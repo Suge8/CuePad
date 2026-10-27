@@ -25,14 +25,14 @@ extension DebugScene {
         let (name, rest) = step.contains(":") ? (String(step.prefix { $0 != ":" }), step.drop { $0 != ":" }.dropFirst()) : (step, Substring())
         let n = rest.split(separator: ",").compactMap { Double($0) }
         switch (name, n.count) {
-        case ("wait", 1): try? await Task.sleep(for: .seconds(n[0]))
+        case ("wait", 1): await Task.wait(for: .seconds(n[0]))
         case ("width", 2):
             let from = window.frame.width, steps = max(1, Int(n[1] / 0.016))
             for step in 1...steps {
                 var frame = window.frame
                 frame.size.width = from + (n[0] - from) * Double(step) / Double(steps)
                 window.setFrame(frame, display: true)
-                try? await Task.sleep(for: Self.frame)
+                await Task.wait(for: Self.frame)
             }
         case ("measure", _): measure(rest.isEmpty ? nil : String(rest), in: window)
         case ("left", 0), ("right", 0), ("space", 0): key(name, in: window)
@@ -40,13 +40,13 @@ extension DebugScene {
             for count in 1...2 {
                 queue(mouse(.leftMouseDown, n[0], n[1], in: window, clicks: count))
                 queue(mouse(.leftMouseUp, n[0], n[1], in: window, clicks: count))
-                try? await Task.sleep(for: .milliseconds(80))
+                await Task.wait(for: .milliseconds(80))
             }
         case ("drag", 4):
             queue(mouse(.leftMouseDown, n[0], n[1], in: window))
             for i in 1...Self.frames {
                 let t = Double(i) / Double(Self.frames)
-                try? await Task.sleep(for: Self.frame)
+                await Task.wait(for: Self.frame)
                 queue(mouse(.leftMouseDragged, n[0] + (n[2] - n[0]) * t, n[1] + (n[3] - n[1]) * t, in: window))
             }
             queue(mouse(.leftMouseUp, n[2], n[3], in: window))
@@ -54,7 +54,7 @@ extension DebugScene {
             let per = pow(n[2], 1 / Double(Self.frames)) - 1
             send(magnify(n[0], n[1], in: window, phase: 1, by: 0))
             for _ in 0..<Self.frames {
-                try? await Task.sleep(for: Self.frame)
+                await Task.wait(for: Self.frame)
                 send(magnify(n[0], n[1], in: window, phase: 2, by: per))
             }
             send(magnify(n[0], n[1], in: window, phase: 4, by: 0))
@@ -66,14 +66,14 @@ extension DebugScene {
             let steps = Self.frames / 2
             for (phase, dy) in [(Int64(1), 0.0)] + Array(repeating: (Int64(2), -n[2] / Double(steps)), count: steps) + [(4, 0)] {
                 scroll(n[0], n[1], in: window, phase: phase, dx: 0, dy: dy, detached: true).map { target.scrollWheel(with: $0) }
-                try? await Task.sleep(for: Self.frame)
+                await Task.wait(for: Self.frame)
             }
             NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: target)
         case ("front", 2):
             DebugForeground.require(window, for: "front")
-            try? await Task.sleep(for: .milliseconds(600))
+            await Task.wait(for: .milliseconds(600))
             DebugForeground.movePointer(to: global(n[0], n[1], in: window))
-            try? await Task.sleep(for: .milliseconds(300))
+            await Task.wait(for: .milliseconds(300))
         case ("back", 0): DebugForeground.giveBack()
         case ("probe", 2):
             let scroll = window.contentView?.superview?.hitTest(NSPoint(x: n[0], y: window.frame.height - n[1]))?.enclosingScrollView
@@ -87,7 +87,7 @@ extension DebugScene {
             let per = pow(n[2], 1 / Double(steps)) - 1
             hid(gesture(at, phase: 1, by: 0))
             for _ in 0..<steps {
-                try? await Task.sleep(for: Self.hidFrame)
+                await Task.wait(for: Self.hidFrame)
                 hid(gesture(at, phase: 2, by: per))
             }
             hid(gesture(at, phase: 4, by: 0))
@@ -96,14 +96,14 @@ extension DebugScene {
             let dx = n[2] / Double(steps), dy = n[3] / Double(steps)
             hid(wheel(at, phase: 1, momentum: 0, dx: 0, dy: 0))
             for _ in 0..<steps {
-                try? await Task.sleep(for: Self.hidFrame)
+                await Task.wait(for: Self.hidFrame)
                 hid(wheel(at, phase: 2, momentum: 0, dx: dx, dy: dy))
             }
             hid(wheel(at, phase: 4, momentum: 0, dx: 0, dy: 0))
             // 松手后的惯性：每帧按 0.92 衰减（同触控板的手感量级），约 0.6 秒
             var (mx, my) = (dx, dy)
             for index in 0..<72 {
-                try? await Task.sleep(for: Self.hidFrame)
+                await Task.wait(for: Self.hidFrame)
                 mx *= 0.92
                 my *= 0.92
                 hid(wheel(at, phase: 0, momentum: index == 0 ? 1 : index == 71 ? 3 : 2, dx: mx, dy: my))
@@ -125,7 +125,7 @@ extension DebugScene {
                     target = target ?? window.contentView?.superview?.hitTest(event.locationInWindow).map { $0.enclosingScrollView ?? $0 }
                     scroll(n[0], n[1], in: window, phase: phase, dx: dx, dy: dy, detached: true).map { target?.scrollWheel(with: $0) }
                 }
-                try? await Task.sleep(for: Self.frame)
+                await Task.wait(for: Self.frame)
             }
         default: return false
         }

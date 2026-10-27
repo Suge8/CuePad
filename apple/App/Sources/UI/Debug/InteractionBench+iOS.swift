@@ -31,7 +31,7 @@ enum IOSInteractionBench {
 
     private static func cold() async -> [String: Any] {
         if PerfProbe.firstSeen["cue"] == nil { await PerfProbe.wait(for: "cue") }
-        try? await Task.sleep(for: .seconds(1))
+        await Task.wait(for: .seconds(1))
         var row = TurnLog.metrics(turns.finish(), instructions: 0, frames: coldFrames.stop())
         row["launchMs"] = ((PerfProbe.firstSeen["cue"] ?? .now).timeIntervalSince(PerfProbe.processStart) * 1000).rounded()
         row["name"] = "冷启动·Cue 页"
@@ -39,14 +39,22 @@ enum IOSInteractionBench {
     }
 
     static func run(_ workspace: Workspace) async {
+        await DebugScene.running("交互测量") { try await measureAll(workspace) }
+    }
+
+    private static func measureAll(_ workspace: Workspace) async throws {
         guard let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
         let out = URL(filePath: dir).appending(path: "interact.jsonl")
-        try? Data().write(to: out)
+        try Data().write(to: out)
         func write(_ line: String) {
-            guard let handle = try? FileHandle(forWritingTo: out) else { return }
-            handle.seekToEndOfFile()
-            handle.write(Data((line + "\n").utf8))
-            try? handle.close()
+            do {
+                let handle = try FileHandle(forWritingTo: out)
+                try handle.seekToEnd()
+                try handle.write(contentsOf: Data((line + "\n").utf8))
+                try handle.close()
+            } catch {
+                DebugScene.abandon("交互测量的结果写不出", error)
+            }
         }
         /// 缺了要量的东西就整次作废：不悄悄少量几项
         func fail(_ reason: String) -> Never {
@@ -63,15 +71,15 @@ enum IOSInteractionBench {
             write("DONE")
             exit(0)
         }
-        try? await Task.sleep(for: .seconds(3))
+        await Task.wait(for: .seconds(3))
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
-        let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 4)))?.items ?? []).map(\.state.id)
-        let tasks = ((try? await store.tasks(.inProgress, .todo))?.flatMap(\.tasks) ?? []).filter { $0.parentID == nil }
+        let sessions = try await store.piSessionPage(PiSessionQuery(limit: 4)).items.map(\.state.id)
+        let tasks = try await store.tasks(.inProgress, .todo).flatMap(\.tasks).filter { $0.parentID == nil }
         guard projects.count >= 2 else { fail("演示库里不到两个项目") }
         guard sessions.count >= 2 else { fail("演示库里不到两个会话") }
         guard let task = tasks.first else { fail("演示库里没有任务") }
-        guard let idea = try? await store.cards(in: Project.defaultID).first else { fail("演示库的默认项目里没有灵感") }
+        guard let idea = try await store.cards(in: Project.defaultID).first else { fail("演示库的默认项目里没有灵感") }
         /// `finger`：请测量脚本真按或真滑（`Finger`），从手指按下起量；不给时从 `action` 发出起量。
         func step(_ name: String, window: Duration = .milliseconds(800), finger: Finger? = nil, _ action: () -> Void = {}) async {
             guard wants(name) else { return }
@@ -82,7 +90,7 @@ enum IOSInteractionBench {
             row(measured)
         }
         workspace.select(.shelf)
-        try? await Task.sleep(for: .seconds(1))
+        await Task.wait(for: .seconds(1))
         // 书架点项目（推入项目页）→ 返回；同一个项目两遍，另一个项目再一遍
         for id in [projects[0], projects[0], projects[1]] {
             await step("书架点项目") { workspace.push(.project(id)) }
@@ -91,13 +99,13 @@ enum IOSInteractionBench {
         // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         guard let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key else { fail("演示库里没有带任务的项目") }
         workspace.push(.project(busiest))
-        try? await Task.sleep(for: .seconds(2))
+        await Task.wait(for: .seconds(2))
         for _ in 0..<2 {
             await step("展开任务") { DebugScene.toggleTaskFold() }
             await step("收起任务") { DebugScene.toggleTaskFold() }
         }
         workspace.select(.cue)
-        try? await Task.sleep(for: .seconds(1))
+        await Task.wait(for: .seconds(1))
         // 主导航：Cue 页点底部的"进展"去进展页（配 `-CuePadManyTasks` 量任务多时）、进展页点 Cue 钮回来（点按调的就是 `tap`）
         for _ in 0..<2 {
             await step("Cue 进任务") { workspace.tap(.progress) }
@@ -106,7 +114,7 @@ enum IOSInteractionBench {
         // 项目 tab 停在一条灵感上时切走再切回来：栈与页都留着，不重建
         workspace.select(.project(Project.defaultID))
         workspace.push(.card(idea.id))
-        try? await Task.sleep(for: .seconds(1.5))
+        await Task.wait(for: .seconds(1.5))
         for _ in 0..<2 {
             await step("灵感去 Cue") { workspace.tap(.cue) }
             await step("Cue 回灵感") { workspace.tap(.shelf) }
@@ -119,7 +127,7 @@ enum IOSInteractionBench {
         }
         // 会话页（底部的"会话"）点会话（先读出这一页再推入）→ 返回
         workspace.showSessions()
-        try? await Task.sleep(for: .seconds(1))
+        await Task.wait(for: .seconds(1))
         for id in [sessions[0], sessions[0], sessions[1]] {
             await step("进会话页") { workspace.openSession(id) }
             await step("返回 Agent") { workspace.path.removeAll() }
@@ -130,7 +138,7 @@ enum IOSInteractionBench {
             for _ in 0..<2 { await stepScroll("Agent 列表滚动", scroll, step: { name, action in await step(name, action) }) }
         }
         workspace.select(.shelf)
-        try? await Task.sleep(for: .seconds(1))
+        await Task.wait(for: .seconds(1))
         for _ in 0..<2 {
             await step("开任务气泡") { workspace.openTask(task) }
             await step("关任务气泡") { workspace.openTask = nil }
@@ -138,17 +146,17 @@ enum IOSInteractionBench {
         await gestures(workspace, session: sessions[0], wants: wants) { name, window, finger, action in
             await step(name, window: window, finger: finger, action)
         }
-        await typeLong(workspace, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
+        try await typeLong(workspace, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
         // 最后量长按书架上的项目卡（放在最后：万一菜单没收起，不影响前面各项）：系统的长按菜单在进程内没有入口，由 perf-ios.sh 在模拟器上真按（`AWAIT 名 x y` 是要它按的点，屏幕坐标）。
         // 从手指按下起量 1.5 秒（菜单在按住约半秒后才弹出）；松手后菜单留着，请脚本点一下空白处收起
         workspace.select(.shelf)
-        try? await Task.sleep(for: .seconds(1))
+        await Task.wait(for: .seconds(1))
         for _ in 0..<2 where wants("长按菜单") {
             guard let card = Self.longPressTarget(in: Self.window) else { fail("书架上找不到有长按菜单的项目卡") }
             await step("长按菜单", window: .milliseconds(1500), finger: .press(card))
             // 收起菜单不量（模拟器里点空白处、按 Esc 都收不起长按出来的菜单）：在进程里让菜单交互收起
             Self.dismissMenus()
-            try? await Task.sleep(for: .seconds(2))
+            await Task.wait(for: .seconds(2))
         }
         write("DONE")
         exit(0)
@@ -156,7 +164,13 @@ enum IOSInteractionBench {
 
     /// 粘贴进来的一大段：仿诊断 JSON（嵌套的调用栈帧，约 850 行、66 KB），或 `-CuePadPasteFile <路径>` 那个文件。
     private static var pasted: String {
-        if let path = UserDefaults.standard.string(forKey: "CuePadPasteFile"), let text = try? String(contentsOfFile: path, encoding: .utf8) { return text }
+        if let path = UserDefaults.standard.string(forKey: "CuePadPasteFile") {
+            do {
+                return try String(contentsOfFile: path, encoding: .utf8)
+            } catch {
+                DebugScene.abandon("粘贴文件读不了", error)
+            }
+        }
         func frame(_ depth: Int) -> [String: Any] {
             var node: [String: Any] = [
                 "binaryUUID": "2B62913E-C889-35F4-98D9-FAC049B8284A", "offsetIntoBinaryTextSegment": 46132, "sampleCount": 1, "binaryName": "CuePad",
@@ -175,13 +189,13 @@ enum IOSInteractionBench {
     private static func typeLong(
         _ workspace: Workspace, session: UUID, card: UUID, wants: (String) -> Bool, fail: (String) -> Never,
         step: (String, () -> Void) async -> Void
-    ) async {
+    ) async throws {
         let text = pasted
         func type<View: UITextView>(_ field: String, into _: View.Type, pastes: Bool = true) async {
-            try? await Task.sleep(for: .seconds(2))
+            await Task.wait(for: .seconds(2))
             guard let view = Self.first(View.self, in: Self.window) else { fail("\(field)：找不到输入框") }
             view.becomeFirstResponder()
-            try? await Task.sleep(for: .seconds(1.5))
+            await Task.wait(for: .seconds(1.5))
             if pastes {
                 UIPasteboard.general.string = text
                 await step("长文粘贴·" + field) { view.paste(nil) }
@@ -189,13 +203,13 @@ enum IOSInteractionBench {
             view.selectedRange = NSRange(location: (view.text as NSString).length, length: 0)
             for _ in 0..<5 { await step("长文打字·" + field) { view.insertText("a") } }
             view.resignFirstResponder()
-            try? await Task.sleep(for: .seconds(1))
+            await Task.wait(for: .seconds(1))
         }
         if wants("长文打字·编辑页") {
             // 从它所在的项目页推入（同点开它的那条路）：直接从书架推入时 UIKit 的交互转场断言崩溃
-            try? await workspace.services.store.updateCard(card) { $0.body = text }
+            try await workspace.services.store.updateCard(card) { $0.body = text }
             workspace.select(.project(Project.defaultID))
-            try? await Task.sleep(for: .seconds(1.5))
+            await Task.wait(for: .seconds(1.5))
             workspace.push(.card(card))
             await type("编辑页", into: CueTextView.self, pastes: false)
             workspace.path.removeAll()
@@ -245,7 +259,7 @@ enum IOSInteractionBench {
     }
 
     private static func measure(window: Duration, pressed: (() async -> Void)?, _ action: () -> Void) async -> [String: Any] {
-        try? await Task.sleep(for: .milliseconds(1200))
+        await Task.wait(for: .milliseconds(1200))
         if let pressed { await pressed() }
         let recorder = FrameRecorder()
         recorder.start()
@@ -253,7 +267,7 @@ enum IOSInteractionBench {
         let instructions = instructionsMillions()
         turns.begin(CACurrentMediaTime(), root: Self.window?.layer)
         action()
-        try? await Task.sleep(for: window)
+        await Task.wait(for: window)
         var row = TurnLog.metrics(turns.finish(), instructions: instructions, frames: recorder.stop())
         // 动作发出的时刻（与 xctrace 录制对时）
         row["at"] = wall

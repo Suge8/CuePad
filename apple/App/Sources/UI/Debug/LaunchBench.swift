@@ -60,7 +60,7 @@ enum LaunchBench {
         CFRunLoopAddObserver(CFRunLoopGetMain(), sleep, .commonModes)
         Task { await settle() }
         Task {
-            try? await Task.sleep(for: limit)
+            await Task.wait(for: limit)
             report()
         }
     }
@@ -94,7 +94,7 @@ enum LaunchBench {
         guard let content = stamps["content"] else { return }
         var last = content
         while true {
-            try? await Task.sleep(for: .nanoseconds(Int64(last.at + quiet) - Int64(now)))
+            await Task.wait(for: .nanoseconds(Int64(last.at + quiet) - Int64(now)))
             guard let busy = stamps["busy"], busy.at > last.at else { break }
             last = busy
         }

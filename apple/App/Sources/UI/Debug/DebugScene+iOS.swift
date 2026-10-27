@@ -57,17 +57,22 @@ extension DebugScene {
             Task { await IOSInteractionBench.run(workspace) }
             return
         }
+        await running("摆画面") { try await presetScene(workspace, project: project) }
+        await presetSpeech(workspace)
+    }
+
+    private static func presetScene(_ workspace: Workspace, project: UUID?) async throws {
         func open(_ route: Route) { workspace.select(route) }
-        func openCard() async {
+        func openCard() async throws {
             if let project { open(.project(project)) }
-            if let card = await card(in: project ?? Project.defaultID, store: workspace.services.store) { workspace.push(.card(card)) }
+            if let card = try await card(in: project ?? Project.defaultID, store: workspace.services.store) { workspace.push(.card(card)) }
         }
         switch scene {
         case "shelf": open(.shelf)
         case "project", "older": if let project { open(.project(project)) }
         case "projectform":
             // 给了项目是编辑它，否则新建
-            let existing = if let project { try? await workspace.services.store.project(project) } else { Project?.none }
+            let existing = if let project { try await workspace.services.store.project(project) } else { Project?.none }
             workspace.projectForm = .init(project: existing)
         case "sidebar":
             if let project { open(.project(project)) }
@@ -84,14 +89,14 @@ extension DebugScene {
             // 配演示库时 Cue 运行在演示的 Mac Studio 上（同 Mac 的设置画面）
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             open(.settings)
-        case "editor": await openCard()
+        case "editor": try await openCard()
         case "send":
-            await openCard()
-            if let id = await card(in: project ?? Project.defaultID, store: workspace.services.store),
-               let card = try? await workspace.services.store.card(id) {
+            try await openCard()
+            if let id = try await card(in: project ?? Project.defaultID, store: workspace.services.store),
+               let card = try await workspace.services.store.card(id) {
                 let outbox = Outbox(content: Outgoing.text(of: card), card: id, project: project)
                 // 给了 -CuePadSession 就当已选好会话，直接进它的近况页（卡片预填在回复框里）
-                if let title = defaults.string(forKey: "CuePadSession"), let session = await demoSession(titled: title, store: workspace.services.store) {
+                if let title = defaults.string(forKey: "CuePadSession"), let session = try await demoSession(titled: title, store: workspace.services.store) {
                     let settings = workspace.services.settings
                     var reply = settings.replyDraft(for: session.id)
                     reply.attachments = [outbox]
@@ -137,7 +142,7 @@ extension DebugScene {
             // 打开 -CuePadSession（会话名，默认 homepage）的近况页，推在 Agent 整页上
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
-            guard let session = await demoSession(titled: title, store: workspace.services.store) else { break }
+            guard let session = try await demoSession(titled: title, store: workspace.services.store) else { break }
             if defaults.bool(forKey: "CuePadNotify") {
                 workspace.open(DeepLink.session(session.id))  // 点锁屏通知进来：只带记录 id
             } else {
@@ -149,15 +154,15 @@ extension DebugScene {
             workspace.showSessions()
             var sheet = NewSessionInput.Start(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（交给 Cue 那台 Mac 建工作区）
             if defaults.bool(forKey: "CuePadLaunch"),
-               let table = try? await workspace.services.store.projects().first(where: { $0.name == String(localized: "圆桌", table: "Demo") })?.id {
-                sheet.launched = try? await workspace.services.launchSession(
+               let table = try await workspace.services.store.projects().first(where: { $0.name == String(localized: "圆桌", table: "Demo") })?.id {
+                sheet.launched = try await workspace.services.launchSession(
                     in: table, prompt: String(localized: "看看 scheduler 的重连问题", table: "Demo"), title: String(localized: "圆桌", table: "Demo"), on: "demo-mac", card: nil, agent: .pi)
             }
             workspace.newSession = sheet
         case "folderpicker":
             // 给 -CuePadProject（默认闲鱼，演示里没绑文件夹）选文件夹的候选页
             let name = defaults.string(forKey: "CuePadProject") ?? String(localized: "闲鱼", table: "Demo")
-            workspace.folderPicker = try? await workspace.services.store.projects().first { $0.name == name }
+            workspace.folderPicker = try await workspace.services.store.projects().first { $0.name == name }
         case "sessions":
             // 配 -CuePadDemo 时 Cue 在演示 Mac 上值班（同 Mac 的 sessions）：会话行按值班时的样子写（歇着、等 Cue 回答、待回复）
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
@@ -167,12 +172,11 @@ extension DebugScene {
             workspace.openSearch()
         default: break
         }
-        await presetSpeech(workspace)
     }
 
     /// 演示会话按会话名找（演示会话的会话名各不相同）。
-    private static func demoSession(titled title: String, store: CueStore) async -> PiSessionState? {
-        try? await store.piSessionPage(PiSessionQuery(text: title)).items.first { $0.state.title == title }?.state
+    private static func demoSession(titled title: String, store: CueStore) async throws -> PiSessionState? {
+        try await store.piSessionPage(PiSessionQuery(text: title)).items.first { $0.state.title == title }?.state
     }
 
     /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页通知那一行按这个状态显示
@@ -194,10 +198,14 @@ extension DebugScene {
     /// - motion：进默认项目 → 进一条灵感 → 返回 → 返回；切到进展、进一个会话 → 返回；切到 Cue。
     static func dockTourIfAsked(_ workspace: Workspace) async {
         guard let tour = defaults.string(forKey: "CuePadDockTour") else { return }
+        await running("底栏导览") { try await dockTour(tour, workspace) }
+    }
+
+    private static func dockTour(_ tour: String, _ workspace: Workspace) async throws {
         let store = workspace.services.store
-        guard let card = await card(in: Project.defaultID, store: store) else { return }
+        guard let card = try await card(in: Project.defaultID, store: store) else { return }
         // 节奏是要录的内容，不是在等别的事
-        func beat() async { try? await Task.sleep(for: .seconds(1.6)) }
+        func beat() async { await Task.wait(for: .seconds(1.6)) }
         workspace.tap(.shelf)
         await beat()
         workspace.push(.project(Project.defaultID))
@@ -210,7 +218,7 @@ extension DebugScene {
                 editor.selectedRange = NSRange(location: (editor.text as NSString).length, length: 0)
                 for word in String(localized: "，切去 Cue 看一眼再回来接着写", table: "Demo").map(String.init) {
                     editor.insertText(word)
-                    try? await Task.sleep(for: .milliseconds(90))
+                    await Task.wait(for: .milliseconds(90))
                 }
                 await beat()
                 editor.resignFirstResponder()
@@ -227,7 +235,7 @@ extension DebugScene {
             await beat()
             workspace.tap(.progress)
             await beat()
-            if let session = try? await store.piSessionPage(PiSessionQuery(limit: 1)).items.first?.state {
+            if let session = try await store.piSessionPage(PiSessionQuery(limit: 1)).items.first?.state {
                 workspace.openSession(session.id, sessionID: session.sessionID)
                 await beat()
                 workspace.path.removeLast()
@@ -249,10 +257,10 @@ extension DebugScene {
 
     /// `-CuePadPanelCycle YES`（配 cue 画面录屏）：画面就绪后每 1.5 秒点一下 Cue 页头，开合面板几遍，看动效。
     private static func cyclePanel() async {
-        try? await Task.sleep(for: .seconds(4))
+        await Task.wait(for: .seconds(4))
         for _ in 0..<8 {
             toggleCuePanel()
-            try? await Task.sleep(for: .seconds(1.5))
+            await Task.wait(for: .seconds(1.5))
         }
     }
 }

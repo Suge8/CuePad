@@ -125,7 +125,7 @@ struct StyleBoard: View {
     private func play() async {
         var tick = 0
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(0.5))
+            await Task.wait(for: .seconds(0.5))
             tick += 1
             if tick % 3 == 0 { count += 1 }
             if tick % 4 == 0 {

@@ -32,24 +32,31 @@ enum IslandBench {
             } catch {
                 marks.add("bench-error \(error)", round)
             }
-            try? await Task.sleep(for: .seconds(1))
+            await Task.wait(for: .seconds(1))
         }
         watcher.cancel()
         marks.add("done")
     }
 
     private final class Marks {
-        let file: FileHandle?
+        let file: FileHandle
         init(_ url: URL) {
             FileManager.default.createFile(atPath: url.path(), contents: nil)
-            file = try? FileHandle(forWritingTo: url)
+            do {
+                file = try FileHandle(forWritingTo: url)
+            } catch {
+                DebugScene.abandon("灵动岛测量的打点文件打不开", error)
+            }
         }
 
         func add(_ event: String, _ round: Int? = nil, at time: Date = .now) {
             var row: [String: Any] = ["e": event, "t": time.timeIntervalSince1970]
             if let round { row["round"] = round }
-            guard let data = try? JSONSerialization.data(withJSONObject: row) else { return }
-            file?.write(data + Data("\n".utf8))
+            do {
+                try file.write(contentsOf: JSONSerialization.data(withJSONObject: row) + Data("\n".utf8))
+            } catch {
+                DebugScene.abandon("灵动岛测量的打点写不出", error)
+            }
         }
     }
 }

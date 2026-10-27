@@ -17,7 +17,7 @@ enum DemoLibrary {
 
     static func seed(_ store: CueStore) async throws {
         let image = try store.files.store(sampleImage())
-        let doc = DebugScene.demoPDF(store)?.markup ?? ""
+        let doc = try DebugScene.demoPDF(store).markup
         let docs = doc + "\n" + (try demoLog(store))
         try await seed(store, groups: projects(image: image, doc: doc, docs: docs), tasks: tasks)
         try await seedSubtasks(store)
@@ -71,8 +71,10 @@ enum DemoLibrary {
         ], complete: true), host: "demo-mac")
         if remindIn > 0 {
             Task {
-                try? await Task.sleep(for: .seconds(remindIn + 20))
-                _ = try? await store.recordQuota(QuotaReport(provider: "anthropic", windows: [window(week, used: 0.45, left: weekLeft)], complete: false), host: "demo-mac")
+                await Task.wait(for: .seconds(remindIn + 20))
+                await DebugScene.running("额度回落") {
+                    _ = try await store.recordQuota(QuotaReport(provider: "anthropic", windows: [window(week, used: 0.45, left: weekLeft)], complete: false), host: "demo-mac")
+                }
             }
         }
         try await store.recordQuota(QuotaReport(provider: "openai-codex", windows: [

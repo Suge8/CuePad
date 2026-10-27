@@ -29,7 +29,7 @@ extension DebugScene {
         try await send(String(localized: "部署到预发环境", table: "Demo"), to: "deploy")
         if let reproduce = tasks.first(where: { $0.body.hasPrefix(String(localized: "复现乱序", table: "Demo")) }) { try await store.setStatus(reproduce.id, .done) }
         // notes 这一轮几分钟前做完，会话歇下
-        try? await Task.sleep(for: .milliseconds(5))
+        await Task.wait(for: .milliseconds(5))
         _ = try await PiStateRecorder(store: store, hostID: "demo-mac").update(
             sessionID: "notes", state: .settled, title: "notes", directory: "notes", projectID: projects.first { $0.name == "Career" }?.id,
             times: PiTimes(stateSince: .now.addingTimeInterval(-6 * 60), busySince: nil), modelState: demoModels, commands: demoCommands)
@@ -41,7 +41,7 @@ extension DebugScene {
         // 再完成两个别的项目的，最近完成那组跨项目、按完成时间排
         for name in ["Flow", String(localized: "圆桌", table: "Demo")] {
             guard let task = tasks.last(where: { $0.projectID == projects.first { $0.name == name }?.id }) else { continue }
-            try? await Task.sleep(for: .milliseconds(5))
+            await Task.wait(for: .milliseconds(5))
             try await store.setStatus(task.id, .done)
         }
     }
@@ -63,11 +63,11 @@ extension DebugScene {
         }
         // 对话围着预览的创建时间排：你的话在先，回答在后
         guard let first = created.first, let last = created.last else { return }
-        let screenshot = try screenshotMarkup(store)
+        let screenshot = try screenshotMarkup(store), pdf = try demoPDF(store)
         let messages = [
             PiChatMessage(
                 sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: String(localized: "把登录页的新样子、手机上的截图和评审结论发给我看看，样子参考这张", table: "Demo") + (screenshot.map { "\n" + $0 } ?? "")
-                    + (demoPDF(store).map { "\n" + $0.markup } ?? ""),
+                    + "\n" + pdf.markup,
                 at: first.addingTimeInterval(-50)),
             PiChatMessage(
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: String(localized: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。", table: "Demo"),

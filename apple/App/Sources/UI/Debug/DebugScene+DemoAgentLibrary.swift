@@ -8,7 +8,7 @@ extension DebugScene {
     /// 默认是该整理的样子（散落的、Claude Code 读不到的、空目录、同名的、格式不对的、另写了一份的全局规则）；`-CuePadAgentLibrary clean` 是整理好了的样子。
     static func seedAgentLibrary(_ services: AppServices) async throws {
         #if os(macOS)
-        seedAgentFiles()
+        try seedAgentFiles()
         #endif
         let store = services.store
         let projects = try await store.projects()
@@ -73,10 +73,18 @@ struct DemoAgentLibrary {
     /// 演示的 Mac Studio 照手机发来的整理与改文件改它的快照（`-CuePadDemoMac YES`，`runDemoMac`）：整理了的那几件不在了（补上链接的各家都读得到，
     /// 去重留下的那份之外的不在了），文件照基准写（快照里已不是手机看到的那一版就退回"Mac 上刚改过"，同真的 Mac）。不是这两种请求为 nil。
     static func apply(_ request: DeliveryRequest, store: CueStore) async -> DeliveryOutcome? {
+        do {
+            return try await applying(request, store: store)
+        } catch {
+            return .failed(ShownText(error))
+        }
+    }
+
+    private static func applying(_ request: DeliveryRequest, store: CueStore) async throws -> DeliveryOutcome? {
         guard request.tidyOrders != nil || request.libraryEdit != nil else { return nil }
-        guard var library = try? await store.agentLibrary(host: request.hostID) else { return .failed(ShownText(AgentLibraryError.tidyGone)) }
+        guard var library = try await store.agentLibrary(host: request.hostID) else { return .failed(ShownText(AgentLibraryError.tidyGone)) }
         let paths = library.skills.map(\.textPath) + library.instructions.map(\.path) + library.tidies.flatMap { $0.sources.map(\.path) }
-        var texts = (try? await store.agentLibraryTexts(host: request.hostID, paths: paths)) ?? [:]
+        var texts = try await store.agentLibraryTexts(host: request.hostID, paths: paths)
         if let orders = request.tidyOrders {
             let ids = Set(orders.map(\.tidy))
             let kept = Set(orders.compactMap(\.keep))
@@ -113,7 +121,7 @@ struct DemoAgentLibrary {
                     hash: hash, modifiedAt: .now, unseenBy: old.unseenBy)
             }
         }
-        _ = try? await store.recordAgentLibrary(library, texts: texts)
+        _ = try await store.recordAgentLibrary(library, texts: texts)
         return .succeeded
     }
 

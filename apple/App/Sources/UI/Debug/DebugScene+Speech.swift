@@ -12,12 +12,16 @@ import SwiftUI
 /// 一页里三种状态（已发出、已送达、没能送达）。
 extension DebugScene {
     static func presetSpeech(_ workspace: Workspace) async {
+        await running("预设说话") { try await presetSpeechBody(workspace) }
+    }
+
+    private static func presetSpeechBody(_ workspace: Workspace) async throws {
         guard let speech = defaults.string(forKey: "CuePadSpeech") else { return }
         let services = workspace.services
         let box: Binding<ComposerDraft>, listener: Listener
         if scene == "session" {
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
-            guard let session = try? await services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state
+            guard let session = try await services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state
             else { return }
             box = services.settings.replyDraftBinding(for: session.id)
             listener = .session(session, mode: .send)
@@ -26,8 +30,9 @@ extension DebugScene {
             listener = .cue
         }
         box.wrappedValue.text = String(localized: "把重连用例也跑一遍，结果贴给我", table: "Demo")
-        if defaults.bool(forKey: "CuePadFiles"), let pdf = demoPDF(services.store),
-           let image = try? services.store.files.store(swatch(red: 0.85, green: 0.47, blue: 0.29)) {
+        if defaults.bool(forKey: "CuePadFiles") {
+            let pdf = try demoPDF(services.store)
+            let image = try services.store.files.store(swatch(red: 0.85, green: 0.47, blue: 0.29))
             box.wrappedValue.files = [DraftFile(key: image, name: ""), pdf]
         }
         switch speech {
@@ -35,21 +40,17 @@ extension DebugScene {
         case "trips":
             // 会话在哪台就发给哪台（`CueStore.speak`），所以直接写请求、指给那台不接手的，再像发出时那样马上传
             guard case .session(let target, _, _, _) = listener, let ref = target.ref else { return }
-            do {
-                let request = try await services.store.requestDelivery(box.wrappedValue.text, to: target, on: Self.idleMac, mode: .send)
-                box.wrappedValue.text = ""
-                await services.upload(request.id)
-                // 这一页的话都有了着落再报就绪：交给 demo-mini 的有了结果，发给不接手的那台的传上了替身
-                let settled = services.store.observe { store in
-                    try store.deliveryRequests(toSession: ref).allSatisfy { !$0.isOpen || $0.hostID == Self.idleMac && $0.reachedServer }
-                }
-                for try await done in settled where done { break }
-            } catch {
-                abandon("trips 那一句没摆好", error)
+            let request = try await services.store.requestDelivery(box.wrappedValue.text, to: target, on: Self.idleMac, mode: .send)
+            box.wrappedValue.text = ""
+            await services.upload(request.id)
+            // 这一页的话都有了着落再报就绪：交给 demo-mini 的有了结果，发给不接手的那台的传上了替身
+            let settled = services.store.observe { store in
+                try store.deliveryRequests(toSession: ref).allSatisfy { !$0.isOpen || $0.hostID == Self.idleMac && $0.reachedServer }
             }
+            for try await done in settled where done { break }
         case "send":
             Task {
-                try? await Task.sleep(for: .seconds(2))
+                await Task.wait(for: .seconds(2))
                 workspace.speak(to: listener, from: box) { $0.stored }
             }
         default: break
@@ -63,9 +64,9 @@ extension DebugScene {
         if !session, cueFlows { return await pressForCueFlow(press) }
         guard defaults.string(forKey: "CuePadSpeech") == "press", (scene == "session") == session else { return }
         // 等的这几秒里输入框可能重建（页面换了身份）：旧的那个任务被取消，不能再按、再量，否则一次按下记成两条
-        guard (try? await Task.sleep(for: .seconds(seconds("CuePadPressAfter", default: 3)))) != nil else { return }
+        guard await Task.wait(for: .seconds(seconds("CuePadPressAfter", default: 3))) else { return }
         guard let log = defaults.string(forKey: "CuePadFlightLog").map({ URL(fileURLWithPath: $0) }) else { return press() }
-        await measureFlight("press", seconds: flightProbe, into: log, act: press)
+        await running("量按下发送") { try await measureFlight("press", seconds: flightProbe, into: log, act: press) }
     }
 }
 #endif

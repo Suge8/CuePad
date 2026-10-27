@@ -61,7 +61,7 @@ extension DebugScene {
     /// 两个带模型（Agent 页卡片多一层读数），其余没有（卡片只有两层）。
     /// 看窄处名字优先、Agent 只留标志，状态标与第二层对齐，上下文落在时长下面。
     static func seedCueRows(_ services: AppServices) async {
-        do { try await seedCueRows(services.store) } catch { print("cuerows: \(error)") }
+        await running("Cue 行的演示数据") { try await seedCueRows(services.store) }
     }
 
     private static func seedCueRows(_ store: CueStore) async throws {
@@ -95,10 +95,10 @@ extension DebugScene {
 
     /// 会话发来一张截图（`png`）：卡片与"等你"上的证据。
     @discardableResult
-    static func seedEvidence(_ store: CueStore, session: String, title: String, png: Data) async -> PiPreview? {
+    static func seedEvidence(_ store: CueStore, session: String, title: String, png: Data) async throws -> PiPreview {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
-        try? png.write(to: file)
-        return try? await store.addPreviews([(file, title)], sessionID: session).first?.preview
+        try png.write(to: file)
+        return try await store.addPreviews([(file, title)], sessionID: session)[0].preview
     }
 }
 #endif

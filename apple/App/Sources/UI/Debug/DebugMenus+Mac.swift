@@ -21,9 +21,9 @@ extension DebugScene {
         let steps = defaults.string(forKey: key)!.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
         let gap = seconds("CuePadClickGap", default: 1.5)
         if down == .rightMouseDown { DebugForeground.require(window, for: key) } else { _ = DebugForeground.borrow(window) }
-        try? await Task.sleep(for: .milliseconds(500))
+        await Task.wait(for: .milliseconds(500))
         for (index, step) in steps.enumerated() {
-            if index > 0 { try? await Task.sleep(for: .seconds(gap)) }
+            if index > 0 { await Task.wait(for: .seconds(gap)) }
             if step.hasPrefix("type:") {
                 (window.firstResponder as? any NSTextInputClient)?.insertText(String(step.dropFirst(5)), replacementRange: NSRange(location: NSNotFound, length: 0))
                 continue
@@ -51,7 +51,7 @@ extension DebugScene {
             }
             for type in [down, up] {
                 // 按下与松开同一刻进队列时，滚动视图里的点按手势认不出（按钮不受影响）；同真点隔一小会儿
-                if type == up { try? await Task.sleep(for: pressHold) }
+                if type == up { await Task.wait(for: pressHold) }
                 guard let event = mouse(type, at: point, in: window) else { return }
                 NSApp.postEvent(event, atStart: false)
             }

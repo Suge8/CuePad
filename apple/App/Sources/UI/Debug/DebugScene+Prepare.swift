@@ -5,7 +5,7 @@ import SwiftUI
 extension DebugScene {
     static func prepareLibrary(_ workspace: Workspace) async -> UUID? {
         var project: UUID?
-        await seeding("摆画面的数据") { project = try await prepare(workspace) }
+        await running("摆画面的数据") { project = try await prepare(workspace) }
         return project
     }
 
@@ -78,19 +78,23 @@ extension DebugScene {
     /// attachments 带上一张卡片（`-CuePadCard` 挑哪张）并放进两张演示图片与一份 PDF，lines 写进 9 行文字（看文字区长到 6 行后在里面滚）。
     /// ＋ 菜单是系统菜单、不能代为展开：截图时按一下 ＋（iPhone 17 Pro 回复框：`axe touch -x 37 -y 810 --down --up --delay 0.15`；axe 的 tap 太快，菜单不开）。
     static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
+        await running("预设输入框") { try await presetComposerBody(draft, source: source, store: store) }
+    }
+
+    private static func presetComposerBody(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async throws {
         switch defaults.string(forKey: "CuePadComposer") {
         case "cards":
             // 等推入页面的转场走完再弹，转场中弹出的面板会被系统丢掉；弹出前不算就绪
             later(.seconds(1)) { source.wrappedValue = .cards }
         case "attachments":
             // 先挑默认项目里的，没有再挑第一个项目里的
-            var id = await card(in: Project.defaultID, store: store)
-            if id == nil, let project = try? await store.projects().first { id = await card(in: project.id, store: store) }
-            if let id, let card = try? await store.card(id) {
+            var id = try await card(in: Project.defaultID, store: store)
+            if id == nil, let project = try await store.projects().first { id = try await card(in: project.id, store: store) }
+            if let id, let card = try await store.card(id) {
                 draft.wrappedValue.attach(card)
             }
-            let swatches = [(0.85, 0.47, 0.29), (0.25, 0.56, 0.72)].compactMap { try? store.files.store(swatch(red: $0.0, green: $0.1, blue: $0.2)) }
-            draft.wrappedValue.files = swatches.map { DraftFile(key: $0, name: "") } + [demoPDF(store)].compactMap { $0 }
+            let swatches = try [(0.85, 0.47, 0.29), (0.25, 0.56, 0.72)].map { try store.files.store(swatch(red: $0.0, green: $0.1, blue: $0.2)) }
+            draft.wrappedValue.files = swatches.map { DraftFile(key: $0, name: "") } + [try demoPDF(store)]
         case "lines":
             draft.wrappedValue.text = (1...9).map { String(localized: "第 \($0) 行", table: "Demo") }.joined(separator: "\n")
         case "slash":
@@ -101,11 +105,11 @@ extension DebugScene {
     }
 
     /// 演示用的一份 PDF（一页 A4、几行字）存进附件目录：附件条、正文里的文件牌、你的话里的文件拍照用。
-    static func demoPDF(_ store: CueStore) -> DraftFile? {
+    static func demoPDF(_ store: CueStore) throws -> DraftFile {
         let name = String(localized: "季度复盘.pdf", table: "Demo")
         let url = FileManager.default.temporaryDirectory.appending(path: name)
         var page = CGRect(x: 0, y: 0, width: 595, height: 842)
-        guard let context = CGContext(url as CFURL, mediaBox: &page, nil) else { return nil }
+        guard let context = CGContext(url as CFURL, mediaBox: &page, nil) else { throw Unmet("演示 PDF 建不出来：\(url.path)") }
         context.beginPDFPage(nil)
         context.setFillColor(red: 0.95, green: 0.93, blue: 0.88, alpha: 1)
         context.fill(page)
@@ -115,7 +119,7 @@ extension DebugScene {
         }
         context.endPDFPage()
         context.closePDF()
-        return (try? store.files.store(fileAt: url)).map { DraftFile(key: $0, name: name) }
+        return DraftFile(key: try store.files.store(fileAt: url), name: name)
     }
 
     static func swatch(red: CGFloat, green: CGFloat, blue: CGFloat) -> Data {
@@ -129,8 +133,8 @@ extension DebugScene {
     }
 
     /// `-CuePadCard` 指定（或最近修改）的一张散放的灵感。
-    static func card(in project: UUID, store: CueStore) async -> UUID? {
-        let cards = (try? await store.cards(in: project)) ?? []
+    static func card(in project: UUID, store: CueStore) async throws -> UUID? {
+        let cards = try await store.cards(in: project)
         let prefix = defaults.string(forKey: "CuePadCard") ?? ""
         return cards.filter { $0.body.hasPrefix(prefix) }.max { $0.modifiedAt < $1.modifiedAt }?.id
     }
@@ -142,9 +146,11 @@ extension DebugScene {
 
     /// task 画面：打开 `-CuePadTask <标题开头>` 那一条任务的气泡，没给是 `preferred` 挑中的，再没有是第一条（推进中、待办）。
     static func openTask(_ workspace: Workspace, preferred: (Card) -> Bool) async {
-        let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
-        let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
-        if let task = named ?? tasks.first(where: preferred) ?? tasks.first { workspace.openTask(task) }
+        await running("打开任务气泡") {
+            let tasks = try await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)
+            let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
+            if let task = named ?? tasks.first(where: preferred) ?? tasks.first { workspace.openTask(task) }
+        }
     }
 }
 #endif

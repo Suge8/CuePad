@@ -17,7 +17,8 @@ extension DebugScene {
         do {
             let title = String(localized: "交接材料", table: "Demo")
             let written = try await store.cards(in: Project.defaultID).contains { $0.body.hasPrefix(title) }
-            if !written, let pdf = demoPDF(store) {
+            if !written {
+                let pdf = try demoPDF(store)
                 let image = try store.files.store(swatch(red: 0.36, green: 0.52, blue: 0.43))
                 let body = [
                     title, "",
@@ -34,10 +35,10 @@ extension DebugScene {
         let delay = defaults.double(forKey: "CuePadFileArrives")
         guard delay > 0, store.files.fileURL(for: away) == nil else { return }
         Task {
-            try? await Task.sleep(for: .seconds(delay))
+            await Task.wait(for: .seconds(delay))
             for step in 1...20 {
                 services.setFileTransfers([away: FileTransfer(direction: .download, fraction: Double(step) / 20)])
-                try? await Task.sleep(for: .milliseconds(150))
+                await Task.wait(for: .milliseconds(150))
             }
             let url = FileManager.default.temporaryDirectory.appending(path: "export.zip")
             do {

@@ -15,7 +15,7 @@ extension DebugScene {
     static func later(_ delay: Duration, _ work: @escaping @MainActor () -> Void) {
         pending += 1
         Task {
-            try? await Task.sleep(for: delay)
+            await Task.wait(for: delay)
             work()
             pending -= 1
         }
@@ -36,9 +36,21 @@ extension DebugScene {
         exit(1)
     }
 
-    /// 摆画面的数据写一段：任何一步失败都以失败退出（`abandon`），演示数据不吞错。
-    static func seeding(_ what: String, _ write: () async throws -> Void) async {
-        do { try await write() } catch { abandon("\(what)没写完", error) }
+    /// 跑一段调试代码（演示数据、驱动）：任何一步抛错都以失败退出（`abandon`），不吞错；被取消（视图走了、任务收场）是正常结束。
+    static func running(_ what: String, _ body: () async throws -> Void) async {
+        do {
+            try await body()
+        } catch is CancellationError {
+            return
+        } catch {
+            abandon("\(what)失败", error)
+        }
+    }
+
+    /// 摆好的画面不成立（演示数据缺了东西）：同 `abandon` 的失败退出。
+    struct Unmet: Error, CustomStringConvertible {
+        let description: String
+        init(_ description: String) { self.description = description }
     }
 
     /// 给了就绪文件时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、
@@ -48,7 +60,11 @@ extension DebugScene {
         var still = 0
         while still < 3 {
             // 排在页面已经发出的读库之后：它回来时，那些读取也都回来了
-            _ = try? await services.store.projects()
+            do {
+                _ = try await services.store.projects()
+            } catch {
+                abandon("就绪前读库", error)
+            }
             await NextFrame.wait()
             still = pending == 0 && unsettled.isEmpty && !animating ? still + 1 : 0
         }
