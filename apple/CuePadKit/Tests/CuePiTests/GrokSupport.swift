@@ -9,16 +9,21 @@ import Synchronization
 /// 本机的 Grok Build（录制时用）：`CUEPAD_GROK` 指定另一个（如新版本）。
 let realGrokURL = ProcessInfo.processInfo.environment["CUEPAD_GROK"].map { URL(filePath: $0) } ?? ExecutableLocator.standard.candidates("grok").first
 
-/// 录制时 Grok 用的模型：环境里给了 `XAI_API_KEY`（只经测试进程的环境给，不写进任何文件）就连真的 xAI，否则连本进程里的假模型（`FakeResponses`）。
-/// 假模型的地址与假密钥由录像带起 grok 时加进它的环境（`AgentTape.recordProcess`），不经 CuePad，录像带里也就没有。
+/// 录制时 Grok 用的模型：环境里给了真凭据就连真的 xAI，否则连本进程里的假模型（`FakeResponses`）。真凭据只经测试进程的环境给、不写进任何文件：
+/// API 密钥（`XAI_API_KEY`），或已登录的凭据文件的位置（`GROK_AUTH_PATH`，如 `~/.grok/auth.json`：grok 自己读、自己刷新，测试不碰它的内容）。
+/// 录像带起 grok 时把这里的环境补进去（`AgentTape.recordProcess`，CuePad 自己给了的不覆盖）：假模型的地址与假密钥，或真凭据——
+/// 测试台的配置目录是临时的，托管会话的 grok 要经它找到登录。都不经 CuePad，录像带里也就没有。
 enum GrokModel {
-    /// 测试进程里共用一个，录制时头一次起 grok 时才开（回放不起：Grok 的输出都在录像带里）；连真模型时为 nil。
-    static let fake: FakeResponses? = ProcessInfo.processInfo.environment["XAI_API_KEY"].map(\.isEmpty) == false ? nil : try? FakeResponses()
+    /// 测试进程环境里的真凭据
+    static let credentials = ProcessInfo.processInfo.environment.filter { ["XAI_API_KEY", "GROK_AUTH_PATH"].contains($0.key) && !$0.value.isEmpty }
 
-    /// 录制时给 grok 进程加的环境：假模型的地址与假密钥（本机地址不走代理），不自动更新。
+    /// 测试进程里共用一个，录制时头一次起 grok 时才开（回放不起：Grok 的输出都在录像带里）；连真模型时为 nil。
+    static let fake: FakeResponses? = credentials.isEmpty ? try? FakeResponses() : nil
+
+    /// 录制时补给 grok 进程的环境：假模型（本机地址不走代理）或真凭据，不自动更新。
     static var environment: [String: String] {
-        ["GROK_DISABLE_AUTOUPDATER": "1"].merging(
-            fake.map { ["GROK_XAI_API_BASE_URL": $0.baseURL, "XAI_API_KEY": "fake-xai-key", "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"] } ?? [:]) { $1 }
+        let model = fake.map { ["GROK_XAI_API_BASE_URL": $0.baseURL, "XAI_API_KEY": "fake-xai-key", "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"] } ?? credentials
+        return ["GROK_DISABLE_AUTOUPDATER": "1"].merging(model) { $1 }
     }
 }
 

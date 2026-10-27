@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode / Grok Build / dsh 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型（Grok Build 用假模型，见 `GrokModel`），
+/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode / Grok Build / dsh 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型（Grok Build 缺省用假模型，见 `GrokModel`），
 /// MCP 是 Fixtures/mcp-echo.mjs 替身。
 /// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，总在隔离的 `OpenCodeSandbox` 里连真 OpenCode 跑（模型见它）。
 private let environment = ProcessInfo.processInfo.environment
