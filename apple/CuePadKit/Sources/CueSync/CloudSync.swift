@@ -77,8 +77,8 @@ public actor CloudSync {
   /// 文件在不在本机看附件目录（取完了就在；传完的本来就在）。
   public nonisolated var fileTransfers: AsyncStream<[String: FileTransfer]> { transfers.stream }
 
-  /// 这个附件文件在本机的位置：没有就现在从 iCloud 取（不看手机自动取的条件），附件记录还没到就等它到（发出的设备还在传）；
-  /// 没开始同步的等开始。这台不同步抛 `FileFetchFailure.notSyncing`，文件坏了抛 `.damaged`，网络与 iCloud 的失败原样抛出；被取消就抛出。
+  /// 这个附件文件在本机的位置：没有就现在从 iCloud 取（不看手机自动取的条件），附件记录还没到就等它到（发出的设备还在传），
+  /// 服务器要求等就等到点；没开始同步的等开始。这台不同步（没认过账号、停下了）抛 `FileFetchFailure.notSyncing`，文件坏了抛 `.damaged`，网络与 iCloud 的失败原样抛出；被取消就抛出。
   /// Mac 把带附件的话交给会话前用它确保文件在本机。
   public func fetchFile(_ key: String) async throws -> URL {
     if cloud == nil { await withCheckedContinuation { startWaiters.append($0) } }
