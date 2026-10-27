@@ -8,13 +8,16 @@ extension CueStore {
   public func trashCard(_ id: UUID) throws -> CardChange? { try trashCards([id]).first }
 
   /// 一次删除多条（Mac 上批量选中的灵感）：同一个事务，库只通知一次；每条的规则同 `trashCard`，回执按给出的顺序，跳过的不在里面。
+  /// 没做完的任务就此离开看板，没人再用的会话随之结束（`endUnusedSessions`；撤销不重开）。
   @discardableResult
   public func trashCards(_ ids: [UUID]) throws -> [CardChange] {
     try write {
       let now = Date.stamp
       return try ids.compactMap { id in
         guard let card = try find(Card.self, id), card.deletedAt == nil else { return nil }
-        return .trash(id: id, lifted: try trashRow(card, at: now))
+        let lifted = try trashRow(card, at: now)
+        if card.completedAt == nil { try endUnusedSessions(of: id, cue: false) }
+        return .trash(id: id, lifted: lifted)
       }
     }
   }

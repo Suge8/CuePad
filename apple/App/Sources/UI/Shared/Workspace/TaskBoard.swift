@@ -5,9 +5,11 @@ import Foundation
 /// 一件任务只在一列：被等你占着的（`CueTally.held`）只在等你，Cue 在做的只在「推进中」，不论它的状态；其余按状态。
 /// - 待办：没做完、Cue 也没在做的顶层任务（没开始的，和开始过而会话都结束了的），项目顺序、同级手动顺序（拖动排序只在同一项目的顶层里挪，`move`）。
 /// - 推进中、等你：就是 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下列头的数与它相等；没绑没做完的任务的活会话在「推进中」里各一张。
+///   推进中置顶的任务（`Card.isPinned`）排在前面，其余照 Cue 的先后。
 ///   等你两种都放：拍板在前（与 Cue 页拍板卡同一份，`waits`），待回复在后（`replies`），各自等得最久的在上；没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
 ///   列里一件一张卡（`held`）：同一件任务上的几件等你收进一张，列头的数仍数条（"等你 N"，与各处相等）。
-/// - 已完成：今天做完的顶层任务（`CueStore.tasksDone`），最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
+/// - 已完成：置顶的（不论哪天做完）在最前，接着今天做完的顶层任务（`CueStore.tasksDone`），最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
+///   待办不另插队（本来就能拖着排），等你按等得多久排。
 ///   每件带上 Cue 做完时点名的第一张成果图（`CueStore.cueResultShots`，读的时候一次取齐，不逐行查库）。
 /// 子任务不单列，卡片写进度；会话此刻在做什么看任务此刻干活的叶子（`Item.leaf`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
 nonisolated struct TaskBoard: Sendable, Equatable {
@@ -266,8 +268,10 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let open = TaskTree(try store.tasks(.inProgress, .todo).flatMap(\.tasks))
         let tally = try store.cueTally()
         let finished = try store.tasksDone().filter { Column.of($0, in: tally) == .done }
+        // 置顶的不论哪天做完的都在已完成的最前（"全部归档"也留着它们），其余今天的在列里、更早的收在列末
+        let pinned = finished.filter(\.isPinned), rest = finished.filter { !$0.isPinned }
         let today = Calendar.current.startOfDay(for: now)
-        let split = finished.firstIndex { ($0.completedAt ?? .distantPast) < today } ?? finished.endIndex
+        let split = rest.firstIndex { ($0.completedAt ?? .distantPast) < today } ?? rest.endIndex
         let results = try store.cueResultShots(of: finished)
         let previews = try store.previews(Set(results.values.joined().map(\.preview)))
         func finishedItem(_ task: Card) throws -> Item {
@@ -277,10 +281,15 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
         return TaskBoard(
             todo: try open.roots.compactMap(open.task).filter { Column.of($0, in: tally) == .todo }.map(item),
-            advancing: try tally.advancing.map { work in Work(work: work, item: try work.task.map(item)) },
+            advancing: try tally.advancing.map { work in Work(work: work, item: try work.task.map(item)) }.pinnedFirst { $0.item?.task.isPinned == true },
             waiting: try waits(tally.waiting, from: store, item: item),
             replies: try tally.replies.map { Reply(reply: $0, item: try $0.task.flatMap { try store.card($0) }.map(item)) },
-            done: try finished[..<split].map(finishedItem),
-            earlier: try finished[split...].map(finishedItem))
+            done: try (pinned + rest[..<split]).map(finishedItem),
+            earlier: try rest[split...].map(finishedItem))
     }
+}
+
+nonisolated private extension Array {
+    /// 置顶的在前，各自保持原来的先后（稳定）。
+    func pinnedFirst(_ pinned: (Element) -> Bool) -> [Element] { filter(pinned) + filter { !pinned($0) } }
 }

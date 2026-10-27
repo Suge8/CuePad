@@ -39,7 +39,7 @@ nonisolated enum Icon: Hashable, Sendable {
     /// 带着附件（回形针）：只带文件的灵感在列表、卡片与搜索里的标记
     case attachment
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
-    case terminal, terminalWindow, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
+    case terminal, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
     case relay, relayStalled
     // Cue 与设置
     case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, schedule, looked, mail
@@ -153,7 +153,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .dismissKeyboard: .ink("keyboard.down")
         case .variables: .ink("braces")
         case .terminal: .ink("terminal")
-        case .terminalWindow: .ink("window")
         case .readFile: .ink("doc")
         case .tool: .ink("wrench")
         case .said: .ink("bubble.text")

@@ -57,8 +57,6 @@ struct SessionPage: View {
     private var header: SessionHeader { workspace.sessionHeader }
     @State private var stored: SessionDigest?
     @State private var task: SessionTaskLink?
-    @State private var confirmingEnd: PiSessionState?
-    @State private var renaming: PiSessionState?
     @State private var follow = ChatFollow()
 
     /// 标题、状态与最新的对话先出；回复框、问题卡与"⋯"晚两帧（`NextFrame`）：它们的建立（文本视图、玻璃、菜单）占点击回合的一半，不在点的那一圈里。
@@ -93,8 +91,6 @@ struct SessionPage: View {
                     .padding(.horizontal, 24).padding(.bottom, 16)
                     .frame(maxWidth: Self.readingWidth)
                     .animation(Motion.fade, value: session.question)
-                    .renameSession($renaming)
-                    .endSession($confirmingEnd)
                 }
             } else if stored != nil {
                 EmptyState(mascot: .empty, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
@@ -103,12 +99,8 @@ struct SessionPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)
-        .onChange(of: headerState(digest, live: live, menu: secondary, task: task), initial: true) { _, state in header.set(state) }
-        .onAppear {
-            header.rename = { renaming = $0 }
-            header.end = { confirmingEnd = $0 }
-            header.reveal = { follow.reveal() }
-        }
+        .onChange(of: headerState(digest, menu: secondary, task: task), initial: true) { _, state in header.set(state) }
+        .onAppear { header.reveal = { follow.reveal() } }
         .onDisappear { header.clear(sessionID) }
         .task {
             await NextFrame.wait()
@@ -129,13 +121,12 @@ struct SessionPage: View {
     }
 
     /// 工具栏上的标题与"⋯"（`SessionHeader`）要显示的值：页面算好交过去，工具栏项在主窗口里常驻。
-    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
+    private func headerState(_ digest: SessionDigest, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
             session: session, title: digest.title(at: services.speech) ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered(at: services.speech)),
             ending: DeliveryRequest.shownEnd(in: digest.deliveries, at: services.speech)?.inTransit == true, place: PiPlace.menuTitle(of: session, project: digest.project),
-            liveID: live.flatMap { $0.canJump ? $0.id : nil }, canEnd: session.canEnd, canRename: MacDelivery.canRename(session),
-            showsHeader: follow.showsHeader, showsMenu: menu, task: task)
+            pin: digest.task, showsHeader: follow.showsHeader, showsMenu: menu, task: task)
     }
 
     /// 绑着的任务按会话读，还能绑的按所在项目读。

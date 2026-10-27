@@ -56,6 +56,9 @@ extension CueStore {
       conditions.append("id = ?")
       arguments.append(id)
     }
+    if let pinned = query.pinned {
+      conditions.append("sessionID \(pinned ? "IN" : "NOT IN") (\(pinnedSessions))")
+    }
     return (conditions.isEmpty ? "1" : conditions.joined(separator: " AND "), arguments)
   }
 
@@ -72,18 +75,41 @@ extension CueStore {
     try db.first("SELECT count(*) FROM piSessionStates") { Int($0.int(0)) } ?? 0
   }
 
-  /// 会话记录配上列表项要的其余几样（项目、最近一条投送请求、改名、没送达的话）：分页与按 id 取的唯一组装处。
+  /// 会话记录配上列表项要的其余几样（项目、最近一条投送请求、改名、没送达的话、绑着的任务）：分页与按 id 取的唯一组装处。
   private func listItems(_ states: [PiSessionState]) throws -> [PiSessionListItem] {
     let ids = states.map(\.sessionID)
     let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
     let deliveries = try latestDeliveries(to: ids)
     let renames = try latestRenames(to: ids)
     let unsettled = try unsettledTalk(to: ids)
+    let tasks = try sessionTasks(ids)
     return states.map {
       PiSessionListItem(
         state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-        unsettled: unsettled[$0.sessionID] ?? [])
+        unsettled: unsettled[$0.sessionID] ?? [], task: tasks[$0.sessionID])
     }
+  }
+
+  /// 绑在置顶任务（`pinnedTasks`，连同子任务）上的会话：会话段的置顶在最前（`PiSessionQuery.pinned`）。
+  static let pinnedSessions = """
+    SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND todoAt IS NOT NULL AND \(cardActive)
+      AND id IN (\(subtree(from: pinnedTasks)))
+    """
+
+  /// 这些会话绑着的顶层任务（从绑着它、还在列表里的任务往上找），按 Pi 的会话 id；绑着几件时置顶的那件在先。
+  /// 与 `pinnedSessions` 同一条规则，一个从任务往下找，一个从会话往上找。
+  func sessionTasks(_ sessionIDs: [String]) throws -> [String: SessionTask] {
+    guard !sessionIDs.isEmpty else { return [:] }
+    let rows = try db.query(
+      """
+      WITH RECURSIVE up(sessionID, id, parentID) AS (
+        SELECT piSessionID, id, parentID FROM cards
+        WHERE piSessionID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND \(Self.cardActive)
+        UNION SELECT up.sessionID, c.id, c.parentID FROM cards c JOIN up ON c.id = up.parentID WHERE c.deletedAt IS NULL)
+      SELECT up.sessionID, c.id, c.isPinned FROM up JOIN cards c ON c.id = up.id WHERE up.parentID IS NULL ORDER BY c.isPinned DESC
+      """, [JSONColumn.encode(sessionIDs)]
+    ) { ($0.text(0), SessionTask(id: $0.uuid(1), isPinned: $0.bool(2))) }
+    return Dictionary(rows, uniquingKeysWith: { first, _ in first })
   }
 
   /// 在问你的会话："等你"里会话那一半（规则在 `PiSessionState.asksYou`，汇总在 `cueTally`）。只读在等回答的那几条，订阅也只依赖它们（`narrow`）：

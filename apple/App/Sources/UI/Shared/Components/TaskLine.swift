@@ -32,11 +32,13 @@ struct TaskLine: View {
         let next = workspace.next(for: task, in: agents, steps: subtasks)
         let done = check.done(task)
         framed(line(next: next, done: done))
-            .taskSpoken(task, subtasks: subtasks, next: next, check: $check, open: open) { start(next) }
+            .taskSpoken(task, subtasks: subtasks, next: next, aside: task.isPinned ? String(localized: "已置顶") : nil, check: $check, open: open) { start(next) }
     }
 
     private func line(next: TaskNext?, done: Bool) -> some View {
-        let title = Text(task.title.textGlyphs).strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(titleInk)
+        // 置顶的顶层任务标题前一枚图钉（看板上同一个，`BoardPin`）
+        let name = Text(task.title.textGlyphs)
+        let title = (task.isPinned ? Text("\(Text(Image(.pin)).foregroundStyle(palette.ink3)) \(name)") : name).strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(titleInk)
             .font(step ? TaskMetrics.stepFont : TaskMetrics.lineFont)
             .lineLimit(titleLines)
         // 圈与旁注都对着标题第一行（`TaskRingView` 的基线），标题折成两行也不落到中间
@@ -141,7 +143,10 @@ struct TaskLine: View {
             .row()
             .benchSpot(task.id)
             .onTapGesture(perform: open)
-            .contextMenu { CardActions(card: task, leaf: subtasks == nil, opens: workspace.entersSession(task, leaf: subtasks == nil, in: agents)) }
+            .contextMenu {
+                let leaf = subtasks == nil
+                CardActions(card: task, leaf: leaf, opens: workspace.entersSession(task, leaf: leaf, in: agents), session: leaf ? agents.items[task.id]?.state : nil)
+            }
             .padding(.vertical, 1)
     }
     #endif

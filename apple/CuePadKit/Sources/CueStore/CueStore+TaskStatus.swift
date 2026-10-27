@@ -1,11 +1,13 @@
 import Foundation
 
 extension CueStore {
-  /// 归档：连同下级一起（已归档的保留原时刻）。
+  /// 归档：连同下级一起（已归档的保留原时刻）。没做完的任务就此离开看板，没人再用的会话随之结束（`endUnusedSessions`）；
+  /// 做完了的在完成时已经结束过，之后又说话恢复的不动。
   public func archive(_ id: UUID) throws {
     try write {
-      guard try find(Card.self, id) != nil else { throw CueStoreError.notFound }
+      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
       try setArchived([id], at: Date.stamp)
+      if card.completedAt == nil { try endUnusedSessions(of: id, cue: false) }
     }
   }
 
@@ -17,14 +19,14 @@ extension CueStore {
     }
   }
 
-  /// 进展页看板"已完成"的一键归档：已完成的顶层任务（及其下级）全部归档，返回归档了几条任务。
+  /// 进展页看板"已完成"的一键归档：已完成的顶层任务（及其下级）全部归档，置顶的留着，返回归档了几条任务。
   /// 没做完的任务下已完成的子任务算在上级的进度里，不单独归档。
   public func archiveCompletedTasks() throws -> Int {
     try write {
       let done = try db.query(
         """
         SELECT t.id FROM cards t
-        WHERE t.todoAt IS NOT NULL AND t.completedAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL
+        WHERE t.todoAt IS NOT NULL AND t.completedAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND t.isPinned = 0
           AND (t.parentID IS NULL OR t.parentID NOT IN (SELECT id FROM cards WHERE todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL))
         """
       ) { $0.uuid(0) }

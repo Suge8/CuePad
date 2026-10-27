@@ -15,6 +15,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var cueSent: Set<UUID> = []
     /// 可换的模型与能用的斜杠命令（会话记录指向的目录记录；会话结束后也在，从没报过的会话没有）。
     var catalog: AgentCatalog?
+    /// 绑着的顶层任务（会话菜单的"置顶"置的是它，`SessionActions`）。
+    var task: SessionTask?
 
     /// 正在请 Mac 补写对话（很久以前的会话没有对话时）：请求还在路上（`Speech`，超时就不再说正在补写）。
     func fetchingTranscript(at moment: Speech.Moment) -> Bool {
@@ -48,7 +50,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     }
 
     static func read(_ id: UUID, sessionID: String?, from store: isolated CueStore) throws -> SessionDigest {
-        let session = try store.piSessionPage(PiSessionQuery(id: id)).items.first?.state
+        let item = try store.piSessionPage(PiSessionQuery(id: id)).items.first
+        let session = item?.state
         let ref = session?.sessionID ?? sessionID
         let messages = try ref.map { try store.piMessages(of: $0) } ?? []
         return SessionDigest(
@@ -58,7 +61,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             messages: messages,
             previews: try ref.map { try store.previews(of: $0) } ?? [],
             cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)),
-            catalog: try session?.catalogID.flatMap { try store.agentCatalog($0) })
+            catalog: try session?.catalogID.flatMap { try store.agentCatalog($0) },
+            task: item?.task)
     }
 }
 

@@ -248,7 +248,7 @@ struct BoardColumn: View {
                     Text("全部归档").frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
                 }
                 .buttonStyle(PressStyle())
-                    .help("把做完的任务全部归档：不占列表，照样搜得到")
+                    .help("把做完的任务全部归档（置顶的留着）：不占列表，照样搜得到")
             }
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)

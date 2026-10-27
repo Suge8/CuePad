@@ -1,9 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 会话页读到的会话（Mac 与手机同一份）：一条列表，"现在"置顶——全部在线的与正在唤醒的（`PiSessionListItem.isCurrent`；不多，不分页），
-/// 按要你注意的先后；"历史"接在下面——已结束的（"现在"里有的不再列），按结束时间从新到旧分页读（分段见 `TimeSection`）。
-/// 两部分用同一个搜索词与项目范围（`Workspace.projectScope`）。
+/// 会话页读到的会话（Mac 与手机同一份）：一条列表，最上面是置顶的——绑在置顶任务上的（`PiSessionQuery.pinned`，在线的在前，结束了也留着；不多，不分页）；
+/// 接着"现在"——其余在线的与正在唤醒的（`PiSessionListItem.isCurrent`；不多，不分页），按要你注意的先后；
+/// "历史"在最下——其余已结束的（"现在"里有的不再列），按结束时间从新到旧分页读（分段见 `TimeSection`）。
+/// 三部分用同一个搜索词与项目范围（`Workspace.projectScope`）。
 nonisolated struct PiSessionList: Sendable, Equatable {
     static let pageSize = 40
 
@@ -21,6 +22,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     }
 
     var filter: Filter
+    var pinned: [PiSessionListItem]
     var now: [PiSessionListItem]
     /// 读到的历史（前 `limit` 条）与一共几条。
     var ended: [PiSessionListItem]
@@ -30,8 +32,8 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 
     var loaded: Int { ended.count }
     var hasMore: Bool { ended.count < endedTotal }
-    /// 一共几个会话（在线的加结束的）。
-    var count: Int { now.count + endedTotal }
+    /// 一共几个会话（置顶的、在线的加结束的）。
+    var count: Int { pinned.count + now.count + endedTotal }
     var isEmpty: Bool { count == 0 }
     /// 卡上写所在的项目图标：看全部项目时；只看一个项目时顶栏已经说了。
     var showsPlace: Bool { filter.project == nil }
@@ -39,15 +41,16 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     static func read(
         text: String, project: UUID? = nil, historyLimit: Int, at moment: Speech.Moment, from store: isolated CueStore
     ) throws -> PiSessionList {
-        let live = try store.piSessionPage(PiSessionQuery(scope: .current, text: text, project: project, limit: .max)).items
+        let pinned = try store.piSessionPage(PiSessionQuery(scope: .all, text: text, project: project, pinned: true, limit: .max)).items
+        let live = try store.piSessionPage(PiSessionQuery(scope: .current, text: text, project: project, pinned: false, limit: .max)).items
             .filter { $0.isCurrent(at: moment) }
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
         let now = PiSessionState.inListOrder(live, state: \.state, deliveries: deliveries, cue: try store.cueDuty(), at: moment)
-        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
+        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, pinned: false, limit: historyLimit))
         return PiSessionList(
-            filter: Filter(text: text, project: project), now: now,
+            filter: Filter(text: text, project: project), pinned: pinned, now: now,
             ended: ended.items, endedTotal: ended.total,
-            ends: try live.reduce(into: [:]) { ends, item in
+            ends: try (pinned.filter { $0.state.state != .known(.ended) } + live).reduce(into: [:]) { ends, item in
                 ends[item.id] = DeliveryRequest.shownEnd(in: try store.deliveryRequests(toSession: item.state.sessionID), at: moment)
             })
     }
@@ -344,17 +347,4 @@ private struct FactsLayout: Layout {
 private extension View {
     /// 读数一行里的一项：能被排成 0 宽并裁掉（`FactsLayout`）。
     func fact() -> some View { frame(minWidth: 0, alignment: .leading).clipped() }
-}
-
-/// 会话行长按（Mac 右键）菜单里的"标为未读"：做完一轮停着、你看过了的会话才有（`PiUnread.canMarkUnread`）；
-/// 标了之后它回到"有新回复"（石绿铃铛），直到你再打开它。
-struct MarkUnreadButton: View {
-    let session: PiSessionState
-    @Environment(AppServices.self) private var services
-
-    var body: some View {
-        if services.settings.canMarkUnread(session) {
-            Button("标为未读", icon: .markUnread) { services.settings.markUnread(session) }
-        }
-    }
 }
