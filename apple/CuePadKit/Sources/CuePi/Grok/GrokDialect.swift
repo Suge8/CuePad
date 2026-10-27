@@ -20,9 +20,10 @@ import Foundation
 ///   MCP 与组织下发的 MCP 都关掉（`compat` 各项、`GROK_MANAGED_MCPS_ENABLED`），工作流清单、每轮摘要、标题刷新、自动更新也关掉；
 /// - 系统提示经会话的智能体定义（`_meta.agentProfile`）整份替换（`promptMode: full`）：换模型时也不丢（`systemPromptOverride` 换模型就被清空，
 ///   源码 model_switch.rs）。系统提示会被当成 MiniJinja 模板渲染（`${{ }}`、`${% %}`），整份包在 raw 块里原样交；
-/// - 工具只有读文件的三样（`read_file`、`grep`、`list_dir`），关掉默认注入与 MCP 的搜索、转调工具（`search_tool`、`use_tool`）：
-///   MCP 工具不进模型的工具清单（源码 sampler_turn.rs、tool_list.rs），模型照名字直接调的照常执行，所以 CuePad 的工具说明写进系统提示
-///   （`CueMCPServer.promptsTools`）；不读 AGENTS.md、不找技能；
+/// - 工具只有读文件的三样（`read_file`、`grep`、`list_dir`）与 Grok 调 MCP 工具的那两样，关掉默认注入；不读 AGENTS.md、不找技能。
+///   Grok 不把 MCP 工具放进模型的工具清单（源码 sampler_turn.rs 的 `tool_definitions_builtins_only`），模型经 `search_tool` 按关键词
+///   找到 CuePad 的工具与参数、经 `use_tool` 调它；只能调清单里的工具，照名字直接调的真模型不会发（实测 grok-4.7-build-fast 改去 grep 文件），
+///   所以这两样不能关（工具白名单下它们也总在，tool_list.rs）。
 /// - 第一条输入只有工作目录与日期（`userMessageTemplate`），没有 Grok 默认的规则、技能、MCP 清单；
 /// - 不问权限（`_meta.yoloMode`）：带着智能体定义的会话默认是自动审查，审查本身要请求一次模型、还会拦下 CuePad 的工具；
 ///   能用的只有读文件与 CuePad 的工具，用不着审查。万一仍来问，驱动一律允许（`ACPSession`）。
@@ -57,7 +58,7 @@ struct GrokDialect: ACPDialect {
                 ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".grok", directoryHint: .isDirectory)).appending(path: "auth.json").path
         let profile: JSONValue = [
             "name": "cue", "description": "Cue", "promptMode": "full", "promptBody": .string("${% raw %}\(config.systemPrompt)${% endraw %}"),
-            "tools": .array(Self.readingTools.map(JSONValue.string)), "disallowedTools": ["search_tool", "use_tool"], "injectDefaultTools": false,
+            "tools": .array(Self.readingTools.map(JSONValue.string)), "injectDefaultTools": false,
             "agentsMd": false, "discoverSkills": false, "userMessageTemplate": ["custom": .string(Self.firstMessage)],
         ]
         return ACPBrainSetup(
@@ -107,9 +108,15 @@ struct GrokDialect: ACPDialect {
         }
     }
 
-    func toolName(_ call: JSONValue) -> String {
-        call["_meta"]?["x.ai/tool"]?["name"]?.string ?? call["title"]?.string ?? "?"
+    /// 名字在 `_meta["x.ai/tool"].name`（标准的 `title` 随后会换成给人看的说法）；经 `use_tool` 调的 MCP 工具报成它转调的那一个。
+    func tool(_ call: JSONValue) -> (name: String, input: JSONValue) {
+        let name = call["_meta"]?["x.ai/tool"]?["name"]?.string ?? call["title"]?.string ?? "?"
+        let input = call["rawInput"] ?? [:]
+        guard name == Self.useTool, let target = input["tool_name"]?.string else { return (name, input) }
+        return (target, input["tool_input"] ?? [:])
     }
+
+    static let useTool = "use_tool"
 
     /// 标准的 `content` 里没有时取 `rawOutput`：MCP 工具的是 `output` 里成败那一项（`OkayOutput`、`ErrorOutput`），命令的是给模型的那段输出。
     func toolResult(_ update: JSONValue) -> String {

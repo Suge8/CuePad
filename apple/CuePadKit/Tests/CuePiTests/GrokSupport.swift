@@ -9,16 +9,25 @@ import Synchronization
 /// 本机的 Grok Build（录制时用）：`CUEPAD_GROK` 指定另一个（如新版本）。
 let realGrokURL = ProcessInfo.processInfo.environment["CUEPAD_GROK"].map { URL(filePath: $0) } ?? ExecutableLocator.standard.candidates("grok").first
 
-/// 录制时 Grok 用的模型：环境里给了 `XAI_API_KEY`（只经测试进程的环境给，不写进任何文件）就连真的 xAI，否则连本进程里的假模型（`FakeResponses`）。
-/// 假模型的地址与假密钥由录像带起 grok 时加进它的环境（`AgentTape.recordProcess`），不经 CuePad，录像带里也就没有。
+/// 录制时 Grok 用的模型：环境里给了真凭据就连真的 xAI，否则连本进程里的假模型（`FakeResponses`）。真凭据只经测试进程的环境给、不写进任何文件：
+/// API 密钥（`XAI_API_KEY`），或已登录的凭据文件的位置（`GROK_AUTH_PATH`，如 `~/.grok/auth.json`：grok 自己读、自己刷新，测试不碰它的内容）。
+/// 录像带起 grok 时把这里的环境补进去（`AgentTape.recordProcess`，CuePad 自己给了的不覆盖）：假模型的地址与假密钥，或真凭据——
+/// 测试台的配置目录是临时的，托管会话的 grok 要经它找到登录。都不经 CuePad，录像带里也就没有。
 enum GrokModel {
-    /// 测试进程里共用一个，录制时头一次起 grok 时才开（回放不起：Grok 的输出都在录像带里）；连真模型时为 nil。
-    static let fake: FakeResponses? = ProcessInfo.processInfo.environment["XAI_API_KEY"].map(\.isEmpty) == false ? nil : try? FakeResponses()
+    /// 测试进程环境里的真凭据
+    static let credentials = ProcessInfo.processInfo.environment.filter { ["XAI_API_KEY", "GROK_AUTH_PATH"].contains($0.key) && !$0.value.isEmpty }
 
-    /// 录制时给 grok 进程加的环境：假模型的地址与假密钥（本机地址不走代理），不自动更新。
+    /// 连真模型时托管会话开在 `CUEPAD_GROK_MODEL` 给的模型上（不给是账号的默认模型；Grok 的新会话不认 `GROK_DEFAULT_MODEL`）；假模型与回放为 nil。
+    static let hosted: PiModelKey? = credentials.isEmpty ? nil
+        : ProcessInfo.processInfo.environment["CUEPAD_GROK_MODEL"].map { PiModelKey(provider: AgentKind.grok.rawValue, id: $0) }
+
+    /// 测试进程里共用一个，录制时头一次起 grok 时才开（回放不起：Grok 的输出都在录像带里）；连真模型时为 nil。
+    static let fake: FakeResponses? = credentials.isEmpty ? try? FakeResponses() : nil
+
+    /// 录制时补给 grok 进程的环境：假模型（本机地址不走代理）或真凭据，不自动更新。
     static var environment: [String: String] {
-        ["GROK_DISABLE_AUTOUPDATER": "1"].merging(
-            fake.map { ["GROK_XAI_API_BASE_URL": $0.baseURL, "XAI_API_KEY": "fake-xai-key", "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"] } ?? [:]) { $1 }
+        let model = fake.map { ["GROK_XAI_API_BASE_URL": $0.baseURL, "XAI_API_KEY": "fake-xai-key", "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"] } ?? credentials
+        return ["GROK_DISABLE_AUTOUPDATER": "1"].merging(model) { $1 }
     }
 }
 
@@ -131,6 +140,9 @@ final class FakeResponses: Sendable {
         indirect case held(Plan)
         /// 说出这几段就停住，直到对方断开
         case endless([String])
+
+        /// 调 MCP 工具：Grok 只把它经 `use_tool` 交给模型（见 `GrokDialect`）
+        static func mcp(_ name: String, _ input: [String: Any]) -> Plan { .call("use_tool", ["tool_name": name, "tool_input": input]) }
     }
 
     /// 最近一句你的话决定怎么答（测试问的那几句）；其余回 "ECHO <原话>"。
@@ -148,8 +160,8 @@ final class FakeResponses: Sendable {
         let outputs = after.compactMap { $0["type"] as? String == "function_call_output" ? $0["output"] as? String : nil }
         if users.contains(where: { $0.contains("Stop now") }) { return .say("STOPPED") }
         if query.contains("Call the echo tool") {
-            if calls.isEmpty { return .call("cuepad__echo", ["text": "x"]) }
-            let next: Plan = calls.count < 8 ? .call("cuepad__echo", ["text": outputs.last ?? "x"]) : .say(outputs.last ?? "")
+            if calls.isEmpty { return .mcp("cuepad__echo", ["text": "x"]) }
+            let next: Plan = calls.count < 8 ? .mcp("cuepad__echo", ["text": outputs.last ?? "x"]) : .say(outputs.last ?? "")
             return calls.count == 1 ? .held(next) : next
         }
         if let codename = system.firstMatch(of: /codename is ([A-Z0-9-]+)/)?.output.1, query.contains("codename") { return .say(String(codename)) }
@@ -157,11 +169,11 @@ final class FakeResponses: Sendable {
             let seen = input.contains { ($0["content"] as? [[String: Any]])?.contains { $0["type"] as? String == "input_image" } == true }
             return .say(seen ? "red" : "I see no image")
         }
-        if query.contains("which drink") {
+        if query.contains("ask_user_question") {
             let questions: [[String: Any]] = [
                 ["question": "Which drink?", "header": "Drink", "multiSelect": false,
                  "options": [["label": "Tea", "description": "hot"], ["label": "Coffee", "description": "strong"]]],
-                ["question": "Which size?", "header": "Size", "multiSelect": false, "options": [["label": "Small", "description": ""], ["label": "Large", "description": ""]]],
+                ["question": "Which size?", "header": "Size", "multiSelect": false, "options": [["label": "Small", "description": "small cup"], ["label": "Large", "description": "large cup"]]],
             ]
             return calls.isEmpty ? .call("ask_user_question", ["questions": questions]) : .say(outputs.last ?? "")
         }
@@ -173,7 +185,7 @@ final class FakeResponses: Sendable {
         if query.contains("hack.txt") {
             return calls.isEmpty ? .call("run_terminal_command", ["command": "echo x > hack.txt", "description": "write the file"]) : .say("I cannot write files here.")
         }
-        if let command = query.firstMatch(of: /Run exactly this shell command: (.+)/)?.output.1 {
+        if let command = query.firstMatch(of: /run exactly: (.+?)  Then/)?.output.1 {
             return calls.isEmpty ? .call("run_terminal_command", ["command": String(command), "description": "run it"]) : .say("DONE")
         }
         if let word = query.firstMatch(of: /single word ([A-Za-z]+)/)?.output.1 { return .say(String(word)) }
