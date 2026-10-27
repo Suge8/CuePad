@@ -51,7 +51,7 @@ struct RealGrokTests {
             let resumed = try await rig.runtime.resume(IndexedSession(id: session.sessionID, path: file.path, cwd: rig.work.path, lastActivityAt: .now, agent: .grok))
             #expect(rig.bridge.session(id: resumed)?.hosted == true && rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
             try await rig.bridge.send(PiMessage(text: "Reply with the single word AGAIN."), to: resumed)
-            try await eventually("接着回答了") { rig.replies(session).last == "AGAIN" }
+            try await eventually("接着回答了") { rig.replied("AGAIN", in: resumed) }
         }
     }
 
@@ -70,9 +70,7 @@ struct RealGrokTests {
 
             try await rig.bridge.answer(.confirmed(true), to: try #require(question.promptID), in: id)
 
-            try await eventually("这一轮做完") {
-                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.contains("DONE") == true } == true
-            }
+            try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled && rig.replied("DONE", in: id) }
             #expect(FileManager.default.fileExists(atPath: marker.path))
         }
     }
@@ -100,7 +98,7 @@ struct RealGrokTests {
             try await rig.bridge.answer(.text("Medium"), to: try #require(size.promptID), in: id)
 
             try await eventually("拿到答案接着说，这一轮做完") {
-                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last.map { $0.contains("Coffee") && $0.contains("Medium") } == true } == true
+                rig.bridge.session(id: id)?.state == .settled && rig.replied("Coffee", in: id) && rig.replied("Medium", in: id)
             }
             #expect(rig.bridge.session(id: id)?.question == nil)
         }
@@ -116,7 +114,7 @@ struct RealGrokTests {
             try await rig.bridge.abort(id)
             try await eventually("停下歇着") { rig.bridge.session(id: id)?.state == .settled }
             try await rig.bridge.send(PiMessage(text: "Reply with the single word NEXT."), to: id)
-            try await eventually("接着回答了") { rig.bridge.session(id: id).map { rig.replies($0).last == "NEXT" } == true }
+            try await eventually("接着回答了") { rig.replied("NEXT", in: id) }
         }
     }
 
@@ -127,7 +125,7 @@ struct RealGrokTests {
             let hosted = try await rig.open("token-4")
             try await rig.bridge.send(PiMessage(text: "Reply with the single word FIRST."), to: hosted)
             let session = try #require(rig.bridge.session(id: hosted))
-            try await eventually("回答落盘") { rig.replies(session).last == "FIRST" }
+            try await eventually("回答落盘") { rig.replied("FIRST", in: hosted) }
             try await rig.bridge.end(hosted)
             try await eventually("托管的下线") { rig.bridge.session(id: hosted) == nil }
 
@@ -204,6 +202,11 @@ final class GrokRig {
 
     func replies(_ session: PiSession) -> [String] {
         ((try? transcript(session))?.messages ?? []).filter { $0.role == .known(.pi) }.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+
+    /// 最近一条回答里有这个词（真模型的措辞不定，不要求刚好是它）
+    func replied(_ word: String, in id: PiSession.ID) -> Bool {
+        bridge.session(id: id).flatMap { replies($0).last?.contains(word) } == true
     }
 }
 

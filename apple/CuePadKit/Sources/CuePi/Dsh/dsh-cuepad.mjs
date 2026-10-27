@@ -9,13 +9,13 @@
 //   - `session/load`：dsh-acp 只有 `session/resume`（不重放历史），改名转给它
 //   - 模型选项的值：dsh-acp 的是 `["提供方","模型"]` 的 JSON 原文，进出都换成 CuePad 的写法 `提供方/模型`
 // 标准没有的，CuePad 的扩展方法（`ACPDialect`）：
-//   `_cuepad/steer`  {sessionId, text, images?[{mimeType, data}], deliveryId?}：插进在跑的这一轮，下一步就读到；歇着时回错误码 -32001，该走 session/prompt
+//   `_cuepad/steer`  {sessionId, text, images?[{mimeType, data}]}：插进在跑的这一轮，下一步就读到；歇着时回错误码 -32001，该走 session/prompt
 //   `_cuepad/rename` {sessionId, name}
 // 插件发给 CuePad 的请求（CuePad 回了才接着做）：
 //   `_cuepad/ask_user_question` {sessionId, questions}：`ask_user_question` 工具要你回答（dsh 的 `AskUserQuestionItem`，托管会话才插这个工具）；
 //   回 {answers} 交给它，回 {cancelled: true}（这一轮停下、没答就作废）这次提问失败。dsh 自己收回（停下这一轮）时不再等回应
 // CuePad 送进去的话带投送请求 id（`session/prompt` 的 `_meta.cuepadDelivery`）：这句话进收件箱时往会话记录里先记一条
-// `plugin:cuepad/delivery` {message, delivery}，随后的 `user/message` 按 message id 认（`DshHistory`）；插话的 `deliveryId` 同样记。
+// `plugin:cuepad/delivery` {message, delivery}，随后的 `user/message` 按 message id 认（`DshHistory`）。
 // config.prompt：给了就是 Cue 的大脑，整份替换系统提示（文件路径，原样不插值）。
 // 环境 CUEPAD_MODEL（`提供方/模型`）：新会话用它；没给用 acp profile 的缺省模型（`agent-default-model`，dsh-acp 自己写死的那个不用）。
 // dsh-acp 只在握手时按这个模型判定收不收图（`promptCapabilities.image`），之后换到能看图的模型也不改。
@@ -96,7 +96,7 @@ export async function apply(ctx, config = {}) {
     record(agent.session, message.id, delivery);
   });
 
-  const methods = extensions(ctx, record);
+  const methods = extensions(ctx);
   const toAgent = (message) => {
     if (typeof message.method === "string" && message.method.startsWith(prefix)) return answer(message, () => methods[message.method.slice(prefix.length)], send);
     // 插件自己发出的请求的回应不交给 dsh-acp（已收回的提问也是）
@@ -163,21 +163,20 @@ function commands(ctx, agent) {
   return ctx.commands.list(agent).map((c) => ({ name: c.name, description: c.description ?? "", ...(c.input?.hint ? { input: { hint: c.input.hint } } : {}) }));
 }
 
-function extensions(ctx, record) {
+function extensions(ctx) {
   const agent = (sessionId) => {
     const found = ctx.agents.get(sessionId);
     if (!found) throw failure(`unknown session ${sessionId}`);
     return found;
   };
   return {
-    async steer({ sessionId, text, images = [], deliveryId }) {
+    async steer({ sessionId, text, images = [] }) {
       const target = agent(sessionId);
       if (target.status !== "running") throw failure("the session is idle: send it as a prompt", idle);
       const refs = images.length === 0 ? [] : await ctx.get("attachments").saveImages(
         images.map((image) => ({ mediaType: image.mimeType, data: Buffer.from(image.data, "base64") })));
       const content = [...(text ? [{ type: "text", text }] : []), ...refs.map((attachment) => ({ type: "image", attachment }))];
       const message = Object.freeze({ id: randomUUID(), role: "user", content, source: { kind: "user" } });
-      if (deliveryId) record(target.session, message.id, deliveryId);
       target.steer(message);
       return {};
     },

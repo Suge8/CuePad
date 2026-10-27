@@ -23,8 +23,9 @@ extension DshRuntime {
 
     nonisolated static func home(_ paths: AgentPaths) -> URL { paths.directory(facts.homeVariable) ?? paths.user(".dsh") }
 
-    /// CuePad 托管的会话的存储根（在 DSH_HOME 下，明文；理由见 `DshRuntime` 头注释；补丁里的同一个位置见 `DshLaunch`）
-    nonisolated static let sessions = "cuepad/sessions"
+    /// CuePad 托管的会话的存储根（在 DSH_HOME 下，明文；理由见 `DshRuntime` 头注释；补丁里的存储根也由它推出，见 `DshLaunch`）
+    nonisolated static let storage = "cuepad"
+    nonisolated static let sessions = storage + "/sessions"
 
     /// 起一个不答 ACP 的进程，插件的探测模式（`CUEPAD_PROBE`）把模型清单写成一行就退出：与会话的模型菜单同一份（各提供方的清单），
     /// 缺省是新会话用的模型。一个模型都没有是没登录（没有 key、也没登录账号）。标准输入要一直开着：一关 dsh 就收场，清单还没问完。
@@ -81,21 +82,21 @@ enum DshLaunch {
 
     /// 托管会话与探测的环境：配置目录（`DSH_HOME`）与新会话的模型（`提供方/模型`，插件的 `CUEPAD_MODEL`）。
     static func environment(_ paths: AgentPaths, model: String?) -> [String: String] {
-        [DshRuntime.facts.homeVariable: DshRuntime.home(paths).path].merging(model.map { ["CUEPAD_MODEL": $0] } ?? [:]) { $1 }
+        [DshRuntime.facts.homeVariable: DshRuntime.home(paths).path, "CUEPAD_MODEL": model].compactMapValues(\.self)
     }
 
     /// 大脑的环境：本次运行的临时目录（会话、附件、存储都在里面）与写在里面的系统提示。
     static func brainEnvironment(in run: URL, prompt: String, model: String?) throws -> [String: String] {
         let promptFile = run.appending(path: "prompt.md")
         try Data(prompt.utf8).write(to: promptFile)
-        return ["CUEPAD_BRAIN_DIR": run.path, "CUEPAD_PROMPT": promptFile.path].merging(model.map { ["CUEPAD_MODEL": $0] } ?? [:]) { $1 }
+        return ["CUEPAD_BRAIN_DIR": run.path, "CUEPAD_PROMPT": promptFile.path, "CUEPAD_MODEL": model].compactMapValues(\.self)
     }
 
     private static func file(_ patch: Patch) -> URL { directory.appending(path: patch.rawValue + ".yml") }
 
     /// 托管会话另插上提问工具（acp profile 里没有它）：它问的经插件转给 CuePad（`DshDialect+Ask`）。
     private static var hosted: String {
-        common(prompt: false, storage: "dshHomePath('cuepad')", insert: "    - id: tool-ask-user\n      name: '@deepseek-ai/dsh-tool-ask-user'\n")
+        common(prompt: false, storage: "dshHomePath('\(DshRuntime.storage)')", insert: "    - id: tool-ask-user\n      name: '@deepseek-ai/dsh-tool-ask-user'\n")
     }
 
     /// 大脑不写代码：只留读文件与搜索，技能、规则、子代理、计划、网页这些都关掉；附件也进临时目录。

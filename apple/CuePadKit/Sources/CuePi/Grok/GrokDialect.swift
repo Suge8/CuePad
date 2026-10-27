@@ -122,9 +122,7 @@ struct GrokDialect: ACPDialect {
     func toolResult(_ update: JSONValue) -> String {
         let text = ACPContent.text(update["content"])
         guard text.isEmpty, let raw = update["rawOutput"] else { return text }
-        if let output = raw["output_for_prompt"]?.string { return output }
-        if let output = raw["output"]?.string { return output }
-        return raw["output"]?.object?.values.compactMap(\.string).first ?? ACPContent.text(raw["output"])
+        return raw["output_for_prompt"]?.string ?? raw["output"]?.string ?? raw["output"]?.object?.values.compactMap(\.string).first ?? ACPContent.text(raw["output"])
     }
 
     func window(of model: String, in session: JSONValue) -> Int? {

@@ -151,7 +151,7 @@ public final class GrokRuntime: AgentRuntime {
         let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
         return home.appending(path: "sessions", directoryHint: .isDirectory)
             .appending(path: cwd.addingPercentEncoding(withAllowedCharacters: unreserved) ?? cwd, directoryHint: .isDirectory)
-            .appending(path: id, directoryHint: .isDirectory).appending(path: facts.sessionFiles?.fileName ?? "updates.jsonl")
+            .appending(path: id, directoryHint: .isDirectory).appending(path: GrokHistory.fileName)
     }
 }
 
