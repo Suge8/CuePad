@@ -1,4 +1,5 @@
 #if os(iOS) && DEBUG
+import CueEditor
 import CueStore
 import CueSync
 import SwiftUI
@@ -93,7 +94,6 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             workspace.show(.cue)
-            if defaults.bool(forKey: "CuePadPlacesOpen") { openPlaces() }
             workspace.sidebar = .all
             if scene == "cuememory" { workspace.cue.showsMemory = true }
             if defaults.bool(forKey: "CuePadPanelCycle") { Task { await cyclePanel() } }
@@ -170,52 +170,62 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadDockTour YES`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步，每步走点按调的那条路：Cue 页展开"⋯" → 去任务 →
-    /// 去会话 → 推入一个会话 → 返回 → 去项目 → 推入搜索 → 返回 → 推入一个会话再换去任务（推入的页清掉）→ 回 Cue →
-    /// 不经"⋯"直接去会话（快捷键、通知的那条路）→ 回 Cue → 直接去项目 → 去会话（隔一格）→ 回 Cue → 聚焦输入框（"⋯"让开）。
+    /// `-CuePadDockTour stack|motion`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步。切 tab 走点标签栏的那条路（直接换 `Workspace.root`），推入、返回走导航栈的路径：
+    /// - stack：项目 → 进默认项目 → 进一条灵感、在末尾接着写一句、收起键盘 → 切到 Cue → 切回项目（还停在那条灵感，字还在）→ 切到进展 → 再切回项目。
+    /// - motion：进默认项目 → 进一条灵感 → 返回 → 返回；切到进展、进一个会话 → 返回；切到 Cue。
     static func dockTourIfAsked(_ workspace: Workspace) async {
-        guard defaults.bool(forKey: "CuePadDockTour") else { return }
-        let sessions = ((try? await workspace.services.store.piSessionPage(PiSessionQuery(limit: 2)))?.items ?? []).map(\.state)
+        guard let tour = defaults.string(forKey: "CuePadDockTour") else { return }
+        let store = workspace.services.store
+        guard let card = await card(in: Project.defaultID, store: store) else { return }
         // 节奏是要录的内容，不是在等别的事
         func beat() async { try? await Task.sleep(for: .seconds(1.6)) }
-        func open(_ index: Int) {
-            guard sessions.indices.contains(index) else { return }
-            workspace.openSession(sessions[index].id, sessionID: sessions[index].sessionID)
+        workspace.root = .shelf
+        await beat()
+        workspace.push(.project(Project.defaultID))
+        await beat()
+        workspace.push(.card(card))
+        await beat()
+        if tour == "stack" {
+            if let editor = textView(CueTextView.self) {
+                editor.becomeFirstResponder()
+                editor.selectedRange = NSRange(location: (editor.text as NSString).length, length: 0)
+                for word in String(localized: "，切去 Cue 看一眼再回来接着写", table: "Demo").map(String.init) {
+                    editor.insertText(word)
+                    try? await Task.sleep(for: .milliseconds(90))
+                }
+                await beat()
+                editor.resignFirstResponder()
+            }
+            await beat()
+            for tab in [Route.cue, .shelf, .progress, .shelf] {
+                workspace.root = tab
+                await beat()
+            }
+        } else {
+            workspace.path.removeLast()
+            await beat()
+            workspace.path.removeLast()
+            await beat()
+            workspace.root = .progress
+            await beat()
+            if let session = try? await store.piSessionPage(PiSessionQuery(limit: 1)).items.first?.state {
+                workspace.openSession(session.id, sessionID: session.sessionID)
+                await beat()
+                workspace.path.removeLast()
+                await beat()
+            }
+            workspace.root = .cue
         }
-        await beat()
-        openPlaces()
-        await beat()
-        workspace.select(.progress)
-        await beat()
-        workspace.showSessions()
-        await beat()
-        open(0)
-        await beat()
-        workspace.path.removeAll()
-        await beat()
-        workspace.select(.shelf)
-        await beat()
-        workspace.openSearch()
-        await beat()
-        workspace.closeSearch()
-        await beat()
-        open(1)
-        await beat()
-        workspace.select(.progress)
-        await beat()
-        workspace.select(.cue)
-        await beat()
-        workspace.showSessions()
-        await beat()
-        workspace.select(.cue)
-        await beat()
-        workspace.select(.shelf)
-        await beat()
-        workspace.showSessions()
-        await beat()
-        workspace.select(.cue)
-        await beat()
-        workspace.speakToCue()
+    }
+
+    /// 屏上第一个这一类的输入框。
+    private static func textView<View: UITextView>(_: View.Type) -> View? {
+        func find(_ view: UIView) -> View? {
+            if let found = view as? View, found.window != nil, !found.isHidden { return found }
+            return view.subviews.lazy.compactMap(find).first
+        }
+        let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }
+        return window.flatMap(find)
     }
 
     /// `-CuePadPanelCycle YES`（配 cue 画面录屏）：画面就绪后每 1.5 秒点一下 Cue 页头，开合面板几遍，看动效。

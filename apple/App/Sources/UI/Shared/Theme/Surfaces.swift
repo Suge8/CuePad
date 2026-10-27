@@ -113,10 +113,6 @@ enum Motion {
         CAMediaTimingFunction(controlPoints: Float(moveCurve.0), Float(moveCurve.1), Float(moveCurve.2), Float(moveCurve.3))
     }
     private static let moveCurve: (Double, Double, Double, Double) = (0.2, 0, 0, 1)
-    /// iPhone 切页：根上那一条页滑过去、底部那一排的选中与换形都是这一条（`PagerController.animate`，图层与 SwiftUI 同一条），"⋯"开合也用它；
-    /// 比列表里挪位置走得长，看得清从哪到哪，仍在 300ms 内。
-    static let dock = Animation.spring(duration: dockDuration, bounce: 0)
-    static let dockDuration: TimeInterval = 0.3
     /// 按下：快、不回弹，手指一落就到位。
     static let pressDown = Animation.spring(duration: 0.14, bounce: 0)
     /// 松开：稍慢、带一点回弹，像纸被放开时弹回来。

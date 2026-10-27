@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Observation
 
-/// 去哪：两端同一套规则，入口（侧栏与底部那一排、⌘1–9、提示、深链、通知、看板的卡、Cue 页的旁注与待回复提示、组件里的"去会话"）都经这里；
+/// 去哪：两端同一套规则，入口（侧栏与标签栏、⌘1–9、提示、深链、通知、看板的卡、Cue 页的旁注与待回复提示、组件里的"去会话"）都经这里；
 /// 平台只给怎么摆（`Layout`）与呈现时顺带的事（`willSelect`、`showEditor`、`sessionRoute`，在各端的 `Workspace` 扩展里）。
 extension Workspace {
     /// 去处怎么摆。
@@ -11,7 +11,7 @@ extension Workspace {
         case pages
         /// iPad 宽屏：侧栏选中的去处是根，会话页、卡片纸页推在它上面（返回回到原处）。
         case split
-        /// 窄屏（iPhone 与窄窗口 iPad）：根只有底部那一排的几个（`Dock.places` 与 Cue，`Route.home`），其余去处推在它所属的那一页上。
+        /// 窄屏（iPhone 与窄窗口 iPad）：根只有标签栏的三个 tab（`Dock.tabs`，`Route.home`），各有自己的导航栈，其余去处推在它所属的那个 tab 上。
         case dock
 
         /// 会话页推在当前页上、能返回。
@@ -44,14 +44,13 @@ extension Workspace {
         select(route)
     }
 
-    /// 换去处（侧栏与底部那一排点哪就是哪），清掉推入的页。窄屏上不在底部那一排的去处推在它所属的那一页上
-    /// （项目、设置……推在书架上）；不属于哪一页的（卡片纸页、会话页）推在当前页上。
+    /// 去这一页（侧栏点哪就是哪、快捷键、深链），清掉它那一栈推入的页。窄屏上不是 tab 的去处推在它所属的那个 tab 上
+    /// （项目、设置……推在书架上），别的 tab 的栈不动；不属于哪一页的（卡片纸页、会话页）推在当前 tab 上。点标签栏只换 tab，不经这里（`DockRoot`）。
     func select(_ route: Route) {
-        let home = layout == .dock ? route.home : route
-        let next = home ?? root
+        let next = (layout == .dock ? route.home : route) ?? root
         willSelect(route, root: next)
-        // 先换路径再换根：换了去处就没有可前进的页（`forward`），清掉推入的页不算返回
-        path = home == route ? [] : [route]
+        if layout != .dock { stacks = [:] }
+        stacks[next] = next == route ? [] : [route]
         root = next
     }
 
@@ -88,13 +87,6 @@ extension Workspace {
         case .task(let id): openTask(id: id)
         case .memory: cue.showsMemory = true
         }
-    }
-
-    /// 推回刚返回离开的那一页（`forward`）。会话页按此刻重读首帧（同 `openSession`）：离开后对话可能又长了。
-    func goForward() {
-        guard let forward else { return }
-        guard case .session(let route) = forward else { return push(forward) }
-        push(sessionRoute(route.id, sessionID: route.sessionID) ?? forward)
     }
 
     /// 打开一条灵感或任务：任务在气泡里看（`openTask`）；灵感（挂在任务下的也一样）进编辑页（`showEditor`）。

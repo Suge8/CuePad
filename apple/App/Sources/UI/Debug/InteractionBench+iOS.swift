@@ -5,10 +5,10 @@ import Darwin
 import QuartzCore
 import UIKit
 
-/// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：以去处为根的导航栈加底部一排）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
+/// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：标签栏、每个 tab 一个导航栈）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
 /// 每项一行 `INTERACT {json}` 写进隔离库目录下的 `interact.jsonl`（模拟器里的标准输出不好取），量完退出。
-/// 动作是点击最终调用的同一条路（导航路径、`openSession`、点底部那一排与侧栏的 `select`、浮窗与面板的状态），不经触摸投递。
-/// 长按菜单与手势（滑动切页、右滑返回、左滑前进，以及会话行、看板上横滑的误触核对）由 `perf-ios.sh` 在模拟器上真按、真滑（`AWAIT` 行，`InteractionBench+iOSTouch`），
+/// 动作是点击最终调用的同一条路（导航路径、`openSession`、点标签栏换的 `Workspace.root`、侧栏的 `select`、浮窗与面板的状态），不经触摸投递。
+/// 长按菜单与右滑返回由 `perf-ios.sh` 在模拟器上真按、真滑（`AWAIT` 行，`InteractionBench+iOSTouch`），
 /// 从手指按下起量；每行的 `landed` 是量完时的根与推入的页。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
 /// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
 /// - 冷启动·Cue 页：App 一打开就在 Cue 页上；`launchMs` 是进程启动到对话排出来（`PerfProbe` 的 `cue`）的墙钟毫秒，
@@ -18,6 +18,7 @@ import UIKit
 /// - 点击回合：动作发出到主线程第一次回到空闲的主线程 CPU 毫秒（只取第一圈 ≥2ms 的 run loop）。
 /// - 合计、最重一圈：动作后 800ms 里主线程 CPU 的总数与最重的一圈；指令数（百万条）是进程在这 800ms 里执行的，不随机器忙闲变。
 /// - 掉帧：display link 相邻间隔超过 1.5 帧的次数。模拟器的合成与 GPU 和真机不同，只作参考。
+/// - 内存：量完这一项时进程的 phys_footprint。
 enum IOSInteractionBench {
     private static let turns = TurnLog()
     private static let coldFrames = FrameRecorder()
@@ -97,11 +98,20 @@ enum IOSInteractionBench {
         }
         workspace.select(.cue)
         try? await Task.sleep(for: .seconds(1))
-        // 主导航：Cue 页点底部的"进展"去进展页（配 `-CuePadManyTasks` 量任务多时）、进展页点 Cue 钮回来（点按调的就是 `select`，过渡由 `HomePager` 接着做）
+        // 主导航：Cue 页点标签栏的"进展"去进展页（配 `-CuePadManyTasks` 量任务多时）、再点 Cue 回来（点标签栏换的就是 `root`）
         for _ in 0..<2 {
-            await step("Cue 进任务") { workspace.select(.progress) }
-            await step("任务回 Cue") { workspace.select(.cue) }
+            await step("Cue 进任务") { workspace.root = .progress }
+            await step("任务回 Cue") { workspace.root = .cue }
         }
+        // 项目 tab 停在一条灵感上时切走再切回来：栈与页都留着，不重建
+        workspace.select(.project(Project.defaultID))
+        workspace.push(.card(idea.id))
+        try? await Task.sleep(for: .seconds(1.5))
+        for _ in 0..<2 {
+            await step("灵感去 Cue") { workspace.root = .cue }
+            await step("Cue 回灵感") { workspace.root = .shelf }
+        }
+        workspace.root = .cue
         // Cue 页头开合面板（点页头的那条路）
         for _ in 0..<2 {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }
@@ -125,7 +135,7 @@ enum IOSInteractionBench {
             await step("开任务气泡") { workspace.openTask(task) }
             await step("关任务气泡") { workspace.openTask = nil }
         }
-        await gestures(workspace, session: sessions[0], wants: wants, fail: fail, press: { await Self.touch(write, $0, $1) }) { name, window, finger, action in
+        await gestures(workspace, session: sessions[0], wants: wants) { name, window, finger, action in
             await step(name, window: window, finger: finger, action)
         }
         await typeLong(workspace, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
@@ -213,7 +223,7 @@ enum IOSInteractionBench {
 
     private static func stepScroll(_ name: String, _ scroll: UIScrollView, step: (String, () -> Void) async -> Void) async {
         // 滚动是持续的：量 40 帧里每帧的主线程回合与掉帧（动作只触发第一帧，之后由 display link 推）
-        // 量完滚回原处（顶上是负的上内边距，不是 0）：根上的页常驻，滚到哪后面的项就从哪接着看
+        // 量完滚回原处（顶上是负的上内边距，不是 0）：tab 的页常驻，滚到哪后面的项就从哪接着看
         let start = scroll.contentOffset
         let driver = ScrollDriver(scroll)
         await step(name) { driver.start() }
@@ -229,7 +239,7 @@ enum IOSInteractionBench {
         guard let view else { return nil }
         if let scroll = view as? UIScrollView, scroll.contentSize.height > scroll.bounds.height, !view.isHidden, view.window != nil,
            scroll.bounds.height > 300 { return scroll }
-        // 叠在原处不画的邻页（透明）不算
+        // 藏着、透明的不算
         for sub in view.subviews where !sub.isHidden && sub.alpha > 0 { if let found = scrollView(in: sub) { return found } }
         return nil
     }
@@ -247,7 +257,18 @@ enum IOSInteractionBench {
         var row = TurnLog.metrics(turns.finish(), instructions: instructions, frames: recorder.stop())
         // 动作发出的时刻（与 xctrace 录制对时）
         row["at"] = wall
+        row["footprintMB"] = footprintMB()
         return row
+    }
+
+    /// 量完这一项时进程的内存占用（phys_footprint，同 Xcode 内存表与系统按它杀进程的口径）。
+    private static func footprintMB() -> Double {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+        }
+        return result == KERN_SUCCESS ? (Double(info.phys_footprint) / 1_048_576 * 10).rounded() / 10 : 0
     }
 }
 

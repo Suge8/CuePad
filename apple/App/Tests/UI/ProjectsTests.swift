@@ -112,7 +112,7 @@ struct ProjectsNavigationTests {
         let workspace = Workspace(services: app.services)
 
         let phone = navigation()
-        phone.select(.shelf)  // 底部那一排的"项目"
+        phone.select(.shelf)  // 标签栏的"项目"
         phone.push(.project(project.id))  // 书架上的项目卡
         phone.push(.progress)  // 项目页的"已完成 N"
         #expect(try await workspace.createTask("补重连用例", in: try #require(phone.currentProject)).projectID == project.id)

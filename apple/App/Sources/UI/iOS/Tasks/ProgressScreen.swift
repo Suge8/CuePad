@@ -2,12 +2,12 @@
 import CueStore
 import SwiftUI
 
-/// 进展页（iPhone 底部那一排与 iPad 侧栏的"进展"）：看板与会话两段，看哪一段只有 `Workspace.progressPane` 一份
+/// 进展页（iPhone 标签栏与 iPad 侧栏的"进展"）：看板与会话两段，看哪一段只有 `Workspace.progressPane` 一份
 /// （项目页"⋯"的"看这个项目的会话"经 `showSessions` 换到会话段）。两段只看项目范围里的（`Workspace.scopedProject`）。
 /// 顶栏中间一块玻璃（`ProgressHeader`）：两段的分段、项目范围、额度环；右上角随段是"添加任务"或"新会话"。
 /// 看板一段是流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）；选了项目以后卡上不画项目小图形、列头的数也只数这个项目。
 /// 宽屏（iPad）与 iPhone 横屏同 Mac 四列并排（`BoardColumns`）；窄屏竖着拿是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点。
-/// 横屏的屏高减去顶栏与底部那一排只剩两百多点，四行连各自的最矮都叠不下；横过来的宽正好排四列。
+/// 横屏的屏高减去顶栏与标签栏只剩两百多点，四行连各自的最矮都叠不下；横过来的宽正好排四列。
 /// "添加任务"去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 /// 会话一段是全部会话（`SessionList`）：在线的在上、历史在下；搜会话在搜索页，这里不另放搜索框。
 struct ProgressScreen: View {
@@ -33,7 +33,7 @@ struct ProgressScreen: View {
         }
         .onChange(of: pane, initial: true) { mounted.insert(pane) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // 顶上不写页名（侧栏、底部那一排的选中格已经说了在哪一页）
+        // 顶上不写页名（侧栏、标签栏的选中格已经说了在哪一页）
         .floatingHeader("进展", center: { ProgressHeader() }) {
             if workspace.progressPane == .sessions {
                 NewSessionButton(project: workspace.scopedProject)
