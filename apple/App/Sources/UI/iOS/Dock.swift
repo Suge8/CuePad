@@ -29,7 +29,6 @@ struct DockRoot: View {
             } label: {
                 DockTabLabel(tab: .cue, selected: root == .cue)
             }
-            .badge(workspace.cue.unread)
         }
         .tint(palette.signature)
         .overlay { DockRelaySpots(shown: Dock.showsTabBar(on: workspace.top)) }
