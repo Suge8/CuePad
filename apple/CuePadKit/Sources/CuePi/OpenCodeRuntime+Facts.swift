@@ -25,14 +25,10 @@ extension OpenCodeRuntime {
         let (process, client) = try await OpenCodeClient.serve(
             executable, environment: probe.locator.environment(launching: executable, overrides: overrides),
             directory: FileManager.default.temporaryDirectory)
-        do {
+        return try await withStopped(process, stop: { await $0.stop() }) { _ in
             let models = try await client.get(OpenCodeData<[OpenCodeModel]>.self, "/api/model").data
             let model = try await client.get(OpenCodeData<OpenCodeModel?>.self, "/api/model/default").data
-            await process.stop()
             return models.isEmpty ? nil : MacAgent(kind: .opencode, model: model?.key, models: models.map(\.option))
-        } catch {
-            await process.stop()
-            throw error
         }
     }
 

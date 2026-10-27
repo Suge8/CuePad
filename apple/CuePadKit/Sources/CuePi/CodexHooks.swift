@@ -165,13 +165,7 @@ struct CodexHooks: AgentHookConfig {
         _ codex: URL, _ environment: [String: String], _ body: @MainActor (CodexRPC) async throws -> Void
     ) async throws {
         let rpc = try await CodexRPC.launch(codex, environment: environment)
-        do {
-            try await body(rpc)
-        } catch {
-            await rpc.shutdown()
-            throw error
-        }
-        await rpc.shutdown()
+        try await withStopped(rpc, stop: { await $0.shutdown() }, body)
     }
 
     // MARK: 信任条目

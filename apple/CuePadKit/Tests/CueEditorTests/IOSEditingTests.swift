@@ -109,7 +109,7 @@ struct IOSEditingTests {
         h.textView.onChange = { notified.append($0) }
 
         h.textView.insert([.data(makePNG(width: 40, height: 30))])
-        #expect(await h.wait { CueFormat.hasImages(h.stored) })
+        #expect(await h.wait { CueFormat.hasAttachments(h.stored) })
 
         let id = try #require(CueFormat.parse(h.stored).compactMap { if case .image(let id) = $0 { id } else { nil } }.first)
         #expect(h.stored == "前文\n![](cuepad://file/\(id))\n后文")
@@ -132,7 +132,7 @@ struct IOSEditingTests {
         h.load("甲乙")
         h.setCaret(1)
         h.textView.insert([.data(makePNG(width: 40, height: 30))])
-        #expect(await h.wait { CueFormat.hasImages(h.stored) })
+        #expect(await h.wait { CueFormat.hasAttachments(h.stored) })
         let original = h.stored
         h.textView.selectedRange = NSRange(location: 0, length: h.textView.textStorage.length)
 

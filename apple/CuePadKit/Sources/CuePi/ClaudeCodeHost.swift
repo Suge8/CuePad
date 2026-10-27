@@ -128,12 +128,7 @@ final class ClaudeHostedSession: SessionLink {
     /// 交给事件流（大脑）与桥（托管会话）。
     private func emit(_ event: TurnEvent) {
         brain?.emit(event)
-        guard let id, let bridge else { return }
-        switch event {
-        case .speaking(let draft): bridge.setDraft(id, draft)
-        case .context(let used, let window?): bridge.update(id) { $0.context = PiContextUsage(tokens: used, window: window) }
-        default: break
-        }
+        if let id { bridge?.show(event, in: id) }
     }
 
     private func startTurn(at now: Date) {

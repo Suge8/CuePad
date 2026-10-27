@@ -19,7 +19,7 @@ struct ImageTests {
         pasteboard.setData(png, forType: .png)
 
         #expect(h.textView.readSelection(from: pasteboard, type: .png))
-        #expect(await h.wait { CueFormat.hasImages(h.stored) })
+        #expect(await h.wait { CueFormat.hasAttachments(h.stored) })
 
         let imageID = try #require(CueFormat.parse(h.stored).compactMap { if case .image(let id) = $0 { id } else { nil } }.first)
         #expect(h.stored == "前文\n![](cuepad://file/\(imageID))\n后文")
@@ -34,7 +34,7 @@ struct ImageTests {
         pasteboard.setData(NSBitmapImageRep(data: makePNG(width: 40, height: 30))!.tiffRepresentation!, forType: .tiff)
 
         #expect(h.textView.readSelection(from: pasteboard, type: .tiff))
-        #expect(await h.wait { CueFormat.hasImages(h.stored) })
+        #expect(await h.wait { CueFormat.hasAttachments(h.stored) })
 
         let stored = try #require(h.store.storedData.first)
         #expect(stored.starts(with: [0x89, 0x50, 0x4E, 0x47]))
@@ -62,7 +62,7 @@ struct ImageTests {
         let drag = FakeDrag(pasteboard: pasteboard, location: point, window: h.window)
         #expect(h.textView.draggingEntered(drag) == .copy)
         #expect(h.textView.performDragOperation(drag))
-        #expect(await h.wait { CueFormat.hasImages(h.stored) })
+        #expect(await h.wait { CueFormat.hasAttachments(h.stored) })
 
         let tokens = CueFormat.parse(h.stored)
         let imageIndex = try #require(tokens.firstIndex { if case .image = $0 { true } else { false } })
@@ -81,7 +81,7 @@ struct ImageTests {
         let pasteboard = h.privatePasteboard()
         pasteboard.setData(makePNG(width: 40, height: 30), forType: .png)
         _ = h.textView.readSelection(from: pasteboard, type: .png)
-        #expect(await h.wait { CueFormat.hasImages(h.stored) })
+        #expect(await h.wait { CueFormat.hasAttachments(h.stored) })
         let pasted = h.stored
 
         h.textView.undoManager?.undo()
@@ -103,7 +103,7 @@ struct ImageTests {
         h.load("甲乙")
         h.setCaret(1)
         _ = h.textView.readSelection(from: pasteboard, type: .png)
-        #expect(await h.wait { CueFormat.hasImages(h.stored) })
+        #expect(await h.wait { CueFormat.hasAttachments(h.stored) })
         let original = h.stored
         h.textView.setSelectedRange(NSRange(location: 0, length: h.textView.textStorage!.length))
 

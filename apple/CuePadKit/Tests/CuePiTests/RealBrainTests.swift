@@ -186,7 +186,7 @@ struct RealBrainTests {
         }
         await #expect(throws: (any Error).self) { try await rig.brain.configure(model: unknown, effort: nil) }
         let other = environment["CUEPAD_BRAIN_OTHER_MODEL_\(runtime.rawValue.uppercased())"] ?? otherModels[runtime]
-        try await rig.brain.configure(model: try #require(other), effort: .low)
+        try await rig.brain.configure(model: other, effort: .low)
         try await rig.brain.send("What word did I ask you to remember? Reply with only the word.")
         try await rig.finished(2)
 

@@ -133,7 +133,7 @@ extension CueKeeper {
     /// 看不了图的，图同文件一样以路径写进信封（`CueEnvelope.delivered`），这里不交。图不在这台 Mac 上，不交图并对你说一声，不悄悄丢掉。
     func images(in pending: [CueMessage], for brain: any HostedSession) async -> [PiImage] {
         guard brain.seesImages else { return [] }
-        let contents = pending.filter { $0.author == .known(.you) && CueFormat.hasImages($0.text) }.map { SendContent(stored: $0.text) }
+        let contents = pending.filter { $0.author == .known(.you) && CueFormat.hasAttachments($0.text) }.map { SendContent(stored: $0.text) }
         guard !contents.isEmpty else { return [] }
         do {
             return try contents.flatMap { try $0.piImages(from: store.files) }

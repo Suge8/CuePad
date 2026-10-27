@@ -58,11 +58,9 @@ extension CodexRuntime {
             return
         case .turnFinished:
             endTurn(session, failure: session.lastError)
-        case .speaking(let draft):
-            return bridge.setDraft(session.id, draft)
-        case .context(let used, let window?):
-            return bridge.update(session.id) { $0.context = PiContextUsage(tokens: used, window: window) }
-        case .context, .tool, .toolDone, .exited:
+        case .speaking, .context:
+            return bridge.show(event, in: session.id)
+        case .tool, .toolDone, .exited:
             return
         }
         publish(session)
