@@ -202,6 +202,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             text: $draft.text, prompt: String(localized: prompt), label: String(localized: label), maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
             shortcut: shortcut, files: accepts.contains(.files) ? { add($0) } : nil)
             .focused(focus)
+            #if os(macOS)
+            .yieldsFocusWhenCovered(focus)
+            #endif
             // 收起时原文与"草稿：…"在同一个位置一换即成，不两层叠着交叉淡：同一行字在变形中只有一层
             .animation(nil) { $0.opacity(shrunkDraft == nil ? 1 : 0) }
             .overlay(alignment: .leading) {

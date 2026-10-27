@@ -3,7 +3,8 @@ import AppKit
 
 /// 画面就绪后在本 App 自己的主窗口里按顺序点几下（截菜单、录任务气泡的开合与换条用；`xc.sh run mac` 起实例后从外面按窗口截、录）。
 /// - `-CuePadClick x,y[;x,y|esc|return|type:文字…]`：左键点；几下之间用分号隔开，隔 `-CuePadClickGap` 秒（默认 1.5），`esc`、`return` 是按一下那个键，
-///   `type:文字` 是往窗口此刻的焦点里打进这几个字（按键事件只发给激活的窗口，后台窗口里看点进输入框落在哪靠它）。
+///   `type:文字` 是往窗口此刻的焦点里打进这几个字（按键事件只发给激活的窗口，后台窗口里看点进输入框落在哪靠它），
+///   `cmd:键` 是按主菜单的快捷键 ⌘键（如 `cmd:f` 打开全屏页里 PDF 的查找条）。
 /// - `-CuePadRightClick x,y`：右键点，弹出那里的右键菜单。
 /// - 双击、拖、捏合、智能缩放、双指滑动与方向键几步见 `DebugGestures+Mac.swift`。
 /// 事件进事件队列（同真点）：窗口的本地事件监听（浮层的关法、任务气泡的落点）照样看得到。
@@ -31,6 +32,10 @@ extension DebugScene {
             if let key = keys[step] {
                 post(.keyDown, in: window, key: key)
                 post(.keyUp, in: window, key: key)
+                continue
+            }
+            if step.hasPrefix("cmd:") {
+                perform(menuKey: String(step.dropFirst(4)), in: window)
                 continue
             }
             let parts = step.split(separator: ",").compactMap { Double($0) }
@@ -62,6 +67,18 @@ extension DebugScene {
     }
 
     private static let keys: [String: (code: UInt16, character: String)] = ["esc": (53, "\u{1b}"), "return": (36, "\r")]
+
+    /// `cmd:键`：主菜单里快捷键是 ⌘键 的那一项，从窗口此刻的焦点沿响应链发它的动作（同按下 ⌘键）。
+    /// 后台窗口不是 key，菜单的快捷键与校验都找不到接收者，所以不经菜单分派，直接从焦点沿响应链发。
+    private static func perform(menuKey key: String, in window: NSWindow) {
+        func find(_ menu: NSMenu) -> NSMenuItem? {
+            menu.items.lazy.compactMap { item in
+                item.keyEquivalent == key && item.keyEquivalentModifierMask == .command ? item : item.submenu.flatMap(find)
+            }.first
+        }
+        guard let item = NSApp.mainMenu.flatMap(find), let action = item.action else { return }
+        _ = window.firstResponder?.tryToPerform(action, with: item)
+    }
 
     private static func post(_ type: NSEvent.EventType, in window: NSWindow, key: (code: UInt16, character: String)) {
         guard let event = NSEvent.keyEvent(

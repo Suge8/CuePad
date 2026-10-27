@@ -26,6 +26,7 @@ struct CaptureComposer: View {
     @Environment(\.palette) private var palette
     @State private var saving = false
     @FocusState private var focused: Bool
+    @Environment(\.panelCovered) private var covered
 
     private var project: UUID { state.project ?? defaultProject ?? Project.defaultID }
     private var destination: String { workspace.catalog?.project(project)?.shownName ?? "" }
@@ -39,7 +40,7 @@ struct CaptureComposer: View {
             header: { header }, tools: { EmptyView() }, send: { saveButton }
         )
         // 一直展开的出现的同一刻聚焦
-        .onAppear { if pinnedOpen { focused = true } }
+        .onAppear { if pinnedOpen, !covered { focused = true } }
     }
 
     private var header: some View {
