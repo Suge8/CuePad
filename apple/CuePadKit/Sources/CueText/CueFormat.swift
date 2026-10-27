@@ -57,17 +57,10 @@ public enum CueFormat {
         return marks.allSatisfy { $0 == mark }
     }
 
-    /// 只留文字（输入框、分享、一行摘要，收不了图片的会话 `AgentCapabilities.images`）：图片去掉、文件留文件名，空行折叠，去掉首尾空白。
+    /// 只留文字（输入框、分享、一行摘要）：图片去掉、文件留文件名，空行折叠，去掉首尾空白。
     public static func plainText(_ stored: String) -> String {
         let text = hasAttachments(stored) ? parse(stored).map(\.shownText).joined() : stored
         return collapsingBlankLines(text).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// 去掉图片、文件照留（收不了图片的会话：文件交给它的是路径，不是图片）：图片留下的空行折叠，去掉首尾空白。
-    public static func withoutImages(_ stored: String) -> String {
-        guard hasImages(stored) else { return stored }
-        let kept = parse(stored).filter { if case .image = $0 { false } else { true } }
-        return collapsingBlankLines(serialize(kept)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// 连着三个以上的换行折成两个（空行最多留一行）。按字节做：Swift 的正则在这条每条消息都过一次的路径上慢一个数量级。

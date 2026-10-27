@@ -24,7 +24,7 @@ import Testing
   }
 
   /// 终端里开的 Claude Code、Codex 会话不是什么都做得到（`AgentCapabilities`）：Cue 对它们的开工、停止、收尾与界面同一组规则——
-  /// 收不了图片的只交文字，停不了这一轮就报停不了，结束不了的会话事做完了也留着。
+  /// 收不了图片的正文照原样写（图片由 Mac 交出时写成路径），停不了这一轮就报停不了，结束不了的会话事做完了也留着。
   @Test func 交给其他Agent的会话_只做它做得到的() async throws {
     let recorder = PiStateRecorder(store: store, hostID: "mac")
     let claude = try await store.createTask("修乱序")
@@ -33,7 +33,7 @@ import Testing
     try await recorder.update(sessionID: "claude-1", state: .settled, agent: .claudeCode)
     let image = try store.files.store(pngData(width: 8, height: 8, shade: 0.5))
     let next = try await store.createTask("改排序\n看截图\n\(CueFormat.imageMarkup(key: image))", under: claude.id)
-    #expect(try await store.startLeaf(next.id, host: "mac").content == "改排序\n看截图")
+    #expect(try await store.startLeaf(next.id, host: "mac").content == next.body)
     try await recorder.update(sessionID: "claude-1", state: .thinking, title: "修乱序", agent: .claudeCode)
     await #expect(throws: CueStoreError.cannotStop("修乱序")) { try await store.stopSession("claude-1", host: "mac") }
 

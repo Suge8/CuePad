@@ -73,19 +73,18 @@ final class SendState {
         services.pi.session(sessionID: sessionID)
     }
 
-    /// 发给 Agent 写到哪（存储格式正文，收不了图片的会话去掉图片、文件照留，`AgentCapabilities.images`）与交出后的提示。本机在线的写给本机，别的 Mac 上的写给那台；
+    /// 发给 Agent 写到哪与交出后的提示。正文原样写：收不了图片的会话由 Mac 交出时把图片写成路径（`MacExecutor`）。本机在线的写给本机，别的 Mac 上的写给那台；
     /// 不在线的（已结束，或托管着、进程歇着）写给它所在的 Mac，由那台的执行器在后台唤醒后送达，提示补一句"唤醒后送达"。
     /// 提示只说写出了（到哪了看任务那一行）。
-    func destination(of stored: String, to target: AgentTarget, card: UUID?) -> (content: String, listener: Listener, handed: Dotted) {
+    func destination(to target: AgentTarget, card: UUID?) -> (listener: Listener, handed: Dotted) {
         let name = sessionName(target.session)
-        let (listener, capabilities, wakes): (Listener, AgentCapabilities, Bool) = switch route(of: target.session, host: target.host) {
-        case .local(let live): (.session(live.sendTarget, host: services.hostID, mode: .send, card: card), live.capabilities, false)
-        case .remote(let session): (.session(session, mode: .send, card: card), session.capabilities, false)
+        let (listener, wakes): (Listener, Bool) = switch route(of: target.session, host: target.host) {
+        case .local(let live): (.session(live.sendTarget, host: services.hostID, mode: .send, card: card), false)
+        case .remote(let session): (.session(session, mode: .send, card: card), false)
         case .ended(let host):
-            (.session(SendTarget(kind: .piSession, name: name, ref: target.session), host: host ?? services.hostID, mode: .send, card: card), .all, true)
+            (.session(SendTarget(kind: .piSession, name: name, ref: target.session), host: host ?? services.hostID, mode: .send, card: card), true)
         }
-        let content = capabilities.contains(.images) ? stored : CueFormat.withoutImages(stored)
-        return (content, listener, Dotted(wakes ? String(localized: "已交给 Agent 会话「\(name)」，唤醒后送达") : String(localized: "已交给 Agent 会话「\(name)」")))
+        return (listener, Dotted(wakes ? String(localized: "已交给 Agent 会话「\(name)」，唤醒后送达") : String(localized: "已交给 Agent 会话「\(name)」")))
     }
 }
 #endif

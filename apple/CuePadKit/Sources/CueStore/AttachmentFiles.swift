@@ -92,6 +92,19 @@ public struct AttachmentFiles: Sendable {
     try Self.removeIfPresent(backups)
   }
 
+  /// 本机上（缓存与保底里）在 `date` 之前存下的附件的键。硬链接的两份是同一个文件，创建时刻相同。
+  func keys(storedBefore date: Date) -> Set<String> {
+    var keys = Set<String>()
+    for folder in [directory, backups] {
+      let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+      for name in names where AttachmentKey.isValid(name) {
+        let created = (try? FileManager.default.attributesOfItem(atPath: folder.appending(path: name).path))?[.creationDate] as? Date
+        if let created, created < date { keys.insert(name) }
+      }
+    }
+    return keys
+  }
+
   /// 登记附件记录所需的元数据（`format` 就是键的扩展名）；文件不在本机返回 nil。
   func metadata(_ key: String) -> (hash: String, byteCount: Int, format: String)? {
     guard let parts = AttachmentKey.parts(key), let url = fileURL(for: key),
@@ -168,6 +181,23 @@ extension CueStore {
 }
 
 extension CueStore {
+  /// 删掉本机上用不着的附件文件（缓存与保底一起），返回删了几个：没有附件记录、库里没有任何正文与文字引用它（`isAttachmentReferenced`），
+  /// 也不在 `drafts`（跨启动留着的草稿）里。这些是存进来却没发出去的：回复框选了又没发的、编辑器里插了又删的。
+  /// 只看 `before` 之前存下的：这次运行里刚存、还没写进正文的（输入框里的、正在入库的分享）都比它晚，不会被删。
+  /// 在一个写事务里查与删：别的进程（命令行）这期间写不进引用它的记录。
+  public func removeStrayFiles(before: Date, drafts: [String]) throws -> Int {
+    let drafted = Set(drafts.flatMap(CueFormat.attachmentKeys(in:)))
+    return try write {
+      var removed = 0
+      for key in files.keys(storedBefore: before).sorted() where !drafted.contains(key) {
+        guard try !hasAttachment(key), try !isAttachmentReferenced(key) else { continue }
+        try files.remove(key)
+        removed += 1
+      }
+      return removed
+    }
+  }
+
   /// 这个键的附件记录服务器收下过（有一版推送成功）。
   func isUploaded(_ key: String) throws -> Bool {
     guard let parts = AttachmentKey.parts(key) else { return false }

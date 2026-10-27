@@ -39,12 +39,17 @@ extension SendContent {
         }
     }
 
-    /// 交给 Agent 的文字：图片去掉（另作 `piImages`），文件在原处换成自成一行的"附件：文件名（路径）"（`AttachmentFiles.agentLine`）。
+    /// 交给 Agent 的文字：图片去掉（另作 `piImages`），文件在原处换成自成一行的"附件：文件名（路径）"（`AttachmentFiles.agentLine`）；
+    /// `imagesAsFiles`（收不了图片的会话）时图片也这样写，名字是"图片.<扩展名>"。
     /// 文件要已在本机（投送执行器取齐了才执行），不在抛 `SendError.attachmentUnavailable`。
-    func agentText(from files: AttachmentFiles) throws -> String {
+    func agentText(from files: AttachmentFiles, imagesAsFiles: Bool = false) throws -> String {
         var text = ""
         for (index, token) in tokens.enumerated() {
-            guard case .file(let key, let name) = token else {
+            let key: String, name: String
+            switch token {
+            case .file(let file, let named): (key, name) = (file, named)
+            case .image(let image) where imagesAsFiles: (key, name) = (image, "图片." + (AttachmentKey.parts(image)?.format ?? ""))
+            default:
                 text += token.shownText
                 continue
             }

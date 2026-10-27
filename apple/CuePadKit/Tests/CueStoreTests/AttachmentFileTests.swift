@@ -97,6 +97,20 @@ import Testing
     #expect(try records().count == 3)
   }
 
+  /// 启动时的清理：没有记录、没被正文或草稿引用、在这次启动之前存下的才删（缓存与保底一起）；这次运行里刚存的、被引用的都留着。
+  @Test func strayFilesGoButReferencedDraftedAndFreshOnesStay() async throws {
+    let stray = try store.files.store(pngData(width: 2, height: 2, shade: 0.1))
+    let used = try store.files.store(pngData(width: 2, height: 2, shade: 0.3))
+    let drafted = try store.files.store(pngData(width: 2, height: 2, shade: 0.5))
+    _ = try await store.createCard(body: "![](cuepad://file/\(used))")
+    let launched = Date.now
+    let fresh = try store.files.store(pngData(width: 2, height: 2, shade: 0.7))
+
+    #expect(try await store.removeStrayFiles(before: launched, drafts: ["看 ![](cuepad://file/\(drafted))"]) == 1)
+    #expect(store.files.fileURL(for: stray) == nil && !FileManager.default.fileExists(atPath: backups.appending(path: stray).path))
+    for kept in [used, drafted, fresh] { #expect(store.files.fileURL(for: kept) != nil) }
+  }
+
   /// 键来自同步记录：拼不出附件目录外的路径。
   @Test(arguments: ["../cuepad.db", "deadbeef", String(repeating: "0", count: 64), String(repeating: "0", count: 64) + "./x"])
   func unknownOrMalformedKeyIsNotFound(key: String) throws {

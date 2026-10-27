@@ -98,6 +98,21 @@ extension MacSyncTests {
         #expect(app.messages.map(\.text) == ["看这段\n附件：录屏.mov（\(path)）"])
     }
 
+    /// 看不了图的会话（模型报了不收图）：图片同文件一样写成本机路径交给它，不丢、不另附；看得了图的照常另附原图。
+    @Test func 看不了图的会话收到图片的路径() async throws {
+        let blind = try await rig.host.connect("sess-1", cwd: "/work/app", seesImages: false)
+        let png = pngData(shade: 0.4)
+        let key = try services.store.files.store(png)
+        try await services.executor.start()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestDelivery(
+            "按这张改\n\(CueFormat.imageMarkup(key: key))", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
+        #expect(try await awaitFinished(request.id).status == .known(.succeeded))
+        let path = try #require(services.store.files.fileURL(for: key)).path(percentEncoded: false)
+        #expect(blind.messages == [PiMessage(text: "按这张改\n附件：图片.png（\(path)）", deliveryID: request.id.uuidString)])
+    }
+
     /// 发给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录；命令里带图片按失败写回，什么都不交给桥。
     @Test func 斜杠命令带卡片只关联卡片_带图片按失败写回() async throws {
         let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
@@ -112,7 +127,7 @@ extension MacSyncTests {
         #expect(linked.piSessionID == "sess-1" && linked.status == .inProgress)
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
 
-        // 图片文件在本机（没到的由执行时取来，那是另一条路径）
+        // 图片文件在本机（没到的由执行器在旁边取来，那是另一条路径）
         let hash = try services.store.files.store(pngData(shade: 0.3))
         let commands = ext.commands.count
         let image = try await services.store.requestDelivery("/greet\n\n![](cuepad://file/\(hash))", to: target, on: TestApp.hostID, mode: .command)

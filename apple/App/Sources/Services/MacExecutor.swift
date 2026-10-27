@@ -113,15 +113,17 @@ final class MacExecutor {
     private func deliver(_ request: DeliveryRequest) async throws {
         let (_, id) = try await connect(request.target)
         guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
-        try await pi.send(try await message(request.content, of: request), to: id)
+        try await pi.send(message(request.content, of: request, to: session), to: id)
         await record(request.content, of: request, to: session.sendTarget)
     }
 
-    /// 交给会话的一句（存储格式）：附件先取到本机，图片另附，文件写成路径（`SendContent.agentText`）。
-    private func message(_ stored: String, of request: DeliveryRequest) async throws -> PiMessage {
-        let content = SendContent(stored: stored)
+    /// 交给会话的一句（存储格式，附件已由执行器取到本机）：收得了图片的图片另附，收不了的（`AgentCapabilities.images`）图片同文件一样写成路径
+    /// （`SendContent.agentText`）。按交出这一刻的会话定：写请求时看到的能力可能已过时（换了模型）。
+    private func message(_ stored: String, of request: DeliveryRequest, to session: CuePi.PiSession) throws -> PiMessage {
+        let content = SendContent(stored: stored), seesImages = session.capabilities.contains(.images)
         // 图片拿走后留下的空行不发
-        return PiMessage(text: try content.agentText(from: store.files).trimmingCharacters(in: .whitespacesAndNewlines), images: try content.piImages(from: store.files), deliveryID: request.id.uuidString)
+        let text = try content.agentText(from: store.files, imagesAsFiles: !seesImages).trimmingCharacters(in: .whitespacesAndNewlines)
+        return PiMessage(text: text, images: seesImages ? try content.piImages(from: store.files) : [], deliveryID: request.id.uuidString)
     }
 
     /// 记发送记录。话已经送达，记不下也照样按成功写回（手机才不会重发）：没记下是这台 Mac 的资料库问题，在这里报。
@@ -213,8 +215,8 @@ final class MacExecutor {
         }
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
             // 开场的话是存储格式（可带卡片里的图片与文件）
-            try await pi.send(try await message(opening, of: request), to: id)
             guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
+            try await pi.send(message(opening, of: request, to: session), to: id)
             await record(opening, of: request, to: session.sendTarget)
         }
     }
