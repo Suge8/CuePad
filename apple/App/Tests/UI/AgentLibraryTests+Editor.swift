@@ -17,11 +17,10 @@ extension AgentLibraryTests {
         let following = Task { await workspace.follow() }
         defer { following.cancel() }
         func snapshot(_ text: String) async throws -> String? {
-            try await eventually("快照读到 \(text)") { workspace.library?.instruction(.global)?.text == text }
-            return workspace.library?.instruction(.global)?.text
+            try await eventually("快照读到 \(text)") { workspace.library?.instruction(.global)?.hash == hash(text) }
+            return try await self.text(.instruction(.global), in: try #require(workspace.library))
         }
-        _ = try await snapshot("# 原则\n")
-        let draft = FileDraft(.instruction(.global), text: workspace.library?.instruction(.global)?.text, workspace: workspace)
+        let draft = FileDraft(.instruction(.global), text: try await snapshot("# 原则\n"), workspace: workspace)
 
         draft.changed(body: "# 原则\n\n先读\n")
         await draft.leave()
@@ -71,7 +70,7 @@ extension AgentLibraryTests {
         try await eventually("快照读到这个技能") { workspace.library?.skill(at: directory.path) != nil }
         let skill = try #require(workspace.library?.skill(at: directory.path))
         #expect(skill.description == "写 PR 描述")
-        let draft = FileDraft(.skill(skill.path), text: skill.text, workspace: workspace)
+        let draft = FileDraft(.skill(skill.path), text: try await text(.skill(skill.path), in: try #require(workspace.library)), workspace: workspace)
         #expect(draft.name == "pr" && draft.summary == "写 PR 描述" && draft.body == "旧的正文\n", "正文从第一行字起，frontmatter 后的空行写回时放回")
 
         draft.changed(summary: "用法: 先读模板")

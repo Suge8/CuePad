@@ -2,10 +2,14 @@ import CryptoKit
 import Foundation
 
 /// 技能与规则：一台 Mac 上各家 Agent 读的技能与规则（AGENTS.md）此刻的样子与该整理的（同步表 `agentLibraries`，每台 Mac 一条、
-/// 只由它自己写，同 `MacAgents`；各端只读）。事实源是文件本身（读写规则在 CuePi 的 `AgentLibraryFiles`）：CuePad 不存副本，
-/// 这条是那台 Mac 照文件写下的快照，内容变了才写（不触发同步），`modifiedAt` 是最近一次变的时刻。
+/// 只由它自己写，同 `MacAgents`；各端只读）。事实源是文件本身（读写规则在 CuePi 的 `AgentLibraryFiles`），这条是那台 Mac 照文件写下的快照，
+/// 内容变了才写，`modifiedAt` 是最近一次变的时刻。
+/// 快照只有元数据（名字、说明、范围、路径、内容哈希、读不到的几家）；每份文件的正文各是一条（`LibraryFileText`，同步表 `agentLibraryFiles`），
+/// 列表上的全局规则预览、文件页、合并稿都读那一条，不另存第二份。
+/// 被否决的：正文塞在快照里——几百个技能就超过 iCloud 单条记录 1MB 的上限，超了那条传不上，手机永远停在旧内容；
+/// 打开文件页时请 Mac 现读——离线读不到、每次打开一个来回。每文件一条：离线可读、没有来回，改一个技能只传那一条。
 /// 手机上的整理与改文件是投送请求（`DeliveryMode.tidy`、`.libraryEdit`），由那台 Mac 照执行时的文件做。
-/// 读出时跳过本版本读不懂的条目（更新的版本加的种类），其余照读。合并来源里共读那份规则的正文不另存（`InstructionSource.stripped(in:)`）。
+/// 读出时跳过本版本读不懂的条目（更新的版本加的种类），其余照读。
 public struct AgentLibrary: Equatable, Sendable {
   public var hostID: String
   /// 那台 Mac 的家目录：路径给人看时缩成 `~`（`shown(_:)`）
@@ -48,17 +52,17 @@ public struct AgentLibrary: Equatable, Sendable {
 
   public func skill(at path: String) -> LibrarySkill? { skills.first { $0.path == path } }
 
-  /// 一份文件在快照里的位置与正文（规则还没有文件时正文为 nil）；快照里没有这一份为 nil。
-  public func file(_ file: LibraryFile) -> (path: String, text: String?)? {
+  /// 一份文件在快照里的位置（技能是目录）、正文那一条的路径（`LibraryFileText.path`）与内容哈希（规则还没有文件时为 nil）；快照里没有这一份为 nil。
+  public func file(_ file: LibraryFile) -> (path: String, textPath: String, hash: String?)? {
     switch file {
-    case .instruction(let kind): instruction(kind).map { ($0.path, $0.text) }
-    case .skill(let path): skill(at: path).map { ($0.path, $0.text) }
+    case .instruction(let kind): instruction(kind).map { ($0.path, $0.path, $0.hash) }
+    case .skill(let path): skill(at: path).map { ($0.path, $0.textPath, $0.hash) }
     }
   }
 
   /// 读不到这份规则的几家（这台装着的、不在 `readers` 里的）；Pi 的系统提示、还没有文件的为空。
   public func unseen(_ instruction: LibraryInstruction) -> [AgentKind] {
-    guard instruction.kind != .piSystem, instruction.text != nil else { return [] }
+    guard instruction.kind != .piSystem, instruction.hash != nil else { return [] }
     return agents.filter { !instruction.readers.contains($0) }
   }
 
@@ -99,8 +103,11 @@ public struct LibrarySkill: Codable, Equatable, Sendable, Identifiable {
   public let group: String
   /// 技能目录的绝对路径
   public let path: String
-  /// SKILL.md 的全文（读不出为空串）：文件页改它，手机上也要
-  public let text: String
+  /// frontmatter 里的说明（没有为空串）
+  public let description: String
+  /// SKILL.md 全文的哈希（`LibraryEdit.base`，读不出的按空串算）：正文在 `LibraryFileText`
+  public let hash: String
+  public let modifiedAt: Date?
   /// 格式不对的那条（四家最严）；对的为 nil
   public let problem: SkillProblem?
   /// 这台接入了、却读不到它的几家（Claude Code 缺链接；旧目录里的只有那一家读），按 `AgentKind` 的顺序
@@ -108,20 +115,23 @@ public struct LibrarySkill: Codable, Equatable, Sendable, Identifiable {
 
   public var id: String { path }
 
+  /// 正文那一条的路径：它的 SKILL.md。
+  public var textPath: String { path + "/SKILL.md" }
+
   public init(
-    name: String, scope: LibraryScope, group: String, path: String, text: String, problem: SkillProblem? = nil, unseenBy: [AgentKind] = []
+    name: String, scope: LibraryScope, group: String, path: String, description: String, hash: String, modifiedAt: Date? = nil,
+    problem: SkillProblem? = nil, unseenBy: [AgentKind] = []
   ) {
     self.name = name
     self.scope = scope
     self.group = group
     self.path = path
-    self.text = text
+    self.description = description
+    self.hash = hash
+    self.modifiedAt = modifiedAt
     self.problem = problem
     self.unseenBy = unseenBy
   }
-
-  /// frontmatter 里的说明（没有为空串）。
-  public var description: String { SkillDocument(text).description ?? "" }
 }
 
 /// 技能与规则里的一份文件：文件页打开的、改它的请求指的（`LibraryEdit`）。
@@ -140,10 +150,10 @@ public struct LibraryInstruction: Codable, Equatable, Sendable, Identifiable {
   }
 
   public let kind: Kind
-  /// 文件的绝对路径（还没有时是要写的位置）
+  /// 文件的绝对路径（还没有时是要写的位置）；正文那一条也按它（`LibraryFileText.path`）
   public let path: String
-  /// 正文；还没有这个文件为 nil（"还没有 AGENTS.md"）
-  public let text: String?
+  /// 正文的哈希（`LibraryEdit.base`）；还没有这个文件为 nil（"还没有 AGENTS.md"）
+  public let hash: String?
   public let modifiedAt: Date?
   /// 读这一份的几家（全局规则：各家的全局规则链到它的；项目规则：Claude Code 被同层的另一份 CLAUDE.md 挡住时不在内），按 `AgentKind` 的顺序
   public let readers: [AgentKind]
@@ -152,10 +162,10 @@ public struct LibraryInstruction: Codable, Equatable, Sendable, Identifiable {
 
   public var id: Kind { kind }
 
-  public init(kind: Kind, path: String, text: String?, modifiedAt: Date?, readers: [AgentKind] = [], links: [String] = []) {
+  public init(kind: Kind, path: String, hash: String?, modifiedAt: Date?, readers: [AgentKind] = [], links: [String] = []) {
     self.kind = kind
     self.path = path
-    self.text = text
+    self.hash = hash
     self.modifiedAt = modifiedAt
     self.readers = readers
     self.links = links
@@ -237,66 +247,19 @@ extension AgentLibrary: Record {
   var bindings: [any SQLBindable] {
     [
       Self.recordID(host: hostID), hostID, home, JSONColumn.encodeList(skills), JSONColumn.encodeList(instructions),
-      JSONColumn.encodeList(tidies.map { $0.withSources { $0.stripped(in: instructions) } }),
+      JSONColumn.encodeList(tidies),
       JSONColumn.encodeList(selfManaged), JSONColumn.encodeList(agents.map(\.rawValue)), modifiedAt,
     ]
   }
   init(row: Row) {
-    let instructions = JSONColumn.decodeList(Lenient<LibraryInstruction>.self, from: row.textOrNil(4)).compactMap(\.value)
     self.init(
       hostID: row.text(1), home: row.text(2),
       skills: JSONColumn.decodeList(Lenient<LibrarySkill>.self, from: row.textOrNil(3)).compactMap(\.value),
-      instructions: instructions,
-      tidies: JSONColumn.decodeList(Lenient<LibraryTidy>.self, from: row.textOrNil(5)).compactMap(\.value)
-        .map { $0.withSources { $0.restored(in: instructions) } },
+      instructions: JSONColumn.decodeList(Lenient<LibraryInstruction>.self, from: row.textOrNil(4)).compactMap(\.value),
+      tidies: JSONColumn.decodeList(Lenient<LibraryTidy>.self, from: row.textOrNil(5)).compactMap(\.value),
       selfManaged: JSONColumn.decodeList(Lenient<SelfManagedSkills>.self, from: row.textOrNil(6)).compactMap(\.value),
       agents: JSONColumn.decodeList(String.self, from: row.textOrNil(7)).compactMap(AgentKind.init(rawValue:)),
       modifiedAt: row.date(8))
   }
 }
 
-extension InstructionSource {
-  /// 共读的那份（`.shared`）正文就是同一路径的那份规则（`AgentLibrary.instructions`）：存的时候去掉（`stripped`），读出时照路径补回（`restored`）。
-  fileprivate func stripped(in instructions: [LibraryInstruction]) -> InstructionSource {
-    guard origin == .shared, text != nil, text == instructions.first(where: { $0.path == path })?.text else { return self }
-    return InstructionSource(origin: origin, path: path, text: nil, modifiedAt: modifiedAt)
-  }
-
-  fileprivate func restored(in instructions: [LibraryInstruction]) -> InstructionSource {
-    guard origin == .shared, text == nil, let instruction = instructions.first(where: { $0.path == path }) else { return self }
-    return InstructionSource(origin: origin, path: path, text: instruction.text, modifiedAt: modifiedAt)
-  }
-}
-
-extension LibraryTidy {
-  /// 规则来源逐份换一下（存取 `AgentLibrary` 时去掉、补回共读那份的正文）；别的种类原样。
-  fileprivate func withSources(_ transform: (InstructionSource) -> InstructionSource) -> LibraryTidy {
-    switch kind {
-    case .globalInstructions(let sources): LibraryTidy(id: id, kind: .globalInstructions(sources.map(transform)))
-    case .projectClaude(let project, let sources): LibraryTidy(id: id, kind: .projectClaude(project: project, sources: sources.map(transform)))
-    default: self
-    }
-  }
-}
-
-extension CueStore {
-  /// 这台 Mac 写下自己的技能与规则（`modifiedAt` 不看）；和库里的一样就不写。返回写了的记录 id（立即上传用），没写为 nil。
-  @discardableResult
-  public func recordAgentLibrary(_ library: AgentLibrary) throws -> UUID? {
-    try write {
-      if let stored = try find(AgentLibrary.self, AgentLibrary.recordID(host: library.hostID)), stored.sameContent(as: library) { return nil }
-      var record = library
-      record.modifiedAt = Date.stamp
-      try upsert(record)
-      return AgentLibrary.recordID(host: library.hostID)
-    }
-  }
-
-  /// 要看的那台 Mac 的技能与规则：Mac 上 `host` 给本机，只认它（还没扫完、碰不得 `~/.agents` 时为 nil，不拿别台的充数）；
-  /// 手机上给 nil，看 Cue 运行的那台，那台没写过就是最近写过的一台，一台都没写过为 nil。
-  public func agentLibrary(host: String?) throws -> AgentLibrary? {
-    if let host { return try find(AgentLibrary.self, AgentLibrary.recordID(host: host)) }
-    if let cue = try cueProfile()?.hostID, let library = try find(AgentLibrary.self, AgentLibrary.recordID(host: cue)) { return library }
-    return try select(AgentLibrary.self, orderBy: "modifiedAt DESC").first
-  }
-}

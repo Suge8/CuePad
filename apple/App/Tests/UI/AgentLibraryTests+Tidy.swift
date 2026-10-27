@@ -70,9 +70,10 @@ extension AgentLibraryTests {
         let merge = try #require(found.merge(into: .global))
         #expect(found.automaticOrders.isEmpty && merge.writers == [.claudeCode])
         #expect(merge.sources.map(\.origin) == [.shared, .agent(.claudeCode), .piSystem, .codexPrompt])
-        #expect(merge.preview(retiring: [.piSystem]).map(\.text) == ["共用的", "全局规则", "你是 Pi"])
-        #expect(merge.preview(retiring: [.piSystem]).map(\.incoming) == [false, true, true], "标出会并进来的段")
-        #expect(found.instruction(.piSystem)?.text == "你是 Pi\n")
+        let preview = merge.preview(retiring: [.piSystem], texts: try await texts(.instruction(.global), in: found))
+        #expect(preview.map(\.text) == ["共用的", "全局规则", "你是 Pi"])
+        #expect(preview.map(\.incoming) == [false, true, true], "标出会并进来的段")
+        #expect(try await text(.instruction(.piSystem), in: found) == "你是 Pi\n")
 
         let workspace = Workspace(services: services)
         await workspace.tidy([TidyOrder(tidy: merge.id, retire: [.piSystem, .codexPrompt])], in: found)

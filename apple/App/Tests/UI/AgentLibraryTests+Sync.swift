@@ -43,16 +43,17 @@ extension AgentLibraryTests {
         let mac = TestApp.hostID
         let library = try await phoneSees("手机读到 Mac 的快照") { $0.hostID == mac && $0.tidies.count == 1 }
         let seen = try #require(library.instruction(.project(project.id)))
-        #expect(seen.text == "# Site\n")
+        let file = LibraryFile.instruction(seen.kind)
+        try await eventually("手机读到这份的正文") { try await text(file, in: library, store: phone.services.store) == "# Site\n" }
 
         try write("# Site\n\nMac 上改的\n", folder.appending(path: "AGENTS.md"))
-        let file = LibraryFile.instruction(seen.kind)
         await #expect(throws: AgentLibraryError.changedOnMac) {
-            try await workspace.saveFile(LibraryEdit(file: file, base: LibraryEdit.base(of: seen.text), text: "手机改的\n"), in: library)
+            try await workspace.saveFile(LibraryEdit(file: file, base: seen.hash ?? "", text: "手机改的\n"), in: library)
         }
-        let followed = try await phoneSees("手机跟上 Mac 上的改动") { $0.instruction(.project(project.id))?.text == "# Site\n\nMac 上改的\n" }
+        let followed = try await phoneSees("手机跟上 Mac 上的改动") { $0.instruction(.project(project.id))?.hash == LibraryEdit.base(of: "# Site\n\nMac 上改的\n") }
+        try await eventually("手机跟上正文") { try await text(file, in: followed, store: phone.services.store) == "# Site\n\nMac 上改的\n" }
         let current = try #require(followed.instruction(.project(project.id)))
-        try await workspace.saveFile(LibraryEdit(file: file, base: LibraryEdit.base(of: current.text), text: "手机改的\n"), in: library)
+        try await workspace.saveFile(LibraryEdit(file: file, base: current.hash ?? "", text: "手机改的\n"), in: library)
         #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n")
 
         let merge = try #require(library.merge(into: .project(project.id)))
@@ -63,7 +64,7 @@ extension AgentLibraryTests {
         _ = try await phoneSees("手机上没有该整理的了") { $0.tidies.isEmpty }
     }
 
-    private static func floor(_ version: Int) -> CKRecord {
+    static func floor(_ version: Int) -> CKRecord {
         let record = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
         record[PeerFloor.field] = version as NSNumber
         return record

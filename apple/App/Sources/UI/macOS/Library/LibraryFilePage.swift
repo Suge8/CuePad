@@ -19,6 +19,7 @@ struct LibraryFileLayer: View {
 
 /// 一份技能或规则的文件页（Mac）：字在一列里居中（同技能与规则页那一列），自动存、没有保存钮（`FileDraft`）。页顶一行写它是哪一份、存好没有；
 /// 下面是同名的分段与"只留这份"、或另写了一份的"合并进来"（有才有，`DuplicateBar`、`MergeBar`）；技能再是名字与说明两个框，最下面正文。
+/// 正文读库里那台写下的那一条（`LibraryFileText`），对上快照的哈希才载入、才跟（`AgentLibrary.arrived`）。
 /// 文件在别处被改了（终端里、别的编辑器、手机发来的）当场跟上，你改着没存上的留着、写出文件变了，由你选换成文件里的或留你的。
 /// 快照里没有这一份了（项目解绑了文件夹、去重时这份进了废纸篓）就收起。
 private struct LibraryFilePage: View {
@@ -26,6 +27,7 @@ private struct LibraryFilePage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var draft: FileDraft?
+    @State private var texts: [String: String]?
     @State private var previewing = DebugHooks.preset.mergePreview
     @State private var retire: Set<InstructionSource.Origin> = []
 
@@ -51,7 +53,7 @@ private struct LibraryFilePage: View {
                         onChange: { draft.changed(body: $0) })
                     .opacity(previewing ? 0 : 1)
                     if previewing, let merge = merge(library) {
-                        MergePreview(blocks: merge.preview(retiring: retire), font: .system(size: 13.5))
+                        MergePreview(blocks: merge.preview(retiring: retire, texts: texts ?? [:]), font: .system(size: 13.5))
                             .frame(maxWidth: Self.textWidth).padding(.horizontal, Self.inset)
                             .frame(maxWidth: .infinity).background(palette.desk)
                     }
@@ -61,12 +63,14 @@ private struct LibraryFilePage: View {
         .padding(.top, Spacing.pageTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.desk.ignoresSafeArea())
+        .observingLibraryTexts(library?.textPaths(for: file) ?? [], in: library, into: $texts)
         .onChange(of: entry == nil, initial: true) {
-            guard library != nil else { return }
-            guard let entry else { workspace.close(.library(file)); return }
-            if draft == nil { draft = FileDraft(file, text: entry.text, workspace: workspace) }
+            if library != nil, entry == nil { workspace.close(.library(file)) }
         }
-        .onChange(of: entry?.text) { draft?.follow(entry?.text) }
+        .onChange(of: library?.arrived(file, in: texts), initial: true) { _, arrived in
+            guard let arrived else { return }
+            if let draft { draft.follow(arrived) } else { draft = FileDraft(file, text: arrived, workspace: workspace) }
+        }
         .task(id: draft != nil) {
             await NextFrame.wait()
             draft?.handle.focus()

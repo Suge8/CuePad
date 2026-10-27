@@ -72,6 +72,8 @@ Cue 说话的工具等结果至多 `Speech.cueWait`；没告诉它的失败作�
 
 每台设备自己写、别的设备只读的三张同步表，规则与写的时机在各自头注释：在不在线 `MacPresence`（`MacPresenceKeeper`）、开着哪一页 `Viewer`（`ViewerKeeper`）、有哪些 Agent 与模型 `MacAgents`（`MacAgentsRecorder`）。它们都不是等待理由：需要及时看到的那台 Mac 本来就听着门铃，在线会话或 Cue 值班时还按节奏拉（「拉取节奏与门铃」）。
 
+技能与规则也是每台 Mac 自己写：一条快照只有元数据（`AgentLibrary`），每份文件的正文各一条（`LibraryFileText`），Mac 每次重读只写内容变了的、删掉不在了的，手机打开文件页读本地已同步来的那条。不把正文塞进快照：几百个技能就超过单条记录 1MB 的上限（500 个技能的快照实测约 230KB，正文另算）。理由与先到后到的读法在两者的头注释。
+
 推送的取舍：在线记录的续期不给手机推送，手机只订阅要紧的变化（理由与实测在 `AlertSubscriptions` 头注释）。
 
 ## 失败与重试

@@ -115,7 +115,17 @@ enum Schema {
     "ALTER TABLE cueLines ADD COLUMN repeats TEXT; ALTER TABLE cueLines ADD COLUMN taskID TEXT;",
     // 76：各台 Mac 的技能与规则（`AgentLibrary`）
     "\(agentLibrariesTable) \(modifiedIndex(.agentLibraries))",
+    // 77：技能与规则每份文件的正文各一条（`LibraryFileText`），快照里只留哈希（76 没发出去过，没有旧写法的快照要认）
+    "\(agentLibraryFilesTable) \(modifiedIndex(.agentLibraryFiles))",
   ]
+
+  /// 技能与规则里每份文件的正文：那台 Mac 每份一条、各端读（`LibraryFileText`）。
+  static let agentLibraryFilesTable = """
+    CREATE TABLE agentLibraryFiles (
+      id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, path TEXT NOT NULL, hash TEXT NOT NULL, text TEXT NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX agentLibraryFiles_host ON agentLibraryFiles(hostID);
+    """
 
   /// 技能与规则的快照：每台 Mac 自己写一条、各端读（`AgentLibrary`）。
   static let agentLibrariesTable = """

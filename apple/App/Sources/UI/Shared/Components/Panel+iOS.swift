@@ -176,3 +176,40 @@ private struct TouchWatch: UIViewRepresentable {
     }
 }
 #endif
+
+#if os(iOS)
+/// 导航栏里的圆钮在窗口里的框（从它长出气泡，`BubbleSource.control`）：栏里的项是系统按 SwiftUI 的按钮另建的，挂在按钮上的视图不跟过去，
+/// SwiftUI 量的框也对不上页。圆钮带一个读屏标识（`accessibilityIdentifier`，系统照样给栏里那颗），点下时从页所在的窗口里按它找、
+/// 按窗口坐标量一次（推入转场里栏在动，不跟着量）。找不到为 nil，调用处退回贴底的纸。
+@MainActor final class ControlAnchor {
+    let id: String
+    fileprivate weak var view: UIView?
+
+    init(_ id: String) { self.id = id }
+
+    var frame: CGRect? {
+        guard let window = view?.window, let control = Self.find(id, in: window) else { return nil }
+        return control.convert(control.bounds, to: nil)
+    }
+
+    private static func find(_ id: String, in view: UIView) -> UIView? {
+        if view.accessibilityIdentifier == id { return view }
+        for child in view.subviews { if let found = find(id, in: child) { return found } }
+        return nil
+    }
+
+    /// 挂在页上（`background`）：认出页所在的窗口。
+    struct Probe: UIViewRepresentable {
+        let anchor: ControlAnchor
+
+        func makeUIView(context: Context) -> UIView {
+            let view = UIView()
+            view.isUserInteractionEnabled = false
+            anchor.view = view
+            return view
+        }
+
+        func updateUIView(_ view: UIView, context: Context) {}
+    }
+}
+#endif
