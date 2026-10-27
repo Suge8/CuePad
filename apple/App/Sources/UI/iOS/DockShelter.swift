@@ -6,7 +6,8 @@ import UIKit
 /// （进展页的看板在模拟器上要多一百多百万条指令），没去过的 tab 第一次选中才现建整页、读库（250ms 级）。
 /// SwiftUI 的 `TabView` 背后是 UIKit 的标签栏控制器，页是各 `UITab` 的 `viewController`。这里在标签栏控制器的视图底下放一层藏着的视图（`Shelter`）：
 /// - 切走的页画完切换的那一帧后挪进来（`Probe.viewDidDisappear`），切回来时系统把它挪回自己的容器，页始终没离开窗口；
-/// - 启动后空闲时把没去过的 tab 建出来：先插在选中的页底下（被它盖着）画两帧，安全区与选中的页一样、字与图都画过，再挪进来，第一次切过去就是回访。
+/// - 启动后空闲时把没去过的 tab 建出来：先插在选中的页底下（被它盖着）、照系统选中时那样走一遍出现（页里导航栈的第一次出现在这时付），画两帧，
+///   安全区与选中的页一样、字与图都画过，再照消失挪进来，第一次切过去就是回访。
 ///   一次建一个，之间再等一阵（时机同 Mac 的 `Prewarm.delay`）。
 /// 藏着的视图里安全区不更新：页在容器里排好了再挪进来，回到容器时安全区没变，不重排；直接在藏着的视图里建出来的页安全区是 0，第一次选中要整页重排。
 /// 藏着的页不订阅（`pageActive`），没读过的先读一份（`pagePrefetch`）。
@@ -62,10 +63,14 @@ struct DockShelter: UIViewControllerRepresentable {
               let shown = bar.selectedTab?.viewController?.view, let container = shown.superview else { return }
         page.view.frame = shown.frame
         page.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        page.beginAppearanceTransition(true, animated: false)
         container.insertSubview(page.view, belowSubview: shown)
+        page.endAppearanceTransition()
         await NextFrame.drawn()
         guard bar.selectedTab != tab, page.view.superview === container else { return }
+        page.beginAppearanceTransition(false, animated: false)
         shelter(in: bar).addSubview(page.view)
+        page.endAppearanceTransition()
     }
 
     private static func shelter(in bar: UITabBarController) -> UIView {

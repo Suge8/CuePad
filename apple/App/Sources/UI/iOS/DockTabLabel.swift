@@ -5,7 +5,6 @@ import UIKit
 /// 标签栏上一个 tab 的字与图标（`DockRoot`）。有事时图标角上带点，不用系统的红角标（`TabMarks`）；读屏把点说的那几样念出来。
 struct DockTabLabel: View {
     let tab: Route
-    let selected: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
