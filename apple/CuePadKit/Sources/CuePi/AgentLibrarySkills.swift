@@ -4,7 +4,7 @@ import Foundation
 
 /// 照文件读出技能与技能那几种该整理的（位置见 `AgentLibraryPlaces`）。规则：
 /// - 有 `SKILL.md` 的目录是技能，不再往里找；没有的非空目录是分类（Claude Code、dsh 的目录只看一层），空的（只算 `.DS_Store` 也空）进"空目录"。
-/// - 格式取四家最严（`SkillProblem`）：格式不对的照列成技能、带上哪里不对，不搬、不链、不算同名。
+/// - 格式取各家最严（`SkillProblem`）：格式不对的照列成技能、带上哪里不对，不搬、不链、不算同名。
 /// - 列出的技能：`.agents/skills` 里的全部，加旧目录里一键整理搬不走的（同名、格式不对的）；旧目录里的只有那一家读得到。
 /// - 旧目录里的：不是 CuePad 的（旧版副本由接入收掉）、不是各家自管的（Claude Code 的 `skills/synced/<账号>/…`、Codex 的 `skills/.system`，只计数）；
 ///   链接不碰（Claude Code、dsh 目录里指到 `.agents` 的是它们的技能链接）。搬到同层 `.agents/skills` 下的同一分类。
@@ -191,7 +191,7 @@ struct LibrarySkillScan {
 }
 
 extension SkillDocument {
-    /// 四家最严的那条：名字 = 目录名、只用 `[a-z0-9-]`、不超过 64；说明 1–1024；嵌套不超过 6 层。对的为 nil。
+    /// 各家最严的那条：名字 = 目录名、只用 `[a-z0-9-]`、不超过 64；说明 1–1024；嵌套不超过 6 层。对的为 nil。
     func problem(directory: String, depth: Int) -> SkillProblem? {
         guard let name, !name.isEmpty else { return .unreadable }
         if directory.count > 64 || !directory.allSatisfy({ $0.isASCII && ($0.isLowercase || $0.isNumber || $0 == "-") }) { return .badName }

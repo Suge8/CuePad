@@ -3,7 +3,7 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// Cue 的大脑：CuePad 起的一个 Agent 运行时子进程（Pi、Codex、Claude Code 或 OpenCode，用户已登录哪家用哪家）。
+/// Cue 的大脑：CuePad 起的一个 Agent 运行时子进程（用户已登录哪家用哪家）。
 /// Cue 不写代码：系统提示整份由 CuePad 给，原生工具只有读文件类，外加 CuePad 的 MCP 服务；对话由 CuePad 自己记，
 /// 运行时不留会话（各家用自己不落盘的方式；OpenCode 落进它的库、用完删掉，见各实现的头注释），也不改用户的配置文件，只用参数、环境变量与临时文件。
 public struct CueBrainConfig: Sendable {
@@ -45,7 +45,7 @@ public enum TurnEvent: Sendable, Equatable {
     /// 转成工具调用、这一轮出错（都在 `turnFinished` 之前）、下一轮开始时清掉；正常说完的留着——
     /// `turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。各家都在协议层得出（逐字增量累积，每段说完时换成运行时给的定稿，不发增量也有），回答不另取一份
     case speaking(PiDraft?)
-    /// 上下文用量，四家同一口径：`used` 是最近一次模型请求的输入 token 合计（含缓存的读与写，不含输出）；`window` 是在用模型的上下文窗口，
+    /// 上下文用量，各家同一口径：`used` 是最近一次模型请求的输入 token 合计（含缓存的读与写，不含输出）；`window` 是在用模型的上下文窗口，
     /// 运行时没报时为 nil。托管会话在桥上显示的（`PiSession.context`）也是这一份
     case context(used: Int, window: Int?)
     /// 开始调一个工具：`id` 是运行时给这次调用的编号（做完时对上）；名字去掉 CuePad 的 MCP 前缀并小写（`task`、`read`；

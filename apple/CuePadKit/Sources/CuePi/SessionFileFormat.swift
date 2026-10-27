@@ -45,12 +45,6 @@ struct SessionFileFormat: Sendable {
         }
     }
 
-    /// 一个会话一个目录的，里面会话文件的名字；别的为 nil。
-    var fileName: String? {
-        guard case .inDirectory(let name, _) = naming else { return nil }
-        return name
-    }
-
     /// 从路径认出的会话 id（文件头还没读到时用它）。
     func sessionID(of file: URL) -> String {
         switch naming {

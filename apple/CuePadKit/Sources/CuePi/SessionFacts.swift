@@ -130,7 +130,7 @@ extension PiSession {
     }
 }
 
-/// 正在做的事写成一句话（同 Pi 扩展）："工具名 · 目标"：命令、搜索、网址取首个非空行，文件取文件名，至多 120 字。三家共用。
+/// 正在做的事写成一句话（同 Pi 扩展）："工具名 · 目标"：命令、搜索、网址取首个非空行，文件取文件名，至多 120 字。各家共用。
 enum ToolDetail {
     static let limit = 120
 
@@ -219,7 +219,7 @@ final class PresenceGate {
     }
 }
 
-/// 权限确认的说法，四家同一句式：标题"允许 <Agent> <动作>？"，下面一行一件要做的事（去掉空的与重复的）；
+/// 权限确认的说法，各家同一句式：标题"允许 <Agent> <动作>？"，下面一行一件要做的事（去掉空的与重复的）；
 /// 作答时回给模型的原因说明是用户在 CuePad 里答的（不说成 CuePad 自己拦的）。
 enum PermissionWording {
     static let allowed = "用户在 CuePad 里允许了", denied = "用户在 CuePad 里拒绝了"

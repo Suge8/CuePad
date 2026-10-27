@@ -140,6 +140,7 @@ extension OpenCodeRuntime {
     /// 子会话的事件落到父会话的子代理名册上：一轮由它自己的 `OpenCodeTurn` 翻出，名册只看开始、在调的工具与怎么结束的。
     func child(_ sessionID: String, of parent: String, _ event: OpenCodeEvent) {
         parents[sessionID] = parent
+        guard !event.type.hasPrefix("session.text.") else { return }  // 子代理说的话不要，逐字增量也不白拼
         let data = event.data
         let now = Date()
         let turn = childTurns[sessionID, default: OpenCodeTurn()].apply(event, models: []).filter(\.changesFacts)
