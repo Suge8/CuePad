@@ -16,10 +16,10 @@ extension ACPSession: SessionLink {
         }
     }
 
-    func command(_ line: String, in _: PiSession.ID) async throws {
+    func command(_ line: String, in id: PiSession.ID) async throws {
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let name = line.dropFirst().split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
-        guard commands.contains(name) else { throw PiBridgeError.rejected("unknown_command") }
+        guard bridge?.session(id: id)?.commands.contains(where: { $0.name == name }) == true else { throw PiBridgeError.rejected("unknown_command") }
         try await interrupt()
         try prompt(ACPContent.prompt(text: line, images: []))
     }

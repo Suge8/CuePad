@@ -41,7 +41,7 @@ struct ACPBrainSetup {
 }
 
 /// 各家通知翻成的驱动动作
-enum ACPSignal: Equatable {
+enum ACPSignal {
     /// Agent 自己开了一轮（不是 CuePad 的 `session/prompt` 开的）；已在跑时不算
     case turnStarted
     /// 这一轮结束（`failure` 是出错的原文）

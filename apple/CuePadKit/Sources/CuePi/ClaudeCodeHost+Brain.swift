@@ -30,7 +30,7 @@ extension ClaudeHostedSession: HostedSession {
             ]
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--effort", ClaudeCode.effort(effort)] }
-            let environment = BrainSession.environment(config, [
+            let environment = config.launchEnvironment(adding: [
                 "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_PROMPT_CACHING_1H": "1",
             ])
             _ = try await launch(config.executable, arguments, directory: config.workingDirectory, environment: environment)
@@ -62,10 +62,6 @@ extension ClaudeHostedSession: HostedSession {
         let stream = try live
         if let model { try await stream.setModel(model) }
         if let effort { try await stream.setEffort(effort) }
-    }
-
-    func abort() async throws {
-        try await interrupt(restarting: false)
     }
 
     func stop() -> @concurrent @Sendable () async -> Void {

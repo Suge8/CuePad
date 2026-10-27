@@ -75,6 +75,25 @@ struct AgentProbe {
         }
     }
 
+    /// 随包插件（Pi 的桥扩展、dsh 的 cuepad 插件）在探测模式（`CUEPAD_PROBE`）写的一行 `{"cuepadProbe": {model, models}}`：
+    /// 缺省模型与会话里的模型菜单同一份；一个模型都没有是没登录。
+    struct PluginReply: Decodable {
+        let cuepadProbe: Models
+        struct Models: Decodable {
+            let model: PiModelOption?
+            let models: [PiModelOption]
+        }
+
+        init?(line: Data) {
+            guard let reply = try? JSONDecoder().decode(Self.self, from: line) else { return nil }
+            self = reply
+        }
+
+        func agent(_ kind: AgentKind) -> MacAgent? {
+            cuepadProbe.models.isEmpty ? nil : MacAgent(kind: kind, model: cuepadProbe.model?.key, models: cuepadProbe.models)
+        }
+    }
+
     enum ProbeError: ShownError {
         case timedOut
         case noAnswer(status: Int32)

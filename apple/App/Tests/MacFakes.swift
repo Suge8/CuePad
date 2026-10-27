@@ -104,7 +104,6 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
         self.agent = agent
     }
 
-    var hostedSessionsOutliveApp: Bool { false }
     func start() {}
     func stop() -> @concurrent @Sendable () async -> Void { {} }
     func open(in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?) async throws -> String {
@@ -112,8 +111,6 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
     }
     func resume(_ session: IndexedSession) async throws -> String { throw AgentRuntimeError.notInstalled(agent) }
     func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript { throw AgentRuntimeError.notInstalled(agent) }
-    func read(_ update: PiHistoryUpdate) {}
-    func follow(_ scope: PiHistoryScope) {}
 
     /// 一个托管的会话上桥，返回桥上的 id。
     @discardableResult
