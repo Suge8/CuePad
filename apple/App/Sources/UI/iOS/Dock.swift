@@ -32,7 +32,6 @@ struct DockRoot: View {
             } label: {
                 DockTabLabel(tab: .cue)
             }
-            .badge(workspace.cue.unread)
         }
         .tint(palette.signature)
         .task(id: root) {
