@@ -154,12 +154,3 @@ struct SyncWiringTests {
         #expect(reason.contains("隔离"))
     }
 }
-
-extension CKRecord {
-    /// 云端最低对端版本那条记录（门槛）。
-    static func peerFloor(_ version: Int) -> CKRecord {
-        let record = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
-        record[PeerFloor.field] = version as NSNumber
-        return record
-    }
-}

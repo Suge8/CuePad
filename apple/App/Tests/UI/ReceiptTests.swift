@@ -20,9 +20,7 @@ struct ReceiptTests {
         var down = false
 
         init() {
-            let floor = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
-            floor[PeerFloor.field] = CueStore.peerFloor as NSNumber
-            inner = SimulatedCloud([floor])
+            inner = SimulatedCloud([.peerFloor(CueStore.peerFloor)])
         }
 
         func setDown(_ down: Bool) { self.down = down }

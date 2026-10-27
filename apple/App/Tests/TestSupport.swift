@@ -1,5 +1,6 @@
+import CloudKit
 import CueStore
-import CueSync
+@testable import CueSync
 // 测试共用的支撑（临时库目录、测试图片、条件等待）与 Kit 的测试同一份；整个测试目标都能用
 @_exported import CueTestSupport
 import Foundation
@@ -60,12 +61,8 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         state.withLock { $0.started += 1 }
     }
 
-    /// 为 true 时 `stop()` 永不返回（模拟卡住的同步）。
-    let stopHangs = Mutex(false)
-
     func stop() async {
         state.withLock { $0.stopped += 1 }
-        if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
     /// 为 true 时 `syncNow()` 永不返回（像网络一直没有回音）。
     let syncNowHangs = Mutex(false)
@@ -334,5 +331,14 @@ extension CueStore {
     /// 全部会话记录（测试核对用；界面按范围与页读，见 `piSessionPage`）。
     func allPiSessionStates() throws -> [PiSessionState] {
         try piSessionPage(PiSessionQuery(limit: .max)).items.map(\.state)
+    }
+}
+
+extension CKRecord {
+    /// 云端最低对端版本那条记录（门槛）。
+    nonisolated static func peerFloor(_ version: Int) -> CKRecord {
+        let record = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
+        record[PeerFloor.field] = version as NSNumber
+        return record
     }
 }
