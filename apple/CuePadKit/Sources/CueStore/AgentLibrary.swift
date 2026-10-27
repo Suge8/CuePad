@@ -105,7 +105,7 @@ public struct LibrarySkill: Codable, Equatable, Sendable, Identifiable {
   public let path: String
   /// frontmatter 里的说明（没有为空串）
   public let description: String
-  /// SKILL.md 全文的哈希（`LibraryEdit.base`，读不出的按空串算）：正文在 `LibraryFileText`
+  /// SKILL.md 全文的哈希（`LibraryEdit.base`，读不出的按空文件算）：正文在 `LibraryFileText`
   public let hash: String
   public let modifiedAt: Date?
   /// 格式不对的那条（四家最严）；对的为 nil
@@ -197,9 +197,9 @@ public struct LibraryEdit: Codable, Equatable, Sendable, StoredJSON {
     self.text = text
   }
 
-  /// 内容的哈希（SHA-256 前 16 字节的十六进制）；没有文件为空串。
+  /// 内容的哈希（SHA-256 前 16 字节的十六进制）；没有文件与空文件都是空串：文件页把"还没有"当空文本，哈希要与 Mac 上的对得上。
   public static func base(of text: String?) -> String {
-    guard let text else { return "" }
+    guard let text, !text.isEmpty else { return "" }
     return SHA256.hash(data: Data(text.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
   }
 }

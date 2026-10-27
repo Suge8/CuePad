@@ -39,8 +39,7 @@ struct LibraryTidying {
         case .unlinked(let agent, let skills):
             for skill in skills { if let link = places.link(skill.name, for: agent, in: skill.scope) { try make(link, to: URL(filePath: skill.path)) } }
         case .duplicate(_, let copies):
-            guard let keep = order.keep else { throw AgentLibraryError.tidyGone }
-            guard let kept = copies.first(where: { $0.path == keep })?.scope else { throw AgentLibraryError.tidyGone }
+            guard let keep = order.keep, let kept = copies.first(where: { $0.path == keep })?.scope else { throw AgentLibraryError.tidyGone }
             // 只移走和留下的那份撞名的：同一层的、全局的（留的是项目里的），留的是全局的就是各项目里的全部
             for copy in copies where copy.path != keep && (copy.scope == kept || copy.scope == .global || kept == .global) {
                 try moveToTrash(URL(filePath: copy.path))
