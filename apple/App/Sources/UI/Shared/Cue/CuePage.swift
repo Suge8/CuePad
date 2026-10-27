@@ -116,7 +116,7 @@ struct CuePage: View {
     private var composer: some View {
         CueComposer(style: .page, takesFocusRequests: !inPanel, sent: { follow.sent() }) { focused in
             // 同底部那一排让开"⋯"的那条弹簧（`DockBar`）：输入框长宽与"⋯"淡出是同一下
-            withAnimation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion)) { dockMotion?.composing = focused }
+            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { dockMotion?.composing = focused }
         }
     }
     #endif
