@@ -163,9 +163,8 @@ struct MarkdownText: View, Equatable {
 
 /// 成块的内容（回答里的表格，Cue 面板里的上下文卡与"运行情况"里的全文）同一套圆角、底色（`Palette.fill`）与内边距；对话里的旁注不铺底（`NoteLine`）。
 enum ChatBlock {
-    static let radius: CGFloat = 12
     static let inset: CGFloat = 12
-    static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: radius, style: .continuous) }
+    static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Radius.block) }
 }
 
 /// 表格：按列排开，每格最宽 `cellWidth`、超过就换行；列按 Markdown 的对齐（数字列常是右对齐）。

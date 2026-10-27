@@ -58,7 +58,7 @@
 	});
 </script>
 
-<section class="cinema" bind:this={section}>
+<section class="cinema night" bind:this={section}>
 	<div class="sec-head" data-reveal>
 		<SplitH text={t('cinema.h')} />
 		<p>{t('cinema.p')}</p>

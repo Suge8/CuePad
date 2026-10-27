@@ -13,7 +13,6 @@ struct DebugWidgetStage: View {
     private static let small = CGSize(width: 170, height: 170)
     private static let medium = CGSize(width: 364, height: 170)
     private static let margin: CGFloat = 16
-    private static let radius: CGFloat = 23
 
     private static let cue = CueNowSamples.asks
     private static let home = DefaultProjectSnapshot(
@@ -39,7 +38,7 @@ struct DebugWidgetStage: View {
         content()
             .padding(Self.margin)
             .frame(width: size.width, height: size.height)
-            .background(palette.desk, in: .rect(cornerRadius: Self.radius, style: .continuous))
+            .background(palette.desk, in: .rect(cornerRadius: Radius.sheet))
     }
 }
 
@@ -86,7 +85,7 @@ struct DebugActivityStage: View {
                     views.lockScreen
                         .frame(width: Self.lockWidth)
                         .frame(maxHeight: Self.maxHeight, alignment: .top).clipped()
-                        .background(palette.paper, in: .rect(cornerRadius: 22, style: .continuous))
+                        .background(palette.paper, in: .rect(cornerRadius: Radius.sheet))
                     HStack(alignment: .top, spacing: 28) {
                         VStack(alignment: .leading, spacing: 0) {
                             label(String(localized: "最小（和别的实时活动同在）", table: "Demo"))
@@ -101,7 +100,7 @@ struct DebugActivityStage: View {
                     label(String(localized: "实时活动", table: "Demo"))
                     Text("没有在跑的活：实时活动已结束，灵动岛空出来", tableName: "Demo")
                         .font(.footnote).foregroundStyle(palette.ink3).frame(width: Self.lockWidth, height: 56)
-                        .background(palette.fill, in: .rect(cornerRadius: 22, style: .continuous))
+                        .background(palette.fill, in: .rect(cornerRadius: Radius.sheet))
                 }
             }
             .padding(.horizontal, 20)
@@ -152,7 +151,7 @@ struct DebugActivityStage: View {
         .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 16)
         .frame(width: Self.expandedWidth)
         .frame(maxHeight: Self.maxHeight, alignment: .top).clipped()
-        .background(Self.island, in: .rect(cornerRadius: 44, style: .continuous))
+        .background(Self.island, in: .rect(cornerRadius: Radius.screen))
     }
 }
 

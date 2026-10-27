@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 项目页的那张纸（与手机项目页同构，一条任务都没有时也在、只剩纸底一行）：前几条没做完的任务连同它们的子任务，一行一件（可拖动、缩进）；
 /// 纸底一行左边"添加任务"，右边是没列出的与最近完成的个数，点了在纸里原地展开、各自开合（规则见 `TaskFold`）。会话不在页上，"⋯"里"看这个项目的会话"去会话页。
-/// 按 ui.md 的 Mac 开合规则一步到位：新行直接出现，同访达展开，不淡入、不挪动。
+/// 按 docs/layout.md 的 Mac 开合规则一步到位：新行直接出现，同访达展开，不淡入、不挪动。
 /// 收起其余任务时纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`），长列表底部收起不会跳到卡片墙。
 /// 纸上不写"任务"的段标题：纸是页面最上面的第一块、行首都是任务圈，不用标题也认得出（读屏念"任务"）。
 /// 行是全 App 共用的那一种（`TaskLine`），标题后一格"下一步"（`TaskNext`）：交给的 Agent 要你做什么，或还没交出去的"开始"；要 Agent 做什么写在任务的正文里（任务气泡）。
@@ -24,7 +24,7 @@ struct FocusBand: View {
         taskRows
         .padding(.horizontal, 20).padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .paper(radius: 18)
+        .paper()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("任务")
         .debugExposesTaskFold(active: active) { toggle(\.showsAll) }
@@ -80,7 +80,7 @@ struct FocusBand: View {
 }
 
 /// 下滚后的回到顶部：一块玻璃，朝上的箭头接没做完的任务数（任务图标接数，不写"任务"二字：图标已经说了）；点一下回到顶部。
-/// 不写项目名：侧栏选中的那一行、侧栏收起时工具栏的切换胶囊已经写着（docs/ui.md 同一屏不重复写这一页的名字）。
+/// 不写项目名：侧栏选中的那一行、侧栏收起时工具栏的切换胶囊已经写着（docs/layout.md 页面顶上不写大标题）。
 struct CompactFocus: View {
     let data: ProjectPageData
     let scrollToTop: () -> Void

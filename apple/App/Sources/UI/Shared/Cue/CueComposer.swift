@@ -25,6 +25,7 @@ struct CueComposer: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focused: Bool
+    @Environment(\.panelCovered) private var covered
     /// 刚发出、还没读到这一句：库里那条记录要下一次读库才变成 `CueWatch.sending`，这一小段钮先当帧换成发送中，
     /// 不先缩没再长出来。读到了这一句（`lastYouSaid` 变了，此时在不在路上都已算进 `sending`）就交还给它。
     /// 只看这两项不看整个现状：在想、用工具时每一步都变，读它的话整个输入框跟着重算。
@@ -46,9 +47,9 @@ struct CueComposer: View {
             header: { EmptyView() },
             tools: { tools },
             send: { sendButton })
-            .onChange(of: opens, initial: true) { if opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true } }
+            .onChange(of: opens, initial: true) { if !covered, opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true } }
             .onChange(of: takesFocusRequests && workspace.cueFocusPending, initial: true) { _, pending in
-                guard pending else { return }
+                guard pending, !covered else { return }
                 focused = true
                 workspace.cueFocusPending = false
             }

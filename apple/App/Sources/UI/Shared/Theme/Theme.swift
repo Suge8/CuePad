@@ -71,6 +71,6 @@ extension CueEditorTheme {
             verticalInset: verticalInset,
             lineSpacing: 7,
             headingSpacing: 10,
-            imageCornerRadius: 10)
+            imageCornerRadius: Radius.block)
     }
 }

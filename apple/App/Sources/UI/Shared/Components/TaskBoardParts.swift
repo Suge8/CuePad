@@ -115,7 +115,7 @@ struct BoardColumn: View {
         #endif
     }
 
-    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）：都是一块写字玻璃，Mac 上排进窗口最顶那一排（`boardTopRow`）。
+    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/layout.md 沉浸式的栏）：都是一块写字玻璃，Mac 上排进窗口最顶那一排（`boardTopRow`）。
     private var columnLane: some View {
         #if os(macOS)
         ScrollView { cards }
@@ -133,7 +133,7 @@ struct BoardColumn: View {
             .overlay(alignment: .top) {
                 BoardColumnHeader(column: column, count: board.count(column))
                     .padding(.horizontal, TaskMetrics.cardPadding)
-                    .glass(in: .rect(cornerRadius: BoardCardMetrics.radius, style: .continuous))
+                    .glass(in: .rect(cornerRadius: TaskMetrics.cardRadius))
                     .padding([.horizontal, .top], BoardCardMetrics.inset)
             }
             .background { BoardLane(targeted: lit) }
@@ -213,18 +213,18 @@ struct BoardColumn: View {
         #if os(macOS)
         NewTaskField(project: newTaskProject, choosesProject: true, autofocus: true) { adding = false }
             .padding(.horizontal, TaskMetrics.cardPadding)
-            .paper(radius: TaskMetrics.cardRadius)
+            .paper(cornerRadius: TaskMetrics.cardRadius)
         #else
         NewTaskLine(project: newTaskProject, projects: workspace.catalog?.projects) { adding = false }
             .padding(.horizontal, 6)
-            .paper(radius: TaskMetrics.cardRadius)
+            .paper(cornerRadius: TaskMetrics.cardRadius)
         #endif
     }
 
     private func empty(_ text: LocalizedStringResource) -> some View {
         Text(text).font(Typography.secondary).foregroundStyle(palette.ink3)
             .frame(maxWidth: .infinity, minHeight: isRow ? nil : 64, maxHeight: isRow ? .infinity : nil)
-            .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
+            .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
     }
 
     private var earlierToggle: some View {

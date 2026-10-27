@@ -121,7 +121,7 @@ struct ProjectPage: View {
                 OlderRow(card: card, lastTarget: lastTarget[card.id], pinned: true)
             }
         }
-        .rowPaper(radius: 12)
+        .rowPaper(cornerRadius: Radius.block)
     }
 
     private func wallSection(title: LocalizedStringResource, count: Int, ids: [UUID], byID: [UUID: Card], lastTarget: [UUID: String]) -> some View {

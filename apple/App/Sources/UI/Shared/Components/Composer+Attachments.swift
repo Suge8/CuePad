@@ -20,7 +20,7 @@ extension Composer {
         let card = CardText(outbox.content), name = card.title.nonEmpty ?? String(localized: "附件")
         let attached = CueFormat.attachmentKeys(in: outbox.content).count
         let removable = outbox.card != keeps
-        let shape = RoundedRectangle(cornerRadius: ComposerMetrics.radius - ComposerMetrics.inset, style: .continuous)
+        let shape = Radius.nested
         let menu = removable ? [ChoiceMenu.Section(choices: [
             ChoiceMenu.Choice(title: "展开编辑", image: .icon(.expandEdit)) { expand(outbox) },
             ChoiceMenu.Choice(title: "不带了", image: .icon(.remove), destructive: true) { drop(outbox) },

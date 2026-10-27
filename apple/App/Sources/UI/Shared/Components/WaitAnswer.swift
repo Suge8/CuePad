@@ -48,6 +48,7 @@ private struct SessionAnswer: View {
     @State private var pending: Pending?
     #if os(macOS)
     @FocusState private var keyboard: Bool
+    @Environment(\.panelCovered) private var covered
     #endif
 
     private var question: PiQuestion? { session.answerableQuestion }
@@ -121,7 +122,8 @@ private struct SessionAnswer: View {
         .focusable(numbered)
         .focusEffectDisabled()
         .focused($keyboard)
-        .onAppear { keyboard = numbered }
+        .yieldsFocusWhenCovered($keyboard)
+        .onAppear { keyboard = numbered && !covered }
         .onKeyPress(characters: .decimalDigits, phases: .down) { press in
             guard numbered, let number = Int(press.characters), values.indices.contains(number - 1), !answering else { return .ignored }
             answer(values[number - 1])
@@ -198,7 +200,7 @@ private struct WaitReply: View {
                 .accessibilityLabel("回答")
         }
         .padding(.leading, 12).padding(.trailing, 3).padding(.vertical, 3)
-        .background(palette.fill, in: .rect(cornerRadius: 18, style: .continuous))
+        .background(palette.fill, in: .rect(cornerRadius: Radius.card))
     }
 
     /// 字上下各让出的空：一行字（约 16）加两边正好是钮的点按高，多行时最后一行仍落在钮的中线附近。

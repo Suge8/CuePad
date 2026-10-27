@@ -16,7 +16,7 @@ nonisolated enum BubbleSource: Equatable {
 /// 长出来的气泡（`PanelStyle.bubble`：任务气泡、Mac 侧栏的额度明细）：纸色的底、一根指着来源的尾巴，不压暗、点外面或 Esc 关。
 /// 摆在来源下面、让开它（控件的框，或那一下所在的整行），尾巴尖贴着它的下沿；下面放不下摆上面、尾巴在下沿。
 /// 不摆左右：摆在旁边会盖住被点的那一行、尾巴落在字上。气泡的高贴着内容，放不下就在里面滚。
-/// 不量自己的高：摆在上面时按底边对齐（`bottom`）——摆法从不读回排版的结果，没有几何读数回写的环（ui.md）。
+/// 不量自己的高：摆在上面时按底边对齐（`bottom`）——摆法从不读回排版的结果，没有几何读数回写的环（docs/layout.md）。
 nonisolated struct BubblePlacement: Equatable {
     var x: CGFloat
     /// 上沿（摆在下面时）或下沿（摆在上面时）的 y，二选一。
@@ -29,7 +29,7 @@ nonisolated struct BubblePlacement: Equatable {
     var side: CGFloat = -1
     /// 贴在底部的纸（`BubbleSource.bottom`）：圆角与屏幕同心、整张从底边升起。
     var sheet = false
-    var radius: CGFloat { sheet ? Self.sheetRadius : Self.radius }
+    var radius: CGFloat { sheet ? Radius.screen : Self.radius }
 
     /// `container`：气泡那一层在窗口里的框（与来源同一套坐标）；`insets`：容器四周不放气泡的那一圈（安全区、工具栏与页边）。
     init(source: BubbleSource, container: CGRect, insets: EdgeInsets) {
@@ -95,12 +95,10 @@ nonisolated struct BubblePlacement: Equatable {
     static let width: CGFloat = 400
     static let rise: CGFloat = 8
     #if os(macOS)
-    static let radius: CGFloat = 18
+    static let radius = Radius.card
     #else
-    static let radius: CGFloat = 26
+    static let radius = Radius.field
     #endif
-    /// 贴在底部的纸：与屏幕圆角同心（屏幕圆角减去留的边）。
-    static let sheetRadius: CGFloat = 46
     /// 那一下离所在那一行上下沿的距离（半行高）：气泡让开整行，尾巴尖贴着行沿。
     static let reach: CGFloat = TaskMetrics.rowHeight / 2
     /// 尾巴离气泡角的最小距离：不画到圆角上。
@@ -174,7 +172,7 @@ struct BubbleFrame<Content: View, Area: View>: View {
 
     var body: some View {
         let shape = BubbleShape(tail: placement.tail, radius: placement.radius)
-        let card = RoundedRectangle(cornerRadius: placement.radius, style: .continuous)
+        let card = RoundedRectangle(cornerRadius: placement.radius)
         ScrollView { content }
             .scrollBounceBehavior(.basedOnSize)
             .frame(width: placement.width)

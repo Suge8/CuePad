@@ -153,14 +153,14 @@ enum DemoLibrary {
             CGRect(x: 40, y: 90, width: 270, height: 170), CGRect(x: 340, y: 90, width: 270, height: 230),
             CGRect(x: 640, y: 90, width: 270, height: 140), CGRect(x: 40, y: 290, width: 270, height: 250),
         ].enumerated() {
-            fill(frame, radius: 18, (0.99, 0.985, 0.97, 1))
-            fill(CGRect(x: frame.minX + 20, y: frame.minY + 22, width: 120 + CGFloat(index) * 20, height: 14), radius: 4, (ink.0, ink.1, ink.2, 0.85))
+            fill(frame, radius: Radius.card, (0.99, 0.985, 0.97, 1))
+            fill(CGRect(x: frame.minX + 20, y: frame.minY + 22, width: 120 + CGFloat(index) * 20, height: 14), radius: Radius.chip, (ink.0, ink.1, ink.2, 0.85))
             for line in 0..<3 {
                 fill(CGRect(x: frame.minX + 20, y: frame.minY + 54 + CGFloat(line) * 22, width: frame.width - 60 - CGFloat(line) * 30, height: 9),
-                     radius: 3, (ink.0, ink.1, ink.2, 0.3))
+                     radius: Radius.chip, (ink.0, ink.1, ink.2, 0.3))
             }
         }
-        fill(CGRect(x: 40, y: 30, width: 180, height: 26), radius: 6, (ink.0, ink.1, ink.2, 1))
+        fill(CGRect(x: 40, y: 30, width: 180, height: 26), radius: Radius.chip, (ink.0, ink.1, ink.2, 1))
         return encode(context.makeImage()!)
     }
 

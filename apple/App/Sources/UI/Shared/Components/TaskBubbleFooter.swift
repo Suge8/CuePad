@@ -112,7 +112,7 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
             trailing
         }
         .padding(BubbleMetrics.stripPadding)
-        .background(palette.fill, in: .rect(cornerRadius: BubbleMetrics.stripRadius, style: .continuous))
+        .background(palette.fill, in: Radius.nested)
         .contentShape(.rect)
     }
 }

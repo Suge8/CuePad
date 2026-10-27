@@ -42,6 +42,7 @@ struct PiReplyBar: View {
     /// 读到了（在路上，或 Agent 已经接过去开始跑）就交还给页面。
     @State private var launched = false
     @FocusState private var focused: Bool
+    @Environment(\.panelCovered) private var covered
     /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单（Mac）。
     @State private var opening: PiConfigPick?
 
@@ -89,7 +90,6 @@ struct PiReplyBar: View {
     private var button: PiReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
 
     /// 与输入框同一个圆角（贴在它上方的问题卡、收成一行的说明用）。
-    static let radius = ComposerMetrics.radius
 
     var body: some View {
         switch reply {
@@ -124,7 +124,7 @@ struct PiReplyBar: View {
             .onChange(of: canStop) { launched = false }
             .task { await DebugHooks.pressSendIfAsked(session: true) { shortcuts[.send]?() } }
             #if os(macOS)
-            .onAppear { focused = active }
+            .onAppear { focused = active && !covered }
             #endif
     }
 
@@ -175,8 +175,8 @@ struct PiReplyBar: View {
     private func notice(_ text: LocalizedStringResource, icon: Icon) -> some View {
         Label(text, icon: icon)
             .font(Typography.secondary).foregroundStyle(palette.ink2)
-            .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 2 * Self.radius, alignment: .leading)
-            .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
+            .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 2 * Radius.field, alignment: .leading)
+            .glass(in: .rect(cornerRadius: Radius.field))
     }
 
     @ViewBuilder private var sendControl: some View {

@@ -8,12 +8,12 @@ struct ClosePanel {
 
 extension EnvironmentValues {
     @Entry var closePanel = ClosePanel {}
+    /// 这一层上面有开着的模态浮层（Mac 的窗口内浮层，`PanelHost.covers`；iOS 的弹层是系统的，恒为假）：
+    /// 被盖住的输入框不要焦点——出现时的自动聚焦、焦点请求都先看它（盖上时交出见 `yieldsFocusWhenCovered`）。
+    @Entry var panelCovered = false
 }
 
 enum PanelStyle: Equatable {
-    /// Mac 上居中浮层的圆角（内容自己画底时也用它，如 ⌘K 的玻璃）。
-    static let radius: CGFloat = 16
-
     /// 居中、模态（iOS 是 sheet）。
     case sheet
     /// 大块内容（预览）：iOS 全屏覆盖，Mac 同 `sheet`。

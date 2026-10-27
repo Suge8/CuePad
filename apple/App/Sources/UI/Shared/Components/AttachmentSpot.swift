@@ -42,7 +42,7 @@ struct AttachmentSpotLayer: View {
                 Rectangle()
                     .frame(width: spot.frame.width, height: spot.frame.height)
                     .opacity(0.001)
-                    .previewSource(PreviewZoomKey(group: AttachmentSpot.group, preview: PiPreview.id(of: key)), radius: 5) { [files = services.store.files] in
+                    .previewSource(PreviewZoomKey(group: AttachmentSpot.group, preview: PiPreview.id(of: key)), cornerRadius: Radius.chip) { [files = services.store.files] in
                         await AttachmentLooks.picture(key, in: files)
                     }
                     // 用留白摆位置（不用 offset）：来源的框按排版算，偏移不算

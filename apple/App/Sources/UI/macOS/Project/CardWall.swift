@@ -55,7 +55,6 @@ private struct CardFace: View {
 }
 
 struct CardTile: View {
-    static let radius: CGFloat = 16
 
     let card: Card
     let lastTarget: String?
@@ -67,9 +66,9 @@ struct CardTile: View {
         Button(action: open) {
         CardFace(card: card, lastTarget: lastTarget, floated: floated)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: Self.radius)
-        .overlay { SelectedFrame(radius: Self.radius) }
-        .contentShape(.rect(cornerRadius: Self.radius))
+        .paper()
+        .overlay { SelectedFrame() }
+        .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(CardOpenStyle())
         .overlay(alignment: .bottomTrailing) {
@@ -131,13 +130,12 @@ private struct DeleteGlyph: View {
 
 /// 批量选择里选上的卡：一圈签名色的边，右上角一个对勾。
 private struct SelectedFrame: View {
-    let radius: CGFloat
     @Environment(\.cardSelected) private var selected
     @Environment(\.palette) private var palette
 
     var body: some View {
         if selected {
-            RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(palette.signature, lineWidth: 2)
+            RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.signature, lineWidth: 2)
                 .overlay(alignment: .topTrailing) {
                     Image(.picked).font(.system(size: 18)).foregroundStyle(palette.onFill, palette.signature)
                         .padding(10)

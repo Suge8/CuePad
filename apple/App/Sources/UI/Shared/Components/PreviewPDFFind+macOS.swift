@@ -46,7 +46,7 @@ final class PDFFindHost: NSView, NSTextFinderBarContainer, NSMenuItemValidation 
 
     func findBarViewDidChangeHeight() { place() }
 
-    /// 上屏就拿键盘：⌘F、⌘G 经响应链从 PDF 视图走到这里，不落到下面盖着的编辑器。
+    /// 上屏就拿键盘：⌘F、⌘G 经响应链从 PDF 视图走到这里（下面盖着的输入框不再要回焦点，`yieldsFocusWhenCovered`）。
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(pdf)

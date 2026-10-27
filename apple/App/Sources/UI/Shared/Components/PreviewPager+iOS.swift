@@ -106,7 +106,7 @@ private struct PreviewPager: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        // 栏后面不垫系统的滚动边缘效果（docs/ui.md「沉浸式的栏」）：SwiftUI 这一层与分页滚动区自己那一层（`PreviewDismissGuard`）都关
+        // 栏后面不垫系统的滚动边缘效果（docs/layout.md「沉浸式的栏」）：SwiftUI 这一层与分页滚动区自己那一层（`PreviewDismissGuard`）都关
         .scrollEdgeEffectHidden()
         .environment(\.previewInsets, insets)
         .environment(\.previewFinds, finds)

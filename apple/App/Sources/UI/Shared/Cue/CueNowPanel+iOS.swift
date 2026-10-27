@@ -8,7 +8,7 @@ import SwiftUI
 /// 上下文用了几成不在这里：换新是自动的、多在歇过一小时后，看了也没有可做的，只留在 Mac 的"运行情况"（`CueContextLine`）。
 /// 在做的会话不在这里：进行中的在进展页的会话段（左滑就到），点进会话只有那一条路，返回落点与行的长相都只有一种。
 /// 面板定高：空、一条、记满都一样高（两条各占两行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
-/// 面板里不放滚动区（docs/ui.md 布局约束）。
+/// 面板里不放滚动区（docs/layout.md）。
 struct CueNowPanel: View {
     let brain: AgentModelChoice?
     let close: () -> Void

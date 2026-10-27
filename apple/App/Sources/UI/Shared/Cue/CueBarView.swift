@@ -11,7 +11,7 @@ struct CueBarView: View {
         VStack(alignment: .leading, spacing: 8) {
             CueStatusRow()
                 .padding(.horizontal, 14).padding(.vertical, 10)
-                .glass(in: .rect(cornerRadius: 22))
+                .glass(in: .rect(cornerRadius: Radius.sheet))
             CueComposer(style: .bar(opens: bar?.opens ?? 0)) { bar?.hide() }
         }
         .frame(width: 560)

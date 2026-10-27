@@ -1,66 +1,64 @@
-/* 字体、配色令牌、基础排版与共用小件（按钮、截图框、逐字揭示） */
+/* 配色与字体令牌、基础排版与共用小件（按钮、截图框、逐字揭示） */
 
-/* ---- Fonts: Bricolage Grotesque variable (self-hosted) ---- */
-@font-face {
-	font-family: 'Bricolage Grotesque';
-	src: url('/assets/fonts/bricolage-latin.woff2') format('woff2');
-	font-weight: 200 800;
-	font-style: normal;
-	font-display: swap;
-	unicode-range:
-		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
-		U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-	font-family: 'Bricolage Grotesque';
-	src: url('/assets/fonts/bricolage-latin-ext.woff2') format('woff2');
-	font-weight: 200 800;
-	font-style: normal;
-	font-display: swap;
-	unicode-range:
-		U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-		U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
-		U+2C60-2C7F, U+A720-A7FF;
-}
-
-/* ---- Tokens ---- */
+/* ---- Tokens ----
+   颜色与 App 同一套：与 Palette（apple/App/AppGroup/Palette.swift）同名的令牌同值，各色管什么见它的头注释，lint.sh 查两边相等。
+   页面只有浅色，不跟随系统深色（插画与视频都是浅色纸底）；深色那档只给整段"夜里的纸"（.night）。
+   light-dark() 在用到的元素上按它的 color-scheme 取值：.night 只声明 color-scheme: dark，不另抄一份深色值。 */
 :root {
-	--canvas: oklch(95.9% 0.01 87.5);
-	--canvas-soft: oklch(98.5% 0.004 91.4);
-	--paper: oklch(99.7% 0.005 95.1);
-	--ink: oklch(19.7% 0.007 78.2);
-	--text: oklch(33.4% 0.011 84.6);
-	--muted: oklch(52.2% 0.018 86.5);
-	--sage: oklch(56.1% 0.061 157.6);
-	--sage-strong: oklch(51.1% 0.06 159.4);
-	--sage-ink: oklch(29.1% 0.028 160.9);
-	--sage-light: oklch(79.6% 0.037 159.5);
-	--drench: oklch(30.9% 0.031 160.9);
-	--drench-2: oklch(25.6% 0.027 161.5);
-	--gold: oklch(73% 0.115 85.8);
-	--border: oklch(30% 0.02 70 / 0.1);
-	--border-strong: oklch(30% 0.02 70 / 0.16);
+	color-scheme: light;
 
-	--font-display:
-		'Bricolage Grotesque', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
-		'Noto Sans CJK SC', system-ui, sans-serif;
-	--font-body:
-		'Bricolage Grotesque', system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB',
-		'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+	--sidebar: light-dark(#e6e2db, #141210);
+	--desk: light-dark(#efede8, #1b1916);
+	--paper: light-dark(#fcfbf8, #282420);
+	--ink: light-dark(#1c1b19, #eee9e1);
+	--ink2: color-mix(in srgb, var(--ink) 78%, transparent);
+	--ink3: light-dark(
+		color-mix(in srgb, var(--ink) 64%, transparent),
+		color-mix(in srgb, var(--ink) 60%, transparent)
+	);
+	--hair: light-dark(
+		color-mix(in srgb, var(--ink) 7%, transparent),
+		color-mix(in srgb, var(--ink) 9%, transparent)
+	);
+	--fill: light-dark(
+		color-mix(in srgb, var(--ink) 5%, transparent),
+		color-mix(in srgb, var(--ink) 7%, transparent)
+	);
+	--signature: light-dark(#2f4a9e, #8fa8e2);
+	--selection: light-dark(
+		color-mix(in srgb, var(--signature) 12%, transparent),
+		color-mix(in srgb, var(--signature) 20%, transparent)
+	);
+	--waiting: light-dark(#845a06, #edbd57);
+	--replied: light-dark(#17704a, #55b988);
+
+	/* 四角星：列表记号与粒子共用的形状，颜色由 background 给 */
+	--sparkle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1c.7 3.9 3.1 6.3 7 7-3.9.7-6.3 3.1-7 7-.7-3.9-3.1-6.3-7-7 3.9-.7 6.3-3.1 7-7Z'/%3E%3C/svg%3E");
+
+	--font-sans:
+		system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+		'Noto Sans CJK SC', sans-serif;
 	--font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
 	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-	--ease-swift: cubic-bezier(0.6, 0, 0.15, 1);
 
 	--shadow-window:
-		0 1px 2px oklch(20% 0.01 75 / 0.06), 0 16px 40px -16px oklch(20% 0.01 75 / 0.2),
-		0 48px 96px -48px oklch(20% 0.01 75 / 0.22);
-	--shadow-shot:
-		0 34px 68px -32px oklch(20% 0.01 75 / 0.38), 0 6px 18px -8px oklch(20% 0.01 75 / 0.12);
+		0 1px 2px rgb(0 0 0 / 0.06), 0 16px 40px -16px rgb(0 0 0 / 0.2),
+		0 48px 96px -48px rgb(0 0 0 / 0.22);
+	--shadow-shot: 0 34px 68px -32px rgb(0 0 0 / 0.38), 0 6px 18px -8px rgb(0 0 0 / 0.12);
 
 	--z-header: 50;
 	--z-grain: 80;
 	--z-skip: 90;
+}
+
+/* 夜里的纸：Palette 深色那组，铺在最深的侧栏色上，一角透出纸色的光 */
+.night {
+	color-scheme: dark;
+	background:
+		radial-gradient(110% 85% at var(--glow, 85% 0%), var(--paper) 0%, transparent 55%),
+		var(--sidebar);
+	color: var(--ink2);
 }
 
 /* ---- Base ---- */
@@ -77,11 +75,11 @@ html {
 }
 
 body {
-	font-family: var(--font-body);
+	font-family: var(--font-sans);
 	font-size: 1.0625rem;
-	line-height: 1.75;
-	color: var(--text);
-	background: var(--canvas);
+	line-height: 1.7;
+	color: var(--ink2);
+	background: var(--desk);
 	overflow-x: clip;
 	-webkit-font-smoothing: antialiased;
 	text-rendering: optimizeLegibility;
@@ -112,11 +110,11 @@ section[id] {
 }
 
 ::selection {
-	background: oklch(56.1% 0.061 157.6 / 0.24);
+	background: var(--selection);
 }
 
 :focus-visible {
-	outline: 2px solid var(--sage-strong);
+	outline: 2px solid var(--signature);
 	outline-offset: 3px;
 	border-radius: 6px;
 }
@@ -128,7 +126,7 @@ section[id] {
 	z-index: var(--z-skip);
 	padding: 0.6rem 1.1rem;
 	background: var(--ink);
-	color: var(--canvas);
+	color: var(--desk);
 	border-radius: 999px;
 	transform: translateY(-300%);
 	transition: transform 0.3s var(--ease-out);
@@ -162,7 +160,7 @@ section[id] {
 	content: '';
 	display: block;
 	height: 100%;
-	background: var(--sage-strong);
+	background: var(--signature);
 	transform: scaleX(var(--sp, 0));
 	transform-origin: left;
 }
@@ -174,32 +172,29 @@ section[id] {
 	gap: 0.55rem;
 	padding: 0.85rem 1.65rem;
 	border-radius: 999px;
-	font-weight: 650;
+	font-weight: 600;
 	font-size: 1rem;
 	line-height: 1.2;
 	transition:
 		transform 0.35s var(--ease-out),
-		box-shadow 0.35s var(--ease-out),
 		background 0.35s,
 		border-color 0.35s;
 }
 .btn-primary {
-	background: var(--sage-strong);
-	color: var(--paper);
-	box-shadow: 0 12px 28px -14px oklch(51.1% 0.06 159.4 / 0.65);
+	background: var(--ink);
+	color: var(--desk);
 }
 .btn-primary:hover {
-	background: var(--sage-ink);
+	background: var(--ink2);
 	transform: translateY(-2px);
-	box-shadow: 0 18px 36px -16px oklch(29.1% 0.028 160.9 / 0.6);
 }
 .btn-ghost {
-	border: 1px solid var(--border-strong);
-	color: var(--text);
-	background: oklch(99.7% 0.005 95.1 / 0.5);
+	border: 1px solid var(--hair);
+	color: var(--ink);
+	background: var(--fill);
 }
 .btn-ghost:hover {
-	border-color: var(--ink);
+	border-color: var(--ink3);
 	transform: translateY(-2px);
 }
 .btn .ic {
@@ -217,9 +212,9 @@ section[id] {
 	font-size: 0.82em;
 	line-height: 1.4;
 	white-space: nowrap;
-	color: var(--text);
+	color: var(--ink2);
 	background: var(--paper);
-	border: 1px solid var(--border-strong);
+	border: 1px solid var(--hair);
 	border-bottom-width: 2.5px;
 	border-radius: 8px;
 }
@@ -228,7 +223,6 @@ section[id] {
 	width: 1.5rem;
 	height: 1.5rem;
 	background: currentColor;
-	-webkit-mask: url('/assets/mark.svg') center / contain no-repeat;
 	mask: url('/assets/mark.svg') center / contain no-repeat;
 }
 
@@ -258,8 +252,8 @@ section[id] {
 	width: 0.82em;
 	height: 0.82em;
 	translate: 0 0.14em;
-	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1c.7 3.9 3.1 6.3 7 7-3.9.7-6.3 3.1-7 7-.7-3.9-3.1-6.3-7-7 3.9-.7 6.3-3.1 7-7Z' fill='%2347715a'/%3E%3C/svg%3E")
-		center / contain no-repeat;
+	background: var(--ink3);
+	mask: var(--sparkle) center / contain no-repeat;
 }
 
 .sec-head {
@@ -268,11 +262,10 @@ section[id] {
 .sec-head h2,
 .drench-h,
 .download h2 {
-	font-family: var(--font-display);
 	font-weight: 700;
 	font-size: clamp(2rem, 3.4vw + 0.8rem, 3.2rem);
 	line-height: 1.1;
-	letter-spacing: -0.025em;
+	letter-spacing: -0.02em;
 	color: var(--ink);
 	text-wrap: balance;
 }

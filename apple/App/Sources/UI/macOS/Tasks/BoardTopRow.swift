@@ -7,7 +7,7 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// 一列的列头排进窗口最顶那一排、卡从它下面滚过（docs/ui.md 沉浸式的栏，那一排什么都不垫）：列头是一块写字玻璃，与那一排的分段、"⋯"同高同一条中线（同 iPad 的列头）。
+    /// 一列的列头排进窗口最顶那一排、卡从它下面滚过（docs/layout.md 沉浸式的栏，那一排什么都不垫）：列头是一块写字玻璃，与那一排的分段、"⋯"同高同一条中线（同 iPad 的列头）。
     /// 否决过：只写字、不垫玻璃（同访达的列头），那一排不垫渐变后卡滚上来就压在字上。压在左上分段、右上"⋯"下面的列头给它们让出一截（窄窗口里"⋯"下面是哪一列不定）。
     func boardTopRow(column: TaskBoard.Column, count: Int) -> some View {
         modifier(BoardTopRow(column: column, count: count))

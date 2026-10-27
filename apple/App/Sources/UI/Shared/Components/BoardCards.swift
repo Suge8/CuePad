@@ -37,12 +37,12 @@ private struct BoardCardFrame: ViewModifier {
             .background {
                 // 换列飞来时盖着原来那一列的纸色，随着飞淡掉（`boardFlight`）：纸色在飞的途中调过来，不在起飞那一下换
                 if let arrival {
-                    RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: TaskMetrics.cardRadius)
                         .fill(arrival.from.paper(palette) ?? palette.paper).opacity(arrival.landed ? 0 : 1)
                 }
             }
-            .paper(radius: TaskMetrics.cardRadius, wash: column.paper(palette))
-            .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+            .paper(cornerRadius: TaskMetrics.cardRadius, wash: column.paper(palette))
+            .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius))
     }
 }
 

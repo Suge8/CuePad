@@ -121,13 +121,12 @@ struct TaskLine: View {
     private static let ringTarget: CGFloat = 44
 
     /// 长按提起的那一行的外形：与列表那张纸同一个圆角。
-    private static let liftRadius: CGFloat = 16
 
     private func framed(_ content: some View) -> some View {
         content
             .contentShape(.rect)
             .onTapGesture(perform: open)
-            .contentShape(.dragPreview, .rect(cornerRadius: Self.liftRadius, style: .continuous))
+            .contentShape(.dragPreview, .rect(cornerRadius: Radius.card))
     }
     #else
     private var inline: Bool { true }

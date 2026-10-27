@@ -24,7 +24,9 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             field
                 .padding(.horizontal, 18)
-                .glass(in: .rect(cornerRadius: CueListMetrics.field / 2, style: .continuous))
+                // 单行时两头正好是半圆（胶囊）；新定时在上面展开几点时是圆角的块，里面那块随它同心（`Radius.nested`）
+                .containerShape(.rect(cornerRadius: Radius.field))
+                .glass(in: .rect(cornerRadius: Radius.field))
                 .padding(.horizontal, 16)
                 .padding(.bottom, -CueListMetrics.field / 2)
         }
@@ -123,7 +125,7 @@ struct CueListRow<Content: View>: View {
             #if os(iOS)
             // 长按抬起的预览与左右滑时露出的缝是这一行的快照：没有底色时抬起来是透明的一条。形状要写明：不写时 iOS 26 按所在容器取同心圆角
             .background(palette.desk, in: .rect)
-            .contentShape(.contextMenuPreview, .rect(cornerRadius: CueListMetrics.radius, style: .continuous))
+            .contentShape(.contextMenuPreview, .rect(cornerRadius: Radius.card))
             .contextMenu { menu }
             .rowSwipes(RowSwipes(leading: [leading], trailing: [trailing]))
             #else
@@ -169,7 +171,7 @@ struct CueListGroupTitle: View {
     }
 }
 
-/// 页边距（Mac 的行底向两边伸出 `RowMetrics.bleed`，边距要盖住它）、行的内边距、手机长按预览的圆角、输入胶囊的高与离底。
+/// 页边距（Mac 的行底向两边伸出 `RowMetrics.bleed`，边距要盖住它）、行的内边距、输入胶囊的高与离底。
 enum CueListMetrics {
     #if os(macOS)
     static let top: CGFloat = 48
@@ -182,7 +184,6 @@ enum CueListMetrics {
     static let margin: CGFloat = 4
     static let inset: CGFloat = 16
     static let vertical: CGFloat = 9
-    static let radius: CGFloat = 16
     static let field: CGFloat = 50
     static let fieldBottom: CGFloat = 8
     #endif
