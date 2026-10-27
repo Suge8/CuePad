@@ -8,6 +8,11 @@ struct TaskOutlineTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
 
+    /// 每行 44 高、从上往下排的行框（拖放的落点按它判）。
+    private func rowFrames(of rows: [TaskTree.Row]) -> [UUID: CGRect] {
+        Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
+    }
+
     /// a（a1、a2）、b。界面给出的每一次移动，Store 都接受。
     @Test func 整理任务_缩进_反缩进_拖放_界面给出的移动Store都接受() async throws {
         let a = try await store.createTask("a")
@@ -37,14 +42,13 @@ struct TaskOutlineTests {
 
         // 拖到一行中部成为它的子任务；不能拖进自己的子树
         let rows = try await tree().rows()
-        let frames = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
+        let frames = rowFrames(of: rows)
         let middle = CGPoint(x: 100, y: 66)
         try await apply(try await tree().drop(b.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)?.move, b.id)
         #expect(try await store.card(b.id)?.parentID == a.id)
         #expect(try await tree().drop(a.id, rows: rows, frames: frames, at: middle, depthShift: 0) == nil)
     }
 
-    /// 层级限制与 Store 同一口径：已完成、不显示的子任务也算层级；拖起来又放回原处什么都不改。
     /// 点掉已完成子任务的圆圈：不再算做完只有一种——它与已完成的上级清掉完成，开始过的回进行中、没开始过的回待办，在归档里的整件取回；
     /// 上级从子任务推出开始，子任务开始过它就跟着进行中。
     @Test func 点掉已完成子任务的圆圈_上级跟着不再算做完_整件取回归档() async throws {
@@ -63,6 +67,7 @@ struct TaskOutlineTests {
         #expect(try await store.archived().isEmpty)
     }
 
+    /// 层级限制与 Store 同一口径：已完成、不显示的子任务也算层级；拖起来又放回原处什么都不改。
     @Test func 带着已完成子任务的任务不能再缩进_拖起来放回原处不换项目() async throws {
         let second = try await store.createTask("发布")
         let first = try await store.createTask("备份")
@@ -72,7 +77,7 @@ struct TaskOutlineTests {
         let tree = TaskTree(all.filter { $0.status != .done }, all: all)
         #expect(tree.indent(second.id) == nil)
         let rows = tree.rows()
-        let frames = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
+        let frames = rowFrames(of: rows)
         let onto = tree.drop(second.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)
         #expect(onto?.mark != .onto(first.id))
         if let move = onto?.move { try await store.moveCard(second.id, to: move.slot, after: move.after) }
@@ -82,7 +87,7 @@ struct TaskOutlineTests {
         let other = try await store.createTask("换首图", in: site.id)
         let flat = TaskTree(try await store.tasks(.inProgress, .todo).flatMap(\.tasks).filter { [loose.id, other.id].contains($0.id) })
         let flatRows = flat.rows()
-        let flatFrames = Dictionary(uniqueKeysWithValues: flatRows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
+        let flatFrames = rowFrames(of: flatRows)
         let home = try #require(flatFrames[loose.id])
         #expect(flat.drop(loose.id, rows: flatRows, frames: flatFrames, at: CGPoint(x: 100, y: home.midY), depthShift: 0) == nil)
     }
