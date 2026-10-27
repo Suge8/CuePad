@@ -2,7 +2,7 @@ import CueEditor
 import CueStore
 import SwiftUI
 
-/// 文件页里两端同一份的几块（Mac 的 `LibraryFilePage`、手机的 `LibraryFileScreen` 只管怎么摆）：
+/// 文件页里两端同一份的几块（`LibraryFileTop`、`LibraryFileBody` 把它们摆好，Mac 的 `LibraryFilePage`、手机的 `LibraryFileScreen` 只管页顶与底色）：
 /// 顶上那一条——同名的技能是几份的分段加"只留这份"（`DuplicateBar`），内容不同的规则是"<那家> 另写了一份"加"合并进来"（`MergeBar`），
 /// 文件在别处改过、你也改着时的那一条（`ConflictBar`）；
 /// 技能的 name、description 两个输入框（`SkillFields`，格式哪里不对标在对应的框下）；合并前标出会并进来的段落（`MergePreview`）。
@@ -46,15 +46,13 @@ struct DuplicateBar: View {
 /// 内容不同的规则："<那家> 另写了一份"加"合并进来"。两步，按钮说出在哪一步：点"合并进来"先在正文里标出会并进来的段落（`FileDraft.previewing`，`MergePreview`），
 /// 这时按钮换成"合并"、旁边"取消"；再点"合并"才做（照那件的合并稿写，`LibraryTidy.merged(retiring:)`，请求带着你看过的那一版，`TidyOrder.base`）。
 /// 后果一句贴在按钮下；替换基础提示的那份（Pi 的系统提示、Codex 的自定提示词）有才在标出时给一个勾，勾了才并进来并撤掉它（预览跟着变）。
-/// 各份正文没到齐（`ready`）前按不了。两步同一个高：第二行一直占着。
+/// 各份正文没到齐（`LibraryTidy.preview` 为 nil）前按不了；合并照那台 Mac 此刻的文件做，Mac 上先写下没存的字，
+/// 手机上有没发的改动时不让合并（你的字会变成和它冲突）。两步同一个高：第二行一直占着。
 struct MergeBar: View {
     let tidy: LibraryTidy
     let library: AgentLibrary
     let draft: FileDraft
-    /// 各份正文都到了、是快照里那一版（`LibraryTidy.preview` 不为 nil）
-    let ready: Bool
-    /// 合并前先做的事（Mac 写下没存的字）；手机上有没发的改动时为 nil，不让合并
-    let prepare: (() async -> Void)?
+    let texts: [String: String]?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var working = false
@@ -74,7 +72,7 @@ struct MergeBar: View {
             }
             Button { merge() } label: { TidyLabel(title: draft.previewing ? "合并" : "合并进来", working: working) }
                 .buttonStyle(ControlButtonStyle(kind: draft.previewing ? .primary : .secondary, compact: true))
-                .disabled(working || !ready || prepare == nil)
+                .disabled(working || tidy.preview(retiring: draft.retire, texts: texts) == nil || Self.unsent(draft))
         } consequence: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 ForEach(tidy.sources.map(\.origin).filter(\.replacesBasePrompt), id: \.self) { origin in
@@ -102,11 +100,19 @@ struct MergeBar: View {
         }
         working = true
         Task {
-            await prepare?()
+            await draft.leave()
             await workspace.tidy([TidyOrder(tidy: tidy.id, retire: draft.retire, base: tidy.base)], in: library)
             working = false
             draft.previewing = false
         }
+    }
+
+    private static func unsent(_ draft: FileDraft) -> Bool {
+        #if os(iOS)
+        draft.dirty
+        #else
+        false
+        #endif
     }
 }
 

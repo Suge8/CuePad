@@ -15,7 +15,7 @@ final class IOSEditorHandle {
     /// 相册、文件选择器选来的。
     func insert(_ files: [IncomingFile]) { view?.insert(files) }
     func focus() { view?.becomeFirstResponder() }
-    /// 换掉整篇正文（说明在 Mac 上被改了、你还没动过，编辑页跟上）：光标留在原来的位置附近。
+    /// 换掉整篇正文（文件在 Mac 上被改了、你还没动过，文件页跟上）：光标留在原来的位置附近。
     func replace(_ text: String) {
         guard let view else { return }
         let location = view.selectedRange.location

@@ -12211,22 +12211,6 @@
         }
       }
     },
-    "我现在用的模型看不了图，你发的图我看不到；要我看图，换个能看图的模型。图我还能原样转给会话。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "My current model can't see images, so I can't see the ones you sent. Switch to a model that supports images if you want me to look. I can still pass them along to a session as is."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "我现在用的模型看不了图，你发的图我看不到；要我看图，换个能看图的模型。图我还能原样转给会话。"
-          }
-        }
-      }
-    },
     "我起不来了：%@\n你再发一条消息，我就再试一次。" : {
       "localizations" : {
         "en" : {

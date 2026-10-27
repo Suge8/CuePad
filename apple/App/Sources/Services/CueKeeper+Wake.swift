@@ -129,15 +129,12 @@ extension CueKeeper {
         }
     }
 
-    /// 你的消息里的图，按发给会话的同一个转换取出、交给大脑；文字里的图片引用照留（Cue 转给会话时原样写进去）。
-    /// 模型看不了图、或图不在这台 Mac 上，不交图并对你说一声，不悄悄丢掉。
+    /// 你的消息里的图，按发给会话的同一个转换取出、交给看得了图的大脑；文字里的图片引用照留（Cue 转给会话时原样写进去）。
+    /// 看不了图的，图同文件一样以路径写进信封（`CueEnvelope.delivered`），这里不交。图不在这台 Mac 上，不交图并对你说一声，不悄悄丢掉。
     func images(in pending: [CueMessage], for brain: any HostedSession) async -> [PiImage] {
+        guard brain.seesImages else { return [] }
         let contents = pending.filter { $0.author == .known(.you) && CueFormat.hasImages($0.text) }.map { SendContent(stored: $0.text) }
         guard !contents.isEmpty else { return [] }
-        guard brain.seesImages else {
-            await say(.cue, ShownText("我现在用的模型看不了图，你发的图我看不到；要我看图，换个能看图的模型。图我还能原样转给会话。"))
-            return []
-        }
         do {
             return try contents.flatMap { try $0.piImages(from: store.files) }
         } catch {

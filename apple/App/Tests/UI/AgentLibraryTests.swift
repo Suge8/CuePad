@@ -106,9 +106,9 @@ struct AgentLibraryTests {
         _ = try await library("撤销后又是五件") { $0.tidies.count == 5 }
     }
 
-    /// 文件页自动存：带着改之前看到的内容（基准）写进文件；文件在别处改过就不写、退回"Mac 上刚改过"，文件页跟上文件此刻的样子。
-    /// 手机发来的改文件与整理（投送请求）由 Mac 照做，结果写回请求。
-    @Test func 改规则带基准_别处改过就退回_手机发来的改文件与合并由Mac照做() async throws {
+    /// 改文件带着改之前看到的内容（基准）写进文件；文件在别处改过就不写、退回"Mac 上刚改过"，文件页跟上文件此刻的样子。
+    /// Claude Code 读不到项目的 AGENTS.md 时，内容不同的几份合并进它，个人的 CLAUDE.local.md 不碰。手机发来的改文件与合并经云由 Mac 照做，在 `+Sync` 里测。
+    @Test func 改规则带基准_别处改过就退回_合并项目里的CLAUDE文件() async throws {
         try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
         let folder = home("work/site")
         let project = try await store.createProject(name: "Site", color: "#000000")
@@ -138,22 +138,13 @@ struct AgentLibraryTests {
         try write("# Site\n\n别处改的\n", folder.appending(path: "AGENTS.md"))
         try await eventually("编辑页读到别处改的") { workspace.library?.instruction(.project(project.id))?.hash == hash("# Site\n\n别处改的\n") }
 
-        try await services.executor.start()
-        let current = try #require(workspace.library?.instruction(.project(project.id)))
-        let stale = try await store.requestLibraryEdit(LibraryEdit(file: file, base: seen.hash ?? "", text: "手机改的"), title: "Site", on: TestApp.hostID)
-        let refused = try await store.outcome(of: stale)
-        #expect(refused.failureReason == ShownText(AgentLibraryError.changedOnMac) && refused.failure == "Mac 上刚改过")
-        let edit = try await store.requestLibraryEdit(LibraryEdit(file: file, base: current.hash ?? "", text: "手机改的\n"), title: "Site", on: TestApp.hostID)
-        #expect(try await store.outcome(of: edit).status == .known(.succeeded))
-        #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n")
+        await workspace.tidy([TidyOrder(tidy: "project-claude/\(project.id.uuidString)")], in: found)
 
-        let tidy = try await store.requestTidy([TidyOrder(tidy: "project-claude/\(project.id.uuidString)")], on: TestApp.hostID)
-        #expect(try await store.outcome(of: tidy).status == .known(.succeeded))
-        #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n\n# 旧的 Claude 说明\n\n# 藏在 .claude 里的\n")
+        #expect(workspace.notice?.text.visible == "合并好了")
+        #expect(read(folder.appending(path: "AGENTS.md")) == "# Site\n\n别处改的\n\n# 旧的 Claude 说明\n\n# 藏在 .claude 里的\n")
         #expect(RelativeLink.points(folder.appending(path: "CLAUDE.md"), to: folder.appending(path: "AGENTS.md")), "同全局：CLAUDE.md 换成链到 AGENTS.md 的链接")
         #expect(!exists(folder.appending(path: ".claude/CLAUDE.md")) && read(folder.appending(path: "CLAUDE.local.md")) == "# 我自己的\n")
         _ = try await library("合并后 Claude Code 经链接读 AGENTS.md") { $0.tidies.isEmpty && $0.instruction(.project(project.id))?.readers == [.claudeCode] }
-        services.cancelBackgroundWork()
     }
 
     /// 合并之后又改过（文件页改了合并的规则）：撤销整个不做、说明原因，后来的改动留着。留着的 Pi 系统提示、各家自管的技能照样跟着文件变。

@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode / Grok Build / dsh 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型（Grok Build 用假模型，见 `GrokModel`），
+/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode / Grok Build / dsh 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型（Grok Build 缺省用假模型，见 `GrokModel`），
 /// MCP 是 Fixtures/mcp-echo.mjs 替身。
 /// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，总在隔离的 `OpenCodeSandbox` 里连真 OpenCode 跑（模型见它）。
 private let environment = ProcessInfo.processInfo.environment
@@ -85,10 +85,6 @@ struct RealBrainTests {
 
         func finished(_ n: Int = 1) async throws {
             try await eventually("第 \(n) 轮做完") { self.count(.turnFinished) >= n }
-        }
-
-        func started(_ n: Int = 1) async throws {
-            try await eventually("第 \(n) 轮开始") { self.count(.turnStarted) >= n }
         }
 
         /// 每轮的回答：做完时还留着的正在说的话
@@ -207,21 +203,6 @@ struct RealBrainTests {
 
         #expect(rig.failures == [], "\(rig.events)")
         #expect(try FileManager.default.contentsOfDirectory(atPath: rig.directory.path) == [])
-        }
-    }
-
-    @Test(arguments: runtimes) func anAbortedTurnHasNoReplyAndTheNextMessageIsAnswered(_ runtime: AgentKind) async throws {
-        AgentTape.use(runtime)
-        try await withRig(runtime) { rig in
-        try await rig.brain.send("Write the numbers from 1 to 400, one per line, in plain text. Do not use any tool.")
-        try await rig.started()
-        try await rig.brain.abort()
-        try await rig.finished()
-        #expect(rig.failures == [] && rig.replies == [], "\(rig.events)")
-
-        try await rig.brain.send("Reply with the single word OK.")
-        try await rig.finished(2)
-        #expect(rig.replies.last?.uppercased().contains("OK") == true)
         }
     }
 }

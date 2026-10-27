@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// 一页里换看哪一段的分段：全 App 只有这一种（进展页的看板｜会话、技能与规则的规则｜技能、搜索的灵感与任务｜会话）。
-/// 每段图标加字（`PaneButton`）；进展页那组只画图标（`titles: false`，字给悬停与读屏）：手机那块玻璃里还要放范围与额度，
-/// Mac 那组在待办列头上方，加字就挤掉列头。放在哪见 ui.md：手机在页顶中间，Mac 在工具栏中间；底由调用处给（工具栏、页顶的玻璃，面板里的 `track`）。
+/// 每段图标加字，选中的靛青字、浅底，其余次一档的墨；进展页那组只画图标（`titles: false`，字给悬停与读屏）：手机那块玻璃里还要放范围与额度，
+/// Mac 那组在待办列头上方，加字就挤掉列头。放在哪见 ui.md：手机在页顶中间，Mac 在工具栏中间；底由调用处给（工具栏、页顶的玻璃，搜索范围自带淡底的槽）。
 /// 换段的动画在这里定一份：不回弹的弹簧，减弱动态效果时只交叉淡入淡出；点着的那一段再点不动。
 struct PaneSegment<Value: Hashable>: View {
     struct Item {
@@ -16,12 +16,14 @@ struct PaneSegment<Value: Hashable>: View {
     var titles = true
     let select: (Value) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(items, id: \.value) { item in
-                PaneButton(title: item.title, on: selection == item.value) {
-                    guard selection != item.value else { return }
+                let on = selection == item.value
+                Button {
+                    guard !on else { return }
                     withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { select(item.value) }
                 } label: {
                     HStack(spacing: PaneMetrics.iconGap) {
@@ -30,23 +32,16 @@ struct PaneSegment<Value: Hashable>: View {
                     }
                     .padding(.horizontal, titles ? PaneMetrics.padding : 0)
                     .frame(minWidth: titles ? PaneMetrics.minWidth : PaneMetrics.square, maxHeight: .infinity)
+                    .foregroundStyle(on ? palette.signature : palette.ink2)
+                    .background(on ? palette.selection : .clear, in: .capsule)
+                    .contentShape(.capsule)
                 }
+                .buttonStyle(PressStyle())
                 .help(Text(item.title))
+                .accessibilityLabel(Text(item.title))
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-    }
-}
-
-extension View {
-    /// 不在玻璃上的分段（面板、结果列表里）：淡底的槽。
-    func paneTrack() -> some View { modifier(PaneTrack()) }
-}
-
-private struct PaneTrack: ViewModifier {
-    @Environment(\.palette) private var palette
-
-    func body(content: Content) -> some View {
-        content.padding(PaneMetrics.inset).background(palette.fill, in: .capsule)
     }
 }
 
@@ -81,39 +76,20 @@ struct ProgressPanes: View {
     }
 }
 
-/// 分段里的一颗：选中的靛青字、浅底，其余次一档的墨（只经 `PaneSegment`）。
-struct PaneButton<Label: View>: View {
-    let title: LocalizedStringResource
-    let on: Bool
-    let action: () -> Void
-    @ViewBuilder var label: Label
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button(action: action) {
-            label
-                .foregroundStyle(on ? palette.signature : palette.ink2)
-                .background(on ? palette.selection : .clear, in: .capsule)
-                .contentShape(.capsule)
-        }
-        .buttonStyle(PressStyle())
-        .accessibilityLabel(Text(title))
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-}
-
 /// 搜索的两个范围：灵感与任务、会话（一个搜索词两边共用，换范围不清空）。Mac 在 ⌘K 面板搜索框那一行的右边，手机是结果最上面那排胶囊的头一块。
-enum SearchScope: CaseIterable {
+enum SearchScope {
     case cards, sessions
 }
 
 struct SearchScopePanes: View {
     @Binding var scope: SearchScope
+    @Environment(\.palette) private var palette
 
     var body: some View {
         PaneSegment(items: [.init(value: .cards, title: "灵感与任务", icon: .idea), .init(value: .sessions, title: "会话", icon: .session)],
                     selection: scope) { scope = $0 }
             .fixedSize()
-            .paneTrack()
+            .padding(PaneMetrics.inset)
+            .background(palette.fill, in: .capsule)
     }
 }

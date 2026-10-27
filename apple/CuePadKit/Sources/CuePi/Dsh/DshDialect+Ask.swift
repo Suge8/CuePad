@@ -10,35 +10,22 @@ extension DshDialect {
     func ask(_ method: String, _ params: JSONValue) -> ACPAsk? {
         guard method == "_cuepad/ask_user_question" else { return nil }
         let questions = (params["questions"]?.array ?? []).filter { $0["id"]?.string != nil && $0["question"]?.string?.isEmpty == false }
-        return questions.isEmpty ? nil : Self.ask(questions[...], answers: [])
+        guard !questions.isEmpty else { return nil }
+        return .inOrder(questions, ask: { current in
+            let id = current["id"] ?? .null
+            let labels = ACPAsk.labels(current)
+            let lines = [current["header"]?.string, current["question"]?.string, current["detail"]?.string].compactMap(\.self) + ACPAsk.notes(current)
+            let question = labels.isEmpty
+                ? PiQuestion(promptID: nil, kind: .text, text: ACPAsk.text(lines))
+                : PiQuestion(promptID: nil, kind: .select, text: ACPAsk.text(lines), options: labels, allowsOther: true)
+            return (question, { answer in
+                switch answer {
+                case .option(let label) where labels.contains(label): ["id": id, "selected": [.string(label)]]
+                case .text(let written) where question.acceptsText && !written.isEmpty: ["id": id, "selected": [], "custom": .string(written)]
+                default: nil
+                }
+            })
+        }, finish: { ["answers": .array($0)] }, withdrawn: ["cancelled": true])
     }
-
-    private static func ask(_ questions: ArraySlice<JSONValue>, answers: [JSONValue]) -> ACPAsk {
-        let current = questions[questions.startIndex]
-        let id = current["id"] ?? .null
-        let options = current["options"]?.array ?? []
-        let labels = options.compactMap { $0["label"]?.string }
-        let notes = options.compactMap { option in
-            option["description"]?.string.flatMap { $0.isEmpty ? nil : "\(option["label"]?.string ?? "")：\($0)" }
-        }
-        let text = String(([current["header"]?.string, current["question"]?.string, current["detail"]?.string].compactMap(\.self) + notes)
-            .joined(separator: "\n").prefix(textLimit))
-        let question = labels.isEmpty
-            ? PiQuestion(promptID: nil, kind: .text, text: text)
-            : PiQuestion(promptID: nil, kind: .select, text: text, options: labels, allowsOther: true)
-        return ACPAsk(question: question, answer: { answer in
-            let item: JSONValue
-            switch answer {
-            case .option(let label) where labels.contains(label): item = ["id": id, "selected": [.string(label)]]
-            case .text(let written) where question.acceptsText && !written.isEmpty: item = ["id": id, "selected": [], "custom": .string(written)]
-            default: return nil
-            }
-            let rest = questions.dropFirst()
-            guard rest.isEmpty else { return .next(ask(rest, answers: answers + [item])) }
-            return .result(["answers": .array(answers + [item])])
-        }, withdrawn: ["cancelled": true])
-    }
-
-    private static let textLimit = 500
 }
 #endif

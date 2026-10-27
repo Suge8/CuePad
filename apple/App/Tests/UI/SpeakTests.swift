@@ -44,8 +44,7 @@ struct SpeakTests {
         let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString).appending(path: name)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: url)
-        let stored = try IncomingFile.file(url).store(in: files)
-        return DraftFile(key: stored.key, name: stored.name)
+        return DraftFile(key: try files.store(fileAt: url), name: name)
     }
 
     /// 把你这句话的写下时刻挪到 `ago` 秒前：时限从真实的此刻起算，不等一分钟。

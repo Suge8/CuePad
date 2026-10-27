@@ -42,7 +42,7 @@ public final class GrokRuntime: AgentRuntime {
         let home = paths.home(of: .grok)
         host = ACPHost(.grok, bridge: bridge, timing: timing, launching: { _ in
             guard let grok = await grok() else { throw AgentRuntimeError.notInstalled(.grok) }
-            let environment = await locate().environment(launching: grok, overrides: paths.environment.merging([Self.facts.homeVariable: home.path]) { $1 })
+            let environment = await locate().environment(launching: grok, overrides: paths.launchEnvironment(of: .grok))
             return ACPHost.Launching(executable: grok, environment: environment, dialect: GrokDialect())
         }, sessionFile: { cwd, id in Self.sessionFile(in: home, cwd: cwd.path, id: id) })
     }
@@ -59,9 +59,6 @@ public final class GrokRuntime: AgentRuntime {
         self.scope = scope
         refresh()
     }
-
-    /// 托管的会话在 App 起的进程里，`stop()` 收掉它们。
-    public var hostedSessionsOutliveApp: Bool { false }
 
     public func stop() -> @concurrent @Sendable () async -> Void {
         stopped = true
@@ -151,19 +148,10 @@ public final class GrokRuntime: AgentRuntime {
         let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
         return home.appending(path: "sessions", directoryHint: .isDirectory)
             .appending(path: cwd.addingPercentEncoding(withAllowedCharacters: unreserved) ?? cwd, directoryHint: .isDirectory)
-            .appending(path: id, directoryHint: .isDirectory).appending(path: facts.sessionFiles?.fileName ?? "updates.jsonl")
+            .appending(path: id, directoryHint: .isDirectory).appending(path: GrokHistory.fileName)
     }
 }
 
 /// 终端里的会话只读：桥按能力表先拒掉，到不了这里。
-extension GrokRuntime: SessionLink {
-    public func send(_ message: PiMessage, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func command(_ line: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func end(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func abort(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
-        throw PiBridgeError.unsupported
-    }
-}
+extension GrokRuntime: SessionLink {}
 #endif

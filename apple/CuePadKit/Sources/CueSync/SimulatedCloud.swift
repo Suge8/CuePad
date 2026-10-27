@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 import os
 
-/// 内存里的 iCloud 替身：账号总是可用，同步区是一组按写入先后编号的记录，令牌就是编号；收下的上传照单记下（`saved`、`deleted`）。
+/// 内存里的 iCloud 替身：账号总是可用，同步区是一组按写入先后编号的记录，令牌就是编号；收下的上传照单记下（`saved`）。
 /// 删掉的记录留一个同样编号的墓碑，拉取时作为删除交给拉到它之后的设备（同 CloudKit 的变更令牌）。
 /// 测试与调试画面用它跑真实的同步代码（`CloudSync`），只换掉网络那一头。
 actor SimulatedCloud: SyncCloud {
@@ -13,8 +13,6 @@ actor SimulatedCloud: SyncCloud {
   private var account = "simulated"
   /// 收下的上传（记录名），按先后。
   private(set) var saved: [String] = []
-  /// 收下的删除（记录名），按先后。
-  private(set) var deleted: [String] = []
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
 
   init(_ records: [CKRecord] = []) {
@@ -72,7 +70,6 @@ actor SimulatedCloud: SyncCloud {
       guard let gone = zone.removeValue(forKey: id) else { continue }
       seq += 1
       tombstones[id] = (seq, gone.record.recordType)
-      deleted.append(id.recordName)
     }
     Self.log.notice("替身 iCloud 收下 \(saving.count, privacy: .public) 条、删除 \(deleting.count, privacy: .public) 条")
     return SentRecords(saved: saving, deleted: deleting)

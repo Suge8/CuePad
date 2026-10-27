@@ -28,7 +28,7 @@ extension CueKeeper {
                 if case .stuck = phase { await startShift() }
                 guard let shift else { return }
                 let ids = pending.map(\.id)
-                let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside(), files: store.files)
+                let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside(), files: store.files, imagesAsFiles: !shift.brain.seesImages)
                 let images = await images(in: pending, for: shift.brain)
                 if shift.turn != nil {
                     do {

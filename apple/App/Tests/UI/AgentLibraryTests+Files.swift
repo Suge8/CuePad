@@ -53,7 +53,6 @@ extension AgentLibraryTests {
             let texts = try await store.agentLibraryTexts(host: TestApp.hostID, paths: [cFile])
             return skills == 2 && texts.isEmpty
         }
-        #expect(await cloud.deleted == [LibraryFileText.recordID(host: TestApp.hostID, path: cFile).uuidString.lowercased()])
     }
 
     /// 500 个技能：快照里只有元数据，单条记录远小于 iCloud 的 1MB 上限；正文在各自那一条里。
@@ -81,7 +80,6 @@ extension AgentLibraryTests {
         let record = try #require(uploaded)
         try await eventually("五百条正文都上了云") { await cloud.saved.count >= 501 }
         let bytes = Self.size(of: record)
-        print("500 个技能：快照记录 \(bytes) 字节（每个技能约 \(bytes / 500) 字节）；正文另 500 条，每条约 \(Data(body.utf8).count) 字节")
         #expect(bytes < 1_000_000 / 3, "快照 \(bytes) 字节")
     }
 

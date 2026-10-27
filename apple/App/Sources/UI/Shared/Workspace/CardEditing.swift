@@ -76,7 +76,14 @@ final class CardEditing {
 enum SaveState: Equatable {
     case idle, saving, saved, failed
 
-    static let savedDisplay: Duration = .seconds(1.5)
+    private static let savedDisplay: Duration = .seconds(1.5)
+
+    /// "已保存"这类亮一会儿就收的状态：页面在 `.task(id: 状态)` 里等它，等够返回 true；等的时候状态又变了（任务取消）返回 false，这次计时作废。
+    /// `awaitsMac`：手机"发往 Mac"是等那台回话，结果晚到，多亮一倍的时间让人看见；Mac 自动存立刻有结果。
+    static func linger(awaitsMac: Bool = false) async -> Bool {
+        try? await Task.sleep(for: savedDisplay * (awaitsMac ? 2 : 1))
+        return !Task.isCancelled
+    }
 
     /// 最长的那个（页顶按它留宽，换字时不伸缩）。
     static var longestText: String { [saving, saved, failed].compactMap(\.text).max { $0.count < $1.count } ?? "" }

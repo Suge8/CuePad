@@ -15,7 +15,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 	en: {
 		'meta.title': 'CuePad — Say it once. Cue keeps your agents moving.',
 		'meta.desc':
-			'A calm notebook that runs your coding agents. Jot it down; Cue hands it to Claude Code, Codex, Pi or OpenCode, keeps them moving, and only asks you what really needs you. Native on Mac, iPhone and iPad. Local-first, free and open source.',
+			'A calm notebook that runs your coding agents. Jot it down; Cue hands it to Claude Code, Codex, Pi, OpenCode or Grok Build, keeps them moving, and only asks you what really needs you. Native on Mac, iPhone and iPad. Local-first, free and open source.',
 		skip: 'Skip to content',
 		'nav.cue': 'Cue',
 		'nav.how': 'How it works',
@@ -27,7 +27,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 		'hero.t3': 'agents moving',
 		'hero.t4': '.',
 		'hero.sub':
-			'A calm notebook that runs your coding agents. Jot it down; Cue hands it to Claude Code, Codex, Pi or OpenCode and only asks you what really needs you.',
+			'A calm notebook that runs your coding agents. Jot it down; Cue hands it to Claude Code, Codex, Pi, OpenCode or Grok Build and only asks you what really needs you.',
 		'hero.cta1': 'Download for Mac',
 		'hero.cta2': 'Star on GitHub',
 		'hero.img': 'The CuePad task board: to do, advancing, waiting on you, done',
@@ -35,7 +35,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 		'drench.h': 'Say what you want. Cue takes it from there.',
 		'drench.p':
 			'Type it on the Mac or say it from your phone. Cue turns it into tasks, starts and names agent sessions, answers their routine questions, checks their evidence and signs off finished work.',
-		'drench.meta': 'Claude Code · Codex · Pi · OpenCode — ⌥ ⇧ Space from anywhere',
+		'drench.meta': 'Claude Code · Codex · Pi · OpenCode · Grok Build — ⌥ ⇧ Space from anywhere',
 		'drench.local':
 			'Local-first — everything lives in a SQLite library on your device and syncs through your own private iCloud. No account, no server, no telemetry.',
 		'drench.video': 'Recording: tell Cue what you want; it starts an agent session and reports back',
@@ -93,7 +93,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 	zh: {
 		'meta.title': 'CuePad — 说一句，Cue 替你盯着所有 Agent',
 		'meta.desc':
-			'一本替你指挥 coding agent 的安静笔记本。记下来，Cue 交给 Claude Code、Codex、Pi 或 OpenCode，盯着它们推进，只把真正要你拍板的事拿来问你。Mac、iPhone、iPad 原生，本地优先，开源免费。',
+			'一本替你指挥 coding agent 的安静笔记本。记下来，Cue 交给 Claude Code、Codex、Pi、OpenCode 或 Grok Build，盯着它们推进，只把真正要你拍板的事拿来问你。Mac、iPhone、iPad 原生，本地优先，开源免费。',
 		skip: '跳到正文',
 		'nav.cue': 'Cue',
 		'nav.how': '怎么用',
@@ -105,7 +105,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 		'hero.t3': '盯着 Agent',
 		'hero.t4': '。',
 		'hero.sub':
-			'一本替你指挥 coding agent 的安静笔记本。记下来，Cue 交给 Claude Code、Codex、Pi 或 OpenCode，只把真正要你拍板的事拿来问你。',
+			'一本替你指挥 coding agent 的安静笔记本。记下来，Cue 交给 Claude Code、Codex、Pi、OpenCode 或 Grok Build，只把真正要你拍板的事拿来问你。',
 		'hero.cta1': '下载 Mac 版',
 		'hero.cta2': '去 GitHub 加星',
 		'hero.img': 'CuePad 的任务看板：待办、推进中、等你、已完成',
@@ -113,7 +113,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 		'drench.h': '你开口，Cue 接手。',
 		'drench.p':
 			'在 Mac 上打字，或在手机上说出你要什么。Cue 把它变成任务，开好并命名 Agent 会话，回答常规提问，核对证据，自己判定做完。',
-		'drench.meta': 'Claude Code · Codex · Pi · OpenCode —— 随处按 ⌥ ⇧ Space 叫 Cue',
+		'drench.meta': 'Claude Code · Codex · Pi · OpenCode · Grok Build —— 随处按 ⌥ ⇧ Space 叫 Cue',
 		'drench.local':
 			'本地优先——全部存在设备上的 SQLite 库里，经你自己的 iCloud 私有数据库同步。无需账号，没有服务器，没有遥测。',
 		'drench.video': '录屏：告诉 Cue 要做什么，它开好 Agent 会话、回来报告结果',

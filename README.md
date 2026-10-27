@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>A calm notebook that runs your coding agents.</b><br />
-  Jot it down; Cue hands it to Claude Code, Codex, Pi, OpenCode or DeepSeek Harness, keeps them moving, and only asks you what really needs you.<br />
+  Jot it down; Cue hands it to Claude Code, Codex, Pi, OpenCode, Grok Build or DeepSeek Harness, keeps them moving, and only asks you what really needs you.<br />
   Native on Mac, iPhone and iPad. Local-first, no account, no server.
 </p>
 
@@ -54,7 +54,7 @@ open CuePad/apple/CuePad.xcodeproj    # pick the CuePad scheme and My Mac, then 
 
 A build from source is ad-hoc signed, keeps its own library in `~/Library/Application Support/CuePad Dev` and doesn't update itself (`git pull` and build again). If the released app is also on this Mac, the source build leaves your agents' settings and notifications to it. iCloud sync and the iPhone/iPad apps need your own Apple developer account ([docs/release.md](docs/release.md#换成自己的身份fork)).
 
-**2. Connect your agents.** On first launch CuePad finds the agents on this Mac — [Pi](https://pi.dev), Claude Code, Codex, OpenCode, [DeepSeek Harness](https://www.npmjs.com/package/@deepseek-ai/dsh) — and connects the ones you tick; one that's missing or signed out is one click to install or sign in. Each row says what it will write before anything is written, and turning an agent off later removes all of it. Work happens in the project's folder, `~/CuePad/<project>` unless you point it at your own code.
+**2. Connect your agents.** On first launch CuePad finds the agents on this Mac — [Pi](https://pi.dev), Claude Code, Codex, OpenCode, Grok Build, [DeepSeek Harness](https://www.npmjs.com/package/@deepseek-ai/dsh) — and connects the ones you tick; one that's missing or signed out is one click to install or sign in. Each row says what it will write before anything is written, and turning an agent off later removes all of it. Work happens in the project's folder, `~/CuePad/<project>` unless you point it at your own code.
 
 **3. Hand off your first job.** Press `Option + Shift + Space` anywhere and tell Cue what you want, e.g. *"Add a dark mode toggle to ~/code/my-app and show me a screenshot."* Or write a task and press **Start**. Cue picks the agent, starts the session, and the result lands back in CuePad.
 

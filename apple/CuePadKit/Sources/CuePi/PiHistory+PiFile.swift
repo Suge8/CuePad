@@ -155,8 +155,8 @@ extension PiHistory {
     private static let decoder = JSONDecoder()
 
     private static func decode(_ raw: UnsafeRawBufferPointer) -> Line? {
-        guard let base = raw.baseAddress, !raw.isEmpty else { return nil }
-        return try? decoder.decode(Line.self, from: Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base), count: raw.count, deallocator: .none))
+        guard let data = raw.borrowedData else { return nil }
+        return try? decoder.decode(Line.self, from: data)
     }
 
     private static func contains(_ raw: UnsafeRawBufferPointer, _ marker: Data) -> Bool {

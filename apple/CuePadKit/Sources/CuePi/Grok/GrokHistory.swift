@@ -12,12 +12,12 @@ import Foundation
 /// - `turn_completed`（方法 `_x.ai/session/update`）结束这一轮：`cancelled` 是被停下，其余是做完（出错的原话不在记录里）。
 /// 工作目录在路径里（`SessionFileFormat.cwd`）；会话名不在这个文件里，历史会话的名字退回首条消息。
 enum GrokHistory {
+    static let fileName = "updates.jsonl"
     static let deliveryPrefix = "cuepad-"
 
     static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
         cp.seq += 1
-        guard let base = raw.baseAddress, !raw.isEmpty,
-              let line = JSONValue.parse(Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base), count: raw.count, deallocator: .none)),
+        guard let data = raw.borrowedData, let line = JSONValue.parse(data),
               let params = line["params"], let update = params["update"]
         else { return }
         if cp.sessionID == nil { cp.sessionID = params["sessionId"]?.string }
