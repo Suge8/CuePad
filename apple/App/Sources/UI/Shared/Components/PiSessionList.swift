@@ -55,7 +55,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 
 /// 一个 Agent 会话的行（进展页的会话段与 iOS 搜索页，Mac 的菜单栏面板、⌘K、项目页、Cue 页头面板同一种，状态都经 `PiShown`）。
 /// - 整页（`page`）是一张两行的圆角卡片：第一行状态标、名字、哪家 Agent 的标志，右边所在项目的图标（看全部项目时）与时长；
-///   第二行状态词接一句现在到哪了（此刻的短词优先，如没能结束、有草稿，见 `PiRowFacts.note`；没有时是 `PiProgress.note`，与项目页、任务看板同一句；歇着、Cue 已接手这次停下时换成它对它做的那一句，`PiProgress.cue`），
+///   第二行状态词接一句现在到哪了（此刻的短词优先，如没能结束、有草稿，见 `PiRowFacts.note`；没有时是 `PiProgress.note`，与项目页、任务看板同一句；歇着、这次停下 Cue 已交给别处时换成在等哪一处做完，`HandoffLine`），
 ///   快满的上下文靠右。模型与子代理名单不上卡（在会话页里）。要你看的三种状态卡片换成这种状态的淡底（`PiShown.wash`）。
 ///   已结束的（历史）没有状态标与状态词，第二行是最后一句回答的首句（`PiProgress.line`），没有时是所在的文件夹；
 ///   都没有也留着这一行：张张卡一样高，长列表扫下去节奏不断。
@@ -76,8 +76,8 @@ struct PiSessionRow: View {
     /// 没能送达的话有几句（`PiSessionListItem.undelivered`）：你看过以后整行不再是"没能送达"，但只要还有，时长前留一个
     /// 胭脂的小折回箭头（读屏念"N 句没送到"），与会话页顶栏同一个数（`PiChat.undeliveredNote`）。
     let undelivered: Int
-    /// Cue 对它做的最近一件事（`PiSessionListItem.cueDid`）：歇着时卡片第二行写它（`PiProgress.cue`）。
-    var cueDid: CueDid?
+    /// 这次停下 Cue 交给了哪（`PiSessionListItem.handoff`）：歇着时卡片第二行写在等它做完（`HandoffLine`）。
+    var handoff: CueHandoff?
     var style = Style.compact
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
@@ -132,7 +132,9 @@ struct PiSessionRow: View {
                             StateWord(shown: shown).fixedSize()
                             if let note = facts.note {
                                 NoteWord(note: note)
-                            } else if let progress = PiProgress.cue(cueDid, shown: shown) ?? PiProgress.note(of: session, failure: nil) {
+                            } else if let handoff = PiProgress.handoff(handoff, shown: shown) {
+                                HandoffLine(handoff: handoff).foregroundStyle(palette.ink2)
+                            } else if let progress = PiProgress.note(of: session, failure: nil) {
                                 Text(progress).foregroundStyle(palette.ink2)
                             }
                         }
@@ -227,7 +229,7 @@ struct PiSessionRow: View {
 extension PiSessionRow: Equatable {
     static func == (a: Self, b: Self) -> Bool {
         a.session == b.session && a.project == b.project && a.delivery == b.delivery && a.end == b.end && a.rename == b.rename
-            && a.undelivered == b.undelivered && a.cueDid == b.cueDid && a.style.card == b.style.card && a.style.dot == b.style.dot
+            && a.undelivered == b.undelivered && a.handoff == b.handoff && a.style.card == b.style.card && a.style.dot == b.style.dot
     }
 }
 

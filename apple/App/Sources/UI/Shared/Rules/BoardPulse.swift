@@ -6,7 +6,7 @@ import SwiftUI
 /// - 要你管：写出状态词的（`PiShown.speaksOnTask`：出错、被打断、没能送达、待回复、有新回复），与上下文用到九成起的
 ///   （`UsageLevel.critical`，状态词就是"上下文 94%"）；线停住，末端一颗点与状态词同色；
 /// - 在跑：`PiShown.isRunning`，线在动、靛青；
-/// - 歇着：其余（会话停着、等 Cue 回答、还没开会话），一条静止的淡线、不带点，标题淡一档；Cue 已接手这次停下时线换成 Cue 对它做的那一句（`cue`）。
+/// - 歇着：其余（会话停着、等 Cue 回答、还没开会话），一条静止的淡线、不带点，标题淡一档；这次停下 Cue 已交给别处时线换成在等哪一处做完（`handoff`）。
 struct BoardPulse: Equatable {
     enum Tier: Int, CaseIterable, Comparable {
         case needsYou, running, resting
@@ -35,13 +35,13 @@ struct BoardPulse: Equatable {
 
     var shown: PiShown?
     var session: PiSessionState?
-    /// 歇着、Cue 已接手这次停下时它对它做的那一句（`PiProgress.cue`）
-    var cue: String?
+    /// 歇着、这次停下 Cue 已交给别处时交给了哪（`PiProgress.handoff`）
+    var handoff: CueHandoff?
 
-    init(shown: PiShown? = nil, session: PiSessionState? = nil, cueDid: CueDid? = nil) {
+    init(shown: PiShown? = nil, session: PiSessionState? = nil, handoff: CueHandoff? = nil) {
         self.shown = shown
         self.session = session
-        cue = shown.flatMap { PiProgress.cue(cueDid, shown: $0) }
+        self.handoff = shown.flatMap { PiProgress.handoff(handoff, shown: $0) }
     }
 
     /// 快满的上下文（九成起，同会话行上的胭脂那一档）。
@@ -99,7 +99,7 @@ extension Workspace {
     /// 快满的上下文不因此漏掉。都没交给会话是歇着。
     func pulse(for task: Card, lead: Card?, in agents: AgentLinks) -> BoardPulse {
         guard let id = watched(task, lead: lead, in: agents), let agent = agent(of: id, in: agents) else { return BoardPulse() }
-        return BoardPulse(shown: agent.shown, session: agent.session, cueDid: agents.items[id]?.cueDid)
+        return BoardPulse(shown: agent.shown, session: agent.session, handoff: agents.items[id]?.handoff)
     }
 
     /// 任务卡看谁交给的会话：此刻干活的叶子，没有再看任务自己。
@@ -126,7 +126,7 @@ extension Workspace {
     /// 没绑任务的会话卡此刻的样子。
     func pulse(of session: PiSessionState) -> BoardPulse {
         let id = session.sessionID
-        return BoardPulse(shown: shown(session, delivery: services.liveSessions.deliveries[id]), session: session, cueDid: services.liveSessions.cueDid[id])
+        return BoardPulse(shown: shown(session, delivery: services.liveSessions.deliveries[id]), session: session, handoff: services.liveSessions.handoffs[id])
     }
 
     /// 推进中按档分成几组（要你管 → 在跑 → 歇着，空的档不在内），同一档保持原来的先后。

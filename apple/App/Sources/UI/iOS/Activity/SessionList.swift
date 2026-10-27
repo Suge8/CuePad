@@ -149,7 +149,7 @@ private struct SessionRow: View {
     var body: some View {
         let session = item.state
         Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
-            PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), cueDid: item.cueDid, style: .page).equatable()
+            PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), handoff: item.handoff, style: .page).equatable()
                 .contentShape(.rect(cornerRadius: SessionCard.radius))
         }
         .buttonStyle(PressStyle(.card))

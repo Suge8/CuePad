@@ -18099,6 +18099,22 @@
         }
       }
     },
+    "等「%@」做完" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting on “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等「%@」做完"
+          }
+        }
+      }
+    },
     "等了 %@" : {
       "localizations" : {
         "en" : {
@@ -18235,6 +18251,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等你说第一句"
+          }
+        }
+      }
+    },
+    "等另一个会话做完" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting on another session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等另一个会话做完"
+          }
+        }
+      }
+    },
+    "等另一件任务做完" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting on another task"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等另一件任务做完"
           }
         }
       }
