@@ -62,7 +62,7 @@ enum CloudKitSchema {
         let type = sqlTypes[column] == "INTEGER" ? "INT64" : "STRING"
         fields.append((column, [encrypted ? "ENCRYPTED" : nil, type, queryable ? "QUERYABLE" : nil].compactMap { $0 }.joined(separator: " ")))
       }
-      if table == .attachments { fields.append(("file", "ASSET")) }
+      if table == .attachments { fields.append((RecordMapper.fileKey, "ASSET")) }
       fields += retiredFields[table.rawValue] ?? []
       types.append(recordType(table.rawValue, fields))
     }

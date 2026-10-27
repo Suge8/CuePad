@@ -4,7 +4,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 真 Agent 用例（Pi、Codex、Claude Code、OpenCode 的托管、钩子、大脑与开工）的跑法，唯一的一处。
+/// 真 Agent 用例（Pi、Codex、Claude Code、OpenCode、Grok Build、dsh 的托管、钩子、大脑与开工）的跑法，唯一的一处。
 ///
 /// 默认回放：每个用例读 `Fixtures/tapes/<家>/<套件>/<用例>[ <参数>].jsonl` 里录好的 Agent 输出（`AgentTape`），不起真 Agent、
 /// 不联网、不花钱，断言照旧。录在 CuePad 读 Agent 输出的边界：Agent 进程的标准输入输出、信号与退出（CuePad 起的是替身
@@ -20,44 +20,58 @@ import Testing
 /// - pi：`~/.local/bin/pi`，假模型（`Fixtures/fake-model.ts`），零网络；FireCode 用例另要本机的 FireCode 源码（`CUEPAD_FIRECODE_SOURCE` 可换）；
 /// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
 /// - claude：本机的 claude 与它自己的登录（钥匙串里的那条，见 `ClaudeLogin`），模型 haiku（`ClaudeTestbed`）；
+/// - grok：本机的 grok（`CUEPAD_GROK` 可换），假模型（`FakeResponses`），零网络；环境里给了 `XAI_API_KEY` 时连真的 xAI（`GrokModel`）；
+/// - dsh：`CUEPAD_DSH` 指的 dsh（0.2.1-rc.2 以上；没给按 PATH 找），DeepSeek 的 key 只经 `DEEPSEEK_API_KEY` 给（录完 grep 录像带确认没有它）；
 /// - 大脑（`RealBrainTests`）用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
 ///
+/// OpenCode 没有录像带（它的 HTTP/SSE 边界没接进来），总是连真 OpenCode 跑：本机找得到 v2（官方脚本、Homebrew 或 npm 的 `@opencode/cli`，
+/// `CUEPAD_OPENCODE` 可指定）就在隔离的 `OpenCodeSandbox` 里跑，找不到就跳过。缺省用假模型 `Fixtures/fake-openai.mjs`，零网络、结果确定；
+/// 列出 `opencode` 只是改连真提供方，模型用 `CUEPAD_OPENCODE_MODEL`（`提供方/模型`，必给），密钥只经环境给。
+///
 /// 没有录像带、只在列出这家时连真 Agent 跑的（`live(_:_:)`）：终端里的 Codex 与 Claude Code（断言的是伪终端、tmux 里真终端界面的
-/// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录），旧扩展托管进程换上新扩展（两个 Pi 进程交替上桥、热换扩展文件，回放排不稳先后），OpenCode（它的 HTTP/SSE 边界没接进录像带；
-/// 本机装的 v2——官方脚本、Homebrew 或 npm 的 `@opencode/cli`——在隔离的 `OpenCodeSandbox` 里用免费模型跑，要联网；免费额度按 IP 计，
-/// 用完或限流时 `CUEPAD_OPENCODE_MODEL` 写成 `提供方/模型` 换到自己的提供方，密钥只经环境给）。
+/// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录；OpenCode 的总跑），
+/// 旧扩展托管进程换上新扩展（两个 Pi 进程交替上桥、热换扩展文件，回放排不稳先后）。
 enum RealAgents {
     static let recording: Set<AgentKind> = Set((ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS"] ?? "").split(separator: ",")
         .compactMap { AgentKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) })
 
+    /// OpenCode 总是连真的（`live`）；别家列出了录制，否则回放。
     static func mode(of agent: AgentKind) -> TapeMode {
-        guard recording.contains(agent) else { return .replay }
-        return agent == .opencode ? .live : .record
+        if agent == .opencode { return .live }
+        return recording.contains(agent) ? .record : .replay
     }
 
-    /// 录制时这家本机跑得起来（装了、登录了）
-    static func installed(_ agent: AgentKind) -> Bool {
+    /// 连真 Agent 跑不起来的原因（没装、没登录、缺模型）；跑得起来为 nil
+    static func missing(_ agent: AgentKind) -> String? {
         switch agent {
-        case .pi: realPiInstalled
-        case .codex: realCodexURL != nil && FileManager.default.fileExists(atPath: realCodexAuth.path)
-        case .claudeCode: claudeURL != nil && ClaudeLogin.token != nil
-        case .opencode: realOpenCodeURL != nil
+        case .pi: realPiInstalled ? nil : "本机没装 pi"
+        case .codex: realCodexURL != nil && FileManager.default.fileExists(atPath: realCodexAuth.path) ? nil : "本机没装或没登录 codex"
+        case .claudeCode: claudeURL != nil && ClaudeLogin.token != nil ? nil : "本机没装或没登录 claude"
+        case .opencode:
+            if realOpenCodeURL == nil { "本机找不到 opencode v2（CUEPAD_OPENCODE 可指定）" }
+            else if recording.contains(.opencode), openCodeRealModel == nil { "列出 opencode 连真提供方要给 CUEPAD_OPENCODE_MODEL（提供方/模型）" }
+            else { nil }
+        case .grok: realGrokURL == nil ? "本机找不到 grok（CUEPAD_GROK 可指定）" : nil
+        case .dsh:
+            if realDshURL == nil { "本机找不到 dsh（CUEPAD_DSH 可指定）" }
+            else if ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"] == nil { "没给 DEEPSEEK_API_KEY" }
+            else { nil }
         }
     }
 
-    /// 回放，或录制且本机跑得起来
-    static func runs(_ agent: AgentKind) -> Bool { mode(of: agent) == .replay || installed(agent) }
+    /// 回放，或连真 Agent 且本机跑得起来
+    static func runs(_ agent: AgentKind) -> Bool { mode(of: agent) == .replay || missing(agent) == nil }
 
-    /// 有录像带的套件：回放总是跑，录制要本机跑得起来。
+    /// 有录像带的套件（与 OpenCode 的）：回放总是跑，连真 Agent 要本机跑得起来。
     static func taped(_ agent: AgentKind) -> ConditionTrait {
-        .enabled(if: runs(agent), "CUEPAD_AGENT_TESTS 列出了 \(agent.rawValue)，但本机没装或没登录，录不了")
+        .enabled(if: runs(agent), "\(agent.rawValue) 跑不了：\(missing(agent) ?? "")")
     }
 
     /// 只连真 Agent 跑的套件（没有录像带）：列出这家且本机跑得起来时才跑。
     static func live(_ agent: AgentKind, _ why: String) -> ConditionTrait {
-        .enabled(if: recording.contains(agent) && installed(agent), "只连真 \(agent.rawValue) 跑（\(why)）：TEST_RUNNER_CUEPAD_AGENT_TESTS=\(agent.rawValue) 开启")
+        .enabled(if: recording.contains(agent) && missing(agent) == nil, "只连真 \(agent.rawValue) 跑（\(why)）：TEST_RUNNER_CUEPAD_AGENT_TESTS=\(agent.rawValue) 开启")
     }
 
     /// 有录像带的套件的时限：录制时给真 Agent 的 `recording`；回放不另设，用 xc.sh 给每个测试的统一时限

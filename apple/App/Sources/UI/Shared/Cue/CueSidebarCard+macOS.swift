@@ -42,9 +42,9 @@ struct CueSidebarCard: View {
             .contentShape(.rect)
         }
         .buttonStyle(RowStyle(selected: selected))
-        .animation(HandOff.quick, value: cue.unread)
-        .animation(HandOff.quick, value: cue.presence)
-        .animation(HandOff.quick, value: said)
+        .animation(Motion.fade, value: cue.unread)
+        .animation(Motion.fade, value: cue.presence)
+        .animation(Motion.fade, value: said)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityValue(selected ? "当前页" : "")
         .help("和 \(cue.name) 说话")

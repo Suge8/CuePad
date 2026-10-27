@@ -187,6 +187,22 @@
         }
       }
     },
+    "%@ 不能换这一项" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ can't change this setting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不能换这一项"
+          }
+        }
+      }
+    },
     "%@ 之后不再记得它，找不回来" : {
       "localizations" : {
         "en" : {
@@ -1366,7 +1382,7 @@
         }
       }
     },
-    "%lld 个技能 Claude Code 读不到" : {
+    "%lld 个技能 %@ 读不到" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -1374,13 +1390,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Claude Code can't read %lld skill"
+                  "value" : "%2$@ can't read %1$lld skill"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Claude Code can't read %lld skills"
+                  "value" : "%2$@ can't read %1$lld skills"
                 }
               }
             }
@@ -1389,7 +1405,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld 个技能 Claude Code 读不到"
+            "value" : "%1$lld 个技能 %2$@ 读不到"
           }
         }
       }
@@ -1446,6 +1462,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 个空文件夹"
+          }
+        }
+      }
+    },
+    "%lld 个附件" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld attachment"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld attachments"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 个附件"
           }
         }
       }
@@ -2539,6 +2583,22 @@
         }
       }
     },
+    "Agent 拒绝了：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The agent refused: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 拒绝了：%@"
+          }
+        }
+      }
+    },
     "Agent 新会话" : {
       "localizations" : {
         "en" : {
@@ -2635,6 +2695,22 @@
         }
       }
     },
+    "Agent 没有及时回应" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The agent didn't respond in time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 没有及时回应"
+          }
+        }
+      }
+    },
     "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看" : {
       "localizations" : {
         "en" : {
@@ -2647,6 +2723,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看"
+          }
+        }
+      }
+    },
+    "Agent 没有回应就退出了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The agent quit without responding"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 没有回应就退出了"
           }
         }
       }
@@ -3289,6 +3381,22 @@
         }
       }
     },
+    "CuePad 在后台开的 %@ 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ sessions that CuePad starts in the background show up in CuePad; sessions started in its web or desktop app don’t."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 在后台开的 %@ 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。"
+          }
+        }
+      }
+    },
     "CuePad 无法启动" : {
       "localizations" : {
         "en" : {
@@ -3771,6 +3879,22 @@
         }
       }
     },
+    "iCloud 空间已满：附件先留在这台，腾出空间后接着传" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud storage is full. Attachments stay on this device and upload once there’s space."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud 空间已满：附件先留在这台，腾出空间后接着传"
+          }
+        }
+      }
+    },
     "iCloud 账号受限" : {
       "localizations" : {
         "en" : {
@@ -3831,6 +3955,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "iCloud 里的 CuePad 数据被重置了"
+          }
+        }
+      }
+    },
+    "iCloud 里的这个文件坏了，取不下来" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is damaged in iCloud and can’t be downloaded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud 里的这个文件坏了，取不下来"
           }
         }
       }
@@ -4579,6 +4719,22 @@
         }
       }
     },
+    "上传中 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uploading %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上传中 %@"
+          }
+        }
+      }
+    },
     "上传本机数据" : {
       "localizations" : {
         "en" : {
@@ -4787,18 +4943,18 @@
         }
       }
     },
-    "下载中" : {
+    "下载中 %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Downloading"
+            "value" : "Downloading %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下载中"
+            "value" : "下载中 %@"
           }
         }
       }
@@ -4943,22 +5099,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不接入也能让 CuePad 在后台开 %@ 会话。"
-          }
-        }
-      }
-    },
-    "不是可识别的图片" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not a recognized image"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不是可识别的图片"
           }
         }
       }
@@ -5331,6 +5471,22 @@
         }
       }
     },
+    "从 iCloud 取来" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloads it from iCloud"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从 iCloud 取来"
+          }
+        }
+      }
+    },
     "以后%@都不用问" : {
       "localizations" : {
         "en" : {
@@ -5487,18 +5643,18 @@
         }
       }
     },
-    "任务，含图片" : {
+    "任务，含附件" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Task, with images"
+            "value" : "Task, with attachments"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "任务，含图片"
+            "value" : "任务，含附件"
           }
         }
       }
@@ -5739,6 +5895,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你发的图没能交给我：%@"
+          }
+        }
+      }
+    },
+    "你发的附件没能交给我：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your attachment didn't reach me: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你发的附件没能交给我：%@"
           }
         }
       }
@@ -6811,6 +6983,22 @@
         }
       }
     },
+    "写入技能" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds a skill"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写入技能"
+          }
+        }
+      }
+    },
     "写入技能与钩子" : {
       "localizations" : {
         "en" : {
@@ -6839,6 +7027,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "写入技能，直连它的后台服务"
+          }
+        }
+      }
+    },
+    "写入技能，跟读它的会话记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds a skill and follows its session logs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写入技能，跟读它的会话记录"
           }
         }
       }
@@ -6935,6 +7139,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "出错"
+          }
+        }
+      }
+    },
+    "出错了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Something went wrong"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "出错了"
           }
         }
       }
@@ -7847,6 +8067,22 @@
         }
       }
     },
+    "发话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "send messages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发话"
+          }
+        }
+      }
+    },
     "发过" : {
       "localizations" : {
         "en" : {
@@ -8511,22 +8747,6 @@
         }
       }
     },
-    "含图片" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Has Images"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "含图片"
-          }
-        }
-      }
-    },
     "含图片的灵感" : {
       "localizations" : {
         "en" : {
@@ -8539,6 +8759,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "含图片的灵感"
+          }
+        }
+      }
+    },
+    "含附件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has Attachments"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "含附件"
           }
         }
       }
@@ -9003,22 +9239,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "图片"
-          }
-        }
-      }
-    },
-    "图片文件…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Image Files…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "图片文件…"
           }
         }
       }
@@ -11127,7 +11347,7 @@
         }
       }
     },
-    "已永久删除，但有 %lld 个图片文件没能删掉" : {
+    "已永久删除，但有 %lld 个附件文件没能删掉" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -11135,13 +11355,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Deleted permanently, but %lld image file couldn't be removed"
+                  "value" : "Deleted permanently, but %lld attachment couldn't be removed"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Deleted permanently, but %lld image files couldn't be removed"
+                  "value" : "Deleted permanently, but %lld attachments couldn't be removed"
                 }
               }
             }
@@ -11150,7 +11370,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已永久删除，但有 %lld 个图片文件没能删掉"
+            "value" : "已永久删除，但有 %lld 个附件文件没能删掉"
           }
         }
       }
@@ -12811,6 +13031,22 @@
         }
       }
     },
+    "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Once connected, %@ sessions started in Terminal show up in CuePad too: see what they're doing from your Mac or phone."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么。"
+          }
+        }
+      }
+    },
     "接入并启用" : {
       "localizations" : {
         "en" : {
@@ -12967,6 +13203,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "插入图片"
+          }
+        }
+      }
+    },
+    "插入文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert File"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入文件"
+          }
+        }
+      }
+    },
+    "插入文件…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert File…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入文件…"
           }
         }
       }
@@ -13539,6 +13807,22 @@
         }
       }
     },
+    "文件…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件…"
+          }
+        }
+      }
+    },
     "文件在别处改过了" : {
       "localizations" : {
         "en" : {
@@ -13599,6 +13883,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文件夹（可不选）"
+          }
+        }
+      }
+    },
+    "文件超过 %lld MB，存不进来" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File is larger than %lld MB and can't be added"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件超过 %lld MB，存不进来"
           }
         }
       }
@@ -15139,38 +15439,6 @@
         }
       }
     },
-    "正在从 iCloud 下载" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloading from iCloud"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在从 iCloud 下载"
-          }
-        }
-      }
-    },
-    "正在从 iCloud 下载…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloading from iCloud…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在从 iCloud 下载…"
-          }
-        }
-      }
-    },
     "正在从 iCloud 同步" : {
       "localizations" : {
         "en" : {
@@ -15539,18 +15807,18 @@
         }
       }
     },
-    "正文里有图片找不到了，无法发送" : {
+    "正文里有附件找不到了，无法发送" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An image in the notes is missing, so it can't be sent"
+            "value" : "An attachment in the notes is missing, so it can't be sent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正文里有图片找不到了，无法发送"
+            "value" : "正文里有附件找不到了，无法发送"
           }
         }
       }
@@ -16003,18 +16271,18 @@
         }
       }
     },
-    "没有可保存的文字、网址或图片" : {
+    "没有可保存的文字、网址或文件" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nothing to save: no text, link, or image"
+            "value" : "Nothing to save: no text, link, or file"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有可保存的文字、网址或图片"
+            "value" : "没有可保存的文字、网址或文件"
           }
         }
       }
@@ -16771,18 +17039,34 @@
         }
       }
     },
-    "灵感，含图片" : {
+    "灵感，含附件" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Idea, with images"
+            "value" : "Idea, with attachments"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "灵感，含图片"
+            "value" : "灵感，含附件"
+          }
+        }
+      }
+    },
+    "点一下从 iCloud 取" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap to download from iCloud"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点一下从 iCloud 取"
           }
         }
       }
@@ -17475,6 +17759,22 @@
         }
       }
     },
+    "移除这个文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove This File"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除这个文件"
+          }
+        }
+      }
+    },
     "移除这张图片" : {
       "localizations" : {
         "en" : {
@@ -18127,6 +18427,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "终端里开的会话不能%@，CuePad 在后台开的都能做。"
+          }
+        }
+      }
+    },
+    "终端里的 %@ 只能在终端里说话：CuePad 只看得到它在做什么" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ in the terminal only takes messages there. CuePad can only see what it's doing."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "终端里的 %@ 只能在终端里说话：CuePad 只看得到它在做什么"
           }
         }
       }
@@ -20547,22 +20863,6 @@
         }
       }
     },
-    "这个目标只能接收文字，请先移除图片" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This destination only accepts text. Remove the images first."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个目标只能接收文字，请先移除图片"
-          }
-        }
-      }
-    },
     "这个组合已被其他应用占用" : {
       "localizations" : {
         "en" : {
@@ -21087,6 +21387,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台手机开着的页没能写下：%@"
+          }
+        }
+      }
+    },
+    "这台现在没在同步，取不了 iCloud 里的文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not syncing, so files in iCloud can’t be downloaded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台现在没在同步，取不了 iCloud 里的文件"
           }
         }
       }
@@ -22107,6 +22423,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "问版本没有回应，稍后再试"
+          }
+        }
+      }
+    },
+    "附件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attachment"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件"
           }
         }
       }

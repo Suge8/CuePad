@@ -40,9 +40,17 @@ struct EditorHost: NSViewRepresentable {
     var editable = true
     @Environment(AppServices.self) private var services
 
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    /// 跟着附件传输重画文件牌的任务（`AttachmentLooks.follow`），编辑器拆掉时取消。
+    final class Coordinator {
+        var watching: Task<Void, Never>?
+    }
+
     func makeNSView(context: Context) -> CueEditorView {
-        let view = CueEditorView(imageStore: services.store.files, theme: theme)
+        let view = CueEditorView(files: services.store.files, theme: theme)
         view.textView.storedText = initialText
+        context.coordinator.watching = AttachmentLooks.follow(services, in: view.textView)
         view.scrollerStyle = .overlay
         handle.textView = view.textView
         if let range = DebugHooks.preset.editorSelection {
@@ -55,15 +63,19 @@ struct EditorHost: NSViewRepresentable {
     }
 
     func updateNSView(_ view: CueEditorView, context: Context) {
-        update(view.textView)
+        update(view.textView, services: services)
     }
 
-    fileprivate func update(_ textView: CueTextView) {
+    static func dismantleNSView(_ view: CueEditorView, coordinator: Coordinator) { coordinator.watching?.cancel() }
+
+    /// `services` 由真正上屏的那个宿主给（`FittedEditorHost` 里的 `host` 不上屏，读不到环境）。
+    fileprivate func update(_ textView: CueTextView, services: AppServices) {
         textView.onChange = onChange
         textView.onSelectionChange = onSelectionChange
         textView.selectionActions = selectionActions
         textView.onSubmit = onSubmit
         textView.onError = onError
+        textView.onFetchFile = { [services, onError] key in AttachmentLooks.fetch(key, services: services, onError: onError) }
         if textView.isEditable != editable { setEditable(textView) }
         if !Self.sameLook(textView.theme, theme) { textView.theme = theme }
     }
@@ -92,14 +104,19 @@ struct FittedEditorHost: NSViewRepresentable {
     let host: EditorHost
     @Environment(AppServices.self) private var services
 
+    func makeCoordinator() -> EditorHost.Coordinator { EditorHost.Coordinator() }
+
     func makeNSView(context: Context) -> CueTextView {
-        let textView = CueTextView(imageStore: services.store.files, theme: host.theme)
+        let textView = CueTextView(files: services.store.files, theme: host.theme)
+        context.coordinator.watching = AttachmentLooks.follow(services, in: textView)
         textView.storedText = host.initialText
         host.handle.textView = textView
         return textView
     }
 
-    func updateNSView(_ textView: CueTextView, context: Context) { host.update(textView) }
+    func updateNSView(_ textView: CueTextView, context: Context) { host.update(textView, services: services) }
+
+    static func dismantleNSView(_ textView: CueTextView, coordinator: EditorHost.Coordinator) { coordinator.watching?.cancel() }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: CueTextView, context: Context) -> CGSize? {
         guard let width = proposal.width else { return nil }

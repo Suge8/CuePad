@@ -29,13 +29,17 @@ nonisolated struct PiProvider: Equatable, Identifiable {
         "anthropic": ("Anthropic", .claude, "Claude"),
         "openai": ("OpenAI", .openai, nil),
         "openai-codex": ("OpenAI Codex", .codex, "Codex"),
-        // Claude Code、Codex 会话上报的模型（`AgentKind.modelProvider`）
+        // Claude Code、Codex、Grok Build 会话上报的模型（`AgentKind.modelProvider`）
         "claude": ("Anthropic", .claude, "Claude"),
         "codex": ("OpenAI", .codex, "Codex"),
+        "grok": ("xAI", .grok, nil),
         "google": ("Google", .gemini, nil),
         "google-vertex": ("Google Vertex", .gemini, nil),
         "xai": ("xAI", .grok, nil),
         "deepseek": ("DeepSeek", .deepseek, nil),
+        // dsh 的两个提供方：API key 与 DeepSeek 账号
+        "deepseek-official": ("DeepSeek", .deepseek, nil),
+        "deepseek-account": ("DeepSeek", .deepseek, nil),
         "kimi-coding": ("Kimi", .kimi, nil),
         "moonshotai": ("Moonshot AI", .kimi, nil),
         "moonshotai-cn": ("Moonshot AI", .kimi, nil),

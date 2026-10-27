@@ -228,7 +228,7 @@ struct SessionTaskTests {
         let session = try #require(try await store.piSessions(sessionIDs: [sessionID])[sessionID]?.state)
         let box = services.settings.replyDraftBinding(for: session.id)
         box.wrappedValue = ComposerDraft(text: text)
-        await workspace.speak(to: .session(session, mode: .send), from: box) { $0.text }?.value
+        await workspace.speak(to: .session(session, mode: .send), from: box) { $0.text }.value
     }
 
     func enableCue() async throws {

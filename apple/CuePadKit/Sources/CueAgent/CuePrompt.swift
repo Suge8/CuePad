@@ -1,4 +1,5 @@
 import CueStore
+import Foundation
 
 /// Cue 一个班次的系统提示：判断与做法加一直记着的，班次内不变、跨班次也只随一直记着的变（提示缓存的前缀因此稳定）；其余记忆与此前的对话
 /// 在新会话的第一条输入里（`CueKeeper`）。分工：工具怎么用、参数与限制只在工具说明里
@@ -96,9 +97,9 @@ public enum CuePrompt {
     以 <cue> 块开头，是此刻从库里现读的事实，以它为准；他说的话（若有）在块后面。上下文会不时换新：换新后的第一条输入在 <cue> 前面多两块——\
     <memory> 是你其余的记忆（越早越粗），<view> 是你和他最近的对话与你此前每一轮的经过。从那里接着做，做过的不重做，答过的不再答；\
     要更早的或某件事的细节用 memory recall 查、zoom 展开、task peek 看。\
-    他发的图写成 ![](cuepad://img/<hash>)、图随话附上。他交代的事一次办完；处理变化时，每件事只做此刻最有用的一个动作。
+    他发的图写成 ![](cuepad://file/<key>)、图随话附上；文件写成 [文件名](cuepad://file/<key>)，话后的「附件：」行是它在这台 Mac 上的路径，要看就读它；转给会话时照原样写引用。他交代的事一次办完；处理变化时，每件事只做此刻最有用的一个动作。
 
-    # 一直记着
+    \(toolManual(.cue, runtime).map { "\($0)\n\n" } ?? "")# 一直记着
     \(memory.pinnedText)
     """
   }
@@ -112,8 +113,21 @@ public enum CuePrompt {
     你整理 CuePad 里 Cue 的长期记忆。输入是几块待合并的记忆，每块以 #lo-hi 开头，下面是它的原文（#序号 一行一条，或两半各自的摘要）。
     把每一块合成一行摘要（至多 \(CueMemoryLine.maxBytes) 字节，用原文的语言）：留下以后用得上的事实、偏好、约定与数字，丢掉寒暄与已经过时的；只写原文里有的，不编造；同一件事改过的以后说的为准。
     每块调一次 \(CueMCPServer.toolName("merge", on: runtime))，lo、hi 照块头的 #lo-hi 写。大块里写着"上面先合的这一块写成的那一行"的，用你给那一块写的摘要。
-    全部写完就结束，不用说话。
+    全部写完就结束，不用说话。\(toolManual(.dream, runtime).map { "\n\n\($0)" } ?? "")
     """
+  }
+
+  /// 这家不把工具说明交给模型时（`CueMCPServer.promptsTools`）写进系统提示的工具说明：名字照这家的写法，说明与参数（JSON Schema）照 MCP 服务给的那份
+  /// （`CueTools.definitions`），不另写一份。别家为 nil。
+  static func toolManual(_ toolset: CueTools.Toolset, _ runtime: AgentKind) -> String? {
+    guard CueMCPServer.promptsTools(on: runtime) else { return nil }
+    let tools = CueTools.definitions(toolset).map { tool in
+      let name = CueMCPServer.toolName(tool["name"] as? String ?? "", on: runtime)
+      let schema = (try? JSONSerialization.data(withJSONObject: tool["inputSchema"] ?? [:], options: [.sortedKeys, .withoutEscapingSlashes]))
+        .map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+      return "## \(name)\n\(tool["description"] as? String ?? "")\n参数：\(schema)"
+    }
+    return "# 工具\n工具照名字直接调，参数是一个 JSON 对象，照下面的 JSON Schema 写。\n\n" + tools.joined(separator: "\n\n")
   }
 
   private static func tools(_ runtime: AgentKind) -> String {

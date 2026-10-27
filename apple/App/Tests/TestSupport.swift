@@ -77,6 +77,13 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     func push() async {}
 
     func resolve(_ resolution: SyncResolution) async throws {}
+    var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }
+    /// `fetchFile` 怎么取（像从 iCloud 取来）；没给是这台不同步
+    let fetching = Mutex<(@Sendable (String) async throws -> URL)?>(nil)
+    func fetchFile(_ key: String) async throws -> URL {
+        guard let fetch = fetching.withLock({ $0 }) else { throw FileFetchFailure.notSyncing }
+        return try await fetch(key)
+    }
 }
 
 /// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键；iOS 的私有命名剪贴板，
@@ -179,7 +186,7 @@ final class TestApp {
     /// 接入一家 Agent（会话索引只为接入了的建）：放一个只报版本的假可执行文件，再装上 CuePad 的文件，状态按磁盘上的文件检测。
     /// 假的 Pi 还像桥扩展的探测模式那样报出模型（登录了），所以这台 Mac 上能用它（同步表 macAgents）；其余几家问不出模型。
     /// Codex 的钩子信任平时由 `codex app-server` 写（真 Codex 的那一步只在 Kit 的 Real* 测试里验）：这里替它把信任写进 `config.toml`。
-    func connect(_ kind: AgentKind, version: String = "2.1.0") async throws {
+    func connect(_ kind: AgentKind, version: String = "2.1.299") async throws {
         try install(kind, version: version)
         if kind == .codex { try installCodexTrustedLikeCodex() }
         else { try await services.agents.install(kind) }
@@ -188,7 +195,7 @@ final class TestApp {
     }
 
     /// 这台 Mac 上装了这家 Agent（还没接入）：放一个只报版本的假可执行文件，Pi 的还能报出模型（`signedIn` 为 false 时没有模型，是没登录）。
-    func install(_ kind: AgentKind, version: String = "2.1.0", signedIn: Bool = true) throws {
+    func install(_ kind: AgentKind, version: String = "2.1.299", signedIn: Bool = true) throws {
         let line = signedIn ? Self.piProbeLine : #"{"cuepadProbe":{"model":null,"models":[]}}"#
         let probe = kind == .pi ? "[ -n \"$CUEPAD_PROBE\" ] && { echo '\(line)'; exit 0; }\n" : ""
         try executable(kind.facts.command, "#!/bin/sh\n\(probe)echo '\(version)'\n", in: bin)
@@ -253,7 +260,7 @@ final class TestApp {
         marker = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".logged-in")
         args = sys.argv[1:]
         if "--version" in args:
-            print("2.1.0 (Claude Code)"); sys.exit(0)
+            print("2.1.299 (Claude Code)"); sys.exit(0)
         if args[:2] == ["auth", "login"]:
             if \(loginFails ? "True" : "False"): sys.exit(1)
             open(marker, "w").close(); sys.exit(0)
@@ -275,8 +282,9 @@ final class TestApp {
     /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
     var agentHomes: [String: String] {
         ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
-         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path,
-         "CUEPAD_AGENTS_DIR": directory.appending(path: "agents").path]
+         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "GROK_HOME": directory.appending(path: "grok").path,
+         "XDG_STATE_HOME": directory.appending(path: "state").path, "CUEPAD_AGENTS_DIR": directory.appending(path: "agents").path,
+         "DSH_HOME": directory.appending(path: "dsh").path]
     }
 
     private func makeServices() -> AppServices {
@@ -311,9 +319,8 @@ extension Workspace {
     /// 像回复框那样从一份草稿发给会话（`speak`，关联带上的第一张卡），等写库与上传走完，返回写下的那条请求。
     func said(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil) async throws -> DeliveryRequest {
         var box = draft
-        let files = services.store.files
         let binding = Binding(get: { box }, set: { box = $0 })
-        await speak(to: .session(session, mode: mode, card: card), from: binding) { try $0.stored(in: files) }?.value
+        await speak(to: .session(session, mode: mode, card: card), from: binding) { $0.stored }.value
         return try #require(try await services.store.deliveryRequests().first)
     }
 }

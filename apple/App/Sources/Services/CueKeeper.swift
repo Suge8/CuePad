@@ -74,6 +74,8 @@ final class CueKeeper {
         var timing: CueTiming
         /// 立即上传这几条（记下送达后：手机与别的 Mac 上那句话马上是已送达，排在其余待推送前面，见 `Speech`）
         var upload: @Sendable ([UUID]) async -> Void
+        /// 你的消息里的附件取到这台 Mac 上（`AppServices.fetchFile`）
+        var fetchFile: FileFetching
 
         /// Cue 自己的目录（在资料库目录里）：`work` 是大脑的工作目录（空的），`keeper.json` 是跨班次的对账进度
         var directory: URL { library.appending(path: "Cue", directoryHint: .isDirectory) }
@@ -98,6 +100,9 @@ final class CueKeeper {
     /// 做完的几轮，旧的在前，至多 `roundsKept`
     private var history: [CueRound] = []
     @ObservationIgnored private var roundCount = 0
+    /// 你的话里的附件正在旁边取的（`ready(_:)`）与取不来、照交的
+    @ObservationIgnored var fetchingFiles: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored var unfetchable: Set<UUID> = []
 
     init(_ setup: Setup) {
         self.setup = setup
@@ -192,6 +197,8 @@ final class CueKeeper {
     /// 不再值班；返回的过程等大脑退出（不需要主线程，退出收尾时在主线程之外等）。
     @discardableResult
     func stop() -> @Sendable () async -> Void {
+        fetchingFiles.values.forEach { $0.cancel() }
+        fetchingFiles = [:]
         input.yield(.stop)
         let wait = shift?.brain.stop()
         return { await wait?() }

@@ -65,7 +65,8 @@ extension DebugScene {
         guard let first = created.first, let last = created.last else { return }
         let messages = [
             PiChatMessage(
-                sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: String(localized: "把登录页的新样子、手机上的截图和评审结论发给我看看，样子参考这张", table: "Demo") + (screenshotMarkup(store).map { "\n" + $0 } ?? ""),
+                sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: String(localized: "把登录页的新样子、手机上的截图和评审结论发给我看看，样子参考这张", table: "Demo") + (screenshotMarkup(store).map { "\n" + $0 } ?? "")
+                    + (demoPDF(store).map { "\n" + $0.markup } ?? ""),
                 at: first.addingTimeInterval(-50)),
             PiChatMessage(
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: String(localized: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。", table: "Demo"),

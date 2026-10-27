@@ -17,8 +17,8 @@ import SwiftUI
 /// 拼在纸里的行之间会露出缺口。
 /// 行底伸出了行的框：在滚动区里，滚动内容自己要给它留出边距（滚动区按自己的边裁）。
 ///
-/// 按下：手机按下即亮、松开淡去（`HandOff.quick`），不缩放——一屏几十行，缩放会让列表显得软；Mac 照原生列表，按下那一刻亮、松开即灭，没有过渡（同 `PressFeedback`）。
-/// 悬停：指针停在哪行哪行亮（Mac 与 iPad 同一套，淡入淡出 `HandOff.quick`；iPad 系统按钮自带的悬停效果关掉，不叠两层）——点得到的东西指针一过就有回应，
+/// 按下：手机按下即亮、松开淡去（`Motion.fade`），不缩放——一屏几十行，缩放会让列表显得软；Mac 照原生列表，按下那一刻亮、松开即灭，没有过渡（同 `PressFeedback`）。
+/// 悬停：指针停在哪行哪行亮（Mac 与 iPad 同一套，淡入淡出 `Motion.fade`；iPad 系统按钮自带的悬停效果关掉，不叠两层）——点得到的东西指针一过就有回应，
 /// 同 Linear、Arc 的侧栏与列表；指针照系统仍是箭头（`PressFeedback`）。
 /// 指针停没停在行上经环境（`rowHovered`）交给行里的内容；悬停才露出的操作只经 `hoverReveal`，不再各自挂 `onHover`、不插进行的排版。
 ///
@@ -142,7 +142,7 @@ private struct RowHighlight: ViewModifier {
             #endif
             .padding(fit.bleed(-1))
             .animation(Self.fade, value: selected)
-            .animation(HandOff.quick, value: hovering)
+            .animation(Motion.fade, value: hovering)
             .animation(pressed ? nil : Self.fade, value: pressed)
     }
 
@@ -157,7 +157,7 @@ private struct RowHighlight: ViewModifier {
 
     #if os(iOS)
     /// 松开与选中的变化淡去（按下那一刻不带过渡）。
-    private static let fade: Animation? = HandOff.quick
+    private static let fade: Animation? = Motion.fade
     #else
     private static let fade: Animation? = nil
     #endif

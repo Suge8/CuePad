@@ -1,17 +1,18 @@
 #if os(iOS)
+import CueEditor
 import PhotosUI
 import SwiftUI
 
 extension ComposerSource {
-    static var imageChoices: [(title: LocalizedStringResource, icon: Icon, source: ComposerSource)] {
-        [("相册", .photoLibrary, .photos)] + (CameraPicker.isAvailable ? [("拍照", .camera, .camera)] : [])
+    static var fileChoices: [(title: LocalizedStringResource, icon: Icon, source: ComposerSource)] {
+        [("相册", .photoLibrary, .photos)] + (CameraPicker.isAvailable ? [("拍照", .camera, .camera)] : []) + [("文件", .file, .files)]
     }
 }
 
-/// "＋"里图片的来源：相册与相机，选好的追加到图片条。
-struct ImageSources: ViewModifier {
+/// "＋"里附件的来源：相册、相机与系统的文件选择器，选好的交给 `add`（存好接进附件条）。
+struct FileSources: ViewModifier {
     @Binding var source: ComposerSource?
-    @Binding var images: [PickedImage]
+    let add: ([IncomingFile]) -> Void
     @Environment(Workspace.self) private var workspace
     @State private var picked: [PhotosPickerItem] = []
 
@@ -21,7 +22,13 @@ struct ImageSources: ViewModifier {
         content
             .photosPicker(isPresented: $source.isOn(.photos), selection: $picked, maxSelectionCount: Self.photoLimit, matching: .images)
             .fullScreenCover(isPresented: $source.isOn(.camera)) {
-                CameraPicker { data in images.append(PickedImage(data: data)) }.ignoresSafeArea()
+                CameraPicker { data in add([.data(data)]) }.ignoresSafeArea()
+            }
+            .fileImporter(isPresented: $source.isOn(.files), allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+                switch result {
+                case .success(let urls): add(urls.map(IncomingFile.file))
+                case .failure(let error): workspace.fail(error)
+                }
             }
             .onChange(of: picked) {
                 let items = picked
@@ -29,13 +36,23 @@ struct ImageSources: ViewModifier {
                 Task {
                     for item in items {
                         do {
-                            if let data = try await item.loadTransferable(type: Data.self) { images.append(PickedImage(data: data)) }
+                            if let data = try await item.loadTransferable(type: Data.self) { add([.data(PhotoData.outgoing(data))]) }
                         } catch {
                             workspace.fail(error)
                         }
                     }
                 }
             }
+    }
+}
+
+/// 相册、相机来的照片：HEIC 等格式转成 JPEG（Pi 与大多数应用不认 HEIC），PNG 与 JPEG 原样保留。
+nonisolated enum PhotoData {
+    static let quality = 0.85
+
+    static func outgoing(_ data: Data) -> Data {
+        let keeps = data.starts(with: [0x89, 0x50, 0x4E, 0x47]) || data.starts(with: [0xFF, 0xD8, 0xFF])
+        return keeps ? data : ImageFiles.jpeg(from: data, quality: quality) ?? data
     }
 }
 
@@ -62,7 +79,7 @@ struct CameraPicker: UIViewControllerRepresentable {
         init(_ parent: CameraPicker) { self.parent = parent }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let data = (info[.originalImage] as? UIImage)?.jpegData(compressionQuality: PickedImage.quality) { parent.onPick(data) }
+            if let data = (info[.originalImage] as? UIImage)?.jpegData(compressionQuality: PhotoData.quality) { parent.onPick(data) }
             parent.dismiss()
         }
 

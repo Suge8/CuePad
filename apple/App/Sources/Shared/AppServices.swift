@@ -56,6 +56,10 @@ final class AppServices {
     private(set) var syncCatchingUp = false
     /// 这台的库和 iCloud 对过至少一遍（`SyncState.reconciled`）；界面只经 `knowsSyncedFacts` 读。
     private(set) var syncReconciled = false
+    /// iCloud 空间不足，附件文件停在本机不往上传（`SyncState.filesOverQuota`）；别的记录照常同步，`syncStatus` 不因它变。
+    private(set) var syncFilesOverQuota = false
+    /// 附件文件此刻在路上的，按 key（`CloudSync.fileTransfers`）：附件那一格据此画进度；key 离开就是那一趟结束了，文件在不在本机看附件目录。
+    private(set) var fileTransfers: [String: FileTransfer] = [:]
     /// Pi 锁屏通知的服务端订阅（只有 iOS 建立）；设置页与权限、注册状态一起显示。
     private(set) var alertSubscription: PiAlertSubscriptionStatus = .off
     #if os(iOS)
@@ -155,6 +159,7 @@ final class AppServices {
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, pi: pi, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: piStateRecorder, library: library,
         upload: { [weak self] id in await self?.upload(id) },
+        fetchFile: { [sync] key in try await sync.fetchFile(key) },
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
@@ -292,7 +297,12 @@ final class AppServices {
         syncIssues = state.issues
         syncCatchingUp = state.catchingUp
         syncReconciled = state.reconciled
+        syncFilesOverQuota = state.filesOverQuota
         alertSubscription = state.alerts
+    }
+
+    func setFileTransfers(_ transfers: [String: FileTransfer]) {
+        fileTransfers = transfers
     }
 
     func setConflicts(_ conflicts: [CardConflict]) {

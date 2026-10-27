@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueAgent
 import CueStore
 import CueText
 import Foundation
@@ -213,7 +214,7 @@ final class ClaudeHostedSession: SessionLink {
             case "tool_use":
                 let name = block["name"]?.string ?? "?"
                 facts.work(.tool, detail: ToolDetail.line(name, block["input"]))
-                emit(.tool(id: block["id"]?.string ?? "", name: Self.toolName(name), arguments: String(decoding: (block["input"] ?? [:]).data, as: UTF8.self)))
+                emit(.tool(id: block["id"]?.string ?? "", name: CueMCPServer.bareName(name, on: .claudeCode), arguments: String(decoding: (block["input"] ?? [:]).data, as: UTF8.self)))
             case "thinking": facts.work(.thinking)
             default: break
             }

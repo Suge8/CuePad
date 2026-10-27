@@ -190,7 +190,13 @@ extension OpenCodeRuntime {
     }
 
     /// CuePad 起的服务不读 `.claude/skills`：技能都在 `.agents/skills`（Claude Code 那边是链到它的链接），两处都读就是同一个技能读到两次、报重名。
-    static let serviceEnvironment = ["OPENCODE_DISABLE_CLAUDE_CODE_SKILLS": "1"]
+    /// 交给会话的附件在工作目录外（`AttachmentFiles.directory`）：OpenCode 读工作目录外的路径要授权（`external_directory` 缺省是问），
+    /// 经行内配置（`OPENCODE_CONFIG_CONTENT`，与用户的配置合并、优先级在项目配置之上）放行这一个目录。
+    static func serviceEnvironment(attachments: URL) -> [String: String] {
+        let allow = ["permission": ["external_directory": [attachments.path(percentEncoded: false) + "**": "allow"]]]
+        let config = String(decoding: try! JSONSerialization.data(withJSONObject: allow, options: [.sortedKeys, .withoutEscapingSlashes]), as: UTF8.self)
+        return ["OPENCODE_DISABLE_CLAUDE_CODE_SKILLS": "1", "OPENCODE_CONFIG_CONTENT": config]
+    }
 
     /// `opencode service start`：起后台服务、写好登记文件才返回（实测约 0.2 秒）。服务自成一个会话（不在这条命令的进程组里，
     /// 超时结束整组碰不到它），标准输入输出指到 /dev/null（不握着这边的管道）：实测 2.0.25。
@@ -198,7 +204,7 @@ extension OpenCodeRuntime {
         guard let executable = await opencode() else { throw AgentRuntimeError.notInstalled(.opencode) }
         let locator = await locate()
         // 服务常驻，它起的工具也用这个 PATH
-        let environment = locator.environment(launching: executable, overrides: paths.environment.merging(Self.serviceEnvironment) { $1 })
+        let environment = locator.environment(launching: executable, overrides: paths.environment.merging(Self.serviceEnvironment(attachments: store.files.directory)) { $1 })
         guard let result = await ChildProcess.run(executable, ["service", "start"], environment: environment, timeout: AgentTimeouts.launch, timing: timing, collect: false)
         else { throw AgentRuntimeError.launchTimedOut(.opencode) }
         guard result.status == 0 else { throw AgentRuntimeError.launchFailed(.opencode, String(localized: "opencode service start 退出码 \(result.status)")) }

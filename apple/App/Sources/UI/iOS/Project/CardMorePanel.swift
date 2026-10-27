@@ -53,7 +53,7 @@ private struct CardMorePanel: View {
     }
 
     private func flip(_ to: Bool) {
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { moving = to }
+        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { moving = to }
     }
 
     private var actions: some View {

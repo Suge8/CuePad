@@ -10,6 +10,13 @@ extension Schema {
     """
   }
 
+  /// 项目按最近的进展排（`CueStore.projectOrder`，侧栏、看板每次重读都排）：按项目取卡片、会话最晚的进展时刻走这两份索引的末端，不逐张翻。
+  /// 带 IF NOT EXISTS：升级测试把建好的新库拨回旧版本号重跑后面的步骤（`AttachmentUpgradeTests`）。
+  static let progressIndexes = """
+    CREATE INDEX IF NOT EXISTS cards_projectID_progress ON cards(projectID, \(CueStore.cardProgress));
+    CREATE INDEX IF NOT EXISTS piSessionStates_projectID_turn ON piSessionStates(projectID, \(CueStore.turnProgress));
+    """
+
   static func modifiedIndex(_ table: Table) -> String {
     "CREATE INDEX \(table.rawValue)_modified ON \(table.rawValue)(id, modifiedAt);"
   }

@@ -42,14 +42,26 @@ actor SimulatedCloud: SyncCloud {
   func accountName() -> String { account }
   func relaySecret() -> Data { Data(repeating: 7, count: RelaySecret.length) }
 
-  func changes(since token: Data?, keys: [String]?) -> ZoneChangeBatch {
+  func changes(since token: Data?, keys: [String]) -> ZoneChangeBatch {
     let after = token.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
-    let changed = zone.values.filter { $0.seq > after }.sorted { $0.seq < $1.seq }.map(\.record)
+    let changed = zone.values.filter { $0.seq > after }.sorted { $0.seq < $1.seq }.map { $0.record.withoutFile }
     let gone = tombstones.filter { $0.value.seq > after }.sorted { $0.value.seq < $1.value.seq }.map { ($0.key, $0.value.recordType) }
     return ZoneChangeBatch(modifications: changed, deletions: gone, token: Data(String(seq).utf8), moreComing: false)
   }
 
-  func records(_ ids: [CKRecord.ID]) -> [CKRecord] { ids.compactMap { zone[$0]?.record } }
+  func records(_ ids: [CKRecord.ID]) -> [CKRecord] { ids.compactMap { zone[$0]?.record.withoutFile } }
+
+  func uploadFile(_ record: CKRecord, progress: @Sendable (Double) -> Void) -> SentRecords {
+    progress(1)
+    return upload(saving: [record], deleting: [])
+  }
+
+  func resumedFileUploads() -> [ResumedUpload] { [] }
+
+  func downloadFile(_ id: CKRecord.ID, progress: @Sendable (Double) -> Void) -> CKRecord? {
+    progress(1)
+    return zone[id]?.record
+  }
 
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) -> SentRecords {
     for record in saving {
@@ -91,12 +103,15 @@ struct UnreachableCloud: SyncCloud {
   func accountStatus() -> CKAccountStatus { .available }
   func accountName() -> String { "simulated" }
   func relaySecret() throws -> Data { throw Self.failure }
-  func changes(since token: Data?, keys: [String]?) throws -> ZoneChangeBatch { throw Self.failure }
+  func changes(since token: Data?, keys: [String]) throws -> ZoneChangeBatch { throw Self.failure }
   func records(_ ids: [CKRecord.ID]) throws -> [CKRecord] { throw Self.failure }
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) throws -> SentRecords {
     let ids = saving.map(\.recordID) + deleting
     throw CKError(.partialFailure, userInfo: [CKPartialErrorsByItemIDKey: Dictionary(uniqueKeysWithValues: ids.map { ($0, Self.offline) })])
   }
+  func uploadFile(_ record: CKRecord, progress: @Sendable (Double) -> Void) throws -> SentRecords { throw Self.failure }
+  func resumedFileUploads() throws -> [ResumedUpload] { throw Self.failure }
+  func downloadFile(_ id: CKRecord.ID, progress: @Sendable (Double) -> Void) throws -> CKRecord? { throw Self.failure }
   func saveZone() throws { throw Self.failure }
   func subscriptions() throws -> [CKSubscription.ID: CKSubscription] { throw Self.failure }
   func save(_ subscription: CKSubscription) throws { throw Self.failure }
@@ -106,4 +121,13 @@ struct UnreachableCloud: SyncCloud {
 extension CloudSync {
   /// 连断了网的 iCloud 替身（`UnreachableCloud`，调试画面）。
   public static func unreachable(store: CueStore) -> CloudSync { CloudSync(store: store) { UnreachableCloud() } }
+}
+
+extension CKRecord {
+  /// 去掉文件的一份（替身的拉取与按 ID 取同 CloudKit 只要列：不带文件）。
+  var withoutFile: CKRecord {
+    guard self[RecordMapper.fileKey] != nil, let copy = copy() as? CKRecord else { return self }
+    copy[RecordMapper.fileKey] = nil
+    return copy
+  }
 }

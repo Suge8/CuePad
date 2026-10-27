@@ -9,7 +9,7 @@ struct FloatingInput<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var locked = false
     /// 没拖够松手时弹回原位。
-    @GestureState(resetTransaction: Transaction(animation: Motion.snappy)) private var drag: CGFloat = 0
+    @GestureState(resetTransaction: Transaction(animation: Motion.nudge)) private var drag: CGFloat = 0
 
     private static var dismissDistance: CGFloat { 60 }
     private static var maxWidth: CGFloat { 600 }
@@ -33,7 +33,7 @@ struct FloatingInput<Content: View>: View {
             }
         }
         // 只淡入淡出：位置跟着键盘走，自己不再加位移
-        .animation(HandOff.quick, value: isPresented)
+        .animation(Motion.fade, value: isPresented)
         .modifier(KeyboardHold())
     }
 

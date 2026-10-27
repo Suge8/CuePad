@@ -14,13 +14,14 @@ final class MacExecutor {
     private let recorder: PiStateRecorder
     private let library: AgentLibraryKeeper
     private let upload: @Sendable (UUID) async -> Void
+    private let fetchFile: FileFetching
     private let refreshQuota: @MainActor () async throws -> Void
     private let reportIssue: @MainActor (String) -> Void
     private var running: DeliveryExecutor?
 
     init(
         store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, workspaces: Workspaces, recorder: PiStateRecorder,
-        library: AgentLibraryKeeper, upload: @escaping @Sendable (UUID) async -> Void,
+        library: AgentLibraryKeeper, upload: @escaping @Sendable (UUID) async -> Void, fetchFile: @escaping FileFetching,
         refreshQuota: @escaping @MainActor () async throws -> Void,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {
@@ -32,6 +33,7 @@ final class MacExecutor {
         self.recorder = recorder
         self.library = library
         self.upload = upload
+        self.fetchFile = fetchFile
         self.refreshQuota = refreshQuota
         self.reportIssue = reportIssue
     }
@@ -40,7 +42,7 @@ final class MacExecutor {
         let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [reportIssue] error in
             let message = String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)")
             Task { @MainActor in reportIssue(message) }
-        }, onWritten: upload) { [weak self] request in
+        }, onWritten: upload, fetchFile: { [fetchFile] key in _ = try await fetchFile(key) }) { [weak self] request in
             guard let self else { return .failed(ShownText("这台 Mac 上的 CuePad 正在退出")) }
             return await self.run(request)
         }
@@ -111,10 +113,17 @@ final class MacExecutor {
     private func deliver(_ request: DeliveryRequest) async throws {
         let (_, id) = try await connect(request.target)
         guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
-        let content = SendContent(stored: request.content)
-        try await pi.send(
-            PiMessage(text: content.plainText, images: try content.piImages(from: store.files), deliveryID: request.id.uuidString), to: id)
+        try await pi.send(message(request.content, of: request, to: session), to: id)
         await record(request.content, of: request, to: session.sendTarget)
+    }
+
+    /// 交给会话的一句（存储格式，附件已由执行器取到本机）：收得了图片的图片另附，收不了的（`AgentCapabilities.images`）图片同文件一样写成路径
+    /// （`SendContent.agentText`）。按交出这一刻的会话定：写请求时看到的能力可能已过时（换了模型）。
+    private func message(_ stored: String, of request: DeliveryRequest, to session: CuePi.PiSession) throws -> PiMessage {
+        let content = SendContent(stored: stored), seesImages = session.capabilities.contains(.images)
+        // 图片拿走后留下的空行不发
+        let text = try content.agentText(from: store.files, imagesAsFiles: !seesImages).trimmingCharacters(in: .whitespacesAndNewlines)
+        return PiMessage(text: text, images: seesImages ? try content.piImages(from: store.files) : [], deliveryID: request.id.uuidString)
     }
 
     /// 记发送记录。话已经送达，记不下也照样按成功写回（手机才不会重发）：没记下是这台 Mac 的资料库问题，在这里报。
@@ -140,12 +149,11 @@ final class MacExecutor {
         try await pi.configure(model: config.model, thinking: config.thinking, name: config.name, in: id)
     }
 
-    /// 命令带着卡片（发给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录。
+    /// 命令带着卡片（发给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录。命令只有文字，带着的图片同文件一样写成路径。
     private func runCommand(_ request: DeliveryRequest) async throws {
         let content = SendContent(stored: request.content)
-        guard !content.hasImages else { throw SendError.imagesNotSupported }
         let (ref, id) = try await connect(request.target)
-        try await pi.command(content.plainText.trimmingCharacters(in: .whitespacesAndNewlines), in: id)
+        try await pi.command(try content.agentText(from: store.files, imagesAsFiles: true).trimmingCharacters(in: .whitespacesAndNewlines), in: id)
         if let card = request.cardID { try await store.linkCard(card, toSession: ref) }
     }
 
@@ -205,11 +213,9 @@ final class MacExecutor {
                 "开新会话（\(launch.opening.rawValue, privacy: .public)）：起进程上桥 \(began.duration(to: opened), privacy: .public)，送开场 \(opened.duration(to: clock.now), privacy: .public)")
         }
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
-            // 开场的话是存储格式（可带卡片里的图片）
-            let content = SendContent(stored: opening)
-            let text = content.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-            try await pi.send(PiMessage(text: text, images: try content.piImages(from: store.files), deliveryID: request.id.uuidString), to: id)
+            // 开场的话是存储格式（可带卡片里的图片与文件）
             guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
+            try await pi.send(message(opening, of: request, to: session), to: id)
             await record(opening, of: request, to: session.sendTarget)
         }
     }

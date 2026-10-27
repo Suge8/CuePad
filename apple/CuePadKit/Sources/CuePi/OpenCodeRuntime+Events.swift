@@ -32,11 +32,7 @@ extension OpenCodeRuntime {
         default: break
         }
         guard event.type.hasPrefix("session."), let sessionID = data.sessionID else { return }
-        if let parent = data.parentID ?? parents[sessionID] {
-            if event.type != "session.text.delta" { child(sessionID, of: parent, event) }
-            return
-        }
-        if let (id, draft) = drafts.apply(event) { bridge.setDraft(bridgeID(id, connection), draft) }
+        if let parent = data.parentID ?? parents[sessionID] { return child(sessionID, of: parent, event) }
         switch event.type {
         case "session.created":
             guard let location = data.location else { return }
@@ -61,55 +57,70 @@ extension OpenCodeRuntime {
             }
         case "session.inbox.delivered":
             enqueueIngest(sessionID, urgent: true)
-        case "session.execution.started":
-            await change(sessionID, connection, active: true) { $0.facts.startTurn(at: .now) }
-        case "session.step.started":
+        case "session.step.started", "session.reasoning.started":
             // 没给会话选过模型时它用配置里的默认模型：每一步都带着实际用的那个
             await change(sessionID, connection) {
                 $0.facts.work(.thinking)
                 if let model = data.model { $0.info.model = model }
             }
-        case "session.reasoning.started":
-            await change(sessionID, connection) { $0.facts.work(.thinking) }
-        case "session.tool.input.started":
-            guard let id = data.id, let name = data.name else { return }
-            await change(sessionID, connection) { $0.toolNames[id] = name }
-        case "session.tool.called":
-            guard let id = data.id else { return }
-            await change(sessionID, connection) { $0.facts.work(.tool, detail: ToolDetail.line($0.toolNames[id] ?? "tool", data.input?.arguments)) }
-        case "session.tool.success", "session.tool.failed":
-            await change(sessionID, connection) {
-                if let id = data.id { $0.toolNames[id] = nil }
-                if $0.toolNames.isEmpty { $0.facts.work(.thinking) }
-            }
-        case "session.step.ended":
-            await change(sessionID, connection) { if let tokens = data.tokens { $0.tokens = tokens.prompt } }
-            enqueueIngest(sessionID, urgent: true)
         case "session.compaction.started":
             await change(sessionID, connection, active: true) { $0.facts.compacting = true }
         case "session.compaction.ended", "session.compaction.failed":
             await change(sessionID, connection) {
                 $0.facts.compacting = false
-                if event.type == "session.compaction.ended" { $0.tokens = nil }
+                if event.type == "session.compaction.ended" { $0.context?.tokens = nil }
             }
-            enqueueIngest(sessionID, urgent: true)
-        case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted":
-            await change(sessionID, connection) {
-                $0.toolNames = [:]
-                let failure = event.type == "session.execution.failed" ? (data.error?.message ?? data.error?.type ?? Self.unknownFailure) : nil
-                let questions = $0.facts.questions
-                $0.facts.endTurn(failure: failure)
-                $0.facts.questions = questions  // 权限与表单随它们自己的事件收起
-            }
-            enqueueIngest(sessionID, urgent: true)
         default:
             break
         }
+        await turn(event, of: sessionID, connection)
+        if Self.transcriptChanges.contains(event.type) { enqueueIngest(sessionID, urgent: true) }
+    }
+
+    /// 对话里多了东西（一步、一轮、一次压缩做完）：读进资料库
+    private static let transcriptChanges: Set = [
+        "session.step.ended", "session.compaction.ended", "session.compaction.failed",
+        "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted",
+    ]
+
+    /// 这条事件交给会话的 `OpenCodeTurn`，翻出的一轮落到会话的事实与桥上。开始一轮是一次活动（会话不在线就上线）。
+    private func turn(_ event: OpenCodeEvent, of sessionID: String, _ connection: Connection) async {
+        if event.type == "session.execution.started" { await change(sessionID, connection, active: true, publishing: false) { _ in } }
+        guard var tracked = sessions[sessionID] else { return }
+        let id = bridgeID(sessionID, connection)
+        let turns = tracked.turn.apply(event, models: catalogs[tracked.directory]?.models ?? [])
+        var failure: String?
+        for turn in turns {
+            switch turn {
+            case .speaking(let draft):
+                if tracked.online { bridge.setDraft(id, draft) }
+            case .turnStarted:
+                tracked.facts.startTurn(at: .now)
+            case .context(let used, let window):
+                tracked.context = window.map { PiContextUsage(tokens: used, window: $0) }
+            case .tool(_, let name, let arguments):
+                tracked.facts.work(.tool, detail: ToolDetail.line(name, JSONValue.parse(Data(arguments.utf8))))
+            case .toolDone:
+                if !tracked.turn.runningTools { tracked.facts.work(.thinking) }
+            case .failed(let text):
+                failure = text
+            case .turnFinished:
+                let questions = tracked.facts.questions
+                tracked.facts.endTurn(failure: failure)
+                tracked.facts.questions = questions  // 权限与表单随它们自己的事件收起
+            case .exited:
+                break
+            }
+        }
+        sessions[sessionID] = tracked
+        if turns.contains(where: \.changesFacts) { publish(sessionID) }
     }
 
     /// 改一个顶层会话并发布。`active`：这是一次活动，会话不在线就上线（在 CuePad 里结束过的也重新上线）。
     /// 不认识的会话（连上之后才建、事件先于列表）先取它的信息。
-    private func change(_ sessionID: String, _ connection: Connection, active: Bool = false, _ body: (inout Tracked) -> Void) async {
+    private func change(
+        _ sessionID: String, _ connection: Connection, active: Bool = false, publishing: Bool = true, _ body: (inout Tracked) -> Void
+    ) async {
         if sessions[sessionID] == nil {
             guard active, let info = try? await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(sessionID)").data,
                   info.parentID == nil, !info.isCueBrain, self.connection === connection else { return }
@@ -123,40 +134,40 @@ extension OpenCodeRuntime {
         }
         sessions[sessionID] = tracked
         if tracked.online, catalogs[tracked.directory] == nil { _ = try? await catalog(tracked.directory, connection.client) }
-        publish(sessionID)
+        if publishing { publish(sessionID) }
     }
 
-    /// 子会话的事件落到父会话的子代理名册上。
+    /// 子会话的事件落到父会话的子代理名册上：一轮由它自己的 `OpenCodeTurn` 翻出，名册只看开始、在调的工具与怎么结束的。
     func child(_ sessionID: String, of parent: String, _ event: OpenCodeEvent) {
         parents[sessionID] = parent
         let data = event.data
         let now = Date()
+        let turn = childTurns[sessionID, default: OpenCodeTurn()].apply(event, models: []).filter(\.changesFacts)
+        if turn.contains(.turnFinished) { childTurns[sessionID] = nil }
+        guard event.type == "session.created" || !turn.isEmpty else { return }
         subagent(sessionID, of: parent) { agent in
-            switch event.type {
-            case "session.created":
+            if event.type == "session.created" {
                 agent.name = data.title ?? ""
                 agent.role = data.agent ?? ""
                 agent.startedAt = now
-            case "session.execution.started":
-                agent.phase = .known(.running)
-                agent.settledAt = nil
-            case "session.tool.input.started":
-                if let id = data.id, let name = data.name { childTools[id] = name }
-            case "session.tool.called":
-                agent.action = ToolDetail.line(data.id.flatMap { childTools.removeValue(forKey: $0) } ?? "tool", data.input?.arguments)
-            case "session.execution.succeeded":
-                agent.phase = .known(.done)
-                agent.action = ""
-                agent.settledAt = now
-            case "session.execution.failed":
-                agent.phase = .known(.failed)
-                agent.action = data.error?.message ?? ""
-                agent.settledAt = now
-            case "session.execution.interrupted":
-                agent.phase = .known(.interrupted)
-                agent.action = ""
-                agent.settledAt = now
-            default: break
+            }
+            for turn in turn {
+                switch turn {
+                case .turnStarted:
+                    agent.phase = .known(.running)
+                    agent.settledAt = nil
+                case .tool(_, let name, let arguments):
+                    agent.action = ToolDetail.line(name, JSONValue.parse(Data(arguments.utf8)))
+                case .failed(let text):
+                    agent.phase = .known(.failed)
+                    agent.action = text
+                    agent.settledAt = now
+                case .turnFinished where agent.phase == .known(.running):
+                    agent.phase = .known(event.type == "session.execution.interrupted" ? .interrupted : .done)
+                    agent.action = ""
+                    agent.settledAt = now
+                default: break
+                }
             }
         }
         publish(parent)

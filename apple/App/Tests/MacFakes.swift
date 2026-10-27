@@ -74,9 +74,10 @@ final class RecordingHost: AgentRuntime {
     @discardableResult
     func connect(
         _ sessionID: String, cwd: String, busy: Bool = false, hosted: Bool = false,
-        protocolVersion: Int = PiWire.protocolVersion, sessionFile: String? = nil
+        protocolVersion: Int = PiWire.protocolVersion, sessionFile: String? = nil, seesImages: Bool = true
     ) async throws -> FakeExtension {
         var options = FakeExtension.Options(protocolVersion: protocolVersion, cwd: cwd, hosted: hosted)
+        if !seesImages { options.model?.images = false }
         if let sessionFile { options.sessionFile = sessionFile }
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
         if busy { ext.setState(["kind": "thinking"]) }

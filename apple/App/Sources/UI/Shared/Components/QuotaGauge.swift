@@ -173,7 +173,7 @@ private struct QuotaWindowRow: View {
                     .transition(.opacity)
             }
         }
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: window)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: window)
     }
 
     @ViewBuilder private var heading: some View {

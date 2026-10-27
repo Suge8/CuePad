@@ -7,6 +7,8 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
   case claudeCode = "claude"
   case codex
   case opencode
+  case grok
+  case dsh
 
   public var id: Self { self }
 
@@ -16,6 +18,8 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     case .claudeCode: "Claude Code"
     case .codex: "Codex"
     case .opencode: "OpenCode"
+    case .grok: "Grok Build"
+    case .dsh: "DeepSeek Harness"
     }
   }
 
@@ -26,15 +30,17 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     case .claudeCode: "CLAUDE_CODE_SESSION_ID"
     case .codex: "CODEX_THREAD_ID"
     case .opencode: "OPENCODE_SESSION_ID"
+    case .grok: "GROK_SESSION_ID"
+    case .dsh: "DSH_SESSION_ID"
     }
   }
 
-  /// 这家模型的提供方（`PiModelKey.provider`），唯一的一处：Claude Code、Codex 的模型名在它们自己的命名空间里（`opus`、`gpt-5.1`），
-  /// 提供方就写成这家；Pi、OpenCode 的模型本身带提供方（`provider/id`），为 nil。会话上报的模型、Cue 的可选清单、开工时只给了 id 的补全都按它。
+  /// 这家模型的提供方（`PiModelKey.provider`），唯一的一处：Claude Code、Codex、Grok Build 的模型名在它们自己的命名空间里（`opus`、`gpt-5.1`、`grok-4.6`），
+  /// 提供方就写成这家；Pi、OpenCode、dsh 的模型本身带提供方（`provider/id`），为 nil。会话上报的模型、Cue 的可选清单、开工时只给了 id 的补全都按它。
   public var modelProvider: String? {
     switch self {
-    case .claudeCode, .codex: rawValue
-    case .pi, .opencode: nil
+    case .claudeCode, .codex, .grok: rawValue
+    case .pi, .opencode, .dsh: nil
     }
   }
 
@@ -57,12 +63,14 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
   }
 }
 
-/// 从 CuePad 能对一个会话做什么（发文字总能做，不在其中）。只由 Agent 与会话在哪跑定：Mac 与手机按同一条规则从会话记录推出，
-/// 界面据此只露出做得到的操作，执行端不另做判断。各家能力的出处见各家接入的头注释（`ClaudeTerminalSession`、`CodexRuntime`、`OpenCodeRuntime`）。
+/// 从 CuePad 能对一个会话做什么。只由 Agent 与会话在哪跑定：Mac 与手机按同一条规则从会话记录推出，
+/// 界面据此只露出做得到的操作，执行端不另做判断。各家能力的出处见各家接入的头注释（`ClaudeTerminalSession`、`CodexRuntime`、`OpenCodeRuntime`、`GrokRuntime`、`DshRuntime`）。
 public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   public let rawValue: Int
   public init(rawValue: Int) { self.rawValue = rawValue }
 
+  /// 发文字（开新一轮）
+  public static let speak = AgentCapabilities(rawValue: 1 << 7)
   public static let images = AgentCapabilities(rawValue: 1 << 0)
   /// 停止这一轮
   public static let abort = AgentCapabilities(rawValue: 1 << 1)
@@ -73,13 +81,17 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   public static let answer = AgentCapabilities(rawValue: 1 << 5)
   public static let end = AgentCapabilities(rawValue: 1 << 6)
 
-  public static let all: AgentCapabilities = [.images, .abort, .model, .rename, .commands, .answer, .end]
+  public static let all: AgentCapabilities = [.speak, .images, .abort, .model, .rename, .commands, .answer, .end]
 
-  /// 这时说不了话的原因（nil 是能说）：在跑时（含等你确认）说话要先停下这一轮、再以这句开新一轮，停不下（没有 `.abort`）就说不了。
+  /// 这时说不了话的原因（nil 是能说）：在线时说不了话（没有 `.speak`）的只能在它的终端里说，结束了的接着说是在后台恢复它，照常能说；
+  /// 在跑时（含等你确认）说话要先停下这一轮、再以这句开新一轮，停不下（没有 `.abort`）就说不了。
   /// 只有终端里的 Claude Code 这样：CuePad 只能经它的收件箱说话，前台工具跑着时收件箱的话要等工具跑完才读到（`priority: "now"` 也一样），
   /// 收件箱也没有停下这一轮的办法（Claude Code 2.1.299 实测与源码）。界面的回复框、Cue 说话（`PiSessionState.speakBlocked`）
   /// 与 Mac 执行发话（桥的 `send`）都只认这里；不排队，歇下再说。
   public func speakBlocked(in state: PiWorkState?, agent: AgentKind?) -> String? {
+    if !contains(.speak), state != .ended {
+      return String(localized: "终端里的 \(agent?.name ?? "Agent") 只能在终端里说话：CuePad 只看得到它在做什么")
+    }
     guard state?.isTurnRunning == true, !contains(.abort) else { return nil }
     return String(localized: "终端里的 \(agent?.name ?? "Agent") 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说")
   }
@@ -95,11 +107,14 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   private static func of(_ agent: AgentKind, hosted: Bool) -> AgentCapabilities {
     if hosted { return .all }
     switch agent {
-    case .pi, .opencode: return .all
+    // dsh 只有 CuePad 托管的会话（它的 web 与桌面版的会话不接）
+    case .pi, .opencode, .dsh: return .all
     // 终端里的会话经它的收件箱说话与改名（只收文字）、经钩子作答、像 Ctrl-C 那样结束；停止这一轮、换模型、斜杠命令只有托管的能做
-    case .claudeCode: return [.answer, .rename, .end]
+    case .claudeCode: return [.speak, .answer, .rename, .end]
     // 终端里的会话由 Codex 的常驻服务承载，经它的控制接口说话；作答经钩子
-    case .codex: return [.images, .abort, .model, .rename, .commands, .answer]
+    case .codex: return [.speak, .images, .abort, .model, .rename, .commands, .answer]
+    // 终端里的会话只读跟读它的会话记录，CuePad 碰不到它的输入
+    case .grok: return []
     }
   }
 }

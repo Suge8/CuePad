@@ -8,7 +8,7 @@ extension Command {
     path: ["search"], summary: "搜索灵感与任务（多个词都要命中，子串，不分大小写；命中正文）", arguments: "[词...]",
     options: [
       .project("限定项目，可重复"), .allProjects,
-      Opt("images", "只要含图片的"), Opt("no-images", "只要不含图片的"),
+      Opt("attachments", "只要含附件（图片或文件）的"), Opt("no-attachments", "只要不含附件的"),
       Opt("sent", "只要交给过 Agent 的"), Opt("unsent", "只要从没交给过 Agent 的"),
       Opt("to", "只要交给过这个 Agent 会话的（会话名）", value: "会话名"),
       Opt("days", "只要最近 N 天内修改过的", value: "N"),
@@ -57,8 +57,8 @@ extension Command {
     if owners.isEmpty, case .project(let project) = try await call.scope() { owners.insert(project.id) }
     if !owners.isEmpty { query.projects = owners }
 
-    if args.has("images") && args.has("no-images") { throw CLIError.usage("--images 与 --no-images 只能选一个") }
-    if args.has("images") || args.has("no-images") { query.hasImages = args.has("images") }
+    if args.has("attachments") && args.has("no-attachments") { throw CLIError.usage("--attachments 与 --no-attachments 只能选一个") }
+    if args.has("attachments") || args.has("no-attachments") { query.hasAttachments = args.has("attachments") }
 
     query.sent = try sentCondition(args)
     if let days = try args.integer("days", minimum: 1) {

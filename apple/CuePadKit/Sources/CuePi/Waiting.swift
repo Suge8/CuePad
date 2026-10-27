@@ -40,7 +40,7 @@ func withDeadline<T: Sendable>(
     }
 }
 
-/// 一条连接上等回应的请求（Pi 扩展的 ack、Claude Code 的控制请求、Codex 与 Pi 大脑的 RPC）：按 id 配上回应，至多等 `timeout`；
+/// 一条连接上等回应的请求（Pi 扩展的 ack、Claude Code 的控制请求、Codex、ACP 与 Pi 大脑的 RPC）：按 id 配上回应，至多等 `timeout`；
 /// 调用方取消时立即以取消结束（请求已发出，对端照常处理）；连接断了等着的全部失败，之后的请求不再发。
 @MainActor
 final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
@@ -56,8 +56,8 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
 
     var isClosed: Bool { closed != nil }
 
-    /// 登记 `id`、用 `send` 发出请求，等回应。`send` 抛错时不等，原样抛出。
-    func request(_ id: ID, send: () throws -> Void) async throws -> Reply {
+    /// 登记 `id`、用 `send` 发出请求，等回应。`send` 抛错时不等，原样抛出。`timed` 为 false 时不限时（ACP 的一轮在结束时才回）。
+    func request(_ id: ID, timed: Bool = true, send: () throws -> Void) async throws -> Reply {
         if let closed { throw closed }
         var timer: Task<Void, Never>?
         defer { timer?.cancel() }
@@ -70,6 +70,7 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
                     waiting.removeValue(forKey: id)?.resume(throwing: error)
                     return
                 }
+                guard timed else { return }
                 let (limit, error) = (timeout, timeoutError)
                 timer = Task { [weak self] in
                     guard (try? await Task.sleep(for: limit)) != nil else { return }

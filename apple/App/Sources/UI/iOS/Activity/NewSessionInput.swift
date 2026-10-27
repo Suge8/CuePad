@@ -39,7 +39,7 @@ struct NewSessionInput: View {
             services: AppServices
         ) async throws -> SessionLaunch {
             try await services.launchSession(
-                in: project.id, prompt: try draft.stored(in: services.store.files).nonEmpty, title: name ?? project.shownName, on: host,
+                in: project.id, prompt: draft.stored.nonEmpty, title: name ?? project.shownName, on: host,
                 card: card ?? draft.attachments.first?.card, agent: agent, model: model, thinking: thinking)
         }
     }
@@ -107,7 +107,7 @@ struct NewSessionInput: View {
         .floatingInputLocked(inFlight)
         .onAppear {
             if launched == nil { launched = start.launched }
-            if let seed = start.draft, draft.isEmpty(accepting: [.images, .cards]) { draft = seed }
+            if let seed = start.draft, draft.isEmpty(accepting: [.files, .cards]) { draft = seed }
             focused = true
         }
         .observing(services.store, id: launched, into: $progress, onError: workspace.fail) {

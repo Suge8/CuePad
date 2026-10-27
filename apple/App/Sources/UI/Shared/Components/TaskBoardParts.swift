@@ -5,7 +5,7 @@ import SwiftUI
 /// 每列先给最窄的 `minColumn`，可见宽多出来的按各列的份数分（`TaskBoard.Column.share`：推进中、等你多分，待办、已完成少分）——宽窗口里轻重分得开，
 /// iPad 竖屏这类刚够四列的宽里四列差不多一样宽、轻的两列不被挤成一行三四个字；四列总在眼前，放不下四列时（如 Mac 窄窗开着侧栏）
 /// 整排横向滚动、最右一列露出一截（看得出能横划）：两侧页边是滚动区内容的边（`margin`），列滚到窗口边才裁，滚到头右边照样留页边。
-/// 卡换列时从原处飞到新处（`boardFlight`），四列共用一个飞行的命名空间与正被拖着的那件（`boardStage`）。
+/// 卡换列时从原处飞到新处（`boardFlight`），四列共用量飞行位置的坐标系与正被拖着的那件（`boardStage`）。
 struct BoardColumns: View {
     let board: TaskBoard
     @Binding var adding: Bool
@@ -68,7 +68,7 @@ struct BoardColumn: View {
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.boardMoved) private var moved
+    @Environment(\.boardMoves) private var moves
     @Environment(\.boardDrag) private var dragging
     @State private var showsEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
@@ -86,7 +86,7 @@ struct BoardColumn: View {
             .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
             .modifier(ShotPresenter(column: column, opened: $opened))
             // 有卡飞进来的那一列（行）排在别的列上面：往左、往上飞的卡不从别的列的卡下面钻过去（`boardFlight`）
-            .zIndex(!moved.isEmpty && board.flights(column).contains(where: moved.contains) ? 1 : 0)
+            .zIndex(moves?.lands(in: board.flights(column)) == true ? 1 : 0)
     }
 
     /// 推进中这一列的线要的"最近说过的话"（`SaidReading`）。
@@ -121,12 +121,14 @@ struct BoardColumn: View {
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
+            .boardLane(column)
             .boardTopRow(column: column, count: board.count(column))
             .background { BoardLane(targeted: lit) }
         #else
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
+            .boardLane(column)
             .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
             .overlay(alignment: .top) {
                 BoardColumnHeader(column: column, count: board.count(column))
@@ -166,12 +168,13 @@ struct BoardColumn: View {
             }
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .advancing:
-            let groups = workspace.byAttention(board.advancing, agents: agents)
-            ForEach(groups, id: \.tier) { group in
-                // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）
-                if group.tier != groups.first?.tier, !isRow { Color.clear.frame(height: 0) }
-                ForEach(Array(group.work.enumerated()), id: \.element.id) { index, work in
-                    let moves = group.tier == .running && index < BoardLine.maxMoving
+            // 一个 ForEach 排完各档：卡换档是同一串里换位（让位），不是这一档删一张、那一档添一张（同一个飞行身份一删一添会从栈顶飞过来）
+            ForEach(AdvancingSlot.slots(workspace.byAttention(board.advancing, agents: agents), gaps: !isRow)) { slot in
+                switch slot {
+                case .gap:
+                    // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）
+                    Color.clear.frame(height: 0)
+                case .work(let work, let moves):
                     if let item = work.item {
                         card(item, moves: moves).boardDraggable(item.id)
                     } else if case .session(let session) = work.work {
@@ -227,7 +230,7 @@ struct BoardColumn: View {
     private var earlierToggle: some View {
         HStack(spacing: 12) {
             Button {
-                withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { showsEarlier.toggle() }
+                withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { showsEarlier.toggle() }
             } label: {
                 HStack(spacing: 4) {
                     Text("更早做完的 \(board.earlier.count)").monospacedDigit()
@@ -318,5 +321,25 @@ private struct SaidReading: ViewModifier {
         content
             .environment(\.boardSaid, said ?? [:])
             .observing(workspace.services.store, id: sessions, into: $said) { [sessions] in try $0.recentSaid(in: sessions, limit: BoardLine.maxSaid) }
+    }
+}
+
+/// 推进中这一列从上到下的一格：一张卡（`moves`：线可以动，只给在跑那一档的前几张，`BoardLine.maxMoving`），或档与档之间的空。
+private enum AdvancingSlot: Identifiable {
+    case gap(BoardPulse.Tier)
+    case work(TaskBoard.Work, moves: Bool)
+
+    var id: String {
+        switch self {
+        case .gap(let tier): "gap/\(tier)"
+        case .work(let work, _): work.id
+        }
+    }
+
+    static func slots(_ groups: [(tier: BoardPulse.Tier, work: [TaskBoard.Work])], gaps: Bool) -> [AdvancingSlot] {
+        groups.enumerated().flatMap { offset, group in
+            (offset > 0 && gaps ? [.gap(group.tier)] : [])
+                + group.work.enumerated().map { .work($1, moves: group.tier == .running && $0 < BoardLine.maxMoving) }
+        }
     }
 }

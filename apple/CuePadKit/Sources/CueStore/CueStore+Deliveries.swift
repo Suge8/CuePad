@@ -24,7 +24,7 @@ extension CueStore {
       status: .known(.pending), failureReason: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
       resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
     try insert(request)
-    try registerImages(in: content)
+    try registerAttachments(in: content)
     if let card, mode == .start || DeliveryMode.toSession.contains(mode), let leaf = try leaf(holding: card) {
       try endUnusedSessions(of: leaf, cue: cue)
     }

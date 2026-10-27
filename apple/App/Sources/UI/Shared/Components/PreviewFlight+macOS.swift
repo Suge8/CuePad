@@ -4,8 +4,8 @@ import CueStore
 import SwiftUI
 
 /// Mac 全屏预览的飞出、飞回（iOS 是系统的 zoom 转场）：打开时点的那张缩略图从原处长到内容落下的地方，关上时翻到的那一份缩回它自己的缩略图
-/// （那张不在屏上时只随浮层淡出）。飞的是缩略图的那张画面，一层 Core Animation 图层浮在整窗最上面，位置、尺寸与圆角都在渲染端走 `Motion.move`
-/// 的曲线（定长 0.24 秒、不回弹），主线程不逐帧重排（docs/ui.md「Mac 上开合不逐帧挪位置」）；飞完那张画面淡掉（`Motion.crossfade`）。
+/// （那张不在屏上时只随浮层淡出）。飞的是缩略图的那张画面，一层 Core Animation 图层浮在整窗最上面，位置、尺寸与圆角都在渲染端走 `Motion.glide`
+/// （定长：飞到了才接着落内容），主线程不逐帧重排（docs/ui.md「Mac 上开合不逐帧挪位置」）；飞完那张画面淡掉（`Motion.fade`）。
 /// 关上时从屏上此刻的样子飞回（`PreviewShown`）：放大、拖过的图从露出的那一截连着缩回去。
 /// 飞的这段内容藏着（`landed`），同一张图不会在两处同时出现：不用盖一层幕布——浮层淡入淡出时 SwiftUI 按层各自改透明度，半透明的幕布盖不住半透明的内容。
 /// 内容区上不占地方的 `Stage` 是飞的终点与起点：它知道翻到了哪一份、内容落在哪。浮层本身的淡入淡出在 `PanelLayer`。减弱动态效果时不飞，只淡。
@@ -47,7 +47,7 @@ import SwiftUI
                     to: Frame(filling: stage.place.rect(aspect: source.aspect ?? Frame.aspect(of: image)), with: image, crop: source.alignment),
                     in: window)
             else { return stage.landed(true) }
-            try? await Task.sleep(for: .seconds(Motion.moveDuration))
+            try? await Task.sleep(for: .seconds(Motion.Glide.duration))
             // 内容在飞的那张下面露出来，那张再淡掉：两层同时一淡一显，中间会透出底色
             stage.landed(true)
             flight.dissolve()
@@ -71,7 +71,7 @@ import SwiftUI
             }
             guard let flight = await Flight(start.0, from: start.1, to: source.frame(to, showing: start.0), in: window) else { return }
             stage.landed(false)
-            try? await Task.sleep(for: .seconds(Motion.moveDuration))
+            try? await Task.sleep(for: .seconds(Motion.Glide.duration))
             flight.dissolve()
         }
     }
@@ -124,25 +124,25 @@ extension EnvironmentValues {
         CATransaction.commit()
     }
 
-    /// 淡掉（`Motion.crossfade` 的时长）、撤走。
+    /// 淡掉（`Motion.fade`）、撤走。
     func dissolve() {
         CATransaction.begin()
         CATransaction.setCompletionBlock { [layer] in layer.removeFromSuperlayer() }
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = 1
-        fade.duration = Motion.crossfadeDuration
-        fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        fade.duration = Motion.Fade.duration
+        fade.timingFunction = Motion.Fade.timing
         layer.opacity = 0
         layer.add(fade, forKey: "fade")
         CATransaction.commit()
     }
 
-    /// 从 `value` 到模型值（终点），`Motion.move` 的曲线与时长（定长、不回弹，不超过 300ms）。
+    /// 从 `value` 到模型值（终点），`Motion.glide`。
     private static func move(_ keyPath: String, _ value: Any) -> CABasicAnimation {
         let animation = CABasicAnimation(keyPath: keyPath)
         animation.fromValue = value
-        animation.duration = Motion.moveDuration
-        animation.timingFunction = Motion.moveTiming
+        animation.duration = Motion.Glide.duration
+        animation.timingFunction = Motion.Glide.timing
         return animation
     }
 }

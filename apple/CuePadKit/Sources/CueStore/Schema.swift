@@ -18,12 +18,14 @@
 /// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields` / `retiredTypes`，生产环境删不掉）。
 enum Schema {
   /// 一步结构升级：多数是 SQL；要用 Swift 算的（如按正文规则取标题）给一个闭包。都在同一个事务里执行。
+  /// 要动附件文件的（78）拿到这个库的 `AttachmentFiles`。
   struct Upgrade: ExpressibleByStringInterpolation, Sendable {
-    let run: @Sendable (SQLite) throws -> Void
+    let run: @Sendable (SQLite, AttachmentFiles) throws -> Void
 
-    init(stringLiteral sql: String) { run = { try $0.exec(sql) } }
+    init(stringLiteral sql: String) { run = { db, _ in try db.exec(sql) } }
     init(stringInterpolation: DefaultStringInterpolation) { self.init(stringLiteral: String(stringInterpolation: stringInterpolation)) }
-    init(_ run: @escaping @Sendable (SQLite) throws -> Void) { self.run = run }
+    init(_ run: @escaping @Sendable (SQLite) throws -> Void) { self.run = { db, _ in try run(db) } }
+    init(files run: @escaping @Sendable (SQLite, AttachmentFiles) throws -> Void) { self.run = run }
   }
 
   /// 能打开的最老结构版本（`upgrades` 的起点）：更早的库不升级、不打开（`schemaTooOld`）。发出的版本把用户的库都升过了某一版，就把那一版及以前的步骤折进 `create`、起点挪到那一版：
@@ -33,8 +35,8 @@ enum Schema {
   /// 最低对端版本（CueSync 的 `PeerFloor`）：更早的设备停下收发、提示更新。只在旧版照新写法读写会做错事时抬到那一版——把新写法误读成别的意思、
   /// 写回时盖掉新字段、读不出就卡住同步；新加的表、字段与句式旧版只是不认（照旧字段显示、跳过读不出的），不抬：一抬，旧设备在更新前什么都发不出去。
   /// 抬的那一版先发 iOS、TestFlight 处理完再发 Mac（docs/release.md「发版顺序」）。与 `baseVersion` 分开：本机的库要等用户的库都升过才折进 `create`。
-  /// 75：旧版值班会把到点的重复定时（`CueMemoryLine.repeats`）当一次性的清掉下一次、不再重复。
-  static let peerFloor = 75
+  /// 78：附件换了地址（`cuepad://file/<键>`）：旧版 Mac 认不出，把链接原文发给 Agent，旧版手机显示不出图与文件。
+  static let peerFloor = 78
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
@@ -117,6 +119,10 @@ enum Schema {
     "\(agentLibrariesTable) \(modifiedIndex(.agentLibraries))",
     // 77：技能与规则每份文件的正文各一条（`LibraryFileText`），快照里只留哈希（76 没发出去过，没有旧写法的快照要认）
     "\(agentLibraryFilesTable) \(modifiedIndex(.agentLibraryFiles))",
+    // 78：附件按键存取，旧引用、记录与文件改到新写法（`keyedAttachments`）
+    Upgrade(files: keyedAttachments),
+    // 79：项目按最近的进展排（`CueStore.projectOrder`），换成按进展时刻的索引；只是本机索引，不碰同步的字段
+    "DROP INDEX IF EXISTS cards_projectID_modifiedAt; \(progressIndexes)",
   ]
 
   /// 技能与规则里每份文件的正文：那台 Mac 每份一条、各端读（`LibraryFileText`）。

@@ -22,7 +22,7 @@ struct PaneSegment<Value: Hashable>: View {
             ForEach(items, id: \.value) { item in
                 PaneButton(title: item.title, on: selection == item.value) {
                     guard selection != item.value else { return }
-                    withAnimation(reduceMotion ? Motion.crossfade : Motion.snappy) { select(item.value) }
+                    withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { select(item.value) }
                 } label: {
                     HStack(spacing: PaneMetrics.iconGap) {
                         Image(item.icon).font(PaneMetrics.iconFont)

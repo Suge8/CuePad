@@ -21,7 +21,7 @@ private struct ShareForm: View {
                     Section("内容") {
                         if let text = content.text { Text(text).lineLimit(4) }
                         ForEach(content.urls, id: \.self) { Text($0.absoluteString).lineLimit(1) }
-                        if !content.images.isEmpty { Text("\(content.images.count) 张图片") }
+                        ForEach(content.files, id: \.url) { Text(verbatim: $0.name).lineLimit(1) }
                     }
                     .listRowBackground(palette.paper)
                 }

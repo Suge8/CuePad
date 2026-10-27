@@ -38,9 +38,9 @@ struct CueStatusRow<Trailing: View>: View {
             row(unread: workspace.cue.unread)
             row(unread: 0)
         }
-        .animation(HandOff.quick, value: workspace.cue.unread)
-        .animation(HandOff.quick, value: workspace.cue.presence)
-        .animation(HandOff.quick, value: status)
+        .animation(Motion.fade, value: workspace.cue.unread)
+        .animation(Motion.fade, value: workspace.cue.presence)
+        .animation(Motion.fade, value: status)
     }
 
     private func row(unread: Int) -> some View {
@@ -122,7 +122,7 @@ struct CueStatusLine: View {
         }
         .font(font)
         .transition(.opacity)
-        .animation(HandOff.quick, value: cue.now)
+        .animation(Motion.fade, value: cue.now)
         .pending(services.isCatchingUp(on: cue.hostID), shown: $syncing)
     }
 
@@ -155,7 +155,7 @@ struct CueTitle: View {
             }
             .padding(.trailing, 14)
         }
-        .animation(HandOff.quick, value: cue.presence)
+        .animation(Motion.fade, value: cue.presence)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }

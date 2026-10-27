@@ -35,7 +35,7 @@ struct MenuBarLive: View {
             ForEach(shown) { row($0) }
             if hidden > 0 { LiveMoreFold(hidden: hidden, expanded: $showsAll, style: Self.style) }
         }
-        .animation(HandOff.quick, value: showsAll)
+        .animation(Motion.fade, value: showsAll)
     }
 
     private func row(_ session: PiSessionState) -> some View {

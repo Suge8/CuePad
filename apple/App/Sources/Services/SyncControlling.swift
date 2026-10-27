@@ -16,9 +16,24 @@ nonisolated protocol SyncControlling: Sendable {
     /// 把待推送全部发出去，返回时这一轮结束
     func push() async
     func resolve(_ resolution: SyncResolution) async throws
+    /// 附件文件此刻在路上的（按 key）：先给当前快照，之后每次变化给新快照（`CloudSync.fileTransfers`）
+    var fileTransfers: AsyncStream<[String: FileTransfer]> { get }
+    /// 这个附件文件在本机的位置，没有就现在从 iCloud 取、记录还没到就等它到（`CloudSync.fetchFile`）
+    func fetchFile(_ key: String) async throws -> URL
 }
 
 extension CloudSync: SyncControlling {}
+
+/// 取附件文件（`AppServices.fetchFile`、发给 Agent 之前的 `SendContent.fetchAttachments`）。
+typealias FileFetching = @Sendable (String) async throws -> URL
+
+nonisolated extension Optional where Wrapped == any SyncControlling {
+    /// 这台不同步（隔离库）时取不到，抛 `FileFetchFailure.notSyncing`。
+    func fetchFile(_ key: String) async throws -> URL {
+        guard let self else { throw FileFetchFailure.notSyncing }
+        return try await self.fetchFile(key)
+    }
+}
 
 nonisolated extension SyncControlling {
     /// 马上只传这几条，不等提交触发的合并窗口，也不等后台那批（`CloudSync.send`）；同一次写入写出的几条一起给，一个请求传完。

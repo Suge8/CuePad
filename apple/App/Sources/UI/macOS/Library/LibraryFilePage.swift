@@ -14,7 +14,7 @@ struct LibraryFileLayer: View {
                 LibraryFilePage(file: file).id(file).transition(.opacity)
             }
         }
-        .animation(HandOff.quick, value: workspace.openLibraryFile)
+        .animation(Motion.fade, value: workspace.openLibraryFile)
     }
 }
 

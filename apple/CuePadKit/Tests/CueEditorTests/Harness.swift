@@ -36,7 +36,7 @@ final class EditorHarness {
 
     init(width: CGFloat = 720, height: CGFloat = 640, theme: CueEditorTheme = .test) {
         _ = NSApplication.shared
-        editor = CueEditorView(imageStore: store, theme: theme)
+        editor = CueEditorView(files: store, theme: theme)
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
         editor.frame = window.contentView!.bounds
         editor.autoresizingMask = [.width, .height]

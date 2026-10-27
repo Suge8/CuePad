@@ -92,9 +92,41 @@ extension CueKeeper {
     /// 记下送达并立即上传（不等上传完就接着对账）。
     func markDelivered(_ ids: [UUID]) async throws {
         try await store.markCueMessagesDelivered(ids)
+        unfetchable.subtract(ids)
         guard !ids.isEmpty else { return }
         let upload = setup.upload
         Task { await upload(ids) }
+    }
+
+    /// 这会儿交得出去的：你的话里的附件都在这台 Mac 上（图交给大脑、文件的路径写进话里，`CueEnvelope.delivered`）。
+    /// 不在的在旁边取（`AppServices.fetchFile`），取到了再对一次账：等文件不挡后面的话。取不来的对你说一声，话照交。
+    func ready(_ pending: [CueMessage]) -> [CueMessage] {
+        pending.filter { message in
+            guard message.author == .known(.you), !unfetchable.contains(message.id) else { return true }
+            let missing = SendContent(stored: message.text).attachmentKeys.filter { store.files.fileURL(for: $0) == nil }
+            guard !missing.isEmpty else { return true }
+            if fetchingFiles[message.id] == nil { fetchingFiles[message.id] = fetch(missing, for: message.id) }
+            return false
+        }
+    }
+
+    private func fetch(_ keys: [String], for message: UUID) -> Task<Void, Never> {
+        let fetchFile = setup.fetchFile
+        return Task {
+            do {
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    for key in Set(keys) { group.addTask { _ = try await fetchFile(key) } }
+                    try await group.waitForAll()
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                unfetchable.insert(message)
+                await say(.cue, ShownText("你发的附件没能交给我：\(ShownText(error).embedded)"))
+            }
+            fetchingFiles[message] = nil
+            input.yield(.kick)
+        }
     }
 
     /// 你的消息里的图，按发给会话的同一个转换取出、交给大脑；文字里的图片引用照留（Cue 转给会话时原样写进去）。

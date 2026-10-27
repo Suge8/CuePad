@@ -79,7 +79,7 @@ struct CuePage: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(Motion.snappy, value: cue.showsRun)
+        .animation(Motion.nudge, value: cue.showsRun)
         .background(palette.desk)
     }
     #else
@@ -116,7 +116,7 @@ struct CuePage: View {
     private var composer: some View {
         CueComposer(style: .page, takesFocusRequests: !inPanel, sent: { follow.sent() }) { focused in
             // 同底部那一排让开"⋯"的那条弹簧（`DockBar`）：输入框长宽与"⋯"淡出是同一下
-            withAnimation(Motion.spatial(Motion.dock, reduceMotion: reduceMotion)) { dockMotion?.composing = focused }
+            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { dockMotion?.composing = focused }
         }
     }
     #endif
@@ -171,7 +171,7 @@ struct CuePage: View {
             // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
             .environment(\.inlineTextSelection, false)
             #endif
-            .animation(HandOff.quick, value: cue.presence.progress)
+            .animation(Motion.fade, value: cue.presence.progress)
         }
     }
 
@@ -212,7 +212,7 @@ struct CuePage: View {
         .floatingAbove {
             if let replies = thread?.replies, !replies.isEmpty { CueReplyTip(replies: replies).transition(.opacity) }
         }
-        .animation(HandOff.quick, value: cue.canHear)
-        .animation(HandOff.quick, value: thread?.replies.isEmpty)
+        .animation(Motion.fade, value: cue.canHear)
+        .animation(Motion.fade, value: thread?.replies.isEmpty)
     }
 }
