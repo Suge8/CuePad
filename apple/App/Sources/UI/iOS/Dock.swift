@@ -9,29 +9,36 @@ import SwiftUI
 struct DockRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    /// 在前台订阅的 tab：跟着 `Workspace.root`，等切过去的那一帧画上屏才换（同 Mac 的 `MacPages.leaving`）：
+    /// 前后两个 tab 的订阅一停一起、实时状态一暂停一恢复要几十毫秒，不放在点击的回合里；页里的值本来就要等读库回来才更新。
+    @State private var live: Route?
 
     var body: some View {
         @Bindable var workspace = workspace
-        let root = workspace.root
+        let root = workspace.root, active = live ?? root
         TabView(selection: $workspace.root) {
             Tab(value: Route.shelf) {
-                DockStack(tab: .shelf, active: root == .shelf)
+                DockStack(tab: .shelf, active: active == .shelf)
             } label: {
-                DockTabLabel(tab: .shelf, selected: root == .shelf)
+                DockTabLabel(tab: .shelf)
             }
             Tab(value: Route.progress) {
-                DockStack(tab: .progress, active: root == .progress)
+                DockStack(tab: .progress, active: active == .progress)
             } label: {
-                DockTabLabel(tab: .progress, selected: root == .progress)
+                DockTabLabel(tab: .progress)
             }
             Tab(value: Route.cue) {
-                DockStack(tab: .cue, active: root == .cue)
+                DockStack(tab: .cue, active: active == .cue)
             } label: {
-                DockTabLabel(tab: .cue, selected: root == .cue)
+                DockTabLabel(tab: .cue)
             }
             .badge(workspace.cue.unread)
         }
         .tint(palette.signature)
+        .task(id: root) {
+            await NextFrame.drawn()
+            if !Task.isCancelled { live = root }
+        }
         .overlay { DockRelaySpots(shown: Dock.showsTabBar(on: workspace.top)) }
     }
 }
@@ -53,6 +60,8 @@ private struct DockStack: View {
                 }
         }
         .environment(\.pageActive, active)
+        .environment(\.pagePrefetch, !active)
+        .background { DockShelter().frame(width: 0, height: 0).accessibilityHidden(true) }
     }
 }
 
