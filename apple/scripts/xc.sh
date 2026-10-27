@@ -14,6 +14,7 @@
 #   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）；只有带 -CuePadForeground YES 的 Mac 测量独占机器
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
 #   xc.sh perf launch mac [次数] [启动参数…]            冷启动：到主窗口上屏、首屏内容出来、能交互（perf-launch.sh）
+#   xc.sh perf ab <旧检出> <新检出> <轮数> <perf 的参数…>   新旧交替跑同一条 perf（含 idle、launch），每轮一行、最后对比表，前台阻塞到结束（perf-ab.py）
 #   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 DebugScene.swift）。
 # 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限与任务时限见 _lock.sh；模拟器池见 _sim.sh。
@@ -57,7 +58,7 @@ case "$cmd" in
   strings) "$0" build mac; "$0" build ios; exec python3 "$APPLE_DIR/scripts/strings.py" sync ;;
   provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
-  perf) ;;  # 先构建、再测量，两段各自进锁（见下）
+  perf) [ "$platform" != ab ] || exec python3 "$APPLE_DIR/scripts/perf-ab.py" "${@:3}" ;;  # 其余先构建、再测量，两段各自进锁（见下）
   test|shot|rec|run) case "$platform" in ios|ipad) xc_enter sim "$0" "$@" ;; *) xc_enter plain "$0" "$@" ;; esac ;;
   check|build|build-perf) xc_enter plain "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
   *) echo "$USAGE" >&2; exit 2 ;;
