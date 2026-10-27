@@ -51,7 +51,7 @@ struct ClaudeSettingsTests {
                 // exec：钩子的父进程是一直在的测试进程，像 Grok 那样（CuePad 认父进程为 Agent，它退出时会话下桥）
                 let run = await ChildProcess.run(
                     URL(filePath: "/bin/sh"), ["-c", #"exec "$0" hook claude < "$1""#, PiProcess.cuepad.path, file.path],
-                    environment: environment, timeout: .seconds(10))
+                    environment: environment, timeout: conditionBudget)
                 #expect(run?.status == 0 && run?.output == "", "\(fields["hook_event_name"]?.string ?? "?") 没有原样放行：\(String(describing: run))")
             }
             #expect(testbed.bridge.sessions.isEmpty)
