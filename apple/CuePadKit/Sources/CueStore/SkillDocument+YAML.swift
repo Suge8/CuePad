@@ -3,7 +3,7 @@ import Foundation
 /// frontmatter 里一个顶层键的值怎么读、怎么写：YAML 标量的子集，够读各家真实技能里出现的写法（普通、单双引号、块、跨行折叠），
 /// 写出的值换成任何一家的 YAML 解析器都读回同一段字。
 extension SkillDocument {
-  /// `first` 是冒号之后那段，`rest` 是值接着的几行（缩进的与中间的空行）。
+  /// `first` 是值的第一行（冒号之后那段，或值从下一行起时的那一行），`rest` 是值接着的几行（缩进的与中间的空行）。
   /// `quote` 是原来带的引号，没带为 nil。
   static func scalar(_ first: Substring, rest: [Substring]) -> (value: String, quote: Character?) {
     let head = first.trimmingCharacters(in: .whitespaces)
@@ -40,37 +40,58 @@ extension SkillDocument {
       guard let indent = explicit ?? rest.first(where: { !blank($0) }).map({ $0.prefix { $0 == " " }.count }) else { return rest.count }
       return rest.prefix { blank($0) || $0.prefix { $0 == " " }.count >= indent }.count
     case "\"", "'":
-      let quote = head.first!
-      var escaped = false, pendingQuote = false
-      for (offset, line) in ([Substring(head.dropFirst())] + rest).enumerated() {
-        for character in line {
-          if pendingQuote {
-            pendingQuote = false
-            if character == "'" { continue }
-            return offset
-          }
-          if escaped { escaped = false } else if quote == "\"" && character == "\\" { escaped = true } else if character == quote {
-            if quote == "\"" { return offset }
-            pendingQuote = true
-          }
-        }
-        if pendingQuote { return offset }
-        escaped = false
-      }
-      return rest.count
+      return closingQuote(first, rest: rest)?.line ?? rest.count
     default:
-      // 值从下一行起时，它前面的注释行算在这个键里
-      var started = !head.isEmpty && !head.hasPrefix("#"), count = 0
-      if started && first.contains(" #") { return 0 }
+      if first.contains(" #") { return 0 }
+      var count = 0
       for line in rest {
-        let content = line.trimmingCharacters(in: .whitespaces)
-        if started && content.hasPrefix("#") { break }
+        if line.trimmingCharacters(in: .whitespaces).hasPrefix("#") { break }
         count += 1
-        if !content.isEmpty && !content.hasPrefix("#") { started = true }
-        if started && line.contains(" #") { break }
+        if line.contains(" #") { break }
       }
       return count
     }
+  }
+
+  /// 只占键那一行的值后面那段 ` # 注释` 从哪起；没有为 nil
+  static func trailingComment(_ value: Substring) -> Substring.Index? {
+    let head = value.drop { $0 == " " || $0 == "\t" }
+    let from: Substring.Index
+    switch head.first {
+    case "|", ">", nil: return nil
+    case "\"", "'":
+      guard let close = closingQuote(value, rest: []), close.line == 0 else { return nil }
+      from = close.end
+    default: from = head.startIndex
+    }
+    return value[from...].firstRange(of: /[ \t]+#/)?.lowerBound
+  }
+
+  /// 引号写法的收尾引号在第几行、它之后的位置；没有收尾为 nil
+  private static func closingQuote(_ first: Substring, rest: ArraySlice<Substring>) -> (line: Int, end: Substring.Index)? {
+    guard let open = first.firstIndex(where: { $0 != " " && $0 != "\t" }) else { return nil }
+    let quote = first[open]
+    var escaped = false
+    for (offset, line) in ([first[first.index(after: open)...]] + rest).enumerated() {
+      var index = line.startIndex
+      while index < line.endIndex {
+        let character = line[index]
+        index = line.index(after: index)
+        if escaped {
+          escaped = false
+        } else if quote == "\"" && character == "\\" {
+          escaped = true
+        } else if character == quote {
+          if quote == "'" && index < line.endIndex && line[index] == "'" {
+            index = line.index(after: index)
+            continue
+          }
+          return (offset, index)
+        }
+      }
+      escaped = false
+    }
+    return nil
   }
 
   /// `key: 值` 的几行（用文件的换行符连起来，末尾不带换行）。多行的写成 `|-` 块（`block` 为假时不用块）；单行的能不加引号就不加，原来带引号的保留那种引号；

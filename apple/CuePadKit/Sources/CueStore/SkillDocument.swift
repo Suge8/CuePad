@@ -28,11 +28,14 @@ public struct SkillDocument: Equatable, Sendable {
     let fields: [Key: Field]
   }
 
-  /// 一个键占的几行（键那行起，到值的最后一行，不含行尾换行）与它原来带的引号
+  /// 一个键在原文里占的地方与它原来带的引号。值写在下一行起时，键那行到值之间的注释、空行不在其中。
   private struct Field: Equatable, Sendable {
-    let range: Range<String.Index>
+    /// 换成新的 `键: 值` 的那段：键那行到值的末尾（值写在下一行时只到冒号），行尾的注释不在其中
+    let key: Range<String.Index>
+    /// 写在下一行起的值占的几行，连同它前面那个换行：写回时删掉
+    let value: Range<String.Index>?
     let quote: Character?
-    /// 值后面跟着缩进的注释行：换成块写法会把它们读进值里
+    /// 这个键下面还留着注释行：换成块写法会把它们读进值里
     let commented: Bool
   }
 
@@ -54,17 +57,26 @@ public struct SkillDocument: Equatable, Sendable {
       let start = index
       index += 1
       guard let first = line.first, !" \t#".contains(first), let colon = line.firstIndex(of: ":") else { continue }
-      // 缩进的与夹在中间的空行接着这个键；其中属于值的几行按值的写法定（之后的注释行不算），末尾的空行留给下一个键
+      // 缩进的与夹在中间的空行接着这个键；冒号后没有值时，值从下一个不是注释、空行的行起。
+      // 属于值的几行按值的写法定，前后的注释行与末尾的空行都不算
       while index < end, lines[index].first.map({ " \t".contains($0) }) ?? true { index += 1 }
-      let value = line[line.index(after: colon)...]
-      var last = start + 1 + Self.valueLines(value, rest: lines[start + 1..<index])
-      while last > start + 1, lines[last - 1].allSatisfy({ $0 == " " || $0 == "\t" }) { last -= 1 }
-      let commented = lines[last..<index].contains { !$0.allSatisfy { $0 == " " || $0 == "\t" } }
+      let after = line[line.index(after: colon)...]
+      let inline = !after.trimmingCharacters(in: .whitespaces).isEmpty && !after.trimmingCharacters(in: .whitespaces).hasPrefix("#")
+      let valueLine = inline ? start : (start + 1..<index).first { !Self.isComment(lines[$0]) } ?? index
+      let head = inline ? after : valueLine < index ? lines[valueLine] : ""
+      var last = valueLine < index ? valueLine + 1 + Self.valueLines(head, rest: lines[valueLine + 1..<index]) : valueLine
+      while last > valueLine + 1, Self.isComment(lines[last - 1], blankOnly: true) { last -= 1 }
+      // 只占键那一行的值，后面的行尾注释也留着
+      let comment = inline && last == start + 1 ? Self.trailingComment(after) : nil
+      let commented = comment != nil || !inline && !after.allSatisfy({ $0 == " " || $0 == "\t" })
+        || (start + 1..<index).contains { ($0 < valueLine || $0 >= last) && !Self.isComment(lines[$0], blankOnly: true) }
       index = last
       guard let key = Key(rawValue: line[..<colon].trimmingCharacters(in: .whitespaces)) else { continue }
-      let scalar = Self.scalar(value, rest: Array(lines[start + 1..<last]))
+      let scalar = valueLine < last ? Self.scalar(head, rest: Array(lines[valueLine + 1..<last])) : (value: "", quote: nil)
       values[key] = scalar.value
-      fields[key] = Field(range: line.startIndex..<lines[last - 1].endIndex, quote: scalar.quote, commented: commented)
+      let keyEnd = inline ? comment ?? lines[last - 1].endIndex : Self.isComment(after, blankOnly: true) ? line.endIndex : after.startIndex
+      let valueRange = !inline && valueLine < last ? lines[valueLine - 1].endIndex..<lines[last - 1].endIndex : nil
+      fields[key] = Field(key: line.startIndex..<keyEnd, value: valueRange, quote: scalar.quote, commented: commented)
     }
     var bodyLine = end + 1
     while bodyLine < lines.count - 1, lines[bodyLine].isEmpty { bodyLine += 1 }
@@ -90,7 +102,8 @@ public struct SkillDocument: Equatable, Sendable {
     var added = ""
     for (key, value, _) in changes {
       if let field = header.fields[key] {
-        edits.append((field.range, Self.yaml(key, value, quote: field.quote, block: !field.commented, newline: newline)))
+        edits.append((field.key, Self.yaml(key, value, quote: field.quote, block: !field.commented, newline: newline)))
+        if let old = field.value { edits.append((old, "")) }
       } else {
         added += Self.yaml(key, value, quote: nil, block: true, newline: newline) + newline
       }
@@ -104,6 +117,12 @@ public struct SkillDocument: Equatable, Sendable {
     result += text[cursor..<header.bodyStart]
     if !header.closed && !body.isEmpty { result += newline }
     return result + body
+  }
+
+  /// 只有空白（`blankOnly` 为假时也算只有注释）的一行：不是值
+  private static func isComment(_ line: Substring, blankOnly: Bool = false) -> Bool {
+    let content = line.trimmingCharacters(in: .whitespaces)
+    return content.isEmpty || (!blankOnly && content.hasPrefix("#"))
   }
 
   /// 顶格的 `---`（后面只许空白）：缩进的是块写法里的字
