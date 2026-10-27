@@ -10,6 +10,8 @@ struct BoardWaitCard: View {
     let held: TaskBoard.Held
     let project: Project?
     @Environment(Workspace.self) private var workspace
+    @Environment(\.cardAgents) private var agents
+    @Environment(\.boardArrival) private var arrival
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -23,7 +25,7 @@ struct BoardWaitCard: View {
 
     private var card: some View {
         BoardLink(to: held.destination) {
-            BoardCardLayout(advancing: false) {
+            BoardCardLayout(advancing: false, pulse: leftPulse) {
                 mark.frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
                 Text(held.title).foregroundStyle(palette.ink)
@@ -36,6 +38,13 @@ struct BoardWaitCard: View {
         }
         .accessibilityLabel(Dotted(held.title, held.deciding ? String(localized: "等你拍板") : String(localized: "待回复"), held.count > 1 ? String(localized: "\(held.count) 件") : nil).spoken)
         .boardDim(project: held.project)
+    }
+
+    /// 刚从推进中飞来时起飞那一下还带着的那条线（`BoardCardLayout`）：任务的或会话的此刻那条。
+    private var leftPulse: BoardPulse {
+        guard arrival?.from == .advancing else { return BoardPulse() }
+        if let item = held.item { return workspace.pulse(for: item.task, lead: item.leaf, in: agents) }
+        return held.replies.first.map { workspace.pulse(of: $0.session) } ?? BoardPulse()
     }
 
     private var mark: some View {

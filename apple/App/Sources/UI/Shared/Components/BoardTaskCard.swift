@@ -20,6 +20,7 @@ struct BoardTaskCard: View {
     @State private var check = TaskCheck()
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
+    @Environment(\.boardArrival) private var arrival
     @Environment(\.palette) private var palette
 
     private var task: Card { item.task }
@@ -27,7 +28,8 @@ struct BoardTaskCard: View {
 
     var body: some View {
         let next = workspace.next(for: task, lead: item.leaf, in: agents, steps: item.steps)
-        let pulse = advancing ? workspace.pulse(for: task, lead: item.leaf, in: agents) : BoardPulse()
+        // 刚从推进中飞出来的也要线（`BoardCardLayout` 起飞时还带着它，随即淡掉）
+        let pulse = advancing || arrival?.from == .advancing ? workspace.pulse(for: task, lead: item.leaf, in: agents) : BoardPulse()
         framed(next: next) {
             BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves) {
                 ring(next: next).opacity(column.leadOpacity)

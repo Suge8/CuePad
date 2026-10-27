@@ -30,6 +30,8 @@ struct BoardArrival: Equatable {
     nonisolated struct Departure: Sendable {
         let column: TaskBoard.Column
         let frame: CGRect
+        /// 哪一刻起飞：过了这一趟飞行的时长就不算数（`BoardDepartures`）。
+        let at: ContinuousClock.Instant
     }
 
     /// 这一次换了列、原处看得见的卡（原处没排出来的——懒加载还没建、滚出去了——不飞，在新处淡入）。
@@ -40,23 +42,33 @@ struct BoardArrival: Equatable {
     fileprivate var lanes: [TaskBoard.Column: CGRect] = [:]
 
     fileprivate func read(_ moved: [String: TaskBoard.Column]) {
-        departures.set(moved.reduce(into: [:]) { departures, move in
+        let now = ContinuousClock.now
+        departures.add(moved.reduce(into: [:]) { departures, move in
             guard let card = frames[move.key], let lane = lanes[card.lane] else { return }
-            departures[move.key] = Departure(column: move.value, frame: card.frame.offsetBy(dx: lane.minX, dy: lane.minY))
-        })
+            departures[move.key] = Departure(column: move.value, frame: card.frame.offsetBy(dx: lane.minX, dy: lane.minY), at: now)
+        }, at: now)
         if !moved.isEmpty { landing = Set(moved.keys) }
     }
 
     func lands(in flights: [String]) -> Bool { !landing.isEmpty && flights.contains(where: landing.contains) }
 }
 
-/// 这一次换了列的卡与原处（`BoardMoves.departures`）。iOS 上转场在渲染线程上求值，所以是加锁的一份，不是主线程上的状态。
+/// 正在飞的卡与原处（`BoardMoves.departures`）。iOS 上转场在渲染线程上求值，所以是加锁的一份，不是主线程上的状态。
+/// 一趟飞行要飞完才撤下（`Motion.Spring.travel` 收住的时长）：飞着时又来一份没人换列的看板，正在飞的那张、刚撤的那张再求值转场时照样认得出自己在飞；
+/// 过了这么久就不算数，同一张卡后来离开看板、再回来时照常淡出淡入。
 nonisolated final class BoardDepartures: Sendable {
     private let state = Mutex<[String: BoardMoves.Departure]>([:])
+    private static let lasts = Duration.seconds(Motion.Spring.travel.settlingDuration)
 
-    func callAsFunction(_ id: String) -> BoardMoves.Departure? { state.withLock { $0[id] } }
+    func callAsFunction(_ id: String) -> BoardMoves.Departure? {
+        state.withLock { $0[id] }.flatMap { ContinuousClock.now - $0.at < Self.lasts ? $0 : nil }
+    }
 
-    fileprivate func set(_ departures: [String: BoardMoves.Departure]) { state.withLock { $0 = departures } }
+    fileprivate func add(_ departures: [String: BoardMoves.Departure], at now: ContinuousClock.Instant) {
+        state.withLock { current in
+            current = current.filter { now - $0.value.at < Self.lasts }.merging(departures) { _, new in new }
+        }
+    }
 }
 
 extension View {

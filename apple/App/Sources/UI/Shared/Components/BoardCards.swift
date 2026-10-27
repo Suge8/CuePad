@@ -130,6 +130,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let trailing: Trailing
     @Environment(\.boardRow) private var row
     @Environment(\.boardTitle) private var titleBand
+    @Environment(\.boardArrival) private var arrival
 
     init(advancing: Bool, pulse: BoardPulse = BoardPulse(), moves: Bool = true,
          @ViewBuilder lead: () -> Lead, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
@@ -141,7 +142,25 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     }
 
     var body: some View {
-        if advancing { withLine } else if row { title.frame(maxHeight: .infinity) } else { title.padding(.vertical, titleBand.padding) }
+        if advancing { withLine } else if row { title.frame(maxHeight: .infinity).overlay(alignment: .bottomLeading) { leftLine } } else {
+            title.padding(.vertical, titleBand.padding).overlay(alignment: .bottomLeading) { leftLine }
+        }
+    }
+
+    /// 从推进中飞出来的卡（`boardArrival`）：起飞时还带着那条线（调用处照旧给 `pulse`），随即淡掉——线不在起飞那一下没了。
+    /// 新的一列没给线留高，淡得比飞快（`Motion.fade`），不在字上多压几帧。
+    @ViewBuilder private var leftLine: some View {
+        if let arrival, arrival.from == .advancing {
+            line(moves: false)
+                .opacity(arrival.landed ? 0 : 1)
+                .animation(Motion.fade, value: arrival.landed)
+        }
+    }
+
+    private func line(moves: Bool) -> some View {
+        BoardLine(pulse: pulse, moves: moves)
+            .padding(.leading, TaskMetrics.cardLead + gap)
+            .padding(.bottom, BoardCardMetrics.waveBottom)
     }
 
     private var title: some View {
@@ -161,9 +180,8 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
             .padding(.top, row ? 0 : BoardCardMetrics.titleTop)
             .padding(.bottom, (row ? 0 : BoardCardMetrics.waveGap) + WaveStrip.height + BoardCardMetrics.waveBottom)
             .overlay(alignment: .bottomLeading) {
-                BoardLine(pulse: pulse, moves: moves)
-                    .padding(.leading, TaskMetrics.cardLead + gap)
-                    .padding(.bottom, BoardCardMetrics.waveBottom)
+                // 从别的列飞进推进中（`boardArrival`）：线随着飞淡出来，不在起飞那一下冒出来
+                line(moves: moves).opacity(arrival.map { $0.from == .advancing || $0.landed ? 1 : 0 } ?? 1)
             }
     }
 
