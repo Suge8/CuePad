@@ -97,13 +97,14 @@ extension CueStore {
   }
 
   /// 待回复的会话（规则在 `PiSessionState.awaitsReply`），等得最久的在前：Cue 页的待回复提示与等你里的待回复（`CueTally.replies`）只读它。
-  /// 只读 Cue 留给你回、此刻歇着的那几条，订阅同 `sessionsAskingYou`。
+  /// 只读留给你回、此刻歇着或出错的那几条，订阅同 `sessionsAskingYou`。
   public func sessionsAwaitingReply() throws -> [PiSessionState] {
     guard let cue = try cueDuty(), !cue.left.isEmpty else { return [] }
-    let settled = PiWorkState.settled.rawValue
-    let candidates = "state = '\(settled)' AND sessionID IN (SELECT value FROM json_each(?))"
+    let resting: [PiWorkState] = [.settled, .error]
+    let candidates = "state IN (\(sqlList(resting))) AND sessionID IN (SELECT value FROM json_each(?))"
     return try narrow(
-      .piSessionStates, column: "state", candidates: candidates, arguments: [JSONColumn.encode(cue.left.map(\.sessionID))], to: { $0 == settled }
+      .piSessionStates, column: "state", candidates: candidates, arguments: [JSONColumn.encode(cue.left.map(\.sessionID))],
+      to: { PiWorkState(rawValue: $0).map(resting.contains) == true }
     ) { rows in
       try sessions(rows).filter { $0.awaitsReply(cue) }.sorted { ($0.stateSince, $0.sessionID) < ($1.stateSince, $1.sessionID) }
     }

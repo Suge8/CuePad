@@ -32,6 +32,7 @@ extension CueActivity {
     case "peek": board ? "看板" : "看\(named)的近况"
     case "stop": "停下\(named)"
     case "leave": "\(named)留给你回"
+    case "take": "收回\(named)（不用他回）"
     case "done": "做完\(named)"
     default: nil
     }
@@ -88,7 +89,9 @@ extension CueActivity {
     switch tool {
     case "task":
       let action = args.line("action")
-      guard let kind = kind(action), let words = cueWords(action, named.quoted, board: args.board) else { return item(.other, "task") }
+      // 收回不上经过：没有与之同名的按钮（`CueActivity.verb`），只进 Cue 自己的上下文
+      guard let words = cueWords(action, named.quoted, board: args.board) else { return item(.other, "task") }
+      guard let kind = kind(action) else { return item(.other, words) }
       let place = action == "add" && !failed ? await named.added(args, store: store) : named
       return item(kind, action == "say" ? "\(words)：\(args.line("text") ?? "")" : words, at: place)
     case "tell":

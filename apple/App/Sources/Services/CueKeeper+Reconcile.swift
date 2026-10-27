@@ -9,6 +9,7 @@ extension CueKeeper {
     func reconcile() async {
         timer?.cancel()
         timer = nil
+        await leaveHisStops()
         do {
             let store = self.store, now = Date.now
             let profile = try await store.cueProfile() ?? CueProfile()
@@ -94,7 +95,7 @@ extension CueKeeper {
             if !changes.due.isEmpty {
                 return _ = try await wakeUp(.sessionActivity(changes.due.map(CueStir.init)))
             }
-            // 没叫醒 Cue：新归他的记下，不再归他的划掉（叫醒的一轮做完才换）
+            // 没叫醒 Cue：他新在场的停下记下，不再记的划掉（叫醒的一轮做完才换）
             if changes.held != progress.held {
                 progress.held = changes.held
                 save()
@@ -115,6 +116,18 @@ extension CueKeeper {
             schedule(deadlines.min())
         } catch {
             Self.log.error("Cue 对账失败：\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// 他发起的一轮停下当场留给他回（`CueStore.leaveHisStops`），留了就立即上传：手机上马上进等你。
+    private func leaveHisStops() async {
+        guard let from = handedOver ?? progress.marks?.sessions else { return }
+        do {
+            let (mark, left) = try await store.leaveHisStops(after: from)
+            handedOver = mark
+            if let left { await setup.upload([left]) }
+        } catch {
+            Self.log.error("他那一轮的停下没能留给他回：\(error.localizedDescription, privacy: .public)")
         }
     }
 

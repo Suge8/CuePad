@@ -10,8 +10,8 @@ extension CueStore {
   /// （这些从 `marks.sessions` 之后算；还没开成会话的事也报），叶子或任务完成（从 `marks.tasks` 之后算），
   /// 等子代理停住（停住的时刻在 `marks.stalls` 之后、不晚于 `now`；序号是会话记录的）。等子代理本身不是变化：子代理的结果交回、会话为它跑完那一轮歇下才报。
   /// 会话里用户说的话不另报：他那一轮歇下时变化标着这一轮是他说的（`CueChange.byUser`）。
-  /// 会话停着（`CueChange.isStop`）归谁接手只在这里定（`hisStop`）：Cue 开的这一轮归 Cue；他开的（机器消息开的跟着它之前那句，见 `turnOpener`）、停下时他在场（`SessionPresence`）归他，
-  /// 不报给 Cue、记进 `held`。管理器把上次的 `held` 交回来：归他的停下等他离开，会话还停在那一次、也没留给他（`CueLeft`）就作为变化报给 Cue。
+  /// 会话停着（`PiSessionState.atStop`）：Cue 开的这一轮报给它定谁接手；他开的（`hisTurn`）已当场留给他回（`leaveHisStops`），Cue 之后看一眼再定收不收回、推不推进，
+  /// 停下时他在场（`SessionPresence`）就先不报、记进 `held`。管理器把上次的 `held` 交回来：等他离开，会话还停在那一次就作为变化报给 Cue。
   public func cueChanges(after marks: CueMarks, held: [String: Date] = [:], at now: Date = .now) throws -> CueChanges {
     var held = held
     let tasks = try topTasks(where: "(t.completedAt IS NULL OR t.writeSeq > ?) AND \(Self.hasSession)", [marks.tasks])
@@ -29,7 +29,7 @@ extension CueStore {
     func seq(_ card: Card) -> Int { cardSeqs[card.id.uuidString.lowercased()] ?? 0 }
     func report(_ session: PiSessionState, seq: Int, task: Card?, leaf: Card?) throws {
       guard let change = try sessionChange(session, seq: seq, task: task, leaf: leaf) else { return }
-      if change.isStop, try hisStop(session.sessionID) != nil { held[session.sessionID] = session.stateSince } else { changes.append(change) }
+      if session.atStop, try hisStop(session.sessionID) != nil { held[session.sessionID] = session.stateSince } else { changes.append(change) }
     }
     func stall(_ session: PiSessionState, seq: Int, task: Card?, leaf: Card?) {
       guard let at = session.stallsAt, at <= now, marks.stalls.map({ at > $0 }) ?? true else { return }
@@ -95,13 +95,29 @@ extension CueStore {
       }
     guard let kind else { return nil }
     return CueChange(
-      kind: kind, task: task, leaf: leaf, session: session, byUser: try turnOpener(session.sessionID) == .user, at: session.stateSince, seq: seq,
+      kind: kind, task: task, leaf: leaf, session: session, byUser: try hisTurn(session.sessionID), at: session.stateSince, seq: seq,
       detail: detail, recap: session.recap, interrupted: session.state == .known(.interrupted))
   }
 
-  /// 停着的会话此刻归他（返回他的在场）：这一轮不是 Cue 开的（`turnOpener`），他在场；归 Cue 为 nil。谁接手只认这一处。
-  func hisStop(_ sessionID: String) throws -> SessionPresence? {
-    guard try turnOpener(sessionID) != .cue else { return nil }
+  /// 他发起的一轮停下时，CuePad 当场把这次停下留给他回（`CueLeft`：歇着、出错的待回复，在等回答的成了他的拍板），不等 Cue 醒来判断：
+  /// 写入序号 `mark` 之后写过、停在要人接手处（`PiSessionState.atStop`）、这一轮是他的（`hisTurn`）的会话。Cue 开的那一轮停下仍报给 Cue 定（`cueChanges`）。
+  /// 返回这次读到的最新序号（下次从它之后算：Cue 收回的不会再留回去）与要不要立即上传 Cue 此刻那一行（记录 id）。值班的管理器每次对账先做，Cue 在跑一轮也不等。
+  public func leaveHisStops(after mark: Int) throws -> (mark: Int, left: UUID?) {
+    try write {
+      let latest = try lastWrite()
+      guard latest > mark else { return (latest, nil) }
+      let stopped = try select(PiSessionState.self, where: "state IN (\(sqlList(PiWorkState.allCases.filter(\.isStopped)))) AND writeSeq > ?", [mark])
+      let his = try stopped.filter { try $0.atStop && hisTurn($0.sessionID) }
+      return (latest, try putLeft(his) ? CueState.recordID : nil)
+    }
+  }
+
+  /// 会话最近这一轮是他的：不是 Cue 开的（`turnOpener`，机器消息开的跟着它之前那句）。停下归谁只认这一处。
+  private func hisTurn(_ sessionID: String) throws -> Bool { try turnOpener(sessionID) != .cue }
+
+  /// 他的停下（`hisTurn`）此刻他在场（返回他的在场）：先不报给 Cue；Cue 的、他不在场的为 nil。
+  private func hisStop(_ sessionID: String) throws -> SessionPresence? {
+    guard try hisTurn(sessionID) else { return nil }
     return try presence(in: sessionID)
   }
 
@@ -117,18 +133,17 @@ extension CueStore {
     return viewing || spokeAt != nil ? SessionPresence(viewing: viewing, spokeAt: spokeAt) : nil
   }
 
-  /// 归他的停下（会话 id → 那次停下的起点）此刻怎样了：会话动了（谁说了话、结束了）、不再停着（`CueChange.isStop`）或已留给他的不再记；
-  /// 还归他的接着记，给出最早会到点的离开时刻；他离开了的作为变化报给 Cue（`reported` 里已有这个会话的变化就不重复）。
+  /// 他在场时的停下（会话 id → 那次停下的起点）此刻怎样了：会话动了（谁说了话、结束了）、不再停着（`PiSessionState.atStop`）的不再记；
+  /// 他还在场的接着记，给出最早会到点的离开时刻；他离开了的作为变化报给 Cue（`reported` 里已有这个会话的变化就不重复）。
   private func heldChanges(_ held: [String: Date], reported: Set<String>) throws -> CueChanges {
     var result = CueChanges(due: [], held: [:], lapse: nil)
     guard !held.isEmpty else { return result }
-    let left = try cueState()?.left ?? []
     let sessions = try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(held.keys.sorted())])
     let seqs = try writeSeqs(of: .piSessionStates, "sessionID", sessions.map(\.sessionID))
     let owners = try sessionOwners(sessions.map(\.sessionID))
-    for session in sessions where session.stateSince.stored == held[session.sessionID]?.stored && !left.contains(where: { $0.holds(for: session) }) {
+    for session in sessions where session.stateSince.stored == held[session.sessionID]?.stored && session.atStop {
       let owner = owners[session.sessionID]
-      guard let change = try sessionChange(session, seq: seqs[session.sessionID] ?? 0, task: owner?.task, leaf: owner?.leaf), change.isStop else { continue }
+      guard let change = try sessionChange(session, seq: seqs[session.sessionID] ?? 0, task: owner?.task, leaf: owner?.leaf) else { continue }
       if let presence = try hisStop(session.sessionID) {
         result.held[session.sessionID] = session.stateSince
         if let lapse = presence.lapse { result.lapse = min(result.lapse ?? lapse, lapse) }

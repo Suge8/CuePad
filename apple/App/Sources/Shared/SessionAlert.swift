@@ -11,6 +11,8 @@ struct SessionAlert: Equatable, Identifiable {
     let title: String
     let question: String?
     let reply: String?
+    /// 出错时的原因（待回复的正文用它）
+    let failure: String?
 
     init(_ state: PiSessionState, _ kind: PiAlert) {
         session = state.id
@@ -18,9 +20,12 @@ struct SessionAlert: Equatable, Identifiable {
         title = state.title
         question = state.question?.text
         reply = state.lastReply
+        failure = state.state == .known(.error) ? state.detail : nil
     }
 
-    var content: (title: String, body: String) { PiAlertText.content(title: title, question: question, reply: reply, kind: kind) }
+    var content: (title: String, body: String) {
+        PiAlertText.content(title: title, question: question, reply: reply, failure: failure, kind: kind)
+    }
 
     var text: Dotted { Dotted("\(content.title)：\(content.body)") }
 
