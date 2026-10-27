@@ -59,7 +59,6 @@ private struct PreviewPDF: NSViewRepresentable {
         host.pdf.displayMode = .singlePageContinuous
         host.pdf.backgroundColor = NSColor(palette.desk)
         context.coordinator.view = host.pdf
-        DebugHooks.pdfShown(host)
         return host
     }
 

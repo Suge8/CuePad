@@ -823,38 +823,6 @@
         }
       }
     },
-    "一、投送队列本月上线，超时不再静默。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1. The delivery queue shipped this month; timeouts are no longer silent."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "一、投送队列本月上线，超时不再静默。"
-          }
-        }
-      }
-    },
-    "三、风险：投送重试与额度提醒还缺验收。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "3. Risks: delivery retries and quota alerts still need sign-off."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "三、风险：投送重试与额度提醒还缺验收。"
-          }
-        }
-      }
-    },
     "三档价格对比表" : {
       "localizations" : {
         "en" : {
@@ -1059,22 +1027,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "乱序的根因在重连时重新入队，修复要保留首次加入的时间"
-          }
-        }
-      }
-    },
-    "二、同步：附件按需取，空间满时先留在本机。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "2. Sync: attachments download on demand and stay local when storage is full."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "二、同步：附件按需取，空间满时先留在本机。"
           }
         }
       }
@@ -2439,22 +2391,6 @@
         }
       }
     },
-    "四、下季度：Cue 记得什么、多 Agent 圆桌。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "4. Next quarter: what Cue remembers, multi-agent roundtables."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "四、下季度：Cue 记得什么、多 Agent 圆桌。"
-          }
-        }
-      }
-    },
     "回复要短，先说结论" : {
       "localizations" : {
         "en" : {
@@ -2851,22 +2787,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "好，我先让 auth 会话复现一下。"
-          }
-        }
-      }
-    },
-    "季度复盘" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quarterly Review"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "季度复盘"
           }
         }
       }

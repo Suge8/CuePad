@@ -41,7 +41,6 @@ struct PreviewPDF: UIViewRepresentable {
         let view = PDFView()
         view.isFindInteractionEnabled = true
         finds?.register(file, view.findInteraction)
-        DebugHooks.pdfShown(view)
         view.displayMode = .singlePageContinuous
         view.displaysPageBreaks = true
         view.pageBreakMargins = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
