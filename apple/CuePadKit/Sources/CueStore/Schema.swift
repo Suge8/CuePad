@@ -113,11 +113,11 @@ enum Schema {
     "ALTER TABLE deliveryRequests ADD COLUMN serverAt INTEGER;",
     // 75：定时（`CueMemoryLine`）：重复规则与挂在哪件任务上
     "ALTER TABLE cueLines ADD COLUMN repeats TEXT; ALTER TABLE cueLines ADD COLUMN taskID TEXT;",
-    // 76：各台 Mac 的技能与说明（`AgentLibrary`）
+    // 76：各台 Mac 的技能与规则（`AgentLibrary`）
     "\(agentLibrariesTable) \(modifiedIndex(.agentLibraries))",
   ]
 
-  /// 技能与说明的快照：每台 Mac 自己写一条、各端读（`AgentLibrary`）。
+  /// 技能与规则的快照：每台 Mac 自己写一条、各端读（`AgentLibrary`）。
   static let agentLibrariesTable = """
     CREATE TABLE agentLibraries (
       id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, home TEXT NOT NULL, skills TEXT, instructions TEXT, tidies TEXT, selfManaged TEXT,

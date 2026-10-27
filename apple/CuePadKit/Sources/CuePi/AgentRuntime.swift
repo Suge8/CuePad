@@ -21,7 +21,7 @@ public struct AgentPaths: Sendable, Equatable {
         }
     }
 
-    /// 几家共读的目录（`~/.agents`，`CUEPAD_AGENTS_DIR` 换走）：全局技能 `skills`、全局说明 `AGENTS.md`，CuePad 的技能也写在这里。
+    /// 几家共读的目录（`~/.agents`，`CUEPAD_AGENTS_DIR` 换走）：全局技能 `skills`、全局规则 `AGENTS.md`，CuePad 的技能也写在这里。
     /// 环境变量是 CuePad 自己的（各家都按家目录读它）：隔离实例与测试经它换到临时目录。
     public var agentsDirectory: URL { directory("CUEPAD_AGENTS_DIR") ?? user(".agents") }
 

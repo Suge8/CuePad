@@ -55,6 +55,6 @@ def isolated_env(library, sockets=SOCKETS):
 
 
 # 各家配置目录的变量 → 隔离库里的目录名；XDG 两项是 OpenCode 的服务登记（XDG_STATE_HOME）与会话数据（XDG_DATA_HOME），
-# 不换的话隔离实例会连上用户在跑的 OpenCode 服务、或把拉起的服务落在真实目录；CUEPAD_AGENTS_DIR 是几家共读的 ~/.agents（技能与说明）
+# 不换的话隔离实例会连上用户在跑的 OpenCode 服务、或把拉起的服务落在真实目录；CUEPAD_AGENTS_DIR 是几家共读的 ~/.agents（技能与规则）
 AGENT_HOMES = {"PI_CODING_AGENT_DIR": "pi", "CLAUDE_CONFIG_DIR": "claude", "CODEX_HOME": "codex", "OPENCODE_CONFIG_DIR": "opencode",
                "XDG_STATE_HOME": "state", "XDG_DATA_HOME": "data", "CUEPAD_AGENTS_DIR": "shared"}

@@ -50,7 +50,7 @@ extension DebugScene {
 
     #if os(macOS)
     /// 每次启动、只要是隔离库（演示库、性能库，也包括真实数据复现的只读副本），这台 Mac 上绑在真实主目录下的文件夹都改绑到演示主目录
-    /// （`DemoLibrary.demoHome`，在隔离库里），保留主目录下的相对路径：实例会真去读写绑定的文件夹（技能与说明的扫描、整理与改说明），
+    /// （`DemoLibrary.demoHome`，在隔离库里），保留主目录下的相对路径：实例会真去读写绑定的文件夹（技能与规则的扫描、整理与改规则），
     /// 绑在真实主目录下就会改到真的仓库；旧版本的演示种子绑的就是真实主目录（`~/Project/cuepad`），库在了不重写。
     /// 所以副本里项目绑的文件夹也不是原来那些。`-CuePadFolder` 明说要绑的那个照旧（隔离实例里真跑 Cue 派活要它）。
     private static func isolateBoundFolders(_ store: CueStore) async {
