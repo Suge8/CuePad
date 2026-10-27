@@ -59,7 +59,7 @@ extension Workspace {
 /// 玻璃按内容宽画再居中时，状态一换（进出"正在同步"、开始结束工作、计时进位）玻璃就变宽变窄、名字左右挪。
 /// Cue 页的页头也在这一位（`CueTitle`，同一块玻璃、同样的宽度规则），只在侧栏收起时有（同 `ProjectSwitcher` 只在收起时写当前页）。
 /// 一页里换看哪一段的分段也在这一位（技能与规则页，`LibraryPanesSlot`，同手机页顶中间）；进展页的例外见 `PanesSlot`。
-/// 开着盖在页上的编辑页时这一位是它的标题与次要一行（`OverlayTitle`）。
+/// 开着盖在页上的编辑页时这一位是它的标题与次要一行（`OverlayTitle`）：两行短字，玻璃按字收窄、居中，标题位的宽照旧。
 struct PageTitleSlot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -146,16 +146,23 @@ struct PageTitleSlot: View {
     }
 }
 
-/// 标题位在 `minWidth`～`width` 之间由工具栏给：理想宽写最窄（工具栏按理想宽量最少要多宽），能放多宽由 `ToolbarItemFlex` 告诉工具栏。玻璃铺满给的宽。
-struct PageTitleFlex: ViewModifier {
-    var alignment = Alignment.leading
-
+/// 标题位在 `minWidth`～`width` 之间由工具栏给：理想宽写最窄（工具栏按理想宽量最少要多宽），能放多宽由 `ToolbarItemFlex` 告诉工具栏。
+/// 标题位本身的宽只随窗口变；玻璃画在里面的内容上（`PageTitleFlex` 铺满，`OverlayTitle` 按字收窄）。
+struct PageTitleWidth: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .frame(maxWidth: .infinity, alignment: alignment)
-            .glass(in: .capsule)
             .frame(minWidth: PageTitleSlot.minWidth, idealWidth: PageTitleSlot.minWidth, maxWidth: PageTitleSlot.width)
             .background { ToolbarItemFlex(width: PageTitleSlot.minWidth...PageTitleSlot.width) }
+    }
+}
+
+/// 玻璃铺满标题位、内容靠左（会话标题、Cue 的页头：状态一换玻璃不变宽变窄，见 `PageTitleSlot`）。
+private struct PageTitleFlex: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glass(in: .capsule)
+            .modifier(PageTitleWidth())
     }
 }
 

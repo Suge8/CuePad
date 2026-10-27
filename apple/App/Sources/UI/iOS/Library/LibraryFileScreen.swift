@@ -29,7 +29,7 @@ struct LibraryFileScreen: View {
                 let theme = CueEditorTheme.editor(palette, horizontalInset: 20)
                 ZStack {
                     IOSEditorHost(initialText: draft.body, theme: theme, handle: draft.handle,
-                                  onChange: { draft.changed(body: $0) }, onError: workspace.fail)
+                                  onChange: { draft.changed(body: $0) }, onError: workspace.fail, editable: blocks == nil)
                     .opacity(blocks == nil ? 1 : 0)
                     if let blocks {
                         MergePreview(blocks: blocks, theme: theme).background(palette.paper)

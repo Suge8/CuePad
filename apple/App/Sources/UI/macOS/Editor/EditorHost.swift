@@ -6,6 +6,8 @@ import SwiftUI
 /// 对编辑器的操作口：底部操作栏经它取当前正文与选中部分。
 final class EditorHandle {
     fileprivate weak var textView: CueTextView?
+    /// 停用时编辑器拿着键盘：再启用时还给它
+    fileprivate var refocus = false
 
     var text: String? { textView?.storedText }
     /// 选中部分的存储格式；没选中为 nil。
@@ -34,6 +36,8 @@ struct EditorHost: NSViewRepresentable {
     /// ⌘↩ 的主动作（见 `CueTextView.onSubmit`）。
     var onSubmit: (() -> Void)?
     var onError: (any Error) -> Void = { _ in }
+    /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）交出键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
+    var editable = true
     @Environment(AppServices.self) private var services
 
     func makeNSView(context: Context) -> CueEditorView {
@@ -60,7 +64,20 @@ struct EditorHost: NSViewRepresentable {
         textView.selectionActions = selectionActions
         textView.onSubmit = onSubmit
         textView.onError = onError
+        if textView.isEditable != editable { setEditable(textView) }
         if !Self.sameLook(textView.theme, theme) { textView.theme = theme }
+    }
+
+    private func setEditable(_ textView: CueTextView) {
+        let window = textView.window
+        if !editable {
+            handle.refocus = window?.firstResponder === textView
+            if handle.refocus { window?.makeFirstResponder(nil) }
+        }
+        textView.isEditable = editable
+        textView.isSelectable = editable
+        textView.setAccessibilityElement(editable)
+        if editable, handle.refocus { window?.makeFirstResponder(textView) }
     }
 
     /// 主题每次渲染都新建，只在外观相关的值真的变了才替换（替换会重排全文）。

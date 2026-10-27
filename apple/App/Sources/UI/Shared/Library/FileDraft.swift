@@ -158,7 +158,14 @@ final class FileDraft {
     private func mark() { if dirty != (text != base) { dirty = text != base } }
 
     /// 页顶次要一行里写的存好没有（Mac 自动存，手机发往 Mac）；文件在别处改过、等你选时不写，文件页顶上那一条写（`ConflictBar`）。
-    var shownState: String? {
+    var shownState: String? { Self.shown(state, dirty: dirty) }
+
+    /// 最长的那个（页顶按它留宽，换字时不伸缩）。
+    static var longestShownState: String {
+        [State.saving, .saved, .followed, .failed, .idle].compactMap { shown($0, dirty: true) }.max { $0.count < $1.count } ?? ""
+    }
+
+    private static func shown(_ state: State, dirty: Bool) -> String? {
         #if os(macOS)
         switch state {
         case .saving: SaveState.saving.text

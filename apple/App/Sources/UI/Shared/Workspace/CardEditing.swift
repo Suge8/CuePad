@@ -78,6 +78,9 @@ enum SaveState: Equatable {
 
     static let savedDisplay: Duration = .seconds(1.5)
 
+    /// 最长的那个（页顶按它留宽，换字时不伸缩）。
+    static var longestText: String { [saving, saved, failed].compactMap(\.text).max { $0.count < $1.count } ?? "" }
+
     var text: String? {
         switch self {
         case .idle: nil

@@ -53,7 +53,7 @@ private struct LibraryFilePage: View {
                 ZStack {
                     EditorHost(
                         initialText: draft.body, theme: theme, handle: draft.handle,
-                        onChange: { draft.changed(body: $0) })
+                        onChange: { draft.changed(body: $0) }, editable: blocks == nil)
                     .opacity(blocks == nil ? 1 : 0)
                     if let blocks {
                         MergePreview(blocks: blocks, theme: theme).background(palette.desk)
@@ -87,10 +87,12 @@ private struct LibraryFilePage: View {
 
     /// 工具栏中间那一块：标题同手机（技能是全局或项目名，规则是名字），次要一行是文件名与存好没有（还没有这个文件时写还没有：写了就建出来）；完整路径悬停看（多是一长串家目录里的点目录）。
     private func header(_ library: AgentLibrary?, entry: (path: String, textPath: String, hash: String?)?) -> OverlayHeader.Content {
-        OverlayHeader.Content(
+        let name = entry.map { URL(filePath: $0.textPath).lastPathComponent }
+        return OverlayHeader.Content(
             page: .library(file), title: workspace.fileTitle(file, in: library),
-            detail: Dotted(entry.map { URL(filePath: $0.textPath).lastPathComponent }, draft?.shownState ?? (entry?.hash == nil ? String(localized: "还没有") : nil)),
-            failed: draft?.state == .failed, help: entry.flatMap { library?.shown($0.textPath) })
+            detail: Dotted(name, draft?.shownState ?? (entry?.hash == nil ? String(localized: "还没有") : nil)),
+            failed: draft?.state == .failed, help: entry.flatMap { library?.shown($0.textPath) },
+            widest: Dotted(name, FileDraft.longestShownState))
     }
 
     private func merge(_ library: AgentLibrary) -> LibraryTidy? {

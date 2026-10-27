@@ -6,6 +6,8 @@ import UIKit
 /// 对编辑器的操作口：插入图片、取当前正文与选中部分。
 final class IOSEditorHandle {
     fileprivate weak var view: CueTextView?
+    /// 停用时编辑器拿着键盘：再启用时还给它
+    fileprivate var refocus = false
 
     var text: String? { view?.storedText }
     /// 选中部分的存储格式；没选中为 nil。
@@ -34,6 +36,8 @@ struct IOSEditorHost: UIViewRepresentable {
     var onError: (any Error) -> Void = { _ in }
     /// 高贴着字、自己不滚（任务气泡：整张纸一起滚）；否则铺满给的地方、在里面滚（纸页）。
     var fits = false
+    /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）收起键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
+    var editable = true
     @Environment(AppServices.self) private var services
 
     func makeCoordinator() -> KeyboardBar.Actions { KeyboardBar.Actions() }
@@ -65,9 +69,21 @@ struct IOSEditorHost: UIViewRepresentable {
         view.onError = onError
         context.coordinator.insertImage = onInsertImage ?? {}
         context.coordinator.variables = onVariables ?? {}
+        if view.isEditable != editable { setEditable(view) }
         if view.theme.textColor != theme.textColor || view.theme.horizontalInset != theme.horizontalInset || view.theme.title?.color != theme.title?.color {
             view.theme = theme
         }
+    }
+
+    private func setEditable(_ view: CueTextView) {
+        if !editable {
+            handle.refocus = view.isFirstResponder
+            view.resignFirstResponder()
+        }
+        view.isEditable = editable
+        view.isSelectable = editable
+        view.isAccessibilityElement = editable
+        if editable, handle.refocus { view.becomeFirstResponder() }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: CueTextView, context: Context) -> CGSize? {

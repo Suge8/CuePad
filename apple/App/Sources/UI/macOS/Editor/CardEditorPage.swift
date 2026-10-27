@@ -122,12 +122,12 @@ struct CardEditorPage: View {
     /// 工具栏中间那一块：标题是项目名，次要一行是改于什么时候、置顶与存好没有（同手机编辑页的页顶）。
     private var header: OverlayHeader.Content {
         let card = data?.card
+        let edited = card.map { String(localized: "改于 \(DateLabel.short($0.modifiedAt))") }
+        let pinned = card?.isPinned == true ? String(localized: "已置顶") : nil
         return OverlayHeader.Content(
             page: .card(cardID), title: data?.project?.shownName ?? "",
-            detail: Dotted(
-                card.map { String(localized: "改于 \(DateLabel.short($0.modifiedAt))") }, card?.isPinned == true ? String(localized: "已置顶") : nil,
-                editing?.saveState.text),
-            failed: editing?.saveState == .failed)
+            detail: Dotted(edited, pinned, editing?.saveState.text),
+            failed: editing?.saveState == .failed, widest: Dotted(edited, pinned, SaveState.longestText))
     }
 
     private func editor(_ card: Card, _ editing: CardEditing) -> some View {
