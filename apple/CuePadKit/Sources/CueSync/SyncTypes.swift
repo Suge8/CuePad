@@ -145,7 +145,7 @@ public struct SyncState: Equatable, Sendable {
   /// 这台的库和 iCloud 完整对过至少一遍：库里有同步区令牌（拉完第一遍才存，换账号、云端数据被删或重置时清掉）。
   /// 没对过时，别的设备写下的事实（Cue 在哪台启用）可能还没到。
   public var reconciled: Bool
-  /// iCloud 空间不足，文件停在本机不往上传（隔一阵再试，`FileSender.quotaPause`）；别的记录照常同步，`status` 不因它变。
+  /// iCloud 空间不足，文件停在本机不往上传（隔一阵再试，`SyncCoordinator.quotaPause`）；别的记录照常同步，`status` 不因它变。
   public var filesOverQuota: Bool
 
   public init(
