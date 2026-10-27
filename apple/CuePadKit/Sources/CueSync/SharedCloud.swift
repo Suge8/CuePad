@@ -89,7 +89,7 @@ struct SharedCloud: SyncCloud {
       var batch = ZoneChangeBatch(modifications: [], deletions: [], token: Data(String(taken.last?.seq ?? after).utf8), moreComing: rows.count > Self.page)
       for row in taken {
         if let data = row.data {
-          batch.modifications.append(try Self.record(data, keys: keys))
+          batch.modifications.append(try Self.record(data))
         } else {
           batch.deletions.append((CKRecord.ID(recordName: row.name, zoneID: Self.zoneID), row.type))
         }
@@ -106,7 +106,7 @@ struct SharedCloud: SyncCloud {
     let row = try admit("records")
     await wait(latency.records)
     let found = try database { db in
-      try ids.compactMap { id in try db.blob("SELECT data FROM records WHERE name = ?", id.recordName).map { try Self.record($0, keys: []) } }
+      try ids.compactMap { id in try db.blob("SELECT data FROM records WHERE name = ?", id.recordName).map { try Self.record($0) } }
     }
     finish(row, landed: Date.now.timeIntervalSince1970, names: found.map { "\($0.recordType):\($0.recordID.recordName)" })
     return found
@@ -122,7 +122,7 @@ struct SharedCloud: SyncCloud {
   func downloadFile(_ id: CKRecord.ID, progress: @escaping @Sendable (Double) -> Void) async throws -> CKRecord? {
     let row = try admit("file-download")
     await wait(latency.records)
-    let found = try database { db in try db.blob("SELECT data FROM records WHERE name = ?", id.recordName).map { try Self.record($0, keys: nil) } }
+    let found = try database { db in try db.blob("SELECT data FROM records WHERE name = ?", id.recordName).map { try Self.record($0, withFile: true) } }
     await transfer(Latency.transfer(found.map { [$0] } ?? [], rate: latency.assetDown), progress)
     finish(row, landed: Date.now.timeIntervalSince1970, names: found.map { ["\($0.recordType):\($0.recordID.recordName)"] } ?? [])
     return found
@@ -226,10 +226,10 @@ struct SharedCloud: SyncCloud {
 
   private func wait(_ spec: [Double]) async { try? await Task.sleep(for: .seconds(Latency.draw(spec))) }
 
-  /// `keys` 没要文件字段时去掉文件（同 CloudKit 的 desiredKeys：不下载）。
-  private static func record(_ data: Data, keys: [String]?) throws -> CKRecord {
+  /// 存下的一条记录；只有取文件（`downloadFile`）带着文件，拉取与按 ID 取同 CloudKit 那样不带（`FileCloud`）。
+  private static func record(_ data: Data, withFile: Bool = false) throws -> CKRecord {
     guard let record = try NSKeyedUnarchiver.unarchivedObject(ofClass: CKRecord.self, from: data) else { throw CKError(.internalError) }
-    if let keys, !keys.contains(RecordMapper.fileKey) { record[RecordMapper.fileKey] = nil }
+    if !withFile { record[RecordMapper.fileKey] = nil }
     return record
   }
 
