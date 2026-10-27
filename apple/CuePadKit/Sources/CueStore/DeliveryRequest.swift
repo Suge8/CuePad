@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 public enum DeliveryStatus: String, Sendable, CaseIterable {
@@ -112,6 +113,9 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   /// 新会话请求的内容；其他方式为 nil。
   public var launch: PiLaunch? { mode == .known(.start) ? PiLaunch(stored: content) : nil }
+
+  /// 要交出去的话里引用的附件（开工的是开场的话里的）。
+  public var attachmentKeys: [String] { CueFormat.attachmentKeys(in: launch?.prompt ?? content) }
 
   /// 绑定文件夹请求的内容；其他方式、读不出的为 nil。
   public var bind: PiBind? { mode == .known(.bind) ? PiBind(stored: content) : nil }

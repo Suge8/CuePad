@@ -42,7 +42,7 @@ final class MacExecutor {
         let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [reportIssue] error in
             let message = String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)")
             Task { @MainActor in reportIssue(message) }
-        }, onWritten: upload) { [weak self] request in
+        }, onWritten: upload, fetchFile: { [fetchFile] key in _ = try await fetchFile(key) }) { [weak self] request in
             guard let self else { return .failed(ShownText("这台 Mac 上的 CuePad 正在退出")) }
             return await self.run(request)
         }
@@ -120,7 +120,6 @@ final class MacExecutor {
     /// 交给会话的一句（存储格式）：附件先取到本机，图片另附，文件写成路径（`SendContent.agentText`）。
     private func message(_ stored: String, of request: DeliveryRequest) async throws -> PiMessage {
         let content = SendContent(stored: stored)
-        try await content.fetchAttachments(store.files, using: fetchFile)
         // 图片拿走后留下的空行不发
         return PiMessage(text: try content.agentText(from: store.files).trimmingCharacters(in: .whitespacesAndNewlines), images: try content.piImages(from: store.files), deliveryID: request.id.uuidString)
     }
@@ -152,7 +151,6 @@ final class MacExecutor {
     private func runCommand(_ request: DeliveryRequest) async throws {
         let content = SendContent(stored: request.content)
         guard !content.hasImages else { throw SendError.imagesNotSupported }
-        try await content.fetchAttachments(store.files, using: fetchFile)
         let (ref, id) = try await connect(request.target)
         try await pi.command(try content.agentText(from: store.files).trimmingCharacters(in: .whitespacesAndNewlines), in: id)
         if let card = request.cardID { try await store.linkCard(card, toSession: ref) }

@@ -78,7 +78,12 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
 
     func resolve(_ resolution: SyncResolution) async throws {}
     var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }
-    func fetchFile(_ key: String) async throws -> URL { throw FileFetchFailure.notSyncing }
+    /// `fetchFile` 怎么取（像从 iCloud 取来）；没给是这台不同步
+    let fetching = Mutex<(@Sendable (String) async throws -> URL)?>(nil)
+    func fetchFile(_ key: String) async throws -> URL {
+        guard let fetch = fetching.withLock({ $0 }) else { throw FileFetchFailure.notSyncing }
+        return try await fetch(key)
+    }
 }
 
 /// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键；iOS 的私有命名剪贴板，

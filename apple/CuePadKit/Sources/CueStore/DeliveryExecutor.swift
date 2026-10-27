@@ -87,7 +87,8 @@ extension CueStore {
 /// 把结果写回请求；完成的请求保留 `retention` 后清理（发出的话等它进对话、等认领的开新会话请求等认领，见 `deleteCompletedDeliveries`）。
 /// - 服务器收下后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）。从服务器收下算、不从写下算：
 ///   在发出的设备上等着的那段（断网、要更新）你看得到它在等、撤得回，传上来就照常执行，同对 Cue 说的话；本机写的从写下算；
-/// - 请求引用的附件不在本机照样领取，由执行它的 App 层当场取来（`SendContent.fetchAttachments`）；
+/// - 请求引用的附件不在本机时先在旁边取（`fetchFile`，一条请求一个任务），取齐才进队执行：等文件不占执行队列，
+///   后面发给别的会话、对 Cue 说的话照常先执行；取不来按失败写回；
 /// - 暂时没成的（`DeliveryOutcome.transient`）重试一次，再不成按失败写回；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
 /// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
@@ -107,6 +108,10 @@ public actor DeliveryExecutor {
   private let onIssue: @Sendable (any Error) -> Void
   private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
   private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
+  /// 把一个附件取到本机（App 给的 `AppServices.fetchFile`）：执行器等附件文件只在这里；缺省是这台取不来
+  private let fetchFile: @Sendable (String) async throws -> Void
+  /// 在旁边取附件的请求
+  private var fetching: [DeliveryRequest.ID: Task<Void, Never>] = [:]
   private static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
   private var watcher: Task<Void, Never>?
   private var cleanup: Task<Void, Never>?
@@ -119,6 +124,7 @@ public actor DeliveryExecutor {
     store: CueStore, hostID: String,
     timing: Timing = .system, onIssue: @escaping @Sendable (any Error) -> Void,
     onWritten: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
+    fetchFile: @escaping @Sendable (String) async throws -> Void = { _ in throw CueStoreError.notFound },
     handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
   ) {
     self.store = store
@@ -127,6 +133,7 @@ public actor DeliveryExecutor {
     self.onIssue = onIssue
     self.onWritten = onWritten
     self.handler = handler
+    self.fetchFile = fetchFile
   }
 
   public func start() async throws {
@@ -147,6 +154,8 @@ public actor DeliveryExecutor {
     watcher = nil
     cleanup?.cancel()
     cleanup = nil
+    fetching.values.forEach { $0.cancel() }
+    fetching = [:]
   }
 
   private func process() async {
@@ -171,6 +180,11 @@ public actor DeliveryExecutor {
       }
       if case .unknown(let raw) = request.mode {
         await finish(request, .failed(ShownText("这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）")))
+        continue
+      }
+      let missing = request.attachmentKeys.filter { store.files.fileURL(for: $0) == nil }
+      if !missing.isEmpty {
+        fetch(missing, for: request)
         continue
       }
       if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true {
@@ -198,6 +212,28 @@ public actor DeliveryExecutor {
     let took = timing.now().timeIntervalSince(started)
     Self.log.info("执行投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public) 用时 \(took, format: .fixed(precision: 2)) 秒")
     await finish(request, outcome)
+  }
+
+  /// 在旁边把这条请求的附件取齐：取到了再过一遍队列（文件不在库里，库的变化叫不醒执行器），取不来按失败写回。
+  private func fetch(_ keys: [String], for request: DeliveryRequest) {
+    guard fetching[request.id] == nil else { return }
+    fetching[request.id] = Task { [fetchFile] in
+      do {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+          for key in Set(keys) { group.addTask { try await fetchFile(key) } }
+          try await group.waitForAll()
+        }
+        await self.fetched(request, failure: nil)
+      } catch {
+        await self.fetched(request, failure: error)
+      }
+    }
+  }
+
+  private func fetched(_ request: DeliveryRequest, failure: (any Error)?) async {
+    guard fetching.removeValue(forKey: request.id) != nil else { return }  // 停下了
+    if let failure { await finish(request, .failed(ShownText(failure))) }
+    await process()
   }
 
   private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome) async {

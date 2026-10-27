@@ -97,6 +97,9 @@ final class CueKeeper {
     /// 做完的几轮，旧的在前，至多 `roundsKept`
     private var history: [CueRound] = []
     @ObservationIgnored private var roundCount = 0
+    /// 你的话里的附件正在旁边取的（`ready(_:)`）与取不来、照交的
+    @ObservationIgnored var fetchingFiles: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored var unfetchable: Set<UUID> = []
 
     init(_ setup: Setup) {
         self.setup = setup
@@ -191,6 +194,8 @@ final class CueKeeper {
     /// 不再值班；返回的过程等大脑退出（不需要主线程，退出收尾时在主线程之外等）。
     @discardableResult
     func stop() -> @Sendable () async -> Void {
+        fetchingFiles.values.forEach { $0.cancel() }
+        fetchingFiles = [:]
         input.yield(.stop)
         let wait = shift?.brain.stop()
         return { await wait?() }

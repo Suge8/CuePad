@@ -40,7 +40,7 @@ extension SendContent {
     }
 
     /// 交给 Agent 的文字：图片去掉（另作 `piImages`），文件在原处换成自成一行的"附件：文件名（路径）"（`AttachmentFiles.agentLine`）。
-    /// 文件要已在本机（先 `fetchAttachments`），不在抛 `SendError.attachmentUnavailable`。
+    /// 文件要已在本机（投送执行器取齐了才执行），不在抛 `SendError.attachmentUnavailable`。
     func agentText(from files: AttachmentFiles) throws -> String {
         var text = ""
         for (index, token) in tokens.enumerated() {
@@ -57,11 +57,4 @@ extension SendContent {
     }
 }
 
-extension SendContent {
-    /// 把正文里的附件都取到这台 Mac 上（发给会话、开工、斜杠命令、交给 Cue 之前）：等附件文件只在这里，本机没有的经同步现取、记录没到就等它到
-    /// （`AppServices.fetchFile`）。投送执行器因此不等附件到了才领取。
-    func fetchAttachments(_ files: AttachmentFiles, using fetchFile: FileFetching) async throws {
-        for key in attachmentKeys where files.fileURL(for: key) == nil { _ = try await fetchFile(key) }
-    }
-}
 #endif

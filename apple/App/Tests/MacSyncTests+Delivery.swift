@@ -1,5 +1,7 @@
 #if os(macOS)
+import CryptoKit
 import CueStore
+import CueText
 import CueSync
 import Foundation
 import Testing
@@ -59,6 +61,41 @@ extension MacSyncTests {
         }
         #expect(rig.host.calls.isEmpty)
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
+    }
+
+    /// 别的设备写下的请求带着还没到这台 Mac 的大附件、排在前面，发给另一个会话的一句在后：后一句先执行完，不等文件（等文件不占执行队列）；
+    /// 文件执行时现取（`AppServices.fetchFile`），取到了前一句照常发出，会话收到的是本机那份的路径。
+    @Test func 附件还没到的请求不挡后面的话_执行时现取_取到后照常发出() async throws {
+        let app = try await rig.host.connect("sess-1", cwd: "/work/app")
+        let web = try await rig.host.connect("sess-2", cwd: "/work/web")
+        let movie = Data(repeating: 3, count: 2_000_000)
+        let source = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)/录屏.mov")
+        try FileManager.default.createDirectory(at: source.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try movie.write(to: source)
+        let key = AttachmentKey.make(hash: SHA256.hash(data: movie).map { String(format: "%02x", $0) }.joined(), format: "mov")
+        let arrive = AsyncStream<Void>.makeStream()
+        rig.sync.fetching.withLock {
+            $0 = { [files = services.store.files, arrived = arrive.stream] wanted in
+                for await _ in arrived { break }  // 在路上，直到放行
+                _ = try files.store(fileAt: source)
+                guard let url = files.fileURL(for: wanted) else { throw FileFetchFailure.damaged }
+                return url
+            }
+        }
+        try await services.executor.start()
+        defer { services.cancelBackgroundWork() }
+
+        let big = try await services.store.requestDelivery(
+            "看这段\n[录屏.mov](cuepad://file/\(key))", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
+        let small = try await services.store.requestDelivery("先改文案", to: SendTarget(kind: .piSession, name: "web", ref: "sess-2"), on: TestApp.hostID)
+        #expect(try await awaitFinished(small.id).status == .known(.succeeded))
+        #expect(web.messages.map(\.text) == ["先改文案"])
+        #expect(try await services.store.deliveryRequest(big.id)?.status == .known(.pending) && app.messages.isEmpty)
+
+        arrive.continuation.yield()
+        #expect(try await awaitFinished(big.id).status == .known(.succeeded))
+        let path = try #require(services.store.files.fileURL(for: key)).path(percentEncoded: false)
+        #expect(app.messages.map(\.text) == ["看这段\n附件：录屏.mov（\(path)）"])
     }
 
     /// 发给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录；命令里带图片按失败写回，什么都不交给桥。
