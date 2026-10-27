@@ -14,11 +14,6 @@ nonisolated enum PiProgress {
         return nil
     }
 
-    /// 歇着时这次停下 Cue 交给了哪（会话卡片、看板卡近况那一句写在等它做完，`HandoffLine`）；别的状态没有：状态由状态标与状态词表达。
-    static func handoff(_ handoff: CueHandoff?, shown: PiShown) -> CueHandoff? {
-        shown.status == .resting ? handoff : nil
-    }
-
     static func line(of session: PiSessionState) -> String? {
         switch session.state.known {
         case .waitingForUser: firstLine(session.question?.text ?? session.detail)

@@ -100,6 +100,7 @@ struct SessionList<Top: View>: View {
             .rowSwipes(RowSwipes(trailing: trailing), clipped: false)
             .contextMenu {
                 MarkUnreadButton(session: item.state)
+                HandoffButton(session: item.state)
                 RowActionButtons(actions: trailing.reversed())
             }
             .cardRow()
@@ -149,7 +150,7 @@ private struct SessionRow: View {
     var body: some View {
         let session = item.state
         Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
-            PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), handoff: item.handoff, style: .page).equatable()
+            PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
                 .contentShape(.rect(cornerRadius: SessionCard.radius))
         }
         .buttonStyle(PressStyle(.card))

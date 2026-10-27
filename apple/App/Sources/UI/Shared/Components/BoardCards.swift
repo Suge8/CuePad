@@ -91,7 +91,7 @@ extension Workspace {
 
 /// 推进中一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：同任务卡（`BoardTaskCard`）的语法——
 /// 开头是这家 Agent 的品牌标（`AgentKind.mark`，任务是完成圈），标题是会话名，下沿是那条线（`BoardLine`，按 `BoardPulse` 画，右端写此刻状态多久与要你管的状态词），
-/// 看全部项目时标题前是它归处的项目小图形；悬停提示写项目与哪家 Agent。点了打开会话。
+/// 看全部项目时标题前是它归处的项目小图形；悬停提示写项目与哪家 Agent。点了打开会话；歇着、在等 Cue 交出去的那一处时长按与右键是去那一处（`HandoffButton`）。
 struct BoardSessionCard: View {
     let session: PiSessionState
     let project: Project?
@@ -115,7 +115,9 @@ struct BoardSessionCard: View {
             .boardCard(.advancing)
         }
         .help(Dotted(project?.shownName, session.agentMark).visible)
+        .contextMenu { HandoffButton(session: session) }
         .accessibilityLabel(Dotted(session.title, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label, pulse.handoff?.waiting).spoken)
+        .accessibilityActions { HandoffButton(session: session) }
     }
 }
 

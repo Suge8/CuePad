@@ -1,6 +1,6 @@
 import Foundation
 
-/// 会话此刻这次停下，Cue 把它的事交给了别处、那一处还没做完：会话歇着时，会话行与看板卡上近况那一句写在等它（`PiSessionListItem.handoff`），
+/// 会话此刻这次停下，Cue 把它的事交给了别处、那一处还没做完：会话歇着时，会话行与看板卡上近况那一句写在等它（App 的 `LiveSessions.handoffs`，此刻有事的会话一起读一次），
 /// 一眼看出有人管、在等谁。只从 Cue 每一轮的经过推（`cueMessages`）、读的时候对上那一处此刻的样子，不另存，也不截 Cue 的原话。
 /// - 哪一轮：这次停下之后（`stateSince` 起）碰过它的最近一轮——它叫醒的（`CueWake.sessionActivity`），或这一轮的动作落在它上面；
 ///   取其中第一处交出去的地方（对别的会话说话、开工、新建任务，`handing`）。Cue 只看了看、没交出去的不算，近况照旧是会话自己最后那句回答。
@@ -10,6 +10,8 @@ import Foundation
 public struct CueHandoff: Equatable, Sendable {
   /// 怎么交出去的（对它说话、开工、新建）：界面画与 Cue 页经过里同一个动作图标
   public let kind: PiChatMessage.Tools.Kind
+  /// 那一处：会话记录 id 或任务 id（`task`），点了去它
+  public let place: UUID
   /// 那一处此刻叫什么（会话名或任务标题）
   public let name: String
   /// 交给的是一件任务，否则是另一个会话：不点名的那句按它写
@@ -25,7 +27,7 @@ extension CueStore {
   private static let handing: Set<PiChatMessage.Tools.Kind> = [.talk, .start, .add]
 
   /// 这些会话里停着（`settled`）、这次停下 Cue 交出去的那一处还没做完的，按 Pi 的会话 id。
-  func handoffs(_ states: [PiSessionState]) throws -> [String: CueHandoff] {
+  public func handoffs(_ states: [PiSessionState]) throws -> [String: CueHandoff] {
     let settled = states.filter { $0.state == .known(.settled) }
     guard let since = settled.map(\.stateSince).min() else { return [:] }
     // 一轮的经过是没有正文的那一行
@@ -38,7 +40,7 @@ extension CueStore {
     }
     let pending = try pendingNames(Array(away.values))
     return away.compactMapValues { touch in
-      (touch.task ?? touch.session).flatMap { pending[$0] }.map { CueHandoff(kind: touch.kind, name: $0, task: touch.task != nil) }
+      (touch.task ?? touch.session).flatMap { place in pending[place].map { CueHandoff(kind: touch.kind, place: place, name: $0, task: touch.task != nil) } }
     }
   }
 

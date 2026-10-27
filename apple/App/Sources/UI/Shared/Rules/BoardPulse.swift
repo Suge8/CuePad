@@ -35,13 +35,13 @@ struct BoardPulse: Equatable {
 
     var shown: PiShown?
     var session: PiSessionState?
-    /// 歇着、这次停下 Cue 已交给别处时交给了哪（`PiProgress.handoff`）
+    /// 歇着时在等谁做完（`Workspace.handoff(of:)`）
     var handoff: CueHandoff?
 
     init(shown: PiShown? = nil, session: PiSessionState? = nil, handoff: CueHandoff? = nil) {
         self.shown = shown
         self.session = session
-        self.handoff = shown.flatMap { PiProgress.handoff(handoff, shown: $0) }
+        self.handoff = handoff
     }
 
     /// 快满的上下文（九成起，同会话行上的胭脂那一档）。
@@ -99,7 +99,7 @@ extension Workspace {
     /// 快满的上下文不因此漏掉。都没交给会话是歇着。
     func pulse(for task: Card, lead: Card?, in agents: AgentLinks) -> BoardPulse {
         guard let id = watched(task, lead: lead, in: agents), let agent = agent(of: id, in: agents) else { return BoardPulse() }
-        return BoardPulse(shown: agent.shown, session: agent.session, handoff: agents.items[id]?.handoff)
+        return BoardPulse(shown: agent.shown, session: agent.session, handoff: handoff(of: agent.session, shown: agent.shown))
     }
 
     /// 任务卡看谁交给的会话：此刻干活的叶子，没有再看任务自己。
@@ -125,8 +125,8 @@ extension Workspace {
 
     /// 没绑任务的会话卡此刻的样子。
     func pulse(of session: PiSessionState) -> BoardPulse {
-        let id = session.sessionID
-        return BoardPulse(shown: shown(session, delivery: services.liveSessions.deliveries[id]), session: session, handoff: services.liveSessions.handoffs[id])
+        let shown = shown(session, delivery: services.liveSessions.deliveries[session.sessionID])
+        return BoardPulse(shown: shown, session: session, handoff: handoff(of: session, shown: shown))
     }
 
     /// 推进中按档分成几组（要你管 → 在跑 → 歇着，空的档不在内），同一档保持原来的先后。

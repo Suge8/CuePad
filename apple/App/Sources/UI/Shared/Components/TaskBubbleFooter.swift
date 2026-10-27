@@ -48,7 +48,7 @@ private struct LaunchStrip: View {
 }
 
 /// 交给了会话的叶子此刻怎样（`TaskAgentLook`，两端同一份说法）：开头是这家 Agent 的标志（不用吉祥物，它是 Cue 的样子），
-/// 状态标（`PiStateDot`，在做时是心电线）接一句标题，下面一句进展或原因；整条点了去会话。
+/// 状态标（`PiStateDot`，在做时是心电线）接一句标题，下面一句进展或原因（歇着、在等 Cue 交出去的那一处时是在等谁，`HandoffLine`）；整条点了去会话。
 private struct AgentStrip: View {
     let leaf: Card
     @Environment(Workspace.self) private var workspace
@@ -79,7 +79,9 @@ private struct AgentStrip: View {
                     PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session.sessionID, row: .task)
                     Text(look.title).font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
                 }
-                if let note = look.note {
+                if let handoff = workspace.handoff(of: session, shown: shown) {
+                    HandoffLine(handoff: handoff).font(BubbleMetrics.meta).foregroundStyle(palette.ink2)
+                } else if let note = look.note {
                     Text(note).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(2)
                 }
             }

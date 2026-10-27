@@ -4,12 +4,12 @@ import SwiftUI
 extension View {
     /// 一条任务给读屏的样子（任务行 `TaskLine`、看板的任务卡 `BoardTaskCard` 同一份）：一行一个元素——"任务内容，子任务 1/4，下一步"，
     /// 值是状态（文案见 `TaskSpeech`），默认动作勾选（与圈同一个动作）；另有打开、开始或看 Agent 的近况，缩进与反缩进（手机上缩进在右滑里）。
-    /// `more`：调用处多给的动作（看板已完成卡的"看成果"）。
+    /// `aside`：标签末尾再念的一句（看板卡上歇着的会话在等谁）；`more`：调用处多给的动作（看板已完成卡的"看成果"、去等着的那一处）。
     func taskSpoken(
-        _ task: Card, subtasks: TaskProgress?, next: TaskNext?, check: Binding<TaskCheck>, open: @escaping () -> Void, follow: @escaping () -> Void,
+        _ task: Card, subtasks: TaskProgress?, next: TaskNext?, aside: String? = nil, check: Binding<TaskCheck>, open: @escaping () -> Void, follow: @escaping () -> Void,
         @ViewBuilder more: () -> some View = { EmptyView() }
     ) -> some View {
-        modifier(TaskSpoken(task: task, subtasks: subtasks, next: next, check: check, open: open, follow: follow, more: more()))
+        modifier(TaskSpoken(task: task, subtasks: subtasks, next: next, aside: aside, check: check, open: open, follow: follow, more: more()))
     }
 }
 
@@ -17,6 +17,7 @@ private struct TaskSpoken<More: View>: ViewModifier {
     let task: Card
     let subtasks: TaskProgress?
     let next: TaskNext?
+    let aside: String?
     @Binding var check: TaskCheck
     let open: () -> Void
     let follow: () -> Void
@@ -29,7 +30,7 @@ private struct TaskSpoken<More: View>: ViewModifier {
         let done = check.done(task)
         content
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, subtasks.map(TaskCopy.progress), next?.speech].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, subtasks.map(TaskCopy.progress), next?.speech, aside].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(TaskSpeech.value(done ? .done : task.status))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(check.phase == .pending ? String(localized: "撤销完成") : TaskSpeech.toggle(done: done))

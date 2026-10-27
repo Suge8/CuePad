@@ -14,6 +14,7 @@ struct SessionMenu: View {
 
     var body: some View {
         MarkUnreadButton(session: session)
+        HandoffButton(session: session)
         if MacDelivery.canRename(session) {
             Button("重命名…", icon: .rename, action: rename)
         }

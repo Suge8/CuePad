@@ -30,7 +30,7 @@ struct BoardTaskCard: View {
         let next = workspace.next(for: task, lead: item.leaf, in: agents, steps: item.steps)
         // 刚从推进中飞出来的也要线（`BoardCardLayout` 起飞时还带着它，随即淡掉）
         let pulse = advancing || arrival?.from == .advancing ? workspace.pulse(for: task, lead: item.leaf, in: agents) : BoardPulse()
-        framed(next: next) {
+        framed(next: next, session: pulse.session) {
             BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves) {
                 ring(next: next).opacity(column.leadOpacity)
                 if let project { BoardProjectGlyph(project: project) }
@@ -44,8 +44,9 @@ struct BoardTaskCard: View {
             .boardCard(column)
         }
         .help(tip)
-        .taskSpoken(task, subtasks: item.steps, next: next, check: $check, open: open, follow: { follow(next) }) {
+        .taskSpoken(task, subtasks: item.steps, next: next, aside: pulse.handoff?.waiting, check: $check, open: open, follow: { follow(next) }) {
             if let shot = item.shot { Button("看成果") { openShot(BoardShot.opening(shot, group: task.id.uuidString)) } }
+            if let session = pulse.session { HandoffButton(session: session) }
         }
     }
 
@@ -89,35 +90,36 @@ struct BoardTaskCard: View {
         if let next { workspace.follow(next) }
     }
 
-    /// 长按（Mac 右键）菜单：点卡进的是会话时第一项"打开任务"（`CardActions.opens`）。
-    private var menu: some View {
+    /// 长按（Mac 右键）菜单：点卡进的是会话时第一项"打开任务"（`CardActions.opens`）；歇着、在等 Cue 交出去的那一处时先是去那一处（`HandoffButton`）。
+    @ViewBuilder private func menu(session: PiSessionState?) -> some View {
         let leaf = item.steps == nil
         let opens = workspace.entersSession(task, leaf: leaf, in: agents)
+        if let session { HandoffButton(session: session) }
         #if os(macOS)
-        return CardActions(card: task, leaf: leaf, opens: opens)
+        CardActions(card: task, leaf: leaf, opens: opens)
         #else
-        return CardActions(card: task, opens: opens)
+        CardActions(card: task, opens: opens)
         #endif
     }
 
     #if os(macOS)
     private static let ring: CGFloat = 15
 
-    private func framed(next: TaskNext?, @ViewBuilder _ card: () -> some View) -> some View {
+    private func framed(next: TaskNext?, session: PiSessionState?, @ViewBuilder _ card: () -> some View) -> some View {
         card()
             .modifier(PressFeedback(pressed: false, kind: .card))
             .onTapGesture { tap() }
-            .contextMenu { menu }
+            .contextMenu { menu(session: session) }
     }
     #else
     private static let ring: CGFloat = 22
 
     /// 按住不动出长按菜单；菜单出来后往菜单外一挪就是拖（`BoardColumn` 挂的 `draggable`，系统把两者放在同一次长按里），往菜单里挪是在菜单里选。
-    private func framed(next: TaskNext?, @ViewBuilder _ card: () -> some View) -> some View {
+    private func framed(next: TaskNext?, session: PiSessionState?, @ViewBuilder _ card: () -> some View) -> some View {
         card()
             .onTapGesture { tap() }
             .contentShape(.contextMenuPreview, .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
-            .contextMenu { menu }
+            .contextMenu { menu(session: session) }
             .contentShape(.dragPreview, .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
     }
     #endif

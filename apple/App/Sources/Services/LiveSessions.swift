@@ -21,7 +21,7 @@ final class LiveSessions {
     private(set) var deliveries: [String: DeliveryRequest] = [:]
     private(set) var renames: [String: DeliveryRequest] = [:]
     private(set) var undelivered: [String: Int] = [:]
-    /// 停着、这次停下 Cue 已交给别处的会话交给了哪（`PiSessionListItem.handoff`）：看板上没绑任务的会话卡读它。
+    /// 停着、这次停下 Cue 交出去的那一处还没做完的会话在等谁（`CueStore.handoffs`，按 Pi 的会话 id）：各处的会话行、看板卡、任务气泡都经 `Workspace.handoff(of:)` 读它。
     private(set) var handoffs: [String: CueHandoff] = [:]
     /// Cue 在值班时的那一份（`CueStore.cueDuty`，与会话一起读；它那台 Mac 的在线期限到点由订阅重读）：会话的显示与"等你"的提示据此分等你还是等 Cue、
     /// 哪几个是它留给你回的（"待回复"）。不在值班为 nil。
@@ -63,13 +63,15 @@ final class LiveSessions {
         var total: Int
         var ended: [PiSessionState] = []
         var cue: CueDuty?
+        var handoffs: [String: CueHandoff]
         var relays: CueFlight.Facts
 
         static func read(from store: isolated CueStore, endedOn host: String? = nil, since: Date = .now) throws -> Page {
-            Page(
-                items: try store.piSessionPage(.current).items, total: try store.piSessionCount(),
+            let items = try store.piSessionPage(.current).items
+            return Page(
+                items: items, total: try store.piSessionCount(),
                 ended: try host.map { try store.endedSessions(on: $0, since: since, limit: LiveSessions.endedWindow) } ?? [],
-                cue: try store.cueDuty(), relays: try CueFlight.Facts.read(from: store))
+                cue: try store.cueDuty(), handoffs: try store.handoffs(items.map(\.state)), relays: try CueFlight.Facts.read(from: store))
         }
     }
 
@@ -94,7 +96,7 @@ final class LiveSessions {
         set(\.deliveries, Dictionary(current.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.renames, Dictionary(current.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.undelivered, PiSessionListItem.undelivered(live, at: moment))
-        set(\.handoffs, Dictionary(live.compactMap { item in item.handoff.map { (item.state.sessionID, $0) } }) { first, _ in first })
+        set(\.handoffs, page.handoffs)
         set(\.cue, page.cue)
         if let next = page.relays.flight(after: seen) {
             seen = page.relays.latest

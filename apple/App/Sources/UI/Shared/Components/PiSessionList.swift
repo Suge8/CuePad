@@ -76,8 +76,6 @@ struct PiSessionRow: View {
     /// 没能送达的话有几句（`PiSessionListItem.undelivered`）：你看过以后整行不再是"没能送达"，但只要还有，时长前留一个
     /// 胭脂的小折回箭头（读屏念"N 句没送到"），与会话页顶栏同一个数（`PiChat.undeliveredNote`）。
     let undelivered: Int
-    /// 这次停下 Cue 交给了哪（`PiSessionListItem.handoff`）：歇着时卡片第二行写在等它做完（`HandoffLine`）。
-    var handoff: CueHandoff?
     var style = Style.compact
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
@@ -132,7 +130,7 @@ struct PiSessionRow: View {
                             StateWord(shown: shown).fixedSize()
                             if let note = facts.note {
                                 NoteWord(note: note)
-                            } else if let handoff = PiProgress.handoff(handoff, shown: shown) {
+                            } else if let handoff = workspace.handoff(of: session, shown: shown) {
                                 HandoffLine(handoff: handoff).foregroundStyle(palette.ink2)
                             } else if let progress = PiProgress.note(of: session, failure: nil) {
                                 Text(progress).foregroundStyle(palette.ink2)
@@ -170,7 +168,7 @@ struct PiSessionRow: View {
                     if let searchHit {
                         Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2).lineLimit(1)
                     } else {
-                        PiStatusLine(shown: shown, facts: facts)
+                        PiStatusLine(shown: shown, facts: facts, handoff: workspace.handoff(of: session, shown: shown))
                     }
                 } meta: {
                     if let context = facts.context { ContextFact(meter: context) }
@@ -229,7 +227,7 @@ struct PiSessionRow: View {
 extension PiSessionRow: Equatable {
     static func == (a: Self, b: Self) -> Bool {
         a.session == b.session && a.project == b.project && a.delivery == b.delivery && a.end == b.end && a.rename == b.rename
-            && a.undelivered == b.undelivered && a.handoff == b.handoff && a.style.card == b.style.card && a.style.dot == b.style.dot
+            && a.undelivered == b.undelivered && a.style.card == b.style.card && a.style.dot == b.style.dot
     }
 }
 
@@ -288,15 +286,18 @@ private struct SubagentCount: View {
     }
 }
 
-/// 窄处的状态一行：状态色的状态词 → 此刻的短词 → 子代理在跑 / 共几个。放不下的从后往前整项丢掉（`FactsLayout`）。字号由外面给。
+/// 窄处的状态一行：状态色的状态词 → 此刻的短词 → 歇着时在等谁（`HandoffLine`）→ 子代理在跑 / 共几个。放不下的从后往前整项丢掉（`FactsLayout`）。字号由外面给。
 private struct PiStatusLine: View {
     let shown: PiShown
     let facts: PiRowFacts
+    let handoff: CueHandoff?
+    @Environment(\.palette) private var palette
 
     var body: some View {
         FactsLayout {
             StateWord(shown: shown).fact()
             if let note = facts.note { NoteWord(note: note).fact() }
+            if let handoff { HandoffLine(handoff: handoff).foregroundStyle(palette.ink2).fact() }
             if let subagents = facts.subagents { SubagentCount(summary: subagents).fact() }
         }
         .lineLimit(1)
