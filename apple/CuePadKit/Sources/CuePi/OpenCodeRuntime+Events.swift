@@ -112,7 +112,7 @@ extension OpenCodeRuntime {
     private func change(_ sessionID: String, _ connection: Connection, active: Bool = false, _ body: (inout Tracked) -> Void) async {
         if sessions[sessionID] == nil {
             guard active, let info = try? await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(sessionID)").data,
-                  info.parentID == nil, self.connection === connection else { return }
+                  info.parentID == nil, !info.isCueBrain, self.connection === connection else { return }
             sessions[sessionID] = sessions[sessionID] ?? Tracked(info: info)
         }
         guard var tracked = sessions[sessionID] else { return }

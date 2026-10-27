@@ -5,14 +5,7 @@ import Foundation
 extension OpenCodeRuntime {
     func snapshot(_ connection: Connection) async throws {
         let client = connection.client
-        var all: [OpenCodeSessionInfo] = []
-        var cursor: String?
-        repeat {
-            let query = "limit=\(Self.sessionPage)" + (cursor.map { "&cursor=" + ($0.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0) } ?? "")
-            let page = try await client.get(OpenCodePage<OpenCodeSessionInfo>.self, "/api/session?\(query)")
-            all += page.data
-            cursor = page.data.isEmpty ? nil : page.cursor?.next
-        } while cursor != nil
+        let all = try await client.sessions().filter { !$0.isCueBrain }
         let asked = Date.now  // 对话里读不到一轮时的开始：快照里在跑的那一轮此刻之后才收尾
         let active = Set(try await client.get(OpenCodeData<[String: OpenCodeActive]>.self, "/api/session/active").data.keys)
         var started: [String: Date] = [:]
