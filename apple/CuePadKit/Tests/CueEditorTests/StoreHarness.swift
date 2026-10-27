@@ -3,8 +3,8 @@ import CueEditor
 import Foundation
 import Synchronization
 
-/// 目录里放真实文件的内存图片库：CueEditor 只经 `CueFileStore` 协议读写图片。
-final class DirectoryImageStore: CueFileStore, Sendable {
+/// 目录里放真实文件的内存附件库：CueEditor 只经 `CueFileStore` 协议读写附件。
+final class DirectoryFileStore: CueFileStore, Sendable {
     private struct Stored {
         var files: [String: URL] = [:]
         var data: [Data] = []

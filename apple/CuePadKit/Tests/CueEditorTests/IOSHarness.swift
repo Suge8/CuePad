@@ -27,7 +27,7 @@ extension CueEditorTheme {
 
 @MainActor
 final class EditorHarness {
-    let store = DirectoryImageStore()
+    let store = DirectoryFileStore()
     let textView: CueTextView
     /// 编辑器挂在一个普通视图下：包的测试进程（xctest）里没有场景，不建窗口。
     let root: UIView

@@ -30,7 +30,7 @@ extension CueEditorTheme {
 
 @MainActor
 final class EditorHarness {
-    let store = DirectoryImageStore()
+    let store = DirectoryFileStore()
     let editor: CueEditorView
     let window: NSWindow
     var textView: CueTextView { editor.textView }
