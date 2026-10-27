@@ -105,11 +105,11 @@ struct SpeakTests {
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == [
             "周末读完第三章\n\n![](cuepad://file/\(photos[0].key))\n![](cuepad://file/\(photos[1].key))\n[第三章 (批注).pdf](cuepad://file/\(pdf.key))",
         ])
-        #expect(workspace.notice?.text.visible == "已记到 默认")
+        #expect(workspace.notice?.text.visible == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
         #expect(try await youSaid().isEmpty)
     }
 
-    /// 这里没有同步，话一直出不了这台：写下 `Speech.sendLimit` 之内是发送中，Cue 是话在路上；过了这句没能送达，
+    /// 这里没有同步，话一直出不了这台：过了 `Speech.sendLimit` 这句没能送达（时限边界见 `ReceiptTests`），
     /// 但那台 Mac 在线 Cue 就不算睡觉、仍在值班；那台 Mac 将睡眠标了离线 Cue 才在睡觉、不值班，本机同步不通时不说它在睡觉，这句也排着不判没送到；
     /// 没能送达后回执来了照样是已送达，Cue 照它写下的在做事。已发出后迟迟没回执见 `ReceiptTests`。
     @Test func 对Cue说_没发出只说这句没送到_在睡觉只看那台Mac在不在线() async throws {
@@ -118,15 +118,8 @@ struct SpeakTests {
         workspace.cue.draft = ComposerDraft(text: "顺便看看登录回调那个超时")
         await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { $0.stored }.value
         let message = try #require(try await youSaid().first)
-        let said = Said.cue(message, host: "mac-cue")
-        let inTime = message.createdAt.addingTimeInterval(Speech.sendLimit - 1)
         let late = message.createdAt.addingTimeInterval(Speech.sendLimit + 1)
 
-        #expect(said.trip(at: .always(at: inTime)) == .sending)
-        try backdate(message, by: Speech.sendLimit - 1)
-        #expect(try await presence() == .sending(.sending))
-
-        #expect(said.trip(at: .always(at: late)) == .failed(.unsent))
         try backdate(message, by: Speech.sendLimit + 1)
         #expect(try await presence() == .idle)
         #expect(try await store.cueDuty() != nil)

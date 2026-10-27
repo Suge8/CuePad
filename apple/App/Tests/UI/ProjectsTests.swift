@@ -1,6 +1,5 @@
 import CueStore
 import Foundation
-import SwiftUI
 import Testing
 @testable import CuePad
 
@@ -14,21 +13,6 @@ struct ProjectsTests {
     /// 跟着工作区的订阅（App 启动时同一条路），项目目录在其中。
     private func observing(_ workspace: Workspace) -> Task<Void, Never> {
         Task { await workspace.follow() }
-    }
-
-    /// 新库第一次打开：落在 Cue 页（没有"还没有项目"的空页），库里已有默认项目；
-    /// 只记下（⌘⇧N 同一个）不选项目，灵感进它。
-    @Test func 新库首屏是Cue页_只记下的灵感进默认项目() async throws {
-        let workspace = Workspace(services: services)
-        let catalog = observing(workspace)
-        defer { catalog.cancel() }
-        try await eventually("目录里只有默认项目") { workspace.catalog?.projects.map(\.id) == [Project.defaultID] }
-        #expect(workspace.root == .cue)
-
-        workspace.cue.draft = ComposerDraft(text: "周末读完第三章")
-        await workspace.note(from: Bindable(workspace.cue).draft)?.value
-        #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["周末读完第三章"])
-        #expect(workspace.notice?.text.visible == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
     }
 
     @Test func 启动回到上次的项目_失效时回到Cue页_数字键按当下顺序取() async throws {

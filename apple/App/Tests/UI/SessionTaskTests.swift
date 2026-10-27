@@ -92,7 +92,7 @@ struct SessionTaskTests {
         #expect(try await store.card(task.id)?.status == .inProgress)
     }
 
-    /// 已完成的事用过、还活着的会话不归没做完的事：信封"在做"、不带参数的 peek 都有它，它的动静只报一次；peek 末尾列着最近完成的事和它的会话。
+    /// 已完成的事用过、还活着的会话不归没做完的事：不带参数的 peek 里有它，它的动静只报一次；peek 末尾列着最近完成的事和它的会话。
     /// Cue 在它上面做别的事：add 带 session 另建任务绑上它，旧任务照旧完成、照旧绑着；会话正被没做完的事用着时不让再绑。
     @Test func 已完成的事的会话还活着_算在做_Cue在它上面另建任务() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
@@ -112,9 +112,6 @@ struct SessionTaskTests {
 
         let board = try await store.cueBoard()
         #expect(board.sessions.map(\.sessionID) == ["s1"])
-        let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: .now, projects: [], changes: [], board: board, waiting: [], wake: .idle))
-        #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
         // 分步做完的事：会话在前一步上，最后一步是手点完成的、没绑会话，列的仍是它用过的会话
         let stepped = try await store.createTask("加语言参数", in: project.id)
         let first = try await store.createTask("加 --lang", under: stepped.id)

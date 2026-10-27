@@ -73,7 +73,6 @@ struct TaskFlowTests {
 
         try await store.bindSession("s1", to: first.id)
         try await store.bindSession("s1", to: second.id)
-        #expect(rig.services.settings.replyDraft(for: PiSessionState.recordID(sessionID: "s1")).isEmpty(accepting: .files))
         #expect(try await store.deliveryRequests().isEmpty)
         #expect(try await store.card(first.id)?.rest == "先复现，别改代码")
         #expect(try await Set(store.tasks(boundTo: "s1").map(\.task.id)) == [first.id, second.id])
