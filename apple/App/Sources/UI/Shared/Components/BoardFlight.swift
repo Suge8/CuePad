@@ -41,12 +41,13 @@ struct BoardArrival: Equatable {
     fileprivate var frames: [String: (lane: TaskBoard.Column, frame: CGRect)] = [:]
     fileprivate var lanes: [TaskBoard.Column: CGRect] = [:]
 
-    fileprivate func read(_ moved: [String: TaskBoard.Column]) {
+    /// `moved`：这一份里换了列的卡；`entered`：新来或离开看板的卡——它们这一趟不是飞，还没飞完的记录也撤掉，进出照常淡。
+    fileprivate func read(_ moved: [String: TaskBoard.Column], entered: Set<String>) {
         let now = ContinuousClock.now
         departures.add(moved.reduce(into: [:]) { departures, move in
             guard let card = frames[move.key], let lane = lanes[card.lane] else { return }
             departures[move.key] = Departure(column: move.value, frame: card.frame.offsetBy(dx: lane.minX, dy: lane.minY), at: now)
-        }, at: now)
+        }, dropping: entered, at: now)
         if !moved.isEmpty { landing = Set(moved.keys) }
     }
 
@@ -55,7 +56,7 @@ struct BoardArrival: Equatable {
 
 /// 正在飞的卡与原处（`BoardMoves.departures`）。iOS 上转场在渲染线程上求值，所以是加锁的一份，不是主线程上的状态。
 /// 一趟飞行要飞完才撤下（`Motion.Spring.travel` 收住的时长）：飞着时又来一份没人换列的看板，正在飞的那张、刚撤的那张再求值转场时照样认得出自己在飞；
-/// 过了这么久就不算数，同一张卡后来离开看板、再回来时照常淡出淡入。
+/// 过了这么久就不算数；还没飞完就离开看板或又回来的，读看板那一处当场撤掉它的记录（`BoardMoves.read`），照常淡出淡入。
 nonisolated final class BoardDepartures: Sendable {
     private let state = Mutex<[String: BoardMoves.Departure]>([:])
     private static let lasts = Duration.seconds(Motion.Spring.travel.settlingDuration)
@@ -64,9 +65,9 @@ nonisolated final class BoardDepartures: Sendable {
         state.withLock { $0[id] }.flatMap { ContinuousClock.now - $0.at < Self.lasts ? $0 : nil }
     }
 
-    fileprivate func add(_ departures: [String: BoardMoves.Departure], at now: ContinuousClock.Instant) {
+    fileprivate func add(_ departures: [String: BoardMoves.Departure], dropping gone: Set<String>, at now: ContinuousClock.Instant) {
         state.withLock { current in
-            current = current.filter { now - $0.value.at < Self.lasts }.merging(departures) { _, new in new }
+            current = current.filter { now - $0.value.at < Self.lasts && !gone.contains($0.key) }.merging(departures) { _, new in new }
         }
     }
 }
@@ -184,7 +185,7 @@ private struct BoardReading: ViewModifier {
             .environment(\.boardMoves, moves)
             .observing(store, id: day, into: Binding { board } set: { read in
                 guard let board, let read else { return board = read }
-                moves.read(read.moved(from: board))
+                moves.read(read.moved(from: board), entered: read.entered(from: board))
                 withAnimation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion)) { self.board = read }
             }, onError: onError) { try TaskBoard.read(from: $0) }
             .onDayChange { day += 1 }
