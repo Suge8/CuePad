@@ -1,4 +1,5 @@
 #if DEBUG
+import CoreText
 import CueStore
 import SwiftUI
 
@@ -86,9 +87,8 @@ extension DebugScene {
     static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
         switch defaults.string(forKey: "CuePadComposer") {
         case "cards":
-            // 等推入页面的转场走完再弹，转场中弹出的面板会被系统丢掉
-            try? await Task.sleep(for: .seconds(1))
-            source.wrappedValue = .cards
+            // 等推入页面的转场走完再弹，转场中弹出的面板会被系统丢掉；弹出前不算就绪
+            later(.seconds(1)) { source.wrappedValue = .cards }
         case "attachments":
             // 先挑默认项目里的，没有再挑第一个项目里的
             var id = await card(in: Project.defaultID, store: store)
@@ -107,7 +107,7 @@ extension DebugScene {
         }
     }
 
-    /// 演示用的一份 PDF（一页 A4、几行字）存进附件目录：附件条、正文里的文件牌、你的话里的文件拍照用。
+    /// 演示用的一份 PDF（一页 A4、几行真的字，搜得到"投送"）存进附件目录：附件条、正文里的文件牌、你的话里的文件拍照用。
     static func demoPDF(_ store: CueStore) -> DraftFile? {
         let name = String(localized: "季度复盘.pdf", table: "Demo")
         let url = FileManager.default.temporaryDirectory.appending(path: name)
@@ -116,9 +116,23 @@ extension DebugScene {
         context.beginPDFPage(nil)
         context.setFillColor(red: 0.95, green: 0.93, blue: 0.88, alpha: 1)
         context.fill(page)
-        context.setFillColor(red: 0.2, green: 0.24, blue: 0.32, alpha: 1)
-        for (row, width) in [420.0, 360, 400, 300, 380, 240].enumerated() {
-            context.fill(CGRect(x: 72, y: 720 - Double(row) * 44, width: width, height: row == 0 ? 26 : 12))
+        // 真的字（不是色块）：全屏页里能搜、能选
+        let lines = [
+            (String(localized: "季度复盘", table: "Demo"), 26.0),
+            (String(localized: "一、投送队列本月上线，超时不再静默。", table: "Demo"), 14),
+            (String(localized: "二、同步：附件按需取，空间满时先留在本机。", table: "Demo"), 14),
+            (String(localized: "三、风险：投送重试与额度提醒还缺验收。", table: "Demo"), 14),
+            (String(localized: "四、下季度：Cue 记得什么、多 Agent 圆桌。", table: "Demo"), 14),
+        ]
+        var y = 740.0
+        for (text, size) in lines {
+            let attributes: [NSAttributedString.Key: Any] = [
+                NSAttributedString.Key(kCTFontAttributeName as String): CTFontCreateWithName("PingFangSC-Regular" as CFString, size, nil),
+                NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(red: 0.2, green: 0.24, blue: 0.32, alpha: 1),
+            ]
+            context.textPosition = CGPoint(x: 72, y: y)
+            CTLineDraw(CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes)), context)
+            y -= size * 2.4
         }
         context.endPDFPage()
         context.closePDF()

@@ -82,12 +82,31 @@ struct CardMeta: View {
             }
             if let lastTarget { SentMark(target: lastTarget) }
             Spacer(minLength: 0)
+            if text.files > 0 { AttachmentMark(count: text.files) }
             if card.isTask { Image(.task).help("任务").accessibilityLabel("任务") }
             if floated { Image(.floated).help("刚从更早的灵感里拿回来").accessibilityLabel("刚从更早的灵感里拿回来") }
             if card.isPinned { Image(.pin).help("已置顶").accessibilityLabel("已置顶") }
         }
         .font(font)
         .foregroundStyle(palette.ink3)
+    }
+}
+
+/// 带着的附件：一个时只有回形针，两个以上回形针加个数（同别处的"图标 + 字"）；读屏都读"带 N 个附件"。
+/// 图片在预览里看得见的地方只数文件（`CardText.files`），没有预览的行数全部附件。
+struct AttachmentMark: View {
+    let count: Int
+
+    var body: some View {
+        Group {
+            if count > 1 {
+                Label { Text(verbatim: "\(count)").monospacedDigit() } icon: { Image(.attachment) }.labelStyle(.titleAndIcon)
+            } else {
+                Image(.attachment)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("带 \(count) 个附件")
     }
 }
 

@@ -1,21 +1,21 @@
 import CueEditor
 import CueStore
 import SwiftUI
-#if os(iOS)
-import UIKit
-#endif
 
 /// 一个文件（不是图片）的牌子，同正文里的文件牌（`CueFileAttachment`）：左边缩略图（系统快速查看的，文件不在本机或出不来时是类型记号），
 /// 右边文件名与一行说明（`FileStatus`：类型与大小、传了几成、怎么取），在传时底下一条进度。
-/// 点它：在本机就打开（`open`，不给是系统的快速查看），还没到就去 iCloud 取，到了自己换上。输入框的附件条、带上的卡片全文、你的话里的文件都是它。
+/// 点它：在本机就在全屏页里看（同组 `among` 里已到的几份左右翻，`Workspace.openAttachment`），还没到就去 iCloud 取，到了自己换上。
+/// 输入框的附件条、带上的卡片全文、你的话里的文件都是它。
 struct FileChip: View {
     let key: String
     let name: String
     var height: CGFloat = 56
-    /// 在本机时点它做什么；nil 时快速查看。
-    var open: ((URL) -> Void)?
+    /// 和它一组的几份（附件条、一句话、一张卡里的），空的是只有它自己；`group` 认这一组。
+    var among: [DraftFile] = []
+    var group = "file"
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
+    @Environment(\.openPreview) private var openPreview
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var scale
     @State private var place = AttachmentPlace.unchecked
@@ -71,44 +71,40 @@ struct FileChip: View {
             }
         }
         .frame(width: thumbSide, height: thumbSide)
+        // 全屏页从这块放大出来、缩回这里
+        .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), radius: 5) { [files = services.store.files, key] in
+            await AttachmentLooks.picture(key, in: files)
+        }
     }
 
     private func tap() {
-        guard let file else { return workspace.fetchFile(key) }
-        if let open { open(file) } else { FilePreview.open(file, title: name) }
+        workspace.openAttachment(DraftFile(key: key, name: name), among: among, group: group, with: openPreview)
     }
 }
 
-/// 附件条里的一张图：方块缩略图，点它快速查看；还没到这台时点它去取。
+/// 附件条里的一张图：方块缩略图，点它在全屏页里看（同 `FileChip`）；还没到这台时点它去取。
 struct ImageTile: View {
     let key: String
     var side: CGFloat = 64
+    var among: [DraftFile] = []
+    var group = "file"
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
+    @Environment(\.openPreview) private var openPreview
+    @Environment(\.displayScale) private var scale
     @State private var place = AttachmentPlace.unchecked
 
     var body: some View {
         Button {
-            guard let file = place.file(key, in: services.store.files) else { return workspace.fetchFile(key) }
-            FilePreview.open(file, title: String(localized: "图片"))
+            workspace.openAttachment(DraftFile(key: key, name: ""), among: among, group: group, with: openPreview)
         } label: {
             Thumbnail(hash: key, height: side, radius: 12).frame(width: side).id(place.isAway)
+                .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), radius: 12) { [files = services.store.files, key, side, scale] in
+                    await Thumbnail.picture(key, height: side, scale: scale, in: files)
+                }
         }
         .buttonStyle(PressStyle())
         .accessibilityLabel("图片")
         .observingArrival(of: key, in: services, into: $place)
-    }
-}
-
-/// 系统的快速查看看本机那份附件（文件名是键，标题另给）：手机上从最前面的窗口弹出，Mac 是快速查看面板。
-@MainActor
-enum FilePreview {
-    static func open(_ file: URL, title: String) {
-        #if os(iOS)
-        let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first(where: \.isKeyWindow)
-        if let window { QuickLook.show(file, title: title, from: window) }
-        #else
-        QuickLook.show(file, title: title)
-        #endif
     }
 }

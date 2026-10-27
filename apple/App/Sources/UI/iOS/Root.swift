@@ -27,6 +27,8 @@ struct IOSRoot: View {
             Group {
                 if sizeClass == .regular { SplitRoot() } else { DockRoot(workspace: workspace) }
             }
+            // 正文、输入框里的附件在这里看（页里另挂了全屏页的用页里那个，带底栏）
+            .previewPresenter($workspace.preview, reply: nil)
             .background { RootShortcuts() }
             // 会写资料库的面板挂在门内：读不出资料库时不弹出，读到后再弹；新会话与发给 Agent 都是浮在键盘上方的输入框
             .overlay {

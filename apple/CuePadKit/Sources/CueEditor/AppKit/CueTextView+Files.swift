@@ -56,24 +56,21 @@ extension CueTextView {
 
     // MARK: 点附件
 
-    /// 点在附件上（不移光标）：文件牌在本机就快速查看，还没到这台的文件牌、图片交给宿主去取；本机的图片与别处照常。
+    /// 点在文件牌或还没到这台的图片上（不移光标）：交给宿主（`onOpenAttachment`）；本机的图片与别处照常。
     public override func mouseDown(with event: NSEvent) {
-        guard event.clickCount == 1, let hit = attachment(at: event) else { return super.mouseDown(with: event) }
-        if let file = hit.file {
-            guard !hit.name.isEmpty else { return super.mouseDown(with: event) }
-            QuickLook.show(file, title: hit.name)
-        } else {
-            onFetchFile?(hit.key)
-        }
+        guard event.clickCount == 1, let (hit, rect) = attachment(at: event), hit.file == nil || !hit.name.isEmpty else { return super.mouseDown(with: event) }
+        onOpenAttachment?(hit.key, hit.name, FileChip.picture(in: rect, named: hit.name))
     }
 
-    private func attachment(at event: NSEvent) -> (key: String, name: String, file: URL?)? {
+    /// 点在哪个附件上，连同它在本视图坐标里的框。
+    private func attachment(at event: NSEvent) -> ((key: String, name: String, file: URL?), CGRect)? {
         guard let window else { return nil }
         let index = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
         let screen = window.convertPoint(toScreen: event.locationInWindow)
         for candidate in [index, index - 1] {
             guard let hit = core.attachment(at: candidate) else { continue }
-            if firstRect(forCharacterRange: NSRange(location: candidate, length: 1), actualRange: nil).contains(screen) { return hit }
+            let rect = firstRect(forCharacterRange: NSRange(location: candidate, length: 1), actualRange: nil)
+            if rect.contains(screen) { return (hit, convert(window.convertFromScreen(rect), from: nil)) }
         }
         return nil
     }

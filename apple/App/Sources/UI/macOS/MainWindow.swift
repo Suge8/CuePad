@@ -18,6 +18,8 @@ struct MainWindow: View {
                 .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
             detail
+                // 正文、输入框里的附件在这里看（页里另挂了全屏页的用页里那个，带底栏）
+                .previewPresenter(Bindable(workspace).preview, reply: nil)
                 .background { ColumnFinder(pages: workspace.pages) }
                 // 开合侧栏时详情区这一栏的图层在滑（`SidebarSlide`）：底色两边多铺一截，滑开的地方不露出窗口的底
                 .background { palette.desk.padding(.horizontal, -MacPages.slideOverscan).ignoresSafeArea() }

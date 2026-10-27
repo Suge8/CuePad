@@ -6,6 +6,8 @@ import SwiftUI
 /// 对编辑器的操作口：底部操作栏经它取当前正文与选中部分。
 final class EditorHandle {
     fileprivate weak var textView: CueTextView?
+    /// 点的那个附件在哪（全屏页从那里放大，`AttachmentSpotLayer` 盖在编辑器上）
+    let spot = AttachmentSpot()
     /// 停用时编辑器拿着键盘：再启用时还给它
     fileprivate var refocus = false
 
@@ -39,6 +41,8 @@ struct EditorHost: NSViewRepresentable {
     /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）交出键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
     var editable = true
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.openPreview) private var openPreview
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -63,19 +67,25 @@ struct EditorHost: NSViewRepresentable {
     }
 
     func updateNSView(_ view: CueEditorView, context: Context) {
-        update(view.textView, services: services)
+        update(view.textView, root: view, workspace: workspace, opener: openPreview)
     }
 
     static func dismantleNSView(_ view: CueEditorView, coordinator: Coordinator) { coordinator.watching?.cancel() }
 
-    /// `services` 由真正上屏的那个宿主给（`FittedEditorHost` 里的 `host` 不上屏，读不到环境）。
-    fileprivate func update(_ textView: CueTextView, services: AppServices) {
+    /// 环境里的由真正上屏的那个宿主给（`FittedEditorHost` 里的 `host` 不上屏，读不到环境）。
+    /// `root` 是上屏的那个视图（盖在上面的 `AttachmentSpotLayer` 按它的坐标摆）。
+    fileprivate func update(_ textView: CueTextView, root: NSView, workspace: Workspace, opener: PreviewOpener?) {
         textView.onChange = onChange
         textView.onSelectionChange = onSelectionChange
         textView.selectionActions = selectionActions
         textView.onSubmit = onSubmit
         textView.onError = onError
-        textView.onFetchFile = { [services, onError] key in AttachmentLooks.fetch(key, services: services, onError: onError) }
+        textView.onOpenAttachment = { [weak textView, weak root, handle, workspace] key, name, picture in
+            guard let textView, let root else { return }
+            var frame = root.convert(picture, from: textView)
+            if !root.isFlipped { frame.origin.y = root.bounds.height - frame.maxY }
+            handle.spot.open(DraftFile(key: key, name: name), at: frame, in: workspace, with: opener)
+        }
         if textView.isEditable != editable { setEditable(textView) }
         if !Self.sameLook(textView.theme, theme) { textView.theme = theme }
     }
@@ -103,6 +113,8 @@ struct EditorHost: NSViewRepresentable {
 struct FittedEditorHost: NSViewRepresentable {
     let host: EditorHost
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.openPreview) private var openPreview
 
     func makeCoordinator() -> EditorHost.Coordinator { EditorHost.Coordinator() }
 
@@ -114,7 +126,7 @@ struct FittedEditorHost: NSViewRepresentable {
         return textView
     }
 
-    func updateNSView(_ textView: CueTextView, context: Context) { host.update(textView, services: services) }
+    func updateNSView(_ textView: CueTextView, context: Context) { host.update(textView, root: textView, workspace: workspace, opener: openPreview) }
 
     static func dismantleNSView(_ textView: CueTextView, coordinator: EditorHost.Coordinator) { coordinator.watching?.cancel() }
 

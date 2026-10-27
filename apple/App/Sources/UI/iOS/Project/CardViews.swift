@@ -117,6 +117,7 @@ struct OlderRow: View {
                 Spacer(minLength: 8)
                 AgentDot(card: card.id).padding(.vertical, -8)
                 if let lastTarget { SentMark(target: lastTarget).font(Typography.caption2).foregroundStyle(palette.ink3) }
+                if !text.attachments.isEmpty { AttachmentMark(count: text.attachments.count).font(Typography.caption2).foregroundStyle(palette.ink3) }
                 Text(DateLabel.short(card.modifiedAt)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
             }
             .padding(.horizontal, 14).padding(.vertical, 10)

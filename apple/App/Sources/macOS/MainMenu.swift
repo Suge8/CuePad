@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 
-/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、新建（"文件"：⌘N 记一条灵感、⌥⌘N 新会话）、编辑快捷键、搜索与侧栏的开关、去进展页（"显示"），
+/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、新建（"文件"：⌘N 记一条灵感、⌥⌘N 新会话）、编辑快捷键与查找（⌘F、⌘G）、搜索与侧栏的开关、去进展页（"显示"），
 /// 以及会话回复框的快捷键（"回复"，`ReplyShortcut`）。⌘N 已是记一条灵感，新会话用 ⌥⌘N（Mac 上"另一种新建"的惯例）。
 enum MainMenu {
     static func install() {
@@ -37,6 +37,11 @@ enum MainMenu {
             .item("拷贝", #selector(NSText.copy(_:)), "c"),
             .item("粘贴", #selector(NSText.paste(_:)), "v"),
             .item("全选", #selector(NSText.selectAll(_:)), "a"),
+            .separator,
+            // 系统的查找条（全屏页里的 PDF，`PDFFindHost`）：动作经响应链找接得住的，tag 是 `NSTextFinder.Action`
+            .item("查找…", #selector(NSResponder.performTextFinderAction(_:)), "f", tag: NSTextFinder.Action.showFindInterface.rawValue),
+            .item("查找下一个", #selector(NSResponder.performTextFinderAction(_:)), "g", tag: NSTextFinder.Action.nextMatch.rawValue),
+            .item("查找上一个", #selector(NSResponder.performTextFinderAction(_:)), "G", tag: NSTextFinder.Action.previousMatch.rawValue),
         ]))
         main.addItem(submenu(title: "显示", items: [
             .item("搜索", #selector(AppDelegate.toggleSearch(_:)), "k"),
