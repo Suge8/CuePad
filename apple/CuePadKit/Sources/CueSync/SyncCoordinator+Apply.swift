@@ -1,5 +1,4 @@
 import CloudKit
-import CueText
 import Foundation
 import os
 
@@ -12,7 +11,6 @@ extension SyncCoordinator {
         continue
       }
       if row.table == .deliveryRequests { traceArrival(of: record, row) }
-      if row.table == .attachments, try !adoptAsset(of: record, row) { continue }
       changes.append(.save(row, systemFields: RecordMapper.encodeSystemFields(record), serverAt: record.creationDate))
     }
     for (id, recordType) in deletions {
@@ -35,24 +33,5 @@ extension SyncCoordinator {
     let toServer = stored.timeIntervalSince(Date(timeIntervalSince1970: Double(created) / 1000))
     Self.log.info(
       "投送请求到达 \(record.recordID.recordName.prefix(8), privacy: .public) \(status, privacy: .public)：创建后 \(toServer, format: .fixed(precision: 1)) 秒到服务器，再 \(Date.now.timeIntervalSince(stored), format: .fixed(precision: 1)) 秒到本机")
-  }
-
-  /// 附件记录必须带文件且内容与哈希一致，才把文件放进附件目录；记录本身坏了拒绝这条记录并报告（返回 false）。
-  /// 本机写不进去（读下载的文件、建目录、拷贝、改名失败）抛出：这一页没应用完，拉取器不前移令牌，之后再拉。
-  private func adoptAsset(of record: CKRecord, _ row: SyncRow) throws -> Bool {
-    let name = record.recordID.recordName
-    guard case .text(let hash)? = row.fields["hash"], case .text(let format)? = row.fields["format"],
-      let file = (record["file"] as? CKAsset)?.fileURL
-    else {
-      report(.damaged, detail: String(localized: "附件记录没有文件"), kind: .incoming, recordType: record.recordType, recordName: name)
-      return false
-    }
-    do {
-      try store.files.adopt(fileAt: file, key: AttachmentKey.make(hash: hash, format: format))
-      return true
-    } catch let error as CueStoreError where [.invalidAttachmentHash, .attachmentHashMismatch].contains(error) {
-      report(.damaged, detail: "\(error)", kind: .incoming, recordType: record.recordType, recordName: name)
-      return false
-    }
   }
 }

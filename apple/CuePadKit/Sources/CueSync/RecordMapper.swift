@@ -4,6 +4,9 @@ import Foundation
 /// 同步表行 ↔ CKRecord。recordType = 表名，recordName = 行 id；列名即字段名。
 /// 用户内容（正文、变量取值、名称、发送内容）放 `encryptedValues`，结构性字段（排序键、时间、引用、标志）保持明文。
 enum RecordMapper {
+  /// 附件记录的资产字段：文件本身，不是列（`CloudKitSchema`）。拉取不带它，文件另走一路（`FileCloud`）。
+  static let fileKey = "file"
+
   static let encryptedColumns: [Table: Set<String>] = [
     .projects: ["name"],
     .cards: ["body", "variableValues"],

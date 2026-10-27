@@ -15,6 +15,9 @@ LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 
   标定时查过"App 到 cloudd 的开销与排队"：同一次运行里 CloudKit 自己记的 Starting→Finished（default 级日志，按 operationID 配对）是上传 0.451 / 0.984、拉取 0.198 / 0.620，
   与 App 里量到的几乎一样，这一截可以忽略。v1（10-24 research/sync-measure，load1 中位约 16：上传 0.234 / 0.513、拉取 0.133 / 0.410）比真环境每经过一次云少约 0.2 秒，
   是那天的请求本身快；10-26 几次真运行之间每种请求的中位也差 20–30%（上传 0.35–0.45），这是模型自带的误差，所以用最近一次、样本最多的那次。
+  v3 加文件的传输速率（字节/秒，请求本身的用时照上）：上行 3.7 MB/s、下行 37 MB/s，出处是 2026-10-27 研究分支 research/asset-probe 在开发环境传取
+  100–500MB 的单个资产（这台 Mac 当时 networkQuality 上行 50 Mbps、下行 408 Mbps）：上传扣掉第一个进度回调前的 1.1–1.6 秒是 3.6–4.0 MB/s，
+  取 100MB 扣掉 1 秒是 37 MB/s。手机的上行多半更慢，看前后差，不看绝对值。
   不含：改记录冲突、限流。改动这里就是换了模拟云的口径：前后对比两边同一版（结果里记着 model）。
 
 用法：
@@ -29,6 +32,8 @@ LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 
   throttle [限流秒=20] [Retry-After=8] [次数=2]  M7 限流（只在模拟云）：窗口内云按设备限流回 429；数各实例窗口内的拉取、上传与早于 Retry-After 的请求，解除到第一拉成功
   bgflush [次数=8]           M8 写完马上进后台：写下→已发出、进后台→收尾完、写下→Mac 入库
   versions [命令行改几次=150] 撞版本探针（不进总表）：App 紧循环改一张卡、命令行同时逐条改，数提交后版本不比上一版大的次数
+  files [轮数=6] [MB=50]     M9 带文件：手机同一刻写下带大文件的灵感、只有字的灵感、对 Cue 说的一句，Mac 收；量前两样与文件各自写下→Mac 入库（_sync_files.py）
+  filesquota [轮数=2] [MB=50] 空间满（只在模拟云）：同上，文件被拒；量只有字的与对 Cue 说的照常到、手机状态不变、文件停着
   island [轮数=10]           M4 收消息到灵动岛（iPhone 模拟器，App 这一侧：入库→实时活动换内容）；不连云、不拿测量锁，xc.sh run ios 自己构建
 环境：SYNC_BENCH_CLOUD=sim|real；SYNC_BENCH_RELAY=0 两端都不连门铃（门铃不通，只靠按节奏拉）；SYNC_BENCH_SKIP_BUILD=1 不构建；
   SYNC_BENCH_SESSIONS 会话数（默认 3）、SYNC_BENCH_FLIP 会话平均几秒切一次状态（默认 8）；SYNC_BENCH_WARM 预热上限秒（默认 300）；SYNC_BENCH_LOCK_WAIT 等锁上限秒（默认 1200，到点列出持有者、以 75 退出）。
@@ -43,6 +48,7 @@ from datetime import datetime
 sys.dont_write_bytecode = True
 from _sync_run import OUT_ROOT, Aborted, Load, Run, exe_of, fake_extension  # noqa: E402
 from _sync_edges import EDGES  # noqa: E402
+from _sync_files import SCENES as FILES  # noqa: E402
 from _sync_scenes import SCENES as BASIC, island  # noqa: E402
 from app_env import BUNDLE_ID, CHECKOUT  # noqa: E402
 
@@ -50,11 +56,12 @@ LOCK = "/tmp/cuepad-sync-measure.lock"  # real 与别的连 CloudKit 的探针�
 SIM_LOCK = "/tmp/cuepad-sync-measure-sim.lock"  # 模拟云的运行之间互斥（不碰 cloudd，不必等 real）
 RELAY = os.environ.get("SYNC_BENCH_RELAY", "1") != "0"
 CLOUD = os.environ.get("SYNC_BENCH_CLOUD", "sim")
-MODEL = "v2"
-LATENCY = {"upload": [0.449, 0.984], "fetch": [0.192, 0.620], "records": [0.197, 0.752], "other": [0.068, 0.469]}  # 出处见头注释
+MODEL = "v3"
+LATENCY = {"upload": [0.449, 0.984], "fetch": [0.192, 0.620], "records": [0.197, 0.752], "other": [0.068, 0.469],
+           "assetUp": 3.7e6, "assetDown": 37e6}  # 出处见头注释
 REAL_COOLDOWN, REAL_LIMIT, REAL_BUDGET = 600, 180, 200
 REAL_LAST = "/tmp/cuepad-sync-measure.last-real"  # 上一次 real 运行结束的时刻
-SCENES = BASIC | EDGES
+SCENES = BASIC | EDGES | FILES
 
 
 LOCK_EXIT = 75  # 等锁超时的退出码，同 xc.sh 的入口锁（_lock.sh）
