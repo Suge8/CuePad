@@ -3,22 +3,20 @@ import SwiftUI
 import UIKit
 
 /// 三个 tab 按底部那一排的顺序（`Dock.tabs`）横着排成一条：左右滑跟手切 tab，松手按甩出的方向停到一页；点底部那一排换 tab 时整条滑过去。
-/// 选中哪个 tab 只有 `Workspace.root` 一份：松手、点按都请它换（`Workspace.tap`），条跟着它走。条此刻在哪只有 `DockMotion` 一份（容器写、SwiftUI 读），
+/// 选中哪个 tab 只有 `Workspace.root` 一份：松手、点按都请它换（`Workspace.tap`），条跟着它的变化走。条此刻在哪只有 `DockMotion` 一份（容器写、SwiftUI 读），
 /// 拖、松手的弹簧、点按的弹簧都是同一条路（`PagerController.animate`），底部那一排的选中与换形读它，所以跟手、同一条弹簧、一起到位。
-/// Cue 在最右，它右边是刚返回离开的那一页（`LeaveShot`）：手指左滑把它拉回来。跟手的是离开前拍的快照（`LeaveShot`，同 Safari 的前进），
+/// Cue 在最右，它右边是刚返回离开的那一页：手指左滑把它拉回来。跟手的是离开前拍的快照（`LeaveShot`，同 Safari 的前进），
 /// 同系统推入一样盖着 Cue 页滑进来、Cue 页慢慢退（底部那一排在条之上，留在原处，前进的页让开它时随拉出淡去，`DockBar`）；松手推入真的页（不带动画），它画上屏后才收起快照。
 /// 跟手与弹簧都在 SwiftUI 之外（`PagerController`）：每页各有自己的托管控制器，拖动只改图层的平移，松手的弹簧交给 Core Animation，
 /// 页里只有 Cue 页的输入框逐帧换浓淡（`DockHandoff`），其余一帧不重算 SwiftUI。环境整份转给每一页（`environment(\.self)`），
-/// 所以这一层的 body 每重算一次，三页的内容就整份重设一遍：这里不读 `DockMotion` 里会变的东西，读的都放进自己的小块里（`PagerSettling`、`ForwardPage`）。
+/// 所以这一层的 body 每重算一次，三页的内容就整份重设一遍：这里什么都不读（root 与前进页由容器自己观察），读 `DockMotion` 的放进自己的小块里（`PagerSettling`、`ForwardPage`）。
 struct DockPager: View {
     let motion: DockMotion
     let shot: LeaveShot
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let root = workspace.root
-        let forward = root == .cue ? shot.view : nil
-        PagerHost(workspace: workspace, motion: motion, shot: shot, root: root, forward: forward)
+        PagerHost(workspace: workspace, motion: motion, shot: shot)
             .ignoresSafeArea()
             .overlay { ForwardPage(motion: motion).allowsHitTesting(false).accessibilityHidden(true) }
             .background { PagerSettling(motion: motion) }
@@ -111,15 +109,9 @@ private struct PagerHost: UIViewControllerRepresentable {
     let workspace: Workspace
     let motion: DockMotion
     let shot: LeaveShot
-    let root: Route
-    let forward: UIView?
 
     func makeUIViewController(context: Context) -> PagerController { PagerController(workspace: workspace, motion: motion, shot: shot) }
 
-    func updateUIViewController(_ controller: PagerController, context: Context) {
-        controller.update(.init(
-            environment: context.environment, root: root, forward: forward,
-            reduceMotion: context.environment.accessibilityReduceMotion))
-    }
+    func updateUIViewController(_ controller: PagerController, context: Context) { controller.update(context.environment) }
 }
 #endif

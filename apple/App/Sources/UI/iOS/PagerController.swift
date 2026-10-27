@@ -7,21 +7,18 @@ import UIKit
 /// 页与条只摆 `bounds` 与 `center`，不碰 `frame`：带平移的视图设 `frame` 会把那一刻的平移折进 `center`，之后平移一变页就带着一段残留位移
 /// （曾经每次排版都这样折一下：停在旧页再一下闪成新页、邻页叠在当前页上、Cue 页歪着露出旁边一角）。
 /// 条的位置只有一份（`offset`），每次挪都经 `apply` 同时交给 `DockMotion`（底部那一排的选中与换形读它）。
-/// 选中哪个 tab 只有 `Workspace.root` 一份：条跟着它的变化滑（`update`），手势松手、读屏翻页是请它换（`Workspace.tapSoon`），不另记一份。
+/// 选中哪个 tab 只有 `Workspace.root` 一份：条直接观察它、跟着它的变化滑（`updateProperties`），手势松手、读屏翻页是请它换（`Workspace.tapSoon`），不另记一份；
+/// SwiftUI 只把环境交过来（`update`），换 tab 不经它、三页的内容不跟着整份重设。
 /// 各页的托管控制器建过就一直挂在条上（回访不重建、滚动位置与推入的页都在），不在屏上的藏着、不订阅（`pageActive` 为假，没读过的先读一份 `pagePrefetch`）；
 /// 滑动中露出来的页（`moving`）画着、订阅着。还没建的页在打开 App 后安静一阵（`buildDelay`）再一页一页地建，离当前页近的先建；拖的那一下邻页还没有才当场建。
 final class PagerController: UIViewController {
-    struct Input {
-        let environment: EnvironmentValues
-        let root: Route
-        let forward: UIView?
-        let reduceMotion: Bool
-    }
-
     private let workspace: Workspace
     private let motion: DockMotion
     private let shot: LeaveShot
-    private var input: Input?
+    /// 转给每一页的环境（`update`）；第一次交来时建当前页。
+    private var environment: EnvironmentValues?
+    /// 条上一次跟到的 root：只跟它的变化走，松手时条先停到了新页、root 还没跟上的那一下不算换了 tab，不把条拉回去。
+    private var followed: Route
     private var pages: [Route: Page] = [:]
     private let strip = UIView()
     /// 正在滑的页：画、订阅。
@@ -50,6 +47,7 @@ final class PagerController: UIViewController {
         self.motion = motion
         self.shot = shot
         resting = workspace.root
+        followed = workspace.root
         super.init(nibName: nil, bundle: nil)
         motion.move(to: CGFloat(Dock.order(resting)), tab: Dock.order(resting), pushed: 0)
     }
@@ -69,22 +67,30 @@ final class PagerController: UIViewController {
 
     // MARK: 输入
 
-    /// 只在 tab 的根页上接横拖：推入了页时横拖归导航栈的返回；Cue 页的输入框有焦点时不接（选字、挪光标都是横着拖），前进松手到真的页画上屏之间也不接。
-    /// 直接读 `DockMotion` 与 `Workspace`（UIKit 自动跟踪这里读到的 Observable），不经 SwiftUI 的输入转一道：那样焦点每进出一次，三页的内容都要整份重设（`refresh`）。
+    /// 直接读 `Workspace`、`DockMotion` 与 `LeaveShot`（UIKit 自动跟踪这里读到的 Observable，变了再调一次），不经 SwiftUI 转一道：
+    /// - 只在 tab 的根页上接横拖：推入了页时横拖归导航栈的返回；Cue 页的输入框有焦点时不接（选字、挪光标都是横着拖），前进松手到真的页画上屏之间也不接。
+    /// - root 换了就滑过去，换了 tab 就忘了前进（`LeaveShot`）、切走的页交出键盘（它留在条上、藏着，输入框不交出焦点的话字还打进看不见的页里；要去的页这时可能正接过焦点，如"对 Cue 说"）；
+    ///   滑动排到下一轮，它读写的 `DockMotion` 不记成这里的依赖。
+    /// - 拉得出来的前进页只在 Cue 页上。
     override func updateProperties() {
         super.updateProperties()
         pan.isEnabled = !motion.composing && !handing && workspace[stack: resting].isEmpty
+        let root = workspace.root
+        if root != followed {
+            followed = root
+            shot.forget()
+            for (tab, page) in pages where tab != root { page.slot.endEditing(true) }
+            if root != resting { Task { self.slide(to: root) } }
+        }
+        let forward = root == .cue ? shot.view : nil
+        if !handing, motion.shot !== forward { motion.shot = forward }
     }
 
-    /// 条只跟着 root 的变化走：松手时条先停到了新页、root 还没跟上的那几毫秒里别处的更新带来的旧 root 不算换了去处，不把条拉回去。
-    func update(_ input: Input) {
-        let changed = self.input.map { $0.root != input.root } ?? false
-        let first = self.input == nil
-        self.input = input
+    func update(_ environment: EnvironmentValues) {
+        let first = self.environment == nil
+        self.environment = environment
         if first { build(resting) }
         for route in pages.keys { refresh(route) }
-        if !handing, motion.shot !== input.forward { motion.shot = input.forward }
-        if changed, input.root != resting { slide(to: input.root) }
     }
 
     private var width: CGFloat { view.bounds.width }
@@ -94,12 +100,12 @@ final class PagerController: UIViewController {
 
     /// 一页的内容：环境整份转过来，再标上它此刻在不在屏上。
     private func refresh(_ route: Route) {
-        guard let input, let page = pages[route] else { return }
+        guard let environment, let page = pages[route] else { return }
         let live = live.contains(route)
         page.host.rootView = AnyView(
             DockStack(tab: route, active: live, shot: route == .cue ? shot : nil)
-                .background(input.environment.palette.desk)
-                .environment(\.self, input.environment))
+                .background(environment.palette.desk)
+                .environment(\.self, environment))
         page.slot.isHidden = !live
     }
 
@@ -201,7 +207,7 @@ final class PagerController: UIViewController {
 
     private func allows(_ direction: PagerArbiter.Direction) -> Bool {
         let index = Dock.order(resting)
-        return direction == .previous ? index > 0 : index < Self.last || input?.forward != nil
+        return direction == .previous ? index > 0 : index < Self.last || motion.shot != nil
     }
 
     @objc private func panned(_ pan: UIPanGestureRecognizer) {
@@ -296,7 +302,7 @@ final class PagerController: UIViewController {
             self.handing = false
             self.offset = -CGFloat(Self.last) * max(self.width, 1)
             withTransaction(still) {
-                self.motion.shot = self.input?.forward
+                self.motion.shot = nil
                 self.apply(self.offset)
             }
             self.motion.busy = false
@@ -305,14 +311,16 @@ final class PagerController: UIViewController {
 
     // MARK: 换 tab
 
-    /// root 换了（点底部那一排、深链、提示）而条还没挪过去：先建好一路要露出来的页，下一帧整条从此刻的位置滑过去（弹簧半路再点也是接着走）；减弱动态效果时直接换。
+    /// root 换了（点底部那一排、深链、提示）而条还没挪过去：整条从此刻的位置滑过去（弹簧半路再点也是接着走），一路要露出来的页还没建的先建、等一帧排好再滑；
+    /// 减弱动态效果时直接换。
     private func slide(to root: Route) {
+        guard root != resting else { return }
         let from = Dock.order(resting), to = Dock.order(root)
         let span = Set(Dock.tabs[min(from, to)...max(from, to)])
         let missing = span.contains { pages[$0] == nil }
         for route in span { build(route) }
         idle?.cancel()
-        guard !(input?.reduceMotion ?? false), view.window != nil else {
+        guard !(environment?.accessibilityReduceMotion ?? false), view.window != nil else {
             stopAnimations()
             show(resting: root, moving: [])
             offset = -CGFloat(to) * width
@@ -320,8 +328,9 @@ final class PagerController: UIViewController {
             return rest()
         }
         show(resting: root, moving: moving.union(span))
+        guard missing else { return animate(to: -CGFloat(to) * width) { [weak self] in self?.rest() } }
         Task { [weak self] in
-            if missing { await NextFrame.wait() }
+            await NextFrame.wait()
             guard let self, self.resting == root else { return }
             self.animate(to: -CGFloat(to) * self.width) { [weak self] in self?.rest() }
         }

@@ -1,6 +1,5 @@
 #if os(iOS)
 import SwiftUI
-import UIKit
 
 /// 窄屏（iPhone 与窄窗口 iPad）的容器：项目、进展、Cue 三个 tab（`Dock.tabs`）横排成一条（`DockPager`：左右滑跟手切 tab，点底部那一排整条滑过去），
 /// 每个 tab 一个导航栈（`Workspace.stacks`、`DockStack`），切走再切回来还停在原来那一页；推入、返回是系统的过渡，返回后在 Cue 页左滑前进回刚才那页。
@@ -35,11 +34,6 @@ struct DockRoot: View {
                 }
             }
             .debugExposesPlaces { openPlaces(true) }
-            .onChange(of: workspace.root) {
-                shot.forget()
-                // 切走的 tab 留在条上、藏着：它里面的输入框不交出焦点的话键盘还在、字还打进看不见的页里
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            }
             // 有焦点时"⋯"收起
             .onChange(of: motion.composing) { if motion.composing { openPlaces(false) } }
     }
@@ -69,13 +63,7 @@ struct DockStack: View {
                 .environment(\.headerHost, .page(search: Dock.search(on: tab)))
                 .dockReserve(tab != .cue)
                 .toolbarVisibility(.hidden, for: .navigationBar)
-                .navigationDestination(for: Route.self) { route in
-                    if let shot {
-                        RouteView(route: route).dockReserve(Dock.stays(on: route)).leaveShot(route, into: shot)
-                    } else {
-                        RouteView(route: route).dockReserve(Dock.stays(on: route))
-                    }
-                }
+                .navigationDestination(for: Route.self) { RouteView(route: $0).dockReserve(Dock.stays(on: $0)).leaveShot($0, into: shot) }
         }
         .environment(\.pageActive, active)
         .environment(\.pagePrefetch, !active)

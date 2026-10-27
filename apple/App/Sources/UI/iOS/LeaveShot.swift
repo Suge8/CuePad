@@ -26,9 +26,9 @@ final class LeaveShot {
 }
 
 extension View {
-    /// 推入的页挂上它：返回离开前把整栈拍进 `shot`。
-    func leaveShot(_ route: Route, into shot: LeaveShot) -> some View {
-        background { LeaveProbe { shot.take(route, from: $0) } }
+    /// 推入的页挂上它：返回离开前把整栈拍进 `shot`；没有（不是 Cue 的栈）时什么都不挂。
+    func leaveShot(_ route: Route, into shot: LeaveShot?) -> some View {
+        background { if let shot { LeaveProbe { shot.take(route, from: $0) } } }
     }
 }
 
