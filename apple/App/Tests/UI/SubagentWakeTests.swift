@@ -101,7 +101,7 @@ struct SubagentWakeTests {
 
     private func say(_ text: String, in workspace: Workspace, _ rig: CueHostTests.Rig) async throws {
         workspace.cue.draft = ComposerDraft(text: text)
-        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: rig.store.files) }?.value
+        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { $0.stored }.value
     }
 
     private static func ui(_ state: String, action: String) -> [String: Any] {

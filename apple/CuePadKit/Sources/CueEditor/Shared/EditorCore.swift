@@ -174,12 +174,13 @@ final class EditorCore {
         let url = files.fileURL(for: key)
         let status = fileStatus(key, name, url)
         let thumbnail = url.flatMap { fileThumbnails.image(at: $0, key: key) }
-        let style = style
-        let symbol = thumbnail == nil ? fileIcon(name).map { CueImageRendering.tinted($0, color: resolved(style.markerColor)) } : nil
-        return CueImageRendering.canvas(size: size) { [weak self] context in
-            FileChip.draw(in: context, size: size, name: name, status: status, thumbnail: thumbnail, symbol: symbol, style: style) {
-                self?.resolved($0) ?? $0
-            }
+        var style = style
+        style.imagePlaceholderColor = resolved(style.imagePlaceholderColor)
+        style.textColor = resolved(style.textColor)
+        style.markerColor = resolved(style.markerColor)
+        let symbol = thumbnail == nil ? fileIcon(name).map { CueImageRendering.tinted($0, color: style.markerColor) } : nil
+        return CueImageRendering.canvas(size: size) { context in
+            FileChip.draw(in: context, size: size, name: name, status: status, thumbnail: thumbnail, symbol: symbol, style: style)
         }
     }
 

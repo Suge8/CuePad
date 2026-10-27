@@ -95,7 +95,8 @@ extension DebugScene {
             if let id, let card = try? await store.card(id) {
                 draft.wrappedValue.attach(card)
             }
-            draft.wrappedValue.images = [(0.85, 0.47, 0.29), (0.25, 0.56, 0.72)].map { PickedImage(data: swatch(red: $0.0, green: $0.1, blue: $0.2)) }
+            let swatches = [(0.85, 0.47, 0.29), (0.25, 0.56, 0.72)].compactMap { try? store.files.store(swatch(red: $0.0, green: $0.1, blue: $0.2)) }
+            draft.wrappedValue.files = swatches.map { DraftFile(key: $0, name: "") } + [demoPDF(store)].compactMap { $0 }
         case "lines":
             draft.wrappedValue.text = (1...9).map { String(localized: "第 \($0) 行", table: "Demo") }.joined(separator: "\n")
         case "slash":
@@ -103,6 +104,24 @@ extension DebugScene {
         default:
             break
         }
+    }
+
+    /// 演示用的一份 PDF（一页 A4、几行字）存进附件目录：附件条、正文里的文件牌、你的话里的文件拍照用。
+    static func demoPDF(_ store: CueStore) -> DraftFile? {
+        let name = String(localized: "季度复盘.pdf", table: "Demo")
+        let url = FileManager.default.temporaryDirectory.appending(path: name)
+        var page = CGRect(x: 0, y: 0, width: 595, height: 842)
+        guard let context = CGContext(url as CFURL, mediaBox: &page, nil) else { return nil }
+        context.beginPDFPage(nil)
+        context.setFillColor(red: 0.95, green: 0.93, blue: 0.88, alpha: 1)
+        context.fill(page)
+        context.setFillColor(red: 0.2, green: 0.24, blue: 0.32, alpha: 1)
+        for (row, width) in [420.0, 360, 400, 300, 380, 240].enumerated() {
+            context.fill(CGRect(x: 72, y: 720 - Double(row) * 44, width: width, height: row == 0 ? 26 : 12))
+        }
+        context.endPDFPage()
+        context.closePDF()
+        return (try? store.files.store(fileAt: url)).map { DraftFile(key: $0, name: name) }
     }
 
     private static func swatch(red: CGFloat, green: CGFloat, blue: CGFloat) -> Data {

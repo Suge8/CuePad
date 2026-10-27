@@ -206,7 +206,7 @@ private struct WaitReply: View {
 
     private func send() {
         guard canSend else { return }
-        _ = workspace.speak(to: .session(session, mode: .send), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
+        workspace.speak(to: .session(session, mode: .send), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
             draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }

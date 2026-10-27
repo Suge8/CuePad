@@ -213,7 +213,7 @@ struct PiReplyBar: View {
     private var placeholder: LocalizedStringResource {
         if let answering { return answering.kind == .known(.select) ? "或写你自己的回答" : "回答上面的问题" }
         if speakBlocked != nil { return Self.blockedPrompt }
-        if !draft.attachments.isEmpty || !draft.images.isEmpty { return "补一句（可不填）" }
+        if !draft.attachments.isEmpty || !draft.files.isEmpty { return "补一句（可不填）" }
         return interrupts ? "插话（会打断这一轮）" : replyPrompt
     }
 
@@ -223,13 +223,13 @@ struct PiReplyBar: View {
         session.state == .known(.ended) ? "唤醒 \(session.title) 接着说" : "回复 \(session.title)"
     }
 
-    /// 作答框只收文字：说出去的这句就是答案（`CueStore.speak`），答完文字清空，其余（别处带进草稿的卡片、图片）留着。
+    /// 作答框只收文字：说出去的这句就是答案（`CueStore.speak`），答完文字清空，其余（别处带进草稿的卡片、附件）留着。
     private func answer() {
         guard canSend, answering != nil else { return }
-        let written = workspace.speak(to: .session(session, mode: .send), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
+        workspace.speak(to: .session(session, mode: .send), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
             draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        if written != nil { didSend() }
+        didSend()
     }
 
     private var box: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: session.id) }
@@ -249,16 +249,15 @@ struct PiReplyBar: View {
     /// （`commandLine`），不看按钮上次排版时带来的方式。
     private func send(_ mode: DeliveryMode) {
         guard canSend else { return }
-        let accepts = accepts, files = services.store.files
+        let accepts = accepts
         let card = draft.attachments.first?.card, command = commandLine
-        let written = if let line = command {
+        if let line = command {
             // 命令不是说的话：批注留着，跟下一句发
             workspace.speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }) { _ in line }
         } else {
-            workspace.speak(to: .session(session, mode: mode, card: card), from: box) { try $0.accepting(accepts).stored(in: files) }
+            workspace.speak(to: .session(session, mode: mode, card: card), from: box) { $0.accepting(accepts).stored }
         }
-        // 图片存不进图片库时什么都没发：不收键盘、不当作发出
-        if written != nil { didSend(talked: command == nil) }
+        didSend(talked: command == nil)
     }
 }
 

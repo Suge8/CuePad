@@ -30,12 +30,12 @@ struct CaptureComposer: View {
     private var project: UUID { state.project ?? defaultProject ?? Project.defaultID }
     private var destination: String { workspace.catalog?.project(project)?.shownName ?? "" }
     /// 收成一行（`Composer` 同一条规则）：没有头部的落点胶囊，占位要带上落点。
-    private var collapsed: Bool { !pinnedOpen && !focused && state.draft.isEmpty(accepting: .images) }
+    private var collapsed: Bool { !pinnedOpen && !focused && state.draft.isEmpty(accepting: .files) }
 
     var body: some View {
         Composer(
             draft: $state.draft, prompt: .verbatim(collapsed ? CaptureCopy.placeholder(to: destination) : CaptureCopy.prompt), label: "随手记",
-            focus: $focused, accepts: .images, form: pinnedOpen ? .open : .line(opensOnFocus: true), shortcuts: [.send: save],
+            focus: $focused, accepts: .files, form: pinnedOpen ? .open : .line(opensOnFocus: true), shortcuts: [.send: save],
             header: { header }, tools: { EmptyView() }, send: { saveButton }
         )
         // 一直展开的出现的同一刻聚焦
@@ -70,7 +70,7 @@ struct CaptureComposer: View {
 
     private var handOffButton: some View {
         let cue = workspace.cue
-        let empty = state.draft.isEmpty(accepting: .images) || !cue.canHear
+        let empty = state.draft.isEmpty(accepting: .files) || !cue.canHear
         return Button("交给 \(cue.name)", icon: .handOff, action: handToCue)
             .font(Typography.meta.weight(.semibold))
             .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, compact: true))
@@ -81,8 +81,7 @@ struct CaptureComposer: View {
 
     /// 这次随手记不记成灵感，直接作为一句话说给 Cue。
     private func handToCue() {
-        let files = services.store.files
-        _ = workspace.speak(to: .cue, from: $state.draft, saying: Dotted(String(localized: "已交给 \(workspace.cue.name)"))) { try $0.stored(in: files) }
+        workspace.speak(to: .cue, from: $state.draft, saying: Dotted(String(localized: "已交给 \(workspace.cue.name)"))) { $0.stored }
     }
 
     private var saveButton: some View {
@@ -94,7 +93,7 @@ struct CaptureComposer: View {
     }
 
     private func save() {
-        let note = CaptureDraft(text: state.draft.text, images: state.draft.images.map(\.data)), project = project
+        let note = CaptureDraft(text: state.draft.text, files: state.draft.files), project = project
         guard !note.isEmpty, !saving else { return }
         saving = true
         workspace.attempt {

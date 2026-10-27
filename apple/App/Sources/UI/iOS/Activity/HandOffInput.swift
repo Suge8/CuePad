@@ -47,7 +47,7 @@ struct HandOffInput: View {
         let workspace = workspace, outbox = outbox
         return Binding(get: { workspace.handOffDraft }) { draft in
             workspace.handOffDraft = draft
-            if workspace.outbox == nil, !draft.isEmpty(accepting: [.images, .cards]) { workspace.outbox = outbox }
+            if workspace.outbox == nil, !draft.isEmpty(accepting: [.files, .cards]) { workspace.outbox = outbox }
         }
     }
     /// 选中的会话在线时是它（模型与命令只给在线的换，已结束的绑定会话没有）。
@@ -74,7 +74,7 @@ struct HandOffInput: View {
     var body: some View {
         Composer(
             draft: box, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
-            accepts: chosen?.state.composerKinds ?? [.images, .cards], cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil,
+            accepts: chosen?.state.composerKinds ?? [.files, .cards], cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil,
             commands: commands,
             header: { header.padding(.horizontal, 12).padding(.top, 10) },
             tools: {
@@ -139,15 +139,13 @@ struct HandOffInput: View {
             guard choice == nil else { return newSession() }
             return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, opening: planned?.opening, workspace: workspace)
         }
-        let kinds = session.composerKinds, files = services.store.files
+        let kinds = session.composerKinds
         let saying = Dotted(String(localized: "已交给 \(session.title)"))
-        let written = if let line = PiSlash.line(of: draft.accepting(kinds), in: commands) {
+        if let line = PiSlash.line(of: draft.accepting(kinds), in: commands) {
             workspace.speak(to: .session(session, mode: .command, card: outbox.card), from: box, saying: saying) { _ in line }
         } else {
-            workspace.speak(to: .session(session, mode: .send, card: outbox.card), from: box, saying: saying) { try $0.accepting(kinds).stored(in: files) }
+            workspace.speak(to: .session(session, mode: .send, card: outbox.card), from: box, saying: saying) { $0.accepting(kinds).stored }
         }
-        // 图片存不进图片库时什么都没发：浮框留着、草稿原样，只看到报错
-        guard written != nil else { return }
         focused = false
         workspace.outbox = nil
     }

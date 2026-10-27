@@ -58,18 +58,19 @@ extension CueTextView {
     private func importFile(from provider: NSItemProvider, type: UTType, into item: UITextPasteItem) {
         let files = files
         nonisolated(unsafe) let item = item, provider = provider
-        let finish: @Sendable (Result<(key: String, name: String), any Error>) -> Void = { result in
-            Task { @MainActor [weak self] in
+        let finish: @Sendable (Result<(key: String, name: String), any Error>) -> Void = { [weak self] result in
+            Task { @MainActor in
                 guard let self else { return item.setNoResult() }
                 switch result {
-                case .success(let stored): item.setResult(attributedString: core.onOwnLine(core.attachmentString(key: stored.key, name: stored.name), replacing: selectedRange))
+                case .success(let stored):
+                    item.setResult(attributedString: self.core.onOwnLine(self.core.attachmentString(key: stored.key, name: stored.name), replacing: self.selectedRange))
                 case .failure(let error):
-                    onError?(error)
+                    self.onError?(error)
                     item.setNoResult()
                 }
             }
         }
-        provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, fileError in
+        _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, fileError in
             if let url {
                 // 临时副本的名字是系统起的，显示用分享方给的名字
                 let name = provider.suggestedName.map { $0 + ((url.pathExtension.isEmpty || $0.hasSuffix("." + url.pathExtension)) ? "" : "." + url.pathExtension) }

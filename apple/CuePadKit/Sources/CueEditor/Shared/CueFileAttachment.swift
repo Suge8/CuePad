@@ -57,9 +57,8 @@ final class CueFileAttachment: NSTextAttachment {
     }
 }
 
-/// 文件牌怎么画（两端同一份，画布由 `CueImageRendering.canvas` 给）。
-@MainActor
-enum FileChip {
+/// 文件牌怎么画（两端同一份，画布由 `CueImageRendering.canvas` 给；颜色由调用方先按当前外观解析好）。
+nonisolated enum FileChip {
     static let padding: CGFloat = 8
     static let thumbSide: CGFloat = 40
     private static let gap: CGFloat = 10
@@ -79,11 +78,11 @@ enum FileChip {
 
     static func draw(
         in context: CGContext, size: CGSize, name: String, status: CueFileStatus, thumbnail: CGImage?, symbol: CueImage?,
-        style: CueEditorTheme, resolve: (CueColor) -> CueColor
+        style: CueEditorTheme
     ) {
         let rect = CGRect(origin: .zero, size: size)
         context.addPath(CGPath(roundedRect: rect, cornerWidth: style.imageCornerRadius, cornerHeight: style.imageCornerRadius, transform: nil))
-        context.setFillColor(resolve(style.imagePlaceholderColor).cgColor)
+        context.setFillColor(style.imagePlaceholderColor.cgColor)
         context.fillPath()
 
         let box = CGRect(x: padding, y: (size.height - thumbSide) / 2, width: thumbSide, height: thumbSide)
@@ -111,19 +110,19 @@ enum FileChip {
         let top = (size.height - lines) / 2
         (name as NSString).draw(
             in: CGRect(x: left, y: top, width: width, height: line(nameFont)),
-            withAttributes: [.font: nameFont, .foregroundColor: resolve(style.textColor), .paragraphStyle: paragraph])
+            withAttributes: [.font: nameFont, .foregroundColor: style.textColor, .paragraphStyle: paragraph])
         (status.detail as NSString).draw(
             in: CGRect(x: left, y: top + line(nameFont) + 2, width: width, height: line(detailFont)),
-            withAttributes: [.font: detailFont, .foregroundColor: resolve(style.markerColor), .paragraphStyle: paragraph])
+            withAttributes: [.font: detailFont, .foregroundColor: style.markerColor, .paragraphStyle: paragraph])
 
         guard let progress = status.progress else { return }
         let track = CGRect(x: left, y: size.height - 7, width: width, height: 3)
         context.addPath(CGPath(roundedRect: track, cornerWidth: 1.5, cornerHeight: 1.5, transform: nil))
-        context.setFillColor(resolve(style.markerColor).withAlphaComponent(0.25).cgColor)
+        context.setFillColor(style.markerColor.withAlphaComponent(0.25).cgColor)
         context.fillPath()
         let done = CGRect(x: track.minX, y: track.minY, width: max(track.height, track.width * min(max(progress, 0), 1)), height: track.height)
         context.addPath(CGPath(roundedRect: done, cornerWidth: 1.5, cornerHeight: 1.5, transform: nil))
-        context.setFillColor(resolve(style.textColor).cgColor)
+        context.setFillColor(style.textColor.cgColor)
         context.fillPath()
     }
 

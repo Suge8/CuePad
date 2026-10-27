@@ -5,7 +5,7 @@ import SwiftUI
 /// Cue 点名的图（提问卡、结果卡）是另一种：方形缩略图配看什么（`CueShots`），共用一张一张的 `DeliverableTile`。
 /// 一份是整宽主图（按内容真实比例夹在 4:3～16:9），两份并排（各按真实比例，不高过主图），三份起横向滑、各按真实比例定宽同高，放不下的露出一截；
 /// 每张下面写它的标题（Agent 发时每份一句、同批各不相同，至多两行）与类型（时长、页数）。缩略图全是真内容（`DeliverableLooks`）。
-/// 文件还在从 iCloud 下载时画面上写"下载中"、点不开，到了自动换成内容。点一张交给 `open`，全屏页从这张放大出来（`previewPresenter`）。
+/// 文件还没到这台时画面上写传了几成（还没开始取的写"点一下从 iCloud 取"，点了就取），到了自动换成内容。点一张交给 `open`，全屏页从这张放大出来（`previewPresenter`）。
 struct PreviewBatch: View {
     let previews: [PiPreview]
     /// 放大与缩回按"哪一组 + 哪一份"认那张缩略图
@@ -93,9 +93,10 @@ struct DeliverableTile: View {
     let zoom: PreviewZoomKey
     let open: (PiPreview) -> Void
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var scale
-    /// 文件随同步到本机的那一刻就绪（附件表变化时重读）
+    /// 文件到本机的那一刻就绪（这个文件的一趟传输结束时重查）
     @State private var arrived: Bool?
     @State private var look: DeliverableLook?
     /// 画面出了 `Pending.delay` 还没出来：这时才写它是什么（`kindIcon`）。
@@ -118,7 +119,7 @@ struct DeliverableTile: View {
     }
 
     var body: some View {
-        Button { open(preview) } label: {
+        Button { if file == nil { workspace.fetchFile(preview.key) } else { open(preview) } } label: {
             VStack(alignment: .leading, spacing: Self.captionGap) {
                 framed
                 if captioned { caption }
@@ -126,13 +127,12 @@ struct DeliverableTile: View {
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle(.card))
-        .disabled(file == nil)
         .accessibilityLabel(Dotted(String(localized: "预览：\(label)"), kind).spoken)
-        .accessibilityHint(file == nil ? "正在从 iCloud 下载" : "全屏查看")
+        .accessibilityHint(file == nil ? "从 iCloud 取来" : "全屏查看")
         #if os(macOS)
         .help(label)
         #endif
-        .observingArrival(of: preview.key, in: services.store, into: $arrived)
+        .observingArrival(of: preview.key, in: services, into: $arrived)
         .task(id: file) {
             guard let file else { return }
             let waited = shown == nil
@@ -148,6 +148,9 @@ struct DeliverableTile: View {
     private var kind: String {
         [preview.kind?.label ?? String(localized: "文件"), shown?.detail].compactMap { $0 }.joined(separator: " ")
     }
+
+    /// 还没到这台时写的那一行：下载中几成，还没开始取的写怎么取。
+    private var away: String { FileStatus.line(name: "", file: nil, transfer: services.fileTransfers[preview.key]).detail }
 
     /// 读到之前先从内存里拿（同一份别处读过、滚回来的），第一帧就是该有的比例。
     private var shown: DeliverableLook? { look ?? DeliverableLooks.cached(preview, box: box) }
@@ -221,11 +224,12 @@ struct DeliverableTile: View {
                 } else if waiting {
                     EmptyView()
                 } else if file == nil {
-                    // 还没到本机：点名的图没有下面那行字，下载中写在画面上
+                    // 还没到本机：点名的图没有下面那行字，传了几成、怎么取写在画面上
                     VStack(spacing: 3) {
                         Image(.downloading).font(.callout)
-                        Text("下载中").font(Typography.caption)
+                        Text(verbatim: away).font(Typography.caption).monospacedDigit().multilineTextAlignment(.center)
                     }
+                    .padding(.horizontal, 6)
                     .foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -261,7 +265,7 @@ struct DeliverableTile: View {
     private var caption: some View {
         Group {
             if file == nil {
-                Text("正在从 iCloud 下载…").foregroundStyle(palette.ink3)
+                Text(verbatim: away).foregroundStyle(palette.ink3)
             } else {
                 Text("\(Text(label).foregroundStyle(palette.ink2))\(Dotted.inline)\(Text(kind))").foregroundStyle(palette.ink3)
             }

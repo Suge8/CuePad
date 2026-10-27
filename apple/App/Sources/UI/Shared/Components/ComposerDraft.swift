@@ -12,12 +12,12 @@ struct Outbox: Identifiable {
     var project: UUID?
 }
 
-/// 输入框里的东西：文字、图片、带上的灵感或任务（可带几张，按带上的顺序；第一张是这次关联的那条——发给 Agent 时是那件任务）、
+/// 输入框里的东西：文字、附件（图片与文件）、带上的灵感或任务（可带几张，按带上的顺序；第一张是这次关联的那条——发给 Agent 时是那件任务）、
 /// 对 Agent 回答的批注（只有会话的回复框有，按在对话里的先后）。存成卡片（随手记）、发给 Pi（回复）、开场的话（新会话）都是它，
 /// 去处只决定怎么处理这份草稿。
 struct ComposerDraft {
     var text = ""
-    var images: [PickedImage] = []
+    var files: [DraftFile] = []
     var attachments: [Outbox] = []
     var notes: [ReplyNote] = []
 
@@ -34,12 +34,12 @@ struct ComposerDraft {
         let parts = [
             notes.isEmpty ? nil : String(localized: "\(notes.count) 条批注"),
             attachments.isEmpty ? nil : String(localized: "\(attachments.count) 条灵感"),
-            images.isEmpty ? nil : String(localized: "\(images.count) 张图片"),
+            files.isEmpty ? nil : String(localized: "\(files.count) 个附件"),
         ].compactMap { $0 }
         return parts.isEmpty ? nil : String(localized: "带了 \(parts.formatted(.list(type: .and)))")
     }
 
-    var hasImages: Bool { !images.isEmpty || attachments.contains { CueFormat.hasImages($0.content) } }
+    var hasFiles: Bool { !files.isEmpty || attachments.contains { CueFormat.hasAttachments($0.content) } }
 
     /// "＋ 选灵感"带上一张（作为这次消息的附件，卡片本身不动）；已带着的不重复。
     mutating func attach(_ card: Card) {
@@ -55,26 +55,33 @@ struct ComposerDraft {
         return draft
     }
 
-    /// 把存储格式正文放回输入框（编辑后重发）：文字接在已写的字后面（空一行），图片接进图片条。本机没有文件的图片略过。
-    mutating func append(stored: String, files: AttachmentFiles) {
-        text = [text, CueFormat.plainText(stored)].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
-        images += CueFormat.imageKeys(in: stored).compactMap { hash in
-            files.fileURL(for: hash).flatMap { try? Data(contentsOf: $0) }.flatMap(PickedImage.init(data:))
+    /// 把存储格式正文放回输入框（编辑后重发、展开编辑带上的卡片）：文字接在已写的字后面（空一行），附件接进附件条（已带着的不重复）。
+    mutating func append(stored: String) {
+        let tokens = CueFormat.parse(stored)
+        let words = tokens.map { if case .text(let text) = $0 { text } else { "" } }.joined()
+        text = [text, CueFormat.plainText(words)].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
+        for token in tokens {
+            let file: DraftFile? = switch token {
+            case .text: nil
+            case .image(let key): DraftFile(key: key, name: "")
+            case .file(let key, let name): DraftFile(key: key, name: name)
+            }
+            if let file, !files.contains(file) { files.append(file) }
         }
     }
 
     /// 按去处接受的种类，有没有可发的东西（不接受的种类不算）。
     func isEmpty(accepting kinds: ComposerKinds) -> Bool {
-        text.allSatisfy(\.isWhitespace) && (!kinds.contains(.images) || images.isEmpty) && (!kinds.contains(.cards) || attachments.isEmpty)
+        text.allSatisfy(\.isWhitespace) && (!kinds.contains(.files) || files.isEmpty) && (!kinds.contains(.cards) || attachments.isEmpty)
             && (!kinds.contains(.notes) || notes.isEmpty)
     }
 
-    /// 只留去处收得下的：收不了图片时（会话做不到，`AgentCapabilities.images`）自己选的图片不带、带上的卡片里的图片去掉，只发文字。
-    /// 草稿里可能有看不见的图片（调回的上一句、展开编辑的卡片、编辑后重发的话），发出前都经这里，界面上没露出的不会跟着发出去。
+    /// 只留去处收得下的：收不了附件时（作答的回复框只收文字）自己带的附件不带、带上的卡片里的附件只留文件名。
+    /// 草稿里可能有看不见的附件（调回的上一句、展开编辑的卡片、编辑后重发的话），发出前都经这里，界面上没露出的不会跟着发出去。
     func accepting(_ kinds: ComposerKinds) -> ComposerDraft {
-        guard !kinds.contains(.images) else { return self }
+        guard !kinds.contains(.files) else { return self }
         var draft = self
-        draft.images = []
+        draft.files = []
         draft.attachments = attachments.map { outbox in
             var outbox = outbox
             outbox.content = CueFormat.plainText(outbox.content)
@@ -83,22 +90,23 @@ struct ComposerDraft {
         return draft
     }
 
-    /// 存储格式正文：图片文件在这里写入图片库。批注（`ReplyNote.message`）排在你写的话前面。
-    func stored(in files: AttachmentFiles) throws -> String {
+    /// 存储格式正文（附件选好时已存进附件目录）。批注（`ReplyNote.message`）排在你写的话前面。
+    var stored: String {
         StoredBody.make(
             attachments: attachments.map(\.content), text: [ReplyNote.message(notes), text].filter { !$0.isEmpty }.joined(separator: "\n\n"),
-            imageHashes: try images.map { try files.store($0.data) })
+            files: files)
     }
 }
 
 struct ComposerKinds: OptionSet {
     let rawValue: Int
-    static let images = ComposerKinds(rawValue: 1)
+    /// 附件：图片与任意文件（交给 Agent 的是本机路径，各家都读得了）
+    static let files = ComposerKinds(rawValue: 1)
     static let cards = ComposerKinds(rawValue: 2)
     static let notes = ComposerKinds(rawValue: 4)
 }
 
-/// 左边"＋"能打开的来源：卡片两端都有；图片 iOS 是相册与拍照，Mac 是图片文件（各平台的选项见 `imageChoices`）。粘贴的图片不经这里，由文字区直接交进图片条。
+/// 左边"＋"能打开的来源：卡片两端都有；附件 iOS 是相册、拍照与文件，Mac 是文件（各平台的选项见 `fileChoices`）。粘贴、拖进来的附件不经这里，由文字区直接交进附件条。
 enum ComposerSource { case cards, photos, camera, files }
 
 extension Binding where Value == ComposerSource? {
@@ -108,32 +116,18 @@ extension Binding where Value == ComposerSource? {
     }
 }
 
-/// 选来、粘贴进来的一张图：HEIC、TIFF 等格式转成 JPEG（Pi 与大多数应用不认 HEIC），PNG 与 JPEG 原样保留。
-/// 图片条里的小图按条里的尺寸降采样解码（`thumbnail`），不拿原图去画：一张 4032 见方的照片原样解码是 65MB，
-/// 图片条里放九张时会话页常驻 556MB、峰值 786MB（降采样后 143MB、358MB，不带图是 131MB、346MB）。
-struct PickedImage: Identifiable {
-    let id = UUID()
-    let data: Data
-    let preview: Image
+/// 带上的一个附件（相册、拍照、文件、粘贴、拖入）：选好就存进附件目录（`store`，在后台：大文件要读一遍算哈希），草稿里只记键与文件名，
+/// 发出去就是正文里的引用（`CueFormat.markup`）。图片没有名字（嵌入的写法不带名字）。
+nonisolated struct DraftFile: Identifiable, Hashable, Sendable {
+    let key: String
+    let name: String
 
-    static let quality = 0.85
-    static let previewSide: CGFloat = 64
+    var id: String { key }
+    var isImage: Bool { AttachmentKey.isImage(key) }
+    var markup: String { CueFormat.markup(key: key, name: name) }
 
-    init(data: Data) {
-        self.data = Self.outgoing(data)
-        preview = Self.thumbnail(data).map { Image(decorative: $0, scale: 1) } ?? Image(.photo)
-    }
-
-    /// 发出去的那份：PNG 与 JPEG 原样，其余（HEIC 等）转 JPEG。只要它的（插进卡片正文）不必解图片条的小图。
-    static func outgoing(_ data: Data) -> Data {
-        let keeps = data.starts(with: [0x89, 0x50, 0x4E, 0x47]) || data.starts(with: [0xFF, 0xD8, 0xFF])
-        return keeps ? data : ImageFiles.jpeg(from: data, quality: quality) ?? data
-    }
-
-    /// 填满一格（裁成方块）时短边够 3 倍屏的像素：按长短边之比定长边上限，再大的不解码。
-    private static func thumbnail(_ data: Data) -> CGImage? {
-        Thumbnails.decoded(data) { size in
-            Int((previewSide * 3 * max(size.width, size.height) / min(size.width, size.height)).rounded(.up))
-        }
+    @concurrent static func store(_ incoming: IncomingFile, in files: AttachmentFiles) async throws -> DraftFile {
+        let stored = try incoming.store(in: files)
+        return DraftFile(key: stored.key, name: stored.name)
     }
 }

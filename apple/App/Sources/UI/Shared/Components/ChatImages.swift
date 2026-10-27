@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 你的话里带的图片（对话里的气泡与还没进对话的气泡共用）：缩略图排在文字气泡下面，靠右；只有一张时按原比例（同高，宽不超过 `singleWidth`，
 /// 不裁），几张时一行 `perRow` 张方块；点一张在交付物同一个全屏页里看（`openPreview`，几张左右翻）。
-/// 图片文件随同步到手机晚于对话：到达之前是占位且点不开，到达的那一刻换成图（附件表变化时重读）。
+/// 图片文件随同步晚于对话到：到达之前是占位，写着传了几成（还没开始取的写怎么取，点了就取），到达的那一刻换成图。
 /// 还在路上的话整片变淡，与文字气泡一致。
 struct ChatImages: View {
     let hashes: [String]
@@ -55,7 +55,7 @@ struct ChatImages: View {
     }
 
     /// 同一张图同一个身份（哈希的前 128 位）：缩略图与全屏页按它对上。
-    private static func id(of hash: String) -> UUID {
+    static func id(of hash: String) -> UUID {
         let hex = Array(hash.prefix(32))
         let groups = [0..<8, 8..<12, 12..<16, 16..<20, 20..<32].map { String(hex[$0]) }
         return UUID(uuidString: groups.joined(separator: "-")) ?? UUID()
@@ -69,24 +69,66 @@ private struct ChatImage: View {
     let zoom: PreviewZoomKey
     let open: () -> Void
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var scale
-    /// 文件随同步到本机的那一刻就绪
+    /// 文件到本机的那一刻就绪
     @State private var arrived: Bool?
 
     var body: some View {
-        Button(action: open) {
+        Button { if arrived == false { workspace.fetchFile(hash) } else { open() } } label: {
             // 到达时换一个身份，缩略图重新读文件；一开始就在的不重读
             Thumbnail(hash: hash, height: side, radius: Self.radius, fitWidth: fitWidth).frame(width: fitWidth == nil ? side : nil).id(arrived ?? true)
                 .previewSource(zoom, radius: Self.radius) { [files = services.store.files, hash, side, scale] in
                     await Thumbnail.picture(hash, height: side, scale: scale, in: files)
                 }
+                .overlay {
+                    if arrived == false {
+                        Text(verbatim: FileStatus.line(name: "", file: nil, transfer: services.fileTransfers[hash]).detail)
+                            .font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3)
+                            .multilineTextAlignment(.center).padding(6)
+                    }
+                }
         }
         .buttonStyle(PressStyle())
-        .disabled(arrived == false)
         .accessibilityLabel("图片")
-        .accessibilityHint("查看大图")
-        .observingArrival(of: hash, in: services.store, into: $arrived)
+        .accessibilityHint(arrived == false ? "从 iCloud 取来" : "查看大图")
+        .observingArrival(of: hash, in: services, into: $arrived)
     }
 
     private static let radius: CGFloat = 12
+}
+
+/// 你的话里带的文件（会话记录里的"附件：名（路径）"认回来的引用也是）：气泡下面一行一个文件牌（`FileChip`），靠右；
+/// 点一个在交付物同一个全屏页里看（`openPreview`，几个左右翻），还没到这台的点了去取。还在路上的话整片变淡，与文字气泡一致。
+struct ChatFiles: View {
+    let files: [DraftFile]
+    var trip = BubbleTrip.arrived
+    @Environment(\.openPreview) private var openPreview
+
+    private static var maxWidth: CGFloat { 300 }
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            ForEach(files) { file in
+                FileChip(key: file.key, name: file.name, open: openPreview.map { opener in { _ in open(file, with: opener) } })
+                    .frame(maxWidth: Self.maxWidth)
+            }
+        }
+        .opacity(trip.opacity)
+    }
+
+    /// 已到本机的几个作为一组打开，从点的那个起。全屏页按交付物认一份：标题与名字都是文件名。
+    private func open(_ file: DraftFile, with opener: PreviewOpener) {
+        let batch = files.compactMap(Self.preview)
+        guard let opened = batch.first(where: { $0.key == file.key }) else { return }
+        opener(PreviewOpening(preview: opened, batch: batch, group: "chat-files-" + files.map(\.key).joined(separator: ",")))
+    }
+
+    /// 名字的扩展名与键的不一致时（键按内容认的、名字没写）接上键的，全屏页按它认类型、找本机那份。
+    private static func preview(_ file: DraftFile) -> PiPreview? {
+        guard let parts = AttachmentKey.parts(file.key) else { return nil }
+        let name = AttachmentKey.make(hash: parts.hash, name: file.name) == file.key ? file.name : file.name + "." + parts.format
+        return PiPreview(id: ChatImages.id(of: file.key), sessionID: "", hash: parts.hash, name: name, title: file.name, byteCount: 0)
+    }
 }

@@ -13,7 +13,7 @@ import SwiftUI
 extension DebugScene {
     static func presetSpeech(_ workspace: Workspace) async {
         guard let speech = defaults.string(forKey: "CuePadSpeech") else { return }
-        let services = workspace.services, files = services.store.files
+        let services = workspace.services
         let box: Binding<ComposerDraft>, listener: Listener
         if scene == "session" {
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
@@ -27,7 +27,7 @@ extension DebugScene {
         }
         box.wrappedValue.text = String(localized: "把重连用例也跑一遍，结果贴给我", table: "Demo")
         switch speech {
-        case "sent": _ = workspace.speak(to: listener, from: box) { try $0.stored(in: files) }
+        case "sent": workspace.speak(to: listener, from: box) { $0.stored }
         case "trips":
             // 会话在哪台就发给哪台（`CueStore.speak`），所以直接写请求、指给那台不接手的，再像发出时那样马上传
             guard case .session(let target, _, _, _) = listener, let ref = target.ref else { return }
@@ -46,7 +46,7 @@ extension DebugScene {
         case "send":
             Task {
                 try? await Task.sleep(for: .seconds(2))
-                _ = workspace.speak(to: listener, from: box) { try $0.stored(in: files) }
+                workspace.speak(to: listener, from: box) { $0.stored }
             }
         default: break
         }

@@ -1,21 +1,24 @@
+import CueEditor
+import CueText
 import SwiftUI
 
 extension Composer {
     var plus: some View {
         let cards = accepts.contains(.cards) ? [ChoiceMenu.Choice(title: "选灵感或任务", image: .icon(.pickCards)) { source = .cards }] : []
-        let images = accepts.contains(.images) ? ComposerSource.imageChoices.map { choice in
+        let files = accepts.contains(.files) ? ComposerSource.fileChoices.map { choice in
             ChoiceMenu.Choice(title: choice.title, image: .icon(choice.icon)) { source = choice.source }
         } : []
-        return MenuButton(sections: [ChoiceMenu.Section(choices: cards + images)], press: .button, accessibilityLabel: "添加") {
+        return MenuButton(sections: [ChoiceMenu.Section(choices: cards + files)], press: .button, accessibilityLabel: "添加") {
             CircleGlyph(fill: palette.fill) { Image(.add).font(.body.weight(.semibold)).foregroundStyle(palette.ink) }
                 .frame(width: ComposerMetrics.slot, height: buttonHeight)
         }
         .fixedSize()
     }
 
-    /// 带上的卡片或任务：标题、图片数，可移除；点一下看全文，长按（Mac 右键）出"展开编辑""不带了"（`AttachmentButton`）。
+    /// 带上的卡片或任务：标题、附件数（图片与文件），可移除；点一下看全文，长按（Mac 右键）出"展开编辑""不带了"（`AttachmentButton`）。
     func chip(_ outbox: Outbox) -> some View {
-        let card = CardText(outbox.content), name = card.title.nonEmpty ?? String(localized: "图片")
+        let card = CardText(outbox.content), name = card.title.nonEmpty ?? String(localized: "附件")
+        let attached = CueFormat.attachmentKeys(in: outbox.content).count
         let removable = outbox.card != keeps
         let shape = RoundedRectangle(cornerRadius: ComposerMetrics.radius - ComposerMetrics.inset, style: .continuous)
         let menu = removable ? [ChoiceMenu.Section(choices: [
@@ -29,9 +32,9 @@ extension Composer {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(name).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                        // 去处收不了图片时卡片里的图片不发（`ComposerDraft.accepting`），不写张数
-                        if accepts.contains(.images), !card.images.isEmpty {
-                            Text("\(card.images.count) 张图片").font(Typography.caption).foregroundStyle(palette.ink3)
+                        // 去处收不了附件时卡片里的附件不发（`ComposerDraft.accepting`），不写个数
+                        if accepts.contains(.files), attached > 0 {
+                            Text("\(attached) 个附件").font(Typography.caption).foregroundStyle(palette.ink3)
                         }
                     }
                     Spacer(minLength: 8)
@@ -49,22 +52,24 @@ extension Composer {
         .background(palette.fill, in: shape)
     }
 
-    var imageStrip: some View {
+    /// 附件条：图片是方块缩略图，别的文件是文件牌（`FileChip`），各带一颗移除；点一个快速查看。
+    var fileStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(draft.images) { image in
+                ForEach(draft.files) { file in
                     ZStack(alignment: .topTrailing) {
-                        image.preview.resizable().scaledToFill()
-                            .frame(width: PickedImage.previewSide, height: PickedImage.previewSide)
-                            .clipShape(.rect(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(palette.hair))
-                        Button { draft.images.removeAll { $0.id == image.id } } label: {
+                        if file.isImage {
+                            ImageTile(key: file.key)
+                        } else {
+                            FileChip(key: file.key, name: file.name, height: Self.stripSide).frame(maxWidth: 220)
+                        }
+                        Button { draft.files.removeAll { $0 == file } } label: {
                             Image(.clear).symbolRenderingMode(.palette)
                                 .foregroundStyle(palette.onMedia, palette.mediaScrim).font(.body)
                                 .frame(width: 44, height: 44, alignment: .topTrailing)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("移除这张图片")
+                        .accessibilityLabel(file.isImage ? "移除这张图片" : "移除这个文件")
                     }
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
                 }
@@ -72,11 +77,30 @@ extension Composer {
         }
     }
 
+    static var stripSide: CGFloat { 64 }
+
+    /// 存进附件目录（后台）再接进附件条；已带着的不重复。选来的文件有安全作用域的，存好才放开访问。
+    func add(_ incoming: [IncomingFile]) {
+        let files = workspace.services.store.files
+        let scoped = incoming.compactMap { if case .file(let url) = $0, url.startAccessingSecurityScopedResource() { url } else { nil } }
+        Task {
+            defer { scoped.forEach { $0.stopAccessingSecurityScopedResource() } }
+            for item in incoming {
+                do {
+                    let file = try await DraftFile.store(item, in: files)
+                    if !draft.files.contains(file) { draft.files.append(file) }
+                } catch {
+                    workspace.fail(error)
+                }
+            }
+        }
+    }
+
     func drop(_ outbox: Outbox) { draft.attachments.removeAll { $0.id == outbox.id } }
 
-    /// 展开编辑：卡片的文字与图片放回输入框（`ComposerDraft.append`），不再作为整张卡带上，原卡片不动。
+    /// 展开编辑：卡片的文字与附件放回输入框（`ComposerDraft.append`），不再作为整张卡带上，原卡片不动。
     func expand(_ outbox: Outbox) {
-        draft.append(stored: outbox.content, files: workspace.services.store.files)
+        draft.append(stored: outbox.content)
         drop(outbox)
         previewing = nil
         focus.wrappedValue = true

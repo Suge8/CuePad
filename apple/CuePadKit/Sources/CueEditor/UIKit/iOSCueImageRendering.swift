@@ -23,7 +23,7 @@ enum CueImageRendering {
     }
 
     /// 左上为原点的画布（文件牌）。动态色由调用方先按当前外观解析。
-    static func canvas(size: CGSize, draw: @MainActor (CGContext) -> Void) -> UIImage {
+    static func canvas(size: CGSize, draw: (CGContext) -> Void) -> UIImage {
         UIGraphicsImageRenderer(size: size).image { draw($0.cgContext) }
     }
 

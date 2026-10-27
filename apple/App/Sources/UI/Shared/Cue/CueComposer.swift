@@ -39,7 +39,7 @@ struct CueComposer: View {
         Composer(
             draft: Bindable(cue).draft, prompt: cue.canHear ? "对 \(cue.name) 说" : "记下灵感",
             label: "对 \(cue.name) 说",
-            focus: $focused, accepts: .images,
+            focus: $focused, accepts: .files,
             form: form, showsSendEmpty: sending, tooled: tooled, shortcuts: shortcuts,
             header: { EmptyView() },
             tools: { tools },
@@ -99,7 +99,7 @@ struct CueComposer: View {
         #endif
     }
 
-    private var hasDraft: Bool { !workspace.cue.draft.isEmpty(accepting: .images) }
+    private var hasDraft: Bool { !workspace.cue.draft.isEmpty(accepting: .files) }
     /// 空着时的发送中：你最近一句还在路上（与气泡、头像同一个事实，`CueWatch.sending`）。
     private var sending: Bool { workspace.cue.canHear && (launched || workspace.cue.sending) }
 
