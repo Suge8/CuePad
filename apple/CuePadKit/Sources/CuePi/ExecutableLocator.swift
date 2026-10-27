@@ -41,9 +41,10 @@ public struct ExecutableLocator: Sendable, Equatable {
         self.init(searchDirectories: Self.homeDirectories(home))
     }
 
-    /// 家目录里各家安装脚本与包管理器的缺省位置：Claude Code、Codex、Pi 的脚本装进 `.local/bin`，OpenCode 的装进 `.opencode/bin`。
+    /// 家目录里各家安装脚本与包管理器的缺省位置：Claude Code、Codex、Pi 的脚本装进 `.local/bin`，OpenCode 的装进 `.opencode/bin`，
+    /// Grok Build 的装进 `.grok/bin`。
     private static func homeDirectories(_ home: URL) -> [URL] {
-        [".local/bin", ".bun/bin", ".npm-global/bin", ".opencode/bin"].map { home.appending(path: $0, directoryHint: .isDirectory) }
+        [".local/bin", ".bun/bin", ".npm-global/bin", ".opencode/bin", ".grok/bin"].map { home.appending(path: $0, directoryHint: .isDirectory) }
     }
 
     /// 搜索目录里所有叫 `command` 的可执行文件，按目录先后。

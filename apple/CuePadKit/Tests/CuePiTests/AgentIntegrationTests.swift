@@ -12,7 +12,7 @@ struct AgentIntegrationTests {
     let bin: URL
     var cuepad: URL { root.appending(path: "CuePad.app/Contents/Helpers/cuepad") }
     var environment: [String: String] {
-        ["CLAUDE_CONFIG_DIR": root.appending(path: "claude").path, "CODEX_HOME": root.appending(path: "codex").path,
+        ["CLAUDE_CONFIG_DIR": root.appending(path: "claude").path, "CODEX_HOME": root.appending(path: "codex").path, "GROK_HOME": root.appending(path: "grok").path,
          "XDG_CONFIG_HOME": root.appending(path: "xdg").path, "CUEPAD_AGENTS_DIR": root.appending(path: "agents").path]
     }
     var extensionFile: URL { paths.extensionsDirectory.appending(path: "cuepad-bridge/index.ts") }
@@ -26,6 +26,7 @@ struct AgentIntegrationTests {
         case .claudeCode: root.appending(path: "claude")
         case .codex: root.appending(path: "codex")
         case .opencode: root.appending(path: "xdg/opencode")
+        case .grok: root.appending(path: "grok")
         }
         return home.appending(path: "skills/cuepad")
     }
@@ -49,6 +50,7 @@ struct AgentIntegrationTests {
     private func installAll() throws {
         try fakeAgent("pi", printing: "0.90.0")
         for command in ["claude", "codex"] { try fakeAgent(command) }
+        try fakeAgent("grok", printing: "grok 1.0.52 (0920c8169e27)")
         try fakeAgent("opencode", printing: "2.0.25")
     }
 

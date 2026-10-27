@@ -19,6 +19,16 @@ public struct PiTerminal: Sendable, Equatable {
         self.tmuxSocketPath = tmuxSocketPath
     }
 
+    /// 进程的控制终端名（如 `ttys012`）；没有终端为 nil。
+    static func controllingTerminal(of pid: Int32) -> String? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size, info.e_tdev != UInt32(bitPattern: -1),
+              let name = devname(dev_t(bitPattern: info.e_tdev), S_IFCHR) else { return nil }
+        let tty = String(cString: name)
+        return tty == "??" ? nil : tty
+    }
+
     init(tty: String?, environment env: [String: String]) {
         self.init(
             tty: tty,

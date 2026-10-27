@@ -66,6 +66,8 @@ public enum CueStoreError: Error, Equatable {
   case sessionInUse(String)
   /// 会话在跑，Cue 这会儿说不了（参数是会话名与原因）：会打断他发起的那一轮，或停不下这一轮（`PiSessionState.speakBlocked`）。
   case cannotSpeakNow(String, String)
+  /// 会话开在终端里、CuePad 只读跟读它（`AgentCapabilities.speak`），对它说不了话（参数是会话名）。
+  case terminalOnly(String)
   /// 会话不能从 CuePad 结束（参数是会话名）。
   case cannotEnd(String)
   /// 会话没停着，没有可留给他回的停下（参数是会话名）。
@@ -130,6 +132,7 @@ extension CueStoreError: LocalizedError {
     case .cannotChangeModel(let title): "会话「\(title)」换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮、在等回答，或它在终端里开、不能从 CuePad 停止"
     case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去。等它歇下（会叫醒你）再说"
+    case .terminalOnly(let title): "会话「\(title)」开在终端里，CuePad 只看得到它在做什么、对它说不了话：要它做的 tell 他在终端里说；它退出后再 say 会在后台接着它"
     case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束：那件事做完时 done 那件事"
     case .cannotEnd(let title): "会话「\(title)」不能从 CuePad 结束（终端里开的这类）：要收掉就 tell 他在终端里退出"
     case .notStopped(let title): "会话「\(title)」没停着（在跑、被打断或已结束）：留给他回只用在它歇着、在等回答或出错时"

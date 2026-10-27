@@ -9,6 +9,8 @@ nonisolated extension AgentKind {
         case .claudeCode: .claudeCode
         case .codex: .codex
         case .opencode: .opencode
+        // Grok Build 没有自己的标志，用的就是 Grok 的
+        case .grok: .grok
         }
     }
 }

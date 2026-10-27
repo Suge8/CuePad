@@ -12,14 +12,19 @@ public struct CueMCPServer: Sendable {
   public static let name = "cuepad"
   /// 模型在这家看到的 CuePad 工具名的前缀，唯一的一处（系统提示照它写工具名，大脑的事件照它去掉）：
   /// Pi 是原名（随包的扩展 cue-tools.ts 照原名登记，不走 Pi 内置 MCP 的 `mcp__` 命名）；Codex 也是原名（MCP 工具放在命名空间
-  /// `mcp__<服务>__` 里，函数名是原名）；Claude Code 一律是 `mcp__<服务>__<工具>`，改不了；OpenCode 是 `<服务>_<工具>`。
+  /// `mcp__<服务>__` 里，函数名是原名）；Claude Code 一律是 `mcp__<服务>__<工具>`，改不了；OpenCode 是 `<服务>_<工具>`，Grok Build 是 `<服务>__<工具>`。
   public static func toolPrefix(on runtime: AgentKind) -> String {
     switch runtime {
     case .pi, .codex: ""
     case .claudeCode: "mcp__\(name)__"
     case .opencode: "\(name)_"
+    case .grok: "\(name)__"
     }
   }
+
+  /// 这家不把 MCP 工具的说明与参数交给模型，要写进系统提示（`CuePrompt.toolManual`）：Grok Build 的模型请求里只有一个按关键词搜 MCP 工具的
+  /// `search_tool` 与转调的 `use_tool`（源码 sampler_turn.rs、tool_list.rs），大脑关掉了这两样，模型照名字直接调的 MCP 工具照常执行。
+  public static func promptsTools(on runtime: AgentKind) -> Bool { runtime == .grok }
 
   /// 模型在这家看到的工具名。
   public static func toolName(_ tool: String, on runtime: AgentKind) -> String { toolPrefix(on: runtime) + tool }

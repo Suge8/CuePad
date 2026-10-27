@@ -62,6 +62,7 @@ extension AgentTape {
         }
         // agent 目录在本用例临时目录里的 Pi 用的是假模型：录制时不联网（Pi 只认这个环境变量与 --offline，没有设置项）。大脑用用户自己的 agent 目录与真模型，不加
         if name == "pi", environment["PI_CODING_AGENT_DIR"]?.hasPrefix(state.withLock({ $0.temporaryRoot })) == true { environment["PI_OFFLINE"] = "1" }
+        if name == "grok" { environment.merge(GrokModel.environment) { $1 } }
         environment["PATH"] = ((environment["PATH"] ?? "").split(separator: ":").map(String.init).filter { $0 != bin.path }
             + [real.deletingLastPathComponent().path]).joined(separator: ":")
         record(TapeEvent(k: "spawn", c: channel, d: name, p: cwd, a: arguments, m: environment[HostMark.variable]))

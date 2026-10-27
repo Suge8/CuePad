@@ -187,6 +187,22 @@
         }
       }
     },
+    "%@ 不能换这一项" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ can't change this setting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不能换这一项"
+          }
+        }
+      }
+    },
     "%@ 之后不再记得它，找不回来" : {
       "localizations" : {
         "en" : {
@@ -2555,6 +2571,22 @@
         }
       }
     },
+    "Agent 拒绝了：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The agent refused: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 拒绝了：%@"
+          }
+        }
+      }
+    },
     "Agent 新会话" : {
       "localizations" : {
         "en" : {
@@ -2651,6 +2683,22 @@
         }
       }
     },
+    "Agent 没有及时回应" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The agent didn't respond in time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 没有及时回应"
+          }
+        }
+      }
+    },
     "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看" : {
       "localizations" : {
         "en" : {
@@ -2663,6 +2711,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看"
+          }
+        }
+      }
+    },
+    "Agent 没有回应就退出了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The agent quit without responding"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 没有回应就退出了"
           }
         }
       }
@@ -6827,6 +6891,22 @@
         }
       }
     },
+    "写入技能，跟读它的会话记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds a skill and follows its session logs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写入技能，跟读它的会话记录"
+          }
+        }
+      }
+    },
     "写批注，↩ 挂到下一句" : {
       "localizations" : {
         "en" : {
@@ -6919,6 +6999,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "出错"
+          }
+        }
+      }
+    },
+    "出错了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Something went wrong"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "出错了"
           }
         }
       }
@@ -7827,6 +7923,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "发给过 Agent"
+          }
+        }
+      }
+    },
+    "发话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "send messages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发话"
           }
         }
       }
@@ -12315,23 +12427,6 @@
         }
       }
     },
-    "技能 %@" : {
-      "comment" : "技能清单那一组的组名，后面是个数",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Skills %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "技能 %@"
-          }
-        }
-      }
-    },
     "技能 %@ 的正文" : {
       "localizations" : {
         "en" : {
@@ -12808,6 +12903,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。"
+          }
+        }
+      }
+    },
+    "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Once connected, %@ sessions started in Terminal show up in CuePad too: see what they're doing from your Mac or phone."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么。"
           }
         }
       }
@@ -18128,6 +18239,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "终端里开的会话不能%@，CuePad 在后台开的都能做。"
+          }
+        }
+      }
+    },
+    "终端里的 %@ 只能在终端里说话：CuePad 只看得到它在做什么" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ in the terminal only takes messages there. CuePad can only see what it's doing."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "终端里的 %@ 只能在终端里说话：CuePad 只看得到它在做什么"
           }
         }
       }

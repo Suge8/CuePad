@@ -10,8 +10,8 @@ extension DebugScene {
 
     /// 演示会话的模型配置，按哪家 Agent：Pi 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，菜单里不带标志）；
     /// OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）；
-    /// Codex 与 Claude Code 是它们自己报的清单，照录像带里 Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）
-    /// 与 Claude Code 的 `initialize`（Claude 系），提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。
+    /// Codex、Claude Code 与 Grok Build 是它们自己报的清单，照录像带里 Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）、
+    /// Claude Code 的 `initialize`（Claude 系）与 Grok Build 握手报的模型，提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。
     static func demoModels(for agent: AgentKind?) -> PiModelState {
         func listed(_ models: [PiModelOption], current: Int, thinking: PiThinkingLevel) -> PiModelState {
             PiModelState(model: models[current], thinking: .known(thinking), models: models)
@@ -37,6 +37,10 @@ extension DebugScene {
                 model(provider, "default", "Default (recommended)", levels), model(provider, "opus", "Opus", levels),
                 model(provider, "fable", "Fable", levels), model(provider, "sonnet", "Sonnet", levels), model(provider, "haiku", "Haiku", levels),
             ], current: 1, thinking: .high)
+        case .grok:
+            let provider = AgentKind.grok.modelProvider ?? ""
+            let efforts: [PiThinkingLevel] = [.low, .medium, .high, .xhigh]
+            return listed([model(provider, "grok-4.6", "Grok 4.6", efforts), model(provider, "grok-4.5", "Grok 4.5", efforts)], current: 0, thinking: .high)
         case .pi, nil:
             return demoModels
         }
@@ -78,7 +82,7 @@ extension DebugScene {
         let names: Set<String>? = switch agent {
         case .codex: ["compact", "name", "model", "skill:deploy", "skill:frontend-design"]
         case .opencode: ["compact", "review", "changelog"]
-        case .pi, .claudeCode, nil: nil
+        case .pi, .claudeCode, .grok, nil: nil
         }
         return names.map { names in demoCommands.filter { names.contains($0.name) } } ?? demoCommands
     }

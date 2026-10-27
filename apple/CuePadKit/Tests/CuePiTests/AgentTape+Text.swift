@@ -66,7 +66,7 @@ extension AgentTape {
     private static let iso = #"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})"#
     private static let milliseconds = #"(?<![0-9.])1[6-9][0-9]{11}(?![0-9])"#
     private static let seconds = #"(?<![0-9.])1[6-9][0-9]{8}(?![0-9])"#
-    private static let placeholder = #"\{(tmp|dtmp|pid|ms|s|iso|T|build|fixtures|pwd|home|ext)(?::([^{}"\s]*))?\}"#
+    private static let placeholder = #"\{(tmp|dtmp|ptmp|pid|ms|s|iso|T|build|fixtures|pwd|home|ext)(?::([^{}"\s]*))?\}"#
     /// 扩展在 hello 里报的随包版本：CuePad 看它与随包版本是否相同决定发不发 `upgrade`，录成占位符，升扩展版本不用重录
     private static let bundledVersion = #""extensionVersion":\#(PiExtensionBundle.version)"#
     private static let window = 2 * 86_400_000.0
@@ -79,7 +79,8 @@ extension AgentTape {
         for (value, replacement) in identity where text.contains(value) { text = text.replacing(value, with: replacement) }
         text = text.replacing(bundledVersion, with: #""extensionVersion":{ext}"#)
         let root = state.temporaryRoot, directories = state.temporaryDirectories
-        for (form, name) in [(root + "/", "tmp"), (root.replacing("/", with: "-") + "-", "dtmp")] where text.contains(form) {
+        for (form, name) in [(root + "/", "tmp"), (root.replacing("/", with: "-") + "-", "dtmp"), (root.replacing("/", with: "%2F") + "%2F", "ptmp")]
+        where text.contains(form) {
             text = replacing(NSRegularExpression.escapedPattern(for: form) + "([0-9]+)(?![0-9])", in: text) { groups in
                 directories.firstIndex(of: Int(groups[1] ?? "") ?? -1).map { "{\(name):\($0)}" } ?? groups[0]!
             }
@@ -135,12 +136,16 @@ extension AgentTape {
         return replacing(placeholder, in: text) { g in
             let value = g[2] ?? ""
             switch g[1]! {
-            case "tmp", "dtmp":
+            case "tmp", "dtmp", "ptmp":
                 guard let index = Int(value), directories.indices.contains(index) else {
                     state.problems.append("回放：录像带里的第 \(value) 个临时目录这次没有建（用例建临时目录的先后变了），重录")
                     return g[0]!
                 }
-                return g[1] == "tmp" ? "\(root)/\(directories[index])" : "\(root.replacing("/", with: "-"))-\(directories[index])"
+                return switch g[1] {
+                case "tmp": "\(root)/\(directories[index])"
+                case "dtmp": "\(root.replacing("/", with: "-"))-\(directories[index])"
+                default: "\(root.replacing("/", with: "%2F"))%2F\(directories[index])"
+                }
             case "T": return scratch
             case "build": return build
             case "fixtures": return fixturesDirectory.path

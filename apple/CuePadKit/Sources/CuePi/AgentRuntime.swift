@@ -46,6 +46,7 @@ extension AgentKind {
         case .claudeCode: ClaudeCodeRuntime.facts
         case .codex: CodexRuntime.facts
         case .opencode: OpenCodeRuntime.facts
+        case .grok: GrokRuntime.facts
         }
     }
 }

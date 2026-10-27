@@ -28,6 +28,8 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var recap = PiRecap()
     /// 解码时认出这个文件不是会话列表里的会话（如 Codex 子代理自己的会话文件，与主会话同层）：索引器不发出它
     var excluded = false
+    /// 你说的一句、还在等它的投送请求 id：Grok 把发它的请求 id 写在它之后的那几行上（`GrokHistory`），等到下一行再照常 `said`
+    var held: Held?
 
     /// 文件从上次读完就没动过：大小正好读到头、修改时间与那次相同。回填时据此不打开文件——启动时绝大多数会话文件都这样，
     /// 逐个打开、核对开头与偏移曾占回填的八成。被改写或替换的文件修改时间会变，照常走读时的核对（`isResumable`）。
@@ -38,6 +40,15 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
         var tools = PiToolLog()
         /// 这一轮里你拒绝过它要用的工具（这一轮因此停下时写"已拒绝"）
         var declined = false
+    }
+
+    struct Held: Sendable, Codable, Equatable {
+        /// `PiHistory.Said` 的 `text` 与 `stored`
+        var text: String
+        var stored: String
+        var id: String
+        var seq: Int64
+        var at: Date
     }
 
     struct Reply: Sendable, Codable, Equatable {
