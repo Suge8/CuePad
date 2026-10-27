@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// Mac 的技能与规则页（侧栏底下那一排的那颗，`Route.library`）：读这台 Mac 写下的快照（`Workspace.library`），文件改了它就跟着变。
-/// 宽时两列——左列规则（标题行末一颗问号，一键整理那块纸有才有、在它最上面），右列技能清单；窄时上下一列（`LibraryColumns`）。
+/// 宽时两列——左列规则（标题行末一颗问号），右列技能清单，一键整理那块纸各列只列自己的事、在标题下（`TidySlot`）；窄时上下一列（`LibraryColumns`）。
 /// 整页一起滚，一直滚到工具栏后面；顶上不写页名（侧栏底下那颗已经说了在哪）。
 /// 这台还没写下快照时（刚升级、第一次扫还没完）只写一句在读。
 struct LibraryPage: View {

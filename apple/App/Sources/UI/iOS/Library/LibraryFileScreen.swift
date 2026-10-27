@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 一份技能或规则的文件页（手机）：改动攒在这里，顶栏右边的纸飞机"发往 Mac"（有改动才亮），那台写进文件、快照同步回来（`FileDraft`）。
 /// 顶上依次是：Mac 上又改过而你也改着时的那一条（换成 Mac 上的、留我的），同名的分段与"只留这份"、或另写了一份的"合并进来"（`DuplicateBar`、`MergeBar`），
-/// 技能的 name、description 两个输入框；下面是正文。顶栏第二行写文件名、发着没有。
+/// 技能的名字与说明两个框；下面是正文。顶栏写它在哪（技能是全局或项目名，规则是名字），第二行写文件名、发着没有。
 /// 不点纸飞机就不发：退出这一页时没发的留在 `Workspace.fileDraft`，回来接着改。快照里没有这一份了就退回去。
 struct LibraryFileScreen: View {
     let file: LibraryFile
@@ -33,7 +33,7 @@ struct LibraryFileScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.paper.ignoresSafeArea())
-        .floatingHeader(.verbatim(workspace.fileName(file)), detail: detail(entry?.path)) { send }
+        .floatingHeader(.verbatim(workspace.fileTitle(file, in: library)), detail: detail(entry?.path)) { send }
         .onChange(of: entry == nil, initial: true) {
             guard let library else { return }
             guard let entry else { dismiss(); return }

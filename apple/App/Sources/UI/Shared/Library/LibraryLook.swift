@@ -19,6 +19,14 @@ extension Workspace {
         }
     }
 
+    /// 文件页页顶写的那一份：技能写它在哪（全局或项目名，名字在下面的名字框里，不重复），规则写它的名字。
+    func fileTitle(_ file: LibraryFile, in library: AgentLibrary?) -> String {
+        switch file {
+        case .skill(let path): library?.skill(at: path).map { scopeName($0.scope) } ?? ""
+        case .instruction(let kind): instructionName(kind)
+        }
+    }
+
     /// 全局，或项目名（项目在本端的目录里找不到时写"项目"）。
     func scopeName(_ scope: LibraryScope) -> String {
         switch scope {

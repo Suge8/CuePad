@@ -132,9 +132,11 @@ struct LibraryRow<Icon: View, Trailing: View>: View {
     #endif
 }
 
-/// 一键整理那块纸（规则段与技能段最上面同一块，Mac 在左列最上面）：不用你选的那几件逐条写结果的事实，不带逐条的按钮、不写标题，
-/// 底下一颗"一键整理"。手机上按钮旁直写后果（`TidyConsequence`）；Mac 做完给可撤销的提示（`Workspace.tidy`）。
+/// 一键整理那块纸：按段分开，规则段只列规则的事（内容相同换链接、Claude Code 读不到项目规则），技能段只列技能的事（旧目录、读不到、空文件夹），
+/// 那一段没有就不出现；Mac 规则的在左列、技能的在右列，各在标题下。不用你选的那几件逐条写结果的事实，不带逐条的按钮、不写标题，
+/// 底下一颗"一键整理"只做这一块列出的。手机上按钮旁直写后果（`TidyConsequence`）；Mac 做完给可撤销的提示（`Workspace.tidy`）。
 struct TidyPaper: View {
+    let tidies: [LibraryTidy]
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -143,7 +145,7 @@ struct TidyPaper: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(library.automaticTidies) { tidy in
+                ForEach(tidies) { tidy in
                     HStack(alignment: .firstTextBaseline, spacing: LibraryRowMetrics.gap) {
                         Image(tidy.icon).foregroundStyle(palette.ink2).frame(width: LibraryRowMetrics.icon)
                         Text(verbatim: workspace.fact(of: tidy, in: library)).font(Self.font).foregroundStyle(palette.ink)
@@ -166,7 +168,7 @@ struct TidyPaper: View {
     private func run() {
         working = true
         Task {
-            await workspace.tidy(library.automaticOrders, in: library)
+            await workspace.tidy(tidies.map { TidyOrder(tidy: $0.id) }, in: library)
             working = false
         }
     }
@@ -178,16 +180,19 @@ struct TidyPaper: View {
     #endif
 }
 
-/// 一键整理那块纸摆在哪：规则段最上面（Mac 在规则标题下），手机的技能段最上面再一份（两段一次只看一段；Mac 两列并排，不重复）。
+/// 一键整理那块纸摆在一段的最上面（Mac 在那一列标题下），只放这一段的事（`rules`：规则的，否则技能的）。
 /// 整理完收起时淡出、下面的跟着上移：是你点了才变的。
 struct TidySlot: View {
     let library: AgentLibrary
+    let rules: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            if !library.automaticTidies.isEmpty { TidyPaper(library: library).transition(.opacity).padding(.bottom, 8) }
+        let tidies = library.automaticTidies.filter { ($0.instruction != nil) == rules }
+        // Group：这一段没有时不占位置，所在那一列的间距也不多出一格
+        Group {
+            if !tidies.isEmpty { TidyPaper(tidies: tidies, library: library).transition(.opacity).padding(.bottom, 8) }
         }
-        .animation(HandOff.quick, value: library.automaticTidies.isEmpty)
+        .animation(HandOff.quick, value: tidies.isEmpty)
     }
 }
 
@@ -256,7 +261,7 @@ struct InstructionSection: View {
                     #endif
                 }
             }
-            TidySlot(library: library)
+            TidySlot(library: library, rules: true)
             LibraryPaper {
                 if let global = library.instruction(.global) { GlobalRuleRow(library: library, instruction: global) }
                 if let pi = library.instruction(.piSystem) { row(pi) }

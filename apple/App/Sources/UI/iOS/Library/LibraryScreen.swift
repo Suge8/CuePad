@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 手机与 iPad 的技能与规则（Cue 名牌的面板那一行推入，`Route.library`；底部那一排让开，`Dock.stays`）：看的是 Cue 运行那台 Mac 报上来的快照（`Workspace.library`）。
 /// Mac 上并排的两列在这里是两段，页顶中间那块玻璃里换（规则｜技能，`LibraryTabs`），它也是页名，不另写标题，段里也不再写组名；
-/// 右边一颗问号，点开是说明的气泡（`LibraryHelp`，贴在底部的纸：哪台 Mac、多久前报的也在里面）。一键整理那块纸（有才有）两段都排在最上面。
+/// 右边一颗问号，点开是说明的气泡（`LibraryHelp`，贴在底部的纸：哪台 Mac、多久前报的也在里面）。一键整理那块纸各段只列这一段的事，排在最上面（`TidySlot`）。
 /// 一台 Mac 都还没报过时只写一句先去 Mac 上打开 CuePad。
 struct LibraryScreen: View {
     enum Tab: CaseIterable { case rules, skills }

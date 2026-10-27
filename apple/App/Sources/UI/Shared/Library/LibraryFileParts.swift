@@ -150,43 +150,31 @@ struct MergePreview: View {
     }
 }
 
-/// 技能的 name 与 description：两个输入框，格式不对的那条标在对应的框下（出错的记号加一句）；说的是放在哪的（`tooDeep`）标在两个框下面。
+/// 技能的 name 与 description：不写键名，名字框是大号粗体、像这一页的标题，说明在它下面、次一档墨色；空时占位"名字""什么时候用它"。
+/// 格式不对的那条标在对应的框下（出错的记号加一句）；说的是放在哪的（`tooDeep`）标在两个框下面。
 struct SkillFields: View {
     let draft: FileDraft
     let problem: SkillProblem?
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            field("name", text: Binding(get: { draft.name }, set: { draft.changed(name: $0) }), problem: problem?.field == .name ? problem : nil)
-            field("description", text: Binding(get: { draft.summary }, set: { draft.changed(summary: $0) }), axis: .vertical,
-                  problem: problem?.field == .description ? problem : nil)
+        VStack(alignment: .leading, spacing: 6) {
+            TextField(String(localized: "名字"), text: Binding(get: { draft.name }, set: { draft.changed(name: $0) }), palette: palette)
+                .textFieldStyle(.plain).font(Self.nameFont).foregroundStyle(palette.ink)
+            if problem?.field == .name, let problem { ProblemLine(problem: problem) }
+            TextField(String(localized: "什么时候用它"), text: Binding(get: { draft.summary }, set: { draft.changed(summary: $0) }), palette: palette, axis: .vertical)
+                .textFieldStyle(.plain).font(Self.summaryFont).foregroundStyle(palette.ink2).lineLimit(1...4)
+            if problem?.field == .description, let problem { ProblemLine(problem: problem) }
             if let problem, problem.field == nil { ProblemLine(problem: problem) }
         }
     }
 
-    private func field(_ key: String, text: Binding<String>, axis: Axis = .horizontal, problem: SkillProblem?) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(verbatim: key).font(Typography.meta.monospaced()).foregroundStyle(palette.ink3).lineLimit(1).fixedSize()
-                    .frame(width: Self.keyWidth, alignment: .leading)
-                TextField("", text: text, palette: palette, axis: axis)
-                    .textFieldStyle(.plain).font(Self.font).foregroundStyle(palette.ink).lineLimit(axis == .vertical ? 1...4 : 1...1)
-            }
-            if let problem { ProblemLine(problem: problem).padding(.leading, Self.keyWidth + 10) }
-        }
-    }
-
     #if os(macOS)
-    private static let keyWidth: CGFloat = 84
+    private static let nameFont = Typography.heading
+    private static let summaryFont = Typography.body
     #else
-    private static let keyWidth: CGFloat = 100
-    #endif
-
-    #if os(macOS)
-    private static let font = Typography.body
-    #else
-    private static let font = Font.body
+    private static let nameFont = Font.title2.weight(.bold)
+    private static let summaryFont = Font.body
     #endif
 }
 

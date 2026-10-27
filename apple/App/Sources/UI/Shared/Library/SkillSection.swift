@@ -13,9 +13,8 @@ struct SkillSection: View {
         VStack(alignment: .leading, spacing: 10) {
             #if os(macOS)
             LibraryHeader(title: Text("技能 \(LibraryHeader<EmptyView>.count(groups.total, palette: palette))", comment: "技能清单那一组的组名，后面是个数"))
-            #else
-            TidySlot(library: library)
             #endif
+            TidySlot(library: library, rules: false)
             if !groups.global.isEmpty {
                 skills(groups.global.flatMap { category in [SkillLine.category(category.name)] + category.skills.map(SkillLine.skill) })
             }

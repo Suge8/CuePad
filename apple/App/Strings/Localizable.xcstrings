@@ -5171,6 +5171,22 @@
         }
       }
     },
+    "什么时候用它" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When to use it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "什么时候用它"
+          }
+        }
+      }
+    },
     "今天" : {
       "localizations" : {
         "en" : {

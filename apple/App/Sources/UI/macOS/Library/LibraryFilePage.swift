@@ -18,7 +18,7 @@ struct LibraryFileLayer: View {
 }
 
 /// 一份技能或规则的文件页（Mac）：字在一列里居中，自动存、没有保存钮（`FileDraft`）。页顶一行写它是哪一份、文件在哪、存好没有；
-/// 下面是同名的分段与"只留这份"、或另写了一份的"合并进来"（有才有，`DuplicateBar`、`MergeBar`）；技能再是 name、description 两个输入框，最下面正文。
+/// 下面是同名的分段与"只留这份"、或另写了一份的"合并进来"（有才有，`DuplicateBar`、`MergeBar`）；技能再是名字与说明两个框，最下面正文。
 /// 文件在别处被改了（终端里、别的编辑器、手机发来的）当场跟上，你改着没存上的留着、写出文件变了，由你选换成文件里的或留你的。
 /// 快照里没有这一份了（项目解绑了文件夹、去重时这份进了废纸篓）就收起。
 private struct LibraryFilePage: View {
@@ -84,12 +84,12 @@ private struct LibraryFilePage: View {
         }
     }
 
-    /// 页顶一行：图标、名字、文件在哪、存好没有（或文件变了与"换成文件里的"）。
+    /// 页顶一行：图标、它在哪（技能是全局或项目名，规则是名字）、文件在哪、存好没有（或文件变了与"换成文件里的"）。
     private func meta(path: String, library: AgentLibrary, draft: FileDraft) -> some View {
         let shown = if case .skill = file { library.shown(path) + "/SKILL.md" } else { library.shown(path) }
         return HStack(spacing: 8) {
             if case .skill = file { Image(.skill).imageScale(.small) } else { Image(.instruction).imageScale(.small) }
-            Text(verbatim: workspace.fileName(file)).foregroundStyle(palette.ink)
+            Text(verbatim: workspace.fileTitle(file, in: library)).foregroundStyle(palette.ink)
             Dotted.inline
             Text(verbatim: shown).lineLimit(1).truncationMode(.middle)
             DraftStatus(draft: draft)
