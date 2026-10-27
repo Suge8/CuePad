@@ -37,6 +37,11 @@ extension DebugScene {
                 model(provider, "default", "Default (recommended)", levels), model(provider, "opus", "Opus", levels),
                 model(provider, "fable", "Fable", levels), model(provider, "sonnet", "Sonnet", levels), model(provider, "haiku", "Haiku", levels),
             ], current: 1, thinking: .high)
+        case .dsh:
+            return listed([
+                model("deepseek-official", "deepseek-flash", "DeepSeek-V4.1-Flash", [.off, .low, .high, .max]),
+                model("deepseek-official", "deepseek-v4-pro", "DeepSeek-V4-Pro", [.off, .low, .high, .max]),
+            ], current: 1, thinking: .high)
         case .pi, nil:
             return demoModels
         }
@@ -78,6 +83,7 @@ extension DebugScene {
         let names: Set<String>? = switch agent {
         case .codex: ["compact", "name", "model", "skill:deploy", "skill:frontend-design"]
         case .opencode: ["compact", "review", "changelog"]
+        case .dsh: ["compact", "plan"]
         case .pi, .claudeCode, nil: nil
         }
         return names.map { names in demoCommands.filter { names.contains($0.name) } } ?? demoCommands

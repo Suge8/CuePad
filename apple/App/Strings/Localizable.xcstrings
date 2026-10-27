@@ -3305,6 +3305,22 @@
         }
       }
     },
+    "CuePad 在后台开的 %@ 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ sessions that CuePad starts in the background show up in CuePad; sessions started in its web or desktop app don’t."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 在后台开的 %@ 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。"
+          }
+        }
+      }
+    },
     "CuePad 无法启动" : {
       "localizations" : {
         "en" : {
@@ -6791,6 +6807,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "写入扩展与技能"
+          }
+        }
+      }
+    },
+    "写入技能" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds a skill"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写入技能"
           }
         }
       }
@@ -12311,23 +12343,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "技能"
-          }
-        }
-      }
-    },
-    "技能 %@" : {
-      "comment" : "技能清单那一组的组名，后面是个数",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Skills %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "技能 %@"
           }
         }
       }

@@ -8,7 +8,9 @@ import Testing
 /// 端到端：Cue 用这家开工、说话、歇下。后台开一个带名字、模型、强度的会话（`AgentRuntime.open`，一次生效），开场一句做完歇下，
 /// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 用订阅令牌，OpenCode 用免费模型。
 /// 默认回放录像带（OpenCode 没有录像带，列出它时直连），见 `RealAgents`。
-private let agents = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
+// dsh 等通用 ACP 驱动接上、录了录像带再加进来
+private let agents = AgentKind.allCases.filter { $0 != .dsh }
+    .filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
 
 @MainActor
 @Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode), RealAgents.timeLimit(.minutes(6)))
@@ -55,7 +57,7 @@ struct RealCueStartTests {
             return lines.first { $0["type"]?.string == "turn_context" }.map { ($0["payload"]?["model"]?.string, $0["payload"]?["effort"]?.string) }
         case .pi:
             return lines.first { $0["message"]?["role"]?.string == "assistant" }.map { ($0["message"]?["model"]?.string, nil) }
-        case .opencode:
+        case .opencode, .dsh:
             return nil
         }
     }
@@ -95,6 +97,8 @@ struct RealCueStartTests {
             await runtime.stop()()
             try await sandbox.stop()
             try outcome.get()
+        case .dsh:
+            throw AgentRuntimeError.notInstalled(.dsh)
         }
     }
 }

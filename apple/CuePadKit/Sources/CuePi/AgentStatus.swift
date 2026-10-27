@@ -5,17 +5,45 @@ import Foundation
 /// Agent 报的版本（`--version` 输出里的第一个 `x.y.z`）。
 public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvertible {
     public var major: Int, minor: Int, patch: Int
-    public init(_ major: Int, _ minor: Int, _ patch: Int) { self.major = major; self.minor = minor; self.patch = patch }
-
-    /// 从 `--version` 的输出里取第一个 `x.y.z`（容忍前缀 `v`）
-    init?(parsing output: String) {
-        guard let m = output.firstMatch(of: /(\d+)\.(\d+)\.(\d+)/),
-              let major = Int(m.1), let minor = Int(m.2), let patch = Int(m.3) else { return nil }
-        self.init(major, minor, patch)
+    /// 预发布标记（`0.2.1-rc.2` 的 `rc.2`；dsh 只发预发布版）：按 semver 排在同号正式版之前
+    public var prerelease: String?
+    public init(_ major: Int, _ minor: Int, _ patch: Int, prerelease: String? = nil) {
+        self.major = major
+        self.minor = minor
+        self.patch = patch
+        self.prerelease = prerelease
     }
 
-    public var description: String { "\(major).\(minor).\(patch)" }
-    public static func < (a: AgentVersion, b: AgentVersion) -> Bool { (a.major, a.minor, a.patch) < (b.major, b.minor, b.patch) }
+    /// 从 `--version` 的输出里取第一个 `x.y.z[-预发布]`（容忍前缀 `v`）
+    init?(parsing output: String) {
+        guard let m = output.firstMatch(of: /(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/),
+              let major = Int(m.1), let minor = Int(m.2), let patch = Int(m.3) else { return nil }
+        self.init(major, minor, patch, prerelease: m.4.map(String.init))
+    }
+
+    public var description: String { "\(major).\(minor).\(patch)" + (prerelease.map { "-" + $0 } ?? "") }
+
+    public static func < (a: AgentVersion, b: AgentVersion) -> Bool {
+        if (a.major, a.minor, a.patch) != (b.major, b.minor, b.patch) { return (a.major, a.minor, a.patch) < (b.major, b.minor, b.patch) }
+        switch (a.prerelease, b.prerelease) {
+        case (nil, _): return false
+        case (_, nil): return true
+        case let (x?, y?): return precedes(x.split(separator: "."), y.split(separator: "."))
+        }
+    }
+
+    /// semver 的预发布比较：逐段比，都是数字按数值、否则按字符；数字段排在字母段前，前段都相同时段少的在前。
+    private static func precedes(_ a: [Substring], _ b: [Substring]) -> Bool {
+        for (x, y) in zip(a, b) where x != y {
+            switch (Int(x), Int(y)) {
+            case let (m?, n?): return m < n
+            case (_?, nil): return true
+            case (nil, _?): return false
+            case (nil, nil): return x < y
+            }
+        }
+        return a.count < b.count
+    }
 }
 
 /// 一个 Agent 在这台 Mac 上的情况，与 CuePad 写给它的文件——唯一的一份状态。

@@ -8,18 +8,24 @@ import Testing
 /// 端到端：真实的 Pi / Codex / Claude Code / OpenCode 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
 /// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，列出它时直连，在隔离的 `OpenCodeSandbox` 里用免费模型。
 private let environment = ProcessInfo.processInfo.environment
-private let runtimes = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
+// dsh 等通用 ACP 驱动接上、录了录像带再加进来
+private let runtimes = AgentKind.allCases.filter { $0 != .dsh }
+    .filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
 /// 连真运行时才看得出的（进程树、各家的历史）：录制或直连时列出、本机装着的几家
 private let liveRuntimes = runtimes.filter { RealAgents.mode(of: $0) != .replay }
 /// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅。OpenCode 用能看图的免费模型
 private let cheapModels: [AgentKind: String] = [
     .pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: "opencode/deepseek-v4.1-flash-free",
+    .dsh: "deepseek-official/deepseek-flash",
 ]
 /// 就地换到的模型：Pi 的上下文窗口与上面的不同，换没换看得出来（Codex 里两个窗口一样，Claude Code 报的是用过的模型里最大的窗口）。
 /// 用 `CUEPAD_BRAIN_OTHER_MODEL_<家>` 换（OpenCode 的免费模型限流时连同 `CUEPAD_BRAIN_MODEL_<家>` 换成自己提供方的，密钥只经环境给）
 private let otherModels: [AgentKind: String] = [
     .pi: "openai-codex/gpt-6-luna", .codex: "gpt-6-luna", .claudeCode: "sonnet", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
+    .dsh: "deepseek-official/deepseek-v4-pro",
 ]
+/// 录 dsh 用的 dsh：`CUEPAD_DSH` 指定（本机装的常是旧版，要 0.2.1-rc.2 以上），没给时按 PATH 找
+let realDshURL = environment["CUEPAD_DSH"].map { URL(filePath: $0) } ?? ExecutableLocator.standard.candidates("dsh").first
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
 /// 缺省 off：最便宜，Codex、Claude Code 还会走夹取
@@ -173,6 +179,7 @@ struct RealBrainTests {
         let unknown = switch runtime {
         case .pi: "openai-codex/no-such-model"
         case .opencode: "opencode/no-such-model"
+        case .dsh: "deepseek-official/no-such-model"
         case .codex, .claudeCode: "no-such-model"
         }
         await #expect(throws: (any Error).self) { try await rig.brain.configure(model: unknown, effort: nil) }
@@ -248,6 +255,9 @@ struct RealBrainProcessTests {
             let left = try await openCodeSessions(in: rig.directory, sandbox)
             try await sandbox.run(["service", "stop"])
             #expect(left.isEmpty, "\(left)")
+        case .dsh:
+            // 会话、附件、存储都在本次运行的临时目录里，随它删掉
+            break
         }
     }
 

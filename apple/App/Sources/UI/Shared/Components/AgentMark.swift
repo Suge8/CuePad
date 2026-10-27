@@ -9,6 +9,8 @@ nonisolated extension AgentKind {
         case .claudeCode: .claudeCode
         case .codex: .codex
         case .opencode: .opencode
+        // dsh 自己的标志就是 DeepSeek 的鲸鱼（它网页版的图标）
+        case .dsh: .deepseek
         }
     }
 }

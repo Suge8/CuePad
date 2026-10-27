@@ -8,7 +8,7 @@ extension ClaudeCodeRuntime {
     nonisolated public static let facts = AgentFacts(
         command: "claude", homeVariable: "CLAUDE_CONFIG_DIR", home: home, installScript: "curl -fsSL https://claude.ai/install.sh | bash",
         loginArguments: ["auth", "login"],
-        sessionFiles: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, nameIsSessionID: true) {
+        sessionFiles: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, naming: .id) {
             home($0).appending(path: "projects", directoryHint: .isDirectory)
         },
         channel: { integration, _ in HookFile.claudeCode(home: integration.home(of: .claudeCode), skillDirectory: integration.skillDirectory) },

@@ -79,10 +79,14 @@ struct AgentRow: View {
     private var help: LocalizedStringResource {
         let files = services.agents.writtenFiles(kind).joined(separator: String(localized: "、"))
         let name = kind.name
+        let reach = switch kind {
+        case .pi: String(localized: "接入后，在终端里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。")
+        case .dsh: String(localized: "CuePad 在后台开的 \(name) 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。")
+        case .claudeCode, .codex, .opencode:
+            String(localized: "接入后，在终端和桌面版里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。")
+        }
         let lines = [
-            kind == .pi
-                ? String(localized: "接入后，在终端里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。")
-                : String(localized: "接入后，在终端和桌面版里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。"),
+            reach,
             kind == .pi ? String(localized: "CuePad 在后台开 Pi 会话也要先接入。") : String(localized: "不接入也能让 CuePad 在后台开 \(name) 会话。"),
             kind.limits,
             String(localized: "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。"),
@@ -159,6 +163,7 @@ extension AgentKind {
         case .pi: String(localized: "写入扩展与技能")
         case .claudeCode, .codex: String(localized: "写入技能与钩子")
         case .opencode: String(localized: "写入技能，直连它的后台服务")
+        case .dsh: String(localized: "写入技能")
         }
     }
 

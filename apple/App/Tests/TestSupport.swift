@@ -276,7 +276,7 @@ final class TestApp {
     var agentHomes: [String: String] {
         ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
          "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path,
-         "CUEPAD_AGENTS_DIR": directory.appending(path: "agents").path]
+         "CUEPAD_AGENTS_DIR": directory.appending(path: "agents").path, "DSH_HOME": directory.appending(path: "dsh").path]
     }
 
     private func makeServices() -> AppServices {

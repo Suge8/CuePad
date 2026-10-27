@@ -13,7 +13,8 @@ struct AgentIntegrationTests {
     var cuepad: URL { root.appending(path: "CuePad.app/Contents/Helpers/cuepad") }
     var environment: [String: String] {
         ["CLAUDE_CONFIG_DIR": root.appending(path: "claude").path, "CODEX_HOME": root.appending(path: "codex").path,
-         "XDG_CONFIG_HOME": root.appending(path: "xdg").path, "CUEPAD_AGENTS_DIR": root.appending(path: "agents").path]
+         "XDG_CONFIG_HOME": root.appending(path: "xdg").path, "CUEPAD_AGENTS_DIR": root.appending(path: "agents").path,
+         "DSH_HOME": root.appending(path: "dsh").path]
     }
     var extensionFile: URL { paths.extensionsDirectory.appending(path: "cuepad-bridge/index.ts") }
 
@@ -26,6 +27,7 @@ struct AgentIntegrationTests {
         case .claudeCode: root.appending(path: "claude")
         case .codex: root.appending(path: "codex")
         case .opencode: root.appending(path: "xdg/opencode")
+        case .dsh: root.appending(path: "dsh")
         }
         return home.appending(path: "skills/cuepad")
     }
@@ -63,6 +65,7 @@ struct AgentIntegrationTests {
         (AgentKind.pi, "0.84.3", AgentStatus.Presence.tooOld(AgentVersion(0, 84, 3))),
         (.pi, "command not found: hello", .notFound),
         (.opencode, "1.19.0", .tooOld(AgentVersion(1, 19, 0))),
+        (.dsh, "0.2.1-rc.1", .tooOld(AgentVersion(0, 2, 1, prerelease: "rc.1"))),
     ])
     func anAgentTooOldOrWithoutAVersionIsNotConnectable(kind: AgentKind, output: String, presence: AgentStatus.Presence) async throws {
         try fakeAgent(kind.facts.command, printing: output)

@@ -39,8 +39,8 @@ public struct PiHistoryUpdate: Sendable {
     public var messages: [PiChatMessage]
     /// 这次读的时候要不要对话（调用方——索引器——的判定）：写不写对话以它为准
     public var includesTranscript: Bool
-    /// 会话 id：会话文件头里的；还没读到文件头时是文件名（只有文件名就是会话 id 的才会这样发出）。
-    public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
+    /// 会话 id：会话文件头里的；还没读到文件头时从路径认（只有文件名就是会话 id 的才会这样发出）。
+    public var sessionID: String { history.sessionID ?? agent.facts.sessionFiles?.sessionID(of: file) ?? file.lastPathComponent }
     public var recap: PiRecap { checkpoint.projectedRecap }
     /// 这次读到的对话与摘要，交给 `CueStore.writePiTranscript`
     public var transcript: PiTranscript { PiTranscript(sessionID: sessionID, messages: messages, recap: recap) }
@@ -68,13 +68,6 @@ public enum PiHistoryScope: Sendable, Equatable {
         case .sessions(let ids): ids.contains(sessionID.lowercased())
         }
     }
-
-    /// 三家的会话文件名都以会话 id 结尾（Claude Code `<id>.jsonl`，Pi `<时刻>_<id>.jsonl`，Codex `rollout-<时刻>-<id>.jsonl`）。
-    func covers(_ file: URL) -> Bool {
-        covers(sessionID: String(file.deletingPathExtension().lastPathComponent.suffix(Self.idLength)))
-    }
-
-    private static let idLength = 36
 }
 
 /// Agent 会话文件（JSONL）的增量解析：读取、检查点、轮次与摘要的规则各家共用（检查点上的 `said`、`answered`、`interrupted`、
@@ -105,7 +98,7 @@ public enum PiHistory {
         let resumed = try checkpoint.flatMap { try isResumable($0, handle: handle, size: size) ? $0 : nil }
         var state = resumed ?? PiHistoryCheckpoint()
         let start = state.offset
-        var transcript = Transcript(fallbackID: file.deletingPathExtension().lastPathComponent, files: wanted ? files : nil)
+        var transcript = Transcript(fallbackID: format.sessionID(of: file), files: wanted ? files : nil, file: file)
         let consumed = try forEachLine(handle, from: start, size: size) { line in try format.ingest(line, &state, &transcript) }
         if !wanted { transcript.messages = [] }
         state.offset = consumed
@@ -195,6 +188,8 @@ public enum PiHistory {
     struct Transcript {
         let fallbackID: String
         let files: AttachmentFiles?
+        /// 读的会话文件（不在文件里的为 nil）：dsh 的图片按它找到所在的 dsh 目录
+        var file: URL? = nil
         var messages: [PiChatMessage] = []
 
         mutating func add(

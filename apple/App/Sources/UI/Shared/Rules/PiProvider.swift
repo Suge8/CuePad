@@ -36,6 +36,9 @@ nonisolated struct PiProvider: Equatable, Identifiable {
         "google-vertex": ("Google Vertex", .gemini, nil),
         "xai": ("xAI", .grok, nil),
         "deepseek": ("DeepSeek", .deepseek, nil),
+        // dsh 的两个提供方：API key 与 DeepSeek 账号
+        "deepseek-official": ("DeepSeek", .deepseek, nil),
+        "deepseek-account": ("DeepSeek", .deepseek, nil),
         "kimi-coding": ("Kimi", .kimi, nil),
         "moonshotai": ("Moonshot AI", .kimi, nil),
         "moonshotai-cn": ("Moonshot AI", .kimi, nil),

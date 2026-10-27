@@ -60,7 +60,7 @@ public struct PiHistoryIndexer: Sendable {
             var last: Set<URL>?
             for await files in liveFiles where files != last {  // 会话的每次状态变化都会再给一份
                 last = files
-                follower.follow(only: Set(files.map(\.realPath.path).filter { Self.isSessionFile($0, under: root, depth: format.depth) }))
+                follower.follow(only: Set(files.map(\.realPath.path).filter { Self.isSessionFile($0, under: root, format: format) }))
             }
         }
         defer { following.cancel() }
@@ -99,7 +99,7 @@ public struct PiHistoryIndexer: Sendable {
         }
 
         // 回填时记住最近修改的那批文件（在线会话的就在其中）：之后盯到的写入落到缓存上，不会重读也不会重复发出
-        let found = Self.sessionFiles(under: root, depth: format.depth).filter { scope.covers($0.url) }
+        let found = Self.sessionFiles(under: root, format: format).filter { scope.covers(sessionID: format.sessionID(of: $0.url)) }
         for (rank, file) in found.enumerated() {
             if Task.isCancelled { return }
             await index(file.url, modified: file.modified, size: file.size, remember: rank < Self.liveCacheLimit)
@@ -113,11 +113,11 @@ public struct PiHistoryIndexer: Sendable {
         }
     }
 
-    private static func isSessionFile(_ path: String, under root: URL, depth: Int) -> Bool {
+    private static func isSessionFile(_ path: String, under root: URL, format: SessionFileFormat) -> Bool {
         let url = URL(filePath: path)
-        guard url.pathExtension == "jsonl" else { return false }
+        guard format.matches(url) else { return false }
         var parent = url
-        for _ in 0..<depth { parent = parent.deletingLastPathComponent() }
+        for _ in 0..<format.depth { parent = parent.deletingLastPathComponent() }
         return parent.path == root.path
     }
 
@@ -126,14 +126,14 @@ public struct PiHistoryIndexer: Sendable {
     }
 
     /// 全部会话文件与修改时间、大小，最近修改的在前。
-    private static func sessionFiles(under root: URL, depth: Int) -> [(url: URL, modified: Date, size: UInt64?)] {
+    private static func sessionFiles(under root: URL, format: SessionFileFormat) -> [(url: URL, modified: Date, size: UInt64?)] {
         let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey, .fileSizeKey]
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return [] }
         var files: [(url: URL, modified: Date, size: UInt64?)] = []
         for case let url as URL in walker {
-            guard walker.level == depth else { continue }
+            guard walker.level == format.depth else { continue }
             walker.skipDescendants()  // 更深的子目录（如 subagents/）不进
-            guard url.pathExtension == "jsonl" else { continue }
+            guard format.matches(url) else { continue }
             let values = try? url.resourceValues(forKeys: Set(keys))
             guard values?.isRegularFile == true else { continue }
             files.append((url, values?.contentModificationDate ?? .distantPast, values?.fileSize.map(UInt64.init)))

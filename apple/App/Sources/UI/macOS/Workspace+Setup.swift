@@ -45,7 +45,7 @@ extension Workspace {
         }.filter { $0.step.isActionable || needsAgent }
     }
 
-    private static let rowOrder: [AgentKind] = [.claudeCode, .codex, .pi, .opencode]
+    private static let rowOrder: [AgentKind] = [.claudeCode, .codex, .pi, .opencode, .dsh]
 
     /// 一家这一步要你做什么，没有为 nil：在装、在登录的看 `AgentIntegrations.jobs`；没装是"安装"（缺前提时先装前提）；
     /// 探测说没登录是"登录"（Pi 没接入也问得出）；没接入是勾上接入；还没按装好后的样子问过是检查中；别的原因照写。

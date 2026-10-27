@@ -77,11 +77,11 @@ struct PiHistoryPersistenceTests {
     }
 }
 
-/// 设置里四家接入后的那一行是同一种写法：已接入 · 名字与版本（各家 `--version` 的原话各不相同）；写在哪、何时生效在悬停提示里。
+/// 设置里各家接入后的那一行是同一种写法：已接入 · 名字与版本（各家 `--version` 的原话各不相同）；写在哪、何时生效在悬停提示里。
 struct AgentLineTests {
     @Test func 四家接入后都写已接入与版本() async throws {
         let rig = TestApp()
-        let versions: [AgentKind: String] = [.pi: "1.2.0", .claudeCode: "2.1.299 (Claude Code)", .codex: "codex-cli 0.162.1", .opencode: "opencode v2.0.29"]
+        let versions: [AgentKind: String] = [.pi: "1.2.0", .claudeCode: "2.1.299 (Claude Code)", .codex: "codex-cli 0.162.1", .opencode: "opencode v2.0.29", .dsh: "0.2.1-rc.4"]
         var lines: [String] = []
         for kind in AgentKind.allCases {
             try await rig.connect(kind, version: versions[kind]!)
@@ -89,7 +89,7 @@ struct AgentLineTests {
             lines.append(AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind)).1?.visible ?? "")
         }
 
-        #expect(lines == ["已接入 · Pi 1.2.0", "已接入 · Claude Code 2.1.299", "已接入 · Codex 0.162.1", "已接入 · OpenCode 2.0.29"])
+        #expect(lines == ["已接入 · Pi 1.2.0", "已接入 · Claude Code 2.1.299", "已接入 · Codex 0.162.1", "已接入 · OpenCode 2.0.29", "已接入 · DeepSeek Harness 0.2.1-rc.4"])
     }
 }
 
@@ -218,7 +218,7 @@ struct CueEnableTests {
         await #expect {
             try await app.services.enableCue(on: TestApp.hostID, moving: false)
         } throws: {
-            $0.localizedDescription == "没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装"
+            $0.localizedDescription == "没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装 · DeepSeek Harness 没装"
         }
         #expect(try await app.services.store.cueProfile()?.enabledAt == nil)
     }
