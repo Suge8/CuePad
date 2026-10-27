@@ -146,12 +146,13 @@ struct PageTitleSlot: View {
     }
 }
 
-/// 标题位在 `minWidth`～`width` 之间由工具栏给：理想宽写最窄（工具栏按理想宽量最少要多宽），能放多宽由 `ToolbarItemFlex` 告诉工具栏。
+/// 标题位在 `minWidth`～`width` 之间由工具栏给，上下限由 `ToolbarItemFlex` 告诉工具栏。理想宽写最宽：这一项挂上时工具栏按理想宽排，
+/// 写最窄就先排成最窄、等别的项引起下一次排版才放宽（实测启动进会话页，名字压成一个字 1～3 秒）；窗口窄时照样压到下限，不进溢出菜单（720 宽开着侧栏实测）。
 /// 标题位本身的宽只随窗口变；玻璃画在里面的内容上（`PageTitleFlex` 铺满，`OverlayTitle` 按字收窄）。
 struct PageTitleWidth: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .frame(minWidth: PageTitleSlot.minWidth, idealWidth: PageTitleSlot.minWidth, maxWidth: PageTitleSlot.width)
+            .frame(minWidth: PageTitleSlot.minWidth, idealWidth: PageTitleSlot.width, maxWidth: PageTitleSlot.width)
             .background { ToolbarItemFlex(width: PageTitleSlot.minWidth...PageTitleSlot.width) }
     }
 }
