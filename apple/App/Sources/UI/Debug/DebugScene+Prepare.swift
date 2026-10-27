@@ -17,6 +17,7 @@ extension DebugScene {
             await seedAgentLibrary(workspace.services)
         }
         await seedOneMac(store)
+        await seedFiles(workspace.services)
         await presetSync(workspace.services)
         guard let name = defaults.string(forKey: "CuePadProject"),
               let project = try? await store.projects().first(where: { $0.name == name })
@@ -80,7 +81,7 @@ extension DebugScene {
     }
 
     /// `-CuePadComposer <cards|attachments|lines|slash>`（配 session、newsession 画面，iOS 与 Mac）：输入框出现时 cards 打开选卡片面板，slash 写进 "/re" 弹出斜杠命令面板，
-    /// attachments 带上一张卡片（`-CuePadCard` 挑哪张）并放进两张演示图片，lines 写进 9 行文字（看文字区长到 6 行后在里面滚）。
+    /// attachments 带上一张卡片（`-CuePadCard` 挑哪张）并放进两张演示图片与一份 PDF，lines 写进 9 行文字（看文字区长到 6 行后在里面滚）。
     /// ＋ 菜单是系统菜单、不能代为展开：截图时按一下 ＋（iPhone 17 Pro 回复框：`axe touch -x 37 -y 810 --down --up --delay 0.15`；axe 的 tap 太快，菜单不开）。
     static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
         switch defaults.string(forKey: "CuePadComposer") {
@@ -124,7 +125,7 @@ extension DebugScene {
         return (try? store.files.store(fileAt: url)).map { DraftFile(key: $0, name: name) }
     }
 
-    private static func swatch(red: CGFloat, green: CGFloat, blue: CGFloat) -> Data {
+    static func swatch(red: CGFloat, green: CGFloat, blue: CGFloat) -> Data {
         let size = CGSize(width: 240, height: 180)
         let context = CGContext(
             data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: 0,

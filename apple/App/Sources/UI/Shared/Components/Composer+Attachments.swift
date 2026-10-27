@@ -64,8 +64,9 @@ extension Composer {
                             FileChip(key: file.key, name: file.name, height: Self.stripSide).frame(maxWidth: 220)
                         }
                         Button { draft.files.removeAll { $0 == file } } label: {
+                            // 图上是压暗的底，文件牌上是纸色的叉落在二墨的圆上
                             Image(.clear).symbolRenderingMode(.palette)
-                                .foregroundStyle(palette.onMedia, palette.mediaScrim).font(.body)
+                                .foregroundStyle(file.isImage ? palette.onMedia : palette.paper, file.isImage ? palette.mediaScrim : palette.ink2).font(.body)
                                 .frame(width: 44, height: 44, alignment: .topTrailing)
                         }
                         .buttonStyle(.plain)
