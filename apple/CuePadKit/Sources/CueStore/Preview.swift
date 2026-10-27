@@ -41,10 +41,9 @@ public enum PiPreviewKind: String, Sendable, CaseIterable {
     }
   }
 
-  /// 类型按附件键的扩展名认（`AttachmentKey.format`）：系统认错的 .ts 等在那里已按文本算，快速查看打开的也是同一份。
+  /// 类型按附件键认（`AttachmentKey.type`）：系统认错的 .ts 等在那里已按文本算，快速查看打开的也是同一份。
   public init?(fileName: String) {
-    let format = AttachmentKey.format(ofName: fileName)
-    guard !Self.unreadable.contains(format), let type = UTType(filenameExtension: format),
+    guard !Self.unreadable.contains(AttachmentKey.format(ofName: fileName)), let type = AttachmentKey.type(ofName: fileName),
       let kind = Self.allCases.first(where: { $0.types.contains { type.conforms(to: $0) } })
     else { return nil }
     self = kind

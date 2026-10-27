@@ -35,7 +35,7 @@ struct CardTextField: View {
         .onChange(of: pickedImage) { insertPicked() }
         .fileImporter(isPresented: $pickingFile, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             switch result {
-            case .success(let urls): editing.handle.insertFiles(urls)
+            case .success(let urls): editing.handle.insert(urls.map(IncomingFile.file))
             case .failure(let error): workspace.fail(error)
             }
         }
@@ -50,7 +50,7 @@ struct CardTextField: View {
         Task {
             do {
                 guard let data = try await item.loadTransferable(type: Data.self) else { return }
-                editing.handle.insertImage(PhotoData.outgoing(data))
+                editing.handle.insert([.data(PhotoData.outgoing(data))])
             } catch {
                 workspace.fail(error)
             }

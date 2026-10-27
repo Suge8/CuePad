@@ -60,14 +60,7 @@ struct ComposerDraft {
         let tokens = CueFormat.parse(stored)
         let words = tokens.map { if case .text(let text) = $0 { text } else { "" } }.joined()
         text = [text, CueFormat.plainText(words)].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
-        for token in tokens {
-            let file: DraftFile? = switch token {
-            case .text: nil
-            case .image(let key): DraftFile(key: key, name: "")
-            case .file(let key, let name): DraftFile(key: key, name: name)
-            }
-            if let file, !files.contains(file) { files.append(file) }
-        }
+        for file in tokens.compactMap(DraftFile.init) where !files.contains(file) { files.append(file) }
     }
 
     /// 按去处接受的种类，有没有可发的东西（不接受的种类不算）。
@@ -124,6 +117,20 @@ nonisolated struct DraftFile: Identifiable, Hashable, Sendable {
     let name: String
 
     var id: String { key }
+
+    init(key: String, name: String) {
+        self.key = key
+        self.name = name
+    }
+
+    /// 正文里的一个附件引用（图片没有名字）；字为 nil。
+    init?(_ token: CueToken) {
+        switch token {
+        case .text: return nil
+        case .image(let key): self.init(key: key, name: "")
+        case .file(let key, let name): self.init(key: key, name: name)
+        }
+    }
 
     static func == (lhs: DraftFile, rhs: DraftFile) -> Bool { lhs.key == rhs.key }
     func hash(into hasher: inout Hasher) { hasher.combine(key) }

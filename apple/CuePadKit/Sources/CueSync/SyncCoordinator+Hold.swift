@@ -1,12 +1,13 @@
 import Foundation
 
-/// 唯一的重试调度：上传（`RecordSender`）与拉取（`ZonePuller`）失败后，协调器归类（`SyncFault`），由这里定下次最早什么时候再发。
+/// 唯一的重试调度：上传（`RecordSender`）、拉取（`ZonePuller`）与文件那一路（`FileSender`、`FileFetcher`）失败后，协调器归类（`SyncFault`），由这里定下次最早什么时候再发。
 /// 连不上与没给时刻的等待按退避（`Backoff`，有人在等时上限小），服务器给的时刻照它（限流按设备算，正式版与别的进程共用一份，不守只会被限得更久），
 /// 账号按长退避，整个上传被拒停 `rejectedPause`。门铃、立即同步、按节奏的拉取与发送者的每一轮都守同一个时刻（`admits`）；
 /// 到点或提前结束时给 `retryDue`，发送者接着发、拉取器补上被挡下的那一拉。
 /// 连不上时拉取只守服务器给的时刻、不守退避：连不上的请求到不了服务器，不加重限流；拉取又是别的设备的改动到这台的唯一通路，
 /// 网络路径没变的恢复（只是 iCloud 连不上）没有别的证据，按退避拉要多等一个退避（模拟云断网 30 秒实测恢复→第一次成功 p50 0.85 → 6.5 秒）。
 /// 连通的证据（任何一次请求成功、网络路径恢复）提前结束连不上的等待，服务器给的时刻照守；有一批收下只结束退避（`progressed`）。
+/// 只有 iCloud 空间不足是文件那一路自己的：文件停 `quotaPause`（`holdFiles`），别的记录照常同步，所以不进 `status`（`SyncState.filesOverQuota`）。
 extension SyncCoordinator {
   struct Hold {
     var until: ContinuousClock.Instant
@@ -20,20 +21,34 @@ extension SyncCoordinator {
     case upload(urgent: Bool)
     /// 拉取：守服务器要求的等待；连不上只守服务器给的时刻（见类型注释），上传被拒、账号在等的不挡拉取。
     case pull
+    /// 传一个文件：同后台那一路的上传，另守空间不足的停顿。
+    case fileUpload
+    /// 取一个文件：同上传；用到时取的（`urgent`）同马上传，越过连不上与被拒的等待。
+    case fileDownload(urgent: Bool)
+
+    /// 用户在等：越过连不上与被拒的等待。
+    var urgent: Bool {
+      switch self {
+      case .upload(let urgent), .fileDownload(let urgent): urgent
+      case .pull, .fileUpload: false
+      }
+    }
   }
 
   static let rejectedPause = Duration.seconds(60)
+  static let quotaPause = Duration.seconds(600)
 
   /// 此刻能不能发这种请求。服务器给的最早时刻谁都守。
   func admits(_ request: Request) -> Bool {
     let now = ContinuousClock.now
+    if case .fileUpload = request, let until = facts.filesHeldUntil, now < until { return false }
     guard let hold = holding, now < hold.until else { return true }
     guard now >= hold.notBefore else { return false }
     return switch (request, hold.fault) {
-    case (.upload(let urgent), .offline), (.upload(let urgent), .rejected): urgent
-    case (.upload, .wait), (.upload, .account): false
     case (.pull, .wait): false
-    case (.pull, .offline), (.pull, .account), (.pull, .rejected): true
+    case (.pull, _): true
+    case (_, .offline), (_, .rejected): request.urgent
+    case (_, .wait), (_, .account): false
     }
   }
 
@@ -51,6 +66,27 @@ extension SyncCoordinator {
       case .rejected: now + Self.rejectedPause
       }
     setHold(Hold(until: max(until, notBefore), fault: fault, notBefore: notBefore))
+  }
+
+  /// iCloud 空间不足（文件被拒）：文件那一路停 `quotaPause`，到点给 `retryDue` 再试；别的记录照常。
+  func holdFiles(_ error: any Error) {
+    if facts.filesHeldUntil == nil { Self.syncLog.notice("iCloud 空间不足，文件先不上传：\(error.brief, privacy: .public)") }
+    let until = ContinuousClock.now + Self.quotaPause
+    facts.filesHeldUntil = until
+    quotaTimer?.cancel()
+    quotaTimer = Task {
+      try? await Task.sleep(until: until, clock: .continuous)
+      guard !Task.isCancelled else { return }
+      self.retryDue.yield(())
+    }
+  }
+
+  /// 服务器收下了一个文件：空间够了。
+  func filesAccepted() {
+    guard facts.filesHeldUntil != nil else { return }
+    facts.filesHeldUntil = nil
+    quotaTimer?.cancel()
+    quotaTimer = nil
   }
 
   /// 有一批收下了：退避到此为止，服务器给的最早时刻照守（另一路被限流时它还在）。

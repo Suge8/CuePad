@@ -80,12 +80,10 @@ extension Composer {
 
     static var stripSide: CGFloat { 64 }
 
-    /// 存进附件目录（后台）再接进附件条；已带着的不重复。选来的文件有安全作用域的，存好才放开访问。
+    /// 存进附件目录（后台）再接进附件条；已带着的不重复。
     func add(_ incoming: [IncomingFile]) {
         let files = workspace.services.store.files
-        let scoped = incoming.compactMap { if case .file(let url) = $0, url.startAccessingSecurityScopedResource() { url } else { nil } }
         Task {
-            defer { scoped.forEach { $0.stopAccessingSecurityScopedResource() } }
             for item in incoming {
                 do {
                     let file = try await DraftFile.store(item, in: files)

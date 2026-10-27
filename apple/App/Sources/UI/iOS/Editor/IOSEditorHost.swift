@@ -12,9 +12,8 @@ final class IOSEditorHandle {
     var text: String? { view?.storedText }
     /// 选中部分的存储格式；没选中为 nil。
     var selection: String? { view?.selectedStoredText }
-    func insertImage(_ data: Data) { view?.insertImage(data: data) }
-    /// 文件选择器选来的（安全作用域的访问由编辑器拿、存好后放开）。
-    func insertFiles(_ urls: [URL]) { view?.insertFiles(urls) }
+    /// 相册、文件选择器选来的。
+    func insert(_ files: [IncomingFile]) { view?.insert(files) }
     func focus() { view?.becomeFirstResponder() }
     /// 换掉整篇正文（说明在 Mac 上被改了、你还没动过，编辑页跟上）：光标留在原来的位置附近。
     func replace(_ text: String) {

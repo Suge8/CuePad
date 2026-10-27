@@ -68,9 +68,7 @@ extension CueTextView {
                 }
                 return
             }
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            finish(Result { (try files.store(fileAt: url), url.lastPathComponent) })
+            finish(Result { try IncomingFile.file(url).store(in: files) })
         }
     }
 
@@ -115,21 +113,9 @@ extension CueTextView {
 
     // MARK: 外部选择器
 
-    /// 相册选来的图片：在光标处插入。
-    public func insertImage(data: Data) {
-        insert([.data(data)])
-    }
-
-    /// 文件选择器选来的文件（安全作用域的访问在这里拿、存好后放开）：在光标处插入。
-    public func insertFiles(_ urls: [URL]) {
-        let scoped = urls.filter { $0.startAccessingSecurityScopedResource() }
-        insert(urls.map(IncomingFile.file)) { scoped.forEach { $0.stopAccessingSecurityScopedResource() } }
-    }
-
-    /// 存好（后台）再插到此刻的光标处，光标落在后面。
-    private func insert(_ files: [IncomingFile], done: @escaping @MainActor () -> Void = {}) {
+    /// 相册、文件选择器选来的：存好（后台）再插到此刻的光标处，光标落在后面。
+    public func insert(_ files: [IncomingFile]) {
         core.importFiles(files) { [weak self] result in
-            done()
             guard let self else { return }
             switch result {
             case .success(let insertion):
