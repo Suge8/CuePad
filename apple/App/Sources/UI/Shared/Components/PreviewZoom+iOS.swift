@@ -160,7 +160,7 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
     }
 
     /// 双击：放大着就缩回适合屏幕，否则放大到点的那一处（`PreviewScale.tap` 倍；铺满可见区比它还大时放大到铺满，竖长截图一双击就按屏宽看）。动画用滚动区自己的（与捏合松手后的回弹同一条）：
-    /// 换成 `UIView.animate(Motion.snappy)` 驱动缩放时每次双击都掉两三帧（模拟器逐帧录屏实测），系统的一帧不掉。
+    /// 换成 `UIView.animate(Motion.nudge)` 驱动缩放时每次双击都掉两三帧（模拟器逐帧录屏实测），系统的一帧不掉。
     @objc private func doubleTapped(_ tap: UITapGestureRecognizer) {
         if zoomedIn { return setZoomScale(1, animated: true) }
         let area = bounds.inset(by: frameInsets).size

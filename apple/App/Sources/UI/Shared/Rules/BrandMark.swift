@@ -43,3 +43,23 @@ nonisolated struct BrandMark: Hashable, Sendable {
     var nsImage: NSImage? { NSImage(symbolName: "brand-" + asset, bundle: .main, variableValue: 0) }
     #endif
 }
+
+/// "这家读不到"：标志压一道斜杠（同系统符号的 `.slash` 变体，一眼读作"没有"），斜杠两侧挖开一道缝，叠在纸上、行的悬停底上都分得开。
+/// 只经这里画（技能与规则行末的 `UnseenMarks`）。
+struct StruckBrandMark: View {
+    let mark: BrandMark
+    let size: CGFloat
+
+    var body: some View {
+        let line = max(1, size / 10)
+        mark.image.font(.system(size: size))
+            .mask {
+                Rectangle().overlay { Self.slash(width: line * 3).blendMode(.destinationOut) }.compositingGroup()
+            }
+            .overlay { Self.slash(width: line) }
+    }
+
+    private static func slash(width: CGFloat) -> some View {
+        Capsule().frame(width: width).padding(.vertical, -2).rotationEffect(.degrees(-45))
+    }
+}

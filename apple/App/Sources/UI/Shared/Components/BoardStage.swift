@@ -8,7 +8,7 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// 看板四列（`BoardColumns`）或四行（`PhoneBoard`）的容器：各列共用的卡飞行命名空间（`boardFlight`）与正被拖着的那件（`boardDrag`）。
+    /// 看板四列（`BoardColumns`）或四行（`PhoneBoard`）的容器：卡飞行量位置的坐标系（`boardFlight`）与正被拖着的那件（`boardDrag`）。
     func boardStage() -> some View { modifier(BoardStage()) }
 
     /// 看板上能拖的卡（拖到推进中是开始、拖到已完成是做完、待办里拖到别的卡前面是排序，`BoardColumn.drop`）：拖着时记下是哪件，拖完（放下或取消）清掉。
@@ -21,12 +21,11 @@ extension View {
 }
 
 private struct BoardStage: ViewModifier {
-    @Namespace private var flight
     @State private var dragging: UUID?
 
     func body(content: Content) -> some View {
         content
-            .environment(\.boardFlight, flight)
+            .coordinateSpace(.named(BoardMoves.space))
             .environment(\.boardDrag, dragging)
             .environment(\.boardDragging, $dragging)
     }
@@ -68,7 +67,7 @@ private struct InsertBefore: ViewModifier {
                 }
             }
             .dropDestination(for: String.self) { ids, _ in perform(ids) } isTargeted: { targeted = $0 }
-            .animation(HandOff.quick, value: shown)
+            .animation(Motion.fade, value: shown)
             .sensoryFeedback(.selection, trigger: shown) { _, now in now }
     }
 }

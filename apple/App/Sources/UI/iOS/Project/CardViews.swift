@@ -59,7 +59,7 @@ struct OlderGroupHeader: View {
         let collapsible = group.isMonth
         let open = !collapsible || expanded.contains(group.period)
         Button {
-            withAnimation(HandOff.quick) {
+            withAnimation(Motion.fade) {
                 if open { expanded.remove(group.period) } else { expanded.insert(group.period) }
             }
         } label: {

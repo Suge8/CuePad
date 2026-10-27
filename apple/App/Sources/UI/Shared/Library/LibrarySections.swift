@@ -160,7 +160,7 @@ struct TidySlot: View {
         Group {
             if !tidies.isEmpty { TidyPaper(tidies: tidies, library: library).transition(.opacity).padding(.bottom, LibraryLayout.gap) }
         }
-        .animation(HandOff.quick, value: tidies.isEmpty)
+        .animation(Motion.fade, value: tidies.isEmpty)
     }
 }
 
@@ -245,12 +245,13 @@ struct InstructionSection: View {
     }
 }
 
-/// 全局规则那一张纸：名字一行，下面露出正文开头四行（留足四行的高，短的不缩），点开就改。
+/// 全局规则那一张纸：名字一行，下面露出正文开头四行（留足四行的高，短的不缩），点开就改。正文读同步来的那一条（`LibraryFileText`），不另存一份预览。
 private struct GlobalRuleRow: View {
     let library: AgentLibrary
     let instruction: LibraryInstruction
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @State private var texts: [String: String]?
 
     var body: some View {
         Button { workspace.openLibrary(.instruction(.global)) } label: {
@@ -261,8 +262,8 @@ private struct GlobalRuleRow: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     InstructionTrailing(library: library, instruction: instruction)
                 }
-                Text(verbatim: Self.opening(instruction.text) ?? String(localized: "还没有"))
-                    .font(Self.textFont).foregroundStyle(instruction.text == nil ? palette.ink3 : palette.ink2)
+                Text(verbatim: opening)
+                    .font(Self.textFont).foregroundStyle(instruction.hash == nil ? palette.ink3 : palette.ink2)
                     .lineLimit(Self.lines, reservesSpace: true).lineSpacing(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, LibraryRowMetrics.icon + LibraryRowMetrics.gap)
@@ -272,13 +273,16 @@ private struct GlobalRuleRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.row)
+        .observingLibraryTexts([instruction.path], in: library, into: $texts)
     }
 
     private static let lines = 4
 
-    /// 正文开头几行（跳过空行）。
-    private static func opening(_ text: String?) -> String? {
-        text.map { $0.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.prefix(lines).joined(separator: "\n") }
+    /// 正文开头几行（跳过空行）；还没有这个文件写"还没有"，正文还在路上时空着（四行的高留着）。
+    private var opening: String {
+        guard let arrived = AgentLibrary.arrived(instruction.path, hash: instruction.hash, in: texts) else { return "" }
+        guard let text = arrived else { return String(localized: "还没有") }
+        return text.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.prefix(Self.lines).joined(separator: "\n")
     }
 
     #if os(macOS)
@@ -318,7 +322,7 @@ private struct InstructionTrailing: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if instruction.text == nil {
+        if instruction.hash == nil {
             Text("还没有").font(Typography.meta).foregroundStyle(palette.ink3).fixedSize()
         } else {
             let writers = library.merge(into: instruction.kind)?.writers ?? []

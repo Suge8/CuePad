@@ -12,6 +12,8 @@ import Foundation
 /// - Claude Code 看不见：它用着、链接的位置还空着（那里已有别的东西不碰）。
 struct LibrarySkillScan {
     var skills: [LibrarySkill] = []
+    /// 列出的技能的 SKILL.md 全文（`LibrarySkill.textPath` → 正文）
+    var texts: [String: String] = [:]
     var tidies: [LibraryTidy] = []
     var selfManaged: [SelfManagedSkills] = []
     var watched: Set<String> = []
@@ -21,6 +23,7 @@ struct LibrarySkillScan {
         let entry: SkillEntry
         let group: String
         let text: String
+        let modifiedAt: Date?
         let problem: SkillProblem?
         /// 在旧目录里：哪家的、搬到这里
         var owner: AgentKind?
@@ -76,11 +79,11 @@ struct LibrarySkillScan {
                 if !linked, free, !duplicated.contains(found.entry.path) { unlinked.append(found.entry) }
                 if !linked { unseen = [.claudeCode] }
             }
-            skills.append(Self.skill(found, unseenBy: unseen))
+            add(found, unseenBy: unseen)
         }
         let moved = Set(moves.map(\.skill.path))
         for found in strays where !moved.contains(found.entry.path) {
-            skills.append(Self.skill(found, unseenBy: found.problem == nil ? places.installed.filter { $0 != found.owner } : []))
+            add(found, unseenBy: found.problem == nil ? places.installed.filter { $0 != found.owner } : [])
         }
         if !unlinked.isEmpty { tidies.append(LibraryTidy(id: "unlinked", kind: .unlinked(unlinked))) }
         // 先全局、后各项目（同 `places.scopes`），每层按分类（不在分类里的最后）、名字、路径
@@ -92,10 +95,13 @@ struct LibrarySkillScan {
         if !empties.isEmpty { tidies.append(LibraryTidy(id: "empty", kind: .empty(empties))) }
     }
 
-    private static func skill(_ found: Found, unseenBy: [AgentKind]) -> LibrarySkill {
-        LibrarySkill(
-            name: found.entry.name, scope: found.entry.scope, group: found.group, path: found.entry.path, text: found.text,
+    private mutating func add(_ found: Found, unseenBy: [AgentKind]) {
+        let skill = LibrarySkill(
+            name: found.entry.name, scope: found.entry.scope, group: found.group, path: found.entry.path,
+            description: SkillDocument(found.text).description ?? "", hash: LibraryEdit.base(of: found.text), modifiedAt: found.modifiedAt,
             problem: found.problem, unseenBy: unseenBy)
+        skills.append(skill)
+        texts[skill.textPath] = found.text
     }
 
     /// 走一个技能目录：读出技能与空目录，记下要盯的目录与文件。旧目录里的链接不碰（Claude Code 的技能链接、指到别处的）。
@@ -118,7 +124,7 @@ struct LibrarySkillScan {
                     watched.insert(skillFile.path)
                     found.append(Found(
                         entry: SkillEntry(name: name, scope: scope, path: item.path), group: group.joined(separator: "/"), text: text,
-                        problem: SkillDocument(text).problem(directory: name, depth: group.count + 1)))
+                        modifiedAt: LibraryInstructionScan.modified(skillFile), problem: SkillDocument(text).problem(directory: name, depth: group.count + 1)))
                 } else if Self.entries(item).allSatisfy({ $0 == ".DS_Store" }) {
                     empties.append(item.path)
                 } else if recursive, group.count < Self.walkLimit {

@@ -69,9 +69,9 @@ struct CueMemoryPage: View {
         // 滚动区止于胶囊半高处，胶囊下半截伸出滚动区：内容只从胶囊背后滚过，不在它下面与圆角外露出被面板下沿切掉的半行
         .safeAreaInset(edge: .bottom, spacing: 0) { field.padding(.bottom, -Metrics.field / 2) }
         .padding(.bottom, Metrics.fieldBottom + Metrics.field / 2)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: kept)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shown?.schedules)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: rescheduling?.id)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: kept)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: shown?.schedules)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: rescheduling?.id)
     }
 
     private var field: some View {

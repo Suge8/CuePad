@@ -1,16 +1,17 @@
 import SwiftUI
 
-/// 同一处先后换两样东西（状态的一句、你的话到哪了的记号、横幅让回页头）：旧的 `gap` 内淡完、新的晚 `gap` 再淡入——
+/// 同一处先后换两样东西（状态的一句、你的话到哪了的记号、横幅让回页头）：旧的先让位淡完（`Motion.yield`）、新的晚这么久再淡入（`Motion.fade`）——
 /// 长短不同的两句同时交叉淡，中间几帧叠成读不出的一团。App 与扩展同一份。
 enum HandOff {
-    /// 颜色、透明度、悬停这类不移动位置的反馈，全 App 同一条（也是新的那样淡入的曲线）。
-    static let quick = Animation.easeOut(duration: 0.16)
-    static let gap: Double = 0.08
+    /// 现成短句没有数值字段（例如顶栏的 Dotted）：数字只影响滚动，不改变句式身份。
+    static func wording(_ text: String) -> String {
+        text.replacingOccurrences(of: "\\p{Nd}+(?:[.,]\\p{Nd}+)*", with: "#", options: .regularExpression)
+    }
 }
 
 extension AnyTransition {
     static let handOff = AnyTransition.asymmetric(
-        insertion: .opacity.animation(HandOff.quick.delay(HandOff.gap)), removal: .opacity.animation(.easeOut(duration: HandOff.gap)))
+        insertion: .opacity.animation(Motion.fade.delay(Motion.Fade.yield)), removal: .opacity.animation(Motion.yield))
 }
 
 extension View {
@@ -24,18 +25,11 @@ extension View {
                 .transition(.handOff)
             }
         }
-        .animation(HandOff.quick, value: id)
+        .animation(Motion.fade, value: id)
     }
 
     func rollingCount<Value: Equatable>(_ value: Value) -> some View {
-        contentTransition(.numericText()).animation(HandOff.quick, value: value)
-    }
-}
-
-extension HandOff {
-    /// 现成短句没有数值字段（例如顶栏的 Dotted）：数字只影响滚动，不改变句式身份。
-    static func wording(_ text: String) -> String {
-        text.replacingOccurrences(of: "\\p{Nd}+(?:[.,]\\p{Nd}+)*", with: "#", options: .regularExpression)
+        contentTransition(.numericText()).animation(Motion.fade, value: value)
     }
 }
 
