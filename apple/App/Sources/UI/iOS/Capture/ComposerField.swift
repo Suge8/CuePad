@@ -18,7 +18,7 @@ struct ComposerField: UIViewRepresentable {
     var keys: (ComposerKey) -> Bool = { _ in false }
     /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了。外接键盘上是文字区的按键命令（按住 ⌘ 看得到）。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
-    /// 收下粘贴进来的图片（原图字节，放进附件条）；nil 是这个输入框不收附件，剪贴板里的照常当文字粘。
+    /// 收下粘贴进来的附件（放进附件条）；nil 是这个输入框不收附件，剪贴板里的照常当文字粘。
     var files: (([IncomingFile]) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
@@ -113,6 +113,8 @@ final class GrowingTextView: UITextView {
     var keys: (ComposerKey) -> Bool = { _ in false }
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     var files: (([IncomingFile]) -> Void)?
+    /// 粘贴从哪个剪贴板取（测试换成私有的）
+    var pasteboard: UIPasteboard = .general
     /// 外部刚写进文字：之后的排版里滚到末尾，直到高度不再变。
     var revealsEnd = false { didSet { revealedHeight = nil } }
     private var revealedHeight: CGFloat?
@@ -173,20 +175,17 @@ final class GrowingTextView: UITextView {
         setNeedsLayout()
     }
 
-    /// 剪贴板里有图片时"粘贴"收的是图片（交给 `files`，放进附件条）：纯文字的文字区本来不收图片，只有图片时连"粘贴"都不给。
-    /// 认图和取图是同一条规则：种类属于图片。系统的 `hasImages` 不认只有 HEIC 的剪贴板，不用它。只看种类不读内容，不触发读取剪贴板的提示。
-    private static func isImage(_ type: String) -> Bool { UTType(type)?.conforms(to: .image) == true }
+    /// 剪贴板里有附件时"粘贴"收的是附件（交给 `files`，放进附件条），认法与卡片编辑器同一条（`PastedItem`）：
+    /// 纯文字的文字区本来不收文件，只有文件时连"粘贴"都不给。
+    private var pastesFiles: Bool { files != nil && PastedItem.isFile(pasteboard.types.compactMap(UTType.init)) }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        action == #selector(paste(_:)) && files != nil && UIPasteboard.general.types.contains(where: Self.isImage)
-            || super.canPerformAction(action, withSender: sender)
+        action == #selector(paste(_:)) && pastesFiles || super.canPerformAction(action, withSender: sender)
     }
 
     override func paste(_ sender: Any?) {
-        if let files, UIPasteboard.general.types.contains(where: Self.isImage) {
-            files(UIPasteboard.general.items.compactMap { item in
-                item.first { Self.isImage($0.key) }.flatMap { ($0.value as? Data) ?? ($0.value as? UIImage)?.pngData() }.map(IncomingFile.data)
-            })
+        if let files, pastesFiles, case let pasted = PastedItem.files(on: pasteboard), !pasted.isEmpty {
+            files(pasted)
             return
         }
         super.paste(sender)

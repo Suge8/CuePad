@@ -10,6 +10,16 @@ extension AttachmentFiles {
     fileURL(for: key).map { Self.label + name + "（" + $0.path(percentEncoded: false) + "）" }
   }
 
+  /// 正文里的这一段要不要写成附件行、写成什么名字：文件按它的文件名；图片只在 `imagesAsFiles`（看不了图的会话与 Cue 的模型）时这样写，
+  /// 名字是"图片.<扩展名>"，看得了图的另附原图。文字与另附的图为 nil。
+  public static func agentFile(_ token: CueToken, imagesAsFiles: Bool) -> (key: String, name: String)? {
+    switch token {
+    case .file(let key, let name): (key, name)
+    case .image(let key) where imagesAsFiles: (key, "图片." + (AttachmentKey.parts(key)?.format ?? ""))
+    default: nil
+    }
+  }
+
   /// 文字里交给 Agent 的附件行换回 `[文件名](cuepad://file/<键>)`，其余照旧。只认这台设备附件目录里的。
   public func restoringAgentLines(in text: String) -> String {
     let prefix = directory.path(percentEncoded: false)

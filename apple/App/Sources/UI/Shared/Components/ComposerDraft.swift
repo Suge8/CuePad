@@ -138,7 +138,7 @@ nonisolated struct DraftFile: Identifiable, Hashable, Sendable {
     var markup: String { CueFormat.markup(key: key, name: name) }
 
     @concurrent static func store(_ incoming: IncomingFile, in files: AttachmentFiles) async throws -> DraftFile {
-        let stored = try incoming.store(in: files)
+        let stored = try await incoming.store(in: files)
         return DraftFile(key: stored.key, name: stored.name)
     }
 }

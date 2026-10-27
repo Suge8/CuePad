@@ -154,7 +154,13 @@ final class EditorCore {
     }
 
     @concurrent private static func store(_ sources: [IncomingFile], in files: any CueFileStore) async -> Result<[(key: String, name: String)], any Error> {
-        Result { try sources.map { try $0.store(in: files) } }
+        do {
+            var stored: [(key: String, name: String)] = []
+            for source in sources { stored.append(try await source.store(in: files)) }
+            return .success(stored)
+        } catch {
+            return .failure(error)
+        }
     }
 
     /// 插进来的附件自成一行：插入处前面、后面不是换行（也不是开头、结尾）就补一个。
