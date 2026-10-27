@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 
-/// 菜单栏图标（`Icon.menuBar`，同 logo 的墨块符号）。图标是模板图，随菜单栏明暗自动着色，形一直不变；
+/// 菜单栏图标（`Icon.cue`：logo 就是 Cue 本人）。图标是模板图，随菜单栏明暗自动着色，形一直不变；
 /// 有要你管的（拍板加待回复，`CueNow.needsYou`，同 Dock 角标与名牌）时图标右边写几件，没有不写（`show(badge:)`，`AppDelegate` 接的）。
 /// 左键弹出面板；右键（或 Control 点击）弹出菜单。
 final class StatusItemController: NSObject {
@@ -14,9 +14,9 @@ final class StatusItemController: NSObject {
         self.togglePanel = togglePanel
         self.toggleWindow = toggleWindow
         super.init()
-        // 20pt 的符号实高约 16pt（同系统菜单栏图标），在 22pt 高的菜单栏里上下各留一点；模板图随菜单栏明暗着色
-        guard let image = Icon.menuBar.platformImage?.withSymbolConfiguration(.init(pointSize: 20, weight: .regular)) else {
-            preconditionFailure("缺少菜单栏符号 cue.menubar")
+        // 20pt 的符号实高约 17pt（同系统菜单栏图标），在 22pt 高的菜单栏里上下各留一点；模板图随菜单栏明暗着色
+        guard let image = Icon.cue.platformImage?.withSymbolConfiguration(.init(pointSize: 20, weight: .regular)) else {
+            preconditionFailure("缺少 Cue 符号 cue.mascot")
         }
         image.isTemplate = true
         guard let button = item.button else { preconditionFailure("菜单栏图标没有按钮") }

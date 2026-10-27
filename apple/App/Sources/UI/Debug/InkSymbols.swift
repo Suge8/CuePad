@@ -134,7 +134,6 @@ enum InkSymbols {
         "cue.star",
         "cue.music",
         "cue.rocket",
-        "cue.menubar",
     ]
 }
 #endif

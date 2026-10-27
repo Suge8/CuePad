@@ -176,14 +176,3 @@ def rocket(m):
     flame = grown([place(p) for p in [(-3.0, y0), (3.0, y0), (0, y0 + 6.0)]], [0.6, 0.6, 1.2], g)
     window = disc(place((0, -4.0)), 2.2 - 0.5 * g, hole=True)
     return [Layer("rocket", [body, window] + fins + [flame])]
-
-
-def menubar(m):
-    """菜单栏里的 CuePad（同 logo）：一圈往右开口的粗 C，开口里嵌一张折角的小纸。只在菜单栏用，单色模板图。"""
-    g, c = GROW[m], CARVE[m]
-    T = 4.2 + 1.4 * g
-    ring = bow((-3.2, 0), 8.0 - T / 2, 45, 270, T)
-    x0, y0, x1, y1 = 5.2, -3.6, 11.2, 4.6
-    e = 2.8
-    paper_ = grown([(x0, y0), (x1 - e, y0), (x1, y0 + e), (x1, y1), (x0, y1)], [1.0, 0.2, 0.2, 1.0, 1.0], g)
-    return [Layer("mark", [ring, paper_])]

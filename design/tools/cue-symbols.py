@@ -1,6 +1,7 @@
 """CuePad 自家的图标（墨块）：从几何直接生成自定义 SF Symbol（模板 7.0，Ultralight / Regular / Black 三个母版插值），
 整个重写 App 资源目录的 Symbols 下（两端共用，资源名 cue.<名>），小组件与实时活动要的几个另拷一份进小组件自己的资源目录（`WIDGET_SYMBOLS`，扩展里没有 App 的资源）
 与图标总览（`IconSheet`）列的全部符号名（`InkSymbols.swift`，只在 Debug 构建里）。
+Cue 的纯白剪影（App 图标着色、透明外观用的 `AppIcon.icon/Assets/cue-mono.svg`，落地页品牌小标 `mark.svg`）也从这里写：同一份几何，所有层涂白。
 用法：python3 design/tools/cue-symbols.py（只用标准库）。这里只有符号表与写出；几何在 `ink/geometry.py`，各族图标在 `ink/icons_*.py`。
 
 墨块的规则（每个图标都守）：
@@ -10,7 +11,7 @@
   点睛只能是小部件（一处点、一条缝里的块，不超过整个图形墨量的 `ACCENT_SHARE`，按 Regular 量、生成时检查——细的母版里主体墨少，占比自然高）：主体在主层——点睛平时是次一级的颜色，
   主体放进点睛层的话，没选中时整个图标是灰的，像被禁用。没有合适的小部件就不设点睛。
 - 字重：体块按母版外扩 / 内缩（`GROW`），孔跟着缩 / 扩，缝在粗的母版里收窄一点——重量来自墨，不来自线。
-- 品牌的物件：纸（圆角方纸 + 右上折角）、C 环（logo 的粗 C）、Cue（纸身体 + 斜着的腰环 + 竖着的眼）。
+- 品牌的物件：纸（圆角方纸 + 右上折角）、C 环（做完的圈）、Cue（纸身体 + 斜着的腰带 + 竖着的眼）。Cue 就是 logo：App 图标、菜单栏、图标族里的 Cue 都是这一份几何（`mascot`），菜单栏直接用它。
 
 坐标：24 格，原点在图形中心、y 向下；1 格 = G 个模板单位，半径 12 格的圆 = 系统的 circle。图形中心落在大写字母高度的中线上，所以与文字基线对齐、随字号缩放。
 同一个符号的三个母版轮廓命令序列必须逐条一致才能插值（写出前断言）：几何按字重变的只能是位置，不能是拐角、分段的有无。
@@ -26,6 +27,9 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "apple/App/Sources/Assets.xcassets/Symbols"
 NAMES_SWIFT = ROOT / "apple/App/Sources/UI/Debug/InkSymbols.swift"
 WIDGET_OUT = ROOT / "apple/App/Widget/Symbols.xcassets"
+ICON_MONO = ROOT / "apple/App/Sources/AppIcon.icon/Assets/cue-mono.svg"
+LANDING_MARK = ROOT / "landing/static/assets/mark.svg"
+ICON_GRID_PX = 36  # 剪影在 1024 画布上一格多少像素：全身约 810 × 780，四周留足图标蒙版的边
 WIDGET_SYMBOLS = ("waiting", "done")  # 小组件与实时活动用到的（`WidgetIcon`）
 PREFIX = "cue"
 
@@ -161,7 +165,6 @@ SYMBOLS = {
     "star": star5,
     "music": music,
     "rocket": rocket,
-    "menubar": menubar,
 }
 
 
@@ -274,6 +277,22 @@ def write_widget_symbols():
         shutil.copytree(OUT / f"{PREFIX}.{name}.symbolset", WIDGET_OUT / f"{PREFIX}.{name}.symbolset")
 
 
+def write_silhouettes():
+    """Cue 的纯白剪影（全部层涂白，缝与眼孔保留）：App 图标着色、透明外观用的（居中在 1024 画布上），落地页品牌小标（`.brandmark` 的蒙版）用的（紧贴外框）。"""
+    layers = mascot("Regular")
+    pts = [sample(sg, k / 32) for L in layers for c in L.contours for sg in c for k in range(33)]
+    x0, x1 = min(p[0] for p in pts), max(p[0] for p in pts)
+    y0, y1 = min(p[1] for p in pts), max(p[1] for p in pts)
+    d = " ".join(d_of(c, 0, 0) for L in layers for c in L.contours)
+    k = ICON_GRID_PX / G
+    ICON_MONO.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">\n'
+        f'<path fill="#FFFFFF" transform="translate({512 - (x0 + x1) / 2 * k:.2f} {512 - (y0 + y1) / 2 * k:.2f}) scale({k:.5f})" d="{d}"/>\n</svg>\n')
+    LANDING_MARK.write_text(
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{fmt(x0)} {fmt(y0)} {fmt(x1 - x0)} {fmt(y1 - y0)}">\n'
+        f'<path fill="#FFFFFF" d="{d}"/>\n</svg>\n')
+
+
 def write_names():
     names = "\n".join(f'        "{PREFIX}.{name}",' for name in SYMBOLS)
     NAMES_SWIFT.write_text(
@@ -289,4 +308,5 @@ def write_names():
 if __name__ == "__main__":
     write_symbols()
     write_widget_symbols()
+    write_silhouettes()
     write_names()

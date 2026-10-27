@@ -42,7 +42,7 @@ enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用�
 
 装更新要重启 CuePad：托管的 Pi 撑得过重启（新版经桥认回），Claude Code、Codex、OpenCode、Grok Build 这类随 App 退出的托管会话还在干活或等你确认时，重启推迟到它们空下来（`UpdateService`）。`-CuePadScene updatewait` 验托管的 Pi 在干活时更新直接装。
 
-换 logo 时重跑 `scripts/make-icon.py`，菜单栏图标 `cue.menubar` 在符号生成器里一起改。
+换图标：改 `AppIcon.icon` 里的 `cue.png`，着色与透明外观的剪影、落地页的小标重跑 `design/tools/cue-symbols.py`（连同菜单栏与图标族里的 Cue，几何只在它的 `mascot`），落地页的 `icon.png`（64）与 `apple-touch-icon.png`（180，垫墨色底）用 Icon Composer 的 `ictool` 导出。
 
 ## CloudKit 数据结构
 
