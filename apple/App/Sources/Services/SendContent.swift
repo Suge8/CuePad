@@ -18,8 +18,9 @@ extension SendContent {
     func piImages(from files: AttachmentFiles) throws -> [PiImage] {
         try tokens.compactMap { token -> PiImage? in
             guard case .image(let key) = token else { return nil }
-            let data = try files.original(key)
-            guard let mimeType = ImageFiles.mimeType(of: data) else { throw SendError.attachmentUnavailable(key) }
+            guard let url = files.fileURL(for: key), let data = try? Data(contentsOf: url), let mimeType = ImageFiles.mimeType(of: data) else {
+                throw SendError.attachmentUnavailable(key)
+            }
             return PiImage(mimeType: mimeType, data: data)
         }
     }

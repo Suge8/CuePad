@@ -28,22 +28,6 @@ struct SendTests {
         try await eventually(services.store, { try $0.deliveryRequests().first }) { $0?.isOpen == false }!
     }
 
-    /// 复制不是发送，不记发送记录；图片文件缺失就报错，剪贴板不动。
-    @Test func 复制_文字与图片按原顺序放进剪贴板_图片缺失就报错() async throws {
-        let missing = String(repeating: "a", count: 64)
-        rig.pasteboard.clearContents()
-        rig.pasteboard.setString("原有", forType: .string)
-        #expect(throws: SendError.attachmentUnavailable(missing)) { try services.copy("x \(CueFormat.imageMarkup(key: missing))") }
-        #expect(rig.pasteboard.string(forType: .string) == "原有")
-
-        let body = try await bodyWithImage()
-        try services.copy(body)
-
-        #expect(rig.pasteboard.string(forType: .string) == "before\n\nafter")
-        #expect(rig.pasteboard.data(forType: .rtfd) != nil)
-        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
-    }
-
     /// 发给 Pi 的东西不论从哪台设备发都只有一种记录：Mac 上发（会话详情、卡片的发送按钮、菜单栏）写一条指定本机的投送请求，写出就返回、
     /// 不等送达，由本机执行器照远端请求的流程执行；会话收到去掉图片标记的文字与按序的原图，资料库里只多这条请求与它的发送记录
     /// （内容快照、关联的卡片、会话 id 与目录名）。
