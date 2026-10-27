@@ -40,6 +40,31 @@ struct HistoryImageTests {
         }
     }
 
+    /// 交给 Agent 的附件行（"附件：文件名（路径）"）在会话名与摘要里只留文件名：本机那份在对话里认回文件；别的 Mac 的路径、
+    /// 扩展报的首条消息被截断在路径中间的，也不把路径带进标题。
+    @Test func 附件行在会话名与摘要里只留文件名() throws {
+        let key = try store.files.store(fileAt: try {
+            let url = dir.appending(path: "handoff-brief.pdf")
+            try Data("%PDF-1.4".utf8).write(to: url)
+            return url
+        }())
+        let local = try #require(store.files.agentLine(key: key, name: "handoff-brief.pdf"))
+        let foreign = "附件：录屏.mov（/Users/other/Library/Caches/CuePadAttachments/\(String(repeating: "a", count: 64)).mov）"
+        var file = SessionFile(directory: dir)
+        try file.append(
+            SessionFile.header(),
+            SessionFile.user("u1", nil, [["type": "text", "text": "看这份\n\n\(local)"]], at: 1),
+            SessionFile.assistant("a1", "u1", text: "看完了", at: 2),
+            SessionFile.user("u2", "a1", [["type": "text", "text": "\(foreign)\n这段也看"]], at: 3))
+
+        let update = try PiHistory.index(file: file.url, agent: .pi, from: nil, files: store.files)
+
+        #expect(update.history.displayName == "看这份  handoff-brief.pdf")
+        #expect(update.messages.first?.text == "看这份\n\n[handoff-brief.pdf](cuepad://file/\(key))")
+        #expect(update.recap.pendingPrompt == "录屏.mov 这段也看")
+        #expect(PiSessionName.display(name: nil, firstMessage: String(("看这份\n\n" + local).prefix(60)), folder: "x") == "看这份  handoff-brief.pdf")
+    }
+
     /// 活动会话的首条消息来自扩展（原文，可能被截断在说明行中间）：显示名同样不带说明行。
     @Test func 说明行不进会话名() {
         let note = "[Image: original 3000x2000, displayed at 1500x1000. Multiply coordinates by 2.00 to map to original image.]"

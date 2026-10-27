@@ -224,10 +224,8 @@ public enum PiHistory {
         mutating func text(_ block: String?) {
             let text = PiSessionName.withoutImageNotes(block ?? "")
             guard !text.isEmpty else { return }
-            guard let files else { return texts.append(text) }
-            let stored = files.restoringAgentLines(in: text)
-            texts.append(stored == text ? text : CueFormat.parse(stored).map(\.shownText).joined())
-            pieces.append(stored)
+            texts.append(AttachmentFiles.namingAgentLines(in: text))
+            if let files { pieces.append(files.restoringAgentLines(in: text)) }
         }
 
         /// 图片原字节；不是图片的跳过（不存进附件）。
