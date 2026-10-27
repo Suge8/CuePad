@@ -10,13 +10,24 @@ public struct CueMCPServer: Sendable {
   static let protocolVersions = ["2025-11-25", "2025-06-18"]
   /// 大脑登记这个服务用的名字。
   public static let name = "cuepad"
-  /// Claude Code 给模型的 MCP 工具名一律是 `mcp__<服务>__<工具>`，改不了。
-  public static let claudeToolPrefix = "mcp__\(name)__"
+  /// 模型在这家看到的 CuePad 工具名的前缀，唯一的一处（系统提示照它写工具名，大脑的事件照它去掉）：
+  /// Pi 是原名（随包的扩展 cue-tools.ts 照原名登记，不走 Pi 内置 MCP 的 `mcp__` 命名）；Codex 也是原名（MCP 工具放在命名空间
+  /// `mcp__<服务>__` 里，函数名是原名）；Claude Code 一律是 `mcp__<服务>__<工具>`，改不了；OpenCode 是 `<服务>_<工具>`。
+  public static func toolPrefix(on runtime: AgentKind) -> String {
+    switch runtime {
+    case .pi, .codex: ""
+    case .claudeCode: "mcp__\(name)__"
+    case .opencode: "\(name)_"
+    }
+  }
 
-  /// 模型在这家看到的工具名（系统提示照它写）。Pi 是原名（随包的扩展 cue-tools.ts 照原名登记，不走 Pi 内置 MCP 的 `mcp__` 命名）；
-  /// Codex 也是原名（MCP 工具放在命名空间 `mcp__<服务>__` 里，函数名是原名）；只有 Claude Code 带前缀（`claudeToolPrefix`）。
-  public static func toolName(_ tool: String, on runtime: AgentKind) -> String {
-    runtime == .claudeCode ? claudeToolPrefix + tool : tool
+  /// 模型在这家看到的工具名。
+  public static func toolName(_ tool: String, on runtime: AgentKind) -> String { toolPrefix(on: runtime) + tool }
+
+  /// 大脑事件里的工具名（`TurnEvent.tool`）：去掉 CuePad 的前缀并小写（Claude Code 的 `Read`）。
+  public static func bareName(_ name: String, on runtime: AgentKind) -> String {
+    let prefix = toolPrefix(on: runtime)
+    return (!prefix.isEmpty && name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : name).lowercased()
   }
 
   public init(store: CueStore, wait: TimeInterval, toolset: CueTools.Toolset = .cue) { tools = CueTools(store: store, wait: wait, toolset: toolset) }

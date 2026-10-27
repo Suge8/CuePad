@@ -25,7 +25,7 @@ extension ClaudeHostedSession: HostedSession {
             let mcp = ["mcpServers": [CueMCPServer.name: ["command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment]]]
             var arguments = [
                 "-p", "--no-session-persistence", "--system-prompt-file", prompt.path, "--tools", "Read,Grep,Glob",
-                "--allowedTools", "Read,Grep,Glob,\(CueMCPServer.claudeToolPrefix)*", "--permission-prompts", "none", "--strict-mcp-config",
+                "--allowedTools", "Read,Grep,Glob,\(CueMCPServer.toolPrefix(on: .claudeCode))*", "--permission-prompts", "none", "--strict-mcp-config",
                 "--mcp-config", jsonString(mcp), "--settings", #"{"disableAllHooks":true}"#,
             ]
             if let model = config.model { arguments += ["--model", model] }
@@ -66,12 +66,6 @@ extension ClaudeHostedSession: HostedSession {
 
     func abort() async throws {
         try await interrupt(restarting: false)
-    }
-
-    /// 事件里的工具名：去掉 CuePad 的 MCP 前缀（`CueMCPServer.claudeToolPrefix`）并小写（Claude Code 的 `Read`），同另两家。
-    static func toolName(_ name: String) -> String {
-        let prefix = CueMCPServer.claudeToolPrefix
-        return (name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : name).lowercased()
     }
 
     func stop() -> @concurrent @Sendable () async -> Void {
