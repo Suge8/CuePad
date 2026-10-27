@@ -22,10 +22,6 @@ public struct CueMCPServer: Sendable {
     }
   }
 
-  /// 这家不把 MCP 工具的说明与参数交给模型，要写进系统提示（`CuePrompt.toolManual`）：Grok Build 的模型请求里只有一个按关键词搜 MCP 工具的
-  /// `search_tool` 与转调的 `use_tool`（源码 sampler_turn.rs、tool_list.rs），大脑关掉了这两样，模型照名字直接调的 MCP 工具照常执行。
-  public static func promptsTools(on runtime: AgentKind) -> Bool { runtime == .grok }
-
   /// 模型在这家看到的工具名。
   public static func toolName(_ tool: String, on runtime: AgentKind) -> String { toolPrefix(on: runtime) + tool }
 

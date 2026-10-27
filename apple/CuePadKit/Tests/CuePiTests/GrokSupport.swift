@@ -136,6 +136,9 @@ final class FakeResponses: Sendable {
         indirect case held(Plan)
         /// 说出这几段就停住，直到对方断开
         case endless([String])
+
+        /// 调 MCP 工具：Grok 只把它经 `use_tool` 交给模型（见 `GrokDialect`）
+        static func mcp(_ name: String, _ input: [String: Any]) -> Plan { .call("use_tool", ["tool_name": name, "tool_input": input]) }
     }
 
     /// 最近一句你的话决定怎么答（测试问的那几句）；其余回 "ECHO <原话>"。
@@ -153,8 +156,8 @@ final class FakeResponses: Sendable {
         let outputs = after.compactMap { $0["type"] as? String == "function_call_output" ? $0["output"] as? String : nil }
         if users.contains(where: { $0.contains("Stop now") }) { return .say("STOPPED") }
         if query.contains("Call the echo tool") {
-            if calls.isEmpty { return .call("cuepad__echo", ["text": "x"]) }
-            let next: Plan = calls.count < 8 ? .call("cuepad__echo", ["text": outputs.last ?? "x"]) : .say(outputs.last ?? "")
+            if calls.isEmpty { return .mcp("cuepad__echo", ["text": "x"]) }
+            let next: Plan = calls.count < 8 ? .mcp("cuepad__echo", ["text": outputs.last ?? "x"]) : .say(outputs.last ?? "")
             return calls.count == 1 ? .held(next) : next
         }
         if let codename = system.firstMatch(of: /codename is ([A-Z0-9-]+)/)?.output.1, query.contains("codename") { return .say(String(codename)) }

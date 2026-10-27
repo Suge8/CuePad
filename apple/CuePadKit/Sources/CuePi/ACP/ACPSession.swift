@@ -357,9 +357,9 @@ final class ACPSession {
         case "tool_call":
             guard facts.running else { return }
             speak(nil)
-            let name = dialect.toolName(update)
-            facts.work(.tool, detail: ToolDetail.line(name, update["rawInput"]))
-            emit(.tool(id: update["toolCallId"]?.string ?? "", name: CueMCPServer.bareName(name, on: agent), arguments: String(decoding: (update["rawInput"] ?? [:]).data, as: UTF8.self)))
+            let (name, input) = dialect.tool(update)
+            facts.work(.tool, detail: ToolDetail.line(name, input))
+            emit(.tool(id: update["toolCallId"]?.string ?? "", name: CueMCPServer.bareName(name, on: agent), arguments: String(decoding: input.data, as: UTF8.self)))
             toolSettled(update)
         case "tool_call_update":
             toolSettled(update)

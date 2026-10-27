@@ -22,8 +22,8 @@ protocol ACPDialect: Sendable {
     func promptMeta(deliveryID: String?) -> JSONValue?
     /// 一条通知（含标准通知里各家自己的种类）对驱动意味着什么
     func signals(_ method: String, _ params: JSONValue) -> [ACPSignal]
-    /// 工具调用的名字，模型看到的写法（标准只有给人看的标题 `title`）
-    func toolName(_ call: JSONValue) -> String
+    /// 工具调用的名字（模型看到的写法；标准只有给人看的标题 `title`）与参数（标准在 `rawInput`）
+    func tool(_ call: JSONValue) -> (name: String, input: JSONValue)
     /// 工具结果的文字（标准在 `content` 里）
     func toolResult(_ update: JSONValue) -> String
     /// 模型的上下文窗口（标准没有）；`session` 是 `session/new`、`session/load` 的结果
@@ -63,7 +63,7 @@ extension ACPDialect {
 
     func signals(_ method: String, _ params: JSONValue) -> [ACPSignal] { [] }
 
-    func toolName(_ call: JSONValue) -> String { call["title"]?.string ?? "?" }
+    func tool(_ call: JSONValue) -> (name: String, input: JSONValue) { (call["title"]?.string ?? "?", call["rawInput"] ?? [:]) }
 
     func toolResult(_ update: JSONValue) -> String { ACPContent.text(update["content"]) }
 

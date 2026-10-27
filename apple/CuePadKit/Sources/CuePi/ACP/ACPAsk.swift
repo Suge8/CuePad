@@ -23,7 +23,7 @@ extension ACPAsk {
     static func permission(_ params: JSONValue, agent: AgentKind, dialect: any ACPDialect) -> ACPAsk {
         let options = params["options"]?.array ?? []
         let call = params["toolCall"] ?? [:]
-        let name = ToolDetail.name(dialect.toolName(call))
+        let name = ToolDetail.name(dialect.tool(call).name)
         let text = PermissionWording.question(agent, String(localized: "使用 \(name)"), [ToolDetail.target(call["rawInput"]), call["title"]?.string])
         return ACPAsk(question: PiQuestion(promptID: nil, kind: .confirm, text: text), answer: { answer in
             guard case .confirmed(let allowed) = answer else { return nil }
