@@ -70,7 +70,7 @@ private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
                 }
             }
         }
-        // 贴在底部的纸伸进 Home 指示条那一截：与屏幕圆角同心，盖住标签栏
+        // 贴在底部的纸伸进 Home 指示条那一截：与屏幕圆角同心，盖住底部那一排
         .ignoresSafeArea(source == .bottom ? .all : .keyboard, edges: source == .bottom ? .bottom : .all)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion) ?? HandOff.quick, value: item?.id)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: keyboardTop)

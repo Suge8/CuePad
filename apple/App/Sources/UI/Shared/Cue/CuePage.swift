@@ -23,6 +23,12 @@ struct CuePage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// 底部那一排换形时，输入框与 Cue 钮交叉（`DockHandoff`）；输入框有焦点时不给"⋯"让位置，焦点进出写在它上面（`DockMotion.composing`）。
+    @Environment(\.dockMotion) private var dockMotion
+    #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
@@ -77,18 +83,41 @@ struct CuePage: View {
         .background(palette.desk)
     }
     #else
-    /// 页顶那一排只有 Cue 的名牌（`CueHeader`，经 `floatingHeader`），浮在对话上，对话让出固定的一段：名牌展开成面板时对话不重排。窄屏上 Cue 页是 tab 的根、不需要返回，不用系统导航栏（`DockRoot`），
-    /// 名牌就是最上面那一排。拍板卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让），窄屏上在标签栏上方。
+    /// 页顶那一排只有 Cue 的名牌（`CueHeader`，经 `floatingHeader`），浮在对话上，对话让出固定的一段：名牌展开成面板时对话不重排。窄屏上 Cue 页是导航栈的根、不需要返回，不用系统导航栏（`DockRoot`），
+    /// 名牌就是最上面那一排；底部左边那颗"⋯"是底部那一排（`DockBar`，不在这一页里）收起的样子，这里给它让出位置，右边是输入框。
+    /// 拍板卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让）；窄屏底部那一排没有键盘时离屏幕底边同 Dock。
     private var page: some View {
-        FloatingReply(backed: false) {
+        FloatingReply(backed: false, floor: docked ? Dock.margin : nil) {
             chat
         } reply: {
             bottom
-                .padding(.horizontal, 12)
+                .padding(.horizontal, docked ? Dock.margin : 12)
                 .frame(maxWidth: Self.readingWidth)
         }
             .scrollDismissesKeyboard(.interactively)
             .floatingHeader(.verbatim(cue.name), height: CueHeader.height, center: { CueHeader() }) { EmptyView() }
+    }
+
+    /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是"⋯"加输入框。
+    private var docked: Bool { !inPanel && sizeClass == .compact }
+
+    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框；换形时与 Cue 钮交叉（`DockHandoff`）。
+    private var dockRow: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            if dockMotion?.composing != true {
+                Color.clear.frame(width: Dock.slot + Dock.gap, height: Dock.slot)
+            }
+            composer.dockedComposer(dockMotion)
+        }
+    }
+    #endif
+
+    #if os(iOS)
+    private var composer: some View {
+        CueComposer(style: .page, takesFocusRequests: !inPanel, sent: { follow.sent() }) { focused in
+            // 同底部那一排让开"⋯"的那条弹簧（`DockBar`）：输入框长宽与"⋯"淡出是同一下
+            withAnimation(Motion.spatial(Motion.dock, reduceMotion: reduceMotion)) { dockMotion?.composing = focused }
+        }
     }
     #endif
 
@@ -175,7 +204,7 @@ struct CuePage: View {
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, ComposerMetrics.stackGap).transition(.opacity) }
             }
             #if os(iOS)
-            CueComposer(style: .page, takesFocusRequests: !inPanel) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
+            Group { if docked { dockRow } else { composer } }.fixedSize(horizontal: false, vertical: true)
             #else
             CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
             #endif

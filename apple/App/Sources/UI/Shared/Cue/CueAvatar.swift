@@ -6,7 +6,7 @@ import SwiftUI
 /// 页不在前台）与拼图解好之前画这一拍的静止图。32pt 及以下只放轮廓变了的帧（`compact`）。
 /// 换拍子时脸软糖地动一下（`JellyMove.cue`），在压得最扁那一刻姿势、点、变淡一起换（都在 `Jelly` 画的那个值里）；做完的欢呼只在换进来的那一下放。
 /// 四档尺寸：行内（16pt，只露上半身：纸面、折角和眼睛，不动；点与变淡照样有，在动、起不来、不在分得出）、侧栏与 Mac 页头的一行、
-/// Mac 侧栏名片（`header`）、手机与 iPad 的名片（`card`；名牌收着时缩到 `CueHeader.face`，长成名片时原样）。`size` 是那块圆的直径。
+/// iPhone 底部那一排的 Cue 钮与 Mac 侧栏名片（`header`）、手机与 iPad 的名片（`card`；名牌收着时缩到 `CueHeader.face`，长成名片时原样）。`size` 是那块圆的直径。
 struct CueAvatar: View {
     nonisolated enum Size {
         case inline, row, header, card

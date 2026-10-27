@@ -95,6 +95,7 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             workspace.show(.cue)
+            if defaults.bool(forKey: "CuePadPlacesOpen") { openPlaces() }
             workspace.sidebar = .all
             if scene == "cuememory" { workspace.cue.showsMemory = true }
             if defaults.bool(forKey: "CuePadPanelCycle") { Task { await cyclePanel() } }
@@ -171,7 +172,7 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadDockTour stack|motion`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步。切 tab 走点标签栏的那条路（直接换 `Workspace.root`），推入、返回走导航栈的路径：
+    /// `-CuePadDockTour stack|motion`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步。切 tab 走点底部那一排的那条路（`Workspace.tap`），推入、返回走导航栈的路径：
     /// - stack：项目 → 进默认项目 → 进一条灵感、在末尾接着写一句、收起键盘 → 切到 Cue → 切回项目（还停在那条灵感，字还在）→ 切到进展 → 再切回项目。
     /// - motion：进默认项目 → 进一条灵感 → 返回 → 返回；切到进展、进一个会话 → 返回；切到 Cue。
     static func dockTourIfAsked(_ workspace: Workspace) async {
@@ -180,7 +181,7 @@ extension DebugScene {
         guard let card = await card(in: Project.defaultID, store: store) else { return }
         // 节奏是要录的内容，不是在等别的事
         func beat() async { try? await Task.sleep(for: .seconds(1.6)) }
-        workspace.root = .shelf
+        workspace.tap(.shelf)
         await beat()
         workspace.push(.project(Project.defaultID))
         await beat()
@@ -199,7 +200,7 @@ extension DebugScene {
             }
             await beat()
             for tab in [Route.cue, .shelf, .progress, .shelf] {
-                workspace.root = tab
+                workspace.tap(tab)
                 await beat()
             }
         } else {
@@ -207,7 +208,7 @@ extension DebugScene {
             await beat()
             workspace.path.removeLast()
             await beat()
-            workspace.root = .progress
+            workspace.tap(.progress)
             await beat()
             if let session = try? await store.piSessionPage(PiSessionQuery(limit: 1)).items.first?.state {
                 workspace.openSession(session.id, sessionID: session.sessionID)
@@ -215,7 +216,7 @@ extension DebugScene {
                 workspace.path.removeLast()
                 await beat()
             }
-            workspace.root = .cue
+            workspace.tap(.cue)
         }
     }
 
