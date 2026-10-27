@@ -58,6 +58,8 @@ extension CueEditorTheme {
             font: Typeface.pingFang(size),
             headingFont: Typeface.pingFang(18, weight: .semibold),
             codeFont: .monospacedSystemFont(ofSize: size - 2, weight: .regular),
+            captionFont: .systemFont(ofSize: 12),
+            fileGlyphSize: Glyph.largeSize,
             markerColor: CueColor(palette.ink3),
             codeBackground: CueColor(palette.fill),
             textColor: CueColor(palette.ink),

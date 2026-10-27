@@ -36,7 +36,7 @@ struct ProjectSwitcher: View {
             HStack(spacing: 6) {
                 if collapsed {
                     CurrentPage(projects: projects)
-                    Image(.expand).font(.system(size: 9, weight: .bold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+                    Image(.expand).font(Glyph.mark).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 }
             }
             .font(Typography.toolbarLabel.weight(.semibold))
@@ -64,7 +64,7 @@ struct ProjectSwitcher: View {
         let color = NSColor(name: nil) { appearance in
             NSColor(Palette(dark: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua).project(project.color))
         }
-        let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        let configuration = NSImage.SymbolConfiguration(pointSize: Glyph.rowSize, weight: .medium)
             .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
         let image = ProjectGlyph.icon(project).platformImage?
             .withSymbolConfiguration(configuration) ?? NSImage()

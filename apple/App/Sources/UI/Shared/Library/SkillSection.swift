@@ -151,7 +151,7 @@ private struct SkillRow: View {
     #if os(macOS)
     private static let nameFont = Typography.body.weight(.medium)
     private static let descriptionFont = Typography.meta
-    private static let markFont = Font.system(size: 11)
+    private static let markFont = Glyph.small
     private static let nameWidth: CGFloat = 188
     private static let markWidth: CGFloat = 16
     private static let vertical: CGFloat = 0

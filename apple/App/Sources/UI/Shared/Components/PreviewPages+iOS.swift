@@ -167,7 +167,7 @@ struct PreviewStill: View {
                 if let image = look?.image {
                     Image(decorative: image, scale: scale).resizable().scaledToFit()
                 } else {
-                    Image(.file).font(.system(size: 56)).foregroundStyle(palette.ink3)
+                    Image(.file).font(Glyph.hero).foregroundStyle(palette.ink3)
                 }
             }
             .frame(maxWidth: 360, maxHeight: 360)
@@ -197,7 +197,7 @@ struct PreviewText: UIViewRepresentable {
         let view = UITextView()
         view.isEditable = false
         view.backgroundColor = .clear
-        view.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+        view.font = Typography.codeUIFont
         view.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 16, right: 12)
         Task { view.text = await Self.read(file) }
         return view

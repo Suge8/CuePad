@@ -182,7 +182,7 @@ struct BubbleFrame<Content: View, Area: View>: View {
             .background {
                 // 一根发丝粗的实线勾出轮廓与尾巴：气泡常落在同色的纸上，只靠投影时尾巴看不出（贴边再叠一层细影也行，但开合每帧多画一层影，掉帧）
                 shape.fill(palette.paper)
-                    .shadow(color: palette.panelShadow, radius: 26, y: 10)
+                    .elevation(.panel)
                     .overlay { shape.stroke(palette.track, lineWidth: Self.edge) }
             }
             .layoutValue(key: BubbleSpot.self, value: placement)

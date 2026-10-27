@@ -16,6 +16,10 @@ public struct CueEditorTheme: @unchecked Sendable {
     /// `# ` `## ` 等标题行的字体（各级同一个）。
     public var headingFont: CueFont
     public var codeFont: CueFont
+    /// 图片占位中间的说明字（图片缺失、传了几成）。
+    public var captionFont: CueFont
+    /// 文件牌上没有缩略图时记号的大小。
+    public var fileGlyphSize: CGFloat
     /// 标题、列表、围栏等标记字符的颜色：保持可见，降低存在感。
     public var markerColor: CueColor
     public var codeBackground: CueColor
@@ -48,7 +52,7 @@ public struct CueEditorTheme: @unchecked Sendable {
     }
 
     public init(
-        font: CueFont, headingFont: CueFont, codeFont: CueFont, markerColor: CueColor,
+        font: CueFont, headingFont: CueFont, codeFont: CueFont, captionFont: CueFont, fileGlyphSize: CGFloat, markerColor: CueColor,
         codeBackground: CueColor, textColor: CueColor, backgroundColor: CueColor, variableColor: CueColor,
         variableBackground: CueColor, imagePlaceholderColor: CueColor, horizontalInset: CGFloat, maxTextWidth: CGFloat? = nil, verticalInset: CGFloat, lineSpacing: CGFloat,
         headingSpacing: CGFloat, imageCornerRadius: CGFloat
@@ -56,6 +60,8 @@ public struct CueEditorTheme: @unchecked Sendable {
         self.font = font
         self.headingFont = headingFont
         self.codeFont = codeFont
+        self.captionFont = captionFont
+        self.fileGlyphSize = fileGlyphSize
         self.markerColor = markerColor
         self.codeBackground = codeBackground
         self.textColor = textColor

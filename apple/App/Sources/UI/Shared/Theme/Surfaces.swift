@@ -19,6 +19,49 @@ extension View {
     }
 }
 
+/// 浮起的高度：投影只有这几档，Theme 以外不写 `.shadow(`（`lint.sh` 查）。新东西先问它浮得多高，不另配一组数。
+/// 深色下平放的东西靠描边分层，抬起的纸不投影（`paper`）。
+enum Elevation {
+    /// 卡片角上的小圆钮。
+    case hover
+    /// 抬起的纸与提示横幅。
+    case lifted
+    /// 窗口内浮层与气泡：要从整窗里浮出来，比 `lifted` 重。
+    case panel
+
+    fileprivate var radius: CGFloat {
+        switch self {
+        case .hover: 6
+        case .lifted: 10
+        case .panel: 28
+        }
+    }
+
+    fileprivate var offset: CGFloat {
+        switch self {
+        case .hover: 2
+        case .lifted: 6
+        case .panel: 10
+        }
+    }
+
+    fileprivate func color(_ palette: Palette) -> Color { self == .panel ? palette.panelShadow : palette.shadow }
+}
+
+private struct ElevationShadow: ViewModifier {
+    let level: Elevation?
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content.shadow(color: level?.color(palette) ?? .clear, radius: level?.radius ?? 0, y: level?.offset ?? 0)
+    }
+}
+
+extension View {
+    /// 投影；`nil` 不投（修饰符照挂，开关时视图的身份不变）。
+    func elevation(_ level: Elevation?) -> some View { modifier(ElevationShadow(level: level)) }
+}
+
 /// 玻璃上的字要多好读。
 enum GlassInk {
     case clear
@@ -42,7 +85,7 @@ private struct PaperSurface: ViewModifier {
             // 平放的纸只用描边：每张卡一个模糊阴影，侧栏开合时整面墙每帧都要重画这些阴影
             .background {
                 Group { if let wash { shape.fill(wash) } else { shape.fill(palette.paperFill) } }
-                    .shadow(color: palette.dark || !lifted ? .clear : palette.shadow, radius: lifted ? 10 : 0, y: lifted ? 6 : 0)
+                    .elevation(lifted && !palette.dark ? .lifted : nil)
             }
             .overlay(shape.strokeBorder(palette.hair))
             // 上沿一线高光：纸边像被光擦过，与玻璃同一种光。只画上沿一条实色细线：渐变描边由 CPU 按整张卡的面积铺渐变，

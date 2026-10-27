@@ -21,6 +21,7 @@ extension CueEditorTheme {
     static let test = CueEditorTheme(
         font: .systemFont(ofSize: 15),
         headingFont: .systemFont(ofSize: 18, weight: .semibold), codeFont: .monospacedSystemFont(ofSize: 13, weight: .regular),
+        captionFont: .systemFont(ofSize: 12), fileGlyphSize: 20,
         markerColor: .gray, codeBackground: NSColor.black.withAlphaComponent(0.06), textColor: .black, backgroundColor: .white,
         variableColor: .purple, variableBackground: NSColor.purple.withAlphaComponent(0.12),
         imagePlaceholderColor: .lightGray,

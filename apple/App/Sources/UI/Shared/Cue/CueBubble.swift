@@ -189,7 +189,7 @@ private struct OriginalToggle: View {
         Button { open.toggle() } label: {
             HStack(spacing: 4) {
                 Text("原话")
-                Image(.expand).font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 180 : 0))
+                Image(.expand).font(Glyph.mark).rotationEffect(.degrees(open ? 180 : 0))
             }
             .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
             // 不另占一行高：按得到的范围往外扩一圈，不撑高气泡

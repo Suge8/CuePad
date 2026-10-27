@@ -50,7 +50,7 @@ enum PaneMetrics {
     static let inset: CGFloat = 3
     #if os(macOS)
     static let font = Typography.toolbarLabel
-    static let iconFont = Font.system(size: 12, weight: .semibold)
+    static let iconFont = Glyph.small
     static let iconGap: CGFloat = 5
     static let padding: CGFloat = 12
     static let minWidth: CGFloat = 64

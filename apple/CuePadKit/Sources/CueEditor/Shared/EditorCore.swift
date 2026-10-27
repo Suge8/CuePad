@@ -185,7 +185,7 @@ final class EditorCore {
         style.imagePlaceholderColor = resolved(style.imagePlaceholderColor)
         style.textColor = resolved(style.textColor)
         style.markerColor = resolved(style.markerColor)
-        let symbol = thumbnail == nil ? fileIcon(name).map { CueImageRendering.tinted($0, color: style.markerColor) } : nil
+        let symbol = thumbnail == nil ? fileIcon(name).map { CueImageRendering.tinted($0, color: style.markerColor, size: style.fileGlyphSize) } : nil
         return CueImageRendering.canvas(size: size) { context in
             FileChip.draw(in: context, size: size, name: name, status: status, thumbnail: thumbnail, symbol: symbol, style: style)
         }

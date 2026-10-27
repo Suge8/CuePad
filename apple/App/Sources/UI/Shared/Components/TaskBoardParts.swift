@@ -234,7 +234,7 @@ struct BoardColumn: View {
             } label: {
                 HStack(spacing: 4) {
                     Text("更早做完的 \(board.earlier.count)").monospacedDigit()
-                    Image(.forward).font(.system(size: 9, weight: .semibold))
+                    Image(.forward).font(Glyph.mark)
                         .rotationEffect(.degrees(showsEarlier ? 90 : 0)).accessibilityHidden(true)
                 }
                 .frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)

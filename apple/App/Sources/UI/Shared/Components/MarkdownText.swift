@@ -89,10 +89,10 @@ struct MarkdownText: View, Equatable {
         }
         func newline(gap: CGFloat? = nil) -> AttributedString {
             var line = AttributedString("\n")
-            line.font = .system(size: 1)
+            line.font = Typography.gap(1)
             guard let gap else { return line }
             var spacer = AttributedString("\n")
-            spacer.font = .system(size: gap)
+            spacer.font = Typography.gap(gap)
             return line + spacer
         }
         var result = AttributedString()

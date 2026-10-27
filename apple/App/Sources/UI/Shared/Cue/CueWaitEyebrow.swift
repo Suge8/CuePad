@@ -60,7 +60,7 @@ struct CueWaitEyebrow: View {
     private func label(_ title: String, linked: Bool) -> some View {
         HStack(spacing: 3) {
             Text(title).lineLimit(1)
-            if linked { Image(.forward).font(.system(size: 8, weight: .bold)) }
+            if linked { Image(.forward).font(Glyph.mark) }
         }
         .foregroundStyle(palette.ink2)
         // 小字本身矮：点得到的范围往上下扩，不撑高这一行
@@ -84,7 +84,7 @@ struct CueWaitEyebrow: View {
     #if os(macOS)
     private func arrow(_ icon: Icon, enabled: Bool, label: LocalizedStringResource, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(icon).font(.system(size: 9, weight: .bold)).frame(width: Self.height, height: Self.height).contentShape(.rect)
+            Image(icon).font(Glyph.mark).frame(width: Self.height, height: Self.height).contentShape(.rect)
         }
         .buttonStyle(PressStyle(.inline))
         .disabled(!enabled)

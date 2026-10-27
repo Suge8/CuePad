@@ -44,7 +44,7 @@ struct TaskNextMark: View {
     #if os(macOS)
     private var edge: Alignment { .leading }
     private static let dot: CGFloat = 6
-    private static let glyph = Font.system(size: 8, weight: .bold)
+    private static let glyph = Glyph.mark
     private static let target: CGFloat = 20
     #else
     @Environment(\.horizontalSizeClass) private var sizeClass

@@ -70,7 +70,7 @@ private struct VariablesChip: View {
                     .foregroundStyle(card.variableValues[names[0]]?.isEmpty == false ? palette.ink : palette.ink2)
                     .lineLimit(1)
                 if names.count > 1 { Text("+\(names.count - 1)").foregroundStyle(palette.ink2) }
-                Image(.expand).font(.system(size: 9, weight: .bold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+                Image(.expand).font(Glyph.mark).foregroundStyle(palette.ink2).accessibilityHidden(true)
             }
             .font(Typography.secondary.weight(.medium))
             .padding(.horizontal, 14).frame(height: 44)
