@@ -161,6 +161,9 @@ private struct SyncSection: View {
             if let failure = choices.failure {
                 Label { Text(failure).font(.footnote) } icon: { FailureMark() }
             }
+            if services.syncFilesOverQuota {
+                Label { Text(FileStatus.overQuota).font(.footnote) } icon: { Image(.syncPaused).foregroundStyle(palette.color(.notice)) }
+            }
             if !services.conflicts.isEmpty {
                 NavigationLink(value: Route.conflicts) {
                     Label("\(services.conflicts.count) 条灵感或任务有两个版本", icon: .conflict)

@@ -16,7 +16,7 @@ struct ShareTests {
         return provider
     }
 
-    @Test func 图片网址文字各取所需() async throws {
+    @Test func 图片网址文字各取所需_图片当文件收() async throws {
         let png = pngData()
         let content = try await ShareItemLoader.load(from: [
             provider(text: "  标题  "), provider(url: "https://example.com/a"), provider(image: png), provider(text: "第二段"),
@@ -24,7 +24,8 @@ struct ShareTests {
 
         #expect(content.text == "标题\n\n第二段")
         #expect(content.urls == [URL(string: "https://example.com/a")!])
-        #expect(content.images == [.init(data: png, fileExtension: "png")])
+        #expect(content.files.count == 1)
+        #expect(try content.files.map { try Data(contentsOf: $0.url) } == [png])
     }
 
     @Test func 选项目保存后进待入库目录并可被主App读到() async throws {

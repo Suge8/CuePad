@@ -23,12 +23,12 @@ extension CueKeeper {
                 input.yield(.kick)
                 return
             }
-            let pending = try await store.cueMessagesToDeliver()
+            let pending = ready(try await store.cueMessagesToDeliver())
             if !pending.isEmpty {
                 if case .stuck = phase { await startShift() }
                 guard let shift else { return }
                 let ids = pending.map(\.id)
-                let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside())
+                let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside(), files: store.files)
                 let images = await images(in: pending, for: shift.brain)
                 if shift.turn != nil {
                     do {

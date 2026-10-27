@@ -16,6 +16,10 @@
 				<integer>1</integer>
 				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
 				<integer>9</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>9</integer>
+				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
+				<integer>9</integer>
 			</dict>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>

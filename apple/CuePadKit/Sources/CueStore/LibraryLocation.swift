@@ -57,9 +57,17 @@ public struct LibraryLocation: Equatable, Sendable {
 
   public var databaseURL: URL { directory.appending(path: "cuepad.db") }
 
-  /// 可随时重建的缓存（交付物按文件名放的一份、缩略图与网页快照）：真实库在系统的缓存目录（系统可清、不进备份），
-  /// 隔离库在隔离目录的 `Caches/` 里——本机构建、测量与测试不往正式版的缓存里写。
-  public var caches: URL { isIsolated ? directory.appending(path: "Caches", directoryHint: .isDirectory) : URL.cachesDirectory }
+  /// 可随时重建的缓存（附件文件 `AttachmentFiles`，可从 iCloud 再取；缩略图与网页快照），系统可清、不进备份：
+  /// - Mac 的真实库在系统的缓存目录；
+  /// - iOS 的真实库在 App Group 容器的 `Library/Caches`（就是库目录旁的 `Caches/`，系统建好的缓存位置）：分享扩展、小组件与主 App 读写同一份附件，
+  ///   不用跨容器链接；
+  /// - 隔离库在隔离目录的 `Caches/` 里——本机构建、测量与测试不往正式版的缓存里写。
+  public var caches: URL {
+    #if os(macOS)
+    if !isIsolated { return URL.cachesDirectory }
+    #endif
+    return directory.appending(path: "Caches", directoryHint: .isDirectory)
+  }
 
   /// 指向一个隔离目录（同 `CUEPAD_LIBRARY_DIR`）：测试、临时库用。
   public static func isolated(_ directory: URL) -> LibraryLocation {

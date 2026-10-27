@@ -21,7 +21,7 @@ struct CuePatrolTests {
 
         let workspace = Workspace(services: rig.services)
         workspace.cue.draft = ComposerDraft(text: "你好")
-        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: store.files) }?.value
+        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { $0.stored }.value
         try await rig.message(.cue, containing: "收到：你好")
 
         let exited = Date.now
@@ -46,7 +46,7 @@ struct CuePatrolTests {
 
         let workspace = Workspace(services: rig.services)
         workspace.cue.draft = ComposerDraft(text: "你好")
-        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: store.files) }?.value
+        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { $0.stored }.value
         try await rig.message(.cue, containing: "收到：你好")
 
         #expect(try await store.cueBoardActive())  // 别的 Mac 上正在开会话的那件事还在做

@@ -9,7 +9,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// 所在的项目；没指定的在默认项目（`Project.defaultID`）。
   public internal(set) var projectID: UUID
-  /// 正文：一段 Markdown（`CueFormat`），图片为 `![](cuepad://img/<哈希>)`。
+  /// 正文：一段 Markdown（`CueFormat`），附件为 `![](cuepad://file/<键>)`、`[文件名](cuepad://file/<键>)`。
   public var body: String
   /// 置顶：项目里长期参考的灵感（项目页任务纸下面那几行，行首一枚图钉）。字段名沿用同步记录里的 isPinned。
   public var isPinned: Bool

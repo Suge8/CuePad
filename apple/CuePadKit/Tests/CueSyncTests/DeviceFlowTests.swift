@@ -73,11 +73,11 @@ import Testing
 
     let seen = try #require(try await phone.store.previews(of: "s1").first)
     #expect(seen == preview)  // 标题、文件名、大小、哈希都到了
-    #expect(try Data(contentsOf: #require(phone.store.files.fileURL(for: seen.hash))) == Data("<h1>登录页</h1>".utf8))
+    #expect(try Data(contentsOf: #require(phone.store.files.fileURL(for: seen.key))) == Data("<h1>登录页</h1>".utf8))
 
     try await mac.store.prunePiMessages(olderThan: 7 * 86_400, now: .now.addingTimeInterval(8 * 86_400))
     try await cloud.exchange()
-    #expect(try await phone.store.previews(of: "s1").isEmpty && phone.store.files.fileURL(for: seen.hash) == nil)
+    #expect(try await phone.store.previews(of: "s1").isEmpty && phone.store.files.fileURL(for: seen.key) == nil)
   }
 
   /// 会话的模型、思考强度（Mac 写）与它所在目录可换的模型、命令经同步到手机；手机的配置请求（手机写）到 Mac，读出同一个配置。

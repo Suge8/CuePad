@@ -48,7 +48,7 @@ struct MessageActions: View {
     private func editAgain(_ session: PiSessionState) {
         let settings = workspace.services.settings
         var draft = settings.replyDraft(for: session.id)
-        draft.append(stored: text, files: workspace.services.store.files)
+        draft.append(stored: text)
         settings.setReplyDraft(draft, for: session.id)
     }
 }

@@ -1,5 +1,6 @@
 import CloudKit
 import CueStore
+import CueText
 import Foundation
 
 /// 要上传的一批：从哪些待推送里挑（`BatchScope`）由发送者定，同一条记录同一时刻只在一批里。
@@ -44,10 +45,11 @@ extension SyncCoordinator {
       failed(error)
       throw error
     }
-    var names = pending.saves.map(\.id)
+    // 附件记录带着文件，走文件那一路（`FileSender`）；那一路在传的，删除也等它传完
+    var names = pending.saves.filter { $0.table != .attachments }.map(\.id)
     var deletes = pending.deletes
     names.removeAll(where: excluded.contains)
-    deletes.removeAll(where: excluded.contains)
+    deletes.removeAll { excluded.contains($0) || fileUploads.contains($0) }
     var batch = OutgoingBatch(saves: [], deletes: [])
     for name in names {
       guard batch.saves.count < limit else {
@@ -67,9 +69,9 @@ extension SyncCoordinator {
     let fits = max(limit - batch.saves.count, 0)
     batch.deletes = deletes.prefix(fits).map(recordID)
     batch.left.formUnion(deletes.dropFirst(fits))
-    let all = pending.saves.count + pending.deletes.count
+    let all = pending.saves.count(where: { $0.table != .attachments }) + pending.deletes.count
     guard !batch.isEmpty else {
-      if case .pending = scope, excluded.isDisjoint(with: pending.saves.map(\.id) + pending.deletes) { drained = generation }
+      if case .pending = scope, excluded.union(fileUploads).isDisjoint(with: pending.saves.map(\.id) + pending.deletes) { drained = generation }
       return batch
     }
     // 这一版传不上去的同不可传的一样不算剩下：改过才再出现在提交的增量里
@@ -95,15 +97,30 @@ extension SyncCoordinator {
     let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
     let record = RecordMapper.record(from: row, zoneID: zoneID, base: base)
     if row.table == .attachments {
-      guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
+      guard let key = row.attachmentKey, let file = store.files.fileURL(for: key) else {
         unsendable[id.recordName] = row.modifiedAt
         report(.fileMissing, kind: .upload, recordType: row.table.rawValue, recordName: id.recordName)
         return nil
       }
-      record["file"] = CKAsset(fileURL: file)
+      record[RecordMapper.fileKey] = CKAsset(fileURL: file)
     }
     return record
   }
+
+  /// 文件那一路要传这条附件记录：带上文件、记下交出的版本，在传完（`fileDone`）之前后台那一路不删它、这一路不再交出。
+  /// 已在传、传不上去（文件不在本机、这一版被拒过）为 nil。读库出错抛出。
+  func takeFile(_ name: String) async throws -> CKRecord? {
+    guard canSync else { throw SyncPaused() }
+    guard !fileUploads.contains(name), let record = try await record(for: recordID(name)), let stamp = record.modifiedAt else { return nil }
+    try await store.noteSent([(name, .attachments, stamp)])
+    fileUploads.insert(name)
+    return record
+  }
+
+  /// 接上的上一个进程交给系统的上传（`FileSender.resume`）：同 `takeFile` 交出的，传完之前不删、不另传。
+  func filesResumed(_ names: [String]) { fileUploads.formUnion(names) }
+
+  func fileDone(_ name: String) { fileUploads.remove(name) }
 
   /// 一批上传的结果：记账，告诉发送者这批有没有进展、该等什么。有记录收下就是一次成功（`succeeded`），并告诉实时层（`acceptances`）。
   func sent(_ sent: SentRecords, for batch: OutgoingBatch) async -> SendOutcome {
@@ -179,4 +196,13 @@ extension SyncCoordinator {
 extension CKRecord {
   /// 记录的版本（同步表的 `modifiedAt` 列）。
   var modifiedAt: Int64? { (self["modifiedAt"] as? NSNumber)?.int64Value }
+}
+
+extension SyncRow {
+  /// 附件记录的键（`AttachmentKey`）；不是附件记录为 nil。
+  var attachmentKey: String? {
+    guard table == .attachments, case .text(let hash)? = fields["hash"] else { return nil }
+    let format = if case .text(let format)? = fields["format"] { format } else { "" }
+    return AttachmentKey.make(hash: hash, format: format)
+  }
 }

@@ -13,7 +13,13 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var id: String
         var name = "Test"
         var thinking: [String] = ["off"]
-        var json: [String: Any] { ["provider": provider, "id": id, "name": name, "thinking": thinking] }
+        /// 看不看得了图；nil 是没报
+        var images: Bool?
+        var json: [String: Any] {
+            var json: [String: Any] = ["provider": provider, "id": id, "name": name, "thinking": thinking]
+            if let images { json["images"] = images }
+            return json
+        }
     }
 
     struct WireCommand: Sendable {

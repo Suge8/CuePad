@@ -16,7 +16,7 @@ struct CueBrainSwitchTests {
     private func say(_ text: String, to rig: CueHostTests.Rig, expecting reply: String) async throws {
         let workspace = Workspace(services: rig.services)
         workspace.cue.draft = ComposerDraft(text: text)
-        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: rig.store.files) }?.value
+        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { $0.stored }.value
         try await rig.message(.cue, containing: reply)
     }
 

@@ -12,7 +12,7 @@ import Testing
   private func populate() async throws -> (card: Card, hash: String) {
     let hash = try store.files.store(pngData(width: 2, height: 2))
     let project = try await store.createProject(name: "P", color: "#111")
-    let card = try await store.createCard(in: project.id, body: "hello ![](cuepad://img/\(hash))")
+    let card = try await store.createCard(in: project.id, body: "hello ![](cuepad://file/\(hash))")
     try await store.updateCard(card.id) {
       $0.isPinned = true
       $0.variableValues = ["k": "v"]

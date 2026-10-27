@@ -105,49 +105,51 @@ extension CueStore {
     } }
   }
 
-  /// 删卡并在同一事务里清理引用它的记录（同步表没有外键级联）。返回这些卡正文引用过的图片哈希，
+  /// 删卡并在同一事务里清理引用它的记录（同步表没有外键级联）。返回这些卡正文引用过的附件的键，
   /// 由调用方在同一事务里交给 `reclaimAttachments` 判断是否已无人引用。
   func purgeCards(where condition: String, _ arguments: [any SQLBindable] = []) throws -> Set<String> {
     let ids = "SELECT id FROM cards WHERE \(condition)"
     let bodies = try db.query("SELECT body FROM cards WHERE \(condition)", arguments) { $0.text(0) }
-    let referenced = Set(bodies.flatMap(CueFormat.imageHashes(in:)))
+    let referenced = Set(bodies.flatMap(CueFormat.attachmentKeys(in:)))
     try db.run("UPDATE sendRecords SET cardID = NULL, modifiedAt = ? WHERE cardID IN (\(ids))", [Date.stamp] + arguments)
     try db.run("DELETE FROM cards WHERE \(condition)", arguments)
     return referenced
   }
 
-  /// 删除候选图片中已无人引用的（`isImageReferenced`）：先删文件，成功后再删记录，
-  /// 所以记录与文件始终配对；删不掉的文件保留记录并返回其哈希。
-  /// 只看被删卡片引用过的图片，不做全表扫描：刚粘贴、正文尚未保存的图片不能被顺手回收。
-  /// 不处理跨设备竞态：另一台设备可能刚好在引用同一哈希。
+  /// 删除候选附件中已无人引用的（`isAttachmentReferenced`）：先删文件，成功后再删记录，
+  /// 所以记录与文件始终配对；删不掉的文件保留记录并返回其键。
+  /// 只看被删的东西引用过的附件，不做全表扫描：刚粘贴、正文尚未保存的附件不能被顺手回收。
+  /// 不处理跨设备竞态：另一台设备可能刚好在引用同一个键。
   func reclaimAttachments(_ candidates: Set<String>) throws -> [String] {
     var failed: [String] = []
-    for hash in candidates.sorted() where try !isImageReferenced(hash) {
-      do { try files.remove(hash: hash) } catch {
-        failed.append(hash)
+    for key in candidates.sorted() where try !isAttachmentReferenced(key) {
+      guard let parts = AttachmentKey.parts(key) else { continue }
+      do { try files.remove(key) } catch {
+        failed.append(key)
         continue
       }
-      try db.run("DELETE FROM attachments WHERE hash = ?", [hash])
+      try db.run("DELETE FROM attachments WHERE hash = ? AND format = ?", [parts.hash, parts.format])
     }
     return failed
   }
 
-  /// 对话里你的消息中带图片的行（只有你的消息引用图片）；`?1` 是图片引用或它的开头 `CueFormat.imagePrefix`。
-  static let userImages = "role = '\(PiChatRole.user.rawValue)' AND instr(text, ?1) > 0"
+  /// 对话里你的消息中带附件的行（只有你的消息引用附件）；`?1` 是某个附件的引用（`CueFormat.reference`）或所有引用都含的 `CueFormat.referencePrefix`。
+  static let userAttachments = "role = '\(PiChatRole.user.rawValue)' AND instr(text, ?1) > 0"
 
-  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、对话里你的消息或 Cue 页的对话引用这张图片，或有预览用着这份文件。
-  func isImageReferenced(_ hash: String) throws -> Bool {
-    try db.first(
+  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、对话里你的消息或 Cue 页的对话引用这个附件，或有预览用着这份文件。
+  func isAttachmentReferenced(_ key: String) throws -> Bool {
+    let referenced = try db.first(
       """
       SELECT 1 FROM cards WHERE instr(body, ?1) > 0
       UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
-      UNION ALL SELECT 1 FROM piMessages WHERE \(Self.userImages)
+      UNION ALL SELECT 1 FROM piMessages WHERE \(Self.userAttachments)
       UNION ALL SELECT 1 FROM cueMessages WHERE instr(text, ?1) > 0
-      UNION ALL SELECT 1 FROM previews WHERE hash = ?2
-      """, [CueFormat.imageMarkup(id: hash), hash]) { _ in true } != nil
+      """, [CueFormat.reference(key: key)]) { _ in true } != nil
+    guard !referenced, let hash = AttachmentKey.parts(key)?.hash else { return referenced }
+    return try db.query("SELECT name FROM previews WHERE hash = ?", [hash]) { $0.text(0) }.contains { AttachmentKey.make(hash: hash, name: $0) == key }
   }
 
-  /// 事务已提交后，把删不掉文件的哈希作为错误报告（永久删除本身已生效）。
+  /// 事务已提交后，把删不掉文件的键作为错误报告（永久删除本身已生效）。
   func reportingFileFailures(_ body: () throws -> [String]) throws {
     let failed = try body()
     if !failed.isEmpty { throw CueStoreError.attachmentFilesNotRemoved(failed) }

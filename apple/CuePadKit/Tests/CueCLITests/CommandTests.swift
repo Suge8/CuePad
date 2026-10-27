@@ -28,7 +28,7 @@ import Testing
   @Test func cardBodyRoundTripsVerbatimThroughStdinAndArgument() async throws {
     let sb = try Fixture()
     _ = try await sb.project("Alpha")
-    let body = "第一段  \n---\n![](cuepad://img/\(String(repeating: "a", count: 64)))\n\n结尾\n"
+    let body = "第一段  \n---\n![](cuepad://file/\(String(repeating: "a", count: 64)))\n\n结尾\n"
 
     let added = try await sb.object("card", "add", "--project", "alpha", stdin: body)
     let id = try #require(added.string("id"))
@@ -176,7 +176,7 @@ import Testing
     let beta = try await sb.project("Beta")
     let hit = try await sb.store.createCard(in: alpha.id, body: "部署 脚本 说明")
     _ = try await sb.store.createCard(in: alpha.id, body: "部署 only")
-    let other = try await sb.store.createCard(in: beta.id, body: "部署 脚本 ![](cuepad://img/\(String(repeating: "b", count: 64)))")
+    let other = try await sb.store.createCard(in: beta.id, body: "部署 脚本 ![](cuepad://file/\(String(repeating: "b", count: 64)))")
     _ = try await sb.store.recordSend("x", to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: other.id)
 
     func search(_ args: [String]) async throws -> [String: Any] {

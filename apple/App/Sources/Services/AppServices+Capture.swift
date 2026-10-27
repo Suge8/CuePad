@@ -26,15 +26,12 @@ extension AppServices {
     }
 
     private func importCapture(_ entry: CaptureQueue.Entry) async throws {
-        var hashes: [String] = []
-        for url in entry.imageURLs() {
-            hashes.append(try store.files.store(fileAt: url))
-        }
+        let files = try entry.files().map { CueFormat.markup(key: try store.files.store(fileAt: $0.url), name: $0.name) }
         let capture = entry.capture
         let sections = [
             capture.text ?? "",
             capture.urls.map(\.absoluteString).joined(separator: "\n"),
-            hashes.map { CueFormat.imageMarkup(id: $0) }.joined(separator: "\n"),
+            files.joined(separator: "\n"),
         ].filter { !$0.isEmpty }
         let project = try await existingProject(capture.project)
         _ = try await store.createCard(in: project, body: sections.joined(separator: "\n\n"))

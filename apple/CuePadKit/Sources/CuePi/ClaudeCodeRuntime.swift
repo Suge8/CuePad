@@ -143,8 +143,9 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     ) async throws -> PiSession.ID {
         let claude = try await executable()
         let session = ClaudeHostedSession(bridge: bridge)
+        // 交给会话的附件在工作目录外（`AttachmentFiles.directory`）：读它不用再问
         let process = try await session.host(
-            executable: claude.url, arguments: arguments, directory: directory,
+            executable: claude.url, arguments: arguments + ["--add-dir", store.files.directory.path(percentEncoded: false)], directory: directory,
             environment: claude.environment.merging([HostMark.variable: sessionID]) { $1 })
         hosted[sessionID] = session
         Task { [weak self] in

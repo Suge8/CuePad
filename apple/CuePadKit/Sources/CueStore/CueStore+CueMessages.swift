@@ -49,7 +49,7 @@ extension CueStore {
       places: try CuePlace.capture(task: task, wake: wake, project: asking == nil ? nil : project?.id, in: db), notify: nil)
     if author == .cue { message.notify = try message.alerts && reaches(.cue) ? .alert : .wake }
     try insert(message)
-    try registerImages(in: text)
+    try registerAttachments(in: text)
     return message
   }
 

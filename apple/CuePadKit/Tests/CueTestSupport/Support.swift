@@ -72,6 +72,8 @@ public struct RawDB {
     guard sqlite3_open_v2(path, &handle, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
       throw RawError(message: "open")
     }
+    // 别的连接收尾（最后一个关掉时做检查点）的那一下读不进来：同 `exec` 等着，不当场报 locked
+    sqlite3_busy_timeout(handle, 5000)
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else {
       throw RawError(message: String(cString: sqlite3_errmsg(handle)))

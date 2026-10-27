@@ -1,7 +1,7 @@
 #if os(iOS)
 import SwiftUI
 
-/// 底部那一排：左边两格去处（系统标签栏，`DockTabs`），右边 Cue 钮，原地换形，样子只从 `DockMotion.places` 推出来，换 tab 时带着 `Motion.travel` 换：
+/// 底部那一排：左边两格去处（系统标签栏，`DockTabs`），右边 Cue 钮，原地换形，样子只从 `DockMotion.places` 推出来，换 tab 时带着 `Motion.nudge` 换：
 /// - 项目、进展两个 tab 上、Cue 页点开"⋯"时：左边两格，右边 Cue 钮（`DockCue`）。按住拖动的透镜是系统的。
 /// - Cue 页：左边一颗"⋯"，Cue 钮长成输入框那么宽、那么高，在换形里与页里真的输入框交叉（`DockHandoff`）。
 /// - Cue 页输入框有焦点（`DockMotion.composing`）：都让开，输入框占满整排。
@@ -19,12 +19,12 @@ struct DockBar: View {
 
     var body: some View {
         DockForm(places: motion.places, motion: motion, width: width, openPlaces: openPlaces)
-            .animation(Motion.travel, value: motion.places)
+            .animation(Motion.nudge, value: motion.places)
             .opacity(stays ? 1 : 0)
             .allowsHitTesting(stays)
             .accessibilityHidden(!stays)
-            .animation(Motion.travel, value: motion.composing)
-            .animation(Motion.travel, value: stays)
+            .animation(Motion.nudge, value: motion.composing)
+            .animation(Motion.nudge, value: stays)
             .transaction { if reduceMotion { $0.animation = nil } }
     }
 }
@@ -106,7 +106,7 @@ private struct DockCue: View {
 
     var body: some View {
         let cue = workspace.cue
-        let drafted = !cue.draft.isEmpty(accepting: .images)
+        let drafted = !cue.draft.isEmpty(accepting: .files)
         Button(action: open) {
             HStack(spacing: 0) {
                 DockTally()

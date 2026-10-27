@@ -29,7 +29,7 @@ public enum CloudOutage {
 
   /// 已经发出的请求数（连真的 iCloud 时对着 `budget` 数）。
   public static var requests: Int { spent.load(ordering: .relaxed) }
-  /// 每种请求（upload、fetch、records、other）在 App 里从发起到返回的每次用时（秒）。
+  /// 每种请求（upload、fetch、records、other、file-upload、file-download）在 App 里从发起到返回的每次用时（秒）。
   public static var requestTimings: [String: [Double]] { timings.withLock { $0 } }
 
   /// 断着时每个请求都交给断了网的替身（`UnreachableCloud`：拉取、订阅是包着的 -1009，上传是逐条 -1009 的 `partialFailure`），
@@ -54,12 +54,19 @@ public enum CloudOutage {
     func accountStatus() async throws -> CKAccountStatus { try await timed("other") { try reachable(); return try await base.accountStatus() } }
     func accountName() async throws -> String { try await timed("other") { try reachable(); return try await base.accountName() } }
     func relaySecret() async throws -> Data { try await timed("other") { try await now.relaySecret() } }
-    func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
+    func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch {
       try await timed("fetch") { try await now.changes(since: token, keys: keys) }
     }
     func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { try await timed("records") { try await now.records(ids) } }
     func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
       try await timed("upload") { try await now.upload(saving: saving, deleting: deleting) }
+    }
+    func uploadFile(_ record: CKRecord, progress: @escaping @Sendable (Double) -> Void) async throws -> SentRecords {
+      try await timed("file-upload") { try await now.uploadFile(record, progress: progress) }
+    }
+    func resumedFileUploads() async throws -> [ResumedUpload] { try await timed("other") { try await now.resumedFileUploads() } }
+    func downloadFile(_ id: CKRecord.ID, progress: @escaping @Sendable (Double) -> Void) async throws -> CKRecord? {
+      try await timed("file-download") { try await now.downloadFile(id, progress: progress) }
     }
     func saveZone() async throws { try await timed("other") { try await now.saveZone() } }
     func subscriptions() async throws -> [CKSubscription.ID: CKSubscription] { try await timed("other") { try await now.subscriptions() } }

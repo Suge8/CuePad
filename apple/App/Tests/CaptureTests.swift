@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import Foundation
 import Testing
 @testable import CuePad
@@ -12,18 +13,29 @@ struct CaptureTests {
 
     private func hash(of data: Data) throws -> String { try services.store.files.store(data) }
 
-    @Test func 文字网址图片按顺序存成卡片_放进所选项目() async throws {
+    /// 扩展拷到临时目录的那份。
+    private func shared(_ data: Data, named name: String) throws -> ShareContent.File {
+        let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + "-" + name)
+        try data.write(to: url)
+        return ShareContent.File(url: url, name: name)
+    }
+
+    @Test func 文字网址图片与文件按顺序存成卡片_放进所选项目() async throws {
         let project = try await services.store.createProject(name: "P", color: "#123456")
+        let pdf = Data("%PDF-1.4".utf8)
         let content = ShareContent(
             text: "读一下这个", urls: [URL(string: "https://a.example/x")!, URL(string: "https://b.example")!],
-            images: [.init(data: png, fileExtension: "png")])
+            files: [try shared(png, named: "截图.png"), try shared(pdf, named: "报价 [终版].pdf")])
         try CaptureQueue.enqueue(content, project: project.id, into: queue)
 
         await services.drainCaptures()
 
         let cards = try await services.store.cards(in: project.id)
         #expect(cards.count == 1)
-        let expected = "读一下这个\n\nhttps://a.example/x\nhttps://b.example\n\n![](cuepad://img/\(try hash(of: png)))"
+        let body = try #require(cards.first?.body)
+        let pdfKey = try #require(CueFormat.attachmentKeys(in: body).last)
+        #expect(pdfKey.hasSuffix(".pdf"))
+        let expected = "读一下这个\n\nhttps://a.example/x\nhttps://b.example\n\n![](cuepad://file/\(try hash(of: png)))\n[报价 (终版).pdf](cuepad://file/\(pdfKey))"
         #expect(cards.first?.body == expected)
         #expect(CaptureQueue.pending(in: queue).isEmpty, "入库后条目应删除")
     }
@@ -39,14 +51,17 @@ struct CaptureTests {
         #expect(Set(try await services.store.cards(in: Project.defaultID).map(\.body)) == ["b", "c"])
     }
 
-    /// 扩展还没写完的条目跳过、不删；入库失败的条目保留并报告；都不挡其他条目。
+    /// 扩展还没写完的条目跳过、不删；入库失败的条目（这里是图读不出来）保留并报告；都不挡其他条目。
     @Test func 没写完与入库失败的条目都留着_不影响其他条目() async throws {
         let unfinished = queue.appending(path: "half-written", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: unfinished, withIntermediateDirectories: true)
         try png.write(to: unfinished.appending(path: "image-1.png"))
         try CaptureQueue.enqueue(
-            ShareContent(text: "坏图", images: [.init(data: Data("not an image".utf8), fileExtension: "png")]),
-            project: Project.defaultID, into: queue, now: Date(timeIntervalSince1970: 1))
+            ShareContent(text: "坏图", files: [try shared(png, named: "坏图.png")]), project: Project.defaultID, into: queue,
+            now: Date(timeIntervalSince1970: 1))
+        let unreadable = try #require(CaptureQueue.pending(in: queue).first?.files().first?.url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: unreadable.path) }
         try CaptureQueue.enqueue(ShareContent(text: "好的"), project: Project.defaultID, into: queue, now: Date(timeIntervalSince1970: 2))
 
         await services.drainCaptures()

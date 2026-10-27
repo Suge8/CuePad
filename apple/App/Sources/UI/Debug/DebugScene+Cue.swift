@@ -88,7 +88,7 @@ extension DebugScene {
             }
             try await seedDeliveries(store)
             try await later(20)
-            let shot = CueFormat.imageMarkup(id: try store.files.store(appShotPNG()))
+            let shot = CueFormat.imageMarkup(key: try store.files.store(appShotPNG()))
             try await you(String(localized: "README 的截图也交给你，换成 Swift 版的样子，参考这张", table: "Demo") + "\n" + shot)
             try await store.recordCueRound(nil, startedAt: .now, answersYou: true, tools: process(
                 step(.read, String(localized: "看「README 截图」的近况", table: "Demo"), panel), step(.talk, String(localized: "对「README 截图」说：换成 Swift 版的样子，按你给的参考图拍", table: "Demo"), panel),

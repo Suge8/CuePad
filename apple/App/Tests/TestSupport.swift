@@ -77,6 +77,13 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     func push() async {}
 
     func resolve(_ resolution: SyncResolution) async throws {}
+    var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }
+    /// `fetchFile` 怎么取（像从 iCloud 取来）；没给是这台不同步
+    let fetching = Mutex<(@Sendable (String) async throws -> URL)?>(nil)
+    func fetchFile(_ key: String) async throws -> URL {
+        guard let fetch = fetching.withLock({ $0 }) else { throw FileFetchFailure.notSyncing }
+        return try await fetch(key)
+    }
 }
 
 /// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键；iOS 的私有命名剪贴板，
@@ -312,9 +319,8 @@ extension Workspace {
     /// 像回复框那样从一份草稿发给会话（`speak`，关联带上的第一张卡），等写库与上传走完，返回写下的那条请求。
     func said(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil) async throws -> DeliveryRequest {
         var box = draft
-        let files = services.store.files
         let binding = Binding(get: { box }, set: { box = $0 })
-        await speak(to: .session(session, mode: mode, card: card), from: binding) { try $0.stored(in: files) }?.value
+        await speak(to: .session(session, mode: mode, card: card), from: binding) { $0.stored }.value
         return try #require(try await services.store.deliveryRequests().first)
     }
 }

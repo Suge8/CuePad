@@ -16,7 +16,7 @@ struct IOSChromeTests {
             stored += line + "\n"
             if i % 40 == 39 {
                 let color = UIColor(hue: CGFloat(i) / 400, saturation: 0.7, brightness: 0.9, alpha: 1)
-                stored += "![](cuepad://img/\(try h.store.store(makePNG(width: 1600, height: 1000, color: color))))\n"
+                stored += "![](cuepad://file/\(try h.store.store(makePNG(width: 1600, height: 1000, color: color))))\n"
             }
         }
         h.load(stored)

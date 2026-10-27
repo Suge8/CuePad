@@ -112,7 +112,7 @@ private struct PreviewPager: View {
     }
 
     private func file(of preview: PiPreview) -> URL? {
-        services.store.files.url(of: preview)
+        services.store.files.fileURL(for: preview.key)
     }
 }
 
