@@ -18,7 +18,7 @@ import Foundation
 /// - 模型写成 `提供方/模型`，换模型与强度（模型的 `variant`，按 `OpenCodeModel.variant(for:)` 夹取）先在 `/api/model` 里认：
 ///   服务对不存在的模型也回 204；能不能看图看模型的 `capabilities.input`；
 /// - 一轮是一次执行（`session.execution.*`）；正在说的话由 `OpenCodeDrafts` 累积；上下文是每一步的输入合计（`OpenCodeTokens.prompt`）；
-///   工具名去掉 MCP 的前缀 `cuepad_`。事件流断了（服务卡住）就结束进程，报成退出。
+///   工具名去掉 MCP 的前缀（`CueMCPServer.toolPrefix`）。事件流断了（服务卡住）就结束进程，报成退出。
 @MainActor
 final class OpenCodeBrain: HostedSession {
     private let session = BrainSession()
@@ -40,7 +40,6 @@ final class OpenCodeBrain: HostedSession {
     private let mcpChanges = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
 
     nonisolated static let agent = "cue"
-    nonisolated static let toolPrefix = "\(CueMCPServer.name)_"
 
     private struct Create: Encodable {
         var agent = OpenCodeBrain.agent
@@ -88,7 +87,7 @@ final class OpenCodeBrain: HostedSession {
 
     /// 内联配置，键名见 OpenCode v2 的 config.schema.json。
     private static func inlineConfig(_ config: CueBrainConfig) -> [String: Any] {
-        let allowed = ["read", "glob", "grep", "external_directory", "\(toolPrefix)*"]
+        let allowed = ["read", "glob", "grep", "external_directory", "\(CueMCPServer.toolPrefix(on: .opencode))*"]
         let permissions = [["action": "*", "resource": "*", "effect": "deny"]] + allowed.map { ["action": $0, "resource": "*", "effect": "allow"] }
         return [
             "default_agent": agent, "snapshots": false,
@@ -224,7 +223,7 @@ final class OpenCodeBrain: HostedSession {
             guard let id = data.id else { return }
             let name = toolNames[id] ?? "?"
             let arguments = String(decoding: (data.input?.json ?? [:]).data, as: UTF8.self)
-            session.emit(.tool(id: id, name: (name.hasPrefix(Self.toolPrefix) ? String(name.dropFirst(Self.toolPrefix.count)) : name).lowercased(), arguments: arguments))
+            session.emit(.tool(id: id, name: CueMCPServer.bareName(name, on: .opencode), arguments: arguments))
         case "session.tool.success", "session.tool.failed":
             guard let id = data.id else { return }
             toolNames[id] = nil
