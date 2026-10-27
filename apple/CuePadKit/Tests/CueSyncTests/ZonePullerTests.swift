@@ -115,7 +115,8 @@ import Testing
     try await store.setSyncState(ZonePuller.tokenKey, Data("t0".utf8))
     let data = pngData(width: 5, height: 5)
     let record = try attachment(data)
-    let blocker = rig.fixture.directory.appending(path: "Attachments")
+    let blocker = rig.fixture.directory.appending(path: "Caches/CuePadAttachments")
+    try FileManager.default.createDirectory(at: blocker.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data().write(to: blocker)
     let zone = FakeZone([page("t1", [record]), page("t1", [record])], server: [record])
     let puller = ZonePuller(source: zone, coordinator: rig.coordinator)
@@ -126,7 +127,7 @@ import Testing
     try FileManager.default.removeItem(at: blocker)
     try await puller.pull()
     #expect(await zone.calls.map(\.token) == [Data("t0".utf8), Data("t0".utf8)])
-    #expect(try store.files.original(hash: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()) == data)
+    #expect(try Data(contentsOf: #require(store.files.fileURL(for: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() + ".png"))) == data)
     #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t1".utf8))
   }
 

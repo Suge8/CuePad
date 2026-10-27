@@ -23,7 +23,7 @@ struct CaptureTests {
 
         let cards = try await services.store.cards(in: project.id)
         #expect(cards.count == 1)
-        let expected = "读一下这个\n\nhttps://a.example/x\nhttps://b.example\n\n![](cuepad://img/\(try hash(of: png)))"
+        let expected = "读一下这个\n\nhttps://a.example/x\nhttps://b.example\n\n![](cuepad://file/\(try hash(of: png)))"
         #expect(cards.first?.body == expected)
         #expect(CaptureQueue.pending(in: queue).isEmpty, "入库后条目应删除")
     }
@@ -39,14 +39,17 @@ struct CaptureTests {
         #expect(Set(try await services.store.cards(in: Project.defaultID).map(\.body)) == ["b", "c"])
     }
 
-    /// 扩展还没写完的条目跳过、不删；入库失败的条目保留并报告；都不挡其他条目。
+    /// 扩展还没写完的条目跳过、不删；入库失败的条目（这里是图读不出来）保留并报告；都不挡其他条目。
     @Test func 没写完与入库失败的条目都留着_不影响其他条目() async throws {
         let unfinished = queue.appending(path: "half-written", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: unfinished, withIntermediateDirectories: true)
         try png.write(to: unfinished.appending(path: "image-1.png"))
         try CaptureQueue.enqueue(
-            ShareContent(text: "坏图", images: [.init(data: Data("not an image".utf8), fileExtension: "png")]),
-            project: Project.defaultID, into: queue, now: Date(timeIntervalSince1970: 1))
+            ShareContent(text: "坏图", images: [.init(data: png, fileExtension: "png")]), project: Project.defaultID, into: queue,
+            now: Date(timeIntervalSince1970: 1))
+        let unreadable = try #require(CaptureQueue.pending(in: queue).first?.imageURLs().first)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: unreadable.path) }
         try CaptureQueue.enqueue(ShareContent(text: "好的"), project: Project.defaultID, into: queue, now: Date(timeIntervalSince1970: 2))
 
         await services.drainCaptures()

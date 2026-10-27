@@ -58,7 +58,7 @@ struct ComposerDraft {
     /// 把存储格式正文放回输入框（编辑后重发）：文字接在已写的字后面（空一行），图片接进图片条。本机没有文件的图片略过。
     mutating func append(stored: String, files: AttachmentFiles) {
         text = [text, CueFormat.plainText(stored)].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
-        images += CueFormat.imageHashes(in: stored).compactMap { hash in
+        images += CueFormat.imageKeys(in: stored).compactMap { hash in
             files.fileURL(for: hash).flatMap { try? Data(contentsOf: $0) }.flatMap(PickedImage.init(data:))
         }
     }

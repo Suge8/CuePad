@@ -180,7 +180,7 @@ public actor DeliveryExecutor {
         await finish(request, .failed(ShownText("这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）")))
         continue
       }
-      if hasMissingImages(request) { continue }
+      if hasMissingAttachments(request) { continue }
       if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
@@ -224,8 +224,8 @@ public actor DeliveryExecutor {
     }
   }
 
-  private func hasMissingImages(_ request: DeliveryRequest) -> Bool {
-    CueFormat.imageHashes(in: request.content).contains { store.files.fileURL(for: $0) == nil }
+  private func hasMissingAttachments(_ request: DeliveryRequest) -> Bool {
+    CueFormat.attachmentKeys(in: request.content).contains { store.files.fileURL(for: $0) == nil }
   }
 
   /// 发出的话与 Cue 的失败请求最多留多久（与对话的保留期一样是 7 天）。

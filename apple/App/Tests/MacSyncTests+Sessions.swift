@@ -64,7 +64,7 @@ extension MacSyncTests {
 
         let png = pngData()
         let hash = try services.store.files.store(png)
-        let shown = try await launched(PiLaunch(project: project.id, prompt: "看这张设计稿\n\n![](cuepad://img/\(hash))", token: "tok-5"), title: "App")
+        let shown = try await launched(PiLaunch(project: project.id, prompt: "看这张设计稿\n\n![](cuepad://file/\(hash))", token: "tok-5"), title: "App")
         #expect(rig.host.extensions["new-tok-5"]?.messages == [
             PiMessage(text: "看这张设计稿", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: shown.id.uuidString)
         ])

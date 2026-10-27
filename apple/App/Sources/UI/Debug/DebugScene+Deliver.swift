@@ -80,7 +80,7 @@ extension DebugScene {
             let named = files.compactMap { $0 }.map { (url: $0, title: $0.deletingPathExtension().lastPathComponent) }
             guard let added = try? await store.addPreviews(named, sessionID: "scratch") else { continue }
             for entry in added where entry.preview.name == String(localized: "还在路上.png", table: "Demo") {
-                if let stored = store.files.fileURL(for: entry.preview.hash) { try? FileManager.default.removeItem(at: stored) }
+                if let stored = store.files.fileURL(for: entry.preview.key) { try? FileManager.default.removeItem(at: stored) }
             }
         }
     }

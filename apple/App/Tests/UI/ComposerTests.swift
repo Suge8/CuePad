@@ -19,21 +19,21 @@ struct ComposerTests {
         let target = try await session()
         let photo = pngData(shade: 0.3)
         let hash = try store.files.store(pngData(shade: 0.8))
-        let card = try await store.createCard(body: "接口约定\n\n![](cuepad://img/\(hash))")
+        let card = try await store.createCard(body: "接口约定\n\n![](cuepad://file/\(hash))")
         let draft = ComposerDraft(
             text: "  照这个改  ", images: [PickedImage(data: photo)],
             attachments: [Outbox(content: card.body, card: card.id, project: nil)])
 
         let request = try await Workspace(services: app.services).said(draft, to: target, mode: .send)
 
-        let photoHash = try #require(CueFormat.imageHashes(in: request.content).last)
-        #expect(request.content == "\(card.body)\n\n照这个改\n\n![](cuepad://img/\(photoHash))")
+        let photoHash = try #require(CueFormat.imageKeys(in: request.content).last)
+        #expect(request.content == "\(card.body)\n\n照这个改\n\n![](cuepad://file/\(photoHash))")
         #expect(app.services.store.files.fileURL(for: photoHash) != nil)
         #expect(request.hostID == "mac-a" && request.mode == .known(.send))
 
         // 只有一张图片也能发
         let onlyPhoto = try await Workspace(services: app.services).said(ComposerDraft(images: [PickedImage(data: pngData())]), to: target, mode: .send)
-        #expect(CueFormat.imageHashes(in: onlyPhoto.content).count == 1 && !onlyPhoto.content.contains("\n"))
+        #expect(CueFormat.imageKeys(in: onlyPhoto.content).count == 1 && !onlyPhoto.content.contains("\n"))
     }
 
     /// 发给 Agent 时用"＋ 选灵感"带上本项目置顶的灵感：卡片作为这次消息的附件跟着发出（任务的正文在前、灵感在后），

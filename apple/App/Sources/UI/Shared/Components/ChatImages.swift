@@ -1,7 +1,6 @@
 import CueStore
-import ImageIO
+import CueText
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// 你的话里带的图片（对话里的气泡与还没进对话的气泡共用）：缩略图排在文字气泡下面，靠右；只有一张时按原比例（同高，宽不超过 `singleWidth`，
 /// 不裁），几张时一行 `perRow` 张方块；点一张在交付物同一个全屏页里看（`openPreview`，几张左右翻）。
@@ -45,16 +44,14 @@ struct ChatImages: View {
     /// 已到本机的几张作为一组打开，从点的那张起。
     private func open(_ hash: String) {
         let batch = hashes.compactMap(preview)
-        guard let opened = batch.first(where: { $0.hash == hash }) else { return }
+        guard let opened = batch.first(where: { $0.key == hash }) else { return }
         openPreview?(PreviewOpening(preview: opened, batch: batch, group: group))
     }
 
-    /// 全屏页按交付物认一份：文件名的扩展名按图片的真实格式取（系统按扩展名认类型），标题是"图片"。没到本机的为 nil。
-    private func preview(_ hash: String) -> PiPreview? {
-        guard let original = services.store.files.fileURL(for: hash) else { return nil }
-        let type = CGImageSourceCreateWithURL(original as CFURL, nil).flatMap(CGImageSourceGetType)
-        let ext = type.flatMap { UTType($0 as String)?.preferredFilenameExtension } ?? "png"
-        return PiPreview(id: Self.id(of: hash), sessionID: "", hash: hash, name: "image.\(ext)", title: String(localized: "图片"), byteCount: 0)
+    /// 全屏页按交付物认一份：文件名的扩展名就是键的（系统按扩展名认类型），标题是"图片"。没到本机的为 nil。
+    private func preview(_ key: String) -> PiPreview? {
+        guard services.store.files.fileURL(for: key) != nil, let parts = AttachmentKey.parts(key) else { return nil }
+        return PiPreview(id: Self.id(of: key), sessionID: "", hash: parts.hash, name: "image.\(parts.format)", title: String(localized: "图片"), byteCount: 0)
     }
 
     /// 同一张图同一个身份（哈希的前 128 位）：缩略图与全屏页按它对上。

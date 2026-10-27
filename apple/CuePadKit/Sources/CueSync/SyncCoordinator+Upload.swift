@@ -1,5 +1,6 @@
 import CloudKit
 import CueStore
+import CueText
 import Foundation
 
 /// 要上传的一批：从哪些待推送里挑（`BatchScope`）由发送者定，同一条记录同一时刻只在一批里。
@@ -95,7 +96,9 @@ extension SyncCoordinator {
     let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
     let record = RecordMapper.record(from: row, zoneID: zoneID, base: base)
     if row.table == .attachments {
-      guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
+      guard case .text(let hash)? = row.fields["hash"], case .text(let format)? = row.fields["format"],
+        let file = store.files.fileURL(for: AttachmentKey.make(hash: hash, format: format))
+      else {
         unsendable[id.recordName] = row.modifiedAt
         report(.fileMissing, kind: .upload, recordType: row.table.rawValue, recordName: id.recordName)
         return nil

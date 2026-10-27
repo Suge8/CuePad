@@ -98,6 +98,8 @@ final class EditorCore {
             switch token {
             case .text(let text): result.append(NSAttributedString(string: text, attributes: baseAttributes))
             case .image(let id): result.append(imageString(id: id))
+            // 文件的显示由 files-ui 做；在那之前照原文编辑，存回去不变
+            case .file: result.append(NSAttributedString(string: CueFormat.serialize([token]), attributes: baseAttributes))
             }
         }
         return result

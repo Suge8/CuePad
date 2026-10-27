@@ -32,7 +32,7 @@ import Testing
     try await store.linkCard(first.id, toSession: "claude-1")
     try await recorder.update(sessionID: "claude-1", state: .settled, agent: .claudeCode)
     let image = try store.files.store(pngData(width: 8, height: 8, shade: 0.5))
-    let next = try await store.createTask("改排序\n看截图\n\(CueFormat.imageMarkup(id: image))", under: claude.id)
+    let next = try await store.createTask("改排序\n看截图\n\(CueFormat.imageMarkup(key: image))", under: claude.id)
     #expect(try await store.startLeaf(next.id, host: "mac").content == "改排序\n看截图")
     try await recorder.update(sessionID: "claude-1", state: .thinking, title: "修乱序", agent: .claudeCode)
     await #expect(throws: CueStoreError.cannotStop("修乱序")) { try await store.stopSession("claude-1", host: "mac") }

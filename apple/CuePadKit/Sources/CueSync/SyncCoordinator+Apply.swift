@@ -1,4 +1,5 @@
 import CloudKit
+import CueText
 import Foundation
 import os
 
@@ -40,12 +41,14 @@ extension SyncCoordinator {
   /// 本机写不进去（读下载的文件、建目录、拷贝、改名失败）抛出：这一页没应用完，拉取器不前移令牌，之后再拉。
   private func adoptAsset(of record: CKRecord, _ row: SyncRow) throws -> Bool {
     let name = record.recordID.recordName
-    guard case .text(let hash)? = row.fields["hash"], let file = (record["file"] as? CKAsset)?.fileURL else {
+    guard case .text(let hash)? = row.fields["hash"], case .text(let format)? = row.fields["format"],
+      let file = (record["file"] as? CKAsset)?.fileURL
+    else {
       report(.damaged, detail: String(localized: "附件记录没有文件"), kind: .incoming, recordType: record.recordType, recordName: name)
       return false
     }
     do {
-      try store.files.adopt(fileAt: file, hash: hash)
+      try store.files.adopt(fileAt: file, key: AttachmentKey.make(hash: hash, format: format))
       return true
     } catch let error as CueStoreError where [.invalidAttachmentHash, .attachmentHashMismatch].contains(error) {
       report(.damaged, detail: "\(error)", kind: .incoming, recordType: record.recordType, recordName: name)

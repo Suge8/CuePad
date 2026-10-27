@@ -4,7 +4,8 @@ public enum CueStoreError: Error, Equatable {
   case notFound
   case blankTaskContent
   case blankProjectName
-  case notAnImage
+  /// 单个文件超过上限（`AttachmentFiles.maxBytes`）。
+  case fileTooLarge(limit: Int)
   /// 卡片或任务只能归属存在且未在回收站的项目。
   case invalidProject
   /// 默认项目不能删除（`Project.defaultID`）。
@@ -16,7 +17,7 @@ public enum CueStoreError: Error, Equatable {
   /// 附件记录声明的哈希格式不对（不是 SHA-256 十六进制）。
   case invalidAttachmentHash
   case blankDeliveryContent
-  /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
+  /// 永久删除已完成，但这些键的附件文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
   /// 库文件是更新版本建的，不打开。
   case unsupportedSchemaVersion(Int)
@@ -98,14 +99,14 @@ extension CueStoreError: LocalizedError {
     case .notFound: String(localized: "找不到这条记录，可能已被删除")
     case .blankTaskContent: String(localized: "任务内容不能为空")
     case .blankProjectName: String(localized: "项目名不能为空")
-    case .notAnImage: String(localized: "不是可识别的图片")
+    case .fileTooLarge(let limit): String(localized: "文件超过 \(limit / 1_000_000) MB，存不进来")
     case .invalidProject: String(localized: "目标项目已不存在或在回收站")
     case .defaultProjectUndeletable: String(localized: "默认项目不能删除")
     case .notAConflictCopy: String(localized: "这条不是冲突副本")
     case .attachmentHashMismatch: String(localized: "附件内容与其哈希不符")
     case .invalidAttachmentHash: String(localized: "附件的哈希格式不对")
     case .blankDeliveryContent: String(localized: "发送内容不能为空")
-    case .attachmentFilesNotRemoved(let hashes): String(localized: "已永久删除，但有 \(hashes.count) 个图片文件没能删掉")
+    case .attachmentFilesNotRemoved(let hashes): String(localized: "已永久删除，但有 \(hashes.count) 个附件文件没能删掉")
     case .unsupportedSchemaVersion(let version): String(localized: "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开")
     case .schemaTooOld(let version): String(localized: "资料库由更早版本的 CuePad 建立（结构版本 \(version)），这个版本不再升级它")
     case .invalidParent: String(localized: "只能挂到任务下，不能挂到自己或自己的下级下")

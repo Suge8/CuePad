@@ -57,7 +57,7 @@ public struct LibraryLocation: Equatable, Sendable {
 
   public var databaseURL: URL { directory.appending(path: "cuepad.db") }
 
-  /// 可随时重建的缓存（交付物按文件名放的一份、缩略图与网页快照）：真实库在系统的缓存目录（系统可清、不进备份），
+  /// 可随时重建的缓存（附件文件 `AttachmentFiles`，可从 iCloud 再取；缩略图与网页快照）：真实库在系统的缓存目录（系统可清、不进备份），
   /// 隔离库在隔离目录的 `Caches/` 里——本机构建、测量与测试不往正式版的缓存里写。
   public var caches: URL { isIsolated ? directory.appending(path: "Caches", directoryHint: .isDirectory) : URL.cachesDirectory }
 
