@@ -278,8 +278,7 @@ html.js .squiggle.drawn {
 	width: 100%;
 	max-width: 40rem;
 	margin-left: auto;
-	/* 插画是浅色纸面：边缘整圈淡出、不碰到画框，深色页上才是一团柔光而不是一块方的 */
-	mask-image: radial-gradient(closest-side, #000 55%, transparent);
+	mask-image: radial-gradient(ellipse 88% 86% at 50% 46%, #000 55%, transparent 76%);
 	will-change: translate;
 	animation: hero-float 7s ease-in-out infinite;
 }

@@ -2,9 +2,10 @@
 
 /* ---- Tokens ----
    颜色与 App 同一套：与 Palette（apple/App/AppGroup/Palette.swift）同名的令牌同值，各色管什么见它的头注释，lint.sh 查两边相等。
-   light-dark() 在用到的元素上按它的 color-scheme 取值：整段"夜里的纸"（.night）只声明 color-scheme: dark，不另抄一份深色值。 */
+   页面只有浅色，不跟随系统深色（插画与视频都是浅色纸底）；深色那档只给整段"夜里的纸"（.night）。
+   light-dark() 在用到的元素上按它的 color-scheme 取值：.night 只声明 color-scheme: dark，不另抄一份深色值。 */
 :root {
-	color-scheme: light dark;
+	color-scheme: light;
 
 	--sidebar: light-dark(#e6e2db, #141210);
 	--desk: light-dark(#efede8, #1b1916);

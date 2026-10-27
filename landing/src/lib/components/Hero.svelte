@@ -212,18 +212,15 @@
 
 	<div class="stage" bind:this={stageEl}>
 		<div class="cell" data-px="12">
-			<picture>
-				<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/board-dark.webp" />
-				<img
-					class="stage-shot"
-					src="/assets/shots/board-light.webp"
-					width="1600"
-					height="1000"
-					fetchpriority="high"
-					decoding="async"
-					alt={t('hero.img')}
-				/>
-			</picture>
+			<img
+				class="stage-shot"
+				src="/assets/shots/board-light.webp"
+				width="1600"
+				height="1000"
+				fetchpriority="high"
+				decoding="async"
+				alt={t('hero.img')}
+			/>
 		</div>
 		<img class="mascot-hero bob" src="/assets/mascot-hello.webp" width="560" height="496" alt="" />
 	</div>

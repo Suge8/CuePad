@@ -14,14 +14,8 @@
 			h = 0,
 			time = 0,
 			raf: number | null = null;
-		/* 粒子是墨与靛青：颜色取自画布自己的 color / accent-color（CSS 令牌按所在段的浅深解析），不在这里另写色值 */
-		let ink = '',
-			signature = '';
-		function readColors() {
-			const cs = getComputedStyle(canvas);
-			ink = cs.color;
-			signature = cs.accentColor;
-		}
+		/* 粒子是墨与靛青：颜色取自画布自己的 color / accent-color（CSS 令牌按所在段解析：夜里的纸段取深色那档），不在这里另写色值 */
+		const { color: ink, accentColor: signature } = getComputedStyle(canvas);
 
 		interface P {
 			x: number;
@@ -100,9 +94,6 @@
 
 		resize();
 		seed();
-		readColors();
-		const scheme = window.matchMedia('(prefers-color-scheme: dark)');
-		scheme.addEventListener('change', readColors);
 		const io = new IntersectionObserver((entries) => {
 			if (entries[0].isIntersecting) start();
 			else stop();
@@ -119,7 +110,6 @@
 		return () => {
 			stop();
 			io.disconnect();
-			scheme.removeEventListener('change', readColors);
 			document.removeEventListener('visibilitychange', onVis);
 			window.removeEventListener('resize', onResize);
 		};

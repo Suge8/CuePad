@@ -298,8 +298,6 @@ html[lang^='zh'] .feat-copy h3 {
    Desk band — generated art breather
    ============================================================ */
 .desk {
-	/* 生成的插画是浅色纸面，压在上面的字照浅色取墨 */
-	color-scheme: light;
 	position: relative;
 	height: clamp(20rem, 52vh, 32rem);
 	overflow: clip;
@@ -382,7 +380,7 @@ html[lang^='zh'] .feat-copy h3 {
 .mascot-dl {
 	width: clamp(180px, 21vw, 260px);
 	margin: 0 auto;
-	mask-image: radial-gradient(closest-side, #000 60%, transparent);
+	mask-image: radial-gradient(ellipse 80% 78% at 50% 50%, #000 55%, transparent 76%);
 }
 .download > div > p {
 	max-width: 52ch;
