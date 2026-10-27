@@ -10,9 +10,8 @@ extension CloudDatabase {
     let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
     operation.savePolicy = .ifServerRecordUnchanged
     operation.isAtomic = false
-    let configuration = CKOperation.Configuration()
+    let configuration = Self.fileConfiguration
     configuration.isLongLived = true
-    configuration.timeoutIntervalForRequest = RequestLimits.request.seconds
     operation.configuration = configuration
     return try await run(operation, progress: progress)
   }
@@ -33,9 +32,7 @@ extension CloudDatabase {
   func downloadFile(_ id: CKRecord.ID, progress: @escaping @Sendable (Double) -> Void) async throws -> CKRecord? {
     let operation = CKFetchRecordsOperation(recordIDs: [id])
     operation.desiredKeys = [RecordMapper.fileKey]
-    let configuration = CKOperation.Configuration()
-    configuration.timeoutIntervalForRequest = RequestLimits.request.seconds
-    operation.configuration = configuration
+    operation.configuration = Self.fileConfiguration
     operation.perRecordProgressBlock = { _, fraction in progress(fraction) }
     let found = Mutex<Result<CKRecord?, any Error>>(.success(nil))
     operation.perRecordResultBlock = { _, result in
@@ -58,6 +55,15 @@ extension CloudDatabase {
     } onCancel: {
       operation.cancel()
     }
+  }
+
+  /// 文件操作的配置：空闲超时同别的请求；服务质量写明 userInitiated。不写时 CloudKit 当成可延后的（日志里 `discretionary=Infers Disc`、
+  /// qos=Default），2026-10-27 开发环境实测 100MB 的上传与几个小文件的取两分钟进度都停在 0，写明之后照常传。
+  private static var fileConfiguration: CKOperation.Configuration {
+    let configuration = CKOperation.Configuration()
+    configuration.timeoutIntervalForRequest = RequestLimits.request.seconds
+    configuration.qualityOfService = .userInitiated
+    return configuration
   }
 
   /// 这个进程加进库的上传操作。

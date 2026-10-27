@@ -55,7 +55,7 @@ def scene_files(run, args):
             m.span("同一刻写下·对 Cue 说·全程（写下→已送达）", say, b.wait(by_id("msg-delivered", say["id"]), ROUND_LIMIT))
         m.span("同一刻写下·文件·写下→到 Mac", written, a.wait(lambda e: e["e"] == "file-arrived" and e.get("key") == burst["key"], FILE_LIMIT))
         for name, inst, direction in (("上传", b, "up"), ("下载", a, "down")):
-            seen = [e for e in inst.events if e["e"] == "transfer" and e["key"].startswith(burst["key"]) and e["dir"] == direction]
+            seen = [e for e in inst.events if e["e"] == "transfer" and e["key"] == burst["key"] and e["dir"] == direction]
             m[f"同一刻写下·文件·界面读到的{name}进度（次）"].append(len(seen))
             if seen and max(e["f"] for e in seen) < 1: m[f"同一刻写下·文件·{name}进度没到 1（次）"].append(1)
         os.remove(path)
@@ -90,4 +90,29 @@ def scene_files_quota(run, args):
     return m, {}
 
 
-SCENES = {"files": scene_files, "filesquota": scene_files_quota}
+def scene_file_resume(run, args):
+    """fileresume [MB=100]（只在真 CloudKit）：手机传大文件传到四成时被杀掉（SIGKILL），20 秒后再起：
+    系统（cloudd）接着传的长期操作被接上，不从头再传。量重启→手机读到上传结束（从头再传要几十秒）、重启后第一次读到的进度、文件到 Mac。"""
+    if run.cloud != "real": raise SystemExit("fileresume 只在真 CloudKit：模拟云的上传在进程里，杀掉就没了")
+    megabytes = int(args[0]) if args else 100
+    a, b, m = run.a, run.b, run.metrics
+    path = make_file(f"{FILES}/{os.getpid()}-resume.tiff", megabytes)
+    t0 = b.send(f"burst r {path}")
+    burst = b.wait(kind("burst"), 60, after=t0 - 0.5)
+    if not burst: m["长期操作·没写成（次）"].append(1); return m, {}
+    key = burst["key"]
+    a.send(f"watch-file {key}")
+    up = lambda e: e["e"] in ("transfer", "transfer-end") and e.get("key") == key and e.get("dir") == "up"
+    if not b.wait(lambda e: up(e) and e.get("f", 0) >= 0.4, 120): m["长期操作·没传到四成（次）"].append(1); return m, {}
+    b.proc.kill(); b.proc.wait()
+    time.sleep(20)
+    restarted = {"t": b.start()}
+    first = b.wait(lambda e: up(e) and e["t"] >= restarted["t"], 120)
+    if first and "f" in first: m["长期操作·重启后第一次读到的进度（成）"].append(round(first["f"] * 10, 1))
+    m.span("长期操作·重启→手机读到上传结束", restarted, b.wait(lambda e: e["e"] == "transfer-end" and e.get("key") == key and e["t"] >= restarted["t"], 120))
+    m.span("长期操作·写下→文件到 Mac", {"t": burst["at"]}, a.wait(lambda e: e["e"] == "file-arrived" and e.get("key") == key, 120))
+    os.remove(path)
+    return m, {}
+
+
+SCENES = {"files": scene_files, "filesquota": scene_files_quota, "fileresume": scene_file_resume}

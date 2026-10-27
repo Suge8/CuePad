@@ -33,6 +33,7 @@
 - 锁：模拟云的运行互相排队（`SIM_LOCK`，不抢 CPU）；连 CloudKit 的运行与探针共用 `LOCK`（都在 `sync-bench.py`）。构建在锁外。
 - 口径：时刻都是同一台机器的墙钟。写下取记录的创建时刻；已发出、入库、回执取实例读到库里变化的那一刻（库的订阅送到主线程）；上屏取页面订阅拿到新值后那一次界面提交（`SyncBench.Watch.observed`，两端开着 Cue 页）。
   冷启动从起进程算。Cue 自己说的话被服务器收下不叫醒说的话的订阅，Mac→手机这一段只量到手机入库。
+- 附件文件（`files`、`filesquota`、`fileresume`）：模拟云按文件大小与速率计传输时间（速率与出处在 `sync-bench.py` 头注释），每轮现做一个随机像素的 TIFF，同一个文件第二次不再上传。`fileresume` 只连真 CloudKit：模拟云的上传在进程里，杀掉就没了。
 - 门铃不通：`SYNC_BENCH_RELAY=0` 两端都不连中转（`-CuePadSyncBenchNoRelay`），不停正式中转。
 - 断网（`offline`）：只让手机那个实例的请求当场以 -1009 失败、门铃断开（`CloudOutage`），不碰机器的网络。恢复时默认替路径监视器报一次网络回来（同真断网）；`nopath` 是路径一直可用、只是云连不上的那种恢复。
 - 灵动岛（`island`）：iPhone 模拟器里量 App 这一侧"拉到的话入库 → 实时活动换内容"。模拟器上量不到推送本身：`simctl push` 不收只有 content-available 的推送（"no user visible content"），

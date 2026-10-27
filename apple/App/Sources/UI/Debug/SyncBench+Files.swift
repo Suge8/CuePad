@@ -18,6 +18,9 @@ extension SyncBench {
                     for (key, transfer) in transfers where last[key] != transfer {
                         mark("transfer", ["key": key, "dir": transfer.direction == .upload ? "up" : "down", "f": transfer.fraction])
                     }
+                    for (key, transfer) in last where transfers[key] == nil {
+                        mark("transfer-end", ["key": key, "dir": transfer.direction == .upload ? "up" : "down"])
+                    }
                     last = transfers
                 }
             }
