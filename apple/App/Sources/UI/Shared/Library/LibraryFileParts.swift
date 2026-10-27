@@ -42,12 +42,14 @@ struct DuplicateBar: View {
 }
 
 /// 内容不同的规则："<那家> 另写了一份"加"合并进来"。点一下先在正文里标出会并进来的段落（`previewing`，`MergePreview`，下面一行出现"取消"），再点才合并
-/// （照那件的合并稿写，`LibraryTidy.merged(retiring:)`）。替换基础提示的两份（Pi 的系统提示、Codex 的自定提示词）各一个勾：勾了才并进来并撤掉那份。
+/// （照那件的合并稿写，`LibraryTidy.merged(retiring:)`，请求带着你看过的那一版，`TidyOrder.base`）。各份正文没到齐（`ready`）前按不了。替换基础提示的两份（Pi 的系统提示、Codex 的自定提示词）各一个勾：勾了才并进来并撤掉那份。
 struct MergeBar: View {
     let tidy: LibraryTidy
     let library: AgentLibrary
     @Binding var previewing: Bool
     @Binding var retire: Set<InstructionSource.Origin>
+    /// 各份正文都到了、是快照里那一版（`LibraryTidy.preview` 不为 nil）
+    let ready: Bool
     /// 合并前先做的事（Mac 写下没存的字）；手机上有没发的改动时为 nil，不让合并
     let prepare: (() async -> Void)?
     @Environment(Workspace.self) private var workspace
@@ -64,7 +66,7 @@ struct MergeBar: View {
             Spacer(minLength: 8)
             Button { merge() } label: { TidyLabel(title: "合并进来", working: working) }
                 .buttonStyle(ControlButtonStyle(kind: previewing ? .primary : .secondary, compact: true))
-                .disabled(working || prepare == nil)
+                .disabled(working || !ready || prepare == nil)
         } consequence: {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(tidy.sources.map(\.origin).filter(\.replacesBasePrompt), id: \.self) { origin in
@@ -96,7 +98,7 @@ struct MergeBar: View {
         working = true
         Task {
             await prepare?()
-            await workspace.tidy([TidyOrder(tidy: tidy.id, retire: retire)], in: library)
+            await workspace.tidy([TidyOrder(tidy: tidy.id, retire: retire, base: tidy.base)], in: library)
             working = false
             previewing = false
         }

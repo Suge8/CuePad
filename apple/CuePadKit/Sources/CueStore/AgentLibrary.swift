@@ -205,16 +205,19 @@ public struct LibraryEdit: Codable, Equatable, Sendable, StoredJSON {
 }
 
 /// 整理里的一件（一键整理是不用你选的那几件）：`keep` 只给同名的那件（去重），是留下的那份技能目录；
-/// `retire` 只给全局规则的合并，是一并撤掉的替换基础提示的几份（Pi 的进废纸篓、Codex 的撤掉配置键，撤销时都放回）。
+/// `retire` 只给全局规则的合并，是一并撤掉的替换基础提示的几份（Pi 的进废纸篓、Codex 的撤掉配置键，撤销时都放回）；
+/// `base` 只给合并，是你看过的合并稿出自的那一版（`LibraryTidy.base`），Mac 上的文件已不是它就不合并、退回"Mac 上刚改过"。
 public struct TidyOrder: Codable, Hashable, Sendable {
   public var tidy: String
   public var keep: String?
   public var retire: Set<InstructionSource.Origin>
+  public var base: String?
 
-  public init(tidy: String, keep: String? = nil, retire: Set<InstructionSource.Origin> = []) {
+  public init(tidy: String, keep: String? = nil, retire: Set<InstructionSource.Origin> = [], base: String? = nil) {
     self.tidy = tidy
     self.keep = keep
     self.retire = retire
+    self.base = base
   }
 }
 

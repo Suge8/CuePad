@@ -87,6 +87,7 @@ public struct AgentLibraryFiles: Sendable {
         do {
             for order in orders {
                 guard let tidy = current.first(where: { $0.id == order.tidy }) else { continue }
+                if let base = order.base, tidy.base != base { throw AgentLibraryError.changedOnMac }
                 try tidying.run(tidy, order)
                 count += 1
             }

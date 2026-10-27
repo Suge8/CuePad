@@ -70,13 +70,22 @@ extension AgentLibraryTests {
         let merge = try #require(found.merge(into: .global))
         #expect(found.automaticOrders.isEmpty && merge.writers == [.claudeCode])
         #expect(merge.sources.map(\.origin) == [.shared, .agent(.claudeCode), .piSystem, .codexPrompt])
-        let preview = merge.preview(retiring: [.piSystem], texts: try await texts(.instruction(.global), in: found))
+        let texts = try await texts(.instruction(.global), in: found)
+        let preview = try #require(merge.preview(retiring: [.piSystem], texts: texts))
         #expect(preview.map(\.text) == ["共用的", "全局规则", "你是 Pi"])
         #expect(preview.map(\.incoming) == [false, true, true], "标出会并进来的段")
+        #expect(merge.preview(retiring: [.piSystem], texts: texts.filter { !$0.key.hasSuffix("CLAUDE.md") }) == nil, "有一份正文还没到：标不出来，按不了合并")
         #expect(try await text(.instruction(.piSystem), in: found) == "你是 Pi\n")
 
+        // 看过合并稿之后 Mac 上又改了一份：不照新文件合并，退回"Mac 上刚改过"
         let workspace = Workspace(services: services)
-        await workspace.tidy([TidyOrder(tidy: merge.id, retire: [.piSystem, .codexPrompt])], in: found)
+        try write("全局规则\n\n后来加的\n", claude.appending(path: "CLAUDE.md"))
+        await workspace.tidy([TidyOrder(tidy: merge.id, retire: [.piSystem, .codexPrompt], base: merge.base)], in: found)
+        #expect(workspace.notice?.text.visible == "Mac 上刚改过" && read(agents.appending(path: "AGENTS.md")) == "共用的\n")
+        try write("全局规则\n", claude.appending(path: "CLAUDE.md"))
+        let again = try await library("又是看过的那一版") { $0.merge(into: .global)?.base == merge.base }
+
+        await workspace.tidy([TidyOrder(tidy: merge.id, retire: [.piSystem, .codexPrompt], base: merge.base)], in: again)
 
         #expect(workspace.notice?.text.visible == "合并好了")
         #expect(read(agents.appending(path: "AGENTS.md")) == "共用的\n\n全局规则\n\n你是 Pi\n\n你是 Codex\n")

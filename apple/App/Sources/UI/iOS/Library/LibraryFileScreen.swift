@@ -23,12 +23,14 @@ struct LibraryFileScreen: View {
         VStack(spacing: 0) {
             if let library, let draft {
                 top(library, draft)
+                // 各份正文没到齐时标不出来，照常显示正文
+                let blocks = previewing ? merge(library)?.preview(retiring: retire, texts: texts) : nil
                 ZStack {
                     IOSEditorHost(initialText: draft.body, theme: .editor(palette, horizontalInset: 20), handle: draft.handle,
                                   onChange: { draft.changed(body: $0) }, onError: workspace.fail)
-                    .opacity(previewing ? 0 : 1)
-                    if previewing, let merge = merge(library) {
-                        MergePreview(blocks: merge.preview(retiring: retire, texts: texts ?? [:]), font: .body).padding(.horizontal, 16).background(palette.paper)
+                    .opacity(blocks == nil ? 1 : 0)
+                    if let blocks {
+                        MergePreview(blocks: blocks, font: .body).padding(.horizontal, 16).background(palette.paper)
                     }
                 }
             } else if entry != nil {
@@ -64,7 +66,9 @@ struct LibraryFileScreen: View {
                     DuplicateBar(path: path, tidy: duplicate, library: library)
                 } else if let merge {
                     // 有没发的改动时不让合并：合并照 Mac 上此刻的文件做，你的字会变成和它冲突
-                    MergeBar(tidy: merge, library: library, previewing: $previewing, retire: $retire, prepare: draft.dirty ? nil : {})
+                    MergeBar(
+                        tidy: merge, library: library, previewing: $previewing, retire: $retire,
+                        ready: merge.preview(retiring: retire, texts: texts) != nil, prepare: draft.dirty ? nil : {})
                 }
                 if case .skill(let path) = file {
                     SkillFields(draft: draft, problem: library.skill(at: path)?.problem).padding(.horizontal, 4)

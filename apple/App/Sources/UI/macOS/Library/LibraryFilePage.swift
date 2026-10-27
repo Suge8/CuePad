@@ -47,13 +47,15 @@ private struct LibraryFilePage: View {
                     if case .skill(let path) = file { SkillFields(draft: draft, problem: library.skill(at: path)?.problem) }
                 }
                 .frame(maxWidth: Self.textWidth, alignment: .leading).padding(.horizontal, Self.inset)
+                // 各份正文没到齐时标不出来，照常显示正文
+                let blocks = previewing ? merge(library)?.preview(retiring: retire, texts: texts) : nil
                 ZStack {
                     EditorHost(
                         initialText: draft.body, theme: .editor(palette, horizontalInset: Self.inset, maxTextWidth: Self.textWidth), handle: draft.handle,
                         onChange: { draft.changed(body: $0) })
-                    .opacity(previewing ? 0 : 1)
-                    if previewing, let merge = merge(library) {
-                        MergePreview(blocks: merge.preview(retiring: retire, texts: texts ?? [:]), font: .system(size: 13.5))
+                    .opacity(blocks == nil ? 1 : 0)
+                    if let blocks {
+                        MergePreview(blocks: blocks, font: .system(size: 13.5))
                             .frame(maxWidth: Self.textWidth).padding(.horizontal, Self.inset)
                             .frame(maxWidth: .infinity).background(palette.desk)
                     }
@@ -86,7 +88,9 @@ private struct LibraryFilePage: View {
         if case .skill(let path) = file, let tidy = library.duplicate(of: path) {
             DuplicateBar(path: path, tidy: tidy, library: library)
         } else if let tidy = merge(library) {
-            MergeBar(tidy: tidy, library: library, previewing: $previewing, retire: $retire) { await draft.leave() }
+            MergeBar(tidy: tidy, library: library, previewing: $previewing, retire: $retire, ready: tidy.preview(retiring: retire, texts: texts) != nil) {
+                await draft.leave()
+            }
         }
     }
 

@@ -79,8 +79,16 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
     return used.isEmpty ? nil : InstructionMerge.union(used.compactMap { texts[$0.path] })
   }
 
-  /// 合并稿按段，标出共读的那份里没有、会并进来的段（合并前给你看）。
-  public func preview(retiring: Set<InstructionSource.Origin>, texts: [String: String]) -> [(text: String, incoming: Bool)] {
+  /// 各份规则此刻的样子（各份的哈希合成一个）：合并请求带着它（`TidyOrder.base`），Mac 上照执行时的文件算出的不一样就不合并，
+  /// 并进去的就是你看过的那一版。不是规则的为 nil。
+  public var base: String? {
+    sources.isEmpty ? nil : LibraryEdit.base(of: sources.map { "\($0.path)\n\($0.hash ?? "")" }.joined(separator: "\n"))
+  }
+
+  /// 合并稿按段，标出共读的那份里没有、会并进来的段（合并前给你看）。各份的正文（`texts`）有一份还没到、或不是快照里那一版时为 nil：
+  /// 正文与快照分条同步，先到的快照配旧正文算出的稿与合并时 Mac 照文件写的对不上。
+  public func preview(retiring: Set<InstructionSource.Origin>, texts: [String: String]?) -> [(text: String, incoming: Bool)]? {
+    guard let texts, sources.allSatisfy({ $0.hash == nil || texts[$0.path].map(LibraryEdit.base) == $0.hash }) else { return nil }
     let shared = sources.first { $0.origin == .shared }.flatMap { texts[$0.path] } ?? ""
     let blocks = Set(InstructionMerge.blocks(of: shared).map(InstructionMerge.normalized))
     return InstructionMerge.blocks(of: merged(retiring: retiring, texts: texts) ?? "").map { ($0, !blocks.contains(InstructionMerge.normalized($0))) }
