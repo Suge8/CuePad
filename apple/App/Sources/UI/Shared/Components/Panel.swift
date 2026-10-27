@@ -14,9 +14,6 @@ extension EnvironmentValues {
 }
 
 enum PanelStyle: Equatable {
-    /// Mac 上居中浮层的圆角（内容自己画底时也用它，如 ⌘K 的玻璃）。
-    static let radius: CGFloat = 16
-
     /// 居中、模态（iOS 是 sheet）。
     case sheet
     /// 大块内容（预览）：iOS 全屏覆盖，Mac 同 `sheet`。

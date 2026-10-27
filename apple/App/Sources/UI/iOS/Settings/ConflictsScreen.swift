@@ -60,7 +60,7 @@ private struct ConflictPair: View {
         }
         .padding(14)
         .frame(minWidth: 280, maxWidth: .infinity, alignment: .topLeading)
-        .paper(radius: 14)
+        .paper()
         .accessibilityElement(children: .contain)
     }
 }

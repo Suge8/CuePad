@@ -126,7 +126,7 @@ struct ScheduleEditor: View {
             .font(BubbleMetrics.meta)
         }
         .padding(BubbleMetrics.stripPadding)
-        .background(palette.fill, in: .rect(cornerRadius: BubbleMetrics.stripRadius, style: .continuous))
+        .background(palette.fill, in: Radius.nested)
     }
 
     /// 选哪天：每周几一排圆钮（周一在前），每月几号一个菜单，一次的是日期；每天的没有这一行。
@@ -226,7 +226,7 @@ struct ScheduleStrip: View {
                 .accessibilityLabel("改定时")
             }
             .padding(BubbleMetrics.stripPadding)
-            .background(palette.fill, in: .rect(cornerRadius: BubbleMetrics.stripRadius, style: .continuous))
+            .background(palette.fill, in: Radius.nested)
             .accessibilityElement(children: .combine)
         }
     }

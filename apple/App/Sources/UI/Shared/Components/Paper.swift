@@ -127,7 +127,7 @@ struct SentMark: View {
 struct Thumbnail: View {
     let hash: String
     var height: CGFloat
-    var radius: CGFloat = 10
+    var cornerRadius: CGFloat = Radius.block
     var fitWidth: CGFloat?
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -146,8 +146,8 @@ struct Thumbnail: View {
             }
             .frame(width: width, height: height)
             .frame(maxWidth: fitWidth == nil ? .infinity : nil)
-            .clipShape(.rect(cornerRadius: radius))
-            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(palette.hair))
+            .clipShape(.rect(cornerRadius: cornerRadius))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(palette.hair))
             .task(id: hash) { image = await Self.picture(hash, height: height, scale: scale, in: services.store.files) }
     }
 

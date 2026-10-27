@@ -25,8 +25,8 @@
 
 <div class="ghost" bind:this={band} aria-hidden="true">
 	<div class="ghost-track" bind:this={track}>
-		{#each [0, 1, 2, 3] as i}
-			<span class={i % 2 === 1 ? 'fill' : ''}>{t('ghost.line')}</span>
+		{#each { length: 4 } as _}
+			<span>{t('ghost.line')}</span>
 		{/each}
 	</div>
 </div>

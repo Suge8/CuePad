@@ -205,7 +205,7 @@ private struct FocusCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: 18)
+        .paper()
         .debugExposesTaskFold { toggle(\.showsAll) }
     }
 

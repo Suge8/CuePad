@@ -326,7 +326,7 @@ private struct ConflictsRow: View {
                 .lineLimit(6).frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)
-        .paper(radius: 10)
+        .paper(cornerRadius: Radius.block)
     }
 }
 #endif

@@ -16,7 +16,7 @@ struct PreviewBatch: View {
         strip
             .padding(Self.inset)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .paper(radius: 16)
+            .paper()
     }
 
     @ViewBuilder private var strip: some View {
@@ -167,10 +167,8 @@ struct DeliverableTile: View {
 
     private var radius: CGFloat {
         switch shape {
-        case .strip(let height) where height < 30: 4
-        case .strip(let height) where height < 80: 8
-        case .shot: 10
-        default: 12
+        case .strip(let height) where height < 80: Radius.chip
+        default: Radius.block
         }
     }
 
@@ -189,7 +187,7 @@ struct DeliverableTile: View {
 
     /// 画面铺满给的框（比例夹过的多出来的裁掉）；没有画面的写类型。
     private var picture: some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: radius)
         // 裁的时候留上沿：截图与页面要紧的多在上面；提问的方形缩略图出画面时已取好景（`LookBox.framed`），居中放
         // 要你看清的图垫白（透明图）。画面还在读时先空着（只有边），读到了淡入；读了 `Pending.delay` 还没出来才铺底写它是什么：
         // 新到的一张（结果卡、提问卡插进对话）几十毫秒就出来，先闪一帧灰底加文件图标再换成截图，比空一下更扰人
@@ -221,7 +219,7 @@ struct DeliverableTile: View {
                 } else {
                     // 画面出得慢（或这种文件没有画面）：写它是什么
                     VStack(spacing: 4) {
-                        Image(kindIcon).font(radius < 12 ? .callout : .title2)
+                        Image(kindIcon).font(radius < Radius.block ? .callout : .title2)
                         if preview.kind == .audio, let detail = shown?.detail { Text(detail).font(Typography.caption).monospacedDigit() }
                     }
                     .foregroundStyle(palette.ink3)
@@ -236,7 +234,7 @@ struct DeliverableTile: View {
             }
             .clipShape(shape)
             .overlay(shape.strokeBorder(isChosen ? palette.signatureFill : isShot ? palette.mediaEdge : palette.hair, lineWidth: isChosen ? 2 : 1))
-            .previewSource(zoom, radius: radius, aspect: isShot ? nil : shown?.aspect, crop: isShot ? .detail : .aligned(crop)) { [image = shown?.image, whole] in
+            .previewSource(zoom, cornerRadius: radius, aspect: isShot ? nil : shown?.aspect, crop: isShot ? .detail : .aligned(crop)) { [image = shown?.image, whole] in
                 await whole?() ?? image
             }
     }
@@ -279,9 +277,9 @@ extension View {
     /// `image` 是飞的那张画面（飞的那一下才取），`aspect` 是内容的真实比例（缩略图裁过时；不给按画面的），
     /// `crop` 是缩略图露出 `image` 的哪一截（`PreviewCrop`）。
     func previewSource(
-        _ key: PreviewZoomKey, radius: CGFloat, aspect: CGFloat? = nil, crop: PreviewCrop = .aligned(.center), image: @escaping () async -> CGImage?
+        _ key: PreviewZoomKey, cornerRadius: CGFloat, aspect: CGFloat? = nil, crop: PreviewCrop = .aligned(.center), image: @escaping () async -> CGImage?
     ) -> some View {
-        modifier(PreviewSource(key: key, radius: radius, aspect: aspect, crop: crop, image: image))
+        modifier(PreviewSource(key: key, radius: cornerRadius, aspect: aspect, crop: crop, image: image))
     }
 }
 

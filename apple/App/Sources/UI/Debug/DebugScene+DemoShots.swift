@@ -34,7 +34,7 @@ extension DebugScene {
                         Text("\(person.joined) 加入", tableName: "Demo").font(.system(size: 11).monospacedDigit()).foregroundStyle(.gray)
                     }
                     .padding(.horizontal, 12).frame(height: 44)
-                    .background(.white, in: .rect(cornerRadius: 12))
+                    .background(.white, in: .rect(cornerRadius: Radius.block))
                 }
             }
             .padding(.top, 20)
@@ -123,22 +123,22 @@ extension DebugScene {
                 }
                 .padding(.top, 6)
                 ForEach([(String(localized: "圆桌", table: "Demo"), Color.orange), ("Flow", .teal), ("CuePad", .purple), (String(localized: "读书", table: "Demo"), .pink)], id: \.0) { name, tint in
-                    HStack(spacing: 6) { RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 9, height: 9); Text(name).font(.system(size: 11)) }
+                    HStack(spacing: 6) { RoundedRectangle(cornerRadius: Radius.chip).fill(tint).frame(width: 9, height: 9); Text(name).font(.system(size: 11)) }
                 }
                 Spacer()
             }
             .padding(12).frame(width: 130, alignment: .leading).background(Color(red: 0.89, green: 0.88, blue: 0.86))
             VStack(alignment: .leading, spacing: 8) {
-                Text("圆桌那个乱序交给你", tableName: "Demo").font(.system(size: 11)).padding(8).background(Color(red: 0.88, green: 0.85, blue: 0.8), in: .rect(cornerRadius: 10))
+                Text("圆桌那个乱序交给你", tableName: "Demo").font(.system(size: 11)).padding(8).background(Color(red: 0.88, green: 0.85, blue: 0.8), in: .rect(cornerRadius: Radius.block))
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                Text("好。拆成四步：复现、改排序、补用例、部署到预发。", tableName: "Demo").font(.system(size: 11)).padding(8).background(paper, in: .rect(cornerRadius: 10))
-                Text("「README 截图换成 Swift 版」做完了", tableName: "Demo").font(.system(size: 11, weight: .semibold)).padding(8).background(paper, in: .rect(cornerRadius: 10))
+                Text("好。拆成四步：复现、改排序、补用例、部署到预发。", tableName: "Demo").font(.system(size: 11)).padding(8).background(paper, in: .rect(cornerRadius: Radius.block))
+                Text("「README 截图换成 Swift 版」做完了", tableName: "Demo").font(.system(size: 11, weight: .semibold)).padding(8).background(paper, in: .rect(cornerRadius: Radius.block))
                 Spacer()
                 Capsule().fill(paper).frame(height: 26).overlay(alignment: .leading) { Text("对 Cue 说", tableName: "Demo").font(.system(size: 10)).foregroundStyle(.gray).padding(.leading, 10) }
             }
             .padding(12).frame(maxWidth: .infinity).background(desk)
         }
-        .frame(height: 300).clipShape(.rect(cornerRadius: 12)).foregroundStyle(.black)
+        .frame(height: 300).clipShape(.rect(cornerRadius: Radius.block)).foregroundStyle(.black)
         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
     }
 
@@ -153,7 +153,7 @@ extension DebugScene {
                     Text("等待授权超过 10 秒，已停止等待", tableName: "Demo").font(.system(size: 12)).foregroundStyle(.gray)
                 }
             }
-            .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color.orange.opacity(0.12), in: .rect(cornerRadius: 10))
+            .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color.orange.opacity(0.12), in: .rect(cornerRadius: Radius.block))
             loginFields()
             Spacer()
             Text("使用其他方式登录", tableName: "Demo").font(.system(size: 13)).foregroundStyle(.indigo).frame(maxWidth: .infinity)
@@ -180,10 +180,10 @@ extension DebugScene {
     private static func loginFields(buttonGap: CGFloat = 0) -> some View {
         VStack(spacing: 14) {
             ForEach([String(localized: "邮箱", table: "Demo"), String(localized: "密码", table: "Demo")], id: \.self) { field in
-                RoundedRectangle(cornerRadius: 10).stroke(.gray.opacity(0.4)).frame(height: 46)
+                RoundedRectangle(cornerRadius: Radius.block).stroke(.gray.opacity(0.4)).frame(height: 46)
                     .overlay(alignment: .leading) { Text(field).foregroundStyle(.gray).padding(.leading, 12) }
             }
-            RoundedRectangle(cornerRadius: 12).fill(.indigo).frame(height: 48)
+            RoundedRectangle(cornerRadius: Radius.block).fill(.indigo).frame(height: 48)
                 .overlay { Text("登录", tableName: "Demo").foregroundStyle(.white).bold() }
                 .padding(.top, buttonGap)
         }
@@ -195,14 +195,14 @@ extension DebugScene {
             ForEach(["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"], id: \.self) { row in
                 HStack(spacing: 5) {
                     ForEach(row.map(String.init), id: \.self) { key in
-                        Text(key).font(.system(size: 13)).frame(width: 26, height: 38).background(.white, in: .rect(cornerRadius: 5))
+                        Text(key).font(.system(size: 13)).frame(width: 26, height: 38).background(.white, in: .rect(cornerRadius: Radius.chip))
                     }
                 }
             }
             HStack(spacing: 5) {
-                RoundedRectangle(cornerRadius: 5).fill(Color(white: 0.7)).frame(width: 60, height: 38)
-                Text("空格", tableName: "Demo").font(.system(size: 13)).frame(maxWidth: .infinity).frame(height: 38).background(.white, in: .rect(cornerRadius: 5))
-                Text("登录", tableName: "Demo").font(.system(size: 13)).frame(width: 60, height: 38).background(Color(white: 0.7), in: .rect(cornerRadius: 5))
+                RoundedRectangle(cornerRadius: Radius.chip).fill(Color(white: 0.7)).frame(width: 60, height: 38)
+                Text("空格", tableName: "Demo").font(.system(size: 13)).frame(maxWidth: .infinity).frame(height: 38).background(.white, in: .rect(cornerRadius: Radius.chip))
+                Text("登录", tableName: "Demo").font(.system(size: 13)).frame(width: 60, height: 38).background(Color(white: 0.7), in: .rect(cornerRadius: Radius.chip))
             }
             .padding(.horizontal, 6)
         }
@@ -215,9 +215,9 @@ extension DebugScene {
                 VStack(spacing: 10) {
                     Text(tier).font(.title3.bold())
                     Text(tier == String(localized: "专业", table: "Demo") ? "¥68" : tier == String(localized: "基础", table: "Demo") ? "¥0" : "¥198").font(.system(size: 34, weight: .heavy))
-                    RoundedRectangle(cornerRadius: 8).fill(tier == String(localized: "专业", table: "Demo") ? .indigo : .gray.opacity(0.3)).frame(height: 34)
+                    RoundedRectangle(cornerRadius: Radius.block).fill(tier == String(localized: "专业", table: "Demo") ? .indigo : .gray.opacity(0.3)).frame(height: 34)
                 }
-                .padding(18).frame(maxWidth: .infinity).background(.white, in: .rect(cornerRadius: 16))
+                .padding(18).frame(maxWidth: .infinity).background(.white, in: .rect(cornerRadius: Radius.card))
             }
         }
         .padding(28).frame(width: 640, height: 360).background(Color(red: 0.93, green: 0.94, blue: 0.99))

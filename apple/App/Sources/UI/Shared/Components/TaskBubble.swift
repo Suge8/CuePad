@@ -154,7 +154,6 @@ enum BubbleMetrics {
     static let dot: CGFloat = 8
     static let capsule: CGFloat = 28
     static let stripPadding = EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
-    static let stripRadius: CGFloat = 12
     #else
     static let strong = Font.subheadline.weight(.semibold)
     static let meta = Font.footnote
@@ -173,6 +172,5 @@ enum BubbleMetrics {
     static let dot: CGFloat = 9
     static let capsule: CGFloat = 36
     static let stripPadding = EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10)
-    static let stripRadius: CGFloat = 18
     #endif
 }

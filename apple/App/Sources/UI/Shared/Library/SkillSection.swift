@@ -66,8 +66,8 @@ struct SkillSection: View {
             }
         }
         .padding(.vertical, 4)
-        .paper(radius: LibraryLayout.radius)
-        .rowContainer(.rect(cornerRadius: LibraryLayout.radius, style: .continuous))
+        .paper(cornerRadius: LibraryLayout.radius)
+        .rowContainer(.rect(cornerRadius: LibraryLayout.radius))
     }
 }
 

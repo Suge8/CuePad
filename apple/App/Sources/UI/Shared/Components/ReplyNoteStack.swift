@@ -11,7 +11,7 @@ struct ReplyNoteStack: View {
     @Environment(\.palette) private var palette
 
     private static let shown = 4
-    private static let shape = RoundedRectangle(cornerRadius: ComposerMetrics.radius - ComposerMetrics.inset, style: .continuous)
+    private static let shape = Radius.nested
 
     var body: some View {
         Group {

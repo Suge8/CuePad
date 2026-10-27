@@ -12,9 +12,6 @@ struct CueSidebarCard: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    /// 选中底的圆角：名片比一行高得多，行的小圆角（`RowMetrics.radius`）在这里显得方。
-    private static let corner: CGFloat = 18
-
     var body: some View {
         let cue = workspace.cue
         let selected = workspace.root == .cue
@@ -50,7 +47,7 @@ struct CueSidebarCard: View {
         .help("和 \(cue.name) 说话")
         // 容器与选中底一样大（行底向两边让出 `RowMetrics.bleed`）：底的四角就是容器的圆角
         .padding(.horizontal, RowMetrics.bleed)
-        .rowContainer(.rect(cornerRadius: Self.corner))
+        .rowContainer(.rect(cornerRadius: Radius.card))
         .padding(.horizontal, SidebarMetrics.edge)
     }
 }

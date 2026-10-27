@@ -90,7 +90,6 @@ struct PiReplyBar: View {
     private var button: PiReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
 
     /// 与输入框同一个圆角（贴在它上方的问题卡、收成一行的说明用）。
-    static let radius = ComposerMetrics.radius
 
     var body: some View {
         switch reply {
@@ -176,8 +175,8 @@ struct PiReplyBar: View {
     private func notice(_ text: LocalizedStringResource, icon: Icon) -> some View {
         Label(text, icon: icon)
             .font(Typography.secondary).foregroundStyle(palette.ink2)
-            .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 2 * Self.radius, alignment: .leading)
-            .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
+            .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 2 * Radius.field, alignment: .leading)
+            .glass(in: .rect(cornerRadius: Radius.field))
     }
 
     @ViewBuilder private var sendControl: some View {

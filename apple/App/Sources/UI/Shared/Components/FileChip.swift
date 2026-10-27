@@ -38,7 +38,7 @@ struct FileChip: View {
             }
             .padding(.horizontal, 8)
             .frame(height: height)
-            .background(palette.fill, in: .rect(cornerRadius: 10, style: .continuous))
+            .background(palette.fill, in: .rect(cornerRadius: Radius.block))
             .overlay(alignment: .bottom) {
                 if let progress = status.progress {
                     // 传了几成：一条细线，靠左长到那一成
@@ -65,14 +65,14 @@ struct FileChip: View {
         Group {
             if let thumbnail {
                 Image(decorative: thumbnail, scale: scale).resizable().scaledToFit()
-                    .clipShape(.rect(cornerRadius: 5, style: .continuous))
+                    .clipShape(.rect(cornerRadius: Radius.chip))
             } else {
                 Image(Icon.file(named: name)).font(.title3).foregroundStyle(palette.ink3)
             }
         }
         .frame(width: thumbSide, height: thumbSide)
         // 全屏页从这块放大出来、缩回这里
-        .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), radius: 5) { [files = services.store.files, key] in
+        .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), cornerRadius: Radius.chip) { [files = services.store.files, key] in
             await AttachmentLooks.picture(key, in: files)
         }
     }
@@ -98,8 +98,8 @@ struct ImageTile: View {
         Button {
             workspace.openAttachment(DraftFile(key: key, name: ""), among: among, group: group, with: openPreview)
         } label: {
-            Thumbnail(hash: key, height: side, radius: 12).frame(width: side).id(place.isAway)
-                .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), radius: 12) { [files = services.store.files, key, side, scale] in
+            Thumbnail(hash: key, height: side, cornerRadius: Radius.block).frame(width: side).id(place.isAway)
+                .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), cornerRadius: Radius.block) { [files = services.store.files, key, side, scale] in
                     await Thumbnail.picture(key, height: side, scale: scale, in: files)
                 }
         }

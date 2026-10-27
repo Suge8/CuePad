@@ -96,8 +96,8 @@ struct SearchPalette: View {
         // 宽高都以详情区为上限（外层留边距）：同一窗口里面板尺寸固定，结果多少都不让它长高
         .frame(maxWidth: Self.maxWidth, maxHeight: Self.height)
         // 面大、字多：玻璃里垫九成实的底，背后的内容不透出来干扰阅读
-        .rowContainer(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
-        .glass(in: .rect(cornerRadius: PanelStyle.radius, style: .continuous))
+        .rowContainer(.rect(cornerRadius: Radius.card))
+        .glass(in: .rect(cornerRadius: Radius.card))
         // 第一份结果读到之前不显示：晚一帧出现，不先露一个空壳再长出内容
         .opacity((scope == .cards ? data == nil : sessions == nil) ? 0 : 1)
     }
@@ -255,7 +255,7 @@ struct SearchPalette: View {
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .paper(radius: 16)
+            .paper()
             .padding(10)
             .frame(maxHeight: .infinity, alignment: .top)
         } else {

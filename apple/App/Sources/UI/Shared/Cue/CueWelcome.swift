@@ -43,7 +43,7 @@ struct CueWelcome: View {
                 .multilineTextAlignment(.center)
                 .padding(16)
                 .frame(maxWidth: .infinity)
-                .paper(radius: 20)
+                .paper(cornerRadius: Radius.sheet)
                 .buttonStyle(ControlButtonStyle(kind: .primary))
             }
         }

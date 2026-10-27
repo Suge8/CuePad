@@ -151,7 +151,7 @@ private struct SessionRow: View {
         let session = item.state
         Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
             PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
-                .contentShape(.rect(cornerRadius: SessionCard.radius))
+                .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(PressStyle(.card))
         .accessibilityHint(session.state == .known(.ended) ? "看最后一轮、回复" : "看近况、回复")

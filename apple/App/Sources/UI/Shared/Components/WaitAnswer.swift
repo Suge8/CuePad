@@ -200,7 +200,7 @@ private struct WaitReply: View {
                 .accessibilityLabel("回答")
         }
         .padding(.leading, 12).padding(.trailing, 3).padding(.vertical, 3)
-        .background(palette.fill, in: .rect(cornerRadius: 18, style: .continuous))
+        .background(palette.fill, in: .rect(cornerRadius: Radius.card))
     }
 
     /// 字上下各让出的空：一行字（约 16）加两边正好是钮的点按高，多行时最后一行仍落在钮的中线附近。

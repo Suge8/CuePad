@@ -4,8 +4,7 @@ import SwiftUI
 /// 离边 `inset`，与外框同心。一直展开时文字区下面只留 `textBottomOpen`，再下面是一格高的那一排；会展开收起的工具排在文字下面，
 /// 至少圆钮的圆高（`slot - 2 * inset`，字号大了工具排折行时随它长高），离底 `inset`，与两颗圆钮同一条中线。
 enum ComposerMetrics {
-    static let radius: CGFloat = 28
-    /// 输入框上面叠着的几层（Cue 页的待回复提示、拍板卡）彼此之间与离输入框都隔这么多，纸与玻璃的圆角同 `radius`：底部一套数。
+    /// 输入框上面叠着的几层（Cue 页的待回复提示、拍板卡）彼此之间与离输入框都隔这么多，纸与玻璃的圆角同 `Radius.field`：底部一套数。
     static let stackGap: CGFloat = 8
     static let inset: CGFloat = 8
     static let slot: CGFloat = 56
@@ -14,8 +13,6 @@ enum ComposerMetrics {
     /// 输入框里的圆钮（`CircleGlyph`）：看得见的直径与点得到的边长。
     static let glyph: CGFloat = 40
     static let glyphTarget: CGFloat = 44
-    /// 输入框上方叠着的说明（`composerNotice`）的圆角：一两行小字，比输入框的胶囊收一档。
-    static let noticeRadius: CGFloat = 16
     static let noticeSpacing: CGFloat = 4
     static let noticePadding: CGFloat = 8
     /// 两行说明的字（`Typography.meta` 一行约 16）连同两行之间的空；会话页对话末尾按动态字号缩放它（`PiConversation`），外边距不缩放。
@@ -139,7 +136,7 @@ extension View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 14).padding(.vertical, ComposerMetrics.noticePadding)
-                    .glass(in: .rect(cornerRadius: ComposerMetrics.noticeRadius, style: .continuous))
+                    .glass(in: .rect(cornerRadius: Radius.card))
                     .allowsHitTesting(false)
             }
         }
