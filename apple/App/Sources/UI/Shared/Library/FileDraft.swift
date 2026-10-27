@@ -190,11 +190,15 @@ final class FileDraft {
         #endif
     }
 
-    /// "已保存"、"已跟上"亮一会儿就收（页面 `.task(id: draft?.state)` 里调：状态再变时这次计时作废）。
+    /// "已保存"、"已跟上"亮一会儿就收（页面 `.task(id: draft?.state)` 里调，机制见 `SaveState.linger`）。
     func settleSoon() async {
         guard state == .saved || state == .followed else { return }
-        try? await Task.sleep(for: SaveState.savedDisplay * 2)
-        if !Task.isCancelled { state = .idle }
+        #if os(iOS)
+        let awaitsMac = true
+        #else
+        let awaitsMac = false
+        #endif
+        if await SaveState.linger(awaitsMac: awaitsMac) { state = .idle }
     }
 
     /// 离开文件页：Mac 写下没存的字。

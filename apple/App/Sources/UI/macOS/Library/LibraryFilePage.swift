@@ -27,11 +27,11 @@ private struct LibraryFilePage: View {
     let file: LibraryFile
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var draft: FileDraft?
     @State private var texts: [String: String]?
 
     var body: some View {
         let library = workspace.library
+        let draft = workspace.draft(of: file, in: library)
         VStack(spacing: 14) {
             if let library, library.file(file) != nil, let draft {
                 LibraryFileTop(file: file, library: library, draft: draft, texts: texts)
@@ -41,17 +41,17 @@ private struct LibraryFilePage: View {
         .padding(.top, Spacing.pageTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.desk.ignoresSafeArea())
-        .loadingFileDraft($draft, of: file, in: library, texts: $texts) { workspace.close(.library(file)) }
+        .loadingFileDraft(of: file, in: library, texts: $texts) { workspace.close(.library(file)) }
         .task(id: draft != nil) {
             await NextFrame.wait()
             draft?.handle.focus()
         }
-        .overlayHeader(header(library), in: workspace)
+        .overlayHeader(header(library, draft), in: workspace)
         .onDisappear { if let draft { Task { await draft.leave() } } }
     }
 
     /// 工具栏中间那一块：标题同手机（技能是全局或项目名，规则是名字），次要一行是文件名与存好没有；完整路径悬停看（多是一长串家目录里的点目录）。
-    private func header(_ library: AgentLibrary?) -> OverlayHeader.Content {
+    private func header(_ library: AgentLibrary?, _ draft: FileDraft?) -> OverlayHeader.Content {
         let entry = library?.file(file)
         return OverlayHeader.Content(
             page: .library(file), title: workspace.fileTitle(file, in: library),

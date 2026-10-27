@@ -52,11 +52,11 @@ public struct AgentLibrary: Equatable, Sendable {
 
   public func skill(at path: String) -> LibrarySkill? { skills.first { $0.path == path } }
 
-  /// 一份文件在快照里的位置（技能是目录）、正文那一条的路径（`LibraryFileText.path`）与内容哈希（规则还没有文件时为 nil）；快照里没有这一份为 nil。
-  public func file(_ file: LibraryFile) -> (path: String, textPath: String, hash: String?)? {
+  /// 一份文件正文那一条的路径（`LibraryFileText.path`）与内容哈希（规则还没有文件时为 nil）；快照里没有这一份为 nil。
+  public func file(_ file: LibraryFile) -> (textPath: String, hash: String?)? {
     switch file {
-    case .instruction(let kind): instruction(kind).map { ($0.path, $0.path, $0.hash) }
-    case .skill(let path): skill(at: path).map { ($0.path, $0.textPath, $0.hash) }
+    case .instruction(let kind): instruction(kind).map { ($0.path, $0.hash) }
+    case .skill(let path): skill(at: path).map { ($0.textPath, $0.hash) }
     }
   }
 

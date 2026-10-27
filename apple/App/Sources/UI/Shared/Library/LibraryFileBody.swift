@@ -87,14 +87,13 @@ extension View {
     /// 文件页挂上与跟着文件走（两端同一份）：读这一份的各份正文（`observingLibraryTexts`），对上快照的哈希就载入改动（`Workspace.fileDraft`），
     /// 之后正文变了就跟（`FileDraft.follow`）；快照里没有这一份了调 `onGone`；"已保存"、"已跟上"亮一会儿就收（`FileDraft.settleSoon`）。
     func loadingFileDraft(
-        _ draft: Binding<FileDraft?>, of file: LibraryFile, in library: AgentLibrary?, texts: Binding<[String: String]?>, onGone: @escaping () -> Void
+        of file: LibraryFile, in library: AgentLibrary?, texts: Binding<[String: String]?>, onGone: @escaping () -> Void
     ) -> some View {
-        modifier(FileDraftLoading(draft: draft, file: file, library: library, texts: texts, onGone: onGone))
+        modifier(FileDraftLoading(file: file, library: library, texts: texts, onGone: onGone))
     }
 }
 
 private struct FileDraftLoading: ViewModifier {
-    @Binding var draft: FileDraft?
     let file: LibraryFile
     let library: AgentLibrary?
     @Binding var texts: [String: String]?
@@ -103,12 +102,13 @@ private struct FileDraftLoading: ViewModifier {
 
     func body(content: Content) -> some View {
         let gone = library != nil && library?.file(file) == nil
+        let draft = workspace.draft(of: file, in: library)
         content
             .observingLibraryTexts(library?.textPaths(for: file) ?? [], in: library, into: $texts)
             .onChange(of: gone, initial: true) { if gone { onGone() } }
             .onChange(of: library?.arrived(file, in: texts), initial: true) { _, arrived in
                 guard let library, let arrived else { return }
-                if let draft { draft.follow(arrived) } else { draft = workspace.fileDraft(file, text: arrived, on: library.hostID) }
+                _ = workspace.fileDraft(file, text: arrived, on: library.hostID)
             }
             .task(id: draft?.state) { await draft?.settleSoon() }
     }
