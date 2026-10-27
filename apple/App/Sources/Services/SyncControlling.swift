@@ -24,7 +24,7 @@ nonisolated protocol SyncControlling: Sendable {
 
 extension CloudSync: SyncControlling {}
 
-/// 取附件文件（`AppServices.fetchFile`、发给 Agent 之前的 `SendContent.fetchAttachments`）。
+/// 取附件文件（`AppServices.fetchFile`）：投送执行器与 Cue 在交出带附件的话之前在旁边取。
 typealias FileFetching = @Sendable (String) async throws -> URL
 
 nonisolated extension Optional where Wrapped == any SyncControlling {

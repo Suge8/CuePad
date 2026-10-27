@@ -29,7 +29,7 @@ public enum CueFormat {
     /// 每个附件引用都含的一截（链接文字之后、键之前）：判断有没有附件、在库里按 SQL 找带附件的行都按它。
     public static let referencePrefix = "](" + scheme
     /// 图片引用的开头（其后是键与 `)`）。
-    public static let imagePrefix = "![" + referencePrefix
+    static let imagePrefix = "![" + referencePrefix
 
     public static func imageMarkup(key: String) -> String { imagePrefix + key + ")" }
 
