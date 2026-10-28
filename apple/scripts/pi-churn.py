@@ -23,7 +23,7 @@ def session(sid, lifetime):
     while time.time() < end:
         try:
             c, _ = s.accept()
-            c.sendall((json.dumps({"t": "hello", "protocol": 1, "extensionVersion": 2, "sessionId": sid, "sessionFile": None, "pid": os.getpid(),
+            c.sendall((json.dumps({"t": "hello", "extensionVersion": 2, "sessionId": sid, "sessionFile": None, "pid": os.getpid(),
                                    "cwd": cwd, "mode": "tui", "model": "demo", "tty": None, "term": {}, "state": state}) + "\n").encode())
             clients.append(c)
         except socket.timeout: pass

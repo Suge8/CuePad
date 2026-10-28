@@ -17,7 +17,7 @@ type Said = { content: UserContent; expand: boolean; text: string; id?: string; 
 /** FireCode 在本扩展实例的事件总线上发布的最新事实 */
 export type Firecode = { inFlight: number; subagents: Subagent[] };
 /** 一个扩展实例的身份：版本与 CuePad 交给它的认领标识 */
-type Identity = { protocol: number; extensionVersion: number; launchToken: string | null };
+type Identity = { extensionVersion: number; launchToken: string | null };
 
 function readTTY(): Promise<string | null> {
 	return new Promise((resolve) => {
@@ -170,7 +170,6 @@ export class Session {
 		for (const key of TERMINAL_ENV_KEYS) if (process.env[key]) terminalEnv[key] = process.env[key]!;
 		return {
 			t: "hello",
-			protocol: this.identity.protocol,
 			extensionVersion: this.identity.extensionVersion,
 			sessionId: this.ctx.sessionManager.getSessionId(),
 			sessionFile: this.ctx.sessionManager.getSessionFile() ?? null,

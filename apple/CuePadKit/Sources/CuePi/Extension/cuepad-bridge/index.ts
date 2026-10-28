@@ -17,8 +17,7 @@ import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
 import { trackShows, watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 41;
-const PROTOCOL_VERSION = 17;
+const EXTENSION_VERSION = 42;
 
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
  * 与 FireCode 判断"会话进行中"用同一个事实 */
@@ -103,7 +102,7 @@ export default function (pi: ExtensionAPI) {
 
 	/** 服务一个终端或 RPC 会话：开 socket、跟踪状态、托管时空闲自退；返回会话与拆掉它的函数。 */
 	function serve(ctx: ExtensionContext, launchToken: string | null) {
-		const session = new Session(pi, ctx, firecode, { protocol: PROTOCOL_VERSION, extensionVersion: EXTENSION_VERSION, launchToken });
+		const session = new Session(pi, ctx, firecode, { extensionVersion: EXTENSION_VERSION, launchToken });
 		const unsubscribe = [...follow(session), watchSession(pi, ctx)];
 		session.idleExit.follow(session.phase);
 		captureDialogs(ctx.ui, session);

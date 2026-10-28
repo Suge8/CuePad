@@ -58,7 +58,7 @@ public final class PiRuntime: AgentRuntime {
     /// 新装或升级了扩展：请在跑的会话换上新扩展（`PiBridge.offerExtensionUpgrade`）。
     public func integrationInstalled() { bridge.offerExtensionUpgrade() }
 
-    /// 认领后的托管进程脱离 App；扩展协议号随更新变了也一样，它歇下时换上新扩展、以新协议连回。
+    /// 认领后的托管进程脱离 App；App 更新后也一样，它歇下时换上新扩展、重新连回。
     public var hostedSessionsOutliveApp: Bool { true }
 
     /// 在后台于 `directory` 开一个新会话，带上发起方的认领标识；等它连上桥后返回。会话名、模型与思考强度是 Pi 的启动参数
@@ -84,7 +84,7 @@ public final class PiRuntime: AgentRuntime {
     static let hostedVariable = "CUEPAD_HOSTED"
 
     /// 启动并等它的会话连上桥；进程先退出或超时（这时让它退出）都抛错。
-    /// 连上的扩展必须读得懂托管约定（报出 `hosted`、协议号相同）：不然起出的进程既不会空闲自退、CuePad 也不认它是托管的，
+    /// 连上的扩展必须读得懂托管约定（报出 `hosted`、CuePad 读得懂它）：不然起出的进程既不会空闲自退、CuePad 也不认它是托管的，
     /// 成了没人管的孤儿。磁盘上的扩展不是随包版本（接入修复失败、Pi 太旧没修、别人改过）时就是这样，这时让它退出并报错。
     private func launch(_ arguments: [String], in directory: URL, environment: [String: String]) async throws -> PiSession {
         guard let executable = await pi() else { throw AgentRuntimeError.notInstalled(.pi) }

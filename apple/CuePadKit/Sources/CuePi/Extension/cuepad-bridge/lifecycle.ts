@@ -48,7 +48,9 @@ const ENTRY = path.join(OWN_DIRECTORY, "index.ts");
 /**
  * 自己重新载入：CuePad 请本扩展核对磁盘（`upgrade`，见 CuePi README「协议」）、磁盘上的本扩展是别的版本时，
  * 就等到空闲（这一轮做完、没有等你回答的弹窗、子代理都歇下、不在压缩）经内部命令调 `ctx.reload()`：它清掉 Pi 的扩展缓存、
- * 从磁盘载入新版本，新实例以新协议重新连上 CuePad，用户不用自己 /reload；在跑的一轮不打断，歇下时（`commit` 里进入空闲）再重载。
+ * 从磁盘载入新版本，新实例重新连上 CuePad，用户不用自己 /reload；在跑的一轮不打断，歇下时（`commit` 里进入空闲）再重载。
+ * 要等子代理也歇下：Pi 的重新载入是整个进程的扩展一起重来，FireCode 的子代理是进程内会话，在飞的回合会被中断。等的这段（可能几个小时）
+ * CuePad 照常收发：它读得懂往前若干版扩展的格式（`PiWire.oldestExtension`），旧扩展不认的新命令回 `bad_request`。
  * 否决自己盯着扩展目录（`fs.watch`）：Bun 在 macOS 上用 FSEvents，关监听与进程退出都同步等 fseventsd 注册完，它一忙，
  * 会话关闭（闲置自退、/reload、换会话）就卡住几秒到十几秒；扩展文件只有 CuePad 写，由它来说。
  * 否决重新载入会话（`switchSession`）：同一工作目录下 Pi 复用缓存里的旧模块，载入的还是旧代码。

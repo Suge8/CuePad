@@ -123,12 +123,12 @@ class Load:
 
 def extension_version(checkout):
     source = open(f"{checkout}/apple/CuePadKit/Sources/CuePi/Extension/cuepad-bridge/index.ts").read()
-    return int(re.search(r"const EXTENSION_VERSION = (\d+);", source).group(1)), int(re.search(r"const PROTOCOL_VERSION = (\d+);", source).group(1))
+    return int(re.search(r"const EXTENSION_VERSION = (\d+);", source).group(1))
 
 
 def fake_extension(directory, checkout):
     """假扩展（子进程里跑）：SESSIONS 个会话，各自按指数分布的间隔切状态；任何带 id 的命令都回 ack ok。"""
-    version, protocol = extension_version(checkout)
+    version = extension_version(checkout)
     os.makedirs(directory, mode=0o700, exist_ok=True); os.chmod(directory, 0o700)
     now = lambda: time.time() * 1000
     sessions = []
@@ -143,7 +143,7 @@ def fake_extension(directory, checkout):
         try: c.sendall((json.dumps(msg) + "\n").encode())
         except OSError: pass
     def hello(s):
-        return {"t": "hello", "protocol": protocol, "extensionVersion": version, "sessionId": s["id"], "sessionFile": None, "pid": os.getpid(),
+        return {"t": "hello", "extensionVersion": version, "sessionId": s["id"], "sessionFile": None, "pid": os.getpid(),
                 "cwd": "/tmp", "mode": "tui", "tty": None, "term": {}, "state": s["state"], "name": s["id"], "firstMessage": None}
     running, parent = True, os.getppid()
     def stop(*_):
