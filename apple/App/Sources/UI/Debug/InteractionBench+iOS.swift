@@ -8,7 +8,7 @@ import UIKit
 /// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：每个 tab 一个导航栈加底部一排）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
 /// 每项一行 `INTERACT {json}` 写进隔离库目录下的 `interact.jsonl`（模拟器里的标准输出不好取），量完退出。
 /// 动作是点击最终调用的同一条路（导航路径、`openSession`、点底部那一排的 `tap`、侧栏的 `select`、浮窗与面板的状态），不经触摸投递。
-/// 长按菜单与右滑返回由 `perf-ios.sh` 在模拟器上真按、真滑（`AWAIT` 行，`InteractionBench+iOSTouch`），
+/// 长按菜单与手势（滑动切页、右滑返回、左滑前进，以及会话行、看板上横滑的误触核对）由 `perf-ios.sh` 在模拟器上真按、真滑（`AWAIT` 行，`InteractionBench+iOSTouch`），
 /// 从手指按下起量；每行的 `landed` 是量完时的根与推入的页。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
 /// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
 /// - 冷启动·Cue 页：App 一打开就在 Cue 页上；`launchMs` 是进程启动到对话排出来（`PerfProbe` 的 `cue`）的墙钟毫秒，
@@ -143,7 +143,7 @@ enum IOSInteractionBench {
             await step("开任务气泡") { workspace.openTask(task) }
             await step("关任务气泡") { workspace.openTask = nil }
         }
-        await gestures(workspace, session: sessions[0], wants: wants) { name, window, finger, action in
+        await gestures(workspace, session: sessions[0], wants: wants, fail: fail, press: { await Self.touch(write, $0, $1) }) { name, window, finger, action in
             await step(name, window: window, finger: finger, action)
         }
         try await typeLong(workspace, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })

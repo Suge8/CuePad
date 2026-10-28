@@ -2,7 +2,7 @@
 import SwiftUI
 
 /// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；轻扫同所有灵感（`CardMenu.swipes`）；交给过 Agent 时右上角是那个会话的状态点；
-/// 长按是菜单，按住拖到上面任务纸的一行上接进那条任务（`TaskOutline`）。
+/// 长按是菜单，菜单出来后往外一拖就拖起来：拖到上面任务纸的一行上接进那条任务（`TaskOutline`），拖到纸底"添加任务"上照它新建一条（`newTaskDrop`）。
 struct CardTileView: View {
     let entry: CardEntry
     let lastTarget: String?
@@ -45,7 +45,7 @@ struct CardTileView: View {
         .zoomSource(card.id, in: zoom)
         .rowSwipes(.card(card, workspace: workspace), clipped: false)
         .contextMenu { CardActions(card: card) }
-        .onDrag { CardDragSession.shared.begin(.idea(card.id)) }
+        .cardDraggable(.idea(card.id), shape: .rect(cornerRadius: Radius.card))
     }
 }
 
@@ -85,7 +85,7 @@ struct OlderGroupHeader: View {
 }
 
 /// "更早"与置顶的灵感里的一行。每行是懒加载列表里独立的一项：同组的行拼成一张纸（首尾圆角、行间分隔线），
-/// 大项目几百张旧卡也只创建屏幕内的行。置顶的（`pinned`）行首一枚图钉，那一组不另起组名。同墙上的卡，能拖进任务。
+/// 大项目几百张旧卡也只创建屏幕内的行。置顶的（`pinned`）行首一枚图钉，那一组不另起组名。同墙上的卡，能拖进任务或拖成新任务。
 struct OlderRow: View {
     let entry: CardEntry
     let lastTarget: String?
@@ -130,7 +130,7 @@ struct OlderRow: View {
         .zoomSource(card.id, in: zoom)
         .rowSwipes(.card(card, workspace: workspace))
         .contextMenu { CardActions(card: card) }
-        .onDrag { CardDragSession.shared.begin(.idea(card.id)) }
+        .cardDraggable(.idea(card.id), shape: shape)
     }
 }
 

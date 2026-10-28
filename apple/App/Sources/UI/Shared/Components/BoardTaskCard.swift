@@ -120,7 +120,6 @@ struct BoardTaskCard: View {
             .onTapGesture { tap() }
             .contentShape(.contextMenuPreview, .rect(cornerRadius: TaskMetrics.cardRadius))
             .contextMenu { menu(session: session) }
-            .contentShape(.dragPreview, .rect(cornerRadius: TaskMetrics.cardRadius))
     }
     #endif
 }

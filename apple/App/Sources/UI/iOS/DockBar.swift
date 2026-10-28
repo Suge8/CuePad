@@ -1,36 +1,38 @@
 #if os(iOS)
 import SwiftUI
 
-/// 底部那一排：左边两格去处（系统标签栏，`DockTabs`），右边 Cue 钮，原地换形，样子只从 `DockMotion.places` 推出来，换 tab 时带着 `Motion.nudge` 换：
-/// - 项目、进展两个 tab 上、Cue 页点开"⋯"时：左边两格，右边 Cue 钮（`DockCue`）。按住拖动的透镜是系统的。
-/// - Cue 页：左边一颗"⋯"，Cue 钮长成输入框那么宽、那么高，在换形里与页里真的输入框交叉（`DockHandoff`）。
+/// 底部那一排：左边两格去处（系统标签栏，`DockTabs`），右边 Cue 钮，原地换形。样子跟着条（`DockMotion`）走，拖到哪长到哪：
+/// - 项目、进展两个 tab 上、Cue 页点开"⋯"时：左边两格，右边 Cue 钮（`DockCue`）。选中哪格跟着条，按住拖动的透镜是系统的。
+/// - Cue 页：左边一颗"⋯"，Cue 钮长成输入框那么宽、那么高，在换形里与页里真的输入框交叉（`DockHandoff`）。从进展页滑向 Cue 页时跟着手指走。
 /// - Cue 页输入框有焦点（`DockMotion.composing`）：都让开，输入框占满整排。
 /// - 推入的页上总是两格加 Cue 钮，点所在的那一格（或在 Cue 上时点 Cue 钮）回到那个 tab 的根上；二级页上、浮起的输入框开着时整排让开（`Dock.stays`）。
 /// 与屏幕圆角同心（同系统悬浮标签栏），只是玻璃：栏后面不垫渐变或模糊。
 /// 接力的"会话"那一头（`relaySpot(dock:)`）只在两格展开时的"进展"那一格（会话在进展里）；收起的"⋯"不接力：光落进"⋯"读不出是去了哪，深色下只剩一团发光的靛青点。
-/// 减弱动态效果时不换形，直接到新样子。
+/// 减弱动态效果时不换形，直接到新样子（条那边也不滑）。
 struct DockBar: View {
     let motion: DockMotion
     let width: CGFloat
     /// 最上面那一页留着这一排（`Dock.stays`）。
     let stays: Bool
+    /// 左滑拉出来的前进页留着这一排：不留时随拉出淡去。
+    let forwardStays: Bool
     let openPlaces: (Bool) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let shown = stays ? (forwardStays ? 1 : 1 - motion.pushed) : 0
         DockForm(places: motion.places, motion: motion, width: width, openPlaces: openPlaces)
-            .animation(Motion.nudge, value: motion.places)
-            .opacity(stays ? 1 : 0)
+            .opacity(shown)
             .allowsHitTesting(stays)
             .accessibilityHidden(!stays)
             .animation(Motion.nudge, value: motion.composing)
+            .animation(Motion.nudge, value: motion.covered)
             .animation(Motion.nudge, value: stays)
             .transaction { if reduceMotion { $0.animation = nil } }
     }
 }
 
-/// 换形的每一帧都从 `places` 算（`Animatable`）：弹簧逐帧插的是它，不是首尾两个样子之间直线过渡（`DockHandoff`）。
-/// 切 tab 时页是一下换走的：离开 Cue 时输入框跟着页没了，没有可交叉的，Cue 钮的玻璃、字与头像一直在，只长回原来的大小。
+/// 换形的每一帧都从 `places` 算（`Animatable`）：点按时弹簧逐帧插的是它，不是首尾两个样子之间直线过渡，各段浓淡与拖动时一样（`DockHandoff`）。
 private struct DockForm: View, Animatable {
     var places: CGFloat
     let motion: DockMotion
@@ -48,7 +50,6 @@ private struct DockForm: View, Animatable {
         let tabs = composing ? 0 : DockHandoff.ramp(places, DockHandoff.tabs)
         let more = composing ? 0 : 1 - DockHandoff.ramp(places, DockHandoff.more)
         let grow = DockHandoff.ramp(places, DockHandoff.grow)
-        let crossing = motion.onCue ? places : 1
         let left = Dock.slot + (Dock.capsule(in: width) - Dock.slot) * grow
         let height = Dock.slot + (Dock.height - Dock.slot) * grow
         ZStack(alignment: .bottomLeading) {
@@ -60,12 +61,12 @@ private struct DockForm: View, Animatable {
                 .opacity(more)
                 .allowsHitTesting(more > 0.5)
                 .accessibilityHidden(more <= 0.5)
-            DockCue(places: crossing) { openPlaces(false) }
+            DockCue(places: places) { openPlaces(false) }
                 .frame(width: max(0, width - left - Dock.gap), height: height)
                 .clipShape(.capsule)
                 .glass(in: .capsule, interactive: true)
                 .offset(x: left + Dock.gap)
-                .opacity(DockHandoff.ramp(crossing, DockHandoff.cueGlass))
+                .opacity(DockHandoff.ramp(places, DockHandoff.cueGlass))
                 .allowsHitTesting(shown)
                 .accessibilityHidden(!shown)
         }

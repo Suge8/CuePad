@@ -89,6 +89,7 @@ struct ProjectPage: View {
             }
         }
         .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 150)
+        .cardDragStage()
     }
 
     @ViewBuilder

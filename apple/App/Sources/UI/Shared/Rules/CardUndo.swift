@@ -11,6 +11,12 @@ extension CueStore {
         undoing(try mergeIdea(idea, into: task))
     }
 
+    /// 照灵感新建任务、灵感进回收站（`createTask(fromIdea:)`）；撤销时任务进回收站、灵感恢复。
+    func spawning(_ idea: UUID) async throws -> (task: Card, undo: Undo) {
+        let (task, change) = try createTask(fromIdea: idea)
+        return (task, undoing(change))
+    }
+
     /// 删除一条灵感或任务（进回收站，下级提到它的位置，见 `trashCard`）；撤销时下级回到它下面。
     func trashing(_ ids: [UUID]) async throws -> Undo {
         undoing(try trashCards(ids))

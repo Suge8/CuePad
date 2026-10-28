@@ -155,7 +155,7 @@ struct TaskFlowTests {
 
     // MARK: 撤销与批量
 
-    @Test func 灵感接进任务_删除_都能撤销_勾选以最新状态为准() async throws {
+    @Test func 灵感接进任务_拖成新任务_删除_都能撤销_勾选以最新状态为准() async throws {
         let workspace = Workspace(services: rig.services)
         let body = "上线前检查\n把 changelog 过一遍"
         let check = try await store.createTask(body)
@@ -175,6 +175,17 @@ struct TaskFlowTests {
         #expect(try await store.trashedCards().map(\.id) == [idea.id])
         try await #require(workspace.notice?.action).run()
         #expect(try await store.trashedCards().isEmpty)
+
+        // 灵感拖到"添加任务"上：照它新建一条任务（填好的变量换成值），灵感进回收站；撤销后新任务进回收站、灵感回来
+        let flaky = try await store.createCard(body: "排查 {{平台}} 闪退")
+        try await store.updateCard(flaky.id) { $0.variableValues = ["平台": "iOS"] }
+        try await workspace.newTask(fromIdea: flaky.id)
+        #expect(workspace.notice?.text.visible == "已新建任务「排查 iOS 闪退」")
+        let spawned = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.body == "排查 iOS 闪退" })
+        #expect(try await store.trashedCards().map(\.id) == [flaky.id])
+        try await #require(workspace.notice?.action).run()
+        #expect(try await store.trashedCards().map(\.id) == [spawned.id])
+        #expect(try await store.cards(in: Project.defaultID).contains { $0.id == flaky.id })
 
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let stale = try await store.createTask("续费域名")

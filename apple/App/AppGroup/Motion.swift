@@ -10,8 +10,10 @@ import SwiftUI
 /// 减弱动态效果的规矩只在 `spatial` 与 `fading`。不隔离：iOS 上转场的效果在渲染线程上求值（`boardFlight`）。
 nonisolated enum Motion {
     /// 小位移：列表里让位、面板与浮层开合、展开收起、切换、计数滚动。0.25 秒，一屏里挪几十上百点时跟手。
-    /// 手机底部那一排换形（换 tab、Cue 钮长成输入框）也是它：虽横过整排，是点了就要到的控件，用户定的不比列表里慢。
+    /// 手机切 tab（三页那一条整屏平移）与底部那一排换形（Cue 钮长成输入框）也是它：虽横过整屏，是点了就要到的控件，用户定的不比列表里慢。
     static let nudge = Animation.spring(Spring.nudge)
+    /// 接着手指速度的 `nudge`（横滑切 tab 松手：初速度按剩下的距离归一，同 Core Animation 那一份 `UIView.animate(springDuration:)`）。
+    static func nudge(velocity: Double) -> Animation { .interpolatingSpring(Spring.nudge, initialVelocity: velocity) }
     /// 远距离的空间移动：卡在看板上换列、在墙上换位。0.4 秒：时长随距离长（Material「距离越远时长越长」，大的转场 375～400ms；
     /// Apple 默认的弹簧 0.5 秒），0.25 秒的弹簧前 50ms 就走掉三成多，飞过两三列（上千点）看着是一跳。
     static let travel = Animation.spring(Spring.travel)

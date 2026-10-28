@@ -53,6 +53,12 @@ extension View {
         modifier(RowHighlight(selected: selected, pressed: false))
     }
 
+    /// 不在行里、按行的框另画的一块底（拖放的落点：大纲按行的位置摆的亮起、纸底新建的那一格）：形状与向两边的让出同行底，
+    /// 调用处只给怎么画。行里能画的用 `row()`；手机的行挂着轻扫、被裁在自己的框里，伸出行框的底只能这样画在外面。
+    func rowPlate(@ViewBuilder _ plate: @escaping (ConcentricRectangle) -> some View) -> some View {
+        modifier(RowPlate(plate: plate))
+    }
+
     /// 指针停在这一行时才露出的操作（任务行的"开始"、"更早"与回收站的删除与恢复、记忆的钉住与忘掉）：浮在行上、不占排版——
     /// 露出与收起时行里的字一个都不挪、不换行、不让位。挂在行的内容上（`row()` 或 `RowStyle` 之内）：读的是这一行的 `rowHovered`。
     /// 操作垫一块与悬停的行同色的实底（行所在那层的底叠悬停的淡底，`Palette.hovered`），盖住压到的字；靠字那一侧淡入一截，不切断半个字。
@@ -116,6 +122,19 @@ private struct RowFit {
         let side = RowMetrics.bleed * sign
         return EdgeInsets(top: 0, leading: side, bottom: 0, trailing: side)
     }
+
+    var shape: ConcentricRectangle {
+        ConcentricRectangle(corners: .concentric(minimum: .fixed(flush ? 0 : Radius.row)))
+    }
+}
+
+private struct RowPlate<Plate: View>: ViewModifier {
+    let plate: (ConcentricRectangle) -> Plate
+    @Environment(\.rowFit) private var fit
+
+    func body(content: Content) -> some View {
+        content.padding(fit.bleed()).background { plate(fit.shape) }.padding(fit.bleed(-1))
+    }
 }
 
 private struct RowHighlight: ViewModifier {
@@ -130,7 +149,7 @@ private struct RowHighlight: ViewModifier {
         content
             .environment(\.rowHovered, hovering)
             .padding(fit.bleed())
-            .background { if let tint { shape.fill(tint).transition(.opacity) } }
+            .background { if let tint { fit.shape.fill(tint).transition(.opacity) } }
             .contentShape(.rect)
             .onHover { hovering = $0 }
             #if os(iOS)
@@ -147,10 +166,6 @@ private struct RowHighlight: ViewModifier {
     private var tint: Color? {
         if selected { return palette.selection }
         return isEnabled && (pressed || hovering) ? palette.fill : nil
-    }
-
-    private var shape: ConcentricRectangle {
-        ConcentricRectangle(corners: .concentric(minimum: .fixed(fit.flush ? 0 : Radius.row)))
     }
 
     #if os(iOS)

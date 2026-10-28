@@ -42,13 +42,20 @@ extension Workspace {
         say("已完成", action: NoticeAction(title: String(localized: "归档")) { try await self.archive(id) })
     }
 
-    /// 灵感拖到一条任务上：接到它的正文后面，灵感进回收站（一次写入）；提示里带"撤销"。灵感与任务不互转，这是灵感变成要做的事的唯一一步。
+    /// 灵感拖到一条任务上：接到它的正文后面，灵感进回收站（一次写入）；提示里带"撤销"。灵感变成要做的事只有这一步与 `newTask(fromIdea:)`。
     func mergeIdea(_ idea: UUID, into task: UUID) async throws {
         let store = services.store
         let undo = try await store.merging(idea, into: task)
         closeIfOpen(idea)
         let title = try await store.card(task)?.title ?? ""
         say("已接到「\(title.textGlyphs)」的正文后面", action: .undo(undo))
+    }
+
+    /// 灵感拖到"添加任务"上：照它新建一条任务（在它的项目里排最前），灵感进回收站（一次写入）；提示里带"撤销"。
+    func newTask(fromIdea idea: UUID) async throws {
+        let (task, undo) = try await services.store.spawning(idea)
+        closeIfOpen(idea)
+        say("已新建任务「\(task.title.textGlyphs)」", action: .undo(undo))
     }
 
     /// 离开一条灵感或任务正文的编辑：先写下没保存的字，还是空白（`Card.isBlank`）的灵感就不留下——记一条是先建一条空的再编辑。

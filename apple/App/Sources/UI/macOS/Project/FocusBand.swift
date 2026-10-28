@@ -56,6 +56,7 @@ struct FocusBand: View {
             .font(Typography.meta).foregroundStyle(palette.ink3)
             .padding(.top, 2)
             .taskFoldBar(anchor)
+            .newTaskDrop()
         }
     }
 

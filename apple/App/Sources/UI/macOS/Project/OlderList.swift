@@ -72,7 +72,7 @@ struct OlderList: View {
 }
 
 /// "更早"与置顶的灵感里的一行：点开编辑页；指针停着时铺行的淡底、行尾浮出删除（`hoverReveal`，批量选择时不出），批量选择里选上的是选中底（`RowStyle`）。
-/// 置顶的（`pinned`）行首是图钉，那一组不另起组名。同墙上的卡，拖到任务纸的一行上接进那条任务。
+/// 置顶的（`pinned`）行首是图钉，那一组不另起组名。同墙上的卡，拖到任务纸的一行上接进那条任务，或拖到"添加任务"上照它新建一条。
 struct OlderRow: View {
     let card: Card
     let lastTarget: String?
@@ -83,7 +83,7 @@ struct OlderRow: View {
         Button(action: open) { OlderRowLine(card: card, lastTarget: lastTarget, pinned: pinned) }
             .buttonStyle(CardOpenStyle())
             .cardPresence(card.id, in: workspace)
-            .onDrag { CardDragSession.shared.begin(.idea(card.id)) }
+            .cardDraggable(.idea(card.id), shape: .rect(cornerRadius: Radius.row))
             .contextMenu { CardActions(card: card, selectable: true) }
             .accessibilityElement(children: .combine)
     }

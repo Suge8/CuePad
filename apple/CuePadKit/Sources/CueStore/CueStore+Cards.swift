@@ -55,11 +55,10 @@ extension CueStore {
   @discardableResult
   public func mergeIdea(_ idea: UUID, into task: UUID) throws -> CardChange {
     try write {
-      guard let card = try find(Card.self, idea), !card.isTask, card.deletedAt == nil else { throw CueStoreError.notFound }
+      let (card, added) = try ideaText(idea)
       guard let target = try find(Card.self, task) else { throw CueStoreError.notFound }
       guard target.isTask else { throw CueStoreError.notATask }
-      // 灵感填好的变量值随正文写进去：值记在灵感上，接过去后任务读不到，留着占位符就丢了它的意思
-      let now = Date.stamp, added = CueVariables.fill(card.body, values: card.variableValues).trimmingCharacters(in: .whitespacesAndNewlines)
+      let now = Date.stamp
       if !added.isEmpty {
         let kept = target.body.trimmingCharacters(in: .whitespacesAndNewlines)
         try db.run("UPDATE cards SET body = ?, modifiedAt = ? WHERE id = ?", [kept + "\n\n" + added, now, task])
@@ -67,6 +66,25 @@ extension CueStore {
       try trashRow(card, at: now)
       return .merge(idea: idea, task: task, body: target.body)
     }
+  }
+
+  /// 照灵感的正文（`ideaText`）新建一条任务，放在灵感所在项目顶层的最前，灵感进回收站，一个事务（拖一条灵感到"添加任务"上）。
+  /// 返回新任务与回执（`undo` 把新任务放进回收站、灵感恢复）。灵感不在了抛 `notFound`，正文是空白的抛 `blankTaskContent`。
+  public func createTask(fromIdea idea: UUID) throws -> (task: Card, change: CardChange) {
+    try write {
+      let (card, body) = try ideaText(idea)
+      try requireContent(body)
+      let task = try insertCard(body, project: card.projectID, parent: nil, todo: true, sortKey: SortKey.before(firstTopKey(in: card.projectID)))
+      try trashRow(card, at: Date.stamp)
+      return (task, .spawn(idea: idea, task: task.id))
+    }
+  }
+
+  /// 要变成任务的那条灵感（不在了、已是任务抛 `notFound`）与它要带过去的字：填好的变量换成值——值记在灵感上，
+  /// 带到任务里就读不到了，留着占位符会丢了它的意思；没填的留占位符。
+  private func ideaText(_ id: UUID) throws -> (Card, String) {
+    guard let card = try find(Card.self, id), !card.isTask, card.deletedAt == nil else { throw CueStoreError.notFound }
+    return (card, CueVariables.fill(card.body, values: card.variableValues).trimmingCharacters(in: .whitespacesAndNewlines))
   }
 
   /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、

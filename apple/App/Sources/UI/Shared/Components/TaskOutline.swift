@@ -1,8 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
-#if os(iOS)
-import UIKit
-#endif
 
 /// 大纲自己的坐标系：行的位置与拖放的落点都在这里量。
 private nonisolated let outlineSpace = "TaskOutline"
@@ -27,8 +23,9 @@ extension EnvironmentValues {
 
 /// 任务大纲（手机与 Mac 的项目页共用）：按 `TaskTree` 缩进排出全部行（只有两级，不折起）。
 /// 手势用系统拖放（手机长按抬起，行上不挂长按菜单，见 `TaskLine`；Mac 按住拖）：停在一行中部高亮、松手成为它的子任务；停在两行之间出插入线，
-/// 横向挪动改层级（插入线的起点跟着缩进）。拖来的是灵感（墙上的卡）时没有行间：指针下的那一行整行亮起，松手灵感接到它的正文后面（`Workspace.mergeIdea`）。
-/// 手机上轻扫按 `CardMenu.swipes`：右滑缩进，左滑删除与"更多"（`rowSwipes`）。落点规则全在 `TaskTree`，这里只管手势与画。
+/// 横向挪动改层级（插入线的起点跟着缩进）。拖来的是灵感（墙上的卡）时没有行间：一拖起来每一行都铺一层淡底（都接得住），指针下的那一行亮起，
+/// 松手灵感接到它的正文后面（`Workspace.mergeIdea`）；纸底的"添加任务"同时换成新建的落点（`newTaskDrop`）。
+/// 手机上轻扫按 `CardMenu.swipes`：右滑缩进，左滑删除与"更多"（`rowSwipes`）。落点规则全在 `TaskTree`，这里只管手势；画在 `TaskDropMarks.swift`。
 /// 行之间不让位（同提醒事项的插入线）：拖动期间不重排，也就不会每帧重算布局。
 struct TaskOutline<Line: View>: View {
     /// 整个项目页的层级：拖放落点按它算，所以能从别的大纲拖进来。
@@ -41,6 +38,7 @@ struct TaskOutline<Line: View>: View {
     /// 展开、收起也不重建它们。
     private let lazyAfter: Int?
     @Environment(Workspace.self) private var workspace
+    @Environment(\.cardDrags) private var drags
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var drag = OutlineDrag()
     @State private var commits = 0
@@ -58,7 +56,7 @@ struct TaskOutline<Line: View>: View {
         TaskMetrics.ringColumn + TaskMetrics.columnGap - (TaskMetrics.ringColumn - TaskMetrics.stepRing) / 2
     }
 
-    // 视图体不读落点（拖动时每移一下都变）：只有高亮与插入线两个小视图读它，拖动期间列表本身不重算
+    // 视图体不读落点（拖动时每移一下都变）与拖着的是哪条：只有落点的几个小视图读它们，拖动期间列表本身不重算
     var body: some View {
         let rows = tree.rows()
         Group {
@@ -76,12 +74,12 @@ struct TaskOutline<Line: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .coordinateSpace(.named(outlineSpace))
-        .overlay(alignment: .topLeading) { InsertionLine(drag: drag, first: rows.first?.id, indent: Self.indentWidth) }
-        .onDrop(of: [.utf8PlainText], delegate: OutlineDrop(
-            accepts: { CardDragSession.shared.idea != nil || CardDragSession.shared.task.map { whole.task($0) != nil } ?? false },
-            update: { update($0, rows: rows) },
-            exit: { drag.end() },
-            perform: perform))
+        .background(alignment: .topLeading) { OutlineTargets(drag: drag, rows: rows, indent: Self.indentWidth, layer: .fill) }
+        .overlay(alignment: .topLeading) {
+            OutlineTargets(drag: drag, rows: rows, indent: Self.indentWidth, layer: .mark)
+            InsertionLine(drag: drag, first: rows.first?.id, indent: Self.indentWidth)
+        }
+        .cardDrop(hover: { hover($0, rows: rows) }, perform: { perform($0, at: $1, rows: rows) })
         .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: rows.map(\.id))
         .sensoryFeedback(.impact(weight: .medium), trigger: commits)
     }
@@ -93,49 +91,47 @@ struct TaskOutline<Line: View>: View {
             leaf: whole.isLeaf(row.id))
         return line(row)
         .padding(.leading, CGFloat(row.depth) * Self.indentWidth)
-        .background { DropHighlight(drag: drag, id: row.id) }
-        .overlay { IdeaDropMark(drag: drag, id: row.id) }
         .contentShape(.rect)
         .environment(\.taskStructure, structure)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(outlineSpace)) } action: { drag.frames[row.id] = $0 }
-        .onDrag { CardDragSession.shared.begin(.task(row.id)) }
+        .cardDraggable(.task(row.id), shape: .rect(cornerRadius: Radius.row))
         #if os(iOS)
         .rowSwipes(.card(row.task, workspace: workspace, structure: structure))
         #endif
     }
 
-    private func update(_ point: CGPoint, rows: [TaskTree.Row]) {
-        if CardDragSession.shared.idea != nil {
-            return drag.setIdea(rows.first { drag.frames[$0.id]?.contains(point) == true }?.id)
+    /// 指针在大纲里移动：拖着灵感只认指针下的那一行，拖着任务按 `TaskTree.drop` 算行上还是行间。别的页拖来的（这一页没记着）不画。
+    private func hover(_ point: CGPoint?, rows: [TaskTree.Row]) {
+        guard let point, let dragged = drags?.current else { return drag.end() }
+        switch dragged {
+        case .idea: drag.setIdea(row(at: point, in: rows))
+        case .task(let id): drag.set(target(id, at: point, rows: rows))
         }
-        guard let dragged = CardDragSession.shared.task else { return }
+    }
+
+    /// 只落拖进来的那一条，落点按松手的位置重算。接进正文的那一下不另震：提示条出来时有一下（`NoticeBanner`）。
+    private func perform(_ dragged: DraggedCard, at point: CGPoint, rows: [TaskTree.Row]) {
+        switch dragged {
+        case .idea(let idea):
+            guard let target = row(at: point, in: rows) else { return }
+            workspace.attempt { try await workspace.mergeIdea(idea, into: target) }
+        case .task(let task):
+            guard let move = target(task, at: point, rows: rows)?.move else { return }
+            commit(task, move)
+        }
+    }
+
+    private func row(at point: CGPoint, in rows: [TaskTree.Row]) -> UUID? {
+        rows.first { drag.frames[$0.id]?.contains(point) == true }?.id
+    }
+
+    /// 横移从拖进这个大纲时的横坐标量起，一级缩进算一档。拖来的任务不在这一页时没有落点。
+    private func target(_ task: UUID, at point: CGPoint, rows: [TaskTree.Row]) -> TaskDrop? {
+        guard whole.task(task) != nil else { return nil }
         let start = drag.startX ?? point.x
         drag.startX = start
         let shift = Int(((point.x - start) / Self.indentWidth).rounded())
-        drag.set(whole.drop(dragged, rows: rows, frames: drag.frames, at: point, depthShift: shift))
-    }
-
-    /// 只落这次拖起的那一条：拖进来的内容与它不符（比如别处拖来的文字）就不动。
-    private func perform(_ info: DropInfo) -> Bool {
-        let dragged = CardDragSession.shared.dragged, move = drag.drop?.move, target = drag.idea
-        CardDragSession.shared.end()
-        drag.end()
-        guard let dragged, let provider = info.itemProviders(for: [.utf8PlainText]).first else { return false }
-        let apply: @MainActor @Sendable () -> Void
-        switch dragged {
-        case .idea(let idea):
-            guard let target else { return false }
-            apply = { workspace.attempt { try await workspace.mergeIdea(idea, into: target) } }
-        case .task(let task):
-            guard let move else { return false }
-            apply = { commit(task, move) }
-        }
-        let expected = dragged.id.uuidString
-        _ = provider.loadObject(ofClass: NSString.self) { object, _ in
-            let matches = (object as? NSString).map(String.init) == expected
-            Task { @MainActor in if matches { apply() } }
-        }
-        return true
+        return whole.drop(task, rows: rows, frames: drag.frames, at: point, depthShift: shift)
     }
 
     private func commit(_ id: UUID, _ move: TaskMove) {
@@ -144,36 +140,9 @@ struct TaskOutline<Line: View>: View {
     }
 }
 
-/// 正被拖着的那一条：一次只有一条，同一页上的几个大纲都认它，所以任务能跨大纲拖，灵感（墙上的卡）能拖进任意一个大纲。
-/// 拖到页外取消时系统不通知，留着的旧值只会让下一次拖进来的外部内容被`perform`核对后拒绝。
-final class CardDragSession {
-    enum Dragged: Equatable {
-        case task(UUID), idea(UUID)
-
-        var id: UUID {
-            switch self {
-            case .task(let id), .idea(let id): id
-            }
-        }
-    }
-
-    static let shared = CardDragSession()
-    private(set) var dragged: Dragged?
-
-    func begin(_ dragged: Dragged) -> NSItemProvider {
-        self.dragged = dragged
-        return NSItemProvider(object: dragged.id.uuidString as NSString)
-    }
-
-    func end() { dragged = nil }
-
-    var task: UUID? { if case .task(let id) = dragged { id } else { nil } }
-    var idea: UUID? { if case .idea(let id) = dragged { id } else { nil } }
-}
-
-/// 一个大纲里的落点状态。起点与行的位置不参与排版（不观察）；落点只由高亮与插入线读，且只在变了时才写。
+/// 一个大纲里的落点状态。起点与行的位置不参与排版（不观察）；落点只由落点的几个小视图读，且只在变了时才写。
 @Observable
-private final class OutlineDrag {
+final class OutlineDrag {
     private(set) var drop: TaskDrop?
     /// 拖着灵感时指针下的那一行：松手接进它的正文。
     private(set) var idea: UUID?
@@ -194,86 +163,11 @@ private final class OutlineDrag {
         set(nil)
         setIdea(nil)
     }
-}
 
-/// 停在这一行中部时的高亮（松手成为它的子任务）：行的选中底（`RowStyle`）。单拆一个视图，拖动时只有它跟着落点重算。
-private struct DropHighlight: View {
-    let drag: OutlineDrag
-    let id: UUID
-
-    var body: some View {
-        Color.clear.row(selected: drag.drop?.mark == .onto(id)).allowsHitTesting(false)
+    /// 亮起的那一行：拖着灵感时指针下的，拖着任务时要成为它子任务的。
+    var target: UUID? {
+        if let idea { return idea }
+        if case .onto(let id) = drop?.mark { return id }
+        return nil
     }
-}
-
-/// 拖着灵感停在这一行上：整行铺选中底、描一圈签名色，行尾一枚小签写松手会怎样（接到正文后面）。盖在行上，不改排版。
-private struct IdeaDropMark: View {
-    let drag: OutlineDrag
-    let id: UUID
-    @Environment(\.palette) private var palette
-    @Environment(\.rowSurface) private var surface
-
-    var body: some View {
-        let on = drag.idea == id
-        ZStack(alignment: .trailing) {
-            if on {
-                Color.clear.row(selected: true)
-                RoundedRectangle(cornerRadius: Radius.row)
-                    .strokeBorder(palette.signature, lineWidth: 1.5)
-                    .padding(.horizontal, -RowMetrics.bleed)
-                // 实底的小签盖在行尾的旁注（时间、"开始"）上，字不叠字
-                Label("接到正文后面", icon: .add).labelStyle(.titleAndIcon)
-                    .font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.signature)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(surface ?? palette.paper, in: .capsule)
-            }
-        }
-        .allowsHitTesting(false)
-        .animation(Motion.fade, value: on)
-    }
-}
-
-/// 两行之间的落点：一条墨色线，起点是一个小圈，左边缩到落下后的层级；落点变化时一下轻触感。
-private struct InsertionLine: View {
-    let drag: OutlineDrag
-    let first: UUID?
-    let indent: CGFloat
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            if case .gap(let after, let depth) = drag.drop?.mark, let top = first.flatMap({ drag.frames[$0] }) {
-                let y = after.flatMap { drag.frames[$0]?.maxY } ?? top.minY
-                let x = CGFloat(depth) * indent
-                HStack(spacing: 0) {
-                    Circle().strokeBorder(palette.ink, lineWidth: 2).frame(width: 9, height: 9)
-                    Capsule().fill(palette.ink).frame(height: 2)
-                }
-                .frame(width: max(top.maxX - x, 0))
-                .offset(x: x, y: y - 4.5)
-            }
-        }
-        .allowsHitTesting(false)
-        .animation(Motion.fade, value: drag.drop?.mark)
-        .sensoryFeedback(.selection, trigger: drag.drop?.mark) { _, mark in mark != nil }
-        // 拖着灵感换了一行：同一下轻触感（整行的亮起画在行上，`IdeaDropMark`）
-        .sensoryFeedback(.selection, trigger: drag.idea) { _, row in row != nil }
-    }
-}
-
-/// 大纲的落点：系统拖放每次移动报一次位置（大纲自己的坐标系）。
-private struct OutlineDrop: DropDelegate {
-    let accepts: () -> Bool
-    let update: (CGPoint) -> Void
-    let exit: () -> Void
-    let perform: (DropInfo) -> Bool
-
-    func validateDrop(info: DropInfo) -> Bool { accepts() }
-    func dropEntered(info: DropInfo) { update(info.location) }
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        update(info.location)
-        return DropProposal(operation: .move)
-    }
-    func dropExited(info: DropInfo) { exit() }
-    func performDrop(info: DropInfo) -> Bool { perform(info) }
 }
