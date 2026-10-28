@@ -278,7 +278,7 @@ struct BoardColumn: View {
 
     /// 同点完成圈（`Workspace.tap`，确认、停留与写入同 `taskCheck`）。
     private func finish(_ item: TaskBoard.Item) {
-        let busy = workspace.next(for: item.task, lead: item.leaf, in: workspace.agentLinks, steps: item.steps)?.agentBusy ?? false
+        let busy = workspace.next(for: item, shown: workspace.pulse(of: item.agent).shown)?.agentBusy ?? false
         finishing = item
         check = TaskCheck()
         workspace.tap($check, task: item.task, subtasks: item.steps, agentBusy: busy)

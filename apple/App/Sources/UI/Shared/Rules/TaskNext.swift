@@ -46,9 +46,8 @@ nonisolated enum TaskNext: Equatable, Sendable {
 extension Workspace {
     /// 一条任务"下一步"那一格（任务行、子任务行都走这里，两端不各自判断）：会话取窗口那一份交给的会话（`agents`，行从环境里取），
     /// Mac 上本机在线的会话换上桥上的实时状态；完成了的不写。有子任务（`steps` 不为 nil）的不是叶子，不开工；正在开会话的不再给"开始"。
-    /// `lead`：上级收成一行时（任务看板）此刻干活的叶子（`TaskBoard.Item.leaf`），先看它，它没有"下一步"再看这件自己。
-    func next(for task: Card, lead: Card? = nil, in agents: AgentLinks, steps: TaskProgress?) -> TaskNext? {
-        if let lead, let next = next(for: lead, in: agents, steps: nil) { return next }
+    /// 看板的卡不走这里，看卡上写的会话（`next(for item:)`）。
+    func next(for task: Card, in agents: AgentLinks, steps: TaskProgress?) -> TaskNext? {
         guard task.status != .done else { return nil }
         let agent = agent(of: task.id, in: agents)
         let startable = steps == nil && agents.launching[task.id] == nil ? task : nil
@@ -63,7 +62,7 @@ extension Workspace {
     }
 
     /// 这条任务交给的会话与它此刻显示的状态（不论值不值得写进"下一步"），没交给会话为 nil：
-    /// Mac 上本机在线的会话换上桥上的实时状态。"下一步"与推进中的档（`BoardPulse`）都读它。
+    /// Mac 上本机在线的会话换上桥上的实时状态。任务行的"下一步"读它。
     func agent(of task: UUID, in agents: AgentLinks) -> (shown: PiShown, session: PiSessionState)? {
         #if os(macOS)
         guard let agent = agents.items[task].map(withLiveState) else { return nil }
