@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 会话页的状态（iOS 与 Mac 同一份，iOS 的搜索页会话一栏也是它）：搜索词、翻到第几页、读到的会话列表，以及正在确认结束或改名的会话。
+/// 会话页的状态（iOS 与 Mac 同一份，iOS 的搜索页会话一栏也是它）：搜索词、翻到第几页、读到的会话列表。
 /// 项目范围不在这里：会话页读 `Workspace.projectScope`（搜索页不筛），交给 `.agentList`。
 /// 换搜索词或项目范围时回到第一页；历史按时间分页，滑到列表底再读下一页（`loadMore`）。
 @Observable
@@ -9,8 +9,6 @@ final class AgentListModel {
     var list: PiSessionList?
     var query = "" { didSet { resetPaging() } }
     private(set) var limit = PiSessionList.pageSize
-    var confirmingEnd: PiSessionState?
-    var renaming: PiSessionState?
 
     var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -39,7 +37,7 @@ extension PiSessionList {
 
 extension View {
     /// 读会话列表（`filter` 是此刻的项目范围）：随会话、投送请求、项目与目录绑定的变化重读，换搜索词或筛选时重新订阅；
-    /// 一并挂上改名与结束会话的确认、行里的搜索高亮。
+    /// 一并挂上行里的搜索高亮。
     func agentList(_ model: AgentListModel, filter: UUID?) -> some View { modifier(AgentListReader(model: model, filter: filter)) }
 }
 
@@ -52,8 +50,6 @@ private struct AgentListReader: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.searchHighlight, model.query)
-            .renameSession($model.renaming)
-            .endSession($model.confirmingEnd)
             .onChange(of: filter) { model.resetPaging() }
             .observing(
                 services.store, id: PiSessionList.Key(filter: .init(text: model.query, project: filter), limit: model.limit, moment: services.speech),

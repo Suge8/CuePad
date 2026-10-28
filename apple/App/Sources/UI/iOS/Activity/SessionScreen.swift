@@ -15,8 +15,6 @@ struct SessionScreen: View {
     /// 最后一次读到的会话记录：记录被删后仍显示它。
     @State private var lastSeen: PiSessionState?
     @State private var follow = ChatFollow()
-    @State private var confirmingEnd: PiSessionState?
-    @State private var renaming: PiSessionState?
 
     /// `seed`：推入前读好的这一页（`Workspace.openSession`），首帧即用，之后以 Store 的观察流为准。
     init(id: UUID, seed: SessionDigest? = nil) {
@@ -57,22 +55,13 @@ struct SessionScreen: View {
                 Menu {
                     // 所在不挤在顶栏里：点"⋯"时写在最上面
                     if let title = PiPlace.menuTitle(of: session, project: digest?.project) { Section { } header: { Text(title) } }
-                    if MacDelivery.canRename(session) {
-                        Button("重命名", icon: .rename) { renaming = session }.disabled(!services.reachesPiHost)
-                    }
-                    if session.canEnd {
-                        Button("结束会话", icon: .endSession, role: .destructive) { confirmingEnd = session }
-                            .disabled(shownEnd?.inTransit == true)
-                    }
+                    SessionActions(session: session, task: digest?.task, ending: shownEnd?.inTransit == true)
                 } label: {
                     Image(.more)
                 }
                 .accessibilityLabel("更多")
-                // 确认框挂在"⋯"上，系统从这颗钮弹出；挂在整页上会指向页面中间随便一处
-                .endSession($confirmingEnd)
             }
         }
-        .renameSession($renaming)
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)

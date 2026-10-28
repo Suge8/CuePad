@@ -2,9 +2,9 @@
 import CueStore
 import SwiftUI
 
-/// 会话列表（进展页的会话段、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）："现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），
-/// "历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。
-/// 在线会话长按或慢慢左滑可结束（确认后发给它所在的 Mac，对话留着）。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
+/// 会话列表（进展页的会话段、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）：最上面"已置顶"（绑在置顶任务上的），
+/// 接着"现在"（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），"历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。
+/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。长按是会话的菜单（`SessionActions`），慢慢左滑可结束、重命名。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
 struct SessionList<Top: View>: View {
     @Bindable var model: AgentListModel
     let filter: UUID?
@@ -53,6 +53,10 @@ struct SessionList<Top: View>: View {
             empty
         } else {
             Group {
+                if !list.pinned.isEmpty {
+                    header { SectionTitle(text: "已置顶").padding(.horizontal, 4) }
+                    ForEach(list.pinned) { row($0, in: list, end: list.ends[$0.id]) }
+                }
                 if !list.now.isEmpty {
                     header { SectionTitle(text: "现在").padding(.horizontal, 4) }
                     ForEach(list.now) { row($0, in: list, end: list.ends[$0.id]) }
@@ -74,9 +78,9 @@ struct SessionList<Top: View>: View {
                 }
             }
             .transaction(value: list.filter) { $0.animation = nil }
-            .animation(Motion.nudge, value: list.now.map(\.id))
-            .animation(Motion.fade, value: list.now.map(\.state.state))
-            .animation(Motion.fade, value: (list.now + list.ended).map(\.delivery?.status))
+            .animation(Motion.nudge, value: (list.pinned + list.now).map(\.id))
+            .animation(Motion.fade, value: (list.pinned + list.now).map(\.state.state))
+            .animation(Motion.fade, value: (list.pinned + list.now + list.ended).map(\.delivery?.status))
             .animation(Motion.fade, value: list.ends)
         }
     }
@@ -88,21 +92,13 @@ struct SessionList<Top: View>: View {
             .listRowInsets(EdgeInsets(top: 14, leading: 0, bottom: 4, trailing: 0))
     }
 
-    /// 一张卡片：长按与慢慢左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话近况页"⋯"里同一个说法，`rowSwipes`）。
+    /// 一张卡片：长按是会话的菜单（`SessionActions`），慢慢左滑露出其中的结束与重命名。会话记录没有删除（会话文件在 Mac 上，归 Pi 管）。
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
-        let endable = item.state.canEnd && end?.inTransit != true
-        let renamable = MacDelivery.canRename(item.state)
-        // 结束不是删除：墨色，确认框里再说清后果；会话记录没有删除（会话文件在 Mac 上，归 Pi 管）
-        let trailing = (endable ? [RowAction("结束会话", icon: .endSession) { model.confirmingEnd = item.state }] : [])
-            + (renamable ? [RowAction("重命名", icon: .rename, tone: .quiet, enabled: services.reachesPiHost) { model.renaming = item.state }] : [])
+        let ending = end?.inTransit == true
         // 行的边距挂在最外层：挂在自绘轻扫里面传不到列表上
         return SessionRow(item: item, showsPlace: list.showsPlace, end: end)
-            .rowSwipes(RowSwipes(trailing: trailing), clipped: false)
-            .contextMenu {
-                MarkUnreadButton(session: item.state)
-                HandoffButton(session: item.state)
-                RowActionButtons(actions: trailing.reversed())
-            }
+            .rowSwipes(SessionActions.swipes(item.state, ending: ending, in: workspace), clipped: false)
+            .contextMenu { SessionActions(session: item.state, task: item.task, ending: ending) }
             .cardRow()
     }
 

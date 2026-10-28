@@ -45,6 +45,7 @@ struct IOSRoot: View {
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
             .overlay { TaskBubbleSlot() }
             .overlay { CardMoreSlot() }
+            .sessionAsks(workspace)
         }
         .watchesTouches { [workspace] in workspace.pressed(at: $0) }
         // 这一层还没有导航栏：上安全区就是状态栏

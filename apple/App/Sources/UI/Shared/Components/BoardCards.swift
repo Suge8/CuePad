@@ -63,6 +63,15 @@ private struct BoardDim: ViewModifier {
 }
 #endif
 
+/// 卡上标题前的图钉：这件任务置顶了（`Card.isPinned`），推进中与已完成里排在前面。读屏念在卡的整句里。
+struct BoardPin: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Image(.pin).font(.system(size: TaskMetrics.cardGlyph)).foregroundStyle(palette.ink3).accessibilityHidden(true)
+    }
+}
+
 /// 卡上标题前的项目小图形：看全部项目时才画（选了项目范围时范围已经说了）。Mac 上指针停在它上面是项目联动（`boardDim`），悬停提示写项目名。
 struct BoardProjectGlyph: View {
     let project: Project
@@ -91,7 +100,7 @@ extension Workspace {
 
 /// 推进中一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：同任务卡（`BoardTaskCard`）的语法——
 /// 开头是这家 Agent 的品牌标（`AgentKind.mark`，任务是完成圈），标题是会话名，下沿是那条线（`BoardLine`，按 `BoardPulse` 画，右端写此刻状态多久与要你管的状态词），
-/// 看全部项目时标题前是它归处的项目小图形；悬停提示写项目与哪家 Agent。点了打开会话；歇着、在等 Cue 交出去的那一处时长按与右键是去那一处（`HandoffButton`）。
+/// 看全部项目时标题前是它归处的项目小图形；悬停提示写项目与哪家 Agent。点了打开会话；长按与右键是会话的菜单（`SessionActions`，各处同一份）。
 struct BoardSessionCard: View {
     let session: PiSessionState
     let project: Project?
@@ -115,9 +124,9 @@ struct BoardSessionCard: View {
             .boardCard(.advancing)
         }
         .help(Dotted(project?.shownName, session.agentMark).visible)
-        .contextMenu { HandoffButton(session: session) }
+        .contextMenu { SessionActions(session: session) }
         .accessibilityLabel(Dotted(session.title, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label, pulse.handoff?.waiting).spoken)
-        .accessibilityActions { HandoffButton(session: session) }
+        .accessibilityActions { SessionActions(session: session) }
     }
 }
 
