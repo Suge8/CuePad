@@ -13,7 +13,8 @@ extension CueStore {
   }
 
   /// `requestDelivery` 的事务内部分：必须在写事务内调用。带着任务里的卡开新会话或交话，是叶子换会话的那一刻：
-  /// 这件事里没人再用的会话随之结束（`endUnusedSessions`）。
+  /// 这件事里没人再用的会话随之结束（`endUnusedSessions`）。你对会话说的话（作答、重跑也算）当场收起挂在它上面的提问（`questionsOn`），
+  /// 算你在那边答了：不交给 Cue、不叫醒它；待回复不用写，读的时候就不算了（`sessionsAwaitingReply`）。
   func insertDelivery(
     _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode, card: UUID? = nil, cue: Bool
   ) throws -> DeliveryRequest {
@@ -25,6 +26,10 @@ extension CueStore {
       resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
     try insert(request)
     try registerAttachments(in: content)
+    if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
+      let on = try questionsOn(session)
+      _ = try endQuestions(setAsideBy: request.id, where: on.predicate, on.bindings)
+    }
     if let card, mode == .start || DeliveryMode.toSession.contains(mode), let leaf = try leaf(holding: card) {
       try endUnusedSessions(of: leaf, cue: cue)
     }
@@ -186,16 +191,22 @@ extension CueStore {
       orderBy: "createdAt, rowid")
   }
 
+  /// 删掉一条请求（移除、重发没能送达的话）：这句收起的提问放回"等你"，它没说到会话那边。
   public func deleteDelivery(_ id: UUID) throws {
-    try write { try db.run("DELETE FROM deliveryRequests WHERE id = ?", [id]) }
+    try write {
+      try db.run("DELETE FROM deliveryRequests WHERE id = ?", [id])
+      try reopen(where: "setAsideBy = ?", [id])
+    }
   }
 
   /// 撤回一条还没被 Mac 领取的请求（`isWithdrawable`）；返回是否撤回了。与领取同一个条件（status = 'pending'），
-  /// 所以撤回与领取只有一个能成：已领取的（交给了 Pi）撤不回。
+  /// 所以撤回与领取只有一个能成：已领取的（交给了 Pi）撤不回。这句收起的提问放回"等你"（同 `deleteDelivery`）。
   public func withdrawDelivery(_ id: UUID) throws -> Bool {
     try write {
       try db.run("DELETE FROM deliveryRequests WHERE id = ? AND status = 'pending'", [id])
-      return db.changes > 0
+      guard db.changes > 0 else { return false }
+      try reopen(where: "setAsideBy = ?", [id])
+      return true
     }
   }
 }

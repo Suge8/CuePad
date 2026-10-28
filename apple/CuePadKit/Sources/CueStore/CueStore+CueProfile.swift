@@ -74,19 +74,10 @@ extension CueStore {
   public func leaveUnattended(_ stop: CueLeft, given: Set<UUID>) throws -> (session: PiSessionState, record: UUID?)? {
     try write {
       guard let session = try sessionState(stop.sessionID), stop.holds(for: session), try question(waitingOn: session.sessionID) == nil else { return nil }
-      let places = try tasks(boundTo: session.sessionID).flatMap { [$0.task.id, $0.parent?.id] }.compactMap(\.self)
-      guard !given.contains(session.id), given.isDisjoint(with: places) else { return nil }
+      guard !given.contains(session.id), given.isDisjoint(with: try sessionPlaces(session.sessionID)) else { return nil }
       if try cueState()?.left.contains(where: { $0.holds(for: session) }) == true { return (session, nil) }
       try putLeft([session])
       return (session, CueState.recordID)
-    }
-  }
-
-  /// 等你里问着会话那件事的提问（会话等的是他在卡上的回答，再留给他回，同一件事就既在等你、又是待回复）；没有为 nil。
-  public func question(waitingOn sessionID: String) throws -> CueMessage? {
-    try cueMessagesWaitingForYou().first { question in
-      guard let task = question.taskID else { return false }
-      return (try? leafSession(workingLeaf(of: task).id)) == sessionID
     }
   }
 

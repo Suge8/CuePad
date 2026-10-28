@@ -8,7 +8,7 @@ import SwiftUI
 /// 铺开的那件：眉题（`CueWaitEyebrow`）、问句（`CueQuestionLine`）、点名的图、怎么答（`WaitAnswer`，与会话页问题卡同一个；主动作在右下角）。问句是代码按 Cue 写的动作短语写出的
 /// （`CueAsking.question`），不靠 Cue 的措辞；要看细节（Cue 的原话、会话里的来龙去脉）点眉题进任务或会话。对话里不另挂还在等你的提问：同一问同屏只一处。
 /// 圆角、与输入框和待回复提示之间的空同一套（`Radius.field`、`stackGap`）。
-/// 卡上只能答：别的话在 Cue 页底下的输入框说，一开口 Cue 的提问就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。
+/// 卡上只能答：别的话在 Cue 页底下的输入框说，一开口 Cue 的提问就收起（Cue 判断不是在答它会放回）；在挂着它的会话里说也当场收起（见 `CueQuestionEnd`）。没有关掉。
 /// Cue 停用着时卡照样露、Cue 的选项停用并写"启用后再答"（`CueChoices`）。答了等库里那件结束才换下一件。
 struct CueWaitDock: View {
     let waiting: [CueWait]
