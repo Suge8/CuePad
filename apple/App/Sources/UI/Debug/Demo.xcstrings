@@ -7943,6 +7943,22 @@
         }
       }
     },
+    "迁移重跑了吗" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Did the migration rerun?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "迁移重跑了吗"
+          }
+        }
+      }
+    },
     "运行 pnpm test billing" : {
       "localizations" : {
         "en" : {
@@ -8275,6 +8291,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重构设置页\n\n设置项的描述写打开后会发生什么。"
+          }
+        }
+      }
+    },
+    "重跑过了：第 14 步已经过去，迁移全部完成。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reran it: step 14 went through and the migration is complete."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重跑过了：第 14 步已经过去，迁移全部完成。"
           }
         }
       }

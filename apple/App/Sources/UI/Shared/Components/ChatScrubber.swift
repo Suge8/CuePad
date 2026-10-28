@@ -35,7 +35,7 @@ struct ChatScrubber: View {
     static func marks(_ entries: [PiChatEntry]) -> [ChatMark] {
         ChatMark.enough(entries.compactMap { entry in
             switch entry.role {
-            case .user, .answer: ChatMark(id: entry.id, kind: .said, preview: ChatMark.firstLine(entry.text))
+            case .user, .answer, .outgoing: ChatMark(id: entry.id, kind: .said, preview: ChatMark.firstLine(entry.text))
             case .notice(let notice) where notice.changesContext: ChatMark(id: entry.id, kind: .boundary, preview: notice.label)
             case .notice, .pi, .machine, .preview: nil
             }

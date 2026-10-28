@@ -20,7 +20,7 @@ struct SessionChat: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        let _ = derived.refresh(digest)
+        let _ = derived.refresh(digest, at: services.speech)
         let items = derived.items
         ChatColumn(
             followKey: PiConversation.followKey(
@@ -39,7 +39,7 @@ struct SessionChat: View {
 
     private func conversation(window: ChatWindow) -> PiConversation {
         var conversation = PiConversation(
-            session: session, items: derived.items, messages: digest.messages, deliveries: digest.deliveries, window: window,
+            session: session, items: derived.items, messages: digest.messages, window: window,
             fetching: digest.fetchingTranscript(at: services.speech))
         #if os(macOS)
         conversation.slot = slot
