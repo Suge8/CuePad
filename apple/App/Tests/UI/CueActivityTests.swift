@@ -4,13 +4,13 @@ import Testing
 @testable import CuePad
 
 /// Cue 此刻（`CueNow`）：名牌、小组件与 iPhone 的实时活动读同一份——数字账、一件一行（等你、推进中、刚做完）、第一件等你；
-/// 在实时活动上"允许一次"走 Cue 页回答的同一个方法，那件回到推进中、下一件等你接上来（会话在问的只能打开）；没活了实时活动就该结束；
+/// 在实时活动上"允许一次"走 Cue 页回答的同一个方法，下一件等你接上来（会话在问的只能打开）；Cue 问到的那件会话还在跑就一直在推进中；没活了实时活动就该结束；
 /// 刚做完的不压住在跑的，到点自己收掉。
 struct CueActivityTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
 
-    @Test func Cue此刻是岛与Cue那一行的同一份_允许一次后那件回到推进中_没活了就结束() async throws {
+    @Test func Cue此刻是岛与Cue那一行的同一份_允许一次后下一件接上_没活了就结束() async throws {
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let release = try await store.createTask("发布 v1.4", in: project.id)
@@ -30,15 +30,15 @@ struct CueActivityTests {
         func now() async throws -> CueNow { CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil)) }
         func kinds(_ now: CueNow) -> [CueNow.Item.Kind] { now.items.map(\.kind) }
 
-        // Cue 还没启用：两件都落在等你上：两件等你，加刚做完的那件；第一件是 Cue 的提问，能"允许一次"
+        // 两件等你：Cue 问发布、画布的会话在问；发布的会话在跑，Cue 问它不占着它，仍在推进中；加刚做完的那件。第一件是 Cue 的提问，能"允许一次"
         var cue = try await now()
-        #expect(kinds(cue) == [.asks, .asks, .done] && cue.advancing == 0 && cue.isLive)
+        #expect(kinds(cue) == [.asks, .asks, .running, .done] && cue.advancing == 1 && cue.isLive)
         let first = try #require(cue.first)
         #expect(first.title == "可以推送 v1.4 到 TestFlight 吗？" && first.detail == nil && first.open == DeepLink.cue.url)
         let allow = try #require(first.allow)
         #expect(allow.message == push.id && allow.choice == CueAsk.once)
 
-        // 允许一次（实时活动在 App 进程里调的就是它）：发布回到推进中、它的会话在跑，会话在问的接上来，只能打开
+        // 允许一次（实时活动在 App 进程里调的就是它）：会话在问的接上来，只能打开
         try await rig.services.answerCueQuestion(allow.message, allow.choice)
         cue = try await now()
         #expect(kinds(cue) == [.asks, .running, .done] && cue.advancing == 1)

@@ -70,16 +70,6 @@ extension Workspace {
         showSessions()
     }
 
-    /// 看板上的卡点了去哪（`BoardLink` 与流程测试同走这里）：进会话，或去 Cue 页答那一问——拍板卡露的就是它（`cueAsking`）。
-    func open(_ destination: TaskBoard.Destination) {
-        switch destination {
-        case .session(let session): openSession(session.id, sessionID: session.sessionID)
-        case .question(let wait):
-            cueAsking = wait
-            show(.cue)
-        }
-    }
-
     /// 去 Cue 页一行旁注提到的那一处（醒来那几行、一轮的经过）：会话、任务（从点的地方长出气泡）或定时。
     func open(_ target: CueWakeHeader.Target) {
         switch target {

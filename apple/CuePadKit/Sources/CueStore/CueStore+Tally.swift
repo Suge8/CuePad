@@ -5,9 +5,10 @@ import Foundation
 /// - 拍板：Cue 带选项问你、还没结束的消息（`cueMessagesWaitingForYou`），加上会话里在等你回答的（`sessionsAskingYou`，规则在 `PiSessionState.asksYou`）。
 ///   一处在等就是一件：同一件任务上 Cue 在问、它的会话也在问，算两件。每件带上它落在哪件顶层任务上（消息的 `taskID`、会话归的那件 `sessionOwners`），没落在任务上的为 nil。
 /// - 待回复：Cue 留给你回、此刻歇着的会话（`sessionsAwaitingReply`，规则在 `PiSessionState.awaitsReply`），等得最久的在前，同样带上它归的顶层任务。
-/// - 被等你占着的（`held`）：有一件拍板或待回复落在它上面的顶层任务。一件事只在一处：它只算等你，不论状态是待办、进行中还是做完——
+/// - 被等你占着的（`held`）：它的会话在问你或待回复的顶层任务。一件事只在一处：它只算等你，不论状态是待办、进行中还是做完——
 ///   推进中在这里去掉它们；任务看板与实时活动按列分时也先看它（App 里的 `TaskBoard.Column.of`）。
-/// - 推进中：Cue 此刻在做的（`CueBoard.active`，即它信封里的"在做"）里不在等你的：被等你占着的事与在问你、待回复的单独会话去掉；先后同看板。
+///   Cue 落在任务上的提问不占着它：那件事留在原处（Cue 还在管它多半是推进中），提问只在 Cue 页答。
+/// - 推进中：Cue 此刻在做的（`CueBoard.active`，即它信封里的"在做"）里不在等你的：被会话等你占着的事与在问你、待回复的单独会话去掉；先后同看板。
 ///   进行中而会话都结束了、没人在做的事不算，它留在你的任务清单里（任务看板的待办）。
 public struct CueTally: Equatable, Sendable {
   public enum Wait: Identifiable, Equatable, Sendable {
@@ -47,7 +48,9 @@ public struct CueTally: Equatable, Sendable {
   public var waiting: [Wait]
   public var replies: [Reply]
 
-  public var held: Set<UUID> { Set(waiting.compactMap(\.task) + replies.compactMap(\.task)) }
+  public var held: Set<UUID> {
+    Set(waiting.compactMap { if case .session(_, let task) = $0 { task } else { nil } } + replies.compactMap(\.task))
+  }
 
   public init(advancing: [CueWork], waiting: [Wait], replies: [Reply]) {
     self.advancing = advancing

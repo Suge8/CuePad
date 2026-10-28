@@ -1510,34 +1510,6 @@
         }
       }
     },
-    "%lld 件" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld item"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld items"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 件"
-          }
-        }
-      }
-    },
     "%lld 件待回复" : {
       "localizations" : {
         "en" : {
@@ -7807,22 +7779,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原项目已不存在或在回收站，已放到默认项目"
-          }
-        }
-      }
-    },
-    "去 Cue 页回答" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Answer on the Cue page"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去 Cue 页回答"
           }
         }
       }
