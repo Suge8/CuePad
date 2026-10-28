@@ -7,7 +7,7 @@ import UIKit
 /// 系统标签栏把悬浮边距（左、右、下各 21 点，iOS 27 实测）算在自己的范围里，玻璃底板是范围减去边距：范围连同边距铺到屏幕左下角，
 /// 底板正好落在这一排左边那块的位置（`Dock.margin` 与它同值，底板宽 `Dock.capsule`、高 `Dock.height`）。系统改了边距这里会与 Cue 钮错开，大版本升级时截图核对。
 /// 底板去不掉（透明外观也还在），也不能逐帧改宽（两格跟着挤扁）：换形里只淡入淡出（`DockHandoff.tabs`）。
-/// 选中哪格只从 tab 推出来（`DockMotion.tab`），透镜由系统滑过去。
+/// 选中哪格只从条推出来（`DockMotion.tab`）：拖页过半才换格，透镜由系统滑过去；透镜的进度没有公开接口，不能跟手连续滑。
 /// 字号与图标大小用系统的；"项目"那一格在同步到不了 Mac 时带一个点（`AppServices.macAlert`），系统角标比它大一圈，所以点是自己画在格子上的。
 struct DockTabs: View {
     let motion: DockMotion
@@ -20,7 +20,7 @@ struct DockTabs: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        TabBar(selected: motion.tab, alert: services.macAlert?.title, tint: palette.signature, ink: palette.ink) { workspace.tap($0) }
+        TabBar(selected: motion.tab, alert: services.macAlert?.title, tint: palette.signature, ink: palette.ink) { workspace.tapSoon($0) }
             .frame(width: Dock.capsule(in: width) + Dock.margin * 2, height: Dock.height + Dock.margin)
             .overlay(alignment: .topLeading) { marks }
             .offset(x: -Dock.margin, y: Dock.margin)
@@ -53,7 +53,7 @@ struct DockTabs: View {
     private static let dotOffset = CGSize(width: 9, height: 5)
 }
 
-/// 选中只在 `selected` 变了时写回：点格子时系统先把透镜滑过去，途中别的更新不把选中拉回旧格。
+/// 选中只在 `selected` 变了时写回：点格子时系统先把透镜滑过去，条随后滑到那一页，途中别的更新不把选中拉回旧格。
 private struct TabBar: UIViewRepresentable {
     let selected: Int?
     let alert: String?

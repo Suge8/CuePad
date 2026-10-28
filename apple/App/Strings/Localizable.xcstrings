@@ -11395,6 +11395,22 @@
         }
       }
     },
+    "已新建任务「%@」" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Created task “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已新建任务「%@」"
+          }
+        }
+      }
+    },
     "已永久删除，但有 %lld 个附件文件没能删掉" : {
       "localizations" : {
         "en" : {
@@ -14151,6 +14167,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新建 定时"
+          }
+        }
+      }
+    },
+    "新建任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Task"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建任务"
           }
         }
       }
