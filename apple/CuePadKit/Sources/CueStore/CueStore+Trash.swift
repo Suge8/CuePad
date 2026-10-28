@@ -46,8 +46,8 @@ extension CueStore {
     if let parent = try find(Card.self, id)?.parentID { try settle(around: [parent]) }
   }
 
-  /// 拨回一次改动（`trashCard`、`moveCard`、`mergeIdea` 的回执），整个拨回是一个事务：
-  /// 删除恢复、提上去的下级回到它下面；挪动放回原来的位置；接进任务的灵感恢复、任务正文改回。
+  /// 拨回一次改动（`trashCard`、`moveCard`、`mergeIdea`、`createTask(fromIdea:)` 的回执），整个拨回是一个事务：
+  /// 删除恢复、提上去的下级回到它下面；挪动放回原来的位置；接进任务的灵感恢复、任务正文改回；照灵感新建的任务进回收站、灵感恢复。
   /// 其间已经不在了的下级跳过，原来的前一个同级不在了就排到最前。
   public func undo(_ change: CardChange) throws { try undo([change]) }
 
@@ -67,6 +67,9 @@ extension CueStore {
       try relocate(id, to: slot, after: survivor)
     case .merge(let idea, let task, let body):
       try db.run("UPDATE cards SET body = ?, modifiedAt = ? WHERE id = ?", [body, Date.stamp, task])
+      try restoreRow(idea)
+    case .spawn(let idea, let task):
+      if let card = try find(Card.self, task), card.deletedAt == nil { _ = try trashRow(card, at: Date.stamp) }
       try restoreRow(idea)
     }
   }

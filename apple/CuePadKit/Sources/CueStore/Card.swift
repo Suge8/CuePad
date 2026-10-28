@@ -1,7 +1,7 @@
 import CueText
 import Foundation
 
-/// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（建成任务时写上，之后不变：灵感与任务不互转，灵感要做就接进一条任务，`mergeIdea`）。
+/// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（建成任务时写上，之后不变：同一条记录不在灵感与任务之间互转，灵感要做就接进一条任务（`mergeIdea`）或照它新建一条（`createTask(fromIdea:)`），灵感进回收站）。
 /// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（顶层任务下的任务，勾选清单里的一条）与挂在下面的灵感。
 /// 任务的正文第一行是标题，其余是要交代给 Agent 的话（`CueLines.split`）：开工时整段作为第一句发出，发出后留在任务上。
 /// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setStatus`、`moveCard`、`createTask`、`mergeIdea`。
@@ -126,6 +126,8 @@ public enum CardChange: Sendable, Equatable {
   case move(id: UUID, from: CardSlot, after: UUID?)
   /// 灵感接进任务：任务原来的正文。
   case merge(idea: UUID, task: UUID, body: String)
+  /// 照灵感新建任务：新建的那条任务。
+  case spawn(idea: UUID, task: UUID)
 }
 
 extension Card {

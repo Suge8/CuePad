@@ -106,6 +106,7 @@ struct ProjectScreen: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
+        .cardDragStage()
     }
 
     /// 段与段之间、段标题与它的内容之间的距离（书架、Mac 项目页同一节奏）。
@@ -202,6 +203,7 @@ private struct FocusCard: View {
                 .font(Typography.secondary).foregroundStyle(palette.ink3).fixedSize()
             }
             .taskFoldBar(anchor)
+            .newTaskDrop()
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

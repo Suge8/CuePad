@@ -14,5 +14,18 @@
 	<string>https://github.com/Suge8/CuePad/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>44KPSfFnQVY3ntWnJqrj5OSGO5Wu6mH8sGPcsZkRIjQ=</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>$(CUEPAD_APP_ID).card</string>
+			<key>UTTypeDescription</key>
+			<string>CuePad Card</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
