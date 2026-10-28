@@ -427,22 +427,6 @@
         }
       }
     },
-    "%@ 有动静" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activity: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 有动静"
-          }
-        }
-      }
-    },
     "%@ 没执行成功：%@" : {
       "localizations" : {
         "en" : {
@@ -567,6 +551,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 秒"
+          }
+        }
+      }
+    },
+    "%@ 等 %lld 处有动静" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%2$lld places stirred, incl. %1$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 等 %2$lld 处有动静"
           }
         }
       }

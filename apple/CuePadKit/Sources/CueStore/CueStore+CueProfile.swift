@@ -68,15 +68,15 @@ extension CueStore {
     }
   }
 
-  /// 一轮收尾的兜底（`CueKeeper.leaveUnattended`）：会话仍停在 `stop` 那次停下、没留给你回、等你里没有问着他的提问，且它与它绑着的任务（含上级）
-  /// 都不在 `given`（这一轮已给过去处的会话与任务）里，就留给你回（同 `leaveToYou`）。不用留返回 nil；留了返回会话与记录 id（立即上传用）。
-  public func leaveUnattended(_ stop: CueLeft, given: Set<UUID>) throws -> (session: PiSessionState, record: UUID)? {
+  /// 一轮收尾的兜底（`CueKeeper.leaveUnattended`）：会话仍停在 `stop` 那次停下、等你里没有问着他的提问，且它与它绑着的任务（含上级）
+  /// 都不在 `given`（这一轮已给过去处的会话与任务）里，它的去处就是留给你回：还没留的留下（同 `leaveToYou`，返回记录 id 供立即上传），
+  /// 已经留着的（他发起的那一轮停下时当场留了）不再写。不用留为 nil。
+  public func leaveUnattended(_ stop: CueLeft, given: Set<UUID>) throws -> (session: PiSessionState, record: UUID?)? {
     try write {
-      guard let session = try sessionState(stop.sessionID), stop.holds(for: session),
-        try cueState()?.left.contains(where: { $0.holds(for: session) }) != true, try question(waitingOn: session.sessionID) == nil
-      else { return nil }
+      guard let session = try sessionState(stop.sessionID), stop.holds(for: session), try question(waitingOn: session.sessionID) == nil else { return nil }
       let places = try tasks(boundTo: session.sessionID).flatMap { [$0.task.id, $0.parent?.id] }.compactMap(\.self)
       guard !given.contains(session.id), given.isDisjoint(with: places) else { return nil }
+      if try cueState()?.left.contains(where: { $0.holds(for: session) }) == true { return (session, nil) }
       try putLeft([session])
       return (session, CueState.recordID)
     }
