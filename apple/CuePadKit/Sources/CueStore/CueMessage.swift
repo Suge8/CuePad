@@ -54,7 +54,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 你选的那一项（`choices` 之一；更旧版本存下的可能是卡上另外写的一句，照原文显示）；收起、撤回的为 nil。
   public var answer: String?
   public var answeredAt: Date?
-  /// 你开口收起这条提问的那句话（你的消息的 id，`CueQuestionEnd`）；放回"等你"时清掉。
+  /// 你开口收起这条提问的那句话（`CueQuestionEnd`）：在 Cue 页说的是你的消息的 id，在挂着它的会话里说的是那句的投送请求的 id；放回"等你"时清掉。
   public var setAsideBy: UUID?
   /// 你的消息或回答被交给 Cue 的大脑的时刻（由 Cue 运行的那台 Mac 写）；回答晚于它时（别的设备同步来的另一个回答）要再交一次。
   public var deliveredAt: Date?
@@ -111,6 +111,7 @@ package enum CuePush: String, Sendable {
 /// 一条提问怎么结束（`CueStore.endCueQuestion`）：几种结局落到同一个状态上（`CueMessage.answeredAt`），没有"关掉"。
 /// 卡上只能选；你不选、在 Cue 页底下开口，还开着的卡当场收起，算你直接说了（`CueStore.addCueMessage`，记下是哪句话收起的，`CueMessage.setAsideBy`）。
 /// 你的话也可能只是别的想法：Cue 读了判断不是在答它，就放回"等你"（`CueStore.restoreCueQuestion`）；那句没交给 Cue 就撤回了，也放回。
+/// 你在挂着它的会话里开口（`CueStore.questionsOn`），它同样当场收起，算你在那边答了：不交给 Cue、不叫醒它；那句撤回或移除了才放回。
 public enum CueQuestionEnd: Equatable, Sendable {
   /// 你选了一项（`choices` 之一）：交给 Cue、叫醒它
   case answered(String)

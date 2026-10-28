@@ -99,6 +99,11 @@ extension CueStore {
     ).map { LeafTask(task: $0, parent: try $0.parentID.flatMap { try find(Card.self, $0) }) }
   }
 
+  /// 会话所在的各处：它属于的叶子任务（`tasks(boundTo:)`）与它们的上级。挂在会话上的提问（`questionsOn`）、一轮兜底时这个会话有没有去处都按它认。
+  func sessionPlaces(_ sessionID: String) throws -> [UUID] {
+    try tasks(boundTo: sessionID).flatMap { [$0.task.id, $0.parent?.id] }.compactMap(\.self)
+  }
+
   /// 能绑会话的叶子（没完成、没绑会话、没删除、没归档）：子任务带着上级一起给，界面写"上级 · 子任务"。顺序同 `tasks(in:_:)`
   /// （项目页的任务顺序：同级手动顺序，子任务紧跟上级）。`project` 是会话所在的项目；会话没归项目（文件夹没绑给哪个项目）时列默认项目的。
   public func bindableTasks(in project: UUID?) throws -> [LeafTask] {

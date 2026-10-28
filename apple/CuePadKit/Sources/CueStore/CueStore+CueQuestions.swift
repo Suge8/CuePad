@@ -33,6 +33,18 @@ extension CueStore {
   /// 还开着的提问（唯一定义）：Cue 带选项问的、还没结束。
   static let openQuestion = "author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL"
 
+  /// 挂在会话上的提问的条件（唯一定义）：关联的任务是会话绑着的叶子或它的上级（`sessionPlaces`）。
+  /// 你对会话开口当场收起它们（`insertDelivery`），Cue 留给你回之前也看它（`question(waitingOn:)`）。
+  func questionsOn(_ sessionID: String) throws -> (predicate: String, bindings: [any SQLBindable]) {
+    ("taskID IN (SELECT value FROM json_each(?))", [Self.idList(try sessionPlaces(sessionID))])
+  }
+
+  /// 等你里挂在会话上的提问（`questionsOn`；会话等的是你在卡上的回答，再留给你回，同一件事就既在等你、又是待回复）；没有为 nil。
+  public func question(waitingOn sessionID: String) throws -> CueMessage? {
+    let on = try questionsOn(sessionID)
+    return try select(CueMessage.self, where: "\(Self.openQuestion) AND \(on.predicate)", on.bindings, orderBy: "createdAt, rowid", limit: 1).first
+  }
+
   /// 你开口收起的提问（唯一定义，也是它的部分索引的条件）：记着是哪句话收起的（`CueMessage.setAsideBy`）。
   /// 它只随结束写下（`endQuestions`）、随放回清掉（`reopen`），有值就是收起着，不再另看 `answeredAt`。
   static let setAside = "setAsideBy IS NOT NULL"
@@ -50,7 +62,8 @@ extension CueStore {
     return db.changes
   }
 
-  /// 你开口收起的提问（`setAside`，走部分索引），从早到晚：交给 Cue 时列在收起它的那句话后面，Cue 放回时按 id 前缀在里面找。
+  /// 你开口收起的提问（`setAside`，走部分索引），从早到晚：在 Cue 页收起的交给 Cue 时列在收起它的那句话后面，Cue 放回时按 id 前缀在里面找；
+  /// 在会话里收起的不列给 Cue，那是你在那边答了。
   public func cueQuestionsSetAside() throws -> [CueMessage] {
     try select(CueMessage.self, where: Self.setAside, orderBy: "createdAt, rowid")
   }
