@@ -98,6 +98,7 @@ nonisolated extension DeliveryMode {
         case .config: String(localized: "模型与思考强度")
         case .end: String(localized: "结束会话")
         case .stop: String(localized: "停止这一轮")
+        case .retry: String(localized: "重试这一轮")
         case .bind: String(localized: "绑定文件夹")
         case .quota: String(localized: "刷新额度")
         case .tidy: String(localized: "整理技能与规则")

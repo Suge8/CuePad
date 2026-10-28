@@ -157,7 +157,8 @@ nonisolated struct PiShown: Hashable, Sendable {
         case awaitsReply
         /// 在等回答，等的是 Cue（`PiSessionState.waitsForCue`），不是你。
         case cueAsking
-        case failed
+        /// 出错，带种类（`PiSessionState.failure`，没记的按其余）：状态词按它写。
+        case failed(PiFailure)
         case unread
         case idle
         /// Cue 在值班时歇着：不催你（没有"有新回复""该你了"）。
@@ -200,7 +201,7 @@ nonisolated extension PiShown {
         let cue = duty?.name
         let own = PiClock.reading(session.state, stateSince: session.stateSince, busySince: session.busySince)
         let busy = session.state.isWorking || session.state == .known(.waitingForUser)
-        let reported = Self.status(of: session.state)
+        let reported = Self.status(of: session.state, failure: session.failure?.known)
         let asked = session.waitsForCue(duty) ? Status.cueAsking : reported
         switch PiDelivery.phase(of: delivery, for: session, seen: seen, at: moment) {
         case .failed(let failure):
@@ -225,13 +226,13 @@ nonisolated extension PiShown {
     }
 
     /// 只有 Pi 报的状态（子代理、样板）：空闲按看过处理。
-    init(state: Open<PiWorkState>) { status = Self.status(of: state) }
+    init(state: Open<PiWorkState>) { status = Self.status(of: state, failure: nil) }
 
-    private static func status(of state: Open<PiWorkState>) -> Status {
+    private static func status(of state: Open<PiWorkState>, failure: PiFailure?) -> Status {
         switch state.known {
         case .thinking, .tool, .delegating, .compacting: .working(state.known!)
         case .waitingForUser: .asking
-        case .error: .failed
+        case .error: .failed(failure ?? .other)
         case .settled: .idle
         case .ended: .ended
         case .interrupted: .interrupted

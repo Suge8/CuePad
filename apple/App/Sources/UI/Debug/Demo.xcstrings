@@ -4039,6 +4039,22 @@
         }
       }
     },
+    "把登录回调改走统一网关，改完跑一遍集成测试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Route the login callback through the unified gateway, then run the integration tests"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把登录回调改走统一网关，改完跑一遍集成测试"
+          }
+        }
+      }
+    },
     "把登录回调的超时修复推送到 origin/main" : {
       "localizations" : {
         "en" : {
@@ -5543,6 +5559,22 @@
         }
       }
     },
+    "查一下钥匙串读不到令牌的原因" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find out why the token can't be read from the keychain"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查一下钥匙串读不到令牌的原因"
+          }
+        }
+      }
+    },
     "查一遍域名哪些快到期，续上" : {
       "localizations" : {
         "en" : {
@@ -5619,22 +5651,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型拒绝了请求（400）"
-          }
-        }
-      }
-    },
-    "模型拒绝了请求（400）：prompt is too long" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The model rejected the request (400): prompt is too long"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模型拒绝了请求（400）：prompt is too long"
           }
         }
       }

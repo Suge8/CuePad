@@ -127,6 +127,27 @@ extension RealPiTests {
         }
     }
 
+    /// 重跑出错的那一轮：会话回到在跑、做完；请求与第一次一样（假模型报出请求里每条消息的角色：只有系统提示与你的话），
+    /// 对话里不多一句话、只多出新的回答，之后的请求里也没有重跑留下的消息；没出错的会话拒绝。
+    @Test func retryRerunsTheFailedTurnAndTheConversationOnlyGainsTheNewAnswer() async throws {
+        try await withRig { pi, bridge, s in
+            let file = try #require(s.sessionFile)
+            let prompt = "[[fail-once]] [[roles]] 跑一遍"
+            try pi.prompt(prompt)
+            try await eventually("出错") { bridge.sessions.first?.state == .error }
+            #expect(try PiHistory.index(file: file, from: nil).messages.map(\.text) == [prompt])
+
+            try await bridge.retry(s.id)
+            try await eventually("重跑做完") { recap(of: bridge.sessions.first)?.lastReply == "ROLES system,user" }
+            try await eventually("歇下") { bridge.sessions.first?.state == .settled }
+            #expect(try PiHistory.index(file: file, from: nil).messages.map(\.text) == [prompt, "ROLES system,user"])
+
+            try pi.prompt("[[roles]] 再来")
+            try await eventually("下一句") { recap(of: bridge.sessions.first)?.lastReply == "ROLES system,user,assistant,user" }
+            await #expect(throws: PiBridgeError.rejected("nothing_to_retry")) { try await bridge.retry(s.id) }
+        }
+    }
+
     @Test func modelFailureShowsError() async throws {
         try await withRig { pi, bridge, _ in
             try pi.prompt("[[fail]]")

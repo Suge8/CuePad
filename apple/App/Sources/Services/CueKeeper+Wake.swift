@@ -195,7 +195,7 @@ extension CueKeeper {
     }
 
     /// 重试可能好的错：额度、登录类的不算。
-    static func retryable(_ summary: PiErrorSummary) -> Bool { summary.kind != .quota && summary.kind != .authentication }
+    static func retryable(_ summary: PiErrorSummary) -> Bool { summary.failure.retries }
 
     static func day(_ date: Date) -> String {
         let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)

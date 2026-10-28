@@ -51,6 +51,8 @@ export class Session {
 	 * 与"正忙"检查之间有一次异步等待）。
 	 */
 	starting: Said | null = null;
+	/** 已交给 Pi、还没落成会话里一条消息的重跑（`retry.ts`）：落成时回它的确认，同 `starting` */
+	retrying: Ack | null = null;
 	asking: Asking | null = null;
 	/** 压缩开始时的粗状态与计时：压缩完（或失败、取消）回到同一个粗状态时，计时也回到那时的起点——
 	 * 歇着时的手动压缩不是新的一轮，压完还是原来那次"做完了"，CuePad 不因此提示、也不算有新回复。 */

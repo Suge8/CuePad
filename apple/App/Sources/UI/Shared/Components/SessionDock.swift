@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 会话页底下浮着的那一叠（手机的会话页与 Mac 的会话页同一份）：等你确认时的问题卡、没能结束的原因（与会话列表同一条规则
+/// 会话页底下浮着的那一叠（手机的会话页与 Mac 的会话页同一份）：等你确认时的问题卡、出错（`PiFailureDock`）、没能结束的原因（与会话列表同一条规则
 /// `DeliveryRequest.shownEnd`）、回复框（`PiReplyBar`）；回复框的停止中、命令进度、发送中与调回的那一句都从这一页读到的会话摘要推出。
 /// 读到会话记录、确认它不在了（Mac 上的会话文件被删）时，回复框换成一句说明。
 struct SessionDock: View {
@@ -19,8 +19,9 @@ struct SessionDock: View {
         let deliveries = digest?.deliveries ?? [], messages = digest?.messages ?? [], speech = services.speech
         VStack(spacing: 8) {
             PiQuestionDock(session: session, deliveries: deliveries)
+            PiFailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
             if let failure = DeliveryRequest.shownEnd(in: deliveries, at: speech)?.failure, session.state != .known(.ended) {
-                Callout(.failed, text: String(localized: "没能结束：\(failure.text)"), docked: true)
+                Callout(.failed(.other), text: String(localized: "没能结束：\(failure.text)"), docked: true)
             }
             if let digest, digest.session == nil {
                 Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)

@@ -14,6 +14,8 @@ public protocol SessionLink: AnyObject {
     /// 请会话退出：托管的进程退出（不论这一轮在不在跑），终端里的像在终端里退出那样收尾。受理即返回，下线随后经 `PiBridge.detach` 报告。
     func end(_ id: PiSession.ID) async throws
     func abort(_ id: PiSession.ID) async throws
+    /// 把出错的那一轮原样重跑一遍（`AgentCapabilities.retry`）：对话里不多一句话。受理即返回，不等模型。
+    func retry(_ id: PiSession.ID) async throws
     func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws
     /// 至少给一项；会话名已去掉首尾空白、不是空的（桥先检查过）。
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws
@@ -25,6 +27,7 @@ extension SessionLink {
     public func command(_ line: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func end(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func abort(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
+    public func retry(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
         throw PiBridgeError.unsupported

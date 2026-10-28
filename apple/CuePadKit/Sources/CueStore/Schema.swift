@@ -125,6 +125,11 @@ enum Schema {
     "DROP INDEX IF EXISTS cards_projectID_modifiedAt; \(progressIndexes)",
     // 80：Cue 记下的记忆去掉开头的记下时间与"他说"（`plainCueLines`）；只改数据，改过的同步出去
     Upgrade(plainCueLines),
+    // 81：会话出错的种类（`PiFailure`），Mac 记下状态时定、各端只读；从更早的版本重跑到这一步时（新建的库已有这一列）不再加
+    Upgrade { (db: SQLite) in
+      guard try db.first("SELECT 1 FROM pragma_table_info('piSessionStates') WHERE name = 'failure'", [], { _ in true }) == nil else { return }
+      try db.exec("ALTER TABLE piSessionStates ADD COLUMN failure TEXT;")
+    },
   ]
 
   /// 技能与规则里每份文件的正文：那台 Mac 每份一条、各端读（`LibraryFileText`）。

@@ -163,6 +163,12 @@ extension PiBridge {
         try await control(id, needs: .abort).abort(id)
     }
 
+    /// 把该会话出错的那一轮原样重跑一遍（`PiSessionState.canRetry`）：对话里不多一句话、也不发"继续"，只多出新的回答。受理即返回，会话随即回到在跑；
+    /// 会话在跑、或最后一轮不是出错结束的，抛 `rejected("nothing_to_retry")`。只有 Pi 有。
+    public func retry(_ id: PiSession.ID) async throws {
+        try await control(id, needs: .retry).retry(id)
+    }
+
     /// 回答该会话正在等的弹窗；`promptID` 不是正在等的那个、或答案对不上时抛 `PiBridgeError.rejected`。
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
         try await control(id, needs: .answer).answer(answer, to: promptID, in: id)

@@ -46,6 +46,7 @@ CuePad → 扩展（都带 `id`）：
 | `config` | `model{provider, id}`、`thinking`、`name`，至少一项 | `bad_request`、`unknown_model`、`no_auth` |
 | `answer` | `promptId`、`value`（`confirm` 为布尔，`select` 为选项原文，`text` 为字符串） | `no_prompt`、`stale_prompt`、`bad_answer` |
 | `abort` | — | — |
+| `retry` | — | `nothing_to_retry` |
 | `end` | — | — |
 | `reload` | — | — |
 | `quota` | — | — |

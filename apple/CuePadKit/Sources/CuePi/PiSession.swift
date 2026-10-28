@@ -62,6 +62,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var detail: String? = nil
     /// 出错时 Pi 上报的原文（会话行悬停看）；`detail` 里是摘要
     public internal(set) var errorMessage: String? = nil
+    /// 出错的种类（同步记录的 `PiSessionState.failure`）：只按原文归一次类（`PiErrorSummary.failure`）
+    public var failure: PiFailure? { state == .error ? PiErrorSummary(errorMessage ?? "").failure : nil }
     /// 进入当前粗状态（工作中、等你确认、出错、空闲）的时间：思考、工具、等子代理之间切换不变
     public internal(set) var stateSince: Date
     /// 这段连续处理开始的时间：离开空闲起，到彻底歇下（自己歇下且没有子代理在飞）为止，中间等你确认也不断；空闲、出错时为 nil
@@ -199,7 +201,7 @@ public enum PiBridgeError: Error, Equatable {
     case sessionEnded
     case ackTimeout
     /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；斜杠命令还有 `unknown_command`（清单里没有的名字）、`missing_argument`（必填参数没给）；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
-    /// `bad_answer`（答案类型或选项不对）；配置时还有 `no_auth`（该提供方没配好密钥）
+    /// `bad_answer`（答案类型或选项不对）；配置时还有 `no_auth`（该提供方没配好密钥）；重跑时还有 `nothing_to_retry`（会话在跑，或最后一轮不是出错结束的）
     case rejected(String)
     /// 这个 Agent 的模型表里没有要换的模型（Pi 扩展回 `unknown_model`，其余几家的接入自己判断）
     case unknownModel(AgentKind)
@@ -230,6 +232,7 @@ extension PiBridgeError: ShownError {
         case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
         case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
         case .rejected("missing_argument"): "这个命令需要带上参数"
+        case .rejected("nothing_to_retry"): "这个会话现在没有出错的一轮可重跑（它在跑，或最后一轮不是出错结束的）"
         // 扩展执行时出错（`failed: <原因>`）：原因就是要说的话
         case .rejected(let reason) where reason.hasPrefix(Self.failedPrefix): ShownText.verbatim(String(reason.dropFirst(Self.failedPrefix.count))).value
         case .rejected(let reason): "Agent 没有接受：\(reason)"

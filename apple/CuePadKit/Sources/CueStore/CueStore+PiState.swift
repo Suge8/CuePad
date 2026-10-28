@@ -15,7 +15,8 @@ extension CueStore {
         lastReply: nil, question: content.question, notify: nil, stateSince: content.times.stateSince,
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
-        context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt)
+        context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt,
+        failure: content.state == .error ? content.failure.map(Open.known) : nil)
       if writesCatalog, let catalog { try writeCatalog(catalog) }
       if let notify { record.notify = try push(notify, record) }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
@@ -110,7 +111,7 @@ extension CueStore {
 
   /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理。它报过的模型与命令（目录记录）留着：发话、换模型会在后台唤醒它，
   /// 回复框照这份列模型、认命令（`PiSlash.line`）。
-  private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL"
+  private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL, failure = NULL"
 
   /// 记录上手上还有活（在跑一轮、等你确认、子代理还在跑）：进程这时没了就是做到一半被打断。用在 UPDATE 的 SET 里，读的是更新前的行。
   private static let hadWork = """
@@ -164,6 +165,8 @@ struct PiStateContent: Paced {
   var directory: String?
   var projectID: UUID?
   var question: PiQuestion?
+  /// 出错的种类（`PiSessionState.failure`，桥按原文归类）
+  var failure: PiFailure?
   var times: PiTimes
   /// 最后一轮开始的时刻（`PiSessionState.turnStartedAt`）
   var turnStartedAt: Date?

@@ -12867,6 +12867,22 @@
         }
       }
     },
+    "换个模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change Model"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换个模型"
+          }
+        }
+      }
+    },
     "换个词或条件试试" : {
       "localizations" : {
         "en" : {
@@ -17611,6 +17627,22 @@
         }
       }
     },
+    "登录失效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signed out"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录失效"
+          }
+        }
+      }
+    },
     "登录时打开" : {
       "localizations" : {
         "en" : {
@@ -21051,6 +21083,22 @@
         }
       }
     },
+    "这个会话现在没有出错的一轮可重跑（它在跑，或最后一轮不是出错结束的）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This session has no failed turn to retry (it is running, or its last turn did not fail)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个会话现在没有出错的一轮可重跑（它在跑，或最后一轮不是出错结束的）"
+          }
+        }
+      }
+    },
     "这个命令需要带上参数" : {
       "localizations" : {
         "en" : {
@@ -21851,6 +21899,22 @@
         }
       }
     },
+    "连不上" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't connect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连不上"
+          }
+        }
+      }
+    },
     "连不上 Codex 的常驻服务" : {
       "localizations" : {
         "en" : {
@@ -22555,6 +22619,22 @@
         }
       }
     },
+    "重试这一轮" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry Turn"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试这一轮"
+          }
+        }
+      }
+    },
     "锁屏通知暂时收不到。回到前台时会自动重试，也可以现在重试。" : {
       "localizations" : {
         "en" : {
@@ -23148,7 +23228,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usage limit reached"
+            "value" : "Limit reached"
           }
         },
         "zh-Hans" : {

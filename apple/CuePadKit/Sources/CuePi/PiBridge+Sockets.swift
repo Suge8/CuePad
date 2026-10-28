@@ -46,6 +46,8 @@ extension PiBridge {
 
         func abort(_: PiSession.ID) async throws { _ = try await request { try PiWire.bare("abort", id: $0) } }
 
+        func retry(_: PiSession.ID) async throws { _ = try await request { try PiWire.bare("retry", id: $0) } }
+
         func answer(_ answer: PiAnswerValue, to promptID: String, in _: PiSession.ID) async throws {
             _ = try await request { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }
         }

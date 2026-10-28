@@ -122,6 +122,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var state: Open<PiWorkState>
   /// 工具名、等待确认的问题、错误信息等。
   public var detail: String?
+  /// 出错的种类（只在出错时有，`PiFailure`）：出错块与看板上写的原因只读它。旧版本写的记录没有，按其余处理。
+  public var failure: Open<PiFailure>?
   /// 工作目录的最后一段（文件夹名），不含完整路径；手机据此在没有绑定项目时写出会话"在哪"。旧版本写的记录没有。
   public var folder: String?
   /// 摘要，见 `PiRecap`（同名字段）；`question` 是 Pi 此刻弹出、等你回答的对话框。旧版本写的记录没有。
@@ -167,7 +169,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, pendingTools: PiChatMessage.Tools? = nil, model: PiModelOption? = nil,
     thinking: Open<PiThinkingLevel>? = nil, context: PiContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil,
-    turnStartedAt: Date? = nil, answeredAt: Date? = nil
+    turnStartedAt: Date? = nil, answeredAt: Date? = nil, failure: Open<PiFailure>? = nil
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -197,6 +199,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.catalogID = catalogID
     self.turnStartedAt = turnStartedAt
     self.answeredAt = answeredAt
+    self.failure = failure
   }
 
   /// 从 CuePad 能对它做什么（规则见 `AgentCapabilities.of`）；本版本不认识的 Agent 只能发文字。
@@ -212,6 +215,11 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 等子代理时这一轮已经歇下，都没有可停的。
   public var canStop: Bool {
     capabilities.contains(.abort) && state.known?.isTurnRunning == true && state != .known(.waitingForUser)
+  }
+
+  /// 能把出错的那一轮原样重跑一遍（`Workspace.retry`，不在对话里多一句话）：出错、这一类错重跑有用（`PiFailure.retries`，没记种类的按其余），且做得到。
+  public var canRetry: Bool {
+    state == .known(.error) && capabilities.contains(.retry) && failure?.known?.retries != false
   }
 
   /// 现在说不了话的原因（nil 是能说，规则见 `AgentCapabilities.speakBlocked`）：回复框与 Cue 说话认它。
@@ -267,13 +275,13 @@ extension PiSessionState: Record {
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "context", "agent", "catalogID", "pendingTools", "turnStartedAt", "answeredAt",
+    "model", "thinking", "context", "agent", "catalogID", "pendingTools", "turnStartedAt", "answeredAt", "failure",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
      model.map(JSONColumn.encode), thinking?.rawValue, context.map(JSONColumn.encode), agent.rawValue, catalogID, pendingTools?.stored,
-     turnStartedAt, answeredAt]
+     turnStartedAt, answeredAt, failure?.rawValue]
   }
   init(row: Row) {
     self.init(
@@ -290,7 +298,7 @@ extension PiSessionState: Record {
       model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
       context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(22)),
       agent: row.textOrNil(23).map(Open.init(rawValue:)) ?? .known(.pi), catalogID: row.uuidOrNil(24), turnStartedAt: row.dateOrNil(26),
-      answeredAt: row.dateOrNil(27))
+      answeredAt: row.dateOrNil(27), failure: row.textOrNil(28).map(Open.init(rawValue:)))
   }
 }
 
