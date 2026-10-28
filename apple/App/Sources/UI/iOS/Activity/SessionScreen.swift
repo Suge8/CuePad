@@ -48,7 +48,7 @@ struct SessionScreen: View {
             if shownEnd?.inTransit == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
-                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
+                PiSessionSubtitle(session: session, delivery: digest?.delivery, undelivered: PiChat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
             }
         } trailing: {
             if let session {

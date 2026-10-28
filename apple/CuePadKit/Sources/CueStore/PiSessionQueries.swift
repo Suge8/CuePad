@@ -123,16 +123,22 @@ extension CueStore {
 
   /// 待回复的会话（规则在 `PiSessionState.awaitsReply`），等得最久的在前：Cue 页的待回复提示与等你里的待回复（`CueTally.replies`）只读它。
   /// 只读留给你回、此刻歇着或出错的那几条，订阅同 `sessionsAskingYou`。
+  /// 留给你之后已经对它说了话（最近一条说给它的话晚于这次停下、没失败）的不算：话一发出就有人接手了，不等 Mac 送到、会话动起来
+  /// （`CueLeft` 在那时自然作废）——看板上它当场回到推进中、写话到哪了（`PiShown` 的 `PiDelivery`），"等你 N"当场少一件。
   public func sessionsAwaitingReply() throws -> [PiSessionState] {
     guard let cue = try cueDuty(), !cue.left.isEmpty else { return [] }
     let resting: [PiWorkState] = [.settled, .error]
     let candidates = "state IN (\(sqlList(resting))) AND sessionID IN (SELECT value FROM json_each(?))"
-    return try narrow(
+    let left = try narrow(
       .piSessionStates, column: "state", candidates: candidates, arguments: [JSONColumn.encode(cue.left.map(\.sessionID))],
       to: { PiWorkState(rawValue: $0).map(resting.contains) == true }
-    ) { rows in
-      try sessions(rows).filter { $0.awaitsReply(cue) }.sorted { ($0.stateSince, $0.sessionID) < ($1.stateSince, $1.sessionID) }
+    ) { rows in try sessions(rows).filter { $0.awaitsReply(cue) } }
+    let said = try latestDeliveries(to: left.map(\.sessionID))
+    return left.filter { session in
+      guard let request = said[session.sessionID] else { return true }
+      return request.createdAt <= session.stateSince || request.status == .known(.failed)
     }
+    .sorted { ($0.stateSince, $0.sessionID) < ($1.stateSince, $1.sessionID) }
   }
 
   private func sessions(_ rows: Set<Int64>) throws -> [PiSessionState] {

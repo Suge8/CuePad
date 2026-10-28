@@ -37,7 +37,8 @@ extension CueStore {
     """
   }
 
-  private func boardItems(_ tasks: [Card]) throws -> [CueBoardItem] {
+  /// 这些顶层任务各自的叶子与会话，规则同看板（`CueBoardItem.leaves`）：做完了的、等你占着的也按它取此刻那一步（任务看板的卡读它，`TaskBoard.read`）。
+  public func boardItems(_ tasks: [Card]) throws -> [CueBoardItem] {
     guard !tasks.isEmpty else { return [] }
     let links = try CardLinks(db, around: tasks.map(\.id))
     let homes = try cards(Set(tasks.map { links.home(of: $0.id) }))

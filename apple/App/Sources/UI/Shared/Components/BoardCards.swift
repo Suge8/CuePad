@@ -102,14 +102,17 @@ extension Workspace {
 /// 开头是这家 Agent 的品牌标（`AgentKind.mark`，任务是完成圈），标题是会话名，下沿是那条线（`BoardLine`，按 `BoardPulse` 画，右端写此刻状态多久与要你管的状态词），
 /// 看全部项目时标题前是它归处的项目小图形；悬停提示写项目与哪家 Agent。点了打开会话；长按与右键是会话的菜单（`SessionActions`，各处同一份）。
 struct BoardSessionCard: View {
-    let session: PiSessionState
+    /// 会话连同发给它的最近一条话（`TaskBoard.Work.agent`，与列同一次读）。
+    let agent: PiSessionListItem
     let project: Project?
     var moves = true
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
+    private var session: PiSessionState { agent.state }
+
     var body: some View {
-        let pulse = workspace.pulse(of: session)
+        let pulse = workspace.pulse(of: agent)
         let resting = pulse.tier == .resting
         BoardLink(to: .session(session)) {
             BoardCardLayout(advancing: true, pulse: pulse, moves: moves) {

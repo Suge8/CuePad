@@ -95,49 +95,23 @@ struct BoardPulse: Equatable {
 }
 
 extension Workspace {
-    /// 任务卡此刻的样子：看此刻干活的叶子交给的会话，没有再看任务自己的（同"下一步"的先后）；会话歇着、"下一步"不写它时也照样看，
-    /// 快满的上下文不因此漏掉。都没交给会话是歇着。
-    func pulse(for task: Card, lead: Card?, in agents: AgentLinks) -> BoardPulse {
-        guard let id = watched(task, lead: lead, in: agents), let agent = agent(of: id, in: agents) else { return BoardPulse() }
-        return BoardPulse(shown: agent.shown, session: agent.session, handoff: handoff(of: agent.session, shown: agent.shown))
-    }
-
-    /// 任务卡看谁交给的会话：此刻干活的叶子，没有再看任务自己。
-    private func watched(_ task: Card, lead: Card?, in agents: AgentLinks) -> UUID? {
-        [lead?.id, task.id].compactMap(\.self).first { agents.items[$0] != nil }
-    }
-
-    /// 任务卡看的是哪个会话（同 `pulse`），不推它此刻的样子：只要知道是谁时用（菜单里结束它、列读说过的话）。
-    func session(for task: Card, lead: Card?, in agents: AgentLinks) -> PiSessionState? {
-        watched(task, lead: lead, in: agents).flatMap { agents.items[$0]?.state }
-    }
-
-    /// 推进中一件看的是哪个会话（读说过的话，`SaidReading`）。
-    func sessionID(_ work: TaskBoard.Work, agents: AgentLinks) -> String? {
-        switch work.work {
-        case .task: work.item.flatMap { session(for: $0.task, lead: $0.leaf, in: agents)?.sessionID }
-        case .session(let session): session.sessionID
-        }
-    }
-
-    /// 推进中一件此刻的样子（`BoardPulse`）：任务同任务卡，会话看它自己（同会话卡）。
-    func pulse(_ work: TaskBoard.Work, agents: AgentLinks) -> BoardPulse {
-        switch work.work {
-        case .task: work.item.map { pulse(for: $0.task, lead: $0.leaf, in: agents) } ?? BoardPulse()
-        case .session(let session): pulse(of: session)
-        }
-    }
-
-    /// 没绑任务的会话卡此刻的样子。
-    func pulse(of session: PiSessionState) -> BoardPulse {
-        let shown = shown(session, delivery: services.liveSessions.deliveries[session.sessionID])
-        return BoardPulse(shown: shown, session: session, handoff: handoff(of: session, shown: shown))
+    /// 看板上一件此刻的样子：只看它写的那个会话（`TaskBoard.Item.agent`、`Work.agent`，与列同一次读到的），连同发给它的话（发出即"发送中"）；
+    /// Mac 上本机在线的会话换上桥上的实时状态。没有会话是歇着。任务行（项目页）给的是窗口那一份里交给这条的会话，规则相同。
+    func pulse(of agent: PiSessionListItem?) -> BoardPulse {
+        guard let agent else { return BoardPulse() }
+        #if os(macOS)
+        let live = withLiveState(agent)
+        #else
+        let live = agent
+        #endif
+        let shown = shown(live)
+        return BoardPulse(shown: shown, session: live.state, handoff: handoff(of: live.state, shown: shown))
     }
 
     /// 推进中从上到下的几组：置顶的任务（`Card.isPinned`）在最前，置顶的与其余的各自按档分（要你管 → 在跑 → 歇着，空的档不在内），
     /// 同一组保持原来的先后。置顶是你亲手定的先后，排在档之前。
-    func byAttention(_ work: [TaskBoard.Work], agents: AgentLinks) -> [(pinned: Bool, tier: BoardPulse.Tier, work: [TaskBoard.Work])] {
-        let tiered = work.map { (work: $0, tier: pulse($0, agents: agents).tier) }
+    func byAttention(_ work: [TaskBoard.Work]) -> [(pinned: Bool, tier: BoardPulse.Tier, work: [TaskBoard.Work])] {
+        let tiered = work.map { (work: $0, tier: pulse(of: $0.agent).tier) }
         return [true, false].flatMap { pinned in
             let tiers = Dictionary(grouping: tiered.filter { ($0.work.item?.task.isPinned == true) == pinned }, by: \.tier)
             return BoardPulse.Tier.allCases.compactMap { tier in tiers[tier].map { (pinned, tier, $0.map(\.work)) } }

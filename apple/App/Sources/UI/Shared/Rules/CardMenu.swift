@@ -4,7 +4,7 @@ import CueStore
 /// 动线是任务优先：建任务（标题下面写要交代的话）→ 开始（正文作为第一句交给 Agent，见 `TaskNext`）→ 完成并归档。
 /// 灵感与任务不互转，菜单里没有这一项：灵感要做，就拖到一条任务上接进它的正文，或拖到"添加任务"上照它新建一条（`Workspace.mergeIdea`、`newTask(fromIdea:)`）。
 /// 长按（Mac 右键）按组排，删除单独在最后；手机上的任务行不挂长按菜单（长按是拖动，见 `TaskLine`），其余操作在左滑的"更多"里（`more`），
-/// 看板的卡挂（按住不动出菜单，菜单出来后往菜单外一挪是拖，`BoardTaskCard`）；点一下进的是会话的任务（`Workspace.entersSession`），菜单第一项是"打开任务"（`open`）；
+/// 看板的卡挂（按住不动出菜单，菜单出来后往菜单外一挪是拖，`BoardTaskCard`）；点一下进的是会话的任务（`Workspace.enter`），菜单第一项是"打开任务"（`open`）；
 /// 打开是点按、完成是点圆圈、缩进是轻扫和拖放，这些不进菜单；低频的（换项目、复制）在任务气泡与纸页的"⋯"里（`more(for:)`）。
 /// 置顶：灵感的在"⋯"里（项目页任务纸下面那几行）；顶层任务的长按与"⋯"里都有（看板的推进中与已完成排在前面，绑着它的会话在会话段置顶）。
 /// 一行轻扫露出的动作也在这里（`swipes`）。删除只有一处（`Workspace.trash`，进回收站、提示里可撤销）：菜单、轻扫之外，
@@ -46,7 +46,7 @@ nonisolated enum CardMenu {
 
     /// 长按菜单，组间画分隔线。`selectable`：这张卡在能批量选择的地方（Mac 项目页的墙与列表），删除前多一项"选择"。
     /// `bindsSession`：这是 Mac 上的叶子任务（没有子任务），没做完时多一项"绑定会话"。
-    /// `opens`：点它进的是会话（`Workspace.entersSession`），最前面单独一组"打开任务"；点一下就是打开任务的不重复这一项。
+    /// `opens`：点它进的是会话（`Workspace.enter`），最前面单独一组"打开任务"；点一下就是打开任务的不重复这一项。
     /// `endsSession`：它此刻在用的会话还能结束，没做完时多一项"结束会话"。
     /// 任务：完成（或重新打开）、置顶（顶层的）与归档一组，结束会话与绑定会话（Mac 的叶子）一组，删除最后；空组不留。
     static func sections(for card: Card, selectable: Bool = false, bindsSession: Bool = false, opens: Bool = false, endsSession: Bool = false) -> [[Item]] {

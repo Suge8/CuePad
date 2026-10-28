@@ -55,6 +55,13 @@ extension Workspace {
         return TaskNext(shown: agent?.shown, session: agent?.session, startable: startable)
     }
 
+    /// 看板上一件的"下一步"：看卡上写的会话（`TaskBoard.Item.agent`，`shown` 是它此刻的样子），没有会话时此刻干活的叶子可以"开始"
+    /// （会话还在路上的不给）；完成了的不写。
+    func next(for item: TaskBoard.Item, shown: PiShown?) -> TaskNext? {
+        guard item.task.status != .done else { return nil }
+        return TaskNext(shown: shown, session: item.agent?.state, startable: item.reaching ? nil : item.leaf)
+    }
+
     /// 这条任务交给的会话与它此刻显示的状态（不论值不值得写进"下一步"），没交给会话为 nil：
     /// Mac 上本机在线的会话换上桥上的实时状态。"下一步"与推进中的档（`BoardPulse`）都读它。
     func agent(of task: UUID, in agents: AgentLinks) -> (shown: PiShown, session: PiSessionState)? {

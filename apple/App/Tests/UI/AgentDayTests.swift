@@ -94,7 +94,7 @@ struct AgentDayTests {
         app.services.pi.setDraft(ext.id, PiDraft(text: "先看", since: .now))
         let row = try await item("atlas")
         #expect(workspace.shown(row).label == "输出中")
-        #expect(workspace.shownInHeader(row.state).label == "输出中")
+        #expect(workspace.shownInHeader(row.state, delivery: row.delivery).label == "输出中")
 
         app.services.pi.setDraft(ext.id, nil)
         #expect(workspace.shown(row).label == "思考中")

@@ -5,7 +5,7 @@ import SwiftUI
 /// 任务行左滑"⋯ 更多"长出的气泡：从按下的那一下长出来（同任务气泡，`PanelStyle.bubble`）。
 nonisolated struct CardMoreRequest: Identifiable, Equatable {
     let card: Card
-    /// 点这一行进的是会话（`Workspace.entersSession`）：气泡里先是"打开任务"。
+    /// 点这一行进的是会话（`Workspace.enter`）：气泡里先是"打开任务"。
     let opens: Bool
     let source: BubbleSource
     var id: UUID { card.id }

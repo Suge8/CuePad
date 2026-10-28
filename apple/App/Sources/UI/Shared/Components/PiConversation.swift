@@ -86,11 +86,13 @@ struct PiConversation: View {
         #endif
     }
 
-    /// 对话末尾：出错的原因（Agent 已把这次错误写成最后一条回答时不再重复）、正在说的话或处理中的进展（带子代理）。
+    /// 对话末尾：出错的原因（Agent 已把这次错误写成最后一条回答时不再重复；出错之后又说了话的不写，那句话接在后面、写着它到哪了）、
+    /// 正在说的话或处理中的进展（带子代理）。
     /// 进展的第一行一直占着位置（`ChatLiveSlot`，没有时留白）：一轮开始、结束时对话不跟着跳；进展往下长出的几步是内容。
     /// 它排在最后：回复框上方的说明（`composerNotice`）落在这段留白里，盖不到上面的内容。
     @ViewBuilder private var ending: some View {
-        if session.state == .known(.error), !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
+        if session.state == .known(.error), PiChat.outgoing(deliveries, messages: messages).isEmpty,
+           !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
             Callout(.failed, text: session.detail ?? String(localized: "Mac 没有说明原因"))
         }
         #if os(macOS)
@@ -248,6 +250,8 @@ extension PiConversation {
 /// 最前面写是哪家 Agent（`AgentMark`），歇着时也写；歇着（该你了、新会话、有新回复）时只有它。所在不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
+    /// 发给它的最近一条话（`PiSessionListItem.delivery` 的取法）：停着时状态写它到哪了。
+    let delivery: DeliveryRequest?
     var undelivered: String?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -256,7 +260,7 @@ struct PiSessionSubtitle: View {
     @State private var syncing = false
 
     var body: some View {
-        let shown = workspace.shownInHeader(session)
+        let shown = workspace.shownInHeader(session, delivery: delivery)
         let speaks = syncing || shown.isRunning || shown.needsYou || [.ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark
         // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
