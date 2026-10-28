@@ -11,7 +11,7 @@ import SwiftUI
 /// 卡上只能答：别的话在 Cue 页底下的输入框说，一开口 Cue 的提问就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。
 /// Cue 停用着时卡照样露、Cue 的选项停用并写"启用后再答"（`CueChoices`）。答了等库里那件结束才换下一件。
 struct CueWaitDock: View {
-    let waiting: [TaskBoard.Wait]
+    let waiting: [CueWait]
     /// 要露的那件（`Workspace.cueAsking`）；换一件写回那里。
     let asking: String?
     /// 提问点名的图（`CueThread.shots`）
@@ -41,7 +41,7 @@ struct CueWaitDock: View {
 
     /// 页打开时已经在等的那张随页一起排出来、不升起（同 `follow` 的头一次）：等 `onChange` 再放的话卡晚一次更新才排，
     /// 对话按它让出的高又要重排一遍。
-    init(waiting: [TaskBoard.Wait], asking: String?, shots: [UUID: [CueShown]], open: @escaping (PreviewOpening) -> Void, moving: Binding<Bool>) {
+    init(waiting: [CueWait], asking: String?, shots: [UUID: [CueShown]], open: @escaping (PreviewOpening) -> Void, moving: Binding<Bool>) {
         self.waiting = waiting
         self.asking = asking
         self.shots = shots
@@ -52,11 +52,11 @@ struct CueWaitDock: View {
     }
 
     /// 选中的那件：还在等就是它，不然是第一件。
-    static func current(in waiting: [TaskBoard.Wait], asking: String?) -> TaskBoard.Wait? {
+    static func current(in waiting: [CueWait], asking: String?) -> CueWait? {
         pick(in: waiting, asking: asking)?.wait
     }
 
-    private static func pick(in waiting: [TaskBoard.Wait], asking: String?) -> CueWaitPick? {
+    private static func pick(in waiting: [CueWait], asking: String?) -> CueWaitPick? {
         guard !waiting.isEmpty else { return nil }
         return CueWaitPick(waits: waiting, index: waiting.firstIndex { $0.id == asking } ?? 0)
     }

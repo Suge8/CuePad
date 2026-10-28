@@ -54,8 +54,8 @@ extension CueQuestionLine where Below == EmptyView {
         self.init(message: message, tone: tone) { EmptyView() }
     }
 
-    /// 拍板卡上的一件（Cue 的提问或会话在问的，`TaskBoard.Wait.asked`）。
-    init(wait: TaskBoard.Wait) {
+    /// 拍板卡上的一件（Cue 的提问或会话在问的，`CueWait.asked`）。
+    init(wait: CueWait) {
         let asked = wait.asked
         self.init(question: asked.line, note: asked.detail) { EmptyView() }
     }

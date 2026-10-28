@@ -25,7 +25,7 @@ struct BoardWaitCard: View {
     private var card: some View {
         BoardLink(to: held.session) {
             BoardCardLayout(advancing: false, pulse: leftPulse) {
-                PiStateGlyph(status: held.asks == nil ? .awaitsReply : .asking).font(.system(size: TaskMetrics.ring))
+                PiStateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
                     .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
                 if held.item?.task.isPinned == true { BoardPin() }
@@ -34,7 +34,7 @@ struct BoardWaitCard: View {
             .boardCard(.waiting)
         }
         .contextMenu { menu }
-        .accessibilityLabel(Dotted(held.title, held.asks == nil ? String(localized: "待回复") : String(localized: "等你拍板")).spoken)
+        .accessibilityLabel(Dotted(held.title, held.deciding ? String(localized: "等你拍板") : String(localized: "待回复")).spoken)
         .accessibilityActions { menu }
         .boardDim(project: held.project)
     }
@@ -61,7 +61,7 @@ struct BoardWaitCard: View {
     /// 项目、问句（待回复写"待回复"）、等了多久，一行。
     private func tip(at now: Date) -> String {
         Dotted(
-            workspace.catalog?.project(held.project)?.shownName, held.asks?.asked.line ?? String(localized: "待回复"),
+            workspace.catalog?.project(held.project)?.shownName, held.deciding ? held.session.asked.line : String(localized: "待回复"),
             PiClock.Waited(since: held.session.stateSince).format(now)
         ).visible
     }

@@ -4,7 +4,7 @@ import Testing
 @testable import CuePad
 
 /// 等你分拍板与待回复（WORDS.md）：Cue 留给你回、此刻歇着的会话是待回复——Cue 页不进拍板卡、在上方的待回复提示里，等得最久的在前；
-/// 进展页的等你列两种都放（拍板在前），绑着的任务从推进中挪进等你，"等你 N"两种一起数；名牌的数字账拍板与待回复各数各的（数全部，不只列得下的那几行），
+/// 进展页的等你列放在问与待回复的会话（在问的在前），绑着的任务从推进中挪进等你，Cue 的提问只在 Cue 页、不多出卡；"等你 N"两种一起数；名牌的数字账拍板与待回复各数各的（数全部，不只列得下的那几行），
 /// "等你 N"与 App 图标角标是两者之和（`CueNow.needsYou`）。
 /// 点提示：几个时去进展页的会话段，待回复紧随等你确认、等得最久的在前；对其中一个说了话它就不再待回复，只剩一个时点了直接进那个会话。
 @MainActor
@@ -43,12 +43,18 @@ struct AwaitingReplyTests {
         #expect(page.waiting.map(\.id) == ["session/deploy"])
         #expect(page.replies.map(\.sessionID) == ["glass", "header"])  // 等得最久的在前；Cue 没留给你的不算
         let board = try await TaskBoard.read(from: store)
-        #expect(board.held.map(\.session.sessionID) == ["deploy", "glass", "header"] && board.held.map { $0.asks != nil } == [true, false, false])
+        #expect(board.held.map(\.session.sessionID) == ["deploy", "glass", "header"] && board.held.map(\.deciding) == [true, false, false])
         #expect(board.held[1].item?.task.id == dock.id && !board.advancing.contains { $0.item?.id == dock.id })  // 被待回复占着：只在等你
         #expect(board.held.map(\.title) == ["deploy", "底栏换玻璃", "打磨手机 Cue 顶栏"])  // 写这件事本身的名字
         var cue = try await now()
         #expect(board.count(.waiting) == 3 && cue.needsYou == 3)  // "等你 N"两种一起数，看板等你列同数
         #expect(cue.spoken == "1 件拍板，2 件待回复" && cue.items.prefix(3).map(\.kind) == [.asks, .reply, .reply])
+
+        // Cue 在底栏那件任务上也问一句：只在 Cue 页答，看板不多出卡，那件仍是待回复那一张
+        let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "把底栏改动推送到 origin/main"), task: dock.id)
+        #expect(try await TaskBoard.read(from: store).held == board.held)
+        #expect(try await thread().waiting.map(\.id) == ["session/deploy", "message/\(push.id.uuidString)"])
+        try await rig.services.answerCueQuestion(push.id, CueAsk.once)
 
         // 答了拍板：名牌只剩待回复
         try await recorder.update(sessionID: "deploy", state: .thinking)

@@ -73,49 +73,17 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
     }
 
-    /// 一件等你：落在任务上的带那件任务。
-    struct Wait: Identifiable, Sendable, Equatable {
-        var wait: CueTally.Wait
-        var item: Item?
-        var id: String { wait.id }
-
-        /// 这件事叫什么（拍板卡的眉题）：落在的任务名，没绑任务的会话名；不落在任务上的 Cue 提问没有这件事，为 nil。
-        var title: String? {
-            if let item { return item.task.title }
-            if case .session(let session, _) = wait { return session.title }
-            return nil
-        }
-
-        /// 等了多久从哪算：Cue 提问的时刻，会话进入等你的时刻。
-        var since: Date {
-            switch wait {
-            case .message(let message, _): message.createdAt
-            case .session(let session, _): session.stateSince
-            }
-        }
-
-        /// 归哪个项目（眉题上写的是它）：落在的任务的项目，没落在任务上的会话看它的归处（`home`），
-        /// Cue 的一般提问是它问时的范围（`CueMessage.asked`），没给范围的不属于哪个项目。
-        var project: UUID? {
-            if let item { return item.task.projectID }
-            switch wait {
-            case .session(let session, _): return TaskBoard.home(session)
-            case .message(let message, _): return message.asked?.project
-            }
-        }
-    }
-
     /// 没绑任务的会话归哪个项目：它的项目，没有项目的归默认项目（同 `PiSessionListItem.home`）。
     static func home(_ session: PiSessionState) -> UUID { session.projectID ?? Project.defaultID }
 
-    /// 等你列的一张卡：一个在等你的会话，在问你（拍板，`asks` 是那一问）或待回复。写的名字同别的列：绑着的任务名，没绑任务的会话名。
+    /// 等你列的一张卡：一个在等你的会话，在问你（拍板）或待回复。写的名字同别的列：绑着的任务名，没绑任务的会话名。
     struct Held: Identifiable, Sendable, Equatable {
         /// 同推进中那张卡的身份（`Item.flight`、`CueWork.id`）：任务是 `task/…`（并行的几步同时等你时只有第一张是），其余是 `session/…`，换列认得出是同一张。
         var id: String
         var session: PiSessionState
         var item: Item?
-        /// 会话在问你的那一问（与 Cue 页拍板卡同一份，`waits`）；待回复为 nil。
-        var asks: Wait?
+        /// 会话在问你（拍板）；否则待回复。
+        var deciding: Bool
 
         var title: String { item?.task.title ?? session.title }
         /// 按项目筛时归哪个项目：绑着的任务的项目，否则会话的归处（`home`）。
@@ -132,17 +100,19 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
     static let empty = TaskBoard(todo: [], advancing: [], held: [], done: [], earlier: [])
 
-    /// 等你列的卡：会话在问的在前、待回复的在后（`waits`、`CueTally.replies` 本来就各按等得最久的在前）；Cue 的提问不在内。
-    private static func heldCards(_ waits: [Wait], _ replies: [(session: PiSessionState, item: Item?)]) -> [Held] {
+    /// 等你列的卡：会话在问的在前、待回复的在后，各自等得最久的在前（`CueTally.replies` 本来就是）；Cue 的提问不上看板。
+    private static func heldCards(
+        _ tally: CueTally, from store: isolated CueStore, item: (Card) throws -> Item
+    ) throws -> [Held] {
+        let asking = tally.waiting.compactMap { wait in if case .session(let session, let task) = wait { (session, task) } else { nil } }
+            .sorted { ($0.0.stateSince, $0.0.sessionID) < ($1.0.stateSince, $1.0.sessionID) }
+        let waiting = asking.map { ($0.0, $0.1, true) } + tally.replies.map { ($0.session, $0.task, false) }
         var flown: Set<UUID> = []
-        func card(_ session: PiSessionState, _ item: Item?, asks: Wait?) -> Held {
+        return try waiting.map { session, task, deciding in
+            let item = try task.flatMap { try store.card($0) }.map(item)
             let id = item.flatMap { flown.insert($0.id).inserted ? $0.flight : nil } ?? "session/\(session.sessionID)"
-            return Held(id: id, session: session, item: item, asks: asks)
+            return Held(id: id, session: session, item: item, deciding: deciding)
         }
-        let asking = waits.compactMap { wait in
-            if case .session(let session, _) = wait.wait { card(session, wait.item, asks: wait) } else { nil }
-        }
-        return asking + replies.map { card($0.session, $0.item, asks: nil) }
     }
 
     /// 比 `before` 换了列的卡（`Item.flight`、`Work.id`、`Held.id`）与它原来在哪一列：看板据此让它从原处飞过去（`boardFlight`）。
@@ -209,12 +179,6 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return TaskMove(slot: .top(project: dragged.projectID), after: after)
     }
 
-    /// 等你那几件（Cue 页的拍板卡读同一份，`CueThread`）：最早的在前（等得最久的先答），落在任务上的带那件任务（`item` 按读的地方要的写）。
-    static func waits(_ waiting: [CueTally.Wait], from store: isolated CueStore, item: (Card) throws -> Item) throws -> [Wait] {
-        try waiting.map { wait in Wait(wait: wait, item: try wait.task.flatMap { try store.card($0) }.map(item)) }
-            .enumerated().sorted { ($0.element.since, $0.offset) < ($1.element.since, $1.offset) }.map(\.element)
-    }
-
     static func read(from store: isolated CueStore, now: Date = .now) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         let steps = try store.subtaskProgress()
@@ -257,9 +221,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
                 case .session(let state): Work(work: work, loose: agents[state.sessionID] ?? PiSessionListItem(state: state))
                 }
             },
-            held: heldCards(
-                try waits(tally.waiting, from: store, item: item),
-                try tally.replies.map { ($0.session, try $0.task.flatMap { try store.card($0) }.map(item)) }),
+            held: try heldCards(tally, from: store, item: item),
             done: try (pinned + rest[..<split]).map(finishedItem),
             earlier: try rest[split...].map(finishedItem))
     }

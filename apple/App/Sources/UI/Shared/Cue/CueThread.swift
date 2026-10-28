@@ -7,8 +7,8 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
     /// 你的回答在读到的范围里，它引用的那条提问也要在，点引用才回得去。
     let messages: [CueMessage]
-    /// 拍板（Cue 的提问与会话在问的，同进展页等你列，`TaskBoard.waits`），等得最久的在前。
-    let waiting: [TaskBoard.Wait]
+    /// 拍板（Cue 的提问与会话在问的，`CueWait.read`），等得最久的在前。
+    let waiting: [CueWait]
     /// 待回复的会话（`CueStore.sessionsAwaitingReply`），等得最久的在前：拍板卡上方那条提示（`CueReplyTip`）。
     let replies: [PiSessionState]
     /// Cue 点名要你看的图（`CueMessage.shots`：提问的与做完的结果），按消息的 id：只有点了名、那一份还在的
@@ -29,7 +29,7 @@ nonisolated struct CueThread: Equatable, Sendable {
 
     /// `lines`：定时叫醒 Cue 的那几轮，到点的那几条定时（按 id）。
     init(
-        messages: [CueMessage], waiting: [TaskBoard.Wait], replies: [PiSessionState], shots: [UUID: [CueShown]],
+        messages: [CueMessage], waiting: [CueWait], replies: [PiSessionState], shots: [UUID: [CueShown]],
         unread: Set<UUID>, lines: [UUID: CueMemoryLine]
     ) {
         self.messages = messages
@@ -56,11 +56,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     static func read(from store: isolated CueStore) throws -> CueThread {
         let recent = try store.cueMessages(limit: limit)
         let messages = try store.cueQuestionsAnswered(outside: recent) + recent
-        // 提到的一次取完子任务进度，不逐件读细节
-        let progress = try store.subtaskProgress()
-        let waits = try TaskBoard.waits(try store.cueWaiting(), from: store) { task in
-            TaskBoard.Item(task: task, steps: progress[task.id])
-        }
+        let waits = try CueWait.read(try store.cueWaiting(), from: store)
         let waiting = waits.compactMap(\.message)
         let pointed = (messages + waiting).filter { !$0.shots.isEmpty }
         let previews = try store.previews(Set(pointed.flatMap { $0.shots.map(\.preview) }))
@@ -217,9 +213,3 @@ nonisolated struct CueShown: Identifiable, Equatable, Sendable {
     var id: UUID { preview.id }
 }
 
-nonisolated extension TaskBoard.Wait {
-    /// Cue 的提问；会话在问的是 nil。
-    var message: CueMessage? {
-        if case .message(let message, _) = wait { message } else { nil }
-    }
-}
