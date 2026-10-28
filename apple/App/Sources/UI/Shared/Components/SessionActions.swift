@@ -75,10 +75,3 @@ enum SessionAsk: Identifiable, Equatable {
         }
     }
 }
-
-extension Workspace {
-    /// 置顶、取消置顶一条卡（灵感与顶层任务；会话的置顶也落在它绑着的任务上）。
-    func setPinned(_ card: UUID, _ pinned: Bool) {
-        perform { try await $0.updateCard(card) { $0.isPinned = pinned } }
-    }
-}

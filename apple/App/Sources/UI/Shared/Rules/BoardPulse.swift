@@ -107,10 +107,15 @@ extension Workspace {
         [lead?.id, task.id].compactMap(\.self).first { agents.items[$0] != nil }
     }
 
-    /// 推进中一件看的是哪个会话（同 `pulse`），不推它此刻的样子：列只要知道是谁时用（读说过的话，`SaidReading`）。
+    /// 任务卡看的是哪个会话（同 `pulse`），不推它此刻的样子：只要知道是谁时用（菜单里结束它、列读说过的话）。
+    func session(for task: Card, lead: Card?, in agents: AgentLinks) -> PiSessionState? {
+        watched(task, lead: lead, in: agents).flatMap { agents.items[$0]?.state }
+    }
+
+    /// 推进中一件看的是哪个会话（读说过的话，`SaidReading`）。
     func sessionID(_ work: TaskBoard.Work, agents: AgentLinks) -> String? {
         switch work.work {
-        case .task: work.item.flatMap { item in watched(item.task, lead: item.leaf, in: agents).flatMap { agents.items[$0]?.state.sessionID } }
+        case .task: work.item.flatMap { session(for: $0.task, lead: $0.leaf, in: agents)?.sessionID }
         case .session(let session): session.sessionID
         }
     }
