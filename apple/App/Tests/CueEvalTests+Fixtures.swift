@@ -72,7 +72,7 @@ extension CueEvalTests {
         $ apple/scripts/xc.sh check
         lint ✔  CuePadKit build ✔  iOS build ✔
         ```
-        截图都发到手机了：一路的方案稿 A/B、中途两版，和最终版浅色、深色各一张。
+        截图都发到手机了：一路的方案稿 A/B、中途两版，和最终版。
         """
 
     static let doneReply = """

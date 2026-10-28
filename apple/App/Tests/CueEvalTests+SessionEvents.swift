@@ -141,16 +141,16 @@ extension CueEvalTests {
     @Test func u做完只挂最终成果() async throws {
         try await CueEval.run(
             "u-做完只挂最终成果",
-            expect: "会话做完侧栏改版，一路发过方案稿、中途两版与最终版浅深两张（共 6 份），回复带证据："
-                + "done 的 show 挂最终版浅色、深色，每张一句看什么；方案稿、中途稿不挂"
+            expect: "会话做完侧栏改版，一路发过方案稿、中途两版与最终版（共 5 份），回复带证据："
+                + "done 的 show 挂最终版，每张一句看什么；方案稿、中途稿不挂"
         ) { eval in
             let rig = eval.rig
             let work = try await rig.working(
-                "收口 Mac 侧栏", "Mac 侧栏收口：去掉 Agent 区，会话数并进项目行。做完的标准：项目已有的检查通过；最终版浅色、深色截图发到手机。")
+                "收口 Mac 侧栏", "Mac 侧栏收口：去掉 Agent 区，会话数并进项目行。做完的标准：项目已有的检查通过；最终版截图发到手机。")
             for batch in [
                 [("plan-a-mac.png", "方案稿 A：会话单列一区"), ("plan-b-mac.png", "方案稿 B：会话数并进项目行")],
                 [("wip-1-mac.png", "中途一版：分组标题太挤"), ("wip-2-mac-dark.png", "中途二版：深色下状态标错位")],
-                [("final-light-mac.png", "最终版浅色：项目行带会话数"), ("final-dark-mac.png", "最终版深色：项目行带会话数")],
+                [("final-mac.png", "最终版：项目行带会话数")],
             ] {
                 try await rig.shots(batch, from: work)
             }
@@ -162,7 +162,7 @@ extension CueEvalTests {
             let report = try await eval.said().last { $0.taskID == work.task.id && $0.choices == nil }
             return [
                 Check(.result, "done 了", done != nil),
-                Check(.tool, "挂了最终版浅色与深色", Set(shown.map(\.name)).isSuperset(of: ["final-light-mac.png", "final-dark-mac.png"])),
+                Check(.tool, "挂了最终版", shown.contains { $0.name == "final-mac.png" }),
                 Check(.tool, "只挂最终版（方案稿、中途稿不挂）", !shown.isEmpty && shown.allSatisfy { $0.title.hasPrefix("最终版") }),
                 Check(.tool, "每张一句看什么", !picked.isEmpty && picked.allSatisfy { ($0["look"] as? String)?.isEmpty == false }),
                 Check(.tool, "结果上就是点名的这几张", report?.shots.map(\.preview) == shown.map(\.id)),
