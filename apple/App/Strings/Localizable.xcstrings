@@ -12867,6 +12867,22 @@
         }
       }
     },
+    "换个模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change Model"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换个模型"
+          }
+        }
+      }
+    },
     "换个词或条件试试" : {
       "localizations" : {
         "en" : {
@@ -17611,6 +17627,22 @@
         }
       }
     },
+    "登录失效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signed out"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录失效"
+          }
+        }
+      }
+    },
     "登录时打开" : {
       "localizations" : {
         "en" : {
@@ -21851,6 +21883,22 @@
         }
       }
     },
+    "连不上" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't connect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连不上"
+          }
+        }
+      }
+    },
     "连不上 Codex 的常驻服务" : {
       "localizations" : {
         "en" : {
@@ -23148,7 +23196,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usage limit reached"
+            "value" : "Limit reached"
           }
         },
         "zh-Hans" : {

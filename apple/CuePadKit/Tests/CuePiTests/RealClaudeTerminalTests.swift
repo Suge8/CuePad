@@ -54,8 +54,8 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// 一轮出错：按 Claude Code 报的错误类型归类成一句人话；它把错误也写成了对话里的最后一条回答，对话里只显示那一处。
-    @Test func aFailedTurnIsClassifiedAndShownOnce() async throws {
+    /// 一轮出错：按 Claude Code 报的错误类型归类成一句人话与出错的种类。
+    @Test func aFailedTurnIsClassified() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.startConnected()
             let terminal = try await testbed.terminal(["--model", "claude-nosuch-9"])
@@ -67,8 +67,7 @@ struct RealClaudeTerminalTests {
             }
             let detail = try #require(testbed.bridge.session(id: session.id)?.detail)
             #expect(detail.hasPrefix("模型不存在或没有权限"), "\(detail)")
-            let reply = try reply()
-            #expect(PiErrorSummary.echoes(reply, line: detail), "\(String(describing: reply)) / \(detail)")
+            #expect(testbed.bridge.session(id: session.id)?.failure == .other)
         }
     }
 

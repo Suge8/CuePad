@@ -89,7 +89,7 @@ struct StyleBoard: View {
     }
 
     private static let statuses: [PiShown.Status] = [
-        .working(.thinking), .delivery(.inTransit(.sending)), .delivery(.inTransit(.waking)), .asking, .awaitsReply, .failed, .delivery(.failed(.timedOut)),
+        .working(.thinking), .delivery(.inTransit(.sending)), .delivery(.inTransit(.waking)), .asking, .awaitsReply, .failed(.other), .delivery(.failed(.timedOut)),
         .cueAsking, .unread, .idle, .resting, .fresh, .ended, .interrupted, .unknown,
     ]
 

@@ -37,11 +37,11 @@ public actor PiStateRecorder {
     self.timing = timing
   }
 
-  /// 没给的字段（nil）沿用上一次的值；`question` 与 `detail` 每次整体替换。
+  /// 没给的字段（nil）沿用上一次的值；`question`、`detail` 与 `failure` 每次整体替换。
   /// 返回这次写入置位的通知标志（没有置位为 nil）：调用方据此立即上传这一条，通知不排在其余待推送后面。
   @discardableResult
   public func update(
-    sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, directory: String? = nil,
+    sessionID: String, state: PiWorkState, detail: String? = nil, failure: PiFailure? = nil, title: String? = nil, directory: String? = nil,
     projectID: UUID? = nil, question: PiQuestion? = nil, times: PiTimes? = nil, turnStartedAt: Date? = nil, launchToken: String? = nil, hosted: Bool? = nil,
     subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil, context: PiContextUsage? = nil, commands: [PiSlashCommand]? = nil,
     agent: AgentKind? = nil, process: PiProcess? = nil
@@ -53,6 +53,7 @@ public actor PiStateRecorder {
     var content = session.pace.content ?? PiStateContent(state: state, times: PiTimes(stateSince: now, busySince: nil))
     content.state = state
     content.detail = detail
+    content.failure = failure
     content.question = question
     if let title { content.title = title }
     if let directory { content.directory = directory }
