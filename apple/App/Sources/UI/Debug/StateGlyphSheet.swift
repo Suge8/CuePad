@@ -69,7 +69,7 @@ struct StateGlyphSheet: View {
         ("该你了", .idle),
         ("等 Cue 回答", .cueAsking),
         ("有新回复", .unread),
-        ("出错", .failed),
+        ("出错", .failed(.other)),
         ("没能送达", .delivery(.failed(.timedOut))),
         ("被打断", .interrupted),
         ("歇着", .resting),

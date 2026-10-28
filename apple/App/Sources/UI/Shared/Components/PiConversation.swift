@@ -7,7 +7,7 @@ import CuePi
 
 /// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧一颗四角同圆的气泡（`BubbleLook.session`；对话气泡只在 Cue 页），Pi 的回答左侧全宽 Markdown（一直展开），
 /// 每轮回答上方一块这一轮的经过（`RoundProcess`）；你发出、Agent 还没读到的话接在末尾，气泡下写送达情况，失败的可重发；Pi 在处理时末尾是这一轮到目前为止的经过与正在跑的那一步（`LiveStatus`；计时在顶上一行），
-/// 有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
+/// 有子代理时下面逐个列出它们此刻的状态。滚动与输入框由平台放。
 /// Mac 上本机在线的会话（`slot`）在末尾逐字长出正在说的话（`SessionDraft`），说完落库时原位换下：这时对话里的回答都不淡入。
 /// 减弱动态效果下也只有淡入淡出。
 struct PiConversation: View {
@@ -86,15 +86,10 @@ struct PiConversation: View {
         #endif
     }
 
-    /// 对话末尾：出错的原因（Agent 已把这次错误写成最后一条回答时不再重复；出错之后又说了话的不写，那句话接在后面、写着它到哪了）、
-    /// 正在说的话或处理中的进展（带子代理）。
+    /// 对话末尾：正在说的话或处理中的进展（带子代理）；出错不在这里，贴在回复框上方（`PiFailureDock`）。
     /// 进展的第一行一直占着位置（`ChatLiveSlot`，没有时留白）：一轮开始、结束时对话不跟着跳；进展往下长出的几步是内容。
     /// 它排在最后：回复框上方的说明（`composerNotice`）落在这段留白里，盖不到上面的内容。
     @ViewBuilder private var ending: some View {
-        if session.state == .known(.error), PiChat.outgoing(deliveries, messages: messages).isEmpty,
-           !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
-            Callout(.failed, text: session.detail ?? String(localized: "Mac 没有说明原因"))
-        }
         #if os(macOS)
         if let slot {
             SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }?.at, floating: floating)

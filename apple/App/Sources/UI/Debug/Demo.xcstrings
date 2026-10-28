@@ -4039,6 +4039,22 @@
         }
       }
     },
+    "把登录回调改走统一网关，改完跑一遍集成测试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Route the login callback through the unified gateway, then run the integration tests"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把登录回调改走统一网关，改完跑一遍集成测试"
+          }
+        }
+      }
+    },
     "把登录回调的超时修复推送到 origin/main" : {
       "localizations" : {
         "en" : {
@@ -5543,6 +5559,22 @@
         }
       }
     },
+    "查一下钥匙串读不到令牌的原因" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find out why the token can't be read from the keychain"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查一下钥匙串读不到令牌的原因"
+          }
+        }
+      }
+    },
     "查一遍域名哪些快到期，续上" : {
       "localizations" : {
         "en" : {
@@ -5619,22 +5651,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型拒绝了请求（400）"
-          }
-        }
-      }
-    },
-    "模型拒绝了请求（400）：prompt is too long" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The model rejected the request (400): prompt is too long"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模型拒绝了请求（400）：prompt is too long"
           }
         }
       }
@@ -6339,6 +6355,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登录回调超时"
+          }
+        }
+      }
+    },
+    "登录失效（401）：OAuth token has expired" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signed out (401): OAuth token has expired"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录失效（401）：OAuth token has expired"
           }
         }
       }
@@ -8055,6 +8087,22 @@
         }
       }
     },
+    "连不上模型服务（504）：upstream request timed out" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't reach the model service (504): upstream request timed out"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连不上模型服务（504）：upstream request timed out"
+          }
+        }
+      }
+    },
     "连服务器执行命令、传文件" : {
       "localizations" : {
         "en" : {
@@ -8643,6 +8691,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "预发上验过了，截图在这里。重连用例都过了：\n\n```\n$ swift test --filter Reconnect\n✔ %1$@ (0.21s)\n✔ %2$@ (0.48s)\n✔ %3$@ (0.12s)\n✔ %4$@ (0.09s)\nExecuted 4 tests, with 0 failures\n```\n\n要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。"
+          }
+        }
+      }
+    },
+    "额度用完（429）：Monthly usage limit reached. Enable available balance usage to continue." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage limit reached (429): Monthly usage limit reached. Enable available balance usage to continue."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "额度用完（429）：Monthly usage limit reached. Enable available balance usage to continue."
           }
         }
       }

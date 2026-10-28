@@ -53,7 +53,10 @@ extension DebugScene {
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: String(localized: "部署到生产吗？\n会替换当前线上的 1.4.2", table: "Demo")))),
             ("review", .delegating, nil, nil, DemoRecap(lastPrompt: String(localized: "让子代理分头审查这两个分支", table: "Demo"))),
             ("migrate", .compacting, nil, "Flow", DemoRecap(lastPrompt: String(localized: "把迁移脚本拆成三步", table: "Demo"), lastReply: String(localized: "拆好了，三步各自能回滚。", table: "Demo"))),
-            ("billing", .error, String(localized: "模型拒绝了请求（400）：prompt is too long", table: "Demo"), String(localized: "闲鱼", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把整个 billing 目录读一遍，总结计费规则", table: "Demo"))),
+            // 出错的三种（`PiFailure`，按原因文字分）：额度用完（换模型）、连不上（重试）、登录失效（换模型）
+            ("billing", .error, String(localized: "额度用完（429）：Monthly usage limit reached. Enable available balance usage to continue.", table: "Demo"), String(localized: "闲鱼", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把整个 billing 目录读一遍，总结计费规则", table: "Demo"))),
+            ("gateway", .error, String(localized: "连不上模型服务（504）：upstream request timed out", table: "Demo"), String(localized: "圆桌", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把登录回调改走统一网关，改完跑一遍集成测试", table: "Demo"))),
+            ("keychain", .error, String(localized: "登录失效（401）：OAuth token has expired", table: "Demo"), "CuePad", DemoRecap(lastPrompt: String(localized: "查一下钥匙串读不到令牌的原因", table: "Demo"))),
             ("notes", .settled, nil, "Career", DemoRecap(
                 lastPrompt: String(localized: "整理一下这周的会议记录", table: "Demo"), lastReply: String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。", table: "Demo"))),
             // 歇着、Cue 已接手这次停下（转给了 cuepad，`seedCue`）：会话行与看板卡写 Cue 对它做的那件事
@@ -84,11 +87,11 @@ extension DebugScene {
         }
         // 此刻的状态从几分钟前起（在问的等了多久、在跑的跑了多久、出错的停了多久都从这一刻算；不给就是写入这一刻："刚刚"）
         let since: [String: TimeInterval] = [
-            "deploy": 21, "rename": 14, "homepage": 9, "notes-edit": 4, "atlas": 3, "cuepad": 5, "review": 4.5, "migrate": 9, "billing": 19, "scratch": 2, "docs": 6,
+            "deploy": 21, "rename": 14, "homepage": 9, "notes-edit": 4, "atlas": 3, "cuepad": 5, "review": 4.5, "migrate": 9, "billing": 19, "gateway": 7, "keychain": 26, "scratch": 2, "docs": 6,
         ]
         // 你这边之前说过的几句在几分钟前（看板推进中卡下沿那条线的过去一句一颗点）；有演示对话的会话（`seedChats`）用对话里的
         let said: [String: [TimeInterval]] = [
-            "billing": [82, 51, 19], "rename": [120, 42, 14], "review": [95, 24, 4.5], "cuepad": [76, 28, 5], "migrate": [63, 9],
+            "billing": [82, 51, 19], "gateway": [33, 7], "keychain": [26], "rename": [120, 42, 14], "review": [95, 24, 4.5], "cuepad": [76, 28, 5], "migrate": [63, 9],
         ]
         for (id, state, detail, name, recap) in sessions {
             let messages = (said[id] ?? []).enumerated().map { index, minutes in

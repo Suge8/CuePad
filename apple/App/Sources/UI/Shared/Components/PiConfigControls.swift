@@ -44,6 +44,16 @@ struct PiModelMenu {
 }
 
 
+extension PiModelMenu {
+    /// 一个会话的模型菜单（回复框的模型胶囊与出错块的"换个模型"同一份）：选了就换这个会话的模型。
+    static func session(_ session: PiSessionState, models: [PiModelOption], current: PiModelKey?, in workspace: Workspace) -> PiModelMenu {
+        PiModelMenu(models: models, current: current) { model in
+            workspace.attempt { _ = try await workspace.services.configure(PiConfig(model: model.key), for: session) }
+        }
+    }
+}
+
+
 /// 输入框工具排里的模型与思考强度（会话页回复框 `SessionConfigControls`；新会话与 Cue（`init(choice:)`）在最左再放一枚 Agent 胶囊 `PiAgentCapsule`）：模型胶囊（模型的标志 + 模型短名；
 /// 有订阅额度的提供方，标志外一圈细环是卡着的那个窗口还剩多少。点开是分好组的菜单，当前打勾），右边思考强度胶囊（"思考"的标 + 一组竖格：格数是可选的档位，一格比一格高，
 /// 当前档以下填满，关着时格全空、一道斜线；点在哪格或横着拖就调到哪档，每过一档轻触一下；按下就在上方浮出档位名，
@@ -239,9 +249,7 @@ struct SessionConfigControls: View {
         }
     }
 
-    private var menu: PiModelMenu {
-        PiModelMenu(models: models, current: shown.model?.key) { configure(PiConfig(model: $0.key)) }
-    }
+    private var menu: PiModelMenu { .session(session, models: models, current: shown.model?.key, in: workspace) }
 
     private func configure(_ config: PiConfig) {
         workspace.attempt { _ = try await services.configure(config, for: session) }

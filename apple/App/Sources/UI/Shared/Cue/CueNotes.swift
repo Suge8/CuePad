@@ -118,7 +118,7 @@ extension CueChange.Kind {
         // 停下是会话这一轮跑完：借在跑的心电线静止形（省略号是"歇着"那个此刻的状态，单看不知所云）
         case .settled: .session
         case .waitingForUser: PiShown(status: .asking).icon
-        case .failed: PiShown(status: .failed).icon
+        case .failed: PiShown(status: .failed(.other)).icon
         case .undelivered: .undelivered
         case .done: .complete
         // 等子代理那两颗点，小点空心：交出去的没动静了（与"停下了"的省略号形状不同族）
@@ -132,7 +132,7 @@ extension CueChange.Kind {
         guard session.stateSince <= since else { return false }
         return switch self {
         case .waitingForUser: status == .asking
-        case .failed: status == .failed
+        case .failed: if case .failed = status { true } else { false }
         case .undelivered: if case .delivery(.failed) = status { true } else { false }
         case .stalled:
             session.stallsAt.map { $0 <= since } ?? false
