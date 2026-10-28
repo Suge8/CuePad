@@ -89,7 +89,6 @@ enum PerfLibrary {
             _ = try await store.addCueMessage(.cue, text: answer(&random, round: round))
             if round % 4 == 1 {
                 _ = try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools(&random), wake: .idle)
-                _ = try await store.addCueMessage(.note, text: sentence(&random, chinese: true, words: 6...18))
             }
         }
     }

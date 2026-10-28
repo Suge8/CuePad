@@ -6347,22 +6347,6 @@
         }
       }
     },
-    "停止" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stop"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "停止"
-          }
-        }
-      }
-    },
     "停止这一轮" : {
       "localizations" : {
         "en" : {
@@ -8807,6 +8791,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "含附件的灵感"
+          }
+        }
+      }
+    },
+    "启动" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启动"
           }
         }
       }
@@ -11715,6 +11715,22 @@
         }
       }
     },
+    "建任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New task"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "建任务"
+          }
+        }
+      }
+    },
     "开一个新的 Agent 会话（⌥⌘N）" : {
       "localizations" : {
         "en" : {
@@ -13555,6 +13571,38 @@
         }
       }
     },
+    "收掉" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收掉"
+          }
+        }
+      }
+    },
+    "收掉了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Closed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收掉了"
+          }
+        }
+      }
+    },
     "收起" : {
       "localizations" : {
         "en" : {
@@ -14135,22 +14183,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新定时"
-          }
-        }
-      }
-    },
-    "新建" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新建"
           }
         }
       }
@@ -19447,6 +19479,22 @@
         }
       }
     },
+    "让它继续" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kept Going"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让它继续"
+          }
+        }
+      }
+    },
     "记一条" : {
       "localizations" : {
         "en" : {
@@ -23273,7 +23321,7 @@
       }
     },
     "，%@" : {
-      "comment" : "Cue 页醒来那一行：一处之后接 Cue 说的话",
+      "comment" : "Cue 页醒来那一行：发生了什么之后接 Cue 定的去处",
       "localizations" : {
         "en" : {
           "stringUnit" : {

@@ -369,22 +369,6 @@
         }
       }
     },
-    "CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The CuePad legacy-import session errored: the model rejected the request (prompt too long). Will pick it up when you’re back."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说"
-          }
-        }
-      }
-    },
     "CuePad 导入旧数据的会话又出错了：prompt 太长，等你回来再拆" : {
       "localizations" : {
         "en" : {
@@ -679,22 +663,6 @@
         }
       }
     },
-    "scheduler 测试全过了，让它接着补 3 个重连用例" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All scheduler tests pass; had it move on to the 3 reconnect cases"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "scheduler 测试全过了，让它接着补 3 个重连用例"
-          }
-        }
-      }
-    },
     "staging.roundtable.app · 今天 10:12" : {
       "localizations" : {
         "en" : {
@@ -775,6 +743,22 @@
         }
       }
     },
+    "「%@」留给你回" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Left “%@” for you to reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」留给你回"
+          }
+        }
+      }
+    },
     "「Mac Studio」没开" : {
       "localizations" : {
         "en" : {
@@ -803,6 +787,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「README 截图换成 Swift 版」做完了"
+          }
+        }
+      }
+    },
+    "「billing」留给你回" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Left “billing” for you to reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「billing」留给你回"
+          }
+        }
+      }
+    },
+    "「deploy」留给你回" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Left “deploy” for you to reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「deploy」留给你回"
+          }
+        }
+      }
+    },
+    "「notes-edit」留给你回" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Left “notes-edit” for you to reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「notes-edit」留给你回"
           }
         }
       }
@@ -1491,22 +1523,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停下「billing」"
-          }
-        }
-      }
-    },
-    "催了 %@：测试跑完把结果贴过来" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nudged %@: paste the results when the tests finish"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "催了 %@：测试跑完把结果贴过来"
           }
         }
       }
@@ -3047,6 +3063,22 @@
         }
       }
     },
+    "对 atlas 说：复现了，接着改" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Told atlas: reproduced, go ahead with the fix"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对 atlas 说：复现了，接着改"
+          }
+        }
+      }
+    },
     "对 cuepad 说：补丁合进去后告诉 docs 填投送队列的数据" : {
       "localizations" : {
         "en" : {
@@ -3203,22 +3235,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导入中 %lld"
-          }
-        }
-      }
-    },
-    "导入旧数据 prompt 太长" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "legacy import prompt too long"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "导入旧数据 prompt 太长"
           }
         }
       }
@@ -3475,22 +3491,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已补完 README 的同步一节"
-          }
-        }
-      }
-    },
-    "已转给 cuepad，等它打补丁" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Handed to cuepad, waiting for its patch"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已转给 cuepad，等它打补丁"
           }
         }
       }
@@ -4803,6 +4803,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "收尾"
+          }
+        }
+      }
+    },
+    "收掉 relay" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Closed relay"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收掉 relay"
           }
         }
       }
@@ -6455,6 +6471,22 @@
         }
       }
     },
+    "看 relay 的近况" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checked on relay"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看 relay 的近况"
+          }
+        }
+      }
+    },
     "看「README 截图」的近况" : {
       "localizations" : {
         "en" : {
@@ -6547,22 +6579,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "看一下线上库的迁移有没有卡住"
-          }
-        }
-      }
-    },
-    "看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Checked Roundtable: shuffle reproduced. People who reconnect get a new join time."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间"
           }
         }
       }
@@ -7175,22 +7191,6 @@
         }
       }
     },
-    "被模型拒了（prompt 太长），要拆成几段读，等你回来定" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The model rejected it (prompt too long). I need to split it into chunks; your call when you’re back"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "被模型拒了（prompt 太长），要拆成几段读，等你回来定"
-          }
-        }
-      }
-    },
     "装修" : {
       "localizations" : {
         "en" : {
@@ -7203,22 +7203,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "装修"
-          }
-        }
-      }
-    },
-    "要你在编辑器里改好提交说明再保存，这一步我替不了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You need to edit the commit message in the editor and save. I can’t do that part for you"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "要你在编辑器里改好提交说明再保存，这一步我替不了"
           }
         }
       }

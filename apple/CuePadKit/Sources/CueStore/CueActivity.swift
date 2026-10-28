@@ -13,10 +13,10 @@ public enum CueActivity {
     switch kind {
     case .read: String(localized: "查看")
     case .talk: String(localized: "发给")
-    case .add: String(localized: "新建")
-    case .start: String(localized: "开始")
-    case .stop: String(localized: "停止")
-    case .done: String(localized: "完成")
+    case .add: String(localized: "建任务")
+    case .start: String(localized: "启动")
+    case .stop: String(localized: "收掉")
+    case .done: String(localized: "做完")
     case .leave: String(localized: "留给你")
     case .schedule: String(localized: "新建 定时")
     case .edit: String(localized: "修改")
@@ -26,6 +26,11 @@ public enum CueActivity {
 
   /// 同一处一轮里做了几件事时留哪一件：越靠前越要紧。留给你不在里面，另算一行（`touches`）。
   static let weight: [PiChatMessage.Tools.Kind] = [.done, .stop, .talk, .start, .add, .edit, .read]
+
+  /// 一轮定下的去处取哪一步（Cue 页自己醒来那一行，`CueNoteRound.outcome`）：越靠前越是这件事的结局。
+  public static func outcomeRank(_ kind: PiChatMessage.Tools.Kind) -> Int {
+    [.done, .stop, .leave, .talk, .start, .add, .schedule, .edit, .read].firstIndex(of: kind) ?? .max
+  }
 
   /// 碰到的一处与对它做的事：这一轮的经过里的一行（最要紧的那个动作，`touches`），或正在跑的那一步（`CueState.step`）。
   public struct Touch: Codable, Equatable, Sendable {

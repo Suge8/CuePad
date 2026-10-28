@@ -27,7 +27,7 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 会话的动静叫醒 Cue，它看了看、什么都没做（没有落了结果的一步）：这一轮最后的话不写进对话；Cue 页那一行写叫醒它的会话停下了、没说话，
+    /// 会话的动静叫醒 Cue，它看了看、什么都没做（没有落了结果的一步）：CuePad 替它把会话留给你回，Cue 页那一行写叫醒它的会话停下了、去处是留给你，
     /// 点它去的就是那个会话。紧接着又这样看了同一个会话：同一格里再一行。会话之后改了名，这两行仍写当时的名字。
     @Test func 会话歇下后Cue什么都没做_写明谁叫醒的() async throws {
         let rig = try await Rig()
@@ -43,7 +43,7 @@ extension CueHostTests {
         }
         func glanced(_ round: CueNoteRound) -> Bool {
             guard let place = round.header?.places.first, round.header?.places.count == 1 else { return false }
-            return round.said.isEmpty && place.title == title && place.kind == .settled
+            return round.outcome?.kind == .leave && place.title == title && place.kind == .settled
                 && place.target == .session(PiSessionState.recordID(sessionID: session.sessionID), sessionID: session.sessionID)
         }
         let first = try await notes()

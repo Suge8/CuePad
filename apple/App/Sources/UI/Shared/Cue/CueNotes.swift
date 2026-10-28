@@ -1,38 +1,35 @@
 import CueStore
 import Foundation
 
-/// Cue 自己醒来的一轮在 Cue 页对话里的样子（`CueNoteLog` 里的一行）：这一轮的经过那一行（为什么醒、叫醒它的各处）与它这一轮说的话。
-/// 旧版本写下的动态可能没有经过那一行（只有正文），也可能经过那一行上没有醒来原因（`header` 为 nil）。
+/// Cue 自己醒来的一轮在 Cue 页对话里的样子（`CueNoteLog` 里的一行）：这一轮的经过那一行——为什么醒、叫醒它的各处（`header`）与它做了什么（`touches`）。
+/// 这一轮不写话：那一行的去处只从它做的动作推出（`outcome`）。旧版本的经过那一行上可能没有醒来原因（`header` 为 nil）。
 nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
-    /// 经过那一行
-    let row: CueMessage?
+    let row: CueMessage
     /// 为什么醒、叫醒它的那几处（`CueMessage.wake`）
     let header: CueWakeHeader?
-    /// 这一轮说的话（动态的正文），从早到晚
-    var said: [CueMessage]
+    /// 这一轮碰到的各处（`CueActivity.touches`），按第一次碰到的先后
+    let touches: [CueActivity.Touch]
 
     /// `lines`：到点的那几条定时（按 id；记忆的正文写下就不变，忘掉的照读）
     init(row: CueMessage, lines: [UUID: CueMemoryLine]) {
         header = row.wake.map { CueWakeHeader($0, in: row, lines: lines) }
+        touches = CueActivity.touches(row.tools)
         self.row = row
-        said = []
     }
 
-    init(said: CueMessage) {
-        row = nil
-        header = nil
-        self.said = [said]
+    var id: UUID { row.id }
+    var date: Date { row.createdAt }
+    /// 什么都不显示：没有醒来原因、也没做什么（旧版本写下的经过）
+    var isEmpty: Bool { header == nil && touches.isEmpty }
+
+    /// 这一轮定下的去处：碰到的各处里最要紧的那一步（`CueActivity.outcomeRank`）；什么都没做（或还在想）为 nil。
+    var outcome: CueActivity.Touch? {
+        touches.min { CueActivity.outcomeRank($0.kind) < CueActivity.outcomeRank($1.kind) }
     }
 
-    var id: UUID { row?.id ?? said[0].id }
-    var date: Date { row?.createdAt ?? said[0].createdAt }
-    /// 什么都不显示：没有醒来原因、没说话（旧版本写下的经过）
-    var isEmpty: Bool { header == nil && said.isEmpty }
-
-    /// 写在 `date` 的一条动态还接在 `last` 这一节所在的那一格里：没隔 `ChatTime.gap`、没跨天（同时间那一行另起一段的规则）。
+    /// 写在 `date` 的一轮还接在 `last` 这一节所在的那一格里：没隔 `ChatTime.gap`、没跨天（同时间那一行另起一段的规则）。
     static func continues(_ last: CueNoteRound, at date: Date) -> Bool {
-        let end = last.said.last?.createdAt ?? last.date
-        return date.timeIntervalSince(end) < ChatTime.gap && Calendar.current.isDate(date, inSameDayAs: end)
+        date.timeIntervalSince(last.date) < ChatTime.gap && Calendar.current.isDate(date, inSameDayAs: last.date)
     }
 }
 
@@ -54,6 +51,19 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
         let target: Target
         /// 定时错过了、这一轮才补上：本该几点、几点补上
         var missed: CueScheduled.Last?
+
+        /// 去处 `touch` 落在这一处上、且是这一处的去处（说话、留给你、做完、收掉）时返回它的种类；否则 nil。
+        /// 落在这一处：同一个会话或任务；会话叫醒的一轮里 Cue 对一件任务做的（经过只记任务，不记它绑的会话）也算——它醒来就是为这个会话，
+        /// 对别的会话做的（转给另一个会话）才是落在别处。
+        func settled(by touch: CueActivity.Touch) -> PiChatMessage.Tools.Kind? {
+            guard [.talk, .leave, .done, .stop].contains(touch.kind) else { return nil }
+            let here = switch target {
+            case .session(let id, _): touch.session.map { $0 == id } ?? (touch.task != nil)
+            case .task(let id): touch.task == id
+            case .schedules: false
+            }
+            return here ? touch.kind : nil
+        }
     }
 
     let wake: CueWake
@@ -105,8 +115,8 @@ extension CueChange.Kind {
     /// 形状借那时那一处的状态图形（`PiShown.icon`），不画那一处此刻的状态——此刻在跑的会话在这里也不动。
     var icon: Icon {
         switch self {
-        // 停下时 Cue 在值班，会话是"歇着"
-        case .settled: PiShown(status: .resting).icon
+        // 停下是会话这一轮跑完：借在跑的心电线静止形（省略号是"歇着"那个此刻的状态，单看不知所云）
+        case .settled: .session
         case .waitingForUser: PiShown(status: .asking).icon
         case .failed: PiShown(status: .failed).icon
         case .undelivered: .undelivered
