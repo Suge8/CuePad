@@ -23196,7 +23196,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usage limit reached"
+            "value" : "Limit reached"
           }
         },
         "zh-Hans" : {

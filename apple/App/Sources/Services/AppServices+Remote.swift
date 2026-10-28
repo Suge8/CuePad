@@ -48,7 +48,7 @@ extension AppServices {
         let title = session.name != nil || session.firstMessage != nil
             ? session.displayName : try await store.piSession(session.sessionID)?.title ?? session.displayName
         let alert = try await piStateRecorder.update(
-            sessionID: session.sessionID, state: session.state, detail: session.detail, title: title,
+            sessionID: session.sessionID, state: session.state, detail: session.detail, failure: session.failure, title: title,
             directory: session.cwd.path(percentEncoded: false),
             projectID: try await store.project(containing: session.cwd)?.id, question: session.question,
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), turnStartedAt: session.turnStartedAt,

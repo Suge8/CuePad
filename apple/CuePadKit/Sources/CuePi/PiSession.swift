@@ -62,6 +62,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var detail: String? = nil
     /// 出错时 Pi 上报的原文（会话行悬停看）；`detail` 里是摘要
     public internal(set) var errorMessage: String? = nil
+    /// 出错的种类（同步记录的 `PiSessionState.failure`）：只按原文归一次类（`PiErrorSummary.failure`）
+    public var failure: PiFailure? { state == .error ? PiErrorSummary(errorMessage ?? "").failure : nil }
     /// 进入当前粗状态（工作中、等你确认、出错、空闲）的时间：思考、工具、等子代理之间切换不变
     public internal(set) var stateSince: Date
     /// 这段连续处理开始的时间：离开空闲起，到彻底歇下（自己歇下且没有子代理在飞）为止，中间等你确认也不断；空闲、出错时为 nil

@@ -53,10 +53,10 @@ extension DebugScene {
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: String(localized: "部署到生产吗？\n会替换当前线上的 1.4.2", table: "Demo")))),
             ("review", .delegating, nil, nil, DemoRecap(lastPrompt: String(localized: "让子代理分头审查这两个分支", table: "Demo"))),
             ("migrate", .compacting, nil, "Flow", DemoRecap(lastPrompt: String(localized: "把迁移脚本拆成三步", table: "Demo"), lastReply: String(localized: "拆好了，三步各自能回滚。", table: "Demo"))),
-            // 出错的三种（`PiFailure`，按原因文字分）：额度用完（换模型）、连不上（重试）、登录失效（换模型）
-            ("billing", .error, String(localized: "额度用完（429）：Monthly usage limit reached. Enable available balance usage to continue.", table: "Demo"), String(localized: "闲鱼", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把整个 billing 目录读一遍，总结计费规则", table: "Demo"))),
-            ("gateway", .error, String(localized: "连不上模型服务（504）：upstream request timed out", table: "Demo"), String(localized: "圆桌", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把登录回调改走统一网关，改完跑一遍集成测试", table: "Demo"))),
-            ("keychain", .error, String(localized: "登录失效（401）：OAuth token has expired", table: "Demo"), "CuePad", DemoRecap(lastPrompt: String(localized: "查一下钥匙串读不到令牌的原因", table: "Demo"))),
+            // 出错的三种（`PiFailure`）：给的是 Agent 报的原文，同桥上一样归类、写摘要（`PiErrorSummary`）：额度用完（换个模型）、连不上（重试）、登录失效（换个模型）
+            ("billing", .error, #"429 {"error":{"type":"billing_error","message":"Monthly usage limit reached. Your limit resets Thursday 9:00."}}"#, String(localized: "闲鱼", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把整个 billing 目录读一遍，总结计费规则", table: "Demo"))),
+            ("gateway", .error, #"504 {"error":{"type":"api_error","message":"upstream request timed out"}}"#, String(localized: "圆桌", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把登录回调改走统一网关，改完跑一遍集成测试", table: "Demo"))),
+            ("keychain", .error, #"401 {"error":{"type":"authentication_error","message":"OAuth token has expired"}}"#, "CuePad", DemoRecap(lastPrompt: String(localized: "查一下钥匙串读不到令牌的原因", table: "Demo"))),
             ("notes", .settled, nil, "Career", DemoRecap(
                 lastPrompt: String(localized: "整理一下这周的会议记录", table: "Demo"), lastReply: String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。", table: "Demo"))),
             // 歇着、Cue 已接手这次停下（转给了 cuepad，`seedCue`）：会话行与看板卡写 Cue 对它做的那件事
@@ -97,8 +97,10 @@ extension DebugScene {
             let messages = (said[id] ?? []).enumerated().map { index, minutes in
                 PiChatMessage(sessionID: id, entryID: "said-\(index)", seq: Int64(index), role: .user, text: recap.pendingPrompt ?? recap.lastPrompt ?? "", at: .now.addingTimeInterval(-minutes * 60))
             }
+            let failure = state == .error ? PiErrorSummary(detail ?? "") : nil
             _ = try await recorder.update(
-                sessionID: id, state: state, detail: detail, title: id, directory: id, projectID: name.flatMap(project), question: recap.question,
+                sessionID: id, state: state, detail: failure?.line ?? detail, failure: failure?.failure, title: id, directory: id,
+                projectID: name.flatMap(project), question: recap.question,
                 times: since[id].map { minutes in
                     let start = Date.now.addingTimeInterval(-minutes * 60)
                     return PiTimes(stateSince: start, busySince: state.isWorking ? start : nil)

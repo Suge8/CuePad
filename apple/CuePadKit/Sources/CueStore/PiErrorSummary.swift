@@ -59,16 +59,21 @@ public struct PiErrorSummary: Sendable, Equatable {
         }
     }
 
-    /// Agent 把这次错误也写成了一条回答（Claude Code 的 `API Error: …`、"There's an issue with the selected model…"）：
-    /// `reply` 归类后就是会话出错的那句说明（`line`），或就是说明里提供方的那句原话。这时对话里已经有它，出错的原因不再另显示一处。
-    public static func echoes(_ reply: String?, line: String?) -> Bool {
-        guard let reply = reply?.trimmingCharacters(in: .whitespacesAndNewlines), !reply.isEmpty, let line else { return false }
-        return PiErrorSummary(reply).line == line || line.hasSuffix("：" + reply)
+    /// 会话出错的种类（`PiSessionState.failure`）：出错块的按钮与各处的状态词按它分。限流、服务出错与连不上一样是 Agent 重试用尽的暂时性错；
+    /// 请求被拒、模型不可用、回答超长与其余归其余。
+    public var failure: PiFailure {
+        switch kind {
+        case .authentication: .login
+        case .quota: .quota
+        case .rateLimited, .server, .network: .network
+        case .rejected, .modelUnavailable, .outputTooLong, .other: .other
+        }
     }
 
-    /// 不能悬停看原文的地方（手机、菜单栏）用：摘要，加上提供方的原句（有的话）。
+    /// 不能悬停看原文的地方（手机、菜单栏）用：摘要，加上提供方的原句（有的话）。额度用完的摘要就是状态词（`PiFailure.quota`），有原句时只写原句，不念两遍。
     public var line: String {
-        [title, providerMessage].compactMap { $0 }.joined(separator: "：")
+        if kind == .quota, let providerMessage { return providerMessage }
+        return [title, providerMessage].compactMap { $0 }.joined(separator: "：")
     }
 
     // MARK: 解析

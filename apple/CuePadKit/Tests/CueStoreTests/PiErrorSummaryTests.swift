@@ -55,12 +55,5 @@ struct PiErrorSummaryTests {
         #expect(summary.providerMessage == message)
         #expect(summary.raw == raw)  // 原文保留，供悬停显示
     }
-
-    /// Claude Code 把错误也写成一条回答：会话的出错说明就是它归类后的那句时，对话里只显示一处。
-    @Test func aReplyThatIsTheErrorEchoesIt() {
-        let raw = "API Error: 402 Insufficient account balance"
-        #expect(PiErrorSummary.echoes(raw, line: PiErrorSummary(raw).line))
-        #expect(!PiErrorSummary.echoes("余额还剩多少？我来查一下。", line: PiErrorSummary(raw).line))
-    }
 }
 #endif

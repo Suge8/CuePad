@@ -16,7 +16,7 @@ extension CueStore {
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
         context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt,
-        failure: content.state == .error ? .known(PiFailure(reason: content.detail)) : nil)
+        failure: content.state == .error ? content.failure.map(Open.known) : nil)
       if writesCatalog, let catalog { try writeCatalog(catalog) }
       if let notify { record.notify = try push(notify, record) }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
@@ -165,6 +165,8 @@ struct PiStateContent: Paced {
   var directory: String?
   var projectID: UUID?
   var question: PiQuestion?
+  /// 出错的种类（`PiSessionState.failure`，桥按原文归类）
+  var failure: PiFailure?
   var times: PiTimes
   /// 最后一轮开始的时刻（`PiSessionState.turnStartedAt`）
   var turnStartedAt: Date?
