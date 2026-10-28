@@ -77,8 +77,8 @@ struct CardTile: View {
             }
         }
         .cardPresence(card.id, in: workspace)
-        // 灵感要做就拖到上面任务纸的一行上，接进那条任务（`TaskOutline`）
-        .onDrag { CardDragSession.shared.begin(.idea(card.id)) }
+        // 灵感要做就拖到上面任务纸的一行上接进那条任务（`TaskOutline`），或拖到纸底"添加任务"上照它新建一条（`newTaskDrop`）
+        .cardDraggable(.idea(card.id), shape: .rect(cornerRadius: Radius.card))
         .onHover { hovering = $0 }
         .presetHover($hovering)
         .animation(Motion.fade, value: hovering)

@@ -69,7 +69,7 @@ struct BoardColumn: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.boardMoves) private var moves
-    @Environment(\.boardDrag) private var dragging
+    @Environment(\.cardDrags) private var drags
     @State private var showsEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
     /// 拖到已完成的那件与它这一下（同点完成圈，`taskCheck`）。
@@ -80,9 +80,9 @@ struct BoardColumn: View {
 
     var body: some View {
         fed
-            .dropDestination(for: String.self) { ids, _ in
-                drop(ids, before: nil)
-            } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
+            .cardDrop(isEnabled: column != .waiting, hover: { targeted = $0 != nil && column != .todo }) { card, _ in
+                if let task = card.task { drop(task, before: nil) }
+            }
             .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
             .modifier(ShotPresenter(column: column, opened: $opened))
             // 有卡飞进来的那一列（行）排在别的列上面：往左、往上飞的卡不从别的列的卡下面钻过去（`boardFlight`）
@@ -140,8 +140,8 @@ struct BoardColumn: View {
         #endif
     }
 
-    /// 拖着卡停在这一列上：只在有一张卡正被拖着时算（`boardDrag`），拖完不留着底。
-    private var lit: Bool { targeted && dragging != nil }
+    /// 拖着卡停在这一列上：只在有一张卡正被拖着时算（`CardDrags`），拖完不留着底。
+    private var lit: Bool { targeted && drags?.current != nil }
 
     private var isRow: Bool {
         #if os(iOS)
@@ -259,26 +259,19 @@ struct BoardColumn: View {
 
     // MARK: 拖放
 
-    private func drop(_ ids: [String], before target: UUID?) -> Bool {
-        guard let id = ids.first.flatMap(UUID.init(uuidString:)), let item = board.item(id) else { return false }
+    private func drop(_ id: UUID, before target: UUID?) {
+        guard let item = board.item(id) else { return }
         let fromTodo = board.todo.contains { $0.id == id }
         switch column {
         case .todo:
-            guard fromTodo else { return false }
-            if let move = board.move(id, before: target) {
-                workspace.perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
-            }
-            return true
+            guard fromTodo, let move = board.move(id, before: target) else { return }
+            workspace.perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
         case .advancing:
-            guard fromTodo else { return false }
-            start(item.task)
-            return true
+            if fromTodo { start(item.task) }
         case .done:
-            guard item.task.status != .done else { return false }
-            finish(item)
-            return true
+            if item.task.status != .done { finish(item) }
         case .waiting:
-            return false
+            break
         }
     }
 
