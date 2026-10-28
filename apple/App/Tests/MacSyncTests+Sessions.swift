@@ -100,7 +100,7 @@ extension MacSyncTests {
         try await store.writePiTranscript(PiTranscript(sessionID: ext.sessionID, messages: [said], recap: PiRecap(lastPrompt: said.text)))
 
         let derived = ChatDerived()
-        derived.refresh(try await SessionDigest.read(PiSessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store))
+        derived.refresh(try await SessionDigest.read(PiSessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store), at: .always())
         #expect(try #require(derived.items.first).fromCue)
     }
 

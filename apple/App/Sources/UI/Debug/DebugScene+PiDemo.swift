@@ -151,9 +151,10 @@ extension DebugScene {
         }
         try await seedTaskStates(store, projects: projects)
         if let relay = states.first(where: { $0.sessionID == "relay" }) {
-            // 一条已送达还没进对话、一条没能送达：由一个只认这台演示 Mac 的执行器给出结果
-            _ = try await services.store.requestDelivery(String(localized: "先把迁移脚本在测试库上跑一遍，报错长这样", table: "Demo") + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay.target, on: relay.hostID, mode: .send)
+            // 一条没能送达、之后又问了一轮（没送到的那句留在说它的那一刻），再一条已送达还没进对话（在最末）：由一个只认这台演示 Mac 的执行器给出结果
             _ = try await services.store.requestDelivery(String(localized: "顺便备份一下线上数据库", table: "Demo"), to: relay.target, on: relay.hostID, mode: .send)
+            try await relayLaterTurn(store)
+            _ = try await services.store.requestDelivery(String(localized: "先把迁移脚本在测试库上跑一遍，报错长这样", table: "Demo") + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay.target, on: relay.hostID, mode: .send)
             // 发给那台 Mac 上已结束的会话、没能送达：装修项目的"此刻"写这条的原因
             let mini = PiStateRecorder(store: store, hostID: relay.hostID)
             _ = try await mini.update(sessionID: "quote", state: .settled, title: "quote", directory: "quote", projectID: project(String(localized: "装修", table: "Demo")))

@@ -6,17 +6,16 @@ import CuePi
 
 
 /// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧一颗四角同圆的气泡（`BubbleLook.session`；对话气泡只在 Cue 页），Pi 的回答左侧全宽 Markdown（一直展开），
-/// 每轮回答上方一块这一轮的经过（`RoundProcess`）；你发出、Agent 还没读到的话接在末尾，气泡下写送达情况，失败的可重发；Pi 在处理时末尾是这一轮到目前为止的经过与正在跑的那一步（`LiveStatus`；计时在顶上一行），
+/// 每轮回答上方一块这一轮的经过（`RoundProcess`）；你发出、Agent 还没读到的话是同一列里的气泡（排在哪见 `PiChat.entries`），下面写送达情况，失败的可重发；Pi 在处理时末尾是这一轮到目前为止的经过与正在跑的那一步（`LiveStatus`；计时在顶上一行），
 /// 有子代理时下面逐个列出它们此刻的状态。滚动与输入框由平台放。
 /// Mac 上本机在线的会话（`slot`）在末尾逐字长出正在说的话（`SessionDraft`），说完落库时原位换下：这时对话里的回答都不淡入。
 /// 减弱动态效果下也只有淡入淡出。
 struct PiConversation: View {
     let session: PiSessionState
-    /// 对话里的每一条（`ChatDerived` 按对话数据推好的）。
+    /// 对话里的每一条（`ChatDerived` 按对话数据推好的，含还没进对话的你的话）。
     let items: [PiChatEntry]
-    /// 发出还没进对话的话要对着已有的消息认。
+    /// 正在说的话落库时要对着最近一条回答认（`SessionDraft`）。
     let messages: [PiChatMessage]
-    var deliveries: [DeliveryRequest] = []
     /// 排开最近几条（不用懒加载栈，见 `ChatScroll`），更早的由它再排开一段。
     let window: ChatWindow
     /// 正在请会话所在的 Mac 补写对话（`SessionDigest.fetchingTranscript`）：最上面一行说明。排在对话那一列里，它收起时正在读的不动（`ChatAnchor`）。
@@ -27,7 +26,6 @@ struct PiConversation: View {
     #endif
     @Environment(\.chatHighlight) private var highlight
     @Environment(AppServices.self) private var services
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .footnote) private var noticeText = ComposerMetrics.noticeTextHeight
     @State private var opened: PreviewOpening?
@@ -39,12 +37,11 @@ struct PiConversation: View {
             if fetching {
                 Label("正在从 Mac 取对话…", icon: .fetching).font(Typography.meta).foregroundStyle(palette.ink3).frame(maxWidth: .infinity)
             }
-            if all.isEmpty, let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
+            if all.allSatisfy(\.role.isOutgoing), let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
             ChatSegments(items: all, window: window, size: Self.segment) { items in
                 ChatSegment(items: Array(items), session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }
-            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in outgoing(request) }
             ending
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -55,21 +52,6 @@ struct PiConversation: View {
         #endif
         .previewPresenter($opened, reply: .session(session))
         .debugOpensPreview(in: items, session: session, $opened)
-    }
-
-    /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（发送中、已发出、送达中；已结束的会话先唤醒）。
-    private func outgoing(_ request: DeliveryRequest) -> some View {
-        let session = session, said = Said.request(request)
-        return SpeechBubble(
-            said: said, box: services.settings.replyDraftBinding(for: session.id),
-            session: session, fromCue: request.isFromCue, look: .session
-        ) { trip in
-            let failed = if case .failed = trip { true } else { false }
-            MessageActions(
-                text: request.content, kind: .outgoing(failed: failed), session: session,
-                resend: { workspace.resend(said, restoringInto: services.settings.replyDraftBinding(for: session.id)) },
-                remove: { workspace.remove(said) })
-        }
     }
 
     static var spacing: CGFloat { 16 }
@@ -156,6 +138,8 @@ private struct ChatSegment: View, Equatable {
     let notes: [ReplyNote]
     let swapsInPlace: Bool
     @Binding var opened: PreviewOpening?
+    @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
 
     init(items: [PiChatEntry], session: PiSessionState, highlight: UUID?, notes: [ReplyNote], swapsInPlace: Bool, opened: Binding<PreviewOpening?>) {
         self.items = items
@@ -187,6 +171,8 @@ private struct ChatSegment: View, Equatable {
             }
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)
+        case .outgoing(let request):
+            outgoing(request).padding(.top, Self.turnGap)
         case .answer:
             // 你答了它的提问：你那一边的一颗气泡，字上面一行答的是哪个问题（问题答完就不在对话里了，引用不能点）
             AnswerBubble(answer: entry.text, quote: entry.question.map { BubbleQuote(text: $0) }, look: .session, highlighted: entry.id == highlight) {
@@ -210,6 +196,18 @@ private struct ChatSegment: View, Equatable {
     }
 }
 
+
+extension ChatSegment {
+    /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（发送中、已发出、送达中；已结束的会话先唤醒）。
+    private func outgoing(_ request: DeliveryRequest) -> some View {
+        let session = session, said = Said.request(request), box = services.settings.replyDraftBinding(for: session.id)
+        return SpeechBubble(said: said, box: box, session: session, fromCue: request.isFromCue, look: .session) { trip in
+            MessageActions(
+                text: request.content, kind: .outgoing(failed: trip.failure != nil), session: session,
+                resend: { workspace.resend(said, restoringInto: box) }, remove: { workspace.remove(said) })
+        }
+    }
+}
 
 /// 这一轮怎么结束的（被停下、被你拒绝）：回答下面一行旁注，不是分隔（上下文没换），刻度滑条上也没有它。
 private struct RoundEndNote: View {

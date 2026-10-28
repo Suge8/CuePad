@@ -109,7 +109,7 @@ extension DebugScene {
     }
 
     /// 演示对话：notes 是几轮做完的对话（带工具活动与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
-    /// relay 在另一台 Mac 上（第二句是斜杠技能，存的是 Pi 展开后的样子；发过去的一条已送达还没进对话、一条没能送达）。
+    /// relay 在另一台 Mac 上（第二句是斜杠技能，存的是 Pi 展开后的样子；发过去的一条没能送达、之后又问了一轮（`relayLaterTurn`），一条已送达还没进对话）。
     static func seedChats(_ store: CueStore) async throws {
         let now = Date.now
         func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: PiChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async throws {
@@ -169,6 +169,20 @@ extension DebugScene {
             (String(localized: "看一下线上库的迁移有没有卡住", table: "Demo"), String(localized: "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", table: "Demo"), .init(steps: 3, items: [.init(kind: .command, target: "psql -c 'select * from schema_migrations order by id desc limit 3'"), .init(kind: .command, target: "psql -c 'select pid, state, query from pg_stat_activity'"), .init(kind: .command, target: "psql -c 'select * from pg_locks where not granted'")]), 1.2),
             (Self.skillSaid, String(localized: "就像排队上厕所：建索引要把整张表锁一下，可前面有人一直占着没出来，它只能在门口等。占着的人走了，它马上就能进去。", table: "Demo"), nil, 0.3),
         ], startedMinutesAgo: 10)
+    }
+
+    /// relay 在没送到的那句之后又问的一轮（此刻写下，晚于那句）。
+    static func relayLaterTurn(_ store: CueStore) async throws {
+        let now = Date.now
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "relay",
+            messages: [
+                PiChatMessage(sessionID: "relay", entryID: "u2", seq: 4, role: .user, text: String(localized: "迁移重跑了吗", table: "Demo"), at: now),
+                PiChatMessage(
+                    sessionID: "relay", entryID: "p2", seq: 5, role: .pi, text: String(localized: "重跑过了：第 14 步已经过去，迁移全部完成。", table: "Demo"),
+                    at: now.addingTimeInterval(0.5), roundStartedAt: now),
+            ],
+            recap: PiRecap(lastPrompt: String(localized: "迁移重跑了吗", table: "Demo"), lastReply: String(localized: "重跑过了：第 14 步已经过去，迁移全部完成。", table: "Demo"))))
     }
 
     /// "/skill:eli5 为什么在等锁" 经 Pi 展开后进会话文件的样子（`PiSkillCall`）。

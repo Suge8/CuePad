@@ -3,9 +3,15 @@ import Foundation
 
 /// 会话页对话里的一条：你说的（右侧气泡），你在 CuePad 里答了它的提问（右侧气泡，带一行答的是哪个问题），
 /// Pi 的一轮回答（左侧全宽，上面一块这一轮的经过），会话文件里的一行系统记录（压缩，居中一行小字），
-/// 扩展投进来的机器消息（FireCode 交回子代理结果、审查结论……，一块信封一张卡片），或 Agent 一次发到手机上看的几个文件（一张预览卡）。
+/// 扩展投进来的机器消息（FireCode 交回子代理结果、审查结论……，一块信封一张卡片），Agent 一次发到手机上看的几个文件（一张预览卡），
+/// 或你发出、还没进对话的一句（右侧气泡，写送达情况，`PiChat.outgoing`）。
 nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
-    enum Role: Equatable, Sendable { case user, answer, pi, notice(PiNotice), machine, preview }
+    enum Role: Equatable, Sendable {
+        case user, answer, pi, notice(PiNotice), machine, preview
+        case outgoing(DeliveryRequest)
+
+        var isOutgoing: Bool { if case .outgoing = self { true } else { false } }
+    }
 
     let id: UUID
     let role: Role
@@ -21,6 +27,12 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     var question: String?
     /// 用户一方的这句是 Cue 发进会话的（`PiChatMessage.saidByCue`，Cue 的 peek 同一条）：气泡上标出 Cue。
     var fromCue = false
+}
+
+private nonisolated extension PiChatEntry {
+    static func outgoing(_ request: DeliveryRequest) -> PiChatEntry {
+        PiChatEntry(id: request.id, role: .outgoing(request), text: request.content, took: nil, fromCue: request.isFromCue)
+    }
 }
 
 private nonisolated extension PiChatEntry.Role {
@@ -41,11 +53,13 @@ private nonisolated extension PiChatEntry.Role {
 private nonisolated enum Timed {
     case answer(PiChatMessage)
     case preview(PiPreview)
+    case stranded(DeliveryRequest)
 
     var at: Date {
         switch self {
         case .answer(let message): message.at
         case .preview(let preview): preview.createdAt
+        case .stranded(let request): request.createdAt
         }
     }
 }
@@ -57,11 +71,20 @@ nonisolated enum PiChat {
     /// 不在会话文件里的两种按时刻插进对话：预览卡（文件在 Agent 的命令行里发出，不留对话条）按创建时间，你的作答（`PiChatRole.answer`）按答的那一刻。
     /// 排在那一刻之前最近的那条之后：一轮里发的、答的在你的话之后、这一轮的回答之前，比最后一条还晚的接在末尾（所有来源同一条规则）。
     /// 一批预览的创建时间相同（`CueStore.addPreviews`），是一张卡。
+    /// 你发出、还没进对话的话（`outgoing`）排在它会落下的地方，与 Cue 页你的话同一条规则：还在路上的（含 Agent 已收下、对话还没跟上的）
+    /// 接在最末——Agent 读到时它就进对话的末尾，换下时不挪位；没能送达的不会再进对话，留在你说它的那一刻（同作答，按时刻插进），
+    /// 之后说的话与回答照常排在它后面。重发是撤回再写一条新的，于是作为新的一句接在最末。到哪了按 `moment`（`Speech`）。
     /// `cueSent` 是 Cue 说的那几条的请求 id（`SessionDigest.cueSent`，按发送记录认）：带着其中之一的用户消息标成 Cue 说的。
-    static func entries(_ messages: [PiChatMessage], previews: [PiPreview] = [], cueSent: Set<UUID> = []) -> [PiChatEntry] {
+    static func entries(
+        _ messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest] = [], cueSent: Set<UUID> = [],
+        at moment: Speech.Moment = .always()
+    ) -> [PiChatEntry] {
+        let outgoing = Self.outgoing(deliveries, messages: messages)
+        let lost = { (request: DeliveryRequest) in Speech.trip(request, at: moment).failure != nil }
         let answers = messages.filter { $0.role == .known(.answer) }.map { (at: $0.at, key: $0.id.uuidString, item: Timed.answer($0)) }
         let batches = previews.map { (at: $0.createdAt, key: $0.id.uuidString, item: Timed.preview($0)) }
-        var waiting = (answers + batches).sorted { ($0.at, $0.key) < ($1.at, $1.key) }.map(\.item)[...]
+        let stranded = outgoing.filter(lost).map { (at: $0.createdAt, key: $0.id.uuidString, item: Timed.stranded($0)) }
+        var waiting = (answers + batches + stranded).sorted { ($0.at, $0.key) < ($1.at, $1.key) }.map(\.item)[...]
         var entries: [PiChatEntry] = []
         func place(before time: Date?) {
             while let next = waiting.first, time.map({ next.at < $0 }) ?? true {
@@ -74,6 +97,9 @@ nonisolated enum PiChat {
                         .compactMap { if case .preview(let preview) = $0 { preview } else { nil } }
                     entries.append(PiChatEntry(id: first.id, role: .preview, text: first.title, took: nil, previews: batch))
                     waiting.removeFirst(batch.count)
+                case .stranded(let request):
+                    entries.append(.outgoing(request))
+                    waiting.removeFirst()
                 }
             }
         }
@@ -85,7 +111,7 @@ nonisolated enum PiChat {
                 fromCue: message.saidByCue(cueSent)))
         }
         place(before: nil)
-        return entries
+        return entries + outgoing.filter { !lost($0) }.map(PiChatEntry.outgoing)
     }
 
     /// Pi 回答这一轮做了多久（时长写法见 `PiClock.duration`）；你的话与系统行没有。
@@ -108,7 +134,7 @@ nonisolated enum PiChat {
         [added.flatMap { $0 > 0 ? "+\($0)" : nil }, removed.flatMap { $0 > 0 ? "−\($0)" : nil }].compactMap { $0 }.joined(separator: " ")
     }
 
-    /// 你发出、Agent 还没读到的话：作为你的气泡接在末尾，写送达情况——还在路上、Agent 已经接过去而对话还没跟上的，
+    /// 你发出、Agent 还没读到的话：作为你的气泡排进对话（排在哪见 `entries`），写送达情况——还在路上、Agent 已经接过去而对话还没跟上的，
     /// 与没能送达的（在那里重发或移除）。Agent 读到的那一刻对话里出现这句（`deliveryID`），气泡换成对话里的那条。
     /// 作答、斜杠命令、设置、开新会话、补写对话这些不是你说的话，不算（命令在会话文件里没有带请求 id 的用户消息，挂了永远换不掉）。
     static func outgoing(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {
@@ -116,7 +142,7 @@ nonisolated enum PiChat {
         return deliveries.filter { $0.mode == .known(.send) && !arrived.contains($0.id) }
     }
 
-    /// 回复框空着时的发送中：接在末尾的你的话里还有在路上的（与那个气泡同一个事实）。
+    /// 回复框空着时的发送中：还没进对话的你的话里还有在路上的（与那个气泡同一个事实）。
     static func sending(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> Bool {
         outgoing(deliveries, messages: messages).contains { Speech.trip($0, at: moment).inTransit }
     }
@@ -126,7 +152,7 @@ nonisolated enum PiChat {
         messages.last { $0.role == .known(.user) }.map { PiSkillCall.shown($0.text) }?.nonEmpty
     }
 
-    /// 有几句没能送达时的说法（它们还挂在对话末尾等你重发或移除）："1 句没送到"；数来自会话列表查询（`PiSessionListItem.undelivered`）。
+    /// 有几句没能送达时的说法（它们留在对话里说出的那一刻，等你重发或移除）："1 句没送到"；数来自会话列表查询（`PiSessionListItem.undelivered`）。
     /// 会话页顶栏状态后写它，会话行在你看过以后（不再整行写"没能送达"）留一个小标记、读屏念它：两处同一个数。没有时是 nil。
     static func undeliveredNote(_ count: Int) -> String? { count > 0 ? String(localized: "\(count) 句没送到") : nil }
 
