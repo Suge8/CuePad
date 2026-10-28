@@ -19,7 +19,7 @@ public enum CueAuthor: String, Sendable, CaseIterable {
 
 /// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有提问的结束（`answer`、`answeredAt`）与送达（`deliveredAt`）会变；
 /// 一轮的经过那一行（`round`，或没有正文的 `note`）随这一轮做到哪改它的清单。
-/// 带选项的是提问，只有一个状态：`answeredAt` 为空是开着，有值是结束了（`CueQuestionEnd`）；结束了不再变，只有你开口收起的 Cue 放得回。
+/// 带选项的是提问，只有一个状态：`answeredAt` 为空是开着，有值是结束了（`CueQuestionEnd`）；结束了不再变，只有你在 Cue 页开口收起的 Cue 放得回。
 public struct CueMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var author: Open<CueAuthor>

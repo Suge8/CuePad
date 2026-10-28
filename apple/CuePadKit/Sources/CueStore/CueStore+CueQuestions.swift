@@ -62,16 +62,18 @@ extension CueStore {
     return db.changes
   }
 
-  /// 你开口收起的提问（`setAside`，走部分索引），从早到晚：在 Cue 页收起的交给 Cue 时列在收起它的那句话后面，Cue 放回时按 id 前缀在里面找；
-  /// 在会话里收起的不列给 Cue，那是你在那边答了。
+  /// 你在 Cue 页开口收起的提问（唯一定义）：收起它的是你对 Cue 说的一句。在会话里收起的不算：那是你在那边答了，Cue 不经手。
+  static let setAsideOnCuePage = "\(setAside) AND setAsideBy IN (SELECT id FROM cueMessages WHERE author = 'you')"
+
+  /// 你在 Cue 页开口收起的提问（`setAsideOnCuePage`，走部分索引），从早到晚：交给 Cue 时列在收起它的那句话后面，Cue 放回时按 id 前缀在里面找。
   public func cueQuestionsSetAside() throws -> [CueMessage] {
-    try select(CueMessage.self, where: Self.setAside, orderBy: "createdAt, rowid")
+    try select(CueMessage.self, where: Self.setAsideOnCuePage, orderBy: "createdAt, rowid")
   }
 
-  /// Cue 判断你那句话不是在答这条：放回"等你"。只有你开口收起的放得回（`setAside`），别的抛 `questionEnded`。
+  /// Cue 判断你那句话不是在答这条：放回"等你"。只有你在 Cue 页开口收起的放得回（`setAsideOnCuePage`），别的抛 `questionEnded`。
   public func restoreCueQuestion(_ id: UUID) throws {
     try write {
-      try reopen(where: "id = ?", [id])
+      try reopen(where: "id = ? AND \(Self.setAsideOnCuePage)", [id])
       guard db.changes > 0 else { throw CueStoreError.questionEnded }
     }
   }
