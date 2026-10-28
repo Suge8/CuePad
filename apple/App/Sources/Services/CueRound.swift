@@ -27,9 +27,6 @@ struct CueRound: Identifiable {
 
     var running: CueToolCall? { calls.last { $0.finishedAt == nil } }
 
-    /// 这一轮动过手：有一次做完的调用不只是看看（`Kind.looks`）。Cue 自己醒来的一轮动过手才写下最后的话（`CueKeeper`）。
-    var acted: Bool { calls.contains { $0.item.map { !$0.kind.looks } ?? false } }
-
     /// 给人看的经过：做完的调用按先后（还在跑的不算，它是此刻在做的）；一个都没做完为 nil。
     var process: PiChatMessage.Tools? {
         let items = calls.compactMap(\.item)

@@ -61,7 +61,6 @@ extension CueHostTests {
         try await eventually("改了名") { try await rig.store.sessions(matching: session.sessionID).first?.title == "改过名的会话" }
         let renamed = try await notes()
         #expect(renamed.count == 2 && renamed.allSatisfy(glanced), "\(renamed)")
-        #expect(try await rig.store.cueMessages().allSatisfy { $0.author != .known(.note) || $0.text.isEmpty })
         await rig.stop()
     }
 
