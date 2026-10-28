@@ -21083,6 +21083,22 @@
         }
       }
     },
+    "这个会话现在没有出错的一轮可重跑（它在跑，或最后一轮不是出错结束的）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This session has no failed turn to retry (it is running, or its last turn did not fail)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个会话现在没有出错的一轮可重跑（它在跑，或最后一轮不是出错结束的）"
+          }
+        }
+      }
+    },
     "这个命令需要带上参数" : {
       "localizations" : {
         "en" : {
@@ -22599,6 +22615,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重试"
+          }
+        }
+      }
+    },
+    "重试这一轮" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry Turn"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试这一轮"
           }
         }
       }
