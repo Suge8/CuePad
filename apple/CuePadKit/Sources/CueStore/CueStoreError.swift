@@ -119,7 +119,7 @@ extension CueStoreError: LocalizedError {
     case .previewTooLarge(let path, let limit): "文件太大，单个不超过 \(limit / 1_000_000) MB：\(path)"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
     case .previewTitle(let name, let limit):
-      "\(name) 的标题要一句说清这份是什么、看哪里，同一次发的各不相同（一行、宽不过 \(limit)，约 \(limit / 2) 个汉字，用和用户对话的语言），如“深色：会话列表的分组标题”"
+      "\(name) 的标题要一句说清这份是什么、看哪里，同一次发的各不相同（一行、宽不过 \(limit)，约 \(limit / 2) 个汉字，用和用户对话的语言），如“改后：会话列表的分组标题”"
     case .readOnlyLibrary: String(localized: "资料库是只读的，写不进去")
     case .noSession(let title): "「\(title)」还没有会话：先 start 开工，它的正文会作为第一句"
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
