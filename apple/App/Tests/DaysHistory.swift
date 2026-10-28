@@ -27,7 +27,7 @@ final class DaysHistory {
         func at(_ day: Int, _ minute: Int) -> Date {
             calendar.date(byAdding: .minute, value: 9 * 60 + minute, to: calendar.startOfDay(for: calendar.date(byAdding: .day, value: -day, to: .now)!))!
         }
-        // 日常来回：每天二十八轮，他的话、这一轮的经过、Cue 的回复、Cue 自己醒来的动态
+        // 日常来回：每天二十八轮，他的话、这一轮的经过、Cue 的回复
         for day in stride(from: 14, through: 1, by: -1) {
             for turn in 0..<28 {
                 let topic = DaysScript.routine[(day * 28 + turn) % DaysScript.routine.count]
@@ -35,7 +35,6 @@ final class DaysHistory {
                 log.append(Seeded(.you, topic.ask, at(day, minute)))
                 log.append(Seeded(.round, "", at(day, minute) + 5, tools: [topic.step]))
                 log.append(Seeded(.cue, topic.reply, at(day, minute) + 40))
-                log.append(Seeded(.note, topic.note, at(day, minute + 12)))
             }
         }
         // 埋的事实
@@ -144,27 +143,27 @@ enum DaysScript {
     ]
 
     struct Routine {
-        let ask: String, reply: String, note: String
+        let ask: String, reply: String
         let step: PiChatMessage.Tools.Item
     }
 
     /// 日常来回的几种：换着用，凑出两周的量
     static let routine: [Routine] = ([
-        ("看下 CI 现在绿不绿", "CI 绿的，最近 20 次构建都过了。", "CI：例行看过，全绿", "CI 构建记录"),
-        ("依赖更新的那几个 PR 合了吗", "合了三个，剩一个等测试补完。", "依赖更新：合了 3 个 PR", "依赖更新 PR"),
-        ("登录页那个小 bug 修了没", "修了，会话补了测试，已经 done。", "登录页 bug：做完", "登录页 bug"),
-        ("看板拖拽卡顿的事有进展吗", "会话定位到重复渲染，正在改。", "看板拖拽：在改重复渲染", "看板拖拽卡顿"),
-        ("官网首页文案改好了吗", "改好了，截图发你手机了。", "官网文案：做完", "官网首页文案"),
-        ("帮我看看昨晚的报错", "是第三方统计脚本超时，不影响主流程，已让会话加超时降级。", "报错：统计脚本超时，加降级", "昨晚的报错"),
-        ("设置页的反馈整理一下", "整理好了，按主题分了五类，放在任务里。", "设置页反馈：整理完", "设置页反馈"),
-        ("数据库备份正常吗", "正常，最近 7 天每天都成功，最大一次 3.1 GB。", "备份：例行看过，正常", "数据库备份"),
-        ("README 里的安装步骤过时了吗", "过时了两步，已让会话更新。", "README：更新安装步骤", "README 安装步骤"),
-        ("这周的发版准备好了吗", "准备好了，等你点头推送。", "发版：等他允许推送", "这周发版"),
-        ("移动端的字号再调大一点", "已让会话把正文从 15 调到 16，截图稍后发你。", "移动端字号：在改", "移动端字号"),
-        ("搜索变慢是怎么回事", "索引没覆盖新加的字段，会话加了索引，查询从 1.2 秒降到 80 毫秒。", "搜索：加索引，变快", "搜索变慢"),
-        ("给通知中心加个全部已读", "加好了，测试过了，已 done。", "通知中心：全部已读做完", "通知中心全部已读"),
-        ("把日志保留期改成 30 天", "改了，旧日志下次清理时按新规则删。", "日志保留期：改成 30 天", "日志保留期"),
-    ] as [(String, String, String, String)]).map { Routine(ask: $0.0, reply: $0.1, note: $0.2, step: PiChatMessage.Tools.Item(kind: .talk, target: "\($0.3)：让会话跟进")) }
+        ("看下 CI 现在绿不绿", "CI 绿的，最近 20 次构建都过了。", "CI 构建记录"),
+        ("依赖更新的那几个 PR 合了吗", "合了三个，剩一个等测试补完。", "依赖更新 PR"),
+        ("登录页那个小 bug 修了没", "修了，会话补了测试，已经 done。", "登录页 bug"),
+        ("看板拖拽卡顿的事有进展吗", "会话定位到重复渲染，正在改。", "看板拖拽卡顿"),
+        ("官网首页文案改好了吗", "改好了，截图发你手机了。", "官网首页文案"),
+        ("帮我看看昨晚的报错", "是第三方统计脚本超时，不影响主流程，已让会话加超时降级。", "昨晚的报错"),
+        ("设置页的反馈整理一下", "整理好了，按主题分了五类，放在任务里。", "设置页反馈"),
+        ("数据库备份正常吗", "正常，最近 7 天每天都成功，最大一次 3.1 GB。", "数据库备份"),
+        ("README 里的安装步骤过时了吗", "过时了两步，已让会话更新。", "README 安装步骤"),
+        ("这周的发版准备好了吗", "准备好了，等你点头推送。", "这周发版"),
+        ("移动端的字号再调大一点", "已让会话把正文从 15 调到 16，截图稍后发你。", "移动端字号"),
+        ("搜索变慢是怎么回事", "索引没覆盖新加的字段，会话加了索引，查询从 1.2 秒降到 80 毫秒。", "搜索变慢"),
+        ("给通知中心加个全部已读", "加好了，测试过了，已 done。", "通知中心全部已读"),
+        ("把日志保留期改成 30 天", "改了，旧日志下次清理时按新规则删。", "日志保留期"),
+    ] as [(String, String, String)]).map { Routine(ask: $0.0, reply: $0.1, step: PiChatMessage.Tools.Item(kind: .talk, target: "\($0.2)：让会话跟进")) }
 
     /// 日常学到的记忆（不 pin）
     static let learned = [

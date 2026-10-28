@@ -51,8 +51,8 @@ extension CueHostTests {
     }
 
     /// 会话交了结果，Cue 自己醒来做完（task done）：Cue 自己按证据确认，顶层任务直接完成，不请你确认，给你写一条结果（不是"等你"）；
-    /// 这就是对你说过话了，最后那句回复不再写成灰色的一行（几乎是同一句）。
-    @Test func 自己醒来做完_告诉你结果_不再写动态() async throws {
+    /// 这就是对你说过话了。
+    @Test func 自己醒来做完_告诉你结果() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 请收一下")  // 假模型据此 done
         let report = try await rig.message(.cue, containing: "做完了")
@@ -60,7 +60,6 @@ extension CueHostTests {
         try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("结果已告诉用户") }
         #expect(try await rig.store.card(try #require(report.taskID))?.status == .done)
         #expect(try await rig.store.cueMessagesWaitingForYou().isEmpty)
-        #expect(try await rig.store.cueMessages().filter { $0.author == .known(.note) && $0.createdAt >= report.createdAt }.isEmpty)
         await rig.stop()
     }
 

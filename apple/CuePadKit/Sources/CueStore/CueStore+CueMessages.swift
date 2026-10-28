@@ -55,7 +55,7 @@ extension CueStore {
 
   /// 一轮的经过那一行（值班的管理器写，`CueMessage.tools`）：在这一轮开始的位置写下（`id` 为 nil，返回新行的 id；Cue 自己醒来的一轮醒来时就写，
   /// 带着为什么醒 `wake`，你发起的第一次调工具时写），之后每做完一步、以及这一轮做完时改它的清单与是谁的那一轮（你中途插话，Cue 自己醒来的一轮就成了回答你的）。
-  /// 这一轮说的话与结果都在它之后。你发起的写成 `round`；Cue 自己醒来的写成没有正文的动态（`note`），Cue 页里是那一节的第一行。
+  /// 这一轮说的话与结果都在它之后。你发起的写成 `round`；Cue 自己醒来的写成没有正文的 `note`，Cue 页里是那一节的第一行。
   @discardableResult
   public func recordCueRound(
     _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, wake: CueWake? = nil
@@ -150,7 +150,7 @@ extension CueStore {
 
   /// Cue 页的新消息（唯一的规则），从早到晚：Cue 对你说的话里，晚于你读到的地方（`CueRead`）与你最近一句的
   /// （答了的提问也算：它在对话里是你那边的一句）。
-  /// 带选项的不算：开着时在"等你"里，结束了是你答过的或它撤回的。它自己醒来的动态、一轮的经过不是对你说的话。
+  /// 带选项的不算：开着时在"等你"里，结束了是你答过的或它撤回的。它自己醒来的一轮的经过不是对你说的话。
   public func cueUnread() throws -> [UUID] {
     try db.query(
       """

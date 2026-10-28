@@ -145,7 +145,7 @@ class EvalScript {
         return Check(kind, label, false, note: made ? "（答错，编造）" : "（答错）")
     }
 
-    /// 这一步里 Cue 写的消息（回复、tell、动态、完成的结果）
+    /// 这一步里 Cue 写的消息（回复、tell、完成的结果）
     func messages(_ step: Step) async throws -> [String] {
         guard let window = step.window else { return [] }
         return try await eval.said(since: window.lowerBound).filter { $0.createdAt <= window.upperBound }.map(\.text)

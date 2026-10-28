@@ -66,7 +66,7 @@ extension CueKeeper {
     struct Turn {
         /// 回复写成谁的
         var author: CueAuthor
-        /// 这一轮的经过：醒来的时刻（Cue 在这之后用 tell 说过话，自己醒来的这一轮最后就不再写 note）、在用的工具、报的错都在这里
+        /// 这一轮的经过：醒来的时刻（Cue 在这之后用 tell 说过话，自己醒来的刚启用那一轮最后就不再写招呼）、在用的工具、报的错都在这里
         var round: CueRound
         /// Cue 自己醒来（不是你发来消息）的这一轮为什么醒（出错要退避、重试同一次醒来）；你发起的为 nil
         var selfStarted: CueWake?
@@ -78,17 +78,17 @@ extension CueKeeper {
         var mark: Int?
         /// 这一轮做完且没出错后，还要等他离开再报的那几次停下（`Progress.held`）：这一轮报了的不再记，没做完下次照样报
         var held: [String: Date]?
+        /// 会话停下叫醒的这一轮报给 Cue 的那几次停下（歇着、等回答、出错）：做完时还没给去处的 CuePad 替它留给他回（`CueKeeper.leaveUnattended`）
+        var stops: [CueLeft] = []
 
-        /// 这一轮是在回答你：你发起的、中途插进了你的话，或写成 cue 的（中途插过你的话、出错后重试的那一轮）。不是的（Cue 自己醒来、
-        /// 含刚启用）已经用 tell 对你说过话，最后的回复就不再写
+        /// 这一轮是在回答你：你发起的、中途插进了你的话，或写成 cue 的（中途插过你的话、出错后重试的那一轮）
         var answersYou: Bool {
             guard let wake = selfStarted else { return true }
             return !delivered.isEmpty || (wake != .enabled && author == .cue)
         }
 
-        /// 最后的话写不写进对话：回答你的一轮、刚启用的招呼照写；Cue 自己醒来的其余各轮没动过手（`CueRound.acted`）就不写——
-        /// 系统提示里"什么都没做就不写"只在这里定。
-        var writesReply: Bool { answersYou || selfStarted == .enabled || round.acted }
+        /// 最后的话写不写进对话：回答你的一轮、刚启用的招呼照写；Cue 自己醒来的其余各轮一律不写，Cue 页照它的动作写这一轮（`CueRound.process`）。
+        var writesReply: Bool { answersYou || selfStarted == .enabled }
     }
 
     /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（写入序号大于 `latest`，或在 `since` 之后才到的等子代理停住）。

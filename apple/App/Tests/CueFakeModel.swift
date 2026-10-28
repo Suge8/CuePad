@@ -146,7 +146,7 @@ nonisolated final class FakeModel: Sendable {
             return .delta(["role": "assistant", "tool_calls": [["index": 0, "id": "call-\(UUID().uuidString.prefix(8))", "type": "function", "function": ["name": tool(suffix), "arguments": json]]]], finish: "tool_calls")
         }
         func say(_ text: String) -> Reply { .delta(["role": "assistant", "content": text], finish: "stop") }
-        // Cue 自己醒来、什么都没做的一轮最后的话不写（`CueKeeper.Turn.writesReply`）：要让你看到它醒来看到了什么，就用 tell 对你说
+        // Cue 自己醒来的一轮（刚启用除外）最后的话不写（`CueKeeper.Turn.writesReply`）：要让你看到它醒来看到了什么，就用 tell 对你说
         func tell(_ text: String) -> Reply { call("tell", ["text": text]) }
 
         let last = (request["messages"] as? [[String: Any]])?.last ?? [:]

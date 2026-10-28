@@ -2,7 +2,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// 新会话第一条输入里的对话视图（`CueKeeper`），在记忆视图之后、信封之前，接上此前的经过。从库里的对话现拼：他的话、你的回复与 tell、你的动态、
+/// 新会话第一条输入里的对话视图（`CueKeeper`），在记忆视图之后、信封之前，接上此前的经过。从库里的对话现拼：他的话、你的回复与 tell、
 /// 每一轮的经过（那一行的清单，`CueStore.recordCueRound`），一条一行，带序号与绝对时刻，从早到晚；从最新的往前取到 `budget` 字。
 /// 提问的回答另起一行，排在回答的时刻。换新之后的各轮照常留在会话里，下一次换新时再并进视图。
 public enum CueView {
@@ -87,8 +87,6 @@ public enum CueView {
       guard !text.isEmpty else { return nil }
       if slot.answer { return "他在卡上选了「\(message.answer!)」：答「\(text.clipped(40))」" }
       return message.choices.map { "你问他：\(text.clipped(yourLimit))（选项：\($0.joined(separator: " / "))）" } ?? "你：" + text.clipped(yourLimit)
-    case .note where !text.isEmpty:
-      return "你的动态：" + text.clipped(yourLimit)
     case .note, .round:
       return round(message.tools)
     case nil:
