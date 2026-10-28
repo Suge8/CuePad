@@ -6,7 +6,7 @@ import Testing
 @testable import CuePad
 
 /// 出错后点"重试"（`Workspace.retry`）：投送请求交给会话所在的 Mac，会话行当场显示话在路上；Mac 让会话的扩展重跑出错的那一轮，
-/// 对话里不多一句话、不写发送记录（只会多出新的回答）；连点只发一次。
+/// 不写发送记录；连点只发一次。重跑出新回答、对话与状态的结果由真实 Pi 的 `HistoryRulesTests` 证明。
 struct RetryTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -16,8 +16,6 @@ struct RetryTests {
         ext.setState(["kind": "error", "error": "fetch failed"])
         try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(
             sessionID: "atlas", state: .error, detail: "fetch failed", failure: .network, title: "atlas", directory: "/work/atlas")
-        let said = PiChatMessage(sessionID: "atlas", entryID: "u1", seq: 1, role: .user, text: "跑一遍", at: .now)
-        try await store.writePiTranscript(PiTranscript(sessionID: "atlas", messages: [said], recap: PiRecap(lastPrompt: "跑一遍")))
         let session = try #require(try await store.allPiSessionStates().first)
         #expect(session.canRetry)
 
@@ -34,7 +32,6 @@ struct RetryTests {
         #expect(try await store.outcome(of: request).status == .known(.succeeded))
         #expect(ext.received == ["retry"])
         #expect(try await store.deliveryRequests(toSession: "atlas").count == 1)
-        #expect(try await store.piMessages(of: "atlas").map(\.text) == ["跑一遍"])
         #expect(try RawDB(app.services.location.databaseURL).count("sendRecords") == 0)
     }
 }
