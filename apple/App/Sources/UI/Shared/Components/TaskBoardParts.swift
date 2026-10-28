@@ -46,7 +46,7 @@ struct BoardColumns: View {
 
 /// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：身后不铺底（`BoardLane`，拖进来时一层选中底），一件一张卡——
 /// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是一件一张的卡（`BoardWaitCard`，拍板在前、待回复在后），都在懒加载栈里（列可能很长，只建看得见的）。
-/// 推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardLine.maxMoving` 张的线在动，
+/// 推进中置顶的在最前，其余按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardLine.maxMoving` 张的线在动，
 /// 各卡线上说过的话由列一次读好（`SaidReading`）。
 /// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
 /// 等你的卡只看不答：拍板点了去 Cue 页那一问（会话在问的进会话），待回复进会话。已完成卡尾的成果图点开全屏看（这一列挂一个 `previewPresenter`）。
@@ -325,21 +325,23 @@ private struct SaidReading: ViewModifier {
 }
 
 /// 推进中这一列从上到下的一格：一张卡（`moves`：线可以动，只给在跑那一档的前几张，`BoardLine.maxMoving`），或档与档之间的空。
+/// 置顶的几档连成一块，不在中间空开。
 private enum AdvancingSlot: Identifiable {
-    case gap(BoardPulse.Tier)
+    case gap(pinned: Bool, BoardPulse.Tier)
     case work(TaskBoard.Work, moves: Bool)
 
     var id: String {
         switch self {
-        case .gap(let tier): "gap/\(tier)"
+        case .gap(let pinned, let tier): "gap/\(pinned)/\(tier)"
         case .work(let work, _): work.id
         }
     }
 
-    static func slots(_ groups: [(tier: BoardPulse.Tier, work: [TaskBoard.Work])], gaps: Bool) -> [AdvancingSlot] {
-        groups.enumerated().flatMap { offset, group in
-            (offset > 0 && gaps ? [.gap(group.tier)] : [])
-                + group.work.enumerated().map { .work($1, moves: group.tier == .running && $0 < BoardLine.maxMoving) }
+    static func slots(_ groups: [(pinned: Bool, tier: BoardPulse.Tier, work: [TaskBoard.Work])], gaps: Bool) -> [AdvancingSlot] {
+        groups.enumerated().flatMap { offset, group -> [AdvancingSlot] in
+            let gap = gaps && offset > 0 && !(group.pinned && groups[offset - 1].pinned)
+            let cards = group.work.enumerated().map { AdvancingSlot.work($1, moves: group.tier == .running && $0 < BoardLine.maxMoving) }
+            return (gap ? [.gap(pinned: group.pinned, group.tier)] : []) + cards
         }
     }
 }

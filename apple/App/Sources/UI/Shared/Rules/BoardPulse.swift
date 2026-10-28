@@ -129,9 +129,13 @@ extension Workspace {
         return BoardPulse(shown: shown, session: session, handoff: handoff(of: session, shown: shown))
     }
 
-    /// 推进中按档分成几组（要你管 → 在跑 → 歇着，空的档不在内），同一档保持原来的先后。
-    func byAttention(_ work: [TaskBoard.Work], agents: AgentLinks) -> [(tier: BoardPulse.Tier, work: [TaskBoard.Work])] {
-        let tiers = Dictionary(grouping: work) { pulse($0, agents: agents).tier }
-        return BoardPulse.Tier.allCases.compactMap { tier in tiers[tier].map { (tier, $0) } }
+    /// 推进中从上到下的几组：置顶的任务（`Card.isPinned`）在最前，置顶的与其余的各自按档分（要你管 → 在跑 → 歇着，空的档不在内），
+    /// 同一组保持原来的先后。置顶是你亲手定的先后，排在档之前。
+    func byAttention(_ work: [TaskBoard.Work], agents: AgentLinks) -> [(pinned: Bool, tier: BoardPulse.Tier, work: [TaskBoard.Work])] {
+        let tiered = work.map { (work: $0, tier: pulse($0, agents: agents).tier) }
+        return [true, false].flatMap { pinned in
+            let tiers = Dictionary(grouping: tiered.filter { ($0.work.item?.task.isPinned == true) == pinned }, by: \.tier)
+            return BoardPulse.Tier.allCases.compactMap { tier in tiers[tier].map { (pinned, tier, $0.map(\.work)) } }
+        }
     }
 }
