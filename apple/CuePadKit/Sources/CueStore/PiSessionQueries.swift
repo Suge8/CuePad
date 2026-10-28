@@ -90,24 +90,23 @@ extension CueStore {
     }
   }
 
-  /// 绑在置顶任务（`pinnedTasks`，连同子任务）上的会话：会话段的置顶在最前（`PiSessionQuery.pinned`）。
-  static let pinnedSessions = """
-    SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND todoAt IS NOT NULL AND \(cardActive)
-      AND id IN (\(subtree(from: pinnedTasks)))
+  /// 会话绑着的顶层任务，一行一处绑定（会话 id、顶层任务、它置顶没有）：会话置不置顶只看这一份。从绑着它、还在列表里的任务往上一级就是顶层
+  /// （任务至多两级，`Card.maxTaskDepth`）。
+  private static let sessionTaskRows = """
+    SELECT piSessionID AS sessionID, COALESCE(parentID, id) AS task,
+      COALESCE((SELECT p.isPinned FROM cards p WHERE p.id = cards.parentID), isPinned) AS pinned
+    FROM cards WHERE piSessionID IS NOT NULL AND todoAt IS NOT NULL AND \(cardActive)
     """
 
-  /// 这些会话绑着的顶层任务（从绑着它、还在列表里的任务往上找），按 Pi 的会话 id；绑着几件时置顶的那件在先。
-  /// 与 `pinnedSessions` 同一条规则，一个从任务往下找，一个从会话往上找。
-  func sessionTasks(_ sessionIDs: [String]) throws -> [String: SessionTask] {
+  /// 绑在置顶任务上的会话：会话段的置顶在最前（`PiSessionQuery.pinned`）。
+  private static let pinnedSessions = "SELECT sessionID FROM (\(sessionTaskRows)) WHERE pinned = 1"
+
+  /// 这些会话绑着的顶层任务（`sessionTaskRows`），按 Pi 的会话 id；绑着几件时置顶的那件在先。
+  private func sessionTasks(_ sessionIDs: [String]) throws -> [String: SessionTask] {
     guard !sessionIDs.isEmpty else { return [:] }
     let rows = try db.query(
-      """
-      WITH RECURSIVE up(sessionID, id, parentID) AS (
-        SELECT piSessionID, id, parentID FROM cards
-        WHERE piSessionID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND \(Self.cardActive)
-        UNION SELECT up.sessionID, c.id, c.parentID FROM cards c JOIN up ON c.id = up.parentID WHERE c.deletedAt IS NULL)
-      SELECT up.sessionID, c.id, c.isPinned FROM up JOIN cards c ON c.id = up.id WHERE up.parentID IS NULL ORDER BY c.isPinned DESC
-      """, [JSONColumn.encode(sessionIDs)]
+      "SELECT sessionID, task, pinned FROM (\(Self.sessionTaskRows)) WHERE sessionID IN (SELECT value FROM json_each(?)) ORDER BY pinned DESC",
+      [JSONColumn.encode(sessionIDs)]
     ) { ($0.text(0), SessionTask(id: $0.uuid(1), isPinned: $0.bool(2))) }
     return Dictionary(rows, uniquingKeysWith: { first, _ in first })
   }

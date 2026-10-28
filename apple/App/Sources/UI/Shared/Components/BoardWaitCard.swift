@@ -46,7 +46,7 @@ struct BoardWaitCard: View {
 
     @ViewBuilder private var menu: some View {
         if let item = held.item {
-            let session = workspace.pulse(for: item.task, lead: item.leaf, in: agents).session
+            let session = workspace.session(for: item.task, lead: item.leaf, in: agents)
             #if os(macOS)
             CardActions(card: item.task, leaf: item.steps == nil, opens: true, session: session)
             #else

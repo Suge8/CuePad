@@ -38,7 +38,7 @@ public struct PiSessionQuery: Sendable, Equatable {
   public var launchToken: String?
   /// 只要这一条记录（`PiSessionState.id`）。
   public var id: UUID?
-  /// 只要绑在置顶任务上的（true）或其余的（false，`CueStore.pinnedSessions`）；nil 表示不限。
+  /// 只要绑在置顶任务上的（true）或其余的（false）；nil 表示不限。
   public var pinned: Bool?
   public var offset: Int
   /// 一页多少条；`Int.max` 表示不分页（只用于本就不多的范围，如在线的）。

@@ -14,9 +14,6 @@ extension CueStore {
       AND projectID NOT IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)
     """
 
-  /// 置顶的顶层任务（还在列表里的，做完了也算）：看板的推进中与已完成排在前面，绑在它们（连同子任务）上的会话在会话段置顶（`pinnedSessions`）。
-  static let pinnedTasks = "SELECT id FROM cards WHERE isPinned = 1 AND todoAt IS NOT NULL AND parentID IS NULL AND \(cardActive)"
-
   /// 散放的灵感：不是任务，也没挂在一个看得见的任务下（上级没到、在回收站的按散放看待）。
   static let looseIdea = """
     todoAt IS NULL AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE deletedAt IS NULL AND todoAt IS NOT NULL))
