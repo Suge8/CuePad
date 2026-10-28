@@ -43,9 +43,9 @@ struct AwaitingReplyTests {
         #expect(page.waiting.map(\.id) == ["session/deploy"])
         #expect(page.replies.map(\.sessionID) == ["glass", "header"])  // 等得最久的在前；Cue 没留给你的不算
         let board = try await TaskBoard.read(from: store)
-        #expect(board.waiting.map(\.id) == ["session/deploy"] && board.replies.map(\.id) == ["reply/glass", "reply/header"])
-        #expect(board.replies.first?.item?.task.id == dock.id && !board.advancing.contains { $0.item?.id == dock.id })  // 被待回复占着：只在等你
-        #expect(board.held.map(\.title) == ["deploy", "底栏换玻璃", "打磨手机 Cue 顶栏"] && board.held.map(\.deciding) == [true, false, false])  // 写这件事本身的名字
+        #expect(board.held.map(\.session.sessionID) == ["deploy", "glass", "header"] && board.held.map { $0.asks != nil } == [true, false, false])
+        #expect(board.held[1].item?.task.id == dock.id && !board.advancing.contains { $0.item?.id == dock.id })  // 被待回复占着：只在等你
+        #expect(board.held.map(\.title) == ["deploy", "底栏换玻璃", "打磨手机 Cue 顶栏"])  // 写这件事本身的名字
         var cue = try await now()
         #expect(board.count(.waiting) == 3 && cue.needsYou == 3)  // "等你 N"两种一起数，看板等你列同数
         #expect(cue.spoken == "1 件拍板，2 件待回复" && cue.items.prefix(3).map(\.kind) == [.asks, .reply, .reply])
@@ -100,7 +100,7 @@ struct AwaitingReplyTests {
         let idle = try await store.createTask("还没开始的")
 
         var board = try await TaskBoard.read(from: store)
-        #expect(board.replies.map(\.id) == ["reply/billing"] && board.held.first?.item?.id == parent.id)
+        #expect(board.held.map(\.session.sessionID) == ["billing"] && board.held.first?.item?.id == parent.id)
         // 卡写的是此刻有会话的那一步（第二步），不是第一个没做完的
         #expect(board.held.first?.item?.agent?.state.sessionID == "billing")
         #expect(board.held.first?.item?.agent?.state.sessionID != first.piSessionID)
@@ -111,7 +111,7 @@ struct AwaitingReplyTests {
         await workspace.speak(to: .session(session, mode: .send), from: box) { $0.text }.value
 
         board = try await TaskBoard.read(from: store)
-        #expect(board.replies.isEmpty && board.count(.waiting) == 0)
+        #expect(board.held.isEmpty && board.count(.waiting) == 0)
         let work = try #require(board.advancing.first { $0.item?.id == parent.id })
         var pulse = workspace.pulse(of: work.agent)
         #expect(pulse.tier == .running && pulse.word == nil && workspace.shownInHeader(session, delivery: work.agent?.delivery).label == "发送中")

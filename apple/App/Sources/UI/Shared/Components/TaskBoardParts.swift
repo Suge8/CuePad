@@ -288,7 +288,7 @@ struct BoardColumn: View {
 extension TaskBoard {
     /// 看板上的这件任务（在哪一列都算）。
     func item(_ id: UUID) -> Item? {
-        todo.first { $0.id == id } ?? advancing.lazy.compactMap(\.item).first { $0.id == id } ?? waiting.lazy.compactMap(\.item).first { $0.id == id }
+        todo.first { $0.id == id } ?? advancing.lazy.compactMap(\.item).first { $0.id == id } ?? held.lazy.compactMap(\.item).first { $0.id == id }
             ?? done.first { $0.id == id } ?? earlier.first { $0.id == id }
     }
 }
