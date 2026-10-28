@@ -20,6 +20,17 @@ extension Workspace {
         if tab == root { path = [] } else { root = tab }
     }
 
+    /// UIKit 的回调里换 tab（点系统标签栏的格子、横滑松手、读屏的三指滑）：排到主线程的下一轮再 `tap`。
+    /// 在 UIKit 派发触摸的那一下里改 `root`，SwiftUI 有时在 willSet 里当场把读它的视图重算一遍（读到的还是旧值），又漏掉紧接着真正的改动：
+    /// 标签栏选了新的格子、页却一直停在旧 tab 上（iOS 27 实测，调用栈是 `ObservationRegistrar.willSet` → `GraphHost.flushTransactions`）。
+    func tapSoon(_ tab: Route) { Task { self.tap(tab) } }
+
+    /// 推回 Cue 页上刚返回离开的那一页（左滑前进，`LeaveShot`）。会话页按此刻重读首帧（同 `openSession`）：离开后对话可能又长了。
+    func goForward(to route: Route) {
+        guard case .session(let session) = route else { return push(route) }
+        push(sessionRoute(session.id, sessionID: session.sessionID) ?? route)
+    }
+
     /// 灵感的纸页推在当前页上。
     func showEditor(_ card: UUID) { push(.card(card)) }
 
