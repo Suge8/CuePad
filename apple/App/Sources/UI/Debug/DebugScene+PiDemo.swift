@@ -151,7 +151,7 @@ extension DebugScene {
         }
         try await seedTaskStates(store, projects: projects)
         if let relay = states.first(where: { $0.sessionID == "relay" }) {
-            // 一条没能送达、之后又问了一轮（没送到的那句留在说它的那一刻），再一条已送达还没进对话（在最末）：由一个只认这台演示 Mac 的执行器给出结果
+            // 一条没能送达（重发的照常送达）、之后又问了一轮，再一条已送达还没进对话：由一个只认这台演示 Mac 的执行器给出结果
             _ = try await services.store.requestDelivery(String(localized: "顺便备份一下线上数据库", table: "Demo"), to: relay.target, on: relay.hostID, mode: .send)
             try await relayLaterTurn(store)
             _ = try await services.store.requestDelivery(String(localized: "先把迁移脚本在测试库上跑一遍，报错长这样", table: "Demo") + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay.target, on: relay.hostID, mode: .send)
@@ -162,8 +162,10 @@ extension DebugScene {
             if let quote = try await store.piSessionPage(PiSessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {
                 _ = try await services.store.requestDelivery(String(localized: "把报价单备份到网盘", table: "Demo"), to: quote.target, on: quote.hostID, mode: .send)
             }
+            let seeded = Date.now
             relayExecutor = DeliveryExecutor(store: store, hostID: relay.hostID, onIssue: { _ in }) { request in
-                [String(localized: "顺便备份一下线上数据库", table: "Demo"), String(localized: "把报价单备份到网盘", table: "Demo")].contains(request.content)
+                request.createdAt < seeded
+                    && [String(localized: "顺便备份一下线上数据库", table: "Demo"), String(localized: "把报价单备份到网盘", table: "Demo")].contains(request.content)
                     ? .failed(ShownText(SendError.sessionNotOnThisMac(request.target.name))) : .succeeded
             }
             try await relayExecutor?.start()
