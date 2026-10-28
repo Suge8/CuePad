@@ -4,6 +4,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { BUILTIN_COMMANDS, contextInfo, findModel, INTERNAL_COMMAND, isThinkingLevel, modelInfo, reason, type BuiltinCommand } from "./info.ts";
+import { retry } from "./retry.ts";
 import type { Ack, Session } from "./session.ts";
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -122,6 +123,7 @@ function handleCommand(session: Session, socket: net.Socket, command: Command | 
 		if (command?.t === "reload") return handleReload(session, ack);
 		if (command?.t === "end") return handleEnd(session, ack);
 		if (command?.t === "abort") return handleAbort(session, ack);
+		if (command?.t === "retry") return handleRetry(session, ack, reject);
 		if (command?.t === "config") return void handleConfig(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "quota") return handleQuota(session, ack, reject);
 		reject("bad_request");
@@ -246,6 +248,12 @@ function handleEnd(session: Session, ack: Ack) {
 function handleAbort(session: Session, ack: Ack) {
 	session.stopRound();
 	ack({ ok: true });
+}
+
+/** 把出错的那一轮原样重跑一遍（`retry.ts`）；确认等重跑的那一轮开始（隐藏消息落成会话里的一条消息）。 */
+function handleRetry(session: Session, ack: Ack, reject: Reject) {
+	const error = retry(session, ack);
+	if (error) reject(error);
 }
 
 /** 会话设置：会话名（Pi 设置会话名的接口，同 `/name`）、模型、思考强度——先换模型（需要该提供方已配好密钥）再设强度，强度由 Pi 按新模型支持的范围夹取。 */

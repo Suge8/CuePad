@@ -2,6 +2,8 @@
 // 最后一条 user 文字里的标记决定行为（请求被中止时以 aborted 结束）：
 //   [[slow]]      流式输出前停住，直到测试放行（制造"正忙"窗口；见下"停住与放行"）
 //   [[fail]]      以 error 结束
+//   [[fail-once]] 同一句话第一次请求以 error 结束（"fake model failure"），之后的请求照常回复（重跑出错的那一轮）
+//   [[roles]]     回复 "ROLES <请求里每条消息的角色，逗号连接>"（证明请求里没有多出的消息）
 //   [[abort-as-error]] 请求被中止时以 error（"The operation was aborted."）结束，像 Pi 1.2 的 openai-codex 在工具被中止后的那次请求
 //   [[tool:CMD]]  先发起 bash 工具调用（CMD 里的字面 \n 会变成换行），收到工具结果后回复 TOOL_DONE
 //   [[write:PATH]] 先发起 write 工具调用（写 PATH），收到工具结果后回复 TOOL_DONE
@@ -22,6 +24,7 @@ const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0
 const gateDirectory = () => join(process.env.PI_CODING_AGENT_DIR!, "fake-model-gate");
 const holdCeiling = 30_000; // 测试异常退出时不让 Pi 永远停着
 let holds = 0;
+const failedOnce = new Set<string>();
 
 // 停住直到放行（取走一个 release 文件）或请求被中止。用目录变化事件等，不轮询。
 async function hold(signal?: AbortSignal) {
@@ -91,7 +94,8 @@ export default function (pi: any) {
 
 				const compacted = context.messages.some((m: any) => JSON.stringify(m.content).includes("compacted into the following summary"));
 				const overflow = !summarizing && text.includes("[[overflow]]") && !compacted;
-				if (overflow || (summarizing ? text.includes("[[fail-compact]]") : text.includes("[[fail]]"))) {
+				const failOnce = text.includes("[[fail-once]]") && !failedOnce.has(text) && !!failedOnce.add(text);
+				if (overflow || failOnce || (summarizing ? text.includes("[[fail-compact]]") : text.includes("[[fail]]"))) {
 					msg.stopReason = "error";
 					msg.errorMessage = overflow ? "prompt is too long: 120000 tokens > 100000 maximum" : "fake model failure";
 					stream.push({ type: "error", reason: "error", error: msg });
@@ -121,7 +125,9 @@ export default function (pi: any) {
 					return;
 				}
 
-				const reply = tool ? "TOOL_DONE" : `ECHO ${text} IMAGES[${images.join(",")}]`;
+				const reply = tool ? "TOOL_DONE"
+					: text.includes("[[roles]]") ? `ROLES ${context.messages.map((m: any) => m.role).join(",")}`
+					: `ECHO ${text} IMAGES[${images.join(",")}]`;
 				msg.content.push({ type: "text", text: reply });
 				stream.push({ type: "text_start", contentIndex: 0, partial: msg });
 				stream.push({ type: "text_delta", contentIndex: 0, delta: reply, partial: msg });

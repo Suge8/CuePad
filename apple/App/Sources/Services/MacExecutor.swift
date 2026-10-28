@@ -4,7 +4,7 @@ import CueStore
 import Foundation
 
 /// 这台 Mac 上的投送请求执行器：领取发给本机的请求（手机发来的与本机界面写的），按发送方式执行，把结果写回。
-/// 全 App 经桥给 Agent 会话发消息、作答、改配置、停止、结束，经各 Agent 的接入在后台开会话、接着会话的只有这里；成功送出的话记发送记录。
+/// 全 App 经桥给 Agent 会话发消息、作答、改配置、停止、重跑出错的一轮、结束，经各 Agent 的接入在后台开会话、接着会话的只有这里；成功送出的话记发送记录。
 final class MacExecutor {
     private let store: CueStore
     private let pi: PiBridge
@@ -91,6 +91,7 @@ final class MacExecutor {
         case .quota: try await refreshQuota()
         case .end: try await end(request.target)
         case .stop: try await stop(request.target)
+        case .retry: try await retry(request.target)
         case .answer: try await answer(request)
         case .config: try await configure(request)
         case .command: try await runCommand(request)
@@ -169,6 +170,12 @@ final class MacExecutor {
     private func stop(_ target: SendTarget) async throws {
         guard let id = pi.session(sessionID: try sessionID(of: target))?.id else { return }
         try await pi.abort(id)
+    }
+
+    /// 把出错的那一轮原样重跑一遍（不写发送记录）：出错的会话在桥上才有这一轮，已结束的不唤醒（唤醒后的进程没有出错的状态，扩展不重跑）。
+    private func retry(_ target: SendTarget) async throws {
+        guard let id = pi.session(sessionID: try sessionID(of: target))?.id else { throw SendError.sessionNotOnThisMac(target.name) }
+        try await pi.retry(id)
     }
 
     /// 请求指名的 Pi 会话（Pi 自己的会话 id）；别的目标是旧版本写的发到应用、剪贴板，按失败写回。

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
 import { clip, messageText, modelInfo, preview, type Question } from "./info.ts";
+import { omitFromContext, landed, stripFromRequest } from "./retry.ts";
 import { claudeHeaderWindows, codexWindows, record } from "./quota.ts";
 import type { Session } from "./session.ts";
 
@@ -21,6 +22,8 @@ export function follow(session: Session): (() => void)[] {
 		pi.on("thinking_level_select", () => session.updateInfo({ thinking: ctx.model ? pi.getThinkingLevel() : null })),
 		pi.on("before_agent_start", () => session.refreshCommands()),
 		pi.on("turn_end", refreshContext),
+		pi.on("context", stripFromRequest),
+		pi.on("turn_end", omitFromContext),
 		pi.on("agent_settled", refreshContext),
 		pi.on("session_compact", refreshContext),
 		pi.on("session_tree", refreshContext),
@@ -35,6 +38,7 @@ export function follow(session: Session): (() => void)[] {
 				const stop = event.message.stopReason;
 				return stop === "toolUse" || stop === "aborted" || stop === "error" ? draft.clear() : draft.grow(event.message, true);
 			}
+			if (event.message.role === "custom") return landed(session, event.message);
 			if (event.message.role !== "user") return;
 			// 首条消息与 Pi 会话列表一致，不区分机器消息
 			session.updateInfo({ firstMessage: session.firstMessage ?? preview(messageText(event.message)) });

@@ -5,7 +5,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge/`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令除 `upgrade` 外一条不发），会话等它换上新扩展（`OtherProtocolHello`、`PiSession.upgrading`）
-    static let protocolVersion = 16
+    static let protocolVersion = 17
 
     struct State: Decodable {
         var kind: String
@@ -291,7 +291,7 @@ enum PiWire {
         var id: String
     }
 
-    /// 只有种类的命令：`reload`、`end`、`abort`、`quota`。
+    /// 只有种类的命令：`reload`、`end`、`abort`、`retry`、`quota`。
     static func bare(_ t: String, id: String) throws -> Data { try encodeLine(Bare(t: t, id: id)) }
 
     private struct ConfigCommand: Encodable {

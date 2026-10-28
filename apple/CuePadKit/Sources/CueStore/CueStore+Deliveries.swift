@@ -58,7 +58,12 @@ extension CueStore {
     try write { try requestControl(.stop, of: target, on: host, cue: cue) }
   }
 
-  /// 正文就是方式名的控制类请求（结束、停止）：同一会话同一种方式在路上只有一条。必须在写事务内调用。
+  /// 请 `host` 那台 Mac 把 `target` 会话出错的那一轮原样重跑一遍：方式是 `retry`；同样复用还在路上的那一条（连点只发一次）。
+  public func requestRetry(of target: SendTarget, on host: String) throws -> DeliveryRequest {
+    try write { try requestControl(.retry, of: target, on: host, cue: false) }
+  }
+
+  /// 正文就是方式名的控制类请求（结束、停止、重跑）：同一会话同一种方式在路上只有一条。必须在写事务内调用。
   func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String, cue: Bool) throws -> DeliveryRequest {
     if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && $0.isOpen }) {
       return open

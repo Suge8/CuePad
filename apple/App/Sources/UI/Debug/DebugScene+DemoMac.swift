@@ -32,7 +32,7 @@ extension DebugScene {
                 let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
                     await Task.wait(for: .seconds(1))
                     if let outcome = await DemoAgentLibrary.apply(request, store: store) { return outcome }
-                    if let mode = request.mode.known, DeliveryMode.toSession.contains(mode), mode != .answer {
+                    if request.mode == .known(.send) {
                         do {
                             _ = try await store.recordSend(request.content, to: request.target, card: request.cardID, delivery: request.id, origin: request.origin)
                         } catch {

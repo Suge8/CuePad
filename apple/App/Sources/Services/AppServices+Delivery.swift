@@ -16,7 +16,7 @@ extension AppServices {
         Task { await upload(said.id, deleted: true) }
     }
 
-    /// 投送请求（发送、作答、配置、结束、停止、开会话、绑定、补对话）都走同一条投送通道，Mac 本机也走它、由执行器交给扩展；
+    /// 投送请求（发送、作答、配置、结束、停止、重跑、开会话、绑定、补对话）都走同一条投送通道，Mac 本机也走它、由执行器交给扩展；
     /// 写出后立即上传（不等它完成），结果用 `CueStore.outcome(of:)` 等。
     func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
         Task { await upload(request.id) }
@@ -54,6 +54,12 @@ extension AppServices {
     /// 只停指挥官自己这一轮，子代理照常跑；已经结束或空闲的会话也算成功。界面只在会话 `state.isTurnRunning` 时给入口（等子代理时指挥官没有在跑的一轮）。
     func stop(_ session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestStop(of: session.target, on: session.hostID))
+    }
+
+    /// 把出错的那一轮原样重跑一遍（`PiSessionState.canRetry`）：请会话所在的 Mac 让扩展重跑它，对话里不多一句话，只多出新的回答；
+    /// 还在路上时再点不会再发一条（Store 去重）。会话的显示状态按这条请求当场是"在路上"（`PiDelivery`）。
+    func retry(_ session: PiSessionState) async throws -> DeliveryRequest {
+        uploaded(try await store.requestRetry(of: session.target, on: session.hostID))
     }
 
     /// 请 `host` 那台 Mac 在项目的文件夹里用 `agent` 开新会话（`model`、`thinking` 为 nil 是这家的默认），`prompt` 作开场。

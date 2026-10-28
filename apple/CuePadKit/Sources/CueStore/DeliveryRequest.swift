@@ -30,6 +30,9 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 停止会话正在跑的这一轮（相当于在 Pi 里按 Esc：只停指挥官自己这一轮，子代理不动），会话回到等你下一句；
   /// 正文固定为 `stop`，不写发送记录
   case stop
+  /// 把会话出错的那一轮原样重跑一遍（`PiSessionState.canRetry`）：对话里不多一句话、也不发"继续"，只多出新的回答；正文固定为 `retry`，
+  /// 不写发送记录。会话在跑或最后一轮不是出错结束的，扩展拒绝（`nothing_to_retry`）
+  case retry
   /// 请 Mac 给项目绑定文件夹（或解除绑定）；正文是 `PiBind`（见 `DeliveryRequest.bind`），不写发送记录
   case bind
   /// 斜杠命令：正文是以 / 开头的整行（命令加参数，可接着带上的卡片文字），由 Pi 派发——内置命令（压缩、命名、换模型……）、扩展命令照常执行，
@@ -46,9 +49,9 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// "Mac 上刚改过"；不写发送记录
   case libraryEdit
 
-  /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。命令与设置（config、end、stop、bind）不在其中：
+  /// 发给会话本身、会改变它状态的方式（说话、作答与重跑出错的一轮）；会话的显示状态只把这几种算进去。命令与设置（config、end、stop、bind）不在其中：
   /// 它们不是"你说的话"，对话只来自会话文件，进度只在回复框上方短暂显示。
-  public static let toSession: Set<DeliveryMode> = [.send, .answer]
+  public static let toSession: Set<DeliveryMode> = [.send, .answer, .retry]
 }
 
 /// 请求是谁写的：没有值是你（经 CuePad 的界面或命令行）；Cue 写的标 `cue`。
