@@ -63,21 +63,25 @@ extension CueStore {
     try setArchived(chains.filter { !reopened.isDisjoint(with: $0) }.map { $0.last! }, at: nil)
   }
 
-  /// 会话的去留只在这里定。一件事里的叶子做完了（你点圆圈 `toggleDone`、Cue 做完 `finishTask`），或叶子换去别的会话的那一刻
-  /// （开工、交话时开新会话或交给别的会话都经 `insertDelivery`，你绑定经 `bindSession`），对这件事里绑着的会话各看一遍，没人再用就请它所在的 Mac 结束：
-  /// 1. 有没做完、也没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去（接着用它时话送到才绑上），留着；
-  /// 2. 这件事的下一步（排在最前的没做完的子任务）还没开工、也没在往别处交，照交给的规则（`handOffPlan`）默认接着用它，留着；
-  /// 3. 其余结束：没有下一步了、下一步换了别的会话、整件事完成。做不到的（`PiSessionState.canEnd`：终端里开的 Codex 会话这类）留着；
-  ///    已结束的、记录还没到的不动。
-  /// `task` 是这件事里的任意一个任务。返回结束请求。必须在写事务内调用。
+  /// 会话的去留只在这里定。任务离开看板（做完：你点圆圈 `toggleDone`、Cue 做完 `finishTask`；归档 `archive`；删除 `trashCards`；
+  /// 所在项目进回收站 `trashProject`），或叶子换去别的会话的那一刻（开工、交话时开新会话或交给别的会话都经 `insertDelivery`，你绑定经 `bindSession`），
+  /// 写下改动之后对这件事里绑着的会话各看一遍，没人再用就请它所在的 Mac 结束：
+  /// 1. 有还在看板上（`taskOpen`）、也没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去（接着用它时话送到才绑上），留着；
+  /// 2. 这件事的下一步（排在最前的还在看板上的子任务）还没开工、也没在往别处交，照交给的规则（`handOffPlan`）默认接着用它，留着；
+  /// 3. 其余结束：没有下一步了、下一步换了别的会话、整件事完成、归档或删掉了。做不到的（`PiSessionState.canEnd`：终端里开的 Codex 会话这类）留着；
+  ///    已结束的、记录还没到的不动。取回归档、撤销删除不重开：再对它说话就在后台恢复。
+  /// `task` 是这件事里的任意一个任务，可以已经归档或删掉（删掉的从它原来的上级往上找这件事）；灵感不管。返回结束请求。必须在写事务内调用。
   @discardableResult
   func endUnusedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
-    guard let top = try find(Card.self, try topTask(of: task)) else { return [] }
+    guard let card = try find(Card.self, task), card.isTask else { return [] }
+    let topID = try card.parentID.map { try ancestors(of: $0).last ?? $0 } ?? task
+    guard let top = try find(Card.self, topID) else { return [] }
     let sessions = try db.query(
-      "SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?")))", [top.id]
+      "SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND (id = ?1 OR id IN (\(Self.subtree(from: "SELECT ?2"))))", [task, topID]
     ) { $0.text(0) }
     guard !sessions.isEmpty else { return [] }
-    let open = try leaves(of: top).filter { $0.completedAt == nil }
+    let open = try select(
+      Card.self, where: "id IN (SELECT value FROM json_each(?)) AND \(Self.taskOpen)", [Self.idList(try leaves(of: top).map(\.id))], orderBy: "sortKey, id")
     let launching = try launchingLeaves(open.map(\.id))
     var used = Set(open.filter { !launching.contains($0.id) }.compactMap(\.piSessionID))
     if let next = open.first, next.id != top.id, next.piSessionID == nil, !launching.contains(next.id), try sendingLeaves([next.id]).isEmpty,
@@ -101,7 +105,7 @@ extension CueStore {
   /// 会话（?1）在这件事（以 ?2 为根；NULL 是哪件事都不除外）之外还有用：别的事没做完的叶子绑着它，或有话正送进去。
   private static let usedElsewhere = """
     SELECT 1 WHERE EXISTS (
-        SELECT 1 FROM cards WHERE piSessionID = ?1 AND todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL
+        SELECT 1 FROM cards WHERE piSessionID = ?1 AND \(taskOpen)
           AND (?2 IS NULL OR id NOT IN (\(subtree(from: "SELECT ?2")))))
       OR EXISTS (
         SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(sqlList(DeliveryMode.toSession))) AND status IN (\(DeliveryStatus.openSQL)))

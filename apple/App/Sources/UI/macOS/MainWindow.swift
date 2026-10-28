@@ -120,6 +120,7 @@ private struct WindowPanels: View {
             }
             .panel(item: $workspace.projectForm) { ProjectForm($0) }
             .panel(isPresented: $workspace.showsSetup) { SetupPanel() }
+            .sessionAsks(workspace)
     }
 }
 

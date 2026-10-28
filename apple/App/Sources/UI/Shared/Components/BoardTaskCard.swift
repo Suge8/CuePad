@@ -7,7 +7,8 @@ import SwiftUI
 /// - 推进中下沿是那条线（`BoardLine`：过去说过的几句、此刻在跑或停住，右端是此刻状态多久与要你管的状态词），歇着的标题淡一档；已完成卡尾是 Cue 点名的成果图；
 /// - 悬停提示：项目、多久（推进中是跑了多久或估还要多久，已完成是几点做完）与交给了哪家 Agent。
 /// 上级收成一张（`TaskBoard.Item.leaf`）：状态看此刻干活的叶子。点圈完成（`TaskCheck`）；点卡的其余地方同任务行（`Workspace.enter`）：
-/// 开工了的叶子进它的会话，其余打开任务气泡。长按（Mac 右键）是这件任务的菜单（`CardActions`），点卡进的是会话时第一项"打开任务"。
+/// 开工了的叶子进它的会话，其余打开任务气泡。长按（Mac 右键）是这件任务的菜单（`CardActions`，各处同一份），点卡进的是会话时第一项"打开任务"，
+/// 推进中在用的会话还能结束时多一项"结束会话"。置顶的（`Card.isPinned`）标题前一枚图钉。
 /// Mac 上指针停在卡上卡亮一档（`PressFeedback` 的卡），还没交出去的叶子这时右端浮出"▶ 开始"（不占排版，盖住标题的尾巴）。
 struct BoardTaskCard: View {
     let item: TaskBoard.Item
@@ -34,6 +35,7 @@ struct BoardTaskCard: View {
             BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves) {
                 ring(next: next).opacity(column.leadOpacity)
                 if let project { BoardProjectGlyph(project: project) }
+                if task.isPinned { BoardPin() }
                 title(resting: pulse.tier == .resting && advancing)
             } trailing: {
                 if let shot = item.shot { BoardShot(shot: shot, group: task.id.uuidString, open: openShot) }
@@ -44,9 +46,12 @@ struct BoardTaskCard: View {
             .boardCard(column)
         }
         .help(tip)
-        .taskSpoken(task, subtasks: item.steps, next: next, aside: pulse.handoff?.waiting, check: $check, open: open, follow: { follow(next) }) {
+        .taskSpoken(task, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) {
             if let shot = item.shot { Button("看成果") { openShot(BoardShot.opening(shot, group: task.id.uuidString)) } }
-            if let session = pulse.session { HandoffButton(session: session) }
+            if let session = pulse.session {
+                HandoffButton(session: session)
+                if let end = SessionActions.end(session, ending: false, in: workspace) { RowActionButtons(actions: [end]) }
+            }
         }
     }
 
@@ -82,6 +87,11 @@ struct BoardTaskCard: View {
         return Dotted(item.project?.shownName, time, agent).visible
     }
 
+    /// 读屏在标题后面多念的：置顶了、在等哪一处做完。
+    private func aside(_ pulse: BoardPulse) -> String? {
+        Dotted(task.isPinned ? String(localized: "已置顶") : nil, pulse.handoff?.waiting).nonEmpty?.spoken
+    }
+
     private func open() { workspace.openTask(task) }
 
     private func tap() { workspace.enter(task, leaf: item.steps == nil, in: agents) }
@@ -96,9 +106,9 @@ struct BoardTaskCard: View {
         let opens = workspace.entersSession(task, leaf: leaf, in: agents)
         if let session { HandoffButton(session: session) }
         #if os(macOS)
-        CardActions(card: task, leaf: leaf, opens: opens)
+        CardActions(card: task, leaf: leaf, opens: opens, session: session)
         #else
-        CardActions(card: task, opens: opens)
+        CardActions(card: task, opens: opens, session: session)
         #endif
     }
 

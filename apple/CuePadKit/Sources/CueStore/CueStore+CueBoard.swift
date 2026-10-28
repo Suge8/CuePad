@@ -26,17 +26,15 @@ extension CueStore {
 
   /// 表 `alias`（会话记录）里不归没做完的事的活会话：没结束，没有没做完的任务绑着它，
   /// 也不是哪个没做完的任务以前用过的（`Card.formerSessionIDs`）。只有已完成的事绑着的算在内：它还活着，Cue 管它。
-  /// 回收站与归档里的任务不算。
+  /// 离开了看板的任务（`taskOpen`：归档、删除、项目进了回收站）不算。
   static func isLoose(_ alias: String) -> String {
-    let open = "c.deletedAt IS NULL AND c.completedAt IS NULL AND c.archivedAt IS NULL"
-    return """
-      \(PiWorkState.outsideSQL([.ended], column: "\(alias).state"))
-        AND NOT EXISTS (
-          SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(open) AND c.todoAt IS NOT NULL)
-        AND NOT EXISTS (
-          SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
-          WHERE c.formerSessionIDs IS NOT NULL AND c.todoAt IS NOT NULL AND \(open) AND f.value = \(alias).sessionID)
-      """
+    """
+    \(PiWorkState.outsideSQL([.ended], column: "\(alias).state"))
+      AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskOpen))
+      AND NOT EXISTS (
+        SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
+        WHERE c.formerSessionIDs IS NOT NULL AND \(taskOpen) AND f.value = \(alias).sessionID)
+    """
   }
 
   private func boardItems(_ tasks: [Card]) throws -> [CueBoardItem] {

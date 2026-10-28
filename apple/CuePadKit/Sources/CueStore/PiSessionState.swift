@@ -38,19 +38,22 @@ public struct PiSessionQuery: Sendable, Equatable {
   public var launchToken: String?
   /// 只要这一条记录（`PiSessionState.id`）。
   public var id: UUID?
+  /// 只要绑在置顶任务上的（true）或其余的（false）；nil 表示不限。
+  public var pinned: Bool?
   public var offset: Int
   /// 一页多少条；`Int.max` 表示不分页（只用于本就不多的范围，如在线的）。
   public var limit: Int
 
   public init(
     scope: PiSessionScope = .all, text: String? = nil, project: UUID? = nil, launchToken: String? = nil, id: UUID? = nil,
-    offset: Int = 0, limit: Int = 50
+    pinned: Bool? = nil, offset: Int = 0, limit: Int = 50
   ) {
     self.scope = scope
     self.text = text
     self.project = project
     self.launchToken = launchToken
     self.id = id
+    self.pinned = pinned
     self.offset = offset
     self.limit = limit
   }
@@ -71,23 +74,32 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var rename: DeliveryRequest?
   /// 发给它、还没有回执或失败了的话（说话的方式，没被领取或失败、还没重发或移除的）：哪几句没能送达按说的话那条规则看此刻（`undelivered`）。
   public var unsettled: [DeliveryRequest]
+  /// 绑着它的顶层任务（`CueStore.sessionTasks`）：会话的"置顶"置的是它；没绑还在列表里的任务为 nil。
+  public var task: SessionTask?
   public var id: UUID { state.id }
   /// 会话归在哪个项目（会话页按它筛、项目的此刻按它归）：它的项目还在就是它，没有项目或项目已删的归默认项目。
   public var home: UUID { project?.id ?? Project.defaultID }
 
   public init(
     state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil,
-    unsettled: [DeliveryRequest] = []
+    unsettled: [DeliveryRequest] = [], task: SessionTask? = nil
   ) {
     self.state = state
     self.project = project
     self.delivery = delivery
     self.rename = rename
     self.unsettled = unsettled
+    self.task = task
   }
 
   /// 此刻没能送达的话有几句（`Speech`：失败的与超时的）：会话行的标记与会话页顶栏的"N 句没送到"同读这个数。
   public func undelivered(at moment: Speech.Moment) -> Int { Speech.undelivered(unsettled, at: moment) }
+}
+
+/// 会话绑着的顶层任务：会话没有自己的置顶，置顶的是这件事（`Card.isPinned`）。
+public struct SessionTask: Sendable, Equatable {
+  public var id: UUID
+  public var isPinned: Bool
 }
 
 /// 一页会话与符合条件的总数。顺序：未结束的在前，各自按进入当前状态的时间从新到旧。

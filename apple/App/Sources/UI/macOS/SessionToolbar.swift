@@ -14,10 +14,8 @@ final class SessionHeader {
         var undelivered: String?
         var ending: Bool
         var place: String?
-        /// 本机桥上在线、开在终端里、知道是哪个终端的会话（可跳到终端，`PiSession.canJump`）。
-        var liveID: CuePi.PiSession.ID?
-        var canEnd: Bool
-        var canRename: Bool
+        /// 绑着的顶层任务（会话菜单的"置顶"置的是它，`SessionActions`）。
+        var pin: SessionTask?
         /// 对话在看历史时标题让开。
         var showsHeader: Bool
         /// "⋯"里的菜单项晚于标题两帧建（建菜单约占点击回合的一半）。
@@ -27,8 +25,6 @@ final class SessionHeader {
     }
 
     private(set) var state: State?
-    @ObservationIgnored var rename: (PiSessionState) -> Void = { _ in }
-    @ObservationIgnored var end: (PiSessionState) -> Void = { _ in }
     @ObservationIgnored var reveal: () -> Void = {}
 
     func set(_ state: State?) {
@@ -203,7 +199,7 @@ private struct ToolbarItemFlex: NSViewRepresentable {
 }
 
 /// "⋯"里会话页的那几项：最上面写所在；绑着的每件没完成的事一项"完成"；"绑定到任务"再绑一件（本项目还没绑会话的叶子任务）；
-/// "解除绑定"正在用它的那几件（以前用过它的不在这里解）；
+/// "解除绑定"正在用它的那几件（以前用过它的不在这里解）；其余是会话的菜单（`SessionActions`，各处同一份）。
 struct SessionMenuItems: View {
     let state: SessionHeader.State
     @Environment(Workspace.self) private var workspace
@@ -236,16 +232,7 @@ struct SessionMenuItems: View {
             }
             Divider()
         }
-        if state.canRename {
-            Button("重命名…", icon: .rename) { workspace.sessionHeader.rename(state.session) }
-        }
-        if let id = state.liveID {
-            Button("跳到终端窗口", icon: .terminalWindow) { workspace.jumpToTerminal(id) }
-        }
-        if state.canEnd {
-            Button("结束会话", icon: .endSession, role: .destructive) { workspace.sessionHeader.end(state.session) }
-                .disabled(state.ending)
-        }
+        SessionActions(session: session, task: state.pin, ending: state.ending)
     }
 
     private func unbind(_ task: UUID) { workspace.perform { try await $0.unbindSession(from: task) } }

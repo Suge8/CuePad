@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 进展页的会话段（`ProgressPage`）：全部会话，在线的在上（现在）、历史在下，只看项目范围里的（`Workspace.scopedProject`，与看板一段共用）。
 /// 页里不另起一排：范围与新会话在工具栏那一排（`ProgressPage` 的头注释）；搜索框是列表的第一行，随列表滚走。
-/// 列表与行同手机（`PiSessionList`、`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
+/// 列表与行同手机（`PiSessionList`、`PiSessionRow`），点行在内容区打开会话页；右键是会话的菜单（`SessionActions`）。
 /// 这台 Mac 检测到 Agent 却一家都没接入时，最上面是接入小卡（`ConnectAgents`）：没接入时本机的会话在这里看不到。
 struct SessionsPane: View {
     @Environment(Workspace.self) private var workspace
@@ -66,6 +66,10 @@ struct SessionsPane: View {
         if list.isEmpty {
             if !ConnectAgents.needed(services) { empty.padding(.top, 60) }
         } else {
+            if !list.pinned.isEmpty {
+                title("已置顶")
+                cards { ForEach(list.pinned) { row($0, in: list, end: list.ends[$0.id]) } }
+            }
             if !list.now.isEmpty {
                 title("现在")
                 cards { ForEach(list.now) { row($0, in: list, end: list.ends[$0.id]) } }
@@ -97,12 +101,9 @@ struct SessionsPane: View {
     /// 看全部项目时卡上放所在项目的图标（`PiSessionList.showsPlace`）。
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let session = item.state
-        let endable = session.canEnd && end?.inTransit != true
         return PiSessionRow(session: session, project: list.showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
             .sessionLink(session.sessionID, press: .card)
-            .contextMenu {
-                SessionMenu(session: session, rename: { model.renaming = session }, end: endable ? { model.confirmingEnd = session } : nil)
-            }
+            .contextMenu { SessionActions(session: session, task: item.task, ending: end?.inTransit == true) }
     }
 
     @ViewBuilder private var empty: some View {

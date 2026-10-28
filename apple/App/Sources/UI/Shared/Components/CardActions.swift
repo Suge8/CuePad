@@ -12,10 +12,13 @@ struct CardActions: View {
     var leaf = false
     /// 点它进的是会话（`Workspace.entersSession`）：长按菜单第一项"打开任务"。
     var opens = false
+    /// 它此刻在用的会话（叶子交给的那个；有子任务的是此刻干活的那一步的）：还能结束时长按菜单多一项"结束会话"。
+    var session: PiSessionState?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card, selectable: selectable, bindsSession: leaf, opens: opens)
+        let ends = session?.canEnd == true
+        let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card, selectable: selectable, bindsSession: leaf, opens: opens, endsSession: ends)
         ForEach(sections.indices, id: \.self) { index in
             if index > 0 { Divider() }
             ForEach(sections[index], id: \.self, content: item)
@@ -29,6 +32,8 @@ struct CardActions: View {
             #if os(macOS)
             Menu(item.title, icon: item.icon) { SessionBindItems(leaf: card) }
             #endif
+        case .endSession:
+            if let session, let end = SessionActions.end(session, ending: false, in: workspace) { RowActionButtons(actions: [end]) }
         default:
             if let run = item.run(on: card, in: workspace) {
                 Button(item.title, icon: item.icon, role: item.tone == .destructive ? .destructive : nil, action: run)
@@ -65,6 +70,7 @@ extension CardMenu.Item {
         case .outdent: "反缩进"
         case .more: "更多"
         case .open: "打开任务"
+        case .endSession: "结束会话"
         }
     }
 
@@ -84,6 +90,7 @@ extension CardMenu.Item {
         case .outdent: .outdent
         case .more: .more
         case .open: .task
+        case .endSession: .endSession
         }
     }
 
@@ -106,7 +113,7 @@ extension CardMenu.Item {
         case .archive: return { workspace.attempt { try await workspace.archive(id) } }
         case .pin, .unpin:
             let pinned = self == .pin
-            return { workspace.perform { try await $0.updateCard(id) { $0.isPinned = pinned } } }
+            return { workspace.setPinned(id, pinned) }
         case .copy: return { workspace.copy(Outgoing.text(of: card)) }
         case .open: return { workspace.openTask(card) }
         case .trash: return { workspace.attempt { try await workspace.trash(id) } }
@@ -129,7 +136,7 @@ extension CardMenu.Item {
             #else
             return nil
             #endif
-        case .move, .bindSession: return nil
+        case .move, .bindSession, .endSession: return nil
         }
     }
 

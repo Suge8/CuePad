@@ -7,6 +7,13 @@ extension CueStore {
   /// 在列表里：可见且没归档（归档的只在"归档"里，搜索照样搜得到）。
   static let cardActive = "(\(cardVisible)) AND archivedAt IS NULL"
 
+  /// 还在看板上的任务（含子任务）：没做完、没归档、没删、项目没进回收站。它绑着的会话才算有人在用（`endUnusedSessions`、`isLoose`）。
+  /// 项目还没同步到的照算（不同于 `cardVisible`）：先到的任务的会话不因项目晚到就被当成没人用、结束掉。
+  static let taskOpen = """
+    todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL
+      AND projectID NOT IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)
+    """
+
   /// 散放的灵感：不是任务，也没挂在一个看得见的任务下（上级没到、在回收站的按散放看待）。
   static let looseIdea = """
     todoAt IS NULL AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE deletedAt IS NULL AND todoAt IS NOT NULL))

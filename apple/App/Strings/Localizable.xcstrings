@@ -12723,18 +12723,18 @@
         }
       }
     },
-    "把做完的任务全部归档：不占列表，照样搜得到" : {
+    "把做完的任务全部归档（置顶的留着）：不占列表，照样搜得到" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Archive all completed tasks. They leave the list but stay searchable."
+            "value" : "Archive all completed tasks except pinned ones. They leave the list but stay searchable."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "把做完的任务全部归档：不占列表，照样搜得到"
+            "value" : "把做完的任务全部归档（置顶的留着）：不占列表，照样搜得到"
           }
         }
       }
@@ -20207,22 +20207,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跳到所在终端"
-          }
-        }
-      }
-    },
-    "跳到终端窗口" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Go to Terminal Window"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "跳到终端窗口"
           }
         }
       }

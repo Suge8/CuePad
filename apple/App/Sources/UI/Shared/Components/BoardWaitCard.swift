@@ -6,6 +6,7 @@ import SwiftUI
 /// - 名字同别的列：这件事本身（任务名，没绑任务的会话名，不落在任务上的 Cue 提问写它要做的事），换列不换名字，折几行同别的卡（`BoardCardMetrics.title`）；看全部项目时前面是项目小图形。
 /// - 一件任务上收了几件时右端写件数。问什么在 Mac 的悬停提示里（项目、问句或"待回复"、等了多久，几件时一件一行）与点进去看。
 /// 点卡去最早的那件（`TaskBoard.Held.destination`）：Cue 的提问去 Cue 页、拍板卡露的就是这一问，会话在问的与待回复进会话。
+/// 长按（Mac 右键）是这件事的菜单，同别的列：任务的（`CardActions`，第一项"打开任务"），没绑任务的会话的（`SessionActions`）；Cue 的一般提问没有。
 struct BoardWaitCard: View {
     let held: TaskBoard.Held
     let project: Project?
@@ -28,6 +29,7 @@ struct BoardWaitCard: View {
             BoardCardLayout(advancing: false, pulse: leftPulse) {
                 mark.frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
+                if held.item?.task.isPinned == true { BoardPin() }
                 Text(held.title).foregroundStyle(palette.ink)
             } trailing: {
                 if held.count > 1 {
@@ -36,8 +38,23 @@ struct BoardWaitCard: View {
             }
             .boardCard(.waiting)
         }
+        .contextMenu { menu }
         .accessibilityLabel(Dotted(held.title, held.deciding ? String(localized: "等你拍板") : String(localized: "待回复"), held.count > 1 ? String(localized: "\(held.count) 件") : nil).spoken)
+        .accessibilityActions { menu }
         .boardDim(project: held.project)
+    }
+
+    @ViewBuilder private var menu: some View {
+        if let item = held.item {
+            let session = workspace.session(for: item.task, lead: item.leaf, in: agents)
+            #if os(macOS)
+            CardActions(card: item.task, leaf: item.steps == nil, opens: true, session: session)
+            #else
+            CardActions(card: item.task, opens: true, session: session)
+            #endif
+        } else if case .session(let session) = held.destination {
+            SessionActions(session: session)
+        }
     }
 
     /// 刚从推进中飞来时起飞那一下还带着的那条线（`BoardCardLayout`）：任务的或会话的此刻那条。

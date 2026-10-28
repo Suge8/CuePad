@@ -107,10 +107,15 @@ extension Workspace {
         [lead?.id, task.id].compactMap(\.self).first { agents.items[$0] != nil }
     }
 
-    /// 推进中一件看的是哪个会话（同 `pulse`），不推它此刻的样子：列只要知道是谁时用（读说过的话，`SaidReading`）。
+    /// 任务卡看的是哪个会话（同 `pulse`），不推它此刻的样子：只要知道是谁时用（菜单里结束它、列读说过的话）。
+    func session(for task: Card, lead: Card?, in agents: AgentLinks) -> PiSessionState? {
+        watched(task, lead: lead, in: agents).flatMap { agents.items[$0]?.state }
+    }
+
+    /// 推进中一件看的是哪个会话（读说过的话，`SaidReading`）。
     func sessionID(_ work: TaskBoard.Work, agents: AgentLinks) -> String? {
         switch work.work {
-        case .task: work.item.flatMap { item in watched(item.task, lead: item.leaf, in: agents).flatMap { agents.items[$0]?.state.sessionID } }
+        case .task: work.item.flatMap { session(for: $0.task, lead: $0.leaf, in: agents)?.sessionID }
         case .session(let session): session.sessionID
         }
     }
@@ -129,9 +134,13 @@ extension Workspace {
         return BoardPulse(shown: shown, session: session, handoff: handoff(of: session, shown: shown))
     }
 
-    /// 推进中按档分成几组（要你管 → 在跑 → 歇着，空的档不在内），同一档保持原来的先后。
-    func byAttention(_ work: [TaskBoard.Work], agents: AgentLinks) -> [(tier: BoardPulse.Tier, work: [TaskBoard.Work])] {
-        let tiers = Dictionary(grouping: work) { pulse($0, agents: agents).tier }
-        return BoardPulse.Tier.allCases.compactMap { tier in tiers[tier].map { (tier, $0) } }
+    /// 推进中从上到下的几组：置顶的任务（`Card.isPinned`）在最前，置顶的与其余的各自按档分（要你管 → 在跑 → 歇着，空的档不在内），
+    /// 同一组保持原来的先后。置顶是你亲手定的先后，排在档之前。
+    func byAttention(_ work: [TaskBoard.Work], agents: AgentLinks) -> [(pinned: Bool, tier: BoardPulse.Tier, work: [TaskBoard.Work])] {
+        let tiered = work.map { (work: $0, tier: pulse($0, agents: agents).tier) }
+        return [true, false].flatMap { pinned in
+            let tiers = Dictionary(grouping: tiered.filter { ($0.work.item?.task.isPinned == true) == pinned }, by: \.tier)
+            return BoardPulse.Tier.allCases.compactMap { tier in tiers[tier].map { (pinned, tier, $0.map(\.work)) } }
+        }
     }
 }

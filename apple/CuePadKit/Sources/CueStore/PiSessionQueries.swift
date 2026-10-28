@@ -56,6 +56,9 @@ extension CueStore {
       conditions.append("id = ?")
       arguments.append(id)
     }
+    if let pinned = query.pinned {
+      conditions.append("sessionID \(pinned ? "IN" : "NOT IN") (\(pinnedSessions))")
+    }
     return (conditions.isEmpty ? "1" : conditions.joined(separator: " AND "), arguments)
   }
 
@@ -72,18 +75,40 @@ extension CueStore {
     try db.first("SELECT count(*) FROM piSessionStates") { Int($0.int(0)) } ?? 0
   }
 
-  /// 会话记录配上列表项要的其余几样（项目、最近一条投送请求、改名、没送达的话）：分页与按 id 取的唯一组装处。
+  /// 会话记录配上列表项要的其余几样（项目、最近一条投送请求、改名、没送达的话、绑着的任务）：分页与按 id 取的唯一组装处。
   private func listItems(_ states: [PiSessionState]) throws -> [PiSessionListItem] {
     let ids = states.map(\.sessionID)
     let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
     let deliveries = try latestDeliveries(to: ids)
     let renames = try latestRenames(to: ids)
     let unsettled = try unsettledTalk(to: ids)
+    let tasks = try sessionTasks(ids)
     return states.map {
       PiSessionListItem(
         state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-        unsettled: unsettled[$0.sessionID] ?? [])
+        unsettled: unsettled[$0.sessionID] ?? [], task: tasks[$0.sessionID])
     }
+  }
+
+  /// 会话绑着的顶层任务，一行一处绑定（会话 id、顶层任务、它置顶没有）：会话置不置顶只看这一份。从绑着它、还在列表里的任务往上一级就是顶层
+  /// （任务至多两级，`Card.maxTaskDepth`）。
+  private static let sessionTaskRows = """
+    SELECT piSessionID AS sessionID, COALESCE(parentID, id) AS task,
+      COALESCE((SELECT p.isPinned FROM cards p WHERE p.id = cards.parentID), isPinned) AS pinned
+    FROM cards WHERE piSessionID IS NOT NULL AND todoAt IS NOT NULL AND \(cardActive)
+    """
+
+  /// 绑在置顶任务上的会话：会话段的置顶在最前（`PiSessionQuery.pinned`）。
+  private static let pinnedSessions = "SELECT sessionID FROM (\(sessionTaskRows)) WHERE pinned = 1"
+
+  /// 这些会话绑着的顶层任务（`sessionTaskRows`），按 Pi 的会话 id；绑着几件时置顶的那件在先。
+  private func sessionTasks(_ sessionIDs: [String]) throws -> [String: SessionTask] {
+    guard !sessionIDs.isEmpty else { return [:] }
+    let rows = try db.query(
+      "SELECT sessionID, task, pinned FROM (\(Self.sessionTaskRows)) WHERE sessionID IN (SELECT value FROM json_each(?)) ORDER BY pinned DESC",
+      [JSONColumn.encode(sessionIDs)]
+    ) { ($0.text(0), SessionTask(id: $0.uuid(1), isPinned: $0.bool(2))) }
+    return Dictionary(rows, uniquingKeysWith: { first, _ in first })
   }
 
   /// 在问你的会话："等你"里会话那一半（规则在 `PiSessionState.asksYou`，汇总在 `cueTally`）。只读在等回答的那几条，订阅也只依赖它们（`narrow`）：

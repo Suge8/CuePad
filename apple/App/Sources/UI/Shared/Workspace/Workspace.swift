@@ -131,6 +131,8 @@ final class Workspace {
     var openTask: TaskBubble.Request? {
         didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }
     }
+    /// 等你确认的改名或结束会话（`SessionActions` 置起，窗口上那一格弹出，`sessionAsks`）。
+    var sessionAsk: SessionAsk?
     /// 刚收起的气泡是哪件事、什么时候：按在它那一行上收起的（按下就关，松开时那一行又要打开它），这一下不再打开。
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?
     @ObservationIgnored var press = PressPoint()
@@ -211,7 +213,7 @@ final class Workspace {
     let overlayHeader = OverlayHeader()
     #endif
 
-    @ObservationIgnored private var noticeTask: Task<Void, Never>?
+    @ObservationIgnored var noticeTask: Task<Void, Never>?
 
     /// 项目目录当场读（`CueStore.snapshot`），Cue 的现状取整个 App 手里那份（`CueFeed.latest`）：第一帧就是读到的样子，没有"还没读到"这一态。
     init(services: AppServices) {
@@ -234,35 +236,6 @@ final class Workspace {
         presses.dismiss()
     }
     #endif
-
-    // MARK: 提示
-
-    static let noticeDuration: Duration = .seconds(2.4)
-
-    /// 收已经拼好的 `Dotted`；界面字面量走下面那个（进目录、按当前语言取字）。
-    func say(
-        _ text: Dotted, tone: Notice.Tone = .done, status: PiShown.Status? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
-        action: NoticeAction? = nil
-    ) {
-        let notice = Notice(text: text, tone: tone, status: status, link: link, action: action)
-        self.notice = notice
-        noticeTask?.cancel()
-        noticeTask = Task { [weak self] in
-            try? await Task.sleep(for: duration)
-            if self?.notice == notice { self?.notice = nil }
-        }
-    }
-
-    func say(
-        _ text: LocalizedStringResource, tone: Notice.Tone = .done, status: PiShown.Status? = nil, link: Route? = nil,
-        duration: Duration = Workspace.noticeDuration, action: NoticeAction? = nil
-    ) {
-        say(Dotted(String(localized: text)), tone: tone, status: status, link: link, duration: duration, action: action)
-    }
-
-    func fail(_ error: any Error) {
-        say(Dotted(error.localizedDescription), tone: .failure)
-    }
 
     // MARK: 项目目录、当前项目与新建位置
 

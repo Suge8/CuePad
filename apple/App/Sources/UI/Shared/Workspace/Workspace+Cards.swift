@@ -114,6 +114,11 @@ extension Workspace {
         openTask = TaskBubble.Request(task: task, step: step, source: press.source)
     }
 
+    /// 置顶、取消置顶一条卡（灵感与顶层任务；会话菜单里的置顶也落在它绑着的任务上）。
+    func setPinned(_ card: UUID, _ pinned: Bool) {
+        perform { try await $0.updateCard(card) { $0.isPinned = pinned } }
+    }
+
     /// 归档（连同下级）：不占列表、仍可搜；提示里可撤销。
     func archive(_ id: UUID) async throws {
         let store = services.store
