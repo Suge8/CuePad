@@ -81,7 +81,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 做完的结果点了名的图是结果卡，见 `rows`），
     /// 连着的几轮 Cue 自己醒来（每轮是它的经过那一行与它说的话，`CueNoteRound`，每轮一行旁注 `CueNoteLog`）收成一格，隔了 `ChatTime.gap` 以上或跨了天另起一格。
     /// 还在等你的提问不在对话里，都在输入框上方的拍板卡里（同一问同屏一处），结束了回到 Cue 的一句；你答了的，答的那一刻另有一格你的回答（`answer`）。
-    /// 它在做的事，自己醒来的一轮写在动态里那一节下面，你发起的一轮写在它的经过里，还没有经过时在末尾一行（`CueEnding`）。
+    /// 它此刻在做的事只写在对话末尾那一行（`CueEnding`）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
         /// 你对一条提问的回答（选的那一项，`CueMessage.answer`；更旧版本存下的另外一句照原文），排在答的那一刻（`answeredAt`）；数据就是那条提问本身，
@@ -184,19 +184,14 @@ nonisolated struct CueThread: Equatable, Sendable {
                 let task = message.taskID.flatMap { shown.insert($0).inserted ? $0 : nil }
                 rows.append(.cue(message, task: task))
             case .note:
-                // 没有正文的是一轮的经过（为什么醒、做了什么），开一节；有正文的是这一轮说的话，接在最近那一节后面
+                // 一轮的经过（为什么醒、做了什么）；有正文的是旧版本写下的动态，不再显示
+                guard message.text.isEmpty else { continue }
                 var group: [CueNoteRound] = []
                 if case .notes(let open) = rows.last, let last = open.last, CueNoteRound.continues(last, at: message.createdAt) {
                     group = open
                     rows.removeLast()
                 }
-                if message.text.isEmpty {
-                    group.append(CueNoteRound(row: message, lines: lines))
-                } else if group.isEmpty {
-                    group = [CueNoteRound(said: message)]
-                } else {
-                    group[group.count - 1].said.append(message)
-                }
+                group.append(CueNoteRound(row: message, lines: lines))
                 rows.append(.notes(group))
             case .round:
                 let touches = CueActivity.touches(message.tools)

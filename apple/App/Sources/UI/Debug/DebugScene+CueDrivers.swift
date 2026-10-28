@@ -6,7 +6,7 @@ import Foundation
 extension DebugScene {
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
     /// 带上叫醒它的会话（这一轮的经过那一行上的 `CueMessage.wake`，同值班的 Mac 起一轮时写下的样子，对话里随之多一行），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
-    /// 一次一个、一次两个交替（看几道光错开），两个的那次歇下前动手说一句（录 Cue 页那一行从在跑到做完）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
+    /// 一次一个、一次两个交替（看几道光错开），歇下前给第一个会话去处：两个的那次对它说话、一个的那次留给你回（录 Cue 页那一行从在跑到补上去处）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
     /// 录"叫醒"的动效用（`CueRelayStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
     /// `-CuePadFlightLog <路径>`：每次叫醒（或交给，见 `relayIfAsked`）前歇着的 `probe` 秒与之后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：
     /// 主线程 display link 的全部间隔、总帧数、超 16ms 的帧与掉帧（超过刷新间隔 1.5 倍）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。
@@ -28,16 +28,15 @@ extension DebugScene {
             guard !woke.isEmpty else { return nil }
             let row = try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: nil, wake: wake)
             try await store.setCueState(.thinking, round: row)
-            // 隔一次动手说一句再歇下（同真的一轮：醒来、动手、说话、歇下）
-            let acts = round % 2 == 0
+            // 歇下前给去处（同真的一轮：醒来、想、动手、歇下）
+            let talks = round % 2 == 0
             return ("wake", {
-                if acts {
-                    var tools = PiChatMessage.Tools()
-                    tools.record(.init(
-                        kind: .talk, target: String(localized: "对 \(woke[0]) 说：测试跑完把结果贴过来", table: "Demo"), name: woke[0], session: PiSessionState.recordID(sessionID: woke[0])))
-                    _ = try await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
-                    _ = try await store.addCueMessage(.note, text: String(localized: "催了 \(woke[0])：测试跑完把结果贴过来", table: "Demo"))
-                }
+                var tools = PiChatMessage.Tools()
+                tools.record(.init(
+                    kind: talks ? .talk : .leave,
+                    target: talks ? String(localized: "对 \(woke[0]) 说：测试跑完把结果贴过来", table: "Demo") : String(localized: "「\(woke[0])」留给你回", table: "Demo"),
+                    name: woke[0], session: PiSessionState.recordID(sessionID: woke[0])))
+                _ = try await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
                 try await store.setCueState(.settled)
             })
         }

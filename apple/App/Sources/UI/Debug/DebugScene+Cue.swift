@@ -66,25 +66,27 @@ extension DebugScene {
                 step(.talk, String(localized: "对「发言轮次乱序」说：先复现 5 人以上的乱序，再改成按首次加入时间排序", table: "Demo"), order)))
             _ = try await store.addCueMessage(
                 .cue, text: String(localized: "好。拆成四步：复现、改成按首次加入时间排序、补 3 个重连用例、部署到预发。第一步已经复现了，现在在改排序。", table: "Demo"), task: order?.id)
-            // Cue 自己醒来的几轮（同值班的管理器醒来时写下的经过那一行，带着为什么醒）：会话停下、出错、定时到点，两次只看了看；
-            // 连着六轮，Cue 页里折起前面的、两次只看了看的并成一行
+            // Cue 自己醒来的几轮（同值班的管理器醒来时写下的经过那一行，带着为什么醒与做了什么）：会话停下、出错、定时到点，每次停下都有去处；
+            // 连着六轮，Cue 页里折起前面的
             func stirred(_ kind: CueChange.Kind, _ session: String) -> CueWake { .sessionActivity([CueStir(kind: kind, session: session)]) }
             let meeting = try await store.cueMemory().lines.first { $0.text.hasPrefix(String(localized: "周会是每周一上午十点", table: "Demo")) }
-            for (wake, note, tools) in [
-                (stirred(.settled, "atlas"), String(localized: "看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间", table: "Demo"), process(step(.read, String(localized: "看「发言轮次乱序」的近况", table: "Demo"), order))),
-                (stirred(.settled, "atlas"), String(localized: "让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试", table: "Demo"), process(
+            for (wake, tools) in [
+                (stirred(.settled, "atlas"), process(
+                    step(.read, String(localized: "看「发言轮次乱序」的近况", table: "Demo"), order), step(.talk, String(localized: "对 atlas 说：复现了，接着改", table: "Demo"), session: "atlas"))),
+                (stirred(.settled, "atlas"), process(
                     step(.read, String(localized: "看「发言轮次乱序」的近况", table: "Demo"), order), step(.talk, String(localized: "对「发言轮次乱序」说：按首次加入时间排序，改完把 scheduler 的测试全跑一遍", table: "Demo"), order))),
-                (stirred(.failed, "billing"), String(localized: "CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说", table: "Demo"), process(
-                    step(.read, String(localized: "看板", table: "Demo")), step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing), step(.search, String(localized: "导入旧数据 prompt 太长", table: "Demo")))),
-                (CueWake.schedule(meeting.map { [CueFire(line: $0.id, due: .now)] } ?? []), "", process(
+                (stirred(.failed, "billing"), process(
+                    step(.read, String(localized: "看板", table: "Demo")), step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing),
+                    step(.leave, String(localized: "「billing」留给你回", table: "Demo"), session: "billing"))),
+                (CueWake.schedule(meeting.map { [CueFire(line: $0.id, due: .now)] } ?? []), process(
                     step(.read, String(localized: "看「README 截图」的近况", table: "Demo"), panel), step(.talk, String(localized: "对「README 截图」说：深色那张也按参考图拍，拍完发给我", table: "Demo"), panel),
                     step(.other, String(localized: "记下：README 截图要浅色深色各一张", table: "Demo")))),
-                (stirred(.settled, "notes"), "", process(step(.read, String(localized: "看「README 截图」的近况", table: "Demo"), panel))),
-                (.idle, "", process(step(.read, String(localized: "看板", table: "Demo")))),
+                (stirred(.settled, "notes"), process(
+                    step(.read, String(localized: "看「README 截图」的近况", table: "Demo"), panel), step(.leave, String(localized: "「notes」留给你回", table: "Demo"), session: "notes"))),
+                (.idle, process(step(.read, String(localized: "看板", table: "Demo")))),
             ] {
                 try await later(12)
                 try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools, wake: wake)
-                if !note.isEmpty { _ = try await store.addCueMessage(.note, text: note) }
             }
             try await seedDeliveries(store)
             try await later(20)
@@ -125,28 +127,31 @@ extension DebugScene {
             if let variant = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(variant, store: store, task: order?.id) }
             let forgotten = try await store.noteCueLine(String(localized: "旧的计费脚本还在用", table: "Demo"), source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
-            // 对话末尾 Cue 自己又醒了五轮（隔几分钟一轮，Cue 页每轮一行）：空闲巡视（只看了看）、billing 出错（说了一句）、atlas 停下了（催了一句，此刻又在跑）、
-            // 三处一起有动静（只看了看：deploy 在等回答、一件任务的子代理卡住、notes 停下）、notes-edit 在等回答（只能在编辑器里答，此刻在等你）
-            for (minutes, wake, note, tools) in [
-                (9.0, CueWake.idle, "", process(step(.read, String(localized: "看板", table: "Demo")))),
-                (7, stirred(.failed, "billing"), String(localized: "被模型拒了（prompt 太长），要拆成几段读，等你回来定", table: "Demo"), process(step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing))),
-                (6, stirred(.settled, "atlas"), String(localized: "scheduler 测试全过了，让它接着补 3 个重连用例", table: "Demo"), process(
+            // 对话末尾 Cue 自己又醒了几轮（隔几分钟一轮，Cue 页每轮一行，去处只从动作推出）：空闲巡视（只看了看）、billing 出错（留给你）、atlas 停下了（让它继续，此刻又在跑）、
+            // 三处一起有动静（deploy 在等回答、一件任务的子代理卡住、notes 停下：留给你 deploy）、notes-edit 在等回答（只能在编辑器里答，留给你）、
+            // relay 推完停下（做完了）
+            for (minutes, wake, tools) in [
+                (9.0, CueWake.idle, process(step(.read, String(localized: "看板", table: "Demo")))),
+                (7, stirred(.failed, "billing"), process(
+                    step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing), step(.leave, String(localized: "「billing」留给你回", table: "Demo"), session: "billing"))),
+                (6, stirred(.settled, "atlas"), process(
                     step(.read, String(localized: "看「发言轮次乱序」的近况", table: "Demo"), order), step(.talk, String(localized: "对「发言轮次乱序」说：测试过了，接着补 3 个重连用例", table: "Demo"), order))),
                 (11, .sessionActivity([
                     CueStir(kind: .waitingForUser, session: "deploy"), CueStir(kind: .stalled, task: importing?.id), CueStir(kind: .settled, session: "notes"),
-                ]), "", process(step(.read, String(localized: "看板", table: "Demo")))),
-                (5, stirred(.waitingForUser, "notes-edit"), String(localized: "要你在编辑器里改好提交说明再保存，这一步我替不了", table: "Demo"), process(step(.read, String(localized: "看 notes-edit 的近况", table: "Demo")))),
+                ]), process(step(.read, String(localized: "看板", table: "Demo")), step(.leave, String(localized: "「deploy」留给你回", table: "Demo"), session: "deploy"))),
+                (5, stirred(.waitingForUser, "notes-edit"), process(
+                    step(.read, String(localized: "看 notes-edit 的近况", table: "Demo")), step(.leave, String(localized: "「notes-edit」留给你回", table: "Demo"), session: "notes-edit"))),
+                (2, stirred(.settled, "relay"), process(
+                    step(.read, String(localized: "看 relay 的近况", table: "Demo"), session: "relay"), step(.done, String(localized: "收掉 relay", table: "Demo"), session: "relay"))),
             ] {
                 try await later(minutes)
                 try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools, wake: wake)
-                if !note.isEmpty { _ = try await store.addCueMessage(.note, text: note) }
             }
             // docs 停下后 Cue 把要的数据转给了 cuepad、自己留着等它打完补丁：会话行与看板卡上歇着的 docs 写 Cue 对它做的这件事（`CueDid`）
             try await later(1)
             try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: process(
                 step(.read, String(localized: "看 docs 的近况", table: "Demo"), session: "docs"),
                 step(.talk, String(localized: "对 cuepad 说：补丁合进去后告诉 docs 填投送队列的数据", table: "Demo"), session: "cuepad")), wake: stirred(.settled, "docs"))
-            _ = try await store.addCueMessage(.note, text: String(localized: "已转给 cuepad，等它打补丁", table: "Demo"))
             try await seedSchedules(store, task: task(String(localized: "续费域名", table: "Demo")))
             // 用到换新线的七成（上下文用量那一块加深一档）
             let context = CueContext(used: 70_000)
