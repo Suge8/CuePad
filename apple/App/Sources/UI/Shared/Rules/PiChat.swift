@@ -73,17 +73,19 @@ nonisolated enum PiChat {
     /// 一批预览的创建时间相同（`CueStore.addPreviews`），是一张卡。
     /// 你发出、还没进对话的话（`outgoing`）排在它会落下的地方，与 Cue 页你的话同一条规则：还在路上的（含 Agent 已收下、对话还没跟上的）
     /// 接在最末——Agent 读到时它就进对话的末尾，换下时不挪位；没能送达的不会再进对话，留在你说它的那一刻（同作答，按时刻插进），
-    /// 之后说的话与回答照常排在它后面。重发是撤回再写一条新的，于是作为新的一句接在最末。到哪了按 `moment`（`Speech`）。
+    /// 之后说的话与回答照常排在它后面；还没进对话的几句之间始终照发出的先后，比在路上的那句晚说、没送到的跟在它后面。
+    /// 重发是撤回再写一条新的，于是作为新的一句接在最末。到哪了按 `moment`（`Speech`）。
     /// `cueSent` 是 Cue 说的那几条的请求 id（`SessionDigest.cueSent`，按发送记录认）：带着其中之一的用户消息标成 Cue 说的。
     static func entries(
         _ messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest] = [], cueSent: Set<UUID> = [],
         at moment: Speech.Moment = .always()
     ) -> [PiChatEntry] {
         let outgoing = Self.outgoing(deliveries, messages: messages)
-        let lost = { (request: DeliveryRequest) in Speech.trip(request, at: moment).failure != nil }
+        // 还没进对话的话之间照发出的先后：最早一句还在路上的起都接在最末，它之前没送到的才插回对话
+        let tail = outgoing.firstIndex { Speech.trip($0, at: moment).failure == nil } ?? outgoing.endIndex
         let answers = messages.filter { $0.role == .known(.answer) }.map { (at: $0.at, key: $0.id.uuidString, item: Timed.answer($0)) }
         let batches = previews.map { (at: $0.createdAt, key: $0.id.uuidString, item: Timed.preview($0)) }
-        let stranded = outgoing.filter(lost).map { (at: $0.createdAt, key: $0.id.uuidString, item: Timed.stranded($0)) }
+        let stranded = outgoing[..<tail].map { (at: $0.createdAt, key: $0.id.uuidString, item: Timed.stranded($0)) }
         var waiting = (answers + batches + stranded).sorted { ($0.at, $0.key) < ($1.at, $1.key) }.map(\.item)[...]
         var entries: [PiChatEntry] = []
         func place(before time: Date?) {
@@ -111,7 +113,7 @@ nonisolated enum PiChat {
                 fromCue: message.saidByCue(cueSent)))
         }
         place(before: nil)
-        return entries + outgoing.filter { !lost($0) }.map(PiChatEntry.outgoing)
+        return entries + outgoing[tail...].map(PiChatEntry.outgoing)
     }
 
     /// Pi 回答这一轮做了多久（时长写法见 `PiClock.duration`）；你的话与系统行没有。
