@@ -6,13 +6,14 @@ import Testing
 /// 等你分拍板与待回复（WORDS.md）：Cue 留给你回、此刻歇着的会话是待回复——Cue 页不进拍板卡、在上方的待回复提示里，等得最久的在前；
 /// 进展页的等你列放在问与待回复的会话（在问的在前），绑着的任务从推进中挪进等你，Cue 的提问只在 Cue 页、不多出卡；"等你 N"两种一起数；名牌的数字账拍板与待回复各数各的（数全部，不只列得下的那几行），
 /// "等你 N"与 App 图标角标是两者之和（`CueNow.needsYou`）。
-/// 点提示：几个时去进展页的会话段，待回复紧随等你确认、等得最久的在前；对其中一个说了话它就不再待回复，只剩一个时点了直接进那个会话。
+/// 点提示：几个时去进展页、停在上次看的那一段（下次打开也是），那几个会话被指出（亮一下）——会话段里待回复紧随等你确认、等得最久的在前；
+/// 对其中一个说了话它就不再待回复，只剩一个时点了直接进那个会话。
 @MainActor
 struct AwaitingReplyTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
 
-    @Test func Cue留给你回的歇着会话是待回复_Cue页不进拍板卡_看板等你列排在拍板后_点提示去会话段或那个会话() async throws {
+    @Test func Cue留给你回的歇着会话是待回复_Cue页不进拍板卡_看板等你列排在拍板后_点提示去上次看的那一段或那个会话() async throws {
         let workspace = Workspace(services: rig.services)
         _ = try await store.updateCueProfile {
             $0.hostID = "mac-cue"
@@ -61,10 +62,17 @@ struct AwaitingReplyTests {
         cue = try await now()
         #expect(cue.yours == [CueNow.Entry(kind: .reply, count: 2)])
 
-        // 几个待回复：点提示去进展页的会话段，待回复紧随等你确认（此刻没有在问的，排在最前）
+        // 几个待回复：点提示去进展页上次看的那一段，项目范围放开，那几个被指出
         workspace.projectScope = try await store.createProject(name: "圆桌", color: "#000000").id
+        #expect(workspace.progressPane == .board)
         workspace.openReplies(try await thread().replies)
-        #expect(workspace.root == .progress && workspace.progressPane == .sessions && workspace.projectScope == nil)
+        #expect(workspace.root == .progress && workspace.progressPane == .board && workspace.projectScope == nil)
+        #expect(workspace.spotlight?.sessions == ["glass", "header"])
+        // 看过会话段：再点、下次打开都停在会话段；待回复紧随等你确认（此刻没有在问的，排在最前）
+        workspace.progressPane = .sessions
+        workspace.openReplies(try await thread().replies)
+        #expect(workspace.root == .progress && workspace.progressPane == .sessions)
+        #expect(AppSettings(defaults: rig.preferences.reopened(), launchArguments: [:]).progressPane == .sessions)
         let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(list.now.prefix(2).map(\.state.sessionID) == ["glass", "header"])  // 同 Cue 页，等得最久的在前
 

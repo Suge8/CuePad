@@ -101,7 +101,7 @@ struct BoardColumn: View {
     @ViewBuilder private var lane: some View {
         #if os(iOS)
         if row {
-            BoardRowLane(column: column, count: board.count(column), targeted: lit, rewind: adding && column == .todo ? board.todo.first?.id : nil) {
+            BoardRowLane(column: column, count: board.count(column), targeted: lit, rewind: adding && column == .todo ? board.todo.first.map { Reveal(target: $0.id) } : spotlit) {
                 if adding && column == .todo { newTask.transition(.opacity) }
             } content: {
                 content
@@ -117,14 +117,14 @@ struct BoardColumn: View {
     /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/layout.md 沉浸式的栏）：都是一块写字玻璃，Mac 上排进窗口最顶那一排（`boardTopRow`）。
     private var columnLane: some View {
         #if os(macOS)
-        ScrollView { cards }
+        revealing { ScrollView { cards } }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
             .boardLane(column)
             .boardTopRow(column: column, count: board.count(column))
             .background { BoardLane(targeted: lit) }
         #else
-        ScrollView { cards }
+        revealing { ScrollView { cards } }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
             .boardLane(column)
@@ -137,6 +137,22 @@ struct BoardColumn: View {
             }
             .background { BoardLane(targeted: lit) }
         #endif
+    }
+
+    /// 从待回复提示跳来（`Workspace.spotlight`）时等你里第一张亮着的：列把它滑进视野（行把它滑到行首）。每跳一次是一次新要求，同一张再要也滑。
+    private var spotlit: Reveal? {
+        guard column == .waiting, let spotlight = workspace.spotlight,
+              let held = board.held.first(where: { spotlight.lights($0.session.sessionID) }) else { return nil }
+        return spotlight.reveal(held.id)
+    }
+
+    /// 一列的滚动区：要哪一格时（`spotlit`）把它滑进视野，已在视野里不动。
+    private func revealing(_ scroll: @escaping () -> some View) -> some View {
+        ScrollViewReader { proxy in
+            scroll().onChange(of: spotlit, initial: true) {
+                if let spotlit { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(spotlit.target) } }
+            }
+        }
     }
 
     /// 拖着卡停在这一列上：只在有一张卡正被拖着时算（`CardDrags`），拖完不留着底。

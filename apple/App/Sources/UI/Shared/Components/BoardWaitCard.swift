@@ -5,7 +5,7 @@ import SwiftUI
 /// - 记号说状态：会话在问你是赭黄问号（`PiStateGlyph(.asking)`），待回复是墨点（`PiStateGlyph(.awaitsReply)`，各处待回复同一个，赭黄只给拍板）。
 /// - 名字同别的列：绑着的任务名，没绑任务的会话名，换列不换名字，折几行同别的卡（`BoardCardMetrics.title`）；看全部项目时前面是项目小图形。
 ///   问什么在 Mac 的悬停提示里（项目、问句或"待回复"、等了多久）与点进去看。
-/// 点卡进那个会话。长按（Mac 右键）是这件事的菜单，同别的列：任务的（`CardActions`，第一项"打开任务"），没绑任务的会话的（`SessionActions`）。
+/// 从待回复提示跳来时这几张亮一下（`spotlit`）。点卡进那个会话。长按（Mac 右键）是这件事的菜单，同别的列：任务的（`CardActions`，第一项"打开任务"），没绑任务的会话的（`SessionActions`）。
 struct BoardWaitCard: View {
     let held: TaskBoard.Held
     let project: Project?
@@ -32,6 +32,7 @@ struct BoardWaitCard: View {
                 Text(held.title).foregroundStyle(palette.ink)
             }
             .boardCard(.waiting)
+            .spotlit(held.session.sessionID, cornerRadius: TaskMetrics.cardRadius)
         }
         .contextMenu { menu }
         .accessibilityLabel(Dotted(held.title, held.deciding ? String(localized: "等你拍板") : String(localized: "待回复")).spoken)

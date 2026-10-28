@@ -56,18 +56,19 @@ extension Workspace {
 
     func push(_ route: Route) { path.append(route) }
 
-    /// 去进展页的会话段（原会话页的去向都是这里："看这个项目的会话"、⌥⌘N、提示条）。
+    /// 去进展页的会话段（原会话页的去向都是这里："看这个项目的会话"、⌥⌘N）。
     func showSessions() {
         progressPane = .sessions
         show(.progress)
     }
 
-    /// 去看待回复的会话（Cue 页的待回复提示）：只有一个直接进那个会话；几个去进展页的会话段（排在等你确认之后、其余之前，`PiShown.rank`），
-    /// 提示数的是全部项目，项目范围放开，一个不漏。
+    /// 去看待回复的会话（Cue 页的待回复提示）：只有一个直接进那个会话；几个去进展页、停在你上次看的那一段——看板的等你列（拍板在前），
+    /// 或会话段（排在等你确认之后、其余之前，`PiShown.rank`），它们亮一下（`spotlight`）。提示数的是全部项目，项目范围放开，一个不漏。
     func openReplies(_ replies: [PiSessionState]) {
         if replies.count == 1 { return openSession(replies[0].id, sessionID: replies[0].sessionID) }
         projectScope = nil
-        showSessions()
+        spotlight = Spotlight(replies.map(\.sessionID))
+        show(.progress)
     }
 
     /// 去 Cue 页一行旁注提到的那一处（醒来那几行、一轮的经过）：会话、任务（从点的地方长出气泡）或定时。
@@ -154,7 +155,7 @@ struct ProjectFormRequest: Identifiable {
 }
 
 /// 进展页的两段（`Workspace.progressPane`）：看板与会话。
-enum ProgressPane: Hashable {
+enum ProgressPane: String, Hashable {
     case board, sessions
 }
 

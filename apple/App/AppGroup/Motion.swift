@@ -6,6 +6,7 @@ import SwiftUI
 /// 回弹 0 是"最通用"的那种，WWDC23 Animate with springs），时长随距离：小位移 `nudge`，远距离 `travel`；
 /// 终点时刻有别的事要接着做、或滚动这类收尾不许拖尾巴的，用定长的 `glide`；不挪位置的出现消失、换色、悬停只淡（`fade`）。
 /// 回弹只给松手（`release`）：释放本身是手势的收尾，带一点回弹像纸被放开时弹回来；菜单、面板、卡片的出现不弹。
+/// 跳到一处后指出是哪几件（`spotlit`）：淡入同 `fade`，亮着停一会让眼睛找到，再慢慢淡掉（`spotlightOut`）；只是透明度，减弱动态效果时照样。
 /// 常驻的循环（`LoopLayer`、头像帧序列的 `Motion.Beat`）与 Cue 和会话之间的接力（`CueRelayStage`）是编排，节奏与曲线在它们自己那里，不在这套里。
 /// 减弱动态效果的规矩只在 `spatial` 与 `fading`。不隔离：iOS 上转场的效果在渲染线程上求值（`boardFlight`）。
 nonisolated enum Motion {
@@ -25,6 +26,8 @@ nonisolated enum Motion {
     static let fade = Animation.easeOut(duration: Fade.duration)
     /// 让位的淡出：同一处先后换两样东西时旧的先淡完（`HandOff`），离开时不压住正滑向终位的内容。
     static let yield = Animation.easeOut(duration: Fade.yield)
+    /// 指出的那几件淡掉：先亮着停 `Spotlight.hold`（手机切 tab 那 0.25 秒也在里面），再用比 `fade` 长的缓出淡掉，像光退下去而不是被关掉。
+    static let spotlightOut = Animation.easeOut(duration: Spotlight.out).delay(Spotlight.hold)
     /// 手机按下：快、不回弹，手指一落就到位。
     static let press = Animation.spring(duration: 0.12)
     /// 手机松开：一点回弹（15% 还不觉得弹，只让尾巴利落些，WWDC23）。
@@ -55,6 +58,12 @@ extension Motion {
         static var timing: CAMediaTimingFunction {
             CAMediaTimingFunction(controlPoints: Float(curve.0), Float(curve.1), Float(curve.2), Float(curve.3))
         }
+    }
+
+    /// `spotlightOut` 的停留与淡出。
+    nonisolated enum Spotlight {
+        static let hold: TimeInterval = 1.2
+        static let out: TimeInterval = 0.6
     }
 
     /// `fade`、`yield` 的时长，渲染端的淡出（Mac 预览落地时飞的那张淡掉）与编排里的等候（等旧的淡完再来新的）用它。

@@ -4,15 +4,18 @@ import SwiftUI
 
 /// 进展页的会话段（`ProgressPage`）：全部会话，在线的在上（现在）、历史在下，只看项目范围里的（`Workspace.scopedProject`，与看板一段共用）。
 /// 页里不另起一排：范围与新会话在工具栏那一排（`ProgressPage` 的头注释）；搜索框是列表的第一行，随列表滚走。
-/// 列表与行同手机（`PiSessionList`、`PiSessionRow`），点行在内容区打开会话页；右键是会话的菜单（`SessionActions`）。
+/// 列表与行同手机（`PiSessionList`、`PiSessionRow`），从待回复提示跳来时同手机（`spotlit`），点行在内容区打开会话页；右键是会话的菜单（`SessionActions`）。
 /// 这台 Mac 检测到 Agent 却一家都没接入时，最上面是接入小卡（`ConnectAgents`）：没接入时本机的会话在这里看不到。
 struct SessionsPane: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var model = AgentListModel()
 
     private var filter: UUID? { workspace.scopedProject }
+    /// 从待回复提示跳来（`Workspace.spotlight`）时第一个亮着的会话：滑进视野，已在视野里不动。
+    private var spotlit: Reveal? { model.list?.reveal(workspace.spotlight) }
 
     /// 列表的宽度：一行读得完，不至于横跨整个大窗口。
     private static let width: CGFloat = 720
@@ -21,6 +24,9 @@ struct SessionsPane: View {
         ScrollViewReader { proxy in
             ScrollView { column }
             .onChange(of: filter) { proxy.scrollTo(Self.top, anchor: .top) }
+            .onChange(of: spotlit, initial: true) {
+                if let spotlit { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(spotlit.target) } }
+            }
         }
         // 让在安全区里（同看板一段）：列表照样滚到工具栏后面
         .safeAreaPadding(.top, Bars.contentGap)
@@ -102,6 +108,7 @@ struct SessionsPane: View {
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let session = item.state
         return PiSessionRow(session: session, project: list.showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
+            .spotlit(session.sessionID, cornerRadius: Radius.card)
             .sessionLink(session.sessionID, press: .card)
             .contextMenu { SessionActions(session: session, task: item.task, ending: end?.inTransit == true) }
     }

@@ -13,13 +13,13 @@ import SwiftUI
 /// 空行是一格铺满整行高的虚线框。卡上标题小一档、可折两行（`BoardCardMetrics.title`），推进中下面是线与状态词。
 /// 辅助字号下一行只叠一排、一张卡几乎占满可见宽（下一张露一条边）：窄卡里大字一行只放得下两个字。
 /// 行里的卡在懒加载的横排里，只建看得见的几张；卡换行时飞过行的上下沿（`boardFlight`），滚动区不裁内容（横向超出的在屏幕外）。
-/// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；它占的高另加在这一行的两个高上，卡的格不因它变矮。添加时这一行先滑回行首。
+/// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；它占的高另加在这一行的两个高上，卡的格不因它变矮。
+/// 要哪一格时（`rewind`：添加任务、从待回复提示跳来）这一行把它滑到行首。
 struct BoardRowLane<Above: View, Content: View>: View {
     let column: TaskBoard.Column
     let count: Int
     let targeted: Bool
-    /// 添加任务：这一行滑回行首（滑到这一格）。
-    let rewind: AnyHashable?
+    let rewind: Reveal?
     @ViewBuilder let above: Above
     @ViewBuilder let content: Content
     @Environment(\.palette) private var palette
@@ -74,8 +74,8 @@ struct BoardRowLane<Above: View, Content: View>: View {
             .frame(minHeight: cell, idealHeight: cell * CGFloat(tiers) + BoardRowMetrics.gap * CGFloat(tiers - 1), maxHeight: .infinity)
             .environment(\.boardRow, true)
             .environment(\.boardTitle, BoardCardMetrics.title(column, cardWidth: nil, typeSize: typeSize))
-            .onChange(of: rewind) {
-                if let rewind { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(rewind, anchor: .leading) } }
+            .onChange(of: rewind, initial: true) {
+                if let rewind { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(rewind.target, anchor: .leading) } }
             }
         }
     }
