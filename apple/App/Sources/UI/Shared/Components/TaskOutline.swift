@@ -3,11 +3,10 @@ import SwiftUI
 /// 大纲自己的坐标系：行的位置与拖放的落点都在这里量。
 private nonisolated let outlineSpace = "TaskOutline"
 
-/// 一行任务在大纲里能做的结构操作（做不了的为 nil），与它是不是叶子（左滑"更多"里有没有"打开任务"，`Workspace.entersSession`）。手机上缩进进轻扫与同源的读屏动作（`RowSwipes.card`），任务行从环境里取来放进读屏动作（`spoken`）；做什么只在 `CardMenu.Item.run`。
+/// 一行任务在大纲里能做的结构操作（做不了的为 nil）。手机上缩进进轻扫与同源的读屏动作（`RowSwipes.card`），任务行从环境里取来放进读屏动作（`spoken`）；做什么只在 `CardMenu.Item.run`。
 struct TaskStructure {
     var indent: (() -> Void)?
     var outdent: (() -> Void)?
-    var leaf = true
 
     /// 读屏动作里的结构操作：手机上缩进已在右滑里（轻扫的读屏动作），反缩进只有拖放。
     #if os(macOS)
@@ -87,8 +86,7 @@ struct TaskOutline<Line: View>: View {
     private func item(_ row: TaskTree.Row) -> some View {
         let structure = TaskStructure(
             indent: tree.indent(row.id).map { move in { commit(row.id, move) } },
-            outdent: tree.outdent(row.id).map { move in { commit(row.id, move) } },
-            leaf: whole.isLeaf(row.id))
+            outdent: tree.outdent(row.id).map { move in { commit(row.id, move) } })
         return line(row)
         .padding(.leading, CGFloat(row.depth) * Self.indentWidth)
         .contentShape(.rect)

@@ -28,6 +28,9 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         session.map { PiRename.title(of: $0, request: DeliveryRequest.latestRename(in: deliveries), at: moment) }
     }
 
+    /// 发给它的最近一条话（作答、命令也算，同 `PiSessionListItem.delivery`）：顶栏的状态按它写话到哪了。
+    var delivery: DeliveryRequest? { deliveries.last { $0.mode.known.map(DeliveryMode.toSession.contains) == true } }
+
     /// 此刻没能送达的话有几句（`Speech.undelivered`，会话行同一个数）。
     func undelivered(at moment: Speech.Moment) -> Int { Speech.undelivered(deliveries, at: moment) }
 

@@ -252,9 +252,10 @@ extension Workspace {
         ).speaking(speaking(session))
     }
 
-    /// 会话页顶栏的状态：只说会话自己的（你的话到哪了写在气泡下面，正在看的会话没有"有新回复"），其余同 `shown`。
-    func shownInHeader(_ session: PiSessionState) -> PiShown {
-        PiShown(session, cue: cueDuty).speaking(speaking(session))
+    /// 会话页顶栏的状态：同 `shown`（话发出后停着的会话当场写话到哪了，出错后再说一句就不再写"出错"，与看板同一个说法），
+    /// 只是正在看的会话没有"有新回复"，没送到的话另写"N 句没送到"（`PiChat.undeliveredNote`），这里不再说一遍。
+    func shownInHeader(_ session: PiSessionState, delivery: DeliveryRequest?) -> PiShown {
+        PiShown(session, delivery: delivery, seen: .distantFuture, cue: cueDuty, at: services.speech).speaking(speaking(session))
     }
 
     /// 这台 Mac 上它此刻有正在说的话（手机上没有）。只随出字开始、结束通知，不随每个增量（`PiBridge.Slot.speaking`）。

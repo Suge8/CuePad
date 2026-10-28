@@ -78,4 +78,55 @@ struct AwaitingReplyTests {
         cue = try await now()
         #expect(cue.items.count == CueNow.itemLimit && cue.yours == [CueNow.Entry(kind: .reply, count: 9)] && cue.needsYou == 9)
     }
+
+    /// 出错的会话留给你回后，对它再说一句：话一发出它就不再待回复——看板上它绑着的任务当场从等你回到推进中、写话到哪了（在跑），
+    /// 不等 Mac 送到；会话动起来后写它自己的状态。点卡进卡上写的那个会话，有子任务的任务也一样（此刻干活那一步的会话）；没有会话的打开任务。
+    @Test func 出错留给你回后再说一句_看板当场回到推进中_点卡进卡上的会话() async throws {
+        let workspace = Workspace(services: rig.services)
+        _ = try await store.updateCueProfile {
+            $0.hostID = "mac-cue"
+            $0.enabledAt = .now
+        }
+        try await store.recordMacPresence(host: "mac-cue") { true }
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        try await recorder.update(
+            sessionID: "billing", state: .error, detail: "connection refused", title: "billing",
+            times: PiTimes(stateSince: .now.addingTimeInterval(-600), busySince: nil))
+        let parent = try await store.createTask("导入旧数据")
+        let first = try await store.createTask("先读一遍", under: parent.id)
+        let second = try await store.createTask("再导进去", under: parent.id)
+        try await store.bindSession("billing", to: second.id)
+        _ = try await store.leaveToYou("billing")
+        let idle = try await store.createTask("还没开始的")
+
+        var board = try await TaskBoard.read(from: store)
+        #expect(board.replies.map(\.id) == ["reply/billing"] && board.held.first?.item?.id == parent.id)
+        // 卡写的是此刻有会话的那一步（第二步），不是第一个没做完的
+        #expect(board.held.first?.item?.agent?.state.sessionID == "billing")
+        #expect(board.held.first?.item?.agent?.state.sessionID != first.piSessionID)
+
+        let session = try #require(board.held.first?.item?.agent?.state)
+        let box = rig.services.settings.replyDraftBinding(for: session.id)
+        box.wrappedValue = ComposerDraft(text: "网络好了，接着做")
+        await workspace.speak(to: .session(session, mode: .send), from: box) { $0.text }.value
+
+        board = try await TaskBoard.read(from: store)
+        #expect(board.replies.isEmpty && board.count(.waiting) == 0)
+        let work = try #require(board.advancing.first { $0.item?.id == parent.id })
+        var pulse = workspace.pulse(of: work.agent)
+        #expect(pulse.tier == .running && pulse.word == nil && workspace.shownInHeader(session, delivery: work.agent?.delivery).label == "发送中")
+
+        try await recorder.update(sessionID: "billing", state: .thinking, times: PiTimes(stateSince: .now, busySince: .now))
+        board = try await TaskBoard.read(from: store)
+        pulse = workspace.pulse(of: try #require(board.advancing.first { $0.item?.id == parent.id }).agent)
+        #expect(pulse.shown?.status == .working(.thinking))
+
+        // 点卡：有会话的进那个会话（有子任务也是），没有会话的打开任务
+        let item = try #require(board.advancing.first { $0.item?.id == parent.id }?.item)
+        workspace.enter(item.task, session: item.agent?.state)
+        #expect(workspace.shownSession?.sessionID == "billing" && workspace.openTask == nil)
+        let todo = try #require(board.todo.first { $0.id == idle.id })
+        workspace.enter(todo.task, session: todo.agent?.state)
+        #expect(workspace.openTask?.task == idle.id)
+    }
 }

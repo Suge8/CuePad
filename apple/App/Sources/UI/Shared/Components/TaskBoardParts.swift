@@ -65,7 +65,6 @@ struct BoardColumn: View {
     var row = false
     #endif
     @Environment(Workspace.self) private var workspace
-    @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.boardMoves) private var moves
@@ -92,7 +91,7 @@ struct BoardColumn: View {
     /// 推进中这一列的线要的"最近说过的话"（`SaidReading`）。
     @ViewBuilder private var fed: some View {
         if column == .advancing {
-            let sessions = board.advancing.compactMap { workspace.sessionID($0, agents: agents) }.sorted()
+            let sessions = board.advancing.compactMap(\.agent?.state.sessionID).sorted()
             lane.modifier(SaidReading(sessions: sessions))
         } else {
             lane
@@ -169,7 +168,7 @@ struct BoardColumn: View {
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .advancing:
             // 一个 ForEach 排完各档：卡换档是同一串里换位（让位），不是这一档删一张、那一档添一张（同一个飞行身份一删一添会从栈顶飞过来）
-            ForEach(AdvancingSlot.slots(workspace.byAttention(board.advancing, agents: agents), gaps: !isRow)) { slot in
+            ForEach(AdvancingSlot.slots(workspace.byAttention(board.advancing), gaps: !isRow)) { slot in
                 switch slot {
                 case .gap:
                     // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）
@@ -177,8 +176,8 @@ struct BoardColumn: View {
                 case .work(let work, let moves):
                     if let item = work.item {
                         card(item, moves: moves).boardDraggable(item.id)
-                    } else if case .session(let session) = work.work {
-                        BoardSessionCard(session: session, project: glyph(workspace.catalog?.project(work.project)), moves: moves)
+                    } else if let agent = work.loose {
+                        BoardSessionCard(agent: agent, project: glyph(workspace.catalog?.project(work.project)), moves: moves)
                             .boardDim(project: work.project)
                             .boardFlight(work.id)
                     }

@@ -108,7 +108,8 @@ public struct CueStir: Codable, Equatable, Sendable {
 }
 
 /// 会话的这一次停下留给你回：你发起的一轮停下当场留（`CueStore.leaveHisStops`），Cue 发起的由它核对后留（`leaveToYou`），它看过也可收回（`takeBack`）。
-/// 会话停在 `since` 起的那次停下（歇着、等回答或出错）时成立，谁再对它说话、它动起来（`stateSince` 变了）就自然作废，不用谁去清。
+/// 会话停在 `since` 起的那次停下（歇着、等回答或出错）时成立，它动起来（`stateSince` 变了）就自然作废，不用谁去清；
+/// 在那之前谁再对它说了话，待回复当场就不算（`CueStore.sessionsAwaitingReply`），不等 Mac 送到。
 /// 只有一份：待回复（`PiSessionState.awaitsReply`）与会话在问的归不归你（`waitsForCue`）都经 `CueDuty` 读它。
 public struct CueLeft: StoredJSON, Hashable, Sendable {
   public var sessionID: String

@@ -10,7 +10,7 @@ struct CardActions: View {
     var selectable = false
     /// 这是 Mac 上的叶子任务（没有子任务）：没做完时多一项"绑定会话"（会话列表在 Mac 上，手机不传）。
     var leaf = false
-    /// 点它进的是会话（`Workspace.entersSession`）：长按菜单第一项"打开任务"。
+    /// 点它进的是会话（`Workspace.enter`）：长按菜单第一项"打开任务"。
     var opens = false
     /// 它此刻在用的会话（叶子交给的那个；有子任务的是此刻干活的那一步的）：还能结束时长按菜单多一项"结束会话"。
     var session: PiSessionState?
@@ -128,9 +128,8 @@ extension CardMenu.Item {
         case .more:
             #if os(iOS)
             // 点这一行进的是会话时，气泡里另有"打开任务"：判断同长按菜单，按此刻交给的会话算
-            let leaf = structure?.leaf ?? true
             return {
-                let opens = workspace.entersSession(card, leaf: leaf, in: workspace.agentLinks)
+                let opens = workspace.agentLinks.items[card.id] != nil
                 workspace.moreCard = CardMoreRequest(card: card, opens: opens, source: workspace.press.source)
             }
             #else

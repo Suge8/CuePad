@@ -124,7 +124,7 @@ struct SessionPage: View {
     private func headerState(_ digest: SessionDigest, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
-            session: session, title: digest.title(at: services.speech) ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered(at: services.speech)),
+            session: session, delivery: digest.delivery, title: digest.title(at: services.speech) ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered(at: services.speech)),
             ending: DeliveryRequest.shownEnd(in: digest.deliveries, at: services.speech)?.inTransit == true, place: PiPlace.menuTitle(of: session, project: digest.project),
             pin: digest.task, showsHeader: follow.showsHeader, showsMenu: menu, task: task)
     }

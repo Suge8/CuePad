@@ -10,6 +10,8 @@ import SwiftUI
 final class SessionHeader {
     struct State: Equatable {
         var session: PiSessionState
+        /// 发给它的最近一条话（`SessionDigest.delivery`）：顶栏的状态按它写话到哪了。
+        var delivery: DeliveryRequest?
         var title: String
         var undelivered: String?
         var ending: Bool
@@ -91,7 +93,7 @@ struct PageTitleSlot: View {
                     if state.ending {
                         Text("正在结束…").font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
                     } else {
-                        PiSessionSubtitle(session: session, undelivered: state.undelivered)
+                        PiSessionSubtitle(session: session, delivery: state.delivery, undelivered: state.undelivered)
                     }
                 }
                 if let primary, let line = state.task?.path(below: state.title) { path(primary, line) }

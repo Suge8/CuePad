@@ -85,7 +85,7 @@ struct TaskLine: View {
     /// 旁注："下一步"、快满的上下文与多久；做完的不写，要你管的状态词写出来时不写多久。放不下时谁先让（`TaskLineLayout.yields`）：
     /// 先是时间，再是没写状态词的标。
     @ViewBuilder private func notes(next: TaskNext?, done: Bool) -> some View {
-        let pulse = workspace.pulse(for: task, lead: nil, in: agents)
+        let pulse = workspace.pulse(of: agents.items[task.id])
         if !done, let next, Self.inlines(next) { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }
         if !done, !(next?.speaks ?? false), let meter = pulse.fullContext { ContextFact(meter: meter).font(TaskMetrics.caption).fixedSize() }
         if !done, !pulse.speaks, let pace = TaskPace.of(task, steps: subtasks) {
@@ -108,7 +108,7 @@ struct TaskLine: View {
         return true
     }
 
-    private func open() { workspace.enter(task, leaf: subtasks == nil, in: agents) }
+    private func open() { workspace.enter(task, session: agents.items[task.id]?.state) }
 
     private func start(_ next: TaskNext?) {
         if let next { workspace.follow(next) }
@@ -141,8 +141,8 @@ struct TaskLine: View {
             .benchSpot(task.id)
             .onTapGesture(perform: open)
             .contextMenu {
-                let leaf = subtasks == nil
-                CardActions(card: task, leaf: leaf, opens: workspace.entersSession(task, leaf: leaf, in: agents), session: leaf ? agents.items[task.id]?.state : nil)
+                let session = agents.items[task.id]?.state
+                CardActions(card: task, leaf: subtasks == nil, opens: session != nil, session: session)
             }
             .padding(.vertical, 1)
     }

@@ -11,7 +11,8 @@ import Foundation
 /// - 已完成：置顶的（不论哪天做完）在最前，接着今天做完的顶层任务（`CueStore.tasksDone`），最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
 ///   待办不另插队（本来就能拖着排），等你按等得多久排。
 ///   每件带上 Cue 做完时点名的第一张成果图（`CueStore.cueResultShots`，读的时候一次取齐，不逐行查库）。
-/// 子任务不单列，卡片写进度；会话此刻在做什么看任务此刻干活的叶子（`Item.leaf`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
+/// 子任务不单列，卡片写进度。每张卡写哪个会话的状态、点了进哪个会话只看 `Item.agent`（没绑任务的会话是 `Work.agent`）：与列在同一次读里取，
+/// 卡在哪一列与卡上写的状态出自同一刻的库，不另读窗口里那一份交给的会话（`AgentLinks`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
 nonisolated struct TaskBoard: Sendable, Equatable {
     enum Column: CaseIterable, Identifiable, Sendable {
         case todo, advancing, waiting, done
@@ -39,8 +40,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var task: Card
         var project: Project?
         var steps: TaskProgress?
-        /// 此刻干活的叶子（`CueStore.workingLeaf`）：会话状态与"开始"看它。有子任务、不在进行中的为 nil（还没开始的由交给的规则定）。
+        /// 此刻干活的叶子（`CueStore.workingLeaf`）：还没交给会话时"开始"开它。有子任务、不在进行中的为 nil（还没开始的由交给的规则定）。
         var leaf: Card?
+        /// 卡上写的会话（`CueBoardItem.session`，此刻干活的那一步的，做完了的是最后做完那一步的）与发给它的最近一条话：
+        /// 卡上的状态、线、"下一步"与点卡进哪个会话都只看它；没有会话为 nil，点卡打开任务。
+        var agent: PiSessionListItem?
+        /// 会话还在路上（正开会话、话正送进会话，`CueBoardItem.reaching`）：不再给"开始"。
+        var reaching = false
         /// 已完成的：Cue 做完时点名的第一张成果图（还在的）；别的列为 nil。
         var shot: CueShown?
         var id: UUID { task.id }
@@ -52,7 +58,11 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     struct Work: Identifiable, Sendable, Equatable {
         var work: CueWork
         var item: Item?
+        /// 没绑任务的会话自己（连同发给它的最近一条话）；任务的看 `item`。
+        var loose: PiSessionListItem?
         var id: String { work.id }
+        /// 这一件写的会话（`Item.agent` 或没绑任务的会话自己）。
+        var agent: PiSessionListItem? { item?.agent ?? loose }
 
         /// 按项目筛时归哪个项目：任务的项目，会话的归处（`home`）。
         var project: UUID {
@@ -260,14 +270,26 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     static func read(from store: isolated CueStore, now: Date = .now) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         let steps = try store.subtaskProgress()
-        func item(_ task: Card) throws -> Item {
-            let progress = steps[task.id]
-            let leaf = progress == nil ? task : task.status == .inProgress ? try store.workingLeaf(of: task.id) : nil
-            return Item(task: task, project: projects[task.projectID], steps: progress, leaf: leaf)
-        }
         let open = TaskTree(try store.tasks(.inProgress, .todo).flatMap(\.tasks))
         let tally = try store.cueTally()
         let finished = try store.tasksDone().filter { Column.of($0, in: tally) == .done }
+        let todo = open.roots.compactMap(open.task).filter { Column.of($0, in: tally) == .todo }
+        // 每件事写哪个会话：推进中的 Cue 那份已经带着（`CueTally.advancing`），其余几列按同一条规则补上，会话连同发给它的话一次读齐
+        let working = tally.advancing.compactMap { if case .task(let board) = $0 { board } else { nil } }
+        let started = Set(working.map(\.id))
+        let held = try tally.held.subtracting(started).compactMap { try store.card($0) }
+        let others = try store.boardItems((todo + finished + held).filter { !started.contains($0.id) })
+        let boards = Dictionary((working + others).map { ($0.id, $0) }) { first, _ in first }
+        let loose = tally.advancing.compactMap { if case .session(let state) = $0 { state } else { nil } }
+        let agents = try store.piSessions(sessionIDs: boards.values.compactMap(\.session?.sessionID) + loose.map(\.sessionID))
+        func item(_ task: Card) throws -> Item {
+            let progress = steps[task.id]
+            let leaf = progress == nil ? task : task.status == .inProgress ? try store.workingLeaf(of: task.id) : nil
+            let board = boards[task.id]
+            return Item(
+                task: task, project: projects[task.projectID], steps: progress, leaf: leaf, agent: board?.session.flatMap { agents[$0.sessionID] },
+                reaching: board?.reaching ?? false)
+        }
         // 置顶的不论哪天做完的都在已完成的最前（"全部归档"也留着它们），其余今天的在列里、更早的收在列末
         let pinned = finished.filter(\.isPinned), rest = finished.filter { !$0.isPinned }
         let today = Calendar.current.startOfDay(for: now)
@@ -280,8 +302,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             return done
         }
         return TaskBoard(
-            todo: try open.roots.compactMap(open.task).filter { Column.of($0, in: tally) == .todo }.map(item),
-            advancing: try tally.advancing.map { work in Work(work: work, item: try work.task.map(item)) },
+            todo: try todo.map(item),
+            advancing: try tally.advancing.map { work in
+                switch work {
+                case .task(let board): Work(work: work, item: try item(board.task))
+                case .session(let state): Work(work: work, loose: agents[state.sessionID] ?? PiSessionListItem(state: state))
+                }
+            },
             waiting: try waits(tally.waiting, from: store, item: item),
             replies: try tally.replies.map { Reply(reply: $0, item: try $0.task.flatMap { try store.card($0) }.map(item)) },
             done: try (pinned + rest[..<split]).map(finishedItem),

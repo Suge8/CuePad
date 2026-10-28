@@ -56,6 +56,10 @@ public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var leaves: [CueBoardLeaf]
   public var id: UUID { task.id }
   public var isActive: Bool { leaves.contains(where: \.isActive) }
+  /// 这件事此刻看的会话：叶子里第一个有会话记录的（并行的几步按子任务顺序）。任务看板的卡写它的状态、点卡进它（`TaskBoard.Item.agent`）。
+  public var session: PiSessionState? { leaves.lazy.compactMap(\.session).first }
+  /// 会话还在路上：正为它开会话，或话正送进上一步的会话，还没有会话可看。
+  public var reaching: Bool { leaves.contains { $0.launching || $0.sending } }
 }
 
 public struct CueBoardLeaf: Equatable, Sendable {
