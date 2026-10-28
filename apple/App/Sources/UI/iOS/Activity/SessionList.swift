@@ -4,15 +4,19 @@ import SwiftUI
 
 /// 会话列表（进展页的会话段、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）：最上面"已置顶"（绑在置顶任务上的），
 /// 接着"现在"（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），"历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。
-/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。长按是会话的菜单（`SessionActions`），慢慢左滑可结束、重命名。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
+/// 从待回复提示跳来时那几个会话亮一下、第一个滑进视野（`spotlit`）。点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。长按是会话的菜单（`SessionActions`），慢慢左滑可结束、重命名。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
 struct SessionList<Top: View>: View {
     @Bindable var model: AgentListModel
     let filter: UUID?
     @ViewBuilder var top: Top
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static var margin: CGFloat { 16 }
+
+    /// 从待回复提示跳来（`Workspace.spotlight`）时第一个亮着的会话：滑进视野，已在视野里不动。
+    private var spotlit: Reveal? { model.list?.reveal(workspace.spotlight) }
 
     /// 最上面那一行的 id：换项目范围时滚回它。
     private static var topID: String { "top" }
@@ -43,6 +47,9 @@ struct SessionList<Top: View>: View {
             .refreshable { await services.syncNow() }
             // 换了项目范围：回到顶上，从这个项目的第一条看起
             .onChange(of: filter) { proxy.scrollTo(Self.topID, anchor: .top) }
+            .onChange(of: spotlit, initial: true) {
+                if let spotlit { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(spotlit.target) } }
+            }
         }
         .agentList(model, filter: filter)
     }
@@ -97,6 +104,7 @@ struct SessionList<Top: View>: View {
         let ending = end?.inTransit == true
         // 行的边距挂在最外层：挂在自绘轻扫里面传不到列表上
         return SessionRow(item: item, showsPlace: list.showsPlace, end: end)
+            .spotlit(item.state.sessionID, cornerRadius: Radius.card)
             .rowSwipes(SessionActions.swipes(item.state, ending: ending, in: workspace), clipped: false)
             .contextMenu { SessionActions(session: item.state, task: item.task, ending: ending) }
             .cardRow()
