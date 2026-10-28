@@ -19,7 +19,7 @@ struct SessionDock: View {
         let deliveries = digest?.deliveries ?? [], messages = digest?.messages ?? [], speech = services.speech
         VStack(spacing: 8) {
             PiQuestionDock(session: session, deliveries: deliveries)
-            PiFailureDock(session: session, deliveries: deliveries, messages: messages, catalog: digest?.catalog, config: digest?.config(at: speech))
+            PiFailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
             if let failure = DeliveryRequest.shownEnd(in: deliveries, at: speech)?.failure, session.state != .known(.ended) {
                 Callout(.failed(.other), text: String(localized: "没能结束：\(failure.text)"), docked: true)
             }
