@@ -181,7 +181,7 @@ final class Workspace {
     var progressPane = ProgressPane.board
     /// 技能与规则页此刻在哪一段：规则或技能。两端同一份：Mac 工具栏与手机页顶的分段都读它，去文件页再回来、换页再回来都还在这一段。
     var libraryPane = LibraryPane.rules
-    /// Cue 页拍板卡露的是哪一件（`TaskBoard.Wait.id`）：在拍板卡上换一件写这里；不在等了露第一件。
+    /// Cue 页拍板卡露的是哪一件（`CueWait.id`）：在拍板卡上换一件写这里；不在等了露第一件。
     var cueAsking: String?
     var notice: Notice?
     /// 窗口根上的全屏页开着哪一份（`previewPresenter`，没有底栏）：正文、输入框里的附件，与没挂全屏页的小窗（菜单栏、Cue 条）点的附件都在这里看。

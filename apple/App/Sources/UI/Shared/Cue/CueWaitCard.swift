@@ -4,10 +4,10 @@ import SwiftUI
 /// 拍板卡上露出的那一件（`CueWaitDock.shown`）：它出自的那份在等的列表与位置。
 /// 只存列表的引用、到画的地方才取出这一件：一件按值约 1.4KB，放进视图值会随外面每一层修饰一起复制、比较。
 struct CueWaitPick: Equatable {
-    let waits: [TaskBoard.Wait]
+    let waits: [CueWait]
     let index: Int
 
-    var wait: TaskBoard.Wait { waits[index] }
+    var wait: CueWait { waits[index] }
     var id: String { wait.id }
 
     /// 挨着的那件（眉题行的小箭头、滑卡换到哪件）；到头了为 nil。
@@ -42,7 +42,7 @@ struct CueWaitCard: View {
     #if os(macOS)
     /// 卡至少多高（Cue 页打开时数要排几格，`CuePage.covered`）：眉题、问句（至少一行标题字）、带图时一排图（`CueShots.floor`）、
     /// 怎么答（至少一颗按钮）、上下的边与卡下面的空（`CueWaitDock.below`）；叠边不算。只能数少。
-    static func floor(_ wait: TaskBoard.Wait, shots: [UUID: [CueShown]], width: CGFloat) -> CGFloat {
+    static func floor(_ wait: CueWait, shots: [UUID: [CueShown]], width: CGFloat) -> CGFloat {
         let pictures = wait.message.flatMap { shots[$0.id] }.map { gap + CueShots.floor(count: $0.count, width: width - 2 * side) } ?? 0
         return edge + CueWaitEyebrow.height + lead + Typography.titleSize + pictures + gap + ControlMetrics.compactHeight + edge + CueWaitDock.below
     }
