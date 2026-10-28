@@ -248,7 +248,7 @@ struct RealHostTests {
         try await eventually("认回的进程接着收话、有回答") { fileTexts("assistant", in: file).last == "ECHO 新的 CuePad 认回之后 IMAGES[]" }
     }
 
-    /// App 更新后扩展协议号变了，上一版 App 托管的进程还在跑旧扩展：新 App 装上新扩展、请它核对后它空闲时换上、以新协议重新连上，
+    /// App 更新后读不懂上一版扩展了（`PiWire.oldestExtension` 提过），上一版 App 托管的进程还在跑旧扩展：新 App 装上新扩展、请它核对后它空闲时换上、重新连上，
     /// 同一个进程接着收话，话送达、有回答。
     /// 只连真 Pi 跑：两个 Pi 进程交替上桥、中途热换扩展文件，回放排不稳先后（三次两次等不到旧扩展上桥）。
     @Test(RealAgents.live(.pi, "两个进程交替与热换扩展，回放排不稳先后"))
@@ -259,11 +259,7 @@ struct RealHostTests {
         try bridge.start()
         let (file, sessionID) = try await endedSession(pi, bridge)
         let installed = PiExtensionFiles(extensionsDirectory: pi.paths.extensionsDirectory)
-        try OldExtension.otherProtocol.rewrite(in: installed.directory)
-        let entry = installed.directory.appending(path: "index.ts")
-        try String(contentsOf: entry, encoding: .utf8)
-            .replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = \(PiExtensionBundle.version - 1);")
-            .write(to: entry, atomically: true, encoding: .utf8)
+        try OldExtension.unreadable.rewrite(in: installed.directory)
         let log = ChangeLog(bridge)
         let left = try await PiProcess(alongside: pi, sessionFile: file, env: [PiRuntime.hostedVariable: "120"])
         defer { left.stop() }

@@ -11,7 +11,7 @@ extension PiBridge {
         weak var bridge: PiBridge?
         /// 收到 hello 之后的会话
         var id: PiSession.ID?
-        /// hello 里报的扩展版本（协议号不同的不读）
+        /// hello 里报的扩展版本
         var extensionVersion: Int?
         let replies = PendingReplies<String, PiWire.Ack>(timeout: AgentTimeouts.ack, timeoutError: PiBridgeError.ackTimeout)
         var nextCommand = 0
@@ -60,7 +60,7 @@ extension PiBridge {
             _ = try await request { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
         }
 
-        /// 报的扩展版本不是随包版本（协议号不同的没报，也算）：请它核对磁盘（`PiWire.upgrade`）。磁盘上还是旧的它就不动，所以可以多说。
+        /// 报的扩展版本不是随包版本（没报的也算）：请它核对磁盘（`PiWire.upgrade`）。磁盘上还是旧的它就不动，所以可以多说。
         func offerUpgrade() {
             guard extensionVersion != PiExtensionBundle.version else { return }
             connection.write(PiWire.upgrade)
@@ -75,12 +75,14 @@ extension PiBridge {
             let commandID = "c\(nextCommand)"
             let data = try encode(commandID)
             let ack = try await replies.request(commandID) { connection.write(data) }
-            guard ack.ok else { throw ack.error == "unknown_model" ? PiBridgeError.unknownModel(.pi) : PiBridgeError.rejected(ack.error ?? "unknown") }
-            return ack
+            guard !ack.ok else { return ack }
+            // 旧扩展不认比它新的命令（`PiWire.oldestExtension`）：换上新扩展后才做得到
+            if ack.error == "bad_request", extensionVersion != PiExtensionBundle.version { throw PiBridgeError.upgradingExtension }
+            throw ack.error == "unknown_model" ? PiBridgeError.unknownModel(.pi) : PiBridgeError.rejected(ack.error ?? "unknown")
         }
     }
 
-    /// 连着的 Pi 会话都报了这个扩展版本（还没 hello 的、协议号不同的都不算）：过渡时判断旧单文件扩展还有没有会话在用
+    /// 连着的 Pi 会话都报了这个扩展版本（还没 hello 的不算）：过渡时判断旧单文件扩展还有没有会话在用
     /// （`AgentIntegration.retireLegacyPiExtension`）。连接在扫描 socket 目录时同步建立，所以已在跑的会话都算在内。
     public func allRun(extensionVersion version: Int) -> Bool { links.values.allSatisfy { $0.extensionVersion == version } }
 
@@ -125,9 +127,9 @@ extension PiBridge {
 
     private func consume(_ link: Link, name: String) async {
         for await line in link.connection.lines {
-            // 协议版本不同的会话：之后的消息格式不可知，只认告别（同 hello 只读认得出的一项：重载的告别要认得出，`PiSessionEndReason.reload`），等连接断开
+            // 读不懂的扩展：之后的消息格式不可知，只认告别（同 hello 只读认得出的一项：重载的告别要认得出，`PiSessionEndReason.reload`），等连接断开
             if link.session?.upgrading == true {
-                link.bye = PiWire.otherProtocolBye(line) ?? link.bye
+                link.bye = PiWire.identityBye(line) ?? link.bye
                 continue
             }
             do {
@@ -158,7 +160,7 @@ extension PiBridge {
             session.hosted = hello.hosted ?? false
             appear(session, on: link)
             link.offerUpgrade()
-        case .otherProtocol(let hello):
+        case .upgrading(let hello):
             guard link.id == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             var session = PiSession(
@@ -167,6 +169,7 @@ extension PiBridge {
             session.name = hello.name
             session.firstMessage = hello.firstMessage
             session.hosted = hello.hosted
+            link.extensionVersion = hello.extensionVersion
             appear(session, on: link)
             link.offerUpgrade()
         case .state(let wire):

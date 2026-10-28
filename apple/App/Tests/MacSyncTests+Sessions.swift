@@ -105,7 +105,7 @@ extension MacSyncTests {
     }
 
     /// App 更新后，开着的会话歇下后自己重新载入扩展、接回（新载入的扩展没见过这一轮：开始报空、起点是此刻）。
-    /// 协议号变了的（`upgrading`）这期间读不到状态，记录停在更新前的样子；没变的照常读着。更新前在跑、重载前做完了这一轮的，
+    /// 扩展旧到 CuePad 读不懂的（`upgrading`）这期间读不到状态，记录停在更新前的样子；读得懂的照常读着。更新前在跑、重载前做完了这一轮的，
     /// 接回时照常算一次歇下，Cue 被叫醒（他不在场：那句话说在半小时前）；更新前就歇着的，接回不是新的歇下，不叫醒。
     @Test(arguments: [true, false], [true, false])
     func 会话重载扩展接回_这期间做完一轮的才叫醒Cue(running: Bool, upgrading: Bool) async throws {
@@ -129,7 +129,7 @@ extension MacSyncTests {
         defer { consuming.cancel() }
 
         let old = try await rig.host.connect(
-            "s1", cwd: "/work/app", busy: running, protocolVersion: upgrading ? 3 : PiWire.protocolVersion, sessionFile: file.path)
+            "s1", cwd: "/work/app", busy: running, extensionVersion: upgrading ? PiWire.oldestExtension - 1 : PiExtensionBundle.version, sessionFile: file.path)
         if running {
             try await store.writePiTranscript(PiTranscript(
                 sessionID: "s1", messages: [said], recap: PiRecap(lastPrompt: "发版", lastReply: "发好了", answeredAt: .now)))
@@ -138,7 +138,7 @@ extension MacSyncTests {
         try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
 
         // 接回的那一次写入落了盘（记录的状态与起点跟上桥上的）才看 Cue 的变化，不然歇着的那一例还没写就判过了
-        try await eventually("桥上以新协议接回") { services.pi.session(sessionID: "s1").map { $0.state == .settled && !$0.upgrading } == true }
+        try await eventually("桥上以新扩展接回") { services.pi.session(sessionID: "s1").map { $0.state == .settled && !$0.upgrading } == true }
         let live = try #require(services.pi.session(sessionID: "s1"))
         _ = try await eventually(store, { try $0.allPiSessionStates().first }, until: {
             $0?.state == .known(.settled) && abs(($0?.stateSince ?? .distantPast).timeIntervalSince(live.stateSince)) < 0.001

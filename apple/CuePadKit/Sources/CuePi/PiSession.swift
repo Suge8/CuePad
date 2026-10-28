@@ -55,7 +55,7 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     /// 启动时从会话列表补上的会话没有终端的环境变量，第一次钩子才带来
     public internal(set) var terminal: PiTerminal
     public internal(set) var state: PiWorkState
-    /// 扩展的协议号与 CuePad 不同：CuePad 请它核对磁盘（`PiWire.upgrade`），磁盘上换了新版本它就在歇下时重新载入、以新协议连回。这段时间读不到它在做什么（`state` 只是填的歇着）、
+    /// CuePad 读不懂这一版扩展（`PiWire.reads`）：CuePad 请它核对磁盘（`PiWire.upgrade`），磁盘上换了新版本它就在歇下时重新载入、以新扩展连回。这段时间读不到它在做什么（`state` 只是填的歇着）、
     /// 也发不进命令；同步记录不写、界面不换上桥上的状态，都照它最后一次读到的样子。
     public internal(set) var upgrading = false
     /// 一句话说明（同步记录的 `detail`）：工具名与调用目标、等你回答的弹窗标题、出错的摘要；其余状态为 nil
@@ -165,7 +165,7 @@ public enum PiSessionChange: Sendable, Equatable {
     /// 会话名、首条消息或近况变了（`displayName` 可能随之改变）
     case infoChanged(PiSession)
     case ended(PiSession, reason: PiSessionEndReason)
-    /// 消息损坏（读不出会话或之后的消息格式不对）；连接已关闭，不会出现在 `sessions` 里。协议版本不同的会话不在此列（`PiSession.upgrading`）
+    /// 消息损坏（读不出会话或之后的消息格式不对）；连接已关闭，不会出现在 `sessions` 里。读不懂的扩展不在此列（`PiSession.upgrading`）
     case incompatible(id: String, detail: String)
     /// 某个会话的扩展观测到订阅额度（回复里带回的，或 `PiBridge.refreshQuota` 查到的）：属于账号，记到 `AccountQuota` 上
     case quota(QuotaReport)
@@ -205,7 +205,7 @@ public enum PiBridgeError: Error, Equatable {
     case rejected(String)
     /// 这个 Agent 的模型表里没有要换的模型（Pi 扩展回 `unknown_model`，其余几家的接入自己判断）
     case unknownModel(AgentKind)
-    /// 会话的扩展协议版本与 CuePad 不同、正自己换上新扩展（`PiSession.upgrading`），不发命令
+    /// 会话的扩展 CuePad 读不懂、正自己换上新扩展（`PiSession.upgrading`），不发命令；或旧扩展还不认这条命令
     case upgradingExtension
     /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
     case unsupported

@@ -4,8 +4,14 @@ import Foundation
 
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge/`。
 enum PiWire {
-    /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令除 `upgrade` 外一条不发），会话等它换上新扩展（`OtherProtocolHello`、`PiSession.upgrading`）
-    static let protocolVersion = 17
+    /// CuePad 读得懂的最旧扩展版本：从它到随包版本，扩展说的格式 CuePad 都照常读、命令照常发。扩展要等会话连同子代理都歇下才换上新版本
+    /// （`SelfReload`），可能等几个小时，这期间会话照常收话。只加命令、加 CuePad 可以没有的字段不提它（旧扩展不认的命令回 `bad_request`）；
+    /// 改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠某个新字段才对时，提到那一版。区间外的 hello 只读身份（`IdentityHello`），
+    /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`PiSession.upgrading`）
+    static let oldestExtension = 40
+
+    /// 这个扩展版本说的格式 CuePad 读得懂（见 `oldestExtension`）
+    static func reads(extensionVersion version: Int?) -> Bool { version.map { (oldestExtension...PiExtensionBundle.version).contains($0) } == true }
 
     struct State: Decodable {
         var kind: String
@@ -42,8 +48,7 @@ enum PiWire {
     }
 
     struct Hello: Decodable {
-        var protocolVersion: Int
-        var extensionVersion: Int?
+        var extensionVersion: Int
         var sessionId: String
         var sessionFile: String?
         var pid: Int32
@@ -58,14 +63,12 @@ enum PiWire {
         var info: Info
 
         enum CodingKeys: String, CodingKey {
-            case protocolVersion = "protocol"
             case extensionVersion, sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
         }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
-            extensionVersion = try c.decodeIfPresent(Int.self, forKey: .extensionVersion)
+            extensionVersion = try c.decode(Int.self, forKey: .extensionVersion)
             sessionId = try c.decode(String.self, forKey: .sessionId)
             sessionFile = try c.decodeIfPresent(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)
@@ -79,11 +82,11 @@ enum PiWire {
         }
     }
 
-    /// 协议版本不同的 hello：格式可能已变，只读认得出会话的几项（其余字段读不出就当没有）。
-    /// `hosted` 也读：托管的与终端里的同一会话并存时记录跟哪个、界面标不标后台看它。
+    /// 每个 hello 先按它读：读得懂这一版扩展（`reads`）才往下读完整的 `Hello`，读不懂的只留认得出会话的几项（其余字段读不出就当没有），
+    /// 这几项的键与含义永远不变。`hosted` 也读：托管的与终端里的同一会话并存时记录跟哪个、界面标不标后台看它。
     /// `sessionFile` 也读：进程退出时说没说过话（`PiSession.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
-    struct OtherProtocolHello: Decodable {
-        var protocolVersion: Int
+    struct IdentityHello: Decodable {
+        var extensionVersion: Int?
         var sessionId: String
         var sessionFile: String?
         var pid: Int32
@@ -93,13 +96,12 @@ enum PiWire {
         var hosted: Bool
 
         enum CodingKeys: String, CodingKey {
-            case protocolVersion = "protocol"
-            case sessionId, sessionFile, pid, cwd, name, firstMessage, hosted
+            case extensionVersion, sessionId, sessionFile, pid, cwd, name, firstMessage, hosted
         }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
+            extensionVersion = try? c.decode(Int.self, forKey: .extensionVersion)
             sessionId = try c.decode(String.self, forKey: .sessionId)
             sessionFile = try? c.decode(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)
@@ -205,12 +207,12 @@ enum PiWire {
 
     struct Bye: Decodable { var reason: String }
 
-    /// 请扩展核对磁盘上的扩展版本、不同就歇下时重新载入（`SelfReload.check`）。格式跨协议版本不变、没有 id、扩展不回 ack：
-    /// 要叫醒的正是协议号与 CuePad 不同的会话，它们只认得出这一行（见 CuePi README「协议」）。
+    /// 请扩展核对磁盘上的扩展版本、不同就歇下时重新载入（`SelfReload.check`）。格式跨扩展版本不变、没有 id、扩展不回 ack：
+    /// 要叫醒的也有 CuePad 读不懂的旧扩展，它们只认得出这一行（见 CuePi README「协议」）。
     static let upgrade = Data(#"{"t":"upgrade"}"#.utf8) + Data([0x0A])
 
-    /// 协议版本不同的连接里只认告别（`OtherProtocolHello` 同理）：格式可能已变，读不出就当不是。
-    static func otherProtocolBye(_ line: Data) -> Bye? {
+    /// 读不懂的扩展的连接里只认告别（`IdentityHello` 同理）：格式可能已变，读不出就当不是。
+    static func identityBye(_ line: Data) -> Bye? {
         struct Tagged: Decodable { var t: String; var reason: String }
         guard let tagged = try? JSONDecoder().decode(Tagged.self, from: line), tagged.t == "bye" else { return nil }
         return Bye(reason: tagged.reason)
@@ -230,7 +232,8 @@ enum PiWire {
 
     enum Message {
         case hello(Hello)
-        case otherProtocol(OtherProtocolHello)
+        /// 读不懂的扩展（`reads`）：只有身份
+        case upgrading(IdentityHello)
         case state(State)
         case info(Info)
         case ack(Ack)
@@ -248,8 +251,8 @@ enum PiWire {
         let decoder = JSONDecoder()
         switch try decoder.decode(Envelope.self, from: line).t {
         case "hello":
-            let other = try decoder.decode(OtherProtocolHello.self, from: line)
-            return other.protocolVersion == protocolVersion ? .hello(try decoder.decode(Hello.self, from: line)) : .otherProtocol(other)
+            let identity = try decoder.decode(IdentityHello.self, from: line)
+            return reads(extensionVersion: identity.extensionVersion) ? .hello(try decoder.decode(Hello.self, from: line)) : .upgrading(identity)
         case "state": return .state(try decoder.decode(StateMessage.self, from: line).state)
         case "info": return .info(try decoder.decode(Info.self, from: line))
         case "ack": return .ack(try decoder.decode(Ack.self, from: line))

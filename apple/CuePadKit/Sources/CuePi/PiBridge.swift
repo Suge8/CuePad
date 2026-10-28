@@ -60,7 +60,7 @@ public final class PiBridge {
     /// 在线会话的控制通道（Pi 的就是它的 `Link`）
     @ObservationIgnored var controls: [PiSession.ID: any SessionLink] = [:]
     /// 重开前（`carryOver`）与重新载入扩展前（`detach` 的 `.reload`）各会话的状态与计时：重新上桥时用一次。
-    /// 协议号不同的读不到状态，不留也不用：接回时沿用的是它之前读到的
+    /// 读不懂的扩展读不到状态，不留也不用：接回时沿用的是它之前读到的
     @ObservationIgnored var carried: [String: (state: PiWorkState, times: PiTimes)] = [:]
     /// 托管的会话歇着的计时（见 `reviewHosted`）
     @ObservationIgnored var idleTimers: [PiSession.ID: Task<Void, Never>] = [:]
