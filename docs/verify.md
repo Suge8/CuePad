@@ -4,7 +4,7 @@ Debug 认的启动参数只在 `DebugScene.swift`（及同目录 `DebugScene+*.s
 
 ## 视觉验收
 
-截图、录屏用 `xc.sh shot|rec`（首次要给终端屏幕录制权限）。浅深色、几个场景一次调用拍完：`xc.sh shot ios -- -CuePadScene shelf -theme light , -- -CuePadScene shelf -theme dark`（一次进锁、构建、装包；iOS 的模拟器外观随每张的 `-theme` 切）。源码没变时构建自动跳过。
+截图、录屏用 `xc.sh shot|rec`（首次要给终端屏幕录制权限）。几个场景（要浅深两种外观时同理）一次调用拍完：`xc.sh shot ios -- -CuePadScene shelf -theme light , -- -CuePadScene shelf -theme dark`（一次进锁、构建、装包；iOS 的模拟器外观随每张的 `-theme` 切）。源码没变时构建自动跳过。
 
 - Mac 的 shot、rec、run 期间自动让显示器醒着（`caffeinate -d -u`），不用自己 `caffeinate -u`。
 - Mac 按窗口拍，图的像素是窗口在屏上的像素（1x 屏上与点数相同，Retina 屏上翻倍）。报窗口被缩小显示时是调度中心或台前调度开着：请用户收起，不发系统按键。

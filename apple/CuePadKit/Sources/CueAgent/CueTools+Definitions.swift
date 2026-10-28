@@ -35,7 +35,7 @@ extension CueTools {
           stop{task|session}：停下会话这一轮；
           leave{task|session}：你发起的那一轮停着（歇下、等回答或出错）、这次该他接手时用，把它留给他回：歇着、出错的显示"待回复"，等回答的成了他的拍板，都进等你；你已 tell 带 ask 问他的不再 leave；他或你再对它说话就作废。他发起的一轮停下 CuePad 已当场留给他，不用 leave；
           take{task|session}：收回留给他回的（待回复，或成了他拍板的等回答），出了等你：只是应他一声、他不用回时用；要推进直接 say，不用先收回；
-          done{task|session,evidence?,show?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。show 是结果上挂的图，写法同 tell 的 show（如 look 写"最终版深色：分组标题"）；不带就不挂图，没点名的仍在会话里。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence、show。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
+          done{task|session,evidence?,show?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。show 是结果上挂的图，写法同 tell 的 show（如 look 写"最终版：分组标题"）；不带就不挂图，没点名的仍在会话里。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence、show。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
           """,
         "inputSchema": schema(
           [
