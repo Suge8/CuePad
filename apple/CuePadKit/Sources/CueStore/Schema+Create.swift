@@ -56,7 +56,7 @@ extension Schema {
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
       pendingTools TEXT, model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT, turnStartedAt INTEGER, answeredAt INTEGER,
-      stateSince INTEGER NOT NULL,
+      failure TEXT, stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);

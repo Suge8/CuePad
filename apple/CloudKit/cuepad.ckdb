@@ -99,6 +99,7 @@ DEFINE SCHEMA
         pendingTools  ENCRYPTED STRING,
         turnStartedAt INT64,
         answeredAt    INT64,
+        failure       STRING,
         models        ENCRYPTED STRING,
         commands      ENCRYPTED STRING,
         GRANT WRITE TO "_creator",

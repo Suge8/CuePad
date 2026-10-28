@@ -84,6 +84,8 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   public static let end = AgentCapabilities(rawValue: 1 << 6)
   /// 发文字（开新一轮）
   public static let speak = AgentCapabilities(rawValue: 1 << 7)
+  /// 把出错的那一轮原样重跑一遍（`PiSessionState.canRetry`）
+  public static let retry = AgentCapabilities(rawValue: 1 << 8)
 
   public static let all: AgentCapabilities = [.speak, .images, .abort, .model, .rename, .commands, .answer, .end]
 
@@ -109,10 +111,11 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   }
 
   private static func of(_ agent: AgentKind, hosted: Bool) -> AgentCapabilities {
-    if hosted { return .all }
+    if hosted { return agent == .pi ? .all.union(.retry) : .all }
     switch agent {
     // dsh 只有 CuePad 托管的会话（它的 web 与桌面版的会话不接）
-    case .pi, .opencode, .dsh: return .all
+    case .pi: return .all.union(.retry)
+    case .opencode, .dsh: return .all
     // 终端里的会话经它的收件箱说话与改名（只收文字）、经钩子作答、像 Ctrl-C 那样结束；停止这一轮、换模型、斜杠命令只有托管的能做
     case .claudeCode: return [.speak, .answer, .rename, .end]
     // 终端里的会话由 Codex 的常驻服务承载，经它的控制接口说话；作答经钩子
