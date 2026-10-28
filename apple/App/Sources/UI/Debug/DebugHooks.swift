@@ -178,8 +178,9 @@ enum DebugHooks {
         #if DEBUG
         DebugScene.later(delay, work)
         #else
+        // 被取消（App 收场）就不做了
         Task {
-            await Task.wait(for: delay)
+            try await Task.sleep(for: delay)
             work()
         }
         #endif
