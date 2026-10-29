@@ -45,4 +45,54 @@ struct RuntimeBootTests {
         try await replacement.updateCue(.settled)
         #expect(try await !now().isLive)
     }
+
+    @Test func 历史82库经83入口升级不补签Cue_真实新报告才恢复确认() async throws {
+        let app = TestApp(), store = app.services.store
+        _ = try await store.updateCueProfile { $0.hostID = "mac-a"; $0.enabledAt = .now }
+        await Workspace(services: app.services).speak("继续检查发布", to: .cue).value
+        let messages = try await store.cueMessagesToDeliver()
+        try await store.markCueMessagesDelivered(messages.map(\.id))
+        try await store.recordMacPresence(host: "mac-a", bootID: "before-upgrade") { true }
+        try await store.setCueState(.thinking, detail: "检查发布结果")
+        let location = app.services.location
+        let db = RawDB(location.databaseURL)
+        app.services.cancelBackgroundWork()
+        try db.exec("""
+            DROP TRIGGER piSessionStates_writeSeq_update;
+            ALTER TABLE piSessionStates DROP COLUMN bootID;
+            ALTER TABLE macPresence DROP COLUMN bootID;
+            ALTER TABLE cueState DROP COLUMN hostID;
+            ALTER TABLE cueState DROP COLUMN bootID;
+            CREATE TRIGGER piSessionStates_writeSeq_update AFTER UPDATE OF state, stateSince, answeredAt ON piSessionStates
+            WHEN old.state IS NOT new.state OR old.stateSince IS NOT new.stateSince OR old.answeredAt IS NOT new.answeredAt
+            BEGIN
+              UPDATE writeCounter SET seq = seq + 1;
+              UPDATE piSessionStates SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;
+            END;
+            PRAGMA user_version = 82;
+            """)
+        #expect(CueStore.schemaVersion(of: location.databaseURL) == 82)
+        let upgraded = try CueStore(location: location)
+        #expect(CueStore.schemaVersion(of: location.databaseURL) == 83 && CueStore.peerFloor == 83)
+        #expect(try db.rows("SELECT hostID IS NULL, bootID IS NULL FROM cueState") == [["1", "1"]])
+        let legacy = try #require(try await upgraded.cueState())
+        #expect(legacy.state == .known(.thinking) && legacy.detail == "检查发布结果" && legacy.runtimeState.known == nil)
+        #expect(try await upgraded.cueMessages().map(\.text) == messages.map(\.text))
+        let reopened = app.relaunch()
+        func now() async throws -> CueNow {
+            CueNow(try await CueDigest.read(from: reopened.store), at: .always(), local: .init(waiting: nil, here: nil))
+        }
+        try await reopened.store.recordMacPresence(host: "mac-a", bootID: "upgrade-boot") { true }
+        let unconfirmed = try await now()
+        #expect(unconfirmed.unconfirmed && unconfirmed.isLive && !unconfirmed.isBusy && !unconfirmed.hasConfirmedActivity)
+        #expect(try db.rows("SELECT hostID IS NULL, bootID IS NULL FROM cueState") == [["1", "1"]])
+        let recorder = PiStateRecorder(store: reopened.store, hostID: "mac-a", minInterval: .zero, bootID: "upgrade-boot")
+        try await recorder.updateCue(.thinking, detail: "检查发布结果")
+        let confirmed = try await now()
+        #expect(confirmed.isBusy && confirmed.hasConfirmedActivity && !confirmed.unconfirmed)
+        #expect(try db.rows("SELECT hostID, bootID FROM cueState") == [["mac-a", "upgrade-boot"]])
+        try await recorder.updateCue(.settled)
+        #expect(try await !now().isLive)
+    }
+
 }
