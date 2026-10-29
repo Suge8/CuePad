@@ -17,7 +17,7 @@ import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
 import { trackShows, watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 44;
+const EXTENSION_VERSION = 45;
 
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
  * 与 FireCode 判断"会话进行中"用同一个事实 */
@@ -62,24 +62,30 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand(INTERNAL_COMMAND, {
 		description: "CuePad 内部使用：需要命令上下文的会话操作（重新载入会话文件、新会话、重载、克隆）",
 		handler: async (action, command: ExtensionCommandContext) => {
-			switch (action.trim()) {
-				case "reload-session": {
-					const file = command.sessionManager.getSessionFile();
-					if (file) await command.switchSession(file);
-					break;
+			const session = live?.session;
+			try {
+				switch (action.trim()) {
+					case "reload-session": {
+						const file = command.sessionManager.getSessionFile();
+						if (file) await command.switchSession(file);
+						break;
+					}
+					case "new": await command.newSession(); break;
+					case "reload-if-idle": await live?.session.reload.ifIdle(command); break;
+					case "end":
+						await command.waitForIdle();
+						if (session?.lifetime.signal.aborted) return;
+						if (command.mode === "rpc") process.kill(process.pid, "SIGTERM");
+						else command.shutdown();
+						break;
+					case "clone": {
+						const leaf = command.sessionManager.getLeafId();
+						if (leaf) await command.fork(leaf, { position: "at" });
+						break;
+					}
 				}
-				case "new": await command.newSession(); break;
-				case "reload-if-idle": await live?.session.reload.ifIdle(command); break;
-				case "end":
-					await command.waitForIdle();
-					if (command.mode === "rpc") process.kill(process.pid, "SIGTERM");
-					else command.shutdown();
-					break;
-				case "clone": {
-					const leaf = command.sessionManager.getLeafId();
-					if (leaf) await command.fork(leaf, { position: "at" });
-					break;
-				}
+			} catch (error) {
+				if (!session?.lifetime.signal.aborted) session?.reportFailure(reason(error));
 			}
 		},
 	});
@@ -119,6 +125,7 @@ export default function (pi: ExtensionAPI) {
 
 		/** 会话关闭：拆掉它挂的一切——事件处理、计时、连接与 socket。 */
 		function close(why: string) {
+			session.lifetime.abort();
 			for (const off of unsubscribe) off();
 			session.retrying = null;
 			session.starting = null;

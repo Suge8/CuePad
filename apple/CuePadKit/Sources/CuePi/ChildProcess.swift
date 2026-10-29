@@ -33,12 +33,10 @@ public final class ChildProcess: Sendable {
         case lifeline
     }
 
-    enum Output: Sendable, Equatable {
+    enum Output: Sendable {
         case null
         case lines
         case raw
-        /// 调用方拥有的普通文件：脱离 App 后继续写，不因读端消失得到 EPIPE。
-        case file(Int32)
     }
 
     /// 标准输出（按 `Output`）；没有接管时立即结束。
@@ -94,9 +92,7 @@ public final class ChildProcess: Sendable {
             posix_spawn_file_actions_adddup2(&actions, lifeline.write, 3)
         }
         var stdout: Int32?
-        if case .file(let fd) = outputMode {
-            posix_spawn_file_actions_adddup2(&actions, fd, STDOUT_FILENO)
-        } else if outputMode == .null {
+        if outputMode == .null {
             posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0)
         } else {
             let out = try Self.pipe()

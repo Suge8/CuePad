@@ -219,7 +219,7 @@ public enum PiBridgeError: Error, Equatable {
     case upgradingExtension
     /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
     case unsupported
-    /// 请它结束后一直没下线（多半还卡在需要你在终端里处理的地方）
+    /// 请求结束后未能确认真正退出；不据断线或重载推断结束成功。
     case notEnded
 }
 
@@ -233,9 +233,11 @@ extension PiBridgeError: ShownError {
         case .unknownSession: "这个 Agent 会话已经结束"
         case .upgradingExtension: "这个会话正在换上新版扩展，歇下后自动接上，到时再发"
         case .unsupported: "这个 Agent 会话不支持这样操作"
-        case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
-        case .sessionEnded: "发送途中 Agent 会话结束了"
-        case .ackTimeout: "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看"
+        case .notEnded: "尚未确认会话已结束"
+        case .sessionEnded: "与 Agent 的连接已断开，操作结果尚未确认"
+        case .ackTimeout: "尚未收到 Agent 的确认；操作可能已经执行，不会自动重试"
+        case .rejected("user_turn"): "会话已进入另一轮，Cue 没有打断"
+        case .rejected("unconfirmed_turn"): "当前轮次的来源尚未确认，Cue 没有打断"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
         case .unknownModel(let agent): "这台 Mac 上的 \(agent.name) 里找不到这个模型"

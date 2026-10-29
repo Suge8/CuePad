@@ -118,13 +118,13 @@ function handleCommand(session: Session, socket: net.Socket, command: Command | 
 	try {
 		// 格式跨扩展版本不变、不回 ack（CuePi README「协议」）：CuePad 读不懂的旧扩展也要收得到
 		if (command?.t === "upgrade") return session.reload.check();
-		if (command?.t === "send") return handleSend(session, command, ack, reject);
+		if (command?.t === "send") return void handleSend(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "command") return void handleSlash(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "answer") return handleAnswer(session, command, ack, reject);
 		if (command?.t === "reload") return handleReload(session, ack);
 		if (command?.t === "end") return handleEnd(session, ack);
 		if (command?.t === "abort") return handleAbort(session, ack);
-		if (command?.t === "retry") return handleRetry(session, ack, reject);
+		if (command?.t === "retry") return void handleRetry(session, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "config") return void handleConfig(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "quota") return handleQuota(session, ack, reject);
 		reject("bad_request");
@@ -133,7 +133,7 @@ function handleCommand(session: Session, socket: net.Socket, command: Command | 
 	}
 }
 
-function handleSend(session: Session, command: Command, ack: Ack, reject: Reject) {
+async function handleSend(session: Session, command: Command, ack: Ack, reject: Reject) {
 	const images = command.images ?? [];
 	const text = command.text ?? "";
 	if (typeof text !== "string" || !isImages(images)) return reject("bad_request");
@@ -146,7 +146,7 @@ function handleSend(session: Session, command: Command, ack: Ack, reject: Reject
 	const cueTurn = command.cueTurn;
 	if (cueTurn !== undefined && (typeof cueTurn !== "object" || cueTurn === null || Array.isArray(cueTurn)
 		|| ("deliveryId" in cueTurn && cueTurn.deliveryId !== null && typeof cueTurn.deliveryId !== "string"))) return reject("bad_request");
-	session.startRound({ content, expand: false, text, id, ack, cueTurn: cueTurn as { deliveryId?: string | null } | undefined });
+	await session.startRound({ content, expand: false, text, id, ack, cueTurn: cueTurn as { deliveryId?: string | null } | undefined });
 }
 
 /**
@@ -171,7 +171,7 @@ function handleReload(session: Session, ack: Ack) {
  * 斜杠命令：内置的（能在非 TUI 下执行的）由本扩展调 Pi 的接口做，其余（扩展命令、提示词模板、skill）经
  * `sendUserMessage(…, { expandPromptTemplates: true })` 交给 Pi 派发——扩展命令执行（会话正忙也立即执行，不开轮）、模板与 skill
  * 展开成新一轮的提示词，与 `send` 同一规则（`startRound`）；不带这个选项的 `sendUserMessage` 只把它当普通文字。清单里没有的名字拒绝，不当文字发出去。
- * `ack` 表示已受理：扩展命令的执行结果与报错只出现在 Pi 自己的界面（`ctx.ui`），这里看不到。
+ * 其他扩展的命令没有公开的完成/错误回执：交出后不回成功 ACK，等待以未确认结束，不伪造执行结果。
  */
 async function handleSlash(session: Session, command: Command, ack: Ack, reject: Reject) {
 	const text = command.text;
@@ -187,8 +187,7 @@ async function handleSlash(session: Session, command: Command, ack: Ack, reject:
 	const found = name === INTERNAL_COMMAND ? undefined : session.pi.getCommands().find((c) => c.name === name);
 	if (!found) return reject("unknown_command");
 	if (found.source === "extension") session.pi.sendUserMessage(text, { expandPromptTemplates: true });
-	else session.startRound({ content: text, expand: true, text });
-	ack({ ok: true });
+	else await session.startRound({ content: text, expand: true, text, ack });
 }
 
 /** 执行一条内置命令；返回拒绝原因，成功返回 undefined。 */
@@ -253,8 +252,8 @@ function handleAbort(session: Session, ack: Ack) {
 }
 
 /** 把出错的那一轮原样重跑一遍（`retry.ts`）；确认等重跑的那一轮开始（隐藏消息落成会话里的一条消息）。 */
-function handleRetry(session: Session, ack: Ack, reject: Reject) {
-	const error = retry(session, ack);
+async function handleRetry(session: Session, ack: Ack, reject: Reject) {
+	const error = await retry(session, ack);
 	if (error) reject(error);
 }
 

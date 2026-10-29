@@ -62,7 +62,7 @@ public final class PiRuntime: AgentRuntime {
     public var hostedSessionsOutliveApp: Bool { true }
 
     /// 在后台于 `directory` 开一个新会话，带上发起方的认领标识；等它连上桥后返回。会话名、模型与思考强度是 Pi 的启动参数
-    /// （`--name`、`--model`、`--thinking`），给了就一起生效；模型不存在或没登录时 Pi 起来就退出，抛 `exited` 并带上 Pi 的原话。
+    /// （`--name`、`--model`、`--thinking`），给了就一起生效；启动失败而先退出时抛 `exited`，不承诺取得 Pi 的输出原文。
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
@@ -93,15 +93,11 @@ public final class PiRuntime: AgentRuntime {
             launching: executable,
             overrides: paths.launchEnvironment.merging(environment) { $1 }.merging([Self.hostedVariable: String(idleLimit.components.seconds)]) { $1 })
         // 脱离 App：新会话、标准输入是它自己握着两端的管道（RPC 模式读到 EOF 就收尾，这样永远读不到）；认领前 App 只握着看守的那根；
-        // stdout 的 RPC 异步错误持续进入诊断；输出是普通文件，App 退出后 Pi 照常写。stderr 留启动失败原因。
-        let diagnostics = try PiHostDiagnostics()
+        // 托管进程不能把整条 RPC 输出存文件，也不能把输出绑在 App 管道上；只消费桥扩展的公开事件。
+        // 没有公开关联事件的错误保留未确认；启动即退只报告退出事实，不承诺取得 stderr 原文。
         let process = try await ChildProcess(
             executable, ["--mode", "rpc"] + arguments, directory: directory, environment: environment,
-            placement: .detached, input: .lifeline, output: .file(diagnostics.descriptor))
-        Task {
-            _ = await process.exited(within: nil)
-            diagnostics.finish()
-        }
+            placement: .detached, input: .lifeline, keepErrors: false)
         let pid = process.pid
         let session: PiSession
         do {
@@ -115,8 +111,7 @@ public final class PiRuntime: AgentRuntime {
                     }
                     group.addTask {
                         guard await process.exited(within: nil) else { return nil }
-                        let line = process.stderrTail.split(whereSeparator: \.isNewline).last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                        throw PiHostError.exited(line.map { String($0.prefix(300)).trimmingCharacters(in: .whitespaces) })
+                        throw PiHostError.exited(nil)
                     }
                     defer { group.cancelAll() }
                     guard let session = try await group.next() ?? nil else { throw CancellationError() }
@@ -148,7 +143,7 @@ public final class PiRuntime: AgentRuntime {
 }
 
 public enum PiHostError: Error, Equatable {
-    /// 后台启动的 Pi 还没连上就退出了（Pi 在标准错误里说的最后一句；没说为 nil）
+    /// 后台启动的 Pi 还没连上就退出了；有已知原因时带上，托管输出不捕获时为 nil。
     case exited(String?)
     /// 等了很久 Pi 都没连上（已让它退出）
     case notConnected

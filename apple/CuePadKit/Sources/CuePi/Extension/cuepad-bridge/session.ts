@@ -4,6 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { phaseOf, StateTracker, type Asking, type Clock, type Phase } from "./events.ts";
 import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, replyText, type Info, type Subagent } from "./info.ts";
 import { IdleExit, IS_HOSTED, SelfReload } from "./lifecycle.ts";
+import { preflight } from "./preflight.ts";
 import { QuotaFetcher, type Quota, type QuotaWindow } from "./quota.ts";
 
 /** 交给 CuePad 用来定位终端的环境变量 */
@@ -31,6 +32,7 @@ function readTTY(): Promise<string | null> {
 /** 一个终端或 RPC 会话的状态、计时、近况与轮次：事件（`events`）与 CuePad 的命令（`commands`）都改它，变了经 `commit`、`updateInfo` 发给客户端。 */
 export class Session {
 	readonly tracker = new StateTracker();
+	readonly lifetime = new AbortController();
 	readonly clients = new Set<net.Socket>();
 	/** 主会话最后一次模型回合开始的时间（`turn_start` 的时刻）：早于这一回合写进会话文件的回答，CuePad 据此认出歇下时这一轮的回答读到没有。
 	 * 取每个回合而不取 agent_start：一次运行里接着处理排队的话，最后的回答出自最后一个回合 */
@@ -130,7 +132,7 @@ export class Session {
 
 	/** 歇着、没有等你回答的弹窗：可以重新载入扩展 */
 	private canReload() {
-		return (this.phase === "idle" || this.phase === "error") && !this.asking;
+		return !this.lifetime.signal.aborted && (this.phase === "idle" || this.phase === "error") && !this.asking;
 	}
 
 	/** 变了的项才发，而且只发变了的那几项：模型表（几百个）与命令清单很大，上下文用量每轮都变，不能每次带上整份。
@@ -193,9 +195,10 @@ export class Session {
 	}
 
 	/** 以这句开新一轮（见 `pending`）。 */
-	startRound(said: Said) {
+	async startRound(said: Said) {
 		if (this.rejectSend(said)) return;
 		if (this.pending.length === 0 && this.ctx.isIdle()) return this.submit(said);
+		if (!(await this.prepare(said.ack)) || this.rejectSend(said)) return;
 		this.pending.push(said);
 		this.stopRound();
 	}
@@ -204,10 +207,35 @@ export class Session {
 	 * 不带 deliverAs：只在歇着时交（见 `pending`），Pi 直接开始这一轮。歇着又没有等着的话时，之前交出、还没落成消息的那句
 	 * 不构成未执行证据；旧等待不阻止宿主空闲时的新意图。
 	 */
-	private submit(said: Said) {
-		if (this.rejectSend(said)) return;
+	private async submit(said: Said) {
+		if (this.rejectSend(said) || !(await this.prepare(said.ack)) || this.rejectSend(said)) return;
 		this.starting = said;
-		this.pi.sendUserMessage(said.content, said.expand ? { expandPromptTemplates: true } : undefined);
+		try {
+			this.pi.sendUserMessage(said.content, said.expand ? { expandPromptTemplates: true } : undefined);
+		} catch (error) {
+			this.starting = null;
+			this.reportFailure(reason(error));
+			said.ack?.({ ok: false, error: `failed: ${reason(error)}` });
+		}
+	}
+
+	async prepare(ack?: Ack) {
+		const failure = await preflight(this.ctx);
+		if (this.lifetime.signal.aborted) return false;
+		if (!failure) return true;
+		this.reportFailure(failure.detail);
+		ack?.({ ok: false, error: failure.code });
+		return false;
+	}
+
+	/** 只上报实际观察到的错误；宿主仍忙时不能用另一个操作的错误盖掉当前轮。 */
+	reportFailure(error: string) {
+		this.ctx.ui.notify(error, "error");
+		if (!this.ctx.isIdle()) return;
+		this.tracker.active = this.pending.length > 0;
+		this.tracker.settled = this.tracker.outcome = { kind: "error", error };
+		this.commit();
+		this.submitPending();
 	}
 
 	/** 歇下了就交出等着的下一句。下一轮事件循环再看：压缩完成的事件在 Pi 收起压缩标记之前发出。 */
@@ -216,7 +244,7 @@ export class Session {
 		this.later("等着的话", () => {
 			if (!this.ctx.isIdle()) return this.stopForPending();
 			const next = this.pending.shift();
-			if (next) this.submit(next);
+			if (next) void this.submit(next);
 		});
 	}
 
@@ -268,10 +296,11 @@ export class Session {
 	 * 在这里报，不让它在事件循环里成为未捕获的异常。 */
 	private later(what: string, action: () => void) {
 		return setImmediate(() => {
+			if (this.lifetime.signal.aborted) return;
 			try {
 				action();
 			} catch (error) {
-				this.ctx.ui.notify(`CuePad：${what}没交给 Pi：${reason(error)}`, "error");
+				this.reportFailure(`CuePad：${what}没交给 Pi：${reason(error)}`);
 			}
 		});
 	}

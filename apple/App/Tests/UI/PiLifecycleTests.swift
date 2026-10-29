@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+@testable import CuePi
 import CueStore
 import Foundation
 import Testing
@@ -60,4 +60,40 @@ struct PiLifecycleTests {
         #expect(try await store.allPiSessionStates().first?.state == (reason == "quit" ? .known(.ended) : .known(.settled)))
     }
 }
+
+/// 实际非 Pi 接入的亚毫秒轮次经 Store 往返后，Cue 仍能接管自己获准的轮；下一毫秒的新轮仍拒绝。
+struct PiSendPrecisionTests {
+    private final class Peer: SessionLink {
+        var messages: [PiMessage] = []
+        func send(_ message: PiMessage, in _: PiSession.ID) async throws { messages.append(message) }
+    }
+
+    @Test func 非Pi当前轮经Store往返后允许Cue发话_换轮仍保护() async throws {
+        let app = TestApp()
+        let started = Date(timeIntervalSince1970: 1_793_290_000.123456)
+        var facts = SessionFacts()
+        facts.startTurn(at: started)
+        var live = PiSession(
+            id: "claude-peer", sessionID: "claude-session", agent: .claudeCode, sessionFile: nil, pid: 0,
+            cwd: app.directory, terminal: PiTerminal(), state: .settled, stateSince: started)
+        live.hosted = true
+        facts.publish(to: &live, at: started)
+        let peer = Peer()
+        app.pi.attach(live, via: peer)
+        try await PiStateRecorder(store: app.services.store, hostID: TestApp.hostID).update(
+            sessionID: live.sessionID, state: live.state, title: "Claude", turnStartedAt: live.turnStartedAt, agent: .claudeCode)
+        let stored = try #require(try await app.services.store.allPiSessionStates().first?.turnStartedAt)
+        #expect(stored != started, "Store 确实把接入的亚毫秒时间按存储合同规范成毫秒")
+        let message = PiMessage(text: "继续自己的任务", policy: .cue(deliveryID: "cue-confirmed", turnStartedAt: stored))
+
+        try await app.pi.send(message, to: live.id)
+        #expect(peer.messages.map(\.text) == ["继续自己的任务"])
+
+        facts.startTurn(at: started.addingTimeInterval(0.001))
+        app.pi.update(live.id) { facts.publish(to: &$0) }
+        await #expect(throws: PiBridgeError.rejected("user_turn")) { try await app.pi.send(message, to: live.id) }
+        #expect(peer.messages.count == 1, "旧许可不能打断新轮")
+    }
+}
+
 #endif

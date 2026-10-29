@@ -133,7 +133,8 @@ extension PiBridge {
             guard !peer.upgrading, peer.state != .ended, peer.state != .interrupted else { throw PiBridgeError.rejected("unconfirmed_turn") }
             if peer.state.hasPendingWork {
                 guard let deliveryID, !deliveryID.isEmpty, let turnStartedAt, let current = peer.turnStartedAt else { throw PiBridgeError.rejected("unconfirmed_turn") }
-                guard turnStartedAt == current else { throw PiBridgeError.rejected("user_turn") }
+                // 接入可能有亚毫秒，Store 往返只有毫秒；复用存储合同，不按任意容差放宽。
+                guard turnStartedAt.stored == current.stored else { throw PiBridgeError.rejected("user_turn") }
             }
         }
         if let why = peer.capabilities.speakBlocked(in: peer.state, agent: peer.agent) {
@@ -143,7 +144,7 @@ extension PiBridge {
     }
 
     /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令、提示词模板与 skill 由 Pi 派发；会开一轮的
-    /// （模板与 skill 展开成这一轮的提示词）与 `send` 同一规则，在跑就先打断。受理只表示已收下，命令自己的输出只出现在 Agent 的界面里；
+    /// （模板与 skill 展开成这一轮的提示词）与 `send` 同一规则，在跑就先打断。Pi 转发的扩展命令没有公开完成回执，结果保持未确认；
     /// 清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
     public func command(_ line: String, in id: PiSession.ID) async throws {
         try await control(id, needs: .commands).command(line, in: id)

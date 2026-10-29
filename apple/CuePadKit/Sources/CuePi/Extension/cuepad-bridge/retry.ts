@@ -22,10 +22,12 @@ const isFailedAnswer = (message: Message | undefined) => message?.role === "assi
 
 /** 重跑：最后一轮是 CuePad 报成出错的那一轮、宿主真实歇着，才开新一轮；返回拒绝原因，受理返回 undefined。
  * 确认只表示观察到隐藏消息事件，不是落盘或模型成功。没有可关联事件时超时仍是未知，同 `send`。 */
-export function retry(session: Session, ack: Ack): string | undefined {
+export async function retry(session: Session, ack: Ack): Promise<string | undefined> {
 	const { ctx, pi } = session;
 	const failed = isFailedAnswer(ctx.sessionManager.buildSessionProjection().messages.at(-1));
 	if (session.phase !== "error" || !failed || !ctx.isIdle()) return NOTHING_TO_RETRY;
+	if (!(await session.prepare(ack))) return;
+	if (session.phase !== "error" || !ctx.isIdle()) return NOTHING_TO_RETRY;
 	settleRetry(session);
 	session.retrying = ack;
 	try {
