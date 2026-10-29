@@ -134,9 +134,13 @@ extension PiChatMessage: Record {
 }
 
 extension PiChatMessage {
-  /// 用户一方的这句是 Cue 发进会话的（`cueSent` 是 `CueStore.cueSentDeliveries` 认出的请求 id）；其余都是用户说的——
-  /// 在终端里打的与在 CuePad 里发的一样。会话页的气泡与 Cue 的 peek 都只认它。
+  /// 这里只判断有正证据的 Cue 来源；不在集合里的投送仍可能来源未确认。
   public func saidByCue(_ cueSent: Set<UUID>) -> Bool { role == .known(.user) && deliveryID.map(cueSent.contains) == true }
+
+  public func source(in sources: [UUID: MessageSource]) -> MessageSource {
+    guard let deliveryID else { return .user }
+    return sources[deliveryID] ?? .unconfirmed
+  }
 }
 
 extension PiChatMessage {

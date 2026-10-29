@@ -136,8 +136,10 @@ enum Schema {
     // 83：运行报告与所属 Mac 的系统启动关联；旧端忽略关联与投送 unknown，会错误授权控制或重投。旧报告不回填证明。
     """
     ALTER TABLE piSessionStates ADD COLUMN bootID TEXT; ALTER TABLE macPresence ADD COLUMN bootID TEXT;
+    ALTER TABLE cueState ADD COLUMN hostID TEXT; ALTER TABLE cueState ADD COLUMN bootID TEXT;
     DROP TRIGGER piSessionStates_writeSeq_update;
     \(updateStamp("piSessionStates", when: sessionChanges))
+    \(canonicalDeliveryFailures)
     """,
   ]
 
