@@ -56,7 +56,7 @@ extension Schema {
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
       pendingTools TEXT, model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT, turnStartedAt INTEGER, answeredAt INTEGER,
-      failure TEXT, stateSince INTEGER NOT NULL,
+      failure TEXT, bootID TEXT, stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
@@ -162,7 +162,7 @@ extension Schema {
     \(writeSeq)
 
     -- 每台 Mac 自己写、各端读：在线记录（Mac 在不在、Cue 在不在值班的唯一信号），能用的 Agent 与各家的模型。
-    CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
+    CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, bootID TEXT) STRICT;
     CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
     \(agentLibrariesTable)
     \(agentLibraryFilesTable)
