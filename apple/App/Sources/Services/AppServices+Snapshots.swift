@@ -23,6 +23,13 @@ extension AppServices {
     #if os(iOS)
     /// 实时活动只能在前台开：启动到变成 active 之前（inactive）也算前台，库读完的第一份就能开，不等下一次变化。
     private static var inForeground: Bool { UIApplication.shared.applicationState != .background }
+
+    /// 远程活动只在身份已确认且资料已对账后开启；不用 CueFeed 在换号、清库前排队的旧快照。
+    func remoteActivityState() throws -> CueActivityState? {
+        guard syncReconciled, [.idle, .syncing].contains(syncStatus) else { return nil }
+        let digest = try store.snapshot { try CueDigest.read(from: $0) }.value
+        return try ActivityPush.fitted(CueActivityState(now: Self.cueNow(digest, at: speech, local: cueLocal)))
+    }
     #endif
 
     /// Cue 此刻：小组件、实时活动与 Cue 那一行（`CueWatch`）都经这里推（调试时可钉成一份样例，`-CuePadCueNow`）。

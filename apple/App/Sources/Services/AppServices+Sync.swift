@@ -199,11 +199,6 @@ extension AppServices {
         }
     }
 
-    /// 处理 `syncStatus == .needsDecision`：用户选择后同步重新开始。
-    func resolveSync(_ resolution: SyncResolution) async throws {
-        try await sync?.resolve(resolution)
-    }
-
     /// 这个附件文件在本机的位置：没有就现在从 iCloud 取（手机上大文件、按流量计费时不自动取，用到时走这里）；没有同步（隔离库）抛 `FileFetchFailure.notSyncing`。
     func fetchFile(_ key: String) async throws -> URL { try await sync.fetchFile(key) }
 
