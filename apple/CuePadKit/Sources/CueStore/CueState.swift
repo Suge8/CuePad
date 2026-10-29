@@ -122,7 +122,7 @@ public struct CueLeft: StoredJSON, Hashable, Sendable {
 
   /// 这一条说的就是会话此刻的这次停下。
   public func holds(for session: PiSessionState) -> Bool {
-    session.sessionID == sessionID && session.stateSince.stored == since.stored && session.state.known?.isStopped == true
+    session.sessionID == sessionID && session.stateSince.stored == since.stored && session.runtimeState.known?.isStopped == true
   }
 }
 

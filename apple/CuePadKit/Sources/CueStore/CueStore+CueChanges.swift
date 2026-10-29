@@ -53,7 +53,7 @@ extension CueStore {
       try report(session, seq: written, task: owner?.task, leaf: owner?.leaf)
     }
     let failed = try selectWritten(
-      DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND cueToldAt IS NULL AND writeSeq > ?",
+      DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = '\(DeliveryStatus.failed.rawValue)' AND cueToldAt IS NULL AND writeSeq > ?",
       [marks.sessions], orderBy: "writeSeq")
     for (request, written) in failed {
       // 没带卡的失败算在会话归的那件事上（同上）
@@ -78,7 +78,10 @@ extension CueStore {
   /// 不分在不在看板上（不在的到点醒来也没有变化，只多对一次账）。
   public func nextCueStall(after now: Date) throws -> Date? {
     try select(PiSessionState.self, where: "state = ?", [PiWorkState.delegating.rawValue])
-      .compactMap(\.stallsAt).filter { $0 > now }.min()
+      .compactMap { session -> Date? in
+        guard let due = session.stallsAt, let until = session.runtimeUntil, due < until else { return nil }
+        return due
+      }.filter { $0 > now }.min()
   }
 
   /// 会话停在的状态是一处变化时（歇下、被打断、等回答、出错）的那条变化；在跑、已结束为 nil。
@@ -86,7 +89,7 @@ extension CueStore {
   /// （Claude Code 的轮末标记写在报歇下的钩子之后）。读到时收尾时刻一变，这一行盖上新序号，变化随之出现。
   private func sessionChange(_ session: PiSessionState, seq: Int, task: Card?, leaf: Card?) throws -> CueChange? {
     let (kind, detail): (CueChange.Kind?, String?) =
-      switch session.state.known {
+      switch session.runtimeState.known {
       case .settled where !session.answered: (nil, nil)
       case .settled, .interrupted: (.settled, nil)
       case .waitingForUser: (.waitingForUser, session.question?.text ?? session.detail)
@@ -112,8 +115,8 @@ extension CueStore {
     }
   }
 
-  /// 会话最近这一轮是他的：不是 Cue 开的（`turnOpener`，机器消息开的跟着它之前那句）。停下归谁只认这一处。
-  private func hisTurn(_ sessionID: String) throws -> Bool { try turnOpener(sessionID) != .cue }
+  /// 会话最近这一轮有他开轮的正证据（`turnOpener`，机器消息开的跟着它之前那句）。停下归谁只认这一处。
+  private func hisTurn(_ sessionID: String) throws -> Bool { try turnOpener(sessionID) == .user }
 
   /// 他的停下（`hisTurn`）此刻他在场（返回他的在场）：先不报给 Cue；Cue 的、他不在场的为 nil。
   private func hisStop(_ sessionID: String) throws -> SessionPresence? {
@@ -124,12 +127,12 @@ extension CueStore {
   /// 他此刻在不在会话里（`SessionPresence`）；不在场为 nil。
   private func presence(in sessionID: String) throws -> SessionPresence? {
     let viewing = try viewers().contains { $0.sessionID == sessionID }
-    // 他一方说的、窗口内的话（从晚到早），去掉 Cue 发进去的（`PiChatMessage.saidByCue`）
+    // 窗口内有明确人类来源的话（从晚到早）；缺来源证据不等于他说过。
     let said = try select(
       PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)' AND at > ?",
       [sessionID, timing.now() - SessionPresence.window], orderBy: "at DESC")
-    let cueSent = try cueSentDeliveries(among: said.compactMap(\.deliveryID))
-    let spokeAt = said.first { !$0.saidByCue(cueSent) }?.at
+    let sources = try deliverySources(among: said.compactMap(\.deliveryID))
+    let spokeAt = said.first { $0.source(in: sources) == .user }?.at
     return viewing || spokeAt != nil ? SessionPresence(viewing: viewing, spokeAt: spokeAt) : nil
   }
 
@@ -183,7 +186,7 @@ extension CueStore {
     guard !requests.isEmpty else { return }
     try write {
       try db.run(
-        "UPDATE deliveryRequests SET cueToldAt = ? WHERE id IN (SELECT value FROM json_each(?)) AND status = 'failed'",
+        "UPDATE deliveryRequests SET cueToldAt = ? WHERE id IN (SELECT value FROM json_each(?)) AND status = '\(DeliveryStatus.failed.rawValue)'",
         [Date.stamp, Self.idList(requests)])
     }
   }

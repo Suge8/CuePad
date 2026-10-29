@@ -160,7 +160,7 @@ final class TestApp {
 
     /// 真实运行报告的前置事实：所属 Mac 在线、报告与 presence 关联同一次系统 boot。
     /// 不在历史回填时调用；要演重启或离线的用例自行改 presence。
-    func runtimeRecorder(on host: String, boot: String = "test-boot") async throws -> PiStateRecorder {
+    func runtimeRecorder(on host: String, boot: String = SystemBoot.id ?? "test-boot") async throws -> PiStateRecorder {
         try await services.store.recordMacPresence(host: host, bootID: boot) { true }
         return PiStateRecorder(store: services.store, hostID: host, minInterval: .zero, timing: timing, bootID: boot)
     }

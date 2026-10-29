@@ -47,7 +47,7 @@ extension AppServices {
     /// 立即按当前库内容更新，不等快照那条异步的观察：进入后台前（`resend`：岛按此刻重发一次，过时时刻从这时算）、
     /// 推送叫醒拉完之后（回调一返回系统就可能挂起 App，`IOSAppDelegate`）。
     func writeSnapshots(resend: Bool = false) async throws {
-        let read = try await CueFeed.Read.read(from: store, widget: true)
+        let read = try await CueReading.Read.read(from: store, widget: true)
         try await present(read.widget!, read.digest, at: speech, local: cueLocal, resend: resend)
     }
 

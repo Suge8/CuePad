@@ -4,7 +4,7 @@ import Foundation
 
 /// Cue 此刻在做什么（头像的表情与在动的点、Cue 页对话末尾的进展、侧栏与菜单栏面板的一行）。各端（含它值班的这台 Mac）都由库推出（`derive`）：
 /// 没启用；它运行的那台 Mac 不在线是在睡觉（那台的在线记录 `MacPresence`，与值班同一条，`CueStore.macOnline`；到期由订阅重读）——本机同步不通时
-/// 那条记录可能只是没同步来，说不准它在不在，不说它在睡觉、照它写下的状态（值班仍按不在线算：那时它答不了会话，宁可多叫你一次）；
+/// 那条记录可能只是没同步来，说不准它在不在，不说它在睡觉、也不沿用旧运行断言（值班仍按不在线算：那时它答不了会话，宁可多叫你一次）；
 /// 你最近一句还在等回执是话在路上（`Speech`，与气泡同一个事实，此刻由 `SpeechClock` 给）；
 /// 其余照值班的 Mac 写下的（`CueState`）：在想、在用工具是在做事，出错是起不来。
 /// 在路上与在做事和 Agent 会话是同一套状态（`shown`：状态标、状态词、颜色、对话末尾那一行都一样）。
@@ -13,6 +13,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
     case disabled
     /// 启用了，但它运行的那台 Mac 不在线。
     case asleep
+    case unconfirmed
     case idle
     /// 你最近一句还在路上：发送中或已发出（`PiDelivery.Transit` 的那两种）。
     case sending(PiDelivery.Transit)
@@ -29,6 +30,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
             let trip = Speech.trip(said: you.said, delivered: you.delivered, reachedServer: you.reachedServer, host: digest.hostID, at: moment)
             if trip.inTransit { return .sending(trip == .sent ? .sent : .sending) }
         }
+        if !digest.hostOnline { return .unconfirmed }
         guard let state = digest.state, let work = state.state.known else { return .idle }
         if work == .error { return .unreachable(state.detail ?? String(localized: "\(digest.name) 起不来了")) }
         return work.isWorking ? .working(work, detail: state.detail, step: state.step) : .idle
@@ -37,7 +39,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// 头像变暗、闭眼：它此刻不会接话。
     var isAway: Bool {
         switch self {
-        case .disabled, .asleep, .unreachable: true
+        case .disabled, .asleep, .unconfirmed, .unreachable: true
         case .idle, .sending, .working: false
         }
     }
@@ -52,7 +54,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
         switch self {
         case .sending(let transit): PiShown(status: .delivery(.inTransit(transit)))
         case .working(let state, _, _): PiShown(status: .working(state))
-        case .disabled, .asleep, .idle, .unreachable: nil
+        case .disabled, .asleep, .unconfirmed, .idle, .unreachable: nil
         }
     }
 
@@ -70,6 +72,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
         switch self {
         case .disabled: ranBefore ? String(localized: "已停用") : String(localized: "还没启用")
         case .asleep: String(localized: "「\(host)」没开")
+        case .unconfirmed: String(localized: "未知状态")
         case .unreachable(let reason): reason
         case .idle, .sending, .working: nil
         }
@@ -94,7 +97,8 @@ nonisolated struct CueDigest: Equatable, Sendable {
     /// 结束了的提问（`CueQuestionEnd`）不算：那件事已经定了，接着写它在那之前最近说的。
     var lastSaid: String?
     /// 它运行的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
-    var hostOnline: Bool
+    var hostUntil: Date?
+    var hostOnline: Bool { hostUntil != nil }
     /// 你最近一句：写下与交给它的时刻、服务器收下过没有（`CueStore.cueLastYou`）；你还没说过为 nil。到哪了按此刻推（`derive`）。
     var lastYou: LastYou?
     /// 值班的 Mac 写下的此刻在做什么（`CueStore.cueState`）。
@@ -105,7 +109,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var done: [Card]
 
     static let empty = CueDigest(
-        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaid: nil, hostOnline: false,
+        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaid: nil, hostUntil: nil,
         lastYou: nil, state: nil, woke: nil, done: [])
 
     struct Woke: Equatable, Sendable {
@@ -134,7 +138,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             tally: tally,
             unread: try store.cueUnread().count,
             lastSaid: said?.headline,
-            hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
+            hostUntil: try profile?.activeHost.flatMap { try store.macOnlineUntil($0) },
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer) },
             state: try store.cueState(),
             woke: try store.cueWaking().map { row in
@@ -144,7 +148,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
                 } else { nil }
                 return Woke(at: row.createdAt, text: Self.woke(row), sessions: sessions)
             },
-            done: try store.tasksDone(since: Calendar.current.startOfDay(for: .now)).filter { TaskBoard.Column.of($0, in: tally) == .done })
+            done: try store.tasksDone(since: Calendar.current.startOfDay(for: store.timing.now())).filter { TaskBoard.Column.of($0, in: tally) == .done })
     }
 
     /// 这一轮为什么醒，写成那一句的开头（"被 canvas-zoom 叫醒"）：名字是叫醒时记下的（`CueMessage.places`）。

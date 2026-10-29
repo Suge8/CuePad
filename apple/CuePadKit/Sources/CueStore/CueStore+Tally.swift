@@ -43,7 +43,18 @@ public struct CueTally: Equatable, Sendable {
     public var id: String { "reply/\(session.sessionID)" }
   }
 
-  public var advancing: [CueWork]
+  /// 全部未完成工作；拍板与待回复是否占着它只从当前 waiting/replies 推出。
+  public var works: [CueWork]
+  public var advancing: [CueWork] {
+    let held = held
+    let yours = Set(waiting.compactMap { if case .session(let state, _) = $0 { state.sessionID } else { nil } } + replies.map(\.session.sessionID))
+    return works.filter {
+      switch $0 {
+      case .task(let item): !held.contains(item.id)
+      case .session(let state): !yours.contains(state.sessionID)
+      }
+    }
+  }
   /// 拍板。
   public var waiting: [Wait]
   public var replies: [Reply]
@@ -52,13 +63,13 @@ public struct CueTally: Equatable, Sendable {
     Set(waiting.compactMap { if case .session(_, let task) = $0 { task } else { nil } } + replies.compactMap(\.task))
   }
 
-  public init(advancing: [CueWork], waiting: [Wait], replies: [Reply]) {
-    self.advancing = advancing
+  public init(works: [CueWork], waiting: [Wait], replies: [Reply]) {
+    self.works = works
     self.waiting = waiting
     self.replies = replies
   }
 
-  public static let empty = CueTally(advancing: [], waiting: [], replies: [])
+  public static let empty = CueTally(works: [], waiting: [], replies: [])
 }
 
 extension CueStore {
@@ -66,17 +77,8 @@ extension CueStore {
     let waiting = try cueWaiting()
     let replying = try sessionsAwaitingReply()
     let owners = try sessionOwners(replying.map(\.sessionID))
-    var tally = CueTally(
-      advancing: [], waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) })
-    let held = tally.held
-    let yours = Set(waiting.compactMap { if case .session(let state, _) = $0 { state.sessionID } else { nil } } + replying.map(\.sessionID))
-    tally.advancing = try cueBoard().active.filter { work in
-      switch work {
-      case .task(let item): !held.contains(item.id)
-      case .session(let state): !yours.contains(state.sessionID)
-      }
-    }
-    return tally
+    return CueTally(
+      works: try cueBoard().active, waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) })
   }
 
   /// 只有拍板那一份（`CueTally.waiting`，同一条规则）：Cue 页的拍板卡只读它，不连带推进中的那些读取。

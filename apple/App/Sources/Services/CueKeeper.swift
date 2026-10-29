@@ -161,7 +161,7 @@ final class CueKeeper {
                         Signal(
                             toDeliver: try store.cueMessagesToDeliver().map(\.id), lastYou: try store.cueLastYou()?.said,
                             active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(),
-                            profile: try store.cueProfile(), viewing: try store.viewers().compactMap(\.sessionID), written: try store.lastWrite())
+                            profile: try store.cueProfile(), viewing: try store.viewers().compactMap(\.sessionID), written: try store.lastWrite(), runtime: try store.runtimeDeadlines())
                     }) { input.yield(.kick) }
                 } catch {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")

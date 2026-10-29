@@ -222,7 +222,7 @@ final class AppServices {
         hostID = mac.hostID
         workspaces = mac.workspaces
         wakeNotifications = mac.wakeNotifications
-        piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID)
+        piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID, timing: mac.timing)
         presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
         viewer = ViewerKeeper(store: store, sync: self.sync, device: mac.hostID)
         pi = mac.pi

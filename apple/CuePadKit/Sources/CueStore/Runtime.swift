@@ -56,7 +56,9 @@ extension CueStore {
 
   /// Cue 的订阅也跟随运行证明与期限；lease 到期不写库，不能只盯 writeSeq。
   public func runtimeDeadlines() throws -> [Date] {
-    let sessions = try select(PiSessionState.self, where: PiWorkState.outsideSQL(PiWorkState.closed), orderBy: "stateSince, id")
+    let sessions = try runtimeProjection(db.query(
+      "SELECT \(PiSessionState.selection) FROM piSessionStates WHERE \(PiWorkState.outsideSQL(PiWorkState.closed))"
+    ) { PiSessionState(row: $0) })
     return Set(sessions.compactMap(\.runtimeUntil)).sorted()
   }
 

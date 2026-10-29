@@ -19,7 +19,7 @@ struct CueActivityTests {
         let readme = try await store.createTask("README 截图换成 Swift 版", in: project.id)
         try await workspace.toggle(readme.id)
         let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4 到 TestFlight"), task: step.id)
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        let recorder = try await rig.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "testflight", state: .thinking, title: "testflight")
         try await store.bindSession("testflight", to: step.id)
         try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom")
@@ -74,7 +74,7 @@ struct CueActivityTests {
         try await store.setCueState(.thinking)
         cue = try await now()
         #expect(cue.isLive && cue.isBusy && cue.quietWord == "在想" && cue.staleAfter == CueNow.fastStale)
-        #expect(cue.settled.quietLine == "刚做完「发布 v1.4」" && !cue.settled.isLive)
+        #expect(cue.settled.unconfirmed && cue.settled.isLive)
 
         // 刚做完一件又派出一件在跑，Cue 歇下：数字账写推进中那件，不停在"做完"
         let ship = try await store.createTask("推送并发新版", in: project.id)

@@ -44,7 +44,7 @@ extension PiSessionState {
   /// 停在要人接手的地方：歇下（最后一轮的回答已读到，`answered`，同它作为变化的时机）、在等回答或出错；被打断的不算，Cue 让它接着做。
   /// 谁接手（`CueStore.cueChanges`、`leaveHisStops`）只管这几种。等子代理停住时会话还在做，与完成、发送失败一样总报给 Cue。
   var atStop: Bool {
-    switch state.known {
+    switch runtimeState.known {
     case .settled: answered
     case .waitingForUser, .error: true
     default: false
@@ -103,7 +103,7 @@ extension PiSessionState {
   /// 等子代理停住的时刻：在等子代理、在跑的子代理里最后一次进展（`PiSubagentState.progressAt`）之后 `stallAfter`。
   /// 不在等子代理、没有在跑的子代理（只剩 Claude Code 的后台命令，它不报进展），或有在跑的不知道进展时刻，为 nil。
   public var stallsAt: Date? {
-    guard state == .known(.delegating) else { return nil }
+    guard runtimeState == .known(.delegating) else { return nil }
     let progress = subagents.filter(\.isRunning).map(\.progressAt)
     guard !progress.isEmpty, !progress.contains(nil) else { return nil }
     return progress.compactMap { $0 }.max()! + Self.stallAfter

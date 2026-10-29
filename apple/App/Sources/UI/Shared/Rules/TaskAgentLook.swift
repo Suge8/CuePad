@@ -14,7 +14,8 @@ struct TaskAgentLook: Equatable {
         case .unread: (title, note) = (String(localized: "Agent 回复了"), nil)
         case .ended: (title, note) = (String(localized: "会话结束了"), String(localized: "在会话里说一句会把它叫回来"))
         case .interrupted: (title, note) = (String(localized: "Agent 被打断了"), String(localized: "在会话里说一句，它接着做"))
-        case .idle, .resting, .fresh, .unknown: (title, note) = (String(localized: "Agent 歇着"), nil)
+        case .unknown: (title, note) = (shown.presence, nil)
+        case .idle, .resting, .fresh: (title, note) = (String(localized: "Agent 歇着"), nil)
         }
     }
 }

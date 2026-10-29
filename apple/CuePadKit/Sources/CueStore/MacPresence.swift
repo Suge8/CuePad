@@ -46,9 +46,11 @@ extension CueStore {
   }
 
   /// 那台 Mac 此刻在不在线（`MacPresence`）；在线时登记到期重读（`expire(at:)`），订阅它的到点自己变成不在线。
-  public func macOnline(_ host: String) throws -> Bool {
-    guard let presence = try find(MacPresence.self, MacPresence.recordID(host: host)), presence.isOnline(at: timing.now()) else { return false }
+  public func macOnlineUntil(_ host: String) throws -> Date? {
+    guard let presence = try find(MacPresence.self, MacPresence.recordID(host: host)), presence.isOnline(at: timing.now()) else { return nil }
     expire(at: presence.onlineUntil)
-    return true
+    return presence.onlineUntil
   }
+
+  public func macOnline(_ host: String) throws -> Bool { try macOnlineUntil(host) != nil }
 }

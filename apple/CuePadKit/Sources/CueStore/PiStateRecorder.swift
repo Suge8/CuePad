@@ -127,7 +127,7 @@ public actor PiStateRecorder {
 
   /// App 启动时对账这台 Mac 上次留下的记录：记下的进程确实没了的按 `exited` 收尾（手上还有活的记为被打断），其余不动——
   /// 进程还在的（托管的 Pi 不随 App 退出，终端里的会话也还开着）与没记下进程的，由桥重新连上后接着写。`running` 判断记下的进程是不是还是那一个。
-  /// 返回对账之前还没收尾的各会话的状态与计时（会话 id → ）：桥据此让重新接上的会话沿用原来的起点（`PiBridge.carryOver`）。
+  /// 返回同一 boot 或可靠对账仍活着的会话的状态与计时：桥据此沿用原来的起点（`PiBridge.carryOver`），不替新进程沿用旧 boot 的计时。
   @discardableResult
   public func reset(running: @escaping @Sendable (PiProcess) -> Bool) async throws -> [String: (state: PiWorkState, times: PiTimes)] {
     for session in sessions.values { session.pace.timer?.cancel() }
