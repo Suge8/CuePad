@@ -18,7 +18,12 @@ extension CueStore {
         context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt,
         failure: content.state == .error ? content.failure.map(Open.known) : nil, bootID: bootID)
       if writesCatalog, let catalog { try writeCatalog(catalog) }
-      if let notify { record.notify = try push(notify, runtimeProjection([record])[0]) }
+      if let notify {
+        // 这是刚收到的真实报告事件；presence 可能尚未写到，不能据此吞掉这次一次性通知。读取当前状态仍严格按 lease 派生。
+        var event = record
+        event.runtimeUntil = now
+        record.notify = try push(notify, event)
+      }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       // 最后一轮的开始不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它
       let assignments = PiSessionState.columns.dropFirst()
