@@ -130,9 +130,9 @@ export class Session {
 		this.broadcast({ t: "state", state: { ...current, since: this.since, busySince: this.busySince, turnSince: this.turnSince } });
 	}
 
-	/** 歇着、没有等你回答的弹窗：可以重新载入扩展 */
+	/** 歇着、没有弹窗或 SDK 待处理消息：可以重新载入扩展。 */
 	private canReload() {
-		return !this.lifetime.signal.aborted && (this.phase === "idle" || this.phase === "error") && !this.asking;
+		return !this.lifetime.signal.aborted && (this.phase === "idle" || this.phase === "error") && !this.asking && !this.ctx.hasPendingMessages();
 	}
 
 	/** 变了的项才发，而且只发变了的那几项：模型表（几百个）与命令清单很大，上下文用量每轮都变，不能每次带上整份。
@@ -257,7 +257,13 @@ export class Session {
 	}
 
 	private rejectSend(said: Said) {
-		if (!said.cueTurn || this.ctx.isIdle()) return false;
+		if (!said.cueTurn) return false;
+		// isIdle 不含 SDK 队列；公开接口没有队列来源证据，不能用当前轮的许可抢到排队用户消息之前。
+		if (this.ctx.hasPendingMessages()) {
+			said.ack?.({ ok: false, error: "unconfirmed_turn" });
+			return true;
+		}
+		if (this.ctx.isIdle()) return false;
 		const last = this.ctx.sessionManager.buildSessionProjection().messages.findLast((message) => message.role === "user");
 		const current = (last as { cuepadDelivery?: unknown } | undefined)?.cuepadDelivery;
 		const allowed = said.cueTurn.deliveryId;
