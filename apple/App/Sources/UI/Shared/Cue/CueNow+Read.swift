@@ -21,9 +21,10 @@ nonisolated extension CueNow {
         self.init(
             name: digest.name, cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
             tally: tally,
-            advancing: digest.advancing, subagents: digest.tally.advancing.reduce(0) { $0 + Self.subagents($1) }, items: Self.limited(items),
+            advancing: digest.advancing, subagents: digest.tally.subagents, items: Self.limited(items),
             first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
-            elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil)
+            elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil,
+            agentCount: digest.tally.agents)
     }
 
     private static func brain(_ presence: CuePresence, digest: CueDigest, local: Local, at now: Date) -> Brain {
@@ -71,15 +72,14 @@ nonisolated extension CueNow {
     /// 推进中的一件：有会话在跑（在想、用工具、压缩，或正在开、话正送进去）是在跑，从最早在跑的那一轮起算；
     /// 否则有会话在等子代理是等交回，数它们在跑的子代理；再否则歇着。
     private static func item(_ work: CueWork) -> Item {
-        let sessions: [PiSessionState], name: String, pending: Bool, settledSince: Date
+        let sessions = work.sessions
+        let name: String, pending: Bool, settledSince: Date
         switch work {
         case .task(let item):
-            sessions = item.leaves.compactMap(\.session).filter { $0.state != .known(.ended) }
             name = item.task.title
             pending = item.leaves.contains { $0.launching || $0.sending }
             settledSince = item.leaves.map(\.since).min() ?? item.task.modifiedAt
         case .session(let state):
-            sessions = [state]
             name = title(state)
             pending = false
             settledSince = state.stateSince
@@ -96,15 +96,6 @@ nonisolated extension CueNow {
                 subagents: delegating.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) })
         }
         return Item(id: work.id, kind: .resting, name: name, since: sessions.map(\.stateSince).max() ?? settledSince, subagents: 0)
-    }
-
-    /// 推进中的一件里在跑的子代理：它没结束的会话各自名册里在跑的。
-    private static func subagents(_ work: CueWork) -> Int {
-        let sessions = switch work {
-        case .task(let item): item.leaves.compactMap(\.session).filter { $0.state != .known(.ended) }
-        case .session(let state): [state]
-        }
-        return sessions.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) }
     }
 
     private static func title(_ state: PiSessionState) -> String { state.title.isEmpty ? String(localized: "会话") : state.title }

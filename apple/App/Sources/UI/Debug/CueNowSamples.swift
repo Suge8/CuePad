@@ -16,13 +16,15 @@ enum CueNowSamples {
         allow: CueNow.Allow(message: UUID(), choice: CueAsk.once))
 
     private static func now(
-        _ cue: CueNow.Brain, _ items: [CueNow.Item], advancing: Int, first: CueNow.Wait? = nil, subagents: Int? = nil
+        _ cue: CueNow.Brain, _ items: [CueNow.Item], advancing: Int, first: CueNow.Wait? = nil, subagents: Int? = nil, agents: Int? = nil
     ) -> CueNow {
         let count = { (kinds: Set<CueNow.Item.Kind>) in items.count { kinds.contains($0.kind) } }
         let tally = CueNow.Tally(asks: count([.asks]), reply: count([.reply]), moving: count([.running, .delegating]), delegating: count([.delegating]))
+        let children = subagents ?? items.reduce(0) { $0 + $1.subagents }
         return CueNow(
             name: "Cue", cue: cue, tally: tally, advancing: advancing,
-            subagents: subagents ?? items.reduce(0) { $0 + $1.subagents }, items: items, first: first, at: .now)
+            subagents: children, items: items, first: first, at: .now,
+            agentCount: agents ?? count([.running, .delegating]) + children)
     }
 
     /// 被会话叫醒、在看它交回的结果；一件在跑、一件等子代理。
@@ -110,7 +112,7 @@ enum CueNowSamples {
         item("header", .running, String(localized: "出 iOS header 收口方案", table: "Demo"), 1.4),
         item("dock", .running, String(localized: "底部 tab 切页丝滑收口", table: "Demo"), 0.9),
         item("notes", .delegating, String(localized: "发言顺序修复", table: "Demo"), 12.05, subagents: 7),
-    ], advancing: 4, first: push, subagents: 12)
+    ], advancing: 4, first: push, subagents: 12, agents: 17)
 
     /// 它运行的那台 Mac 没开，手上的活照旧：一件拍板、一个会话待回复、三件在跑。
     static let awayBusy = now(.away(String(localized: "「Mac Studio」没开", table: "Demo"), failed: false), [

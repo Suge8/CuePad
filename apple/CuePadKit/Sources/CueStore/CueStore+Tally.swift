@@ -47,18 +47,24 @@ public struct CueTally: Equatable, Sendable {
   /// 拍板。
   public var waiting: [Wait]
   public var replies: [Reply]
+  /// 参与工作的 Agent 总数（`CueAgents`），在按等你分列之前算：任务的一处在问你，不会漏掉同任务的其它工作会话。
+  public var agents: Int
+
+  /// 推进中那几件里正在运行的子代理：共享同一主会话的任务不重复数它的名册。
+  public var subagents: Int { CueAgents.sessions(in: advancing).reduce(0) { $0 + $1.subagents.count(where: \.isRunning) } }
 
   public var held: Set<UUID> {
     Set(waiting.compactMap { if case .session(_, let task) = $0 { task } else { nil } } + replies.compactMap(\.task))
   }
 
-  public init(advancing: [CueWork], waiting: [Wait], replies: [Reply]) {
+  public init(advancing: [CueWork], waiting: [Wait], replies: [Reply], agents: Int) {
     self.advancing = advancing
     self.waiting = waiting
     self.replies = replies
+    self.agents = agents
   }
 
-  public static let empty = CueTally(advancing: [], waiting: [], replies: [])
+  public static let empty = CueTally(advancing: [], waiting: [], replies: [], agents: 0)
 }
 
 extension CueStore {
@@ -66,11 +72,13 @@ extension CueStore {
     let waiting = try cueWaiting()
     let replying = try sessionsAwaitingReply()
     let owners = try sessionOwners(replying.map(\.sessionID))
+    let active = try cueBoard().active
     var tally = CueTally(
-      advancing: [], waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) })
+      advancing: [], waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) },
+      agents: CueAgents.count(in: active))
     let held = tally.held
     let yours = Set(waiting.compactMap { if case .session(let state, _) = $0 { state.sessionID } else { nil } } + replying.map(\.sessionID))
-    tally.advancing = try cueBoard().active.filter { work in
+    tally.advancing = active.filter { work in
       switch work {
       case .task(let item): !held.contains(item.id)
       case .session(let state): !yours.contains(state.sessionID)
