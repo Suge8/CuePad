@@ -54,6 +54,12 @@ extension CueStore {
     return presence.onlineUntil
   }
 
+  /// Cue 的订阅也跟随运行证明与期限；lease 到期不写库，不能只盯 writeSeq。
+  public func runtimeDeadlines() throws -> [Date] {
+    let sessions = try select(PiSessionState.self, where: PiWorkState.outsideSQL(PiWorkState.closed), orderBy: "stateSince, id")
+    return Set(sessions.compactMap(\.runtimeUntil)).sorted()
+  }
+
   /// 每批只读一次 host 集合，O(S+H)；所有运行读取共用，不按会话逐条查在线状态。
   func runtimeProjection(_ sessions: [PiSessionState]) throws -> [PiSessionState] {
     guard !sessions.isEmpty else { return [] }

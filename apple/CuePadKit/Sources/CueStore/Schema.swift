@@ -134,7 +134,11 @@ enum Schema {
     // 82：额度按宿主授权分区，能力、失败与最后观测的时刻一起同步；旧记录没有授权事实，只能作为未知数据
     "ALTER TABLE accountQuotas ADD COLUMN account TEXT; ALTER TABLE accountQuotas ADD COLUMN status TEXT; ALTER TABLE accountQuotas ADD COLUMN observedAt INTEGER;",
     // 83：运行报告与所属 Mac 的系统启动关联；旧端忽略关联与投送 unknown，会错误授权控制或重投。旧报告不回填证明。
-    "ALTER TABLE piSessionStates ADD COLUMN bootID TEXT; ALTER TABLE macPresence ADD COLUMN bootID TEXT;",
+    """
+    ALTER TABLE piSessionStates ADD COLUMN bootID TEXT; ALTER TABLE macPresence ADD COLUMN bootID TEXT;
+    DROP TRIGGER piSessionStates_writeSeq_update;
+    \(updateStamp("piSessionStates", when: sessionChanges))
+    """,
   ]
 
   /// 技能与规则里每份文件的正文：那台 Mac 每份一条、各端读（`LibraryFileText`）。
