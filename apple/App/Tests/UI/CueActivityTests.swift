@@ -84,4 +84,33 @@ struct CueActivityTests {
         cue = try await now()
         #expect(cue.spoken == "1 件推进中" && cue.needsYou == 0)
     }
+
+    @Test func Cue话未确认不沿用旧忙碌也不结束活动_迟到回执后按真实状态继续() async throws {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing)
+        let workspace = Workspace(services: app.services), store = app.services.store
+        defer { app.services.cancelBackgroundWork() }
+        _ = try await store.updateCueProfile { profile in
+            profile.hostID = "mac-cue"
+            profile.enabledAt = clock.now
+        }
+        try await store.recordMacPresence(host: "mac-cue") { true }
+        try await store.setCueState(.thinking)
+        await workspace.speak("检查部署结果", to: .cue).value
+        let message = try #require(try await store.cueMessagesToDeliver().first)
+        clock.advance(.seconds(Speech.sendLimit + Speech.receiptLimit + 1))
+        func now() async throws -> CueNow {
+            CueNow(try await CueDigest.read(from: store), at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
+        }
+        let uncertain = try await now()
+        #expect(!uncertain.isBusy && uncertain.unconfirmed && uncertain.isLive && !uncertain.hasConfirmedActivity)
+        #expect(try await store.cueMessagesToDeliver().map(\.id) == [message.id])
+        try await store.markCueMessagesDelivered([message.id], at: clock.now)
+        try await store.setCueState(.tool, detail: "read · deploy.log")
+        let confirmed = try await now()
+        #expect(confirmed.isBusy && confirmed.hasConfirmedActivity && !confirmed.unconfirmed)
+        try await store.setCueState(.settled)
+        #expect(try await !now().isLive)
+    }
+
 }

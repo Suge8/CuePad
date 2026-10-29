@@ -13,7 +13,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
     case disabled
     /// 启用了，但它运行的那台 Mac 不在线。
     case asleep
-    case unconfirmed
+    case unconfirmed(String)
     case idle
     /// 你最近一句还在路上：发送中或已发出（`PiDelivery.Transit` 的那两种）。
     case sending(PiDelivery.Transit)
@@ -25,12 +25,13 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// `moment`：此刻与到 Cue 那台 Mac 的同步从什么时候起通着（`AppServices.speech`）。
     static func derive(_ digest: CueDigest, at moment: Speech.Moment) -> CuePresence {
         guard digest.enabled else { return .disabled }
-        if !digest.hostOnline && moment.reachableSince(digest.hostID) != nil { return .asleep }
-        if let you = digest.lastYou {
-            let trip = Speech.trip(said: you.said, delivered: you.delivered, reachedServer: you.reachedServer, host: digest.hostID, at: moment)
-            if trip.inTransit { return .sending(trip == .sent ? .sent : .sending) }
+        let trip = digest.lastYou.map {
+            Speech.trip(said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer, host: digest.hostID, at: moment)
         }
-        if !digest.hostOnline { return .unconfirmed }
+        if case .unconfirmed(let reason) = trip { return .unconfirmed(reason) }
+        if !digest.hostOnline && moment.reachableSince(digest.hostID) != nil { return .asleep }
+        if let trip, trip.inTransit { return .sending(trip == .sent ? .sent : .sending) }
+        if !digest.hostOnline { return .unconfirmed(String(localized: "状态未确认")) }
         guard let state = digest.state, let work = state.state.known else { return .idle }
         if work == .error { return .unreachable(state.detail ?? String(localized: "\(digest.name) 起不来了")) }
         return work.isWorking ? .working(work, detail: state.detail, step: state.step) : .idle
@@ -43,6 +44,8 @@ nonisolated enum CuePresence: Equatable, Sendable {
         case .idle, .sending, .working: false
         }
     }
+
+    var isUnconfirmed: Bool { if case .unconfirmed = self { true } else { false } }
 
     var isUnreachable: Bool { if case .unreachable = self { true } else { false } }
 
@@ -72,7 +75,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
         switch self {
         case .disabled: ranBefore ? String(localized: "已停用") : String(localized: "还没启用")
         case .asleep: String(localized: "「\(host)」没开")
-        case .unconfirmed: String(localized: "状态未确认")
+        case .unconfirmed(let reason): reason
         case .unreachable(let reason): reason
         case .idle, .sending, .working: nil
         }
