@@ -84,7 +84,7 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
    ```
 
    Caddy 会自己签证书、续期，WebSocket 原样转发。域名还没解析到这台时签不到，Caddy 会退避重试；解析生效后 `systemctl reload caddy` 立即重试。
-6. 检查：`curl https://relay.example.com/health` 返回 `ok`。
+6. 门铃检查：`curl https://relay.example.com/health` 返回 `ok`。需要实时活动的版本，发布前还须 GET `/v1/activity/health` 确认 HTTP 204（见下）；门铃正常不代表 APNs 已配置。
 7. 把 `apple/App/Config/Signing.xcconfig` 的 `CUEPAD_RELAY_HOST` 换成你的域名，再重新编译 App。
 8. 你自己的 iCloud 容器里要有记录类型 `relaySecrets`，按 [docs/release.md](../docs/release.md)「CloudKit 数据结构」导入 `apple/CloudKit/cuepad.ckdb`。
 
@@ -136,7 +136,9 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 
 ### 启用前
 
-五项配置全缺时，门铃与 `/health` 照常可用，活动接口明确返回 503；只配部分、空值、非法配置或不可读取的 P-256 私钥会使启动失败：
+`GET /v1/activity/health` 是无数据的本地就绪检查：配置完整、私钥已加载且启动时 ES256 签名成功，返回 **204**；未配置返回 **503**。响应体为空，带 `Cache-Control: no-store`；其它方法返回 405，`Allow: GET`。检查不建立 APNs 连接、不发送推送，也不证明 Apple 侧密钥权限、网络可达性或设备送达。
+
+五项配置全缺时，门铃与 `/health` 照常可用，活动接口及活动健康检查明确返回 503；只配部分、空值、非法配置或不可读取的 P-256 私钥会使启动失败：
 
 | 环境变量 | 值 |
 | --- | --- |

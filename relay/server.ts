@@ -45,6 +45,10 @@ const server = Bun.serve<Peer, never>({
   fetch(req, server) {
     const path = new URL(req.url).pathname;
     if (path === "/health") return new Response("ok");
+    if (path === "/v1/activity/health") {
+      const headers = { "cache-control": "no-store", allow: "GET" };
+      return new Response(null, { status: req.method === "GET" ? (apns ? 204 : 503) : 405, headers });
+    }
     if (path === "/v1/activity") {
       // 只信任显式绑定回环地址、由本机 TLS 代理覆盖的协议头，不信任公网来客自报 HTTPS。
       const secure = new URL(req.url).protocol === "https:" || (LOOPBACK.has(process.env.HOST ?? "")
