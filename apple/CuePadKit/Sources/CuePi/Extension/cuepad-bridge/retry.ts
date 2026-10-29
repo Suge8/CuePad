@@ -18,7 +18,7 @@ export const NOTHING_TO_RETRY = "nothing_to_retry";
 type Message = ContextEvent["messages"][number];
 
 const isRetryMessage = (message: Message) => message.role === "custom" && message.customType === RETRY_TYPE;
-const isFailedAnswer = (message: Message | undefined) => message?.role === "assistant" && message.stopReason === "error";
+const isFailedAnswer = (message: Message | undefined) => message?.role === "assistant" && (message.stopReason === "error" || message.stopReason === "length");
 
 /** 重跑：最后一轮是 CuePad 报成出错的那一轮、会话歇着、没有正在交出的重跑，才开新一轮；返回拒绝原因，受理返回 undefined。
  * 确认等隐藏消息落成会话里的一条消息（`landed`）：Pi 拒收（没登录、没有模型）时不发任何事件，CuePad 到点按没送到报，同 `send`。 */

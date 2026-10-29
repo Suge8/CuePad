@@ -190,6 +190,9 @@ DEFINE SCHEMA
         windows       ENCRYPTED STRING,
         createdAt     INT64,
         modifiedAt    INT64,
+        account       ENCRYPTED STRING,
+        status        STRING,
+        observedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

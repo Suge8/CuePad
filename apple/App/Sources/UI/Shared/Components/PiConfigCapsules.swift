@@ -20,7 +20,7 @@ extension View {
 /// 模型胶囊：模型的标志（`BrandMark.model`）+ 模型短名（没有当前模型时写 `unnamed`）。iOS 点开是系统菜单（`MenuButton`）；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
 /// SwiftUI 在 Mac 上把菜单项里的图片丢掉）：分组标题带这一组的标志（提供方或 Agent 的产品标志），每个模型带它自己的标志。
 /// 有订阅额度的提供方：标志外一圈细环是卡着的那个窗口还剩多少（`ModelBadge`），没给组名的分组标题写各窗口还剩多少
-/// （`PiModelLabel.title`，Mac 的 AppKit 菜单同一份，见 `PiConfigControls.open`）；到了重置时刻随即按已重置画（`Moments`）。
+/// （`PiModelLabel.title`，Mac 的 AppKit 菜单同一份，见 `PiConfigControls.open`）；到了重置时刻无新观测就收起数值环（`Moments`）。
 struct PiModelCapsule: View {
     let models: PiModelMenu
     let current: PiModelOption?
@@ -60,7 +60,7 @@ struct PiModelCapsule: View {
                     .modifier(Breathing(active: pending))
                     .accessibilityHidden(true)
             }
-            (current.map { Text(PiModelName.short($0)) } ?? Text(unnamed)).lineLimit(1).truncationMode(.tail)
+            (current.map { Text(Dotted(PiModelName.short($0), $0.account?.label(provider: $0.key.provider)).visible) } ?? Text(unnamed)).lineLimit(1).truncationMode(.tail)
                 .contentTransition(.opacity)
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
@@ -74,12 +74,12 @@ struct PiModelCapsule: View {
     }
 
     private func spoken(at now: Date) -> String {
-        Dotted(current?.displayName ?? String(localized: unnamed), binding(at: now).map { String(localized: "\($0.name)额度剩 \($0.percent)") }).spoken
+        Dotted(current?.displayName ?? String(localized: unnamed), current.flatMap { $0.account?.label(provider: $0.key.provider) }, binding(at: now).map { String(localized: "\($0.name)额度剩 \($0.percent)") }).spoken
     }
 
     /// 当前模型的提供方卡着的那个窗口（按模型的周额度只算这个模型的）。
     private func binding(at now: Date) -> QuotaMeter.Window? {
-        guard let current, let quota = quotas.first(where: { $0.provider == current.key.provider }) else { return nil }
+        guard let current, let quota = quotas.first(where: { $0.provider == current.key.provider && current.account?.matches($0.account) == true }) else { return nil }
         return quota.binding(at: now, model: current.key.id).map { QuotaMeter.Window($0, at: now) }
     }
 }

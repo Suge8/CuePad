@@ -32,6 +32,7 @@ nonisolated enum SendError: Error, Equatable {
     case alreadyHeard
     /// 查订阅额度要经在线 Agent 会话里的扩展，这台 Mac 上此刻没有。
     case noLiveSession
+    case quotaUnavailable
 }
 
 extension SendError: ShownError {
@@ -53,6 +54,7 @@ extension SendError: ShownError {
         case .alreadyHanded: "Mac 已经把它发给 Agent，撤不回了"
         case .alreadyHeard: "Cue 已经收到这句了，撤不回"
         case .noLiveSession: "这台 Mac 上没有在线的 Agent 会话，查不了额度"
+        case .quotaUnavailable: "额度查询失败，请稍后再试"
         }
     }
 }

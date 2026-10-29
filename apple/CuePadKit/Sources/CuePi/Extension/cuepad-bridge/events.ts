@@ -18,7 +18,7 @@ export function follow(session: Session): (() => void)[] {
 	const refreshContext = () => session.refreshContext();
 	const finishCompaction = () => session.finishCompaction();
 	return [
-		pi.on("model_select", () => { session.updateInfo(modelInfo(pi, ctx)); refreshContext(); }),
+		pi.on("model_select", async () => { session.updateInfo(await modelInfo(pi, ctx)); refreshContext(); }),
 		pi.on("thinking_level_select", () => session.updateInfo({ thinking: ctx.model ? pi.getThinkingLevel() : null })),
 		pi.on("before_agent_start", () => session.refreshCommands()),
 		pi.on("turn_end", refreshContext),
@@ -107,16 +107,17 @@ export function follow(session: Session): (() => void)[] {
 			const stopped = tracker.stopped || context.signal?.aborted === true;
 			if (last?.stopReason === "aborted" || (last?.stopReason === "error" && stopped)) tracker.outcome = { kind: "done" };
 			else if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
+			else if (last?.stopReason === "length") tracker.outcome = { kind: "error", error: "max_output_tokens" };
 		}),
 		// 订阅额度随每次回复带回来（零额外请求）：Claude 在响应头里，Codex 在流里的 codex.rate_limits 事件里
 		pi.on("after_provider_response", (event, context) => {
 			const provider = context.model?.provider;
-			if (provider === "anthropic") session.reportQuota({ provider, windows: claudeHeaderWindows(event.headers), complete: false });
+			if (provider === "anthropic") session.observeQuota(provider, claudeHeaderWindows(event.headers), false);
 		}),
 		pi.on("provider_stream_event", (event) => {
 			const data = record(event.data);
 			if (event.provider !== "openai-codex" || data.type !== "codex.rate_limits") return;
-			session.reportQuota({ provider: event.provider, windows: codexWindows(record(data.rate_limits), "primary", "secondary", "window_minutes", 60), complete: true });
+			session.observeQuota(event.provider, codexWindows(record(data.rate_limits), "primary", "secondary", "window_minutes", 60), true);
 		}),
 		pi.on("agent_settled", () => {
 			// 还有话等着：被它停下的这一轮不算歇下，接着就是它开的那一轮（`submitPending`）

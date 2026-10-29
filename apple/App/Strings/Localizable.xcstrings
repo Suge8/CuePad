@@ -825,22 +825,6 @@
         }
       }
     },
-    "%@%@已重置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@%2$@Reset"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@%2$@已重置"
-          }
-        }
-      }
-    },
     "%@/cuepad 已有一个指向 %@ 的链接，没有覆盖" : {
       "localizations" : {
         "en" : {
@@ -2331,22 +2315,6 @@
         }
       }
     },
-    "Agent 会话用订阅账号跑过一轮后，这里显示每个窗口还剩多少、多久后重置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "After an agent session runs a turn on a subscription account, this shows how much is left in each window and when it resets"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 会话用订阅账号跑过一轮后，这里显示每个窗口还剩多少、多久后重置"
-          }
-        }
-      }
-    },
     "Agent 会话的内容" : {
       "localizations" : {
         "en" : {
@@ -2935,6 +2903,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "CUEPAD_LIBRARY_DIR 必须是绝对路径，收到「%@」"
+          }
+        }
+      }
+    },
+    "ChatGPT 暂不提供额度数据" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChatGPT usage data isn’t available"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChatGPT 暂不提供额度数据"
           }
         }
       }
@@ -3637,6 +3621,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mac 迟迟没收下这句"
+          }
+        }
+      }
+    },
+    "OpenAI API 按量计费" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI API · Pay as you go"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI API 按量计费"
           }
         }
       }
@@ -6091,6 +6091,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用 %@"
+          }
+        }
+      }
+    },
+    "使用 ChatGPT 套餐" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Using ChatGPT plan"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 ChatGPT 套餐"
           }
         }
       }
@@ -9135,18 +9151,34 @@
         }
       }
     },
-    "回答超出了输出长度上限" : {
+    "回答未完成" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The reply hit the output length limit"
+            "value" : "Reply incomplete"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "回答超出了输出长度上限"
+            "value" : "回答未完成"
+          }
+        }
+      }
+    },
+    "回答未完成：达到输出长度上限" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reply incomplete: output length limit reached"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回答未完成：达到输出长度上限"
           }
         }
       }
@@ -10751,6 +10783,22 @@
         }
       }
     },
+    "尚未观测到额度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usage observed yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未观测到额度"
+          }
+        }
+      }
+    },
     "层" : {
       "localizations" : {
         "en" : {
@@ -11591,22 +11639,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已选 %lld 条"
-          }
-        }
-      }
-    },
-    "已重置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reset"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已重置"
           }
         }
       }
@@ -16031,6 +16063,22 @@
         }
       }
     },
+    "此授权不提供订阅额度查询" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage queries aren’t available for this authorization"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此授权不提供订阅额度查询"
+          }
+        }
+      }
+    },
     "此操作无法撤销。" : {
       "localizations" : {
         "en" : {
@@ -18527,6 +18575,22 @@
         }
       }
     },
+    "管理用量" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage Usage"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "管理用量"
+          }
+        }
+      }
+    },
     "粉色" : {
       "localizations" : {
         "en" : {
@@ -20295,6 +20359,22 @@
         }
       }
     },
+    "达到用量限制" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage limit reached"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "达到用量限制"
+          }
+        }
+      }
+    },
     "运行" : {
       "localizations" : {
         "en" : {
@@ -21903,6 +21983,22 @@
         }
       }
     },
+    "连接 Agent 会话后，这里显示授权支持的额度信息" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect an agent session to see the usage information available for its authorization"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接 Agent 会话后，这里显示授权支持的额度信息"
+          }
+        }
+      }
+    },
     "退出 CuePad" : {
       "localizations" : {
         "en" : {
@@ -23179,18 +23275,50 @@
         }
       }
     },
-    "额度用完" : {
+    "额度查询失败" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Limit reached"
+            "value" : "Couldn’t check usage"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "额度用完"
+            "value" : "额度查询失败"
+          }
+        }
+      }
+    },
+    "额度查询失败，请稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t check usage. Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "额度查询失败，请稍后再试"
+          }
+        }
+      }
+    },
+    "额度观测已过期，等待更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage observation expired. Waiting for an update"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "额度观测已过期，等待更新"
           }
         }
       }

@@ -80,10 +80,10 @@ extension Schema {
     ) STRICT;
     CREATE INDEX previews_sessionID_createdAt ON previews(sessionID, createdAt);
 
-    -- 订阅账号的用量：每个提供方一条（id 由提供方定），windows 是 JSON 数组。
+    -- 额度能力与最近观测：每台 Mac 的每个授权分区一条。
     CREATE TABLE accountQuotas (
       id TEXT PRIMARY KEY NOT NULL, provider TEXT NOT NULL, hostID TEXT NOT NULL, windows TEXT NOT NULL,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, account TEXT, status TEXT, observedAt INTEGER
     ) STRICT;
 
     CREATE TABLE piMessages (

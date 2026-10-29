@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 会话出错时贴在回复框上方的那块（同问题卡的位置，`SessionDock`）：写原因原文，下面一颗按钮——重跑这一轮有用且做得到时"重试"
-/// （`PiSessionState.canRetry`，`Workspace.retry`）；额度用完、登录失效时"换个模型"，点开就是回复框里那份模型菜单（`PiModelMenu.session`），
+/// （`PiSessionState.canRetry`，`Workspace.retry`）；达到用量限制、登录失效时"换个模型"，ChatGPT 套餐限额时主操作是"管理用量"，点开就是回复框里那份模型菜单（`PiModelMenu.session`），
 /// 会话报不出可换的模型时只写原因。写不写只看顶栏那一个状态（`Workspace.shownInHeader`）：出错之后又说了话、点了重试，话在路上时状态就不是出错，块随之收起。
 /// 贴在这里而不在对话末尾：卡在你这里的事都在回复框上方，滚到哪都看得见、按钮在拇指下。
 struct PiFailureDock: View {
@@ -18,7 +18,11 @@ struct PiFailureDock: View {
         let status = workspace.shownInHeader(session, delivery: delivery).status
         if case .failed = status {
             let text = session.detail ?? String(localized: "Mac 没有说明原因")
-            if session.canRetry {
+            if let url = session.usageURL {
+                Callout(status, text: text, docked: true) {
+                    Link("管理用量", destination: url).buttonStyle(ControlButtonStyle(kind: .primary))
+                }
+            } else if session.canRetry {
                 Callout(status, text: text, docked: true) {
                     Button { workspace.retry(session) } label: { Label("重试", icon: .retry) }
                         .buttonStyle(ControlButtonStyle(kind: .secondary))

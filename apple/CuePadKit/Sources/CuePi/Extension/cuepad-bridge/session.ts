@@ -4,7 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { phaseOf, StateTracker, type Asking, type Clock, type Phase } from "./events.ts";
 import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, replyText, type Info, type Subagent } from "./info.ts";
 import { IdleExit, IS_HOSTED, SelfReload } from "./lifecycle.ts";
-import { QuotaFetcher, type Quota } from "./quota.ts";
+import { QuotaFetcher, type Quota, type QuotaWindow } from "./quota.ts";
 
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = ["TERM_PROGRAM", "__CFBundleIdentifier", "TMUX", "TMUX_PANE"];
@@ -91,7 +91,7 @@ export class Session {
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
 			question: null,
 			subagents: firecode.subagents,
-			...modelInfo(pi, ctx),
+			model: null, thinking: null, models: [],
 			...contextInfo(ctx),
 			...commandInfo(pi),
 		};
@@ -145,6 +145,7 @@ export class Session {
 		if (Object.keys(changed).length === 0) return;
 		this.info = { ...this.info, ...changed };
 		this.broadcast({ t: "info", ...changed });
+		if (changed.models) this.quota.capabilities(changed.models);
 	}
 
 	/** 上下文用量随每一轮、压缩、换模型、换分支变化。 */
@@ -154,18 +155,26 @@ export class Session {
 
 	/** 命令清单只会在会话载入（`session_start`，含重载）和资源扩展后变——扩展注册的命令、提示词模板、skill；后者发生在 `session_start`
 	 * 之后且没有事件，所以每次提交消息前（`before_agent_start`）取一次，而不是每一轮（`turn_end`）。 */
-	refreshCommands() {
-		this.updateInfo(commandInfo(this.pi));
+	async refreshCommands() {
+		this.updateInfo({ ...commandInfo(this.pi), ...await modelInfo(this.pi, this.ctx) });
 	}
 
 	/** 额度不属于会话、属于账号：每次观测都发给所有客户端（一行，随每次回复），由 CuePad 记到账号上。
 	 * 不在这里去重：值没变的观测也说明刚观测过，"更新于"要跟上；写不写库只由 CuePad 定（`CueStore.recordQuota`）。 */
+	/** 使用这一轮开始前已报告的授权，不在响应返回后重新解析令牌、把旧响应归到新授权。 */
+	observeQuota(provider: string, windows: QuotaWindow[], complete: boolean) {
+		const account = this.info.models.find((model) => model.provider === provider)?.account;
+		if (windows.length === 0 || account?.kind !== "oauth" || !account.scope) return;
+		this.reportQuota({ provider, account, status: "observed", windows, complete });
+	}
+
 	reportQuota(quota: Quota) {
-		if (this.clients.size === 0 || quota.windows.length === 0) return;
+		if (this.clients.size === 0) return;
 		this.broadcast({ t: "quota", ...quota });
 	}
 
 	async hello() {
+		this.updateInfo(await modelInfo(this.pi, this.ctx));
 		const terminalEnv: Record<string, string> = {};
 		for (const key of TERMINAL_ENV_KEYS) if (process.env[key]) terminalEnv[key] = process.env[key]!;
 		return {

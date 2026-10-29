@@ -36,7 +36,8 @@ enum Schema {
   /// 写回时盖掉新字段、读不出就卡住同步；新加的表、字段与句式旧版只是不认（照旧字段显示、跳过读不出的），不抬：一抬，旧设备在更新前什么都发不出去。
   /// 抬的那一版先发 iOS、TestFlight 处理完再发 Mac（docs/release.md「发版顺序」）。与 `baseVersion` 分开：本机的库要等用户的库都升过才折进 `create`。
   /// 78：附件换了地址（`cuepad://file/<键>`）：旧版 Mac 认不出，把链接原文发给 Agent，旧版手机显示不出图与文件。
-  static let peerFloor = 78
+  /// 82：旧客户端忽略额度能力与授权分区，会把失败或过期窗口显示成可用余额。
+  static let peerFloor = 82
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
@@ -130,6 +131,8 @@ enum Schema {
       guard try db.first("SELECT 1 FROM pragma_table_info('piSessionStates') WHERE name = 'failure'", [], { _ in true }) == nil else { return }
       try db.exec("ALTER TABLE piSessionStates ADD COLUMN failure TEXT;")
     },
+    // 82：额度按宿主授权分区，能力、失败与最后观测的时刻一起同步；旧记录没有授权事实，只能作为未知数据
+    "ALTER TABLE accountQuotas ADD COLUMN account TEXT; ALTER TABLE accountQuotas ADD COLUMN status TEXT; ALTER TABLE accountQuotas ADD COLUMN observedAt INTEGER;",
   ]
 
   /// 技能与规则里每份文件的正文：那台 Mac 每份一条、各端读（`LibraryFileText`）。

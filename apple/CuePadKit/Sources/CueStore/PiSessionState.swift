@@ -121,9 +121,15 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var projectID: UUID?
   public var state: Open<PiWorkState>
   /// 工具名、等待确认的问题、错误信息等。
-  public var detail: String?
+  private var storedDetail: String?
+  public var detail: String? {
+    get { failure?.known == .truncated ? PiNotice.truncated.label : storedDetail }
+    set { storedDetail = newValue }
+  }
   /// 出错的种类（只在出错时有，`PiFailure`）：出错块与看板上写的原因只读它。旧版本写的记录没有，按其余处理。
   public var failure: Open<PiFailure>?
+
+  public var usageURL: URL? { failure?.known == .quota ? model?.account?.usageURL(provider: model?.key.provider ?? "") : nil }
   /// 工作目录的最后一段（文件夹名），不含完整路径；手机据此在没有绑定项目时写出会话"在哪"。旧版本写的记录没有。
   public var folder: String?
   /// 摘要，见 `PiRecap`（同名字段）；`question` 是 Pi 此刻弹出、等你回答的对话框。旧版本写的记录没有。
@@ -177,7 +183,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.title = title
     self.projectID = projectID
     self.state = state
-    self.detail = detail
+    self.storedDetail = detail
     self.folder = folder
     self.lastPrompt = lastPrompt
     self.lastReply = lastReply

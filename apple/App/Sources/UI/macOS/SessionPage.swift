@@ -16,7 +16,7 @@ extension PiSessionState {
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
             launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
             pendingPrompt: recap?.pendingPrompt, pendingTools: recap?.pendingTools, model: session.model, thinking: session.thinking, context: session.context,
-            agent: .known(session.agent))
+            agent: .known(session.agent), turnStartedAt: session.turnStartedAt, answeredAt: recap?.answeredAt, failure: session.failure.map(Open.known))
     }
 }
 

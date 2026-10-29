@@ -29,11 +29,15 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 | --- | --- |
 | `hello` | 连接后第一条：`extensionVersion`、`sessionId`、`sessionFile`（可空）、`pid`、`cwd`、`mode`（`tui`/`rpc`）、`tty`、`term`（终端相关环境变量）、`state`、`launchToken`、`hosted`，以及 `info` 的全部字段 |
 | `state` | 只在状态切换时发：`state{kind, since, busySince, turnSince, …}`，时刻都是毫秒 |
-| `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images}`、`thinking`、`models`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
+| `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images, account{kind, scope}}`、`thinking`、`models`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
 | `draft` | 正在说的话：`text`（`null` 是清掉）、`since` |
-| `quota` | 订阅额度的一次观测：`provider`、`windows[{seconds, used, resetsAt, model, binding}]`、`complete` |
+| `quota` | 授权的额度能力与结果：`provider`、`account{kind, scope}`、`status`（`observed`/`unobserved`/`unsupported`/`failed`）、`windows[{seconds, used, resetsAt, model, binding}]`、`complete` |
 | `ack` | 命令回应：`id`、`ok`，或 `error`（见下表）；`reload` 另带 `reloaded` |
 | `bye` | 主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
+
+`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。轮换授权后重新观测，不沿用旧窗口。ChatGPT plan（`openai` OAuth）当前没有公开额度查询能力，报 `unsupported`，管理入口为 https://chatgpt.com/settings/usage；不调用 Codex 用量接口。`ack.ok` 只代表命令已处理，不代表获得数值观测。过重置时刻无新观测算过期，不推算为满额。
+
+普通生成 `stopReason=length` 保留 `draft`，终态走现有 `error`（`max_output_tokens`）；历史保留部分文字及未完成记录。
 
 `state.kind`：`idle`、`thinking`、`tool`（`tool`、`detail`）、`waiting_user`（`title`）、`delegating`（自己歇下、子代理在飞）、`compacting`、`done`、`error`（`error`）。
 

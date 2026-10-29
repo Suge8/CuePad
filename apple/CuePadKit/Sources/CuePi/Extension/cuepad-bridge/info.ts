@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import { account, accountKind, type Account } from "./account.ts";
 
 /** 需要"命令上下文"（切换会话、新会话、重载、克隆）的操作只能在命令处理函数里做：本扩展注册这一条内部命令 `/cuepad <动作>`，
  * 经 `sendUserMessage("/cuepad <动作>", { expandPromptTemplates: true })` 触发。只有这条内部命令本身不列进给手机的清单；
@@ -96,8 +97,8 @@ function thinkingLevels(model: Model): ThinkingLevel[] {
 	});
 }
 
-function describeModel(model: Model) {
-	return { provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model), images: model.input.includes("image") };
+function describeModel(model: Model, account: Account | null) {
+	return { account, provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model), images: model.input.includes("image") };
 }
 
 /** 此刻可选的模型：与 Pi 的 /model 一致——配了范围（`--models`、`enabledModels`）就是范围内的，否则是已配好密钥的全部；当前模型总在其中。 */
@@ -109,12 +110,22 @@ function modelChoices(ctx: ExtensionContext): Model[] {
 }
 
 /** 此刻的模型配置；Pi 里换了模型、强度后重新取。 */
-export function modelInfo(pi: ExtensionAPI, ctx: ExtensionContext): Pick<Info, "model" | "thinking" | "models"> {
+export async function modelInfo(pi: ExtensionAPI, ctx: ExtensionContext): Promise<Pick<Info, "model" | "thinking" | "models">> {
+	const choices = modelChoices(ctx);
+	const accounts = new Map(await Promise.all([...new Set(choices.map((m) => m.provider))].map(async (provider) => {
+		try {
+			return [provider, (await account(ctx, provider)).identity] as const;
+		} catch (error) {
+			ctx.ui.notify(`CuePad：无法读取 ${provider} 的授权身份：${reason(error)}`, "warning");
+			return [provider, { kind: accountKind(ctx, provider), scope: null } as Account] as const;
+		}
+	})));
+	const describe = (model: Model) => describeModel(model, accounts.get(model.provider) ?? null);
 	const current = ctx.model;
 	return {
-		model: current ? describeModel(current) : null,
+		model: current ? describe(current) : null,
 		thinking: current ? pi.getThinkingLevel() : null,
-		models: modelChoices(ctx).map(describeModel),
+		models: choices.map(describe),
 	};
 }
 

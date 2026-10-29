@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { reason } from "./info.ts";
+import { account, type Account } from "./account.ts";
 
 /** 查订阅额度的单个请求最多等这么久（接口实测约 150ms；VPN 断了就是查不到，CuePad 保留上次的值） */
 const QUOTA_TIMEOUT_MS = 3_000;
@@ -16,9 +17,9 @@ const QUOTA_PROVIDERS: Record<string, { url: string; headers: (token: string) =>
 
 /** 一个额度窗口：长度（秒）、已用比例（0..1）、重置时刻（Unix 秒）、只算某个模型时的模型显示名；
  * `binding` 是提供方说此刻卡着的就是它（Claude 响应头的 representative-claim），提供方没说的不带 */
-type QuotaWindow = { seconds: number; used: number; resetsAt: number; model: string | null; binding?: true };
+export type QuotaWindow = { seconds: number; used: number; resetsAt: number; model: string | null; binding?: true };
 /** 一个提供方的一次观测；`complete` 是全部窗口（查用量接口得到的），回复里带回的只有一部分 */
-export type Quota = { provider: string; windows: QuotaWindow[]; complete: boolean };
+export type Quota = { provider: string; account: Account; status: "observed" | "unsupported" | "unobserved" | "failed"; windows: QuotaWindow[]; complete: boolean };
 
 export function record(value: unknown): Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -85,7 +86,7 @@ function codexAccount(token: string): string {
 	return id;
 }
 
-/** 按需查订阅额度（CuePad 的 `quota` 命令）；查到的每家交给 `report` 报出去。 */
+/** 能力与观测都经同一条 quota 消息；空查询不是新观测。 */
 export class QuotaFetcher {
 	/** 正在查的额度：几个客户端同时要时共用这一次 */
 	private inFlight: Promise<string[]> | null = null;
@@ -98,30 +99,56 @@ export class QuotaFetcher {
 		this.report = report;
 	}
 
-	/** 查一次所有订阅的额度，返回各家的失败原因（全部查到或没有订阅为空）。查到的那几家已经报出去了。 */
+	/** 每个授权都报告能力或结果；没有订阅授权与查询失败都明确拒绝，不产生空成功。 */
 	fetchAll(): Promise<string[]> {
-		this.inFlight ??= Promise.allSettled(Object.keys(QUOTA_PROVIDERS).map((provider) => this.fetch(provider)))
+		const providers = this.providers();
+		if (providers.length === 0) return Promise.resolve(["no subscription authorization"]);
+		this.inFlight ??= Promise.allSettled(providers.map((provider) => this.fetch(provider)))
 			.then((results) => results.flatMap((r) => r.status === "rejected" ? [reason(r.reason)] : []))
 			.finally(() => { this.inFlight = null; });
 		return this.inFlight;
 	}
 
-	/** 查一个提供方的用量：没用 OAuth 订阅登录的（API 密钥、没登录）跳过，返回 false；查到就报出去。令牌经 Pi 取（会自动刷新）。 */
-	private async fetch(provider: string): Promise<boolean> {
-		const source = QUOTA_PROVIDERS[provider];
+	private providers(): string[] {
 		const registry = this.ctx.modelRegistry;
-		const model = registry.getAll().find((m) => m.provider === provider);
-		if (!model || !registry.isUsingOAuth(model)) return false;
-		const token = (await registry.getProviderAuth(provider))?.auth.apiKey;
-		if (!token) throw new Error(`${provider}: no token`);
-		const response = await fetch(source.url, {
-			headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...source.headers(token) },
-			signal: AbortSignal.timeout(QUOTA_TIMEOUT_MS),
-		});
-		if (!response.ok) throw new Error(`${provider}: HTTP ${response.status}`);
-		const windows = source.parse(await response.json());
-		if (windows.length === 0) throw new Error(`${provider}: unrecognized usage format`);
-		this.report({ provider, windows, complete: true });
-		return true;
+		return [...new Set([...registry.getAvailable(), ...(this.ctx.model ? [this.ctx.model] : [])]
+			.filter((model) => registry.isUsingOAuth(model)).map((model) => model.provider))];
+	}
+
+	capabilities(models: { provider: string; account: Account | null }[]) {
+		const seen = new Set<string>();
+		for (const model of models) {
+			if (!model.account || seen.has(model.provider)) continue;
+			seen.add(model.provider);
+			const supported = model.account.kind === "oauth" && QUOTA_PROVIDERS[model.provider];
+			const status = model.account.kind === "oauth" && !model.account.scope ? "failed" : supported ? "unobserved" : "unsupported";
+			this.report({ provider: model.provider, account: model.account, status, windows: [], complete: false });
+		}
+	}
+
+	private async fetch(provider: string): Promise<void> {
+		let identity: Account = { kind: "oauth", scope: null };
+		try {
+			const resolved = await account(this.ctx, provider);
+			identity = resolved.identity;
+			const source = QUOTA_PROVIDERS[provider];
+			if (!source) {
+				this.report({ provider, account: identity, status: "unsupported", windows: [], complete: true });
+				return;
+			}
+			const token = resolved.auth?.apiKey;
+			if (!token) throw new Error(`${provider}: no token`);
+			const response = await fetch(source.url, {
+				headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...source.headers(token) },
+				signal: AbortSignal.timeout(QUOTA_TIMEOUT_MS),
+			});
+			if (!response.ok) throw new Error(`${provider}: HTTP ${response.status}`);
+			const windows = source.parse(await response.json());
+			if (windows.length === 0) throw new Error(`${provider}: unrecognized usage format`);
+			this.report({ provider, account: identity, status: "observed", windows, complete: true });
+		} catch (error) {
+			this.report({ provider, account: identity, status: "failed", windows: [], complete: false });
+			throw error;
+		}
 	}
 }

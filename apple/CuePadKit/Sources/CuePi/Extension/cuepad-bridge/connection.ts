@@ -28,6 +28,7 @@ async function onConnection(session: Session, socket: net.Socket) {
 	session.clients.add(socket);
 	socket.on("close", () => session.clients.delete(socket));
 	session.write(socket, greeting);
+	session.quota.capabilities(greeting.models);
 
 	let buffer = "";
 	socket.setEncoding("utf8");
@@ -213,7 +214,7 @@ async function runBuiltin(session: Session, builtin: BuiltinCommand, args: strin
 			session.runInternal(builtin.name);
 			return;
 	}
-	session.updateInfo({ ...modelInfo(pi, ctx), ...contextInfo(ctx) });
+	session.updateInfo({ ...await modelInfo(pi, ctx), ...contextInfo(ctx) });
 }
 
 /** 压缩不等完成就返回；开头一小段时间内的失败（没有可压缩的内容、没有模型）当作拒绝报给手机，之后的失败只能提示在 Pi 里。 */
@@ -272,7 +273,7 @@ async function handleConfig(session: Session, command: Command, ack: Ack, reject
 		if (!(await pi.setModel(target))) return reject("no_auth");
 	}
 	if (thinking) pi.setThinkingLevel(thinking);
-	session.updateInfo(modelInfo(pi, ctx));
+	session.updateInfo(await modelInfo(pi, ctx));
 	ack({ ok: true });
 }
 
@@ -291,7 +292,10 @@ function handleAnswer(session: Session, command: Command, ack: Ack, reject: Reje
 	ack({ ok: true });
 }
 
-/** 查一次所有订阅的额度；全部查到（或没有订阅）才 ok，否则带上各家的失败原因。 */
+/** 每个订阅授权都报能力或结果；没有授权与查询失败带上原因，不把空查询当成功。 */
 function handleQuota(session: Session, ack: Ack, reject: Reject) {
-	void session.quota.fetchAll().then((failures) => failures.length === 0 ? ack({ ok: true }) : reject(`failed: ${failures.join("; ")}`));
+	void session.quota.fetchAll().then(async (failures) => {
+		session.updateInfo(await modelInfo(session.pi, session.ctx));
+		failures.length === 0 ? ack({ ok: true }) : reject(`failed: ${failures.join("; ")}`);
+	});
 }

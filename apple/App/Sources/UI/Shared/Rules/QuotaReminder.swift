@@ -27,7 +27,8 @@ nonisolated struct QuotaReminder {
 
     /// 会提醒的那个窗口：整个账号的本周。
     static func window(of quota: AccountQuota) -> QuotaWindow? {
-        quota.windows.first { $0.seconds == QuotaWindow.week && $0.model == nil }
+        guard quota.status == .observed, quota.account?.scope != nil else { return nil }
+        return quota.windows.first { $0.seconds == QuotaWindow.week && $0.model == nil }
     }
 
     /// 这个窗口此刻在提醒的那段里（提醒响过、还没重置）：灵动岛与锁屏的额度那一行把它标出来。
@@ -43,7 +44,7 @@ nonisolated struct QuotaReminder {
             guard fireAt > now else { return nil }
             let meter = QuotaMeter.Window(window, at: fireAt)
             return QuotaReminder(
-                id: "\(prefix)\(quota.provider)/\(Int((window.resetsAt.timeIntervalSince1970 / 60).rounded()))", fireAt: fireAt,
+                id: "\(prefix)\(quota.id)/\(Int((window.resetsAt.timeIntervalSince1970 / 60).rounded()))", fireAt: fireAt,
                 title: String(localized: "\(PiProvider(id: quota.provider).account) \(meter.name)还剩 \(meter.percent)"),
                 body: body(resetsAt: window.resetsAt, fireAt: fireAt))
         }

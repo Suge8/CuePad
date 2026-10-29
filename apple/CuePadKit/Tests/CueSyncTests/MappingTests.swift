@@ -35,7 +35,8 @@ import Testing
     try Data("<h1>登录页</h1>".utf8).write(to: page)
     _ = try await store.addPreviews([(page, "登录页")], sessionID: "s1")
     try await store.recordQuota(
-      QuotaReport(provider: "anthropic", windows: [QuotaWindow(seconds: 18_000, used: 0.2, resetsAt: .now)], complete: true), host: "mac")
+      QuotaReport(provider: "anthropic", windows: [QuotaWindow(seconds: 18_000, used: 0.2, resetsAt: .now)], complete: true,
+        account: PiAccount(kind: .oauth, scope: "mapping-account")), host: "mac")
     try await store.addCueMessage(.cue, text: "要发布吗？", ask: try CueAsking(.release, action: "发布 1.4"), urgent: true, task: card.id)
     try await store.noteCueLine("发布前先跑检查", source: .you, pinned: true, remindAt: .now.addingTimeInterval(60))
     try await store.updateCueProfile { $0.hostID = "mac" }

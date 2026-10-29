@@ -68,18 +68,18 @@ enum DemoLibrary {
         try await store.recordQuota(QuotaReport(provider: "anthropic", windows: [
             window(hours5, used: 0.68, left: resetIn > 0 ? resetIn : 2 * 3_600 + 14 * 60), window(week, used: 0.38, left: weekLeft),
             window(week, used: 0.12, left: weekLeft, model: "Fable"),
-        ], complete: true), host: "demo-mac")
+        ], complete: true, account: PiAccount(kind: .oauth, scope: "demo-anthropic")), host: "demo-mac")
         if remindIn > 0 {
             Task {
                 await Task.wait(for: .seconds(remindIn + 20))
                 await DebugScene.running("额度回落") {
-                    _ = try await store.recordQuota(QuotaReport(provider: "anthropic", windows: [window(week, used: 0.45, left: weekLeft)], complete: false), host: "demo-mac")
+                    _ = try await store.recordQuota(QuotaReport(provider: "anthropic", windows: [window(week, used: 0.45, left: weekLeft)], complete: false, account: PiAccount(kind: .oauth, scope: "demo-anthropic")), host: "demo-mac")
                 }
             }
         }
         try await store.recordQuota(QuotaReport(provider: "openai-codex", windows: [
             window(week, used: 0.91, left: 36 * 3_600),
-        ], complete: true), host: "demo-mac")
+        ], complete: true, account: PiAccount(kind: .oauth, scope: "demo-codex")), host: "demo-mac")
     }
 
     /// 两级任务：圆桌的"乱序"四个子任务，每个子任务是叶子、带着正文（发给 Agent 的状态见 `DebugScene.seedTaskStates`）；

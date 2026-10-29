@@ -17,7 +17,7 @@ import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
 import { trackShows, watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 42;
+const EXTENSION_VERSION = 43;
 
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
  * 与 FireCode 判断"会话进行中"用同一个事实 */
@@ -82,10 +82,10 @@ export default function (pi: ExtensionAPI) {
 
 	trackShows(pi);
 
-	pi.on("session_start", (_event, ctx) => {
+	pi.on("session_start", async (_event, ctx) => {
 		if (process.env[PROBE_ENV]) {
 			// 没有配好密钥的模型（没登录）时 Pi 仍给出一个占位的当前模型，报成没有模型
-			const { model, models } = ctx.modelRegistry.getAvailable().length > 0 ? modelInfo(pi, ctx) : { model: null, models: [] };
+			const { model, models } = ctx.modelRegistry.getAvailable().length > 0 ? await modelInfo(pi, ctx) : { model: null, models: [] };
 			fs.writeSync(1, JSON.stringify({ cuepadProbe: { model, models } }) + "\n");
 			return;
 		}
