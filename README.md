@@ -7,7 +7,7 @@
 <p align="center">
   <b>A calm notebook that runs your coding agents.</b><br />
   Jot it down; Cue hands it to Claude Code, Codex, Pi, OpenCode, Grok Build or DeepSeek Harness, keeps them moving, and only asks you what really needs you.<br />
-  Native on Mac, iPhone and iPad. Local-first, no account, no server.
+  Native on Mac, iPhone and iPad. Local-first, no CuePad account.
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
 - **Every agent on one board.** Tasks move through four lanes — to do, advancing, waiting on you, done — with each session's live state next to them: thinking, running a tool, waiting, finished.
 - **Your phone is the remote.** Answer an agent's question or permission request from anywhere. Agents send you screenshots, pages, PDFs and recordings to check, each captioned with what to look at.
 - **Ideas first.** Plain Markdown with inline images and `{{variables}}`. When it's time to act, drag an idea onto a task and it joins the task's notes; every send is logged and can be resent.
-- **Yours.** Everything lives in a SQLite library on your device and syncs through your own private iCloud database. No account, no server, no telemetry.
+- **Yours.** Everything lives in a SQLite library on your device and syncs through your own private iCloud database. No CuePad account, no telemetry. Live Activity summaries pass through a stateless relay to Apple’s push service; the relay doesn’t retain them.
 
 | | |
 |:-:|:-:|

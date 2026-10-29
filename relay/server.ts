@@ -1,5 +1,5 @@
 // CuePad 门铃中转：同一个人的设备进同一个房间；一台的改动被 iCloud 收下后按一下门铃，中转转给房间里的其它设备，它们自己去 iCloud 拉。
-// 中转不存任何东西、不看内容，门铃不带内容。房间号是设备由 iCloud 里的密钥派生的 Ed25519 公钥；入房要对中转给的随机数签名，
+// 门铃不带内容。实时活动另走 /v1/activity（activity.ts），只转发、不留存。房间号是设备由 iCloud 里的密钥派生的 Ed25519 公钥；入房要对中转给的随机数签名，
 // 没有密钥的人进不了房间，也就按不了这个房间的门铃。
 //
 // 协议（文本帧，JSON）：
@@ -11,7 +11,13 @@
 // 心跳用 WebSocket 协议层的 ping：设备每 10 秒一次；IDLE_TIMEOUT_S 内什么都没收到的连接（设备睡了、断网、被挂起）由中转断开，不留死连接。
 //
 // 环境变量：PORT（默认 8080）；HOST 是监听地址（默认所有地址，放在反向代理后面时给 127.0.0.1）；
-// CERT、KEY 是 PEM 证书与私钥路径，给了就直接提供 TLS，不给就是明文（放在 Caddy 等反向代理后面）。
+// CERT、KEY 是 PEM 证书与私钥路径，给了就直接提供 TLS；回环 Caddy 代理另设 TRUST_PROXY=loopback（来源与限频在 ingress.ts）。
+import { configuredAPNs } from "./apns";
+import { activity, MAX_REQUEST_BYTES } from "./activity";
+import { Ingress } from "./ingress";
+
+const ingress = new Ingress();
+const apns = configuredAPNs();
 const PROTOCOL = "cuepad-relay-v1";
 const AUTH_TIMEOUT_MS = 10_000;
 const IDLE_TIMEOUT_S = 20;
@@ -35,12 +41,22 @@ async function verified(room: string, nonce: string, signature: unknown): Promis
 const server = Bun.serve<Peer, never>({
   port: Number(process.env.PORT ?? 8080),
   hostname: process.env.HOST,
+  maxRequestBodySize: MAX_REQUEST_BYTES,
   tls: process.env.CERT ? { cert: Bun.file(process.env.CERT), key: Bun.file(process.env.KEY!) } : undefined,
   fetch(req, server) {
     const path = new URL(req.url).pathname;
     if (path === "/health") return new Response("ok");
+    if (path === "/v1/activity/health") {
+      const headers = { "cache-control": "no-store", allow: "GET" };
+      return new Response(null, { status: req.method === "GET" ? (apns ? 204 : 503) : 405, headers });
+    }
     const room = path.match(ROOM)?.[1];
-    if (room && server.upgrade(req, { data: { room, nonce: base64url(crypto.getRandomValues(new Uint8Array(32))), authed: false } })) return;
+    if (path === "/v1/activity" || room) {
+      const admitted = ingress.admit(req, server.requestIP(req)?.address);
+      if (admitted instanceof Response) return admitted;
+      if (path === "/v1/activity") return activity(req, apns, admitted.secure);
+      if (room && server.upgrade(req, { data: { room, nonce: base64url(crypto.getRandomValues(new Uint8Array(32))), authed: false } })) return;
+    }
     return new Response("not found", { status: 404 });
   },
   websocket: {
@@ -75,3 +91,10 @@ const server = Bun.serve<Peer, never>({
 });
 
 console.log(`cuepad relay listening on ${server.port}${process.env.CERT ? " (tls)" : ""}`);
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    apns?.close();
+    server.stop(true);
+  });
+}

@@ -77,7 +77,7 @@ extension AppServices {
     /// 不碰立即同步的忙碌状态（`syncNow`）。不在调用方的线程上跑（`@concurrent`）：从主线程来的也当场离开，主线程忙时拉取不跟着晚。
     /// 失败（多半是离线、被限流）由同步层归类、定下次的时刻并按段记日志，这里不另记：下一次触发或等待结束会再拉，状态变化经同步状态反映。
     @concurrent func pull() async {
-        try? await sync?.syncNow()
+        _ = try? await sync?.syncNow()
     }
 
     /// 此刻该按什么节奏拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`，门铃通着（`doorbellFallback`）时降为兜底：
@@ -197,11 +197,6 @@ extension AppServices {
         case .needsDecision, .outdated, .noAccount, .accountRestricted: return false
         default: return true
         }
-    }
-
-    /// 处理 `syncStatus == .needsDecision`：用户选择后同步重新开始。
-    func resolveSync(_ resolution: SyncResolution) async throws {
-        try await sync?.resolve(resolution)
     }
 
     /// 这个附件文件在本机的位置：没有就现在从 iCloud 取（手机上大文件、按流量计费时不自动取，用到时走这里）；没有同步（隔离库）抛 `FileFetchFailure.notSyncing`。

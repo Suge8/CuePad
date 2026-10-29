@@ -6,7 +6,8 @@ import Foundation
 /// - 数字账（`ledger`）：要你管的（拍板、待回复，按件数）在前，"N 推进中"在后（与看板列头、底部那一排、侧栏进展那一行同一个数，`advancing`），
 ///   再接"M 子代理"（推进中各件的会话里在跑的子代理一共几个，`subagents`），放不下先去掉子代理；Cue 不在时也照写，为 0 的不写。
 ///   推进中那项只在有件在跑或等子代理交回时写（`Tally.moving`），都歇着时写那一句（`quietLine`）；每件此刻的样子（在跑、等子代理）不进数字账，在下面每件一行里。
-///   否决过：按件分"3 在跑 1 等子代理"——看不出规模，加起来又不数歇着的、对不上推进中；按会话数加代理总数——会话数对不上看板上任何一个数，放不下时只剩它。
+///   按件分"3 在跑 1 等子代理"看不出规模，加起来又不数歇着的、对不上推进中，所以数字账仍数任务。
+/// - 灵动岛常驻只取一个数：有等你就取 `needsYou`，否则取活跃 Agent 总数 `agentCount`；它不等于推进中任务数，计数规则只在 `CueAgents`。
 /// - 角标（`needsYou`）：拍板加待回复，App 图标、菜单栏图标与灵动岛最小态同一个数。
 /// - 每件一行（`items`）：展开态与锁屏下面列的那几件，等你的每一件、待回复的每个会话、推进中的每一件（在跑、等子代理交回、歇着）、刚做完的顶层任务；按这个先后排。
 /// - 快的事实（Cue 在想、话在路上）几分钟就变，后台的岛不一定等得到下一份：过了 `staleAt` 只信慢的（`settled`）。
@@ -28,6 +29,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var at: Date
     /// Mac 上它运行在别的 Mac 时那一句（"在「Mac Studio」上运行"）：静着、手上没有事时那一句写它；Mac Cue 页输入框工具排末尾的旁注也写它。这台或手机上为 nil。
     var elsewhere: String? = nil
+    /// 参与工作的 Agent 总数，只由 CueTally 算。未带这个读数的快照保持未知，不拿任务数或截过的几行凑一个数。
+    var agentCount: Int? = nil
 
     enum Brain: Codable, Hashable, Sendable {
         /// 此刻不会接话：那一句原因（"「Mac Studio」没开"、换新 Mac 时"正在从 iCloud 同步…"），起不来时 `failed`。
@@ -135,8 +138,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 随快照写进 App Group 的是两种各几件，小组件与实时活动只读不另算。
     var needsYou: Int { tally.needsYou }
 
-    /// 有活才开着实时活动：Cue 在一轮里或话在路上、有等你的（拍板与待回复）、有在跑或等子代理的；只剩歇着与刚做完的就结束。
-    var isLive: Bool { isBusy || needsYou > 0 || tally.moving > 0 }
+    /// 有活才开着实时活动：Cue 在一轮里或话在路上、有等你的、正在开工或有活跃 Agent（含审查中的子代理）；只剩歇着与刚做完的就结束。
+    var isLive: Bool { isBusy || needsYou > 0 || tally.moving > 0 || agentCount.map { $0 > 0 } == true }
 
     /// 这一份过多久不可信。
     var staleAfter: TimeInterval { isBusy ? Self.fastStale : Self.slowStale }

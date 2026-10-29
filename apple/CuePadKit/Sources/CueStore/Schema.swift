@@ -130,7 +130,16 @@ enum Schema {
       guard try db.first("SELECT 1 FROM pragma_table_info('piSessionStates') WHERE name = 'failure'", [], { _ in true }) == nil else { return }
       try db.exec("ALTER TABLE piSessionStates ADD COLUMN failure TEXT;")
     },
+    // 82：每台手机的实时活动推送地址，令牌经 iCloud 加密同步给 Mac
+    "\(activityDestinationsTable) \(modifiedIndex(.activityDestinations))",
   ]
+
+  static let activityDestinationsTable = """
+    CREATE TABLE activityDestinations (
+      id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, activityID TEXT NOT NULL, token TEXT NOT NULL,
+      environment TEXT NOT NULL, startedAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    """
 
   /// 技能与规则里每份文件的正文：那台 Mac 每份一条、各端读（`LibraryFileText`）。
   static let agentLibraryFilesTable = """

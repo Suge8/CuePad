@@ -56,8 +56,8 @@ extension CueTools {
           卡片、摘要与通知只显示"可以<doing>吗？"、rule 那类的这条规矩、show 的图与选项，不显示 text。
           show 是回答这个问题必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 task peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就只放方案、每个一张（不带原样作对比）、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。只有 show 里的图上卡片。
           text 先一句要做的动作，再一句依据（rule 那类写哪条规矩）和不做会怎样；不写 push、rule 这类分类名。
-          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；\(CueAsk.allCases.filter { !$0.allowable }.map(\.rawValue).joined(separator: "、")) 只有第一项），他选第二项就照原话记成一条一直记着的记忆。卡上只能选：他在 Cue 页一开口，开着的卡就当场收起，算他直接说了；他那句不是在答它，restore 放回。
-          urgent 推送到手机；task 关联一个任务（第二项的范围是它的项目）；withdraw 写"等你"里一条的 id，撤回它（你不用再问了，或他在会话里说了怎么办），可同时带 text 说明；restore 写他开口收起的那条的 id，放回"等你"。
+          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；\(CueAsk.allCases.filter { !$0.allowable }.map(\.rawValue).joined(separator: "、")) 只有第一项），他选第二项就照原话记成一条一直记着的记忆。
+          urgent 推送到手机；task 关联一个任务（第二项的范围是它的项目）；withdraw 写"等你"里一条的 id，撤回它（你不用再问了），可同时带 text 说明；restore 写他在 Cue 页开口收起的那条的 id，放回"等你"。
           """,
         "inputSchema": schema(
           [

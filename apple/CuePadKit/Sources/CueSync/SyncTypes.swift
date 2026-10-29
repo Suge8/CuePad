@@ -1,6 +1,16 @@
 import CloudKit
 import CueStore
 
+/// 一次拉取的结果，不是全局同步状态：上传成功或重写本地快照都不能证明这次拉完了。
+public enum SyncPullResult: Equatable, Sendable {
+  /// 完整拉完，收到并处理了记录变化。
+  case newData
+  /// 完整拉完，没有记录变化。
+  case noData
+  /// 账号不可用、同步暂停、同步区缺失或尚在退避，这次没有完整拉完。
+  case incomplete
+}
+
 /// 对外的同步状态，界面直接显示。本机数据在任何状态下都完好，可继续使用。
 public enum SyncStatus: Equatable, Sendable {
   /// 正在连接 iCloud：同步刚开始，还没确认账号状态。

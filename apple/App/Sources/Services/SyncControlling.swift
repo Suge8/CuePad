@@ -9,8 +9,8 @@ nonisolated protocol SyncControlling: Sendable {
     func start() async
     func stop() async
     /// 立即拉一次（返回时拉完；在拉的排上合成一拉，同步开始前来的等开始了再拉），顺带让待推送发一轮（不等）：
-    /// 立即同步、回到前台、按节奏的拉取、收到推送、门铃都只调它（经 `AppServices.pull`）
-    func syncNow() async throws
+    /// 立即同步、回到前台、按节奏的拉取、收到推送、门铃都只调它；结果明确这次有没有完整拉完。
+    @discardableResult func syncNow() async throws -> SyncPullResult
     /// 马上传这几条（不进攒批窗口、不等后台那批），返回时它们都有了结果：全被服务器收下为 true
     func send(recordNames: Set<String>) async -> Bool
     /// 把待推送全部发出去，返回时这一轮结束
