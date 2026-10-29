@@ -115,13 +115,14 @@ export class QuotaFetcher {
 			.filter((model) => registry.isUsingOAuth(model)).map((model) => model.provider))];
 	}
 
-	capabilities(models: { provider: string; account: Account | null }[]) {
+	capabilities(models: { provider: string; account: Account | null }[], currentProvider: string | undefined) {
 		const seen = new Set<string>();
 		for (const model of models) {
 			if (!model.account || seen.has(model.provider)) continue;
 			seen.add(model.provider);
 			const supported = model.account.kind === "oauth" && QUOTA_PROVIDERS[model.provider];
-			const status = model.account.kind === "oauth" && !model.account.scope ? "failed" : supported ? "unobserved" : "unsupported";
+			const unresolved = model.provider === currentProvider && model.account.kind === "oauth" && !model.account.scope;
+			const status = unresolved ? "failed" : supported ? "unobserved" : "unsupported";
 			this.report({ provider: model.provider, account: model.account, status, windows: [], complete: false });
 		}
 	}

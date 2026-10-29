@@ -28,7 +28,7 @@ async function onConnection(session: Session, socket: net.Socket) {
 	session.clients.add(socket);
 	socket.on("close", () => session.clients.delete(socket));
 	session.write(socket, greeting);
-	session.quota.capabilities(greeting.models);
+	session.quota.capabilities(greeting.models, greeting.model?.provider);
 
 	let buffer = "";
 	socket.setEncoding("utf8");

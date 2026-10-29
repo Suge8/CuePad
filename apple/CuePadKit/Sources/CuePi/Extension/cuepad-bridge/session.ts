@@ -145,7 +145,7 @@ export class Session {
 		if (Object.keys(changed).length === 0) return;
 		this.info = { ...this.info, ...changed };
 		this.broadcast({ t: "info", ...changed });
-		if (changed.models) this.quota.capabilities(changed.models);
+		if (changed.models || changed.model) this.quota.capabilities(this.info.models, this.info.model?.provider);
 	}
 
 	/** 上下文用量随每一轮、压缩、换模型、换分支变化。 */

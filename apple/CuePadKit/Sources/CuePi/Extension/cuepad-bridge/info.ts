@@ -112,16 +112,18 @@ function modelChoices(ctx: ExtensionContext): Model[] {
 /** 此刻的模型配置；Pi 里换了模型、强度后重新取。 */
 export async function modelInfo(pi: ExtensionAPI, ctx: ExtensionContext): Promise<Pick<Info, "model" | "thinking" | "models">> {
 	const choices = modelChoices(ctx);
-	const accounts = new Map(await Promise.all([...new Set(choices.map((m) => m.provider))].map(async (provider) => {
-		try {
-			return [provider, (await account(ctx, provider)).identity] as const;
-		} catch (error) {
-			ctx.ui.notify(`CuePad：无法读取 ${provider} 的授权身份：${reason(error)}`, "warning");
-			return [provider, { kind: accountKind(ctx, provider), scope: null } as Account] as const;
-		}
-	})));
-	const describe = (model: Model) => describeModel(model, accounts.get(model.provider) ?? null);
+	const accounts = new Map<string, Account>([...new Set(choices.map((m) => m.provider))]
+		.map((provider) => [provider, { kind: accountKind(ctx, provider), scope: null }]));
 	const current = ctx.model;
+	// 解析授权可能刷新令牌；可选项只读宿主已知路线，不能让另一家的网络挡住当前会话。
+	if (current) {
+		try {
+			accounts.set(current.provider, (await account(ctx, current.provider)).identity);
+		} catch (error) {
+			ctx.ui.notify(`CuePad：无法读取 ${current.provider} 的授权身份：${reason(error)}`, "warning");
+		}
+	}
+	const describe = (model: Model) => describeModel(model, accounts.get(model.provider) ?? null);
 	return {
 		model: current ? describe(current) : null,
 		thinking: current ? pi.getThinkingLevel() : null,

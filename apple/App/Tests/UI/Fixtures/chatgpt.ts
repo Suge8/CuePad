@@ -10,8 +10,8 @@ export default function (pi: any) {
 			refreshToken: async () => { throw new Error("test never refreshes"); },
 			getApiKey: (credential: any) => credential.access,
 		},
-		models: [{ id: "echo", name: "OAuth Echo", reasoning: false, input: ["text", "image"],
-			contextWindow: 100000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }],
+		models: ["echo", "echo-next"].map((id) => ({ id, name: id, reasoning: false, input: ["text", "image"],
+			contextWindow: 100000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } })),
 		streamSimple(model: any, context: any) {
 			const stream = createAssistantMessageEventStream();
 			queueMicrotask(() => {

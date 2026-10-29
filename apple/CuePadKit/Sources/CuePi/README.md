@@ -35,7 +35,9 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 | `ack` | 命令回应：`id`、`ok`，或 `error`（见下表）；`reload` 另带 `reloaded` |
 | `bye` | 主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
 
-`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。轮换授权后重新观测，不沿用旧窗口。ChatGPT plan（`openai` OAuth）当前没有公开额度查询能力，报 `unsupported`，管理入口为 https://chatgpt.com/settings/usage；不调用 Codex 用量接口。`ack.ok` 只代表命令已处理，不代表获得数值观测。过重置时刻无新观测算过期，不推算为满额。
+`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。模型清单只为当前 provider 解析授权；其余只报已知 `kind`、`scope=null`（尚未解析，不是查询失败），切为当前或主动查额度才解析。另一家的续期不阻塞当前会话；当前身份解析失败仍明确提示并报 `failed`，数值只匹配已知授权分区。轮换授权后重新观测，不沿用旧窗口。
+
+ChatGPT plan（`openai` OAuth）当前没有公开额度查询能力，报 `unsupported`，管理入口为 https://chatgpt.com/settings/usage；不调用 Codex 用量接口。`ack.ok` 只代表命令已处理，不代表获得数值观测。过重置时刻无新观测算过期，不推算为满额。
 
 普通生成 `stopReason=length` 保留 `draft`，终态走现有 `error`（`max_output_tokens`）；历史保留部分文字及未完成记录。
 
