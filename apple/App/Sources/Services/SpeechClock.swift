@@ -14,7 +14,7 @@ final class SpeechClock {
     @ObservationIgnored private let alwaysReachable: Bool
     @ObservationIgnored private let timing: Timing
 
-    /// 一句还没被接收方领取、交出的话：写下的时刻、服务器收下过没有与接收它的那台 Mac。
+    /// 本机尚未看到领取或送达回执的一句：写下的时刻、服务器收下过没有与接收它的那台 Mac。
     nonisolated struct Awaiting: Equatable, Sendable {
         var said: Date
         var reachedServer: Bool

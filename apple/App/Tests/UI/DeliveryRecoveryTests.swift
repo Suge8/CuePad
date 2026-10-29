@@ -224,6 +224,8 @@ struct DeliveryRecoveryTests {
             "action": "say", "task": task.id.uuidString, "text": "接着检查发布结果",
         ]))
         #expect(!result.isError)
+        #expect(result.text.contains("尚未确认") && result.text.contains("可能已经执行"))
+        #expect(!result.text.contains("还没送达") && !result.text.contains("结果会写进变化"))
         let request = try #require(try await store.deliveryRequests().first)
         try await app.services.executor.start()
         _ = try await store.outcome(of: request)

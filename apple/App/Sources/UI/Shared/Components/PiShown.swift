@@ -29,7 +29,7 @@ nonisolated extension PiSessionState {
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
     /// 不看有没有新回复：看一眼就让行换位置，列表会在手下跳。
     /// `cue`：Cue 在值班时的那一份（`LiveSessions.cue`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`），它留给你回的（待回复）紧随等你确认。
-    /// `moment`：此刻（话超时就是没能送达）。
+    /// `moment`：此刻（超时只表示送达未确认）。
     /// `state`：一项的会话（会话本身是 `\.self`）。
     static func inListOrder<Item>(
         _ items: [Item], state: KeyPath<Item, PiSessionState>, deliveries: [String: DeliveryRequest] = [:], cue: CueDuty? = nil,
@@ -51,7 +51,7 @@ nonisolated extension PiSessionState {
 }
 
 /// 发给会话、还没被它的状态吸收的那条话在会话行上的样子。到哪了只读说的话那条规则（`Speech`，含一直没发出与超时）：
-/// 在路上（发送中、已发出）、已送达、没能送达；在路上怎么说（`Transit`）只是展示。会话状态只来自 Mac 同步回来的记录，发出后要等 Mac 执行、写回、
+/// 在路上（发送中、已发出）、已送达、明确失败与静态未确认；在路上怎么说（`Transit`）只是展示。会话状态只来自 Mac 同步回来的记录，发出后要等 Mac 执行、写回、
 /// 再同步过来才变；话是本机当场写出的，所以显示状态把它算进去：发出即"发送中"，会话进入处理中后让位给会话状态。
 nonisolated enum PiDelivery: Hashable, Sendable {
     case inTransit(Transit)
@@ -94,7 +94,6 @@ nonisolated enum PiDelivery: Hashable, Sendable {
 
         /// `session` 是收话的会话；开新会话的请求没有。`trip` 是这条请求此刻到哪了（在路上的那两种）。
         static func of(_ request: DeliveryRequest, session: PiSessionState?, trip: Speech.Trip) -> Transit {
-            if request.status == .known(.unconfirmed) { return .unconfirmed }
             if session?.state == .known(.ended) { return .waking }
             if !request.isWithdrawable { return .delivering }
             return trip == .sent ? .sent : .sending
@@ -107,9 +106,9 @@ nonisolated enum PiDelivery: Hashable, Sendable {
     /// 在你看过这个会话（`seen`，本机最后一次看它）之前一直显示，会话之后动过也不算数。
     static func phase(of request: DeliveryRequest?, for session: PiSessionState, seen: Date? = nil, at moment: Speech.Moment) -> PiDelivery? {
         guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }
-        if request.mode == .known(.retry), request.status == .known(.unconfirmed) { return nil }
         let trip = Speech.trip(request, at: moment)
         switch trip {
+        case .unconfirmed: return mode == .retry ? nil : .inTransit(.unconfirmed)
         case .sending, .sent:
             // 发出之后才进入处理中，才算它在处理这句话；时间存到毫秒，同刻算作发出前就在跑（这句还没打断它）
             if session.runtimeState.isWorking && session.stateSince > request.createdAt { return nil }
@@ -215,7 +214,8 @@ nonisolated extension PiShown {
             let note = if case .inTransit(let transit) = phase { transit.note } else { nil as String? }
             self.init(status: asked, note: note, clock: own, cue: cue)
         case let phase?:
-            self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) }, cue: cue)
+            let clock = delivery.map { phase == .inTransit(.unconfirmed) ? PiClock.ago($0.createdAt) : .sent(since: $0.createdAt) }
+            self.init(status: .delivery(phase), clock: clock, cue: cue)
         case nil where session.runtimeState == .known(.settled):
             let rest: Status = session.awaitsReply(duty) ? .awaitsReply : duty != nil ? .resting : unread ? .unread : .idle
             self.init(status: session.hasStarted ? rest : .fresh, clock: own, cue: cue)

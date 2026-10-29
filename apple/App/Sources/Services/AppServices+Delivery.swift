@@ -5,6 +5,7 @@ extension AppServices {
     /// 撤回一句说出去的话（重发或移除没能送达的话）：发给会话的，还没被 Mac 领取的才撤得回，明确未交出的失败按库里的当前状态撤回；
     /// 对 Cue 说的，还没交给它的才撤得回。撤了立即把删除传上去，免得 Mac 先拉到它；撤不回时抛出原因。
     func withdraw(_ said: Said) async throws {
+        guard said.trip(at: speech).unconfirmedReason == nil else { throw SendError.alreadyHanded }
         switch said {
         case .request(let request) where request.status == .known(.failed):
             guard try await store.withdrawFailedDelivery(request.id) else { throw SendError.alreadyHanded }

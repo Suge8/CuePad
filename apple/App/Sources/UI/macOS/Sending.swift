@@ -44,7 +44,7 @@ extension Workspace {
             let title = plan.name ?? projectName
             let agents = try await services.store.macAgents(on: host)
             guard let agent = agents.preferred(services.settings.lastAgent) else { throw SendError.noAgent(here: host == services.hostID, agents.whyNone) }
-            _ = try await startSession(in: project, prompt: text.nonEmpty, title: title, on: host, card: leaf, agent: agent) {}
+            _ = try await startSession(in: project, prompt: text.nonEmpty, title: title, on: host, card: leaf, agent: agent) { _ in }
         }
     }
 

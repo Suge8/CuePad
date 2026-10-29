@@ -28,8 +28,9 @@ nonisolated enum MacDelivery {
     static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {
         guard session.canStop, let turnStart = session.busySince else { return false }
         return deliveries.contains { request in
-            request.mode == .known(.stop) && request.createdAt >= turnStart && request.status != .known(.unconfirmed)
-                && Speech.trip(request, at: moment).failure == nil
+            guard request.mode == .known(.stop), request.createdAt >= turnStart else { return false }
+            let trip = Speech.trip(request, at: moment)
+            return trip.inTransit || trip == .delivered
         }
     }
 
@@ -56,15 +57,15 @@ nonisolated enum MacDelivery {
         // 最新的一条是按写下的先后排的最后一条（`deliveryRequests(toSession:)`）：时间只到毫秒，同一毫秒的两条按时间比不出先后
         guard let latest = deliveries.last, latest.mode == .known(.command) else { return nil }
         let command = String(latest.content.prefix { !$0.isWhitespace })
-        let trip = Speech.trip(latest, at: moment), uncertainty = latest.unconfirmedReason
-        if trip.failure != nil || uncertainty != nil {
-            let finished = latest.completedAt ?? latest.modifiedAt
+        let trip = Speech.trip(latest, at: moment)
+        if trip.failure != nil || trip.unconfirmedReason != nil {
+            let finished = latest.completedAt ?? Speech.deadline(latest, at: moment) ?? latest.modifiedAt
             if messages.contains(where: { $0.at > finished }) { return nil }
         }
-        if let uncertainty { return .unconfirmed(command: command, reason: uncertainty) }
         switch trip {
         case .sending, .sent: return .running(command)
         case .delivered: return nil
+        case .unconfirmed(let reason): return .unconfirmed(command: command, reason: reason)
         case .failed(let failure): return .failed(command: command, failure: failure)
         }
     }

@@ -121,20 +121,6 @@ import Testing
     await executor.stop()
   }
 
-  @Test func requestInterruptedByAnAppRestartFailsAndIsNeverRunAgain() async throws {
-    let handler = Handler()
-    let stuck = try await store.requestDelivery("half done", to: pi, on: "mac-a")
-    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'executing', handledBy = 'mac-a'")
-
-    let executor = executor(handler)
-    try await executor.start()
-
-    let after = try #require(try await request(stuck.id))
-    #expect(after.status == .known(.failed) && after.failureReason?.text.isEmpty == false)
-    #expect(await handler.seen.isEmpty)  // 不重发：可能已经发出去了一半
-    await executor.stop()
-  }
-
   @Test
   func requestsOlderThanTheMaximumAgeAreAbandonedInsteadOfSurprisingTheUser() async throws {
     let handler = Handler()

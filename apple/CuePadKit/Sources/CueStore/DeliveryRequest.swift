@@ -153,7 +153,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 执行一次的结果：明确成功、明确未交出，或已交出但无法确认。未知只能由真实消息等正证据收敛，不授权再次派发。
+/// 执行一次的结果：明确成功、明确未交出，或可能已交出但无法确认。未知只能由真实消息等正证据收敛，不授权再次派发。
 public enum DeliveryOutcome: Sendable {
   case succeeded
   case failed(ShownText)

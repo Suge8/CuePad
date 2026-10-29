@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueAgent
-@testable import CueStore
+import CueStore
 import CueTestSupport
 import Foundation
 import Testing
@@ -19,16 +19,25 @@ struct DeliveryLaunchTests {
         try await app.offersPi()
         app.host.openingRejection = reason
         let task = try await store.createTask("检查发布结果")
-        let token = UUID().uuidString
-        let launch = PiLaunch(project: Project.defaultID, prompt: task.body, token: token)
         let workspace = Workspace(services: app.services)
-        await workspace.speak(launch.stored, to: .session(
-            SendTarget(kind: .piSession, name: "发布", ref: nil), host: TestApp.hostID, mode: .start, card: task.id)).value
+        var shownProgress: LaunchProgress?
+        let opening = Task {
+            try await workspace.startSession(in: Project.defaultID, prompt: task.body, title: "发布", card: task.id, agent: .pi) {
+                shownProgress = $0
+            }
+        }
+        defer { opening.cancel() }
+        try await eventually("表单写下开会话请求") { try await store.deliveryRequests().count == 1 }
         let request = try #require(try await store.deliveryRequests().first)
         try await app.services.executor.start()
         let result = try await store.outcome(of: request)
         #expect(app.pi.sessions.count == 1)
         #expect(result.status == .known(.unconfirmed))
+        try await eventually("表单收到未知结果") { shownProgress?.request?.status == .known(.unconfirmed) }
+        switch try #require(shownProgress).phase(at: app.services.speech) {
+        case .unconfirmed: break
+        default: Issue.record("创建后的未知结果不能显示正在开会话")
+        }
         #expect(try await store.launchingLeaves([task.id]) == [task.id])
         await workspace.resend(.request(result), restoringInto: app.services.settings.replyDraftBinding(for: task.id)).value
         #expect(workspace.notice?.isError == true)
@@ -40,6 +49,8 @@ struct DeliveryLaunchTests {
         ]))
         #expect(repeated.isError)
         #expect(try await store.deliveryRequests().map(\.id) == [request.id])
+        opening.cancel()
+        _ = await opening.result
         await app.services.executor.beginStop()()
     }
 }

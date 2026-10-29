@@ -10,18 +10,21 @@ import Testing
 /// #43：一次未知不授权重投旧请求，也不能永久锁住用户明确发起的新控制意图。
 @MainActor
 struct DeliveryControlTests {
-    @Test(arguments: [DeliveryMode.send, .start])
-    func 任务投送未确认时Cue再开工不能悄悄再发或再开(mode: DeliveryMode) async throws {
+    @Test(arguments: [DeliveryMode.send, .start], [
+        ("unconfirmed", false), ("unconfirmed", true), ("future-outcome", false), ("future-outcome", true),
+    ])
+    func 交接未收尾时Cue再开工不能悄悄再发或再开(mode: DeliveryMode, outcome: (String, Bool)) async throws {
+        let (status, fresh) = outcome
         let app = TestApp(), store = app.services.store
         defer { app.services.cancelBackgroundWork() }
-        try await app.offersPi()
-        let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
+        let host = "mac-delivery"
+        try await store.recordMacAgents(host: host, name: "测试 Mac", [MacAgent(kind: .pi, model: nil, models: [])])
+        let recorder = try await app.runtimeRecorder(on: host)
         try await recorder.update(sessionID: "atlas", state: .settled)
         let parent = try await store.createTask("发布")
         let first = try await store.createTask("准备", under: parent.id)
         try await store.bindSession("atlas", to: first.id)
         let task = try await store.createTask("上传结果", under: parent.id)
-        let host = TestApp.hostID
         try await store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
         let target = SendTarget(kind: .piSession, name: "发布", ref: mode == .start ? nil : "atlas")
         let text = mode == .start ? PiLaunch(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
@@ -29,8 +32,11 @@ struct DeliveryControlTests {
         let request = try #require(try await store.deliveryRequests().first)
         // 写回前崩溃／丢回执：已交出的原意图留在库里，未确认不是未开工。
         try RawDB(app.services.location.databaseURL).exec(
-            "UPDATE deliveryRequests SET status = 'unconfirmed', handledBy = '\(host)', completedAt = createdAt WHERE id = '\(request.id.uuidString.lowercased())'")
-        let args: [String: Any] = ["action": "start", "task": task.id.uuidString, "fresh": mode == .start]
+            "UPDATE deliveryRequests SET status = '\(status)', handledBy = '\(host)', completedAt = createdAt WHERE id = '\(request.id.uuidString.lowercased())'")
+        let occupied = try #require(try await store.handoffRequests(for: [task.id])[task.id])
+        #expect(occupied.map(\.id) == [request.id])
+        #expect(occupied.allSatisfy { !Speech.trip($0, at: .always()).inTransit })
+        let args: [String: Any] = ["action": "start", "task": task.id.uuidString, "fresh": fresh]
         let result = try #require(await CueTools(store: store, wait: 0).call("task", args))
         #expect(result.isError)
         #expect(try await store.deliveryRequests().map(\.id) == [request.id])

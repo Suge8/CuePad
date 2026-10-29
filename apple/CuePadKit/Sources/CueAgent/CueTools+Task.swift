@@ -171,7 +171,7 @@ extension CueTools {
     let request = try await store.startLeaf(
       leaf.id, agent: agent, fresh: args.bool("fresh") == true, model: args.string("model"), thinking: try Self.effort(args), host: host, cue: true)
     if request.mode == .known(.start) { return .ok("已请 Mac 为「\(leaf.heading)」开新会话，正文作为第一句。（\(leaf.id.shortID)）") }
-    return try await spoken(request, "「\(leaf.heading)」接着用上一步的会话，正文作为下一句（送到后这一步绑上它）", tail: leaf.id.shortID, from: host)
+    return try await spoken(request, "已请求「\(leaf.heading)」沿用上一步的会话，正文作为下一句", tail: leaf.id.shortID, from: host)
   }
 
   static func effort(_ args: Args) throws -> PiThinkingLevel? {

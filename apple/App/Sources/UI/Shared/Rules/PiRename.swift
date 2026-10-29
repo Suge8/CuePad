@@ -18,7 +18,7 @@ nonisolated enum PiRename {
         switch Speech.trip(request, at: moment) {
         case .sending, .sent: return name
         case .delivered: return session.modifiedAt > (request.completedAt ?? request.createdAt) ? session.title : name
-        case .failed: return session.title
+        case .failed, .unconfirmed: return session.title
         }
     }
 

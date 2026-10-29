@@ -1,3 +1,4 @@
+import CueStore
 import SwiftUI
 
 extension PiShown {
@@ -8,6 +9,7 @@ extension PiShown {
         case .asking: palette.waiting
         // 等 Cue 回答：不是要你管的，中性的墨色（赭黄只给等你确认的）
         case .cueAsking, .awaitsReply: palette.ink
+        case .delivery(.inTransit(.unconfirmed)): palette.ink3
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery: palette.signature
         case .unread: palette.replied
@@ -18,6 +20,7 @@ extension PiShown {
     /// 带色的状态（状态词与状态标同色）：要你管的、在跑的、有新回复。
     var isColored: Bool {
         switch status {
+        case .delivery(.inTransit(.unconfirmed)): false
         case .asking, .awaitsReply, .failed, .working, .delivery, .unread: true
         case .cueAsking, .idle, .resting, .fresh, .ended, .interrupted, .unknown: false
         }
@@ -148,7 +151,7 @@ extension PiShown {
         switch status {
         case .working(.delegating): .loop(.relay)
         case .working: .loop(.heartbeat)
-        case .delivery(.failed): .icon
+        case .delivery(.failed), .delivery(.inTransit(.unconfirmed)): .icon
         case .delivery: .flight
         case .asking: .rippled
         case .idle, .resting, .fresh, .ended, .interrupted, .unknown, .cueAsking, .awaitsReply, .failed, .unread: .icon
@@ -168,5 +171,5 @@ struct PiStateGlyph: View {
     }
 
     /// 没能送达（会话行的"有话没送到"、气泡上的标记）：样子不随原因变，这里不带原因。
-    static let undelivered = PiStateGlyph(status: .delivery(.failed(.timedOut)))
+    static let undelivered = PiStateGlyph(status: .delivery(.failed(.reported(DeliveryRequest.unexplainedFailure))))
 }

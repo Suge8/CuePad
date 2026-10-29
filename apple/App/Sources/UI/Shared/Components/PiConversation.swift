@@ -202,7 +202,7 @@ extension ChatSegment {
     private func outgoing(_ request: DeliveryRequest) -> some View {
         let session = session, said = Said.request(request), box = services.settings.replyDraftBinding(for: session.id)
         return SpeechBubble(said: said, box: box, session: session, fromCue: request.isFromCue, look: .session) { trip in
-            if request.status == .known(.unconfirmed) {
+            if trip.unconfirmedReason != nil {
                 Button(MessageMenu.Item.copy.title, icon: MessageMenu.Item.copy.icon) { workspace.copy(request.content) }
             } else {
                 MessageActions(

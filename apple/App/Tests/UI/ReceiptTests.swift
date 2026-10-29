@@ -7,7 +7,7 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 说出去的话到哪了只看这句自己：服务器收下了是已发出、Mac 回执了是已送达，写下满时限还没出这台、或已发出满时限没回执是没能送达
+/// 说出去的话到哪了只看这句自己：服务器收下了是已发出、Mac 回执了是已送达，等服务器或接收方回执到点只说明未确认
 /// （`Speech`，App 一处刷新"此刻"，`SpeechClock`）。全局同步状态一时不通不让已发出的话变红。
 /// 时间用手动推进的钟：到点翻状态靠 App 自己的那一次睡眠，不靠测试去重读。会话在 mac-b、Cue 运行在 mac-cue，都要经同步。
 @MainActor
@@ -27,11 +27,11 @@ struct ReceiptTests {
         func holds(_ id: UUID) async -> Bool { await inner.saved.contains(id.uuidString.lowercased()) }
 
         /// mac-b 领取并执行了这条请求，结果写回服务器。
-        func macAnswers(_ id: UUID) async throws {
+        func macAnswers(_ id: UUID, status: String = DeliveryStatus.succeeded.rawValue) async throws {
             let record = try #require(await inner.records([CKRecord.ID(recordName: id.uuidString.lowercased(), zoneID: CloudSync.zoneID)]).first)
             let done = try #require(record.copy() as? CKRecord)
             let now = Int64(Date.now.timeIntervalSince1970 * 1000) + 1
-            done["status"] = DeliveryStatus.succeeded.rawValue as NSString
+            done["status"] = status as NSString
             done["handledBy"] = "mac-b" as NSString
             done["completedAt"] = now as NSNumber
             done["modifiedAt"] = now as NSNumber
@@ -125,7 +125,7 @@ struct ReceiptTests {
 
     /// 话传上服务器就是已发出（会话行、Cue 页头同一个说法），不等 Mac 回执。弱网：一次拉取失败、同步状态成了连不上 iCloud，
     /// 已发出的话不变红；断着时写下的话排在本机，一直是发送中、过了 `Speech.sendLimit` 也不判没能送达。恢复后它传上去回到已发出；
-    /// Mac 回执的那句已送达，另一句已发出后满 `Speech.receiptLimit` 没回执是 Mac 迟迟没收下。
+    /// Mac 回执的那句已送达，另一句满 `Speech.receiptLimit` 没回执是未确认，显式再说保留原意图，迟到回执仍收敛原句。
     @Test
     func 说的话到服务器是已发出_回执是已送达_一次失败不让别的话变红_断着时排着不到点_没回执到点() async throws {
         let cloud = WeakCloud()
@@ -182,14 +182,25 @@ struct ReceiptTests {
         try await eventually("回执回来") { try await trip(of: first, services) == .delivered }
         try await eventually("会话行回到已发出，不再数没送到") { row(services)?.label == "已发出" && services.liveSessions.undelivered["atlas"] == nil }
 
-        // 第二句已发出，同步通着满时限（从恢复那一刻算）没回执：Mac 迟迟没收下
+        // 已发出满时限仍没回执，不能推断 Mac 没有执行。
         let recovered = try #require(services.speech.reachableSince)
         await advance(to: recovered.addingTimeInterval(Speech.receiptLimit - 1))
         #expect(try await trip(of: second, services) == .sent)
         await advance(to: recovered.addingTimeInterval(Speech.receiptLimit))
-        try await eventually("满时限没回执") { try await trip(of: second, services) == .failed(.timedOut) }
-        try await eventually("会话行翻成没能送达") { row(services)?.undelivered == .timedOut && services.liveSessions.undelivered["atlas"] == 1 }
-        #expect(row(services)?.label == "没能送达")
+        try await eventually("回执等待到点") { services.speech.now >= recovered.addingTimeInterval(Speech.receiptLimit) }
+        let uncertain = try await trip(of: second, services)
+        #expect(uncertain.failure == nil && !uncertain.inTransit && uncertain != .delivered)
+        #expect(row(services)?.label == "送达未确认")
+        #expect(row(services)?.isRunning == false)
+        #expect(Speech.undelivered(try await store.deliveryRequests(), at: services.speech) == 0)
+        await workspace.resend(.request(second), restoringInto: services.settings.replyDraftBinding(for: target.id)).value
+        #expect(workspace.notice?.isError == true)
+        await workspace.sayAgain(.request(second), restoringInto: services.settings.replyDraftBinding(for: target.id)).value
+        #expect(try await store.deliveryRequest(second.id) != nil)
+        #expect(try await store.deliveryRequests(toSession: target.sessionID).count == 3)
+        try await cloud.macAnswers(second.id)
+        await services.syncNow()
+        try await eventually("迟到的原回执收敛") { try await trip(of: second, services) == .delivered }
     }
 
     /// 断网时说的话（对 Cue、对会话）排在本机，一直是发送中：不判没能送达、不说 Mac 迟迟没收下、不说 Cue 在睡觉。断网超过手机主动拉取的
@@ -200,6 +211,7 @@ struct ReceiptTests {
         let app = TestApp(timing: clock.timing)
         let services = app.services!
         let store = services.store
+        defer { services.cancelBackgroundWork() }
         func setSync(_ status: SyncStatus) async throws {
             app.sync.emit(SyncState(status: status, issues: []))
             try await eventually("同步状态 \(status)") { services.syncStatus == status }
@@ -251,8 +263,49 @@ struct ReceiptTests {
         clock.advance(.seconds(Speech.sendLimit - 1))
         #expect(try await trips() == [.sending, .sending])
         #expect(try await presence(services) == .sending(.sending))
-        // 同步通着满时限仍没传上去：这才没能送达
+        // 同步通着也不能凭缺少上传回执断言未交出。
         clock.advance(.seconds(1))
-        try await eventually("恢复后满时限没发出") { try await trips() == [.failed(.unsent), .failed(.unsent)] }
+        let since = try #require(services.speech.reachableSince)
+        try await eventually("发送等待到点") { services.speech.now >= since.addingTimeInterval(Speech.sendLimit) }
+        for trip in try await trips() {
+            #expect(trip.failure == nil && !trip.inTransit && trip != .delivered)
+        }
+        #expect(Speech.undelivered(try await store.deliveryRequests(), at: services.speech) == 0)
+        await workspace.resend(.cue(toCue, host: "mac-cue"), restoringInto: Bindable(workspace.cue).draft).value
+        #expect(workspace.notice?.isError == true)
+        #expect(try await store.cueMessages().contains { $0.id == toCue.id })
+        await workspace.sayAgain(.cue(toCue, host: "mac-cue"), restoringInto: Bindable(workspace.cue).draft).value
+        #expect(try await store.cueMessages().contains { $0.id == toCue.id })
     }
+
+    @Test(arguments: ["future-outcome", "unconfirmed"])
+    func 不认识或缺原因的未确认状态不冒充失败_显式再说保留原请求(status: String) async throws {
+        let cloud = WeakCloud()
+        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
+        let services = app.services!, workspace = Workspace(services: app.services)
+        defer { services.cancelBackgroundWork() }
+        let target = try await session(in: services.store)
+        services.startSync()
+        services.startLiveSessions()
+        try await eventually("同步通了") { services.syncStatus == .idle && services.syncReconciled }
+        let request = try await sayToSession(workspace, target, "继续一次检查")
+        try await eventually("服务器收下请求") { await cloud.holds(request.id) }
+        try await cloud.macAnswers(request.id, status: status)
+        await services.syncNow()
+        let current = try #require(try await services.store.deliveryRequest(request.id))
+        #expect(current.status.rawValue == status)
+        let result = Said.request(current).trip(at: services.speech)
+        #expect(current.failure == nil)
+        #expect(result.failure == nil && !result.inTransit && result != .delivered)
+        #expect(result.unconfirmedReason?.contains("可能已经执行") == true)
+        #expect(result.unconfirmedReason?.contains("已交给 Agent") == false)
+        try await eventually("会话行收到未知状态") { row(services)?.label == "送达未确认" }
+        let box = services.settings.replyDraftBinding(for: target.id)
+        await workspace.resend(.request(current), restoringInto: box).value
+        #expect(workspace.notice?.isError == true)
+        await workspace.sayAgain(.request(current), restoringInto: box).value
+        #expect(try await services.store.deliveryRequest(request.id)?.status.rawValue == status)
+        #expect(try await services.store.deliveryRequests(toSession: target.sessionID).count == 2)
+    }
+
 }

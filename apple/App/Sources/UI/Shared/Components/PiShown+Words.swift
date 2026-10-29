@@ -74,6 +74,7 @@ nonisolated extension PiShown {
         case .asking: 0
         case .awaitsReply: 1
         case .failed, .delivery(.failed): 2
+        case .delivery(.inTransit(.unconfirmed)): 4
         case .working, .delivery, .cueAsking: 3
         case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 4
         case .ended: 5
@@ -86,6 +87,7 @@ nonisolated extension PiShown {
         case .asking, .awaitsReply: 6
         case .failed, .delivery(.failed): 5
         case .unread: 4
+        case .delivery(.inTransit(.unconfirmed)): 1
         case .working, .delivery, .cueAsking: 2
         case .idle, .resting, .fresh, .interrupted, .unknown: 1
         case .ended: 0

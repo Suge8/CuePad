@@ -1,4 +1,5 @@
 #if os(iOS) && DEBUG
+import CueStore
 import SwiftUI
 
 /// 视觉样板（`-CuePadScene style`）：颜色 token、纸与玻璃、各类按压、状态标与动效放在一页，改主题时对照，录屏取帧。
@@ -89,7 +90,7 @@ struct StyleBoard: View {
     }
 
     private static let statuses: [PiShown.Status] = [
-        .working(.thinking), .delivery(.inTransit(.sending)), .delivery(.inTransit(.waking)), .asking, .awaitsReply, .failed(.other), .delivery(.failed(.timedOut)),
+        .working(.thinking), .delivery(.inTransit(.sending)), .delivery(.inTransit(.waking)), .asking, .awaitsReply, .failed(.other), .delivery(.failed(.reported(DeliveryRequest.unexplainedFailure))),
         .cueAsking, .unread, .idle, .resting, .fresh, .ended, .interrupted, .unknown,
     ]
 

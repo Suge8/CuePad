@@ -65,7 +65,7 @@ extension CueTools {
       if let session = leaf.session {
         head += " · " + Self.sessionHead(session.session, now: now, left: left)
       } else {
-        head += leaf.sending ? " · 发送中（话正送进上一步的会话）" : " · 没有会话"
+        head += leaf.sending ? " · 前次投送尚未确认（可能已经执行，先核对，不要重复开工）" : " · 没有会话"
       }
       lines.append(head)
       if let session = leaf.session { lines += Self.subagentLines(session.session, now: now) }
