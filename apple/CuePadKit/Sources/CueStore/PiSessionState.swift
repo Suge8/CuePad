@@ -250,6 +250,12 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     return answeredAt >= turnStartedAt
   }
 
+  /// 已收到发出这句话之后开始的一轮的回答；ACK 的落库可能比回答更晚，不能因此继续遮住终态。
+  public func answered(since requestedAt: Date) -> Bool {
+    guard let turnStartedAt else { return false }
+    return turnStartedAt > requestedAt && answered
+  }
+
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
 

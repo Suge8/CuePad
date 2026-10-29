@@ -110,8 +110,8 @@ nonisolated enum PiDelivery: Hashable, Sendable {
             if session.state.isWorking && session.stateSince > request.createdAt { return nil }
             return .inTransit(.of(request, session: session, trip: trip))
         case .delivered:
-            // 等会话状态跟上（进入处理中，或在送达之后变过）就让位
             let caughtUp = session.state.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
+                || session.answered(since: request.createdAt)
             return caughtUp ? nil : .delivered
         case .failed(let failure):
             return (seen ?? .distantPast) > (Speech.failedAt(request, at: moment) ?? moment.now) ? nil : .failed(failure)
