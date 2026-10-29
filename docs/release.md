@@ -71,4 +71,4 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 这一节还有条目时 `release ios` 拒绝发版；部署完成并回读核对后删除对应条目。字段由 `ck-production.sh` 另行核对，订阅定义与外部服务需要下面的验收：
 
-- 实时活动：部署 `activityDestinations` 记录类型（`token` 为加密字段）；部署中转 `/v1/activity` 并配置只限本 App topic、production 环境的 APNs 密钥。先征得用户同意，不在本地验证时部署；用签名测试设备核对前台、后台、锁屏的 APNs 投递及令牌轮换，再发布两端。
+- 实时活动：部署 `activityDestinations` 记录类型（`token` 为加密字段）；部署中转 `/v1/activity` 并配置只限本 App topic、production 环境的 APNs 密钥。先征得用户同意，不在本地验证时部署；用签名测试设备核对前台、后台、锁屏的 APNs 投递及令牌轮换。先更新负责发布活动的 Mac，再更新 iPhone；新版手机不再用本地库更新远程活动，不能与旧版 Mac 配合验收实时更新。
