@@ -60,7 +60,7 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
 extension IOSAppDelegate: CueQuestionAnswering {
     func answerCueQuestion(_ message: UUID, _ choice: String) async throws {
         guard case .ready(let services) = launch else { throw LibraryClosed() }
-        try await services.answerCueQuestion(message, choice)
+        try await services.answerRemoteCueQuestion(message, choice)
     }
 
     private struct LibraryClosed: LocalizedError {
