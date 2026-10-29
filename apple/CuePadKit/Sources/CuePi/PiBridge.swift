@@ -56,6 +56,8 @@ public final class PiBridge {
 
     @ObservationIgnored let directory: URL
     @ObservationIgnored let hostedIdle: Duration
+    /// 显式结束正在等待的承载进程；让出后的接手重载不能干扰同一个结束请求。
+    @ObservationIgnored private(set) var ending: Set<PiSession.ID> = []
     @ObservationIgnored var links: [String: Link] = [:]       // socket 文件名（不含 .sock）→ 连接
     /// 在线会话的控制通道（Pi 的就是它的 `Link`）
     @ObservationIgnored var controls: [PiSession.ID: any SessionLink] = [:]
@@ -126,7 +128,15 @@ extension PiBridge {
     /// 拒收、带上原因，不排队。受理即返回，不代表模型成功。
     public func send(_ message: PiMessage, to id: PiSession.ID) async throws {
         let link = try control(id, needs: message.images.isEmpty ? [] : .images)
-        if let session = session(id: id), let why = session.capabilities.speakBlocked(in: session.state, agent: session.agent) {
+        guard let peer = session(id: id) else { throw PiBridgeError.sessionEnded }
+        if case .cue(let deliveryID, let turnStartedAt) = message.policy {
+            guard !peer.upgrading, peer.state != .ended, peer.state != .interrupted else { throw PiBridgeError.rejected("unconfirmed_turn") }
+            if peer.state.hasPendingWork {
+                guard let deliveryID, !deliveryID.isEmpty, let turnStartedAt, let current = peer.turnStartedAt else { throw PiBridgeError.rejected("unconfirmed_turn") }
+                guard turnStartedAt == current else { throw PiBridgeError.rejected("user_turn") }
+            }
+        }
+        if let why = peer.capabilities.speakBlocked(in: peer.state, agent: peer.agent) {
             throw PiBridgeError.rejected("failed: \(why)")
         }
         try await link.send(message, in: id)
@@ -146,12 +156,27 @@ extension PiBridge {
 
     /// 结束该会话并等它下线；`AgentTimeouts.end` 内没下线抛 `notEnded`。
     public func end(_ id: PiSession.ID) async throws {
+        guard let target = session(id: id) else { throw PiBridgeError.sessionEnded }
+        let ids = target.agent == .pi
+            ? sessions.filter { $0.agent == .pi && $0.sessionID == target.sessionID }.map(\.id) : [id]
+        ending.formUnion(ids)
+        defer { ending.subtract(ids) }
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for id in ids { group.addTask { try await self.endInstance(id) } }
+            try await group.waitForAll()
+        }
+    }
+
+    private func endInstance(_ id: PiSession.ID) async throws {
         let link = try control(id, needs: .end)
         let changes = changes()  // 先订阅再动手：下线的那一刻不会漏
         try await link.end(id)
         try await withDeadline(AgentTimeouts.end, orThrow: PiBridgeError.notEnded) {
             for await change in changes {
-                if case .ended(let ended, _) = change, ended.id == id { return }
+                if case .ended(let ended, let reason) = change, ended.id == id {
+                    if ended.agent == .pi, reason != .closed(reason: "quit") { throw PiBridgeError.notEnded }
+                    return
+                }
             }
             throw CancellationError()
         }

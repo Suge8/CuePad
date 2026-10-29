@@ -143,7 +143,10 @@ function handleSend(session: Session, command: Command, ack: Ack, reject: Reject
 		? text
 		: [{ type: "text" as const, text }, ...images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))];
 	const id = typeof command.deliveryId === "string" ? command.deliveryId : undefined;
-	session.startRound({ content, expand: false, text, id, ack });
+	const cueTurn = command.cueTurn;
+	if (cueTurn !== undefined && (typeof cueTurn !== "object" || cueTurn === null || Array.isArray(cueTurn)
+		|| ("deliveryId" in cueTurn && cueTurn.deliveryId !== null && typeof cueTurn.deliveryId !== "string"))) return reject("bad_request");
+	session.startRound({ content, expand: false, text, id, ack, cueTurn: cueTurn as { deliveryId?: string | null } | undefined });
 }
 
 /**
@@ -209,8 +212,10 @@ async function runBuiltin(session: Session, builtin: BuiltinCommand, args: strin
 			if (!ctx.sessionManager.getLeafId()) return "failed: nothing to clone";
 			session.runInternal("clone");
 			return;
-		case "new":
 		case "reload":
+			session.reload.request();
+			return;
+		case "new":
 			session.runInternal(builtin.name);
 			return;
 	}
@@ -233,16 +238,12 @@ function compact(session: Session, instructions: string): Promise<string | undef
 	});
 }
 
-/**
- * 结束会话：与用户在 Pi 里退出同一条路（`ctx.shutdown`——TUI 恢复终端并提示怎么恢复会话，退出时发 `bye quit`）。
- * 正在跑的一轮先中止、等你回答的弹窗先取消，否则 Pi 要等它们结束才会退出。RPC 模式只在读到下一条命令或这一轮结束时检查退出请求，
- * 所以后台托管的进程不走这里，由 CuePad 给它发 SIGTERM（`PiBridge.end`）。
- */
+/** 先回受理，再经命令上下文等真实空闲后按 mode 退出；ACK 不是结束完成。 */
 function handleEnd(session: Session, ack: Ack) {
 	ack({ ok: true });
-	session.asking?.dismiss?.();
-	if (!session.ctx.isIdle()) session.ctx.abort();
-	session.ctx.shutdown();
+	for (const said of session.pending.splice(0)) said.ack?.({ ok: false, error: "failed: session is ending" });
+	session.stopRound();
+	session.runInternal("end");
 }
 
 /** 停止这一轮（`stopRound`）；子代理落定后照常把结果投回来开始新的一轮。 */

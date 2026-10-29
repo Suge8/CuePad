@@ -93,10 +93,15 @@ public final class PiRuntime: AgentRuntime {
             launching: executable,
             overrides: paths.launchEnvironment.merging(environment) { $1 }.merging([Self.hostedVariable: String(idleLimit.components.seconds)]) { $1 })
         // 脱离 App：新会话、标准输入是它自己握着两端的管道（RPC 模式读到 EOF 就收尾，这样永远读不到）；认领前 App 只握着看守的那根；
-        // 标准输出丢掉（RPC 的事件与回应走桥），标准错误留着，没连上就退出时取最后一行当原因
+        // stdout 的 RPC 异步错误持续进入诊断；输出是普通文件，App 退出后 Pi 照常写。stderr 留启动失败原因。
+        let diagnostics = try PiHostDiagnostics()
         let process = try await ChildProcess(
             executable, ["--mode", "rpc"] + arguments, directory: directory, environment: environment,
-            placement: .detached, input: .lifeline)
+            placement: .detached, input: .lifeline, output: .file(diagnostics.descriptor))
+        Task {
+            _ = await process.exited(within: nil)
+            diagnostics.finish()
+        }
         let pid = process.pid
         let session: PiSession
         do {
@@ -134,7 +139,8 @@ public final class PiRuntime: AgentRuntime {
     /// 让出的托管会话退出了：接手的进程把会话重新载入到最新（让出前做完的那一轮它还没看到）。
     private func reloadSuccessor(of session: PiSession) {
         guard session.agent == .pi, session.hosted,
-              let successor = bridge.sessions.first(where: { $0.agent == .pi && $0.sessionID == session.sessionID && !$0.hosted }) else { return }
+              let successor = bridge.sessions.first(where: { $0.agent == .pi && $0.sessionID == session.sessionID && !$0.hosted }),
+              !bridge.ending.contains(successor.id) else { return }
         Task {
             do { try await bridge.reload(successor.id) } catch { Self.log.notice("让接手的会话重新载入失败：\(String(describing: error))") }
         }

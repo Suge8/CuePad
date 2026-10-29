@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
 import { clip, messageText, modelInfo, preview, type Question } from "./info.ts";
-import { omitFromContext, landed, stripFromRequest } from "./retry.ts";
+import { omitFromContext, landed, settleRetry, stripFromRequest } from "./retry.ts";
 import { claudeHeaderWindows, codexWindows, record } from "./quota.ts";
 import type { Session } from "./session.ts";
 
@@ -36,6 +36,7 @@ export function follow(session: Session): (() => void)[] {
 		pi.on("message_end", (event) => {
 			if (event.message.role === "assistant") {
 				const stop = event.message.stopReason;
+				tracker.finish(event.message);
 				return stop === "toolUse" || stop === "aborted" || stop === "error" ? draft.clear() : draft.grow(event.message, true);
 			}
 			if (event.message.role === "custom") return landed(session, event.message);
@@ -67,8 +68,8 @@ export function follow(session: Session): (() => void)[] {
 			tracker.stopped = false;
 			session.commit();
 			draft.clear();
-			// 还有话等着：这一轮（多半是上一句开的）先停下，让下一句开新一轮
-			if (pending.length > 0) session.stopRound();
+			// agent_start 早于当前用户消息写入投影；下一轮事件循环重新核对，不能拿上一轮的标识授权打断。
+			session.submitPending();
 		}),
 		pi.on("turn_start", (event) => {
 			session.turnSince = event.timestamp;
@@ -104,10 +105,7 @@ export function follow(session: Session): (() => void)[] {
 		// 这一轮收到过停止、或这一轮的中止信号已触发——按被停下报，不看错误文案
 		pi.on("agent_end", (event, context) => {
 			const last = event.messages.findLast((m) => m.role === "assistant");
-			const stopped = tracker.stopped || context.signal?.aborted === true;
-			if (last?.stopReason === "aborted" || (last?.stopReason === "error" && stopped)) tracker.outcome = { kind: "done" };
-			else if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
-			else if (last?.stopReason === "length") tracker.outcome = { kind: "error", error: "max_output_tokens" };
+			if (last) tracker.finish(last, context.signal?.aborted === true);
 		}),
 		// 订阅额度随每次回复带回来（零额外请求）：Claude 在响应头里，Codex 在流里的 codex.rate_limits 事件里
 		pi.on("after_provider_response", (event, context) => {
@@ -120,6 +118,7 @@ export function follow(session: Session): (() => void)[] {
 			session.observeQuota(event.provider, codexWindows(record(data.rate_limits), "primary", "secondary", "window_minutes", 60), true);
 		}),
 		pi.on("agent_settled", () => {
+			settleRetry(session);
 			// 还有话等着：被它停下的这一轮不算歇下，接着就是它开的那一轮（`submitPending`）
 			tracker.active = pending.length > 0;
 			tracker.tools.clear();
@@ -151,13 +150,19 @@ export class StateTracker {
 	active = false;
 	tools = new Map<string, { name: string; detail?: string }>();
 	prompt: { title?: string } | null = null;
-	/** agent_end 记录结果，agent_settled 才生效：重试/压缩/排队消息都可能在 agent_end 之后继续 */
+	/** 完成的助手消息记录结果（部分失败没有 agent_end），agent_settled 才生效。 */
 	outcome: State = { kind: "done" };
 	/** 这一轮收到过 CuePad 的停止（`abort` 命令） */
 	stopped = false;
 	settled: State | null = null;
 	/** session_before_compact 到 session_compact / session_compact_failed */
 	compacting = false;
+
+	finish(message: { stopReason: string; errorMessage?: string }, aborted = false) {
+		if (message.stopReason === "error" && !this.stopped && !aborted) this.outcome = { kind: "error", error: message.errorMessage ?? "unknown" };
+		else if (message.stopReason === "length") this.outcome = { kind: "error", error: "max_output_tokens" };
+		else this.outcome = { kind: "done" };
+	}
 
 	/** `inFlight`：在飞子代理数（FireCode 发布） */
 	derive(inFlight: number): State {

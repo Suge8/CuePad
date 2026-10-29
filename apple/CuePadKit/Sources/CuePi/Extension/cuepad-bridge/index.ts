@@ -17,7 +17,7 @@ import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
 import { trackShows, watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 43;
+const EXTENSION_VERSION = 44;
 
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
  * 与 FireCode 判断"会话进行中"用同一个事实 */
@@ -70,7 +70,11 @@ export default function (pi: ExtensionAPI) {
 				}
 				case "new": await command.newSession(); break;
 				case "reload-if-idle": await live?.session.reload.ifIdle(command); break;
-				case "reload": await command.reload(); break;
+				case "end":
+					await command.waitForIdle();
+					if (command.mode === "rpc") process.kill(process.pid, "SIGTERM");
+					else command.shutdown();
+					break;
 				case "clone": {
 					const leaf = command.sessionManager.getLeafId();
 					if (leaf) await command.fork(leaf, { position: "at" });
@@ -116,6 +120,9 @@ export default function (pi: ExtensionAPI) {
 		/** 会话关闭：拆掉它挂的一切——事件处理、计时、连接与 socket。 */
 		function close(why: string) {
 			for (const off of unsubscribe) off();
+			session.retrying = null;
+			session.starting = null;
+			session.pending.length = 0;
 			session.idleExit.cancel();
 			session.reload.close();
 			session.draft.cancel();

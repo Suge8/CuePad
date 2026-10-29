@@ -180,15 +180,23 @@ public struct PiImage: Sendable, Equatable {
     }
 }
 
+/// Cue 的发送只获准接管已确认属于它的那一轮；实际派发时重新核对，不把旧快照当打断许可。
+public enum PiSendPolicy: Sendable, Equatable {
+    case user
+    case cue(deliveryID: String?, turnStartedAt: Date?)
+}
+
 public struct PiMessage: Sendable, Equatable {
     public var text: String
     public var images: [PiImage]
     /// CuePad 投送请求的 id：扩展把它写进会话文件里这条消息（`cuepadDelivery`），对话据此认出是哪条请求送进来的（扩展 v12 起）
     public var deliveryID: String?
-    public init(text: String, images: [PiImage] = [], deliveryID: String? = nil) {
+    public var policy: PiSendPolicy
+    public init(text: String, images: [PiImage] = [], deliveryID: String? = nil, policy: PiSendPolicy = .user) {
         self.text = text
         self.images = images
         self.deliveryID = deliveryID
+        self.policy = policy
     }
 }
 
@@ -197,9 +205,11 @@ public enum PiBridgeError: Error, Equatable {
     case insecureSocketDirectory(String)
     case socketDirectoryTooLong
     case unknownSession(String)
-    /// 等 ack 时连接断了
+    /// 已交出后等 ack 时连接断了：结果未知，不是未接受的证明。
     case sessionEnded
+    /// 未及时观察到确认，可能已经执行；不能据此自动重投。
     case ackTimeout
+    /// `unconfirmed_turn` / `user_turn` 是提交前的 Cue 保护拒绝；`failed: …` 仍可能已执行，不承诺未接受。
     /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；斜杠命令还有 `unknown_command`（清单里没有的名字）、`missing_argument`（必填参数没给）；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
     /// `bad_answer`（答案类型或选项不对）；配置时还有 `no_auth`（该提供方没配好密钥）；重跑时还有 `nothing_to_retry`（会话在跑，或最后一轮不是出错结束的）
     case rejected(String)

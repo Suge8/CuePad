@@ -32,17 +32,8 @@ extension PiBridge {
 
         func reload() async throws { _ = try await request { try PiWire.bare("reload", id: $0) } }
 
-        /// 托管的 SIGTERM 请 Pi 收尾（扩展先发 bye），过了 `endGrace` 还在桥上（连接没断，pid 仍是它）就强杀；
-        /// 终端里开的经扩展走 Pi 的正常退出（终端恢复原样）。
-        func end(_: PiSession.ID) async throws {
-            guard let session else { throw PiBridgeError.sessionEnded }
-            guard session.hosted else { return _ = try await request { try PiWire.bare("end", id: $0) } }
-            kill(session.pid, SIGTERM)
-            Task { [weak self] in
-                try? await Task.sleep(for: AgentTimeouts.endGrace)
-                if self?.session?.pid == session.pid { kill(session.pid, SIGKILL) }
-            }
-        }
+        /// 退出方式由扩展按真实 mode 选择，不按 hosted 猜模式，也不对外部 PID 发信号。
+        func end(_: PiSession.ID) async throws { _ = try await request { try PiWire.bare("end", id: $0) } }
 
         func abort(_: PiSession.ID) async throws { _ = try await request { try PiWire.bare("abort", id: $0) } }
 
