@@ -6,4 +6,7 @@ nonisolated enum IslandType {
     static let countWidth: CGFloat = 32
     static let marker = Font.system(size: 12, weight: .semibold)
     static let markerWidth: CGFloat = 12
+    static let narrowSide: CGFloat = 28
+    static let narrowMarker: CGFloat = 9
+    static let narrowNumberHeight: CGFloat = 17
 }

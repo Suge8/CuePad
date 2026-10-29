@@ -15,7 +15,7 @@ Debug 认的启动参数只在 `DebugScene.swift`（及同目录 `DebugScene+*.s
 - iPhone 系统返回（返回钮、左缘滑动）只能真操作：另起 axe 点或滑（`axe swipe --start-x 5 … --duration 1 --delta 5`；从 x=1 起或滑得快，系统不认作边缘滑动），每步后 `axe describe-ui` 看左上那颗钮核对回到了哪。
 - 改了图标生成器先看 `-CuePadScene icons`（iPad）。模拟器桌面上加小组件脚本不做，看 `-CuePadScene widgets`。
 - 改了状态图形或 Cue 头像的各拍，看 `-CuePadScene stateicons`（会话状态、经过那一行、头像各拍四档，一屏放不下加 `-CuePadSheetEnd YES` 截底半）。换拍的软糖与小动作录 `-CuePadCueCycle YES`（走一圈 `CueNowSamples.tour`，`-CuePadCueCycleSeconds <秒>` 改每拍停多久，默认 2.6；停着的拍子每 15～20 秒才动一下，看小动作录 `-CuePadCueNow quiet` 一分钟）。
-- 灵动岛用 `xc.sh run ios -- -CuePadScene cue -CuePadCueNow busy -CuePadLiveActivity YES` 租到自己的模拟器，axe 按该 UDID 回桌面、截图、长按与锁屏；展开态按住时拍。`activity` 画面只预览共享视图，不证明系统宽度、状态栏或高度限制。分别在 iPhone 17 与 18 Pro/Pro Max 核对时间和电量；大数、未知数样例在 `CueActivitySamples`。
+- 灵动岛用 `xc.sh run ios -- -CuePadScene cue -CuePadCueNow busy -CuePadLiveActivity YES` 租到自己的模拟器，axe 按该 UDID 回桌面、截图、长按与锁屏；展开态按住时拍。`activity` 画面只预览共享视图，不证明系统宽度、状态栏或高度限制。分别在 iPhone 17 与 18 Pro/Pro Max 核对时间和电量；大数、未知数样例在 `CueActivitySamples`。双活动要用另一个调试身份的隔离合成活动：同一 App 的多个活动仍会合成一个紧凑展示，不能证明最小态或系统窄位。
 - 系统岛的轮播验收加 `-CuePadCueCycle YES -CuePadCueCycleSeconds 6`，由本地演示更新系统活动；录屏仍经 `xc.sh rec`。这是状态变化的过渡，不是常驻循环。模拟器回桌面或打开通知中心后也可能挂起演示 App，轮播会停；只以实际变更的帧为证，不用录制请求时长推算帧率。App 的 `-CuePadReduceMotion` 与语言参数不传进 Widget 进程：系统岛需在租到的模拟器设置对应语言、减少动态效果后验收，结束还原。
 - 录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …`；铺成一张图：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`。裁图、缩放用 `sips`（本机没装 ImageMagick）。
 - 验收用户装着的版本前，核对 `~/Applications/CuePad.app` 的 `CFBundleVersion` 与 `~/.pi/agent/extensions/cuepad-bridge/index.ts` 的 `EXTENSION_VERSION` 就是要验的那一版（只读）。

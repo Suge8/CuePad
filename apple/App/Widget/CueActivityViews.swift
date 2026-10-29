@@ -3,7 +3,8 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// 紧凑态只留 Cue、语义图形与一个读数：等你优先，否则活跃 Agent（不是任务数）；旧快照没有读数时写破折号，不猜。
+/// 常规紧凑态只留 Cue、语义图形与一个读数：等你优先，否则活跃 Agent（不是任务数）；旧快照没有读数时写破折号，不猜。
+/// 最小态与窄紧凑位用同一读数，28pt 圆内只留图形与至多 9+，不缩字号；完整数在展开态与读屏名称里。
 /// 展开与锁屏才显示完整读数、此刻那一步与必要明细。没有周期动画，内容更新时由系统做短过渡。
 /// 调试画面复用这些视图，但不能代替系统灵动岛的宽度与状态栏验收。
 struct CueActivityViews {
@@ -16,12 +17,9 @@ struct CueActivityViews {
     }
 
     var lockScreen: some View { LockScreen(now: now, stale: stale).withPalette().dynamicTypeSize(...Self.maxType) }
-    var compactLeading: some View { CueNowFace(now: now, size: 24, rim: .black).island() }
-    var compactTrailing: some View { CompactCount(now: now).island() }
-    var minimal: some View {
-        HStack { CueNowFace(now: now, size: 24, rim: .black) }
-            .accessibilityElement(children: .ignore).accessibilityLabel(ActivityCount(now).line).island()
-    }
+    var compactLeading: some View { CompactLeading(now: now).island() }
+    var compactTrailing: some View { CompactTrailing(now: now).island() }
+    var minimal: some View { CompactCount(now: now, narrow: true).island() }
     var expanded: some View {
         ActivityBody(now: now, rim: .black).padding(.horizontal, 6).padding(.bottom, 8).island()
     }
@@ -35,15 +33,16 @@ private extension View {
     func island() -> some View { withPalette().environment(\.colorScheme, .dark).dynamicTypeSize(...CueActivityViews.maxType) }
 }
 
-/// 显示口径与完整读屏名称共用；紧凑位最多三个字符，超过两位明确写 99+，完整数留在展开态。
+/// 所有尺寸共用口径与读屏名称；正常紧凑位写到 99+，28pt 圆位写到 9+，完整数留在展开态。
 private struct ActivityCount {
     let now: CueNow
     init(_ now: CueNow) { self.now = now }
     var waiting: Bool { now.needsYou > 0 }
     var value: Int? { waiting ? now.needsYou : now.agentCount }
-    var compact: String {
+    func digits(narrow: Bool) -> String {
         guard let value else { return "—" }
-        return value > 99 ? "99+" : value.formatted(.number.grouping(.never))
+        let limit = narrow ? 9 : 99
+        return value > limit ? "\(limit)+" : value.formatted(.number.grouping(.never))
     }
     var line: String {
         if waiting { return String(localized: "\(now.needsYou) 等你") }
@@ -53,25 +52,59 @@ private struct ActivityCount {
     var tone: CueNow.Tone { waiting ? (now.tally.asks > 0 ? .asks : .reply) : .moving }
 }
 
+/// 系统的窄紧凑位与最小态最多容纳 28pt 圆：主读数放在左位，右位让系统收掉。
+private struct CompactLeading: View {
+    let now: CueNow
+    @Environment(\.isDynamicIslandLimitedInWidth) private var narrow
+
+    var body: some View {
+        if narrow { CompactCount(now: now, narrow: true) }
+        else { CueNowFace(now: now, size: 24, rim: .black) }
+    }
+}
+
+private struct CompactTrailing: View {
+    let now: CueNow
+    @Environment(\.isDynamicIslandLimitedInWidth) private var narrow
+
+    var body: some View {
+        if !narrow { CompactCount(now: now) }
+    }
+}
+
 private struct CompactCount: View {
     let now: CueNow
+    var narrow = false
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
         let count = ActivityCount(now)
-        HStack(spacing: 4) {
-            (count.waiting ? WidgetIcon.waiting : .agent).image
-                .font(IslandType.marker).frame(width: IslandType.markerWidth)
-                .contentTransition(.opacity)
-            Text(count.compact).font(IslandType.count).monospacedDigit()
-                .contentTransition(dimmed ? .identity : reduceMotion ? .opacity : .numericText())
-                .animation(dimmed ? nil : Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: count.value)
-                .frame(width: IslandType.countWidth)
+        Group {
+            if narrow {
+                VStack(spacing: 0) {
+                    marker(count).resizable().scaledToFit().frame(width: IslandType.narrowMarker, height: IslandType.narrowMarker)
+                    number(count).frame(height: IslandType.narrowNumberHeight)
+                }
+                .frame(width: IslandType.narrowSide, height: IslandType.narrowSide)
+            } else {
+                HStack(spacing: 4) {
+                    marker(count).font(IslandType.marker).frame(width: IslandType.markerWidth)
+                    number(count).frame(width: IslandType.countWidth)
+                }
+            }
         }
         .foregroundStyle(count.tone.color(palette))
         .accessibilityElement(children: .ignore).accessibilityLabel(count.line)
+    }
+
+    private func marker(_ count: ActivityCount) -> Image { (count.waiting ? WidgetIcon.waiting : .agent).image }
+
+    private func number(_ count: ActivityCount) -> some View {
+        Text(count.digits(narrow: narrow)).font(IslandType.count).monospacedDigit()
+            .contentTransition(dimmed ? .identity : reduceMotion ? .opacity : .numericText())
+            .animation(dimmed ? nil : Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: count.value)
     }
 }
 
@@ -178,7 +211,7 @@ private struct FirstWait: View {
             if let allow = wait.allow {
                 Button(intent: AllowOnceIntent(allow)) {
                     Text("允许一次").font(.footnote.weight(.semibold)).foregroundStyle(palette.onFill)
-                        .padding(.horizontal, 12).frame(minHeight: 36).background(palette.signatureFill, in: .capsule)
+                        .padding(.horizontal, 12).frame(minHeight: 44).background(palette.signatureFill, in: .capsule)
                 }
                 .buttonStyle(.plain).fixedSize()
             }
