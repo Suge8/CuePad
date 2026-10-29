@@ -100,7 +100,7 @@ export function follow(session: Session): (() => void)[] {
 			session.commit();
 		}),
 		pi.on("session_compact", finishCompaction),
-		pi.on("session_compact_failed", finishCompaction),
+		pi.on("session_compact_failed", (event) => session.finishCompaction(event.aborted ? undefined : event.errorMessage)),
 		// 被停下的一轮有时以 error 结束（Pi 1.2 在工具被中止后再请求模型、请求因中止失败时记成 error）：只认确定的事实——
 		// 这一轮收到过停止、或这一轮的中止信号已触发——按被停下报，不看错误文案
 		pi.on("agent_end", (event, context) => {

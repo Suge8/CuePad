@@ -92,9 +92,6 @@ export function listen(session: Session, directory: string): (reason: string) =>
 }
 
 
-/** 压缩命令受理后等多久：这段时间内失败算命令失败，之后只提示在 Pi 里 */
-const COMPACT_FAILURE_WINDOW_MS = 1500;
-
 /** CuePad 发来的一行命令：字段来自 JSON，类型没有保证，逐处校验后才用 */
 type Command = Record<string, unknown>;
 type Reject = (error: string) => void;
@@ -221,15 +218,13 @@ async function runBuiltin(session: Session, builtin: BuiltinCommand, args: strin
 	session.updateInfo({ ...await modelInfo(pi, ctx), ...contextInfo(ctx) });
 }
 
-/** 压缩不等完成就返回；开头一小段时间内的失败（没有可压缩的内容、没有模型）当作拒绝报给手机，之后的失败只能提示在 Pi 里。 */
+/** 只回一次真实压缩结果；超过桥的等待期限仍由公开压缩事件上报状态，不把未完成当成功。 */
 function compact(session: Session, instructions: string): Promise<string | undefined> {
 	return new Promise((resolve) => {
-		const early = setTimeout(() => resolve(undefined), COMPACT_FAILURE_WINDOW_MS);
 		session.ctx.compact({
 			customInstructions: instructions || undefined,
-			onComplete: () => { clearTimeout(early); resolve(undefined); },
+			onComplete: () => resolve(undefined),
 			onError: (error: Error) => {
-				clearTimeout(early);
 				session.ctx.ui.notify(`压缩失败：${error.message}`, "error");
 				resolve(`failed: ${error.message}`);
 			},

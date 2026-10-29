@@ -277,9 +277,13 @@ export class Session {
 		this.ctx.abort();
 	}
 
-	// 压缩前就失败（没有可压缩的内容、没有模型）时只有 session_compact_failed，那时什么都没变
-	finishCompaction() {
-		if (!this.tracker.compacting) return;
+	// 失败也可能早于 session_before_compact；自动压缩的结果留到真正 settled，取消不改写原结果。
+	finishCompaction(error?: string) {
+		if (error) this.tracker.settled = this.tracker.outcome = { kind: "error", error };
+		if (!this.tracker.compacting) {
+			if (error) this.commit();
+			return;
+		}
 		const resume = this.beforeCompaction ?? undefined;
 		this.beforeCompaction = null;
 		this.tracker.compacting = false;
