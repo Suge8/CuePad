@@ -51,11 +51,9 @@ extension CueStore {
     }
   }
 
-  /// `deliveries`（会话消息的 `PiChatMessage.deliveryID`）里哪些是 Cue 说的：按发送记录认，送出它的请求清理了也认得出。
+  /// 统一来源分类里有 Cue 正证据的投送；请求先到、发送记录先到或请求已清理都按同一条规则。
   public func cueSentDeliveries(among deliveries: some Sequence<UUID>) throws -> Set<UUID> {
-    Set(try db.query(
-      "SELECT deliveryID FROM sendRecords WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND deliveryID IN (SELECT value FROM json_each(?))",
-      [Self.idList(deliveries)]) { $0.uuid(0) })
+    Set(try deliverySources(among: deliveries).compactMap { $0.value == .cue ? $0.key : nil })
   }
 
   /// 把灵感或任务关联到一个会话（没开始的任务进行中；完成了的不变：说话不改任务的状态），不写发送记录：
