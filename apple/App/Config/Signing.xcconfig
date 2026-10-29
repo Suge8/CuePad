@@ -13,7 +13,7 @@ CODE_SIGN_IDENTITY = -
 DEVELOPMENT_TEAM =
 
 // 门铃与实时活动中转的主机（唯一定义；协议与部署见 relay/README.md）：经 Info.plist 的 CuePadRelayHost 给 App 读，
-// 发布脚本打包前核对它活着（_signing.sh 的 check_relay）。房间由各自 iCloud 里的密钥派生，fork 用这台也与别人互不相干；换成自己架的就改这一行。
+// 发布脚本核对就绪（_signing.sh 的 check_relay）。门铃房间由各自 iCloud 密钥派生；APNs 绑定 App topic，fork 的实时活动需换成自己的中转与密钥。
 CUEPAD_RELAY_HOST = relay.cue-pad.com
 
 // 正式版标记（唯一定义）：release-mac.sh 归档时传 YES，经 macOS Info.plist 的 CuePadRelease 给运行期读（CuePadKit 的 AppIdentity.isRelease）；
