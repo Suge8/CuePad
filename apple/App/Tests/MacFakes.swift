@@ -35,6 +35,8 @@ final class RecordingHost: AgentRuntime {
     private(set) var extensions: [String: FakeExtension] = [:]
     /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
     var openFailure: String?
+    /// 宿主已创建后，开场消息被扩展明确拒绝。
+    var openingRejection: String?
     /// 接下来的几次唤醒依次以这些错误失败（如会话起得慢、没及时连上桥），用完照常唤醒
     var resumeFailures: [any Error] = []
     private let bridge: PiBridge
@@ -66,7 +68,15 @@ final class RecordingHost: AgentRuntime {
             directory: directory.path, launchToken: launchToken, name: name, model: model.map { "\($0.provider)/\($0.id)" }, thinking: thinking?.rawValue))
         if let openFailure { throw PiHostError.exited(openFailure) }
         let id = "new-\(launchToken)"
-        return try await connect(id, cwd: directory.path, sessionFile: sessions.appending(path: "--demo--/\(id).jsonl").path).id
+        let ext = try await connect(id, cwd: directory.path, sessionFile: sessions.appending(path: "--demo--/\(id).jsonl").path)
+        if let openingRejection {
+            let previous = ext.onCommand
+            ext.onCommand = { connection, command in
+                if command["t"] as? String == "send" { return ["ok": false, "error": openingRejection] }
+                return previous(connection, command)
+            }
+        }
+        return ext.id
     }
 
     /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；`hosted` 是 CuePad 在后台托管的；

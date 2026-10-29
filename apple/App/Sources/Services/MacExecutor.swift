@@ -246,7 +246,13 @@ final class MacExecutor {
             guard let session = pi.session(id: id) else {
                 return .unconfirmed(ShownText("会话已经启动，但连接已断开，不会自动再开一个"))
             }
-            return try await send(opening, of: request, to: session)
+            do {
+                return try await send(opening, of: request, to: session)
+            } catch {
+                // 已创建的会话不能因首句拒绝变成可安全重开；整个 start 意图保留未知。
+                AppServices.log.error("会话已创建，开场消息未确认 \(request.id, privacy: .public)：\(String(describing: error), privacy: .public)")
+                return .unconfirmed(ShownText(error))
+            }
         }
         return .succeeded
     }
