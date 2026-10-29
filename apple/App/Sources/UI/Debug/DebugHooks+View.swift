@@ -163,7 +163,7 @@ extension View {
                 async let away: Void = DebugScene.awayIfAsked(
                     workspace.services.store, leave: { workspace.show(.progress) }, back: { workspace.show(.cue) })
                 async let tour: Void = DebugScene.dockTourIfAsked(workspace)
-                async let cueNow: Void = DebugScene.cueNowTourIfAsked(workspace.cue)
+                async let cueNow: Void = DebugScene.cueNowTourIfAsked(workspace)
                 async let board: Void = DebugScene.boardTourIfAsked(workspace.services.store)
                 await DebugScene.cycleIfAsked(workspace.services)
                 _ = await (notices, wakes, blinks, says, relays, flow, away, tour, cueNow, board)

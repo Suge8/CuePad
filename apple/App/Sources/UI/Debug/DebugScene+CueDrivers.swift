@@ -2,6 +2,9 @@
 import CueStore
 import CueText
 import Foundation
+#if os(iOS)
+import UIKit
+#endif
 
 extension DebugScene {
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
@@ -217,13 +220,23 @@ extension DebugScene {
     static let cueCycleStep = 2.6
 
     /// `-CuePadCueCycle YES`：就绪后 Cue 此刻每 `cueCycleStep` 秒（`-CuePadCueCycleSeconds <秒>` 改，给得比软糖短就是每一下都被下一个值打断）换成下一份样例
-    /// （`CueNowSamples.tour`），页头、侧栏与实时活动的调试画面同一份一起变，录切换的动效。
-    static func cueNowTourIfAsked(_ cue: CueWatch) async {
+    /// （`CueNowSamples.tour`），页头、侧栏与实时活动预览同一份一起变。配 `-CuePadLiveActivity YES` 时也更新系统活动，
+    /// 用持续有活的样例录换态，避免后台无法重开；这是演示节奏，不是生产发布频率。
+    static func cueNowTourIfAsked(_ workspace: Workspace) async {
         guard defaults.bool(forKey: "CuePadCueCycle") else { return }
-        let samples = CueNowSamples.tour
+        let live = defaults.bool(forKey: "CuePadLiveActivity")
+        let samples = live ? CueActivitySamples.tour : CueNowSamples.tour
         let step = defaults.object(forKey: "CuePadCueCycleSeconds") == nil ? cueCycleStep : defaults.double(forKey: "CuePadCueCycleSeconds")
         for index in 0... {
-            cue.pin(samples[index % samples.count])
+            var now = samples[index % samples.count]
+            now.at = .now
+            workspace.cue.pin(now)
+            #if os(iOS)
+            if live {
+                await workspace.services.cueActivity?.show(
+                    CueActivityState(now: now, quotas: [CueActivityState.Quota]()), resend: false, foreground: UIApplication.shared.applicationState != .background)
+            }
+            #endif
             guard await Task.wait(for: .seconds(step)) else { return }
         }
     }

@@ -2935,18 +2935,18 @@
         }
       }
     },
-    "实时活动" : {
+    "实时活动样式预览" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Live Activity"
+            "value" : "Live Activity preview"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "实时活动"
+            "value" : "实时活动样式预览"
           }
         }
       }
@@ -5479,22 +5479,6 @@
         }
       }
     },
-    "最小（和别的实时活动同在）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Minimal (alongside other Live Activities)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最小（和别的实时活动同在）"
-          }
-        }
-      }
-    },
     "最终版浅色：定价页首屏" : {
       "localizations" : {
         "en" : {
@@ -5655,22 +5639,6 @@
         }
       }
     },
-    "横屏（窄紧凑态）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Landscape (narrow compact)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "横屏（窄紧凑态）"
-          }
-        }
-      }
-    },
     "横竖屏切换不跳动" : {
       "localizations" : {
         "en" : {
@@ -5827,22 +5795,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "汇报.pptx"
-          }
-        }
-      }
-    },
-    "没有在跑的活：实时活动已结束，灵动岛空出来" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nothing running: the Live Activity has ended and the Dynamic Island is clear"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有在跑的活：实时活动已结束，灵动岛空出来"
           }
         }
       }
@@ -8451,38 +8403,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重连过 · 位置没变"
-          }
-        }
-      }
-    },
-    "锁屏" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lock Screen"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "锁屏"
-          }
-        }
-      }
-    },
-    "长按灵动岛" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Long-press Dynamic Island"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "长按灵动岛"
           }
         }
       }

@@ -4,6 +4,7 @@ import SwiftUI
 /// （design/tools/cue-symbols.py 的 `WIDGET_SYMBOLS`）。意思与 `Icon` 里同名的一样，App 里画的 Debug 舞台读到的是 App 资源里的同一个符号。
 nonisolated enum WidgetIcon: String, Sendable {
     case waiting
+    case agent
     case done
 
     var image: Image { Image("cue.\(rawValue)") }

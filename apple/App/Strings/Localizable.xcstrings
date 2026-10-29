@@ -1454,6 +1454,34 @@
         }
       }
     },
+    "%lld 个活跃 Agent" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld active agent"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld active agents"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 个活跃 Agent"
+          }
+        }
+      }
+    },
     "%lld 个空文件夹" : {
       "localizations" : {
         "en" : {
@@ -2222,22 +2250,6 @@
 
       },
       "shouldTranslate" : false
-    },
-    "00小时00分钟" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "00 hr, 00 min"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "00小时00分钟"
-          }
-        }
-      }
     },
     "3D 模型" : {
       "localizations" : {
@@ -8683,22 +8695,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "名称"
-          }
-        }
-      }
-    },
-    "后重置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "until reset"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后重置"
           }
         }
       }
@@ -16991,6 +16987,22 @@
         }
       }
     },
+    "活跃 Agent 数未知" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Active agent count unknown"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "活跃 Agent 数未知"
+          }
+        }
+      }
+    },
     "浅色" : {
       "localizations" : {
         "en" : {
@@ -18231,34 +18243,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等 %lld 个 Agent 做完再装"
-          }
-        }
-      }
-    },
-    "等 %lld 个子代理" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Awaiting %lld subagent"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Awaiting %lld subagents"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等 %lld 个子代理"
           }
         }
       }

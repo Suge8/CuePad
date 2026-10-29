@@ -21,14 +21,11 @@ struct CueActivityWidget: Widget {
         } dynamicIsland: { context in
             let views = CueActivityViews(context.state, at: .now)
             return DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) { views.expandedLeading }
-                DynamicIslandExpandedRegion(.trailing) { views.expandedTrailing }
-                DynamicIslandExpandedRegion(.center) { views.expandedCenter }
-                DynamicIslandExpandedRegion(.bottom) { views.expandedBottom }
+                DynamicIslandExpandedRegion(.bottom) { views.expanded }
             } compactLeading: {
-                views.compactLeading()
+                views.compactLeading
             } compactTrailing: {
-                views.compactTrailing()
+                views.compactTrailing
             } minimal: {
                 views.minimal
             }
