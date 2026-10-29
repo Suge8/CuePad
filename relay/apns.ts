@@ -1,5 +1,5 @@
 // 一进程只服务一个 topic / 环境。连接与签名只在内存复用；不排队、不重试、不记录令牌或内容。
-import { createPrivateKey, sign, type KeyObject } from "node:crypto";
+import { createHash, createPrivateKey, sign, type KeyObject } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { connect, constants, sensitiveHeaders, type ClientHttp2Session, type ClientHttp2Stream } from "node:http2";
 
@@ -10,7 +10,7 @@ const MAX_RESPONSE_BYTES = 4096;
 
 type Environment = "production" | "development";
 type Configuration = { key: KeyObject; keyID: string; teamID: string; topic: string; environment: Environment };
-export type Push = { token: string; priority: 5 | 10; body: string };
+export type Push = { token: string; priority: 5 | 10; expiration: number; body: string };
 export type Result = { status: number; reason?: string; apnsStatus?: number };
 
 function configuration(): Configuration | undefined {
@@ -116,7 +116,8 @@ export class APNs {
           "apns-topic": this.config.topic,
           "apns-push-type": "liveactivity",
           "apns-priority": String(push.priority),
-          "apns-expiration": "0",
+          "apns-expiration": String(push.expiration),
+          "apns-collapse-id": createHash("sha256").update(push.token).digest("hex"),
           "content-type": "application/json",
           [sensitiveHeaders]: [":path", "authorization"],
         });

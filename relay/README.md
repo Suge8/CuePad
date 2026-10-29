@@ -103,6 +103,7 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
   "token": "活动推送令牌的十六进制字符串",
   "environment": "production",
   "priority": 5,
+  "expiration": 1793260800,
   "payload": {
     "aps": {
       "timestamp": 1793232000,
@@ -116,9 +117,12 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 
 - `environment` 只接受 `production` / `development`，且须与服务配置一致；`priority` 只接受 5 / 10。
 - `event` 只接受 `update` / `end`；`timestamp` 必填，`stale-date` / `dismissal-date` 可选，均为非负整数 Unix 秒。结束时仍需最终 `content-state`；立即移除锁屏活动可用 `dismissal-date: 0`。
+- `expiration` 必填，取该活动真实到期时刻（Mac 的 `ActivityDestination.expiresAt`），为非负整数 Unix 秒，须满足 `timestamp <= expiration <= timestamp + 8 小时`；不能每次发送都重新延长活动寿命。`update` / `end` 使用相同规则，`dismissal-date` 不改变推送到期时刻。
 - `content-state` 是不解释的 JSON 对象；只有外层的固定字段获准，不能传 `alert`、`start`、topic、目的 URL 或其它 APNs 字段。查询参数一律拒绝。
 - 请求总量最多 16 KiB；APNs payload 重编码后的 UTF-8 最多 4096 字节。令牌接受偶数位十六进制、最多 1024 字符，不假设固定令牌长度。不接受压缩请求。
-- APNs topic 由服务端固定，推送类型固定 `liveactivity`，`apns-expiration: 0`（APNs 不存储待送通知）。中转复用 HTTP/2 连接，ES256 JWT 按需每 50 分钟刷新；单次 APNs 请求最多 10 秒，最多 32 个在途请求，并服从 APNs 的连接并发限制。首份有效认证前只发一个请求；满额立即拒绝，不排队。断线或超时会关闭连接并清掉在途请求，之后的新请求重新建连，已失败的请求不自动重发。
+- APNs topic 由服务端固定，推送类型固定 `liveactivity`。`apns-expiration` 使用请求的活动到期时刻；`apns-collapse-id` 是规范化为小写十六进制的令牌字符串的 SHA-256（64 字符 hex），同一活动的更新与结束共享折叠标识，客户不能自定。
+- 手机暂时离线时，**APNs 可以暂存待送通知**，按折叠标识合并同一活动的更新，并尝试在到期前补送最新状态或结束事件；中转本身仍不存库、不排队、不重试。Apple 明确这是尽力服务，不保证严格保留最新一份、顺序、到期边界或最终送达；204 不能当作手机已经显示。
+- 中转复用 HTTP/2 连接，ES256 JWT 按需每 50 分钟刷新；单次 APNs 请求最多 10 秒，最多 32 个在途请求，并服从 APNs 的连接并发限制。首份有效认证前只发一个请求；满额立即拒绝，不排队。断线或超时会关闭连接并清掉在途请求，之后的新请求重新建连，已失败的请求不自动重发。
 
 成功返回 **204，只表示 APNs 已接受**，不保证手机收到或岛已经显示。错误返回 JSON `{"reason":"…"}`；APNs 响应错误另带原始 `apnsStatus`：
 
