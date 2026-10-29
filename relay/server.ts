@@ -11,12 +11,13 @@
 // 心跳用 WebSocket 协议层的 ping：设备每 10 秒一次；IDLE_TIMEOUT_S 内什么都没收到的连接（设备睡了、断网、被挂起）由中转断开，不留死连接。
 //
 // 环境变量：PORT（默认 8080）；HOST 是监听地址（默认所有地址，放在反向代理后面时给 127.0.0.1）；
-// CERT、KEY 是 PEM 证书与私钥路径，给了就直接提供 TLS，不给就是明文（放在 Caddy 等反向代理后面）。
+// CERT、KEY 是 PEM 证书与私钥路径，给了就直接提供 TLS；回环 Caddy 代理另设 TRUST_PROXY=loopback（来源与限频在 ingress.ts）。
 import { configuredAPNs } from "./apns";
 import { activity, MAX_REQUEST_BYTES } from "./activity";
+import { Ingress } from "./ingress";
 
+const ingress = new Ingress();
 const apns = configuredAPNs();
-const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 const PROTOCOL = "cuepad-relay-v1";
 const AUTH_TIMEOUT_MS = 10_000;
 const IDLE_TIMEOUT_S = 20;
@@ -49,14 +50,13 @@ const server = Bun.serve<Peer, never>({
       const headers = { "cache-control": "no-store", allow: "GET" };
       return new Response(null, { status: req.method === "GET" ? (apns ? 204 : 503) : 405, headers });
     }
-    if (path === "/v1/activity") {
-      // 只信任显式绑定回环地址、由本机 TLS 代理覆盖的协议头，不信任公网来客自报 HTTPS。
-      const secure = new URL(req.url).protocol === "https:" || (LOOPBACK.has(process.env.HOST ?? "")
-        && LOOPBACK.has(server.requestIP(req)?.address ?? "") && req.headers.get("x-forwarded-proto") === "https");
-      return activity(req, apns, secure);
-    }
     const room = path.match(ROOM)?.[1];
-    if (room && server.upgrade(req, { data: { room, nonce: base64url(crypto.getRandomValues(new Uint8Array(32))), authed: false } })) return;
+    if (path === "/v1/activity" || room) {
+      const admitted = ingress.admit(req, server.requestIP(req)?.address);
+      if (admitted instanceof Response) return admitted;
+      if (path === "/v1/activity") return activity(req, apns, admitted.secure);
+      if (room && server.upgrade(req, { data: { room, nonce: base64url(crypto.getRandomValues(new Uint8Array(32))), authed: false } })) return;
+    }
     return new Response("not found", { status: 404 });
   },
   websocket: {

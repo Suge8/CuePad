@@ -7,7 +7,7 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 
 门铃不带内容，资料仍从 iCloud 拉。可选的实时活动转发会让个人内容、计数与活动推送令牌瞬时经过中转内存；中转不落盘、不记录请求或响应内容，没有账户、令牌库或重试队列。
 
-门铃只看得到两样东西：房间号和签名。房间号是一把公钥，由你 iCloud 里的密钥派生；进房间要用这把密钥签名。没有密钥的人进不了你的房间，也按不了你的门铃。协议写在 `server.ts` 的头注释里。
+门铃认证只用房间号和签名。房间号是一把公钥，由你 iCloud 里的密钥派生；进房间要用这把密钥签名。没有密钥的人进不了你的房间，也按不了你的门铃。协议写在 `server.ts` 的头注释里。
 
 中转连不上时 CuePad 照常按节奏去 iCloud 拉，只是别的设备的改动要晚一两秒才到。
 
@@ -27,7 +27,7 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 
    ```bash
    useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin cuepad-relay
-   mkdir -p /opt/cuepad-relay && cp server.ts activity.ts apns.ts /opt/cuepad-relay/   # root 所有，服务只读
+   mkdir -p /opt/cuepad-relay && cp server.ts activity.ts apns.ts ingress.ts /opt/cuepad-relay/   # root 所有，服务只读
    ```
 
 4. 写 `/etc/systemd/system/cuepad-relay.service`，然后 `systemctl daemon-reload && systemctl enable --now cuepad-relay`：
@@ -42,7 +42,7 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
    User=cuepad-relay
    Group=cuepad-relay
    WorkingDirectory=/opt/cuepad-relay
-   Environment=HOST=127.0.0.1 PORT=8080
+   Environment=HOST=127.0.0.1 PORT=8080 TRUST_PROXY=loopback
    ExecStart=/usr/local/bin/bun server.ts
    Restart=always
    RestartSec=2
@@ -90,7 +90,21 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 
 不想装 Caddy 的，也可以让 Bun 自己提供 TLS（`CERT`、`KEY` 环境变量，见 `server.ts` 头注释），证书续期后要重启服务。
 
-日常维护：日志 `journalctl -u cuepad-relay`、`journalctl -u caddy`；升级中转就把三个 `.ts` 文件一起拷进 `/opt/cuepad-relay/` 再 `systemctl restart cuepad-relay`（设备几秒内自动重连）；升级 Bun 按第 2 步重装后同样重启。
+日常维护：日志 `journalctl -u cuepad-relay`、`journalctl -u caddy`；升级中转就把四个 `.ts` 文件一起拷进 `/opt/cuepad-relay/` 再 `systemctl restart cuepad-relay`（设备几秒内自动重连）；升级 Bun 按第 2 步重装后同样重启。
+
+## 入口限频
+
+Bun 内存里的一个入口令牌桶同时保护 `/v1/activity` 请求与 `/v1/<房间号>` WebSocket 握手，在读活动请求体、调用 APNs、分配 WebSocket 前计费；无效请求也计费，已建立连接的门铃帧不计费。两项健康检查不计费。
+
+- 每个来源 IP 共用 **每秒 10 次、突发 60 次**预算，连续补充，每次请求用一份；多台设备共用出口时共享预算。正常一台 Mac 每秒最多发布一份，留出多设备与重连余量。
+- 过限立即返回 **429**、`{"reason":"RateLimited"}`、整数秒 `Retry-After` 与 `Cache-Control: no-store`；不排队、不自动重试。`Retry-After` 向上取整、至少 1 秒，表示当前预算最早恢复时间，不预留名额。
+- 来源表最多 **16,384 项**。满表时拒绝新来源，不驱逐仍有预算债务的旧来源；已有来源继续按自己的预算处理。此时 `Retry-After` 指向最早可回收的槽位。
+- 表只保留 IP 和限频元数据，不保存业务内容、活动令牌或请求历史。使用单调时钟；最后一次获准请求后 **6 秒**预算已补满，拒绝请求不延长该时刻。按最后获准时间维护双向链表，每次请求至多回收最旧的一项，无扫描、排序、定时清扫或等待；单次表操作均摊 O(1)，空闲时不为删除过期项唤醒进程。表不落盘、不记 IP 日志，进程退出即丢弃。
+- 这是单进程、按来源 IP 的限制，不是全局配额或抗 DDoS 保证；重启会重置预算，分布式来源仍须网络层防护。限额固定在 `ingress.ts`，不提供运行期调参接口。
+
+默认只按 Bun socket 对端 IP 识别来源，忽略所有转发头；IPv6 规范化，IPv4-mapped IPv6 与对应 IPv4 共用预算。仅设 **`TRUST_PROXY=loopback`**、显式绑定回环 `HOST` 且未启用 Bun TLS 时信任回环代理。该模式要求 socket 对端是回环地址、`X-Forwarded-For` 是单个有效 IP、`X-Forwarded-Proto` 是 `http` 或 `https`；缺失、列表或非法值返回 400，不回退到别的头或来源。非法代理配置使启动失败。
+
+Caddy 使用默认 `reverse_proxy` 行为：丢弃外部客户端自报的转发头，再写入实际对端 IP 与协议；不要配置 `trusted_proxies` 或透传客户端的这些头。本机回环是信任边界，本机进程也能冒充代理，不把不可信进程放在中转宿主上。直接用 Bun TLS 时不设 `TRUST_PROXY`。
 
 ## 实时活动转发
 
@@ -131,7 +145,7 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 | 400 / 413 / 415 | 字段或环境错误 / 超限 / 非 JSON 或压缩请求 |
 | 405 / 426 | 非 POST / 未使用 HTTPS |
 | 410 | APNs `400 BadDeviceToken`、`400 DeviceTokenNotForTopic` 或 `410 Unregistered`；令牌对当前固定环境/topic 不可用，不表示它对所有环境/topic 永久失效 |
-| 429 | APNs 限频，保留 reason |
+| 429 | 入口限频 `RateLimited`（带 `Retry-After`），或 APNs 限频（保留 reason 与 `apnsStatus`） |
 | 503 | 未启用 `ActivityUnavailable`、满额 `APNsBusy`、本机不可用 `APNsUnavailable` 或 APNs 暂不可用 |
 | 504 | `APNsTimeout`；是否已被 APNs 接受未知 |
 | 502 | 其它 APNs 错误、断线或异常响应；保留可辨 reason，不自动重试 |
@@ -154,9 +168,9 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 
 在 Apple 后台创建 **topic-specific、只限一个 topic 和一个环境**的钥匙，不用 team-scoped 或跨环境旧钥匙。代码不能从 `.p8` 判断 Apple 侧权限，部署者须核实。每个进程只有一套配置；开发与生产分开部署。上游主机只从环境选 Apple 官方主机，没有自定义 host 开关。
 
-部署前先配置防火墙/反向代理限频、请求大小与超时限制，保护活动接口及门铃握手；32 个在途请求的限制不是限频。将私钥作为只读 secret 文件交服务（例如 systemd `LoadCredential`，`APNS_KEY_FILE` 指向该 credential），不要写进代码、镜像、环境变量值或日志；禁用 core dump（systemd `LimitCORE=0`），避免内存里的内容落盘。其余四项可放 systemd 环境配置。轮换或撤销钥匙后重启服务，清掉旧连接和签名。
+入口限频已由 Bun 统一执行，不需要定制 Caddy 插件；32 个 APNs 在途请求的限制另管并发，不代替限频。部署前仍须配置防火墙、反向代理请求大小与超时限制，避免慢连接与大请求在入口前耗尽资源。将私钥作为只读 secret 文件交服务（例如 systemd `LoadCredential`，`APNS_KEY_FILE` 指向该 credential），不要写进代码、镜像、环境变量值或日志；禁用 core dump（systemd `LimitCORE=0`），避免内存里的内容落盘。其余四项可放 systemd 环境配置。轮换或撤销钥匙后重启服务，清掉旧连接和签名。
 
-公网只开放 TLS 代理，不开放 Bun 明文端口。活动接口接受 Bun 自带 TLS；用 Caddy 时，Bun 必须显式绑定 `127.0.0.1` 或 `::1`，且只信任本机代理覆盖的 `X-Forwarded-Proto: https`。不能把该头当成外部客户端可自行声明的 HTTPS 凭据；本机回环是信任边界。代理不要记录 body、令牌或授权头，不要启用含请求内容的追踪。发布、写入 secret、发真实推送前先获得部署授权。
+公网只开放 TLS 代理，不开放 Bun 明文端口。活动接口接受 Bun 自带 TLS；用 Caddy 时按「入口限频」启用回环代理信任，同时校验来源与 HTTPS，不接受外部客户端自报的转发头。代理不要记录 body、令牌或授权头，不要启用含请求内容的追踪。发布、写入 secret、发真实推送前先获得部署授权。
 
 协议依据：[ActivityKit 推送](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications)、[APNs 请求](https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns)、[响应语义](https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns)、[钥匙与 JWT](https://developer.apple.com/documentation/usernotifications/establishing-a-token-based-connection-to-apns)。
 
