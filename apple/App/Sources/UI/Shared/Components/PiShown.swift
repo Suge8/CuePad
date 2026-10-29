@@ -69,6 +69,7 @@ nonisolated enum PiDelivery: Hashable, Sendable {
         case delivering
         /// 发给已结束的会话：Mac 先在后台唤醒它。
         case waking
+        case unconfirmed
 
         var label: String {
             switch self {
@@ -76,6 +77,7 @@ nonisolated enum PiDelivery: Hashable, Sendable {
             case .sent: String(localized: "已发出")
             case .delivering: String(localized: "送达中")
             case .waking: String(localized: "正在唤醒")
+            case .unconfirmed: String(localized: "送达未确认")
             }
         }
 
@@ -86,11 +88,13 @@ nonisolated enum PiDelivery: Hashable, Sendable {
             case .sent: String(localized: "你的话已发出")
             case .delivering: String(localized: "你的话送达中")
             case .waking: String(localized: "你的话正在唤醒")
+            case .unconfirmed: String(localized: "你的话送达未确认")
             }
         }
 
         /// `session` 是收话的会话；开新会话的请求没有。`trip` 是这条请求此刻到哪了（在路上的那两种）。
         static func of(_ request: DeliveryRequest, session: PiSessionState?, trip: Speech.Trip) -> Transit {
+            if request.status == .known(.unconfirmed) { return .unconfirmed }
             if session?.state == .known(.ended) { return .waking }
             if !request.isWithdrawable { return .delivering }
             return trip == .sent ? .sent : .sending
@@ -103,14 +107,15 @@ nonisolated enum PiDelivery: Hashable, Sendable {
     /// 在你看过这个会话（`seen`，本机最后一次看它）之前一直显示，会话之后动过也不算数。
     static func phase(of request: DeliveryRequest?, for session: PiSessionState, seen: Date? = nil, at moment: Speech.Moment) -> PiDelivery? {
         guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }
+        if request.mode == .known(.retry), request.status == .known(.unconfirmed) { return nil }
         let trip = Speech.trip(request, at: moment)
         switch trip {
         case .sending, .sent:
             // 发出之后才进入处理中，才算它在处理这句话；时间存到毫秒，同刻算作发出前就在跑（这句还没打断它）
-            if session.state.isWorking && session.stateSince > request.createdAt { return nil }
+            if session.runtimeState.isWorking && session.stateSince > request.createdAt { return nil }
             return .inTransit(.of(request, session: session, trip: trip))
         case .delivered:
-            let caughtUp = session.state.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
+            let caughtUp = session.runtimeState.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
                 || session.answered(since: request.createdAt)
             return caughtUp ? nil : .delivered
         case .failed(let failure):
@@ -136,7 +141,7 @@ nonisolated enum PiUnread {
     static func markedUnread(_ session: PiSessionState) -> Date { session.stateSince.addingTimeInterval(-0.001) }
 
     private static func isSettledReply(_ session: PiSessionState) -> Bool {
-        session.state == .known(.settled) && session.hasStarted
+        session.runtimeState == .known(.settled) && session.hasStarted
     }
 }
 
@@ -199,9 +204,9 @@ nonisolated extension PiShown {
         at moment: Speech.Moment
     ) {
         let cue = duty?.name
-        let own = PiClock.reading(session.state, stateSince: session.stateSince, busySince: session.busySince)
-        let busy = session.state.isWorking || session.state == .known(.waitingForUser)
-        let reported = Self.status(of: session.state, failure: session.failure?.known)
+        let own = PiClock.reading(session.runtimeState, stateSince: session.stateSince, busySince: session.busySince)
+        let busy = session.runtimeState.isWorking || session.runtimeState == .known(.waitingForUser)
+        let reported = Self.status(of: session.runtimeState, failure: session.failure?.known)
         let asked = session.waitsForCue(duty) ? Status.cueAsking : reported
         switch PiDelivery.phase(of: delivery, for: session, seen: seen, at: moment) {
         case .failed(let failure):
@@ -211,7 +216,7 @@ nonisolated extension PiShown {
             self.init(status: asked, note: note, clock: own, cue: cue)
         case let phase?:
             self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) }, cue: cue)
-        case nil where session.state == .known(.settled):
+        case nil where session.runtimeState == .known(.settled):
             let rest: Status = session.awaitsReply(duty) ? .awaitsReply : duty != nil ? .resting : unread ? .unread : .idle
             self.init(status: session.hasStarted ? rest : .fresh, clock: own, cue: cue)
         case nil:

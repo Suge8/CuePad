@@ -20,6 +20,10 @@ struct SessionDock: View {
         VStack(spacing: 8) {
             PiQuestionDock(session: session, deliveries: deliveries)
             PiFailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
+            if let end = deliveries.last(where: { $0.mode == .known(.end) }), let reason = end.unconfirmedReason,
+               session.state != .known(.ended) {
+                Callout(.unknown, text: String(localized: "结束结果尚未确认：\(reason)"), docked: true)
+            }
             if let failure = DeliveryRequest.shownEnd(in: deliveries, at: speech)?.failure, session.state != .known(.ended) {
                 Callout(.failed(.other), text: String(localized: "没能结束：\(failure.text)"), docked: true)
             }

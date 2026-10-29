@@ -17,6 +17,7 @@ struct SpeechBubble<Menu: View>: View {
     let look: BubbleLook
     /// 长按菜单（消息菜单）；给的是此刻到哪了。
     @ViewBuilder var menu: (Speech.Trip) -> Menu
+    @State private var confirmingAgain = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -27,11 +28,25 @@ struct SpeechBubble<Menu: View>: View {
         let trip = said.trip(at: services.speech), shown = bubble(trip)
         VStack(alignment: .trailing, spacing: look.statusSpacing) {
             UserBubble(stored: said.content, look: look, trip: shown, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
-            if case .failed(let undelivered) = shown { failedLine(undelivered).padding(.trailing, look.statusInset) }
+            if let reason = unconfirmedReason {
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(verbatim: reason)
+                    Button("再说一次…") { confirmingAgain = true }.buttonStyle(PressStyle(.inline))
+                }
+                .font(Typography.caption).foregroundStyle(palette.ink3).padding(.trailing, look.statusInset)
+            } else if case .failed(let undelivered) = shown { failedLine(undelivered).padding(.trailing, look.statusInset) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         // 会话页新到的淡入（Cue 页这一句挂在格子里面，过渡不播，由回复框那头的发出动画接上）
         .transition(.entry)
+        .dialog("再说一次？", isPresented: $confirmingAgain, message: "上一句可能已经执行，再说一次可能让 Agent 重复操作。原请求会保留。", buttons: [
+            DialogButton(title: "再说一次") { workspace.sayAgain(said, restoringInto: box) },
+        ])
+    }
+
+    private var unconfirmedReason: String? {
+        if case .request(let request) = said { return request.unconfirmedReason }
+        return nil
     }
 
     private func bubble(_ trip: Speech.Trip) -> BubbleTrip {

@@ -9,14 +9,45 @@ extension CueStore {
     _ content: String, to target: SendTarget, card: UUID? = nil, delivery: UUID? = nil, origin: Open<DeliveryOrigin>? = nil
   ) throws -> SendRecord {
     try write {
-      let now = Date.stamp
-      let record = SendRecord(
-        id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
-        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now, deliveryID: delivery, origin: origin)
-      try insert(record)
-      try registerAttachments(in: content)
-      if let card, target.kind == .known(.piSession), let session = target.ref { try linkCardInTransaction(card, toSession: session, at: now) }
+      if let delivery, let existing = try select(SendRecord.self, where: "deliveryID = ?", [delivery]).first { return existing }
+      let record = try insertSendRecord(content, to: target, card: card, delivery: delivery, origin: origin)
+      if let card, target.kind == .known(.piSession), let session = target.ref {
+        try linkCardInTransaction(card, toSession: session, at: Date.stamp)
+      }
       return record
+    }
+  }
+
+  /// 纯记账，不重放卡片绑定。历史回填与主动投送共用同一份发送记录。
+  @discardableResult
+  func insertSendRecord(
+    _ content: String, to target: SendTarget, card: UUID?, delivery: UUID?, origin: Open<DeliveryOrigin>?
+  ) throws -> SendRecord {
+    let now = Date.stamp
+    let record = SendRecord(
+      id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
+      targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now, deliveryID: delivery, origin: origin)
+    try insert(record)
+    try registerAttachments(in: content)
+    return record
+  }
+
+  /// 已受理内容的发送记录；主动关联另走 linkDeliveredCard，历史回填不带这个副作用。
+  public func recordDelivery(_ request: DeliveryRequest, content: String, to target: SendTarget) throws {
+    try write {
+      if try db.first("SELECT 1 FROM sendRecords WHERE deliveryID = ?", [request.id], { _ in true }) != nil { return }
+      try insertSendRecord(content, to: target, card: request.cardID, delivery: request.id, origin: request.origin)
+    }
+  }
+
+  /// 执行中的主动关联，不同于历史记账。请求写下后用户已经改绑或解绑的，不能被晚到的 ACK 抢回去。
+  public func linkDeliveredCard(_ request: DeliveryRequest, toSession session: String) throws {
+    guard let card = request.cardID else { return }
+    try write {
+      guard try find(DeliveryRequest.self, request.id)?.cardID == card,
+        try db.first("SELECT 1 FROM deliveryRequests r WHERE r.id = ? AND \(Self.latestHandoff("r"))", [request.id], { _ in true }) != nil
+      else { return }
+      try linkCardInTransaction(card, toSession: session, at: Date.stamp)
     }
   }
 
@@ -66,7 +97,7 @@ extension CueStore {
       guard let link = try link(of: task) else { throw CueStoreError.notFound }
       guard link.isTask else { throw CueStoreError.notATask }
       guard try homeLeaf(task) == task else { throw CueStoreError.notALeaf }
-      try forgetLaunches(of: task)
+      try forgetHandoffs(of: task)
       try linkCardInTransaction(task, toSession: sessionID, at: Date.stamp)
       try endUnusedSessions(of: task, cue: false)
     }
@@ -75,15 +106,15 @@ extension CueStore {
   /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常（没有别的任务绑着它就是没绑任务的会话）。
   public func unbindSession(from task: UUID) throws {
     try write {
-      try forgetLaunches(of: task)
+      try forgetHandoffs(of: task)
       try db.run("UPDATE cards SET piSessionID = NULL, modifiedAt = ? WHERE id = ? AND piSessionID IS NOT NULL", [Date.stamp, task])
     }
   }
 
-  /// 用户亲手绑定、解绑是之后的一次交给：指向这个任务的开新会话请求不再认领它（`claimLaunchedCards` 只认最近一次），
-  /// 否则那个会话的记录一写（或同步过来）就把它抢回去；它们也就不再算"正在开会话"（`launchingLeaves` 按请求带着的卡认）。
-  private func forgetLaunches(of task: UUID) throws {
-    try db.run("UPDATE deliveryRequests SET cardID = NULL, modifiedAt = ? WHERE cardID = ? AND mode = 'start'", [Date.stamp, task])
+  /// 用户亲手绑定、解绑后，旧请求不再有主动关联权限；迟到 ACK、会话认领与历史都不能抢回新绑定。
+  /// 不依赖发起设备与执行设备时钟一致。
+  private func forgetHandoffs(of task: UUID) throws {
+    try db.run("UPDATE deliveryRequests SET cardID = NULL, modifiedAt = ? WHERE cardID = ? AND mode IN ('start', 'send', 'command')", [Date.stamp, task])
   }
 
   /// 这个会话属于的叶子任务：正在用它的与以前用过它的（`formerSessionIDs`；没删除、没归档，含完成了的），先开始的在前；子任务带着上级。

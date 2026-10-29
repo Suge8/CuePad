@@ -25,13 +25,14 @@ nonisolated extension PiShown {
         case .fresh: String(localized: "新开的会话")
         case .ended: String(localized: "已结束")
         case .interrupted: String(localized: "被打断")
-        case .unknown: String(localized: "未知状态")
+        case .unknown: String(localized: "状态未确认")
         }
     }
 
     /// 只有一个状态标时它说的是什么（读屏标签、悬停提示、项目长按菜单的标题、任务上的会话状态）。
     var presence: String {
         switch status {
+        case .delivery(.inTransit(.unconfirmed)): String(localized: "送达未确认")
         case .delivery(.inTransit(.waking)): String(localized: "正在唤醒 Agent")
         case .delivery(.failed): String(localized: "没能送达 Agent")
         case .delivery: String(localized: "正在发给 Agent")
@@ -47,7 +48,7 @@ nonisolated extension PiShown {
         case .fresh: String(localized: "Agent 新会话")
         case .ended: String(localized: "Agent 会话已结束")
         case .interrupted: String(localized: "Agent 被打断")
-        case .unknown: String(localized: "Agent 状态未知")
+        case .unknown: String(localized: "Agent 状态尚未确认")
         }
     }
 
@@ -60,6 +61,7 @@ nonisolated extension PiShown {
     /// 在跑：工作中，或话在路上、已送达而会话还没跟上（没能送达的不算）——状态色、动效、排序与区头"N 个在跑"同一档。
     var isRunning: Bool {
         switch status {
+        case .delivery(.inTransit(.unconfirmed)): false
         case .working, .delivery(.inTransit), .delivery(.delivered): true
         default: false
         }

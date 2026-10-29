@@ -2,7 +2,11 @@ import CueText
 import Foundation
 
 public enum DeliveryStatus: String, Sendable, CaseIterable {
-  case pending, executing, succeeded, failed
+  case pending, executing
+  /// 已交出但无法确认；不再领取，只能由真实消息等正证据收敛。
+  case unconfirmed
+  case succeeded
+  case failed = "not_delivered"
 }
 
 extension DeliveryStatus {
@@ -15,7 +19,7 @@ extension DeliveryStatus {
 /// 投送请求的发送方式（唯一定义）。读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 你说的话（唯一一种）：会话歇着就以它开新一轮；在跑就先打断这一轮，再以它开新一轮（忙不忙以 Mac 执行时的会话为准，
-  /// 写请求时看到的状态可能已经过时）。没有排队：话要么进了对话，要么没送到、留在对话末尾等你重发或移除
+  /// 写请求时看到的状态可能已经过时）。没有排队：投送可能已送达、明确没交出，或交出后仍未确认；未确认不自动重发
   case send
   /// 回答会话正在等的弹窗；正文是 `PiAnswer`（见 `DeliveryRequest.answer`）
   case answer
@@ -30,7 +34,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 停止会话正在跑的这一轮（相当于在 Pi 里按 Esc：只停指挥官自己这一轮，子代理不动），会话回到等你下一句；
   /// 正文固定为 `stop`，不写发送记录
   case stop
-  /// 把会话出错的那一轮原样重跑一遍（`PiSessionState.canRetry`）：对话里不多一句话、也不发"继续"，只多出新的回答；正文固定为 `retry`，
+  /// 接着会话出错的那一轮重试（`PiSessionState.canRetry`）：不补发用户消息，也不发"继续"；正文固定为 `retry`，
   /// 不写发送记录。会话在跑或最后一轮不是出错结束的，扩展拒绝（`nothing_to_retry`）
   case retry
   /// 请 Mac 给项目绑定文件夹（或解除绑定）；正文是 `PiBind`（见 `DeliveryRequest.bind`），不写发送记录
@@ -69,7 +73,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var mode: Open<DeliveryMode>
   public var cardID: UUID?
   public var status: Open<DeliveryStatus>
-  /// 没送到的原因（各端按自己的语言显示，`ShownText`）；给人看的读 `failure`。
+  /// 失败或未确认的原因（各端按自己的语言显示，`ShownText`）；读 `failure` / `unconfirmedReason`。
   public var failureReason: ShownText?
   public var handledBy: String?
   public var createdAt: Date
@@ -86,26 +90,34 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   public var isFromCue: Bool { origin == .known(.cue) }
 
-  /// 还没有结果（等待执行或执行中）。
+  /// 还没有执行结果（等待执行或执行中）。
   public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
   /// 还没被 Mac 领取（仍是 pending）：撤得回。领取后它已交给 Agent。
-  public var isWithdrawable: Bool { status == .known(.pending) }
+  public var isWithdrawable: Bool { status == .known(.pending) && handledBy == nil }
 
   /// 没能送达的原因（这台设备的语言）；成功或还在路上是 nil。本机执行器写回的失败总带原因（`DeliveryOutcome.failed`），只有别的版本写来、
   /// 没带原因的记录（含本版本不认识的状态，它不是送达）落到 `unexplainedFailure`——失败说法只在这里兜底，界面与服务不再各写一句。
   public var failure: String? {
-    guard !isOpen, status != .known(.succeeded) else { return nil }
+    guard !isOpen, status != .known(.succeeded), status != .known(.unconfirmed) else { return nil }
     guard let reason = failureReason?.text, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
     return reason
   }
+
+  /// 已交出但缺少最终确认；不是未送达，不能据此撤回或自动重发。
+  public var unconfirmedReason: String? {
+    guard status == .known(.unconfirmed) else { return nil }
+    return failureReason?.text ?? String(localized: "已交给 Agent，送达尚未确认，不会自动重发")
+  }
+
+  static var interruptedReason: ShownText { ShownText("Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发") }
 
   public static var unexplainedFailure: String { String(localized: "Mac 没有说明原因") }
 
   /// 发给一个会话的请求（先发的在前）里此刻要显示的那次结束到哪了（`Speech`）：还在路上的，或没能结束、之后也没再发过别的；
   /// 结束成功或没请求过是 nil。
   public static func shownEnd(in requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
-    guard let end = requests.last(where: { $0.mode == .known(.end) }) else { return nil }
+    guard let end = requests.last(where: { $0.mode == .known(.end) }), end.status != .known(.unconfirmed) else { return nil }
     switch Speech.trip(end, at: moment) {
     case .sending: return .sending
     case .sent: return .sent
@@ -148,13 +160,11 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 执行一次的结果（`DeliveryExecutor` 的 handler 给）：成功、失败，或暂时没成——话还没交出去、过一会儿再试不会说两遍的错
-/// （会话正在起、还没连上桥，清单在 App 的执行器里）。暂时没成由 `DeliveryExecutor` 隔 `Speech.retryDelay` 再执行一次，
-/// 再不成就按失败写回；终态只由执行器写这一处。
+/// 执行一次的结果：明确成功、明确未交出，或已交出但无法确认。未知只能由真实消息等正证据收敛，不授权再次派发。
 public enum DeliveryOutcome: Sendable {
   case succeeded
   case failed(ShownText)
-  case transient(ShownText)
+  case unconfirmed(ShownText)
 }
 
 extension DeliveryRequest: Record {

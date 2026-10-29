@@ -94,27 +94,27 @@ extension CueStore {
       .max { $0.stateSince < $1.stateSince }
   }
 
-  /// 这些叶子里正在开新会话的：带着叶子的开新会话请求还在路上，或成功了、会话记录还没到（还没认领）。
-  /// 只认会被认领的那条（同 `claimLaunchedCards`）：它是带着这张卡的最近一次交给；之后又交给了别处，或亲手绑定、解绑作废了它（`forgetLaunches`），就不算。
+  /// 这些叶子里正在开新会话的：还在路上、已交出未确认，或成功了但会话记录还没到（还没认领）；未知不授权自动再开。
+  /// 只认会被认领的那条（同 `claimLaunchedCards`）：它是带着这张卡的最近一次交给；之后又交给了别处，或亲手绑定、解绑作废了它（`forgetHandoffs`），就不算。
   public func launchingLeaves(_ leaves: [UUID]) throws -> Set<UUID> {
     guard !leaves.isEmpty else { return [] }
     return Set(try db.query(
       """
       SELECT cardID FROM deliveryRequests
       WHERE cardID IN (SELECT value FROM json_each(?)) AND mode = '\(DeliveryMode.start.rawValue)'
-        AND status IN (\(DeliveryStatus.openSQL), '\(DeliveryStatus.succeeded.rawValue)')
+        AND status IN (\(DeliveryStatus.openSQL), '\(DeliveryStatus.unconfirmed.rawValue)', '\(DeliveryStatus.succeeded.rawValue)')
         AND \(Self.launchUnclaimed) AND \(Self.latestHandoff("deliveryRequests"))
       """, [Self.idList(leaves)]) { $0.uuid(0) })
   }
 
-  /// 这些叶子里话正在送进会话的：带着叶子、发给会话的话（送达时叶子绑上那个会话）还没有结果。
+  /// 这些叶子里话正在送进会话的：带着叶子、发给会话的话还在执行或已交出未确认；未知不授权自动再发。
   /// 接着用上一步的会话时，开工到话送到之间就是这样：还没绑上，看板与 peek 写"发送中"。
   func sendingLeaves(_ leaves: [UUID]) throws -> Set<UUID> {
     guard !leaves.isEmpty else { return [] }
     return Set(try db.query(
       """
       SELECT cardID FROM deliveryRequests
-      WHERE cardID IN (SELECT value FROM json_each(?)) AND mode = '\(DeliveryMode.send.rawValue)' AND status IN (\(DeliveryStatus.openSQL))
+      WHERE cardID IN (SELECT value FROM json_each(?)) AND mode = '\(DeliveryMode.send.rawValue)' AND status IN (\(DeliveryStatus.openSQL), '\(DeliveryStatus.unconfirmed.rawValue)')
       """, [Self.idList(leaves)]) { $0.uuid(0) })
   }
 

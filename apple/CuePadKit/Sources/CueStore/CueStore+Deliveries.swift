@@ -63,7 +63,7 @@ extension CueStore {
     try write { try requestControl(.stop, of: target, on: host, cue: cue) }
   }
 
-  /// 请 `host` 那台 Mac 把 `target` 会话出错的那一轮原样重跑一遍：方式是 `retry`；同样复用还在路上的那一条（连点只发一次）。
+  /// 请 `host` 那台 Mac 接着 `target` 会话出错的那一轮重试：方式是 `retry`；同样复用还在路上的那一条（连点只发一次）。
   public func requestRetry(of target: SendTarget, on host: String) throws -> DeliveryRequest {
     try write { try requestControl(.retry, of: target, on: host, cue: false) }
   }
@@ -191,7 +191,17 @@ extension CueStore {
       orderBy: "createdAt, rowid")
   }
 
-  /// 删掉一条请求（移除、重发没能送达的话）：这句收起的提问放回"等你"，它没说到会话那边。
+  /// 明确未交出的失败请求才允许用于重发或移除；按当前存储状态判定，不信界面上旧的失败快照。
+  public func withdrawFailedDelivery(_ id: UUID) throws -> Bool {
+    try write {
+      try db.run("DELETE FROM deliveryRequests WHERE id = ? AND status = '\(DeliveryStatus.failed.rawValue)'", [id])
+      guard db.changes > 0 else { return false }
+      try reopen(where: "setAsideBy = ?", [id])
+      return true
+    }
+  }
+
+  /// 显式清理记录，不授权重投；重发与移除气泡走 withdrawDelivery / withdrawFailedDelivery。
   public func deleteDelivery(_ id: UUID) throws {
     try write {
       try db.run("DELETE FROM deliveryRequests WHERE id = ?", [id])
@@ -199,11 +209,16 @@ extension CueStore {
     }
   }
 
-  /// 撤回一条还没被 Mac 领取的请求（`isWithdrawable`）；返回是否撤回了。与领取同一个条件（status = 'pending'），
-  /// 所以撤回与领取只有一个能成：已领取的（交给了 Pi）撤不回。这句收起的提问放回"等你"（同 `deleteDelivery`）。
-  public func withdrawDelivery(_ id: UUID) throws -> Bool {
+  /// 撤回只在执行它的本机能与领取原子互斥；跨设备只允许从未交给同步发送者的请求。
+  /// 已上传或正在上传的 pending 可能只是旧快照，删除成功也不能证明宿主尚未领取。这句收起的提问放回"等你"（同 `deleteDelivery`）。
+  public func withdrawDelivery(_ id: UUID, locallyOn host: String? = nil) throws -> Bool {
     try write {
-      try db.run("DELETE FROM deliveryRequests WHERE id = ? AND status = 'pending'", [id])
+      try db.run(
+        """
+        DELETE FROM deliveryRequests WHERE id = ?1 AND status = '\(DeliveryStatus.pending.rawValue)' AND handledBy IS NULL
+          AND (hostID = ?2 OR NOT EXISTS (
+            SELECT 1 FROM syncRecords WHERE recordName = ?1 AND (sentModifiedAt IS NOT NULL OR pushedModifiedAt IS NOT NULL)))
+        """, [id, host])
       guard db.changes > 0 else { return false }
       try reopen(where: "setAsideBy = ?", [id])
       return true

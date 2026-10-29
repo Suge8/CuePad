@@ -28,7 +28,8 @@ nonisolated enum MacDelivery {
     static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {
         guard session.canStop, let turnStart = session.busySince else { return false }
         return deliveries.contains { request in
-            request.mode == .known(.stop) && request.createdAt >= turnStart && Speech.trip(request, at: moment).failure == nil
+            request.mode == .known(.stop) && request.createdAt >= turnStart && request.status != .known(.unconfirmed)
+                && Speech.trip(request, at: moment).failure == nil
         }
     }
 

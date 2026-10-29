@@ -5,7 +5,7 @@ import Foundation
 /// Cue 页的话在路上，与 Cue 的说话工具都读这里。
 /// - 发送中：还没离开这台设备（服务器没收下过）。接收方就是本机时不经服务器，回执前一直是发送中。
 /// - 已发出：服务器收下了（或接收的 Mac 已领取），还没回执。这之后本机同步断开不改变它：话已经在服务器上，回执晚点回来而已。
-/// - 已送达：请求成功；Cue 消息有 `deliveredAt`。
+/// - 已送达：请求成功；Cue 消息有 `deliveredAt`。执行后未确认仍是已发出，不冒充未送达；界面可按请求的 `unconfirmedReason` 展示。
 /// - 没能送达：请求失败（原因读 `DeliveryRequest.failure`）；同步通着满 `sendLimit` 还没离开这台设备（`unsent`）；或已发出、同步通着满
 ///   `receiptLimit` 还没回执（`timedOut`）——Cue 消息没有 `deliveredAt`，请求还没被 Mac 领取（领取了在执行的不算超时，如唤醒已结束的会话）。
 ///   每句只看自己的证据：一次拉取或上传失败（全局同步状态一时不通）不让别的话变红，已发出的话更不受影响。超时只说这句话自己没送到，
@@ -49,13 +49,9 @@ public enum Speech {
   public static let receiptLimit: TimeInterval = 60
 
   /// Cue 的说话工具（say、answer）写下请求后等结果多久。这一轮停在这里等，所以比 `receiptLimit` 短得多：Cue 多半运行在会话所在的
-  /// 那台 Mac 上，本机执行与唤醒已结束的会话都在 1 秒内有结果，加上一次暂时性错误的重试（`retryDelay`）也在 10 秒内；
+  /// 那台 Mac 上，本机执行与唤醒已结束的会话通常在 1 秒内有结果；
   /// 跨 Mac 的往返大多几秒。取 20 秒覆盖这些；没交到 Cue 手上的失败不丢，写进它下一轮的变化并立即叫醒它（`CueChange.Kind.undelivered`）。
   public static let cueWait: TimeInterval = 20
-
-  /// Mac 执行器遇上暂时性错误（会话正在起、还没连上桥）后隔多久重试一次。假扩展与真实 Pi 起来后连上桥都在 0.3 秒内
-  /// （桥用 kqueue 盯 socket 目录），取 2 秒留出余量；执行器按先后一条条执行，等得再久会拖住后面的请求。
-  static let retryDelay: Duration = .seconds(2)
 
   // MARK: 规则
 
@@ -92,6 +88,7 @@ public enum Speech {
     switch request.status.known {
     case .pending: waiting(since: request.createdAt, reachedServer: request.reachedServer, host: request.hostID, at: moment)
     case .executing: moment.isLocal(request.hostID) ? .sending : .sent
+    case .unconfirmed: .sent
     case .succeeded: .delivered
     case .failed, nil: .failed(.reported(request.failure ?? DeliveryRequest.unexplainedFailure))
     }

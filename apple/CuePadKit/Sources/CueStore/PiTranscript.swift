@@ -89,13 +89,6 @@ extension CueStore {
   /// 在调用方的写事务里写对话与摘要（原样写会话文件的投影；"已结束的会话没有进行中的提问"在读出时定，见
   /// `PiSessionState.pendingPrompt`）。会话记录还不存在时只写消息。
   func applyTranscript(_ transcript: PiTranscript) throws {
-    // 你发出的话成了对话里的消息就是送到了，没送到的也一样：Agent 晚收下的那句以对话为准。
-    // 请求等这条消息上了服务器再收走（`markPushed`），这之前气泡由它接替（`PiChat.outgoing`）
-    try db.run(
-      """
-      UPDATE deliveryRequests SET status = '\(DeliveryStatus.succeeded.rawValue)', failure = NULL, completedAt = COALESCE(completedAt, ?2), modifiedAt = ?2
-      WHERE mode = '\(DeliveryMode.send.rawValue)' AND status != '\(DeliveryStatus.succeeded.rawValue)' AND id IN (SELECT value FROM json_each(?1))
-      """, [Self.idList(transcript.messages.compactMap(\.deliveryID)), Date.stamp])
     for message in transcript.messages {
       try registerAttachments(in: message.text)
       if try insert(message, ignoringExisting: true) { continue }
@@ -104,6 +97,7 @@ extension CueStore {
         "UPDATE piMessages SET text = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (text IS NOT ?1 OR tools IS NOT ?2)",
         [message.text, message.tools?.stored, Date.stamp, message.id])
     }
+    try reconcileDeliveries(in: transcript.messages, session: transcript.sessionID)
     let recap = transcript.recap
     try db.run(
       """
@@ -112,6 +106,40 @@ extension CueStore {
       """,
       [recap.lastPrompt, recap.lastReply, recap.pendingPrompt, recap.pendingTools?.stored, Date.stamp,
        PiSessionState.recordID(sessionID: transcript.sessionID), recap.answeredAt])
+  }
+
+  /// 真实消息与来源在同一事务收敛；请求原文是发送快照，不拿模型输出冒充投送确认。
+  /// 批量按现有主键与 deliveryID 索引查，不逐条读请求；补历史只记账，不绑定任务。
+  func reconcileDeliveries(in messages: [PiChatMessage], session: String) throws {
+    let ids = Set(messages.compactMap { message in
+      [.known(.user), .known(.machine)].contains(message.role) ? message.deliveryID : nil
+    })
+    guard !ids.isEmpty else { return }
+    let list = Self.idList(ids)
+    let requests = try select(
+      DeliveryRequest.self,
+      where: "id IN (SELECT value FROM json_each(?)) AND mode IN ('send', 'start')", [list])
+    let recorded = Set(try db.query(
+      "SELECT deliveryID FROM sendRecords WHERE deliveryID IN (SELECT value FROM json_each(?))", [list]) { $0.uuid(0) })
+    for request in requests where !recorded.contains(request.id) {
+      guard request.target.kind == .known(.piSession), request.mode == .known(.start) || request.target.ref == session else { continue }
+      let content = request.launch?.prompt ?? request.content
+      let target = SendTarget(kind: .piSession, name: request.target.name, ref: session)
+      try insertSendRecord(content, to: target, card: request.cardID, delivery: request.id, origin: request.origin)
+    }
+    try confirmDeliveries(among: ids, session: session)
+  }
+
+  /// 本机读历史或同步读到真实消息后，投送只向已送达收敛。先落消息，再在同一事务认账，不受请求／消息到达顺序影响。
+  func confirmDeliveries(among ids: Set<UUID>, session: String) throws {
+    guard !ids.isEmpty else { return }
+    // 消息上服务器之后才收走请求（markPushed）；这之前原气泡由该消息接替。
+    try db.run(
+      """
+      UPDATE deliveryRequests SET status = '\(DeliveryStatus.succeeded.rawValue)', failure = NULL, completedAt = ?2, modifiedAt = MAX(modifiedAt + 1, ?2)
+      WHERE mode IN ('send', 'start') AND status != '\(DeliveryStatus.succeeded.rawValue)' AND id IN (SELECT value FROM json_each(?1))
+        AND (targetRef = ?3 OR mode = 'start')
+      """, [Self.idList(ids), Date.stamp, session])
   }
 
   /// 删掉不再需要同步的对话：会话 `window` 内没有活动（按本机会话索引里会话文件的最后活动；索引里没有的按最后一条消息）、

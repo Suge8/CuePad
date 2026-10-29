@@ -151,6 +151,11 @@ struct ReceiptTests {
         try await eventually("会话行是已发出") { row(services)?.label == "已发出" }
         #expect(try await presence(services) == .sending(.sent))
 
+        // 手机还只看到 pending，Mac 也可能已经领取：上传过的旧快照不能靠删除来授权重发。
+        await workspace.resend(.request(first), restoringInto: services.settings.replyDraftBinding(for: target.id)).value
+        #expect(workspace.notice?.isError == true)
+        #expect(try await store.deliveryRequests(toSession: target.sessionID).map(\.id) == [first.id])
+
         // 弱网：一次拉取失败，同步状态连不上 iCloud；已发出的照旧
         await cloud.setDown(true)
         await services.syncNow()

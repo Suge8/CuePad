@@ -96,6 +96,7 @@ final class RecordingHost: AgentRuntime {
 /// 撑不过 App 重启的那几家（Claude Code、Codex 这类靠管道连着 App 的）托管会话的替身：经桥的 `attach` 上桥（各家接入就是这样上桥的），
 /// 状态由测试改，命令都受理不做事。
 final class PipedHostedAgent: AgentRuntime, SessionLink {
+    private(set) var messages: [PiMessage] = []
     private let bridge: PiBridge
     private let agent: AgentKind
 
@@ -125,7 +126,7 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
 
     func set(_ id: PiSession.ID, _ state: PiWorkState) { bridge.update(id) { $0.state = state } }
 
-    func send(_ message: PiMessage, in id: PiSession.ID) async throws {}
+    func send(_ message: PiMessage, in id: PiSession.ID) async throws { messages.append(message) }
     func command(_ line: String, in id: PiSession.ID) async throws {}
     func end(_ id: PiSession.ID) async throws {}
     func abort(_ id: PiSession.ID) async throws {}

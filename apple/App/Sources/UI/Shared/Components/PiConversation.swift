@@ -87,7 +87,7 @@ struct PiConversation: View {
     private var floating: CGFloat { ComposerMetrics.noticeClearance(textHeight: noticeText) }
 
     @ViewBuilder private var liveStatus: some View {
-        if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session).transition(.entry) }
+        if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty { LiveStatus(session: session).transition(.entry) }
     }
 }
 
@@ -118,9 +118,9 @@ struct SessionDraft: View {
                 }
             }
             ChatLiveSlot(spacing: PiConversation.spacing, floating: floating) {
-                if speaking || landed && session.state.known?.isTurnRunning == true {
-                    PiSubagentList(agents: session.subagents)
-                } else if session.state.isWorking || !session.subagents.isEmpty {
+                if speaking || landed && session.runtimeState.known?.isTurnRunning == true {
+                    PiSubagentList(agents: session.runtimeSubagents)
+                } else if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty {
                     LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
                 }
             }
@@ -202,9 +202,13 @@ extension ChatSegment {
     private func outgoing(_ request: DeliveryRequest) -> some View {
         let session = session, said = Said.request(request), box = services.settings.replyDraftBinding(for: session.id)
         return SpeechBubble(said: said, box: box, session: session, fromCue: request.isFromCue, look: .session) { trip in
-            MessageActions(
-                text: request.content, kind: .outgoing(failed: trip.failure != nil), session: session,
-                resend: { workspace.resend(said, restoringInto: box) }, remove: { workspace.remove(said) })
+            if request.status == .known(.unconfirmed) {
+                Button(MessageMenu.Item.copy.title, icon: MessageMenu.Item.copy.icon) { workspace.copy(request.content) }
+            } else {
+                MessageActions(
+                    text: request.content, kind: .outgoing(failed: trip.failure != nil), session: session,
+                    resend: { workspace.resend(said, restoringInto: box) }, remove: { workspace.remove(said) })
+            }
         }
     }
 }
@@ -312,7 +316,7 @@ struct PiQuestionDock: View {
     var deliveries: [DeliveryRequest] = []
 
     var body: some View {
-        if session.state == .known(.waitingForUser) {
+        if session.runtimeState == .known(.waitingForUser) {
             if let question = session.answerableQuestion {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
