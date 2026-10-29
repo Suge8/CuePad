@@ -12,6 +12,11 @@
 //
 // 环境变量：PORT（默认 8080）；HOST 是监听地址（默认所有地址，放在反向代理后面时给 127.0.0.1）；
 // CERT、KEY 是 PEM 证书与私钥路径，给了就直接提供 TLS，不给就是明文（放在 Caddy 等反向代理后面）。
+import { configuredAPNs } from "./apns";
+import { activity, MAX_REQUEST_BYTES } from "./activity";
+
+const apns = configuredAPNs();
+const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 const PROTOCOL = "cuepad-relay-v1";
 const AUTH_TIMEOUT_MS = 10_000;
 const IDLE_TIMEOUT_S = 20;
@@ -35,10 +40,17 @@ async function verified(room: string, nonce: string, signature: unknown): Promis
 const server = Bun.serve<Peer, never>({
   port: Number(process.env.PORT ?? 8080),
   hostname: process.env.HOST,
+  maxRequestBodySize: MAX_REQUEST_BYTES,
   tls: process.env.CERT ? { cert: Bun.file(process.env.CERT), key: Bun.file(process.env.KEY!) } : undefined,
   fetch(req, server) {
     const path = new URL(req.url).pathname;
     if (path === "/health") return new Response("ok");
+    if (path === "/v1/activity") {
+      // 只信任显式绑定回环地址、由本机 TLS 代理覆盖的协议头，不信任公网来客自报 HTTPS。
+      const secure = new URL(req.url).protocol === "https:" || (LOOPBACK.has(process.env.HOST ?? "")
+        && LOOPBACK.has(server.requestIP(req)?.address ?? "") && req.headers.get("x-forwarded-proto") === "https");
+      return activity(req, apns, secure);
+    }
     const room = path.match(ROOM)?.[1];
     if (room && server.upgrade(req, { data: { room, nonce: base64url(crypto.getRandomValues(new Uint8Array(32))), authed: false } })) return;
     return new Response("not found", { status: 404 });
@@ -75,3 +87,10 @@ const server = Bun.serve<Peer, never>({
 });
 
 console.log(`cuepad relay listening on ${server.port}${process.env.CERT ? " (tls)" : ""}`);
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    apns?.close();
+    server.stop(true);
+  });
+}
