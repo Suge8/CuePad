@@ -59,7 +59,17 @@ extension CueStore {
     let sessions = try runtimeProjection(db.query(
       "SELECT \(PiSessionState.selection) FROM piSessionStates WHERE \(PiWorkState.outsideSQL(PiWorkState.closed))"
     ) { PiSessionState(row: $0) })
-    return Set(sessions.compactMap(\.runtimeUntil)).sorted()
+    return Set(sessions.compactMap(\.runtimeUntil) + [try cueState()?.runtimeUntil].compactMap { $0 }).sorted()
+  }
+
+  func runtimeProjection(_ state: CueState) throws -> CueState {
+    var state = state
+    state.runtimeUntil = nil
+    guard let host = state.hostID, host == (try cueProfile()?.activeHost), let boot = state.bootID,
+      let presence = try runtimePresences()[host], presence.bootID == boot, presence.isOnline(at: timing.now()) else { return state }
+    expire(at: presence.onlineUntil)
+    state.runtimeUntil = presence.onlineUntil
+    return state
   }
 
   /// 每批只读一次 host 集合，O(S+H)；所有运行读取共用，不按会话逐条查在线状态。

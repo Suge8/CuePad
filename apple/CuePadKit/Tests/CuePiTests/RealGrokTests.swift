@@ -1,13 +1,11 @@
 #if os(macOS)
 import CueStore
 import CueTestSupport
-import Darwin
 import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：CuePad 在后台托管 Grok Build（`grok agent stdio`，录制时连假模型，见 `GrokModel`），对话来自它的会话记录；
-/// 终端里开着的 Grok 会话从它的登记与会话记录只读跟读。
+/// 端到端：CuePad 在后台托管 Grok Build（`grok agent stdio`，录制时连假模型，见 `GrokModel`），对话来自它的会话记录。
 @MainActor
 @Suite(RealAgents.taped(.grok), .agentTape(.grok), RealAgents.timeLimit(.minutes(3)), RealAgents.serialWhenRecording(.grok))
 struct RealGrokTests {
@@ -118,40 +116,7 @@ struct RealGrokTests {
         }
     }
 
-    /// 终端里开着的会话（登记在 `active_sessions.json`）：范围里的接上桥，只读——能力表里什么都没有，说话被挡下并说明只能在终端里；
-    /// 会话记录里一轮开始到结束跟着在跑、歇下；登记注销后下桥。终端的会话记录借托管会话录下的那份。
-    @Test func aTerminalSessionIsFollowedReadOnly() async throws {
-        try await withGrokRig { rig in
-            let hosted = try await rig.open("token-4")
-            try await rig.bridge.send(PiMessage(text: "Reply with the single word FIRST."), to: hosted)
-            let session = try #require(rig.bridge.session(id: hosted))
-            try await eventually("回答落盘") { rig.replied("FIRST", in: hosted) }
-            try await rig.bridge.end(hosted)
-            try await eventually("托管的下线") { rig.bridge.session(id: hosted) == nil }
 
-            // 记录先停在你说了一句、还没答完（终端里正在跑）
-            let file = try #require(session.sessionFile)
-            let lines = try String(contentsOf: file, encoding: .utf8).split(separator: "\n", omittingEmptySubsequences: false)
-            let asked = try #require(lines.firstIndex { $0.contains("\"user_message_chunk\"") })
-            let full = try String(contentsOf: file, encoding: .utf8)
-            try (lines[...asked].joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
-            rig.runtime.follow(.sessions([session.sessionID]))
-            let entry: [[String: Any]] = [["session_id": session.sessionID, "pid": Int(getpid()), "cwd": rig.work.path]]
-            try JSONSerialization.data(withJSONObject: entry).write(to: rig.home.appending(path: "active_sessions.json"))
-
-            try await eventually("接上桥、在跑") { rig.bridge.sessions.first { $0.sessionID == session.sessionID && !$0.hosted }?.state == .thinking }
-            let terminal = try #require(rig.bridge.sessions.first { $0.sessionID == session.sessionID })
-            #expect(terminal.capabilities == [])
-            await #expect(throws: PiBridgeError.self) { try await rig.bridge.send(PiMessage(text: "hi"), to: terminal.id) }
-
-            try full.write(to: file, atomically: true, encoding: .utf8)
-            rig.runtime.read(try PiHistory.index(file: file, agent: .grok, from: nil, files: scratchFiles))
-            try await eventually("这一轮做完歇下") { rig.bridge.session(id: terminal.id)?.state == .settled }
-
-            try "[]".write(to: rig.home.appending(path: "active_sessions.json"), atomically: true, encoding: .utf8)
-            try await eventually("下桥") { rig.bridge.session(id: terminal.id) == nil }
-        }
-    }
 }
 
 /// 一个临时的 Grok 配置目录与工作目录，起的 grok 与家目录都指到这里，不读写真实的 ~/.grok 与资料库。

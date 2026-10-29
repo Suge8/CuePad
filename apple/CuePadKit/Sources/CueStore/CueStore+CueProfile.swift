@@ -45,7 +45,7 @@ extension CueStore {
   }
 
   /// Cue 此刻在做什么；值班的 Mac 还没写过为 nil。
-  public func cueState() throws -> CueState? { try find(CueState.self, CueState.recordID) }
+  public func cueState() throws -> CueState? { try find(CueState.self, CueState.recordID).map { try runtimeProjection($0) } }
 
   /// Cue 在值班时的那一份（`CueDuty`：名字与留给你回的会话）；不在值班为 nil。值班按 `CueProfile.onDuty`（各端读同步来的设置、状态与它那台 Mac 的在线记录），
   /// 那台 Mac 的期限到了由订阅重读（`macOnline`），"等你 N"、会话显示与手机推送标志到点自己变。
@@ -115,19 +115,24 @@ extension CueStore {
   }
 
   /// 值班的 Mac 写下 Cue 此刻的样子（在做什么、这个班次的上下文），整行一次写；和库里一样就不写（不触发同步）。不在值班写歇着、没有上下文。
+  /// 只有真实报告提供宿主与 boot；缺少身份的写入保留原报告，但不签发当前运行证明。
   public func setCueState(
-    _ state: PiWorkState, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil
+    _ state: PiWorkState, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil,
+    hostID: String? = nil, bootID: String? = nil
   ) throws {
-    try write { try putCueState(state, detail: detail, step: step, round: round, context: context) }
+    try write { try putCueState(state, detail: detail, step: step, round: round, context: context, hostID: hostID, bootID: bootID) }
   }
 
-  func putCueState(_ state: PiWorkState, detail: String?, step: CueActivity.Touch?, round: UUID?, context: CueContext?) throws {
+  func putCueState(
+    _ state: PiWorkState, detail: String?, step: CueActivity.Touch?, round: UUID?, context: CueContext?, hostID: String?, bootID: String?
+  ) throws {
     let current = try cueState()
     let next = CueState(
-      state: .known(state), detail: detail, step: step, round: round, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
-    if let current, (current.state, current.detail, current.step, current.round, current.context) == (next.state, next.detail, next.step, next.round, next.context) {
+      state: .known(state), detail: detail, step: step, round: round, context: context, left: current?.left ?? [], modifiedAt: Date.stamp, hostID: hostID, bootID: bootID)
+    if let current, (current.state, current.detail, current.step, current.round, current.context) == (next.state, next.detail, next.step, next.round, next.context),
+      current.hostID == next.hostID, current.bootID == next.bootID {
       return
     }
-    try upsert(next, updating: ["state", "detail", "step", "modifiedAt", "round", "context"])
+    try upsert(next, updating: ["state", "detail", "step", "modifiedAt", "round", "context", "hostID", "bootID"])
   }
 }

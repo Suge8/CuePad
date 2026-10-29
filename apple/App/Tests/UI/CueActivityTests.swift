@@ -65,13 +65,13 @@ struct CueActivityTests {
             profile.hostID = "mac-cue"
             profile.enabledAt = .now
         }
-        try await store.recordMacPresence(host: "mac-cue") { true }
+        let cueRecorder = try await rig.runtimeRecorder(on: "mac-cue")
         cue = try await now()
         #expect(cue.ledger.isEmpty && cue.quietLine == "刚做完「发布 v1.4」" && cue.quietWord == "做完")
         #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).quietLine == CueNow.quiet)
 
         // Cue 自己开始想：手上没活也算有活，岛开着；过时之后只信慢的事实
-        try await store.setCueState(.thinking)
+        try await cueRecorder.updateCue(.thinking)
         cue = try await now()
         #expect(cue.isLive && cue.isBusy && cue.quietWord == "在想" && cue.staleAfter == CueNow.fastStale)
         #expect(cue.settled.unconfirmed && cue.settled.isLive && !cue.settled.hasConfirmedActivity)
@@ -80,7 +80,7 @@ struct CueActivityTests {
         let ship = try await store.createTask("推送并发新版", in: project.id)
         try await recorder.update(sessionID: "ship", state: .thinking, title: "ship")
         try await store.bindSession("ship", to: ship.id)
-        try await store.setCueState(.settled)
+        try await cueRecorder.updateCue(.settled)
         cue = try await now()
         #expect(cue.spoken == "1 件推进中" && cue.needsYou == 0)
     }
@@ -94,8 +94,8 @@ struct CueActivityTests {
             profile.hostID = "mac-cue"
             profile.enabledAt = clock.now
         }
-        try await store.recordMacPresence(host: "mac-cue") { true }
-        try await store.setCueState(.thinking)
+        let cueRecorder = try await app.runtimeRecorder(on: "mac-cue")
+        try await cueRecorder.updateCue(.thinking)
         await workspace.speak("检查部署结果", to: .cue).value
         let message = try #require(try await store.cueMessagesToDeliver().first)
         clock.advance(.seconds(Speech.sendLimit + Speech.receiptLimit + 1))
@@ -106,10 +106,10 @@ struct CueActivityTests {
         #expect(!uncertain.isBusy && uncertain.unconfirmed && uncertain.isLive && !uncertain.hasConfirmedActivity)
         #expect(try await store.cueMessagesToDeliver().map(\.id) == [message.id])
         try await store.markCueMessagesDelivered([message.id], at: clock.now)
-        try await store.setCueState(.tool, detail: "read · deploy.log")
+        try await cueRecorder.updateCue(.tool, detail: "read · deploy.log")
         let confirmed = try await now()
         #expect(confirmed.isBusy && confirmed.hasConfirmedActivity && !confirmed.unconfirmed)
-        try await store.setCueState(.settled)
+        try await cueRecorder.updateCue(.settled)
         #expect(try await !now().isLive)
     }
 

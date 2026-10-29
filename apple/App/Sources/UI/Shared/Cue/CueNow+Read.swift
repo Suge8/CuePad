@@ -13,7 +13,7 @@ nonisolated extension CueNow {
 
     init(_ digest: CueDigest, at moment: Speech.Moment, local: Local) {
         let presence = CuePresence.derive(digest, at: moment)
-        var runtime = RuntimeTimeline(digest, at: moment.now)
+        var runtime = RuntimeTimeline(digest, at: moment)
         let items = Self.limited(Self.items(digest, works: runtime.items, at: moment.now)).enumerated().map { index, item in
             var item = item
             item.slot = index

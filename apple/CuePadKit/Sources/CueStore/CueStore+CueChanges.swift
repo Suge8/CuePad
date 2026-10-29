@@ -84,12 +84,13 @@ extension CueStore {
       }.filter { $0 > now }.min()
   }
 
-  /// 会话停在的状态是一处变化时（歇下、被打断、等回答、出错）的那条变化；在跑、已结束为 nil。
+  /// 已写入的报告是一处变化时（歇下、被打断、等回答、出错）的事件；在跑、已结束为 nil。
+  /// 报告事件不替当前运行背书：presence 可以晚于新报告到，`session.runtimeState` 仍保留未确认。
   /// 歇下要等最后一轮的回答读到才算（`PiSessionState.answered`）：状态由 Agent 报，问答由 Mac 读会话文件写，两路先后不定
   /// （Claude Code 的轮末标记写在报歇下的钩子之后）。读到时收尾时刻一变，这一行盖上新序号，变化随之出现。
   private func sessionChange(_ session: PiSessionState, seq: Int, task: Card?, leaf: Card?) throws -> CueChange? {
     let (kind, detail): (CueChange.Kind?, String?) =
-      switch session.runtimeState.known {
+      switch session.state.known {
       case .settled where !session.answered: (nil, nil)
       case .settled, .interrupted: (.settled, nil)
       case .waitingForUser: (.waitingForUser, session.question?.text ?? session.detail)

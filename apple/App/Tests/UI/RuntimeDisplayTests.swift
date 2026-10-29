@@ -126,7 +126,7 @@ struct RuntimeDisplayTests {
             profile.hostID = "mac-b"
             profile.enabledAt = clock.now
         }
-        try await store.setCueState(.tool, detail: "read · Sources/Runtime/SharedRuntimeProjection.swift")
+        try await b.updateCue(.tool, detail: "read · Sources/Runtime/SharedRuntimeProjection.swift")
         let full = try await now()
         let quotas = (0..<4).map { index in
             CueActivityState.Quota(account: "订阅账户 user\(index)@example.com", windows: [

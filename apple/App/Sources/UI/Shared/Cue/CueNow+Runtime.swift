@@ -26,11 +26,11 @@ nonisolated struct RuntimeTimeline {
         var unknown = 0
         var agents = 0
         var held = 0
-        var pending = false
+        var pending = 0
         var sessionRefs: [Int] = []
 
         var kind: CueNow.Item.Kind {
-            if running > 0 || pending { return .running }
+            if running > 0 || pending > 0 { return .running }
             if delegating > 0 { return .delegating }
             return unknown > 0 ? .unconfirmed : .resting
         }
@@ -62,7 +62,7 @@ nonisolated struct RuntimeTimeline {
         var agents = 0
         var asks = 0
         var reply = 0
-        var pending = false
+        var pending = 0
         var visible: String?
         var unknown = 0
         var startedRunning: Date?
@@ -76,7 +76,7 @@ nonisolated struct RuntimeTimeline {
             delegating += other.delegating
             agents += other.agents
             unknown += other.unknown
-            pending = pending || other.pending
+            pending += other.pending
             expiredSessions += other.expiredSessions
             startedRunning = [startedRunning, other.startedRunning].compactMap { $0 }.min()
             startedDelegating = [startedDelegating, other.startedDelegating].compactMap { $0 }.min()
@@ -96,7 +96,8 @@ nonisolated struct RuntimeTimeline {
     var workSlots: [Int: Int] = [:]
     var shownIDs: [Int: String] = [:]
 
-    init(_ digest: CueDigest, at now: Date) {
+    init(_ digest: CueDigest, at moment: Speech.Moment) {
+        let now = moment.now
         let source = digest.tally
         tally = CueNow.Tally(asks: source.waiting.count, reply: source.replies.count)
         advancing = source.advancing.count
@@ -106,18 +107,25 @@ nonisolated struct RuntimeTimeline {
             let index = works.count
             owners[work.id] = index
             let states = work.sessions
-            let name: String, since: Date, pending: Bool
+            let name: String, since: Date, handoffs: [DeliveryRequest]
             switch work {
             case .task(let item):
                 name = item.task.title
                 since = states.map(\.stateSince).max() ?? item.leaves.map(\.since).min() ?? item.task.modifiedAt
-                pending = item.reaching
+                handoffs = item.leaves.flatMap(\.handoffs)
             case .session(let session):
                 name = session.title.isEmpty ? String(localized: "会话") : session.title
                 since = session.stateSince
-                pending = false
+                handoffs = []
             }
-            var entry = Work(id: work.id, name: name, since: since, pending: pending)
+            var entry = Work(id: work.id, name: name, since: since)
+            for request in handoffs {
+                let trip = Speech.trip(request, at: moment)
+                guard trip.inTransit else { entry.unknown += 1; continue }
+                entry.pending += 1
+                let due = min(Speech.deadline(request, at: moment) ?? now + CueNow.fastStale, now + CueNow.fastStale)
+                events[due, default: []].append(Removal(work: index, pending: 1, unknown: 1))
+            }
             for session in states {
                 let state = session.runtimeState
                 let running = state.isWorking && state != .known(.delegating) ? 1 : 0
@@ -143,9 +151,6 @@ nonisolated struct RuntimeTimeline {
                         work: index, running: running, delegating: delegating, agents: agents, unknown: 1,
                         startedRunning: runningSince, startedDelegating: delegatingSince, expiredSessions: added ? [ref] : []))
                 }
-            }
-            if entry.pending {
-                events[now + CueNow.fastStale, default: []].append(Removal(work: index, pending: true, unknown: 1))
             }
             works.append(entry)
         }
@@ -244,7 +249,7 @@ nonisolated struct RuntimeTimeline {
             works[index].delegating -= removal.delegating
             works[index].agents -= removal.agents
             works[index].held -= removal.asks + removal.reply
-            if removal.pending { works[index].pending = false }
+            works[index].pending -= removal.pending
             works[index].unknown += removal.unknown
             if removal.unknown > 0 {
                 works[index].runningSince = removal.afterRunning

@@ -100,6 +100,7 @@ DEFINE SCHEMA
         turnStartedAt INT64,
         answeredAt    INT64,
         failure       STRING,
+        bootID        STRING,
         models        ENCRYPTED STRING,
         commands      ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
@@ -262,6 +263,8 @@ DEFINE SCHEMA
         context       STRING,
         leftToYou     STRING,
         step          ENCRYPTED STRING,
+        hostID        STRING,
+        bootID        STRING,
         woke          STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
@@ -279,6 +282,7 @@ DEFINE SCHEMA
         hostID        STRING,
         onlineUntil   INT64,
         modifiedAt    INT64,
+        bootID        STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

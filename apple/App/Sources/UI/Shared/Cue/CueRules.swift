@@ -32,7 +32,8 @@ nonisolated enum CuePresence: Equatable, Sendable {
         if !digest.hostOnline && moment.reachableSince(digest.hostID) != nil { return .asleep }
         if let trip, trip.inTransit { return .sending(trip == .sent ? .sent : .sending) }
         if !digest.hostOnline { return .unconfirmed(String(localized: "状态未确认")) }
-        guard let state = digest.state, let work = state.state.known else { return .idle }
+        guard let state = digest.state else { return .idle }
+        guard let work = state.runtimeState.known else { return .unconfirmed(String(localized: "状态未确认")) }
         if work == .error { return .unreachable(state.detail ?? String(localized: "\(digest.name) 起不来了")) }
         return work.isWorking ? .working(work, detail: state.detail, step: state.step) : .idle
     }

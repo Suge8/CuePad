@@ -23,7 +23,7 @@ public actor PiStateRecorder {
 
   public nonisolated let store: CueStore
   public nonisolated let hostID: String
-  private let bootID: String?
+  let bootID: String?
   let minInterval: Duration
   let timing: Timing
   private var sessions: [String: Session] = [:]
