@@ -33,7 +33,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var cueUntil: Date? = nil
 
     enum CodingKeys: String, CodingKey {
-        case name = "n", cue = "c", tally = "t", advancing = "a", subagents = "s", items = "i", first = "f", at = "d", elsewhere = "e", decay = "x", unconfirmed = "u", cueUntil = "v"
+        case name, cue, tally, advancing, subagents, items, first, at, elsewhere
+        case decay = "x", unconfirmed = "u", cueUntil = "v"
     }
 
     enum Brain: Codable, Hashable, Sendable {
@@ -55,7 +56,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         /// 其中歇着、等它派出去的子代理交回的（`Item.Kind.delegating`）：头像那一拍读它（每件一行截过，读不全）。
         var delegating = 0
 
-        enum CodingKeys: String, CodingKey { case asks = "a", reply = "r", moving = "m", delegating = "d" }
+        enum CodingKeys: String, CodingKey { case asks, reply, moving, delegating }
 
         /// "等你 N"：拍板加待回复，这条规则只在这里（`CueNow.needsYou`）。
         var needsYou: Int { asks + reply }
@@ -89,7 +90,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         var subagents: Int
         var slot = 0
 
-        enum CodingKeys: String, CodingKey { case id, kind = "k", name = "n", since = "t", subagents = "s", slot = "p" }
+        enum CodingKeys: String, CodingKey { case id, kind, name, since, subagents
+            case slot = "p" }
 
         /// 到这一刻收掉：刚做完的只留 `doneWindow`，别的不按时刻收。
         var expiry: Date? { kind == .done ? since.addingTimeInterval(CueNow.doneWindow) : nil }
@@ -148,8 +150,11 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 随快照写进 App Group 的是两种各几件，小组件与实时活动只读不另算。
     var needsYou: Int { tally.needsYou }
 
+    /// 当前有确认的活动才可新建；未确认只能保留已有活动。
+    var hasConfirmedActivity: Bool { isBusy || needsYou > 0 || tally.moving > 0 }
+
     /// 未确认不等于全部完成；只有明确没有活（歇着与刚做完）时才允许现有生命周期收尾。
-    var isLive: Bool { isBusy || needsYou > 0 || tally.moving > 0 || unconfirmed }
+    var isLive: Bool { hasConfirmedActivity || unconfirmed }
 
     /// 这一份过多久不可信。
     var staleAfter: TimeInterval { isBusy ? Self.fastStale : Self.slowStale }
@@ -159,7 +164,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var settled: CueNow {
         guard isBusy else { return self }
         var now = self
-        now.cue = .away(String(localized: "未知状态"), failed: false)
+        now.cue = .away(String(localized: "状态未确认"), failed: false)
         now.unconfirmed = true
         return now
     }
@@ -259,7 +264,7 @@ nonisolated extension CueNow {
         case .working(let woke, let doing, _): doing ?? woke ?? Self.thinking
         case .idle:
             if unconfirmed {
-                String(localized: "未知状态")
+                String(localized: "状态未确认")
             } else if let done = justDone {
                 String(localized: "刚做完「\(done.name)」")
             } else if advancing > 0 {
@@ -328,7 +333,7 @@ nonisolated extension CueNow.Item.Kind {
         case .running: String(localized: "在跑")
         case .delegating: String(localized: "等子代理")
         case .resting: String(localized: "歇着")
-        case .unconfirmed: String(localized: "未知状态")
+        case .unconfirmed: String(localized: "状态未确认")
         case .done: String(localized: "做完")
         }
     }

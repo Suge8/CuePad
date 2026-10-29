@@ -30,18 +30,19 @@ struct RuntimeDisplayTests {
             CueNow(try await CueDigest.read(from: store), at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
         }
         let snapshot = try await now()
-        #expect(snapshot.subagents == 3 && snapshot.tally.moving == 3)
+        #expect(snapshot.subagents == 3 && snapshot.tally.moving == 3 && snapshot.hasConfirmedActivity)
         _ = app.relaunch()
         try await store.recordMacPresence(host: "mac-a", bootID: "test-boot") { true }
         #expect(try await now().tally.moving == 3)
 
         try await store.recordMacPresence(host: "mac-a", bootID: "test-boot") { false }
         let offline = try await now()
-        #expect(offline.subagents == 0 && offline.tally.moving == 0 && offline.advancing == 3 && offline.isLive)
+        #expect(offline.subagents == 0 && offline.tally.moving == 0 && offline.advancing == 3)
+        #expect(offline.isLive && !offline.hasConfirmedActivity)
         let board = try await TaskBoard.read(from: store)
         #expect(board.advancing.allSatisfy { workspace.shown($0.agent!).status == .unknown })
         #expect(snapshot.shown(at: snapshot.at + 601).tally.moving == 0)
-        #expect(snapshot.shown(at: snapshot.at + 601).isLive)
+        #expect(snapshot.shown(at: snapshot.at + 601).isLive && !snapshot.shown(at: snapshot.at + 601).hasConfirmedActivity)
 
         try await store.recordMacPresence(host: "mac-a", bootID: "new-system-boot") { true }
         try await store.writePiTranscript(PiTranscript(sessionID: "compacting", messages: [], recap: PiRecap(lastReply: "晚到的历史")))
@@ -50,7 +51,12 @@ struct RuntimeDisplayTests {
         #expect(try await !store.runtimeIsConfirmed(after, at: clock.now))
         #expect(try await now().tally.moving == 0)
         for id in tasks { #expect(try await store.card(id)?.status == .inProgress) }
-        #expect(try await store.piMessages(of: "working").map(\.text) == ["关机前的工作"])
+        let reports = try await store.piSessions(sessionIDs: ["working", "compacting", "delegating"])
+        #expect(reports["working"]?.state.state == .known(.thinking))
+        #expect(reports["delegating"]?.state.state == .known(.delegating))
+        for id in ["working", "compacting", "delegating"] {
+            #expect(try await store.piMessages(of: id).map(\.text) == ["关机前的工作"])
+        }
     }
 
     @Test func 多台Mac按各自期限失效_同件并行去重_续期贯通读取与完整信封() async throws {
@@ -134,6 +140,13 @@ struct RuntimeDisplayTests {
         #expect(full.items.count == 8 && bytes <= 4096)
         let decoded = try JSONDecoder().decode(CueActivityState.self, from: JSONEncoder().encode(content))
         #expect(decoded.now.shown(at: clock.now + 601).tally.moving == 0 && decoded.now.shown(at: clock.now + 601).isLive)
+        var expiration = reading.updates().makeAsyncIterator()
+        _ = try #require(try await expiration.next())
+        await clock.waitForSleeper()
+        clock.advance(.seconds(601))
+        let reread = try #require(try await expiration.next())
+        let timedOut = CueNow(reread.digest, at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
+        #expect(timedOut.tally.moving == 0 && timedOut.subagents == 0 && timedOut.unconfirmed && timedOut.isLive)
     }
 
     @Test func 同件事的拍板到期不遮住另一台仍在跑的会话_后续快照与即时读取相同() async throws {
@@ -161,6 +174,49 @@ struct RuntimeDisplayTests {
         let fresh = try await now()
         #expect(fresh.tally == afterA.tally && fresh.items.map(\.since) == afterA.items.map(\.since))
         #expect(afterA.shown(at: clock.now + 240).tally.moving == 0)
+    }
+
+    @Test func 同一会话绑两任务只数一次子代理_一件拍板及解除不漏另一件_到期归零() async throws {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing), workspace = Workspace(services: app.services), store = app.services.store
+        let first = try await workspace.createTask("第一件", in: Project.defaultID)
+        let sharedLeaf = try await store.createTask("共用会话", under: first.id)
+        let gateLeaf = try await store.createTask("发布确认", under: first.id)
+        let second = try await workspace.createTask("第二件", in: Project.defaultID)
+        let secondShared = try await store.createTask("共用会话", under: second.id)
+        let secondGate = try await store.createTask("另一处确认", under: second.id)
+        let recorder = try await app.runtimeRecorder(on: "worker", boot: "test-boot")
+        try await recorder.update(sessionID: "shared", state: .thinking, title: "共享会话", subagents: [
+            PiSubagentState(name: "builder", role: "工程师", phase: .known(.running)),
+        ])
+        try await store.bindSession("shared", to: sharedLeaf.id)
+        try await store.bindSession("shared", to: secondShared.id)
+        func now() async throws -> CueNow {
+            CueNow(try await CueDigest.read(from: store), at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
+        }
+        let both = try await now()
+        #expect(both.advancing == 2 && both.tally.moving == 2 && both.subagents == 1)
+        clock.advance(.seconds(240))
+        let gate = try await app.runtimeRecorder(on: "gate-host", boot: "test-boot")
+        let question = PiQuestion(promptID: "p", kind: .confirm, text: "发布吗？")
+        try await gate.update(sessionID: "gate", state: .waitingForUser, title: "发布确认", question: question)
+        try await store.bindSession("gate", to: gateLeaf.id)
+        let held = try await now()
+        #expect(held.advancing == 1 && held.subagents == 1)
+        try await gate.update(sessionID: "gate", state: .settled)
+        let released = try await now()
+        #expect(released.advancing == 2 && released.subagents == 1)
+        try await gate.update(sessionID: "other-gate", state: .waitingForUser, title: "另一处确认", question: question)
+        try await store.bindSession("other-gate", to: secondGate.id)
+        let otherHeld = try await now()
+        #expect(otherHeld.advancing == 1 && otherHeld.subagents == 1)
+        try await gate.update(sessionID: "other-gate", state: .settled)
+        #expect(try await now().subagents == 1)
+        try await gate.update(sessionID: "gate", state: .waitingForUser, question: question)
+        let snapshot = try await now()
+        #expect(snapshot.shown(at: clock.now + 360).subagents == 0)
+        #expect(snapshot.shown(at: clock.now + 600).advancing == 2 && snapshot.shown(at: clock.now + 600).subagents == 0)
+        #expect(snapshot.shown(at: clock.now + 600).isLive && !snapshot.shown(at: clock.now + 600).hasConfirmedActivity)
     }
 
     nonisolated private static func holdUI(until signal: DispatchSemaphore) -> Bool {

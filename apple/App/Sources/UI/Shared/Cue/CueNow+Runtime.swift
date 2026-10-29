@@ -27,6 +27,7 @@ nonisolated struct RuntimeTimeline {
         var agents = 0
         var held = 0
         var pending = false
+        var sessionRefs: [Int] = []
 
         var kind: CueNow.Item.Kind {
             if running > 0 || pending { return .running }
@@ -36,7 +37,6 @@ nonisolated struct RuntimeTimeline {
         var moving: Int { held == 0 && (kind == .running || kind == .delegating) ? 1 : 0 }
         var delegated: Int { held == 0 && kind == .delegating ? 1 : 0 }
         var advancing: Int { held == 0 ? 1 : 0 }
-        var subagents: Int { held == 0 ? agents : 0 }
 
         var item: CueNow.Item {
             let start = switch kind {
@@ -46,6 +46,13 @@ nonisolated struct RuntimeTimeline {
             }
             return CueNow.Item(id: id, kind: kind, name: name, since: start, subagents: kind == .delegating ? agents : 0)
         }
+    }
+
+    struct Session {
+        var agents: Int
+        /// held 只撤销那一件的引用，不能把共享会话的贡献固定给第一件。
+        var advancing = 0
+        var contribution: Int { advancing > 0 ? agents : 0 }
     }
 
     struct Removal {
@@ -62,6 +69,7 @@ nonisolated struct RuntimeTimeline {
         var startedDelegating: Date?
         var afterRunning: Date?
         var afterDelegating: Date?
+        var expiredSessions: [Int] = []
 
         mutating func merge(_ other: Removal) {
             running += other.running
@@ -69,12 +77,14 @@ nonisolated struct RuntimeTimeline {
             agents += other.agents
             unknown += other.unknown
             pending = pending || other.pending
+            expiredSessions += other.expiredSessions
             startedRunning = [startedRunning, other.startedRunning].compactMap { $0 }.min()
             startedDelegating = [startedDelegating, other.startedDelegating].compactMap { $0 }.min()
         }
     }
 
     var works: [Work] = []
+    var sessions: [Session] = []
     var events: [Date: [Removal]] = [:]
     var dates: ArraySlice<Date> = []
     var tally: CueNow.Tally
@@ -91,7 +101,7 @@ nonisolated struct RuntimeTimeline {
         tally = CueNow.Tally(asks: source.waiting.count, reply: source.replies.count)
         advancing = source.advancing.count
         subagents = 0
-        var owners: [String: Int] = [:]
+        var owners: [String: Int] = [:], sessionRefs: [String: Int] = [:]
         for work in source.works {
             let index = works.count
             owners[work.id] = index
@@ -113,6 +123,13 @@ nonisolated struct RuntimeTimeline {
                 let running = state.isWorking && state != .known(.delegating) ? 1 : 0
                 let delegating = state == .known(.delegating) ? 1 : 0
                 let agents = session.runtimeSubagents.count(where: \.isRunning)
+                let added = sessionRefs[session.sessionID] == nil
+                if added {
+                    sessionRefs[session.sessionID] = sessions.count
+                    sessions.append(Session(agents: agents))
+                }
+                let ref = sessionRefs[session.sessionID]!
+                entry.sessionRefs.append(ref)
                 entry.running += running
                 entry.delegating += delegating
                 entry.agents += agents
@@ -124,7 +141,7 @@ nonisolated struct RuntimeTimeline {
                     entry.delegatingSince = [entry.delegatingSince, delegatingSince].compactMap { $0 }.min()
                     events[due, default: []].append(Removal(
                         work: index, running: running, delegating: delegating, agents: agents, unknown: 1,
-                        startedRunning: runningSince, startedDelegating: delegatingSince))
+                        startedRunning: runningSince, startedDelegating: delegatingSince, expiredSessions: added ? [ref] : []))
                 }
             }
             if entry.pending {
@@ -153,9 +170,12 @@ nonisolated struct RuntimeTimeline {
         for work in works {
             tally.moving += work.moving
             tally.delegating += work.delegated
-            subagents += work.subagents
+            if work.held == 0 {
+                for ref in work.sessionRefs { sessions[ref].advancing += 1 }
+            }
             if work.unknown > 0 { unconfirmed = true }
         }
+        subagents = sessions.reduce(0) { $0 + $1.contribution }
         waiting = source.waiting.map { wait in
             let until: Date? = if case .session(let session, _) = wait { session.runtimeUntil } else { nil }
             return (until, CueNow.wait(wait, name: digest.name))
@@ -209,6 +229,11 @@ nonisolated struct RuntimeTimeline {
         for removal in removals {
             tally.asks -= removal.asks
             tally.reply -= removal.reply
+            for ref in removal.expiredSessions {
+                let before = sessions[ref].contribution
+                sessions[ref].agents = 0
+                subagents -= before
+            }
             if let id = removal.visible, let index = visible[id] {
                 items.append(.remove(slot: index))
                 shownIDs[index] = nil
@@ -229,7 +254,13 @@ nonisolated struct RuntimeTimeline {
             tally.moving += after.moving - before.moving
             tally.delegating += after.delegated - before.delegated
             advancing += after.advancing - before.advancing
-            subagents += after.subagents - before.subagents
+            if before.held > 0 && after.held == 0 {
+                for ref in after.sessionRefs {
+                    let contribution = sessions[ref].contribution
+                    sessions[ref].advancing += 1
+                    subagents += sessions[ref].contribution - contribution
+                }
+            }
             if workSlots[index] != nil { changed.insert(index) }
         }
         for index in changed.sorted() {

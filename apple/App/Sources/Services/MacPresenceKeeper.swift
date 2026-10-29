@@ -56,7 +56,7 @@ nonisolated final class MacPresenceKeeper: Sendable {
         let done = DispatchSemaphore(value: 0)
         Task.detached { [self] in
             do {
-                if try await !signOff() { Self.log.error("将睡眠：离线已写入本机，但云端没有接受") }
+                if try await !signOff() { Self.log.error("将睡眠：离线已写入本机，但尚未确认 iCloud 已接受") }
             } catch {
                 Self.log.error("将睡眠：离线记录失败：\(error.localizedDescription, privacy: .public)")
             }

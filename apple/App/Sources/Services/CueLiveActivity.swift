@@ -38,7 +38,7 @@ final class CueLiveActivity {
             return
         }
         // 没开过，或被划掉、被系统结束了：在前台再开一个
-        guard foreground, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard now.hasConfirmedActivity, foreground, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         do {
             _ = try Activity.request(attributes: CueActivityAttributes(), content: content)
         } catch {

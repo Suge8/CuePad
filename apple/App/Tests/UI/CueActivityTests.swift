@@ -74,7 +74,7 @@ struct CueActivityTests {
         try await store.setCueState(.thinking)
         cue = try await now()
         #expect(cue.isLive && cue.isBusy && cue.quietWord == "在想" && cue.staleAfter == CueNow.fastStale)
-        #expect(cue.settled.unconfirmed && cue.settled.isLive)
+        #expect(cue.settled.unconfirmed && cue.settled.isLive && !cue.settled.hasConfirmedActivity)
 
         // 刚做完一件又派出一件在跑，Cue 歇下：数字账写推进中那件，不停在"做完"
         let ship = try await store.createTask("推送并发新版", in: project.id)

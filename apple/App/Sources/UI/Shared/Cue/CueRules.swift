@@ -72,7 +72,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
         switch self {
         case .disabled: ranBefore ? String(localized: "已停用") : String(localized: "还没启用")
         case .asleep: String(localized: "「\(host)」没开")
-        case .unconfirmed: String(localized: "未知状态")
+        case .unconfirmed: String(localized: "状态未确认")
         case .unreachable(let reason): reason
         case .idle, .sending, .working: nil
         }
