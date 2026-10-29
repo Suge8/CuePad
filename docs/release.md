@@ -24,7 +24,7 @@
 团队写在凭据文件的 `CUEPAD_TEAM_ID`（字段见 `_signing.sh` 头注释）。本机 ad-hoc 构建到此就能编能跑。
 要真机、同步或发布，再在开发者后台做上面的一次性前置：`xc.sh provision ids` 用 API 建四个 App ID 并开能力；App Group、iCloud 容器在网页创建并挂上；`xc.sh provision` 建证书与描述文件；CloudKit 结构按下文导入自己的容器。
 Mac 的自动更新源与公钥（`CuePad-macOS-Info.plist` 的 `SUFeedURL`、`SUPublicEDKey`）指向本仓库的发布，自己发版时换成自己的（`sparkle.sh`）。
-门铃中转（同一文件的 `CUEPAD_RELAY_HOST`）默认是作者的 `relay.cue-pad.com`，fork 照用也和别人互不相干（房间由各自 iCloud 里的密钥派生）；换成自己架的见 `relay/README.md`。发布脚本打包前核对它的 `/health`。
+门铃中转（同一文件的 `CUEPAD_RELAY_HOST`）默认是作者的 `relay.cue-pad.com`，fork 照用也和别人互不相干（房间由各自 iCloud 里的密钥派生）；换成自己架的见 `relay/README.md`。发布脚本打包前核对门铃 `/health` 与实时活动 `/v1/activity/health`；后者只核对服务端配置可用，不代替真实 APNs 投递验收。
 
 ## 自动更新（macOS）
 
@@ -69,4 +69,6 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 ### 待部署到生产
 
-发版前一次 Deploy Schema Changes，部署完删掉对应条目。这里记的是 cktool 看不到的订阅定义，订阅只有手机会建：这一节还有条目时 `release ios` 拒绝发版，`release mac` 不受影响：
+这一节还有条目时 `release ios` 拒绝发版；部署完成并回读核对后删除对应条目。字段由 `ck-production.sh` 另行核对，订阅定义与外部服务需要下面的验收：
+
+- 实时活动：部署 `activityDestinations` 记录类型（`token` 为加密字段）；部署中转 `/v1/activity` 并配置只限本 App topic、production 环境的 APNs 密钥。先征得用户同意，不在本地验证时部署；用签名测试设备核对前台、后台、锁屏的 APNs 投递及令牌轮换，再发布两端。

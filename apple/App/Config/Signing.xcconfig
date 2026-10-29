@@ -12,7 +12,7 @@ CODE_SIGN_STYLE = Automatic
 CODE_SIGN_IDENTITY = -
 DEVELOPMENT_TEAM =
 
-// 门铃中转的主机（唯一定义；连 wss://<它>/v1/…，部署与协议见 relay/README.md）：经 Info.plist 的 CuePadRelayHost 给 App 读，
+// 门铃与实时活动中转的主机（唯一定义；协议与部署见 relay/README.md）：经 Info.plist 的 CuePadRelayHost 给 App 读，
 // 发布脚本打包前核对它活着（_signing.sh 的 check_relay）。房间由各自 iCloud 里的密钥派生，fork 用这台也与别人互不相干；换成自己架的就改这一行。
 CUEPAD_RELAY_HOST = relay.cue-pad.com
 

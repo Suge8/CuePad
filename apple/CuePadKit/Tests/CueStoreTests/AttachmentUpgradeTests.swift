@@ -33,6 +33,8 @@ import Testing
         ('00000000-0000-4000-8000-0000000000a1', '\(photo)', \(png.count), 'png', 1, 10), ('00000000-0000-4000-8000-0000000000a2', '\(clip)', \(movie.count), 'bin', 1, 20);
       INSERT INTO syncRecords (recordName, recordType, pushedModifiedAt) VALUES ('00000000-0000-4000-8000-0000000000a1', 'attachments', 10), ('00000000-0000-4000-8000-0000000000a2', 'attachments', NULL);
       INSERT INTO previews (id, sessionID, hash, name, title, byteCount, createdAt, modifiedAt) VALUES ('00000000-0000-4000-8000-0000000000b1', 's', '\(clip)', '演示.MOV', '演示', \(movie.count), 1, 1);
+      DROP TABLE activityDestinations;
+      ALTER TABLE piSessionStates DROP COLUMN failure;
       PRAGMA user_version = 77;
       """)
 

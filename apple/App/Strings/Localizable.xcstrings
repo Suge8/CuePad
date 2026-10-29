@@ -10543,6 +10543,22 @@
         }
       }
     },
+    "实时活动的推送地址" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Live Activity push address"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "实时活动的推送地址"
+          }
+        }
+      }
+    },
     "审查" : {
       "localizations" : {
         "en" : {

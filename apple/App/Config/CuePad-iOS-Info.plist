@@ -6,6 +6,8 @@
 	<string>$(CUEPAD_APP_ID)</string>
 	<key>CuePadRelayHost</key>
 	<string>$(CUEPAD_RELAY_HOST)</string>
+	<key>CuePadPushEnvironment</key>
+	<string>$(APS_ENVIRONMENT)</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

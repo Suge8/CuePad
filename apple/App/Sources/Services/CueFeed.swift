@@ -13,10 +13,21 @@ final class CueFeed {
         var digest: CueDigest
         /// 小组件另要的（只有 iPhone 读）
         var widget: WidgetContent?
+        var activity: ActivityRead?
 
         static func read(from store: isolated CueStore, widget: Bool) throws -> Read {
-            Read(digest: try CueDigest.read(from: store), widget: widget ? try store.widgetContent() : nil)
+            let destinations = widget ? [] : try store.activityDestinations()
+            return Read(
+                digest: try CueDigest.read(from: store), widget: widget ? try store.widgetContent() : nil,
+                activity: destinations.isEmpty ? nil : ActivityRead(
+                    destinations: destinations, quotas: try store.accountQuotas(), publisher: try store.activityPublisher()))
         }
+    }
+
+    nonisolated struct ActivityRead: Equatable, Sendable {
+        var destinations: [ActivityDestination]
+        var quotas: [AccountQuota]
+        var publisher: String?
     }
 
     nonisolated struct Seen: Sendable {
