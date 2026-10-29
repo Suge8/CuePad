@@ -17,7 +17,8 @@ import UIKit
 /// - 周额度提醒（`remind`）两端都经 `post` 排成定时本地通知：到点时 App 不必在跑，手机上也不靠推送。
 @Observable
 final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
-    private(set) var authorization: UNAuthorizationStatus = .notDetermined
+    private var knownAuthorization: UNAuthorizationStatus?
+    var authorization: UNAuthorizationStatus { knownAuthorization ?? .notDetermined }
     /// 点开的通知交给它（`pendingDeepLink`）；资料库打开后接上（早于系统交来点开的通知）。
     @ObservationIgnored weak var services: AppServices?
     #if os(macOS)
@@ -35,23 +36,26 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     /// 没人去点的权限弹窗还会一直留在系统里、盖住之后起的每个实例。Debug 构建给 `-CuePadNotifications YES` 时照常（docs/verify.md「通知」）。
     var delivers: Bool { services.map { $0.location.touchesRealWorld || DebugHooks.deliversNotifications } ?? false }
 
-    /// 用户可能在系统设置里改过：回到前台时重新读。
+    /// 用户可能在系统设置里改过：回到前台、后台写角标时重新读。
     func refresh() async {
-        authorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        knownAuthorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         await showBadge()
     }
 
     /// App 图标的角标（iPhone 的主屏、Mac 的 Dock）：经通知中心设，受系统"标记"开关控制，没有通知权限时不设。
     func showBadge(_ count: Int) async {
         badge = count
+        guard delivers else { return }
+        #if os(iOS)
+        if UIApplication.shared.applicationState == .background { return await refresh() }
+        #endif
+        if knownAuthorization == nil { return await refresh() }
         await showBadge()
     }
 
     private func showBadge() async {
         guard delivers else { return }
         let center = UNUserNotificationCenter.current()
-        // 推送冷启动到后台时没有窗口、也没执行 enable；权限必须能在写角标这条路上读到。
-        if authorization == .notDetermined { authorization = await center.notificationSettings().authorizationStatus }
         guard isAuthorized else { return }
         do {
             try await center.setBadgeCount(badge)
