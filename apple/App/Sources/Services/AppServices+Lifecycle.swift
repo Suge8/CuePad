@@ -26,21 +26,18 @@ extension AppServices {
 
     /// App 整个进后台时调用（iOS 最后一个窗口退到后台，在后台任务里，`BackgroundWork`；只是一个窗口退下、别的还在前台的不调）：
     /// 停掉按节奏的拉取，等所有登记的落盘完成，写下这台设备已离开会话（界面在场景退到后台时报的）并传完，
-    /// 把待推送发完（挂起后发送者就不会再跑了），等这些改动的门铃按完再断开中转，并把小组件快照刷到最新（观察任务同理）。
+    /// 本地落盘后先刷新快照，不让网络占完后台时间；再发完待推送、等门铃按完后断开中转，最后补上上传后的状态。
     /// 回前台的对应入口是 `handleActivation`。
     func prepareForBackground() async {
         stopPolling()
         relay?.pause()
         for flush in backgroundFlushes.values { await flush() }
+        await resendSnapshots()
         await viewer?.settle()
         await sync?.push()
         // 收下的那一批的门铃由跟随者在 push 返回前排上（同一个主线程队列，先到先跑），这里等它发完；其间回了前台就不断
         await relay?.settle()
-        do {
-            try await writeSnapshots(resend: true)
-        } catch {
-            reportIssue(.widgetDataUnavailable("\(error)"))
-        }
+        await resendSnapshots()
     }
 
     /// 取消后台任务（快照维护、分享入库、macOS 的 Pi 索引等）。

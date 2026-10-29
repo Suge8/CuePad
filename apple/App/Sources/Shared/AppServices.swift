@@ -262,7 +262,9 @@ final class AppServices {
         cueFeed = CueFeed(store: store, widget: true)
         self.timing = timing
         self.pasteboard = pasteboard
-        cueActivity = location.touchesRealWorld || DebugHooks.opensLiveActivity ? CueLiveActivity() : nil
+        let activitySync: (any SyncControlling)? = if case .iCloud = sync, location.touchesRealWorld { self.sync } else { nil }
+        cueActivity = location.touchesRealWorld || DebugHooks.opensLiveActivity
+            ? CueLiveActivity(store: store, sync: activitySync, device: UIDevice.current.identifierForVendor?.uuidString) : nil
         viewer = UIDevice.current.identifierForVendor.map { [sync = self.sync] in
             ViewerKeeper(store: store, sync: sync, device: $0.uuidString)
         }

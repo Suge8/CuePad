@@ -5,7 +5,7 @@ import AppIntents
 #endif
 
 /// 实时活动的一份（iPhone 锁屏与灵动岛；macOS 26 起系统把它转进 Mac 的菜单栏，Mac 不写代码）：Cue 此刻（`CueNow`，同 App 里 Cue 那一行的唯一一份）
-/// 加各家订阅额度的一瞥（`Quota`，读数规则是 App 里的 `QuotaMeter`，这里只存算好的）。App 推出（`AppServices.startSnapshots`），小组件进程只画（`CueActivityViews`）。
+/// 加各家订阅额度的一瞥（`Quota`，读数规则在 `QuotaMeter`，这里只存算好的）。远程由 Mac 推出，本地演示由 App 推出，小组件进程只画（`CueActivityViews`）。
 nonisolated struct CueActivityState: Codable, Hashable, Sendable {
     var now: CueNow
     var quotas: [Quota]
@@ -34,6 +34,9 @@ nonisolated struct CueActivityState: Codable, Hashable, Sendable {
 #if os(iOS)
 nonisolated struct CueActivityAttributes: ActivityAttributes {
     typealias ContentState = CueActivityState
+    /// 推送地址的原始到期起点，不随内容或令牌更新续期；缺少元数据的活动不注册远程地址。
+    var startedAt: Date? = .now
+    var remoteUpdates: Bool?
 }
 
 /// 实时活动上的"允许一次"：在 App 进程里执行（`LiveActivityIntent`，不打开 App），走 Cue 页回答提问的同一个方法。

@@ -49,17 +49,11 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     }
 
     /// 要紧的变化的推送（见 `AlertSubscriptions`：静默的与带 content-available 的可见通知，后台也会把 App 叫起来一会儿）：拉到推送说的变化再交还系统
-    /// （冷启动时等同步启动完，见 `AppServices.pull`）；拉完当场改实时活动与小组件（`AppServices.writeSnapshots`）再交还：
-    /// 回调一返回系统就可能挂起 App，快照那条观察是异步的，靠它改岛常常来不及。
+    /// （冷启动时等同步启动完，见 `CloudSync.syncNow`）；交还前当场刷新小组件与角标，拉取失败如实返回。
+    /// 回调返回后系统可能挂起，不依赖异步观察；远程实时活动由 Mac 经 APNs 更新，不在此用本地库覆盖。
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
-        guard case .ready(let services) = launch else { return .noData }
-        await services.pull()
-        do {
-            try await services.writeSnapshots()
-        } catch {
-            return .failed
-        }
-        return .newData
+        guard case .ready(let services) = launch else { return .failed }
+        return await services.refreshFromPush()
     }
 }
 

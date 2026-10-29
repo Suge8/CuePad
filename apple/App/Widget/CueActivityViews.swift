@@ -6,7 +6,7 @@ import WidgetKit
 /// 实时活动的几种样子（`CueActivityState`）。小组件扩展按系统给的态画（`CueActivityWidget`）；主 App 也编进了这个文件，
 /// 调试画面用同一份视图画出各态（`DebugActivityStage`）：系统的上下文（`ActivityViewContext`）造不出来，这里只吃内容与画的时刻。
 /// 数字账与头像就是 App 里名牌的同一份（`CueNowViews`）。画的是推出的那一份到此刻的样子（`CueNow.shown(at:)`：
-/// 过时了只信慢的事实，刚做完的到点收掉）；每一份的 `staleDate` 是它下一次变的那一刻（`CueLiveActivity`），系统到点重画，App 不用醒。
+/// 过时了只信慢的事实，刚做完的到点收掉）。`staleDate` 标记这份内容过时，不获取新事实，也不保证之后每个期限都会重新执行视图。
 /// - 紧凑态：数字账那一排拆在摄像头两侧——左边要你管的那一组（拍板、待回复），右边"N 推进中"；没有要你管的，左边"N 推进中"、右边"M 子代理"。没有可数的只写短词（`CueNow.quietWord`）。
 ///   不计时：哪件的秒在走看不出，计时留在展开态每一行里。横屏窄紧凑态（`isDynamicIslandLimitedInWidth`）左边只留头像，右边是最前那一项的数。
 /// - 最小态（与别的实时活动同在）：头像加角标（要你管的几件，`CueNow.needsYou`）。

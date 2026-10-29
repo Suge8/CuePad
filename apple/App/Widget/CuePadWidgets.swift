@@ -12,7 +12,7 @@ struct CuePadWidgets: WidgetBundle {
     }
 }
 
-/// Cue 的实时活动（App 开、改、结束，`CueLiveActivity`）：各态的样子在 `CueActivityViews`，点卡片空白处进 Cue 页。
+/// Cue 的实时活动：App 前台开启，远程内容由 Mac 发布（`CueLiveActivity`）；各态在 `CueActivityViews`，点卡片空白处进 Cue 页。
 struct CueActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CueActivityAttributes.self) { context in

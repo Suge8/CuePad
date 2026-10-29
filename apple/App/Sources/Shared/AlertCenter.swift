@@ -48,9 +48,13 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func showBadge() async {
-        guard delivers, isAuthorized else { return }
+        guard delivers else { return }
+        let center = UNUserNotificationCenter.current()
+        // 推送冷启动到后台时没有窗口、也没执行 enable；权限必须能在写角标这条路上读到。
+        if authorization == .notDetermined { authorization = await center.notificationSettings().authorizationStatus }
+        guard isAuthorized else { return }
         do {
-            try await UNUserNotificationCenter.current().setBadgeCount(badge)
+            try await center.setBadgeCount(badge)
         } catch {
             AppServices.log.error("App 图标角标没能更新：\(String(describing: error), privacy: .public)")
         }

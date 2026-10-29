@@ -7,8 +7,8 @@ import WidgetKit
 
 /// 给小组件与分享扩展的快照：跟随资料库变化写进共享容器。扩展不打开资料库。
 /// 只写内容真正变了的那份；小组件显示默认项目与 Cue，只有这两份变了才刷新它们（刷新次数有系统预算）。
-/// 每次运行的第一份全写、岛照发：留在共享容器与系统里的那份可能是旧版本写的，结构变了这版就解不出来（小组件读成空的），不能拿它比。
-/// iPhone 的实时活动（`CueLiveActivity`）与小组件读同一份 Cue 此刻，每次都先改岛：后台被推送叫醒时剩的时间不多。
+/// 每次运行的第一份全写、本地活动照发：留在共享容器与系统里的那份可能是旧版本写的，结构变了这版就解不出来（小组件读成空的），不能拿它比。
+/// 本地实时活动与小组件读同一份 Cue 此刻；远程活动只用它开启，已有内容由 Mac 经 APNs 更新（`CueLiveActivity`）。
 extension AppServices {
     /// 库变了、此刻或本机事实变了（`CueFeed`，同一次读带着小组件另要的）时按 Cue 的现状改快照，直到任务取消。
     func startSnapshots() {
@@ -51,13 +51,22 @@ extension AppServices {
         try await present(read.widget!, read.digest, at: speech, local: cueLocal, resend: resend)
     }
 
+    /// 不依赖观察任务赶在挂起前执行；前台重开、后台收尾都显式等这一份完成。
+    func resendSnapshots() async {
+        do {
+            try await writeSnapshots(resend: true)
+        } catch {
+            reportIssue(.widgetDataUnavailable("\(error)"))
+        }
+    }
+
     private func present(
         _ content: WidgetContent, _ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local, resend: Bool = false
     ) async throws {
         let now = Self.cueNow(digest, at: moment, local: local)
         #if os(iOS)
         let first = publishedSnapshots == nil
-        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas), resend: resend || first, foreground: Self.inForeground)
+        await cueActivity?.show(try ActivityPush.fitted(CueActivityState(now: now, quotas: content.quotas)), resend: resend || first, foreground: Self.inForeground)
         await alerts?.showBadge(now.needsYou)
         #endif
         try publish(WidgetSnapshots(content, now: now))
