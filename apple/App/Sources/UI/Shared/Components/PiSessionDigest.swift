@@ -47,6 +47,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
             return PiConfigShown(model: model, thinking: thinking, context: current.context, pending: true, failure: nil)
         case .delivered: return current
+        case .unconfirmed: return current
         case .failed(let failure):
             return PiConfigShown(model: current.model, thinking: current.thinking, context: current.context, pending: false, failure: failure)
         }
