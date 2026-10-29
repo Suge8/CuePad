@@ -121,10 +121,15 @@ struct RuntimeDisplayTests {
             try await recorder.update(sessionID: "extra-\(index)", state: .thinking, title: task.title)
             try await store.bindSession("extra-\(index)", to: task.id)
         }
-        _ = try await store.addCueMessage(.cue, text: "需要确认", ask: try CueAsking(.push, action: "推送全部并行交付的修复"))
+        _ = try await store.addCueMessage(.cue, text: "需要确认", ask: try CueAsking(.rule, action: "推送全部并行交付的修复", rule: "提交前需要确认全部并行修改已经验收并通过检查"))
+        _ = try await store.updateCueProfile { profile in
+            profile.hostID = "mac-b"
+            profile.enabledAt = clock.now
+        }
+        try await store.setCueState(.tool, detail: "read · Sources/Runtime/SharedRuntimeProjection.swift")
         let full = try await now()
         let quotas = (0..<4).map { index in
-            CueActivityState.Quota(account: "订阅账户 \(index)", windows: [
+            CueActivityState.Quota(account: "订阅账户 user\(index)@example.com", windows: [
                 .init(name: "5 小时", left: 0.75, level: .roomy, resetsAt: clock.now + 3600, near: false),
                 .init(name: "本周", left: 0.25, level: .tight, resetsAt: clock.now + 86400, near: true),
             ])
@@ -137,7 +142,7 @@ struct RuntimeDisplayTests {
                                               "stale-date": Int(full.nextShownChange(after: full.at)!.timeIntervalSince1970)]]
         let bytes = try JSONSerialization.data(withJSONObject: envelope).count
         print("RUNTIME complete APNs update envelope: \(bytes) bytes; 8 active hosts, 8 works, 8 visible items, 4 quota accounts/8 windows")
-        #expect(full.items.count == 8 && bytes <= 4096)
+        #expect(full.items.count == 8 && full.isBusy && full.first?.detail != nil && bytes <= 4096)
         let decoded = try JSONDecoder().decode(CueActivityState.self, from: JSONEncoder().encode(content))
         #expect(decoded.now.shown(at: clock.now + 601).tally.moving == 0 && decoded.now.shown(at: clock.now + 601).isLive)
         var expiration = reading.updates().makeAsyncIterator()

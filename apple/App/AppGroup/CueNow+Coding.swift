@@ -70,3 +70,36 @@ nonisolated extension CueNow.Decay {
         try values.encode(replaceFirst, forKey: .replaceFirst)
     }
 }
+
+nonisolated extension CueNow.Decay.Change {
+    private enum Operation: Int, Codable { case update = 0, replace = 1, remove = 2 }
+
+    init(from decoder: any Decoder) throws {
+        var values = try decoder.unkeyedContainer()
+        switch try values.decode(Operation.self) {
+        case .update:
+            self = .update(slot: try values.decode(Int.self), kind: try values.decode(CueNow.Item.Kind.self),
+                           since: try values.decode(Date.self), subagents: try values.decode(Int.self))
+        case .replace: self = .replace(try values.decode(CueNow.Item.self))
+        case .remove: self = .remove(slot: try values.decode(Int.self))
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var values = encoder.unkeyedContainer()
+        switch self {
+        case .update(let slot, let kind, let since, let subagents):
+            try values.encode(Operation.update)
+            try values.encode(slot)
+            try values.encode(kind)
+            try values.encode(since)
+            try values.encode(subagents)
+        case .replace(let item):
+            try values.encode(Operation.replace)
+            try values.encode(item)
+        case .remove(let slot):
+            try values.encode(Operation.remove)
+            try values.encode(slot)
+        }
+    }
+}
