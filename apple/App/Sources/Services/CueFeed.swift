@@ -5,7 +5,7 @@ import Observation
 /// Cue 的现状：库里那页摘要（`CueDigest`）配上此刻（`AppServices.speech`）与本机事实（`AppServices.cueLocal`），整个 App 一份、一个订阅读一次（同 `LiveSessions`）。
 /// 读的东西不随此刻与本机事实变：库变了重读，此刻或本机事实变了把手里那份配上新的再给一次（`updates`）。
 /// Cue 那一行（`CueWatch`，每个窗口一份）与 iPhone 的小组件快照、实时活动（`startSnapshots`）都从这里取，不各自订阅、库一变各读一遍摘要；
-/// iPhone 上同一次读顺带读小组件另要的项目、默认项目与额度（`WidgetContent`，`widget`）。
+/// iPhone 上同一次读顺带读小组件另要的项目、默认项目（`WidgetContent`，`widget`）。
 /// 第一个来读的起订阅（`AppServices.cueUpdates`），之后的共用；读失败时订阅结束、记下错误，读它的各自报出。
 @Observable
 final class CueFeed {
@@ -20,13 +20,12 @@ final class CueFeed {
             return Read(
                 digest: try CueDigest.read(from: store), widget: widget ? try store.widgetContent() : nil,
                 activity: destinations.isEmpty ? nil : ActivityRead(
-                    destinations: destinations, quotas: try store.accountQuotas(), publisher: try store.activityPublisher()))
+                    destinations: destinations, publisher: try store.activityPublisher()))
         }
     }
 
     nonisolated struct ActivityRead: Equatable, Sendable {
         var destinations: [ActivityDestination]
-        var quotas: [AccountQuota]
         var publisher: String?
     }
 

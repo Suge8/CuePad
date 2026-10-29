@@ -257,22 +257,6 @@
         }
       }
     },
-    "5 小时" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "5 hours"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "5 小时"
-          }
-        }
-      }
-    },
     "6 人 · 按首次加入时间排" : {
       "localizations" : {
         "en" : {
@@ -5523,22 +5507,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未能完成操作。（CKErrorDomain错误15。）（<CKError 0x6000: \"Server Rejected Request\" (15/2000); server message = \"Internal server error\">）"
-          }
-        }
-      }
-    },
-    "本周" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This week"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本周"
           }
         }
       }

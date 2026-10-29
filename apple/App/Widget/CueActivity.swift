@@ -4,31 +4,11 @@ import ActivityKit
 import AppIntents
 #endif
 
-/// 实时活动的一份（iPhone 锁屏与灵动岛；macOS 26 起系统把它转进 Mac 的菜单栏，Mac 不写代码）：Cue 此刻（`CueNow`，同 App 里 Cue 那一行的唯一一份）
-/// 加各家订阅额度的一瞥（`Quota`，读数规则在 `QuotaMeter`，这里只存算好的）。远程由 Mac 推出，本地演示由 App 推出，小组件进程只画（`CueActivityViews`）。
+/// 实时活动只传 Cue 此刻，保留 now 信封；远程由 Mac 推出，本地演示由 App 推出，小组件进程只画。
 nonisolated struct CueActivityState: Codable, Hashable, Sendable {
     var now: CueNow
-    var quotas: [Quota]
 
-    struct Quota: Codable, Hashable, Sendable {
-        var account: String
-        var windows: [Window]
-
-        struct Window: Codable, Hashable, Sendable {
-            /// "5 小时"、"本周"
-            var name: String
-            /// 还剩（0 到 1）
-            var left: Double
-            var level: UsageLevel
-            var resetsAt: Date
-            /// 快重置了、提醒把额度用掉的那段里（`QuotaReminder.isNear`）
-            var near: Bool
-
-            var percent: String { "\(Int((left * 100).rounded()))%" }
-        }
-    }
-
-    func same(as other: CueActivityState) -> Bool { now.same(as: other.now) && quotas == other.quotas }
+    func same(as other: CueActivityState) -> Bool { now.same(as: other.now) }
 }
 
 #if os(iOS)

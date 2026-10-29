@@ -66,7 +66,7 @@ extension AppServices {
         let now = Self.cueNow(digest, at: moment, local: local)
         #if os(iOS)
         let first = publishedSnapshots == nil
-        await cueActivity?.show(try ActivityPush.fitted(CueActivityState(now: now, quotas: content.quotas)), resend: resend || first, foreground: Self.inForeground)
+        await cueActivity?.show(try ActivityPush.fitted(CueActivityState(now: now)), resend: resend || first, foreground: Self.inForeground)
         await alerts?.showBadge(now.needsYou)
         #endif
         try publish(WidgetSnapshots(content, now: now))
@@ -112,30 +112,10 @@ nonisolated struct WidgetSnapshots: Equatable, Sendable {
     static func == (a: Self, b: Self) -> Bool { a.projects == b.projects && a.home == b.home && a.cue.same(as: b.cue) }
 }
 
-extension CueActivityState {
-    /// 实时活动那一份：Cue 此刻，加各家额度在它推出那一刻（`CueNow.at`）的读数（`QuotaMeter`）与本周快重置的提醒段（`QuotaReminder.isNear`）。
-    nonisolated init(now: CueNow, quotas: [AccountQuota]) {
-        let date = now.at
-        self.now = now
-        self.quotas = quotas.compactMap { quota in
-            let meter = QuotaMeter(quota, at: date)
-            let week = QuotaReminder.window(of: quota)
-            let windows = meter.windows.map { window in
-                Quota.Window(
-                    name: window.name, left: window.left, level: window.level, resetsAt: window.resetsAt,
-                    near: week.map { window.id == $0.id && QuotaReminder.isNear($0, at: date) } ?? false)
-            }
-            return windows.isEmpty ? nil : Quota(account: meter.account, windows: windows)
-        }
-    }
-}
-
 /// 小组件除 Cue 之外从库里读的那份（与 Cue 的摘要同一次读，`CueFeed.Read`）。
 nonisolated struct WidgetContent: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var home: DefaultProjectSnapshot
-    /// 各家订阅额度（只给实时活动）。
-    var quotas: [AccountQuota]
 }
 
 extension CueStore {
@@ -153,7 +133,6 @@ extension CueStore {
                 cards: latest.map {
                     DefaultProjectSnapshot.Card(id: $0.id, title: $0.heading, modifiedAt: $0.modifiedAt)
                 },
-                total: cards.count),
-            quotas: try accountQuotas())
+                total: cards.count))
     }
 }

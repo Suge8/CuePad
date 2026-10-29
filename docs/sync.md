@@ -117,7 +117,7 @@ Cue 说话的工具等结果至多 `Speech.cueWait`；没告诉它的失败作�
 
 - Mac 不注册远程通知、签名里没有推送权限（aps-environment），通知都是本机发的本地通知；同步到达本来也不靠推送（见「拉取节奏与门铃」）。
 - `notify` 是一次性事件标志，通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的写入取代就不送出。要保证每个事件都送达得另建追加式的通知事件记录，那是另一种设计。
-- 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒手机。令牌经私有 iCloud 加密同步（`CueLiveActivity`），内容复用 Cue 摘要（`ActivityPublisher`）；手机不拿本地旧库覆盖远程活动。中转瞬时可见计数、标题、问题与额度，不留存；密钥只在服务端。[部署与隐私边界](../relay/README.md)。
+- 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒手机。令牌经私有 iCloud 加密同步（`CueLiveActivity`），内容复用 Cue 摘要（`ActivityPublisher`）；手机不拿本地旧库覆盖远程活动。中转瞬时可见计数、标题与问题，不留存；密钥只在服务端。[部署与隐私边界](../relay/README.md)。
 - ActivityKit 推送仍受网络、优先级与系统预算限制，不保证秒到；活动最多八小时，本次不远程开启。`stale-date` 只标过时，不会取得新事实。依据：[ActivityKit](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications)、[后台通知](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app)。
 - Mac 提示音装进 ~/Library/Sounds（`AlertSounds`），卸载 App 后会留下，也会出现在系统设置的提示音列表里。
 - 改订阅的定义（谓词、选项、通知文案 key）等于改 schema，见 [release.md](release.md)。

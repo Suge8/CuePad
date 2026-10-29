@@ -40,7 +40,7 @@ nonisolated struct ActivityPush: Encodable, Sendable {
 
     struct Oversized: Error {}
 
-    /// 数字账完整保留；先缩短显示文字，再省掉额度与放不下的行，第一件等你仍可打开。
+    /// 数字账完整保留；先缩短显示文字，再省掉放不下的行，第一件等你仍可打开。
     static func fitted(_ original: CueActivityState) throws -> CueActivityState {
         func fits(_ value: CueActivityState) throws -> Bool { try JSONEncoder().encode(Payload(value)).count <= byteLimit }
         if try fits(original) { return original }
@@ -63,7 +63,6 @@ nonisolated struct ActivityPush: Encodable, Sendable {
             item.name = clipped(item.name, bytes: 160)
             return item
         }
-        while try !fits(state), !state.quotas.isEmpty { state.quotas.removeLast() }
         while try !fits(state), let index = state.now.items.lastIndex(where: { $0.kind != .done }) { state.now.items.remove(at: index) }
         if try !fits(state) { state.now.first?.detail = nil }
         if try !fits(state) { state.now.first?.allow = nil }

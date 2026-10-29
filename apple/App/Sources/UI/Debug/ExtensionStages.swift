@@ -50,7 +50,7 @@ struct DebugActivityStage: View {
     private let stale = UserDefaults.standard.bool(forKey: "CuePadCueStale")
 
     var body: some View {
-        let state = CueActivityState(now: workspace.cue.now, quotas: CueNowSamples.quotas)
+        let state = CueActivityState(now: workspace.cue.now)
         let views = CueActivityViews(state, at: stale ? state.now.staleAt : .now)
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {

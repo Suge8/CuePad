@@ -151,15 +151,5 @@ enum CueNowSamples {
     /// 动效录屏的一圈：歇着 → 你说话（在听）→ 被叫醒在想 → 歇下等子代理交回 → 等你拍板 → 做完 → 起不来 → 不在。
     static let tour = [quiet, hearing, woke, delegating, asks, done, failed, away]
 
-    /// 实时活动里的额度一瞥：Claude 本周快重置（倒数），Codex 宽松。
-    static let quotas = [
-        CueActivityState.Quota(account: "Claude", windows: [
-            .init(name: String(localized: "5 小时", table: "Demo"), left: 0.68, level: .roomy, resetsAt: .now.addingTimeInterval(2.2 * 3600), near: false),
-            .init(name: String(localized: "本周", table: "Demo"), left: 0.41, level: .roomy, resetsAt: .now.addingTimeInterval(2.4 * 3600), near: true),
-        ]),
-        CueActivityState.Quota(account: "Codex", windows: [
-            .init(name: String(localized: "本周", table: "Demo"), left: 0.8, level: .roomy, resetsAt: .now.addingTimeInterval(4 * 86400), near: false),
-        ]),
-    ]
 }
 #endif

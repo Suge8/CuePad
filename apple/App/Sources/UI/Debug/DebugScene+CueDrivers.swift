@@ -234,7 +234,7 @@ extension DebugScene {
             #if os(iOS)
             if live {
                 await workspace.services.cueActivity?.show(
-                    CueActivityState(now: now, quotas: [CueActivityState.Quota]()), resend: false, foreground: UIApplication.shared.applicationState != .background)
+                    CueActivityState(now: now), resend: false, foreground: UIApplication.shared.applicationState != .background)
             }
             #endif
             guard await Task.wait(for: .seconds(step)) else { return }
