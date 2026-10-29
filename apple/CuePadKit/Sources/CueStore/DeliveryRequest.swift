@@ -3,7 +3,7 @@ import Foundation
 
 public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing
-  /// 已交出但无法确认；不再领取，只能由真实消息等正证据收敛。
+  /// 可能已交出但无法确认；不再领取，只能由真实消息等正证据收敛。
   case unconfirmed
   case succeeded
   case failed = "not_delivered"
@@ -73,7 +73,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var mode: Open<DeliveryMode>
   public var cardID: UUID?
   public var status: Open<DeliveryStatus>
-  /// 失败或未确认的原因（各端按自己的语言显示，`ShownText`）；读 `failure` / `unconfirmedReason`。
+  /// 失败或未确认的原因（各端按自己的语言显示，`ShownText`）；读 `failure` / `Speech.trip`。
   public var failureReason: ShownText?
   public var handledBy: String?
   public var createdAt: Date
@@ -93,21 +93,14 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 还没有执行结果（等待执行或执行中）。
   public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
-  /// 还没被 Mac 领取（仍是 pending）：撤得回。领取后它已交给 Agent。
+  /// 尚未领取只是撤回的必要条件；能否撤回还要由库事务核对已发送事实。
   public var isWithdrawable: Bool { status == .known(.pending) && handledBy == nil }
 
-  /// 没能送达的原因（这台设备的语言）；成功或还在路上是 nil。本机执行器写回的失败总带原因（`DeliveryOutcome.failed`），只有别的版本写来、
-  /// 没带原因的记录（含本版本不认识的状态，它不是送达）落到 `unexplainedFailure`——失败说法只在这里兜底，界面与服务不再各写一句。
+  /// 明确未交出的原因；未知状态不是未送达。缺少原因的明确失败只在这里兜底。
   public var failure: String? {
-    guard !isOpen, status != .known(.succeeded), status != .known(.unconfirmed) else { return nil }
+    guard status == .known(.failed) else { return nil }
     guard let reason = failureReason?.text, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
     return reason
-  }
-
-  /// 已交出但缺少最终确认；不是未送达，不能据此撤回或自动重发。
-  public var unconfirmedReason: String? {
-    guard status == .known(.unconfirmed) else { return nil }
-    return failureReason?.text ?? String(localized: "已交给 Agent，送达尚未确认，不会自动重发")
   }
 
   static var interruptedReason: ShownText { ShownText("Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发") }
@@ -117,11 +110,11 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 发给一个会话的请求（先发的在前）里此刻要显示的那次结束到哪了（`Speech`）：还在路上的，或没能结束、之后也没再发过别的；
   /// 结束成功或没请求过是 nil。
   public static func shownEnd(in requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
-    guard let end = requests.last(where: { $0.mode == .known(.end) }), end.status != .known(.unconfirmed) else { return nil }
+    guard let end = requests.last(where: { $0.mode == .known(.end) }) else { return nil }
     switch Speech.trip(end, at: moment) {
     case .sending: return .sending
     case .sent: return .sent
-    case .delivered: return nil
+    case .delivered, .unconfirmed: return nil
     case .failed(let failure): return end.id == requests.last?.id ? .failed(failure) : nil
     }
   }
