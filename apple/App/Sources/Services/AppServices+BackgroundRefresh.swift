@@ -6,9 +6,13 @@ extension AppServices {
     /// 拉到的一部分也要发布：之后是否还有执行机会由系统决定，不依赖观察任务的调度。
     func refreshFromPush() async -> UIBackgroundFetchResult {
         guard let sync else { return .noData }
-        var result = UIBackgroundFetchResult.newData
+        let result: UIBackgroundFetchResult
         do {
-            try await sync.syncNow()
+            result = switch try await sync.syncNow() {
+            case .newData: .newData
+            case .noData: .noData
+            case .incomplete: .failed
+            }
         } catch {
             result = .failed
         }

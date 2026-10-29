@@ -30,7 +30,7 @@ struct ThrottleTests {
     let card = try await mac.store.createCard(body: "限流时记的")
     let name = card.id.uuidString.lowercased()
     _ = await macSync.send(recordNames: [name])
-    try? await macSync.syncNow()
+    _ = try? await macSync.syncNow()
     _ = try? await macSync.relaySecret()
     await macSync.push()
 
