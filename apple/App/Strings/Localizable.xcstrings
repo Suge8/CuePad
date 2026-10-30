@@ -539,6 +539,22 @@
         }
       }
     },
+    "%@ 的设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的设置"
+          }
+        }
+      }
+    },
     "%@ 的设置…" : {
       "localizations" : {
         "en" : {
@@ -5023,22 +5039,6 @@
         }
       }
     },
-    "不启用" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Off"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不启用"
-          }
-        }
-      }
-    },
     "不在" : {
       "localizations" : {
         "en" : {
@@ -6455,6 +6455,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停止这一轮"
+          }
+        }
+      }
+    },
+    "停用 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn Off %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停用 %@"
           }
         }
       }
@@ -9079,6 +9095,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用后说一件想做的事，我来开工，要你拿主意时再找你"
+          }
+        }
+      }
+    },
+    "启用或停用 Cue、运行情况、设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn Cue on or off, status, settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用或停用 Cue、运行情况、设置"
           }
         }
       }
@@ -20851,22 +20883,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "运行情况"
-          }
-        }
-      }
-    },
-    "运行情况、设置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Status, settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "运行情况、设置"
           }
         }
       }
