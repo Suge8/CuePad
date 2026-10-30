@@ -82,10 +82,10 @@ extension CueKeeper {
 
             let changes = try await self.changes(at: now)
             // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化。
-            // 等着重来的是你的一轮（额度、登录卡住）：新变化不顶掉它，这就重来（变化随信封一起看）
+            // 持续重试的工作不被新变化替代：重交原来的醒来原因，变化随信封一起看。
             if let held = setback {
                 let fresh = changes.due.contains(where: { $0.seq > held.latest ?? Int.min || ($0.kind == .stalled && $0.at > held.since) })
-                if fresh, held.wake != .message {
+                if fresh, !held.persistent {
                     setback = nil
                 } else if fresh || held.retryAt.map({ now >= $0 }) == true {
                     setback?.retryAt = nil

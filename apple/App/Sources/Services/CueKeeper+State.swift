@@ -95,11 +95,13 @@ extension CueKeeper {
         var writesReply: Bool { answersYou || selfStarted == .enabled }
     }
 
-    /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（写入序号大于 `latest`，或在 `since` 之后才到的等子代理停住）。
+    /// 失败轮次的重试进度：普通自发失败只重试一次，可被新变化替代；持续重试保留原工作，直到承接它的一轮成功。
     struct Setback {
         var latest: Int?
         var since: Date
         var retryAt: Date?
+        /// 额度、登录阻塞的工作必须承接原轮次；新变化不能替代它。
+        var persistent: Bool
         var wake: CueWake
         var author: CueAuthor
     }

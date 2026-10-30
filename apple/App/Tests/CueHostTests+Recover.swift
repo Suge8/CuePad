@@ -100,6 +100,32 @@ extension CueHostTests {
         await rig.stop()
     }
 
+    @Test func 定时额度失败等待重试时_新会话变化不丢掉定时() async throws {
+        let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
+        let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
+        try await remote.update(sessionID: "remote-retry", state: .thinking, title: "旁边的工作", turnStartedAt: .now)
+        rig.model.blockQuota(times: 1)
+        let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)
+        try await rig.message(.cue, containing: "达到用量限制")
+        try await eventually("一次性定时已触发，正在等慢速重试") {
+            guard let keeper = rig.services.cue.keeper else { return false }
+            return keeper.setback?.retryAt != nil && keeper.turn == nil
+        }
+        #expect(try await rig.store.cueLine(reminder.line.id)?.deletedAt != nil)
+        try await remote.update(sessionID: "remote-retry", state: .settled)
+        try await rig.answered("remote-retry")
+        let done = try await rig.message(.cue, containing: "定时到点：#\(reminder.index) 核对发布结果")
+        #expect(done.text.contains("一次"))
+        let keeper = try #require(rig.services.cue.keeper)
+        try await eventually("承接原定时的一轮完成") {
+            keeper.rounds.contains { round in
+                guard case .schedule(let fires) = round.wake else { return false }
+                return fires.contains { $0.line == reminder.line.id } && round.finishedAt != nil && round.failure == nil
+            }
+        }
+        await rig.stop()
+    }
+
     /// 你说完话之后不久（缓存还热）没再说话：Cue 趁热巡视一次，不等冷巡视的空闲时长；这段空闲里只热巡视这一次。
     @Test func 缓存还热时趁热巡视一次() async throws {
         let rig = try await Rig(

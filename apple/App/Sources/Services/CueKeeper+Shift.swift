@@ -158,10 +158,12 @@ extension CueKeeper {
                 else if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
                 else if !Self.retryable(PiErrorSummary(failure)) { await setBack(failure, retrying: .message, as: .cue) }
             } else {
-                setback = nil
-                tried = []
-                stalls = 0
-                await recovered()
+                if setback?.persistent != true || setback?.wake == finished.round.wake {
+                    setback = nil
+                    tried = []
+                    stalls = 0
+                    await recovered()
+                }
                 await markTold(finished.round)
                 if let held = finished.held { progress.held = held }
                 await advanceBaseline(from: finished.mark, seen: finished.round.startedAt)
@@ -249,15 +251,17 @@ extension CueKeeper {
     /// 一轮出错之后什么时候重来（带上这次的错）：换了 Agent 的马上；额度、登录卡住又换不了 Agent 的（你发起的一轮也算，`wake` 是你发来消息）
     /// 按慢速周期（`CueTiming.slowDelay`）一直重来，直到一轮好好做完；Cue 自己醒来的其余错第一次隔 `retryWake` 再醒一次，再错就等新变化。
     private func setBack(_ failure: String, retrying wake: CueWake, as author: CueAuthor, now: Bool = false) async {
+        if let held = setback, held.persistent, held.wake != wake { return }
+        let persistent = setback?.persistent == true || !Self.retryable(PiErrorSummary(failure))
         let latest = try? await changes().due.map(\.seq).max()
         let delay: Duration?
         if now { delay = .zero }
-        else if !Self.retryable(PiErrorSummary(failure)) {
+        else if persistent {
             stalls += 1
             delay = setup.timing.slowDelay(after: stalls)
         } else { delay = setback == nil ? setup.timing.retryWake : nil }
         if delay != nil { retrying = failure }
-        setback = Setback(latest: latest, since: .now, retryAt: delay.map { .now + $0.seconds }, wake: wake, author: author)
+        setback = Setback(latest: latest, since: .now, retryAt: delay.map { .now + $0.seconds }, persistent: persistent, wake: wake, author: author)
     }
 
     /// 出错后换了 Agent 的一轮：交出去的你的话退回（新的大脑起好就交），Cue 自己醒来的那次马上重来；都带上这次的错。
