@@ -6,7 +6,7 @@ import SwiftUI
 /// - 还没说过话（`intro`）：自我介绍"我是 Cue"，在对话那一块正中。启用了请你直接说，下面接几句能直接说的话（`CueStarters`，点一句放进输入框），
 ///   没有主按钮。
 /// - 说过话、后来停用了：一小张纸排在输入框正上方（拍板卡之下，离你下一步最近），不画吉祥物、不再自我介绍，只说启用后它接着干活。
-/// 没启用时启用是唯一的主动作：选一台 Mac（能运行 Cue 的几台，`CueSettings.hosts`；按钮的样子见 `enableButton`，选不了的写为什么，
+/// 没启用时启用是唯一的主动作：停用过的回到停用前那台（同开关），否则选一台 Mac（能运行 Cue 的几台，`CueSettings.hosts`；按钮的样子见 `enableButton`，选不了的写为什么，
 /// `CueSettings.Host.selectable`）；菜单是各入口同一份 `CueHostMenu`。在这台 Mac 上启用打开接入面板
 /// （`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，同一下启用），别的 Mac 直接启用，没写成的原因就地写在按钮下面（`CueSettingsModel`）。
 /// 能不能启用读 `CueGate`：这台还没和 iCloud 对过时只写在等什么、没有按钮（对得久了整张换成"正在从 iCloud 同步"，`EmptyState.waitsForSync`）。
@@ -91,7 +91,7 @@ struct CueWelcome: View {
             }
         } else {
             HStack(spacing: 8) {
-                enableButton(hosts)
+                enableButton(settings, hosts)
                 if model.enabling != nil { Spinner(.small) }
             }
             .disabled(model.enabling != nil)
@@ -108,23 +108,32 @@ struct CueWelcome: View {
         model.choose(host, services)
     }
 
-    /// 一台：一颗直接启用的主按钮（选不了时停用、下面写为什么）。几台：Mac 上主按钮直接在这台启用，别的几台收在旁边一颗"选别的 Mac"的菜单里；
-    /// Mac 上这颗菜单常驻、只有这台时藏起（占着位置）：库里多一台 Mac 时卡片不长高一截（卡片竖直居中，长高就整块上下挪）；
+    /// 一台、或停用过（回到停用前那台接着干活，`CueSettings.resumeHost`，同开关）、或 Mac 上：一颗直接启用的主按钮（选不了时停用、下面写为什么），
+    /// 别的几台收在旁边一颗"选别的 Mac"的菜单里；Mac 上这颗菜单常驻、没有别的时藏起（占着位置）：库里多一台 Mac 时卡片不长高一截（卡片竖直居中，长高就整块上下挪）；
     /// 不置灰露着：只有一台 Mac 的新用户看到一颗点不了的"选别的 Mac"，不知道该装第二台还是哪里坏了。
-    /// 手机上没有"这台"，主按钮本身就是选哪台的菜单（带下拉箭头）。一颗按钮只做一件事：点了直接启用的不带箭头，带箭头的点开是菜单。
-    @ViewBuilder private func enableButton(_ hosts: [CueSettings.Host]) -> some View {
-        if let host = hosts.first, hosts.count == 1 || host.isHere {
+    /// 手机上从没选过、有几台时，主按钮本身就是选哪台的菜单（带下拉箭头）。一颗按钮只做一件事：点了直接启用的不带箭头，带箭头的点开是菜单。
+    @ViewBuilder private func enableButton(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {
+        if let host = primary(settings, hosts) {
             VStack(spacing: 6) {
                 Button(host.isHere ? "在这台 Mac 上启用" : "在「\(host.name)」上启用") { enable(on: host) }.disabled(!host.selectable)
                 if !host.selectable { Text(host.note).font(Typography.meta).foregroundStyle(palette.ink3) }
-                if host.isHere {
-                    let others = hostMenu(Array(hosts.dropFirst()), title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, compact: true))
-                    if hosts.count == 1 { others.hidden() } else { others }
-                }
+                let others = hosts.filter { $0.id != host.id }
+                #if os(macOS)
+                let menu = hostMenu(others, title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, compact: true))
+                if others.isEmpty { menu.hidden() } else { menu }
+                #else
+                if !others.isEmpty { hostMenu(others, title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, compact: true)) }
+                #endif
             }
         } else {
             hostMenu(hosts, title: String(localized: "选一台 Mac 启用"), surface: ControlSurface(kind: .primary))
         }
+    }
+
+    /// 主按钮直接启用的那台；没有（手机上从没选过、有几台）为 nil。
+    private func primary(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> CueSettings.Host? {
+        guard hosts.count == 1 || settings.profile.hostID != nil || hosts.first?.isHere == true else { return nil }
+        return settings.resumeHost(here: workspace.localHost)
     }
 
     private func hostMenu(_ hosts: [CueSettings.Host], title: String, surface: ControlSurface) -> some View {

@@ -32,7 +32,7 @@ struct PageMenuSlot: View {
             case .session: "完成或绑定任务、重命名、跳到终端、结束会话"
             case .card: "置顶、移到项目、复制、归档、删除"
             case .project: "选择灵感、看这个项目的会话、项目操作"
-            case .cue: "运行情况、设置"
+            case .cue: "启用或停用 Cue、运行情况、设置"
             case .progress: "新任务、新会话、项目范围、搜索、归档做完的、接入 Agent"
             case .trash: "清空回收站"
             case .none: "这一页没有更多操作"
@@ -60,11 +60,18 @@ struct PageMenuSlot: View {
             case .card(let card?): CardActions(card: card, more: true)
             case .project(let id): ProjectMenuItems(projectID: id)
             case .cue:
+                let cue = workspace.cue
+                // 开关同设置里那一个（`AppServices.turnCue`）；停用后再启用回到停用前那台
+                if cue.presence == .disabled {
+                    Button("启用 \(cue.name)", icon: .wakeEnabled) { workspace.turnCue(true) }
+                } else {
+                    Button("停用 \(cue.name)", icon: .wakeEnabled) { workspace.turnCue(false) }
+                }
                 // 运行情况给开发者看：只在 Cue 于这台 Mac 值班时有（经过只在值班的管理器里）
                 if workspace.services.cue.keeper != nil {
-                    Toggle("运行情况", icon: .session, isOn: Bindable(workspace.cue).showsRun)
+                    Toggle("运行情况", icon: .session, isOn: Bindable(cue).showsRun)
                 }
-                Button("\(workspace.cue.name) 的设置…", icon: .settings) { SettingsPane.open(.general) }
+                Button("\(cue.name) 的设置…", icon: .settings) { SettingsPane.open(.general) }
             case .progress:
                 Button("新任务", icon: .add) { workspace.progressPane = .board; workspace.addsTask = true }
                 Button("新会话", icon: .add) { workspace.newSession() }

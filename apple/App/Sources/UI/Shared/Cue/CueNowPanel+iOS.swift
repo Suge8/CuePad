@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Cue 名牌长出的面板（`CueHeader`）：只放 Cue 自己的、会天天变的（Mac 上这些分在 Cue 页输入框、记忆与定时两张弹层与设置里）。名牌长成的名片之下沿中轴排三块：
 /// 它的大脑（Agent、模型与思考强度，`CueConfigControls`）；它的记忆（`CueRecall`：刚记下的两条，整块点进记忆）；
-/// 底下几行：它的定时（`ScheduleLine`，点了打开定时），它在用的技能与规则（`LibraryLine`，点了推入技能与规则），它在哪台 Mac 上运行、点了进设置。
+/// 底下几行：它的定时（`ScheduleLine`，点了打开定时），它在用的技能与规则（`LibraryLine`，点了推入技能与规则），它在哪台 Mac 上运行（点了进设置）与它的开关。
 /// 上下文用了几成不在这里：换新是自动的、多在歇过一小时后，看了也没有可做的，只留在 Mac 的"运行情况"（`CueContextLine`）。
 /// 在做的会话不在这里：进行中的在进展页的会话段（左滑就到），点进会话只有那一条路，返回落点与行的长相都只有一种。
 /// 面板定高：空、一条、记满都一样高（两条各占两行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
@@ -189,37 +189,46 @@ private struct LibraryLine: View {
     }
 }
 
-/// 面板最底下一行，点了推入设置页（Cue 的名字与在哪台 Mac 上运行在它最上面一组），左边一句、行尾"设置"：
-/// 在线时写它在哪台 Mac 上运行；不在时写为什么（同名牌，`CuePresence.line`：已停用、还没启用、某台没开），
-/// 但名片上没有可数的时那一句已写在名字下面（`CueNow.quietLine`），同一屏不写两遍，这一行只剩去设置的路。
+/// 面板最底下一行：左边点了推入设置页（Cue 的名字、开关与在哪台 Mac 上运行在它最上面一组），右边是 Cue 的开关（`CueSwitch`，同设置里那一个）。
+/// 左边一句：在线时写它在哪台 Mac 上运行；不在时写为什么（同名牌，`CuePresence.line`：已停用、某台没开），
+/// 但名片上没有可数的时那一句已写在名字下面（`CueNow.quietLine`），同一屏不写两遍，这一句只剩"设置"；开关没能写成时这一句换成原因。
+/// 还没选过在哪台运行时开关占着位置、看不见：那时的下一步是上面的选 Mac（`CueHostPick`）；还没和 iCloud 对过、手机上还没有哪台 Mac 时开关停用。
 private struct CueHostLine: View {
     let open: () -> Void
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @State private var model = CueSettingsModel()
 
     var body: some View {
         let place = place
-        Button(action: open) {
-            HStack(spacing: 8) {
-                Image(place == nil ? .settings : .mac).foregroundStyle(palette.ink3)
-                if let place {
-                    Text(place).foregroundStyle(palette.ink2).lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text("设置").foregroundStyle(palette.ink3)
-                } else {
-                    Text("设置").foregroundStyle(palette.ink2)
-                    Spacer(minLength: 8)
+        let settings = model.settings ?? .empty
+        HStack(spacing: 8) {
+            Button(action: open) {
+                HStack(spacing: 8) {
+                    Image(place == nil ? .settings : .mac).foregroundStyle(palette.ink3)
+                    if let failure = model.failure {
+                        Text(failure).foregroundStyle(palette.failure).lineLimit(2)
+                    } else {
+                        Text(place ?? String(localized: "设置")).foregroundStyle(palette.ink2).lineLimit(1)
+                    }
+                    Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                    Spacer(minLength: 0)
                 }
-                Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                .font(Typography.secondary)
+                .frame(minHeight: 28)
+                .contentShape(.rect)
             }
-            .font(Typography.secondary)
-            .frame(minHeight: 28)
-            .contentShape(.rect)
+            .buttonStyle(PressStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Dotted(model.failure ?? place, String(localized: "设置")).spoken)
+            .accessibilityAddTraits(.isButton)
+            CueSwitch(model: model, here: nil)
+                .disabled(!model.isOn && (settings.gate(services).waitingReason != nil || settings.hosts(here: nil).isEmpty))
+                .opacity(workspace.cue.hostID == nil ? 0 : 1)
+                .accessibilityHidden(workspace.cue.hostID == nil)
         }
-        .buttonStyle(PressStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Dotted(place, String(localized: "设置")).spoken)
-        .accessibilityAddTraits(.isButton)
+        .cueSettings(model)
     }
 
     private var place: String? {
