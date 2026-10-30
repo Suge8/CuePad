@@ -86,7 +86,7 @@ import Testing
       let hello = try await server.request("initialize", ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": ["name": "pi", "version": "1"]])
       #expect(hello["protocolVersion"] as? String == "2025-11-25")
       let tools = try #require(try await server.request("tools/list", [:])["tools"] as? [[String: Any]])
-      #expect(tools.compactMap { $0["name"] as? String } == ["task", "tell", "memory"])
+      #expect(tools.compactMap { $0["name"] as? String } == ["task", "tell", "memory", "setup"])
 
       try await server.call("task", ["action": "add", "title": "重写发布脚本", "project": "演示", "steps": ["调研", "改脚本"]])
       let task = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.heading == "重写发布脚本" }).id

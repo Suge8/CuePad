@@ -5,31 +5,11 @@ import SwiftUI
 nonisolated enum PiModelLabel {
     /// 分组标题：这家有订阅额度时写"Claude · 5 小时剩 86% · 本周剩 92%"（`QuotaMeter.menuTitle`），否则是提供方名。
     static func title(_ model: PiModelOption, quotas: [AccountQuota], at now: Date) -> String {
-        if let quota = quota(model, quotas: quotas) { return QuotaMeter(quota, at: now).menuTitle.visible }
+        if let quota = model.quota(in: quotas) { return QuotaMeter(quota, at: now).menuTitle.visible }
         if model.account?.source != nil {
             return Dotted(PiProvider(id: model.key.provider).name, String(localized: "账号额度见列表，路由账号未知")).visible
         }
         return model.account?.label(provider: model.key.provider) ?? PiProvider(id: model.key.provider).name
-    }
-
-    /// 网关只在模型明确指定完整上游且只有一个账号时关联；auto 与多个账号不猜实际路由。
-    static func quota(_ model: PiModelOption, quotas: [AccountQuota]) -> AccountQuota? {
-        guard let account = model.account else { return nil }
-        guard let source = account.source else {
-            return quotas.first { $0.provider == model.key.provider && account.matches($0.account) }
-        }
-        let candidates = quotas.filter {
-            $0.account?.source == source && $0.account?.route.map { model.key.id.hasPrefix($0 + "/") } == true
-        }
-        let longest = candidates.compactMap { $0.account?.route?.count }.max()
-        let matching = candidates.filter { $0.account?.route?.count == longest }
-        if let scope = matching.first?.account?.scope, matching.allSatisfy({ $0.account?.scope == scope }) {
-            return matching.max {
-                let first = $0.observedAt ?? .distantPast, second = $1.observedAt ?? .distantPast
-                return first == second ? $0.modifiedAt < $1.modifiedAt : first < second
-            }
-        }
-        return quotas.first { $0.account?.source == source && $0.account?.route == nil && $0.status == .unsupported }
     }
 
     /// 菜单里的分组：提供方按第一次出现的顺序。
