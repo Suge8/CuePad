@@ -6,10 +6,19 @@ nonisolated struct CueReading: Sendable {
     struct Read: Equatable, Sendable {
         let digest: CueDigest
         let widget: WidgetContent?
+        let activity: ActivityRead?
 
         static func read(from store: isolated CueStore, widget: Bool) throws -> Read {
-            Read(digest: try CueDigest.read(from: store), widget: widget ? try store.widgetContent() : nil)
+            let destinations = widget ? [] : try store.activityDestinations()
+            return Read(
+                digest: try CueDigest.read(from: store), widget: widget ? try store.widgetContent() : nil,
+                activity: destinations.isEmpty ? nil : ActivityRead(destinations: destinations, publisher: try store.activityPublisher()))
         }
+    }
+
+    struct ActivityRead: Equatable, Sendable {
+        let destinations: [ActivityDestination]
+        let publisher: String?
     }
 
     let store: CueStore

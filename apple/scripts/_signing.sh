@@ -51,11 +51,13 @@ release_archive() {
   echo "$HOME/Library/Developer/Xcode/Archives/$(date +%F)/CuePad $1 ${3#CURRENT_PROJECT_VERSION=}.xcarchive"
 }
 
-# 发布前核对门铃中转：check_relay [打出来的 Info.plist]。中转的 /health 要回 ok（App 没有它只能按节奏拉）；
+# 发布前核对中转：check_relay [打出来的 Info.plist]。门铃 /health 回 ok，实时活动 /v1/activity/health 回 204；
 # 给了 Info.plist 就再核对包里的 CuePadRelayHost 就是 CUEPAD_RELAY_HOST（App 读不到会当场停下）。
 check_relay() {
   [ "$(curl -fsS --max-time 10 "https://$CUEPAD_RELAY_HOST/health" 2>/dev/null)" = ok ] \
     || { echo "门铃中转 https://$CUEPAD_RELAY_HOST/health 没回 ok（部署见 relay/README.md）" >&2; exit 1; }
+  [ "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "https://$CUEPAD_RELAY_HOST/v1/activity/health" 2>/dev/null)" = 204 ] \
+    || { echo "实时活动中转尚未就绪（APNs 配置与部署见 relay/README.md）" >&2; exit 1; }
   [ -z "${1:-}" ] || [ "$(/usr/libexec/PlistBuddy -c 'Print :CuePadRelayHost' "$1" 2>/dev/null)" = "$CUEPAD_RELAY_HOST" ] \
     || { echo "$1 里的 CuePadRelayHost 不是 $CUEPAD_RELAY_HOST" >&2; exit 1; }
 }

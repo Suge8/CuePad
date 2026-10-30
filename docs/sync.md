@@ -1,10 +1,8 @@
 # 同步参考
 
-同步通路、拉取、发送与通知的规则和理由写在各自类型的头注释里：通路、冷启动与为什么不用 CKSyncEngine 在 `CloudSync`，拉、推在 `ZonePuller`、`RecordSender`，失败怎么归类、怎么重试在 `SyncFault`、`SyncCoordinator+Hold`，等待理由与立即同步在 `AppServices+Sync.swift`，说的话到哪了在 `Speech`。这里只补代码里没有的：实测结论、跨设备的取舍、排查与真机验证。
-
 ## 拉取节奏与门铃
 
-别的设备的改动到本机只有两条路：门铃叫这台拉一次，或按节奏拉。门铃（实时层）在别的设备的一批改动被 iCloud 收下时经自建中转通知这台，中转只转发"有新东西"，数据只在 iCloud。规则在 `Relay`（连接、重连、心跳、欠一次、进后台前断开、后台短连）、`RelaySecret`（密钥，经 `CloudSync.relaySecret` 取）、`RelayCredentials`（房间号与签名）、`AppServices+Relay`（何时连、按与听），中转与协议在 `relay/`；节奏在 `SyncPoller.Cadence`，等待理由只在 `AppServices.pollingCadence` 加。
+别的设备的改动入库都经拉取：门铃、通知或按节奏触发。门铃在别的设备的一批改动被 iCloud 收下时经自建中转通知这台，只带"有新东西"；实时活动另经同一中转发往 APNs，不写入手机资料库。规则在 `Relay`（连接、重连、心跳、欠一次、进后台前断开、后台短连）、`RelaySecret`（密钥，经 `CloudSync.relaySecret` 取）、`RelayCredentials`（房间号与签名）、`AppServices+Relay`（何时连、按与听），中转与协议在 `relay/`；节奏在 `SyncPoller.Cadence`，等待理由只在 `AppServices.pollingCadence` 加。
 
 **门铃不通时（连不上中转、心跳判断断了），Mac 的 2 秒拉取是别的设备写来的请求与对 Cue 说的话到达 Mac 的唯一通路，别放慢、别删。** 门铃通着时按节奏的拉取降为 15 秒一次的兜底（理由在 `Relay.silenceLimit`）；门铃断了当场换回快档、立即拉一次。
 
@@ -120,7 +118,9 @@ Cue 工具最多等 `Speech.cueWait`；未知不重发，不承诺之后必有�
 
 - Mac 不注册远程通知、签名里没有推送权限（aps-environment），通知都是本机发的本地通知；同步到达本来也不靠推送（见「拉取节奏与门铃」）。
 - `notify` 是一次性事件标志，通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的写入取代就不送出。要保证每个事件都送达得另建追加式的通知事件记录，那是另一种设计。
-- 实时活动、小组件与 App 使用同一份运行投影。快照过期时撤销当前运行证据，但不把未确认当作全部完成或活动结束；下一次按时刻变化由 `CueNow.nextShownChange` 通知系统重画。iCloud 通知与 ActivityKit 更新是不同通道，不能用通知已接受或同步完成推断活动已经上屏。目标与活动生命周期按 `CueLiveActivity` 的约束处理，不从一个运行计数反推。
+- 实时活动、小组件与 App 使用同一份运行投影，Mac 发布者直接订阅 Store，不依赖界面订阅。快照过期只撤销运行证据；未知只保留已有活动，不授权新建，也不冒充完成。各 host 到期后的计数由 `CueNow.nextShownChange` 安排系统重画。
+- 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒；手机不拿本地旧库覆盖。令牌私有 iCloud 加密同步，中转内容不留存，密钥只在服务端。APNs 收下不证明已上屏，岛更新不证明手机资料库已同步。[部署与隐私边界](../relay/README.md)。
+- ActivityKit 推送仍受网络、优先级与系统预算限制，不保证秒到；活动最多八小时，本次不远程开启。`stale-date` 只标过时，不会取得新事实。依据：[ActivityKit](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications)、[后台通知](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app)。
 - Mac 提示音装进 ~/Library/Sounds（`AlertSounds`），卸载 App 后会留下，也会出现在系统设置的提示音列表里。
 - 改订阅的定义（谓词、选项、通知文案 key）等于改 schema，见 [release.md](release.md)。
 
@@ -142,12 +142,20 @@ CloudKit 日志里的错误详情是 `<private>`。要复现：拿用户库的�
 
 验证生产环境的订阅能否创建：用 Developer ID 描述文件签名、带 production 容器权限的最小 Mac 程序保存订阅，打印完整的 CKError（看 `description`，`localizedDescription` 会丢掉服务端的说明）。开发环境的 Mac 描述文件按 Provisioning UDID 登记设备，不是 Hardware UUID。
 
+### 实时活动的手机取证
+
+`xc.sh activity-log <输出.json>` 签隔离 Mac 副本，在 AppDelegate 与库启动前只读生产私有区，不重启正式版。无报告成功输出 `[]`；失败非零退出，保留旧导出。
+
+取证与地址独立，按账号隔离。写本地后异步上传，失败不改活动决策、不续后台时间。本地写入时保留近七天最多 96 条；iCloud 只留最后上传快照，不自动清理。不记正文、原始令牌或完整错误。`contentObserved`、`sourceAt` 与 `contentTag` 只表示 App 观察，不证明屏幕展示。隔离演示加 `-CuePadActivityDiagnostics YES`。跨网络、后台和真实撤销待 TestFlight 验收。
+
 ### 推送叫醒被系统结束的 App
 
-推送先于同步启动到达：App 被系统结束（内存回收，不是被划掉）后由推送冷启动到后台，拉取要等同步开始了再拉（`CloudSync.syncNow`），拉完、改完小组件与实时活动才交还系统（`IOSAppDelegate` 的远程通知回调）。在 App 切换器里划掉的，系统不再因推送拉起它（Apple 远程通知回调文档），直到用户再打开或重启手机：可见通知照常出（通知服务扩展照常改写），小组件与实时活动不变。没有自动测试：推送不经 Workspace，模拟器登不了 iCloud，CloudKit 也不把推送发给做出改动的那台设备，只能真机加另一台设备验。
+CloudKit 推送先于同步启动到达时，拉取要等同步开始（`CloudSync.syncNow`），小组件与角标更新完再交还系统（`IOSAppDelegate`）。被系统回收与用户划掉 App 不同：后者不再因后台通知被拉起，小组件不能依靠这条通路更新。已经开启并登记令牌的实时活动走独立的 ActivityKit 推送，不依赖 App 被叫醒；不把它的上屏当成手机资料库已经同步的证据。
+
+以下需签名设备与另一台同环境设备。隔离模拟器能核对入库后的展示和 ActivityKit 内容，不能证明真实通知可达、后台预算、锁屏数据保护或低电量行为。Apple Silicon 模拟器可配 APNs 沙箱推送，仍不代表真机调度。
 
 1. 两端在同一个环境：生产订阅部署之后，手机装 TestFlight 版、Mac 用正式版；之前用 `xc.sh device` 装的开发构建，Mac 那头起连开发环境的实例（见 [perf.md](perf.md)「同步测量」）。手机打开一次、确认设置里通知那一行正常，主屏放 Cue 小组件。
 2. 打开 CuePad 后回主屏、锁屏放一会儿（不要划掉；要验冷启动，等系统回收它，或打开几个大 App 挤掉它）。
 3. 在 Mac 上让 Cue 对你说一句不带选项的话（只走静默推送），再说一句带选项的（可见通知，同时叫醒 App）。
-4. 不解锁、不打开 App，看小组件与锁屏实时活动：应在几十秒内换成刚说的话。再打开 App：Cue 页里两句已在，不是打开后才转圈拉到。
-5. 反例：小组件停在旧内容、打开 App 才出现，就是推送拉起的那一拉空手返回或推送被节流。看手机日志（Mac 上 Console 选这台手机，subsystem 是 App 身份前缀）类别 `sync` 有没有"同步进入等待"（归类与原话）或认账号失败。静默推送每小时只给两三条，连着试几次后它不来是系统节流，换可见通知那句验。
+4. 不打开 App，分别核对小组件与实时活动；前者取决于 CloudKit 唤醒及 WidgetKit 刷新预算，后者应由 ActivityKit 推送换成最新计数与问题。再打开 App 核对资料库，不能用岛已更新替代这一步。
+5. 小组件只在打开 App 后才变化时，查手机 `sync` 日志的拉取、账号与等待原因，也查是否真的收到唤醒；Apple 建议后台通知不要超过每小时两三条，不是固定配额。岛不更新则另查令牌记录、Mac 的 `live-activity` 日志、中转/APNs 响应与系统活动是否结束；HTTP 成功只证明 APNs 收下。

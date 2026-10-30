@@ -46,7 +46,8 @@ struct RuntimeBootTests {
         #expect(try await !now().isLive)
     }
 
-    @Test func 历史82库经83入口升级不补签Cue_真实新报告才恢复确认() async throws {
+    @Test(arguments: ["主干82", "本分支82", "本分支84"])
+    func 历史库升级不补签Cue_真实新报告才恢复确认(_ origin: String) async throws {
         let app = TestApp(), store = app.services.store
         _ = try await store.updateCueProfile { $0.hostID = "mac-a"; $0.enabledAt = .now }
         await Workspace(services: app.services).speak("继续检查发布", to: .cue).value
@@ -57,7 +58,13 @@ struct RuntimeBootTests {
         let location = app.services.location
         let db = RawDB(location.databaseURL)
         app.services.cancelBackgroundWork()
-        try db.exec("""
+        if origin == "主干82" {
+            _ = try await store.recordActivityDestination(device: "phone", activityID: "existing", token: "token", environment: "development", startedAt: .now)
+            try db.exec("ALTER TABLE accountQuotas DROP COLUMN account; ALTER TABLE accountQuotas DROP COLUMN status; ALTER TABLE accountQuotas DROP COLUMN observedAt;")
+        } else {
+            try db.exec("DROP TABLE activityDestinations;")
+        }
+        if origin != "本分支84" { try db.exec("""
             DROP TRIGGER piSessionStates_writeSeq_update;
             ALTER TABLE piSessionStates DROP COLUMN bootID;
             ALTER TABLE macPresence DROP COLUMN bootID;
@@ -70,11 +77,14 @@ struct RuntimeBootTests {
               UPDATE piSessionStates SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;
             END;
             ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
-            PRAGMA user_version = 82;
-            """)
-        #expect(CueStore.schemaVersion(of: location.databaseURL) == 82)
+            """) }
+        let oldVersion = origin == "本分支84" ? 84 : 82
+        try db.exec("PRAGMA user_version = \(oldVersion);")
+        #expect(CueStore.schemaVersion(of: location.databaseURL) == oldVersion)
         let upgraded = try CueStore(location: location)
-        #expect(CueStore.schemaVersion(of: location.databaseURL) == 84 && CueStore.peerFloor == 84)
+        #expect(CueStore.schemaVersion(of: location.databaseURL) == 85 && CueStore.peerFloor == 84)
+        #expect(try await upgraded.activityDestinations().map(\.activityID) == (origin == "主干82" ? ["existing"] : []))
+        #expect(try await upgraded.accountQuotas().isEmpty)
         #expect(try db.rows("SELECT hostID IS NULL, bootID IS NULL FROM cueState") == [["1", "1"]])
         let legacy = try #require(try await upgraded.cueState())
         #expect(legacy.state == .known(.thinking) && legacy.detail == "检查发布结果" && legacy.runtimeState.known == nil)

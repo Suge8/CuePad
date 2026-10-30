@@ -1,18 +1,6 @@
 import CueStore
 import Foundation
 
-nonisolated extension CueWork {
-    /// 同一会话绑着多个叶子也只贡献一次。
-    var sessions: [PiSessionState] {
-        let states = switch self {
-        case .task(let item): item.leaves.compactMap(\.session)
-        case .session(let session): [session]
-        }
-        var seen = Set<String>()
-        return states.filter { $0.state != .known(.ended) && seen.insert($0.sessionID).inserted }
-    }
-}
-
 /// 当前状态与未来各 host 到期后的数字账共用同一份归属汇总；不为每个未来时刻重扫全量。
 nonisolated struct RuntimeTimeline {
     struct Work {
@@ -50,6 +38,7 @@ nonisolated struct RuntimeTimeline {
 
     struct Session {
         var agents: Int
+        var total: Int
         /// held 只撤销那一件的引用，不能把共享会话的贡献固定给第一件。
         var advancing = 0
         var contribution: Int { advancing > 0 ? agents : 0 }
@@ -90,6 +79,7 @@ nonisolated struct RuntimeTimeline {
     var tally: CueNow.Tally
     var advancing: Int
     var subagents: Int
+    var agentCount = 0
     var unconfirmed = false
     var waiting: [(until: Date?, value: CueNow.Wait)] = []
     var firstIndex = 0
@@ -134,7 +124,8 @@ nonisolated struct RuntimeTimeline {
                 let added = sessionRefs[session.sessionID] == nil
                 if added {
                     sessionRefs[session.sessionID] = sessions.count
-                    sessions.append(Session(agents: agents))
+                    sessions.append(Session(agents: agents, total: session.activeAgentCount))
+                    agentCount += session.activeAgentCount
                 }
                 let ref = sessionRefs[session.sessionID]!
                 entry.sessionRefs.append(ref)
@@ -237,6 +228,8 @@ nonisolated struct RuntimeTimeline {
             for ref in removal.expiredSessions {
                 let before = sessions[ref].contribution
                 sessions[ref].agents = 0
+                agentCount -= sessions[ref].total
+                sessions[ref].total = 0
                 subagents -= before
             }
             if let id = removal.visible, let index = visible[id] {
@@ -283,6 +276,6 @@ nonisolated struct RuntimeTimeline {
         let beforeFirst = firstIndex
         while firstIndex < waiting.count, let until = waiting[firstIndex].until, until <= date { firstIndex += 1 }
         let first = firstIndex < waiting.count ? waiting[firstIndex].value : nil
-        return CueNow.Decay(at: date, tally: tally, advancing: advancing, subagents: subagents, items: items, first: beforeFirst == firstIndex ? nil : first, replaceFirst: beforeFirst != firstIndex)
+        return CueNow.Decay(at: date, tally: tally, advancing: advancing, subagents: subagents, items: items, first: beforeFirst == firstIndex ? nil : first, replaceFirst: beforeFirst != firstIndex, agentCount: agentCount)
     }
 }

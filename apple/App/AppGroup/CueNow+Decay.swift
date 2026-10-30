@@ -11,8 +11,9 @@ nonisolated extension CueNow {
         var items: [Change]
         var first: Wait?
         var replaceFirst: Bool
+        var agentCount: Int? = nil
 
-        enum CodingKeys: String, CodingKey { case at = "t", tally = "c", advancing = "a", subagents = "s", items = "i", first = "f", replaceFirst = "r" }
+        enum CodingKeys: String, CodingKey { case at = "t", tally = "c", advancing = "a", subagents = "s", items = "i", first = "f", replaceFirst = "r", agentCount = "g" }
 
         enum Change: Codable, Hashable, Sendable {
             case update(slot: Int, kind: Item.Kind, since: Date, subagents: Int)
@@ -25,6 +26,7 @@ nonisolated extension CueNow {
         tally = step.tally
         advancing = step.advancing
         subagents = step.subagents
+        agentCount = step.agentCount
         unconfirmed = true
         for change in step.items {
             switch change {

@@ -58,6 +58,11 @@ public struct CueTally: Equatable, Sendable {
   /// 拍板。
   public var waiting: [Wait]
   public var replies: [Reply]
+  /// 参与工作的 Agent 总数（`CueAgents`），在按等你分列之前算：任务的一处在问你，不会漏掉同任务的其它工作会话。
+  public var agents: Int { CueAgents.count(in: works) }
+
+  /// 推进中那几件里正在运行的子代理：共享同一主会话的任务不重复数它的名册。
+  public var subagents: Int { CueAgents.sessions(in: advancing).reduce(0) { $0 + $1.runtimeSubagents.count(where: \.isRunning) } }
 
   public var held: Set<UUID> {
     Set(waiting.compactMap { if case .session(_, let task) = $0 { task } else { nil } } + replies.compactMap(\.task))

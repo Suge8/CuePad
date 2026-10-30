@@ -143,7 +143,22 @@ enum Schema {
     """,
     // 84：执行与历史确认分别持有硬截止；旧端会把 confirming 写回未确认，必须一起更新。旧记录不补造期限。
     "ALTER TABLE deliveryRequests ADD COLUMN deadlineAt INTEGER;",
+    // 85：82 的两种布局分别含活动地址与额度授权字段；补齐缺少的部分，不替旧报告或投送补造证明。
+    Upgrade { db in
+      try db.exec("\(activityDestinationsTable) CREATE INDEX IF NOT EXISTS activityDestinations_modified ON activityDestinations(id, modifiedAt);")
+      let columns = Set(try db.query("PRAGMA table_info(accountQuotas)") { $0.text(1) })
+      for (name, type) in [("account", "TEXT"), ("status", "TEXT"), ("observedAt", "INTEGER")] where !columns.contains(name) {
+        try db.exec("ALTER TABLE accountQuotas ADD COLUMN \(name) \(type);")
+      }
+    },
   ]
+
+  static let activityDestinationsTable = """
+    CREATE TABLE IF NOT EXISTS activityDestinations (
+      id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, activityID TEXT NOT NULL, token TEXT NOT NULL,
+      environment TEXT NOT NULL, startedAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    """
 
   /// 技能与规则里每份文件的正文：那台 Mac 每份一条、各端读（`LibraryFileText`）。
   static let agentLibraryFilesTable = """

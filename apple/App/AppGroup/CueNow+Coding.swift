@@ -11,7 +11,7 @@ nonisolated extension CueNow {
             first: try values.decodeIfPresent(Wait.self, forKey: .first), at: try values.decode(Date.self, forKey: .at),
             elsewhere: try values.decodeIfPresent(String.self, forKey: .elsewhere), decay: decay ?? [],
             unconfirmed: try values.decodeIfPresent(Bool.self, forKey: .unconfirmed) ?? true,
-            cueUntil: try values.decodeIfPresent(Date.self, forKey: .cueUntil))
+            cueUntil: try values.decodeIfPresent(Date.self, forKey: .cueUntil), agentCount: try values.decodeIfPresent(Int.self, forKey: .agentCount))
         if decay == nil { migrateUnconfirmedRuntime() }
     }
 
@@ -52,7 +52,7 @@ nonisolated extension CueNow.Decay {
                                moving: try counts.decode(Int.self), delegating: try counts.decode(Int.self)),
             advancing: try values.decode(Int.self, forKey: .advancing), subagents: try values.decode(Int.self, forKey: .subagents),
             items: try values.decode([Change].self, forKey: .items), first: try values.decodeIfPresent(CueNow.Wait.self, forKey: .first),
-            replaceFirst: try values.decode(Bool.self, forKey: .replaceFirst))
+            replaceFirst: try values.decode(Bool.self, forKey: .replaceFirst), agentCount: try values.decodeIfPresent(Int.self, forKey: .agentCount))
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -68,6 +68,7 @@ nonisolated extension CueNow.Decay {
         try values.encode(items, forKey: .items)
         try values.encodeIfPresent(first, forKey: .first)
         try values.encode(replaceFirst, forKey: .replaceFirst)
+        try values.encodeIfPresent(agentCount, forKey: .agentCount)
     }
 }
 

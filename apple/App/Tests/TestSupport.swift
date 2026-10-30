@@ -67,9 +67,10 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     /// 为 true 时 `syncNow()` 永不返回（像网络一直没有回音）。
     let syncNowHangs = Mutex(false)
 
-    func syncNow() async throws {
+    @discardableResult func syncNow() async throws -> SyncPullResult {
         state.withLock { $0.syncNows += 1 }
         if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
+        return .noData
     }
     let uploads = AsyncStream<String>.makeStream()
     let sendsSucceed = Mutex(true)

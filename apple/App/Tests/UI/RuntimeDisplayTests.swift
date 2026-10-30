@@ -20,6 +20,7 @@ struct RuntimeDisplayTests {
             tasks.append(task.id)
             try await recorder.update(sessionID: id, state: state, title: id, hosted: true, subagents: [
                 PiSubagentState(name: "builder", role: "工程师", phase: .known(.running)),
+                PiSubagentState(name: "builder", role: "审查员", phase: .known(.review)),
             ])
             try await store.bindSession(id, to: task.id)
             try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [
@@ -30,6 +31,7 @@ struct RuntimeDisplayTests {
             CueNow(try await CueDigest.read(from: store), at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
         }
         let snapshot = try await now()
+        #expect(snapshot.agentCount == 9)
         #expect(snapshot.subagents == 3 && snapshot.tally.moving == 3 && snapshot.hasConfirmedActivity)
         _ = app.relaunch()
         try await store.recordMacPresence(host: "mac-a", bootID: "test-boot") { true }
@@ -37,6 +39,7 @@ struct RuntimeDisplayTests {
 
         try await store.recordMacPresence(host: "mac-a", bootID: "test-boot") { false }
         let offline = try await now()
+        #expect(offline.agentCount == 0)
         #expect(offline.subagents == 0 && offline.tally.moving == 0 && offline.advancing == 3)
         #expect(offline.isLive && !offline.hasConfirmedActivity)
         let board = try await TaskBoard.read(from: store)
@@ -81,12 +84,15 @@ struct RuntimeDisplayTests {
             CueNow(try await CueDigest.read(from: store), at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
         }
         let snapshot = try await now()
+        #expect(snapshot.agentCount == 4)
         #expect(snapshot.advancing == 1 && snapshot.tally.moving == 1 && snapshot.subagents == 2)
         let aExpires = snapshot.at + 360
         let onlyB = snapshot.shown(at: aExpires)
+        #expect(onlyB.agentCount == 2)
         #expect(onlyB.tally.moving == 1 && onlyB.tally.delegating == 1 && onlyB.subagents == 1)
         #expect(onlyB.items.first?.kind == .delegating)
         let expired = snapshot.shown(at: snapshot.at + 600)
+        #expect(expired.agentCount == 0)
         #expect(expired.tally.moving == 0 && expired.subagents == 0 && expired.advancing == 1 && expired.isLive)
         #expect(snapshot.nextShownChange(after: snapshot.at) == aExpires)
 
@@ -128,20 +134,9 @@ struct RuntimeDisplayTests {
         }
         try await b.updateCue(.tool, detail: "read · Sources/Runtime/SharedRuntimeProjection.swift")
         let full = try await now()
-        let quotas = (0..<4).map { index in
-            CueActivityState.Quota(account: "订阅账户 user\(index)@example.com", windows: [
-                .init(name: "5 小时", left: 0.75, level: .roomy, resetsAt: clock.now + 3600, near: false),
-                .init(name: "本周", left: 0.25, level: .tight, resetsAt: clock.now + 86400, near: true),
-            ])
-        }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        let content = CueActivityState(now: full, quotas: quotas)
-        let state = try JSONSerialization.jsonObject(with: encoder.encode(content))
-        let envelope: [String: Any] = ["aps": ["timestamp": Int(full.at.timeIntervalSince1970), "event": "update", "content-state": state,
-                                              "stale-date": Int(full.nextShownChange(after: full.at)!.timeIntervalSince1970)]]
-        let bytes = try JSONSerialization.data(withJSONObject: envelope).count
-        print("RUNTIME complete APNs update envelope: \(bytes) bytes; 8 active hosts, 8 works, 8 visible items, 4 quota accounts/8 windows")
+        let content = try ActivityPush.fitted(CueActivityState(now: full))
+        let bytes = try JSONEncoder().encode(ActivityPush.Payload(content)).count
+        print("RUNTIME complete APNs update envelope: \(bytes) bytes; 8 active hosts, 8 works, 8 visible items, fitted production payload")
         #expect(full.items.count == 8 && full.isBusy && full.first?.detail != nil && bytes <= 4096)
         let decoded = try JSONDecoder().decode(CueActivityState.self, from: JSONEncoder().encode(content))
         #expect(decoded.now.shown(at: clock.now + 601).tally.moving == 0 && decoded.now.shown(at: clock.now + 601).isLive)
@@ -207,7 +202,7 @@ struct RuntimeDisplayTests {
         try await gate.update(sessionID: "gate", state: .waitingForUser, title: "发布确认", question: question)
         try await store.bindSession("gate", to: gateLeaf.id)
         let held = try await now()
-        #expect(held.advancing == 1 && held.subagents == 1)
+        #expect(held.advancing == 1 && held.subagents == 1 && held.agentCount == 2)
         try await gate.update(sessionID: "gate", state: .settled)
         let released = try await now()
         #expect(released.advancing == 2 && released.subagents == 1)

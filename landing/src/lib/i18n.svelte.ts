@@ -37,7 +37,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 			'Type it on the Mac or say it from your phone. Cue turns it into tasks, starts and names agent sessions, answers their routine questions, checks their evidence and signs off finished work.',
 		'drench.meta': 'Claude\u00a0Code · Codex · Pi · OpenCode · Grok\u00a0Build · DeepSeek\u00a0Harness — ⌥\u00a0⇧\u00a0Space from anywhere',
 		'drench.local':
-			'Local-first — everything lives in a SQLite library on your device and syncs through your own private iCloud. No account, no server, no telemetry.',
+			'Local-first — your library lives on your devices and syncs through your private iCloud. No CuePad account or telemetry. Live Activity summaries pass through a relay to Apple’s push service without being retained.',
 		'drench.video': 'Recording: tell Cue what you want; it starts an agent session and reports back',
 		'how.h': 'From one sentence to finished work',
 		'how.1.h': 'Say it',
@@ -115,7 +115,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 			'在 Mac 上打字，或在手机上说出你要什么。Cue 把它变成任务，开好并命名 Agent 会话，回答常规提问，核对证据，自己判定做完。',
 		'drench.meta': 'Claude\u00a0Code · Codex · Pi · OpenCode · Grok\u00a0Build · DeepSeek\u00a0Harness —— 随处按 ⌥\u00a0⇧\u00a0Space 叫 Cue',
 		'drench.local':
-			'本地优先——全部存在设备上的 SQLite 库里，经你自己的 iCloud 私有数据库同步。无需账号，没有服务器，没有遥测。',
+			'本地优先——资料库存在你的设备上，经你的 iCloud 私有数据库同步。无需 CuePad 账号，没有遥测。实时活动摘要经中转发往 Apple 推送服务，不留存内容。',
 		'drench.video': '录屏：告诉 Cue 要做什么，它开好 Agent 会话、回来报告结果',
 		'how.h': '从一句话到做完',
 		'how.1.h': '说一句',

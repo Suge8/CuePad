@@ -335,6 +335,18 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE activityDestinations (
+        "___recordID" REFERENCE QUERYABLE,
+        device        STRING,
+        activityID    STRING,
+        token         ENCRYPTED STRING,
+        environment   STRING,
+        startedAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE syncFloor (
         "___recordID" REFERENCE QUERYABLE,
         version       INT64,
@@ -345,6 +357,13 @@ DEFINE SCHEMA
     RECORD TYPE relaySecrets (
         "___recordID" REFERENCE QUERYABLE,
         secret        ENCRYPTED BYTES,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE activityDiagnostics (
+        "___recordID" REFERENCE QUERYABLE,
+        report        ENCRYPTED BYTES,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

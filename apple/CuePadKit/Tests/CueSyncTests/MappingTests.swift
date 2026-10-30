@@ -44,6 +44,7 @@ import Testing
     try await store.markCueRead(through: .now)
     try await store.recordMacPresence(host: "mac") { true }
     try await store.recordViewing(device: "phone", sessionID: "s1", cue: false)
+    try await store.recordActivityDestination(device: "phone", activityID: "activity", token: "private-push-token", environment: "production", startedAt: .now)
     try await store.recordMacAgents(host: "mac", name: "工作室", [MacAgent(kind: .pi, model: nil, models: [])], problems: [MacAgentProblem(kind: .codex, reason: .notLoggedIn)])
     let skill = "---\nname: pr\ndescription: 写 PR\n---\n"
     try await store.recordAgentLibrary(
@@ -81,6 +82,10 @@ import Testing
     #expect(record.encryptedValues["variableValues"] as? String != nil)
     #expect(record["sortKey"] as? String == card.sortKey)
     #expect(record["modifiedAt"] as? Int64 != nil && record.encryptedValues["modifiedAt"] == nil)
+
+    let destination = ActivityDestination.recordID(device: "phone").uuidString.lowercased()
+    let push = RecordMapper.record(from: try #require(try await store.syncRow(recordName: destination)), zoneID: testZone)
+    #expect(push.encryptedValues["token"] as? String == "private-push-token" && push["token"] == nil)
 
     let names = ["projects": "name", "sendRecords": "content"]
     let answer = PiChatMessage.recordID(sessionID: "s1", entryID: "answer/1").uuidString.lowercased()

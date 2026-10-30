@@ -136,6 +136,7 @@ extension DeliveryConfirmationTests {
         try RawDB(app.databaseURL).exec("""
             UPDATE deliveryRequests SET status = 'executing', handledBy = '\(TestApp.hostID)';
             ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
+            DROP TABLE activityDestinations;
             PRAGMA user_version = 83;
             """)
         let services = app.relaunch()

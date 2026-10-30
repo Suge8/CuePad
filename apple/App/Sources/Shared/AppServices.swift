@@ -121,10 +121,9 @@ final class AppServices {
 
     #if os(iOS)
     @ObservationIgnored let pasteboard: UIPasteboard
-    /// 锁屏与灵动岛上的那一个实时活动（`startSnapshots` 跟着库开、改、结束它）。不碰真实世界时（`LibraryLocation.touchesRealWorld`：测试、脚本起的调试实例）没有：
-    /// 实例被结束时开着的活动留在系统里，下次装 App 时系统为它把 App 叫到后台，正好撞上测试宿主的启动（测试进程连不上）；
-    /// 验收实时活动时用 `-CuePadLiveActivity YES` 打开（`DebugHooks.opensLiveActivity`）。
-    @ObservationIgnored let cueActivity: CueLiveActivity?
+    /// 手机实时活动：本地负责开启与身份失效时撤销，远程内容由 Mac 发布。
+    /// 隔离实例默认不开，避免遗留活动唤醒测试宿主；验收用 `-CuePadLiveActivity YES`。
+    @ObservationIgnored private(set) var cueActivity: CueLiveActivity?
     #endif
 
     #if os(macOS)
@@ -262,9 +261,14 @@ final class AppServices {
         cueFeed = CueFeed(store: store, widget: true)
         self.timing = timing
         self.pasteboard = pasteboard
-        cueActivity = location.touchesRealWorld || DebugHooks.opensLiveActivity ? CueLiveActivity() : nil
+        let activitySync: (any SyncControlling)? = if case .iCloud = sync, location.touchesRealWorld { self.sync } else { nil }
         viewer = UIDevice.current.identifierForVendor.map { [sync = self.sync] in
             ViewerKeeper(store: store, sync: sync, device: $0.uuidString)
+        }
+        if location.touchesRealWorld || DebugHooks.opensLiveActivity {
+            cueActivity = CueLiveActivity.make(store: store, sync: activitySync, location: location) { [weak self] in
+                try self?.remoteActivityState()
+            }
         }
     }
     #endif
@@ -283,6 +287,15 @@ final class AppServices {
         }
     }
 
+    /// 换账号或清除资料前先撤销活动；重置同步令牌的决定已做出，不等异步状态流才阻止旧库重开活动。
+    func resolveSync(_ resolution: SyncResolution) async throws {
+        #if os(iOS)
+        await cueActivity?.invalidate(reason: "resolveSync").value
+        #endif
+        syncReconciled = false
+        try await sync?.resolve(resolution)
+    }
+
     /// 同步从不通变通时立即同步一次（`syncNow`）：断网时没传上去的记录（留在库里待推送）当场传出、在等的回执当场拉回，
     /// 不等发送者的退避；按节奏的拉取也随之重开一个窗口（`pollingCondition`）。
     /// Mac 停下同步等更新时当场查一次更新（`UpdateService.checkInBackground`）。
@@ -290,6 +303,15 @@ final class AppServices {
         let recovered = state.status.reachesMac && speech.reachableSince == nil
         #if os(macOS)
         if state.status == .outdated, syncStatus != .outdated { updates.checkInBackground() }
+        #endif
+        #if os(iOS)
+        if syncStatus != state.status {
+            switch state.status {
+            case .noAccount: cueActivity?.invalidate(reason: "syncNoAccount")
+            case .needsDecision: cueActivity?.invalidate(reason: "syncNeedsDecision")
+            default: break
+            }
+        }
         #endif
         syncStatus = state.status
         speechClock.setReachable(state.status.reachesMac)

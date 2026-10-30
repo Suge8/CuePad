@@ -30,7 +30,7 @@ extension PiSessionState {
     guard runtimeUntil == nil else { return subagents }
     return subagents.map { agent in
       var agent = agent
-      if agent.isRunning { agent.phase = .unknown("unconfirmed") }
+      if agent.isRunning || agent.phase == .known(.review) { agent.phase = .unknown("unconfirmed") }
       return agent
     }
   }

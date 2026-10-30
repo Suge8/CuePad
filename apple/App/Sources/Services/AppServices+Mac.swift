@@ -58,6 +58,7 @@ extension AppServices {
         startCue()
         startSync()
         startRelay()
+        startActivityPushes()
         startSpeechClock()
         startLiveSessions()
         startAccountQuotas()

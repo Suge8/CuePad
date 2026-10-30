@@ -8,7 +8,7 @@
 
 ## 发版顺序
 
-同步下界（`Schema.peerFloor`，什么时候抬见它的注释）抬高的那一版先发 iOS，等 TestFlight 处理完（`testflight.py builds` 显示 VALID）再发 Mac：Mac 经 Sparkle 几分钟就装上，iOS 要等苹果处理十几分钟到一小时，反过来发，这段时间里手机停下收发。`release ios` 上传后在那个提交上打 `ios/<构建号>` 标签，`release mac` 核对 TestFlight 上处理好的最新一版的下界不低于这一版，不够就不发。下界没变的版本两端先后随意。
+同步下界（`Schema.peerFloor`，什么时候抬见它的注释）抬高的那一版先发 iOS，等 TestFlight 处理完（`testflight.py builds` 显示 VALID）再发 Mac：Mac 经 Sparkle 几分钟就装上，iOS 要等苹果处理十几分钟到一小时，反过来发，这段时间里手机停下收发。`release ios` 上传后在那个提交上打 `ios/<构建号>` 标签，`release mac` 核对 TestFlight 上处理好的最新一版的下界不低于这一版，不够就不发。下界没变的版本通常先后随意；首次启用远程实时活动的这一版先更新负责发布的 Mac，再更新 iPhone：新版手机不再用本地库更新远程活动。
 
 先装上新版的那台把下界抬上去，另一台停下同步、写下的照记，更新后自动发出：Mac 停下时当场查一次更新（`UpdateService.checkInBackground`），手机在设置的同步那一行点「在 TestFlight 里更新」。
 
@@ -24,7 +24,7 @@
 团队写在凭据文件的 `CUEPAD_TEAM_ID`（字段见 `_signing.sh` 头注释）。本机 ad-hoc 构建到此就能编能跑。
 要真机、同步或发布，再在开发者后台做上面的一次性前置：`xc.sh provision ids` 用 API 建四个 App ID 并开能力；App Group、iCloud 容器在网页创建并挂上；`xc.sh provision` 建证书与描述文件；CloudKit 结构按下文导入自己的容器。
 Mac 的自动更新源与公钥（`CuePad-macOS-Info.plist` 的 `SUFeedURL`、`SUPublicEDKey`）指向本仓库的发布，自己发版时换成自己的（`sparkle.sh`）。
-门铃中转（同一文件的 `CUEPAD_RELAY_HOST`）默认是作者的 `relay.cue-pad.com`，fork 照用也和别人互不相干（房间由各自 iCloud 里的密钥派生）；换成自己架的见 `relay/README.md`。发布脚本打包前核对它的 `/health`。
+中转地址由同一文件的 `CUEPAD_RELAY_HOST` 定义。作者的 `relay.cue-pad.com` 可供 fork 使用门铃（房间由各自 iCloud 密钥派生），但 APNs 只支持作者的 App topic；fork 的实时活动须部署自己的中转和匹配身份的 APNs 密钥，见 `relay/README.md`。发布脚本核对门铃 `/health` 与活动 `/v1/activity/health`；后者不代替实际投递验收。
 
 ## 自动更新（macOS）
 
@@ -69,4 +69,4 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 ### 待部署到生产
 
-发版前一次 Deploy Schema Changes，部署完删掉对应条目。这里记的是 cktool 看不到的订阅定义，订阅只有手机会建：这一节还有条目时 `release ios` 拒绝发版，`release mac` 不受影响：
+这一节还有条目时 `release ios` 拒绝发版；部署完成并回读核对后删除对应条目。字段由 `ck-production.sh` 另行核对。
