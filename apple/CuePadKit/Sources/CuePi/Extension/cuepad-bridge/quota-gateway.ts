@@ -56,7 +56,7 @@ export async function gatewayQuotas(provider: string, resolved: Awaited<ReturnTy
 		const card = record(value);
 		if (typeof card.provider !== "string" || !card.provider || typeof card.kind !== "string") throw new Error(`${provider}: invalid quota account`);
 		const user = typeof card.user === "string" ? card.user : "";
-		const name = ["Magpie", card.name ?? card.provider, card.alias || card.seat || user, card.from, resolved.identity.name].filter(Boolean).join(" / ");
+		const name = ["Magpie", card.name ?? card.provider, card.alias || card.seat || user, card.from].filter(Boolean).join(" / ");
 		const identity = { kind: resolved.identity.kind, source, scope: partition([source, card.provider, card.kind, user || card.alias || card.seat || card.name || "", card.from ?? ""]), route: card.provider, name };
 		if (activeScopes.includes(identity.scope)) throw new Error(`${provider}: ambiguous quota accounts`);
 		activeScopes.push(identity.scope);

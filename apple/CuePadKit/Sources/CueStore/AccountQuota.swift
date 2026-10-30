@@ -80,10 +80,12 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
   public var provider: String
   /// 写下这次观测的 Mac：手机请 Mac 刷新时发给它
   public var hostID: String
+  /// 读取时关联 MacAgents 的名字，不随额度另存。
+  public var macName: String
   public var account: PiAccount?
   public var status: QuotaStatus
   public var observedAt: Date?
-  /// 此来源最近一次请求的开始时刻，只用于拒绝晚到的结果，不代替原观测时间。
+  /// 此账号或网关来源最近一次请求的开始时刻，只用于拒绝晚到的结果，不代替原观测时间。
   public var requestedAt: Date?
   /// 按窗口从短到长（同长的整个账号在前，按模型的在后）
   public var windows: [QuotaWindow]
@@ -101,10 +103,11 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
   static let updateStep: TimeInterval = 0.001
 
   public init(id: UUID, provider: String, hostID: String, windows: [QuotaWindow], createdAt: Date, modifiedAt: Date,
-    account: PiAccount? = nil, status: QuotaStatus = .observed, observedAt: Date? = nil, details: QuotaDetails? = nil, requestedAt: Date? = nil) {
+    account: PiAccount? = nil, status: QuotaStatus = .observed, observedAt: Date? = nil, details: QuotaDetails? = nil, requestedAt: Date? = nil, macName: String = MacAgents.unnamed) {
     self.id = id
     self.provider = provider
     self.hostID = hostID
+    self.macName = macName
     self.account = account
     self.status = status
     self.observedAt = observedAt
@@ -214,11 +217,12 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
 extension AccountQuota: Record {
   static let table = Table.accountQuotas
   static let columns = ["id", "provider", "hostID", "windows", "createdAt", "modifiedAt", "account", "status", "observedAt", "details", "requestedAt"]
+  static var selection: String { (columns + [MacAgents.nameSQL(host: "accountQuotas.hostID")]).joined(separator: ", ") }
   var bindings: [any SQLBindable] { [id, provider, hostID, JSONColumn.encode(windows), createdAt, modifiedAt, account.map(JSONColumn.encode), status.rawValue, observedAt, details.map(JSONColumn.encode), requestedAt] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), provider: row.text(1), hostID: row.text(2), windows: JSONColumn.decodeList(QuotaWindow.self, from: row.text(3)),
       createdAt: row.date(4), modifiedAt: row.date(5), account: JSONColumn.decode(PiAccount.self, from: row.textOrNil(6)),
-      status: row.textOrNil(7).flatMap(QuotaStatus.init(rawValue:)) ?? .unobserved, observedAt: row.dateOrNil(8), details: JSONColumn.decode(QuotaDetails.self, from: row.textOrNil(9)), requestedAt: row.dateOrNil(10))
+      status: row.textOrNil(7).flatMap(QuotaStatus.init(rawValue:)) ?? .unobserved, observedAt: row.dateOrNil(8), details: JSONColumn.decode(QuotaDetails.self, from: row.textOrNil(9)), requestedAt: row.dateOrNil(10), macName: MacAgents.shownName(row.textOrNil(11)))
   }
 }

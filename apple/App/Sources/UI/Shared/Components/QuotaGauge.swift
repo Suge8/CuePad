@@ -22,7 +22,7 @@ struct QuotaDetail: View {
         } else {
             Moments(next: quotas.nextReset(after:)) { now in
                 QuotaColumns {
-                    ForEach(quotas.map { QuotaMeter($0, at: now) }, id: \.id) { QuotaAccount(meter: $0) }
+                    ForEach(QuotaMeter.all(quotas, at: now), id: \.id) { QuotaAccount(meter: $0) }
                 }
             }
         }

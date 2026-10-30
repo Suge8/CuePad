@@ -54,10 +54,10 @@ nonisolated struct QuotaMeter: Equatable {
     let values: [QuotaDetails.Value]
     let updatedAt: Date?
 
-    init(_ quota: AccountQuota, at now: Date) {
+    init(_ quota: AccountQuota, at now: Date, source: String? = nil) {
         provider = quota.provider
         id = quota.id
-        account = quota.account?.label(provider: quota.provider) ?? PiProvider(id: quota.provider).account
+        account = Dotted(quota.account?.label(provider: quota.provider) ?? PiProvider(id: quota.provider).account, source).visible
         usageURL = quota.account?.usageURL(provider: quota.provider)
         message = switch quota.reading(at: now) {
         case .observed: quota.account?.source != nil && quota.isStale(at: now) ? String(localized: "上次观测，等待更新") : nil
@@ -72,6 +72,26 @@ nonisolated struct QuotaMeter: Equatable {
         plan = quota.details?.plan
         values = quota.reading(at: now) == .observed ? quota.details?.values ?? [] : []
         updatedAt = quota.observedAt
+    }
+
+    /// 一处网关不加来源；多处才按所属 Mac 与同机网关区分，地址与授权分区只用于认身份。
+    static func all(_ quotas: [AccountQuota], at now: Date) -> [Self] {
+        let gateways = quotas.filter { $0.account?.source != nil }
+        let hosts = Array(Set(gateways.map(\.hostID))).sorted()
+        let sources = Dictionary(grouping: gateways, by: \.hostID).mapValues { Array(Set($0.compactMap { $0.account?.source })).sorted() }
+        let multiple = sources.values.reduce(0) { $0 + $1.count } > 1
+        return quotas.map { quota in
+            guard multiple, let source = quota.account?.source, let own = sources[quota.hostID], let index = own.firstIndex(of: source) else {
+                return Self(quota, at: now)
+            }
+            var mac: String?
+            if hosts.count > 1 {
+                let sameName = Set(gateways.filter { $0.macName == quota.macName }.map(\.hostID)).sorted()
+                mac = sameName.count > 1 ? "\(quota.macName) \(sameName.firstIndex(of: quota.hostID)! + 1)" : quota.macName
+            }
+            let gateway = own.count > 1 ? String(localized: "网关 \(index + 1)") : nil
+            return Self(quota, at: now, source: Dotted(mac, gateway).visible)
+        }
     }
 
     /// 模型菜单的分组标题："Claude · 5 小时剩 86% · 本周剩 92%"。

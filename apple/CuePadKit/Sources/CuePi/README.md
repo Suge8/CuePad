@@ -42,7 +42,7 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 
 `account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。原生订阅只为当前模型解析授权；其余原生 OAuth 只报种类与 `scope=null`，主动查额度时再解析。实际地址与认证经宿主 `getApiKeyAndHeaders(model)` 取得，自定义地址不调用原生订阅接口。回复流里的额度只归到回合开始时已确定的原生 OAuth 分区。
 
-自定义来源从模型实际 baseUrl 下的 `magpie/quotas` 查询，复用请求认证与配置头，不另存网关地址或密钥。404/405/501 表示不支持，其余请求失败明确报失败。网关账号以 `source`（实际地址与认证的不可逆分区）、完整上游 `route` 与 user 分开；可选 `name` 只作显示。成功清单的 `accounts` 与 `activeScopes` 同事务更新，只移除该来源已经撤销的账号；损坏清单不部分写入。`requestedAt` 只排序来源请求，晚到的旧清单与旧失败不能覆盖新结果。在线会话共同保留仍有效的来源；单个旧授权失败不阻止其他来源刷新。
+自定义来源从模型实际 baseUrl 下的 `magpie/quotas` 查询，复用请求认证与配置头，不另存网关地址或密钥。404/405/501 表示不支持，其余请求失败明确报失败。网关账号以 `source`（实际地址与认证的不可逆分区）、完整上游 `route` 与 user 分开；可选 `name` 只作显示。成功清单的 `accounts` 与 `activeScopes` 同事务更新，只移除该来源已经撤销的账号；损坏清单不部分写入。主动查询的成功、失败与不支持结果都带 `requestedAt`，按账号或网关来源排序，晚到的旧结果不能覆盖新结果。原生查询的 `observedAt` 取响应解析完成时刻，网关账号仍保留自己的 `readAt`。在线会话共同保留仍有效的来源；单个旧授权失败不阻止其他来源刷新。
 
 额度面板打开、回前台与连接来源变化时读取账号清单，同时来的查询合并；已有账号的观测新鲜不能阻止发现新账号。手机通过原 `quota` 投送请求询问每台来源 Mac，不增加轮询，也不只选择最近写记录的 Mac。
 
@@ -50,7 +50,7 @@ magpie 的 `balance` 字符串原样显示，金额与 credits 不作百分比�
 
 magpie v0.1.2190 的 [公开结构](https://github.com/yetone/magpie/blob/v0.1.2190/internal/provider/quotas.go) 与[网关接口](https://github.com/yetone/magpie/blob/v0.1.2190/internal/gateway/gateway.go)已核对。GET `/v1/magpie/quotas` 不保证更新 Claude 观测：Claude Code 回答或 `/usage` 才更新。官方另有 POST `/v1/magpie/quotas/refresh`，可能在账号目录运行 CLI；CuePad 不自动调用它，不复制上游登录或以反复 GET 冒充实时刷新。
 
-账号窗口只在模型 id 明确指定完整上游、且该上游只有一个账号时关联；嵌套 provider 取最长前缀。自动池与多个账号不显示模型额度环，菜单明确路由账号未知，账号列表分别显示额度；`last` 不用于预测路由。
+账号窗口只在模型 id 明确指定完整上游、且该上游只有一个账号时关联；嵌套 provider 取最长前缀。自动池与多个账号不显示模型额度环，菜单明确路由账号未知，账号列表分别显示额度；`last` 不用于预测路由。单网关不显示来源标签，多来源时才按已有 Mac 名称与同机网关编号区分，不把地址拼进账号名。
 
 ChatGPT plan（`openai` OAuth）当前没有公开额度查询能力，报 `unsupported`，管理入口为 https://chatgpt.com/settings/usage；不调用 Codex 用量接口。`ack.ok` 只代表命令已处理，不代表获得数值观测。过重置时刻无新观测算过期，不推算为满额。
 

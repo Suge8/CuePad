@@ -19327,6 +19327,22 @@
         }
       }
     },
+    "网关 %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网关 %lld"
+          }
+        }
+      }
+    },
     "网络连接中断" : {
       "localizations" : {
         "en" : {

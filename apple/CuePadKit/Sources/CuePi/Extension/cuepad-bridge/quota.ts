@@ -119,7 +119,7 @@ export class QuotaFetcher {
 				const key = resolved.native ? `${model.provider}/${identity.scope}` : identity.source!;
 				if (seen.has(key)) return;
 				seen.add(key);
-				if (resolved.native) await this.fetchNative(model, resolved);
+				if (resolved.native) await this.fetchNative(model, resolved, requestedAt);
 				else await gatewayQuotas(model.provider, resolved, this.report, requestedAt);
 			} catch (error) {
 				this.report({ provider: identity.source ? "magpie" : model.provider, account: identity, status: "failed", windows: [], complete: false, requestedAt });
@@ -142,11 +142,11 @@ export class QuotaFetcher {
 		}
 	}
 
-	private async fetchNative(model: Model, resolved: Awaited<ReturnType<typeof account>>) {
+	private async fetchNative(model: Model, resolved: Awaited<ReturnType<typeof account>>, requestedAt: number) {
 		const provider = model.provider, identity = resolved.identity;
 		const source = QUOTA_PROVIDERS[provider];
 		if (!source || identity.kind !== "oauth") {
-			this.report({ provider, account: identity, status: "unsupported", windows: [], complete: true });
+			this.report({ provider, account: identity, status: "unsupported", windows: [], complete: true, requestedAt });
 			return;
 		}
 		if (!resolved.token) throw new Error(`${provider}: no token`);
@@ -157,6 +157,6 @@ export class QuotaFetcher {
 		if (!response.ok) throw new Error(`${provider}: HTTP ${response.status}`);
 		const windows = source.parse(await response.json());
 		if (windows.length === 0) throw new Error(`${provider}: unrecognized usage format`);
-		this.report({ provider, account: identity, status: "observed", windows, complete: true });
+		this.report({ provider, account: identity, status: "observed", windows, complete: true, requestedAt, observedAt: Date.now() / 1000 });
 	}
 }
