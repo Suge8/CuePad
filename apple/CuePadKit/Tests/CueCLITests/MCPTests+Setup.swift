@@ -72,11 +72,15 @@ extension MCPTests {
       #expect(try await store.cueProfile()?.model == nil)
 
       let switched = try await server.call("setup", ["action": "set", "model": "openai-codex/gpt-6", "effort": "high"])
-      #expect(switched.contains("这一轮做完后生效"), "\(switched)")
+      #expect(switched.contains("下一轮换上") && !switched.contains("换新大脑"), "\(switched)")
       let changed = try #require(try await store.cueProfile())
       #expect(changed.model == "openai-codex/gpt-6" && changed.effort == .known(.high))
 
-      try await server.call("setup", ["action": "set", "agent": "claude", "name": "小 Q"])
+      // 模型回到默认要重开大脑（同管理器）
+      #expect(try await server.call("setup", ["action": "set", "model": "default"]).contains("换新大脑"))
+      #expect(try await store.cueProfile()?.model == nil)
+
+      #expect(try await server.call("setup", ["action": "set", "agent": "claude", "name": "小 Q"]).contains("换新大脑"))
       let profile = try #require(try await store.cueProfile())
       #expect(profile.runtime == .known(.claudeCode) && profile.model == nil && profile.name == "小 Q")
       #expect(try await server.call("setup", ["action": "set", "agent": "claude"]).contains("没改"))
