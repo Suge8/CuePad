@@ -85,7 +85,7 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
   public var account: PiAccount?
   public var status: QuotaStatus
   public var observedAt: Date?
-  /// 此账号或网关来源最近一次请求的开始时刻，只用于拒绝晚到的结果，不代替原观测时间。
+  /// 已收下的最晚排序时刻（`QuotaReport.requestedAt`），只用于拒绝晚到的结果，不代替原观测时间。
   public var requestedAt: Date?
   /// 按窗口从短到长（同长的整个账号在前，按模型的在后）
   public var windows: [QuotaWindow]
@@ -172,6 +172,8 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
   /// 同一网关成功返回的账号清单；仅用于移除该来源已撤销的账号。
   public var activeScopes: [String]?
   public var accounts: [QuotaReport]?
+  /// 排序时刻：这份结果所属操作期间的一个时刻——主动查询（成功、失败、不支持、网关清单）取请求开始，回复带回的观测取收到回复。
+  /// 取在操作期间以内，先结束的操作的时刻一定早于后开始的；能力声明不带。
   public var requestedAt: Date?
   public var details: QuotaDetails?
 

@@ -115,18 +115,19 @@ export async function modelInfo(pi: ExtensionAPI, ctx: ExtensionContext): Promis
 	const current = ctx.model;
 	const key = (model: Model) => JSON.stringify([model.provider, model.id]);
 	const accounts = new Map<string, Account>();
-	await Promise.all(choices.map(async (choice) => {
-		const model = current && key(choice) === key(current) ? current : choice;
-		// 其他原生 OAuth 只读认证种类，避免续期网络挡住当前会话。
-		if (model !== current && ctx.modelRegistry.isUsingOAuth(model)) {
-			accounts.set(key(model), unresolvedAccount(ctx, model));
-			return;
-		}
+	const resolve = async (model: Model) => {
 		try { accounts.set(key(model), (await account(ctx, model)).identity); }
 		catch (error) {
 			if (model === current) ctx.ui.notify(`CuePad：无法读取 ${model.provider} 的授权身份：${reason(error)}`, "warning");
 			accounts.set(key(model), unresolvedAccount(ctx, model));
 		}
+	};
+	// 先解析当前模型；同提供方的其余模型随后共用它刚续期的凭据，照样解析，CuePad 才认得出换掉的账号与令牌（`CueStore.retainQuotaSources`）。
+	// 其他提供方的 OAuth 只读认证种类，避免它们的续期网络挡住当前会话。
+	if (current) await resolve(current);
+	await Promise.all(choices.filter((model) => !current || key(model) !== key(current)).map(async (model) => {
+		if (model.provider !== current?.provider && ctx.modelRegistry.isUsingOAuth(model)) accounts.set(key(model), unresolvedAccount(ctx, model));
+		else await resolve(model);
 	}));
 	const describe = (model: Model) => describeModel(model, accounts.get(key(model)) ?? null);
 	return {

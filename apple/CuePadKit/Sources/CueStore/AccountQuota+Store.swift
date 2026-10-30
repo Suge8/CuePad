@@ -38,8 +38,12 @@ extension CueStore {
     }
   }
 
-  /// 记下一次观测（只有 Mac 写）。只在值有意义地变化时写——窗口变了、某个窗口的整数百分比变了、重置时间变了——
-  /// 或上次写已超过 `touchAfter`（只为"更新于"不过时）；否则不写，每次回复都来的观测不会每次都写库与同步。返回是否写了。
+  /// 记下一次观测（只有 Mac 写）。先后只看 `requestedAt`（结果所属操作期间的一个时刻，见 `QuotaReport.requestedAt`）：
+  /// 比这条记录已收下的早就丢掉，所以先结束的操作不会盖过后开始的，几个会话进程的结果怎么交错到达都一样。
+  /// 只在值有意义地变化时写——状态、窗口、某个窗口的整数百分比、重置时间变了——或上次写已超过 `touchAfter`（只为"更新于"不过时）；
+  /// 否则只在本机推进排序时刻、不改版本不同步，每次回复都来的观测不会每次都写库与同步。
+  /// 原生提供方未解析的授权（`scope` 为 nil：还没查，或查时解析失败）是这台 Mac 上这个提供方的一条，不关联任何账号的数值：
+  /// 已有证明了身份的账号时不再写"还没查"；同一提供方证明了身份、且不早于它的结果到来时移除它。返回是否写了。
   @discardableResult
   public func recordQuota(_ report: QuotaReport, host: String) throws -> Bool {
     try write { try applyQuota(report, host: host) }
@@ -49,8 +53,16 @@ extension CueStore {
     let id = AccountQuota.recordID(provider: report.provider, host: host, account: report.account)
     let existing = try find(AccountQuota.self, id)
     if let start = report.requestedAt, let previous = existing?.requestedAt, start < previous { return false }
-    if report.status == .observed, let stamp = report.observedAt, let previous = existing?.observedAt, stamp < previous { return false }
     var removed = false
+    if report.account.source == nil {
+      let unresolved = AccountQuota.recordID(provider: report.provider, host: host, account: PiAccount(kind: report.account.kind))
+      if report.account.scope == nil {
+        if report.status != .failed, try provenAccount(of: report, on: host) { return false }
+      } else if let start = report.requestedAt, let pending = try find(AccountQuota.self, unresolved), pending.requestedAt.map({ $0 <= start }) ?? true {
+        try db.run("DELETE FROM accountQuotas WHERE id = ?", [unresolved])
+        removed = true
+      }
+    }
     for account in report.accounts ?? [] {
       guard account.account.source == report.account.source, account.account.route != nil else { continue }
       removed = try applyQuota(account, host: host) || removed
@@ -68,10 +80,11 @@ extension CueStore {
     let details = report.status == .observed ? report.details : existing?.details ?? report.details
     let windows = report.status == .observed ? report.merged(into: existing?.windows ?? []) : existing?.windows ?? []
     let observedAt = report.status == .observed ? report.observedAt ?? now : existing?.observedAt
-    if let existing, existing.status == status, existing.account == report.account, existing.details == details, report.requestedAt == nil, report.activeScopes == nil, !Self.changedMeaningfully(existing.windows, windows),
+    if let existing, existing.status == status, existing.account == report.account, existing.details == details, report.activeScopes == nil, !Self.changedMeaningfully(existing.windows, windows),
       now.timeIntervalSince(existing.modifiedAt) < AccountQuota.touchAfter,
       observedAt == existing.observedAt || observedAt?.timeIntervalSince(existing.observedAt ?? .distantPast) ?? 0 < AccountQuota.touchAfter
     {
+      if let start = report.requestedAt, start != existing.requestedAt { try db.run("UPDATE accountQuotas SET requestedAt = ? WHERE id = ?", [start, id]) }
       return removed
     }
     let quota = AccountQuota(
@@ -85,6 +98,12 @@ extension CueStore {
         [JSONColumn.encode(windows), now, status.rawValue, observedAt, JSONColumn.encode(report.account), details.map(JSONColumn.encode), quota.requestedAt, id])
     }
     return true
+  }
+
+  private func provenAccount(of report: QuotaReport, on host: String) throws -> Bool {
+    try select(AccountQuota.self, where: "hostID = ? AND provider = ?", [host, report.provider]).contains {
+      $0.account?.source == nil && $0.account?.scope != nil && $0.account?.kind == report.account.kind
+    }
   }
 
   private static func changedMeaningfully(_ old: [QuotaWindow], _ new: [QuotaWindow]) -> Bool {

@@ -1,7 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { reason } from "./info.ts";
 import { gatewayQuotas } from "./quota-gateway.ts";
-import { account, type Account, type Model } from "./account.ts";
+import { account, unresolvedAccount, type Account, type Model } from "./account.ts";
 
 /** 查订阅额度的单个请求最多等这么久（接口实测约 150ms；VPN 断了就是查不到，CuePad 保留上次的值） */
 const QUOTA_TIMEOUT_MS = 3_000;
@@ -88,7 +88,9 @@ function codexAccount(token: string): string {
 	return id;
 }
 
-/** 能力与观测都经同一条 quota 消息；空查询不是新观测。 */
+/** 能力与观测都经同一条 quota 消息；空查询不是新观测。
+ * 身份：报告只归到这次结果实际用的、已解析出分区的授权；解析失败没有账号身份，记在这个提供方未解析的授权上（`scope=null`，不关联任何账号的数值）。
+ * 时间：带结果的报告都带 `requestedAt`，取结果所属操作期间的一个时刻（主动查询取开始，回复取收到），CuePad 据此只让后开始的覆盖先结束的。 */
 export class QuotaFetcher {
 	/** 正在查的额度：几个客户端同时要时共用这一次 */
 	private inFlight: Promise<string[]> | null = null;
@@ -112,7 +114,7 @@ export class QuotaFetcher {
 		const seen = new Set<string>();
 		const results = await Promise.allSettled(models.map(async (model) => {
 			const requestedAt = Date.now() / 1000;
-			let identity: Account = { kind: this.ctx.modelRegistry.isUsingOAuth(model) ? "oauth" : "apiKey", scope: null };
+			let identity = unresolvedAccount(this.ctx, model);
 			try {
 				const resolved = await account(this.ctx, model);
 				identity = resolved.identity;
@@ -129,6 +131,7 @@ export class QuotaFetcher {
 		return results.flatMap((result) => result.status === "rejected" ? [reason(result.reason)] : []);
 	}
 
+	/** 当前模型的提供方连同其余模型都解析过（`modelInfo`），它未解析就是解析失败；其他提供方的 OAuth 未解析只是还没查。 */
 	capabilities(models: { provider: string; account: Account | null }[], currentProvider: string | undefined) {
 		const seen = new Set<string>();
 		for (const model of models) {

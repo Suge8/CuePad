@@ -36,13 +36,13 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 | `state` | 只在状态切换时发：`state{kind, since, busySince, turnSince, …}`，时刻都是毫秒 |
 | `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images, account{kind, scope, source?, route?, name?}}`、`thinking`、`models`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
 | `draft` | 正在说的话：`text`（`null` 是清掉）、`since` |
-| `quota` | 授权的额度能力与结果：`provider`、`account{kind, scope, source?, route?, name?}`、`status`（`observed`/`unobserved`/`unsupported`/`failed`）、`windows[{seconds, used, resetsAt, model, binding}]`、`complete`、`observedAt?`（原观测的 Unix 秒）、`activeScopes?`（此来源成功返回的账号分区）、`accounts?`（同一次网关清单中的各账号报告）、`details?{kind, plan?, balance?, values[]}`、`requestedAt?`（请求开始的 Unix 秒） |
+| `quota` | 授权的额度能力与结果：`provider`、`account{kind, scope, source?, route?, name?}`、`status`（`observed`/`unobserved`/`unsupported`/`failed`）、`windows[{seconds, used, resetsAt, model, binding}]`、`complete`、`observedAt?`（原观测的 Unix 秒）、`activeScopes?`（此来源成功返回的账号分区）、`accounts?`（同一次网关清单中的各账号报告）、`details?{kind, plan?, balance?, values[]}`、`requestedAt?`（排序时刻的 Unix 秒：主动查询取请求开始，回复带回的取收到回复） |
 | `ack` | 命令回应：`id`、`ok`，或 `error`（见下表）；`reload` 另带 `reloaded` |
 | `bye` | 主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
 
-`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。原生订阅只为当前模型解析授权；其余原生 OAuth 只报种类与 `scope=null`，主动查额度时再解析。实际地址与认证经宿主 `getApiKeyAndHeaders(model)` 取得，自定义地址不调用原生订阅接口。回复流里的额度只归到回合开始时已确定的原生 OAuth 分区。
+`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。原生订阅只为当前模型的提供方解析授权；其他提供方的原生 OAuth 只报种类与 `scope=null`，主动查额度时再解析。未解析的授权（`scope=null`）是这个提供方的一条，不关联任何账号的数值：当前模型的提供方未解析、主动查询时解析失败报 `failed`，其他提供方还没查报能力；解析失败不归到之前的账号。CuePad 在已有证明身份的账号时不再记"还没查"，同一提供方证明身份且不早于它的结果到来时移除它。实际地址与认证经宿主 `getApiKeyAndHeaders(model)` 取得，自定义地址不调用原生订阅接口。回复流里的额度只在回合前已报告的原生 OAuth 分区与收到回复后重新解析的一致时归到它，不一致就丢掉这次并重报模型身份。
 
-自定义来源从模型实际 baseUrl 下的 `magpie/quotas` 查询，复用请求认证与配置头，不另存网关地址或密钥。404/405/501 表示不支持，其余请求失败明确报失败。网关账号以 `source`（实际地址与认证的不可逆分区）、完整上游 `route` 与 user 分开；可选 `name` 只作显示。成功清单的 `accounts` 与 `activeScopes` 同事务更新，只移除该来源已经撤销的账号；损坏清单不部分写入。主动查询的成功、失败与不支持结果都带 `requestedAt`，按账号或网关来源排序，晚到的旧结果不能覆盖新结果。原生查询的 `observedAt` 取响应解析完成时刻，网关账号仍保留自己的 `readAt`。在线会话共同保留仍有效的来源；单个旧授权失败不阻止其他来源刷新。
+自定义来源从模型实际 baseUrl 下的 `magpie/quotas` 查询，复用请求认证与配置头，不另存网关地址或密钥。404/405/501 表示不支持，其余请求失败明确报失败。网关账号以 `source`（实际地址与认证的不可逆分区）、完整上游 `route` 与 user 分开；可选 `name` 只作显示。成功清单的 `accounts` 与 `activeScopes` 同事务更新，只移除该来源已经撤销的账号；损坏清单不部分写入。主动查询的成功、失败与不支持结果和回复带回的观测都带 `requestedAt`，CuePad 按账号或网关来源只收不早于已收下的，先结束的操作不会盖过后开始的。原生查询的 `observedAt` 取响应解析完成时刻，回复取收到时刻，网关账号仍保留自己的 `readAt`。在线会话共同保留仍有效的来源；单个旧授权失败不阻止其他来源刷新。
 
 额度面板打开、回前台与连接来源变化时读取账号清单，同时来的查询合并；已有账号的观测新鲜不能阻止发现新账号。手机通过原 `quota` 投送请求询问每台来源 Mac，不增加轮询，也不只选择最近写记录的 Mac。
 
