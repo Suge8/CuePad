@@ -34,13 +34,17 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 | --- | --- |
 | `hello` | 连接后第一条：`extensionVersion`、`sessionId`、`sessionFile`（可空）、`pid`、`cwd`、`mode`（`tui`/`rpc`）、`tty`、`term`（终端相关环境变量）、`state`、`launchToken`、`hosted`，以及 `info` 的全部字段 |
 | `state` | 只在状态切换时发：`state{kind, since, busySince, turnSince, …}`，时刻都是毫秒 |
-| `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images, account{kind, scope}}`、`thinking`、`models`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
+| `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images, account{kind, scope, source?, route?, name?}}`、`thinking`、`models`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
 | `draft` | 正在说的话：`text`（`null` 是清掉）、`since` |
-| `quota` | 授权的额度能力与结果：`provider`、`account{kind, scope}`、`status`（`observed`/`unobserved`/`unsupported`/`failed`）、`windows[{seconds, used, resetsAt, model, binding}]`、`complete` |
+| `quota` | 授权的额度能力与结果：`provider`、`account{kind, scope, source?, route?, name?}`、`status`（`observed`/`unobserved`/`unsupported`/`failed`）、`windows[{seconds, used, resetsAt, model, binding}]`、`complete`、`observedAt?`（原观测的 Unix 秒）、`activeScopes?`（此来源成功返回的账号分区） |
 | `ack` | 命令回应：`id`、`ok`，或 `error`（见下表）；`reload` 另带 `reloaded` |
 | `bye` | 主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
 
-`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。模型清单只为当前 provider 解析授权；其余只报已知 `kind`、`scope=null`（尚未解析，不是查询失败），切为当前或主动查额度才解析。另一家的续期不阻塞当前会话；当前身份解析失败仍明确提示并报 `failed`，数值只匹配已知授权分区。轮换授权后重新观测，不沿用旧窗口。
+`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。原生订阅只为当前模型解析授权；其余原生 OAuth 只报种类与 `scope=null`，主动查额度时再解析。实际地址与认证经宿主 `getApiKeyAndHeaders(model)` 取得，自定义地址不调用原生订阅接口。回复流里的额度只归到回合开始时已确定的原生 OAuth 分区。
+
+自定义来源从模型实际 baseUrl 下的 `magpie/quotas` 查询，复用请求认证与配置头，不另存网关地址或密钥。404/405/501 表示不支持，其余请求失败明确报失败。网关账号以 `source`（实际地址与认证的不可逆分区）、完整上游 `route` 与 user 分开；可选 `name` 只作显示。成功清单的 `activeScopes` 只移除该来源已经撤销的账号。在线会话共同保留仍有效的来源；单个旧授权失败不阻止其他来源刷新。
+
+magpie 窗口仅接收名称为数字加 `hour(s)`、`day(s)`、`week(s)`、含百分比与重置时刻的固定周期；余额、无限量、纯文字、无重置及未知周期不支持。`readAt` 原样作为 `observedAt`；没有 `readAt` 不生成新观测，`asOf` 不代替它。缓存陈旧时标明上次观测。账号窗口只在模型 id 明确指定完整上游、且该上游只有一个账号时关联；嵌套 provider 取最长前缀。自动池与多个账号不显示模型额度环，菜单明确路由账号未知，账号列表分别显示额度；`last` 不用于预测路由。
 
 ChatGPT plan（`openai` OAuth）当前没有公开额度查询能力，报 `unsupported`，管理入口为 https://chatgpt.com/settings/usage；不调用 Codex 用量接口。`ack.ok` 只代表命令已处理，不代表获得数值观测。过重置时刻无新观测算过期，不推算为满额。
 

@@ -58,7 +58,7 @@ nonisolated struct QuotaMeter: Equatable {
         account = quota.account?.label(provider: quota.provider) ?? PiProvider(id: quota.provider).account
         usageURL = quota.account?.usageURL(provider: quota.provider)
         message = switch quota.reading(at: now) {
-        case .observed: nil
+        case .observed: quota.account?.source != nil && quota.isStale(at: now) ? String(localized: "上次额度观测，等待更新") : nil
         case .unsupported: usageURL != nil ? String(localized: "ChatGPT 暂不提供额度数据") : String(localized: "此授权不提供订阅额度查询")
         case .unobserved: String(localized: "尚未观测到额度")
         case .failed: String(localized: "额度查询失败")

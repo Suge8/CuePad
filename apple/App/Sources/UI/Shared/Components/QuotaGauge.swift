@@ -95,9 +95,9 @@ private struct QuotaRefreshOnAppear: ViewModifier {
     #endif
 
     func body(content: Content) -> some View {
-        let shown = active && foreground
-        content.task(id: shown && services.canRefreshQuota) {
-            guard shown else { return }
+        let shouldRefresh = active && foreground && services.canRefreshQuota
+        content.task(id: shouldRefresh) {
+            guard shouldRefresh else { return }
             await workspace.refreshQuota()
         }
     }

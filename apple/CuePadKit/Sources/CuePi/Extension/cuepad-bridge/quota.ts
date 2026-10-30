@@ -1,6 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { reason } from "./info.ts";
-import { account, type Account } from "./account.ts";
+import { gatewayQuotas } from "./quota-gateway.ts";
+import { account, type Account, type Model } from "./account.ts";
 
 /** 查订阅额度的单个请求最多等这么久（接口实测约 150ms；VPN 断了就是查不到，CuePad 保留上次的值） */
 const QUOTA_TIMEOUT_MS = 3_000;
@@ -19,7 +20,7 @@ const QUOTA_PROVIDERS: Record<string, { url: string; headers: (token: string) =>
  * `binding` 是提供方说此刻卡着的就是它（Claude 响应头的 representative-claim），提供方没说的不带 */
 export type QuotaWindow = { seconds: number; used: number; resetsAt: number; model: string | null; binding?: true };
 /** 一个提供方的一次观测；`complete` 是全部窗口（查用量接口得到的），回复里带回的只有一部分 */
-export type Quota = { provider: string; account: Account; status: "observed" | "unsupported" | "unobserved" | "failed"; windows: QuotaWindow[]; complete: boolean };
+export type Quota = { provider: string; account: Account; status: "observed" | "unsupported" | "unobserved" | "failed"; windows: QuotaWindow[]; complete: boolean; observedAt?: number; activeScopes?: string[] };
 
 export function record(value: unknown): Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -99,57 +100,61 @@ export class QuotaFetcher {
 		this.report = report;
 	}
 
-	/** 每个授权都报告能力或结果；没有订阅授权与查询失败都明确拒绝，不产生空成功。 */
 	fetchAll(): Promise<string[]> {
-		const providers = this.providers();
-		if (providers.length === 0) return Promise.resolve(["no subscription authorization"]);
-		this.inFlight ??= Promise.allSettled(providers.map((provider) => this.fetch(provider)))
-			.then((results) => results.flatMap((r) => r.status === "rejected" ? [reason(r.reason)] : []))
-			.finally(() => { this.inFlight = null; });
+		this.inFlight ??= this.fetchSources().finally(() => { this.inFlight = null; });
 		return this.inFlight;
 	}
 
-	private providers(): string[] {
-		const registry = this.ctx.modelRegistry;
-		return [...new Set([...registry.getAvailable(), ...(this.ctx.model ? [this.ctx.model] : [])]
-			.filter((model) => registry.isUsingOAuth(model)).map((model) => model.provider))];
+	private async fetchSources(): Promise<string[]> {
+		const models = [...this.ctx.modelRegistry.getAvailable(), ...(this.ctx.model ? [this.ctx.model] : [])];
+		if (models.length === 0) return ["no available quota sources"];
+		const seen = new Set<string>();
+		const results = await Promise.allSettled(models.map(async (model) => {
+			let identity: Account = { kind: this.ctx.modelRegistry.isUsingOAuth(model) ? "oauth" : "apiKey", scope: null };
+			try {
+				const resolved = await account(this.ctx, model);
+				identity = resolved.identity;
+				const key = resolved.native ? `${model.provider}/${identity.scope}` : identity.source!;
+				if (seen.has(key)) return;
+				seen.add(key);
+				if (resolved.native) await this.fetchNative(model, resolved);
+				else await gatewayQuotas(model.provider, resolved, this.report);
+			} catch (error) {
+				this.report({ provider: model.provider, account: identity, status: "failed", windows: [], complete: false });
+				throw error;
+			}
+		}));
+		return results.flatMap((result) => result.status === "rejected" ? [reason(result.reason)] : []);
 	}
 
 	capabilities(models: { provider: string; account: Account | null }[], currentProvider: string | undefined) {
 		const seen = new Set<string>();
 		for (const model of models) {
-			if (!model.account || seen.has(model.provider)) continue;
-			seen.add(model.provider);
-			const supported = model.account.kind === "oauth" && QUOTA_PROVIDERS[model.provider];
-			const unresolved = model.provider === currentProvider && model.account.kind === "oauth" && !model.account.scope;
-			const status = unresolved ? "failed" : supported ? "unobserved" : "unsupported";
-			this.report({ provider: model.provider, account: model.account, status, windows: [], complete: false });
+			if (!model.account) continue;
+			const key = `${model.provider}/${model.account.scope}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			const supported = model.account.source || (model.account.kind === "oauth" && QUOTA_PROVIDERS[model.provider]);
+			const unresolved = model.provider === currentProvider && !model.account.scope;
+			this.report({ provider: model.provider, account: model.account, status: unresolved ? "failed" : supported ? "unobserved" : "unsupported", windows: [], complete: false });
 		}
 	}
 
-	private async fetch(provider: string): Promise<void> {
-		let identity: Account = { kind: "oauth", scope: null };
-		try {
-			const resolved = await account(this.ctx, provider);
-			identity = resolved.identity;
-			const source = QUOTA_PROVIDERS[provider];
-			if (!source) {
-				this.report({ provider, account: identity, status: "unsupported", windows: [], complete: true });
-				return;
-			}
-			const token = resolved.auth?.apiKey;
-			if (!token) throw new Error(`${provider}: no token`);
-			const response = await fetch(source.url, {
-				headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...source.headers(token) },
-				signal: AbortSignal.timeout(QUOTA_TIMEOUT_MS),
-			});
-			if (!response.ok) throw new Error(`${provider}: HTTP ${response.status}`);
-			const windows = source.parse(await response.json());
-			if (windows.length === 0) throw new Error(`${provider}: unrecognized usage format`);
-			this.report({ provider, account: identity, status: "observed", windows, complete: true });
-		} catch (error) {
-			this.report({ provider, account: identity, status: "failed", windows: [], complete: false });
-			throw error;
+	private async fetchNative(model: Model, resolved: Awaited<ReturnType<typeof account>>) {
+		const provider = model.provider, identity = resolved.identity;
+		const source = QUOTA_PROVIDERS[provider];
+		if (!source || identity.kind !== "oauth") {
+			this.report({ provider, account: identity, status: "unsupported", windows: [], complete: true });
+			return;
 		}
+		if (!resolved.token) throw new Error(`${provider}: no token`);
+		const headers = new Headers(resolved.headers);
+		for (const [key, value] of Object.entries(source.headers(resolved.token))) headers.set(key, value);
+		headers.set("Accept", "application/json");
+		const response = await fetch(source.url, { headers, signal: AbortSignal.timeout(QUOTA_TIMEOUT_MS), redirect: "error" });
+		if (!response.ok) throw new Error(`${provider}: HTTP ${response.status}`);
+		const windows = source.parse(await response.json());
+		if (windows.length === 0) throw new Error(`${provider}: unrecognized usage format`);
+		this.report({ provider, account: identity, status: "observed", windows, complete: true });
 	}
 }
