@@ -28,8 +28,8 @@ nonisolated enum CuePresence: Equatable, Sendable {
         let trip = digest.lastYou.map {
             Speech.trip(said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer, host: digest.hostID, at: moment)
         }
-        if case .unconfirmed(let reason) = trip { return .unconfirmed(reason) }
         if !digest.hostOnline && moment.reachableSince(digest.hostID) != nil { return .asleep }
+        if case .unconfirmed(let reason) = trip { return .unconfirmed(reason) }
         if let trip, trip.inTransit { return .sending(trip == .sent ? .sent : .sending) }
         if !digest.hostOnline { return .unconfirmed(String(localized: "状态未确认")) }
         guard let state = digest.state else { return .idle }

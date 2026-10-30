@@ -2555,22 +2555,6 @@
         }
       }
     },
-    "Agent 已接手，尚未从会话历史确认，不会自动重发" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The agent has accepted this message. Delivery is not yet confirmed, so it won’t be sent again automatically."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 已接手，尚未从会话历史确认，不会自动重发"
-          }
-        }
-      }
-    },
     "Agent 拒绝了：%@" : {
       "localizations" : {
         "en" : {

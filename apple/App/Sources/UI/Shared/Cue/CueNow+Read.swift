@@ -13,6 +13,9 @@ nonisolated extension CueNow {
 
     init(_ digest: CueDigest, at moment: Speech.Moment, local: Local) {
         let presence = CuePresence.derive(digest, at: moment)
+        let unconfirmed = digest.lastYou.map {
+            Speech.trip(said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer, host: digest.hostID, at: moment).unconfirmedReason != nil
+        } ?? false
         var runtime = RuntimeTimeline(digest, at: moment)
         let items = Self.limited(Self.items(digest, works: runtime.items, at: moment.now)).enumerated().map { index, item in
             var item = item
@@ -25,7 +28,7 @@ nonisolated extension CueNow {
             tally: runtime.tally, advancing: runtime.advancing, subagents: runtime.subagents, items: items,
             first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
             elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil,
-            decay: runtime.decay(visible: items), unconfirmed: runtime.unconfirmed || presence.isUnconfirmed || (!digest.hostOnline && digest.state?.state.isWorking == true), cueUntil: digest.hostUntil)
+            decay: runtime.decay(visible: items), unconfirmed: runtime.unconfirmed || presence.isUnconfirmed || unconfirmed || (!digest.hostOnline && digest.state?.state.isWorking == true), cueUntil: digest.hostUntil)
     }
 
     private static func brain(_ presence: CuePresence, digest: CueDigest, local: Local, at now: Date) -> Brain {

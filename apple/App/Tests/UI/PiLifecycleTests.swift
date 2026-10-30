@@ -56,7 +56,7 @@ struct PiLifecycleTests {
         if reason == "disconnect" { ext.crash() } else { ext.close(bye: reason) }
 
         let result = try await store.outcome(of: request)
-        #expect(result.status == (reason == "quit" ? .known(.succeeded) : .known(.failed)))
+        #expect(result.status == (reason == "quit" ? .known(.succeeded) : .known(.unconfirmed)))
         #expect(try await store.allPiSessionStates().first?.state == (reason == "quit" ? .known(.ended) : .known(.settled)))
     }
 }

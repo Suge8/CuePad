@@ -15,6 +15,7 @@ struct SpeakTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
     var files: AttachmentFiles { app.services.store.files }
+    private let boot = SystemBoot.id ?? "test-boot"
 
     /// Cue 运行在 mac-cue（不是这台：发给它要经同步），那台醒着（它的在线记录同步来了）。
     private func enableCue() async throws {
@@ -22,7 +23,7 @@ struct SpeakTests {
             profile.hostID = "mac-cue"
             profile.enabledAt = .now
         }
-        try await store.recordMacPresence(host: "mac-cue") { true }
+        try await store.recordMacPresence(host: "mac-cue", bootID: boot) { true }
     }
 
     private func session(host: String = "mac-b") async throws -> PiSessionState {
@@ -109,10 +110,8 @@ struct SpeakTests {
         #expect(try await youSaid().isEmpty)
     }
 
-    /// 这里没有同步，话一直出不了这台：过了 `Speech.sendLimit` 这句没能送达（时限边界见 `ReceiptTests`），
-    /// 但那台 Mac 在线 Cue 就不算睡觉、仍在值班；那台 Mac 将睡眠标了离线 Cue 才在睡觉、不值班，本机同步不通时不说它在睡觉，这句也排着不判没送到；
-    /// 没能送达后回执来了照样是已送达，Cue 照它写下的在做事。已发出后迟迟没回执见 `ReceiptTests`。
-    @Test func 对Cue说_没发出只说这句没送到_在睡觉只看那台Mac在不在线() async throws {
+    /// 消息超时只表示未确认；Mac 明确离线仍显示在睡觉，不能被传话未知覆盖。本机同步不通时不猜离线；真实回执与签名报告恢复当前状态。
+    @Test func 对Cue说_超时不假报未送达_明确离线不被未知覆盖() async throws {
         try await enableCue()
         let workspace = Workspace(services: app.services)
         workspace.cue.draft = ComposerDraft(text: "顺便看看登录回调那个超时")
@@ -121,17 +120,21 @@ struct SpeakTests {
         let late = message.createdAt.addingTimeInterval(Speech.sendLimit + 1)
 
         try backdate(message, by: Speech.sendLimit + 1)
-        #expect(try await presence() == .idle)
+        #expect(try await presence().isUnconfirmed)
         #expect(try await store.cueDuty() != nil)
 
         try await store.recordMacPresence(host: "mac-cue") { false }  // 那台 Mac 将睡眠：标成离线，同步到这里
         #expect(try await presence() == .asleep)
+        let digest = try await CueDigest.read(from: store)
+        let snapshot = CueNow(digest, at: .always(at: late), local: .init(waiting: nil, here: nil))
+        #expect(snapshot.isLive)
+        #expect(!snapshot.hasConfirmedActivity)
         #expect(try await store.cueDuty() == nil)  // 值班与"在睡觉"同一条
         #expect(try await presence(reachable: false) == .sending(.sending))  // 本机同步不通：这句排着、仍在路上，不判没送到
 
-        try await store.recordMacPresence(host: "mac-cue") { true }  // 醒来续上在线，收下你的话
+        try await store.recordMacPresence(host: "mac-cue", bootID: boot) { true }  // 醒来续上在线，收下你的话
         try await store.markCueMessagesDelivered([message.id])
-        try await store.setCueState(.thinking)  // 值班的 Mac 交给它后写下它在想
+        try await store.setCueState(.thinking, hostID: "mac-cue", bootID: boot)
         #expect(Said.cue(try #require(try await youSaid().first), host: "mac-cue").trip(at: .always(at: late)) == .delivered)
         #expect(try await presence() == .working(.thinking, detail: nil, step: nil))
     }
