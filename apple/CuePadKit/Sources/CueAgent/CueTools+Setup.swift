@@ -10,7 +10,7 @@ extension CueTools {
       "description": """
         你自己与你运行的这台 Mac 的设置。look{part?} 只读：不带 part 是总览（大脑与它好不好、各家 Agent 能不能用与边界、订阅额度、记忆与定时、技能与规则、项目）；
         part=brain|agents|quota|skills|projects 看那一块的全部（agents 带每家能选的模型、各自花哪个账号的额度）；
-        set{agent?,model?,effort?,fast?,name?} 改你自己的大脑：agent 要在这台 Mac 上能用，换 agent 不写 model 就用那家的默认；model 照这家的写法（look agents 里有），写 default 回到这家的默认；fast 只有支持的模型能开。model、effort 这一轮做完后换上；agent、name、fast 这一轮做完后换新大脑（记忆照旧）。额度吃紧时可换到宽裕的那家或模型，要等额度恢复再换回就 memory remind 定个时；
+        set{agent?,model?,effort?,fast?,name?} 改你自己的大脑：agent 要在这台 Mac 上能用，换 agent 不写 model 就用那家的默认；model 照这家的写法（look agents 里有），写 default 回到这家的默认；fast 只有支持的模型能开。改的都在这一轮做完后生效，换 agent、name、fast 时换个新大脑（记忆照旧）。额度吃紧时可换到宽裕的那家或模型，要等额度恢复再换回就 memory remind 定个时；
         project{project,new?,title?,intro?,folder?}：project 写项目名，new:true 才新建（防拼错建出新的）；title 改名，intro 是一句话介绍（空串清掉），folder 绑定这台 Mac 上的文件夹（绝对路径或 ~/，要存在；空串解除）；
         tidy{} 请这台 Mac 一键整理技能与规则（look skills 里"一键整理"那几件）；同名去重、内容不同的规则合并要他挑，告诉他在技能与规则页里做。
         """,
@@ -108,9 +108,8 @@ extension CueTools {
       (profile.runtime, profile.model, profile.effort, profile.fast, profile.name) = (.known(wanted.0), wanted.1, wanted.2, wanted.3, wanted.4)
     }
     guard profile != current else { return "本来就是这样，没改。" }
-    let renewed = switching || profile.fast != current.fast || profile.name != current.name || (profile.model == nil && current.model != nil)
-    let when = renewed ? "这一轮做完后换新大脑（记忆照旧）" : "这一轮做完后换上"
-    return (["改好了：\(Self.brainLine(profile, agent: agent))"] + notes + [when]).joined(separator: "；") + "。"
+    // 要不要换新大脑由管理器定（`CueKeeper` 的 `needsNewBrain`），这里不另判一份：说明里写着哪几样会换
+    return (["改好了：\(Self.brainLine(profile, agent: agent))"] + notes + ["这一轮做完后生效"]).joined(separator: "；") + "。"
   }
 
   /// 照这家的写法核对 model：写不出键的退回；有清单的要在清单里。返回这家的标准写法（`AgentKind.modelRef`）。
@@ -141,6 +140,7 @@ extension CueTools {
     let ref = try args.required("project").trimmingCharacters(in: .whitespacesAndNewlines)
     let title = args.string("title")?.trimmingCharacters(in: .whitespacesAndNewlines)
     let intro = args.string("intro").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    if let title, title.isEmpty { throw Failure("title 不能是空的") }
     let folder = try args.string("folder").map(folderPath)
     var done: [String] = []
     let project: Project
@@ -155,7 +155,6 @@ extension CueTools {
       project = try await self.project(ref)
     }
     if title != nil || intro != nil {
-      if let title, title.isEmpty { throw Failure("title 不能是空的") }
       try await store.updateProject(project.id) { edited in
         if let title { edited.name = title }
         if let intro { edited.intro = intro.isEmpty ? nil : intro }
@@ -181,7 +180,8 @@ extension CueTools {
     guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
       throw Failure("这台 Mac 上没有文件夹 \(url.path)：先开任务让会话建好，或问他在哪")
     }
-    return url.path(percentEncoded: false).replacing(/\/$/, with: "")
+    let path = url.path(percentEncoded: false)
+    return path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
   }
 
   // MARK: tidy
