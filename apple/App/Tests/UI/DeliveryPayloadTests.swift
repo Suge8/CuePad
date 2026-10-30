@@ -44,7 +44,7 @@ struct DeliveryPayloadTests {
         let next = try #require(try await phone.services.store.deliveryRequests().first { $0.content == "只执行这句新话" })
         await mac.services.syncNow()
         try await eventually("新话到达 Mac") { try await mac.services.store.deliveryRequest(next.id) != nil }
-        #expect(try await mac.services.store.outcome(of: next).status == .known(.unconfirmed))
+        #expect(try await mac.services.store.outcome(of: next).status == .known(.succeeded))
         #expect(ext.messages.map(\.text) == ["只执行这句新话"])
         await mac.services.executor.beginStop()()
     }

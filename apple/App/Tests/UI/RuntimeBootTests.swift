@@ -69,11 +69,12 @@ struct RuntimeBootTests {
               UPDATE writeCounter SET seq = seq + 1;
               UPDATE piSessionStates SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;
             END;
+            ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
             PRAGMA user_version = 82;
             """)
         #expect(CueStore.schemaVersion(of: location.databaseURL) == 82)
         let upgraded = try CueStore(location: location)
-        #expect(CueStore.schemaVersion(of: location.databaseURL) == 83 && CueStore.peerFloor == 83)
+        #expect(CueStore.schemaVersion(of: location.databaseURL) == 84 && CueStore.peerFloor == 84)
         #expect(try db.rows("SELECT hostID IS NULL, bootID IS NULL FROM cueState") == [["1", "1"]])
         let legacy = try #require(try await upgraded.cueState())
         #expect(legacy.state == .known(.thinking) && legacy.detail == "检查发布结果" && legacy.runtimeState.known == nil)

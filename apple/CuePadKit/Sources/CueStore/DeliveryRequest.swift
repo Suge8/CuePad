@@ -3,6 +3,8 @@ import Foundation
 
 public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing
+  /// 派发已结束，正在从真实历史核对；不是执行成功的证据。
+  case confirming
   /// 可能已交出但无法确认；不再领取，只能由真实消息等正证据收敛。
   case unconfirmed
   case succeeded
@@ -10,8 +12,8 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
 }
 
 extension DeliveryStatus {
-  /// 还没有结果的状态（等领取、执行中）：`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
-  static let open: Set<DeliveryStatus> = [.pending, .executing]
+  /// 持久记录尚未收尾（等领取、执行、确认）；是否仍在等进度由 Speech 连同期限推出：`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
+  static let open: Set<DeliveryStatus> = [.pending, .executing, .confirming]
   /// `open` 的 SQL `IN (…)` 列表。
   static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
 }
@@ -78,6 +80,8 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var handledBy: String?
   public var createdAt: Date
   public var completedAt: Date?
+  /// 当前准备、执行或确认阶段的硬截止。只在进入阶段时写，不随同步、绑定或重开续期。
+  public var deadlineAt: Date? = nil
   public var modifiedAt: Date
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
@@ -90,7 +94,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   public var isFromCue: Bool { origin == .known(.cue) }
 
-  /// 还没有执行结果（等待执行或执行中）。
+  /// 持久记录还没有收尾，不等于此刻在跑；当前进度与控制去重读 Speech.trip。
   public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
   /// 尚未领取只是撤回的必要条件；能否撤回还要由库事务核对已发送事实。
@@ -103,7 +107,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     return reason
   }
 
-  static var interruptedReason: ShownText { ShownText("Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发") }
+  public static var interruptedReason: ShownText { ShownText("Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发") }
 
   public static var unexplainedFailure: String { String(localized: "Mac 没有说明原因") }
 
@@ -153,9 +157,11 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 执行一次的结果：明确成功、明确未交出，或可能已交出但无法确认。未知只能由真实消息等正证据收敛，不授权再次派发。
+/// 一次派发后的进度：交给后台核对、明确成功、明确未交出，或可能已交出但无法确认。未知只能由真实消息等正证据收敛，不授权再次派发。
 public enum DeliveryOutcome: Sendable {
   case succeeded
+  /// 核对在执行通道之外运行；传入的是已落盘的阶段与期限，不得再次派发。
+  case confirming(@Sendable (DeliveryRequest) async -> DeliveryOutcome)
   case failed(ShownText)
   case unconfirmed(ShownText)
 }
@@ -164,11 +170,11 @@ extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
     "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
-    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "serverAt",
+    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "serverAt", "deadlineAt",
   ]
   static let syncedColumns = columns.filter { !["resultReceivedAt", "serverAt"].contains($0) }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, failureReason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, failureReason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt, deadlineAt]
   }
   init(row: Row) {
     self.init(
@@ -176,8 +182,8 @@ extension DeliveryRequest: Record {
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
       status: Open(rawValue: row.text(8)), failureReason: row.textOrNil(9).flatMap(ShownText.init(stored:)), handledBy: row.textOrNil(10),
-      createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14), serverAt: row.dateOrNil(16),
-      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(17))
+      createdAt: row.date(11), completedAt: row.dateOrNil(12), deadlineAt: row.dateOrNil(17), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14), serverAt: row.dateOrNil(16),
+      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(18))
   }
 }
 

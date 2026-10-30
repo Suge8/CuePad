@@ -89,15 +89,7 @@ extension CueStore {
   /// 在调用方的写事务里写对话与摘要（原样写会话文件的投影；"已结束的会话没有进行中的提问"在读出时定，见
   /// `PiSessionState.pendingPrompt`）。会话记录还不存在时只写消息。
   func applyTranscript(_ transcript: PiTranscript) throws {
-    for message in transcript.messages {
-      try registerAttachments(in: message.text)
-      if try insert(message, ignoringExisting: true) { continue }
-      // 已写过的消息只有正文和工具活动会变（读会话文件的规则升级后重读）：同样的内容不改写，免得重复上传
-      try db.run(
-        "UPDATE piMessages SET text = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (text IS NOT ?1 OR tools IS NOT ?2)",
-        [message.text, message.tools?.stored, Date.stamp, message.id])
-    }
-    try reconcileDeliveries(in: transcript.messages, session: transcript.sessionID)
+    try applyPiMessages(transcript.messages, session: transcript.sessionID)
     let recap = transcript.recap
     try db.run(
       """
@@ -106,6 +98,28 @@ extension CueStore {
       """,
       [recap.lastPrompt, recap.lastReply, recap.pendingPrompt, recap.pendingTools?.stored, Date.stamp,
        PiSessionState.recordID(sessionID: transcript.sessionID), recap.answeredAt])
+  }
+
+  /// 定点核对只补真实用户消息与送达证据，不改正常索引的检查点和轮次摘要。
+  public func writePiDeliveryReceipts(_ messages: [PiChatMessage]) throws {
+    let receipts = messages.filter { $0.deliveryID != nil && [.known(.user), .known(.machine)].contains($0.role) }
+    try write {
+      for (session, messages) in Dictionary(grouping: receipts, by: \.sessionID) {
+        try applyPiMessages(messages, session: session)
+      }
+    }
+  }
+
+  private func applyPiMessages(_ messages: [PiChatMessage], session: String) throws {
+    for message in messages {
+      try registerAttachments(in: message.text)
+      if try insert(message, ignoringExisting: true) { continue }
+      // 已写过的消息只有正文和工具活动会变（读会话文件的规则升级后重读）：同样的内容不改写，免得重复上传
+      try db.run(
+        "UPDATE piMessages SET text = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (text IS NOT ?1 OR tools IS NOT ?2)",
+        [message.text, message.tools?.stored, Date.stamp, message.id])
+    }
+    try reconcileDeliveries(in: messages, session: session)
   }
 
   /// 真实消息与来源在同一事务收敛；请求原文是发送快照，不拿模型输出冒充投送确认。

@@ -3,7 +3,7 @@ import Foundation
 /// 一句话的送达证据，由记录、服务器收下过没有与此刻推出，不另存。
 /// 发送中与已发出仍在等；超时、领取后缺少结果或本版本不认识的状态只说明未确认，不证明未交出。
 /// 只有接收方明确拒绝才是失败。未确认不自动重发，晚到的正证据可以让它变为已送达。
-/// 两段等待时限只在同步通着时走；到点由 App 的 `SpeechClock` 刷新此刻，不轮询。
+/// 未领取的回执窗口只在同步通着时走；准备、执行与确认的持久期限不依赖接收方或同步存活。
 public enum Speech {
   public enum Trip: Equatable, Sendable {
     case sending
@@ -71,8 +71,10 @@ public enum Speech {
 
   public static func trip(_ request: DeliveryRequest, at moment: Moment) -> Trip {
     switch request.status.known {
-    case .pending: waiting(since: request.createdAt, reachedServer: request.reachedServer, host: request.hostID, at: moment)
-    case .executing: moment.isLocal(request.hostID) ? .sending : .sent
+    case .pending:
+      if request.deadlineAt != nil || request.handledBy != nil { phase(request, at: moment) }
+      else { waiting(since: request.createdAt, reachedServer: request.reachedServer, host: request.hostID, at: moment) }
+    case .executing, .confirming: phase(request, at: moment)
     case .unconfirmed: .unconfirmed(request.failureReason?.text ?? unconfirmedReason)
     case nil: .unconfirmed(unconfirmedReason)
     case .succeeded: .delivered
@@ -87,7 +89,9 @@ public enum Speech {
   }
 
   public static func deadline(_ request: DeliveryRequest, at moment: Moment) -> Date? {
-    guard request.status == .known(.pending) else { return nil }
+    guard request.isOpen else { return nil }
+    if let deadline = request.deadlineAt { return deadline }
+    guard request.status == .known(.pending), request.handledBy == nil else { return nil }
     return deadline(said: request.createdAt, delivered: nil, reachedServer: request.reachedServer, host: request.hostID, at: moment)
   }
 
@@ -103,6 +107,11 @@ public enum Speech {
       guard request.mode == .known(.send) else { return false }
       return trip(request, at: moment).failure != nil
     }
+  }
+
+  private static func phase(_ request: DeliveryRequest, at moment: Moment) -> Trip {
+    guard let deadline = request.deadlineAt, moment.now < deadline else { return .unconfirmed(unconfirmedReason) }
+    return moment.isLocal(request.hostID) ? .sending : .sent
   }
 
   private static func waiting(since said: Date, reachedServer: Bool, host: String?, at moment: Moment) -> Trip {

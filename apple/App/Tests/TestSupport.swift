@@ -73,7 +73,9 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     }
     let uploads = AsyncStream<String>.makeStream()
     let sendsSucceed = Mutex(true)
+    let sendingGate = Mutex<AsyncStream<Void>?>(nil)
     func send(recordNames: Set<String>) async -> Bool {
+        if let gate = sendingGate.withLock({ $0 }) { for await _ in gate { break } }
         for name in recordNames.sorted() { uploads.continuation.yield(name) }
         return sendsSucceed.withLock { $0 }
     }

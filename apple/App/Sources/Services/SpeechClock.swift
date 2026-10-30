@@ -14,11 +14,12 @@ final class SpeechClock {
     @ObservationIgnored private let alwaysReachable: Bool
     @ObservationIgnored private let timing: Timing
 
-    /// 本机尚未看到领取或送达回执的一句：写下的时刻、服务器收下过没有与接收它的那台 Mac。
+    /// 仍在等进度的一句：未领取时按通信窗口，已开始准备、执行或确认时按持久期限。
     nonisolated struct Awaiting: Equatable, Sendable {
         var said: Date
         var reachedServer: Bool
         var host: String?
+        var deadline: Date? = nil
     }
 
     init(localHost: String?, reachable: Bool, alwaysReachable: Bool, timing: Timing) {
@@ -46,7 +47,7 @@ final class SpeechClock {
     /// 已经过了的时限立即刷"此刻"，再睡到下一个。
     private func schedule() {
         alarm?.cancel()
-        let deadlines = waiting.compactMap { Speech.deadline(said: $0.said, delivered: nil, reachedServer: $0.reachedServer, host: $0.host, at: moment) }
+        let deadlines = waiting.compactMap { $0.deadline ?? Speech.deadline(said: $0.said, delivered: nil, reachedServer: $0.reachedServer, host: $0.host, at: moment) }
         let now = timing.now()
         if deadlines.contains(where: { $0 > moment.now && $0 <= now }) { moment.now = now }
         guard let next = deadlines.filter({ $0 > now }).min() else { return }
@@ -59,16 +60,19 @@ final class SpeechClock {
 
 extension AppServices {
     /// 跟着资料库给出还在等回执的话（`SpeechClock.track`）与有没有还没结果的请求（`hasOpenDeliveries`，主动拉取的条件）：
-    /// 还没被领取的投送请求，与你对 Cue 说了、还没交给它的话。一个订阅读一次。读失败时报告并停止（到点不再翻、不再主动拉）。
+    /// 还没收尾的投送请求，与你对 Cue 说了、还没交给它的话。一个订阅读一次。读失败时报告并停止（到点不再翻、不再主动拉）。
     func startSpeechClock() {
         follow(reporting: { .syncUnavailable(String(localized: "读取在等回执的话失败，到点不再翻状态、不再主动拉取：\(String(describing: $0))")) }) {
             for try await open in self.store.observe({ store in
                 let requests = try store.deliveryRequests().filter(\.isOpen)
                 let cueHost = try store.cueProfile()?.hostID
                 let toCue = try store.cueMessagesToDeliver().filter { $0.author == .known(.you) }
-                let waiting = requests.filter(\.isWithdrawable).map { SpeechClock.Awaiting(said: $0.createdAt, reachedServer: $0.reachedServer, host: $0.hostID) }
+                let waiting = requests.filter { $0.isWithdrawable || $0.deadlineAt != nil }.map {
+                    SpeechClock.Awaiting(said: $0.createdAt, reachedServer: $0.reachedServer, host: $0.hostID, deadline: $0.deadlineAt)
+                }
                     + toCue.map { SpeechClock.Awaiting(said: $0.createdAt, reachedServer: $0.reachedServer, host: cueHost) }
-                return OpenSpeech(open: !requests.isEmpty || !toCue.isEmpty, waiting: waiting)
+                let active = requests.contains { Speech.trip($0, at: .always(at: store.timing.now())).inTransit }
+                return OpenSpeech(open: active || !toCue.isEmpty, waiting: waiting)
             }) {
                 self.hasOpenDeliveries = open.open
                 self.speechClock.track(open.waiting)

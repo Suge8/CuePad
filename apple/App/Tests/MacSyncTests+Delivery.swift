@@ -53,7 +53,7 @@ extension MacSyncTests {
 
         let request = try await services.store.requestDelivery(
             "按这张改\n\(CueFormat.imageMarkup(key: key))", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
-        #expect(try await awaitFinished(request.id).status == .known(.unconfirmed))
+        #expect(try await awaitFinished(request.id).status == .known(.succeeded))
         let path = try #require(services.store.files.fileURL(for: key)).path(percentEncoded: false)
         #expect(blind.messages == [PiMessage(text: "按这张改\n附件：图片.png（\(path)）", deliveryID: request.id.uuidString)])
     }

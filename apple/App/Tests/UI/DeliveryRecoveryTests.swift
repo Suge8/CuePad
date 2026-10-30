@@ -11,6 +11,18 @@ import Testing
 /// #43：回执丢失不是未执行，历史是投送与来源的正证据，回填不能重放绑定。
 @MainActor
 struct DeliveryRecoveryTests {
+    let clock = ManualTiming()
+    private func outcome(_ request: DeliveryRequest, in appStore: CueStore) async throws -> DeliveryRequest {
+        for try await raw in appStore.observe({ try $0.deliveryRequest(request.id) }) {
+            guard let raw else { throw CueStoreError.notFound }
+            if !raw.isOpen { return raw }
+            if raw.status == .known(.confirming), let due = raw.deadlineAt {
+                clock.advance(.seconds(max(0, due.timeIntervalSince(clock.now)) + 1))
+            }
+        }
+        throw CancellationError()
+    }
+
     private func session(_ app: TestApp, reply: String) async throws -> (PiSessionState, FakeExtension) {
         let id = UUID().uuidString.lowercased()
         let ext = try await app.host.connect(id, cwd: app.directory.path)
@@ -54,12 +66,12 @@ struct DeliveryRecoveryTests {
 
     @Test(arguments: ["timeout", "disconnect", "failed", "ack"])
     func 回执丢失或弱确认都不授权重发_晚到历史接替原气泡(reply: String) async throws {
-        let app = TestApp(), store = app.services.store
+        let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: reply)
         defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("从中断的地方继续", to: target, app: app)
         try await app.services.executor.start()
-        let uncertain = try await store.outcome(of: request)
+        let uncertain = try await outcome(request, in: store)
         #expect(uncertain.status == .known(.unconfirmed))
         #expect(uncertain.failure == nil)
         #expect(ext.messages.map(\.text) == ["从中断的地方继续"])
@@ -82,7 +94,7 @@ struct DeliveryRecoveryTests {
     }
 
     @Test func 重开App与更新的旧pending同步都不能再派发已领取的话() async throws {
-        let app = TestApp(), store = app.services.store
+        let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "ack")
         defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("不要再上传一次", to: target, app: app)
@@ -90,19 +102,19 @@ struct DeliveryRecoveryTests {
         // App 在交出后、写回前退出，磁盘上只剩领取事实。
         try RawDB(app.services.location.databaseURL).exec("UPDATE deliveryRequests SET status = 'executing', handledBy = '\(TestApp.hostID)'")
         try await app.services.executor.start()
-        #expect(try await store.deliveryRequest(request.id)?.status == .known(.unconfirmed))
+        #expect(try await outcome(request, in: store).status == .known(.unconfirmed))
         old.fields["modifiedAt"] = .int(Int64(Date.now.addingTimeInterval(60).timeIntervalSince1970 * 1000))
         #expect(try await store.applyRemote([.save(old, systemFields: Data())]).isEmpty)
         // 下一句正常处理完之后，旧意图也不得偷偷再次派发。
         let next = try await say("只检查结果", to: target, app: app)
-        _ = try await store.outcome(of: next)
+        _ = try await outcome(next, in: store)
         #expect(ext.messages.map(\.text) == ["只检查结果"])
         #expect(try await store.deliveryRequest(request.id)?.status == .known(.unconfirmed))
         await app.services.executor.beginStop()()
     }
 
     @Test func 先同步到真实消息也能确认原请求_不等弱ACK再次回来() async throws {
-        let mac = TestApp(), phone = TestApp(host: "phone"), store = mac.services.store
+        let mac = TestApp(timing: clock.timing), phone = TestApp(host: "phone"), store = mac.services.store
         let (target, ext) = try await session(mac, reply: "ack")
         defer {
             ext.close(bye: "quit"); mac.pi.stop()
@@ -112,7 +124,7 @@ struct DeliveryRecoveryTests {
         let pending = try #require(try await phone.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
         #expect(try await store.applyRemote([.save(pending, systemFields: Data())]).isEmpty)
         try await mac.services.executor.start()
-        _ = try await store.outcome(of: request)
+        _ = try await outcome(request, in: store)
         try await history(ext.messages, session: target.sessionID, app: mac)
         let message = try #require(try await store.piMessages(of: target.sessionID).first)
         let row = try #require(try await store.syncRow(recordName: message.id.uuidString.lowercased()))
@@ -126,16 +138,16 @@ struct DeliveryRecoveryTests {
     }
 
     @Test func 明确再说一次保留原来的未知_不伪装成安全重发() async throws {
-        let app = TestApp(), store = app.services.store
+        let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "ack")
         defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
         let first = try await say("继续检查", to: target, app: app)
         try await app.services.executor.start()
-        let uncertain = try await store.outcome(of: first)
+        let uncertain = try await outcome(first, in: store)
         let workspace = Workspace(services: app.services)
         await workspace.sayAgain(.request(uncertain), restoringInto: app.services.settings.replyDraftBinding(for: target.id)).value
         let second = try #require(try await store.deliveryRequests().first { $0.id != first.id })
-        _ = try await store.outcome(of: second)
+        _ = try await outcome(second, in: store)
         #expect(try await store.deliveryRequests().count == 2)
         #expect(try await store.deliveryRequest(first.id)?.status == .known(.unconfirmed))
         #expect(ext.messages.map(\.text) == ["继续检查", "继续检查"])
@@ -143,7 +155,7 @@ struct DeliveryRecoveryTests {
     }
 
     @Test func 唤醒暂时连不上也不在一次领取里再开宿主() async throws {
-        let app = TestApp(), store = app.services.store
+        let app = TestApp(timing: clock.timing), store = app.services.store
         defer { app.pi.stop(); app.services.cancelBackgroundWork() }
         try await store.upsertPiSession(IndexedSession(
             id: "sleeping", path: app.directory.appending(path: "sleeping.jsonl").path, cwd: app.directory.path,
@@ -153,7 +165,7 @@ struct DeliveryRecoveryTests {
         app.host.resumeFailures = [PiHostError.notConnected]
         let request = try await say("检查一次发布结果", to: target, app: app)
         try await app.services.executor.start()
-        let done = try await store.outcome(of: request)
+        let done = try await outcome(request, in: store)
         #expect(done.status == .known(.failed))
         #expect(app.host.extensions.isEmpty)
         #expect(try await store.deliveryRequests().map(\.id) == [request.id])
@@ -162,7 +174,7 @@ struct DeliveryRecoveryTests {
 
     @Test(arguments: [AgentKind.claudeCode, .codex, .opencode, .grok, .dsh])
     func 其他接入仍保留各自的受理合同(agent: AgentKind) async throws {
-        let app = TestApp(), store = app.services.store
+        let app = TestApp(timing: clock.timing), store = app.services.store
         defer { app.pi.stop(); app.services.cancelBackgroundWork() }
         let runtime = PipedHostedAgent(bridge: app.pi, agent: agent)
         runtime.host("other", state: .settled)
@@ -170,14 +182,14 @@ struct DeliveryRecoveryTests {
         let target = try #require(try await store.allPiSessionStates().first)
         let request = try await say("继续检查结果", to: target, app: app)
         try await app.services.executor.start()
-        let done = try await store.outcome(of: request)
+        let done = try await outcome(request, in: store)
         #expect(done.status == .known(.succeeded))
         #expect(runtime.messages.map(\.text) == ["继续检查结果"])
         await app.services.executor.beginStop()()
     }
 
     @Test func Cue旧请求不能越过派发时新开始的人类轮() async throws {
-        let app = TestApp(), store = app.services.store
+        let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "ack")
         defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
         let task = try await store.createTask("修复发布")
@@ -188,7 +200,7 @@ struct DeliveryRecoveryTests {
         _ = await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "先检查一次"])
         let first = try #require(try await store.deliveryRequests().first)
         try await app.services.executor.start()
-        _ = try await store.outcome(of: first)
+        _ = try await outcome(first, in: store)
         await app.services.executor.beginStop()()
         try await history(ext.messages, session: target.sessionID, app: app)
         ext.setState(["kind": "thinking"])
@@ -205,7 +217,7 @@ struct DeliveryRecoveryTests {
         ext.sendRaw("{\"t\":\"state\",\"state\":{\"kind\":\"thinking\",\"since\":\(newTurn),\"turnSince\":\(newTurn)}}")
         try await eventually("桥看到后来的一轮") { app.pi.session(id: ext.id)?.turnStartedAt != began }
         try await app.services.executor.start()
-        let rejected = try await store.outcome(of: second)
+        let rejected = try await outcome(second, in: store)
         #expect(rejected.status == .known(.failed))
         #expect(ext.messages.map(\.text) == ["先检查一次"])
         #expect(app.pi.session(id: ext.id)?.state == .thinking)
@@ -213,7 +225,7 @@ struct DeliveryRecoveryTests {
     }
 
     @Test func Cue超时后的历史补齐来源_清理请求后仍保留_不抢后来手动绑定() async throws {
-        let app = TestApp(), store = app.services.store
+        let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "timeout")
         defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
         let task = try await store.createTask("修复发布")
@@ -228,7 +240,7 @@ struct DeliveryRecoveryTests {
         #expect(!result.text.contains("还没送达") && !result.text.contains("结果会写进变化"))
         let request = try #require(try await store.deliveryRequests().first)
         try await app.services.executor.start()
-        _ = try await store.outcome(of: request)
+        _ = try await outcome(request, in: store)
         let workspace = Workspace(services: app.services), taskID = task.id
         workspace.perform { try await $0.bindSession("later-session", to: taskID) }
         try await eventually("手动改绑生效") { try await store.leafSession(taskID) == "later-session" }

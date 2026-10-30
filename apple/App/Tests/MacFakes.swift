@@ -37,6 +37,8 @@ final class RecordingHost: AgentRuntime {
     var openFailure: String?
     /// 宿主已创建后，开场消息被扩展明确拒绝。
     var openingRejection: String?
+    var openingGate: AsyncStream<Void>?
+    var writesMessages = true
     /// 接下来的几次唤醒依次以这些错误失败（如会话起得慢、没及时连上桥），用完照常唤醒
     var resumeFailures: [any Error] = []
     private let bridge: PiBridge
@@ -66,6 +68,8 @@ final class RecordingHost: AgentRuntime {
     ) async throws -> String {
         calls.append(.open(
             directory: directory.path, launchToken: launchToken, name: name, model: model.map { "\($0.provider)/\($0.id)" }, thinking: thinking?.rawValue))
+        if let openingGate { for await _ in openingGate { break } }
+        try Task.checkCancellation()
         if let openFailure { throw PiHostError.exited(openFailure) }
         let id = "new-\(launchToken)"
         let ext = try await connect(id, cwd: directory.path, sessionFile: sessions.appending(path: "--demo--/\(id).jsonl").path)
@@ -88,11 +92,17 @@ final class RecordingHost: AgentRuntime {
     ) async throws -> FakeExtension {
         var options = FakeExtension.Options(extensionVersion: extensionVersion, cwd: cwd, hosted: hosted)
         if !seesImages { options.model?.images = false }
-        if let sessionFile { options.sessionFile = sessionFile }
+        let file = sessionFile.map { URL(filePath: $0) } ?? sessions.appending(path: "--demo--/\(sessionID).jsonl")
+        options.sessionFile = file.path
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
         if busy { ext.setState(["kind": "thinking"]) }
+        let writesMessages = self.writesMessages
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }
+            if writesMessages, command["t"] as? String == "send" {
+                do { try Self.writeMessage(command, session: sessionID, cwd: cwd, file: file) }
+                catch { return ["ok": false, "error": "failed: \(error)"] }
+            }
             return ["ok": true]
         }
         try bridge.start()
@@ -101,6 +111,29 @@ final class RecordingHost: AgentRuntime {
         extensions[sessionID] = ext
         return ext
     }
+    nonisolated private static func writeMessage(_ command: [String: Any], session: String, cwd: String, file: URL) throws {
+        let timestamp = Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(.now)
+        func line(_ object: [String: Any]) throws -> Data {
+            var data = try JSONSerialization.data(withJSONObject: object)
+            data.append(0x0A)
+            return data
+        }
+        if !FileManager.default.fileExists(atPath: file.path) {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try line(["type": "session", "version": 3, "id": session, "timestamp": timestamp, "cwd": cwd]).write(to: file)
+        }
+        var content: [[String: Any]] = [["type": "text", "text": command["text"] as? String ?? ""]]
+        content += (command["images"] as? [[String: Any]] ?? []).map { $0.merging(["type": "image"]) { _, new in new } }
+        let message: [String: Any] = [
+            "type": "message", "id": command["id"] as? String ?? UUID().uuidString, "timestamp": timestamp,
+            "message": ["role": "user", "content": content, "cuepadDelivery": command["deliveryId"] as? String ?? ""],
+        ]
+        let handle = try FileHandle(forWritingTo: file)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: line(message))
+    }
+
 }
 
 /// 撑不过 App 重启的那几家（Claude Code、Codex 这类靠管道连着 App 的）托管会话的替身：经桥的 `attach` 上桥（各家接入就是这样上桥的），

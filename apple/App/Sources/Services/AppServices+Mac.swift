@@ -211,7 +211,10 @@ extension AppServices {
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
             let scope = connected ? .all : await hostedScope(of: agent)
             runtimes[agent]?.follow(scope)
-            return await consumePiHistory(indexer.events(following: pi.sessionFiles, scope: scope), agent: agent)
+            let events = agent == .pi
+                ? indexer.events(following: piDeliveryHistoryFiles(), scope: scope)
+                : indexer.events(following: pi.sessionFiles, scope: scope)
+            return await consumePiHistory(events, agent: agent)
         }
         guard connected, let runtime = runtimes[agent] else { return }
         do {

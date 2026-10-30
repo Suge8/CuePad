@@ -12,6 +12,7 @@ import Testing
 struct DeliveryControlTests {
     @Test(arguments: [DeliveryMode.send, .start], [
         ("unconfirmed", false), ("unconfirmed", true), ("future-outcome", false), ("future-outcome", true),
+        ("executing", false), ("executing", true), ("confirming", false), ("confirming", true),
     ])
     func 交接未收尾时Cue再开工不能悄悄再发或再开(mode: DeliveryMode, outcome: (String, Bool)) async throws {
         let (status, fresh) = outcome
@@ -32,7 +33,7 @@ struct DeliveryControlTests {
         let request = try #require(try await store.deliveryRequests().first)
         // 写回前崩溃／丢回执：已交出的原意图留在库里，未确认不是未开工。
         try RawDB(app.services.location.databaseURL).exec(
-            "UPDATE deliveryRequests SET status = '\(status)', handledBy = '\(host)', completedAt = createdAt WHERE id = '\(request.id.uuidString.lowercased())'")
+            "UPDATE deliveryRequests SET status = '\(status)', handledBy = '\(host)', deadlineAt = createdAt - 1000 WHERE id = '\(request.id.uuidString.lowercased())'")
         let occupied = try #require(try await store.handoffRequests(for: [task.id])[task.id])
         #expect(occupied.map(\.id) == [request.id])
         #expect(occupied.allSatisfy { !Speech.trip($0, at: .always()).inTransit })

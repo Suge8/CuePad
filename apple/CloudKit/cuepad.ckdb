@@ -133,6 +133,7 @@ DEFINE SCHEMA
         completedAt   INT64,
         modifiedAt    INT64,
         origin        STRING,
+        deadlineAt    INT64,
         taskID        STRING,
         partIDs       STRING,
         resultDetail  ENCRYPTED STRING,

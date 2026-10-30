@@ -54,7 +54,7 @@ extension MacSyncTests {
         let task = try await services.store.createTask("上线", in: project.id)
         let step = try await services.store.createTask("备份数据库\n先把库备份一份", under: task.id)
 
-        #expect(try await launched(PiLaunch(project: project.id, prompt: step.body, token: "tok-6"), card: step.id).status == .known(.unconfirmed))
+        #expect(try await launched(PiLaunch(project: project.id, prompt: step.body, token: "tok-6"), card: step.id).status == .known(.succeeded))
         #expect(rig.host.extensions["new-tok-6"]?.received == ["send"])
         guard case .open(_, _, let name, _, _) = try #require(rig.host.calls.first) else {
             Issue.record("没有开新会话")
@@ -93,7 +93,7 @@ extension MacSyncTests {
         try await services.executor.start()
         let request = try await store.requestLaunch(
             PiLaunch(project: project.id, prompt: "看看测试为什么挂", token: "tok-cue"), title: "App", on: TestApp.hostID, cue: true)
-        #expect(try await awaitFinished(request.id).status == .known(.unconfirmed))
+        #expect(try await awaitFinished(request.id).status == .known(.succeeded))
         let ext = try #require(rig.host.extensions["new-tok-cue"])
         let received = try #require(ext.messages.first)
         let delivery = try #require(received.deliveryID.flatMap(UUID.init(uuidString:)))

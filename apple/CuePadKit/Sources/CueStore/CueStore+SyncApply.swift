@@ -187,18 +187,28 @@ extension CueStore {
   private static func mergingDeliveryProgress(local: SyncRow, remote: SyncRow) -> SyncRow? {
     func progress(_ row: SyncRow) -> Int {
       switch row.text("status").flatMap(DeliveryStatus.init(rawValue:)) {
-      case .succeeded: 4
-      case .unconfirmed: 3
-      case .failed: 2
+      case .succeeded: 5
+      case .unconfirmed: 4
+      case .failed: 3
+      case .confirming: 2
       case .executing: 1
-      case .pending, nil: row.text("handledBy") == nil ? 0 : 1
+      case .pending: row.text("handledBy") == nil ? 0 : 1
+      case nil: 4
       }
     }
     let localProgress = progress(local), remoteProgress = progress(remote)
-    guard localProgress != remoteProgress, localProgress > remoteProgress || local.modifiedAt > remote.modifiedAt else { return nil }
+    let samePhase = local.text("status") == remote.text("status")
+    func deadline(_ row: SyncRow) -> Int64? {
+      if case .int(let value) = row.fields["deadlineAt"] { value } else { nil }
+    }
+    let due = [deadline(local), deadline(remote)].compactMap { $0 }.min()
+    let preservesDeadline = samePhase && due != deadline(remote)
+    let preservesProgress = localProgress != remoteProgress && (localProgress > remoteProgress || local.modifiedAt > remote.modifiedAt)
+    guard preservesDeadline || preservesProgress else { return nil }
     var repaired = local.modifiedAt > remote.modifiedAt ? local : remote
     let resolved = localProgress > remoteProgress ? local : remote
-    for column in ["status", "failure", "handledBy", "completedAt"] { repaired.fields[column] = resolved.fields[column] }
+    for column in ["status", "failure", "handledBy", "completedAt", "deadlineAt"] { repaired.fields[column] = resolved.fields[column] }
+    if samePhase { repaired.fields["deadlineAt"] = due.map(SQLValue.int) ?? .null }
     repaired.fields["modifiedAt"] = .int(max(local.modifiedAt, remote.modifiedAt) + 1)
     return repaired
   }

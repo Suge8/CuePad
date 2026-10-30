@@ -70,7 +70,7 @@ extension CueStore {
 
   /// 正文就是方式名的控制类请求（结束、停止、重跑）：同一会话同一种方式在路上只有一条。必须在写事务内调用。
   func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String, cue: Bool) throws -> DeliveryRequest {
-    if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && $0.isOpen }) {
+    if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && Speech.trip($0, at: .always(at: timing.now())).inTransit }) {
       return open
     }
     return try insertDelivery(mode.rawValue, to: target, on: host, mode: mode, cue: cue)
@@ -140,7 +140,11 @@ extension CueStore {
 
   /// 所有投送请求，最近的在前。
   public func deliveryRequests() throws -> [DeliveryRequest] {
-    try select(DeliveryRequest.self, orderBy: "createdAt DESC, rowid DESC")
+    let requests = try select(DeliveryRequest.self, orderBy: "createdAt DESC, rowid DESC")
+    for request in requests where request.isOpen {
+      if let due = request.deadlineAt, due > timing.now() { expire(at: due) }
+    }
+    return requests
   }
 
   public func deliveryRequest(_ id: UUID) throws -> DeliveryRequest? { try find(DeliveryRequest.self, id) }
@@ -177,7 +181,15 @@ extension CueStore {
   /// 投送请求此刻的样子：记录还在就是它；发出的话已成了对话里的消息（之后请求被收走，见 `markPushed`）就是已送达；
   /// 都不是（撤回、清理了）为 nil。
   public func latest(of request: DeliveryRequest) throws -> DeliveryRequest? {
-    if let current = try deliveryRequest(request.id) { return current }
+    if var current = try deliveryRequest(request.id) {
+      if current.isOpen, current.deadlineAt != nil || current.handledBy != nil || current.status != .known(.pending) {
+        if case .unconfirmed = Speech.trip(current, at: .always(at: timing.now())) {
+          current.status = .known(.unconfirmed)
+          current.failureReason = ShownText.verbatim(Speech.unconfirmedReason)
+        } else if let deadline = current.deadlineAt { expire(at: deadline) }
+      }
+      return current
+    }
     guard try db.first("SELECT 1 FROM piMessages WHERE deliveryID = ?", [request.id], { _ in true }) != nil else { return nil }
     var arrived = request
     arrived.status = .known(.succeeded)

@@ -39,15 +39,19 @@ final class MacExecutor {
     }
 
     func start() async throws {
-        let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [reportIssue] error in
+        guard running == nil else { return }
+        let executor = DeliveryExecutor(store: store, hostID: hostID, timing: store.timing, onIssue: { [reportIssue] error in
             let message = String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)")
             Task { @MainActor in reportIssue(message) }
-        }, onWritten: upload, fetchFile: { [fetchFile] key in _ = try await fetchFile(key) }) { [weak self] request in
+        }, onWritten: upload, fetchFile: { [fetchFile] key in _ = try await fetchFile(key) }, recover: { [store, pi] request in
+            await PiDeliveryConfirmation(store: store, pi: pi).recover(request)
+        }) { [weak self] request in
             guard let self else { return .failed(ShownText("这台 Mac 上的 CuePad 正在退出")) }
             return await self.run(request)
         }
-        try await executor.start()
         running = executor
+        do { try await executor.start() }
+        catch { running = nil; throw error }
     }
 
     /// 立即不再领取新请求；返回的等待不在主线程上，退出收尾里与别的组件一起限时等（见 `AppServices.beginShutdown`）。
@@ -124,7 +128,11 @@ final class MacExecutor {
             let context = try await store.cueSendContext(in: session.sessionID)
             outgoing.policy = .cue(deliveryID: context.deliveryID?.uuidString, turnStartedAt: context.turnStartedAt)
         }
-        try await pi.send(outgoing, to: session.id)
+        do { try await pi.send(outgoing, to: session.id) }
+        catch {
+            guard session.agent == .pi, !Self.definitelyNotHanded(error) else { throw error }
+            return PiDeliveryConfirmation(store: store, pi: pi).pending(in: session, reason: ShownText(error))
+        }
         do {
             try await store.linkDeliveredCard(request, toSession: session.sessionID)
         } catch {
@@ -132,7 +140,7 @@ final class MacExecutor {
         }
         // Pi 的 message_end 先于会话文件写入；其他接入沿用各自的受理合同，不抹掉已有能力。
         guard session.agent != .pi else {
-            return .unconfirmed(ShownText("Agent 已接手，尚未从会话历史确认，不会自动重发"))
+            return PiDeliveryConfirmation(store: store, pi: pi).pending(in: session)
         }
         await record(content, of: request, to: session.sendTarget)
         return .succeeded

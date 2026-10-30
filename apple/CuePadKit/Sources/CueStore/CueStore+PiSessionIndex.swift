@@ -28,6 +28,19 @@ extension CueStore {
     }
   }
 
+  /// 未收尾投送对应的真实文件位置；确认到期也继续由正常历史订阅跟随，直到正证据或请求被清理。
+  public func deliveryHistoryFiles(on host: String) throws -> Set<URL> {
+    let unsettled = "r.hostID = ?1 AND r.status NOT IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)')"
+    return Set(try db.query(
+      """
+      SELECT path FROM piSessions p WHERE COALESCE(p.agent, 'pi') = 'pi' AND p.id IN (
+        SELECT r.targetRef FROM deliveryRequests r WHERE \(unsettled) AND r.mode = 'send'
+        UNION
+        SELECT s.sessionID FROM deliveryRequests r JOIN piSessionStates s ON s.launchToken = \(Self.launchToken("r"))
+        WHERE \(unsettled) AND r.mode = 'start')
+      """, [host]) { URL(filePath: $0.text(0)) })
+  }
+
   /// 只留下这些会话文件的索引，其余（文件已删除、不再算会话的）删除，返回删掉的条数。
   /// 同时让已结束（与终端里被打断）的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的这类记录（文件被删的；从没落盘的，
   /// 如 `--no-session` 或没发过消息的），补写有会话文件却没有记录的。在线的不动；
@@ -37,7 +50,8 @@ extension CueStore {
   public func retainPiSessions(paths: Set<String>, agent: AgentKind, host: String) throws -> Int {
     try write {
       let indexed = try db.query("SELECT id, path FROM piSessions WHERE \(Self.agentOf) = ?", [agent.rawValue]) { ($0.text(0), $0.text(1)) }
-      let stale = indexed.filter { !paths.contains($0.1) }
+      let retained = agent == .pi ? Set(try deliveryHistoryFiles(on: host).map(\.path)) : []
+      let stale = indexed.filter { !paths.contains($0.1) && !retained.contains($0.1) }
       for (id, _) in stale { try db.run("DELETE FROM piSessions WHERE id = ?", [id]) }
       try db.run(
         """

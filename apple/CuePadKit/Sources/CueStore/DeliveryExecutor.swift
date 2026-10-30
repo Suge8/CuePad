@@ -1,99 +1,15 @@
 import Foundation
 import os
 
-extension CueStore {
-  fileprivate func pendingDeliveries(for host: String) throws -> [DeliveryRequest] {
-    try select(
-      DeliveryRequest.self, where: "status = '\(DeliveryStatus.pending.rawValue)' AND handledBy IS NULL AND hostID = ?", [host],
-      orderBy: "createdAt, rowid")
-  }
-
-  /// 领取只允许 pending 单向前进；这不是跨进程／跨设备的恰好一次执行保证。
-  fileprivate func claimDelivery(_ id: UUID, host: String) throws -> Bool {
-    try write {
-      try db.run(
-        "UPDATE deliveryRequests SET status = '\(DeliveryStatus.executing.rawValue)', handledBy = ?, modifiedAt = ? WHERE id = ? AND status = '\(DeliveryStatus.pending.rawValue)' AND handledBy IS NULL",
-        [host, Date.stamp, id])
-      return db.changes > 0
-    }
-  }
-
-  /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败。
-  /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果。
-  /// 任务的状态与正文都不因说话而变：发出的正文留在任务上，"发过没有"看投送请求。
-  /// 你的作答成功了，同一个事务里往那个会话的对话写下你答了什么（`PiChatRole.answer`；Cue 替你答的不写，记在它那一轮的经过里）。
-  fileprivate func finishDelivery(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws {
-    let id = request.id
-    let (status, reason): (DeliveryStatus, ShownText?) =
-      switch outcome {
-      case .succeeded: (.succeeded, nil)
-      case .failed(let reason): (.failed, reason)
-      case .unconfirmed(let reason): (.unconfirmed, reason)
-      }
-    try write {
-      try db.run(
-        """
-        UPDATE deliveryRequests SET status = ?, failure = ?, completedAt = ?, modifiedAt = ?
-        WHERE id = ? AND status = ?
-        """, [status.rawValue, reason?.stored, completed, Date.stamp, id, request.status.rawValue])
-      guard db.changes > 0, status == .succeeded, let request = try find(DeliveryRequest.self, id), !request.isFromCue,
-        let answer = request.answer, let session = request.target.ref
-      else { return }
-      // 排在会话文件里此刻最后一条之后（作答时 Agent 停着等你，接下来的都在它之后）；对话按 `at` 把它插到答的那一刻：
-      // 你写下作答请求的时刻，不是这里执行完的时刻（离线答的、Mac 晚领取的，执行晚于答）
-      let seq = try db.first("SELECT MAX(seq) FROM piMessages WHERE sessionID = ?", [session]) { $0.isNull(0) ? 0 : $0.int(0) } ?? 0
-      _ = try insert(
-        PiChatMessage(
-          sessionID: session, entryID: "answer/\(id.uuidString.lowercased())", seq: seq, role: .answer, text: answer.value.said, at: request.createdAt,
-          deliveryID: id, question: answer.question, shownText: answer.value.shown),
-        ignoringExisting: true)
-    }
-  }
-
-  fileprivate func markInterruptedDeliveries(host: String, at now: Date) throws {
-    try write {
-      try db.run(
-        """
-        UPDATE deliveryRequests SET status = '\(DeliveryStatus.unconfirmed.rawValue)', failure = ?, completedAt = ?, modifiedAt = ?
-        WHERE hostID = ? AND (status = '\(DeliveryStatus.executing.rawValue)' OR (status = '\(DeliveryStatus.pending.rawValue)' AND handledBy IS NOT NULL))
-        """, [DeliveryRequest.interruptedReason.stored, now, Date.stamp, host])
-    }
-  }
-
-  /// 删除完成时间早于 `cutoff` 的请求；返回是否还剩已完成的（还剩就再排一轮）。
-  /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
-  /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
-  /// 发出的话（`send`）不按保留期清：送到的等它在对话里的那条消息上了服务器再收走（`markPushed`），气泡才不会在消息到别的设备之前没了；
-  /// 没能送达的留着等用户重发或移除（重发写成后移除它）。Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`）。
-  /// 这几种都至多留到完成早于 `keptCutoff`。
-  fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> Bool {
-    let done = "status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)')"
-    let kept = """
-      completedAt >= ?3 AND (mode = '\(DeliveryMode.send.rawValue)' OR (status = '\(DeliveryStatus.failed.rawValue)' AND origin IS '\(DeliveryOrigin.cue.rawValue)'))
-      """
-    let awaitingClaim = """
-      mode = 'start' AND status = '\(DeliveryStatus.succeeded.rawValue)' AND cardID IS NOT NULL AND completedAt >= ?2
-        AND \(Self.latestHandoff("deliveryRequests")) AND \(Self.launchUnclaimed)
-      """
-    let arguments: [any SQLBindable] = [cutoff, claimCutoff, keptCutoff]
-    return try write {
-      try db.run(
-        "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(kept))",
-        arguments)
-      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(kept))", arguments) { _ in true } != nil
-    }
-  }
-}
-
 /// Mac 端的投送执行器：只领取发给本机（`hostID` 等于本机）的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，
 /// 把结果写回请求；完成的请求保留 `retention` 后清理（发出的话等它进对话、等认领的开新会话请求等认领，见 `deleteCompletedDeliveries`）。
 /// - 服务器收下后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）。从服务器收下算、不从写下算：
 ///   在发出的设备上等着的那段（断网、要更新）你看得到它在等、撤得回，传上来就照常执行，同对 Cue 说的话；本机写的从写下算；
 /// - 请求引用的附件不在本机时先在旁边取（`fetchFile`，一条请求一个任务），取齐才进队执行：等文件不占执行队列，
-///   后面发给别的会话、对 Cue 说的话照常先执行；取不来按失败写回；
+///   后面发给别的会话、对 Cue 说的话照常先执行；取不来按失败写回；准备与执行分别以 maxAge 为安全上限；
 /// - 每次领取只交给 handler 一次；任何执行后未知都留待正证据对账，不在领取内重试；
-/// - 启动时，上次执行到一半的请求标为未确认且不重试（可能已经发出）；
-/// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
+/// - 启动时只恢复上次请求的核对，不重派、不续期；确认任务独立于执行通道，由 stop 取消并收齐；
+/// - 读写 Store 失败交给 `onIssue`；持久阶段的期限仍使发送方有界收敛；
 /// - 写回结果后调用一次 `onWritten`（App 用它立即上传这一条，排在其余待推送前面）；执行超过 `claimGrace` 的，领取那一版先传一次：
 ///   发起的设备据领取知道 Mac 接手了，但不能据此断言已交给 Agent。多数执行几十毫秒就完，只传结果那一版：
 ///   领取那一版在路上时结果得等它回来才能传（同一条记录一次只一版在路上），回执要多等一个来回。
@@ -109,12 +25,16 @@ public actor DeliveryExecutor {
   private let timing: Timing
   private let onIssue: @Sendable (any Error) -> Void
   private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
+  private let recover: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   /// 把一个附件取到本机（App 给的 `AppServices.fetchFile`）：执行器等附件文件只在这里；缺省是这台取不来
   private let fetchFile: @Sendable (String) async throws -> Void
+  private var uploads: [UUID: Task<Void, Never>] = [:]
+  private var confirmations: [DeliveryRequest.ID: Task<Void, Never>] = [:]
   /// 在旁边取附件的请求
   private var fetching: [DeliveryRequest.ID: Task<Void, Never>] = [:]
   private static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
+  private var started = false
   private var watcher: Task<Void, Never>?
   private var cleanup: Task<Void, Never>?
   private var processing = false
@@ -127,6 +47,7 @@ public actor DeliveryExecutor {
     timing: Timing = .system, onIssue: @escaping @Sendable (any Error) -> Void,
     onWritten: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
     fetchFile: @escaping @Sendable (String) async throws -> Void = { _ in throw CueStoreError.notFound },
+    recover: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome = { _ in .unconfirmed(DeliveryRequest.interruptedReason) },
     handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
   ) {
     self.store = store
@@ -135,29 +56,46 @@ public actor DeliveryExecutor {
     self.onIssue = onIssue
     self.onWritten = onWritten
     self.handler = handler
+    self.recover = recover
     self.fetchFile = fetchFile
   }
 
   public func start() async throws {
-    guard watcher == nil else { return }
-    try await store.markInterruptedDeliveries(host: hostID, at: timing.now())
-    if try await deleteExpired() { scheduleCleanup() }
-    watcher = Task { [store, hostID, onIssue] in
-      do {
-        for try await _ in store.observe({ try $0.pendingDeliveries(for: hostID).map(\.id) }) { await self.process() }
-      } catch {
-        onIssue(error)
+    guard !started else { return }
+    started = true
+    do {
+      for request in try await store.unsettledDeliveries(for: hostID) {
+        guard started, !Task.isCancelled else { return }
+        await finish(request, await recover(request), resuming: true)
       }
+      guard started, !Task.isCancelled else { return }
+      let remaining = try await deleteExpired()
+      guard started, !Task.isCancelled else { return }
+      if remaining { scheduleCleanup() }
+      watcher = Task { [store, hostID, onIssue] in
+        do {
+          for try await _ in store.observe({ try $0.pendingDeliveries(for: hostID).map(\.id) }) { await self.process() }
+        } catch {
+          if !Task.isCancelled { onIssue(error) }
+        }
+      }
+    } catch {
+      await stop()
+      throw error
     }
   }
 
-  public func stop() {
-    watcher?.cancel()
+  public func stop() async {
+    started = false
+    let tasks = [watcher, cleanup, claimUpload].compactMap { $0 } + Array(fetching.values) + Array(confirmations.values) + Array(uploads.values)
+    tasks.forEach { $0.cancel() }
     watcher = nil
-    cleanup?.cancel()
     cleanup = nil
-    fetching.values.forEach { $0.cancel() }
+    claimUpload = nil
     fetching = [:]
+    confirmations = [:]
+    uploads = [:]
+    for task in tasks { await task.value }
   }
 
   private func process() async {
@@ -169,14 +107,14 @@ public actor DeliveryExecutor {
     defer { processing = false }
     repeat {
       rerun = false
-      while !Task.isCancelled, let next = await nextActionable() { await run(next) }
+      while started, !Task.isCancelled, let next = await nextActionable() { await run(next) }
     } while rerun && !Task.isCancelled
   }
 
   private func nextActionable() async -> DeliveryRequest? {
     guard let candidates = await reporting({ try await store.pendingDeliveries(for: hostID) }) else { return nil }
     for request in candidates {
-      if timing.now().timeIntervalSince(request.serverAt ?? request.createdAt) > Self.maxAge.seconds {
+      if request.deadlineAt.map({ timing.now() >= $0 }) == true || timing.now().timeIntervalSince(request.serverAt ?? request.createdAt) > Self.maxAge.seconds {
         await finish(request, .failed(ShownText("请求到 iCloud 后超过 \(Int(Self.maxAge.seconds)) 秒仍未执行，已放弃")))
         continue
       }
@@ -186,19 +124,18 @@ public actor DeliveryExecutor {
       }
       let missing = request.attachmentKeys.filter { store.files.fileURL(for: $0) == nil }
       if !missing.isEmpty {
-        fetch(missing, for: request)
+        if let prepared = await reporting({ try await store.prepareDelivery(request.id, until: timing.now().addingTimeInterval(Self.maxAge.seconds)) }) {
+          if let prepared { fetch(missing, for: prepared) }
+        }
         continue
       }
-      if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true {
+      if let claimed = await reporting({ try await store.claimDelivery(request.id, host: hostID, until: timing.now().addingTimeInterval(Self.maxAge.seconds)) }), let claimed {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
-        claimUpload = Task { [onWritten, timing] in
+        claimUpload = Task { [timing] in
           guard (try? await timing.sleep(Self.claimGrace)) != nil else { return }
-          await onWritten(request.id)
+          self.notifyWritten(request.id)
         }
-        var claimed = request
-        claimed.status = .known(.executing)
-        claimed.handledBy = hostID
         return claimed
       }
     }
@@ -207,11 +144,12 @@ public actor DeliveryExecutor {
 
   /// 每个已领取意图只执行一次。
   private func run(_ request: DeliveryRequest) async {
-    let started = timing.now()
+    guard started, !Task.isCancelled else { return }
+    let began = timing.now()
     let outcome = await handler(request)
     claimUpload?.cancel()
     claimUpload = nil
-    let took = timing.now().timeIntervalSince(started)
+    let took = timing.now().timeIntervalSince(began)
     Self.log.info("执行投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public) 用时 \(took, format: .fixed(precision: 2)) 秒")
     await finish(request, outcome)
   }
@@ -238,11 +176,36 @@ public actor DeliveryExecutor {
     await process()
   }
 
-  private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome) async {
-    if await reporting({ try await store.finishDelivery(request, outcome, at: timing.now()) }) != nil {
-      await onWritten(request.id)
+  private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, resuming: Bool = false) async {
+    guard started, !Task.isCancelled else { return }
+    let continuing: Bool = if case .confirming = outcome { resuming } else { false }
+    if !continuing {
+      if let changed = await reporting({ try await store.finishDelivery(request, outcome, at: timing.now()) }) {
+        let confirmed: Bool = if case .succeeded = outcome { true } else { false }
+        if changed || confirmed { notifyWritten(request.id) }
+      }
     }
-    scheduleCleanup()
+    if case .confirming(let verify) = outcome,
+      let stored = await reporting({ try await store.deliveryRequest(request.id) }), let stored,
+      stored.status != .known(.succeeded), started, !Task.isCancelled {
+      confirmations[stored.id] = Task {
+        let result = await verify(stored)
+        await self.finish(stored, result)
+        self.confirmations.removeValue(forKey: stored.id)
+      }
+    }
+    if started, !Task.isCancelled { scheduleCleanup() }
+  }
+
+  /// 上传回执也不占执行通道；同一条的版本顺序由同步发送器负责，这里只持有可取消任务。
+  private func notifyWritten(_ id: UUID) {
+    guard started, !Task.isCancelled else { return }
+    let token = UUID()
+    uploads[token] = Task { [onWritten] in
+      guard !Task.isCancelled else { return }
+      await onWritten(id)
+      self.uploads.removeValue(forKey: token)
+    }
   }
 
   /// 执行 Store 读写；失败交给 `onIssue` 并返回 nil。`stop()` 之后（所在任务已取消）的失败不再上报。
@@ -258,7 +221,7 @@ public actor DeliveryExecutor {
   private static let keptRetention: TimeInterval = 7 * 86_400
 
   private func scheduleCleanup() {
-    guard cleanup == nil else { return }
+    guard started, cleanup == nil else { return }
     cleanup = Task { [timing] in
       guard (try? await timing.sleep(Self.retention)) != nil else { return }
       let remaining = await self.reporting { try await self.deleteExpired() }
