@@ -6,13 +6,30 @@ import CueTestSupport
 import CueText
 import Darwin
 import Foundation
+import Synchronization
 import Testing
 @testable import CuePad
 
 extension CueHostTests {
+    /// 起大脑的门（`Rig.launches`）：起大脑在主线程之外问它，所以用锁。
+    nonisolated final class LaunchGate: Sendable {
+        private let state = Mutex((open: true, attempts: 0))
+        var attempts: Int { state.withLock { $0.attempts } }
+        func set(open: Bool) { state.withLock { $0.open = open } }
+
+        func pass(_ launch: CuePad.CueLaunch) -> CuePad.CueLaunch? {
+            state.withLock { state in
+                state.attempts += 1
+                return state.open ? launch : nil
+            }
+        }
+    }
+
     final class Rig {
         let model: FakeModel
         let notifier = RecordingCueNotifier()
+        /// 起 Pi 的大脑要过的门：关上时这台 Mac 找不到 Pi（起不来），数着试了几次
+        let launches = LaunchGate()
         let app: TestApp
         let folder: URL
         /// 真大脑的临时目录（`EvalBrain.launch`，开销记录在里面）；假模型时为 nil
@@ -23,23 +40,27 @@ extension CueHostTests {
         /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。
         /// `seesImages`：假模型能不能看图（Pi 的模型表里写的输入）。`asksOnEnable`：刚启用那一轮（手上有事才有，`prepare` 摆）先用 tell 问你一句，再写最后的回复。
         /// `brain`：大脑换成真的 Agent（`CueEvalTests`），假模型的剧本不再用上。`patrolAfter`：空闲多久巡视一次；
-        /// `cacheLifetime`：提示缓存算多久过期；`renewAt`：换新线。`clock`：信封上写的此刻。`prepare`：启用 Cue 之前在库里摆好的（多日评测预置的历史）。
+        /// `cacheLifetime`：提示缓存算多久过期；`renewAt`：换新线。`clock`：信封上写的此刻。`timing`：再改别的时间规则（重起、看门狗、热巡视）。
+        /// `prepare`：启用 Cue 之前在库里摆好的（多日评测预置的历史）。
         init(
             usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false, brain: EvalBrain? = nil,
             patrolAfter: Duration = .seconds(3600), cacheLifetime: Duration = .seconds(3600),
-            renewAt: Int = CueContext.renewAt, clock: @escaping @Sendable () -> Date = { .now }, prepare: ((Rig) async throws -> Void)? = nil
+            renewAt: Int = CueContext.renewAt, clock: @escaping @Sendable () -> Date = { .now }, timing tune: (inout CueTiming) -> Void = { _ in },
+            prepare: ((Rig) async throws -> Void)? = nil
         ) async throws {
             model = try FakeModel(usage: usage, failingOnce: failingOnce, asksOnEnable: asksOnEnable)
             let port = try await model.start()
-            let timing = CueTiming(
+            var timing = CueTiming(
                 patrolAfter: patrolAfter, cacheLifetime: cacheLifetime, renewAt: renewAt,
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), sayWait: 5, quietHours: [], clock: clock)
+            tune(&timing)
             let launch = CuePad.CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             let directory = brain.map { _ in TestLibraries.makeDirectory() }
             brainDirectory = directory
-            let brainLaunch = try brain.map { try $0.launch(in: directory!) }, runtime = brain?.runtime
+            let brainLaunch = try brain.map { try $0.launch(in: directory!) }, runtime = brain?.runtime, gate = launches
             app = TestApp(cue: CueDependencies(
-                launch: { agent, _ in agent == runtime ? brainLaunch : agent == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
+                launch: { agent, _ in agent == runtime ? brainLaunch : agent == .pi ? gate.pass(launch) : nil },
+                helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
             try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000,"input":\#(seesImages ? #"["text","image"]"# : #"["text"]"#)},{"id":"fake-model-2","contextWindow":200000,"reasoning":true,"input":["text"]}]}}}"#.utf8)
@@ -101,6 +122,14 @@ extension CueHostTests {
 
         func say(_ text: String) async throws { try await store.addCueMessage(.you, text: text) }
 
+        /// 这个 Rig 的值班管理器写下的大脑健康（`CueHealth`）。
+        var health: CueHealth? { CueHealth.read(library: app.directory.appending(path: "Library")) }
+
+        /// Cue 写的、含 `text` 的消息有几条。
+        func count(_ text: String) async throws -> Int {
+            try await store.cueMessages().count { $0.author == .known(.cue) && $0.text.contains(text) }
+        }
+
         func image() throws -> String { CueFormat.imageMarkup(key: try store.files.store(pngData(shade: 0.5))) }
 
         /// 等到出现一条 `author` 写的、含 `text` 的消息（中间隔着真 Pi 大脑起进程、读剧本）。
@@ -117,20 +146,37 @@ extension CueHostTests {
         /// 这个 Rig 的 Cue 的大脑：工作目录是这个库的 Cue 工作目录的进程（别的测试也在起 Pi）里，父进程不在其中的那个
         /// （大脑起的工具服务也在这个目录）。在全部进程里找：CuePad 起的进程经中转挂到 launchd 下（`ChildProcess`），不是测试进程的子进程。
         var brainPIDs: [pid_t] {
+            let inWork = workPIDs
+            return inWork.filter { !inWork.contains(Self.parent(of: $0)) }
+        }
+
+        /// 大脑起的 Cue 的工具服务（`cuepad mcp`）：父进程是大脑的那个 cuepad。
+        var toolServerPIDs: [pid_t] {
+            let brains = brainPIDs
+            return workPIDs.filter { pid in
+                var path = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+                guard brains.contains(Self.parent(of: pid)), proc_pidpath(pid, &path, UInt32(path.count)) > 0 else { return false }
+                return URL(filePath: String(cString: path)).lastPathComponent == "cuepad"
+            }
+        }
+
+        private static func parent(of pid: pid_t) -> pid_t {
+            var info = proc_bsdinfo()
+            guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size)) > 0 else { return 0 }
+            return pid_t(info.pbi_ppid)
+        }
+
+        /// 工作目录是这个库的 Cue 工作目录的进程。
+        private var workPIDs: [pid_t] {
             let work = app.directory.appending(path: "Library/Cue/work").resolvingSymlinksInPath().path
             var pids = [pid_t](repeating: 0, count: 8192)
             let count = Int(proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size)))
-            let inWork = pids.prefix(max(0, count)).filter { pid in
+            return pids.prefix(max(0, count)).filter { pid in
                 guard pid > 0 else { return false }
                 var info = proc_vnodepathinfo()
                 guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, Int32(MemoryLayout<proc_vnodepathinfo>.size)) > 0 else { return false }
                 let cwd = withUnsafeBytes(of: info.pvi_cdir.vip_path) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
                 return URL(filePath: cwd).resolvingSymlinksInPath().path == work
-            }
-            return inWork.filter { pid in
-                var info = proc_bsdinfo()
-                guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size)) > 0 else { return false }
-                return !inWork.contains(pid_t(info.pbi_ppid))
             }
         }
     }

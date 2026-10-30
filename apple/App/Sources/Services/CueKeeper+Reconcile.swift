@@ -14,10 +14,10 @@ extension CueKeeper {
             let store = self.store, now = Date.now
             let profile = try await store.cueProfile() ?? CueProfile()
             await follow(BrainSettings(profile))
-            // 该换新了、一直记着的又变过：换个班次（系统提示跟上），再接着对账
-            if let shift, shift.turn == nil, shift.primed, renewDue(shift, now: now),
-               try await CueMemoryView(store.cueMemory()).pinned.map(\.line.id) != shift.pinned {
-                Self.log.notice("Cue 换新时一直记着的变了：换个班次")
+            // 要换的班次（工具服务没了、换了 Agent），或该换新了、一直记着的又变过（系统提示跟上）：换个班次，再接着对账。
+            // 在交你的话之前：退回的话要交给新的大脑
+            if let shift, shift.turn == nil, try await outworn(shift, now: now) {
+                Self.log.notice("Cue 换个班次（\(shift.retiring ? "这个大脑不能接着用" : "换新时一直记着的变了", privacy: .public)）")
                 await shift.brain.stop()()
                 await startShift()
                 input.yield(.kick)
@@ -25,7 +25,7 @@ extension CueKeeper {
             }
             let pending = ready(try await store.cueMessagesToDeliver())
             if !pending.isEmpty {
-                if case .stuck = phase { await startShift() }
+                if case .restarting(let failures, _, _) = phase { await startShift(failures: failures) }
                 guard let shift else { return }
                 let ids = pending.map(\.id)
                 let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside(), files: store.files, imagesAsFiles: !shift.brain.seesImages)
@@ -103,20 +103,28 @@ extension CueKeeper {
             if let lapse = changes.lapse { deadlines.append(lapse) }
 
             let idleSince = try await store.cueLastYou()?.said ?? profile.enabledAt ?? shift.startedAt
-            if try await !store.cueBoardActive(), let due = patrolDue(idleSince: idleSince, now: now), try await !handsEmpty() {
-                if due <= now {
+            if try await !store.cueBoardActive(), let due = patrolDue(idleSince: idleSince, lastRequest: shift.lastRequest, now: now),
+               try await !handsEmpty() {
+                if due.at <= now {
                     let today = Self.day(now)
                     progress.patrols = (progress.patrolDay == today ? progress.patrols : 0) + 1
                     progress.patrolDay = today
-                    progress.patrolledIdle = idleSince
+                    if due.warm { progress.warmedIdle = idleSince } else { progress.patrolledIdle = idleSince }
                     return _ = try await wakeUp(.idle)
                 }
-                deadlines.append(due)
+                deadlines.append(due.at)
             }
             schedule(deadlines.min())
         } catch {
             Self.log.error("Cue 对账失败：\(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// 这个班次不接着用了：要换的（`Shift.retiring`），或该换新了、一直记着的又变过。
+    private func outworn(_ shift: Shift, now: Date) async throws -> Bool {
+        if shift.retiring { return true }
+        guard shift.primed, renewDue(shift, now: now) else { return false }
+        return try await CueMemoryView(store.cueMemory()).pinned.map(\.line.id) != shift.pinned
     }
 
     /// 他发起的一轮停下当场留给他回（`CueStore.leaveHisStops`），留了就立即上传：手机上马上进等你。
@@ -135,7 +143,7 @@ extension CueKeeper {
     private func follow(_ wanted: BrainSettings) async {
         guard let current = brainSettings, wanted != current else { return }
         switch phase {
-        case .restarting, .stuck:
+        case .restarting:
             await startShift()
         case .running(let shift) where shift.turn == nil && !current.needsNewBrain(for: wanted):
             do {
@@ -173,15 +181,22 @@ extension CueKeeper {
         return try await store.cueMessagesWaitingForYou().isEmpty
     }
 
-    /// 什么时候可以巡视；这段空闲巡视过了、今天次数用完（等到明天）、整天都是打扰时段为 nil。
-    private func patrolDue(idleSince: Date, now: Date) -> Date? {
-        guard progress.patrolledIdle != idleSince else { return nil }
-        let today = Self.day(now)
-        let used = progress.patrolDay == today ? progress.patrols : 0
-        let earliest = used < Self.patrolsPerDay
-            ? max(now, idleSince + setup.timing.patrolAfter.seconds)
-            : Calendar.current.startOfDay(for: now).addingTimeInterval(24 * 3600)
-        return setup.timing.awake(from: earliest)
+    /// 下一次巡视（`warm` 是热巡视），两种里早的那个：热的赶在缓存过期前（`CueTiming.warmPatrolAfter`），冷的照空闲时长；两种每段空闲各至多一次、
+    /// 共用每天的次数，冷巡视过的这段空闲不再热巡视（冷巡视自己把缓存焐热了）。都巡视过了、整天都是打扰时段为 nil；今天次数用完等到明天（冷的）。
+    private func patrolDue(idleSince: Date, lastRequest: Date?, now: Date) -> (at: Date, warm: Bool)? {
+        let timing = setup.timing
+        let used = progress.patrolDay == Self.day(now) ? progress.patrols : 0
+        let cold = progress.patrolledIdle == idleSince ? nil : timing.awake(from: used < Self.patrolsPerDay
+            ? max(now, idleSince + timing.patrolAfter.seconds)
+            : Calendar.current.startOfDay(for: now).addingTimeInterval(24 * 3600))
+        var warm: Date?
+        if used < Self.patrolsPerDay, progress.warmedIdle != idleSince, progress.patrolledIdle != idleSince, let lastRequest,
+           let at = timing.awake(from: max(now, idleSince + timing.warmPatrolAfter.seconds)),
+           at <= lastRequest + (timing.cacheLifetime - timing.cacheMargin).seconds {
+            warm = at
+        }
+        if let warm, cold.map({ warm < $0 }) ?? true { return (warm, true) }
+        return cold.map { ($0, false) }
     }
 }
 #endif

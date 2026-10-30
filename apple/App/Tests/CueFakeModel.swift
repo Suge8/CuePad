@@ -188,6 +188,11 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送登录页的修复"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
+        // 额度用完（各家额度类的说法之一，`PiErrorSummary` 认作额度）：每次都是
+        if last["role"] as? String == "user", text.contains("请用到额度用完") {
+            errorCount.withLock { $0 += 1 }
+            return .error("You have hit your usage limit.")
+        }
         if text.contains("请慢慢想"), once("hang") { return .hang }
         // 后台整理记忆的大脑：输入以待合并的块开头，合第一块
         if let block = text.firstMatch(of: /^#(\d+)-(\d+)\n/) {

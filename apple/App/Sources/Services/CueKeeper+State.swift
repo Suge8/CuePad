@@ -9,10 +9,8 @@ extension CueKeeper {
         /// 正在起大脑；参数是此前连续失败了几次
         case starting(failures: Int)
         case running(Shift)
-        /// 第 n 次连续失败之后，等着重起
-        case restarting(Int)
-        /// 次数用完，停在起不来（原因）；你的下一条消息再试
-        case stuck(ShownText)
+        /// 第 n 次连续失败之后（原因），等着到 `at` 重起（`CueTiming.restartDelay`）；你发来消息、改了设置就马上再试。没有终态：快的重试用完转慢的，一直试下去
+        case restarting(failures: Int, reason: ShownText, at: Date)
     }
 
     /// 大脑用的那几项设置：起大脑时取自设置，就地换了模型、强度跟着改；与库里的设置不同就去对上。
@@ -48,6 +46,8 @@ extension CueKeeper {
         var lastRequest: Date?
         /// 起好之前连续失败的次数：一轮做完清零
         var failures: Int
+        /// 这一轮做完就换个班次（工具服务挂了、额度登录卡住换了 Agent）：下一句不再交给这个大脑
+        var retiring = false
     }
 
     /// 跨班次、跨 App 重启的对账进度（本机，只给这台 Mac 的管理器用）。
@@ -56,8 +56,9 @@ extension CueKeeper {
         var marks: CueMarks?
         var patrolDay: String?
         var patrols = 0
-        /// 巡视过的那段空闲（从你上次说话起）
+        /// 巡视过的那段空闲（从你上次说话起）：冷巡视、热巡视各记各的，每段空闲各至多一次
         var patrolledIdle: Date?
+        var warmedIdle: Date?
         /// 已为哪一次启用（`CueProfile.enabledAt`）醒来过
         var greeted: Date?
         /// 他在场、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
@@ -81,6 +82,8 @@ extension CueKeeper {
         var held: [String: Date]?
         /// 会话停下叫醒的这一轮报给 Cue 的那几次停下（歇着、等回答、出错）：做完时还没给去处的 CuePad 替它留给他回（`CueKeeper.leaveUnattended`）
         var stops: [CueLeft] = []
+        /// 这一轮出错后换了 Agent：交出去的你的话退回、自己醒来的那次马上重来，都交给新的大脑
+        var replay = false
 
         /// 这一轮是在回答你：你发起的、中途插进了你的话，或写成 cue 的（中途插过你的话、出错后重试的那一轮）
         var answersYou: Bool {
@@ -103,6 +106,8 @@ extension CueKeeper {
 
     nonisolated enum Input: Sendable {
         case kick, retry, stop
+        /// 看门狗到点：在跑的一轮太久没有大脑事件（`CueTiming.silence`）
+        case silent
         case brain(Int, TurnEvent)
     }
 

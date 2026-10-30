@@ -20,7 +20,8 @@ extension CueKeeper {
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: setup.timing.clock(), projects: try await store.projects(),
             changes: changes.due, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
-            wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said)))
+            wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said),
+            quotas: try await store.accountQuotas(), retrying: retrying.map(Self.firstLine)))
         var parts = [envelope]
         if !shift.primed || renewDue(shift, now: now) {
             if shift.primed {
@@ -64,6 +65,8 @@ extension CueKeeper {
             $0.primed = true
             $0.turn = turn
         }
+        retrying = nil
+        heard()
         save()
         try await markDelivered(delivering)
         return true
@@ -196,6 +199,11 @@ extension CueKeeper {
 
     /// 重试可能好的错：额度、登录类的不算。
     static func retryable(_ summary: PiErrorSummary) -> Bool { summary.failure.retries }
+
+    /// 错的原文首行（信封里那一行只放得下这么多）。
+    static func firstLine(_ raw: String) -> String {
+        String((raw.split(whereSeparator: \.isNewline).first ?? "").prefix(200))
+    }
 
     static func day(_ date: Date) -> String {
         let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
