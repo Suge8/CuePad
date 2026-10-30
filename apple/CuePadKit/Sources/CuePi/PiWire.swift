@@ -120,7 +120,7 @@ enum PiWire {
         private var updates: [@Sendable (inout PiSession) -> Void] = []
 
         private enum CodingKeys: String, CodingKey {
-            case name, firstMessage, question, subagents, model, thinking, models, context, commands
+            case name, firstMessage, question, subagents, model, thinking, models, proofs, context, commands
         }
 
         init(from decoder: any Decoder) throws {
@@ -141,6 +141,7 @@ enum PiWire {
             try field(.model, PiModelOption.self) { $0.model = $1 }
             try field(.thinking, Open<PiThinkingLevel>.self) { $0.thinking = $1 }
             try field(.models, [PiModelOption].self) { $0.availableModels = $1 ?? [] }
+            try field(.proofs, [PiProof].self) { $0.proofs = $1 ?? [] }
             try field(.context, PiContextUsage.self) { $0.context = $1 }
             try field(.commands, [WireCommand].self) { $0.commands = $1?.map(\.command) ?? [] }
         }

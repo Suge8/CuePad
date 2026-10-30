@@ -92,7 +92,7 @@ export class Session {
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
 			question: null,
 			subagents: firecode.subagents,
-			model: null, thinking: null, models: [],
+			model: null, thinking: null, models: [], proofs: [],
 			...contextInfo(ctx),
 			...commandInfo(pi),
 		};

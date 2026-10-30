@@ -117,7 +117,7 @@ export class QuotaFetcher {
 			const requestedAt = Date.now() / 1000;
 			let identity = unresolvedAccount(this.ctx, model);
 			try {
-				const resolved = await account(this.ctx, model, true);
+				const resolved = await account(this.ctx, model);
 				identity = resolved.identity;
 				const key = resolved.native ? `${model.provider}/${identity.scope}` : identity.source!;
 				if (seen.has(key)) return;

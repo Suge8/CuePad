@@ -77,28 +77,28 @@ public struct PiModelKey: Sendable, Hashable, Codable {
 
 /// 会话可选的一个模型：标识、显示名，它支持的思考强度（不支持思考的只有 `off`；不认识的新强度读出时丢掉），以及能不能看图
 /// （`nil` 是 Agent 没报，当作能）。JSON 里 provider、id 与 name 平铺，强度叫 `thinking`、看图叫 `images`（Pi 桥上报的格式同此）。
-/// 一次证明了的授权：哪个分区，与开始解析的时刻（线上是 Unix 秒）。
-public struct PiProof: Sendable, Equatable, Codable {
+/// 会话证明过的一个授权：哪个模型、哪个分区，与开始解析的时刻（线上是 Unix 秒）。只在 Mac 上在线会话里，不存、不同步：
+/// 模型表会持久化并同步（`AgentCatalog` 按内容定 id），证明时刻每次解析都变，放进去会让目录每轮换一条。
+public struct PiProof: Sendable, Equatable, Decodable {
+  public var provider: String
+  public var id: String
   public var account: PiAccount
   public var at: Date
 
-  public init(account: PiAccount, at: Date) {
+  public init(provider: String, id: String, account: PiAccount, at: Date) {
+    self.provider = provider
+    self.id = id
     self.account = account
     self.at = at
   }
 
-  private enum CodingKeys: String, CodingKey { case account, at }
+  private enum CodingKeys: String, CodingKey { case provider, id, account, at }
 
-  /// 时刻固定按 Unix 秒读写：线上与存下的模型表用的解码器日期写法不同。
   public init(from decoder: any Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
-    self.init(account: try c.decode(PiAccount.self, forKey: .account), at: Date(timeIntervalSince1970: try c.decode(Double.self, forKey: .at)))
-  }
-
-  public func encode(to encoder: any Encoder) throws {
-    var c = encoder.container(keyedBy: CodingKeys.self)
-    try c.encode(account, forKey: .account)
-    try c.encode(at.timeIntervalSince1970, forKey: .at)
+    self.init(
+      provider: try c.decode(String.self, forKey: .provider), id: try c.decode(String.self, forKey: .id),
+      account: try c.decode(PiAccount.self, forKey: .account), at: Date(timeIntervalSince1970: try c.decode(Double.self, forKey: .at)))
   }
 }
 
@@ -107,24 +107,20 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
   public var name: String
   public var thinkingLevels: [PiThinkingLevel]
   public var acceptsImages: Bool?
-  /// 这一次解析出的授权（未解析时 `scope` 为 nil）；额度只按它关联。
   public var account: PiAccount?
-  /// 这个会话最近一次证明的授权与开始解析的时刻（解析失败不抹掉）：只用来决定保留哪些额度记录（`CueStore.retainQuotaSources`），不关联额度。
-  public var proven: PiProof?
   public var id: PiModelKey { key }
 
-  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel], acceptsImages: Bool? = nil, account: PiAccount? = nil, proven: PiProof? = nil) {
+  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel], acceptsImages: Bool? = nil, account: PiAccount? = nil) {
     self.key = key
     self.name = name
     self.thinkingLevels = thinkingLevels
     self.acceptsImages = acceptsImages
     self.account = account
-    self.proven = proven
   }
 
   private enum CodingKeys: String, CodingKey {
     case provider, id, name
-    case thinking, images, account, proven
+    case thinking, images, account
   }
 
   public init(from decoder: any Decoder) throws {
@@ -133,8 +129,7 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
       key: PiModelKey(provider: try c.decode(String.self, forKey: .provider), id: try c.decode(String.self, forKey: .id)),
       name: try c.decode(String.self, forKey: .name),
       thinkingLevels: try c.decode([String].self, forKey: .thinking).compactMap(PiThinkingLevel.init(rawValue:)),
-      acceptsImages: try c.decodeIfPresent(Bool.self, forKey: .images), account: try c.decodeIfPresent(PiAccount.self, forKey: .account),
-      proven: try c.decodeIfPresent(PiProof.self, forKey: .proven))
+      acceptsImages: try c.decodeIfPresent(Bool.self, forKey: .images), account: try c.decodeIfPresent(PiAccount.self, forKey: .account))
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -145,7 +140,6 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
     try c.encode(thinkingLevels.map(\.rawValue), forKey: .thinking)
     try c.encodeIfPresent(acceptsImages, forKey: .images)
     try c.encodeIfPresent(account, forKey: .account)
-    try c.encodeIfPresent(proven, forKey: .proven)
   }
 }
 

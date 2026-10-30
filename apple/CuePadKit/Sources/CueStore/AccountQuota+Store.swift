@@ -20,28 +20,45 @@ extension CueStore {
 
   /// 会话共同决定有效来源；尚待桥重新连接的有效记录也保留，避免启动时先连上的会话清掉其他账号。
   /// 账号或网关来源的记录只按证明移除：可能拥有它的每个模型（同一提供方，或证明过这个来源的）都证明了别的授权，且证明不早于这条记录最近的结果。
-  /// 模型的证明是会话最近一次解析成功的那次（`PiModelOption.proven`，解析失败不抹掉），没有证明的是未知，什么都不移除；
-  /// 旧证明不能否定比它新的记录。网关来源归哪些提供方：来源那一条记下的，与证明过这个来源的模型。各来源只看自己的模型，互不影响。
+  /// 证明只来自在线会话（`PiSession.proofs`，每次解析成功都推进时刻，解析失败不抹掉，含模型范围外、额度查询解析到的）；
+  /// 没有证明的模型（还没解析过、或会话不在线只剩存下的模型表）是未知，什么都不移除；旧证明不能否定比它新的记录。
+  /// 网关来源归哪些提供方：来源那一条记下的，与证明过这个来源的。各来源只看自己的模型，互不影响。
   /// 未解析的那条在这个提供方此刻还有未解析的模型、且这个提供方没有不早于它的证明时保留。
-  public func retainQuotaSources(on host: String, models: [PiModelOption]) throws {
-    let models = try hostModels(on: host) + models
-    guard models.contains(where: { $0.proven != nil }) else { return }
+  public func retainQuotaSources(on host: String, live: [QuotaWitness]) throws {
+    var candidates: [QuotaCandidate] = []
+    for witness in live {
+      for model in witness.models {
+        let proof = witness.proofs.first { $0.provider == model.key.provider && $0.id == model.key.id }
+        candidates.append(QuotaCandidate(provider: model.key.provider, account: model.account, proof: proof))
+      }
+      for proof in witness.proofs where !witness.models.contains(where: { $0.key.provider == proof.provider && $0.key.id == proof.id }) {
+        candidates.append(QuotaCandidate(provider: proof.provider, account: nil, proof: proof))
+      }
+    }
+    let online = Set(live.map(\.sessionID))
+    for state in try select(PiSessionState.self, where: "hostID = ? AND \(PiWorkState.outsideSQL(PiWorkState.closed))", [host]) where !online.contains(state.sessionID) {
+      var models = [state.model].compactMap { $0 }
+      if let id = state.catalogID, let catalog = try agentCatalog(id) { models += catalog.models }
+      candidates += models.map { QuotaCandidate(provider: $0.key.provider, account: $0.account, proof: nil) }
+    }
+    let proofs = candidates.compactMap(\.proof)
+    guard !proofs.isEmpty else { return }
     try write {
       let quotas = try select(AccountQuota.self, where: "hostID = ?", [host])
       var owners: [String: Set<String>] = [:]
       for quota in quotas where quota.account?.route == nil { if let source = quota.account?.source { owners[source, default: []].insert(quota.provider) } }
-      for model in models { if let source = model.proven?.account.source { owners[source, default: []].insert(model.key.provider) } }
+      for proof in proofs { if let source = proof.account.source { owners[source, default: []].insert(proof.provider) } }
       for quota in quotas {
         guard let account = quota.account else { try db.run("DELETE FROM accountQuotas WHERE id = ?", [quota.id]); continue }
-        let candidates = models.filter { model in
-          if let source = account.source { return owners[source]?.contains(model.key.provider) == true }
-          return model.key.provider == quota.provider
+        let mine = candidates.filter { candidate in
+          if let source = account.source { return owners[source]?.contains(candidate.provider) == true }
+          return candidate.provider == quota.provider
         }
-        let valid = candidates.contains { model in
+        let valid = mine.contains { candidate in
           guard account.scope != nil else {
-            return model.account?.scope == nil && model.account?.kind == account.kind && !Self.proves(models, quota.provider, account.kind, since: quota.evidencedAt)
+            return candidate.account?.scope == nil && candidate.account?.kind == account.kind && !Self.proves(proofs, quota.provider, account.kind, since: quota.evidencedAt)
           }
-          guard let proof = model.proven else { return true }
+          guard let proof = candidate.proof else { return true }
           if let source = account.source { return proof.account.source == source || proof.at < quota.evidencedAt }
           return proof.account.source == nil && proof.account.matches(account) || proof.at < quota.evidencedAt
         }
@@ -56,14 +73,14 @@ extension CueStore {
   /// 否则只在本机推进排序时刻、不改版本不同步，每次回复都来的观测不会每次都写库与同步。
   /// 提供方未解析的授权（`scope` 为 nil：还没查，或查时解析失败）是这台 Mac 上这个提供方的一条，不关联任何账号的数值，与证明了身份的结果按同一个时刻排先后：
   /// 已有证明了身份的账号或来源时不再写"还没查"；查时解析失败只在这个提供方没有不早于它的证明时写；同一提供方证明了身份、且不早于它的结果到来时移除它。
-  /// 证明既看额度记录，也看本机会话模型表里的证明（`PiModelOption.proven`），写入与保留核对用同一个判断，到达先后不影响结果。
+  /// 证明既看额度记录，也看在线会话的证明（`proofs`，同 `retainQuotaSources`），写入与保留核对用同一个判断，到达先后不影响结果。
   /// 网关清单里各账号的报告用清单的排序时刻。返回是否写了。
   @discardableResult
-  public func recordQuota(_ report: QuotaReport, host: String) throws -> Bool {
-    try write { try applyQuota(report, host: host) }
+  public func recordQuota(_ report: QuotaReport, host: String, proofs: [PiProof] = []) throws -> Bool {
+    try write { try applyQuota(report, host: host, proofs: proofs) }
   }
 
-  private func applyQuota(_ report: QuotaReport, host: String) throws -> Bool {
+  private func applyQuota(_ report: QuotaReport, host: String, proofs: [PiProof]) throws -> Bool {
     let id = AccountQuota.recordID(provider: report.provider, host: host, account: report.account)
     let existing = try find(AccountQuota.self, id)
     if let start = report.requestedAt, let previous = existing?.requestedAt, start < previous { return false }
@@ -72,7 +89,7 @@ extension CueStore {
       let unresolved = AccountQuota.recordID(provider: report.provider, host: host, account: PiAccount(kind: report.account.kind))
       if report.account.scope == nil {
         let since = report.status == .failed ? report.requestedAt : nil
-        if try hasProvenPeer(of: report, on: host, since: since) || Self.proves(try hostModels(on: host), report.provider, report.account.kind, since: since ?? .distantPast) { return false }
+        if try hasProvenPeer(of: report, on: host, since: since) || Self.proves(proofs, report.provider, report.account.kind, since: since ?? .distantPast) { return false }
       } else if let start = report.requestedAt, let pending = try find(AccountQuota.self, unresolved), pending.requestedAt.map({ $0 <= start }) ?? true {
         try db.run("DELETE FROM accountQuotas WHERE id = ?", [unresolved])
         removed = true
@@ -81,7 +98,7 @@ extension CueStore {
     for var account in report.accounts ?? [] {
       guard account.account.source == report.account.source, account.account.route != nil else { continue }
       account.requestedAt = report.requestedAt
-      removed = try applyQuota(account, host: host) || removed
+      removed = try applyQuota(account, host: host, proofs: proofs) || removed
     }
     if let scopes = report.activeScopes, let source = report.account.source {
       for old in try select(AccountQuota.self, where: "hostID = ?", [host])
@@ -116,19 +133,9 @@ extension CueStore {
     return true
   }
 
-  /// 这台 Mac 上未结束会话的模型表（含各自的证明）。
-  private func hostModels(on host: String) throws -> [PiModelOption] {
-    var models: [PiModelOption] = []
-    for state in try select(PiSessionState.self, where: "hostID = ? AND \(PiWorkState.outsideSQL(PiWorkState.closed))", [host]) {
-      models += [state.model].compactMap { $0 }
-      if let id = state.catalogID, let catalog = try agentCatalog(id) { models += catalog.models }
-    }
-    return models
-  }
-
-  /// 这个 Pi 提供方的模型有没有不早于 `since` 的证明：不经额度记录上记着的提供方名（几个提供方共用一个网关来源时那里只有一个）。
-  private static func proves(_ models: [PiModelOption], _ provider: String, _ kind: PiAccount.Kind, since: Date) -> Bool {
-    models.contains { $0.key.provider == provider && $0.proven.map { $0.account.kind == kind && $0.at >= since } == true }
+  /// 这个 Pi 提供方有没有不早于 `since` 的证明：不经额度记录上记着的提供方名（几个提供方共用一个网关来源时那里只有一个）。
+  private static func proves(_ proofs: [PiProof], _ provider: String, _ kind: PiAccount.Kind, since: Date) -> Bool {
+    proofs.contains { $0.provider == provider && $0.account.kind == kind && $0.at >= since }
   }
 
   /// 这个提供方有没有证明了身份的结果；给了 `since` 时只算排序时刻不早于它的。
@@ -158,4 +165,24 @@ extension CueStore {
     }
     return try requestDelivery(mode.rawValue, to: SendTarget(kind: .mac, name: "CuePad", ref: nil), on: host, mode: mode)
   }
+}
+
+/// 一个在线会话交给额度保留核对的事实：它的模型表与它证明过的授权。
+public struct QuotaWitness: Sendable {
+  public var sessionID: String
+  public var models: [PiModelOption]
+  public var proofs: [PiProof]
+
+  public init(sessionID: String, models: [PiModelOption], proofs: [PiProof]) {
+    self.sessionID = sessionID
+    self.models = models
+    self.proofs = proofs
+  }
+}
+
+/// 可能拥有某条额度记录的一个模型：这一次解析出的授权，与它最近的证明（没有是未知）。
+private struct QuotaCandidate {
+  let provider: String
+  let account: PiAccount?
+  let proof: PiProof?
 }
