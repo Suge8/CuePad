@@ -38,12 +38,12 @@ function date(value: unknown): number | null {
 }
 
 /** 同一个实际地址与认证只查一次。不转发凭据到重定向，不读上游登录文件。 */
-export async function gatewayQuotas(provider: string, resolved: Awaited<ReturnType<typeof account>>, report: (quota: Quota) => void, requestedAt = Date.now() / 1000) {
+export async function gatewayQuotas(provider: string, resolved: Awaited<ReturnType<typeof account>>, report: (quota: Quota) => void, requestedAt = Date.now() / 1000, owners?: Record<string, number>) {
 	const headers = new Headers(resolved.headers);
 	headers.set("Accept", "application/json");
 	const response = await fetch(`${resolved.baseUrl}/magpie/quotas`, { headers, signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "error" });
 	if ([404, 405, 501].includes(response.status)) {
-		report({ provider, account: resolved.identity, status: "unsupported", windows: [], complete: true, requestedAt });
+		report({ provider, account: resolved.identity, status: "unsupported", windows: [], complete: true, requestedAt, owners });
 		return;
 	}
 	if (!response.ok) throw new Error(`${provider}: quota HTTP ${response.status}`);
@@ -70,5 +70,5 @@ export async function gatewayQuotas(provider: string, resolved: Awaited<ReturnTy
 		accounts.push({ provider: card.provider, account: identity, status, windows: observedAt === null ? [] : windows, complete: true,
 			...(observedAt === null ? { details: { kind: details.kind, plan: details.plan, values: [] } } : { observedAt, details }) });
 	}
-	report({ provider, account: resolved.identity, status: "unobserved", windows: [], complete: true, requestedAt, activeScopes, accounts });
+	report({ provider, account: resolved.identity, status: "unobserved", windows: [], complete: true, requestedAt, owners, activeScopes, accounts });
 }

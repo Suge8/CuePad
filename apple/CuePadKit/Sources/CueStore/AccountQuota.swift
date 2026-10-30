@@ -176,13 +176,15 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
   public var observedAt: Date?
   /// 同一网关成功返回的账号清单；仅用于移除该来源已撤销的账号。
   public var activeScopes: [String]?
+  /// 网关来源一级的报告：这次解析到这个来源的每个 Pi 提供方与各自开始解析的时刻（几个提供方指向同一网关时查询只做一次）。
+  public var owners: [String: Date]?
   public var accounts: [QuotaReport]?
   /// 排序时刻：这份结果所属操作期间的一个时刻——主动查询（成功、失败、不支持、网关清单）取请求开始，回复带回的观测取收到回复。
   /// 取在操作期间以内，先结束的操作的时刻一定早于后开始的；能力声明不带。
   public var requestedAt: Date?
   public var details: QuotaDetails?
 
-  public init(provider: String, windows: [QuotaWindow], complete: Bool, account: PiAccount, status: QuotaStatus = .observed, observedAt: Date? = nil, activeScopes: [String]? = nil, details: QuotaDetails? = nil, accounts: [QuotaReport]? = nil, requestedAt: Date? = nil) {
+  public init(provider: String, windows: [QuotaWindow], complete: Bool, account: PiAccount, status: QuotaStatus = .observed, observedAt: Date? = nil, activeScopes: [String]? = nil, details: QuotaDetails? = nil, accounts: [QuotaReport]? = nil, requestedAt: Date? = nil, owners: [String: Date]? = nil) {
     self.provider = provider
     self.account = account
     self.status = status
@@ -190,6 +192,7 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
     self.complete = complete
     self.observedAt = observedAt
     self.requestedAt = requestedAt
+    self.owners = owners
     self.accounts = accounts
     self.activeScopes = activeScopes
     self.details = details

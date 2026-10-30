@@ -71,4 +71,4 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 这一节还有条目时 `release ios` 拒绝发版；部署完成并回读核对后删除对应条目。字段由 `ck-production.sh` 另行核对。
 
-- #51：结构 87 为 `accountQuotas` 增加 `details`（ENCRYPTED STRING）与 `requestedAt`（INT64）。只读生产核对确认尚未部署；发布前按上文部署并回读。固定窗口仍用原字段，旧设备不写其他 Mac 的额度，最低对端版本保持 86。
+- #51：结构 87 为 `accountQuotas` 增加 `details`（ENCRYPTED STRING）与 `requestedAt`（INT64）；另加的 `owners` 只在本机、不同步，不部署。只读生产核对确认尚未部署；发布前按上文部署并回读。固定窗口仍用原字段，旧设备不写其他 Mac 的额度，最低对端版本保持 86。

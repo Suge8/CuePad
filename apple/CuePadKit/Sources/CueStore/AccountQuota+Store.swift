@@ -22,7 +22,7 @@ extension CueStore {
   /// 账号或网关来源的记录只按证明移除：可能拥有它的每个模型（同一提供方，或证明过这个来源的）都证明了别的授权，且证明不早于这条记录最近的结果。
   /// 证明只来自在线会话（`PiSession.proofs`，每次解析成功都推进时刻，解析失败不抹掉，含模型范围外、额度查询解析到的）；
   /// 没有证明的模型（还没解析过、或会话不在线只剩存下的模型表）是未知，什么都不移除；旧证明不能否定比它新的记录。
-  /// 网关来源归哪些提供方：来源那一条记下的，与证明过这个来源的。各来源只看自己的模型，互不影响。
+  /// 网关来源归哪些提供方：来源那一条记下的证明过它的提供方（`sourceOwners`，含模型范围外的、会话已退出的），与在线会话证明过它的。各来源只看自己的模型，互不影响。
   /// 未解析的那条在这个提供方此刻还有未解析的模型、且这个提供方没有不早于它的证明时保留。
   public func retainQuotaSources(on host: String, live: [QuotaWitness]) throws {
     var candidates: [QuotaCandidate] = []
@@ -46,7 +46,10 @@ extension CueStore {
     try write {
       let quotas = try select(AccountQuota.self, where: "hostID = ?", [host])
       var owners: [String: Set<String>] = [:]
-      for quota in quotas where quota.account?.route == nil { if let source = quota.account?.source { owners[source, default: []].insert(quota.provider) } }
+      let recorded = try sourceOwners(on: host)
+      for quota in quotas where quota.account?.route == nil {
+        if let source = quota.account?.source { owners[source, default: []].formUnion([quota.provider] + Array((recorded[quota.id] ?? [:]).keys)) }
+      }
       for proof in proofs { if let source = proof.account.source { owners[source, default: []].insert(proof.provider) } }
       for quota in quotas {
         guard let account = quota.account else { try db.run("DELETE FROM accountQuotas WHERE id = ?", [quota.id]); continue }
@@ -73,7 +76,9 @@ extension CueStore {
   /// 否则只在本机推进排序时刻、不改版本不同步，每次回复都来的观测不会每次都写库与同步。
   /// 提供方未解析的授权（`scope` 为 nil：还没查，或查时解析失败）是这台 Mac 上这个提供方的一条，不关联任何账号的数值，与证明了身份的结果按同一个时刻排先后：
   /// 已有证明了身份的账号或来源时不再写"还没查"；查时解析失败只在这个提供方没有不早于它的证明时写；同一提供方证明了身份、且不早于它的结果到来时移除它。
-  /// 证明既看额度记录，也看在线会话的证明（`proofs`，同 `retainQuotaSources`），写入与保留核对用同一个判断，到达先后不影响结果。
+  /// 证明既看额度记录（网关来源那一条记下的每个提供方与时刻，`owners`），也看在线会话的证明（`proofs`，同 `retainQuotaSources`），
+  /// 写入与保留核对用同一个判断，到达先后不影响结果。网关来源一级的报告带来的提供方与时刻只并进那一条（取较晚的，不删），较早的报告被丢掉时也并：
+  /// 那次解析是真的证明；并进时移除这些提供方不晚于它的未解析那条。
   /// 网关清单里各账号的报告用清单的排序时刻。返回是否写了。
   @discardableResult
   public func recordQuota(_ report: QuotaReport, host: String, proofs: [PiProof] = []) throws -> Bool {
@@ -81,6 +86,12 @@ extension CueStore {
   }
 
   private func applyQuota(_ report: QuotaReport, host: String, proofs: [PiProof]) throws -> Bool {
+    let wrote = try applyReport(report, host: host, proofs: proofs)
+    guard let owners = report.owners, report.account.source != nil, report.account.route == nil else { return wrote }
+    return try mergeOwners(owners, into: AccountQuota.recordID(provider: report.provider, host: host, account: report.account), kind: report.account.kind, host: host) || wrote
+  }
+
+  private func applyReport(_ report: QuotaReport, host: String, proofs: [PiProof]) throws -> Bool {
     let id = AccountQuota.recordID(provider: report.provider, host: host, account: report.account)
     let existing = try find(AccountQuota.self, id)
     if let start = report.requestedAt, let previous = existing?.requestedAt, start < previous { return false }
@@ -138,13 +149,45 @@ extension CueStore {
     proofs.contains { $0.provider == provider && $0.account.kind == kind && $0.at >= since }
   }
 
-  /// 这个提供方有没有证明了身份的结果；给了 `since` 时只算排序时刻不早于它的。
+  /// 这个提供方有没有证明了身份的结果：它自己写的原生账号或来源那一条，或记下它证明过的网关来源；给了 `since` 时只算不早于它的。
   private func hasProvenPeer(of report: QuotaReport, on host: String, since start: Date?) throws -> Bool {
-    try select(AccountQuota.self, where: "hostID = ? AND provider = ?", [host, report.provider]).contains { peer in
+    let owners = try sourceOwners(on: host)
+    return try select(AccountQuota.self, where: "hostID = ?", [host]).contains { peer in
       guard peer.account?.route == nil, peer.account?.scope != nil, peer.account?.kind == report.account.kind else { return false }
+      if let at = owners[peer.id]?[report.provider], start.map({ at >= $0 }) ?? true { return true }
+      guard peer.provider == report.provider else { return false }
       guard let start else { return true }
       return peer.requestedAt.map { $0 >= start } ?? false
     }
+  }
+
+  /// 网关来源那一条记下的证明过它的 Pi 提供方与各自最近的时刻（本机列 `owners`，不同步）。
+  private func sourceOwners(on host: String) throws -> [UUID: [String: Date]] {
+    let rows = try db.query("SELECT id, owners FROM accountQuotas WHERE hostID = ? AND owners IS NOT NULL", [host]) { ($0.uuid(0), $0.text(1)) }
+    return Dictionary(rows.map { ($0.0, Self.decodeOwners($0.1)) }, uniquingKeysWith: { $1 })
+  }
+
+  /// 把这些提供方与时刻并进来源那一条（取较晚的，不删），并移除它们不晚于这次证明的未解析那条。返回是否移除了记录。
+  private func mergeOwners(_ owners: [String: Date], into id: UUID, kind: PiAccount.Kind, host: String) throws -> Bool {
+    guard !owners.isEmpty, let text = try db.first("SELECT owners FROM accountQuotas WHERE id = ?", [id], { $0.textOrNil(0) }) else { return false }
+    let merged = (text.map(Self.decodeOwners) ?? [:]).merging(owners, uniquingKeysWith: max)
+    try db.run("UPDATE accountQuotas SET owners = ? WHERE id = ?", [Self.encodeOwners(merged), id])
+    var removed = false
+    for (provider, at) in owners {
+      let unresolved = AccountQuota.recordID(provider: provider, host: host, account: PiAccount(kind: kind))
+      guard let pending = try find(AccountQuota.self, unresolved), pending.requestedAt.map({ $0 <= at }) ?? true else { continue }
+      try db.run("DELETE FROM accountQuotas WHERE id = ?", [unresolved])
+      removed = true
+    }
+    return removed
+  }
+
+  private static func decodeOwners(_ text: String) -> [String: Date] {
+    ((try? JSONDecoder().decode([String: Double].self, from: Data(text.utf8))) ?? [:]).mapValues(Date.init(timeIntervalSince1970:))
+  }
+
+  private static func encodeOwners(_ owners: [String: Date]) -> String {
+    String(decoding: (try? JSONEncoder().encode(owners.mapValues(\.timeIntervalSince1970))) ?? Data("{}".utf8), as: UTF8.self)
   }
 
   private static func changedMeaningfully(_ old: [QuotaWindow], _ new: [QuotaWindow]) -> Bool {

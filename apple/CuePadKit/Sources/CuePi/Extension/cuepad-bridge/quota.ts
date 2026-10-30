@@ -21,7 +21,7 @@ const QUOTA_PROVIDERS: Record<string, { url: string; headers: (token: string) =>
 export type QuotaWindow = { seconds: number; used: number; resetsAt: number; model: string | null; binding?: true };
 /** 一个提供方的一次观测；`complete` 是全部窗口（查用量接口得到的），回复里带回的只有一部分 */
 export type QuotaDetails = { kind: string; plan?: string; balance?: string; values: { name: string; display?: string; used?: number; unlimited?: boolean; balance?: number; unit?: string; resetsAt?: number }[] };
-export type Quota = { provider: string; account: Account; status: "observed" | "unsupported" | "unobserved" | "failed"; windows: QuotaWindow[]; complete: boolean; observedAt?: number; activeScopes?: string[]; details?: QuotaDetails; accounts?: Quota[]; requestedAt?: number };
+export type Quota = { provider: string; account: Account; status: "observed" | "unsupported" | "unobserved" | "failed"; windows: QuotaWindow[]; complete: boolean; observedAt?: number; activeScopes?: string[]; details?: QuotaDetails; accounts?: Quota[]; requestedAt?: number; owners?: Record<string, number> };
 
 export function record(value: unknown): Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -112,24 +112,35 @@ export class QuotaFetcher {
 	private async fetchSources(): Promise<string[]> {
 		const models = [...this.ctx.modelRegistry.getAvailable(), ...(this.ctx.model ? [this.ctx.model] : [])];
 		if (models.length === 0) return ["no available quota sources"];
-		const seen = new Set<string>();
-		const results = await Promise.allSettled(models.map(async (model) => {
+		// 先解析全部模型，再按来源各查一次：网关来源的报告带上解析到它的每个提供方与各自开始解析的时刻（`owners`），
+		// 几个 Pi 提供方指向同一网关时，CuePad 才知道它们都证明过这个来源（不论在不在模型范围内、会话之后在不在线）。
+		const resolutions = await Promise.allSettled(models.map(async (model) => {
 			const requestedAt = Date.now() / 1000;
-			let identity = unresolvedAccount(this.ctx, model);
-			try {
-				const resolved = await account(this.ctx, model);
-				identity = resolved.identity;
-				const key = resolved.native ? `${model.provider}/${identity.scope}` : identity.source!;
-				if (seen.has(key)) return;
-				seen.add(key);
-				if (resolved.native) await this.fetchNative(model, resolved, requestedAt);
-				else await gatewayQuotas(model.provider, resolved, this.report, requestedAt);
-			} catch (error) {
-				this.report({ provider: model.provider, account: identity, status: "failed", windows: [], complete: false, requestedAt });
+			try { return { model, requestedAt, resolved: await account(this.ctx, model) }; }
+			catch (error) {
+				this.report({ provider: model.provider, account: unresolvedAccount(this.ctx, model), status: "failed", windows: [], complete: false, requestedAt });
 				throw error;
 			}
 		}));
-		return results.flatMap((result) => result.status === "rejected" ? [reason(result.reason)] : []);
+		const groups = new Map<string, { model: Model; requestedAt: number; resolved: Awaited<ReturnType<typeof account>>; owners: Record<string, number> }>();
+		for (const result of resolutions) {
+			if (result.status === "rejected") continue;
+			const { model, requestedAt, resolved } = result.value;
+			const key = resolved.native ? `${model.provider}/${resolved.identity.scope}` : resolved.identity.source!;
+			const group = groups.get(key) ?? { model, requestedAt, resolved, owners: {} };
+			group.owners[model.provider] = Math.max(group.owners[model.provider] ?? 0, requestedAt);
+			groups.set(key, group);
+		}
+		const fetches = await Promise.allSettled([...groups.values()].map(async ({ model, requestedAt, resolved, owners }) => {
+			try {
+				if (resolved.native) await this.fetchNative(model, resolved, requestedAt);
+				else await gatewayQuotas(model.provider, resolved, this.report, requestedAt, owners);
+			} catch (error) {
+				this.report({ provider: model.provider, account: resolved.identity, status: "failed", windows: [], complete: false, requestedAt, ...(resolved.native ? {} : { owners }) });
+				throw error;
+			}
+		}));
+		return [...resolutions, ...fetches].flatMap((result) => result.status === "rejected" ? [reason(result.reason)] : []);
 	}
 
 	/** 能力声明不带排序时刻，所以不报失败（失败只来自带时刻的查询）：未解析的只报其他提供方的 OAuth（`modelInfo` 不解析它们，只是还没查），
