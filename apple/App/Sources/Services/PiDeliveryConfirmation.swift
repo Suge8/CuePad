@@ -46,7 +46,7 @@ struct PiDeliveryConfirmation {
     private func verify(
         _ request: DeliveryRequest, connection: CuePi.PiSession.ID?, file: URL?, reason: ShownText?
     ) async -> DeliveryOutcome {
-        let uncertain = reason ?? ShownText.verbatim(Speech.unconfirmedReason)
+        let uncertain = reason ?? Speech.unconfirmedReason
         guard let file else { return .unconfirmed(uncertain) }
         let following = PiHistory.following(file: file, agent: .pi, files: store.files)
         let result: DeliveryOutcome

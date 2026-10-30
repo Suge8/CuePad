@@ -185,7 +185,7 @@ extension CueStore {
       if current.isOpen, current.deadlineAt != nil || current.handledBy != nil || current.status != .known(.pending) {
         if case .unconfirmed = Speech.trip(current, at: .always(at: timing.now())) {
           current.status = .known(.unconfirmed)
-          current.failureReason = ShownText.verbatim(Speech.unconfirmedReason)
+          current.failureReason = Speech.unconfirmedReason
         } else if let deadline = current.deadlineAt { expire(at: deadline) }
       }
       return current

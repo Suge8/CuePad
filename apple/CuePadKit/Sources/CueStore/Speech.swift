@@ -25,7 +25,7 @@ public enum Speech {
     case reported(String)
   }
 
-  public static var unconfirmedReason: String { String(localized: "送达尚未确认，可能已经执行，不会自动重发") }
+  public static let unconfirmedReason = ShownText("送达尚未确认，可能已经执行，不会自动重发")
 
   // MARK: 时限（说的话的各段等待只在这里定）
 
@@ -75,8 +75,8 @@ public enum Speech {
       if request.deadlineAt != nil || request.handledBy != nil { phase(request, at: moment) }
       else { waiting(since: request.createdAt, reachedServer: request.reachedServer, host: request.hostID, at: moment) }
     case .executing, .confirming: phase(request, at: moment)
-    case .unconfirmed: .unconfirmed(request.failureReason?.text ?? unconfirmedReason)
-    case nil: .unconfirmed(unconfirmedReason)
+    case .unconfirmed: .unconfirmed(request.failureReason?.text ?? unconfirmedReason.text)
+    case nil: .unconfirmed(unconfirmedReason.text)
     case .succeeded: .delivered
     case .failed: .failed(.reported(request.failure ?? DeliveryRequest.unexplainedFailure))
     }
@@ -110,12 +110,12 @@ public enum Speech {
   }
 
   private static func phase(_ request: DeliveryRequest, at moment: Moment) -> Trip {
-    guard let deadline = request.deadlineAt, moment.now < deadline else { return .unconfirmed(unconfirmedReason) }
+    guard let deadline = request.deadlineAt, moment.now < deadline else { return .unconfirmed(unconfirmedReason.text) }
     return moment.isLocal(request.hostID) ? .sending : .sent
   }
 
   private static func waiting(since said: Date, reachedServer: Bool, host: String?, at moment: Moment) -> Trip {
-    if let due = due(said: said, reachedServer: reachedServer, host: host, at: moment), moment.now >= due { return .unconfirmed(unconfirmedReason) }
+    if let due = due(said: said, reachedServer: reachedServer, host: host, at: moment), moment.now >= due { return .unconfirmed(unconfirmedReason.text) }
     return reachedServer && !moment.isLocal(host) ? .sent : .sending
   }
 

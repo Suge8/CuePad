@@ -8,6 +8,17 @@ import Testing
 @testable import CueStore
 
 extension DeliveryConfirmationTests {
+    private func expectPortableReason(_ stored: ShownText?) throws {
+        let reason = try #require(stored)
+        let key = "送达尚未确认，可能已经执行，不会自动重发"
+        #expect(reason == ShownText(String.LocalizationValue(stringLiteral: key)))
+        let directory = try #require(Bundle.main.url(forResource: "en", withExtension: "lproj"))
+        let english = try #require(Bundle(url: directory))
+        let expected = english.localizedString(forKey: key, value: nil, table: nil)
+        #expect(expected != key)
+        #expect(String(localized: reason.value, bundle: english) == expected)
+    }
+
     @Test(arguments: [false, true])
     func ACK后真断线先核对最后历史_有证据则送达_没证据才静态未知(hasMessage: Bool) async throws {
         let clock = ManualTiming()
@@ -24,6 +35,14 @@ extension DeliveryConfirmationTests {
         let result = try await app.services.store.outcome(of: request)
         #expect(result.status == (hasMessage ? .known(.succeeded) : .known(.unconfirmed)))
         #expect(result.failure == nil)
+        if !hasMessage {
+            let phone = TestApp(host: "phone")
+            defer { phone.services.cancelBackgroundWork() }
+            let row = try #require(try await app.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
+            #expect(try await phone.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
+            let received = try #require(try await phone.services.store.deliveryRequest(request.id))
+            try expectPortableReason(received.failureReason)
+        }
         #expect(ext.messages.count == 1)
         let due = try #require(phase.deadlineAt)
         #expect(clock.now < due)
@@ -85,6 +104,7 @@ extension DeliveryConfirmationTests {
         let resolved = try await settledDispatch(request, in: mac)
         if ackAfterDeadline {
             #expect(resolved.status == .known(.unconfirmed) && resolved.deadlineAt == due)
+            try expectPortableReason(resolved.failureReason)
         }
         await mac.services.executor.beginStop()()
         mac.pi.stop()
@@ -97,6 +117,8 @@ extension DeliveryConfirmationTests {
         try await eventually("发送端不再把执行快照当作在跑") { phone.services.speech.now >= due }
         let stillExecuting = try #require(try await phone.services.store.deliveryRequest(request.id))
         #expect(stillExecuting.status == .known(.executing))
+        let expired = try #require(try await phone.services.store.latest(of: request))
+        try expectPortableReason(expired.failureReason)
         #expect(Speech.trip(stillExecuting, at: phone.services.speech).unconfirmedReason != nil)
         #expect(!phone.services.hasOpenDeliveries)
         #expect(ext.messages.count == 1)

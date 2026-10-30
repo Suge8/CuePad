@@ -38,7 +38,7 @@ extension CueStore {
       switch outcome {
       case .succeeded: (.succeeded, nil)
       case .confirming where request.deadlineAt.map({ completed < $0 }) != true:
-        (.unconfirmed, .verbatim(Speech.unconfirmedReason))
+        (.unconfirmed, Speech.unconfirmedReason)
       case .confirming: (.confirming, nil)
       case .failed(let reason): (.failed, reason)
       case .unconfirmed(let reason): (.unconfirmed, reason)
