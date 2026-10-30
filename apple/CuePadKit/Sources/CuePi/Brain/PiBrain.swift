@@ -16,6 +16,7 @@ import Foundation
 ///   （换模型时 Pi 会按新模型重取强度，所以强度在后）；都只改这个进程，不写 Pi 的设置；
 /// - 用 Claude 订阅时把请求标成 Claude Code 的（随包的扩展 claude-subscription.ts，见它的头注释）：`-ne` 下用户自己装的同类扩展不加载，
 ///   不带这些标识的订阅请求会扣额外用量；
+/// - OpenAI Responses 与 Codex Responses 的 fast 由随包扩展在请求前写 `service_tier=priority`；配置改变后重启大脑；
 /// - 提示缓存用长的一档（`PI_CACHE_RETENTION=long`：Anthropic 1 小时，OpenAI 24 小时，提供方不支持的照常）；
 /// - 开新会话走 `new_session`：Pi 按启动参数重建整个运行时（扩展与它起的工具服务都重起），所以就地换过的模型与强度随后再交一次；
 /// - 发话一律带 `streamingBehavior: steer`：正忙时 Pi 在当前回合的工具调用做完后、下一次请求模型前把它交给模型，空闲时照常开始一轮；
@@ -60,6 +61,7 @@ final class PiBrain: HostedSession {
                 "--mode", "rpc", "--no-session", "--offline", "-ne", "-na", "-e", Self.tools.path, "-e", Self.subscription.path,
                 "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "-nbt", "--tools", "+read,+grep,+find,+ls",
             ]
+            if config.fast == true { arguments += ["-e", Bundle.module.url(forResource: "cue-fast", withExtension: "ts")!.path] }
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--thinking", effort.rawValue] }
             let process = try await ChildProcess(

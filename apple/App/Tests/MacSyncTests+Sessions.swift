@@ -8,6 +8,17 @@ import Testing
 @testable import CuePi
 
 extension MacSyncTests {
+    @Test func 手机请求切换加速交给在线会话() async throws {
+        let ext = try await rig.host.connect("fast", cwd: rig.directory.path)
+        defer { ext.close(bye: "quit"); services.cancelBackgroundWork() }
+        try await services.executor.start()
+        let request = try await services.store.requestConfig(
+            PiConfig(fast: true), to: SendTarget(kind: .piSession, name: "fast", ref: "fast"), on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+        #expect(done.status == .known(.succeeded))
+        #expect(ext.commands.last?.json["fast"] as? Bool == true)
+    }
+
     func launched(_ launch: PiLaunch, title: String = "app", card: UUID? = nil) async throws -> DeliveryRequest {
         try await services.executor.start()
         let request = try await services.store.requestLaunch(launch, title: title, on: TestApp.hostID, card: card)

@@ -95,20 +95,28 @@ extension CodexRuntime {
 
     /// 改名走 `thread/name/set`；模型与强度走 `thread/settings/update`，强度按新模型支持的范围夹取（`PiThinkingLevel.clamped`）。
     public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
+        try await configure(PiConfig(model: model, thinking: thinking, name: name), in: id)
+    }
+
+    public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
+        let model = config.model, thinking = config.thinking, name = config.name
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
         if let name {
             try await call(session, "thread/name/set", ["threadId": .string(session.threadID), "name": .string(name)])
             bridge.update(id) { $0.name = name }
         }
-        guard model != nil || thinking != nil else { return }
+        guard model != nil || thinking != nil || config.fast != nil else { return }
         let rpc = try await control(session)
         if models == nil { models = try await CodexModel.list(rpc) }
         let target = model?.id ?? bridge.session(id: id)?.model?.key.id
         let entry = models?.first { $0.id == target }
         if model != nil, entry == nil { throw PiBridgeError.unknownModel(.codex) }
+        if config.fast == true, entry?.supportsFast != true { throw PiBridgeError.unsupported }
         var settings: [String: JSONValue] = ["threadId": .string(session.threadID)]
         if let model { settings["model"] = .string(model.id) }
         if let thinking { settings["effort"] = .string(CodexModel.effort(thinking.clamped(to: entry?.efforts ?? []))) }
+        if let fast = config.fast { settings["serviceTier"] = fast ? "priority" : "default" }
+        else if model != nil, entry?.supportsFast == false, bridge.session(id: id)?.fast == true { settings["serviceTier"] = "default" }
         try await call(session, "thread/settings/update", .object(settings))
         if let thread = try await rpc.call("thread/read", ["threadId": .string(session.threadID)])["thread"] {
             bridge.update(id) { self.apply(thread, to: &$0) }

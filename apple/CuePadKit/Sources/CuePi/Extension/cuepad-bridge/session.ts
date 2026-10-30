@@ -33,6 +33,7 @@ function readTTY(): Promise<string | null> {
 export class Session {
 	readonly tracker = new StateTracker();
 	readonly lifetime = new AbortController();
+	fast: boolean;
 	readonly clients = new Set<net.Socket>();
 	/** 主会话最后一次模型回合开始的时间（`turn_start` 的时刻）：早于这一回合写进会话文件的回答，CuePad 据此认出歇下时这一轮的回答读到没有。
 	 * 取每个回合而不取 agent_start：一次运行里接着处理排队的话，最后的回答出自最后一个回合 */
@@ -80,6 +81,8 @@ export class Session {
 		this.ctx = ctx;
 		this.firecode = firecode;
 		this.identity = identity;
+		const saved = ctx.sessionManager.getBranch().findLast((entry) => entry.type === "custom" && entry.customType === "cuepad-fast");
+		this.fast = saved?.type === "custom" && saved.data === true;
 		const initial = this.state();
 		this.lastKey = JSON.stringify([initial, this.turnSince]);
 		this.phase = phaseOf(initial);
@@ -91,12 +94,19 @@ export class Session {
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
 			question: null,
 			subagents: firecode.subagents,
-			model: null, thinking: null, models: [],
+			model: null, thinking: null, fast: this.fast, models: [],
 			...contextInfo(ctx),
 			...commandInfo(pi),
 		};
 		this.quota = new QuotaFetcher(ctx, (quota) => this.reportQuota(quota));
 		this.reload = new SelfReload(ctx, identity.extensionVersion, () => this.canReload(), (action) => this.runInternal(action));
+	}
+
+	setFast(fast: boolean) {
+		if (this.fast === fast) return;
+		this.fast = fast;
+		this.pi.appendEntry("cuepad-fast", fast);
+		this.updateInfo({ fast });
 	}
 
 	get firstMessage() { return this.info.firstMessage; }

@@ -21,14 +21,15 @@ extension CueKeeper {
         var runtime: Open<AgentKind>
         var model: String?
         var effort: PiThinkingLevel?
+        var fast: Bool?
 
         init(_ profile: CueProfile) {
-            (name, runtime, model, effort) = (profile.name, profile.runtime, profile.model, profile.effort?.known)
+            (name, runtime, model, effort, fast) = (profile.name, profile.runtime, profile.model, profile.effort?.known, profile.fast)
         }
 
-        /// 换成 `wanted` 要换大脑：名字在系统提示里、Agent 是另一个进程；模型、强度回到运行时默认就地也做不到。
+        /// 换成 `wanted` 要换大脑：名字在系统提示里、Agent 是另一个进程；fast 或回到运行时默认也要重开。
         func needsNewBrain(for wanted: BrainSettings) -> Bool {
-            wanted.name != name || wanted.runtime != runtime || (wanted.model == nil && model != nil) || (wanted.effort == nil && effort != nil)
+            wanted.name != name || wanted.runtime != runtime || wanted.fast != fast || (wanted.model == nil && model != nil) || (wanted.effort == nil && effort != nil)
         }
     }
 

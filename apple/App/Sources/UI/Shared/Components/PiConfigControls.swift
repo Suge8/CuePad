@@ -69,6 +69,7 @@ struct PiConfigControls<Trailing: View>: View {
     /// 思考强度可选的档；空时不放思考强度。
     let levels: [PiThinkingLevel]
     let chooseThinking: (PiThinkingLevel) -> Void
+    let chooseFast: (Bool) -> Void
     /// 键盘请弹出的菜单（只有 Mac 有这个入口）：弹出后清掉。
     let opening: Binding<PiConfigPick?>
     let trailing: Trailing
@@ -83,6 +84,7 @@ struct PiConfigControls<Trailing: View>: View {
     init(
         agent: PiAgentPick? = nil, models: PiModelMenu, shown: PiConfigShown, unnamed: LocalizedStringResource = "模型", levels: [PiThinkingLevel],
         opening: Binding<PiConfigPick?> = .constant(nil), chooseThinking: @escaping (PiThinkingLevel) -> Void,
+        chooseFast: @escaping (Bool) -> Void = { _ in },
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.agent = agent
@@ -92,6 +94,7 @@ struct PiConfigControls<Trailing: View>: View {
         self.levels = levels
         self.opening = opening
         self.chooseThinking = chooseThinking
+        self.chooseFast = chooseFast
         self.trailing = trailing()
     }
 
@@ -114,6 +117,9 @@ struct PiConfigControls<Trailing: View>: View {
                     .popUpAnchor(anchors[.thinking])
                     #endif
                     .layoutValue(key: ConfigGive.self, value: .wording)
+            }
+            if shown.model?.supportsFast == true {
+                PiFastCapsule(fast: shown.fast) { chooseFast(shown.fast != true) }
             }
             trailing
         }
@@ -243,9 +249,11 @@ struct SessionConfigControls: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        PiConfigControls(models: menu, shown: shown, levels: shown.model?.thinkingLevels ?? [], opening: opening) {
+        PiConfigControls(models: menu, shown: shown, levels: shown.model?.thinkingLevels ?? [], opening: opening, chooseThinking: {
             configure(PiConfig(thinking: $0))
-        } trailing: {
+        }, chooseFast: {
+            configure(PiConfig(fast: $0))
+        }) {
             if let meter = shown.context.flatMap(PiContextMeter.init) {
                 PiContextGauge(session: session, meter: meter).layoutValue(key: ConfigGive.self, value: .context)
             }

@@ -4,6 +4,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { BUILTIN_COMMANDS, contextInfo, findModel, INTERNAL_COMMAND, isThinkingLevel, modelInfo, reason, type BuiltinCommand } from "./info.ts";
+import { supportsFast } from "./fast.ts";
 import { retry } from "./retry.ts";
 import type { Ack, Session } from "./session.ts";
 
@@ -255,19 +256,21 @@ async function handleRetry(session: Session, ack: Ack, reject: Reject) {
 /** 会话设置：会话名（Pi 设置会话名的接口，同 `/name`）、模型、思考强度——先换模型（需要该提供方已配好密钥）再设强度，强度由 Pi 按新模型支持的范围夹取。 */
 async function handleConfig(session: Session, command: Command, ack: Ack, reject: Reject) {
 	const { pi, ctx } = session;
-	const { model, thinking } = command;
+	const { model, thinking, fast } = command;
 	const name = typeof command.name === "string" ? command.name.trim() : command.name;
 	if (model !== undefined && !isModelRef(model)) return reject("bad_request");
 	if (thinking !== undefined && !isThinkingLevel(thinking)) return reject("bad_request");
 	if (name !== undefined && (typeof name !== "string" || name.length === 0)) return reject("bad_request");
-	if (model === undefined && thinking === undefined && name === undefined) return reject("bad_request");
+	if (fast !== undefined && typeof fast !== "boolean") return reject("bad_request");
+	if (model === undefined && thinking === undefined && fast === undefined && name === undefined) return reject("bad_request");
+	const target = model ? ctx.modelRegistry.find(model.provider, model.id) : ctx.model;
+	if (model && !target) return reject("unknown_model");
+	if (fast === true && !supportsFast(target)) return reject("bad_request");
 	if (name) pi.setSessionName(name);
-	if (model) {
-		const target = ctx.modelRegistry.find(model.provider, model.id);
-		if (!target) return reject("unknown_model");
-		if (!(await pi.setModel(target))) return reject("no_auth");
-	}
+	if (model && target && !(await pi.setModel(target))) return reject("no_auth");
 	if (thinking) pi.setThinkingLevel(thinking);
+	const selectedFast = typeof fast === "boolean" ? fast : model && !supportsFast(target) && session.fast ? false : undefined;
+	if (typeof selectedFast === "boolean") session.setFast(selectedFast);
 	session.updateInfo(await modelInfo(pi, ctx));
 	ack({ ok: true });
 }

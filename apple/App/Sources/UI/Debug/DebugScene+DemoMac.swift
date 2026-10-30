@@ -122,7 +122,7 @@ extension DebugScene {
     ) async throws {
         _ = try await recorder.update(
             sessionID: session.sessionID, state: state, detail: detail, title: session.title, directory: session.folder, projectID: session.projectID,
-            question: question, modelState: PiModelState(model: session.model, thinking: session.thinking, models: demoModels.models),
+            question: question, modelState: PiModelState(model: session.model, thinking: session.thinking, fast: session.fast, models: demoModels.models),
             context: session.context, commands: demoCommands, agent: session.agent.known)
     }
 }

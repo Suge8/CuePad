@@ -34,7 +34,7 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 | --- | --- |
 | `hello` | 连接后第一条：`extensionVersion`、`sessionId`、`sessionFile`（可空）、`pid`、`cwd`、`mode`（`tui`/`rpc`）、`tty`、`term`（终端相关环境变量）、`state`、`launchToken`、`hosted`，以及 `info` 的全部字段 |
 | `state` | 只在状态切换时发：`state{kind, since, busySince, turnSince, …}`，时刻都是毫秒 |
-| `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images, account{kind, scope, source?, route?, name?}}`、`thinking`、`models`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
+| `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images, supportsFast, account{kind, scope, source?, route?, name?}}`、`thinking`、`fast`、`models`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
 | `draft` | 正在说的话：`text`（`null` 是清掉）、`since` |
 | `quota` | 授权的额度能力与结果：`provider`、`account{kind, scope, source?, route?, name?}`、`status`（`observed`/`unobserved`/`unsupported`/`failed`）、`windows[{seconds, used, resetsAt, model, binding}]`、`complete`、`observedAt?`（原观测的 Unix 秒）、`activeScopes?`（此来源成功返回的账号分区） |
 | `ack` | 命令回应：`id`、`ok`，或 `error`（见下表）；`reload` 另带 `reloaded` |
@@ -58,7 +58,7 @@ CuePad → 扩展（都带 `id`）：
 | --- | --- | --- |
 | `send` | `text`（文件写成一行"附件：文件名（本机路径）"，会话看不了图时图片也这样写，`AttachmentFiles.agentLine`）、`images[{mimeType, data}]`（base64 原图）、`deliveryId`（可选，落盘为消息上的 `cuepadDelivery`）、`cueTurn{deliveryId}`（可选，见下） | `empty`、`bad_request`、`unconfirmed_turn`、`user_turn` |
 | `command` | `text`：`/` 开头的整行 | `bad_request`、`unknown_command`、`missing_argument`、`unknown_model`、`no_auth` |
-| `config` | `model{provider, id}`、`thinking`、`name`，至少一项 | `bad_request`、`unknown_model`、`no_auth` |
+| `config` | `model{provider, id}`、`thinking`、`fast`、`name`，至少一项 | `bad_request`、`unknown_model`、`no_auth` |
 | `answer` | `promptId`、`value`（`confirm` 为布尔，`select` 为选项原文，`text` 为字符串） | `no_prompt`、`stale_prompt`、`bad_answer` |
 | `abort` | — | — |
 | `retry` | — | `nothing_to_retry` |

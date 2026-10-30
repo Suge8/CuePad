@@ -4,8 +4,8 @@ import CueText
 import Foundation
 
 extension DebugScene {
-    static func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
-        PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
+    static func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel], supportsFast: Bool = false) -> PiModelOption {
+        PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels, supportsFast: supportsFast)
     }
 
     /// 演示会话的模型配置，按哪家 Agent：Pi 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，菜单里不带标志）；
@@ -27,7 +27,7 @@ extension DebugScene {
         case .codex:
             let provider = AgentKind.codex.modelProvider ?? ""
             return listed([
-                model(provider, "gpt-6.1-sol", "GPT-6.1-Sol", levels), model(provider, "gpt-6-astra", "GPT-6-Astra", levels),
+                model(provider, "gpt-6.1-sol", "GPT-6.1-Sol", levels, supportsFast: true), model(provider, "gpt-6-astra", "GPT-6-Astra", levels, supportsFast: true),
                 model(provider, "gpt-6-sol", "GPT-6-Sol", levels), model(provider, "gpt-6-luna", "GPT-6-Luna", levels),
                 model(provider, "gpt-5.6-terra", "GPT-5.6-Terra", levels),
             ], current: 0, thinking: .medium)
@@ -128,6 +128,6 @@ extension DebugScene {
 
     /// 不是 Pi 的演示会话（其余是 Pi）：都开在终端里，能做的按各家（`AgentCapabilities`）——cuepad 是 Claude Code（回复框只有文字、没有停止与模型），
     /// homepage 是 Codex（能作答、换模型，斜杠命令只有几个内置与 skill），billing 是 OpenCode，历史里的 weekly 是 Claude Code。
-    static let demoAgents: [String: AgentKind] = ["cuepad": .claudeCode, "homepage": .codex, "billing": .opencode, "weekly": .claudeCode]
+    static let demoAgents: [String: AgentKind] = ["scratch": .codex, "cuepad": .claudeCode, "homepage": .codex, "billing": .opencode, "weekly": .claudeCode]
 }
 #endif

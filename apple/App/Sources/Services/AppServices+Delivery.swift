@@ -88,11 +88,11 @@ extension AppServices {
     /// `card`：从这条灵感或任务开的（开好后它关联到新会话、会话名按它定，见 `CueStore.requestLaunch`、`CueStore.claimLaunchedCards`）。
     func launchSession(
         in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil
+        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool? = nil
     ) async throws -> SessionLaunch {
         let token = UUID().uuidString
         let request = uploaded(try await store.requestLaunch(
-            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking), title: title, on: host, card: card))
+            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast), title: title, on: host, card: card))
         return SessionLaunch(request: request.id, token: token)
     }
 

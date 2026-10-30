@@ -14,10 +14,11 @@ import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@e
 import { listen } from "./connection.ts";
 import { captureDialogs, follow } from "./events.ts";
 import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
+import { supportsFast } from "./fast.ts";
 import { trackShows, watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 48;
+const EXTENSION_VERSION = 49;
 
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
  * 与 FireCode 判断"会话进行中"用同一个事实 */
@@ -88,6 +89,11 @@ export default function (pi: ExtensionAPI) {
 				if (!session?.lifetime.signal.aborted) session?.reportFailure(reason(error));
 			}
 		},
+	});
+
+	pi.on("before_provider_request", (event, ctx) => {
+		if (!live?.session.fast || !supportsFast(ctx.model) || !event.payload || typeof event.payload !== "object" || Array.isArray(event.payload)) return;
+		return { ...event.payload, service_tier: "priority" };
 	});
 
 	trackShows(pi);

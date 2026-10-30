@@ -84,24 +84,27 @@ import Testing
   @Test func modelChoicesTravelToThePhoneAndTheConfigRequestTravelsBackToTheMac() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
     let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low, .medium])
-    let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high])
+    let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high], supportsFast: true)
     let compact = PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin))
     try await recorder.update(
       sessionID: "s1", state: .settled, title: "t", directory: "/Users/me/app",
-      modelState: PiModelState(model: sonnet, thinking: .known(.low), models: [sonnet, opus]), commands: [compact])
+      modelState: PiModelState(model: sonnet, thinking: .known(.low), fast: false, models: [sonnet, opus]), commands: [compact])
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.allPiSessionStates().first)
-    #expect(seen.model == sonnet && seen.thinking == .known(.low))
+    #expect(seen.model == sonnet && seen.thinking == .known(.low) && seen.fast == false)
     let catalogID = try #require(seen.catalogID)
     let catalog = try #require(try await phone.store.agentCatalog(catalogID))
     #expect(catalog.models == [sonnet, opus] && catalog.commands == [compact])
 
-    let config = PiConfig(model: opus.key, thinking: .high)
+    let config = PiConfig(model: opus.key, thinking: .high, fast: true)
     let target = SendTarget(kind: .piSession, name: "t", ref: "s1")
     let made = try await phone.store.requestConfig(config, to: target, on: "mac")
     try await cloud.exchange()
     #expect(try await mac.store.deliveryRequest(made.id)?.config == config)
+    try await phone.store.updateCueProfile { $0.fast = true }
+    try await cloud.exchange()
+    #expect(try await mac.store.cueProfile()?.fast == true)
   }
 
   /// 发出的话：手机写、Mac 执行，结果回到手机；这句进了对话、消息上了服务器，Mac 才收走请求，气泡由对话里那条接替。

@@ -7827,6 +7827,22 @@
         }
       }
     },
+    "加速" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fast"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加速"
+          }
+        }
+      }
+    },
     "动项目外的东西" : {
       "localizations" : {
         "en" : {
@@ -11955,6 +11971,22 @@
         }
       }
     },
+    "开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开"
+          }
+        }
+      }
+    },
     "开一个新的 Agent 会话（⌥⌘N）" : {
       "localizations" : {
         "en" : {
@@ -12223,6 +12255,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "归档"
+          }
+        }
+      }
+    },
+    "当前模型不支持加速" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This model does not support Fast mode"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前模型不支持加速"
           }
         }
       }
@@ -15383,6 +15431,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未填"
+          }
+        }
+      }
+    },
+    "未知" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未知"
           }
         }
       }

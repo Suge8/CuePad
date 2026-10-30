@@ -165,6 +165,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 会话当前的模型与思考强度（Pi 桥上报；已结束的会话留着最后的值）。旧版本写的记录没有。
   public var model: PiModelOption?
   public var thinking: Open<PiThinkingLevel>?
+  public var fast: Bool?
   /// 上下文余量（Pi 桥上报；已结束的会话留着最后一次的值）。旧版本写的记录没有。
   public var context: PiContextUsage?
   /// 哪个 Agent 的会话。旧版本写的记录没有，是 Pi。
@@ -178,7 +179,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: PiPush?, stateSince: Date,
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, pendingTools: PiChatMessage.Tools? = nil, model: PiModelOption? = nil,
-    thinking: Open<PiThinkingLevel>? = nil, context: PiContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil,
+    thinking: Open<PiThinkingLevel>? = nil, fast: Bool? = nil, context: PiContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil,
     turnStartedAt: Date? = nil, answeredAt: Date? = nil, failure: Open<PiFailure>? = nil, bootID: String? = nil, runtimeUntil: Date? = nil
   ) {
     self.id = id
@@ -206,6 +207,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.pendingTools = pendingTools
     self.model = model
     self.thinking = thinking
+    self.fast = fast
     self.context = context
     self.agent = agent
     self.catalogID = catalogID
@@ -293,13 +295,13 @@ extension PiSessionState: Record {
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "context", "agent", "catalogID", "pendingTools", "turnStartedAt", "answeredAt", "failure", "bootID",
+    "model", "thinking", "context", "agent", "catalogID", "pendingTools", "turnStartedAt", "answeredAt", "failure", "bootID", "fast",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
      model.map(JSONColumn.encode), thinking?.rawValue, context.map(JSONColumn.encode), agent.rawValue, catalogID, pendingTools?.stored,
-     turnStartedAt, answeredAt, failure?.rawValue, bootID]
+     turnStartedAt, answeredAt, failure?.rawValue, bootID, fast.map { $0 ? Int64(1) : Int64(0) }]
   }
   init(row: Row) {
     self.init(
@@ -313,7 +315,7 @@ extension PiSessionState: Record {
       // 会话重新连上时又是它——不必等文件再追加
       pendingPrompt: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(19),
       pendingTools: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(25).flatMap(PiChatMessage.Tools.init(stored:)),
-      model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
+      model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)), fast: row.intOrNil(30).map { $0 == 1 },
       context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(22)),
       agent: row.textOrNil(23).map(Open.init(rawValue:)) ?? .known(.pi), catalogID: row.uuidOrNil(24), turnStartedAt: row.dateOrNil(26),
       answeredAt: row.dateOrNil(27), failure: row.textOrNil(28).map(Open.init(rawValue:)), bootID: row.textOrNil(29))

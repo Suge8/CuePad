@@ -15,7 +15,7 @@ extension PiSessionState {
             lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question, notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
             launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
-            pendingPrompt: recap?.pendingPrompt, pendingTools: recap?.pendingTools, model: session.model, thinking: session.thinking, context: session.context,
+            pendingPrompt: recap?.pendingPrompt, pendingTools: recap?.pendingTools, model: session.model, thinking: session.thinking, fast: session.fast, context: session.context,
             agent: .known(session.agent), turnStartedAt: session.turnStartedAt, answeredAt: recap?.answeredAt, failure: session.failure.map(Open.known), bootID: SystemBoot.id, runtimeUntil: .distantFuture)
     }
 }
@@ -181,10 +181,10 @@ extension Workspace {
     /// `agent`：用哪个 Agent 开；`model`、`thinking` 为 nil 是这家的默认。
     func startSession(
         in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, progressed: @escaping (LaunchProgress) -> Void
+        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool? = nil, progressed: @escaping (LaunchProgress) -> Void
     ) async throws -> String {
         let launch = try await services.launchSession(
-            in: project, prompt: prompt, title: title, on: host ?? services.hostID, card: card, agent: agent, model: model, thinking: thinking)
+            in: project, prompt: prompt, title: title, on: host ?? services.hostID, card: card, agent: agent, model: model, thinking: thinking, fast: fast)
         var seen = false
         for try await progress in services.store.observe({ try launch.progress(from: $0) }) {
             if let claimed = progress.claimed { return claimed.sessionID }

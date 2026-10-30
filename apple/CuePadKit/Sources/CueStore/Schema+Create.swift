@@ -56,7 +56,7 @@ extension Schema {
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
       pendingTools TEXT, model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT, turnStartedAt INTEGER, answeredAt INTEGER,
-      failure TEXT, bootID TEXT, stateSince INTEGER NOT NULL,
+      failure TEXT, bootID TEXT, fast INTEGER, stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
@@ -147,7 +147,7 @@ extension Schema {
     CREATE INDEX cueLines_order ON cueLines(createdAt, id);
     CREATE INDEX cueLines_remindAt ON cueLines(remindAt) WHERE remindAt IS NOT NULL;
     CREATE TABLE cueProfile (
-      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, hostID TEXT, runtime TEXT NOT NULL, model TEXT, effort TEXT,
+      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, hostID TEXT, runtime TEXT NOT NULL, model TEXT, effort TEXT, fast INTEGER,
       enabledAt INTEGER, modifiedAt INTEGER NOT NULL
     ) STRICT;
     -- lineIDs：区间里各行 id 的指纹，行序变了（别处同步来更早的行）摘要随之作废

@@ -3,13 +3,15 @@ import CueStore
 import CueText
 import Foundation
 
-/// `model/list` 里的一个模型：强度是 Codex 的 `ReasoningEffort`（`none` 即关闭；`ultra` 等 CuePad 没有的档丢掉）。
+/// `model/list` 里的一个模型：强度是 Codex 的 `ReasoningEffort`（`none` 即关闭；`ultra` 等 CuePad 没有的档丢掉）；
+/// fast 只取 `serviceTiers` 里的 `priority`。
 struct CodexModel {
     let id: String
     let name: String
     let efforts: [PiThinkingLevel]
     /// 能看图（`inputModalities` 里有 image）
     let seesImages: Bool
+    let supportsFast: Bool
     /// 用户没配模型时 Codex 用的那个
     let isDefault: Bool
 
@@ -17,7 +19,7 @@ struct CodexModel {
     static let provider = AgentKind.codex.modelProvider!
 
     var option: PiModelOption {
-        PiModelOption(key: PiModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts, acceptsImages: seesImages)
+        PiModelOption(key: PiModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts, acceptsImages: seesImages, supportsFast: supportsFast)
     }
 
     static func thinking(_ effort: String) -> Open<PiThinkingLevel> { Open(rawValue: effort == "none" ? "off" : effort) }
@@ -39,6 +41,7 @@ struct CodexModel {
             let seesImages = entry["inputModalities"]?.array.map { $0.contains("image") } ?? true
             return CodexModel(
                 id: id, name: entry["displayName"]?.string ?? id, efforts: efforts.compactMap { thinking($0).known }, seesImages: seesImages,
+                supportsFast: entry["serviceTiers"]?.array?.contains { $0["id"]?.string == "priority" } == true,
                 isDefault: entry["isDefault"]?.bool == true)
         }
     }
