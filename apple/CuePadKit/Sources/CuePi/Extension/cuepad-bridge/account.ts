@@ -25,8 +25,10 @@ export function provenAccount(ctx: ExtensionContext, model: Model): Proof | unde
 	return proof && { account: proof.account, at: proof.at };
 }
 
-/** 请求路线与认证只问宿主；自定义地址不冒充原生 OAuth。只把不可逆分区交给 App。 */
-export async function account(ctx: ExtensionContext, model: Model) {
+/** 请求路线与认证只问宿主；自定义地址不冒充原生 OAuth。只把不可逆分区交给 App。
+ * `confirm`：主动查询时的解析，证明时刻总是推进到这一次（CuePad 据此清理换掉的授权）；
+ * 其余（每轮前取模型表）同一授权沿用原时刻，模型表不随每次解析变化。 */
+export async function account(ctx: ExtensionContext, model: Model, confirm = false) {
 	const order = ++resolutions, at = Date.now() / 1000;
 	const resolved = await ctx.modelRegistry.getApiKeyAndHeaders(model);
 	if (!resolved.ok) throw new Error(`${model.provider}: authorization unavailable`);
@@ -46,8 +48,7 @@ export async function account(ctx: ExtensionContext, model: Model) {
 	let proven = proofs.get(ctx.modelRegistry);
 	if (!proven) proofs.set(ctx.modelRegistry, proven = new Map());
 	const last = proven.get(modelKey(model));
-	// 同一授权再次证明沿用最早的时刻：模型表不随每次解析变化，保留规则只会更保守（旧证明不否定比它新的记录）
-	const same = last && JSON.stringify(last.account) === JSON.stringify(identity);
+	const same = !confirm && last && JSON.stringify(last.account) === JSON.stringify(identity);
 	if ((last?.order ?? 0) < order) proven.set(modelKey(model), { order, at: same ? last!.at : at, account: identity });
 	return { identity, baseUrl, headers, native, token: resolved.apiKey };
 }

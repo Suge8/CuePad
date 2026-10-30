@@ -22,13 +22,9 @@ extension CueStore {
   /// 账号或网关来源的记录只按证明移除：可能拥有它的每个模型（同一提供方，或证明过这个来源的）都证明了别的授权，且证明不早于这条记录最近的结果。
   /// 模型的证明是会话最近一次解析成功的那次（`PiModelOption.proven`，解析失败不抹掉），没有证明的是未知，什么都不移除；
   /// 旧证明不能否定比它新的记录。网关来源归哪些提供方：来源那一条记下的，与证明过这个来源的模型。各来源只看自己的模型，互不影响。
-  /// 未解析的那条在这个提供方此刻还有未解析的模型时保留。
+  /// 未解析的那条在这个提供方此刻还有未解析的模型、且这个提供方没有不早于它的证明时保留。
   public func retainQuotaSources(on host: String, models: [PiModelOption]) throws {
-    var models = models
-    for state in try select(PiSessionState.self, where: "hostID = ? AND \(PiWorkState.outsideSQL(PiWorkState.closed))", [host]) {
-      models += [state.model].compactMap { $0 }
-      if let id = state.catalogID, let catalog = try agentCatalog(id) { models += catalog.models }
-    }
+    let models = try hostModels(on: host) + models
     guard models.contains(where: { $0.proven != nil }) else { return }
     try write {
       let quotas = try select(AccountQuota.self, where: "hostID = ?", [host])
@@ -42,7 +38,9 @@ extension CueStore {
           return model.key.provider == quota.provider
         }
         let valid = candidates.contains { model in
-          guard account.scope != nil else { return model.account?.scope == nil && model.account?.kind == account.kind }
+          guard account.scope != nil else {
+            return model.account?.scope == nil && model.account?.kind == account.kind && !Self.proves(models, quota.provider, account.kind, since: quota.evidencedAt)
+          }
           guard let proof = model.proven else { return true }
           if let source = account.source { return proof.account.source == source || proof.at < quota.evidencedAt }
           return proof.account.source == nil && proof.account.matches(account) || proof.at < quota.evidencedAt
@@ -58,6 +56,7 @@ extension CueStore {
   /// 否则只在本机推进排序时刻、不改版本不同步，每次回复都来的观测不会每次都写库与同步。
   /// 提供方未解析的授权（`scope` 为 nil：还没查，或查时解析失败）是这台 Mac 上这个提供方的一条，不关联任何账号的数值，与证明了身份的结果按同一个时刻排先后：
   /// 已有证明了身份的账号或来源时不再写"还没查"；查时解析失败只在这个提供方没有不早于它的证明时写；同一提供方证明了身份、且不早于它的结果到来时移除它。
+  /// 证明既看额度记录，也看本机会话模型表里的证明（`PiModelOption.proven`），写入与保留核对用同一个判断，到达先后不影响结果。
   /// 网关清单里各账号的报告用清单的排序时刻。返回是否写了。
   @discardableResult
   public func recordQuota(_ report: QuotaReport, host: String) throws -> Bool {
@@ -72,7 +71,8 @@ extension CueStore {
     if report.account.route == nil {
       let unresolved = AccountQuota.recordID(provider: report.provider, host: host, account: PiAccount(kind: report.account.kind))
       if report.account.scope == nil {
-        if try hasProvenPeer(of: report, on: host, since: report.status == .failed ? report.requestedAt : nil) { return false }
+        let since = report.status == .failed ? report.requestedAt : nil
+        if try hasProvenPeer(of: report, on: host, since: since) || Self.proves(try hostModels(on: host), report.provider, report.account.kind, since: since ?? .distantPast) { return false }
       } else if let start = report.requestedAt, let pending = try find(AccountQuota.self, unresolved), pending.requestedAt.map({ $0 <= start }) ?? true {
         try db.run("DELETE FROM accountQuotas WHERE id = ?", [unresolved])
         removed = true
@@ -114,6 +114,21 @@ extension CueStore {
         [JSONColumn.encode(windows), now, status.rawValue, observedAt, JSONColumn.encode(report.account), details.map(JSONColumn.encode), quota.requestedAt, id])
     }
     return true
+  }
+
+  /// 这台 Mac 上未结束会话的模型表（含各自的证明）。
+  private func hostModels(on host: String) throws -> [PiModelOption] {
+    var models: [PiModelOption] = []
+    for state in try select(PiSessionState.self, where: "hostID = ? AND \(PiWorkState.outsideSQL(PiWorkState.closed))", [host]) {
+      models += [state.model].compactMap { $0 }
+      if let id = state.catalogID, let catalog = try agentCatalog(id) { models += catalog.models }
+    }
+    return models
+  }
+
+  /// 这个 Pi 提供方的模型有没有不早于 `since` 的证明：不经额度记录上记着的提供方名（几个提供方共用一个网关来源时那里只有一个）。
+  private static func proves(_ models: [PiModelOption], _ provider: String, _ kind: PiAccount.Kind, since: Date) -> Bool {
+    models.contains { $0.key.provider == provider && $0.proven.map { $0.account.kind == kind && $0.at >= since } == true }
   }
 
   /// 这个提供方有没有证明了身份的结果；给了 `since` 时只算排序时刻不早于它的。
