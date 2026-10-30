@@ -30,8 +30,10 @@ extension CueKeeper {
 
     /// 合一次：Cue 的那家与模型、强度用低档（一行行的摘要用不着深想，模型照用户给 Cue 选的，各家都起得来、不另猜模型名），
     /// 系统提示只讲怎么合（`CuePrompt.dream`），工具只有 merge 与 tidy（`cuepad mcp --dream`），不带 Cue 的会话。一轮做完或进程退出就停。
-    /// 一直记着的该收口时（`CueMemoryView.tidyDue`）一并交给它；这一轮做完了，就把此刻钉着的那组记成整理过的（`tidied`）：
-    /// 它什么都没动也算，那组没变就不再交（不然过了软线、它又觉得不该动时，每次记忆一变都重来一遍）。出错的不记，下次记忆变化再交。
+    /// 一直记着的该收口时（`CueMemoryView.tidyDue`）一并交给它；这一轮没出错地做完，就把交给它的那组记成整理过的（`tidied`）：
+    /// 它什么都没动也算，那组没变就不再交（不然过了软线、它又觉得不该动时，每次记忆一变都重来一遍）。记的是交出去的那组，不是做完时钉着的：
+    /// 整理期间别处新钉的没交给它，下一次照常算新钉的；代价是它并出的新行也算新钉的，仍过软线时会再看一遍，之后那组就不变了。
+    /// 出错的（各家出错后照样报一轮做完）不记，下次记忆变化再交。
     private func dream() async {
         var brain: (any HostedSession)?
         do {
@@ -44,16 +46,18 @@ extension CueKeeper {
                 runtime, launch, model: profile.model, effort: .low, systemPrompt: CuePrompt.dream(runtime: runtime), tools: ["--dream"])
             brain = started
             try await started.send(input, images: [])
-            var finished = false
+            var finished = false, failed = false
             loop: for await event in started.events {
                 switch event {
-                case .failed(let reason): Self.log.error("Cue 整理记忆出错：\(reason, privacy: .public)")
+                case .failed(let reason):
+                    failed = true
+                    Self.log.error("Cue 整理记忆出错：\(reason, privacy: .public)")
                 case .turnFinished: finished = true; break loop
                 case .exited: break loop
                 default: break
                 }
             }
-            if tidy && finished { try recordTidied(CueMemoryView(try await store.cueMemory()).pinned.map(\.line.id)) }
+            if tidy && finished && !failed { try recordTidied(view.pinned.map(\.line.id)) }
         } catch is CancellationError {
             // 不再值班（停用 Cue、退出）时正起着的这次跟着取消，不是没起来
         } catch {

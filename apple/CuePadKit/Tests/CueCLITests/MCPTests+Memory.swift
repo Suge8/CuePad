@@ -47,6 +47,32 @@ extension MCPTests {
     }
   }
 
+  /// 后台整理记忆的大脑经 `cuepad mcp --dream` 收口一直记着的：同一件事的几条并成一条（有他的原话就算他的）、一次性的放回普通记忆，只动一直记着的。
+  @Test func theDreamTidiesWhatIsAlwaysKept() async throws {
+    let sandbox = try Fixture()
+    let store = sandbox.store
+    let rules: [(String, CueLineSource)] = [("回复要短", .you), ("回复先说结论", .cue), ("以后推送都不用问", .you), ("这周在修登录页", .cue)]
+    for (text, source) in rules {
+      try await store.noteCueLine(text, source: source, pinned: true)
+      try await Task.sleep(for: .milliseconds(2))  // 序号按记下的先后
+    }
+    try await store.noteCueLine("周会在周一", source: .cue)
+    try await Server.run(library: sandbox.directory, arguments: ["mcp", "--dream"]) { server in
+      let tools = try #require(try await server.request("tools/list", [:])["tools"] as? [[String: Any]])
+      #expect(tools.compactMap { $0["name"] as? String } == ["merge", "tidy"])
+
+      #expect(try await server.call("tidy", ["lines": [0, 1], "text": "回复要短，先说结论"]).contains("#5"))
+      try await server.call("tidy", ["lines": [3]])
+      #expect(try await server.refused("tidy", ["lines": [4], "text": "周会"]).contains("不是一直记着"))
+      #expect(try await server.refused("tidy", ["lines": [2], "text": "以后都不用问"]).contains("至少两条"))
+    }
+    let kept = try await store.recentCueMemory().lines
+    #expect(kept.filter(\.pinned).map(\.text).sorted() == ["以后推送都不用问", "回复要短，先说结论"])
+    #expect(kept.first { $0.text == "回复要短，先说结论" }?.source == .known(.you))
+    #expect(kept.contains { $0.text == "这周在修登录页" && !$0.pinned })
+    #expect(!kept.contains { $0.text == "回复要短" || $0.text == "回复先说结论" })
+  }
+
   /// 明天这个钟点（本机时区），照 remind 认的 yyyy-MM-dd HH:mm 写。
   static func tomorrow(hour: Int) -> String {
     let day = Calendar.current.date(byAdding: .day, value: 1, to: .now)!

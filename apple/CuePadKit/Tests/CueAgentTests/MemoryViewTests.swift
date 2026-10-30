@@ -34,31 +34,12 @@ import Testing
     #expect(try #require(after.viewText).split(separator: "\n").allSatisfy { !$0.hasPrefix("#1 ") })
   }
 
-  /// 一直记着的越堆越多：新钉了 5 条就交给后台整理；整理的大脑把同一件事的几条并成一条（有他的原话就算他的）、把一次性的放回普通记忆，
-  /// 只动一直记着的；整理过的那组没变就不再交。
-  @Test func theDreamTidiesWhatIsAlwaysKept() async throws {
-    let rules: [(String, CueLineSource)] = [
-      ("回复要短", .you), ("回复先说结论", .cue), ("以后推送都不用问", .you), ("这周在修登录页", .cue), ("提交信息用中文", .you),
-    ]
-    for (text, source) in rules {
-      try await store.noteCueLine(text, source: source, pinned: true)
-      try await Task.sleep(for: .milliseconds(2))
-    }
-    try await store.noteCueLine("周会在周一", source: .cue)
-    var view = CueMemoryView(try await store.cueMemory())
+  /// 一直记着的越堆越多：新钉了 5 条就交给后台整理（输入里带上钉着的全部行）；整理过的那组没变就不再交。
+  @Test func newPinsAreHandedToTheDreamOnce() async throws {
+    for index in 0..<CueMemoryView.tidyAfterPins { try await store.noteCueLine("规矩 \(index)", source: .you, pinned: true) }
+    let view = CueMemoryView(try await store.cueMemory())
     #expect(view.tidyDue(since: []))
     #expect(try #require(view.dreamText(tidy: true)).contains("<pinned>"))
-
-    let dream = CueTools(store: store, toolset: .dream)
-    let merged = try #require(await dream.call("tidy", ["lines": [0, 1], "text": "回复要短，先说结论"]))
-    #expect(!merged.isError && merged.text.contains("#6"))
-    #expect(try #require(await dream.call("tidy", ["lines": [3]])).isError == false)
-    #expect(try #require(await dream.call("tidy", ["lines": [5], "text": "周会"])).isError)
-
-    view = CueMemoryView(try await store.cueMemory())
-    #expect(view.pinned.map(\.line.text) == ["以后推送都不用问", "提交信息用中文", "回复要短，先说结论"])
-    #expect(view.pinned.last?.line.source == .known(.you))
-    #expect(try await store.recentCueMemory().lines.contains { $0.text == "这周在修登录页" && !$0.pinned })
     #expect(!view.tidyDue(since: Set(view.pinned.map(\.line.id))))
   }
 
