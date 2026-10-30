@@ -1,7 +1,7 @@
 import Foundation
 
 /// 按时间分段：今天 / 昨天 / 本周 / 本月 / 更早。会话历史（已结束的会话按结束时间，进展页的会话段与 ⌘K）与 Cue 的记忆（按记下的时间）共用。
-/// 会话历史按结束时间从新到旧分页，所以分段只在末尾增长，下一页不会插进上面的段。
+/// 会话历史按结束时间从新到旧分页；同一时间段只列一组。
 nonisolated enum TimeSection: Sendable {
     case today, yesterday, thisWeek, thisMonth, earlier
 
@@ -31,12 +31,16 @@ nonisolated enum TimeSection: Sendable {
         var items: [Item]
     }
 
-    /// 按从新到旧排好的条目切成相连的段。
+    /// 按从新到旧排好的条目分段；设备时钟不一致时，同一时间段可能在输入里不相邻。
     static func split<Item>(_ items: [Item], date: (Item) -> Date, now: Date, calendar: Calendar = .current) -> [Run<Item>] {
         var runs: [Run<Item>] = []
         for item in items {
             let section = of(date(item), now: now, calendar: calendar)
-            if runs.last?.section == section { runs[runs.count - 1].items.append(item) } else { runs.append(Run(section: section, items: [item])) }
+            if let index = runs.firstIndex(where: { $0.section == section }) {
+                runs[index].items.append(item)
+            } else {
+                runs.append(Run(section: section, items: [item]))
+            }
         }
         return runs
     }
