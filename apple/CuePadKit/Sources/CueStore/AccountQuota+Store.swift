@@ -155,7 +155,8 @@ extension CueStore {
     return try select(AccountQuota.self, where: "hostID = ?", [host]).contains { peer in
       guard peer.account?.route == nil, peer.account?.scope != nil, peer.account?.kind == report.account.kind else { return false }
       if let at = owners[peer.id]?[report.provider], start.map({ at >= $0 }) ?? true { return true }
-      guard peer.provider == report.provider else { return false }
+      // 网关来源那一条的 provider 只是建它的提供方、requestedAt 是各提供方共用的，证明不了这个提供方何时成功：带时刻的只看 owners
+      guard peer.provider == report.provider, peer.account?.source == nil || start == nil else { return false }
       guard let start else { return true }
       return peer.requestedAt.map { $0 >= start } ?? false
     }
