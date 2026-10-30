@@ -66,7 +66,8 @@ extension CueKeeper {
             }
 
             let due = try await store.dueCueSchedules(at: now)
-            if !due.isEmpty {
+            // 持续重试只有一项承接中的工作；新定时留在库里，等它成功后再交付和消费。
+            if setback?.persistent != true, !due.isEmpty {
                 // 错过了几次的只补最近的那一次：本该几点记那一次
                 let fires = due.compactMap { line in
                     line.remindAt.map { CueFire(line: line.id, due: line.repeats?.latest(from: $0, until: now) ?? $0) }

@@ -126,6 +126,38 @@ extension CueHostTests {
         await rig.stop()
     }
 
+    @Test func 持续重试期间新定时不先消费_两项失败都能恢复() async throws {
+        let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3)] })
+        rig.model.blockQuota(times: 1)
+        let first = try await rig.store.noteCueLine("核对发布结果 A", source: .you, remindAt: .now)
+        let keeper = try #require(rig.services.cue.keeper)
+        func waiting(_ id: UUID) -> Bool {
+            guard keeper.turn == nil, let held = keeper.setback, held.persistent,
+                  case .schedule(let fires) = held.wake else { return false }
+            return fires.contains { $0.line == id }
+        }
+        try await eventually("A 失败后等待重试") { waiting(first.line.id) }
+        let second = try await rig.store.noteCueLine("核对发布结果 B", source: .you, remindAt: .now)
+        rig.model.blockQuota(times: 1, containing: "醒来：定时到点\n- #\(second.index) 核对发布结果 B")
+        // B 已到期，留出对账时间；A 的慢速重试还没到点。
+        try await Task.sleep(for: .seconds(1))
+        #expect(try await rig.store.cueLine(second.line.id)?.deletedAt == nil)
+        #expect(try await rig.store.dueCueSchedules(at: .now).contains { $0.id == second.line.id })
+        try await rig.message(.cue, containing: "定时到点：#\(first.index) 核对发布结果 A")
+        try await eventually("B 随后失败，也等着持续重试") { waiting(second.line.id) }
+        try await rig.message(.cue, containing: "定时到点：#\(second.index) 核对发布结果 B")
+        try await eventually("两个定时各自完成") {
+            [first.line.id, second.line.id].allSatisfy { id in
+                keeper.rounds.contains { round in
+                    guard case .schedule(let fires) = round.wake else { return false }
+                    return fires.contains { $0.line == id } && round.finishedAt != nil && round.failure == nil
+                }
+            }
+        }
+        #expect(rig.model.errors == 2)
+        await rig.stop()
+    }
+
     /// 你说完话之后不久（缓存还热）没再说话：Cue 趁热巡视一次，不等冷巡视的空闲时长；这段空闲里只热巡视这一次。
     @Test func 缓存还热时趁热巡视一次() async throws {
         let rig = try await Rig(

@@ -25,8 +25,8 @@ nonisolated final class FakeModel: Sendable {
     /// 回过最后一句的工具结果（工具调用之后这一轮就结束）
     private let finishedAfter = Mutex<[String]>([])
     /// 接下来几次请求（你的话与信封）报额度用完
-    private let quotaBlocked = Mutex(0)
-    func blockQuota(times: Int) { quotaBlocked.withLock { $0 = times } }
+    private let quotaBlocked = Mutex((left: 0, containing: String?.none))
+    func blockQuota(times: Int, containing: String? = nil) { quotaBlocked.withLock { $0 = (times, containing) } }
     /// 整理记忆的大脑收到过几次一直记着的（`<pinned>`）
     private let pinnedShown = Mutex(0)
     var tidyAsks: Int { pinnedShown.withLock { $0 } }
@@ -195,9 +195,10 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送登录页的修复"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         // 额度用完（各家额度类的说法之一，`PiErrorSummary` 认作额度）：说了这句的每次都是，`blockQuota` 之后的那几次也是
-        let blocked = quotaBlocked.withLock { left in
-            guard left > 0, last["role"] as? String == "user" else { return false }
-            left -= 1
+        let blocked = quotaBlocked.withLock { rule in
+            guard rule.left > 0, last["role"] as? String == "user",
+                  rule.containing.map(text.contains) ?? true else { return false }
+            rule.left -= 1
             return true
         }
         if blocked || last["role"] as? String == "user" && text.contains("请用到额度用完") {
