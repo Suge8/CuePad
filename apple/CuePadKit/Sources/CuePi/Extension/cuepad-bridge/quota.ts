@@ -90,6 +90,7 @@ function codexAccount(token: string): string {
 
 /** 能力与观测都经同一条 quota 消息；空查询不是新观测。
  * 身份：报告只归到这次结果实际用的、已解析出分区的授权；解析失败没有账号身份，记在这个提供方未解析的授权上（`scope=null`，不关联任何账号的数值）。
+ * 账号与来源一级的报告（能力、失败、网关清单）的 `provider` 是模型在 Pi 里的提供方，网关清单里各账号的是上游。
  * 时间：带结果的报告都带 `requestedAt`，取结果所属操作期间的一个时刻（主动查询取开始，回复取收到），CuePad 据此只让后开始的覆盖先结束的。 */
 export class QuotaFetcher {
 	/** 正在查的额度：几个客户端同时要时共用这一次 */
@@ -124,14 +125,14 @@ export class QuotaFetcher {
 				if (resolved.native) await this.fetchNative(model, resolved, requestedAt);
 				else await gatewayQuotas(model.provider, resolved, this.report, requestedAt);
 			} catch (error) {
-				this.report({ provider: identity.source ? "magpie" : model.provider, account: identity, status: "failed", windows: [], complete: false, requestedAt });
+				this.report({ provider: model.provider, account: identity, status: "failed", windows: [], complete: false, requestedAt });
 				throw error;
 			}
 		}));
 		return results.flatMap((result) => result.status === "rejected" ? [reason(result.reason)] : []);
 	}
 
-	/** 当前模型的提供方连同其余模型都解析过（`modelInfo`），它未解析就是解析失败；其他提供方的 OAuth 未解析只是还没查。 */
+	/** `modelInfo` 只不解析其他提供方的 OAuth（它们未解析只是还没查）；其余未解析的都是解析失败。 */
 	capabilities(models: { provider: string; account: Account | null }[], currentProvider: string | undefined) {
 		const seen = new Set<string>();
 		for (const model of models) {
@@ -140,8 +141,8 @@ export class QuotaFetcher {
 			if (seen.has(key)) continue;
 			seen.add(key);
 			const supported = model.account.source || (model.account.kind === "oauth" && QUOTA_PROVIDERS[model.provider]);
-			const unresolved = model.provider === currentProvider && !model.account.scope;
-			this.report({ provider: model.account.source ? "magpie" : model.provider, account: model.account, status: unresolved ? "failed" : supported ? "unobserved" : "unsupported", windows: [], complete: false });
+			const failed = !model.account.scope && (model.provider === currentProvider || model.account.kind !== "oauth");
+			this.report({ provider: model.provider, account: model.account, status: failed ? "failed" : supported ? "unobserved" : "unsupported", windows: [], complete: false });
 		}
 	}
 

@@ -43,7 +43,7 @@ export async function gatewayQuotas(provider: string, resolved: Awaited<ReturnTy
 	headers.set("Accept", "application/json");
 	const response = await fetch(`${resolved.baseUrl}/magpie/quotas`, { headers, signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "error" });
 	if ([404, 405, 501].includes(response.status)) {
-		report({ provider: "magpie", account: resolved.identity, status: "unsupported", windows: [], complete: true, requestedAt });
+		report({ provider, account: resolved.identity, status: "unsupported", windows: [], complete: true, requestedAt });
 		return;
 	}
 	if (!response.ok) throw new Error(`${provider}: quota HTTP ${response.status}`);
@@ -70,5 +70,5 @@ export async function gatewayQuotas(provider: string, resolved: Awaited<ReturnTy
 		accounts.push({ provider: card.provider, account: identity, status, windows: observedAt === null ? [] : windows, complete: true,
 			...(observedAt === null ? { details: { kind: details.kind, plan: details.plan, values: [] } } : { observedAt, details }) });
 	}
-	report({ provider: "magpie", account: resolved.identity, status: "unobserved", windows: [], complete: true, requestedAt, activeScopes, accounts });
+	report({ provider, account: resolved.identity, status: "unobserved", windows: [], complete: true, requestedAt, activeScopes, accounts });
 }

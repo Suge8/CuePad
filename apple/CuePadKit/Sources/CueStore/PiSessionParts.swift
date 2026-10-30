@@ -82,20 +82,24 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
   public var name: String
   public var thinkingLevels: [PiThinkingLevel]
   public var acceptsImages: Bool?
+  /// 这一次解析出的授权（未解析时 `scope` 为 nil）；额度只按它关联。
   public var account: PiAccount?
+  /// `account` 未解析时，这个会话最近一次证明的授权：只用来保留它的额度记录（`CueStore.retainQuotaSources`），不关联额度。
+  public var proven: PiAccount?
   public var id: PiModelKey { key }
 
-  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel], acceptsImages: Bool? = nil, account: PiAccount? = nil) {
+  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel], acceptsImages: Bool? = nil, account: PiAccount? = nil, proven: PiAccount? = nil) {
     self.key = key
     self.name = name
     self.thinkingLevels = thinkingLevels
     self.acceptsImages = acceptsImages
     self.account = account
+    self.proven = proven
   }
 
   private enum CodingKeys: String, CodingKey {
     case provider, id, name
-    case thinking, images, account
+    case thinking, images, account, proven
   }
 
   public init(from decoder: any Decoder) throws {
@@ -104,7 +108,8 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
       key: PiModelKey(provider: try c.decode(String.self, forKey: .provider), id: try c.decode(String.self, forKey: .id)),
       name: try c.decode(String.self, forKey: .name),
       thinkingLevels: try c.decode([String].self, forKey: .thinking).compactMap(PiThinkingLevel.init(rawValue:)),
-      acceptsImages: try c.decodeIfPresent(Bool.self, forKey: .images), account: try c.decodeIfPresent(PiAccount.self, forKey: .account))
+      acceptsImages: try c.decodeIfPresent(Bool.self, forKey: .images), account: try c.decodeIfPresent(PiAccount.self, forKey: .account),
+      proven: try c.decodeIfPresent(PiAccount.self, forKey: .proven))
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -115,6 +120,7 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
     try c.encode(thinkingLevels.map(\.rawValue), forKey: .thinking)
     try c.encodeIfPresent(acceptsImages, forKey: .images)
     try c.encodeIfPresent(account, forKey: .account)
+    try c.encodeIfPresent(proven, forKey: .proven)
   }
 }
 

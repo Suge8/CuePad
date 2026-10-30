@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
-import { account, unresolvedAccount, type Account } from "./account.ts";
+import { account, provenAccount, unresolvedAccount, type Account } from "./account.ts";
 
 /** 需要"命令上下文"（切换会话、新会话、重载、克隆）的操作只能在命令处理函数里做：本扩展注册这一条内部命令 `/cuepad <动作>`，
  * 经 `sendUserMessage("/cuepad <动作>", { expandPromptTemplates: true })` 触发。只有这条内部命令本身不列进给手机的清单；
@@ -97,8 +97,9 @@ function thinkingLevels(model: Model): ThinkingLevel[] {
 	});
 }
 
-function describeModel(model: Model, account: Account | null) {
-	return { account, provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model), images: model.input.includes("image") };
+/** `account` 是这一次解析的结果；没解析出分区时 `proven` 带上这个模型最近一次证明的授权，CuePad 只据此保留它的记录。 */
+function describeModel(model: Model, account: Account | null, proven: Account | undefined) {
+	return { account, ...(proven && !account?.scope ? { proven } : {}), provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model), images: model.input.includes("image") };
 }
 
 /** 此刻可选的模型：与 Pi 的 /model 一致——配了范围（`--models`、`enabledModels`）就是范围内的，否则是已配好密钥的全部；当前模型总在其中。 */
@@ -129,7 +130,7 @@ export async function modelInfo(pi: ExtensionAPI, ctx: ExtensionContext): Promis
 		if (model.provider !== current?.provider && ctx.modelRegistry.isUsingOAuth(model)) accounts.set(key(model), unresolvedAccount(ctx, model));
 		else await resolve(model);
 	}));
-	const describe = (model: Model) => describeModel(model, accounts.get(key(model)) ?? null);
+	const describe = (model: Model) => describeModel(model, accounts.get(key(model)) ?? null, provenAccount(ctx, model));
 	return {
 		model: current ? describe(current) : null,
 		thinking: current ? pi.getThinkingLevel() : null,
