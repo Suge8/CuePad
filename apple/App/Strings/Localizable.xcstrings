@@ -128,6 +128,38 @@
         }
       }
     },
+    "%@ %@（%@ 重置），我换到 %@ 接着干。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: %2$@ (resets %3$@). Switching to %4$@ to keep going."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@（%3$@ 重置），我换到 %4$@ 接着干。"
+          }
+        }
+      }
+    },
+    "%@ %@，我换到 %@ 接着干。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: %2$@. Switching to %3$@ to keep going."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@，我换到 %3$@ 接着干。"
+          }
+        }
+      }
+    },
     "%@ %lld" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8147,6 +8179,22 @@
         }
       }
     },
+    "又能干活了。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I'm back to work."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "又能干活了。"
+          }
+        }
+      }
+    },
     "反缩进" : {
       "localizations" : {
         "en" : {
@@ -12627,18 +12675,18 @@
         }
       }
     },
-    "我起不来了：%@\n你再发一条消息，我就再试一次。" : {
+    "我起不来了：%@\n我隔一阵会自己再试；你发条消息，我马上再试。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I can't start: %@\nSend me another message and I'll try again."
+            "value" : "I can't start: %@\nI'll keep retrying on my own. Send me a message to retry right away."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "我起不来了：%@\n你再发一条消息，我就再试一次。"
+            "value" : "我起不来了：%@\n我隔一阵会自己再试；你发条消息，我马上再试。"
           }
         }
       }
@@ -21355,6 +21403,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没醒过"
+          }
+        }
+      }
+    },
+    "这一轮 %lld 分钟没有动静，大脑像是卡住了" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No activity for %lld minute this turn. Cue's model seems stuck."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No activity for %lld minutes this turn. Cue's model seems stuck."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这一轮 %lld 分钟没有动静，大脑像是卡住了"
           }
         }
       }

@@ -75,7 +75,7 @@ extension CueKeeper {
         guard let agent,
               let option = model.flatMap(kind.modelKey).flatMap({ key in agent.models.first { $0.key == key } }) ?? agent.defaultModel,
               let quotas = try? await store.accountQuotas(),
-              let quota = PiModelLabel.quota(option, quotas: quotas)
+              let quota = option.quota(in: quotas)
         else { return nil }
         return quota.binding(at: .now, model: option.key.id)?.resetsAt
     }
@@ -89,7 +89,7 @@ extension CueKeeper {
         await say(.cue, ShownText("我起不来了：\(reason.embedded)\n我隔一阵会自己再试；你发条消息，我马上再试。"), urgent: true)
     }
 
-    /// 说过起不来之后大脑又起好了。
+    /// 说过起不来之后第一轮好好做完：起好又挂、反复起不来的都不算，这次故障里只说这一句。
     func recovered() async {
         guard outageTold else { return }
         outageTold = false

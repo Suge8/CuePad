@@ -77,5 +77,38 @@ extension CueHostTests {
         #expect(!keeper.rounds.contains { $0.sent.contains { $0.contains(/\n#\d+-\d+\n#\d+\s/) } })
         await rig.stop()
     }
+
+    /// 一直记着的过了软线（上次整理之后只新钉了几条，不够"新钉多了"那条线）：后台另起的大脑拿到钉着的全部行整理
+    /// （假模型看了觉得都不用动），跑完记下交给它的那组；之后记忆再变、那组没变就不再交给它（合待合并的块时也不带）；
+    /// 再钉一条，那组变了、仍过软线，再整理一次。
+    @Test func 一直记着的过了软线_后台整理_那组不变不再整理() async throws {
+        let tidiedFile = { (rig: Rig) in rig.app.directory.appending(path: "Library/Cue/tidied.json") }
+        // 一条至多 280 字节：十五条合起来刚过软线（`CueMemoryLine.pinnedSoft`）；前十一条算上次整理过的
+        let long = String(repeating: "测", count: 89)
+        let rig = try await Rig(prepare: { rig in
+            var ids: [UUID] = []
+            for index in 0..<15 { ids.append(try await rig.store.noteCueLine("规矩 \(index) \(long)", source: .you, pinned: true).line.id) }
+            let file = tidiedFile(rig)
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(Array(ids.prefix(11))).write(to: file)
+        })
+        func tidied() -> Set<UUID> { (try? JSONDecoder().decode(Set<UUID>.self, from: Data(contentsOf: tidiedFile(rig)))) ?? [] }
+        func pinned() async throws -> Set<UUID> { Set(try await rig.store.cueMemory().lines.filter(\.pinned).map(\.id)) }
+        try await eventually("整理过一次、记下那组") {
+            let set = try await pinned()
+            return rig.model.tidyAsks == 1 && tidied() == set
+        }
+
+        for index in 0..<(CueMemoryView.budget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
+        try await eventually("后台合了待合并的块") { try await !rig.store.cueMemory().summaries.isEmpty }
+        #expect(rig.model.tidyAsks == 1)
+
+        try await rig.store.noteCueLine("规矩 15 \(long)", source: .you, pinned: true)
+        try await eventually("那组变了，再整理一次") {
+            let set = try await pinned()
+            return rig.model.tidyAsks == 2 && tidied() == set && set.count == 16
+        }
+        await rig.stop()
+    }
 }
 #endif

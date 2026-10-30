@@ -24,6 +24,9 @@ nonisolated final class FakeModel: Sendable {
     private let asksOnEnable: Bool
     /// 回过最后一句的工具结果（工具调用之后这一轮就结束）
     private let finishedAfter = Mutex<[String]>([])
+    /// 整理记忆的大脑收到过几次一直记着的（`<pinned>`）
+    private let pinnedShown = Mutex(0)
+    var tidyAsks: Int { pinnedShown.withLock { $0 } }
     /// 不回的请求的连接：留着，免得释放时断开
     private let hung = Mutex<[NWConnection]>([])
 
@@ -194,10 +197,13 @@ nonisolated final class FakeModel: Sendable {
             return .error("You have hit your usage limit.")
         }
         if text.contains("请慢慢想"), once("hang") { return .hang }
-        // 后台整理记忆的大脑：输入以待合并的块开头，合第一块
-        if let block = text.firstMatch(of: /^#(\d+)-(\d+)\n/) {
+        // 后台整理记忆的大脑：有待合并的块就合第一块；一直记着的（`<pinned>`）只看一眼、什么都不动
+        let dreaming = last["role"] as? String == "user" && (text.hasPrefix("<merge>") || text.hasPrefix("<pinned>"))
+        if dreaming, text.contains("<pinned>") { pinnedShown.withLock { $0 += 1 } }
+        if let block = text.firstMatch(of: /<merge>\n#(\d+)-(\d+)\n/) {
             return call("merge", ["lo": Int(block.1)!, "hi": Int(block.2)!, "text": "合起来的偏好"])
         }
+        if dreaming { return say("都不用动") }
         if text.contains("三步并行"), let board = text.firstMatch(of: /在做 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
             return text.contains("醒来：会话有动静") ? tell("看板：\n" + board) : say("看板：\n" + board)
         }

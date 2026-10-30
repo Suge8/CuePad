@@ -38,7 +38,6 @@ extension CueKeeper {
             phase = .running(Shift(id: id, brain: brain, pinned: memory.pinned.map(\.line.id), failures: failures))
             Task { for await event in brain.events { input.yield(.brain(id, event)) } }
             Self.log.notice("Cue 第 \(id) 个班次开始（\(runtime.rawValue, privacy: .public)）")
-            await recovered()
         } catch {
             await broke(ShownText(error))
         }
@@ -159,6 +158,7 @@ extension CueKeeper {
             } else {
                 setback = nil
                 tried = []
+                await recovered()
                 await markTold(finished.round)
                 if let held = finished.held { progress.held = held }
                 await advanceBaseline(from: finished.mark, seen: finished.round.startedAt)

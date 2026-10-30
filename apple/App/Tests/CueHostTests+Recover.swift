@@ -11,7 +11,7 @@ import Testing
 /// 出了问题 Cue 自己接着干：起不来不停在终态、挂住的一轮被看门狗重起、额度用完换一家 Agent、缓存还热时趁热巡视。
 extension CueHostTests {
     /// 大脑没了又起不来（这台 Mac 上找不到 Pi）：快的几次重试用完，告诉你一次起不来，此刻是出错；之后隔一阵自己再试，
-    /// Pi 回来了就起好，说一句又能干活了，你的话照常答。
+    /// Pi 回来了就起好；之后第一轮好好做完（答你的话）才说一句又能干活了。
     @Test func 起不来后隔一阵自己再试_起好了说又能干活了() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.milliseconds(500)] })
         let first = try #require(rig.brainPIDs.first)
@@ -23,9 +23,11 @@ extension CueHostTests {
         try await eventually("转慢的之后还在试") { rig.launches.attempts >= before + 6 }
         try await eventually("健康是等着重起") { rig.health?.phase == .restarting && rig.health?.nextRetry != nil }
         rig.launches.set(open: true)
-        try await rig.message(.cue, containing: "又能干活了")
+        try await eventually("自己起好了") { rig.health?.phase == .running }
+        #expect(try await rig.count("又能干活了") == 0)
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
+        try await rig.message(.cue, containing: "又能干活了")
         #expect(try await rig.count("我起不来了") == 1)
         #expect(try await rig.count("又能干活了") == 1)
         try await eventually("健康是值班中") { rig.health?.phase == .running }
