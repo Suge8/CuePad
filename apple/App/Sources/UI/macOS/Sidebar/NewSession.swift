@@ -35,6 +35,7 @@ struct NewSessionForm: View {
     /// 这次指定的模型与思考强度（nil 是这家的默认）。
     @State private var model: PiModelKey?
     @State private var thinking: PiThinkingLevel?
+    @State private var fast = false
     @State private var prompt = ""
     @State private var stage = Stage.idle
 
@@ -71,7 +72,7 @@ struct NewSessionForm: View {
                 PiConfigControls(choice: choice(agents, agent)) {
                     services.settings.lastAgent = $0
                     model = nil
-                } chooseModel: { model = $0 } chooseThinking: { thinking = $0 }
+                } chooseModel: { model = $0 } chooseThinking: { thinking = $0 } chooseFast: { fast = $0 }
                 .disabled(launching)
             }
             HStack(spacing: 8) {
@@ -128,7 +129,7 @@ struct NewSessionForm: View {
     }
 
     private func choice(_ agents: MacAgents, _ agent: AgentKind) -> AgentModelChoice {
-        AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking)
+        AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking, fast: fast)
     }
 
     private func start(_ place: ProjectFolders.LaunchPlace, _ choice: AgentModelChoice) {
@@ -140,7 +141,7 @@ struct NewSessionForm: View {
             do {
                 let id = try await workspace.startSession(
                     in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.shownName, agent: agent,
-                    model: choice.model, thinking: choice.shownThinking
+                    model: choice.model, thinking: choice.shownThinking, fast: choice.launchFast
                 ) { stage = .launching($0) }
                 stage = .idle
                 opened(id)

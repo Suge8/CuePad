@@ -207,11 +207,16 @@ extension PiBridge {
     /// 换该会话的模型、思考强度或会话名（至少给一项，会话名不能是空白）：先换模型再设强度，强度按新模型支持的范围夹取。
     /// 模型不在 Agent 的模型表里抛 `unknownModel`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
     public func configure(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, name: String? = nil, in id: PiSession.ID) async throws {
-        let name = name?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard model != nil || thinking != nil || name != nil, name?.isEmpty != true else { throw PiBridgeError.rejected("bad_request") }
-        var needs: AgentCapabilities = model != nil || thinking != nil ? .model : []
-        if name != nil { needs.insert(.rename) }
-        try await control(id, needs: needs).configure(model: model, thinking: thinking, name: name, in: id)
+        try await configure(PiConfig(model: model, thinking: thinking, name: name), in: id)
+    }
+
+    public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
+        var config = config
+        config.name = config.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard config.model != nil || config.thinking != nil || config.fast != nil || config.name != nil, config.name?.isEmpty != true else { throw PiBridgeError.rejected("bad_request") }
+        var needs: AgentCapabilities = config.model != nil || config.thinking != nil || config.fast != nil ? .model : []
+        if config.name != nil { needs.insert(.rename) }
+        try await control(id, needs: needs).configure(config, in: id)
     }
 
     /// 请该会话查一次所有 OAuth 订阅的额度：查到的随 `changes()` 的 `.quota` 报出（与回复里带回的同一条路），

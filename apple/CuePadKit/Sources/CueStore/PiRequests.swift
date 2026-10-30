@@ -78,18 +78,20 @@ public struct PiAnswer: Sendable, Equatable, StoredJSON {
 public struct PiConfig: Sendable, Equatable, StoredJSON {
   public var model: PiModelKey?
   public var thinking: PiThinkingLevel?
+  public var fast: Bool?
   /// 会话名（Pi 的 `/name`）：会话设置，与模型、思考强度同一条路。
   public var name: String?
 
-  public init(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, name: String? = nil) {
+  public init(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool? = nil, name: String? = nil) {
     self.model = model
     self.thinking = thinking
+    self.fast = fast
     self.name = name
   }
 
   /// 什么都不改、或强度是更新版本的新值（解码不了）时为 nil。
   init?(stored: String) {
-    guard let value = JSONColumn.decode(Self.self, from: stored), value.model != nil || value.thinking != nil || value.name != nil else {
+    guard let value = JSONColumn.decode(Self.self, from: stored), value.model != nil || value.thinking != nil || value.fast != nil || value.name != nil else {
       return nil
     }
     self = value
@@ -120,16 +122,32 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
   public internal(set) var name: String?
   public var model: PiModelKey?
   public var thinking: PiThinkingLevel?
+  public var fast: Bool
 
   public init(
-    project: UUID, prompt: String?, token: String, agent: AgentKind = .pi, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil
+    project: UUID, prompt: String?, token: String, agent: AgentKind = .pi, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false
   ) {
     self.project = project
     self.prompt = prompt
     self.token = token
     self.model = model
     self.thinking = thinking
+    self.fast = fast
     self.agent = agent
+  }
+
+  private enum CodingKeys: String, CodingKey { case project, prompt, token, agent, name, model, thinking, fast }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    project = try c.decode(UUID.self, forKey: .project)
+    prompt = try c.decodeIfPresent(String.self, forKey: .prompt)
+    token = try c.decode(String.self, forKey: .token)
+    agent = try c.decodeIfPresent(AgentKind.self, forKey: .agent)
+    name = try c.decodeIfPresent(String.self, forKey: .name)
+    model = try c.decodeIfPresent(PiModelKey.self, forKey: .model)
+    thinking = try c.decodeIfPresent(PiThinkingLevel.self, forKey: .thinking)
+    fast = try c.decodeIfPresent(Bool.self, forKey: .fast) ?? false
   }
 }
 

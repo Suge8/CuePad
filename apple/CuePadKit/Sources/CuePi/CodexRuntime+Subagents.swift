@@ -14,6 +14,11 @@ extension CodexRuntime {
         // 托管会话的一轮归它的驱动（`event`），下面两项只管终端会话
         let terminal = hosted[pid] == nil
         switch method {
+        case "thread/settings/updated":
+            if let settings = params["threadSettings"] {
+                bridge.update(session.id) { $0.fast = settings["serviceTier"]?.string == "priority" }
+            }
+            return
         case "thread/name/updated":
             bridge.update(session.id) { $0.name = params["threadName"]?.string }
             return

@@ -17,7 +17,7 @@ import Foundation
 ///   模型表声明了 v2 的模型照样开着）、协作模式说明（`include_collaboration_mode_instructions`）也都关掉，见 `overrides`；
 ///   `<CODEX_HOME>/AGENTS.md` 没有开关（只换配置目录才挡得住，换了会丢登录），用户写了就会进来；
 /// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
-/// - 模型与思考强度每轮随 `turn/start` 给（就地换就是改下一轮给的）：强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`）；
+/// - 模型与思考强度每轮随 `turn/start` 给（就地换就是改下一轮给的）；fast 随线程的 `serviceTier` 给，强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`）；
 /// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮。
 @MainActor
 final class CodexBrain: HostedSession {
@@ -39,6 +39,7 @@ final class CodexBrain: HostedSession {
     /// 在用的模型（没给时是 `thread/start` 定下的默认）与要的强度：每轮随 `turn/start` 给
     private var model: CodexModel?
     private var level: PiThinkingLevel?
+    private var fast = false
 
     var events: AsyncStream<TurnEvent> { outlet.events }
     var seesImages: Bool { model?.seesImages == true }
@@ -63,10 +64,13 @@ final class CodexBrain: HostedSession {
                 "baseInstructions": .string(config.systemPrompt), "config": .object(overrides),
             ]
             if let model = config.model { params["model"] = .string(model) }
+            params["serviceTier"] = config.fast ? "priority" : "default"
             threadParams = .object(params)
             let started = try await driver.open("thread/start", threadParams)
             models = try await CodexModel.list(rpc, hidden: true)
             model = models.first { $0.id == started["model"]?.string }
+            fast = config.fast
+            guard !fast || model?.supportsFast == true else { throw HostedSessionError.rejected(String(localized: "当前模型不支持加速")) }
             level = config.effort
         } catch {
             await outlet.abandon(stop())
@@ -83,6 +87,7 @@ final class CodexBrain: HostedSession {
         guard driver.thread != nil else { throw HostedSessionError.notRunning }
         if let id {
             guard let found = models.first(where: { $0.id == id }) else { throw HostedSessionError.rejected(String(localized: "Codex 没有模型 \(id)")) }
+            guard !fast || found.supportsFast else { throw HostedSessionError.rejected(String(localized: "当前模型不支持加速")) }
             model = found
         }
         if let effort { level = effort }

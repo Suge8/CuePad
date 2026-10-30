@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { account, unresolvedAccount, type Account } from "./account.ts";
+import { supportsFast } from "./fast.ts";
 
 /** 需要"命令上下文"（切换会话、新会话、重载、克隆）的操作只能在命令处理函数里做：本扩展注册这一条内部命令 `/cuepad <动作>`，
  * 经 `sendUserMessage("/cuepad <动作>", { expandPromptTemplates: true })` 触发。只有这条内部命令本身不列进给手机的清单；
@@ -66,7 +67,7 @@ export type Info = {
 	name: string | null; firstMessage: string | null; question: Question | null;
 	subagents: Subagent[];
 	/** 当前模型、思考强度与可换的模型（Pi 里已配好密钥的）：手机据此选 */
-	model: ReturnType<typeof describeModel> | null; thinking: ThinkingLevel | null; models: ReturnType<typeof describeModel>[];
+	model: ReturnType<typeof describeModel> | null; thinking: ThinkingLevel | null; fast: boolean; models: ReturnType<typeof describeModel>[];
 	/** 上下文余量：已用 token（压缩后到下一次回答前未知，为 null）与当前模型的窗口；没有模型为 null */
 	context: { tokens: number | null; window: number } | null;
 	/** 此刻能用的斜杠命令：能执行的内置命令 + 扩展命令 + 提示词模板 + skill */
@@ -98,7 +99,7 @@ function thinkingLevels(model: Model): ThinkingLevel[] {
 }
 
 function describeModel(model: Model, account: Account | null) {
-	return { account, provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model), images: model.input.includes("image") };
+	return { account, provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model), images: model.input.includes("image"), supportsFast: supportsFast(model) };
 }
 
 /** 此刻可选的模型：与 Pi 的 /model 一致——配了范围（`--models`、`enabledModels`）就是范围内的，否则是已配好密钥的全部；当前模型总在其中。 */

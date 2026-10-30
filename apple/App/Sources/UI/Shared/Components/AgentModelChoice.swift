@@ -7,12 +7,12 @@ extension PiConfigControls where Trailing == EmptyView {
     /// 换了家时模型回到那家的默认也由调用方写（新会话记在表单里，Cue 记在设置里）。
     init(
         choice: AgentModelChoice, opening: Binding<PiConfigPick?> = .constant(nil), chooseAgent: @escaping (AgentKind) -> Void,
-        chooseModel: @escaping (PiModelKey?) -> Void, chooseThinking: @escaping (PiThinkingLevel) -> Void
+        chooseModel: @escaping (PiModelKey?) -> Void, chooseThinking: @escaping (PiThinkingLevel) -> Void, chooseFast: @escaping (Bool) -> Void = { _ in }
     ) {
         self.init(
             agent: choice.agent.map { PiAgentPick(kinds: choice.agents.map(\.kind), current: $0, choose: chooseAgent) },
-            models: choice.menu(choose: chooseModel), shown: PiConfigShown(model: choice.current, thinking: choice.shownThinking, pending: false),
-            unnamed: "默认模型", levels: choice.levels, opening: opening, chooseThinking: chooseThinking)
+            models: choice.menu(choose: chooseModel), shown: PiConfigShown(model: choice.current, thinking: choice.shownThinking, fast: choice.fast, pending: false),
+            unnamed: "默认模型", levels: choice.levels, opening: opening, chooseThinking: chooseThinking, chooseFast: chooseFast)
     }
 }
 
@@ -20,8 +20,7 @@ extension PiConfigControls where Trailing == EmptyView {
 /// - 能选的几家是那台 Mac 上能用的（`MacAgents`，调用方再按自己的条件筛，如 Cue 只列有模型可选的）；当前那家不在里面时照样写它（胶囊写它的名字、菜单里不打勾）。
 /// - 模型只列当前那家在那台上能选的，按提供方分组（同会话页）；不指定时用的那项标着默认，选它写回 nil：跟着这家的默认走，它换了默认也跟着换。
 ///   指定了却不在清单里（清单变了）照指定的 id 显示。
-/// - 思考强度的档跟着当前模型：在清单里就是它支持的档；不知道时取这家各模型的档的并集，再没有是全部档（起会话、大脑起来时都按模型夹取，
-///   `PiThinkingLevel.clamped`）；显示的当前档同样夹到这一集合里。没指定是"默认"。
+/// - 思考强度只列当前模型上报的档；模型不在清单里时不出控件。显示的当前档同样夹到这一集合里。没指定是“默认”。
 nonisolated struct AgentModelChoice: Equatable, Sendable {
     let agents: [MacAgent]
     /// 当前那家；一家都没有为 nil（不出 Agent 胶囊）。
@@ -29,6 +28,7 @@ nonisolated struct AgentModelChoice: Equatable, Sendable {
     /// 指定的模型；nil 是这家的默认。
     let model: PiModelKey?
     let thinking: PiThinkingLevel?
+    var fast: Bool = false
 
     private var brain: MacAgent? { agent.flatMap { kind in agents.first { $0.kind == kind } } }
 
@@ -39,12 +39,11 @@ nonisolated struct AgentModelChoice: Equatable, Sendable {
     }
 
     var levels: [PiThinkingLevel] {
-        if let listed = current.flatMap({ current in brain?.models.first { $0.key == current.key } }) { return listed.thinkingLevels }
-        let supported = Set((brain?.models ?? []).flatMap(\.thinkingLevels))
-        return supported.isEmpty ? PiThinkingLevel.allCases : PiThinkingLevel.allCases.filter(supported.contains)
+        current.flatMap { current in brain?.models.first { $0.key == current.key }?.thinkingLevels } ?? []
     }
 
     var shownThinking: PiThinkingLevel? { thinking.map { $0.clamped(to: levels) } }
+    var launchFast: Bool { fast && current?.supportsFast == true }
 
     /// 选了不指定时用的那项写回 nil：跟着这家的默认走。
     @MainActor func menu(choose: @escaping (PiModelKey?) -> Void) -> PiModelMenu {

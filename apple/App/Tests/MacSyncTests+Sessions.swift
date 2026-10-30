@@ -1,6 +1,7 @@
 #if os(macOS)
+import CloudKit
 import CueStore
-import CueSync
+@testable import CueSync
 import Foundation
 import Testing
 @testable import CuePad
@@ -8,6 +9,49 @@ import Testing
 @testable import CuePi
 
 extension MacSyncTests {
+    @Test func 手机经同步切换Mac在线会话的加速_结果与状态回到手机() async throws {
+        let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
+        let mac = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
+        let phone = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, host: "phone")
+        let changes = mac.pi.changes()
+        try mac.pi.start()
+        _ = try await mac.runtimeRecorder(on: TestApp.hostID)
+        let recording = Task { try await mac.services.consumePiChanges(changes) }
+        for side in [mac, phone] { side.services.startSync() }
+        defer {
+            recording.cancel()
+            mac.pi.stop()
+            for side in [mac, phone] { side.services.cancelBackgroundWork() }
+        }
+        try await mac.services.executor.start()
+        let ext = try await mac.host.connect("fast", cwd: mac.directory.path)
+        defer { ext.close(bye: "quit") }
+        ext.onCommand = { [weak ext] _, command in
+            if command["t"] as? String == "config", let fast = command["fast"] as? Bool {
+                ext?.sendInfo(["fast": fast])
+            }
+            return ["ok": true]
+        }
+        let stateID = PiSessionState.recordID(sessionID: "fast")
+        _ = try await eventually(mac.services.store, { try $0.allPiSessionStates().first }, until: { $0?.sessionID == "fast" })
+        await mac.services.upload(stateID)
+        await phone.services.syncNow()
+        let session = try #require(try await eventually(phone.services.store, { try $0.allPiSessionStates().first }, until: { $0?.sessionID == "fast" }))
+
+        let request = try await phone.services.configure(PiConfig(fast: true), for: session)
+        await phone.services.upload(request.id)
+        await mac.services.syncNow()
+        let result = try #require(try await eventually(mac.services.store, { try $0.deliveryRequest(request.id) }, until: { $0?.isOpen == false }))
+        #expect(result.status == .known(.succeeded))
+        try #require(ext.commands.last?.json["fast"] as? Bool == true)
+        _ = try await eventually(mac.services.store, { try $0.allPiSessionStates().first?.fast }, until: { $0 == true })
+        await mac.services.upload(stateID, request.id)
+        await phone.services.syncNow()
+        let received = try #require(try await eventually(phone.services.store, { try $0.deliveryRequest(request.id) }, until: { $0?.isOpen == false }))
+        #expect(received.status == .known(.succeeded))
+        #expect(try await phone.services.store.allPiSessionStates().first?.fast == true)
+    }
+
     func launched(_ launch: PiLaunch, title: String = "app", card: UUID? = nil) async throws -> DeliveryRequest {
         try await services.executor.start()
         let request = try await services.store.requestLaunch(launch, title: title, on: TestApp.hostID, card: card)

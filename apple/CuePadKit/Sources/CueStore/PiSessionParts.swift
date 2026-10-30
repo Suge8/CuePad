@@ -76,26 +76,30 @@ public struct PiModelKey: Sendable, Hashable, Codable {
 }
 
 /// 会话可选的一个模型：标识、显示名，它支持的思考强度（不支持思考的只有 `off`；不认识的新强度读出时丢掉），以及能不能看图
-/// （`nil` 是 Agent 没报，当作能）。JSON 里 provider、id 与 name 平铺，强度叫 `thinking`、看图叫 `images`（Pi 桥上报的格式同此）。
+/// （`nil` 是 Agent 没报，当作能）。`supportsFast` 与思考档同由运行时上报：Codex 读 `serviceTiers`，Pi 看模型的 Responses API；
+/// 从 CuePad 切到不支持的模型会关闭 fast。Claude Code 的现有控制通道未确认能可靠切换，OpenCode 与 Grok Build 本次不接。
+/// JSON 里 provider、id 与 name 平铺，强度叫 `thinking`、看图叫 `images`。
 public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
   public var key: PiModelKey
   public var name: String
   public var thinkingLevels: [PiThinkingLevel]
   public var acceptsImages: Bool?
   public var account: PiAccount?
+  public var supportsFast: Bool
   public var id: PiModelKey { key }
 
-  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel], acceptsImages: Bool? = nil, account: PiAccount? = nil) {
+  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel], acceptsImages: Bool? = nil, account: PiAccount? = nil, supportsFast: Bool = false) {
     self.key = key
     self.name = name
     self.thinkingLevels = thinkingLevels
     self.acceptsImages = acceptsImages
     self.account = account
+    self.supportsFast = supportsFast
   }
 
   private enum CodingKeys: String, CodingKey {
     case provider, id, name
-    case thinking, images, account
+    case thinking, images, account, supportsFast
   }
 
   public init(from decoder: any Decoder) throws {
@@ -104,7 +108,8 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
       key: PiModelKey(provider: try c.decode(String.self, forKey: .provider), id: try c.decode(String.self, forKey: .id)),
       name: try c.decode(String.self, forKey: .name),
       thinkingLevels: try c.decode([String].self, forKey: .thinking).compactMap(PiThinkingLevel.init(rawValue:)),
-      acceptsImages: try c.decodeIfPresent(Bool.self, forKey: .images), account: try c.decodeIfPresent(PiAccount.self, forKey: .account))
+      acceptsImages: try c.decodeIfPresent(Bool.self, forKey: .images), account: try c.decodeIfPresent(PiAccount.self, forKey: .account),
+      supportsFast: try c.decodeIfPresent(Bool.self, forKey: .supportsFast) ?? false)
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -115,6 +120,7 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
     try c.encode(thinkingLevels.map(\.rawValue), forKey: .thinking)
     try c.encodeIfPresent(acceptsImages, forKey: .images)
     try c.encodeIfPresent(account, forKey: .account)
+    if supportsFast { try c.encode(true, forKey: .supportsFast) }
   }
 }
 
@@ -122,11 +128,13 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
 public struct PiModelState: Sendable, Equatable {
   public var model: PiModelOption?
   public var thinking: Open<PiThinkingLevel>?
+  public var fast: Bool?
   public var models: [PiModelOption]
 
-  public init(model: PiModelOption? = nil, thinking: Open<PiThinkingLevel>? = nil, models: [PiModelOption] = []) {
+  public init(model: PiModelOption? = nil, thinking: Open<PiThinkingLevel>? = nil, fast: Bool? = nil, models: [PiModelOption] = []) {
     self.model = model
     self.thinking = thinking
+    self.fast = fast
     self.models = models
   }
 }

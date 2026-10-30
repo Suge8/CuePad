@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
 import { clip, messageText, modelInfo, preview, type Question } from "./info.ts";
+import { supportsFast } from "./fast.ts";
 import { omitFromContext, landed, settleRetry, stripFromRequest } from "./retry.ts";
 import { claudeHeaderWindows, codexWindows, record } from "./quota.ts";
 import type { Session } from "./session.ts";
@@ -18,7 +19,11 @@ export function follow(session: Session): (() => void)[] {
 	const refreshContext = () => session.refreshContext();
 	const finishCompaction = () => session.finishCompaction();
 	return [
-		pi.on("model_select", async () => { session.updateInfo(await modelInfo(pi, ctx)); refreshContext(); }),
+		pi.on("model_select", async () => {
+			if (!supportsFast(ctx.model)) session.setFast(false);
+			session.updateInfo(await modelInfo(pi, ctx));
+			refreshContext();
+		}),
 		pi.on("thinking_level_select", () => session.updateInfo({ thinking: ctx.model ? pi.getThinkingLevel() : null })),
 		pi.on("before_agent_start", () => session.refreshCommands()),
 		pi.on("turn_end", refreshContext),
@@ -26,7 +31,7 @@ export function follow(session: Session): (() => void)[] {
 		pi.on("turn_end", omitFromContext),
 		pi.on("agent_settled", refreshContext),
 		pi.on("session_compact", refreshContext),
-		pi.on("session_tree", refreshContext),
+		pi.on("session_tree", () => { session.followBranch(); refreshContext(); }),
 		pi.on("session_info_changed", (event) => session.updateInfo({ name: event.name ?? null })),
 		pi.on("message_start", (event) => {
 			if (event.message.role !== "assistant") return;

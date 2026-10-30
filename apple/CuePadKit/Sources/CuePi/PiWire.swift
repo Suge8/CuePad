@@ -120,7 +120,7 @@ enum PiWire {
         private var updates: [@Sendable (inout PiSession) -> Void] = []
 
         private enum CodingKeys: String, CodingKey {
-            case name, firstMessage, question, subagents, model, thinking, models, context, commands
+            case name, firstMessage, question, subagents, model, thinking, fast, models, context, commands
         }
 
         init(from decoder: any Decoder) throws {
@@ -140,6 +140,7 @@ enum PiWire {
             }
             try field(.model, PiModelOption.self) { $0.model = $1 }
             try field(.thinking, Open<PiThinkingLevel>.self) { $0.thinking = $1 }
+            try field(.fast, Bool.self) { $0.fast = $1 }
             try field(.models, [PiModelOption].self) { $0.availableModels = $1 ?? [] }
             try field(.context, PiContextUsage.self) { $0.context = $1 }
             try field(.commands, [WireCommand].self) { $0.commands = $1?.map(\.command) ?? [] }
@@ -305,11 +306,12 @@ enum PiWire {
         var id: String
         var model: PiModelKey?
         var thinking: String?
+        var fast: Bool?
         var name: String?
     }
 
-    static func configCommand(id: String, model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) throws -> Data {
-        try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, name: name))
+    static func configCommand(id: String, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool? = nil, name: String?) throws -> Data {
+        try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, fast: fast, name: name))
     }
 
     private struct AnswerCommand<Value: Encodable>: Encodable {

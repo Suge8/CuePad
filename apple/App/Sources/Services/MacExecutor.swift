@@ -169,7 +169,7 @@ final class MacExecutor {
     private func configure(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws {
         guard let config = request.config else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新强度，或什么都不改
         let (_, id, _) = try await connect(request.target, access: access)
-        try await pi.configure(model: config.model, thinking: config.thinking, name: config.name, in: id)
+        try await pi.configure(config, in: id)
     }
 
     /// 命令带着卡片（发给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录。命令只有文字，带着的图片同文件一样写成路径。
@@ -239,6 +239,10 @@ final class MacExecutor {
         let clock = ContinuousClock(), began = clock.now
         let id = try await runtime(launch.opening).open(
             in: directory, launchToken: launch.token, name: launch.name, model: launch.model, thinking: launch.thinking)
+        if launch.fast || pi.session(id: id)?.fast == true {
+            do { try await pi.configure(PiConfig(fast: launch.fast), in: id) }
+            catch { try? await pi.end(id); throw error }
+        }
         let opened = clock.now
         // 开工到会话连上分两段记下：起进程上桥，与第一句落成会话里的消息（`AgentTimeouts`）；慢在哪一段、超时在哪一段从这里看
         defer {

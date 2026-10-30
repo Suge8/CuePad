@@ -62,7 +62,7 @@ extension DebugScene {
             // 歇着、Cue 已接手这次停下（转给了 cuepad，`seedCue`）：会话行与看板卡写 Cue 对它做的那件事
             ("docs", .settled, nil, "Career", DemoRecap(
                 lastPrompt: String(localized: "把简历里的项目经历按时间重排", table: "Demo"), lastReply: String(localized: "排好了，最近的在前。投送队列那段的数据要等补丁合进去再填。", table: "Demo"))),
-            // 终端里刚开、还没说过话
+            // CuePad 在后台新开的会话，还没说过话
             ("scratch", .settled, nil, "CuePad", DemoRecap()),
             ("piwork", .settled, nil, nil, DemoRecap(
                 lastPrompt: String(localized: "列出 piwork 目录下的文件", table: "Demo"), lastReply: String(localized: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md", table: "Demo"))),
@@ -85,7 +85,7 @@ extension DebugScene {
             try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
             try await recorder.end(sessionID: id)
         }
-        // 此刻的状态从几分钟前起（在问的等了多久、在跑的跑了多久、出错的停了多久都从这一刻算；不给就是写入这一刻："刚刚"）
+        // 各会话状态开始的时间距今几分钟
         let since: [String: TimeInterval] = [
             "deploy": 21, "rename": 14, "homepage": 9, "notes-edit": 4, "atlas": 3, "cuepad": 5, "review": 4.5, "migrate": 9, "billing": 19, "gateway": 7, "keychain": 26, "scratch": 2, "docs": 6,
         ]
@@ -105,7 +105,8 @@ extension DebugScene {
                     let start = Date.now.addingTimeInterval(-minutes * 60)
                     return PiTimes(stateSince: start, busySince: state.isWorking ? start : nil)
                 },
-                modelState: demoModels(for: demoAgents[id]), context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands(for: demoAgents[id]),
+                hosted: id == "scratch", modelState: demoModels(for: demoAgents[id], fast: id == "scratch" ? false : nil),
+                context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands(for: demoAgents[id]),
                 agent: demoAgents[id])
             try await store.writePiTranscript(PiTranscript(
                 sessionID: id, messages: messages,

@@ -85,12 +85,13 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     /// 当前模型、思考强度与可以换成的模型；未选模型时 `model` 与 `thinking` 为 nil
     public internal(set) var model: PiModelOption? = nil
     public internal(set) var thinking: Open<PiThinkingLevel>? = nil
+    public internal(set) var fast: Bool? = nil
     public internal(set) var availableModels: [PiModelOption] = []
     /// 上下文余量：没有模型时为 nil
     public internal(set) var context: PiContextUsage? = nil
     public internal(set) var commands: [PiSlashCommand] = []
 
-    public var modelState: PiModelState { PiModelState(model: model, thinking: thinking, models: availableModels) }
+    public var modelState: PiModelState { PiModelState(model: model, thinking: thinking, fast: fast, models: availableModels) }
 
     /// 从 CuePad 能对它做什么（与同步记录上的 `PiSessionState.capabilities` 同一条规则）。
     public var capabilities: AgentCapabilities { .of(agent, hosted: hosted, model: model) }
