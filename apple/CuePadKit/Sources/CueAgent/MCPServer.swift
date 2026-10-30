@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// Cue 的工具经 MCP 提供（`cuepad mcp`；后台整理记忆的大脑用 `cuepad mcp --dream`，只有 merge）：stdio，一行一个 JSON-RPC 消息。只做握手版：initialize、notifications/initialized、ping、
+/// Cue 的工具经 MCP 提供（`cuepad mcp`；后台整理记忆的大脑用 `cuepad mcp --dream`，只有 merge 与 tidy）：stdio，一行一个 JSON-RPC 消息。只做握手版：initialize、notifications/initialized、ping、
 /// tools/list、tools/call；不做 resources、prompts、sampling、tasks。请求按到达顺序一个个处理。
 public struct CueMCPServer: Sendable {
   let tools: CueTools

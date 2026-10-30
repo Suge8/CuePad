@@ -60,7 +60,7 @@ extension CueActivity {
     return Touch(kind: kind, name: name, task: named.task, session: named.session)
   }
 
-  /// 正在用时没碰哪一处（`step` 为 nil）的那一句：看板、记忆、对你说，读文件类照会话里的写法"工具 · 目标"。
+  /// 正在用时没碰哪一处（`step` 为 nil）的那一句：看板、记忆、设置、对你说，读文件类照会话里的写法"工具 · 目标"。
   /// `tool`、`arguments` 是大脑报的（`TurnEvent.tool`：去掉前缀的小写名字与 JSON 原文）。
   public static func detail(tool: String, arguments: String) -> String {
     let args = Parsed(arguments)
@@ -80,6 +80,7 @@ extension CueActivity {
       case "remind": return "定时"
       default: return "用记忆"
       }
+    case "setup": return setupWords(args)
     case "bash": return line(tool, args.line("command"))
     case "grep", "find", "glob": return line(tool == "glob" ? "find" : tool, args.line("pattern"))
     default: return line(tool, args.path.map { URL(filePath: $0).lastPathComponent })
@@ -122,10 +123,25 @@ extension CueActivity {
       case "pin": return item(.other, (args.raw["pinned"] as? Bool) == false ? "一条记忆不再一直记着" : "一条记忆一直记着")
       default: return item(.other, "memory")
       }
+    case "setup": return item(args.line("action") == "look" ? .read : .other, setupWords(args))
     case "bash": return item(.command, args.line("command") ?? tool)
     case "grep", "find", "glob": return item(.search, args.line("pattern") ?? tool)
     case "read": return item(.read, args.path.map { URL(filePath: $0).lastPathComponent } ?? tool)
     default: return item(.other, tool)
+    }
+  }
+
+  /// setup 的一次调用（正在用时那一句与经过里那一条同一句）："看设置 · quota""改大脑：agent=codex""建项目「官网」"。
+  static func setupWords(_ args: Parsed) -> String {
+    switch args.line("action") {
+    case "look": return "看设置" + (args.line("part").map { PiSessionState.detailSeparator + $0 } ?? "")
+    case "set":
+      let changed = ["agent", "model", "effort", "name"].compactMap { key in args.line(key).map { "\(key)=\($0)" } }
+        + [(args.raw["fast"] as? Bool).map { "fast=\($0)" }].compactMap(\.self)
+      return "改大脑" + (changed.isEmpty ? "" : "：" + changed.joined(separator: " "))
+    case "project": return ((args.raw["new"] as? Bool) == true ? "建项目" : "改项目") + "「\(args.line("project") ?? "")」"
+    case "tidy": return "整理技能与规则"
+    default: return "用设置"
     }
   }
 

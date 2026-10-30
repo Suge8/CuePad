@@ -33,4 +33,22 @@ import Testing
     #expect(!after.merges.isEmpty)
     #expect(try #require(after.viewText).split(separator: "\n").allSatisfy { !$0.hasPrefix("#1 ") })
   }
+
+  /// 一直记着的越堆越多：新钉了 5 条就交给后台整理（输入里带上钉着的全部行）；整理过的那组没变就不再交。
+  @Test func newPinsAreHandedToTheDreamOnce() async throws {
+    for index in 0..<CueMemoryView.tidyAfterPins { try await store.noteCueLine("规矩 \(index)", source: .you, pinned: true) }
+    let view = CueMemoryView(try await store.cueMemory())
+    #expect(view.tidyDue(since: []))
+    #expect(try #require(view.dreamText(tidy: true)).contains("<pinned>"))
+    #expect(!view.tidyDue(since: Set(view.pinned.map(\.line.id))))
+  }
+
+  /// 一直记着的超过硬线：系统提示里写出用量并叫 Cue 合并。
+  @Test func pinnedPastTheHardLineAsksCueToMerge() async throws {
+    let text = String(repeating: "规", count: CueMemoryLine.maxBytes / 3)
+    for _ in 0...(CueMemoryLine.pinnedHard / text.utf8.count) { try await store.noteCueLine(text, source: .you, pinned: true) }
+    let view = CueMemoryView(try await store.cueMemory())
+    #expect(view.pinnedText.hasPrefix("\(view.pinned.count) 条，8.2KB / 8KB：超了"))
+    #expect(view.pinnedText.contains("note replaces"))
+  }
 }

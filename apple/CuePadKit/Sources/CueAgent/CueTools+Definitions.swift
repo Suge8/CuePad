@@ -7,8 +7,17 @@ extension CueTools {
   static func definitions(_ toolset: Toolset) -> [[String: Any]] {
     switch toolset {
     case .cue: definitions
-    case .dream: [merge]
+    case .dream: [merge, tidy]
     }
+  }
+
+  private static var tidy: [String: Any] {
+    [
+      "name": "tidy",
+      "description": "收口 <pinned> 里一直记着的：lines 是序号的数组。带 text 把这几条（至少两条）并成一条一直记着的（≤\(CueMemoryLine.maxBytes) 字节）；不带 text 是让它们不再一直记着（回到普通记忆）。",
+      "inputSchema": schema(["lines": ["type": "array", "items": ["type": "integer"], "minItems": 1], "text": string], required: ["lines"]),
+      "annotations": ["readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false],
+    ]
   }
 
   private static var merge: [String: Any] {

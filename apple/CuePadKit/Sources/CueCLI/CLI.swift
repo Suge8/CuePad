@@ -25,7 +25,7 @@ enum CLI {
     var json = arguments.contains("--json")
     do {
       // 隐藏入口：Cue 的工具（MCP，stdio），由 Cue 的大脑启动，不在任何帮助里；--wait <秒> 是说话工具等结果的时限（App 的 CueTiming.sayWait）；
-      // --dream 是后台整理记忆的大脑用的那一组（只有 merge）
+      // --dream 是后台整理记忆的大脑用的那一组（merge 与 tidy）
       if arguments.first == "mcp" {
         let wait = arguments.count == 3 && arguments[1] == "--wait" ? TimeInterval(arguments[2]) : nil
         let dream = arguments == ["mcp", "--dream"]

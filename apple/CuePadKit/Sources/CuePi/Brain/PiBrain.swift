@@ -5,7 +5,7 @@ import Foundation
 
 /// Pi 当大脑：RPC 模式（`pi --mode rpc`，协议见 Pi 的 docs/rpc.md），一行一条 JSON（`ChildProcess`）。
 /// - 不落会话（`--no-session`）；不发现扩展（`-ne`，CuePad 的桥扩展也不加载，所以它不在 Agent 会话列表里），
-///   只加载随包的 cue-tools.ts：它当 CuePad 的 MCP 服务的客户端，把工具照原名（task、tell、memory）登记给模型，不走 Pi 内置 MCP 的
+///   只加载随包的 cue-tools.ts：它当 CuePad 的 MCP 服务的客户端，把工具照原名（task、tell、memory、setup）登记给模型，不走 Pi 内置 MCP 的
 ///   `mcp__cuepad__` 命名（见它的头注释）；服务的命令行经环境变量 `CUEPAD_CUE_MCP` 交给它；
 ///   不读工作目录里的项目文件（`-na`：项目的 `.pi/` 设置、扩展与 MCP 配置都不信任），也不加载 skill、上下文文件、提示词模板；
 /// - 系统提示整份替换（`--system-prompt` 盖过 `SYSTEM.md`）；Pi 只在没给 `--append-system-prompt` 时才去找 `APPEND_SYSTEM.md`
