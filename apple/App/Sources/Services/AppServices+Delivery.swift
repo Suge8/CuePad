@@ -10,11 +10,31 @@ extension AppServices {
         case .request(let request) where request.status == .known(.failed):
             guard try await store.withdrawFailedDelivery(request.id) else { throw SendError.alreadyHanded }
         case .request(let request):
-            guard try await store.withdrawDelivery(request.id, locallyOn: speech.localHost) else { throw SendError.alreadyHanded }
+            if try await !store.withdrawDelivery(request.id, locallyOn: speech.localHost) {
+                guard request.status == .known(.preparing) else { throw SendError.alreadyHanded }
+                try await withdrawRemotely(request.id)
+                try await store.deleteDelivery(request.id)
+            }
         case .cue(let message, _):
             guard try await store.withdrawCueMessage(message.id) else { throw SendError.alreadyHeard }
         }
         Task { await upload(said.id, deleted: true) }
+    }
+
+    private func withdrawRemotely(_ id: UUID) async throws {
+        let deadline = timing.now().addingTimeInterval(Speech.receiptLimit)
+        guard let withdrawal = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
+        let request = uploaded(withdrawal)
+        let result = try await withThrowingTaskGroup(of: DeliveryRequest.self) { [store, timing] group in
+            group.addTask { try await store.outcome(of: request) }
+            group.addTask {
+                try await timing.sleepUntil(deadline)
+                throw SendError.alreadyHanded
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
+        guard result.status == .known(.succeeded) else { throw SendError.alreadyHanded }
     }
 
     /// 投送请求（发送、作答、配置、结束、停止、重跑、开会话、绑定、补对话）都走同一条投送通道，Mac 本机也走它、由执行器交给扩展；

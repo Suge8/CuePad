@@ -164,7 +164,7 @@ extension CueStore {
       DeliveryRequest.self,
       where: """
         targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode = '\(DeliveryMode.send.rawValue)'
-          AND status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.failed.rawValue)') AND targetRef IN (SELECT value FROM json_each(?))
+          AND status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.preparing.rawValue)', '\(DeliveryStatus.failed.rawValue)') AND targetRef IN (SELECT value FROM json_each(?))
         """, [JSONColumn.encode(sessionIDs)], orderBy: "createdAt, rowid")
     return Dictionary(grouping: requests) { $0.target.ref ?? "" }
   }

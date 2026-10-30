@@ -133,7 +133,7 @@ import Testing
 
     _ = try await eventually(store, { try $0.deliveryRequests().first?.status }) { $0 == .known(.failed) }
     let after = try #require(try await request(stale.id))
-    #expect(after.failureReason?.text.isEmpty == false)
+    #expect(after.reason?.text.isEmpty == false)
     #expect(await handler.seen.isEmpty)
     await executor.stop()
   }
@@ -150,7 +150,7 @@ import Testing
     let done = try await eventually(store, { try $0.deliveryRequests() }) { $0.first?.status == .known(.failed) }
 
     #expect(await handler.seen.isEmpty)  // 不认识的发送方式不执行，也不猜成 send
-    #expect(done[0].failureReason?.text.contains("quantumSend") == true)
+    #expect(done[0].reason?.text.contains("quantumSend") == true)
     #expect(done[0].mode == .unknown("quantumSend") && done[0].completedAt != nil)
     await executor.stop()
   }

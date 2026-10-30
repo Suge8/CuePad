@@ -26,6 +26,8 @@ public actor DeliveryExecutor {
   private let onIssue: @Sendable (any Error) -> Void
   private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
   private let recover: @Sendable (DeliveryRequest) async -> DeliveryOutcome
+  private let preparation: @Sendable (DeliveryRequest) async -> DeliveryAdmission
+  private var waiting: [UUID: Task<Void, Never>] = [:]
   private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   /// 把一个附件取到本机（App 给的 `AppServices.fetchFile`）：执行器等附件文件只在这里；缺省是这台取不来
   private let fetchFile: @Sendable (String) async throws -> Void
@@ -37,7 +39,7 @@ public actor DeliveryExecutor {
   private var started = false
   private var watcher: Task<Void, Never>?
   private var cleanup: Task<Void, Never>?
-  private var processing = false
+  private var runner: Task<Void, Never>?
   /// 正在执行的那一条到 `claimGrace` 才传领取（结果先写下就不传）。
   private var claimUpload: Task<Void, Never>?
   private var rerun = false
@@ -48,6 +50,7 @@ public actor DeliveryExecutor {
     onWritten: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
     fetchFile: @escaping @Sendable (String) async throws -> Void = { _ in throw CueStoreError.notFound },
     recover: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome = { _ in .unconfirmed(DeliveryRequest.interruptedReason) },
+    preparation: @escaping @Sendable (DeliveryRequest) async -> DeliveryAdmission = { _ in .ready },
     handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
   ) {
     self.store = store
@@ -55,6 +58,7 @@ public actor DeliveryExecutor {
     self.timing = timing
     self.onIssue = onIssue
     self.onWritten = onWritten
+    self.preparation = preparation
     self.handler = handler
     self.recover = recover
     self.fetchFile = fetchFile
@@ -64,6 +68,8 @@ public actor DeliveryExecutor {
     guard !started else { return }
     started = true
     do {
+      try await store.releaseDeliveryReservations(for: hostID)
+      for id in try await store.abandonPreparedDeliveries(for: hostID) { notifyWritten(id) }
       for request in try await store.unsettledDeliveries(for: hostID) {
         guard started, !Task.isCancelled else { return }
         await finish(request, await recover(request), resuming: true)
@@ -74,7 +80,7 @@ public actor DeliveryExecutor {
       if remaining { scheduleCleanup() }
       watcher = Task { [store, hostID, onIssue] in
         do {
-          for try await _ in store.observe({ try $0.pendingDeliveries(for: hostID).map(\.id) }) { await self.process() }
+          for try await _ in store.observe({ try $0.pendingDeliveries(for: hostID).map(\.id) }) { self.enqueue() }
         } catch {
           if !Task.isCancelled { onIssue(error) }
         }
@@ -87,35 +93,42 @@ public actor DeliveryExecutor {
 
   public func stop() async {
     started = false
-    let tasks = [watcher, cleanup, claimUpload].compactMap { $0 } + Array(fetching.values) + Array(confirmations.values) + Array(uploads.values)
+    let tasks = [watcher, cleanup, claimUpload, runner].compactMap { $0 } + Array(fetching.values) + Array(waiting.values) + Array(confirmations.values) + Array(uploads.values)
     tasks.forEach { $0.cancel() }
     watcher = nil
+    runner = nil
     cleanup = nil
     claimUpload = nil
     fetching = [:]
+    waiting = [:]
     confirmations = [:]
     uploads = [:]
     for task in tasks { await task.value }
   }
 
+  private func enqueue() {
+    if runner != nil { rerun = true; return }
+    runner = Task { await self.process() }
+  }
+
   private func process() async {
-    if processing {
-      rerun = true
-      return
-    }
-    processing = true
-    defer { processing = false }
+    defer { runner = nil }
     repeat {
       rerun = false
       while started, !Task.isCancelled, let next = await nextActionable() { await run(next) }
     } while rerun && !Task.isCancelled
   }
 
-  private func nextActionable() async -> DeliveryRequest? {
+  private func nextActionable() async -> Dispatch? {
+    if let abandoned = await reporting({ try await store.abandonPreparedDeliveries(for: hostID) }) {
+      for id in abandoned { notifyWritten(id) }
+    }
     guard let candidates = await reporting({ try await store.pendingDeliveries(for: hostID) }) else { return nil }
     for request in candidates {
+      if waiting[request.id] != nil { continue }
       if request.deadlineAt.map({ timing.now() >= $0 }) == true || timing.now().timeIntervalSince(request.serverAt ?? request.createdAt) > Self.maxAge.seconds {
-        await finish(request, .failed(ShownText("请求到 iCloud 后超过 \(Int(Self.maxAge.seconds)) 秒仍未执行，已放弃")))
+        let reason = request.status == .known(.preparing) ? DeliveryPreparation.expired : ShownText("请求到 iCloud 后超过 \(Int(Self.maxAge.seconds)) 秒仍未执行，已放弃")
+        await finish(request, .failed(reason))
         continue
       }
       if case .unknown(let raw) = request.mode {
@@ -129,24 +142,57 @@ public actor DeliveryExecutor {
         }
         continue
       }
-      if let claimed = await reporting({ try await store.claimDelivery(request.id, host: hostID, until: timing.now().addingTimeInterval(Self.maxAge.seconds)) }), let claimed {
+      let admission = await preparation(request)
+      if case .waiting(let pending) = admission {
+        await prepare(request, pending)
+        continue
+      }
+      guard started, !Task.isCancelled else { return nil }
+      let reserved = await reporting {
+        let deadline = timing.now().addingTimeInterval(Self.maxAge.seconds)
+        if case .existingTarget = admission { return try await store.reserveDeliveryTarget(request.id, host: hostID, until: deadline) }
+        return try await store.claimDelivery(request.id, host: hostID, until: deadline)
+      }
+      if let claimed = reserved, let claimed {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
-        claimUpload = Task { [timing] in
-          guard (try? await timing.sleep(Self.claimGrace)) != nil else { return }
-          self.notifyWritten(request.id)
-        }
-        return claimed
+        var intent = request
+        if case .existingTarget = admission { intent.status = .known(.preparing) }
+        return Dispatch(request: claimed, intent: intent)
       }
     }
     return nil
   }
 
-  /// 每个已领取意图只执行一次。
-  private func run(_ request: DeliveryRequest) async {
+  private struct Dispatch {
+    let request: DeliveryRequest
+    let intent: DeliveryRequest
+  }
+
+  /// handler 接收领取前的意图快照，保留是否只能连接现有目标；领取事实与结果守卫由执行器独占。
+  private func run(_ dispatch: Dispatch) async {
     guard started, !Task.isCancelled else { return }
+    var request = dispatch.request
+    if request.status == .known(.preparing) {
+      if case .waiting(let pending) = await preparation(dispatch.intent) {
+        await prepare(request, pending)
+        return
+      }
+      guard started, !Task.isCancelled else { return }
+      guard let begun = await reporting({ try await store.beginDelivery(request.id, on: hostID, until: timing.now().addingTimeInterval(Self.maxAge.seconds)) }),
+            let begun else {
+        await reporting { try await store.releaseDeliveryReservations(for: hostID, only: request.id) }
+        return
+      }
+      request = begun
+    }
+    guard started, !Task.isCancelled else { return }
+    claimUpload = Task { [timing] in
+      guard (try? await timing.sleep(Self.claimGrace)) != nil else { return }
+      self.notifyWritten(request.id)
+    }
     let began = timing.now()
-    let outcome = await handler(request)
+    let outcome = await handler(dispatch.intent)
     claimUpload?.cancel()
     claimUpload = nil
     let took = timing.now().timeIntervalSince(began)
@@ -173,7 +219,7 @@ public actor DeliveryExecutor {
   private func fetched(_ request: DeliveryRequest, failure: (any Error)?) async {
     guard fetching.removeValue(forKey: request.id) != nil else { return }  // 停下了
     if let failure { await finish(request, .failed(ShownText(failure))) }
-    await process()
+    enqueue()
   }
 
   private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, resuming: Bool = false) async {
@@ -195,6 +241,45 @@ public actor DeliveryExecutor {
       }
     }
     if started, !Task.isCancelled { scheduleCleanup() }
+  }
+
+  private func prepare(_ request: DeliveryRequest, _ preparation: DeliveryPreparation) async {
+    guard started, !Task.isCancelled, waiting[request.id] == nil,
+      let stored = await reporting({ try await store.awaitDeliveryTarget(request, reason: preparation.reason, until: timing.now().addingTimeInterval(Self.maxAge.seconds)) }),
+      let stored, let deadline = stored.deadlineAt else { return }
+    notifyWritten(stored.id)
+    waiting[stored.id] = Task { [store, timing] in
+      do {
+        let ready = try await withThrowingTaskGroup(of: Bool.self) { group in
+          group.addTask { try await preparation.wait(); return true }
+          group.addTask { try await timing.sleepUntil(deadline); return false }
+          group.addTask {
+            for try await needed in store.observe({ store in
+              let current = try store.deliveryRequest(stored.id)
+              let abandoned = try store.isDeliveryAbandoned(stored.id)
+              return current?.status == .known(.preparing) && current?.handledBy == nil && !abandoned
+            }) {
+              if !needed { return false }
+            }
+            return false
+          }
+          defer { group.cancelAll() }
+          return try await group.next() ?? false
+        }
+        guard !Task.isCancelled else { return }
+        for id in try await store.abandonPreparedDeliveries(for: hostID) { self.notifyWritten(id) }
+        if timing.now() >= deadline {
+          await self.finish(stored, .failed(DeliveryPreparation.expired))
+        } else if ready {
+          try await store.deliveryTargetReady(stored.id)
+          self.notifyWritten(stored.id)
+        }
+      } catch {
+        if !Task.isCancelled { await self.finish(stored, .failed(ShownText(error))) }
+      }
+      self.waiting.removeValue(forKey: stored.id)
+      self.enqueue()
+    }
   }
 
   /// 上传回执也不占执行通道；同一条的版本顺序由同步发送器负责，这里只持有可取消任务。

@@ -7,7 +7,9 @@ struct TaskAgentLook: Equatable {
     init(_ shown: PiShown, line: String?) {
         switch shown.status {
         case .delivery(.failed): (title, note) = (shown.label, line)
-        case .working, .delivery, .cueAsking: (title, note) = (shown.status == .cueAsking ? shown.presence : String(localized: "Agent 正在做"), String(localized: "做完会在这里告诉你"))
+        case .working, .delivery, .cueAsking:
+            (title, note) = shown.isRunning
+                ? (String(localized: "Agent 正在做"), String(localized: "做完会在这里告诉你")) : (shown.presence, nil)
         case .asking: (title, note) = (shown.asksForWords ? String(localized: "Agent 在等你回答") : String(localized: "Agent 在等你确认"), line)
         case .awaitsReply: (title, note) = (shown.presence, nil)
         case .failed: (title, note) = (shown.label, line)

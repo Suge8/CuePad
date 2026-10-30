@@ -45,8 +45,9 @@ struct TaskFlowTests {
 
         // 重发送达：任务进行中并记着会话，正文留在任务上
         delivers.withLock { $0 = true }
-        try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
+        let renewed = try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "s1" }
+        #expect(try await store.outcome(of: renewed).status == .known(.succeeded))
         await executor.stop()
         let started = try #require(try await store.card(task.id))
         #expect(started.status == .inProgress && started.body == "修乱序\n\n日志在 logs/0918.txt")
@@ -122,6 +123,7 @@ struct TaskFlowTests {
         }
         try await executor.start()
         _ = try await eventually(store, { try $0.card(second.id)?.piSessionID }) { $0 == "s1" }
+        #expect(try await store.outcome(of: try #require(sent)).status == .known(.succeeded))
         await executor.stop()
         try await workspace.toggle(second.id)
         #expect(try await requests(.end).isEmpty)  // "发版"还没开工，默认接着用它

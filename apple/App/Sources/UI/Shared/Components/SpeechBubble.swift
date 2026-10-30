@@ -27,7 +27,13 @@ struct SpeechBubble<Menu: View>: View {
         let trip = said.trip(at: services.speech), shown = bubble(trip)
         VStack(alignment: .trailing, spacing: look.statusSpacing) {
             UserBubble(stored: said.content, look: look, trip: shown, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
-            if let reason = trip.unconfirmedReason {
+            if case .preparing(let reason) = trip {
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(verbatim: reason)
+                    Button("撤回", action: remove).buttonStyle(PressStyle(.inline))
+                }
+                .font(Typography.caption).foregroundStyle(palette.ink3).padding(.trailing, look.statusInset)
+            } else if let reason = trip.unconfirmedReason {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(verbatim: reason)
                     Button("再说一次…") { confirmingAgain = true }.buttonStyle(PressStyle(.inline))
@@ -47,6 +53,7 @@ struct SpeechBubble<Menu: View>: View {
         switch trip {
         case .sending, .sent:
             if case .request(let request) = said { .sending(.of(request, session: session, trip: trip)) } else { .sending(trip == .sent ? .sent : .sending) }
+        case .preparing: .arrived
         case .unconfirmed: .sending(.unconfirmed)
         case .delivered: showsDelivered ? .delivered(said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) }) : .arrived
         case .failed(let failure):

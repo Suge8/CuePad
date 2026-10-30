@@ -59,7 +59,7 @@ extension CueStore {
         let session = leaf.piSessionID.flatMap { sessions[$0] }
         return CueBoardLeaf(
           leaf: leaf, session: session, handoffs: (handoffs[leaf.id] ?? []).filter { leaf.piSessionID == nil || $0.mode == .known(.start) },
-          since: session?.stateSince ?? leaf.startedAt ?? task.startedAt ?? task.todoAt ?? task.createdAt)
+          since: session?.stateSince ?? leaf.startedAt ?? task.startedAt ?? task.todoAt ?? task.createdAt, at: .always(at: timing.now()))
       }
       let open = leaves.dropLast().filter(\.isActive)
       return CueBoardItem(task: task, progress: progress[task.id], leaves: open.isEmpty ? [leaves.last!] : Array(open))
@@ -89,11 +89,11 @@ extension CueStore {
     guard let card = try find(Card.self, top) else { throw CueStoreError.notFound }
     let leaves = try leaves(of: card)
     let sessions = try sessionStates(leaves.compactMap(\.piSessionID))
-    let sending = try sendingLeaves(leaves.filter { $0.piSessionID == nil }.map(\.id))
+    let handoffs = try handoffRequests(for: leaves.filter { $0.piSessionID == nil }.map(\.id))
     let details = try leaves.map { leaf in
       CueLeafDetail(
         leaf: leaf, session: try leaf.piSessionID.flatMap { sessions[$0] }.map { try sessionDetail($0, rounds: rounds) },
-        sending: sending.contains(leaf.id))
+        handoffs: handoffs[leaf.id] ?? [])
     }
     return CueTaskDetail(task: card, progress: try subtaskProgress(of: [top])[top], leaves: details)
   }

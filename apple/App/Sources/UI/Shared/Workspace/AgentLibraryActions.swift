@@ -67,7 +67,7 @@ extension Workspace {
         } else {
             let request = try await services.requestLibraryEdit(edit, title: shownName(of: edit.file), on: library.hostID)
             let outcome = try await services.store.outcome(of: request)
-            if outcome.failureReason == ShownText(AgentLibraryError.changedOnMac) { throw AgentLibraryError.changedOnMac }
+            if outcome.reason == ShownText(AgentLibraryError.changedOnMac) { throw AgentLibraryError.changedOnMac }
             if let failure = outcome.failure { throw SendError.notDelivered(failure) }
         }
     }

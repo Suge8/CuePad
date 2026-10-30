@@ -12,6 +12,17 @@ extension CueStore {
     try write { try insertDelivery(content, to: target, on: host, mode: mode, card: card, cue: cue) }
   }
 
+  /// 远端快照不能授权删除：沿现有投送通道交给目标 Mac，核对仍未交出后才撤回。
+  public func requestDeliveryWithdrawal(_ id: UUID) throws -> DeliveryRequest? {
+    try write {
+      guard let original = try find(DeliveryRequest.self, id), original.status == .known(.preparing) else { return nil }
+      if let existing = try select(DeliveryRequest.self, where: "mode = 'withdraw' AND content = ? AND status IN (\(DeliveryStatus.openSQL))", [id.uuidString.lowercased()]).first {
+        return existing
+      }
+      return try insertDelivery(id.uuidString.lowercased(), to: original.target, on: original.hostID, mode: .withdraw, cue: false)
+    }
+  }
+
   /// `requestDelivery` 的事务内部分：必须在写事务内调用。带着任务里的卡开新会话或交话，是叶子换会话的那一刻：
   /// 这件事里没人再用的会话随之结束（`endUnusedSessions`）。你对会话说的话（作答、重跑也算）当场收起挂在它上面的提问（`questionsOn`），
   /// 算你在那边答了：不交给 Cue、不叫醒它；待回复不用写，读的时候就不算了（`sessionsAwaitingReply`）。
@@ -22,7 +33,7 @@ extension CueStore {
     let now = Date.stamp
     let request = DeliveryRequest(
       id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
-      status: .known(.pending), failureReason: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
+      status: .known(.pending), reason: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
       resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
     try insert(request)
     try registerAttachments(in: content)
@@ -70,7 +81,7 @@ extension CueStore {
 
   /// 正文就是方式名的控制类请求（结束、停止、重跑）：同一会话同一种方式在路上只有一条。必须在写事务内调用。
   func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String, cue: Bool) throws -> DeliveryRequest {
-    if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && Speech.trip($0, at: .always(at: timing.now())).inTransit }) {
+    if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && Speech.trip($0, at: .always(at: timing.now())).awaitingResult }) {
       return open
     }
     return try insertDelivery(mode.rawValue, to: target, on: host, mode: mode, cue: cue)
@@ -185,7 +196,7 @@ extension CueStore {
       if current.isOpen, current.deadlineAt != nil || current.handledBy != nil || current.status != .known(.pending) {
         if case .unconfirmed = Speech.trip(current, at: .always(at: timing.now())) {
           current.status = .known(.unconfirmed)
-          current.failureReason = Speech.unconfirmedReason
+          current.reason = Speech.unconfirmedReason
         } else if let deadline = current.deadlineAt { expire(at: deadline) }
       }
       return current
@@ -205,12 +216,14 @@ extension CueStore {
 
   /// 明确未交出的失败请求才允许用于重发或移除；按当前存储状态判定，不信界面上旧的失败快照。
   public func withdrawFailedDelivery(_ id: UUID) throws -> Bool {
-    try write {
-      try db.run("DELETE FROM deliveryRequests WHERE id = ? AND status = '\(DeliveryStatus.failed.rawValue)'", [id])
-      guard db.changes > 0 else { return false }
-      try reopen(where: "setAsideBy = ?", [id])
-      return true
-    }
+    try write { try removeFailedDelivery(id) }
+  }
+
+  func removeFailedDelivery(_ id: UUID) throws -> Bool {
+    try db.run("DELETE FROM deliveryRequests WHERE id = ? AND status = '\(DeliveryStatus.failed.rawValue)'", [id])
+    guard db.changes > 0 else { return false }
+    try reopen(where: "setAsideBy = ?", [id])
+    return true
   }
 
   /// 显式清理记录，不授权重投；重发与移除气泡走 withdrawDelivery / withdrawFailedDelivery。
@@ -224,16 +237,18 @@ extension CueStore {
   /// 撤回只在执行它的本机能与领取原子互斥；跨设备只允许从未交给同步发送者的请求。
   /// 已上传或正在上传的 pending 可能只是旧快照，删除成功也不能证明宿主尚未领取。这句收起的提问放回"等你"（同 `deleteDelivery`）。
   public func withdrawDelivery(_ id: UUID, locallyOn host: String? = nil) throws -> Bool {
-    try write {
-      try db.run(
-        """
-        DELETE FROM deliveryRequests WHERE id = ?1 AND status = '\(DeliveryStatus.pending.rawValue)' AND handledBy IS NULL
-          AND (hostID = ?2 OR NOT EXISTS (
-            SELECT 1 FROM syncRecords WHERE recordName = ?1 AND (sentModifiedAt IS NOT NULL OR pushedModifiedAt IS NOT NULL)))
-        """, [id, host])
-      guard db.changes > 0 else { return false }
-      try reopen(where: "setAsideBy = ?", [id])
-      return true
-    }
+    try write { try removeUnstartedDelivery(id, locallyOn: host) }
+  }
+
+  func removeUnstartedDelivery(_ id: UUID, locallyOn host: String?) throws -> Bool {
+    try db.run(
+      """
+      DELETE FROM deliveryRequests WHERE id = ?1 AND status IN ('pending', 'preparing') AND handledBy IS NULL
+        AND (hostID = ?2 OR NOT EXISTS (
+          SELECT 1 FROM syncRecords WHERE recordName = ?1 AND (sentModifiedAt IS NOT NULL OR pushedModifiedAt IS NOT NULL)))
+      """, [id, host])
+    guard db.changes > 0 else { return false }
+    try reopen(where: "setAsideBy = ?", [id])
+    return true
   }
 }

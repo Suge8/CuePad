@@ -127,6 +127,7 @@ extension PiBridge {
     /// 发消息（文字 + 图片），以这句开新一轮：会话歇着就直接开始，在跑就先打断这一轮；打断不了的（`AgentCapabilities.speakBlocked`）
     /// 拒收、带上原因，不排队。受理即返回，不代表模型成功。
     public func send(_ message: PiMessage, to id: PiSession.ID) async throws {
+        try Task.checkCancellation()
         let link = try control(id, needs: message.images.isEmpty ? [] : .images)
         guard let peer = session(id: id) else { throw PiBridgeError.sessionEnded }
         if case .cue(let deliveryID, let turnStartedAt) = message.policy {
@@ -140,7 +141,10 @@ extension PiBridge {
         if let why = peer.capabilities.speakBlocked(in: peer.state, agent: peer.agent) {
             throw PiBridgeError.rejected("failed: \(why)")
         }
-        try await link.send(message, in: id)
+        do { try await link.send(message, in: id) }
+        catch PiBridgeError.upgradingExtension {
+            throw PiBridgeError.operationStarted(ShownText(PiBridgeError.upgradingExtension))
+        }
     }
 
     /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令、提示词模板与 skill 由 Pi 派发；会开一轮的

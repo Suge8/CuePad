@@ -4,6 +4,7 @@ import Foundation
 nonisolated extension PiShown {
     var label: String {
         switch status {
+        case .delivery(.preparing(let reason)): reason
         case .delivery(.inTransit(let transit)): transit.label
         case .delivery(.delivered): String(localized: "已送达")
         case .delivery(.failed): String(localized: "没能送达")
@@ -32,6 +33,7 @@ nonisolated extension PiShown {
     /// 只有一个状态标时它说的是什么（读屏标签、悬停提示、项目长按菜单的标题、任务上的会话状态）。
     var presence: String {
         switch status {
+        case .delivery(.preparing(let reason)): reason
         case .delivery(.inTransit(.unconfirmed)): String(localized: "送达未确认")
         case .delivery(.inTransit(.waking)): String(localized: "正在唤醒 Agent")
         case .delivery(.failed): String(localized: "没能送达 Agent")
@@ -61,7 +63,7 @@ nonisolated extension PiShown {
     /// 在跑：工作中，或话在路上、已送达而会话还没跟上（没能送达的不算）——状态色、动效、排序与区头"N 个在跑"同一档。
     var isRunning: Bool {
         switch status {
-        case .delivery(.inTransit(.unconfirmed)): false
+        case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): false
         case .working, .delivery(.inTransit), .delivery(.delivered): true
         default: false
         }
@@ -74,7 +76,7 @@ nonisolated extension PiShown {
         case .asking: 0
         case .awaitsReply: 1
         case .failed, .delivery(.failed): 2
-        case .delivery(.inTransit(.unconfirmed)): 4
+        case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): 4
         case .working, .delivery, .cueAsking: 3
         case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 4
         case .ended: 5
@@ -87,7 +89,7 @@ nonisolated extension PiShown {
         case .asking, .awaitsReply: 6
         case .failed, .delivery(.failed): 5
         case .unread: 4
-        case .delivery(.inTransit(.unconfirmed)): 1
+        case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): 1
         case .working, .delivery, .cueAsking: 2
         case .idle, .resting, .fresh, .interrupted, .unknown: 1
         case .ended: 0

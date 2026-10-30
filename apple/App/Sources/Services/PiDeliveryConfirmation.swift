@@ -33,12 +33,12 @@ struct PiDeliveryConfirmation {
             guard let sessionID else { return .unconfirmed(DeliveryRequest.interruptedReason) }
             if let session = pi.session(sessionID: sessionID) {
                 guard session.agent == .pi else { return .unconfirmed(DeliveryRequest.interruptedReason) }
-                return pending(in: session, reason: request.failureReason)
+                return pending(in: session, reason: request.reason)
             }
             let indexed = try await store.piSession(sessionID)
             guard indexed?.agent == .pi else { return .unconfirmed(DeliveryRequest.interruptedReason) }
             return .confirming { current in
-                await verify(current, connection: nil, file: indexed.map { URL(filePath: $0.path) }, reason: request.failureReason)
+                await verify(current, connection: nil, file: indexed.map { URL(filePath: $0.path) }, reason: request.reason)
             }
         } catch { return unresolved(error) }
     }

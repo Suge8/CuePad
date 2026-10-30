@@ -215,8 +215,10 @@ public enum PiBridgeError: Error, Equatable {
     case rejected(String)
     /// 这个 Agent 的模型表里没有要换的模型（Pi 扩展回 `unknown_model`，其余几家的接入自己判断）
     case unknownModel(AgentKind)
-    /// 会话的扩展 CuePad 读不懂、正自己换上新扩展（`PiSession.upgrading`），不发命令；或旧扩展还不认这条命令
+    /// 当前扩展尚未就绪；不能据此推断调用方的复合操作此前没有副作用。
     case upgradingExtension
+    /// 已进入接入的复合操作，不能再把其中的升级错误用作准备证明。
+    case operationStarted(ShownText)
     /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
     case unsupported
     /// 请求结束后未能确认真正退出；不据断线或重载推断结束成功。
@@ -231,7 +233,8 @@ extension PiBridgeError: ShownError {
         case .insecureSocketDirectory(let path): "Agent 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
         case .socketDirectoryTooLong: "Agent 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
-        case .upgradingExtension: "这个会话正在换上新版扩展，歇下后自动接上，到时再发"
+        case .upgradingExtension: "会话扩展正在升级"
+        case .operationStarted(let reason): "会话操作已经开始，结果尚未确认：\(reason.embedded)"
         case .unsupported: "这个 Agent 会话不支持这样操作"
         case .notEnded: "尚未确认会话已结束"
         case .sessionEnded: "与 Agent 的连接已断开，操作结果尚未确认"

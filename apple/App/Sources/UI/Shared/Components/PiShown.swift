@@ -54,6 +54,7 @@ nonisolated extension PiSessionState {
 /// 在路上（发送中、已发出）、已送达、明确失败与静态未确认；在路上怎么说（`Transit`）只是展示。会话状态只来自 Mac 同步回来的记录，发出后要等 Mac 执行、写回、
 /// 再同步过来才变；话是本机当场写出的，所以显示状态把它算进去：发出即"发送中"，会话进入处理中后让位给会话状态。
 nonisolated enum PiDelivery: Hashable, Sendable {
+    case preparing(String)
     case inTransit(Transit)
     /// 送到了，会话状态还没跟上。
     case delivered
@@ -108,6 +109,7 @@ nonisolated enum PiDelivery: Hashable, Sendable {
         guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }
         let trip = Speech.trip(request, at: moment)
         switch trip {
+        case .preparing(let reason): return .preparing(reason)
         case .unconfirmed: return mode == .retry ? nil : .inTransit(.unconfirmed)
         case .sending, .sent:
             // 发出之后才进入处理中，才算它在处理这句话；时间存到毫秒，同刻算作发出前就在跑（这句还没打断它）

@@ -42,7 +42,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         guard let request = deliveries.last(where: { $0.config.map { $0.model != nil || $0.thinking != nil } == true }),
               let wanted = request.config else { return current }
         switch Speech.trip(request, at: moment) {
-        case .sending, .sent:
+        case .preparing, .sending, .sent:
             let model = wanted.model.flatMap { key in catalog?.models.first { $0.key == key } } ?? current.model
             let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
             return PiConfigShown(model: model, thinking: thinking, context: current.context, pending: true, failure: nil)
