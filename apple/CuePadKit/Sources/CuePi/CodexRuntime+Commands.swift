@@ -116,7 +116,7 @@ extension CodexRuntime {
         if let model { settings["model"] = .string(model.id) }
         if let thinking { settings["effort"] = .string(CodexModel.effort(thinking.clamped(to: entry?.efforts ?? []))) }
         if let fast = config.fast { settings["serviceTier"] = fast ? "priority" : "default" }
-        else if model != nil, entry?.supportsFast == false, bridge.session(id: id)?.fast == true { settings["serviceTier"] = "default" }
+        else if model != nil, entry?.supportsFast == false, bridge.session(id: id)?.fast != false { settings["serviceTier"] = "default" }
         try await call(session, "thread/settings/update", .object(settings))
         if let thread = try await rpc.call("thread/read", ["threadId": .string(session.threadID)])["thread"] {
             bridge.update(id) { self.apply(thread, to: &$0) }

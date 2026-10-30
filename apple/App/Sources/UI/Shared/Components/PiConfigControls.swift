@@ -119,7 +119,7 @@ struct PiConfigControls<Trailing: View>: View {
                     .layoutValue(key: ConfigGive.self, value: .wording)
             }
             if shown.model?.supportsFast == true {
-                PiFastCapsule(fast: shown.fast) { chooseFast(shown.fast != true) }
+                PiFastCapsule(fast: shown.fast, choose: chooseFast)
             }
             trailing
         }

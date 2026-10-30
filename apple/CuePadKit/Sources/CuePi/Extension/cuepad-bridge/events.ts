@@ -31,7 +31,7 @@ export function follow(session: Session): (() => void)[] {
 		pi.on("turn_end", omitFromContext),
 		pi.on("agent_settled", refreshContext),
 		pi.on("session_compact", refreshContext),
-		pi.on("session_tree", refreshContext),
+		pi.on("session_tree", () => { session.followBranch(); refreshContext(); }),
 		pi.on("session_info_changed", (event) => session.updateInfo({ name: event.name ?? null })),
 		pi.on("message_start", (event) => {
 			if (event.message.role !== "assistant") return;

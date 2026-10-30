@@ -81,8 +81,7 @@ export class Session {
 		this.ctx = ctx;
 		this.firecode = firecode;
 		this.identity = identity;
-		const saved = ctx.sessionManager.getBranch().findLast((entry) => entry.type === "custom" && entry.customType === "cuepad-fast");
-		this.fast = saved?.type === "custom" && saved.data === true;
+		this.fast = this.branchFast();
 		const initial = this.state();
 		this.lastKey = JSON.stringify([initial, this.turnSince]);
 		this.phase = phaseOf(initial);
@@ -100,6 +99,16 @@ export class Session {
 		};
 		this.quota = new QuotaFetcher(ctx, (quota) => this.reportQuota(quota));
 		this.reload = new SelfReload(ctx, identity.extensionVersion, () => this.canReload(), (action) => this.runInternal(action));
+	}
+
+	private branchFast(): boolean {
+		const entry = this.ctx.sessionManager.getBranch().findLast((item) => item.type === "custom" && item.customType === "cuepad-fast");
+		return entry?.type === "custom" && entry.data === true;
+	}
+
+	followBranch() {
+		this.fast = this.branchFast();
+		this.updateInfo({ fast: this.fast });
 	}
 
 	setFast(fast: boolean) {
