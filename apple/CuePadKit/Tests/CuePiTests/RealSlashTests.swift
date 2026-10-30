@@ -77,7 +77,8 @@ struct RealSlashTests {
 
     @Test func slashCommandsAreExpandedAndRunByPi() async throws {
         try await withRig { pi, bridge, s in
-            try await bridge.command("/shout hi there", in: s.id)
+            // 扩展命令没有公开的完成回执：交出后不确认，以 ackTimeout 结束（与后面的步骤并行等）
+            let shout = Task { try await bridge.command("/shout hi there", in: s.id) }
             _ = try await pi.waitForEvent("扩展命令跑了") { $0["method"] as? String == "notify" && $0["message"] as? String == "shout:hi there" }
             #expect(fileTexts("user", in: s.sessionFile).isEmpty, "扩展命令不产生发给模型的消息")
 
@@ -88,6 +89,7 @@ struct RealSlashTests {
             try await eventually("skill 展开后进了模型上下文") {
                 fileTexts("user", in: s.sessionFile).last?.contains("CAREFUL-BODY-MARKER") == true
             }
+            await #expect(throws: PiBridgeError.ackTimeout) { try await shout.value }
         }
     }
 

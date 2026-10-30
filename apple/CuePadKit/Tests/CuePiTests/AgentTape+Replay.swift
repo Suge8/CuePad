@@ -16,6 +16,9 @@ extension AgentTape {
                 return false
             }
             var events = data.split(separator: 0x0A).compactMap { try? JSONDecoder().decode(TapeEvent.self, from: $0) }
+            if let agent = state.agent, let stale = Self.staleVersion(of: agent, in: events) {
+                state.problems.append("录像带的 \(agent.name) 版本 \(stale.found) 低于最低版本 \(stale.minimum)：TEST_RUNNER_CUEPAD_AGENT_TESTS=\(agent.rawValue) 重录")
+            }
             // 连上就断、一句没说的连接（桥在会话关掉的那一刻重连，赶上没赶上全看时机）：不等它，回放时多出来的也不算
             let talked = Set(events.filter { $0.k == "send" || $0.k == "recv" }.compactMap(\.c))
             events.removeAll { ["connect", "close", "hangup"].contains($0.k) && $0.c?.hasPrefix("s") == true && !talked.contains($0.c!) }
@@ -30,6 +33,15 @@ extension AgentTape {
             startEmitting()
             return true
         }
+    }
+
+    /// 录下的 `--version` 回答低于这家现在的最低版本：CuePad 会拒掉它，后面的断言都没意义。
+    private static func staleVersion(of agent: AgentKind, in events: [TapeEvent]) -> (found: AgentVersion, minimum: AgentVersion)? {
+        guard let minimum = agent.facts.minimumVersion,
+              let channel = events.first(where: { $0.k == "spawn" && $0.a == ["--version"] })?.c,
+              let output = events.first(where: { $0.k == "stdout" && $0.c == channel })?.d,
+              let found = AgentVersion(parsing: output), found < minimum else { return nil }
+        return (found, minimum)
     }
 
     /// 一条输入到了：认领录像带里这条通道上最早没认领的同类输入，比对内容，再接着做出后面的输出。返回认领到的通道。
