@@ -190,8 +190,9 @@ private struct LibraryLine: View {
 }
 
 /// 面板最底下一行：左边点了推入设置页（Cue 的名字、开关与在哪台 Mac 上运行在它最上面一组），右边是 Cue 的开关（`CueSwitch`，同设置里那一个）。
-/// 左边一句：在线时写它在哪台 Mac 上运行；不在时写为什么（同名牌，`CuePresence.line`：已停用、某台没开），
-/// 但名片上没有可数的时那一句已写在名字下面（`CueNow.quietLine`），同一屏不写两遍，这一句只剩"设置"；开关没能写成时这一句换成原因。
+/// 左边一句说的是点进去是什么（`Lead`）：开着时是它在哪台 Mac 上运行，关着、还没选过时是"Cue 的设置"。原因只在真有问题时顶替这一句：
+/// 开关没能写成（胭脂）、它起不来（胭脂）、它那台 Mac 没开；说不准的（状态未确认）与平常的（已停用：开关已经说了）不写。
+/// 名片上没有可数的时它不在的那一句已写在名字下面（`CueNow.quietLine`），同一屏不写两遍，这一句回到"Cue 的设置"。
 /// 还没选过在哪台运行时开关占着位置、看不见：那时的下一步是上面的选 Mac（`CueHostPick`）；还没和 iCloud 对过、手机上还没有哪台 Mac 时开关停用。
 private struct CueHostLine: View {
     let open: () -> Void
@@ -200,18 +201,21 @@ private struct CueHostLine: View {
     @Environment(\.palette) private var palette
     @State private var model = CueSettingsModel()
 
+    /// 左边那一句。
+    fileprivate enum Lead {
+        case host(String)
+        case settings(String)
+        case problem(String, failed: Bool)
+    }
+
     var body: some View {
-        let place = place
+        let lead = lead
         let settings = model.settings ?? .empty
         HStack(spacing: 8) {
             Button(action: open) {
                 HStack(spacing: 8) {
-                    Image(place == nil ? .settings : .mac).foregroundStyle(palette.ink3)
-                    if let failure = model.failure {
-                        Text(failure).foregroundStyle(palette.failure).lineLimit(2)
-                    } else {
-                        Text(place ?? String(localized: "设置")).foregroundStyle(palette.ink2).lineLimit(1)
-                    }
+                    Image(lead.icon).foregroundStyle(palette.ink3)
+                    Text(lead.text).foregroundStyle(lead.failed ? palette.failure : palette.ink2).lineLimit(2)
                     Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
                     Spacer(minLength: 0)
                 }
@@ -221,21 +225,45 @@ private struct CueHostLine: View {
             }
             .buttonStyle(PressStyle())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Dotted(model.failure ?? place, String(localized: "设置")).spoken)
+            .accessibilityLabel(Dotted(lead.text, String(localized: "设置")).spoken)
             .accessibilityAddTraits(.isButton)
             CueSwitch(model: model, here: nil)
                 .disabled(!model.isOn && (settings.gate(services).waitingReason != nil || settings.hosts(here: nil).isEmpty))
                 .opacity(workspace.cue.hostID == nil ? 0 : 1)
                 .accessibilityHidden(workspace.cue.hostID == nil)
         }
+        .animation(Motion.fade, value: lead.text)
         .cueSettings(model)
     }
 
-    private var place: String? {
+    private var lead: Lead {
         let cue = workspace.cue
+        if let failure = model.failure { return .problem(failure, failed: true) }
         let host = cue.hostName ?? MacAgents.unnamed
-        guard let away = cue.presence.line(host: host, ranBefore: cue.hostID != nil) else { return String(localized: "在「\(host)」上运行") }
-        return cue.now.ledger.isEmpty ? nil : away
+        let settings = Lead.settings(String(localized: "\(cue.name) 的设置"))
+        switch cue.presence {
+        case .disabled: return settings
+        case .asleep, .unreachable:
+            guard !cue.now.ledger.isEmpty, let why = cue.presence.line(host: host, ranBefore: true) else { return settings }
+            return .problem(why, failed: cue.presence.isUnreachable)
+        case .unconfirmed, .idle, .sending, .working: return .host(String(localized: "在「\(host)」上运行"))
+        }
+    }
+}
+
+private extension CueHostLine.Lead {
+    var text: String {
+        switch self {
+        case .host(let text), .settings(let text), .problem(let text, _): text
+        }
+    }
+
+    var icon: Icon {
+        if case .settings = self { .settings } else { .mac }
+    }
+
+    var failed: Bool {
+        if case .problem(_, failed: true) = self { true } else { false }
     }
 }
 

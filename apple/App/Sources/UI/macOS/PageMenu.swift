@@ -55,36 +55,9 @@ struct PageMenuSlot: View {
     var body: some View {
         let content = content
         Menu {
-            switch content {
-            case .session(let state?): if state.showsMenu { SessionMenuItems(state: state) }
-            case .card(let card?): CardActions(card: card, more: true)
-            case .project(let id): ProjectMenuItems(projectID: id)
-            case .cue:
-                let cue = workspace.cue
-                // 开关同设置里那一个（`AppServices.turnCue`）；停用后再启用回到停用前那台
-                if cue.presence == .disabled {
-                    Button("启用 \(cue.name)", icon: .wakeEnabled) { workspace.turnCue(true) }
-                } else {
-                    Button("停用 \(cue.name)", icon: .wakeEnabled) { workspace.turnCue(false) }
-                }
-                // 运行情况给开发者看：只在 Cue 于这台 Mac 值班时有（经过只在值班的管理器里）
-                if workspace.services.cue.keeper != nil {
-                    Toggle("运行情况", icon: .session, isOn: Bindable(cue).showsRun)
-                }
-                Button("\(cue.name) 的设置…", icon: .settings) { SettingsPane.open(.general) }
-            case .progress:
-                Button("新任务", icon: .add) { workspace.progressPane = .board; workspace.addsTask = true }
-                Button("新会话", icon: .add) { workspace.newSession() }
-                ProjectScopeItems()
-                Button("搜索（⌘K）", icon: .search) { workspace.searching = true }
-                    .disabled(!workspace.isLibraryReady)
-                Divider()
-                Button("全部归档做完的", icon: .archive) { workspace.attempt { try await workspace.archiveCompletedTasks() } }
-                Button("接入 Agent…", icon: .extensionNote) { workspace.showsSetup = true }
-            case .trash:
-                Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
-            case .session(nil), .card(nil), .none: EmptyView()
-            }
+            Group { items(content) }
+                // macOS 27 起菜单默认藏起菜单项的图片：标明图标与字都画（docs/ui.md）
+                .labelStyle(.titleAndIcon)
         } label: {
             // 看板段选了项目范围（范围收在这里）：钮角上带这个项目的小图形，一眼看得出只在看一个项目
             Image(.more).overlay(alignment: .topTrailing) {
@@ -103,6 +76,39 @@ struct PageMenuSlot: View {
         .accessibilityLabel("更多")
         .observing(services.store, id: workspace.openCard, into: $opened, onError: workspace.fail) { [id = workspace.openCard] store in
             try id.flatMap { try store.card($0) }
+        }
+    }
+
+    @ViewBuilder private func items(_ content: Content) -> some View {
+        switch content {
+        case .session(let state?): if state.showsMenu { SessionMenuItems(state: state) }
+        case .card(let card?): CardActions(card: card, more: true)
+        case .project(let id): ProjectMenuItems(projectID: id)
+        case .cue:
+            let cue = workspace.cue
+            // 开关同设置里那一个（`AppServices.turnCue`）；停用后再启用回到停用前那台
+            if cue.presence == .disabled {
+                Button("启用 \(cue.name)", icon: .wakeEnabled) { workspace.turnCue(true) }
+            } else {
+                Button("停用 \(cue.name)", icon: .wakeEnabled) { workspace.turnCue(false) }
+            }
+            // 运行情况给开发者看：只在 Cue 于这台 Mac 值班时有（经过只在值班的管理器里）
+            if workspace.services.cue.keeper != nil {
+                Toggle("运行情况", icon: .session, isOn: Bindable(cue).showsRun)
+            }
+            Button("\(cue.name) 的设置…", icon: .settings) { SettingsPane.open(.general) }
+        case .progress:
+            Button("新任务", icon: .add) { workspace.progressPane = .board; workspace.addsTask = true }
+            Button("新会话", icon: .add) { workspace.newSession() }
+            ProjectScopeItems()
+            Button("搜索（⌘K）", icon: .search) { workspace.searching = true }
+                .disabled(!workspace.isLibraryReady)
+            Divider()
+            Button("全部归档做完的", icon: .archive) { workspace.attempt { try await workspace.archiveCompletedTasks() } }
+            Button("接入 Agent…", icon: .extensionNote) { workspace.showsSetup = true }
+        case .trash:
+            Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
+        case .session(nil), .card(nil), .none: EmptyView()
         }
     }
 }

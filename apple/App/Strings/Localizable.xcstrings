@@ -539,6 +539,22 @@
         }
       }
     },
+    "%@ 的设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的设置"
+          }
+        }
+      }
+    },
     "%@ 的设置…" : {
       "localizations" : {
         "en" : {
