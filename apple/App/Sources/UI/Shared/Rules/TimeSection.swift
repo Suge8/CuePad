@@ -16,7 +16,9 @@ nonisolated enum TimeSection: Sendable {
     }
 
     /// 昨天先于本周、本月判断：周一的昨天、月初的昨天都算昨天。一周总从周一算起，不随地区设置（时区仍用传入的日历）。
+    /// 其他设备的时钟可能快于本机：未来时间按今天分组，不改原始时间或顺序。
     static func of(_ date: Date, now: Date, calendar: Calendar = .current) -> TimeSection {
+        let date = min(date, now)
         var calendar = calendar
         calendar.firstWeekday = 2
         if calendar.isDate(date, inSameDayAs: now) { return .today }
@@ -31,7 +33,7 @@ nonisolated enum TimeSection: Sendable {
         var items: [Item]
     }
 
-    /// 按从新到旧排好的条目切成相连的段。
+    /// 按从新到旧排好的条目切成相连的段（未来时间在 `of` 里归今天，所以同一段总相连）。
     static func split<Item>(_ items: [Item], date: (Item) -> Date, now: Date, calendar: Calendar = .current) -> [Run<Item>] {
         var runs: [Run<Item>] = []
         for item in items {

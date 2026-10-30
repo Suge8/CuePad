@@ -21,19 +21,12 @@ struct FolderCandidateList: View {
         return (candidates ?? []).filter { text.isEmpty || $0.folder.localizedStandardContains(text) }
     }
 
-    private var groups: [(host: String?, items: [ProjectFolders.Candidate])] {
-        let hosts = Set(shown.map(\.hostID))
-        guard hosts.count > 1 else { return [(nil, shown)] }
-        return hosts.sorted().map { host in
-            let items = shown.filter { $0.hostID == host }
-            return (items.first?.macName, items)
-        }
-    }
+    private var groups: [ProjectFolders.CandidateGroup] { ProjectFolders.candidateGroups(shown) }
 
     var body: some View {
         List {
-            ForEach(groups, id: \.host) { group in
-                Section(group.host ?? "") {
+            ForEach(groups) { group in
+                Section(group.name ?? "") {
                     ForEach(group.items) { candidate in
                         Button { pick(candidate) } label: {
                             HStack(spacing: 10) {
