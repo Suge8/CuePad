@@ -11,7 +11,7 @@ extension DebugScene {
         let store = services.store, host = "notice-fixture"
         let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { error in
             Task { @MainActor in abandon("说明验收执行器失败", error) }
-        }) { _ in
+        }) { _, _ in
             .failed(.verbatim(String(localized: "模型拒绝了请求（400）", table: "Demo")))
         }
         do {

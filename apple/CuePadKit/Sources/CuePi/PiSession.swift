@@ -233,7 +233,7 @@ extension PiBridgeError: ShownError {
         case .insecureSocketDirectory(let path): "Agent 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
         case .socketDirectoryTooLong: "Agent 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
-        case .upgradingExtension: "会话扩展正在升级"
+        case .upgradingExtension: DeliveryPreparation.upgrading.value
         case .operationStarted(let reason): "会话操作已经开始，结果尚未确认：\(reason.embedded)"
         case .unsupported: "这个 Agent 会话不支持这样操作"
         case .notEnded: "尚未确认会话已结束"

@@ -55,7 +55,7 @@ struct AnswerLineTests {
         try await store.writePiTranscript(PiTranscript(
             sessionID: "s", messages: [PiChatMessage(sessionID: "s", entryID: "u1", seq: 1, role: .user, text: "把 RSS 改成全文", at: asked.addingTimeInterval(-60))],
             recap: PiRecap(lastPrompt: "把 RSS 改成全文")))
-        let executor = DeliveryExecutor(store: store, hostID: "mac", onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+        let executor = DeliveryExecutor(store: store, hostID: "mac", onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
         defer { Task { await executor.stop() } }
 
         let request = try await app.services.answer(.option("另存为 feed-full.xml"), to: session)

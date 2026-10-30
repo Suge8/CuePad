@@ -28,7 +28,7 @@ public actor DeliveryExecutor {
   private let recover: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   private let preparation: @Sendable (DeliveryRequest) async -> DeliveryAdmission
   private var waiting: [UUID: Task<Void, Never>] = [:]
-  private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
+  private let handler: @Sendable (DeliveryRequest, DeliveryAdmission.Access) async -> DeliveryOutcome
   /// 把一个附件取到本机（App 给的 `AppServices.fetchFile`）：执行器等附件文件只在这里；缺省是这台取不来
   private let fetchFile: @Sendable (String) async throws -> Void
   private var uploads: [UUID: Task<Void, Never>] = [:]
@@ -50,8 +50,8 @@ public actor DeliveryExecutor {
     onWritten: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
     fetchFile: @escaping @Sendable (String) async throws -> Void = { _ in throw CueStoreError.notFound },
     recover: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome = { _ in .unconfirmed(DeliveryRequest.interruptedReason) },
-    preparation: @escaping @Sendable (DeliveryRequest) async -> DeliveryAdmission = { _ in .ready },
-    handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
+    preparation: @escaping @Sendable (DeliveryRequest) async -> DeliveryAdmission = { _ in .ready(.resumable) },
+    handler: @escaping @Sendable (DeliveryRequest, DeliveryAdmission.Access) async -> DeliveryOutcome
   ) {
     self.store = store
     self.hostID = hostID
@@ -107,6 +107,7 @@ public actor DeliveryExecutor {
   }
 
   private func enqueue() {
+    guard started, !Task.isCancelled else { return }
     if runner != nil { rerun = true; return }
     runner = Task { await self.process() }
   }
@@ -142,23 +143,25 @@ public actor DeliveryExecutor {
         }
         continue
       }
-      let admission = await preparation(request)
-      if case .waiting(let pending) = admission {
+      let access: DeliveryAdmission.Access
+      switch await preparation(request) {
+      case .waiting(let pending):
         await prepare(request, pending)
         continue
+      case .ready(let allowed): access = allowed
       }
       guard started, !Task.isCancelled else { return nil }
       let reserved = await reporting {
         let deadline = timing.now().addingTimeInterval(Self.maxAge.seconds)
-        if case .existingTarget = admission { return try await store.reserveDeliveryTarget(request.id, host: hostID, until: deadline) }
-        return try await store.claimDelivery(request.id, host: hostID, until: deadline)
+        switch access {
+        case .existingOnly: return try await store.reserveDeliveryTarget(request.id, host: hostID, until: deadline)
+        case .resumable: return try await store.claimDelivery(request.id, host: hostID, until: deadline)
+        }
       }
       if let claimed = reserved, let claimed {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
-        var intent = request
-        if case .existingTarget = admission { intent.status = .known(.preparing) }
-        return Dispatch(request: claimed, intent: intent)
+        return Dispatch(request: claimed, access: access)
       }
     }
     return nil
@@ -166,15 +169,14 @@ public actor DeliveryExecutor {
 
   private struct Dispatch {
     let request: DeliveryRequest
-    let intent: DeliveryRequest
+    let access: DeliveryAdmission.Access
   }
 
-  /// handler 接收领取前的意图快照，保留是否只能连接现有目标；领取事实与结果守卫由执行器独占。
   private func run(_ dispatch: Dispatch) async {
     guard started, !Task.isCancelled else { return }
     var request = dispatch.request
     if request.status == .known(.preparing) {
-      if case .waiting(let pending) = await preparation(dispatch.intent) {
+      if case .waiting(let pending) = await preparation(request) {
         await prepare(request, pending)
         return
       }
@@ -192,7 +194,7 @@ public actor DeliveryExecutor {
       self.notifyWritten(request.id)
     }
     let began = timing.now()
-    let outcome = await handler(dispatch.intent)
+    let outcome = await handler(request, dispatch.access)
     claimUpload?.cancel()
     claimUpload = nil
     let took = timing.now().timeIntervalSince(began)
@@ -202,7 +204,7 @@ public actor DeliveryExecutor {
 
   /// 在旁边把这条请求的附件取齐：取到了再过一遍队列（文件不在库里，库的变化叫不醒执行器），取不来按失败写回。
   private func fetch(_ keys: [String], for request: DeliveryRequest) {
-    guard fetching[request.id] == nil else { return }
+    guard started, !Task.isCancelled, fetching[request.id] == nil else { return }
     fetching[request.id] = Task { [fetchFile] in
       do {
         try await withThrowingTaskGroup(of: Void.self) { group in
@@ -246,7 +248,7 @@ public actor DeliveryExecutor {
   private func prepare(_ request: DeliveryRequest, _ preparation: DeliveryPreparation) async {
     guard started, !Task.isCancelled, waiting[request.id] == nil,
       let stored = await reporting({ try await store.awaitDeliveryTarget(request, reason: preparation.reason, until: timing.now().addingTimeInterval(Self.maxAge.seconds)) }),
-      let stored, let deadline = stored.deadlineAt else { return }
+      let stored, let deadline = stored.deadlineAt, started, !Task.isCancelled else { return }
     notifyWritten(stored.id)
     waiting[stored.id] = Task { [store, timing] in
       do {

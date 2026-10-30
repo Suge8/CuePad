@@ -51,9 +51,9 @@ final class MacExecutor {
             return await PiDeliveryConfirmation(store: store, pi: pi).recover(request)
         }, preparation: { [pi] request in
             await MacDeliveryPreparation(pi: pi).current(request)
-        }) { [weak self] request in
+        }) { [weak self] request, access in
             guard let self else { return .failed(ShownText("这台 Mac 上的 CuePad 正在退出")) }
-            return await self.run(request)
+            return await self.run(request, access: access)
         }
         running = executor
         do { try await executor.start() }
@@ -68,10 +68,10 @@ final class MacExecutor {
     }
 
     /// 每个意图只尝试一次。明确的前置拒绝可报失败，交出后的超时、断线或执行错误保留未知。
-    private func run(_ request: DeliveryRequest) async -> DeliveryOutcome {
+    private func run(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async -> DeliveryOutcome {
         do {
             guard try await store.mayBeginDelivery(request.id) else { return .failed(DeliveryPreparation.abandoned) }
-            return try await perform(request)
+            return try await perform(request, access: access)
         } catch {
             AppServices.log.error("投送请求 \(request.id, privacy: .public) \(request.mode.rawValue, privacy: .public) 没成：\(String(describing: error), privacy: .public)")
             if request.mode == .known(.start), error is PiHostError { return .unconfirmed(ShownText(error)) }
@@ -80,7 +80,7 @@ final class MacExecutor {
     }
 
     /// 每种发送方式一个分支。不认识的方式 `DeliveryExecutor` 已按失败写回，走到这里的都是已知方式。
-    private func perform(_ request: DeliveryRequest) async throws -> DeliveryOutcome {
+    private func perform(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws -> DeliveryOutcome {
         guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
         switch mode {
         case .withdraw:
@@ -92,10 +92,10 @@ final class MacExecutor {
         case .end: try await end(request.target)
         case .stop: try await stop(request.target)
         case .retry: try await retry(request.target)
-        case .answer: try await answer(request)
-        case .config: try await configure(request)
-        case .command: try await runCommand(request)
-        case .send: return try await deliver(request)
+        case .answer: try await answer(request, access: access)
+        case .config: try await configure(request, access: access)
+        case .command: try await runCommand(request, access: access)
+        case .send: return try await deliver(request, access: access)
         case .tidy:
             guard let orders = request.tidyOrders else { throw SendError.unsupportedMode(request.mode.rawValue) }
             // 别的设备发来的整理不留撤销：撤销只给在这台上点的那一下（发的那台在按钮旁写明撤不回，`TidyConsequence`）
@@ -111,8 +111,8 @@ final class MacExecutor {
 
     /// 发出的话：会话在跑就由桥先打断这一轮（忙不忙以此刻为准，写请求时看到的"歇着"可能已过时），以这句开新一轮。
     /// 会话已结束时先在后台恢复；送出后记发送记录（带上请求 id，扩展写进会话文件的那条消息据此与请求气泡对上）。
-    private func deliver(_ request: DeliveryRequest) async throws -> DeliveryOutcome {
-        let (_, id, resumed) = try await connect(request)
+    private func deliver(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws -> DeliveryOutcome {
+        let (_, id, resumed) = try await connect(request.target, access: access)
         guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
         do {
             let result = try await send(request.content, of: request, to: session)
@@ -160,22 +160,22 @@ final class MacExecutor {
 
     /// 作答、改会话设置（会话名、模型、思考强度）与斜杠命令交给扩展，不是发出去的内容，不记发送记录。
     /// 会话已结束时与发消息一样先在后台恢复：改名对已结束的会话也要能做，Pi 只在活着的进程里写会话名。
-    private func answer(_ request: DeliveryRequest) async throws {
+    private func answer(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws {
         guard let answer = request.answer else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新答案
-        let (_, id, _) = try await connect(request)
+        let (_, id, _) = try await connect(request.target, access: access)
         try await pi.answer(answer.value, to: answer.promptID, in: id)
     }
 
-    private func configure(_ request: DeliveryRequest) async throws {
+    private func configure(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws {
         guard let config = request.config else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新强度，或什么都不改
-        let (_, id, _) = try await connect(request)
+        let (_, id, _) = try await connect(request.target, access: access)
         try await pi.configure(model: config.model, thinking: config.thinking, name: config.name, in: id)
     }
 
     /// 命令带着卡片（发给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录。命令只有文字，带着的图片同文件一样写成路径。
-    private func runCommand(_ request: DeliveryRequest) async throws {
+    private func runCommand(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws {
         let content = SendContent(stored: request.content)
-        let (ref, id, _) = try await connect(request)
+        let (ref, id, _) = try await connect(request.target, access: access)
         try await pi.command(try content.agentText(from: store.files, imagesAsFiles: true).trimmingCharacters(in: .whitespacesAndNewlines), in: id)
         do { try await store.linkDeliveredCard(request, toSession: ref) } catch {
             reportIssue(String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)"))
@@ -210,11 +210,10 @@ final class MacExecutor {
     }
 
     /// 目标会话连着这台 Mac 的桥就用它，已结束的在后台恢复（会话索引里的会话文件与工作目录）。
-    private func connect(_ request: DeliveryRequest) async throws -> (sessionID: String, id: CuePi.PiSession.ID, resumed: Bool) {
-        let target = request.target
+    private func connect(_ target: SendTarget, access: DeliveryAdmission.Access) async throws -> (sessionID: String, id: CuePi.PiSession.ID, resumed: Bool) {
         let ref = try sessionID(of: target)
         if let live = pi.session(sessionID: ref) { return (ref, live.id, false) }
-        if request.status == .known(.preparing) { throw PiBridgeError.sessionEnded }
+        if case .existingOnly = access { throw PiBridgeError.sessionEnded }
         guard let indexed = try await store.piSession(ref) else { throw SendError.sessionNotOnThisMac(target.name) }
         try requireDirectory(URL(filePath: indexed.cwd, directoryHint: .isDirectory))
         try Task.checkCancellation()

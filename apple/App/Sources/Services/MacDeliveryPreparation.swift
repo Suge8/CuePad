@@ -9,15 +9,15 @@ struct MacDeliveryPreparation {
 
     func current(_ request: DeliveryRequest) -> DeliveryAdmission {
         guard let mode = request.mode.known, DeliveryMode.requiresReadySession.contains(mode),
-              request.target.kind == .known(.piSession), let sessionID = request.target.ref else { return .ready }
+              request.target.kind == .known(.piSession), let sessionID = request.target.ref else { return .ready(.resumable) }
         if let live = pi.session(sessionID: sessionID) {
-            return live.upgrading ? .waiting(waiting(for: sessionID)) : .existingTarget
+            return live.upgrading ? .waiting(waiting(for: sessionID)) : .ready(.existingOnly)
         }
-        return request.status == .known(.preparing) ? .waiting(waiting(for: sessionID)) : .ready
+        return request.status == .known(.preparing) ? .waiting(waiting(for: sessionID)) : .ready(.resumable)
     }
 
     func waiting(for sessionID: String) -> DeliveryPreparation {
-        DeliveryPreparation(reason: ShownText(PiBridgeError.upgradingExtension)) { [pi] in
+        DeliveryPreparation(reason: DeliveryPreparation.upgrading) { [pi] in
             let changes = await pi.changes()
             if await Self.isReady(sessionID, in: pi) { return }
             for await _ in changes {

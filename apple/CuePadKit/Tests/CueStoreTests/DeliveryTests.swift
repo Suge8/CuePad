@@ -28,8 +28,8 @@ import Testing
   }
 
   private func executor(_ handler: Handler) -> DeliveryExecutor {
-    DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") }) {
-      await handler.handle($0)
+    DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") }) { request, _ in
+      await handler.handle(request)
     }
   }
 
@@ -44,7 +44,7 @@ import Testing
   private func executor(_ uploads: Uploads, handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome) -> DeliveryExecutor {
     DeliveryExecutor(
       store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") },
-      onWritten: { [store] id in await uploads.add(try? await store.deliveryRequest(id)?.status.known) }, handler: handler)
+      onWritten: { [store] id in await uploads.add(try? await store.deliveryRequest(id)?.status.known) }, handler: { request, _ in await handler(request) })
   }
 
   /// 当场执行完的只交出结果那一版：领取那一版在路上时结果得等它回来才能传，手机的回执要多等一个来回。

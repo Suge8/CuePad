@@ -163,7 +163,7 @@ extension DebugScene {
                 _ = try await services.store.requestDelivery(String(localized: "把报价单备份到网盘", table: "Demo"), to: quote.target, on: quote.hostID, mode: .send)
             }
             let seeded = Date.now
-            relayExecutor = DeliveryExecutor(store: store, hostID: relay.hostID, onIssue: { _ in }) { request in
+            relayExecutor = DeliveryExecutor(store: store, hostID: relay.hostID, onIssue: { _ in }) { request, _ in
                 request.createdAt < seeded
                     && [String(localized: "顺便备份一下线上数据库", table: "Demo"), String(localized: "把报价单备份到网盘", table: "Demo")].contains(request.content)
                     ? .failed(ShownText(SendError.sessionNotOnThisMac(request.target.name))) : .succeeded

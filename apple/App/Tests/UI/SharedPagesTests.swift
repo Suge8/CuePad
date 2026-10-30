@@ -66,7 +66,7 @@ struct SharedPagesTests {
         }
         guard case .sending = try await phase() else { Issue.record("发出后应是在路上：\(try await phase())"); return }
 
-        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _ in .succeeded }
+        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _, _ in .succeeded }
         try await executor.start()
         _ = try await eventually(store, { try SessionLaunch(request: request.id, token: "tok-1").progress(from: $0).phase(at: .always()) }) { $0 == .opening }
         #expect(try await phase() == .opening)
@@ -77,7 +77,7 @@ struct SharedPagesTests {
         await executor.stop()
 
         let refused = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: "tok-2"), title: "圆桌", on: "mac-b", card: nil)
-        let failing = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _ in .failed(.verbatim("文件夹不在了")) }
+        let failing = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _, _ in .failed(.verbatim("文件夹不在了")) }
         try await failing.start()
         _ = try await eventually(store, { try $0.deliveryRequest(refused.id)?.isOpen }) { $0 == false }
         await failing.stop()

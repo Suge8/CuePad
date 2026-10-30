@@ -55,7 +55,7 @@ struct PiChatTests {
         func item() async throws -> PiSessionListItem { try #require(try await store.piSessionPage(PiSessionQuery()).items.first) }
         #expect(try await item().undelivered(at: .always()) == 0)
 
-        let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _ in .failed(.verbatim("Pi 已经退出")) }
+        let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _, _ in .failed(.verbatim("Pi 已经退出")) }
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(lost.id)?.isOpen }) { $0 == false }
         await executor.stop()

@@ -58,7 +58,7 @@ struct SessionTaskTests {
         try await store.bindSession("s1", to: task.id)
         try await workspace.toggle(task.id)
         #expect(try await store.card(task.id)?.status == .done)
-        let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+        let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
         try await executor.start()
         defer { Task { await executor.stop() } }
 
@@ -148,7 +148,7 @@ struct SessionTaskTests {
             try await recorder.update(sessionID: id, state: .settled, title: title, hosted: true, agent: .pi)
         }
         try await store.bindSession("s1", to: task.id)
-        let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { request in
+        let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { request, _ in
             if request.mode == .known(.end), let id = request.target.ref { _ = try? await recorder.update(sessionID: id, state: .ended) }
             return .succeeded
         }

@@ -27,7 +27,7 @@ struct SessionControlsTests {
 
     /// Mac 执行器按给定结果写回，等到这条有结果。
     private func execute(_ request: DeliveryRequest, failing reason: String) async throws -> DeliveryRequest {
-        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _ in .failed(.verbatim(reason)) }
+        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _, _ in .failed(.verbatim(reason)) }
         try await executor.start()
         defer { Task { await executor.stop() } }
         for try await current in store.observe({ try $0.deliveryRequest(request.id) }) {

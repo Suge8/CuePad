@@ -10,6 +10,7 @@ public struct DeliveryPreparation: Sendable {
     self.wait = wait
   }
 
+  public static let upgrading = ShownText("会话扩展正在升级")
   public static let expired = ShownText("准备超时，尚未派发，不会自动发送")
   public static let abandoned = ShownText("请求已放弃，尚未派发")
   public static let ready = ShownText("准备就绪，等待派发")
@@ -17,7 +18,9 @@ public struct DeliveryPreparation: Sendable {
 
 /// 派发条件是能力约束，不把一次就绪通知当作后续派发许可。
 public enum DeliveryAdmission: Sendable {
-  case ready
-  case existingTarget
+  /// 派发时取得目标的权限，不表示请求进度。
+  public enum Access: Sendable { case resumable, existingOnly }
+
+  case ready(Access)
   case waiting(DeliveryPreparation)
 }
