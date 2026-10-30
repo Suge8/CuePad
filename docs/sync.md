@@ -1,7 +1,5 @@
 # 同步参考
 
-同步通路、拉取、发送与通知的规则和理由写在各自类型的头注释里：通路、冷启动与为什么不用 CKSyncEngine 在 `CloudSync`，拉、推在 `ZonePuller`、`RecordSender`，失败怎么归类、怎么重试在 `SyncFault`、`SyncCoordinator+Hold`，等待理由与立即同步在 `AppServices+Sync.swift`，说的话到哪了在 `Speech`。这里只补代码里没有的：实测结论、跨设备的取舍、排查与真机验证。
-
 ## 拉取节奏与门铃
 
 别的设备的改动入库都经拉取：门铃、通知或按节奏触发。门铃在别的设备的一批改动被 iCloud 收下时经自建中转通知这台，只带"有新东西"；实时活动另经同一中转发往 APNs，不写入手机资料库。规则在 `Relay`（连接、重连、心跳、欠一次、进后台前断开、后台短连）、`RelaySecret`（密钥，经 `CloudSync.relaySecret` 取）、`RelayCredentials`（房间号与签名）、`AppServices+Relay`（何时连、按与听），中转与协议在 `relay/`；节奏在 `SyncPoller.Cadence`，等待理由只在 `AppServices.pollingCadence` 加。
@@ -117,7 +115,7 @@ Cue 说话的工具等结果至多 `Speech.cueWait`；没告诉它的失败作�
 
 - Mac 不注册远程通知、签名里没有推送权限（aps-environment），通知都是本机发的本地通知；同步到达本来也不靠推送（见「拉取节奏与门铃」）。
 - `notify` 是一次性事件标志，通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的写入取代就不送出。要保证每个事件都送达得另建追加式的通知事件记录，那是另一种设计。
-- 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒手机。令牌经私有 iCloud 加密同步（`CueLiveActivity`），内容复用 Cue 摘要（`ActivityPublisher`）；手机不拿本地旧库覆盖远程活动。中转瞬时可见计数、标题与问题，不留存；密钥只在服务端。[部署与隐私边界](../relay/README.md)。
+- 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒；手机不拿本地旧库覆盖。令牌私有 iCloud 加密同步，中转内容不留存，密钥只在服务端。[部署与隐私边界](../relay/README.md)。
 - ActivityKit 推送仍受网络、优先级与系统预算限制，不保证秒到；活动最多八小时，本次不远程开启。`stale-date` 只标过时，不会取得新事实。依据：[ActivityKit](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications)、[后台通知](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app)。
 - Mac 提示音装进 ~/Library/Sounds（`AlertSounds`），卸载 App 后会留下，也会出现在系统设置的提示音列表里。
 - 改订阅的定义（谓词、选项、通知文案 key）等于改 schema，见 [release.md](release.md)。
@@ -139,6 +137,12 @@ CloudKit 日志里的错误详情是 `<private>`。要复现：拿用户库的�
 同步是否真在跑以库为准（只读复制出来看）：`syncState` 有一行 `zoneToken`，`syncRecords` 的行数随推送增长到与同步表记录数相当。真机验证：装发布版 → 设置里的 iCloud 同步先显示"正在连接 iCloud…"再变"已同步" → 几分钟内复制库检查这两张表 → 另一台设备上看到同一批项目、灵感与任务。
 
 验证生产环境的订阅能否创建：用 Developer ID 描述文件签名、带 production 容器权限的最小 Mac 程序保存订阅，打印完整的 CKError（看 `description`，`localizedDescription` 会丢掉服务端的说明）。开发环境的 Mac 描述文件按 Provisioning UDID 登记设备，不是 Hardware UUID。
+
+### 实时活动的手机取证
+
+`xc.sh activity-log <输出.json>` 签隔离 Mac 副本，在 AppDelegate 与库启动前只读生产私有区，不重启正式版。无报告成功输出 `[]`；失败非零退出，保留旧导出。
+
+取证独立于地址；先落盘再异步上传，失败不改活动决策、不额外持有后台时间。按账号隔离，最近七天最多 96 条；不记正文、原始令牌或完整错误。`contentObserved` 的 `sourceAt`、`contentTag` 只证明 App 观察到内容版本，不是屏幕确认。隔离演示加 `-CuePadActivityDiagnostics YES` 留本地记录；未接工具、跨网络与后台调度仍须 TestFlight 真机验收。
 
 ### 推送叫醒被系统结束的 App
 

@@ -62,12 +62,12 @@ extension CueStore {
 
   /// 旧活动结束的回调不能删掉新活动刚写下的地址。
   @discardableResult
-  public func removeActivityDestination(device: String, activityID: String? = nil) throws -> UUID? {
+  public func removeActivityDestination(device: String, activityID: String? = nil) throws -> ActivityDestination? {
     try write {
       let id = ActivityDestination.recordID(device: device)
       guard let old = try find(ActivityDestination.self, id), activityID == nil || old.activityID == activityID else { return nil }
       try db.run("DELETE FROM activityDestinations WHERE id = ?", [id])
-      return id
+      return old
     }
   }
 }

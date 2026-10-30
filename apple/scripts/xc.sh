@@ -3,6 +3,7 @@
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
 #   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 的整模块编译
 #   xc.sh build <mac|ios|ipad>
+#   xc.sh activity-log [输出.json]                  生产 iCloud 活动取证只读导出：签隔离副本、不启动应用服务，不打开真实库、不重启正式版
 #   xc.sh strings                                   编 mac 与 ios，把界面文字收进 String Catalog，列出缺英文的（strings.py 头注释）
 #   xc.sh test <mac|ios|ipad> [xcodebuild 参数…]     如 -only-testing:CuePadTests/SuiteName；ios、ipad 不带参数时连 CuePadKit 也在模拟器上跑
 #   xc.sh test kit [xcodebuild 参数…]               CuePadKit 在 macOS 上的测试，如 -only-testing:CueSyncTests/PendingTests
@@ -44,7 +45,7 @@ IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 测试里条件等待的上限从这个时限推出（CueTestSupport 的 conditionBudget）：测试不另写短的墙钟上限
 export TEST_RUNNER_CUEPAD_TEST_TIME_LIMIT=$TEST_TIME_LIMIT
-USAGE="用法：$0 <check|build|strings|test|shot|rec|run|stop|perf|release|device|provision> [mac|ios|ipad|kit] …（见脚本头注释）"
+USAGE="用法：$0 <check|build|strings|test|shot|rec|run|stop|perf|release|device|provision|activity-log> [mac|ios|ipad|kit] …（见脚本头注释）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -67,10 +68,11 @@ case "$cmd" in
     # 本检出上一个 run 的实例租着一台模拟器：先收掉再排队，免得槽位被自己占满
     if [ "$cmd" = run ] && [ "$platform" != mac ]; then python3 "$APPLE_DIR/scripts/app.py" stop sim >/dev/null; fi
     case "$platform" in ios) xc_enter "$IOS_DEVICE" "$0" "$@" ;; ipad) xc_enter "$IPAD_DEVICE" "$0" "$@" ;; *) xc_enter "" "$0" "$@" ;; esac ;;
-  check|build|build-perf) xc_enter "" "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
+  check|build|build-perf|activity-log) xc_enter "" "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
 [ "$cmd" != check ] || platform=ios
+[ "$cmd" != activity-log ] || platform=mac
 perf_script=""
 if [ "$cmd" = perf ]; then
   # perf idle|launch <平台> …：平台跟着传给 perf-idle.sh、perf-launch.sh
@@ -140,6 +142,9 @@ case "$cmd" in
     wait "$kit" || status=$?
     wait "$wmo" || status=$?
     exit $status ;;
+  activity-log)
+    xcd all
+    python3 "$APPLE_DIR/scripts/activity-log.py" "$app" "${2:-$DERIVED/activity-diagnostics.json}" ;;
   build) xcd all; sign_development ;;
   build-perf) built "$DERIVED/build-key-$platform" "$app" all xcb -quiet build ;;
   test)

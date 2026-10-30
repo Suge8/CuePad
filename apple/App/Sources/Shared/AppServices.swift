@@ -266,7 +266,7 @@ final class AppServices {
             ViewerKeeper(store: store, sync: sync, device: $0.uuidString)
         }
         if location.touchesRealWorld || DebugHooks.opensLiveActivity {
-            cueActivity = CueLiveActivity(store: store, sync: activitySync, device: UIDevice.current.identifierForVendor?.uuidString) { [weak self] in
+            cueActivity = CueLiveActivity.make(store: store, sync: activitySync, location: location) { [weak self] in
                 try self?.remoteActivityState()
             }
         }
@@ -290,7 +290,7 @@ final class AppServices {
     /// 换账号或清除资料前先撤销活动；重置同步令牌的决定已做出，不等异步状态流才阻止旧库重开活动。
     func resolveSync(_ resolution: SyncResolution) async throws {
         #if os(iOS)
-        await cueActivity?.invalidate().value
+        await cueActivity?.invalidate(reason: "resolveSync").value
         #endif
         syncReconciled = false
         try await sync?.resolve(resolution)
@@ -307,7 +307,8 @@ final class AppServices {
         #if os(iOS)
         if syncStatus != state.status {
             switch state.status {
-            case .noAccount, .needsDecision: cueActivity?.invalidate()
+            case .noAccount: cueActivity?.invalidate(reason: "syncNoAccount")
+            case .needsDecision: cueActivity?.invalidate(reason: "syncNeedsDecision")
             default: break
             }
         }
