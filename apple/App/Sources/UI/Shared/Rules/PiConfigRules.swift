@@ -23,7 +23,12 @@ nonisolated enum PiModelLabel {
         }
         let longest = candidates.compactMap { $0.account?.route?.count }.max()
         let matching = candidates.filter { $0.account?.route?.count == longest }
-        if matching.count == 1 { return matching.first }
+        if let scope = matching.first?.account?.scope, matching.allSatisfy({ $0.account?.scope == scope }) {
+            return matching.max {
+                let first = $0.observedAt ?? .distantPast, second = $1.observedAt ?? .distantPast
+                return first == second ? $0.modifiedAt < $1.modifiedAt : first < second
+            }
+        }
         return quotas.first { $0.account?.source == source && $0.account?.route == nil && $0.status == .unsupported }
     }
 

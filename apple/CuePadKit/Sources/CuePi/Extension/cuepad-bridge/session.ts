@@ -163,7 +163,8 @@ export class Session {
 	 * 不在这里去重：值没变的观测也说明刚观测过，"更新于"要跟上；写不写库只由 CuePad 定（`CueStore.recordQuota`）。 */
 	/** 使用这一轮开始前已报告的授权，不在响应返回后重新解析令牌、把旧响应归到新授权。 */
 	observeQuota(provider: string, windows: QuotaWindow[], complete: boolean) {
-		const account = this.info.models.find((model) => model.provider === provider)?.account;
+		const model = this.info.model;
+		const account = model?.provider === provider ? model.account : null;
 		if (windows.length === 0 || account?.kind !== "oauth" || account.source || !account.scope) return;
 		this.reportQuota({ provider, account, status: "observed", windows, complete });
 	}
