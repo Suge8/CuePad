@@ -28,7 +28,7 @@ export async function account(ctx: ExtensionContext, model: Model) {
 	}
 	const scope = partition([baseUrl, [...headers].sort()]);
 	const native = baseUrl === NATIVE_URLS[model.provider];
-	const identity: Account = native ? { kind, scope } : { kind, scope, source: scope };
+	const identity: Account = native ? { kind, scope } : { kind, scope, source: scope, name: new URL(baseUrl).host };
 	return { identity, baseUrl, headers, native, token: resolved.apiKey };
 }
 

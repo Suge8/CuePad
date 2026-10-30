@@ -153,6 +153,8 @@ enum Schema {
     },
     // 86：preparing 只等现有会话就绪，未派发且可撤回；85 客户端不能正确合并这个阶段。
     Upgrade { _ in },
+    // 87：余额与套餐明细；旧端仍可读固定窗口，缺明细不构造余额。
+    "ALTER TABLE accountQuotas ADD COLUMN details TEXT; ALTER TABLE accountQuotas ADD COLUMN requestedAt INTEGER;",
   ]
 
   static let activityDestinationsTable = """

@@ -10,10 +10,9 @@ extension CueStore {
     return all.compactMap { quota in
       guard let source = quota.account?.source, let state = sources["\(quota.hostID)/\(source)"] else { return quota }
       if quota.account?.route == nil { return state.hasCards ? nil : quota }
-      if quota.status == .unsupported { return quota }
-      guard let failure = state.summary, failure.status == .failed, failure.modifiedAt > quota.modifiedAt else { return quota }
+      guard let failure = state.summary, (failure.status == .failed || failure.status == .unsupported), failure.modifiedAt > quota.modifiedAt else { return quota }
       var failed = quota
-      failed.status = .failed
+      failed.status = failure.status
       failed.modifiedAt = failure.modifiedAt
       return failed
     }
@@ -43,41 +42,49 @@ extension CueStore {
   /// 或上次写已超过 `touchAfter`（只为"更新于"不过时）；否则不写，每次回复都来的观测不会每次都写库与同步。返回是否写了。
   @discardableResult
   public func recordQuota(_ report: QuotaReport, host: String) throws -> Bool {
-    try write {
-      var removed = false
-      if let scopes = report.activeScopes, let source = report.account.source {
-        for old in try select(AccountQuota.self, where: "hostID = ?", [host])
-          where old.account?.source == source && old.account?.route != nil && !scopes.contains(old.account?.scope ?? "") {
-          try db.run("DELETE FROM accountQuotas WHERE id = ?", [old.id])
-          removed = true
-        }
-      }
-      let id = AccountQuota.recordID(provider: report.provider, host: host, account: report.account)
-      let existing = try find(AccountQuota.self, id)
-      let current = try select(AccountQuota.self, where: "hostID = ?", [host], orderBy: "modifiedAt DESC, id", limit: 1).first
-      let now = max(Date.stamp, current?.modifiedAt.addingTimeInterval(AccountQuota.updateStep) ?? .distantPast)
-      if report.status == .observed, let stamp = report.observedAt, let previous = existing?.observedAt, stamp < previous { return removed }
-      let status = report.status == .unobserved && !report.complete ? existing?.status ?? .unobserved : report.status
-      let windows = report.status == .observed ? report.merged(into: existing?.windows ?? []) : existing?.windows ?? []
-      let observedAt = report.status == .observed ? report.observedAt ?? now : existing?.observedAt
-      if let existing, existing.status == status, existing.account == report.account, !Self.changedMeaningfully(existing.windows, windows),
-        now.timeIntervalSince(existing.modifiedAt) < AccountQuota.touchAfter,
-        observedAt == existing.observedAt || observedAt?.timeIntervalSince(existing.observedAt ?? .distantPast) ?? 0 < AccountQuota.touchAfter
-      {
-        return removed
-      }
-      let quota = AccountQuota(
-        id: id, provider: report.provider, hostID: host, windows: windows, createdAt: existing?.createdAt ?? now, modifiedAt: now,
-        account: report.account, status: status, observedAt: observedAt)
-      if existing == nil {
-        try insert(quota)
-      } else {
-        try db.run(
-          "UPDATE accountQuotas SET windows = ?, modifiedAt = ?, status = ?, observedAt = ?, account = ? WHERE id = ?",
-          [JSONColumn.encode(windows), now, status.rawValue, observedAt, JSONColumn.encode(report.account), id])
-      }
-      return true
+    try write { try applyQuota(report, host: host) }
+  }
+
+  private func applyQuota(_ report: QuotaReport, host: String) throws -> Bool {
+    let id = AccountQuota.recordID(provider: report.provider, host: host, account: report.account)
+    let existing = try find(AccountQuota.self, id)
+    if let start = report.requestedAt, let previous = existing?.requestedAt, start < previous { return false }
+    if report.status == .observed, let stamp = report.observedAt, let previous = existing?.observedAt, stamp < previous { return false }
+    var removed = false
+    for account in report.accounts ?? [] {
+      guard account.account.source == report.account.source, account.account.route != nil else { continue }
+      removed = try applyQuota(account, host: host) || removed
     }
+    if let scopes = report.activeScopes, let source = report.account.source {
+      for old in try select(AccountQuota.self, where: "hostID = ?", [host])
+        where old.account?.source == source && old.account?.route != nil && !scopes.contains(old.account?.scope ?? "") {
+        try db.run("DELETE FROM accountQuotas WHERE id = ?", [old.id])
+        removed = true
+      }
+    }
+    let current = try select(AccountQuota.self, where: "hostID = ?", [host], orderBy: "modifiedAt DESC, id", limit: 1).first
+    let now = max(Date.stamp, current?.modifiedAt.addingTimeInterval(AccountQuota.updateStep) ?? .distantPast)
+    let status = report.status == .unobserved && !report.complete ? existing?.status ?? .unobserved : report.status
+    let details = report.status == .observed ? report.details : existing?.details ?? report.details
+    let windows = report.status == .observed ? report.merged(into: existing?.windows ?? []) : existing?.windows ?? []
+    let observedAt = report.status == .observed ? report.observedAt ?? now : existing?.observedAt
+    if let existing, existing.status == status, existing.account == report.account, existing.details == details, report.requestedAt == nil, report.activeScopes == nil, !Self.changedMeaningfully(existing.windows, windows),
+      now.timeIntervalSince(existing.modifiedAt) < AccountQuota.touchAfter,
+      observedAt == existing.observedAt || observedAt?.timeIntervalSince(existing.observedAt ?? .distantPast) ?? 0 < AccountQuota.touchAfter
+    {
+      return removed
+    }
+    let quota = AccountQuota(
+      id: id, provider: report.provider, hostID: host, windows: windows, createdAt: existing?.createdAt ?? now, modifiedAt: now,
+      account: report.account, status: status, observedAt: observedAt, details: details, requestedAt: report.requestedAt ?? existing?.requestedAt)
+    if existing == nil {
+      try insert(quota)
+    } else {
+      try db.run(
+        "UPDATE accountQuotas SET windows = ?, modifiedAt = ?, status = ?, observedAt = ?, account = ?, details = ?, requestedAt = ? WHERE id = ?",
+        [JSONColumn.encode(windows), now, status.rawValue, observedAt, JSONColumn.encode(report.account), details.map(JSONColumn.encode), quota.requestedAt, id])
+    }
+    return true
   }
 
   private static func changedMeaningfully(_ old: [QuotaWindow], _ new: [QuotaWindow]) -> Bool {
@@ -89,11 +96,11 @@ extension CueStore {
     }
   }
 
-  /// 请 `host` 那台 Mac 刷新订阅额度（手机上的额度视图打开、数据陈旧时）：与发送共用投送请求与执行器，方式是 `quota`；
+  /// 请 `host` 那台 Mac 读取额度清单（手机上的额度面板打开时）：与发送共用投送请求与执行器，方式是 `quota`；
   /// 已有一条在路上时返回它，不再写第二条。
   public func requestQuotaRefresh(on host: String) throws -> DeliveryRequest {
     let mode = DeliveryMode.quota
-    if let open = try select(DeliveryRequest.self, where: "mode = ? AND status IN (\(DeliveryStatus.openSQL))", [mode.rawValue]).first(where: { Speech.trip($0, at: .always(at: timing.now())).inTransit }) {
+    if let open = try select(DeliveryRequest.self, where: "mode = ? AND status IN (\(DeliveryStatus.openSQL))", [mode.rawValue]).first(where: { $0.hostID == host && Speech.trip($0, at: .always(at: timing.now())).inTransit }) {
       return open
     }
     return try requestDelivery(mode.rawValue, to: SendTarget(kind: .mac, name: "CuePad", ref: nil), on: host, mode: mode)

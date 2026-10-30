@@ -10,7 +10,7 @@ import SwiftUI
 /// 这就是最后一层，不再有点开的：不是按钮、没有按压。放得下时账号并排成等宽的几栏，否则一个一块往下排（`QuotaColumns`）。
 ///
 /// 配色只用墨：余量足是次要墨色，用过七成是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）；胭脂时数字一起变色。
-/// 读数在新观测到达时变，另外在每个窗口的重置时刻各变一次（`Moments` 睡到 `nextReset(after:)`：等到重置是业务语义，不是周期刷新）：
+/// 读数在新观测到达、变陈旧与每个窗口的重置时刻变化（`Moments` 睡到 `nextReset(after:)`：等到重置是业务语义，不是周期刷新）：
 /// 条与匀速线用无回弹弹簧过去、数字滚动换字，减弱动态效果时直接到终态；没有常驻动画与周期定时器。
 struct QuotaDetail: View {
     @Environment(AppServices.self) private var services
@@ -36,7 +36,7 @@ private struct QuotaEmpty: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("还没有额度").font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
-            Text("连接 Agent 会话后，这里显示授权支持的额度信息")
+            Text("连接 Agent 会话后，这里显示订阅额度与 API 余额")
                 .font(Typography.meta).foregroundStyle(palette.ink2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -78,7 +78,7 @@ private struct QuotaColumns: Layout {
 }
 
 extension View {
-    /// 额度视图出现（Mac 的侧栏额度环与明细、手机的页在前台或回到前台）或有了可问的（会话连上）时，数据陈旧就查一次（节流在 `AccountQuotas`）。
+    /// 打开额度或来源改变时读一次清单；不根据已有账号的观测时间阻止发现新账号。
     func refreshesQuota() -> some View { modifier(QuotaRefreshOnAppear()) }
 }
 
@@ -96,7 +96,7 @@ private struct QuotaRefreshOnAppear: ViewModifier {
 
     func body(content: Content) -> some View {
         let shouldRefresh = active && foreground && services.canRefreshQuota
-        content.task(id: shouldRefresh) {
+        content.task(id: shouldRefresh ? services.quotaRefreshKey : []) {
             guard shouldRefresh else { return }
             await workspace.refreshQuota()
         }
@@ -122,7 +122,13 @@ private struct QuotaAccount: View {
             }
             .font(Typography.secondary.weight(.medium))
             VStack(alignment: .leading, spacing: 10) {
+                if let plan = meter.plan { Text(verbatim: plan).font(Typography.meta).foregroundStyle(palette.ink2) }
+                if let balance = meter.balance {
+                    Text(verbatim: balance).font(Typography.gaugeNumber).monospacedDigit().foregroundStyle(palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let message = meter.message { Text(message).font(Typography.meta).foregroundStyle(palette.ink2) }
+                ForEach(Array(meter.values.enumerated()), id: \.offset) { _, value in QuotaValueRow(value: value) }
                 ForEach(meter.windows) { QuotaWindowRow(window: $0) }
                 if let url = meter.usageURL { Link("管理用量", destination: url).font(Typography.meta) }
             }
@@ -132,13 +138,15 @@ private struct QuotaAccount: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// 账号名，数据陈旧时接"· x 分钟前"。
+    /// 每个账号都标原观测时间；查询成功不替换为请求完成时间。
     @ViewBuilder private var title: some View {
         let account = Text(meter.account).foregroundStyle(palette.ink)
-        if meter.isStale {
-            LiveText(style: PiClock.ago(meter.updatedAt).live(.list)) { ago in
+        if let updatedAt = meter.updatedAt {
+            LiveText(style: PiClock.ago(updatedAt).live(.list)) { ago in
                 Text("\(account)\(Text("\(Dotted.inline)\(ago)").font(Typography.meta).foregroundStyle(palette.ink3))")
             }
+            .help(updatedAt.formatted(date: .abbreviated, time: .standard))
+            .accessibilityHint(Text(updatedAt, format: .dateTime))
         } else {
             account
         }

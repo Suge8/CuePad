@@ -195,6 +195,8 @@ DEFINE SCHEMA
         account       ENCRYPTED STRING,
         status        STRING,
         observedAt    INT64,
+        details       ENCRYPTED STRING,
+        requestedAt   INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

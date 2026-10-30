@@ -20,7 +20,8 @@ const QUOTA_PROVIDERS: Record<string, { url: string; headers: (token: string) =>
  * `binding` 是提供方说此刻卡着的就是它（Claude 响应头的 representative-claim），提供方没说的不带 */
 export type QuotaWindow = { seconds: number; used: number; resetsAt: number; model: string | null; binding?: true };
 /** 一个提供方的一次观测；`complete` 是全部窗口（查用量接口得到的），回复里带回的只有一部分 */
-export type Quota = { provider: string; account: Account; status: "observed" | "unsupported" | "unobserved" | "failed"; windows: QuotaWindow[]; complete: boolean; observedAt?: number; activeScopes?: string[] };
+export type QuotaDetails = { kind: string; plan?: string; balance?: string; values: { name: string; display?: string; used?: number; unlimited?: boolean; balance?: number; unit?: string; resetsAt?: number }[] };
+export type Quota = { provider: string; account: Account; status: "observed" | "unsupported" | "unobserved" | "failed"; windows: QuotaWindow[]; complete: boolean; observedAt?: number; activeScopes?: string[]; details?: QuotaDetails; accounts?: Quota[]; requestedAt?: number };
 
 export function record(value: unknown): Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -110,6 +111,7 @@ export class QuotaFetcher {
 		if (models.length === 0) return ["no available quota sources"];
 		const seen = new Set<string>();
 		const results = await Promise.allSettled(models.map(async (model) => {
+			const requestedAt = Date.now() / 1000;
 			let identity: Account = { kind: this.ctx.modelRegistry.isUsingOAuth(model) ? "oauth" : "apiKey", scope: null };
 			try {
 				const resolved = await account(this.ctx, model);
@@ -118,9 +120,9 @@ export class QuotaFetcher {
 				if (seen.has(key)) return;
 				seen.add(key);
 				if (resolved.native) await this.fetchNative(model, resolved);
-				else await gatewayQuotas(model.provider, resolved, this.report);
+				else await gatewayQuotas(model.provider, resolved, this.report, requestedAt);
 			} catch (error) {
-				this.report({ provider: model.provider, account: identity, status: "failed", windows: [], complete: false });
+				this.report({ provider: identity.source ? "magpie" : model.provider, account: identity, status: "failed", windows: [], complete: false, requestedAt });
 				throw error;
 			}
 		}));
@@ -131,12 +133,12 @@ export class QuotaFetcher {
 		const seen = new Set<string>();
 		for (const model of models) {
 			if (!model.account) continue;
-			const key = `${model.provider}/${model.account.scope}`;
+			const key = model.account.source ?? `${model.provider}/${model.account.scope}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
 			const supported = model.account.source || (model.account.kind === "oauth" && QUOTA_PROVIDERS[model.provider]);
 			const unresolved = model.provider === currentProvider && !model.account.scope;
-			this.report({ provider: model.provider, account: model.account, status: unresolved ? "failed" : supported ? "unobserved" : "unsupported", windows: [], complete: false });
+			this.report({ provider: model.account.source ? "magpie" : model.provider, account: model.account, status: unresolved ? "failed" : supported ? "unobserved" : "unsupported", windows: [], complete: false });
 		}
 	}
 

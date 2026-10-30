@@ -83,7 +83,7 @@ extension Schema {
     -- 额度能力与最近观测：每台 Mac 的每个授权分区一条。
     CREATE TABLE accountQuotas (
       id TEXT PRIMARY KEY NOT NULL, provider TEXT NOT NULL, hostID TEXT NOT NULL, windows TEXT NOT NULL,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, account TEXT, status TEXT, observedAt INTEGER
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, account TEXT, status TEXT, observedAt INTEGER, details TEXT, requestedAt INTEGER
     ) STRICT;
 
     CREATE TABLE piMessages (

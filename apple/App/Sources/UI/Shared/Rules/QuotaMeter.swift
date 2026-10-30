@@ -49,8 +49,10 @@ nonisolated struct QuotaMeter: Equatable {
     /// 显示的窗口，从短到长：整个账号的窗口全列（Claude 是 5 小时、本周，Codex 按套餐一到两个）；
     /// 按模型的周额度只在用过七成时列在后面——平时它比整个账号的本周宽松，列出来只是多读一行，快用完时才卡人
     let windows: [Window]
-    let updatedAt: Date
-    let isStale: Bool
+    let balance: String?
+    let plan: String?
+    let values: [QuotaDetails.Value]
+    let updatedAt: Date?
 
     init(_ quota: AccountQuota, at now: Date) {
         provider = quota.provider
@@ -58,23 +60,25 @@ nonisolated struct QuotaMeter: Equatable {
         account = quota.account?.label(provider: quota.provider) ?? PiProvider(id: quota.provider).account
         usageURL = quota.account?.usageURL(provider: quota.provider)
         message = switch quota.reading(at: now) {
-        case .observed: quota.account?.source != nil && quota.isStale(at: now) ? String(localized: "上次额度观测，等待更新") : nil
-        case .unsupported: usageURL != nil ? String(localized: "ChatGPT 暂不提供额度数据") : String(localized: "此授权不提供订阅额度查询")
-        case .unobserved: String(localized: "尚未观测到额度")
-        case .failed: String(localized: "额度查询失败")
+        case .observed: quota.account?.source != nil && quota.isStale(at: now) ? String(localized: "上次观测，等待更新") : nil
+        case .unsupported: usageURL != nil ? String(localized: "ChatGPT 暂不提供额度数据") : String(localized: "此授权不提供额度或余额查询")
+        case .unobserved: quota.details?.kind == "balance" ? String(localized: "余额未知，等待新观测") : String(localized: "尚未观测到额度")
+        case .failed: quota.details?.kind == "balance" ? String(localized: "余额查询失败") : String(localized: "额度查询失败")
         case .expired: String(localized: "额度观测已过期，等待更新")
         }
         let all = quota.reading(at: now) == .observed ? quota.windows.map { Window($0, at: now) } : []
         windows = all.filter { !$0.isScoped || $0.level != .roomy }
-        updatedAt = quota.observedAt ?? quota.modifiedAt
-        isStale = quota.isStale(at: now)
+        balance = quota.account?.scope != nil && quota.observedAt != nil ? quota.details?.balance : nil
+        plan = quota.details?.plan
+        values = quota.reading(at: now) == .observed ? quota.details?.values ?? [] : []
+        updatedAt = quota.observedAt
     }
 
     /// 模型菜单的分组标题："Claude · 5 小时剩 86% · 本周剩 92%"。
-    var menuTitle: Dotted { Dotted([account] + (message.map { [$0] } ?? windows.map { String(localized: "\($0.name)剩 \($0.percent)") })) }
+    var menuTitle: Dotted { Dotted([account] + [balance].compactMap { $0 } + (message.map { [$0] } ?? windows.map { String(localized: "\($0.name)剩 \($0.percent)") })) }
 
     /// 读屏：账号与每个窗口剩多少、多久重置。
-    var spoken: String { Dotted([account] + (message.map { [$0] } ?? windows.map(\.spoken))).spoken }
+    var spoken: String { Dotted([account] + [balance].compactMap { $0 } + (message.map { [$0] } ?? windows.map(\.spoken))).spoken }
 
     /// 到 `end` 还有多久（时长写法同 `PiClock.duration`，最后一分钟也写"1 分钟"、不读秒），给 `LiveText` 用：只在字会变的时刻重画——
     /// 一小时内每整分钟、一天内每整小时、再往后每整天（都从 `end` 往回数）。过了 `end` 不再走（那一刻由 `Moments` 睡到 `nextReset(after:)` 按过期重画）。
@@ -109,8 +113,10 @@ nonisolated struct QuotaMeter: Equatable {
 }
 
 extension [AccountQuota] {
-    /// `now` 之后最近的一次窗口重置：额度读数只在新观测到达与这一刻变（`Moments` 睡到它重画）；都过了为 nil。
+    /// 下一次窗口重置或观测变陈旧的时刻；只重画读数，不发网络请求。
     nonisolated func nextReset(after now: Date) -> Date? {
-        flatMap(\.windows).map(\.resetsAt).filter { $0 > now }.min()
+        let resets = flatMap(\.windows).map(\.resetsAt) + flatMap { $0.details?.values.compactMap(\.resetsAt) ?? [] }
+        let stale = compactMap { $0.observedAt?.addingTimeInterval(AccountQuota.staleAfter) }
+        return (resets + stale).filter { $0 > now }.min()
     }
 }

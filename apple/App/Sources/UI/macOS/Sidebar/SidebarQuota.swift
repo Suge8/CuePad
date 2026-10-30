@@ -5,7 +5,7 @@ import SwiftUI
 /// Mac 主窗口里额度只在这一处：额度是整个 App 的（`AppServices.accountQuotas`），不属于哪一页，侧栏在每页都看得见。
 /// 侧栏收起时窗口里没有额度，看菜单栏面板里那一份（`MenuBarPad`）；工具栏不另留一份。
 /// 行高固定（`Spacing.sidebarRow`），环最多三颗、靠右长：有没有额度、几家都不挪别的行，侧栏最窄（`MainWindow` 的最小宽）时也放得下。
-/// 环出现与明细打开时，数据陈旧就查一次（`refreshesQuota`）。
+/// 环出现与明细打开时读取账号清单（`refreshesQuota`），不定时查询。
 /// 否决过：放进底栏设置钮左边（四颗圆钮加两三颗环超出侧栏最小宽）、放进 Cue 名片（名片说的是 Cue，环比名字那一行高，名片跟着变高）。
 struct SidebarQuota: View {
     @State private var open = DebugHooks.preset.quotaOpen
