@@ -80,6 +80,7 @@ extension CodexRuntime {
         let last = try await Self.lastTurn(threadID, on: rpc)
         let running = last?["status"]?.string == "inProgress"
         if tracked[id] != nil { return id }
+        // thread/read 不返回 serviceTier；resume 虽然返回，却会订阅线程并接走终端的审批，所以保持未知。
         attach(makeSession(thread, pid: rpc.pid)) { session in
             if running { self.startTurn(session, at: Self.startedAt(last)) }
         }
