@@ -142,7 +142,7 @@ CloudKit 日志里的错误详情是 `<private>`。要复现：拿用户库的�
 
 `xc.sh activity-log <输出.json>` 签隔离 Mac 副本，在 AppDelegate 与库启动前只读生产私有区，不重启正式版。无报告成功输出 `[]`；失败非零退出，保留旧导出。
 
-取证独立于地址；先落盘再异步上传，失败不改活动决策、不额外持有后台时间。按账号隔离，最近七天最多 96 条；不记正文、原始令牌或完整错误。`contentObserved` 的 `sourceAt`、`contentTag` 只证明 App 观察到内容版本，不是屏幕确认。隔离演示加 `-CuePadActivityDiagnostics YES` 留本地记录；未接工具、跨网络与后台调度仍须 TestFlight 真机验收。
+取证与地址独立，按账号隔离。写本地后异步上传，失败不改活动决策、不续后台时间。本地写入时保留近七天最多 96 条；iCloud 只留最后上传快照，不自动清理。不记正文、原始令牌或完整错误。`contentObserved`、`sourceAt` 与 `contentTag` 只表示 App 观察，不证明屏幕展示。隔离演示加 `-CuePadActivityDiagnostics YES`。跨网络、后台和真实撤销待 TestFlight 验收。
 
 ### 推送叫醒被系统结束的 App
 
