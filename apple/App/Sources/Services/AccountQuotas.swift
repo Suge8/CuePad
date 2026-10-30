@@ -31,7 +31,6 @@ final class AccountQuotas {
             return
         }
         let now = Date.now
-        if items.contains(where: { $0.status == .failed && !$0.isStale(at: now) }) { throw SendError.quotaUnavailable }
         guard needsRefresh(at: now) else { return }
         let task = Task { try await refresh() }
         running = task
@@ -50,10 +49,23 @@ extension AppServices {
 
     #if os(macOS)
     /// 此刻有没有可问的：在线的会话（额度视图据此在会话连上时再看一次）。
-    var canRefreshQuota: Bool { quotaSession != nil }
+    var canRefreshQuota: Bool { !quotaSessions.isEmpty }
 
     /// 能问的会话：协议对得上的在线会话（与 `canRefreshQuota` 同一个判定，视图不会在问不了时一出现就走一次刷新）。
-    private var quotaSession: PiBridge.Slot? { pi.slots.first { !$0.session.upgrading } }
+    private var quotaSessions: [PiBridge.Slot] {
+        var seen = Set<String>()
+        return pi.slots.filter { slot in
+            guard !slot.session.upgrading, slot.session.agent == .pi else { return false }
+            let models = slot.session.availableModels + [slot.session.model].compactMap { $0 }
+            let keys = models.compactMap { model in
+                model.account.map { $0.source ?? "\(model.key.provider)/\($0.kind.rawValue)/\($0.scope ?? "")" }
+            }
+            if keys.isEmpty { return true }
+            let needed = keys.contains { !seen.contains($0) }
+            seen.formUnion(keys)
+            return needed
+        }
+    }
 
     /// 手机发来的刷新请求（投送方式 `quota`）：与本机视图同一套节流，失败照常写回原因。
     func refreshQuotaForRequest() async throws {
@@ -63,8 +75,21 @@ extension AppServices {
 
     /// 经在线会话里的扩展查（它有 Pi 的令牌与自动刷新，App 不碰 Pi 的登录文件），查到的随桥的 `.quota` 写进库。
     fileprivate func refreshQuota() async throws {
-        guard let session = quotaSession else { return }
-        try await pi.refreshQuota(in: session.id)
+        let sessions = quotaSessions
+        guard !sessions.isEmpty else { throw SendError.noLiveSession }
+        let succeeded = await withTaskGroup(of: Bool.self) { group in
+            for session in sessions {
+                let id = session.id
+                group.addTask { [pi] in
+                    do { try await pi.refreshQuota(in: id); return true }
+                    catch { return false }
+                }
+            }
+            var succeeded = true
+            for await result in group { succeeded = result && succeeded }
+            return succeeded
+        }
+        if !succeeded { throw SendError.quotaUnavailable }
     }
     #else
     /// 此刻有没有可问的：知道哪台 Mac（写过额度的，或有在线会话的）。

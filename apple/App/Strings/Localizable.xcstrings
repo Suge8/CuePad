@@ -4819,6 +4819,22 @@
         }
       }
     },
+    "上次额度观测，等待更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last observed usage, awaiting update"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次额度观测，等待更新"
+          }
+        }
+      }
+    },
     "上级：%@" : {
       "localizations" : {
         "en" : {
@@ -20071,6 +20087,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "调研三款笔记 App 的优缺点，写一页总结"
+          }
+        }
+      }
+    },
+    "账号额度见列表，路由账号未知" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See account usage; routing account unknown"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账号额度见列表，路由账号未知"
           }
         }
       }

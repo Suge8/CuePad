@@ -164,7 +164,7 @@ export class Session {
 	/** 使用这一轮开始前已报告的授权，不在响应返回后重新解析令牌、把旧响应归到新授权。 */
 	observeQuota(provider: string, windows: QuotaWindow[], complete: boolean) {
 		const account = this.info.models.find((model) => model.provider === provider)?.account;
-		if (windows.length === 0 || account?.kind !== "oauth" || !account.scope) return;
+		if (windows.length === 0 || account?.kind !== "oauth" || account.source || !account.scope) return;
 		this.reportQuota({ provider, account, status: "observed", windows, complete });
 	}
 

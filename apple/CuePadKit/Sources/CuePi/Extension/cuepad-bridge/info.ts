@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
-import { account, accountKind, type Account } from "./account.ts";
+import { account, unresolvedAccount, type Account } from "./account.ts";
 
 /** 需要"命令上下文"（切换会话、新会话、重载、克隆）的操作只能在命令处理函数里做：本扩展注册这一条内部命令 `/cuepad <动作>`，
  * 经 `sendUserMessage("/cuepad <动作>", { expandPromptTemplates: true })` 触发。只有这条内部命令本身不列进给手机的清单；
@@ -112,18 +112,23 @@ function modelChoices(ctx: ExtensionContext): Model[] {
 /** 此刻的模型配置；Pi 里换了模型、强度后重新取。 */
 export async function modelInfo(pi: ExtensionAPI, ctx: ExtensionContext): Promise<Pick<Info, "model" | "thinking" | "models">> {
 	const choices = modelChoices(ctx);
-	const accounts = new Map<string, Account>([...new Set(choices.map((m) => m.provider))]
-		.map((provider) => [provider, { kind: accountKind(ctx, provider), scope: null }]));
 	const current = ctx.model;
-	// 解析授权可能刷新令牌；可选项只读宿主已知路线，不能让另一家的网络挡住当前会话。
-	if (current) {
-		try {
-			accounts.set(current.provider, (await account(ctx, current.provider)).identity);
-		} catch (error) {
-			ctx.ui.notify(`CuePad：无法读取 ${current.provider} 的授权身份：${reason(error)}`, "warning");
+	const key = (model: Model) => JSON.stringify([model.provider, model.id]);
+	const accounts = new Map<string, Account>();
+	await Promise.all(choices.map(async (choice) => {
+		const model = current && key(choice) === key(current) ? current : choice;
+		// 其他原生 OAuth 只读认证种类，避免续期网络挡住当前会话。
+		if (model !== current && ctx.modelRegistry.isUsingOAuth(model)) {
+			accounts.set(key(model), unresolvedAccount(ctx, model));
+			return;
 		}
-	}
-	const describe = (model: Model) => describeModel(model, accounts.get(model.provider) ?? null);
+		try { accounts.set(key(model), (await account(ctx, model)).identity); }
+		catch (error) {
+			if (model === current) ctx.ui.notify(`CuePad：无法读取 ${model.provider} 的授权身份：${reason(error)}`, "warning");
+			accounts.set(key(model), unresolvedAccount(ctx, model));
+		}
+	}));
+	const describe = (model: Model) => describeModel(model, accounts.get(key(model)) ?? null);
 	return {
 		model: current ? describe(current) : null,
 		thinking: current ? pi.getThinkingLevel() : null,

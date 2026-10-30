@@ -1,22 +1,37 @@
 import { createHash } from "node:crypto";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-export type Account = { kind: "oauth" | "apiKey"; scope: string | null };
+export type Account = { kind: "oauth" | "apiKey"; scope: string | null; source?: string; route?: string; name?: string };
+export type Model = NonNullable<ExtensionContext["model"]>;
 
-/** 宿主决定认证路线并解析授权；桥只传不可逆的授权分区，不读登录文件、不解析 ChatGPT 凭据、不刷新。
- * 分区包含完整请求授权，令牌轮换宁可开始新观测，也不能把另一账号、工作区或授权应用的窗口沿用过来。 */
-export function accountKind(ctx: ExtensionContext, provider: string): Account["kind"] {
-	const registry = ctx.modelRegistry;
-	const model = registry.getAll().find((model) => model.provider === provider) ?? ctx.model;
-	return model?.provider === provider && registry.isUsingOAuth(model) ? "oauth" : "apiKey";
+export function partition(value: unknown): string {
+	return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-export async function account(ctx: ExtensionContext, provider: string) {
-	const registry = ctx.modelRegistry;
-	const kind = accountKind(ctx, provider);
-	if (kind === "apiKey") return { identity: { kind, scope: null } as Account, auth: null };
-	const resolved = await registry.getProviderAuth(provider);
-	if (!resolved) throw new Error(`${provider}: no authorization`);
-	const scope = createHash("sha256").update(JSON.stringify([provider, resolved.auth])).digest("hex");
-	return { identity: { kind, scope } as Account, auth: resolved.auth };
+const NATIVE_URLS: Record<string, string> = {
+	anthropic: "https://api.anthropic.com", "openai-codex": "https://chatgpt.com/backend-api", openai: "https://api.openai.com/v1",
+};
+
+/** 请求路线与认证只问宿主；自定义地址不冒充原生 OAuth。只把不可逆分区交给 App。 */
+export async function account(ctx: ExtensionContext, model: Model) {
+	const resolved = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+	if (!resolved.ok) throw new Error(`${model.provider}: authorization unavailable`);
+	const baseUrl = (resolved.baseUrl ?? model.baseUrl).replace(/\/+$/, "");
+	const headers = new Headers();
+	const kind = ctx.modelRegistry.isUsingOAuth(model) ? "oauth" : "apiKey";
+	if (resolved.apiKey) {
+		if (model.api === "anthropic-messages" && kind === "apiKey") headers.set("x-api-key", resolved.apiKey);
+		else headers.set("Authorization", `Bearer ${resolved.apiKey}`);
+	}
+	for (const [key, value] of Object.entries({ ...model.headers, ...resolved.headers })) {
+		if (value === null) headers.delete(key); else headers.set(key, value);
+	}
+	const scope = partition([baseUrl, [...headers].sort()]);
+	const native = baseUrl === NATIVE_URLS[model.provider];
+	const identity: Account = native ? { kind, scope } : { kind, scope, source: scope };
+	return { identity, baseUrl, headers, native, token: resolved.apiKey };
+}
+
+export function unresolvedAccount(ctx: ExtensionContext, model: Model): Account {
+	return { kind: ctx.modelRegistry.isUsingOAuth(model) ? "oauth" : "apiKey", scope: null };
 }

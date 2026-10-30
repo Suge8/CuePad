@@ -79,7 +79,7 @@ struct PiModelCapsule: View {
 
     /// 当前模型的提供方卡着的那个窗口（按模型的周额度只算这个模型的）。
     private func binding(at now: Date) -> QuotaMeter.Window? {
-        guard let current, let quota = quotas.first(where: { $0.provider == current.key.provider && current.account?.matches($0.account) == true }) else { return nil }
+        guard let current, let quota = PiModelLabel.quota(current, quotas: quotas) else { return nil }
         return quota.binding(at: now, model: current.key.id).map { QuotaMeter.Window($0, at: now) }
     }
 }

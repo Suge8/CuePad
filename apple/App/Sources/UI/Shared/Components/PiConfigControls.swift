@@ -33,10 +33,10 @@ struct PiModelMenu {
     func sections(quotas: [AccountQuota], at now: Date) -> [ChoiceMenu.Section] {
         PiModelLabel.groups(models).map { group in
             ChoiceMenu.Section(
-                title: .verbatim(group.models.first.map { PiModelLabel.title($0, quotas: quotas, at: now) } ?? group.provider.name), image: group.provider.mark.map(ChoiceMenu.Glyph.brand),
+                title: .verbatim(group.models.first?.account?.source != nil ? group.provider.name : group.models.first.map { PiModelLabel.title($0, quotas: quotas, at: now) } ?? group.provider.name), image: group.provider.mark.map(ChoiceMenu.Glyph.brand),
                 choices: group.models.map { model in
                     ChoiceMenu.Choice(
-                        title: .verbatim(model.displayName), subtitle: model.key == defaultModel ? "默认" : nil, image: BrandMark.model(model).map(ChoiceMenu.Glyph.brand),
+                        title: .verbatim(model.displayName), subtitle: model.account?.source != nil ? .verbatim(PiModelLabel.title(model, quotas: quotas, at: now)) : model.key == defaultModel ? "默认" : nil, image: BrandMark.model(model).map(ChoiceMenu.Glyph.brand),
                         checked: model.key == current) { choose(model) }
                 })
         }

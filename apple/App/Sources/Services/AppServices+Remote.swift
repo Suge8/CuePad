@@ -25,8 +25,12 @@ extension AppServices {
         for await change in changes {
             switch change {
             case .appeared(let session), .stateChanged(let session, _), .infoChanged(let session):
+                let previous = live[session.id]
                 live[session.id] = session
                 if owner(of: session.sessionID)?.id == session.id { try await recordPiState(of: session) }
+                if previous?.model != session.model || previous?.availableModels != session.availableModels {
+                    try await store.retainQuotaSources(on: hostID, models: live.values.flatMap { $0.availableModels + [$0.model].compactMap { $0 } })
+                }
             case .ended(let session, let reason):
                 live[session.id] = nil
                 if let other = owner(of: session.sessionID) {
