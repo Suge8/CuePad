@@ -100,6 +100,7 @@ DEFINE SCHEMA
         turnStartedAt INT64,
         answeredAt    INT64,
         failure       STRING,
+        bootID        STRING,
         models        ENCRYPTED STRING,
         commands      ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
@@ -132,6 +133,7 @@ DEFINE SCHEMA
         completedAt   INT64,
         modifiedAt    INT64,
         origin        STRING,
+        deadlineAt    INT64,
         taskID        STRING,
         partIDs       STRING,
         resultDetail  ENCRYPTED STRING,
@@ -262,6 +264,8 @@ DEFINE SCHEMA
         context       STRING,
         leftToYou     STRING,
         step          ENCRYPTED STRING,
+        hostID        STRING,
+        bootID        STRING,
         woke          STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
@@ -279,6 +283,7 @@ DEFINE SCHEMA
         hostID        STRING,
         onlineUntil   INT64,
         modifiedAt    INT64,
+        bootID        STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -330,6 +335,18 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE activityDestinations (
+        "___recordID" REFERENCE QUERYABLE,
+        device        STRING,
+        activityID    STRING,
+        token         ENCRYPTED STRING,
+        environment   STRING,
+        startedAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE syncFloor (
         "___recordID" REFERENCE QUERYABLE,
         version       INT64,
@@ -340,6 +357,13 @@ DEFINE SCHEMA
     RECORD TYPE relaySecrets (
         "___recordID" REFERENCE QUERYABLE,
         secret        ENCRYPTED BYTES,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE activityDiagnostics (
+        "___recordID" REFERENCE QUERYABLE,
+        report        ENCRYPTED BYTES,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

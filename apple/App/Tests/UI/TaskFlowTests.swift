@@ -30,7 +30,7 @@ struct TaskFlowTests {
         // 开始：正文连同标题交出去；话在路上、没送到都看会话那一格，不再给"开始"
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas")
         let delivers = Mutex(false)
-        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request in
+        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request, _ in
             guard delivers.withLock({ $0 }) else { return .failed(.verbatim("会话在送达前关掉了")) }
             _ = try? await store.recordSend(request.content, to: atlas, card: request.cardID)
             return .succeeded
@@ -45,8 +45,9 @@ struct TaskFlowTests {
 
         // 重发送达：任务进行中并记着会话，正文留在任务上
         delivers.withLock { $0 = true }
-        try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
+        let renewed = try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "s1" }
+        #expect(try await store.outcome(of: renewed).status == .known(.succeeded))
         await executor.stop()
         let started = try #require(try await store.card(task.id))
         #expect(started.status == .inProgress && started.body == "修乱序\n\n日志在 logs/0918.txt")
@@ -116,12 +117,13 @@ struct TaskFlowTests {
         _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：开新会话的去向核对完即可
 
         // 会话所在的 Mac 送到：记下这次发送，这一步绑上会话
-        let executor = DeliveryExecutor(store: store, hostID: "mac-other", onIssue: { Issue.record("\($0)") }) { [store] request in
+        let executor = DeliveryExecutor(store: store, hostID: "mac-other", onIssue: { Issue.record("\($0)") }) { [store] request, _ in
             _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
             return .succeeded
         }
         try await executor.start()
         _ = try await eventually(store, { try $0.card(second.id)?.piSessionID }) { $0 == "s1" }
+        #expect(try await store.outcome(of: try #require(sent)).status == .known(.succeeded))
         await executor.stop()
         try await workspace.toggle(second.id)
         #expect(try await requests(.end).isEmpty)  // "发版"还没开工，默认接着用它
@@ -144,7 +146,7 @@ struct TaskFlowTests {
         #expect(request.launch?.project == project.id)
         #expect(try await next(task) == nil)
 
-        let executor = DeliveryExecutor(store: store, hostID: request.hostID, onIssue: { Issue.record("\($0)") }) { _ in .failed(.verbatim("这台 Mac 上开不了会话")) }
+        let executor = DeliveryExecutor(store: store, hostID: request.hostID, onIssue: { Issue.record("\($0)") }) { _, _ in .failed(.verbatim("这台 Mac 上开不了会话")) }
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
         await executor.stop()

@@ -11,9 +11,9 @@ import Testing
 /// 回复框带着还没到这台 Mac 的大附件发出的那句不挡后面的话：文件在旁边现取（`AppServices.fetchFile`），发给另一个会话的话照常先送到；
 /// 文件到了，那句照常送到，会话收到的是本机那份的路径。
 struct AttachmentSendTests {
-    let app = TestApp()
-
     @Test func 带着还没到的大附件的那句不挡后面的话_文件到了照常送到() async throws {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing)
         let services: AppServices = app.services
         let atlas = try await app.host.connect("atlas", cwd: "/work/atlas")
         let web = try await app.host.connect("web", cwd: "/work/web")
@@ -43,11 +43,17 @@ struct AttachmentSendTests {
         }
         try await eventually("后一句先送到") { web.messages.map(\.text) == ["先改文案"] }
         #expect(atlas.messages.isEmpty)
+        let preparing = try #require(try await services.store.deliveryRequests().first { $0.target.ref == "atlas" })
+        #expect(preparing.status == .known(.pending) && preparing.deadlineAt != nil)
+        clock.advance(.seconds(61))
+        #expect(Speech.trip(preparing, at: .always(at: clock.now, localHost: TestApp.hostID)).inTransit)
 
         arrive.continuation.yield()
         try await eventually("文件到了，前一句照常送到") { !atlas.messages.isEmpty }
         let path = try #require(services.store.files.fileURL(for: key)).path(percentEncoded: false)
         #expect(atlas.messages.map(\.text) == ["看这段录屏\n\n附件：录屏.mov（\(path)）"])
+        #expect(try await services.store.outcome(of: preparing).status == .known(.succeeded))
+        await services.executor.beginStop()()
     }
 }
 #endif

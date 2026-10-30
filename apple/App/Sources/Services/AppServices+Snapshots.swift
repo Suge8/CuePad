@@ -7,8 +7,8 @@ import WidgetKit
 
 /// 给小组件与分享扩展的快照：跟随资料库变化写进共享容器。扩展不打开资料库。
 /// 只写内容真正变了的那份；小组件显示默认项目与 Cue，只有这两份变了才刷新它们（刷新次数有系统预算）。
-/// 每次运行的第一份全写、岛照发：留在共享容器与系统里的那份可能是旧版本写的，结构变了这版就解不出来（小组件读成空的），不能拿它比。
-/// iPhone 的实时活动（`CueLiveActivity`）与小组件读同一份 Cue 此刻，每次都先改岛：后台被推送叫醒时剩的时间不多。
+/// 每次运行的第一份全写、本地活动照发：留在共享容器与系统里的那份可能是旧版本写的，结构变了这版就解不出来（小组件读成空的），不能拿它比。
+/// 本地实时活动与小组件读同一份 Cue 此刻；远程活动只用它开启，已有内容由 Mac 经 APNs 更新（`CueLiveActivity`）。
 extension AppServices {
     /// 库变了、此刻或本机事实变了（`CueFeed`，同一次读带着小组件另要的）时按 Cue 的现状改快照，直到任务取消。
     func startSnapshots() {
@@ -23,6 +23,13 @@ extension AppServices {
     #if os(iOS)
     /// 实时活动只能在前台开：启动到变成 active 之前（inactive）也算前台，库读完的第一份就能开，不等下一次变化。
     private static var inForeground: Bool { UIApplication.shared.applicationState != .background }
+
+    /// 远程活动只在身份已确认且资料已对账后开启；不用 CueFeed 在换号、清库前排队的旧快照。
+    func remoteActivityState() throws -> CueActivityState? {
+        guard syncReconciled, [.idle, .syncing].contains(syncStatus) else { return nil }
+        let digest = try store.snapshot { try CueDigest.read(from: $0) }.value
+        return try ActivityPush.fitted(CueActivityState(now: Self.cueNow(digest, at: speech, local: cueLocal)))
+    }
     #endif
 
     /// Cue 此刻：小组件、实时活动与 Cue 那一行（`CueWatch`）都经这里推（调试时可钉成一份样例，`-CuePadCueNow`）。
@@ -47,8 +54,17 @@ extension AppServices {
     /// 立即按当前库内容更新，不等快照那条异步的观察：进入后台前（`resend`：岛按此刻重发一次，过时时刻从这时算）、
     /// 推送叫醒拉完之后（回调一返回系统就可能挂起 App，`IOSAppDelegate`）。
     func writeSnapshots(resend: Bool = false) async throws {
-        let read = try await CueFeed.Read.read(from: store, widget: true)
+        let read = try await CueReading.Read.read(from: store, widget: true)
         try await present(read.widget!, read.digest, at: speech, local: cueLocal, resend: resend)
+    }
+
+    /// 不依赖观察任务赶在挂起前执行；前台重开、后台收尾都显式等这一份完成。
+    func resendSnapshots() async {
+        do {
+            try await writeSnapshots(resend: true)
+        } catch {
+            reportIssue(.widgetDataUnavailable("\(error)"))
+        }
     }
 
     private func present(
@@ -57,7 +73,7 @@ extension AppServices {
         let now = Self.cueNow(digest, at: moment, local: local)
         #if os(iOS)
         let first = publishedSnapshots == nil
-        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas), resend: resend || first, foreground: Self.inForeground)
+        await cueActivity?.show(try ActivityPush.fitted(CueActivityState(now: now)), resend: resend || first, foreground: Self.inForeground)
         await alerts?.showBadge(now.needsYou)
         #endif
         try publish(WidgetSnapshots(content, now: now))
@@ -103,30 +119,10 @@ nonisolated struct WidgetSnapshots: Equatable, Sendable {
     static func == (a: Self, b: Self) -> Bool { a.projects == b.projects && a.home == b.home && a.cue.same(as: b.cue) }
 }
 
-extension CueActivityState {
-    /// 实时活动那一份：Cue 此刻，加各家额度在它推出那一刻（`CueNow.at`）的读数（`QuotaMeter`）与本周快重置的提醒段（`QuotaReminder.isNear`）。
-    nonisolated init(now: CueNow, quotas: [AccountQuota]) {
-        let date = now.at
-        self.now = now
-        self.quotas = quotas.compactMap { quota in
-            let meter = QuotaMeter(quota, at: date)
-            let week = QuotaReminder.window(of: quota)
-            let windows = meter.windows.map { window in
-                Quota.Window(
-                    name: window.name, left: window.left, level: window.level, resetsAt: window.resetsAt,
-                    near: week.map { window.id == $0.id && QuotaReminder.isNear($0, at: date) } ?? false)
-            }
-            return windows.isEmpty ? nil : Quota(account: meter.account, windows: windows)
-        }
-    }
-}
-
 /// 小组件除 Cue 之外从库里读的那份（与 Cue 的摘要同一次读，`CueFeed.Read`）。
 nonisolated struct WidgetContent: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var home: DefaultProjectSnapshot
-    /// 各家订阅额度（只给实时活动）。
-    var quotas: [AccountQuota]
 }
 
 extension CueStore {
@@ -144,7 +140,6 @@ extension CueStore {
                 cards: latest.map {
                     DefaultProjectSnapshot.Card(id: $0.id, title: $0.heading, modifiedAt: $0.modifiedAt)
                 },
-                total: cards.count),
-            quotas: try accountQuotas())
+                total: cards.count))
     }
 }

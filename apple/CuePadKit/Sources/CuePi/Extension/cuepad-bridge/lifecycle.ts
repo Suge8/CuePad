@@ -56,7 +56,7 @@ const ENTRY = path.join(OWN_DIRECTORY, "index.ts");
  * 否决重新载入会话（`switchSession`）：同一工作目录下 Pi 复用缓存里的旧模块，载入的还是旧代码。
  */
 export class SelfReload {
-	private newerOnDisk = false;
+	private requested = false;
 	private scheduled: ReturnType<typeof setImmediate> | undefined;
 
 	private readonly ctx: ExtensionContext;
@@ -77,32 +77,37 @@ export class SelfReload {
 		let source: string;
 		try { source = fs.readFileSync(ENTRY, "utf8"); }
 		catch (error) {
-			this.newerOnDisk = false;
 			if ((error as NodeJS.ErrnoException).code !== "ENOENT") this.ctx.ui.notify(`CuePad 扩展升级检查失败：${reason(error)}`, "error");
 			return;
 		}
 		const version = Number(/const EXTENSION_VERSION = (\d+);/.exec(source)?.[1]);
-		this.newerOnDisk = Number.isInteger(version) && version !== this.version;
+		this.requested ||= Number.isInteger(version) && version !== this.version;
 		this.whenIdle();
 	}
 
-	/** 磁盘上是别的版本、此刻歇着：排上一次重新载入 */
+	/** 手动重载与升级共用空闲门，不中止宿主或进程内子代理。 */
+	request() {
+		this.requested = true;
+		this.whenIdle();
+	}
+
+	/** 已请求重载、此刻歇着：排上一次重新载入 */
 	whenIdle() {
-		if (!this.newerOnDisk || this.scheduled || !this.canReload()) return;
+		if (!this.requested || this.scheduled || !this.canReload()) return;
 		this.scheduled = this.runInternal("reload-if-idle");
 	}
 
 	/** 内部命令 `reload-if-idle` 里：再核对一次空闲后从磁盘载入新版本。 */
 	async ifIdle(command: ExtensionCommandContext) {
-		if (!this.newerOnDisk || !this.canReload()) {
+		if (!this.requested || !this.canReload()) {
 			this.scheduled = undefined;
 			return;
 		}
 		// session_compact 先通知扩展、再收起 Pi 的压缩标记：用它的空闲 Promise 等收尾，不轮询
 		await command.waitForIdle();
 		this.scheduled = undefined;
-		if (!this.newerOnDisk || !this.canReload() || !command.isIdle()) return;
-		this.newerOnDisk = false;
+		if (!this.requested || !this.canReload() || !command.isIdle()) return;
+		this.requested = false;
 		await command.reload();
 	}
 

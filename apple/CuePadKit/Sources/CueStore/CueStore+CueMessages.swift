@@ -77,12 +77,12 @@ extension CueStore {
   /// 分开写的话同步可能先把歇着带到别的设备、话与清单还在路上，那里的 Cue 页就把这一轮先当成没说话，话到了再改回来。
   @discardableResult
   public func finishCueRound(
-    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?
+    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?, hostID: String? = nil, bootID: String? = nil
   ) throws -> UUID? {
     try write {
       let row = try tools.map { try putCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: $0) } ?? id
       if let reply { try putCueReply(startedAt: startedAt, reply: reply, as: author, answersYou: answersYou) }
-      try putCueState(.settled, detail: nil, step: nil, round: nil, context: context)
+      try putCueState(.settled, detail: nil, step: nil, round: nil, context: context, hostID: hostID, bootID: bootID)
       return row
     }
   }

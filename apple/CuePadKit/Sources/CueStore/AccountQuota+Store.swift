@@ -93,7 +93,7 @@ extension CueStore {
   /// 已有一条在路上时返回它，不再写第二条。
   public func requestQuotaRefresh(on host: String) throws -> DeliveryRequest {
     let mode = DeliveryMode.quota
-    if let open = try select(DeliveryRequest.self, where: "mode = ? AND status IN (\(DeliveryStatus.openSQL))", [mode.rawValue]).first {
+    if let open = try select(DeliveryRequest.self, where: "mode = ? AND status IN (\(DeliveryStatus.openSQL))", [mode.rawValue]).first(where: { Speech.trip($0, at: .always(at: timing.now())).inTransit }) {
       return open
     }
     return try requestDelivery(mode.rawValue, to: SendTarget(kind: .mac, name: "CuePad", ref: nil), on: host, mode: mode)

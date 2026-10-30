@@ -39,7 +39,7 @@ nonisolated struct PiRowFacts: Equatable {
             else if hasDraft { .draft }
             else { nil }
         guard session.state != .known(.ended) else { return }
-        subagents = PiSubagentSummary(session.subagents)
+        subagents = PiSubagentSummary(session.runtimeSubagents)
         context = session.context.flatMap(PiContextMeter.init).flatMap { $0.level == .roomy ? nil : $0 }
     }
 }

@@ -198,7 +198,7 @@ public actor CloudSync {
     accountRetry = Task {
       try? await Task.sleep(until: at, clock: .continuous)
       guard !Task.isCancelled else { return }
-      try? await self.syncNow()  // 拉取失败由协调器归类、按段记（`SyncCoordinator.noteWaiting`）
+      _ = try? await self.syncNow()  // 拉取失败由协调器归类、按段记（`SyncCoordinator.noteWaiting`）
     }
   }
 
@@ -209,21 +209,23 @@ public actor CloudSync {
     accountRetryAt = nil  // 账号变了是新情况，不等上次失败的退避
     guard wasConnected ? await checkAccount(cloud) : await connectNow() else { return }
     if wasConnected { await ensureAlertSubscriptions(cloud) }  // 刚开始的已在建
-    try? await puller?.pull()
+    _ = try? await puller?.pull()
   }
 
   /// 立即同步：拉一次（返回时拉完），顺带让发送者发一轮（不等，守着它的重试时刻）。下拉刷新、立即同步按钮、回到前台、按节奏的拉取（`SyncPoller`）、
   /// 手机收到推送、实时层的门铃都只调它；`start()` 之前来的等开始了再拉，没认过账号的先认。通知订阅没建成的话顺带在后台重试（见 `alertsAttemptedAt`）。
-  public func syncNow() async throws {
+  /// 返回本次拉取的结果；账号、暂停与退避导致的未拉取不是成功，不能从全局同步状态反推。
+  @discardableResult
+  public func syncNow() async throws -> SyncPullResult {
     if cloud == nil { await withCheckedContinuation { startWaiters.append($0) } }
-    guard await connectNow(), let cloud, let puller, let sender else { return }
+    guard await connectNow(), let cloud, let puller, let sender else { return .incomplete }
     if Self.subscribesToAlerts, await coordinator.alertSubscription != .active,
       alertsAttemptedAt.map({ ContinuousClock.now - $0 >= Self.alertRetryInterval }) ?? true
     {
       Task { await ensureAlertSubscriptions(cloud) }
     }
     await sender.kick()
-    try await puller.pull()
+    return try await puller.pull()
   }
 
   /// 马上传这几条（同一次写入写出的一起，一个请求）：不进攒批窗口、不等后台那批；返回时它们都有了结果

@@ -55,7 +55,7 @@ extension CueTools {
 
   func peek(_ card: Card) async throws -> Result {
     let detail = try await store.cueTaskDetail(card.id)
-    let now = Date(), left = try await store.cueState()?.left ?? []
+    let now = store.timing.now(), left = try await store.cueState()?.left ?? []
     var lines = [
       "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (detail.progress.map { " · 子任务 \($0.done)/\($0.total)" } ?? "")
         + " · " + status(detail.task)
@@ -64,8 +64,10 @@ extension CueTools {
       var head = leaf.leaf.id == detail.task.id ? "-" : "- 「\(leaf.leaf.heading)」（\(leaf.leaf.id.shortID)）\(status(leaf.leaf))"
       if let session = leaf.session {
         head += " · " + Self.sessionHead(session.session, now: now, left: left)
+      } else if let request = leaf.handoffs.last, case .preparing(let reason) = Speech.trip(request, at: .always(at: now)) {
+        head += " · \(reason)（原请求仍保留，不要重复开工）"
       } else {
-        head += leaf.sending ? " · 发送中（话正送进上一步的会话）" : " · 没有会话"
+        head += leaf.handoffs.isEmpty ? " · 没有会话" : " · 前次投送尚未确认（可能已经执行，先核对，不要重复开工）"
       }
       lines.append(head)
       if let session = leaf.session { lines += Self.subagentLines(session.session, now: now) }

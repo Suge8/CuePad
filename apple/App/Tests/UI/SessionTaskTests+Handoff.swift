@@ -48,7 +48,7 @@ extension SessionTaskTests {
         }
         let task = try await store.createTask("修登录")
         try await store.linkCard(task.id, toSession: "s1")
-        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+        let recorder = try await rig.runtimeRecorder(on: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let target = SendTarget(kind: .piSession, name: "修登录", ref: "s1")
         let byCue = UUID(), byPad = UUID(), byCueLater = UUID()
@@ -94,7 +94,7 @@ extension SessionTaskTests {
         try await enableCue()
         let task = try await store.createTask("修登录")
         try await store.linkCard(task.id, toSession: "s1")
-        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+        let recorder = try await rig.runtimeRecorder(on: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let target = SendTarget(kind: .piSession, name: "修登录", ref: "s1")
         var seq: Int64 = 0
@@ -162,7 +162,7 @@ extension SessionTaskTests {
             $0.enabledAt = .now
         }
         try await store.recordMacPresence(host: "mac-b") { true }  // mac-b 醒着：它的在线记录同步到这里
-        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+        let recorder = try await app.runtimeRecorder(on: services.hostID)
         let questions = [("s1", PiQuestion(promptID: "p", kind: .confirm, text: "继续？")), ("s2", PiQuestion(promptID: nil, kind: .confirm, text: "在终端里确认"))]
         for (session, question) in questions {
             try await recorder.update(sessionID: session, state: .thinking, title: session)
@@ -183,7 +183,9 @@ extension SessionTaskTests {
         var counts = store.observe({ try $0.cueTally().waiting.count }).makeAsyncIterator()
         #expect(try await counts.next() == 1)
         await clock.waitForSleeper()
-        clock.advance(.seconds(MacPresence.lifetime))
+        clock.advance(.seconds(MacPresence.lifetime - 1))
+        _ = try await app.runtimeRecorder(on: services.hostID)  // Agent 所在的 Mac 仍续期，只让 Cue 那台过期
+        clock.advance(.seconds(1))
         #expect(try await counts.next() == 2)
         #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])
         try await recorder.update(sessionID: "s3", state: .thinking, title: "s3")

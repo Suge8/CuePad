@@ -61,15 +61,21 @@ extension Schema {
 
   /// `table`（已有 `writeSeq` 列）新增的行，或 `when` 里的列改了值的行，盖上计数器的下一个数。
   private static func stamped(_ table: String, when columns: [String]) -> String {
+    """
+      CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp(table)) END;
+      \(updateStamp(table, when: columns))
+      """
+  }
+
+  static func updateStamp(_ table: String, when columns: [String]) -> String {
     let changed = columns.map { "old.\($0) IS NOT new.\($0)" }.joined(separator: " OR ")
     return """
-      CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp(table)) END;
       CREATE TRIGGER \(table)_writeSeq_update AFTER UPDATE OF \(columns.joined(separator: ", ")) ON \(table) WHEN \(changed) BEGIN \(stamp(table)) END;
       """
   }
 
   /// 会话记录上构成 Cue 的变化的列：进入的状态与时刻，与最后一轮在会话文件里收尾的时刻（读到这一轮的回答时它变，变化随之就绪）。
-  private static let sessionChanges = ["state", "stateSince", "answeredAt"]
+  static let sessionChanges = ["state", "stateSince", "answeredAt", "bootID"]
 
   private static func stamp(_ table: String) -> String {
     "UPDATE writeCounter SET seq = seq + 1; UPDATE \(table) SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;"

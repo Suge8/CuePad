@@ -69,7 +69,7 @@ struct BoardPulse: Equatable {
         case .resting: return .resting
         case .needsYou: return .stopped(broken: shown?.status == .interrupted)
         case .running:
-            let subagents = session?.subagents.count { $0.phase == .known(.running) } ?? 0
+            let subagents = session?.runtimeSubagents.count { $0.phase == .known(.running) } ?? 0
             let gait: Gait = switch shown?.status {
             case .working(.tool): .tool
             case .working(.compacting): .compact

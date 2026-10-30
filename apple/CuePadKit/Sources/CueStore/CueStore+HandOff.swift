@@ -42,12 +42,13 @@ extension CueStore {
     let card = try requireLeaf(plan.leaf)
     if !fresh, card.piSessionID != nil { throw CueStoreError.alreadyStarted(card.heading) }
     let content = try opening(of: plan.leaf, plan.opensSession)
+    let handoffs = try handoffRequests(for: [plan.leaf])[plan.leaf] ?? []
+    if handoffs.contains(where: { $0.mode == .known(.send) }) { throw CueStoreError.sending(card.heading) }
+    if handoffs.contains(where: { $0.mode == .known(.start) }) { throw CueStoreError.launching(card.heading) }
     switch plan.destination {
     case .session(let sessionID, _, _):
-      if try !sendingLeaves([plan.leaf]).isEmpty { throw CueStoreError.sending(card.heading) }
       return try write { try say(content, to: try sessionTarget(sessionID, name: card.heading), card: card.id, host: host, cue: cue) }
     case .launch(let project, let host):
-      guard try launchingLeaves([plan.leaf]).isEmpty else { throw CueStoreError.launching(card.heading) }
       let kind = try launchAgent(agent, on: host)
       let key = try model.map(kind.requiredModelKey)
       let launch = PiLaunch(
@@ -94,28 +95,33 @@ extension CueStore {
       .max { $0.stateSince < $1.stateSince }
   }
 
-  /// 这些叶子里正在开新会话的：带着叶子的开新会话请求还在路上，或成功了、会话记录还没到（还没认领）。
-  /// 只认会被认领的那条（同 `claimLaunchedCards`）：它是带着这张卡的最近一次交给；之后又交给了别处，或亲手绑定、解绑作废了它（`forgetLaunches`），就不算。
-  public func launchingLeaves(_ leaves: [UUID]) throws -> Set<UUID> {
-    guard !leaves.isEmpty else { return [] }
-    return Set(try db.query(
-      """
-      SELECT cardID FROM deliveryRequests
-      WHERE cardID IN (SELECT value FROM json_each(?)) AND mode = '\(DeliveryMode.start.rawValue)'
-        AND status IN (\(DeliveryStatus.openSQL), '\(DeliveryStatus.succeeded.rawValue)')
-        AND \(Self.launchUnclaimed) AND \(Self.latestHandoff("deliveryRequests"))
-      """, [Self.idList(leaves)]) { $0.uuid(0) })
+  /// 尚未收尾的交接请求，按叶子批量分组。占位与运行展示都读这些原记录；是否仍在路上只由 `Speech.trip` 判定。
+  /// 未确认与不认识的结果仍占位；只有明确未交出才允许自动另开或再发。
+  public func handoffRequests(for leaves: [UUID]) throws -> [UUID: [DeliveryRequest]] {
+    guard !leaves.isEmpty else { return [:] }
+    let requests = try select(
+      DeliveryRequest.self,
+      where: """
+        cardID IN (SELECT value FROM json_each(?)) AND (
+          (mode = '\(DeliveryMode.start.rawValue)' AND status != '\(DeliveryStatus.failed.rawValue)'
+            AND \(Self.launchUnclaimed) AND \(Self.latestHandoff("deliveryRequests")))
+          OR (mode = '\(DeliveryMode.send.rawValue)' AND status NOT IN ('\(DeliveryStatus.failed.rawValue)', '\(DeliveryStatus.succeeded.rawValue)')))
+        """, [Self.idList(leaves)], orderBy: "createdAt, rowid")
+    return Dictionary(grouping: requests, by: { $0.cardID! })
   }
 
-  /// 这些叶子里话正在送进会话的：带着叶子、发给会话的话（送达时叶子绑上那个会话）还没有结果。
-  /// 接着用上一步的会话时，开工到话送到之间就是这样：还没绑上，看板与 peek 写"发送中"。
+  /// 尚未认领到会话的开会话意图，包括未知结果；它防重复，不代表此刻在跑。
+  public func launchingLeaves(_ leaves: [UUID]) throws -> Set<UUID> {
+    Set(try handoffRequests(for: leaves).compactMap { leaf, requests in
+      requests.contains { $0.mode == .known(.start) } ? leaf : nil
+    })
+  }
+
+  /// 尚未收尾的发话意图，包括未知结果；它防重复，不代表此刻在跑。
   func sendingLeaves(_ leaves: [UUID]) throws -> Set<UUID> {
-    guard !leaves.isEmpty else { return [] }
-    return Set(try db.query(
-      """
-      SELECT cardID FROM deliveryRequests
-      WHERE cardID IN (SELECT value FROM json_each(?)) AND mode = '\(DeliveryMode.send.rawValue)' AND status IN (\(DeliveryStatus.openSQL))
-      """, [Self.idList(leaves)]) { $0.uuid(0) })
+    Set(try handoffRequests(for: leaves).compactMap { leaf, requests in
+      requests.contains { $0.mode == .known(.send) } ? leaf : nil
+    })
   }
 
   /// 项目在哪台 Mac 上绑了文件夹：这台 Mac 绑了就是它，否则别的 Mac 里按名字排第一台；都没绑为 nil。

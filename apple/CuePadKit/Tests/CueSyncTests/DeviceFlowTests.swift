@@ -108,7 +108,7 @@ import Testing
   /// 回执马上传、消息排在后面时（同步区里正传着大附件），手机上的请求不先没了：气泡一直在。
   @Test
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
-    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
     try await executor.start()
     let request = try await phone.store.requestDelivery("run this", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"), on: "mac")
 
@@ -139,7 +139,7 @@ import Testing
   func anAnswerLineOutlivesItsRequestOnThePhone() async throws {
     let executor = DeliveryExecutor(
       store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }
-    ) { _ in .succeeded }
+    ) { _, _ in .succeeded }
     try await executor.start()
     let target = SendTarget(kind: .piSession, name: "fix bug", ref: "s1")
     let mine = try await phone.store.requestAnswer(PiAnswer(promptID: "p-1", value: .option("另存为 feed-full.xml"), question: "要覆盖 public/feed.xml 吗？"), to: target, on: "mac")
@@ -162,7 +162,7 @@ import Testing
   /// 两句都是已送达，同步状态回到空闲。
   @Test
   func wordsSaidOfflineReachTheMacAfterRecoveryAndTheReceiptsComeBack() async throws {
-    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
     try await executor.start()
     _ = try await phone.store.updateCueProfile {
       $0.hostID = "mac"

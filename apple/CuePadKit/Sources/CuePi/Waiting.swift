@@ -19,7 +19,7 @@ public enum AgentTimeouts {
     public static let shell: Duration = .seconds(5)
     /// 列出在跑的 Claude Code 会话
     public static let list: Duration = .seconds(15)
-    /// 请托管的进程退出后等它自己收尾多久，过了就强杀（Pi 的收尾实测 80 次里 11 次停住超过这个数）
+    /// CuePad 自有子进程的强制收尾宽限；已认领的 Pi 经桥走宿主退出，不用强杀兜底。
     public static let endGrace: Duration = .seconds(5)
     /// 托管的会话歇着满这么久就退出（不算结束，发话时再接着）
     public static let hostedIdle: Duration = .seconds(30 * 60)

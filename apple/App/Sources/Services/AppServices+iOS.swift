@@ -59,16 +59,6 @@ extension AppServices {
         await alerts?.refresh()
     }
 
-    /// 实时活动只能在前台开：回到前台时按库里此刻推一份，再看一次要不要开，过时时刻从此刻算。
-    private func resendSnapshots() async {
-        guard cueActivity != nil else { return }
-        do {
-            try await writeSnapshots(resend: true)
-        } catch {
-            reportIssue(.widgetDataUnavailable("\(error)"))
-        }
-    }
-
     /// 前台提示：本机已同步来的在线会话（`LiveSessions`）每次变化，由 `SessionAlertTracker` 认出"等你"、"做完了"，到得了你的（`CueStore.reaches`）交给界面。
     /// 不依赖推送是否到达；App 不在前台时不发（后台由系统推送提示，前台系统不再重复展示，见 `AlertCenter`）。
     private func startSessionAlerts(since active: ActiveSince) {

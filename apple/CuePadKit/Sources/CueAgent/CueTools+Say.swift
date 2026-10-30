@@ -38,25 +38,20 @@ extension CueTools {
     return (try await store.leafSession(leaf.id), leaf.id, "「\(leaf.heading)」的会话", leaf.id.shortID)
   }
 
-  /// 说的话写下后等结果，至多到写下后 `wait`：结果按说的话那条规则（`Speech`）读——已送达、没送到（工具结果标成出错，带 Mac 报的原因），
-  /// 或还在路上：这台 Mac（`host`，Cue 与它的工具都在这台）自己执行的还没回执，发给别的 Mac 的还没传出这台、已发出
-  /// （如实说还没送达；之后 Mac 报没送到会写进下一轮的变化，见 `CueChange.Kind.undelivered`）。
-  /// 没有 Mac 报的原因的没能送达（还没传出、迟迟没回执）不标出错：话可能稍后照常送达，标了 Cue 会再说一遍。`what` 是做了什么。
+  /// 只把明确拒绝标成出错；等待窗口结束不授权 Cue 重说，也不保证之后一定收到结果。
   func spoken(_ request: DeliveryRequest, _ what: String, tail short: String, from host: String) async throws -> Result {
     let latest = try await settled(request)
     let tail = "（\(short)）"
     let moment = Speech.Moment.always(localHost: host)
     switch Speech.trip(latest, at: moment) {
+    case .preparing(let reason):
+      return .ok("\(what)：\(reason)。这是原请求，不要重复发送。\(tail)")
     case .delivered:
       return .ok("\(what)：已送达。\(tail)")
     case .failed(.reported(let reason)):
       return Result(text: "\(what)：没送到——\(reason)\(tail) \(Self.undeliveredMark(request.id))", isError: true)
-    case .sending where moment.isLocal(latest.hostID):
-      return .ok("\(what)：这台 Mac 正在送，还没送达，结果会写进变化。\(tail)")
-    case .failed(.unsent), .sending:
-      return .ok("\(what)：还没发出（这台 Mac 还没把它传上 iCloud），还没送达，结果会写进变化。\(tail)")
-    case .failed(.timedOut), .sent:
-      return .ok("\(what)：已发出，还没送达，结果会写进变化。\(tail)")
+    case .sending, .sent, .unconfirmed:
+      return .ok("\(what)：送达尚未确认，可能已经执行；不要自动重发。若收到后续回执或消息，再据实判断。\(tail)")
     }
   }
 

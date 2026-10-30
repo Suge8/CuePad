@@ -26,7 +26,7 @@ extension CueHostTests {
         let sent = try #require(try await rig.store.deliveryRequests(toSession: "remote-1").last)
         #expect(sent.hostID == "mac-b" && sent.isOpen && sent.isFromCue)
 
-        let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", onIssue: { Issue.record("\($0)") }) { _ in .failed(.verbatim("会话已关闭")) }
+        let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", onIssue: { Issue.record("\($0)") }) { _, _ in .failed(.verbatim("会话已关闭")) }
         try await macB.start()
         let seen = try await rig.message(.cue, containing: "看到了")
         #expect(seen.text.contains("[发送失败] 修好登录页 说不出去") && seen.text.contains("会话已关闭"), "\(seen.text)")
@@ -43,7 +43,7 @@ extension CueHostTests {
         let task = try await rig.store.createTask("修好登录页 说不出去", in: project.id)
         try await rig.store.linkCard(task.id, toSession: "remote-3")
         try await PiStateRecorder(store: rig.store, hostID: "mac-b").update(sessionID: "remote-3", state: .settled, title: "修好登录页")
-        let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", onIssue: { Issue.record("\($0)") }) { _ in .failed(.verbatim("会话已关闭")) }
+        let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", onIssue: { Issue.record("\($0)") }) { _, _ in .failed(.verbatim("会话已关闭")) }
         try await macB.start()
         try await rig.say("请对登录页说继续")
         try await eventually("工具当场报了没送到") { rig.model.answered("没送到——会话已关闭") }
@@ -72,7 +72,7 @@ extension CueHostTests {
         let brain = try #require(rig.brainPIDs.first)
         kill(brain, SIGKILL)
 
-        let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", onIssue: { Issue.record("\($0)") }) { _ in .failed(.verbatim("会话已关闭")) }
+        let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", onIssue: { Issue.record("\($0)") }) { _, _ in .failed(.verbatim("会话已关闭")) }
         try await macB.start()
         let seen = try await rig.message(.cue, containing: "看到了")
         #expect(seen.text.contains("[发送失败] 修好登录页 半路断开") && seen.text.contains("会话已关闭"), "\(seen.text)")
@@ -141,7 +141,7 @@ extension CueHostTests {
                 guard rig.model.answers("还没送达") > told, try await rig.store.cueState()?.state == .known(.settled) else { return false }
                 return try await rig.store.deliveryRequests(toSession: "remote-1").contains { $0.isOpen }
             }
-            let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", timing: clock, onIssue: { Issue.record("\($0)") }) { _ in .failed(.verbatim(reason)) }
+            let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", timing: clock, onIssue: { Issue.record("\($0)") }) { _, _ in .failed(.verbatim(reason)) }
             try await macB.start()
             try await rig.message(.cue, containing: reason)
             await macB.stop()

@@ -95,9 +95,12 @@ extension MacSyncTests {
             PiLaunch(project: project.id, prompt: "看看测试为什么挂", token: "tok-cue"), title: "App", on: TestApp.hostID, cue: true)
         #expect(try await awaitFinished(request.id).status == .known(.succeeded))
         let ext = try #require(rig.host.extensions["new-tok-cue"])
-        try await store.deleteDelivery(request.id)
-        let said = PiChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: "看看测试为什么挂", at: .now, deliveryID: request.id)
+        let received = try #require(ext.messages.first)
+        let delivery = try #require(received.deliveryID.flatMap(UUID.init(uuidString:)))
+        let said = PiChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: received.text, at: .now, deliveryID: delivery)
         try await store.writePiTranscript(PiTranscript(sessionID: ext.sessionID, messages: [said], recap: PiRecap(lastPrompt: said.text)))
+        #expect(try await store.deliveryRequest(request.id)?.status == .known(.succeeded))
+        try await store.deleteDelivery(request.id)
 
         let derived = ChatDerived()
         derived.refresh(try await SessionDigest.read(PiSessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store), at: .always())
@@ -140,9 +143,11 @@ extension MacSyncTests {
         // 接回的那一次写入落了盘（记录的状态与起点跟上桥上的）才看 Cue 的变化，不然歇着的那一例还没写就判过了
         try await eventually("桥上以新扩展接回") { services.pi.session(sessionID: "s1").map { $0.state == .settled && !$0.upgrading } == true }
         let live = try #require(services.pi.session(sessionID: "s1"))
-        _ = try await eventually(store, { try $0.allPiSessionStates().first }, until: {
+        let stored = try await eventually(store, { try $0.allPiSessionStates().first }, until: {
             $0?.state == .known(.settled) && abs(($0?.stateSince ?? .distantPast).timeIntervalSince(live.stateSince)) < 0.001
         })
+        #expect(try await !store.macOnline(TestApp.hostID))
+        #expect(stored?.runtimeState.known == nil)
         let woke = try await store.cueChanges(after: CueMarks(mark))
         #expect(woke.due.map { "\($0.kind)\($0.interrupted ? "（被打断）" : "") \($0.session?.sessionID ?? "")" } == (running ? ["settled s1"] : []))
     }

@@ -16,7 +16,7 @@ extension PiSessionState {
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
             launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
             pendingPrompt: recap?.pendingPrompt, pendingTools: recap?.pendingTools, model: session.model, thinking: session.thinking, context: session.context,
-            agent: .known(session.agent), turnStartedAt: session.turnStartedAt, answeredAt: recap?.answeredAt, failure: session.failure.map(Open.known))
+            agent: .known(session.agent), turnStartedAt: session.turnStartedAt, answeredAt: recap?.answeredAt, failure: session.failure.map(Open.known), bootID: SystemBoot.id, runtimeUntil: .distantFuture)
     }
 }
 
@@ -181,22 +181,17 @@ extension Workspace {
     /// `agent`：用哪个 Agent 开；`model`、`thinking` 为 nil 是这家的默认。
     func startSession(
         in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, launched: @escaping () -> Void
+        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, progressed: @escaping (LaunchProgress) -> Void
     ) async throws -> String {
         let launch = try await services.launchSession(
             in: project, prompt: prompt, title: title, on: host ?? services.hostID, card: card, agent: agent, model: model, thinking: thinking)
-        var reported = false, seen = false
+        var seen = false
         for try await progress in services.store.observe({ try launch.progress(from: $0) }) {
             if let claimed = progress.claimed { return claimed.sessionID }
             // 请求开成了、会话却一直没带着认领标识连上来：等认领的请求到期清掉（`DeliveryExecutor`），不再静静地等下去
             if progress.request != nil { seen = true } else if seen { throw SendError.notLaunched(String(localized: "会话一直没连上 CuePad")) }
-            switch progress.phase(at: services.speech) {
-            case .failed(let failure): throw SendError.notLaunched(failure.text)
-            case .opening where !reported:
-                reported = true
-                launched()
-            default: break
-            }
+            progressed(progress)
+            if case .failed(let failure) = progress.phase(at: services.speech) { throw SendError.notLaunched(failure.text) }
         }
         throw CancellationError()
     }

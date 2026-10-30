@@ -43,6 +43,9 @@ public enum CueWork: Identifiable, Equatable, Sendable {
 
   /// 在做的事的顶层任务；会话为 nil。
   public var task: Card? { if case .task(let item) = self { item.task } else { nil } }
+
+  /// 这件事用着的未结束会话：几片叶子共用的会话只出现一次。
+  public var sessions: [PiSessionState] { CueAgents.sessions(in: [self]) }
 }
 
 /// 看板上的一件事：一个没做完的顶层任务。在做的（`isActive`）归值班的 Cue 管，其余是你手上的清单。
@@ -66,10 +69,19 @@ public struct CueBoardLeaf: Equatable, Sendable {
   public var leaf: Card
   /// 叶子的会话记录；还没开会话（或记录还没到）为 nil。
   public var session: PiSessionState?
-  /// 正在为叶子开新会话（请求还没执行完，或开好了还没认领到）。
-  public var launching: Bool
-  /// 叶子还没绑会话、它的话正送进上一步的会话（`CueStore.sendingLeaves`；送到时绑上）。
-  public var sending: Bool
+  /// 唯一占位入口 `handoffRequests` 的原记录；防重复，不代表此刻在跑。
+  public let handoffs: [DeliveryRequest]
+  private let activity: Set<DeliveryMode>
+  public var launching: Bool { activity.contains(.start) }
+  public var sending: Bool { activity.contains(.send) }
+
+  init(leaf: Card, session: PiSessionState?, handoffs: [DeliveryRequest], since: Date, at moment: Speech.Moment) {
+    self.leaf = leaf
+    self.session = session
+    self.handoffs = handoffs
+    self.since = since
+    activity = Set(handoffs.filter { Speech.activity($0, at: moment) != nil }.compactMap(\.mode.known))
+  }
   /// 停在当前状态的起点：会话进入当前状态的时刻，没有会话时是开始做或建成任务的时刻。
   public var since: Date
 
@@ -88,8 +100,8 @@ public struct CueLeafDetail: Equatable, Sendable {
   public var leaf: Card
   /// 叶子的会话；还没开会话（或记录还没到）为 nil。
   public var session: CueSessionDetail?
-  /// 还没绑会话、话正送进上一步的会话（同 `CueBoardItem.sending`）。
-  public var sending: Bool
+  /// 未绑定会话的原始交接意图；准备、在路上与未知按 Speech 区分。
+  public var handoffs: [DeliveryRequest]
 }
 
 /// 一个会话的细节（Cue 的 peek）：记录与最近几轮问答。

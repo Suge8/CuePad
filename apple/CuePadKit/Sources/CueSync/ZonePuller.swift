@@ -27,8 +27,8 @@ actor ZonePuller {
 
   private let source: any ZoneChangeSource
   private let coordinator: SyncCoordinator
-  private var running: (id: UUID, task: Task<Void, any Error>)?
-  private var queued: (id: UUID, task: Task<Void, any Error>)?
+  private var running: (id: UUID, task: Task<SyncPullResult, any Error>)?
+  private var queued: (id: UUID, task: Task<SyncPullResult, any Error>)?
   /// 等待期间被挡下过：等待结束时补拉一次。
   private var owed = false
 
@@ -40,37 +40,40 @@ actor ZonePuller {
   private var store: CueStore { coordinator.store }
 
   /// 拉到没有更多为止；在跑的那次结束后才开始（见类型注释）。同步区不在（被删、被重置）交给协调器判断要不要请你决定。
-  func pull() async throws {
+  @discardableResult
+  func pull() async throws -> SyncPullResult {
     if let queued { return try await queued.task.value }
     let id = UUID()
     let previous = running?.task
     let task = Task {
       _ = await previous?.result
-      try await self.run(id)
+      return try await self.run(id)
     }
     if previous == nil { running = (id, task) } else { queued = (id, task) }
-    try await task.value
+    return try await task.value
   }
 
-  private func run(_ id: UUID) async throws {
+  private func run(_ id: UUID) async throws -> SyncPullResult {
     if queued?.id == id {
       running = queued
       queued = nil
     }
     defer { if running?.id == id { running = nil } }
-    guard await coordinator.canSync else { return }
+    guard await coordinator.canSync else { return .incomplete }
+    let changed: Bool
     do {
       do {
-        try await drain()
+        changed = try await drain()
       } catch let error as CKError where error.code == .changeTokenExpired {
         try await coordinator.setToken(nil)
-        try await drain()
+        changed = try await drain()
       }
     } catch let error as CKError where [.zoneNotFound, .userDeletedZone].contains(error.code) {
-      return await coordinator.zoneMissing(deletedByUser: error.code == .userDeletedZone)
+      await coordinator.zoneMissing(deletedByUser: error.code == .userDeletedZone)
+      return .incomplete
     } catch is RetryHeld {
       owed = true
-      return
+      return .incomplete
     } catch {
       if !(error is SyncPaused) {
         let fault = await coordinator.failed(error)
@@ -83,13 +86,14 @@ actor ZonePuller {
       throw error
     }
     await coordinator.succeeded()
+    return changed ? .newData : .noData
   }
 
   /// 重试的等待结束了（`SyncCoordinator.retryDue`）：期间被挡下过的拉取补一次。
   func due() async {
     guard owed else { return }
     owed = false
-    try? await pull()  // 失败已由协调器归类、定了下次的时刻
+    _ = try? await pull()  // 失败已由协调器归类、定了下次的时刻
   }
 
   /// 发请求前问重试调度：在等就抛出，这一拉记成欠着（`run`）。
@@ -97,14 +101,16 @@ actor ZonePuller {
     guard await coordinator.admits(.pull) else { throw RetryHeld() }
   }
 
-  private func drain() async throws {
+  private func drain() async throws -> Bool {
+    let changed: Bool
     do {
-      try await drainPages()
+      changed = try await drainPages()
     } catch {
       await coordinator.setCatchingUp(false)
       throw error
     }
     await coordinator.setCatchingUp(false)
+    return changed
   }
 
   /// 一页变化，只带 `keys` 这几个字段。
@@ -115,12 +121,14 @@ actor ZonePuller {
     }
   }
 
-  private func drainPages() async throws {
+  private func drainPages() async throws -> Bool {
     // 对账与积压了不止一页（离线久了、别处一下写了很多）算在同步中；一页就拉完的（按节奏的、门铃叫来的）不算，状态不跟着闪
     var token = try await coordinator.token()
+    var changed = false
     if token == nil {
       await coordinator.setCatchingUp(true)
-      token = try await catchUp()
+      let caught = try await catchUp()
+      (token, changed) = (caught.token, caught.changed)
       try await coordinator.setToken(token)
     }
     var batch: ZoneChangeBatch
@@ -128,13 +136,15 @@ actor ZonePuller {
       batch = try await changes(since: token, keys: Self.fieldsWithoutFiles)
       if batch.moreComing { await coordinator.setCatchingUp(true) }
       try await coordinator.pulled(batch.modifications, batch.deletions)
+      changed = changed || !batch.modifications.isEmpty || !batch.deletions.isEmpty
       if batch.token != token { try await coordinator.setToken(batch.token) }  // 库里的就是 `token`：没有变化的一拉不写库
       token = batch.token
     } while batch.moreComing
+    return changed
   }
 
-  /// 按版本对账（见类型注释），返回翻完时的令牌；补取、删除都应用完才返回，调用方随即存下。
-  private func catchUp() async throws -> Data {
+  /// 按版本对账（见类型注释），返回翻完时的令牌与是否处理了变化；补取、删除都应用完才返回。
+  private func catchUp() async throws -> (token: Data, changed: Bool) {
     let before = try await store.syncedRecords()
     var seen: [CKRecord.ID: Int64] = [:]
     var batch: ZoneChangeBatch
@@ -150,6 +160,7 @@ actor ZonePuller {
     } while batch.moreComing
 
     let wanted = try await newerOnServer(seen, synced: before)
+    var changed = false
     for start in stride(from: 0, to: wanted.count, by: CloudKitLimits.recordsPerRequest) {
       let ids = Array(wanted[start..<min(start + CloudKitLimits.recordsPerRequest, wanted.count)])
       try await admitted()
@@ -157,6 +168,7 @@ actor ZonePuller {
       let found = Set(records.map(\.recordID))
       for id in ids where !found.contains(id) { seen[id] = nil }  // 补取时已不在
       try await coordinator.pulled(records, [])
+      changed = changed || !records.isEmpty
     }
 
     let names = Set(seen.keys.map(\.recordName))
@@ -165,7 +177,7 @@ actor ZonePuller {
     if !gone.isEmpty {
       try await coordinator.pulled([], gone.map { (CKRecord.ID(recordName: $0.key, zoneID: coordinator.zoneID), $0.value.table.rawValue) })
     }
-    return batch.token
+    return (batch.token, changed || !gone.isEmpty)
   }
 
   /// 本机没有（也没推送过）或服务器上较新的记录。

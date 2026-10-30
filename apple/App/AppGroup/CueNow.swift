@@ -6,7 +6,8 @@ import Foundation
 /// - 数字账（`ledger`）：要你管的（拍板、待回复，按件数）在前，"N 推进中"在后（与看板列头、底部那一排、侧栏进展那一行同一个数，`advancing`），
 ///   再接"M 子代理"（推进中各件的会话里在跑的子代理一共几个，`subagents`），放不下先去掉子代理；Cue 不在时也照写，为 0 的不写。
 ///   推进中那项只在有件在跑或等子代理交回时写（`Tally.moving`），都歇着时写那一句（`quietLine`）；每件此刻的样子（在跑、等子代理）不进数字账，在下面每件一行里。
-///   否决过：按件分"3 在跑 1 等子代理"——看不出规模，加起来又不数歇着的、对不上推进中；按会话数加代理总数——会话数对不上看板上任何一个数，放不下时只剩它。
+///   按件分"3 在跑 1 等子代理"看不出规模，加起来又不数歇着的、对不上推进中，所以数字账仍数任务。
+/// - 灵动岛常驻只取一个数：有等你就取 `needsYou`，否则取活跃 Agent 总数 `agentCount`；它不等于推进中任务数，计数规则只在 `CueAgents`。
 /// - 角标（`needsYou`）：拍板加待回复，App 图标、菜单栏图标与灵动岛最小态同一个数。
 /// - 每件一行（`items`）：展开态与锁屏下面列的那几件，等你的每一件、待回复的每个会话、推进中的每一件（在跑、等子代理交回、歇着）、刚做完的顶层任务；按这个先后排。
 /// - 快的事实（Cue 在想、话在路上）几分钟就变，后台的岛不一定等得到下一份：过了 `staleAt` 只信慢的（`settled`）。
@@ -28,6 +29,16 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var at: Date
     /// Mac 上它运行在别的 Mac 时那一句（"在「Mac Studio」上运行"）：静着、手上没有事时那一句写它；Mac Cue 页输入框工具排末尾的旁注也写它。这台或手机上为 nil。
     var elsewhere: String? = nil
+    var decay: [Decay] = []
+    var unconfirmed = false
+    var cueUntil: Date? = nil
+    /// 参与工作的 Agent 总数；旧快照没有证明时保持未知。
+    var agentCount: Int? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case name, cue, tally, advancing, subagents, items, first, at, elsewhere, agentCount
+        case decay = "x", unconfirmed = "u", cueUntil = "v"
+    }
 
     enum Brain: Codable, Hashable, Sendable {
         /// 此刻不会接话：那一句原因（"「Mac Studio」没开"、换新 Mac 时"正在从 iCloud 同步…"），起不来时 `failed`。
@@ -48,6 +59,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         /// 其中歇着、等它派出去的子代理交回的（`Item.Kind.delegating`）：头像那一拍读它（每件一行截过，读不全）。
         var delegating = 0
 
+        enum CodingKeys: String, CodingKey { case asks, reply, moving, delegating }
+
         /// "等你 N"：拍板加待回复，这条规则只在这里（`CueNow.needsYou`）。
         var needsYou: Int { asks + reply }
     }
@@ -66,6 +79,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
             case delegating
             /// 推进中、此刻没在跑
             case resting
+            case unconfirmed
             /// 刚做完的顶层任务
             case done
         }
@@ -77,6 +91,10 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         /// 停在这个样子的起点（计时从它走；刚做完的是做完的时刻）。
         var since: Date
         var subagents: Int
+        var slot = 0
+
+        enum CodingKeys: String, CodingKey { case id, kind, name, since, subagents
+            case slot = "p" }
 
         /// 到这一刻收掉：刚做完的只留 `doneWindow`，别的不按时刻收。
         var expiry: Date? { kind == .done ? since.addingTimeInterval(CueNow.doneWindow) : nil }
@@ -135,18 +153,22 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 随快照写进 App Group 的是两种各几件，小组件与实时活动只读不另算。
     var needsYou: Int { tally.needsYou }
 
-    /// 有活才开着实时活动：Cue 在一轮里或话在路上、有等你的（拍板与待回复）、有在跑或等子代理的；只剩歇着与刚做完的就结束。
-    var isLive: Bool { isBusy || needsYou > 0 || tally.moving > 0 }
+    /// 当前有确认的活动才可新建；未确认只能保留已有活动。
+    var hasConfirmedActivity: Bool { isBusy || needsYou > 0 || tally.moving > 0 || agentCount.map { $0 > 0 } == true }
+
+    /// 未确认不等于全部完成；只有明确没有活（歇着与刚做完）时才允许现有生命周期收尾。
+    var isLive: Bool { hasConfirmedActivity || unconfirmed }
 
     /// 这一份过多久不可信。
     var staleAfter: TimeInterval { isBusy ? Self.fastStale : Self.slowStale }
-    var staleAt: Date { at.addingTimeInterval(staleAfter) }
+    var staleAt: Date { min(at.addingTimeInterval(staleAfter), cueUntil ?? .distantFuture) }
 
-    /// 过时之后只信慢的事实：Cue 按歇着算（头像那一拍跟着 `cue` 推出，不另改）。
+    /// 过时只撤销运行断言；没有完成证据，不据此结束活动。
     var settled: CueNow {
         guard isBusy else { return self }
         var now = self
-        now.cue = .idle
+        now.cue = .away(String(localized: "状态未确认"), failed: false)
+        now.unconfirmed = true
         return now
     }
 
@@ -163,16 +185,21 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     }
 
     /// 推出后再没收到新一份时，到 `date` 该画成的样子：过了 `staleAt` 只信慢的事实，刚做完的到点收掉。
-    func shown(at date: Date) -> CueNow { (date >= staleAt ? settled : self).aged(to: date) }
+    func shown(at date: Date) -> CueNow {
+        var now = date >= staleAt ? settled : self
+        for step in decay where step.at <= date { now.apply(step) }
+        return now.aged(to: date)
+    }
 
     /// `date` 之后 `shown(at:)` 下一次变的那一刻（过时、刚做完的收掉）；没有为 nil。
     func nextShownChange(after date: Date) -> Date? {
-        [nextChange(after: date), staleAt > date && self != settled ? staleAt : nil].compactMap { $0 }.min()
+        [nextChange(after: date), staleAt > date && self != settled ? staleAt : nil, decay.first { $0.at > date }?.at].compactMap { $0 }.min()
     }
 
     /// 内容一样（不看推出的时刻）：一样的不重画、不重发。
     func same(as other: CueNow) -> Bool {
         var other = other
+        if isBusy || other.isBusy, staleAt != other.staleAt { return false }
         other.at = at
         return self == other
     }
@@ -182,18 +209,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
 }
 
 nonisolated extension CueNow: SnapshotFile { static let fileName = "cue.json" }
-
-nonisolated extension CueNow.Tally {
-    /// 上一版写下的快照（小组件读的 cue.json、开着的实时活动）没有 `delegating`：缺键按 0 读，不让整份读不出。
-    /// 这一版普及后（用户都升过、旧快照都被重写过）删掉，回到合成的解码。
-    init(from decoder: any Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        asks = try values.decode(Int.self, forKey: .asks)
-        reply = try values.decode(Int.self, forKey: .reply)
-        moving = try values.decode(Int.self, forKey: .moving)
-        delegating = try values.decodeIfPresent(Int.self, forKey: .delegating) ?? 0
-    }
-}
 
 nonisolated extension CueNow {
     /// 数字账的一项：哪一种、几件。
@@ -251,7 +266,9 @@ nonisolated extension CueNow {
         case .hearing: String(localized: "你的话在路上")
         case .working(let woke, let doing, _): doing ?? woke ?? Self.thinking
         case .idle:
-            if let done = justDone {
+            if unconfirmed {
+                String(localized: "状态未确认")
+            } else if let done = justDone {
                 String(localized: "刚做完「\(done.name)」")
             } else if advancing > 0 {
                 String(localized: "推进中 \(advancing) 件，都歇着")
@@ -307,7 +324,7 @@ nonisolated extension CueNow.Item.Kind {
         case .reply: .reply
         case .running, .delegating: .moving
         case .done: .done
-        case .resting: .quiet
+        case .resting, .unconfirmed: .quiet
         }
     }
 
@@ -319,6 +336,7 @@ nonisolated extension CueNow.Item.Kind {
         case .running: String(localized: "在跑")
         case .delegating: String(localized: "等子代理")
         case .resting: String(localized: "歇着")
+        case .unconfirmed: String(localized: "状态未确认")
         case .done: String(localized: "做完")
         }
     }

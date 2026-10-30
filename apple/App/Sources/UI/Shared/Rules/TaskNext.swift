@@ -21,8 +21,8 @@ nonisolated enum TaskNext: Equatable, Sendable {
     /// 会话这时值得写出来：在跑、在等你、出了事、有你没看的回复。歇着（看过了、新会话、已结束）不写。
     private static func wantsLook(_ shown: PiShown) -> Bool {
         switch shown.status {
-        case .delivery, .working, .asking, .awaitsReply, .cueAsking, .failed, .unread, .interrupted: true
-        case .idle, .resting, .fresh, .ended, .unknown: false
+        case .delivery, .working, .asking, .awaitsReply, .cueAsking, .failed, .unread, .interrupted, .unknown: true
+        case .idle, .resting, .fresh, .ended: false
         }
     }
 
@@ -30,7 +30,8 @@ nonisolated enum TaskNext: Equatable, Sendable {
     var agentBusy: Bool {
         guard case .agent(let shown, _) = self else { return false }
         switch shown.status {
-        case .working, .asking, .delivery: return true
+        case .delivery(.preparing): return false
+        case .working, .asking, .delivery, .unknown: return true
         default: return false
         }
     }
@@ -91,5 +92,5 @@ extension TaskNext {
 
 extension PiShown {
     /// 任务行上要写出状态词的：要你动手的（`needsYou`），加上停在半路（被打断）与做完一轮你还没看的。在跑的只有会动的线。
-    var speaksOnTask: Bool { needsYou || status == .interrupted || status == .unread }
+    var speaksOnTask: Bool { needsYou || status == .interrupted || status == .unread || status == .unknown }
 }

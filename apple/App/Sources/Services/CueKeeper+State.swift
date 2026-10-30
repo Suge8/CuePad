@@ -119,6 +119,7 @@ extension CueKeeper {
         /// 本机最近一次写入的序号（`CueStore.lastWrite`）：会话状态与收尾，卡片的完成与层级，投送请求的状态一变它就变
         /// （晚到的变化事件时刻也可能更早，只有写入序号一定跟着变）；会话的其余列（说明、上下文、子代理的动作）与会话里的消息怎么变都不叫醒对账
         var written: Int
+        var runtime: [Date]
     }
 }
 #endif

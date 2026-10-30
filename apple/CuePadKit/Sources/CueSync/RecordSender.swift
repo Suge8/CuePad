@@ -186,9 +186,12 @@ actor RecordSender {
     return next
   }
 
-  private func outcome(of batch: OutgoingBatch) async -> Bool {
-    let names = batch.names
+  private func outcome(of prepared: OutgoingBatch) async -> Bool {
+    var names = prepared.names
     do {
+      let batch = try await reservingDeliveryPayloads(in: prepared)
+      names = batch.names
+      guard !batch.isEmpty else { return true }
       var sent: SentRecords
       do {
         sent = try await uploader.upload(saving: batch.saves, deleting: batch.deletes)
@@ -223,6 +226,23 @@ actor RecordSender {
       await schedule(await coordinator.failed(error))
       return false
     }
+  }
+
+  /// nextBatch 读 payload 与登记 noteSent 之间也可能被另一进程撤回；交出前按同一 Store 事务核对并保留该版。
+  /// 旧版已消失或变更就丢弃它，沿现有调度重读，不把丢弃当成服务器已接收。
+  private func reservingDeliveryPayloads(in prepared: OutgoingBatch) async throws -> OutgoingBatch {
+    var obsolete = Set<String>()
+    for record in prepared.saves where record.recordType == Table.deliveryRequests.rawValue {
+      if let stamp = record.modifiedAt,
+        try await !coordinator.store.reserveDeliveryPayload(record.recordID.recordName, modifiedAt: stamp) {
+        obsolete.insert(record.recordID.recordName)
+      }
+    }
+    var batch = prepared
+    batch.drop(obsolete)
+    newer.subtract(obsolete)
+    resend.formUnion(obsolete.intersection(urgent))
+    return batch
   }
 
   /// 上传前对一次最低对端版本，成功为止（同一时刻只对一次）；停下（这台要更新、要你决定）的不再对。文件那一路（`FileSender`）同样等它。

@@ -133,6 +133,7 @@ private struct SessionAnswer: View {
     }
 
     private var note: (text: String, failed: Bool)? {
+        if let reason = sent?.unconfirmedReason { return (reason, false) }
         if answering, sent == .delivered { return (String(localized: "已答，等 Mac 上的 Agent 继续"), false) }
         return failure.map { ($0, true) }
     }

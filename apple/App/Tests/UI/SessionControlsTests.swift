@@ -13,7 +13,8 @@ struct SessionControlsTests {
     private let luna = PiModelOption(key: PiModelKey(provider: "openai", id: "luna"), name: "Luna", thinkingLevels: [.off, .high])
 
     private func session() async throws -> PiSessionState {
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(
+        let recorder = try await app.runtimeRecorder(on: "mac-a")
+        try await recorder.update(
             sessionID: "atlas", state: .settled, title: "atlas", directory: "/w/atlas",
             modelState: PiModelState(model: opus, thinking: .known(.low), models: [opus, luna]))
         return try #require(try await store.piSessionPage(PiSessionQuery()).items.first?.state)
@@ -26,7 +27,7 @@ struct SessionControlsTests {
 
     /// Mac 执行器按给定结果写回，等到这条有结果。
     private func execute(_ request: DeliveryRequest, failing reason: String) async throws -> DeliveryRequest {
-        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _ in .failed(.verbatim(reason)) }
+        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _, _ in .failed(.verbatim(reason)) }
         try await executor.start()
         defer { Task { await executor.stop() } }
         for try await current in store.observe({ try $0.deliveryRequest(request.id) }) {
@@ -39,7 +40,8 @@ struct SessionControlsTests {
     @Test(arguments: [true, false])
     func 允许自己填的选择题_回复框也能作答(allowsOther: Bool) async throws {
         let question = PiQuestion(promptID: "p-1", kind: .select, text: "喝什么？", options: ["茶", "咖啡"], allowsOther: allowsOther)
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .waitingForUser, title: "atlas", question: question)
+        let recorder = try await app.runtimeRecorder(on: "mac-a")
+        try await recorder.update(sessionID: "atlas", state: .waitingForUser, title: "atlas", question: question)
         let session = try #require(try await store.allPiSessionStates().first)
 
         #expect(MacDelivery.reply(to: session) == (allowsOther ? .answer(question) : .answerAbove))

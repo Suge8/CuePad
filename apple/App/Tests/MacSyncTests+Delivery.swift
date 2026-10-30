@@ -9,28 +9,9 @@ import Testing
 @testable import CuePi
 
 extension MacSyncTests {
-    /// 等请求有结果；10 秒没有就失败并说明（观察流不会自己结束，没有上限会无声挂住整个测试宿主）。
     func awaitFinished(_ id: UUID) async throws -> DeliveryRequest {
-        let store = services.store
-        return try await withThrowingTaskGroup(of: DeliveryRequest.self) { group in
-            group.addTask {
-                for try await request in store.observe({ try $0.deliveryRequest(id) }) {
-                    if let request, request.status == .known(.succeeded) || request.status == .known(.failed) { return request }
-                }
-                throw CancellationError()
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(60))
-                throw TimedOut(what: "投送请求 \(id) 没有在 60 秒内出结果")
-            }
-            defer { group.cancelAll() }
-            return try await group.next()!
-        }
-    }
-
-    struct TimedOut: Error, CustomStringConvertible {
-        let what: String
-        var description: String { what }
+        let request = try await eventually(services.store, { try $0.deliveryRequest(id) }, until: { $0?.isOpen == false })
+        return try #require(request)
     }
 
     /// 手机对在线会话的斜杠命令、作答、改配置、结束、停止：各走桥的命令通道（命令由 Pi 展开执行，不当文字发出），按成功写回，

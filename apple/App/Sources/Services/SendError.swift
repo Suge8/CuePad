@@ -26,7 +26,7 @@ nonisolated enum SendError: Error, Equatable {
     case projectNotHere
     /// 要在里面启动 Pi 的目录不在了（被删或改名），附目录末段名。
     case directoryMissing(String)
-    /// 话已被 Mac 领取、交给了 Agent，撤不回。
+    /// 已领取、已进入同步发送，或本机快照不足以证明尚未交出，不能安全撤回。
     case alreadyHanded
     /// 对 Cue 说的话已交给了它，撤不回。
     case alreadyHeard
@@ -51,7 +51,7 @@ extension SendError: ShownError {
         case .noCodeDirectory(let project): "项目「\(project)」还没有绑定文件夹，不知道目录在哪"
         case .projectNotHere: "这个项目还没同步到这台 Mac，稍后再开"
         case .directoryMissing(let folder): "目录不存在：\(folder)"
-        case .alreadyHanded: "Mac 已经把它发给 Agent，撤不回了"
+        case .alreadyHanded: "这句可能已经交出，不能安全撤回"
         case .alreadyHeard: "Cue 已经收到这句了，撤不回"
         case .noLiveSession: "这台 Mac 上没有在线的 Agent 会话，查不了额度"
         case .quotaUnavailable: "额度查询失败，请稍后再试"

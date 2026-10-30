@@ -30,7 +30,7 @@ extension CueTools {
           edit{task,title?,body?,steps?,project?,reopen?}：改标题、换掉正文、追加子任务、连同子任务挪到项目；追加子任务与 reopen:true 都让已完成的任务回到没做完；
           start{task,agent?,model?,effort?,fresh?}：开工叶子（task 有子任务时是第一个没做完的子任务）。同一任务的上一步有会话就接着用它（已结束的先恢复），否则在项目文件夹开新会话：agent 缺省是那台 Mac 的默认，model 写 provider/id（claude、codex 只写 id）。叶子已有会话用 say；fresh:true 开新会话（上一步的会话随之结束）；
           say{task|session,text,model?,effort?}：对会话说话（给 task 是它在做的叶子的会话；结束了的先恢复）。会话在等回答时 text 就是答案（选项原文、从 1 起的序号或 是/否；允许自己写的题才收别的话）；否则会话在跑时打断这一轮、以这句开新一轮，他发起的那一轮在跑时不说（报错，歇下会叫醒你）。带 model、effort 先给会话换上；
-          say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒：已送达、没送到（出错，带原因），或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
+          say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒：已送达、明确未交出（出错，带原因），或尚未确认（可能已经执行，不自动重发；若有后续回执或消息，再据实核对）；
           peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答全文、发到手机的文件（带本机路径）。带 session：那个会话；
           stop{task|session}：停下会话这一轮；
           leave{task|session}：你发起的那一轮停着（歇下、等回答或出错）、这次该他接手时用，把它留给他回：歇着、出错的显示"待回复"，等回答的成了他的拍板，都进等你；你已 tell 带 ask 问他的不再 leave；他或你再对它说话就作废。他发起的一轮停下 CuePad 已当场留给他，不用 leave；

@@ -25,6 +25,7 @@ enum RecordMapper {
     .macAgents: ["agents", "problems", "name"],
     .agentLibraries: ["home", "skills", "instructions", "tidies", "selfManaged", "agents"],
     .agentLibraryFiles: ["path", "hash", "text"],
+    .activityDestinations: ["token"],
   ]
 
   static func table(named recordType: String) -> Table? {

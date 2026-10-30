@@ -92,9 +92,6 @@ export function listen(session: Session, directory: string): (reason: string) =>
 }
 
 
-/** 压缩命令受理后等多久：这段时间内失败算命令失败，之后只提示在 Pi 里 */
-const COMPACT_FAILURE_WINDOW_MS = 1500;
-
 /** CuePad 发来的一行命令：字段来自 JSON，类型没有保证，逐处校验后才用 */
 type Command = Record<string, unknown>;
 type Reject = (error: string) => void;
@@ -118,13 +115,13 @@ function handleCommand(session: Session, socket: net.Socket, command: Command | 
 	try {
 		// 格式跨扩展版本不变、不回 ack（CuePi README「协议」）：CuePad 读不懂的旧扩展也要收得到
 		if (command?.t === "upgrade") return session.reload.check();
-		if (command?.t === "send") return handleSend(session, command, ack, reject);
+		if (command?.t === "send") return void handleSend(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "command") return void handleSlash(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "answer") return handleAnswer(session, command, ack, reject);
 		if (command?.t === "reload") return handleReload(session, ack);
 		if (command?.t === "end") return handleEnd(session, ack);
 		if (command?.t === "abort") return handleAbort(session, ack);
-		if (command?.t === "retry") return handleRetry(session, ack, reject);
+		if (command?.t === "retry") return void handleRetry(session, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "config") return void handleConfig(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "quota") return handleQuota(session, ack, reject);
 		reject("bad_request");
@@ -133,7 +130,7 @@ function handleCommand(session: Session, socket: net.Socket, command: Command | 
 	}
 }
 
-function handleSend(session: Session, command: Command, ack: Ack, reject: Reject) {
+async function handleSend(session: Session, command: Command, ack: Ack, reject: Reject) {
 	const images = command.images ?? [];
 	const text = command.text ?? "";
 	if (typeof text !== "string" || !isImages(images)) return reject("bad_request");
@@ -143,7 +140,10 @@ function handleSend(session: Session, command: Command, ack: Ack, reject: Reject
 		? text
 		: [{ type: "text" as const, text }, ...images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))];
 	const id = typeof command.deliveryId === "string" ? command.deliveryId : undefined;
-	session.startRound({ content, expand: false, text, id, ack });
+	const cueTurn = command.cueTurn;
+	if (cueTurn !== undefined && (typeof cueTurn !== "object" || cueTurn === null || Array.isArray(cueTurn)
+		|| ("deliveryId" in cueTurn && cueTurn.deliveryId !== null && typeof cueTurn.deliveryId !== "string"))) return reject("bad_request");
+	await session.startRound({ content, expand: false, text, id, ack, cueTurn: cueTurn as { deliveryId?: string | null } | undefined });
 }
 
 /**
@@ -168,7 +168,7 @@ function handleReload(session: Session, ack: Ack) {
  * 斜杠命令：内置的（能在非 TUI 下执行的）由本扩展调 Pi 的接口做，其余（扩展命令、提示词模板、skill）经
  * `sendUserMessage(…, { expandPromptTemplates: true })` 交给 Pi 派发——扩展命令执行（会话正忙也立即执行，不开轮）、模板与 skill
  * 展开成新一轮的提示词，与 `send` 同一规则（`startRound`）；不带这个选项的 `sendUserMessage` 只把它当普通文字。清单里没有的名字拒绝，不当文字发出去。
- * `ack` 表示已受理：扩展命令的执行结果与报错只出现在 Pi 自己的界面（`ctx.ui`），这里看不到。
+ * 其他扩展的命令没有公开的完成/错误回执：交出后不回成功 ACK，等待以未确认结束，不伪造执行结果。
  */
 async function handleSlash(session: Session, command: Command, ack: Ack, reject: Reject) {
 	const text = command.text;
@@ -184,8 +184,7 @@ async function handleSlash(session: Session, command: Command, ack: Ack, reject:
 	const found = name === INTERNAL_COMMAND ? undefined : session.pi.getCommands().find((c) => c.name === name);
 	if (!found) return reject("unknown_command");
 	if (found.source === "extension") session.pi.sendUserMessage(text, { expandPromptTemplates: true });
-	else session.startRound({ content: text, expand: true, text });
-	ack({ ok: true });
+	else await session.startRound({ content: text, expand: true, text, ack });
 }
 
 /** 执行一条内置命令；返回拒绝原因，成功返回 undefined。 */
@@ -209,23 +208,23 @@ async function runBuiltin(session: Session, builtin: BuiltinCommand, args: strin
 			if (!ctx.sessionManager.getLeafId()) return "failed: nothing to clone";
 			session.runInternal("clone");
 			return;
-		case "new":
 		case "reload":
+			session.reload.request();
+			return;
+		case "new":
 			session.runInternal(builtin.name);
 			return;
 	}
 	session.updateInfo({ ...await modelInfo(pi, ctx), ...contextInfo(ctx) });
 }
 
-/** 压缩不等完成就返回；开头一小段时间内的失败（没有可压缩的内容、没有模型）当作拒绝报给手机，之后的失败只能提示在 Pi 里。 */
+/** 只回一次真实压缩结果；超过桥的等待期限仍由公开压缩事件上报状态，不把未完成当成功。 */
 function compact(session: Session, instructions: string): Promise<string | undefined> {
 	return new Promise((resolve) => {
-		const early = setTimeout(() => resolve(undefined), COMPACT_FAILURE_WINDOW_MS);
 		session.ctx.compact({
 			customInstructions: instructions || undefined,
-			onComplete: () => { clearTimeout(early); resolve(undefined); },
+			onComplete: () => resolve(undefined),
 			onError: (error: Error) => {
-				clearTimeout(early);
 				session.ctx.ui.notify(`压缩失败：${error.message}`, "error");
 				resolve(`failed: ${error.message}`);
 			},
@@ -233,16 +232,12 @@ function compact(session: Session, instructions: string): Promise<string | undef
 	});
 }
 
-/**
- * 结束会话：与用户在 Pi 里退出同一条路（`ctx.shutdown`——TUI 恢复终端并提示怎么恢复会话，退出时发 `bye quit`）。
- * 正在跑的一轮先中止、等你回答的弹窗先取消，否则 Pi 要等它们结束才会退出。RPC 模式只在读到下一条命令或这一轮结束时检查退出请求，
- * 所以后台托管的进程不走这里，由 CuePad 给它发 SIGTERM（`PiBridge.end`）。
- */
+/** 先回受理，再经命令上下文等真实空闲后按 mode 退出；ACK 不是结束完成。 */
 function handleEnd(session: Session, ack: Ack) {
 	ack({ ok: true });
-	session.asking?.dismiss?.();
-	if (!session.ctx.isIdle()) session.ctx.abort();
-	session.ctx.shutdown();
+	for (const said of session.pending.splice(0)) said.ack?.({ ok: false, error: "failed: session is ending" });
+	session.stopRound();
+	session.runInternal("end");
 }
 
 /** 停止这一轮（`stopRound`）；子代理落定后照常把结果投回来开始新的一轮。 */
@@ -252,8 +247,8 @@ function handleAbort(session: Session, ack: Ack) {
 }
 
 /** 把出错的那一轮原样重跑一遍（`retry.ts`）；确认等重跑的那一轮开始（隐藏消息落成会话里的一条消息）。 */
-function handleRetry(session: Session, ack: Ack, reject: Reject) {
-	const error = retry(session, ack);
+async function handleRetry(session: Session, ack: Ack, reject: Reject) {
+	const error = await retry(session, ack);
 	if (error) reject(error);
 }
 

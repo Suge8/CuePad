@@ -28,8 +28,8 @@ import Testing
   }
 
   private func executor(_ handler: Handler) -> DeliveryExecutor {
-    DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") }) {
-      await handler.handle($0)
+    DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") }) { request, _ in
+      await handler.handle(request)
     }
   }
 
@@ -44,7 +44,7 @@ import Testing
   private func executor(_ uploads: Uploads, handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome) -> DeliveryExecutor {
     DeliveryExecutor(
       store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") },
-      onWritten: { [store] id in await uploads.add(try? await store.deliveryRequest(id)?.status.known) }, handler: handler)
+      onWritten: { [store] id in await uploads.add(try? await store.deliveryRequest(id)?.status.known) }, handler: { request, _ in await handler(request) })
   }
 
   /// 当场执行完的只交出结果那一版：领取那一版在路上时结果得等它回来才能传，手机的回执要多等一个来回。
@@ -121,20 +121,6 @@ import Testing
     await executor.stop()
   }
 
-  @Test func requestInterruptedByAnAppRestartFailsAndIsNeverRunAgain() async throws {
-    let handler = Handler()
-    let stuck = try await store.requestDelivery("half done", to: pi, on: "mac-a")
-    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'executing', handledBy = 'mac-a'")
-
-    let executor = executor(handler)
-    try await executor.start()
-
-    let after = try #require(try await request(stuck.id))
-    #expect(after.status == .known(.failed) && after.failureReason?.text.isEmpty == false)
-    #expect(await handler.seen.isEmpty)  // 不重发：可能已经发出去了一半
-    await executor.stop()
-  }
-
   @Test
   func requestsOlderThanTheMaximumAgeAreAbandonedInsteadOfSurprisingTheUser() async throws {
     let handler = Handler()
@@ -147,7 +133,7 @@ import Testing
 
     _ = try await eventually(store, { try $0.deliveryRequests().first?.status }) { $0 == .known(.failed) }
     let after = try #require(try await request(stale.id))
-    #expect(after.failureReason?.text.isEmpty == false)
+    #expect(after.reason?.text.isEmpty == false)
     #expect(await handler.seen.isEmpty)
     await executor.stop()
   }
@@ -164,7 +150,7 @@ import Testing
     let done = try await eventually(store, { try $0.deliveryRequests() }) { $0.first?.status == .known(.failed) }
 
     #expect(await handler.seen.isEmpty)  // 不认识的发送方式不执行，也不猜成 send
-    #expect(done[0].failureReason?.text.contains("quantumSend") == true)
+    #expect(done[0].reason?.text.contains("quantumSend") == true)
     #expect(done[0].mode == .unknown("quantumSend") && done[0].completedAt != nil)
     await executor.stop()
   }

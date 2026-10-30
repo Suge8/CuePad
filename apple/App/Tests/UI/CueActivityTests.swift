@@ -19,7 +19,7 @@ struct CueActivityTests {
         let readme = try await store.createTask("README 截图换成 Swift 版", in: project.id)
         try await workspace.toggle(readme.id)
         let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4 到 TestFlight"), task: step.id)
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        let recorder = try await rig.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "testflight", state: .thinking, title: "testflight")
         try await store.bindSession("testflight", to: step.id)
         try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom")
@@ -65,23 +65,52 @@ struct CueActivityTests {
             profile.hostID = "mac-cue"
             profile.enabledAt = .now
         }
-        try await store.recordMacPresence(host: "mac-cue") { true }
+        let cueRecorder = try await rig.runtimeRecorder(on: "mac-cue")
         cue = try await now()
         #expect(cue.ledger.isEmpty && cue.quietLine == "刚做完「发布 v1.4」" && cue.quietWord == "做完")
         #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).quietLine == CueNow.quiet)
 
         // Cue 自己开始想：手上没活也算有活，岛开着；过时之后只信慢的事实
-        try await store.setCueState(.thinking)
+        try await cueRecorder.updateCue(.thinking)
         cue = try await now()
         #expect(cue.isLive && cue.isBusy && cue.quietWord == "在想" && cue.staleAfter == CueNow.fastStale)
-        #expect(cue.settled.quietLine == "刚做完「发布 v1.4」" && !cue.settled.isLive)
+        #expect(cue.settled.unconfirmed && cue.settled.isLive && !cue.settled.hasConfirmedActivity)
 
         // 刚做完一件又派出一件在跑，Cue 歇下：数字账写推进中那件，不停在"做完"
         let ship = try await store.createTask("推送并发新版", in: project.id)
         try await recorder.update(sessionID: "ship", state: .thinking, title: "ship")
         try await store.bindSession("ship", to: ship.id)
-        try await store.setCueState(.settled)
+        try await cueRecorder.updateCue(.settled)
         cue = try await now()
         #expect(cue.spoken == "1 件推进中" && cue.needsYou == 0)
     }
+
+    @Test func Cue话未确认不沿用旧忙碌也不结束活动_迟到回执后按真实状态继续() async throws {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing)
+        let workspace = Workspace(services: app.services), store = app.services.store
+        defer { app.services.cancelBackgroundWork() }
+        _ = try await store.updateCueProfile { profile in
+            profile.hostID = "mac-cue"
+            profile.enabledAt = clock.now
+        }
+        let cueRecorder = try await app.runtimeRecorder(on: "mac-cue")
+        try await cueRecorder.updateCue(.thinking)
+        await workspace.speak("检查部署结果", to: .cue).value
+        let message = try #require(try await store.cueMessagesToDeliver().first)
+        clock.advance(.seconds(Speech.sendLimit + Speech.receiptLimit + 1))
+        func now() async throws -> CueNow {
+            CueNow(try await CueDigest.read(from: store), at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
+        }
+        let uncertain = try await now()
+        #expect(!uncertain.isBusy && uncertain.unconfirmed && uncertain.isLive && !uncertain.hasConfirmedActivity)
+        #expect(try await store.cueMessagesToDeliver().map(\.id) == [message.id])
+        try await store.markCueMessagesDelivered([message.id], at: clock.now)
+        try await cueRecorder.updateCue(.tool, detail: "read · deploy.log")
+        let confirmed = try await now()
+        #expect(confirmed.isBusy && confirmed.hasConfirmedActivity && !confirmed.unconfirmed)
+        try await cueRecorder.updateCue(.settled)
+        #expect(try await !now().isLive)
+    }
+
 }

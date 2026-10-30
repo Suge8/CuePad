@@ -13,24 +13,30 @@ nonisolated extension CueNow {
 
     init(_ digest: CueDigest, at moment: Speech.Moment, local: Local) {
         let presence = CuePresence.derive(digest, at: moment)
-        let items = Self.items(digest, at: moment.now)
+        let unconfirmed = digest.lastYou.map {
+            Speech.trip(said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer, host: digest.hostID, at: moment).unconfirmedReason != nil
+        } ?? false
+        var runtime = RuntimeTimeline(digest, at: moment)
+        let items = Self.limited(Self.items(digest, works: runtime.items, at: moment.now)).enumerated().map { index, item in
+            var item = item
+            item.slot = index
+            return item
+        }
         let host = digest.hostName ?? MacAgents.unnamed
-        let tally = Tally(
-            asks: items.count { $0.kind == .asks }, reply: items.count { $0.kind == .reply },
-            moving: items.count { $0.kind == .running || $0.kind == .delegating }, delegating: items.count { $0.kind == .delegating })
+        let agentCount = runtime.agentCount
         self.init(
             name: digest.name, cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
-            tally: tally,
-            advancing: digest.advancing, subagents: digest.tally.advancing.reduce(0) { $0 + Self.subagents($1) }, items: Self.limited(items),
+            tally: runtime.tally, advancing: runtime.advancing, subagents: runtime.subagents, items: items,
             first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
-            elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil)
+            elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil,
+            decay: runtime.decay(visible: items), unconfirmed: runtime.unconfirmed || presence.isUnconfirmed || unconfirmed || (!digest.hostOnline && digest.state?.state.isWorking == true), cueUntil: digest.hostUntil, agentCount: agentCount)
     }
 
     private static func brain(_ presence: CuePresence, digest: CueDigest, local: Local, at now: Date) -> Brain {
         // 库里没有 Cue 不等于哪台都没启用：还没和 iCloud 对过时写在等什么（同启用入口读的 `CueGate`）
         if presence == .disabled, let waiting = local.waiting { return .away(waiting, failed: false) }
         return switch presence {
-        case .disabled, .asleep, .unreachable:
+        case .disabled, .asleep, .unconfirmed, .unreachable:
             .away(presence.line(host: digest.hostName ?? MacAgents.unnamed, ranBefore: digest.hostID != nil) ?? digest.name, failed: presence.isUnreachable)
         case .idle: .idle
         case .sending: .hearing
@@ -43,7 +49,7 @@ nonisolated extension CueNow {
     }
 
     /// 拍板的每一件、待回复的每个会话、推进中的每一件、刚做完的每一件，按这个先后（同一种里照摘要的先后）。
-    private static func items(_ digest: CueDigest, at now: Date) -> [Item] {
+    private static func items(_ digest: CueDigest, works: [Item], at now: Date) -> [Item] {
         let asks = digest.tally.waiting.map { wait in
             switch wait {
             case .message(let message, _):
@@ -55,7 +61,6 @@ nonisolated extension CueNow {
         let replies = digest.tally.replies.map { reply in
             Item(id: reply.id, kind: .reply, name: title(reply.session), since: reply.session.stateSince, subagents: 0)
         }
-        let works = digest.tally.advancing.map(item)
         let done = digest.done.compactMap { task in
             task.completedAt.map { Item(id: "done/\(task.id.uuidString)", kind: .done, name: task.title, since: $0, subagents: 0) }
         }.filter { $0.isFresh(at: now) }
@@ -63,55 +68,16 @@ nonisolated extension CueNow {
     }
 
     /// 截到 `itemLimit` 件，先后照旧；放不下时最后一格留给最近刚做完的那件（刚做完排在最后，照截就被截掉，头像与那一句就读不到它）。
-    private static func limited(_ items: [Item]) -> [Item] {
+    static func limited(_ items: [Item]) -> [Item] {
         guard items.count > itemLimit, let done = items.first(where: { $0.kind == .done }) else { return Array(items.prefix(itemLimit)) }
         return items.filter { $0.kind != .done }.prefix(itemLimit - 1) + [done]
-    }
-
-    /// 推进中的一件：有会话在跑（在想、用工具、压缩，或正在开、话正送进去）是在跑，从最早在跑的那一轮起算；
-    /// 否则有会话在等子代理是等交回，数它们在跑的子代理；再否则歇着。
-    private static func item(_ work: CueWork) -> Item {
-        let sessions: [PiSessionState], name: String, pending: Bool, settledSince: Date
-        switch work {
-        case .task(let item):
-            sessions = item.leaves.compactMap(\.session).filter { $0.state != .known(.ended) }
-            name = item.task.title
-            pending = item.leaves.contains { $0.launching || $0.sending }
-            settledSince = item.leaves.map(\.since).min() ?? item.task.modifiedAt
-        case .session(let state):
-            sessions = [state]
-            name = title(state)
-            pending = false
-            settledSince = state.stateSince
-        }
-        let running = sessions.filter { $0.state.isWorking && $0.state != .known(.delegating) }
-        if pending || !running.isEmpty {
-            let since = running.map { $0.busySince ?? $0.stateSince }.min() ?? settledSince
-            return Item(id: work.id, kind: .running, name: name, since: since, subagents: 0)
-        }
-        let delegating = sessions.filter { $0.state == .known(.delegating) }
-        if !delegating.isEmpty {
-            return Item(
-                id: work.id, kind: .delegating, name: name, since: delegating.map(\.stateSince).min() ?? settledSince,
-                subagents: delegating.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) })
-        }
-        return Item(id: work.id, kind: .resting, name: name, since: sessions.map(\.stateSince).max() ?? settledSince, subagents: 0)
-    }
-
-    /// 推进中的一件里在跑的子代理：它没结束的会话各自名册里在跑的。
-    private static func subagents(_ work: CueWork) -> Int {
-        let sessions = switch work {
-        case .task(let item): item.leaves.compactMap(\.session).filter { $0.state != .known(.ended) }
-        case .session(let state): [state]
-        }
-        return sessions.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) }
     }
 
     private static func title(_ state: PiSessionState) -> String { state.title.isEmpty ? String(localized: "会话") : state.title }
 
     /// Cue 的提问：问句与下面那一句（同卡片与通知，`CueMessage.headline`、`CueAsking.why`），打开是 Cue 页，带选项的能"允许一次"（选第一项）；
     /// 会话在问：会话名与问题的第一行，打开是那个会话。
-    private static func wait(_ wait: CueTally.Wait, name: String) -> Wait {
+    static func wait(_ wait: CueTally.Wait, name: String) -> Wait {
         switch wait {
         case .message(let message, _):
             return Wait(

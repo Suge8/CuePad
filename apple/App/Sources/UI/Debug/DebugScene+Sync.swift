@@ -122,16 +122,15 @@ extension DebugScene {
         private let first = Mutex<Task<Void, Never>?>(nil)
 
         var stateUpdates: AsyncStream<SyncState> { AsyncStream { $0.yield(SyncState(status: .idle, issues: [], reconciled: true)) } }
-        func syncNow() async throws { await pull() }
-
-        private func pull() async {
-            let task = first.withLock { task in
-                if let task { return task }
+        @discardableResult func syncNow() async throws -> SyncPullResult {
+            let (task, started) = first.withLock { task in
+                if let task { return (task, false) }
                 let made = Task { await Self.arrive() }
                 task = made
-                return made
+                return (made, true)
             }
             await task.value
+            return started ? .newData : .noData
         }
 
         private static func arrive() async {
@@ -197,7 +196,10 @@ extension DebugScene {
             (state, self.stalls) = (SyncState(status: status, issues: issues, reconciled: true, filesOverQuota: filesOverQuota), stalls)
         }
         var stateUpdates: AsyncStream<SyncState> { AsyncStream { [state] in $0.yield(state) } }
-        func syncNow() async throws { if stalls { try await Task.sleep(for: .seconds(86_400)) } }
+        @discardableResult func syncNow() async throws -> SyncPullResult {
+            if stalls { try await Task.sleep(for: .seconds(86_400)) }
+            return state.status == .idle ? .noData : .incomplete
+        }
     }
 
     /// 摆画面时交给同步替身的：`arrive`、`newmac` 的资料库，`conflicts` 的冲突副本（冲突那一行由有同步时的订阅读出，`AppServices.startSync`）。
@@ -236,7 +238,7 @@ extension DebugScene {
 nonisolated extension DebugScene.StandInSyncing {
     func start() async {}
     func stop() async {}
-    func syncNow() async throws {}
+    @discardableResult func syncNow() async throws -> SyncPullResult { .incomplete }
     func send(recordNames: Set<String>) async -> Bool { true }
     func push() async {}
     func resolve(_ resolution: SyncResolution) async throws {}

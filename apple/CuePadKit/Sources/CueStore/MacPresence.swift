@@ -6,7 +6,8 @@ import Foundation
 /// （写的时机在 App 的 `MacPresenceKeeper`）。到期由订阅重读（`expire(at:)`），不轮询；期限是那台 Mac 的时钟写的，各端时钟大致对准即可。
 public struct MacPresence: Equatable, Sendable {
   public var hostID: String
-  var onlineUntil: Date
+  public var onlineUntil: Date
+  public var bootID: String?
   public var modifiedAt: Date
 
   /// 醒着时多久续一次。在线记录只在 Mac 没打招呼就消失时（崩溃、断电、断网、将睡眠那一条没传出去）靠期限兜底，
@@ -23,31 +24,33 @@ public struct MacPresence: Equatable, Sendable {
 
 extension MacPresence: Record {
   static let table = Table.macPresence
-  static let columns = ["id", "hostID", "onlineUntil", "modifiedAt"]
-  var bindings: [any SQLBindable] { [Self.recordID(host: hostID), hostID, onlineUntil, modifiedAt] }
-  init(row: Row) { self.init(hostID: row.text(1), onlineUntil: row.date(2), modifiedAt: row.date(3)) }
+  static let columns = ["id", "hostID", "onlineUntil", "modifiedAt", "bootID"]
+  var bindings: [any SQLBindable] { [Self.recordID(host: hostID), hostID, onlineUntil, modifiedAt, bootID] }
+  init(row: Row) { self.init(hostID: row.text(1), onlineUntil: row.date(2), bootID: row.textOrNil(4), modifiedAt: row.date(3)) }
 }
 
 extension CueStore {
   /// 这台 Mac 写下自己在不在线：醒着写到此刻加 `MacPresence.lifetime`，不醒（将睡眠、退出）写成此刻。返回记录 id（立即上传用）。
   /// `awake` 在写的这一刻才读：定时续期与将睡眠的写可能交错，后执行的那次也按最新的醒睡写，刚标的离线不会被一次晚到的续期续上。
   @discardableResult
-  public func recordMacPresence(host: String, awake: @Sendable () -> Bool) throws -> UUID {
+  public func recordMacPresence(host: String, bootID: String? = SystemBoot.id, awake: @Sendable () -> Bool) throws -> UUID {
     try write {
       let now = timing.now()
       // 库里存到毫秒：离线写成此刻要往下取整，四舍五入进位会让同一毫秒里的读仍算在线
       let offline = Date(timeIntervalSince1970: (now.timeIntervalSince1970 * 1000).rounded(.down) / 1000)
       let presence = MacPresence(
-        hostID: host, onlineUntil: awake() ? now.addingTimeInterval(MacPresence.lifetime) : offline, modifiedAt: Date.stamp)
-      try upsert(presence, updating: ["onlineUntil", "modifiedAt"])
+        hostID: host, onlineUntil: awake() ? now.addingTimeInterval(MacPresence.lifetime) : offline, bootID: bootID, modifiedAt: Date.stamp)
+      try upsert(presence, updating: ["onlineUntil", "modifiedAt", "bootID"])
       return MacPresence.recordID(host: host)
     }
   }
 
   /// 那台 Mac 此刻在不在线（`MacPresence`）；在线时登记到期重读（`expire(at:)`），订阅它的到点自己变成不在线。
-  public func macOnline(_ host: String) throws -> Bool {
-    guard let presence = try find(MacPresence.self, MacPresence.recordID(host: host)), presence.isOnline(at: timing.now()) else { return false }
+  public func macOnlineUntil(_ host: String) throws -> Date? {
+    guard let presence = try find(MacPresence.self, MacPresence.recordID(host: host)), presence.isOnline(at: timing.now()) else { return nil }
     expire(at: presence.onlineUntil)
-    return true
+    return presence.onlineUntil
   }
+
+  public func macOnline(_ host: String) throws -> Bool { try macOnlineUntil(host) != nil }
 }

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # iOS：testflight = 归档 → 导出并上传 App Store Connect；device = 开发构建并装到连接的真机。
 # 手动签名：证书与描述文件由 provision.py 经 API 创建（Xcode 自动签名的 API 密钥管不了 App Group / iCloud 容器）。
-# testflight 打包前先过两关，没部署完就不发：docs/release.md「待部署到生产」还有条目（订阅定义 cktool 看不到，只有手机会建，只拦 iOS）；
-# 生产环境的 CloudKit 结构缺字段（ck-production.sh，Mac 发版也跑）；门铃中转打包前、归档后各核对一次（check_relay）。
+# testflight 打包前确认部署完成：docs/release.md「待部署到生产」没有条目、CloudKit 生产结构不缺字段（ck-production.sh，Mac 发版也跑）；
+# 门铃与实时活动中转打包前、归档后各核对一次（check_relay）。
 # 上传后在这个提交上打 ios/<构建号> 标签：release-mac.sh 据它核对发版顺序（docs/release.md「发版顺序」）。
 # 前提：docs/release.md。
 set -euo pipefail

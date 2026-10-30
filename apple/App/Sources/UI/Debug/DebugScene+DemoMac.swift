@@ -29,7 +29,7 @@ extension DebugScene {
                 await reachable()
                 try await Task.sleep(for: .seconds(1.2))
                 // 与真的 Mac 一样，说出去的话送达后记一条发送记录（任务因此进行中、关联到这个会话）
-                let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
+                let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request, _ in
                     await Task.wait(for: .seconds(1))
                     if let outcome = await DemoAgentLibrary.apply(request, store: store) { return outcome }
                     if request.mode == .known(.send) {

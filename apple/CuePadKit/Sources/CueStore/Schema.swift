@@ -37,7 +37,7 @@ enum Schema {
   /// 抬的那一版先发 iOS、TestFlight 处理完再发 Mac（docs/release.md「发版顺序」）。与 `baseVersion` 分开：本机的库要等用户的库都升过才折进 `create`。
   /// 78：附件换了地址（`cuepad://file/<键>`）：旧版 Mac 认不出，把链接原文发给 Agent，旧版手机显示不出图与文件。
   /// 82：旧客户端忽略额度能力与授权分区，会把失败或过期窗口显示成可用余额。
-  static let peerFloor = 82
+  static let peerFloor = 86
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
@@ -133,7 +133,34 @@ enum Schema {
     },
     // 82：额度按宿主授权分区，能力、失败与最后观测的时刻一起同步；旧记录没有授权事实，只能作为未知数据
     "ALTER TABLE accountQuotas ADD COLUMN account TEXT; ALTER TABLE accountQuotas ADD COLUMN status TEXT; ALTER TABLE accountQuotas ADD COLUMN observedAt INTEGER;",
+    // 83：运行报告与所属 Mac 的系统启动关联；旧端忽略关联与投送 unknown，会错误授权控制或重投。旧报告不回填证明。
+    """
+    ALTER TABLE piSessionStates ADD COLUMN bootID TEXT; ALTER TABLE macPresence ADD COLUMN bootID TEXT;
+    ALTER TABLE cueState ADD COLUMN hostID TEXT; ALTER TABLE cueState ADD COLUMN bootID TEXT;
+    DROP TRIGGER piSessionStates_writeSeq_update;
+    \(updateStamp("piSessionStates", when: sessionChanges))
+    \(canonicalDeliveryFailures)
+    """,
+    // 84：执行与历史确认分别持有硬截止；旧端会把 confirming 写回未确认，必须一起更新。旧记录不补造期限。
+    "ALTER TABLE deliveryRequests ADD COLUMN deadlineAt INTEGER;",
+    // 85：82 的两种布局分别含活动地址与额度授权字段；补齐缺少的部分，不替旧报告或投送补造证明。
+    Upgrade { db in
+      try db.exec("\(activityDestinationsTable) CREATE INDEX IF NOT EXISTS activityDestinations_modified ON activityDestinations(id, modifiedAt);")
+      let columns = Set(try db.query("PRAGMA table_info(accountQuotas)") { $0.text(1) })
+      for (name, type) in [("account", "TEXT"), ("status", "TEXT"), ("observedAt", "INTEGER")] where !columns.contains(name) {
+        try db.exec("ALTER TABLE accountQuotas ADD COLUMN \(name) \(type);")
+      }
+    },
+    // 86：preparing 只等现有会话就绪，未派发且可撤回；85 客户端不能正确合并这个阶段。
+    Upgrade { _ in },
   ]
+
+  static let activityDestinationsTable = """
+    CREATE TABLE IF NOT EXISTS activityDestinations (
+      id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, activityID TEXT NOT NULL, token TEXT NOT NULL,
+      environment TEXT NOT NULL, startedAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    """
 
   /// 技能与规则里每份文件的正文：那台 Mac 每份一条、各端读（`LibraryFileText`）。
   static let agentLibraryFilesTable = """

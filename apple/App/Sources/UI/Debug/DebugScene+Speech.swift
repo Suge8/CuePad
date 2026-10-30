@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// `-CuePadSpeech <draft|sent|send|press>`（配 cue 或 session 画面与 `-CuePadDemo YES`，iOS 与 Mac）：去处是 Cue 页（cue），或 `-CuePadSession` 那个会话的回复框（session；
+/// `-CuePadSpeech <draft|sent|send|press|trips|preparing>`（配 cue 或 session 画面与 `-CuePadDemo YES`，iOS 与 Mac）：去处是 Cue 页（cue），或 `-CuePadSession` 那个会话的回复框（session；
 /// 演示里 scratch 没说过话，末尾只有这一句）。
 /// draft 在输入框里写一句、不发；sent 再经发消息的那条路（`Workspace.speak`）发出：输入框已空，末尾一个发送中的气泡（演示里没有接收的 Mac，一直在路上）；
 /// send 先写好、画面就绪 2 秒后再发（录屏看到发出的那一下，配 `-CuePadDemoMac YES` 看到送达）；press 同 send，但在输入框出现 3 秒（`-CuePadPressAfter`）后按的是它的发送钮（看钮与飞光；Mac 上给录屏留出起录的时间）；
@@ -10,6 +10,7 @@ import SwiftUI
 /// 已送达与没能送达：Cue 页用 `-CuePadCuePresence thinking|asleep`（`DebugScene+Cue.swift`），会话页看 relay（一句已送达、一句没能送达）。
 /// trips（配 `-CuePadSession relay -CuePadSync simulated`，新的隔离库）：再写一句给一台不接手的 Mac（demo-studio），传上替身 iCloud 后是已发出——
 /// 一页里三种状态（已发出、已送达、没能送达）。
+/// preparing（配 `-CuePadScene session -CuePadSession scratch`，不配 `-CuePadDemoMac`）：长原文可展开；原请求等待扩展升级，有原因与准备期限、可撤回，不接真实 Agent。
 extension DebugScene {
     static func presetSpeech(_ workspace: Workspace) async {
         await running("预设说话") { try await presetSpeechBody(workspace) }
@@ -48,6 +49,22 @@ extension DebugScene {
                 try store.deliveryRequests(toSession: ref).allSatisfy { !$0.isOpen || $0.hostID == Self.idleMac && $0.reachedServer }
             }
             for try await done in settled where done { break }
+        case "preparing":
+            guard case .session(let target, let host, _, _) = listener else { return }
+            let request = try await services.store.requestDelivery(longChatPrompt(25), to: target, on: host)
+            box.wrappedValue = ComposerDraft()
+            let store = services.store
+            let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { error in
+                Task { @MainActor in abandon("准备演示写库失败", error) }
+            }, preparation: { request in
+                let id = request.id
+                return .waiting(DeliveryPreparation(reason: DeliveryPreparation.upgrading) {
+                    for try await _ in store.observe({ try $0.deliveryRequest(id)?.isOpen }) {}
+                })
+            }) { _, _ in .unconfirmed(Speech.unconfirmedReason) }
+            try await executor.start()
+            for try await ready in store.observe({ try $0.deliveryRequest(request.id)?.status == .known(.preparing) }) where ready { break }
+            await executor.stop()
         case "send":
             Task {
                 await Task.wait(for: .seconds(2))

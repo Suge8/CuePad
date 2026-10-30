@@ -3,11 +3,11 @@ import CueStore
 import Foundation
 
 extension PiRuntime {
-    /// 最低 0.84.4：要有 `ui_prompt_*` 事件。官方脚本要 Node.js（下限是脚本里写的），没有时只报一句英文就退出；太旧时用它自带的升级命令。
+    /// 最低 1.4.0：官方原包验证了 agent_settled、context_edit 与命令空闲等待。官方脚本要 Node.js（下限是脚本里写的），没有时只报一句英文就退出；太旧时用它自带的升级命令。
     /// 没有命令行登录，只能在它的终端界面里输入 /login。没有桌面版：只有配置目录不算装着。
     /// 上报通道是桥扩展（`PiExtensionFiles`），托管的会话也经它上报，所以没接入开不出会话；托管进程空闲满时限自己退出（交给扩展计时）。
     nonisolated public static let facts = AgentFacts(
-        command: "pi", homeVariable: "PI_CODING_AGENT_DIR", home: { $0.pi.agentDirectory }, minimumVersion: AgentVersion(0, 84, 4),
+        command: "pi", homeVariable: "PI_CODING_AGENT_DIR", home: { $0.pi.agentDirectory }, minimumVersion: AgentVersion(1, 4, 0),
         installScript: "curl -fsSL https://pi.dev/install.sh | sh", upgradeCommand: "pi update --self",
         installPrerequisite: InstallPrerequisite(name: "Node.js", command: "node", minimum: AgentVersion(22, 19, 0), site: URL(string: "https://nodejs.org")!),
         homeMeansInstalled: false,

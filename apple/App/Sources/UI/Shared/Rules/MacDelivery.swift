@@ -28,22 +28,28 @@ nonisolated enum MacDelivery {
     static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {
         guard session.canStop, let turnStart = session.busySince else { return false }
         return deliveries.contains { request in
-            request.mode == .known(.stop) && request.createdAt >= turnStart && Speech.trip(request, at: moment).failure == nil
+            guard request.mode == .known(.stop), request.createdAt >= turnStart else { return false }
+            let trip = Speech.trip(request, at: moment)
+            return trip.inTransit || trip == .delivered
         }
     }
 
     /// 斜杠命令的进度（读投送请求与对话，不另存）：最近一条请求是命令时才有——在路上写"正在执行 /compact…"、没成功写原因、
-    /// 成功就消失（命令不进对话、不进发送记录；结果若在会话文件里，对话里自然有）。失败的在之后有新的请求、对话里多了话时收起。
+    /// 结果未确认时停止转圈、如实写未知；成功就消失。失败与未知在之后有新请求或对话时收起。
     /// 回复框上方一行显示。
     enum CommandProgress: Equatable {
+        case preparing(String)
         case running(String)
+        case unconfirmed(command: String, reason: String)
         case failed(command: String, failure: Speech.Failure)
 
         var failed: Bool { if case .failed = self { true } else { false } }
 
         var text: String {
             switch self {
+            case .preparing(let reason): reason
             case .running(let command): String(localized: "正在执行 \(command)…")
+            case .unconfirmed(let command, let reason): String(localized: "\(command) 的执行结果尚未确认：\(reason)")
             case .failed(let command, let failure): String(localized: "\(command) 没执行成功：\(failure.text)")
             }
         }
@@ -53,12 +59,17 @@ nonisolated enum MacDelivery {
         // 最新的一条是按写下的先后排的最后一条（`deliveryRequests(toSession:)`）：时间只到毫秒，同一毫秒的两条按时间比不出先后
         guard let latest = deliveries.last, latest.mode == .known(.command) else { return nil }
         let command = String(latest.content.prefix { !$0.isWhitespace })
-        switch Speech.trip(latest, at: moment) {
+        let trip = Speech.trip(latest, at: moment)
+        if trip.failure != nil || trip.unconfirmedReason != nil {
+            let finished = latest.completedAt ?? Speech.deadline(latest, at: moment) ?? latest.modifiedAt
+            if messages.contains(where: { $0.at > finished }) { return nil }
+        }
+        switch trip {
+        case .preparing(let reason): return .preparing(reason)
         case .sending, .sent: return .running(command)
         case .delivered: return nil
-        case .failed(let failure):
-            let failedAt = latest.completedAt ?? latest.modifiedAt
-            return messages.contains { $0.at > failedAt } ? nil : .failed(command: command, failure: failure)
+        case .unconfirmed(let reason): return .unconfirmed(command: command, reason: reason)
+        case .failed(let failure): return .failed(command: command, failure: failure)
         }
     }
 
@@ -91,6 +102,7 @@ nonisolated extension DeliveryMode {
     var label: String {
         switch self {
         case .send: String(localized: "说话")
+        case .withdraw: String(localized: "撤回")
         case .command: String(localized: "斜杠命令")
         case .answer: String(localized: "作答")
         case .start: String(localized: "新会话")

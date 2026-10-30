@@ -32,14 +32,23 @@ extension Workspace {
 
     /// 重发一句没能送达的话：先撤回它（撤不回——Mac 已领取、Cue 已收到——就不重发，免得说两遍），再用同样的内容写一条新的。
     /// 撤回之后写不进库时，原文放进 `box`（这个去处的输入框），文字不丢。
-    func resend(_ said: Said, restoringInto box: Binding<ComposerDraft>) {
+    @discardableResult
+    func resend(_ said: Said, restoringInto box: Binding<ComposerDraft>) -> Task<Void, Never> {
         let services = services
-        attempt {
-            try await services.withdraw(said)
-            await self.write(said.content, to: said.listener) {
-                box.wrappedValue.append(stored: said.content)
-            }.value
+        return Task {
+            do {
+                try await services.withdraw(said)
+                await self.write(said.content, to: said.listener) {
+                    box.wrappedValue.append(stored: said.content)
+                }.value
+            } catch { fail(error) }
         }
+    }
+
+    /// 用户确认可能重复后明确再说一次：新建意图，保留原请求的未知，不把它删除后伪装成安全重投。
+    @discardableResult
+    func sayAgain(_ said: Said, restoringInto box: Binding<ComposerDraft>) -> Task<Void, Never> {
+        write(said.content, to: said.listener) { box.wrappedValue.append(stored: said.content) }
     }
 
     /// 移除一句没能送达的话（同样先撤回）。

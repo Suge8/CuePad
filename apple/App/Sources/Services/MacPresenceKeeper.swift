@@ -46,16 +46,20 @@ nonisolated final class MacPresenceKeeper: Sendable {
         }
     }
 
-    func signOff() async {
+    func signOff() async throws -> Bool {
         awake.withLock { $0 = false }
-        do { try await publish() } catch { Self.log.error("退出时没能写下这台 Mac 离线：\(error.localizedDescription, privacy: .public)") }
+        return try await publish()
     }
 
     /// 在系统发将睡眠通知的线程上同步等离线这一条写完、传完：这是系统给的唯一一段能拖住睡眠的时间（等的工作不在主线程上，不会互等）。
     private func goingToSleep() {
         let done = DispatchSemaphore(value: 0)
         Task.detached { [self] in
-            await signOff()
+            do {
+                if try await !signOff() { Self.log.error("将睡眠：离线已写入本机，但尚未确认 iCloud 已接受") }
+            } catch {
+                Self.log.error("将睡眠：离线记录失败：\(error.localizedDescription, privacy: .public)")
+            }
             done.signal()
         }
         if done.wait(timeout: .now() + Self.sleepUploadLimit) == .timedOut {
@@ -63,9 +67,10 @@ nonisolated final class MacPresenceKeeper: Sendable {
         }
     }
 
-    private func publish() async throws {
+    @discardableResult
+    private func publish() async throws -> Bool {
         let id = try await store.recordMacPresence(host: host) { self.awake.withLock { $0 } }
-        await sync?.upload(id)
+        return await sync?.send(recordNames: [id.uuidString.lowercased()]) ?? true
     }
 }
 #endif
