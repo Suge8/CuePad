@@ -19,31 +19,33 @@ extension CueStore {
   }
 
   /// 会话共同决定有效来源；尚待桥重新连接的有效记录也保留，避免启动时先连上的会话清掉其他账号。
-  /// 一条账号或网关来源的记录，只在每个可能拥有它的模型都证明了别的授权时移除：模型此刻的授权按这次解析的，没解析出就按它最近证明的（`PiModelOption.proven`），
-  /// 两样都没有的是未知，保留这个提供方的原生记录与它的网关来源（网关来源归哪个提供方看来源那一条的 `provider`）。
-  /// 未解析的那条在这个提供方此刻还有未解析的模型时保留。各来源只看自己的模型，互不影响。
+  /// 账号或网关来源的记录只按证明移除：可能拥有它的每个模型（同一提供方，或证明过这个来源的）都证明了别的授权，且证明不早于这条记录最近的结果。
+  /// 模型的证明是会话最近一次解析成功的那次（`PiModelOption.proven`，解析失败不抹掉），没有证明的是未知，什么都不移除；
+  /// 旧证明不能否定比它新的记录。网关来源归哪些提供方：来源那一条记下的，与证明过这个来源的模型。各来源只看自己的模型，互不影响。
+  /// 未解析的那条在这个提供方此刻还有未解析的模型时保留。
   public func retainQuotaSources(on host: String, models: [PiModelOption]) throws {
     var models = models
     for state in try select(PiSessionState.self, where: "hostID = ? AND \(PiWorkState.outsideSQL(PiWorkState.closed))", [host]) {
       models += [state.model].compactMap { $0 }
       if let id = state.catalogID, let catalog = try agentCatalog(id) { models += catalog.models }
     }
-    guard models.contains(where: { ($0.account?.scope ?? $0.proven?.scope) != nil }) else { return }
+    guard models.contains(where: { $0.proven != nil }) else { return }
     try write {
       let quotas = try select(AccountQuota.self, where: "hostID = ?", [host])
-      let owners = Dictionary(grouping: quotas.filter { $0.account?.source != nil && $0.account?.route == nil }, by: { $0.account?.source ?? "" })
-        .mapValues { Set($0.map(\.provider)) }
+      var owners: [String: Set<String>] = [:]
+      for quota in quotas where quota.account?.route == nil { if let source = quota.account?.source { owners[source, default: []].insert(quota.provider) } }
+      for model in models { if let source = model.proven?.account.source { owners[source, default: []].insert(model.key.provider) } }
       for quota in quotas {
-        let valid = models.contains { model in
-          guard let fresh = model.account, let account = quota.account else { return false }
-          let provider = model.key.provider
-          guard account.scope != nil else { return provider == quota.provider && fresh.scope == nil && fresh.kind == account.kind }
-          guard let known = fresh.scope != nil ? fresh : model.proven else {
-            if let source = account.source { return owners[source]?.contains(provider) == true }
-            return provider == quota.provider
-          }
-          if let source = account.source { return known.source == source }
-          return provider == quota.provider && known.source == nil && known.matches(account)
+        guard let account = quota.account else { try db.run("DELETE FROM accountQuotas WHERE id = ?", [quota.id]); continue }
+        let candidates = models.filter { model in
+          if let source = account.source { return owners[source]?.contains(model.key.provider) == true }
+          return model.key.provider == quota.provider
+        }
+        let valid = candidates.contains { model in
+          guard account.scope != nil else { return model.account?.scope == nil && model.account?.kind == account.kind }
+          guard let proof = model.proven else { return true }
+          if let source = account.source { return proof.account.source == source || proof.at < quota.evidencedAt }
+          return proof.account.source == nil && proof.account.matches(account) || proof.at < quota.evidencedAt
         }
         if !valid { try db.run("DELETE FROM accountQuotas WHERE id = ?", [quota.id]) }
       }
@@ -54,8 +56,9 @@ extension CueStore {
   /// 比这条记录已收下的早就丢掉，所以先结束的操作不会盖过后开始的，几个会话进程的结果怎么交错到达都一样。
   /// 只在值有意义地变化时写——状态、窗口、某个窗口的整数百分比、重置时间变了——或上次写已超过 `touchAfter`（只为"更新于"不过时）；
   /// 否则只在本机推进排序时刻、不改版本不同步，每次回复都来的观测不会每次都写库与同步。
-  /// 提供方未解析的授权（`scope` 为 nil：还没查，或查时解析失败）是这台 Mac 上这个提供方的一条，不关联任何账号的数值：
-  /// 已有证明了身份的账号或来源时不再写"还没查"；同一提供方证明了身份、且不早于它的结果（原生账号或网关来源一级）到来时移除它。返回是否写了。
+  /// 提供方未解析的授权（`scope` 为 nil：还没查，或查时解析失败）是这台 Mac 上这个提供方的一条，不关联任何账号的数值，与证明了身份的结果按同一个时刻排先后：
+  /// 已有证明了身份的账号或来源时不再写"还没查"；查时解析失败只在这个提供方没有不早于它的证明时写；同一提供方证明了身份、且不早于它的结果到来时移除它。
+  /// 网关清单里各账号的报告用清单的排序时刻。返回是否写了。
   @discardableResult
   public func recordQuota(_ report: QuotaReport, host: String) throws -> Bool {
     try write { try applyQuota(report, host: host) }
@@ -69,14 +72,15 @@ extension CueStore {
     if report.account.route == nil {
       let unresolved = AccountQuota.recordID(provider: report.provider, host: host, account: PiAccount(kind: report.account.kind))
       if report.account.scope == nil {
-        if report.status != .failed, try hasProvenPeer(of: report, on: host) { return false }
+        if try hasProvenPeer(of: report, on: host, since: report.status == .failed ? report.requestedAt : nil) { return false }
       } else if let start = report.requestedAt, let pending = try find(AccountQuota.self, unresolved), pending.requestedAt.map({ $0 <= start }) ?? true {
         try db.run("DELETE FROM accountQuotas WHERE id = ?", [unresolved])
         removed = true
       }
     }
-    for account in report.accounts ?? [] {
+    for var account in report.accounts ?? [] {
       guard account.account.source == report.account.source, account.account.route != nil else { continue }
+      account.requestedAt = report.requestedAt
       removed = try applyQuota(account, host: host) || removed
     }
     if let scopes = report.activeScopes, let source = report.account.source {
@@ -112,9 +116,12 @@ extension CueStore {
     return true
   }
 
-  private func hasProvenPeer(of report: QuotaReport, on host: String) throws -> Bool {
-    try select(AccountQuota.self, where: "hostID = ? AND provider = ?", [host, report.provider]).contains {
-      $0.account?.route == nil && $0.account?.scope != nil && $0.account?.kind == report.account.kind
+  /// 这个提供方有没有证明了身份的结果；给了 `since` 时只算排序时刻不早于它的。
+  private func hasProvenPeer(of report: QuotaReport, on host: String, since start: Date?) throws -> Bool {
+    try select(AccountQuota.self, where: "hostID = ? AND provider = ?", [host, report.provider]).contains { peer in
+      guard peer.account?.route == nil, peer.account?.scope != nil, peer.account?.kind == report.account.kind else { return false }
+      guard let start else { return true }
+      return peer.requestedAt.map { $0 >= start } ?? false
     }
   }
 

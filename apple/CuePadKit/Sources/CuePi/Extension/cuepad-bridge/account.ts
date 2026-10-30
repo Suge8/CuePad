@@ -12,19 +12,22 @@ const NATIVE_URLS: Record<string, string> = {
 	anthropic: "https://api.anthropic.com", "openai-codex": "https://chatgpt.com/backend-api", openai: "https://api.openai.com/v1",
 };
 
-/** 每个模型最近一次证明的授权（按解析开始的先后，晚开始的才覆盖）；解析失败不抹掉它。只用来让 CuePad 保留它的记录（`provenAccount`），
+/** 一次证明了的授权与开始解析的时刻（Unix 秒）。 */
+export type Proof = { account: Account; at: number };
+/** 每个模型最近一次证明的授权（按解析开始的先后，晚开始的才覆盖）；解析失败不抹掉它。只用来让 CuePad 决定保留哪些记录（`provenAccount`），
  * 不拿来关联额度或归属任何报告：那只认这一次解析的结果。 */
-const proofs = new WeakMap<ExtensionContext["modelRegistry"], Map<string, { started: number; identity: Account }>>();
+const proofs = new WeakMap<ExtensionContext["modelRegistry"], Map<string, Proof & { order: number }>>();
 let resolutions = 0;
 const modelKey = (model: Model) => JSON.stringify([model.provider, model.id]);
 
-export function provenAccount(ctx: ExtensionContext, model: Model): Account | undefined {
-	return proofs.get(ctx.modelRegistry)?.get(modelKey(model))?.identity;
+export function provenAccount(ctx: ExtensionContext, model: Model): Proof | undefined {
+	const proof = proofs.get(ctx.modelRegistry)?.get(modelKey(model));
+	return proof && { account: proof.account, at: proof.at };
 }
 
 /** 请求路线与认证只问宿主；自定义地址不冒充原生 OAuth。只把不可逆分区交给 App。 */
 export async function account(ctx: ExtensionContext, model: Model) {
-	const started = ++resolutions;
+	const order = ++resolutions, at = Date.now() / 1000;
 	const resolved = await ctx.modelRegistry.getApiKeyAndHeaders(model);
 	if (!resolved.ok) throw new Error(`${model.provider}: authorization unavailable`);
 	const baseUrl = (resolved.baseUrl ?? model.baseUrl).replace(/\/+$/, "");
@@ -42,7 +45,10 @@ export async function account(ctx: ExtensionContext, model: Model) {
 	const identity: Account = native ? { kind, scope } : { kind, scope, source: scope, name: "Magpie" };
 	let proven = proofs.get(ctx.modelRegistry);
 	if (!proven) proofs.set(ctx.modelRegistry, proven = new Map());
-	if ((proven.get(modelKey(model))?.started ?? 0) < started) proven.set(modelKey(model), { started, identity });
+	const last = proven.get(modelKey(model));
+	// 同一授权再次证明沿用最早的时刻：模型表不随每次解析变化，保留规则只会更保守（旧证明不否定比它新的记录）
+	const same = last && JSON.stringify(last.account) === JSON.stringify(identity);
+	if ((last?.order ?? 0) < order) proven.set(modelKey(model), { order, at: same ? last!.at : at, account: identity });
 	return { identity, baseUrl, headers, native, token: resolved.apiKey };
 }
 

@@ -154,9 +154,14 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
     }.max { $0.used(at: now) < $1.used(at: now) }
   }
 
+  /// 网关来源一级的那条按来源一条：几个提供方指向同一网关与授权时，它们的清单在同一条记录上排先后。
   static func recordID(provider: String, host: String, account: PiAccount?) -> UUID {
-    DeterministicID.uuid("account-quota/\(host)/\(provider)/\(account?.kind.rawValue ?? "unknown")/\(account?.scope ?? "unknown")")
+    let owner = account?.source != nil && account?.route == nil ? "source" : provider
+    return DeterministicID.uuid("account-quota/\(host)/\(owner)/\(account?.kind.rawValue ?? "unknown")/\(account?.scope ?? "unknown")")
   }
+
+  /// 这条记录最近一次结果的时刻：带排序时刻的取它，只有能力声明的取收下的时刻。
+  var evidencedAt: Date { requestedAt ?? createdAt }
 }
 
 /// 扩展报来的一次观测（桥协议的 `quota` 消息，线上格式即此）。

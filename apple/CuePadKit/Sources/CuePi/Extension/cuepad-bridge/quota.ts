@@ -132,17 +132,17 @@ export class QuotaFetcher {
 		return results.flatMap((result) => result.status === "rejected" ? [reason(result.reason)] : []);
 	}
 
-	/** `modelInfo` 只不解析其他提供方的 OAuth（它们未解析只是还没查）；其余未解析的都是解析失败。 */
+	/** 能力声明不带排序时刻，所以不报失败（失败只来自带时刻的查询）：未解析的只报其他提供方的 OAuth（`modelInfo` 不解析它们，只是还没查），
+	 * 其余未解析的是解析失败，不在这里声明。 */
 	capabilities(models: { provider: string; account: Account | null }[], currentProvider: string | undefined) {
 		const seen = new Set<string>();
 		for (const model of models) {
-			if (!model.account) continue;
+			if (!model.account || (!model.account.scope && (model.provider === currentProvider || model.account.kind !== "oauth"))) continue;
 			const key = model.account.source ?? `${model.provider}/${model.account.scope}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
 			const supported = model.account.source || (model.account.kind === "oauth" && QUOTA_PROVIDERS[model.provider]);
-			const failed = !model.account.scope && (model.provider === currentProvider || model.account.kind !== "oauth");
-			this.report({ provider: model.provider, account: model.account, status: failed ? "failed" : supported ? "unobserved" : "unsupported", windows: [], complete: false });
+			this.report({ provider: model.provider, account: model.account, status: supported ? "unobserved" : "unsupported", windows: [], complete: false });
 		}
 	}
 
