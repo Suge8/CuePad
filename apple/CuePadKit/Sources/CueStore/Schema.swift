@@ -153,8 +153,13 @@ enum Schema {
     },
     // 86：preparing 只等现有会话就绪，未派发且可撤回；85 客户端不能正确合并这个阶段。
     Upgrade { _ in },
-    // 87：余额与套餐明细；旧端仍可读固定窗口，缺明细不构造余额。
-    "ALTER TABLE accountQuotas ADD COLUMN details TEXT; ALTER TABLE accountQuotas ADD COLUMN requestedAt INTEGER;",
+    // 87：余额与套餐明细、结果的排序时刻；旧端仍可读固定窗口，缺明细不构造余额。同 85，只补缺的列（新建的库已有）。
+    Upgrade { db in
+      let columns = Set(try db.query("PRAGMA table_info(accountQuotas)") { $0.text(1) })
+      for (name, type) in [("details", "TEXT"), ("requestedAt", "INTEGER")] where !columns.contains(name) {
+        try db.exec("ALTER TABLE accountQuotas ADD COLUMN \(name) \(type);")
+      }
+    },
   ]
 
   static let activityDestinationsTable = """
