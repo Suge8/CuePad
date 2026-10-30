@@ -81,11 +81,13 @@ extension CueKeeper {
             if let stall = try await store.nextCueStall(after: now) { deadlines.append(stall) }
 
             let changes = try await self.changes(at: now)
-            // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化
+            // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化。
+            // 等着重来的是你的一轮（额度、登录卡住）：新变化不顶掉它，这就重来（变化随信封一起看）
             if let held = setback {
-                if changes.due.contains(where: { $0.seq > held.latest ?? Int.min || ($0.kind == .stalled && $0.at > held.since) }) {
+                let fresh = changes.due.contains(where: { $0.seq > held.latest ?? Int.min || ($0.kind == .stalled && $0.at > held.since) })
+                if fresh, held.wake != .message {
                     setback = nil
-                } else if let retryAt = held.retryAt, now >= retryAt {
+                } else if fresh || held.retryAt.map({ now >= $0 }) == true {
                     setback?.retryAt = nil
                     return _ = try await wakeUp(held.wake, as: held.author)
                 } else {

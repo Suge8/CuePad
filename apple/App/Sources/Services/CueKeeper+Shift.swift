@@ -136,8 +136,9 @@ extension CueKeeper {
             let summary = PiErrorSummary(raw)
             // Cue 自己醒来的一轮第一次出错（会重试的那种）先不说：多是网络偶发，重试也失败了再告诉你；你在等的一轮立刻说
             if turn?.selfStarted != nil, setback == nil, Self.retryable(summary) { return }
-            guard raw != toldFailure else { return }  // 同一个错一轮轮重复（如额度）只说一次
-            toldFailure = raw
+            // 同一个错一轮轮重复（如额度）只说一次：按摘要认，原文里常带每次不同的请求 id
+            guard summary.line != toldFailure else { return }
+            toldFailure = summary.line
             // 认不出的错，摘要只是原文的首行
             let text = summary.kind == .other ? ShownText("这一轮出错了：\(raw)") : ShownText("这一轮出错了：\(summary.shownTitle.embedded)\n\(raw)")
             if let turn, turn.answersYou { await reply(text, in: turn) } else { await say(.cue, text) }
@@ -155,9 +156,11 @@ extension CueKeeper {
             if let failure = finished.round.failure {
                 if finished.replay { await replay(finished, failure: failure) }
                 else if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
+                else if !Self.retryable(PiErrorSummary(failure)) { await setBack(failure, retrying: .message, as: .cue) }
             } else {
                 setback = nil
                 tried = []
+                stalls = 0
                 await recovered()
                 await markTold(finished.round)
                 if let held = finished.held { progress.held = held }
@@ -243,13 +246,18 @@ extension CueKeeper {
         save()
     }
 
-    /// Cue 自己醒来的一轮出错：第一次出错（且不是额度、登录）隔一会儿再醒一次（带上这次的错），否则等新变化。
+    /// 一轮出错之后什么时候重来（带上这次的错）：换了 Agent 的马上；额度、登录卡住又换不了 Agent 的（你发起的一轮也算，`wake` 是你发来消息）
+    /// 按慢速周期（`CueTiming.slowDelay`）一直重来，直到一轮好好做完；Cue 自己醒来的其余错第一次隔 `retryWake` 再醒一次，再错就等新变化。
     private func setBack(_ failure: String, retrying wake: CueWake, as author: CueAuthor, now: Bool = false) async {
         let latest = try? await changes().due.map(\.seq).max()
-        let retry = now || (setback == nil && Self.retryable(PiErrorSummary(failure)))
-        if retry { retrying = failure }
-        setback = Setback(
-            latest: latest, since: .now, retryAt: retry ? .now + (now ? 0 : setup.timing.retryWake.seconds) : nil, wake: wake, author: author)
+        let delay: Duration?
+        if now { delay = .zero }
+        else if !Self.retryable(PiErrorSummary(failure)) {
+            stalls += 1
+            delay = setup.timing.slowDelay(after: stalls)
+        } else { delay = setback == nil ? setup.timing.retryWake : nil }
+        if delay != nil { retrying = failure }
+        setback = Setback(latest: latest, since: .now, retryAt: delay.map { .now + $0.seconds }, wake: wake, author: author)
     }
 
     /// 出错后换了 Agent 的一轮：交出去的你的话退回（新的大脑起好就交），Cue 自己醒来的那次马上重来；都带上这次的错。

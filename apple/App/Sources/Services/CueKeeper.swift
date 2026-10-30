@@ -52,9 +52,10 @@ import os
 /// 你发来的图按发给会话的同一个转换交给大脑（文字里的图片引用照留，Cue 能原样转给会话）；模型看不了图就同文件一样把路径写进信封。
 /// 基线（变化从哪算起）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
 /// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
-/// Cue 自己醒来（刚启用、定时与 5–6）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次（信封带上这次的错，先核对做到了哪），再错就等下一个新变化；额度、登录类的错不重试。
+/// Cue 自己醒来（刚启用、定时与 5–6）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次（信封带上这次的错，先核对做到了哪），再错就等下一个新变化。
 /// 额度、登录卡住（这一轮或起大脑时），这台 Mac 上另有能用的 Agent 就换过去（`failOver`：只说从哪换到哪，这一轮交给新的大脑重来）；换回由 Cue 自己定。
-/// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。回答你的一轮的回复与出错（一轮只响一次）、起不来都提示你（`CueMessage.urgent`）。
+/// 没有能换的了（都试过）：这一轮（你发起的也算）按慢速周期一直重来，直到一轮好好做完（`setBack`），那个错只说一次。
+/// 出错写一条 Cue 消息告诉你：你发起的一轮、额度与登录类的错立刻说；会重试的那次先不说，重试也错了才说。回答你的一轮的回复与出错（一轮只响一次）、起不来都提示你（`CueMessage.urgent`）。
 /// 大脑意外退出、起不来、一轮里太久没有事件（看门狗，`CueTiming.silence`）都按 `CueTiming.restartDelay` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；快的几次用完写一条 Cue 消息说起不来（这次故障只说一次），转慢的一直试，你发消息就马上再试，
 /// 之后第一轮好好做完时说一句又能干活了。工具服务没了（`toolsDown`）的班次做完这一轮就换。
@@ -97,7 +98,7 @@ final class CueKeeper {
     /// 此刻（或上一次试起）的大脑用的设置
     var brainSettings: BrainSettings?
     var shifts = 0
-    /// 最近告诉过你的那个错：同一个错一轮轮重复（如额度）只说一次
+    /// 最近告诉过你的那个错（`PiErrorSummary.line`）：同一个错一轮轮重复（如额度）只说一次
     var toldFailure: String?
     var setback: Setback?
     var timer: Task<Void, Never>?
@@ -108,6 +109,8 @@ final class CueKeeper {
     @ObservationIgnored var watchdog: Task<Void, Never>?
     /// 这次故障里因额度、登录换走过的 Agent（`failOver`）：不再换回；一轮好好做完清空
     @ObservationIgnored var tried: Set<AgentKind> = []
+    /// 额度、登录卡住又换不了 Agent，连续几轮在按慢速周期重来（`setBack`）；一轮好好做完清零
+    @ObservationIgnored var stalls = 0
     /// 这次故障已告诉你起不来了（`tellDown`），恢复时说一句
     @ObservationIgnored var outageTold = false
     /// 下一次醒来是上一轮出错后的重来：上一轮的错，随信封交给大脑（`CueEnvelope.Input.retrying`），交出去就清掉

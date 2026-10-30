@@ -31,8 +31,11 @@ nonisolated struct CueTiming: Sendable {
 
     /// 连续第 `failures` 次失败后等多久再起。
     func restartDelay(after failures: Int) -> Duration {
-        failures <= restarts.count ? restarts[failures - 1] : slowRestarts[min(failures - restarts.count, slowRestarts.count) - 1]
+        failures <= restarts.count ? restarts[failures - 1] : slowDelay(after: failures - restarts.count)
     }
+
+    /// 慢的那组里第 n 次（从 1 起）等多久：起不来转慢之后，与额度、登录卡住又换不了 Agent 时一轮轮重来，都按它。
+    func slowDelay(after n: Int) -> Duration { slowRestarts[min(n, slowRestarts.count) - 1] }
 
     /// 快的重试用完了：这时才算起不来（告诉你一次，此刻的状态是出错）。
     func isDown(after failures: Int) -> Bool { failures > restarts.count }

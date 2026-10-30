@@ -89,6 +89,17 @@ extension CueHostTests {
         await rig.stop()
     }
 
+    /// 额度用完、这台 Mac 上没有别的 Agent 可换：那个错只说一次，你的这一轮按慢速周期一直重来（信封带上那个错），额度回来了就接着做完。
+    @Test func 额度用完又没得换_慢速周期重来直到做完() async throws {
+        let rig = try await Rig(timing: { $0.slowRestarts = [.milliseconds(500)] })
+        rig.model.blockQuota(times: 3)
+        try await rig.say("你好")
+        try await rig.message(.cue, containing: "接着做上一轮没做完的")
+        #expect(rig.model.errors == 3)
+        #expect(try await rig.count("达到用量限制") == 1)
+        await rig.stop()
+    }
+
     /// 你说完话之后不久（缓存还热）没再说话：Cue 趁热巡视一次，不等冷巡视的空闲时长；这段空闲里只热巡视这一次。
     @Test func 缓存还热时趁热巡视一次() async throws {
         let rig = try await Rig(

@@ -24,6 +24,9 @@ nonisolated final class FakeModel: Sendable {
     private let asksOnEnable: Bool
     /// 回过最后一句的工具结果（工具调用之后这一轮就结束）
     private let finishedAfter = Mutex<[String]>([])
+    /// 接下来几次请求（你的话与信封）报额度用完
+    private let quotaBlocked = Mutex(0)
+    func blockQuota(times: Int) { quotaBlocked.withLock { $0 = times } }
     /// 整理记忆的大脑收到过几次一直记着的（`<pinned>`）
     private let pinnedShown = Mutex(0)
     var tidyAsks: Int { pinnedShown.withLock { $0 } }
@@ -191,8 +194,13 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送登录页的修复"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
-        // 额度用完（各家额度类的说法之一，`PiErrorSummary` 认作额度）：每次都是
-        if last["role"] as? String == "user", text.contains("请用到额度用完") {
+        // 额度用完（各家额度类的说法之一，`PiErrorSummary` 认作额度）：说了这句的每次都是，`blockQuota` 之后的那几次也是
+        let blocked = quotaBlocked.withLock { left in
+            guard left > 0, last["role"] as? String == "user" else { return false }
+            left -= 1
+            return true
+        }
+        if blocked || last["role"] as? String == "user" && text.contains("请用到额度用完") {
             errorCount.withLock { $0 += 1 }
             return .error("You have hit your usage limit.")
         }
@@ -237,6 +245,8 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("醒来：刚启用") {
             return asksOnEnable ? call("tell", ["text": "要交给我跟进吗？"]) : say("我看了一眼")
         }
+        // 出错后重来、信封后面没接你的话（重来的就是上一轮）
+        if text.contains("上一轮出错重试"), text.hasSuffix("</cue>") { return say("接着做上一轮没做完的") }
         return say("收到：" + (text.split(separator: "\n").last.map(String.init) ?? ""))
     }
 }

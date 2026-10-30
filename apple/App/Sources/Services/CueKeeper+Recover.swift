@@ -39,7 +39,7 @@ extension CueKeeper {
 
     // MARK: 换大脑
 
-    /// 额度、登录卡住（不重试的错）：这台 Mac 上另有能用、这次故障里还没试过的 Agent，就把设置换过去（模型清空、fast 关），
+    /// 额度、登录卡住（`PiFailure.retries` 为假）：这台 Mac 上另有能用、这次故障里还没试过的 Agent，就把设置换过去（模型清空、fast 关），
     /// 返回告诉你的那句（从哪换到哪、为什么、额度读得到就带重置时刻）。换不了为 nil：照常报错，起不来的按慢速重试。
     /// 换回原来那家由 Cue 自己定（记忆、定时与 `setup set`），这里不自动换回；`tried` 在一轮好好做完时清空。
     func failOver(_ failure: String) async -> ShownText? {
