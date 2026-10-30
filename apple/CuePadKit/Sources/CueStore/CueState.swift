@@ -3,9 +3,15 @@ import Foundation
 
 /// Cue 此刻在做什么（同步，只有一行，只由它值班的那台 Mac 写）：与 Agent 会话同一套工作状态（`PiWorkState`）。
 /// 一轮里是思考（`thinking`）或调用工具（`tool`：碰到任务与会话的一步是 `step`，其余是 `detail`），一轮之间歇着（`settled`），
-/// 大脑起不来是出错（`error`，`detail` 是原因）。别的设备与这台 Mac 的界面都只读它（`CuePresence`）。
+/// 大脑起不来是出错（`error`，`detail` 是原因）。报告保留原值，当前断言只读 `runtimeState`：
+/// 报告所属宿主必须仍在值班、同 boot 且 lease 有效；旧报告、换宿主与历史元数据不能补签证明。
 public struct CueState: Equatable, Sendable {
   public var state: Open<PiWorkState>
+  public var hostID: String?
+  public var bootID: String?
+  /// 读时按所属宿主、boot 与 lease 推出，不落库或同步。
+  public var runtimeUntil: Date?
+  public var runtimeState: Open<PiWorkState> { runtimeUntil == nil ? .unknown("unconfirmed") : state }
   /// 正在跑的那一步没碰任务与会话时的一句（"动作 · 目标"、看板、回想，`CueActivity.detail`）；出错时是原因
   public var detail: String?
   /// 正在跑的那一步碰到的那一处（类别与对象，与每一步记下的同一对，`CueActivity.step`）：各端按按钮动词表写成一句（`CueActivity.line`）
@@ -20,8 +26,11 @@ public struct CueState: Equatable, Sendable {
 
   public init(
     state: Open<PiWorkState>, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil, left: [CueLeft] = [],
-    modifiedAt: Date = .now
+    modifiedAt: Date = .now, hostID: String? = nil, bootID: String? = nil, runtimeUntil: Date? = nil
   ) {
+    self.hostID = hostID
+    self.bootID = bootID
+    self.runtimeUntil = runtimeUntil
     self.left = left
     self.state = state
     self.detail = detail
@@ -122,7 +131,7 @@ public struct CueLeft: StoredJSON, Hashable, Sendable {
 
   /// 这一条说的就是会话此刻的这次停下。
   public func holds(for session: PiSessionState) -> Bool {
-    session.sessionID == sessionID && session.stateSince.stored == since.stored && session.state.known?.isStopped == true
+    session.sessionID == sessionID && session.stateSince.stored == since.stored && session.runtimeState.known?.isStopped == true
   }
 }
 
@@ -142,15 +151,15 @@ public struct CueDuty: Equatable, Sendable {
 
 extension CueState: Record {
   static let table = Table.cueState
-  static let columns = ["id", "state", "detail", "modifiedAt", "round", "context", "leftToYou", "step"]
+  static let columns = ["id", "state", "detail", "modifiedAt", "round", "context", "leftToYou", "step", "hostID", "bootID"]
   var bindings: [any SQLBindable] {
-    [Self.recordID, state.rawValue, detail, modifiedAt, round, context?.stored, left.isEmpty ? nil : JSONColumn.encode(left), step.map(JSONColumn.encode)]
+    [Self.recordID, state.rawValue, detail, modifiedAt, round, context?.stored, left.isEmpty ? nil : JSONColumn.encode(left), step.map(JSONColumn.encode), hostID, bootID]
   }
   /// 解不出的 `step`（更新版本加的类别）读成 nil：那一句退回状态词，此刻的其余照读。
   init(row: Row) {
     self.init(
       state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), step: JSONColumn.decode(CueActivity.Touch.self, from: row.textOrNil(7)),
       round: row.uuidOrNil(4), context: row.textOrNil(5).flatMap(CueContext.init(stored:)),
-      left: JSONColumn.decodeList(CueLeft.self, from: row.textOrNil(6)), modifiedAt: row.date(3))
+      left: JSONColumn.decodeList(CueLeft.self, from: row.textOrNil(6)), modifiedAt: row.date(3), hostID: row.textOrNil(8), bootID: row.textOrNil(9))
   }
 }

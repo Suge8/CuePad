@@ -28,7 +28,7 @@ final class FileFollower: Sendable {
         core = Core(continuation: continuation)
     }
 
-    /// 盯的文件换成 `paths`（真实路径）。新加进来的已经在了就报一次（盯上之前写进去的也读到），不再盯的也报一次（读到最后写下的）。
+    /// 盯的文件换成 `paths`（真实路径）。新加的路径先报一次（存在时读到已有内容，不存在时读者也能完成初次核对），不再盯的也报一次（读到最后写下的）。
     func follow(only paths: Set<String>) {
         core.queue.sync { core.follow(only: paths) }
     }
@@ -67,9 +67,10 @@ final class FileFollower: Sendable {
             continuation.finish()
         }
 
-        /// 盯上文件本身就报一次。
+        /// 先报告当前路径，之后只随文件事件报告。
         private func descend(_ path: String) {
-            if arm(path) { continuation.yield(path) }
+            _ = arm(path)
+            continuation.yield(path)
         }
 
         /// 盯上一个文件，返回盯上的是不是文件本身。

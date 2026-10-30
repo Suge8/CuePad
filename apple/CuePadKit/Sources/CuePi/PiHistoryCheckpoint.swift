@@ -6,6 +6,8 @@ import Foundation
 /// 增量索引的可持久化状态。调用方存起来（Codable），下次传回来就只读新增字节。只存摘要与跨行的轮次状态，不存正文。
 /// 解不开（格式随 CuePi 升级变了）的检查点当作没有，从头重读。
 public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
+    /// 重新读取旧检查点，把曾按普通完成入库的 length 回答改为未完成。
+    var terminalFormat: Int = 1
     /// 已消费到的字节偏移（总在一个换行之后）
     public internal(set) var offset: UInt64 = 0
     /// 读到 `offset` 那次文件的修改时间（列目录或读之前取的）

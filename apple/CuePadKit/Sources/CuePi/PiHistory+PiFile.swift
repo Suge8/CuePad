@@ -128,6 +128,9 @@ extension PiHistory {
                 // 中途调工具前说的一段也是说的话（这一句的回答是最后一段）；被停下（Esc）时说了一半的也是
                 switch message.stopReason {
                 case "toolUse": cp.spoke(message.content?.reply ?? "", entry)
+                case "length":
+                    cp.answered(message.content?.reply ?? "", entry, into: &transcript)
+                    transcript.add(cp, Entry(id: entry.id + "#incomplete", seq: entry.seq, at: entry.at), role: .system, text: PiNotice.truncated.rawValue)
                 case "aborted": cp.interrupted(entry, said: message.content?.reply ?? "", into: &transcript)
                 case "error" where message.errorMessage.map(abortMessages.contains) == true:
                     cp.interrupted(entry, said: message.content?.reply ?? "", into: &transcript)

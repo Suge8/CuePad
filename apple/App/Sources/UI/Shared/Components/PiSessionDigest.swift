@@ -11,7 +11,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var messages: [PiChatMessage] = []
     /// 这个会话里 Agent 发到手机上看的文件（对话里按 `.preview` 消息的位置显示，见 `PiChat.entries`）。
     var previews: [PiPreview] = []
-    /// 对话里 Cue 说的那几条的请求 id（按发送记录认，`cueSentDeliveries`）；还在路上的看请求自己的来源。
+    /// 统一来源分类得到的 Cue 正证据（请求 id）；还在路上的看请求自己的来源。
     var cueSent: Set<UUID> = []
     /// 可换的模型与能用的斜杠命令（会话记录指向的目录记录；会话结束后也在，从没报过的会话没有）。
     var catalog: AgentCatalog?
@@ -47,6 +47,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
             return PiConfigShown(model: model, thinking: thinking, context: current.context, pending: true, failure: nil)
         case .delivered: return current
+        case .unconfirmed: return current
         case .failed(let failure):
             return PiConfigShown(model: current.model, thinking: current.thinking, context: current.context, pending: false, failure: failure)
         }
@@ -76,7 +77,7 @@ nonisolated struct PiConfigShown: Equatable {
     /// 上下文余量（会话记录上的，用量条显示；没有模型时为 nil）。
     var context: PiContextUsage?
     var pending: Bool
-    /// 最近一次没换成的原因（`Speech`：Mac 报的，或一直没发出、超时）。
+    /// 最近一次明确没换成的原因（`Speech`：Mac 报的拒绝）。
     var failure: Speech.Failure?
 }
 

@@ -1,0 +1,1 @@
+{"advancing":1,"at":1790000000000,"cue":{"working":{"doing":"读取旧进度","since":1789999940000,"woke":"被升级前任务叫醒"}},"items":[{"id":"task\/11111111-1111-1111-1111-111111111111","kind":"running","name":"升级前任务","since":1789999970000,"subagents":1}],"name":"Cue","subagents":1,"tally":{"asks":0,"delegating":0,"moving":1,"reply":0}}

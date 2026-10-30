@@ -507,6 +507,22 @@
         }
       }
     },
+    "%@ 的执行结果尚未确认：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The result of %@ is unconfirmed: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 的执行结果尚未确认：%2$@"
+          }
+        }
+      }
+    },
     "%@ 的文件夹" : {
       "localizations" : {
         "en" : {
@@ -821,22 +837,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@%2$@%3$@后重置"
-          }
-        }
-      }
-    },
-    "%@%@已重置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@%2$@Reset"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@%2$@已重置"
           }
         }
       }
@@ -2343,22 +2343,6 @@
         }
       }
     },
-    "Agent 会话用订阅账号跑过一轮后，这里显示每个窗口还剩多少、多久后重置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "After an agent session runs a turn on a subscription account, this shows how much is left in each window and when it resets"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 会话用订阅账号跑过一轮后，这里显示每个窗口还剩多少、多久后重置"
-          }
-        }
-      }
-    },
     "Agent 会话的内容" : {
       "localizations" : {
         "en" : {
@@ -2711,22 +2695,6 @@
         }
       }
     },
-    "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The agent didn't confirm in time. The session may not be running or couldn't take the message (not signed in or no model). Check the session."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看"
-          }
-        }
-      }
-    },
     "Agent 没有回应就退出了" : {
       "localizations" : {
         "en" : {
@@ -2759,18 +2727,18 @@
         }
       }
     },
-    "Agent 状态未知" : {
+    "Agent 状态尚未确认" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent status unknown"
+            "value" : "Agent status is unconfirmed"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent 状态未知"
+            "value" : "Agent 状态尚未确认"
           }
         }
       }
@@ -2947,6 +2915,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "CUEPAD_LIBRARY_DIR 必须是绝对路径，收到「%@」"
+          }
+        }
+      }
+    },
+    "ChatGPT 暂不提供额度数据" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChatGPT usage data isn’t available"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChatGPT 暂不提供额度数据"
           }
         }
       }
@@ -3541,18 +3525,18 @@
         }
       }
     },
-    "Mac 上的 CuePad 在执行过程中退出，为避免重复发送没有重试" : {
+    "Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad on the Mac quit while running this and didn't retry, to avoid sending it twice"
+            "value" : "CuePad quit on the Mac during delivery. Delivery is unconfirmed and won’t be retried automatically."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mac 上的 CuePad 在执行过程中退出，为避免重复发送没有重试"
+            "value" : "Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发"
           }
         }
       }
@@ -3569,22 +3553,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mac 上这个会话的文件可能已经删掉了"
-          }
-        }
-      }
-    },
-    "Mac 已经把它发给 Agent，撤不回了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The Mac already sent it to the agent; it can't be taken back"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac 已经把它发给 Agent，撤不回了"
           }
         }
       }
@@ -3637,18 +3605,18 @@
         }
       }
     },
-    "Mac 迟迟没收下这句" : {
+    "OpenAI API 按量计费" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The Mac never picked this up"
+            "value" : "OpenAI API · Pay as you go"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mac 迟迟没收下这句"
+            "value" : "OpenAI API 按量计费"
           }
         }
       }
@@ -4671,6 +4639,22 @@
         }
       }
     },
+    "上一句可能已经执行，再说一次可能让 Agent 重复操作。原请求会保留。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The previous message may already have been acted on. Sending it again could repeat the action. The original request will be kept."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一句可能已经执行，再说一次可能让 Agent 重复操作。原请求会保留。"
+          }
+        }
+      }
+    },
     "上一处" : {
       "localizations" : {
         "en" : {
@@ -5147,6 +5131,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不绑了"
+          }
+        }
+      }
+    },
+    "与 Agent 的连接已断开，操作结果尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The agent disconnected. The operation’s result is unconfirmed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "与 Agent 的连接已断开，操作结果尚未确认"
           }
         }
       }
@@ -5771,6 +5771,54 @@
         }
       }
     },
+    "会话已经启动，但连接已断开，不会自动再开一个" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session has started, but the connection was lost. Another session won’t be started automatically."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话已经启动，但连接已断开，不会自动再开一个"
+          }
+        }
+      }
+    },
+    "会话已进入另一轮，Cue 没有打断" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session has moved to another turn. Cue didn’t interrupt it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话已进入另一轮，Cue 没有打断"
+          }
+        }
+      }
+    },
+    "会话当前状态还未确认，重新接上后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session’s current status is unconfirmed. Try again after it reconnects."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话当前状态还未确认，重新接上后再试"
+          }
+        }
+      }
+    },
     "会话有动静" : {
       "localizations" : {
         "en" : {
@@ -5783,22 +5831,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话有动静"
-          }
-        }
-      }
-    },
-    "会话没有按时结束，可能还在等你在终端里处理" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The session didn't end in time; it may be waiting for you in the terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会话没有按时结束，可能还在等你在终端里处理"
           }
         }
       }
@@ -6011,6 +6043,22 @@
         }
       }
     },
+    "你的话送达未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message delivery unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的话送达未确认"
+          }
+        }
+      }
+    },
     "你说一件事，%@ 交给这台 Mac 上的 Agent 去做" : {
       "localizations" : {
         "en" : {
@@ -6103,6 +6151,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用 %@"
+          }
+        }
+      }
+    },
+    "使用 ChatGPT 套餐" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Using ChatGPT plan"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 ChatGPT 套餐"
           }
         }
       }
@@ -6899,6 +6963,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "内置"
+          }
+        }
+      }
+    },
+    "再说一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再说一次"
+          }
+        }
+      }
+    },
+    "再说一次…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Again…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再说一次…"
+          }
+        }
+      }
+    },
+    "再说一次？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Again?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再说一次？"
           }
         }
       }
@@ -8131,22 +8243,6 @@
         }
       }
     },
-    "发送途中 Agent 会话结束了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The agent session ended while sending"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发送途中 Agent 会话结束了"
-          }
-        }
-      }
-    },
     "发送（%@）；按住只记下" : {
       "localizations" : {
         "en" : {
@@ -9131,18 +9227,34 @@
         }
       }
     },
-    "回答超出了输出长度上限" : {
+    "回答未完成" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The reply hit the output length limit"
+            "value" : "Reply incomplete"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "回答超出了输出长度上限"
+            "value" : "回答未完成"
+          }
+        }
+      }
+    },
+    "回答未完成：达到输出长度上限" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reply incomplete: output length limit reached"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回答未完成：达到输出长度上限"
           }
         }
       }
@@ -10763,6 +10875,54 @@
         }
       }
     },
+    "尚未收到 Agent 的确认；操作可能已经执行，不会自动重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No confirmation from the agent yet. The operation may already have run and won’t be retried automatically."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未收到 Agent 的确认；操作可能已经执行，不会自动重试"
+          }
+        }
+      }
+    },
+    "尚未确认会话已结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session exit is not yet confirmed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未确认会话已结束"
+          }
+        }
+      }
+    },
+    "尚未观测到额度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usage observed yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未观测到额度"
+          }
+        }
+      }
+    },
     "层" : {
       "localizations" : {
         "en" : {
@@ -11607,22 +11767,6 @@
         }
       }
     },
-    "已重置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reset"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已重置"
-          }
-        }
-      }
-    },
     "带 %lld 个附件" : {
       "localizations" : {
         "en" : {
@@ -11967,6 +12111,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "归档"
+          }
+        }
+      }
+    },
+    "当前轮次的来源尚未确认，Cue 没有打断" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This turn’s origin is unconfirmed. Cue didn’t interrupt it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前轮次的来源尚未确认，Cue 没有打断"
           }
         }
       }
@@ -15099,22 +15259,6 @@
         }
       }
     },
-    "未知状态" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unknown"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未知状态"
-          }
-        }
-      }
-    },
     "未知错误" : {
       "localizations" : {
         "en" : {
@@ -16039,6 +16183,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正文里还没有 {{变量}}"
+          }
+        }
+      }
+    },
+    "此授权不提供订阅额度查询" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage queries aren’t available for this authorization"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此授权不提供订阅额度查询"
           }
         }
       }
@@ -17355,6 +17515,22 @@
         }
       }
     },
+    "状态未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "状态未确认"
+          }
+        }
+      }
+    },
     "现在" : {
       "localizations" : {
         "en" : {
@@ -18527,6 +18703,22 @@
         }
       }
     },
+    "管理用量" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage Usage"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "管理用量"
+          }
+        }
+      }
+    },
     "粉色" : {
       "localizations" : {
         "en" : {
@@ -18763,6 +18955,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "结束会话"
+          }
+        }
+      }
+    },
+    "结束结果尚未确认：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session exit is unconfirmed: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束结果尚未确认：%@"
           }
         }
       }
@@ -20295,6 +20503,22 @@
         }
       }
     },
+    "达到用量限制" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage limit reached"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "达到用量限制"
+          }
+        }
+      }
+    },
     "运行" : {
       "localizations" : {
         "en" : {
@@ -21391,18 +21615,18 @@
         }
       }
     },
-    "这句一直没传到 iCloud，发不到 Mac" : {
+    "这句可能已经交出，不能安全撤回" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This never reached iCloud, so it can't reach the Mac"
+            "value" : "This message may already be on its way and can’t be safely withdrawn."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这句一直没传到 iCloud，发不到 Mac"
+            "value" : "这句可能已经交出，不能安全撤回"
           }
         }
       }
@@ -21759,6 +21983,22 @@
         }
       }
     },
+    "这轮的来源还未确认，先不打断" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This turn’s origin is unconfirmed. It won’t be interrupted."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这轮的来源还未确认，先不打断"
+          }
+        }
+      }
+    },
     "这里还没有灵感" : {
       "localizations" : {
         "en" : {
@@ -21903,6 +22143,22 @@
         }
       }
     },
+    "连接 Agent 会话后，这里显示授权支持的额度信息" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect an agent session to see the usage information available for its authorization"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接 Agent 会话后，这里显示授权支持的额度信息"
+          }
+        }
+      }
+    },
     "退出 CuePad" : {
       "localizations" : {
         "en" : {
@@ -21963,6 +22219,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "送达中"
+          }
+        }
+      }
+    },
+    "送达尚未确认，可能已经执行，不会自动重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivery is unconfirmed. The operation may already have run; it won’t be retried automatically."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "送达尚未确认，可能已经执行，不会自动重发"
+          }
+        }
+      }
+    },
+    "送达未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivery unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "送达未确认"
           }
         }
       }
@@ -23179,18 +23467,50 @@
         }
       }
     },
-    "额度用完" : {
+    "额度查询失败" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Limit reached"
+            "value" : "Couldn’t check usage"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "额度用完"
+            "value" : "额度查询失败"
+          }
+        }
+      }
+    },
+    "额度查询失败，请稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t check usage. Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "额度查询失败，请稍后再试"
+          }
+        }
+      }
+    },
+    "额度观测已过期，等待更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage observation expired. Waiting for an update"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "额度观测已过期，等待更新"
           }
         }
       }

@@ -6,7 +6,7 @@ import Observation
 import OSLog
 
 /// 开着的岛由 Mac 唯一发布内容，手机只登记地址；中转不存业务状态。
-/// 观察复用 CueFeed，同一秒内只发最新一份（APNs timestamp 是秒）；网络慢或失败时不排历史队列。
+/// 事实直接订阅 CueReading，同一秒内只发最新一份（APNs timestamp 是秒）；网络慢或失败时不排历史队列。
 /// 可作答的提问先确认 iCloud 收下；每次等待后从库核对当前内容，不把已撤回或回答的旧提问补推回去。
 /// 成功只表示 APNs 收下，不表示已上屏。普通进度低优先级，等你变化和结束用高优先级；不以高频推送耗尽系统预算。
 final class ActivityPublisher {
@@ -34,12 +34,13 @@ final class ActivityPublisher {
     func run(_ services: AppServices) async throws {
         defer { session.invalidateAndCancel() }
         let (changes, changed) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
-        let reading: @MainActor @Sendable () async throws -> Void = {
+        let source = CueReading(store: services.store, widget: false)
+        let reading: @isolated(any) @Sendable () async throws -> Void = {
             defer { changed.finish() }
-            for try await _ in services.cueUpdates() { changed.yield() }
+            for try await _ in source.updates() { changed.yield() }
         }
         let availability: @MainActor @Sendable () async throws -> Void = {
-            for await _ in Observations({ services.syncStatus.reachesMac && services.knowsSyncedFacts }) { changed.yield() }
+            for await _ in Observations({ (services.syncStatus.reachesMac && services.knowsSyncedFacts, services.speech) }) { changed.yield() }
         }
         let publishing: @MainActor @Sendable () async throws -> Void = {
             try await self.publish(changes, retrying: changed, services: services)
@@ -83,7 +84,7 @@ final class ActivityPublisher {
     /// 订阅只负责叫醒；网络返回时订阅重读未必已送到，不以它缓存的那一份证明问题仍有效。
     private func current(_ services: AppServices) throws -> Publication? {
         guard services.syncStatus.reachesMac, services.knowsSyncedFacts else { return nil }
-        let read = try services.store.snapshot { try CueFeed.Read.read(from: $0, widget: false) }.value
+        let read = try services.store.snapshot { try CueReading.Read.read(from: $0, widget: false) }.value
         guard let activity = read.activity, activity.publisher == services.hostID else { return nil }
         let now = AppServices.cueNow(read.digest, at: services.speech, local: CueNow.Local(waiting: nil, here: nil))
         return Publication(destinations: activity.destinations, state: try ActivityPush.fitted(CueActivityState(now: now)))

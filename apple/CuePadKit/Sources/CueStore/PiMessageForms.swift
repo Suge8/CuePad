@@ -70,6 +70,7 @@ public enum PiNotice: String, Sendable, CaseIterable {
   case compacted = "已压缩上下文"
   case stopped = "已停止"
   case declined = "已拒绝"
+  case truncated = "回答未完成：达到输出长度上限"
 
   public var changesContext: Bool { self == .compacted }
 
@@ -78,6 +79,7 @@ public enum PiNotice: String, Sendable, CaseIterable {
     case .compacted: String(localized: "已压缩上下文")
     case .stopped: String(localized: "已停止")
     case .declined: String(localized: "已拒绝")
+    case .truncated: String(localized: "回答未完成：达到输出长度上限")
     }
   }
 }

@@ -4,6 +4,7 @@ import CueSync
 import Foundation
 import Testing
 import AppKit
+import Synchronization
 @testable import CuePad
 @testable import CuePi
 
@@ -37,19 +38,23 @@ struct MacSyncTests {
 
     /// 退出可能发生在主线程被占住时：在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等收尾的回复，
     /// 主线程上排队的任务轮不到。收尾的等待部分若需要主线程，退出就永远等不到。
-    @Test
-    func 主线程被占住时退出收尾仍在上限内完成() async throws {
+    @Test(arguments: [true, false])
+    func 主线程被占住时退出收尾仍在上限内完成(uploadAccepted: Bool) async throws {
+        rig.sync.sendsSucceed.withLock { $0 = uploadAccepted }
         services.startSync()
         try await services.executor.start()
         try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
 
         let finish = services.beginShutdown(within: .seconds(2))
-        let done = DispatchSemaphore(value: 0)
+        let done = DispatchSemaphore(value: 0), outcome = Mutex<String?>(nil)
         Task.detached {
-            _ = await finish()
+            let failure = await finish()
+            outcome.withLock { $0 = failure }
             done.signal()
         }
         #expect(Self.blockCurrentThread(until: done, seconds: 30), "主线程被占住时收尾等不到")
+        let failure = outcome.withLock { $0 }
+        #expect(uploadAccepted ? failure == nil : failure?.contains("尚未确认云端已接受") == true)
         #expect(rig.sync.stopped == 1)
     }
 

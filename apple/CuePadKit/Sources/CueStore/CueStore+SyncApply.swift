@@ -18,6 +18,7 @@ extension CueStore {
           failures.append(RemoteFailure(recordName: change.recordName, message: "\(error)"))
         }
       }
+      try reconcileDeliveryReceipts(changes)
       let cards = Set(changes.compactMap(\.cardID))
       if !cards.isEmpty { try repairCardTree(touching: cards) }
       if changes.contains(where: \.touchesLaunches) { try claimLaunchedCards() }
@@ -80,13 +81,29 @@ extension CueStore {
   /// 排序键相同不在这里处理：读取时按 id 打平，移动时重排。
   private func applySave(_ remote: SyncRow, _ systemFields: Data, serverAt: Date?) throws {
     let awaitingResult = try remote.table == .deliveryRequests && isAwaitingResult(remote.id)
-    try applyVersion(remote, systemFields)
-    if remote.table == .deliveryRequests, let serverAt {
-      try db.run("UPDATE deliveryRequests SET serverAt = ? WHERE id = ? AND serverAt IS NULL", [serverAt, remote.id])
+    var canonical = remote
+    let legacy = remote.table == .deliveryRequests && remote.text("status") == Schema.legacyDeliveryFailure
+    if legacy {
+      canonical.fields["status"] = try db.first(
+        "SELECT \(Schema.deliveryFailureStatus) FROM (SELECT ? AS handledBy)", [remote.fields["handledBy"] ?? .null]) { $0.value(0) }
+    }
+    try applyVersion(canonical, systemFields)
+    if legacy {
+      // 服务器确认的是旧字节，正规化后的版本必须重新上传；原原因和领取事实原样保留。
+      try db.run("UPDATE deliveryRequests SET modifiedAt = MAX(modifiedAt, ?2) + 1 WHERE id = ?1", [remote.id, remote.modifiedAt])
+    }
+    if remote.table == .deliveryRequests {
+      if let serverAt { try db.run("UPDATE deliveryRequests SET serverAt = ? WHERE id = ? AND serverAt IS NULL", [serverAt, remote.id]) }
+      // 旧同步快照仍带着领取事实，却把状态退回 pending：入库时就收口为未知，不只在执行器里跳过。
+      try db.run(
+        """
+        UPDATE deliveryRequests SET status = '\(DeliveryStatus.unconfirmed.rawValue)', failure = ?2, completedAt = COALESCE(completedAt, ?3), modifiedAt = MAX(modifiedAt + 1, ?3)
+        WHERE id = ?1 AND status = '\(DeliveryStatus.pending.rawValue)' AND handledBy IS NOT NULL
+        """, [remote.id, DeliveryRequest.interruptedReason.stored, Date.stamp])
     }
     if awaitingResult {
       try db.run(
-        "UPDATE deliveryRequests SET resultReceivedAt = ? WHERE id = ? AND status IN ('succeeded', 'failed')",
+        "UPDATE deliveryRequests SET resultReceivedAt = ? WHERE id = ? AND status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)')",
         [Date.stamp, remote.id])
     }
   }
@@ -109,6 +126,12 @@ extension CueStore {
     guard let local = try readSyncRow(table, remote.id) else {
       if pushed != nil { return }
       try overwrite(remote)
+      try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt)
+      return
+    }
+
+    if table == .deliveryRequests, let repaired = Self.mergingDeliveryProgress(local: local, remote: remote) {
+      try overwrite(repaired)
       try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt)
       return
     }
@@ -137,11 +160,64 @@ extension CueStore {
     }
   }
 
+  /// 按变更涉及的消息主键、会话索引批量找正证据，不为每条请求全表找消息。
+  private func reconcileDeliveryReceipts(_ changes: [RemoteChange]) throws {
+    var messageIDs: [String] = [], requestIDs: [String] = [], sessions = Set<String>()
+    for change in changes {
+      guard case .save(let row, _, _) = change else { continue }
+      if row.table == .piMessages { messageIDs.append(row.id) }
+      if row.table == .deliveryRequests {
+        requestIDs.append(row.id)
+        if let session = row.text("targetRef") { sessions.insert(session) }
+      }
+    }
+    guard !messageIDs.isEmpty || !sessions.isEmpty else { return }
+    let messages = try select(
+      PiChatMessage.self,
+      where: """
+        (id IN (SELECT value FROM json_each(?1)) OR (sessionID IN (SELECT value FROM json_each(?2)) AND deliveryID IN (SELECT value FROM json_each(?3))))
+          AND role IN ('user', 'machine') AND deliveryID IS NOT NULL
+        """, [JSONColumn.encode(messageIDs), JSONColumn.encode(sessions.sorted()), JSONColumn.encode(requestIDs)])
+    for (session, messages) in Dictionary(grouping: messages, by: \.sessionID) {
+      try confirmDeliveries(among: Set(messages.compactMap(\.deliveryID)), session: session)
+    }
+  }
+
+  /// 旧 pending 或迟到的错误不能把已交出的意图退回可执行。正证据成功优先于未知，未知优先于失败。
+  private static func mergingDeliveryProgress(local: SyncRow, remote: SyncRow) -> SyncRow? {
+    func progress(_ row: SyncRow) -> Int {
+      switch row.text("status").flatMap(DeliveryStatus.init(rawValue:)) {
+      case .succeeded: 5
+      case .unconfirmed: 4
+      case .failed: 3
+      case .confirming: 2
+      case .executing: 1
+      case .pending: row.text("handledBy") == nil ? 0 : 1
+      case nil: 4
+      }
+    }
+    let localProgress = progress(local), remoteProgress = progress(remote)
+    let samePhase = local.text("status") == remote.text("status")
+    func deadline(_ row: SyncRow) -> Int64? {
+      if case .int(let value) = row.fields["deadlineAt"] { value } else { nil }
+    }
+    let due = [deadline(local), deadline(remote)].compactMap { $0 }.min()
+    let preservesDeadline = samePhase && due != deadline(remote)
+    let preservesProgress = localProgress != remoteProgress && (localProgress > remoteProgress || local.modifiedAt > remote.modifiedAt)
+    guard preservesDeadline || preservesProgress else { return nil }
+    var repaired = local.modifiedAt > remote.modifiedAt ? local : remote
+    let resolved = localProgress > remoteProgress ? local : remote
+    for column in ["status", "failure", "handledBy", "completedAt", "deadlineAt"] { repaired.fields[column] = resolved.fields[column] }
+    if samePhase { repaired.fields["deadlineAt"] = due.map(SQLValue.int) ?? .null }
+    repaired.fields["modifiedAt"] = .int(max(local.modifiedAt, remote.modifiedAt) + 1)
+    return repaired
+  }
+
   /// 投送请求在本机还在等结果：远端版本把它变成完成时，记下本机时刻（往返时间的终点）。
   /// 执行方在本机写结果，不走远端应用；第一次就收到已完成请求的设备从没等过它，也不记。
   private func isAwaitingResult(_ id: String) throws -> Bool {
     try db.first(
-      "SELECT 1 FROM deliveryRequests WHERE id = ? AND status IN (\(DeliveryStatus.openSQL))", [id]) { _ in true } != nil
+      "SELECT 1 FROM deliveryRequests WHERE id = ? AND (status IN (\(DeliveryStatus.openSQL)) OR status = '\(DeliveryStatus.unconfirmed.rawValue)')", [id]) { _ in true } != nil
   }
 
   /// 卡片层级在远端变更之后仍要成立（见 `CardLinks.repairs`）；改写的卡片会再推送，让各设备收敛。

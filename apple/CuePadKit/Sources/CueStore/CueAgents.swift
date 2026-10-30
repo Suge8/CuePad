@@ -5,11 +5,7 @@ import Foundation
 /// 名册由接入按各家身份去重，不按显示名合并：两个子代理可以同名。Cue 本身不在看板会话里，不另加一。
 enum CueAgents {
   static func count(in work: [CueWork]) -> Int {
-    sessions(in: work).reduce(0) { count, session in
-      count + (session.state.isWorking ? 1 : 0) + session.subagents.count {
-        $0.phase == .known(.running) || $0.phase == .known(.review)
-      }
-    }
+    sessions(in: work).reduce(0) { $0 + $1.activeAgentCount }
   }
 
   static func sessions(in work: [CueWork]) -> [PiSessionState] {
@@ -22,5 +18,11 @@ enum CueAgents {
       }.filter { $0.state != .known(.ended) }.map { ($0.sessionID, $0) },
       uniquingKeysWith: { $0.modifiedAt >= $1.modifiedAt ? $0 : $1 })
     return Array(sessions.values)
+  }
+}
+
+extension PiSessionState {
+  public var activeAgentCount: Int {
+    (runtimeState.isWorking ? 1 : 0) + runtimeSubagents.count { $0.phase == .known(.running) || $0.phase == .known(.review) }
   }
 }

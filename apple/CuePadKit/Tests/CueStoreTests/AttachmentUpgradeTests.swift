@@ -34,6 +34,21 @@ import Testing
       INSERT INTO syncRecords (recordName, recordType, pushedModifiedAt) VALUES ('00000000-0000-4000-8000-0000000000a1', 'attachments', 10), ('00000000-0000-4000-8000-0000000000a2', 'attachments', NULL);
       INSERT INTO previews (id, sessionID, hash, name, title, byteCount, createdAt, modifiedAt) VALUES ('00000000-0000-4000-8000-0000000000b1', 's', '\(clip)', '演示.MOV', '演示', \(movie.count), 1, 1);
       DROP TABLE activityDestinations;
+      ALTER TABLE accountQuotas DROP COLUMN account;
+      ALTER TABLE accountQuotas DROP COLUMN status;
+      ALTER TABLE accountQuotas DROP COLUMN observedAt;
+      DROP TRIGGER piSessionStates_writeSeq_update;
+      ALTER TABLE piSessionStates DROP COLUMN bootID;
+      ALTER TABLE macPresence DROP COLUMN bootID;
+      ALTER TABLE cueState DROP COLUMN hostID;
+      ALTER TABLE cueState DROP COLUMN bootID;
+      CREATE TRIGGER piSessionStates_writeSeq_update AFTER UPDATE OF state, stateSince, answeredAt ON piSessionStates
+      WHEN old.state IS NOT new.state OR old.stateSince IS NOT new.stateSince OR old.answeredAt IS NOT new.answeredAt
+      BEGIN
+        UPDATE writeCounter SET seq = seq + 1;
+        UPDATE piSessionStates SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;
+      END;
+      ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
       ALTER TABLE piSessionStates DROP COLUMN failure;
       PRAGMA user_version = 77;
       """)

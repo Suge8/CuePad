@@ -6,7 +6,7 @@ import Foundation
 /// `title` 是一句中文，`providerMessage` 是提供方给的原句（可作补充说明），`raw` 是完整原文（悬停显示）。
 public struct PiErrorSummary: Sendable, Equatable {
     public enum Kind: Sendable, Equatable {
-        /// 401/403：密钥无效、登录过期、没有权限
+        /// 401 或明确的认证错误：密钥无效、登录过期；权限与策略拒绝不据此要求重登
         case authentication
         /// 额度、余额、订阅用量用完（按消息内容识别，不论状态码：Anthropic 的用量上限与余额不足都是 400）
         case quota
@@ -48,29 +48,30 @@ public struct PiErrorSummary: Sendable, Equatable {
         func coded(_ text: ShownText) -> ShownText { status.map { ShownText("\(text.embedded)（\($0)）") } ?? text }
         return switch kind {
         case .authentication: coded(ShownText("认证失败，检查 API 密钥或重新登录"))
-        case .quota: ShownText("额度用完")
+        case .quota: ShownText("达到用量限制")
         case .rateLimited: ShownText("请求太频繁，稍后再试")
         case .rejected: coded(ShownText("模型拒绝了请求"))
         case .server: coded(ShownText("模型服务繁忙或出错，稍后再试"))
         case .network: ShownText("网络连接中断")
         case .modelUnavailable: ShownText("模型不存在或没有权限")
-        case .outputTooLong: ShownText("回答超出了输出长度上限")
+        case .outputTooLong: ShownText("回答未完成：达到输出长度上限")
         case .other: status == nil ? .verbatim(Self.firstLine(of: raw)) : coded(ShownText("模型调用出错"))
         }
     }
 
     /// 会话出错的种类（`PiSessionState.failure`）：出错块的按钮与各处的状态词按它分。限流、服务出错与连不上一样是 Agent 重试用尽的暂时性错；
-    /// 请求被拒、模型不可用、回答超长与其余归其余。
+    /// 回答超长归未完成；请求被拒、模型不可用与其余归其余。
     public var failure: PiFailure {
         switch kind {
         case .authentication: .login
         case .quota: .quota
         case .rateLimited, .server, .network: .network
-        case .rejected, .modelUnavailable, .outputTooLong, .other: .other
+        case .outputTooLong: .truncated
+        case .rejected, .modelUnavailable, .other: .other
         }
     }
 
-    /// 不能悬停看原文的地方（手机、菜单栏）用：摘要，加上提供方的原句（有的话）。额度用完的摘要就是状态词（`PiFailure.quota`），有原句时只写原句，不念两遍。
+    /// 不能悬停看原文的地方（手机、菜单栏）用：摘要，加上提供方的原句（有的话）。用量限制的摘要就是状态词（`PiFailure.quota`），有原句时只写原句，不念两遍。
     public var line: String {
         if kind == .quota, let providerMessage { return providerMessage }
         return [title, providerMessage].compactMap { $0 }.joined(separator: "：")
@@ -105,7 +106,8 @@ public struct PiErrorSummary: Sendable, Equatable {
     private static func kind(status: Int?, type: String?, text: String) -> Kind {
         let type = type?.lowercased() ?? ""
         if let kind = claudeCodes[type] { return kind }
-        if status == 401 || status == 403 || ["authentication_error", "permission_error"].contains(type)
+        if text == "max_output_tokens" { return .outputTooLong }
+        if status == 401 || type == "authentication_error"
             || text.contains(/invalid.?(x-)?api.?key|unauthorized/) { return .authentication }
         // 额度类的各家说法：OpenAI `insufficient_quota`、Anthropic "usage limits" / "credit balance is too low" /
         // 订阅的 "extra usage"、Codex/ChatGPT 订阅 `usage_limit_reached` / "usage limit" /
@@ -117,7 +119,7 @@ public struct PiErrorSummary: Sendable, Equatable {
         }
         if status == 429 || type == "rate_limit_error" || text.contains(/rate.?limit|too many requests/) { return .rateLimited }
         if status.map({ (500...599).contains($0) }) == true || type == "overloaded_error" { return .server }
-        if status == 400 || type == "invalid_request_error" { return .rejected }
+        if status == 400 || status == 403 || ["invalid_request_error", "permission_error"].contains(type) { return .rejected }
         if status == nil,
            text.contains(/connection (error|refused|reset|lost)|fetch failed|network.?error|econnreset|enotfound|eai_again|getaddrinfo|socket hang up|timed? ?out|terminated/) {
             return .network

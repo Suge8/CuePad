@@ -12,7 +12,8 @@ import Testing
 /// 模型是本进程里的假 OpenAI 端点（按剧本回，零网络），执行器开的会话由假扩展扮演（`RecordingHost`）。
 /// Pi 的配置在临时目录（`PI_CODING_AGENT_DIR`），不碰 ~/.pi 与真实资料库。
 /// 本机的 Pi（真 Pi 的测试共用）
-nonisolated let realPi = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
+nonisolated let realPi = ProcessInfo.processInfo.environment["CUEPAD_TEST_PI"].map { URL(filePath: $0) }
+    ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
 
 @Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized)
 struct CueHostTests {

@@ -197,20 +197,32 @@ extension CueStore {
     return synced
   }
 
+  /// 发送者读出 payload 后，在同一事务里核对该版仍在并保留发送权；与撤回互斥。
+  /// 若读取后已撤回或改写，旧 payload 不能交出，发送者按新的库事实重新挑选。
+  package func reserveDeliveryPayload(_ id: String, modifiedAt: Int64) throws -> Bool {
+    try write {
+      guard try db.first("SELECT 1 FROM deliveryRequests WHERE id = ? AND modifiedAt = ?", [id, modifiedAt], { _ in true }) != nil else { return false }
+      try noteSentVersions([(id, .deliveryRequests, modifiedAt)])
+      return true
+    }
+  }
+
   /// 本机把这几条记录的这一版交给服务器（构造上传批次时）。结果没回到本机就崩溃、或回包在路上丢了，服务器其实收下了它；
   /// 之后它经拉取或重传被拒附的服务器版本回来，按修改时间认出是自己的（`applyVersion`），不当成并发编辑留冲突副本。
   /// 同一时刻只有一批在路上，所以每条记录记一个时间就够：已有一版交出去而服务器还没收下时保留那一版（它最可能先回来），
   /// 收下之后再交出去的才覆盖。
   package func noteSent(_ versions: [(name: String, table: Table, modifiedAt: Int64)]) throws {
-    try write {
-      for version in versions {
-        try db.run(
-          """
-          INSERT INTO syncRecords (recordName, recordType, sentModifiedAt) VALUES (?, ?, ?)
-          ON CONFLICT(recordName) DO UPDATE SET sentModifiedAt = excluded.sentModifiedAt
-          WHERE syncRecords.sentModifiedAt IS NULL OR syncRecords.sentModifiedAt <= COALESCE(syncRecords.pushedModifiedAt, -1)
-          """, [version.name, version.table.rawValue, version.modifiedAt])
-      }
+    try write { try noteSentVersions(versions) }
+  }
+
+  private func noteSentVersions(_ versions: [(name: String, table: Table, modifiedAt: Int64)]) throws {
+    for version in versions {
+      try db.run(
+        """
+        INSERT INTO syncRecords (recordName, recordType, sentModifiedAt) VALUES (?, ?, ?)
+        ON CONFLICT(recordName) DO UPDATE SET sentModifiedAt = excluded.sentModifiedAt
+        WHERE syncRecords.sentModifiedAt IS NULL OR syncRecords.sentModifiedAt <= COALESCE(syncRecords.pushedModifiedAt, -1)
+        """, [version.name, version.table.rawValue, version.modifiedAt])
     }
   }
 

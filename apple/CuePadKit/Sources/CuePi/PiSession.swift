@@ -180,15 +180,23 @@ public struct PiImage: Sendable, Equatable {
     }
 }
 
+/// Cue 的发送只获准接管已确认属于它的那一轮；实际派发时重新核对，不把旧快照当打断许可。
+public enum PiSendPolicy: Sendable, Equatable {
+    case user
+    case cue(deliveryID: String?, turnStartedAt: Date?)
+}
+
 public struct PiMessage: Sendable, Equatable {
     public var text: String
     public var images: [PiImage]
     /// CuePad 投送请求的 id：扩展把它写进会话文件里这条消息（`cuepadDelivery`），对话据此认出是哪条请求送进来的（扩展 v12 起）
     public var deliveryID: String?
-    public init(text: String, images: [PiImage] = [], deliveryID: String? = nil) {
+    public var policy: PiSendPolicy
+    public init(text: String, images: [PiImage] = [], deliveryID: String? = nil, policy: PiSendPolicy = .user) {
         self.text = text
         self.images = images
         self.deliveryID = deliveryID
+        self.policy = policy
     }
 }
 
@@ -197,9 +205,11 @@ public enum PiBridgeError: Error, Equatable {
     case insecureSocketDirectory(String)
     case socketDirectoryTooLong
     case unknownSession(String)
-    /// 等 ack 时连接断了
+    /// 已交出后等 ack 时连接断了：结果未知，不是未接受的证明。
     case sessionEnded
+    /// 未及时观察到确认，可能已经执行；不能据此自动重投。
     case ackTimeout
+    /// `unconfirmed_turn` / `user_turn` 是提交前的 Cue 保护拒绝；`failed: …` 仍可能已执行，不承诺未接受。
     /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；斜杠命令还有 `unknown_command`（清单里没有的名字）、`missing_argument`（必填参数没给）；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
     /// `bad_answer`（答案类型或选项不对）；配置时还有 `no_auth`（该提供方没配好密钥）；重跑时还有 `nothing_to_retry`（会话在跑，或最后一轮不是出错结束的）
     case rejected(String)
@@ -209,7 +219,7 @@ public enum PiBridgeError: Error, Equatable {
     case upgradingExtension
     /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
     case unsupported
-    /// 请它结束后一直没下线（多半还卡在需要你在终端里处理的地方）
+    /// 请求结束后未能确认真正退出；不据断线或重载推断结束成功。
     case notEnded
 }
 
@@ -223,9 +233,11 @@ extension PiBridgeError: ShownError {
         case .unknownSession: "这个 Agent 会话已经结束"
         case .upgradingExtension: "这个会话正在换上新版扩展，歇下后自动接上，到时再发"
         case .unsupported: "这个 Agent 会话不支持这样操作"
-        case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
-        case .sessionEnded: "发送途中 Agent 会话结束了"
-        case .ackTimeout: "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看"
+        case .notEnded: "尚未确认会话已结束"
+        case .sessionEnded: "与 Agent 的连接已断开，操作结果尚未确认"
+        case .ackTimeout: "尚未收到 Agent 的确认；操作可能已经执行，不会自动重试"
+        case .rejected("user_turn"): "会话已进入另一轮，Cue 没有打断"
+        case .rejected("unconfirmed_turn"): "当前轮次的来源尚未确认，Cue 没有打断"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
         case .unknownModel(let agent): "这台 Mac 上的 \(agent.name) 里找不到这个模型"

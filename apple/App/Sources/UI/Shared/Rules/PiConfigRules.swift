@@ -4,8 +4,10 @@ import SwiftUI
 /// 会话页的模型菜单怎么写：按提供方（`PiProvider`）分组，组名有额度时带还剩多少；胶囊上的短名见 `PiModelName`。
 nonisolated enum PiModelLabel {
     /// 分组标题：这家有订阅额度时写"Claude · 5 小时剩 86% · 本周剩 92%"（`QuotaMeter.menuTitle`），否则是提供方名。
-    static func title(_ provider: PiProvider, quotas: [AccountQuota], at now: Date) -> String {
-        quotas.first { $0.provider == provider.id }.map { QuotaMeter($0, at: now).menuTitle.visible } ?? provider.name
+    static func title(_ model: PiModelOption, quotas: [AccountQuota], at now: Date) -> String {
+        quotas.first { $0.provider == model.key.provider && model.account?.matches($0.account) == true }
+            .map { QuotaMeter($0, at: now).menuTitle.visible }
+            ?? model.account?.label(provider: model.key.provider) ?? PiProvider(id: model.key.provider).name
     }
 
     /// 菜单里的分组：提供方按第一次出现的顺序。

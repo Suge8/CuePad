@@ -4,9 +4,9 @@ import SwiftUI
 /// 你的话到哪了（气泡自己画出来）：进了对话、在路上（会话这边的说法，`PiDelivery.Transit`）、已送达（来回用时）、没能送达。
 /// 记号在气泡左下角外（`TripMark`），"发出"一族只有纸飞机：还没出这台设备是一架一趟趟飞过的小飞机（`LoopLayer.flight`，与发送钮、会话状态标里的话在路上同一个）；
 /// 出了这台（已发出、送达中）飞机停下、旁边写着到了哪一步——话 0.4 秒就到服务器，回执要等那台 Mac，看得出不是卡在本机；
-/// 卡住了到点就是没能送达、写着原因。唤醒已结束的会话比送达多一步（后台起 Agent，手机上还隔着同步往返），飞着带上说法，免得看着像卡住；
+/// 等待到点只显示静态未确认，不提供安全重发。唤醒已结束的会话比送达多一步（后台起 Agent，手机上还隔着同步往返），飞着带上说法，免得看着像卡住；
 /// 已送达是停下来带勾的那架（用时给读屏与 Mac 的悬停说明）；没能送达胭脂叹号，点它是原因全文与重发、移除。
-/// 只有没能送达在气泡下面多一行"未送达 · 重发"（`SpeechBubble`），原因不常驻：Mac 写回的原文长短不定，常驻就得折叠。
+/// 明确失败在下面一行写"未送达 · 重发"，原因放菜单；未确认常驻说明与须确认风险的"再说一次"（`SpeechBubble`）。
 enum BubbleTrip: Hashable {
     case arrived
     case sending(PiDelivery.Transit)
@@ -46,7 +46,7 @@ private struct TripMark: View {
             case .arrived: EmptyView()
             case .sending(let transit):
                 HStack(spacing: 4) {
-                    OnTheWay(size: 13, color: palette.ink3, landed: transit == .sent || transit == .delivering)
+                    OnTheWay(size: 13, color: palette.ink3, landed: transit == .sent || transit == .delivering || transit == .unconfirmed)
                     if transit != .sending { Text(transit.label).fixedSize() }
                 }
                 .accessibilityElement(children: .ignore)

@@ -28,12 +28,13 @@ nonisolated struct QuotaReminder {
     /// `now` 之后还要响的提醒，每个账号至多一条。
     static func due(_ quotas: [AccountQuota], at now: Date) -> [QuotaReminder] {
         quotas.compactMap { quota in
-            guard let window = quota.windows.first(where: { $0.seconds == QuotaWindow.week && $0.model == nil }) else { return nil }
+            guard quota.status == .observed, quota.account?.scope != nil,
+                  let window = quota.windows.first(where: { $0.seconds == QuotaWindow.week && $0.model == nil }) else { return nil }
             let fireAt = window.resetsAt.addingTimeInterval(-lead)
             guard fireAt > now else { return nil }
             let meter = QuotaMeter.Window(window, at: fireAt)
             return QuotaReminder(
-                id: "\(prefix)\(quota.provider)/\(Int((window.resetsAt.timeIntervalSince1970 / 60).rounded()))", fireAt: fireAt,
+                id: "\(prefix)\(quota.id)/\(Int((window.resetsAt.timeIntervalSince1970 / 60).rounded()))", fireAt: fireAt,
                 title: String(localized: "\(PiProvider(id: quota.provider).account) \(meter.name)还剩 \(meter.percent)"),
                 body: body(resetsAt: window.resetsAt, fireAt: fireAt))
         }

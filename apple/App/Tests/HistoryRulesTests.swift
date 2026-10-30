@@ -21,7 +21,7 @@ struct HistoryRulesTests {
         let services: AppServices
         var store: CueStore { services.store }
 
-        init(idleLimit: Duration = AgentTimeouts.hostedIdle) async throws {
+        init(idleLimit: Duration = AgentTimeouts.hostedIdle, providerFixture: URL? = nil, oauth: Bool = true, otherOAuthProviders: [String] = []) async throws {
             let directory = TestLibraries.makeDirectory()
             cwd = directory.appending(path: "work", directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
@@ -42,10 +42,29 @@ struct HistoryRulesTests {
             try await agents.install(.pi)
             let extensions = paths.agentDirectory.appending(path: "extensions")
             try FileManager.default.createDirectory(at: extensions, withIntermediateDirectories: true)
-            try FileManager.default.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
+            if let providerFixture {
+                let directory = extensions.appending(path: "test-provider")
+                try FileManager.default.copyItem(at: providerFixture.deletingLastPathComponent(), to: directory)
+                try FileManager.default.moveItem(at: directory.appending(path: providerFixture.lastPathComponent), to: directory.appending(path: "index.ts"))
+            } else {
+                try FileManager.default.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
+            }
             // 托管的 Pi 同真实用户一样读 agent 目录里的设置：默认假模型、不思考，不加载家目录里自动发现的 skill
-            try JSONSerialization.data(withJSONObject: ["defaultProvider": "fake", "defaultModel": "echo", "defaultThinkingLevel": "off", "skills": ["!**"]])
-                .write(to: paths.agentDirectory.appending(path: "settings.json"))
+            let provider = providerFixture == nil ? "fake" : "openai"
+            try JSONSerialization.data(withJSONObject: [
+                "defaultProvider": provider, "defaultModel": "echo", "defaultThinkingLevel": "off", "skills": ["!**"],
+                "retry": ["enabled": false], "compaction": ["enabled": false],
+            ]).write(to: paths.agentDirectory.appending(path: "settings.json"))
+            if providerFixture != nil {
+                let credential: [String: Any] = oauth
+                    ? ["type": "oauth", "access": "synthetic-account-a", "refresh": "synthetic-refresh", "expires": 4_000_000_000_000]
+                    : ["type": "api_key", "key": "synthetic-api-key"]
+                var credentials = ["openai": credential]
+                for provider in otherOAuthProviders {
+                    credentials[provider] = ["type": "oauth", "access": "synthetic-\(provider)", "refresh": "synthetic-refresh", "expires": 4_000_000_000_000]
+                }
+                try JSONSerialization.data(withJSONObject: credentials).write(to: paths.agentDirectory.appending(path: "auth.json"))
+            }
             _ = Self.offline
 
             bridge = PiBridge(socketDirectory: paths.socketDirectory)

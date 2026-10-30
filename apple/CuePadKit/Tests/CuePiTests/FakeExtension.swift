@@ -246,8 +246,9 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     }
 
     /// 发 `quota`：订阅额度的一次观测（`windows` 按线上格式：`seconds`、`used`、`resetsAt` 秒、可选 `model`、`binding`）。
-    func sendQuota(provider: String, windows: [[String: Any]], complete: Bool) {
-        broadcast(["t": "quota", "provider": provider, "windows": windows, "complete": complete])
+    func sendQuota(provider: String, windows: [[String: Any]], complete: Bool, scope: String? = nil, status: String = "observed") {
+        broadcast(["t": "quota", "provider": provider, "account": ["kind": "oauth", "scope": scope ?? "test-\(provider)"],
+                   "status": status, "windows": windows, "complete": complete])
     }
 
     /// 发状态切换（`kind` 等字段按协议；`since` 自动补）。从不在跑进入思考或调工具是开始新的一轮：`turnSince` 记成此刻（同扩展在回合开始时记）。

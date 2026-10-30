@@ -50,18 +50,11 @@ extension CueStore {
   /// Cue 这会儿说不了就抛 `cannotSpeakNow`、什么都不写，它歇下时 Cue 被叫醒再说：停不下这一轮（`speakBlocked`），
   /// 或会打断他发起的那一轮（`inUserTurn`）。正文原样写：收不了图片的会话由 Mac 交出时把图片写成路径。必须在写事务内调用。
   func say(_ content: String, to session: SessionTarget, card: UUID?, host: String, cue: Bool) throws -> DeliveryRequest {
-    if cue, let state = session.state, state.speakBlocked != nil {
-      guard state.capabilities.contains(.speak) else { throw CueStoreError.terminalOnly(session.target.name) }
-      throw CueStoreError.cannotSpeakNow(session.target.name, "在跑，CuePad 打断不了它（在终端里开的）")
+    if cue {
+      guard let state = session.state else { throw CueStoreError.sessionUnconfirmed }
+      try checkCueCanSpeak(in: state)
     }
-    if cue, try inUserTurn(session.target.ref) { throw CueStoreError.cannotSpeakNow(session.target.name, "正在跑他发起的一轮，现在说会打断它") }
     return try insertDelivery(content, to: session.target, on: session.host(or: host), mode: .send, card: card, cue: cue)
-  }
-
-  /// 会话正在跑的这一轮是他发起的（`turnOpener`）。
-  private func inUserTurn(_ sessionID: String?) throws -> Bool {
-    guard let sessionID, try sessionState(sessionID)?.state.known?.isTurnRunning == true else { return false }
-    return try turnOpener(sessionID) == .user
   }
 
   /// 会话最近（或正在跑）的这一轮是谁开的，唯一的一处（"他说的"标记、他那一轮里 Cue 不插嘴、停下归谁接手都只认它）：
@@ -71,10 +64,14 @@ extension CueStore {
     guard let last = try select(
       PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)'", [sessionID], orderBy: "seq DESC, id DESC", limit: 1
     ).first else { return nil }
-    return last.saidByCue(try cueSentDeliveries(among: [last.deliveryID].compactMap(\.self))) ? .cue : .user
+    switch last.source(in: try deliverySources(among: [last.deliveryID].compactMap(\.self))) {
+    case .cue: return .cue
+    case .user: return .user
+    case .unconfirmed: return .unconfirmed
+    }
   }
 
-  enum TurnOpener { case user, cue }
+  enum TurnOpener { case user, cue, unconfirmed }
 
   /// 一句话作为提问的答案：选择题给选项原文或从 1 起的序号，收自己写的回答的（`PiQuestion.allowsOther`）其余文字照写；
   /// 不收的，Cue 说的（`leading`）开头正好是一个选项、后面紧跟标点或空白（"B. Redis，多实例共享"、照抄提问的"A. 新建表…"）就按那个选项答，

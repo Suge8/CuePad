@@ -52,8 +52,8 @@ public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
   }
   public var id: Slot { Slot(seconds: seconds, model: model) }
 
-  /// `now` 时已用的比例（0 到 1）：过了重置时间按已重置算，不等新的观测。
-  public func used(at now: Date) -> Double { now >= resetsAt ? 0 : min(max(used, 0), 1) }
+  /// 最近观测的比例；重置不代表已观测到恢复。
+  public func used(at now: Date) -> Double { min(max(used, 0), 1) }
 
   /// 匀速刻度：窗口已过去的时间占多少，即按匀速此刻该用到多少（0 到 1）；过了重置时间是 0。
   public func pace(at now: Date) -> Double {
@@ -71,15 +71,18 @@ public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
   }
 }
 
-/// 一个订阅账号最近一次观测到的用量（同步表 `accountQuotas`，Mac 写、各端读）：每个提供方一条，以最新的观测为准。
+/// 一个订阅账号最近一次观测到的用量（同步表 `accountQuotas`，Mac 写、各端读）：每台 Mac 的每个授权分区一条，展示最近的授权，不跨分区合并。
 /// 观测来自 Pi 会话里的扩展——每次回复时提供方带回的用量（零额外请求），或额度视图打开、数据陈旧时请扩展查一次。
-/// "更新于"读 `modifiedAt`。
+/// "更新于"读 `observedAt`；`modifiedAt` 表示能力、结果或当前授权发生变化。
 public struct AccountQuota: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// Pi 的提供方 id（`anthropic`、`openai-codex`）
   public var provider: String
   /// 写下这次观测的 Mac：手机请 Mac 刷新时发给它
   public var hostID: String
+  public var account: PiAccount?
+  public var status: QuotaStatus
+  public var observedAt: Date?
   /// 按窗口从短到长（同长的整个账号在前，按模型的在后）
   public var windows: [QuotaWindow]
   public var createdAt: Date
@@ -87,25 +90,54 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
 
   /// 最新的观测超过这么久算陈旧：额度视图出现时请 Mac 查一次。
   public static let staleAfter: TimeInterval = 10 * 60
+  public static let failureCooldown: TimeInterval = 2 * 60
   /// 用量没有有意义的变化时，观测时间最多拖这么久才写一次（只为"更新于"不过时）；有变化随时写。
   static let touchAfter: TimeInterval = staleAfter / 2
   /// 重置时间相差不超过这么多算同一个（同一窗口里提供方报的重置时刻会差几百毫秒）。
   static let resetTolerance: TimeInterval = 60
+  /// 同一毫秒切换授权也要有确定的先后；数据库与同步的时刻精度是毫秒。
+  fileprivate static let updateStep: TimeInterval = 0.001
 
-  public init(id: UUID, provider: String, hostID: String, windows: [QuotaWindow], createdAt: Date, modifiedAt: Date) {
+  public init(id: UUID, provider: String, hostID: String, windows: [QuotaWindow], createdAt: Date, modifiedAt: Date,
+    account: PiAccount? = nil, status: QuotaStatus = .observed, observedAt: Date? = nil) {
     self.id = id
     self.provider = provider
     self.hostID = hostID
+    self.account = account
+    self.status = status
+    self.observedAt = observedAt
     self.windows = windows
     self.createdAt = createdAt
     self.modifiedAt = modifiedAt
   }
 
-  public func isStale(at now: Date) -> Bool { now.timeIntervalSince(modifiedAt) > Self.staleAfter }
+  public func isStale(at now: Date) -> Bool {
+    switch status {
+    case .unsupported: false
+    case .unobserved: true
+    case .failed: now.timeIntervalSince(modifiedAt) > Self.failureCooldown
+    case .observed: now.timeIntervalSince(observedAt ?? modifiedAt) > Self.staleAfter || windows.contains { now >= $0.resetsAt }
+    }
+  }
+
+  public enum Reading: Sendable, Equatable { case observed, unobserved, unsupported, failed, expired }
+
+  public func reading(at now: Date) -> Reading {
+    if status == .unsupported { return .unsupported }
+    guard account?.scope != nil else { return status == .failed ? .failed : .unobserved }
+    switch status {
+    case .unsupported: return .unsupported
+    case .failed: return .failed
+    case .unobserved: return .unobserved
+    case .observed:
+      return windows.isEmpty ? .unobserved : windows.contains { now >= $0.resetsAt } ? .expired : .observed
+    }
+  }
 
   /// 卡着的窗口：提供方说了是哪个（`QuotaWindow.isBinding`，Claude）且还没过重置时间就是它；没说（Codex、用量接口刚替换过）
   /// 或它已重置时，是此刻用得最多的那个。`model` 给了时按模型的周额度也参与比较（只算名字出现在模型 id 或名字里的，如 Fable 之于 claude-fable-5）。
   public func binding(at now: Date, model: String? = nil) -> QuotaWindow? {
+    guard reading(at: now) == .observed else { return nil }
     if let claimed = windows.first(where: { $0.isBinding && now < $0.resetsAt }) { return claimed }
     let model = model?.lowercased()
     return windows.filter { window in
@@ -114,18 +146,24 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
     }.max { $0.used(at: now) < $1.used(at: now) }
   }
 
-  static func recordID(provider: String) -> UUID { DeterministicID.uuid("account-quota/\(provider)") }
+  static func recordID(provider: String, host: String, account: PiAccount?) -> UUID {
+    DeterministicID.uuid("account-quota/\(host)/\(provider)/\(account?.kind.rawValue ?? "unknown")/\(account?.scope ?? "unknown")")
+  }
 }
 
 /// 扩展报来的一次观测（桥协议的 `quota` 消息，线上格式即此）。
 public struct QuotaReport: Sendable, Equatable, Decodable {
   public var provider: String
+  public var account: PiAccount
+  public var status: QuotaStatus
   public var windows: [QuotaWindow]
   /// 是这个账号的全部窗口（查用量接口得到的）：替换已存的；回复里带回的只有一部分（Claude 的响应头没有按模型的周额度），按窗口并进已存的
   public var complete: Bool
 
-  public init(provider: String, windows: [QuotaWindow], complete: Bool) {
+  public init(provider: String, windows: [QuotaWindow], complete: Bool, account: PiAccount, status: QuotaStatus = .observed) {
     self.provider = provider
+    self.account = account
+    self.status = status
     self.windows = windows
     self.complete = complete
   }
@@ -158,19 +196,22 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
 
 extension AccountQuota: Record {
   static let table = Table.accountQuotas
-  static let columns = ["id", "provider", "hostID", "windows", "createdAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, provider, hostID, JSONColumn.encode(windows), createdAt, modifiedAt] }
+  static let columns = ["id", "provider", "hostID", "windows", "createdAt", "modifiedAt", "account", "status", "observedAt"]
+  var bindings: [any SQLBindable] { [id, provider, hostID, JSONColumn.encode(windows), createdAt, modifiedAt, account.map(JSONColumn.encode), status.rawValue, observedAt] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), provider: row.text(1), hostID: row.text(2), windows: JSONColumn.decodeList(QuotaWindow.self, from: row.text(3)),
-      createdAt: row.date(4), modifiedAt: row.date(5))
+      createdAt: row.date(4), modifiedAt: row.date(5), account: JSONColumn.decode(PiAccount.self, from: row.textOrNil(6)),
+      status: row.textOrNil(7).flatMap(QuotaStatus.init(rawValue:)) ?? .unobserved, observedAt: row.dateOrNil(8))
   }
 }
 
 extension CueStore {
   /// 各订阅账号的用量，按提供方。
   public func accountQuotas() throws -> [AccountQuota] {
-    try select(AccountQuota.self, orderBy: "provider")
+    let all = try select(AccountQuota.self, orderBy: "modifiedAt DESC, id")
+    var seen = Set<String>()
+    return all.filter { seen.insert("\($0.hostID)/\($0.provider)").inserted }
   }
 
   /// 记下一次观测（只有 Mac 写）。只在值有意义地变化时写——窗口变了、某个窗口的整数百分比变了、重置时间变了——
@@ -178,22 +219,27 @@ extension CueStore {
   @discardableResult
   public func recordQuota(_ report: QuotaReport, host: String) throws -> Bool {
     try write {
-      let id = AccountQuota.recordID(provider: report.provider)
-      let now = Date.stamp
+      let id = AccountQuota.recordID(provider: report.provider, host: host, account: report.account)
       let existing = try find(AccountQuota.self, id)
-      let windows = report.merged(into: existing?.windows ?? [])
-      if let existing, !Self.changedMeaningfully(existing.windows, windows),
+      let current = try select(AccountQuota.self, where: "hostID = ? AND provider = ?", [host, report.provider], orderBy: "modifiedAt DESC, id", limit: 1).first
+      let now = max(Date.stamp, current?.modifiedAt.addingTimeInterval(AccountQuota.updateStep) ?? .distantPast)
+      let status = report.status == .unobserved ? existing?.status ?? .unobserved : report.status
+      let windows = report.status == .observed ? report.merged(into: existing?.windows ?? []) : existing?.windows ?? []
+      let observedAt = report.status == .observed ? now : existing?.observedAt
+      if current?.id == id, let existing, existing.status == status, !Self.changedMeaningfully(existing.windows, windows),
         now.timeIntervalSince(existing.modifiedAt) < AccountQuota.touchAfter
       {
         return false
       }
       let quota = AccountQuota(
-        id: id, provider: report.provider, hostID: host, windows: windows, createdAt: existing?.createdAt ?? now, modifiedAt: now)
+        id: id, provider: report.provider, hostID: host, windows: windows, createdAt: existing?.createdAt ?? now, modifiedAt: now,
+        account: report.account, status: status, observedAt: observedAt)
       if existing == nil {
         try insert(quota)
       } else {
         try db.run(
-          "UPDATE accountQuotas SET hostID = ?, windows = ?, modifiedAt = ? WHERE id = ?", [host, JSONColumn.encode(windows), now, id])
+          "UPDATE accountQuotas SET windows = ?, modifiedAt = ?, status = ?, observedAt = ? WHERE id = ?",
+          [JSONColumn.encode(windows), now, status.rawValue, observedAt, id])
       }
       return true
     }
@@ -212,7 +258,7 @@ extension CueStore {
   /// 已有一条在路上时返回它，不再写第二条。
   public func requestQuotaRefresh(on host: String) throws -> DeliveryRequest {
     let mode = DeliveryMode.quota
-    if let open = try select(DeliveryRequest.self, where: "mode = ? AND status IN (\(DeliveryStatus.openSQL))", [mode.rawValue]).first {
+    if let open = try select(DeliveryRequest.self, where: "mode = ? AND status IN (\(DeliveryStatus.openSQL))", [mode.rawValue]).first(where: { Speech.trip($0, at: .always(at: timing.now())).inTransit }) {
       return open
     }
     return try requestDelivery(mode.rawValue, to: SendTarget(kind: .mac, name: "CuePad", ref: nil), on: host, mode: mode)

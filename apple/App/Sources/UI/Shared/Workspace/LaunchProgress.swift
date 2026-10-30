@@ -18,7 +18,8 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
         case sending(PiDelivery.Transit)
         /// Mac 已启动 Pi，等它连上来。
         case opening
-        /// 没能开成：Mac 报的原因，或一直没发出、超时（说的话那条规则，`Speech`）。
+        case unconfirmed(String)
+        /// 明确没能开成：Mac 报的原因。
         case failed(Speech.Failure)
         case claimed
     }
@@ -30,6 +31,7 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
         switch trip {
         case .sending, .sent: return .sending(.of(request, session: nil, trip: trip))
         case .delivered: return .opening
+        case .unconfirmed(let reason): return .unconfirmed(reason)
         case .failed(let failure): return .failed(failure)
         }
     }

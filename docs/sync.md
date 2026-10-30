@@ -52,6 +52,7 @@
 
 - 所有发给 Agent 与 Cue 的话都经 `Workspace.speak` 写一条投送请求或 Cue 消息，界面不等上传与结果（`lint.sh` 查）。方式与各自的约定在 `DeliveryMode`，执行与重试在 `DeliveryExecutor`、`MacExecutor`。
 - 终端里的 Claude Code 在跑时说不了，规则只在 `AgentCapabilities.speakBlocked`。
+- Pi 的 ACK 不证明已落入对话。受理后后台核对真实历史，期间保持正常发送进度；只有无法核实或阶段期限耗尽才显示未确认，不重投探测。来源与轮次在派发前复核。
 
 ## 附件的文件
 
@@ -77,14 +78,14 @@
 
 状态与时限只在 `Speech`，每句只看自己的证据：服务器收下过没有读同步元数据（`CueStore+Speech`），不另存；全局同步状态一时不通只影响还没传出去的话的时限起点，不让已发出的话变红。一句话从按发送到本机看到回执走的通路，排查慢在哪一段时对照：
 
-1. 按发送 → 本机库：先清空输入框，再写一条记录（毫秒级）。气泡是发送中。
-2. 本机 → 服务器：马上传（`CloudSync.send`），收下即已发出；满 `Speech.sendLimit` 还没传上去是没能送达（实测与取值理由在它的注释里）。
+1. 按发送 → 本机库：清空输入框并写入记录，气泡显示发送中。
+2. 本机 → 服务器：马上传（`CloudSync.send`），确认收下才显示已发出；超过 `Speech.sendLimit` 仍缺确认，只显示未确认，不反推服务器没有收到。
 3. 服务器 → 接收的 Mac：门铃或按节奏的拉取（节奏与实测见「拉取节奏与门铃」）。
-4. Mac 交给 Agent 或 Cue：0.2 秒内；写回结果、交给 Cue 后马上传，执行超过半秒的先传领取（`DeliveryExecutor.claimGrace`）。Cue 回你的话同样马上传：由发送者从提交里认出来（`RecordSender.speak`），不靠写的人叫。
-5. 服务器 → 发出方：门铃或按节奏的拉取（手机有在等回执的话时在等，见「拉取节奏与门铃」），另有推送。回执到了是已送达；已发出满 `Speech.receiptLimit`（同步不通时不计）没回执是 Mac 迟迟没收下。
-6. 进对话：Mac 读到会话文件里带请求标识的那条写进对话，气泡由它接替（`PiChat.outgoing`）；这条消息上了服务器，Mac 才在记账的同一事务里收走请求（`CueStore.markPushed`）。回执马上传、消息走后台那一路，在写对话时就收的话删除先到，这期间别的设备上气泡空着。
+4. Mac 交给 Agent 或 Cue：领取、结果和交给 Cue 的事实立即上传，执行超过半秒的先传领取（`DeliveryExecutor.claimGrace`）。Cue 回你的话同样马上传：由发送者从提交里认出来（`RecordSender.speak`），不靠写的人叫。
+5. 服务器 → 发出方：门铃、按节奏拉取及推送带回进度。执行与确认有持久阶段期限；接收端崩溃，发出方也能到期，不因断网暂停、重开或同步延长。到期不证明未执行。
+6. 进对话：定点核对及历史订阅发现真实消息，同事务确认送达、补来源、接替气泡；不等模型回答，也不挡其他会话。晚到照常纠正，回填不重绑任务；消息上云后收走请求，来源由发送记录保留。
 
-Cue 说话的工具等结果至多 `Speech.cueWait`；没告诉它的失败作为"[发送失败]"写进它下一轮的变化并叫醒它（`CueTools`、`cueToldAt`）。
+Cue 工具最多等 `Speech.cueWait`；未知不重发，不承诺之后必有结果。「再说一次」先提示重复风险并保留原请求。只有明确未交出才允许安全重发，未告诉 Cue 的明确失败进入下一轮变化（`CueTools`、`cueToldAt`）。
 
 ## Mac 在线
 
@@ -92,7 +93,9 @@ Cue 说话的工具等结果至多 `Speech.cueWait`；没告诉它的失败作�
 
 技能与规则也是每台 Mac 自己写：一条快照只有元数据（`AgentLibrary`），每份文件的正文各一条（`LibraryFileText`），Mac 每次重读只写内容变了的、删掉不在了的，手机打开文件页读本地已同步来的那条。不把正文塞进快照：几百个技能就超过单条记录 1MB 的上限（500 个技能的快照实测约 230KB，正文另算）。理由与先到后到的读法在两者的头注释。
 
-推送的取舍：在线记录的续期不给手机推送，手机只订阅要紧的变化（理由与实测在 `AlertSubscriptions` 头注释）。
+运行报告通过系统 boot 与所属 Mac 的在线期限关联；App 重开不换系统 boot，摘要回填不刷新运行确认。没有当前证据时保留最后报告与任务历史，但不继续声称正在运行，也不冒充全部完成。异常断电仍需等待在线期限失效，不是瞬时探活。
+
+在线记录复用现有续期，不加每会话心跳。普通通知只订阅要紧变化（`AlertSubscriptions`）；实时活动的有效期限参与内容比较，需要续期时会有额外活动更新，不能称为零流量。
 
 ## 失败与重试
 
@@ -115,7 +118,8 @@ Cue 说话的工具等结果至多 `Speech.cueWait`；没告诉它的失败作�
 
 - Mac 不注册远程通知、签名里没有推送权限（aps-environment），通知都是本机发的本地通知；同步到达本来也不靠推送（见「拉取节奏与门铃」）。
 - `notify` 是一次性事件标志，通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的写入取代就不送出。要保证每个事件都送达得另建追加式的通知事件记录，那是另一种设计。
-- 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒；手机不拿本地旧库覆盖。令牌私有 iCloud 加密同步，中转内容不留存，密钥只在服务端。[部署与隐私边界](../relay/README.md)。
+- 实时活动、小组件与 App 使用同一份运行投影，Mac 发布者直接订阅 Store，不依赖界面订阅。快照过期只撤销运行证据；未知只保留已有活动，不授权新建，也不冒充完成。各 host 到期后的计数由 `CueNow.nextShownChange` 安排系统重画。
+- 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒；手机不拿本地旧库覆盖。令牌私有 iCloud 加密同步，中转内容不留存，密钥只在服务端。APNs 收下不证明已上屏，岛更新不证明手机资料库已同步。[部署与隐私边界](../relay/README.md)。
 - ActivityKit 推送仍受网络、优先级与系统预算限制，不保证秒到；活动最多八小时，本次不远程开启。`stale-date` 只标过时，不会取得新事实。依据：[ActivityKit](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications)、[后台通知](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app)。
 - Mac 提示音装进 ~/Library/Sounds（`AlertSounds`），卸载 App 后会留下，也会出现在系统设置的提示音列表里。
 - 改订阅的定义（谓词、选项、通知文案 key）等于改 schema，见 [release.md](release.md)。

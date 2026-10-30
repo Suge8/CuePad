@@ -116,9 +116,10 @@ nonisolated final class ViewerKeeper: Sendable {
         update { if gone { $0.away.insert(reason) } else { $0.away.remove(reason) } }
     }
 
-    private func publish() async throws {
-        guard let id = try await record(in: store) else { return }
-        await sync?.upload(id)
+    @discardableResult
+    private func publish() async throws -> Bool {
+        guard let id = try await record(in: store) else { return true }
+        return await sync?.upload(id) ?? true
     }
 
     /// 他来到了这台（`CueStore.arrive`），当场传出去：别的 Mac 据此让位。
@@ -185,9 +186,10 @@ nonisolated extension ViewerKeeper {
         for await _ in inputs { return }
     }
 
-    func signOff() async {
+    func signOff() async throws -> Bool {
         state.withLock { _ = $0.away.insert(.quitting) }
-        await settle()
+        _ = try await record(in: store)
+        return await sync?.upload(Viewer.recordID(device: device)) ?? true
     }
 
     /// 跟着主窗口，直到任务取消：把这台 Mac 上的人看不看得到主窗口交给界面（`AppServices.seesMainWindow` 的两半：窗口露没露在屏上、

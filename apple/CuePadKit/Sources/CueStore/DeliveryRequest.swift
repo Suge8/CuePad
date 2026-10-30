@@ -2,12 +2,18 @@ import CueText
 import Foundation
 
 public enum DeliveryStatus: String, Sendable, CaseIterable {
-  case pending, executing, succeeded, failed
+  case pending, executing
+  /// 派发已结束，正在从真实历史核对；不是执行成功的证据。
+  case confirming
+  /// 可能已交出但无法确认；不再领取，只能由真实消息等正证据收敛。
+  case unconfirmed
+  case succeeded
+  case failed = "not_delivered"
 }
 
 extension DeliveryStatus {
-  /// 还没有结果的状态（等领取、执行中）：`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
-  static let open: Set<DeliveryStatus> = [.pending, .executing]
+  /// 持久记录尚未收尾（等领取、执行、确认）；是否仍在等进度由 Speech 连同期限推出：`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
+  static let open: Set<DeliveryStatus> = [.pending, .executing, .confirming]
   /// `open` 的 SQL `IN (…)` 列表。
   static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
 }
@@ -15,7 +21,7 @@ extension DeliveryStatus {
 /// 投送请求的发送方式（唯一定义）。读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 你说的话（唯一一种）：会话歇着就以它开新一轮；在跑就先打断这一轮，再以它开新一轮（忙不忙以 Mac 执行时的会话为准，
-  /// 写请求时看到的状态可能已经过时）。没有排队：话要么进了对话，要么没送到、留在对话末尾等你重发或移除
+  /// 写请求时看到的状态可能已经过时）。没有排队：投送可能已送达、明确没交出，或交出后仍未确认；未确认不自动重发
   case send
   /// 回答会话正在等的弹窗；正文是 `PiAnswer`（见 `DeliveryRequest.answer`）
   case answer
@@ -30,7 +36,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 停止会话正在跑的这一轮（相当于在 Pi 里按 Esc：只停指挥官自己这一轮，子代理不动），会话回到等你下一句；
   /// 正文固定为 `stop`，不写发送记录
   case stop
-  /// 把会话出错的那一轮原样重跑一遍（`PiSessionState.canRetry`）：对话里不多一句话、也不发"继续"，只多出新的回答；正文固定为 `retry`，
+  /// 接着会话出错的那一轮重试（`PiSessionState.canRetry`）：不补发用户消息，也不发"继续"；正文固定为 `retry`，
   /// 不写发送记录。会话在跑或最后一轮不是出错结束的，扩展拒绝（`nothing_to_retry`）
   case retry
   /// 请 Mac 给项目绑定文件夹（或解除绑定）；正文是 `PiBind`（见 `DeliveryRequest.bind`），不写发送记录
@@ -69,11 +75,13 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var mode: Open<DeliveryMode>
   public var cardID: UUID?
   public var status: Open<DeliveryStatus>
-  /// 没送到的原因（各端按自己的语言显示，`ShownText`）；给人看的读 `failure`。
+  /// 失败或未确认的原因（各端按自己的语言显示，`ShownText`）；读 `failure` / `Speech.trip`。
   public var failureReason: ShownText?
   public var handledBy: String?
   public var createdAt: Date
   public var completedAt: Date?
+  /// 当前准备、执行或确认阶段的硬截止。只在进入阶段时写，不随同步、绑定或重开续期。
+  public var deadlineAt: Date? = nil
   public var modifiedAt: Date
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
@@ -86,19 +94,20 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   public var isFromCue: Bool { origin == .known(.cue) }
 
-  /// 还没有结果（等待执行或执行中）。
+  /// 持久记录还没有收尾，不等于此刻在跑；当前进度与控制去重读 Speech.trip。
   public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
-  /// 还没被 Mac 领取（仍是 pending）：撤得回。领取后它已交给 Agent。
-  public var isWithdrawable: Bool { status == .known(.pending) }
+  /// 尚未领取只是撤回的必要条件；能否撤回还要由库事务核对已发送事实。
+  public var isWithdrawable: Bool { status == .known(.pending) && handledBy == nil }
 
-  /// 没能送达的原因（这台设备的语言）；成功或还在路上是 nil。本机执行器写回的失败总带原因（`DeliveryOutcome.failed`），只有别的版本写来、
-  /// 没带原因的记录（含本版本不认识的状态，它不是送达）落到 `unexplainedFailure`——失败说法只在这里兜底，界面与服务不再各写一句。
+  /// 明确未交出的原因；未知状态不是未送达。缺少原因的明确失败只在这里兜底。
   public var failure: String? {
-    guard !isOpen, status != .known(.succeeded) else { return nil }
+    guard status == .known(.failed) else { return nil }
     guard let reason = failureReason?.text, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
     return reason
   }
+
+  public static var interruptedReason: ShownText { ShownText("Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发") }
 
   public static var unexplainedFailure: String { String(localized: "Mac 没有说明原因") }
 
@@ -109,7 +118,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     switch Speech.trip(end, at: moment) {
     case .sending: return .sending
     case .sent: return .sent
-    case .delivered: return nil
+    case .delivered, .unconfirmed: return nil
     case .failed(let failure): return end.id == requests.last?.id ? .failed(failure) : nil
     }
   }
@@ -148,24 +157,24 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 执行一次的结果（`DeliveryExecutor` 的 handler 给）：成功、失败，或暂时没成——话还没交出去、过一会儿再试不会说两遍的错
-/// （会话正在起、还没连上桥，清单在 App 的执行器里）。暂时没成由 `DeliveryExecutor` 隔 `Speech.retryDelay` 再执行一次，
-/// 再不成就按失败写回；终态只由执行器写这一处。
+/// 一次派发后的进度：交给后台核对、明确成功、明确未交出，或可能已交出但无法确认。未知只能由真实消息等正证据收敛，不授权再次派发。
 public enum DeliveryOutcome: Sendable {
   case succeeded
+  /// 核对在执行通道之外运行；传入的是已落盘的阶段与期限，不得再次派发。
+  case confirming(@Sendable (DeliveryRequest) async -> DeliveryOutcome)
   case failed(ShownText)
-  case transient(ShownText)
+  case unconfirmed(ShownText)
 }
 
 extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
     "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
-    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "serverAt",
+    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "serverAt", "deadlineAt",
   ]
   static let syncedColumns = columns.filter { !["resultReceivedAt", "serverAt"].contains($0) }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, failureReason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, failureReason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt, deadlineAt]
   }
   init(row: Row) {
     self.init(
@@ -173,8 +182,8 @@ extension DeliveryRequest: Record {
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
       status: Open(rawValue: row.text(8)), failureReason: row.textOrNil(9).flatMap(ShownText.init(stored:)), handledBy: row.textOrNil(10),
-      createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14), serverAt: row.dateOrNil(16),
-      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(17))
+      createdAt: row.date(11), completedAt: row.dateOrNil(12), deadlineAt: row.dateOrNil(17), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14), serverAt: row.dateOrNil(16),
+      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(18))
   }
 }
 

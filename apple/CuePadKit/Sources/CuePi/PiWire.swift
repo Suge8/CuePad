@@ -8,7 +8,7 @@ enum PiWire {
     /// （`SelfReload`），可能等几个小时，这期间会话照常收话。只加命令、加 CuePad 可以没有的字段不提它（旧扩展不认的命令回 `bad_request`）；
     /// 改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠某个新字段才对时，提到那一版。区间外的 hello 只读身份（`IdentityHello`），
     /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`PiSession.upgrading`）
-    static let oldestExtension = 40
+    static let oldestExtension = 47
 
     /// 这个扩展版本说的格式 CuePad 读得懂（见 `oldestExtension`）
     static func reads(extensionVersion version: Int?) -> Bool { version.map { (oldestExtension...PiExtensionBundle.version).contains($0) } == true }
@@ -269,19 +269,22 @@ enum PiWire {
     // MARK: CuePad → 扩展
 
     private struct Command: Encodable {
+        struct CueTurn: Encodable { var deliveryId: String? }
         struct Image: Encodable { var mimeType: String; var data: String }
         var t: String
         var id: String
         var text: String
         var images: [Image]?
         var deliveryId: String?
+        var cueTurn: CueTurn?
     }
 
     static func sendCommand(id: String, _ message: PiMessage) throws -> Data {
-        try encodeLine(Command(
+        let cueTurn: Command.CueTurn? = if case .cue(let deliveryID, _) = message.policy { .init(deliveryId: deliveryID) } else { nil }
+        return try encodeLine(Command(
             t: "send", id: id, text: message.text,
             images: message.images.isEmpty ? nil : message.images.map { .init(mimeType: $0.mimeType, data: $0.data.base64EncodedString()) },
-            deliveryId: message.deliveryID))
+            deliveryId: message.deliveryID, cueTurn: cueTurn))
     }
 
     /// 斜杠命令：`text` 是以 / 开头的整行。

@@ -38,15 +38,18 @@ nonisolated extension Optional where Wrapped == any SyncControlling {
 nonisolated extension SyncControlling {
     /// 马上只传这几条，不等提交触发的合并窗口，也不等后台那批（`CloudSync.send`）；同一次写入写出的几条一起给，一个请求传完。
     /// `deleted`：本机删掉了它们，传的是删除（传什么由库推导，这里只用于日志）。没传成的之后照常重试。返回时已经传完（或没传成）。
-    func upload(_ records: [UUID], deleted: Bool = false) async {
-        guard !records.isEmpty else { return }
+    @discardableResult
+    func upload(_ records: [UUID], deleted: Bool = false) async -> Bool {
+        guard !records.isEmpty else { return true }
         let log = Logger(subsystem: AppIdentity.id, category: "services"), began = Date.now
         let what = deleted ? "删除" : "上传"
         let names = records.map { $0.uuidString.prefix(8) }.joined(separator: "、")
         // 没传成的不另记：原因由同步层归类、按段记（连不上、被限流），意料之外的进问题列表并记 error
-        guard await send(recordNames: Set(records.map { $0.uuidString.lowercased() })) else { return }
+        guard await send(recordNames: Set(records.map { $0.uuidString.lowercased() })) else { return false }
         log.info("立即\(what, privacy: .public) \(names, privacy: .public) 用时 \(Date.now.timeIntervalSince(began), format: .fixed(precision: 1)) 秒")
+        return true
     }
 
-    func upload(_ records: UUID..., deleted: Bool = false) async { await upload(records, deleted: deleted) }
+    @discardableResult
+    func upload(_ records: UUID..., deleted: Bool = false) async -> Bool { await upload(records, deleted: deleted) }
 }

@@ -56,7 +56,7 @@ extension Schema {
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
       pendingTools TEXT, model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT, turnStartedAt INTEGER, answeredAt INTEGER,
-      failure TEXT, stateSince INTEGER NOT NULL,
+      failure TEXT, bootID TEXT, stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
@@ -80,10 +80,10 @@ extension Schema {
     ) STRICT;
     CREATE INDEX previews_sessionID_createdAt ON previews(sessionID, createdAt);
 
-    -- 订阅账号的用量：每个提供方一条（id 由提供方定），windows 是 JSON 数组。
+    -- 额度能力与最近观测：每台 Mac 的每个授权分区一条。
     CREATE TABLE accountQuotas (
       id TEXT PRIMARY KEY NOT NULL, provider TEXT NOT NULL, hostID TEXT NOT NULL, windows TEXT NOT NULL,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, account TEXT, status TEXT, observedAt INTEGER
     ) STRICT;
 
     CREATE TABLE piMessages (
@@ -104,7 +104,7 @@ extension Schema {
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
       failure TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
-      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0, serverAt INTEGER
+      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0, serverAt INTEGER, deadlineAt INTEGER
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
 
@@ -155,14 +155,14 @@ extension Schema {
       lo INTEGER NOT NULL, hi INTEGER NOT NULL, text TEXT NOT NULL, lineIDs TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY (lo, hi)
     ) STRICT;
     CREATE TABLE cueState (
-      id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, context TEXT, leftToYou TEXT, step TEXT
+      id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, context TEXT, leftToYou TEXT, step TEXT, hostID TEXT, bootID TEXT
     ) STRICT;
     CREATE TABLE cueRead (id TEXT PRIMARY KEY NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
 
     \(writeSeq)
 
     -- 每台 Mac 自己写、各端读：在线记录（Mac 在不在、Cue 在不在值班的唯一信号），能用的 Agent 与各家的模型。
-    CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
+    CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, bootID TEXT) STRICT;
     CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
     \(agentLibrariesTable)
     \(agentLibraryFilesTable)

@@ -117,13 +117,23 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
   public var hostID: String
+  /// 真实报告或本机进程对账确认的系统启动；历史回填不写。
+  public var bootID: String?
+  /// Store 读取时派生，不持久化；没有证明不等于空闲。
+  public internal(set) var runtimeUntil: Date?
   public var title: String
   public var projectID: UUID?
   public var state: Open<PiWorkState>
   /// 工具名、等待确认的问题、错误信息等。
-  public var detail: String?
+  private var storedDetail: String?
+  public var detail: String? {
+    get { failure?.known == .truncated ? PiNotice.truncated.label : storedDetail }
+    set { storedDetail = newValue }
+  }
   /// 出错的种类（只在出错时有，`PiFailure`）：出错块与看板上写的原因只读它。旧版本写的记录没有，按其余处理。
   public var failure: Open<PiFailure>?
+
+  public var usageURL: URL? { failure?.known == .quota ? model?.account?.usageURL(provider: model?.key.provider ?? "") : nil }
   /// 工作目录的最后一段（文件夹名），不含完整路径；手机据此在没有绑定项目时写出会话"在哪"。旧版本写的记录没有。
   public var folder: String?
   /// 摘要，见 `PiRecap`（同名字段）；`question` 是 Pi 此刻弹出、等你回答的对话框。旧版本写的记录没有。
@@ -169,15 +179,17 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, pendingTools: PiChatMessage.Tools? = nil, model: PiModelOption? = nil,
     thinking: Open<PiThinkingLevel>? = nil, context: PiContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil,
-    turnStartedAt: Date? = nil, answeredAt: Date? = nil, failure: Open<PiFailure>? = nil
+    turnStartedAt: Date? = nil, answeredAt: Date? = nil, failure: Open<PiFailure>? = nil, bootID: String? = nil, runtimeUntil: Date? = nil
   ) {
     self.id = id
     self.sessionID = sessionID
     self.hostID = hostID
+    self.bootID = bootID
+    self.runtimeUntil = runtimeUntil
     self.title = title
     self.projectID = projectID
     self.state = state
-    self.detail = detail
+    self.storedDetail = detail
     self.folder = folder
     self.lastPrompt = lastPrompt
     self.lastReply = lastReply
@@ -214,7 +226,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 能停止这一轮：做得到，且指挥官自己在跑一轮、没在等你时；等你确认时它在等你答（停止会让人以为把问题也撤了），
   /// 等子代理时这一轮已经歇下，都没有可停的。
   public var canStop: Bool {
-    capabilities.contains(.abort) && state.known?.isTurnRunning == true && state != .known(.waitingForUser)
+    capabilities.contains(.abort) && runtimeState.known?.isTurnRunning == true && state != .known(.waitingForUser)
   }
 
   /// 能把出错的那一轮原样重跑一遍（`Workspace.retry`，不在对话里多一句话）：出错、这一类错重跑有用（`PiFailure.retries`，没记种类的按其余），且做得到。
@@ -223,11 +235,11 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   }
 
   /// 现在说不了话的原因（nil 是能说，规则见 `AgentCapabilities.speakBlocked`）：回复框与 Cue 说话认它。
-  public var speakBlocked: String? { capabilities.speakBlocked(in: state.known, agent: agent.known) }
+  public var speakBlocked: String? { capabilities.speakBlocked(in: runtimeState.known, agent: agent.known) }
 
   /// 等你确认、且能从 CuePad 作答的问题（问题本身可答，这个会话也做得到）；其余只能在 Agent 那边答。
   public var answerableQuestion: PiQuestion? {
-    guard state == .known(.waitingForUser), capabilities.contains(.answer), let question, question.isAnswerable else { return nil }
+    guard runtimeState == .known(.waitingForUser), capabilities.contains(.answer), let question, question.isAnswerable else { return nil }
     return question
   }
 
@@ -244,6 +256,12 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     return answeredAt >= turnStartedAt
   }
 
+  /// 已收到发出这句话之后开始的一轮的回答；ACK 的落库可能比回答更晚，不能因此继续遮住终态。
+  public func answered(since requestedAt: Date) -> Bool {
+    guard let turnStartedAt else { return false }
+    return turnStartedAt > requestedAt && answered
+  }
+
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
 
@@ -253,11 +271,11 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 
   /// 拍板里会话那一半的唯一规则：在等回答且等的不是 Cue（`waitsForCue`）。拍板卡、"等你确认"的提示
   /// （Mac 的通知、手机的前台横幅与锁屏推送标志，`CueStore.reaches`）都只认它。歇着的不算，留给你回的是待回复（`awaitsReply`），两种合起来是等你（`CueTally`）。
-  public func asksYou(_ cue: CueDuty?) -> Bool { state == .known(.waitingForUser) && !waitsForCue(cue) }
+  public func asksYou(_ cue: CueDuty?) -> Bool { runtimeState == .known(.waitingForUser) && !waitsForCue(cue) }
 
   /// 待回复的唯一规则：停着没在问（歇着或出错），Cue 值班时这次停下留给了你回（`CueDuty.leftToYou`：你发起的一轮当场就是，Cue 发起的由它定）。
   /// 会话行的"待回复"（出错的照样显示出错）、Cue 页的待回复提示、名牌、看板等你列里的待回复与待回复的提示（`CueStore.sessionsAwaitingReply`、`reaches`）都只认它。
-  public func awaitsReply(_ cue: CueDuty?) -> Bool { state != .known(.waitingForUser) && cue?.leftToYou(self) == true }
+  public func awaitsReply(_ cue: CueDuty?) -> Bool { runtimeState != .unknown("unconfirmed") && state != .known(.waitingForUser) && cue?.leftToYou(self) == true }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
@@ -275,13 +293,13 @@ extension PiSessionState: Record {
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "context", "agent", "catalogID", "pendingTools", "turnStartedAt", "answeredAt", "failure",
+    "model", "thinking", "context", "agent", "catalogID", "pendingTools", "turnStartedAt", "answeredAt", "failure", "bootID",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
      model.map(JSONColumn.encode), thinking?.rawValue, context.map(JSONColumn.encode), agent.rawValue, catalogID, pendingTools?.stored,
-     turnStartedAt, answeredAt, failure?.rawValue]
+     turnStartedAt, answeredAt, failure?.rawValue, bootID]
   }
   init(row: Row) {
     self.init(
@@ -298,7 +316,7 @@ extension PiSessionState: Record {
       model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
       context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(22)),
       agent: row.textOrNil(23).map(Open.init(rawValue:)) ?? .known(.pi), catalogID: row.uuidOrNil(24), turnStartedAt: row.dateOrNil(26),
-      answeredAt: row.dateOrNil(27), failure: row.textOrNil(28).map(Open.init(rawValue:)))
+      answeredAt: row.dateOrNil(27), failure: row.textOrNil(28).map(Open.init(rawValue:)), bootID: row.textOrNil(29))
   }
 }
 

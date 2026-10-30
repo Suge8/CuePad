@@ -1,6 +1,5 @@
 #if os(macOS)
 import CueStore
-import Darwin
 import Foundation
 
 /// Grok Build（xAI）的接入，经 ACP：驱动是通用的 `ACPSession`，Grok 自己的扩展在 `GrokDialect`。
@@ -8,7 +7,7 @@ import Foundation
 ///   开新会话是 `session/new`，接着已结束的是 `session/load`。歇满 `PiBridge.hostedIdle` 由桥请它退出。发出的话带着投送请求 id
 ///   （`GrokDialect.promptMeta`），会话记录里认得回（`GrokHistory`）。
 /// - 终端里的会话（TUI）只读跟读：开着的登记在 `<GROK_HOME>/active_sessions.json`（会话 id、pid、工作目录；正常退出时注销，
-///   崩溃留下的由下一个登记的清掉），盯着它所在的目录，范围里（`follow`）、进程还在的上桥，注销或进程退出就下桥。
+///   崩溃留下的由下一个登记的清掉），盯着它所在的目录，范围里（`follow`）、登记的进程起点与 PID 吻合、本进程有新报告的上桥，注销或进程退出就下桥。
 ///   在做什么从它的会话记录推出（历史索引增量跟读，`read`）：你说了一句到这一轮结束是在跑；等你确认、出错的原话不进会话记录，看不到。
 ///   CuePad 碰不到它的输入，说话、停止、作答、结束都只能在终端里（能力表里终端的 Grok 什么都没有）。
 ///   用户开了 leader（`grok --leader`）时终端界面是 leader 的客户端，连上 leader 能完全接管：不做——leader 的协议没有文档，
@@ -29,7 +28,12 @@ public final class GrokRuntime: AgentRuntime {
 
     private final class Terminal {
         var facts = SessionFacts()
+        let process: PiProcess
+        var checkpoint: PiHistoryCheckpoint?
+        var awaitingReport: DirectoryWatcher?
         var exit: ProcessExitWatcher?
+
+        init(process: PiProcess) { self.process = process }
     }
 
     public init(
@@ -78,6 +82,8 @@ public final class GrokRuntime: AgentRuntime {
 
     public func read(_ update: PiHistoryUpdate) {
         guard let (id, terminal) = terminals.first(where: { bridge.session(id: $0.key)?.sessionID == update.sessionID }) else { return }
+        guard terminal.process.isRunning else { return detach(id) }
+        guard current(update.checkpoint, for: terminal) else { return }
         follow(terminal, update.checkpoint)
         bridge.update(id) { terminal.facts.publish(to: &$0) }
     }
@@ -89,31 +95,52 @@ public final class GrokRuntime: AgentRuntime {
         guard !stopped else { return }
         if watcher == nil { watcher = try? DirectoryWatcher(home) { [weak self] in self?.refresh() } }
         let hostedIDs = host.sessionIDs
-        let open = Self.activeSessions(in: home).filter { scope.covers(sessionID: $0.sessionID) && !hostedIDs.contains($0.sessionID) && kill($0.pid, 0) == 0 }
+        let open = Self.activeSessions(in: home).filter {
+            scope.covers(sessionID: $0.sessionID) && !hostedIDs.contains($0.sessionID) && $0.process?.isRunning == true
+        }
         let ids = Set(open.map { "\($0.sessionID).\($0.pid)" })
-        for id in terminals.keys where !ids.contains(id) { detach(id) }
-        for entry in open where terminals["\(entry.sessionID).\(entry.pid)"] == nil { attach(entry) }
+        for (id, terminal) in terminals where !ids.contains(id) || !terminal.process.isRunning { detach(id) }
+        for entry in open { confirm(entry) }
     }
 
-    private func attach(_ entry: ActiveSession) {
+    private func confirm(_ entry: ActiveSession) {
         let id = "\(entry.sessionID).\(entry.pid)"
-        let terminal = Terminal()
-        terminals[id] = terminal
-        terminal.exit = ProcessExitWatcher(pid: entry.pid) { [weak self] in self?.detach(id) }
+        guard bridge.session(id: id) == nil else { return }
         let file = Self.sessionFile(in: home, cwd: entry.cwd, id: entry.sessionID)
+        let terminal: Terminal
+        if let existing = terminals[id] {
+            terminal = existing
+        } else {
+            guard let process = entry.process, process.isRunning else { return }
+            terminal = Terminal(process: process)
+            terminals[id] = terminal
+            terminal.exit = ProcessExitWatcher(pid: entry.pid) { [weak self] in self?.detach(id) }
+            terminal.awaitingReport = try? DirectoryWatcher(file) { [weak self] in self?.refresh() }
+        }
+        guard let checkpoint = try? PiHistory.index(file: file, agent: .grok, from: terminal.checkpoint, transcript: false, files: files).checkpoint else { return }
+        let confirmed = current(checkpoint, for: terminal)
+        terminal.checkpoint = checkpoint
+        guard confirmed else { return }
+        terminal.awaitingReport = nil
         var session = PiSession(
             id: id, sessionID: entry.sessionID, agent: .grok, sessionFile: file, pid: entry.pid,
             cwd: URL(filePath: entry.cwd, directoryHint: .isDirectory), terminal: PiTerminal(tty: PiTerminal.controllingTerminal(of: entry.pid)),
             state: .settled, stateSince: .now)
-        // 接上时已在跑的：从会话记录读出这一轮的开始（之后的由历史索引跟读，`read`）
-        if let checkpoint = try? PiHistory.index(file: file, agent: .grok, from: nil, transcript: false, files: files).checkpoint {
-            follow(terminal, checkpoint)
-        }
+        follow(terminal, checkpoint)
         terminal.facts.publish(to: &session)
         bridge.attach(session, via: self)
     }
 
+    private func current(_ checkpoint: PiHistoryCheckpoint, for terminal: Terminal) -> Bool {
+        let start = terminal.process.startDate
+        guard let reported = checkpoint.lastActivity, reported >= start,
+              checkpoint.round.map({ $0.startedAt.map { $0 >= start } ?? false }) ?? true else { return false }
+        guard let previous = terminal.checkpoint, let last = previous.lastActivity else { return true }
+        return reported > last || (reported == last && checkpoint.offset >= previous.offset)
+    }
+
     private func follow(_ terminal: Terminal, _ checkpoint: PiHistoryCheckpoint) {
+        terminal.checkpoint = checkpoint
         if let round = checkpoint.round {
             if !terminal.facts.running { terminal.facts.startTurn(at: round.startedAt ?? .now) }
         } else if terminal.facts.running {
@@ -127,14 +154,18 @@ public final class GrokRuntime: AgentRuntime {
         bridge.detach(id, reason: .closed(reason: "quit"))
     }
 
-    /// `active_sessions.json` 里的一项（Grok 的 `ActiveSession`）
+    /// `active_sessions.json` 里的一项；`pid_start` 是 Unix 微秒，与内核进程起点逐位相等。缺少时不靠裸 PID 回退。
     struct ActiveSession: Decodable {
         var sessionID: String
         var pid: Int32
+        var pidStart: Int64?
         var cwd: String
+
+        var process: PiProcess? { pidStart.map { PiProcess(pid: pid, startedAt: $0) } }
 
         private enum CodingKeys: String, CodingKey {
             case sessionID = "session_id"
+            case pidStart = "pid_start"
             case pid, cwd
         }
     }

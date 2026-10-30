@@ -112,8 +112,12 @@ final class CueLiveActivity {
                 trace(.blocked, activityID: old.id, reason: "notForeground/replace")
                 return
             }
-            guard try remoteState() != nil else {
+            guard let current = try remoteState() else {
                 trace(.blocked, activityID: old.id, reason: "remoteStateUnavailable/replace")
+                return
+            }
+            guard !current.now.isLive || current.now.hasConfirmedActivity else {
+                trace(.blocked, activityID: old.id, reason: "unconfirmed/replace", sourceAt: current.now.at)
                 return
             }
             trace(.endRequested, activityID: old.id, reason: "replaceLocalWithRemote")
@@ -146,6 +150,10 @@ final class CueLiveActivity {
         if let running {
             guard resend || !running.content.state.same(as: state) else { return }
             await running.update(content, timestamp: now.at)
+            return
+        }
+        guard now.hasConfirmedActivity else {
+            trace(.blocked, reason: "unconfirmed/create", sourceAt: now.at)
             return
         }
         guard foreground, ActivityAuthorizationInfo().areActivitiesEnabled else {

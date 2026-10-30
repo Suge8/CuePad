@@ -53,13 +53,12 @@ extension CueStore {
     let all = candidates.flatMap { $0 }
     let sessions = try sessionStates(all.compactMap(\.piSessionID))
     let progress = try subtaskProgress(of: tasks.map(\.id))
-    let launching = try launchingLeaves(all.map(\.id))
-    let sending = try sendingLeaves(all.filter { $0.piSessionID == nil }.map(\.id))
+    let handoffs = try handoffRequests(for: all.map(\.id))
     return zip(tasks, candidates).map { task, candidates in
       let leaves = candidates.map { leaf in
         let session = leaf.piSessionID.flatMap { sessions[$0] }
         return CueBoardLeaf(
-          leaf: leaf, session: session, launching: launching.contains(leaf.id), sending: sending.contains(leaf.id),
+          leaf: leaf, session: session, handoffs: (handoffs[leaf.id] ?? []).filter { leaf.piSessionID == nil || $0.mode == .known(.start) },
           since: session?.stateSince ?? leaf.startedAt ?? task.startedAt ?? task.todoAt ?? task.createdAt)
       }
       let open = leaves.dropLast().filter(\.isActive)

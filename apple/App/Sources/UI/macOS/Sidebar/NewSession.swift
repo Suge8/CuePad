@@ -40,11 +40,11 @@ struct NewSessionForm: View {
 
     private enum Stage: Equatable {
         case idle
-        case opening
-        /// Pi 已启动，等它连上（连上后表单关掉、打开新会话）。
-        case connecting
+        case launching(LaunchProgress?)
         case failed(String)
     }
+
+    private var launching: Bool { if case .launching = stage { true } else { false } }
 
     private static let width: CGFloat = 340
     private static let listHeight: CGFloat = 240
@@ -63,7 +63,7 @@ struct NewSessionForm: View {
             .frame(maxHeight: Self.listHeight).fixedSize(horizontal: false, vertical: true)
             TextField(String(localized: "开场的话（可不填）"), text: $prompt, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain).lineLimit(2...5)
-                .onSubmit { if let place, let agents, let agent, stage != .opening { start(place, choice(agents, agent)) } }
+                .onSubmit { if let place, let agents, let agent, !launching { start(place, choice(agents, agent)) } }
                 .padding(.horizontal, 10).padding(.vertical, 8)
                 .paper(cornerRadius: Radius.block)
                 .accessibilityLabel("开场的话")
@@ -72,7 +72,7 @@ struct NewSessionForm: View {
                     services.settings.lastAgent = $0
                     model = nil
                 } chooseModel: { model = $0 } chooseThinking: { thinking = $0 }
-                .disabled(stage == .opening)
+                .disabled(launching)
             }
             HStack(spacing: 8) {
                 switch stage {
@@ -82,12 +82,7 @@ struct NewSessionForm: View {
                     } else {
                         Text("在后台开，不占终端").font(Typography.meta).foregroundStyle(palette.ink3)
                     }
-                case .opening:
-                    Spinner(.small)
-                    Text("正在开…").font(Typography.meta).foregroundStyle(palette.ink3)
-                case .connecting:
-                    Spinner(.small)
-                    Text("等 Agent 连上…").font(Typography.meta).foregroundStyle(palette.ink3)
+                case .launching(let progress): progressLine(progress)
                 case .failed(let reason):
                     Text(reason).font(Typography.meta).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
                 }
@@ -96,13 +91,24 @@ struct NewSessionForm: View {
                 Button("开始") { if let place, let agents, let agent { start(place, choice(agents, agent)) } }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(place == nil || agent == nil || stage == .opening)
+                    .disabled(place == nil || agent == nil || launching)
             }
             .controlSize(.small)
         }
         .padding(16)
         .frame(width: Self.width)
         .background(palette.desk)
+    }
+
+    @ViewBuilder private func progressLine(_ progress: LaunchProgress?) -> some View {
+        switch progress?.phase(at: services.speech) {
+        case .unconfirmed(let reason):
+            Text(verbatim: reason).font(Typography.meta).foregroundStyle(palette.ink3)
+        default:
+            Spinner(.small)
+            Text(progress?.phase(at: services.speech) == .opening ? LocalizedStringKey("等 Agent 连上…") : LocalizedStringKey("正在开…"))
+                .font(Typography.meta).foregroundStyle(palette.ink3)
+        }
     }
 
     private func row(_ place: ProjectFolders.LaunchPlace, selected: Bool) -> some View {
@@ -127,14 +133,15 @@ struct NewSessionForm: View {
 
     private func start(_ place: ProjectFolders.LaunchPlace, _ choice: AgentModelChoice) {
         guard let agent = choice.agent else { return }
-        stage = .opening
+        guard !launching else { return }
+        stage = .launching(nil)
         let words = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             do {
                 let id = try await workspace.startSession(
                     in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.shownName, agent: agent,
                     model: choice.model, thinking: choice.shownThinking
-                ) { stage = .connecting }
+                ) { stage = .launching($0) }
                 stage = .idle
                 opened(id)
             } catch {

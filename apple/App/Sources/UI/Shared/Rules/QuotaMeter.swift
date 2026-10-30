@@ -3,7 +3,7 @@ import Foundation
 
 /// 一个订阅账号的额度怎么读（额度环与它展开的明细 `QuotaDetail`、回复框的模型胶囊，模型菜单的分组标题共用一份）。
 /// 口径是还剩多少（剩余，不是已用）：用户要回答的是"还够不够用"，满格是满额、往下掉是在用，同电量一样不用换算。
-/// 读数（含读屏的说法与"照这速度多久用完"）全在 `now` 那一刻算定：过了重置时间的窗口按已重置算（满额），不请求、也不跑定时器——界面只在新观测到达或重画时换读数，
+/// 读数（含读屏的说法与"照这速度多久用完"）全在 `now` 那一刻算定：过了重置时间的窗口显示等待更新，不画数值，不请求、也不跑定时器——界面只在新观测到达或重画时换读数，
 /// 倒计时是自己走字的计时文字（`Countdown`，与"x 分钟前"的 `PiClock.Live` 同一种做法）。档位按已用算，与上下文用量同一个口径（`UsageLevel`）。
 nonisolated struct QuotaMeter: Equatable {
     struct Window: Equatable, Identifiable {
@@ -17,8 +17,6 @@ nonisolated struct QuotaMeter: Equatable {
         /// 照这速度还能用多久的短语："约 2 小时"（时长写法同 `PiClock.duration`）；剩的不比匀速线少（重置前用不完）为 nil
         let runway: String?
         let level: UsageLevel
-        /// 过了重置时间、还没有新的观测：下一次什么时候重置不知道，只写"已重置"
-        let hasReset: Bool
         let id: QuotaWindow.ID
         /// 读屏："5 小时剩 32%，2 小时后重置，照这速度约 1 小时后用完"。
         let spoken: String
@@ -36,14 +34,16 @@ nonisolated struct QuotaMeter: Equatable {
             resetsAt = window.resetsAt
             runway = window.exhaustion(at: now).map { String(localized: "约 \(PiClock.duration($0.timeIntervalSince(now)))") }
             level = UsageLevel(used: used)
-            hasReset = now >= window.resetsAt
             id = window.id
-            let reset = hasReset ? String(localized: "已重置") : String(localized: "\(Countdown(end: window.resetsAt).format(now))后重置")
+            let reset = String(localized: "\(Countdown(end: window.resetsAt).format(now))后重置")
             spoken = Dotted(String(localized: "\(name)剩 \(Self.percent(left))"), reset, runway.map { String(localized: "照这速度\($0)后用完") }).spoken
         }
     }
 
     let provider: String
+    let id: UUID
+    let message: String?
+    let usageURL: URL?
     /// 账号叫什么：订阅的产品名（Claude、Codex，`PiProvider.account`），不是提供方（Anthropic、OpenAI）
     let account: String
     /// 显示的窗口，从短到长：整个账号的窗口全列（Claude 是 5 小时、本周，Codex 按套餐一到两个）；
@@ -54,21 +54,30 @@ nonisolated struct QuotaMeter: Equatable {
 
     init(_ quota: AccountQuota, at now: Date) {
         provider = quota.provider
-        account = PiProvider(id: quota.provider).account
-        let all = quota.windows.map { Window($0, at: now) }
+        id = quota.id
+        account = quota.account?.label(provider: quota.provider) ?? PiProvider(id: quota.provider).account
+        usageURL = quota.account?.usageURL(provider: quota.provider)
+        message = switch quota.reading(at: now) {
+        case .observed: nil
+        case .unsupported: usageURL != nil ? String(localized: "ChatGPT 暂不提供额度数据") : String(localized: "此授权不提供订阅额度查询")
+        case .unobserved: String(localized: "尚未观测到额度")
+        case .failed: String(localized: "额度查询失败")
+        case .expired: String(localized: "额度观测已过期，等待更新")
+        }
+        let all = quota.reading(at: now) == .observed ? quota.windows.map { Window($0, at: now) } : []
         windows = all.filter { !$0.isScoped || $0.level != .roomy }
-        updatedAt = quota.modifiedAt
+        updatedAt = quota.observedAt ?? quota.modifiedAt
         isStale = quota.isStale(at: now)
     }
 
     /// 模型菜单的分组标题："Claude · 5 小时剩 86% · 本周剩 92%"。
-    var menuTitle: Dotted { Dotted([account] + windows.map { String(localized: "\($0.name)剩 \($0.percent)") }) }
+    var menuTitle: Dotted { Dotted([account] + (message.map { [$0] } ?? windows.map { String(localized: "\($0.name)剩 \($0.percent)") })) }
 
     /// 读屏：账号与每个窗口剩多少、多久重置。
-    var spoken: String { Dotted([account] + windows.map(\.spoken)).spoken }
+    var spoken: String { Dotted([account] + (message.map { [$0] } ?? windows.map(\.spoken))).spoken }
 
     /// 到 `end` 还有多久（时长写法同 `PiClock.duration`，最后一分钟也写"1 分钟"、不读秒），给 `LiveText` 用：只在字会变的时刻重画——
-    /// 一小时内每整分钟、一天内每整小时、再往后每整天（都从 `end` 往回数）。过了 `end` 不再走（那一刻由 `Moments` 睡到 `nextReset(after:)` 按已重置重画）。
+    /// 一小时内每整分钟、一天内每整小时、再往后每整天（都从 `end` 往回数）。过了 `end` 不再走（那一刻由 `Moments` 睡到 `nextReset(after:)` 按过期重画）。
     struct Countdown: DiscreteFormatStyle {
         let end: Date
 

@@ -5,7 +5,7 @@ import SwiftUI
 /// 菜单栏面板里就地展开的那一块；还没有额度记录时那里写还没有额度、怎么才会有（`QuotaEmpty`）。
 ///
 /// 每个账号一块（`QuotaAccount`），排法同旁边的列表行：头一行是 20 点宽的图标列里的产品标志加账号名（数据陈旧时接"x 分钟前"），
-/// 下面每个窗口一行，与账号名左对齐：窗口名与多久后重置（计时文字，只在整分钟换字，`LiveText`；过了重置时间还没有新观测写"已重置"），
+/// 下面每个窗口一行，与账号名左对齐：窗口名与多久后重置（计时文字，只在整分钟换字，`LiveText`；过重置时间无新观测只写等待更新、不画数值），
 /// 右边是还剩多少的大号等宽数字，下面一条剩余条（`MarkedBar`，刻线是匀速线）。超了匀速线（照这速度重置前会用完）在条下多一行"照这速度约 X 后用完"。
 /// 这就是最后一层，不再有点开的：不是按钮、没有按压。放得下时账号并排成等宽的几栏，否则一个一块往下排（`QuotaColumns`）。
 ///
@@ -22,7 +22,7 @@ struct QuotaDetail: View {
         } else {
             Moments(next: quotas.nextReset(after:)) { now in
                 QuotaColumns {
-                    ForEach(quotas.map { QuotaMeter($0, at: now) }.filter { !$0.windows.isEmpty }, id: \.provider) { QuotaAccount(meter: $0) }
+                    ForEach(quotas.map { QuotaMeter($0, at: now) }, id: \.id) { QuotaAccount(meter: $0) }
                 }
             }
         }
@@ -36,7 +36,7 @@ private struct QuotaEmpty: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("还没有额度").font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
-            Text("Agent 会话用订阅账号跑过一轮后，这里显示每个窗口还剩多少、多久后重置")
+            Text("连接 Agent 会话后，这里显示授权支持的额度信息")
                 .font(Typography.meta).foregroundStyle(palette.ink2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -84,6 +84,7 @@ extension View {
 
 private struct QuotaRefreshOnAppear: ViewModifier {
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.pageActive) private var active
     #if os(iOS)
     // 手机回到前台再看一次；Mac 的窗口由 AppKit 托管，没有 SwiftUI 场景，场景阶段一直不是 active，只看页在不在前台
@@ -97,7 +98,7 @@ private struct QuotaRefreshOnAppear: ViewModifier {
         let shown = active && foreground
         content.task(id: shown && services.canRefreshQuota) {
             guard shown else { return }
-            await services.refreshQuotaIfStale()
+            await workspace.refreshQuota()
         }
     }
 }
@@ -121,13 +122,14 @@ private struct QuotaAccount: View {
             }
             .font(Typography.secondary.weight(.medium))
             VStack(alignment: .leading, spacing: 10) {
+                if let message = meter.message { Text(message).font(Typography.meta).foregroundStyle(palette.ink2) }
                 ForEach(meter.windows) { QuotaWindowRow(window: $0) }
+                if let url = meter.usageURL { Link("管理用量", destination: url).font(Typography.meta) }
             }
             .padding(.leading, iconColumn + Self.iconGap)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(meter.spoken)
+        .accessibilityElement(children: .contain)
     }
 
     /// 账号名，数据陈旧时接"· x 分钟前"。
@@ -172,11 +174,7 @@ private struct QuotaWindowRow: View {
 
     @ViewBuilder private var heading: some View {
         let name = Text(window.name).fontWeight(.medium).foregroundStyle(palette.ink)
-        if window.hasReset {
-            Text("\(name)\(Dotted.inline)已重置")
-        } else {
-            LiveText(style: QuotaMeter.Countdown(end: window.resetsAt)) { Text("\(name)\(Dotted.inline)\(Text($0).monospacedDigit())后重置") }
-        }
+        LiveText(style: QuotaMeter.Countdown(end: window.resetsAt)) { Text("\(name)\(Dotted.inline)\(Text($0).monospacedDigit())后重置") }
     }
 }
 
@@ -248,13 +246,13 @@ struct QuotaRings: View {
     }
 
     private func rings(_ quotas: [AccountQuota], at now: Date) -> some View {
-        let rings = quotas.compactMap { quota in quota.binding(at: now).map { (provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
+        let rings = quotas.compactMap { quota in quota.binding(at: now).map { (id: quota.id, provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
         return HStack(spacing: 6) {
             if row {
                 Text("额度").foregroundStyle(palette.ink3)
                 Spacer(minLength: 0)
             } else if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
-            ForEach(rings, id: \.provider) { ModelBadge(mark: PiProvider(id: $0.provider).mark, binding: $0.window) }
+            ForEach(rings, id: \.id) { ModelBadge(mark: PiProvider(id: $0.provider).mark, binding: $0.window) }
         }
         .foregroundStyle(palette.ink2)
         .accessibilityElement(children: .ignore)

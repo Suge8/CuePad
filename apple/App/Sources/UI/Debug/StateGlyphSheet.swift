@@ -70,7 +70,7 @@ struct StateGlyphSheet: View {
         ("等 Cue 回答", .cueAsking),
         ("有新回复", .unread),
         ("出错", .failed(.other)),
-        ("没能送达", .delivery(.failed(.timedOut))),
+        ("没能送达", .delivery(.failed(.reported(DeliveryRequest.unexplainedFailure)))),
         ("被打断", .interrupted),
         ("歇着", .resting),
         ("新会话", .fresh),

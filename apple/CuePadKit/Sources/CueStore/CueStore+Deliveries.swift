@@ -63,14 +63,14 @@ extension CueStore {
     try write { try requestControl(.stop, of: target, on: host, cue: cue) }
   }
 
-  /// 请 `host` 那台 Mac 把 `target` 会话出错的那一轮原样重跑一遍：方式是 `retry`；同样复用还在路上的那一条（连点只发一次）。
+  /// 请 `host` 那台 Mac 接着 `target` 会话出错的那一轮重试：方式是 `retry`；同样复用还在路上的那一条（连点只发一次）。
   public func requestRetry(of target: SendTarget, on host: String) throws -> DeliveryRequest {
     try write { try requestControl(.retry, of: target, on: host, cue: false) }
   }
 
   /// 正文就是方式名的控制类请求（结束、停止、重跑）：同一会话同一种方式在路上只有一条。必须在写事务内调用。
   func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String, cue: Bool) throws -> DeliveryRequest {
-    if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && $0.isOpen }) {
+    if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && Speech.trip($0, at: .always(at: timing.now())).inTransit }) {
       return open
     }
     return try insertDelivery(mode.rawValue, to: target, on: host, mode: mode, cue: cue)
@@ -140,7 +140,11 @@ extension CueStore {
 
   /// 所有投送请求，最近的在前。
   public func deliveryRequests() throws -> [DeliveryRequest] {
-    try select(DeliveryRequest.self, orderBy: "createdAt DESC, rowid DESC")
+    let requests = try select(DeliveryRequest.self, orderBy: "createdAt DESC, rowid DESC")
+    for request in requests where request.isOpen {
+      if let due = request.deadlineAt, due > timing.now() { expire(at: due) }
+    }
+    return requests
   }
 
   public func deliveryRequest(_ id: UUID) throws -> DeliveryRequest? { try find(DeliveryRequest.self, id) }
@@ -177,7 +181,15 @@ extension CueStore {
   /// 投送请求此刻的样子：记录还在就是它；发出的话已成了对话里的消息（之后请求被收走，见 `markPushed`）就是已送达；
   /// 都不是（撤回、清理了）为 nil。
   public func latest(of request: DeliveryRequest) throws -> DeliveryRequest? {
-    if let current = try deliveryRequest(request.id) { return current }
+    if var current = try deliveryRequest(request.id) {
+      if current.isOpen, current.deadlineAt != nil || current.handledBy != nil || current.status != .known(.pending) {
+        if case .unconfirmed = Speech.trip(current, at: .always(at: timing.now())) {
+          current.status = .known(.unconfirmed)
+          current.failureReason = Speech.unconfirmedReason
+        } else if let deadline = current.deadlineAt { expire(at: deadline) }
+      }
+      return current
+    }
     guard try db.first("SELECT 1 FROM piMessages WHERE deliveryID = ?", [request.id], { _ in true }) != nil else { return nil }
     var arrived = request
     arrived.status = .known(.succeeded)
@@ -191,7 +203,17 @@ extension CueStore {
       orderBy: "createdAt, rowid")
   }
 
-  /// 删掉一条请求（移除、重发没能送达的话）：这句收起的提问放回"等你"，它没说到会话那边。
+  /// 明确未交出的失败请求才允许用于重发或移除；按当前存储状态判定，不信界面上旧的失败快照。
+  public func withdrawFailedDelivery(_ id: UUID) throws -> Bool {
+    try write {
+      try db.run("DELETE FROM deliveryRequests WHERE id = ? AND status = '\(DeliveryStatus.failed.rawValue)'", [id])
+      guard db.changes > 0 else { return false }
+      try reopen(where: "setAsideBy = ?", [id])
+      return true
+    }
+  }
+
+  /// 显式清理记录，不授权重投；重发与移除气泡走 withdrawDelivery / withdrawFailedDelivery。
   public func deleteDelivery(_ id: UUID) throws {
     try write {
       try db.run("DELETE FROM deliveryRequests WHERE id = ?", [id])
@@ -199,11 +221,16 @@ extension CueStore {
     }
   }
 
-  /// 撤回一条还没被 Mac 领取的请求（`isWithdrawable`）；返回是否撤回了。与领取同一个条件（status = 'pending'），
-  /// 所以撤回与领取只有一个能成：已领取的（交给了 Pi）撤不回。这句收起的提问放回"等你"（同 `deleteDelivery`）。
-  public func withdrawDelivery(_ id: UUID) throws -> Bool {
+  /// 撤回只在执行它的本机能与领取原子互斥；跨设备只允许从未交给同步发送者的请求。
+  /// 已上传或正在上传的 pending 可能只是旧快照，删除成功也不能证明宿主尚未领取。这句收起的提问放回"等你"（同 `deleteDelivery`）。
+  public func withdrawDelivery(_ id: UUID, locallyOn host: String? = nil) throws -> Bool {
     try write {
-      try db.run("DELETE FROM deliveryRequests WHERE id = ? AND status = 'pending'", [id])
+      try db.run(
+        """
+        DELETE FROM deliveryRequests WHERE id = ?1 AND status = '\(DeliveryStatus.pending.rawValue)' AND handledBy IS NULL
+          AND (hostID = ?2 OR NOT EXISTS (
+            SELECT 1 FROM syncRecords WHERE recordName = ?1 AND (sentModifiedAt IS NOT NULL OR pushedModifiedAt IS NOT NULL)))
+        """, [id, host])
       guard db.changes > 0 else { return false }
       try reopen(where: "setAsideBy = ?", [id])
       return true

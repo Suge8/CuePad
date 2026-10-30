@@ -2,14 +2,15 @@ import CueStore
 import Foundation
 
 extension AppServices {
-    /// 撤回一句说出去的话（重发或移除没能送达的话）：发给会话的，还没被 Mac 领取的才撤得回，没能送达的直接删；
+    /// 撤回一句说出去的话（重发或移除没能送达的话）：发给会话的，还没被 Mac 领取的才撤得回，明确未交出的失败按库里的当前状态撤回；
     /// 对 Cue 说的，还没交给它的才撤得回。撤了立即把删除传上去，免得 Mac 先拉到它；撤不回时抛出原因。
     func withdraw(_ said: Said) async throws {
+        guard said.trip(at: speech).unconfirmedReason == nil else { throw SendError.alreadyHanded }
         switch said {
         case .request(let request) where request.status == .known(.failed):
-            try await store.deleteDelivery(request.id)
+            guard try await store.withdrawFailedDelivery(request.id) else { throw SendError.alreadyHanded }
         case .request(let request):
-            guard try await store.withdrawDelivery(request.id) else { throw SendError.alreadyHanded }
+            guard try await store.withdrawDelivery(request.id, locallyOn: speech.localHost) else { throw SendError.alreadyHanded }
         case .cue(let message, _):
             guard try await store.withdrawCueMessage(message.id) else { throw SendError.alreadyHeard }
         }
@@ -56,7 +57,7 @@ extension AppServices {
         uploaded(try await store.requestStop(of: session.target, on: session.hostID))
     }
 
-    /// 把出错的那一轮原样重跑一遍（`PiSessionState.canRetry`）：请会话所在的 Mac 让扩展重跑它，对话里不多一句话，只多出新的回答；
+    /// 接着出错的那一轮重试（`PiSessionState.canRetry`）：请会话所在的 Mac 让扩展重试，不补发用户消息；
     /// 还在路上时再点不会再发一条（Store 去重）。会话的显示状态按这条请求当场是"在路上"（`PiDelivery`）。
     func retry(_ session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestRetry(of: session.target, on: session.hostID))

@@ -17,7 +17,7 @@ import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
 import { trackShows, watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 42;
+const EXTENSION_VERSION = 47;
 
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
  * 与 FireCode 判断"会话进行中"用同一个事实 */
@@ -62,30 +62,40 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand(INTERNAL_COMMAND, {
 		description: "CuePad 内部使用：需要命令上下文的会话操作（重新载入会话文件、新会话、重载、克隆）",
 		handler: async (action, command: ExtensionCommandContext) => {
-			switch (action.trim()) {
-				case "reload-session": {
-					const file = command.sessionManager.getSessionFile();
-					if (file) await command.switchSession(file);
-					break;
+			const session = live?.session;
+			try {
+				switch (action.trim()) {
+					case "reload-session": {
+						const file = command.sessionManager.getSessionFile();
+						if (file) await command.switchSession(file);
+						break;
+					}
+					case "new": await command.newSession(); break;
+					case "reload-if-idle": await live?.session.reload.ifIdle(command); break;
+					case "end":
+						await command.waitForIdle();
+						if (session?.lifetime.signal.aborted) return;
+						if (command.mode === "rpc") process.kill(process.pid, "SIGTERM");
+						else command.shutdown();
+						break;
+					case "clone": {
+						const leaf = command.sessionManager.getLeafId();
+						if (leaf) await command.fork(leaf, { position: "at" });
+						break;
+					}
 				}
-				case "new": await command.newSession(); break;
-				case "reload-if-idle": await live?.session.reload.ifIdle(command); break;
-				case "reload": await command.reload(); break;
-				case "clone": {
-					const leaf = command.sessionManager.getLeafId();
-					if (leaf) await command.fork(leaf, { position: "at" });
-					break;
-				}
+			} catch (error) {
+				if (!session?.lifetime.signal.aborted) session?.reportFailure(reason(error));
 			}
 		},
 	});
 
 	trackShows(pi);
 
-	pi.on("session_start", (_event, ctx) => {
+	pi.on("session_start", async (_event, ctx) => {
 		if (process.env[PROBE_ENV]) {
 			// 没有配好密钥的模型（没登录）时 Pi 仍给出一个占位的当前模型，报成没有模型
-			const { model, models } = ctx.modelRegistry.getAvailable().length > 0 ? modelInfo(pi, ctx) : { model: null, models: [] };
+			const { model, models } = ctx.modelRegistry.getAvailable().length > 0 ? await modelInfo(pi, ctx) : { model: null, models: [] };
 			fs.writeSync(1, JSON.stringify({ cuepadProbe: { model, models } }) + "\n");
 			return;
 		}
@@ -115,7 +125,11 @@ export default function (pi: ExtensionAPI) {
 
 		/** 会话关闭：拆掉它挂的一切——事件处理、计时、连接与 socket。 */
 		function close(why: string) {
+			session.lifetime.abort();
 			for (const off of unsubscribe) off();
+			session.retrying = null;
+			session.starting = null;
+			session.pending.length = 0;
 			session.idleExit.cancel();
 			session.reload.close();
 			session.draft.cancel();

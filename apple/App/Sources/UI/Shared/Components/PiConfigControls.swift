@@ -22,7 +22,7 @@ struct PiAgentPick {
 }
 
 
-/// 模型菜单，两端同一份：可选的模型按提供方分组（`PiModelLabel.groups`），组名写提供方与它的额度用量（`PiModelLabel.title`，到了 `now` 按已重置算）；
+/// 模型菜单，两端同一份：可选的模型按提供方分组（`PiModelLabel.groups`），组名写提供方与它的额度用量（`PiModelLabel.title`，过重置时间无新观测显示过期）；
 /// 每项的名字与标志按模型定（`BrandMark.model`），不指定模型时用的那项（`defaultModel`，新会话与 Cue）在名字下注"默认"，当前打勾。选了做什么由调用方给。
 struct PiModelMenu {
     let models: [PiModelOption]
@@ -33,7 +33,7 @@ struct PiModelMenu {
     func sections(quotas: [AccountQuota], at now: Date) -> [ChoiceMenu.Section] {
         PiModelLabel.groups(models).map { group in
             ChoiceMenu.Section(
-                title: .verbatim(PiModelLabel.title(group.provider, quotas: quotas, at: now)), image: group.provider.mark.map(ChoiceMenu.Glyph.brand),
+                title: .verbatim(group.models.first.map { PiModelLabel.title($0, quotas: quotas, at: now) } ?? group.provider.name), image: group.provider.mark.map(ChoiceMenu.Glyph.brand),
                 choices: group.models.map { model in
                     ChoiceMenu.Choice(
                         title: .verbatim(model.displayName), subtitle: model.key == defaultModel ? "默认" : nil, image: BrandMark.model(model).map(ChoiceMenu.Glyph.brand),
@@ -105,6 +105,9 @@ struct PiConfigControls<Trailing: View>: View {
         ConfigRow {
             if let agent { PiAgentCapsule(pick: agent) }
             modelCapsule
+            if let model = shown.model, let url = model.account?.usageURL(provider: model.key.provider) {
+                Link("管理用量", destination: url).font(Typography.meta).buttonStyle(PressStyle())
+            }
             if let meter = PiThinkingMeter(levels: levels, current: shown.thinking) {
                 PiThinkingDial(meter: meter, pending: shown.pending, choose: chooseThinking)
                     #if os(macOS)

@@ -38,8 +38,8 @@ extension PiStateRecorder {
     cue.cancel()
     let settled = cue.commit(CueStateContent(state: .settled, context: context), at: timing.now())
     do {
-      return try await persist { [store] in
-        try await store.finishCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: tools, reply: reply, as: author, context: context)
+      return try await persist { [store, hostID, bootID] in
+        try await store.finishCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: tools, reply: reply, as: author, context: context, hostID: hostID, bootID: bootID)
       }
     } catch {
       cue.forget(settled)
@@ -55,8 +55,8 @@ extension PiStateRecorder {
 
   private func writeCue(_ content: CueStateContent) async throws {
     do {
-      try await persist { [store] in
-        try await store.setCueState(content.state, detail: content.detail, step: content.step, round: content.round, context: content.context)
+      try await persist { [store, hostID, bootID] in
+        try await store.setCueState(content.state, detail: content.detail, step: content.step, round: content.round, context: content.context, hostID: hostID, bootID: bootID)
       }
     } catch {
       cue.forget(content)

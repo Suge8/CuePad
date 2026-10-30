@@ -82,18 +82,20 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
   public var name: String
   public var thinkingLevels: [PiThinkingLevel]
   public var acceptsImages: Bool?
+  public var account: PiAccount?
   public var id: PiModelKey { key }
 
-  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel], acceptsImages: Bool? = nil) {
+  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel], acceptsImages: Bool? = nil, account: PiAccount? = nil) {
     self.key = key
     self.name = name
     self.thinkingLevels = thinkingLevels
     self.acceptsImages = acceptsImages
+    self.account = account
   }
 
   private enum CodingKeys: String, CodingKey {
     case provider, id, name
-    case thinking, images
+    case thinking, images, account
   }
 
   public init(from decoder: any Decoder) throws {
@@ -102,7 +104,7 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
       key: PiModelKey(provider: try c.decode(String.self, forKey: .provider), id: try c.decode(String.self, forKey: .id)),
       name: try c.decode(String.self, forKey: .name),
       thinkingLevels: try c.decode([String].self, forKey: .thinking).compactMap(PiThinkingLevel.init(rawValue:)),
-      acceptsImages: try c.decodeIfPresent(Bool.self, forKey: .images))
+      acceptsImages: try c.decodeIfPresent(Bool.self, forKey: .images), account: try c.decodeIfPresent(PiAccount.self, forKey: .account))
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -112,6 +114,7 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
     try c.encode(name, forKey: .name)
     try c.encode(thinkingLevels.map(\.rawValue), forKey: .thinking)
     try c.encodeIfPresent(acceptsImages, forKey: .images)
+    try c.encodeIfPresent(account, forKey: .account)
   }
 }
 

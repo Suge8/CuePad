@@ -69,10 +69,10 @@ public struct CueBoardLeaf: Equatable, Sendable {
   public var leaf: Card
   /// 叶子的会话记录；还没开会话（或记录还没到）为 nil。
   public var session: PiSessionState?
-  /// 正在为叶子开新会话（请求还没执行完，或开好了还没认领到）。
-  public var launching: Bool
-  /// 叶子还没绑会话、它的话正送进上一步的会话（`CueStore.sendingLeaves`；送到时绑上）。
-  public var sending: Bool
+  /// 唯一占位入口 `handoffRequests` 的原记录；防重复，不代表此刻在跑。
+  public var handoffs: [DeliveryRequest]
+  public var launching: Bool { handoffs.contains { $0.mode == .known(.start) } }
+  public var sending: Bool { handoffs.contains { $0.mode == .known(.send) } }
   /// 停在当前状态的起点：会话进入当前状态的时刻，没有会话时是开始做或建成任务的时刻。
   public var since: Date
 

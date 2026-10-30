@@ -5,7 +5,7 @@ extension CueStore {
   /// `catalog`：会话报的模型与命令所在的目录记录；`writesCatalog` 为真（这个会话报的变了或还没写过）才写它，
   /// 不必每次状态变化都去比一遍几十 KB 的清单。
   func writePiState(
-    sessionID: String, hostID: String, content: PiStateContent, catalog: AgentCatalog?, writesCatalog: Bool, notify: PiAlert?
+    sessionID: String, hostID: String, bootID: String?, content: PiStateContent, catalog: AgentCatalog?, writesCatalog: Bool, notify: PiAlert?
   ) throws {
     try write {
       let now = Date.stamp
@@ -16,9 +16,14 @@ extension CueStore {
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
         context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt,
-        failure: content.state == .error ? content.failure.map(Open.known) : nil)
+        failure: content.state == .error ? content.failure.map(Open.known) : nil, bootID: bootID)
       if writesCatalog, let catalog { try writeCatalog(catalog) }
-      if let notify { record.notify = try push(notify, record) }
+      if let notify {
+        // 这是刚收到的真实报告事件；presence 可能尚未写到，不能据此吞掉这次一次性通知。读取当前状态仍严格按 lease 派生。
+        var event = record
+        event.runtimeUntil = now
+        record.notify = try push(notify, event)
+      }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       // 最后一轮的开始不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它
       let assignments = PiSessionState.columns.dropFirst()
@@ -68,19 +73,29 @@ extension CueStore {
   /// 启动对账：只收尾这台 Mac 上记下的进程确实没了的记录（`running` 判断记下的进程是不是还是那一个），按进程没了收尾
   /// （`losePiState`），手上还有活的记为被打断。其余一律不动：记下的进程还在的（托管的 Pi 不随 App 退出，终端里的会话也还开着），
   /// 与没记下进程、不知道还在不在的（如刚升级、本机进程表还空着），都由桥重新连上后接着写，或在进程退出时收尾。
-  /// 返回对账之前还没收尾的各会话的状态与计时（会话 id → ），重新接上时沿用（`PiStateRecorder.update`）。
-  func reconcilePiStates(host: String, running: (PiProcess) -> Bool, at now: Date) throws -> [String: (state: PiWorkState, times: PiTimes)] {
+  /// 返回可沿用的状态与计时：可靠对账仍活着的，或同一 boot 且没有死亡证据的；旧 boot 与无证据的历史不带给新进程。
+  func reconcilePiStates(host: String, bootID: String?, running: (PiProcess) -> Bool, at now: Date) throws -> [String: (state: PiWorkState, times: PiTimes)] {
     try write {
       let before = try db.query(
         // `+hostID`：不走 hostID 索引（这台 Mac 的会话几乎就是全部），改走 state 索引只读没收尾的那几条
-        "SELECT sessionID, state, stateSince, busySince FROM piSessionStates WHERE +hostID = ? AND \(PiWorkState.outsideSQL(PiWorkState.closed))", [host]
-      ) { row in (row.text(0), PiWorkState(rawValue: row.text(1)), PiTimes(stateSince: row.date(2), busySince: row.dateOrNil(3))) }
-      let open = Dictionary(before.compactMap { id, state, times in state.map { (id, ($0, times)) } }) { $1 }
+        "SELECT sessionID, state, stateSince, busySince, bootID FROM piSessionStates WHERE +hostID = ? AND \(PiWorkState.outsideSQL(PiWorkState.closed))", [host]
+      ) { row in (row.text(0), PiWorkState(rawValue: row.text(1)), PiTimes(stateSince: row.date(2), busySince: row.dateOrNil(3)), row.textOrNil(4)) }
       let processes = try db.query(
         "SELECT p.sessionID, p.pid, p.startedAt FROM piProcesses p JOIN piSessionStates s ON s.sessionID = p.sessionID WHERE s.hostID = ?",
         [host]
       ) { (sessionID: $0.text(0), process: PiProcess(pid: Int32($0.int(1)), startedAt: $0.int(2))) }
-      let gone = processes.filter { !running($0.process) }.map(\.sessionID)
+      let checked = processes.map { (sessionID: $0.sessionID, alive: running($0.process)) }
+      let alive = checked.filter(\.alive).map(\.sessionID)
+      if !alive.isEmpty {
+        try db.run("UPDATE piSessionStates SET bootID = ?, modifiedAt = ? WHERE hostID = ? AND sessionID IN (SELECT value FROM json_each(?))",
+                   [bootID, Date.stamp, host, JSONColumn.encode(alive)])
+      }
+      let gone = checked.filter { !$0.alive }.map(\.sessionID)
+      let aliveIDs = Set(alive), goneIDs = Set(gone)
+      let open = Dictionary(before.compactMap { id, state, times, confirmedBoot -> (String, (PiWorkState, PiTimes))? in
+        guard aliveIDs.contains(id) || (bootID != nil && confirmedBoot == bootID && !goneIDs.contains(id)) else { return nil }
+        return state.map { (id, ($0, times)) }
+      }) { $1 }
       guard !gone.isEmpty else { return open }
       let among = "(SELECT value FROM json_each(?))", goneList = JSONColumn.encode(gone)
       try close(where: "hostID = ? AND sessionID IN \(among)", [host, goneList], at: now)
@@ -111,7 +126,7 @@ extension CueStore {
 
   /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理。它报过的模型与命令（目录记录）留着：发话、换模型会在后台唤醒它，
   /// 回复框照这份列模型、认命令（`PiSlash.line`）。
-  private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL, failure = NULL"
+  private static let cleared = "bootID = NULL, detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL, failure = NULL"
 
   /// 记录上手上还有活（在跑一轮、等你确认、子代理还在跑）：进程这时没了就是做到一半被打断。用在 UPDATE 的 SET 里，读的是更新前的行。
   private static let hadWork = """

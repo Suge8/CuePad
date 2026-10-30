@@ -230,6 +230,7 @@ struct SessionTaskTests {
 
     func enableCue() async throws {
         let host = services.hostID
+        try await store.recordMacPresence(host: host) { true }
         try await store.updateCueProfile {
             $0.hostID = host
             $0.enabledAt = .now
