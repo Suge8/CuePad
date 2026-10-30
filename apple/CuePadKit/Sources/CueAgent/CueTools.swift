@@ -43,6 +43,7 @@ public struct CueTools: Sendable {
       case (.cue, "task"): return try await task(args)
       case (.cue, "tell"): return try await tell(args)
       case (.cue, "memory"): return try await memory(args)
+      case (.cue, "setup"): return try await setup(args)
       case (.dream, "merge"): return try await merge(args)
       default: return nil
       }

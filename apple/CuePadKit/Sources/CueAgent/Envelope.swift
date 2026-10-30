@@ -24,11 +24,18 @@ public enum CueEnvelope {
     /// 这一轮要写的语言不是中文时它的名字（他这句话的语言，他没开口时是界面语言，App 定）：系统提示是中文，只在系统提示里说一次，
     /// 照着中文句式回的还是中文（实测），所以每一轮在块尾再说一次；中文时为 nil，不写这一行。
     public var language: String?
+    /// 额度（`CueStore.accountQuotas`）：信封里只写吃紧的（规则在 `render`）
+    public var quotas: [AccountQuota]
+    /// 这一轮是上一轮出错后的重试：上一轮的错（原文首行），Cue 先核对上一轮做到了哪、不重做
+    public var retrying: String?
 
     public init(
       now: Date, projects: [Project], changes: [CueChange],
-      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, fired: [Fired] = [], schedules: [CueMemoryLine] = [], language: String? = nil
+      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, fired: [Fired] = [], schedules: [CueMemoryLine] = [], language: String? = nil,
+      quotas: [AccountQuota] = [], retrying: String? = nil
     ) {
+      self.quotas = quotas
+      self.retrying = retrying
       self.language = language
       self.schedules = schedules
       self.fired = fired
