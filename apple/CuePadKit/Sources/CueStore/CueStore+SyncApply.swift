@@ -187,13 +187,14 @@ extension CueStore {
   private static func mergingDeliveryProgress(local: SyncRow, remote: SyncRow) -> SyncRow? {
     func progress(_ row: SyncRow) -> Int {
       switch row.text("status").flatMap(DeliveryStatus.init(rawValue:)) {
-      case .succeeded: 5
-      case .unconfirmed: 4
-      case .failed: 3
-      case .confirming: 2
-      case .executing: 1
-      case .pending: row.text("handledBy") == nil ? 0 : 1
-      case nil: 4
+      case .succeeded: 6
+      case .unconfirmed: 5
+      case .failed: 4
+      case .confirming: 3
+      case .executing: 2
+      case .preparing: 1
+      case .pending: row.text("handledBy") == nil ? 0 : 2
+      case nil: 5
       }
     }
     let localProgress = progress(local), remoteProgress = progress(remote)

@@ -38,6 +38,7 @@ nonisolated enum MacDelivery {
     /// 结果未确认时停止转圈、如实写未知；成功就消失。失败与未知在之后有新请求或对话时收起。
     /// 回复框上方一行显示。
     enum CommandProgress: Equatable {
+        case preparing(String)
         case running(String)
         case unconfirmed(command: String, reason: String)
         case failed(command: String, failure: Speech.Failure)
@@ -46,6 +47,7 @@ nonisolated enum MacDelivery {
 
         var text: String {
             switch self {
+            case .preparing(let reason): reason
             case .running(let command): String(localized: "正在执行 \(command)…")
             case .unconfirmed(let command, let reason): String(localized: "\(command) 的执行结果尚未确认：\(reason)")
             case .failed(let command, let failure): String(localized: "\(command) 没执行成功：\(failure.text)")
@@ -63,6 +65,7 @@ nonisolated enum MacDelivery {
             if messages.contains(where: { $0.at > finished }) { return nil }
         }
         switch trip {
+        case .preparing(let reason): return .preparing(reason)
         case .sending, .sent: return .running(command)
         case .delivered: return nil
         case .unconfirmed(let reason): return .unconfirmed(command: command, reason: reason)
@@ -99,6 +102,7 @@ nonisolated extension DeliveryMode {
     var label: String {
         switch self {
         case .send: String(localized: "说话")
+        case .withdraw: String(localized: "撤回")
         case .command: String(localized: "斜杠命令")
         case .answer: String(localized: "作答")
         case .start: String(localized: "新会话")

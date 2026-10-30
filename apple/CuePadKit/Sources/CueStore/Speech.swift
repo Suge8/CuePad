@@ -7,6 +7,7 @@ import Foundation
 public enum Speech {
   public enum Trip: Equatable, Sendable {
     case sending
+    case preparing(String)
     case sent
     case delivered
     case unconfirmed(String)
@@ -16,8 +17,26 @@ public enum Speech {
 
     public var unconfirmedReason: String? { if case .unconfirmed(let reason) = self { reason } else { nil } }
 
-    /// 仍在等进度；未确认已结束等待，不显示运行中，也不因此授权安全重发。
+    /// 控制请求去重：准备仍等待原请求，但不因此授权 Agent 在跑。
+    public var awaitingResult: Bool {
+      if case .preparing = self { return true }
+      return inTransit
+    }
+
+    /// 已进入传递等待；准备不在其中，未确认也不授权 Agent 正在运行或安全重发。
     public var inTransit: Bool { self == .sending || self == .sent }
+  }
+
+  /// 活动的保留依据，不授权 Agent 正在运行；未确认可保留旧活动，准备不能创建活动。
+  public enum Activity: Sendable { case pending, unconfirmed }
+
+  public static func activity(_ request: DeliveryRequest, at moment: Moment) -> Activity? {
+    guard request.status != .known(.preparing) else { return nil }
+    switch trip(request, at: moment) {
+    case .preparing, .failed: return nil
+    case .sending, .sent: return .pending
+    case .delivered, .unconfirmed: return .unconfirmed
+    }
   }
 
   public enum Failure: Hashable, Sendable {
@@ -71,11 +90,17 @@ public enum Speech {
 
   public static func trip(_ request: DeliveryRequest, at moment: Moment) -> Trip {
     switch request.status.known {
+    case .preparing:
+      if let deadline = request.deadlineAt, moment.now >= deadline {
+        .unconfirmed(ShownText("准备期限已过，派发结果尚未确认").text)
+      } else {
+        .preparing(ShownText("尚未派发：\((request.reason ?? ShownText("等待目标就绪")).embedded)").text)
+      }
     case .pending:
       if request.deadlineAt != nil || request.handledBy != nil { phase(request, at: moment) }
       else { waiting(since: request.createdAt, reachedServer: request.reachedServer, host: request.hostID, at: moment) }
     case .executing, .confirming: phase(request, at: moment)
-    case .unconfirmed: .unconfirmed(request.failureReason?.text ?? unconfirmedReason.text)
+    case .unconfirmed: .unconfirmed(request.reason?.text ?? unconfirmedReason.text)
     case nil: .unconfirmed(unconfirmedReason.text)
     case .succeeded: .delivered
     case .failed: .failed(.reported(request.failure ?? DeliveryRequest.unexplainedFailure))

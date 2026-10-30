@@ -30,6 +30,7 @@ nonisolated enum TaskNext: Equatable, Sendable {
     var agentBusy: Bool {
         guard case .agent(let shown, _) = self else { return false }
         switch shown.status {
+        case .delivery(.preparing): return false
         case .working, .asking, .delivery, .unknown: return true
         default: return false
         }

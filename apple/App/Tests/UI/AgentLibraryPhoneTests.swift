@@ -62,7 +62,7 @@ struct AgentLibraryPhoneTests {
     func start() async throws -> (Mac, Workspace, () -> Void) {
         let mac = Mac(store: store)
         try await mac.report()
-        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { await mac.handle($0) }
+        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { request, _ in await mac.handle(request) }
         try await executor.start()
         let workspace = Workspace(services: app.services)
         let following = Task { await workspace.follow() }

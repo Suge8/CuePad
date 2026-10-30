@@ -5819,6 +5819,38 @@
         }
       }
     },
+    "会话扩展正在升级" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updating the session extension"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话扩展正在升级"
+          }
+        }
+      }
+    },
+    "会话操作已经开始，结果尚未确认：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session operation has started; its outcome is unconfirmed: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话操作已经开始，结果尚未确认：%@"
+          }
+        }
+      }
+    },
     "会话有动静" : {
       "localizations" : {
         "en" : {
@@ -7203,6 +7235,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "冲突列表读取失败：%@"
+          }
+        }
+      }
+    },
+    "准备就绪，等待派发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready, waiting to send"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "准备就绪，等待派发"
+          }
+        }
+      }
+    },
+    "准备期限已过，派发结果尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparation timed out; delivery is unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "准备期限已过，派发结果尚未确认"
+          }
+        }
+      }
+    },
+    "准备超时，尚未派发，不会自动发送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparation timed out — not sent and won’t send automatically"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "准备超时，尚未派发，不会自动发送"
           }
         }
       }
@@ -10891,6 +10971,22 @@
         }
       }
     },
+    "尚未派发：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not sent: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未派发：%@"
+          }
+        }
+      }
+    },
     "尚未确认会话已结束" : {
       "localizations" : {
         "en" : {
@@ -13647,6 +13743,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搜索（⌘K）"
+          }
+        }
+      }
+    },
+    "撤回" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Withdraw"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤回"
           }
         }
       }
@@ -18671,6 +18783,22 @@
         }
       }
     },
+    "等待目标就绪" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for the target to be ready"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待目标就绪"
+          }
+        }
+      }
+    },
     "等连上 iCloud 再开启" : {
       "localizations" : {
         "en" : {
@@ -20027,6 +20155,22 @@
         }
       }
     },
+    "请求已放弃，尚未派发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request abandoned — not sent"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求已放弃，尚未派发"
+          }
+        }
+      }
+    },
     "请稍候" : {
       "localizations" : {
         "en" : {
@@ -21227,22 +21371,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这个会话已经不在了，发不到它"
-          }
-        }
-      }
-    },
-    "这个会话正在换上新版扩展，歇下后自动接上，到时再发" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This session is switching to the new extension and will reconnect when idle. Send again then."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个会话正在换上新版扩展，歇下后自动接上，到时再发"
           }
         }
       }

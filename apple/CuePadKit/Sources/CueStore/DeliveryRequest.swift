@@ -3,6 +3,8 @@ import Foundation
 
 public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing
+  /// 等现有会话就绪，整个操作尚未开始；不能据此恢复目标进程。
+  case preparing
   /// 派发已结束，正在从真实历史核对；不是执行成功的证据。
   case confirming
   /// 可能已交出但无法确认；不再领取，只能由真实消息等正证据收敛。
@@ -13,7 +15,7 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
 
 extension DeliveryStatus {
   /// 持久记录尚未收尾（等领取、执行、确认）；是否仍在等进度由 Speech 连同期限推出：`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
-  static let open: Set<DeliveryStatus> = [.pending, .executing, .confirming]
+  static let open: Set<DeliveryStatus> = [.pending, .preparing, .executing, .confirming]
   /// `open` 的 SQL `IN (…)` 列表。
   static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
 }
@@ -23,6 +25,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 你说的话（唯一一种）：会话歇着就以它开新一轮；在跑就先打断这一轮，再以它开新一轮（忙不忙以 Mac 执行时的会话为准，
   /// 写请求时看到的状态可能已经过时）。没有排队：投送可能已送达、明确没交出，或交出后仍未确认；未确认不自动重发
   case send
+  /// 撤回另一条尚未派发的投送；正文为原请求 id，由执行 Mac 原子核对后处理。
+  case withdraw
   /// 回答会话正在等的弹窗；正文是 `PiAnswer`（见 `DeliveryRequest.answer`）
   case answer
   /// 在 Mac 上开一个新会话（后台托管）；正文是 `PiLaunch`
@@ -55,6 +59,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// "Mac 上刚改过"；不写发送记录
   case libraryEdit
 
+  public static let requiresReadySession: Set<DeliveryMode> = [.send, .answer, .command, .config, .retry]
+
   /// 发给会话本身、会改变它状态的方式（说话、作答与重跑出错的一轮）；会话的显示状态只把这几种算进去。命令与设置（config、end、stop、bind）不在其中：
   /// 它们不是"你说的话"，对话只来自会话文件，进度只在回复框上方短暂显示。
   public static let toSession: Set<DeliveryMode> = [.send, .answer, .retry]
@@ -75,8 +81,8 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var mode: Open<DeliveryMode>
   public var cardID: UUID?
   public var status: Open<DeliveryStatus>
-  /// 失败或未确认的原因（各端按自己的语言显示，`ShownText`）；读 `failure` / `Speech.trip`。
-  public var failureReason: ShownText?
+  /// 准备、失败或未确认的说明（各端按自己的语言显示，`ShownText`）；读 `failure` / `Speech.trip`。
+  public var reason: ShownText?
   public var handledBy: String?
   public var createdAt: Date
   public var completedAt: Date?
@@ -98,12 +104,12 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
   /// 尚未领取只是撤回的必要条件；能否撤回还要由库事务核对已发送事实。
-  public var isWithdrawable: Bool { status == .known(.pending) && handledBy == nil }
+  public var isWithdrawable: Bool { [.known(.pending), .known(.preparing)].contains(status) && handledBy == nil }
 
   /// 明确未交出的原因；未知状态不是未送达。缺少原因的明确失败只在这里兜底。
   public var failure: String? {
     guard status == .known(.failed) else { return nil }
-    guard let reason = failureReason?.text, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
+    guard let reason = reason?.text, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
     return reason
   }
 
@@ -116,6 +122,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public static func shownEnd(in requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
     guard let end = requests.last(where: { $0.mode == .known(.end) }) else { return nil }
     switch Speech.trip(end, at: moment) {
+    case .preparing(let reason): return .preparing(reason)
     case .sending: return .sending
     case .sent: return .sent
     case .delivered, .unconfirmed: return nil
@@ -174,14 +181,14 @@ extension DeliveryRequest: Record {
   ]
   static let syncedColumns = columns.filter { !["resultReceivedAt", "serverAt"].contains($0) }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, failureReason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt, deadlineAt]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, reason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt, deadlineAt]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
-      status: Open(rawValue: row.text(8)), failureReason: row.textOrNil(9).flatMap(ShownText.init(stored:)), handledBy: row.textOrNil(10),
+      status: Open(rawValue: row.text(8)), reason: row.textOrNil(9).flatMap(ShownText.init(stored:)), handledBy: row.textOrNil(10),
       createdAt: row.date(11), completedAt: row.dateOrNil(12), deadlineAt: row.dateOrNil(17), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14), serverAt: row.dateOrNil(16),
       origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(18))
   }

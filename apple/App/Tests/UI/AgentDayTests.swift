@@ -34,7 +34,7 @@ struct AgentDayTests {
 
     /// 那台 Mac 的执行器领到请求后按 `outcome` 写回，等到这条请求有结果。
     private func macAnswers(_ request: DeliveryRequest, host: String, _ outcome: DeliveryOutcome) async throws {
-        let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { Issue.record("执行器意外上报：\($0)") }) { _ in outcome }
+        let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { Issue.record("执行器意外上报：\($0)") }) { _, _ in outcome }
         try await executor.start()
         for try await open in store.observe({ try $0.deliveryRequest(request.id)?.isOpen }) where open == false { break }
         await executor.stop()

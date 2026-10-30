@@ -9,7 +9,7 @@ extension PiShown {
         case .asking: palette.waiting
         // 等 Cue 回答：不是要你管的，中性的墨色（赭黄只给等你确认的）
         case .cueAsking, .awaitsReply: palette.ink
-        case .delivery(.inTransit(.unconfirmed)): palette.ink3
+        case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): palette.ink3
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery: palette.signature
         case .unread: palette.replied
@@ -20,7 +20,7 @@ extension PiShown {
     /// 带色的状态（状态词与状态标同色）：要你管的、在跑的、有新回复。
     var isColored: Bool {
         switch status {
-        case .delivery(.inTransit(.unconfirmed)): false
+        case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): false
         case .asking, .awaitsReply, .failed, .working, .delivery, .unread: true
         case .cueAsking, .idle, .resting, .fresh, .ended, .interrupted, .unknown: false
         }
@@ -53,6 +53,7 @@ extension PiShown {
         case .cueAsking: .cueAsking
         // 胭脂圆叹号（`Icon.failure`，与操作出错同一个）：与等你确认的赭黄问号圆靠颜色与里面的字分开
         case .failed: .failure
+        case .delivery(.preparing): .more
         case .delivery(.failed): .undelivered
         case .delivery: .onTheWay
         // 等子代理交回：一大一小两颗点（同状态标会动的那两颗、看板卡下沿那一端），不借在跑的心电线
@@ -151,7 +152,7 @@ extension PiShown {
         switch status {
         case .working(.delegating): .loop(.relay)
         case .working: .loop(.heartbeat)
-        case .delivery(.failed), .delivery(.inTransit(.unconfirmed)): .icon
+        case .delivery(.preparing), .delivery(.failed), .delivery(.inTransit(.unconfirmed)): .icon
         case .delivery: .flight
         case .asking: .rippled
         case .idle, .resting, .fresh, .ended, .interrupted, .unknown, .cueAsking, .awaitsReply, .failed, .unread: .icon

@@ -41,7 +41,7 @@ extension DeliveryConfirmationTests {
             let row = try #require(try await app.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
             #expect(try await phone.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
             let received = try #require(try await phone.services.store.deliveryRequest(request.id))
-            try expectPortableReason(received.failureReason)
+            try expectPortableReason(received.reason)
         }
         #expect(ext.messages.count == 1)
         let due = try #require(phase.deadlineAt)
@@ -104,7 +104,7 @@ extension DeliveryConfirmationTests {
         let resolved = try await settledDispatch(request, in: mac)
         if ackAfterDeadline {
             #expect(resolved.status == .known(.unconfirmed) && resolved.deadlineAt == due)
-            try expectPortableReason(resolved.failureReason)
+            try expectPortableReason(resolved.reason)
         }
         await mac.services.executor.beginStop()()
         mac.pi.stop()
@@ -118,7 +118,7 @@ extension DeliveryConfirmationTests {
         let stillExecuting = try #require(try await phone.services.store.deliveryRequest(request.id))
         #expect(stillExecuting.status == .known(.executing))
         let expired = try #require(try await phone.services.store.latest(of: request))
-        try expectPortableReason(expired.failureReason)
+        try expectPortableReason(expired.reason)
         #expect(Speech.trip(stillExecuting, at: phone.services.speech).unconfirmedReason != nil)
         #expect(!phone.services.hasOpenDeliveries)
         #expect(ext.messages.count == 1)

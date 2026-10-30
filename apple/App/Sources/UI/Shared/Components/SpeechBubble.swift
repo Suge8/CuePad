@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 你说出去的一句（会话页末尾还没进对话的话、Cue 页里你的话）：全 App 只此一个，状态只从记录推出（`Speech`）。
-/// 到哪了画在气泡上（`BubbleTrip`；已送达只在 `showsDelivered` 时）；没能送达时下面一行"未送达 · 重发"，原因与移除在叹号的菜单里。
+/// 到哪了画在气泡上（`BubbleTrip`；已送达只在 `showsDelivered` 时）；没能送达时原因常驻气泡下方，并显示"未送达 · 重发"；移除在叹号的菜单里。
 /// 等待到点只显示静态未确认；再说一次须确认重复风险，保留原记录。晚到回执照常收敛。
 struct SpeechBubble<Menu: View>: View {
     let said: Said
@@ -27,7 +27,13 @@ struct SpeechBubble<Menu: View>: View {
         let trip = said.trip(at: services.speech), shown = bubble(trip)
         VStack(alignment: .trailing, spacing: look.statusSpacing) {
             UserBubble(stored: said.content, look: look, trip: shown, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
-            if let reason = trip.unconfirmedReason {
+            if case .preparing(let reason) = trip {
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(verbatim: reason)
+                    Button("撤回", action: remove).buttonStyle(PressStyle(.inline))
+                }
+                .font(Typography.caption).foregroundStyle(palette.ink3).padding(.trailing, look.statusInset)
+            } else if let reason = trip.unconfirmedReason {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(verbatim: reason)
                     Button("再说一次…") { confirmingAgain = true }.buttonStyle(PressStyle(.inline))
@@ -47,6 +53,7 @@ struct SpeechBubble<Menu: View>: View {
         switch trip {
         case .sending, .sent:
             if case .request(let request) = said { .sending(.of(request, session: session, trip: trip)) } else { .sending(trip == .sent ? .sent : .sending) }
+        case .preparing: .arrived
         case .unconfirmed: .sending(.unconfirmed)
         case .delivered: showsDelivered ? .delivered(said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) }) : .arrived
         case .failed(let failure):
@@ -54,14 +61,20 @@ struct SpeechBubble<Menu: View>: View {
         }
     }
 
-    /// 一行，和旁注一样高：重发是行里的字，不画胶囊；点按区放大到 44 点而不撑高这一行。
+    /// 原因常驻；重发仍是行里的字，不画胶囊，点按区放大而不撑高这一行。
     private func failedLine(_ undelivered: Undelivered) -> some View {
-        HStack(spacing: 0) {
-            Text("未送达，")
-            Button(MessageMenu.Item.resend.title, action: undelivered.resend)
-                .fontWeight(.semibold)
-                .buttonStyle(PressStyle(.inline))
-                .contentShape(.rect.inset(by: -14))
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(verbatim: undelivered.reason)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            HStack(spacing: 0) {
+                Text("未送达，")
+                Button(MessageMenu.Item.resend.title, action: undelivered.resend)
+                    .fontWeight(.semibold)
+                    .buttonStyle(PressStyle(.inline))
+                    .contentShape(.rect.inset(by: -14))
+            }
         }
         .font(Typography.caption).foregroundStyle(palette.failure)
     }

@@ -44,6 +44,8 @@ extension CueTools {
     let tail = "（\(short)）"
     let moment = Speech.Moment.always(localHost: host)
     switch Speech.trip(latest, at: moment) {
+    case .preparing(let reason):
+      return .ok("\(what)：\(reason)。这是原请求，不要重复发送。\(tail)")
     case .delivered:
       return .ok("\(what)：已送达。\(tail)")
     case .failed(.reported(let reason)):

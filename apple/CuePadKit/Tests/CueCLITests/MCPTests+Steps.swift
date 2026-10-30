@@ -42,7 +42,7 @@ extension MCPTests {
       }
 
       // Mac 送到：记下这次发送，这一步绑上会话
-      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store] request in
+      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store] request, _ in
         _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
         return .succeeded
       }
@@ -91,7 +91,7 @@ extension MCPTests {
       let launch = try #require(try await store.deliveryRequests().first { $0.mode == .known(.start) })
       #expect(try await ends() == ["s1"])
       // Mac 开好新会话：会话记录带着请求里的 token 到了，这一步绑上它
-      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
       try await executor.start()
       _ = try await eventually(store, { try $0.deliveryRequest(launch.id)?.status }) { $0 == .known(.succeeded) }
       await executor.stop()

@@ -39,8 +39,8 @@ extension MCPTests {
       #expect(launch.launch?.agent == .codex && launch.launch?.model == PiModelKey(provider: "codex", id: "gpt-5.1") && launch.launch?.thinking == .high)
 
       // 那台 Mac 上没有 Codex：执行器把失败写回
-      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) {
-        $0.launch?.agent == .codex ? .failed(.verbatim("这台 Mac 上没有找到 Codex")) : .succeeded
+      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { request, _ in
+        request.launch?.agent == .codex ? .failed(.verbatim("这台 Mac 上没有找到 Codex")) : .succeeded
       }
       try await executor.start()
       defer { Task { await executor.stop() } }
@@ -69,7 +69,7 @@ extension MCPTests {
     try await recorder.update(sessionID: "c1", state: .error, title: "改文案", agent: .claudeCode)
     try await Server.run(library: sandbox.directory) { server in
       // 这台 Mac 一收到就办成：说话、作答的工具等得到结果，马上返回
-      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
       try await executor.start()
       defer { Task { await executor.stop() } }
 

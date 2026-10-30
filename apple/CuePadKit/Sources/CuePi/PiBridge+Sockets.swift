@@ -68,7 +68,6 @@ extension PiBridge {
             let ack = try await replies.request(commandID) { connection.write(data) }
             guard !ack.ok else { return ack }
             // 旧扩展不认比它新的命令（`PiWire.oldestExtension`）：换上新扩展后才做得到
-            if ack.error == "bad_request", extensionVersion != PiExtensionBundle.version { throw PiBridgeError.upgradingExtension }
             throw ack.error == "unknown_model" ? PiBridgeError.unknownModel(.pi) : PiBridgeError.rejected(ack.error ?? "unknown")
         }
     }

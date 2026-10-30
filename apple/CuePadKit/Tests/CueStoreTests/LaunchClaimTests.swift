@@ -38,7 +38,7 @@ import Testing
     let idea = try await store.createCard(in: project.id, body: "看一下重连")
     let executor = DeliveryExecutor(
       store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("\($0)") }
-    ) { _ in .succeeded }
+    ) { _, _ in .succeeded }
     try await executor.start()
     let launch = try await store.requestLaunch(
       PiLaunch(project: project.id, prompt: idea.body, token: "t-late"), title: "圆桌", on: "mac-a", card: idea.id)

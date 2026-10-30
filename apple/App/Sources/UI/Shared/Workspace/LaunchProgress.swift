@@ -29,6 +29,7 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
         guard let request else { return .idle }
         let trip = Speech.trip(request, at: moment)
         switch trip {
+        case .preparing: return .idle
         case .sending, .sent: return .sending(.of(request, session: nil, trip: trip))
         case .delivered: return .opening
         case .unconfirmed(let reason): return .unconfirmed(reason)

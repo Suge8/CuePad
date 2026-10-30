@@ -29,7 +29,7 @@ struct DeliveryMigrationTests {
         let current = try #require(try await store.deliveryRequest(request.id))
         let uncertain = raw == "failed" && claimed
         #expect(current.status == (uncertain ? .known(.unconfirmed) : .known(.failed)))
-        #expect(current.failureReason?.text == "原样保留的错误")
+        #expect(current.reason?.text == "原样保留的错误")
         let canonical = try #require(try await store.syncRow(recordName: row.id))
         #expect(canonical.fields["status"] == .text(uncertain ? "unconfirmed" : "not_delivered"))
         if raw == "failed" {
@@ -64,7 +64,7 @@ struct DeliveryMigrationTests {
         #expect(try await store.applyRemote([.save(old, systemFields: Data())]).isEmpty)
         let current = try #require(try await store.deliveryRequest(request.id))
         #expect(current.status == .known(.unconfirmed))
-        #expect(current.failureReason?.text == "旧宿主的原始错误")
+        #expect(current.reason?.text == "旧宿主的原始错误")
         let workspace = Workspace(services: receiver.services)
         await workspace.resend(.request(current), restoringInto: receiver.services.settings.replyDraftBinding(for: UUID())).value
         #expect(workspace.notice?.isError == true)
@@ -97,7 +97,7 @@ struct DeliveryMigrationTests {
         defer { services.cancelBackgroundWork() }
         let migrated = try #require(try await store.deliveryRequest(request.id))
         #expect(migrated.status == (claimed ? .known(.unconfirmed) : .known(.failed)))
-        #expect(migrated.failureReason?.text == "原来的失败原因")
+        #expect(migrated.reason?.text == "原来的失败原因")
         #expect(try await store.pendingSync(among: [row.id]).saves.map(\.id) == [row.id])
         let workspace = Workspace(services: services)
         await workspace.resend(.request(migrated), restoringInto: services.settings.replyDraftBinding(for: UUID())).value

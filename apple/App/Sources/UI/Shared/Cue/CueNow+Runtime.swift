@@ -110,8 +110,8 @@ nonisolated struct RuntimeTimeline {
             }
             var entry = Work(id: work.id, name: name, since: since)
             for request in handoffs {
-                let trip = Speech.trip(request, at: moment)
-                guard trip.inTransit else { entry.unknown += 1; continue }
+                guard let activity = Speech.activity(request, at: moment) else { continue }
+                if case .unconfirmed = activity { entry.unknown += 1; continue }
                 entry.pending += 1
                 let due = min(Speech.deadline(request, at: moment) ?? now + CueNow.fastStale, now + CueNow.fastStale)
                 events[due, default: []].append(Removal(work: index, pending: 1, unknown: 1))
