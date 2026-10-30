@@ -122,10 +122,10 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
   public internal(set) var name: String?
   public var model: PiModelKey?
   public var thinking: PiThinkingLevel?
-  public var fast: Bool?
+  public var fast: Bool
 
   public init(
-    project: UUID, prompt: String?, token: String, agent: AgentKind = .pi, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool? = nil
+    project: UUID, prompt: String?, token: String, agent: AgentKind = .pi, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false
   ) {
     self.project = project
     self.prompt = prompt
@@ -134,6 +134,20 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
     self.thinking = thinking
     self.fast = fast
     self.agent = agent
+  }
+
+  private enum CodingKeys: String, CodingKey { case project, prompt, token, agent, name, model, thinking, fast }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    project = try c.decode(UUID.self, forKey: .project)
+    prompt = try c.decodeIfPresent(String.self, forKey: .prompt)
+    token = try c.decode(String.self, forKey: .token)
+    agent = try c.decodeIfPresent(AgentKind.self, forKey: .agent)
+    name = try c.decodeIfPresent(String.self, forKey: .name)
+    model = try c.decodeIfPresent(PiModelKey.self, forKey: .model)
+    thinking = try c.decodeIfPresent(PiThinkingLevel.self, forKey: .thinking)
+    fast = try c.decodeIfPresent(Bool.self, forKey: .fast) ?? false
   }
 }
 

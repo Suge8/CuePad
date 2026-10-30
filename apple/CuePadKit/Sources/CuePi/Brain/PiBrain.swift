@@ -61,7 +61,7 @@ final class PiBrain: HostedSession {
                 "--mode", "rpc", "--no-session", "--offline", "-ne", "-na", "-e", Self.tools.path, "-e", Self.subscription.path,
                 "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "-nbt", "--tools", "+read,+grep,+find,+ls",
             ]
-            if config.fast == true { arguments += ["-e", Bundle.module.url(forResource: "cue-fast", withExtension: "ts")!.path] }
+            if config.fast { arguments += ["-e", Bundle.module.url(forResource: "cue-fast", withExtension: "ts")!.path] }
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--thinking", effort.rawValue] }
             let process = try await ChildProcess(

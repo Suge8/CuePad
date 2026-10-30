@@ -239,8 +239,8 @@ final class MacExecutor {
         let clock = ContinuousClock(), began = clock.now
         let id = try await runtime(launch.opening).open(
             in: directory, launchToken: launch.token, name: launch.name, model: launch.model, thinking: launch.thinking)
-        if let fast = launch.fast {
-            do { try await pi.configure(PiConfig(fast: fast), in: id) }
+        if launch.fast || pi.session(id: id)?.fast == true {
+            do { try await pi.configure(PiConfig(fast: launch.fast), in: id) }
             catch { try? await pi.end(id); throw error }
         }
         let opened = clock.now

@@ -20,7 +20,7 @@ struct CueConfigControls: View {
             update {
                 $0.runtime = .known(agent)
                 $0.model = nil
-                $0.fast = nil
+                $0.fast = false
             }
         } chooseModel: { key in
             guard let agent = choice.agent else { return }
@@ -28,7 +28,7 @@ struct CueConfigControls: View {
             let selected = key.flatMap { key in models?.models.first { $0.key == key } } ?? models?.defaultModel
             update {
                 $0.model = key.map(agent.modelRef)
-                if selected?.supportsFast != true { $0.fast = nil }
+                if selected?.supportsFast != true { $0.fast = false }
             }
         } chooseThinking: { level in
             update { $0.effort = .known(level) }

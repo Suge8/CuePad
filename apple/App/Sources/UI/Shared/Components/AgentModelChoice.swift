@@ -28,7 +28,7 @@ nonisolated struct AgentModelChoice: Equatable, Sendable {
     /// 指定的模型；nil 是这家的默认。
     let model: PiModelKey?
     let thinking: PiThinkingLevel?
-    var fast: Bool? = nil
+    var fast: Bool = false
 
     private var brain: MacAgent? { agent.flatMap { kind in agents.first { $0.kind == kind } } }
 
@@ -43,6 +43,7 @@ nonisolated struct AgentModelChoice: Equatable, Sendable {
     }
 
     var shownThinking: PiThinkingLevel? { thinking.map { $0.clamped(to: levels) } }
+    var launchFast: Bool { fast && current?.supportsFast == true }
 
     /// 选了不指定时用的那项写回 nil：跟着这家的默认走。
     @MainActor func menu(choose: @escaping (PiModelKey?) -> Void) -> PiModelMenu {

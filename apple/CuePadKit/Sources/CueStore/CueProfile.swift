@@ -11,7 +11,7 @@ public struct CueProfile: Equatable, Sendable {
   public var model: String?
   /// 思考强度：各家都用这一个枚举，各家在大脑里映射。全新的设置是低（大脑默认要快）；nil 是交给运行时取档。
   public var effort: Open<PiThinkingLevel>?
-  public var fast: Bool?
+  public var fast: Bool
   /// 启用的时刻；nil 是没启用。
   public var enabledAt: Date?
   public var modifiedAt: Date
@@ -31,7 +31,7 @@ public struct CueProfile: Equatable, Sendable {
 
   public init(
     name: String = CueProfile.defaultName, hostID: String? = nil, runtime: Open<AgentKind> = .known(.pi), model: String? = nil,
-    effort: Open<PiThinkingLevel>? = .known(.low), fast: Bool? = nil, enabledAt: Date? = nil, modifiedAt: Date = .now
+    effort: Open<PiThinkingLevel>? = .known(.low), fast: Bool = false, enabledAt: Date? = nil, modifiedAt: Date = .now
   ) {
     self.name = name
     self.hostID = hostID
@@ -48,13 +48,13 @@ extension CueProfile: Record {
   static let table = Table.cueProfile
   static let columns = ["id", "name", "hostID", "runtime", "model", "effort", "enabledAt", "modifiedAt", "fast"]
   var bindings: [any SQLBindable] {
-    [Self.recordID, name, hostID, runtime.rawValue, model, effort?.rawValue, enabledAt, modifiedAt, fast.map { $0 ? Int64(1) : Int64(0) }]
+    [Self.recordID, name, hostID, runtime.rawValue, model, effort?.rawValue, enabledAt, modifiedAt, fast ? Int64(1) : Int64(0)]
   }
   init(row: Row) {
     let name = row.text(1).trimmingCharacters(in: .whitespacesAndNewlines)
     self.init(
       name: name.isEmpty ? Self.defaultName : name, hostID: row.textOrNil(2), runtime: Open(rawValue: row.text(3)),
-      model: row.textOrNil(4), effort: row.textOrNil(5).map(Open.init(rawValue:)), fast: row.intOrNil(8).map { $0 == 1 }, enabledAt: row.dateOrNil(6), modifiedAt: row.date(7))
+      model: row.textOrNil(4), effort: row.textOrNil(5).map(Open.init(rawValue:)), fast: row.int(8) == 1, enabledAt: row.dateOrNil(6), modifiedAt: row.date(7))
   }
 }
 

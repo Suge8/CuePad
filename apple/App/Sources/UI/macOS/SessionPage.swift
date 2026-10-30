@@ -181,7 +181,7 @@ extension Workspace {
     /// `agent`：用哪个 Agent 开；`model`、`thinking` 为 nil 是这家的默认。
     func startSession(
         in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool? = nil, progressed: @escaping (LaunchProgress) -> Void
+        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false, progressed: @escaping (LaunchProgress) -> Void
     ) async throws -> String {
         let launch = try await services.launchSession(
             in: project, prompt: prompt, title: title, on: host ?? services.hostID, card: card, agent: agent, model: model, thinking: thinking, fast: fast)

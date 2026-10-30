@@ -35,7 +35,7 @@ struct NewSessionForm: View {
     /// 这次指定的模型与思考强度（nil 是这家的默认）。
     @State private var model: PiModelKey?
     @State private var thinking: PiThinkingLevel?
-    @State private var fast: Bool?
+    @State private var fast = false
     @State private var prompt = ""
     @State private var stage = Stage.idle
 
@@ -141,7 +141,7 @@ struct NewSessionForm: View {
             do {
                 let id = try await workspace.startSession(
                     in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.shownName, agent: agent,
-                    model: choice.model, thinking: choice.shownThinking, fast: choice.current?.supportsFast == true ? fast : nil
+                    model: choice.model, thinking: choice.shownThinking, fast: choice.launchFast
                 ) { stage = .launching($0) }
                 stage = .idle
                 opened(id)

@@ -64,12 +64,12 @@ final class CodexBrain: HostedSession {
                 "baseInstructions": .string(config.systemPrompt), "config": .object(overrides),
             ]
             if let model = config.model { params["model"] = .string(model) }
-            if let fast = config.fast { params["serviceTier"] = fast ? "priority" : "default" }
+            params["serviceTier"] = config.fast ? "priority" : "default"
             threadParams = .object(params)
             let started = try await driver.open("thread/start", threadParams)
             models = try await CodexModel.list(rpc, hidden: true)
             model = models.first { $0.id == started["model"]?.string }
-            fast = config.fast == true
+            fast = config.fast
             guard !fast || model?.supportsFast == true else { throw HostedSessionError.rejected(String(localized: "当前模型不支持加速")) }
             level = config.effort
         } catch {

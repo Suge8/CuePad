@@ -13,7 +13,7 @@ public struct CueBrainConfig: Sendable {
     public let model: String?
     /// 思考强度：各家共用 Pi 的档位，各实现映射到自己的写法、夹到模型支持的档位
     public let effort: PiThinkingLevel?
-    public let fast: Bool?
+    public let fast: Bool
     /// 整份替换运行时内置的系统提示
     public let systemPrompt: String
     public let workingDirectory: URL
@@ -23,7 +23,7 @@ public struct CueBrainConfig: Sendable {
     public let environment: [String: String]
 
     public init(
-        runtime: AgentKind, executable: URL, model: String?, effort: PiThinkingLevel?, fast: Bool? = nil, systemPrompt: String,
+        runtime: AgentKind, executable: URL, model: String?, effort: PiThinkingLevel?, fast: Bool = false, systemPrompt: String,
         workingDirectory: URL, mcp: [String], environment: [String: String]
     ) {
         self.runtime = runtime

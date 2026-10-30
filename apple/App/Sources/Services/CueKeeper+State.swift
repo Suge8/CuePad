@@ -21,7 +21,7 @@ extension CueKeeper {
         var runtime: Open<AgentKind>
         var model: String?
         var effort: PiThinkingLevel?
-        var fast: Bool?
+        var fast: Bool
 
         init(_ profile: CueProfile) {
             (name, runtime, model, effort, fast) = (profile.name, profile.runtime, profile.model, profile.effort?.known, profile.fast)

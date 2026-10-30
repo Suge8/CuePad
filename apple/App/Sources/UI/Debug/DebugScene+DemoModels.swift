@@ -12,9 +12,9 @@ extension DebugScene {
     /// OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）；
     /// Codex、Claude Code 与 Grok Build 是它们自己报的清单，照录像带里 Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）、
     /// Claude Code 的 `initialize`（Claude 系）与 Grok Build 握手报的模型，提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。
-    static func demoModels(for agent: AgentKind?) -> PiModelState {
+    static func demoModels(for agent: AgentKind?, fast: Bool? = nil) -> PiModelState {
         func listed(_ models: [PiModelOption], current: Int, thinking: PiThinkingLevel) -> PiModelState {
-            PiModelState(model: models[current], thinking: .known(thinking), models: models)
+            PiModelState(model: models[current], thinking: .known(thinking), fast: fast, models: models)
         }
         let levels: [PiThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
         switch agent {
@@ -126,7 +126,7 @@ extension DebugScene {
         #endif
     }
 
-    /// 不是 Pi 的演示会话（其余是 Pi）：都开在终端里，能做的按各家（`AgentCapabilities`）——cuepad 是 Claude Code（回复框只有文字、没有停止与模型），
+    /// 演示会话里 scratch 是后台托管的 Codex；其余非 Pi 会话在终端里——cuepad 是 Claude Code（回复框只有文字、没有停止与模型），
     /// homepage 是 Codex（能作答、换模型，斜杠命令只有几个内置与 skill），billing 是 OpenCode，历史里的 weekly 是 Claude Code。
     static let demoAgents: [String: AgentKind] = ["scratch": .codex, "cuepad": .claudeCode, "homepage": .codex, "billing": .opencode, "weekly": .claudeCode]
 }

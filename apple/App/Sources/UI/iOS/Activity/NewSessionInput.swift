@@ -35,7 +35,7 @@ struct NewSessionInput: View {
         /// 在 `host` 那台 Mac、项目的文件夹（没绑的那台先建工作区）用 `agent`（与 `model`、`thinking`，nil 是默认）开新会话，`draft` 作开场：
         /// 开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`；没有就是带上的第一张）。
         func launch(
-            in project: Project, on host: String, draft: ComposerDraft, agent: AgentKind, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool? = nil,
+            in project: Project, on host: String, draft: ComposerDraft, agent: AgentKind, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool = false,
             services: AppServices
         ) async throws -> SessionLaunch {
             try await services.launchSession(
@@ -57,7 +57,7 @@ struct NewSessionInput: View {
     /// 这次指定的模型与思考强度（nil 是这家的默认）。
     @State private var model: PiModelKey?
     @State private var thinking: PiThinkingLevel?
-    @State private var fast: Bool?
+    @State private var fast = false
     @State private var sending = false
     @FocusState private var focused: Bool
 
@@ -179,7 +179,7 @@ struct NewSessionInput: View {
         workspace.attempt {
             defer { sending = false }
             launched = try await start.launch(
-                in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, fast: brain.current?.supportsFast == true ? fast : nil, services: services)
+                in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, fast: brain.launchFast, services: services)
         }
     }
 }

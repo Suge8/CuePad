@@ -44,7 +44,7 @@ extension CueKeeper {
 
     /// 按这家起一个大脑（Cue 的班次与后台整理记忆的都经这里）：工作目录是 Cue 自己的空目录，`tools` 是 `cuepad mcp` 后面的参数（给哪一组工具）。
     func startBrain(
-        _ runtime: AgentKind, _ launch: CueLaunch, model: String?, effort: PiThinkingLevel?, fast: Bool? = nil, systemPrompt: String, tools: [String]
+        _ runtime: AgentKind, _ launch: CueLaunch, model: String?, effort: PiThinkingLevel?, fast: Bool = false, systemPrompt: String, tools: [String]
     ) async throws -> any HostedSession {
         let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
