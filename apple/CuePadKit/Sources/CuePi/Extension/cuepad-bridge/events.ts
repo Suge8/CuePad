@@ -49,9 +49,10 @@ export function follow(session: Session): (() => void)[] {
 			// 首条消息与 Pi 会话列表一致，不区分机器消息
 			session.updateInfo({ firstMessage: session.firstMessage ?? preview(messageText(event.message)) });
 			// 交出的那句落成了消息（带图时 Pi 在文字后附上图片说明，所以按开头认）：投送请求 id 写到它上面，再确认送达。
+			// 模板与 skill 落成的是展开后的文字，认不出原话：只在歇着时交出（`submit`），交出后的第一条你的消息就是它。
 			// 扩展先收到 message_end、Pi 再把同一个消息对象写进会话文件，所以 id 随消息落盘，对话（读会话文件）据此认出它
 			const said = session.starting;
-			if (!said || !messageText(event.message).startsWith(said.text)) return;
+			if (!said || (!said.expand && !messageText(event.message).startsWith(said.text))) return;
 			session.starting = null;
 			if (said.id) Object.assign(event.message, { cuepadDelivery: said.id });
 			said.ack?.({ ok: true });

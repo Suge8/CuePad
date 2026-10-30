@@ -1,9 +1,10 @@
-// 测试用 FireCode 配置：只写指挥官必需的一节（至少一个角色，用假模型，零网络），其余一律用 FireCode 的缺省。
-// 不逐项列它的开关与字段：它删改过的名字会让整份配置被拒、指挥官不加载；缺省不随它的版本变。
+// 测试用 FireCode 配置：只写指挥官必需的一节（至少一个角色，用假模型，零网络），其余用 FireCode 的缺省。
+// 审查与守望两节没有缺省、要逐项写全，测试用不到，关掉；它们的字段随 FireCode 的版本变，写了反而让整份配置被拒、指挥官不加载。
 // 指挥官没加载时 `subagents` 工具报错，`PiProcess.requireSubagentsTool` 带着它的提示原文失败。
 {
+	"features": { "review": false, "watcher": false },
 	"master": {
 		"autoActivate": true,
-		"roles": { "工程师": { "model": "fake/echo/off", "use": "测试", "fallback": [] } }
+		"roles": { "工程师": { "model": "fake/echo/off", "use": "测试" } }
 	}
 }

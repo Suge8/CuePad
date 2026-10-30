@@ -50,7 +50,7 @@ struct AgentIntegrationTests {
     }
 
     private func installAll() throws {
-        try fakeAgent("pi", printing: "0.90.0")
+        try fakeAgent("pi", printing: PiRuntime.facts.minimumVersion!.description)
         try fakeAgent("claude", printing: "2.1.299 (Claude Code)")
         try fakeAgent("codex")
         try fakeAgent("grok", printing: "grok 1.0.52 (0920c8169e27)")

@@ -7,7 +7,7 @@ import CueStore
 
 /// 压缩上下文是会话状态里的一档"工作中"（`.compacting`）：真实 Pi + 安装器装进临时目录的真实扩展 + 假模型 + `PiBridge`。
 /// 手动 /compact、上下文快满时自动压缩、上下文溢出后压缩再重试，三种都先报"在压缩"；
-/// 歇着时开始的压缩（手动）结束、失败或被停止后回到原来的状态和原来的计时起点——不是新的一轮。
+/// 歇着时开始的压缩（手动）结束或被停止后回到原来的状态和原来的计时起点——不是新的一轮；失败了是一次出错。
 /// 摘要请求的停住与成败由对话里的标记控制（`[[slow-compact]]`、`[[fail-compact]]`、`[[overflow]]`，见 Fixtures/fake-model.ts）：
 /// 压缩停住多久由测试决定（`PiProcess.release`），不按时长——机器负载高时测试自己的步骤会慢过任何固定窗口。
 @MainActor
@@ -54,7 +54,7 @@ struct RealCompactTests {
             let settled = try #require(bridge.sessions.first)
             let log = ChangeLog(bridge)
 
-            try await bridge.command("/compact", in: s.id)
+            let compact = Task { try await bridge.command("/compact", in: s.id) }  // 压完才确认
             try await eventually("在压缩") { bridge.sessions.first?.state == .compacting }
             let compacting = try #require(bridge.sessions.first)
             #expect(compacting.busySince != nil && compacting.stateSince > settled.stateSince)
@@ -72,28 +72,30 @@ struct RealCompactTests {
                 if case .stateChanged(let session, .compacting) = change { session } else { nil }
             }.first)
             #expect(resumed.stateSince == settled.stateSince && resumed.busySince == nil)
+            await #expect(throws: PiBridgeError.rejected("failed: Compaction cancelled")) { try await compact.value }
         }
     }
 
-    @Test func 手动压缩失败或被停止_回到原来的状态与计时() async throws {
+    /// 停下的压缩回到原来的歇下与计时，命令以"取消"回；失败的压缩是一次出错（与自动压缩同一条收尾），命令以失败回。
+    @Test func 手动压缩被停止回到原来的状态与计时_失败报错() async throws {
         try await withRig { pi, bridge, s in
-            // 摘要请求先停住再失败：失败在受理之后，命令照常受理
             try await reply(pi, bridge, "第一轮 [[slow-compact]] [[fail-compact]]")
             try await reply(pi, bridge, "第二轮")
             let settled = try #require(bridge.sessions.first)
             let log = ChangeLog(bridge)
 
-            try await bridge.command("/compact", in: s.id)
-            let releasing = releaseWhileCompacting(pi, bridge)  // 命令受理后才放行，失败才在受理之后
-            try await eventually("失败后回落") { log.states == [.compacting, .settled] }
-            releasing.cancel()
-            #expect(bridge.sessions.first?.stateSince == settled.stateSince)
-
-            try await bridge.command("/compact", in: s.id)
+            let stopping = Task { try await bridge.command("/compact", in: s.id) }  // 压完才确认
             try await eventually("在压缩") { bridge.sessions.first?.state == .compacting }
             try await bridge.abort(s.id)
-            try await eventually("停下后回落") { log.states.count == 4 && log.states.last == .settled }
+            await #expect(throws: PiBridgeError.rejected("failed: Compaction cancelled")) { try await stopping.value }
+            try await eventually("停下后回落") { log.states == [.compacting, .settled] }
             #expect(bridge.sessions.first?.stateSince == settled.stateSince && bridge.sessions.first?.busySince == nil)
+
+            let releasing = releaseWhileCompacting(pi, bridge)
+            defer { releasing.cancel() }
+            await #expect(throws: PiBridgeError.self, "压缩失败，命令以失败回") { try await bridge.command("/compact", in: s.id) }
+            try await eventually("失败报成出错") { log.states.count == 4 && log.states.last == .error }
+            #expect(bridge.sessions.first?.errorMessage?.contains("fake model failure") == true)
             #expect(try compactions(in: s) == 0)
         }
     }

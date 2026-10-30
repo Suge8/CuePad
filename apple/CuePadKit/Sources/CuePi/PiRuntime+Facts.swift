@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 extension PiRuntime {
-    /// 最低 1.4.0：官方原包验证了 agent_settled、context_edit 与命令空闲等待。官方脚本要 Node.js（下限是脚本里写的），没有时只报一句英文就退出；太旧时用它自带的升级命令。
+    /// 最低 1.4.0：官方原包验证了 agent_settled、context_edit 与命令空闲等待。抬它时同一改动里重录 Pi 录像带（`TEST_RUNNER_CUEPAD_AGENT_TESTS=pi`，见 CuePiTests 的 `RealAgents`）。官方脚本要 Node.js（下限是脚本里写的），没有时只报一句英文就退出；太旧时用它自带的升级命令。
     /// 没有命令行登录，只能在它的终端界面里输入 /login。没有桌面版：只有配置目录不算装着。
     /// 上报通道是桥扩展（`PiExtensionFiles`），托管的会话也经它上报，所以没接入开不出会话；托管进程空闲满时限自己退出（交给扩展计时）。
     nonisolated public static let facts = AgentFacts(
