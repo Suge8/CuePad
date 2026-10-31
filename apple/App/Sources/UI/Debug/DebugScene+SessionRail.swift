@@ -7,7 +7,6 @@ import SwiftUI
 /// 右侧只记组件发出的打开意图与系统拖放收到的会话 id；不调用 Workspace 导航。`-CuePadRailEmpty YES` 验空列占位。
 struct DebugSessionRail: View {
     let workspace: Workspace
-    @State private var data: SessionRailData?
     @State private var event = "—"
     @Environment(\.palette) private var palette
 
@@ -21,12 +20,10 @@ struct DebugSessionRail: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            if let data {
-                SessionRail(data: data, form: form, pulse: workspace.pulse) { session, opening in
-                    event = "\(opening == .leading ? "leading" : "primary"): \(session.sessionID)"
-                }
-                .frame(height: 650)
+            SessionRail(data: workspace.services.liveSessions.rail, form: form, pulse: workspace.pulse) { session, opening in
+                event = "\(opening == .leading ? "leading" : "primary"): \(session.sessionID)"
             }
+            .frame(height: 650)
             VStack(alignment: .leading, spacing: 16) {
                 Text(verbatim: "SessionRail · \(Int(form.width)) pt").font(Typography.bodyStrong)
                 Text(verbatim: event).font(Typography.body).accessibilityIdentifier("rail-event")
@@ -43,7 +40,6 @@ struct DebugSessionRail: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(palette.desk)
         .environment(workspace)
-        .observing(workspace.services.store, into: $data, onError: { DebugScene.abandon("会话条读取", $0) }, SessionRailData.read)
     }
 }
 

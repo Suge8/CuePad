@@ -89,9 +89,13 @@ struct CueRelayStage: ViewModifier {
             flightID = id
             arriving = Set(flight.ends.filter(\.opens).map(\.session))
             playback?.cancel()
+            let readyRails = rails.allObjects.filter(\.canReveal)
             playback = Task {
                 if flight.direction == .relay {
-                    for rail in rails.allObjects { await rail.prepare(flight.ends) }
+                    // 会话条与 flight 来自同一快照；先让新格挂载，再滚入，最后量锚。缺席目标不等待。
+                    await NextFrame.drawn()
+                    guard !Task.isCancelled else { return }
+                    for rail in readyRails { rail.prepare(flight.ends) }
                 }
                 // 在接力的那几处这一刻才挂上锚：等这一次更新排好、提交了再量
                 await NextFrame.drawn()

@@ -29,7 +29,6 @@ struct WideRail: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var data: SessionRailData?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -46,17 +45,14 @@ struct WideRail: View {
             .buttonStyle(.row)
             .accessibilityLabel(workspace.cue.name)
             .relaySpot(cue: .entry)
-            if let data {
-                SessionRail(data: data, form: width == SessionRail.Form.wide.width ? .wide : .narrow,
-                            marked: Set(workspace.shownSessions.compactMap(\.sessionID)), pulse: workspace.pulse) { session, opening in
-                    workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .leading ? .main : .side)
-                }
+            SessionRail(data: services.liveSessions.rail, form: width == SessionRail.Form.wide.width ? .wide : .narrow,
+                        marked: Set(workspace.shownSessions.compactMap(\.sessionID)), pulse: workspace.pulse) { session, opening in
+                workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .leading ? .main : .side)
             }
             Spacer(minLength: 0)
         }
         .frame(width: width)
         .background(palette.sidebar)
-        .observing(services.store, into: $data, onError: workspace.fail) { try SessionRailData.read(from: $0) }
     }
 }
 

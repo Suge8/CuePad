@@ -33,6 +33,8 @@ final class LiveSessions {
     /// 叫醒那一路不在这里（`CueWatch.wake`）。
     /// 与会话一起读：重排"在做"那一列的那次写入（话在路上、新会话出现）与这次接力同一份到达界面，量落点时那一列已经排好。
     private(set) var flight: CueFlight?
+    /// 与接力事实同一次读到，界面不另起订阅等待目标进入会话条。
+    private(set) var rail = SessionRailData(waiting: [], advancing: [])
     /// 已经算过的最新时刻（叫醒与交给同一条时间线）。
     @ObservationIgnored private var seen: Date?
     private let launchedAt = Date()
@@ -65,13 +67,14 @@ final class LiveSessions {
         var cue: CueDuty?
         var handoffs: [String: CueHandoff]
         var relays: CueFlight.Facts
+        var rail: SessionRailData
 
         static func read(from store: isolated CueStore, endedOn host: String? = nil, since: Date = .now) throws -> Page {
             let items = try store.piSessionPage(.current).items
             return Page(
                 items: items, total: try store.piSessionCount(),
                 ended: try host.map { try store.endedSessions(on: $0, since: since, limit: LiveSessions.endedWindow) } ?? [],
-                cue: try store.cueDuty(), handoffs: try store.handoffs(items.map(\.state)), relays: try CueFlight.Facts.read(from: store))
+                cue: try store.cueDuty(), handoffs: try store.handoffs(items.map(\.state)), relays: try CueFlight.Facts.read(from: store), rail: try SessionRailData.read(from: store))
         }
     }
 
@@ -98,6 +101,7 @@ final class LiveSessions {
         set(\.undelivered, PiSessionListItem.undelivered(live, at: moment))
         set(\.handoffs, page.handoffs)
         set(\.cue, page.cue)
+        set(\.rail, page.rail)
         if let next = page.relays.flight(after: seen) {
             seen = page.relays.latest
             flight = next

@@ -143,6 +143,13 @@ extension DebugScene {
         let launcher = PiStateRecorder(store: store, hostID: "demo-mac", bootID: defaults.bool(forKey: "CuePadNarrow") ? "narrow-demo-boot" : nil)
         var round = 0
         await everyIfAsked("CuePadRelay") {
+            if kind == "mixed" {
+                let requests = try await relayMixed(store, on: launcher)
+                return ("mixed", {
+                    for request in requests { try await store.deleteDelivery(request.id) }
+                    try await launcher.end(sessionID: "relay-1")
+                })
+            }
             let starts = kind.map { $0 == "start" } ?? !round.isMultiple(of: 2)
             round += 1
             if starts {
@@ -192,7 +199,7 @@ extension DebugScene {
                 if let log { try await measureFlight("idle", seconds: probe, into: log) }
                 guard let done = try await act() else { continue }
                 if let log { try await measureFlight(done.kind, seconds: probe, into: log) }
-                await Task.wait(for: .seconds(max(1.5 - probe, 0)))
+                await Task.wait(for: .seconds(max((done.kind == "mixed" ? 8 : 1.5) - probe, 0)))
                 try await done.undo()
             }
         }

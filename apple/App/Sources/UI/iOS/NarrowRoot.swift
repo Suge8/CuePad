@@ -43,7 +43,6 @@ private struct NarrowHome: View {
 private struct NarrowCue: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var rail: SessionRailData?
 
     var body: some View {
         RouteView(route: .cue)
@@ -58,19 +57,12 @@ private struct NarrowCue: View {
                     .accessibilityIdentifier("narrow-sidebar")
             }
             .overlay(alignment: .leading) {
-                Group {
-                    if let rail {
-                        SessionRail(data: rail, form: .phone, pulse: workspace.pulse) { session, _ in
-                            workspace.openSession(session.id, sessionID: session.sessionID)
-                        }
-                    } else {
-                        Color.clear.frame(width: SessionRail.Form.phone.width)
-                    }
+                SessionRail(data: workspace.services.liveSessions.rail, form: .phone, pulse: workspace.pulse) { session, _ in
+                    workspace.openSession(session.id, sessionID: session.sessionID)
                 }
                 .padding(.top, CueHeader.height + Bars.contentGap)
                 .padding(.bottom, ComposerMetrics.slot + 16)
             }
-            .observing(workspace.services.store, into: $rail, onError: workspace.fail, SessionRailData.read)
     }
 }
 
