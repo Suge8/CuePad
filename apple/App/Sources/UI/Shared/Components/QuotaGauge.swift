@@ -62,8 +62,9 @@ private struct QuotaEmpty: View {
     }
 }
 
-/// 账号放得下就排成两栏：按顺序前一半在左栏、后一半在右栏，各栏从上往下（块高矮不一，按行对齐会留空洞）。
-/// 位置只看顺序（`QuotaMeter.ordered`），不看块高：哪个账号失败、读数行多少都不挪别的账号。
+/// 账号放得下就排成两栏：按顺序（`QuotaMeter.ordered`）切成连续两段，左栏从上往下读完再读右栏，读屏同序（块高矮不一，按行对齐会留空洞）。
+/// 切在哪里按量到的块高选：让较高那栏最矮的切点，一样高时取靠前的。位置只由顺序与各块形状定，刷新不挪；账号失败、少了窗口这类形状变了才可能换栏。
+/// 只有一个账号或放不下两栏（手机、菜单栏面板）时一块接一块往下排。
 /// 没给宽（Mac 侧栏的气泡）时取两栏的宽；只有一个账号或放不下两栏（手机、菜单栏面板）时一块接一块往下排。
 struct QuotaColumns: Layout {
     static let column: CGFloat = 248
@@ -86,14 +87,19 @@ struct QuotaColumns: Layout {
     private func arrange(_ width: CGFloat, _ subviews: Subviews) -> ([(x: CGFloat, y: CGFloat, width: CGFloat)], [CGFloat]) {
         let count = subviews.count > 1 && width + 1 >= Self.column * 2 + Self.gap ? 2 : 1
         let column = (width - Self.gap * CGFloat(count - 1)) / CGFloat(count)
+        let blocks = subviews.map { $0.sizeThatFits(ProposedViewSize(width: column, height: nil)).height }
+        func stack(_ part: ArraySlice<CGFloat>) -> CGFloat { part.reduce(0, +) + Self.lineSpacing * CGFloat(max(part.count - 1, 0)) }
+        // 右栏从第几块起；只有一栏时不切
+        let split = count == 1 ? blocks.count : (1..<blocks.count).min { a, b in
+            (max(stack(blocks[..<a]), stack(blocks[a...])), a) < (max(stack(blocks[..<b]), stack(blocks[b...])), b)
+        }!
         var heights = Array(repeating: CGFloat(0), count: count)
         var places: [(x: CGFloat, y: CGFloat, width: CGFloat)] = []
-        let perColumn = (subviews.count + count - 1) / count
-        for (offset, subview) in subviews.enumerated() {
-            let index = offset / perColumn
+        for (offset, block) in blocks.enumerated() {
+            let index = offset < split ? 0 : 1
             let y = heights[index] == 0 ? 0 : heights[index] + Self.lineSpacing
             places.append((CGFloat(index) * (column + Self.gap), y, column))
-            heights[index] = y + subview.sizeThatFits(ProposedViewSize(width: column, height: nil)).height
+            heights[index] = y + block
         }
         return (places, heights)
     }
