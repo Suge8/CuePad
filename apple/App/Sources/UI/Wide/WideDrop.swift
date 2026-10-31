@@ -15,28 +15,31 @@ extension EnvironmentValues {
 }
 
 #if os(iOS)
-struct WideDrop: ViewModifier {
-    let column: Workspace.Column
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.wideWindowID) private var windowID
-    @State private var drop = WideDropState()
+extension WideColumnController: UIDropInteractionDelegate {
+    func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
+        session.hasItemsConforming(toTypeIdentifiers: [DraggedColumn.type.identifier, UTType.cuepadSession.identifier])
+    }
 
-    func body(content: Content) -> some View {
-        content
-            .overlay { WideDropFeedback(state: drop) }
-            .onDrop(of: [DraggedColumn.type.identifier, UTType.cuepadSession.identifier], isTargeted: Bindable(drop).targeted) { providers in
-                guard let provider = providers.first else { return false }
-                if provider.hasItemConformingToTypeIdentifier(DraggedColumn.type.identifier) {
-                    load(DraggedColumn.self, type: DraggedColumn.type, from: provider) {
-                        workspace.dropSession(SessionRoute(id: $0.recordID, sessionID: $0.sessionID), in: column, movingWithinWindow: $0.windowID == windowID)
-                    }
-                } else {
-                    load(DraggedSession.self, type: .cuepadSession, from: provider) {
-                        workspace.openSession(PiSessionState.recordID(sessionID: $0.sessionID), sessionID: $0.sessionID, in: column)
-                    }
-                }
-                return true
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
+        drop.targeted = true
+        return UIDropProposal(operation: .copy)
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidExit session: any UIDropSession) { drop.targeted = false }
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: any UIDropSession) { drop.targeted = false }
+
+    func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
+        drop.targeted = false
+        guard let provider = session.items.first?.itemProvider else { return }
+        if provider.hasItemConformingToTypeIdentifier(DraggedColumn.type.identifier) {
+            load(DraggedColumn.self, type: DraggedColumn.type, from: provider) {
+                self.workspace.dropSession(SessionRoute(id: $0.recordID, sessionID: $0.sessionID), in: self.column, movingWithinWindow: $0.windowID == self.focus.windowID)
             }
+        } else {
+            load(DraggedSession.self, type: .cuepadSession, from: provider) {
+                self.workspace.openSession(PiSessionState.recordID(sessionID: $0.sessionID), sessionID: $0.sessionID, in: self.column)
+            }
+        }
     }
 
     private func load<Value: Decodable & Sendable>(_ value: Value.Type, type: UTType, from provider: NSItemProvider, apply: @escaping @MainActor (Value) -> Void) {
@@ -48,7 +51,7 @@ struct WideDrop: ViewModifier {
             Task { @MainActor in
                 switch result {
                 case .success(let value): apply(value)
-                case .failure(let error): workspace.fail(error)
+                case .failure(let error): self.workspace.fail(error)
                 }
             }
         }
@@ -66,10 +69,15 @@ struct WideSessionTitle: View {
     var body: some View {
         HStack {
             if let windowID, let session = workspace.session(in: column) {
+                #if os(iOS)
+                WideTitleDrag(title: title, item: DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
+                    .frame(maxWidth: .infinity)
+                #else
                 Text(verbatim: title).font(.headline).lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(.rect)
                     .draggable(DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
+                #endif
             }
             Button("关闭", icon: .close) { workspace.closeColumn(column) }
                 .labelStyle(.iconOnly)

@@ -161,20 +161,23 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     @Environment(AlertCenter.self) private var alerts
 
     func makeUIViewController(context: Context) -> WideColumnController {
-        let controller = WideColumnController(focus: focus, workspace: workspace)
+        let controller = WideColumnController(column: column, focus: focus, workspace: workspace)
         if column == .main { focus.main = controller } else { focus.side = controller }
         return controller
     }
 
     func updateUIViewController(_ controller: WideColumnController, context: Context) {
-        controller.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
+        controller.rootView = AnyView(content.overlay { WideDropFeedback(state: controller.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
     }
 }
 
 final class WideColumnController: UIHostingController<AnyView> {
+    let column: Workspace.Column
+    let drop = WideDropState()
     let focus: WideFocus
     let workspace: Workspace
-    init(focus: WideFocus, workspace: Workspace) {
+    init(column: Workspace.Column, focus: WideFocus, workspace: Workspace) {
+        self.column = column
         self.focus = focus
         self.workspace = workspace
         super.init(rootView: AnyView(EmptyView()))
@@ -182,12 +185,30 @@ final class WideColumnController: UIHostingController<AnyView> {
     }
     @MainActor required dynamic init?(coder: NSCoder) { nil }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        installDropTargets(in: view)
+    }
+
+    private func installDropTargets(in target: UIView) {
+        let interactions = target.interactions.compactMap { $0 as? UIDropInteraction }
+        // 列表与回复框自带接收器，会截住父栏的拖放；追加只认会话的接收器，保留原处理。
+        if (target === view || !interactions.isEmpty) && !interactions.contains(where: { $0.delegate === self }) {
+            target.addInteraction(UIDropInteraction(delegate: self))
+        }
+        target.subviews.forEach { installDropTargets(in: $0) }
+    }
+
     override var canBecomeFirstResponder: Bool { true }
 
     override var keyCommands: [UIKeyCommand]? {
-        [UIKeyCommand(input: "\t", modifierFlags: .control, action: #selector(cycle)),
-         UIKeyCommand(input: UIKeyCommand.inputLeftArrow, modifierFlags: [.command, .alternate], action: #selector(left)),
-         UIKeyCommand(input: UIKeyCommand.inputRightArrow, modifierFlags: [.command, .alternate], action: #selector(right))]
+        let commands = [
+            UIKeyCommand(input: "\t", modifierFlags: .control, action: #selector(cycle)),
+            UIKeyCommand(input: UIKeyCommand.inputLeftArrow, modifierFlags: [.command, .alternate], action: #selector(left)),
+            UIKeyCommand(input: UIKeyCommand.inputRightArrow, modifierFlags: [.command, .alternate], action: #selector(right))
+        ]
+        commands.forEach { $0.wantsPriorityOverSystemBehavior = true }
+        return commands
     }
     @objc private func cycle() { focus.cycle() }
     @objc private func left() { move(to: .main) }

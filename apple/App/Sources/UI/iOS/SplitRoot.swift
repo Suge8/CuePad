@@ -20,11 +20,9 @@ struct SplitRoot: View {
                         }.padding(.horizontal, 16).frame(height: 44)
                         destination(workspace.mainRoute, column: .main)
                     }
-                    .modifier(WideDrop(column: .main))
                 }.frame(width: sizes.main)
                 WideColumnHost(column: .side, focus: focus) {
                     destination(workspace.sideSession.map(Route.session) ?? .cue, column: .side)
-                        .modifier(WideDrop(column: .side))
                 }.frame(width: sizes.side)
             }
         }
