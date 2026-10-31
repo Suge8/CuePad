@@ -110,7 +110,10 @@ struct SessionsPane: View {
         return PiSessionRow(session: session, project: list.showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
             .spotlit(session.sessionID, cornerRadius: Radius.card)
             .sessionLink(session.sessionID, press: .card)
-            .contextMenu { SessionActions(session: session, task: item.task, ending: end?.inTransit == true) }
+            .contextMenu {
+                Button("在左边打开") { workspace.openSession(session.id, sessionID: session.sessionID, in: .main) }
+                SessionActions(session: session, task: item.task, ending: end?.inTransit == true)
+            }
     }
 
     @ViewBuilder private var empty: some View {

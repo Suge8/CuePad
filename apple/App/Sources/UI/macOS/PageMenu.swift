@@ -18,7 +18,6 @@ struct PageMenuSlot: View {
 
     private enum Content: Equatable {
         /// 会话页；页面还没交来值时是 nil。
-        case session(SessionHeader.State?)
         /// 编辑页开着：这张卡的操作；还没读到时是 nil。
         case card(Card?)
         case project(UUID)
@@ -29,7 +28,6 @@ struct PageMenuSlot: View {
 
         var help: LocalizedStringResource {
             switch self {
-            case .session: "完成或绑定任务、重命名、跳到终端、结束会话"
             case .card: "置顶、移到项目、复制、归档、删除"
             case .project: "选择灵感、看这个项目的会话、项目操作"
             case .cue: "运行情况、设置"
@@ -43,7 +41,6 @@ struct PageMenuSlot: View {
     private var content: Content {
         if let id = workspace.openCard { return .card((opened ?? nil).flatMap { $0.id == id ? $0 : nil }) }
         return switch workspace.mainRoute {
-        case .session: .session(workspace.shownSessionHeader)
         case .project(let id): .project(id)
         case .cue: .cue
         case .progress: .progress
@@ -56,7 +53,6 @@ struct PageMenuSlot: View {
         let content = content
         Menu {
             switch content {
-            case .session(let state?): if state.showsMenu { SessionMenuItems(state: state) }
             case .card(let card?): CardActions(card: card, more: true)
             case .project(let id): ProjectMenuItems(projectID: id)
             case .cue:
@@ -76,7 +72,7 @@ struct PageMenuSlot: View {
                 Button("接入 Agent…", icon: .extensionNote) { workspace.showsSetup = true }
             case .trash:
                 Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
-            case .session(nil), .card(nil), .none: EmptyView()
+            case .card(nil), .none: EmptyView()
             }
         } label: {
             // 看板段选了项目范围（范围收在这里）：钮角上带这个项目的小图形，一眼看得出只在看一个项目
@@ -89,7 +85,6 @@ struct PageMenuSlot: View {
         .menuStyle(.button).menuIndicator(.hidden)
         .buttonStyle(ControlButtonStyle(kind: .circular))
         .fixedSize()
-        .background { WindowFrame(\.minX) { workspace.pages.moreEdge = $0 } }
         .padding(.leading, Spacing.toolbarGap)
         .disabled(content == .none || content == .card(nil))
         .help(content.help)

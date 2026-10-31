@@ -45,17 +45,14 @@ extension SessionDigest {
     }
 }
 
-/// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），对话（`SessionChat`）、回复框（`PiReplyBar`，Mac 上一直是两层）
-/// 与顶栏规则（`ChatFollow.showsHeader`）与手机同一套。页头全在窗口工具栏上，内容区里不另起一行。
-/// 看历史时标题让开，"⋯"不让开：工具栏一直在，让开只留一格空位；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出。
-/// 很久以前的会话没有对话时请它所在的 Mac 补写。是一页（`Route.session`），左上不放返回：去别处靠侧栏。
+/// 一栏里的 Agent 会话。页头只显示标题与关闭，任务与会话操作在标题右键菜单里。
+/// 对话与回复框绑定 sessionID；左右换栏时草稿从会话偏好恢复。
 struct SessionPage: View {
     let sessionID: String
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    private var header: SessionHeader { workspace.sessionHeader }
     @State private var stored: SessionDigest?
     @State private var task: SessionTaskLink?
     @State private var follow = ChatFollow()
@@ -73,16 +70,10 @@ struct SessionPage: View {
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
         VStack(spacing: 0) {
             if let session = digest.session {
-                if column == .side, let state = headerState(digest, menu: secondary, task: task) {
-                    HStack {
-                        Text(state.title).font(Typography.toolbarTitle).lineLimit(1)
-                        Spacer()
-                        Menu { SessionMenuItems(state: state) } label: { Image(.more) }
-                            .menuStyle(.borderlessButton).fixedSize()
-                        Button("关闭", icon: .close) { workspace.closeColumn(.side) }.labelStyle(.iconOnly)
+                WideSessionTitle(title: digest.title(at: services.speech) ?? session.title, column: column)
+                    .contextMenu {
+                        if let state = headerState(digest, menu: secondary, task: task) { SessionMenuItems(state: state) }
                     }
-                    .padding()
-                }
                 FloatingReply {
                     // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                     if stored != nil {
@@ -110,9 +101,6 @@ struct SessionPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)
-        .onChange(of: headerState(digest, menu: secondary, task: task), initial: true) { _, state in if column == .main { header.set(state) } }
-        .onAppear { if column == .main { header.reveal = { follow.reveal() } } }
-        .onDisappear { if column == .main { header.clear(sessionID) } }
         .task {
             await NextFrame.wait()
             await NextFrame.wait()
@@ -131,7 +119,7 @@ struct SessionPage: View {
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
-    /// 工具栏上的标题与"⋯"（`SessionHeader`）要显示的值：页面算好交过去，工具栏项在主窗口里常驻。
+    /// 标题右键菜单的数据随本栏会话读取。
     private func headerState(_ digest: SessionDigest, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
@@ -158,10 +146,11 @@ private struct SessionLink: ViewModifier {
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
-        let opened = workspace.mainRoute == .session(sessionID)
+        let opened = workspace.shownSessions.contains { $0.sessionID == sessionID }
         let button = Button {
             workspace.searching = false
-            workspace.show(.session(sessionID))
+            workspace.openSession(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID,
+                                  in: NSEvent.modifierFlags.contains(.command) ? .main : .side)
         } label: {
             content.contentShape(.rect)
         }
@@ -170,6 +159,7 @@ private struct SessionLink: ViewModifier {
         }
         .accessibilityAddTraits(opened ? .isSelected : [])
         .accessibilityHint("打开会话")
+        .draggable(DraggedSession(sessionID: sessionID))
     }
 }
 

@@ -2,39 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 窗口最顶那一排左边的一项（侧栏钮之后）：项目切换、"收起"、进展页的分段与范围排在同一个工具栏项里。
-/// 宽 0 的工具栏项也占一格圆钮那么宽（36pt，实测），各成一项时会话页上看不见的几格就占掉一截，窄窗口里标题、搜索与"⋯"被挤进溢出菜单。
-/// 开合侧栏时随侧栏滑的是工具栏的各项、变了宽的项原地出没（`SidebarSlide.riderMoved`）：进展页上这一项开合前后一样宽（项目切换不在那里），分段照常随侧栏滑。
-struct LeadingSlots: View {
-    var body: some View {
-        HStack(spacing: 0) {
-            SwitcherSlot()
-            CloseButton()
-            PanesSlot()
-            ScopeSlot()
-        }
-        // 离侧栏的边、侧栏钮各空一点：工具栏把这一项贴着它们排；再多空，侧栏收起时英文的待办列头写不下列名
-        .padding(.leading, Self.leadingGap)
-    }
-
-    private static let leadingGap: CGFloat = 4
-}
-
-/// 窗口最顶那一排右边的一项：同步提醒、会话段的新会话、搜索、"⋯"排在同一个工具栏项里（理由同 `LeadingSlots`）。
-struct TrailingSlots: View {
-    var body: some View {
-        // 间隔由各控件自己在前面留（`toolbarGap`）：宽 0 的那几格不多出空隙
-        HStack(spacing: 0) {
-            SyncAlertSlot()
-            PageActionSlot()
-            LibraryHelpSlot()
-            CueListSlots()
-            SearchSlot()
-            PageMenuSlot()
-        }
-    }
-}
-
 extension View {
     /// 工具栏里在这一页上暂时用不上的控件（进展页两段之间换着用的几样）：看不见、不接点，宽度照旧，换段时工具栏不重排。
     func toolbarVisible(_ shown: Bool) -> some View {
@@ -48,22 +15,6 @@ extension View {
             .clipped()
             .toolbarVisible(present)
             .animation(nil, value: present)
-    }
-}
-
-/// 侧栏收起时的项目切换（紧跟在侧栏钮后面）。进展页、技能与规则页上没有它：左上的分段已经说了在哪一页；进展页上它再占一截就把分段推到待办那一列上面、
-/// 待办的列头只剩个数（去别处用侧栏钮、⌘1–9）。单独一个视图读侧栏开合：主窗口的视图体读了它，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
-struct SwitcherSlot: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        let shown = !workspace.sidebarOpen && workspace.mainRoute != .progress && workspace.mainRoute != .library
-        // 不用 disabled：环境一变整份菜单又要重算；⌘1–9 本来就由窗口快捷键（`WorkspaceShortcuts`）接，菜单里的只是提示
-        // 玻璃与墨色字自己画，同右边的项目范围（`ProjectScopeMenu`）：交给工具栏画时，没焦点的窗口里字是停用的淡灰
-        ProjectSwitcher(collapsed: shown)
-            .menuStyle(.button).buttonStyle(ControlButtonStyle(kind: .glass))
-            .padding(.trailing, Spacing.toolbarGap)
-            .toolbarPresence(shown)
     }
 }
 
@@ -101,19 +52,6 @@ struct CloseButton: View {
             .accessibilityLabel("收起")
             .padding(.trailing, Spacing.toolbarGap)
         }
-    }
-}
-
-/// 工具栏左边、侧栏钮（与侧栏收起时的项目切换）之后：进展页两段的图标分段（`ProgressPanes`，同 iPhone 顶上那块玻璃里那一组），两段同一个位置。
-/// 分段本该在中间（`PageTitleSlot`）：看板段那一排是四个列头、各对齐自己那一列，中间正是推进中、等你的列头，放中间就压住它们，所以留在左上、待办那一列上方。
-/// 右沿报给看板段的列头（`MacPages.panesEdge`）：它下面的列头从它右边起，不压在分段下面。
-struct PanesSlot: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        PageControl(.progress) { ProgressPanes().frame(height: PaneMetrics.square).padding(PaneMetrics.inset).glass(in: .capsule) }
-            .background { WindowFrame(\.maxX) { workspace.pages.panesEdge = $0 } }
-            .toolbarPresence(workspace.mainRoute == .progress)
     }
 }
 
