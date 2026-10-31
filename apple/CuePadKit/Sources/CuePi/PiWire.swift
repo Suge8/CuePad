@@ -8,7 +8,7 @@ enum PiWire {
     /// （`SelfReload`），可能等几个小时，这期间会话照常收话。只加命令、加 CuePad 可以没有的字段不提它（旧扩展不认的命令回 `bad_request`）；
     /// 改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠某个新字段才对时，提到那一版。区间外的 hello 只读身份（`IdentityHello`），
     /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`PiSession.upgrading`）
-    static let oldestExtension = 52
+    static let oldestExtension = 53
 
     /// 这个扩展版本说的格式 CuePad 读得懂（见 `oldestExtension`）
     static func reads(extensionVersion version: Int?) -> Bool { version.map { (oldestExtension...PiExtensionBundle.version).contains($0) } == true }
@@ -120,7 +120,7 @@ enum PiWire {
         private var updates: [@Sendable (inout PiSession) -> Void] = []
 
         private enum CodingKeys: String, CodingKey {
-            case name, firstMessage, question, subagents, model, thinking, models, proofs, context, commands
+            case name, firstMessage, question, subagents, model, thinking, fast, models, proofs, context, commands
         }
 
         init(from decoder: any Decoder) throws {
@@ -140,6 +140,7 @@ enum PiWire {
             }
             try field(.model, PiModelOption.self) { $0.model = $1 }
             try field(.thinking, Open<PiThinkingLevel>.self) { $0.thinking = $1 }
+            try field(.fast, Bool.self) { $0.fast = $1 }
             try field(.models, [PiModelOption].self) { $0.availableModels = $1 ?? [] }
             try field(.proofs, [PiProof].self) { $0.proofs = $1 ?? [] }
             try field(.context, PiContextUsage.self) { $0.context = $1 }
@@ -306,11 +307,12 @@ enum PiWire {
         var id: String
         var model: PiModelKey?
         var thinking: String?
+        var fast: Bool?
         var name: String?
     }
 
-    static func configCommand(id: String, model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) throws -> Data {
-        try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, name: name))
+    static func configCommand(id: String, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool? = nil, name: String?) throws -> Data {
+        try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, fast: fast, name: name))
     }
 
     private struct AnswerCommand<Value: Encodable>: Encodable {

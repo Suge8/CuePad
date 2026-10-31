@@ -10,8 +10,8 @@ struct DiagnosticArchiveTests {
     }
 
     /// MetricKit 的 JSON 形状（`MXDiagnosticPayload.jsonRepresentation()`）：第一条调用栈不是崩溃线程，第二条才是；
-    /// 栈是树，根是最外层（dyld），最深的叶子是崩溃处。
-    static func payload(end: String = "2026-10-09 03:40:12", kind: String = "crashDiagnostics", exceptionType: Int = 1, signal: Int = 11) -> Data {
+    /// 栈是树，根是崩溃处，最深的叶子是最外层（dyld）。
+    static func payload(end: String = "2026-10-09 03:40:12", kind: String = "crashDiagnostics", exceptionType: Int = 10, signal: Int = 6) -> Data {
         Data("""
         {
           "timeStampBegin": "2026-10-09 00:00:00", "timeStampEnd": "\(end)",
@@ -20,16 +20,17 @@ struct DiagnosticArchiveTests {
             "diagnosticMetaData": {
               "appVersion": "0.1.0", "appBuildVersion": "2610082154", "deviceType": "iPhone18,3", "osVersion": "iPhone OS 27.0 (24A430)",
               "exceptionType": \(exceptionType), "exceptionCode": 1, "signal": \(signal),
-              "terminationReason": "Namespace SIGNAL, Code 11 Segmentation fault: 11"
+              "terminationReason": "Namespace SIGNAL, Code 6 Aborted: 6",
+              "objectiveCexceptionReason": { "exceptionName": "NSInvalidArgumentException", "composedMessage": "Invalid scene state" }
             },
             "callStackTree": { "callStackPerThread": true, "callStacks": [
               { "threadAttributed": false, "callStackRootFrames": [
                 { "binaryName": "libsystem_kernel.dylib", "offsetIntoBinaryTextSegment": 100, "address": 1, "sampleCount": 1, "subFrames": [] } ] },
               { "threadAttributed": true, "callStackRootFrames": [
-                { "binaryName": "dyld", "offsetIntoBinaryTextSegment": 100, "address": 2, "sampleCount": 1, "subFrames": [
-                  { "binaryName": "CuePad", "offsetIntoBinaryTextSegment": 2000, "address": 3, "sampleCount": 1, "subFrames": [
-                    { "binaryName": "SwiftUI", "offsetIntoBinaryTextSegment": 300, "address": 4, "sampleCount": 1, "subFrames": [
-                      { "binaryName": "CuePad", "offsetIntoBinaryTextSegment": 4096, "address": 5, "sampleCount": 1, "subFrames": [] } ] } ] } ] } ] }
+                { "binaryName": "libsystem_kernel.dylib", "offsetIntoBinaryTextSegment": 4096, "address": 5, "sampleCount": 1, "subFrames": [
+                  { "binaryName": "libsystem_pthread.dylib", "offsetIntoBinaryTextSegment": 300, "address": 4, "sampleCount": 1, "subFrames": [
+                    { "binaryName": "UIKitCore", "offsetIntoBinaryTextSegment": 2000, "address": 3, "sampleCount": 1, "subFrames": [
+                      { "binaryName": "dyld", "offsetIntoBinaryTextSegment": 100, "address": 2, "sampleCount": 1, "subFrames": [] } ] } ] } ] } ] }
             ] }
           }]
         }
@@ -53,14 +54,14 @@ struct DiagnosticArchiveTests {
 
     @Test func 摘要_异常类型_信号_原因_崩溃线程顶部的帧() throws {
         let archive = archive()
-        try archive.store(Self.payload(exceptionType: 1, signal: 11))
+        try archive.store(Self.payload(exceptionType: 10, signal: 6))
         let report = try #require(archive.reports().first)
 
-        #expect(report.exception == "EXC_BAD_ACCESS" && report.signal == "SIGSEGV")
-        #expect(report.reason == "Namespace SIGNAL, Code 11 Segmentation fault: 11")
+        #expect(report.exception == "EXC_CRASH" && report.signal == "SIGABRT")
+        #expect(report.reason == "NSInvalidArgumentException: Invalid scene state\nNamespace SIGNAL, Code 6 Aborted: 6")
         #expect(report.app?.visible == "0.1.0（2610082154） · iPhone18,3 · iPhone OS 27.0 (24A430)")
-        // 取崩溃线程（不是第一条栈），最深的在前
-        #expect(report.frames == ["CuePad +0x1000", "SwiftUI +0x12c", "CuePad +0x7d0", "dyld +0x64"])
+        // 取崩溃线程（不是第一条栈），崩溃处在前
+        #expect(report.frames == ["libsystem_kernel.dylib +0x1000", "libsystem_pthread.dylib +0x12c", "UIKitCore +0x7d0", "dyld +0x64"])
     }
 
 }

@@ -68,6 +68,20 @@ nonisolated enum ProjectFolders {
         let sessions: Int
     }
 
+    /// 按设备分组；显示名可相同，设备标识才是稳定的组标识。
+    struct CandidateGroup: Identifiable {
+        let id: String
+        let name: String?
+        let items: [Candidate]
+    }
+
+    static func candidateGroups(_ candidates: [Candidate]) -> [CandidateGroup] {
+        let byHost = Dictionary(grouping: candidates, by: \.hostID)
+        return byHost.map { host, items in
+            CandidateGroup(id: host, name: byHost.count > 1 ? items.first?.macName : nil, items: items)
+        }.sorted { $0.id < $1.id }
+    }
+
     /// 候选来自同步来的现成数据：各 Mac 上跑过 Agent 的文件夹（`CueStore.sessionFolders`，最近的在前），其次是别的项目绑着、但没有会话跑过的文件夹；
     /// 同一台 Mac 上同名的只列一个（手机分不出同名的两个文件夹）；`excluding` 项目在那台 Mac 上已绑着的不再列。
     static func candidates(folders: [SessionFolder], bindings: [DirectoryBinding], projects: [Project], excluding project: UUID?) -> [Candidate] {

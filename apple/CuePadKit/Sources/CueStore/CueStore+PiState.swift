@@ -14,7 +14,7 @@ extension CueStore {
         projectID: content.projectID, state: .known(content.state), detail: content.detail, folder: content.folder, lastPrompt: nil,
         lastReply: nil, question: content.question, notify: nil, stateSince: content.times.stateSince,
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
-        subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
+        subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking, fast: content.modelState.fast,
         context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt,
         failure: content.state == .error ? content.failure.map(Open.known) : nil, bootID: bootID)
       if writesCatalog, let catalog { try writeCatalog(catalog) }

@@ -29,7 +29,7 @@ extension CueKeeper {
             }
             let memory = CueMemoryView(try await store.cueMemory())
             let brain = try await startBrain(
-                runtime, launch, model: profile.model, effort: profile.effort?.known,
+                runtime, launch, model: profile.model, effort: profile.effort?.known, fast: profile.fast,
                 systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents, runtime: runtime, interface: .current),
                 tools: ["--wait", "\(setup.timing.sayWait)"])
             shifts += 1
@@ -44,12 +44,12 @@ extension CueKeeper {
 
     /// 按这家起一个大脑（Cue 的班次与后台整理记忆的都经这里）：工作目录是 Cue 自己的空目录，`tools` 是 `cuepad mcp` 后面的参数（给哪一组工具）。
     func startBrain(
-        _ runtime: AgentKind, _ launch: CueLaunch, model: String?, effort: PiThinkingLevel?, systemPrompt: String, tools: [String]
+        _ runtime: AgentKind, _ launch: CueLaunch, model: String?, effort: PiThinkingLevel?, fast: Bool = false, systemPrompt: String, tools: [String]
     ) async throws -> any HostedSession {
         let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         return try await CueBrainConfig(
-            runtime: runtime, executable: launch.executable, model: model, effort: effort, systemPrompt: systemPrompt, workingDirectory: work,
+            runtime: runtime, executable: launch.executable, model: model, effort: effort, fast: fast, systemPrompt: systemPrompt, workingDirectory: work,
             mcp: [setup.helper.path, "mcp"] + tools,
             environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, AgentKind.pi.facts.homeVariable: setup.piAgentDirectory.path, "PATH": launch.path]
         ).startBrain()

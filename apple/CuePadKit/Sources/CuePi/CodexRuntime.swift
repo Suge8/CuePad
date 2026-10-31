@@ -220,6 +220,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     private func attachHosted(_ result: JSONValue, rpc: CodexRPC, launchToken: String?) -> PiSession.ID {
         var session = makeSession(result["thread"] ?? .object([:]), pid: rpc.pid)
         session.hosted = true
+        session.fast = result["serviceTier"]?.string == "priority"
         session.launchToken = launchToken
         attach(session)
         return session.id

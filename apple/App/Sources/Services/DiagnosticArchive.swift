@@ -106,7 +106,11 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         date = (root["timeStampEnd"] as? String).flatMap(DiagnosticArchive.parse) ?? .distantPast
         exception = (meta["exceptionType"] as? Int).map(Self.exceptionName)
         signal = (meta["signal"] as? Int).map(Self.signalName)
-        reason = meta["terminationReason"] as? String
+        let objectiveC = meta["objectiveCexceptionReason"] as? [String: Any] ?? [:]
+        let exceptionReason = [objectiveC["exceptionName"] as? String, objectiveC["composedMessage"] as? String]
+            .compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: ": ")
+        let reasons = [exceptionReason, meta["terminationReason"] as? String ?? ""].filter { !$0.isEmpty }
+        reason = reasons.isEmpty ? nil : reasons.joined(separator: "\n")
         app = Self.app(meta)
         frames = Self.frames(of: diagnostic["callStackTree"] as? [String: Any])
         json = String(decoding: data, as: UTF8.self)
@@ -132,18 +136,18 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         ).nonEmpty
     }
 
-    /// 调用栈是树：根是最外层，沿第一个子帧走到最深处就是崩溃处。
+    /// 调用栈是树：根是崩溃处，子帧依次是调用它的帧。
     private static func frames(of tree: [String: Any]?) -> [String] {
         let stacks = tree?["callStacks"] as? [[String: Any]] ?? []
         let stack = stacks.first { $0["threadAttributed"] as? Bool == true } ?? stacks.first
         var path: [String] = []
         var frame = (stack?["callStackRootFrames"] as? [[String: Any]])?.first
-        while let current = frame {
+        while let current = frame, path.count < topFrames {
             let offset = (current["offsetIntoBinaryTextSegment"] as? Int).map { "+0x" + String($0, radix: 16) } ?? ""
             path.append("\(current["binaryName"] as? String ?? "?") \(offset)".trimmingCharacters(in: .whitespaces))
             frame = (current["subFrames"] as? [[String: Any]])?.first
         }
-        return Array(path.reversed().prefix(topFrames))
+        return path
     }
 
     private static func exceptionName(_ type: Int) -> String {

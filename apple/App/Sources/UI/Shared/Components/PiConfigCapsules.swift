@@ -178,8 +178,25 @@ struct PiThinkingDial: View {
     private var drawn: PiThinkingMeter { touched.map(meter.pointing(at:)) ?? meter }
 
     var body: some View {
+        #if os(iOS)
+        Button {
+            let levels = PiThinkingLevel.allCases.filter(meter.levels.contains)
+            let index = meter.current.flatMap { levels.firstIndex(of: $0) }
+            if !levels.isEmpty { choose(levels[index.map { ($0 + 1) % levels.count } ?? 0]) }
+        } label: {
+            content
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityLabel("思考强度")
+        .accessibilityValue(meter.label)
+        #else
+        content
+        #endif
+    }
+
+    private var content: some View {
         let drawn = drawn
-        HStack(spacing: 6) {
+        return HStack(spacing: 6) {
             // 写出档名（与"上下文 86%"同一种写法）：只有一个脑图标加几根竖条要猜；按着时跟着指到的档变。
             // 工具排放不下时（`ConfigRow`）只写档名
             ViewThatFits(in: .horizontal) {
@@ -208,6 +225,7 @@ struct PiThinkingDial: View {
         }
         .frame(minHeight: ConfigCapsule.hitHeight)
         .contentShape(.rect)
+        #if os(macOS)
         .coordinateSpace(.named(Self.space))
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space))
@@ -224,6 +242,7 @@ struct PiThinkingDial: View {
         .sensoryFeedback(.selection, trigger: touched) { _, new in new != nil }
         .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: drawn)
         .animation(Motion.fade, value: bubble)
+        #endif
         .accessibilityElement()
         .accessibilityLabel("思考强度")
         .accessibilityValue(meter.label)

@@ -101,6 +101,7 @@ DEFINE SCHEMA
         answeredAt    INT64,
         failure       STRING,
         bootID        STRING,
+        fast          ENCRYPTED INT64,
         models        ENCRYPTED STRING,
         commands      ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
@@ -252,6 +253,7 @@ DEFINE SCHEMA
         effort        ENCRYPTED STRING,
         enabledAt     INT64,
         modifiedAt    INT64,
+        fast          ENCRYPTED INT64,
         allows        ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

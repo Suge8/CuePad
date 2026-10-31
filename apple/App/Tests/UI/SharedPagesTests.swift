@@ -56,6 +56,56 @@ struct SharedPagesTests {
         #expect(whole?.text.visible == "已恢复到 圆桌" && whole?.link == .project(project.id))
     }
 
+    #if os(iOS)
+    @Test func 历史会话跨午夜时钟快二十秒_同一时间段只出现一次() async throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 8 * 3_600))
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 31, hour: 23, minute: 59, second: 50)))
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        for (id, date) in [("future", now + 20), ("today", now - 3_600), ("week", now - 3 * 86_400)] {
+            try await recorder.update(sessionID: id, state: .ended, title: id, times: PiTimes(stateSince: date, busySince: nil))
+        }
+        let workspace = Workspace(services: app.services)
+        workspace.showSessions()
+        let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(at: now), from: store)
+        let before = TimeSection.split(list.ended, date: \.state.stateSince, now: now, calendar: calendar)
+        #expect(before.map(\.section) == [.today, .thisWeek])
+        #expect(before.first?.items.map(\.state.sessionID) == ["future", "today"])
+        #expect(before.flatMap(\.items).count == 3)
+        #expect(Set(before.flatMap(\.items).map(\.id)).count == 3)
+        let after = TimeSection.split(list.ended, date: \.state.stateSince, now: now + 21, calendar: calendar)
+        #expect(after.map(\.section) == [.today, .yesterday, .thisWeek])
+        #expect(after.flatMap(\.items).count == 3)
+    }
+
+    @Test func 新会话认领时_时间异常的历史仍只有一组和一份会话() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        let now = Date.now
+        for (id, date) in [("future", now.addingTimeInterval(90 * 86_400)), ("today", now), ("past", now.addingTimeInterval(-90 * 86_400))] {
+            try await recorder.update(sessionID: id, state: .ended, title: id, times: PiTimes(stateSince: date, busySince: nil))
+        }
+        let workspace = Workspace(services: app.services)
+        workspace.showSessions()
+        func checkList(expectNew: Bool = false) async throws {
+            let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+            let sections = list.historyRuns.map(\.section)
+            let rows = list.pinned + list.now + list.historyRuns.flatMap(\.items)
+            #expect(Set(sections).count == sections.count)
+            #expect(Set(rows.map(\.id)).count == rows.count)
+            #expect(Set(rows.map(\.state.sessionID)).isSuperset(of: ["future", "today", "past"]))
+            #expect(rows.filter { $0.state.sessionID == "new" }.count == (expectNew ? 1 : 0))
+        }
+        try await checkList()
+        let launch = try await NewSessionInput.Start(project: project.id).launch(
+            in: project, on: "mac-a", draft: ComposerDraft(text: "检查重连"), agent: .pi, model: nil, thinking: nil, services: app.services)
+        try await checkList()
+        try await recorder.update(sessionID: "new", state: .thinking, title: "新会话", launchToken: launch.token)
+        #expect(try await launch.progress(from: store).claimed?.sessionID == "new")
+        try await checkList(expectNew: true)
+    }
+    #endif
+
     // MARK: 新会话进度
 
     @Test func 新会话从发出到认领_失败带着原因() async throws {

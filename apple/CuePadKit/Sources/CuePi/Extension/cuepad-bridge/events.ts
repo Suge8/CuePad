@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
 import { clip, messageText, modelInfo, preview, type Question } from "./info.ts";
+import { supportsFast } from "./fast.ts";
 import { omitFromContext, landed, settleRetry, stripFromRequest } from "./retry.ts";
 import { claudeHeaderWindows, codexWindows, record } from "./quota.ts";
 import type { Session } from "./session.ts";
@@ -18,7 +19,11 @@ export function follow(session: Session): (() => void)[] {
 	const refreshContext = () => session.refreshContext();
 	const finishCompaction = () => session.finishCompaction();
 	return [
-		pi.on("model_select", async () => { session.updateInfo(await modelInfo(pi, ctx)); refreshContext(); }),
+		pi.on("model_select", async () => {
+			if (!supportsFast(ctx.model)) session.setFast(false);
+			session.updateInfo(await modelInfo(pi, ctx));
+			refreshContext();
+		}),
 		pi.on("thinking_level_select", () => session.updateInfo({ thinking: ctx.model ? pi.getThinkingLevel() : null })),
 		pi.on("before_agent_start", () => session.refreshCommands()),
 		pi.on("turn_end", refreshContext),
@@ -26,7 +31,7 @@ export function follow(session: Session): (() => void)[] {
 		pi.on("turn_end", omitFromContext),
 		pi.on("agent_settled", refreshContext),
 		pi.on("session_compact", refreshContext),
-		pi.on("session_tree", refreshContext),
+		pi.on("session_tree", () => { session.followBranch(); refreshContext(); }),
 		pi.on("session_info_changed", (event) => session.updateInfo({ name: event.name ?? null })),
 		pi.on("message_start", (event) => {
 			if (event.message.role !== "assistant") return;
@@ -44,9 +49,12 @@ export function follow(session: Session): (() => void)[] {
 			// 首条消息与 Pi 会话列表一致，不区分机器消息
 			session.updateInfo({ firstMessage: session.firstMessage ?? preview(messageText(event.message)) });
 			// 交出的那句落成了消息（带图时 Pi 在文字后附上图片说明，所以按开头认）：投送请求 id 写到它上面，再确认送达。
+			// 模板与 skill 落成的是展开后的文字，认不出原话：它们只经 `submit` 在歇着时交出，交出后的第一条你的消息就当是它。
+			// 交出到开轮之间（预检、Pi 查登录）别的扩展抢先开轮会认错：落成的消息不带来源，input 事件的 source 对各扩展都是
+			// extension、又早于展开，Pi 没有能精确区分的字段。
 			// 扩展先收到 message_end、Pi 再把同一个消息对象写进会话文件，所以 id 随消息落盘，对话（读会话文件）据此认出它
 			const said = session.starting;
-			if (!said || !messageText(event.message).startsWith(said.text)) return;
+			if (!said || (!said.expand && !messageText(event.message).startsWith(said.text))) return;
 			session.starting = null;
 			if (said.id) Object.assign(event.message, { cuepadDelivery: said.id });
 			said.ack?.({ ok: true });

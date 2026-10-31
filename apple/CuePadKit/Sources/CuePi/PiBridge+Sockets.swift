@@ -43,12 +43,16 @@ extension PiBridge {
             _ = try await request { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }
         }
 
-        /// 强度先在这里按目标模型夹好（`PiThinkingLevel.clamped`）：Pi 自己的夹法与之不同，界面按这一条显示。
-        func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in _: PiSession.ID) async throws {
-            let key = model ?? session?.model?.key
+        func configure(_ config: PiConfig, in _: PiSession.ID) async throws {
+            let key = config.model ?? session?.model?.key
             let levels = session?.availableModels.first { $0.key == key }?.thinkingLevels ?? []
-            let thinking = thinking?.clamped(to: levels)
-            _ = try await request { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
+            let thinking = config.thinking?.clamped(to: levels)
+            _ = try await request { try PiWire.configCommand(id: $0, model: config.model, thinking: thinking, fast: config.fast, name: config.name) }
+        }
+
+        /// 强度先在这里按目标模型夹好（`PiThinkingLevel.clamped`）：Pi 自己的夹法与之不同，界面按这一条显示。
+        func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
+            try await configure(PiConfig(model: model, thinking: thinking, name: name), in: id)
         }
 
         /// 报的扩展版本不是随包版本（没报的也算）：请它核对磁盘（`PiWire.upgrade`）。磁盘上还是旧的它就不动，所以可以多说。

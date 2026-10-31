@@ -37,19 +37,19 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因（到哪了按 `Speech`）。
     /// 思考强度按显示的模型夹取（`PiThinkingLevel.clamped`），换了模型不会短暂显示新模型没有的档位。
     func config(at moment: Speech.Moment) -> PiConfigShown {
-        let current = PiConfigShown(model: session?.model, thinking: session?.thinking?.known, context: session?.context, pending: false, failure: nil)
+        let current = PiConfigShown(model: session?.model, thinking: session?.thinking?.known, fast: session?.fast, context: session?.context, pending: false, failure: nil)
         // 只看换模型、思考强度的请求：改名同走配置请求，但与这两样无关
-        guard let request = deliveries.last(where: { $0.config.map { $0.model != nil || $0.thinking != nil } == true }),
+        guard let request = deliveries.last(where: { $0.config.map { $0.model != nil || $0.thinking != nil || $0.fast != nil } == true }),
               let wanted = request.config else { return current }
         switch Speech.trip(request, at: moment) {
         case .preparing, .sending, .sent:
             let model = wanted.model.flatMap { key in catalog?.models.first { $0.key == key } } ?? current.model
             let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
-            return PiConfigShown(model: model, thinking: thinking, context: current.context, pending: true, failure: nil)
+            return PiConfigShown(model: model, thinking: thinking, fast: wanted.fast ?? current.fast, context: current.context, pending: true, failure: nil)
         case .delivered: return current
         case .unconfirmed: return current
         case .failed(let failure):
-            return PiConfigShown(model: current.model, thinking: current.thinking, context: current.context, pending: false, failure: failure)
+            return PiConfigShown(model: current.model, thinking: current.thinking, fast: current.fast, context: current.context, pending: false, failure: failure)
         }
     }
 
@@ -74,6 +74,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
 nonisolated struct PiConfigShown: Equatable {
     var model: PiModelOption?
     var thinking: PiThinkingLevel?
+    var fast: Bool? = nil
     /// 上下文余量（会话记录上的，用量条显示；没有模型时为 nil）。
     var context: PiContextUsage?
     var pending: Bool

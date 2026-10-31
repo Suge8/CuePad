@@ -19,6 +19,7 @@ public protocol SessionLink: AnyObject {
     func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws
     /// 至少给一项；会话名已去掉首尾空白、不是空的（桥先检查过）。
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws
+    func configure(_ config: PiConfig, in id: PiSession.ID) async throws
 }
 
 /// 做不到的操作缺省拒绝（终端里只读的会话、没有斜杠命令或停止的终端会话）：桥按能力表先拒，实际到不了这里。
@@ -29,6 +30,10 @@ extension SessionLink {
     public func abort(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func retry(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
+    public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
+        guard config.fast == nil else { throw PiBridgeError.unsupported }
+        try await configure(model: config.model, thinking: config.thinking, name: config.name, in: id)
+    }
     public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
         throw PiBridgeError.unsupported
     }

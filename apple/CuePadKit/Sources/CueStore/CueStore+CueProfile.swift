@@ -28,6 +28,7 @@ extension CueStore {
         if profile.runtime.known.map(available.contains) != true {
           profile.runtime = .known(first)
           profile.model = nil
+          profile.fast = false
         }
       }
     }

@@ -4,6 +4,6 @@
 {"c":"p1","k":"exit","n":0}
 {"a":["--mode","rpc","-e","{fixtures}/fake-model.ts","-e","{fixtures}/ui-confirm.ts"],"c":"p2","d":"pi","k":"spawn","p":"/private{tmp:2}/work"}
 {"k":"dir","p":"{tmp:2}/agent/sessions/--private{dtmp:2}-work--"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"4ad4ba72-122a-441e-8bb9-617da74c0420\",\"method\":\"notify\",\"message\":\"CuePad bridge disabled: {tmp:1} is not a directory owned by you with mode 0700\",\"notifyType\":\"warning\"}","k":"stdout"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"9b3618de-a074-4c6d-b8a0-9c5a045b1ff9\",\"method\":\"notify\",\"message\":\"CuePad bridge disabled: {tmp:1} is not a directory owned by you with mode 0700\",\"notifyType\":\"warning\"}","k":"stdout"}
 {"c":"p2","k":"signal","n":15}
 {"c":"p2","k":"exit","n":143}

@@ -37,7 +37,8 @@ enum Schema {
   /// 抬的那一版先发 iOS、TestFlight 处理完再发 Mac（docs/release.md「发版顺序」）。与 `baseVersion` 分开：本机的库要等用户的库都升过才折进 `create`。
   /// 78：附件换了地址（`cuepad://file/<键>`）：旧版 Mac 认不出，把链接原文发给 Agent，旧版手机显示不出图与文件。
   /// 82：旧客户端忽略额度能力与授权分区，会把失败或过期窗口显示成可用余额。
-  static let peerFloor = 86
+  /// 87：旧端会忽略配置请求里的 fast，错误地把部分执行报告成成功。
+  static let peerFloor = 87
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
@@ -153,7 +154,14 @@ enum Schema {
     },
     // 86：preparing 只等现有会话就绪，未派发且可撤回；85 客户端不能正确合并这个阶段。
     Upgrade { _ in },
-    // 87：余额与套餐明细、结果的排序时刻；旧端仍可读固定窗口，缺明细不构造余额。`owners`（证明过网关来源的提供方与时刻）只在本机、不同步。
+    // 87：fast 随会话状态与 Cue 配置同步；旧端会忽略配置请求中的 fast。
+    Upgrade { db in
+      for table in ["piSessionStates", "cueProfile"] {
+        let exists = try db.first("SELECT 1 FROM pragma_table_info(?) WHERE name = 'fast'", [table]) { _ in true }
+        if exists == nil { try db.exec("ALTER TABLE \(table) ADD COLUMN fast INTEGER") }
+      }
+    },
+    // 88：余额与套餐明细、结果的排序时刻；旧端仍可读固定窗口，缺明细不构造余额。`owners`（证明过网关来源的提供方与时刻）只在本机、不同步。
     // 同 85，只补缺的列（新建的库已有）。
     Upgrade { db in
       let columns = Set(try db.query("PRAGMA table_info(accountQuotas)") { $0.text(1) })
