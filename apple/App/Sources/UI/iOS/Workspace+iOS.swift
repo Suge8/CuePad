@@ -93,7 +93,7 @@ extension Workspace {
     }
 
     /// 会话的前台提示（等你确认、做完了）弹不弹：开着这个会话页时不弹（与系统通知同一条规则，见 `AlertCenter`）。
-    func showsAlert(about session: UUID) -> Bool { shownSession?.id != session }
+    func showsAlert(about session: UUID) -> Bool { !shownSessions.contains { $0.id == session } }
 
     /// 顶上那条提示还留不留：说的是某个会话的提示（等你确认、做完了），你进了那个会话就当场撤下
     /// （与不弹同一条规则 `showsAlert`），不在正看着的页面上停满 5 秒；别的提示照常留到时间。
