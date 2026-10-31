@@ -6,14 +6,14 @@ import CuePi
 #endif
 
 /// 账号额度的唯一界面订阅。打开面板、回前台或连接来源变化时读取账号清单；已有观测的新鲜程度不能证明清单没变化。
-/// 同时来的请求合并；不设周期刷新。网关原观测时间只由 readAt 决定，读取清单不会刷新 Claude 的 /usage。
+/// 同时来的请求合并；不设周期刷新。`items` 的先后只在这里定（`QuotaMeter.ordered`），各处照这个顺序摆。网关原观测时间只由 readAt 决定，读取清单不会刷新 Claude 的 /usage。
 @Observable
 final class AccountQuotas {
     private(set) var items: [AccountQuota] = []
     @ObservationIgnored private var running: (key: [String], task: Task<Void, any Error>)?
 
     func follow(_ store: CueStore, changed: ([AccountQuota]) async -> Void) async throws {
-        for try await items in store.observe({ try $0.accountQuotas() }) where items != self.items {
+        for try await items in store.observe({ QuotaMeter.ordered(try $0.accountQuotas()) }) where items != self.items {
             self.items = items
             await changed(items)
         }

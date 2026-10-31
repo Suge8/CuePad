@@ -73,13 +73,7 @@ nonisolated struct QuotaMeter: Equatable {
         provider = quota.provider
         id = quota.id
         account = Dotted(quota.account?.label(provider: quota.provider) ?? PiProvider(id: quota.provider).account, source).visible
-        if quota.account?.source != nil, let name = quota.account?.name {
-            let parts = name.components(separatedBy: " / ").dropFirst()
-            product = parts.first ?? name
-            identity = parts.count > 1 ? parts.dropFirst().joined(separator: " / ") : nil
-        } else {
-            (product, identity) = (quota.account?.label(provider: quota.provider) ?? PiProvider(id: quota.provider).account, nil)
-        }
+        (product, identity) = Self.names(quota)
         self.source = source
         usageURL = quota.account?.usageURL(provider: quota.provider)
         status = switch quota.reading(at: now) {
@@ -103,6 +97,25 @@ nonisolated struct QuotaMeter: Equatable {
         plan = quota.details?.plan
         values = quota.reading(at: now) == .observed ? quota.details?.values ?? [] : []
         updatedAt = quota.observedAt
+    }
+
+    /// 明细里的产品名与账号名（网关全名去掉打头的"Magpie"拆开；原生账号只有产品名）。
+    static func names(_ quota: AccountQuota) -> (product: String, identity: String?) {
+        guard quota.account?.source != nil, let name = quota.account?.name else {
+            return (quota.account?.label(provider: quota.provider) ?? PiProvider(id: quota.provider).account, nil)
+        }
+        let parts = name.components(separatedBy: " / ").dropFirst()
+        return (parts.first ?? name, parts.count > 1 ? parts.dropFirst().joined(separator: " / ") : nil)
+    }
+
+    /// 账号在明细、额度环与菜单栏面板里的先后：按产品名，同一产品按账号名，再按所属 Mac 与记录定死。不看写入时间，刷新不挪位置。
+    static func ordered(_ quotas: [AccountQuota]) -> [AccountQuota] {
+        quotas.map { (names($0), $0) }.sorted { a, b in
+            for (x, y) in [(a.0.product, b.0.product), (a.0.identity ?? "", b.0.identity ?? ""), (a.1.hostID, b.1.hostID)] where x != y {
+                return x.localizedStandardCompare(y) == .orderedAscending
+            }
+            return a.1.id.uuidString < b.1.id.uuidString
+        }.map(\.1)
     }
 
     /// 提供方原串里有没有负数（"¥-0.06 · $0.00"）：减号紧跟数字才算，不解析金额。

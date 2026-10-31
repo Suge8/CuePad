@@ -62,7 +62,8 @@ private struct QuotaEmpty: View {
     }
 }
 
-/// 账号放得下就排成两栏：每块进当时较矮的那一栏（块高矮不一，按行对齐会留空洞），读屏仍按原顺序。
+/// 账号放得下就排成两栏：按顺序前一半在左栏、后一半在右栏，各栏从上往下（块高矮不一，按行对齐会留空洞）。
+/// 位置只看顺序（`QuotaMeter.ordered`），不看块高：哪个账号失败、读数行多少都不挪别的账号。
 /// 没给宽（Mac 侧栏的气泡）时取两栏的宽；只有一个账号或放不下两栏（手机、菜单栏面板）时一块接一块往下排。
 struct QuotaColumns: Layout {
     static let column: CGFloat = 248
@@ -87,8 +88,9 @@ struct QuotaColumns: Layout {
         let column = (width - Self.gap * CGFloat(count - 1)) / CGFloat(count)
         var heights = Array(repeating: CGFloat(0), count: count)
         var places: [(x: CGFloat, y: CGFloat, width: CGFloat)] = []
-        for subview in subviews {
-            let index = heights.indices.min { heights[$0] < heights[$1] }!
+        let perColumn = (subviews.count + count - 1) / count
+        for (offset, subview) in subviews.enumerated() {
+            let index = offset / perColumn
             let y = heights[index] == 0 ? 0 : heights[index] + Self.lineSpacing
             places.append((CGFloat(index) * (column + Self.gap), y, column))
             heights[index] = y + subview.sizeThatFits(ProposedViewSize(width: column, height: nil)).height

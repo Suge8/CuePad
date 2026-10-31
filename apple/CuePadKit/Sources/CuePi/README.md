@@ -46,7 +46,7 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 
 额度面板打开、回前台与连接来源变化时读取账号清单，同时来的查询合并；已有账号的观测新鲜不能阻止发现新账号。手机通过原 `quota` 投送请求询问每台来源 Mac，不增加轮询，也不只选择最近写记录的 Mac。
 
-magpie 的 `balance` 字符串原样显示，金额与 credits 不作百分比；`plan` 保留提供方名称。窗口仅在名字明确是数字加 `hour(s)`、`day(s)`、`week(s)` 且有百分比和重置时间时计算匀速线与额度环；其他计量、`display` 纯文字、`unlimited` 与数值 `balance` 只显示读数，不推测周期。`readAt` 原样作为账号的 `observedAt`；没有它就是未知，`asOf` 与取缓存的时刻不代替它。明细里刚观测过的账号并成一行原观测时间（取其中最早的），陈旧（标原观测时间）、失败、过期标在各自账号上；零余额照常显示，负余额原样显示并标欠费。
+magpie 的 `balance` 字符串原样显示，金额与 credits 不作百分比；`plan` 保留提供方名称。窗口仅在名字明确是数字加 `hour(s)`、`day(s)`、`week(s)` 且有百分比和重置时间时计算匀速线与额度环；其他计量、`display` 纯文字、`unlimited` 与数值 `balance` 只显示读数，不推测周期。`readAt` 原样作为账号的 `observedAt`；没有它就是未知，`asOf` 与取缓存的时刻不代替它。明细里账号按产品名、同一产品按账号名排，不随刷新挪位置；刚观测过的账号并成一行原观测时间（取其中最早的），陈旧（标原观测时间）、失败、过期标在各自账号上；零余额照常显示，负余额原样显示并标欠费。
 
 magpie v0.1.2190 的 [公开结构](https://github.com/yetone/magpie/blob/v0.1.2190/internal/provider/quotas.go) 与[网关接口](https://github.com/yetone/magpie/blob/v0.1.2190/internal/gateway/gateway.go)已核对。GET `/v1/magpie/quotas` 不保证更新 Claude 观测：Claude Code 回答或 `/usage` 才更新。官方另有 POST `/v1/magpie/quotas/refresh`，可能在账号目录运行 CLI；CuePad 不自动调用它，不复制上游登录或以反复 GET 冒充实时刷新。
 
