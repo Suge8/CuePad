@@ -105,6 +105,10 @@ extension DebugScene {
             }
         default: break
         }
+        // 宽屏验收：-CuePadWideMain <sessionID> 在左栏打开演示会话，右栏仍由 session 场景选择。
+        if let left = defaults.string(forKey: "CuePadWideMain") {
+            workspace.openSession(PiSessionState.recordID(sessionID: left), sessionID: left, in: .main)
+        }
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
         if defaults.string(forKey: "CuePadSidebarCycle") != nil { Task { await cycleSidebar() } }
         await presetSpeech(workspace)

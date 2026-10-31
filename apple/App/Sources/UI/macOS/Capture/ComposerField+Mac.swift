@@ -43,7 +43,9 @@ struct ComposerField: NSViewRepresentable {
         view.isVerticallyResizable = true
         view.isHorizontallyResizable = false
         view.autoresizingMask = [.width]
-        view.focusChanged = { [weak coordinator = context.coordinator] in coordinator?.focusChanged($0) }
+        view.focusChanged = { [weak coordinator = context.coordinator, weak view] _ in
+            if let view { coordinator?.focusChanged(view) }
+        }
         view.shortcut = { [weak coordinator = context.coordinator] in coordinator?.parent.shortcut($0) }
         let scroll = ComposerScrollView()
         scroll.documentView = view
@@ -130,11 +132,12 @@ struct ComposerField: NSViewRepresentable {
             return true
         }
 
-        func focusChanged(_ focused: Bool) {
-            guard !focused else { return report(true) }
-            // 交出焦点要等窗口换完第一响应者再报：换的中途报 false，SwiftUI 收这一格的焦点时把窗口的第一响应者清空，
-            // 刚接过焦点的别的文字区（任务气泡里点进的编辑器）又被夺走、打的字没处去（实测）
-            Task { @MainActor in self.report(false) }
+        func focusChanged(_ view: NSTextView) {
+            // 两个回复框会在同一次更新里申请焦点；窗口换完后读取真实响应者，不能回报中途的 true 或排队的旧 false。
+            Task { @MainActor [weak view] in
+                guard let view else { return }
+                self.report(view.window?.firstResponder === view)
+            }
         }
 
         private func report(_ focused: Bool) {

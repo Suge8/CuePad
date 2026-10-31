@@ -7,107 +7,71 @@ struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
 
+    @State private var focus = WideFocus()
+
     var body: some View {
-        NavigationSplitView(columnVisibility: Binding(get: { workspace.sidebarOpen ? .all : .detailOnly }, set: { workspace.sidebarOpen = $0 != .detailOnly })) {
-            Sidebar()
-                // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌃⌘S 同一个入口。
-                // 同访达：它是侧栏这一栏的工具栏项，侧栏开着时在侧栏顶上、红绿灯右边，收起后留在原处，成了工具栏最左的一颗
-                .toolbar(removing: .sidebarToggle)
-                .toolbar { ToolbarItem { SidebarToggle() } }
-                .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
-        } detail: {
-            detail
-                // 正文、输入框里的附件在这里看（页里另挂了全屏页的用页里那个，带底栏）
-                .previewPresenter(Bindable(workspace).preview, reply: nil)
-                .background { ColumnFinder(pages: workspace.pages) }
-                // 开合侧栏时详情区这一栏的图层在滑（`SidebarSlide`）：底色两边多铺一截，滑开的地方不露出窗口的底
-                .background { palette.desk.padding(.horizontal, -MacPages.slideOverscan).ignoresSafeArea() }
+        GeometryReader { geometry in
+            let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
+            HStack(spacing: 0) {
+                WideRail(width: sizes.rail)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { WideRailTools(wide: sizes.rail == SessionRail.Form.wide.width) }
+                WideColumnHost(column: .main, focus: focus, rail: sizes.rail, origin: sizes.rail) {
+                    main
+                }
+                .frame(width: sizes.main)
+                WideColumnHost(column: .side, focus: focus, rail: sizes.rail, origin: sizes.rail + sizes.main) {
+                    side
+                }
+                .frame(width: sizes.side)
+            }
         }
+        .previewPresenter(Bindable(workspace).preview, reply: nil)
+        .background(palette.desk)
         .background { WindowPanels(workspace: workspace) }
         .background { TaskBubbleSlot() }
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }
         .overlay { Prewarm().environment(workspace) }
+        .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
+        .toolbar { ToolbarItem(placement: .navigation) { SidebarToggle() } }
+        .toolbar(removing: .title)
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .panelHost()
         .environment(workspace)
     }
 
-    private var detail: some View {
-        HStack(spacing: 0) {
+    private var main: some View {
+        VStack(spacing: 0) {
+            HStack {
+                WidePlaces()
+                Spacer(minLength: 8)
+                CloseButton()
+                if workspace.overlay != nil { OverlayTitle() }
+                if workspace.mainRoute == .library { LibraryPanesSlot(); LibraryHelpSlot() }
+                SyncAlertSlot()
+                SearchSlot()
+                if case .session = workspace.mainRoute {} else { PageMenuSlot() }
+            }
+            .padding(.horizontal, 16).frame(height: 44)
             ZStack {
-                page
+                CatalogGate { PageStack() }
                 EditorLayer().zIndex(1)
                 LibraryFileLayer().zIndex(1)
             }
             .overlay(alignment: .bottom) { CaptureSlot() }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Divider()
-            CatalogGate {
-                if let session = workspace.sideSession, let id = session.sessionID {
-                    SessionPage(sessionID: id, column: .side).id(id)
-                } else {
+        }
+    }
+
+    @ViewBuilder private var side: some View {
+        CatalogGate {
+            if let session = workspace.sideSession, let id = session.sessionID {
+                SessionPage(sessionID: id, column: .side).id(id)
+            } else {
+                VStack(spacing: 0) {
+                    HStack { CueTitle(); Spacer(); CueListSlots() }.padding(.horizontal, 16).frame(height: 44)
                     CuePage()
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
-        .toolbar { toolbar }
-        .toolbar(removing: .title)
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-    }
-
-    private var page: some View {
-        CatalogGate { PageStack() }
-    }
-
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        // 工具栏项常驻、只换里面的内容（`ScopeSlot` 头注释）：左右各一项把控件排在一起（`LeadingSlots`、`TrailingSlots`），中间是这一页的标题。
-        // 玻璃都由控件自己画：工具栏给条目画的玻璃底不随内容显隐，宽 0 时仍留着玻璃的边距与一个空圆钮
-        ToolbarItem(placement: .navigation) { LeadingSlots() }
-            .sharedBackgroundVisibility(.hidden)
-        // 会话页的标题（`SessionHeader`）、Cue 页（侧栏收起时）的标题（`CueTitle`），居中；.principal 在详情区里居中，与对话的阅读栏同一条中线
-        ToolbarItem(placement: .principal) { PageTitleSlot() }
-            .sharedBackgroundVisibility(.hidden)
-        ToolbarSpacer(.flexible)
-        ToolbarItem(placement: .primaryAction) { TrailingSlots() }
-            .sharedBackgroundVisibility(.hidden)
-    }
-}
-
-/// 找详情区这一栏的承载视图交给 `SidebarSlide.column`（分栏里每一栏包在一层里，再往上是分栏本身），分栏每次摆完交给 `SidebarSlide.splitResized`。
-private struct ColumnFinder: NSViewRepresentable {
-    let pages: MacPages
-
-    func makeNSView(context: Context) -> Probe { Probe(pages: pages) }
-    func updateNSView(_ view: Probe, context: Context) {}
-
-    final class Probe: NSView {
-        let pages: MacPages
-        private var observer: NSObjectProtocol?
-
-        init(pages: MacPages) {
-            self.pages = pages
-            super.init(frame: .zero)
-        }
-
-        required init?(coder: NSCoder) { nil }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            observer.map(NotificationCenter.default.removeObserver)
-            observer = nil
-            pages.slide.leaveWindow()
-            guard window != nil, let column = sequence(first: self, next: \.superview).first(where: { $0.superview?.superview is NSSplitView }) else { return }
-            pages.slide.column = column
-            // 同步投递（queue 为 nil）：要在分栏这一次布局里处理
-            observer = NotificationCenter.default.addObserver(forName: NSSplitView.didResizeSubviewsNotification, object: column.superview?.superview, queue: nil) { [weak self] _ in
-                MainActor.assumeIsolated { self?.splitResized() }
-            }
-        }
-
-        private func splitResized() {
-            if let split = pages.slide.column?.superview?.superview as? NSSplitView { pages.slide.splitResized(split) }
         }
     }
 }

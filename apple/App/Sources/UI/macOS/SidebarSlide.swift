@@ -16,6 +16,11 @@ import AppKit
 /// 否决的方案：让分栏自己动画——AppKit 每帧在主线程摆一遍分栏、重排工具栏、重算窗口拖动区域、通知 SwiftUI 安全区变了，前台每帧 5～7ms（144Hz 一帧只有 6.9ms），
 /// 开头还有几圈 11～25ms；收起先滑完再交给分栏——滑完的那一圈收分栏、重排工具栏与详情区要 30ms 上下；用 SwiftUI 的偏移逐帧挪——每帧重新摆整页。
 final class SidebarSlide {
+    static func translate(_ layer: CALayer, by distance: CGFloat, key: String) {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        layer.add(SlideCurve(from: distance, to: 0, width: abs(distance)).offset { $0 }, forKey: key)
+    }
+
     /// 详情区这一栏（`ColumnFinder`）：父视图是它在分栏里的那一格，再往上是分栏。
     weak var column: NSView?
     /// 刚按下开合、等分栏换过去：要展开为 true。
