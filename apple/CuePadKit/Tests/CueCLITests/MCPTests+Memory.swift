@@ -21,7 +21,7 @@ extension MCPTests {
       #expect(kept.first { $0.text == "推送前先跑测试和 lint" }?.source == .known(.you))
 
       try await server.call("memory", ["action": "remind", "text": "看周报", "at": Self.tomorrow(hour: 9)])
-      #expect(try await server.refused("memory", ["action": "note", "text": "看月报", "replaces": ["#3", 1]]).contains("定时"))
+      #expect(try await server.refused("memory", ["action": "note", "text": "看月报", "replaces": [3, 1]]).contains("定时"))
       #expect(try await store.cueMemory().lines.count == 4)
       #expect(try await store.cueScheduleLines().map(\.text) == ["看周报"])
       #expect(try await store.recentCueMemory().count == 2)

@@ -14,10 +14,12 @@ extension CueTools {
           remind{text,at,repeat?,task?} 定时，到点叫醒你：at 是第一次（ISO 8601 或 yyyy-MM-dd HH:mm）；repeat 是重复，照 RRULE 写（FREQ=DAILY、FREQ=WEEKLY;BYDAY=MO,TH、FREQ=MONTHLY;BYMONTHDAY=1，时刻取 at 的），不带只这一次；task 写没完成的任务，到点你开工它。不再定时就 forget 那一条；任务完成、归档或进回收站时它上面的定时自动不再定时。
           schedules{} 只读：全部定时（序号、下一次、怎么重复、挂的任务）。
           """,
+        // replaces 的元素只写整数：数组元素写成 ["string", "integer"] 联合类型时，Claude Code 2.1.312 下模型第一下调用常改用不带前缀的
+        // 工具名（`task`），被拒成"No such tool"（同一份清单只改这一处就好，6/6 实测）
         "inputSchema": schema(
           [
             "action": ["type": "string", "enum": ["note", "recall", "zoom", "forget", "pin", "remind", "schedules"]],
-            "text": string, "pin": ["type": "boolean"], "his": ["type": "boolean"], "replaces": ["type": "array", "items": ["type": ["string", "integer"]]],
+            "text": string, "pin": ["type": "boolean"], "his": ["type": "boolean"], "replaces": ["type": "array", "items": ["type": "integer"]],
             "query": string, "line": ["type": ["string", "integer"]],
             "pinned": ["type": "boolean"], "at": string, "repeat": string, "task": string, "lo": ["type": "integer"], "hi": ["type": "integer"],
           ], required: ["action"]),
