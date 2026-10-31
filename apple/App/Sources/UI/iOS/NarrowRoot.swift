@@ -69,6 +69,7 @@ private struct NarrowCue: View {
                 }
                 .padding(.top, CueHeader.height + Bars.contentGap)
                 .padding(.bottom, ComposerMetrics.slot + 16)
+                .ignoresSafeArea(.container, edges: .bottom)
             }
             .observing(workspace.services.store, into: $rail, onError: workspace.fail, SessionRailData.read)
     }
