@@ -2,7 +2,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// Cue 的三个工具（task、tell、memory）与后台整理记忆的那一个（merge）：定义与实现。都经 `CueStore` 的业务操作，写出的投送请求与消息标明来自 Cue。
+/// Cue 的四个工具（task、tell、memory、setup）与后台整理记忆的那两个（merge、tidy）：定义与实现。都经 `CueStore` 的业务操作，写出的投送请求与消息标明来自 Cue。
 /// 返回一两句人话加 id，只有正文（各家大脑给模型看的都是这一份）；出错给出路（`isError`）。
 public struct CueTools: Sendable {
   let store: CueStore
@@ -10,7 +10,7 @@ public struct CueTools: Sendable {
   let wait: TimeInterval
   let toolset: Toolset
 
-  /// 给谁用：Cue（task、tell、memory），或后台整理记忆的大脑（只有 merge，`CuePrompt.dream`）。
+  /// 给谁用：Cue（task、tell、memory、setup），或后台整理记忆的大脑（merge、tidy，`CuePrompt.dream`）。
   public enum Toolset: Sendable {
     case cue, dream
   }
@@ -43,7 +43,9 @@ public struct CueTools: Sendable {
       case (.cue, "task"): return try await task(args)
       case (.cue, "tell"): return try await tell(args)
       case (.cue, "memory"): return try await memory(args)
+      case (.cue, "setup"): return try await setup(args)
       case (.dream, "merge"): return try await merge(args)
+      case (.dream, "tidy"): return try await tidy(args)
       default: return nil
       }
     } catch let failure as Failure {

@@ -3,7 +3,8 @@ import CueText
 import Foundation
 
 /// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。
-/// 块里第一行是时间，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、醒来的原因。
+/// 块里第一行是时间，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、醒来的原因，
+/// 有才写的：上一轮出错重试、吃紧的额度。
 /// 新会话的第一条输入里，它前面还有记忆视图与对话视图（`CueKeeper`）。信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
   public struct Input: Sendable {
@@ -24,11 +25,18 @@ public enum CueEnvelope {
     /// 这一轮要写的语言不是中文时它的名字（他这句话的语言，他没开口时是界面语言，App 定）：系统提示是中文，只在系统提示里说一次，
     /// 照着中文句式回的还是中文（实测），所以每一轮在块尾再说一次；中文时为 nil，不写这一行。
     public var language: String?
+    /// 额度（`CueStore.accountQuotas`）：信封里只写吃紧的（`CueQuotaWords.tight`），一个账号一行
+    public var quotas: [AccountQuota]
+    /// 这一轮是上一轮出错后的重试：上一轮的错（原文首行），Cue 先核对上一轮做到了哪、不重做
+    public var retrying: String?
 
     public init(
       now: Date, projects: [Project], changes: [CueChange],
-      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, fired: [Fired] = [], schedules: [CueMemoryLine] = [], language: String? = nil
+      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, fired: [Fired] = [], schedules: [CueMemoryLine] = [], language: String? = nil,
+      quotas: [AccountQuota] = [], retrying: String? = nil
     ) {
+      self.quotas = quotas
+      self.retrying = retrying
       self.language = language
       self.schedules = schedules
       self.fired = fired
@@ -64,6 +72,12 @@ public enum CueEnvelope {
 
     lines.append("醒来：" + wake(input.wake))
     if case .schedule = input.wake { lines += input.fired.map { "- " + fired($0, now: input.now) } }
+    if let retrying = input.retrying { lines.append("上一轮出错重试：\(clip(retrying, 160))；先核对上一轮做到哪，做过的不重做") }
+    let tight = input.quotas.filter { CueQuotaWords.tight($0, at: input.now) }
+    if !tight.isEmpty {
+      lines.append("额度吃紧：")
+      lines += tight.map { "- " + CueQuotaWords.tightLine($0, at: input.now) }
+    }
     if let language = input.language { lines.append("这一轮你写下的字都用\(language)（回复、tell、任务、对会话说的话）") }
     lines.append("</cue>")
     return lines.joined(separator: "\n")

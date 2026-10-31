@@ -128,6 +128,38 @@
         }
       }
     },
+    "%@ %@（%@ 重置），我换到 %@ 接着干。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: %2$@ (resets %3$@). Switching to %4$@ to keep going."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@（%3$@ 重置），我换到 %4$@ 接着干。"
+          }
+        }
+      }
+    },
+    "%@ %@，我换到 %@ 接着干。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: %2$@. Switching to %3$@ to keep going."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@，我换到 %3$@ 接着干。"
+          }
+        }
+      }
+    },
     "%@ %lld" : {
       "localizations" : {
         "zh-Hans" : {
@@ -535,6 +567,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 的文件夹"
+          }
+        }
+      }
+    },
+    "%@ 的设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的设置"
           }
         }
       }
@@ -5055,22 +5103,6 @@
         }
       }
     },
-    "不启用" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Off"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不启用"
-          }
-        }
-      }
-    },
     "不在" : {
       "localizations" : {
         "en" : {
@@ -6567,6 +6599,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停止这一轮"
+          }
+        }
+      }
+    },
+    "停用 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn Off %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停用 %@"
           }
         }
       }
@@ -8243,6 +8291,22 @@
         }
       }
     },
+    "又能干活了。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I'm back to work."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "又能干活了。"
+          }
+        }
+      }
+    },
     "反缩进" : {
       "localizations" : {
         "en" : {
@@ -9191,6 +9255,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用后说一件想做的事，我来开工，要你拿主意时再找你"
+          }
+        }
+      }
+    },
+    "启用或停用 Cue、运行情况、设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn Cue on or off, status, settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用或停用 Cue、运行情况、设置"
           }
         }
       }
@@ -12739,18 +12819,18 @@
         }
       }
     },
-    "我起不来了：%@\n你再发一条消息，我就再试一次。" : {
+    "我起不来了：%@\n我隔一阵会自己再试；你发条消息，我马上再试。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I can't start: %@\nSend me another message and I'll try again."
+            "value" : "I can't start: %@\nI'll keep retrying on my own. Send me a message to retry right away."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "我起不来了：%@\n你再发一条消息，我就再试一次。"
+            "value" : "我起不来了：%@\n我隔一阵会自己再试；你发条消息，我马上再试。"
           }
         }
       }
@@ -21063,22 +21143,6 @@
         }
       }
     },
-    "运行情况、设置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Status, settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "运行情况、设置"
-          }
-        }
-      }
-    },
     "近 30 天" : {
       "localizations" : {
         "en" : {
@@ -21547,6 +21611,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没醒过"
+          }
+        }
+      }
+    },
+    "这一轮 %lld 分钟没有动静，大脑像是卡住了" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No activity for %lld minute this turn. Cue's model seems stuck."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No activity for %lld minutes this turn. Cue's model seems stuck."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这一轮 %lld 分钟没有动静，大脑像是卡住了"
           }
         }
       }

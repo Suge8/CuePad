@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// "Cue 记得什么"（Cue 页上打开的弹层，入口见 `CuePage`；手机与 Mac 同一张列表，壳是 `CueListPanel`）：没忘掉、不是定时的记忆，
-/// 最上面是"一直记着"（钉住的）一组，其余按记下的时间分段（今天、昨天、本周、本月、更早，同会话历史 `TimeSection`），组内从新到旧。
+/// 最上面是"一直记着"（钉住的）一组、组头右端是它的用量（`PinnedUsage`；后台整理合并过的就是普通的一条，不另标），其余按记下的时间分段（今天、昨天、本周、本月、更早，同会话历史 `TimeSection`），组内从新到旧。
 /// 一条只剩正文：时间在组头，谁说的与确切日期只在长按（右键）菜单的抬头与读屏里——一屏要看得到十来条。定时另有一张（`CueSchedulePage`）。
 /// 记一条是浮在底部的玻璃胶囊；记下的算你说的，一条超过 `CueMemoryLine.maxBytes` 字节时在胶囊里说明、不写。
 /// 钉住与忘掉按平台惯例收起（`CueListRow`）；忘掉先确认：库里忘掉是软删、界面上没有拨回去的路。
@@ -29,7 +29,7 @@ struct CueMemoryPage: View {
             isEmpty: memory != nil && kept.isEmpty
         ) {
             if !pinned.isEmpty {
-                GroupTitle(title: String(localized: "一直记着"), icon: .pin)
+                GroupTitle(title: String(localized: "一直记着"), icon: .pin) { PinnedUsage(bytes: CueMemoryLine.bytes(pinned)) }
                 ForEach(pinned) { row($0).transition(.opacity) }
             }
             ForEach(TimeSection.split(others, date: \.createdAt, now: .now), id: \.section) { run in
@@ -99,12 +99,47 @@ extension RowAction {
     }
 }
 
-/// 组头：小号、第三档墨，可带一枚图标；上面空出一段把组分开。
-private struct GroupTitle: View {
+/// 组头：小号、第三档墨，可带一枚图标，右端可挂一样东西（一直记着的用量）；上面空出一段把组分开。
+private struct GroupTitle<Trailing: View>: View {
     let title: String
     var icon: Icon?
+    @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        SectionLabel(text: Dotted(title), icon: icon).padding(.horizontal, CueListMetrics.inset).padding(.top, 20).padding(.bottom, 2)
+        HStack(spacing: 12) {
+            SectionLabel(text: Dotted(title), icon: icon)
+            Spacer(minLength: 0)
+            trailing
+        }
+        .padding(.horizontal, CueListMetrics.inset).padding(.top, 20).padding(.bottom, 2)
+    }
+}
+
+extension GroupTitle where Trailing == EmptyView {
+    init(title: String, icon: Icon? = nil) { self.init(title: title, icon: icon) { EmptyView() } }
+}
+
+/// 一直记着的用量：一条用量条（`MarkedBar`，不带刻线）铺到硬线（`CueMemoryLine.pinnedHard`）的比例，旁边是已用多少（kB，一位小数）。
+/// 不画软线：过了它后台马上合并收口，那一段一闪而过，刻线只会让人猜它是什么。用量档位与配色同上下文那一行（`UsageLevel`），平时是安静的次要墨。
+private struct PinnedUsage: View {
+    let bytes: Int
+    @Environment(\.palette) private var palette
+
+    private static let width: CGFloat = 56
+
+    var body: some View {
+        let fraction = min(Double(bytes) / Double(CueMemoryLine.pinnedHard), 1)
+        let level = UsageLevel(used: fraction)
+        let used = Measurement(value: Double(bytes), unit: UnitInformationStorage.bytes).converted(to: .kilobytes)
+            .formatted(.measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(1))))
+        HStack(spacing: 8) {
+            MarkedBar(fill: fraction, mark: nil, level: level).frame(width: Self.width)
+            Text(verbatim: used).monospacedDigit().foregroundStyle(level == .critical ? palette.failure : palette.ink3)
+                .contentTransition(.numericText(value: fraction))
+        }
+        .font(Typography.meta)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: used))
+        .animation(Motion.fade, value: bytes)
     }
 }

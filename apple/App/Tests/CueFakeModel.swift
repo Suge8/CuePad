@@ -24,6 +24,12 @@ nonisolated final class FakeModel: Sendable {
     private let asksOnEnable: Bool
     /// 回过最后一句的工具结果（工具调用之后这一轮就结束）
     private let finishedAfter = Mutex<[String]>([])
+    /// 接下来几次请求（你的话与信封）报额度用完
+    private let quotaBlocked = Mutex((left: 0, containing: String?.none))
+    func blockQuota(times: Int, containing: String? = nil) { quotaBlocked.withLock { $0 = (times, containing) } }
+    /// 整理记忆的大脑收到过几次一直记着的（`<pinned>`）
+    private let pinnedShown = Mutex(0)
+    var tidyAsks: Int { pinnedShown.withLock { $0 } }
     /// 不回的请求的连接：留着，免得释放时断开
     private let hung = Mutex<[NWConnection]>([])
 
@@ -188,11 +194,25 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送登录页的修复"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
+        // 额度用完（各家额度类的说法之一，`PiErrorSummary` 认作额度）：说了这句的每次都是，`blockQuota` 之后的那几次也是
+        let blocked = quotaBlocked.withLock { rule in
+            guard rule.left > 0, last["role"] as? String == "user",
+                  rule.containing.map(text.contains) ?? true else { return false }
+            rule.left -= 1
+            return true
+        }
+        if blocked || last["role"] as? String == "user" && text.contains("请用到额度用完") {
+            errorCount.withLock { $0 += 1 }
+            return .error("You have hit your usage limit.")
+        }
         if text.contains("请慢慢想"), once("hang") { return .hang }
-        // 后台整理记忆的大脑：输入以待合并的块开头，合第一块
-        if let block = text.firstMatch(of: /^#(\d+)-(\d+)\n/) {
+        // 后台整理记忆的大脑：有待合并的块就合第一块；一直记着的（`<pinned>`）只看一眼、什么都不动
+        let dreaming = last["role"] as? String == "user" && (text.hasPrefix("<merge>") || text.hasPrefix("<pinned>"))
+        if dreaming, text.contains("<pinned>") { pinnedShown.withLock { $0 += 1 } }
+        if let block = text.firstMatch(of: /<merge>\n#(\d+)-(\d+)\n/) {
             return call("merge", ["lo": Int(block.1)!, "hi": Int(block.2)!, "text": "合起来的偏好"])
         }
+        if dreaming { return say("都不用动") }
         if text.contains("三步并行"), let board = text.firstMatch(of: /在做 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
             return text.contains("醒来：会话有动静") ? tell("看板：\n" + board) : say("看板：\n" + board)
         }
@@ -226,6 +246,8 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("醒来：刚启用") {
             return asksOnEnable ? call("tell", ["text": "要交给我跟进吗？"]) : say("我看了一眼")
         }
+        // 出错后重来、信封后面没接你的话（重来的就是上一轮）
+        if text.contains("上一轮出错重试"), text.hasSuffix("</cue>") { return say("接着做上一轮没做完的") }
         return say("收到：" + (text.split(separator: "\n").last.map(String.init) ?? ""))
     }
 }
