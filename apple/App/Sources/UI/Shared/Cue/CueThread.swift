@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页一次读到的：最近的对话、在等你的那几条、待回复的会话；对话排成的格子与刻度滑条的刻度在读的时候一起推好
+/// Cue 页一次读到的：最近的对话、在等你的那几条；对话排成的格子与刻度滑条的刻度在读的时候一起推好
 /// （不在主线程，滚动时页面重算也不再推一遍）。
 nonisolated struct CueThread: Equatable, Sendable {
     /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
@@ -9,8 +9,6 @@ nonisolated struct CueThread: Equatable, Sendable {
     let messages: [CueMessage]
     /// 拍板（Cue 的提问与会话在问的，`CueWait.read`），等得最久的在前。
     let waiting: [CueWait]
-    /// 待回复的会话（`CueStore.sessionsAwaitingReply`），等得最久的在前：拍板卡上方那条提示（`CueReplyTip`）。
-    let replies: [PiSessionState]
     /// Cue 点名要你看的图（`CueMessage.shots`：提问的与做完的结果），按消息的 id：只有点了名、那一份还在的
     let shots: [UUID: [CueShown]]
     let rows: [Row]
@@ -29,12 +27,11 @@ nonisolated struct CueThread: Equatable, Sendable {
 
     /// `lines`：定时叫醒 Cue 的那几轮，到点的那几条定时（按 id）。
     init(
-        messages: [CueMessage], waiting: [CueWait], replies: [PiSessionState], shots: [UUID: [CueShown]],
+        messages: [CueMessage], waiting: [CueWait], shots: [UUID: [CueShown]],
         unread: Set<UUID>, lines: [UUID: CueMemoryLine]
     ) {
         self.messages = messages
         self.waiting = waiting
-        self.replies = replies
         self.shots = shots
         self.unread = unread
         let rows = Self.rows(messages, waiting: Set(waiting.compactMap(\.message?.id)), shots: shots, lines: lines)
@@ -69,7 +66,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         }
         let fired = messages.flatMap { message -> [UUID] in if case .schedule(let fires)? = message.wake { fires.map(\.line) } else { [] } }
         return CueThread(
-            messages: messages, waiting: waits, replies: try store.sessionsAwaitingReply(), shots: shots, unread: Set(try store.cueUnread()),
+            messages: messages, waiting: waits, shots: shots, unread: Set(try store.cueUnread()),
             lines: Dictionary(try store.cueLines(fired).map { ($0.line.id, $0.line) }) { first, _ in first })
     }
 

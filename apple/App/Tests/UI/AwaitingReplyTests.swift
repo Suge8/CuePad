@@ -42,9 +42,9 @@ struct AwaitingReplyTests {
         func thread() async throws -> CueThread { try await CueThread.read(from: store) }
         func now() async throws -> CueNow { CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil)) }
 
-        var page = try await thread()
+        let page = try await thread()
         #expect(page.waiting.map(\.id) == ["session/deploy"])
-        #expect(page.replies.map(\.sessionID) == ["glass", "header"])  // 等得最久的在前；Cue 没留给你的不算
+        #expect(try await store.sessionsAwaitingReply().map(\.sessionID) == ["glass", "header"])  // 等得最久的在前；Cue 没留给你的不算
         let board = try await TaskBoard.read(from: store)
         #expect(board.held.map(\.session.sessionID) == ["deploy", "glass", "header"] && board.held.map(\.deciding) == [true, false, false])
         #expect(board.held[1].item?.task.id == dock.id && !board.advancing.contains { $0.item?.id == dock.id })  // 被待回复占着：只在等你
@@ -67,12 +67,12 @@ struct AwaitingReplyTests {
         // 几个待回复：打开待回复去进展页上次看的那一段，项目范围放开，那几个被指出
         workspace.projectScope = try await store.createProject(name: "圆桌", color: "#000000").id
         #expect(workspace.progressPane == .board)
-        workspace.openReplies(try await thread().replies)
+        workspace.openReplies(try await store.sessionsAwaitingReply())
         #expect(workspace.mainRoute == .progress && workspace.progressPane == .board && workspace.projectScope == nil)
         #expect(workspace.spotlight?.sessions == ["glass", "header"])
         // 看过会话段：再点、下次打开都停在会话段；待回复紧随等你确认（此刻没有在问的，排在最前）
         workspace.progressPane = .sessions
-        workspace.openReplies(try await thread().replies)
+        workspace.openReplies(try await store.sessionsAwaitingReply())
         #expect(workspace.mainRoute == .progress && workspace.progressPane == .sessions)
         #expect(AppSettings(defaults: rig.preferences.reopened(), launchArguments: [:]).progressPane == .sessions)
         let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
@@ -80,9 +80,8 @@ struct AwaitingReplyTests {
 
         // 对其中一个说了话、它动起来：不再待回复；只剩一个，打开待回复直接进那个会话
         try await recorder.update(sessionID: "header", state: .thinking)
-        page = try await thread()
-        #expect(page.replies.map(\.sessionID) == ["glass"])
-        workspace.openReplies(page.replies)
+        #expect(try await store.sessionsAwaitingReply().map(\.sessionID) == ["glass"])
+        workspace.openReplies(try await store.sessionsAwaitingReply())
         #expect(workspace.shownSessions.map(\.sessionID) == ["glass"])
         #expect(try await now().yours == [CueNow.Entry(kind: .reply, count: 1)])
 

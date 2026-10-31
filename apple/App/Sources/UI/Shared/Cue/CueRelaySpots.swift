@@ -76,11 +76,12 @@ private struct SessionSpot: ViewModifier {
     let session: String?
     let row: EndSpot.Row
     @Environment(Workspace.self) private var workspace
+    @Environment(\.pageActive) private var active
 
     func body(content: Content) -> some View {
         let flying = session.flatMap { workspace.relays(session: $0) ? $0 : nil }
         content.modifier(Arrival(session: session)).background {
-            if let flying { RelayAnchor(role: .end(.session(flying, row))).transition(.identity) }
+            if active, let flying { RelayAnchor(role: .end(.session(flying, row))).transition(.identity) }
         }
     }
 }

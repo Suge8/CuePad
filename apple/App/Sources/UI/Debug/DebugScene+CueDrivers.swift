@@ -140,7 +140,7 @@ extension DebugScene {
     static func relayIfAsked(_ workspace: Workspace) async {
         let store = workspace.services.store
         let kind = defaults.string(forKey: "CuePadRelayKind")
-        let launcher = PiStateRecorder(store: store, hostID: "demo-mac")
+        let launcher = PiStateRecorder(store: store, hostID: "demo-mac", bootID: defaults.bool(forKey: "CuePadNarrow") ? "narrow-demo-boot" : nil)
         var round = 0
         await everyIfAsked("CuePadRelay") {
             let starts = kind.map { $0 == "start" } ?? !round.isMultiple(of: 2)
