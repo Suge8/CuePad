@@ -50,6 +50,8 @@ import Testing
       END;
       ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
       ALTER TABLE piSessionStates DROP COLUMN failure;
+      ALTER TABLE sessionViewers DROP COLUMN sessionIDs;
+      ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT;
       PRAGMA user_version = 77;
       """)
 

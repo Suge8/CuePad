@@ -111,7 +111,7 @@ import Testing
       return try #require(try await rig.store.cueMessages().last { $0.text == text }).id
     }
 
-    try await rig.store.recordViewing(device: "phone", sessionID: nil, cue: true)
+    try await rig.store.recordViewing(device: "phone", sessionIDs: [], cue: true)
     let fixed = try await reply("登录页修好了，**测试全过**")
     #expect(try await flag(rig, fixed) == "cue")
     let record = try #require(try await rig.coordinator.record(for: rig.recordID(fixed)))
@@ -123,7 +123,7 @@ import Testing
     #expect(try await flag(rig, reply("问你了", startedAt: round)) == "said")  // 只静默叫醒
 
     try await rig.store.recordMacPresence(host: "mac") { true }
-    try await rig.store.recordViewing(device: "mac", sessionID: nil, cue: true)
+    try await rig.store.recordViewing(device: "mac", sessionIDs: [], cue: true)
     #expect(try await flag(rig, reply("合并好了")) == "said")
   }
 
@@ -147,11 +147,11 @@ import Testing
     #expect(try await flag(rig, session) == "settled")
     try await rig.simulatePush()
     try await rig.store.recordMacPresence(host: "mac") { true }
-    try await rig.store.recordViewing(device: "mac", sessionID: "s1", cue: false)
+    try await rig.store.recordViewing(device: "mac", sessionIDs: ["s2", "s1"], cue: false)
     try await round()
     #expect(try await flag(rig, session) == "wake")
     try await rig.simulatePush()
-    try await rig.store.recordViewing(device: "mac", sessionID: nil, cue: false)
+    try await rig.store.recordViewing(device: "mac", sessionIDs: [], cue: false)
 
     _ = try await rig.store.updateCueProfile {
       $0.hostID = "mac"

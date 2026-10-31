@@ -79,10 +79,10 @@ struct RuntimeBootTests {
             ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
             """) }
         let oldVersion = origin == "本分支84" ? 84 : 82
-        try db.exec("PRAGMA user_version = \(oldVersion);")
+        try db.exec("ALTER TABLE sessionViewers DROP COLUMN sessionIDs; ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT; PRAGMA user_version = \(oldVersion);")
         #expect(CueStore.schemaVersion(of: location.databaseURL) == oldVersion)
         let upgraded = try CueStore(location: location)
-        #expect(CueStore.schemaVersion(of: location.databaseURL) == 85 && CueStore.peerFloor == 84)
+        #expect(CueStore.schemaVersion(of: location.databaseURL) == CueStore.supportedSchemaVersions.upperBound)
         #expect(try await upgraded.activityDestinations().map(\.activityID) == (origin == "主干82" ? ["existing"] : []))
         #expect(try await upgraded.accountQuotas().isEmpty)
         #expect(try db.rows("SELECT hostID IS NULL, bootID IS NULL FROM cueState") == [["1", "1"]])

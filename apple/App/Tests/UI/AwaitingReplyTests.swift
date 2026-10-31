@@ -81,7 +81,7 @@ struct AwaitingReplyTests {
         page = try await thread()
         #expect(page.replies.map(\.sessionID) == ["glass"])
         workspace.openReplies(page.replies)
-        #expect(workspace.shownSession?.sessionID == "glass")
+        #expect(workspace.shownSessions.map(\.sessionID) == ["glass"])
         #expect(try await now().yours == [CueNow.Entry(kind: .reply, count: 1)])
 
         // 多过列得下的行：数字账与角标数的是全部
@@ -138,7 +138,7 @@ struct AwaitingReplyTests {
         // 点卡：有会话的进那个会话（有子任务也是），没有会话的打开任务
         let item = try #require(board.advancing.first { $0.item?.id == parent.id }?.item)
         workspace.enter(item.task, session: item.agent?.state)
-        #expect(workspace.shownSession?.sessionID == "billing" && workspace.openTask == nil)
+        #expect(workspace.shownSessions.map(\.sessionID) == ["billing"] && workspace.openTask == nil)
         let todo = try #require(board.todo.first { $0.id == idle.id })
         workspace.enter(todo.task, session: todo.agent?.state)
         #expect(workspace.openTask?.task == idle.id)

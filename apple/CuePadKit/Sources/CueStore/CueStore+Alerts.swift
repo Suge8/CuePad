@@ -49,7 +49,7 @@ extension CueStore {
     case .settled: cue == nil
     }
     guard yours else { return nil }
-    return try watchedOnMac { $0.sessionID.map(PiSessionState.recordID) == state.id } ? .wake : .alert(alert)
+    return try watchedOnMac { $0.sessionIDs.contains(state.sessionID) } ? .wake : .alert(alert)
   }
 
   /// 这次停下刚留给你（`CueLeft`，会话状态没变，状态转换的标志轮不到它）：会话在这台 Mac 上（会话记录只有它写）、

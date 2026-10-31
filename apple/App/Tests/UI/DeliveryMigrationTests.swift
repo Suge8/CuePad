@@ -91,6 +91,8 @@ struct DeliveryMigrationTests {
             CREATE TRIGGER piSessionStates_writeSeq_update AFTER UPDATE OF state ON piSessionStates BEGIN SELECT 1; END;
             ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
             DROP TABLE activityDestinations;
+            ALTER TABLE sessionViewers DROP COLUMN sessionIDs;
+            ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT;
             PRAGMA user_version = 82;
             """)
         let services = app.relaunch(), store = services.store

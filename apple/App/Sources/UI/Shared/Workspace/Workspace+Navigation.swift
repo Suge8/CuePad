@@ -29,9 +29,9 @@ extension Workspace {
         return nil
     }
 
-    /// 屏幕上最上面那一页是会话页时是它（这个窗口开着哪个会话，`ViewerKeeper`）。
-    var shownSession: ViewerKeeper.Page? {
-        if case .session(let route) = top { ViewerKeeper.Page(id: route.id, sessionID: route.sessionID) } else { nil }
+    /// 屏幕上最上面那一页是会话页时是它（这个窗口开着哪些会话，`ViewerKeeper`）。
+    var shownSessions: [ViewerKeeper.Page] {
+        if case .session(let route) = top { [ViewerKeeper.Page(id: route.id, sessionID: route.sessionID)] } else { [] }
     }
 
     /// 去一页（提示、快捷键、深链与组件共用）：开着的任务气泡收起；有历史时会话页推在当前页上（已在看它就不再叠一页），其余经 `select`。

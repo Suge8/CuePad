@@ -57,7 +57,7 @@ struct PiAlertRoutingTests {
         alerts.receive(tapped(session.id))
         try await eventually("打开那个会话") { workspace.top == .session(session.id) }
 
-        #expect(workspace.shownSession == ViewerKeeper.Page(id: session.id, sessionID: "atlas"))
+        #expect(workspace.shownSessions == [ViewerKeeper.Page(id: session.id, sessionID: "atlas")])
         #expect(app.services.pendingDeepLink == nil)
         #if os(iOS)
         #expect(workspace.root == .project(Project.defaultID))

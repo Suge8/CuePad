@@ -127,7 +127,7 @@ extension CueStore {
 
   /// 他此刻在不在会话里（`SessionPresence`）；不在场为 nil。
   private func presence(in sessionID: String) throws -> SessionPresence? {
-    let viewing = try viewers().contains { $0.sessionID == sessionID }
+    let viewing = try viewers().contains { $0.sessionIDs.contains(sessionID) }
     // 窗口内有明确人类来源的话（从晚到早）；缺来源证据不等于他说过。
     let said = try select(
       PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)' AND at > ?",

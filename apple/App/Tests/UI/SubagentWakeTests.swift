@@ -51,7 +51,7 @@ struct SubagentWakeTests {
         #expect(!keeper.rounds.contains { $0.wake.isSessionActivity })
 
         // 子代理交回（在主会话为它跑完那一轮之前仍在飞）；FireCode 投回结果、指挥官再跑一轮：歇下先写进库，回答随后才落盘
-        try await store.recordViewing(device: "phone", sessionID: session.sessionID, cue: false)
+        try await store.recordViewing(device: "phone", sessionIDs: [session.sessionID], cue: false)
         session.sendInfo(["subagents": [Self.ui("done", action: "测试全过")]])
         try file.append(user: "<firecode_master_event>\nui 交回：测试全过\n</firecode_master_event>")
         session.setState(["kind": "thinking"])

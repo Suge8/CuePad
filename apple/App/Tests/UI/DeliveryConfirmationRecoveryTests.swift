@@ -137,6 +137,8 @@ extension DeliveryConfirmationTests {
             UPDATE deliveryRequests SET status = 'executing', handledBy = '\(TestApp.hostID)';
             ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
             DROP TABLE activityDestinations;
+            ALTER TABLE sessionViewers DROP COLUMN sessionIDs;
+            ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT;
             PRAGMA user_version = 83;
             """)
         let services = app.relaunch()

@@ -304,10 +304,11 @@ DEFINE SCHEMA
     RECORD TYPE sessionViewers (
         "___recordID" REFERENCE QUERYABLE,
         device        STRING,
-        sessionID     STRING,
+        sessionIDs    STRING,
         modifiedAt    INT64,
         cue           INT64,
         arrivedAt     INT64,
+        sessionID     STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

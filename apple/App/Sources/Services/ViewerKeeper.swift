@@ -9,17 +9,17 @@ import Foundation
 import os
 import Synchronization
 
-/// 这台设备此刻开着哪一页、他什么时候来到这台（`Viewer`，规则在它的头注释）只由这里写，只在变了时写一次，写成立即上传；没有心跳。
+/// 这台设备此刻开着哪些页、他什么时候来到这台（`Viewer`，规则在它的头注释）只由这里写，只在变了时写一次，写成立即上传；没有心跳。
 /// 来到这台（`arrive`）：手机点开与每次回到前台（`AppServices.followArrivals` 报来）；Mac 读到他最近来到的是别的设备（`CueStore.leftFor`）就算人不在跟前（`Away.elsewhere`），回到这台的第一下键盘鼠标才回来、记下来到。
-/// 开着的那一页由界面报来：会话页（`show`）Mac 是人看得到主窗口时内容区的会话页，手机是场景前台活跃时导航最上面的会话页
-/// （都是 `Workspace.shownSession`；iPad 开几个窗口各报各的，取最近开的那个）；Cue 页（`showCue`）两端都由 `CueViewing` 报（iPad 上它可以在面板里、
+/// 开着的页由界面报来：会话页（`show`）Mac 是人看得到主窗口时内容区的会话页，手机是场景前台活跃时导航最上面的会话页
+/// （都是 `Workspace.shownSessions`；iPad 开几个窗口各报各的，合并各窗口开着的页）；Cue 页（`showCue`）两端都由 `CueViewing` 报（iPad 上它可以在面板里、
 /// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出、他去了别的设备，或 `SessionPresence.window` 没动过键盘鼠标）时一概算没开着，
 /// 回来再按界面报的算；退出时写完、传完才放行，手机进后台时写完、传完。将睡眠不拖住系统：Mac 的这条只在那台 Mac 在线时算数（`Viewer`），
 /// `MacPresenceKeeper` 在将睡眠时同步写下离线，它在各端就作废了。
-/// 写的那一刻在 Store 的隔离域里读开着哪一页：几路写入谁先谁后，库里留下的都是最后的那个状态。
+/// 写的那一刻在 Store 的隔离域里读开着哪些页：几路写入谁先谁后，库里留下的都是最后的那个状态。
 nonisolated final class ViewerKeeper: Sendable {
     /// 开着的会话页：会话记录 id；`sessionID` 是 Pi 的会话 id，只有记录 id 的入口（点通知进来）不带，写时从记录里取。
-    struct Page: Equatable, Sendable {
+    struct Page: Hashable, Sendable {
         let id: UUID
         let sessionID: String?
     }
@@ -30,15 +30,15 @@ nonisolated final class ViewerKeeper: Sendable {
     }
 
     private struct State {
-        /// 各窗口此刻开着的会话页，最近开的在后。
-        var shown: [(window: UUID, page: Page)] = []
+        /// 各窗口此刻开着的会话页。
+        var shown: [UUID: Set<Page>] = [:]
         var cue = false
         var away: Set<Away> = []
-        var viewing: Viewing { away.isEmpty ? Viewing(session: shown.last?.page, cue: cue) : Viewing(session: nil, cue: false) }
+        var viewing: Viewing { away.isEmpty ? Viewing(sessions: Set(shown.values.flatMap { $0 }), cue: cue) : Viewing(sessions: [], cue: false) }
     }
 
     private struct Viewing: Equatable {
-        var session: Page?
+        var sessions: Set<Page>
         var cue: Bool
     }
 
@@ -61,11 +61,10 @@ nonisolated final class ViewerKeeper: Sendable {
         (aways, awayChanged) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
     }
 
-    /// 一个窗口开着的会话页（nil：没开着，或窗口不在前台）。开着哪个变了就由 `keep` 当场写。
-    func show(_ page: Page?, in window: UUID) {
+    /// 一个窗口开着的会话页（空数组：没开着，或窗口不在前台）。开着哪个变了就由 `keep` 当场写。
+    func show(_ pages: [Page], in window: UUID) {
         update { state in
-            state.shown.removeAll { $0.window == window }
-            if let page { state.shown.append((window, page)) }
+            state.shown[window] = pages.isEmpty ? nil : Set(pages)
         }
     }
 
@@ -97,7 +96,7 @@ nonisolated final class ViewerKeeper: Sendable {
         }
     }
 
-    /// 当场写下此刻开着哪个并传完（手机进后台时：挂起后就传不出去了）。
+    /// 当场写下此刻开着哪些页并传完（手机进后台时：挂起后就传不出去了）。
     func settle() async {
         do { try await publish() } catch { Self.log.error("没能写下这台设备开着的会话：\(error.localizedDescription, privacy: .public)") }
     }
@@ -134,10 +133,10 @@ nonisolated final class ViewerKeeper: Sendable {
 
     private func record(in store: isolated CueStore) throws -> UUID? {
         let viewing = state.withLock { $0.viewing }
-        let sessionID = try viewing.session.flatMap { page in
+        let sessionIDs = try viewing.sessions.compactMap { page in
             try page.sessionID ?? store.piSessionPage(PiSessionQuery(id: page.id)).items.first?.state.sessionID
         }
-        return try store.recordViewing(device: device, sessionID: sessionID, cue: viewing.cue)
+        return try store.recordViewing(device: device, sessionIDs: Set(sessionIDs), cue: viewing.cue)
     }
 }
 
@@ -193,7 +192,7 @@ nonisolated extension ViewerKeeper {
     }
 
     /// 跟着主窗口，直到任务取消：把这台 Mac 上的人看不看得到主窗口交给界面（`AppServices.seesMainWindow` 的两半：窗口露没露在屏上、
-    /// 人在不在跟前），再报开着的会话页（`Workspace.shownSession`，页一换或看得到与否一变就重算）。
+    /// 人在不在跟前），再报开着的会话页（`Workspace.shownSessions`，页一换或看得到与否一变就重算）。
     @MainActor func follow(_ workspace: Workspace) async {
         let services = workspace.services, window = UUID()
         let away = Task { for await away in aways { services.away = away } }
@@ -201,8 +200,9 @@ nonisolated extension ViewerKeeper {
         defer {
             away.cancel()
             exposure.cancel()
+            show([], in: window)
         }
-        for await page in Observations({ services.seesMainWindow ? workspace.shownSession : nil }) { show(page, in: window) }
+        for await page in Observations({ services.seesMainWindow ? workspace.shownSessions : [] }) { show(page, in: window) }
     }
 
     @MainActor private static func followExposure(_ services: AppServices) async {
@@ -224,10 +224,10 @@ struct SessionViewing: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: phase == .active ? workspace.shownSession : nil, initial: true) { _, page in
+            .onChange(of: phase == .active ? workspace.shownSessions : [], initial: true) { _, page in
                 keeper?.show(page, in: window)
             }
-            .onDisappear { keeper?.show(nil, in: window) }
+            .onDisappear { keeper?.show([], in: window) }
     }
 }
 #endif

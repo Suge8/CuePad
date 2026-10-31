@@ -43,7 +43,7 @@ import Testing
     try await store.setCueState(.tool, detail: "建任务 · 修好登录页")
     try await store.markCueRead(through: .now)
     try await store.recordMacPresence(host: "mac") { true }
-    try await store.recordViewing(device: "phone", sessionID: "s1", cue: false)
+    try await store.recordViewing(device: "phone", sessionIDs: ["s1", "s2"], cue: false)
     try await store.recordActivityDestination(device: "phone", activityID: "activity", token: "private-push-token", environment: "production", startedAt: .now)
     try await store.recordMacAgents(host: "mac", name: "工作室", [MacAgent(kind: .pi, model: nil, models: [])], problems: [MacAgentProblem(kind: .codex, reason: .notLoggedIn)])
     let skill = "---\nname: pr\ndescription: 写 PR\n---\n"

@@ -70,3 +70,5 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 ### 待部署到生产
 
 这一节还有条目时 `release ios` 拒绝发版；部署完成并回读核对后删除对应条目。字段由 `ck-production.sh` 另行核对。
+
+- #62：`sessionViewers.sessionIDs`（STRING）尚未导入开发环境、部署生产；旧 `sessionID` 已登记下线。部署回读通过后按「发版顺序」先发 iOS，再发 Mac。
