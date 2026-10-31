@@ -24,8 +24,11 @@ struct QuotaDetail: View {
             Moments(next: quotas.nextReset(after:)) { now in
                 let meters = QuotaMeter.all(quotas, at: now)
                 VStack(alignment: .leading, spacing: 14) {
+                    // 读屏按定好的顺序：两栏的块上沿相近时，系统按几何会先读左栏下面那块
                     QuotaColumns {
-                        ForEach(meters, id: \.id) { QuotaAccount(meter: $0) }
+                        ForEach(Array(meters.enumerated()), id: \.element.id) { index, meter in
+                            QuotaAccount(meter: meter).accessibilitySortPriority(Double(meters.count - index))
+                        }
                     }
                     if let updated = meters.filter({ $0.status == nil }).compactMap(\.updatedAt).min() {
                         LiveText(style: PiClock.ago(updated).live(.list)) { Text("\($0)更新") }
@@ -62,8 +65,9 @@ private struct QuotaEmpty: View {
     }
 }
 
-/// 账号放得下就排成两栏：按顺序（`QuotaMeter.ordered`）切成连续两段，左栏从上往下读完再读右栏，读屏同序（块高矮不一，按行对齐会留空洞）。
-/// 切在哪里按量到的块高选：让较高那栏最矮的切点，一样高时取靠前的。位置只由顺序与各块形状定，刷新不挪；账号失败、少了窗口这类形状变了才可能换栏。
+/// 账号放得下就排成两栏：按顺序（`QuotaMeter.ordered`）一块块放进当时较矮的那一栏，一样高放左栏（块高矮不一，按行对齐会留空洞）。
+/// 每块落在当时最矮那栏的底下，所以各块上沿随顺序只增不减：从上往下扫就是定好的顺序，读屏同序。
+/// 位置只由顺序与各块形状定，刷新不挪；账号失败、少了窗口这类形状变了才可能换栏。
 /// 只有一个账号或放不下两栏（手机、菜单栏面板）时一块接一块往下排。
 /// 没给宽（Mac 侧栏的气泡）时取两栏的宽；只有一个账号或放不下两栏（手机、菜单栏面板）时一块接一块往下排。
 struct QuotaColumns: Layout {
@@ -87,16 +91,11 @@ struct QuotaColumns: Layout {
     private func arrange(_ width: CGFloat, _ subviews: Subviews) -> ([(x: CGFloat, y: CGFloat, width: CGFloat)], [CGFloat]) {
         let count = subviews.count > 1 && width + 1 >= Self.column * 2 + Self.gap ? 2 : 1
         let column = (width - Self.gap * CGFloat(count - 1)) / CGFloat(count)
-        let blocks = subviews.map { $0.sizeThatFits(ProposedViewSize(width: column, height: nil)).height }
-        func stack(_ part: ArraySlice<CGFloat>) -> CGFloat { part.reduce(0, +) + Self.lineSpacing * CGFloat(max(part.count - 1, 0)) }
-        // 右栏从第几块起；只有一栏时不切
-        let split = count == 1 ? blocks.count : (1..<blocks.count).min { a, b in
-            (max(stack(blocks[..<a]), stack(blocks[a...])), a) < (max(stack(blocks[..<b]), stack(blocks[b...])), b)
-        }!
         var heights = Array(repeating: CGFloat(0), count: count)
         var places: [(x: CGFloat, y: CGFloat, width: CGFloat)] = []
-        for (offset, block) in blocks.enumerated() {
-            let index = offset < split ? 0 : 1
+        for subview in subviews {
+            let block = subview.sizeThatFits(ProposedViewSize(width: column, height: nil)).height
+            let index = heights.indices.min { heights[$0] < heights[$1] }!
             let y = heights[index] == 0 ? 0 : heights[index] + Self.lineSpacing
             places.append((CGFloat(index) * (column + Self.gap), y, column))
             heights[index] = y + block
