@@ -9963,6 +9963,22 @@
         }
       }
     },
+    "在左边打开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open on the Left"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在左边打开"
+          }
+        }
+      }
+    },
     "在想" : {
       "localizations" : {
         "en" : {
