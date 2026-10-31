@@ -32,13 +32,14 @@ struct PageStack: View {
 
     @ViewBuilder private func pageView(_ page: Route) -> some View {
         switch page {
+        case .shelf: ProjectShelf()
         case .project(let id): ProjectPage(projectID: id)
         case .archive: ArchivePage()
         case .trash: TrashPage()
         case .library: LibraryPage()
         case .cue: CuePage()
         case .progress: ProgressPage()
-        case .session(let route): if let id = route.sessionID { SessionPage(sessionID: id).id(id) }
+        case .session(let route): if let id = route.sessionID { SessionPage(sessionID: id, column: .main).id(id) }
         default: EmptyView()  // 其余是 iOS 的页
         }
     }

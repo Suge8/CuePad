@@ -49,7 +49,7 @@ struct SetupTests {
         #expect(await first.setUp(connecting: agents.connectable, enablingCue: true).isEmpty)
         #expect(agents.status(.pi)?.isConnected == true && agents.status(.claudeCode)?.isConnected == true)
         #expect(try await services.store.cueProfile()?.hostID == TestApp.hostID)
-        #expect(first.mainRoute == .progress && first.sideSession == nil)
+        #expect(first.mainRoute == .shelf && first.sideSession == nil)
 
         app.relaunch()
         let next = await reopen()

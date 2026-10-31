@@ -2,8 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 主窗口：玻璃侧栏 + 当前页（侧栏点 Cue、任务、会话、项目，都在内容区整页切换；没有返回、前进与往上一层，
-/// 导航都在侧栏，工具栏左上只在开着编辑页时有"收起"）；卡片编辑页、⌘K 搜索、底部输入栏、提示都在详情区之上。
+/// 主窗口的主区与右栏分别呈现导航去处，编辑页与文件页盖在主区上。
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
@@ -34,12 +33,24 @@ struct MainWindow: View {
     }
 
     private var detail: some View {
-        ZStack {
-            page
-            EditorLayer().zIndex(1)
-            LibraryFileLayer().zIndex(1)
+        HStack(spacing: 0) {
+            ZStack {
+                page
+                EditorLayer().zIndex(1)
+                LibraryFileLayer().zIndex(1)
+            }
+            .overlay(alignment: .bottom) { CaptureSlot() }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Divider()
+            CatalogGate {
+                if let session = workspace.sideSession, let id = session.sessionID {
+                    SessionPage(sessionID: id, column: .side).id(id)
+                } else {
+                    CuePage()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .overlay(alignment: .bottom) { CaptureSlot() }
         .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
         .toolbar { toolbar }
         .toolbar(removing: .title)

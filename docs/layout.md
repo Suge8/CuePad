@@ -20,7 +20,7 @@
 
 `Workspace.navigation` 是唯一导航值：`Navigation.narrow(NarrowNavigation)` 或 `.wide(WideNavigation)`。窄屏只存 `path` 与根上侧栏的 `sidebarOpen`，Cue、项目书架与进展不放进 path；宽屏只存 `main: WideNavigation.Main` 与 `side: SessionRoute?`（nil 是 Cue）。main 分为 `.browse`（直接读持久浏览选择）、`.session`、`.page`（辅助页）；不把浏览选择再复制到 main。读取用 `layout`、`mainRoute`、`sideSession`；窄屏侧栏内容用 `sidebarRoute`（项目段是书架），宽屏返回落点用 `browseRoute`（项目段可恢复项目详情），栈的系统返回绑定 `path`；尺寸变化经 `setLayout`，不用直接另建一套状态。
 
-偏好唯一存在 `AppSettings` 的设备本地 UserDefaults：`navigationPane` 是项目｜进展（默认进展），`currentProject` 是项目段上次打开的项目（nil 是书架），`railExpanded` 是宽条选择（默认 true）。`Workspace.navigationPane`、`browseRoute` 与宽屏 `sidebarOpen` 都直接读它；窄屏侧栏开合只在本窗口，不落盘。既有 `progressPane` 仍只管看板｜会话。iPad 不再另存 `splitProject`。
+偏好唯一存在 `AppSettings` 的设备本地 UserDefaults：`navigationPane` 是项目｜进展（首次默认项目），`currentProject` 是项目段上次打开的项目（nil 是书架），`railExpanded` 是宽条选择（默认 true）。`Workspace.navigationPane`、`browseRoute` 与宽屏 `sidebarOpen` 都直接读它；窄屏侧栏开合只在本窗口，不落盘。既有 `progressPane` 仍只管看板｜会话。iPad 不再另存 `splitProject`。
 
 | 入口 | 窄屏 | 宽屏 |
 |---|---|---|

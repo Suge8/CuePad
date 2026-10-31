@@ -51,6 +51,7 @@ extension SessionDigest {
 /// 很久以前的会话没有对话时请它所在的 Mac 补写。是一页（`Route.session`），左上不放返回：去别处靠侧栏。
 struct SessionPage: View {
     let sessionID: String
+    let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -72,6 +73,16 @@ struct SessionPage: View {
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
         VStack(spacing: 0) {
             if let session = digest.session {
+                if column == .side, let state = headerState(digest, menu: secondary, task: task) {
+                    HStack {
+                        Text(state.title).font(Typography.toolbarTitle).lineLimit(1)
+                        Spacer()
+                        Menu { SessionMenuItems(state: state) } label: { Image(.more) }
+                            .menuStyle(.borderlessButton).fixedSize()
+                        Button("关闭", icon: .close) { workspace.closeColumn(.side) }.labelStyle(.iconOnly)
+                    }
+                    .padding()
+                }
                 FloatingReply {
                     // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                     if stored != nil {
@@ -99,9 +110,9 @@ struct SessionPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)
-        .onChange(of: headerState(digest, menu: secondary, task: task), initial: true) { _, state in header.set(state) }
-        .onAppear { header.reveal = { follow.reveal() } }
-        .onDisappear { header.clear(sessionID) }
+        .onChange(of: headerState(digest, menu: secondary, task: task), initial: true) { _, state in if column == .main { header.set(state) } }
+        .onAppear { if column == .main { header.reveal = { follow.reveal() } } }
+        .onDisappear { if column == .main { header.clear(sessionID) } }
         .task {
             await NextFrame.wait()
             await NextFrame.wait()

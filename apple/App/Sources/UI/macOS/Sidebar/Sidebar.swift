@@ -209,6 +209,19 @@ private struct ProjectRows: View {
     }
 }
 
+struct ProjectShelf: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        ScrollView {
+            if let catalog = workspace.catalog {
+                ProjectRows(pages: SidebarPages(catalog), catalog: catalog, select: workspace.show)
+                    .padding(SidebarMetrics.column)
+            }
+        }
+    }
+}
+
 /// 侧栏里的一行：图标列、名字、行尾一样东西（进展的计数）；当前页是行的选中底（`RowStyle`）、文字加粗。
 private struct PageRow<Icon: View, Title: View, Trailing: View>: View {
     let selected: Bool

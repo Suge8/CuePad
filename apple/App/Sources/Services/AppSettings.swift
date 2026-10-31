@@ -179,7 +179,7 @@ final class AppSettings {
         #endif
         lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
         progressPane = string(Key.progressPane).flatMap(ProgressPane.init(rawValue:)) ?? .board
-        navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .progress
+        navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .projects
         railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (defaults.data(forKey: Key.replyDrafts).flatMap { try? JSONDecoder().decode([UUID: SavedDraft].self, from: $0) } ?? [:])

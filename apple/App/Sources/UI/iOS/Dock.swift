@@ -52,10 +52,11 @@ struct DockStack: View {
 
     var body: some View {
         let path = workspace.path
+        let root = workspace.sidebarOpen ? workspace.sidebarRoute : tab
         NavigationStack(path: Binding(get: { path }, set: { workspace.path = $0 })) {
-            RouteView(route: tab)
-                .environment(\.headerHost, .page(search: Dock.search(on: tab)))
-                .dockReserve(tab != .cue)
+            RouteView(route: root)
+                .environment(\.headerHost, .page(search: Dock.search(on: root)))
+                .dockReserve(root != .cue)
                 .toolbarVisibility(.hidden, for: .navigationBar)
                 .navigationDestination(for: Route.self) { RouteView(route: $0).dockReserve(Dock.stays(on: $0)).leaveShot($0, into: shot) }
         }

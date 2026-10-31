@@ -116,7 +116,7 @@ extension DebugScene {
             if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             workspace.show(.cue)
             if defaults.bool(forKey: "CuePadPlacesOpen") { openPlaces() }
-            workspace.sidebarOpen = true
+            if workspace.layout == .wide { workspace.sidebarOpen = true }
             if scene == "cuememory" { workspace.cue.showsMemory = true } else { workspace.cue.showsSchedules = scene == "cueschedules" }
             if defaults.bool(forKey: "CuePadPanelCycle") { Task { await cyclePanel() } }
         case "cuepanel":
