@@ -85,10 +85,19 @@ extension CueStore {
     try write { try applyQuota(report, host: host, proofs: proofs) }
   }
 
+  /// 同一台 Mac、同一网关来源，来源一级只有规范的那一条（`AccountQuota.recordID`）：写它时删掉同来源的别的来源一级记录
+  /// （如按 Pi 提供方名定 id 时写下的），删除随同步到手机。
   private func applyQuota(_ report: QuotaReport, host: String, proofs: [PiProof]) throws -> Bool {
-    let wrote = try applyReport(report, host: host, proofs: proofs)
-    guard let owners = report.owners, report.account.source != nil, report.account.route == nil else { return wrote }
-    return try mergeOwners(owners, into: AccountQuota.recordID(provider: report.provider, host: host, account: report.account), kind: report.account.kind, host: host) || wrote
+    guard let source = report.account.source, report.account.route == nil else { return try applyReport(report, host: host, proofs: proofs) }
+    let id = AccountQuota.recordID(provider: report.provider, host: host, account: report.account)
+    var removed = false
+    for other in try select(AccountQuota.self, where: "hostID = ?", [host]) where other.id != id && other.account?.source == source && other.account?.route == nil {
+      try db.run("DELETE FROM accountQuotas WHERE id = ?", [other.id])
+      removed = true
+    }
+    let wrote = try applyReport(report, host: host, proofs: proofs) || removed
+    guard let owners = report.owners else { return wrote }
+    return try mergeOwners(owners, into: id, kind: report.account.kind, host: host) || wrote
   }
 
   private func applyReport(_ report: QuotaReport, host: String, proofs: [PiProof]) throws -> Bool {
