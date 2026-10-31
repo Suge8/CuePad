@@ -5,12 +5,6 @@ import SwiftUI
 extension Workspace {
     func willSelect(_ route: Route, from previous: Route) {}
 
-    /// 推回 Cue 页上刚返回离开的那一页（左滑前进，`LeaveShot`）。会话页按此刻重读首帧（同 `openSession`）：离开后对话可能又长了。
-    func goForward(to route: Route) {
-        guard case .session(let session) = route else { return push(route) }
-        if let loaded = sessionRoute(session.id, sessionID: session.sessionID) { push(loaded) }
-    }
-
     /// 灵感的纸页推在当前页上。
     func showEditor(_ card: UUID) { push(.card(card)) }
 

@@ -1,4 +1,11 @@
 extension Workspace {
+    /// NavigationLink 和系统返回直接写路径；项目书架的链接也要更新持久浏览落点。
+    func setNarrowPath(_ next: [Route]) {
+        guard layout == .narrow else { return }
+        if let route = next.last { remember(route) }
+        path = next
+    }
+
     func showNarrow(_ route: Route) {
         if case .session = route { pushNarrow(route) } else { selectNarrow(route) }
     }

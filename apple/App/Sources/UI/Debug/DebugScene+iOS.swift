@@ -1,11 +1,10 @@
 #if os(iOS) && DEBUG
-import CueEditor
 import CueStore
 import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏底部的"项目"、宽屏侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看说过话后停用时输入框上方那张启用的小纸（`CueWelcome`））、cuememory（再打开"Cue 记得什么"）、cueschedules（再打开定时）、project、older、editor、progress（进展页看板段，窄屏底部与宽屏侧栏的"进展"；给了 `-CuePadProject` 先把项目范围设成它）、sessions（进展页的会话段；给了 `-CuePadProject` 先把项目范围设成它，`-CuePadQuotaOpen YES` 顶栏胶囊长出额度明细）、send、search、trash、archive、settings（配 -CuePadDemo 时 Cue 运行在演示的 Mac 上）、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（Cue 页）。
+/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏侧栏的"项目"、宽屏侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看说过话后停用时输入框上方那张启用的小纸（`CueWelcome`））、cuememory（再打开"Cue 记得什么"）、cueschedules（再打开定时）、project、older、editor、progress（进展页看板段，窄屏侧栏与宽屏主区的"进展"；给了 `-CuePadProject` 先把项目范围设成它）、sessions（进展页的会话段；给了 `-CuePadProject` 先把项目范围设成它，`-CuePadQuotaOpen YES` 顶栏胶囊长出额度明细）、send、search、trash、archive、settings（配 -CuePadDemo 时 Cue 运行在演示的 Mac 上）、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（Cue 页）。
 /// search 是搜索页，出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
 /// library 是技能与规则（`-CuePadLibraryTab skills` 打开在技能那一段），再推入文件页：instruction 是全局规则（给了 `-CuePadProject` 是那个项目的，
 /// 演示的全局规则顶上有合并那一条，`-CuePadMergePreview YES` 已点过一下"合并进来"、标出会并进来的段），skill 是 write-swift，duplicate 是同名的 release。
@@ -59,6 +58,7 @@ extension DebugScene {
         }
         await running("摆画面") { try await presetScene(workspace, project: project) }
         await presetSpeech(workspace)
+        await prepareNarrow(workspace)
     }
 
     private static func presetScene(_ workspace: Workspace, project: UUID?) async throws {
@@ -115,7 +115,6 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             workspace.show(.cue)
-            if defaults.bool(forKey: "CuePadPlacesOpen") { openPlaces() }
             if workspace.layout == .wide { workspace.sidebarOpen = true }
             if scene == "cuememory" { workspace.cue.showsMemory = true } else { workspace.cue.showsSchedules = scene == "cueschedules" }
             if defaults.bool(forKey: "CuePadPanelCycle") { Task { await cyclePanel() } }
@@ -191,68 +190,6 @@ extension DebugScene {
         case "subscribeFailed": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .failed(String(localized: "iCloud 账号不可用", table: "Demo")))
         default: nil
         }
-    }
-
-    /// `-CuePadDockTour stack|motion`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步。切 tab 走点底部那一排的那条路（`Workspace.select`），推入、返回走导航栈的路径：
-    /// - stack：项目 → 进默认项目 → 进一条灵感、在末尾接着写一句、收起键盘 → 切到 Cue → 切回项目（还停在那条灵感，字还在）→ 切到进展 → 再切回项目。
-    /// - motion：进默认项目 → 进一条灵感 → 返回 → 返回；切到进展、进一个会话 → 返回；切到 Cue。
-    static func dockTourIfAsked(_ workspace: Workspace) async {
-        guard let tour = defaults.string(forKey: "CuePadDockTour") else { return }
-        await running("底栏导览") { try await dockTour(tour, workspace) }
-    }
-
-    private static func dockTour(_ tour: String, _ workspace: Workspace) async throws {
-        let store = workspace.services.store
-        guard let card = try await card(in: Project.defaultID, store: store) else { return }
-        // 节奏是要录的内容，不是在等别的事
-        func beat() async { await Task.wait(for: .seconds(1.6)) }
-        workspace.select(.shelf)
-        await beat()
-        workspace.push(.project(Project.defaultID))
-        await beat()
-        workspace.push(.card(card))
-        await beat()
-        if tour == "stack" {
-            if let editor = textView(CueTextView.self) {
-                editor.becomeFirstResponder()
-                editor.selectedRange = NSRange(location: (editor.text as NSString).length, length: 0)
-                for word in String(localized: "，切去 Cue 看一眼再回来接着写", table: "Demo").map(String.init) {
-                    editor.insertText(word)
-                    await Task.wait(for: .milliseconds(90))
-                }
-                await beat()
-                editor.resignFirstResponder()
-            }
-            await beat()
-            for tab in [Route.cue, .shelf, .progress, .shelf] {
-                workspace.select(tab)
-                await beat()
-            }
-        } else {
-            workspace.path.removeLast()
-            await beat()
-            workspace.path.removeLast()
-            await beat()
-            workspace.select(.progress)
-            await beat()
-            if let session = try await store.piSessionPage(PiSessionQuery(limit: 1)).items.first?.state {
-                workspace.openSession(session.id, sessionID: session.sessionID)
-                await beat()
-                workspace.path.removeLast()
-                await beat()
-            }
-            workspace.select(.cue)
-        }
-    }
-
-    /// 屏上第一个这一类的输入框。
-    private static func textView<View: UITextView>(_: View.Type) -> View? {
-        func find(_ view: UIView) -> View? {
-            if let found = view as? View, found.window != nil, !found.isHidden { return found }
-            return view.subviews.lazy.compactMap(find).first
-        }
-        let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }
-        return window.flatMap(find)
     }
 
     /// `-CuePadPanelCycle YES`（配 cue 画面录屏）：画面就绪后每 1.5 秒点一下 Cue 页头，开合面板几遍，看动效。

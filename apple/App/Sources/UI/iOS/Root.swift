@@ -24,7 +24,7 @@ struct IOSRoot: View {
         @Bindable var workspace = workspace
         return CatalogGate {
             Group {
-                if sizeClass == .regular { SplitRoot() } else { DockRoot(workspace: workspace) }
+                if sizeClass == .regular { SplitRoot() } else { NarrowRoot() }
             }
             // 正文、输入框里的附件在这里看（页里另挂了全屏页的用页里那个，带底栏）
             .previewPresenter($workspace.preview, reply: nil)
