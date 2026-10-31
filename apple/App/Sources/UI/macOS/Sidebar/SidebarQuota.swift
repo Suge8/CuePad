@@ -8,6 +8,7 @@ import SwiftUI
 /// 环出现与明细打开时读取账号清单（`refreshesQuota`），不定时查询。
 /// 否决过：放进底栏设置钮左边（四颗圆钮加两三颗环超出侧栏最小宽）、放进 Cue 名片（名片说的是 Cue，环比名字那一行高，名片跟着变高）。
 struct SidebarQuota: View {
+    @Environment(AppServices.self) private var services
     @State private var open = DebugHooks.preset.quotaOpen
     /// 收起的时刻：按在环上收起的，松开时不再打开（`PressPoint.reopens`）。
     @State private var closed: ContinuousClock.Instant?
@@ -15,9 +16,11 @@ struct SidebarQuota: View {
     var body: some View {
         QuotaRings(open: open, height: Spacing.sidebarRow, row: true) { open = !open && !PressPoint.reopens(closedAt: closed) }
             .font(Typography.sidebarHeader)
-            .bubble(isPresented: $open) { QuotaDetail().padding(16).refreshesQuota() }
+            .bubble(isPresented: $open, width: QuotaDetail.bubbleWidth(accounts: services.accountQuotas.items.count)) { QuotaDetail().padding(Self.padding).refreshesQuota() }
             .onChange(of: open) { _, open in if !open { closed = .now } }
             .refreshesQuota()
     }
+
+    static let padding: CGFloat = 16
 }
 #endif

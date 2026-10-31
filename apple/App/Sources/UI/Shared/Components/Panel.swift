@@ -19,8 +19,8 @@ enum PanelStyle: Equatable {
     /// 大块内容（预览）：iOS 全屏覆盖，Mac 同 `sheet`。
     case fullScreen
     /// 长出来的气泡（`BubbleFrame`，摆法在 `BubblePlacement`）：不压暗，点外面或 Esc 关、那一下照常落到下面；两端同一个样子（iOS 不是系统 sheet）。
-    /// 从控件长出的在 Mac 上用 `bubble(isPresented:)`，它替控件量框。
-    case bubble(BubbleSource)
+    /// 从控件长出的在 Mac 上用 `bubble(isPresented:)`，它替控件量框。`width` 只有内容自己要宽的给（Mac 额度明细排两栏），手机按屏宽摆、不看它。
+    case bubble(BubbleSource, width: CGFloat = BubblePlacement.width)
 
     /// 模态：压暗、拦下外面的点按（居中的 sheet 与全屏）。
     var modal: Bool {

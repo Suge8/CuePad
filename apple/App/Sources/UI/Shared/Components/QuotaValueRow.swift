@@ -1,25 +1,25 @@
 import CueStore
 import SwiftUI
 
-/// 没有明确周期的计量、余额与文本只显示提供方的读数，不参与匀速线与额度环。
+/// 没有明确周期的计量、余额与文本只显示提供方的读数，不参与匀速线与额度环；一行，同额度明细里的余额（名字与重置在左、读数在右）。
 struct QuotaValueRow: View {
     let value: QuotaDetails.Value
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            MetaLine(gap: 8) {
-                Text(verbatim: value.name).foregroundStyle(palette.ink2)
-            } meta: {
-                reading.foregroundStyle(palette.ink).monospacedDigit()
-            }
-            .font(Typography.meta)
+        MetaLine(gap: 8) {
             if let resetsAt = value.resetsAt {
-                LiveText(style: QuotaMeter.Countdown(end: resetsAt)) { Text("\($0)后重置") }
-                    .font(Typography.meta).foregroundStyle(palette.ink3)
+                LiveText(style: QuotaMeter.Countdown(end: resetsAt)) { Text("\(name)\(Dotted.inline)\(Text("\($0)后重置").foregroundStyle(palette.ink3))") }
+            } else {
+                name
             }
+        } meta: {
+            reading.foregroundStyle(palette.ink).monospacedDigit()
         }
+        .font(Typography.meta)
     }
+
+    private var name: Text { Text(verbatim: value.name).fontWeight(.medium).foregroundStyle(palette.ink) }
 
     private var reading: Text {
         if let display = value.display { return Text(verbatim: display) }

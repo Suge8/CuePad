@@ -19,8 +19,8 @@ extension View {
     }
 
     /// 从这个控件（按钮、圆钮、胶囊）长出的气泡：挂在它的框下（放不下挂上面），尾巴指它的中线；点、键盘、读屏打开都一样。
-    func bubble(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
-        modifier(ControlBubble(isPresented: isPresented, panel: content))
+    func bubble(isPresented: Binding<Bool>, width: CGFloat = BubblePlacement.width, @ViewBuilder content: @escaping () -> some View) -> some View {
+        modifier(ControlBubble(isPresented: isPresented, width: width, panel: content))
     }
 }
 
@@ -230,13 +230,14 @@ private struct Mode: Equatable {
 /// 从控件长出的气泡（`View.bubble(isPresented:)`）：只这一个视图读几何（自己的框），开销可忽略；行里的气泡不走这里（`BubbleSource.press`）。
 private struct ControlBubble<Panel: View>: ViewModifier {
     @Binding var isPresented: Bool
+    let width: CGFloat
     @ViewBuilder let panel: () -> Panel
     @State private var frame: CGRect?
 
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
-            .panel(isPresented: $isPresented, style: .bubble(frame.map(BubbleSource.control) ?? .unanchored), content: panel)
+            .panel(isPresented: $isPresented, style: .bubble(frame.map(BubbleSource.control) ?? .unanchored, width: width), content: panel)
     }
 }
 
@@ -324,8 +325,8 @@ private struct PanelLayer: View {
         GeometryReader { proxy in
             BubbleStage {
                 ForEach(host.shown) { shown in
-                    if case .bubble(let source) = shown.style {
-                        let placement = BubblePlacement(source: source, container: proxy.frame(in: .global), insets: Self.bubbleInsets)
+                    if case .bubble(let source, let width) = shown.style {
+                        let placement = BubblePlacement(source: source, container: proxy.frame(in: .global), insets: Self.bubbleInsets, width: width)
                         BubbleFrame(placement: placement) { shown.content.environment(\.panelCovered, host.covers(shown.id)) } area: { area(shown.id) }
                             .transition(placement.transition(reduceMotion: reduceMotion))
                     }

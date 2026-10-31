@@ -825,22 +825,6 @@
       },
       "shouldTranslate" : false
     },
-    "%@%@%@后重置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@%2$@Resets in %3$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@%2$@%3$@后重置"
-          }
-        }
-      }
-    },
     "%@/cuepad 已有一个指向 %@ 的链接，没有覆盖" : {
       "localizations" : {
         "en" : {
@@ -916,6 +900,22 @@
         }
       }
     },
+    "%@后用完" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Runs out in %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@后用完"
+          }
+        }
+      }
+    },
     "%@后重置" : {
       "localizations" : {
         "en" : {
@@ -944,6 +944,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@报来"
+          }
+        }
+      }
+    },
+    "%@更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@更新"
           }
         }
       }
@@ -4815,6 +4831,22 @@
         }
       }
     },
+    "上次观测于 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last observed %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次观测于 %@"
+          }
+        }
+      }
+    },
     "上次观测，等待更新" : {
       "localizations" : {
         "en" : {
@@ -5099,6 +5131,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不接入也能让 CuePad 在后台开 %@ 会话。"
+          }
+        }
+      }
+    },
+    "不提供查询" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not available"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不提供查询"
           }
         }
       }
@@ -5943,6 +5991,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "低"
+          }
+        }
+      }
+    },
+    "余额" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balance"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "余额"
           }
         }
       }
@@ -11083,6 +11147,22 @@
         }
       }
     },
+    "尚未观测" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not observed yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未观测"
+          }
+        }
+      }
+    },
     "尚未观测到额度" : {
       "localizations" : {
         "en" : {
@@ -11879,6 +11959,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已转为 %lld 个任务"
+          }
+        }
+      }
+    },
+    "已过期" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expired"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已过期"
           }
         }
       }
@@ -15031,6 +15127,22 @@
         }
       }
     },
+    "暂无额度数据" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usage data"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无额度数据"
+          }
+        }
+      }
+    },
     "更多" : {
       "localizations" : {
         "en" : {
@@ -15739,6 +15851,22 @@
         }
       }
     },
+    "查询失败" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t check"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询失败"
+          }
+        }
+      }
+    },
     "标为完成" : {
       "localizations" : {
         "en" : {
@@ -15975,6 +16103,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "橙色"
+          }
+        }
+      }
+    },
+    "欠费" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overdue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "欠费"
           }
         }
       }
