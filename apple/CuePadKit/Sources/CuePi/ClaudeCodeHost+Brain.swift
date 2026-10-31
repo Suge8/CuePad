@@ -8,7 +8,9 @@ import Foundation
 /// 不跑用户的钩子（也就不会报给 CuePad 成一个会话）；工具只有只读的三样与 CuePad 的 MCP，其余需要批准的一律拒绝（`--permission-prompts none`），
 /// 不会停下来等人。斜杠命令开着，只为开新会话的 `/clear`（见下）。
 /// - 正忙时说的话并进当前这一轮（不先停下，与托管会话的发话不同）；他的话以 `/` 开头时前面垫一个空格，不被当成命令；
-/// - 起好要等 CuePad 的 MCP 服务连上（`toolsConnected`）；
+/// - 起好要等 CuePad 的 MCP 服务连上（`toolsConnected`）；工具搜索关掉（`ENABLE_TOOL_SEARCH=false`）：缺省的 auto 在 CuePad 的工具说明
+///   长到一定程度后，模型的第一下调用改用不带前缀的名字（`task`），被拒成"No such tool"（2.1.312 实测，同一份工具清单显式开、关都不会）；
+///   Cue 只有四个工具，一直全量给模型；
 /// - 开新会话是写一句 `/clear`：Claude Code 清掉对话（进程、MCP 连接、模型与强度都留着），回一条不调模型的 `result`，不报成一轮；
 /// - 提示缓存留 1 小时（`ENABLE_PROMPT_CACHING_1H`：订阅登录多数时候本来就是，API 密钥与超额时默认 5 分钟）；
 /// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；就地换模型与强度走控制请求（`ClaudeStream`）。
@@ -33,6 +35,7 @@ extension ClaudeHostedSession: HostedSession {
             if let effort = config.effort { arguments += ["--effort", ClaudeCode.effort(effort)] }
             let environment = config.launchEnvironment(adding: [
                 "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_PROMPT_CACHING_1H": "1",
+                "ENABLE_TOOL_SEARCH": "false",
             ])
             _ = try await launch(config.executable, arguments, directory: config.workingDirectory, environment: environment)
             try await toolsConnected()
