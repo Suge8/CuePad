@@ -98,9 +98,11 @@ public enum CuePrompt {
   /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：系统提示与 tell 的说明共用这一种写法。
   static var asks: String { CueAsk.allCases.map { "\($0.definition)（\($0.rawValue)）" }.joined(separator: "、") }
 
+  /// 工具名带前缀的那几家另说一句：下文的 task peek 这类简称让模型第一下常照简称调（Claude Code 2.1.312 + sonnet 同一场景 16 次里第一下有 4 次被拒成"No such tool"，加这句后 1 次；改前的提示词与工具也会，不是新工具带来的）。
   private static func tools(_ runtime: AgentKind) -> String {
-    [("task", "任务与会话"), ("tell", "对他说话"), ("memory", "记忆与定时"), ("setup", "你自己与这台 Mac：设置、额度、Agent、技能与规则、项目")].map { "\(CueMCPServer.toolName($0.0, on: runtime))（\($0.1)）" }
+    let named = [("task", "任务与会话"), ("tell", "对他说话"), ("memory", "记忆与定时"), ("setup", "你自己与这台 Mac：设置、额度、Agent、技能与规则、项目")].map { "\(CueMCPServer.toolName($0.0, on: runtime))（\($0.1)）" }
       .joined(separator: "、")
+    return CueMCPServer.toolPrefix(on: runtime).isEmpty ? named : named + "；调用时工具名照这里写全，下文的 task peek、memory note 这类是「工具 动作」的简称"
   }
 
   /// 清单多于这么多个就只写默认的：Pi 没配范围时可选的是已配好密钥的全部，可能几百个，而系统提示每个班次都带着它。
