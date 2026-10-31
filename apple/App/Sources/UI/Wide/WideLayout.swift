@@ -15,7 +15,7 @@ struct WideMetrics {
         let wide = workspace.sidebarOpen && width >= SessionRail.Form.wide.width + minimum + right
         rail = wide ? SessionRail.Form.wide.width : SessionRail.Form.narrow.width
         let available = max(0, width - rail)
-        if case .session = workspace.mainRoute {
+        if case .session = workspace.mainRoute, workspace.sideSession != nil {
             main = available / 2
         } else {
             main = max(available / 2, available - right)

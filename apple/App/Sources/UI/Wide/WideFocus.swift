@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 /// 只保留控件引用，当前栏从系统第一响应者读取，不复制输入焦点状态。
 final class WideFocus {
+    let windowID = UUID()
     #if os(macOS)
     weak var main: WideColumnView?
     weak var side: WideColumnView?
@@ -17,28 +18,40 @@ final class WideFocus {
 
     func focus(_ column: Workspace.Column) {
         guard let view = column == .main ? main : side else { return }
-        let input = descendants(view).compactMap { $0 as? NSTextView }.last { $0.isEditable && !$0.isHiddenOrHasHiddenAncestor }
+        let input = descendants(view).compactMap { $0 as? NSTextView }.last { $0.isEditable && visible($0) }
         view.window?.makeFirstResponder(input ?? view)
     }
 
-    private func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+    private func descendants(_ view: NSView) -> [NSView] {
+        view.subviews.filter(visible).flatMap { [$0] + descendants($0) }
+    }
+
+    private func visible(_ view: NSView) -> Bool {
+        sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden && $0.alphaValue > 0 && $0.layer?.opacity != 0 }
+    }
     #else
-    weak var main: UIView?
-    weak var side: UIView?
+    weak var main: WideColumnController?
+    weak var side: WideColumnController?
 
     var current: Workspace.Column? {
-        if let main, descendants(main).contains(where: \.isFirstResponder) { return .main }
-        if let side, descendants(side).contains(where: \.isFirstResponder) { return .side }
+        if let main, main.isFirstResponder || descendants(main.view).contains(where: \.isFirstResponder) { return .main }
+        if let side, side.isFirstResponder || descendants(side.view).contains(where: \.isFirstResponder) { return .side }
         return nil
     }
 
     func focus(_ column: Workspace.Column) {
-        guard let view = column == .main ? main : side else { return }
-        let input = descendants(view).compactMap { $0 as? UITextView }.last { $0.isEditable && !$0.isHidden }
-        (input ?? view).becomeFirstResponder()
+        guard let controller = column == .main ? main : side else { return }
+        let input = descendants(controller.view).compactMap { $0 as? UITextView }.last { $0.isEditable }
+        (input as UIResponder? ?? controller).becomeFirstResponder()
     }
 
-    private func descendants(_ view: UIView) -> [UIView] { view.subviews.flatMap { [$0] + descendants($0) } }
+    private func descendants(_ view: UIView) -> [UIView] {
+        view.subviews.filter(visible).flatMap { [$0] + descendants($0) }
+    }
+
+    private func visible(_ view: UIView) -> Bool {
+        sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden && $0.alpha > 0 && $0.layer.opacity > 0 && $0.isUserInteractionEnabled }
+    }
     #endif
 
     func cycle() { focus(current == .main ? .side : .main) }
@@ -62,7 +75,7 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WideColumnView, context: Context) {
-        view.host.rootView = AnyView(content.overlay { WideDropFeedback(state: view.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels))
+        view.host.rootView = AnyView(content.overlay { WideDropFeedback(state: view.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels).environment(\.wideWindowID, focus.windowID))
         view.move(rail: rail, origin: origin)
     }
 }
@@ -113,7 +126,7 @@ final class WideColumnView: NSView {
         do {
             if let data = pasteboard.data(forType: .init(DraggedColumn.type.identifier)) {
                 let value = try JSONDecoder().decode(DraggedColumn.self, from: data)
-                workspace.moveSession(from: value.leading ? .main : .side, to: column)
+                workspace.dropSession(SessionRoute(id: value.recordID, sessionID: value.sessionID), in: column, movingWithinWindow: value.windowID == focus.windowID)
                 return true
             }
             if let data = pasteboard.data(forType: .init(UTType.cuepadSession.identifier)) {
@@ -149,12 +162,12 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> WideColumnController {
         let controller = WideColumnController(focus: focus, workspace: workspace)
-        if column == .main { focus.main = controller.view } else { focus.side = controller.view }
+        if column == .main { focus.main = controller } else { focus.side = controller }
         return controller
     }
 
     func updateUIViewController(_ controller: WideColumnController, context: Context) {
-        controller.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts))
+        controller.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
     }
 }
 
@@ -168,6 +181,8 @@ final class WideColumnController: UIHostingController<AnyView> {
         safeAreaRegions = []
     }
     @MainActor required dynamic init?(coder: NSCoder) { nil }
+
+    override var canBecomeFirstResponder: Bool { true }
 
     override var keyCommands: [UIKeyCommand]? {
         [UIKeyCommand(input: "\t", modifierFlags: .control, action: #selector(cycle)),
@@ -210,6 +225,7 @@ private struct WideEnvironment: ViewModifier {
             #else
             .environment(\.previewSources, values.previewSources)
             .environment(\.previewZoom, values.previewZoom)
+            .environment(\.zoomNamespace, values.zoomNamespace)
             #endif
     }
 }

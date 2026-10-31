@@ -49,6 +49,22 @@ extension Workspace {
         presentWide(state)
     }
 
+    func session(in column: Column) -> SessionRoute? {
+        guard case .wide(let state) = navigation else { return nil }
+        if column == .side { return state.side }
+        if case .session(let session) = state.main { return session }
+        return nil
+    }
+
+    /// 同窗口按对象当前位置交换；跨窗口只打开被拖的会话，不改源窗口。
+    func dropSession(_ route: SessionRoute, in column: Column, movingWithinWindow: Bool) {
+        if movingWithinWindow, let source = [Column.main, .side].first(where: { session(in: $0)?.id == route.id }) {
+            moveSession(from: source, to: column)
+        } else {
+            openSession(route.id, sessionID: route.sessionID, in: column)
+        }
+    }
+
     private func presentWide(_ state: WideNavigation) {
         let previous = mainRoute
         navigation = .wide(state)
