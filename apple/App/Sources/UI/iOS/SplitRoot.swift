@@ -29,6 +29,7 @@ struct SplitRoot: View {
             }
         }
         .overlay(alignment: .top) { NoticeBanner() }
+        .environment(\.wideWindowID, focus.windowID)
     }
 
     @ViewBuilder private func destination(_ route: Route, column: Workspace.Column) -> some View {

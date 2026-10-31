@@ -3,15 +3,22 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 nonisolated struct DraggedColumn: Codable, Transferable {
-    let leading: Bool
+    let windowID: UUID
+    let recordID: UUID
+    let sessionID: String?
     static let type = UTType(exportedAs: "\(AppIdentity.id).column", conformingTo: .data)
     static var transferRepresentation: some TransferRepresentation { CodableRepresentation(contentType: type) }
+}
+
+extension EnvironmentValues {
+    @Entry var wideWindowID: UUID?
 }
 
 #if os(iOS)
 struct WideDrop: ViewModifier {
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
+    @Environment(\.wideWindowID) private var windowID
     @State private var drop = WideDropState()
 
     func body(content: Content) -> some View {
@@ -21,7 +28,7 @@ struct WideDrop: ViewModifier {
                 guard let provider = providers.first else { return false }
                 if provider.hasItemConformingToTypeIdentifier(DraggedColumn.type.identifier) {
                     load(DraggedColumn.self, type: DraggedColumn.type, from: provider) {
-                        workspace.moveSession(from: $0.leading ? .main : .side, to: column)
+                        workspace.dropSession(SessionRoute(id: $0.recordID, sessionID: $0.sessionID), in: column, movingWithinWindow: $0.windowID == windowID)
                     }
                 } else {
                     load(DraggedSession.self, type: .cuepadSession, from: provider) {
@@ -54,13 +61,16 @@ struct WideSessionTitle: View {
     let title: String
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
+    @Environment(\.wideWindowID) private var windowID
 
     var body: some View {
         HStack {
-            Text(verbatim: title).font(.headline).lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
-                .draggable(DraggedColumn(leading: column == .main))
+            if let windowID, let session = workspace.session(in: column) {
+                Text(verbatim: title).font(.headline).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                    .draggable(DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
+            }
             Button("关闭", icon: .close) { workspace.closeColumn(column) }
                 .labelStyle(.iconOnly)
         }
