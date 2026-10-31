@@ -46,7 +46,7 @@ extension DebugScene {
     }
 
     /// `-CuePadReplyBlink <秒>`（配 `-CuePadDemo YES -CuePadScene cue`，画面就绪后开始、一直循环）：每隔这么久 Cue 把一个歇着的会话留给你回
-    /// （同值班的 Mac 写下的样子，`leaveToYou`），1.5 秒后那个会话又跑起来、不再待回复，看 Cue 页的待回复提示（`CueReplyTip`）怎么进出。
+    /// （同值班的 Mac 写下的样子，`leaveToYou`），1.5 秒后那个会话又跑起来、不再待回复，看会话条的等你组如何变化。
     static func replyBlinkIfAsked(_ store: CueStore) async {
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         let title = String(localized: "底栏换系统液态玻璃", table: "Demo")

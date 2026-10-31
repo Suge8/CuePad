@@ -169,7 +169,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             text.padding(.horizontal, 18).padding(.top, ComposerMetrics.textTop).padding(.bottom, ComposerMetrics.textBottomOpen)
             HStack(spacing: 0) {
                 if !accepts.isEmpty { plus }
-                tools()
+                tools().environment(\.singleLineConfig, workspace.layout == .wide)
                 Spacer(minLength: 0)
                 slotSpace
             }
@@ -187,7 +187,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     .frame(minHeight: buttonHeight)
                 // 工具排与两颗圆钮同一条中线；没有工具时这里是空的，不占位
                 if tooled, expanded, showsTools {
-                    tools()
+                    tools().environment(\.singleLineConfig, workspace.layout == .wide)
                         .frame(minHeight: ComposerMetrics.slot - 2 * ComposerMetrics.inset)
                         .padding(.bottom, ComposerMetrics.inset)
                         .transition(.scale(scale: 0.6, anchor: .leading).combined(with: .opacity))

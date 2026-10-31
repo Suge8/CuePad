@@ -22,7 +22,7 @@ struct CueBarView: View {
 
 import SwiftUI
 
-/// 一行 Cue 的现状（菜单栏面板、输入条、iPad 侧栏最上面；Mac 侧栏是名片 `CueSidebarCard`，用同一套零件）：头像（`CueEntryAvatar`）、名字，
+/// 一行 Cue 的现状（菜单栏面板与输入条）：头像（`CueEntryAvatar`）、名字，
 /// 下面 Cue 此刻那一行（`CueStatusLine` 的 tally），有新消息的在行尾写几条（石绿，`UnreadCount`；行里放不下时整个不写，让给名字与数字账）。有新消息时同会话行的"有新回复"：名字加粗。
 /// `status` 为假时不写此刻那一行（iPad 上 Cue 页开着时页头已写了这一句）。
 struct CueStatusRow<Trailing: View>: View {

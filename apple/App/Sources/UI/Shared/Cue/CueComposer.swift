@@ -5,7 +5,7 @@ import SwiftUI
 /// （`Workspace.sayToCue`、`note`）。按下就清空输入框，不等上传；这里只管输入与发完之后做什么（`sent`）。
 /// Mac 的 Cue 页上工具排里是 Cue 用哪个 Agent、模型与思考强度（`CueConfigControls`，与新会话同一排；⌘⇧M、⌘⇧E 弹出模型与思考强度的菜单）；浮起的输入条不放，
 /// 没启用时也不放：发出去只是记下，还没有在哪台 Mac 运行，那几颗只能写一份选不了的缺省。
-/// Cue 运行在别的 Mac 上时工具排末尾一句旁注写在哪台（`CueNow.elsewhere`）：那几枚胶囊选的就是那台上的大脑。
+/// Cue 运行在别的 Mac 上时工具排末尾的 Mac 图标说明在哪台（`CueNow.elsewhere`）：那几枚胶囊选的就是那台上的大脑。
 /// 手机上它们在 Cue 面板的第一行（`CueHeader`），输入框里不再放一份：聚焦才露出的胶囊找不到。
 struct CueComposer: View {
     enum Style: Equatable {
@@ -162,16 +162,16 @@ private struct CueBrainRow: View {
     }
 }
 
-/// 工具排末尾的旁注：Cue 运行在别的 Mac 上时写在哪台。单拆一个视图读 Cue 此刻：输入框本身不随它重算。
+/// 工具排末尾的 Mac 图标：悬停或读屏说明 Cue 运行在哪台。单拆一个视图读 Cue 此刻：输入框本身不随它重算。
 private struct CueHostNote: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         if let elsewhere = workspace.cue.now.elsewhere {
-            Label(elsewhere, icon: .mac)
+            Image(.mac)
                 .font(Typography.meta).foregroundStyle(palette.ink3)
-                .lineLimit(1).fixedSize()
+                .help(elsewhere).accessibilityLabel(elsewhere)
                 .padding(.trailing, 4)
                 .transition(.opacity)
         }

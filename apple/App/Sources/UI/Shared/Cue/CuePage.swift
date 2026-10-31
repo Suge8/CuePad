@@ -18,7 +18,6 @@ import SwiftUI
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 运行在哪台 Mac 都一样。"Cue 记得什么"（`CueMemoryPage`）与定时（`CueSchedulePage`）在 Mac 工具栏右上的两颗圆钮（`CueListSlots`）、手机页头的面板里；
 /// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
 struct CuePage: View {
-    /// iPad 右侧面板里：没有自己的顶栏（页头浮在面板顶上）。
     var inPanel = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -174,7 +173,7 @@ struct CuePage: View {
                 // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, ComposerMetrics.stackGap).transition(.opacity) }
             }
-            CueComposer(style: .page, takesFocusRequests: !inPanel) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
+            CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
         }
         .animation(Motion.fade, value: cue.canHear)
     }

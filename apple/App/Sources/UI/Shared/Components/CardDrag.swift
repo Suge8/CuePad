@@ -15,6 +15,15 @@ nonisolated enum DraggedCard: Hashable, Codable, Sendable, Transferable {
     }
 }
 
+nonisolated struct DraggedTaskSession: Transferable {
+    let card: DraggedCard
+    let session: DraggedSession
+    static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(exporting: \.session)
+        ProxyRepresentation(exporting: \.card)
+    }
+}
+
 extension UTType {
     /// 两端 Info.plist 导出的同一个标识（`$(CUEPAD_APP_ID).card`）。
     nonisolated static let cuepadCard = UTType(exportedAs: "\(AppIdentity.id).card")
@@ -37,8 +46,8 @@ extension View {
     func cardDragStage() -> some View { modifier(CardDragStage()) }
 
     /// 能拖的一条。`shape` 是拖起来那张预览的轮廓：不给时预览是直角矩形，圆角的卡与行四角露出直角的底。
-    func cardDraggable(_ card: DraggedCard, shape: some Shape) -> some View {
-        modifier(CardDraggable(card: card, shape: shape))
+    func cardDraggable(_ card: DraggedCard, session: String? = nil, shape: some Shape) -> some View {
+        modifier(CardDraggable(card: card, session: session, shape: shape))
     }
 
     /// 只收这一页拖着的卡的落点（`CardDrags` 记着是哪条；别的页、别的 App 拖来的不收）。`hover` 报指针在落点里的位置（落点自己的坐标系），
@@ -90,13 +99,20 @@ private struct CardDrop: ViewModifier {
 
 private struct CardDraggable<S: Shape>: ViewModifier {
     let card: DraggedCard
+    let session: String?
     let shape: S
     @Environment(\.cardDrags) private var drags
+    @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
-        content
+        Group {
+            if let session, workspace.layout == .wide {
+                content.draggable(DraggedTaskSession(card: card, session: DraggedSession(sessionID: session)))
+            } else {
+                content.draggable(card)
+            }
+        }
             .contentShape(.dragPreview, shape)
-            .draggable(card)
             .onDragSessionUpdated { session in
                 guard let drags else { return }
                 switch session.phase {

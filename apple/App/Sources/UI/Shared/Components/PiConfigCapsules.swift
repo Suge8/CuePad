@@ -65,11 +65,12 @@ struct PiModelCapsule: View {
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
         .padding(.leading, badged ? 6 : 11).padding(.trailing, 11)
-        // 按内容宽；只有比整排还宽时截断（`ConfigRow`）
+        // 先按内容宽，宽屏回复框用剩余宽度截断；完整模型名可悬停或读屏查看。
         .configCapsuleHeight()
         .background(palette.fill, in: .capsule)
         .frame(minHeight: ConfigCapsule.hitHeight)
         .contentShape(.capsule)
+        .help(spoken(at: now))
         .animation(Motion.fade, value: current?.key)
     }
 
@@ -112,13 +113,16 @@ struct PiAgentCapsule: View {
 
     private var label: some View {
         let kind = pick.current
-        return HStack(spacing: 5) {
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 5) {
+                ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
+                Text(kind.name).lineLimit(1).contentTransition(.opacity)
+            }.fixedSize()
             ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
-            Text(kind.name).lineLimit(1).contentTransition(.opacity)
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-        .padding(.leading, 6).padding(.trailing, 11)
-        .fixedSize()
+        .padding(.horizontal, 6)
+        .help(kind.name)
         .configCapsuleHeight()
         .background(palette.fill, in: .capsule)
         .frame(minHeight: ConfigCapsule.hitHeight)

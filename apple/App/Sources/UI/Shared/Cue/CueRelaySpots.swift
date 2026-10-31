@@ -8,15 +8,10 @@ nonisolated struct RelayEnd: Equatable, Sendable {
     var opens = false
 }
 
-/// Cue 那一头落在哪：同时在屏上几处时取排在前面的。三端的规则就是这个顺序——
-/// Mac 与 iPad 有侧栏时总落在侧栏的 Cue 一行（在不在 Cue 页都一样），侧栏收起时退到 Cue 页页头；
-/// iPhone 没有侧栏：在 Cue 页落在页头的头像（从底部往上飞一长段，最看得出），在项目、进展页上落在底部那一排的 Cue 钮。
+/// Cue 那一头：宽屏常驻条的入口优先，其次是 Cue 页头；菜单栏与输入条在自己的窗口内取锚。
 enum CueSpot: Int {
-    /// 侧栏最上面的 Cue（Mac 是名片 `CueSidebarCard`、iPad 是那一行，头像都是 `CueEntryAvatar`；菜单栏面板、输入条在别的窗口，不参与）。
     case entry
     case header
-    /// iPhone 项目、进展两个 tab 底部那一排的 Cue 钮。
-    case dock
 }
 
 /// 会话那一头落在哪：屏上有它的几处时取最具体的（`rank` 小的）。只有此刻在接力的会话与任务挂锚。
@@ -25,8 +20,6 @@ enum EndSpot: Equatable {
     case session(String, Row)
     /// 任务圈与正在开会话的空心点：带着这件任务、或交给的会话就是它绑着的那个时算。
     case task(UUID, session: String?)
-    /// "进展"那一处：iPhone 底部那一排的那一格、Mac 与 iPad 侧栏的那一行；Cue 页收起的去处钮不接力。
-    case dock
 
     /// 状态标所在的行，越具体越前。
     enum Row: Int {
@@ -43,7 +36,6 @@ enum EndSpot: Equatable {
         switch self {
         case .session(let session, let row): session == end.session ? row.rawValue : nil
         case .task(let task, let session): task == end.task || session == end.session ? Row.task.rawValue : nil
-        case .dock: Row.task.rawValue + 1
         }
     }
 }
@@ -58,9 +50,6 @@ extension View {
 
     /// Cue 的头像：接力的 Cue 那一头，光落进、发自头像右下那颗点（`RelayFlight.Scene.land`）。
     func relaySpot(cue spot: CueSpot) -> some View { background { RelayAnchor(role: .cue(spot)) } }
-
-    /// "进展"那一处（`EndSpot.dock`，`dock` 为真的那处）：会话哪一行都不在屏上时接力落在这里。一直挂着。
-    func relaySpot(dock: Bool) -> some View { background { if dock { RelayAnchor(role: .end(.dock)) } } }
 
     /// 会话自己那一行：这次交给刚开出这个会话时，行先占着位置、透明，光落下时淡出来（`Stage.arriving`）。
     func relayArrival(session: String) -> some View { modifier(Arrival(session: session)) }
