@@ -17,7 +17,7 @@ enum RecordMapper {
     .directoryBindings: ["folder"],
     .piMessages: ["text", "tools", "question", "shownText"],
     .previews: ["name", "title"],
-    .accountQuotas: ["windows", "account"],
+    .accountQuotas: ["windows", "account", "details"],
     .cueMessages: ["text", "choices", "answer", "tools", "askAction", "askRule", "askShots", "places", "shownText"],
     .cueLines: ["text"],
     .cueProfile: ["name", "model", "effort", "fast"],

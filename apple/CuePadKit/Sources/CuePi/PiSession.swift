@@ -87,6 +87,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var thinking: Open<PiThinkingLevel>? = nil
     public internal(set) var fast: Bool? = nil
     public internal(set) var availableModels: [PiModelOption] = []
+    /// 这个会话证明过的授权（`PiProof`）：只用来决定保留哪些额度记录，不存不同步
+    public internal(set) var proofs: [PiProof] = []
     /// 上下文余量：没有模型时为 nil
     public internal(set) var context: PiContextUsage? = nil
     public internal(set) var commands: [PiSlashCommand] = []

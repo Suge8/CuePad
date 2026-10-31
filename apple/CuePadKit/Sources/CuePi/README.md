@@ -34,17 +34,23 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 | --- | --- |
 | `hello` | 连接后第一条：`extensionVersion`、`sessionId`、`sessionFile`（可空）、`pid`、`cwd`、`mode`（`tui`/`rpc`）、`tty`、`term`（终端相关环境变量）、`state`、`launchToken`、`hosted`，以及 `info` 的全部字段 |
 | `state` | 只在状态切换时发：`state{kind, since, busySince, turnSince, …}`，时刻都是毫秒 |
-| `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images, supportsFast, account{kind, scope, source?, route?, name?}}`、`thinking`、`fast`、`models`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
+| `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images, supportsFast, account{kind, scope, source?, route?, name?}}`、`thinking`、`fast`、`models`、`proofs[{provider, id, account, at}]`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
 | `draft` | 正在说的话：`text`（`null` 是清掉）、`since` |
-| `quota` | 授权的额度能力与结果：`provider`、`account{kind, scope, source?, route?, name?}`、`status`（`observed`/`unobserved`/`unsupported`/`failed`）、`windows[{seconds, used, resetsAt, model, binding}]`、`complete`、`observedAt?`（原观测的 Unix 秒）、`activeScopes?`（此来源成功返回的账号分区） |
+| `quota` | 授权的额度能力与结果：`provider`（模型在 Pi 里的提供方；网关清单 `accounts` 里是上游）、`account{kind, scope, source?, route?, name?}`、`status`（`observed`/`unobserved`/`unsupported`/`failed`）、`windows[{seconds, used, resetsAt, model, binding}]`、`complete`、`observedAt?`（原观测的 Unix 秒）、`activeScopes?`（此来源成功返回的账号分区）、`accounts?`（同一次网关清单中的各账号报告）、`details?{kind, plan?, balance?, values[]}`、`requestedAt?`（排序时刻的 Unix 秒：主动查询取请求开始，回复带回的取收到回复）、`owners?`（网关来源一级：这次解析到这个来源的每个 Pi 提供方与各自开始解析的 Unix 秒） |
 | `ack` | 命令回应：`id`、`ok`，或 `error`（见下表）；`reload` 另带 `reloaded` |
 | `bye` | 主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
 
-`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。原生订阅只为当前模型解析授权；其余原生 OAuth 只报种类与 `scope=null`，主动查额度时再解析。实际地址与认证经宿主 `getApiKeyAndHeaders(model)` 取得，自定义地址不调用原生订阅接口。回复流里的额度只归到回合开始时已确定的原生 OAuth 分区。
+`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。原生订阅只为当前模型的提供方解析授权；其他提供方的原生 OAuth 只报种类与 `scope=null`，主动查额度时再解析。未解析的授权（`scope=null`）是这个提供方的一条，不关联任何账号的数值：主动查询时解析失败报带 `requestedAt` 的 `failed`，其他提供方还没查的报能力；能力声明不带排序时刻，不报失败；解析失败不归到之前的账号。CuePad 让它与同一提供方证明了身份的结果按同一个时刻排先后：已有证明时不记"还没查"，失败只在没有不早于它的证明时记，证明不早于它的结果或会话的 `proofs` 到来时移除它。`proofs` 是这个会话解析成功过的每个模型（含模型范围外、额度查询解析到的）最近一次证明的授权与开始解析的时刻（Unix 秒）：每次成功都推进，解析失败不抹掉；CuePad 只在 Mac 的在线会话上据此决定保留哪些记录，不存、不同步、不据此关联额度。一条记录只在可能拥有它的每个模型都证明了别的授权、且证明不早于这条记录最近的结果时移除；没有证明的模型（含不在线、只剩存下模型表的会话）是未知，什么都不移除。未解析失败是否被取代，看额度记录（含网关来源那一条本机记下的 `owners`：证明过它的每个提供方与时刻，只并不删，会话退出后仍在）与在线会话里同一 Pi 提供方的证明。几个提供方指向同一网关时查询只做一次，报告的 `owners` 列出全部。实际地址与认证经宿主 `getApiKeyAndHeaders(model)` 取得，自定义地址不调用原生订阅接口。回复流里的额度只在回合前已报告的原生 OAuth 分区与收到回复后重新解析的一致时归到它，不一致就丢掉这次并重报模型身份。
 
-自定义来源从模型实际 baseUrl 下的 `magpie/quotas` 查询，复用请求认证与配置头，不另存网关地址或密钥。404/405/501 表示不支持，其余请求失败明确报失败。网关账号以 `source`（实际地址与认证的不可逆分区）、完整上游 `route` 与 user 分开；可选 `name` 只作显示。成功清单的 `activeScopes` 只移除该来源已经撤销的账号。在线会话共同保留仍有效的来源；单个旧授权失败不阻止其他来源刷新。
+自定义来源从模型实际 baseUrl 下的 `magpie/quotas` 查询，复用请求认证与配置头，不另存网关地址或密钥。404/405/501 表示不支持，其余请求失败明确报失败。网关账号以 `source`（实际地址与认证的不可逆分区）、完整上游 `route` 与 user 分开；可选 `name` 只作显示。网关来源一级按来源一条记录，几个提供方指向同一网关时同在一条上排先后；成功清单的 `accounts` 用清单的 `requestedAt`，与 `activeScopes` 同事务更新，只移除该来源已经撤销的账号；损坏清单不部分写入。主动查询的成功、失败与不支持结果和回复带回的观测都带 `requestedAt`，CuePad 按账号或网关来源只收不早于已收下的，先结束的操作不会盖过后开始的。原生查询的 `observedAt` 取响应解析完成时刻，回复取收到时刻，网关账号仍保留自己的 `readAt`。在线会话共同保留仍有效的来源；单个旧授权失败不阻止其他来源刷新。
 
-magpie 窗口仅接收名称为数字加 `hour(s)`、`day(s)`、`week(s)`、含百分比与重置时刻的固定周期；余额、无限量、纯文字、无重置及未知周期不支持。`readAt` 原样作为 `observedAt`；没有 `readAt` 不生成新观测，`asOf` 不代替它。缓存陈旧时标明上次观测。账号窗口只在模型 id 明确指定完整上游、且该上游只有一个账号时关联；嵌套 provider 取最长前缀。自动池与多个账号不显示模型额度环，菜单明确路由账号未知，账号列表分别显示额度；`last` 不用于预测路由。
+额度面板打开、回前台与连接来源变化时读取账号清单，同时来的查询合并；已有账号的观测新鲜不能阻止发现新账号。手机通过原 `quota` 投送请求询问每台来源 Mac，不增加轮询，也不只选择最近写记录的 Mac。
+
+magpie 的 `balance` 字符串原样显示，金额与 credits 不作百分比；`plan` 保留提供方名称。窗口仅在名字明确是数字加 `hour(s)`、`day(s)`、`week(s)` 且有百分比和重置时间时计算匀速线与额度环；其他计量、`display` 纯文字、`unlimited` 与数值 `balance` 只显示读数，不推测周期。`readAt` 原样作为账号的 `observedAt`；没有它就是未知，`asOf` 与取缓存的时刻不代替它。明细里账号按产品名、同一产品按账号名排，不随刷新挪位置；刚观测过的账号并成一行原观测时间（取其中最早的），陈旧（标原观测时间）、失败、过期标在各自账号上；零余额照常显示，负余额原样显示并标欠费。
+
+magpie v0.1.2190 的 [公开结构](https://github.com/yetone/magpie/blob/v0.1.2190/internal/provider/quotas.go) 与[网关接口](https://github.com/yetone/magpie/blob/v0.1.2190/internal/gateway/gateway.go)已核对。GET `/v1/magpie/quotas` 不保证更新 Claude 观测：Claude Code 回答或 `/usage` 才更新。官方另有 POST `/v1/magpie/quotas/refresh`，可能在账号目录运行 CLI；CuePad 不自动调用它，不复制上游登录或以反复 GET 冒充实时刷新。
+
+账号窗口只在模型 id 明确指定完整上游、且该上游只有一个账号时关联；嵌套 provider 取最长前缀。自动池与多个账号不显示模型额度环，菜单明确路由账号未知，账号列表分别显示额度；`last` 不用于预测路由。单网关不显示来源标签，多来源时才按已有 Mac 名称与同机网关编号区分，不把地址拼进账号名；明细里同一产品只有一个账号时只写产品名，有几个时才接账号名（邮箱的 @ 前那段不重复就只写它，全名在悬停提示里）。
 
 ChatGPT plan（`openai` OAuth）当前没有公开额度查询能力，报 `unsupported`，管理入口为 https://chatgpt.com/settings/usage；不调用 Codex 用量接口。`ack.ok` 只代表命令已处理，不代表获得数值观测。过重置时刻无新观测算过期，不推算为满额。
 

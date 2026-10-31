@@ -28,8 +28,10 @@ extension AppServices {
                 let previous = live[session.id]
                 live[session.id] = session
                 if owner(of: session.sessionID)?.id == session.id { try await recordPiState(of: session) }
-                if previous?.model != session.model || previous?.availableModels != session.availableModels {
-                    try await store.retainQuotaSources(on: hostID, models: live.values.flatMap { $0.availableModels + [$0.model].compactMap { $0 } })
+                if previous?.model != session.model || previous?.availableModels != session.availableModels || previous?.proofs != session.proofs {
+                    try await store.retainQuotaSources(on: hostID, live: live.values.map {
+                        QuotaWitness(sessionID: $0.sessionID, models: $0.availableModels + [$0.model].compactMap { $0 }, proofs: $0.proofs)
+                    })
                 }
             case .ended(let session, let reason):
                 live[session.id] = nil
@@ -39,7 +41,7 @@ extension AppServices {
                     // 重载不是退出：同一进程马上以新扩展连回来接着写，不先把记录当成进程没了写成被打断或已结束
                     try await piStateRecorder.exited(sessionID: session.sessionID, spoke: session.spoke)
                 }
-            case .quota(let report): try await store.recordQuota(report, host: hostID)
+            case .quota(let report): try await store.recordQuota(report, host: hostID, proofs: live.values.flatMap(\.proofs))
             case .incompatible: break
             }
         }
