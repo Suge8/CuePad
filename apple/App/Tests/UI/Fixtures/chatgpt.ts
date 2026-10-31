@@ -3,7 +3,8 @@ import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 // 外部模型服务替身；Pi、桥、历史、投送和库都走真实入口，绝不联网。
 export default function (pi: any) {
 	pi.registerProvider("openai", {
-		baseUrl: "http://127.0.0.1:1", api: "chatgpt-test",
+		// 原生地址只用于认出 ChatGPT 套餐：模型调用由下面的 streamSimple 接管，额度对 openai 不发请求
+		baseUrl: "https://api.openai.com/v1", api: "chatgpt-test",
 		oauth: {
 			name: "ChatGPT Test",
 			login: async () => { throw new Error("test never signs in"); },

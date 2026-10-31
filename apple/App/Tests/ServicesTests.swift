@@ -81,7 +81,8 @@ struct PiHistoryPersistenceTests {
 struct AgentLineTests {
     @Test func 各家接入后都写已接入与版本() async throws {
         let rig = TestApp()
-        let versions: [AgentKind: String] = [.pi: "1.2.0", .claudeCode: "2.1.299 (Claude Code)", .codex: "codex-cli 0.162.1", .opencode: "opencode v2.0.29",
+        let pi = AgentKind.pi.facts.minimumVersion!.description
+        let versions: [AgentKind: String] = [.pi: pi, .claudeCode: "2.1.299 (Claude Code)", .codex: "codex-cli 0.162.1", .opencode: "opencode v2.0.29",
             .grok: "grok 1.0.52 (0920c8169e27)", .dsh: "0.2.1-rc.4"]
         var lines: [String] = []
         for kind in AgentKind.allCases {
@@ -91,7 +92,7 @@ struct AgentLineTests {
         }
 
         #expect(lines == [
-            "已接入 · Pi 1.2.0", "已接入 · Claude Code 2.1.299", "已接入 · Codex 0.162.1", "已接入 · OpenCode 2.0.29", "已接入 · Grok Build 1.0.52",
+            "已接入 · Pi \(pi)", "已接入 · Claude Code 2.1.299", "已接入 · Codex 0.162.1", "已接入 · OpenCode 2.0.29", "已接入 · Grok Build 1.0.52",
             "已接入 · DeepSeek Harness 0.2.1-rc.4",
         ])
     }
@@ -102,7 +103,7 @@ struct AgentUpgradeTests {
     /// 旧版是单文件扩展（v37 及更早）：装上目录，没有 Pi 会话开着旧扩展就删掉旧文件，扩展目录里只剩一份。
     @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
         let rig = TestApp()
-        try TestScript.install("#!/bin/sh\necho 0.90.0\n", at: rig.directory.appending(path: "bin/pi"))
+        try TestScript.install("#!/bin/sh\necho \(AgentKind.pi.facts.minimumVersion!.description)\n", at: rig.directory.appending(path: "bin/pi"))
         let legacy = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
         try FileManager.default.createDirectory(at: rig.piPaths.extensionsDirectory, withIntermediateDirectories: true)
         try "\(PiExtensionBundle.ownershipMarker)\nconst EXTENSION_VERSION = 37;\n".write(to: legacy, atomically: true, encoding: .utf8)

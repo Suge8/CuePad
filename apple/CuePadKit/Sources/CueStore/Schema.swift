@@ -161,6 +161,14 @@ enum Schema {
         if exists == nil { try db.exec("ALTER TABLE \(table) ADD COLUMN fast INTEGER") }
       }
     },
+    // 88：余额与套餐明细、结果的排序时刻；旧端仍可读固定窗口，缺明细不构造余额。`owners`（证明过网关来源的提供方与时刻）只在本机、不同步。
+    // 同 85，只补缺的列（新建的库已有）。
+    Upgrade { db in
+      let columns = Set(try db.query("PRAGMA table_info(accountQuotas)") { $0.text(1) })
+      for (name, type) in [("details", "TEXT"), ("requestedAt", "INTEGER"), ("owners", "TEXT")] where !columns.contains(name) {
+        try db.exec("ALTER TABLE accountQuotas ADD COLUMN \(name) \(type);")
+      }
+    },
   ]
 
   static let activityDestinationsTable = """

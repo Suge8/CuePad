@@ -5,7 +5,7 @@ import SwiftUI
 nonisolated enum PiModelLabel {
     /// 分组标题：这家有订阅额度时写"Claude · 5 小时剩 86% · 本周剩 92%"（`QuotaMeter.menuTitle`），否则是提供方名。
     static func title(_ model: PiModelOption, quotas: [AccountQuota], at now: Date) -> String {
-        if let quota = model.quota(in: quotas) { return QuotaMeter(quota, at: now).menuTitle.visible }
+        if let quota = model.quota(in: quotas), let meter = QuotaMeter.all(quotas, at: now).first(where: { $0.id == quota.id }) { return meter.menuTitle.visible }
         if model.account?.source != nil {
             return Dotted(PiProvider(id: model.key.provider).name, String(localized: "账号额度见列表，路由账号未知")).visible
         }

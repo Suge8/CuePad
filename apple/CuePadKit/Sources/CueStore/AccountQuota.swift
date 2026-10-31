@@ -72,7 +72,7 @@ public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
 }
 
 /// 一个账号最近一次观测到的用量（同步表 `accountQuotas`，Mac 写、各端读）：每台 Mac 的每个授权分区一条，不跨账号、来源合并。
-/// 观测来自 Pi 会话里的扩展——每次回复时提供方带回的用量（零额外请求），或额度视图打开、数据陈旧时请扩展查一次。
+/// 观测来自 Pi 会话里的扩展；读取网关清单只发现账号，不保证提供方的原观测已更新。
 /// "更新于"读 `observedAt`；`modifiedAt` 表示能力、结果或当前授权发生变化。
 public struct AccountQuota: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -80,17 +80,21 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
   public var provider: String
   /// 写下这次观测的 Mac：手机请 Mac 刷新时发给它
   public var hostID: String
+  /// 读取时关联 MacAgents 的名字，不随额度另存。
+  public var macName: String
   public var account: PiAccount?
   public var status: QuotaStatus
   public var observedAt: Date?
+  /// 已收下的最晚排序时刻（`QuotaReport.requestedAt`），只用于拒绝晚到的结果，不代替原观测时间。
+  public var requestedAt: Date?
   /// 按窗口从短到长（同长的整个账号在前，按模型的在后）
   public var windows: [QuotaWindow]
+  public var details: QuotaDetails?
   public var createdAt: Date
   public var modifiedAt: Date
 
-  /// 最新的观测超过这么久算陈旧：额度视图出现时请 Mac 查一次。
+  /// 原观测超过这么久标为陈旧；它不决定账号清单是否需要读取。
   public static let staleAfter: TimeInterval = 10 * 60
-  public static let failureCooldown: TimeInterval = 2 * 60
   /// 用量没有有意义的变化时，观测时间最多拖这么久才写一次（只为"更新于"不过时）；有变化随时写。
   static let touchAfter: TimeInterval = staleAfter / 2
   /// 重置时间相差不超过这么多算同一个（同一窗口里提供方报的重置时刻会差几百毫秒）。
@@ -99,14 +103,17 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
   static let updateStep: TimeInterval = 0.001
 
   public init(id: UUID, provider: String, hostID: String, windows: [QuotaWindow], createdAt: Date, modifiedAt: Date,
-    account: PiAccount? = nil, status: QuotaStatus = .observed, observedAt: Date? = nil) {
+    account: PiAccount? = nil, status: QuotaStatus = .observed, observedAt: Date? = nil, details: QuotaDetails? = nil, requestedAt: Date? = nil, macName: String = MacAgents.unnamed) {
     self.id = id
     self.provider = provider
     self.hostID = hostID
+    self.macName = macName
     self.account = account
     self.status = status
     self.observedAt = observedAt
+    self.requestedAt = requestedAt
     self.windows = windows
+    self.details = details
     self.createdAt = createdAt
     self.modifiedAt = modifiedAt
   }
@@ -115,8 +122,8 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
     switch status {
     case .unsupported: false
     case .unobserved: true
-    case .failed: now.timeIntervalSince(modifiedAt) > Self.failureCooldown
-    case .observed: now.timeIntervalSince(observedAt ?? modifiedAt) > Self.staleAfter || windows.contains { now >= $0.resetsAt }
+    case .failed: true
+    case .observed: now.timeIntervalSince(observedAt ?? modifiedAt) >= Self.staleAfter || windows.contains { now >= $0.resetsAt }
     }
   }
 
@@ -130,7 +137,8 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
     case .failed: return .failed
     case .unobserved: return .unobserved
     case .observed:
-      return windows.isEmpty ? .unobserved : windows.contains { now >= $0.resetsAt } ? .expired : .observed
+      guard !windows.isEmpty || details?.hasReading == true else { return .unobserved }
+      return windows.contains { now >= $0.resetsAt } || details?.values.contains { $0.resetsAt.map { now >= $0 } == true } == true ? .expired : .observed
     }
   }
 
@@ -146,9 +154,14 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
     }.max { $0.used(at: now) < $1.used(at: now) }
   }
 
+  /// 网关来源一级的那条按来源一条：几个提供方指向同一网关与授权时，它们的清单在同一条记录上排先后。
   static func recordID(provider: String, host: String, account: PiAccount?) -> UUID {
-    DeterministicID.uuid("account-quota/\(host)/\(provider)/\(account?.kind.rawValue ?? "unknown")/\(account?.scope ?? "unknown")")
+    let owner = account?.source != nil && account?.route == nil ? "source" : provider
+    return DeterministicID.uuid("account-quota/\(host)/\(owner)/\(account?.kind.rawValue ?? "unknown")/\(account?.scope ?? "unknown")")
   }
+
+  /// 这条记录最近一次结果的时刻：带排序时刻的取它，只有能力声明的取收下的时刻。
+  var evidencedAt: Date { requestedAt ?? createdAt }
 }
 
 /// 扩展报来的一次观测（桥协议的 `quota` 消息，线上格式即此）。
@@ -163,15 +176,26 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
   public var observedAt: Date?
   /// 同一网关成功返回的账号清单；仅用于移除该来源已撤销的账号。
   public var activeScopes: [String]?
+  /// 网关来源一级的报告：这次解析到这个来源的每个 Pi 提供方与各自开始解析的时刻（几个提供方指向同一网关时查询只做一次）。
+  public var owners: [String: Date]?
+  public var accounts: [QuotaReport]?
+  /// 排序时刻：这份结果所属操作期间的一个时刻——主动查询（成功、失败、不支持、网关清单）取请求开始，回复带回的观测取收到回复。
+  /// 取在操作期间以内，先结束的操作的时刻一定早于后开始的；能力声明不带。
+  public var requestedAt: Date?
+  public var details: QuotaDetails?
 
-  public init(provider: String, windows: [QuotaWindow], complete: Bool, account: PiAccount, status: QuotaStatus = .observed, observedAt: Date? = nil, activeScopes: [String]? = nil) {
+  public init(provider: String, windows: [QuotaWindow], complete: Bool, account: PiAccount, status: QuotaStatus = .observed, observedAt: Date? = nil, activeScopes: [String]? = nil, details: QuotaDetails? = nil, accounts: [QuotaReport]? = nil, requestedAt: Date? = nil, owners: [String: Date]? = nil) {
     self.provider = provider
     self.account = account
     self.status = status
     self.windows = windows
     self.complete = complete
     self.observedAt = observedAt
+    self.requestedAt = requestedAt
+    self.owners = owners
+    self.accounts = accounts
     self.activeScopes = activeScopes
+    self.details = details
   }
 
   /// 并进已存的窗口，排成 `AccountQuota.windows` 的顺序。这次观测没说哪个卡着（用量接口、Codex）时，沿用已存的那个说法：
@@ -202,12 +226,13 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
 
 extension AccountQuota: Record {
   static let table = Table.accountQuotas
-  static let columns = ["id", "provider", "hostID", "windows", "createdAt", "modifiedAt", "account", "status", "observedAt"]
-  var bindings: [any SQLBindable] { [id, provider, hostID, JSONColumn.encode(windows), createdAt, modifiedAt, account.map(JSONColumn.encode), status.rawValue, observedAt] }
+  static let columns = ["id", "provider", "hostID", "windows", "createdAt", "modifiedAt", "account", "status", "observedAt", "details", "requestedAt"]
+  static var selection: String { (columns + [MacAgents.nameSQL(host: "accountQuotas.hostID")]).joined(separator: ", ") }
+  var bindings: [any SQLBindable] { [id, provider, hostID, JSONColumn.encode(windows), createdAt, modifiedAt, account.map(JSONColumn.encode), status.rawValue, observedAt, details.map(JSONColumn.encode), requestedAt] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), provider: row.text(1), hostID: row.text(2), windows: JSONColumn.decodeList(QuotaWindow.self, from: row.text(3)),
       createdAt: row.date(4), modifiedAt: row.date(5), account: JSONColumn.decode(PiAccount.self, from: row.textOrNil(6)),
-      status: row.textOrNil(7).flatMap(QuotaStatus.init(rawValue:)) ?? .unobserved, observedAt: row.dateOrNil(8))
+      status: row.textOrNil(7).flatMap(QuotaStatus.init(rawValue:)) ?? .unobserved, observedAt: row.dateOrNil(8), details: JSONColumn.decode(QuotaDetails.self, from: row.textOrNil(9)), requestedAt: row.dateOrNil(10), macName: MacAgents.shownName(row.textOrNil(11)))
   }
 }

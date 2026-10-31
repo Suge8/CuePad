@@ -10,7 +10,7 @@ extension View {
             switch style {
             case .fullScreen:
                 self.fullScreenCover(item: item) { content($0).modalPage(close) }
-            case .bubble(let source):
+            case .bubble(let source, _):
                 self.overlay { BubbleLayer(item: item.wrappedValue, source: source, close: close, content: content) }
             case .sheet:
                 self.sheet(item: item) { content($0).modalPage(close) }
