@@ -75,6 +75,7 @@ struct PiConfigControls<Trailing: View>: View {
     let trailing: Trailing
     /// 这一排在给的宽里靠哪边（Cue 面板里居中）。
     var alignment = Alignment.leading
+    @Environment(\.singleLineConfig) private var singleLine
     @Environment(AppServices.self) var services
     #if os(macOS)
     /// 键盘弹出的菜单贴着哪枚胶囊。
@@ -105,9 +106,9 @@ struct PiConfigControls<Trailing: View>: View {
     }
 
     var body: some View {
-        ConfigRow {
-            if let agent { PiAgentCapsule(pick: agent) }
-            modelCapsule
+        ConfigRow(singleLine: singleLine) {
+            if let agent { PiAgentCapsule(pick: agent).layoutValue(key: ConfigGive.self, value: .agent) }
+            modelCapsule.layoutValue(key: ConfigGive.self, value: .model)
             if let model = shown.model, let url = model.account?.usageURL(provider: model.key.provider) {
                 Link("管理用量", destination: url).font(Typography.meta).buttonStyle(PressStyle())
             }
@@ -150,11 +151,11 @@ struct PiConfigControls<Trailing: View>: View {
 }
 
 /// 工具排：胶囊按内容宽从左排成一行，竖直居中，整排不超出给的宽（超出的话输入框跟着撑宽、伸出屏幕两边）。
-/// 一行放不下时按 `Give` 的次序一步步让，够了就停；让完还放不下（字号大、模型名长）就折到下一行，胶囊都按内容宽、不截字：
-/// 模型名是这一排要读的字，截成"…"就认不出用的是哪个模型。只有一枚自己就比整排宽时才截它。
+/// 一行放不下时按 `Give` 依次收短思考、间距、上下文；普通页面再换行。宽屏回复框保持单行，先把 Agent 收成标志，再将剩余宽度给模型。
 private struct ConfigRow: Layout {
+    var singleLine = false
     /// 让的次序：先去掉思考强度前的"思考"二字（`PiThinkingDial`），再收紧间距，再把"上下文"收成圆环（`PiContextGauge`）。
-    enum Give: CaseIterable { case wording, spacing, context }
+    enum Give: CaseIterable { case wording, spacing, context, agent, model }
 
     private static let spacing: CGFloat = 6
     private static let tightSpacing: CGFloat = 2
@@ -204,13 +205,23 @@ private struct ConfigRow: Layout {
             switch give {
             case .spacing:
                 row.spacing = Self.tightSpacing
+            case .model:
+                guard singleLine else { continue }
+                for index in subviews.indices where subviews[index][ConfigGive.self] == give {
+                    row.widths[index] = width(of: subviews[index], in: max(0, available - row.width + row.widths[index]))
+                }
+            case .agent:
+                guard singleLine else { continue }
+                for index in subviews.indices where subviews[index][ConfigGive.self] == give {
+                    row.widths[index] = width(of: subviews[index], in: 0)
+                }
             case .wording, .context:
                 for index in subviews.indices where subviews[index][ConfigGive.self] == give {
                     row.widths[index] = width(of: subviews[index], in: 0)
                 }
             }
         }
-        guard row.width > available else { return row }
+        guard !singleLine, row.width > available else { return row }
         var x: CGFloat = 0
         for index in subviews.indices {
             if row.widths[index] > available { row.widths[index] = width(of: subviews[index], in: available) }
@@ -265,4 +276,9 @@ struct SessionConfigControls: View {
     private func configure(_ config: PiConfig) {
         workspace.attempt { _ = try await services.configure(config, for: session) }
     }
+}
+
+extension EnvironmentValues {
+    /// 回复框工具排只占一行：先收短装饰与 Agent 名，最后把剩余宽度给模型；完整名称仍可读屏、打开菜单查看。
+    @Entry var singleLineConfig = false
 }

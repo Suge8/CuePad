@@ -74,9 +74,6 @@ extension Workspace {
     }
 
     func toggleSidebar() {
-        #if os(macOS)
-        pages.slide.expect(opening: !sidebarOpen)
-        #endif
         sidebarOpen.toggle()
     }
 

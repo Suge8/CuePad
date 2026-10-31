@@ -20,7 +20,7 @@ struct NoticeBanner: View {
     }
 
     var body: some View {
-        let field = workspace.layout == .narrow && Dock.search(on: workspace.top) == .field
+        let field = workspace.layout == .narrow && workspace.top == .shelf
         ZStack {
             if let notice = workspace.notice {
                 NoticeCapsule(notice: notice)

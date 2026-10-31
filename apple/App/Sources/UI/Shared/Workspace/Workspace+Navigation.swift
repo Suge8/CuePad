@@ -67,16 +67,6 @@ extension Workspace {
         show(.progress)
     }
 
-    /// 去看待回复的会话：只有一个直接进那个会话；几个去进展页、停在你上次看的那一段——看板的等你列（拍板在前），
-    /// 或会话段（排在等你确认之后、其余之前，`PiShown.rank`），它们亮一下（`spotlight`）。入口数的是全部项目，项目范围放开，一个不漏。
-    func openReplies(_ replies: [PiSessionState]) {
-        guard !replies.isEmpty else { return }
-        if replies.count == 1 { return openSession(replies[0].id, sessionID: replies[0].sessionID) }
-        projectScope = nil
-        spotlight = Spotlight(replies.map(\.sessionID))
-        show(.progress)
-    }
-
     /// 去 Cue 页一行旁注提到的那一处（醒来那几行、一轮的经过）：会话、任务（从点的地方长出气泡）或定时。
     func open(_ target: CueWakeHeader.Target) {
         switch target {

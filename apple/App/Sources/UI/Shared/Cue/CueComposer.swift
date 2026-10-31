@@ -5,7 +5,7 @@ import SwiftUI
 /// （`Workspace.sayToCue`、`note`）。按下就清空输入框，不等上传；这里只管输入与发完之后做什么（`sent`）。
 /// Mac 的 Cue 页上工具排里是 Cue 用哪个 Agent、模型与思考强度（`CueConfigControls`，与新会话同一排；⌘⇧M、⌘⇧E 弹出模型与思考强度的菜单）；浮起的输入条不放，
 /// 没启用时也不放：发出去只是记下，还没有在哪台 Mac 运行，那几颗只能写一份选不了的缺省。
-/// Cue 运行在别的 Mac 上时工具排末尾一句旁注写在哪台（`CueNow.elsewhere`）：那几枚胶囊选的就是那台上的大脑。
+/// Cue 运行在别的 Mac 上时工具排末尾的 Mac 图标说明在哪台（`CueNow.elsewhere`）：那几枚胶囊选的就是那台上的大脑。
 /// 手机上它们在 Cue 面板的第一行（`CueHeader`），输入框里不再放一份：聚焦才露出的胶囊找不到。
 struct CueComposer: View {
     enum Style: Equatable {
@@ -19,8 +19,6 @@ struct CueComposer: View {
     /// 接"对 Cue 说"的焦点请求（`Workspace.cueFocusPending`）：Cue 页的输入框接，iPad 右侧面板里的不接。
     var takesFocusRequests = false
     var sent: () -> Void = {}
-    /// 焦点进出时告诉外面（iPhone Cue 页底部的"⋯"随它让开）。
-    var focusChanged: (Bool) -> Void = { _ in }
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -53,10 +51,9 @@ struct CueComposer: View {
                 focused = true
                 workspace.cueFocusPending = false
             }
-            .onChange(of: focused) { focusChanged(focused) }
             #if os(iOS)
             // 推入别的页就交出焦点、收起键盘，返回时不还：只由系统收起的话 SwiftUI 记着它，返回时在推出转场里把键盘弹回来，
-            // 这一页的托管控制器不认转场里到的键盘，输入框与拍板卡就压在键盘底下（实测）。焦点经上面那条报给底部那一排
+            // 这一页的托管控制器不认转场里到的键盘，输入框与拍板卡就压在键盘底下（实测）
             .onChange(of: workspace.top) { _, top in
                 if style == .page, takesFocusRequests, top != .cue { focused = false }
             }
@@ -165,16 +162,16 @@ private struct CueBrainRow: View {
     }
 }
 
-/// 工具排末尾的旁注：Cue 运行在别的 Mac 上时写在哪台。单拆一个视图读 Cue 此刻：输入框本身不随它重算。
+/// 工具排末尾的 Mac 图标：悬停或读屏说明 Cue 运行在哪台。单拆一个视图读 Cue 此刻：输入框本身不随它重算。
 private struct CueHostNote: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         if let elsewhere = workspace.cue.now.elsewhere {
-            Label(elsewhere, icon: .mac)
+            Image(.mac)
                 .font(Typography.meta).foregroundStyle(palette.ink3)
-                .lineLimit(1).fixedSize()
+                .help(elsewhere).accessibilityLabel(elsewhere)
                 .padding(.trailing, 4)
                 .transition(.opacity)
         }

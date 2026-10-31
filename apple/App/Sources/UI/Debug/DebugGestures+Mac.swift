@@ -2,7 +2,7 @@
 import AppKit
 
 /// `-CuePadClick` 里除点按外的几步（录全屏预览的缩放、看图、翻页用；坐标同点按，主窗口里的点、左上为原点）：
-/// - `dbl:x,y` 双击；`drag:x1,y1,x2,y2` 按住拖过去（约半秒）；
+/// - `dbl:x,y` 双击；`cmdclick:x,y` 按住 ⌘ 点；`drag:x1,y1,x2,y2` 按住拖过去（约半秒）；
 /// - `pinch:x,y,倍数` 触控板捏合（大于 1 是放大，约半秒）；`smart:x,y` 智能缩放（双指轻点两下）；
 /// - `swipe:x,y,dx,dy` 触控板双指滑动（dx、dy 是手指走的点数，往右、往下为正；约 0.3 秒，没有惯性）：翻页照真的走；
 ///   滚动视图自己的滚动（放大后的图双指看图）在进程内合成不了——系统的滚动视图在别的线程按窗口服务器送来的滑动滚（responsive scrolling），
@@ -36,6 +36,10 @@ extension DebugScene {
             }
         case ("measure", _): measure(rest.isEmpty ? nil : String(rest), in: window)
         case ("left", 0), ("right", 0), ("space", 0): key(name, in: window)
+        case ("cmdclick", 2):
+            queue(mouse(.leftMouseDown, n[0], n[1], in: window, flags: .command))
+            await Task.wait(for: .milliseconds(90))
+            queue(mouse(.leftMouseUp, n[0], n[1], in: window, flags: .command))
         case ("dbl", 2):
             for count in 1...2 {
                 queue(mouse(.leftMouseDown, n[0], n[1], in: window, clicks: count))
@@ -168,9 +172,9 @@ extension DebugScene {
         if event.type == .magnify { view.magnify(with: event) } else { view.smartMagnify(with: event) }
     }
 
-    private static func mouse(_ type: NSEvent.EventType, _ x: Double, _ y: Double, in window: NSWindow, clicks: Int = 1) -> NSEvent? {
+    private static func mouse(_ type: NSEvent.EventType, _ x: Double, _ y: Double, in window: NSWindow, clicks: Int = 1, flags: NSEvent.ModifierFlags = []) -> NSEvent? {
         NSEvent.mouseEvent(
-            with: type, location: NSPoint(x: x, y: window.frame.height - y), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            with: type, location: NSPoint(x: x, y: window.frame.height - y), modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clicks, pressure: 1)
     }
 

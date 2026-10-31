@@ -77,6 +77,10 @@ struct CueRelayStage: ViewModifier {
         @ObservationIgnored fileprivate weak var host: RelayAnchorView?
         @ObservationIgnored fileprivate var color: CGColor?
         @ObservationIgnored private var flightID = UUID()
+        @ObservationIgnored private var playback: Task<Void, Never>?
+        @ObservationIgnored private let rails = NSHashTable<SessionRailReveal>.weakObjects()
+
+        func register(_ rail: SessionRailReveal) { rails.add(rail) }
 
         /// `since`：这次接力的起点（叫醒是 `CueWatch.Wake.seen`），光照它排时刻，晚到的从中途画起；交给从此刻起。
         func play(_ flight: CueFlight, since: Date = .now, reduceMotion: Bool) {
@@ -84,10 +88,18 @@ struct CueRelayStage: ViewModifier {
             let id = UUID()
             flightID = id
             arriving = Set(flight.ends.filter(\.opens).map(\.session))
-            Task {
+            playback?.cancel()
+            let readyRails = rails.allObjects.filter(\.canReveal)
+            playback = Task {
+                if flight.direction == .relay {
+                    // 会话条与 flight 来自同一快照；先让新格挂载，再滚入，最后量锚。缺席目标不等待。
+                    await NextFrame.drawn()
+                    guard !Task.isCancelled else { return }
+                    for rail in readyRails { rail.prepare(flight.ends) }
+                }
                 // 在接力的那几处这一刻才挂上锚：等这一次更新排好、提交了再量
-                await NextFrame.wait()
-                guard self.flightID == id else { return }
+                await NextFrame.drawn()
+                guard !Task.isCancelled, self.flightID == id else { return }
                 guard let window = host?.window, let root = RelayAnchorView.rootLayer(of: window), let color else {
                     arriving = []
                     return
@@ -100,7 +112,7 @@ struct CueRelayStage: ViewModifier {
                 // 没有落点的不等
                 arriving.formIntersection(placed.map(\.0))
                 RelayFlight(color: color, reduceMotion: reduceMotion).play(
-                    flight.direction, cue: cue, ends: placed.map(\.1), in: root, since: since) { index in
+                    flight.direction, cue: cue, ends: placed.map(\.1), in: root, since: flight.direction == .relay ? .now : since) { index in
                         if self.flightID == id { self.arriving.remove(placed[index].0) }
                     }
             }
@@ -111,7 +123,7 @@ struct CueRelayStage: ViewModifier {
         private static func place(of end: RelayEnd, among anchors: [RelayAnchorView], in root: CALayer, near cue: CGPoint?) -> RelayFlight.Landing? {
             anchors.compactMap { anchor -> (rank: Int, landing: RelayFlight.Landing)? in
                 guard case .end(let spot) = anchor.role, let rank = spot.rank(for: end),
-                      let frame = anchor.frame(in: root, seesThrough: end.opens && rank == EndSpot.Row.own.rawValue) else { return nil }
+                      let frame = anchor.frame(in: root, seesThrough: end.opens && rank <= EndSpot.Row.own.rawValue) else { return nil }
                 return (rank, RelayFlight.Landing(point: frame.center, host: anchor.layer))
             }
             .min { ($0.rank, RelayFlight.distance($0.landing.point, cue)) < ($1.rank, RelayFlight.distance($1.landing.point, cue)) }?.landing

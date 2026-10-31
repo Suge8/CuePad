@@ -12,6 +12,8 @@ struct SessionRail: View {
         var inset: CGFloat { self == .phone ? 2 : 8 }
     }
 
+    static let chatInset: CGFloat = 52
+
     enum Opening { case primary, leading }
 
     let data: SessionRailData
@@ -37,7 +39,11 @@ private struct SessionRailContent: View {
     let marked: Set<String>
     let open: (PiSessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 54
+    @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 52
+
+    @Environment(\.relayStage) private var stage
+    @Environment(\.pageActive) private var active
+    @State private var reveal = SessionRailReveal()
 
     private var rowHeight: CGFloat {
         if form != .wide { return tileHeight }
@@ -62,6 +68,10 @@ private struct SessionRailContent: View {
                 Spacer(minLength: 0)
             }
         }
+        .onChange(of: [rows.waiting.map(\.id), rows.advancing.map(\.id)], initial: true) { _, groups in reveal.update(groups) }
+        .onChange(of: active, initial: true) { _, active in reveal.active = active }
+        .onAppear { stage?.register(reveal); reveal.active = active }
+        .onDisappear { reveal.active = false }
         .frame(width: form.width)
     }
 
@@ -78,16 +88,32 @@ private struct SessionRailContent: View {
         VStack(spacing: 0) {
             SessionRailHeader(column: column, count: items.count, wide: form == .wide)
                 .frame(height: Self.headerHeight)
-            ScrollView {
-                LazyVStack(spacing: Self.cellGap) {
-                    ForEach(items) { item in
-                        SessionRailCell(item: item, form: form, moves: moving.contains(item.id), selected: marked.contains(item.id), open: open)
-                            .frame(minHeight: rowHeight)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: Self.cellGap) {
+                        ForEach(items) { item in
+                            SessionRailCell(item: item, form: form, moves: moving.contains(item.id), selected: marked.contains(item.id), open: open)
+                                .frame(minHeight: rowHeight)
+                                .id(item.id)
+                        }
+                    }
+                    .scrollTargetLayout()
+                    .safeAreaPadding(.bottom, Self.bottomInset)
+                }
+                .scrollIndicators(.hidden)
+                .onScrollPhaseChange { _, phase in
+                    if phase == .idle { reveal.busy.remove(column) } else { reveal.busy.insert(column) }
+                }
+                .onScrollTargetVisibilityChange(idType: String.self, threshold: 1) { reveal.visible[column] = Set($0) }
+                .onAppear {
+                    reveal.register(column) { id in
+                        var transaction = Transaction(animation: nil)
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) { proxy.scrollTo(id, anchor: .center) }
                     }
                 }
-                .safeAreaPadding(.bottom, Self.bottomInset)
+                .onDisappear { reveal.remove(column) }
             }
-            .scrollIndicators(.hidden)
         }
         .rowContainer(.rect(cornerRadius: Radius.block), flush: true)
         .clipShape(.rect(cornerRadius: Radius.block))

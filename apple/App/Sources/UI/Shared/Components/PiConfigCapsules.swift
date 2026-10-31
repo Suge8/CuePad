@@ -65,11 +65,12 @@ struct PiModelCapsule: View {
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
         .padding(.leading, badged ? 6 : 11).padding(.trailing, 11)
-        // 按内容宽；只有比整排还宽时截断（`ConfigRow`）
+        // 先按内容宽，宽屏回复框用剩余宽度截断；完整模型名可悬停或读屏查看。
         .configCapsuleHeight()
         .background(palette.fill, in: .capsule)
         .frame(minHeight: ConfigCapsule.hitHeight)
         .contentShape(.capsule)
+        .help(spoken(at: now))
         .animation(Motion.fade, value: current?.key)
     }
 
@@ -112,13 +113,16 @@ struct PiAgentCapsule: View {
 
     private var label: some View {
         let kind = pick.current
-        return HStack(spacing: 5) {
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 5) {
+                ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
+                Text(kind.name).lineLimit(1).contentTransition(.opacity)
+            }.fixedSize()
             ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
-            Text(kind.name).lineLimit(1).contentTransition(.opacity)
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-        .padding(.leading, 6).padding(.trailing, 11)
-        .fixedSize()
+        .padding(.horizontal, 6)
+        .help(kind.name)
         .configCapsuleHeight()
         .background(palette.fill, in: .capsule)
         .frame(minHeight: ConfigCapsule.hitHeight)
@@ -155,6 +159,7 @@ struct PiThinkingDial: View {
     let meter: PiThinkingMeter
     let pending: Bool
     let choose: (PiThinkingLevel) -> Void
+    @Environment(\.singleLineConfig) private var compact
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @LoopsPlay private var loops
@@ -167,8 +172,10 @@ struct PiThinkingDial: View {
     /// 竖格在这一枚胶囊里的位置：横向位置按它换算成档。
     @State private var track: CGRect = .zero
 
-    private static let barWidth: CGFloat = 4
-    private static let gap: CGFloat = 3
+    private var barWidth: CGFloat { compact ? 3 : 4 }
+    private var gap: CGFloat { compact ? 2 : 3 }
+    private var inset: CGFloat { compact ? 6 : 10 }
+    private var labelGap: CGFloat { compact ? 2 : 6 }
     private static let lowest: CGFloat = 6
     private static let tallest: CGFloat = 16
     private static let linger: Duration = .seconds(1.2)
@@ -196,7 +203,7 @@ struct PiThinkingDial: View {
 
     private var content: some View {
         let drawn = drawn
-        return HStack(spacing: 6) {
+        return HStack(spacing: labelGap) {
             // 写出档名（与"上下文 86%"同一种写法）：只有一个脑图标加几根竖条要猜；按着时跟着指到的档变。
             // 工具排放不下时（`ConfigRow`）只写档名
             ViewThatFits(in: .horizontal) {
@@ -207,7 +214,7 @@ struct PiThinkingDial: View {
             meterBars(drawn)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { track = $0 }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, inset)
         .configCapsuleHeight()
         .background(palette.fill, in: .capsule)
         .overlay(alignment: .top) {
@@ -295,10 +302,10 @@ struct PiThinkingDial: View {
     }
 
     private func bars(color: @escaping (Int) -> Color) -> some View {
-        HStack(alignment: .bottom, spacing: Self.gap) {
+        HStack(alignment: .bottom, spacing: gap) {
             let count = PiThinkingMeter.scale.count
             ForEach(0..<count, id: \.self) { index in
-                Capsule().fill(color(index)).frame(width: Self.barWidth, height: height(index, of: count))
+                Capsule().fill(color(index)).frame(width: barWidth, height: height(index, of: count))
             }
         }
         .frame(height: Self.tallest, alignment: .bottom)

@@ -9,7 +9,7 @@ nonisolated struct DraggedSession: Codable, Hashable, Sendable, Transferable {
 }
 
 extension UTType {
-    nonisolated static let cuepadSession = UTType(exportedAs: "\(AppIdentity.id).session")
+    nonisolated static let cuepadSession = UTType(exportedAs: "\(AppIdentity.id).session", conformingTo: .data)
 }
 
 struct SessionRailCell: View {
@@ -42,9 +42,8 @@ struct SessionRailCell: View {
 
     @ViewBuilder private var control: some View {
         #if os(macOS)
-        label
-            .row(selected: selected)
-            .modifier(ListPress(slop: 5) { open(item.session, NSEvent.modifierFlags.contains(.command) ? .leading : .primary) })
+        Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .leading : .primary) } label: { label }
+            .buttonStyle(RowStyle(selected: selected))
         #else
         if form == .phone {
             Button { open(item.session, .primary) } label: { label }
@@ -52,7 +51,7 @@ struct SessionRailCell: View {
         } else {
             label
                 .row(selected: selected)
-                .gesture(SessionRailTap { open(item.session, $0 ? .leading : .primary) })
+                .gesture(SessionTap { open(item.session, $0 ? .leading : .primary) })
                 .focusable(interactions: .activate)
                 .onKeyPress(.space) { open(item.session, .primary); return .handled }
                 .accessibilityElement(children: .ignore)
@@ -117,16 +116,3 @@ struct SessionRailCell: View {
         .accessibilityHidden(true)
     }
 }
-
-#if os(iOS)
-/// SwiftUI 的 TapGesture.modifiers 只在 Mac 可用；iPad 从这一笔 UIKit 手势读取 ⌘，不另记键盘按下状态。
-private struct SessionRailTap: UIGestureRecognizerRepresentable {
-    let action: (Bool) -> Void
-
-    func makeUIGestureRecognizer(context: Context) -> UITapGestureRecognizer { UITapGestureRecognizer() }
-
-    func handleUIGestureRecognizerAction(_ recognizer: UITapGestureRecognizer, context: Context) {
-        if recognizer.state == .ended { action(recognizer.modifierFlags.contains(.command)) }
-    }
-}
-#endif

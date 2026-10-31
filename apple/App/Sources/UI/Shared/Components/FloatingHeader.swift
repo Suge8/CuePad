@@ -52,7 +52,7 @@ extension View {
 enum HeaderHost: Equatable {
     /// 推入的页。
     case navigationBar
-    /// 窄屏根上的页，系统导航栏藏着；`search`：这一排的搜索入口（哪一页用哪种只在 `Dock.search`）。
+    /// 窄屏根上的页，系统导航栏藏着；`search`：这一排的搜索入口（由页面容器指定）。
     case page(search: HeaderSearch?)
     /// iPad 右边那一栏的根，系统导航栏藏着：左边是侧栏钮（`SidebarToggle`，`sidebarShown` 是侧栏此刻在屏幕上，按它开合），
     /// `sidebarBeside` 是侧栏排在旁边（`SplitHome`）。

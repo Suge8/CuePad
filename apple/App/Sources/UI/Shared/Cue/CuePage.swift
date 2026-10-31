@@ -9,7 +9,7 @@ import SwiftUI
 /// Cue 自己醒来的那几轮每轮一行旁注（`CueNoteLog`：提到的那一处、当时出了什么事与它说的一句，点了去那里），
 /// 末尾是它此刻在做什么（`CueEnding`：常驻的一行，此刻在做的只写这里）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是拍板卡（`CueWaitDock`：Cue 的提问与会话在问的都在这里，
-/// 对话里不另挂）与输入框（`CueComposer`），待回复提示（`CueReplyTip`）叠在它们上方。
+/// 对话里不另挂）与输入框（`CueComposer`）。
 /// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
@@ -18,17 +18,9 @@ import SwiftUI
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 运行在哪台 Mac 都一样。"Cue 记得什么"（`CueMemoryPage`）与定时（`CueSchedulePage`）在 Mac 工具栏右上的两颗圆钮（`CueListSlots`）、手机页头的面板里；
 /// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
 struct CuePage: View {
-    /// iPad 右侧面板里：没有自己的顶栏（页头浮在面板顶上）。
-    var inPanel = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    #if os(iOS)
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    /// 底部那一排换形时，输入框与 Cue 钮交叉（`DockHandoff`）；输入框有焦点时不给"⋯"让位置，焦点进出写在它上面（`DockMotion.composing`）。
-    @Environment(\.dockMotion) private var dockMotion
-    #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
@@ -84,43 +76,21 @@ struct CuePage: View {
         .background(palette.desk)
     }
     #else
-    /// 页顶那一排只有 Cue 的名牌（`CueHeader`，经 `floatingHeader`），浮在对话上，对话让出固定的一段：名牌展开成面板时对话不重排。窄屏上 Cue 页是导航栈的根、不需要返回，不用系统导航栏（`DockRoot`），
-    /// 名牌就是最上面那一排；底部左边那颗"⋯"是底部那一排（`DockBar`，不在这一页里）收起的样子，这里给它让出位置，右边是输入框。
-    /// 拍板卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让）；窄屏底部那一排没有键盘时离屏幕底边同 Dock。
+    /// 名牌保留整页坐标；仅对话与拍板卡给常驻会话条让位。
     private var page: some View {
-        FloatingReply(backed: false, floor: docked ? Dock.margin : nil) {
-            chat
+        FloatingReply(backed: false) {
+            chat.padding(.leading, railInset)
         } reply: {
             bottom
-                .padding(.horizontal, docked ? Dock.margin : 12)
+                .padding(.horizontal, 12)
                 .frame(maxWidth: Self.readingWidth)
         }
-            .scrollDismissesKeyboard(.interactively)
-            .floatingHeader(.verbatim(cue.name), height: CueHeader.height, center: { CueHeader() }) { EmptyView() }
-    }
-
-    /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是"⋯"加输入框。
-    private var docked: Bool { !inPanel && sizeClass == .compact }
-
-    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框；换形时与 Cue 钮交叉（`DockHandoff`）。
-    private var dockRow: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            if dockMotion?.composing != true {
-                Color.clear.frame(width: Dock.slot + Dock.gap, height: Dock.slot)
-            }
-            composer.dockedComposer(dockMotion)
-        }
+        .scrollDismissesKeyboard(.interactively)
+        .floatingHeader(.verbatim(cue.name), height: CueHeader.height, center: { CueHeader() }) { EmptyView() }
     }
     #endif
 
-    #if os(iOS)
-    private var composer: some View {
-        CueComposer(style: .page, takesFocusRequests: !inPanel, sent: { follow.sent() }) { focused in
-            // 同底部那一排让开"⋯"的那条弹簧（`DockBar`）：输入框长宽与"⋯"淡出是同一下
-            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { dockMotion?.composing = focused }
-        }
-    }
-    #endif
+    private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.chatInset : 0 }
 
     // MARK: 对话
 
@@ -181,14 +151,12 @@ struct CuePage: View {
         var count: Int
         var last: Date?
         var waiting: Int
-        var replies: Int
         var live: Bool
 
         init(_ thread: CueThread, live: Bool) {
             count = thread.messages.count
             last = thread.messages.last?.modifiedAt
             waiting = thread.waiting.count
-            replies = thread.replies.count
             self.live = live
         }
     }
@@ -196,24 +164,16 @@ struct CuePage: View {
     // MARK: 底部
 
     /// 浮在对话底上的一块：拍板卡、停用时的启用与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
-    /// 待回复提示叠在这一块上方、不占排版（`floatingAbove`）：它一出一收不改这一块的高，对话不跟着跳。
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
                 CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, shots: thread.shots, open: { opened = $0 }, moving: $docking)
+                    .padding(.leading, railInset)
                 // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, ComposerMetrics.stackGap).transition(.opacity) }
             }
-            #if os(iOS)
-            Group { if docked { dockRow } else { composer } }.fixedSize(horizontal: false, vertical: true)
-            #else
             CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
-            #endif
-        }
-        .floatingAbove {
-            if let replies = thread?.replies, !replies.isEmpty { CueReplyTip(replies: replies).transition(.opacity) }
         }
         .animation(Motion.fade, value: cue.canHear)
-        .animation(Motion.fade, value: thread?.replies.isEmpty)
     }
 }

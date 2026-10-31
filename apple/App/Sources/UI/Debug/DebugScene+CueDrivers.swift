@@ -46,7 +46,7 @@ extension DebugScene {
     }
 
     /// `-CuePadReplyBlink <秒>`（配 `-CuePadDemo YES -CuePadScene cue`，画面就绪后开始、一直循环）：每隔这么久 Cue 把一个歇着的会话留给你回
-    /// （同值班的 Mac 写下的样子，`leaveToYou`），1.5 秒后那个会话又跑起来、不再待回复，看 Cue 页的待回复提示（`CueReplyTip`）怎么进出。
+    /// （同值班的 Mac 写下的样子，`leaveToYou`），1.5 秒后那个会话又跑起来、不再待回复，看会话条的等你组如何变化。
     static func replyBlinkIfAsked(_ store: CueStore) async {
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         let title = String(localized: "底栏换系统液态玻璃", table: "Demo")
@@ -140,9 +140,16 @@ extension DebugScene {
     static func relayIfAsked(_ workspace: Workspace) async {
         let store = workspace.services.store
         let kind = defaults.string(forKey: "CuePadRelayKind")
-        let launcher = PiStateRecorder(store: store, hostID: "demo-mac")
+        let launcher = PiStateRecorder(store: store, hostID: "demo-mac", bootID: defaults.bool(forKey: "CuePadNarrow") ? "narrow-demo-boot" : nil)
         var round = 0
         await everyIfAsked("CuePadRelay") {
+            if kind == "mixed" {
+                let requests = try await relayMixed(store, on: launcher)
+                return ("mixed", {
+                    for request in requests { try await store.deleteDelivery(request.id) }
+                    try await launcher.end(sessionID: "relay-1")
+                })
+            }
             let starts = kind.map { $0 == "start" } ?? !round.isMultiple(of: 2)
             round += 1
             if starts {
@@ -192,7 +199,7 @@ extension DebugScene {
                 if let log { try await measureFlight("idle", seconds: probe, into: log) }
                 guard let done = try await act() else { continue }
                 if let log { try await measureFlight(done.kind, seconds: probe, into: log) }
-                await Task.wait(for: .seconds(max(1.5 - probe, 0)))
+                await Task.wait(for: .seconds(max((done.kind == "mixed" ? 8 : 1.5) - probe, 0)))
                 try await done.undo()
             }
         }

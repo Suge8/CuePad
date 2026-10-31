@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// 演示库里 Cue 页写好之后会话那一侧的样子（`seedCue` 末尾调）：
-/// - `-CuePadReplies <N>`：Cue 把歇着的会话留给你回（待回复：Cue 页拍板卡上方那条提示 `CueReplyTip`，看板的等你列，`seedReplies`）；
+/// - `-CuePadReplies <N>`：Cue 把歇着的会话留给你回（待回复：会话条与看板的等你组，`seedReplies`）；
 /// - `-CuePadAtlas <PiWorkState>`、`-CuePadAtlasTitle <名>`：atlas 会话此刻的状态、名字改成这样（核对醒来那几行定格在写下那一刻，不跟着会话变）；
 /// - `-CuePadTaskLines written|changed`：对话末尾 Cue 再说一句关于"导入旧数据"的话（气泡下一行这件活），都看过、页停在最新处；
 ///   changed 再把它与结果卡的"README 截图"改名（标题后加"（改过）"）、换状态（前者做完、后者重开），核对对话里的任务行定格在写下那一刻。

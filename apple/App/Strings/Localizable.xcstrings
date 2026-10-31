@@ -1120,50 +1120,6 @@
         }
       }
     },
-    "%@，%lld 项" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld item"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld items"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@，%2$lld 项"
-          }
-        }
-      }
-    },
-    "%@，有该整理的" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@, needs tidying"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@，有该整理的"
-          }
-        }
-      }
-    },
     "%@，送达中" : {
       "localizations" : {
         "en" : {
@@ -1226,62 +1182,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 个任务没做完"
-          }
-        }
-      }
-    },
-    "%lld 个会话待回复" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld session to reply"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld sessions to reply"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个会话待回复"
-          }
-        }
-      }
-    },
-    "%lld 个启动问题" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Startup Issue"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Startup Issues"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个启动问题"
           }
         }
       }
@@ -5615,22 +5515,6 @@
         }
       }
     },
-    "任务已完成" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Task done"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "任务已完成"
-          }
-        }
-      }
-    },
     "任务最多 %lld 级（任务 → 子任务）" : {
       "localizations" : {
         "en" : {
@@ -7399,6 +7283,22 @@
         }
       }
     },
+    "切换栏焦点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch Column Focus"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换栏焦点"
+          }
+        }
+      }
+    },
     "切换模型" : {
       "localizations" : {
         "en" : {
@@ -8031,22 +7931,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "去会话"
-          }
-        }
-      }
-    },
-    "去处" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Places"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去处"
           }
         }
       }
@@ -9083,22 +8967,6 @@
         }
       }
     },
-    "和 %@ 说话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Talk to %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "和 %@ 说话"
-          }
-        }
-      }
-    },
     "和 Cue 的一条对话" : {
       "localizations" : {
         "en" : {
@@ -9191,22 +9059,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "回到最新，有新内容"
-          }
-        }
-      }
-    },
-    "回到这件事" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Back to task"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回到这件事"
           }
         }
       }
@@ -9767,22 +9619,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在别处改过，已跟上"
-          }
-        }
-      }
-    },
-    "在右侧并排看 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show %@ Alongside"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在右侧并排看 %@"
           }
         }
       }
@@ -10667,22 +10503,6 @@
         }
       }
     },
-    "完成任务：打勾；会话绑着的事都做完了就结束它" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Complete the task; once everything linked to the session is done, the session ends"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完成任务：打勾；会话绑着的事都做完了就结束它"
-          }
-        }
-      }
-    },
     "完成会把它的会话一起结束。" : {
       "localizations" : {
         "en" : {
@@ -10711,22 +10531,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成并结束会话"
-          }
-        }
-      }
-    },
-    "完成或绑定任务、重命名、跳到终端、结束会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Complete or link a task, rename, go to Terminal, end session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完成或绑定任务、重命名、跳到终端、结束会话"
           }
         }
       }
@@ -11111,22 +10915,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "展开编辑"
-          }
-        }
-      }
-    },
-    "展开项目、进展" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shows projects and progress"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "展开项目、进展"
           }
         }
       }
@@ -12303,22 +12091,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当前轮次的来源尚未确认，Cue 没有打断"
-          }
-        }
-      }
-    },
-    "当前页" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Current page"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前页"
           }
         }
       }
@@ -13539,22 +13311,6 @@
         }
       }
     },
-    "推进中 %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld active"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "推进中 %lld"
-          }
-        }
-      }
-    },
     "推进中 %lld 件，都歇着" : {
       "localizations" : {
         "en" : {
@@ -14171,6 +13927,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "改技能与规则"
+          }
+        }
+      }
+    },
+    "放在这里" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop Here"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放在这里"
           }
         }
       }
@@ -18315,6 +18087,22 @@
         }
       }
     },
+    "移到右栏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to Right Column"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移到右栏"
+          }
+        }
+      }
+    },
     "移到回收站" : {
       "localizations" : {
         "en" : {
@@ -18327,6 +18115,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移到回收站"
+          }
+        }
+      }
+    },
+    "移到左栏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to Left Column"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移到左栏"
           }
         }
       }
@@ -20123,22 +19927,6 @@
         }
       }
     },
-    "设置（⌘,）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Settings (⌘,)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置（⌘,）"
-          }
-        }
-      }
-    },
     "该你了" : {
       "localizations" : {
         "en" : {
@@ -21743,22 +21531,6 @@
         }
       }
     },
-    "这件事已完成" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This task is done"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这件事已完成"
-          }
-        }
-      }
-    },
     "这件任务已删除" : {
       "localizations" : {
         "en" : {
@@ -22283,22 +22055,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "进展"
-          }
-        }
-      }
-    },
-    "进展：看板与会话（⌘⇧T）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Progress: board and sessions (⌘⇧T)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "进展：看板与会话（⌘⇧T）"
           }
         }
       }

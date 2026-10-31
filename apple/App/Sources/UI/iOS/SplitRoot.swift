@@ -32,7 +32,7 @@ struct SplitRoot: View {
 
     @ViewBuilder private func destination(_ route: Route, column: Workspace.Column) -> some View {
         if route == .cue {
-            CuePage(inPanel: true).countsAsPiViewer()
+            CuePage().countsAsPiViewer()
                 .environment(\.headerHost, .panel)
                 .modifier(KeyboardHold())
         } else {

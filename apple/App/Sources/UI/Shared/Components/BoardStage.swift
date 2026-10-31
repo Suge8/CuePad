@@ -6,7 +6,7 @@ extension View {
 
     /// 看板上能拖的卡（拖到推进中是开始、拖到已完成是做完、待办里拖到别的卡前面是排序，`BoardColumn.drop`）。
     /// 落点的高亮（列的选中底、插入线）只在有卡正被拖着时画（`CardDrags`）。
-    func boardDraggable(_ id: UUID) -> some View { cardDraggable(.task(id), shape: .rect(cornerRadius: TaskMetrics.cardRadius)) }
+    func boardDraggable(_ id: UUID, session: String? = nil) -> some View { cardDraggable(.task(id), session: session, shape: .rect(cornerRadius: TaskMetrics.cardRadius)) }
 
     /// 待办里一张卡的落点：拖到它上面就是排到它前面，卡的上沿画一条插入线（`InsertionMark`）；拖的就是它自己时不画。
     func insertsBefore(_ id: UUID, perform: @escaping (UUID) -> Void) -> some View { modifier(InsertBefore(id: id, perform: perform)) }
