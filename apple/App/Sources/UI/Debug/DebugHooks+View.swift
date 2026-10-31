@@ -108,7 +108,7 @@ extension View {
             Task { await DebugScene.composerNoticeIfAsked(workspace.services) }
             Task { await DebugScene.replyBlinkIfAsked(workspace.services.store) }
             Task {
-                let from = workspace.root
+                let from = workspace.mainRoute
                 await DebugScene.saysIfAsked(workspace.services, visit: { workspace.show(.cue) }, back: { workspace.show(from) })
             }
             Task { await DebugScene.awayIfAsked(workspace.services.store) }
@@ -152,7 +152,7 @@ extension View {
                 async let notices: Void = DebugScene.composerNoticeIfAsked(workspace.services)
                 async let wakes: Void = DebugScene.wakeIfAsked(workspace)
                 async let blinks: Void = DebugScene.replyBlinkIfAsked(workspace.services.store)
-                let from = (workspace.root, workspace.path)
+                let from = (workspace.mainRoute, workspace.path)
                 async let says: Void = DebugScene.saysIfAsked(
                     workspace.services, visit: { workspace.select(.cue) }, back: {
                         workspace.select(from.0)

@@ -131,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func newCard(_ sender: Any?) { workspace?.newCard() }
     @objc func newSession(_ sender: Any?) { workspace?.newSession() }
     /// 不叫 `toggleSidebar(_:)`：AppKit 的分栏控制器自己响应那个动作，在响应链上先接走，带着分栏动画开合。
-    @objc func toggleCueSidebar(_ sender: Any?) { workspace?.pages.toggleSidebar() }
+    @objc func toggleCueSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {

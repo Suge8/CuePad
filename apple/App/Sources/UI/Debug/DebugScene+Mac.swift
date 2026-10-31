@@ -14,9 +14,9 @@ extension DebugScene {
         if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
         Task { await SyncBench.run(workspace) }
         Task { await cueNowTourIfAsked(workspace) }
-        if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.pages.sidebar = .detailOnly }
+        if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.sidebarOpen = false }
         switch scene {
-        case "collapsed": workspace.pages.sidebar = .detailOnly
+        case "collapsed": workspace.sidebarOpen = false
         case "search": workspace.searching = true
         case "progress":
             // 进展页看板段：配 -CuePadDemo 时写入 Mac 同步来的演示会话与 Cue 的等你，推进中的任务带会话状态（同 iOS 的 progress）

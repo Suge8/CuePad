@@ -14,7 +14,7 @@ struct CueSidebarCard: View {
 
     var body: some View {
         let cue = workspace.cue
-        let selected = workspace.root == .cue
+        let selected = workspace.mainRoute == .cue
         let said = selected || cue.unread == 0 ? nil : cue.lastSaid
         Button { select(.cue) } label: {
             HStack(spacing: 12) {

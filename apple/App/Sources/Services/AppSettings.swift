@@ -21,7 +21,6 @@ final class AppSettings {
         #if os(macOS)
         static let globalShortcut = "globalShortcut"
         static let cueShortcut = "cueShortcut"
-        static let currentProject = "currentProject"
         static let alerts = "alerts"
         #endif
         static let replyDrafts = "replyDrafts"
@@ -29,6 +28,9 @@ final class AppSettings {
         static let unreadSince = "unreadSince"
         static let lastAgent = "lastAgent"
         static let progressPane = "progressPane"
+        static let navigationPane = "navigationPane"
+        static let currentProject = "currentProject"
+        static let railExpanded = "railExpanded"
     }
 
     @ObservationIgnored let defaults: UserDefaults
@@ -38,11 +40,11 @@ final class AppSettings {
     @ObservationIgnored private var draftTimer: Task<Void, Never>?
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
-    #if os(macOS)
-    /// Mac 主窗口上次打开的项目：下次打开回到它（`Workspace.openingRoute`），也是菜单栏随手记默认记进的项目；当前项目只看去处（`Workspace.currentProject`）。
+    /// 上次打开的项目；项目段恢复与菜单栏随手记共用，当前项目仍从导航推出。
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
+    #if os(macOS)
     /// 通知两种提示（等你、做完了）各自的开关与提示音（`AlertPreferences`）。
     var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
     #endif
@@ -52,6 +54,11 @@ final class AppSettings {
     var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
     /// 进展页上次看的那一段（看板或会话，`Workspace.progressPane` 读写的就是它）。
     var progressPane: ProgressPane { didSet { defaults.set(progressPane.rawValue, forKey: Key.progressPane) } }
+
+    /// 窄屏侧栏与宽屏主区共用的项目｜进展选择。
+    var navigationPane: NavigationPane { didSet { defaults.set(navigationPane.rawValue, forKey: Key.navigationPane) } }
+    /// 宽屏会话条的用户选择；窗口不够宽时只改变呈现，不写这个值。
+    var railExpanded: Bool { didSet { defaults.set(railExpanded, forKey: Key.railExpanded) } }
 
     /// 本机最后一次看每个 Pi 会话的时间（按 sessionID），判断"有新回复"（`PiUnread`）；只留最近看的 `seenLimit` 个。
     private(set) var sessionSeen: [String: Date] { didSet { defaults.set(sessionSeen, forKey: Key.sessionSeen) } }
@@ -166,12 +173,14 @@ final class AppSettings {
         self.defaults = defaults
         func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
-        #if os(macOS)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
+        #if os(macOS)
         alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
         #endif
         lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
         progressPane = string(Key.progressPane).flatMap(ProgressPane.init(rawValue:)) ?? .board
+        navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .progress
+        railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (defaults.data(forKey: Key.replyDrafts).flatMap { try? JSONDecoder().decode([UUID: SavedDraft].self, from: $0) } ?? [:])
             .mapValues(ReplyDraftSlot.init)

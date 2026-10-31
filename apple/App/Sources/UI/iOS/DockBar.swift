@@ -130,13 +130,13 @@ private struct DockCue: View {
         .accessibilityValue(Dotted(cue.unread > 0 ? String(localized: "\(cue.unread) 条新消息") : nil, DockTally.spoken(cue), drafted ? String(localized: "有草稿") : nil).spoken)
     }
 
-    /// 在 Cue 页上（"⋯"展开着）点它是收起、回到输入框；在别的 tab 上是换到 Cue，推在 Cue 页上的页上是回到 Cue 页（`Workspace.tap`）。
+    /// 在 Cue 页上（"⋯"展开着）点它是收起、回到输入框；在别的 tab 上是换到 Cue，推在 Cue 页上的页上是回到 Cue 页（`Workspace.select`）。
     private func open() {
         guard workspace.top != .cue else {
             collapse()
             return
         }
-        workspace.tap(.cue)
+        workspace.select(.cue)
     }
 
     @ViewBuilder private func corner(drafted: Bool) -> some View {

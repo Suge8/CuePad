@@ -20,7 +20,7 @@ struct DockTabs: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        TabBar(selected: motion.tab, alert: services.macAlert?.title, tint: palette.signature, ink: palette.ink) { workspace.tapSoon($0) }
+        TabBar(selected: motion.tab, alert: services.macAlert?.title, tint: palette.signature, ink: palette.ink) { let route = $0; Task { workspace.select(route) } }
             .frame(width: Dock.capsule(in: width) + Dock.margin * 2, height: Dock.height + Dock.margin)
             .overlay(alignment: .topLeading) { marks }
             .offset(x: -Dock.margin, y: Dock.margin)

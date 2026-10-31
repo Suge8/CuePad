@@ -4,7 +4,7 @@ import Observation
 import SwiftUI
 
 /// 一个窗口（场景）的界面状态：去处、项目目录、打开的卡、浮层、提示；Mac 另有挂着的页与发送目标。数据本身不在这里，界面直接订阅 Store。
-/// 去处只在这里一份（`root` 与 `path`，规则见 `Workspace+Navigation`）：两端都经 `show`、`open` 去，平台只决定怎么摆（`Layout`）。
+/// 去处只存 `navigation`，两种布局与入口合同见 `Workspace+Navigation`。
 @Observable
 final class Workspace {
     struct Notice: Identifiable, Equatable {
@@ -54,40 +54,8 @@ final class Workspace {
     }
 
     let services: AppServices
-    /// 当前去处（Mac 的内容区、iPad 右边那一栏、窄屏选中的 tab）：打开 App 先到 `openingRoute`。经 `select` 换；窄屏点底部那一排经 `tap` 换（各 tab 的栈留着）。
-    var root: Route
-    /// 各个根上推入的页（iOS 的卡片纸页、会话页……），按根分开：窄屏每个 tab 一个导航栈，切走再回来还在；宽屏与 Mac 只有当前根的那一份（`select` 换根时清掉）。
-    /// Mac 没有历史，总是空的。经 `subscript(stack:)` 读写，按根分开观察：在一个 tab 里推入、返回只叫醒那个 tab 的导航栈，别的 tab 不跟着重算。
-    @ObservationIgnored private(set) var stacks: [Route: [Route]] = [:]
-
-    subscript(stack root: Route) -> [Route] {
-        get {
-            access(keyPath: \.[stack: root])
-            return stacks[root] ?? []
-        }
-        set { withMutation(keyPath: \.[stack: root]) { stacks[root] = newValue } }
-    }
-
-    /// 当前根上推入的页。
-    var path: [Route] {
-        get { self[stack: root] }
-        set { self[stack: root] = newValue }
-    }
-
-    /// 清掉各个根上推入的页。
-    func clearStacks() {
-        for root in stacks.keys { self[stack: root] = [] }
-    }
-    /// 去处怎么摆：Mac 固定是 `.pages`，iOS 随尺寸类在 `.split` 与 `.dock` 之间换（`IOSRoot`）。变窄时把宽屏的去处推到它所属的那一页上。
-    var layout = Layout.native {
-        didSet {
-            guard layout == .dock, oldValue != .dock, let home = root.home, home != root else { return }
-            let pushed = [root] + path
-            clearStacks()
-            self[stack: home] = pushed
-            root = home
-        }
-    }
+    /// 只保留当前布局的导航值；尺寸切换经 `setLayout` 转换，不缓存另一套去处。
+    var navigation: Navigation
     /// 新建（`project` 为 nil）或编辑项目的表单：侧栏、书架与项目页的入口都经这里，窗口的根弹出。
     var projectForm: ProjectFormRequest?
     /// 请过"对 Cue 说"拿到焦点（`speakToCue`：随手记小组件、手机的 ⌘⇧N），Cue 页的输入框还没接：它出现时或已在屏上时接下并清掉。
@@ -167,9 +135,6 @@ final class Workspace {
     var handOffDraft = ComposerDraft()
     /// 新会话的输入框（`NewSessionInput`）。
     var newSession: NewSessionInput.Start?
-    var sidebar: NavigationSplitViewVisibility = .automatic
-    /// 宽屏：右侧的 Cue 面板是否展开。
-    var agentPanel = false
     /// 每次 ⌘K（或点搜索钮、项目页与侧栏顶上的搜索框）加一：搜索页据此聚焦搜索框，已在搜索页时同样生效。
     var searchFocusRequests = 0
     #endif
@@ -224,18 +189,23 @@ final class Workspace {
     /// 项目目录当场读（`CueStore.snapshot`），Cue 的现状取整个 App 手里那份（`CueFeed.latest`）：第一帧就是读到的样子，没有"还没读到"这一态。
     init(services: AppServices) {
         self.services = services
-        root = Self.openingRoute(services)
+        #if os(macOS)
+        navigation = .wide(WideNavigation())
+        #else
+        navigation = .narrow(NarrowNavigation())
+        #endif
         cue = CueWatch(services.cueFeed.latest()?.digest, at: services.speech, local: services.cueLocal)
         #if os(macOS)
         sendState = SendState(services: services)
         #endif
         readCatalog()
+        if let catalog { reconcileNavigation(projects: Set(catalog.projects.map(\.id))) }
         readLibrary()
     }
 
     #if os(macOS)
     /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `select`；会话页只在是当前页时在里面）。
-    var mountedPages: [Route] { pages.kept.contains(root) ? pages.kept : pages.kept + [root] }
+    var mountedPages: [Route] { pages.kept.contains(mainRoute) ? pages.kept : pages.kept + [mainRoute] }
 
     func finishClosingCard() {
         guard openCard == nil else { return }
@@ -314,19 +284,12 @@ final class Workspace {
     /// 读取失败时清空目录并记下原因：资料库读不出来时不能接着显示过时的项目。
     private func observeCatalog() async {
         guard let start = catalogStart else { return }
-        #if os(macOS)
-        await reconcileCurrentProject()
-        #endif
+        reconcileNavigation(projects: Set(start.value.projects.map(\.id)))
         do {
             for try await next in services.store.observe(from: start, { try ProjectCatalog.read(from: $0) }) {
                 let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
                 catalog = next
-                if membershipChanged {
-                    #if os(macOS)
-                    await reconcileCurrentProject()
-                    pages.forget(projectsNotIn: Set(next.projects.map(\.id)))
-                    #endif
-                }
+                if membershipChanged { reconcileNavigation(projects: Set(next.projects.map(\.id))) }
             }
         } catch is CancellationError {
         } catch {
@@ -341,20 +304,28 @@ final class Workspace {
         readLibrary()
     }
 
-    #if os(macOS)
-    /// 保存的当前项目以 Store 为准：不存在或已进回收站时清掉设置，正开着它就回到 `Route.first`（不经 `select`：不把失效的页记成去过的）。
-    /// 项目表每次变化后、写入撞上失效项目时调用。
+    /// 写入时项目已被删：当场读有效项目，纠正浏览选择与打开的路径。
     func reconcileCurrentProject() async {
-        let settings = services.settings
-        guard let saved = settings.currentProject else { return }
         do {
-            let projects = try await services.store.projects()
-            guard !projects.contains(where: { $0.id == saved }) else { return }
-            if settings.currentProject == saved { settings.currentProject = nil }
-            if root == .project(saved) { root = .first }
+            reconcileNavigation(projects: Set(try await services.store.projects().map(\.id)))
         } catch {
             fail(error)
         }
     }
-    #endif
+
+    private func reconcileNavigation(projects ids: Set<UUID>) {
+        let settings = services.settings
+        if let saved = settings.currentProject, !ids.contains(saved) { settings.currentProject = nil }
+        switch navigation {
+        case .narrow(var state):
+            if let index = state.path.firstIndex(where: { if case .project(let id) = $0 { !ids.contains(id) } else { false } }) {
+                state.path = Array(state.path[..<index])
+                navigation = .narrow(state)
+            }
+        case .wide: break
+        }
+        #if os(macOS)
+        pages.forget(projectsNotIn: ids)
+        #endif
+    }
 }

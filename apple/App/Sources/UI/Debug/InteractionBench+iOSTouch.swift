@@ -89,9 +89,9 @@ extension IOSInteractionBench {
             default: "\(route)"
             }
         }
-        var text = ([workspace.root] + workspace.path).map(brief).joined(separator: ">")
-        if workspace.root == .progress, workspace.progressPane == .sessions, workspace.path.isEmpty, let before = rowBefore, moved(before) { text += "+行动作" }
-        if workspace.root == .progress, workspace.progressPane == .board, let offset = boardOffset(in: window) { text += " 行横移=\(offset)" }
+        var text = ([workspace.mainRoute] + workspace.path).map(brief).joined(separator: ">")
+        if workspace.mainRoute == .progress, workspace.progressPane == .sessions, workspace.path.isEmpty, let before = rowBefore, moved(before) { text += "+行动作" }
+        if workspace.mainRoute == .progress, workspace.progressPane == .board, let offset = boardOffset(in: window) { text += " 行横移=\(offset)" }
         return text
     }
 

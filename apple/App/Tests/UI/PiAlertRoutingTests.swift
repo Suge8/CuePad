@@ -55,12 +55,12 @@ struct PiAlertRoutingTests {
         #expect(app.services.pendingDeepLink == nil && workspace.top == .project(Project.defaultID))
 
         alerts.receive(tapped(session.id))
-        try await eventually("打开那个会话") { workspace.top == .session(session.id) }
+        try await eventually("打开那个会话") { workspace.shownSessions.contains { $0.id == session.id } }
 
         #expect(workspace.shownSessions == [ViewerKeeper.Page(id: session.id, sessionID: "atlas")])
         #expect(app.services.pendingDeepLink == nil)
         #if os(iOS)
-        #expect(workspace.root == .project(Project.defaultID))
+        #expect(workspace.path.first == .project(Project.defaultID))
         #endif
     }
 

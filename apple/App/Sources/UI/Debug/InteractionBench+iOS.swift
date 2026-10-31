@@ -108,18 +108,18 @@ enum IOSInteractionBench {
         await Task.wait(for: .seconds(1))
         // 主导航：Cue 页点底部的"进展"去进展页（配 `-CuePadManyTasks` 量任务多时）、进展页点 Cue 钮回来（点按调的就是 `tap`）
         for _ in 0..<2 {
-            await step("Cue 进任务") { workspace.tap(.progress) }
-            await step("任务回 Cue") { workspace.tap(.cue) }
+            await step("Cue 进任务") { workspace.select(.progress) }
+            await step("任务回 Cue") { workspace.select(.cue) }
         }
         // 项目 tab 停在一条灵感上时切走再切回来：栈与页都留着，不重建
         workspace.select(.project(Project.defaultID))
         workspace.push(.card(idea.id))
         await Task.wait(for: .seconds(1.5))
         for _ in 0..<2 {
-            await step("灵感去 Cue") { workspace.tap(.cue) }
-            await step("Cue 回灵感") { workspace.tap(.shelf) }
+            await step("灵感去 Cue") { workspace.select(.cue) }
+            await step("Cue 回灵感") { workspace.select(.shelf) }
         }
-        workspace.tap(.cue)
+        workspace.select(.cue)
         // Cue 页头开合面板（点页头的那条路）
         for _ in 0..<2 {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }

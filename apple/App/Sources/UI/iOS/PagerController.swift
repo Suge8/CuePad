@@ -7,7 +7,7 @@ import UIKit
 /// 页与条只摆 `bounds` 与 `center`，不碰 `frame`：带平移的视图设 `frame` 会把那一刻的平移折进 `center`，之后平移一变页就带着一段残留位移
 /// （曾经每次排版都这样折一下：停在旧页再一下闪成新页、邻页叠在当前页上、Cue 页歪着露出旁边一角）。
 /// 条的位置只有一份（`offset`），每次挪都经 `apply` 同时交给 `DockMotion`（底部那一排的选中与换形读它）。
-/// 选中哪个 tab 只有 `Workspace.root` 一份：条直接观察它、跟着它的变化滑（`updateProperties`），手势松手、读屏翻页是请它换（`Workspace.tapSoon`），不另记一份；
+/// 选中哪个 tab 只有 `Workspace.mainRoute` 一份：条直接观察它、跟着它的变化滑（`updateProperties`），手势松手、读屏翻页是请它换（`Workspace.select`），不另记一份；
 /// SwiftUI 只把环境交过来（`update`），换 tab 不经它、三页的内容不跟着整份重设。
 /// 各页的托管控制器建过就一直挂在条上（回访不重建、滚动位置与推入的页都在），不在屏上的藏着、不订阅（`pageActive` 为假，没读过的先读一份 `pagePrefetch`）；
 /// 滑动中露出来的页（`moving`）画着、订阅着。还没建的页在打开 App 后安静一阵（`buildDelay`）再一页一页地建，离当前页近的先建；拖的那一下邻页还没有才当场建。
@@ -23,7 +23,7 @@ final class PagerController: UIViewController {
     private let strip = UIView()
     /// 正在滑的页：画、订阅。
     private var moving: Set<Route> = []
-    /// 条停在哪一页：跟着 `Workspace.root` 的变化，只在松手时先于它改（先把弹簧交出去再请 root 跟上）。
+    /// 条停在哪一页：跟着 `Workspace.mainRoute` 的变化，只在松手时先于它改（先把弹簧交出去再请 root 跟上）。
     private var resting: Route { didSet { setNeedsUpdateProperties() } }
     /// 条的平移（点）：停在第 i 页是 -i×宽；拉出前进页时越过最后一页。
     private var offset: CGFloat = 0
@@ -46,8 +46,8 @@ final class PagerController: UIViewController {
         self.workspace = workspace
         self.motion = motion
         self.shot = shot
-        resting = workspace.root
-        followed = workspace.root
+        resting = workspace.mainRoute
+        followed = workspace.mainRoute
         super.init(nibName: nil, bundle: nil)
         motion.move(to: CGFloat(Dock.order(resting)), tab: Dock.order(resting), pushed: 0)
     }
@@ -74,8 +74,8 @@ final class PagerController: UIViewController {
     /// - 拉得出来的前进页只在 Cue 页上。
     override func updateProperties() {
         super.updateProperties()
-        pan.isEnabled = !motion.composing && !handing && workspace[stack: resting].isEmpty
-        let root = workspace.root
+        pan.isEnabled = !motion.composing && !handing && workspace.path.isEmpty
+        let root = workspace.mainRoute
         if root != followed {
             followed = root
             shot.forget()
@@ -259,7 +259,7 @@ final class PagerController: UIViewController {
         animate(to: -CGFloat(target) * w, velocity: velocity) { [weak self] in
             if target > Self.last { self?.commitForward() } else { self?.rest() }
         }
-        if turned { workspace.tapSoon(resting) }
+        if turned { Task { workspace.select(resting) } }
     }
 
     /// 切页只有这一条弹簧：松手、点按、深链都经它；条的图层与 SwiftUI 那一层（底部那一排、前进页）同一条（`Motion.nudge`）、同一个初速度。
@@ -289,7 +289,7 @@ final class PagerController: UIViewController {
         buildLater()
     }
 
-    /// 拉到前进页松手：快照停在原处，下一轮不带动画地推入真的页（同 `Workspace.tapSoon` 的理由），它画上屏后收起快照、这一条回到 Cue 页（推入的页盖着）。
+    /// 拉到前进页松手：快照停在原处，下一轮不带动画地推入真的页（同 `Workspace.select` 的理由），它画上屏后收起快照、这一条回到 Cue 页（推入的页盖着）。
     private func commitForward() {
         handing = true
         Task { [weak self] in
@@ -340,7 +340,7 @@ final class PagerController: UIViewController {
     private func scroll(toward edge: UIAccessibilityScrollDirection) -> Bool {
         let index = Dock.order(resting) + (edge == .right ? -1 : edge == .left ? 1 : 0)
         guard index != Dock.order(resting), Dock.tabs.indices.contains(index) else { return false }
-        workspace.tapSoon(Dock.tabs[index])
+        Task { workspace.select(Dock.tabs[index]) }
         return true
     }
 }

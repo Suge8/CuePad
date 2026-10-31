@@ -42,7 +42,7 @@ struct PageMenuSlot: View {
 
     private var content: Content {
         if let id = workspace.openCard { return .card((opened ?? nil).flatMap { $0.id == id ? $0 : nil }) }
-        return switch workspace.root {
+        return switch workspace.mainRoute {
         case .session: .session(workspace.shownSessionHeader)
         case .project(let id): .project(id)
         case .cue: .cue

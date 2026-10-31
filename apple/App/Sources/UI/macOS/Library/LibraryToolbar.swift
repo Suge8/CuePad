@@ -34,7 +34,7 @@ struct LibraryHelpSlot: View {
         }
         .padding(.leading, Spacing.toolbarGap)
         .toolbarVisible(workspace.overlay == nil)
-        .toolbarPresence(workspace.root == .library)
+        .toolbarPresence(workspace.mainRoute == .library)
     }
 }
 #endif

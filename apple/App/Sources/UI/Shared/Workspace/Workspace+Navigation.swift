@@ -2,59 +2,64 @@ import CueStore
 import Foundation
 import Observation
 
-/// 去哪：两端同一套规则，入口（侧栏与底部那一排、⌘1–9、提示、深链、通知、看板的卡、Cue 页的旁注与待回复提示、组件里的"去会话"）都经这里；
-/// 平台只给怎么摆（`Layout`）与呈现时顺带的事（`willSelect`、`showEditor`、`sessionRoute`，在各端的 `Workspace` 扩展里）。
+/// 共用入口只分派布局；窄屏与宽屏的去处规则分别在 Workspace+Narrow、Workspace+Wide。
 extension Workspace {
-    /// 去处怎么摆。
-    enum Layout {
-        /// Mac：内容区一次一页，没有历史、没有上一层，导航都在侧栏；会话页也是换页。
-        case pages
-        /// iPad 宽屏：侧栏选中的去处是根，会话页、卡片纸页推在它上面（返回回到原处）。
-        case split
-        /// 窄屏（iPhone 与窄窗口 iPad）：根只有底部那一排的三个 tab（`Dock.tabs`，`Route.home`），各有自己的导航栈，其余去处推在它所属的那个 tab 上。
-        case dock
+    /// 窄屏栈顶，宽屏主区；宽屏会话可见性读 shownSessions，不用 top 推测右栏。
+    var top: Route { mainRoute }
 
-        /// 会话页推在当前页上、能返回。
-        var keepsHistory: Bool { self != .pages }
-    }
-
-    /// 最上面那一页。
-    var top: Route { path.last ?? root }
-
-    /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页），否则没有。"在哪个项目"只有这一份：⌘N、进展页新建任务的默认落点都读它。
     var currentProject: UUID? {
-        for route in ([root] + path).reversed() {
-            if case .project(let id) = route { return id }
-        }
-        return nil
+        let routes = layout == .narrow ? path : [mainRoute]
+        return routes.reversed().compactMap { route in
+            if case .project(let id) = route { id } else { nil }
+        }.first
     }
 
-    /// 屏幕上最上面那一页是会话页时是它（这个窗口开着哪些会话，`ViewerKeeper`）。
+    /// 一个窗口可见的会话，按左、右排列且不重复；窄屏只有侧栏、没有推入页时没有可见会话。
+    /// 只表达导航可见性；前后台、窗口遮挡与人在不在由 ViewerKeeper 处理。
     var shownSessions: [ViewerKeeper.Page] {
-        if case .session(let route) = top { [ViewerKeeper.Page(id: route.id, sessionID: route.sessionID)] } else { [] }
+        let sessions: [SessionRoute]
+        switch navigation {
+        case .narrow(let state):
+            if case .session(let route)? = state.path.last { sessions = [route] } else { sessions = [] }
+        case .wide(let state):
+            let main: SessionRoute? = if case .session(let route) = state.main { route } else { nil }
+            sessions = [main, state.side].compactMap(\.self)
+        }
+        return sessions.map { ViewerKeeper.Page(id: $0.id, sessionID: $0.sessionID) }
     }
 
-    /// 去一页（提示、快捷键、深链与组件共用）：开着的任务气泡收起；有历史时会话页推在当前页上（已在看它就不再叠一页），其余经 `select`。
+    /// 外部导航：窄屏会话推入，其余重选；宽屏会话默认右栏、Cue 回右栏、其余换主区。
     func show(_ route: Route) {
         openTask = nil
-        if case .session = route, layout.keepsHistory {
-            if path.last != route { path.append(route) }
-            return
+        switch layout {
+        case .narrow: showNarrow(route)
+        case .wide: selectWide(route)
         }
-        select(route)
     }
 
-    /// 去这一页（侧栏点哪就是哪、快捷键、深链），清掉它那一栈推入的页。窄屏上不是 tab 的去处推在它所属的那个 tab 上
-    /// （项目、设置……推在书架上），别的 tab 的栈不动；不属于哪一页的（卡片纸页、会话页）推在当前 tab 上。点底部那一排只换 tab，不经这里（`tap`）。
+    /// 明确重选：窄屏回根并打开侧栏或目标页；宽屏同 show。
     func select(_ route: Route) {
-        let next = (layout == .dock ? route.home : route) ?? root
-        willSelect(route, root: next)
-        if layout != .dock { clearStacks() }
-        self[stack: next] = next == route ? [] : [route]
-        root = next
+        openTask = nil
+        switch layout {
+        case .narrow: selectNarrow(route)
+        case .wide: selectWide(route)
+        }
     }
 
-    func push(_ route: Route) { path.append(route) }
+    /// 页面内继续前往：窄屏压栈，宽屏替换所属栏。
+    func push(_ route: Route) {
+        switch layout {
+        case .narrow: pushNarrow(route)
+        case .wide: selectWide(route)
+        }
+    }
+
+    func back() {
+        switch layout {
+        case .narrow: if !path.isEmpty { path.removeLast() }
+        case .wide: closeColumn(.main)
+        }
+    }
 
     /// 去进展页的会话段（原会话页的去向都是这里："看这个项目的会话"、⌥⌘N）。
     func showSessions() {
@@ -62,9 +67,10 @@ extension Workspace {
         show(.progress)
     }
 
-    /// 去看待回复的会话（Cue 页的待回复提示）：只有一个直接进那个会话；几个去进展页、停在你上次看的那一段——看板的等你列（拍板在前），
-    /// 或会话段（排在等你确认之后、其余之前，`PiShown.rank`），它们亮一下（`spotlight`）。提示数的是全部项目，项目范围放开，一个不漏。
+    /// 去看待回复的会话：只有一个直接进那个会话；几个去进展页、停在你上次看的那一段——看板的等你列（拍板在前），
+    /// 或会话段（排在等你确认之后、其余之前，`PiShown.rank`），它们亮一下（`spotlight`）。入口数的是全部项目，项目范围放开，一个不漏。
     func openReplies(_ replies: [PiSessionState]) {
+        guard !replies.isEmpty else { return }
         if replies.count == 1 { return openSession(replies[0].id, sessionID: replies[0].sessionID) }
         projectScope = nil
         spotlight = Spotlight(replies.map(\.sessionID))
@@ -89,8 +95,14 @@ extension Workspace {
 
     /// 打开一个会话页（`sessionID` 是 Pi 的会话 id，只有记录 id 的入口不带）。去之前当场读好这一页（`sessionRoute`）：
     /// 读的是只读连接、只要几毫秒，推入的第一帧就有标题与对话，也不会被晚到的读取结果拉回已经离开的地方。读不到要去的会话时不去。
-    func openSession(_ id: UUID, sessionID: String? = nil) {
-        if let route = sessionRoute(id, sessionID: sessionID) { show(route) }
+    func openSession(_ id: UUID, sessionID: String? = nil, in column: Column = .side) {
+        guard let route = sessionRoute(id, sessionID: sessionID) else { return }
+        openTask = nil
+        switch layout {
+        case .narrow: showNarrow(route)
+        case .wide:
+            if case .session(let session) = route { openWideSession(session, in: column) }
+        }
     }
 
     /// 点提示条去它说的地方（两端的提示共用）：会话经 `openSession`（同其他打开会话的入口先读好这一页），其余经 `show`。

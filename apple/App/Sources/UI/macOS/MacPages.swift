@@ -1,10 +1,9 @@
 #if os(macOS)
 import SwiftUI
 
-/// 主窗口内容区挂着哪些页、侧栏开合（Mac）。当前页本身在 `Workspace.root`，这里只管"去过的页留着"。
+/// 主窗口内容区挂着哪些页、侧栏开合（Mac）。当前页本身在 `Workspace.mainRoute`，这里只管"去过的页留着"。
 @Observable
 final class MacPages {
-    var sidebar: NavigationSplitViewVisibility = .all
 
     /// 内容区挂着的页（`PageStack`）：去过的页留着，回访不再重建；至多 `keptPages` 个，满了换掉最久没看的。会话页不留（带着输入焦点与实时对话，挂着不看会抢键盘）。
     private(set) var kept: [Route] = []
@@ -27,13 +26,6 @@ final class MacPages {
     let slide = SidebarSlide()
     /// 开合侧栏时详情区这一栏的图层滑开的地方两边多铺的底色（`MainWindow`），不小于侧栏最宽的那一栏。
     static let slideOverscan: CGFloat = 400
-
-    /// 开合侧栏：分栏不带动画地换到终点，看得见的滑动由 `SidebarSlide` 交给 Core Animation。
-    func toggleSidebar() {
-        let opening = sidebar == .detailOnly
-        slide.expect(opening: opening)
-        sidebar = opening ? .all : .detailOnly
-    }
 
     func visit(from left: Route, to page: Route) {
         current = page

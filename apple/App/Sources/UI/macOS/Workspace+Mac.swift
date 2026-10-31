@@ -3,26 +3,13 @@ import AppKit
 import CueStore
 import Foundation
 
-/// Mac 怎么摆去处（`Workspace+Navigation`）：内容区一次一页，卡片的编辑页盖在当前页上。
-extension Workspace.Layout {
-    static let native = Self.pages
-}
-
 extension Workspace {
-    /// 打开 App 先到上次打开的项目（`AppSettings.currentProject`；失效的由 `reconcileCurrentProject` 退回），没有是 `Route.first`。
-    static func openingRoute(_ services: AppServices) -> Route {
-        services.settings.currentProject.map(Route.project) ?? .first
-    }
-
-    /// 换页时顺带的事：开着的编辑页收起、批量选择结束，记下去过的页（`MacPages`）；去会话页撤掉它那一组通知（点通知进来的也走这里），
-    /// 去项目页记下它（下次打开回到它）。
-    func willSelect(_ route: Route, root next: Route) {
+    /// 平台呈现的副作用；去处由 Workspace+Wide 写入。
+    func willSelect(_ route: Route, from previous: Route) {
         overlay = nil
         presses.clearSelection()
         presses.dismiss()
-        pages.visit(from: root, to: next)
-        if case .session(let session) = next, let alerts = services.alerts { Task { await alerts.dismiss(session: session.id) } }
-        if case .project(let id) = next { services.settings.currentProject = id }
+        pages.visit(from: previous, to: route)
     }
 
     /// 灵感的编辑页整页盖在当前页上（`EditorLayer`）。

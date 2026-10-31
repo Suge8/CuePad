@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// 三个 tab 按底部那一排的顺序（`Dock.tabs`）横着排成一条：左右滑跟手切 tab，松手按甩出的方向停到一页；点底部那一排换 tab 时整条滑过去。
-/// 选中哪个 tab 只有 `Workspace.root` 一份：松手、点按都请它换（`Workspace.tap`），条跟着它的变化走。条此刻在哪只有 `DockMotion` 一份（容器写、SwiftUI 读），
+/// 选中哪个 tab 只有 `Workspace.mainRoute` 一份：松手、点按都请它换（`Workspace.select`），条跟着它的变化走。条此刻在哪只有 `DockMotion` 一份（容器写、SwiftUI 读），
 /// 拖、松手的弹簧、点按的弹簧都是同一条路（`PagerController.animate`），底部那一排的选中与换形读它，所以跟手、同一条弹簧、一起到位。
 /// Cue 在最右，它右边是刚返回离开的那一页：手指左滑把它拉回来。跟手的是离开前拍的快照（`LeaveShot`，同 Safari 的前进），
 /// 同系统推入一样盖着 Cue 页滑进来、Cue 页慢慢退（底部那一排在条之上，留在原处，前进的页让开它时随拉出淡去，`DockBar`）；松手推入真的页（不带动画），它画上屏后才收起快照。
@@ -56,7 +56,7 @@ final class DockMotion {
     init(workspace: Workspace) { self.workspace = workspace }
 
     /// Cue 的栈上推入了页、盖着 Cue 页：输入框在 Cue 页里，底部那一排总是两格。
-    var covered: Bool { !workspace[stack: .cue].isEmpty }
+    var covered: Bool { !workspace.path.isEmpty }
 
     /// 底部那一排是两格的样子占几成：1 是两格，0 是"⋯"加输入框（`DockHandoff`）。
     var places: CGFloat { placesOpen || covered ? 1 : 1 - onCue }

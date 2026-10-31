@@ -39,7 +39,7 @@ struct Sidebar: View {
         // 选中样式本身就标出了位置，不再套系统焦点环
         .focusEffectDisabled()
         .onMoveCommand { direction in
-            guard let order = pages?.order, let page = Self.page(after: workspace.root, in: order, moving: direction) else { return }
+            guard let order = pages?.order, let page = Self.page(after: workspace.mainRoute, in: order, moving: direction) else { return }
             workspace.show(page)
         }
         // 侧栏比桌面深一档：浅色、深色都能看出分层，与内容同一色温
@@ -112,7 +112,7 @@ private struct SidebarScroll<Content: View>: View {
             ScrollView { content }
                 .scrollBounceBehavior(.basedOnSize)
                 .onScrollGeometryChange(for: Bool.self) { $0.visibleRect.maxY < $0.contentSize.height - 1 } action: { continues = $1 }
-                .onChange(of: workspace.root, initial: true) { _, page in proxy.scrollTo(page) }
+                .onChange(of: workspace.mainRoute, initial: true) { _, page in proxy.scrollTo(page) }
         }
         .overlay(alignment: .bottom) {
             if continues {
@@ -176,7 +176,7 @@ private struct ProgressRow: View {
 
     var body: some View {
         let entry = SidebarOutline.Entry.progress
-        PageRow(selected: workspace.root == entry.route, action: { select(entry.route) }) {
+        PageRow(selected: workspace.mainRoute == entry.route, action: { select(entry.route) }) {
             Image(entry.icon).font(Glyph.row).foregroundStyle(palette.ink2)
         } title: {
             Text(entry.title)
@@ -196,7 +196,7 @@ private struct ProjectRows: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let current = workspace.root
+        let current = workspace.mainRoute
         VStack(spacing: SidebarMetrics.rowGap) {
             ForEach(pages.outline.projects) { project in
                 ProjectRow(
@@ -282,7 +282,7 @@ private struct FooterPage: View {
     }
 
     var body: some View {
-        let selected = workspace.root == entry.route
+        let selected = workspace.mainRoute == entry.route
         Button { select(entry.route) } label: {
             IconImage(entry.icon, accent: selected ? .lit : .none).font(Glyph.control)
                 .foregroundStyle(selected ? palette.ink : palette.ink2)

@@ -2,8 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace`）：宽屏是分栏（`SplitRoot`），窄屏（iPhone 与窄窗口 iPad）
-/// 是底部那一排、每个 tab 一个导航栈（`DockRoot`）。两种容器读写同一份去处（`Workspace.root`、`stacks`），按尺寸类换 `Workspace.layout`。
+/// 每个场景一个 Workspace；尺寸类选择窄屏单栈或宽屏两栏。
 struct IOSRoot: View {
     let services: AppServices
     /// 本窗口的工作区：出现时建（`onAppear` 在第一帧之前做完，第一帧照样是建好的样子），不在 init 里建：init 在上一层的 body 里跑，
@@ -62,7 +61,7 @@ struct IOSRoot: View {
         .modifier(PaletteProvider())
         .environment(workspace)
         .environment(workspace.services)
-        .onChange(of: sizeClass, initial: true) { workspace.layout = sizeClass == .regular ? .split : .dock }
+        .onChange(of: sizeClass, initial: true) { workspace.setLayout(sizeClass == .regular ? .wide : .narrow) }
         .task { await workspace.follow() }
         .modifier(SessionViewing(keeper: workspace.services.viewer, workspace: workspace))
         .debugScene(workspace)

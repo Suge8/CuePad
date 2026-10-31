@@ -1,13 +1,7 @@
 #if os(iOS)
 import SwiftUI
 
-/// 窄屏（iPhone 与窄窗口 iPad）的容器：项目、进展、Cue 三个 tab（`Dock.tabs`）横排成一条（`DockPager`：左右滑跟手切 tab，点底部那一排整条滑过去），
-/// 每个 tab 一个导航栈（`Workspace.stacks`、`DockStack`），切走再切回来还停在原来那一页；推入、返回是系统的过渡，返回后在 Cue 页左滑前进回刚才那页。
-/// 打开 App 落在 Cue。底部那一排整个窗口一份（`DockBar`），盖在条上、不在哪一页里：切 tab 时它不重建、不跟着滑，选中与换形跟着条（`DockMotion`）走；
-/// 推入的页上也留着（同系统标签栏，写着灵感也能切去 Cue 看一眼），设置、技能与规则这类二级页让开（`Dock.stays`）。
-/// Cue 页的输入框在页里（随键盘升起），底边那一格在换形里与 Cue 钮交叉，浓淡都是条的位置与"⋯"开合的函数（`DockHandoff`）。
-/// 被否决的：几个导航栈在 SwiftUI 里叠着、只露选中的那个——切 tab 是一下换走，没法跟手滑；系统 `TabView` 每次换 tab 把切走的页摘出窗口，
-/// 底部附件（`tabViewBottomAccessory`）也摆不出两格加 Cue 钮。
+/// 窄屏的单栈承载；底部控件与动效外壳由窄屏导航阶段替换。
 struct DockRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -18,7 +12,7 @@ struct DockRoot: View {
     init(workspace: Workspace) { _motion = State(initialValue: DockMotion(workspace: workspace)) }
 
     var body: some View {
-        DockPager(motion: motion, shot: shot)
+        DockStack(tab: .cue, active: true, shot: shot)
             .environment(\.dockMotion, motion)
             .overlay {
                 // 底部那一排按窗口的宽在同一遍排版里排，不写回状态：打开时先按 0 宽排一遍，玻璃就多变一次形
@@ -57,8 +51,8 @@ struct DockStack: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let path = workspace[stack: tab]
-        NavigationStack(path: Binding(get: { path }, set: { workspace[stack: tab] = $0 })) {
+        let path = workspace.path
+        NavigationStack(path: Binding(get: { path }, set: { workspace.path = $0 })) {
             RouteView(route: tab)
                 .environment(\.headerHost, .page(search: Dock.search(on: tab)))
                 .dockReserve(tab != .cue)

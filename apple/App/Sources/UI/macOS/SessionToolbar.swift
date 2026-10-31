@@ -42,7 +42,7 @@ final class SessionHeader {
 extension Workspace {
     /// 当前会话页的标题与菜单要显示的值；不是会话页时为 nil。
     var shownSessionHeader: SessionHeader.State? {
-        guard case .session(let route) = root, let state = sessionHeader.state, state.session.sessionID == route.sessionID else { return nil }
+        guard case .session(let route) = mainRoute, let state = sessionHeader.state, state.session.sessionID == route.sessionID else { return nil }
         return state
     }
 }
@@ -72,11 +72,11 @@ struct PageTitleSlot: View {
             OverlayTitle()
         } else if let state = workspace.shownSessionHeader {
             title(state)
-        } else if workspace.root == .cue, workspace.pages.sidebar == .detailOnly {
+        } else if workspace.mainRoute == .cue, !workspace.sidebarOpen {
             CueTitle()
                 .frame(height: Spacing.toolbarControl)
                 .modifier(PageTitleFlex())
-        } else if workspace.root == .library {
+        } else if workspace.mainRoute == .library {
             LibraryPanesSlot()
         }
     }

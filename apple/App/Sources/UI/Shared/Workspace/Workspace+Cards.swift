@@ -21,9 +21,7 @@ extension Workspace {
         do {
             return try await write(project)
         } catch CueStoreError.invalidProject where project != Project.defaultID {
-            #if os(macOS)
             await reconcileCurrentProject()
-            #endif
             let result = try await write(Project.defaultID)
             say("原项目已不存在或在回收站，已放到默认项目", tone: .failure)
             return result
@@ -91,10 +89,10 @@ extension Workspace {
     /// 点一条任务（项目页的任务行、看板的卡同一条规则）：它写着哪个会话的状态就进那个会话——看板的卡是此刻干活那一步的
     /// （`TaskBoard.Item.agent`，有子任务的也是），任务行是这条自己交给的（做完了也算）；没有会话的打开任务气泡（改标题与正文，子任务在气泡里）。
     /// 进会话的那一下，任务气泡从长按菜单的"打开任务"进（`CardActions` 的 `opens`）。
-    func enter(_ task: Card, session: PiSessionState?) {
+    func enter(_ task: Card, session: PiSessionState?, in column: Column = .side) {
         guard let session else { return openTask(task) }
         openTask = nil
-        openSession(session.id, sessionID: session.sessionID)
+        openSession(session.id, sessionID: session.sessionID, in: column)
     }
 
     /// 打开一条任务的气泡（没开工的任务行、Cue 对话里的任务、⌘K、归档、小组件链接都经这里）：从刚按下的那一下长出来；

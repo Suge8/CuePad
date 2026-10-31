@@ -57,7 +57,7 @@ struct SwitcherSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let shown = workspace.pages.sidebar == .detailOnly && workspace.root != .progress && workspace.root != .library
+        let shown = !workspace.sidebarOpen && workspace.mainRoute != .progress && workspace.mainRoute != .library
         // 不用 disabled：环境一变整份菜单又要重算；⌘1–9 本来就由窗口快捷键（`WorkspaceShortcuts`）接，菜单里的只是提示
         // 玻璃与墨色字自己画，同右边的项目范围（`ProjectScopeMenu`）：交给工具栏画时，没焦点的窗口里字是停用的淡灰
         ProjectSwitcher(collapsed: shown)
@@ -73,9 +73,9 @@ struct SidebarToggle: View {
 
     var body: some View {
         // 点画在标签里：工具栏把"字 + 图标"的标签换成系统按钮，挂在按钮外面的会被丢掉
-        Button { workspace.pages.toggleSidebar() } label: {
+        Button { workspace.toggleSidebar() } label: {
             Image(.sidebar).overlay(alignment: .topTrailing) {
-                if workspace.pages.sidebar == .detailOnly, workspace.root != .cue { CueDot().offset(x: 5, y: -4) }
+                if !workspace.sidebarOpen, workspace.mainRoute != .cue { CueDot().offset(x: 5, y: -4) }
             }
         }
         .accessibilityLabel("侧栏")
@@ -113,7 +113,7 @@ struct PanesSlot: View {
     var body: some View {
         PageControl(.progress) { ProgressPanes().frame(height: PaneMetrics.square).padding(PaneMetrics.inset).glass(in: .capsule) }
             .background { WindowFrame(\.maxX) { workspace.pages.panesEdge = $0 } }
-            .toolbarPresence(workspace.root == .progress)
+            .toolbarPresence(workspace.mainRoute == .progress)
     }
 }
 
@@ -192,7 +192,7 @@ struct ScopeSlot: View {
             .frame(maxWidth: Self.maxWidth, minHeight: Spacing.toolbarControl, maxHeight: Spacing.toolbarControl)
             .toolbarVisible(workspace.showsSessionsBar)
             .padding(.leading, Spacing.toolbarGap)
-            .toolbarPresence(workspace.root == .progress)
+            .toolbarPresence(workspace.mainRoute == .progress)
     }
 }
 
@@ -234,7 +234,7 @@ struct CueListSlots: View {
             .buttonStyle(ControlButtonStyle(kind: .circular))
         }
         .padding(.leading, Spacing.toolbarGap)
-        .toolbarPresence(workspace.root == .cue)
+        .toolbarPresence(workspace.mainRoute == .cue)
     }
 }
 
@@ -255,7 +255,7 @@ struct PageActionSlot: View {
         .fixedSize()
         .frame(height: Spacing.toolbarControl)
         .padding(.leading, Spacing.toolbarGap)
-        .toolbarPresence(workspace.root == .progress)
+        .toolbarPresence(workspace.mainRoute == .progress)
     }
 }
 
@@ -290,12 +290,12 @@ struct SearchSlot: View {
             .accessibilityLabel("搜索")
             .disabled(!workspace.isLibraryReady)
             .padding(.leading, Spacing.toolbarGap)
-            .toolbarPresence(workspace.root != .progress)
+            .toolbarPresence(workspace.mainRoute != .progress)
     }
 }
 
 extension Workspace {
     /// 进展页的会话段：那一排左边是项目范围，右边新会话。
-    var showsSessionsBar: Bool { root == .progress && progressPane == .sessions }
+    var showsSessionsBar: Bool { mainRoute == .progress && progressPane == .sessions }
 }
 #endif

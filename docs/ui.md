@@ -12,7 +12,8 @@
 - 字是墨，分三档（`ink`、`ink2`、`ink3`），三档都是要读的字，在各层底与实底玻璃上都 ≥ 4.5:1；不用系统灰与系统占位色。
 - 签名色靛青只给焦点与正在发生的事，一屏一两处。在跑与选中都是"这里有动静"，靠形状分：在跑是会动的线，选中是一块底。
 - 项目色只上图形，不写成字、不做成圆点：圆点和彩字会被读成状态。
-- 同一状态处处同一个样子，用户只学一次。每种图形只有一个出处：任务圈 `TaskRingView`（有子任务的按子任务分段，做到哪只画在圈上、不另写"n/m"）、任务行 `TaskLine`（项目页，要你管的才写状态词）、看板卡（`BoardTaskCard`、`BoardSessionCard`、等你列的 `BoardWaitCard`，推进中卡下沿的线 `BoardLine` 只按 `BoardPulse` 画）、会话状态 `PiShown`、出错 `FailureMark`、等你 `Waiting.swift`（拍板赭黄；待回复是墨点，会话行、待回复提示、看板卡与经过里同一个，出自 `PiShown.icon`）、一件拍板怎么答 `WaitAnswer`（Cue 页拍板卡、会话页问题卡同一个，按问题种类给；进展页只看不答）；新界面引用它们，不另画。对勾只表示完成与记下。
+- 同一状态处处同一个样子，用户只学一次。每种图形只有一个出处：任务圈 `TaskRingView`（有子任务的按子任务分段，做到哪只画在圈上、不另写"n/m"）、任务行 `TaskLine`（项目页，要你管的才写状态词）、看板卡（`BoardTaskCard`、`BoardSessionCard`、等你列的 `BoardWaitCard`，推进中卡下沿的线 `BoardLine` 只按 `BoardPulse` 画）、会话状态 `PiShown`、出错 `FailureMark`、等你 `Waiting.swift`（拍板赭黄；待回复是墨点，会话条、会话行、看板卡与经过里同一个，出自 `PiShown.icon`）、一件拍板怎么答 `WaitAnswer`（Cue 页拍板卡、会话页问题卡同一个，按问题种类给；进展页只看不答）；新界面引用它们，不另画。对勾只表示完成与记下。
+- 会话条只用一套分组格，两端共用状态线与记号；纸色、宽窄与导航规则见 [layout.md](layout.md)。不提供旧样式切换。
 - logo 就是 Cue 本人：App 图标、菜单栏、图标族、落地页同一个形象。
 - 灵动岛是例外的小视口：常规紧凑态只放 Cue、语义图形与一个主数字；最小态与 28pt 窄位优先保住图形和数字，完整数留在展开与读屏名称。展开与锁屏才给步骤和明细（`CueActivityViews`）。扩展只在内容更新时过渡，不移植 App 的循环头像，也不为动画发推送；系统将动画限制在两秒内，Always-On 低亮度时不播（[Apple](https://developer.apple.com/documentation/widgetkit/animating-data-updates-in-widgets-and-live-activities)）。
 - 图标只经 `Icon`，品牌标志只经 `BrandMark`，规则在各自头注释里。"发出"（发送、作答、交给、发往 Mac）是纸飞机，只表示方向的（在上面、更早、回到最新）是胖箭头，两族不互借。系统菜单里的标志要显式标为可见：macOS 27、iPadOS 27 起默认藏起菜单项图片。
@@ -22,7 +23,7 @@
 - 看板分轻重：推进中、等你是此刻要看的，重；待办、已完成是清单与回顾，轻。轻重只出自列（`BoardWeight.swift`）：卡的纸色（每列一种同色系的极淡一档，推进中就是白纸）、标题的墨、列头的数、列宽与手机每行排几排，各组件只问列。列身后仍不铺色，颜色只在记号与纸上。
 - Mac 照原生控件（按下与指针的做法在 `PressFeedback` 头注释）：单击选中、双击打开的列表两种点按并列识别，单击不等双击间隔。和系统应用不一样的地方，用户会觉得是坏了。
 - 悬停：点得到的东西指针一过就有回应（同 macOS 26 工具栏的玻璃钮、Linear、Arc）——自绘的按钮浮一层淡底、卡片亮一档、行铺淡底，淡入淡出、不挪位置不缩放；只经 `PressStyle`（按种类 `Press`）与 `RowStyle`，自绘的可点控件不用 `.plain`、`.borderless`（`lint.sh` 查），悬停时要换颜色、露记号的按钮读 `buttonHovered`，不各自挂 `onHover`；浮在内容上的玻璃胶囊与圆钮只经 `ControlButtonStyle`（`glass`、`circular`）。系统控件的悬停与焦点环交给系统。
-- 项目联动（Mac）：指针停在侧栏的项目行或看板卡上的项目小图形上时，看板上别的项目的卡淡下去，同一项目的不动。指着哪个项目只有 `Workspace.hoveredProject` 一份，侧栏与看板读写同一份（`boardDim`）。
+- 项目联动（宽屏）：指针停在项目入口或看板卡的项目小图形上时，看板上别的项目淡下去，同一项目不动。只读写 `Workspace.hoveredProject`（`boardDim`）。
 - 悬停、选中时才出现的东西不改动周围的排版：悬停才露的操作只经 `hoverReveal` 浮在行上，随选中变的只换颜色与字重、不插不撤占位置的东西。露出一个钮挤动了标题与时间、选中一页让整列侧栏上下跳，都是用户能一眼看见的抖。
 - 圆角只有 `Radius` 的几档，按东西的种类取，Theme 以外不写数（`lint.sh` 查）；嵌在容器里的块用 `Radius.nested`，内角随容器走、不手算；胶囊与圆写 `.capsule`、`.circle`。字号只经 `Typography`、图标尺寸只经 `Glyph`、投影只经 `Elevation`，Theme 以外同样不写数（`lint.sh` 查）。列表行的底（选中、按下、悬停）只有 `RowStyle` 一份，调用处不自己画底与负边距。
 - 少写字：不写说明句与次级标签，要解释的放问号气泡；撤不回的后果写在按钮旁。叫法见 WORDS.md。

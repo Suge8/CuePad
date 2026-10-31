@@ -9,7 +9,7 @@ struct MainWindow: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        NavigationSplitView(columnVisibility: Bindable(workspace.pages).sidebar) {
+        NavigationSplitView(columnVisibility: Binding(get: { workspace.sidebarOpen ? .all : .detailOnly }, set: { workspace.sidebarOpen = $0 != .detailOnly })) {
             Sidebar()
                 // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌃⌘S 同一个入口。
                 // 同访达：它是侧栏这一栏的工具栏项，侧栏开着时在侧栏顶上、红绿灯右边，收起后留在原处，成了工具栏最左的一颗
@@ -143,7 +143,7 @@ private struct CaptureSlot: View {
         let bare = workspace.isLibraryReady && workspace.overlay == nil && workspace.presses.presented == nil
         if bare, workspace.presses.isSelecting {
             SelectionBar().padding(.bottom, 16).transition(.opacity)
-        } else if bare, workspace.root.takesCapture {
+        } else if bare, workspace.mainRoute.takesCapture {
             let searching = workspace.searching
             CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
                 .opacity(searching ? 0 : 1)

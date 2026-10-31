@@ -147,7 +147,7 @@ private struct SessionLink: ViewModifier {
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
-        let opened = workspace.root == .session(sessionID)
+        let opened = workspace.mainRoute == .session(sessionID)
         let button = Button {
             workspace.searching = false
             workspace.show(.session(sessionID))

@@ -2,33 +2,13 @@
 import CueStore
 import SwiftUI
 
-/// iOS 怎么摆去处（`Workspace+Navigation`）：宽屏是分栏（`.split`），窄屏是底部那一排（`.dock`，`IOSRoot` 按尺寸类换）；
-/// 卡片纸页与会话页推在当前页上。还有只在手机与 iPad 上的浮层：发给 Agent、新会话、搜索页。
-extension Workspace.Layout {
-    static let native = Self.split
-}
-
 extension Workspace {
-    /// 打开 App 先到 `Route.first`；iPad 的窗口恢复时再选回上次的项目（`restore`）。
-    static func openingRoute(_ services: AppServices) -> Route { .first }
-
-    /// 换去处没有顺带的事。
-    func willSelect(_ route: Route, root next: Route) {}
-
-    /// 点底部那一排的一格（同系统标签栏）：换到那个 tab，它的栈原样留着；点的就是所在的 tab 时回到它的根。
-    func tap(_ tab: Route) {
-        if tab == root { path = [] } else { root = tab }
-    }
-
-    /// UIKit 的回调里换 tab（点系统标签栏的格子、横滑松手、读屏的三指滑）：排到主线程的下一轮再 `tap`。
-    /// 在 UIKit 派发触摸的那一下里改 `root`，SwiftUI 有时在 willSet 里当场把读它的视图重算一遍（读到的还是旧值），又漏掉紧接着真正的改动：
-    /// 标签栏选了新的格子、页却一直停在旧 tab 上（iOS 27 实测，调用栈是 `ObservationRegistrar.willSet` → `GraphHost.flushTransactions`）。
-    func tapSoon(_ tab: Route) { Task { self.tap(tab) } }
+    func willSelect(_ route: Route, from previous: Route) {}
 
     /// 推回 Cue 页上刚返回离开的那一页（左滑前进，`LeaveShot`）。会话页按此刻重读首帧（同 `openSession`）：离开后对话可能又长了。
     func goForward(to route: Route) {
         guard case .session(let session) = route else { return push(route) }
-        push(sessionRoute(session.id, sessionID: session.sessionID) ?? route)
+        if let loaded = sessionRoute(session.id, sessionID: session.sessionID) { push(loaded) }
     }
 
     /// 灵感的纸页推在当前页上。
@@ -36,7 +16,7 @@ extension Workspace {
 
     /// 技能与规则的文件页推在技能与规则页上；已在一份文件页上时换掉它、不叠一层（去重的几份之间切换，返回回到技能与规则页）。
     func openLibrary(_ file: LibraryFile) {
-        if case .libraryFile? = path.last { path[path.count - 1] = .libraryFile(file) } else { push(.libraryFile(file)) }
+        if layout == .narrow, case .libraryFile? = path.last { path[path.count - 1] = .libraryFile(file) } else { push(.libraryFile(file)) }
     }
 
     /// 先读出这一页：推入的第一帧就是标题与最新的对话（`SessionRoute.seed`），只有记录 id 的入口顺带补上 Pi 的会话 id。
@@ -64,14 +44,6 @@ extension Workspace {
         newSession = NewSessionInput.Start(project: project, draft: draft, card: card, name: plan?.name, host: host)
     }
 
-    /// 宽屏：恢复窗口时选回上次侧栏选中的项目；它已不在项目目录里（进了回收站、被删）时留在打开 App 的那一页。
-    /// 分栏只在目录读到后才建出（`CatalogGate`），这里当场判定，不先推一张空的项目页再退回。
-    /// 已经选着它时不动：分栏随窗口宽窄重建（宽 → 窄 → 宽）时，项目页上推入的页留着。
-    func restore(project: UUID?) {
-        guard let project, root != .project(project), catalog?.project(project) != nil else { return }
-        select(.project(project))
-    }
-
     /// 搜索页推在当前页上并聚焦搜索框（已在搜索页时只聚焦），退出就是返回。
     func openSearch() {
         searchFocusRequests += 1
@@ -79,17 +51,19 @@ extension Workspace {
     }
 
     func closeSearch() {
-        if top == .search { path.removeLast() }
+        if top == .search { back() }
     }
 
-    /// 项目进了回收站：从各个栈里移除它的页面（连同推在它上面的）。
+    /// 项目进了回收站：窄屏移除它及后继页，宽屏回到项目书架。
     func pop(_ project: UUID?) {
         guard let project else { return }
-        let gone = Route.project(project)
-        for (tab, stack) in stacks {
-            if let index = stack.firstIndex(of: gone) { self[stack: tab] = Array(stack[..<index]) }
+        if services.settings.currentProject == project { services.settings.currentProject = nil }
+        switch layout {
+        case .narrow:
+            if let index = path.firstIndex(of: .project(project)) { path = Array(path[..<index]) }
+        case .wide:
+            if mainRoute == .project(project) { select(.shelf) }
         }
-        if root == gone { select(.shelf) }
     }
 
     /// 会话的前台提示（等你确认、做完了）弹不弹：开着这个会话页时不弹（与系统通知同一条规则，见 `AlertCenter`）。
