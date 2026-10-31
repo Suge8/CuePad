@@ -8,22 +8,16 @@ nonisolated struct DraggedColumn: Codable, Transferable {
     static var transferRepresentation: some TransferRepresentation { CodableRepresentation(contentType: type) }
 }
 
+#if os(iOS)
 struct WideDrop: ViewModifier {
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @State private var targeted = false
+    @State private var drop = WideDropState()
 
     func body(content: Content) -> some View {
         content
-            .overlay {
-                if targeted {
-                    palette.selection
-                        .overlay { Text("放在这里").font(.title2) }
-                        .allowsHitTesting(false)
-                }
-            }
-            .onDrop(of: [DraggedColumn.type.identifier, UTType.cuepadSession.identifier], isTargeted: $targeted) { providers in
+            .overlay { WideDropFeedback(state: drop) }
+            .onDrop(of: [DraggedColumn.type.identifier, UTType.cuepadSession.identifier], isTargeted: Bindable(drop).targeted) { providers in
                 guard let provider = providers.first else { return false }
                 if provider.hasItemConformingToTypeIdentifier(DraggedColumn.type.identifier) {
                     load(DraggedColumn.self, type: DraggedColumn.type, from: provider) {
@@ -54,6 +48,8 @@ struct WideDrop: ViewModifier {
     }
 }
 
+#endif
+
 struct WideSessionTitle: View {
     let title: String
     let column: Workspace.Column
@@ -69,5 +65,21 @@ struct WideSessionTitle: View {
                 .labelStyle(.iconOnly)
         }
         .padding(.horizontal, 16).frame(height: 44)
+    }
+}
+
+@Observable
+final class WideDropState {
+    var targeted = false
+}
+
+struct WideDropFeedback: View {
+    let state: WideDropState
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if state.targeted {
+            palette.selection.overlay { Text("放在这里").font(.title2) }.allowsHitTesting(false)
+        }
     }
 }

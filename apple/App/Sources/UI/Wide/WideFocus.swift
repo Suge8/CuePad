@@ -1,4 +1,6 @@
 import SwiftUI
+import CueStore
+import UniformTypeIdentifiers
 
 /// 只保留控件引用，当前栏从系统第一响应者读取，不复制输入焦点状态。
 final class WideFocus {
@@ -60,13 +62,14 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WideColumnView, context: Context) {
-        view.host.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels))
+        view.host.rootView = AnyView(content.overlay { WideDropFeedback(state: view.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels))
         view.move(rail: rail, origin: origin)
     }
 }
 
 final class WideColumnView: NSView {
     let host = NSHostingView(rootView: AnyView(EmptyView()))
+    let drop = WideDropState()
     let column: Workspace.Column
     let focus: WideFocus
     let workspace: Workspace
@@ -83,6 +86,7 @@ final class WideColumnView: NSView {
         host.sizingOptions = []
         host.autoresizingMask = [.width, .height]
         addSubview(host)
+        registerForDraggedTypes([.init(DraggedColumn.type.identifier), .init(UTType.cuepadSession.identifier)])
     }
 
     required init?(coder: NSCoder) { nil }
@@ -93,6 +97,32 @@ final class WideColumnView: NSView {
         guard let previous, previous.rail != rail, let layer else { return }
         sequence += 1
         SidebarSlide.translate(layer, by: previous.origin - origin, key: "wide.\(sequence)")
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        drop.targeted = true
+        return .copy
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) { drop.targeted = false }
+    override func draggingEnded(_ sender: any NSDraggingInfo) { drop.targeted = false }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        drop.targeted = false
+        let pasteboard = sender.draggingPasteboard
+        do {
+            if let data = pasteboard.data(forType: .init(DraggedColumn.type.identifier)) {
+                let value = try JSONDecoder().decode(DraggedColumn.self, from: data)
+                workspace.moveSession(from: value.leading ? .main : .side, to: column)
+                return true
+            }
+            if let data = pasteboard.data(forType: .init(UTType.cuepadSession.identifier)) {
+                let value = try JSONDecoder().decode(DraggedSession.self, from: data)
+                workspace.openSession(PiSessionState.recordID(sessionID: value.sessionID), sessionID: value.sessionID, in: column)
+                return true
+            }
+        } catch { workspace.fail(error) }
+        return false
     }
 
     @objc func switchWideFocus(_ sender: Any?) { focus.cycle() }

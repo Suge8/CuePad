@@ -16,11 +16,11 @@ struct MainWindow: View {
                 WideRail(width: sizes.rail)
                     .safeAreaInset(edge: .bottom, spacing: 0) { WideRailTools(wide: sizes.rail == SessionRail.Form.wide.width) }
                 WideColumnHost(column: .main, focus: focus, rail: sizes.rail, origin: sizes.rail) {
-                    main.modifier(WideDrop(column: .main))
+                    main
                 }
                 .frame(width: sizes.main)
                 WideColumnHost(column: .side, focus: focus, rail: sizes.rail, origin: sizes.rail + sizes.main) {
-                    side.modifier(WideDrop(column: .side))
+                    side
                 }
                 .frame(width: sizes.side)
             }
