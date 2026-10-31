@@ -159,6 +159,7 @@ struct PiThinkingDial: View {
     let meter: PiThinkingMeter
     let pending: Bool
     let choose: (PiThinkingLevel) -> Void
+    @Environment(\.singleLineConfig) private var compact
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @LoopsPlay private var loops
@@ -171,8 +172,10 @@ struct PiThinkingDial: View {
     /// 竖格在这一枚胶囊里的位置：横向位置按它换算成档。
     @State private var track: CGRect = .zero
 
-    private static let barWidth: CGFloat = 4
-    private static let gap: CGFloat = 3
+    private var barWidth: CGFloat { compact ? 3 : 4 }
+    private var gap: CGFloat { compact ? 2 : 3 }
+    private var inset: CGFloat { compact ? 6 : 10 }
+    private var labelGap: CGFloat { compact ? 2 : 6 }
     private static let lowest: CGFloat = 6
     private static let tallest: CGFloat = 16
     private static let linger: Duration = .seconds(1.2)
@@ -200,7 +203,7 @@ struct PiThinkingDial: View {
 
     private var content: some View {
         let drawn = drawn
-        return HStack(spacing: 6) {
+        return HStack(spacing: labelGap) {
             // 写出档名（与"上下文 86%"同一种写法）：只有一个脑图标加几根竖条要猜；按着时跟着指到的档变。
             // 工具排放不下时（`ConfigRow`）只写档名
             ViewThatFits(in: .horizontal) {
@@ -211,7 +214,7 @@ struct PiThinkingDial: View {
             meterBars(drawn)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { track = $0 }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, inset)
         .configCapsuleHeight()
         .background(palette.fill, in: .capsule)
         .overlay(alignment: .top) {
@@ -299,10 +302,10 @@ struct PiThinkingDial: View {
     }
 
     private func bars(color: @escaping (Int) -> Color) -> some View {
-        HStack(alignment: .bottom, spacing: Self.gap) {
+        HStack(alignment: .bottom, spacing: gap) {
             let count = PiThinkingMeter.scale.count
             ForEach(0..<count, id: \.self) { index in
-                Capsule().fill(color(index)).frame(width: Self.barWidth, height: height(index, of: count))
+                Capsule().fill(color(index)).frame(width: barWidth, height: height(index, of: count))
             }
         }
         .frame(height: Self.tallest, alignment: .bottom)
