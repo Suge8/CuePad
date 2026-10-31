@@ -99,9 +99,11 @@ extension View {
         #if DEBUG
         overlay {
             if DebugScene.scene == "stateicons" { StateGlyphSheet().withPalette() }
+            if DebugScene.scene == "rail" { DebugSessionRail(workspace: workspace).modifier(PaletteProvider()) }
         }
         .task {
             await DebugScene.prepare(workspace)
+            await DebugScene.seedRailIfAsked(workspace.services)
             await DebugScene.signalReady(workspace.services)
             // 接力与关窗不挂在窗口内容上：关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
             Task { await DebugScene.wakeIfAsked(workspace) }
@@ -137,6 +139,7 @@ extension View {
                 case "style": StyleBoard()
                 case "icons": IconSheet()
                 case "stateicons": StateGlyphSheet()
+                case "rail": DebugSessionRail(workspace: workspace).modifier(PaletteProvider())
                 case "widgets": DebugWidgetStage()
                 case "activity": DebugActivityStage(workspace: workspace)
                 case "share": DebugShareStage(location: workspace.services.location)
@@ -147,6 +150,7 @@ extension View {
         }
             .task {
                 await DebugScene.prepare(workspace)
+                await DebugScene.seedRailIfAsked(workspace.services)
                 DebugScene.noticeIfAsked(workspace)
                 await DebugScene.signalReady(workspace.services)
                 async let notices: Void = DebugScene.composerNoticeIfAsked(workspace.services)

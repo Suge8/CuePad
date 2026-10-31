@@ -18,6 +18,16 @@
 	<array>
 		<dict>
 			<key>UTTypeIdentifier</key>
+			<string>$(CUEPAD_APP_ID).session</string>
+			<key>UTTypeDescription</key>
+			<string>CuePad Session</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
 			<string>$(CUEPAD_APP_ID).card</string>
 			<key>UTTypeDescription</key>
 			<string>CuePad Card</string>

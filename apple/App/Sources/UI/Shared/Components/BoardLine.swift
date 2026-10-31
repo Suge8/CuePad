@@ -20,6 +20,9 @@ struct BoardLine: View {
     let pulse: BoardPulse
     /// 列里允许它动（排在前 `maxMoving` 条在跑的里）。
     var moves = true
+    /// 会话条只画「现在」，与卡片共用绘线、状态色与循环预算，不复制一份波形实现。
+    var detail: Detail = .history
+    enum Detail { case history, now }
     @Environment(\.boardSaid) private var said
     @Environment(\.palette) private var palette
     @LoopsPlay private var plays
@@ -33,6 +36,21 @@ struct BoardLine: View {
     private static let endDot: CGFloat = 6
 
     var body: some View {
+        Group {
+            if detail == .now {
+                HStack(spacing: 0) {
+                    if pulse.tier == .running { Circle().fill(pulse.tint(palette)).frame(width: Self.endDot, height: Self.endDot) }
+                    now(joint: false)
+                }
+            } else {
+                history
+            }
+        }
+        .frame(height: WaveStrip.height)
+        .accessibilityHidden(true)
+    }
+
+    private var history: some View {
         HStack(spacing: 8) {
             if let handoff = pulse.handoff {
                 HandoffLine(handoff: handoff).font(TaskMetrics.caption).foregroundStyle(palette.ink2).frame(maxWidth: .infinity, alignment: .leading)
@@ -45,8 +63,6 @@ struct BoardLine: View {
             }
             reading
         }
-        .frame(height: WaveStrip.height)
-        .accessibilityHidden(true)
     }
 
     private func past(_ marks: [CGFloat]) -> some View {
