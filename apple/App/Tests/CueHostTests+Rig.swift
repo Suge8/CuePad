@@ -122,6 +122,13 @@ extension CueHostTests {
 
         func say(_ text: String) async throws { try await store.addCueMessage(.you, text: text) }
 
+        /// 另一台 Mac（mac-b）醒着、它的在线记录同步到了这里：它上面的会话这才算在跑，Cue 才能对它说话（`CueStore.runtimeIsConfirmed`）。
+        /// 返回替那台 Mac 写会话状态的记录器。
+        func remoteMac() async throws -> PiStateRecorder {
+            try await store.recordMacPresence(host: "mac-b") { true }
+            return PiStateRecorder(store: store, hostID: "mac-b")
+        }
+
         /// 这个 Rig 的值班管理器写下的大脑健康（`CueHealth`）。
         var health: CueHealth? { CueHealth.read(library: app.directory.appending(path: "Library")) }
 
