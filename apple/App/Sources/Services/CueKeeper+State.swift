@@ -102,14 +102,14 @@ extension CueKeeper {
         var retryAt: Date?
         /// 额度、登录阻塞的工作必须承接原轮次；新变化不能替代它。
         var persistent: Bool
+        /// 持续重试已按慢速周期重来了几轮（`CueTiming.slowDelay`）
+        var stalls: Int
         var wake: CueWake
         var author: CueAuthor
     }
 
     nonisolated enum Input: Sendable {
-        case kick, retry, stop
-        /// 看门狗到点：在跑的一轮太久没有大脑事件（`CueTiming.silence`）
-        case silent
+        case kick, stop
         case brain(Int, TurnEvent)
     }
 

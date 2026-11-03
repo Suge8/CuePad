@@ -9,6 +9,9 @@ extension CueKeeper {
     func reconcile() async {
         timer?.cancel()
         timer = nil
+        // 下面排的定时只在歇着时有，`alarm` 只在等着重起或一轮在跑时有：两者不会同时要排
+        defer { schedule(alarm) }
+        await revive()
         await leaveHisStops()
         do {
             let store = self.store, now = Date.now

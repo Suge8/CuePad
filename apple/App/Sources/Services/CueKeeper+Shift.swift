@@ -20,7 +20,6 @@ extension CueKeeper {
     }
 
     func startShift(failures: Int = 0) async {
-        restart?.cancel()
         phase = .starting(failures: failures)
         do {
             let profile = try await store.cueProfile() ?? CueProfile()
@@ -82,16 +81,12 @@ extension CueKeeper {
             failures = shift.failures + 1
         case .restarting: return
         }
+        // 换了 Agent：新的那家马上起，从头算失败次数
         if let switched = await failOver(reason.text) {
-            phase = .restarting(failures: failures, reason: reason, at: .now)
+            phase = .restarting(failures: 0, reason: reason, at: .now)
             return await say(.cue, switched)
         }
-        let delay = setup.timing.restartDelay(after: failures), input = input
-        phase = .restarting(failures: failures, reason: reason, at: .now + delay.seconds)
-        restart = Task {
-            guard (try? await Task.sleep(for: delay)) != nil else { return }
-            input.yield(.retry)
-        }
+        phase = .restarting(failures: failures, reason: reason, at: .now + setup.timing.restartDelay(after: failures).seconds)
         if setup.timing.isDown(after: failures) { await tellDown(reason) }
     }
 
@@ -109,7 +104,6 @@ extension CueKeeper {
             if turn == nil {
                 let round = beginRound(.message, sent: [])
                 updateShift { $0.turn = Turn(author: .cue, round: round) }
-                heard()
             }
         case .speaking(let draft):
             updateShift { $0.turn?.speaking = draft }
@@ -161,7 +155,6 @@ extension CueKeeper {
                 if setback?.persistent != true || setback?.wake == finished.round.wake {
                     setback = nil
                     tried = []
-                    stalls = 0
                     await recovered()
                 }
                 await markTold(finished.round)
@@ -254,14 +247,14 @@ extension CueKeeper {
         if let held = setback, held.persistent, held.wake != wake { return }
         let persistent = setback?.persistent == true || !Self.retryable(PiErrorSummary(failure))
         let latest = try? await changes().due.map(\.seq).max()
+        let stalls = (setback?.stalls ?? 0) + (persistent && !now ? 1 : 0)
         let delay: Duration?
         if now { delay = .zero }
-        else if persistent {
-            stalls += 1
-            delay = setup.timing.slowDelay(after: stalls)
-        } else { delay = setback == nil ? setup.timing.retryWake : nil }
+        else if persistent { delay = setup.timing.slowDelay(after: stalls) }
+        else { delay = setback == nil ? setup.timing.retryWake : nil }
         if delay != nil { retrying = failure }
-        setback = Setback(latest: latest, since: .now, retryAt: delay.map { .now + $0.seconds }, persistent: persistent, wake: wake, author: author)
+        setback = Setback(
+            latest: latest, since: .now, retryAt: delay.map { .now + $0.seconds }, persistent: persistent, stalls: stalls, wake: wake, author: author)
     }
 
     /// 出错后换了 Agent 的一轮：交出去的你的话退回（新的大脑起好就交），Cue 自己醒来的那次马上重来；都带上这次的错。

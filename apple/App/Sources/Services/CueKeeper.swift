@@ -23,7 +23,8 @@ import os
 /// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起（没有终态，一直试下去）；Cue 此刻在做什么（`work`）由它直接得出，
 /// 每次对完账写进库（`PiStateRecorder.updateCue`；值班结束时由 `CueService` 写回歇着），大脑好不好写进本机的健康文件（`CueHealth`，`writeHealth`）。
 ///
-/// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账，按先后只做一件事：
+/// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账。定时器只有一个（`timer`），每次对账重排：
+/// 歇着时排下一个定时、巡视或停住，等着重起时排重起的时刻，一轮在跑时排看门狗（`alarm`）。先接上大脑（到点重起、挂住的停掉，`revive`），再按先后只做一件事：
 /// 1. 你的消息（连同它收起的卡，`CueEnvelope.delivered`）与"等你"的回答（选的那一项）：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
 /// 2. 这一轮还没完就等。
 /// 3. 要换大脑（见上）就停掉在跑的、按新设置起新班次。
@@ -101,16 +102,12 @@ final class CueKeeper {
     /// 最近告诉过你的那个错（`PiErrorSummary.line`）：同一个错一轮轮重复（如额度）只说一次
     var toldFailure: String?
     var setback: Setback?
+    /// 对账的唯一定时器（`schedule`）：下一个到点的定时、巡视、等着的停住，或等着重起的那一下、看门狗看一眼（`alarm`），每次对账重排
     var timer: Task<Void, Never>?
-    /// 等着重起的那一下（`Phase.restarting`）；先一步重起了就取消
-    @ObservationIgnored var restart: Task<Void, Never>?
-    /// 最近一次大脑事件（或一轮开始）的时刻与盯着它的看门狗（`heard`）
+    /// 最近一次大脑事件（或一轮开始）的时刻：看门狗从它算（`alarm`）
     @ObservationIgnored var heardAt = Date.now
-    @ObservationIgnored var watchdog: Task<Void, Never>?
     /// 这次故障里因额度、登录换走过的 Agent（`failOver`）：不再换回；一轮好好做完清空
     @ObservationIgnored var tried: Set<AgentKind> = []
-    /// 额度、登录卡住又换不了 Agent，连续几轮在按慢速周期重来（`setBack`）；一轮好好做完清零
-    @ObservationIgnored var stalls = 0
     /// 这次故障已告诉你起不来了（`tellDown`），恢复时说一句
     @ObservationIgnored var outageTold = false
     /// 下一次醒来是上一轮出错后的重来：上一轮的错，随信封交给大脑（`CueEnvelope.Input.retrying`），交出去就清掉
@@ -208,8 +205,6 @@ final class CueKeeper {
                 switch next {
                 case .stop: break loop
                 case .kick: break
-                case .retry: if case .restarting(let failures, _, _) = phase { await startShift(failures: failures) }
-                case .silent: await silenced()
                 case .brain(let id, let event): if shift?.id == id { await handle(event) }
                 }
                 await reconcile()
@@ -217,7 +212,7 @@ final class CueKeeper {
             }
             group.cancelAll()
         }
-        for task in [timer, restart, watchdog] { task?.cancel() }
+        timer?.cancel()
         await shift?.brain.stop()()
         clearHealth()
     }
