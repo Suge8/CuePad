@@ -59,6 +59,7 @@ extension MCPTests {
       $0.hostID = "mac-a"
       $0.enabledAt = .now
     }
+    try await store.recordMacPresence(host: "mac-a") { true }  // 会话所在的 Mac 醒着：它上面的会话才算在跑，Cue 才能对它说话
     let recorder = PiStateRecorder(store: store, hostID: "mac-a")
     let project = try await sandbox.project("演示")
     try await store.setDirectory("/tmp/demo", for: project.id)
