@@ -7,8 +7,8 @@ import SwiftUI
 ///   没有主按钮。
 /// - 说过话、后来停用了：一小张纸排在输入框正上方（拍板卡之下，离你下一步最近），不画吉祥物、不再自我介绍，只说启用后它接着干活。
 /// 没启用时启用是唯一的主动作：停用过的回到停用前那台（同开关），否则选一台 Mac（能运行 Cue 的几台，`CueSettings.hosts`；按钮的样子见 `enableButton`，选不了的写为什么，
-/// `CueSettings.Host.selectable`）；菜单是各入口同一份 `CueHostMenu`。在这台 Mac 上启用打开接入面板
-/// （`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，同一下启用），别的 Mac 直接启用，没写成的原因就地写在按钮下面（`CueSettingsModel`）。
+/// `CueSettings.Host.selectable`）；菜单是各入口同一份 `CueHostMenu`。这台 Mac 一家 Agent 都还没接上时启用打开接入面板
+/// （`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，同一下启用），接上了的与别的 Mac 直接启用，没写成的原因就地写在按钮下面（`CueSettingsModel`）。
 /// 能不能启用读 `CueGate`：这台还没和 iCloud 对过时只写在等什么、没有按钮（对得久了整张换成"正在从 iCloud 同步"，`EmptyState.waitsForSync`）。
 /// 手机上 Cue 与 Agent 都在 Mac 上、只经 iCloud 看到：启用钮之前是三步（`CueMacSteps`：装 Mac 版、登同一个 iCloud、在 Mac 上接 Agent），
 /// 卡住的那一步带出路（发出 Mac 版的下载链接（GitHub Releases，`CueSettings.macDownload`，隔空投送到 Mac 上最快）、没开 iCloud 时打开设置），三步都通才是启用钮。
@@ -98,9 +98,10 @@ struct CueWelcome: View {
         }
     }
 
+    /// 这台 Mac 一家 Agent 都还没接上时打开接入面板（给装法，接上的同一下启用）；接上了就直接启用，同开关（`Workspace.turnCue`）。
     private func enable(on host: CueSettings.Host) {
         #if os(macOS)
-        guard host.id != workspace.localHost else {
+        if host.isHere, !host.usable {
             workspace.showsSetup = true
             return
         }
