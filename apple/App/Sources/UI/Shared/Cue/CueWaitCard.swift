@@ -185,7 +185,7 @@ private extension View {
     }
 
     func fitRole(_ part: CueWaitFit.Part, hidden: Bool) -> some View {
-        allowsHitTesting(!hidden).accessibilityHidden(hidden).layoutValue(key: CueWaitFit.Role.self, value: part)
+        allowsHitTesting(!hidden).readerHidden(hidden).layoutValue(key: CueWaitFit.Role.self, value: part)
     }
 }
 #endif

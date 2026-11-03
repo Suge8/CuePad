@@ -121,6 +121,6 @@ struct CueUnreadDot: View {
             .animation(Motion.fade, value: unread)
             .padding(.top, CueBubble.padding.top)
             .accessibilityLabel("新消息")
-            .accessibilityHidden(!unread)
+            .readerHidden(!unread)
     }
 }

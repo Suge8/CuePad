@@ -31,8 +31,6 @@ private struct NarrowHome: View {
                     .modifier(NarrowPlacement(slide: slide, width: geometry.size.width, sidebar: true, open: open))
                     .environment(\.pageActive, open && workspace.path.isEmpty)
             }
-            // 子层的 accessibilityHidden 只在显式容器里生效：少了这层，旁白照样读到透明的那层（模拟器旁白实测）
-            .accessibilityElement(children: .contain)
             .contentShape(.rect)
             .gesture(NarrowPan(slide: slide, workspace: workspace, reduceMotion: reduceMotion))
         }
@@ -86,8 +84,6 @@ private struct NarrowSidebar: View {
                 page(.progress, pane: .progress, search: .button)
             }
         }
-        // 同 `NarrowHome`：藏着的那页要在显式容器里才不进读屏
-        .accessibilityElement(children: .contain)
         .safeAreaPadding(.top, FloatingHeaderLayout.height + Bars.contentGap)
         .overlay(alignment: .top) { switcher.padding(.horizontal, FloatingHeaderLayout.margin) }
         .background(palette.desk.ignoresSafeArea())
@@ -102,7 +98,7 @@ private struct NarrowSidebar: View {
             .environment(\.pageActive, shown && workspace.sidebarOpen && workspace.path.isEmpty)
             .opacity(shown ? 1 : 0)
             .allowsHitTesting(shown)
-            .accessibilityHidden(!shown)
+            .readerHidden(!shown)
     }
 
     private var switcher: some View {
@@ -141,7 +137,7 @@ private struct NarrowPlacement: ViewModifier {
             .offset(x: sidebar ? (progress - 1) * width : progress * width * 0.3)
             .opacity((sidebar ? progress > 0 : progress < 1) ? 1 : 0)
             .allowsHitTesting(sidebar ? progress == 1 : progress == 0)
-            .accessibilityHidden(sidebar != open)
+            .readerHidden(sidebar != open)
     }
 }
 #endif

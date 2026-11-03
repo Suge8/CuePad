@@ -43,7 +43,7 @@ private struct LibraryPaneScroll<Content: View>: View {
         // 出去的那段淡得比进来的快：两段叠着半透明的那几帧短，字不糊在一起
         .transaction(value: on) { if !on, $0.animation != nil { $0.animation = Motion.fade } }
         .allowsHitTesting(on)
-        .accessibilityHidden(!on)
+        .readerHidden(!on)
         .onChange(of: shown) { old, new in
             guard !reduceMotion, old != new, old == pane || new == pane else { return }
             let other = pane == new ? old : new

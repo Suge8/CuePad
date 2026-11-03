@@ -115,7 +115,7 @@ private struct SessionAnswer: View {
             if other { Text("都不是？在下面的回复框里写你的回答").font(Typography.meta).foregroundStyle(palette.ink3) }
             // 到哪了那一行一直占着（没有时留白）、只写一行：它一出一收卡就变高变矮，浮在卡上面的对话跟着当帧跳
             Text(note?.text ?? " ").font(Typography.meta).foregroundStyle(note?.failed == true ? palette.failure : palette.ink3).lineLimit(1)
-                .opacity(note == nil ? 0 : 1).accessibilityHidden(note == nil)
+                .opacity(note == nil ? 0 : 1).readerHidden(note == nil)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         #if os(macOS)

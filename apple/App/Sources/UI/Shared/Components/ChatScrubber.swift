@@ -134,7 +134,7 @@ struct ChatScrubber: View {
         }
         .opacity(keyboard ? 0 : 1)
         .allowsHitTesting(!keyboard)
-        .accessibilityHidden(keyboard)
+        .readerHidden(keyboard)
         .animation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion), value: keyboard)
         #if os(iOS)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }

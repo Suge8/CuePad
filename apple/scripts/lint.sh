@@ -51,6 +51,8 @@ forbid "不用 DispatchQueue.main.asyncAfter：它取消不了。等事件用通
   'DispatchQueue\.main\.asyncAfter'
 forbid "不访问 NSTextView/UITextView 的 layoutManager：访问一次就把视图永久降级到 TextKit 1，用 textLayoutManager" \
   '\.layoutManager\b'
+forbid "iOS 上按条件不进读屏用 readerHidden（ReaderHidden.swift）：accessibilityHidden 只在显式无障碍容器里生效，直接挂在栈里或自己收成元素再挂，旁白照样念到看不见的那层（模拟器旁白实测）；Mac 的无障碍树藏得住，Mac 独有文件不限；已合并成一个元素里的那句直接写，行尾注释以「合并」开头说明（容器会把它挡在合并外）" \
+  '\.accessibilityHidden\((?!(?:true|false)\))(?!.*//\s*合并)' '**/ReaderHidden.swift' '**/macOS/**' '**/*+macOS.swift'
 forbid "自绘玻璃只经 glass(in:)（Surfaces.swift）：材质统一 .regular，降低透明度、增强对比度时退回实底" \
   '\.glassEffect\(' '**/Theme/Surfaces.swift'
 forbid "产品代码不写 #if DEBUG，经 DebugHooks 碰调试画面：两种构建的分叉收在 DebugHooks 一处（Release 里钩子什么都不做）；调试代码放 App/Sources/UI/Debug，演示数据在 Seed.swift" \

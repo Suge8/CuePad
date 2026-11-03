@@ -36,7 +36,7 @@ struct BlankChat: View {
             .opacity(shown ? 1 : 0)
             .animation(Motion.fade, value: shown)
             .allowsHitTesting(false)
-            .accessibilityHidden(!shown)
+            .readerHidden(!shown)
     }
 }
 
