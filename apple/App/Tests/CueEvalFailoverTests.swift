@@ -54,8 +54,9 @@ struct CueEvalFailoverTests {
                 Check(.result, "只有一件、标题是整理周报、在演示、没开工",
                       tasks.count == 1 && tasks.first?.heading.contains("周报") == true && tasks.first?.projectID == demo?.id
                           && !rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
-                Check(.result, "这一轮回了他这件事（不是出错的话）",
-                      reply.map { $0.text.contains("周报") && !$0.text.contains(/出错|失败|没能|用不了/) } == true,
+                Check(.result, "这一轮回了他这件事已办好（不是出错、没办成的话）",
+                      reply.map { $0.text.contains("周报") && $0.text.contains(/建好|建了|已建|加了|记下/)
+                          && !$0.text.contains(/出错|失败|没能|用不了|还没建|稍后|再试|无法/) } == true,
                       note: reply.map { "：\($0.text)" } ?? ""),
             ]
         }
