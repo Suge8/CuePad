@@ -9,10 +9,15 @@ struct WideMetrics {
     let main: CGFloat
     let side: CGFloat
 
+    /// 会话条自动收窄的临界窗口宽：宽版会话条加主栏下限（看板或会话）、右栏下限（Cue 或会话）。
+    static func threshold(_ workspace: Workspace) -> CGFloat {
+        let minimum = workspace.mainRoute == .progress && workspace.progressPane == .board ? board : session
+        return SessionRail.Form.wide.width + minimum + (workspace.sideSession == nil ? cue : session)
+    }
+
     init(width: CGFloat, workspace: Workspace) {
-        let minimum = workspace.mainRoute == .progress && workspace.progressPane == .board ? Self.board : Self.session
         let right = workspace.sideSession == nil ? Self.cue : Self.session
-        let wide = workspace.sidebarOpen && width >= SessionRail.Form.wide.width + minimum + right
+        let wide = workspace.sidebarOpen && width >= Self.threshold(workspace)
         rail = wide ? SessionRail.Form.wide.width : SessionRail.Form.narrow.width
         let available = max(0, width - rail)
         if case .session = workspace.mainRoute, workspace.sideSession != nil {
