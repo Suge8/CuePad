@@ -2,10 +2,9 @@
 import CueStore
 import SwiftUI
 
-/// 项目页（窄屏侧栏的"项目"）：顶上中间一条搜索框，右上"新建项目"。
-/// 宽屏侧栏已列出全部项目、顶上有搜索框，没有进这一页的入口：只在正看着的项目进了回收站时退回这里（`Workspace.pop`），顶上只有"新建项目"。
-/// 只排项目（在发生什么在进展页）：置顶项目是纸卡（`pinnedGrid`：图标、名字、介绍），其余排成一张纸上的行，长相同侧栏的项目行（只有图标与名字）。
-/// 窄屏（iPhone）没有侧栏，末尾一组归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`）推在这一页上；宽屏这一组在侧栏里，这里不放。
+/// 书架（项目｜进展的"项目"段，没打开具体项目时的落点）：窄屏在根上的侧栏里，宽屏在主区。右上"新建项目"。
+/// 只排项目（在发生什么在进展页）：置顶项目是纸卡（`pinnedGrid`：图标、名字、介绍），其余排成一张纸上的行（只有图标与名字）。
+/// 窄屏末尾一组归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`），点了推入；宽屏不放这一组。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
