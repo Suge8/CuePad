@@ -109,7 +109,9 @@ extension CueHostTests {
             // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
             try await store.linkCard(task.id, toSession: session.sessionID)
             try await store.updateCard(task.id) { $0.body = title }
+            // 开出来的会话一上桥就记成歇着：先等这一轮的在干活写进库，回复才不会早于这一轮的开始（早了不算读到回答，Cue 不醒）
             session.setState(["kind": "thinking"])
+            try await eventually("在干活写进库") { try await self.store.sessions(matching: session.sessionID).first?.state.isWorking == true }
             session.setState(["kind": "idle"])
             try await answered(session.sessionID)
         }
@@ -126,10 +128,7 @@ extension CueHostTests {
 
         /// 另一台 Mac（mac-b）醒着、它的在线记录同步到了这里：它上面的会话这才算在跑，Cue 才能对它说话（`CueStore.runtimeIsConfirmed`）。
         /// 返回替那台 Mac 写会话状态的记录器。
-        func remoteMac() async throws -> PiStateRecorder {
-            try await store.recordMacPresence(host: "mac-b") { true }
-            return PiStateRecorder(store: store, hostID: "mac-b")
-        }
+        func remoteMac() async throws -> PiStateRecorder { try await app.runtimeRecorder(on: "mac-b") }
 
         /// 这个 Rig 的值班管理器写下的大脑健康（`CueHealth`）。
         var health: CueHealth? { CueHealth.read(library: app.directory.appending(path: "Library")) }

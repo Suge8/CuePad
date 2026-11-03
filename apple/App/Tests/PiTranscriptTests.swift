@@ -116,7 +116,7 @@ struct PiTranscriptTests {
 
         let first = try await services.requestTranscript(of: session)
         let late = first.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
-        #expect(Speech.trip(first, at: .always(at: late)).failure != nil)  // 页面上已是没能送达（这里没有同步：一直没发出）
+        #expect(Speech.trip(first, at: .always(at: late)).unconfirmedReason != nil)  // 页面上已是送达尚未确认（这里没有同步：一直没发出）
         let again = try await services.requestTranscript(of: session)
 
         #expect(again.id == first.id)
