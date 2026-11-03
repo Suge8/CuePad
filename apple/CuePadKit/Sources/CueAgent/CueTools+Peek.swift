@@ -41,6 +41,32 @@ extension CueTools {
         + (lines.isEmpty ? "" : "\n" + lines.map(\.text).joined(separator: "\n")))
   }
 
+  /// 信封里变化说到的那几件事的近况（`CueEnvelope.Input.recaps`），就是 peek 给的那一份：Cue 醒来就能核对证据，不用再 peek 一次
+  /// （每次工具调用都要把整段前缀再读一遍）。一件一份，按变化的先后放，放不下 `recapBudget` 的那件不带，变化那一行照旧写截短的回复。
+  /// 两种不带（短场景实测带了会做错）：
+  /// - 他发起的一轮停下（`CueChange.byUser`）：CuePad 已留给他回，Cue 多半只定收不收回，截短的回复够用；带上全文它会就着细节替他拿主意
+  ///   （他那一轮碰上推送，转头问他推不推）。
+  /// - 完成：做完是定了的事，不用再核对证据；那一刻会话可能还在写，近况是半截的（只有开工那句），它会当成没交证据去追。
+  public func recaps(for changes: [CueChange]) async throws -> [CueEnvelope.Subject: String] {
+    var recaps: [CueEnvelope.Subject: String] = [:], seen = Set<CueEnvelope.Subject>(), room = Self.recapBudget
+    for change in changes where !change.byUser && change.kind != .done {
+      guard let subject = CueEnvelope.Subject(change), seen.insert(subject).inserted, let text = try await recap(change), text.count <= room else { continue }
+      recaps[subject] = text
+      room -= text.count
+    }
+    return recaps
+  }
+
+  private func recap(_ change: CueChange) async throws -> String? {
+    if let task = change.task { return try await peek(task).text }
+    return try await change.session.asyncMap { try await peek($0).text }
+  }
+
+  /// 一个信封里近况合起来最多这么多字。一份近况通常一两千字（真实库里会话回答的中位 366 字、P99 约 2500 字，peek 再带两三轮截短的问答与正文），
+  /// 最长约 6000 字（最新回答截到 `latestReplyLimit`）；真实库里会话叫醒 Cue 时至多 4 件事有变化（96% 只有一件）。12000 字装得下两份最长的或五六份常见的，
+  /// 合起来约 1 万 token，是换新线（`CueContext.renewAt`）的一成：一次很多变化也不会把一轮的上下文撑到要换新。
+  static let recapBudget = 12_000
+
   /// 不带参数的 peek 末尾列几件最近完成的。
   static let recentlyDone = 5
 
@@ -72,7 +98,7 @@ extension CueTools {
       lines.append(head)
       if let session = leaf.session { lines += Self.subagentLines(session.session, now: now) }
       if let rest = leaf.leaf.rest { lines.append("  正文：\(CueEnvelope.clip(CueFormat.plainText(rest), 200))") }
-      if let session = leaf.session { lines += Self.conversation(session) }
+      if let session = leaf.session { lines += Self.conversation(session, opening: leaf.leaf.body) }
     }
     lines += deliveredLines(try await store.deliverables(of: detail.task.id))
     return .ok(lines.joined(separator: "\n"))
@@ -141,15 +167,19 @@ extension CueTools {
   }
 
   /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，更早的截短），每行缩进两格。
-  private static func conversation(_ detail: CueSessionDetail) -> [String] {
+  /// `opening`：叶子的标题与正文；你开工时发的那一句里就是它，上面已写了正文，不再重抄一遍。
+  private static func conversation(_ detail: CueSessionDetail, opening: String? = nil) -> [String] {
+    let opening = opening.map(flat)
     var lines: [String] = []
     let latest = detail.recent.lastIndex { $0.role == .known(.pi) }
     let agent = agentName(detail.session)
     for (index, message) in detail.recent.enumerated() {
       let text = CueFormat.plainText(message.text)
       guard index == latest else {
-        let who = message.role == .known(.pi) ? agent : message.saidByCue(detail.cueSent) ? "你" : "他"
-        lines.append("  \(who)：\(CueEnvelope.clip(text, 300))")
+        let byCue = message.role != .known(.pi) && message.saidByCue(detail.cueSent)
+        let who = message.role == .known(.pi) ? agent : byCue ? "你" : "他"
+        let opens = byCue && opening.map { !$0.isEmpty && flat(text).contains($0) } == true
+        lines.append("  \(who)：" + (opens ? "开工的第一句（标题与正文）" : CueEnvelope.clip(text, 300)))
         continue
       }
       let full = text.count > latestReplyLimit
@@ -158,6 +188,8 @@ extension CueTools {
     }
     return lines
   }
+
+  private static func flat(_ text: String) -> String { text.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
 
   private func status(_ card: Card) -> String {
     switch card.status {

@@ -22,10 +22,10 @@ extension CueActivity {
   }
 
   /// Cue 自己的说法（`Tools.Item.target`，只进它的上下文 `CueView`）：跟它的工具名走，不跟按钮。`named` 是认出的对象（`Named.quoted`），
-  /// `board`：看的是看板（没指哪件活）。
-  static func cueWords(_ action: String?, _ named: String, board: Bool) -> String? {
+  /// `board`：看的是看板（没指哪件活）；`starts`：add 带了 start:true（建好就开工）。
+  static func cueWords(_ action: String?, _ named: String, board: Bool, starts: Bool) -> String? {
     switch action {
-    case "add": "建任务\(named)"
+    case "add": starts ? "建任务并开工\(named)" : "建任务\(named)"
     case "edit": "改\(named)"
     case "start": "开工\(named)"
     case "say": "对\(named)说"
@@ -101,7 +101,7 @@ extension CueActivity {
     case "task":
       let action = args.line("action")
       // 收回不上经过：没有与之同名的按钮（`CueActivity.verb`），只进 Cue 自己的上下文
-      guard let words = cueWords(action, named.quoted, board: args.board) else { return item(.other, "task") }
+      guard let words = cueWords(action, named.quoted, board: args.board, starts: args.raw["start"] as? Bool == true) else { return item(.other, "task") }
       guard let kind = kind(action) else { return item(.other, words) }
       let place = action == "add" && !failed ? await named.added(args, store: store) : named
       return item(kind, action == "say" ? "\(words)：\(args.line("text") ?? "")" : words, at: place)

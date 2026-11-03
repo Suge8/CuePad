@@ -3,7 +3,7 @@ import CueText
 import Foundation
 
 /// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。
-/// 块里第一行是时间，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、醒来的原因，
+/// 块里第一行是时间，然后是项目、变化（说到的事多半在下面带着近况，哪些带见 `CueTools.recaps`）、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、醒来的原因，
 /// 有才写的：上一轮出错重试、吃紧的额度。
 /// 新会话的第一条输入里，它前面还有记忆视图与对话视图（`CueKeeper`）。信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
@@ -12,6 +12,8 @@ public enum CueEnvelope {
     /// 所有项目（`CueStore.projects`）：Cue 据此把活放进项目。
     public var projects: [Project]
     public var changes: [CueChange]
+    /// 变化说到的那几件事的近况（`CueTools.recaps`，同 peek 给的）：带了的那件，变化那一行不再写截短的回复。
+    public var recaps: [Subject: String]
     /// 看板（`CueStore.cueBoard`）：只写在做的。
     public var board: CueBoard
     public var waiting: [CueMessage]
@@ -31,7 +33,7 @@ public enum CueEnvelope {
     public var retrying: String?
 
     public init(
-      now: Date, projects: [Project], changes: [CueChange],
+      now: Date, projects: [Project], changes: [CueChange], recaps: [Subject: String] = [:],
       board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, fired: [Fired] = [], schedules: [CueMemoryLine] = [], language: String? = nil,
       quotas: [AccountQuota] = [], retrying: String? = nil
     ) {
@@ -44,6 +46,7 @@ public enum CueEnvelope {
       self.now = now
       self.projects = projects
       self.changes = changes
+      self.recaps = recaps
       self.board = board
       self.waiting = waiting
       self.wake = wake
@@ -55,8 +58,15 @@ public enum CueEnvelope {
 
     lines.append("项目：" + input.projects.map(\.name).joined(separator: "、"))
 
-    lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty ? "无" : ""))
-    lines += input.changes.map { "- \(change($0))" }
+    // 近况就是 task peek 给的那一份，写明了少去 peek 一遍（短场景实测：带着近况的那几轮里，不写每遍还 peek 四五次，写了两三次）
+    lines.append("变化（上次醒来之后\(input.recaps.isEmpty ? "" : "；缩进的是那件事的近况，同 task peek 的结果")）：" + (input.changes.isEmpty ? "无" : ""))
+    var shown = Set<Subject>()
+    for change in input.changes {
+      let subject = Subject(change), recap = subject.flatMap { input.recaps[$0] }
+      lines.append("- " + self.change(change, reply: recap == nil))
+      guard let subject, let recap, shown.insert(subject).inserted else { continue }
+      lines += recap.split(separator: "\n", omittingEmptySubsequences: false).map { "  " + $0 }
+    }
 
     let active = input.board.active
     lines.append("在做 \(active.count) 件" + (active.isEmpty ? "" : "："))
@@ -140,7 +150,24 @@ public enum CueEnvelope {
     }
   }
 
-  private static func change(_ change: CueChange) -> String {
+  /// 变化说的是哪件事：任务的按顶层任务，不归没做完的事的会话按会话。近况一件一份。
+  public enum Subject: Hashable, Sendable {
+    case task(UUID)
+    case session(String)
+
+    public init?(_ change: CueChange) {
+      if let task = change.task {
+        self = .task(task.id)
+      } else if let session = change.session {
+        self = .session(session.sessionID)
+      } else {
+        return nil
+      }
+    }
+  }
+
+  /// `reply`：那件事没带近况，写一句截短的回复。
+  private static func change(_ change: CueChange, reply: Bool) -> String {
     let label: String =
       switch change.kind {
       case .settled: change.interrupted ? state(.known(.interrupted)) : "歇下"
@@ -152,7 +179,7 @@ public enum CueEnvelope {
       }
     var text = "[\(label)\(change.byUser ? " · 他说的" : "")] \(where_(change))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
-    if let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
+    if reply, let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
     return text
   }
 
@@ -199,7 +226,7 @@ public enum CueEnvelope {
     return parts
   }
 
-  /// 近况只写此刻还开着的：在等的提问、正在做的动作、正在处理的话。做完的回复不写：歇下时已作为变化报过（带回复），
+  /// 近况只写此刻还开着的：在等的提问、正在做的动作、正在处理的话。做完的回复不写：歇下时已作为变化报过（带那件事的近况），
   /// 每次醒来再列一遍只是重复；要看就 peek 那件事。
   private static func recent(_ session: PiSessionState) -> String? {
     if session.state == .known(.waitingForUser), let question = session.question { return question.text }

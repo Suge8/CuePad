@@ -91,11 +91,14 @@ extension CueTools {
     return name
   }
 
+  /// start:true 是建好就开工（同 start，开工参数也同），一次调用办完；开工的参数与 Cue 是否在值班都在写之前查完。
   private func add(_ args: Args) async throws -> Result {
     let heading = try Self.name(try args.required("title"), "标题")
     let names = try (args.strings("steps") ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "子任务") }
     let session = try await args.string("session").asyncMap(session)
     if session != nil, args.string("body") != nil { throw Failure("带 session 时不写 body：会话已经在做，话用 say 对它说") }
+    let launch = args.bool("start") == true ? try await Launch(args, tools: self) : nil
+    if session != nil, launch != nil { throw Failure("带 session 时不写 start：会话已经在做，话用 say 对它说") }
     if let session, let busy = try await store.tasks(boundTo: session.sessionID).first(where: { $0.task.piSessionID == session.sessionID && $0.task.status != .done }) {
       throw Failure("会话「\(session.title)」正在做「\(busy.task.heading)」（\(busy.task.id.shortID)）：同一件事接着做用 say 或给它 edit 加子任务")
     }
@@ -106,7 +109,8 @@ extension CueTools {
     // 同一件事建第二份（重试、同一轮里并发发出的两次 add）只会开出第二个会话：返回已有的那件
     if session == nil, let same = try await openTopTasks(titled: heading).first(where: { $0.projectID == projectID }) {
       let dropped = args.string("body") != nil || !names.isEmpty ? "，这次的正文与子任务也没写（要改用 edit）" : ""
-      return .ok("已有没做完的「\(same.heading)」（\(same.id.shortID)），没再建\(dropped)：同一件事接着用它。")
+      let unstarted = launch == nil ? "" : "，也没开工（它没开工就 start）"
+      return .ok("已有没做完的「\(same.heading)」（\(same.id.shortID)），没再建\(dropped)\(unstarted)：同一件事接着用它。")
     }
     let top = try await store.createTask(CueLines.joined(title: heading, rest: args.string("body")), in: projectID)
     var steps: [UUID] = []
@@ -118,7 +122,13 @@ extension CueTools {
       text += "，" + (leaf.id == top.id ? "" : "「\(leaf.heading)」") + "绑上了会话「\(session.title)」"
     }
     text += "，在项目「\(try await store.project(projectID)?.name ?? "")」里。"
-    return .ok(text)
+    guard let launch else { return .ok(text) }
+    do {
+      let started = try await self.start(try await store.workingLeaf(of: top.id), launch)
+      return Result(text: text + started.text, isError: started.isError)
+    } catch {
+      return Result(text: text + "没开工：\(Self.message(error))（建好的任务照留，修好后 start）", isError: true)
+    }
   }
 
   private func edit(_ args: Args) async throws -> Result {
@@ -161,15 +171,35 @@ extension CueTools {
     return .ok("「\(card.heading)」（\(card.id.shortID)）：\(done.joined(separator: "，"))。")
   }
 
-  private func start(_ args: Args) async throws -> Result {
-    let agent = try args.string("agent").map { raw -> AgentKind in
-      guard let agent = AgentKind(rawValue: raw) else { throw Failure("agent 只能是 \(Self.agents)") }
-      return agent
+  /// 开工的参数（start 与 add 带 start:true 共用），连同在哪台 Mac 开：都查完才开工。
+  private struct Launch {
+    var agent: AgentKind?
+    var model: String?
+    var thinking: PiThinkingLevel?
+    var fresh: Bool
+    var host: String
+
+    init(_ args: Args, tools: CueTools) async throws {
+      agent = try args.string("agent").map { raw -> AgentKind in
+        guard let agent = AgentKind(rawValue: raw) else { throw Failure("agent 只能是 \(CueTools.agents)") }
+        return agent
+      }
+      model = args.string("model")
+      thinking = try CueTools.effort(args)
+      fresh = args.bool("fresh") == true
+      host = try await tools.host()
     }
+  }
+
+  private func start(_ args: Args) async throws -> Result {
     let leaf = try await workingLeaf(try args.required("task"))
-    let host = try await host()
+    return try await start(leaf, try await Launch(args, tools: self))
+  }
+
+  private func start(_ leaf: Card, _ launch: Launch) async throws -> Result {
+    let host = launch.host
     let request = try await store.startLeaf(
-      leaf.id, agent: agent, fresh: args.bool("fresh") == true, model: args.string("model"), thinking: try Self.effort(args), host: host, cue: true)
+      leaf.id, agent: launch.agent, fresh: launch.fresh, model: launch.model, thinking: launch.thinking, host: host, cue: true)
     if request.mode == .known(.start) { return .ok("已请 Mac 为「\(leaf.heading)」开新会话，正文作为第一句。（\(leaf.id.shortID)）") }
     return try await spoken(request, "已请求「\(leaf.heading)」沿用上一步的会话，正文作为下一句", tail: leaf.id.shortID, from: host)
   }

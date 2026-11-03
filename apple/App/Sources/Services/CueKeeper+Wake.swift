@@ -19,7 +19,7 @@ extension CueKeeper {
         let changes = try await self.changes(at: now)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: setup.timing.clock(), projects: try await store.projects(),
-            changes: changes.due, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
+            changes: changes.due, recaps: try await CueTools(store: store).recaps(for: changes.due), board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
             wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said),
             quotas: try await store.accountQuotas(), retrying: retrying.map(Self.firstLine)))
         var parts = [envelope]
