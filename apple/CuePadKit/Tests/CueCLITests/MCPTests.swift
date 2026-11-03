@@ -92,6 +92,12 @@ import Testing
       let task = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.heading == "重写发布脚本" }).id
       let research = try #require(try await store.children(of: task).first)
       _ = try await server.call("task", ["action": "edit", "task": research.id.uuidString, "body": "先读 release.sh"])
+      // 没用到的参数填成空值（有的模型这样填）是没写，正文不动；清掉正文写 none
+      #expect(try await server.refused("task", ["action": "edit", "task": research.id.uuidString, "title": "", "body": ""]).contains("edit 至少给"))
+      #expect(try await store.card(research.id)?.rest == "先读 release.sh")
+      _ = try await server.call("task", ["action": "edit", "task": research.id.uuidString, "body": "none"])
+      #expect(try await store.card(research.id)?.rest == nil)
+      _ = try await server.call("task", ["action": "edit", "task": research.id.uuidString, "body": "先读 release.sh"])
       #expect(try await server.call("task", ["action": "peek"]).contains("重写发布脚本（\(task.shortID)）"))
       // 名字宽过上限（汉字算 2）：整件退回，告诉 Cue 怎么改，什么都不写
       for long: [String: Any] in [["title": "让 Agent 编译测试排队、模拟器复用、测试快速失败"], ["title": "发布", "steps": ["调研", "把发布脚本改成按渠道分别打包上传"]]] {

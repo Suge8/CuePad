@@ -49,8 +49,6 @@ extension CueTools {
 
   /// 写 `model` 时回到这家默认的写法。
   static let defaultModel = "default"
-  /// 写 `intro` 清掉介绍、写 `folder` 解除文件夹的写法：空值是没写（`Args.given`）。
-  static let cleared = "none"
 
   private func setBrain(_ args: Args) async throws -> String {
     let keys = ["agent", "model", "effort", "fast", "name"].filter { args.raw[$0] != nil }
