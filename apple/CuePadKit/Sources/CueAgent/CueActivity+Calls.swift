@@ -160,22 +160,18 @@ extension CueActivity {
       self.name = name
     }
 
-    /// 开始时认：add 要建的那件还没有，只照标题叫它（按标题去找会认成同名的旧任务，比如早做完的那件）。
+    /// 开始时认，与工具同一个认法（`CueTools.place`）：add 要建的那件还没有，只照标题叫它（按标题去找会认成同名的旧任务，比如早做完的那件）。
     init(_ args: Parsed, tool: String, store: CueStore) async {
-      let tools = CueTools(store: store)
-      var task: Card?, found: PiSessionState?, sessionRef: String?
-      if let ref = args.line("task") {
-        task = try? await tools.task(ref)
-      } else if let session = args.line("session") {
-        switch try? await tools.sessionRef(session) {
-        case .session(let state): found = state
-        case .task(let card): task = card
-        case nil: sessionRef = session
-        }
+      var task: Card?, found: PiSessionState?
+      switch try? await CueTools(store: store).place(Args(args.raw)) {
+      case .session(let state): found = state
+      case .task(let card): task = card
+      case nil: break
       }
       self.task = task?.id
       session = found?.id
-      name = task?.heading ?? args.line("task") ?? args.line("title") ?? found?.title ?? sessionRef
+      let written = args.line("task") ?? args.line("session")
+      name = task?.heading ?? (found == nil ? args.line("task") : nil) ?? args.line("title") ?? found?.title ?? written
     }
 
     /// add 做成后它建的那件，或认作同一件、没再建的那件（`CueTools.openTopTasks`）：没做完的同名顶层任务里后建的；会话照开始时认的。
@@ -191,7 +187,7 @@ extension CueActivity {
   struct Parsed {
     let raw: [String: Any]
 
-    init(_ arguments: String) { raw = (try? JSONSerialization.jsonObject(with: Data(arguments.utf8))) as? [String: Any] ?? [:] }
+    init(_ arguments: String) { raw = Args.given((try? JSONSerialization.jsonObject(with: Data(arguments.utf8))) as? [String: Any] ?? [:]) }
 
     func line(_ key: String) -> String? {
       (raw[key] as? String)?.split(whereSeparator: \.isNewline).first.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }

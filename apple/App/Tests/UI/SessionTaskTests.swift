@@ -38,7 +38,12 @@ struct SessionTaskTests {
         let cue = CueTools(store: store, wait: 0)
         let said = try #require(await cue.call("task", ["action": "say", "session": "修登录", "text": "补上登录的测试"]))
         #expect(!said.isError && said.text.contains("会话「修登录」"))
-        #expect(try await store.deliveryRequests(toSession: "s1").map(\.content) == ["补上登录的测试"])
+        // 有的模型把没用到的参数填成空值、把会话的编号写进 task：照样送到
+        let filled = try #require(await cue.call("task", ["action": "say", "task": "", "session": "修登录", "model": "", "effort": "", "text": "再跑一遍"]))
+        #expect(!filled.isError, "\(filled.text)")
+        let swapped = try #require(await cue.call("task", ["action": "say", "task": "s1", "text": "跑完告诉我"]))
+        #expect(!swapped.isError, "\(swapped.text)")
+        #expect(try await store.deliveryRequests(toSession: "s1").map(\.content) == ["补上登录的测试", "再跑一遍", "跑完告诉我"])
 
         let added = try #require(await cue.call("task", ["action": "add", "title": "修好登录", "session": "s1"]))
         #expect(!added.isError)

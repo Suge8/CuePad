@@ -253,7 +253,7 @@ extension CueKeeper {
     private func setBack(_ failure: String, retrying wake: CueWake, as author: CueAuthor, now: Bool = false) async {
         if let held = setback, held.persistent, held.wake != wake { return }
         let persistent = setback?.persistent == true || !Self.retryable(PiErrorSummary(failure))
-        let latest = try? await changes().due.map(\.seq).max()
+        let latest = try? await changes().due.filter { $0.kind != .stalled }.map(\.seq).max()
         let delay: Duration?
         if now { delay = .zero }
         else if persistent {

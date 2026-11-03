@@ -37,7 +37,7 @@ public struct CueTools: Sendable {
 
   /// 调用一个工具；工具名不认识返回 nil（协议层报参数错）。业务上的失败是 `isError` 的结果。
   public func call(_ name: String, _ arguments: [String: Any]) async -> Result? {
-    let args = Args(raw: arguments)
+    let args = Args(arguments)
     do {
       switch (toolset, name) {
       case (.cue, "task"): return try await task(args)
@@ -69,10 +69,14 @@ public struct CueTools: Sendable {
     throw Failure("没有项目「\(ref)」。现有：" + (all.isEmpty ? "无" : all.map(\.name).joined(separator: "、")))
   }
 
-  /// 任务：id、至少 4 位的 id 前缀，或标题（不分大小写，只在没删除的任务里找）。
+  /// 任务：id、至少 4 位的 id 前缀，或标题（不分大小写，只在没删除的任务里找）。写的是会话就说清楚这里要任务。
   func task(_ ref: String) async throws -> Card {
-    guard let card = try await findTask(ref) else { throw Failure("找不到任务「\(ref.trimmingCharacters(in: .whitespaces))」：用 task peek 看看板上的 id") }
-    return card
+    if let card = try await findTask(ref) { return card }
+    let key = ref.trimmingCharacters(in: .whitespaces)
+    if let session = try? await matchedSession(key) {
+      throw Failure("「\(key)」是会话「\(session.title)」，不是任务：这里写任务的 id 或标题（peek 里有）")
+    }
+    throw Failure("找不到任务「\(key)」：用 task peek 看看板上的 id")
   }
 
   /// 没做完、叫这个名字（不分大小写）的顶层任务，后建的在前：add 认同一件事、经过清单认 add 建的那件都按它，做完的同名旧任务不算。
@@ -107,16 +111,32 @@ public struct CueTools: Sendable {
     }
   }
 
+  /// say、peek、stop、leave、take 对的那一处（经过里认它的也是这条）：task、session 两个参数都认任务与会话的编号，写在 task 先认任务、
+  /// 写在 session 先认会话。信封按任务列会话、只写任务的编号，不归任务的会话只有会话的编号：模型两种编号常填错参数，在这里收成一处都认。都没给为 nil。
+  func place(_ args: Args) async throws -> SessionRef? {
+    if let ref = args.string("task") {
+      if let card = try await findTask(ref) { return .task(card) }
+      if let session = try await matchedSession(ref) { return .session(session) }
+      throw Failure("找不到任务或会话「\(ref.trimmingCharacters(in: .whitespaces))」：用 task peek 看 id")
+    }
+    return try await args.string("session").asyncMap(sessionRef)
+  }
+
   /// session 写的引用：对不上会话时也认任务的 id 前缀或标题。
-  /// 信封与看板按任务列会话、只写任务的编号，"对会话说"时模型自然把它填进 session：两套编号在这里收成一个参数都认。
   func sessionRef(_ ref: String) async throws -> SessionRef {
-    let hits = try await store.sessions(matching: ref)
-    let live = hits.filter { $0.state != .known(.ended) }
-    if hits.count == 1 { return .session(hits[0]) }
-    if live.count == 1 { return .session(live[0]) }
-    if hits.count > 1 { throw Failure("「\(ref)」对上了 \(hits.count) 个会话：用会话 id（peek 里有）") }
+    if let session = try await matchedSession(ref) { return .session(session) }
     guard let card = try await findTask(ref) else { throw Failure("找不到会话或任务「\(ref)」：用 task peek 看 id") }
     return .task(card)
+  }
+
+  /// 对上的会话（`CueStore.sessions(matching:)`）：只有一个，或同名的几个里只有一个没结束；对不上为 nil，对上几个报错。
+  private func matchedSession(_ ref: String) async throws -> PiSessionState? {
+    let hits = try await store.sessions(matching: ref)
+    let live = hits.filter { $0.state != .known(.ended) }
+    if hits.count == 1 { return hits[0] }
+    if live.count == 1 { return live[0] }
+    if hits.count > 1 { throw Failure("「\(ref)」对上了 \(hits.count) 个会话：用会话 id（peek 里有）") }
+    return nil
   }
 
   enum SessionRef {
@@ -134,6 +154,21 @@ public struct CueTools: Sendable {
 
 struct Args {
   let raw: [String: Any]
+
+  init(_ arguments: [String: Any]) { raw = Self.given(arguments) }
+
+  /// 模型写了的参数：去掉 null、空白字符串与空数组。有的模型把没用到的可选参数一律填成空值，当成写了就会去找叫空串的任务、
+  /// 把空的 ask 当成提问；没有哪个参数靠空值表达意思（回到默认写 default，清掉写 none）。
+  static func given(_ arguments: [String: Any]) -> [String: Any] {
+    arguments.filter { _, value in
+      switch value {
+      case is NSNull: false
+      case let text as String: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      case let list as [Any]: !list.isEmpty
+      default: true
+      }
+    }
+  }
 
   func string(_ key: String) -> String? { raw[key] as? String }
 

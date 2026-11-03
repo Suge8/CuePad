@@ -10,14 +10,11 @@ extension CueTools {
     case "start": return try await start(args)
     case "say": return try await say(args)
     case "peek":
-      if let ref = args.string("task") { return try await peek(try await task(ref)) }
-      if let ref = args.string("session") {
-        switch try await sessionRef(ref) {
-        case .session(let session): return try await peek(session)
-        case .task(let card): return try await peek(card)
-        }
+      switch try await place(args) {
+      case .session(let session)?: return try await peek(session)
+      case .task(let card)?: return try await peek(card)
+      case nil: return try await board()
       }
-      return try await board()
     case "stop":
       let target = try await speaker(args)
       _ = try await store.stopSession(target.session, host: try await host(), cue: true)
