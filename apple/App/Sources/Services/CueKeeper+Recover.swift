@@ -6,32 +6,27 @@ import Foundation
 
 /// 出了问题怎么自己接着干：看门狗、自动换大脑、起不来与恢复时说的话、大脑健康的本机投影（`CueHealth`）。
 extension CueKeeper {
-    // MARK: 看门狗
+    // MARK: 重起与看门狗
 
-    /// 一轮开始（或这一轮里有大脑事件）：截止时刻推到此刻之后 `CueTiming.silence`。看门狗一个就够，睡到截止时刻醒来看一眼：
-    /// 这期间有过事件就睡到新的截止时刻，没有就报 `.silent`；一轮做完（不论哪个班次）就退出，下一轮开始再起。
-    func heard() {
-        heardAt = .now
-        guard turn != nil, watchdog == nil else { return }
-        let limit = setup.timing.silence.seconds, input = input
-        watchdog = Task {
-            defer { watchdog = nil }
-            while turn != nil, !Task.isCancelled {
-                let wait = (heardAt + limit).timeIntervalSinceNow
-                guard wait > 0 else {
-                    input.yield(.silent)
-                    return
-                }
-                try? await Task.sleep(for: .seconds(wait))
-            }
+    /// 大脑这时该有人管的那一下（对账的定时器排它，`reconcile`）：等着重起的到点时刻，或在跑的一轮最近一次大脑事件之后 `CueTiming.silence`（看门狗）。
+    var alarm: Date? {
+        switch phase {
+        case .restarting(_, _, let at): at
+        case .running(let shift) where shift.turn != nil: heardAt + setup.timing.silence.seconds
+        case .starting, .running: nil
         }
     }
 
-    /// `.silent` 到了：还是那么久没动静就当大脑挂了（停掉，按 `broke` 重起、交出去的话重新交）。
-    func silenced() async {
-        guard turn != nil, Date.now >= heardAt + setup.timing.silence.seconds else { return }
-        let minutes = Int(setup.timing.silence.seconds / 60)
-        await broke(ShownText("这一轮 \(minutes) 分钟没有动静，大脑像是卡住了"))
+    /// 到了 `alarm`：等着重起的起一个；在跑的一轮还是那么久没动静就当大脑挂了（停掉，按 `broke` 重起、交出去的话重新交）。
+    func revive() async {
+        guard let alarm, alarm <= .now else { return }
+        switch phase {
+        case .restarting(let failures, _, _): await startShift(failures: failures)
+        case .running:
+            let minutes = Int(setup.timing.silence.seconds / 60)
+            await broke(ShownText("这一轮 \(minutes) 分钟没有动静，大脑像是卡住了"))
+        case .starting: break
+        }
     }
 
     /// 工具结果说 Cue 的工具服务（`cuepad mcp`）没了（Pi 的接入 `cue-tools.ts` 报的）：这个班次的工具用不了了，做完这一轮就换。
