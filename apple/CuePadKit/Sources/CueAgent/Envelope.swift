@@ -250,7 +250,8 @@ public enum CueEnvelope {
 
   private static func where_(_ change: CueChange) -> String {
     guard let task = change.task else { return change.session.map(sessionName) ?? "" }
-    let base = "\(task.heading)（\(task.id.shortID)）"
+    // 已完成的任务的会话再歇下（多是答完你追问的一句）：写明已完成，免得照没做完的标准再核对一遍、去催证据
+    let base = "\(task.heading)（\(task.id.shortID)）" + (task.status == .done ? "（已完成）" : "")
     guard let leaf = change.leaf, leaf.id != task.id else { return base }
     return "\(base) › \(leaf.heading)"
   }
