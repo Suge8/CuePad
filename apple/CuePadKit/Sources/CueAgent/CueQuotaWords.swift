@@ -2,16 +2,16 @@ import CueStore
 import Foundation
 
 /// 额度写给 Cue 看的样子（信封与 `setup look`，中文、不随界面语言；界面上的说法在 App 的 `QuotaMeter`）。
-/// 吃紧（`tight`）的规则只在这里：信封只写吃紧的账号，look 给吃紧的标出来。
+/// 吃紧（`tight`）的规则只在这里：信封只写吃紧的账号（`tightLine`），look 给吃紧的标出来。读不到（查询失败、不报额度）不算吃紧：
+/// 那是没有证据，不是用得多；常年查询失败的账号若算吃紧，信封每一轮都写它，Cue 照系统提示就一直绕开能用的那家。读不到的原因只在 look 里写。
 /// 账号里有的窗口过了重置时间（`AccountQuota.reading` 整个算 `.expired`）时，没重置的窗口照常读（`live`）：
 /// 5 小时窗口刚重置、本周已用到九成的账号照样吃紧。
 enum CueQuotaWords {
   /// 卡着的窗口用到这么多算吃紧。
   static let tightUse = 0.8
 
-  /// 吃紧：读不到（查询失败），卡着的窗口用到 `tightUse`，或有窗口照此刻的速度在重置前用完。
+  /// 吃紧：卡着的窗口用到 `tightUse`，或有窗口照此刻的速度在重置前用完。
   static func tight(_ quota: AccountQuota, at now: Date) -> Bool {
-    if quota.reading(at: now) == .failed { return true }
     guard let live = live(quota, at: now) else { return false }
     if let binding = live.binding(at: now), binding.used(at: now) >= tightUse { return true }
     return live.windows.contains { $0.exhaustion(at: now) != nil }
@@ -23,9 +23,9 @@ enum CueQuotaWords {
     return quota.provider + (name.map { "「\($0)」" } ?? "")
   }
 
-  /// 信封里吃紧的一个账号一行：只写卡着的与会在重置前用完的窗口。
-  static func tightLine(_ quota: AccountQuota, at now: Date) -> String {
-    guard let live = live(quota, at: now) else { return "\(account(quota)) \(status(quota, at: now))" }
+  /// 信封里吃紧的一个账号一行：只写卡着的与会在重置前用完的窗口；不吃紧为 nil。
+  static func tightLine(_ quota: AccountQuota, at now: Date) -> String? {
+    guard tight(quota, at: now), let live = live(quota, at: now) else { return nil }
     let binding = live.binding(at: now)
     let shown = live.windows.filter { $0 == binding || $0.exhaustion(at: now) != nil }
     return "\(account(quota)) " + shown.map { window(live, $0, at: now) }.joined(separator: "；")

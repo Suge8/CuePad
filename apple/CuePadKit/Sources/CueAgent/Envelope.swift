@@ -83,11 +83,8 @@ public enum CueEnvelope {
     lines.append("醒来：" + wake(input.wake))
     if case .schedule = input.wake { lines += input.fired.map { "- " + fired($0, now: input.now) } }
     if let retrying = input.retrying { lines.append("上一轮出错重试：\(clip(retrying, 160))；先核对上一轮做到哪，做过的不重做") }
-    let tight = input.quotas.filter { CueQuotaWords.tight($0, at: input.now) }
-    if !tight.isEmpty {
-      lines.append("额度吃紧：")
-      lines += tight.map { "- " + CueQuotaWords.tightLine($0, at: input.now) }
-    }
+    let tight = input.quotas.compactMap { CueQuotaWords.tightLine($0, at: input.now) }
+    if !tight.isEmpty { lines += ["额度吃紧："] + tight.map { "- " + $0 } }
     if let language = input.language { lines.append("这一轮你写下的字都用\(language)（回复、tell、任务、对会话说的话）") }
     lines.append("</cue>")
     return lines.joined(separator: "\n")
