@@ -25,6 +25,22 @@ extension MCPTests {
       problems: [MacAgentProblem(kind: .codex, reason: .notLoggedIn)])
   }
 
+  /// Cue 写错模型名（如把 claude 拼成 claaude）：开工当场退回、列出能选的，不写投送请求；照抄清单里的就开得出来。
+  @Test func cueTypoModelIsRefusedBeforeAnythingIsSent() async throws {
+    let sandbox = try Fixture()
+    let store = sandbox.store
+    try await Self.enable(store)
+    try await Server.run(library: sandbox.directory) { server in
+      let added = try await server.call("task", ["action": "add", "title": "修好登录白屏"])
+      let id = try #require(added.firstMatch(of: /（([0-9a-f]{8})）/).map { String($0.1) })
+      let refusal = try await server.refused("task", ["action": "start", "task": id, "agent": "pi", "model": "anthropic/claaude-opus-5-5"])
+      #expect(refusal.contains("Pi 没有 anthropic/claaude-opus-5-5：能选的是 anthropic/claude-opus-5-5、openai-codex/gpt-6"), "\(refusal)")
+      #expect(try await store.deliveryRequests().isEmpty)
+      _ = try await server.call("task", ["action": "start", "task": id, "agent": "pi", "model": "anthropic/claude-opus-5-5"])
+      #expect(try await store.deliveryRequests().count == 1)
+    }
+  }
+
   @Test func cueLooksAtItsBrainAgentsQuotaAndProjects() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -67,7 +83,7 @@ extension MCPTests {
     try await Server.run(library: sandbox.directory) { server in
       #expect(try await server.refused("setup", ["action": "set"]).contains("至少给"))
       #expect(try await server.refused("setup", ["action": "set", "agent": "codex"]).contains("没登录"))
-      #expect(try await server.refused("setup", ["action": "set", "model": "anthropic/claude-nope"]).contains("look agents"))
+      #expect(try await server.refused("setup", ["action": "set", "model": "anthropic/claude-nope"]).contains("Pi 没有 anthropic/claude-nope：能选的是 anthropic/claude-opus-5-5、openai-codex/gpt-6"))
       #expect(try await server.refused("setup", ["action": "set", "model": "openai-codex/gpt-6", "fast": true]).contains("不支持 fast"))
       #expect(try await store.cueProfile()?.model == nil)
 

@@ -75,6 +75,8 @@ public enum CueStoreError: Error, Equatable {
   case cannotEnd(String)
   /// 会话没停着，没有可留给他回的停下（参数是会话名）。
   case notStopped(String)
+  /// model 不在这家能选的里面（参数是 Agent 名、Cue 写的 model 与能选的，`CueStore.cueModelKey`）。
+  case unknownModel(agent: String, model: String, choices: [String])
   /// 会话换不了模型（参数是会话名）。
   case cannotChangeModel(String)
   /// 答案不在可选的里面（参数是可选的答案）。
@@ -98,6 +100,9 @@ public enum CueStoreError: Error, Equatable {
 }
 
 extension CueStoreError: LocalizedError {
+  /// 模型写错时直接列出能选的，至多这么多个；多了指去 setup look。
+  static let choicesListed = 20
+
   public var errorDescription: String? {
     switch self {
     case .notFound: String(localized: "找不到这条记录，可能已被删除")
@@ -132,6 +137,8 @@ extension CueStoreError: LocalizedError {
     case .agentUnavailable(let reason): "开不了会话：\(reason)。start 的 agent 换成系统提示里列着的那几家"
     case .noAgent(let why): "开会话的那台 Mac 上没有能用的 Agent（\(why)）：用 tell 告诉用户"
     case .invalidModel(let agent): "\(agent) 的 model 写成 provider/id：提供方与模型 id 用 / 隔开（Claude Code、Codex 只写 id）"
+    case .unknownModel(let agent, let model, let choices):
+      "\(agent) 没有 \(model)：" + (choices.count <= Self.choicesListed ? "能选的是 \(choices.joined(separator: "、"))，照抄其一" : "用 setup look agents 看能选的，照抄其一")
     case .cannotChangeModel(let title): "会话「\(title)」换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮、在等回答，或它在终端里开、不能从 CuePad 停止"
     case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去。等它歇下（会叫醒你）再说"

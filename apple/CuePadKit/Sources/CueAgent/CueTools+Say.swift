@@ -8,7 +8,7 @@ extension CueTools {
   func say(_ args: Args) async throws -> Result {
     let target = try await speaker(args)
     let host = try await host()
-    let config = try await config(args, of: target.session)
+    let config = try await config(args, of: target.session, host: host)
     let switched = config.map { "先换成 " + [$0.model.map { "\($0.provider)/\($0.id)" }, $0.thinking?.rawValue].compactMap { $0 }.joined(separator: " ") + "，再" } ?? ""
     let text = try args.required("text")
     let request = try await store.speak(text, to: target.session, card: target.card, config: config, host: host, cue: true)
@@ -81,11 +81,11 @@ extension CueTools {
     return try await store.latest(of: request) ?? request
   }
 
-  /// say 带的 model、effort（说话与作答之前先换上）；model 的写法同 start，只写 id 时提供方按会话是哪家补。都没带为 nil。
-  private func config(_ args: Args, of session: String) async throws -> PiConfig? {
+  /// say 带的 model、effort（说话与作答之前先换上）；model 的写法同 start，只写 id 时提供方按会话是哪家补，不在它的模型表里当场退回。都没带为 nil。
+  private func config(_ args: Args, of session: String, host: String) async throws -> PiConfig? {
     let effort = try Self.effort(args)
     guard let raw = args.string("model") else { return effort.map { PiConfig(thinking: $0) } }
     let agent = try await store.piSessions(sessionIDs: [session])[session]?.state.agent.known
-    return PiConfig(model: try (agent ?? .pi).requiredModelKey(raw), thinking: effort)
+    return PiConfig(model: try await store.cueModelKey(raw, of: agent ?? .pi, host: host, session: session), thinking: effort)
   }
 }

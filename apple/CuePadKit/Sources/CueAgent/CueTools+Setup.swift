@@ -70,7 +70,7 @@ extension CueTools {
 
     var model = switching ? nil : current.model
     if let raw = args.string("model")?.trimmingCharacters(in: .whitespaces) {
-      model = raw.isEmpty || raw == Self.defaultModel ? nil : try modelRef(raw, of: agent)
+      model = raw.isEmpty || raw == Self.defaultModel ? nil : agent.kind.modelRef(try await store.cueModelKey(raw, of: agent.kind, host: host))
     }
     let option = model.flatMap(agent.kind.modelKey).flatMap { key in agent.models.first { $0.key == key } } ?? (model == nil ? agent.defaultModel : nil)
 
@@ -110,17 +110,6 @@ extension CueTools {
     guard profile != current else { return "本来就是这样，没改。" }
     let when = profile.needsNewBrain(from: current) ? "这一轮做完后换新大脑（记忆照旧）" : "下一轮换上"
     return (["改好了：\(Self.brainLine(profile, agent: agent))"] + notes + [when]).joined(separator: "；") + "。"
-  }
-
-  /// 照这家的写法核对 model：写不出键的退回；有清单的要在清单里。返回这家的标准写法（`AgentKind.modelRef`）。
-  private func modelRef(_ raw: String, of agent: MacAgent) throws -> String {
-    guard let key = agent.kind.modelKey(raw) else {
-      throw Failure("\(agent.kind.name) 的 model 写 provider/id（如 anthropic/claude-opus-5-5）：\(raw)")
-    }
-    guard agent.models.isEmpty || agent.models.contains(where: { $0.key == key }) else {
-      throw Failure("\(agent.kind.name) 在这台 Mac 上没有 \(raw)：用 setup look agents 看能选的")
-    }
-    return agent.kind.modelRef(key)
   }
 
   /// "Pi · anthropic/claude-opus-5-5 · 强度 low · fast 关 · 名字 Cue"：model 为 nil 写这家的默认是哪个。
