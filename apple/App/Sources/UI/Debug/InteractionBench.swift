@@ -26,7 +26,7 @@ enum InteractionBench {
     /// 而页面壳加最新对话的构建本身就在 45～70ms（工具栏与回复框等次要部分已挪到后面的帧，见 `SessionPage`）。
     /// Cue 页首访给 120ms：第一帧同样要带页头与铺满一屏的最新对话，另有拍板卡与输入框；第一次进页的成本（真实的字第一次画、视图第一次建）
     /// 只能挪到启动后先挂上整页或少画首帧才躲得开，两样都不做（启动后先挂上是把活挪走，不是去掉）。
-    private static let budgets: [String: (clickMs: Double, hitches: Int)] = [
+    static let budgets: [String: (clickMs: Double, hitches: Int)] = [
         "页面回访": (14, 1),
         "页面首访": (28, 2),
         "Agent 页首访": (28, 2),
@@ -215,6 +215,7 @@ enum InteractionBench {
                 await step("侧栏展开") { NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil) }
             }
         }
+        try await measureWide(workspace, in: window, sessions: sessions, only: only, foreground: foreground)
         NSApp.terminate(nil)
     }
 
@@ -235,7 +236,7 @@ enum InteractionBench {
         return view.subviews.flatMap(textViews)
     }
 
-    private static func measure(_ name: String, in view: NSView, _ action: () -> Void) async -> [String: Any] {
+    static func measure(_ name: String, in view: NSView, _ action: () -> Void) async -> [String: Any] {
         await Task.wait(for: .milliseconds(900))
         let recorder = FrameRecorder()
         recorder.start(in: view)

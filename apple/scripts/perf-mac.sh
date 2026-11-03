@@ -3,7 +3,7 @@
 #   单次交互：演示库与大库（-CuePadSeed perf：50 项目、5000 卡、300 张大图、200 个 Pi 历史会话，前 12 个带长对话）上的 -CuePadBench interact，
 #   逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）与其中的指令数、每毫秒跑的周期（GHz：活一样多而回合翻倍时它减半，是机器那一刻慢），
 #   合计、最重一圈、指令数与掉帧，取各次的中位数，
-#   列成表。默认在后台量（不抢前台）：指令数照样前后对比，帧与掉帧偏乐观，不和预算比；
+#   列成表；宽屏自动阈值那几项另列一张（静置时主线程与进程的指令、反向时的滑动），栏宽或保留状态不对时不论前后台都以 1 退出。默认在后台量（不抢前台）：指令数照样前后对比，帧与掉帧偏乐观，不和预算比；
 #   要和交互预算（docs/perf.md「交互预算」）比就加 -CuePadForeground YES 在前台量（规则见 docs/verify.md「占前台」），有一项超了就以 1 退出。
 #   CUEPAD_PERF_SEED=<库目录>（如真实库的只读副本）：只量这份库，每次从它克隆，换掉演示库与大库；配 -CuePadProject <库里的项目名>（单次交互从项目页起）。
 #   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/perf.md「交互预算」。
@@ -126,5 +126,20 @@ for key in order:
     over += foreground and not ok
     unseen = '，未见变化' if not all(r["seen"] for r in samples) else ''
     print(f"{key[0]:6}{key[1]:14}{click:12.1f}{budget_click:7.0f}{click_instructions:10.0f}{ghz:6.2f}{total:9.0f}{instructions:8.0f}{heaviest:9.1f}{hitches:6.0f}{budget_hitches:6d}{worst:10.1f}  {('ok' if ok else '超预算') if foreground else '-'}{unseen}")
-sys.exit(1 if over else 0)
+# 宽屏自动阈值的几项另有正确性（InteractionBench+Wide.swift）：栏宽或保留状态不对，前后台都判失败
+wide = [r for r in rows if "railOK" in r]
+broken = [r for r in wide if not (r["railOK"] and r["stateOK"])]
+if wide:
+    print(f"\n{'库':6}{'宽屏':18}{'静置主线程 M':>12}{'静置进程 M':>11}{'每帧位移':>9}{'漏采帧':>7}{'停下差':>7}  状态")
+    for key in order:
+        samples = [r for r in wide if (r["库"], r["name"]) == key]
+        if not samples:
+            continue
+        idle_main = st.median(r["idleMainM"] for r in samples)
+        idle_process = st.median(r["idleProcessM"] for r in samples)
+        slide = [r for r in samples if "perFramePt" in r]
+        motion = f"{max(r['perFramePt'] for r in slide):9.1f}{max(r['gapFrames'] for r in slide):7.0f}{max(abs(r['restPt']) for r in slide):7.1f}" if slide else f"{'-':>9}{'-':>7}{'-':>7}"
+        bad = [r for r in samples if not (r["railOK"] and r["stateOK"])]
+        print(f"{key[0]:6}{key[1]:18}{idle_main:12.1f}{idle_process:11.1f}{motion}  {'ok' if not bad else f'{len(bad)} 次栏宽或状态不符'}")
+sys.exit(1 if over or broken else 0)
 PY
