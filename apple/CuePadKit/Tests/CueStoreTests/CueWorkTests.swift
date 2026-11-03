@@ -40,6 +40,7 @@ import Testing
     try RawDB(fixture.url).exec("UPDATE cards SET modifiedAt = 1 WHERE id = '\(older.id.uuidString.lowercased())'")
     let since = CueMarks(try await store.lastWrite())
 
+    try await store.recordMacPresence(host: "mac") { true }  // 会话所在的 Mac 醒着：它报的状态才算数
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .waitingForUser, detail: "确认写入？")
 
     #expect(try await store.cueTally().waiting.map(\.task) == [latest.id])
