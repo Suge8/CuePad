@@ -29,6 +29,11 @@ struct WideMetrics {
     }
 }
 
+extension EnvironmentValues {
+    /// 宽屏主栏放得下看板四列的最窄宽（`WideMetrics.board`）：放不下时 iPad 的进展页换成竖版看板（`ProgressScreen`），不把四列压窄。
+    @Entry var boardFits = true
+}
+
 struct WideRail: View {
     let width: CGFloat
     @Environment(Workspace.self) private var workspace

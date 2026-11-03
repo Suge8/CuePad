@@ -20,6 +20,7 @@ struct SplitRoot: View {
                             Spacer()
                         }.padding(.horizontal, 16).frame(height: 44)
                         destination(workspace.mainRoute, column: .main)
+                            .environment(\.boardFits, sizes.main >= WideMetrics.board)
                     }
                 }.frame(width: sizes.main)
                 WideColumnHost(column: .side, focus: focus) {
