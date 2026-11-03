@@ -63,6 +63,7 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     let focus: WideFocus
     let rail: CGFloat
     let origin: CGFloat
+    let width: CGFloat
     @ViewBuilder let content: Content
     @Environment(\.self) private var environment
     @Environment(Workspace.self) private var workspace
@@ -76,7 +77,7 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
 
     func updateNSView(_ view: WideColumnView, context: Context) {
         view.host.rootView = AnyView(content.overlay { WideDropFeedback(state: view.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels).environment(\.wideWindowID, focus.windowID))
-        view.move(rail: rail, origin: origin)
+        view.move(rail: rail, origin: origin, width: width)
     }
 }
 
@@ -86,7 +87,7 @@ final class WideColumnView: NSView {
     let column: Workspace.Column
     let focus: WideFocus
     let workspace: Workspace
-    private var previous: (rail: CGFloat, origin: CGFloat)?
+    private var previous: (rail: CGFloat, origin: CGFloat, width: CGFloat)?
     private var sequence = 0
     override var acceptsFirstResponder: Bool { true }
 
@@ -96,6 +97,8 @@ final class WideColumnView: NSView {
         self.workspace = workspace
         super.init(frame: .zero)
         wantsLayer = true
+        // 按栏的框裁（矩形裁剪，不离屏）：滑动时右缘随图层的宽走（`move`）
+        clipsToBounds = true
         host.sizingOptions = []
         host.autoresizingMask = [.width, .height]
         addSubview(host)
@@ -105,11 +108,17 @@ final class WideColumnView: NSView {
     required init?(coder: NSCoder) { nil }
     override func layout() { super.layout(); host.frame = bounds }
 
-    func move(rail: CGFloat, origin: CGFloat) {
-        defer { previous = (rail, origin) }
+    /// 会话条换宽时两栏这一下就到了终点的位置与宽（页按新的宽排一次），看得见的滑动是渲染端的两段叠加动画（`SidebarSlide`，主线程不逐帧挪）：
+    /// 整栏从旧位置平移回来，右缘从旧宽收放到新宽。两栏平移的距离不同（主栏随会话条的边，右栏随两栏的分界），只平移的话主栏已按终点排宽、
+    /// 又多平移了一截，滑动途中右缘压进右边那一栏（右栏透明的栏头处透出主栏的圆钮）；按终点的框裁又在两栏之间露出一道缝。
+    /// 栏图层的宽按同一条曲线从旧宽走到新宽（图层的锚点在左上，只动右缘；页的排版不跟着变）：主栏的右缘与右栏的左缘每一帧都对齐，
+    /// 两段偏移随同一条弹簧按比例收敛（离终点的比例只随时间走，与距离无关）。
+    func move(rail: CGFloat, origin: CGFloat, width: CGFloat) {
+        defer { previous = (rail, origin, width) }
         guard let previous, previous.rail != rail, let layer else { return }
         sequence += 1
         SidebarSlide.translate(layer, by: previous.origin - origin, key: "wide.\(sequence)")
+        SidebarSlide.slide(layer, "bounds.size.width", by: previous.width - width, key: "wide.edge.\(sequence)")
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {

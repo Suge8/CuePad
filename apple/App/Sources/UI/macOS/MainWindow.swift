@@ -15,11 +15,11 @@ struct MainWindow: View {
             HStack(spacing: 0) {
                 WideRail(width: sizes.rail)
                     .safeAreaInset(edge: .bottom, spacing: 0) { WideRailTools(wide: sizes.rail == SessionRail.Form.wide.width) }
-                WideColumnHost(column: .main, focus: focus, rail: sizes.rail, origin: sizes.rail) {
+                WideColumnHost(column: .main, focus: focus, rail: sizes.rail, origin: sizes.rail, width: sizes.main) {
                     main
                 }
                 .frame(width: sizes.main)
-                WideColumnHost(column: .side, focus: focus, rail: sizes.rail, origin: sizes.rail + sizes.main) {
+                WideColumnHost(column: .side, focus: focus, rail: sizes.rail, origin: sizes.rail + sizes.main, width: sizes.side) {
                     side
                 }
                 .frame(width: sizes.side)

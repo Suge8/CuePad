@@ -17,8 +17,13 @@ import AppKit
 /// 开头还有几圈 11～25ms；收起先滑完再交给分栏——滑完的那一圈收分栏、重排工具栏与详情区要 30ms 上下；用 SwiftUI 的偏移逐帧挪——每帧重新摆整页。
 final class SidebarSlide {
     static func translate(_ layer: CALayer, by distance: CGFloat, key: String) {
-        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
-        layer.add(SlideCurve(from: distance, to: 0, width: abs(distance)).offset { $0 }, forKey: key)
+        slide(layer, "transform.translation.x", by: distance, key: key)
+    }
+
+    /// 在 `keyPath` 上叠一段从 `distance` 回到 0 的偏移（同 `translate` 的曲线；宽屏的栏右缘用 `bounds.size.width`）。
+    static func slide(_ layer: CALayer, _ keyPath: String, by distance: CGFloat, key: String) {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, distance != 0 else { return }
+        layer.add(SlideCurve(from: distance, to: 0, width: abs(distance)).offset(keyPath) { $0 }, forKey: key)
     }
 
     /// 详情区这一栏（`ColumnFinder`）：父视图是它在分栏里的那一格，再往上是分栏。
@@ -148,9 +153,9 @@ private struct SlideCurve {
     }
 
     /// 叠加在模型值上的一段平移偏移：边相对终点的偏移从 `from - to` 按曲线回到 0，`translation` 把它换算成这一层的偏移（到 0 时也得是 0）。
-    func offset(_ translation: (CGFloat) -> CGFloat) -> CAKeyframeAnimation {
+    func offset(_ keyPath: String = "transform.translation.x", _ translation: (CGFloat) -> CGFloat) -> CAKeyframeAnimation {
         let steps = max(1, Int((duration * Self.samplesPerSecond).rounded(.up)))
-        let animation = CAKeyframeAnimation(keyPath: "transform.translation.x")
+        let animation = CAKeyframeAnimation(keyPath: keyPath)
         animation.values = (0...steps).map { step in
             translation(step == steps ? 0 : (from - to) * CGFloat(Self.remaining(duration * Double(step) / Double(steps))))
         }
