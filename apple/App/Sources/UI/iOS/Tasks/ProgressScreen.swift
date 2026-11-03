@@ -68,7 +68,7 @@ struct ProgressScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .opacity(on ? 1 : 0)
             .allowsHitTesting(on)
-            .accessibilityHidden(!on)
+            .readerHidden(!on)
             .environment(\.pageActive, active && on)
     }
 

@@ -113,7 +113,8 @@ private struct PinnedShelfCard: View {
     @ViewBuilder private var lines: some View {
         let intro = project.intro?.nonEmpty
         Text(project.shownName).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
-        Text(intro ?? " ").font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1).accessibilityHidden(intro == nil)
+        Text(intro ?? " ").font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
+            .accessibilityHidden(intro == nil) // 合并：卡片合并成一个元素，直接写就藏得住；readerHidden 的容器会把介绍挡在合并外
     }
 }
 

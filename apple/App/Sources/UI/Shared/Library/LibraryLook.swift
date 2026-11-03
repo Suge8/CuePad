@@ -119,6 +119,6 @@ struct UnseenMarks: View {
         .frame(width: Self.width * CGFloat(agents.count), alignment: .trailing)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(unseen.isEmpty ? "" : String(localized: "\(unseen.map(\.name).formatted(.list(type: .and))) 读不到"))
-        .accessibilityHidden(unseen.isEmpty)
+        .accessibilityHidden(unseen.isEmpty) // 合并：整行合并成一个元素，直接写就藏得住；readerHidden 的容器会把这句挡在合并外
     }
 }

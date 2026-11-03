@@ -53,7 +53,7 @@ private struct BrainBlock: View {
         CueConfigControls(choice: brain, alignment: .center)
             .opacity(chosen ? (cue.canHear ? 1 : Self.dimmed) : 0)
             .disabled(!cue.canHear)
-            .accessibilityHidden(!chosen)
+            .readerHidden(!chosen)
             .overlay {
                 if !chosen { CueHostPick() }
             }

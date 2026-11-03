@@ -6,7 +6,6 @@ import UIKit
 @Observable
 final class NarrowSlide {
     var progress: CGFloat = 0
-    var dragging = false
 
     func set(open: Bool, velocity: CGFloat = 0, reduceMotion: Bool) {
         let target: CGFloat = open ? 1 : 0
@@ -44,7 +43,6 @@ struct NarrowPan: UIGestureRecognizerRepresentable {
         switch pan.state {
         case .began:
             context.coordinator.start = slide.progress
-            slide.dragging = true
             view.window?.endEditing(true)
         case .changed:
             var transaction = Transaction()
@@ -53,7 +51,6 @@ struct NarrowPan: UIGestureRecognizerRepresentable {
                 slide.progress = min(max(context.coordinator.start + pan.translation(in: view).x / width, 0), 1)
             }
         case .ended, .cancelled:
-            slide.dragging = false
             let speed = pan.velocity(in: view).x / width
             let open = pan.state == .cancelled ? workspace.sidebarOpen : slide.progress + speed * Self.projection > 0.5
             workspace.sidebarOpen = open

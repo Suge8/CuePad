@@ -169,7 +169,7 @@ private struct Yield: ViewModifier {
             .opacity(hidden ? 0 : 1)
             .animation(Motion.fade, value: hidden)
             .allowsHitTesting(!hidden)
-            .accessibilityHidden(hidden)
+            .readerHidden(hidden)
     }
 }
 
