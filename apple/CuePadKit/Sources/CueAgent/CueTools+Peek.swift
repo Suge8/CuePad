@@ -43,10 +43,10 @@ extension CueTools {
 
   /// 信封里变化说到的那几件事的近况（`CueEnvelope.Input.recaps`），就是 peek 给的那一份：Cue 醒来就能核对证据，不用再 peek 一次
   /// （每次工具调用都要把整段前缀再读一遍）。一件一份，按变化的先后放，放不下 `recapBudget` 的那件不带，变化那一行照旧写截短的回复。
-  /// 两种不带（短场景实测带了会做错）：
-  /// - 他发起的一轮停下（`CueChange.byUser`）：CuePad 已留给他回，Cue 多半只定收不收回，截短的回复够用；带上全文它会就着细节替他拿主意
-  ///   （他那一轮碰上推送，转头问他推不推）。
-  /// - 完成：做完是定了的事，不用再核对证据；那一刻会话可能还在写，近况是半截的（只有开工那句），它会当成没交证据去追。
+  /// 两种不带（短场景 Pi + sonnet 实测，带与不带各跑几遍）：
+  /// - 他发起的一轮停下（`CueChange.byUser`）：CuePad 已留给他回，Cue 多半只定收不收回，截短的回复够用。带上全文它会就着细节替他拿主意
+  ///   （他那一轮碰上推送，转头问他推不推）：带的 4 遍错 3 遍，不带的 6 遍错 1 遍，改前 2 遍都对。
+  /// - 完成：做完是定了的事，不用再核对证据；叫醒那一刻会话的记录常还没写完，近况只有开工那句。带的 4 遍里 Cue 每遍照样再 peek，省不下调用（整件任务完成已不叫醒 Cue，这条多半只碰上子任务完成）。
   public func recaps(for changes: [CueChange]) async throws -> [CueEnvelope.Subject: String] {
     var recaps: [CueEnvelope.Subject: String] = [:], seen = Set<CueEnvelope.Subject>(), room = Self.recapBudget
     for change in changes where !change.byUser && change.kind != .done {
@@ -97,8 +97,10 @@ extension CueTools {
       }
       lines.append(head)
       if let session = leaf.session { lines += Self.subagentLines(session.session, now: now) }
-      if let rest = leaf.leaf.rest { lines.append("  正文：\(CueEnvelope.clip(CueFormat.plainText(rest), 200))") }
-      if let session = leaf.session { lines += Self.conversation(session, opening: leaf.leaf.body) }
+      // 最近几轮里有开工那一句（与标题加正文一字不差）就不另列正文：那一句照原样列在问答里，截得比正文这行还宽
+      let opened = leaf.session.map { Self.opening(in: $0, body: leaf.leaf.body) } ?? false
+      if !opened, let rest = leaf.leaf.rest { lines.append("  正文：\(CueEnvelope.clip(CueFormat.plainText(rest), 200))") }
+      if let session = leaf.session { lines += Self.conversation(session, opening: opened ? leaf.leaf.body : nil) }
     }
     lines += deliveredLines(try await store.deliverables(of: detail.task.id))
     return .ok(lines.joined(separator: "\n"))
@@ -167,9 +169,8 @@ extension CueTools {
   }
 
   /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，更早的截短），每行缩进两格。
-  /// `opening`：叶子的标题与正文；你开工时发的那一句里就是它，上面已写了正文，不再重抄一遍。
+  /// `opening`：叶子的标题与正文（`opening(in:body:)` 认出了开工那一句）：那一句标明是开工的第一句，原文照列。
   private static func conversation(_ detail: CueSessionDetail, opening: String? = nil) -> [String] {
-    let opening = opening.map(flat)
     var lines: [String] = []
     let latest = detail.recent.lastIndex { $0.role == .known(.pi) }
     let agent = agentName(detail.session)
@@ -178,8 +179,8 @@ extension CueTools {
       guard index == latest else {
         let byCue = message.role != .known(.pi) && message.saidByCue(detail.cueSent)
         let who = message.role == .known(.pi) ? agent : byCue ? "你" : "他"
-        let opens = byCue && opening.map { !$0.isEmpty && flat(text).contains($0) } == true
-        lines.append("  \(who)：" + (opens ? "开工的第一句（标题与正文）" : CueEnvelope.clip(text, 300)))
+        let opens = byCue && opening.map { same(text, $0) } == true
+        lines.append("  \(who)\(opens ? "（开工的第一句，即标题与正文）" : "")：\(CueEnvelope.clip(text, 300))")
         continue
       }
       let full = text.count > latestReplyLimit
@@ -189,7 +190,15 @@ extension CueTools {
     return lines
   }
 
-  private static func flat(_ text: String) -> String { text.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+  /// 最近几轮里你说过的一句与叶子的标题加正文一字不差（不计空白），就是开工那一句。
+  private static func opening(in detail: CueSessionDetail, body: String) -> Bool {
+    detail.recent.contains { $0.role != .known(.pi) && $0.saidByCue(detail.cueSent) && same(CueFormat.plainText($0.text), body) }
+  }
+
+  private static func same(_ said: String, _ body: String) -> Bool {
+    let flat = { (text: String) in text.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+    return flat(said) == flat(CueFormat.plainText(body))
+  }
 
   private func status(_ card: Card) -> String {
     switch card.status {
