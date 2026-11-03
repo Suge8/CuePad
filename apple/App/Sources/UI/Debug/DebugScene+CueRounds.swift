@@ -38,14 +38,14 @@ extension DebugScene {
             _ = try await store.addCueMessage(.cue, text: String(localized: "复现了：回调里等 token 刷新时没设超时，网络慢时会一直挂着。改成 10 秒超时、超时后回登录页重新授权，测试在跑。", table: "Demo"))
         case "thinking":
             try await you(String(localized: "顺便看看登录回调那个超时", table: "Demo"))
-            try await store.setCueState(.thinking, context: context)
+            try await store.setDemoCueState(.thinking, context: context)
         case "tool":
             try await you(String(localized: "顺便看看登录回调那个超时", table: "Demo"))
             let login = try await store.createTask(String(localized: "登录回调超时", table: "Demo"), in: order?.projectID ?? Project.defaultID)
             let row = try await store.recordCueRound(nil, startedAt: .now, answersYou: true, tools: process(
                 step(.read, String(localized: "看板", table: "Demo")), step(.search, String(localized: "登录回调 超时", table: "Demo")), step(.add, String(localized: "建任务「登录回调超时」", table: "Demo"), login), step(.start, String(localized: "开工「登录回调超时」", table: "Demo"), login),
                 step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing), step(.leave, String(localized: "「notes」留给你回", table: "Demo"), session: "notes")))
-            try await store.setCueState(.tool, step: .init(kind: .talk, name: login.heading, task: login.id), round: row, context: context)
+            try await store.setDemoCueState(.tool, step: .init(kind: .talk, name: login.heading, task: login.id), round: row, context: context)
         case "woke":
             // Cue 自己醒来的一轮还在跑：叫醒它的那一行下面挂这一轮的经过（碰到 4 处，连同在跑那一行至多 4 行），末行是此刻在做的
             let row = try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: process(
@@ -53,7 +53,7 @@ extension DebugScene {
                 step(.edit, String(localized: "改「导入旧数据」", table: "Demo"), importing), step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing),
                 step(.done, String(localized: "做完「README 截图」", table: "Demo"), panel),
                 step(.leave, String(localized: "「notes」留给你回", table: "Demo"), session: "notes")), wake: stirred(.settled, "atlas"))
-            try await store.setCueState(.tool, step: .init(kind: .stop, name: "billing", session: PiSessionState.recordID(sessionID: "billing")), round: row, context: context)
+            try await store.setDemoCueState(.tool, step: .init(kind: .stop, name: "billing", session: PiSessionState.recordID(sessionID: "billing")), round: row, context: context)
         case "sending":
             _ = try await store.addCueMessage(.you, text: String(localized: "顺便看看登录回调那个超时", table: "Demo"))
         case "away":

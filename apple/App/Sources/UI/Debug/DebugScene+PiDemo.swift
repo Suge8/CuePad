@@ -18,7 +18,10 @@ extension DebugScene {
 
     /// 演示用的 Mac 端状态：各种状态、各家 Agent 的会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
-        await running("演示 Pi 会话") { try await seedPiSessions(services) }
+        await running("演示 Pi 会话") {
+            try await refreshDemoPresence(services.store)
+            try await seedPiSessions(services)
+        }
     }
 
     private static func seedPiSessions(_ services: AppServices) async throws {
@@ -29,7 +32,7 @@ extension DebugScene {
         guard !live.contains(where: { $0.state.hostID == "demo-mac" }) else { return }
         let projects = try await store.projects()
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
-        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+        let recorder = demoRecorder(store)
         let sessions: [(String, PiWorkState, String?, String?, DemoRecap)] = [
             // 在跑的会话：新的话在 pendingPrompt，上一轮问答成对
             ("atlas", .tool, "bash · pnpm test -- scheduler", String(localized: "圆桌", table: "Demo"), DemoRecap(
@@ -53,10 +56,10 @@ extension DebugScene {
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: String(localized: "部署到生产吗？\n会替换当前线上的 1.4.2", table: "Demo")))),
             ("review", .delegating, nil, nil, DemoRecap(lastPrompt: String(localized: "让子代理分头审查这两个分支", table: "Demo"))),
             ("migrate", .compacting, nil, "Flow", DemoRecap(lastPrompt: String(localized: "把迁移脚本拆成三步", table: "Demo"), lastReply: String(localized: "拆好了，三步各自能回滚。", table: "Demo"))),
-            // 出错的三种（`PiFailure`）：给的是 Agent 报的原文，同桥上一样归类、写摘要（`PiErrorSummary`）：额度用完（换个模型）、连不上（重试）、登录失效（换个模型）
+            // 出错的一个：给的是 Agent 报的原文，同桥上一样归类、写摘要（`PiErrorSummary`，额度用完、换个模型）
             ("billing", .error, #"429 {"error":{"type":"billing_error","message":"Monthly usage limit reached. Your limit resets Thursday 9:00."}}"#, String(localized: "闲鱼", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把整个 billing 目录读一遍，总结计费规则", table: "Demo"))),
-            ("gateway", .error, #"504 {"error":{"type":"api_error","message":"upstream request timed out"}}"#, String(localized: "圆桌", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把登录回调改走统一网关，改完跑一遍集成测试", table: "Demo"))),
-            ("keychain", .error, #"401 {"error":{"type":"authentication_error","message":"OAuth token has expired"}}"#, "CuePad", DemoRecap(lastPrompt: String(localized: "查一下钥匙串读不到令牌的原因", table: "Demo"))),
+            ("gateway", .tool, "bash · pnpm test -- auth", String(localized: "圆桌", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把登录回调改走统一网关，改完跑一遍集成测试", table: "Demo"))),
+            ("keychain", .thinking, nil, "CuePad", DemoRecap(lastPrompt: String(localized: "查一下钥匙串读不到令牌的原因", table: "Demo"))),
             ("notes", .settled, nil, "Career", DemoRecap(
                 lastPrompt: String(localized: "整理一下这周的会议记录", table: "Demo"), lastReply: String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。", table: "Demo"))),
             // 歇着、Cue 已接手这次停下（转给了 cuepad，`seedCue`）：会话行与看板卡写 Cue 对它做的那件事
@@ -136,7 +139,7 @@ extension DebugScene {
         ])
         try await seedBindings(store, projects: projects)
         // 另一台 Mac 上的会话（演示发过去的话送达与失败）
-        _ = try await PiStateRecorder(store: store, hostID: "demo-mini").update(
+        _ = try await demoRecorder(store, host: "demo-mini").update(
             sessionID: "relay", state: .settled, title: "relay", directory: "relay", times: PiTimes(stateSince: .now.addingTimeInterval(-32 * 60), busySince: nil))
         try await seedChats(store)
         if defaults.bool(forKey: "CuePadLongChat") { try await seedLongChat(store, project: project("CuePad")) }
@@ -157,7 +160,7 @@ extension DebugScene {
             try await relayLaterTurn(store)
             _ = try await services.store.requestDelivery(String(localized: "先把迁移脚本在测试库上跑一遍，报错长这样", table: "Demo") + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay.target, on: relay.hostID, mode: .send)
             // 发给那台 Mac 上已结束的会话、没能送达：装修项目的"此刻"写这条的原因
-            let mini = PiStateRecorder(store: store, hostID: relay.hostID)
+            let mini = demoRecorder(store, host: relay.hostID)
             _ = try await mini.update(sessionID: "quote", state: .settled, title: "quote", directory: "quote", projectID: project(String(localized: "装修", table: "Demo")))
             try await mini.end(sessionID: "quote")
             if let quote = try await store.piSessionPage(PiSessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {

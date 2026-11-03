@@ -26,14 +26,14 @@ extension DebugScene {
         let state = defaults.string(forKey: "CuePadAtlas").flatMap(PiWorkState.init(rawValue:))
         let title = defaults.string(forKey: "CuePadAtlasTitle")
         guard state != nil || title != nil else { return }
-        _ = try await PiStateRecorder(store: store, hostID: "demo-mac").update(sessionID: "atlas", state: state ?? .tool, title: title ?? "atlas")
+        _ = try await demoRecorder(store).update(sessionID: "atlas", state: state ?? .tool, title: title ?? "atlas")
     }
 
     /// 待回复的演示会话（各自新开，不借别的演示已绑着任务的会话）：header 绑着一件新任务"打磨手机 Cue 顶栏"（看板上它挪进等你、卡上写任务名），
     /// 2 起另加没绑任务、十几分钟前歇下的 glass（写会话名）。
     static func seedReplies(_ count: Int, store: CueStore) async throws {
         guard count > 0 else { return }
-        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+        let recorder = demoRecorder(store)
         func settle(_ id: String, _ title: String, _ agent: AgentKind, minutes: Double, said: String, reply: String) async throws {
             try await recorder.update(
                 sessionID: id, state: .settled, title: title, directory: "CuePad",

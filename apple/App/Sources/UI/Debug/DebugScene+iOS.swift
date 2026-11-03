@@ -48,7 +48,11 @@ extension DebugScene {
             (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
         }
         let project = await prepareLibrary(workspace)
-        if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+        if defaults.bool(forKey: "CuePadDemo") {
+            await seedRemote(workspace.services)
+            // Cue 在演示 Mac 上值班才有"等 Cue 回答"与待回复：每个画面都写（已写过就不再写）；Cue 页那几档在摆画面时按各自的先后写
+            if !["cue", "cuememory", "cueschedules"].contains(scene ?? "") { await seedCue(workspace.services) }
+        }
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
         if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
         await IslandBench.run(workspace.services)  // 跑完才报就绪：xc.sh run 一直持有这台模拟器，别的任务换不掉它

@@ -13,7 +13,7 @@ extension DebugScene {
     private static let longChatRounds = 300
 
     static func seedLongChat(_ store: CueStore, project: UUID?) async throws {
-        _ = try await PiStateRecorder(store: store, hostID: "demo-mac").update(
+        _ = try await demoRecorder(store).update(
             sessionID: longChat, state: .settled, title: longChat, directory: longChat, projectID: project)
         let start = Date.now.addingTimeInterval(-Double(longChatRounds) * 240)
         let turns = (0..<longChatRounds).map { round in
@@ -31,7 +31,7 @@ extension DebugScene {
 
     private static func appendRounds(_ sessionID: String, rounds: Int, store: CueStore) async throws {
         guard let session = try await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: sessionID))).items.first?.state else { return }
-        let recorder = PiStateRecorder(store: store, hostID: session.hostID, minInterval: .zero)
+        let recorder = demoRecorder(store, host: session.hostID, minInterval: .zero)
         func set(_ state: PiWorkState, detail: String? = nil, agents: [PiSubagentState]) async throws {
             _ = try await recorder.update(
                 sessionID: sessionID, state: state, detail: detail, title: session.title, directory: session.folder, projectID: session.projectID, subagents: agents)

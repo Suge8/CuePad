@@ -30,7 +30,7 @@ extension DebugScene {
             let wake = CueWake.sessionActivity(woke.map { CueStir(kind: .settled, session: $0) })
             guard !woke.isEmpty else { return nil }
             let row = try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: nil, wake: wake)
-            try await store.setCueState(.thinking, round: row)
+            try await store.setDemoCueState(.thinking, round: row)
             // 歇下前给去处（同真的一轮：醒来、想、动手、歇下）
             let talks = round % 2 == 0
             return ("wake", {
@@ -40,7 +40,7 @@ extension DebugScene {
                     target: talks ? String(localized: "对 \(woke[0]) 说：测试跑完把结果贴过来", table: "Demo") : String(localized: "「\(woke[0])」留给你回", table: "Demo"),
                     name: woke[0], session: PiSessionState.recordID(sessionID: woke[0])))
                 _ = try await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
-                try await store.setCueState(.settled)
+                try await store.setDemoCueState(.settled)
             })
         }
     }
@@ -48,7 +48,7 @@ extension DebugScene {
     /// `-CuePadReplyBlink <秒>`（配 `-CuePadDemo YES -CuePadScene cue`，画面就绪后开始、一直循环）：每隔这么久 Cue 把一个歇着的会话留给你回
     /// （同值班的 Mac 写下的样子，`leaveToYou`），1.5 秒后那个会话又跑起来、不再待回复，看会话条的等你组如何变化。
     static func replyBlinkIfAsked(_ store: CueStore) async {
-        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+        let recorder = demoRecorder(store)
         let title = String(localized: "底栏换系统液态玻璃", table: "Demo")
         func set(_ state: PiWorkState) async throws {
             _ = try await recorder.update(sessionID: "blink", state: state, title: title, directory: "CuePad", agent: .claudeCode)
@@ -66,7 +66,7 @@ extension DebugScene {
         await running("撤回等你的提问") {
             for asked in try await store.cueMessagesWaitingForYou() { _ = try await store.endCueQuestion(asked.id, .withdrawn) }
             for session in try await store.piSessionPage(PiSessionQuery(limit: 500)).items.map(\.state) where session.state == .known(.waitingForUser) {
-                _ = try await PiStateRecorder(store: store, hostID: session.hostID).update(sessionID: session.sessionID, state: .settled, title: session.title)
+                _ = try await demoRecorder(store, host: session.hostID).update(sessionID: session.sessionID, state: .settled, title: session.title)
             }
         }
     }
@@ -140,7 +140,7 @@ extension DebugScene {
     static func relayIfAsked(_ workspace: Workspace) async {
         let store = workspace.services.store
         let kind = defaults.string(forKey: "CuePadRelayKind")
-        let launcher = PiStateRecorder(store: store, hostID: "demo-mac", bootID: defaults.bool(forKey: "CuePadNarrow") ? "narrow-demo-boot" : nil)
+        let launcher = demoRecorder(store)
         var round = 0
         await everyIfAsked("CuePadRelay") {
             if kind == "mixed" {
@@ -217,7 +217,7 @@ extension DebugScene {
         let reopen = defaults.double(forKey: "CuePadReopen")
         guard reopen > 0 else { return }
         await Task.wait(for: .seconds(reopen / 2))
-        await running("关窗时写下 Cue 的状态") { try await workspace.services.store.setCueState(.tool, detail: String(localized: "读看板 · 关窗时写下", table: "Demo")) }
+        await running("关窗时写下 Cue 的状态") { try await workspace.services.store.setDemoCueState(.tool, detail: String(localized: "读看板 · 关窗时写下", table: "Demo")) }
         await Task.wait(for: .seconds(reopen / 2))
         shell.show()
     }

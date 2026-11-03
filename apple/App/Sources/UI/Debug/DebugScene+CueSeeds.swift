@@ -70,8 +70,8 @@ extension DebugScene {
             profile.hostID = "demo-mac"
             profile.enabledAt = .now
         }
-        try await store.recordMacPresence(host: "demo-mac") { true }
-        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+        try await store.recordMacPresence(host: "demo-mac", bootID: demoBoot) { true }
+        let recorder = demoRecorder(store)
         let asked = String(localized: "加在「安装」后面吗？", table: "Demo")
         let rows: [(id: String, title: String, agent: AgentKind, state: PiWorkState, detail: String?, question: PiQuestion?, tokens: Int, model: Bool)] = [
             ("cue-pi-long", String(localized: "把 README 的截图换成 Swift 版并补上深色模式的那一张", table: "Demo"), .pi, .settled, nil, nil, 100_000, true),

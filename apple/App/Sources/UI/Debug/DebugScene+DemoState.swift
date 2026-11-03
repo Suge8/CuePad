@@ -30,7 +30,7 @@ extension DebugScene {
         if let reproduce = tasks.first(where: { $0.body.hasPrefix(String(localized: "复现乱序", table: "Demo")) }) { try await store.setStatus(reproduce.id, .done) }
         // notes 这一轮几分钟前做完，会话歇下
         await Task.wait(for: .milliseconds(5))
-        _ = try await PiStateRecorder(store: store, hostID: "demo-mac").update(
+        _ = try await demoRecorder(store).update(
             sessionID: "notes", state: .settled, title: "notes", directory: "notes", projectID: projects.first { $0.name == "Career" }?.id,
             times: PiTimes(stateSince: .now.addingTimeInterval(-6 * 60), busySince: nil), modelState: demoModels, commands: demoCommands)
         let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id && !$0.body.hasPrefix(String(localized: "投送队列超时报错不发键", table: "Demo")) }

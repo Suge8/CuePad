@@ -16,7 +16,7 @@ extension DebugScene {
     private static func boardTour(_ store: CueStore) async throws {
         guard let task = try await TaskBoard.read(from: store).todo.first?.task else { return }
         // 每一步停留的时长是演示节奏，不是在等别的事
-        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+        let recorder = demoRecorder(store)
         func pause() async { await Task.wait(for: .seconds(2.5)) }
         if let last = try await store.projects().last(where: { !$0.isPinned && !$0.isDefault }) {
             await pause()

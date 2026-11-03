@@ -55,10 +55,10 @@ extension DebugScene {
     /// 演示 Mac 上的 Cue 接到你的话：思考几秒再回一句（同值班的 Mac 写下的样子，上下文照旧），看发出后的"思考中"与回答落下。
     static func demoCueAnswers(_ store: CueStore) async throws {
         let context = try await store.cueState()?.context
-        try await store.setCueState(.thinking, context: context)
+        try await store.setDemoCueState(.thinking, context: context)
         try await Task.sleep(for: .seconds(4))
         _ = try await store.addCueMessage(.cue, text: String(localized: "收到，我这就去看。", table: "Demo"))
-        try await store.setCueState(.settled, context: context)
+        try await store.setDemoCueState(.settled, context: context)
     }
 
     /// 你对运行在演示 Mac 上的 Cue 说了、还没交给它的话；演示 Mac 不在线（`-CuePadCuePresence asleep`，没写在线记录）时它收不到。
@@ -79,7 +79,7 @@ extension DebugScene {
     private static func cycle(_ services: AppServices) async throws {
         let store = services.store
         let query = PiSessionQuery(id: PiSessionState.recordID(sessionID: "scratch"))
-        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+        let recorder = demoRecorder(store)
         func set(_ state: PiWorkState, _ detail: String, question: PiQuestion? = nil) async throws {
             guard let session = try await store.piSessionPage(query).items.first?.state else { return }
             try await replay(session, as: state, detail: detail, question: question, recorder: recorder)
@@ -109,7 +109,7 @@ extension DebugScene {
         guard let ref = try await store.deliveryRequest(request)?.target.ref,
               let session = try await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: ref))).items.first?.state
         else { return }
-        let recorder = PiStateRecorder(store: store, hostID: host)
+        let recorder = demoRecorder(store, host: host)
         await Task.wait(for: .seconds(0.8))
         try await replay(session, as: .thinking, recorder: recorder)
         await Task.wait(for: .seconds(2.5))

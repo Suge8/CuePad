@@ -71,7 +71,7 @@ extension DebugScene {
         try await store.markCueMessagesDelivered([said.id], at: startedAt)
 
         let context = try await store.cueState()?.context
-        try await store.setCueState(.thinking, context: context)
+        try await store.setDemoCueState(.thinking, context: context)
         try await beat(FlowBeat.thinking)
         // 同值班的管理器（`CueKeeper.handle`）：调用开始时写此刻碰到的那一处（`CueState.step`），做完一步整份经过写回那一行
         let roundtable = try await store.projects().first { $0.name == String(localized: "圆桌", table: "Demo") }?.id
@@ -79,21 +79,21 @@ extension DebugScene {
         var tools = PiChatMessage.Tools()
         tools.record(.init(kind: .read, target: String(localized: "看板", table: "Demo")))
         let row = try await store.recordCueRound(nil, startedAt: startedAt, answersYou: true, tools: tools)
-        try await store.setCueState(.tool, step: .init(kind: .add, name: name), round: row, context: context)
+        try await store.setDemoCueState(.tool, step: .init(kind: .add, name: name), round: row, context: context)
         try await beat(FlowBeat.toolStep)
         let task = try await store.createTask(name, in: roundtable ?? Project.defaultID)
         tools.record(.init(kind: .add, target: String(localized: "建任务「登录回调超时」", table: "Demo"), task: task.id, name: name))
         _ = try await store.recordCueRound(row, startedAt: startedAt, answersYou: true, tools: tools)
-        try await store.setCueState(.tool, step: .init(kind: .start, name: name, task: task.id), round: row, context: context)
+        try await store.setDemoCueState(.tool, step: .init(kind: .start, name: name, task: task.id), round: row, context: context)
         try await beat(FlowBeat.toolStep)
         try await store.linkCard(task.id, toSession: flowSession)
         tools.record(.init(kind: .start, target: String(localized: "开工「登录回调超时」", table: "Demo"), task: task.id, name: name))
         _ = try await store.recordCueRound(row, startedAt: startedAt, answersYou: true, tools: tools)
-        try await store.setCueState(.thinking, round: row, context: context)
+        try await store.setDemoCueState(.thinking, round: row, context: context)
         try await beat(FlowBeat.toolStep)
 
         _ = try await store.addCueMessage(.cue, text: String(localized: "复现了：回调里等 token 刷新时没设超时，网络慢时会一直挂着。改成 10 秒超时、超时后回登录页重新授权，测试在跑。", table: "Demo"), task: task.id)
-        try await store.setCueState(.settled, context: context)
+        try await store.setDemoCueState(.settled, context: context)
         try await beat(FlowBeat.reply)
 
         let evidence = try await seedEvidence(store, session: flowSession, title: String(localized: "登录页（超时后）", table: "Demo"), png: loginTimeoutPNG())

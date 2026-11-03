@@ -7,7 +7,8 @@ import Foundation
 /// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 确认做完了（结果带证据与截图）。
 /// 对话里有你的话（一句带图）、Cue 的话、每一轮的经过（碰到 1 处、3 处）、折起的动态、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的，最上面三条定时（`seedSchedules`）；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 运行在这台 Mac，"运行情况"才有。
-/// `-CuePadWaitKinds YES`：等你里各种问题都有（Cue 把 homepage 的选择题、deploy 的确认题、rename 的文字题留给你答），对话都看过了、页停在最新处。
+/// 默认的等你：拍板两个（推送那一问、notes-edit 在编辑器里问的），待回复一个（notes），出错的 billing；其余会话在跑或等 Cue 回答。
+/// `-CuePadWaitKinds YES`：等你里各种问题都有（再一张 Cue 的删目录一问；Cue 把 homepage 的选择题、deploy 的确认题、rename 的文字题留给你答），对话都看过了、页停在最新处。
 /// `-CuePadReplies <N>`、`-CuePadAtlas`、`-CuePadAtlasTitle` 见 `DebugScene+CueSessions.swift`。
 /// 配 fresh 时 notes-edit 也结束，没有拍板：名牌说几个会话待回复。
 /// `-CuePadCuePresence <unchosen|fresh|answered|thinking|tool|woke|sending|asleep|disabled>`：unchosen 是还没选过在哪台 Mac 上运行（演示的几台 Mac 都在，手机 Cue 面板就地选）；fresh 是刚启用、还没说过话（空态里那几句能直接说的话，`CueStarters`）；answered 是"等你"那一条你选了"可以"（回到对话里、带着你的回答），
@@ -33,17 +34,17 @@ extension DebugScene {
                 profile.hostID = host
                 profile.enabledAt = presence == "disabled" ? nil : .now
             }
-            if presence != "asleep" { try await store.recordMacPresence(host: host) { true } }
+            if presence != "asleep" { try await store.recordMacPresence(host: host, bootID: boot(of: host)) { true } }
             if presence == "fresh" {
                 let replies = defaults.integer(forKey: "CuePadReplies")
-                if replies > 0 { try await PiStateRecorder(store: store, hostID: "demo-mac").end(sessionID: "notes-edit") }
+                if replies > 0 { try await demoRecorder(store).end(sessionID: "notes-edit") }
                 return try await seedReplies(replies, store: store)
             }
             let tasks = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
             func task(_ prefix: String) -> Card? { tasks.first { $0.parentID == nil && $0.body.hasPrefix(prefix) } }
             let order = task(String(localized: "发言轮次乱序", table: "Demo")), importing = task(String(localized: "导入旧数据时保留回收站", table: "Demo")), panel = task(String(localized: "README 截图换成 Swift 版", table: "Demo"))
             if let importing { try await store.linkCard(importing.id, toSession: "billing") }
-            // 截图是 notes 会话做的（歇着）：Cue 值班，侧栏与会话列表里它只说"歇着"
+            // 截图是 notes 会话做的：交了截图停下、留给你回（待回复，`seedPiSessions`）
             if let panel { try await store.linkCard(panel.id, toSession: "notes") }
             let evidence = try await seedEvidence(store, session: "notes", title: String(localized: "README 截图（浅色）", table: "Demo"), png: readmePNG())
             // Cue 发进 atlas 会话的一句（还在路上）：会话页的气泡上标着 Cue
@@ -118,8 +119,8 @@ extension DebugScene {
 
                     要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
                     """, table: "Demo"), ask: try CueAsking(.push, action: String(localized: "把发言顺序的修复推送到 origin/main", table: "Demo")), shots: try await deployShots(store), task: order?.id)
-            // 第二张"等你"（答完第一张接着露出来）：还有几条在等的演示
-            if !cueFlows, let billing = task(String(localized: "清理旧的计费脚本", table: "Demo")) {
+            // 第二张"等你"（答完第一张接着露出来）只在要各种等你时写：默认的演示里拍板是这一张与 notes-edit 在编辑器里问的那个，共两个
+            if !cueFlows, defaults.bool(forKey: "CuePadWaitKinds"), let billing = task(String(localized: "清理旧的计费脚本", table: "Demo")) {
                 _ = try await store.addCueMessage(
                     .cue, text: String(localized: "旧的计费脚本目录 `scripts/billing-legacy` 已经没有调用方了，CI 里也不再跑。要删掉吗？", table: "Demo"),
                     ask: try CueAsking(.delete, action: String(localized: "删掉 scripts/billing-legacy 目录", table: "Demo")), task: billing.id)
@@ -155,7 +156,9 @@ extension DebugScene {
             try await seedSchedules(store, task: task(String(localized: "续费域名", table: "Demo")))
             // 用到换新线的七成（上下文用量那一块加深一档）
             let context = CueContext(used: 70_000)
-            try await store.setCueState(.settled, context: context)
+            try await store.setDemoCueState(.settled, context: context)
+            // 待回复的一个：notes 交了截图停下、Cue 留给你回（在它最后一次写状态之后记：留给你的是这一次停下）
+            _ = try await store.leaveToYou("notes")
             // 等你里各种问题都有：Cue 把选择题、确认题、文字题留给你答（值班时它们本来归 Cue 答），都看过了（页停在最新处）
             if defaults.bool(forKey: "CuePadWaitKinds") {
                 for id in ["homepage", "deploy", "rename"] { _ = try await store.leaveToYou(id) }

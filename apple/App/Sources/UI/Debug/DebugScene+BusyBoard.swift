@@ -12,7 +12,7 @@ extension DebugScene {
     }
 
     private static func busyBoard(_ store: CueStore) async throws {
-        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+        let recorder = demoRecorder(store)
         guard try await store.piSessionPage(PiSessionQuery(text: "share")).items.isEmpty else { return }
         let now = Date.now
         func session(_ id: String, _ state: PiWorkState, _ detail: String?, busy minutes: Double, earlier: [Double] = [], prompt: String, subagents: [PiSubagentState]? = nil) async throws {

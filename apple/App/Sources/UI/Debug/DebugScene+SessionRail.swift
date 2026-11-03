@@ -50,7 +50,7 @@ extension DebugScene {
             let store = services.store, host = "rail-mac", boot = "rail-boot"
             try await store.recordMacPresence(host: host, bootID: boot) { true }
             _ = try await store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
-            try await store.setCueState(.settled)
+            try await store.setCueState(.settled, hostID: host, bootID: boot)
             let recorder = PiStateRecorder(store: store, hostID: host, bootID: boot)
             let samples: [(String, AgentKind, PiWorkState)] = [
                 ("notes-edit", .claudeCode, .waitingForUser), ("release", .codex, .waitingForUser), ("docs", .codex, .settled),
