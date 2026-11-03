@@ -19,7 +19,7 @@ extension DebugScene {
     /// 演示用的 Mac 端状态：各种状态、各家 Agent 的会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         await running("演示 Pi 会话") {
-            try await refreshDemoPresence(services.store)
+            try await keepDemoPresence(services.store)
             try await seedPiSessions(services)
         }
     }

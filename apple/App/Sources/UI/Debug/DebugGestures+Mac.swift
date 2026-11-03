@@ -9,7 +9,7 @@ import AppKit
 ///   不认合成的；后台看图用 `drag`，要真滚走下面占前台的 `hidscroll`；`jump:x,y,dy` 让那一点的滚动视图一下往下挪 dy 点（负数往上；只为把内容摆到要看的地方，如 PDF 翻到后页、对话翻回前面）；
 /// - `left`、`right`、`space` 按一下那个键；`wait:秒` 多等一会儿；`width:宽,秒` 像拖窗口右边那样逐帧把窗口改到这么宽（左上角不动）；
 /// - 占前台的真实输入（要 `-CuePadForeground YES`，`DebugForeground`）：`front:x,y` 借前台、把指针放到那一点；`hidpinch:x,y,倍数`、
-///   `hidscroll:x,y,dx,dy`（手指走 0.5 秒、松手后惯性约 0.6 秒）在 HID 层发给窗口服务器（同触控板，经它派给指针下的窗口、系统滚动视图自己的线程）；
+///   `hidscroll:x,y,dx,dy`（手指走 0.5 秒、松手后惯性约 0.6 秒）、`hiddrag:x1,y1,x2,y2,秒`（按住鼠标拖过去，拖窗口边就是真的改窗口宽）在 HID 层发给窗口服务器（同触控板，经它派给指针下的窗口、系统滚动视图自己的线程）；
 ///   `back` 还前台与指针；`probe:x,y` 把那一点的滚动视图放大倍数与可见区原点写进日志（`PREVIEW-PROBE`，看事件进没进去）；
 /// - `measure:标签` 起量、`measure` 收：这一段主线程的掉帧（display link 的回调间隔，`FrameRecorder`）与进程执行的指令数，
 ///   写一行 `PREVIEW-MEASURE 标签 {json}` 进日志（前后两个检出跑同一串步骤对比）。
@@ -112,6 +112,19 @@ extension DebugScene {
                 my *= 0.92
                 hid(wheel(at, phase: 0, momentum: index == 0 ? 1 : index == 71 ? 3 : 2, dx: mx, dy: my))
             }
+        case ("hiddrag", 5):
+            let from = global(n[0], n[1], in: window), to = global(n[2], n[3], in: window), steps = max(1, Int(n[4] * 120))
+            hid(CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: from, mouseButton: .left))
+            await Task.wait(for: .milliseconds(300))
+            hid(CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: from, mouseButton: .left))
+            for i in 1...steps {
+                await Task.wait(for: Self.hidFrame)
+                let t = Double(i) / Double(steps)
+                let at = CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
+                hid(CGEvent(mouseEventSource: nil, mouseType: .leftMouseDragged, mouseCursorPosition: at, mouseButton: .left))
+            }
+            await Task.wait(for: .milliseconds(150))
+            hid(CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: to, mouseButton: .left))
         case ("smart", 2):
             send(cgEvent(n[0], n[1], in: window) { $0.type = Self.gestureType; $0.setIntegerValueField(Self.gestureSubtype, value: 22) })
         case ("swipe", 4):
