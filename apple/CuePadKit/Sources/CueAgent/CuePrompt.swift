@@ -92,20 +92,12 @@ public enum CuePrompt {
     return CueMCPServer.toolPrefix(on: runtime).isEmpty ? named : named + "；调用时工具名照这里写全，下文的 task peek、memory note 这类是「工具 动作」的简称"
   }
 
-  /// 清单多于这么多个就只写默认的：Pi 没配范围时可选的是已配好密钥的全部，可能几百个，而系统提示每个班次都带着它。
-  private static let modelsListed = 20
-
-  /// 一家一行，能照抄进 start（如"agent=pi, model=anthropic/claude-opus-5-5（默认）、openai-codex/gpt-6.1-sol"）：
-  /// 模型按这家的写法（`AgentKind.modelRef`），默认的在前；没有模型清单的只写 agent（用它自己的默认）。
+  /// 一行：能开会话的几家与各自的默认模型（照这家的写法，`AgentKind.modelRef`）。完整的模型清单与额度只在 `setup look agents`（现读，班次中途变了也对），
+  /// 不抄进每个班次都带着的系统提示；写错的 model 当场被退回并列出能选的（`CueStore.cueModelKey`）。
   private static func agentsSection(_ agents: [MacAgent]) -> String {
-    guard !agents.isEmpty else { return "" }
-    let lines = agents.map { agent in
-      let others = agent.models.count > modelsListed ? [] : agent.models.map(\.key).filter { $0 != agent.model }
-      let models = (agent.model.map { [agent.kind.modelRef($0) + "（默认）"] } ?? []) + others.map(agent.kind.modelRef)
-      return "  - agent=\(agent.kind.rawValue)" + (models.isEmpty ? "" : ", model=" + models.joined(separator: "、"))
-    }
+    guard let first = agents.first else { return "" }
+    let named = agents.map { agent in agent.kind.rawValue + (agent.model.map { "（默认 \(agent.kind.modelRef($0))）" } ?? "") }
     // start 不写 agent 用那台 Mac 的默认（`CueStore.startLeaf`），就是清单第一家
-    return "\n- 可选的 Agent 与模型（照抄进 start 的 agent、model，model 只填一个；不写 agent 就用 \(agents[0].kind.rawValue) 和它的默认模型）：\n"
-      + lines.joined(separator: "\n")
+    return "\n- 能开会话的 Agent：\(named.joined(separator: "、"))；不写 agent 用 \(first.kind.rawValue)，别的模型看 setup look agents。"
   }
 }
