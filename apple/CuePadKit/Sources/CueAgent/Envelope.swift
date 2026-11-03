@@ -99,7 +99,7 @@ public enum CueEnvelope {
       let said = ([message.text] + paths).joined(separator: "\n")
       let cards = setAside.filter { $0.setAsideBy == message.id }
       guard !cards.isEmpty else { return said }
-      return ([said, "", "（他开口收起了等你里的 \(cards.count) 张；他这句与它无关就 tell restore 放回：）"] + cards.map { "- " + question($0) }).joined(separator: "\n")
+      return ([said, "", "（他开口收起了等你里的 \(cards.count) 张；他这句与它无关就 tell 带 restore 放回：）"] + cards.map { "- " + question($0) }).joined(separator: "\n")
     }.joined(separator: "\n\n")
   }
 

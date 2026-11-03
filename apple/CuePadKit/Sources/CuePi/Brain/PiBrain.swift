@@ -10,7 +10,7 @@ import Foundation
 ///   不读工作目录里的项目文件（`-na`：项目的 `.pi/` 设置、扩展与 MCP 配置都不信任），也不加载 skill、上下文文件、提示词模板；
 /// - 系统提示整份替换（`--system-prompt` 盖过 `SYSTEM.md`）；Pi 只在没给 `--append-system-prompt` 时才去找 `APPEND_SYSTEM.md`
 ///   追加上去，所以给一个空的追加项挡掉它（空串不追加任何东西）；
-/// - 工具只有扩展登记的与内置的 `read,grep,find,ls`（`-nbt` 关掉内置工具、留着扩展的，`+名字` 再加回这几个）；
+/// - 工具只有扩展登记的与内置的 `read`（`-nbt` 关掉内置工具、留着扩展的，`+read` 再加回它）：Cue 只读文件核对证据，搜代码交给会话；
 /// - 图随 `prompt` 的 `images` 交；模型能不能看图看 `get_state` 里模型的 `input`；
 /// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；就地换走 `set_model`（`提供方/模型` 拆开）再 `set_thinking_level`
 ///   （换模型时 Pi 会按新模型重取强度，所以强度在后）；都只改这个进程，不写 Pi 的设置；
@@ -59,7 +59,7 @@ final class PiBrain: HostedSession {
             try config.systemPrompt.write(to: prompt, atomically: true, encoding: .utf8)
             var arguments = [
                 "--mode", "rpc", "--no-session", "--offline", "-ne", "-na", "-e", Self.tools.path, "-e", Self.subscription.path,
-                "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "-nbt", "--tools", "+read,+grep,+find,+ls",
+                "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "-nbt", "--tools", "+read",
             ]
             if config.fast { arguments += ["-e", Bundle.module.url(forResource: "cue-fast", withExtension: "ts")!.path] }
             if let model = config.model { arguments += ["--model", model] }

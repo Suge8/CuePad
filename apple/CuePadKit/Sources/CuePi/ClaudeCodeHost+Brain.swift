@@ -5,7 +5,7 @@ import Foundation
 
 /// 当 Cue 的大脑开（`init()` 再 `start`）：不挂桥、不进会话列表，一轮的状态与托管会话同一套，经 `events` 交出。
 /// 启动参数（见 `start`）保证：不落会话（不进 `claude --resume` 的列表）；系统提示整份替换，不读 CLAUDE.md、自动记忆与 skill；
-/// 不跑用户的钩子（也就不会报给 CuePad 成一个会话）；工具只有只读的三样与 CuePad 的 MCP，其余需要批准的一律拒绝（`--permission-prompts none`），
+/// 不跑用户的钩子（也就不会报给 CuePad 成一个会话）；工具只有读文件（Cue 只读文件核对证据，搜代码交给会话）与 CuePad 的 MCP，其余需要批准的一律拒绝（`--permission-prompts none`），
 /// 不会停下来等人。斜杠命令开着，只为开新会话的 `/clear`（见下）。
 /// - 正忙时说的话并进当前这一轮（不先停下，与托管会话的发话不同）；他的话以 `/` 开头时前面垫一个空格，不被当成命令；
 /// - 起好要等 CuePad 的 MCP 服务连上（`toolsConnected`）；
@@ -25,8 +25,8 @@ extension ClaudeHostedSession: HostedSession {
             try config.systemPrompt.write(to: prompt, atomically: true, encoding: .utf8)
             let mcp = ["mcpServers": [CueMCPServer.name: ["command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment]]]
             var arguments = [
-                "-p", "--no-session-persistence", "--system-prompt-file", prompt.path, "--tools", "Read,Grep,Glob",
-                "--allowedTools", "Read,Grep,Glob,\(CueMCPServer.toolPrefix(on: .claudeCode))*", "--permission-prompts", "none", "--strict-mcp-config",
+                "-p", "--no-session-persistence", "--system-prompt-file", prompt.path, "--tools", "Read",
+                "--allowedTools", "Read,\(CueMCPServer.toolPrefix(on: .claudeCode))*", "--permission-prompts", "none", "--strict-mcp-config",
                 "--mcp-config", jsonString(mcp), "--settings", #"{"disableAllHooks":true}"#,
             ]
             if let model = config.model { arguments += ["--model", model] }

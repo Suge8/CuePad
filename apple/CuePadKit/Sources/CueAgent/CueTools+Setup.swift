@@ -8,11 +8,10 @@ extension CueTools {
     [
       "name": "setup",
       "description": """
-        你自己与你运行的这台 Mac 的设置。look{part?} 只读：不带 part 是总览（大脑与它好不好、各家 Agent 能不能用与边界、订阅额度、记忆与定时、技能与规则、项目）；
-        part=brain|agents|quota|skills|projects 看那一块的全部（agents 带每家能选的模型、各自花哪个账号的额度）；
-        set{agent?,model?,effort?,fast?,name?} 改你自己的大脑：agent 要在这台 Mac 上能用，换 agent 不写 model 就用那家的默认；model 照这家的写法（look agents 里有），写 default 回到这家的默认；fast 只有支持的模型能开。model、effort 下一轮换上；换 agent、name、fast 或 model 回到默认，这一轮做完后换新大脑（记忆照旧，结果里会说是哪种）。额度吃紧时可换到宽裕的那家或模型，要等额度恢复再换回就 memory remind 定个时；
-        project{project,new?,title?,intro?,folder?}：project 写项目名，new:true 才新建（防拼错建出新的）；title 改名，intro 是一句话介绍（空串清掉），folder 绑定这台 Mac 上的文件夹（绝对路径或 ~/，要存在；空串解除）；
-        tidy{} 请这台 Mac 一键整理技能与规则（look skills 里"一键整理"那几件）；同名去重、内容不同的规则合并要他挑，告诉他在技能与规则页里做。
+        你自己与你运行的这台 Mac。look{part?} 只读：不带 part 是总览（大脑与它好不好、各家 Agent 能不能用与边界、订阅额度、记忆与定时、技能与规则、项目）；part=brain|agents|quota|skills|projects 看那一块的全部（agents 带每家能选的模型、各花哪个账号的额度）；
+        set{agent?,model?,effort?,fast?,name?} 改你自己的大脑：agent 要在这台 Mac 上能用，换 agent 不写 model 用那家的默认；model 照这家的写法（look agents 里有），写 default 回到默认；fast 只有支持的模型能开。model、effort 下一轮换上；换 agent、name、fast 或 model 回到默认，这一轮做完后换新大脑（记忆照旧，结果里会说是哪种）；
+        project{project,new?,title?,intro?,folder?}：project 写项目名，new:true 才新建（防拼错建出新的）；title 改名，intro 是一句话介绍（空串清掉），folder 绑定这台 Mac 上已有的文件夹（绝对路径或 ~/；空串解除）；
+        tidy{} 请这台 Mac 一键整理技能与规则（look skills 里"一键整理"那几件）；去重与合并要他挑，告诉他在技能与规则页里做。
         """,
       "inputSchema": schema(
         [
