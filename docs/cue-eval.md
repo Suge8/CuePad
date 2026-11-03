@@ -1,6 +1,6 @@
 # Cue 评测
 
-改 Cue 的系统提示、工具说明、信封或记忆前后各跑一遍，比同一套场景里真模型的做法。大脑缺省是这台 Mac 上 Claude Code 自己的登录，换 Pi、Codex 与换模型、强度见 `EvalBrain` 头注释；经 xcodebuild 传的环境变量要加 `TEST_RUNNER_` 前缀。
+改 Cue 的系统提示、工具说明、信封或记忆前后各跑一遍，比同一套场景里真模型的做法。大脑缺省是这台 Mac 上 Claude Code 自己的登录，换 Pi、Codex 与换模型、强度见 `EvalBrain` 头注释（Pi 没有 Anthropic 登录时，`_MODEL` 给 ~/.pi/agent/models.json 里的提供方，如 `magpie/claude/claude-sonnet-5-5`）；经 xcodebuild 传的环境变量要加 `TEST_RUNNER_` 前缀。
 
 ## 三套场景
 
@@ -19,6 +19,15 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER
 - 长程、多日考什么、怎么换新，在 `CueEvalLongTests`、`CueEvalDaysTests` 的头注释。只改了一两类行为时，短场景可用 `-only-testing:'CuePadTests/CueEvalTests/<函数名>()'` 只跑受影响的几个，结论照样看两遍以上。
 - 输出目录每个场景一个 .md（信封、工具调用、Cue 写的消息、判定与每一轮的开销）与一份 `<场景>.score.json`，这一遍的系统提示在 `system-prompt.md`。有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
 - 开销是大脑自报的 token 与费用；后台做梦的大脑输出另存 `usage/dream`，逐轮开销与换新只数 Cue 的。缓存跨场景命中一小时，先后跑的缓存读写会不同。
+
+## 换大脑
+
+Pi 额度用完、自动换到这台 Mac 上另一家真的 Agent 之后，那家能不能起来接着答（`CueEvalFailoverTests`）。换上的那家用 `_RUNTIME` 选，不能是 Pi：
+
+```bash
+TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=codex TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/failover CUEPAD_TEST_TIME_LIMIT=900 \
+  apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalFailoverTests
+```
 
 ## 问与打扰的专门场景
 

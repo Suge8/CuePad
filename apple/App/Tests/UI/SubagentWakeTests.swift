@@ -66,7 +66,7 @@ struct SubagentWakeTests {
         await rig.stop()
     }
 
-    /// 另一台 Mac 上的会话在等子代理，在跑的子代理最后一次进展快满 `stallAfter`：到点 Cue 醒来一次，变化写"等子代理 20 分钟没动静"；
+    /// 另一台（在线的）Mac 上的会话在等子代理，在跑的子代理最后一次进展快满 `stallAfter`：到点 Cue 醒来一次，变化写"等子代理 20 分钟没动静"；
     /// 之后你跟 Cue 说话，同一段停滞不再出现在变化里。
     @Test func 在跑的子代理太久没进展_叫醒一次() async throws {
         let rig = try await CueHostTests.Rig()
@@ -79,6 +79,8 @@ struct SubagentWakeTests {
             name: "ui", role: "工程师", phase: .known(.running), action: "bash · swift test", startedAt: due - 3600,
             progressAt: due - PiSessionState.stallAfter)
         let reviewer = PiSubagentState(name: "reviewer", role: "哨兵", phase: .known(.done), startedAt: due - 3600, settledAt: due - 3000, progressAt: due - 3000)
+        // 会话在跑只认宿主在线时报的（`runtimeUntil`）：mac-b 像醒着的 Mac 那样先报在线
+        try await store.recordMacPresence(host: "mac-b") { true }
         try await PiStateRecorder(store: store, hostID: "mac-b")
             .update(sessionID: "remote-1", state: .delegating, title: "修好登录页", subagents: [ui, reviewer])
 
