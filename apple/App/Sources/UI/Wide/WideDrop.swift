@@ -17,7 +17,9 @@ extension EnvironmentValues {
 #if os(iOS)
 extension WideColumnController: UIDropInteractionDelegate {
     func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
-        session.hasItemsConforming(toTypeIdentifiers: [DraggedColumn.type.identifier, UTType.cuepadSession.identifier])
+        // 看板、项目页的卡片落点在主栏浏览页里，与这个接收器挂在同一个托管视图上：带卡片的拖放（有会话的任务卡也带会话）归它们，不在这里打开会话
+        if column == .main, workspace.session(in: .main) == nil, session.hasItemsConforming(toTypeIdentifiers: [UTType.cuepadCard.identifier]) { return false }
+        return session.hasItemsConforming(toTypeIdentifiers: [DraggedColumn.type.identifier, UTType.cuepadSession.identifier])
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
