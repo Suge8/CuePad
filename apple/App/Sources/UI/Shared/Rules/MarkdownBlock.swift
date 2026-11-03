@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 /// Pi 回答的 Markdown 块（iOS 会话页、Mac 会话页共用）。只认回答里常见的几种，其余按段落；块内的行内语法
@@ -33,8 +34,7 @@ nonisolated enum MarkdownBlock: Equatable, Sendable {
     /// 一行里的行内记号（强调、代码、链接、转义、实体）只留显示的字；没有这些记号的行原样（系统的行内解析每行要建一份带属性的文字）。
     static func plainInline(_ text: String) -> String {
         guard text.contains(where: inlineMarks.contains) else { return text }
-        return (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-            .map { String($0.characters) } ?? text
+        return String(AttributedString(inlineMarkdown: text).characters)
     }
 
     private static let inlineMarks: Set<Character> = ["*", "_", "`", "[", "]", "\\", "<", "&", "~", "!"]
