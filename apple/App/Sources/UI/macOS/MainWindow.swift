@@ -44,6 +44,7 @@ struct MainWindow: View {
         VStack(spacing: 0) {
             HStack {
                 WidePlaces()
+                WideProjectHeading().padding(.leading, 8)
                 Spacer(minLength: 8)
                 CloseButton()
                 if workspace.overlay != nil { OverlayTitle() }

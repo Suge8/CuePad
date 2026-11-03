@@ -3,18 +3,10 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 栏头里在这一页上暂时用不上的控件（进展页两段之间换着用的几样）：看不见、不接点，宽度照旧，换段时那一排不重排。
-    func toolbarVisible(_ shown: Bool) -> some View {
+    /// 暂时用不上、一会儿还要出现的栏头控件：看不见、不接点、读屏跳过，仍挂着、位置照留。只给两种：
+    /// 一出一收会挤动同一排旁边的（同步提醒、技能与规则的说明），与来回换着用、现建要花一截首帧的（进展页会话段的范围与新会话）；其余按条件写。
+    func keepsPlace(shown: Bool) -> some View {
         opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
-    }
-
-    /// 只在一部分时候有的栏头控件（进展页、Cue 页、技能与规则页的几格）：不在时宽 0、看不见，仍挂着（再出现时不现建，项目菜单不重算）。
-    /// 宽度不跟动画走：每帧变一次宽，那一排就每帧重排一遍。
-    func toolbarPresence(_ present: Bool) -> some View {
-        frame(width: present ? nil : 0, alignment: .leading)
-            .clipped()
-            .toolbarVisible(present)
-            .animation(nil, value: present)
     }
 }
 
@@ -116,103 +108,75 @@ struct WindowFrame<Value: Equatable>: NSViewRepresentable {
 
 /// 进展页顶上那一排、两段分段之后：会话段的项目范围（`ProjectScopeMenu`，`Workspace.projectScope`；看板段那一排是列头，范围在"⋯"里）。
 /// 栏头里的控件只有一条规矩（这一格、`PageActionSlot`、`SearchSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，
-/// 栏头读不到页面读的库，抄一份过来就是第二个事实源。控件都一直挂着（换页时不现建整份项目菜单）、只换内容。
-/// 只属于一页的几格在别的页宽 0（`toolbarPresence`），随那一页第一次挂上才建（`PageControl`）；
-/// 进展页两段之间宽度不变，换段只换哪几样看得见（`toolbarVisible`）。这一格按项目名的宽、最宽 `maxWidth`（再长截断），只在换范围时变宽变窄；
-/// 状态归页面的（会话段的搜索、新会话表单读的这台 Mac 上有哪些 Agent）留在页里。
+/// 栏头读不到页面读的库，抄一份过来就是第二个事实源；状态归页面的（会话段的搜索、新会话表单读的这台 Mac 上有哪些 Agent）留在页里。
+/// 只在会话段看得见，看板段仍挂着（`keepsPlace`）：换到会话段时现建整份项目菜单与新会话钮，那一下多 50～70M 条指令（13%～25%，后台量的"看板→会话"）。
+/// 按项目名的宽、最宽 `maxWidth`（再长截断）。
 struct ScopeSlot: View {
     @Environment(Workspace.self) private var workspace
 
     private static let maxWidth: CGFloat = 200
 
     var body: some View {
-        PageControl(.progress) { ProjectScopeMenu() }
+        ProjectScopeMenu()
             .frame(maxWidth: Self.maxWidth, minHeight: Spacing.toolbarControl, maxHeight: Spacing.toolbarControl)
-            .toolbarVisible(workspace.showsSessionsBar)
             .padding(.leading, Spacing.toolbarGap)
-            .toolbarPresence(workspace.mainRoute == .progress)
+            .keepsPlace(shown: workspace.showsSessionsBar)
     }
 }
 
-/// 只属于一页的栏头控件（进展页的 `ScopeSlot`、`PageActionSlot`，Cue 页的 `CueListSlots`，技能与规则页的 `LibraryHelpSlot`）：
-/// 别的页上宽 0、看不见。随那一页一起挂上——进展页在启动后空闲时先挂上（`Prewarm`），或一打开就在那一页——之后一直挂着；
-/// 挂上之前不建，冷启动的第一帧不建看不见的分段、项目菜单、玻璃与新会话钮。
-struct PageControl<Content: View>: View {
-    let page: Route
-    let content: Content
-    @Environment(Workspace.self) private var workspace
-    @State private var mounted = false
-
-    init(_ page: Route, @ViewBuilder content: () -> Content) {
-        self.page = page
-        self.content = content()
-    }
-
-    var body: some View {
-        let due = workspace.mountedPages.contains(page)
-        ZStack { if mounted || due { content } }
-            .onChange(of: due, initial: true) { if $1 { mounted = true } }
-    }
-}
-
-/// 右栏 Cue 页栏头的右边：记忆与定时两颗圆钮，各打开自己的弹层（`CueMemoryPage`、`CueSchedulePage`）。规矩同 `ScopeSlot`。
+/// 右栏 Cue 页栏头的右边：记忆与定时两颗圆钮，各打开自己的弹层（`CueMemoryPage`、`CueSchedulePage`）。
 struct CueListSlots: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         let cue = workspace.cue
-        PageControl(.cue) {
-            HStack(spacing: Spacing.toolbarGap) {
-                Button("\(cue.name) 记得什么", icon: .memory) { cue.showsMemory = true }
-                    .help("\(cue.name) 记得什么")
-                Button("定时", icon: .schedule) { cue.showsSchedules = true }
-                    .help("定时")
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(ControlButtonStyle(kind: .circular))
+        HStack(spacing: Spacing.toolbarGap) {
+            Button("\(cue.name) 记得什么", icon: .memory) { cue.showsMemory = true }
+                .help("\(cue.name) 记得什么")
+            Button("定时", icon: .schedule) { cue.showsSchedules = true }
+                .help("定时")
         }
+        .labelStyle(.iconOnly)
+        .buttonStyle(ControlButtonStyle(kind: .circular))
         .padding(.leading, Spacing.toolbarGap)
-        .toolbarPresence(workspace.mainRoute == .cue)
     }
 }
 
 /// 进展页顶上那一排的右边：会话段的"新会话"（弹出新会话的表单，`NewSessionPanel`，⌥⌘N 同）；看板段的新任务在"⋯"里。
-/// 规矩同 `ScopeSlot`；宽度就是字宽（字不随页变）。
+/// 规矩同 `ScopeSlot`。
 struct PageActionSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         // 写明图标与字两样都要
-        PageControl(.progress) {
-            Button("新会话", icon: .add) { workspace.showsNewSession = true }
-                .labelStyle(.titleAndIcon)
-                .buttonStyle(ControlButtonStyle(kind: .glass))
-                .help("开一个新的 Agent 会话（⌥⌘N）")
-        }
-        .toolbarVisible(workspace.showsSessionsBar)
-        .fixedSize()
-        .frame(height: Spacing.toolbarControl)
-        .padding(.leading, Spacing.toolbarGap)
-        .toolbarPresence(workspace.mainRoute == .progress)
+        Button("新会话", icon: .add) { workspace.showsNewSession = true }
+            .labelStyle(.titleAndIcon)
+            .buttonStyle(ControlButtonStyle(kind: .glass))
+            .help("开一个新的 Agent 会话（⌥⌘N）")
+            .fixedSize()
+            .frame(height: Spacing.toolbarControl)
+            .padding(.leading, Spacing.toolbarGap)
+            .keepsPlace(shown: workspace.showsSessionsBar)
     }
 }
 
 /// 主栏栏头右边、搜索之前：同步需要关注时（没登录 iCloud、连不上、需要你决定、出错等）露一个图标，悬停看原因，点开设置处理。
-/// 有同步就常驻一格圆钮宽，平时只是看不见：提醒一出一收不挤动旁边的标题与搜索。
+/// 有同步就常驻一格圆钮宽，平时只是看不见（`keepsPlace`）：提醒一出一收不挤动左边的编辑页标题与项目名。
 struct SyncAlertSlot: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let summary = SyncSummary(services.syncStatus)
-        Button { SettingsPane.open(.general) } label: {
-            Image(summary.icon).foregroundStyle(palette.color(summary.tone))
+        if services.sync != nil {
+            let summary = SyncSummary(services.syncStatus)
+            Button { SettingsPane.open(.general) } label: {
+                Image(summary.icon).foregroundStyle(palette.color(summary.tone))
+            }
+            .buttonStyle(ControlButtonStyle(kind: .circular))
+            .help([summary.title, summary.detail, String(localized: "点按在设置里处理")].compactMap { $0 }.joined(separator: "\n"))
+            .accessibilityLabel(summary.title)
+            .keepsPlace(shown: summary.tone != .calm)
         }
-        .buttonStyle(ControlButtonStyle(kind: .circular))
-        .help([summary.title, summary.detail, String(localized: "点按在设置里处理")].compactMap { $0 }.joined(separator: "\n"))
-        .accessibilityLabel(summary.title)
-        .toolbarVisible(summary.tone != .calm)
-        .toolbarPresence(services.sync != nil)
     }
 }
 
@@ -222,13 +186,14 @@ struct SearchSlot: View {
 
     var body: some View {
         // 资料库读不出来时：搜索结果能打开卡片，是写入入口
-        Button { workspace.searching.toggle() } label: { Image(.search) }
-            .buttonStyle(ControlButtonStyle(kind: .circular))
-            .help("搜索（⌘K）")
-            .accessibilityLabel("搜索")
-            .disabled(!workspace.isLibraryReady)
-            .padding(.leading, Spacing.toolbarGap)
-            .toolbarPresence(workspace.mainRoute != .progress)
+        if workspace.mainRoute != .progress {
+            Button { workspace.searching.toggle() } label: { Image(.search) }
+                .buttonStyle(ControlButtonStyle(kind: .circular))
+                .help("搜索（⌘K）")
+                .accessibilityLabel("搜索")
+                .disabled(!workspace.isLibraryReady)
+                .padding(.leading, Spacing.toolbarGap)
+        }
     }
 }
 

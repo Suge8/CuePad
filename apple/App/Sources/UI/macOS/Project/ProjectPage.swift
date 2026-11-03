@@ -2,8 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目页（与手机项目页同构）：最上面一行项目的一句介绍接它的文件夹（`ProjectIntroLine`）→ 任务那张纸（`FocusBand`）→ 置顶的灵感 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有说现状的那一格（`EmptyWallTile`，记灵感在底部随手记）。
-/// 不写项目名作大标题。
+/// 项目页（与手机项目页同构）：最上面一行是它的文件夹与规则（`ProjectIntroLine`；项目名与介绍在主栏栏头，`WideProjectHeading`）→ 任务那张纸（`FocusBand`）→ 置顶的灵感 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有说现状的那一格（`EmptyWallTile`，记灵感在底部随手记）。
 struct ProjectPage: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
@@ -83,7 +82,7 @@ struct ProjectPage: View {
     /// 最上面那行取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
-            ProjectIntroLine(project: workspace.catalog?.project(projectID))
+            ProjectIntroLine(project: workspace.catalog?.project(projectID), intro: false)
             VStack(alignment: .leading, spacing: Spacing.section) {
                 if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
             }

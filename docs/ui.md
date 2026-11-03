@@ -12,7 +12,7 @@
 - 字是墨，分三档（`ink`、`ink2`、`ink3`），三档都是要读的字，在各层底与实底玻璃上都 ≥ 4.5:1；不用系统灰与系统占位色。
 - 签名色靛青只给焦点与正在发生的事，一屏一两处。在跑与选中都是"这里有动静"，靠形状分：在跑是会动的线，选中是一块底。
 - 项目色只上图形，不写成字、不做成圆点：圆点和彩字会被读成状态。
-- 同一状态处处同一个样子，用户只学一次。每种图形只有一个出处：任务圈 `TaskRingView`（有子任务的按子任务分段，做到哪只画在圈上、不另写"n/m"）、任务行 `TaskLine`（项目页，要你管的才写状态词）、看板卡（`BoardTaskCard`、`BoardSessionCard`、等你列的 `BoardWaitCard`，推进中卡下沿的线 `BoardLine` 只按 `BoardPulse` 画）、会话状态 `PiShown`、出错 `FailureMark`、等你 `Waiting.swift`（拍板赭黄；待回复是墨点，会话条、会话行、看板卡与经过里同一个，出自 `PiShown.icon`）、一件拍板怎么答 `WaitAnswer`（Cue 页拍板卡、会话页问题卡同一个，按问题种类给；进展页只看不答）；新界面引用它们，不另画。对勾只表示完成与记下。
+- 同一状态处处同一个样子，用户只学一次。每种图形只有一个出处：任务圈 `TaskRingView`（有子任务的按子任务分段，做到哪只画在圈上、不另写"n/m"）、任务行 `TaskLine`（项目页，要你管的才写状态词）、看板卡（`BoardTaskCard`、`BoardSessionCard`、等你列的 `BoardWaitCard`，推进中卡下沿的线 `BoardLine` 只按 `BoardPulse` 画）、会话状态 `PiShown`、出错 `FailureMark`、等你（拍板赭黄，`Palette.waiting` 列着现成的几样；待回复是墨点，会话条、会话行、看板卡与经过里同一个，出自 `PiShown.icon`）、一件拍板怎么答 `WaitAnswer`（Cue 页拍板卡、会话页问题卡同一个，按问题种类给；进展页只看不答）；新界面引用它们，不另画。对勾只表示完成与记下。
 - 会话条只用一套分组格，两端共用状态线与记号（纸色与宽窄在 `SessionRail` 头注释，导航见 [layout.md](layout.md)）。不提供旧样式切换。
 - logo 就是 Cue 本人：App 图标、菜单栏、图标族、落地页同一个形象。
 - 灵动岛是例外的小视口：常规紧凑态只放 Cue、语义图形与一个主数字；最小态与 28pt 窄位优先保住图形和数字，完整数留在展开与读屏名称。展开与锁屏才给步骤和明细（`CueActivityViews`）。扩展只在内容更新时过渡，不移植 App 的循环头像，也不为动画发推送；系统将动画限制在两秒内，Always-On 低亮度时不播（[Apple](https://developer.apple.com/documentation/widgetkit/animating-data-updates-in-widgets-and-live-activities)）。

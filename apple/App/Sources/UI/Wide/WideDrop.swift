@@ -75,7 +75,7 @@ struct WideSessionTitle: View {
                 WideTitleDrag(title: title, item: DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
                     .frame(maxWidth: .infinity)
                 #else
-                Text(verbatim: title).font(.headline).lineLimit(1)
+                WideHeading(title: title)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(.rect)
                     .draggable(DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))

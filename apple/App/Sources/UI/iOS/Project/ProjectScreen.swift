@@ -31,6 +31,9 @@ struct ProjectScreen: View {
     @State private var anchor = TaskFoldAnchor()
     @State private var board = WallBoard()
 
+    /// 在宽屏主栏里（栏头写着项目名，`WideProjectHeading`），不是推入的页。
+    private var inColumn: Bool { headerHost == .panel }
+
     var body: some View {
         ScrollView {
             ScrollViewReader { proxy in
@@ -42,8 +45,9 @@ struct ProjectScreen: View {
         }
         .scrollPosition($position)
         .taskFoldScroll(anchor)
-        // 顶栏第二行是项目的一句介绍接它的文件夹（`ProjectPlace`）；页顶不写标题时（iPad 侧栏在旁边）这两样另起一行排在页里（`ProjectIntroLine`）
-        .floatingHeader(.verbatim(project?.shownName ?? ""), detail: { ProjectIntroLine(project: project, inHeader: true) }, trailing: { actions })
+        // 推入时顶栏写项目名，第二行是项目的一句介绍接它的文件夹（`ProjectPlace`）；在宽屏主栏里项目名与介绍在栏头（`WideProjectHeading`），
+        // 页顶只留右边的操作，文件夹另起一行排在页里（`ProjectIntroLine`）
+        .floatingHeader(.verbatim(inColumn ? "" : project?.shownName ?? ""), detail: { ProjectIntroLine(project: project, inHeader: true) }, trailing: { actions })
         .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
@@ -58,7 +62,7 @@ struct ProjectScreen: View {
         let data = page.data, lastTarget = data.lastTarget
         // 任务纸不进懒加载栈：纸在懒加载栈的一格里时，收起后按 id 滚回纸底那一行会偏出一屏（`TaskFoldAnchor`）
         VStack(alignment: .leading, spacing: 0) {
-            if headerHost.namesPage { ProjectIntroLine(project: project).padding(.leading, 4).padding(.bottom, 12) }
+            if inColumn { ProjectIntroLine(project: project, intro: false).padding(.leading, 4).padding(.bottom, 12) }
             if data.project != nil { FocusCard(data: data, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
             // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
             LazyVStack(alignment: .leading, spacing: 0) {

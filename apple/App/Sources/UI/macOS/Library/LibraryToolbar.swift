@@ -14,27 +14,24 @@ struct LibraryPanesSlot: View {
 }
 
 /// 主栏栏头右边、搜索之前：技能与规则页的说明（`LibraryHelp`），气泡从这颗圆钮长出，框按窗口坐标量（`WindowFrame`，窗口里的浮层用窗口坐标）。
-/// 别的页宽 0、随这一页第一次挂上才建（`PageControl`，规矩同 `ScopeSlot`）；开着文件页时看不见；这台还没写下快照时停用。
+/// 开着文件页时看不见、位置照留（`keepsPlace`：左边的分段与文件页标题不挪）；这台还没写下快照时停用。
 struct LibraryHelpSlot: View {
     @Environment(Workspace.self) private var workspace
     @State private var open = false
     @State private var frame: CGRect?
 
     var body: some View {
-        PageControl(.library) {
-            Button { open.toggle() } label: { Image(.help) }
-                .buttonStyle(ControlButtonStyle(kind: .circular))
-                .help("说明")
-                .accessibilityLabel("说明")
-                .disabled(workspace.library == nil)
-                .background { WindowFrame(\.self) { frame = $0 } }
-                .panel(isPresented: $open, style: .bubble(frame.map(BubbleSource.control) ?? .unanchored)) {
-                    if let library = workspace.library { LibraryHelp(library: library) }
-                }
-        }
-        .padding(.leading, Spacing.toolbarGap)
-        .toolbarVisible(workspace.overlay == nil)
-        .toolbarPresence(workspace.mainRoute == .library)
+        Button { open.toggle() } label: { Image(.help) }
+            .buttonStyle(ControlButtonStyle(kind: .circular))
+            .help("说明")
+            .accessibilityLabel("说明")
+            .disabled(workspace.library == nil)
+            .background { WindowFrame(\.self) { frame = $0 } }
+            .panel(isPresented: $open, style: .bubble(frame.map(BubbleSource.control) ?? .unanchored)) {
+                if let library = workspace.library { LibraryHelp(library: library) }
+            }
+            .padding(.leading, Spacing.toolbarGap)
+            .keepsPlace(shown: workspace.overlay == nil)
     }
 }
 #endif

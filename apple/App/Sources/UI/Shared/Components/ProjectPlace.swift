@@ -76,18 +76,19 @@ struct ProjectPlaceLabel: View {
     }
 }
 
-/// 项目的一句介绍接它的文件夹（`ProjectPlace`）：Mac 项目页与 iPad 侧栏在旁边时项目页最上面那一行（那时页顶不写标题与第二行），
-/// `inHeader` 时是手机页顶那块玻璃的第二行（小一号、同一档墨、不带图标，同 `floatingHeader` 的信息行）。
+/// 项目的一句介绍接它的文件夹（`ProjectPlace`）：`inHeader` 时是手机页顶那块玻璃的第二行（小一号、同一档墨、不带图标，同 `floatingHeader` 的信息行）；
+/// 宽屏（Mac、iPad）项目页最上面那一行不写介绍（`intro: false`）：项目名与介绍已在主栏栏头（`WideProjectHeading`），这里只剩文件夹与"规则"。
 /// 目录读到之前、没写介绍时也占着这一行的高：下面的任务纸与墙、玻璃里的标题不上下跳。介绍优先占宽，文件夹在后面省略（规则见 `ProjectPlaceLabel`）。
 /// 绑着文件夹的项目（技能与规则的快照里有它）行末一个"规则"，点了直接打开这个项目的 AGENTS.md 编辑页；手机页顶那块玻璃里不放，在右上"⋯"里。
 struct ProjectIntroLine: View {
     let project: Project?
     var inHeader = false
+    var intro = true
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let intro = project?.intro, place = project.flatMap(workspace.place(of:))
+        let intro = self.intro ? project?.intro : nil, place = project.flatMap(workspace.place(of:))
         HStack(spacing: 0) {
             if let intro {
                 Text(intro).foregroundStyle(inHeader ? palette.ink3 : palette.ink2)

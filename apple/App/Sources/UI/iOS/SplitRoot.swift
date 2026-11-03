@@ -16,6 +16,7 @@ struct SplitRoot: View {
                         HStack {
                             SidebarToggle(shown: workspace.sidebarOpen)
                             WidePlaces()
+                            WideProjectHeading().padding(.leading, 8)
                             Spacer()
                         }.padding(.horizontal, 16).frame(height: 44)
                         destination(workspace.mainRoute, column: .main)

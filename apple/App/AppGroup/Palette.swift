@@ -127,7 +127,9 @@ struct Palette {
 
     // MARK: 状态（只上状态图形与紧挨着的那个词，不给整段字上色）
 
-    /// 等你确认：赭黄，全 App 只有等你用它（问号圆、"等你 N"、Cue 头像的环）；表达等你经 Waiting.swift。对比度 4.7，深色 6.9。
+    /// 等你确认：赭黄，全 App 只有等你与拍板用它。对比度 4.7，深色 6.9。"等你"（WORDS.md）的现成样子只有这几样：Cue 此刻数字账里的"N 拍板"与"N 待回复"（`CueLedger`）、
+    /// 去 Cue 的入口角上的点（`CueDot`）、状态图形 `Icon.waiting` 与会话的状态字（经 `PiShown`）；待回复的记号是墨点（`Icon.awaitsReply`，经 `PiShown`）。
+    /// 别的"要你处理"（同步、连接）按 `StatusTone.notice` 用墨色，出错是 `FailureMark`。
     var waiting: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0x845A06) }
     /// 等你的实底胶囊（实时活动里等你的数）。字 6.0，深色 4.6。
     var waitingFill: Color { dark ? Color(hex: 0x9C6A08) : Color(hex: 0x845A06) }
