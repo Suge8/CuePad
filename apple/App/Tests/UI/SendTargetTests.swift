@@ -174,7 +174,7 @@ struct SendTargetTests {
 
     /// 交到哪只有一份规则（`CueStore.handOffPlan`）：同样的一步，Mac 上"开始"与 Cue 开工落到同一个会话；开新会话时会话名、项目、哪台 Mac 都一样。
     /// 上一步绑着别的 Mac 上的会话：写一条指定那台 Mac 的请求，本机不执行；会话在跑也不先问，由那台执行时打断这一轮；还没送达，这一步还没绑上。
-    /// Cue 不插嘴不是它开的那一轮（`checkCueCanSpeak`），等会话歇下再开工，交到同一处。
+    /// Cue 不插嘴不是它开的那一轮（`checkCueCanSpeak`）：会话正忙时 Cue 开工被退回、什么都不写，歇下后再开工，交到同一处。
     @Test func Mac开始与Cue开工_交到同一个地方_别的Mac上的会话正忙也不先问() async throws {
         try await remoteSession("r", title: "atlas", state: .thinking)
         let (forMac, forCue) = (try await leaf(in: project, session: "r"), try await leaf(in: project, session: "r"))
@@ -184,6 +184,8 @@ struct SendTargetTests {
         #expect(mac.hostID == "mac-b" && mac.mode == .known(.send) && mac.target == SendTarget(kind: .piSession, name: "atlas", ref: "r"))
         #expect(rig.host.calls.isEmpty && rig.pi.sessions.isEmpty, "本机没有执行它")
         #expect(try await store.card(forMac.id)?.piSessionID == nil, "还没送达，这一步还没绑上")
+        await #expect(throws: CueStoreError.turnSourceUnconfirmed) { try await store.startLeaf(forCue.id, host: TestApp.hostID, cue: true) }
+        #expect(try await store.deliveryRequests().map(\.id) == [mac.id], "Cue 被退回时什么都没写")
         try await remoteSession("r", title: "atlas")
         let cue = try await store.startLeaf(forCue.id, host: TestApp.hostID, cue: true)
         #expect(cue.target.ref == "r" && cue.hostID == mac.hostID)
