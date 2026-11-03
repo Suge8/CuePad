@@ -178,7 +178,7 @@ nonisolated final class FakeModel: Sendable {
         }
         if last["role"] as? String == "tool" {
             if text.contains("建好了"), let id = text.firstMatch(of: /（([0-9a-f]{8})）/)?.1 {
-                return call("task", ["action": "start", "task": String(id), "model": "fake/fake-model", "effort": "high"])
+                return call("task", ["action": "start", "task": String(id), "model": "fake/m", "effort": "high"])  // 测试 Mac 上 Pi 报的模型（TestSupport 的 piProbeLine）
             }
             finishedAfter.withLock { $0.append(text) }
             return say("办好了")
