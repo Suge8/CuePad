@@ -97,6 +97,7 @@ extension CueKeeper {
 
     /// 失败轮次的重试进度：普通自发失败只重试一次，可被新变化替代；持续重试保留原工作，直到承接它的一轮成功。
     struct Setback {
+        /// 出错时变化里最新的写入序号（等子代理停住按时刻认，不算）与出错的时刻：之后有更新的才是新变化
         var latest: Int?
         var since: Date
         var retryAt: Date?

@@ -110,8 +110,7 @@ extension MCPTests {
     let folder = sandbox.directory.appending(path: "site", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     try await Server.run(library: sandbox.directory) { server in
-      // 拼错的名字不静默新建；参数不对的新建什么都不写
-      #expect(try await server.refused("setup", ["action": "project", "project": "官网", "new": true, "title": " "]).contains("title 不能是空的"))
+      // 拼错的名字不静默新建
       #expect(try await server.refused("setup", ["action": "project", "project": "官网", "intro": "公司落地页"]).contains("没有项目「官网」"))
       #expect(try await store.projects().map(\.name) == ["默认"])
 
@@ -124,8 +123,13 @@ extension MCPTests {
 
       try await server.call("setup", ["action": "project", "project": "官网", "folder": "/"])
       #expect(try await store.directory(of: project.id) == "/")
-      try await server.call("setup", ["action": "project", "project": "官网", "title": "落地页", "folder": ""])
+      // 没用到的参数填成空值（有的模型这样填）是没写：介绍与文件夹不动；清掉、解除要写 none
+      try await server.call("setup", ["action": "project", "project": "官网", "title": "落地页", "intro": "", "folder": ""])
       #expect(try await store.project(project.id)?.name == "落地页")
+      #expect(try await store.project(project.id)?.intro == "公司落地页")
+      #expect(try await store.directory(of: project.id) == "/")
+      try await server.call("setup", ["action": "project", "project": "落地页", "intro": "none", "folder": "none"])
+      #expect(try await store.project(project.id)?.intro == nil)
       #expect(try await store.directory(of: project.id) == nil)
     }
   }

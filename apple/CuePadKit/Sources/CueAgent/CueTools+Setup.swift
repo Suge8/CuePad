@@ -10,7 +10,7 @@ extension CueTools {
       "description": """
         你自己与你运行的这台 Mac。look{part?} 只读：不带 part 是总览（大脑与它好不好、各家 Agent 能不能用与边界、订阅额度、记忆与定时、技能与规则、项目）；part=brain|agents|quota|skills|projects 看那一块的全部（agents 带每家能选的模型、各花哪个账号的额度）；
         set{agent?,model?,effort?,fast?,name?} 改你自己的大脑：agent 要在这台 Mac 上能用，换 agent 不写 model 用那家的默认；model 照这家的写法（look agents 里有），写 default 回到默认；fast 只有支持的模型能开。model、effort 下一轮换上；换 agent、name、fast 或 model 回到默认，这一轮做完后换新大脑（记忆照旧，结果里会说是哪种）；
-        project{project,new?,title?,intro?,folder?}：project 写项目名，new:true 才新建（防拼错建出新的）；title 改名，intro 是一句话介绍（空串清掉），folder 绑定这台 Mac 上已有的文件夹（绝对路径或 ~/；空串解除）；
+        project{project,new?,title?,intro?,folder?}：project 写项目名，new:true 才新建（防拼错建出新的）；title 改名，intro 是一句话介绍（写 \(Self.cleared) 清掉），folder 绑定这台 Mac 上已有的文件夹（绝对路径或 ~/；写 \(Self.cleared) 解除）；
         tidy{} 请这台 Mac 一键整理技能与规则（look skills 里"一键整理"那几件）；去重与合并要他挑，告诉他在技能与规则页里做。
         """,
       "inputSchema": schema(
@@ -48,6 +48,8 @@ extension CueTools {
 
   /// 写 `model` 时回到这家默认的写法。
   static let defaultModel = "default"
+  /// 写 `intro` 清掉介绍、写 `folder` 解除文件夹的写法：空值是没写（`Args.given`）。
+  static let cleared = "none"
 
   private func setBrain(_ args: Args) async throws -> String {
     let keys = ["agent", "model", "effort", "fast", "name"].filter { args.raw[$0] != nil }
@@ -69,7 +71,7 @@ extension CueTools {
 
     var model = switching ? nil : current.model
     if let raw = args.string("model")?.trimmingCharacters(in: .whitespaces) {
-      model = raw.isEmpty || raw == Self.defaultModel ? nil : agent.kind.modelRef(try await store.cueModelKey(raw, of: agent.kind, host: host))
+      model = raw == Self.defaultModel ? nil : agent.kind.modelRef(try await store.cueModelKey(raw, of: agent.kind, host: host))
     }
     let option = model.flatMap(agent.kind.modelKey).flatMap { key in agent.models.first { $0.key == key } } ?? (model == nil ? agent.defaultModel : nil)
 
@@ -128,7 +130,6 @@ extension CueTools {
     let ref = try args.required("project").trimmingCharacters(in: .whitespacesAndNewlines)
     let title = args.string("title")?.trimmingCharacters(in: .whitespacesAndNewlines)
     let intro = args.string("intro").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-    if let title, title.isEmpty { throw Failure("title 不能是空的") }
     let folder = try args.string("folder").map(folderPath)
     var done: [String] = []
     let project: Project
@@ -145,10 +146,10 @@ extension CueTools {
     if title != nil || intro != nil {
       try await store.updateProject(project.id) { edited in
         if let title { edited.name = title }
-        if let intro { edited.intro = intro.isEmpty ? nil : intro }
+        if let intro { edited.intro = intro == Self.cleared ? nil : intro }
       }
       if let title { done.append("改名为「\(title)」") }
-      if let intro { done.append(intro.isEmpty ? "清掉了介绍" : "写好了介绍") }
+      if let intro { done.append(intro == Self.cleared ? "清掉了介绍" : "写好了介绍") }
     }
     if let folder {
       try await store.setDirectory(folder, for: project.id)
@@ -157,10 +158,10 @@ extension CueTools {
     return done.joined(separator: "，") + "。"
   }
 
-  /// folder 写的路径：空串是解除（nil）；`~` 展开、要是这台 Mac 上已有的文件夹，存标准写法。
+  /// folder 写的路径：`cleared` 是解除（nil）；`~` 展开、要是这台 Mac 上已有的文件夹，存标准写法。
   private func folderPath(_ raw: String) throws -> String? {
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { return nil }
+    guard trimmed != Self.cleared else { return nil }
     let expanded = NSString(string: trimmed).expandingTildeInPath
     guard expanded.hasPrefix("/") else { throw Failure("folder 写绝对路径或 ~/ 开头：\(raw)") }
     let url = URL(filePath: expanded, directoryHint: .isDirectory).standardizedFileURL

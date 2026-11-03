@@ -12,10 +12,11 @@ public struct CueChange: Equatable, Sendable {
     /// Cue 说的话（说话、作答，`DeliveryMode.toSession`）没送到，而它还不知道：工具等结果超时、收到报告的那一轮半路断了都算；
     /// 记下已知道的（`CueStore.markCueTold`）不再报（`detail` 是 Mac 报的原因）。会话那边在等它接着说，所以与等回答一样立即叫醒它
     case undelivered
-    /// 叶子或任务完成
+    /// 没做完的任务里一个子任务完成（整件完成不报，见 `CueStore.cueChanges`）
     case done
     /// 会话在等子代理，在跑的子代理都 `PiSessionState.stallAfter` 没有进展（`PiSessionState.stallsAt` 到了）：多半卡住了。
-    /// 这不是一次写入，是时间到了：同一段停滞只报一次（`CueMarks.stalls`），有了新进展再停住是新的一段
+    /// 这不是一次写入，是时间到了：同一段停滞只报一次（`CueMarks.stalls`），有了新进展再停住是新的一段；`seq` 是会话记录的，
+    /// 会话别的写入也会让它变，判这一段是不是新的只看 `at`。Cue 此刻说不进去的（他发起的那一轮、打断不了的）不报
     case stalled
   }
 
@@ -24,7 +25,7 @@ public struct CueChange: Equatable, Sendable {
   public var task: Card?
   /// 变化所在的叶子；任务本身的变化为 nil。
   public var leaf: Card?
-  /// 变化所在的会话；任务完成这类不在会话上的变化为 nil。
+  /// 变化所在的会话；子任务完成这类不在会话上的变化为 nil。
   public var session: PiSessionState?
   /// 这一轮是他的（`CueStore.hisTurn`，由事实推出，不另存）：Cue 说的不算；扩展投进来的机器消息开的轮跟着它之前那句。
   public var byUser = false
@@ -34,7 +35,7 @@ public struct CueChange: Equatable, Sendable {
   public var seq: Int
   /// 提问、错误、哪个请求为什么没成。
   public var detail: String?
-  /// 会话记录里已有的摘要：叶子的会话的；任务本身的变化取它最近有动静的那个会话的。
+  /// 会话记录里已有的摘要：变化所在的会话（完成的子任务是它绑着的会话）的。
   public var recap: PiRecap?
   /// 停下是因为做到一半被打断（`PiWorkState.interrupted`），不是做完了。
   public var interrupted = false
@@ -78,7 +79,7 @@ public struct CueChanges: Equatable, Sendable {
   public var lapse: Date?
 }
 
-/// Cue 的变化从哪算起（本机写入序号，`CueStore.lastWrite`）：会话的动静从 `sessions` 之后，任务完成从 `tasks` 之后。
+/// Cue 的变化从哪算起（本机写入序号，`CueStore.lastWrite`）：会话的动静从 `sessions` 之后，子任务完成从 `tasks` 之后。
 /// 一轮做完时，会话的动静从醒来时读到的序号算起（这一轮里写进来的下次还在），完成从这一轮结束时算起（这一轮里多是 Cue 自己做完的）。
 /// 等子代理停住（`CueChange.Kind.stalled`）不是写入，按时刻算：停住的时刻在 `stalls` 之后才报，一轮做完时前移到醒来的时刻。
 public struct CueMarks: Codable, Equatable, Sendable {

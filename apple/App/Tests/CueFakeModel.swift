@@ -223,13 +223,13 @@ nonisolated final class FakeModel: Sendable {
             return call("task", ["action": "say", "task": "修好登录页 半路断开", "text": "继续"])
         }
         if text.contains("醒来：会话有动静"), text.contains("要作答") { return tell("去作答了") }
+        if text.contains("醒来：会话有动静"), text.contains("先出两次错"), once("error", times: 2) { return fail() }
         if text.contains("醒来：会话有动静"), text.contains("[等子代理") { return tell("子代理那边停住了") }
         if text.contains("醒来：会话有动静"), text.contains("请收一下") {
             return call("task", ["action": "done", "task": "修好登录页 请收一下", "evidence": ["登录测试全过"]])
         }
         if text.contains("醒来：会话有动静") {
             if text.contains("先出一次错"), once("error") { return fail() }
-            if text.contains("先出两次错"), once("error", times: 2) { return fail() }
             if text.contains("只看看") { return say("只是看了看") }
             return tell("登录页那边歇下了")
         }

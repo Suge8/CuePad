@@ -63,6 +63,24 @@ extension CueHostTests {
         await rig.stop()
     }
 
+    /// 你自己点了完成整件任务：没人再用的会话随之结束，Cue 没有要接着做的，不叫醒它；之后你跟它说话，变化里也没有这件。
+    @Test func 你点完成整件任务_Cue不醒() async throws {
+        let rig = try await Rig()
+        try await rig.settleTask(titled: "修好登录页")
+        try await rig.message(.cue, containing: "登录页那边歇下了")
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
+        let task = try #require(try await rig.store.cueBoard().tasks.first?.task)
+        try await Workspace(services: rig.services).toggle(task.id)
+        #expect(try await rig.store.card(task.id)?.status == .done)
+        try await rig.say("你好")
+        try await rig.message(.cue, containing: "收到：你好")
+        let keeper = try #require(rig.services.cue.keeper)
+        let hello = try #require(keeper.rounds.last { $0.wake == .message })
+        #expect(hello.sent.joined().contains("变化（上次醒来之后）：无"), "\(hello.sent)")
+        #expect(!keeper.rounds.contains { $0.sent.joined().contains("[完成]") })
+        await rig.stop()
+    }
+
     /// 你在别处记下的记忆多到要合并（超过视图预算）：后台另起的大脑把待合并的块写成摘要（假模型合第一块）；Cue 不为它醒，换新的第一轮
     /// （这里每次醒来都到了换新线）也不带待合并的块，回你的话照常。
     @Test func 记忆待合并_后台合并_Cue的轮里没有合并() async throws {

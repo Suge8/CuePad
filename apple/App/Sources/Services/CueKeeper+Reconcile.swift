@@ -88,7 +88,8 @@ extension CueKeeper {
             // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化。
             // 持续重试的工作不被新变化替代：重交原来的醒来原因，变化随信封一起看。
             if let held = setback {
-                let fresh = changes.due.contains(where: { $0.seq > held.latest ?? Int.min || ($0.kind == .stalled && $0.at > held.since) })
+                // 等子代理停住只按时刻认新旧：它的序号是会话记录的，会话处理交回、又回到等子代理时也会变
+                let fresh = changes.due.contains { $0.kind == .stalled ? $0.at > held.since : $0.seq > held.latest ?? Int.min }
                 if fresh, !held.persistent {
                     setback = nil
                 } else if fresh || held.retryAt.map({ now >= $0 }) == true {

@@ -23,17 +23,13 @@ extension CueTools {
     return Int(value) == nil && value.caseInsensitiveCompare(option) != .orderedSame
   }
 
-  /// say、stop、leave 对的会话：给 task（或 session 写的是任务）是它在做的叶子绑着的会话（带上叶子），给 session 是那个会话。`label` 是工具结果里对它的称呼。
+  /// say、stop、leave、take 对的会话（认法在 `place`）：是任务就是它在做的叶子绑着的会话（带上叶子），是会话就是那个会话。`label` 是工具结果里对它的称呼。
   func speaker(_ args: Args) async throws -> (session: String, card: UUID?, label: String, short: String) {
     let leaf: Card
-    if let ref = args.string("task") {
-      leaf = try await workingLeaf(ref)
-    } else {
-      guard let ref = args.string("session") else { throw Failure("要给 task 或 session") }
-      switch try await sessionRef(ref) {
-      case .session(let session): return (session.sessionID, nil, "会话「\(session.title)」", session.shortID)
-      case .task(let card): leaf = try await store.workingLeaf(of: card.id)
-      }
+    switch try await place(args) {
+    case .session(let session)?: return (session.sessionID, nil, "会话「\(session.title)」", session.shortID)
+    case .task(let card)?: leaf = try await store.workingLeaf(of: card.id)
+    case nil: throw Failure("要给 task 或 session")
     }
     return (try await store.leafSession(leaf.id), leaf.id, "「\(leaf.heading)」的会话", leaf.id.shortID)
   }
