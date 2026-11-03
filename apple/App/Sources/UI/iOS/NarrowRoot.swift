@@ -22,19 +22,24 @@ private struct NarrowHome: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let open = workspace.sidebarOpen
             ZStack {
                 NarrowCue()
-                    .modifier(NarrowPlacement(slide: slide, width: geometry.size.width, sidebar: false))
-                    .environment(\.pageActive, !workspace.sidebarOpen && workspace.path.isEmpty)
+                    .modifier(NarrowPlacement(slide: slide, width: geometry.size.width, sidebar: false, open: open))
+                    .environment(\.pageActive, !open && workspace.path.isEmpty)
                 NarrowSidebar()
-                    .modifier(NarrowPlacement(slide: slide, width: geometry.size.width, sidebar: true))
-                    .environment(\.pageActive, workspace.sidebarOpen && workspace.path.isEmpty)
+                    .modifier(NarrowPlacement(slide: slide, width: geometry.size.width, sidebar: true, open: open))
+                    .environment(\.pageActive, open && workspace.path.isEmpty)
             }
+            // 子层的 accessibilityHidden 只在显式容器里生效：少了这层，旁白照样读到透明的那层（模拟器旁白实测）
+            .accessibilityElement(children: .contain)
             .contentShape(.rect)
             .gesture(NarrowPan(slide: slide, workspace: workspace, reduceMotion: reduceMotion))
         }
-        .onChange(of: workspace.sidebarOpen, initial: true) { _, open in
+        .onChange(of: workspace.sidebarOpen, initial: true) { old, open in
             slide.set(open: open, reduceMotion: reduceMotion)
+            // 换了一层给读屏：等这一帧把藏起的那层交出去再报，焦点才落到新的一层，不留在藏起的钮上
+            if old != open { Task { await NextFrame.drawn(); AccessibilityNotification.ScreenChanged(nil).post() } }
         }
         .background { NarrowKeyboard(sidebarOpen: workspace.sidebarOpen) }
     }
@@ -81,6 +86,8 @@ private struct NarrowSidebar: View {
                 page(.progress, pane: .progress, search: .button)
             }
         }
+        // 同 `NarrowHome`：藏着的那页要在显式容器里才不进读屏
+        .accessibilityElement(children: .contain)
         .safeAreaPadding(.top, FloatingHeaderLayout.height + Bars.contentGap)
         .overlay(alignment: .top) { switcher.padding(.horizontal, FloatingHeaderLayout.margin) }
         .background(palette.desk.ignoresSafeArea())
@@ -121,20 +128,20 @@ private struct NarrowSidebar: View {
     }
 }
 
-/// 位移的读数只影响最外面的两层；两页正文不读取每帧进度。
+/// 位移的读数只影响最外面的两层；两页正文不读取每帧进度。读屏只给开合值指着的那层，不随拖动与动画中途变。
 private struct NarrowPlacement: ViewModifier {
     let slide: NarrowSlide
     let width: CGFloat
     let sidebar: Bool
+    let open: Bool
 
     func body(content: Content) -> some View {
         let progress = slide.progress
-        let shown = sidebar ? progress > 0 : progress < 1
         content
             .offset(x: sidebar ? (progress - 1) * width : progress * width * 0.3)
-            .opacity(shown ? 1 : 0)
+            .opacity((sidebar ? progress > 0 : progress < 1) ? 1 : 0)
             .allowsHitTesting(sidebar ? progress == 1 : progress == 0)
-            .accessibilityHidden(!shown || slide.dragging)
+            .accessibilityHidden(sidebar != open)
     }
 }
 #endif
