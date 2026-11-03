@@ -51,8 +51,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         case .failed(let failure):
             // 没换成只说给换的那个人、说到他对这个会话的下一个动作为止：Cue 换的由它看工具结果自己处理；之后又说了话、改了名，这句就过时了
             guard !request.isFromCue, request.id == deliveries.last?.id else { return current }
-            let name = wanted.model.map { key in catalog?.models.first { $0.key == key }?.name ?? key.id }
-            let text = name.map { String(localized: "没换成「\($0)」：\(failure.text)") } ?? String(localized: "没换成：\(failure.text)")
+            let name = wanted.model.map { key in catalog?.models.first { $0.key == key }?.name ?? key.id } ?? wanted.thinking.map { String(localized: "思考 \($0.label)") }
+            let text = name.map { String(localized: "没换成 \($0)：\(failure.text)") } ?? String(localized: "没换成：\(failure.text)")
             return PiConfigShown(model: current.model, thinking: current.thinking, fast: current.fast, context: current.context, pending: false, failure: text)
         }
     }

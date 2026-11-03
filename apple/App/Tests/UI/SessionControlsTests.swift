@@ -53,7 +53,7 @@ struct SessionControlsTests {
         #expect(try await shown(atlas) == PiConfigShown(model: luna, thinking: .high, pending: true, failure: nil))
 
         _ = try await execute(request, failing: "Pi 没在运行")
-        #expect(try await shown(atlas) == PiConfigShown(model: opus, thinking: .low, pending: false, failure: "没换成「Luna」：Pi 没在运行"))
+        #expect(try await shown(atlas) == PiConfigShown(model: opus, thinking: .low, pending: false, failure: "没换成 Luna：Pi 没在运行"))
         // 之后对这个会话做了别的（这里是停下这一轮）：那一句过时了，不再挂在输入框上
         _ = try await app.services.stop(atlas)
         #expect(try await shown(atlas).failure == nil)

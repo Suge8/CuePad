@@ -819,6 +819,22 @@
         }
       }
     },
+    "%@ 里没有这个模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ doesn't have this model"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 里没有这个模型"
+          }
+        }
+      }
+    },
     "%@ 里的 hooks 格式不对，CuePad 没有改它" : {
       "localizations" : {
         "en" : {
@@ -3489,6 +3505,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "CuePad 的 MCP 服务连不上：%@"
+          }
+        }
+      }
+    },
+    "CuePad 的工具服务没连上（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't connect to CuePad's tools (%@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 的工具服务没连上（%@）"
           }
         }
       }
@@ -16971,6 +17003,22 @@
         }
       }
     },
+    "没换成 %@：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't switch to %1$@: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没换成 %1$@：%2$@"
+          }
+        }
+      }
+    },
     "没换成 %@：%@\n我还用原来的。" : {
       "localizations" : {
         "en" : {
@@ -22247,22 +22295,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台 Mac 上没有找到 %@"
-          }
-        }
-      }
-    },
-    "这台 Mac 上的 %@ 里找不到这个模型" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ on this Mac doesn't have this model"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这台 Mac 上的 %@ 里找不到这个模型"
           }
         }
       }
