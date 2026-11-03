@@ -142,7 +142,7 @@ final class Workspace {
     var projectScope: UUID?
     /// 页面按哪个项目筛（进展页的两段）：项目范围里的项目进了回收站就是全部（nil）。
     var scopedProject: UUID? { catalog?.project(projectScope)?.id }
-    /// 进展页此刻在哪一段：看板或会话。三端同一份：工具栏的主操作（新任务 / 新会话）与页顶的分段都读它，去会话段经 `showSessions`。
+    /// 进展页此刻在哪一段：看板或会话。三端同一份：主操作（新任务 / 新会话）与分段都读它，去会话段经 `showSessions`。
     /// 就是本机偏好里的那一份（`AppSettings.progressPane`）：下次打开停在你上次看的那一段。
     var progressPane: ProgressPane {
         get { services.settings.progressPane }

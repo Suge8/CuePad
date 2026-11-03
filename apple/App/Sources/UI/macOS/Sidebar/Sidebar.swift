@@ -2,9 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// CueSidebarCard 尚由共享组件持有，边距随该组件一起由 Owner 收口。
-enum SidebarMetrics { static let edge: CGFloat = 10 }
-
 struct ProjectShelf: View {
     @Environment(Workspace.self) private var workspace
 

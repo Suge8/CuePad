@@ -14,8 +14,8 @@ nonisolated private struct EditorData: Sendable, Equatable {
 /// 前台每帧几何变化会让 AppKit 重算整窗的鼠标跟踪区。
 /// 重活先在看不见时做完——挂上编辑器与底栏、让编辑器接过键盘，各占一帧——再淡入；这几帧里墙上那张卡保持按下（`CardPresence.opening`）。
 /// 编辑页底下的项目页保持挂载，关掉后回到原来的滚动位置。
-/// 这张卡的操作（置顶、移到项目、复制、归档、删除）在工具栏右上的"⋯"里（`PageMenuSlot`），页里不另放一个。
-/// 它在哪个项目、改于什么时候、存好没有在工具栏中间（`OverlayHeader`，同手机编辑页页顶中间那块），页里不另写。
+/// 这张卡的操作（置顶、移到项目、复制、归档、删除）在主栏栏头右端的"⋯"里（`PageMenuSlot`），页里不另放一个。
+/// 它在哪个项目、改于什么时候、存好没有在主栏栏头"收起"的旁边（`OverlayHeader`，同手机编辑页页顶中间那块），页里不另写。
 struct CardEditorPage: View {
     let cardID: UUID
     @Environment(Workspace.self) private var workspace
@@ -117,7 +117,7 @@ struct CardEditorPage: View {
         }
     }
 
-    /// 工具栏中间那一块：标题是项目名，次要一行是改于什么时候、置顶与存好没有（同手机编辑页的页顶）。
+    /// 栏头里的标题那一块：标题是项目名，次要一行是改于什么时候、置顶与存好没有（同手机编辑页的页顶）。
     private var header: OverlayHeader.Content {
         let card = data?.card
         let edited = card.map { String(localized: "改于 \(DateLabel.short($0.modifiedAt))") }

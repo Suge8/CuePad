@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 进展页（侧栏"进展"、⌘⇧T）：看板（`TaskBoardPage`）与会话（`SessionsPane`）两段，看哪一段只有 `Workspace.progressPane` 一份。
+/// 进展页（项目｜进展的"进展"、⌘⇧T）：看板（`TaskBoardPage`）与会话（`SessionsPane`）两段，看哪一段只有 `Workspace.progressPane` 一份。
 /// 分段、范围与新建在本页顶上，四个列头跟各自的列对齐。
 /// 新会话的表单挂在这一页（`NewSessionPanel`，⌥⌘N 先来这一段再弹它）。
 /// 去过的段一直挂着，换段只换哪一段看得见（同 `PageStack` 换页）：按段现建时换一下要重建整块看板或会话列表（实测 75～125ms）。

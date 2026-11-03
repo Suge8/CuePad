@@ -71,6 +71,7 @@ extension Workspace {
         if mainRoute != previous { willSelect(mainRoute, from: previous) }
     }
 
+    /// 栏头的 ×：左栏回项目｜进展的浏览落点（`browseRoute`，之前打开的项目还是那个），右栏回 Cue。不另存返回来源。
     func closeColumn(_ column: Column) {
         guard case .wide(var state) = navigation else { return }
         switch column {

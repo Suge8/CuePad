@@ -18,7 +18,7 @@ final class CueWatch {
     private(set) var sending = false
     /// 你最近一句写下的时刻（`CueDigest.lastYou`）：刚发出的那句读到了没有只看它。
     private(set) var lastYouSaid: Date?
-    /// Cue 此刻（`CueNow`）：头像那一拍、数字账、拍板几件（底部那一排与侧栏进展那一行的"等你 M"、入口的点）、推进中几件、
+    /// Cue 此刻（`CueNow`）：头像那一拍、数字账、拍板几件（会话条的等你、入口的点）、推进中几件、
     /// 角标的数都只读它，不另存一份；内容变了才换（推出的时刻不算）。刚做完的那件到点在这里收掉（`show`），头像与数字账同一刻换。
     private(set) var now = CueNow.empty
     /// 这一次会话叫醒的接力（`Wake`）：接力层（`CueRelayStage`）照它画光，头像照它醒。
@@ -27,8 +27,6 @@ final class CueWatch {
     private var transition: Transition?
     /// 新消息有几条（`CueDigest.unread`）。
     private(set) var unread = 0
-    /// 它最近一句（`CueDigest.lastSaid`）：只有 Mac 侧栏名片的气泡读。
-    private(set) var lastSaid: String?
     /// 它运行的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
     private(set) var hostID: String?
     private(set) var hostName: String?
@@ -101,7 +99,6 @@ final class CueWatch {
         let next = AppServices.cueNow(digest, at: moment, local: local).aged(to: .now)
         if !isPinned, !next.same(as: now) { show(next) }
         unread = digest.unread
-        lastSaid = digest.lastSaid
         hostID = digest.hostID
         hostName = digest.hostName
         #if os(macOS)

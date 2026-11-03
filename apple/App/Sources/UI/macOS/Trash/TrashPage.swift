@@ -2,7 +2,7 @@
 import SwiftUI
 
 /// 回收站：删除的项目（连同其卡片）与单独删除的卡片；可恢复、永久删除、清空。
-/// 顶上不写页名（侧栏底下的回收站钮已经说了在哪），也没有顶上那一排：清空回收站在右上"⋯"里（它看回收站有没有东西，页面的数据不进工具栏）。
+/// 顶上不写页名，也没有顶上那一排：清空回收站在主栏栏头的"⋯"里（它看回收站有没有东西，页面的数据不进栏头）。
 struct TrashPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services

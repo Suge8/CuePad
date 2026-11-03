@@ -11,7 +11,7 @@ nonisolated enum Glyph {
     /// 列表行首与区头动作的图标。
     static let rowSize: CGFloat = 13
     static let row = Font.system(size: rowSize, weight: .medium)
-    /// 侧栏脚部、工具栏圆钮、头像串里的图标。
+    /// 会话条脚部、栏头圆钮、头像串里的图标。
     static let control = Font.system(size: 15)
     /// 大图标：手机底栏的"更多"、选中的角标、菜单栏图标。
     static let largeSize: CGFloat = 20

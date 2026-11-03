@@ -3,13 +3,13 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 工具栏里在这一页上暂时用不上的控件（进展页两段之间换着用的几样）：看不见、不接点，宽度照旧，换段时工具栏不重排。
+    /// 栏头里在这一页上暂时用不上的控件（进展页两段之间换着用的几样）：看不见、不接点，宽度照旧，换段时那一排不重排。
     func toolbarVisible(_ shown: Bool) -> some View {
         opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
     }
 
-    /// 只在一部分时候有的工具栏控件（侧栏收起时的项目切换、进展页的几格）：不在时宽 0、看不见，仍挂着（再出现时不现建，项目菜单不重算）。
-    /// 宽度不跟动画走：工具栏项每帧变一次宽，整条工具栏就每帧重新约束一遍。
+    /// 只在一部分时候有的栏头控件（进展页、Cue 页、技能与规则页的几格）：不在时宽 0、看不见，仍挂着（再出现时不现建，项目菜单不重算）。
+    /// 宽度不跟动画走：每帧变一次宽，那一排就每帧重排一遍。
     func toolbarPresence(_ present: Bool) -> some View {
         frame(width: present ? nil : 0, alignment: .leading)
             .clipped()
@@ -18,7 +18,7 @@ extension View {
     }
 }
 
-/// 开合侧栏（`MacPages.toggleSidebar`，⌃⌘S 同）。收起时侧栏的 Cue 名片看不见了：不在 Cue 页、Cue 有等你或新消息时钮角上带点（`CueDot`）。
+/// 开合会话条（`Workspace.toggleSidebar`，⌃⌘S 同，宽 220 与 72 两档）。收起时 Cue 有等你或新消息，钮角上带点（`CueDot`）。
 struct SidebarToggle: View {
     @Environment(Workspace.self) private var workspace
 
@@ -35,9 +35,9 @@ struct SidebarToggle: View {
 }
 
 /// 打开、收起卡片只改动下面三处（收起按钮、编辑页图层、底部输入条的位置），各自读"打开的卡"：
-/// 主窗口的视图体不读它，开合时不重算整个窗口、不重建整条工具栏。
+/// 主窗口的视图体不读它，开合时不重算整个窗口。
 
-/// 工具栏左上的"收起"：只在开着编辑页时有（灵感的编辑页、技能与规则的文件页，Esc 同），没有时不占位置。
+/// 主栏栏头里的"收起"：只在开着编辑页时有（灵感的编辑页、技能与规则的文件页，Esc 同），没有时不占位置。
 /// 一颗返回图标的圆钮（同手机推入页左上的系统返回），悬停提示与读屏说"收起"。
 struct CloseButton: View {
     @Environment(Workspace.self) private var workspace
@@ -55,8 +55,8 @@ struct CloseButton: View {
     }
 }
 
-/// 量这一块在窗口里的框（左上为原点，同窗口里浮层的坐标），或它的一条边（`CGRect.minX`、`maxX`）：工具栏项与页面不在同一棵视图里，
-/// SwiftUI 的全局坐标对不上，按窗口坐标量。开合侧栏、拖侧栏的宽时挪的是外面的几层（工具栏项那一格），听这几层的框变了再量。
+/// 量这一块在窗口里的框（左上为原点，同窗口里浮层的坐标），或它的一条边（`CGRect.minX`、`maxX`）：两栏各是一个托管视图，
+/// SwiftUI 的全局坐标只到所在那一栏，按窗口坐标量。会话条换宽时挪的是外面的几层，听这几层的框变了再量。
 struct WindowFrame<Value: Equatable>: NSViewRepresentable {
     let edge: KeyPath<CGRect, Value>
     let report: (Value) -> Void
@@ -114,10 +114,10 @@ struct WindowFrame<Value: Equatable>: NSViewRepresentable {
     }
 }
 
-/// 工具栏左边、两段分段之后：这一页的范围，进展页的会话段是项目范围（`ProjectScopeMenu`，`Workspace.projectScope`；看板段那一排是列头，范围在"⋯"里）。
-/// 工具栏里的页面控件只有一条规矩（这一格、`PanesSlot`、`PageActionSlot`、`SearchSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，
-/// 工具栏读不到页面读的库，抄一份过来就是第二个事实源。控件都一直挂着（换页时不现建整份项目菜单）、只换内容：工具栏项一增删整条重建（实测占进出会话页点击回合的一半，25fdb5fa、4fd371a4）。
-/// 只属于进展页的几格（这一格、分段、新会话）在别的页宽 0（`toolbarPresence`），随进展页第一次挂上才建（`PageControl`），进出进展页时整条重排一次（一次 100～150ms 的重排是逐帧变宽时量的，b9707fc5）；
+/// 进展页顶上那一排、两段分段之后：会话段的项目范围（`ProjectScopeMenu`，`Workspace.projectScope`；看板段那一排是列头，范围在"⋯"里）。
+/// 栏头里的控件只有一条规矩（这一格、`PageActionSlot`、`SearchSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，
+/// 栏头读不到页面读的库，抄一份过来就是第二个事实源。控件都一直挂着（换页时不现建整份项目菜单）、只换内容。
+/// 只属于一页的几格在别的页宽 0（`toolbarPresence`），随那一页第一次挂上才建（`PageControl`）；
 /// 进展页两段之间宽度不变，换段只换哪几样看得见（`toolbarVisible`）。这一格按项目名的宽、最宽 `maxWidth`（再长截断），只在换范围时变宽变窄；
 /// 状态归页面的（会话段的搜索、新会话表单读的这台 Mac 上有哪些 Agent）留在页里。
 struct ScopeSlot: View {
@@ -134,7 +134,7 @@ struct ScopeSlot: View {
     }
 }
 
-/// 只属于一页的工具栏控件（进展页的 `PanesSlot`、`ScopeSlot`、`PageActionSlot`，技能与规则页的 `LibraryHelpSlot`）：
+/// 只属于一页的栏头控件（进展页的 `ScopeSlot`、`PageActionSlot`，Cue 页的 `CueListSlots`，技能与规则页的 `LibraryHelpSlot`）：
 /// 别的页上宽 0、看不见。随那一页一起挂上——进展页在启动后空闲时先挂上（`Prewarm`），或一打开就在那一页——之后一直挂着；
 /// 挂上之前不建，冷启动的第一帧不建看不见的分段、项目菜单、玻璃与新会话钮。
 struct PageControl<Content: View>: View {
@@ -155,7 +155,7 @@ struct PageControl<Content: View>: View {
     }
 }
 
-/// 工具栏右边、搜索之前：Cue 页的记忆与定时两颗圆钮，各打开自己的弹层（`CueMemoryPage`、`CueSchedulePage`）。规矩同 `ScopeSlot`。
+/// 右栏 Cue 页栏头的右边：记忆与定时两颗圆钮，各打开自己的弹层（`CueMemoryPage`、`CueSchedulePage`）。规矩同 `ScopeSlot`。
 struct CueListSlots: View {
     @Environment(Workspace.self) private var workspace
 
@@ -176,13 +176,13 @@ struct CueListSlots: View {
     }
 }
 
-/// 工具栏右边、搜索之前：进展页会话段的"新会话"（弹出新会话的表单，`NewSessionPanel`，⌥⌘N 同）；看板段的新任务在"⋯"里。
+/// 进展页顶上那一排的右边：会话段的"新会话"（弹出新会话的表单，`NewSessionPanel`，⌥⌘N 同）；看板段的新任务在"⋯"里。
 /// 规矩同 `ScopeSlot`；宽度就是字宽（字不随页变）。
 struct PageActionSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        // 工具栏把"图标 + 字"的标签只画成图标：写明两样都要
+        // 写明图标与字两样都要
         PageControl(.progress) {
             Button("新会话", icon: .add) { workspace.showsNewSession = true }
                 .labelStyle(.titleAndIcon)
@@ -197,8 +197,8 @@ struct PageActionSlot: View {
     }
 }
 
-/// 工具栏右边最前面：同步需要关注时（没登录 iCloud、连不上、需要你决定、出错等）露一个图标，悬停看原因，点开设置处理。
-/// 有同步就常驻一格圆钮宽，平时只是看不见：提醒一出一收不挤动标题与搜索（工具栏项一变宽整条重排，窄窗口里居中的标题跟着挪）。
+/// 主栏栏头右边、搜索之前：同步需要关注时（没登录 iCloud、连不上、需要你决定、出错等）露一个图标，悬停看原因，点开设置处理。
+/// 有同步就常驻一格圆钮宽，平时只是看不见：提醒一出一收不挤动旁边的标题与搜索。
 struct SyncAlertSlot: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -216,7 +216,7 @@ struct SyncAlertSlot: View {
     }
 }
 
-/// 工具栏右边的搜索（⌘K 同）。进展页上不在这里，收在"⋯"里（`PageMenuSlot`）：看板段那一排是列头，会话段那一排已有范围与新会话，页里还有搜会话的框。
+/// 主栏栏头右边的搜索（⌘K 同）。进展页上不在这里，收在"⋯"里（`PageMenuSlot`）：看板段那一排是列头，会话段那一排已有范围与新会话，页里还有搜会话的框。
 struct SearchSlot: View {
     @Environment(Workspace.self) private var workspace
 

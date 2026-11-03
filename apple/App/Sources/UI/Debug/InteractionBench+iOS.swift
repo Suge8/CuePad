@@ -5,10 +5,10 @@ import Darwin
 import QuartzCore
 import UIKit
 
-/// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：每个 tab 一个导航栈加底部一排）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
+/// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone 窄屏：以 Cue 为根的单栈加根上的侧栏）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
 /// 每项一行 `INTERACT {json}` 写进隔离库目录下的 `interact.jsonl`（模拟器里的标准输出不好取），量完退出。
-/// 动作是点击最终调用的同一条路（导航路径、`openSession`、点底部那一排的 `tap`、侧栏的 `select`、浮窗与面板的状态），不经触摸投递。
-/// 长按菜单与手势（滑动切页、右滑返回、左滑前进，以及会话行、看板上横滑的误触核对）由 `perf-ios.sh` 在模拟器上真按、真滑（`AWAIT` 行，`InteractionBench+iOSTouch`），
+/// 动作是点击最终调用的同一条路（导航路径、会话条的 `openSession`、侧栏钮与头像的 `select`、浮窗与面板的状态），不经触摸投递。
+/// 长按菜单与手势（滑动开合侧栏、右滑返回，以及会话行、看板上横滑的误触核对）由 `perf-ios.sh` 在模拟器上真按、真滑（`AWAIT` 行，`InteractionBench+iOSTouch`），
 /// 从手指按下起量；每行的 `landed` 是量完时的根与推入的页。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
 /// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
 /// - 冷启动·Cue 页：App 一打开就在 Cue 页上；`launchMs` 是进程启动到对话排出来（`PerfProbe` 的 `cue`）的墙钟毫秒，
@@ -106,36 +106,27 @@ enum IOSInteractionBench {
         }
         workspace.select(.cue)
         await Task.wait(for: .seconds(1))
-        // 主导航：Cue 页点底部的"进展"去进展页（配 `-CuePadManyTasks` 量任务多时）、进展页点 Cue 钮回来（点按调的就是 `tap`）
+        // 侧栏开合：Cue 页开侧栏的进展段（配 `-CuePadManyTasks` 量任务多时）、点侧栏的 Cue 头像回来
         for _ in 0..<2 {
-            await step("Cue 进任务") { workspace.select(.progress) }
-            await step("任务回 Cue") { workspace.select(.cue) }
+            await step("开侧栏·进展") { workspace.select(.progress) }
+            await step("收侧栏回 Cue") { workspace.select(.cue) }
         }
-        // 项目 tab 停在一条灵感上时切走再切回来：栈与页都留着，不重建
-        workspace.select(.project(Project.defaultID))
-        workspace.push(.card(idea.id))
-        await Task.wait(for: .seconds(1.5))
-        for _ in 0..<2 {
-            await step("灵感去 Cue") { workspace.select(.cue) }
-            await step("Cue 回灵感") { workspace.select(.shelf) }
-        }
-        workspace.select(.cue)
         // Cue 页头开合面板（点页头的那条路）
         for _ in 0..<2 {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }
             await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
         }
-        // 会话页（底部的"会话"）点会话（先读出这一页再推入）→ 返回
-        workspace.showSessions()
-        await Task.wait(for: .seconds(1))
+        // Cue 页左边的会话条点会话（先读出这一页再推入）→ 返回 Cue
         for id in [sessions[0], sessions[0], sessions[1]] {
-            await step("进会话页") { workspace.openSession(id) }
-            await step("返回 Agent") { workspace.path.removeAll() }
+            await step("会话条进会话") { workspace.openSession(id) }
+            await step("会话返回 Cue") { workspace.path.removeAll() }
         }
-        // Agent 列表滚动：每帧 40pt 往下再往上
-        if wants("Agent 列表滚动") {
-            guard let scroll = Self.scrollView(in: Self.window) else { fail("Agent 页上找不到可滚的列表") }
-            for _ in 0..<2 { await stepScroll("Agent 列表滚动", scroll, step: { name, action in await step(name, action) }) }
+        // 侧栏进展页会话段的列表滚动：每帧 40pt 往下再往上
+        if wants("会话列表滚动") {
+            workspace.showSessions()
+            await Task.wait(for: .seconds(1))
+            guard let scroll = Self.scrollView(in: Self.window) else { fail("会话段上找不到可滚的列表") }
+            for _ in 0..<2 { await stepScroll("会话列表滚动", scroll, step: { name, action in await step(name, action) }) }
         }
         workspace.select(.shelf)
         await Task.wait(for: .seconds(1))
@@ -237,7 +228,7 @@ enum IOSInteractionBench {
 
     private static func stepScroll(_ name: String, _ scroll: UIScrollView, step: (String, () -> Void) async -> Void) async {
         // 滚动是持续的：量 40 帧里每帧的主线程回合与掉帧（动作只触发第一帧，之后由 display link 推）
-        // 量完滚回原处（顶上是负的上内边距，不是 0）：tab 的页常驻，滚到哪后面的项就从哪接着看
+        // 量完滚回原处（顶上是负的上内边距，不是 0）：侧栏的页常驻，滚到哪后面的项就从哪接着看
         let start = scroll.contentOffset
         let driver = ScrollDriver(scroll)
         await step(name) { driver.start() }

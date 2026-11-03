@@ -207,7 +207,7 @@ enum InteractionBench {
                 await step("收起任务") { DebugScene.toggleTaskFold() }
             }
         }
-        // 侧栏开合在卡最多的项目页上量：整页内容要跟着详情区的宽度重排。走 ⌃⌘S 那条路（主菜单动作经响应链），不直接调方法
+        // 会话条宽窄开合（220 与 72）在卡最多的项目页上量：主区整页按新的宽重排。走 ⌃⌘S 那条路（主菜单动作经响应链），不直接调方法
         if let big = workspace.catalog?.cardCounts.max(by: { $0.value < $1.value })?.key {
             await step("页面回访") { workspace.show(.project(big)) }
             for _ in 0..<2 {

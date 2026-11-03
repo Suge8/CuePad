@@ -2,9 +2,9 @@
 import CueStore
 import SwiftUI
 
-/// 内容区：当前页与最近去过的几页都挂着（`Workspace.mountedPages`），切页只是换哪一页看得见，回访不重建、不重排、滚动位置还在。
+/// 主区：当前页与最近去过的几页都挂着（`Workspace.mountedPages`），切页只是换哪一页看得见，回访不重建、不重排、滚动位置还在。
 /// 不在前台的页：不可见、点不到、屏读跳过，暂停订阅与实时状态（`pageActive`），尺寸停在离开时的值（`PageStackLayout`）。
-/// 读页面的只有这里，主窗口的视图体不读它，切页时不重建整条工具栏。会话页不留，只在当前页时挂上。
+/// 读页面的只有这里，主窗口的视图体不读它，切页时不重算整个窗口。会话页不留，只在当前页时挂上。
 struct PageStack: View {
     @Environment(Workspace.self) private var workspace
 

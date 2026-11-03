@@ -19,7 +19,7 @@ struct ShelfScreen: View {
             if let catalog = workspace.catalog { content(catalog) }
         }
         .refreshable { await services.syncNow() }
-        .floatingHeader(.verbatim(SidebarOutline.Entry.projects.title)) {
+        .floatingHeader("项目") {
             Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
         }
     }
@@ -141,16 +141,16 @@ private struct ShelfRow: View {
     }
 }
 
-/// 窄屏末尾那一组：归档、回收站、设置（`SidebarOutline.footer`，同侧栏底部），点了推在项目页上。
+/// 项目段末尾那一组：归档、回收站、设置，点了推入。
 private struct ShelfFooter: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(SidebarOutline.footer, id: \.self) { entry in
-                ShelfLine(route: entry.route, icon: entry.icon, title: entry.title, alert: entry == .settings ? services.macAlert : nil)
-            }
+            ShelfLine(route: .archive, icon: .archive, title: String(localized: "归档"))
+            ShelfLine(route: .trash, icon: .trash, title: String(localized: "回收站"))
+            ShelfLine(route: .settings, icon: .settings, title: String(localized: "设置"), alert: services.macAlert)
         }
         .padding(.vertical, ShelfScreen.paperInset)
         .rowPaper(cornerRadius: Radius.sheet)

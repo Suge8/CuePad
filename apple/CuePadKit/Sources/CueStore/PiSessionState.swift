@@ -276,7 +276,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public func asksYou(_ cue: CueDuty?) -> Bool { runtimeState == .known(.waitingForUser) && !waitsForCue(cue) }
 
   /// 待回复的唯一规则：停着没在问（歇着或出错），Cue 值班时这次停下留给了你回（`CueDuty.leftToYou`：你发起的一轮当场就是，Cue 发起的由它定）。
-  /// 会话行的"待回复"（出错的照样显示出错）、Cue 页的待回复提示、名牌、看板等你列里的待回复与待回复的提示（`CueStore.sessionsAwaitingReply`、`reaches`）都只认它。
+  /// 会话行的"待回复"（出错的照样显示出错）、会话条、名牌、看板等你列里的待回复与待回复的提示（`CueStore.sessionsAwaitingReply`、`reaches`）都只认它。
   public func awaitsReply(_ cue: CueDuty?) -> Bool { runtimeState != .unknown("unconfirmed") && state != .known(.waitingForUser) && cue?.leftToYou(self) == true }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。

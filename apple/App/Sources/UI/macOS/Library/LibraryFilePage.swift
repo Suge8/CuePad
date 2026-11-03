@@ -17,7 +17,7 @@ struct LibraryFileLayer: View {
     }
 }
 
-/// 一份技能或规则的文件页（Mac）：字在一列里居中（同技能与规则页那一列），自动存、没有保存钮（`FileDraft`）。它是哪一份、存好没有在工具栏中间
+/// 一份技能或规则的文件页（Mac）：字在一列里居中（同技能与规则页那一列），自动存、没有保存钮（`FileDraft`）。它是哪一份、存好没有在主栏栏头
 /// （`OverlayHeader`：标题同手机，技能是全局或项目名、规则是名字；次要一行是文件名与存好没有；完整路径悬停看），页里不另写。
 /// 顶上是文件在别处改过的那一条、同名的分段与"只留这份"、或另写了一份的"合并进来"（有才有，`ConflictBar`、`DuplicateBar`、`MergeBar`）；技能再是名字与说明两个框，最下面正文。
 /// 正文读库里那台写下的那一条（`LibraryFileText`），对上快照的哈希才载入、才跟（`AgentLibrary.arrived`）。
@@ -50,7 +50,7 @@ private struct LibraryFilePage: View {
         .onDisappear { if let draft { Task { await draft.leave() } } }
     }
 
-    /// 工具栏中间那一块：标题同手机（技能是全局或项目名，规则是名字），次要一行是文件名与存好没有；完整路径悬停看（多是一长串家目录里的点目录）。
+    /// 栏头里的标题那一块：标题同手机（技能是全局或项目名，规则是名字），次要一行是文件名与存好没有；完整路径悬停看（多是一长串家目录里的点目录）。
     private func header(_ library: AgentLibrary?, _ draft: FileDraft?) -> OverlayHeader.Content {
         let entry = library?.file(file)
         return OverlayHeader.Content(

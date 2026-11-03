@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 一页里换看哪一段的分段：全 App 只有这一种（进展页的看板｜会话、技能与规则的规则｜技能、搜索的灵感与任务｜会话）。
-/// 每段图标加字，选中的靛青字、浅底，其余次一档的墨；进展页那组只画图标（`titles: false`，字给悬停与读屏）：手机那块玻璃里还要放范围与额度，
-/// Mac 那组在待办列头上方，加字就挤掉列头。放在哪见 docs/layout.md：手机在页顶中间，Mac 在工具栏中间；底由调用处给（工具栏、页顶的玻璃，搜索范围自带淡底的槽）。
+/// 一页里换看哪一段的分段：全 App 只有这一种（项目｜进展、进展页的看板｜会话、技能与规则的规则｜技能、搜索的灵感与任务｜会话）。
+/// 每段图标加字，选中的靛青字、浅底，其余次一档的墨；进展页那组只画图标（`titles: false`，字给悬停与读屏）：手机那块玻璃里还要放范围与额度。
+/// 放在哪见 docs/layout.md「栏头与页顶」；底由调用处给（栏头、页顶的玻璃，搜索范围自带淡底的槽）。
 /// 换段的动画在这里定一份：不回弹的弹簧，减弱动态效果时只交叉淡入淡出；点着的那一段再点不动。
 struct PaneSegment<Value: Hashable>: View {
     struct Item {
@@ -66,7 +66,7 @@ enum PaneMetrics {
     #endif
 }
 
-/// 进展页的两段：看板｜会话，看哪一段只有 `Workspace.progressPane` 一份。手机与 iPad 在顶上那块玻璃里（`ProgressHeader`），Mac 在工具栏左上（`PanesSlot`）。
+/// 进展页的两段：看板｜会话，看哪一段只有 `Workspace.progressPane` 一份。手机与 iPad 在顶上那块玻璃里（`ProgressHeader`），Mac 在进展页自己顶上那一排的左边（`ProgressPage`）。
 struct ProgressPanes: View {
     @Environment(Workspace.self) private var workspace
 

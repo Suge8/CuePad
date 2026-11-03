@@ -60,7 +60,7 @@ struct CueStatusRow<Trailing: View>: View {
     }
 }
 
-/// 去 Cue 的入口上的头像（状态行、Mac 侧栏名片）：接力的 Cue 那一头落在这里（`CueSpot.entry`），又来一句时外面漾开一圈石绿（`CueArrival`）。
+/// 去 Cue 的入口上的头像（状态行）：接力的 Cue 那一头落在这里（`CueSpot.entry`），又来一句时外面漾开一圈石绿（`CueArrival`）。
 struct CueEntryAvatar: View {
     var size = CueAvatar.Size.row
     @Environment(Workspace.self) private var workspace
@@ -92,7 +92,7 @@ struct UnreadCount: View {
     }
 }
 
-/// Cue 那一行的第二行（`tally`：Mac 侧栏名片、iPad 侧栏、菜单栏面板、输入条与手机、iPad 的页头）或 Mac Cue 页头里此刻在做什么的那一句。
+/// Cue 那一行的第二行（`tally`：菜单栏面板、输入条与手机、iPad 的页头）或 Mac Cue 页头里此刻在做什么的那一句。
 /// `tally` 时就是 Cue 此刻（`CueLedger`：数字账，没有可数的写一句安静的现状、不在时写原因）；不写 tally 时不在写 Cue 此刻的那句原因（`CueNow.Brain.away`，起不来是失败色，其余次要灰），
 /// 话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`），空闲不写。
 /// Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时状态词是"输出中"（`PiShown.speaking`）。
@@ -137,8 +137,7 @@ struct CueStatusLine: View {
 }
 
 #if os(macOS)
-/// Mac Cue 页的页头（窗口工具栏居中，玻璃由工具栏给）：头像，名字接此刻在做什么，一行（Cue 此刻在侧栏的名片上，等你的卡就在输入框上方，这里不写）。输入框里有没说出去的话时头像露"在听"。
-/// 只在侧栏收起时有（`PageTitleSlot`）：侧栏开着时最上面的名片已经写了名字与现状。
+/// Mac Cue 页的页头（右栏栏头那一排的左边）：头像，名字接此刻在做什么，一行（等你的卡就在输入框上方，这里不写）。输入框里有没说出去的话时头像露"在听"。
 /// 手机与 iPad 的页头是 `CueHeader`。
 struct CueTitle: View {
     @Environment(Workspace.self) private var workspace

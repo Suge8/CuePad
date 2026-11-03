@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 技能与规则的问号点开的气泡：三句——CuePad 直接改这些文件、不经过 Agent；行末划掉的标志是读不到的那几家；
 /// 看的是哪台 Mac、多久前报的（`AgentLibrary.modifiedAt`，还没读到那台的名字时只写时间）。
-/// 手机上问号是页顶右边的圆钮（`LibraryScreen`），Mac 上在工具栏右边（`LibraryHelpSlot`）。
+/// 手机上问号是页顶右边的圆钮（`LibraryScreen`），Mac 上在主栏栏头右边（`LibraryHelpSlot`）。
 struct LibraryHelp: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace

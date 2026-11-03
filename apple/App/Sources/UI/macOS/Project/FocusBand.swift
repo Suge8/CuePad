@@ -81,7 +81,7 @@ struct FocusBand: View {
 }
 
 /// 下滚后的回到顶部：一块玻璃，朝上的箭头接没做完的任务数（任务图标接数，不写"任务"二字：图标已经说了）；点一下回到顶部。
-/// 不写项目名：侧栏选中的那一行、侧栏收起时工具栏的切换胶囊已经写着（docs/layout.md 页面顶上不写大标题）。
+/// 不写项目名。
 struct CompactFocus: View {
     let data: ProjectPageData
     let scrollToTop: () -> Void

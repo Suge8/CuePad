@@ -148,8 +148,8 @@ extension Workspace {
     }
 }
 
-/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 进展页、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
-/// ⌘1–9 的唯一处理者在这里：工具栏的项目切换菜单收起时不响应其菜单项的快捷键（实测），菜单里的 ⌘ 只是提示。
+/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 进展页、⌃⌘S 会话条开合与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
+/// ⌘1–9 的唯一处理者在这里。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
 

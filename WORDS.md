@@ -16,7 +16,7 @@
 - **进展**（`Route.progress`，窄屏侧栏与宽屏主区里的去处）：看板与会话两段（`Workspace.progressPane`），会话段是全部会话（在线在上、历史在下）；避免：任务页（已退役）；会话页只指打开的那一个会话
 - **会话**（进展页的一段）；避免：Agent 标签
 - **Agent 会话**；避免：Pi 会话（界面上）。"Pi"只指 Pi 这个产品（安装、扩展、版本、模型与 `pi` 命令）
-- **项目**（侧栏列出全部项目，置顶的在前；窄屏侧栏的项目段与宽屏主区共用选择）
+- **项目**（项目段列出全部项目，置顶的在前；窄屏侧栏的项目段与宽屏主区共用选择）
 - **项目范围**（`Workspace.projectScope`）：进展页看板与会话两段共用的"只看哪个项目"，顶栏中间不选时写"全部项目 ⌄"、选了是"项目名 ✕"；避免：筛选、过滤（界面上）
 - **会话条**（两端通用的会话入口，分组格）；避免：底部那一排、标签栏、Tab（主导航已退役）
 - **任务气泡**（`TaskBubble`，手机上是贴在底部的纸）：看一条任务只有它；避免：浮窗、详情页
@@ -48,7 +48,7 @@
 - 灵感 Idea · 任务 Task · 子任务 Subtask · 正文 Notes · 项目 Project · 默认项目 Default Project · 置顶 Pin / Unpin / Pinned · 归档 Archive · 回收站 Trash · 批注 Comment（不叫 Note，免得和 Notes 混）
 - 进展 Progress · 看板 Board · 会话 Session · Agent 会话 Agent Session · 全部项目 All Projects · 工作区 Workspace · 绑定的文件夹 Linked Folder
 - Cue 的四个：Cue · 推进中 Active · 等你 Needs You · 记忆 Memory；一直记着 Always Remember
-- 拍板 Your Call（"等你拍板" Needs Your Call）；数字账（名牌、小组件、灵动岛与锁屏、菜单栏面板）与侧栏进展的计数里数接小写短形：N for you（拍板）· N to reply · N active · N subagent(s) · N need(s) you
+- 拍板 Your Call（"等你拍板" Needs Your Call）；数字账（名牌、小组件、灵动岛与锁屏、菜单栏面板）与会话条的计数里数接小写短形：N for you（拍板）· N to reply · N active · N subagent(s) · N need(s) you
 - 进行中 In Progress（任务自己的状态，不与 Active 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…
 - 经过的动作词：查看 View · 发给 Message · 新建 New · 修改 Edit · 开始 Start · 停止 Stop · 完成 Complete · 留给你 Left for You
 - 技能与规则 Skills & Rules · 规则 Rules（全局规则 Global Rules · 项目规则 Project Rules）· 一键整理 Tidy Up · 去重（按钮"只留这份"）Keep This One · 合并（按钮"合并进来"）Merge In · 发往 Mac Send to Mac

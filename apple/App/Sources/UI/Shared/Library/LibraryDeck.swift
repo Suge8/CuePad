@@ -53,7 +53,7 @@ private struct LibraryPaneScroll<Content: View>: View {
     }
 }
 
-/// 规则｜技能两段，看哪一段只有 `Workspace.libraryPane` 一份（`PaneSegment`）：Mac 在工具栏中间（`LibraryPanesSlot`），
+/// 规则｜技能两段，看哪一段只有 `Workspace.libraryPane` 一份（`PaneSegment`）：Mac 在主栏栏头（`LibraryPanesSlot`），
 /// 手机与 iPad 在页顶中间那块玻璃里（`LibraryScreen`）；它也是页名，页里不另写。
 struct LibraryPanes: View {
     @Environment(Workspace.self) private var workspace

@@ -70,7 +70,7 @@ nonisolated extension PiShown {
     }
 
     /// 会话列表的档：等你确认 → 待回复 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。拍板在前同看板的等你列（在问的会话卡着 Agent），
-    /// 待回复紧随（Cue 页的待回复提示点进来看的就是它们）。
+    /// 待回复紧随。
     var rank: Int {
         switch status {
         case .asking: 0

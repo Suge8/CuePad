@@ -3,8 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 进展页的会话段（`ProgressPage`）：全部会话，在线的在上（现在）、历史在下，只看项目范围里的（`Workspace.scopedProject`，与看板一段共用）。
-/// 页里不另起一排：范围与新会话在工具栏那一排（`ProgressPage` 的头注释）；搜索框是列表的第一行，随列表滚走。
-/// 列表与行同手机（`PiSessionList`、`PiSessionRow`），点行在内容区打开会话页；右键是会话的菜单（`SessionActions`）。
+/// 页里不另起一排：范围与新会话在进展页顶上那一排（`ProgressPage`）；搜索框是列表的第一行，随列表滚走。
+/// 列表与行同手机（`PiSessionList`、`PiSessionRow`），点行开会话（默认右栏，`openSession`）；右键是会话的菜单（`SessionActions`）。
 /// 这台 Mac 检测到 Agent 却一家都没接入时，最上面是接入小卡（`ConnectAgents`）：没接入时本机的会话在这里看不到。
 struct SessionsPane: View {
     @Environment(Workspace.self) private var workspace
@@ -21,7 +21,7 @@ struct SessionsPane: View {
             ScrollView { column }
             .onChange(of: filter) { proxy.scrollTo(Self.top, anchor: .top) }
         }
-        // 让在安全区里（同看板一段）：列表照样滚到工具栏后面
+        // 让在安全区里（同看板一段）：列表照样滚到顶上那一排后面
         .safeAreaPadding(.top, Bars.contentGap)
         .background(palette.desk)
         .agentList(model, filter: filter)

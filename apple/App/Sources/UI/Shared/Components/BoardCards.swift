@@ -6,7 +6,7 @@ extension View {
     /// 手机竖版看板里铺满行给的格），左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠纸与桌面的明度、色相差把纸托出来。
     func boardCard(_ column: TaskBoard.Column) -> some View { modifier(BoardCardFrame(column: column)) }
 
-    /// 项目联动（Mac）：指针停在侧栏的项目行或卡上的项目小图形上时（`Workspace.hoveredProject`），别的项目的卡淡下去，这个项目的不动。
+    /// 项目联动（宽屏）：指针停在卡上的项目小图形上时（`Workspace.hoveredProject`），别的项目的卡淡下去，这个项目的不动。
     /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。没有项目的（Cue 的一般提问）跟着淡。
     func boardDim(project: UUID?) -> some View {
         #if os(macOS)

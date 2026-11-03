@@ -1,8 +1,8 @@
 #if os(macOS)
 import SwiftUI
 
-/// 盖在页上的编辑页（灵感的编辑页、技能与规则的文件页，`Workspace.overlay`）是哪一份：标题与下面一行次要信息，在工具栏中间的标题位（`PageTitleSlot`），
-/// 同手机推入页页顶中间那块玻璃；页里不另写这一行。工具栏项在主窗口里常驻，编辑页只把算好的值交到这里（同 `SessionHeader`），收起时清掉自己的。
+/// 盖在页上的编辑页（灵感的编辑页、技能与规则的文件页，`Workspace.overlay`）是哪一份：标题与下面一行次要信息，在主栏栏头里"收起"的旁边（`OverlayTitle`），
+/// 同手机推入页页顶中间那块玻璃；页里不另写这一行。栏头在主窗口里常驻，编辑页只把算好的值交到这里（同 `SessionHeader`），收起时清掉自己的。
 @Observable
 final class OverlayHeader {
     struct Content: Equatable {
@@ -30,15 +30,15 @@ final class OverlayHeader {
 }
 
 extension View {
-    /// 编辑页把自己的标题与次要一行交给工具栏（`OverlayHeader`），值变了就再交，离开时清掉。
+    /// 编辑页把自己的标题与次要一行交给栏头（`OverlayHeader`），值变了就再交，离开时清掉。
     func overlayHeader(_ content: OverlayHeader.Content, in workspace: Workspace) -> some View {
         onChange(of: content, initial: true) { _, content in workspace.overlayHeader.set(content) }
             .onDisappear { workspace.overlayHeader.clear(content.page) }
     }
 }
 
-/// 工具栏标题位里的那一块：两行，标题与次要一行（同手机的 `TitleStack`）。开着编辑页就占着这一位（值交到之前空着，不先露出下面那一页的）。
-/// 玻璃按字收窄、居中（两行短字铺满标题位会两边空出一大截），放不下时字截断、玻璃不超过标题位；标题位自己的宽只随窗口变，工具栏不因它重排。
+/// 栏头里编辑页的标题那一块：两行，标题与次要一行（同手机的 `TitleStack`）。开着编辑页就占着这一位（值交到之前空着，不先露出下面那一页的）。
+/// 玻璃按字收窄、居中（两行短字铺满这一位会两边空出一大截），放不下时字截断、玻璃不超过这一位。
 /// 宽按次要一行最宽的样子留（`Content.widest`）：存着、存好、没存上换字时玻璃不跟着伸缩。
 struct OverlayTitle: View {
     @Environment(Workspace.self) private var workspace

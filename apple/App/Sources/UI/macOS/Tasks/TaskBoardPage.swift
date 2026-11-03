@@ -2,7 +2,7 @@
 import SwiftUI
 
 /// 进展页的看板一段（`ProgressPage`）：流水看板（`TaskBoard`）四列并排——待办 → 推进中 → 等你 → 已完成（今天），列不按状态铺色。
-/// 不另起一排：四个列头就排在窗口最顶那一排里、各对齐自己那一列（`boardTopRow`），卡各自滚动、从它们下面过。
+/// 四个列头各浮在自己那一列的顶上（`boardTopRow`），卡各自滚动、从它们下面过。
 /// 项目范围同会话一段那一份（选了项目以后列头的数也只数这个项目）；"新任务"落在范围里的项目或当前项目。
 struct TaskBoardPage: View {
     @Environment(Workspace.self) private var workspace

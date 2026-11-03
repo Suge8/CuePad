@@ -121,7 +121,7 @@ extension CueStore {
     }
   }
 
-  /// 待回复的会话（规则在 `PiSessionState.awaitsReply`），等得最久的在前：Cue 页的待回复提示与等你里的待回复（`CueTally.replies`）只读它。
+  /// 待回复的会话（规则在 `PiSessionState.awaitsReply`），等得最久的在前：会话条与等你里的待回复（`CueTally.replies`）只读它。
   /// 只读留给你回、此刻歇着或出错的那几条，订阅同 `sessionsAskingYou`。
   /// 留给你之后已经对它说了话（最近一条说给它的话晚于这次停下、没失败）的不算：话一发出就有人接手了，不等 Mac 送到、会话动起来
   /// （`CueLeft` 在那时自然作废）——看板上它当场回到推进中、写话到哪了（`PiShown` 的 `PiDelivery`），"等你 N"当场少一件。

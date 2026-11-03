@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 主窗口内容区挂着哪些页、侧栏开合（Mac）。当前页本身在 `Workspace.mainRoute`，这里只管"去过的页留着"。
+/// 主窗口主区挂着哪些页（Mac）。当前页本身在 `Workspace.mainRoute`，这里只管"去过的页留着"。
 @Observable
 final class MacPages {
 
@@ -16,11 +16,6 @@ final class MacPages {
     @ObservationIgnored private var visits = 0
     @ObservationIgnored private var trimTask: Task<Void, Never>?
     static let keptPages = 4
-
-    /// 开合侧栏时随侧栏滑的那些图层（`SidebarSlide`）。
-    let slide = SidebarSlide()
-    /// 开合侧栏时详情区这一栏的图层滑开的地方两边多铺的底色（`MainWindow`），不小于侧栏最宽的那一栏。
-    static let slideOverscan: CGFloat = 400
 
     func visit(from left: Route, to page: Route) {
         current = page

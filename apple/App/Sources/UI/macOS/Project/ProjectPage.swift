@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 项目页（与手机项目页同构）：最上面一行项目的一句介绍接它的文件夹（`ProjectIntroLine`）→ 任务那张纸（`FocusBand`）→ 置顶的灵感 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有说现状的那一格（`EmptyWallTile`，记灵感在底部随手记）。
-/// 不写项目名作大标题：侧栏开着时名字就在选中的那一行，收起时工具栏的切换胶囊写它（`ProjectSwitcher`）。
+/// 不写项目名作大标题。
 struct ProjectPage: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
@@ -48,7 +48,7 @@ struct ProjectPage: View {
                     withAnimation(Motion.fade) { collapsed = isCollapsed }
                 }
                 // 下滚后的回到顶部：排进窗口最顶那一排、居中（项目页那一排中间是空的），不压在下一排的卡片上；
-                // 是页里的一块、不放进工具栏——工具栏内容只随用户操作变，不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
+                // 是页里的一块、不放进栏头——栏头内容只随用户操作变，不随滚动位置这种布局读数变（docs/layout.md 第一条：跟着滚动位置变会形成布局循环）
                 if collapsed, let data, !data.tasks.isEmpty {
                     CompactFocus(data: data) {
                         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }

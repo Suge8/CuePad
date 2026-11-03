@@ -2,13 +2,13 @@
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
-/// `IOSInteractionBench` 里要真手指的项：进程内没有入口（系统长按菜单）或要量的就是手势本身（滑动切页、右滑返回、左滑前进）。
+/// `IOSInteractionBench` 里要真手指的项：进程内没有入口（系统长按菜单）或要量的就是手势本身（滑动开合侧栏、右滑返回）。
 /// App 写 `AWAIT 名 x y`（按）或 `AWAIT 名 x y x2 y2 swipe|drag 秒`（从前一点快滑或慢拖到后一点），屏幕坐标、名字里不带空格；`perf-ios.sh` 用 axe 在模拟器上真按、真滑，
 /// 量从手指按下（`TouchProbe`）起算。每行的 `landed` 是量完时停在哪（`landed(_:)`），核对手势做了该做的事、没误触。
 extension IOSInteractionBench {
     enum Finger {
         case press(CGPoint)
-        /// 快滑（axe swipe）：切页、返回、快甩。
+        /// 快滑（axe swipe）：开合侧栏、返回、快甩。
         case swipe(from: CGPoint, to: CGPoint, seconds: Double = 0.25)
         /// 慢拖（axe drag，逐点移动）：行的轻扫只认开始那一刻横向慢于 600pt/s 的拖。
         case drag(from: CGPoint, to: CGPoint, seconds: Double)
@@ -19,7 +19,7 @@ extension IOSInteractionBench {
     /// 滑动的几项量 1 秒：滑 0.25 秒、松手后转场还要走半秒，800ms 时常停在半路上。
     static let swipeWindow = Duration.milliseconds(1000)
 
-    /// 手势切页、返回与前进（每项两遍），再在会话行与任务看板上横滑核对没被切页抢走。改前（切页还是点底部那一排）1、2、4 什么都不发生，3 是系统的返回。
+    /// 手势开合侧栏与返回（每项两遍），再在会话行与任务看板上横滑核对没被侧栏的横拖抢走（`NarrowPan`：手指下还能横滚的先滚，行上慢拖是行的动作）。
     /// `press`：请脚本按或滑一下、不量（收起滑出的行动作）。
     static func gestures(
         _ workspace: Workspace, session: UUID, wants: (String) -> Bool, fail: (String) -> Never, press: (String, Finger) async -> Void, step: Step
@@ -32,27 +32,26 @@ extension IOSInteractionBench {
             await Task.wait(for: .seconds(1))
         }
         for _ in 0..<2 {
-            // Cue 在底部那一排最右：右滑去它左边的会话页，会话页左滑回 Cue
-            if wants("滑动切页·Cue→会话") {
+            // Cue 页右滑开侧栏（起手让开左边的会话条，x 在屏宽四分之一）
+            if wants("滑动开侧栏") {
                 await land(.cue)
-                await step("滑动切页·Cue→会话", swipeWindow, .swipe(from: CGPoint(x: left, y: mid), to: CGPoint(x: right, y: mid))) {}
+                await step("滑动开侧栏", swipeWindow, .swipe(from: CGPoint(x: left, y: mid), to: CGPoint(x: right, y: mid))) {}
             }
-            // 会话页的中部满是会话行（行上左滑露出行的动作），切页滑在第一行上面的分组标题那一条
-            if wants("滑动切页·会话→Cue") {
+            // 侧栏会话段的中部满是会话行（行上左滑露出行的动作），收侧栏滑在第一行上面的分组标题那一条
+            if wants("滑动收侧栏") {
                 await land(.progress, pane: .sessions)
                 let row = sessionRow(in: window, fail: fail)
                 let y = row.minY - 20
-                await step("滑动切页·会话→Cue", swipeWindow, .swipe(from: CGPoint(x: right, y: y), to: CGPoint(x: left, y: y))) {}
+                await step("滑动收侧栏", swipeWindow, .swipe(from: CGPoint(x: right, y: y), to: CGPoint(x: left, y: y))) {}
             }
-            // 右滑返回从内容区起（x=60），不贴边；左滑前进紧接着回到的 Cue 页
-            guard wants("右滑返回") || wants("左滑前进") else { continue }
+            // 右滑返回从内容区起（x=60），不贴边：推入页的返回是系统的
+            guard wants("右滑返回") else { continue }
             await land(.cue)
             workspace.openSession(session)
             await Task.wait(for: .seconds(1.5))
             await step("右滑返回", swipeWindow, .swipe(from: CGPoint(x: 60, y: mid), to: CGPoint(x: right, y: mid))) {}
-            await step("左滑前进", swipeWindow, .swipe(from: CGPoint(x: right, y: mid), to: CGPoint(x: left, y: mid))) {}
         }
-        // 会话行：慢慢左拖 150pt（约 0.9 秒）露出行的动作；同一行上快甩是切页（会话页左边是 Cue）
+        // 会话行：慢慢左拖 150pt（约 0.9 秒）露出行的动作；同一行上快甩是收侧栏回 Cue
         for _ in 0..<2 where wants("误触·会话行左滑") {
             await land(.cue)
             await land(.progress, pane: .sessions)
@@ -79,7 +78,7 @@ extension IOSInteractionBench {
         }
     }
 
-    /// 量完时停在哪：根与推入的页（`cue`、`cue>session`），露出了行的轻扫按钮记"+行动作"，进展页的看板记第一行横着滚到了哪。
+    /// 量完时停在哪：根上那一层（`cue`，侧栏开着是侧栏那一段）与推入的页（`cue>session`），露出了行的轻扫按钮记"+行动作"，进展页的看板记第一行横着滚到了哪。
     static func landed(_ workspace: Workspace) -> String {
         func brief(_ route: Route) -> String {
             switch route {
@@ -89,7 +88,8 @@ extension IOSInteractionBench {
             default: "\(route)"
             }
         }
-        var text = ([workspace.mainRoute] + workspace.path).map(brief).joined(separator: ">")
+        let root: Route = workspace.sidebarOpen ? workspace.sidebarRoute : .cue
+        var text = ([root] + workspace.path).map(brief).joined(separator: ">")
         if workspace.mainRoute == .progress, workspace.progressPane == .sessions, workspace.path.isEmpty, let before = rowBefore, moved(before) { text += "+行动作" }
         if workspace.mainRoute == .progress, workspace.progressPane == .board, let offset = boardOffset(in: window) { text += " 行横移=\(offset)" }
         return text
@@ -109,7 +109,7 @@ extension IOSInteractionBench {
         }
     }
 
-    /// 手指按得到的视图：整个在屏内，中心点的命中落在它里面。根上四页都建着，挪到屏外的页 UIKit 的 frame 可能还在屏内，只看 frame 会认错页。
+    /// 手指按得到的视图：整个在屏内，中心点的命中落在它里面。根上 Cue 与侧栏两段都建着，挪到屏外的那层 UIKit 的 frame 可能还在屏内，只看 frame 会认错页。
     private static func onScreen(_ view: UIView, _ window: UIWindow) -> CGRect? {
         let frame = view.convert(view.bounds, to: window)
         guard !view.isHidden, view.alpha > 0, window.bounds.contains(frame),

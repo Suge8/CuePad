@@ -4,21 +4,21 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏侧栏的"项目"、宽屏侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看说过话后停用时输入框上方那张启用的小纸（`CueWelcome`））、cuememory（再打开"Cue 记得什么"）、cueschedules（再打开定时）、project、older、editor、progress（进展页看板段，窄屏侧栏与宽屏主区的"进展"；给了 `-CuePadProject` 先把项目范围设成它）、sessions（进展页的会话段；给了 `-CuePadProject` 先把项目范围设成它，`-CuePadQuotaOpen YES` 顶栏胶囊长出额度明细）、send、search、trash、archive、settings（配 -CuePadDemo 时 Cue 运行在演示的 Mac 上）、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（Cue 页）。
+/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏侧栏与宽屏主区的"项目"）、cue（Cue 页，宽屏会话条展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看说过话后停用时输入框上方那张启用的小纸（`CueWelcome`））、cuememory（再打开"Cue 记得什么"）、cueschedules（再打开定时）、project、older、editor、progress（进展页看板段，窄屏侧栏与宽屏主区的"进展"；给了 `-CuePadProject` 先把项目范围设成它）、sessions（进展页的会话段；给了 `-CuePadProject` 先把项目范围设成它，`-CuePadQuotaOpen YES` 顶栏胶囊长出额度明细）、send、search、trash、archive、settings（配 -CuePadDemo 时 Cue 运行在演示的 Mac 上）、sidebar（窄屏开着侧栏、宽屏会话条展开；给了 `-CuePadProject` 先打开那个项目）；不给是打开 App 的第一屏（Cue 页）。
 /// search 是搜索页，出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
 /// library 是技能与规则（`-CuePadLibraryTab skills` 打开在技能那一段），再推入文件页：instruction 是全局规则（给了 `-CuePadProject` 是那个项目的，
 /// 演示的全局规则顶上有合并那一条，`-CuePadMergePreview YES` 已点过一下"合并进来"、标出会并进来的段），skill 是 write-swift，duplicate 是同名的 release。
 /// task 打开进行中第一条的任务气泡（没有落点、在上方居中；没有进行中的就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
-/// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
+/// session：打开 `-CuePadSession <会话名>`（默认 homepage）的会话页，从进展页的会话段进（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// style：视觉样板（`StyleBoard`）盖在最上层；icons：图标总览（`IconSheet`，iPad 竖屏一屏）；stateicons：状态图形总览（`StateGlyphSheet`，一列往下滚，Mac 也有）。
 /// widgets：小组件的小号与中号（`DebugWidgetStage`）；activity：实时活动的各态（`DebugActivityStage`）；share：分享扩展的表单（`DebugShareStage`）。都盖在最上层。
-/// newsession：Agent 页上浮起新会话输入框；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
+/// newsession：进展页的会话段上浮起新会话输入框；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
 /// `-CuePadDemoMac YES`：发给演示 Mac（demo-mac）上会话的话由它慢慢接手、送达、再回状态，对运行在它上面的 Cue 说的话也会交给 Cue（见 `runDemoMac`）。
 /// `-CuePadCuePresence away`（cue 画面）：一夜里 Cue 陆续说了几句，回到 Cue 页从新消息读起；`-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页、
 /// 那几句这时才来，再回到 Cue 页，录"离开很久后回来"的定位（`awayIfAsked`）。
 /// `-CuePadLiveActivity YES`：隔离库下也开真的实时活动（配 `-CuePadDemo YES`，演示库里有推进中与等你），验收锁屏与灵动岛；`simctl io screenshot` 拍不到灵动岛，录一小段取帧。
-/// cuepanel：iPad 在项目页旁开着右侧 Cue 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
+/// cuepanel：宽屏主区开着项目页、右栏是 Cue。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
     /// 模拟器当作接了电脑键盘、聚焦不弹软键盘：清掉输入法的硬件键盘布局后照常弹出（私有选择子，只在 Debug 里）。
     private static func showSoftwareKeyboard() {
@@ -138,7 +138,7 @@ extension DebugScene {
             // 没给 -CuePadTask 时是进行中的第一条
             await openTask(workspace) { $0.status == .inProgress }
         case "session":
-            // 打开 -CuePadSession（会话名，默认 homepage）的近况页，推在 Agent 整页上
+            // 打开 -CuePadSession（会话名，默认 homepage）的会话页，从进展页的会话段进
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             guard let session = try await demoSession(titled: title, store: workspace.services.store) else { break }

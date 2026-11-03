@@ -97,9 +97,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var advancing: Int { tally.advancing.count }
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
-    /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`），只给 Mac 侧栏名片的气泡（Cue 那一行写 Cue 此刻，不写它）。
-    /// 结束了的提问（`CueQuestionEnd`）不算：那件事已经定了，接着写它在那之前最近说的。
-    var lastSaid: String?
     /// 它运行的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
     var hostUntil: Date?
     var hostOnline: Bool { hostUntil != nil }
@@ -113,7 +110,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var done: [Card]
 
     static let empty = CueDigest(
-        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaid: nil, hostUntil: nil,
+        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, hostUntil: nil,
         lastYou: nil, state: nil, woke: nil, done: [])
 
     struct Woke: Equatable, Sendable {
@@ -131,8 +128,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
 
     static func read(from store: isolated CueStore) throws -> CueDigest {
         let profile = try store.cueProfile()
-        let recent = try store.cueMessages(limit: recentWindow)
-        let said = recent.last { $0.author == .known(.cue) && ($0.choices == nil || $0.answeredAt == nil) }
         let tally = try store.cueTally()
         return CueDigest(
             name: profile?.name ?? CueProfile.defaultName,
@@ -141,7 +136,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
             hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
             tally: tally,
             unread: try store.cueUnread().count,
-            lastSaid: said?.headline,
             hostUntil: try profile?.activeHost.flatMap { try store.macOnlineUntil($0) },
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer) },
             state: try store.cueState(),
@@ -171,11 +165,10 @@ nonisolated struct CueDigest: Equatable, Sendable {
         }
     }
 
-    private static let recentWindow = 40
 }
 
 nonisolated extension CueMessage {
-    /// Cue 的一句在对话以外的那一行（Mac 侧栏名片的气泡、拍板卡与全屏预览底栏的第一句、回答的引用、实时活动里第一件等你）：提问是要你定什么（`CueAsking.question`，不露原话），
+    /// Cue 的一句在对话以外的那一行（拍板卡与全屏预览底栏的第一句、回答的引用、实时活动里第一件等你）：提问是要你定什么（`CueAsking.question`，不露原话），
     /// 其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
     var headline: String? { asking?.question ?? MarkdownBlock.firstPlainLine(CueFormat.plainText(text)) }
 }

@@ -5,12 +5,12 @@ extension View {
     /// 页顶那一排（全 App 只此一种，手机与 iPad、根页与推入页同一个）：左边一颗圆钮，中间一两块玻璃，右边至多一颗圆钮
     /// （多个操作时调用方给一个"⋯"`Menu`），各是一块玻璃，玻璃之间透出内容；内容一直滚到这一排后面，栏后面不垫模糊或渐变（`Bars`）。
     /// 中间是标题与下面一行要紧信息（推入页），或调用方给的 `center`（根页：这一页的范围，Cue 页是 Cue 的名牌），不写页名大标题：
-    /// 底部那一排与侧栏的选中格已经说了在哪一页（侧栏不在旁边时照写，`HeaderHost.namesPage`）。中间那几块由 `headerPiece` 或 `GrowPanel` 画，提示横幅盖在这一排上时让开。
+    /// 窄屏侧栏的项目｜进展已经说了在哪一页（`HeaderHost.namesPage`）。中间那几块由 `headerPiece` 或 `GrowPanel` 画，提示横幅盖在这一排上时让开。
     /// 画在哪由所在的地方定（`HeaderHost`），调用处不分：
     /// - 系统导航栏（推入的页）：左边是系统的圆形返回（左缘右滑返回、长按返回菜单都是系统的），
     ///   中间与右边是导航栏里的两项。两项推入时就建好、一直在，标题与信息只在项里面换，让开也只是透明：推入转场期间系统不重建工具栏项，
     ///   换项要等转场结束才显示；中间这一项不在时系统还会把标题当普通文字摆回中间。
-    /// - 页自己画（窄屏三个 tab 的根页、iPad 右边那一栏的根、iPad 右侧的 Cue 面板）：系统导航栏藏着，这一排是页的一部分，切 tab、推入时随页走，
+    /// - 页自己画（窄屏根上的 Cue 页与侧栏两段、宽屏栏里的页）：系统导航栏藏着，这一排是页的一部分，开合侧栏、推入时随页走，
     ///   不与推入页的栏项交叉；从中间长出的面板（`GrowPanel`）只能在这里长：导航栏里的项按栏高摆、画不到栏外。
     /// `hidden` 时中间与右边让开（淡到透明、不可点、读屏跳过），左边一直在；占的高度不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。标题同时是读屏、返回菜单与多任务切换器里的名字。
@@ -54,28 +54,20 @@ enum HeaderHost: Equatable {
     case navigationBar
     /// 窄屏根上的页，系统导航栏藏着；`search`：这一排的搜索入口（由页面容器指定）。
     case page(search: HeaderSearch?)
-    /// iPad 右边那一栏的根，系统导航栏藏着：左边是侧栏钮（`SidebarToggle`，`sidebarShown` 是侧栏此刻在屏幕上，按它开合），
-    /// `sidebarBeside` 是侧栏排在旁边（`SplitHome`）。
-    case split(sidebarShown: Bool, sidebarBeside: Bool)
-    /// iPad 右侧的 Cue 面板：自己画，提示横幅不在它上面（横幅在右边那一栏里），不用让开。
+    /// 宽屏（iPad）栏里的页：自己画，不为提示横幅让开。
     case panel
 
     var search: HeaderSearch? {
         if case .page(let search) = self { search } else { nil }
     }
 
-    /// 这一页的名字此刻在别处写着（窄屏底部那一排、侧栏的选中格）：页顶那一排不再写标题，同一屏不重复。
-    /// 侧栏不在旁边（收起，或从左缘滑出盖在页上）时照推入的页写：盖在页上的侧栏随时收回，页名不跟着来回闪。
+    /// 这一页的名字此刻在别处写着（窄屏侧栏顶上的项目｜进展）：页顶那一排不再写标题，同一屏不重复。
     var namesPage: Bool {
-        switch self {
-        case .page: true
-        case .split(_, let sidebarBeside): sidebarBeside
-        case .navigationBar, .panel: false
-        }
+        if case .page = self { true } else { false }
     }
 }
 
-/// 页自己画的那一排里的搜索入口，两种的放大镜落在同一处，切 tab 时不跳。
+/// 页自己画的那一排里的搜索入口，两种的放大镜落在同一处，侧栏换段时不跳。
 enum HeaderSearch {
     /// 左边一颗圆钮：中间放着这一页看什么。
     case button
@@ -118,7 +110,7 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
     func body(content: Content) -> some View {
         Group {
             switch host {
-            case .page, .split, .panel:
+            case .page, .panel:
                 // 内容让到这一排下面再隔 `Bars.contentGap`；这一排排在让出之前的安全区里，贴着状态栏下沿，同导航栏里的圆钮
                 content
                     .safeAreaPadding(.top, height + Bars.contentGap)
@@ -173,7 +165,7 @@ private struct Yield: ViewModifier {
     }
 }
 
-/// 页自己画的那一排：左边搜索入口（`HeaderSearch`）或 iPad 的侧栏钮，右边这一页的那一个操作，圆钮的位置同导航栏里的返回钮与圆钮；
+/// 页自己画的那一排：左边搜索入口（`HeaderSearch`），右边这一页的那一个操作，圆钮的位置同导航栏里的返回钮与圆钮；
 /// 中间那几块盖在圆钮之上一层：从中间长出的面板（`GrowPanel`）铺满这一排往下长。
 private struct PageBar<Middle: View, Trailing: View>: View {
     let host: HeaderHost
@@ -186,7 +178,6 @@ private struct PageBar<Middle: View, Trailing: View>: View {
         ZStack(alignment: .top) {
             HStack {
                 if host.search == .button { Button("搜索", icon: .search) { workspace.openSearch() } }
-                if case .split(let shown, _) = host { SidebarToggle(shown: shown) }
                 Spacer(minLength: 8)
                 trailing
             }
