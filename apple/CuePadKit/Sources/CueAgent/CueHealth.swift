@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// Cue 的大脑此刻好不好（本机文件 `<资料库>/Cue/health.json`，不同步）：值班的管理器（`CueKeeper`）每次对完账写，
-/// Cue 的工具服务（另一个进程）读给 Cue 看（`setup look`），Mac 的界面也读它。唯一的写者是管理器，事实源是它的内存状态，这里只是投影。
+/// Cue 的工具服务（另一个进程）读给 Cue 看（`setup look`），只有它读。唯一的写者是管理器，事实源是它的内存状态，这里只是投影。
 public struct CueHealth: Codable, Equatable, Sendable {
   public enum Phase: String, Codable, Sendable {
     /// 正在起大脑
