@@ -75,6 +75,31 @@ public struct PiModelKey: Sendable, Hashable, Codable {
   }
 }
 
+/// 会话证明过的一个授权：哪个模型、哪个分区，与开始解析的时刻（线上是 Unix 秒）。只在 Mac 上在线会话里，不存、不同步：
+/// 模型表会持久化并同步（`AgentCatalog` 按内容定 id），证明时刻每次解析都变，放进去会让目录每轮换一条。
+public struct PiProof: Sendable, Equatable, Decodable {
+  public var provider: String
+  public var id: String
+  public var account: PiAccount
+  public var at: Date
+
+  public init(provider: String, id: String, account: PiAccount, at: Date) {
+    self.provider = provider
+    self.id = id
+    self.account = account
+    self.at = at
+  }
+
+  private enum CodingKeys: String, CodingKey { case provider, id, account, at }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    self.init(
+      provider: try c.decode(String.self, forKey: .provider), id: try c.decode(String.self, forKey: .id),
+      account: try c.decode(PiAccount.self, forKey: .account), at: Date(timeIntervalSince1970: try c.decode(Double.self, forKey: .at)))
+  }
+}
+
 /// 会话可选的一个模型：标识、显示名，它支持的思考强度（不支持思考的只有 `off`；不认识的新强度读出时丢掉），以及能不能看图
 /// （`nil` 是 Agent 没报，当作能）。`supportsFast` 与思考档同由运行时上报：Codex 读 `serviceTiers`，Pi 看模型的 Responses API；
 /// 从 CuePad 切到不支持的模型会关闭 fast。Claude Code 的现有控制通道未确认能可靠切换，OpenCode 与 Grok Build 本次不接。

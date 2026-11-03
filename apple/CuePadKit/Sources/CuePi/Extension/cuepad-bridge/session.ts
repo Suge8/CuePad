@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import type net from "node:net";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { account } from "./account.ts";
 import { phaseOf, StateTracker, type Asking, type Clock, type Phase } from "./events.ts";
 import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, replyText, type Info, type Subagent } from "./info.ts";
 import { IdleExit, IS_HOSTED, SelfReload } from "./lifecycle.ts";
@@ -93,7 +94,7 @@ export class Session {
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
 			question: null,
 			subagents: firecode.subagents,
-			model: null, thinking: null, fast: this.fast, models: [],
+			model: null, thinking: null, fast: this.fast, models: [], proofs: [],
 			...contextInfo(ctx),
 			...commandInfo(pi),
 		};
@@ -179,13 +180,19 @@ export class Session {
 	}
 
 	/** 额度不属于会话、属于账号：每次观测都发给所有客户端（一行，随每次回复），由 CuePad 记到账号上。
-	 * 不在这里去重：值没变的观测也说明刚观测过，"更新于"要跟上；写不写库只由 CuePad 定（`CueStore.recordQuota`）。 */
-	/** 使用这一轮开始前已报告的授权，不在响应返回后重新解析令牌、把旧响应归到新授权。 */
+	 * 不在这里去重：值没变的观测也说明刚观测过，"更新于"要跟上；写不写库只由 CuePad 定（`CueStore.recordQuota`）。
+	 * 回复实际用的授权扩展拿不到：回合前已报告的分区与收到回复后重新解析的一致才归到它；两次之间换了账号或令牌就丢掉这次并重报模型身份，
+	 * 不把新账号的用量记到旧账号上，也不把旧回复归到新授权。解析不挡回复流。 */
 	observeQuota(provider: string, windows: QuotaWindow[], complete: boolean) {
-		const model = this.info.model;
-		const account = model?.provider === provider ? model.account : null;
-		if (windows.length === 0 || account?.kind !== "oauth" || account.source || !account.scope) return;
-		this.reportQuota({ provider, account, status: "observed", windows, complete });
+		const model = this.ctx.model;
+		const before = this.info.model?.provider === provider ? this.info.model.account : null;
+		if (windows.length === 0 || model?.provider !== provider || before?.kind !== "oauth" || before.source || !before.scope) return;
+		const receivedAt = Date.now() / 1000;
+		const refreshModels = () => void modelInfo(this.pi, this.ctx).then((info) => this.updateInfo(info));
+		void account(this.ctx, model).then(({ identity }) => {
+			if (identity.kind !== before.kind || identity.scope !== before.scope || identity.source) return refreshModels();
+			this.reportQuota({ provider, account: before, status: "observed", windows, complete, observedAt: receivedAt, requestedAt: receivedAt });
+		}, refreshModels);
 	}
 
 	reportQuota(quota: Quota) {
