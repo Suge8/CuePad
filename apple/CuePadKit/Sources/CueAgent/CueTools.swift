@@ -15,6 +15,9 @@ public struct CueTools: Sendable {
     case cue, dream
   }
 
+  /// 清掉一项的写法（task edit 的 body、setup project 的 intro 与 folder）：空值是没写（`Args.given`）。
+  static let cleared = "none"
+
   public init(store: CueStore, wait: TimeInterval = Speech.cueWait, toolset: Toolset = .cue) {
     self.store = store
     self.wait = wait

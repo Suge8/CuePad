@@ -146,8 +146,9 @@ extension CueTools {
       done.append("改了标题")
     }
     if let body = args.string("body") {
-      try await store.updateCard(card.id) { $0.rest = body }
-      done.append("换了正文")
+      let cleared = body.trimmingCharacters(in: .whitespacesAndNewlines) == Self.cleared
+      try await store.updateCard(card.id) { $0.rest = cleared ? nil : body }
+      done.append(cleared ? "清掉了正文" : "换了正文")
     }
     if let steps {
       let existing = Set(try await store.children(of: card.id).filter(\.isTask).map { $0.heading })
