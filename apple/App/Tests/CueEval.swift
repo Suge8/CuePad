@@ -120,11 +120,13 @@ final class CueEval {
         Self.calls(in: round.map { [$0] } ?? [], tool, action.map { [$0] } ?? [])
     }
 
-    /// `rounds` 里调的 `tool`（`actions` 为空时不论动作）与它的参数
+    /// `rounds` 里调的 `tool`（`actions` 为空时不论动作）与它的参数；add 带 start:true 建好就开工，也算 start
     static func calls(in rounds: [CueRound], _ tool: String, _ actions: Set<String> = []) -> [(call: CueToolCall, args: [String: Any])] {
         rounds.flatMap(\.calls).compactMap { call in
             let args = (try? JSONSerialization.jsonObject(with: Data(call.arguments.utf8))) as? [String: Any] ?? [:]
-            guard call.name == tool, actions.isEmpty || (args["action"] as? String).map(actions.contains) == true else { return nil }
+            let action = args["action"] as? String
+            let starts = action == "add" && args["start"] as? Bool == true && actions.contains("start")
+            guard call.name == tool, actions.isEmpty || action.map(actions.contains) == true || starts else { return nil }
             return (call, args)
         }
     }

@@ -66,11 +66,10 @@ extension CueEvalTests {
             try await eval.trigger { try await rig.services.answerCueQuestion(card.id, always) }
             let pushLines = try await rig.store.cueMemory().lines.filter { $0.deletedAt == nil && $0.text.contains("推送") }
             let remembered = pushLines.contains { $0.text == always && $0.pinned }
-            let before = eval.calls("task", "say").count
             try await eval.trigger {
                 try await rig.ask(work, said: Self.pushReady, question: "要推送到 origin/main 吗？", options: ["推送", "不推送"])
             }
-            let said = eval.calls("task", "say").dropFirst(before).compactMap { $0.args["text"] as? String }
+            let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
             let asks = try await eval.said().filter { $0.choices != nil && $0.id != card.id }
             return [
                 Check(.tool, "卡上的第二项记成一直记着的原话", remembered),

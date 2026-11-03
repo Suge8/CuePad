@@ -35,7 +35,7 @@ extension CueTools {
         "name": "task",
         "description": """
           任务与会话。task 写任务的 id 前缀或标题，session 写会话的 id 前缀或会话名（信封与 peek 里有），写任务的也认、指它在做的会话（done 除外）。body、text 里原样写的 ![](cuepad://file/<key>) 与 [文件名](cuepad://file/<key>) 作为图片与文件交给会话。
-          add{title,project?,steps?,body?,session?}：建任务。body 是正文，开工时连同标题作为会话的第一句（子任务开新会话时先带上顶层任务的标题与正文）；子任务自己的话用 edit 写在子任务上。同一项目里已有同名没做完的任务时不另建，返回那件。带 session 把那个会话绑到新任务上：不写 body（话用 say 说），project 缺省是会话所在的项目；
+          add{title,project?,steps?,body?,session?,start?}：建任务。body 是正文，开工时连同标题作为会话的第一句（子任务开新会话时先带上顶层任务的标题与正文）；子任务自己的话用 edit 写在子任务上。同一项目里已有同名没做完的任务时不另建，返回那件。带 session 把那个会话绑到新任务上：不写 body（话用 say 说），project 缺省是会话所在的项目。start:true 建好就开工，同 start（可带 agent、model、effort）；
           edit{task,title?,body?,steps?,project?,reopen?}：改标题、换掉正文、追加子任务、连同子任务挪到项目；追加子任务与 reopen:true 都让已完成的任务回到没做完；
           start{task,agent?,model?,effort?,fresh?}：开工叶子（task 有子任务时是第一个没做完的子任务）。同一任务的上一步有会话就接着用它（已结束的先恢复），否则在项目文件夹开新会话：agent 缺省是那台 Mac 的默认，model 写 provider/id（claude、codex 只写 id）。叶子已有会话用 say；fresh:true 开新会话（上一步的会话随之结束）；
           say{task|session,text,model?,effort?}：对会话说话（给 task 是它在做的叶子的会话；结束了的先恢复）。会话在等回答时 text 就是答案（选项原文、从 1 起的序号或 是/否；允许自己写的题才收别的话）；否则会话在跑时打断这一轮、以这句开新一轮，他发起的那一轮在跑时不说（报错，歇下会叫醒你）。带 model、effort 先给会话换上；
@@ -53,7 +53,7 @@ extension CueTools {
             "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": ["type": "string", "description": "provider/id"],
             "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,
             "evidence": ["type": "array", "items": ["type": "string", "description": "宽不过 \(evidenceLimit)"], "maxItems": evidenceCount],
-            "show": show, "fresh": ["type": "boolean"], "reopen": ["type": "boolean"],
+            "show": show, "fresh": ["type": "boolean"], "reopen": ["type": "boolean"], "start": ["type": "boolean"],
           ], required: ["action"]),
         "annotations": ["readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false],
       ],

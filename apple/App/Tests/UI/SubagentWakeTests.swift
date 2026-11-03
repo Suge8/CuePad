@@ -62,7 +62,7 @@ struct SubagentWakeTests {
         try await eventually("这一轮做完") { try await store.cueState()?.state == .known(.settled) }
         let woke = keeper.rounds.filter { $0.wake.isSessionActivity }
         #expect(woke.count == 1)
-        #expect(woke.first?.sent.first?.contains("回复：子代理做完：测试全过") == true, "\(woke.map(\.sent))")
+        #expect(woke.first?.sent.first?.contains("（最新的回答）：\n      子代理做完：测试全过") == true, "\(woke.map(\.sent))")
         await rig.stop()
     }
 

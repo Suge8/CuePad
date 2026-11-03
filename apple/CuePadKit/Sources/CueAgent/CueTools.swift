@@ -48,12 +48,14 @@ public struct CueTools: Sendable {
       case (.dream, "tidy"): return try await tidy(args)
       default: return nil
       }
-    } catch let failure as Failure {
-      return Result(text: failure.message, isError: true)
     } catch {
-      // Kit 里只有 Cue 会碰到的错误，文案本来就是写给 Cue 的（见 `CueStoreError`）
-      return Result(text: (error as? LocalizedError)?.errorDescription ?? "\(error)", isError: true)
+      return Result(text: Self.message(error), isError: true)
     }
+  }
+
+  /// 出错给 Cue 看的那句：Kit 里只有 Cue 会碰到的错误，文案本来就是写给 Cue 的（见 `CueStoreError`）。
+  static func message(_ error: any Error) -> String {
+    (error as? Failure)?.message ?? (error as? LocalizedError)?.errorDescription ?? "\(error)"
   }
 
   func host() async throws -> String {
