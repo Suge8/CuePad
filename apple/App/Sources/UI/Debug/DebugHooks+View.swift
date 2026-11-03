@@ -2,20 +2,16 @@ import CueStore
 import SwiftUI
 
 extension View {
-    #if os(macOS)
-    /// 单次交互（`-CuePadBench interact`）时记下这条任务行在窗口里的位置，前台量的"任务气泡开"用真实点击点它（`InteractionBench`）；平时什么都不挂。
-    @ViewBuilder func benchSpot(_ task: UUID) -> some View {
-        #if DEBUG
-        if InteractionBench.locatesRows {
-            onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { InteractionBench.rows[task] = $0 }
-        } else {
-            self
-        }
+    /// 单次交互（`-CuePadBench interact`，仅 Mac）时记下这一行在窗口里的位置（左上为原点，`.global` 在 Mac 上就是窗口），只记看得见的那一页上的（`pageActive`；
+    /// 藏起的页与预热的页还在视图树里、照样排版），离屏、页藏起时撤掉（`InteractionBench.rows`）：
+    /// 前台量的"任务气泡开"用真实点击点任务行；宽屏跨阈值认中段读的那一条（看板卡、对话里的一条，`WidePage`）。平时什么都不挂。
+    @ViewBuilder func benchSpot(_ id: some Hashable) -> some View {
+        #if os(macOS) && DEBUG
+        if InteractionBench.locatesRows { modifier(BenchSpot(id: id)) } else { self }
         #else
         self
         #endif
     }
-    #endif
 
     #if os(iOS)
     /// 点 Cue 页头开合面板的那条路交给测量（`IOSInteractionBench` 的"开合 Cue 面板"）。
@@ -201,6 +197,27 @@ struct DebugStage<Main: View>: View {
         #else
         main()
         #endif
+    }
+}
+#endif
+
+#if os(macOS) && DEBUG
+private struct BenchSpot<ID: Hashable>: ViewModifier {
+    let id: ID
+    @Environment(\.pageActive) private var active
+    /// 最近一次的位置：页重新露出来时位置可能没变、不再报，从这里补登记。是引用，写它不触发更新。
+    @State private var last = Last()
+
+    final class Last { var frame: CGRect? }
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                last.frame = frame
+                if active { InteractionBench.rows[id] = frame }
+            }
+            .onChange(of: active, initial: true) { InteractionBench.rows[id] = active ? last.frame : nil }
+            .onDisappear { InteractionBench.rows[id] = nil }
     }
 }
 #endif

@@ -57,10 +57,10 @@ enum InteractionBench {
     ]
 
     private static let turns = TurnLog()
-    /// 记下任务行的位置（`benchSpot`）：只在单次交互的测量里。
+    /// 记下行的位置（`benchSpot`）：只在单次交互的测量里。
     static let locatesRows = DebugScene.defaults.string(forKey: "CuePadBench") == "interact"
-    /// 任务行在窗口里的位置（左上为原点），按任务。
-    static var rows: [UUID: CGRect] = [:]
+    /// 报了位置的行在窗口里的位置（左上为原点，`benchSpot`）：任务行按任务，看板卡、对话里的一条按各自的身份。
+    static var rows: [AnyHashable: CGRect] = [:]
 
     static func run(_ workspace: Workspace) async {
         await DebugScene.running("交互测量") { try await measureAll(workspace) }

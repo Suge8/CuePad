@@ -159,7 +159,7 @@ private struct ChatSegment: View, Equatable {
 
     var body: some View {
         ChatRows(ids: items.map(\.id), spacing: PiConversation.spacing) {
-            ForEach(items) { item in row(item) }
+            ForEach(items) { item in row(item).benchSpot(item.id) }
         }
     }
 

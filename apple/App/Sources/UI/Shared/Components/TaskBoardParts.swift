@@ -180,13 +180,14 @@ struct BoardColumn: View {
                         BoardSessionCard(agent: agent, project: glyph(workspace.catalog?.project(work.project)), moves: moves)
                             .boardDim(project: work.project)
                             .boardFlight(work.id)
+                            .benchSpot(work.id)
                     }
                 }
             }
             if board.advancing.isEmpty { empty("拖一件待办到这里开始") }
         case .waiting:
             ForEach(board.held) { held in
-                let card = BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project))).boardFlight(held.id)
+                let card = BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project))).boardFlight(held.id).benchSpot(held.id)
                 if let item = held.item { card.boardDraggable(item.id, session: held.session.sessionID) } else { card }
             }
             if board.count(.waiting) == 0 { empty("没有等你的事") }
@@ -203,6 +204,7 @@ struct BoardColumn: View {
         BoardTaskCard(item: item, column: column, project: glyph(item.project), moves: moves) { opened = $0 }
             .boardDim(project: item.task.projectID)
             .boardFlight(item.flight)
+            .benchSpot(item.id)
     }
 
     /// 卡上的项目小图形：只看一个项目时不画（范围已经说了）。

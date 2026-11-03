@@ -5,8 +5,8 @@ import CueStore
 /// 宽屏自动阈值（`-CuePadBench interact` 的最后一段）：四种两栏组合各在会话条自动收窄的临界宽度上下 1 点来回改窗口宽（同人拖窗口边的那一下），
 /// 每一下按 `measure` 的口径量回合、指令与掉帧，行里另记：
 /// - `railPt`、`sidePt`：停下后会话条与右栏的宽，`railOK` 是会话条宽对，`crossed` 是这一下真的跨过了阈值（会话条换了宽；反向那一项是主栏真的滑起来了）；
-///   `stateOK`：偏好（会话条开合、项目｜进展、当前项目、看板｜会话）、两栏去处与各份草稿都没被改；`pageOK`：两栏的栏视图与栏里每个滚动视图还是原来那个对象
-///   （页面没被重建），且各自离顶或离底的距离没变（看板停在顶、对话停在最新处；栏宽变了对话会重新折行，离顶的距离跟着变）。任一项不对 `perf-mac.sh` 判失败；
+///   `stateOK`：偏好（会话条开合、项目｜进展、当前项目、看板｜会话）、两栏去处与各份草稿都没被改；`page`：页面没被重建、每栏停在中段读的那一项还在眼前（`WidePage`；ok、验不了的 untested、没保住的 broken，`pageUntested` 列出验不了的栏），
+///   `pages` 是逐栏的判定、锚点、跨阈值前后离顶与离底的距离、锚点离可视区正中多远、锚点的框与可视区（窗口坐标）。除了验不了，任一项不对 `perf-mac.sh` 判失败；
 /// - `idleMainM`、`idleProcessM`：停下后再静置 500ms 主线程与整个进程的指令（百万）：布局反馈环会让窗口停着主线程也一直排版，它降不下来；进程那份含后台线程（同步、读库），不算排版；
 /// - 反向那一项（`宽屏反向·…`）：收窄后 50ms（滑动刚起头）就拉回，滑动途中逐帧取主栏图层的呈现偏移（呈现层树里的左缘，即屏上的位置），`perFramePt` 是平均到每帧的最大位移（取样在主线程，主线程忙的那几帧取不到，两次取样之间按隔了几帧摊开；`gapFrames` 是隔得最多的一次）、`restPt` 是停下时离终点多远；`samples` 保留原始时刻与位置。
 ///   漏采的那几帧里有没有跳，这里证明不了：逐帧看屏上的样子录 `-CuePadWideReverse`（`DebugScene+Wide.swift`）。
@@ -54,8 +54,9 @@ extension InteractionBench {
             let threshold = WideMetrics.threshold(workspace)
             window.setContentSize(NSSize(width: threshold, height: height))
             await Task.wait(for: .seconds(1))
+            await WidePage.scrollToMiddle(wideColumns(in: view))
             let before = snapshot(workspace, ids: ids)
-            let page = pages(in: view)
+            let page = WidePage(wideColumns(in: view))
             func step(_ name: String, width: CGFloat, rail: CGFloat, reverse: Bool = false) async {
                 guard only?.contains(name) ?? true else {
                     // 不量也照样改宽：下一步才是从阈值另一侧跨过来（反向那一下停回原宽，不必做）
@@ -86,9 +87,11 @@ extension InteractionBench {
                 row["railOK"] = railPt == rail
                 row["crossed"] = reverse ? moved : railBefore != railPt
                 row["stateOK"] = snapshot(workspace, ids: ids) == before
-                let shownPage = pages(in: view)
-                row["pageOK"] = kept(page, shownPage)
-                row["pageScrolls"] = shownPage.count
+                let shownPage = page.compare(wideColumns(in: view))
+                row["page"] = shownPage.verdict.rawValue
+                row["pageUntested"] = page.untested
+                row["pages"] = shownPage.detail
+                row["pageBaseline"] = page.baseline
                 row["budgetClickMs"] = wideBudget.clickMs
                 row["budgetHitches"] = wideBudget.hitches
                 row["foreground"] = foreground
@@ -125,37 +128,12 @@ extension InteractionBench {
             drafts: ids.map { settings.replyDraft(for: $0).text } + [workspace.cue.draft.text])
     }
 
-    /// 栏视图与滚动视图（对象标识）和滚动视图离文档两端的距离；栏视图的距离记 0。文档视图翻没翻转都行：判的时候两端任一端没变就算没变。
-    private struct Scroll {
-        let id: ObjectIdentifier
-        let top: CGFloat
-        let bottom: CGFloat
-    }
-
-    private static func pages(in view: NSView) -> [Scroll] {
-        wideColumns(in: view).flatMap { [Scroll(id: ObjectIdentifier($0), top: 0, bottom: 0)] + scrolls(in: $0) }
-    }
-
-    private static func scrolls(in view: NSView) -> [Scroll] {
-        guard !view.isHidden else { return [] }
-        var found: [Scroll] = []
-        if let scroll = view as? NSScrollView, let document = scroll.documentView, scroll.frame.height > 0 {
-            let visible = scroll.contentView.bounds
-            found.append(Scroll(id: ObjectIdentifier(scroll), top: visible.minY, bottom: document.frame.height - visible.maxY))
-        }
-        return found + view.subviews.flatMap(scrolls)
-    }
-
-    private static func kept(_ before: [Scroll], _ after: [Scroll]) -> Bool {
-        before.map(\.id) == after.map(\.id) && zip(before, after).allSatisfy { abs($0.top - $1.top) <= 1 || abs($0.bottom - $1.bottom) <= 1 }
-    }
-
     private static func columns(in view: NSView) -> (main: WideColumnView?, side: WideColumnView?) {
         let all = wideColumns(in: view)
         return (all.first { $0.column == .main }, all.first { $0.column == .side })
     }
 
-    private static func wideColumns(in view: NSView) -> [WideColumnView] {
+    static func wideColumns(in view: NSView) -> [WideColumnView] {
         if let column = view as? WideColumnView { return [column] }
         return view.subviews.flatMap(wideColumns)
     }

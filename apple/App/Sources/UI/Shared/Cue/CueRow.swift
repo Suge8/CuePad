@@ -13,7 +13,7 @@ struct CueSegment: View, Equatable {
     var body: some View {
         ChatRows(ids: rows.map(\.row.id), spacing: 0) {
             ForEach(rows, id: \.row.id) { row in
-                row.equatable().transition(CueRow.arrives(row.row, swapsInPlace: services.cueSwapsInPlace) ? CueBubble.arrival : .identity)
+                row.equatable().benchSpot(row.row.id).transition(CueRow.arrives(row.row, swapsInPlace: services.cueSwapsInPlace) ? CueBubble.arrival : .identity)
             }
         }
     }
