@@ -38,8 +38,8 @@ enum Schema {
   /// 78：附件换了地址（`cuepad://file/<键>`）：旧版 Mac 认不出，把链接原文发给 Agent，旧版手机显示不出图与文件。
   /// 82：旧客户端忽略额度能力与授权分区，会把失败或过期窗口显示成可用余额。
   /// 87：旧端会忽略配置请求里的 fast，错误地把部分执行报告成成功。
-  /// 88：一台设备可同时开多个会话；旧端只读 sessionID，会把开着的另一页当作无人查看、错误推送。
-  static let peerFloor = 88
+  /// 89：一台设备可同时开多个会话；旧端只读 sessionID，会把开着的另一页当作无人查看、错误推送。
+  static let peerFloor = 89
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
@@ -162,7 +162,15 @@ enum Schema {
         if exists == nil { try db.exec("ALTER TABLE \(table) ADD COLUMN fast INTEGER") }
       }
     },
-    // 88：开着的会话改存集合；旧单值只在升级时转入，本地旧列删掉，CloudKit 字段登记下线。
+    // 88：余额与套餐明细、结果的排序时刻；旧端仍可读固定窗口，缺明细不构造余额。`owners`（证明过网关来源的提供方与时刻）只在本机、不同步。
+    // 同 85，只补缺的列（新建的库已有）。
+    Upgrade { db in
+      let columns = Set(try db.query("PRAGMA table_info(accountQuotas)") { $0.text(1) })
+      for (name, type) in [("details", "TEXT"), ("requestedAt", "INTEGER"), ("owners", "TEXT")] where !columns.contains(name) {
+        try db.exec("ALTER TABLE accountQuotas ADD COLUMN \(name) \(type);")
+      }
+    },
+    // 89：开着的会话改存集合；旧单值只在升级时转入，本地旧列删掉，CloudKit 字段登记下线。
     """
     ALTER TABLE sessionViewers ADD COLUMN sessionIDs TEXT;
     UPDATE sessionViewers SET sessionIDs = json_array(sessionID) WHERE sessionID IS NOT NULL;

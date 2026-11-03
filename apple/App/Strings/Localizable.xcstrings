@@ -825,22 +825,6 @@
       },
       "shouldTranslate" : false
     },
-    "%@%@%@后重置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@%2$@Resets in %3$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@%2$@%3$@后重置"
-          }
-        }
-      }
-    },
     "%@/cuepad 已有一个指向 %@ 的链接，没有覆盖" : {
       "localizations" : {
         "en" : {
@@ -916,6 +900,22 @@
         }
       }
     },
+    "%@后用完" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Runs out in %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@后用完"
+          }
+        }
+      }
+    },
     "%@后重置" : {
       "localizations" : {
         "en" : {
@@ -944,6 +944,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@报来"
+          }
+        }
+      }
+    },
+    "%@更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@更新"
           }
         }
       }
@@ -4815,18 +4831,34 @@
         }
       }
     },
-    "上次额度观测，等待更新" : {
+    "上次观测于 %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Last observed usage, awaiting update"
+            "value" : "Last observed %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上次额度观测，等待更新"
+            "value" : "上次观测于 %@"
+          }
+        }
+      }
+    },
+    "上次观测，等待更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last observation, waiting for an update"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次观测，等待更新"
           }
         }
       }
@@ -5103,6 +5135,22 @@
         }
       }
     },
+    "不提供查询" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not available"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不提供查询"
+          }
+        }
+      }
+    },
     "不知道会话运行在哪个终端应用里" : {
       "localizations" : {
         "en" : {
@@ -5147,6 +5195,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不绑了"
+          }
+        }
+      }
+    },
+    "不限量" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlimited"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不限量"
           }
         }
       }
@@ -5927,6 +5991,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "低"
+          }
+        }
+      }
+    },
+    "余额" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balance"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "余额"
+          }
+        }
+      }
+    },
+    "余额未知，等待新观测" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balance unknown, waiting for an observation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "余额未知，等待新观测"
+          }
+        }
+      }
+    },
+    "余额查询失败" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balance query failed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "余额查询失败"
           }
         }
       }
@@ -11035,6 +11147,22 @@
         }
       }
     },
+    "尚未观测" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not observed yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未观测"
+          }
+        }
+      }
+    },
     "尚未观测到额度" : {
       "localizations" : {
         "en" : {
@@ -11831,6 +11959,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已转为 %lld 个任务"
+          }
+        }
+      }
+    },
+    "已过期" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expired"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已过期"
           }
         }
       }
@@ -14983,6 +15127,22 @@
         }
       }
     },
+    "暂无额度数据" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usage data"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无额度数据"
+          }
+        }
+      }
+    },
     "更多" : {
       "localizations" : {
         "en" : {
@@ -15691,6 +15851,22 @@
         }
       }
     },
+    "查询失败" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t check"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询失败"
+          }
+        }
+      }
+    },
     "标为完成" : {
       "localizations" : {
         "en" : {
@@ -15927,6 +16103,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "橙色"
+          }
+        }
+      }
+    },
+    "欠费" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overdue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "欠费"
           }
         }
       }
@@ -16379,18 +16571,18 @@
         }
       }
     },
-    "此授权不提供订阅额度查询" : {
+    "此授权不提供额度或余额查询" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usage queries aren’t available for this authorization"
+            "value" : "Usage and balance queries aren’t available for this authorization"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此授权不提供订阅额度查询"
+            "value" : "此授权不提供额度或余额查询"
           }
         }
       }
@@ -19343,6 +19535,22 @@
         }
       }
     },
+    "网关 %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网关 %lld"
+          }
+        }
+      }
+    },
     "网络连接中断" : {
       "localizations" : {
         "en" : {
@@ -20395,18 +20603,18 @@
         }
       }
     },
-    "读取订阅额度失败，额度不再更新：%@" : {
+    "读取额度失败，额度不再更新：%@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't read subscription usage; usage won't update: %@"
+            "value" : "Can’t read usage. Updates have stopped: %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "读取订阅额度失败，额度不再更新：%@"
+            "value" : "读取额度失败，额度不再更新：%@"
           }
         }
       }
@@ -22367,18 +22575,18 @@
         }
       }
     },
-    "连接 Agent 会话后，这里显示授权支持的额度信息" : {
+    "连接 Agent 会话后，这里显示订阅额度与 API 余额" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connect an agent session to see the usage information available for its authorization"
+            "value" : "Connect an agent session to see subscription usage and API balances"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "连接 Agent 会话后，这里显示授权支持的额度信息"
+            "value" : "连接 Agent 会话后，这里显示订阅额度与 API 余额"
           }
         }
       }

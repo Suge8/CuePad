@@ -31,12 +31,13 @@ nonisolated struct BubblePlacement: Equatable {
     var sheet = false
     var radius: CGFloat { sheet ? Radius.screen : Self.radius }
 
-    /// `container`：气泡那一层在窗口里的框（与来源同一套坐标）；`insets`：容器四周不放气泡的那一圈（安全区、工具栏与页边）。
-    init(source: BubbleSource, container: CGRect, insets: EdgeInsets) {
+    /// `container`：气泡那一层在窗口里的框（与来源同一套坐标）；`insets`：容器四周不放气泡的那一圈（安全区、工具栏与页边）；
+    /// `width`：想要的宽，放不下就取容器的宽。
+    init(source: BubbleSource, container: CGRect, insets: EdgeInsets, width preferred: CGFloat = Self.width) {
         let bounds = CGRect(
             x: insets.leading, y: insets.top,
             width: max(container.width - insets.leading - insets.trailing, 0), height: max(container.height - insets.top - insets.bottom, 0))
-        width = min(Self.width, bounds.width)
+        width = min(preferred, bounds.width)
         // 要让开的那一块（容器里的坐标）与气泡想放的左边
         let target: CGRect, left: CGFloat
         switch source {

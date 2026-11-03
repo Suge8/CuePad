@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
-import { account, unresolvedAccount, type Account } from "./account.ts";
+import { account, proofsOf, unresolvedAccount, type Account, type Proof } from "./account.ts";
 import { supportsFast } from "./fast.ts";
 
 /** 需要"命令上下文"（切换会话、新会话、重载、克隆）的操作只能在命令处理函数里做：本扩展注册这一条内部命令 `/cuepad <动作>`，
@@ -68,6 +68,8 @@ export type Info = {
 	subagents: Subagent[];
 	/** 当前模型、思考强度与可换的模型（Pi 里已配好密钥的）：手机据此选 */
 	model: ReturnType<typeof describeModel> | null; thinking: ThinkingLevel | null; fast: boolean; models: ReturnType<typeof describeModel>[];
+	/** 这个会话证明过的授权（含模型范围外的、额度查询解析到的）：CuePad 只据此决定保留哪些额度记录，不进模型表、不同步 */
+	proofs: Proof[];
 	/** 上下文余量：已用 token（压缩后到下一次回答前未知，为 null）与当前模型的窗口；没有模型为 null */
 	context: { tokens: number | null; window: number } | null;
 	/** 此刻能用的斜杠命令：能执行的内置命令 + 扩展命令 + 提示词模板 + skill */
@@ -111,29 +113,31 @@ function modelChoices(ctx: ExtensionContext): Model[] {
 }
 
 /** 此刻的模型配置；Pi 里换了模型、强度后重新取。 */
-export async function modelInfo(pi: ExtensionAPI, ctx: ExtensionContext): Promise<Pick<Info, "model" | "thinking" | "models">> {
+export async function modelInfo(pi: ExtensionAPI, ctx: ExtensionContext): Promise<Pick<Info, "model" | "thinking" | "models" | "proofs">> {
 	const choices = modelChoices(ctx);
 	const current = ctx.model;
 	const key = (model: Model) => JSON.stringify([model.provider, model.id]);
 	const accounts = new Map<string, Account>();
-	await Promise.all(choices.map(async (choice) => {
-		const model = current && key(choice) === key(current) ? current : choice;
-		// 其他原生 OAuth 只读认证种类，避免续期网络挡住当前会话。
-		if (model !== current && ctx.modelRegistry.isUsingOAuth(model)) {
-			accounts.set(key(model), unresolvedAccount(ctx, model));
-			return;
-		}
+	const resolve = async (model: Model) => {
 		try { accounts.set(key(model), (await account(ctx, model)).identity); }
 		catch (error) {
 			if (model === current) ctx.ui.notify(`CuePad：无法读取 ${model.provider} 的授权身份：${reason(error)}`, "warning");
 			accounts.set(key(model), unresolvedAccount(ctx, model));
 		}
+	};
+	// 先解析当前模型；同提供方的其余模型随后共用它刚续期的凭据，照样解析，CuePad 才认得出换掉的账号与令牌（`CueStore.retainQuotaSources`）。
+	// 其他提供方的 OAuth 只读认证种类，避免它们的续期网络挡住当前会话。
+	if (current) await resolve(current);
+	await Promise.all(choices.filter((model) => !current || key(model) !== key(current)).map(async (model) => {
+		if (model.provider !== current?.provider && ctx.modelRegistry.isUsingOAuth(model)) accounts.set(key(model), unresolvedAccount(ctx, model));
+		else await resolve(model);
 	}));
 	const describe = (model: Model) => describeModel(model, accounts.get(key(model)) ?? null);
 	return {
 		model: current ? describe(current) : null,
 		thinking: current ? pi.getThinkingLevel() : null,
 		models: choices.map(describe),
+		proofs: proofsOf(ctx),
 	};
 }
 

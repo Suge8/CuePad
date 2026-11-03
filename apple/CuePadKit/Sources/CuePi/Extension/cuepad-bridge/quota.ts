@@ -1,7 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { reason } from "./info.ts";
 import { gatewayQuotas } from "./quota-gateway.ts";
-import { account, type Account, type Model } from "./account.ts";
+import { account, unresolvedAccount, type Account, type Model } from "./account.ts";
 
 /** 查订阅额度的单个请求最多等这么久（接口实测约 150ms；VPN 断了就是查不到，CuePad 保留上次的值） */
 const QUOTA_TIMEOUT_MS = 3_000;
@@ -20,7 +20,8 @@ const QUOTA_PROVIDERS: Record<string, { url: string; headers: (token: string) =>
  * `binding` 是提供方说此刻卡着的就是它（Claude 响应头的 representative-claim），提供方没说的不带 */
 export type QuotaWindow = { seconds: number; used: number; resetsAt: number; model: string | null; binding?: true };
 /** 一个提供方的一次观测；`complete` 是全部窗口（查用量接口得到的），回复里带回的只有一部分 */
-export type Quota = { provider: string; account: Account; status: "observed" | "unsupported" | "unobserved" | "failed"; windows: QuotaWindow[]; complete: boolean; observedAt?: number; activeScopes?: string[] };
+export type QuotaDetails = { kind: string; plan?: string; balance?: string; values: { name: string; display?: string; used?: number; unlimited?: boolean; balance?: number; unit?: string; resetsAt?: number }[] };
+export type Quota = { provider: string; account: Account; status: "observed" | "unsupported" | "unobserved" | "failed"; windows: QuotaWindow[]; complete: boolean; observedAt?: number; activeScopes?: string[]; details?: QuotaDetails; accounts?: Quota[]; requestedAt?: number; owners?: Record<string, number> };
 
 export function record(value: unknown): Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -87,7 +88,10 @@ function codexAccount(token: string): string {
 	return id;
 }
 
-/** 能力与观测都经同一条 quota 消息；空查询不是新观测。 */
+/** 能力与观测都经同一条 quota 消息；空查询不是新观测。
+ * 身份：报告只归到这次结果实际用的、已解析出分区的授权；解析失败没有账号身份，记在这个提供方未解析的授权上（`scope=null`，不关联任何账号的数值）。
+ * 账号与来源一级的报告（能力、失败、网关清单）的 `provider` 是模型在 Pi 里的提供方，网关清单里各账号的是上游。
+ * 时间：带结果的报告都带 `requestedAt`，取结果所属操作期间的一个时刻（主动查询取开始，回复取收到），CuePad 据此只让后开始的覆盖先结束的。 */
 export class QuotaFetcher {
 	/** 正在查的额度：几个客户端同时要时共用这一次 */
 	private inFlight: Promise<string[]> | null = null;
@@ -108,43 +112,56 @@ export class QuotaFetcher {
 	private async fetchSources(): Promise<string[]> {
 		const models = [...this.ctx.modelRegistry.getAvailable(), ...(this.ctx.model ? [this.ctx.model] : [])];
 		if (models.length === 0) return ["no available quota sources"];
-		const seen = new Set<string>();
-		const results = await Promise.allSettled(models.map(async (model) => {
-			let identity: Account = { kind: this.ctx.modelRegistry.isUsingOAuth(model) ? "oauth" : "apiKey", scope: null };
-			try {
-				const resolved = await account(this.ctx, model);
-				identity = resolved.identity;
-				const key = resolved.native ? `${model.provider}/${identity.scope}` : identity.source!;
-				if (seen.has(key)) return;
-				seen.add(key);
-				if (resolved.native) await this.fetchNative(model, resolved);
-				else await gatewayQuotas(model.provider, resolved, this.report);
-			} catch (error) {
-				this.report({ provider: model.provider, account: identity, status: "failed", windows: [], complete: false });
+		// 先解析全部模型，再按来源各查一次：网关来源的报告带上解析到它的每个提供方与各自开始解析的时刻（`owners`），
+		// 几个 Pi 提供方指向同一网关时，CuePad 才知道它们都证明过这个来源（不论在不在模型范围内、会话之后在不在线）。
+		const resolutions = await Promise.allSettled(models.map(async (model) => {
+			const requestedAt = Date.now() / 1000;
+			try { return { model, requestedAt, resolved: await account(this.ctx, model) }; }
+			catch (error) {
+				this.report({ provider: model.provider, account: unresolvedAccount(this.ctx, model), status: "failed", windows: [], complete: false, requestedAt });
 				throw error;
 			}
 		}));
-		return results.flatMap((result) => result.status === "rejected" ? [reason(result.reason)] : []);
+		const groups = new Map<string, { model: Model; requestedAt: number; resolved: Awaited<ReturnType<typeof account>>; owners: Record<string, number> }>();
+		for (const result of resolutions) {
+			if (result.status === "rejected") continue;
+			const { model, requestedAt, resolved } = result.value;
+			const key = resolved.native ? `${model.provider}/${resolved.identity.scope}` : resolved.identity.source!;
+			const group = groups.get(key) ?? { model, requestedAt, resolved, owners: {} };
+			group.owners[model.provider] = Math.max(group.owners[model.provider] ?? 0, requestedAt);
+			groups.set(key, group);
+		}
+		const fetches = await Promise.allSettled([...groups.values()].map(async ({ model, requestedAt, resolved, owners }) => {
+			try {
+				if (resolved.native) await this.fetchNative(model, resolved, requestedAt);
+				else await gatewayQuotas(model.provider, resolved, this.report, requestedAt, owners);
+			} catch (error) {
+				this.report({ provider: model.provider, account: resolved.identity, status: "failed", windows: [], complete: false, requestedAt, ...(resolved.native ? {} : { owners }) });
+				throw error;
+			}
+		}));
+		return [...resolutions, ...fetches].flatMap((result) => result.status === "rejected" ? [reason(result.reason)] : []);
 	}
 
+	/** 能力声明不带排序时刻，所以不报失败（失败只来自带时刻的查询）：未解析的只报其他提供方的 OAuth（`modelInfo` 不解析它们，只是还没查），
+	 * 其余未解析的是解析失败，不在这里声明。 */
 	capabilities(models: { provider: string; account: Account | null }[], currentProvider: string | undefined) {
 		const seen = new Set<string>();
 		for (const model of models) {
-			if (!model.account) continue;
-			const key = `${model.provider}/${model.account.scope}`;
+			if (!model.account || (!model.account.scope && (model.provider === currentProvider || model.account.kind !== "oauth"))) continue;
+			const key = model.account.source ?? `${model.provider}/${model.account.scope}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
 			const supported = model.account.source || (model.account.kind === "oauth" && QUOTA_PROVIDERS[model.provider]);
-			const unresolved = model.provider === currentProvider && !model.account.scope;
-			this.report({ provider: model.provider, account: model.account, status: unresolved ? "failed" : supported ? "unobserved" : "unsupported", windows: [], complete: false });
+			this.report({ provider: model.provider, account: model.account, status: supported ? "unobserved" : "unsupported", windows: [], complete: false });
 		}
 	}
 
-	private async fetchNative(model: Model, resolved: Awaited<ReturnType<typeof account>>) {
+	private async fetchNative(model: Model, resolved: Awaited<ReturnType<typeof account>>, requestedAt: number) {
 		const provider = model.provider, identity = resolved.identity;
 		const source = QUOTA_PROVIDERS[provider];
 		if (!source || identity.kind !== "oauth") {
-			this.report({ provider, account: identity, status: "unsupported", windows: [], complete: true });
+			this.report({ provider, account: identity, status: "unsupported", windows: [], complete: true, requestedAt });
 			return;
 		}
 		if (!resolved.token) throw new Error(`${provider}: no token`);
@@ -155,6 +172,6 @@ export class QuotaFetcher {
 		if (!response.ok) throw new Error(`${provider}: HTTP ${response.status}`);
 		const windows = source.parse(await response.json());
 		if (windows.length === 0) throw new Error(`${provider}: unrecognized usage format`);
-		this.report({ provider, account: identity, status: "observed", windows, complete: true });
+		this.report({ provider, account: identity, status: "observed", windows, complete: true, requestedAt, observedAt: Date.now() / 1000 });
 	}
 }
