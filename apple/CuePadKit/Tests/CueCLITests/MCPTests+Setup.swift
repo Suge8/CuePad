@@ -69,7 +69,9 @@ extension MCPTests {
         #expect(overview.contains(expected), "\(expected) 不在：\n\(overview)")
       }
       let agents = try await server.call("setup", ["action": "look", "part": "agents"])
-      #expect(agents.contains("anthropic/claude-opus-5-5（Claude Opus 5.5，默认） · 强度 low/medium/high · fast · 额度：anthropic「Max」 本周 已用 86%"), "\(agents)")
+      // 模型那一行带着卡着的窗口几点重置：额度用完时看这一块就够定时接着做
+      let opus = try #require(agents.split(separator: "\n").first { $0.contains("anthropic/claude-opus-5-5（") }, "\(agents)")
+      #expect(opus.contains("（Claude Opus 5.5，默认） · 强度 low/medium/high · fast · 额度：anthropic「Max」 本周 已用 86%，") && opus.hasSuffix(" 重置"), "\(opus)")
       #expect(agents.contains("openai-codex/gpt-6（GPT-6） · 强度 low/high"), "\(agents)")
       #expect(try await server.call("setup", ["action": "look", "part": "quota"]).contains("花它的模型：pi anthropic/claude-opus-5-5"))
       #expect(try await server.refused("setup", ["action": "look", "part": "money"]).contains("brain / agents / quota / skills / projects"))

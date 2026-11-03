@@ -39,10 +39,11 @@ enum CueQuotaWords {
     return "\(account(quota))\(mark) " + windows.joined(separator: "；")
   }
 
-  /// 模型关联的那个账号卡着的窗口（按模型的周额度只算这个模型的）："本周 已用 85%"；读不到写原因。
+  /// 模型关联的那个账号卡着的窗口（按模型的周额度只算这个模型的）："本周 已用 85%，11-02 9:00 重置"；读不到写原因。
+  /// 带上重置时刻：额度用完时 Cue 只看 `setup look agents` 一次，换不了模型就照它定时接着做。
   static func binding(_ quota: AccountQuota, model: PiModelKey, at now: Date) -> String {
     guard let window = live(quota, at: now)?.binding(at: now, model: model.id) else { return "\(account(quota)) \(status(quota, at: now))" }
-    return "\(account(quota)) \(name(window)) 已用 \(percent(window, at: now))"
+    return "\(account(quota)) \(name(window)) 已用 \(percent(window, at: now))，\(CueScheduleWords.time(window.resetsAt, now: now)) 重置"
   }
 
   /// 只留还没重置的窗口的那一份（读法、卡着的规则仍是 `AccountQuota` 的）；读不到或窗口全过了重置时间为 nil。

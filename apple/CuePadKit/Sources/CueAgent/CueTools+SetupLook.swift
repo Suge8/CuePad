@@ -16,7 +16,8 @@ extension CueTools {
       lines = brain(profile, mac: mac, now: now, detail: false) + agents(mac, profile: profile, quotas: quotas, now: now, detail: false)
         + quota(quotas, mac: mac, now: now, detail: false) + [memory] + skills(library, projects: [], detail: false) + projects(facts, detail: false)
     case .brain: lines = brain(profile, mac: mac, now: now, detail: true)
-    case .agents: lines = agents(mac, profile: profile, quotas: quotas, now: now, detail: true)
+    // 各模型的额度与重置时刻在它那一行；一条额度记录都没有时另说一句，免得为确认没有再看一次 quota
+    case .agents: lines = agents(mac, profile: profile, quotas: quotas, now: now, detail: true) + (quotas.isEmpty ? quota(quotas, mac: mac, now: now, detail: true) : [])
     case .quota: lines = quota(quotas, mac: mac, now: now, detail: true)
     case .skills: lines = skills(try await store.agentLibrary(host: host), projects: try await store.projects(), detail: true)
     case .projects: lines = projects(try await projectFacts(), detail: true)
