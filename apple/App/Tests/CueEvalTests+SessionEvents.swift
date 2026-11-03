@@ -22,7 +22,9 @@ extension CueEvalTests {
     @Test func f额度用完() async throws {
         try await CueEval.run("f2-额度用完", expect: "会话报额度用完：告诉用户") { eval in
             let work = try await eval.rig.working(Self.title, Self.body)
-            let quota = #"400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."}}"#
+            // 重置时刻跟着此刻走：写死的日期一过，"重置已过、可以重试"就成了对的做法
+            let resets = Date.now.addingTimeInterval(86400).formatted(.iso8601.year().month().day())
+            let quota = #"400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on \#(resets) at 00:00 UTC."}}"#
             try await eval.trigger { work.session.setState(["kind": "error", "error": quota]) }
             let told = try await eval.said().contains { $0.author == .known(.cue) }
             return [Check(.interrupt, "tell 告诉用户", !eval.calls("tell").isEmpty && told)]
@@ -47,6 +49,7 @@ extension CueEvalTests {
                 let e2e = PiSubagentState(
                     name: "e2e", role: "工程师", phase: .known(.running), action: "bash · npx playwright test reset-password", startedAt: due - 1800,
                     progressAt: due - PiSessionState.stallAfter)
+                try await rig.store.recordMacPresence(host: "mac-b") { true }
                 try await PiStateRecorder(store: rig.store, hostID: "mac-b")
                     .update(sessionID: id, state: .delegating, title: Self.title, turnStartedAt: due - 1900, subagents: [e2e])
                 let prompt = PiChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: due - 3600, deliveryID: delivery)

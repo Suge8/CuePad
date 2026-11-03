@@ -39,11 +39,12 @@ extension CueHostTests {
 
         /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。
         /// `seesImages`：假模型能不能看图（Pi 的模型表里写的输入）。`asksOnEnable`：刚启用那一轮（手上有事才有，`prepare` 摆）先用 tell 问你一句，再写最后的回复。
-        /// `brain`：大脑换成真的 Agent（`CueEvalTests`），假模型的剧本不再用上。`patrolAfter`：空闲多久巡视一次；
+        /// `brain`：大脑换成真的 Agent（`CueEvalTests`），假模型的剧本不再用上。`standby`：照常用假模型的 Pi 启用，这台 Mac 上那一家（不是 Pi）
+        /// 起的是真的 Agent，换大脑换过去就是它（`CueEvalFailoverTests`）。`patrolAfter`：空闲多久巡视一次；
         /// `cacheLifetime`：提示缓存算多久过期；`renewAt`：换新线。`clock`：信封上写的此刻。`timing`：再改别的时间规则（重起、看门狗、热巡视）。
         /// `prepare`：启用 Cue 之前在库里摆好的（多日评测预置的历史）。
         init(
-            usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false, brain: EvalBrain? = nil,
+            usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false, brain: EvalBrain? = nil, standby: EvalBrain? = nil,
             patrolAfter: Duration = .seconds(3600), cacheLifetime: Duration = .seconds(3600),
             renewAt: Int = CueContext.renewAt, clock: @escaping @Sendable () -> Date = { .now }, timing tune: (inout CueTiming) -> Void = { _ in },
             prepare: ((Rig) async throws -> Void)? = nil
@@ -55,9 +56,10 @@ extension CueHostTests {
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), sayWait: 5, quietHours: [], clock: clock)
             tune(&timing)
             let launch = CuePad.CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
-            let directory = brain.map { _ in TestLibraries.makeDirectory() }
+            let real = brain ?? standby
+            let directory = real.map { _ in TestLibraries.makeDirectory() }
             brainDirectory = directory
-            let brainLaunch = try brain.map { try $0.launch(in: directory!) }, runtime = brain?.runtime, gate = launches
+            let brainLaunch = try real.map { try $0.launch(in: directory!) }, runtime = real?.runtime, gate = launches
             app = TestApp(cue: CueDependencies(
                 launch: { agent, _ in agent == runtime ? brainLaunch : agent == .pi ? gate.pass(launch) : nil },
                 helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
