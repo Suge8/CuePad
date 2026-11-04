@@ -55,12 +55,13 @@ private final class Days: EvalScript, Playable {
         await quietPeriod(Self.away)
         let image = try await say("他：问 CI 报告里的镜像（冷）", "之前查 CI 变慢那份报告里，runner 用的镜像是哪个版本？")
         let storage = try #require(history.storage), site = try #require(history.weekly)
+        // 先问理由、再让会话问：会话刚问过、Cue 刚答了，"上次为什么没选"就成了问刚才那一答，它解释的是自己刚才的选择（实测多数遍如此）
+        let why = try await say("他：问为什么没选 S3", "上次图片存储为什么没选 S3 来着？")
         let s3 = try await event("图片存储：问要不要迁 S3", on: storage) {
             try await storage.ask(
                 said: "图片压缩做完了：上传时转 WebP、按三档宽度出图，存储用量从 182 GB 降到 61 GB，单元测试 27 个全过。",
                 question: "存储要不要顺便迁到 S3？\nA. 迁到 S3（生命周期规则与 CloudFront 现成）\nB. 留在 R2", options: ["A", "B"], rig: rig)
         }
-        let why = try await say("他：问为什么没选 S3", "上次图片存储为什么没选 S3 来着？")
         await quietPeriod(Self.away)
         let csv = try await say("他：派一件写代码的活（冷）", "演示项目的看板加一个导出 CSV 的按钮，直接开工。")
         let language = try await say("他：问提交信息用什么语言", "提交信息现在用中文还是英文来着？")
