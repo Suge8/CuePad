@@ -1,25 +1,24 @@
 import SwiftUI
 
-/// 工具排里的加速开关：开着是选中的胶囊（`chip(on:)`），点一下换；不知道开没开时点开选。
+/// 工具排里的加速开关：开着是选中的胶囊（`chip(on:)`），点一下换；不知道开没开时点开菜单选（手机上经 `MenuButton`，键盘不跳）。
 struct PiFastCapsule: View {
     let fast: Bool?
     let choose: (Bool) -> Void
 
     var body: some View {
-        Group {
-            if let fast {
-                Button { choose(!fast) } label: { label }
-                    .buttonStyle(PressStyle())
-            } else {
-                Menu {
-                    Button("开") { choose(true) }
-                    Button("关") { choose(false) }
-                } label: { label }
-                    .menuStyle(.borderlessButton)
-            }
+        if let fast {
+            Button { choose(!fast) } label: { label }
+                .buttonStyle(PressStyle())
+                .accessibilityLabel("加速")
+                .accessibilityValue(fast ? Text("开") : Text("关"))
+        } else {
+            MenuButton(sections: [
+                ChoiceMenu.Section(choices: [
+                    ChoiceMenu.Choice(title: "开") { choose(true) },
+                    ChoiceMenu.Choice(title: "关") { choose(false) },
+                ]),
+            ], accessibilityLabel: "加速", value: String(localized: "未知")) { label }
         }
-        .accessibilityLabel("加速")
-        .accessibilityValue(fast == true ? Text("开") : fast == false ? Text("关") : Text("未知"))
     }
 
     private var label: some View {
@@ -27,6 +26,6 @@ struct PiFastCapsule: View {
             Text("加速")
             if fast == true { Text("开") } else if fast == false { Text("关") } else { Text("未知") }
         }
-        .chip(on: fast == true)
+        .chip(on: fast == true, menu: fast == nil)
     }
 }

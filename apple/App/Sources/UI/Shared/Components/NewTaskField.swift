@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`choosesProject` 时右边一颗项目胶囊（`chip`）可换落到哪个项目（进展页跨项目）；手机上经 `MenuButton`，菜单开着键盘不跳。
+/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`choosesProject` 时右边一颗落点胶囊（`DestinationChip`）可换落到哪个项目（进展页跨项目）；手机上经 `MenuButton`，菜单开着键盘不跳。
 /// 失焦且没写字时收回：点出来的那一行（`writing`）变回入口，`autofocus` 浮出的那一行交给 `dismiss`；写了字的留着字。Mac 上点这一行外面就算失焦（`resignsFocusOnOutsideClick`）。
 struct NewTaskField: View {
     let project: UUID?
@@ -68,11 +68,7 @@ struct NewTaskField: View {
                 ChoiceMenu.Choice(title: .verbatim(item.shownName), checked: item.id == target) { chosen = item.id }
             }),
         ], accessibilityLabel: "挂到 \(current?.shownName ?? "")") {
-            HStack(spacing: 4) {
-                ProjectGlyph(project: current, size: 10)
-                Text(current?.shownName ?? "")
-            }
-            .chip()
+            DestinationChip(project: current)
         }
     }
 

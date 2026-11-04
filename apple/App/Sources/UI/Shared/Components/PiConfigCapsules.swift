@@ -47,7 +47,7 @@ struct PiModelCapsule: View {
             (current.map { Text(Dotted(PiModelName.short($0), $0.account?.label(provider: $0.key.provider)).visible) } ?? Text(unnamed)).truncationMode(.tail)
                 .contentTransition(.opacity)
         }
-        .chip()
+        .chip(menu: true)
         .help(spoken(at: now))
         .animation(Motion.fade, value: current?.key)
     }
@@ -97,7 +97,7 @@ struct PiAgentCapsule: View {
             }.fixedSize()
             ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
         }
-        .chip()
+        .chip(menu: pick.choosable)
         .help(kind.name)
         .animation(Motion.fade, value: kind)
     }

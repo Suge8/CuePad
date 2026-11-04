@@ -72,8 +72,7 @@ struct CaptureComposer: View {
         let cue = workspace.cue
         let empty = state.draft.isEmpty(accepting: .files) || !cue.canHear
         return Button("交给 \(cue.name)", icon: .handOff, action: handToCue)
-            .font(Typography.meta.weight(.semibold))
-            .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, compact: true))
+            .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, size: .compact))
             .fixedSize()
             .disabled(empty)
             .help("把这次随手记直接说给 \(cue.name)")
@@ -107,7 +106,7 @@ struct CaptureComposer: View {
 
 #endif
 
-/// 头部的落点胶囊："[前缀] 图标 名字 ⌄"，点开换去处；外形是 `chip`（与工具排同一档高）。随手记与 iOS 进展页的快速添加写"→ 项目图标 项目名"（init(project:)），
+/// 头部的落点胶囊："[前缀] 图标 名字 ⌄"，点开换去处；外形是 `chip`（与工具排同一档高）。随手记与新建任务（`NewTaskField`）写"→ 项目图标 项目名"（init(project:)），
 /// 新会话与发给 Agent 的输入框用同一个胶囊写"新会话 · 项目名""交给 会话名"。
 struct DestinationChip<Icon: View>: View {
     var lead: String?

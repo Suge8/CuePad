@@ -45,8 +45,7 @@ struct PiContextGauge: View {
                 HStack(spacing: 4) { Text("上下文").foregroundStyle(palette.ink3); percent }
                 HStack(spacing: 4) { ring; percent }
             }
-            .chip()
-            .background { usedFill }
+            .chip(level: ControlSurface.Level(fraction: meter.fraction, color: used))
         }
         .buttonStyle(PressStyle())
         .help(meter.help.visible)
@@ -60,17 +59,6 @@ struct PiContextGauge: View {
         .accessibilityLabel("上下文")
         .accessibilityValue(meter.help.spoken)
         .animation(Motion.fade, value: meter)
-    }
-
-    /// 铺在胶囊淡底下面、到已用比例的那层。手机上 `chip` 的点按区比胶囊高，铺色只占胶囊那么高（标准字号下胶囊就是 `inline` 高）。
-    private var usedFill: some View {
-        GeometryReader { proxy in
-            used.frame(width: proxy.size.width * meter.fraction)
-        }
-        #if os(iOS)
-        .frame(height: ControlSize.inline.height)
-        #endif
-        .clipShape(.capsule)
     }
 
     private var percent: some View {
@@ -101,7 +89,7 @@ struct PiContextGauge: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if compacts {
                     Button("现在压缩", icon: .compact, action: compact)
-                        .buttonStyle(.glass).controlSize(.small)
+                        .buttonStyle(ControlButtonStyle(size: .compact))
                 }
             }
         }
