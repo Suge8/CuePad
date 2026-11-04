@@ -13,37 +13,12 @@ struct FilterBar: View {
         HStack(spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    SearchFilters(query: $query, targets: targets) { name, value, on in
-                        FilterCapsule(name: name, value: value, on: on)
-                    }
+                    SearchFilters(query: $query, targets: targets)
                 }
                 .menuStyle(.button).menuIndicator(.hidden).buttonStyle(PressStyle())
             }
             if let total { Text(CountCopy.hits(total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2).fixedSize().layoutPriority(1) }
         }
-    }
-}
-
-/// 选中的是选中底（`selection`）与半粗的墨字，同手机的 `FilterChip`。
-private struct FilterCapsule: View {
-    let name: String
-    let value: String?
-    let on: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Text(name).foregroundStyle(on ? palette.ink : palette.ink2)
-            if let value {
-                Text(value).fontWeight(.medium)
-                Image(.expand).font(Glyph.mark).foregroundStyle(on ? palette.ink2 : palette.ink3).accessibilityHidden(true)
-            }
-        }
-        .font(Typography.meta.weight(on ? .semibold : .regular))
-        .foregroundStyle(palette.ink)
-        .padding(.horizontal, 10).frame(height: 28)
-        .background(on ? palette.selection : palette.fill, in: .capsule)
-        .contentShape(.capsule)
     }
 }
 #endif
