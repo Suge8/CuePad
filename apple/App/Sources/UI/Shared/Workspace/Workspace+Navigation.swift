@@ -61,6 +61,12 @@ extension Workspace {
         }
     }
 
+    /// 项目"⋯"里的"看这个项目的进展"（宽屏，Mac 与 iPad 同）：项目范围设成它，去进展的看板。
+    func showProgress(of project: UUID) {
+        projectScope = project
+        selectPane(.progress)
+    }
+
     /// 去进展页的会话段（窄屏："看这个项目的会话"）。宽屏没有会话段，已结束的会话在会话条的"更早"。
     func showSessions() {
         progressPane = .sessions

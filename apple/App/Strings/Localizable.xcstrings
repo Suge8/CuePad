@@ -12143,6 +12143,22 @@
         }
       }
     },
+    "开着" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shown"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开着"
+          }
+        }
+      }
+    },
     "异常" : {
       "localizations" : {
         "en" : {
@@ -13727,6 +13743,22 @@
         }
       }
     },
+    "收着" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hidden"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收着"
+          }
+        }
+      }
+    },
     "收起" : {
       "localizations" : {
         "en" : {
@@ -14771,6 +14803,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示或隐藏侧栏（⌃⌘S）"
+          }
+        }
+      }
+    },
+    "显示更多" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show More"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示更多"
           }
         }
       }

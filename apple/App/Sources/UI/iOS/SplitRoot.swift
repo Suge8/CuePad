@@ -4,7 +4,7 @@ import SwiftUI
 
 /// iPad 宽屏（宽窗）：会话条（`WideRail`，导航只在这一处）、主区（浏览页、辅助页、一个会话或并排两个）、右边一直是 Cue。尺寸与自动收起同 Mac（`WideMetrics`）。
 /// 主区与 Cue 的页自己画页顶（`floatingHeader`）；会话页上面是会话的栏头（`WideSessionTitle`），项目页上面一排写项目名与介绍（`WideProjectHeading`，页里不另写）。
-/// Cue 收起（窗口放不下）时，Cue 钮在会话条顶上那一排（`CueButton`），点了从右边浮出、盖在主区上；收起的 Cue 仍挂着，只是藏起。
+/// Cue 钮一直在会话条顶上那一排（`CueButton`）：露着时点了收起，收着时放回（放不下时从右边浮出、盖在主区上）；收起的 Cue 仍挂着，只是藏起。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -16,7 +16,7 @@ struct SplitRoot: View {
             let floats = sizes.cue == 0 && !sizes.cueFits && workspace.cueFloats
             let shown = sizes.cue > 0 || floats
             HStack(spacing: 0) {
-                WideRail(width: sizes.rail, cueButton: sizes.cue == 0 ? sizes.cueFits : nil)
+                WideRail(width: sizes.rail, cue: (sizes.cueFits, shown))
                 WideColumnHost(slot: .main, focus: focus) {
                     destination(workspace.mainRoute, column: .main)
                         .environment(\.boardFits, sizes.leading >= WideMetrics.board)

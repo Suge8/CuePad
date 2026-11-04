@@ -100,10 +100,7 @@ private struct ProjectMenuItems: View {
         let ready = workspace.isLibraryReady
         Button("选择灵感", icon: CardMenu.Item.select.icon) { workspace.presses.beginSelecting() }
             .disabled(!ready || (workspace.catalog?.cardCounts[projectID] ?? 0) == 0)
-        Button("看这个项目的进展", icon: .task) {
-            workspace.projectScope = projectID
-            workspace.selectPane(.progress)
-        }
+        Button("看这个项目的进展", icon: .task) { workspace.showProgress(of: projectID) }
         if let project = workspace.catalog?.project(projectID) {
             Divider()
             ProjectActions(project: project) { workspace.projectForm = .init(project: project) }

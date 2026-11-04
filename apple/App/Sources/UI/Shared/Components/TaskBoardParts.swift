@@ -5,8 +5,6 @@ import SwiftUI
 /// 每列先给最窄的 `minColumn`，可见宽多出来的按各列的份数分（`TaskBoard.Column.share`：推进中、等你多分，待办、已完成少分）——宽窗口里轻重分得开，
 /// iPad 竖屏这类刚够四列的宽里四列差不多一样宽、轻的两列不被挤成一行三四个字；四列总在眼前，放不下四列时（如 Mac 窄窗开着侧栏）
 /// 整排横向滚动、最右一列露出一截（看得出能横划）：两侧页边是滚动区内容的边（`margin`），列滚到窗口边才裁，滚到头右边照样留页边。
-/// 放得下就不套横向滚动区：Mac 的列头排在标题栏那一排，滚动区的内部视图在那里一律被标题栏当成拖窗口、列头的 ＋ 点不进去（`ColumnHostingView`）。
-/// 放得下与放不下之间换一次是整排重建（列里的滚动位置回到顶），只在窗口拖过看板最窄宽的那一下。
 /// 卡换列时从原处飞到新处（`boardFlight`），四列共用量飞行位置的坐标系与正被拖着的那件（`boardStage`）。
 struct BoardColumns: View {
     let board: TaskBoard
@@ -28,22 +26,14 @@ struct BoardColumns: View {
         GeometryReader { proxy in
             let spare = max(0, proxy.size.width - margin * 2 - Self.gap * 3 - Self.minColumn * 4)
             let unit = spare / TaskBoard.Column.allCases.map(\.share).reduce(0, +)
-            Group {
-                if proxy.size.width >= Self.narrowest(margin: margin) {
-                    columns(unit).padding(.horizontal, margin)
-                } else {
-                    ScrollView(.horizontal) { columns(unit) }
-                        .safeAreaPadding(.horizontal, margin)
-                        .scrollBounceBehavior(.basedOnSize)
-                        .scrollIndicators(.never)
-                }
-            }
-            .boardStage()
+            // 放得下、放不下都是这一个滚动区（放得下时只是滚不动）：窗口拖过看板最窄宽时不换结构，列里的滚动位置留着
+            ScrollView(.horizontal) { columns(unit) }
+                .safeAreaPadding(.horizontal, margin)
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollIndicators(.never)
+                .boardStage()
         }
     }
-
-    /// 四列都取最窄、连同列间与两侧页边要多宽。
-    static func narrowest(margin: CGFloat) -> CGFloat { margin * 2 + gap * 3 + minColumn * 4 }
 
     private func columns(_ unit: CGFloat) -> some View {
         HStack(alignment: .top, spacing: Self.gap) {

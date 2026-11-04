@@ -10,7 +10,7 @@ struct WideMetrics {
     static let board: CGFloat = 756
     #if os(macOS)
     /// Mac 看板右边让给最顶那一排末尾的"⋯"（列头与它同一排，`TaskBoardPage`）：栏头右边距、钮前那道缝、圆钮，再与最后一列隔 12，减去看板自己的右页边。
-    /// 算进主区放看板的最窄宽：少了它，正好在临界宽时看板放不下四列、套上横向滚动区，列头的 ＋ 在标题栏那一排点不进去（`BoardColumns`）。
+    /// 算进主区放看板的最窄宽：少了它，正好在临界宽时最后一列钻到"⋯"底下、要横滑才看得全。
     static let boardMenu: CGFloat = 16 + 8 + ControlMetrics.height + 12 - (Spacing.page - 8)
     #endif
     static let session: CGFloat = 400

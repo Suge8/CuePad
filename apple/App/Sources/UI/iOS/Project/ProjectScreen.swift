@@ -126,13 +126,17 @@ struct ProjectScreen: View {
         MasonryLayout(minColumnWidth: sizeClass == .regular ? 220 : 150, maxColumns: typeSize.isAccessibilitySize ? 1 : 4, spacing: Self.wallSpacing) { tiles() }
     }
 
-    /// 顶栏右边的"⋯"：新建卡片、看这个项目的会话（进展页两段共用的项目范围设成它，再切到会话段），其后是共用的项目操作。
+    /// 顶栏右边的"⋯"：新建卡片、看这个项目的会话或进展（项目范围设成它：窄屏再切到进展页的会话段，宽屏没有会话段、去进展的看板，同 Mac），其后是共用的项目操作。
     private var actions: some View {
         Menu("更多", icon: .more) {
             Button("记一条灵感", icon: .write, action: workspace.newCard)
-            Button("看这个项目的会话", icon: .session) {
-                workspace.projectScope = projectID
-                workspace.showSessions()
+            if workspace.layout == .wide {
+                Button("看这个项目的进展", icon: .task) { workspace.showProgress(of: projectID) }
+            } else {
+                Button("看这个项目的会话", icon: .session) {
+                    workspace.projectScope = projectID
+                    workspace.showSessions()
+                }
             }
             if let project {
                 Divider()

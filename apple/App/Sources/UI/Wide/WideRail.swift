@@ -9,8 +9,8 @@ import SwiftUI
 struct WideRail: View {
     let width: CGFloat
     #if os(iOS)
-    /// Cue 收起时 iPad 的 Cue 钮排在顶上那一排（`CueButton`，值是 Cue 放不放得下）；Mac 的在窗口右上。
-    var cueButton: Bool?
+    /// iPad 的 Cue 钮一直排在顶上那一排（`CueButton`）；Mac 的在窗口右上、只在 Cue 收着时有。
+    var cue: (fits: Bool, shown: Bool)?
     #endif
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -53,7 +53,7 @@ struct WideRail: View {
                 toggle
                 Spacer(minLength: 0)
                 search
-                if let cueButton { CueButton(fits: cueButton) }
+                if let cue { CueButton(fits: cue.fits, shown: cue.shown) }
                 #else
                 Spacer(minLength: 0)
                 search
@@ -69,7 +69,7 @@ struct WideRail: View {
             #endif
             HStack(spacing: 0) { toggle; search }.padding(.bottom, 6)
             #if os(iOS)
-            if let cueButton { CueButton(fits: cueButton).padding(.bottom, 6) }
+            if let cue { CueButton(fits: cue.fits, shown: cue.shown).padding(.bottom, 6) }
             #endif
         }
     }
@@ -153,7 +153,8 @@ struct RailIcon: View {
 }
 
 /// 会话条底部的"更早"：已结束的会话（宽屏的进展页没有会话一段，已结束的只在这里与 ⌘K 搜索），默认折起、只写个数，组头同等你、推进中那一种。
-/// 宽时点组头原地展开成一列（Agent 标志、名字、多久前，先读一页，最多占 `listHeight` 高、在里面滚）；图标条上是"更早"与个数，点开是一份菜单。
+/// 宽时点组头原地展开成一列（Agent 标志、名字、多久前，最多占 `listHeight` 高、在里面滚，滚到底接着读下一页）；图标条上是"更早"与个数，点开是一份菜单（读到的那几页，末尾"显示更多"再读一页）。
+/// 个数是全部已结束的会话，每一个都翻得到。
 /// 点一行在主区打开（⌘ 点并排）。开合只在这一处，不进偏好：每次打开窗口都是折起的。
 struct RailEarlier: View {
     let wide: Bool
@@ -162,10 +163,13 @@ struct RailEarlier: View {
     @Environment(\.palette) private var palette
     @State private var open = false
     @State private var earlier: Earlier?
+    /// 读到第几条为止：滚到列表底（宽）或点"显示更多"（图标条）再加一页。
+    @State private var limit = PiSessionList.pageSize
 
     nonisolated struct Earlier: Equatable, Sendable {
         var items: [PiSessionState]
         var total: Int
+        var hasMore: Bool { items.count < total }
     }
 
     private static let listHeight: CGFloat = 240
@@ -178,8 +182,12 @@ struct RailEarlier: View {
                     header(total)
                     if open, let earlier {
                         ScrollView {
-                            LazyVStack(spacing: 2) { ForEach(earlier.items, id: \.sessionID) { row($0) } }
-                                .padding(.horizontal, RowMetrics.bleed)
+                            LazyVStack(spacing: 2) {
+                                ForEach(earlier.items, id: \.sessionID) { row($0) }
+                                // 滑到这里才读下一页（同进展页会话段的分页）
+                                if earlier.hasMore { Spinner(.small).frame(maxWidth: .infinity).padding(8).task(id: earlier.items.count) { more() } }
+                            }
+                            .padding(.horizontal, RowMetrics.bleed)
                         }
                         .frame(maxHeight: Self.listHeight)
                         .fixedSize(horizontal: false, vertical: true)
@@ -189,6 +197,10 @@ struct RailEarlier: View {
                 Menu {
                     ForEach(earlier?.items ?? [], id: \.sessionID) { session in
                         Button(session.title) { workspace.openSession(session.id, sessionID: session.sessionID) }
+                    }
+                    if earlier?.hasMore == true {
+                        Divider()
+                        Button("显示更多") { more() }
                     }
                 } label: {
                     VStack(spacing: 0) {
@@ -207,10 +219,14 @@ struct RailEarlier: View {
         }
         .padding(.horizontal, SessionRail.Form.wide.inset)
         .padding(.top, 6)
-        .observing(services.store, into: $earlier, onError: workspace.fail) { store in
-            let page = try store.piSessionPage(PiSessionQuery(scope: .ended, limit: PiSessionList.pageSize))
+        .observing(services.store, id: limit, into: $earlier, onError: workspace.fail) { [limit] store in
+            let page = try store.piSessionPage(PiSessionQuery(scope: .ended, limit: limit))
             return Earlier(items: page.items.map(\.listed), total: page.total)
         }
+    }
+
+    private func more() {
+        if let earlier, earlier.hasMore { limit = earlier.items.count + PiSessionList.pageSize }
     }
 
     private func header(_ total: Int) -> some View {
