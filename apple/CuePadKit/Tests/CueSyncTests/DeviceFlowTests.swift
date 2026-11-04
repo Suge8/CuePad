@@ -215,14 +215,14 @@ import Testing
     #expect(states["s2"] == shared && states["s3"] != shared)
     let own = try #require(states["s3"] ?? nil)
     #expect(try await phone.store.agentCatalog(own)?.models == scoped.models)
-    let sent = try #require(try await mac.store.agentCatalog(shared))
 
     try await recorder.update(sessionID: "s1", state: .settled, detail: "做完了")
+    let pending = try await mac.reconcileDelta().saves
+    #expect(!pending.contains(mac.id(shared)))  // 清单没改，不再上传
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.allPiSessionStates().first { $0.sessionID == "s1" })
     #expect(seen.state == .known(.settled) && seen.detail == "做完了")
-    #expect(try await mac.store.agentCatalog(shared) == sent)  // 没改，不再上传
     #expect(try await phone.store.agentCatalog(shared)?.models.count == 300)
 
     try await recorder.end(sessionID: "s1")

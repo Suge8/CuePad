@@ -51,14 +51,16 @@ import Testing
   @Test
   func aRequestFinishedRightAwayHandsOnlyTheResultToUpload() async throws {
     let uploads = Uploads()
-    let executor = executor(uploads) { _ in .succeeded }
+    let executor = executor(uploads) { $0.content == "栅栏" ? .failed(.verbatim("栅栏")) : .succeeded }
     try await executor.start()
     _ = try await store.requestDelivery("hi", to: pi, on: "mac-a")
     try await eventually("结果交给上传") { await !uploads.statuses.isEmpty }
     clock.advance(DeliveryExecutor.claimGrace)
-    try await Task.sleep(for: .milliseconds(100))  // 领取那次要是没取消，到点后会在这段里交出
+    // 第二条（换个结果好区分）做完时，领取那次要是没取消，到点交出的已排在它前面
+    _ = try await store.requestDelivery("栅栏", to: pi, on: "mac-a")
+    try await eventually("第二条的结果交给上传") { await uploads.statuses.count >= 2 }
 
-    #expect(await uploads.statuses == [.succeeded])
+    #expect(await uploads.statuses == [.succeeded, .failed])
     await executor.stop()
   }
 
