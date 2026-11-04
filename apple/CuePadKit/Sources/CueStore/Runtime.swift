@@ -19,7 +19,7 @@ public enum SystemBoot {
 }
 
 extension PiSessionState {
-  /// 保留原报告，当前断言另取投影；未知不会被当成空闲或结束。
+  /// 保留原报告，当前断言另取投影；未知不会被当成空闲或结束。所在的 Mac 不在线时也是未知，为什么在 `offlineMac`。
   public var runtimeState: Open<PiWorkState> {
     if state == .known(.ended) || state == .known(.interrupted) { return state }
     return runtimeUntil == nil ? .unknown("unconfirmed") : state
@@ -37,7 +37,7 @@ extension PiSessionState {
 }
 
 extension CueStore {
-  /// 只有同一次系统启动的真实证明且所属 Mac 的 lease 仍有效才确认；旧报告、摘要修改时间均不能背书。
+  /// 只有同一次系统启动的见证（真实报告、本机收尾或启动对账写下的 `bootID`）且所属 Mac 的 lease 仍有效才确认；旧报告、摘要修改时间均不能背书。
   public func runtimeIsConfirmed(_ session: PiSessionState, at now: Date = .now) throws -> Bool {
     try runtimeDeadline(session, presences: runtimePresences(), at: now) != nil
   }
@@ -73,14 +73,24 @@ extension CueStore {
   }
 
   /// 每批只读一次 host 集合，O(S+H)；所有运行读取共用，不按会话逐条查在线状态。
+  /// 没确认的里所在的 Mac 不在线的（没有在线记录或过了期限）带上它的名字（`offlineMac`）：说的是那台 Mac 没开，不是这个会话说不准；名字只在有这样的会话时读。
   func runtimeProjection(_ sessions: [PiSessionState]) throws -> [PiSessionState] {
     guard !sessions.isEmpty else { return [] }
     let presences = try runtimePresences(), now = timing.now()
-    return sessions.map { session in
+    var names: [String: String]?
+    return try sessions.map { session in
       var session = session
       session.runtimeUntil = runtimeDeadline(session, presences: presences, at: now)
+      if session.runtimeUntil == nil, session.runtimeState.known == nil, presences[session.hostID]?.isOnline(at: now) != true {
+        if names == nil { names = try macNames() }
+        session.offlineMac = MacAgents.shownName(names?[session.hostID])
+      }
       return session
     }
+  }
+
+  private func macNames() throws -> [String: String] {
+    Dictionary(try db.query("SELECT hostID, name FROM macAgents WHERE name IS NOT NULL") { ($0.text(0), $0.text(1)) }) { first, _ in first }
   }
 
   func select(

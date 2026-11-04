@@ -74,7 +74,7 @@ class EvalScript {
         try await rig.store.recordSend(task.body, to: SendTarget(kind: .piSession, name: task.heading, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
         let fake = try await rig.app.host.connect(id, cwd: folder, busy: true)
         fake.sendInfo(["name": task.heading])
-        let session = ScriptedSession(session: fake, task: task, history: [PiChatMessage(sessionID: id, entryID: "e1", seq: 1, role: .user, text: task.body, at: .now, deliveryID: delivery)])
+        let session = ScriptedSession(id, on: rig.app.host, task: task, history: [PiChatMessage(sessionID: id, entryID: "e1", seq: 1, role: .user, text: task.body, at: .now, deliveryID: delivery)])
         sessions.append(session)
         return session
     }
@@ -101,7 +101,7 @@ class EvalScript {
             let said = fake.commands.compactMap { $0.json["text"] as? String }
             guard ([top.body, leaf.task.body] + said).joined(separator: "\n").contains(topic) else { continue }
             fake.setState(["kind": "thinking"])  // 开场白在接手前就到了：像真会话那样在干活
-            return ScriptedSession(session: fake, task: top)
+            return ScriptedSession(id, on: rig.app.host, task: top)
         }
         return nil
     }

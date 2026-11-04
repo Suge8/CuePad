@@ -5,7 +5,7 @@ import Testing
 
 extension MCPTests {
   /// 分步做一件事（常规的"完成 → 开工下一步"）：上一步收尾时下一步还没开工，会话留着；下一步开工接着用它——草稿作为下一句发进去，不开新会话；
-  /// 话送到时这一步才绑上那个会话（同界面、同开新会话"开成了才绑"），送到前看板与 peek 写"发送中"、不能再开工或说话；
+  /// 话送到时这一步才绑上那个会话（同界面、同开新会话"开成了才绑"），送到前看板写"发送中"、peek 写送达尚未确认，不能再开工或说话；
   /// 最后一步做完，会话结束（界面点圆圈同一条规则，见 App 的 `TaskFlowTests`）。
   /// 开工的工具等送达结果时，另一个 `cuepad mcp`（Cue 的下一次调用）看到的是送到前的样子；Mac 送到后工具说已送达。
   @Test func stepsOfATaskContinueInTheSameSession() async throws {
@@ -20,6 +20,7 @@ extension MCPTests {
     let task = try await store.createTask("重写发布脚本", in: project.id)
     let first = try await store.createTask("调研", under: task.id), second = try await store.createTask("改脚本", under: task.id)
     try await store.linkCard(first.id, toSession: "s1")
+    try await store.recordMacPresence(host: "mac-a") { true }  // 会话所在的 Mac 醒着：下一步才能接着用它的会话
     try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "调研")
     try await Server.run(library: sandbox.directory) { server in
       _ = try await server.call("task", ["action": "done", "task": first.id.uuidString, "evidence": ["看完了"]])
@@ -38,7 +39,9 @@ extension MCPTests {
         let peek = try await cue.call("task", ["action": "peek", "task": task.id.uuidString])
         let start = try await cue.refused("task", ["action": "start", "task": second.id.uuidString])
         let say = try await cue.refused("task", ["action": "say", "task": second.id.uuidString, "text": "还有"])
-        #expect(board.contains("改脚本 › 发送中") && peek.contains("发送中") && start.contains("送到") && say.contains("送到"))
+        #expect(board.contains("改脚本 › 发送中"), "\(board)")
+        // 上一句可能已经执行：开工、说话都拒绝，免得同一句说两遍
+        #expect(peek.contains("尚未确认") && start.contains("尚未确认") && say.contains("尚未确认"), "\(peek)\n\(start)\n\(say)")
       }
 
       // Mac 送到：记下这次发送，这一步绑上会话

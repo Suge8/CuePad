@@ -128,6 +128,38 @@
         }
       }
     },
+    "%@ %@（%@ 重置），我换到 %@ 接着干。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: %2$@ (resets %3$@). Switching to %4$@ to keep going."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@（%3$@ 重置），我换到 %4$@ 接着干。"
+          }
+        }
+      }
+    },
+    "%@ %@，我换到 %@ 接着干。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: %2$@. Switching to %3$@ to keep going."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@，我换到 %3$@ 接着干。"
+          }
+        }
+      }
+    },
     "%@ %lld" : {
       "localizations" : {
         "zh-Hans" : {
@@ -539,6 +571,22 @@
         }
       }
     },
+    "%@ 的设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的设置"
+          }
+        }
+      }
+    },
     "%@ 的设置…" : {
       "localizations" : {
         "en" : {
@@ -767,6 +815,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ 那次错过，%2$@ 补上"
+          }
+        }
+      }
+    },
+    "%@ 里没有这个模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ doesn't have this model"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 里没有这个模型"
           }
         }
       }
@@ -3445,6 +3509,22 @@
         }
       }
     },
+    "CuePad 的工具服务没连上（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't connect to CuePad's tools (%@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 的工具服务没连上（%@）"
+          }
+        }
+      }
+    },
     "CuePad 的资料库没打开，到 App 里看看" : {
       "localizations" : {
         "en" : {
@@ -5055,22 +5135,6 @@
         }
       }
     },
-    "不启用" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Off"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不启用"
-          }
-        }
-      }
-    },
     "不在" : {
       "localizations" : {
         "en" : {
@@ -5883,22 +5947,6 @@
         }
       }
     },
-    "会话当前状态还未确认，重新接上后再试" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The session’s current status is unconfirmed. Try again after it reconnects."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会话当前状态还未确认，重新接上后再试"
-          }
-        }
-      }
-    },
     "会话扩展正在升级" : {
       "localizations" : {
         "en" : {
@@ -6567,6 +6615,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停止这一轮"
+          }
+        }
+      }
+    },
+    "停用 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn Off %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停用 %@"
           }
         }
       }
@@ -8243,6 +8307,22 @@
         }
       }
     },
+    "又能干活了。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I'm back to work."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "又能干活了。"
+          }
+        }
+      }
+    },
     "反缩进" : {
       "localizations" : {
         "en" : {
@@ -9191,6 +9271,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用后说一件想做的事，我来开工，要你拿主意时再找你"
+          }
+        }
+      }
+    },
+    "启用或停用 Cue、运行情况、设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn Cue on or off, status, settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用或停用 Cue、运行情况、设置"
           }
         }
       }
@@ -12739,18 +12835,18 @@
         }
       }
     },
-    "我起不来了：%@\n你再发一条消息，我就再试一次。" : {
+    "我起不来了：%@\n我隔一阵会自己再试；你发条消息，我马上再试。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I can't start: %@\nSend me another message and I'll try again."
+            "value" : "I can't start: %@\nI'll keep retrying on my own. Send me a message to retry right away."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "我起不来了：%@\n你再发一条消息，我就再试一次。"
+            "value" : "我起不来了：%@\n我隔一阵会自己再试；你发条消息，我马上再试。"
           }
         }
       }
@@ -16887,6 +16983,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没找到它的命令行程序"
+          }
+        }
+      }
+    },
+    "没换成 %@：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't switch to %1$@: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没换成 %1$@：%2$@"
           }
         }
       }
@@ -21063,22 +21175,6 @@
         }
       }
     },
-    "运行情况、设置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Status, settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "运行情况、设置"
-          }
-        }
-      }
-    },
     "近 30 天" : {
       "localizations" : {
         "en" : {
@@ -21547,6 +21643,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没醒过"
+          }
+        }
+      }
+    },
+    "这一轮 %lld 分钟没有动静，大脑像是卡住了" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No activity for %lld minute this turn. Cue's model seems stuck."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No activity for %lld minutes this turn. Cue's model seems stuck."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这一轮 %lld 分钟没有动静，大脑像是卡住了"
           }
         }
       }
@@ -22159,22 +22283,6 @@
         }
       }
     },
-    "这台 Mac 上的 %@ 里找不到这个模型" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ on this Mac doesn't have this model"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这台 Mac 上的 %@ 里找不到这个模型"
-          }
-        }
-      }
-    },
     "这台 Mac 上的 CuePad 不认识这种发送方式（%@），请更新" : {
       "localizations" : {
         "en" : {
@@ -22411,22 +22519,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条提问已经结束了"
-          }
-        }
-      }
-    },
-    "这轮的来源还未确认，先不打断" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This turn’s origin is unconfirmed. It won’t be interrupted."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这轮的来源还未确认，先不打断"
           }
         }
       }

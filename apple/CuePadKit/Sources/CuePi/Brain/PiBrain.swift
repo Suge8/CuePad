@@ -5,12 +5,12 @@ import Foundation
 
 /// Pi 当大脑：RPC 模式（`pi --mode rpc`，协议见 Pi 的 docs/rpc.md），一行一条 JSON（`ChildProcess`）。
 /// - 不落会话（`--no-session`）；不发现扩展（`-ne`，CuePad 的桥扩展也不加载，所以它不在 Agent 会话列表里），
-///   只加载随包的 cue-tools.ts：它当 CuePad 的 MCP 服务的客户端，把工具照原名（task、tell、memory）登记给模型，不走 Pi 内置 MCP 的
+///   只加载随包的 cue-tools.ts：它当 CuePad 的 MCP 服务的客户端，把工具照原名（task、tell、memory、setup）登记给模型，不走 Pi 内置 MCP 的
 ///   `mcp__cuepad__` 命名（见它的头注释）；服务的命令行经环境变量 `CUEPAD_CUE_MCP` 交给它；
 ///   不读工作目录里的项目文件（`-na`：项目的 `.pi/` 设置、扩展与 MCP 配置都不信任），也不加载 skill、上下文文件、提示词模板；
 /// - 系统提示整份替换（`--system-prompt` 盖过 `SYSTEM.md`）；Pi 只在没给 `--append-system-prompt` 时才去找 `APPEND_SYSTEM.md`
 ///   追加上去，所以给一个空的追加项挡掉它（空串不追加任何东西）；
-/// - 工具只有扩展登记的与内置的 `read,grep,find,ls`（`-nbt` 关掉内置工具、留着扩展的，`+名字` 再加回这几个）；
+/// - 工具只有扩展登记的与内置的 `read`（`-nbt` 关掉内置工具、留着扩展的，`+read` 再加回它）：Cue 只读文件核对证据，搜代码交给会话；
 /// - 图随 `prompt` 的 `images` 交；模型能不能看图看 `get_state` 里模型的 `input`；
 /// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；就地换走 `set_model`（`提供方/模型` 拆开）再 `set_thinking_level`
 ///   （换模型时 Pi 会按新模型重取强度，所以强度在后）；都只改这个进程，不写 Pi 的设置；
@@ -20,7 +20,10 @@ import Foundation
 /// - 提示缓存用长的一档（`PI_CACHE_RETENTION=long`：Anthropic 1 小时，OpenAI 24 小时，提供方不支持的照常）；
 /// - 开新会话走 `new_session`：Pi 按启动参数重建整个运行时（扩展与它起的工具服务都重起），所以就地换过的模型与强度随后再交一次；
 /// - 发话一律带 `streamingBehavior: steer`：正忙时 Pi 在当前回合的工具调用做完后、下一次请求模型前把它交给模型，空闲时照常开始一轮；
-/// - 一轮从第一个 `agent_start` 到 `agent_settled`（重试、压缩、插话都在其中）；
+/// - 一轮从第一个 `agent_start` 到 `agent_settled`（重试、压缩、插话都在其中）。报 `agent_settled` 的那段里交来的话 Pi 推到报完再开新的一轮
+///   （0.87 起的 `_deferredSettledActions`），新一轮的 `agent_start` 不会先于上一轮的 `agent_settled`；
+/// - 哪一轮接走了交来的话（`TurnEvent.received`）：Pi 把它放进上下文时报那条用户消息（`message_start`），一条对一句、按交来的先后。
+///   正忙时交来的多半并进这一轮，赶上这一轮收尾就由下一轮接走；交话的一方以为在跑的那一轮可能已经收尾，只按这里认；
 /// - 正在说的话（拼法见 `DraftParts`）：段号是 `contentIndex`，`message_update` 的 `text_delta` 追加（RPC 只发增量，见 Pi 的 docs/json.md
 ///   「Reconstruct streaming messages」），`text_end` 与 `message_end` 给定稿；开出工具调用、停下或出错后这条不再算。
 @MainActor
@@ -46,6 +49,8 @@ final class PiBrain: HostedSession {
     private var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
     /// 这一轮里的状况（`agent_start` 到 `agent_settled`）
     private var turn: Turn?
+    /// 交给 Pi、它还没报出那条用户消息的话（`send` 的标识），先交的在前
+    private var unreceived: [UUID] = []
     private struct Turn {
         var error: String?
     }
@@ -59,7 +64,7 @@ final class PiBrain: HostedSession {
             try config.systemPrompt.write(to: prompt, atomically: true, encoding: .utf8)
             var arguments = [
                 "--mode", "rpc", "--no-session", "--offline", "-ne", "-na", "-e", Self.tools.path, "-e", Self.subscription.path,
-                "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "-nbt", "--tools", "+read,+grep,+find,+ls",
+                "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "-nbt", "--tools", "+read",
             ]
             if config.fast { arguments += ["-e", Bundle.module.url(forResource: "cue-fast", withExtension: "ts")!.path] }
             if let model = config.model { arguments += ["--model", model] }
@@ -82,9 +87,17 @@ final class PiBrain: HostedSession {
         }
     }
 
-    func send(_ text: String, images: [PiImage]) async throws {
+    func send(_ text: String, images: [PiImage], id: UUID) async throws {
         let images = images.map { ["type": "image", "data": .string($0.data.base64EncodedString()), "mimeType": .string($0.mimeType)] as JSONValue }
-        _ = try await command(["type": "prompt", "message": .string(text), "images": .array(images), "streamingBehavior": "steer"])
+        unreceived.append(id)
+        do {
+            let reply = try await command(["type": "prompt", "message": .string(text), "images": .array(images), "streamingBehavior": "steer"])
+            // 扩展当命令收下的不进上下文
+            if reply["data"]?["disposition"]?.string == "handled" { unreceived.removeAll { $0 == id } }
+        } catch {
+            unreceived.removeAll { $0 == id }
+            throw error
+        }
     }
 
     func newSession() async throws {
@@ -153,6 +166,8 @@ final class PiBrain: HostedSession {
         case "tool_execution_end" where event["parentToolCallId"] == nil:
             guard turn != nil, let id = event["toolCallId"]?.string else { return }
             session.emit(.toolDone(id: id, result: brainText(event["result"]?["content"]), failed: event["isError"]?.bool == true))
+        case "message_start" where event["message"]?["role"]?.string == "user":
+            if !unreceived.isEmpty { session.emit(.received(unreceived.removeFirst())) }
         case "message_start":
             guard event["message"]?["role"]?.string == "assistant" else { return }
             speech = DraftParts()

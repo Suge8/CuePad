@@ -26,6 +26,7 @@ nonisolated extension PiShown {
         case .fresh: String(localized: "新开的会话")
         case .ended: String(localized: "已结束")
         case .interrupted: String(localized: "被打断")
+        case .unknown(let mac?): String(localized: "「\(mac)」没开")
         case .unknown: String(localized: "状态未确认")
         }
     }
@@ -50,6 +51,7 @@ nonisolated extension PiShown {
         case .fresh: String(localized: "Agent 新会话")
         case .ended: String(localized: "Agent 会话已结束")
         case .interrupted: String(localized: "Agent 被打断")
+        case .unknown(let mac?): String(localized: "「\(mac)」没开")
         case .unknown: String(localized: "Agent 状态尚未确认")
         }
     }

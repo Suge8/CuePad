@@ -49,7 +49,6 @@ public final class ChildProcess: Sendable {
     struct State {
         var inputOpen = true
         var stopping = false
-        var stderr = Data()
         /// waitpid 拿到的状态；nil 是还没退出
         var status: Int32?
         /// 等退出的：退出时都以 true 唤醒，限时的到点以 false 唤醒（各自只唤醒一次）
@@ -58,14 +57,13 @@ public final class ChildProcess: Sendable {
     /// 回收与读事件的回调和调用方共享（`Mutex` 不可复制，放进引用里）
     final class Shared: Sendable { let state = Mutex(State()) }
     private let shared = Shared()
-    /// 脱离 App 的进程的标准错误：已删掉名字的临时文件（只剩描述符），进程退出后随最后一个描述符关闭而释放
-    private let errorFile: Int32?
+    private let errors: ErrorTail?
     /// 脱离 App 的进程还没认领时看守那根管道的写端（`Placement.detached`）
     private let hold: Mutex<Int32?>
-    private static let stderrLimit = 4096
 
     /// `environment` 是完整的环境（nil 继承本进程的）；`directory` 为 nil 时用本进程的工作目录。
-    /// 标准错误只留末尾（`stderrTail`）给退出原因，`keepErrors` 为 false 时丢掉。
+    /// 标准错误只留末尾（`stderrTail`）给退出原因，`keepErrors` 为 false 时丢掉。脱离 App 的进程只读到认领为止
+    /// （起不来的原因都在这之前），之后由看守接着读走丢掉：App 退出后它不收 EPIPE，也没有越写越大的文件。
     init(
         _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil,
         placement: Placement, input inputMode: Input = .null, output outputMode: Output = .null, keepErrors: Bool = true
@@ -100,40 +98,35 @@ public final class ChildProcess: Sendable {
             stdout = out.read
             posix_spawn_file_actions_adddup2(&actions, out.write, STDOUT_FILENO)
         }
-        var stderr: Int32?
-        var errorFile: Int32?
-        if !keepErrors {
-            posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0)
-        } else if placement == .detached {
-            // 管道在 App 退出后就断了，它再写标准错误会失败：写进临时文件
-            let file = try Self.scratchFile()
-            errorFile = file
-            posix_spawn_file_actions_adddup2(&actions, file, STDERR_FILENO)
-        } else {
+        var errors: ErrorTail?
+        if keepErrors {
             let err = try Self.pipe()
             opened.append(err.write)
-            stderr = err.read
+            errors = ErrorTail(err.read)
             posix_spawn_file_actions_adddup2(&actions, err.write, STDERR_FILENO)
+            if placement == .detached { posix_spawn_file_actions_adddup2(&actions, err.read, Self.errorsFD) }
+        } else {
+            posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0)
         }
         if let directory { posix_spawn_file_actions_addchdir(&actions, directory.path) }
         let pid: pid_t, hold: Int32?
         do {
             (pid, hold) = try await Self.spawn(
                 executable, arguments, environment: environment ?? ProcessInfo.processInfo.environment, actions: &actions,
-                newSession: placement == .detached
-            ) { [shared] in Self.watchExit($0, group: placement == .group, shared: shared) }
+                newSession: placement == .detached, drainsErrors: errors != nil
+            ) { [shared] in Self.watchExit($0, group: placement == .group, shared: shared, errors: errors) }
         } catch {
-            opened += [input, stdout, stderr, errorFile].compactMap { $0 }
+            opened += [input, stdout].compactMap { $0 }
+            errors?.stop()
             throw error
         }
         self.pid = pid
         self.placement = placement
         self.input = input
-        self.errorFile = errorFile
+        self.errors = errors
         self.hold = Mutex(hold)
         if let input { _ = fcntl(input, F_SETNOSIGPIPE, 1) }
 
-        let shared = shared
         let (output, emit) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
         self.output = output
         if let stdout {
@@ -144,26 +137,18 @@ public final class ChildProcess: Sendable {
         } else {
             emit.finish()
         }
-        if let stderr {
-            Self.read(stderr) { chunk in
-                shared.state.withLock {
-                    $0.stderr.append(chunk)
-                    if $0.stderr.count > Self.stderrLimit { $0.stderr = Data($0.stderr.suffix(Self.stderrLimit)) }
-                }
-            } done: {}
-        }
     }
 
     deinit {
-        if let errorFile { close(errorFile) }
         hold.withLock { $0 }.map { _ = close($0) }
     }
 
-    /// 认领脱离 App 的进程：看守退出，之后它的生死只归它自己（`Placement.detached`）。
+    /// 认领脱离 App 的进程：看守不再管它的生死（之后只归它自己，`Placement.detached`），改去读走它的标准错误。
     func release() {
         guard let fd = hold.withLock({ fd in defer { fd = nil }; return fd }) else { return }
         _ = Darwin.write(fd, "\n", 1)
         close(fd)
+        errors?.stop()
     }
 
     // MARK: 一次性的命令
@@ -281,19 +266,8 @@ public final class ChildProcess: Sendable {
         shared.state.withLock { $0.status }.flatMap { ($0 & 0x7F) == 0 ? ($0 >> 8) & 0xFF : nil }
     }
 
-    /// 标准错误的末尾（至多 `stderrLimit`），去掉首尾空白。
-    var stderrTail: String {
-        var data = shared.state.withLock { $0.stderr }
-        if let errorFile {
-            var info = stat()
-            if fstat(errorFile, &info) == 0, info.st_size > 0 {
-                let count = Int(min(info.st_size, off_t(Self.stderrLimit)))
-                var buffer = [UInt8](repeating: 0, count: count)
-                if pread(errorFile, &buffer, count, info.st_size - off_t(count)) == count { data = Data(buffer) }
-            }
-        }
-        return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    /// 标准错误的末尾（`ErrorTail`），去掉首尾空白；退出之后取的含它退出前写的全部。
+    var stderrTail: String { errors?.text ?? "" }
 
     /// 等进程退出，至多 `limit`（nil 不限时，按 `timing` 量）；退出了返回 true。到点或调用方取消时不管有没有退出都立刻返回 false，好接着升级信号。
     /// 等退出与计时在同一个任务组里赛跑：谁先到取谁，另一个随即取消（进程先退出，计时的睡眠者当场撤掉）。

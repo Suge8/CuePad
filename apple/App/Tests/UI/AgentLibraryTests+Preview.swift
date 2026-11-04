@@ -23,6 +23,7 @@ extension AgentLibraryTests {
 
         workspace.openLibrary(.instruction(.global))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false  // 默认关窗时 AppKit 自己再释放一次，与 ARC 重复：测试进程随后在自动释放池里崩掉
         window.contentView = NSHostingView(rootView: LibraryFileLayer().environment(workspace).environment(services))
         window.makeKeyAndOrderFront(nil)
         defer { window.close() }

@@ -150,7 +150,7 @@ private struct Details: View {
                     HStack(spacing: 12) {
                         Text(item.name).foregroundStyle(palette.ink).lineLimit(1)
                         Spacer(minLength: 0)
-                        Text(item.kind.label).foregroundStyle(item.kind.tone.color(palette)).fixedSize()
+                        Text(item.label).foregroundStyle(item.kind.tone.color(palette)).fixedSize()
                     }
                     .font(.subheadline)
                 }

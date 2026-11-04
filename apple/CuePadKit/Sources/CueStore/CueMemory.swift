@@ -28,6 +28,14 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   /// 一条最多这么多字节（UTF-8），超了拒绝。
   public static let maxBytes = 280
 
+  /// 一直记着的（每个班次都在系统提示里）合计多少字节（各条正文的 UTF-8）的两条线：过了 `pinnedSoft` 后台整理（做梦）把它们收口，
+  /// 过了 `pinnedHard` 系统提示里叫 Cue 自己合并（`CueMemoryView.pinnedText`）；记忆页的用量也按这两条画。
+  public static let pinnedSoft = 4096
+  public static let pinnedHard = 8192
+
+  /// 这几条正文合计的字节数（一直记着的用量，同上两条线的口径）。
+  public static func bytes(_ lines: some Sequence<CueMemoryLine>) -> Int { lines.reduce(0) { $0 + $1.text.utf8.count } }
+
   /// 这段话能记成一条（去掉首尾空白后不空、不超过 `maxBytes` 字节）：界面输入时与写入时同一个判断。
   public static func fits(_ text: String) -> Bool {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

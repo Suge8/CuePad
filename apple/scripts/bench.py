@@ -9,7 +9,8 @@
 抽题、评测读的题目行、判分、报告只有一份。题目行：bench、id、type、question、answer、abstain（该拒答）、evidence（判分要看的证据原话）、
 date（提问时刻的字面）、asked（epoch 秒）、log（[作者 you/cue, epoch 秒, 正文]，按时刻排好）；评测把除 log 外的字段原样抄进每题的结果，判分只读结果。
 
-判分模型：Pi（anthropic/claude-sonnet-5-5，thinking off），登录从 ~/.pi/agent/auth.json 只读地取、不刷新；
+判分模型：Pi（anthropic/claude-sonnet-5-5，thinking off），登录从 ~/.pi/agent/auth.json 只读地取、不刷新；没有 Anthropic 登录时
+CUEPAD_BENCH_JUDGE_MODEL 给 ~/.pi/agent/models.json 里的提供方（如 magpie/claude/claude-sonnet-5-5，同评测的 _MODEL），只拷进 models.json；
 官方用 gpt-4o / gpt-4o-mini / Gemini，Pi 设不了 temperature，判分结果存在每题的 json 里，重跑只判没判过的。
 """
 import argparse
@@ -29,11 +30,14 @@ from benches.convomem import ConvoMem
 from benches.lme import LongMemEval
 from benches.locomo import LoCoMo
 
-JUDGE_MODEL = "anthropic/claude-sonnet-5-5"
+JUDGE_MODEL = os.environ.get("CUEPAD_BENCH_JUDGE_MODEL", "anthropic/claude-sonnet-5-5")
+# anthropic/ 开头的走用户 Pi 的订阅登录；别的提供方的地址与密钥在 models.json 里
+SUBSCRIBED = JUDGE_MODEL.startswith("anthropic/")
 REPO = Path(__file__).resolve().parents[2]
 SUBSCRIPTION = REPO / "apple/CuePadKit/Sources/CuePi/Brain/claude-subscription.ts"
 PI = Path.home() / ".local/bin/pi"
 PI_AUTH = Path.home() / ".pi/agent/auth.json"
+PI_MODELS = Path.home() / ".pi/agent/models.json"
 
 
 BENCHES = {bench.name: bench for bench in (LongMemEval, LoCoMo, ConvoMem)}
@@ -54,12 +58,15 @@ def cmd_sample(args):
 
 
 def judge_one(prompt: str, home: Path) -> str:
-    token = subprocess.run(
-        ["/usr/bin/plutil", "-extract", "anthropic.access", "raw", "-o", "-", str(PI_AUTH)], check=True, capture_output=True, text=True).stdout.strip()
     env = {k: v for k, v in os.environ.items() if not k.startswith(("ANTHROPIC_", "XDG_"))}
-    env.update(ANTHROPIC_OAUTH_TOKEN=token, PI_CODING_AGENT_DIR=str(home / "agent"), HOME=str(home), CUEPAD_CLAUDE=shutil.which("claude") or "claude")
+    env.update(PI_CODING_AGENT_DIR=str(home / "agent"), HOME=str(home), CUEPAD_CLAUDE=shutil.which("claude") or "claude")
+    subscription = []
+    if SUBSCRIBED:
+        env["ANTHROPIC_OAUTH_TOKEN"] = subprocess.run(
+            ["/usr/bin/plutil", "-extract", "anthropic.access", "raw", "-o", "-", str(PI_AUTH)], check=True, capture_output=True, text=True).stdout.strip()
+        subscription = ["-e", str(SUBSCRIPTION)]
     command = [
-        str(PI), "-p", "--no-session", "--offline", "-ne", "-nt", "-ns", "-nc", "-np", "--no-themes", "-e", str(SUBSCRIPTION),
+        str(PI), "-p", "--no-session", "--offline", "-ne", "-nt", "-ns", "-nc", "-np", "--no-themes", *subscription,
         # 空的系统提示过不了订阅计费标识那一步（扩展把标识插在系统提示的块前面）
         "--system-prompt", "You are a helpful assistant.", "--model", JUDGE_MODEL, "--thinking", "off", prompt,
     ]
@@ -72,9 +79,10 @@ def judge_one(prompt: str, home: Path) -> str:
 
 
 def cmd_judge(args):
-    expires = json.loads(PI_AUTH.read_text())["anthropic"]["expires"] / 1000
-    if expires < time.time():
-        sys.exit("Pi 的 Anthropic 令牌已过期：等用户自己的 Pi 续上，判分不替它刷新")
+    if SUBSCRIBED:
+        login = json.loads(PI_AUTH.read_text()).get("anthropic")
+        if login is None or login["expires"] / 1000 < time.time():
+            sys.exit("Pi 没有有效的 Anthropic 登录：等用户自己的 Pi 续上（判分不替它刷新），或用 CUEPAD_BENCH_JUDGE_MODEL 换 models.json 里的提供方")
     files = [f for run in args.runs for f in sorted(run.glob("*.json"))]
     benches = {json.loads(f.read_text())["bench"] for f in files}
     if len(benches) != 1:
@@ -82,6 +90,8 @@ def cmd_judge(args):
     bench = BENCHES[benches.pop()](Path())
     home = Path(tempfile.mkdtemp(prefix="bench-judge-"))
     (home / "agent").mkdir()
+    if not SUBSCRIBED:
+        shutil.copy(PI_MODELS, home / "agent" / "models.json")
 
     def grade(path: Path):
         result = json.loads(path.read_text())

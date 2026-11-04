@@ -229,12 +229,13 @@ private enum CueRunFormat {
         }
     }
 
-    /// Cue 自己的三个工具各一个图标，读文件类与会话里的工具清单同一套（`RoundProcess.icon`）。
+    /// Cue 自己的四个工具各一个图标，读文件类与会话里的工具清单同一套（`RoundProcess.icon`）。
     static func icon(tool: String) -> Icon {
         switch tool {
         case "task": .task
         case "tell": .said
         case "memory": .memory
+        case "setup": .settings
         default: RoundProcess.icon(tool: tool)
         }
     }

@@ -9,15 +9,22 @@ extension CueStore {
   private static let kept = "remindAt IS NULL AND deletedAt IS NULL"
 
   /// 记一条（带 `remindAt` 是一条定时，见 `CueMemoryLine`）。记不成一条的（`CueMemoryLine.fits`：空白、超过 `CueMemoryLine.maxBytes` 字节）拒绝。
+  /// `replacing` 是这一条取代的几条（改了说法、几条并成一条）：同一次写入里忘掉它们，要都还在、都不是定时，否则整件不写（`notFound`）。
   /// 返回这一条与它的序号。
   @discardableResult
   public func noteCueLine(
-    _ text: String, source: CueLineSource, pinned: Bool = false, remindAt: Date? = nil, repeats: CueRepeat? = nil, task: UUID? = nil
+    _ text: String, source: CueLineSource, pinned: Bool = false, remindAt: Date? = nil, repeats: CueRepeat? = nil, task: UUID? = nil,
+    replacing: [UUID] = []
   ) throws -> (line: CueMemoryLine, index: Int) {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { throw CueStoreError.blankTaskContent }
     guard CueMemoryLine.fits(text) else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
     return try write {
+      let now = Date.stamp
+      for id in replacing {
+        guard let old = try find(CueMemoryLine.self, id), old.deletedAt == nil, old.remindAt == nil else { throw CueStoreError.notFound }
+        try db.run("UPDATE cueLines SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, id])
+      }
       let line = try insertLine(text, source: source, pinned: pinned, remindAt: remindAt, repeats: repeats, task: task)
       return (line, try index(of: line))
     }
@@ -166,6 +173,11 @@ extension CueStore {
     let lines = try select(CueMemoryLine.self, where: Self.kept, orderBy: "createdAt DESC, id DESC", limit: limit)
     let count = try db.first("SELECT count(*) FROM cueLines WHERE \(Self.kept)") { Int($0.int(0)) } ?? 0
     return CueMemoryRecent(lines: lines, count: count)
+  }
+
+  /// 一直记着的那几条的 id（按记忆的顺序）。
+  public func pinnedCueLineIDs() throws -> [UUID] {
+    try db.query("SELECT id FROM cueLines WHERE pinned = 1 AND deletedAt IS NULL ORDER BY \(Self.lineOrder)") { $0.uuid(0) }
   }
 
   /// 记忆的版本读数（`CueMemoryVersion`）：一条聚合，不读行的内容。

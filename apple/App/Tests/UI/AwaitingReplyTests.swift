@@ -20,7 +20,7 @@ struct AwaitingReplyTests {
             $0.enabledAt = .now
         }
         try await store.recordMacPresence(host: "mac-cue") { true }
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        let recorder = try await rig.runtimeRecorder(on: "mac-a")
         func settle(_ id: String, _ title: String, minutesAgo: Double) async throws {
             try await recorder.update(
                 sessionID: id, state: .settled, title: title, times: PiTimes(stateSince: .now.addingTimeInterval(-minutesAgo * 60), busySince: nil))
@@ -102,7 +102,7 @@ struct AwaitingReplyTests {
             $0.enabledAt = .now
         }
         try await store.recordMacPresence(host: "mac-cue") { true }
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        let recorder = try await rig.runtimeRecorder(on: "mac-a")
         try await recorder.update(
             sessionID: "billing", state: .error, detail: "connection refused", title: "billing",
             times: PiTimes(stateSince: .now.addingTimeInterval(-600), busySince: nil))

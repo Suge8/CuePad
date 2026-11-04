@@ -65,7 +65,7 @@ struct RuntimeGrokTests {
         let stale = try #require(try await store.piSessions(sessionIDs: ["stale"])["stale"]?.state)
         #expect(stale.state == .known(.compacting) && stale.bootID == "old-boot")
         #expect(try await !store.runtimeIsConfirmed(stale))
-        #expect(workspace.shown(stale, delivery: nil).status == .unknown)
+        #expect(workspace.shown(stale, delivery: nil).status == .unknown())
         let summary = CueNow(try await CueDigest.read(from: store), at: .always(), local: .init(waiting: nil, here: nil))
         #expect(summary.tally.moving == 1)
         let live = try #require(app.pi.session(sessionID: "live"))

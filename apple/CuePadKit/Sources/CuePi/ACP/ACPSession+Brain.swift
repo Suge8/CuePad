@@ -37,14 +37,16 @@ extension ACPSession: HostedSession {
         try await mcpReady(within: AgentTimeouts.launch)
     }
 
-    func send(_ text: String, images: [PiImage]) async throws {
+    /// 插不进这一轮的等它做完再开一轮：接走它的是插进的那一轮或新开的那一轮。
+    func send(_ text: String, images: [PiImage], id: UUID) async throws {
         let text = text.hasPrefix("/") ? " " + text : text
         if facts.running {
             guard let sessionID else { throw HostedSessionError.notRunning }
-            if try await dialect.steer(text, images: images, session: sessionID, on: live) { return }
+            if try await dialect.steer(text, images: images, session: sessionID, on: live) { return emit(.received(id)) }
             await untilFinished()
         }
         try prompt(ACPContent.prompt(text: text, images: images))
+        emit(.received(id))
     }
 
     func newSession() async throws {

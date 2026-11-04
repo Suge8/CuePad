@@ -63,6 +63,24 @@ extension CueHostTests {
         await rig.stop()
     }
 
+    /// 你自己点了完成整件任务：没人再用的会话随之结束，Cue 没有要接着做的，不叫醒它；之后你跟它说话，变化里也没有这件。
+    @Test func 你点完成整件任务_Cue不醒() async throws {
+        let rig = try await Rig()
+        try await rig.settleTask(titled: "修好登录页")
+        try await rig.message(.cue, containing: "登录页那边歇下了")
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
+        let task = try #require(try await rig.store.cueBoard().tasks.first?.task)
+        try await Workspace(services: rig.services).toggle(task.id)
+        #expect(try await rig.store.card(task.id)?.status == .done)
+        try await rig.say("你好")
+        try await rig.message(.cue, containing: "收到：你好")
+        let keeper = try #require(rig.services.cue.keeper)
+        let hello = try #require(keeper.rounds.last { $0.wake == .message })
+        #expect(hello.sent.joined().contains("变化（上次醒来之后）：无"), "\(hello.sent)")
+        #expect(!keeper.rounds.contains { $0.sent.joined().contains("[完成]") })
+        await rig.stop()
+    }
+
     /// 你在别处记下的记忆多到要合并（超过视图预算）：后台另起的大脑把待合并的块写成摘要（假模型合第一块）；Cue 不为它醒，换新的第一轮
     /// （这里每次醒来都到了换新线）也不带待合并的块，回你的话照常。
     @Test func 记忆待合并_后台合并_Cue的轮里没有合并() async throws {
@@ -75,6 +93,39 @@ extension CueHostTests {
         #expect(keeper.rounds.map(\.wake) == [.message])  // 空库启用不醒，记忆待合并也不叫醒 Cue
         // 待合并的块的写法：块头 #lo-hi 独占一行，下面是原行
         #expect(!keeper.rounds.contains { $0.sent.contains { $0.contains(/\n#\d+-\d+\n#\d+\s/) } })
+        await rig.stop()
+    }
+
+    /// 一直记着的过了软线（上次整理之后只新钉了几条，不够"新钉多了"那条线）：后台另起的大脑拿到钉着的全部行整理
+    /// （假模型看了觉得都不用动），跑完记下交给它的那组；之后记忆再变、那组没变就不再交给它（合待合并的块时也不带）；
+    /// 再钉一条，那组变了、仍过软线，再整理一次。
+    @Test func 一直记着的过了软线_后台整理_那组不变不再整理() async throws {
+        let tidiedFile = { (rig: Rig) in rig.app.directory.appending(path: "Library/Cue/tidied.json") }
+        // 一条至多 280 字节：十五条合起来刚过软线（`CueMemoryLine.pinnedSoft`）；前十一条算上次整理过的
+        let long = String(repeating: "测", count: 89)
+        let rig = try await Rig(prepare: { rig in
+            var ids: [UUID] = []
+            for index in 0..<15 { ids.append(try await rig.store.noteCueLine("规矩 \(index) \(long)", source: .you, pinned: true).line.id) }
+            let file = tidiedFile(rig)
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(Array(ids.prefix(11))).write(to: file)
+        })
+        func tidied() -> Set<UUID> { (try? JSONDecoder().decode(Set<UUID>.self, from: Data(contentsOf: tidiedFile(rig)))) ?? [] }
+        func pinned() async throws -> Set<UUID> { Set(try await rig.store.cueMemory().lines.filter(\.pinned).map(\.id)) }
+        try await eventually("整理过一次、记下那组") {
+            let set = try await pinned()
+            return rig.model.tidyAsks == 1 && tidied() == set
+        }
+
+        for index in 0..<(CueMemoryView.budget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
+        try await eventually("后台合了待合并的块") { try await !rig.store.cueMemory().summaries.isEmpty }
+        #expect(rig.model.tidyAsks == 1)
+
+        try await rig.store.noteCueLine("规矩 15 \(long)", source: .you, pinned: true)
+        try await eventually("那组变了，再整理一次") {
+            let set = try await pinned()
+            return rig.model.tidyAsks == 2 && tidied() == set && set.count == 16
+        }
         await rig.stop()
     }
 }

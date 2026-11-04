@@ -19,8 +19,9 @@ extension CueKeeper {
         let changes = try await self.changes(at: now)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: setup.timing.clock(), projects: try await store.projects(),
-            changes: changes.due, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
-            wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said)))
+            changes: changes.due, recaps: try await CueTools(store: store).recaps(for: changes.due), board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
+            wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said),
+            quotas: try await store.accountQuotas(on: setup.recorder.hostID), retrying: retrying.map(Self.firstLine)))
         var parts = [envelope]
         if !shift.primed || renewDue(shift, now: now) {
             if shift.primed {
@@ -42,16 +43,17 @@ extension CueKeeper {
         }
         if let said { parts.append(said) }
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
-        let sent = parts.joined(separator: "\n")
+        let sent = parts.joined(separator: "\n"), sending = UUID()
         do {
-            try await shift.brain.send(sent, images: images)
+            try await shift.brain.send(sent, images: images, id: sending)
         } catch {
             await broke(ShownText("发不进去：\(ShownText(error).embedded)"))  // 这一轮还没开，交出去的话也还没记送达
             return false
         }
         var turn = Turn(
-            author: author, round: beginRound(wake, sent: [sent], at: now), selfStarted: wake == .message ? nil : wake, delivered: delivering,
+            author: author, round: beginRound(wake, sent: [sent], at: now), selfStarted: wake == .message ? nil : wake, delivered: shift.taken,
             mark: mark, held: changes.held, stops: Self.stops(in: wake, changes.due))
+        if !shift.taken.isEmpty { turn.author = .cue }
         // Cue 自己醒来的一轮醒来就写下经过那一行：为什么醒在它上面，各端马上画得出叫醒的那一下
         if !turn.answersYou {
             do {
@@ -63,7 +65,11 @@ extension CueKeeper {
         updateShift {
             $0.primed = true
             $0.turn = turn
+            $0.taken = []
+            $0.handed[sending] = delivering
         }
+        retrying = nil
+        heardAt = setup.timing.awake()
         save()
         try await markDelivered(delivering)
         return true
@@ -96,8 +102,9 @@ extension CueKeeper {
         return used >= setup.timing.renewAt || now.timeIntervalSince(last) > setup.timing.cacheLifetime.seconds
     }
 
-    /// 记下送达并立即上传（不等上传完就接着对账）。
+    /// 记下送达并立即上传（不等上传完就接着对账）。先把交出去还没答上的落盘（`save`）：送达写下之后崩溃，下次值班据此退回。
     func markDelivered(_ ids: [UUID]) async throws {
+        if !ids.isEmpty { save() }
         try await store.markCueMessagesDelivered(ids)
         unfetchable.subtract(ids)
         guard !ids.isEmpty else { return }
@@ -178,6 +185,7 @@ extension CueKeeper {
     }
 
     func save() {
+        progress.unanswered = shift?.unanswered ?? []
         do {
             try FileManager.default.createDirectory(at: setup.directory, withIntermediateDirectories: true)
             try JSONEncoder().encode(progress).write(to: setup.directory.appending(path: "keeper.json"), options: .atomic)
@@ -196,6 +204,11 @@ extension CueKeeper {
 
     /// 重试可能好的错：额度、登录类的不算。
     static func retryable(_ summary: PiErrorSummary) -> Bool { summary.failure.retries }
+
+    /// 错的原文首行（信封里那一行只放得下这么多）。
+    static func firstLine(_ raw: String) -> String {
+        String((raw.split(whereSeparator: \.isNewline).first ?? "").prefix(200))
+    }
 
     static func day(_ date: Date) -> String {
         let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)

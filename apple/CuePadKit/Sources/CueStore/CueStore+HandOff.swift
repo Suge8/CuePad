@@ -50,7 +50,7 @@ extension CueStore {
       return try write { try say(content, to: try sessionTarget(sessionID, name: card.heading), card: card.id, host: host, cue: cue) }
     case .launch(let project, let host):
       let kind = try launchAgent(agent, on: host)
-      let key = try model.map(kind.requiredModelKey)
+      let key = try model.map { try cueModelKey($0, of: kind, host: host) }
       let launch = PiLaunch(
         project: project, prompt: content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : content, token: UUID().uuidString,
         agent: kind, model: key, thinking: thinking)

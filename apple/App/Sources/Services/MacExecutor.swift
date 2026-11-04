@@ -74,7 +74,7 @@ final class MacExecutor {
             return try await perform(request, access: access)
         } catch {
             AppServices.log.error("投送请求 \(request.id, privacy: .public) \(request.mode.rawValue, privacy: .public) 没成：\(String(describing: error), privacy: .public)")
-            if request.mode == .known(.start), error is PiHostError { return .unconfirmed(ShownText(error)) }
+            if request.mode == .known(.start), error as? PiHostError == .notConnected { return .unconfirmed(ShownText(error)) }
             return DeliveryRefusal.definitelyNotHanded(error) ? .failed(ShownText(error)) : .unconfirmed(ShownText(error))
         }
     }

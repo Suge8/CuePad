@@ -82,7 +82,8 @@ struct RuntimeBootTests {
         try db.exec("PRAGMA user_version = \(oldVersion);")
         #expect(CueStore.schemaVersion(of: location.databaseURL) == oldVersion)
         let upgraded = try CueStore(location: location)
-        #expect(CueStore.schemaVersion(of: location.databaseURL) == 85 && CueStore.peerFloor == 84)
+        // 83 的运行证明与 84 的期限，旧端读写会做错事：对端下限不能低于 84
+        #expect(CueStore.schemaVersion(of: location.databaseURL) == CueStore.supportedSchemaVersions.upperBound && CueStore.peerFloor >= 84)
         #expect(try await upgraded.activityDestinations().map(\.activityID) == (origin == "主干82" ? ["existing"] : []))
         #expect(try await upgraded.accountQuotas().isEmpty)
         #expect(try db.rows("SELECT hostID IS NULL, bootID IS NULL FROM cueState") == [["1", "1"]])

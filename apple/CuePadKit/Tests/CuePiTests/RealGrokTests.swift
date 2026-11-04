@@ -40,7 +40,7 @@ struct RealGrokTests {
             let unknown = await #expect(throws: PiBridgeError.unknownModel(.grok)) {
                 try await rig.bridge.configure(model: PiModelKey(provider: AgentKind.grok.rawValue, id: "no-such-model"), in: id)
             }
-            #expect(unknown?.localizedDescription == "这台 Mac 上的 Grok Build 里找不到这个模型")
+            #expect(unknown?.localizedDescription == "Grok Build 里没有这个模型")
 
             try await rig.bridge.end(id)
             try await eventually("下线") { rig.bridge.session(id: id) == nil }

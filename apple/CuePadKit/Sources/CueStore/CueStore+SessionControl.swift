@@ -51,7 +51,7 @@ extension CueStore {
   /// 或会打断他发起的那一轮（`inUserTurn`）。正文原样写：收不了图片的会话由 Mac 交出时把图片写成路径。必须在写事务内调用。
   func say(_ content: String, to session: SessionTarget, card: UUID?, host: String, cue: Bool) throws -> DeliveryRequest {
     if cue {
-      guard let state = session.state else { throw CueStoreError.sessionUnconfirmed }
+      guard let state = session.state else { throw CueStoreError.sessionUnconfirmed(session.target.name) }
       try checkCueCanSpeak(in: state)
     }
     return try insertDelivery(content, to: session.target, on: session.host(or: host), mode: .send, card: card, cue: cue)
@@ -103,8 +103,10 @@ extension CueStore {
   }
 
   /// 停止会话正在跑的这一轮；此刻停不了（`PiSessionState.canStop`，与界面的停止按钮同一条）抛 `cannotStop`。
+  /// Cue 停的先看此刻在做什么确认过没有（`requireRuntime`）：没确认时说的是那台 Mac 不在线或还没报，不说"没在跑"。
   public func stopSession(_ sessionID: String, host: String, cue: Bool = false) throws -> DeliveryRequest {
     let session = try sessionTarget(sessionID, name: "")
+    if cue, let state = session.state { try requireRuntime(state) }
     guard session.state?.canStop == true else { throw CueStoreError.cannotStop(session.target.name) }
     return try requestStop(of: session.target, on: session.host(or: host), cue: cue)
   }

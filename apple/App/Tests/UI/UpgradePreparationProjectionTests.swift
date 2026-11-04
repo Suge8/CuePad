@@ -199,7 +199,7 @@ extension UpgradePreparationTests {
         #expect(try await app.services.store.applyRemote([.save(historical, systemFields: Data())]).isEmpty)
         try RawDB(app.databaseURL).exec("PRAGMA user_version = 85")
         app.relaunch()
-        #expect(CueStore.schemaVersion(of: app.databaseURL) == 86)
+        #expect(CueStore.schemaVersion(of: app.databaseURL) == CueStore.supportedSchemaVersions.upperBound)
         try await app.services.executor.start()
         old.close(bye: "reload")
         let ready = try await app.host.connect(target.sessionID, cwd: app.directory.path)

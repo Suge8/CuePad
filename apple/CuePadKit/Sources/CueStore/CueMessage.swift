@@ -147,8 +147,7 @@ public enum CueAlert {
       body = ([asking.question] + [asking.why].compactMap(\.self) + shots + [choices.joined(separator: " / ")]).joined(separator: "\n")
     } else {
       let plain = CueFormat.plainText(text)
-      let words = (try? AttributedString(markdown: plain, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))).map { String($0.characters) }
-      body = (words ?? plain).trimmingCharacters(in: .whitespacesAndNewlines).clipped(bodyLimit)
+      body = String(AttributedString(inlineMarkdown: plain).characters).trimmingCharacters(in: .whitespacesAndNewlines).clipped(bodyLimit)
     }
     let name = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return (name.isEmpty ? CueProfile.defaultName : name, body)

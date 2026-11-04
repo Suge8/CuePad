@@ -2,20 +2,37 @@ import CueStore
 import Observation
 import SwiftUI
 
-/// Cue 的设置，各入口同一份：两端设置里 Cue 那一组（`CueSettingsSection`）、手机 Cue 面板的选 Mac（`CueNowPanel`）与两端 Cue 页的启用
-/// （`CueWelcome`）都读写它。读的是同步的设置（`CueProfile`）与各台 Mac 自报的名字与能用的 Agent（`CueStore.allMacAgents`，Cue 能在
-/// 哪台上运行就是这几台）；动作是改名、在哪台运行并启用（`AppServices.enableCue`，规则在 `CueStore.enableCue`）、停用，写完都立即上传。
+/// Cue 的设置，各入口同一份：两端设置里 Cue 那一组（`CueSettingsSection`）、Cue 页的开关（Mac 的"⋯"、手机 Cue 面板）、手机 Cue 面板的选 Mac
+/// （`CueNowPanel`）与两端 Cue 页的启用（`CueWelcome`）都读写它。读的是同步的设置（`CueProfile`）与各台 Mac 自报的名字与能用的 Agent
+/// （`CueStore.allMacAgents`，Cue 能在哪台上运行就是这几台）；动作是改名、开关（`turn`）、在哪台运行并启用（`AppServices.enableCue`，
+/// 规则在 `CueStore.enableCue`），写完都立即上传。停用只经开关：它是唯一的停用入口，在哪台运行的菜单里没有"不启用"。
 /// 没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。
 /// 能不能启用、改 Mac 要不要先确认只读 `CueGate`。
 @Observable
 final class CueSettingsModel {
     /// 读到的（`cueSettings(_:)` 挂上的订阅写入；第一帧当场读好）。
-    var settings: CueSettings?
+    var settings: CueSettings? {
+        didSet { settle() }
+    }
     private(set) var failure: String?
     /// 正在改过去并启用的那台。
     private(set) var enabling: String?
+    /// 开关按下、还没写进库的那一态：开关先翻过去，写完由库里的接上，不弹回再翻。
+    private(set) var turning: Bool?
     /// 等你确认的改 Mac（`choose` 遇上它正在别的 Mac 上运行）：页面据此弹确认框，确认了才 `confirm`。
     var moving: CueMove?
+
+    /// 开关此刻的样子：按下了就是按下的那一态，否则是库里的。
+    var isOn: Bool { turning ?? (settings ?? .empty).isOn }
+
+    /// 开关（`AppServices.turnCue`）：开关先翻到按下的那一态、停在那里直到库里读回来（没写成就回去）。`here` 是这台 Mac（手机为 nil）。
+    func turn(_ on: Bool, here: String?, _ services: AppServices) {
+        turning = on
+        run {
+            defer { self.settle() }
+            try await services.turnCue(on, here: here)
+        }
+    }
 
     func enable(on host: String, moving: Bool = false, _ services: AppServices) {
         enabling = host
@@ -25,9 +42,8 @@ final class CueSettingsModel {
         }
     }
 
-    /// 设置里的"在哪台运行"：nil（"不启用"）是停用；选一台就是在那台启用，Cue 正在别的 Mac 上运行时先请你确认（`moving`）。
-    func choose(_ host: CueSettings.Host?, _ services: AppServices) {
-        guard let host else { return run { try await services.updateCue { $0.enabledAt = nil } } }
+    /// 选在哪台运行：就在那台启用，Cue 正在别的 Mac 上运行时先请你确认（`moving`）。
+    func choose(_ host: CueSettings.Host, _ services: AppServices) {
         let settings = settings ?? .empty
         if case .runs(let id, let from) = settings.gate(services), id != host.id {
             moving = CueMove(to: host, from: from, cue: settings.profile.name)
@@ -49,8 +65,16 @@ final class CueSettingsModel {
         run { try await services.updateCue { $0.name = name } }
     }
 
-    /// 读不出来、写不成：原因就地写出。
-    func fail(_ error: any Error) { failure = error.localizedDescription }
+    /// 读不出来、写不成：原因就地写出，开关回到库里那一态。
+    func fail(_ error: any Error) {
+        failure = error.localizedDescription
+        turning = nil
+    }
+
+    /// 库里已是按下的那一态：开关交回给库。写完时库可能还没读回来（读回来时 `settings` 再来一次）。
+    private func settle() {
+        if turning == settings?.isOn { turning = nil }
+    }
 
     private func run(_ work: @escaping @MainActor () async throws -> Void) {
         failure = nil
@@ -60,7 +84,19 @@ final class CueSettingsModel {
     }
 }
 
-/// Cue 的名字输入框（两端设置同一个）：回车或离开输入框时写入（`CueSettingsModel.rename`），库里的名字变了跟着回填。
+extension AppServices {
+    /// Cue 的开关，各处同一个（两端设置里 Cue 那一行、Mac Cue 页的"⋯"、手机 Cue 面板、Cue 页停用后的那张小纸），也是唯一的停用入口：
+    /// 关是停用（库里记着那台，`CueProfile.hostID`）；开是在接着干活的那台启用（`CueSettings.resumeHost`，规则同 `enableCue`）。
+    /// 开的时候按此刻库里的读，不按界面上一次读到的。`here` 是这台 Mac（手机为 nil）。一台 Mac 都没有时开不了，各处的开关那时停用。
+    func turnCue(_ on: Bool, here: String?) async throws {
+        guard on else { return try await updateCue { $0.enabledAt = nil } }
+        guard let host = try await CueSettings.read(from: store).resumeHost(here: here) else { return }
+        try await enableCue(on: host.id, moving: false)
+    }
+}
+
+/// Cue 的名字输入框（两端设置里 Cue 那一行，`CueSwitchRow`）：不带框、像那一行的名字，点进去就改；回车或离开输入框时写入
+/// （`CueSettingsModel.rename`），库里的名字变了跟着回填。
 struct CueNameField: View {
     let model: CueSettingsModel
     @Environment(AppServices.self) private var services
@@ -69,7 +105,7 @@ struct CueNameField: View {
 
     var body: some View {
         TextField("名字", text: $name, prompt: Text(CueProfile.defaultName))
-            .multilineTextAlignment(.trailing)
+            .textFieldStyle(.plain)
             .focused($editing)
             .onSubmit { model.rename(name, services) }
             .onChange(of: editing) { left, _ in
@@ -109,6 +145,9 @@ nonisolated struct CueSettings: Equatable, Sendable {
         CueSettings(profile: try store.cueProfile() ?? CueProfile(), macs: try store.allMacAgents())
     }
 
+    /// 开着：在哪台 Mac 上启用着。
+    var isOn: Bool { profile.activeHost != nil }
+
     /// 能运行 Cue 的一台：名字（那台自报的，`MacAgents.shownName`；是这台（`isHere`）时写"这台 Mac"）、能用的几家与一家都不能用时为什么。
     struct Host: Identifiable, Equatable {
         let id: String
@@ -138,8 +177,15 @@ nonisolated struct CueSettings: Equatable, Sendable {
         return hosts
     }
 
-    /// 设置里那一行写的：此刻运行的那台（`running`，没启用为 nil）的名字，或"不启用"。
-    static func shown(_ running: String?, in hosts: [Host]) -> String { hosts.first { $0.id == running }?.name ?? off }
+    /// 开关打开时在哪台启用：停用前那台还能选就回到它（接着干活），否则这台 Mac，再否则第一台能用的；
+    /// 都不能用时仍给第一台，启用时说清为什么（`CueEnableError`）。一台都没有为 nil。
+    func resumeHost(here: String?) -> Host? {
+        let hosts = hosts(here: here)
+        return hosts.first { $0.id == profile.hostID && $0.selectable } ?? hosts.first(where: \.selectable) ?? hosts.first
+    }
+
+    /// 在哪台运行那一行写的：此刻运行的那台的名字。
+    static func shown(_ running: String, in hosts: [Host]) -> String { hosts.first { $0.id == running }?.name ?? MacAgents.unnamed }
 
     /// 能不能在哪台启用（`CueGate`）：按库里它此刻运行在哪台、那台自报的名字。
     @MainActor func gate(_ services: AppServices) -> CueGate {
@@ -147,9 +193,8 @@ nonisolated struct CueSettings: Equatable, Sendable {
         return CueGate.of(services, running: running, name: running.map { id in macs.first { $0.hostID == id }?.shownName ?? MacAgents.unnamed })
     }
 
-    /// 各端同一套写法：选在哪台运行的那一行与"不启用"（停用）。
+    /// 各端同一套写法：选在哪台运行的那一行。
     static var hostTitle: String { String(localized: "在哪台 Mac 上运行") }
-    static var off: String { String(localized: "不启用") }
     #if os(iOS)
     /// 手机上还没有哪台 Mac 写下过自己（`hosts` 为空）时设置与 Cue 面板里那句。同步到不了 Mac（`AppServices.macAlert`）时写同步那一行的标题：
     /// 手机只经 iCloud 和 Mac 连上，那时去 Mac 上打开也连不上。只写标题：面板里这一块定高放不下说明，设置里说明与出路就在紧下面的同步那一组。
@@ -177,7 +222,7 @@ struct CueMove: Identifiable, Equatable {
 }
 
 /// 能不能在一台 Mac 上启用 Cue、改它运行的 Mac：所有入口（Cue 页的启用钮与它的多台菜单（`CueWelcome`）、手机 Cue 面板的选 Mac、接入面板 Cue 那一行、
-/// 两端设置里那一行）只读这一处，
+/// 各处的开关、两端设置里在哪台运行那一行）只读这一处，
 /// 规则本身落在启用的入口（`AppServices.enableCue`），这里只给界面说清楚此刻是哪种。
 enum CueGate: Equatable {
     /// 这台的库还没和 iCloud 对过一遍（`AppServices.knowsSyncedFacts`）：入口写这句原因，不能启用

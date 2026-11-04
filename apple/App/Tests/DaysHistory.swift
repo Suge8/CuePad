@@ -104,7 +104,7 @@ final class DaysHistory {
         }
         try await rig.store.writePiTranscript(PiTranscript(sessionID: id, messages: history, recap: PiRecap(pendingPrompt: "继续")))
         try await eventually("\(title) 在干活写进库") { try await rig.store.sessions(matching: id).first?.state.isWorking == true }
-        return ScriptedSession(session: fake, task: task, history: history)
+        return ScriptedSession(id, on: rig.app.host, task: task, history: history)
     }
 }
 

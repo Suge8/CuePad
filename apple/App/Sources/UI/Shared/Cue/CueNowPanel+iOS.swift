@@ -4,31 +4,33 @@ import SwiftUI
 
 /// Cue 名牌长出的面板（`CueHeader`）：只放 Cue 自己的、会天天变的（Mac 上这些分在 Cue 页输入框、记忆与定时两张弹层与设置里）。名牌长成的名片之下沿中轴排三块：
 /// 它的大脑（Agent、模型与思考强度，`CueConfigControls`）；它的记忆（`CueRecall`：刚记下的两条，整块点进记忆）；
-/// 底下几行：它的定时（`ScheduleLine`，点了打开定时），它在用的技能与规则（`LibraryLine`，点了推入技能与规则），它在哪台 Mac 上运行、点了进设置。
+/// 底下几行：它的定时（`ScheduleLine`，点了打开定时），它在用的技能与规则（`LibraryLine`，点了推入技能与规则），它在哪台 Mac 上运行（点了进设置）与它的开关。
 /// 上下文用了几成不在这里：换新是自动的、多在歇过一小时后，看了也没有可做的，只留在 Mac 的"运行情况"（`CueContextLine`）。
 /// 在做的会话不在这里：进行中的在进展页的会话段（左滑就到），点进会话只有那一条路，返回落点与行的长相都只有一种。
 /// 面板定高：空、一条、记满都一样高（两条各占两行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
-/// 面板里不放滚动区（docs/layout.md）。
+/// 面板里不放滚动区（docs/layout.md）。Cue 的设置（`CueSettingsModel`）整块读一份：选 Mac 与底行的开关读写同一份，改 Mac 的确认框也只挂这一个。
 struct CueNowPanel: View {
     let brain: AgentModelChoice?
     let close: () -> Void
     @Environment(Workspace.self) private var workspace
+    @State private var settings = CueSettingsModel()
 
     /// 面板的字号上限：再大胶囊那一排连模型名都要截掉（iPhone 17 上辅助字号第二档就成了"Opus…"）。
     private static let largestType = DynamicTypeSize.accessibility1
 
     var body: some View {
         VStack(spacing: 22) {
-            BrainBlock(brain: brain)
+            BrainBlock(brain: brain, settings: settings)
             CueRecall { go { workspace.cue.showsMemory = true } }
             VStack(spacing: 6) {
                 ScheduleLine { go { workspace.cue.showsSchedules = true } }
                 LibraryLine { go { workspace.push(.library) } }
-                CueHostLine { go { workspace.push(.settings) } }
+                CueHostLine(model: settings) { go { workspace.push(.settings) } }
             }
         }
         .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 18)
         .dynamicTypeSize(...Self.largestType)
+        .cueSettings(settings)
     }
 
     /// 点面板里的一项：先收起，再去那里。
@@ -45,6 +47,7 @@ struct CueNowPanel: View {
 /// 高度总由启用了的那一排定（看不见时也排着），换态时面板不变高。
 private struct BrainBlock: View {
     let brain: AgentModelChoice?
+    let settings: CueSettingsModel
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -55,7 +58,7 @@ private struct BrainBlock: View {
             .disabled(!cue.canHear)
             .accessibilityHidden(!chosen)
             .overlay {
-                if !chosen { CueHostPick() }
+                if !chosen { CueHostPick(model: settings) }
             }
     }
 
@@ -189,44 +192,81 @@ private struct LibraryLine: View {
     }
 }
 
-/// 面板最底下一行，点了推入设置页（Cue 的名字与在哪台 Mac 上运行在它最上面一组），左边一句、行尾"设置"：
-/// 在线时写它在哪台 Mac 上运行；不在时写为什么（同名牌，`CuePresence.line`：已停用、还没启用、某台没开），
-/// 但名片上没有可数的时那一句已写在名字下面（`CueNow.quietLine`），同一屏不写两遍，这一行只剩去设置的路。
+/// 面板最底下一行：左边点了推入设置页（Cue 的名字、开关与在哪台 Mac 上运行在它最上面一组），右边是 Cue 的开关（`CueSwitch`，同设置里那一个）。
+/// 左边一句说的是点进去是什么（`Lead`）：开着时是它在哪台 Mac 上运行，关着、还没选过时是"Cue 的设置"。原因只在真有问题时顶替这一句：
+/// 开关没能写成（胭脂；还没选过 Mac 时开关不在，没写成的原因写在选 Mac 那一块下面）、它起不来（胭脂）、它那台 Mac 没开；
+/// 说不准的（状态未确认）与平常的（已停用：开关已经说了）不写。
+/// 名片上没有可数的时它不在的那一句已写在名字下面（`CueNow.quietLine`），同一屏不写两遍，这一句回到"Cue 的设置"。
+/// 还没选过在哪台运行时开关占着位置、看不见：那时的下一步是上面的选 Mac（`CueHostPick`）；还没和 iCloud 对过、手机上还没有哪台 Mac 时开关停用。
 private struct CueHostLine: View {
+    let model: CueSettingsModel
     let open: () -> Void
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
-    var body: some View {
-        let place = place
-        Button(action: open) {
-            HStack(spacing: 8) {
-                Image(place == nil ? .settings : .mac).foregroundStyle(palette.ink3)
-                if let place {
-                    Text(place).foregroundStyle(palette.ink2).lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text("设置").foregroundStyle(palette.ink3)
-                } else {
-                    Text("设置").foregroundStyle(palette.ink2)
-                    Spacer(minLength: 8)
-                }
-                Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-            }
-            .font(Typography.secondary)
-            .frame(minHeight: 28)
-            .contentShape(.rect)
-        }
-        .buttonStyle(PressStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Dotted(place, String(localized: "设置")).spoken)
-        .accessibilityAddTraits(.isButton)
+    /// 左边那一句。
+    fileprivate enum Lead {
+        case host(String)
+        case settings(String)
+        case problem(String, failed: Bool)
     }
 
-    private var place: String? {
+    var body: some View {
+        let lead = lead
+        let settings = model.settings ?? .empty
+        HStack(spacing: 8) {
+            Button(action: open) {
+                HStack(spacing: 8) {
+                    Image(lead.icon).foregroundStyle(palette.ink3)
+                    Text(lead.text).foregroundStyle(lead.failed ? palette.failure : palette.ink2).lineLimit(2)
+                    Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                    Spacer(minLength: 0)
+                }
+                .font(Typography.secondary)
+                .frame(minHeight: 28)
+                .contentShape(.rect)
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Dotted(lead.text, String(localized: "设置")).spoken)
+            .accessibilityAddTraits(.isButton)
+            CueSwitch(model: model, here: nil)
+                .disabled(!model.isOn && (settings.gate(services).waitingReason != nil || settings.hosts(here: nil).isEmpty))
+                .opacity(workspace.cue.hostID == nil ? 0 : 1)
+                .accessibilityHidden(workspace.cue.hostID == nil)
+        }
+        .animation(Motion.fade, value: lead.text)
+    }
+
+    private var lead: Lead {
         let cue = workspace.cue
+        if cue.hostID != nil, let failure = model.failure { return .problem(failure, failed: true) }
         let host = cue.hostName ?? MacAgents.unnamed
-        guard let away = cue.presence.line(host: host, ranBefore: cue.hostID != nil) else { return String(localized: "在「\(host)」上运行") }
-        return cue.now.ledger.isEmpty ? nil : away
+        let settings = Lead.settings(String(localized: "\(cue.name) 的设置"))
+        switch cue.presence {
+        case .disabled: return settings
+        case .asleep, .unreachable:
+            guard !cue.now.ledger.isEmpty, let why = cue.presence.line(host: host, ranBefore: true) else { return settings }
+            return .problem(why, failed: cue.presence.isUnreachable)
+        case .unconfirmed, .idle, .sending, .working: return .host(String(localized: "在「\(host)」上运行"))
+        }
+    }
+}
+
+private extension CueHostLine.Lead {
+    var text: String {
+        switch self {
+        case .host(let text), .settings(let text), .problem(let text, _): text
+        }
+    }
+
+    var icon: Icon {
+        if case .settings = self { .settings } else { .mac }
+    }
+
+    var failed: Bool {
+        if case .problem(_, failed: true) = self { true } else { false }
     }
 }
 
@@ -234,9 +274,9 @@ private struct CueHostLine: View {
 /// （`CueHostMenu`），选一台就在那台启用、面板留着，启用了这一块换成大脑。启用中转圈，没写成的原因写在下面；
 /// 还没和 iCloud 对过时只写在等什么，还没有哪台 Mac 写下过自己时写先去 Mac 上打开、同步不通时写同步那一行的标题（`CueSettings.noHost`）。
 private struct CueHostPick: View {
+    let model: CueSettingsModel
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var model = CueSettingsModel()
 
     private static var title: String { String(localized: "选在哪台 Mac 上运行") }
 
@@ -267,7 +307,6 @@ private struct CueHostPick: View {
                 Text(failure).font(Typography.meta).foregroundStyle(palette.failure).multilineTextAlignment(.center).lineLimit(2)
             }
         }
-        .cueSettings(model)
     }
 }
 #endif

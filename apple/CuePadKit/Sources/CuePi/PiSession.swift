@@ -246,7 +246,7 @@ extension PiBridgeError: ShownError {
         case .rejected("unconfirmed_turn"): "当前轮次的来源尚未确认，Cue 没有打断"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
-        case .unknownModel(let agent): "这台 Mac 上的 \(agent.name) 里找不到这个模型"
+        case .unknownModel(let agent): "\(agent.name) 里没有这个模型"
         case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
         case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
         case .rejected("missing_argument"): "这个命令需要带上参数"
