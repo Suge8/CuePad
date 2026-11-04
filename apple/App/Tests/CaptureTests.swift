@@ -56,13 +56,11 @@ struct CaptureTests {
         let unfinished = queue.appending(path: "half-written", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: unfinished, withIntermediateDirectories: true)
         try png.write(to: unfinished.appending(path: "image-1.png"))
-        try CaptureQueue.enqueue(
-            ShareContent(text: "坏图", files: [try shared(png, named: "坏图.png")]), project: Project.defaultID, into: queue,
-            now: Date(timeIntervalSince1970: 1))
+        try CaptureQueue.enqueue(ShareContent(text: "坏图", files: [try shared(png, named: "坏图.png")]), project: Project.defaultID, into: queue)
         let unreadable = try #require(CaptureQueue.pending(in: queue).first?.files().first?.url)
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: unreadable.path) }
-        try CaptureQueue.enqueue(ShareContent(text: "好的"), project: Project.defaultID, into: queue, now: Date(timeIntervalSince1970: 2))
+        try CaptureQueue.enqueue(ShareContent(text: "好的"), project: Project.defaultID, into: queue)
 
         await services.drainCaptures()
 
