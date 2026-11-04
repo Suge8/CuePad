@@ -10,7 +10,7 @@ struct FilterBar: View {
 
     var body: some View {
         // 筛选在左、可横向滚动（窄面板里不被挤成省略号），结果数常驻右侧
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.group) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     SearchFilters(query: $query, targets: targets)

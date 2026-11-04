@@ -26,7 +26,7 @@ struct MainWindow: View {
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }
         .overlay { Prewarm().environment(workspace) }
-        .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
+        .overlay(alignment: .top) { NoticeView().padding(.top, Spacing.item) }
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .panelHost()
@@ -113,10 +113,10 @@ struct CaptureSlot: View {
     var body: some View {
         let bare = workspace.isLibraryReady && workspace.overlay == nil && workspace.presses.presented == nil
         if bare, workspace.presses.isSelecting {
-            SelectionBar().padding(.bottom, 16).transition(.opacity)
+            SelectionBar().padding(.bottom, Spacing.block).transition(.opacity)
         } else if bare, workspace.mainRoute.takesCapture {
             let searching = workspace.searching
-            CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
+            CaptureBar(project: workspace.currentProject).padding(.bottom, Spacing.block)
                 .opacity(searching ? 0 : 1)
                 .allowsHitTesting(!searching)
                 .accessibilityHidden(searching)

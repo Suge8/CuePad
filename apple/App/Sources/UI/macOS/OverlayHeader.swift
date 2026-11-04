@@ -59,7 +59,7 @@ struct OverlayTitle: View {
                 .font(Typography.toolbarPath)
             }
             .lineLimit(1)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Spacing.block)
             .frame(height: ControlMetrics.height)
             .glass(in: .capsule)
             .help(content?.help ?? "")

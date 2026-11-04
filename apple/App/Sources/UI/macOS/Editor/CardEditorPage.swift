@@ -54,7 +54,7 @@ struct CardEditorPage: View {
             if mounted, let data, let editing {
                 EditorBar(card: data.card, editing: editing)
                     .column()
-                    .padding(.bottom, 16)
+                    .padding(.bottom, Spacing.block)
                     .disabled(!shown)
                     .accessibilityHidden(!shown)
             }

@@ -115,7 +115,7 @@ private struct ShortcutKey: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.item) {
             Text("更改").font(Typography.meta).foregroundStyle(palette.ink3).opacity(lit && !recording ? 1 : 0)
             Keycap(text: text)
         }
@@ -219,7 +219,7 @@ private struct NotificationSection: View {
         @Bindable var settings = services.settings
         // 设置行的图标是墨色线条：形状与提示带的状态图形同一个
         return SettingRow(title: title, icon: Image(PiShown(status: SessionAlert.status(kind)).icon), help: help) {
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.group) {
                 Picker("提示音", selection: Binding(get: { settings.alerts[kind].sound }, set: { sound in
                     settings.alerts[kind].sound = sound
                     sound?.preview()
@@ -298,9 +298,9 @@ private struct ConflictsRow: View {
     private var versions: some View {
         SettingPopover(title: "选一份保留", width: 420) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Spacing.block) {
                     ForEach(services.conflicts, id: \.copy.id) { conflict in
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: Spacing.item) {
                             Text(conflict.original.title).font(Typography.bodyStrong)
                             ForEach(conflict.versions) { version($0, of: conflict) }
                         }
@@ -325,7 +325,7 @@ private struct ConflictsRow: View {
             Text(Outgoing.text(of: version.card)).font(Typography.secondary).foregroundStyle(palette.ink2)
                 .lineLimit(6).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(10)
+        .padding(Spacing.item)
         .paper(cornerRadius: Radius.block)
     }
 }

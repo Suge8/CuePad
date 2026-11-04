@@ -12,7 +12,7 @@ struct OlderList: View {
 
     var body: some View {
         let total = groups.reduce(0) { $0 + $1.cards.count }
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: Spacing.page) {
             SectionHeader("更早", count: total).id(ScrollAnchor.older)
             let titled = OlderGroup.needsTitles(in: groups)
             ForEach(groups, id: \.period) { group in
@@ -29,7 +29,7 @@ struct OlderList: View {
             Spacer()
             Text("\(group.cards.count) 条").font(Typography.meta).foregroundStyle(palette.ink3)
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, Spacing.tight)
         .contentShape(.rect)
         return VStack(alignment: .leading, spacing: 6) {
             if group.isMonth {
@@ -91,7 +91,7 @@ private struct OlderRowLine: View {
 
     var body: some View {
         let text = CardText(card.body)
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.item) {
             RowGlyph(attached: !text.attachments.isEmpty, pinned: pinned)
             Text(text.label)
                 .font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
@@ -102,9 +102,9 @@ private struct OlderRowLine: View {
             Text(DateLabel.short(card.modifiedAt)).monospacedDigit().frame(width: 64, alignment: .trailing)
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
-        .padding(.horizontal, 12).frame(height: 38)
+        .padding(.horizontal, Spacing.inset).frame(height: 38)
         .contentShape(.rect)
-        .hoverReveal(when: !workspace.presses.isSelecting) { DeleteCardButton(card: card.id).padding(.horizontal, 8) }
+        .hoverReveal(when: !workspace.presses.isSelecting) { DeleteCardButton(card: card.id).padding(.horizontal, Spacing.item) }
         .row(selected: selected)
     }
 }

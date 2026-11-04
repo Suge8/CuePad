@@ -10,13 +10,13 @@ struct SetupLibraryStep: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             TidyFacts(tidies: library.automaticTidies, library: library)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12).padding(.vertical, 10)
+                .padding(.horizontal, Spacing.inset).padding(.vertical, Spacing.item)
                 .background(palette.paper, in: .rect(cornerRadius: Radius.block))
             if !library.selfManaged.isEmpty {
-                Text(verbatim: untouched).font(Typography.meta).foregroundStyle(palette.ink3).padding(.horizontal, 4)
+                Text(verbatim: untouched).font(Typography.meta).foregroundStyle(palette.ink3).padding(.horizontal, Spacing.tight)
             }
         }
     }

@@ -56,13 +56,13 @@ struct SetupPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             header.padding(.horizontal, 24).padding(.top, 24)
             // 不用 Form：浮层里的 Form 给开关报错位置、没有按下动作，读屏与辅助控制点不中（macOS 27 实测），这里按设置窗口的样子自己排
-            VStack(alignment: .leading, spacing: 12) { content }
+            VStack(alignment: .leading, spacing: Spacing.group) { content }
                 .font(Typography.body)
                 .labeledContentStyle(RowLayout())
                 .labelStyle(RowLabel())
                 .controlSize(.mini)
-                .padding(.horizontal, 20).padding(.vertical, 16)
-            footer.padding(.horizontal, 24).padding(.bottom, 20)
+                .padding(.horizontal, Spacing.panel).padding(.vertical, Spacing.block)
+            footer.padding(.horizontal, 24).padding(.bottom, Spacing.panel)
         }
         .frame(width: 520)
         .background(palette.desk)
@@ -78,12 +78,12 @@ struct SetupPanel: View {
 
     /// 标题说这一步做成什么；要启用 Cue 时下面一句说它是什么（第一次打开的人只认得 Agent）。
     private var header: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .center, spacing: Spacing.block) {
             Image(Mascot.hello.rawValue).resizable().scaledToFit().frame(width: 64, height: 64)
                 .scaleEffect(shown || reduceMotion ? 1 : 0.9)
                 .opacity(shown ? 1 : 0)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
                 Text(tidying != nil ? "把技能与规则收到一处" : setupCue == .none ? "接入 Agent" : "启用 \(cueName)")
                     .font(Typography.heading).foregroundStyle(palette.ink)
                 if tidying != nil {
@@ -102,7 +102,7 @@ struct SetupPanel: View {
         } else {
             if setupCue == .needsAgent {
                 Text(logsInFirst ? "先登录好其中一家" : "先装好其中一家").font(Typography.secondary).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, Spacing.tight)
             }
             // Agent 那几行与 Cue 那一行分两组：先定接哪几家，再是启用这一步
             if !rows.isEmpty { group { ForEach(rows) { row($0) } } }
@@ -117,8 +117,8 @@ struct SetupPanel: View {
 
     /// 一行一句的提示（检测中、都已接入）：纸色底。
     private func note(@ViewBuilder _ content: () -> some View) -> some View {
-        HStack(spacing: 8) { content() }.foregroundStyle(palette.ink2)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 9)
+        HStack(spacing: Spacing.item) { content() }.foregroundStyle(palette.ink2)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Spacing.inset).padding(.vertical, 9)
             .background(palette.paper, in: .rect(cornerRadius: Radius.block))
     }
 
@@ -212,7 +212,7 @@ struct SetupPanel: View {
     }
 
     private var footer: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: Spacing.group) {
             Text(tidying != nil ? "做完能撤销；原来的那些进废纸篓" : "可在设置里改").font(Typography.meta).foregroundStyle(palette.ink3)
             Spacer(minLength: 8)
             if let tidying {
@@ -271,7 +271,7 @@ struct SetupPanel: View {
         VStack(spacing: 0) {
             Group(subviews: rows()) { subviews in
                 ForEach(subviews) { row in
-                    row.padding(.horizontal, 12).padding(.vertical, 9)
+                    row.padding(.horizontal, Spacing.inset).padding(.vertical, 9)
                 }
             }
         }
@@ -282,7 +282,7 @@ struct SetupPanel: View {
 /// 设置行（`SettingRow`）在 Form 外的排法，同 Form 里：名称在左、控件靠右。
 private struct RowLayout: LabeledContentStyle {
     func makeBody(configuration: Configuration) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: Spacing.group) {
             configuration.label
             Spacer(minLength: 0)
             configuration.content
@@ -293,7 +293,7 @@ private struct RowLayout: LabeledContentStyle {
 /// 同 Form 里：图标一列，名称与它下面的状态上下排。
 private struct RowLabel: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
             configuration.icon
             VStack(alignment: .leading, spacing: 2) { configuration.title }
         }

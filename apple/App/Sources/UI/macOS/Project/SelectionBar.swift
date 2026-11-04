@@ -10,7 +10,7 @@ struct SelectionBar: View {
     var body: some View {
         let presses = workspace.presses
         let count = presses.selected.count
-        HStack(spacing: 16) {
+        HStack(spacing: Spacing.block) {
             Text("已选 \(count) 条").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).monospacedDigit()
             Button("全选") { presses.selectAll() }
                 .keyboardShortcut("a")
@@ -21,7 +21,7 @@ struct SelectionBar: View {
             Button(role: .destructive) { delete() } label: {
                 Label("删除", icon: .trash)
                     .font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onFill)
-                    .padding(.horizontal, 14).frame(height: 32)
+                    .padding(.horizontal, Spacing.inset).frame(height: 32)
                     .background(palette.failureFill, in: .capsule)
                     .contentShape(.capsule)
             }
@@ -32,7 +32,7 @@ struct SelectionBar: View {
         .buttonStyle(PressStyle())
         .font(Typography.secondary)
         .foregroundStyle(palette.ink2)
-        .padding(.leading, 20).padding(.trailing, 8)
+        .padding(.leading, 20).padding(.trailing, Spacing.item)
         .frame(width: 460, height: 48)
         .glass(in: .capsule, interactive: true)
     }

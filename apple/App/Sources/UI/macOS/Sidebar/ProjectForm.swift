@@ -68,7 +68,7 @@ struct ProjectForm: View {
 
     /// 文件夹：没选时是"选择…"，选了写末段名（悬停看完整路径）并可清掉。
     private var folderRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.item) {
             Label("文件夹", icon: .folder).foregroundStyle(palette.ink2)
             Spacer()
             if let folder {

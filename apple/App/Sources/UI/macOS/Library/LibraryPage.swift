@@ -14,7 +14,7 @@ struct LibraryPage: View {
             if let library = workspace.library {
                 LibraryDeck(library: library)
             } else {
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.item) {
                     Spinner(.small)
                     Text("正在读这台 Mac 上的技能与规则…")
                 }
