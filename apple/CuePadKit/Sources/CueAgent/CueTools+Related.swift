@@ -11,7 +11,7 @@ extension CueTools {
     let text = said.trimmingCharacters(in: .whitespacesAndNewlines)
     guard text.count <= Self.questionLimit, text.contains(where: { "？?".contains($0) }) else { return [] }
     let words = Self.words(in: text)
-    return try await store.recallCue(words.joined(separator: " "), limit: Self.relatedLimit).replies.map { replyLine($0, around: words) }
+    return try await store.recallCueReplies(words.joined(separator: " "), limit: Self.relatedLimit).map { replyLine($0, around: words) }
   }
 
   /// 算短问句的上限（字）

@@ -7,9 +7,10 @@ import Foundation
 
 extension CueKeeper {
     /// 发一个信封让 Cue 醒来，这一轮的回复写成谁的按醒来原因定（`author(of:)`）；`said`、`images`、`delivering` 是随信封交出去的你的消息与回答，
+    /// `asked` 是其中他自己说的话（不含他对卡的回答：回答里转述的提问不是他在问），按它找会话回复（`CueTools.related`）；
     /// 发出去就记下送达。发不进去时按大脑出了问题处理，返回 false。
     func wakeUp(
-        _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, images: [PiImage] = [], delivering: [UUID] = []
+        _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, asked: String = "", images: [PiImage] = [], delivering: [UUID] = []
     ) async throws -> Bool {
         guard let shift else { return false }
         let author = chosen ?? Self.author(of: wake)
@@ -22,7 +23,7 @@ extension CueKeeper {
             changes: changes.due, recaps: try await tools.recaps(for: changes.due), board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
             wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said),
             quotas: try await store.accountQuotas(on: setup.recorder.hostID), retrying: retrying.map(Self.firstLine),
-            related: try await tools.related(to: said ?? "")))
+            related: try await tools.related(to: asked)))
         var parts = [envelope]
         if !shift.primed || renewDue(shift, now: now) {
             if shift.primed {

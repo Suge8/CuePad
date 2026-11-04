@@ -50,7 +50,8 @@ extension CueKeeper {
                     guard await interject(said, images: images, delivering: ids) else { return nil }
                     try await markDelivered(ids)
                 } else {
-                    _ = try await wakeUp(.message, said: said, images: images, delivering: ids)
+                    let asked = pending.filter { $0.author == .known(.you) }.map(\.text).joined(separator: "\n")
+                    _ = try await wakeUp(.message, said: said, asked: asked, images: images, delivering: ids)
                 }
                 return nil
             }
