@@ -64,7 +64,7 @@ struct ProjectScreen: View {
         VStack(alignment: .leading, spacing: 0) {
             if inColumn { ProjectIntroLine(project: project, intro: false).padding(.leading, 4).padding(.bottom, 12) }
             if data.project != nil { FocusCard(data: data, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
-            // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
+            // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角），段与段之间的距离各自写在段上
             LazyVStack(alignment: .leading, spacing: 0) {
                 if data.cards.isEmpty {
                     wall { EmptyWallTile() }
@@ -80,7 +80,7 @@ struct ProjectScreen: View {
                     .padding(.bottom, Self.sectionGap)
                 }
                 if !arrangement.wall.isEmpty {
-                    SectionHeader(title: "最近", count: arrangement.wall.count).padding(.bottom, Self.headerGap)
+                    SectionHeader("最近", count: arrangement.wall.count).padding(.bottom, Self.headerGap)
                     wall {
                         ForEach(arrangement.wall.compactMap { page.entries[$0] }) { entry in
                             CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
@@ -93,7 +93,7 @@ struct ProjectScreen: View {
                     let groups = data.olderGroups(arrangement)
                     let titled = OlderGroup.needsTitles(in: groups)
                     // 有组标题时由组标题自己与段标题隔开
-                    SectionHeader(title: "更早", count: arrangement.older.count).id(ScrollAnchor.older).padding(.bottom, titled ? 0 : Self.headerGap)
+                    SectionHeader("更早", count: arrangement.older.count).id(ScrollAnchor.older).padding(.bottom, titled ? 0 : Self.headerGap)
                     ForEach(groups, id: \.period) { group in
                         if titled { OlderGroupHeader(group: group, expanded: $expanded) }
                         if !group.isMonth || expanded.contains(group.period) {
@@ -195,7 +195,7 @@ private struct FocusCard: View {
             // 辅助字号下开合挪到"添加任务"下面一行：并排时输入框会被挤没
             let bar = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 0)) : AnyLayout(HStackLayout(spacing: 6))
             bar {
-                NewTaskLine(project: data.project?.id)
+                NewTaskField(project: data.project?.id)
                 Group {
                     if hidden > 0 { toggleButton(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
                     if hidden > 0, done > 0 { Dot() }
@@ -225,7 +225,7 @@ private struct FocusCard: View {
         Button { toggle(key) } label: {
             HStack(spacing: 4) {
                 Text(title)
-                Image(open ? .collapse : .expand).font(.caption.weight(.semibold)).accessibilityHidden(true)
+                Chevron(.expand).rotationEffect(.degrees(open ? 180 : 0))
             }
             .frame(minHeight: 44).contentShape(.rect)
         }

@@ -21,7 +21,7 @@ struct CardTileView: View {
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(text.label)
-                        .font(.subheadline.weight(.semibold))
+                        .font(Typography.secondary.weight(.semibold))
                         .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
                         .lineLimit(3)
                     Spacer(minLength: 0)
@@ -29,7 +29,7 @@ struct CardTileView: View {
                 }
                 if !text.preview.isEmpty {
                     Text(VariableText.styled(text.preview, palette))
-                        .font(.footnote).foregroundStyle(palette.ink2)
+                        .font(Typography.meta).foregroundStyle(palette.ink2)
                         .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
                 }
                 CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
@@ -65,12 +65,11 @@ struct OlderGroupHeader: View {
         } label: {
             HStack {
                 if collapsible {
-                    Image(.forward).font(.caption2.weight(.bold))
-                        .rotationEffect(.degrees(open ? 90 : 0)).accessibilityHidden(true)
+                    Chevron(.forward).rotationEffect(.degrees(open ? 90 : 0))
                 }
-                Text(OlderGroupTitle.text(group.period)).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
+                SectionHeader(Dotted(OlderGroupTitle.text(group.period)), level: .group)
                 Spacer()
-                if collapsible && !open { Text("\(group.cards.count) 条").font(.caption).foregroundStyle(palette.ink3) }
+                if collapsible && !open { Text("\(group.cards.count) 条").font(Typography.caption).foregroundStyle(palette.ink3) }
             }
             .padding(.horizontal, 4)
             // 能折起的月份要点得到；周标题只是标题，紧贴它下面那组
@@ -84,7 +83,7 @@ struct OlderGroupHeader: View {
     }
 }
 
-/// "更早"与置顶的灵感里的一行。每行是懒加载列表里独立的一项：同组的行拼成一张纸（首尾圆角、行间分隔线），
+/// "更早"与置顶的灵感里的一行。每行是懒加载列表里独立的一项：同组的行拼成一张纸（首尾圆角），
 /// 大项目几百张旧卡也只创建屏幕内的行。置顶的（`pinned`）行首一枚图钉，那一组不另起组名。同墙上的卡，能拖进任务或拖成新任务。
 struct OlderRow: View {
     let entry: CardEntry
@@ -106,24 +105,23 @@ struct OlderRow: View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Route.card(card.id)) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                if pinned { Image(.pin).font(.footnote).foregroundStyle(palette.ink2).accessibilityLabel("已置顶") }
+                if pinned { Image(.pin).font(Typography.meta).foregroundStyle(palette.ink2).accessibilityLabel("已置顶") }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(text.label).font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(text.label).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                     // 只有标题的也占着第二行：同一张纸上的行一样高
-                    Text(text.preview.isEmpty ? " " : text.preview).font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
+                    Text(text.preview.isEmpty ? " " : text.preview).font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 AgentDot(card: card.id).padding(.vertical, -8)
                 if let lastTarget { SentMark(target: lastTarget).font(Typography.caption2).foregroundStyle(palette.ink3) }
                 if !text.attachments.isEmpty { AttachmentMark(count: text.attachments.count).font(Typography.caption2).foregroundStyle(palette.ink3) }
-                Text(DateLabel.short(card.modifiedAt)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
+                Text(DateLabel.short(card.modifiedAt)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
             .contentShape(.rect)
         }
         .buttonStyle(.row)
         .background(palette.paper, in: .rect)
-        .overlay(alignment: .top) { if !isFirst { Divider().padding(.leading, 14) } }
         // 一组行拼成一张纸：每行按它在组里的位置裁角，也是它的行容器
         .clipShape(shape)
         .rowContainer(shape, flush: true)
