@@ -15,7 +15,7 @@ struct SpeakTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
     var files: AttachmentFiles { app.services.store.files }
-    private let boot = SystemBoot.id ?? "test-boot"
+    private let boot = TestBoot.id
 
     /// Cue 运行在 mac-cue（不是这台：发给它要经同步），那台醒着（它的在线记录同步来了）。
     private func enableCue() async throws {

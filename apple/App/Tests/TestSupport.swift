@@ -161,11 +161,9 @@ final class TestApp {
         return services
     }
 
-    /// 真实运行报告的前置事实：所属 Mac 在线、报告与 presence 关联同一次系统 boot。
-    /// 不在历史回填时调用；要演重启或离线的用例自行改 presence。
-    func runtimeRecorder(on host: String, boot: String = SystemBoot.id ?? "test-boot") async throws -> PiStateRecorder {
-        try await services.store.recordMacPresence(host: host, bootID: boot) { true }
-        return PiStateRecorder(store: services.store, hostID: host, minInterval: .zero, timing: timing, bootID: boot)
+    /// 那台 Mac 醒着、这次开机报的会话状态（`CueStore.runtimeRecorder`），写入不合并、走这个 App 的时钟。
+    func runtimeRecorder(on host: String, boot: String = TestBoot.id) async throws -> PiStateRecorder {
+        try await services.store.runtimeRecorder(on: host, boot: boot, minInterval: .zero, timing: timing)
     }
 
     /// 同步报来这台的库和 iCloud 对没对过一遍（`SyncState.reconciled`，启用 Cue 的前提），等服务读到。同步要已经起着

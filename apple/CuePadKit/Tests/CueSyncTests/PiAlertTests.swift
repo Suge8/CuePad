@@ -131,7 +131,7 @@ import Testing
   /// 他在 Mac 上开着那个会话时都不出通知，只静默叫醒手机（`PiPush.wake`）。
   @Test func sessionAlertsReachThePhoneOnlyWhenTheStopIsHis() async throws {
     let rig = try Rig()
-    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
+    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing, bootID: TestBoot.id)
     let session = PiSessionState.recordID(sessionID: "s1")
     func round(_ said: String? = nil) async throws {
       try await recorder.update(sessionID: "s1", state: .thinking, title: "登录页", turnStartedAt: .now)
@@ -146,7 +146,7 @@ import Testing
     try await round()
     #expect(try await flag(rig, session) == "settled")
     try await rig.simulatePush()
-    try await rig.store.recordMacPresence(host: "mac") { true }
+    try await rig.store.recordMacPresence(host: "mac", bootID: TestBoot.id) { true }
     try await rig.store.recordViewing(device: "mac", sessionIDs: ["s2", "s1"], cue: false)
     try await round()
     #expect(try await flag(rig, session) == "wake")
