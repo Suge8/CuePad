@@ -229,11 +229,11 @@ public final class ChildProcess: Sendable {
 
     // MARK: 停与等
 
-    /// 请它马上退出、不等：SIGTERM，宽限期过了还没走就 SIGKILL（自成进程组的整组结束）。之后等它退出的一定等得到。
-    public func end(grace: Duration = AgentTimeouts.endGrace) {
+    /// 请它马上退出、不等：SIGTERM，宽限 `AgentTimeouts.endGrace` 过了还没走就 SIGKILL（自成进程组的整组结束）。之后等它退出的一定等得到。
+    public func end() {
         Darwin.kill(pid, SIGTERM)
         Task { [self] in
-            if await !exited(within: grace) { kill() }
+            if await !exited(within: AgentTimeouts.endGrace) { kill() }
         }
     }
 
