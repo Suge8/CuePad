@@ -109,7 +109,7 @@ private struct PinnedShelfCard: View {
     /// 没写介绍也占着介绍那一行：置顶卡一样高，单出来的一张、一整行都没介绍的不比别的行矮。
     @ViewBuilder private var lines: some View {
         let intro = project.intro?.nonEmpty
-        Text(project.shownName).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
+        Text(project.shownName).font(Typography.title.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
         Text(intro ?? " ").font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
             .accessibilityHidden(intro == nil) // 合并：卡片合并成一个元素，直接写就藏得住；readerHidden 的容器会把介绍挡在合并外
     }
@@ -125,7 +125,7 @@ private struct ShelfRow: View {
     var body: some View {
         NavigationLink(value: Route.project(project.id)) {
             Label {
-                Text(project.shownName).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+                Text(project.shownName).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
             } icon: {
                 ProjectGlyph(project: project, size: glyph)
             }
@@ -154,33 +154,19 @@ private struct ShelfFooter: View {
     }
 }
 
-/// 末尾那一组的一行：图标、名字，行尾是同步到不了 Mac 的点（只有设置）、条数与箭头，点进一页。
-/// 图标与名字同项目行一样排（`Label`，图标槽同 `ProjectGlyph` 宽）：两组的图标列与字的起点在同一条竖线上。
+/// 末尾那一组的一行（`LinkRow`）：图标、名字，行尾是同步到不了 Mac 的点（只有设置）与箭头，点进一页。
 private struct ShelfLine: View {
     let route: Route
     let icon: Icon
     let title: String
     var alert: SyncSummary?
     @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 17
 
     var body: some View {
         NavigationLink(value: route) {
-            HStack(spacing: 12) {
-                Label {
-                    Text(title).foregroundStyle(palette.ink)
-                } icon: {
-                    IconImage(icon).font(.system(size: glyph)).foregroundStyle(palette.ink).frame(width: glyph + 6).accessibilityHidden(true)
-                }
-                Spacer(minLength: 8)
-                if let alert { Circle().fill(palette.color(alert.tone)).frame(width: 7, height: 7).accessibilityHidden(true) }
-                Image(.forward).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
-            }
-            .padding(.horizontal, 16).frame(minHeight: 48)
-            .contentShape(.rect)
+            LinkRow(title: Text(title), alert: alert.map { palette.color($0.tone) }) { IconImage(icon) }
         }
         .buttonStyle(.row)
-        .accessibilityElement(children: .combine)
         .accessibilityValue(alert?.title ?? "")
     }
 }

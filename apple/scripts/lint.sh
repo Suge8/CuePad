@@ -83,10 +83,8 @@ forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（
   'App/Sources/UI/Wide/WideDrop.swift' \
   'App/Sources/UI/iOS/Activity/NewSessionInput.swift' \
   'App/Sources/UI/iOS/Activity/SessionScreen.swift' \
-  'App/Sources/UI/iOS/Home/ShelfScreen.swift' \
   'App/Sources/UI/iOS/Library/LibraryScreen.swift' \
   'App/Sources/UI/iOS/NoticeBanner.swift' \
-  'App/Sources/UI/iOS/Project/CardMorePanel.swift' \
   'App/Sources/UI/iOS/Project/CardViews.swift' \
   'App/Sources/UI/iOS/Project/FolderCandidates.swift' \
   'App/Sources/UI/iOS/Project/ProjectScreen.swift' \
