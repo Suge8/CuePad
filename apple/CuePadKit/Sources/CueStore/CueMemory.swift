@@ -28,6 +28,14 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   /// 一条最多这么多字节（UTF-8），超了拒绝。
   public static let maxBytes = 280
 
+  /// 一直记着的（每个班次都在系统提示里）合计多少字节（各条正文的 UTF-8）的两条线：过了 `pinnedSoft` 后台整理（做梦）把它们收口，
+  /// 过了 `pinnedHard` 系统提示里叫 Cue 自己合并（`CueMemoryView.pinnedText`）；记忆页的用量也按这两条画。
+  public static let pinnedSoft = 4096
+  public static let pinnedHard = 8192
+
+  /// 这几条正文合计的字节数（一直记着的用量，同上两条线的口径）。
+  public static func bytes(_ lines: some Sequence<CueMemoryLine>) -> Int { lines.reduce(0) { $0 + $1.text.utf8.count } }
+
   /// 这段话能记成一条（去掉首尾空白后不空、不超过 `maxBytes` 字节）：界面输入时与写入时同一个判断。
   public static func fits(_ text: String) -> Bool {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -49,10 +57,12 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 记忆的版本读数：行数与最后改动（记、忘、钉、提醒），任一变了它就变。管理器订阅它，不必每次读整份记忆；摘要不在内：管理器不看摘要。
+/// 记忆的版本读数：行数与各行改动时刻之和。任一行变了它就变——记、忘、钉、提醒，本机写的或别的设备同步来的，迟到的也算：
+/// 那一行的改动时刻变了和就变（只看最晚那一刻会漏掉改动时刻早于它的同步）。管理器的对账与后台整理都订阅它，不必每次读整份记忆；
+/// 摘要不在内：写摘要不叫醒它们。
 public struct CueMemoryVersion: Equatable, Sendable {
   var lines: Int
-  var modifiedAt: Date?
+  var stamps: Int64
 }
 
 extension CueMemoryLine: Record {

@@ -1,3 +1,4 @@
+import CueText
 import CueStore
 import SwiftUI
 
@@ -114,7 +115,7 @@ struct CueSays: View {
 
     /// 标题行里的行内记号（粗体、代码、链接）照样认，不露出星号与反引号。
     private static func inline(_ line: String) -> AttributedString {
-        (try? AttributedString(markdown: line, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(line)
+        AttributedString(inlineMarkdown: line)
     }
 
     private static func isMarkup(_ line: String) -> Bool {

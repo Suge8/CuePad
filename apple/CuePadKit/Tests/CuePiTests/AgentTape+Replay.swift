@@ -135,10 +135,11 @@ extension AgentTape {
 
     /// CuePad 经不同的通道读 Agent（标准输出、钩子、socket），各自异步处理；回放一口气写完时，后写的通道可能先被处理，
     /// 与录制时的先后相反。换通道前等前一条被读走（替身的标准输出读空）、主线程上排着的处理跑完。
+    /// Agent 写的文件也是一条通道：测试看到它（如 MCP 替身的调用记录）就接着动手，那时 CuePad 要已读完它之前说的。
     private static let readByCuePad: Set<String> = ["stdout", "stderr", "exit", "recv", "close", "hook"]
 
     private static func needsBarrier(from previous: TapeEvent, to next: TapeEvent) -> Bool {
-        next.spontaneous == true || readByCuePad.contains(next.k) && previous.c != next.c
+        next.spontaneous == true || (readByCuePad.contains(next.k) || next.k == "file") && previous.c != next.c
     }
 
     private func barrier(after previous: TapeEvent, before next: TapeEvent) async {

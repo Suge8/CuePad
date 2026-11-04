@@ -151,6 +151,8 @@ struct OpenCodeEvent: Decodable, Sendable {
         var action: String?
         var resources: [String]?
         var requestID: String?
+        /// 收件箱里的一句（`session.inbox.*`）：`enqueued` 带着它（`item`），之后送进会话（`delivered`）、撤掉（`cancelled`）只带编号
+        var inboxID: String?
         var item: Item?
         /// 工具的结果（`session.tool.success`）：内容块
         var content: JSONValue?

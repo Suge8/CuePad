@@ -6,7 +6,7 @@ import os
 import Synchronization
 
 /// 这台 Mac 的在线记录（`MacPresence`，各端判断它在不在线、Cue 在不在值班的唯一信号）只由这里写，每次写完立即上传：
-/// 启动与醒来立即续期，醒着每 `MacPresence.renewal` 续一次；系统将睡眠与退出（`AppServices.beginShutdown`）时写成离线。
+/// 启动时 App 在第一次读库之前已写下在线（`CueStore.launchMac`），这里起来后与醒来时立即续期并上传，醒着每 `MacPresence.renewal` 续一次；系统将睡眠与退出（`AppServices.beginShutdown`）时写成离线。
 /// 将睡眠的通知同步处理：观察者不返回系统就不睡（至多 30 秒，见 `NSWorkspace.willSleepNotification` 的文档），离线这一条写完、传完
 /// （至多 `sleepUploadLimit`）才放行。异步处理时，合上盖子网络常在上传前就断了，别的设备要等期限过了才知道它不在。
 /// 醒没醒只看系统的将睡眠与醒来（醒来只在完整唤醒时发，睡眠中的维护唤醒不算），睡着时定时器到点不续。

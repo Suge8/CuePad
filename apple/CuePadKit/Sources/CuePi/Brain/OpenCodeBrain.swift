@@ -5,8 +5,8 @@ import Foundation
 
 /// OpenCode 当大脑：自己起一台 `opencode serve --stdio`（`OpenCodeClient.serve`，生命随标准输入，不复用用户的后台服务），
 /// 接口、事件流与一轮的解读都与接入同一份（`OpenCodeClient`、`OpenCodeEvent`、`OpenCodeTurn`，翻出的原样发出）。配置只经环境变量与内联配置，不改用户的文件：
-/// - 内联配置（`OPENCODE_CONFIG_CONTENT`，见 `inlineConfig`）定义智能体 `cue`：`system` 整份替换系统提示；权限先全部拒绝，再放行读文件的三样
-///   （`read`、`glob`、`grep`，连同工作目录外的路径）与 CuePad 的 MCP 工具；MCP 只开 CuePad 的 `cuepad`（策略拒绝 `mcp:*`、只放 `mcp:cuepad`，
+/// - 内联配置（`OPENCODE_CONFIG_CONTENT`，见 `inlineConfig`）定义智能体 `cue`：`system` 整份替换系统提示；权限先全部拒绝，再放行读文件
+///   （`read`，连同工作目录外的路径；Cue 只读文件核对证据，搜代码交给会话）与 CuePad 的 MCP 工具；MCP 只开 CuePad 的 `cuepad`（策略拒绝 `mcp:*`、只放 `mcp:cuepad`，
 ///   用户配置里的 MCP 服务不起），不走 codemode（工具直接给模型）；不留快照；
 /// - 不读工作目录的项目配置（`OPENCODE_DISABLE_PROJECT_CONFIG`）。用户全局的 AGENTS.md（OpenCode 配置目录里的）没有开关（只换配置目录
 ///   才挡得住，换了会丢用户配的提供方），写了就会进来——同 Codex 大脑对 `<CODEX_HOME>/AGENTS.md` 的取舍；
@@ -15,7 +15,7 @@ import Foundation
 ///   起大脑时先删掉这个工作目录里服务已不在的带标记会话（崩溃留下的；同时在跑的另一个大脑的不动）；
 /// - MCP 是起服务后异步连上的：起大脑时等 `/api/mcp` 报 `cuepad` 已连上（`mcp.status.changed` 时再看）、再等它的工具进了工具表
 ///   （没有信号可等，见 `mcpToolsSettle`），之前说的话模型看不到它的工具；
-/// - 说的话以 `steer` 交：空闲时开一轮，正忙时在下一个步骤边界并进这一轮；
+/// - 说的话以 `steer` 交：空闲时开一轮，正忙时在下一个步骤边界并进这一轮；带上发送标识（`metadata.cuepadDelivery`），哪一轮收下看它送进会话的那一刻（`OpenCodeTurn`）；
 /// - 模型写成 `提供方/模型`，换模型与强度（模型的 `variant`，按 `OpenCodeModel.variant(for:)` 夹取）先在 `/api/model` 里认：
 ///   服务对不存在的模型也回 204；能不能看图看模型的 `capabilities.input`；
 /// - 事件流断了（服务卡住）就结束进程，报成退出。
@@ -92,7 +92,7 @@ final class OpenCodeBrain: HostedSession {
 
     /// 内联配置，键名见 OpenCode v2 的 config.schema.json。
     private static func inlineConfig(_ config: CueBrainConfig) -> [String: Any] {
-        let allowed = ["read", "glob", "grep", "external_directory", "\(CueMCPServer.toolPrefix(on: .opencode))*"]
+        let allowed = ["read", "external_directory", "\(CueMCPServer.toolPrefix(on: .opencode))*"]
         let permissions = [["action": "*", "resource": "*", "effect": "deny"]] + allowed.map { ["action": $0, "resource": "*", "effect": "allow"] }
         return [
             "default_agent": agent, "snapshots": false,
@@ -183,12 +183,14 @@ final class OpenCodeBrain: HostedSession {
         self.level = level
     }
 
-    func send(_ text: String, images: [PiImage]) async throws {
+    func send(_ text: String, images: [PiImage], id: UUID) async throws {
         guard let client, let sessionID else { throw HostedSessionError.notRunning }
         struct File: Encodable { var uri: String }
-        struct Prompt: Encodable { var text: String; var files: [File]; var delivery = "steer" }
+        struct Metadata: Encodable { var cuepadDelivery: String }
+        struct Prompt: Encodable { var text: String; var files: [File]; var metadata: Metadata; var delivery = "steer" }
         let files = images.map { File(uri: "data:\($0.mimeType);base64,\($0.data.base64EncodedString())") }
-        try await client.call("POST", "/api/session/\(sessionID)/prompt", directory: directory, body: Prompt(text: text, files: files))
+        let prompt = Prompt(text: text, files: files, metadata: Metadata(cuepadDelivery: id.uuidString))
+        try await client.call("POST", "/api/session/\(sessionID)/prompt", directory: directory, body: prompt)
     }
 
     /// 先删会话再关输入；删不掉的（服务已卡住或退出）留给下次起大脑时清。

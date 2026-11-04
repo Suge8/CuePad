@@ -1,5 +1,5 @@
 /**
- * Cue 的工具（task、tell、memory）在 Pi 里就叫服务给的名字。Pi 内置的 MCP 支持把工具一律命名成 mcp__<服务>__<工具>，
+ * Cue 的工具（task、tell、memory、setup）在 Pi 里就叫服务给的名字。Pi 内置的 MCP 支持把工具一律命名成 mcp__<服务>__<工具>，
  * 而系统提示、工具说明与模型自己的习惯都写 memory recall、task start，模型常照着调不带前缀的名字，被 Pi 以
  * "Tool memory not found" 拒掉；所以不走内置的，由这个扩展当 MCP 客户端：加载时起 CuePad 的 MCP 服务（命令行是环境变量
  * CUEPAD_CUE_MCP 里的 JSON 数组，由 PiBrain 给，服务的其余环境随 Pi 进程继承），握手、取工具清单、照原名逐个登记，

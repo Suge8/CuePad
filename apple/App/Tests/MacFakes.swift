@@ -39,6 +39,8 @@ final class RecordingHost: AgentRuntime {
     var openingRejection: String?
     var openingGate: AsyncStream<Void>?
     var writesMessages = true
+    /// 按 Pi 会话 id 装到它每个假扩展上的行为：开出的与结束后被话唤醒重新连上的（`resume`，新进程）都装，会话换了进程照样那样回话
+    var behaviors: [String: (FakeExtension) -> Void] = [:]
     /// 接下来的几次唤醒依次以这些错误失败（如会话起得慢、没及时连上桥），用完照常唤醒
     var resumeFailures: [any Error] = []
     private let bridge: PiBridge
@@ -105,6 +107,7 @@ final class RecordingHost: AgentRuntime {
             }
             return ["ok": true]
         }
+        behaviors[sessionID]?(ext)
         try bridge.start()
         try ext.start()
         try await eventually("桥连上 \(sessionID)") { bridge.session(id: ext.id) != nil }
@@ -125,7 +128,8 @@ final class RecordingHost: AgentRuntime {
         var content: [[String: Any]] = [["type": "text", "text": command["text"] as? String ?? ""]]
         content += (command["images"] as? [[String: Any]] ?? []).map { $0.merging(["type": "image"]) { _, new in new } }
         let message: [String: Any] = [
-            "type": "message", "id": command["id"] as? String ?? UUID().uuidString, "timestamp": timestamp,
+            // 条目 id 像 Pi 那样每条不同：桥的命令 id 按连接从 c1 数起，唤醒后的新进程会与先前写下的条目撞上
+            "type": "message", "id": UUID().uuidString, "timestamp": timestamp,
             "message": ["role": "user", "content": content, "cuepadDelivery": command["deliveryId"] as? String ?? ""],
         ]
         let handle = try FileHandle(forWritingTo: file)
@@ -212,5 +216,10 @@ final class RecordingCueNotifier: CueNotifying {
     private(set) var posted: [(title: String, body: String)] = []
 
     func post(title: String, body: String) async { posted.append((title, body)) }
+}
+
+extension AppServices {
+    /// 演 App 重开：库与桥都留着，只把启动时那一步（对账、写下在线，`AppServices.launch`）再走一遍。
+    func reconcileLaunch() throws { try Self.launch(store, on: hostID, bridge: pi) }
 }
 #endif

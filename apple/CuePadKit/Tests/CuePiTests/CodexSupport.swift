@@ -32,6 +32,22 @@ func copyCodexAuth(to file: URL) throws {
     try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
 }
 
+/// 本机 Codex 的登录写成 Pi 的 openai-codex 凭据（同一个 ChatGPT 登录），放进临时 agent 目录的 auth.json。与 `copyCodexAuth` 同理永不刷新：
+/// 刷新令牌换成假值、到期时间写到很远，access token 真过期时请求失败，不碰用户那份。
+func writePiCodexAuth(into agent: URL) throws {
+    let auth = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: realCodexAuth)) as? [String: Any])
+    let tokens = try #require(auth["tokens"] as? [String: Any])
+    AgentTape.current?.secret(tokens: tokens)
+    let credential: [String: Any] = [
+        "type": "oauth", "access": try #require(tokens["access_token"] as? String), "refresh": "cuepad-test-no-refresh",
+        "expires": Date.distantFuture.timeIntervalSince1970 * 1000, "accountId": try #require(tokens["account_id"] as? String),
+    ]
+    try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
+    let file = agent.appending(path: "auth.json")
+    try JSONSerialization.data(withJSONObject: ["openai-codex": credential]).write(to: file, options: .atomic)
+    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+}
+
 /// 一张 64×64 的 sRGB 纯色 PNG（1×1 的图、设备色彩空间里的纯红，模型有时说成别的颜色）。
 func solidPNG(red: CGFloat, green: CGFloat, blue: CGFloat) throws -> Data {
     let sRGB = try #require(CGColorSpace(name: CGColorSpace.sRGB))

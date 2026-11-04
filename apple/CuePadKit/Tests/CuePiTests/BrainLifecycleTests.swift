@@ -41,7 +41,14 @@ struct BrainLifecycleTests {
 
     /// 运行时不理会输入关闭、也忽略 SIGTERM：stop() 在两个宽限期后结束整个进程组，报告退出。
     @Test func stopEndsARuntimeThatIgnoresEOFAndSIGTERM() async throws {
-        let (config, file) = try fakeRuntime(.claudeCode, "trap '' TERM\nexec sleep 300")
+        // 起好要等 CuePad 的工具服务连上（`mcp_status`）：答一句连上了，之后谁也不理
+        let (config, file) = try fakeRuntime(.claudeCode, #"""
+            trap '' TERM
+            read line
+            id=$(printf '%s' "$line" | sed -E 's/.*"request_id":"([^"]+)".*/\1/')
+            printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"mcpServers":[{"name":"cuepad","status":"connected"}]}}}\n' "$id"
+            exec sleep 300
+            """#)
         let brain = try await config.startBrain()
         do {
             // 脚本跑起来写下 pid 之前停它，测不到"忽略 SIGTERM"

@@ -20,7 +20,7 @@ struct SessionTaskTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
         try await enableCue()
-        try await services.resetPiState()  // Mac 启动
+        try services.reconcileLaunch()  // Mac 启动
         var session = CuePi.PiSession(
             id: "s1.100", sessionID: "s1", agent: .pi, sessionFile: URL(filePath: "/tmp/never-\(UUID().uuidString).jsonl"), pid: 100,
             cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: PiTerminal(),
@@ -38,7 +38,12 @@ struct SessionTaskTests {
         let cue = CueTools(store: store, wait: 0)
         let said = try #require(await cue.call("task", ["action": "say", "session": "修登录", "text": "补上登录的测试"]))
         #expect(!said.isError && said.text.contains("会话「修登录」"))
-        #expect(try await store.deliveryRequests(toSession: "s1").map(\.content) == ["补上登录的测试"])
+        // 有的模型把没用到的参数填成空值、把会话的编号写进 task：照样送到
+        let filled = try #require(await cue.call("task", ["action": "say", "task": "", "session": "修登录", "model": "", "effort": "", "text": "再跑一遍"]))
+        #expect(!filled.isError, "\(filled.text)")
+        let swapped = try #require(await cue.call("task", ["action": "say", "task": "s1", "text": "跑完告诉我"]))
+        #expect(!swapped.isError, "\(swapped.text)")
+        #expect(try await store.deliveryRequests(toSession: "s1").map(\.content) == ["补上登录的测试", "再跑一遍", "跑完告诉我"])
 
         let added = try #require(await cue.call("task", ["action": "add", "title": "修好登录", "session": "s1"]))
         #expect(!added.isError)
@@ -190,7 +195,7 @@ struct SessionTaskTests {
     @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
-        try await services.resetPiState()  // Mac 启动
+        try services.reconcileLaunch()  // Mac 启动
         try await rig.offersPi()
         let leaf = try await store.createTask("修登录", in: project.id)
         let workspace = Workspace(services: services)

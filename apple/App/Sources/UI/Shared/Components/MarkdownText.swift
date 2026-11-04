@@ -1,3 +1,4 @@
+import CueText
 import SwiftUI
 
 /// Pi 回答的 Markdown 渲染（块见 `MarkdownBlock`）：相邻的非表格块排成**一段**带属性的文字（`AttributedString`），交给 `Paragraphs`——
@@ -147,8 +148,7 @@ struct MarkdownText: View, Equatable {
     }
 
     static func inline(_ text: String, _ palette: Palette) -> AttributedString {
-        var string = (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-            ?? AttributedString(text)
+        var string = AttributedString(inlineMarkdown: text)
         for run in string.runs {
             if run.link != nil { string[run.range].underlineStyle = .single }
             if run.inlinePresentationIntent?.contains(.code) == true {

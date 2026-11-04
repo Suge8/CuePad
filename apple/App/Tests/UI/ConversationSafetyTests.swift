@@ -33,7 +33,7 @@ struct ConversationSafetyTests {
         ]))
 
         #expect(result.isError)
-        #expect(result.text.contains("来源还未确认"))
+        #expect(result.text.contains("查不到是谁开的"))
         #expect(!result.text.contains("他发起的一轮"))
         #expect(try await store.deliveryRequests().isEmpty)
         #expect(try await store.piMessages(of: session).map(\.text) == ["已经收到，但来源记录尚未到达"])

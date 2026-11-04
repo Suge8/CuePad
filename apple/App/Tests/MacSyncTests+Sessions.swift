@@ -170,7 +170,7 @@ extension MacSyncTests {
                 sessionID: "s1", messages: [said], recap: PiRecap(lastPrompt: "发版", lastReply: "发好了", answeredAt: turn.addingTimeInterval(60))))
             try await services.piStateRecorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: turn.addingTimeInterval(60), busySince: nil))
         }
-        try await services.resetPiState()  // 更新后的 App 启动对账
+        try services.reconcileLaunch()  // 更新后的 App 启动对账
         let mark = try await store.lastWrite()
         let consuming = Task { try await services.consumePiChanges(changes) }
         defer { consuming.cancel() }
@@ -190,8 +190,9 @@ extension MacSyncTests {
         let stored = try await eventually(store, { try $0.allPiSessionStates().first }, until: {
             $0?.state == .known(.settled) && abs(($0?.stateSince ?? .distantPast).timeIntervalSince(live.stateSince)) < 0.001
         })
-        #expect(try await !store.macOnline(TestApp.hostID))
-        #expect(stored?.runtimeState.known == nil)
+        // 重开时写下了在线（`AppServices.launch`）：接回的状态当场就是确认的
+        #expect(try await store.macOnline(TestApp.hostID))
+        #expect(stored?.runtimeState == .known(.settled))
         let woke = try await store.cueChanges(after: CueMarks(mark))
         #expect(woke.due.map { "\($0.kind)\($0.interrupted ? "（被打断）" : "") \($0.session?.sessionID ?? "")" } == (running ? ["settled s1"] : []))
     }

@@ -1,6 +1,6 @@
 # Cue 评测
 
-改 Cue 的系统提示、工具说明、信封或记忆前后各跑一遍，比同一套场景里真模型的做法。大脑缺省是这台 Mac 上 Claude Code 自己的登录，换 Pi、Codex 与换模型、强度见 `EvalBrain` 头注释；经 xcodebuild 传的环境变量要加 `TEST_RUNNER_` 前缀。
+改 Cue 的系统提示、工具说明、信封或记忆前后各跑一遍，比同一套场景里真模型的做法。大脑缺省是这台 Mac 上 Claude Code 自己的登录，换 Pi、Codex 与换模型、强度见 `EvalBrain` 头注释（Pi 没有 Anthropic 登录时，`_MODEL` 给 ~/.pi/agent/models.json 里的提供方，如 `magpie/claude/claude-sonnet-5-5`）；经 xcodebuild 传的环境变量要加 `TEST_RUNNER_` 前缀。
 
 ## 三套场景
 
@@ -19,6 +19,15 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER
 - 长程、多日考什么、怎么换新，在 `CueEvalLongTests`、`CueEvalDaysTests` 的头注释。只改了一两类行为时，短场景可用 `-only-testing:'CuePadTests/CueEvalTests/<函数名>()'` 只跑受影响的几个，结论照样看两遍以上。
 - 输出目录每个场景一个 .md（信封、工具调用、Cue 写的消息、判定与每一轮的开销）与一份 `<场景>.score.json`，这一遍的系统提示在 `system-prompt.md`。有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
 - 开销是大脑自报的 token 与费用；后台做梦的大脑输出另存 `usage/dream`，逐轮开销与换新只数 Cue 的。缓存跨场景命中一小时，先后跑的缓存读写会不同。
+
+## 换大脑
+
+Pi 额度用完、自动换到这台 Mac 上另一家真的 Agent 之后，那家能不能起来接着答（`CueEvalFailoverTests`）。换上的那家用 `_RUNTIME` 选，不能是 Pi：
+
+```bash
+TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=codex TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/failover CUEPAD_TEST_TIME_LIMIT=900 \
+  apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalFailoverTests
+```
 
 ## 问与打扰的专门场景
 
@@ -46,6 +55,7 @@ python3 apple/scripts/score.py /tmp/cue-eval/base-short-{1,2} /tmp/cue-eval/base
 ```
 
 - 判定的类别见 `CheckKind`，出错调用的分法见 `CallFailure`；前提这一遍没出现的判定记"不计"，不进通过数。
+- 判定按工具调用、库里的结果、会话收到的命令（替他答了哪个选项看会话收到的作答）与消息字段判；只能读 Cue 写的字的几处收在 `EvalReading`，认法与边界在那里，改了认法先拿现有的 .md 重放一遍、看翻了哪些。
 - 打扰 = tell（不含 ask、撤回、放回）+ task leave（他收到"待回复"）+ 其他推送（管理器写的 urgent，如出错）；回他的话不算。
 - 回复与 tell 超两句按系统提示的上限数；他问进展的那一轮上限是两句与件数（非空的行）里大的那个。
 - 怎么看：先看组内差（同一设置几遍之间最大减最小），差值没超过它的不算改动的效果；再看翻转、组内不稳与每遍都没过的。改了判定的措辞，它在成绩单里就是另一条（按措辞认身份），改前改后各列一次。

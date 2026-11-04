@@ -11,7 +11,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 一句话没说过的会话（没留下会话文件）不进历史，CuePad 后台托管的会话闲置退出也不算结束（见 `PiStateRecorder.exited`）。
   case ended
   /// 做到一半被打断：手上还有活（在跑一轮、等你确认、子代理还在跑）时进程没了——崩溃、被杀，
-  /// 或 App 启动对账时发现它已经不在（`PiStateRecorder.exited`、`reset`）。与已结束一样只存在于记录里，会话再动起来时换成新状态；
+  /// 或 App 启动对账时发现它已经不在（`PiStateRecorder.exited`、`CueStore.launchMac`）。与已结束一样只存在于记录里，会话再动起来时换成新状态；
   /// 发话照常（Mac 在后台把它恢复起来再送达）。不进历史，留在"现在"等人接着做。
   case interrupted
 

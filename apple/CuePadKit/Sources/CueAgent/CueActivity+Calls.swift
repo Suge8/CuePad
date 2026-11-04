@@ -22,10 +22,10 @@ extension CueActivity {
   }
 
   /// Cue 自己的说法（`Tools.Item.target`，只进它的上下文 `CueView`）：跟它的工具名走，不跟按钮。`named` 是认出的对象（`Named.quoted`），
-  /// `board`：看的是看板（没指哪件活）。
-  static func cueWords(_ action: String?, _ named: String, board: Bool) -> String? {
+  /// `board`：看的是看板（没指哪件活）；`starts`：add 带了 start:true（建好就开工）。
+  static func cueWords(_ action: String?, _ named: String, board: Bool, starts: Bool) -> String? {
     switch action {
-    case "add": "建任务\(named)"
+    case "add": starts ? "建任务并开工\(named)" : "建任务\(named)"
     case "edit": "改\(named)"
     case "start": "开工\(named)"
     case "say": "对\(named)说"
@@ -60,7 +60,7 @@ extension CueActivity {
     return Touch(kind: kind, name: name, task: named.task, session: named.session)
   }
 
-  /// 正在用时没碰哪一处（`step` 为 nil）的那一句：看板、记忆、对你说，读文件类照会话里的写法"工具 · 目标"。
+  /// 正在用时没碰哪一处（`step` 为 nil）的那一句：看板、记忆、设置、对你说，读文件类照会话里的写法"工具 · 目标"。
   /// `tool`、`arguments` 是大脑报的（`TurnEvent.tool`：去掉前缀的小写名字与 JSON 原文）。
   public static func detail(tool: String, arguments: String) -> String {
     let args = Parsed(arguments)
@@ -80,6 +80,7 @@ extension CueActivity {
       case "remind": return "定时"
       default: return "用记忆"
       }
+    case "setup": return setupWords(args)
     case "bash": return line(tool, args.line("command"))
     case "grep", "find", "glob": return line(tool == "glob" ? "find" : tool, args.line("pattern"))
     default: return line(tool, args.path.map { URL(filePath: $0).lastPathComponent })
@@ -100,7 +101,7 @@ extension CueActivity {
     case "task":
       let action = args.line("action")
       // 收回不上经过：没有与之同名的按钮（`CueActivity.verb`），只进 Cue 自己的上下文
-      guard let words = cueWords(action, named.quoted, board: args.board) else { return item(.other, "task") }
+      guard let words = cueWords(action, named.quoted, board: args.board, starts: args.raw["start"] as? Bool == true) else { return item(.other, "task") }
       guard let kind = kind(action) else { return item(.other, words) }
       let place = action == "add" && !failed ? await named.added(args, store: store) : named
       return item(kind, action == "say" ? "\(words)：\(args.line("text") ?? "")" : words, at: place)
@@ -122,10 +123,25 @@ extension CueActivity {
       case "pin": return item(.other, (args.raw["pinned"] as? Bool) == false ? "一条记忆不再一直记着" : "一条记忆一直记着")
       default: return item(.other, "memory")
       }
+    case "setup": return item(args.line("action") == "look" ? .read : .other, setupWords(args))
     case "bash": return item(.command, args.line("command") ?? tool)
     case "grep", "find", "glob": return item(.search, args.line("pattern") ?? tool)
     case "read": return item(.read, args.path.map { URL(filePath: $0).lastPathComponent } ?? tool)
     default: return item(.other, tool)
+    }
+  }
+
+  /// setup 的一次调用（正在用时那一句与经过里那一条同一句）："看设置 · quota""改大脑：agent=codex""建项目「官网」"。
+  static func setupWords(_ args: Parsed) -> String {
+    switch args.line("action") {
+    case "look": return "看设置" + (args.line("part").map { PiSessionState.detailSeparator + $0 } ?? "")
+    case "set":
+      let changed = ["agent", "model", "effort", "name"].compactMap { key in args.line(key).map { "\(key)=\($0)" } }
+        + [(args.raw["fast"] as? Bool).map { "fast=\($0)" }].compactMap(\.self)
+      return "改大脑" + (changed.isEmpty ? "" : "：" + changed.joined(separator: " "))
+    case "project": return ((args.raw["new"] as? Bool) == true ? "建项目" : "改项目") + "「\(args.line("project") ?? "")」"
+    case "tidy": return "整理技能与规则"
+    default: return "用设置"
     }
   }
 
@@ -144,22 +160,18 @@ extension CueActivity {
       self.name = name
     }
 
-    /// 开始时认：add 要建的那件还没有，只照标题叫它（按标题去找会认成同名的旧任务，比如早做完的那件）。
+    /// 开始时认，与工具同一个认法（`CueTools.place`）：add 要建的那件还没有，只照标题叫它（按标题去找会认成同名的旧任务，比如早做完的那件）。
     init(_ args: Parsed, tool: String, store: CueStore) async {
-      let tools = CueTools(store: store)
-      var task: Card?, found: PiSessionState?, sessionRef: String?
-      if let ref = args.line("task") {
-        task = try? await tools.task(ref)
-      } else if let session = args.line("session") {
-        switch try? await tools.sessionRef(session) {
-        case .session(let state): found = state
-        case .task(let card): task = card
-        case nil: sessionRef = session
-        }
+      var task: Card?, found: PiSessionState?
+      switch try? await CueTools(store: store).place(Args(args.raw)) {
+      case .session(let state): found = state
+      case .task(let card): task = card
+      case nil: break
       }
       self.task = task?.id
       session = found?.id
-      name = task?.heading ?? args.line("task") ?? args.line("title") ?? found?.title ?? sessionRef
+      let written = args.line("task") ?? args.line("session")
+      name = task?.heading ?? (found == nil ? args.line("task") : nil) ?? args.line("title") ?? found?.title ?? written
     }
 
     /// add 做成后它建的那件，或认作同一件、没再建的那件（`CueTools.openTopTasks`）：没做完的同名顶层任务里后建的；会话照开始时认的。
@@ -175,7 +187,7 @@ extension CueActivity {
   struct Parsed {
     let raw: [String: Any]
 
-    init(_ arguments: String) { raw = (try? JSONSerialization.jsonObject(with: Data(arguments.utf8))) as? [String: Any] ?? [:] }
+    init(_ arguments: String) { raw = Args.given((try? JSONSerialization.jsonObject(with: Data(arguments.utf8))) as? [String: Any] ?? [:]) }
 
     func line(_ key: String) -> String? {
       (raw[key] as? String)?.split(whereSeparator: \.isNewline).first.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }

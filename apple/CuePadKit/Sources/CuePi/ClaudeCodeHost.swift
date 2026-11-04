@@ -9,7 +9,8 @@ import Foundation
 /// - Cue 的大脑（`init()` → `start`，`HostedSession`，见 +Brain）：不上桥，只产出事件流，启动参数与发话语义见那里。
 ///
 /// 一轮的起止、工具、上下文、正在说的话都在这里判一次，从同一处交给两边：事件（`emit`，大脑的事件流）与桥上的事实（`facts`、草稿、上下文）。
-/// - 一轮从发出话或它开始请求模型（`ClaudeStream.requestsModel`）起，到 `result` 止，被停下的照常结束、不算出错；
+/// - 一轮从发出话、它收下带标识的话（`command_lifecycle` 的 `started`，报 `received`）或它开始请求模型（`ClaudeStream.requestsModel`）起，
+///   到 `result` 止，被停下的照常结束、不算出错；
 ///   没在跑时来的 `result`（大脑的 `/clear`、子代理交回时的空转）不报成一轮。在飞的工作见 `ClaudeHostedTasks`，正在说的话由 `ClaudeStream` 得出。
 /// - 上下文用量：最近一次调模型（模型回答带的 `usage`）的输入合计——`input_tokens` 加缓存的读与写，不含输出（同 `TurnEvent.context`）；
 ///   为 0 的是 Claude Code 合成的回答（报错等），不算。`result` 的用量是整轮累加的、停在模型回话之前时全是 0，不用；窗口从它的模型用量里来，只给桥。
@@ -175,6 +176,9 @@ final class ClaudeHostedSession: SessionLink {
             }
         case "result":
             result(message, at: now)
+        case "command_lifecycle" where message["state"]?.string == "started":
+            beginTurn()
+            if let id = message["command_uuid"]?.string.flatMap(UUID.init(uuidString:)) { emit(.received(id)) }
         default:
             return
         }

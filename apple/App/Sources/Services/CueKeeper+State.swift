@@ -9,10 +9,8 @@ extension CueKeeper {
         /// 正在起大脑；参数是此前连续失败了几次
         case starting(failures: Int)
         case running(Shift)
-        /// 第 n 次连续失败之后，等着重起
-        case restarting(Int)
-        /// 次数用完，停在起不来（原因）；你的下一条消息再试
-        case stuck(ShownText)
+        /// 第 n 次连续失败之后（原因），等着到 `at` 重起（`CueTiming.restartDelay`）；你发来消息、改了设置就马上再试。没有终态：快的重试用完转慢的，一直试下去
+        case restarting(failures: Int, reason: ShownText, at: Date)
     }
 
     /// 大脑用的那几项设置：起大脑时取自设置，就地换了模型、强度跟着改；与库里的设置不同就去对上。
@@ -27,17 +25,19 @@ extension CueKeeper {
             (name, runtime, model, effort, fast) = (profile.name, profile.runtime, profile.model, profile.effort?.known, profile.fast)
         }
 
-        /// 换成 `wanted` 要换大脑：名字在系统提示里、Agent 是另一个进程；fast 或回到运行时默认也要重开。
-        func needsNewBrain(for wanted: BrainSettings) -> Bool {
-            wanted.name != name || wanted.runtime != runtime || wanted.fast != fast || (wanted.model == nil && model != nil) || (wanted.effort == nil && effort != nil)
-        }
+        /// 换成 `wanted` 要换大脑（规则在 `CueProfile.needsNewBrain`）。
+        func needsNewBrain(for wanted: BrainSettings) -> Bool { wanted.profile.needsNewBrain(from: profile) }
+
+        private var profile: CueProfile { CueProfile(name: name, runtime: runtime, model: model, effort: effort.map(Open.known), fast: fast) }
     }
 
     struct Shift {
         let id: Int
         let brain: any HostedSession
-        /// 起它时系统提示里一直记着的那几条：换新时变了就换班次（`renewDue`）
+        /// 起它时系统提示里一直记着的那几条：变了就在下一轮前换班次（`outworn`）
         let pinned: [UUID]
+        /// 这个大脑此刻知道的一直记着的那几条（系统提示里的，或一轮里插给它的，`tellRules`）
+        var told: [UUID]
         /// 这个大脑的会话已经接上（第一条输入带过视图）；没有时下一次醒来带上
         var primed = false
         let startedAt = Date.now
@@ -48,6 +48,14 @@ extension CueKeeper {
         var lastRequest: Date?
         /// 起好之前连续失败的次数：一轮做完清零
         var failures: Int
+        /// 这一轮做完就换个班次（工具服务挂了、额度登录卡住换了 Agent）：下一句不再交给这个大脑
+        var retiring = false
+        /// 交给大脑、它还没报哪一轮接走（`TurnEvent.received`）的话：发送标识 → 其中你的消息与回答
+        var handed: [UUID: [UUID]] = [:]
+        /// 报了接走时没有在跑的一轮的你的话：接下来开始的那一轮接走的
+        var taken: [UUID] = []
+        /// 交出去、还没答上的你的话（接走它的一轮在跑、还没报接走、等着下一轮接）：大脑出问题时清掉送达、重起后重新交
+        var unanswered: [UUID] { (turn?.delivered ?? []) + handed.values.flatMap(\.self) + taken }
     }
 
     /// 跨班次、跨 App 重启的对账进度（本机，只给这台 Mac 的管理器用）。
@@ -56,12 +64,77 @@ extension CueKeeper {
         var marks: CueMarks?
         var patrolDay: String?
         var patrols = 0
-        /// 巡视过的那段空闲（从你上次说话起）
+        /// 巡视过的那段空闲（从你上次说话起）：冷巡视、热巡视各记各的，每段空闲各至多一次
         var patrolledIdle: Date?
+        var warmedIdle: Date?
         /// 已为哪一次启用（`CueProfile.enabledAt`）醒来过
         var greeted: Date?
         /// 他在场、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
         var held: [String: Date] = [:]
+        /// 交给大脑、还没答上的你的话与要退回还没退回成的（`Shift.unanswered` 与 `CueKeeper.owed` 合起来，`save` 时取）：上一次没收好尾（崩溃、强杀）时，
+        /// 下次值班一开始退回没送达、重新交（`run`），至少答一次。可选：旧的进度文件没有它
+        var unanswered: [UUID]?
+        /// 额度、登录卡住后的绕行（`Detour`）；没在绕行为 nil
+        var detour: Detour?
+    }
+
+    /// 额度、登录卡住后的绕行（规则在 `CueKeeper+Recover` 的头注释）：你设定的那家与它的模型、强度、fast（绕行前的设置），与这次卡住的几家。
+    nonisolated struct Detour: Codable, Equatable, Sendable {
+        struct Stuck: Codable, Equatable, Sendable {
+            /// 卡住的时刻：轮流从最近卡住的那家后面数
+            var at: Date
+            /// 卡住时读到的重置时刻；读不到（登录、额度读不出、起不来）为 nil
+            var resets: Date?
+        }
+
+        var runtime: AgentKind
+        var model: String?
+        var effort: PiThinkingLevel?
+        var fast: Bool
+        var stuck: [AgentKind: Stuck] = [:]
+
+        init(_ settings: BrainSettings, from runtime: AgentKind) {
+            (self.runtime, model, effort, fast) = (runtime, settings.model, settings.effort, settings.fast)
+        }
+
+        /// 这家此刻该能用：这次没卡住，或读到的重置时刻已过。
+        func open(_ kind: AgentKind, at now: Date) -> Bool {
+            guard let stuck = stuck[kind] else { return true }
+            return stuck.resets.map { $0 <= now } ?? false
+        }
+
+        /// 此刻该用哪家（唯一规则）：你设定的那家该能用就是它；此刻用的那家没卡住就留它；否则没卡过的那家，再否则重置已过的里最早的
+        /// （这几种 `open`：该能用，马上换）；都不是就轮到最近卡住的那家后面的一家（碰运气，只在慢速周期到点时换）。
+        /// 轮流与没卡过的按 Agent 的顺序从最近卡住的那家后面数。这台一家都没有为 nil。
+        func next(from current: AgentKind, among kinds: [AgentKind], at now: Date) -> (kind: AgentKind, open: Bool)? {
+            if kinds.contains(runtime), open(runtime, at: now) { return (runtime, true) }
+            if stuck[current] == nil, kinds.contains(current) { return (current, true) }
+            let last = stuck.max { $0.value.at < $1.value.at }?.key ?? current
+            let split = kinds.firstIndex(of: last).map { $0 + 1 } ?? 0
+            let order = kinds[split...] + kinds[..<split]
+            if let fresh = order.first(where: { stuck[$0] == nil }) { return (fresh, true) }
+            let passed = order.compactMap { kind in stuck[kind]?.resets.flatMap { $0 <= now ? (kind, $0) : nil } }
+            if let earliest = passed.min(by: { $0.1 < $1.1 }) { return (earliest.0, true) }
+            return order.first.map { ($0, false) }
+        }
+
+        /// 换到这家时设置写成什么：你设定的那家照原样；别的那家用它自己的默认模型（模型名各家不通用）、fast 关，强度照你设定的。
+        func apply(_ kind: AgentKind, to profile: inout CueProfile) {
+            let home = kind == runtime
+            profile.runtime = .known(kind)
+            (profile.model, profile.effort, profile.fast) = (home ? model : nil, effort.map(Open.known), home && fast)
+        }
+
+        /// 设置还是绕行写下的样子；不是就是你或 Cue 后来改了（后来的选择就是你设定的，不再绕行）。
+        func wrote(_ profile: CueProfile) -> Bool {
+            guard let kind = profile.runtime.known else { return false }
+            var written = profile
+            apply(kind, to: &written)
+            return written == profile
+        }
+
+        /// 下一个还没到的重置时刻：到点时对一次账，该能用的那家马上换过去（`CueKeeper.alarm`）。
+        func nextReset(after now: Date) -> Date? { stuck.values.compactMap(\.resets).filter { $0 > now }.min() }
     }
 
     struct Turn {
@@ -71,7 +144,7 @@ extension CueKeeper {
         var round: CueRound
         /// Cue 自己醒来（不是你发来消息）的这一轮为什么醒（出错要退避、重试同一次醒来）；你发起的为 nil
         var selfStarted: CueWake?
-        /// 这一轮里交出去的你的消息与回答：大脑中途退出时清掉送达。Cue 自己醒来的一轮里有它，就是中途插进了你的话
+        /// 这一轮接走的你的消息与回答（大脑报的，`TurnEvent.received`）。Cue 自己醒来的一轮里有它，就是中途插进了你的话
         var delivered: [UUID] = []
         /// 大脑此刻正在说的话：做完时还留着的就是这一轮的回复
         var speaking: PiDraft?
@@ -81,6 +154,8 @@ extension CueKeeper {
         var held: [String: Date]?
         /// 会话停下叫醒的这一轮报给 Cue 的那几次停下（歇着、等回答、出错）：做完时还没给去处的 CuePad 替它留给他回（`CueKeeper.leaveUnattended`）
         var stops: [CueLeft] = []
+        /// 这一轮出错后换了 Agent：交出去的你的话退回、自己醒来的那次马上重来，都交给新的大脑
+        var replay = false
 
         /// 这一轮是在回答你：你发起的、中途插进了你的话，或写成 cue 的（中途插过你的话、出错后重试的那一轮）
         var answersYou: Bool {
@@ -92,17 +167,22 @@ extension CueKeeper {
         var writesReply: Bool { answersYou || selfStarted == .enabled }
     }
 
-    /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（写入序号大于 `latest`，或在 `since` 之后才到的等子代理停住）。
+    /// 失败轮次的重试进度：普通自发失败只重试一次，可被新变化替代；持续重试保留原工作，直到承接它的一轮成功。
     struct Setback {
+        /// 出错时变化里最新的写入序号（等子代理停住按时刻认，不算）与出错的时刻：之后有更新的才是新变化
         var latest: Int?
         var since: Date
         var retryAt: Date?
+        /// 额度、登录阻塞的工作必须承接原轮次；新变化不能替代它，也不提前它。
+        var persistent: Bool
+        /// 持续重试已按慢速周期重来了几轮（`CueTiming.slowDelay`）
+        var stalls: Int
         var wake: CueWake
         var author: CueAuthor
     }
 
     nonisolated enum Input: Sendable {
-        case kick, retry, stop
+        case kick, stop
         case brain(Int, TurnEvent)
     }
 

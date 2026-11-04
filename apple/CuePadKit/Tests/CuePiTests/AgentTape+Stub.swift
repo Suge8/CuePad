@@ -60,7 +60,7 @@ extension AgentTape {
             chmod(inner.path, lstat(outer, &info) == 0 ? info.st_mode & 0o777 : 0o700)
             environment["CUEPAD_PI_SOCKET_DIR"] = inner.path
         }
-        // agent 目录在本用例临时目录里的 Pi 用的是假模型：录制时不联网（Pi 只认这个环境变量与 --offline，没有设置项）。大脑用用户自己的 agent 目录与真模型，不加
+        // agent 目录在本用例临时目录里的 Pi：录制时不取模型清单、不查版本（Pi 只认这个环境变量与 --offline，没有设置项；模型请求照常）
         if name == "pi", environment["PI_CODING_AGENT_DIR"]?.hasPrefix(state.withLock({ $0.temporaryRoot })) == true { environment["PI_OFFLINE"] = "1" }
         if name == "grok" { environment.merge(GrokModel.environment) { current, _ in current } }
         environment["PATH"] = ((environment["PATH"] ?? "").split(separator: ":").map(String.init).filter { $0 != bin.path }

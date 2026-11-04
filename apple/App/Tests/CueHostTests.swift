@@ -1,7 +1,7 @@
 #if os(macOS)
 import CueAgent
 import CuePi
-import CueStore
+@testable import CueStore
 import CueTestSupport
 import CueText
 import Foundation
@@ -87,6 +87,20 @@ struct CueHostTests {
         let sent = try #require(session.messages.last { !$0.images.isEmpty })
         #expect(sent.text.contains("看这张") && !sent.text.contains("cuepad://"))
         #expect(sent.images.map(\.data) == [pngData(shade: 0.5)])
+        await rig.stop()
+    }
+
+    /// 额度只看 Cue 运行的这台 Mac（额度各台各登各的）：别的 Mac 上吃紧的账号不写进信封，这台的照写。
+    @Test func 信封里的额度只写这台Mac的() async throws {
+        let rig = try await Rig()
+        let tight = [QuotaWindow(seconds: 18_000, used: 0.9, resetsAt: .now.addingTimeInterval(3600), isBinding: true)]
+        for (host, name) in [(TestApp.hostID, "这台"), ("mac-b", "那台")] {
+            try await rig.store.recordQuota(
+                QuotaReport(provider: "anthropic", windows: tight, complete: true, account: PiAccount(kind: .oauth, scope: name, name: name)), host: host)
+        }
+        try await rig.say("额度吃紧吗")
+        let answer = try await rig.message(.cue, containing: "额度吃紧：")
+        #expect(answer.text.contains("「这台」") && !answer.text.contains("「那台」"))
         await rig.stop()
     }
 

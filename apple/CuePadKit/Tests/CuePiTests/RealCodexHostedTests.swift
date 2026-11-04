@@ -45,7 +45,7 @@ struct RealCodexHostedTests {
             #expect(rig.bridge.session(id: id)?.displayName == "看图")
             // 斜杠命令换到没有的模型：提示点的是这个会话的 Agent
             let unknown = await #expect(throws: PiBridgeError.unknownModel(.codex)) { try await rig.bridge.command("/model no-such-model", in: id) }
-            #expect(unknown?.localizedDescription == "这台 Mac 上的 Codex 里找不到这个模型")
+            #expect(unknown?.localizedDescription == "Codex 里没有这个模型")
 
             try await rig.bridge.end(id)
             try await eventually("下线") { rig.bridge.session(id: id) == nil }

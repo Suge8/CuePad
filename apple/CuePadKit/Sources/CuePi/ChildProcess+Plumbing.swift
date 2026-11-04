@@ -6,11 +6,11 @@ import Synchronization
 /// 起进程的底层：经中转挂到 launchd 下、登记退出事件、读描述符。
 extension ChildProcess {
     /// 经中转起进程，返回它的 PID：`registered` 在它 exec 之前调（登记退出事件：已被 launchd 回收的进程登记不上，退出码就丢了）。
-    /// `actions` 里放好了标准输入输出与 3 号，中转用的 `goFD`、`reportFD` 在这里放；`newSession` 时连同它在新会话里，
-    /// 并留一个看守（`Placement.detached`），返回看守那根管道的写端。
+    /// `actions` 里放好了标准输入输出与 3 号（`drainsErrors` 时还有 `errorsFD`），中转用的 `goFD`、`reportFD` 在这里放；
+    /// `newSession` 时连同它在新会话里，并留一个看守（`Placement.detached`），返回看守那根管道的写端。
     static func spawn(
         _ executable: URL, _ arguments: [String], environment: [String: String], actions: inout posix_spawn_file_actions_t?,
-        newSession: Bool, registered: (pid_t) -> Void
+        newSession: Bool, drainsErrors: Bool, registered: (pid_t) -> Void
     ) async throws -> (pid: pid_t, hold: Int32?) {
         // 起不来的（不存在、不可执行）当场抛错，不等中转里的 exec 失败
         guard access(executable.path, X_OK) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .ENOENT) }
@@ -30,7 +30,7 @@ extension ChildProcess {
         posix_spawnattr_setsigmask(&attributes, &signals)
         let session: Int32 = newSession ? POSIX_SPAWN_SETSID : 0
         posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK | session))
-        let argv = ([shell, "-c", relay(environment, held: hold != nil), "sh", executable.path] + arguments).map { strdup($0) } + [nil]
+        let argv = ([shell, "-c", relay(environment, held: hold != nil, drainsErrors: drainsErrors), "sh", executable.path] + arguments).map { strdup($0) } + [nil]
         let envp = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
         defer { (argv + envp).forEach { free($0) } }
         var relayPID: pid_t = 0
@@ -57,6 +57,8 @@ extension ChildProcess {
     }
 
     private static let shell = "/bin/sh"
+    /// 脱离 App 的进程的标准错误管道读端，给看守认领后接着读（`relay`）
+    static let errorsFD: Int32 = 6
     private static let holdFD: Int32 = 7
     private static let goFD: Int32 = 8
     private static let reportFD: Int32 = 9
@@ -64,15 +66,18 @@ extension ChildProcess {
     /// 中转脚本：后台的子 shell 自成进程组（`set -m`：作业控制下也不把标准输入换成空设备、不忽略 SIGINT 与 SIGQUIT），
     /// 等 `goFD` 读到 EOF 再 exec 成要起的命令；`reportFD` 报出它的 PID，中转随即退出，它就挂到 launchd 下。
     /// shell 会给要起的命令补上 PWD 与 SHLVL（exec 时 SHLVL 去不掉）：要求的环境里没有的，经 env 去掉，环境与要求的一致。
-    /// `held` 时再留一个看守（`Placement.detached`）：`holdFD` 上读到认领的一行就退出，读到 EOF 就结束它（SIGTERM，宽限后 SIGKILL）；
-    /// 它已经不在（自己退了、`end()` 结束过）时 SIGTERM 失败，不再等宽限、补 SIGKILL。
-    private static func relay(_ environment: [String: String], held: Bool) -> String {
+    /// `held` 时再留一个看守（`Placement.detached`）：`holdFD` 上读到认领的一行就不再管它，读到 EOF 就结束它（SIGTERM，宽限后 SIGKILL）；
+    /// 它已经不在（自己退了、`end()` 结束过）时 SIGTERM 失败，不再等宽限、补 SIGKILL。`drainsErrors` 时认领后看守变成读走它标准错误的
+    /// `cat`（App 这时不再读，见 `ChildProcess.release()`），直到它与继承了标准错误的后代都退出：管道一直有读者，
+    /// 它写标准错误不会因 App 退出收到 EPIPE、写满后卡住，也不留越写越大的文件。
+    private static func relay(_ environment: [String: String], held: Bool, drainsErrors: Bool) -> String {
         let added = ["PWD", "SHLVL"].filter { environment[$0] == nil }
         let command = added.isEmpty ? #""$@""# : "/usr/bin/env " + added.map { "-u \($0) " }.joined() + #""$@""#
-        let start = "set -m; { read -r _ <&\(goFD); exec \(command) \(goFD)<&-; } \(reportFD)>&- \(holdFD)<&- & p=$!; "
+        let start = "set -m; { read -r _ <&\(goFD); exec \(command) \(goFD)<&-; } \(reportFD)>&- \(holdFD)<&- \(errorsFD)<&- & p=$!; "
         let grace = AgentTimeouts.endGrace.components.seconds
+        let drain = drainsErrors ? " && exec cat <&\(errorsFD) >/dev/null 3>&- \(holdFD)<&- \(errorsFD)<&-" : ""
         let guardian = held
-            ? "{ read -r _ <&\(holdFD) || { kill -TERM $p && { sleep \(grace); kill -KILL $p; }; }; } \(goFD)<&- \(reportFD)>&- 2>/dev/null & "
+            ? "{ read -r _ <&\(holdFD)\(drain) || { kill -TERM $p && { sleep \(grace); kill -KILL $p; }; }; } \(goFD)<&- \(reportFD)>&- 2>/dev/null & "
             : ""
         return start + guardian + "echo $p >&\(reportFD)"
     }
@@ -86,9 +91,10 @@ extension ChildProcess {
 
     /// 进程退出事件（带退出码）到了就记下、唤醒等着的，自成进程组的再结束组里剩下的。
     /// 事件源在进程退出前一直握着自己，与这个对象的生死无关（脱离 App 的 Pi 也由它记下退出）。
-    static func watchExit(_ pid: pid_t, group: Bool, shared: Shared) {
+    static func watchExit(_ pid: pid_t, group: Bool, shared: Shared, errors: ErrorTail?) {
         let finish: @Sendable (Int32) -> Void = { status in
             if group { killpg(pid, SIGKILL) }
+            errors?.flush()  // 等退出的取得到它退出前写的全部标准错误
             let waiters = shared.state.withLock { s in
                 s.status = status
                 defer { s.waiters = [:] }
@@ -138,14 +144,6 @@ extension ChildProcess {
             done()
         }
         source.resume()
-    }
-
-    static func scratchFile() throws -> Int32 {
-        var template = Array((NSTemporaryDirectory() + "cuepad-child-XXXXXX").utf8CString)
-        let fd = mkstemp(&template)
-        guard fd >= 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
-        template.withUnsafeBufferPointer { _ = unlink($0.baseAddress!) }
-        return try lifted(fd)
     }
 
     /// 要交给子进程的描述符在本进程这端挪到 `reportFD` 之上、设 FD_CLOEXEC：

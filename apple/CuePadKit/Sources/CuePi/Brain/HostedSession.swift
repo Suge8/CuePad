@@ -38,11 +38,14 @@ public struct CueBrainConfig: Sendable {
     }
 }
 
-/// 各家同形的事件。一轮：`turnStarted` →（`speaking`、`context`、`tool` / `toolDone`…）→ `failed`（出错时）→ `turnFinished`；
-/// 一轮进行中再 `send` 的话并进这一轮，不另起一轮。
+/// 各家同形的事件。一轮：`turnStarted` →（`received`、`speaking`、`context`、`tool` / `toolDone`…）→ `failed`（出错时）→ `turnFinished`；
+/// 一轮进行中再 `send` 的话多半并进这一轮，赶上这一轮收尾就另起一轮：哪一轮接走了它只看 `received`。
 /// 子代理与嵌套的工具调用、子代理说的话不报。
 public enum TurnEvent: Sendable, Equatable {
     case turnStarted
+    /// 交给 `send` 的那一句（参数是发送时给的标识）进了这一轮：各家按运行时报的那一刻报，报在接走它的那一轮里（插进去时在跑的那一轮
+    /// 可能正好收尾，接走它的是下一轮）；没有在跑的一轮时报的，是接下来开始的那一轮接走的。各家认的是哪个事件见各实现的头注释
+    case received(UUID)
     /// 正在说的话（`PiDraft`，规则同它）：这一轮此刻正在说的这条回答到目前为止的全文，随增量报（不节流），nil 是清掉。
     /// 转成工具调用、这一轮出错（都在 `turnFinished` 之前）、下一轮开始时清掉；正常说完的留着——
     /// `turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。各家都在协议层得出（逐字增量累积，每段说完时换成运行时给的定稿，不发增量也有），回答不另取一份
@@ -74,8 +77,8 @@ public protocol HostedSession: AnyObject {
     func start(_ config: CueBrainConfig) async throws
     /// 模型能看图（起好之后才算数）；看不了时别交图，交了各家也只是丢掉或报错
     var seesImages: Bool { get }
-    /// 说一句话（可带图，按各家原生的图片输入交）：空闲时开始一轮，正忙时插进当前这一轮
-    func send(_ text: String, images: [PiImage]) async throws
+    /// 说一句话（可带图，按各家原生的图片输入交）：空闲时开始一轮，正忙时插进当前这一轮；接走它的那一轮报 `received(id)`
+    func send(_ text: String, images: [PiImage], id: UUID) async throws
     /// 开新会话：清掉此前的对话，系统提示、工具、模型与强度不变，下一句从空白的对话说起。只在空闲时调
     func newSession() async throws
     /// 就地换模型（运行时自己的写法，同 `CueBrainConfig.model`）与思考强度：进程与上下文不动，下一次请求模型起生效（`seesImages` 随新模型）。

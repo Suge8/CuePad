@@ -166,7 +166,7 @@ struct MacSyncTests {
         try await mine.update(sessionID: "old", state: .settled, process: PiProcess(pid: 1, startedAt: 1))  // 记下的进程已不在
         try await other.update(sessionID: "theirs", state: .thinking)
 
-        try await services.resetPiState()
+        try services.reconcileLaunch()
 
         let states = Dictionary(uniqueKeysWithValues: try await services.store.allPiSessionStates().map { ($0.sessionID, $0.state) })
         #expect(states == ["old": .known(.ended), "theirs": .known(.thinking)])
@@ -182,7 +182,7 @@ struct MacSyncTests {
         let seen = try #require(try await services.store.allPiSessionStates().first { $0.sessionID == "s1" })
         services.settings.markSeen(seen, at: past.addingTimeInterval(1))
 
-        try await services.resetPiState()
+        try services.reconcileLaunch()
         let kept = try await rig.host.connect("s1", cwd: "/work/s1")
         let changed = try await rig.host.connect("s2", cwd: "/work/s2")
 

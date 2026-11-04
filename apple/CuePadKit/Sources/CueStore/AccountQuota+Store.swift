@@ -1,9 +1,10 @@
 import Foundation
 
 extension CueStore {
-  /// 各来源的账号额度；网关的请求能力记录仅在没有账号清单时显示。
-  public func accountQuotas() throws -> [AccountQuota] {
-    let all = try select(AccountQuota.self, orderBy: "modifiedAt DESC, id")
+  /// 各来源的账号额度；网关的请求能力记录仅在没有账号清单时显示。`host` 给了只要那台 Mac 观测到的：Cue 只看它运行的那台（额度是各台各登各的）。
+  public func accountQuotas(on host: String? = nil) throws -> [AccountQuota] {
+    let all = try host.map { try select(AccountQuota.self, where: "hostID = ?", [$0], orderBy: "modifiedAt DESC, id") }
+      ?? select(AccountQuota.self, orderBy: "modifiedAt DESC, id")
     let sources = Dictionary(grouping: all, by: { "\($0.hostID)/\($0.account?.source ?? "")" }).mapValues { peers in
       (hasCards: peers.contains { $0.account?.route != nil }, summary: peers.first { $0.account?.route == nil })
     }

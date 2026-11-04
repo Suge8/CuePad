@@ -10,6 +10,8 @@ import Foundation
 /// - 一轮结束：这一轮的 `turn/completed`（别的轮的不算：停下旧的一轮紧接着开新的一轮时，旧的结束可能晚到）。失败的先报 `failed`：
 ///   这一轮不再重试的 `error` 通知的原文，没有就用 `turn.error`。不看线程状态：失败时 systemError 先于原文与 `turn/completed` 到（实测 0.162.1）；
 /// - 工具是这一轮里的 `mcpToolCall` 与 `commandExecution` 项（命令记作 `bash`）；用量是最近一次请求的 `inputTokens`（已含缓存命中）与 `modelContextWindow`；
+/// - 收下交来的话（`received`）：它进这一轮的对话时的 `userMessage` 项，发话时给的 `clientUserMessageId` 是发送标识（UUID）的随项带回（`clientId`）。
+///   插话在这一轮下一次请求模型前进来；最后一次请求时插进的，这一轮接着再请求一次收下它（0.166.0 实测），不会落到下一轮；
 /// - 正在说的话是 `CodexRPC` 累积好的这个线程的（`onDraft`）：过程中的说明说完、停下与失败的一轮它已清掉，留下的只有给你看的回答；
 /// - 子线程（子代理）与线程之外的事不在这里：每条通知处理完原样转给 `onNotification`，服务端请求由开它的一方接（`CodexRPC.onRequest`）。
 @MainActor
@@ -110,6 +112,8 @@ final class CodexDriver {
             guard let item = params["item"] else { return }
             let id = item["id"]?.string ?? ""
             switch item["type"]?.string {
+            case "userMessage":
+                if let sent = item["clientId"]?.string.flatMap(UUID.init(uuidString:)) { onEvent(.received(sent)) }
             case "mcpToolCall":
                 onEvent(.tool(id: id, name: item["tool"]?.string ?? "?", arguments: String(decoding: (item["arguments"] ?? [:]).data, as: UTF8.self)))
             case "commandExecution":

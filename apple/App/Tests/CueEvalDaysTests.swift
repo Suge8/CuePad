@@ -55,12 +55,13 @@ private final class Days: EvalScript, Playable {
         await quietPeriod(Self.away)
         let image = try await say("他：问 CI 报告里的镜像（冷）", "之前查 CI 变慢那份报告里，runner 用的镜像是哪个版本？")
         let storage = try #require(history.storage), site = try #require(history.weekly)
+        // 先问理由、再让会话问：会话刚问过、Cue 刚答了，"上次为什么没选"就成了问刚才那一答，它解释的是自己刚才的选择（实测多数遍如此）
+        let why = try await say("他：问为什么没选 S3", "上次图片存储为什么没选 S3 来着？")
         let s3 = try await event("图片存储：问要不要迁 S3", on: storage) {
             try await storage.ask(
                 said: "图片压缩做完了：上传时转 WebP、按三档宽度出图，存储用量从 182 GB 降到 61 GB，单元测试 27 个全过。",
                 question: "存储要不要顺便迁到 S3？\nA. 迁到 S3（生命周期规则与 CloudFront 现成）\nB. 留在 R2", options: ["A", "B"], rig: rig)
         }
-        let why = try await say("他：问为什么没选 S3", "上次图片存储为什么没选 S3 来着？")
         await quietPeriod(Self.away)
         let csv = try await say("他：派一件写代码的活（冷）", "演示项目的看板加一个导出 CSV 的按钮，直接开工。")
         let language = try await say("他：问提交信息用什么语言", "提交信息现在用中文还是英文来着？")
@@ -136,7 +137,7 @@ private final class Days: EvalScript, Playable {
 
     private func judge(_ key: Points) async throws -> [Check] {
         for session in sessions { try await session.refresh(rig) }
-        let s3Said = says([key.s3], to: key.storage)
+        let s3Answers = answers([key.s3], to: key.storage)
         let reasons = try await replies(key.why).joined(separator: "\n")
         let csvTexts = CueEval.calls(in: rounds(key.csv), "task", ["add", "edit", "say", "start"]).map { Self.texts($0.args) }.joined(separator: "\n")
         let preference = csvTexts.contains(/中文/) ? "带了新的（中文）" : csvTexts.contains(/英文|English/) ? "带了旧的（英文）" : "没提"
@@ -157,12 +158,12 @@ private final class Days: EvalScript, Playable {
             try await recalled("9 天前报告里顺带的：镜像 node:20.11.1-bookworm", key.image, fabricated: { $0.contains(/node:?\s?\d|\d+\.\d+\.\d+/) }) {
                 $0.contains("20.11.1")
             },
-            Check(.memory, "5 天前否掉的：会话问迁不迁 S3，答留在 R2", s3Said.contains { $0.contains(/B|R2|不迁|留在/) } && !s3Said.contains { $0.trimmingCharacters(in: .whitespaces) == "A" }),
+            Check(.memory, "5 天前否掉的：会话问迁不迁 S3，答留在 R2", s3Answers == ["B"]),
             Check(.memory, "5 天前否掉的理由：贵、团队没人熟 AWS（答出至少一条）", reasons.contains(/贵|成本|费用|AWS|不熟|没人熟/), note: reasons.isEmpty ? "（没回）" : ""),
             Check(.memory, "1 天前改的偏好：派活时带的是新的（中文提交信息）", preference.hasPrefix("带了新的"), note: "——\(preference)"),
             // 引号里的是他从前的原话（"比之前「用英文写」的新"），不算答成英文
-            try await recalled("1 天前改的偏好：问起时答中文", key.language, fabricated: { Self.unquoted($0).contains("英文") }) {
-                Self.unquoted($0).contains("中文") && !Self.unquoted($0).contains(/现在.{0,6}英文|用英文写/)
+            try await recalled("1 天前改的偏好：问起时答中文", key.language, fabricated: { EvalReading.unquoted($0).contains("英文") }) {
+                EvalReading.unquoted($0).contains("中文") && !EvalReading.unquoted($0).contains(/现在.{0,6}英文|用英文写/)
             },
             try await recalled("补记后有块要合、他触发冷换新：问车位答 B2 层 117", key.parking, fabricated: { $0.contains(/[A-Z]?\d+ ?层|\d{2,3} ?号/) }) {
                 $0.contains("B2") && $0.contains("117")

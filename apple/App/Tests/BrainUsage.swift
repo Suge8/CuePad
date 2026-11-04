@@ -4,7 +4,8 @@ import Foundation
 /// 大脑一轮的开销，从大脑 stdout 的副本里读：
 /// - Claude Code：每轮的 result 事件里 `modelUsage`（各模型的 token）与 `total_cost_usd` 是这个进程到此的累计，
 ///   同一进程相邻两轮相减得这一轮（含 Claude Code 自己顺带的小模型请求）；
-/// - Pi：一轮从 `agent_start` 到 `agent_settled`，这一轮里每条助手消息 `message_end` 的 usage（input、cacheRead、cacheWrite、output、cost.total）相加。
+/// - Pi：一轮从 `agent_start` 到 `agent_settled`，这一轮里每条助手消息 `message_end` 的 usage（input、cacheRead、cacheWrite、output、cost.total）相加；
+/// - Codex：一轮到 `turn/completed` 为止，每次请求模型后 `thread/tokenUsage/updated` 的 `last` 相加（它的输入含缓存读，这里减掉）；不报费用，记 0。
 nonisolated struct BrainUsage {
     var input = 0, cacheRead = 0, cacheWrite = 0, output = 0
     var cost = 0.0
@@ -38,7 +39,7 @@ nonisolated struct BrainUsage {
     static func dreams(in root: URL) -> [Dream] {
         files(in: dreamDirectory(in: root)).map { file in
             let dates = try? file.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
-            let events = events(file), results = claude(events)
+            let events = events(file), results = claude(events) + codex(events)
             let usage = (results.isEmpty ? events.compactMap(assistant) : results).reduce(BrainUsage(), +)
             return Dream(started: dates?.creationDate ?? .distantPast, finished: dates?.contentModificationDate ?? .distantPast, usage: usage)
         }
@@ -48,19 +49,22 @@ nonisolated struct BrainUsage {
     static func rounds(in root: URL) -> [BrainUsage] {
         files(in: directory(in: root)).flatMap { file in
             let events = events(file)
-            return claude(events) + pi(events)
+            return claude(events) + pi(events) + codex(events)
         }
     }
 
-    /// 大脑在哪几轮开了新的对话（轮的序号同 `rounds`）：第一个进程之后每个进程的第一轮，和 Pi 回应过 new_session 之后的那一轮
+    /// 大脑在哪几轮开了新的对话（轮的序号同 `rounds`）：第一个进程之后每个进程的第一轮，和 Pi 回应过 new_session、Codex 开了第二个对话之后的那一轮
     static func renewed(in root: URL) -> [Int] {
         var index = 0, out: [Int] = []
         for (number, file) in files(in: directory(in: root)).enumerated() {
-            var fresh = number > 0
+            var fresh = number > 0, threads = 0
             for event in events(file) {
-                switch event["type"] as? String {
+                switch event["type"] as? String ?? event["method"] as? String {
                 case "response" where event["command"] as? String == "new_session": fresh = true
-                case "result", "agent_settled":
+                case "thread/started":
+                    threads += 1
+                    if threads > 1 { fresh = true }
+                case "result", "agent_settled", "turn/completed":
                     if fresh { out.append(index) }
                     fresh = false
                     index += 1
@@ -80,7 +84,7 @@ nonisolated struct BrainUsage {
     private static func events(_ file: URL) -> [[String: Any]] {
         ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n").compactMap { line -> [String: Any]? in
             guard line.contains(#""type":"result""#) || line.contains(#""type":"agent_"#) || line.contains(#""type":"message_end""#)
-                || line.contains(#""command":"new_session""#)
+                || line.contains(#""command":"new_session""#) || line.contains(/"method":"(turn\/completed|thread\/tokenUsage\/updated|thread\/started)"/)
             else { return nil }
             return (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any]
         }
@@ -112,6 +116,25 @@ nonisolated struct BrainUsage {
             case "agent_settled":
                 if let done = round { rounds.append(done) }
                 round = nil
+            default: break
+            }
+        }
+        return rounds
+    }
+
+    private static func codex(_ events: [[String: Any]]) -> [BrainUsage] {
+        var rounds: [BrainUsage] = [], round = BrainUsage()
+        for event in events {
+            switch event["method"] as? String {
+            case "thread/tokenUsage/updated":
+                guard let last = ((event["params"] as? [String: Any])?["tokenUsage"] as? [String: Any])?["last"] as? [String: Any] else { continue }
+                let cached = last["cachedInputTokens"] as? Int ?? 0
+                round = round + BrainUsage(
+                    input: (last["inputTokens"] as? Int ?? 0) - cached, cacheRead: cached, cacheWrite: last["cacheWriteInputTokens"] as? Int ?? 0,
+                    output: last["outputTokens"] as? Int ?? 0)
+            case "turn/completed":
+                rounds.append(round)
+                round = BrainUsage()
             default: break
             }
         }

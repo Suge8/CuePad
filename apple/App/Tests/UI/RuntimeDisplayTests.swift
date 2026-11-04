@@ -42,8 +42,12 @@ struct RuntimeDisplayTests {
         #expect(offline.agentCount == 0)
         #expect(offline.subagents == 0 && offline.tally.moving == 0 && offline.advancing == 3)
         #expect(offline.isLive && !offline.hasConfirmedActivity)
+        // 那台 Mac 没开：会话行、小组件与实时活动的每件一行都说哪台没开，不各说一遍状态未确认；在线期限到期推出来的那一份同样
+        let macOff = "「\(MacAgents.unnamed)」没开"
+        #expect(offline.items.count == 3 && offline.items.allSatisfy { $0.label == macOff }, "\(offline.items.map(\.label))")
+        #expect(snapshot.shown(at: snapshot.at + 601).items.allSatisfy { $0.label == macOff }, "\(snapshot.shown(at: snapshot.at + 601).items.map(\.label))")
         let board = try await TaskBoard.read(from: store)
-        #expect(board.advancing.allSatisfy { workspace.shown($0.agent!).status == .unknown })
+        #expect(board.advancing.allSatisfy { workspace.shown($0.agent!).status == .unknown(macOff: MacAgents.unnamed) })
         #expect(snapshot.shown(at: snapshot.at + 601).tally.moving == 0)
         #expect(snapshot.shown(at: snapshot.at + 601).isLive && !snapshot.shown(at: snapshot.at + 601).hasConfirmedActivity)
 
@@ -241,17 +245,16 @@ struct RuntimeDisplayTests {
             try await store.bindSession(id, to: task.id)
         }
         _ = app.relaunch()
-        try await app.services.resetPiState()
         #expect(identity.isRunning)
         let alive = try #require(try await store.piSessions(sessionIDs: ["alive"])["alive"]?.state)
         #expect(try await store.runtimeIsConfirmed(alive))
         #expect(alive.state == .known(.compacting))
         let unknown = try #require(try await store.piSessions(sessionIDs: ["unknown"])["unknown"]?.state)
         #expect(try await !store.runtimeIsConfirmed(unknown))
-        #expect(unknown.state == .known(.compacting) && workspace.shown(unknown, delivery: nil).status == .unknown)
+        #expect(unknown.state == .known(.compacting) && workspace.shown(unknown, delivery: nil).status == .unknown())
         try input.fileHandleForWriting.close()
         process.waitUntilExit()
-        try await app.services.resetPiState()
+        try app.services.reconcileLaunch()
         #expect(try await store.piSessions(sessionIDs: ["alive"])["alive"]?.state.state == .known(.interrupted))
     }
     #endif

@@ -36,14 +36,16 @@ import Testing
       try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", title: id, lastActivityAt: .now), host: host)
     }
 
-    try await recorder.reset { _ in false }
+    // App 重开：启动对账，之后是新的一个记录器
+    _ = try store.launchMac(host: host) { _ in false }
+    let reopened = self.recorder
     #expect(try await states()["terminal"]?.state == .known(.ended))
     #expect(try await states()["hosted"]?.state == .known(.settled))
 
     // 对账之后才连上桥的新会话（还没有会话文件）：记录器正在跟它，对账不删
-    try await recorder.update(sessionID: "live-new", state: .settled, title: "live-new", hosted: true)
+    try await reopened.update(sessionID: "live-new", state: .settled, title: "live-new", hosted: true)
     try await store.retainPiSessions(paths: ["/s/terminal.jsonl", "/s/hosted.jsonl"], agent: .pi, host: host)
-    try await recorder.dropUnindexedHosted(of: .pi)
+    try await reopened.dropUnindexedHosted(of: .pi)
     #expect(Set(try await states().keys) == ["terminal", "hosted", "live-new"], "没有会话文件的已结束与歇着的托管记录被清掉，有的与在线的留着")
   }
 }

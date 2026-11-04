@@ -18,7 +18,8 @@ import Foundation
 ///   `<CODEX_HOME>/AGENTS.md` 没有开关（只换配置目录才挡得住，换了会丢登录），用户写了就会进来；
 /// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
 /// - 模型与思考强度每轮随 `turn/start` 给（就地换就是改下一轮给的）；fast 随线程的 `serviceTier` 给，强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`）；
-/// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮。
+/// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮。发话都带发送标识（`clientUserMessageId`），
+///   哪一轮收下看它进对话时的 `userMessage` 项（`CodexDriver`）。
 @MainActor
 final class CodexBrain: HostedSession {
     /// 停用的功能：会写 Codex 自己的记忆与时间线（memories、chronicle），会跑用户配置的钩子（hooks，也就不会报给 CuePad 成一个会话），
@@ -93,18 +94,20 @@ final class CodexBrain: HostedSession {
         if let effort { level = effort }
     }
 
-    func send(_ text: String, images: [PiImage]) async throws {
+    /// 插进的话由服务按这一轮的编号收下（`expectedTurnId`）；这一轮刚好结束就开新的一轮。
+    func send(_ text: String, images: [PiImage], id: UUID) async throws {
         guard let rpc = driver.rpc, let thread = driver.thread else { throw HostedSessionError.notRunning }
-        let input = CodexRPC.input(text: text, images: images)
+        let input = CodexRPC.input(text: text, images: images), client: JSONValue = .string(id.uuidString)
         if let active = driver.turn {
             do {
-                try await rpc.call("turn/steer", ["threadId": .string(thread), "input": .array(input), "expectedTurnId": .string(active)])
+                let steer: JSONValue = ["threadId": .string(thread), "input": .array(input), "expectedTurnId": .string(active), "clientUserMessageId": client]
+                _ = try await rpc.call("turn/steer", steer)
                 return
             } catch CodexRPCError.server {
                 // 这一轮刚好结束：下面开新的一轮
             }
         }
-        var options: [String: JSONValue] = [:]
+        var options: [String: JSONValue] = ["clientUserMessageId": client]
         if let model {
             options["model"] = .string(model.id)
             if let level { options["effort"] = .string(CodexModel.effort(level.clamped(to: model.efforts))) }

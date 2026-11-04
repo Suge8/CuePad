@@ -12,8 +12,9 @@ import Testing
 /// 继承来的 ANTHROPIC_*、XDG_* 清掉，登录在外壳起进程时现取、只进它的环境：
 /// - Claude Code 用它自己存在钥匙串里的那条（`ClaudeLogin`），配置目录 `CLAUDE_CONFIG_DIR` 在临时目录（不碰 ~/.claude）；
 /// - Codex 的配置目录 `CODEX_HOME` 在临时目录，只拷进 ~/.codex/auth.json（同"陌生人第一次打开"：没有 config.toml）；
-/// - Pi 用 `ANTHROPIC_OAUTH_TOKEN`，从 ~/.pi/agent/auth.json 的 anthropic.access 只读地取。不拷 auth.json、不替它刷新：
-///   刷新会用掉一次性的刷新令牌，把用户挤下线；令牌过期就起不来，等他自己的 Pi 续上。`PI_CODING_AGENT_DIR` 在临时目录。
+/// - Pi 的配置目录 `PI_CODING_AGENT_DIR` 在临时目录。模型是 anthropic/ 开头的用 `ANTHROPIC_OAUTH_TOKEN`，从 ~/.pi/agent/auth.json 的 anthropic.access
+///   只读地取。不拷 auth.json、不替它刷新：刷新会用掉一次性的刷新令牌，把用户挤下线；令牌过期就起不来，等他自己的 Pi 续上。
+///   别的提供方（如 `magpie/claude/claude-sonnet-5-5`）只拷进 ~/.pi/agent/models.json：提供方的地址与密钥写在里面，不碰登录。
 /// 开销从评测这边取：外壳把大脑的 stdout 另存一份到 `usage` 目录（每个大脑进程一个文件，`BrainUsage` 读），
 /// 用 bash 的进程替换接 tee 再 exec，大脑仍是外壳这个进程，退出码与流都不变。后台整理记忆的一次性大脑（做梦）同走这个外壳，
 /// 认法是它的工具服务带 `--dream`（Pi 在环境变量 CUEPAD_CUE_MCP 里，Claude Code 在 --mcp-config 的参数里），输出另存到 `usage/dream`。
@@ -47,6 +48,9 @@ struct EvalBrain {
     /// Pi 的登录：用户的 Pi 存的那一份，只读
     private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
 
+    /// Pi 自定的提供方（非 Anthropic 的模型用）：用户的 Pi 那一份，拷进临时的配置目录
+    private static let piModels = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/models.json")
+
     /// 评测给 Pi 多加载的只读扩展：每次请求模型前记下系统提示首块是不是计费标识（在大脑自己的扩展之后加载，看到的是它们改过的），
     /// 证明请求走的是带 Claude 订阅计费标识的那条路；什么都不改。
     private static let billingLog = """
@@ -71,6 +75,11 @@ struct EvalBrain {
             executable = realPi
             let agent = root.appending(path: "pi-agent")
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
+            guard model.hasPrefix("anthropic/") else {
+                try FileManager.default.copyItem(at: Self.piModels, to: agent.appending(path: "models.json"))
+                login = "export PI_CODING_AGENT_DIR='\(agent.path)'"
+                break
+            }
             let auth = try #require(
                 (try? JSONSerialization.jsonObject(with: Data(contentsOf: Self.piAuth))) as? [String: Any], "这台 Mac 上的 Pi 没登录")["anthropic"] as? [String: Any]
             let expires = try #require(auth?["expires"] as? Double, "Pi 没有 Anthropic 的登录")

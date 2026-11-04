@@ -34,7 +34,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     /// 此刻没能送达的话有几句（`Speech.undelivered`，会话行同一个数）。
     func undelivered(at moment: Speech.Moment) -> Int { Speech.undelivered(deliveries, at: moment) }
 
-    /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因（到哪了按 `Speech`）。
+    /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值，是你换的、之后还没对它做别的才带上那一句（到哪了按 `Speech`）。
     /// 思考强度按显示的模型夹取（`PiThinkingLevel.clamped`），换了模型不会短暂显示新模型没有的档位。
     func config(at moment: Speech.Moment) -> PiConfigShown {
         let current = PiConfigShown(model: session?.model, thinking: session?.thinking?.known, fast: session?.fast, context: session?.context, pending: false, failure: nil)
@@ -49,7 +49,11 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         case .delivered: return current
         case .unconfirmed: return current
         case .failed(let failure):
-            return PiConfigShown(model: current.model, thinking: current.thinking, fast: current.fast, context: current.context, pending: false, failure: failure)
+            // 没换成只说给换的那个人、说到他对这个会话的下一个动作为止：Cue 换的由它看工具结果自己处理；之后又说了话、改了名，这句就过时了
+            guard !request.isFromCue, request.id == deliveries.last?.id else { return current }
+            let name = wanted.model.map { key in catalog?.models.first { $0.key == key }?.name ?? key.id } ?? wanted.thinking.map { String(localized: "思考 \($0.label)") }
+            let text = name.map { String(localized: "没换成 \($0)：\(failure.text)") } ?? String(localized: "没换成：\(failure.text)")
+            return PiConfigShown(model: current.model, thinking: current.thinking, fast: current.fast, context: current.context, pending: false, failure: text)
         }
     }
 
@@ -78,8 +82,8 @@ nonisolated struct PiConfigShown: Equatable {
     /// 上下文余量（会话记录上的，用量条显示；没有模型时为 nil）。
     var context: PiContextUsage?
     var pending: Bool
-    /// 最近一次明确没换成的原因（`Speech`：Mac 报的拒绝）。
-    var failure: Speech.Failure?
+    /// 你最近一次换模型、强度明确没换成：那一句（要换成什么与 Mac 报的原因，`SessionDigest.config`）。
+    var failure: String?
 }
 
 /// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的状态图形上（`PiStateGlyph`，与状态标同一个样子：问题是赭黄问号圆、出错是胭脂圆叹号），正文中性；

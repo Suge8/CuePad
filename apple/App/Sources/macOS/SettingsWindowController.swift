@@ -22,6 +22,9 @@ final class SettingsWindowController {
         let (window, tabs) = built ?? build(showing: pane ?? .general)
         if let pane { tabs.selectedTabViewItemIndex = Self.index(pane) }
         DebugHooks.present(window)
+        // 窗口第一次排出来时 AppKit 把焦点交给键盘顺序里第一个能接的（通用页最上面 Cue 的名字），名字整段选中、一打字就盖掉；
+        // 同系统各应用的设置窗口，打开时谁都不拿焦点，点哪个输入框才进编辑
+        window.makeFirstResponder(nil)
     }
 
     private static func index(_ pane: SettingsPane) -> Int { SettingsPane.allCases.firstIndex(of: pane)! }

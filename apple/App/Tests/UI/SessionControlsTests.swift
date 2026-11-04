@@ -4,7 +4,7 @@ import Testing
 @testable import CuePad
 
 /// 会话页里换模型与思考强度：经模型胶囊同一个入口（`AppServices.configure`）写请求，显示只由会话记录与发给它的投送请求推出（不另存界面状态）。
-/// 换了之后胶囊立即显示新值并标着在路上；没换成回到会话当前的值并写原因。
+/// 换了之后胶囊立即显示新值并标着在路上；没换成回到会话当前的值并写要换成什么、为什么，直到对这个会话做下一件事。
 struct SessionControlsTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -47,13 +47,16 @@ struct SessionControlsTests {
         #expect(MacDelivery.reply(to: session) == (allowsOther ? .answer(question) : .answerAbove))
     }
 
-    @Test func 换模型_立即显示新值_没换成回到当前值写原因_结束了照样能换() async throws {
+    @Test func 换模型_立即显示新值_没换成回到当前值写原因_再做别的就不再说_结束了照样能换() async throws {
         let atlas = try await session()
         let request = try await app.services.configure(PiConfig(model: luna.key, thinking: .high), for: atlas)
         #expect(try await shown(atlas) == PiConfigShown(model: luna, thinking: .high, pending: true, failure: nil))
 
         _ = try await execute(request, failing: "Pi 没在运行")
-        #expect(try await shown(atlas) == PiConfigShown(model: opus, thinking: .low, pending: false, failure: .reported("Pi 没在运行")))
+        #expect(try await shown(atlas) == PiConfigShown(model: opus, thinking: .low, pending: false, failure: "没换成 Luna：Pi 没在运行"))
+        // 之后对这个会话做了别的（这里是停下这一轮）：那一句过时了，不再挂在输入框上
+        _ = try await app.services.stop(atlas)
+        #expect(try await shown(atlas).failure == nil)
 
         try await PiStateRecorder(store: store, hostID: "mac-a").end(sessionID: "atlas")
         let ended = try #require(try await store.allPiSessionStates().first)

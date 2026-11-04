@@ -92,6 +92,8 @@ nonisolated struct CueDigest: Equatable, Sendable {
     /// 它运行（或停用前运行）的那台 Mac 与它的名字（`MacAgents.shownName`）。
     var hostID: String?
     var hostName: String?
+    /// 各台 Mac 的名字（`MacAgents.shownName`）：会话所在的那台在线期限到了，每件一行写它没开（`RuntimeTimeline`）。
+    var macNames: [String: String] = [:]
     /// 推进中与等你（`CueStore.cueTally`）。
     var tally: CueTally
     var advancing: Int { tally.advancing.count }
@@ -134,6 +136,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             enabled: profile?.activeHost != nil,
             hostID: profile?.hostID,
             hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
+            macNames: Dictionary(try store.allMacAgents().map { ($0.hostID, $0.shownName) }) { first, _ in first },
             tally: tally,
             unread: try store.cueUnread().count,
             hostUntil: try profile?.activeHost.flatMap { try store.macOnlineUntil($0) },

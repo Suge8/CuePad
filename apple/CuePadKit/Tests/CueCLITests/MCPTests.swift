@@ -14,9 +14,9 @@ import Testing
     var next = 0
     private let exit: ProcessExit
 
-    private init(library: URL) throws {
+    private init(library: URL, arguments: [String]) throws {
       process.executableURL = try cuepadBinary()
-      process.arguments = ["mcp"]
+      process.arguments = arguments
       process.environment = ["CUEPAD_LIBRARY_DIR": library.path]
       process.standardInput = input
       process.standardOutput = output
@@ -37,9 +37,9 @@ import Testing
       exit = try ProcessExit(launching: process)
     }
 
-    /// 起一个 `cuepad mcp` 交给 `body`；之后（失败也一样）关它的输入、等它退出。
-    static func run(library: URL, _ body: (Server) async throws -> Void) async throws {
-      let server = try Server(library: library)
+    /// 起一个 `cuepad mcp`（`arguments` 换成 `mcp --dream` 是整理记忆的那一组）交给 `body`；之后（失败也一样）关它的输入、等它退出。
+    static func run(library: URL, arguments: [String] = ["mcp"], _ body: (Server) async throws -> Void) async throws {
+      let server = try Server(library: library, arguments: arguments)
       let outcome: Result<Void, any Error>
       do { outcome = .success(try await body(server)) } catch { outcome = .failure(error) }
       try? server.input.fileHandleForWriting.close()
@@ -86,11 +86,17 @@ import Testing
       let hello = try await server.request("initialize", ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": ["name": "pi", "version": "1"]])
       #expect(hello["protocolVersion"] as? String == "2025-11-25")
       let tools = try #require(try await server.request("tools/list", [:])["tools"] as? [[String: Any]])
-      #expect(tools.compactMap { $0["name"] as? String } == ["task", "tell", "memory"])
+      #expect(tools.compactMap { $0["name"] as? String } == ["task", "tell", "memory", "setup"])
 
       try await server.call("task", ["action": "add", "title": "重写发布脚本", "project": "演示", "steps": ["调研", "改脚本"]])
       let task = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.heading == "重写发布脚本" }).id
       let research = try #require(try await store.children(of: task).first)
+      _ = try await server.call("task", ["action": "edit", "task": research.id.uuidString, "body": "先读 release.sh"])
+      // 没用到的参数填成空值（有的模型这样填）是没写，正文不动；清掉正文写 none
+      #expect(try await server.refused("task", ["action": "edit", "task": research.id.uuidString, "title": "", "body": ""]).contains("edit 至少给"))
+      #expect(try await store.card(research.id)?.rest == "先读 release.sh")
+      _ = try await server.call("task", ["action": "edit", "task": research.id.uuidString, "body": "none"])
+      #expect(try await store.card(research.id)?.rest == nil)
       _ = try await server.call("task", ["action": "edit", "task": research.id.uuidString, "body": "先读 release.sh"])
       #expect(try await server.call("task", ["action": "peek"]).contains("重写发布脚本（\(task.shortID)）"))
       // 名字宽过上限（汉字算 2）：整件退回，告诉 Cue 怎么改，什么都不写

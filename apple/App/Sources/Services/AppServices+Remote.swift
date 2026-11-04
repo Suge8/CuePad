@@ -7,10 +7,10 @@ import Foundation
 extension AppServices {
     // MARK: Pi 状态记录
 
-    /// 启动时对账上次留下的会话记录（别的 Mac 的不动）：进程确实没了的收尾，还在的留给桥重新连上（见 `PiStateRecorder.reset`）。
-    /// 对账之前还没收尾的会话交给桥：重新接上时状态种类没变就沿用原来的起点（`PiBridge.attach`）。
-    func resetPiState() async throws {
-        pi.carryOver(try await piStateRecorder.reset { $0.isRunning })
+    /// 这台 Mac 启动（`init` 里，第一次读库之前）：对账上次留下的会话记录（别的 Mac 的不动）并写下在线（`CueStore.launchMac`）——
+    /// 进程确实没了的收尾，还在的留给桥重新连上；对账之前还没收尾的会话交给桥：重新接上时状态种类没变就沿用原来的起点（`PiBridge.attach`）。
+    static func launch(_ store: CueStore, on host: String, bridge: PiBridge) throws {
+        bridge.carryOver(try store.launchMac(host: host) { $0.isRunning })
     }
 
     /// 把 Pi 桥的会话变化写成同步记录，直到流结束。一个会话一条记录：同一会话同时有两个进程（后台托管的那个正在让给

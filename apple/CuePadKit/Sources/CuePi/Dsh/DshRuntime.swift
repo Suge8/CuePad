@@ -86,14 +86,20 @@ struct DshDialect: ACPDialect {
         return ACPBrainSetup(environment: try DshLaunch.brainEnvironment(in: directory, prompt: config.systemPrompt, model: config.model), meta: nil)
     }
 
-    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> Bool {
+    /// 插件回这句消息的 id，它被一轮收下时报 `_cuepad/claimed`（`dsh-cuepad.mjs`）。
+    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? {
         let images: [JSONValue] = images.map { ["mimeType": .string($0.mimeType), "data": .string($0.data.base64EncodedString())] }
         do {
-            try await connection.call("_cuepad/steer", ["sessionId": .string(session), "text": .string(text), "images": .array(images)])
-            return true
+            let steered = try await connection.call("_cuepad/steer", ["sessionId": .string(session), "text": .string(text), "images": .array(images)])
+            return ACPSteer(claim: steered["messageId"]?.string)
         } catch ACPError.server(Self.idle, _) {
-            return false
+            return nil
         }
+    }
+
+    func signals(_ method: String, _ params: JSONValue) -> [ACPSignal] {
+        guard method == "_cuepad/claimed", let message = params["messageId"]?.string else { return [] }
+        return [.claimed(message)]
     }
 
     @MainActor func rename(_ name: String, session: String, cwd: URL, on connection: ACPConnection) async throws -> Bool {

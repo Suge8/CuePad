@@ -6,7 +6,8 @@ import SwiftUI
 /// 是否展开、开会话的进度是否优先由调用方决定；文字、字号与颜色只在这里。
 struct MacInputNotice: View {
     var noMac = false
-    var failure: Speech.Failure?
+    /// 没换成的那一句（`PiConfigShown.failure`）
+    var failure: String?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -15,7 +16,7 @@ struct MacInputNotice: View {
                 Text(CueStoreError.noMac.localizedDescription).foregroundStyle(palette.ink3)
             }
             if let failure {
-                Text("没换成：\(failure.text)").foregroundStyle(palette.failure)
+                Text(failure).foregroundStyle(palette.failure)
             }
         }
         .font(Typography.caption).lineLimit(2)

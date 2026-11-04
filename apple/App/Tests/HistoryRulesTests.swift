@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import CueAgent
 import CuePi
 import CueStore
 import Foundation
@@ -7,7 +8,7 @@ import Testing
 @testable import CuePad
 
 /// "什么算历史"的两条规则，端到端用真实 Pi：一句话没说过的会话关掉后不进历史；CuePad 后台托管的会话闲置退出不算结束，
-/// 仍在"现在"，Mac 本机与手机两条路发话都会唤醒它，只有用户结束它才进历史。
+/// 仍在"现在"、歇着（不是状态未确认），Cue、Mac 本机与手机三条路发话都会唤醒它，只有用户结束它才进历史。
 /// 真实 Pi 与真实后台托管（测闲置退出的用例闲置 2 秒就退），全部状态落在临时目录，假模型零网络；不碰真实资料库与 ~/.pi。
 nonisolated private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appending(path: "CuePadKit/Tests/CuePiTests/Fixtures")
@@ -125,7 +126,7 @@ struct HistoryRulesTests {
 
     // MARK: 后台托管的会话闲置退出
 
-    @Test func 托管会话闲置退出后仍在现在_发话唤醒回复_用户结束才进历史() async throws {
+    @Test func 托管会话闲置退出后歇着_Cue与本机手机发话都唤醒它_用户结束才进历史() async throws {
         let rig = try await Rig(idleLimit: .seconds(2))
         defer { rig.shutdown() }
         let id = try await rig.host.open(in: rig.cwd, launchToken: "hosted", name: nil, model: nil, thinking: nil)
@@ -136,6 +137,15 @@ struct HistoryRulesTests {
 
         // 闲置退出：进程不在了，会话仍在"现在"，歇着，不进历史
         try await eventually("闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
+        let rested = try await expectResting(rig, sessionID)
+
+        // Cue 对它说话：照常收下，后台唤醒它
+        let host = TestApp.hostID
+        _ = try await rig.store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
+        let said = try #require(await CueTools(store: rig.store).call("task", ["action": "say", "session": rested.shortID, "text": "Cue 来的话"]))
+        #expect(!said.isError, "\(said.text)")
+        try await eventually("Cue 说的话得到回复") { try await rig.replies(of: sessionID).last == "ECHO Cue 来的话 IMAGES[]" }
+        try await eventually("Cue 说完再次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         try await expectResting(rig, sessionID)
 
         // Mac 本机发话（"已结束"那条路：执行器用会话索引在后台唤醒）
@@ -159,12 +169,14 @@ struct HistoryRulesTests {
         #expect(try await rig.records(.live).isEmpty)
     }
 
-    /// 进程不在了、记录仍在"现在"（未结束）、不在历史里、是托管的、歇着。
+    /// 进程不在了、记录仍在"现在"（未结束）、不在历史里、是托管的、此刻确认歇着：界面写停着的说法（Cue 值班时是歇着或待回复），不写状态未确认。
     @discardableResult
     private func expectResting(_ rig: Rig, _ sessionID: String) async throws -> PiSessionState {
         let current = try await rig.store.piSessionPage(.current).items.map(\.state)
         let state = try #require(current.first { $0.sessionID == sessionID }, "仍在现在")
-        #expect(state.hosted && state.state == .known(.settled), "托管、歇着")
+        #expect(state.hosted && state.runtimeState == .known(.settled), "托管、歇着")
+        let shown = Workspace(services: rig.services).shown(state, delivery: nil)
+        #expect([.idle, .unread, .resting, .awaitsReply].contains(shown.status), "界面写的是「\(shown.label)」")
         #expect(try await rig.records(.ended).isEmpty, "不进历史")
         return state
     }

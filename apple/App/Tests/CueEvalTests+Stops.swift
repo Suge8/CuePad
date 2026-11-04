@@ -35,8 +35,7 @@ extension CueEvalTests {
             ]
             guard let card else { return checks }
             try await eval.trigger { try await rig.services.answerCueQuestion(card.id, CueAsk.once) }
-            let said = eval.calls("task", "say").filter { !$0.call.failed }.compactMap { $0.args["text"] as? String }
-            checks.append(Check(.result, "他点了可以：把方案 1 转给会话", said.contains { $0.contains(/1|靛蓝/) }))
+            checks.append(Check(.result, "他点了可以：把方案 1 转给会话", work.answers == ["1 靛蓝"]))
             return checks
         }
     }
@@ -78,11 +77,10 @@ extension CueEvalTests {
                 work.session.sendInfo(["question": ["id": "p1", "kind": "select", "text": question, "options": ["推送", "不推送"]]])
                 work.session.setState(["kind": "waiting_user", "title": question])
             }
-            let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
             let session = try #require(try await rig.store.sessions(matching: work.id).first)
             return [
                 Check(.result, "还是他的拍板（没收回）", session.asksYou(try await rig.store.cueDuty())),
-                Check(.ask, "没替他答（没 say 推送）", !said.contains { $0.trimmingCharacters(in: .whitespaces) == "推送" || $0 == "1" }),
+                Check(.ask, "没替他答（没 say 推送）", !work.answers.contains("推送")),
                 Check(.ask, "没发 Cue 的等你", try await eval.said().allSatisfy { $0.choices == nil }),
                 Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
             ]

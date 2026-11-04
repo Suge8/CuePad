@@ -5,10 +5,10 @@ import Foundation
 extension ClaudeCodeRuntime {
     /// 会话文件是 `projects/<项目目录>/<会话 id>.jsonl`。上报通道是钩子（`HookFile.claudeCode`）；托管的进程是 CuePad 起的。
     /// 不读 `~/.agents/skills`（技能逐个链过去），自己往 `skills/synced` 写 claude.ai 同步的技能；全局规则是 `CLAUDE.md`。
-    /// 最低 2.1.145：从这版起钩子的环境里才有 `CLAUDE_CODE_SESSION_ID`（取自钩子输入的 `session_id`），钩子入口靠它认出是 Claude Code 发的
-    /// （`ClaudeCodeRuntime.received`），更旧的钩子会全被放行。
+    /// 最低 2.1.169：从这版起 stream-json 报带标识的话被哪一轮收下（`command_lifecycle` 的 `command_uuid`），大脑据此报 `received`（2.1.168 没有）；
+    /// 钩子环境里的 `CLAUDE_CODE_SESSION_ID`（2.1.145 起）也就有了，钩子入口靠它认出是 Claude Code 发的（`ClaudeCodeRuntime.received`）。
     nonisolated public static let facts = AgentFacts(
-        command: "claude", homeVariable: "CLAUDE_CONFIG_DIR", minimumVersion: AgentVersion(2, 1, 145),
+        command: "claude", homeVariable: "CLAUDE_CONFIG_DIR", minimumVersion: AgentVersion(2, 1, 169),
         installScript: "curl -fsSL https://claude.ai/install.sh | bash",
         loginArguments: ["auth", "login"],
         sessionFiles: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, naming: .id) {

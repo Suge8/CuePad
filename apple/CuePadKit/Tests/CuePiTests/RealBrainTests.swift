@@ -5,14 +5,13 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode / Grok Build / dsh 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型（Grok Build 缺省用假模型，见 `GrokModel`），
+/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode / Grok Build / dsh 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型（Pi 用本机 Codex 的登录，
+/// Grok Build 缺省用假模型，见 `GrokModel`），
 /// MCP 是 Fixtures/mcp-echo.mjs 替身。
 /// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，总在隔离的 `OpenCodeSandbox` 里连真 OpenCode 跑（模型见它）。
 private let environment = ProcessInfo.processInfo.environment
 private let runtimes = AgentKind.allCases.filter(RealAgents.runs)
-/// 连真运行时才看得出的（进程树、各家的历史）：录制时列出的、OpenCode（总连真的），本机跑得起来的几家
-private let liveRuntimes = runtimes.filter { RealAgents.mode(of: $0) != .replay }
-/// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅
+/// Pi 用 openai-codex 的模型（登录取本机 Codex 的）：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅
 private let cheapModels: [AgentKind: String] = [
     .pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
     .grok: "grok-4.6", .dsh: "deepseek-official/deepseek-flash",
@@ -61,8 +60,11 @@ struct RealBrainTests {
             echoLog = root.appending(path: "echo.log")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             sandbox = runtime == .opencode ? try await OpenCodeSandbox() : nil
-            // Grok 的大脑另起临时配置目录，登录取用户配置目录里的：用户配置目录指到这里，不碰真实的 ~/.grok；dsh 的家目录也在这里（登录只经环境里的 key）
+            if runtime == .pi, AgentTape.current?.mode != .replay { try writePiCodexAuth(into: root.appending(path: "pi-agent")) }
+            // Grok 的大脑另起临时配置目录，登录取用户配置目录里的：用户配置目录指到这里，不碰真实的 ~/.grok；dsh 的家目录也在这里（登录只经环境里的 key）；
+            // Pi 的 agent 目录也在这里，不读用户的 ~/.pi（设置、提供方各人不同），连真 Pi 时登录取本机 Codex 的（`writePiCodexAuth`）
             let agentHome = switch runtime {
+            case .pi: ["PI_CODING_AGENT_DIR": root.appending(path: "pi-agent").path]
             case .grok: ["GROK_HOME": root.appending(path: "grok-user").path]
             case .dsh: ["DSH_HOME": root.appending(path: "dsh").path]
             default: [String: String]()
@@ -87,27 +89,32 @@ struct RealBrainTests {
             try await eventually("第 \(n) 轮做完") { self.count(.turnFinished) >= n }
         }
 
-        /// 每轮的回答：做完时还留着的正在说的话
-        var replies: [String] {
-            var speaking: PiDraft?, replies: [String] = []
+        /// 做完的每一轮：收下的话（`received`；没在跑时报的归接下来开始的那一轮）与回答（做完时还留着的正在说的话）
+        var turns: [(received: [UUID], reply: String?)] {
+            var turns: [(received: [UUID], reply: String?)] = [], open: (received: [UUID], reply: String?)?, early: [UUID] = []
             for event in events {
                 switch event {
-                case .speaking(let draft): speaking = draft
+                case .turnStarted:
+                    open = (early, nil)
+                    early = []
+                case .received(let id): if open == nil { early.append(id) } else { open?.received.append(id) }
+                case .speaking(let draft): open?.reply = draft?.text
                 case .turnFinished:
-                    if let text = speaking?.text { replies.append(text) }
-                    speaking = nil
+                    if let open { turns.append(open) }
+                    open = nil
                 default: break
                 }
             }
-            return replies
+            return turns
         }
+        var replies: [String] { turns.compactMap(\.reply) }
         var failures: [String] { events.compactMap { if case .failed(let text) = $0 { text } else { nil } } }
         var contexts: [Int] { events.compactMap { if case .context(let used, _) = $0 { used } else { nil } } }
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
     }
 
     /// 起一个大脑跑完测试体，不论成败都等它退出、收掉 OpenCode 的隔离环境。
-    private func withRig(_ runtime: AgentKind, _ body: (Rig) async throws -> Void) async throws {
+    func withRig(_ runtime: AgentKind, _ body: (Rig) async throws -> Void) async throws {
         let rig = try await Rig(runtime)
         let outcome: Result<Void, any Error>
         do { try await body(rig); outcome = .success(()) } catch { outcome = .failure(error) }
@@ -137,7 +144,7 @@ struct RealBrainTests {
         AgentTape.use(runtime)
         try await withRig(runtime) { rig in
         #expect(rig.brain.seesImages)
-        try await rig.brain.send("What color is this image? Reply with only the color name in English.", images: [PiImage(mimeType: "image/png", data: redPNG)])
+        try await rig.brain.send("What color is this image? Reply with only the color name in English.", images: [PiImage(mimeType: "image/png", data: redPNG)], id: UUID())
         try await rig.finished()
 
         #expect(rig.failures == [], "\(rig.events)")
@@ -166,6 +173,24 @@ struct RealBrainTests {
         #expect(rig.count(.turnStarted) == 1)
         #expect(rig.echoed.first == "x" && rig.echoed.count < 8, "\(rig.echoed)")
         #expect(rig.replies.last?.contains("STOPPED") == true, "\(rig.replies)")
+        }
+    }
+
+    /// 这一轮唯一的一次请求模型还在飞时再说一句：收下它的那一轮照它回答（Claude Code 在这一轮收尾后另开一轮收下，Codex、Grok 在这一轮里
+    /// 再请求一次），收下（`received`）报在那一轮里，不记到只回答了第一句的那一轮上；每句话只收下一次。
+    /// dsh 不在其中：它的录像带要 DeepSeek 的 key 才录得了（`RealAgents`）。
+    @Test(arguments: runtimes.filter { $0 != .dsh }) func aMessageSentDuringTheLastRequestIsReceivedByTheTurnThatAnswersIt(_ runtime: AgentKind) async throws {
+        AgentTape.use(runtime)
+        try await withRig(runtime) { rig in
+        let first = UUID(), second = UUID()
+        try await rig.brain.send("Reply with only the single word ALPHA.", images: [], id: first)
+        try await rig.brain.send("Reply with only the single word BETA.", images: [], id: second)
+        try await eventually("两句都收下、那几轮都做完") { rig.turns.flatMap(\.received).count == 2 && rig.count(.turnStarted) == rig.count(.turnFinished) }
+
+        #expect(rig.failures == [], "\(rig.events)")
+        #expect(Set(rig.turns.flatMap(\.received)) == [first, second], "\(rig.events)")
+        let answering = try #require(rig.turns.first { $0.received.contains(second) })
+        #expect(answering.reply?.contains("BETA") == true, "\(rig.turns)")
         }
     }
 
@@ -207,107 +232,7 @@ struct RealBrainTests {
     }
 }
 
-/// 结束后进程连同它起的子进程（MCP 服务等）都退出、各家的历史里没有这次对话：断言的是真进程树与各家真实的历史目录，回放不出来，
-/// 只在录制或直连时连真运行时跑。
-@MainActor
-@Suite(.enabled(if: !liveRuntimes.isEmpty, "只连真运行时跑（看真进程树与各家的历史）：CUEPAD_AGENT_TESTS 列出 pi、codex、claude、grok、dsh，或本机有 opencode v2 时开启"), .serialized, .timeLimit(.minutes(5)))
-struct RealBrainProcessTests {
-    @Test(arguments: liveRuntimes) func stoppingLeavesNoProcessesOrHistory(_ runtime: AgentKind) async throws {
-        let rig = try await RealBrainTests.Rig(runtime)
-        try await rig.brain.send("Reply with the single word OK.")
-        try await rig.finished()
-
-        let tree = try processTree(containing: rig.marker)
-        #expect(tree.count >= 2)  // 运行时与 MCP 替身
-        // OpenCode 的会话在它的库里：用接入连的后台服务看这个工作目录里的会话，停之前有、停之后一个不剩
-        let sandbox = rig.sandbox
-        if let sandbox {
-            try await sandbox.run(["service", "start"])
-            #expect(try await openCodeSessions(in: rig.directory, sandbox).count == 1)
-        }
-        await rig.brain.stop()()
-        try await eventually("报告退出") { rig.events.last == .exited(nil) }
-        let survivors = tree.filter { kill($0, 0) == 0 }
-        #expect(survivors == [], "没退出的进程：\(survivors)")
-
-        switch runtime {
-        case .pi:
-            #expect(((try? FileManager.default.contentsOfDirectory(atPath: rig.sessions.path)) ?? []) == [])
-        case .codex:
-            #expect(try codexSessions(mentioning: rig.marker) == [])
-        case .claudeCode:
-            #expect(try claudeTranscripts(for: rig.marker) == [])
-        case .opencode:
-            let sandbox = try #require(sandbox)
-            let left = try await openCodeSessions(in: rig.directory, sandbox)
-            try await sandbox.stop()
-            #expect(left.isEmpty, "\(left)")
-        case .grok:
-            // 大脑的配置目录是它自己的临时目录（停下时删掉）：用户的会话目录里没有这个工作目录（只读）
-            let sessions = home.appending(path: ".grok/sessions")
-            #expect(((try? FileManager.default.contentsOfDirectory(atPath: sessions.path)) ?? []).filter { $0.contains(rig.marker) } == [])
-        case .dsh:
-            // 会话、附件、存储都在本次运行的临时目录里，随它删掉；dsh 的家目录里没有会话
-            let dshHome = rig.directory.deletingLastPathComponent().appending(path: "dsh")
-            #expect(!FileManager.default.fileExists(atPath: dshHome.appending(path: DshRuntime.sessions).path))
-        }
-    }
-
-    private func openCodeSessions(in directory: URL, _ sandbox: OpenCodeSandbox) async throws -> [Any] {
-        try await sandbox.api("GET", "/api/session?directory=" + OpenCodeClient.escaped(directory.path))["data"] as? [Any] ?? []
-    }
-
-    /// 大脑进程与它的全部后代：从命令行里带着标记的 MCP 替身往上找到运行时，再取它的整棵子树。运行时挂在 launchd 下
-    /// （`ChildProcess` 经中转起，见它的头注释），挂在本测试进程下的也认。
-    private func processTree(containing marker: String) throws -> [pid_t] {
-        let ps = Process()
-        ps.executableURL = URL(filePath: "/bin/ps")
-        ps.arguments = ["-A", "-o", "pid=,ppid=,command="]
-        let out = Pipe()
-        ps.standardOutput = out
-        let exit = try ProcessExit(launching: ps)
-        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        _ = exit.blockingValue
-        let rows = text.split(separator: "\n").compactMap { line -> (pid: pid_t, ppid: pid_t, command: String)? in
-            let parts = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
-            guard parts.count == 3, let pid = pid_t(parts[0]), let ppid = pid_t(parts[1]) else { return nil }
-            return (pid, ppid, String(parts[2]))
-        }
-        let parent = Dictionary(rows.map { ($0.pid, $0.ppid) }, uniquingKeysWith: { a, _ in a })
-        var root = try #require(rows.first { $0.command.contains(marker) }).pid
-        while let up = parent[root], up != getpid(), up > 1 { root = up }
-        var tree = [root]
-        var index = 0
-        while index < tree.count {
-            tree += rows.filter { $0.ppid == tree[index] }.map(\.pid)
-            index += 1
-        }
-        return tree
-    }
-
-    /// Codex 的会话文件（只读）里提到这个工作目录的。
-    private func codexSessions(mentioning marker: String) throws -> [String] {
-        let root = home.appending(path: ".codex/sessions")
-        let recent = Date().addingTimeInterval(-600)
-        let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.contentModificationDateKey])?.compactMap { $0 as? URL } ?? []
-        return files.filter { file in
-            guard file.pathExtension == "jsonl", let modified = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
-                  modified > recent, let text = try? String(contentsOf: file, encoding: .utf8) else { return false }
-            return text.contains(marker)
-        }.map(\.path)
-    }
-
-    /// Claude Code 按工作目录存的会话记录（只读）。
-    private func claudeTranscripts(for marker: String) throws -> [String] {
-        let root = home.appending(path: ".claude/projects")
-        let projects = try FileManager.default.contentsOfDirectory(atPath: root.path).filter { $0.contains(marker) }
-        return projects.flatMap { project in
-            ((try? FileManager.default.contentsOfDirectory(atPath: root.appending(path: project).path)) ?? []).filter { $0.hasSuffix(".jsonl") }
-        }
-    }
-}
-
-private extension HostedSession {
-    func send(_ text: String) async throws { try await send(text, images: []) }
+extension HostedSession {
+    func send(_ text: String) async throws { try await send(text, images: [], id: UUID()) }
 }
 #endif

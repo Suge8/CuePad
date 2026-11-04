@@ -25,12 +25,9 @@ extension AppServices {
         }
         follow { await self.historyStore.keepPruned() }
         startStrayFileCleanup()
-        // 先对账再起各家的接入：重新接上的会话沿用对账前的起点（`PiBridge.carryOver`）。对账失败照样起，只是从此刻算
+        // 启动对账在 `init` 里已做完（`launch`）：重新接上的会话沿用对账前的起点（`PiBridge.carryOver`）
+        startRuntimes()
         follow(reporting: { .syncUnavailable(String(localized: "Agent 状态没能写入同步记录：\(String(describing: $0))")) }) {
-            var failure: (any Error)?
-            do { try await self.resetPiState() } catch { failure = error }
-            self.startRuntimes()
-            if let failure { throw failure }
             try await self.consumePiChanges(piChanges)
         }
         // 执行器在接入刷新之后才启动：托管的 Pi 加载磁盘上的扩展，App 更新后要先换成随包版本，旧扩展读不懂托管约定。

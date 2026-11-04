@@ -16,7 +16,7 @@ nonisolated extension CueNow {
         enum CodingKeys: String, CodingKey { case at = "t", tally = "c", advancing = "a", subagents = "s", items = "i", first = "f", replaceFirst = "r", agentCount = "g" }
 
         enum Change: Codable, Hashable, Sendable {
-            case update(slot: Int, kind: Item.Kind, since: Date, subagents: Int)
+            case update(slot: Int, kind: Item.Kind, since: Date, subagents: Int, offline: String? = nil)
             case replace(Item)
             case remove(slot: Int)
         }
@@ -30,11 +30,12 @@ nonisolated extension CueNow {
         unconfirmed = true
         for change in step.items {
             switch change {
-            case .update(let slot, let kind, let since, let subagents):
+            case .update(let slot, let kind, let since, let subagents, let offline):
                 if let index = items.firstIndex(where: { $0.slot == slot }) {
                     items[index].kind = kind
                     items[index].since = since
                     items[index].subagents = subagents
+                    items[index].offline = offline
                 }
             case .replace(let item):
                 if let index = items.firstIndex(where: { $0.slot == item.slot }) { items[index] = item } else { items.append(item) }

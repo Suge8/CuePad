@@ -62,25 +62,34 @@ struct SubagentWakeTests {
         try await eventually("这一轮做完") { try await store.cueState()?.state == .known(.settled) }
         let woke = keeper.rounds.filter { $0.wake.isSessionActivity }
         #expect(woke.count == 1)
-        #expect(woke.first?.sent.first?.contains("回复：子代理做完：测试全过") == true, "\(woke.map(\.sent))")
+        #expect(woke.first?.sent.first?.contains("（最新的回答）：\n      子代理做完：测试全过") == true, "\(woke.map(\.sent))")
         await rig.stop()
     }
 
-    /// 另一台 Mac 上的会话在等子代理，在跑的子代理最后一次进展快满 `stallAfter`：到点 Cue 醒来一次，变化写"等子代理 20 分钟没动静"；
-    /// 之后你跟 Cue 说话，同一段停滞不再出现在变化里。
-    @Test func 在跑的子代理太久没进展_叫醒一次() async throws {
+    /// 另一台（在线的）Mac 上的会话在等子代理，在跑的子代理最后一次进展快满 `stallAfter`：到点 Cue 醒来一次，变化写"等子代理 20 分钟没动静"；
+    /// 之后你跟 Cue 说话，同一段停滞不再出现在变化里。他自己发起的那一轮里停住的不报：Cue 对它说不进去（他那一轮不插嘴）。
+    @Test func 在跑的子代理太久没进展_叫醒一次_他那一轮的不报() async throws {
         let rig = try await CueHostTests.Rig()
         let store = rig.store
         let project = try #require(try await store.projects().first)
         let task = try await store.createTask("修好登录页 子代理停住", in: project.id)
         try await store.linkCard(task.id, toSession: "remote-1")
+        let his = try await store.createTask("修好注册页 他那一轮", in: project.id)
+        try await store.linkCard(his.id, toSession: "remote-his")
         let due = Date.now.addingTimeInterval(3)
         let ui = PiSubagentState(
             name: "ui", role: "工程师", phase: .known(.running), action: "bash · swift test", startedAt: due - 3600,
             progressAt: due - PiSessionState.stallAfter)
         let reviewer = PiSubagentState(name: "reviewer", role: "哨兵", phase: .known(.done), startedAt: due - 3600, settledAt: due - 3000, progressAt: due - 3000)
-        try await PiStateRecorder(store: store, hostID: "mac-b")
-            .update(sessionID: "remote-1", state: .delegating, title: "修好登录页", subagents: [ui, reviewer])
+        // 会话在跑只认宿主在线时报的（`runtimeUntil`）：mac-b 像醒着的 Mac 那样先报在线
+        try await store.recordMacPresence(host: "mac-b") { true }
+        let remote = PiStateRecorder(store: store, hostID: "mac-b")
+        // 他在终端里说的那句开了这一轮（Mac 读会话文件写下，没有投送请求）
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "remote-his", messages: [PiChatMessage(sessionID: "remote-his", entryID: "u1", seq: 1, role: .user, text: "做到底", at: due - 3600)],
+            recap: PiRecap(lastPrompt: "做到底")))
+        try await remote.update(sessionID: "remote-his", state: .delegating, title: "修好注册页", subagents: [ui])
+        try await remote.update(sessionID: "remote-1", state: .delegating, title: "修好登录页", subagents: [ui, reviewer])
 
         try await rig.message(.cue, containing: "子代理那边停住了")
         let keeper = try #require(rig.services.cue.keeper)
@@ -89,6 +98,7 @@ struct SubagentWakeTests {
         let stalled = try #require(woke.first)
         #expect(stalled.startedAt >= due)
         #expect(stalled.sent.first?.contains("[等子代理 20 分钟没动静] 修好登录页 子代理停住（\(task.id.shortID)）：ui：bash · swift test") == true, "\(stalled.sent)")
+        #expect(stalled.sent.first?.contains("[等子代理 20 分钟没动静] 修好注册页") == false, "\(stalled.sent)")
         try await eventually("这一轮做完") { try await store.cueState()?.state == .known(.settled) }
 
         try await say("你好", in: Workspace(services: rig.services), rig)
@@ -96,6 +106,34 @@ struct SubagentWakeTests {
         let hello = try #require(keeper.rounds.last { $0.wake == .message })
         #expect(hello.sent.first?.contains("变化（上次醒来之后）：无") == true, "\(hello.sent)")
         #expect(keeper.rounds.filter { $0.wake.isSessionActivity }.count == 1)
+        await rig.stop()
+    }
+
+    /// 子代理停住叫醒的那一轮出错、隔一会儿重试也错（才告诉你）：之后会话处理交回又回到等子代理，同一段停滞不是新变化，不再叫醒；
+    /// 下一件真的事（这里是到点的定时）照常叫醒。
+    @Test func 停住那一轮出错重试也错_会话来回写不再叫醒() async throws {
+        let rig = try await CueHostTests.Rig()
+        let store = rig.store
+        let project = try #require(try await store.projects().first)
+        let task = try await store.createTask("修好登录页 子代理停住 先出两次错", in: project.id)
+        try await store.linkCard(task.id, toSession: "remote-2")
+        let due = Date.now.addingTimeInterval(3)
+        let ui = PiSubagentState(
+            name: "ui", role: "工程师", phase: .known(.running), action: "bash · swift test", startedAt: due - 3600,
+            progressAt: due - PiSessionState.stallAfter)
+        let remote = try await rig.remoteMac()
+        try await remote.update(sessionID: "remote-2", state: .delegating, title: "修好登录页", subagents: [ui])
+        try await rig.message(.cue, containing: "bad things happened")
+        #expect(rig.model.errors == 2)
+
+        // 会话为别的事动了一下（如处理交回的结果）又回到等子代理：会话记录盖上新序号，停住的时刻不变
+        try await remote.update(sessionID: "remote-2", state: .thinking, title: "修好登录页", subagents: [ui])
+        try await remote.update(sessionID: "remote-2", state: .delegating, title: "修好登录页", subagents: [ui])
+        let line = try await store.noteCueLine("核对发布结果", source: .you, remindAt: .now.addingTimeInterval(2))
+        try await rig.message(.cue, containing: "定时到点：#\(line.index) 核对发布结果")
+        let keeper = try #require(rig.services.cue.keeper)
+        #expect(keeper.rounds.filter { $0.wake.isSessionActivity }.count == 2)
+        #expect(try await rig.count("子代理那边停住了") == 0)
         await rig.stop()
     }
 

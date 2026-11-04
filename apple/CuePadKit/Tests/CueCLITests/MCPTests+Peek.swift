@@ -4,14 +4,14 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// peek 一件事：每个叶子最新的那条回答给全文（至多 4000 字，超了截尾并注明），更早的截短。
+  /// peek 一件事：每个叶子最新的那条回答给全文（至多 4000 字，超了留开头的结论与结尾的证据、截掉中间并注明），更早的截短。
   @Test func peekGivesTheLatestReplyInFull() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
     let task = try await store.createTask("跑测试")
     try await store.linkCard(task.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "跑测试")
-    let older = String(repeating: "旧", count: 500), output = "全部通过 " + String(repeating: "过", count: 4500) + "尾巴"
+    let older = String(repeating: "旧", count: 500), output = "结论：全部通过\n" + String(repeating: "过", count: 4500) + "\n证据：退出码 0"
     try await store.writePiTranscript(PiTranscript(
       sessionID: "s1",
       messages: [
@@ -23,10 +23,33 @@ extension MCPTests {
       recap: PiRecap()))
     try await Server.run(library: sandbox.directory) { server in
       let text = try await server.call("task", ["action": "peek", "task": task.id.uuidString])
-      // 前 4000 字里的"过"（含开头"全部通过"的那个）都在：长串重复字符的子串查找不可靠，按个数比
-      #expect(text.filter { $0 == "过" }.count == output.prefix(4000).filter { $0 == "过" }.count)
-      #expect(!text.contains("尾巴") && text.contains("后面还有 \(output.count - 4000) 字"))
+      // 开头 1000 字与结尾 3000 字里的"过"都在、中间的没了：长串重复字符的子串查找不可靠，按个数比
+      #expect(text.filter { $0 == "过" }.count == (output.prefix(1000) + output.suffix(3000)).filter { $0 == "过" }.count)
+      #expect(text.contains("结论：全部通过") && text.contains("证据：退出码 0") && text.contains("中间截掉 \(output.count - 4000) 字"))
       #expect(!text.contains(older) && text.contains(String(older.prefix(200))))
+    }
+  }
+
+  /// 几步接着用同一个会话：peek 只在最后用它的那一步下面列会话与问答，前面的步骤写"会话同后面的一步"，同一段问答不重复。
+  @Test func stepsSharingASessionListItOnce() async throws {
+    let sandbox = try Fixture()
+    let store = sandbox.store
+    let task = try await store.createTask("逐页查死链")
+    let first = try await store.createTask("查首页", under: task.id), second = try await store.createTask("查价格页", under: task.id)
+    for step in [first, second] { try await store.linkCard(step.id, toSession: "s1") }
+    _ = try await store.toggleDone(first.id)
+    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "查死链")
+    try await store.writePiTranscript(PiTranscript(
+      sessionID: "s1",
+      messages: [
+        PiChatMessage(sessionID: "s1", entryID: "1", seq: 1, role: .user, text: "查首页", at: .now),
+        PiChatMessage(sessionID: "s1", entryID: "2", seq: 2, role: .pi, text: "首页 3 个死链", at: .now),
+      ],
+      recap: PiRecap()))
+    try await Server.run(library: sandbox.directory) { server in
+      let text = try await server.call("task", ["action": "peek", "task": task.id.uuidString])
+      #expect(text.components(separatedBy: "首页 3 个死链").count == 2, "\(text)")
+      #expect(text.contains("「查首页」（\(first.id.shortID)）完成 · 会话同后面的一步"), "\(text)")
     }
   }
 

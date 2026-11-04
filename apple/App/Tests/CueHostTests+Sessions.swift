@@ -19,7 +19,7 @@ extension CueHostTests {
         try await eventually("配置后送进草稿") { session.received.contains("send") }
         #expect(rig.app.host.calls.contains {
             if case .open(let directory, _, let name, let model, let thinking) = $0 {
-                directory == rig.folder.path && name == "修好登录页" && model == "fake/fake-model" && thinking == "high"
+                directory == rig.folder.path && name == "修好登录页" && model == "fake/m" && thinking == "high"
             } else { false }
         })
         #expect(session.messages.first?.text == "修好登录页\n把登录页修好")

@@ -5,10 +5,13 @@ import Foundation
 
 /// Grok Build 与 ACP 标准不同的地方（`ACPDialect`）。起的是 `grok agent --no-leader stdio`：不连 leader（Grok 常驻的会话进程；连上了
 /// CuePad 起的进程只是它的客户端，会话活在 leader 里、退出也不走）。扩展方法与通知都在 `_x.ai/` 下（源码 xai-grok-shell 的 extensions/）：
-/// - 一轮：Agent 自己开的一轮（插话落空时它补开一轮，`interject-fallback-…`）从 `_x.ai/queue/changed` 带上 `runningPromptId` 起，
-///   每一轮都以 `_x.ai/session_notification` 的 `turn_completed` 结束（出错的原话在 `agent_result`）；
+/// - 一轮：Agent 自己开的一轮从 `_x.ai/queue/changed` 带上 `runningPromptId` 起，每一轮都以 `_x.ai/session_notification` 的
+///   `turn_completed` 结束（出错的原话在 `agent_result`）；
 /// - 上下文：每次请求模型的 `response_completed` 的用量，输入是未缓存、缓存读、缓存写三项之和；窗口是会话的模型清单里这个模型的 `totalContextTokens`；
-/// - 正忙时插话：`_x.ai/interject`（只收文字），下一次请求模型时并进这一轮，这一轮已经不再请求模型时它自己补开一轮；
+/// - 正忙时插话：`_x.ai/interject`（只收文字），下一次请求模型时并进这一轮；最后一次请求在飞时插进的，这一轮接着再请求一次收下它。
+///   这一轮已经不再请求模型（如停止钩子在跑）时插话搁浅，收尾后它以搁浅的原话自己开一轮（`runningPromptId` 是 `interject-fallback-…`，
+///   `runningText` 是原话，先于这一轮 `session/prompt` 的回应到；1.0.70 实测）。收下插话的那一刻不报（`_x.ai/session/interjection` 在受理时就发），
+///   所以只按搁浅认（`ACPSteer` 不带标识）；
 /// - 改名：`_x.ai/session/rename`；工具名在 `_meta["x.ai/tool"].name`（标准的 `title` 随后会换成给人看的说法），MCP 工具的结果在 `rawOutput`；
 /// - 提问：`_x.ai/ask_user_question`（+Ask）；
 /// - 图：握手不报能收图，实际收（`image_normalize`，太小的丢掉、太大的压缩）；
@@ -31,6 +34,8 @@ struct GrokDialect: ACPDialect {
     var agent: AgentKind { .grok }
     var arguments: [String] { ["agent", "--no-leader", "stdio"] }
     var connectsMCPLater: Bool { true }
+    /// 排着的 `session/prompt` 还没跑起来时插话，它先以插话补开一轮、再跑那一句（1.0.70 实测）
+    var queuesPrompts: Bool { true }
 
     /// 读文件的三样（Grok 的内置工具名）
     static let readingTools = ["read_file", "grep", "list_dir"]
@@ -66,11 +71,13 @@ struct GrokDialect: ACPDialect {
             meta: ["agentProfile": profile, "yoloMode": true])
     }
 
-    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> Bool {
-        guard images.isEmpty else { return false }
+    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? {
+        guard images.isEmpty else { return nil }
         try await connection.call("_x.ai/interject", ["sessionId": .string(session), "text": .string(text)])
-        return true
+        return ACPSteer()
     }
+
+    static let strandedPrefix = "interject-fallback-"
 
     @MainActor func rename(_ name: String, session: String, cwd: URL, on connection: ACPConnection) async throws -> Bool {
         try await connection.call("_x.ai/session/rename", ["sessionId": .string(session), "title": .string(name), "cwd": .string(cwd.path)])
@@ -84,7 +91,8 @@ struct GrokDialect: ACPDialect {
     func signals(_ method: String, _ params: JSONValue) -> [ACPSignal] {
         switch method {
         case "_x.ai/queue/changed":
-            return params["runningPromptId"]?.string == nil ? [] : [.turnStarted]
+            guard let running = params["runningPromptId"]?.string else { return [] }
+            return running.hasPrefix(Self.strandedPrefix) ? [.stranded(text: params["runningText"]?.string ?? "")] : [.turnStarted]
         case "_x.ai/mcp/server_status" where params["name"]?.string == CueMCPServer.name:
             switch params["status"]?.string {
             case "ready": return [.mcp(failure: nil)]

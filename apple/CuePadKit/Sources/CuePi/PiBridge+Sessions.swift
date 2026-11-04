@@ -4,7 +4,7 @@ import Darwin
 import Foundation
 
 extension PiBridge {
-    /// CuePad 重开前各会话记下的状态与计时（启动对账时从同步记录里取，`PiStateRecorder.reset`）。
+    /// CuePad 重开前各会话记下的状态与计时（启动对账时从同步记录里取，`CueStore.launchMac`）。
     public func carryOver(_ before: [String: (state: PiWorkState, times: PiTimes)]) { carried = before }
 
     /// 一个会话上线（发现了它，或 CuePad 刚开了它）：之后的命令交给 `link`。同一 id 已在线时只换通道与快照，不重报出现。

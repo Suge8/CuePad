@@ -10,7 +10,8 @@ import Foundation
 /// 各家与标准不同的地方只经 `ACPDialect`。
 ///
 /// - 一轮：CuePad 发出 `session/prompt` 起，到它的回应止（回应只结束它自己开的那一轮）；Agent 自己开、自己结束的一轮由各家报（`ACPSignal`）。
-///   被停下（`session/cancel`）照常结束、不算出错；回错误的是出错（`ACPError` 的原话）。
+///   各家报 CuePad 开的那一轮结束时只记下出错的原文，等回应再结束：回应之前各家还会报这一轮之后的事（Grok 把搁浅的插话转成它自己开的一轮，
+///   1.0.70 实测先于回应到），要排在这一轮结束之后。被停下（`session/cancel`）照常结束、不算出错；回错误的是出错（各家报的原文，没有就是 `ACPError` 的原话）。
 /// - 正在说的话：`agent_message_chunk` 逐字累积（ACP 不分条：工具调用前后各是一条），开出工具调用、停下、出错、下一轮开始时清掉。
 /// - 工具：`tool_call` 开始，`tool_call_update`（或 `tool_call` 本身）的 `completed`、`failed` 结束；名字与结果的文字经各家（`ACPDialect`）。
 /// - 上下文：标准的 `usage_update`（`used`、`size`），或各家报的输入合计（`ACPSignal.context`，窗口取各家给的模型窗口）。
@@ -37,11 +38,21 @@ final class ACPSession {
     /// 开会话的结果（各家的模型清单在里面，`ACPDialect.window`）
     private(set) var opened: JSONValue = [:]
     /// 会话的配置项（`configOptions`）
-    private(set) var options: [JSONValue] = []
+    var options: [JSONValue] = []
     /// 在等你回答的（Agent 的请求 id 与这一问）
     var pending: (request: JSONValue, ask: ACPAsk)?
     /// 一轮一个编号：`session/prompt` 的回应只结束它自己开的那一轮
     private var turn = 0
+    /// 在跑的是 CuePad 的 `session/prompt` 开的那一轮（它的编号）；Agent 自己开的为 nil
+    private var prompted: Int?
+    /// 先排进队列的家（`ACPDialect.queuesPrompts`）已报它跑起来了
+    private var promptRunning = false
+    /// 各家报的这一轮出错的原文，等回应结束这一轮时用
+    private var reported: String?
+    /// 回应之前各家已报它自己接着开了一轮（`ACPSignal.stranded`）：这一轮结束后接着开
+    private var agentTurnNext = false
+    /// 大脑插进这一轮的话（+Brain）
+    var steers = ACPSteers()
     private var draft: DraftParts?
     /// 停下这一轮后它的结束不算出错
     private var stopping = false
@@ -52,7 +63,7 @@ final class ACPSession {
     private var mcp: Result<Void, HostedSessionError>?
     private var mcpWaiters: [CheckedContinuation<Void, Never>] = []
     private var contextUsed: Int?
-    private var contextWindow: Int?
+    var contextWindow: Int?
     /// 大脑的配置与各家的配法（开新会话时照它再开）
     var brainSetup: (config: CueBrainConfig, setup: ACPBrainSetup)?
     /// 就地换过的模型与强度
@@ -147,60 +158,6 @@ final class ACPSession {
         mcpWaiters = []
     }
 
-    // MARK: 配置项
-
-    /// 配置项里某一类的那一项（`model`、`thought_level`）
-    func option(_ category: String) -> JSONValue? { options.first { $0["category"]?.string == category } }
-
-    /// 一项的可选值：平铺的，或分组的（每组的 `options`）
-    private func values(_ option: JSONValue?) -> [JSONValue] {
-        (option?["options"]?.array ?? []).flatMap { $0["options"]?.array ?? [$0] }
-    }
-
-    var currentModel: String? { option("model")?["currentValue"]?.string }
-    var currentLevel: PiThinkingLevel? { option("thought_level")?["currentValue"]?.string.flatMap(PiThinkingLevel.init(rawValue:)) }
-    var levels: [PiThinkingLevel] { values(option("thought_level")).compactMap { $0["value"]?.string.flatMap(PiThinkingLevel.init(rawValue:)) } }
-
-    /// 可选的模型（强度是在用模型的那几档）
-    var models: [PiModelOption] {
-        values(option("model")).compactMap { value in
-            value["value"]?.string.map { PiModelOption(key: key($0), name: value["name"]?.string ?? $0, thinkingLevels: levels) }
-        }
-    }
-
-    /// 在用的模型：按完整的模型键对（模型写成 `提供方/模型` 的家，只对 id 会认错或认不出）
-    var currentOption: PiModelOption? { currentModel.flatMap { current in models.first { $0.key == key(current) } } }
-
-    /// 配置项里的模型值读成模型键（`AgentKind.modelKey`；下发时反过来写成 `AgentKind.modelRef`）
-    func key(_ model: String) -> PiModelKey { agent.modelKey(model) ?? PiModelKey(provider: "", id: model) }
-
-    /// 换掉一项（`session/set_config_option`）：Agent 不认这个值时抛 `ACPError.server`，在用的不变。
-    func set(_ category: String, to value: String) async throws {
-        guard let sessionID, let config = option(category)?["id"]?.string else { throw HostedSessionError.rejected(String(localized: "\(agent.name) 不能换这一项")) }
-        let result = try await live.call("session/set_config_option", ["sessionId": .string(sessionID), "configId": .string(config), "value": .string(value)])
-        if let updated = result["configOptions"]?.array { adopt(options: updated) }
-    }
-
-    /// 就地换模型、强度（强度夹到换完之后的模型有的档位）；记下换过的，开新会话后再交一次（`HostedSession.configure`）。
-    func configure(model: String?, effort: PiThinkingLevel?) async throws {
-        if let model { try await set("model", to: model) }
-        if let effort { try await set("thought_level", to: effort.clamped(to: levels).rawValue) }
-        configured = (model ?? configured.model, effort ?? configured.effort)
-    }
-
-    private func adopt(options updated: [JSONValue]) {
-        options = updated
-        contextWindow = currentModel.flatMap { dialect.window(of: $0, in: opened) } ?? contextWindow
-        guard let id else { return }
-        bridge?.update(id) { publishOptions(to: &$0) }
-    }
-
-    private func publishOptions(to session: inout PiSession) {
-        session.availableModels = models
-        session.model = currentOption
-        session.thinking = currentLevel.map(Open.known)
-    }
-
     // MARK: 一轮
 
     /// 以这句开一轮（不等模型）：回应到了这一轮结束。
@@ -210,6 +167,8 @@ final class ACPSession {
         var params: [String: JSONValue] = ["sessionId": .string(sessionID), "prompt": .array(blocks)]
         if let meta = dialect.promptMeta(deliveryID: deliveryID) { params["_meta"] = meta }
         let mine = begin()
+        prompted = mine
+        promptRunning = !dialect.queuesPrompts
         Task { [weak self] in
             do {
                 try await connection.call("session/prompt", .object(params), timed: false)
@@ -233,6 +192,9 @@ final class ACPSession {
         await untilFinished()
     }
 
+    /// 在跑的是 CuePad 开的那一轮：插话只并进它（Agent 自己开的一轮各家不保证收下，等它做完再开）
+    var steerable: Bool { facts.running && prompted == turn && promptRunning }
+
     /// 等这一轮结束（没在跑立即返回）。
     func untilFinished() async {
         guard facts.running else { return }
@@ -248,19 +210,33 @@ final class ACPSession {
         return turn
     }
 
-    /// 这一轮结束；`which` 是 `session/prompt` 开的那一轮的编号（别的轮的回应不算），nil 是各家报的结束。
+    /// 这一轮结束；`which` 是 `session/prompt` 开的那一轮的编号（别的轮的回应不算），nil 是各家报的结束（Agent 自己开的那一轮）。
+    /// 插进来、还没认出被收下的话是这一轮收下的（`ACPSteers`）；回应之前各家报了它接着开的一轮，这就开。
     private func finish(_ which: Int?, failure: String?) {
         guard facts.running, which.map({ $0 == turn }) ?? true else { return }
         let stopped = stopping
         stopping = false
+        let failure = stopped ? nil : reported ?? failure
+        prompted = nil
+        reported = nil
         if stopped || failure != nil { speak(nil) }
         decline()
-        let failure = stopped ? nil : failure
         facts.endTurn(failure: failure)
+        for id in steers.ended() { emit(.received(id)) }
         if let failure { emit(.failed(failure)) }
         emit(.turnFinished)
         release()
         publish()
+        if agentTurnNext {
+            agentTurnNext = false
+            beginStranded()
+        }
+    }
+
+    /// Agent 以搁浅的插话自己开的一轮：那几句是它收下的。
+    private func beginStranded() {
+        _ = begin()
+        for id in steers.takeStranded() { emit(.received(id)) }
     }
 
     private func release() {
@@ -330,9 +306,18 @@ final class ACPSession {
 
     private func apply(_ signal: ACPSignal) {
         switch signal {
-        case .turnStarted: if !facts.running { _ = begin() }
-        case .turnFinished(let failure): finish(nil, failure: failure)
+        case .turnStarted:
+            if !facts.running { _ = begin() } else if prompted == turn { promptRunning = true }
+        case .turnFinished(let failure):
+            guard facts.running, prompted == turn else { return finish(nil, failure: failure) }
+            // 它已不再收插话：之后的话等回应结束这一轮再开新的一轮
+            reported = failure
+            promptRunning = false
         case .context(let used): noteContext(used: used, window: contextWindow)
+        case .claimed(let claim): if let id = steers.claimed(claim) { emit(.received(id)) }
+        case .stranded(let text):
+            steers.strand(text)
+            if facts.running { agentTurnNext = true } else { beginStranded() }
         case .mcp: break
         }
     }

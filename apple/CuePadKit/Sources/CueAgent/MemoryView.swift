@@ -1,9 +1,9 @@
 import CueStore
 import Foundation
 
-/// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出（在系统提示里，`pinnedText`）；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
+/// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出（在系统提示里，`pinnedText`，按字节有软硬两条线，见 `CueMemoryLine.pinnedSoft`）；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
 /// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；
-/// 缺的摘要列成"待合并"（`merges`，由小到大、一批合到顶），视图里不列，由后台整理记忆的一次性大脑写（`mergeText`，`CueKeeper` 起）。摘要可以一层层展开（`zoom`）。
+/// 缺的摘要列成"待合并"（`merges`，由小到大、一批合到顶），视图里不列，由后台整理记忆的一次性大脑写（`dreamText`，`CueKeeper` 起；一直记着的该收口时（`tidyDue`）一并交给它整理）。摘要可以一层层展开（`zoom`）。
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public enum Entry: Equatable, Sendable {
@@ -29,8 +29,10 @@ public struct CueMemoryView: Equatable, Sendable {
   public var pinned: [CueIndexedLine]
   public var entries: [Entry]
   public var merges: [Merge]
-  /// 一直记着的已超出预算：视图里提示合并或取消一些。
-  public var pinnedOverBudget: Bool
+  /// 一直记着的合计字节（`CueMemoryLine.bytes`）
+  public var pinnedBytes: Int
+  /// 一直记着的过了硬线（`CueMemoryLine.pinnedHard`）：系统提示里叫 Cue 合并
+  public var pinnedOverBudget: Bool { pinnedBytes > CueMemoryLine.pinnedHard }
   private let lines: [CueMemoryLine]
   private let summaries: [[Int]: String]
 
@@ -45,7 +47,7 @@ public struct CueMemoryView: Equatable, Sendable {
     let summaries = Dictionary(memory.summaries.map { ([$0.lo, $0.hi], $0.text) }, uniquingKeysWith: { _, last in last })
     (self.lines, self.summaries) = (lines, summaries)
     pinned = lines.enumerated().filter { $1.pinned && $1.deletedAt == nil }.map { CueIndexedLine(index: $0, line: $1) }
-    pinnedOverBudget = pinned.count > budget
+    pinnedBytes = CueMemoryLine.bytes(pinned.map(\.line))
     var entries: [Entry] = [], merges: [Merge] = []
     // 区间在视图里显示成的几行：有摘要用摘要，没有就拆成两半，单行只列没忘掉、没一直记着的
     func expand(_ lo: Int, _ hi: Int) -> [Entry] {
@@ -81,12 +83,42 @@ public struct CueMemoryView: Equatable, Sendable {
     self.merges = merges.sorted { ($0.hi - $0.lo, $0.lo) < ($1.hi - $1.lo, $1.lo) }
   }
 
-  /// 系统提示里的一直记着的（班次内不变）。
+  /// 系统提示里的一直记着的（班次内不变）：先一行用量，过了硬线跟一句叫 Cue 合并。
   public var pinnedText: String {
     guard !pinned.isEmpty else { return "还没有。" }
-    var out = pinned.map { $0.line.shown(at: $0.index) }
-    if pinnedOverBudget { out.append("（一直记着的太多，超出了记忆的预算：过时的 forget，不必一直记着的 pin false）") }
+    var out = ["\(pinned.count) 条，\(Self.kilobytes(pinnedBytes)) / \(Self.kilobytes(CueMemoryLine.pinnedHard))"]
+    if pinnedOverBudget {
+      out[0] += "：超了。同一件事的几条用 note replaces 并成一条（保留他的原话与范围），过时的 forget，不必一直记着的 pin false"
+    }
+    out += pinned.map { $0.line.shown(at: $0.index) }
     return out.joined(separator: "\n")
+  }
+
+  /// "3.2KB"：一位小数，整数不带 .0。
+  static func kilobytes(_ bytes: Int) -> String {
+    (Double(bytes) / 1024).formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US_POSIX"))) + "KB"
+  }
+
+  /// 自上次整理一直记着的以来新钉了这么多条，就再整理一次（没过软线也整理）。
+  public static let tidyAfterPins = 5
+
+  /// 该不该让后台整理一直记着的：钉着的那组和上次整理后的（`tidied`，从没整理过为空）不一样，且过了软线（`CueMemoryLine.pinnedSoft`）
+  /// 或新钉了 `tidyAfterPins` 条以上。整理时什么都没动，那组也就没变，不会一直重跑。
+  public func tidyDue(since tidied: Set<UUID>) -> Bool {
+    let ids = Set(pinned.map(\.line.id))
+    guard ids != tidied else { return false }
+    return pinnedBytes > CueMemoryLine.pinnedSoft || ids.subtracting(tidied).count >= Self.tidyAfterPins
+  }
+
+  /// 交给整理记忆的大脑的输入（规则在它的系统提示里，`CuePrompt.dream`）：待合并的块（`mergeText`），`tidy` 时另附一直记着的全部行；都没有为 nil。
+  public func dreamText(tidy: Bool) -> String? {
+    var parts: [String] = []
+    if let mergeText { parts.append("<merge>\n\(mergeText)\n</merge>") }
+    if tidy, !pinned.isEmpty {
+      let head = "\(pinned.count) 条，\(Self.kilobytes(pinnedBytes))（软线 \(Self.kilobytes(CueMemoryLine.pinnedSoft))）"
+      parts.append((["<pinned>", head] + pinned.map { $0.line.shown(at: $0.index) } + ["</pinned>"]).joined(separator: "\n"))
+    }
+    return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
   }
 
   /// 新会话第一条输入里的 `<memory>` 块：其余的记忆，从早到晚、越早越粗；没有为 nil。
@@ -116,8 +148,8 @@ public struct CueMemoryView: Equatable, Sendable {
     return line.shown(at: index) + (line.deletedAt != nil ? "（已忘掉）" : line.pinned ? "（一直记着）" : "")
   }
 
-  /// 交给整理记忆的大脑的待合并的块（规则在它的系统提示里，`CuePrompt.dream`）：由小到大，大块里还要先合的那一半指向排在前面的块；没有为 nil。
-  public var mergeText: String? {
+  /// 待合并的块：由小到大，大块里还要先合的那一半指向排在前面的块；没有为 nil。
+  var mergeText: String? {
     guard !merges.isEmpty else { return nil }
     return merges.map { "#\($0.lo)-\($0.hi - 1)\n\($0.source)" }.joined(separator: "\n\n")
   }

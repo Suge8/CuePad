@@ -17,10 +17,8 @@ struct AwaitingReplyTests {
             $0.hostID = "mac-cue"
             $0.enabledAt = .now
         }
-        try await store.recordMacPresence(host: "mac-cue", bootID: "cue-boot") { true }
-        try await store.setCueState(.settled, hostID: "mac-cue", bootID: "cue-boot")
-        try await store.recordMacPresence(host: "mac-a", bootID: "agent-boot") { true }
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a", bootID: "agent-boot")
+        try await store.recordMacPresence(host: "mac-cue") { true }
+        let recorder = try await rig.runtimeRecorder(on: "mac-a")
         func settle(_ id: String, _ title: String, minutesAgo: Double) async throws {
             try await recorder.update(
                 sessionID: id, state: .settled, title: title, times: PiTimes(stateSince: .now.addingTimeInterval(-minutesAgo * 60), busySince: nil))
@@ -87,10 +85,8 @@ struct AwaitingReplyTests {
             $0.hostID = "mac-cue"
             $0.enabledAt = .now
         }
-        try await store.recordMacPresence(host: "mac-cue", bootID: "cue-boot") { true }
-        try await store.setCueState(.settled, hostID: "mac-cue", bootID: "cue-boot")
-        try await store.recordMacPresence(host: "mac-a", bootID: "agent-boot") { true }
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a", bootID: "agent-boot")
+        try await store.recordMacPresence(host: "mac-cue") { true }
+        let recorder = try await rig.runtimeRecorder(on: "mac-a")
         try await recorder.update(
             sessionID: "billing", state: .error, detail: "connection refused", title: "billing",
             times: PiTimes(stateSince: .now.addingTimeInterval(-600), busySince: nil))
