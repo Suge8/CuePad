@@ -35,5 +35,26 @@ extension DebugScene {
             await Task.wait(for: .seconds(2))
         }
     }
+
+    /// `-CuePadBoardSwap YES`（仅 Mac，配 `-CuePadDemo YES` 录屏）：就绪后每 1.5 秒在进展的看板与一个演示会话之间来回换主区，走会话条上那两下的同一条路
+    /// （`selectPane`、`openSession`）：看会话条在看板上自动收成图标条、进会话回到宽版，主区随之滑动、看板的列宽一步到位。
+    /// `fast`：中途反向——换过去 0.1 秒就换回、再连换两次各隔 0.06 秒，各停 1.5 秒，看打断时栏与栏是否仍对齐、停下时是否回到终点。
+    static func swapBoardIfAsked(_ workspace: Workspace) async {
+        guard let mode = defaults.string(forKey: "CuePadBoardSwap") else { return }
+        let session = defaults.string(forKey: "CuePadSession") ?? "notes"
+        // 两次之间停多久是录屏的节奏，不是在等别的事
+        let gaps: [Double] = mode == "fast" ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
+        await Task.wait(for: .seconds(1.5))
+        var step = 0
+        while !Task.isCancelled {
+            if workspace.onBoard {
+                workspace.openSession(PiSessionState.recordID(sessionID: session), sessionID: session)
+            } else {
+                workspace.selectPane(.progress)
+            }
+            await Task.wait(for: .seconds(gaps[step % gaps.count]))
+            step += 1
+        }
+    }
 }
 #endif

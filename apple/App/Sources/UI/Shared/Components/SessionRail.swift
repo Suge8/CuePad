@@ -42,6 +42,10 @@ private struct SessionRailContent: View {
     let open: (PiSessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 52
+    #if os(iOS)
+    /// iPad 宽版一行：Chrome 的行高，随动态字体放大。
+    @ScaledMetric(relativeTo: .body) private var wideRow = Chrome.row
+    #endif
 
     @Environment(\.relayStage) private var stage
     @Environment(\.pageActive) private var active
@@ -54,7 +58,8 @@ private struct SessionRailContent: View {
         #if os(macOS)
         case .wide: Chrome.row
         #else
-        case .wide: max(Chrome.row, tileHeight)
+        // 宽版一行只有名字与线（同 Mac），不按手机两行的格高
+        case .wide: wideRow
         #endif
         }
     }

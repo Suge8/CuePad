@@ -15,13 +15,15 @@ enum Chrome {
     #if os(macOS)
     /// 窗口最顶那一排的高：系统按统一工具栏定，红绿灯在它的中线上；三栏的栏头都排在这一排。
     static let band: CGFloat = 52
-    /// 会话条宽版一行的高（同访达侧栏的中号行）。
+    /// 会话条宽版一行的高。指针（Mac）：同访达侧栏的中号行。
     static let row: CGFloat = 32
     /// 收起的图标条：红绿灯两侧留白相等（灯左沿 19、三颗灯连同间隔 59.5、右边再留 19.5），条上每一格都在这条中轴上。
     static let strip: CGFloat = 98
     #else
     /// iPad 会话条顶上那一排（侧栏钮、搜索、Cue 钮）的高。
     static let band: CGFloat = 44
+    /// 触控（iPad）：手指点得准的最小高（HIG 44）。接了触控板也是这一档——手指随时会点，iPadOS 自己的侧栏也不因指针改行高；
+    /// 行与行之间、组与组之间同 Mac 的节奏（`cellGap`、`groupGap`），多出来的高只在行里。
     static let row: CGFloat = 44
     /// iPad 没有红绿灯，图标条只放得下一格加两边的纸。
     static let strip: CGFloat = 80

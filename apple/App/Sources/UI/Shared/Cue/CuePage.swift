@@ -21,6 +21,9 @@ struct CuePage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    #if os(iOS)
+    @Environment(\.headerHost) private var headerHost
+    #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
@@ -85,6 +88,8 @@ struct CuePage: View {
                 .frame(maxWidth: Self.readingWidth)
         }
         .scrollDismissesKeyboard(.interactively)
+        // iPad 右边那一栏：名牌比栏窄，对话到名牌下沿淡出，不从名牌两侧露出来（`Bars`）；手机的名牌铺满整行，照沉浸式
+        .fadesUnderHead(headerHost == .panel)
         .floatingHeader(.verbatim(cue.name), height: CueHeader.height, center: { CueHeader() }) { EmptyView() }
     }
     #endif

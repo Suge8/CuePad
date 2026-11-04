@@ -56,6 +56,8 @@ struct SplitRoot: View {
                     .toolbarVisibility(.hidden, for: .navigationBar)
                     .navigationDestination(for: Route.self) { RouteView(route: $0) }
             }
+            // 会话的栏头是写着字的一排：对话到它下沿淡出，同 Mac（`Bars`）
+            .fadesUnderHead(route.isSession)
         }
     }
 }
