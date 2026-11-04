@@ -203,11 +203,6 @@ private struct BoardRowSpine: View {
     }
 }
 
-extension EnvironmentValues {
-    /// 手机看板待办行头的"+"：点它开添加任务（`PhoneBoard` 的 `addsInLane`）；nil 不画。
-    @Entry var laneAddsTask: (() -> Void)? = nil
-}
-
 /// 侧转 90° 的一个子视图占转过之后的框（`rotationEffect` 只转画面，不换排版的宽高）。
 private struct Sideways: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

@@ -8,12 +8,11 @@ import SwiftUI
 /// 只有辅助字号下四行连各自的最矮都叠不下，才整页竖着滚。高按各行的理想高分（`TaskBoard.Column.rowTiers`）：推进中、等你各三排卡，
 /// 待办、已完成各一排矮卡，矮屏与大一两档的字下重的两行先回到两排。
 /// 卡换行时从原处飞到新处（`boardFlight`），四行共用量飞行位置的坐标系与正被拖着的那件（`boardStage`）。
-/// 点"+"添加任务时整页先回到待办那一行。`addsInLane`：那颗"+"在待办的行头里（窄屏侧栏，页顶那一排放不下它）。
+/// 点"+"添加任务时整页先回到待办那一行。
 struct PhoneBoard: View {
     let board: TaskBoard
     @Binding var adding: Bool
     let newTaskProject: UUID?
-    let addsInLane: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -31,7 +30,6 @@ struct PhoneBoard: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.never)
             .boardStage()
-            .environment(\.laneAddsTask, addsInLane ? { adding = true } : nil)
             .onChange(of: adding) {
                 if adding { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(TaskBoard.Column.todo, anchor: .top) } }
             }

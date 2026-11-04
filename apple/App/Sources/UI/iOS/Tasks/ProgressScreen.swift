@@ -5,8 +5,8 @@ import SwiftUI
 /// 进展页（窄屏侧栏与宽屏主区的"进展"）：看板与会话两段，看哪一段只有 `Workspace.progressPane` 一份
 /// （项目页"⋯"的"看这个项目的会话"经 `showSessions` 换到会话段）。两段只看项目范围里的（`Workspace.scopedProject`）。
 /// 顶栏中间一块玻璃（`ProgressHeader`）：两段的分段、项目范围、额度环；宽屏右上角随段是"添加任务"或"新会话"。
-/// 窄屏的那一排是侧栏的（`NarrowSidebarBar`，同一块玻璃、项目范围收进额度面板），放不下这一页自己的操作：添加任务是待办行头的"+"
-/// （`BoardRowLane`），新会话是会话列表的第一行（`NewSessionLine`）。
+/// 窄屏的那一排是侧栏的（`NarrowSidebarBar`，同一块玻璃、项目范围收进额度面板），放不下这一页自己的操作：添加任务是待办头上的"+"
+/// （`laneAddsTask`：竖版看板的行头、横屏四列的列头），新会话是会话列表的第一行（`NewSessionLine`）。
 /// 看板一段是流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）；选了项目以后卡上不画项目小图形、列头的数也只数这个项目。
 /// 宽屏（iPad）主栏放得下看板最窄宽（`WideMetrics.board`，`boardFits`）与 iPhone 横屏同 Mac 四列并排（`BoardColumns`）；放不下的主栏（iPad 竖屏、
 /// 11 寸横屏旁边开着 Cue 或会话）与窄屏竖着拿是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点：
@@ -65,9 +65,10 @@ struct ProgressScreen: View {
             if verticalSizeClass == .compact || (sizeClass == .regular && boardFits) {
                 BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject, margin: 12)
             } else {
-                PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject, addsInLane: inSidebar)
+                PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)
             }
         }
+        .environment(\.laneAddsTask, inSidebar ? { adding = true } : nil)
         // 换范围不带里层的挪位与数字动画，理由同 Mac 的 `TaskBoardPage`
         .transaction(value: scope) { $0.disablesAnimations = true }
     }
