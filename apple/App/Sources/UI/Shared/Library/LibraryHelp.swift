@@ -20,7 +20,6 @@ struct LibraryHelp: View {
         .font(Typography.secondary)
         .fixedSize(horizontal: false, vertical: true)
         .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .observing(services.store, id: library.hostID, into: $mac, onError: workspace.fail) { [host = library.hostID] in try $0.macAgents(on: host) }
     }
 

@@ -98,6 +98,10 @@ struct PiConfigControls<Trailing: View>: View {
         self.trailing = trailing()
     }
 
+    /// 工具排的字号上限（同 Cue 面板的做法）：取 402 宽的手机上收完六步（`ConfigRow`）仍放得下、不压发送钮的那一档，实测 AX-XL；
+    /// 再大一档 AX-XXL 时上下文压到发送钮下面。泛型类型里放不了静态存储属性。
+    static var largestType: DynamicTypeSize { .accessibility3 }
+
     func aligned(_ alignment: Alignment) -> Self {
         var aligned = self
         aligned.alignment = alignment
@@ -123,6 +127,8 @@ struct PiConfigControls<Trailing: View>: View {
             }
             trailing
         }
+        // 字号到这一档为止（输入的正文照常放大）：再大 402 宽的手机上收完六步也放不下，伸到发送钮底下
+        .dynamicTypeSize(...Self.largestType)
         .frame(maxWidth: .infinity, alignment: alignment)
         #if os(macOS)
         .onChange(of: opening.wrappedValue) { _, pick in
@@ -158,7 +164,7 @@ struct PiConfigControls<Trailing: View>: View {
 /// 5. `secondary`：次要的再收一档——思考强度只剩竖格、上下文只剩圆环（百分比留在读屏与点开的气泡里）、加速只写"加速"（开着靠选中底）；
 /// 6. `model`：剩下的宽都给模型，放不下全名就只留标志（没有标志的模型名字截断）；完整名称悬停、读屏、菜单里看。
 /// 先收字、留标志与操作；不把胶囊收进"⋯"：排版定不了菜单里该有哪几项（`Layout` 不能藏起子视图，藏不掉的照样被读屏读到、点到），一律收短、留在原地。
-/// 六步收完仍放不下（最大的辅助字号）就伸出输入框的右边、被裁掉，不折行、不撑宽输入框。
+/// 字号封顶在 `PiConfigControls.largestType`（402 宽的手机收完六步仍放得下、不压发送钮的那一档）；更窄的屏收完仍放不下就伸出去被裁掉，不折行、不撑宽输入框。
 private struct ConfigRow: Layout {
     enum Give: CaseIterable { case wording, spacing, context, agent, secondary, model }
 

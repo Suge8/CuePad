@@ -18,7 +18,7 @@ struct CardMoreSlot: View {
     var body: some View {
         @Bindable var workspace = workspace
         Color.clear
-            .panel(item: $workspace.moreCard, style: .bubble(workspace.moreCard?.source ?? .unanchored)) { CardMorePanel(card: $0.card, opens: $0.opens) }
+            .panel(item: $workspace.moreCard, style: .bubble(workspace.moreCard?.source ?? .unanchored, width: .fixed(BubblePlacement.maxWidth))) { CardMorePanel(card: $0.card, opens: $0.opens) }
     }
 }
 

@@ -10,9 +10,9 @@ extension View {
             switch style {
             case .fullScreen:
                 self.fullScreenCover(item: item) { content($0).modalPage(close) }
-            case .bubble(let source, _):
+            case .bubble(let source, let width):
                 let shown = item.wrappedValue
-                self.modifier(BubbleSlot(key: shown.map { AnyHashable($0.id) }, source: source, close: close) { if let shown { content(shown) } })
+                self.modifier(BubbleSlot(key: shown.map { AnyHashable($0.id) }, source: source, width: width, close: close) { if let shown { content(shown) } })
             case .sheet:
                 self.sheet(item: item) { content($0).modalPage(close) }
             }
@@ -49,6 +49,7 @@ final class PanelHost {
         /// 换了这个就是另一个气泡（换一条任务）：旧的退场、新的进场。
         let identity: AnyHashable
         let source: BubbleSource
+        let width: BubblePlacement.Width
         let content: AnyView
         let close: ClosePanel
     }
@@ -80,8 +81,8 @@ extension View {
     /// 场景的根与 sheet 各挂一次（同 Mac 的 `panelHost`）：这一层的气泡都画在这里。
     func panelHost() -> some View { modifier(PanelHostModifier()) }
 
-    /// 从这个控件（按钮、圆钮、胶囊）长出的气泡，同 Mac：挂在它的框下（放不下挂上面），尾巴指它。`width` 手机不看（按屏宽摆）。
-    func bubble(isPresented: Binding<Bool>, width: CGFloat = BubblePlacement.width, @ViewBuilder content: @escaping () -> some View) -> some View {
+    /// 从这个控件（按钮、圆钮、胶囊）长出的气泡，同 Mac：挂在它的框下（放不下挂上面），尾巴指它。宽默认随内容（`BubblePlacement.Width`）。
+    func bubble(isPresented: Binding<Bool>, width: BubblePlacement.Width = .fitting, @ViewBuilder content: @escaping () -> some View) -> some View {
         modifier(ControlBubble(isPresented: isPresented, width: width, panel: content))
     }
 }
@@ -126,6 +127,7 @@ private struct WindowProbe: UIViewRepresentable {
 private struct BubbleSlot<Panel: View>: ViewModifier {
     let key: AnyHashable?
     let source: BubbleSource
+    let width: BubblePlacement.Width
     let close: ClosePanel
     @ViewBuilder let panel: () -> Panel
     @Environment(PanelHost.self) private var host: PanelHost?
@@ -134,11 +136,11 @@ private struct BubbleSlot<Panel: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: Mode(key: key, source: source), initial: true) { _, mode in
+            .onChange(of: Mode(key: key, source: source, width: width), initial: true) { _, mode in
                 guard let host else { return }
                 guard let key = mode.key else { return host.hide(token) }
                 host.show(PanelHost.Shown(
-                    token: token, identity: [AnyHashable(token), key], source: mode.source,
+                    token: token, identity: [AnyHashable(token), key], source: mode.source, width: mode.width,
                     content: AnyView(panel().environment(\.closePanel, close).environment(\.self, environment)), close: close))
             }
             .onDisappear { host?.hide(token) }
@@ -147,6 +149,7 @@ private struct BubbleSlot<Panel: View>: ViewModifier {
     private struct Mode: Equatable {
         let key: AnyHashable?
         let source: BubbleSource
+        let width: BubblePlacement.Width
     }
 }
 
@@ -155,7 +158,7 @@ private struct BubbleSlot<Panel: View>: ViewModifier {
 /// 点下时按读屏标识量钮的框（`PanelHost.frame(of:)`，`LibraryScreen`）。
 private struct ControlBubble<Panel: View>: ViewModifier {
     @Binding var isPresented: Bool
-    let width: CGFloat
+    let width: BubblePlacement.Width
     @ViewBuilder let panel: () -> Panel
     @State private var measured = Measured()
 
@@ -185,7 +188,7 @@ private struct BubbleLayer: View {
         let source = shown?.source ?? .unanchored
         GeometryReader { proxy in
             let frame = proxy.frame(in: .global)
-            let placement = BubblePlacement(source: source, container: frame, insets: Self.insets).lifted(keyboardTop != nil)
+            let placement = BubblePlacement(source: source, container: frame, insets: Self.insets, width: shown?.width ?? .fitting).lifted(keyboardTop != nil)
             BubbleStage(floor: keyboardTop.map { $0 - frame.minY - Self.insets.bottom }, ceiling: Self.insets.top) {
                 if let shown {
                     BubbleFrame(placement: placement) {
@@ -201,6 +204,7 @@ private struct BubbleLayer: View {
                     .transition(placement.transition(reduceMotion: reduceMotion))
                 }
             }
+            .coordinateSpace(.named(BubbleStage.space))
         }
         // 贴在底部的纸伸进 Home 指示条那一截：与屏幕圆角同心
         .ignoresSafeArea(source == .bottom ? .all : .keyboard, edges: source == .bottom ? .bottom : .all)
