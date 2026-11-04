@@ -102,8 +102,8 @@ struct PiStateDot: View {
         let mark = ZStack {
             // 不放循环动效时画同一状态的静止图标（纸飞机的静止那一架由它自己换，`OnTheWay`）
             switch shown.mark {
-            case .flight: OnTheWay(size: box, color: tint).transition(Self.swap)
-            case .loop(let kind) where loops: LoopLayer(kind: kind, color: tint).transition(Self.swap)
+            case .flight: OnTheWay(size: box, color: tint).transition(Motion.pop(reduceMotion: reduceMotion))
+            case .loop(let kind) where loops: LoopLayer(kind: kind, color: tint).transition(Motion.pop(reduceMotion: reduceMotion))
             case .loop, .icon, .rippled: icon(tint)
             }
         }
@@ -130,10 +130,9 @@ struct PiStateDot: View {
             .background {
                 if shown.mark == .rippled, loops { LoopLayer(kind: .ripple, color: tint).frame(width: box * 0.86, height: box * 0.86) }
             }
-            .transition(Self.swap)
+            .transition(Motion.pop(reduceMotion: reduceMotion))
     }
 
-    private static let swap = AnyTransition.scale(scale: 0.6).combined(with: .opacity)
 }
 
 /// 会话状态标画什么（`PiStateDot` 只画它、不判断），状态 → 样子只在 `PiShown.mark`：常驻的循环、话在路上那架纸飞机、外带一圈波纹的图标，或静止的图标（`PiShown.icon`）。

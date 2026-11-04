@@ -1,22 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 工具排里各枚胶囊（Agent、模型、思考强度、上下文用量 `PiContextGauge`）同样高。
-enum ConfigCapsule {
-    /// 标准字号下的高；字号大了跟着字长高，字上下留 `textInset`（写死高度时大字号的字会伸出胶囊）。
-    static let height: CGFloat = 30
-    static let textInset: CGFloat = 4
-    /// 点按区的高：胶囊画 `height` 高，点得到的上下各多一截，整排就是这么高。
-    static let hitHeight: CGFloat = 44
-}
-
-extension View {
-    /// 胶囊的高（`ConfigCapsule`）：至少 `height`，字号大了随字长高。
-    func configCapsuleHeight() -> some View {
-        padding(.vertical, ConfigCapsule.textInset).frame(minHeight: ConfigCapsule.height)
-    }
-}
-
 /// 模型胶囊：模型的标志（`BrandMark.model`）+ 模型短名（没有当前模型时写 `unnamed`）。iOS 点开是系统菜单（`MenuButton`）；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
 /// SwiftUI 在 Mac 上把菜单项里的图片丢掉）：分组标题带这一组的标志（提供方或 Agent 的产品标志），每个模型带它自己的标志。
 /// 有订阅额度的提供方：标志外一圈细环是卡着的那个窗口还剩多少（`ModelBadge`），没给组名的分组标题写各窗口还剩多少
@@ -31,7 +15,6 @@ struct PiModelCapsule: View {
     /// 弹出 AppKit 的模型菜单。
     let pick: () -> Void
     #endif
-    @Environment(\.palette) private var palette
 
     var body: some View {
         Moments(next: quotas.nextReset(after:)) { now in capsule(at: now) }
@@ -53,26 +36,31 @@ struct PiModelCapsule: View {
     private func label(at now: Date) -> some View {
         let mark = current.flatMap(BrandMark.model), binding = binding(at: now)
         let badged = mark != nil || binding != nil
-        return HStack(spacing: 5) {
+        let name = (current.map { Text(Dotted(PiModelName.short($0), $0.account?.label(provider: $0.key.provider)).visible) } ?? Text(unnamed))
+            .contentTransition(.opacity)
+        return HStack(spacing: 0) {
             // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
             if badged {
                 ModelBadge(mark: mark, binding: binding)
                     .modifier(Breathing(active: pending))
                     .accessibilityHidden(true)
+                // 工具排给的宽放不下全名（`ConfigRow` 的 `model`）就只留标志，不截成"G…"；完整模型名可悬停、读屏或在菜单里看
+                ViewThatFits(in: .horizontal) {
+                    name.padding(.leading, Self.gap)
+                    Color.clear.frame(width: 0, height: 0)
+                }
+            } else {
+                // 没有标志可留：名字截断
+                name.truncationMode(.tail)
             }
-            (current.map { Text(Dotted(PiModelName.short($0), $0.account?.label(provider: $0.key.provider)).visible) } ?? Text(unnamed)).lineLimit(1).truncationMode(.tail)
-                .contentTransition(.opacity)
         }
-        .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-        .padding(.leading, badged ? 6 : 11).padding(.trailing, 11)
-        // 先按内容宽，宽屏回复框用剩余宽度截断；完整模型名可悬停或读屏查看。
-        .configCapsuleHeight()
-        .background(palette.fill, in: .capsule)
-        .frame(minHeight: ConfigCapsule.hitHeight)
-        .contentShape(.capsule)
+        .chip(menu: true)
         .help(spoken(at: now))
         .animation(Motion.fade, value: current?.key)
     }
+
+    /// 标志与名字之间。
+    private static let gap: CGFloat = 5
 
     private func spoken(at now: Date) -> String {
         Dotted(current?.displayName ?? String(localized: unnamed), current.flatMap { $0.account?.label(provider: $0.key.provider) }, binding(at: now).map { String(localized: "\($0.name)额度剩 \($0.percent)") }).spoken
@@ -86,11 +74,10 @@ struct PiModelCapsule: View {
 }
 
 
-/// Agent 胶囊：产品标志 + 名字，与模型胶囊同一种底与高（`PiConfigControls`）。能换（`PiAgentPick.choosable`）时点开选哪家：
+/// Agent 胶囊：产品标志 + 名字，与模型胶囊同一种胶囊（`PiConfigControls`）。能换（`PiAgentPick.choosable`）时点开选哪家：
 /// iOS 是系统菜单（`MenuButton`），Mac 同模型胶囊弹 AppKit 菜单（`ChoiceMenu`，SwiftUI 在 Mac 上丢掉菜单项里的产品标志）。
 struct PiAgentCapsule: View {
     let pick: PiAgentPick
-    @Environment(\.palette) private var palette
     #if os(macOS)
     @State private var anchor = PopUpAnchor()
     #endif
@@ -120,13 +107,8 @@ struct PiAgentCapsule: View {
             }.fixedSize()
             ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
         }
-        .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-        .padding(.horizontal, 6)
+        .chip(menu: pick.choosable)
         .help(kind.name)
-        .configCapsuleHeight()
-        .background(palette.fill, in: .capsule)
-        .frame(minHeight: ConfigCapsule.hitHeight)
-        .contentShape(.capsule)
         .animation(Motion.fade, value: kind)
     }
 }
@@ -174,7 +156,6 @@ struct PiThinkingDial: View {
 
     private var barWidth: CGFloat { compact ? 3 : 4 }
     private var gap: CGFloat { compact ? 2 : 3 }
-    private var inset: CGFloat { compact ? 6 : 10 }
     private var labelGap: CGFloat { compact ? 2 : 6 }
     private static let lowest: CGFloat = 6
     private static let tallest: CGFloat = 16
@@ -203,20 +184,19 @@ struct PiThinkingDial: View {
 
     private var content: some View {
         let drawn = drawn
-        return HStack(spacing: labelGap) {
+        return HStack(spacing: 0) {
             // 写出档名（与"上下文 86%"同一种写法）：只有一个脑图标加几根竖条要猜；按着时跟着指到的档变。
-            // 工具排放不下时（`ConfigRow`）只写档名
+            // 工具排放不下时（`ConfigRow`）先只写档名，再只剩竖格（档名在读屏里）
             ViewThatFits(in: .horizontal) {
-                reading(drawn, wordy: true)
-                reading(drawn, wordy: false)
+                reading(drawn, wordy: true).padding(.trailing, labelGap)
+                reading(drawn, wordy: false).padding(.trailing, labelGap)
+                Color.clear.frame(width: 0, height: 0)
             }
             .accessibilityHidden(true)
             meterBars(drawn)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { track = $0 }
         }
-        .padding(.horizontal, inset)
-        .configCapsuleHeight()
-        .background(palette.fill, in: .capsule)
+        .chip()
         .overlay(alignment: .top) {
             if let bubble {
                 Text("思考 \(Text(bubble.label).fontWeight(.semibold).foregroundStyle(palette.ink))")
@@ -230,8 +210,6 @@ struct PiThinkingDial: View {
                     .allowsHitTesting(false)
             }
         }
-        .frame(minHeight: ConfigCapsule.hitHeight)
-        .contentShape(.rect)
         #if os(macOS)
         .coordinateSpace(.named(Self.space))
         .gesture(

@@ -72,8 +72,7 @@ struct CaptureComposer: View {
         let cue = workspace.cue
         let empty = state.draft.isEmpty(accepting: .files) || !cue.canHear
         return Button("交给 \(cue.name)", icon: .handOff, action: handToCue)
-            .font(Typography.meta.weight(.semibold))
-            .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, compact: true))
+            .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, size: .compact))
             .fixedSize()
             .disabled(empty)
             .help("把这次随手记直接说给 \(cue.name)")
@@ -107,7 +106,7 @@ struct CaptureComposer: View {
 
 #endif
 
-/// 头部的落点胶囊："[前缀] 图标 名字 ⌃⌄"，点开换去处。随手记与 iOS 进展页的快速添加写"→ 项目图标 项目名"（init(project:)），
+/// 头部的落点胶囊："[前缀] 图标 名字 ⌄"，点开换去处；外形是 `chip`（与工具排同一档高）。随手记与新建任务（`NewTaskField`）写"→ 项目图标 项目名"（init(project:)），
 /// 新会话与发给 Agent 的输入框用同一个胶囊写"新会话 · 项目名""交给 会话名"。
 struct DestinationChip<Icon: View>: View {
     var lead: String?
@@ -116,34 +115,26 @@ struct DestinationChip<Icon: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: ChipMetrics.spacing) {
+        HStack(spacing: 4) {
             if let lead { Text(lead).foregroundStyle(palette.ink3) }
             icon
-            title.foregroundStyle(palette.ink).lineLimit(1)
-            Image(.choose).font(ChipMetrics.chevron).foregroundStyle(palette.ink3).accessibilityHidden(true)
+            title
         }
-        .font(ChipMetrics.font)
-        .padding(.horizontal, ChipMetrics.inset).frame(height: ChipMetrics.height)
-        .background(palette.fill, in: .capsule)
-        .contentShape(.capsule)
+        .chip(menu: true)
     }
-}
-
-/// 胶囊的尺寸（泛型类型里放不了静态存储属性）。
-private enum ChipMetrics {
-    #if os(macOS)
-    static let spacing: CGFloat = 5, glyph: CGFloat = 12, inset: CGFloat = 8, height: CGFloat = 24
-    static let font = Typography.meta
-    static let chevron = Glyph.mark
-    #else
-    static let spacing: CGFloat = 6, glyph: CGFloat = 13, inset: CGFloat = 12, height: CGFloat = 32
-    static let font = Font.subheadline.weight(.medium)
-    static let chevron = Font.caption2
-    #endif
 }
 
 extension DestinationChip where Icon == ProjectGlyph {
     init(project: Project?) {
-        self.init(lead: "→", title: Text(project?.shownName ?? "")) { ProjectGlyph(project: project, size: ChipMetrics.glyph) }
+        self.init(lead: "→", title: Text(project?.shownName ?? "")) { ProjectGlyph(project: project, size: Self.glyph) }
+    }
+
+    /// 项目图标与胶囊上的字（`ControlSize.inline.font`）一样大。
+    private static var glyph: CGFloat {
+        #if os(macOS)
+        12
+        #else
+        13
+        #endif
     }
 }

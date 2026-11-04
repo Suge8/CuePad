@@ -67,7 +67,7 @@ struct FileChip: View {
                 Image(decorative: thumbnail, scale: scale).resizable().scaledToFit()
                     .clipShape(.rect(cornerRadius: Radius.chip))
             } else {
-                Image(Icon.file(named: name)).font(.title3).foregroundStyle(palette.ink3)
+                Image(Icon.file(named: name)).font(Glyph.large).foregroundStyle(palette.ink3)
             }
         }
         .frame(width: thumbSide, height: thumbSide)

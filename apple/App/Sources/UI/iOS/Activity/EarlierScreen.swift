@@ -19,7 +19,7 @@ struct EarlierTile: View {
                         Text("更早").foregroundStyle(palette.ink2)
                         Text(total, format: .number).foregroundStyle(palette.ink3).monospacedDigit()
                     }
-                    .font(.caption2.weight(.semibold))
+                    .font(Typography.caption2.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: Self.height)
                     .contentShape(.rect)
                 }

@@ -190,27 +190,27 @@ struct CardRow: View {
                 MetaLine(spacing: 8, gap: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         // 任务用全 App 同一个任务圈打头，一眼分得出任务与灵感
-                        if card.isTask { TaskRingView(status: card.status, done: false, size: Self.ring) }
-                        Text(marked(text.label)).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
+                        if card.isTask { TaskRingView(status: card.status, done: false, size: Self.ring).frame(width: Self.ring) }
+                        Text(marked(text.label)).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(2)
                     }
                 } meta: {
                     HStack(spacing: 8) {
                         if text.files > 0 { AttachmentMark(count: text.files) }
                         Text(DateLabel.short(card.modifiedAt)).monospacedDigit()
                     }
-                    .font(.caption).foregroundStyle(palette.ink3)
+                    .font(Typography.caption).foregroundStyle(palette.ink3)
                 }
                 // 搜索时摘要从命中处截起（`CueSummary.snippet`），看得出为什么搜到它
                 let preview = highlight.isEmpty ? text.preview : CueSummary.snippet(card.body, matching: terms).textGlyphs
                 if !preview.isEmpty {
-                    Text(marked(preview)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
+                    Text(marked(preview)).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2)
                 }
                 if let project {
                     HStack(spacing: 4) {
                         ProjectGlyph(project: project, size: 10)
                         Text(project?.shownName ?? "")
                     }
-                    .font(.caption).foregroundStyle(palette.ink3).padding(.top, 2)
+                    .font(Typography.caption).foregroundStyle(palette.ink3).padding(.top, 2)
                 }
             }
             .multilineTextAlignment(.leading)

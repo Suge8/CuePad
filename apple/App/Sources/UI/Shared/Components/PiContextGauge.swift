@@ -3,11 +3,11 @@ import SwiftUI
 
 /// 回复框工具排里思考强度条旁的上下文用量（iOS 与 Mac 共用，读数规则见 `PiContextMeter`）：胶囊里写"上下文 86%"，
 /// 胶囊自己就是用量计——底下从左铺一层淡色，铺到已用的比例。写出"上下文"三个字，数字不会被读成别的；工具排放不下时（`ConfigRow`）
-/// 三个字收成一个小圆环：淡圈上一道弧描到已用的比例，静止、紧挨着百分比，读得出是用量。不用一条短横（挨着数字读成减号"−86%"），
+/// 三个字收成一个小圆环、再放不下只剩圆环（百分比在读屏与气泡里）：淡圈上一道弧描到已用的比例，静止、紧挨着百分比，读得出是用量。不用一条短横（挨着数字读成减号"−86%"），
 /// 也不用圈里一块扇形（像录制钮或表盘）。
 /// 与模型、思考强度同样高；用到七成百分比加粗转墨色、铺色加深；九成时铺色换成胭脂（赭黄只给等你确认），百分比仍是墨色加粗——
 /// 胭脂字压在胭脂铺色上，深色下到不了 4.5:1，颜色只放在铺色上，字留给墨色。刚压缩过、Agent 还不知道
-/// 已用多少时没有这颗胶囊。悬停与读屏说"上下文 · 已用 x% · 剩 y%"（快满了加一句可以压缩）；点一下是同样的说明，
+/// 已用多少时没有这颗胶囊。悬停与读屏说"上下文 · 已用 x% · 剩 y%"（快满了加一句可以压缩）；点一下是从胶囊长出的气泡写同样的说明，
 /// 接近上限时多一个"压缩"，等于发出 /compact（会话能用斜杠命令时，`AgentCapabilities.commands`）。
 struct PiContextGauge: View {
     let session: PiSessionState
@@ -35,23 +35,13 @@ struct PiContextGauge: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 4) { Text("上下文").foregroundStyle(palette.ink3); percent }
                 HStack(spacing: 4) { ring; percent }
+                ring
             }
-            .font(Typography.meta)
-            .padding(.horizontal, 10)
-            .configCapsuleHeight()
-            .background(palette.fill, in: .capsule)
-            .background(alignment: .leading) {
-                GeometryReader { proxy in
-                    used.frame(width: proxy.size.width * meter.fraction)
-                }
-                .clipShape(.capsule)
-            }
-            .frame(minHeight: ConfigCapsule.hitHeight)
-            .contentShape(.capsule)
+            .chip(level: ControlSurface.Level(fraction: meter.fraction, color: used))
         }
         .buttonStyle(PressStyle())
         .help(meter.help.visible)
-        .popover(isPresented: $showsDetail) { detail.presentationCompactAdaptation(.popover) }
+        .bubble(isPresented: $showsDetail) { detail }
         .accessibilityLabel("上下文")
         .accessibilityValue(meter.help.spoken)
         .animation(Motion.fade, value: meter)
@@ -85,12 +75,11 @@ struct PiContextGauge: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if compacts {
                     Button("现在压缩", icon: .compact, action: compact)
-                        .buttonStyle(.glass).controlSize(.small)
+                        .buttonStyle(ControlButtonStyle(size: .compact))
                 }
             }
         }
         .padding(16)
-        .frame(minWidth: 220, maxWidth: 300, alignment: .leading)
     }
 
     private func compact() {

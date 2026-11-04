@@ -128,7 +128,7 @@ struct CueFaceMarks: ViewModifier {
                     Circle().fill(dot == .failed ? palette.failure : palette.signature).padding(line).background(rim, in: .circle)
                         .frame(width: Self.dotSide(size), height: Self.dotSide(size))
                         .offset(x: Self.dotReach(size), y: Self.dotReach(size))
-                        .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+                        .transition(Motion.pop(reduceMotion: reduceMotion))
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -139,7 +139,7 @@ struct CueFaceMarks: ViewModifier {
                         .background(palette.waitingFill, in: .capsule)
                         .padding(line).background(rim, in: .capsule)
                         .offset(x: size * 0.16, y: -size * 0.12)
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(Motion.pop(reduceMotion: reduceMotion))
                 }
             }
     }

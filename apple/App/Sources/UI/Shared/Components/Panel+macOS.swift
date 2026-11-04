@@ -20,7 +20,7 @@ extension View {
 
     /// 从这个控件（按钮、圆钮、胶囊）长出的气泡：挂在它的框下（放不下挂上面），尾巴指它的中线；点、键盘、读屏打开都一样。
     /// 开合的状态用 `BubbleSwitch`：按在开关上收起的那一下，松开时不再打开。
-    func bubble(isPresented: Binding<Bool>, width: CGFloat = BubblePlacement.width, @ViewBuilder content: @escaping () -> some View) -> some View {
+    func bubble(isPresented: Binding<Bool>, width: BubblePlacement.Width = .fitting, @ViewBuilder content: @escaping () -> some View) -> some View {
         modifier(ControlBubble(isPresented: isPresented, width: width, panel: content))
     }
 }
@@ -242,7 +242,7 @@ private struct Mode: Equatable {
 /// 从控件长出的气泡（`View.bubble(isPresented:)`）：只这一个视图读几何（自己的框），开销可忽略；行里的气泡不走这里（`BubbleSource.press`）。
 private struct ControlBubble<Panel: View>: ViewModifier {
     @Binding var isPresented: Bool
-    let width: CGFloat
+    let width: BubblePlacement.Width
     @ViewBuilder let panel: () -> Panel
     @State private var frame: CGRect?
 
@@ -344,6 +344,7 @@ private struct PanelLayer: View {
                     }
                 }
             }
+            .coordinateSpace(.named(BubbleStage.space))
         }
         .ignoresSafeArea()
     }
@@ -381,13 +382,11 @@ struct PanelHeader<Trailing: View>: View {
 /// Mac 浮层右上的关闭钮（Esc 同）。
 struct PanelCloseButton: View {
     @Environment(\.closePanel) private var close
-    @Environment(\.palette) private var palette
 
     var body: some View {
         Button("关闭", icon: .close) { close() }
-            .labelStyle(.iconOnly).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
-            .frame(width: 26, height: 26).background(palette.fill, in: .circle).contentShape(.circle)
-            .buttonStyle(PressStyle())
+            .labelStyle(.iconOnly)
+            .buttonStyle(ControlButtonStyle(kind: .round, size: .compact))
             .help("关闭（Esc）")
     }
 }

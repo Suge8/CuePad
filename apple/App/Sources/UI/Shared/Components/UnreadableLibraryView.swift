@@ -6,6 +6,7 @@ struct UnreadableLibraryView: View {
     let failure: LibraryFailure
     let retry: () -> Void
     @Environment(\.palette) private var palette
+    @State private var details = false
 
     /// 纸离窗口或屏幕左右边的距离：与各平台页面内容的边距一致。
     #if os(iOS)
@@ -20,19 +21,29 @@ struct UnreadableLibraryView: View {
     var body: some View {
         EmptyState(mascot: .error, title: "读不出资料库", message: .verbatim(failure.summary)) {
             VStack(spacing: 16) {
-                DisclosureGroup("详情") {
-                    Text(failure.reason).font(.caption.monospaced()).textSelection(.enabled)
-                        .multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
+                Button { details.toggle() } label: {
+                    HStack(spacing: 6) {
+                        Text("详情")
+                        Chevron(details ? .expand : .forward)
+                    }
+                    .font(Typography.meta).foregroundStyle(palette.ink2)
                 }
-                .font(.footnote).frame(maxWidth: 420)
-                // iOS 的系统默认按钮没有外形，用与"新建项目"同一个主按钮；Mac 的系统按钮本身有外形
+                .buttonStyle(PressStyle(.inline))
+                .accessibilityValue(details ? "已展开" : "已折叠")
+                if details {
+                    Text(failure.reason).font(Typography.caption.monospaced()).textSelection(.enabled)
+                        .multilineTextAlignment(.leading).frame(maxWidth: 420, alignment: .leading)
+                }
                 #if os(iOS)
-                EmptyStateButton(title: "重试", icon: .retry, action: retry)
-                ExportDiagnosticsButton(text: failure.diagnostics).controlSize(.large).frame(minHeight: 44)
+                Grid(verticalSpacing: 16) {
+                    GridRow { Button("重试", icon: .retry, action: retry).buttonStyle(EqualButtonStyle(kind: .primary)) }
+                    GridRow { ExportDiagnosticsButton(text: failure.diagnostics).buttonStyle(EqualButtonStyle(kind: .secondary)) }
+                }
+                .fixedSize(horizontal: true, vertical: false)
                 #else
                 HStack {
-                    EmptyStateButton(title: "重试", icon: .retry, kind: .small, action: retry)
-                    ExportDiagnosticsButton(text: failure.diagnostics)
+                    Button("重试", icon: .retry, action: retry)
+                    ExportDiagnosticsButton(text: failure.diagnostics).buttonStyle(ControlButtonStyle(kind: .secondary))
                 }
                 #endif
             }
@@ -43,3 +54,15 @@ struct UnreadableLibraryView: View {
         .background(palette.desk)
     }
 }
+
+#if os(iOS)
+private struct EqualButtonStyle: ButtonStyle {
+    let kind: ControlButtonStyle.Kind
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.frame(maxWidth: .infinity)
+            .modifier(ControlSurface(kind: kind))
+            .modifier(PressFeedback(pressed: configuration.isPressed, kind: .control))
+    }
+}
+#endif

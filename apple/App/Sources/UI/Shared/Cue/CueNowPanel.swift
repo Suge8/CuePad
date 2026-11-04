@@ -120,7 +120,7 @@ private struct CueRecall: View {
                     if let count = recent?.count, count > 0 {
                         Text("全部 \(count) 条").font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3)
                     }
-                    Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                    Chevron(.forward).foregroundStyle(palette.ink3)
                 }
                 ForEach(0..<Self.shown, id: \.self) { index in
                     RecallLine(line: lines.indices.contains(index) ? lines[index] : nil)
@@ -155,7 +155,7 @@ private struct RecallLine: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let line {
                 HStack(spacing: 3) {
-                    if line.pinned { Image(.pin).font(.caption2) }
+                    if line.pinned { Image(.pin).font(Glyph.mark) }
                     Text(line.createdAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
                 }
                 .font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
@@ -180,7 +180,7 @@ private struct ScheduleLine: View {
                 Text("定时").foregroundStyle(palette.ink2).lineLimit(1)
                 Spacer(minLength: 8)
                 if let summary { Text(verbatim: summary).monospacedDigit().foregroundStyle(palette.ink3) }
-                Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                Chevron(.forward).foregroundStyle(palette.ink3)
             }
             .font(Typography.secondary)
             .frame(minHeight: CueNowPanel.line)
@@ -211,7 +211,7 @@ private struct LibraryLine: View {
                 Spacer(minLength: 8)
                 if alert { Circle().fill(palette.ink).frame(width: CueDot.size, height: CueDot.size).accessibilityLabel(String(localized: "有该整理的")) }
                 if let summary { Text(verbatim: summary).monospacedDigit().foregroundStyle(palette.ink3) }
-                Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                Chevron(.forward).foregroundStyle(palette.ink3)
             }
             .font(Typography.secondary)
             .frame(minHeight: CueNowPanel.line)
@@ -252,7 +252,7 @@ private struct CueHostLine: View {
                 HStack(spacing: 8) {
                     Image(lead.icon).foregroundStyle(palette.ink3)
                     Text(lead.text).foregroundStyle(lead.failed ? palette.failure : palette.ink2).lineLimit(2)
-                    Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                    Chevron(.forward).foregroundStyle(palette.ink3)
                     Spacer(minLength: 0)
                 }
                 .font(Typography.secondary)

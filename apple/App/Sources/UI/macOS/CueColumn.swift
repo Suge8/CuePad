@@ -45,7 +45,7 @@ struct CueTitle: View {
             .accessibilityAddTraits(.isHeader)
             .accessibilityHint(panel.open ? "收起" : "换模型，看它刚记下的，去记忆与设置")
             .animation(Motion.fade, value: cue.presence)
-            .bubble(isPresented: $panel.open, width: Self.panelWidth) { CueNowPanel(brain: brain, close: { panel.open = false }) }
+            .bubble(isPresented: $panel.open, width: .fixed(Self.panelWidth)) { CueNowPanel(brain: brain, close: { panel.open = false }) }
             Spacer(minLength: Spacing.toolbarGap)
             Button("收起右栏", icon: .rightColumn) { workspace.hideCue() }
                 .labelStyle(.iconOnly)

@@ -28,7 +28,7 @@ struct SessionDock: View {
                 Callout(.failed(.other), text: String(localized: "没能结束：\(failure.text)"), docked: true)
             }
             if let digest, digest.session == nil {
-                Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
+                Text("这个会话已经不在了，发不到它").font(Typography.meta).foregroundStyle(palette.ink3)
             } else {
                 PiReplyBar(
                     session: session, config: digest?.config(at: speech), catalog: digest?.catalog, compact: compact,

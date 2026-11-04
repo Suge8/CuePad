@@ -241,19 +241,61 @@ nonisolated enum DateLabel {
     }
 }
 
-/// 分段标题：名称 + 可选计数；读屏作为一个标题。
+/// 一节的头，全 App 只这一种：`page` 是页内大段（最近、更早、现在、历史），与行里的字一样重、可带计数；
+/// `group` 是组头（按时间分的段、一直记着），小号半粗淡墨，可带一个图标。左右缩进与上下留白由所在列表给；能折的组由调用处在旁边放 `Chevron`。
+/// 读屏作为一个标题，图标是装饰不读。`init(title:count:)` 是旧样子（iOS 文字样式、左右各缩 4），调用处迁完删掉。
 struct SectionHeader: View {
-    let title: LocalizedStringResource
+    enum Level { case page, group }
+
+    let title: Dotted
+    var level = Level.page
     var count: Int?
+    var icon: Icon?
+    private var legacy = false
     @Environment(\.palette) private var palette
 
+    init(_ title: Dotted, level: Level = .page, count: Int? = nil, icon: Icon? = nil) {
+        self.title = title
+        self.level = level
+        self.count = count
+        self.icon = icon
+    }
+
+    init(_ title: LocalizedStringResource, level: Level = .page, count: Int? = nil, icon: Icon? = nil) {
+        self.init(Dotted(String(localized: title)), level: level, count: count, icon: icon)
+    }
+
+    init(title: LocalizedStringResource, count: Int?) {
+        self.init(title, count: count)
+        legacy = true
+    }
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title).font(.headline).foregroundStyle(palette.ink)
-            if let count { Text("\(count)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).counting(count) }
+        HStack(alignment: .firstTextBaseline, spacing: level == .page ? 6 : 5) {
+            if let icon { Image(icon).accessibilityHidden(true) }
+            Text(title)
+            if let count { Text("\(count)").font(countFont).monospacedDigit().foregroundStyle(palette.ink3).counting(count) }
         }
-        .padding(.horizontal, 4)
+        .font(titleFont)
+        .foregroundStyle(level == .page ? palette.ink : palette.ink3)
+        .padding(.horizontal, legacy ? 4 : 0)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    private var titleFont: Font {
+        if legacy { return .headline }
+        return level == .page ? Typography.sectionTitle : Typography.label
+    }
+
+    private var countFont: Font {
+        if legacy { return .footnote }
+        guard level == .page else { return Typography.label }
+        // iOS 还没有 sectionCount 这一档（在 Mac 组的 Typography 里，B0b 补）
+        #if os(macOS)
+        return Typography.sectionCount
+        #else
+        return Typography.meta
+        #endif
     }
 }
