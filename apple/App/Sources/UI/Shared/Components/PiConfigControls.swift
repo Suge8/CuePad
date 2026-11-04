@@ -101,6 +101,8 @@ struct PiConfigControls<Trailing: View>: View {
     /// 工具排的字号上限（同 Cue 面板的做法）：取 402 宽的手机上收完六步（`ConfigRow`）仍放得下、不压发送钮的那一档，实测 AX-XL；
     /// 再大一档 AX-XXL 时上下文压到发送钮下面。泛型类型里放不了静态存储属性。
     static var largestType: DynamicTypeSize { .accessibility3 }
+    /// 裁这一排时上下多留的高：Mac 上思考强度按着时在上方浮出的档位名（`PiThinkingDial`）。
+    static var overhang: CGFloat { 64 }
 
     func aligned(_ alignment: Alignment) -> Self {
         var aligned = self
@@ -113,7 +115,15 @@ struct PiConfigControls<Trailing: View>: View {
             if let agent { PiAgentCapsule(pick: agent).layoutValue(key: ConfigGive.self, value: [.agent]) }
             modelCapsule.layoutValue(key: ConfigGive.self, value: [.model])
             if let model = shown.model, let url = model.account?.usageURL(provider: model.key.provider) {
-                Link("管理用量", destination: url).font(Typography.meta).buttonStyle(PressStyle())
+                Link(destination: url) {
+                    ViewThatFits(in: .horizontal) {
+                        Text("管理用量")
+                        Text("用量")
+                    }
+                }
+                .font(Typography.meta).buttonStyle(PressStyle())
+                .accessibilityLabel("管理用量")
+                .layoutValue(key: ConfigGive.self, value: [.secondary])
             }
             if let meter = PiThinkingMeter(levels: levels, current: shown.thinking) {
                 PiThinkingDial(meter: meter, pending: shown.pending, choose: chooseThinking)
@@ -127,8 +137,10 @@ struct PiConfigControls<Trailing: View>: View {
             }
             trailing
         }
-        // 字号到这一档为止（输入的正文照常放大）：再大 402 宽的手机上收完六步也放不下，伸到发送钮底下
+        // 字号到这一档为止（输入的正文照常放大）：再大 402 宽的手机上收完六步也放不下
         .dynamicTypeSize(...Self.largestType)
+        // 只在横向裁到这一排给的宽（收完仍放不下的整颗挪到外面，`ConfigRow`），永远不画到右边的发送钮上；上面留出 Mac 思考强度浮出的档位名
+        .mask { Rectangle().padding(.vertical, -Self.overhang) }
         .frame(maxWidth: .infinity, alignment: alignment)
         #if os(macOS)
         .onChange(of: opening.wrappedValue) { _, pick in
@@ -161,15 +173,20 @@ struct PiConfigControls<Trailing: View>: View {
 /// 2. `spacing`：胶囊之间收紧；
 /// 3. `context`："上下文"三个字收成圆环（`PiContextGauge`）；
 /// 4. `agent`：Agent 胶囊只留产品标志（`PiAgentCapsule`）；
-/// 5. `secondary`：次要的再收一档——思考强度只剩竖格、上下文只剩圆环（百分比留在读屏与点开的气泡里）、加速只写"加速"（开着靠选中底）；
+/// 5. `secondary`：次要的再收一档——思考强度只剩竖格、上下文只剩圆环（百分比留在读屏与点开的气泡里）、加速只写"加速"（开着靠选中底）、"管理用量"写"用量"；
 /// 6. `model`：剩下的宽都给模型，放不下全名就只留标志（没有标志的模型名字截断）；完整名称悬停、读屏、菜单里看。
 /// 先收字、留标志与操作；不把胶囊收进"⋯"：排版定不了菜单里该有哪几项（`Layout` 不能藏起子视图，藏不掉的照样被读屏读到、点到），一律收短、留在原地。
-/// 字号封顶在 `PiConfigControls.largestType`（402 宽的手机收完六步仍放得下、不压发送钮的那一档）；更窄的屏收完仍放不下就伸出去被裁掉，不折行、不撑宽输入框。
+/// 字号封顶在 `PiConfigControls.largestType`（402 宽的手机收完六步仍放得下的那一档）。更窄的屏、或多了不能再收的（"管理用量"）收完仍放不下时，
+/// 放不完整的那几颗从末尾起整颗挪到这一排外面、被这一排横向裁掉（`PiConfigControls` 的 `mask`）：不折行、不撑宽输入框、不画到发送钮上，不露半颗。
 private struct ConfigRow: Layout {
     enum Give: CaseIterable { case wording, spacing, context, agent, secondary, model }
 
     private static let spacing: CGFloat = 6
     private static let tightSpacing: CGFloat = 2
+    /// 放不下的挪到这一排右边这么远：在屏幕外，点不到。
+    private static let offstage: CGFloat = 10_000
+    /// 量宽的取整误差。
+    private static let slack: CGFloat = 0.5
 
     private struct Arrangement {
         var widths: [CGFloat]
@@ -188,7 +205,11 @@ private struct ConfigRow: Layout {
         let height = height(row, subviews)
         var x = bounds.minX
         for index in subviews.indices {
-            subviews[index].place(at: CGPoint(x: x, y: bounds.minY + height / 2), anchor: .leading, proposal: ProposedViewSize(width: row.widths[index], height: height))
+            // 放不完整的整颗挪到外面（被裁掉），不留半颗；之后的也都放不下
+            let fits = x + row.widths[index] <= bounds.maxX + Self.slack
+            subviews[index].place(
+                at: CGPoint(x: fits ? x : bounds.maxX + Self.offstage, y: bounds.minY + height / 2), anchor: .leading,
+                proposal: ProposedViewSize(width: row.widths[index], height: height))
             x += row.widths[index] + row.spacing
         }
     }
