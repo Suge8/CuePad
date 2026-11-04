@@ -17,7 +17,7 @@ struct MacDependencies {
     var workspaces: Workspaces
     /// 系统睡眠与唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
-    /// 资料库里随时间变的读与在线记录续期用的时钟（`CueStore.timing`）；测试换成手动推进的。
+    /// App 的钟：资料库里随时间变的读与在线记录续期（`CueStore.timing`），桥的回执与结束时限（`PiBridge.timing`，`pi` 用同一个建）；测试换成手动推进的。
     var timing: Timing = .system
     /// 命令行工具 `cuepad` 的链接（设置里的开关；Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖它）。
     var commandLineTool: CommandLineToolInstaller
@@ -47,7 +47,8 @@ struct MacDependencies {
         let paths = AgentPaths(pi: PiPaths(socketDirectory: sockets), environment: agentHome.map { home in
             environment.merging(["HOME": home.path, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]) { $1 }
         } ?? environment)
-        let pi = PiBridge(socketDirectory: paths.pi.socketDirectory)
+        let timing = Timing.system
+        let pi = PiBridge(socketDirectory: paths.pi.socketDirectory, timing: timing)
         let hooks = AgentHookServer(path: paths.pi.hookSocket)
         // 不碰真实世界时不碰真实的 `~/.local/bin`：链接放进资料库目录，除非指定了 Pi 目录与链接目录（`PiPaths.isExplicit`）
         let commandLineTool = isolated && !paths.pi.isExplicit
@@ -74,6 +75,7 @@ struct MacDependencies {
             hostID: hostID,
             workspaces: Workspaces.resolve(isolatedLibrary: isolated ? location.directory : nil),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
+            timing: timing,
             commandLineTool: commandLineTool,
             updater: AppIdentity.isRelease ? SparkleUpdater() : DebugHooks.updater,
             hooks: hooks,

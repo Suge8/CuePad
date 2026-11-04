@@ -10,7 +10,7 @@ import CueStore
 @MainActor
 @Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealSlashTests {
-    private func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
+    private func withRig(timing: Timing = .system, _ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
         let resources = try makeTempDirectory()
         let prompts = resources.appending(path: "prompts")
         let skill = resources.appending(path: "skills/careful")
@@ -22,7 +22,7 @@ struct RealSlashTests {
         let pi = try await PiProcess(
             extraExtensions: ["ui-confirm.ts", "slash.ts"],
             extraArguments: ["--prompt-template", prompts.path, "--skill", skill.deletingLastPathComponent().path])
-        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory, timing: timing)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
@@ -76,8 +76,9 @@ struct RealSlashTests {
     }
 
     @Test func slashCommandsAreExpandedAndRunByPi() async throws {
-        try await withRig { pi, bridge, s in
-            // 扩展命令没有公开的完成回执：交出后不确认，以 ackTimeout 结束（与后面的步骤并行等）
+        let clock = ManualTiming()
+        try await withRig(timing: clock.timing) { pi, bridge, s in
+            // 扩展命令没有公开的完成回执：交出后不确认，到回执时限以 ackTimeout 结束
             let shout = Task { try await bridge.command("/shout hi there", in: s.id) }
             _ = try await pi.waitForEvent("扩展命令跑了") { $0["method"] as? String == "notify" && $0["message"] as? String == "shout:hi there" }
             #expect(fileTexts("user", in: s.sessionFile).isEmpty, "扩展命令不产生发给模型的消息")
@@ -89,6 +90,7 @@ struct RealSlashTests {
             try await eventually("skill 展开后进了模型上下文") {
                 fileTexts("user", in: s.sessionFile).last?.contains("CAREFUL-BODY-MARKER") == true
             }
+            clock.advance(AgentTimeouts.ack)
             await #expect(throws: PiBridgeError.ackTimeout) { try await shout.value }
         }
     }

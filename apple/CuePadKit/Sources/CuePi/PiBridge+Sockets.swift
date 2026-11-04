@@ -13,7 +13,7 @@ extension PiBridge {
         var id: PiSession.ID?
         /// hello 里报的扩展版本
         var extensionVersion: Int?
-        let replies = PendingReplies<String, PiWire.Ack>(timeout: AgentTimeouts.ack, timeoutError: PiBridgeError.ackTimeout)
+        let replies: PendingReplies<String, PiWire.Ack>
         var nextCommand = 0
         var bye: PiWire.Bye?
         var rejected = false
@@ -22,6 +22,7 @@ extension PiBridge {
             self.connection = connection
             self.file = file
             self.bridge = bridge
+            replies = PendingReplies(timeout: AgentTimeouts.ack, timing: bridge.timing, timeoutError: PiBridgeError.ackTimeout)
         }
 
         var session: PiSession? { id.flatMap { bridge?.session(id: $0) } }
