@@ -77,6 +77,33 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// 收尾那一刻改规矩又追问：叫醒的那一轮在 Pi 里已收尾、还没报出来时你钉上一条、再说一句，两句都插给了以为在跑的那一轮。
+    /// 规矩一变这一轮做完就换班次：插进去的规矩不另开一轮、不写进对话，新班次照新规矩；你那句没被接走，退回交给新班次，只答一次。
+    @Test func 收尾那一刻改规矩又追问_这句换班次后只答一次_规矩照样生效() async throws {
+        let rig = try await Rig(settleGate: true)
+        let held = try rig.armSettle()
+        let remote = try await rig.remoteMac()
+        try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页", turnStartedAt: .now)
+        try await remote.update(sessionID: "remote-1", state: .settled)
+        try await rig.answered("remote-1")
+        try await held()
+        let line = try await rig.store.noteCueLine("推送前先问我", source: .you).line
+        Workspace(services: rig.services).pinCueLine(line.id, true)
+        try await rig.handed("一直记着的刚变了")
+        try await rig.say("第二句")
+        try await rig.handed("第二句")
+        try rig.releaseSettle()
+        try await rig.message(.cue, containing: "收到：第二句")
+        try await eventually("Cue 歇下") { try await rig.store.cueState()?.state == .known(.settled) }
+        #expect(try await rig.count("收到：第二句") == 1)
+        #expect(try await rig.count("这一轮照新规矩") == 0, "插进去的规矩不写进对话")
+        try await rig.say("一直记着什么")
+        let answer = try await rig.message(.cue, containing: "一直记着：")
+        #expect(answer.text.contains("推送前先问我"))
+        #expect(try await rig.count("登录页那边歇下了") == 1)
+        await rig.stop()
+    }
+
     /// 你在 Cue 页发图：资料库里的图片引用转成图片交给大脑（假模型收到的是图片，不只是文字里的引用），Cue 照图回答。
     @Test func 你发图_Cue看得见() async throws {
         let rig = try await Rig()

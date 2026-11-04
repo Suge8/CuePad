@@ -69,15 +69,8 @@ extension CueKeeper {
                 archive(round)
                 retrying = round.failure
             }
-            await shift.brain.stop()()
+            await retire(shift)
             speech.offer(nil)
-            if !shift.unanswered.isEmpty {
-                do {
-                    try await store.unmarkCueMessagesDelivered(shift.unanswered)
-                } catch {
-                    Self.log.error("Cue 没读完的消息没能退回：\(error.localizedDescription, privacy: .public)")
-                }
-            }
             failures = shift.failures + 1
         case .restarting: return
         }
@@ -90,6 +83,17 @@ extension CueKeeper {
         if setup.timing.isDown(after: failures) { await tellDown(reason) }
     }
 
+    /// 停掉这个班次的大脑：交给它、还没答上的你的话（`Shift.unanswered`）清掉送达，下一个大脑重新交。出了问题与换班次都经这里。
+    func retire(_ shift: Shift) async {
+        await shift.brain.stop()()
+        guard !shift.unanswered.isEmpty else { return }
+        do {
+            try await store.unmarkCueMessagesDelivered(shift.unanswered)
+        } catch {
+            Self.log.error("Cue 没读完的消息没能退回：\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     func handle(_ event: TurnEvent) async {
         switch event {
         // 逐字的正在说（每条带着到此为止的全文）与上下文用量，一轮几十上百条：不记
@@ -100,7 +104,7 @@ extension CueKeeper {
         switch event {
         case .turnStarted:
             speech.offer(nil)
-            // 没有醒来就开始的一轮只能是插进来的你的话开的
+            // 没有醒来就开始的一轮只能是插进来的你的话开的（以为在跑的那一轮已收尾）；只插了规矩的轮来不及开：规矩一变这一轮做完就换班次（`outworn`）
             if turn == nil {
                 let round = beginRound(.message, sent: [])
                 updateShift {

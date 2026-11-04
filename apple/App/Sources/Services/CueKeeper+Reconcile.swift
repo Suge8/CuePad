@@ -18,10 +18,10 @@ extension CueKeeper {
             let profile = try await store.cueProfile() ?? CueProfile()
             await follow(BrainSettings(profile))
             // 要换的班次（工具服务没了、换了 Agent），或一直记着的变过（系统提示跟上）：换个班次，再接着对账。
-            // 在交你的话之前：退回的话要交给新的大脑，你改过规矩之后的话按新规矩答
+            // 在交你的话之前：退回的话（含插进刚收尾那一轮、还没被接走的，`retire`）要交给新的大脑，你改过规矩之后的话按新规矩答
             if let shift, shift.turn == nil, try await outworn(shift) {
                 Self.log.notice("Cue 换个班次（\(shift.retiring ? "这个大脑不能接着用" : "一直记着的变了", privacy: .public)）")
-                await shift.brain.stop()()
+                await retire(shift)
                 await startShift()
                 input.yield(.kick)
                 return
@@ -34,18 +34,8 @@ extension CueKeeper {
                 let ids = pending.map(\.id)
                 let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside(), files: store.files, imagesAsFiles: !shift.brain.seesImages)
                 let images = await images(in: pending, for: shift.brain)
-                // 插进在跑的这一轮：这一轮可能正好收尾、由下一轮接走，回答你的是大脑报接走它的那一轮（`TurnEvent.received`）
                 if shift.turn != nil {
-                    let sending = UUID()
-                    do {
-                        try await shift.brain.send(said, images: images, id: sending)
-                    } catch {
-                        return await broke(ShownText("发不进去：\(ShownText(error).embedded)"))
-                    }
-                    updateShift {
-                        $0.handed[sending] = ids
-                        $0.turn?.round.sent.append(said)
-                    }
+                    guard await interject(said, images: images, delivering: ids) else { return }
                     try await markDelivered(ids)
                 } else {
                     _ = try await wakeUp(.message, said: said, images: images, delivering: ids)
@@ -55,7 +45,7 @@ extension CueKeeper {
             guard let shift, shift.turn == nil else { return }
 
             if brainSettings?.needsNewBrain(for: BrainSettings(profile)) == true {
-                await shift.brain.stop()()
+                await retire(shift)
                 await startShift()
                 input.yield(.kick)
                 return
@@ -141,22 +131,33 @@ extension CueKeeper {
         return try await CueMemoryView(store.cueMemory()).pinned.map(\.line.id) != shift.pinned
     }
 
-    /// 一轮在跑时一直记着的变了：当场插一句给在跑的大脑（同插进来的你的话），这一轮接下来的动作就照新的；系统提示等这一轮做完换班次时跟上（`outworn`）。
+    /// 一轮在跑时一直记着的变了：当场插一句给在跑的大脑（`interject`，不带你的话），这一轮接下来的动作就照新的；系统提示等这一轮做完换班次时跟上（`outworn`）。
     /// 一轮里每个大脑事件都对一次账：只读钉着的 id 核对（`CueStore.pinnedCueLineIDs`），变了才读记忆。插不进去按大脑出了问题处理，返回 false。
     private func tellRules(_ shift: Shift) async throws -> Bool {
         guard try await store.pinnedCueLineIDs() != shift.told else { return true }
         let memory = CueMemoryView(try await store.cueMemory())
         let pinned = memory.pinned.map(\.line.id)
-        let note = "一直记着的刚变了，这一轮接下来照这份做（盖过系统提示里那一节）：\n" + memory.pinnedText
+        guard await interject("一直记着的刚变了，这一轮接下来照这份做（盖过系统提示里那一节）：\n" + memory.pinnedText) else { return false }
+        updateShift { $0.told = pinned }
+        return true
+    }
+
+    /// 插一句给以为在跑的那一轮（唯一的插话路径：你的话与规矩都经这里）。那一轮可能正好收尾、由下一轮接走：
+    /// 哪一轮接走只按大脑报的 `TurnEvent.received`，接走你的话（`delivering`）的那一轮才回答你；规矩不带你的话，不记账，
+    /// 赶上收尾的规矩也开不出一轮（规矩变了这一轮做完就换班次，`outworn`，新班次的系统提示里就是它）。
+    /// 换班次、出了问题时没被接走的你的话退回重交（`retire`）。插不进去按大脑出了问题处理，返回 false。
+    private func interject(_ text: String, images: [PiImage] = [], delivering ids: [UUID] = []) async -> Bool {
+        guard let shift else { return false }
+        let sending = UUID()
         do {
-            try await shift.brain.send(note, images: [])
+            try await shift.brain.send(text, images: images, id: sending)
         } catch {
             await broke(ShownText("发不进去：\(ShownText(error).embedded)"))
             return false
         }
         updateShift {
-            $0.told = pinned
-            $0.turn?.round.sent.append(note)
+            if !ids.isEmpty { $0.handed[sending] = ids }
+            $0.turn?.round.sent.append(text)
         }
         return true
     }
