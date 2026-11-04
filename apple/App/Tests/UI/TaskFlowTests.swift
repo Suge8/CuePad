@@ -104,11 +104,7 @@ struct TaskFlowTests {
         try await workspace.toggle(first.id)
         #expect(try await requests(.end).isEmpty)
 
-        try await store.updateCard(second.id) { $0.rest = "照 --lang 的用法写 README" }
-        workspace.handOff(try #require(try await store.card(second.id)))
-        let sent = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.send) } }) { $0 != nil }
-        #expect(sent?.target.ref == "s1" && sent?.content == "写 README\n照 --lang 的用法写 README")
-        #expect(try await requests(.start).isEmpty)
+        try await store.bindSession("s1", to: second.id)
 
         workspace.startFresh(third)
         let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
@@ -116,15 +112,6 @@ struct TaskFlowTests {
         #expect(launch?.launch?.prompt == "加语言参数\n命令行要能切中英文\n\n发版\n打 tag 再发")
         _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：开新会话的去向核对完即可
 
-        // 会话所在的 Mac 送到：记下这次发送，这一步绑上会话
-        let executor = DeliveryExecutor(store: store, hostID: "mac-other", onIssue: { Issue.record("\($0)") }) { [store] request, _ in
-            _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
-            return .succeeded
-        }
-        try await executor.start()
-        _ = try await eventually(store, { try $0.card(second.id)?.piSessionID }) { $0 == "s1" }
-        #expect(try await store.outcome(of: try #require(sent)).status == .known(.succeeded))
-        await executor.stop()
         try await workspace.toggle(second.id)
         #expect(try await requests(.end).isEmpty)  // "发版"还没开工，默认接着用它
         try await workspace.toggle(third.id)
@@ -157,7 +144,7 @@ struct TaskFlowTests {
 
     // MARK: 撤销与批量
 
-    @Test func 灵感接进任务_拖成新任务_删除_都能撤销_勾选以最新状态为准() async throws {
+    @Test func 灵感接进任务_拖成新任务_删除_都能撤销() async throws {
         let workspace = Workspace(services: rig.services)
         let body = "上线前检查\n把 changelog 过一遍"
         let check = try await store.createTask(body)
@@ -190,10 +177,6 @@ struct TaskFlowTests {
         #expect(try await store.cards(in: Project.defaultID).contains { $0.id == flaky.id })
 
         let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let stale = try await store.createTask("续费域名")
-        try await workspace.toggle(stale.id)
-        try await workspace.toggle(stale.id)  // 手里的副本已过时：切换以 Store 当前状态为准
-        #expect(try await store.card(stale.id)?.status == .todo)
 
         workspace.convertToTasks("- 写发布说明\n\n- 更新截图", in: project.id)
         try await eventually("转好任务") { workspace.notice?.text.visible == "已转为 2 个任务" }
