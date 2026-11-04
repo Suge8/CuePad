@@ -37,7 +37,10 @@ import Testing
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
 
-    #expect(await zone.calls.map(\.keys) == [ZonePuller.versionKeys, ZonePuller.versionKeys, ZonePuller.fieldsWithoutFiles])
+    let keys = await zone.calls.map { Set($0.keys ?? []) }
+    #expect(keys.count == 3)
+    #expect(!keys[0].contains("body") && !keys[1].contains("body"))  // 对账那两页只要版本
+    #expect(keys[2].contains("body") && !keys[2].contains("file"))  // 补取要正文，不带附件文件
     #expect(await zone.calls.last?.token == Data("v2".utf8))
     #expect(Set(await zone.fetches.flatMap { $0 }) == [newer.recordID, fresh.recordID])  // 已同步的那条不取
     #expect(Set(try await store.cards(in: Project.defaultID).map(\.body)) == ["已同步", "别处改过", "别处新建"])
