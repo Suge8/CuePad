@@ -79,9 +79,13 @@ class EvalScript {
         return session
     }
 
-    /// 他在一件事上接着交代：Cue 可能对原来的会话说，也可能（那件已做完、会话已结束）另建任务开新会话。开了新会话就接着用新的。
+    /// 他在一件事上接着交代：Cue 可能对原来的会话说，可能对剧本里另一个会话说（那件已做完、会话已结束，转给更早那件还开着的会话），
+    /// 也可能另建任务开新会话。接着演的是它真送到的那个：开了新会话用新的，说给了别的会话用那个。
     func continuing(_ session: ScriptedSession, _ topic: Regex<Substring>, after step: Step) async throws -> ScriptedSession {
-        guard calls(step, "task", ["start"]).contains(where: { !$0.call.failed }) else { return session }
+        guard calls(step, "task", ["start"]).contains(where: { !$0.call.failed }) else {
+            for other in sessions { try await other.refresh(rig) }
+            return calls(step, "task", ["say"]).filter { !$0.call.failed }.compactMap { target($0.args) }.last ?? session
+        }
         var found: ScriptedSession?
         try? await eventually("Cue 开出的会话绑上任务") {
             found = try await self.opened(topic)
