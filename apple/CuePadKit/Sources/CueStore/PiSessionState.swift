@@ -117,7 +117,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
   public var hostID: String
-  /// 真实报告或本机进程对账确认的系统启动；历史回填不写。
+  /// 见证这条记录此刻状态的那次系统启动：真实报告、本机收尾（进程没了）或启动对账时写；历史回填不写。
   public var bootID: String?
   /// Store 读取时派生，不持久化；没有证明不等于空闲。
   public internal(set) var runtimeUntil: Date?
