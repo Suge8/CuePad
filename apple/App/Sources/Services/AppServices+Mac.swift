@@ -205,7 +205,7 @@ extension AppServices {
     /// 建一家的索引，直到任务取消：有会话文件的读文件，其余接入期间起它的运行时、取消时停掉。
     private func index(_ agent: AgentKind, connected: Bool) async {
         if let indexer = PiHistoryIndexer(
-            agent: agent, paths: paths, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files,
+            agent: agent, paths: paths, transcriptWindow: PiChat.transcriptWindow, files: store.files,
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
             let scope = connected ? .all : await hostedScope(of: agent)
             runtimes[agent]?.follow(scope)

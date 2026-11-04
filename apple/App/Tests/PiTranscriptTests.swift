@@ -42,7 +42,7 @@ struct PiTranscriptTests {
     /// 像 App 启动时那样回填一次会话目录：索引器定要不要对话（最近 7 天修改过的、本机已存着对话的），落盘照 App 的路子走。
     private func backfill() async {
         let indexer = PiHistoryIndexer(
-            agent: .pi, paths: AgentPaths(pi: rig.piPaths), transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files
+            agent: .pi, paths: AgentPaths(pi: rig.piPaths), transcriptWindow: PiChat.transcriptWindow, files: store.files
         ) { [services] in await services.loadHistoryStart(for: $0) }!
         let source = indexer.events(following: AsyncStream { $0.finish() }, scope: .all)
         let events = AsyncStream<PiHistoryEvent> { continuation in
