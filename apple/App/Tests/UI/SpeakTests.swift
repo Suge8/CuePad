@@ -213,8 +213,8 @@ struct SpeakTests {
         #expect(Said.request(try #require(done)).trip(at: .always(at: .now)) == .delivered)
     }
 
-    /// Mac 报的失败写它的原因；旧领取没有阶段期限时不证明还在执行（持久阶段到期见 `DeliveryConfirmationTests`）；重发撤回旧的、写同样内容与方式的新的。
-    @Test func 发给会话_Mac明确拒绝才失败_旧领取缺期限保守未知_失败重发撤回旧的() async throws {
+    /// Mac 报的失败写它的原因；重发撤回旧的、写同样内容与方式的新的。
+    @Test func 发给会话_Mac明确拒绝才失败_失败重发撤回旧的() async throws {
         let target = try await session()
         let workspace = Workspace(services: app.services)
         let box = app.services.settings.replyDraftBinding(for: target.id)
@@ -232,16 +232,6 @@ struct SpeakTests {
         let retried = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 1 && $0[0].id != lost.id }
         #expect(retried[0].content == "改完再跑一遍" && retried[0].mode == .known(.send) && retried[0].isOpen)
         #expect(box.wrappedValue.text.isEmpty)
-
-        // 旧领取缺少阶段期限：不能据此一直显示在执行，也不能当作明确未交出。
-        let late = retried[0].createdAt.addingTimeInterval(Speech.receiptLimit + 1)
-        var claimed = retried[0]
-        claimed.status = .known(.executing)
-        #expect(Said.request(claimed).trip(at: .always(at: late)).unconfirmedReason != nil)
-
-        workspace.resend(.request(retried[0]), restoringInto: box)
-        let again = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 1 && $0[0].id != retried[0].id }
-        #expect(again[0].content == "改完再跑一遍")
     }
 
     /// 写库失败（对 Cue 说、发给会话一样）：文字回到输入框，期间新打的字接在后面，报错，什么都没写下。

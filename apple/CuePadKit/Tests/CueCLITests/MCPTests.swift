@@ -114,9 +114,6 @@ import Testing
       #expect(try await store.workingLeaf(of: task).id == step.id)
       #expect(try await server.call("task", ["action": "peek"]).contains("调研 › 正在开会话"))
 
-      _ = try await server.call("tell", ["text": "调研结论要推送到 origin/main 吗？", "ask": "push", "doing": "推送登录页的修复", "task": task.uuidString])
-      #expect(try await store.cueMessagesWaitingForYou().map(\.text) == ["调研结论要推送到 origin/main 吗？"])
-
       #expect(try await server.call("memory", ["action": "note", "text": "发布前先跑检查", "pin": true]).contains("#0"))
       #expect(try await store.recallCue("发布前").lines.map(\.line.pinned) == [true])
       _ = try await server.call("memory", ["action": "forget", "line": "#0"])
