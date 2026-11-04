@@ -56,6 +56,8 @@ public final class PiBridge {
 
     @ObservationIgnored let directory: URL
     @ObservationIgnored let hostedIdle: Duration
+    /// 桥的钟：回执（`AgentTimeouts.ack`）、结束（`AgentTimeouts.end`）的时限与托管会话歇着的计时（`hostedIdle`）；App 给的是它自己的那一个（`MacDependencies.timing`）。
+    @ObservationIgnored let timing: Timing
     /// 显式结束正在等待的承载进程；让出后的接手重载不能干扰同一个结束请求。
     @ObservationIgnored private(set) var ending: Set<PiSession.ID> = []
     @ObservationIgnored var links: [String: Link] = [:]       // socket 文件名（不含 .sock）→ 连接
@@ -77,9 +79,10 @@ public final class PiBridge {
     @ObservationIgnored private var subscribers: [UUID: AsyncStream<PiSessionChange>.Continuation] = [:]
 
     /// - Parameter hostedIdle: 托管的 Claude Code、Codex 会话歇着满这么久就请它退出（不算结束，发话时再接着）。
-    public init(socketDirectory: URL = PiPaths().socketDirectory, hostedIdle: Duration = AgentTimeouts.hostedIdle) {
+    public init(socketDirectory: URL = PiPaths().socketDirectory, hostedIdle: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system) {
         directory = socketDirectory
         self.hostedIdle = hostedIdle
+        self.timing = timing
     }
 
     // MARK: 生命周期
@@ -176,7 +179,7 @@ extension PiBridge {
         let link = try control(id, needs: .end)
         let changes = changes()  // 先订阅再动手：下线的那一刻不会漏
         try await link.end(id)
-        try await withDeadline(AgentTimeouts.end, orThrow: PiBridgeError.notEnded) {
+        try await withDeadline(AgentTimeouts.end, timing: timing, orThrow: PiBridgeError.notEnded) {
             for await change in changes {
                 if case .ended(let ended, let reason) = change, ended.id == id {
                     if ended.agent == .pi, reason != .closed(reason: "quit") { throw PiBridgeError.notEnded }

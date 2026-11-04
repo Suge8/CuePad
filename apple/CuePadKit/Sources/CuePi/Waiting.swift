@@ -40,17 +40,19 @@ func withDeadline<T: Sendable>(
     }
 }
 
-/// 一条连接上等回应的请求（Pi 扩展的 ack、Claude Code 的控制请求、Codex、ACP 与 Pi 大脑的 RPC）：按 id 配上回应，至多等 `timeout`；
+/// 一条连接上等回应的请求（Pi 扩展的 ack、Claude Code 的控制请求、Codex、ACP 与 Pi 大脑的 RPC）：按 id 配上回应，至多等 `timeout`（按 `timing` 量）；
 /// 调用方取消时立即以取消结束（请求已发出，对端照常处理）；连接断了等着的全部失败，之后的请求不再发。
 @MainActor
 final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
     private var waiting: [ID: CheckedContinuation<Reply, any Error>] = [:]
     private var closed: (any Error)?
     private let timeout: Duration
+    private let timing: Timing
     private let timeoutError: any Error
 
-    init(timeout: Duration, timeoutError: any Error) {
+    init(timeout: Duration, timing: Timing = .system, timeoutError: any Error) {
         self.timeout = timeout
+        self.timing = timing
         self.timeoutError = timeoutError
     }
 
@@ -70,9 +72,9 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
                     waiting.removeValue(forKey: id)?.resume(throwing: error)
                     return
                 }
-                let (limit, error) = (timeout, timeoutError)
+                let (deadline, error, timing) = (timing.now().addingTimeInterval(timeout.seconds), timeoutError, timing)
                 timer = Task { [weak self] in
-                    guard (try? await Task.sleep(for: limit)) != nil else { return }
+                    guard (try? await timing.sleepUntil(deadline)) != nil else { return }
                     self?.waiting.removeValue(forKey: id)?.resume(throwing: error)
                 }
             }

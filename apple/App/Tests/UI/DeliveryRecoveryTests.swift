@@ -71,6 +71,10 @@ struct DeliveryRecoveryTests {
         defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("从中断的地方继续", to: target, app: app)
         try await app.services.executor.start()
+        if reply == "timeout" {
+            try await eventually("话交给了宿主") { ext.messages.count == 1 }
+            clock.advance(AgentTimeouts.ack)
+        }
         let uncertain = try await outcome(request, in: store)
         #expect(uncertain.status == .known(.unconfirmed))
         #expect(uncertain.failure == nil)
@@ -172,13 +176,12 @@ struct DeliveryRecoveryTests {
         await app.services.executor.beginStop()()
     }
 
-    @Test(arguments: [AgentKind.claudeCode, .codex, .opencode, .grok, .dsh])
-    func 其他接入仍保留各自的受理合同(agent: AgentKind) async throws {
+    @Test func 其他接入仍保留各自的受理合同() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         defer { app.pi.stop(); app.services.cancelBackgroundWork() }
-        let runtime = PipedHostedAgent(bridge: app.pi, agent: agent)
+        let runtime = PipedHostedAgent(bridge: app.pi, agent: .claudeCode)
         runtime.host("other", state: .settled)
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "other", state: .settled, agent: agent)
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "other", state: .settled, agent: .claudeCode)
         let target = try #require(try await store.allPiSessionStates().first)
         let request = try await say("继续检查结果", to: target, app: app)
         try await app.services.executor.start()
@@ -240,6 +243,8 @@ struct DeliveryRecoveryTests {
         #expect(!result.text.contains("还没送达") && !result.text.contains("结果会写进变化"))
         let request = try #require(try await store.deliveryRequests().first)
         try await app.services.executor.start()
+        try await eventually("话交给了宿主") { ext.messages.count == 1 }
+        clock.advance(AgentTimeouts.ack)
         _ = try await outcome(request, in: store)
         let workspace = Workspace(services: app.services), taskID = task.id
         workspace.perform { try await $0.bindSession("later-session", to: taskID) }

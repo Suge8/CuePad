@@ -45,7 +45,8 @@ struct DeliveryControlTests {
 
     @Test(arguments: [DeliveryMode.retry, .end])
     func 未确认后再次点控制是新意图_原请求保留_宿主仍保护实际执行(mode: DeliveryMode) async throws {
-        let app = TestApp(), store = app.services.store
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing), store = app.services.store
         let ext = try await app.host.connect("atlas", cwd: app.directory.path)
         ext.onCommand = { [weak ext] _, command in
             guard let kind = command["t"] as? String, kind == "retry" || kind == "end" else { return ["ok": true] }
@@ -62,6 +63,8 @@ struct DeliveryControlTests {
         if mode == .retry { await workspace.retry(session).value } else { await workspace.end(session) }
         let first = try #require(try await store.deliveryRequests().first)
         try await app.services.executor.start()
+        try await eventually("第一次交给了宿主") { ext.received.contains(mode.rawValue) }
+        clock.advance(AgentTimeouts.ack)
         let uncertain = try await store.outcome(of: first)
         #expect(uncertain.status == .known(.unconfirmed))
         if mode == .retry {
