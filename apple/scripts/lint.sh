@@ -70,13 +70,10 @@ forbid "投影只经 elevation 的几档（Theme/Surfaces.swift 的 Elevation，
 forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（.caption、.footnote、Font.subheadline…）：它们编进 Mac 是系统的小号（.caption、.footnote 10 点），低于 Mac 的 12 点下限；iOS 缺的角色在 Typography 里按用途加。扩展（Widget）里没有 Typography，例外" \
   '(?:\.font\(\s*\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\bFont\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\.system\(\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b)' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/**' \
-  'App/Sources/UI/Shared/Components/ProjectScope.swift' \
   'App/Sources/UI/Shared/Components/RowActions.swift' \
   'App/Sources/UI/Shared/Components/TaskNextMark.swift' \
   'App/Sources/UI/iOS/Activity/NewSessionInput.swift' \
   'App/Sources/UI/iOS/Activity/SessionScreen.swift' \
-  'App/Sources/UI/iOS/Home/ShelfScreen.swift' \
-  'App/Sources/UI/iOS/Project/CardMorePanel.swift' \
   'App/Sources/UI/iOS/Project/FolderCandidates.swift' \
   'App/Sources/UI/iOS/Settings/ConflictsScreen.swift' \
   'App/Sources/UI/iOS/Settings/SettingsScreen.swift' \
