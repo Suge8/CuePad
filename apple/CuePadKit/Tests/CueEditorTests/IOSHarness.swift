@@ -31,7 +31,6 @@ final class EditorHarness {
     let textView: CueTextView
     /// 编辑器挂在一个普通视图下：包的测试进程（xctest）里没有场景，不建窗口。
     let root: UIView
-    let nowhere = NSRange(location: NSNotFound, length: 0)
 
     init(width: CGFloat = 390, height: CGFloat = 700, theme: CueEditorTheme = .test) {
         textView = CueTextView(files: store, theme: theme)

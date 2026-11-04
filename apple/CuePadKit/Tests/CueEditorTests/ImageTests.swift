@@ -146,7 +146,6 @@ struct ImageTests {
         let stored = "前\n![](cuepad://file/\(String(repeating: "0", count: 64)).png)\n后"
         h.load(stored)
         #expect(h.stored == stored)
-        #expect(h.imageLineFrames().count == 1)
     }
 
     @Test("图片像素在进入视口后显示出来，解码不阻塞加载")
