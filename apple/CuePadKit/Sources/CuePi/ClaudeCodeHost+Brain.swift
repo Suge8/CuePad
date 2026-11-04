@@ -36,7 +36,7 @@ extension ClaudeHostedSession: HostedSession {
             let environment = config.launchEnvironment(adding: [
                 "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_PROMPT_CACHING_1H": "1",
             ])
-            _ = try await launch(config.executable, arguments, directory: config.workingDirectory, environment: environment)
+            _ = try await launch(config.executable, arguments, directory: config.workingDirectory, environment: environment, timing: config.timing)
             try await toolsConnected()
         } catch {
             await brain.abandon(stop())

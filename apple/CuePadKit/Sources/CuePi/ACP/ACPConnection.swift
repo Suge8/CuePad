@@ -33,10 +33,12 @@ final class ACPConnection {
         }
     }
 
-    /// 起 Agent 的 ACP 服务并握手（`initialize`，协议版本 1）；起不来、握手失败或超时时停掉进程再抛错。
-    static func launch(_ executable: URL, _ arguments: [String], environment: [String: String], directory: URL? = nil) async throws -> ACPConnection {
+    /// 起 Agent 的 ACP 服务并握手（`initialize`，协议版本 1）；起不来、握手失败或超时时停掉进程再抛错。`timing` 交给进程（`ChildProcess`）。
+    static func launch(
+        _ executable: URL, _ arguments: [String], environment: [String: String], directory: URL? = nil, timing: Timing = .system
+    ) async throws -> ACPConnection {
         let process = try await ChildProcess(
-            executable, arguments, directory: directory, environment: environment, placement: .group, input: .pipe, output: .lines)
+            executable, arguments, directory: directory, environment: environment, placement: .group, input: .pipe, output: .lines, timing: timing)
         let connection = ACPConnection(process)
         do {
             connection.agent = try await connection.call("initialize", [

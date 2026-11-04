@@ -4,6 +4,12 @@ import CueText
 import Foundation
 
 extension ClaudeHostedSession {
+    /// 托管会话起进程：权限确认经标准输入问 CuePad，模式 auto（见类注释）。
+    func host(executable: URL, arguments: [String], directory: URL, environment: [String: String]) async throws -> ChildProcess {
+        try await launch(
+            executable, ["--permission-prompt-tool", "stdio", "--permission-mode", "auto"] + arguments, directory: directory, environment: environment)
+    }
+
     func send(_ message: PiMessage, in _: PiSession.ID) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
             throw PiBridgeError.rejected("empty")

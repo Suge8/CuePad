@@ -43,6 +43,8 @@ public final class ChildProcess: Sendable {
     let output: AsyncStream<Data>
     let pid: pid_t
     private let placement: Placement
+    /// 量限时等待与收尾宽限的钟
+    private let timing: Timing
     private let input: Int32?
     private let writes = DispatchQueue(label: "cuepad.child.write")
 
@@ -64,9 +66,11 @@ public final class ChildProcess: Sendable {
     /// `environment` 是完整的环境（nil 继承本进程的）；`directory` 为 nil 时用本进程的工作目录。
     /// 标准错误只留末尾（`stderrTail`）给退出原因，`keepErrors` 为 false 时丢掉。脱离 App 的进程只读到认领为止
     /// （起不来的原因都在这之前），之后由看守接着读走丢掉：App 退出后它不收 EPIPE，也没有越写越大的文件。
+    /// `timing` 量限时等待（`attempt` 的超时）与 `end`、`stop` 的宽限。
     init(
         _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil,
-        placement: Placement, input inputMode: Input = .null, output outputMode: Output = .null, keepErrors: Bool = true
+        placement: Placement, input inputMode: Input = .null, output outputMode: Output = .null, keepErrors: Bool = true,
+        timing: Timing = .system
     ) async throws {
         var opened: [Int32] = []
         defer { for fd in opened { close(fd) } }  // 本进程这端以外的都在启动后关掉
@@ -122,6 +126,7 @@ public final class ChildProcess: Sendable {
         }
         self.pid = pid
         self.placement = placement
+        self.timing = timing
         self.input = input
         self.errors = errors
         self.hold = Mutex(hold)
@@ -162,7 +167,7 @@ public final class ChildProcess: Sendable {
 
     /// 跑一个命令（标准输入、标准错误是空设备），取它的退出码与标准输出（`collect` 为 false 时不接管，常驻的后代继承了管道就永远读不到结尾）。
     /// 自成进程组：超过 `timeout` 时结束它连同它起的整组（不理 SIGTERM、握着输出管道的子进程也一样）。
-    /// 取消调用方不影响它：超时照样结束，退出码照实取。`timing` 是量 `timeout` 的钟：起一个进程要多久取决于系统此刻多忙，
+    /// 取消调用方不影响它：超时照样结束，退出码照实取。`timing` 是量 `timeout` 与结束时宽限的钟：起一个进程要多久取决于系统此刻多忙，
     /// 测试给手动推进的钟，截止只在测试推进时到。
     @concurrent public static func attempt(
         _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil, timeout: Duration? = nil,
@@ -170,12 +175,12 @@ public final class ChildProcess: Sendable {
     ) async -> Attempt {
         guard let process = try? await ChildProcess(
             executable, arguments, directory: directory, environment: environment, placement: .group, output: collect ? .raw : .null,
-            keepErrors: false)
+            keepErrors: false, timing: timing)
         else { return .notStarted }
         // 包一层不继承取消的任务（`withTaskCancellationShield` 要 macOS 27，部署目标是 26）
         return await Task {
             async let output = process.output.reduce(into: Data()) { $0 += $1 }
-            guard await process.exited(within: timeout, timing: timing) else {
+            guard await process.exited(within: timeout) else {
                 process.end()
                 return .timedOut  // 不等输出读完：它起的后代可能还握着管道（离开时读取随之取消）
             }
@@ -232,15 +237,15 @@ public final class ChildProcess: Sendable {
         }
     }
 
-    /// 让它退出并等到退出：先关标准输入请它收尾，不走再 SIGTERM，还不走就 SIGKILL。之后 `exited()` 报 nil。
+    /// 让它退出并等到退出：先关标准输入请它收尾，不走再 SIGTERM，各宽限 `AgentTimeouts.endGrace`，还不走就 SIGKILL。之后 `exited()` 报 nil。
     /// 调用方取消不让它跳过收尾（SIGKILL 不给它清理的机会，如 Claude Code 的收件箱 socket 就会留在 /tmp/cc-socks 里）。
-    func stop(grace: Duration = AgentTimeouts.endGrace) async {
+    func stop() async {
         shared.state.withLock { $0.stopping = true }
         closeInput()
         await Task { [self] in
-            if await exited(within: grace) { return }
+            if await exited(within: AgentTimeouts.endGrace) { return }
             Darwin.kill(pid, SIGTERM)
-            if await exited(within: grace) { return }
+            if await exited(within: AgentTimeouts.endGrace) { return }
             kill()
             _ = await exited(within: nil)
         }.value
@@ -271,11 +276,11 @@ public final class ChildProcess: Sendable {
 
     /// 等进程退出，至多 `limit`（nil 不限时，按 `timing` 量）；退出了返回 true。到点或调用方取消时不管有没有退出都立刻返回 false，好接着升级信号。
     /// 等退出与计时在同一个任务组里赛跑：谁先到取谁，另一个随即取消（进程先退出，计时的睡眠者当场撤掉）。
-    func exited(within limit: Duration?, timing: Timing = .system) async -> Bool {
+    func exited(within limit: Duration?) async -> Bool {
         guard let limit else { return await waitForExitSignal() }
         return await withTaskGroup(of: Bool?.self) { group in
             group.addTask { await self.waitForExitSignal() }
-            group.addTask { (try? await timing.sleep(limit)) == nil ? nil : false }  // 被取消的计时不算结果
+            group.addTask { (try? await self.timing.sleep(limit)) == nil ? nil : false }  // 被取消的计时不算结果
             defer { group.cancelAll() }
             while let result = await group.next() {
                 if let result { return result }

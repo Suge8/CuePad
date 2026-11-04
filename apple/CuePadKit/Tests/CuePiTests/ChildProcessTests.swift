@@ -23,6 +23,9 @@ struct ChildProcessTests {
         await clock.waitForSleeper()
         clock.advance(.seconds(1))
         guard case .timedOut = await call.value else { Issue.record("没按超时结束"); return }
+        // 它不理 SIGTERM：结束时的宽限也按这个钟，推过去才 SIGKILL，不留下它
+        await clock.waitForSleeper()
+        clock.advance(AgentTimeouts.endGrace)
     }
 
     /// 超时结束的是起的命令连同它起的子进程：子进程握着输出管道、自己不退，也不让调用方等它。

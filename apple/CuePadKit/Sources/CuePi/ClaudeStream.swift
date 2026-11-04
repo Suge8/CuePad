@@ -23,11 +23,11 @@ final class ClaudeStream {
     private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: PiBridgeError.ackTimeout)
     private var inputClosed = false
 
-    /// 启动进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。
-    init(executable: URL, arguments: [String], directory: URL, environment: [String: String]) async throws {
+    /// 启动进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。`timing` 交给进程（`ChildProcess`）。
+    init(executable: URL, arguments: [String], directory: URL, environment: [String: String], timing: Timing = .system) async throws {
         process = try await ChildProcess(
             executable, ["--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages"] + arguments,
-            directory: directory, environment: environment, placement: .group, input: .pipe, output: .lines)
+            directory: directory, environment: environment, placement: .group, input: .pipe, output: .lines, timing: timing)
         let lines = process.output
         Task { [weak self] in
             for await line in lines { self?.received(line) }
