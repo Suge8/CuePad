@@ -45,7 +45,7 @@ extension CueKeeper {
             let started = try await startBrain(
                 runtime, launch, model: profile.model, effort: .low, systemPrompt: CuePrompt.dream(runtime: runtime), tools: ["--dream"])
             brain = started
-            try await started.send(input, images: [])
+            try await started.send(input, images: [], id: UUID())
             var finished = false, failed = false
             loop: for await event in started.events {
                 switch event {

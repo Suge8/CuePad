@@ -65,7 +65,7 @@ extension CodexRuntime {
             endTurn(session, failure: session.lastError)
         case .speaking, .context:
             return bridge.show(event, in: session.id)
-        case .tool, .toolDone, .exited:
+        case .tool, .toolDone, .exited, .received:
             return
         }
         publish(session)

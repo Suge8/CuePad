@@ -93,13 +93,14 @@ final class CodexBrain: HostedSession {
         if let effort { level = effort }
     }
 
-    func send(_ text: String, images: [PiImage]) async throws {
+    /// 插进的话由服务按这一轮的编号收下（`expectedTurnId`）：收下了就是这一轮接走的；这一轮刚好结束就开新的一轮，接走它的是那一轮。
+    func send(_ text: String, images: [PiImage], id: UUID) async throws {
         guard let rpc = driver.rpc, let thread = driver.thread else { throw HostedSessionError.notRunning }
         let input = CodexRPC.input(text: text, images: images)
         if let active = driver.turn {
             do {
                 try await rpc.call("turn/steer", ["threadId": .string(thread), "input": .array(input), "expectedTurnId": .string(active)])
-                return
+                return outlet.emit(.received(id))
             } catch CodexRPCError.server {
                 // 这一轮刚好结束：下面开新的一轮
             }
@@ -110,6 +111,7 @@ final class CodexBrain: HostedSession {
             if let level { options["effort"] = .string(CodexModel.effort(level.clamped(to: model.efforts))) }
         }
         try await driver.startTurn(input, options: options)
+        outlet.emit(.received(id))
     }
 
     func stop() -> @concurrent @Sendable () async -> Void { driver.stop() }

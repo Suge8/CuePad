@@ -56,6 +56,27 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// 收尾那一刻追问：会话的动静叫醒的那一轮在 Pi 里已收尾、还没报出来时你说一句，这台 Mac 以为那一轮还在跑、把话插进去，
+    /// Pi 报完收尾另开一轮接走它。这句在接走它的那一轮得到回答、只答一次；叫醒的那一轮最后的话不当成回答你写进对话。
+    @Test func 收尾那一刻追问_这句在下一轮得到回答_只答一次() async throws {
+        let rig = try await Rig(settleGate: true)
+        let held = try rig.armSettle()
+        let remote = try await rig.remoteMac()
+        try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页", turnStartedAt: .now)
+        try await remote.update(sessionID: "remote-1", state: .settled)
+        try await rig.answered("remote-1")
+        try await held()
+        try await rig.say("第二句")
+        try await rig.handed("第二句")
+        try rig.releaseSettle()
+        try await rig.message(.cue, containing: "收到：第二句")
+        try await eventually("Cue 歇下") { try await rig.store.cueState()?.state == .known(.settled) }
+        #expect(try await rig.count("登录页那边歇下了") == 1)
+        #expect(try await rig.count("收到：第二句") == 1)
+        #expect(try await rig.count("办好了") == 0, "叫醒的那一轮没接走这句")
+        await rig.stop()
+    }
+
     /// 你在 Cue 页发图：资料库里的图片引用转成图片交给大脑（假模型收到的是图片，不只是文字里的引用），Cue 照图回答。
     @Test func 你发图_Cue看得见() async throws {
         let rig = try await Rig()

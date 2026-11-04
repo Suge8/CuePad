@@ -34,15 +34,16 @@ extension CueKeeper {
                 let ids = pending.map(\.id)
                 let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside(), files: store.files, imagesAsFiles: !shift.brain.seesImages)
                 let images = await images(in: pending, for: shift.brain)
+                // 插进在跑的这一轮：这一轮可能正好收尾、由下一轮接走，回答你的是大脑报接走它的那一轮（`TurnEvent.received`）
                 if shift.turn != nil {
+                    let sending = UUID()
                     do {
-                        try await shift.brain.send(said, images: images)
+                        try await shift.brain.send(said, images: images, id: sending)
                     } catch {
                         return await broke(ShownText("发不进去：\(ShownText(error).embedded)"))
                     }
                     updateShift {
-                        $0.turn?.author = .cue
-                        $0.turn?.delivered += ids
+                        $0.handed[sending] = ids
                         $0.turn?.round.sent.append(said)
                     }
                     try await markDelivered(ids)

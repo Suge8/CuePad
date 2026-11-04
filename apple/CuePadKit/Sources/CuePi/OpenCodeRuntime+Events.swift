@@ -108,7 +108,7 @@ extension OpenCodeRuntime {
                 let questions = tracked.facts.questions
                 tracked.facts.endTurn(failure: failure)
                 tracked.facts.questions = questions  // 权限与表单随它们自己的事件收起
-            case .exited:
+            case .exited, .received:
                 break
             }
         }

@@ -183,12 +183,13 @@ final class OpenCodeBrain: HostedSession {
         self.level = level
     }
 
-    func send(_ text: String, images: [PiImage]) async throws {
+    func send(_ text: String, images: [PiImage], id: UUID) async throws {
         guard let client, let sessionID else { throw HostedSessionError.notRunning }
         struct File: Encodable { var uri: String }
         struct Prompt: Encodable { var text: String; var files: [File]; var delivery = "steer" }
         let files = images.map { File(uri: "data:\($0.mimeType);base64,\($0.data.base64EncodedString())") }
         try await client.call("POST", "/api/session/\(sessionID)/prompt", directory: directory, body: Prompt(text: text, files: files))
+        session.emit(.received(id))
     }
 
     /// 先删会话再关输入；删不掉的（服务已卡住或退出）留给下次起大脑时清。

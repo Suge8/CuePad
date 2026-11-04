@@ -57,9 +57,10 @@ extension CueHostTests {
         /// `brain`：大脑换成真的 Agent（`CueEvalTests`），假模型的剧本不再用上。`standby`：照常用假模型的 Pi 启用，这台 Mac 上那一家（不是 Pi）
         /// 起的是真的 Agent，换大脑换过去就是它（`CueEvalFailoverTests`）。`patrolAfter`：空闲多久巡视一次；
         /// `cacheLifetime`：提示缓存算多久过期；`renewAt`：换新线。`clock`：信封上写的此刻。`timing`：再改别的时间规则（重起、看门狗、热巡视）。
-        /// `prepare`：启用 Cue 之前在库里摆好的（多日评测预置的历史）。
+        /// `prepare`：启用 Cue 之前在库里摆好的（多日评测预置的历史）。`settleGate`：Pi 的大脑多加载收尾闸（`armSettle`）。
         init(
             usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false, brain: EvalBrain? = nil, standby: EvalBrain? = nil,
+            settleGate: Bool = false,
             patrolAfter: Duration = .seconds(3600), cacheLifetime: Duration = .seconds(3600),
             renewAt: Int = CueContext.renewAt, clock: @escaping @Sendable () -> Date = { .now }, timing tune: (inout CueTiming) -> Void = { _ in },
             prepare: ((Rig) async throws -> Void)? = nil
@@ -70,7 +71,8 @@ extension CueHostTests {
                 patrolAfter: patrolAfter, cacheLifetime: cacheLifetime, renewAt: renewAt,
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), sayWait: 5, quietHours: [], clock: clock)
             tune(&timing)
-            let launch = CuePad.CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
+            let launch = CuePad.CueLaunch(
+                executable: settleGate ? try Self.gatedPi() : realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             let real = brain ?? standby
             let directory = real.map { _ in TestLibraries.makeDirectory() }
             brainDirectory = directory
@@ -140,6 +142,40 @@ extension CueHostTests {
         }
 
         func say(_ text: String) async throws { try await store.addCueMessage(.you, text: text) }
+
+        /// 起 Pi 时多带收尾闸扩展（`settle-gate.ts`）、交给它的每一行另记一份（`handed`）的启动脚本。
+        private static func gatedPi() throws -> URL {
+            let gate = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appending(path: "CuePadKit/Tests/CuePiTests/Fixtures/settle-gate.ts")
+            let script = TestLibraries.makeDirectory().appending(path: "pi")
+            try """
+                #!/bin/sh
+                mkdir -p "$PI_CODING_AGENT_DIR/settle-gate"
+                tee -a "$PI_CODING_AGENT_DIR/settle-gate/stdin.log" | '\(realPi.path)' "$@" -e '\(gate.path)'
+
+                """.write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+            return script
+        }
+
+        private var settleGate: URL { app.piPaths.agentDirectory.appending(path: "settle-gate", directoryHint: .isDirectory) }
+
+        /// Pi 下一次收尾时停在报出来之前（`settle-gate.ts`），返回等它停住的那一下；`releaseSettle` 放行。
+        func armSettle() throws -> () async throws -> Void {
+            try FileManager.default.createDirectory(at: settleGate, withIntermediateDirectories: true)
+            try Data().write(to: settleGate.appending(path: "arm"))
+            return { [settleGate] in
+                try await eventually("Pi 收尾停住") { FileManager.default.fileExists(atPath: settleGate.appending(path: "held").path) }
+            }
+        }
+
+        func releaseSettle() throws { try Data().write(to: settleGate.appending(path: "release")) }
+
+        /// 含 `text` 的那一行交到了 Pi（收尾闸停着时 Pi 先收下、等报完收尾再处理）。
+        func handed(_ text: String) async throws {
+            let log = settleGate.appending(path: "stdin.log")
+            try await eventually("「\(text)」交到 Pi") { ((try? String(contentsOf: log, encoding: .utf8)) ?? "").contains(text) }
+        }
 
         /// 另一台 Mac（mac-b）醒着、它的在线记录同步到了这里：它上面的会话这才算在跑，Cue 才能对它说话（`CueStore.runtimeIsConfirmed`）。
         /// 返回替那台 Mac 写会话状态的记录器。

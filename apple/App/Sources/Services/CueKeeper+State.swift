@@ -50,6 +50,12 @@ extension CueKeeper {
         var failures: Int
         /// 这一轮做完就换个班次（工具服务挂了、额度登录卡住换了 Agent）：下一句不再交给这个大脑
         var retiring = false
+        /// 交给大脑、它还没报哪一轮接走（`TurnEvent.received`）的话：发送标识 → 其中你的消息与回答
+        var handed: [UUID: [UUID]] = [:]
+        /// 报了接走时没有在跑的一轮的你的话：接下来开始的那一轮接走的
+        var taken: [UUID] = []
+        /// 交出去、还没答上的你的话（接走它的一轮在跑、还没报接走、等着下一轮接）：大脑出问题时清掉送达、重起后重新交
+        var unanswered: [UUID] { (turn?.delivered ?? []) + handed.values.flatMap(\.self) + taken }
     }
 
     /// 跨班次、跨 App 重启的对账进度（本机，只给这台 Mac 的管理器用）。
@@ -74,7 +80,7 @@ extension CueKeeper {
         var round: CueRound
         /// Cue 自己醒来（不是你发来消息）的这一轮为什么醒（出错要退避、重试同一次醒来）；你发起的为 nil
         var selfStarted: CueWake?
-        /// 这一轮里交出去的你的消息与回答：大脑中途退出时清掉送达。Cue 自己醒来的一轮里有它，就是中途插进了你的话
+        /// 这一轮接走的你的消息与回答（大脑报的，`TurnEvent.received`）。Cue 自己醒来的一轮里有它，就是中途插进了你的话
         var delivered: [UUID] = []
         /// 大脑此刻正在说的话：做完时还留着的就是这一轮的回复
         var speaking: PiDraft?

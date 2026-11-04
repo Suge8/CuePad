@@ -43,16 +43,17 @@ extension CueKeeper {
         }
         if let said { parts.append(said) }
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
-        let sent = parts.joined(separator: "\n")
+        let sent = parts.joined(separator: "\n"), sending = UUID()
         do {
-            try await shift.brain.send(sent, images: images)
+            try await shift.brain.send(sent, images: images, id: sending)
         } catch {
             await broke(ShownText("发不进去：\(ShownText(error).embedded)"))  // 这一轮还没开，交出去的话也还没记送达
             return false
         }
         var turn = Turn(
-            author: author, round: beginRound(wake, sent: [sent], at: now), selfStarted: wake == .message ? nil : wake, delivered: delivering,
+            author: author, round: beginRound(wake, sent: [sent], at: now), selfStarted: wake == .message ? nil : wake, delivered: shift.taken,
             mark: mark, held: changes.held, stops: Self.stops(in: wake, changes.due))
+        if !shift.taken.isEmpty { turn.author = .cue }
         // Cue 自己醒来的一轮醒来就写下经过那一行：为什么醒在它上面，各端马上画得出叫醒的那一下
         if !turn.answersYou {
             do {
@@ -64,6 +65,8 @@ extension CueKeeper {
         updateShift {
             $0.primed = true
             $0.turn = turn
+            $0.taken = []
+            $0.handed[sending] = delivering
         }
         retrying = nil
         heardAt = setup.timing.awake()

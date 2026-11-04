@@ -60,9 +60,10 @@ extension ClaudeHostedSession: HostedSession {
 
     private static let toolsPoll: Duration = .milliseconds(100)
 
-    func send(_ text: String, images: [PiImage]) async throws {
+    func send(_ text: String, images: [PiImage], id: UUID) async throws {
         let text = text.hasPrefix("/") ? " " + text : text
         try await say(Self.userMessage(ClaudeStream.content(text: text, images: images)), interrupting: false)
+        brain?.emit(.received(id))
     }
 
     func newSession() async throws {

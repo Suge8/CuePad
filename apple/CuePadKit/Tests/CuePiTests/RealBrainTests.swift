@@ -141,7 +141,7 @@ struct RealBrainTests {
         AgentTape.use(runtime)
         try await withRig(runtime) { rig in
         #expect(rig.brain.seesImages)
-        try await rig.brain.send("What color is this image? Reply with only the color name in English.", images: [PiImage(mimeType: "image/png", data: redPNG)])
+        try await rig.brain.send("What color is this image? Reply with only the color name in English.", images: [PiImage(mimeType: "image/png", data: redPNG)], id: UUID())
         try await rig.finished()
 
         #expect(rig.failures == [], "\(rig.events)")
@@ -312,6 +312,6 @@ struct RealBrainProcessTests {
 }
 
 private extension HostedSession {
-    func send(_ text: String) async throws { try await send(text, images: []) }
+    func send(_ text: String) async throws { try await send(text, images: [], id: UUID()) }
 }
 #endif

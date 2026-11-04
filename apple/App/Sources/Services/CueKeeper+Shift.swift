@@ -71,9 +71,9 @@ extension CueKeeper {
             }
             await shift.brain.stop()()
             speech.offer(nil)
-            if let delivered = shift.turn?.delivered, !delivered.isEmpty {
+            if !shift.unanswered.isEmpty {
                 do {
-                    try await store.unmarkCueMessagesDelivered(delivered)
+                    try await store.unmarkCueMessagesDelivered(shift.unanswered)
                 } catch {
                     Self.log.error("Cue 没读完的消息没能退回：\(error.localizedDescription, privacy: .public)")
                 }
@@ -103,7 +103,18 @@ extension CueKeeper {
             // 没有醒来就开始的一轮只能是插进来的你的话开的
             if turn == nil {
                 let round = beginRound(.message, sent: [])
-                updateShift { $0.turn = Turn(author: .cue, round: round) }
+                updateShift {
+                    $0.turn = Turn(author: .cue, round: round, delivered: $0.taken)
+                    $0.taken = []
+                }
+            }
+        // 接走你的话的一轮回答你：写成 Cue 说的，最后的话写进对话
+        case .received(let id):
+            updateShift { shift in
+                guard let ids = shift.handed.removeValue(forKey: id), !ids.isEmpty else { return }
+                guard shift.turn != nil else { return shift.taken += ids }
+                shift.turn?.author = .cue
+                shift.turn?.delivered += ids
             }
         case .speaking(let draft):
             updateShift { $0.turn?.speaking = draft }
@@ -264,9 +275,10 @@ extension CueKeeper {
     private func replay(_ turn: Turn, failure: String) async {
         retrying = failure
         if let woke = turn.selfStarted { await setBack(failure, retrying: woke, as: turn.author, now: true) }
-        guard !turn.delivered.isEmpty else { return }
+        let returned = turn.delivered + (shift?.unanswered ?? [])
+        guard !returned.isEmpty else { return }
         do {
-            try await store.unmarkCueMessagesDelivered(turn.delivered)
+            try await store.unmarkCueMessagesDelivered(returned)
         } catch {
             Self.log.error("Cue 没答上的消息没能退回：\(error.localizedDescription, privacy: .public)")
         }
