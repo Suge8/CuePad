@@ -16,12 +16,13 @@ extension CueKeeper {
         let store = self.store, now = self.now
         let mark = try await store.lastWrite()
         let board = try await store.cueBoard()
-        let changes = try await self.changes(at: now)
+        let changes = try await self.changes(at: now), tools = CueTools(store: store)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: setup.timing.clock(), projects: try await store.projects(),
-            changes: changes.due, recaps: try await CueTools(store: store).recaps(for: changes.due), board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
+            changes: changes.due, recaps: try await tools.recaps(for: changes.due), board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
             wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said),
-            quotas: try await store.accountQuotas(on: setup.recorder.hostID), retrying: retrying.map(Self.firstLine)))
+            quotas: try await store.accountQuotas(on: setup.recorder.hostID), retrying: retrying.map(Self.firstLine),
+            related: try await tools.related(to: said ?? "")))
         var parts = [envelope]
         if !shift.primed || renewDue(shift, now: now) {
             if shift.primed {
