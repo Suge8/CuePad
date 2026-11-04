@@ -106,30 +106,28 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 你的一轮碰上 Pi 额度用完，换到 Claude Code（只说这一句，这次故障就算告诉过你）；它快的重试还没用完、没到说起不来（你的话等着交，
-    /// 每次对账都马上再试一次，快的那几次留得够多），Pi 就到了重置时刻，换回 Pi 答上你的话：答上的那一轮说一句恢复了，中间没说过起不来。
-    @Test func 换家后答上你的话_说一句恢复了_不说起不来() async throws {
-        let rig = try await Rig(timing: { ($0.restarts, $0.slowRestarts) = (Array(repeating: .seconds(3600), count: 8), [.seconds(3600)]) })
-        _ = try await stuckPi(rig, resetsIn: 3, alongside: [.claudeCode])
-        rig.model.blockQuota(times: 1)
-        try await rig.say("你好")
-        try await rig.message(.cue, containing: "我换到 Claude Code 接着干")
-        try await rig.message(.cue, containing: "收到：你好")
-        try await rig.message(.cue, containing: "又能干活了，用的是 Pi")
-        #expect(try await rig.count("接着干") == 1)
-        #expect(try await rig.count("又能干活了") == 1)
-        #expect(try await rig.count("我起不来了") == 0)
-        await rig.stop()
-    }
+    enum Stuck: Sendable { case message, schedule }
 
-    /// 同上，卡住的是定时那一轮（Cue 自己醒来的）：换家说一句，卡着的定时做完的那一轮说一句恢复了，中间没说过起不来。
-    @Test func 换家后做完卡着的定时_说一句恢复了_不说起不来() async throws {
-        let rig = try await Rig(timing: { ($0.restarts, $0.slowRestarts) = ([.seconds(3600)], [.seconds(3600)]) })
-        _ = try await stuckPi(rig, resetsIn: 3, alongside: [.claudeCode])
+    /// 你的一轮或定时那一轮（Cue 自己醒来的）碰上 Pi 额度用完，换到 Claude Code（只说这一句，这次故障就算告诉过你）；它起不来、快的重试还没用完
+    /// （你的话等着交时每次对账都马上再试一次，快的那几次留得够多），Pi 就到了重置时刻，换回 Pi 做完卡着的那件：做完的那一轮说一句恢复了，中间没说过起不来。
+    @Test(arguments: [Stuck.message, .schedule])
+    func 换家后做完卡着的那件_说一句恢复了_不说起不来(_ stuck: Stuck) async throws {
+        let rig = try await Rig(timing: { ($0.restarts, $0.slowRestarts) = (Array(repeating: .seconds(3600), count: 8), [.seconds(3600)]) })
+        let resets = try await stuckPi(rig, resetsIn: 60, alongside: [.claudeCode])
         rig.model.blockQuota(times: 1)
-        let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)
+        let done: String
+        switch stuck {
+        case .message:
+            try await rig.say("你好")
+            done = "收到：你好"
+        case .schedule:
+            let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)
+            done = "定时到点：#\(reminder.index) 核对发布结果"
+        }
         try await rig.message(.cue, containing: "我换到 Claude Code 接着干")
-        try await rig.message(.cue, containing: "定时到点：#\(reminder.index) 核对发布结果")
+        try await eventually("Claude Code 起不来，等着重起") { rig.health?.runtime == .claudeCode && rig.health?.phase == .restarting }
+        rig.jump(to: resets)
+        try await rig.message(.cue, containing: done)
         try await rig.message(.cue, containing: "又能干活了，用的是 Pi")
         #expect(try await rig.count("接着干") == 1)
         #expect(try await rig.count("又能干活了") == 1)
