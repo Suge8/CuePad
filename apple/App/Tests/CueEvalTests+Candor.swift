@@ -90,11 +90,14 @@ extension CueEvalTests {
         ]
     }
 
-    /// 回复里有一小句是 Cue 说之后自己再发、再开（"接上后我再让它推""下一轮会重新发"）：去掉引号里转述的原话，按标点切成小句，
-    /// 有再做的动作、又不是否定（"没再试""不再重发"）或请他回头叫它（"你得再叫我一次"）的就算。按小句认，不列整句措辞：同一句承诺换个说法照样认。
+    /// 回复里有一小句是 Cue 说之后自己再发、再开（"开机后我再让它推""下一轮会重新发"）：去掉引号里转述的原话，按句号切句、逗号切小句，
+    /// 有再做的动作、又不是否定（"没再试""不再重发"）或请他回头叫它（"你得再叫我一次"）的就算；一句里先请他开口（"你再说一声，我就再开"）的，
+    /// 是他开口开的新一轮，不算。按小句认，不列整句措辞：同一句承诺换个说法照样认。
     static func promisesRetry(_ reply: String) -> Bool {
-        reply.replacing(/“[^”]*”|"[^"]*"|「[^」]*」/, with: "").split(whereSeparator: { "，。；！？,.;!?\n".contains($0) })
-            .contains { $0.contains(/再(发|开|推|试|让|叫|去|做)|重发|重新发|下一轮/) && !$0.contains(/没|不|别|免得|叫我|告诉我|让我/) }
+        reply.replacing(/“[^”]*”|"[^"]*"|「[^」]*」/, with: "").split(whereSeparator: { "。！？!?\n".contains($0) })
+            .filter { !$0.contains(/你(?:再|先)?(?:说|叫|告诉|提醒|点|回)/) }
+            .flatMap { $0.split(whereSeparator: { "，；,;.".contains($0) }) }
+            .contains { $0.contains(/再(?:发|开|推|试|让|叫|去|做)|重发|重新发|下一轮/) && !$0.contains(/没|不|别|免得|叫我|告诉我|让我/) }
     }
 
     /// Cue 被拒的几种原因（`CueStoreError` 的 macOffline、sessionUnconfirmed、turnSourceUnconfirmed）：从结果认是哪种（`marker`），
