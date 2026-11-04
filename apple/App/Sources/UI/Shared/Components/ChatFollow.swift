@@ -185,6 +185,8 @@ struct JumpToNewest: View {
     let action: () -> Void
     @Environment(\.palette) private var palette
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// 点按区的边长与离可见区右、下边的距离。
     static let size: CGFloat = 44
     static let inset: CGFloat = 10
@@ -193,15 +195,14 @@ struct JumpToNewest: View {
 
     var body: some View {
         Button(action: action) {
-            Image(.toLatest).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
+            Image(.toLatest).font(Glyph.control.weight(.semibold)).foregroundStyle(palette.ink)
                 .frame(width: 40, height: 40)
                 .glass(in: .circle, interactive: true, ink: .clear)
                 .overlay(alignment: .topTrailing) {
                     if unseen {
-                        Circle().fill(palette.ink).frame(width: 10, height: 10)
-                            .overlay(Circle().strokeBorder(palette.desk, lineWidth: 2))
+                        StatusDot(color: palette.ink, rim: palette.desk)
                             .offset(x: -3, y: 3)
-                            .transition(.scale.combined(with: .opacity))
+                            .transition(Motion.pop(reduceMotion: reduceMotion))
                     }
                 }
                 .frame(width: Self.size, height: Self.size)
