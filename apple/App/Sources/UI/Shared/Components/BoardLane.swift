@@ -24,6 +24,8 @@ extension EnvironmentValues {
 /// 列头：状态色实心圆里一个白字形（`BoardLaneMark`）、列名，右边是这一列的数。数随列的轻重（`BoardWeight.swift`）：推进中、等你放大、着状态色，
 /// 待办、已完成与列名同字号、列名与数都是 ink3。卡片开头的记号是空心描边，与它分得开。
 /// 待办的列头在数右边可带一颗"+"（`laneAddsTask`，同手机竖版看板待办行头的那一颗）。
+/// 四列同一套排法：放不下时先收紧列名与数之间的空，再把列名截成省略号，记号、数与"+"一直在。
+/// 不用按宽挑候选（`ViewThatFits`）：待办多一颗"+"，挑候选时整个列名先没了（1280 宽的 Mac 上只剩「11 ＋」），四列看着不是一套规则。
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
@@ -32,15 +34,10 @@ struct BoardColumnHeader: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // 窄到放不下时先不写列名、再不画记号，数一直在（Mac 待办的列头给左上的分段让位、侧栏收起时）
-            ViewThatFits(in: .horizontal) {
-                row(title: true, mark: true)
-                row(title: false, mark: true)
-                row(title: false, mark: false)
-            }
-            .lineLimit(1)
-            // 读屏总念列名与数，不随看得见的那一档少念
-            .accessibilityElement(children: .ignore)
+            row
+                .lineLimit(1)
+                // 读屏总念列名与数，列名截没了也照念
+                .accessibilityElement(children: .ignore)
             .accessibilityLabel(column.title)
             .accessibilityValue("\(count)")
             .accessibilityAddTraits(.isHeader)
@@ -49,7 +46,7 @@ struct BoardColumnHeader: View {
                     .labelStyle(.iconOnly)
                     .font(Self.font)
                     .foregroundStyle(palette.signature)
-                    .frame(width: Self.height, height: Self.height)
+                    .frame(width: Self.add, height: Self.height)
                     .contentShape(.rect)
                     .buttonStyle(PressStyle(.inline))
             }
@@ -57,11 +54,13 @@ struct BoardColumnHeader: View {
         .frame(height: Self.height)
     }
 
-    private func row(title: Bool, mark: Bool) -> some View {
-        HStack(spacing: 8) {
-            if mark { BoardLaneMark(column: column, size: Self.mark) }
-            if title { Text(column.title).font(Self.font).foregroundStyle(column.light ? palette.ink3 : palette.ink2).fixedSize() }
-            Spacer(minLength: 8)
+    private var row: some View {
+        // 记号与列名隔一道，列名与数之间只靠弹性的空：放不下时先把这道空收到最小，再截列名
+        HStack(spacing: 0) {
+            BoardLaneMark(column: column, size: Self.mark)
+            Text(column.title).font(Self.font).foregroundStyle(column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
+                .padding(.leading, 6)
+            Spacer(minLength: 4)
             Text("\(count)").font(column.light ? Self.font : Self.countFont).monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
         }
     }
@@ -72,11 +71,15 @@ struct BoardColumnHeader: View {
     private static let mark: CGFloat = 16
     /// 与栏头那一排的玻璃同高（`boardTopRow`）
     static let height = Spacing.toolbarControl
+    /// "+"占的宽：字形加一点按得到的余量（悬停底向外宽出，`PressStyle(.inline)`）；按列头高的方块会白占一截、把列名挤短。
+    private static let add: CGFloat = 24
     #else
     private static let font = Font.headline
     private static let countFont = Font.title2.weight(.semibold)
     private static let mark: CGFloat = 20
     static let height: CGFloat = 52
+    /// 手指点得到的一格：高是列头的 52，宽收到 32（横屏四列的待办列头里，44 宽会把"待办"挤成省略号）。
+    private static let add: CGFloat = 32
     #endif
 }
 
