@@ -4,8 +4,8 @@ import SwiftUI
 
 /// 进展页（窄屏侧栏与宽屏主区的"进展"）：只有看板，只看项目范围里的（`Workspace.scopedProject`）。会话不在这里：在跑、等你的在会话条上，
 /// 已结束的在"更早"（窄屏 Cue 页会话条底下那一格推入，宽屏会话条里展开）。
-/// 窄屏那一排是侧栏的（`NarrowSidebarBar`：左边项目范围，右边额度）；宽屏页顶中间一块玻璃（`ProgressHeader`）：项目范围与额度环，右上角新会话（`NewSessionButton`）。
-/// 添加任务是待办头上的"+"（`laneAddsTask`：竖版看板的行头、四列的列头）。
+/// 窄屏那一排是侧栏的（`NarrowSidebarBar`：左边项目范围，右边额度）；宽屏页顶中间一块玻璃（`ProgressHeader`）：项目范围与额度环。
+/// 添加任务是待办头上的"+"、新会话是推进中头上的"+"（`LaneAdd`：竖版看板的行头、四列的列头），页顶不另放新会话。
 /// 看板是流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）；选了项目以后卡上不画项目小图形、列头的数也只数这个项目。
 /// 宽屏（iPad）主栏放得下看板最窄宽（`WideMetrics.board`，`boardFits`）与 iPhone 横屏同 Mac 四列并排（`BoardColumns`）；放不下的主栏（iPad 竖屏、
 /// 11 寸横屏旁边开着 Cue 或会话）与窄屏竖着拿是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点：
@@ -26,9 +26,7 @@ struct ProgressScreen: View {
     var body: some View {
         boardView
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .floatingHeader("进展", center: { ProgressHeader(open: $quotaOpen) }) {
-                NewSessionButton(project: workspace.scopedProject)
-            }
+            .floatingHeader("进展", center: { ProgressHeader(open: $quotaOpen) }) { EmptyView() }
             .refreshesQuota()
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: adding)
             .onChange(of: workspace.scopedProject) { adding = false }
@@ -46,6 +44,7 @@ struct ProgressScreen: View {
             }
         }
         .environment(\.laneAddsTask, add)
+        .environment(\.laneAddsSession, { workspace.openNewSession(in: scope) })
         // 换范围不带里层的挪位与数字动画，理由同 Mac 的 `TaskBoardPage`
         .transaction(value: scope) { $0.disablesAnimations = true }
     }

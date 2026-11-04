@@ -6,6 +6,8 @@ import SwiftUI
 /// 三栏各自的栏头都排在窗口最顶那一排（红绿灯那一排，`Chrome.band`），同一基线；窗口工具栏只留一条空的，给这一排定高、把红绿灯放在它中线上。
 /// 尺寸与自动收起只在 `WideMetrics`。Cue 收起后右上一颗 Cue 钮（`CueButton`），它压在最右那一块的栏头右端，那一块的栏头让出它（`headInset`）。
 /// 收起的 Cue 仍挂着（对话、滚动位置都在），只是藏起；放不下时点 Cue 钮，它从右边浮出、盖在主区上（`Workspace.cueFloats`）。
+/// 资料库读不出时整窗只有一张"读不出资料库"的卡（`CatalogGate` 挂在三栏外面，同启动时打不开库、同 iOS 的整窗）：三栏都读它，每栏各放一张就是一屏两三张一样的卡；
+/// 会话条也收起——点进去的哪一页都读不出，一屏只留重试这一个焦点。
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
@@ -13,6 +15,25 @@ struct MainWindow: View {
     @State private var focus = WideFocus()
 
     var body: some View {
+        CatalogGate { columns }
+        // 三栏从窗口上沿起，栏头排进红绿灯那一排（各栏里自己让出这一排）
+        .ignoresSafeArea(.container, edges: .top)
+        .railTips()
+        .previewPresenter(Bindable(workspace).preview, reply: nil)
+        .background(palette.desk)
+        .background { WindowPanels(workspace: workspace) }
+        .background { TaskBubbleSlot() }
+        .background { WorkspaceShortcuts(workspace: workspace) }
+        .background { CardPressMonitor(workspace: workspace) }
+        .overlay { Prewarm().environment(workspace) }
+        .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
+        .toolbar(removing: .title)
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .panelHost()
+        .environment(workspace)
+    }
+
+    private var columns: some View {
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
             let floats = sizes.floats
@@ -43,21 +64,6 @@ struct MainWindow: View {
                 if sizes.cue == 0 { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
             }
         }
-        // 三栏从窗口上沿起，栏头排进红绿灯那一排（各栏里自己让出这一排）
-        .ignoresSafeArea(.container, edges: .top)
-        .railTips()
-        .previewPresenter(Bindable(workspace).preview, reply: nil)
-        .background(palette.desk)
-        .background { WindowPanels(workspace: workspace) }
-        .background { TaskBubbleSlot() }
-        .background { WorkspaceShortcuts(workspace: workspace) }
-        .background { CardPressMonitor(workspace: workspace) }
-        .overlay { Prewarm().environment(workspace) }
-        .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
-        .toolbar(removing: .title)
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        .panelHost()
-        .environment(workspace)
     }
 
     private static func inset(trailing: CGFloat) -> EdgeInsets {
@@ -131,8 +137,9 @@ private extension Route {
 }
 
 extension Workspace {
-    /// ⌥⌘N（"文件 › 新会话"）与进展页"⋯"里的"新会话"：弹出新会话的表单（表单只有这一个出处，挂在主窗口上）。
-    func newSession() {
+    /// ⌥⌘N（"文件 › 新会话"）与看板推进中列头的 ＋（`openNewSession`）：弹出新会话的表单（表单只有这一个出处，挂在主窗口上），开在 `project`（nil 是当前项目）。
+    func newSession(in project: UUID? = nil) {
+        newSessionProject = project
         showsNewSession = true
     }
 }

@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// Cue 页（窄屏的根，打开 App 就在这一页；宽屏一直在右边，收起时成一颗钮），与会话页同一套消息版式：
-/// 页头一直在（头像、名字与数字账；Mac 在右边那一栏的栏头，是 `CueTitle`；手机与 iPad 是浮在对话上的 `CueHeader`，点开是在做、等你与记忆的面板）；
+/// 页头一直在（头像、名字与数字账；Mac 在右边那一栏的栏头，是 `CueTitle`；手机与 iPad 是浮在对话上的 `CueHeader`；点开都是 Cue 的面板，`CueNowPanel`）；
 /// 中间是对话：你的话是右侧牛皮纸色的气泡，Cue 的话是左侧纸做的气泡（`CueBubble`、`CueSays`），它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`），
 /// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、醒来记录与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
 /// 你发起的一轮在你的话之后先是这一轮的经过（`CueTrace`：碰到的任务与会话一处一行，做完一步才往下长、出现了就不再动），这一轮说的话与结果按先后在它之后。
@@ -15,8 +15,8 @@ import SwiftUI
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
 /// 对完一次滑上来（`ChatColumn` 的 `holding`）：对完才算开始看，有新消息就到第一条新消息、从它读起，没有才到最新处（`CueViewing`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
-/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 运行在哪台 Mac 都一样。"Cue 记得什么"（`CueMemoryPage`）与定时（`CueSchedulePage`）在 Mac 工具栏右上的两颗圆钮（`CueListSlots`）、手机页头的面板里；
-/// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
+/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 运行在哪台 Mac 都一样。"Cue 记得什么"（`CueMemoryPage`）与定时（`CueSchedulePage`）从 Cue 的面板里去（`CueNowPanel`，三端同一份）；
+/// Cue 在这台 Mac 值班时 Mac 的面板末尾还有"运行情况"，在右侧开一栏（`CueRunPanel`）。宽屏没启用时这一页不放输入框（`bottom`）。
 struct CuePage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -30,10 +30,9 @@ struct CuePage: View {
     @State private var seen: [UUID: Date] = [:]
 
     #if os(macOS)
-    static let readingWidth: CGFloat = 760
-    static let inset: CGFloat = 24
-    /// 拍板卡与输入框离页底。
-    static let replyPadding: CGFloat = 16
+    static let readingWidth = Spacing.reading
+    static let inset = Spacing.page
+    static let replyPadding = Spacing.replyBottom
     #else
     static let readingWidth: CGFloat = 640
     static let inset: CGFloat = 16
@@ -172,7 +171,10 @@ struct CuePage: View {
                 // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, ComposerMetrics.stackGap).transition(.opacity) }
             }
-            CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
+            // 宽屏没启用时不放输入框：主区底部已有记下灵感的那一条（`CaptureSlot`），一屏只留一个；这一栏只剩启用那一张（`CueWelcome`）
+            if cue.canHear || workspace.layout == .narrow {
+                CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
+            }
         }
         .animation(Motion.fade, value: cue.canHear)
     }

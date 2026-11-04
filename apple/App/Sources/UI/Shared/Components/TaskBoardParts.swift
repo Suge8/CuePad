@@ -184,8 +184,10 @@ struct BoardColumn: View {
         #endif
     }
 
+    /// 空列的占位：空列收窄了（`BoardWidths.compact`），一句话在里面居中折行。
     private func empty(_ text: LocalizedStringResource) -> some View {
-        Text(text).font(Typography.secondary).foregroundStyle(palette.ink3)
+        Text(text).font(Typography.secondary).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
+            .padding(.horizontal, BoardCardMetrics.inset)
             .frame(maxWidth: .infinity, minHeight: isRow ? nil : 64, maxHeight: isRow ? .infinity : nil)
             .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
     }

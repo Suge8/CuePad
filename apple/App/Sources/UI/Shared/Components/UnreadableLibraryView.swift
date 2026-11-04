@@ -14,6 +14,9 @@ struct UnreadableLibraryView: View {
     private static let margin = Spacing.page
     #endif
 
+    /// 纸最宽多少：整窗只有这一张（Mac 主窗口、iPad）时不铺满，同启动时打不开库那一扇窗的宽。
+    private static let widest: CGFloat = 520
+
     var body: some View {
         EmptyState(mascot: .error, title: "读不出资料库", message: .verbatim(failure.summary)) {
             VStack(spacing: 16) {
@@ -34,6 +37,7 @@ struct UnreadableLibraryView: View {
                 #endif
             }
         }
+        .frame(maxWidth: Self.widest)
         .padding(.horizontal, Self.margin)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)

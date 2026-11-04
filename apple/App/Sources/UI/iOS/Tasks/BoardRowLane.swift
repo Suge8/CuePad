@@ -31,15 +31,11 @@ struct BoardRowLane<Above: View, Content: View>: View {
     @ScaledMetric(relativeTo: .caption) private var spineHeight = BoardRowMetrics.spineHeight
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.laneAddsTask) private var addTask
+    @Environment(\.laneAddsSession) private var addSession
     @ScaledMetric(relativeTo: .subheadline) private var addHeight = BoardRowMetrics.addHeight
 
-    /// 这一行的行头带的"+"（读屏名与动作）：待办是添加任务；其余列头的"+"与四列看板的列头同一份（`BoardColumnHeader`）。
-    private var add: (title: LocalizedStringResource, action: () -> Void)? {
-        switch column {
-        case .todo: addTask.map { ("添加任务", $0) }
-        default: nil
-        }
-    }
+    /// 这一行的行头带的"+"：待办是添加任务，推进中是新会话（`LaneAdd`，与四列看板的列头同一份）。
+    private var add: LaneAdd? { LaneAdd.of(column, task: addTask, session: addSession) }
     private var adds: Bool { add != nil }
 
     var body: some View {
@@ -137,11 +133,11 @@ enum BoardRowMetrics {
 
 /// 行头玻璃里的内容，在玻璃里居中（玻璃在行里竖直居中，卡从它下面滑过）。行再矮也写全名字：认行靠记号、名字与纸色。
 /// 重的两行：记号、竖排的名字、放大着状态色的数；轻的两行与矮卡同高，记号与数并排在上、名字竖排在下，字小一档，名字与数都是 ink3。
-/// 名字那一格按四个名字里最长的占位，同轻重的行头一样大。给了 `add` 时（待办）下面再一颗"+"。
+/// 名字那一格按四个名字里最长的占位，同轻重的行头一样大。给了 `add` 时（待办、推进中）下面再一颗"+"。
 private struct BoardRowSpine: View {
     let column: TaskBoard.Column
     let count: Int
-    let add: (title: LocalizedStringResource, action: () -> Void)?
+    let add: LaneAdd?
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .caption) private var mark: CGFloat = 16
     @ScaledMetric(relativeTo: .caption2) private var lightMark: CGFloat = 12
@@ -150,13 +146,7 @@ private struct BoardRowSpine: View {
         VStack(spacing: 0) {
             marks
             if let add {
-                Button(add.title, icon: .add, action: add.action)
-                    .labelStyle(.iconOnly)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(palette.signature)
-                    .frame(maxWidth: .infinity, minHeight: BoardRowMetrics.addHeight)
-                    .contentShape(.rect)
-                    .buttonStyle(PressStyle(.inline))
+                LaneAddButton(add).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: BoardRowMetrics.addHeight)
             }
         }
     }

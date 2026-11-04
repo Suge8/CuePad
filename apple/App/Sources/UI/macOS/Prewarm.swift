@@ -42,7 +42,7 @@ struct Prewarm: View {
         ZStack {
             switch step {
             case .conversation:
-                ChatScroll(followKey: 0, readingWidth: 760, inset: 24, follow: $follow) {
+                ChatScroll(followKey: 0, readingWidth: Spacing.reading, inset: Spacing.page, follow: $follow) {
                     PiConversation(
                         session: Self.session, items: PiChat.entries(Self.messages), messages: Self.messages, window: ChatWindow(count: PiConversation.firstWindow, earlier: 0) {})
                 }

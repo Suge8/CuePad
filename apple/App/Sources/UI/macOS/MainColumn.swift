@@ -16,7 +16,7 @@ struct MainColumn: View {
     var body: some View {
         ZStack(alignment: .top) {
             ZStack {
-                CatalogGate { PageStack() }
+                PageStack()
                 Group {
                     EditorLayer()
                     LibraryFileLayer()
@@ -46,7 +46,7 @@ struct BesideColumn: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        CatalogGate {
+        Group {
             if let id = workspace.besideSession?.sessionID { SessionPage(sessionID: id, column: .beside).id(id) }
         }
         .ignoresSafeArea(.container, edges: .top)

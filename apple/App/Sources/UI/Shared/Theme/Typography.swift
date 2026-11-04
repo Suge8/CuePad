@@ -107,6 +107,10 @@ nonisolated enum Spacing {
     /// 一栏的边：页面内容的左右边距，也是这一栏栏头里第一样东西与最后一颗钮离栏边（栏头与下面的内容同一条左边、同一条右边）。
     /// 看板的卡、项目页的纸、对话的列（`SessionChat`、`CuePage` 的 inset）都从这里起。
     static let page: CGFloat = 24
+    /// 对话的阅读栏最宽（会话、Cue）：长回答一行不至于太长，气泡也不挤；两侧仍离栏边 `page`。
+    static let reading: CGFloat = 760
+    /// 回复框（会话的、对 Cue 说）与它上面的拍板卡离栏底。
+    static let replyBottom: CGFloat = 16
     /// 页面内容离工具栏下沿。
     static let pageTop: CGFloat = 24
     /// 页内分组之间、分组标题到内容。

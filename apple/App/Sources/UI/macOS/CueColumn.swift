@@ -8,11 +8,9 @@ struct CueColumn: View {
     let shown: Bool
 
     var body: some View {
-        CatalogGate {
-            VStack(spacing: 0) {
-                CueTitle()
-                CuePage().fadesUnderHead()
-            }
+        VStack(spacing: 0) {
+            CueTitle()
+            CuePage().fadesUnderHead()
         }
         .environment(\.pageActive, shown)
         .ignoresSafeArea(.container, edges: .top)

@@ -27,7 +27,7 @@ struct PageMenuSlot: View {
             switch self {
             case .card: "置顶、移到项目、复制、归档、删除"
             case .project: "选择灵感、看这个项目的进展、项目操作"
-            case .progress: "新会话、项目范围、归档做完的、接入 Agent"
+            case .progress: "项目范围、归档做完的、接入 Agent"
             case .trash: "清空回收站"
             case .none: "这一页没有更多操作"
             }
@@ -75,7 +75,6 @@ struct PageMenuSlot: View {
         case .card(let card?): CardActions(card: card, more: true)
         case .project(let id): ProjectMenuItems(projectID: id)
         case .progress:
-            Button("新会话", icon: .add) { workspace.newSession() }
             ProjectScopeItems()
             Divider()
             Button("全部归档做完的", icon: .archive) { workspace.attempt { try await workspace.archiveCompletedTasks() } }

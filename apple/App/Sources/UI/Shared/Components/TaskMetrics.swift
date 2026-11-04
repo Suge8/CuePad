@@ -49,6 +49,8 @@ enum BoardCardMetrics {
     static let gap: CGFloat = 8
     /// 卡里开头记号、项目小图形、标题、尾巴之间（`BoardCardLayout`）。
     static let leadGap: CGFloat = 8
+    /// 推进中卡下沿那条线最窄多宽才画（`BoardLineRow`）：过去两颗点与现在一截波读得出来；再窄整条不画，只留读数。
+    nonisolated static let lineMin: CGFloat = 40
     /// 手机竖版看板（`boardRow`）：卡窄，内边距、记号与标题之间都收一点，标题小一档。
     static let rowPadding: CGFloat = 12
     static let rowGap: CGFloat = 6

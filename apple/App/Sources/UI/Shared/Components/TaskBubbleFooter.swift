@@ -117,7 +117,8 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
     }
 }
 
-/// 还没交出去的叶子："开始"——正文连同标题作为第一句交给 Agent（先写下正文里没保存的字）。Mac 左边另有"绑定会话"；
+/// 还没交出去的叶子："开始"——正文连同标题作为第一句交给 Agent（先写下正文里没保存的字）。Mac 左边另有"绑定会话"
+/// （点开是会话列表的菜单，`SessionBindItems`；紧凑的次按钮，与"开始"同一排、同高，看得出能点）；
 /// 这台 Mac 上上次没开成（`Workspace.launchFailures`）时左边换成原因、按钮写"重试"。
 private struct StartBar: View {
     let leaf: Card
@@ -134,10 +135,8 @@ private struct StartBar: View {
                 Text(failure).font(BubbleMetrics.meta).foregroundStyle(palette.failure).lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             } else if caption == nil {
-                Menu { SessionBindItems(leaf: leaf) } label: {
-                    Text("绑定会话").font(BubbleMetrics.meta).foregroundStyle(palette.ink3)
-                }
-                .menuStyle(.button).buttonStyle(PressStyle(.inline)).menuIndicator(.hidden).fixedSize()
+                Menu { SessionBindItems(leaf: leaf) } label: { Text("绑定会话") }
+                    .menuStyle(.button).menuIndicator(.hidden).buttonStyle(ControlButtonStyle(kind: .secondary, compact: true)).fixedSize()
             }
             #endif
             if let caption { Text(caption).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(1) }

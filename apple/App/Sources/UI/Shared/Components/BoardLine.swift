@@ -64,6 +64,8 @@ struct BoardLine: View {
                     }
                 }
             }
+            // 不画时排成 0 宽裁掉：钉在左端的那颗点不漏出来
+            .fact()
             .layoutValue(key: BoardLineRow.Part.self, value: .line)
             Group {
                 if let clock = pulse.shown?.clock { TimeSpent(clock: clock).fact().layoutValue(key: BoardLineRow.Part.self, value: .time) }
@@ -137,9 +139,11 @@ struct BoardLine: View {
 }
 
 /// 卡下沿那一行（推进中的任务卡、会话卡，与从推进中飞出时还带着线的卡同这一处）：左边是线（或在等谁），右端是读数——时长、状态词（`Part`）。
-/// 卡变窄时按这个顺序让，整行绝不比卡给的宽：照常排（线与读数隔 8、时长与词隔 4）→ 收两道缝（4、2）→ 丢时长、让位给状态词 →
-/// 收字距（`allowsTightening`）→ 状态词截断；线至少留 `minLine`（末端那颗点与一小截线，看得出停在哪）。没有状态词时时长就是那一项，只截断不丢。
-/// 1280 宽的推进中列里线这一行约 97 宽："达到用量限制""上下文 94%"丢了时长后放得下，英文的"Usage limit reached"截断。
+/// 卡变窄时按这个顺序让（`plans`），整行绝不比卡给的宽：照常排（线与读数隔 `gap`、时长与词隔 `pair`）→ 收两道缝（`tight`）→ 丢时长、让位给状态词 →
+/// 线拿不到最小可读的宽（`BoardCardMetrics.lineMin`：过去两颗点、现在一截波）就整条不画，读数占整行（时长与词都放得下就都留，否则只留词）→
+/// 收字距（`allowsTightening`）→ 状态词截断。读数总靠右，同一列各卡的读数一条竖线对齐。没有状态词时时长就是那一项，只截断不丢。
+/// 1280 宽的推进中列里线这一行约 97 宽："达到用量限制""上下文 94%"丢了时长、线也不画，只留词；英文的"Usage limit reached"截断。
+/// 否决过：线压到十几点也留着——只剩一颗点挤在词前面，读不出是线，像个标点。
 /// 每次排版各量一次理想宽，不按 `ViewThatFits` 把几种排法都建出来；丢掉的排成 0 宽裁掉（`fact()`），读屏仍由卡的标签说状态。
 /// 被否决的：读数 `fixedSize`、线占剩下的——卡一窄读数就越过卡的右沿（1280 宽的推进中列，"1 小时 达到用量限制"）。
 struct BoardLineRow: Layout {
@@ -148,7 +152,22 @@ struct BoardLineRow: Layout {
         static let defaultValue = Part.word
     }
 
-    static let minLine: CGFloat = 16
+    /// 线与读数之间、时长与状态词之间：照常与收紧两档。
+    private static let gap: CGFloat = 8
+    private static let pair: CGFloat = 4
+    private static let tight: (gap: CGFloat, pair: CGFloat) = (4, 2)
+
+    /// 一种排法：线与读数隔多少（nil 是不画线）、时长与词隔多少、留不留时长。
+    private struct Plan {
+        let line: CGFloat?
+        let pair: CGFloat
+        let spare: Bool
+    }
+
+    private static let plans = [
+        Plan(line: gap, pair: pair, spare: true), Plan(line: tight.gap, pair: tight.pair, spare: true), Plan(line: tight.gap, pair: tight.pair, spare: false),
+        Plan(line: nil, pair: tight.pair, spare: true), Plan(line: nil, pair: tight.pair, spare: false),
+    ]
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         CGSize(width: proposal.width ?? 0, height: proposal.height ?? WaveStrip.height)
@@ -162,12 +181,12 @@ struct BoardLineRow: Layout {
         let (keep, spare) = word.map { ($0, time) } ?? (time, nil)
         let keepWidth = keep?.sizeThatFits(.unspecified).width ?? 0
         let spareWidth = spare?.sizeThatFits(.unspecified).width ?? 0
-        let room = bounds.width - Self.minLine
-        let plan: (lineGap: CGFloat, gap: CGFloat, spare: Bool) = [(8, 4, true), (4, 2, true), (4, 2, false)].first { plan in
-            let reading = keepWidth + (plan.2 && spare != nil ? spareWidth + plan.1 : 0)
-            return reading + (keep == nil ? 0 : plan.0) <= room + 0.5
-        } ?? (4, 2, false)
-        let shownKeep = min(keepWidth, max(0, room - plan.lineGap))
+        // 线占的那一截：要画就至少 `lineMin`，读数之外还剩多少都给它
+        func room(_ plan: Plan) -> CGFloat { bounds.width - (plan.line.map { BoardCardMetrics.lineMin + (keep == nil ? 0 : $0) } ?? 0) }
+        let plan = Self.plans.first { plan in
+            keepWidth + (plan.spare && spare != nil ? spareWidth + plan.pair : 0) <= room(plan) + 0.5
+        } ?? Self.plans[Self.plans.count - 1]
+        let shownKeep = min(keepWidth, max(0, room(plan)))
         let shownSpare = plan.spare ? spareWidth : 0
         // 从右往左摆：先必留的、再可丢的（时长在词左边），线占剩下的
         var x = bounds.maxX
@@ -177,11 +196,12 @@ struct BoardLineRow: Layout {
             keep.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: shownKeep, height: height))
         }
         if let spare {
-            if shownSpare > 0 { x -= plan.gap + shownSpare }
+            if shownSpare > 0 { x -= plan.pair + shownSpare }
             spare.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: shownSpare, height: height))
         }
-        if keep != nil { x -= plan.lineGap }
-        line?.place(at: bounds.origin, proposal: ProposedViewSize(width: max(0, x - bounds.minX), height: height))
+        if keep != nil, let gap = plan.line { x -= gap }
+        let lineWidth = plan.line == nil ? 0 : max(0, x - bounds.minX)
+        line?.place(at: bounds.origin, proposal: ProposedViewSize(width: lineWidth, height: height))
     }
 }
 

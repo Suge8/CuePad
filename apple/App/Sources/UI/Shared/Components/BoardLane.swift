@@ -16,21 +16,65 @@ struct BoardLane: View {
 }
 
 extension EnvironmentValues {
-    /// 看板待办那一列（行）头上的"+"：点它开添加任务（窄屏侧栏的进展页给，`ProgressScreen`：页顶那一排是侧栏的、放不下它；Mac 的看板也给，`TaskBoardPage`：列头就是窗口最顶那一排）；nil 不画。
-    /// 读它的是手机竖版看板的行头（`BoardRowLane`）与四列看板的列头（`BoardColumnHeader`）。
+    /// 看板待办那一列（行）头上的"+"：点它开添加任务（进展页给：手机与 iPad `ProgressScreen`，Mac `TaskBoardPage`）；nil 不画。
     @Entry var laneAddsTask: (() -> Void)? = nil
+    /// 推进中那一列（行）头上的"+"：点它开新会话（`Workspace.openNewSession`）。三端的新会话都只在这里，另外只有会话列表空着时那一颗（`SessionList`）；nil 不画。
+    @Entry var laneAddsSession: (() -> Void)? = nil
+}
+
+/// 列头、行头上的"+"（三端同这一处）：待办是添加任务（`laneAddsTask`），推进中是新会话（`laneAddsSession`），页没给就没有。
+/// 读它的是四列看板的列头（`BoardColumnHeader`）与手机竖版看板的行头（`BoardRowLane`），各自只给它多大。
+struct LaneAdd {
+    let title: LocalizedStringResource
+    let action: () -> Void
+
+    static func of(_ column: TaskBoard.Column, task: (() -> Void)?, session: (() -> Void)?) -> LaneAdd? {
+        switch column {
+        case .todo: task.map { LaneAdd(title: "添加任务", action: $0) }
+        case .advancing: session.map { LaneAdd(title: "新会话", action: $0) }
+        case .waiting, .done: nil
+        }
+    }
+}
+
+/// "+"那一颗：只画图标、着品牌靛青，按下与悬停是行内的淡底（`PressStyle(.inline)`）；字号与按得到的那一格由放它的那一处给。
+struct LaneAddButton: View {
+    let add: LaneAdd
+    @Environment(\.palette) private var palette
+
+    init(_ add: LaneAdd) { self.add = add }
+
+    var body: some View {
+        Button(add.title, icon: .add, action: add.action)
+            .labelStyle(.iconOnly)
+            .foregroundStyle(palette.signature)
+            .contentShape(.rect)
+            .buttonStyle(PressStyle(.inline))
+    }
+}
+
+extension Workspace {
+    /// 推进中列头的"+"：新会话开在 `project`（看板的项目范围，没选时 nil、开在当前项目）。Mac 是窗口里的表单（`NewSessionPanel`），手机与 iPad 是新会话的输入框。
+    func openNewSession(in project: UUID?) {
+        #if os(macOS)
+        newSession(in: project)
+        #else
+        newSession = .init(project: project)
+        #endif
+    }
 }
 
 /// 列头：状态色实心圆里一个白字形（`BoardLaneMark`）、列名，右边是这一列的数。数随列的轻重（`BoardWeight.swift`）：推进中、等你放大、着状态色，
 /// 待办、已完成与列名同字号、列名与数都是 ink3。卡片开头的记号是空心描边，与它分得开。
-/// 待办的列头在数右边可带一颗"+"（`laneAddsTask`，同手机竖版看板待办行头的那一颗）。
+/// 待办与推进中的列头在数右边可带一颗"+"（`LaneAdd`：添加任务、新会话，同手机竖版看板行头的那一颗）。
 /// 四列同一套排法：放不下时先收紧列名与数之间的空，再把列名截成省略号，记号、数与"+"一直在。
-/// 不用按宽挑候选（`ViewThatFits`）：待办多一颗"+"，挑候选时整个列名先没了（1280 宽的 Mac 上只剩「11 ＋」），四列看着不是一套规则。
+/// 不用按宽挑候选（`ViewThatFits`）：多一颗"+"的列，挑候选时整个列名先没了（1280 宽的 Mac 上只剩「11 ＋」），四列看着不是一套规则。
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
     @Environment(\.palette) private var palette
     @Environment(\.laneAddsTask) private var addTask
+    @Environment(\.laneAddsSession) private var addSession
 
     var body: some View {
         HStack(spacing: 0) {
@@ -41,14 +85,8 @@ struct BoardColumnHeader: View {
             .accessibilityLabel(column.title)
             .accessibilityValue("\(count)")
             .accessibilityAddTraits(.isHeader)
-            if column == .todo, let addTask {
-                Button("添加任务", icon: .add, action: addTask)
-                    .labelStyle(.iconOnly)
-                    .font(Self.font)
-                    .foregroundStyle(palette.signature)
-                    .frame(width: Self.add, height: Self.height)
-                    .contentShape(.rect)
-                    .buttonStyle(PressStyle(.inline))
+            if let add = LaneAdd.of(column, task: addTask, session: addSession) {
+                LaneAddButton(add).font(Self.font).frame(width: Self.add, height: Self.height)
             }
         }
         .frame(height: Self.height)

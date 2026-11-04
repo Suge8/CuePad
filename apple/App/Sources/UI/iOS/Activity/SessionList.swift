@@ -110,17 +110,6 @@ extension SessionList where Top == EmptyView {
     init(model: AgentListModel) { self.init(model: model) { EmptyView() } }
 }
 
-/// "新会话"：在 `project` 里开（iPad 宽屏进展页顶右边的那一个操作）。
-struct NewSessionButton: View {
-    let project: UUID?
-
-    @Environment(Workspace.self) private var workspace
-    var body: some View {
-        Button("新会话", icon: .add) { workspace.newSession = .init(project: project) }
-            .accessibilityHint("让 Mac 开一个 Agent 会话")
-    }
-}
-
 /// 一个会话（`PiSessionRow`）点开它的会话页；已结束的整行更淡。
 private struct SessionRow: View {
     let item: PiSessionListItem

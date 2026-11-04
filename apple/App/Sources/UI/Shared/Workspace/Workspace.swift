@@ -113,8 +113,10 @@ final class Workspace {
     var searching = false
     /// 接入 Agent 并启用 Cue 的面板（`SetupPanel`；首次打开由 `offerSetup` 置起，Cue 页的启用钮（`CueWelcome`）与会话页的"接入"也打开它，主窗口弹出）。
     var showsSetup = false
-    /// 新会话的表单开着（`NewSessionForm`，主窗口弹出；菜单"文件 › 新会话"与进展页"⋯"里的"新会话"置起，`newSession`）。
+    /// 新会话的表单开着（`NewSessionForm`，主窗口弹出；菜单"文件 › 新会话"与看板推进中列头的 ＋ 置起，`newSession(in:)`）。
     var showsNewSession = false
+    /// 这一次新会话默认开在哪个项目（看板的项目范围；nil 是当前项目）。
+    var newSessionProject: UUID?
     /// 这台 Mac 上点"开始"没开成会话的叶子与原因（`handOff`）：任务气泡那一行一直写着、给"重试"，再点开始时清掉。
     /// 只记在这台：没开成的开新会话请求过一会儿就清掉（`DeliveryExecutor.retention`），提示条两秒多就收，原因就只剩这里。
     var launchFailures: [UUID: String] = [:]

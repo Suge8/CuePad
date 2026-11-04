@@ -59,8 +59,6 @@ struct SessionPage: View {
 
     /// 标题、状态与最新的对话先出；回复框、问题卡与"⋯"晚两帧（`NextFrame`）：它们的建立（文本视图、玻璃、菜单）占点击回合的一半，不在点的那一圈里。
     @State private var secondary = false
-    /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
-    private static let readingWidth: CGFloat = 760
 
     var body: some View {
         let slot = services.pi.slot(sessionID: sessionID)
@@ -78,7 +76,7 @@ struct SessionPage: View {
                     // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                     if stored != nil {
                         SessionChat(
-                            session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, slot: slot)
+                            session: session, digest: digest, readingWidth: Spacing.reading, inset: Spacing.page, follow: $follow, slot: slot)
                             .replyNotes(session: session.id, messages: digest.messages)
                     }
                 } reply: {
@@ -90,8 +88,8 @@ struct SessionPage: View {
                             Color.clear.frame(height: ComposerMetrics.openOneLine)
                         }
                     }
-                    .padding(.horizontal, 24).padding(.bottom, 16)
-                    .frame(maxWidth: Self.readingWidth)
+                    .padding(.horizontal, Spacing.page).padding(.bottom, Spacing.replyBottom)
+                    .frame(maxWidth: Spacing.reading)
                     .animation(Motion.fade, value: session.question)
                 }
                 // 对话到栏头下沿淡出：栏头是写着字的一排、不是玻璃，滚过去的字会叠在会话名上

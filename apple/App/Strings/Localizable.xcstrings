@@ -571,22 +571,6 @@
         }
       }
     },
-    "%@ 的设置…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ Settings…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 的设置…"
-          }
-        }
-      }
-    },
     "%@ 秒" : {
       "localizations" : {
         "en" : {
@@ -6519,22 +6503,6 @@
         }
       }
     },
-    "停用 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn Off %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "停用 %@"
-          }
-        }
-      }
-    },
     "允许" : {
       "localizations" : {
         "en" : {
@@ -8775,6 +8743,22 @@
         }
       }
     },
+    "右栏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Right Sidebar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "右栏"
+          }
+        }
+      }
+    },
     "叶子" : {
       "localizations" : {
         "en" : {
@@ -9155,22 +9139,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用后说一件想做的事，我来开工，要你拿主意时再找你"
-          }
-        }
-      }
-    },
-    "启用或停用 Cue、运行情况、设置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn Cue on or off, status, settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "启用或停用 Cue、运行情况、设置"
           }
         }
       }
@@ -13247,6 +13215,22 @@
         }
       }
     },
+    "换模型，看它刚记下的，去记忆、定时与设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change model, see what it just saved, open memory, schedules and settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换模型，看它刚记下的，去记忆、定时与设置"
+          }
+        }
+      }
+    },
     "换模型，看它刚记下的，去记忆与设置" : {
       "localizations" : {
         "en" : {
@@ -13903,6 +13887,38 @@
         }
       }
     },
+    "收起右栏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Right Sidebar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收起右栏"
+          }
+        }
+      }
+    },
+    "收起右栏（⌃⌘I）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide right sidebar (⌃⌘I)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收起右栏（⌃⌘I）"
+          }
+        }
+      }
+    },
     "收起键盘" : {
       "localizations" : {
         "en" : {
@@ -14419,22 +14435,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新会话…"
-          }
-        }
-      }
-    },
-    "新会话、项目范围、归档做完的、接入 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New session, project filter, archive done, connect agents"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新会话、项目范围、归档做完的、接入 Agent"
           }
         }
       }
@@ -18327,22 +18327,6 @@
         }
       }
     },
-    "看这个项目的会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View Project Sessions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看这个项目的会话"
-          }
-        }
-      }
-    },
     "看这个项目的进展" : {
       "localizations" : {
         "en" : {
@@ -19911,22 +19895,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "让 %@ 调研三款笔记 App 的优缺点，写一页总结"
-          }
-        }
-      }
-    },
-    "让 Mac 开一个 Agent 会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Asks your Mac to start an agent session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "让 Mac 开一个 Agent 会话"
           }
         }
       }
@@ -21771,22 +21739,6 @@
         }
       }
     },
-    "这个项目还没有 Agent 会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Agent Sessions in This Project"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个项目还没有 Agent 会话"
-          }
-        }
-      }
-    },
     "这件任务已删除" : {
       "localizations" : {
         "en" : {
@@ -23571,6 +23523,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "项目范围"
+          }
+        }
+      }
+    },
+    "项目范围、归档做完的、接入 Agent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Project scope, archive done, connect agents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "项目范围、归档做完的、接入 Agent"
           }
         }
       }

@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 新会话的表单挂在主窗口上（`WindowPanels`，⌥⌘N 与进展页"⋯"里的"新会话"经 `Workspace.showsNewSession` 打开；窗口内浮层，同其他弹层）：
+/// 新会话的表单挂在主窗口上（`WindowPanels`，⌥⌘N 与看板推进中列头的 ＋ 经 `Workspace.newSession(in:)` 打开；窗口内浮层，同其他弹层）：
 /// 开好后关掉表单、在内容区打开新会话的整页。这台 Mac 上一家 Agent 都不能用（`MacAgents`）时表单里写为什么（`whyNone`）。
 struct NewSessionPanel: ViewModifier {
     @Environment(Workspace.self) private var workspace
@@ -53,7 +53,7 @@ struct NewSessionForm: View {
     var body: some View {
         let places = ProjectFolders.launchPlaces(
             projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost, workMac: nil)
-        let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.currentProject } ?? places.first
+        let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.newSessionProject ?? workspace.currentProject } ?? places.first
         let agent = agents?.preferred(services.settings.lastAgent)
         VStack(alignment: .leading, spacing: 12) {
             Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)

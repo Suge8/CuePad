@@ -98,7 +98,7 @@ struct CueWelcome: View {
         }
     }
 
-    /// 这台 Mac 一家 Agent 都还没接上时打开接入面板（给装法，接上的同一下启用）；接上了就直接启用，同开关（`Workspace.turnCue`）。
+    /// 这台 Mac 一家 Agent 都还没接上时打开接入面板（给装法，接上的同一下启用）；接上了就直接启用，同开关（`AppServices.turnCue`）。
     private func enable(on host: CueSettings.Host) {
         #if os(macOS)
         if host.isHere, !host.usable {
