@@ -8,35 +8,35 @@ struct ProjectShelf: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 8) {
+            VStack(spacing: Spacing.item) {
                 HStack {
                     Spacer()
                     Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
                 }
                 ForEach(workspace.catalog?.projects ?? []) { project in
                     Button { workspace.show(.project(project.id)) } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: Spacing.group) {
                             ProjectGlyph(project: project)
                             Text(project.shownName)
                             Spacer()
-                        }.padding(12).contentShape(.rect)
+                        }.padding(Spacing.group).contentShape(.rect)
                     }
                     .buttonStyle(.row)
                     .contextMenu { ProjectActions(project: project, edit: { workspace.projectForm = .init(project: project) }) }
                 }
                 place("归档", icon: .archive, route: .archive)
                 place("回收站", icon: .trash, route: .trash)
-            }.padding(16)
+            }.padding(Spacing.block)
         }
     }
 
     private func place(_ title: LocalizedStringResource, icon: Icon, route: Route) -> some View {
         Button { workspace.show(route) } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.group) {
                 Image(icon).frame(width: 20)
                 Text(title)
                 Spacer()
-            }.padding(12).contentShape(.rect)
+            }.padding(Spacing.group).contentShape(.rect)
         }
         .buttonStyle(.row)
     }

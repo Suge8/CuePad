@@ -64,7 +64,7 @@ struct SessionResultList: View {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if groups.isEmpty {
                         Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端里开一个，会话就会出现在这里")
-                            .font(Typography.secondary).foregroundStyle(palette.ink2).padding(.vertical, 16)
+                            .font(Typography.secondary).foregroundStyle(palette.ink2).padding(.vertical, Spacing.block)
                     }
                     ForEach(groups, id: \.key) { group in
                         header(group)
@@ -72,11 +72,11 @@ struct SessionResultList: View {
                     }
                     if more > 0 {
                         Button("显示更多（还有 \(more) 个）", action: loadMore)
-                            .buttonStyle(PressStyle(.inline)).font(Typography.meta).foregroundStyle(palette.ink2).padding(.vertical, 10)
+                            .buttonStyle(PressStyle(.inline)).font(Typography.meta).foregroundStyle(palette.ink2).padding(.vertical, Spacing.item)
                     }
                 }
                 // 行的底向两边让出一截，留在滚动区里
-                .padding(.vertical, 8).padding(.horizontal, 18)
+                .padding(.vertical, Spacing.item).padding(.horizontal, Spacing.block)
             }
             .onChange(of: selection) { if let selection { proxy.scrollTo(selection) } }
         }
@@ -88,7 +88,7 @@ struct SessionResultList: View {
         case .ended(let section): Dotted(section.title)
         }
         return SectionHeader(title, level: .group, count: group.sessions.count)
-            .padding(.top, 10).padding(.bottom, 2)
+            .padding(.top, Spacing.group).padding(.bottom, 2)
     }
 
     private func row(_ session: PiSessionState) -> some View {

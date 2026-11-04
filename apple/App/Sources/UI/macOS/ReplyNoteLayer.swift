@@ -51,7 +51,7 @@ private struct ReplyNoteLayer: ViewModifier {
             Button { begin(note, at: at) } label: {
                 Label("批注", icon: .said)
                     .font(Typography.caption.weight(.semibold))
-                    .padding(.horizontal, 12).frame(height: 28)
+                    .padding(.horizontal, Spacing.inset).frame(height: 28)
                     .contentShape(.capsule)
             }
             .buttonStyle(PressStyle())
@@ -139,7 +139,7 @@ private struct NoteEditor: View {
     private static let shape = RoundedRectangle(cornerRadius: Radius.card)
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
             Image(.said).font(Typography.secondary).foregroundStyle(palette.ink2).accessibilityHidden(true)
             TextField(String(localized: "写批注，↩ 挂到下一句"), text: $text, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain)
@@ -148,7 +148,7 @@ private struct NoteEditor: View {
                 .focused($focused)
                 .onSubmit(submit)
         }
-        .padding(.horizontal, 14).padding(.vertical, 11)
+        .padding(.horizontal, Spacing.inset).padding(.vertical, 11)
         .frame(width: Self.width, alignment: .leading)
         .glass(in: Self.shape)
         .resignsFocusOnOutsideClick()

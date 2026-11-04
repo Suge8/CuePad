@@ -103,7 +103,7 @@ struct SearchPalette: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.item) {
             Image(.search).foregroundStyle(palette.ink2).accessibilityHidden(true)
             TextField(scope == .cards ? String(localized: "搜索灵感与任务") : String(localized: "搜索会话"), text: $query.text, palette: palette)
                 .textFieldStyle(.plain).font(Typography.searchField)
@@ -119,12 +119,12 @@ struct SearchPalette: View {
             SearchScopePanes(scope: $scope).frame(height: Self.scopeHeight)
             Keycap(text: "esc")
         }
-        .padding(.horizontal, 18).frame(height: 52)
+        .padding(.horizontal, Spacing.block).frame(height: 52)
     }
 
     @ViewBuilder private var cardsContent: some View {
         FilterBar(query: $query, targets: data?.matches.targets ?? [], total: data?.matches.total)
-            .padding(.horizontal, 14).padding(.bottom, 10)
+             .padding(.horizontal, Spacing.inset).padding(.bottom, Spacing.item)
         Divider()
         // 放得下就列表 + 预览并排，否则只留列表（最小窗口下详情区不到 500 宽）
         ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
@@ -167,7 +167,7 @@ struct SearchPalette: View {
                         if data.groups.isEmpty {
                             Text(query.text.isEmpty && !query.isFiltered ? "输入关键词，或用上面的筛选" : "没有找到灵感或任务")
                                 .font(Typography.secondary).foregroundStyle(palette.ink2)
-                                .padding(.vertical, 16)
+                                .padding(.vertical, Spacing.block)
                         }
                         ForEach(data.groups) { group in
                             let project = workspace.catalog?.project(group.id)
@@ -177,18 +177,18 @@ struct SearchPalette: View {
                                 Text("\(group.cards.count)").foregroundStyle(palette.ink3)
                             }
                             .font(Typography.label).foregroundStyle(palette.ink2)
-                            .padding(.top, 10).padding(.bottom, 2)
+                            .padding(.top, Spacing.group).padding(.bottom, 2)
                             ForEach(group.cards) { entry in row(entry).id(entry.id) }
                         }
                         if data.total > data.shown {
                             Button(CountCopy.more(data.total - data.shown)) { query.pages += 1 }
                                 .buttonStyle(PressStyle(.inline)).font(Typography.meta).foregroundStyle(palette.ink2)
-                                .padding(.vertical, 10)
+                                .padding(.vertical, Spacing.item)
                         }
                     }
                 }
                 // 行的底向两边让出一截，留在滚动区里
-                .padding(.vertical, 8).padding(.horizontal, 18)
+                .padding(.vertical, Spacing.item).padding(.horizontal, Spacing.block)
             }
             .onChange(of: selection) { if let selection { proxy.scrollTo(selection) } }
         }
@@ -197,7 +197,7 @@ struct SearchPalette: View {
     private func row(_ entry: CardEntry) -> some View {
         let card = entry.card, text = entry.text
         let isSelected = card.id == selection
-        return HStack(spacing: 10) {
+        return HStack(spacing: Spacing.item) {
             Group {
                 if card.isTask {
                     TaskRingView(status: card.status, done: false, size: 14)
@@ -227,7 +227,7 @@ struct SearchPalette: View {
             // 搜着词时从第一处命中往前一点开始显示，命中不会落在下面看不到的地方
             let rest = CueSummary.snippet(card.body, matching: query.text.split(whereSeparator: \.isWhitespace).map(String.init), whole: true)
             let project = workspace.catalog?.project(card.projectID)
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Spacing.group) {
                 Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
                     Text(Dotted(project?.shownName, DateLabel.short(card.modifiedAt)))
@@ -247,16 +247,16 @@ struct SearchPalette: View {
                         ScrollView { body }
                     }
                 }
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.group) {
                     Text("↩ 打开")
                     Text("⌘⇧C 复制")
                 }
-                .font(Typography.meta).foregroundStyle(palette.ink3).padding(.top, 4)
+                .font(Typography.meta).foregroundStyle(palette.ink3).padding(.top, Spacing.tight)
             }
-            .padding(20)
+            .padding(Spacing.panel)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .paper()
-            .padding(10)
+            .padding(Spacing.item)
             .frame(maxHeight: .infinity, alignment: .top)
         } else {
             Spacer().frame(maxWidth: .infinity)

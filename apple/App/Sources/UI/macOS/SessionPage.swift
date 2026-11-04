@@ -80,7 +80,7 @@ struct SessionPage: View {
                             .replyNotes(session: session.id, messages: digest.messages)
                     }
                 } reply: {
-                    VStack(spacing: 8) {
+                    VStack(spacing: Spacing.item) {
                         if secondary {
                             SessionDock(session: session, digest: digest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
                         } else {

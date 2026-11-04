@@ -19,7 +19,7 @@ struct MenuBarPad: View {
     private static let blockPadding: CGFloat = 14
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             if workspace.isLibraryReady { cueRow }
             if quotaOpen { QuotaDetail().modifier(Block()) }
             let rows = workspace.liveWork
@@ -32,7 +32,7 @@ struct MenuBarPad: View {
             if workspace.isLibraryReady {
                 CaptureComposer(state: $capture, defaultProject: services.settings.currentProject, pinnedOpen: true)
             } else if let failure = workspace.catalogFailure {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.item) {
                     Label { Text("读不出资料库") } icon: { FailureMark() }.font(Typography.secondary.weight(.medium))
                     Text(failure).font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(4)
                     Button("重试") { workspace.retryCatalog() }

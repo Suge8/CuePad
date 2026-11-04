@@ -32,7 +32,7 @@ private struct LibraryFilePage: View {
     var body: some View {
         let library = workspace.library
         let draft = workspace.draft(of: file, in: library)
-        VStack(spacing: 14) {
+        VStack(spacing: Spacing.block) {
             if let library, library.file(file) != nil, let draft {
                 LibraryFileTop(file: file, library: library, draft: draft, texts: texts)
                 LibraryFileBody(file: file, library: library, draft: draft, texts: texts)

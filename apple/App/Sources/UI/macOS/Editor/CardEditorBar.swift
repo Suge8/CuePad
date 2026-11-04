@@ -46,8 +46,8 @@ struct EditorBar: View {
 
     var body: some View {
         let names = CueVariables.names(in: editing.text)
-        GlassEffectContainer(spacing: 10) {
-            HStack(spacing: 10) {
+        GlassEffectContainer(spacing: Spacing.item) {
+            HStack(spacing: Spacing.item) {
                 if !names.isEmpty { VariablesChip(card: card, names: names) }
                 Spacer(minLength: 0)
             }
@@ -73,7 +73,7 @@ private struct VariablesChip: View {
                 Chevron(.expand).foregroundStyle(palette.ink2)
             }
             .font(Typography.secondary.weight(.medium))
-            .padding(.horizontal, 14).frame(height: 44)
+            .padding(.horizontal, Spacing.inset).frame(height: 44)
             .frame(maxWidth: 260)
             .contentShape(.capsule)
         }

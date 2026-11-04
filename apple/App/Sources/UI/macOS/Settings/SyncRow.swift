@@ -91,7 +91,7 @@ struct SyncRow: View {
     private func choice(
         _ choice: SyncChoices.Choice, primary: Bool = false, destructive: Bool = false, action: @escaping () -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
             // 会删东西的那颗字用胭脂，与确认框里同一颗一致
             Button(action: action) { Text(choice.title).foregroundStyle(destructive ? palette.failure : primary ? palette.onFill : palette.ink) }
                 .buttonStyle(ControlButtonStyle(kind: primary ? .primary : .secondary, size: .compact))
@@ -102,7 +102,7 @@ struct SyncRow: View {
     private var issues: some View {
         SettingPopover(title: "\(services.syncIssues.count) 条记录没能同步", width: 400) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Spacing.group) {
                     ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(issue.text).font(Typography.meta).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)

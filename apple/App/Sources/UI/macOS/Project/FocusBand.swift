@@ -22,7 +22,7 @@ struct FocusBand: View {
 
     var body: some View {
         taskRows
-        .padding(.horizontal, 20).padding(.vertical, 14)
+        .padding(.horizontal, 20).padding(.vertical, Spacing.inset)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .paper()
         .accessibilityElement(children: .contain)
@@ -89,7 +89,7 @@ struct CompactFocus: View {
 
     var body: some View {
         Button(action: scrollToTop) {
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.item) {
                 Image(.above).accessibilityHidden(true)
                 if data.taskCounts.open > 0 {
                     Label { Text(data.taskCounts.open, format: .number).monospacedDigit() } icon: { Image(.task) }

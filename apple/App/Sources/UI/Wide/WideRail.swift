@@ -99,7 +99,7 @@ struct WideRail: View {
         return Button { workspace.selectPane(pane) } label: {
             Group {
                 if wide {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Spacing.item) {
                         Image(icon).font(Glyph.control).foregroundStyle(palette.ink2).frame(width: Chrome.icon)
                         Text(title).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
                         Spacer(minLength: 0)
@@ -215,7 +215,7 @@ struct RailEarlier: View {
                             LazyVStack(spacing: Chrome.cellGap) {
                                 ForEach(earlier.items, id: \.sessionID) { row($0) }
                                 // 滑到这里才读下一页（同手机"更早"那一页的分页）
-                                if earlier.hasMore { Spinner(.small).frame(maxWidth: .infinity).padding(8).task(id: earlier.items.count) { more() } }
+                                if earlier.hasMore { Spinner(.small).frame(maxWidth: .infinity).padding(Spacing.item).task(id: earlier.items.count) { more() } }
                             }
                             // 行底伸出行框：滚动内容自己留出让出的那一截
                             .padding(.horizontal, Chrome.rowInset)
@@ -264,7 +264,7 @@ struct RailEarlier: View {
 
     private func header(_ total: Int) -> some View {
         Button { withAnimation(Motion.fade) { open.toggle() } } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.tight) {
                 Text("更早").foregroundStyle(palette.ink2)
                 Text(total, format: .number).foregroundStyle(palette.ink3).monospacedDigit()
                 Spacer(minLength: 0)
@@ -284,7 +284,7 @@ struct RailEarlier: View {
 
     private func row(_ session: PiSessionState) -> some View {
         Button { open(session) } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.item) {
                 Group { if let agent = session.agent.known { agent.mark.image } else { Image(.terminal) } }
                     .font(Glyph.control).foregroundStyle(palette.ink3).frame(width: Chrome.icon)
                     .accessibilityHidden(true)
@@ -356,7 +356,7 @@ private struct RailTipLabel: View {
             .foregroundStyle(palette.ink)
             .lineLimit(1)
             .fixedSize()
-            .padding(.horizontal, 12)
+            .padding(.horizontal, Spacing.group)
             .frame(height: ControlMetrics.compactHeight)
             .paper(cornerRadius: Radius.block, lifted: true)
             .offset(x: frame.maxX + Chrome.groupGap, y: frame.midY - ControlMetrics.compactHeight / 2)

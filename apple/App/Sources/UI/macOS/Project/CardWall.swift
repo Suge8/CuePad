@@ -30,7 +30,7 @@ private struct CardFace: View {
 
     var body: some View {
         let text = CardText(card.body)
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             if let image = text.images.first {
                 Thumbnail(hash: image, height: 118).padding(-8).padding(.bottom, 6)
             }
@@ -50,7 +50,7 @@ private struct CardFace: View {
             CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated, font: Typography.meta)
                 .padding(.top, 2)
         }
-        .padding(16)
+        .padding(Spacing.block)
     }
 }
 
@@ -143,7 +143,7 @@ private struct SelectedCard: ViewModifier {
             }
             .overlay(alignment: .topTrailing) {
                 if selected {
-                    PickedMark().font(Glyph.large).padding(10).transition(.opacity)
+                    PickedMark().font(Glyph.large) .padding(Spacing.item).transition(.opacity)
                 }
             }
     }

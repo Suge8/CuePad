@@ -55,7 +55,7 @@ struct NewSessionForm: View {
             projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost, workMac: nil)
         let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.newSessionProject ?? workspace.currentProject } ?? places.first
         let agent = agents?.preferred(services.settings.lastAgent)
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
             Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
             ScrollView {
                 // 行的底向两边让出一截，留在滚动区里不被裁
@@ -65,7 +65,7 @@ struct NewSessionForm: View {
             TextField(String(localized: "开场的话（可不填）"), text: $prompt, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain).lineLimit(2...5)
                 .onSubmit { if let place, let agents, let agent, !launching { start(place, choice(agents, agent)) } }
-                .padding(.horizontal, 10).padding(.vertical, 8)
+                .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.item)
                 .paper(cornerRadius: Radius.block)
                 .accessibilityLabel("开场的话")
             if let agents, let agent {
@@ -75,7 +75,7 @@ struct NewSessionForm: View {
                 } chooseModel: { model = $0 } chooseThinking: { thinking = $0 } chooseFast: { fast = $0 }
                 .disabled(launching)
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.item) {
                 switch stage {
                 case .idle:
                     if let agents, agents.agents.isEmpty {
@@ -96,7 +96,7 @@ struct NewSessionForm: View {
             }
             .controlSize(.small)
         }
-        .padding(16)
+        .padding(Spacing.block)
         .frame(width: Self.width)
         .background(palette.desk)
     }
@@ -114,7 +114,7 @@ struct NewSessionForm: View {
 
     private func row(_ place: ProjectFolders.LaunchPlace, selected: Bool) -> some View {
         Button { chosen = place.id } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.item) {
                 ProjectGlyph(project: place.project, size: 13)
                 Text(place.project.shownName).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: 4)

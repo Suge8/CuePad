@@ -29,7 +29,7 @@ struct SettingRow<Control: View, Fix: View>: View {
                 if let status {
                     // 新旧两句叠在同一处：淡出中的那句不另占一行
                     ZStack(alignment: .leading) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: Spacing.item) {
                             Text(status).foregroundStyle(palette.color(tone, muted: true))
                             fix
                         }
@@ -106,13 +106,13 @@ struct SettingPopover<Content: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
             Text(title).font(Typography.bodyStrong).foregroundStyle(palette.ink)
             content
         }
         .font(Typography.secondary)
         .lineLimit(nil)
-        .padding(16)
+        .padding(Spacing.block)
         .frame(width: width, alignment: .leading)
         .settingPopoverBackground()
     }
