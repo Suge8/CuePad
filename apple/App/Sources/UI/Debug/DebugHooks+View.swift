@@ -13,8 +13,7 @@ extension View {
         #endif
     }
 
-    #if os(iOS)
-    /// 点 Cue 页头开合面板的那条路交给测量（`IOSInteractionBench` 的"开合 Cue 面板"）。
+    /// 点 Cue 页头（Mac 是 Cue 栏头的头像那一块）开合面板的那条路交给测量（两端 `InteractionBench` 的"展开 Cue 面板""收起 Cue 面板"）。
     func debugExposesCuePanel(_ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
         onAppear { DebugScene.toggleCuePanel = toggle }
@@ -22,8 +21,6 @@ extension View {
         self
         #endif
     }
-
-    #endif
 
     /// 项目页任务纸点"还有 N 条"的那条路交给测量（两端 `InteractionBench` 的"展开任务"）：看得见的那一页（`active`）的纸。
     func debugExposesTaskFold(active: Bool = true, _ toggle: @escaping () -> Void) -> some View {

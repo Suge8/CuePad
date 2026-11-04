@@ -45,6 +45,13 @@ enum InteractionBench {
         "侧栏展开": (28, 2),
         "Cue 收起": (28, 2),
         "Cue 放回": (28, 2),
+        // 看板这一页上的几下（`measureBoard`）：开会话同"会话页"，回看板同"进进展页"，列宽换档同"卡换列"，Cue 面板同任务气泡
+        "看板→会话": (90, 2),
+        "会话→看板": (28, 2),
+        "列宽换档·列空": (14, 2),
+        "列宽换档·有卡": (14, 2),
+        "展开 Cue 面板": (28, 2),
+        "收起 Cue 面板": (14, 2),
         "展开任务": (28, 2),
         "收起任务": (14, 2),
         "发送·会话页": (14, 1),
@@ -202,6 +209,7 @@ enum InteractionBench {
                 await step("Cue 放回") { workspace.services.settings.cueOpen = true }
             }
         }
+        try await measureBoard(workspace, sessions: sessions, only: only, step: step)
         try await measureWide(workspace, in: window, sessions: sessions, only: only, foreground: foreground)
         NSApp.terminate(nil)
     }

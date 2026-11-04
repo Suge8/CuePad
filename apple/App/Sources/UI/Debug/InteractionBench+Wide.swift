@@ -28,10 +28,13 @@ extension InteractionBench {
     ]
 
     /// 摆成这种组合：主区回进展的看板、Cue 开着，再按组合把 `sessions` 的前一两份开在主区（第二份并排）。
+    /// 会话条在看板与别处都选宽版（`Workspace.railExpanded`）：看板上默认是图标条、没有可跨的会话条阈值，量的是在看板上选了宽版的那种。
     static func arrange(_ item: WideCase, in workspace: Workspace, sessions: [String]) {
         let ids = sessions.prefix(2).map { PiSessionState.recordID(sessionID: $0) }
         workspace.services.settings.navigationPane = .progress
         workspace.services.settings.cueOpen = true
+        workspace.services.settings.railExpanded = true
+        workspace.services.settings.boardRailExpanded = true
         workspace.selectWide(.progress)
         if item.sessions > 0 { workspace.openSession(ids[0], sessionID: sessions[0], in: .main) }
         if item.sessions > 1 { workspace.openSession(ids[1], sessionID: sessions[1], in: .beside) }
