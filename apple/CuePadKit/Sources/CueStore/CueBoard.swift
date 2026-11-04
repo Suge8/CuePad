@@ -109,6 +109,9 @@ public struct CueSessionDetail: Equatable, Sendable {
   public var session: PiSessionState
   /// 最近几轮问答（会话里用户一方说的与 Agent 的回答），从早到晚。
   public var recent: [PiChatMessage]
-  /// `recent` 里 Cue 说的那几条的请求 id（`cueSentDeliveries`，与会话页同一条规则，见 `PiChatMessage.saidByCue`）。
+  /// `recent` 与 `earlier` 里 Cue 说的那几条的请求 id（`cueSentDeliveries`，与会话页同一条规则，见 `PiChatMessage.saidByCue`）。
   public var cueSent: Set<UUID>
+  /// 比 `recent` 更早、Cue 对这个会话说的话（开工那句与之后托付的），从早到晚：交回时逐件核对它们做到没有，
+  /// 不另记"托付了什么"，会话里 Cue 说过的话就是那一份。
+  public var earlier: [PiChatMessage]
 }

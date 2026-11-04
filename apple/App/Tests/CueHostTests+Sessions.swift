@@ -64,6 +64,40 @@ extension CueHostTests {
         await rig.stop()
     }
 
+    /// 会话交回时，Cue 几轮之前托付给它的事已不在最近几轮问答里：叫醒 Cue 的信封在近况里照列它更早对会话说过的（重发的同一句只列一次），
+    /// 他自己在会话里说的不列；Cue 说的每一句原文照列不截，长话末尾的要求也在，他在最近几轮里照抄的同一句（截短列着）挤不掉它。Cue 拿它对照交回，没做到的不 done（照不照办看评测：长程的"做完顺手升 2.3.1"）。
+    @Test func 会话交回时_信封列着Cue更早托付的() async throws {
+        let rig = try await Rig()
+        try await rig.say("请建个任务并开工")
+        try await eventually("开工这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("开新会话") }
+        try await eventually("执行器开出会话") { !rig.app.host.extensions.isEmpty }
+        let session = try #require(rig.app.host.extensions.values.first), id = session.sessionID
+        let task = try #require(try await rig.store.cueBoard().tasks.first?.task)
+        try await rig.store.linkCard(task.id, toSession: id)
+        let context = String(repeating: "登录页的入口、填邮箱页和设新密码页照正文做，提示文案统一。", count: 10)
+        let bump = context + "最后：做完后顺手把版本号升到 2.3.1，CHANGELOG 记一笔", his = "顺便看看登录页的字号"
+        let last = context + "最后：交回时贴 git log -1 --stat", echoed = context + "最后：改完的页面截图发到手机"
+        var messages: [PiChatMessage] = []
+        for (text, byCue) in [(bump, true), (bump, true), (his, false), (echoed, true), ("接着做第 1 页", true), (echoed, false), (last, true)] {
+            let delivery = UUID()
+            if byCue { _ = try await rig.store.recordSend(text, to: SendTarget(kind: .piSession, name: task.heading, ref: id), card: task.id, delivery: delivery, origin: .known(.cue)) }
+            messages.append(PiChatMessage(sessionID: id, entryID: "u\(messages.count)", seq: Int64(messages.count + 1), role: .user, text: text, at: .now, deliveryID: byCue ? delivery : nil))
+            messages.append(PiChatMessage(sessionID: id, entryID: "a\(messages.count)", seq: Int64(messages.count + 1), role: .pi, text: "好", at: .now))
+        }
+        session.setState(["kind": "thinking"])
+        try await eventually("在干活写进库") { try await rig.store.sessions(matching: id).first?.state.isWorking == true }
+        session.setState(["kind": "idle"])
+        try await rig.answered(id, messages: messages)
+        try await eventually("被叫醒的那一轮做完") { rig.rounds.contains { $0.wake.isSessionActivity && $0.finishedAt != nil } }
+        let envelope = try #require(rig.rounds.last { $0.wake.isSessionActivity }).sent.joined()
+        let earlier = envelope.components(separatedBy: "你更早对它说过的").dropFirst().first?.split(separator: "\n").dropFirst()
+            .prefix { $0.trimmingCharacters(in: .whitespaces).hasPrefix("- ") }.map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+        #expect(bump.count > 300 && earlier.filter { $0.contains("2.3.1") } == ["- \(bump)"], "\(envelope)")
+        #expect(earlier.contains("- \(echoed)") && envelope.contains("他：") && !envelope.contains("他：\(echoed)"), "\(envelope)")
+        #expect(envelope.contains("你：\(last)") && !envelope.contains(his), "\(envelope)")
+        await rig.stop()
+    }
+
     /// Cue 用工具时，值班的 Mac 把它在做什么写进库（同步出去，各设备 Cue 页的头像与进展一行读这一处），这一轮说完回到歇着。
     /// 工具是读一个命名管道：没人往里写，读就停在那里，"工具进行中"一直在库里，断言完再写一行放行。
     @Test func Cue用工具时库里写下动作_说完回到歇着() async throws {

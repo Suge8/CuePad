@@ -130,12 +130,23 @@ final class Duty: EvalScript, Playable {
             try await login.deliver(pageShot("MailHog：两封邮件并排", ["左：验证你的邮箱（注册验证邮件）", "右：重置你的密码（重置邮件）", "同一页眉、按钮样式与页脚"]), title: "重置邮件与注册验证邮件并排", rig: rig)
             try await login.settle(LongScript.loginDone, rig: rig)
         }
-        // 它记得升版本号、没收尾：会话补上，让托付（忘记密码做完才删 SendGrid）有个兑现的时候
+        // 它记得升版本号、没收尾：会话补上（提交了没有照 Cue 交代的），还不收就再答一次它追问的，让托付（忘记密码做完才删 SendGrid）有个兑现的时候
         let loginClosed = { (step: Step) in self.calls(step, "task", ["done"]).contains { !$0.call.failed && self.target($0.args) === login } }
-        var closed = finish
+        var closed = finish, wrapUp = [finish]
         if !loginClosed(finish) {
-            let bumped = try await event("忘记密码：补上版本号与 CHANGELOG", on: login) { try await login.settle(LongScript.bumpDone, rig: rig) }
-            if loginClosed(bumped) { closed = bumped }
+            let bumped = try await event("忘记密码：补上版本号与 CHANGELOG", on: login) {
+                try await login.settle(LongScript.bumpDone(committed: EvalReading.asksToCommit(self.says(self.steps, to: login))), rig: rig)
+            }
+            wrapUp.append(bumped)
+            if loginClosed(bumped) {
+                closed = bumped
+            } else {
+                let answered = try await event("忘记密码：答收尾时的追问", on: login) {
+                    try await login.settle(LongScript.wrapFollowUp(committed: EvalReading.asksToCommit(self.says(self.steps, to: login))), rig: rig)
+                }
+                wrapUp.append(answered)
+                if loginClosed(answered) { closed = answered }
+            }
         }
         try await event("官网：做完交回", on: website) {
             try await website.deliver(pageShot("Lighthouse 移动端 · 首页", LongScript.lighthouseShot), title: "首页 Lighthouse 改前改后", rig: rig)
@@ -145,7 +156,7 @@ final class Duty: EvalScript, Playable {
 
         var checks = try await judge(login: login, settings: settings, site: website, digest: digest, key: Points(
             go: go, progress: progress, readmeStatus: readmeStatus, provider: provider, tabs: tabs, e2e: e2e, trip: trip, bounce: bounce,
-            finish: finish, certified: certified, wrap: wrap, cert: cert))
+            certified: certified, wrap: wrap, wrapUp: wrapUp, cert: cert))
         checks += try await probes(Probes(
             depsListed: depsListed, node: node, layout: layout, instant: instant, sendgrid: sendgrid, finish: closed,
             widget: widget, widgetAgain: widgetAgain, page1: page1, page2: page2, page3: page3, links: links, site: website, loginTask: login.task.id))

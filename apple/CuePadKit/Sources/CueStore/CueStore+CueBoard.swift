@@ -108,8 +108,14 @@ extension CueStore {
       PiChatMessage.self, where: "sessionID = ? AND role IN ('\(PiChatRole.user.rawValue)', '\(PiChatRole.pi.rawValue)')", [session.sessionID],
       orderBy: "seq DESC, id DESC", limit: rounds * 2
     ).reversed()
+    let before = try recent.first.map { first in
+      try select(
+        PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)' AND deliveryID IS NOT NULL AND seq < ?", [session.sessionID, first.seq],
+        orderBy: "seq, id")
+    } ?? []
+    let cueSent = try cueSentDeliveries(among: (recent + before).compactMap(\.deliveryID))
     return CueSessionDetail(
-      session: session, recent: Array(recent), cueSent: try cueSentDeliveries(among: recent.compactMap(\.deliveryID)))
+      session: session, recent: Array(recent), cueSent: cueSent, earlier: before.filter { $0.saidByCue(cueSent) })
   }
 
   /// Cue 说的会话：会话 id、至少 4 位的 id 前缀，或会话名（不分大小写）；id 对上的优先，都按最近有动静的在前。
