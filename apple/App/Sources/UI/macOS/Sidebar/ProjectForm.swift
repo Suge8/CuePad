@@ -60,7 +60,7 @@ struct ProjectForm: View {
             .textFieldStyle(.plain).font(Typography.body).foregroundStyle(palette.ink)
             .padding(.horizontal, Spacing.inset)
             .frame(height: ControlSize.regular.height)
-            .background(palette.fill, in: Radius.nested)
+            .panelFieldSurface()
             .onSubmit(save)
     }
 
