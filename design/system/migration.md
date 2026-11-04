@@ -72,7 +72,8 @@
 | W2-6 Mac 的 Cue 页 | 强 | `UI/Shared/Cue/` 下 `CueListPanel.swift`、`CueMemoryPage.swift`、`CueSchedulePage.swift`、`ScheduleEditor.swift`、`CueHostMenu.swift`、`CueWelcome.swift`、`CueDot.swift`、`CuePage.swift`、`CueStarters.swift`；`UI/macOS/Library/LibraryToolbar.swift`、`UI/iOS/Library/LibraryScreen.swift` | 问号换 `HelpButton`（Mac 不再用系统 popover）；悬停钮命中 28；关闭换 `.round`；"好"换主按钮；`WeekdayChip` 换 `chip(on:)`；重复的系统分段换 `PaneSegment`（C3）；箭头换 `Chevron`；`CueDot` 转场换 `Motion.pop`；Mac 运行情况面板去掉 `.move` | mac-cuememory ios-cuememory mac-cuerun ios-cue mac-library ios-library |
 | W2-7 Mac 设置、接入与编辑页 | 便 | `UI/macOS/Settings/SettingRow.swift`、`SettingsView.swift`、`SyncRow.swift`、`UI/Shared/Components/LastCrashRow.swift`、`UI/macOS/SetupPanel.swift`、`UI/macOS/Sidebar/Sidebar.swift`、`UI/macOS/Search/SessionResults.swift`、`UI/macOS/Trash/TrashPage.swift`、`UI/macOS/Editor/CardEditorBar.swift`、`UI/Wide/WideDrop.swift` | 删 `settingButton`，节头换 `SectionHeader`，调用处写 `ControlButtonStyle(size: .compact)`；`SetupPanel.group` 换 `rowPaper`；列表分割线删掉（菜单与系统 `Form` 里的不动）；变量从系统 popover 改 `bubble(isPresented:)`；`.title2` 换角色 | mac-settings mac-agentsetup mac-shelf mac-trash mac-search mac-editor |
 | W2-8 看板的新建 | 便，前置 W2-5 | `UI/Shared/Components/TaskBoardParts.swift`、`UI/iOS/Tasks/ProgressScreen.swift`、`UI/Shared/Components/TaskMetrics.swift` | `NewTaskLine` 换 `NewTaskField` 并删它；`BoardCardMetrics.rowTitle` 换角色 | ios-progress mac-board ipad-progress |
-| W2-9 收口 | 便，最后 | `UI/Shared/Theme/Controls.swift`、`UI/Shared/Components/Atoms.swift`、`UI/Shared/Components/EmptyState.swift`、`apple/scripts/lint.sh` | 删 `compact:`、`.highlight`、`EmptyStateButton`、旧 `SectionHeader` 初始化、`SectionTitle`、`SectionLabel`；lint 棘轮的例外清空 | 全部基线 |
+| W2-10 Mac 项目表单 | 强，前置 W1-5 | `UI/macOS/Sidebar/ProjectForm.swift`、`UI/Debug/DebugHooks+View.swift` | 整块是系统样式（`.roundedBorder` 输入框、系统小按钮"选择…""取消""创建"、`desk` 底），与 Panel、控件三档、圆角都不一致。表单只给内容，外形交给所在的 `panel`（纸底、`Radius.card`，自己不铺 `desk`）；两个输入框是同一种淡底单行框（`fill` 底、`Radius.nested`、高 `ControlSize.regular`，占位字经 `TextField(_:text:palette:)` 的 `ink3`）；"选择…"是 `ControlButtonStyle(size: .compact)`，"取消"是 `quiet`、"创建""保存"是唯一的 `primary`，同一档高；图标与颜色格沿用 W1-5 后的 `ProjectStylePicker`。调试场景 `projectform` 现在把表单直接铺满窗口、不经 `panel`，截图里的直角平板有一半是它造成的：改成经 `panel` 弹出，截图才是真实样子 | mac-projectform（新建）；另拍编辑已有项目一张 |
+| W2-9 收口 | 便，最后（在 W2-10 之后） | `UI/Shared/Theme/Controls.swift`、`UI/Shared/Components/Atoms.swift`、`UI/Shared/Components/EmptyState.swift`、`apple/scripts/lint.sh` | 删 `compact:`、`.highlight`、`EmptyStateButton`、旧 `SectionHeader` 初始化、`SectionTitle`、`SectionLabel`；lint 棘轮的例外清空 | 全部基线 |
 
 W2-9 完成标准另加：`rg 'compact: (true|false)|\.highlight\b|EmptyStateButton|SectionTitle|SectionLabel|FilterChip|FilterCapsule|NewTaskLine|settingButton'` 在 `apple/App` 下为零。
 
@@ -89,6 +90,10 @@ W2-9 完成标准另加：`rg 'compact: (true|false)|\.highlight\b|EmptyStateBut
 | W3-7 | 强，最后 | `apple/scripts/lint.sh`：禁 `padding`、`spacing:` 写数字（Theme、Debug、Widget 与 `static let` 具名常量除外）；W3-1～6 留下拿不准角色的值逐处定档、拍前后对比 |
 
 便宜模型的做法：等于某档值的换成那一档（4→`tight`、8→`item`、12→`group`；6 只在图标与字之间换 `glyph`、2 只在光学校准处换 `hair`；页级容器的左右边换 `page`，纸、卡里的换 `inset`，浮层里的换 `panel`）；10、14、18 按角色就近：组件内部（控件、行、卡、气泡里）往下取 8／12／16，组与组之间往上取 12／16／24；拿不准是内部还是组间的，和 3、5 这类光学值一起不动，列进交付说明给 W3-7。组件自己的几何（面板宽、缩略图边长）提成组件里的具名常量，不进 `Spacing`。截图：该目录页面对应的基线全拍。
+
+## 总验收的缺口
+
+- **`Motion.pop` 转场没录过屏**：W1-4 只拍了静态截图，转场的起点、终点、中途反向都没看。总验收时用能触发转场的场景逐帧看，正常与减弱动态效果各一段：`xc.sh rec ios -- -CuePadDemo YES -CuePadScene style`（样板页的状态标每 3 秒在工作与歇着之间切换，触发 `PiStateDot` 的换样子），加 `-CuePadReduceMotion YES` 再录一段；Mac 与输入框里的发送钮、附件、回到最新钮各找一处会出现、消失的操作（`-CuePadClick` 或 bcu 驱动）同样录两段。逐帧看起点是 0.9 不是 0、终点到原大、减弱动态效果时只淡不缩，方法见 docs/verify.md（`ffmpeg -fps_mode vfr` 拆帧）。
 
 ## 等合并后复查（导航与外框，本轮两组在改，这里只列）
 
