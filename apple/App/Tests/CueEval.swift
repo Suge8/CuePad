@@ -14,6 +14,9 @@ struct Working {
     let session: FakeExtension
     let prompt: PiChatMessage
     var id: String { session.sessionID }
+    /// 会话收到的作答（选项原文或填的字），从早到晚。判"替他答了哪个"只认它：say 的话由库认成选项（"B. 留在 R2"按 B 答）才送到会话，
+    /// 认不成的被拒、到不了这里。作答成功的请求随后就从库里清掉，会话收到的是留下来的那一份。
+    var answers: [String] { session.commands.filter { $0.json["t"] as? String == "answer" }.compactMap { $0.json["value"] as? String } }
 }
 
 /// 一个场景的现场：Rig、叫醒 Cue 的时刻，以及被叫醒的那一轮。
@@ -149,10 +152,15 @@ final class CueEval {
         return try await rig.store.cueMessages(limit: 2000).filter { $0.createdAt >= from && $0.author != .known(.you) && !$0.text.isEmpty }
     }
 
-    /// 他看得到的字（消息与记下的记忆）没抄信封、工具结果里括号中的编号：每个场景都判。
+    /// 他看得到的字（消息与记下的记忆）没抄信封、工具结果里括号中的编号：每个场景都判。只认库里真有的任务、会话的编号，
+    /// 会话回复里括号中的提交号（"已提交到本地 main（3f9c2ab）"）照抄是该的。
     func showsNoIDs() async throws -> Check {
         let seen = rig.rounds.filter { $0.startedAt >= start }.flatMap { $0.sent + $0.calls.compactMap(\.result) }
-        let ids = Set(seen.flatMap { $0.matches(of: /（((?:s-)?[0-9a-f]{6,8})）/).map { String($0.1) } })
+        var ids = Set<String>()
+        for id in Set(seen.flatMap { $0.matches(of: /（((?:s-)?[0-9a-f]{6,8})）/).map { String($0.1) } }) {
+            let cards = try await rig.store.cards(idPrefix: id), sessions = try await rig.store.sessions(matching: id)
+            if !cards.isEmpty || !sessions.isEmpty { ids.insert(id) }
+        }
         let written = try await said().map(\.text) + calls("memory", "note").compactMap { $0.args["text"] as? String }
         return Check(.tool, "他看得到的字里没有编号", !written.contains { text in ids.contains { text.contains($0) } })
     }

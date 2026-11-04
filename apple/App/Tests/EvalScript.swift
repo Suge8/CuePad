@@ -79,9 +79,13 @@ class EvalScript {
         return session
     }
 
-    /// 他在一件事上接着交代：Cue 可能对原来的会话说，也可能（那件已做完、会话已结束）另建任务开新会话。开了新会话就接着用新的。
+    /// 他在一件事上接着交代：Cue 可能对原来的会话说，可能对剧本里另一个会话说（那件已做完、会话已结束，转给更早那件还开着的会话），
+    /// 也可能另建任务开新会话。接着演的是它真送到的那个：开了新会话用新的，说给了别的会话用那个。
     func continuing(_ session: ScriptedSession, _ topic: Regex<Substring>, after step: Step) async throws -> ScriptedSession {
-        guard calls(step, "task", ["start"]).contains(where: { !$0.call.failed }) else { return session }
+        guard calls(step, "task", ["start"]).contains(where: { !$0.call.failed }) else {
+            for other in sessions { try await other.refresh(rig) }
+            return calls(step, "task", ["say"]).filter { !$0.call.failed }.compactMap { target($0.args) }.last ?? session
+        }
         var found: ScriptedSession?
         try? await eventually("Cue 开出的会话绑上任务") {
             found = try await self.opened(topic)
@@ -127,8 +131,8 @@ class EvalScript {
         steps.flatMap { calls($0, "task", ["say"]) }.filter { !$0.call.failed && target($0.args) === session }.compactMap { $0.args["text"] as? String }
     }
 
-    /// 去掉引号里转述的原话（“”「」""）
-    static func unquoted(_ text: String) -> String { text.replacing(/“[^”]*”|「[^」]*」|"[^"]*"/, with: "") }
+    /// 这几步里 `session` 收到的作答（`ScriptedSession.answers`）
+    func answers(_ steps: [Step], to session: ScriptedSession) -> [String] { steps.compactMap(\.window).flatMap(session.answers(in:)) }
 
     /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
     /// `fabricated`：没答对、也没说不知道时，这句是不是给了一个具体的错答案（编造）。
@@ -138,7 +142,7 @@ class EvalScript {
         // 这一步里回他的每一句都算：碰上换新时，答他的那句之后新班次还会再回一句
         let answers = try await replies(step)
         if answers.contains(where: correct) { return Check(kind, label, true) }
-        if answers.contains(where: { $0.contains(/不记得|不确定|没找到|查不到|没有记录|没查到|不知道|答不出|答不上|报不出|没统计|没查退信|没有.{0,6}记录/) }) {
+        if answers.contains(where: EvalReading.admitsUnknown) {
             return Check(kind, label, false, note: "（说不知道）")
         }
         let made = fabricated.map { answers.contains(where: $0) } ?? false

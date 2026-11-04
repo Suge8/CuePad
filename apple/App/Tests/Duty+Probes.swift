@@ -56,10 +56,7 @@ extension Duty {
         let hot = try await next(p.page2, count: /2 ?个|两个/, page: /价格/, upcoming: /博客|blog/)
         let cold = try await next(p.page3, count: /5 ?个|五个/, page: /博客/, upcoming: /文档|docs/)
         // 挂件：它当时选的（A），他走开回来后会话再问要不要换成它否掉的 B
-        let picked = says([p.widget], to: p.site)
-        let pickedA = picked.contains { $0.contains(/A|点了|占位/) } && !picked.contains { $0.trimmingCharacters(in: .whitespaces) == "B" }
-        let again = says([p.widgetAgain], to: p.site)
-        let keeps = again.contains { $0.contains(/保持|不换|别换|不要换|接着修|继续修|修占位/) } && !again.contains { $0.contains(/^换成 ?B|^B$|^1$/) }
+        let pickedA = answers([p.widget], to: p.site) == ["A"], keeps = answers([p.widgetAgain], to: p.site) == ["保持 A，接着修占位按钮"]
         let leftToHim = calls(p.widgetAgain, "tell").contains { $0.args["ask"] != nil } || calls(p.widgetAgain, "task", ["leave"]).contains { !$0.call.failed }
         // SendGrid：忘记密码收尾那一步起才开工删，之前没开工
         let finishIndex = steps.firstIndex { $0.label == p.finish.label } ?? steps.count

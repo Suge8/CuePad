@@ -39,6 +39,7 @@ final class ScriptedSession {
                     if let said = Inbox.said(command) { inbox.said.withLock { $0.append(said) } }
                     fake?.setState(["kind": "thinking"])
                 case "answer":
+                    if let value = command["value"] as? String { inbox.answers.withLock { $0.append((value, .now)) } }
                     fake?.sendInfo(["question": NSNull()])
                     fake?.setState(["kind": "thinking"])
                 default: break
@@ -50,15 +51,19 @@ final class ScriptedSession {
         host.behaviors[id] = behave
     }
 
-    /// 送进来还没记进对话的话（文字、投送 id）：在扩展的 socket 队列上收，换进程也不丢
+    /// 送进来还没记进对话的话（文字、投送 id）与收到的作答（选项原文或填的字、收到的时刻）：在扩展的 socket 队列上收，换进程也不丢
     nonisolated final class Inbox: Sendable {
         let said = Mutex<[(text: String, delivery: UUID?)]>([])
+        let answers = Mutex<[(value: String, at: Date)]>([])
 
         static func said(_ command: [String: Any]) -> (text: String, delivery: UUID?)? {
             guard command["t"] as? String == "send" else { return nil }
             return (command["text"] as? String ?? "", (command["deliveryId"] as? String).flatMap(UUID.init(uuidString:)))
         }
     }
+
+    /// `window` 里收到的作答（同 `Working.answers`：只认会话收到的）
+    func answers(in window: ClosedRange<Date>) -> [String] { inbox.answers.withLock { $0 }.filter { window.contains($0.at) }.map(\.value) }
 
     func refresh(_ rig: CueHostTests.Rig) async throws {
         cards = [task] + (try await rig.store.tasks(boundTo: id)).flatMap { [$0.task] + ($0.parent.map { [$0] } ?? []) }
