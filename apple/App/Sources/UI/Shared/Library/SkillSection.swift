@@ -19,7 +19,7 @@ struct SkillSection: View {
             }
             ForEach(groups.projects) { group in
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.glyph) {
                         ProjectGlyph(project: workspace.catalog?.project(group.project), size: Self.glyph)
                         Text(verbatim: workspace.projectName(group.project))
                     }
@@ -28,7 +28,7 @@ struct SkillSection: View {
                     .accessibilityAddTraits(.isHeader)
                     skills(group.skills.map(SkillLine.skill))
                 }
-                .padding(.top, 8)
+                .padding(.top, Spacing.item)
             }
             if !library.selfManaged.isEmpty {
                 LibraryPaper {
@@ -36,7 +36,7 @@ struct SkillSection: View {
                         LinkRow(title: Text(verbatim: managed.title), chevron: false) { managed.agent.mark.image }
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, Spacing.item)
             }
         }
     }
@@ -55,13 +55,13 @@ struct SkillSection: View {
                     Text(verbatim: name.isEmpty ? String(localized: "不在分类里") : name)
                         .font(Typography.label).foregroundStyle(palette.ink3)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, Spacing.inset).padding(.top, 10).padding(.bottom, 2)
+                        .padding(.horizontal, Spacing.inset).padding(.top, Spacing.item).padding(.bottom, 2)
                         .accessibilityAddTraits(.isHeader)
                 case .skill(let skill): SkillRow(skill: skill, library: library)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Spacing.tight)
         .paper(cornerRadius: LibraryLayout.radius)
         .rowContainer(.rect(cornerRadius: LibraryLayout.radius))
     }
@@ -98,9 +98,9 @@ private struct SkillRow: View {
     }
 
     private var row: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.group) {
             #if os(macOS)
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.tight) {
                 name.frame(maxWidth: .infinity, alignment: .leading)
                 mark
             }
@@ -108,7 +108,7 @@ private struct SkillRow: View {
             description.frame(maxWidth: .infinity, alignment: .leading)
             #else
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) { name.layoutPriority(1); mark }
+                HStack(spacing: Spacing.tight) { name.layoutPriority(1); mark }
                 description
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -154,7 +154,7 @@ private struct SkillRow: View {
     private static let height: CGFloat = 36
     #else
     private static let markFont = Typography.meta
-    private static let vertical: CGFloat = 8
+    private static let vertical = Spacing.item
     private static let height: CGFloat = 56
     #endif
 }

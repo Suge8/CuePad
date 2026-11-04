@@ -12,14 +12,14 @@ struct LibraryHelp: View {
     @State private var mac: MacAgents?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
             Text(Self.direct).foregroundStyle(palette.ink)
             Text("行末划掉的标志：那一家读不到这一份").foregroundStyle(palette.ink)
             Text(Dotted(mac?.shownName, String(localized: "\(DateLabel.short(library.modifiedAt))报来"))).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
         }
         .font(Typography.secondary)
         .fixedSize(horizontal: false, vertical: true)
-        .padding(16)
+        .padding(Spacing.block)
         .observing(services.store, id: library.hostID, into: $mac, onError: workspace.fail) { [host = library.hostID] in try $0.macAgents(on: host) }
     }
 

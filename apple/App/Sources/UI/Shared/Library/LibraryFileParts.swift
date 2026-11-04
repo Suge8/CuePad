@@ -60,7 +60,7 @@ struct MergeBar: View {
 
     var body: some View {
         LibraryFileBar {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.glyph) {
                 ForEach(tidy.writers, id: \.self) { $0.mark.image.foregroundStyle(palette.ink2) }
                 Text(verbatim: String(localized: "\(tidy.writers.map(\.name).formatted(.list(type: .and))) 另写了一份"))
                     .font(Typography.secondary).foregroundStyle(palette.ink).lineLimit(2)
@@ -75,7 +75,7 @@ struct MergeBar: View {
                 .buttonStyle(ControlButtonStyle(kind: draft.previewing ? .primary : .secondary, size: .compact))
                 .disabled(working || tidy.preview(retiring: draft.retire, texts: texts) == nil || Self.unsent(draft))
         } consequence: {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 ForEach(tidy.sources.map(\.origin).filter(\.replacesBasePrompt), id: \.self) { origin in
                     let on = draft.retire.contains(origin)
                     Button {
@@ -153,11 +153,11 @@ struct LibraryFileBar<Content: View, Consequence: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) { content }
+        VStack(alignment: .leading, spacing: Spacing.item) {
+            HStack(spacing: Spacing.item) { content }
             consequence
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
+        .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
         #if os(macOS)
         .paper(cornerRadius: Radius.block)
         #else
@@ -175,14 +175,14 @@ struct MergePreview: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Spacing.group) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     HStack(alignment: .top, spacing: Self.gap) {
                         Capsule().fill(block.incoming ? palette.ink2 : .clear).frame(width: Self.bar)
                         text(block.text).foregroundStyle(palette.ink).lineSpacing(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.vertical, 4).padding(.trailing, 6).padding(.leading, Self.mark)
+                    .padding(.vertical, Spacing.tight).padding(.trailing, 6).padding(.leading, Self.mark)
                     .background(block.incoming ? palette.bubble : .clear, in: .rect(cornerRadius: Radius.chip))
                     // 记号与底挂在字的左边：字与编辑器里的对齐
                     .padding(.leading, -(Self.mark + Self.bar + Self.gap))
@@ -190,7 +190,7 @@ struct MergePreview: View {
                     .accessibilityHint(block.incoming ? String(localized: "会并进来") : "")
                 }
             }
-            .padding(.vertical, 14)
+            .padding(.vertical, Spacing.group)
             .frame(maxWidth: theme.maxTextWidth, alignment: .leading)
             .padding(.horizontal, theme.horizontalInset)
             .frame(maxWidth: .infinity)
@@ -241,7 +241,7 @@ private struct ProblemLine: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
             FailureMark()
             Text(verbatim: problem.description).foregroundStyle(palette.ink2)
         }

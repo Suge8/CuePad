@@ -10,14 +10,14 @@ import SwiftUI
 /// 两段共用的排版：一列居中、最宽 `column`（同 Mac 文件页那一列字），块与块之间 `gap`。段名只在分段上（Mac 工具栏、手机页顶），段里不再写组名与个数。
 enum LibraryLayout {
     static let column: CGFloat = 680
-    static let gap: CGFloat = 12
+    static let gap = Spacing.group
     static let margin = Spacing.page
     static let bottom = Spacing.section
     #if os(macOS)
     /// 纸的圆角
     static let radius = Radius.block
     /// 一张纸里行上下留的边；手机上行铺满纸宽（`flush`），不留
-    static let paperVertical: CGFloat = 4
+    static let paperVertical = Spacing.tight
     static let flush = false
     /// 文件页里正文与上面各块的左右留白
     static let textInset: CGFloat = 24
@@ -55,9 +55,9 @@ struct TidyPaper: View {
     @State private var working = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Spacing.block) {
             TidyFacts(tidies: tidies, library: library, font: Self.font)
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.group) {
                 Button { run() } label: { TidyLabel(title: "一键整理", working: working) }
                     .buttonStyle(ControlButtonStyle(kind: .primary))
                     .disabled(working)
@@ -95,7 +95,7 @@ struct TidyFacts: View {
     @ScaledMetric(relativeTo: .body) private var iconColumn = Chrome.icon
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             ForEach(tidies) { tidy in
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.group) {
                     Image(tidy.icon).foregroundStyle(palette.ink2).frame(width: iconColumn)
@@ -230,7 +230,7 @@ private struct GlobalRuleRow: View {
                     .padding(.leading, iconColumn + Spacing.group)
             }
             .padding(.horizontal, Spacing.inset)
-            .padding(.vertical, 12)
+            .padding(.vertical, Spacing.group)
             .contentShape(.rect)
         }
         .buttonStyle(.row)
