@@ -23,6 +23,7 @@ public final class PiRuntime: AgentRuntime {
     private let locate: @Sendable () async -> ExecutableLocator
     private let idleLimit: Duration
     private let timing: Timing
+    private let nudge: PiExtensionNudge
     private var watcher: Task<Void, Never>?
 
     /// - Parameter pi: 这台 Mac 上够新的 `pi`（检测时挑中的那个，`AgentStatus.executable`；没有为 nil）。
@@ -39,24 +40,36 @@ public final class PiRuntime: AgentRuntime {
         self.locate = locate
         self.idleLimit = idleLimit
         self.timing = timing
+        nudge = PiExtensionNudge(extensionsDirectory: paths.extensionsDirectory, timing: timing)
     }
 
-    /// 开始跟着桥上的会话：让出的托管会话退出后让接手的重新载入。
+    /// 开始跟着桥上的会话：让出的托管会话退出后让接手的重新载入；自己盯磁盘的旧扩展上桥时碰一下它盯的名字（`PiExtensionNudge`），
+    /// 之前装新扩展时漏掉的这时换上。
     public func start() {
         guard watcher == nil else { return }
         let changes = bridge.changes()
         watcher = Task { [weak self] in
             for await change in changes {
-                if case .ended(let session, _) = change { self?.reloadSuccessor(of: session) }
+                switch change {
+                case .ended(let session, _): self?.reloadSuccessor(of: session)
+                case .appeared: self?.nudgeDiskWatchers()
+                default: break
+                }
             }
         }
+        nudgeDiskWatchers()
     }
 
     /// 托管的 Pi 会话不随 CuePad 退出（新会话组、空闲由扩展自退），没有要关的。
     public func stop() -> @concurrent @Sendable () async -> Void { {} }
 
-    /// 新装或升级了扩展：请在跑的会话换上新扩展（`PiBridge.offerExtensionUpgrade`）。
-    public func integrationInstalled() { bridge.offerExtensionUpgrade() }
+    /// 新装或升级了扩展：请在跑的会话换上新扩展（`PiBridge.offerExtensionUpgrade`；自己盯磁盘的旧扩展碰一下它盯的名字）。
+    public func integrationInstalled() {
+        bridge.offerExtensionUpgrade()
+        nudgeDiskWatchers()
+    }
+
+    private func nudgeDiskWatchers() { nudge.request(versions: bridge.extensionVersions) }
 
     /// 认领后的托管进程脱离 App；App 更新后也一样，它歇下时换上新扩展、重新连回。
     public var hostedSessionsOutliveApp: Bool { true }
