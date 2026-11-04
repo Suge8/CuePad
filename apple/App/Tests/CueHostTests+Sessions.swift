@@ -65,7 +65,7 @@ extension CueHostTests {
     }
 
     /// 会话交回时，Cue 几轮之前托付给它的事已不在最近几轮问答里：叫醒 Cue 的信封在近况里照列它更早对会话说过的（重发的同一句只列一次），
-    /// 他自己在会话里说的不列。Cue 拿它对照交回，没做到的不 done（照不照办看评测：长程的"做完顺手升 2.3.1"）。
+    /// 他自己在会话里说的不列；Cue 说的每一句原文照列不截，长话末尾的要求也在。Cue 拿它对照交回，没做到的不 done（照不照办看评测：长程的"做完顺手升 2.3.1"）。
     @Test func 会话交回时_信封列着Cue更早托付的() async throws {
         let rig = try await Rig()
         try await rig.say("请建个任务并开工")
@@ -74,9 +74,11 @@ extension CueHostTests {
         let session = try #require(rig.app.host.extensions.values.first), id = session.sessionID
         let task = try #require(try await rig.store.cueBoard().tasks.first?.task)
         try await rig.store.linkCard(task.id, toSession: id)
-        let bump = "做完后顺手把版本号升到 2.3.1，CHANGELOG 记一笔", his = "顺便看看登录页的字号"
+        let context = String(repeating: "登录页的入口、填邮箱页和设新密码页照正文做，提示文案统一。", count: 10)
+        let bump = context + "最后：做完后顺手把版本号升到 2.3.1，CHANGELOG 记一笔", his = "顺便看看登录页的字号"
+        let last = context + "最后：交回时贴 git log -1 --stat"
         var messages: [PiChatMessage] = []
-        for (text, byCue) in [(bump, true), (bump, true), (his, false), ("接着做第 1 页", true), ("接着做第 2 页", true), ("接着做第 3 页", true)] {
+        for (text, byCue) in [(bump, true), (bump, true), (his, false), ("接着做第 1 页", true), ("接着做第 2 页", true), (last, true)] {
             let delivery = UUID()
             if byCue { _ = try await rig.store.recordSend(text, to: SendTarget(kind: .piSession, name: task.heading, ref: id), card: task.id, delivery: delivery, origin: .known(.cue)) }
             messages.append(PiChatMessage(sessionID: id, entryID: "u\(messages.count)", seq: Int64(messages.count + 1), role: .user, text: text, at: .now, deliveryID: byCue ? delivery : nil))
@@ -90,7 +92,8 @@ extension CueHostTests {
         let envelope = try #require(rig.rounds.last { $0.wake.isSessionActivity }).sent.joined()
         let earlier = envelope.components(separatedBy: "你更早对它说过的").dropFirst().first?.split(separator: "\n").dropFirst()
             .prefix { $0.trimmingCharacters(in: .whitespaces).hasPrefix("- ") }.map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-        #expect(earlier == ["- \(bump)"], "\(envelope)")
+        #expect(bump.count > 300 && earlier.filter { $0.contains("2.3.1") } == ["- \(bump)"], "\(envelope)")
+        #expect(envelope.contains("你：\(last)") && !envelope.contains(his), "\(envelope)")
         await rig.stop()
     }
 

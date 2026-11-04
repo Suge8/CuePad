@@ -106,10 +106,10 @@ extension CueTools {
       }
       lines.append(head)
       if let session = leaf.session { lines += Self.subagentLines(session.session, now: now) }
-      // 最近几轮里有开工那一句（与标题加正文一字不差）就不另列正文：那一句照原样列在问答里，截得比正文这行还宽
+      // 会话里有开工那一句（与标题加正文一字不差）就不另列正文：那一句是 Cue 说的，在问答或更早说过的里照原文列全
       let opened = leaf.session.map { Self.opening(in: $0, body: leaf.leaf.body) } ?? false
       if !opened, let rest = leaf.leaf.rest { lines.append("  正文：\(CueEnvelope.clip(CueFormat.plainText(rest), 200))") }
-      if let session = leaf.session { lines += Self.conversation(session, body: leaf.leaf.body, opening: opened ? leaf.leaf.body : nil) }
+      if let session = leaf.session { lines += Self.conversation(session, opening: opened ? leaf.leaf.body : nil) }
     }
     lines += deliveredLines(try await store.deliverables(of: detail.task.id))
     return .ok(lines.joined(separator: "\n"))
@@ -177,18 +177,17 @@ extension CueTools {
     }
   }
 
-  /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，太长截掉中间；更早的截短），每行缩进两格。
-  /// `opening`：叶子的标题与正文（`opening(in:body:)` 认出了开工那一句）：那一句标明是开工的第一句，原文照列。
-  /// 前面先列更早你对它说过的（`earlier`，开工那句在正文里、重发的同一句只列一次）：托付的事常在几轮之前，交回时不提它就会被漏掉
-  /// （长程评测里"做完顺手升版本号"漏核对就 done，实测）。原文照列、不截：截掉的后半句里可能正是要核对的那件；这是 Cue 自己写的短话
-  /// （长程评测 234 句 say 中位 92 字、最长 347 字）。
-  private static func conversation(_ detail: CueSessionDetail, body: String? = nil, opening: String? = nil) -> [String] {
+  /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，太长截掉中间；他说的与更早的回答截短），每行缩进两格。
+  /// `opening`：叶子的标题与正文（`opening(in:body:)` 认出了开工那一句）：那一句标明是开工的第一句。
+  /// 前面先列更早你对它说过的（`earlier`，重发的同一句、最近几轮里已有的只列一次）：托付的事常在几轮之前，交回时不提它就会被漏掉
+  /// （长程评测里"做完顺手升版本号"漏核对就 done，实测）。你说的每一句在这里只出现一次、原文照列不截：截掉的后半句里可能正是要核对的那件；
+  /// 这是 Cue 自己写的短话（长程评测 234 句 say 中位 92 字、最长 347 字）。
+  private static func conversation(_ detail: CueSessionDetail, opening: String? = nil) -> [String] {
     var lines: [String] = [], listed = Set(detail.recent.map { flat(CueFormat.plainText($0.text)) })
-    if let body { listed.insert(flat(CueFormat.plainText(body))) }
     let earlier = detail.earlier.map { CueFormat.plainText($0.text) }.filter { listed.insert(flat($0)).inserted }
     if !earlier.isEmpty {
       lines.append("  你更早对它说过的（交回时逐件核对做到没有，没做到的不算做完）：")
-      lines += earlier.map { "  - \(flat($0))" }
+      lines += earlier.map { said in "  - " + (opening.map { same(said, $0) } == true ? "（开工的第一句，即标题与正文）" : "") + flat(said) }
     }
     let latest = detail.recent.lastIndex { $0.role == .known(.pi) }
     let agent = agentName(detail.session)
@@ -198,7 +197,7 @@ extension CueTools {
         let byCue = message.role != .known(.pi) && message.saidByCue(detail.cueSent)
         let who = message.role == .known(.pi) ? agent : byCue ? "你" : "他"
         let opens = byCue && opening.map { same(text, $0) } == true
-        lines.append("  \(who)\(opens ? "（开工的第一句，即标题与正文）" : "")：\(CueEnvelope.clip(text, 300))")
+        lines.append("  \(who)\(opens ? "（开工的第一句，即标题与正文）" : "")：\(byCue ? flat(text) : CueEnvelope.clip(text, 300))")
         continue
       }
       let cut = text.count - latestReplyLimit
@@ -209,9 +208,9 @@ extension CueTools {
     return lines
   }
 
-  /// 最近几轮里你说过的一句与叶子的标题加正文一字不差（不计空白），就是开工那一句。
+  /// 会话里你说过的一句（最近几轮或更早）与叶子的标题加正文一字不差（不计空白），就是开工那一句。
   private static func opening(in detail: CueSessionDetail, body: String) -> Bool {
-    detail.recent.contains { $0.role != .known(.pi) && $0.saidByCue(detail.cueSent) && same(CueFormat.plainText($0.text), body) }
+    (detail.earlier + detail.recent).contains { $0.role != .known(.pi) && $0.saidByCue(detail.cueSent) && same(CueFormat.plainText($0.text), body) }
   }
 
   private static func same(_ said: String, _ body: String) -> Bool { flat(said) == flat(CueFormat.plainText(body)) }
