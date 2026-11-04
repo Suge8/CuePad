@@ -182,8 +182,8 @@ extension CueStore {
 
   /// 记忆的版本读数（`CueMemoryVersion`）：一条聚合，不读行的内容。
   public func cueMemoryVersion() throws -> CueMemoryVersion {
-    try db.first("SELECT count(*), MAX(modifiedAt) FROM cueLines") { CueMemoryVersion(lines: Int($0.int(0)), modifiedAt: $0.dateOrNil(1)) }
-      ?? CueMemoryVersion(lines: 0, modifiedAt: nil)
+    try db.first("SELECT count(*), coalesce(sum(modifiedAt), 0) FROM cueLines") { CueMemoryVersion(lines: Int($0.int(0)), stamps: $0.int(1)) }
+      ?? CueMemoryVersion(lines: 0, stamps: 0)
   }
 
   /// 写区间 [lo, hi) 的摘要（覆盖旧的）：对齐的 2 的幂区间（至少两行），行要都在；摘要同一条记忆的长度上限。

@@ -133,8 +133,6 @@ extension CueKeeper {
         var lastYou: Date?
         var active: Bool
         var memory: CueMemoryVersion
-        /// 一直记着的那几条：别的设备迟到同步来的钉上、取消、忘掉不一定改得动 `memory`（修改时间可能早于最晚那条），单独看
-        var pinned: [UUID]
         var profile: CueProfile?
         /// 各设备开着的会话（`Viewer`）：他离开了在场的会话，要再报给 Cue
         var viewing: [String]
