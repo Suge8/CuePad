@@ -3,7 +3,7 @@ import CueText
 import Foundation
 
 /// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。
-/// 块里第一行是时间，然后是项目、变化（说到的事多半在下面带着近况，哪些带见 `CueTools.recaps`）、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、醒来的原因，
+/// 块里第一行是时间（带时区），然后是项目、变化（说到的事多半在下面带着近况，哪些带见 `CueTools.recaps`）、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、醒来的原因，
 /// 有才写的：上一轮出错重试、吃紧的额度。
 /// 新会话的第一条输入里，它前面还有记忆视图与对话视图（`CueKeeper`）。信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
@@ -54,7 +54,7 @@ public enum CueEnvelope {
   }
 
   public static func render(_ input: Input) -> String {
-    var lines = ["<cue>", input.now.formatted(stamp)]
+    var lines = ["<cue>", input.now.formatted(stamp) + "（\(zone(input.now))）"]
 
     lines.append("项目：" + input.projects.map(\.name).joined(separator: "、"))
 
@@ -82,7 +82,7 @@ public enum CueEnvelope {
 
     lines.append("醒来：" + wake(input.wake))
     if case .schedule = input.wake { lines += input.fired.map { "- " + fired($0, now: input.now) } }
-    if let retrying = input.retrying { lines.append("上一轮出错重试：\(clip(retrying, 160))；先核对上一轮做到哪，做过的不重做") }
+    if let retrying = input.retrying { lines.append("上一轮出错重试：\(clip(retrying, 160))；先 peek 核对上一轮做到哪，做过的不重做") }
     let tight = input.quotas.compactMap { CueQuotaWords.tightLine($0, at: input.now) }
     if !tight.isEmpty { lines += ["额度吃紧："] + tight.map { "- " + $0 } }
     if let language = input.language { lines.append("这一轮你写下的字都用\(language)（回复、tell、任务、对会话说的话）") }
@@ -264,6 +264,13 @@ public enum CueEnvelope {
     if minutes < 60 { return "\(minutes) 分钟" }
     if minutes < 48 * 60 { return "\(minutes / 60) 小时" + (minutes % 60 == 0 ? "" : " \(minutes % 60) 分") }
     return "\(minutes / 1440) 天"
+  }
+
+  /// "UTC+8""UTC+5:30""UTC-3"：信封里的时刻都是这台 Mac 的本地时间，第一行写明时区，报错原文里的 UTC 时刻（额度几点重置）Cue 才换算得对
+  /// （没写时 Cue 把"00:00 UTC"当成已经过了）。只写这一处：其余的时刻跟着它，不在每个时刻后面再写一遍。
+  static func zone(_ date: Date) -> String {
+    let offset = TimeZone.current.secondsFromGMT(for: date), minutes = abs(offset) / 60
+    return "UTC\(offset < 0 ? "-" : "+")\(minutes / 60)" + (minutes % 60 == 0 ? "" : ":" + String(format: "%02d", minutes % 60))
   }
 
   /// 按此刻的时区现取（Mac 换了时区，下一次就跟着换）。2026-10-21 周三 09:05
