@@ -175,6 +175,11 @@ extension CueStore {
     return CueMemoryRecent(lines: lines, count: count)
   }
 
+  /// 一直记着的那几条的 id（按记忆的顺序）。
+  public func pinnedCueLineIDs() throws -> [UUID] {
+    try db.query("SELECT id FROM cueLines WHERE pinned = 1 AND deletedAt IS NULL ORDER BY \(Self.lineOrder)") { $0.uuid(0) }
+  }
+
   /// 记忆的版本读数（`CueMemoryVersion`）：一条聚合，不读行的内容。
   public func cueMemoryVersion() throws -> CueMemoryVersion {
     try db.first("SELECT count(*), MAX(modifiedAt) FROM cueLines") { CueMemoryVersion(lines: Int($0.int(0)), modifiedAt: $0.dateOrNil(1)) }

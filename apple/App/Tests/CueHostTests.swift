@@ -1,7 +1,7 @@
 #if os(macOS)
 import CueAgent
 import CuePi
-import CueStore
+@testable import CueStore
 import CueTestSupport
 import CueText
 import Foundation
@@ -112,7 +112,27 @@ struct CueHostTests {
         try await eventually("这一轮停在模型那里") { rig.model.holding }
         let line = try await rig.store.noteCueLine("推送前先问我", source: .you).line
         Workspace(services: rig.services).pinCueLine(line.id, true)
-        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains("推送前先问我") } == true }
+        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains("一直记着的刚变了") && $0.contains("推送前先问我") } == true }
+        rig.model.release()
+        let answer = try await rig.message(.cue, containing: "这一轮照新规矩")
+        #expect(answer.text.contains("推送前先问我"))
+        await rig.stop()
+    }
+
+    /// 别的设备上把一条旧记忆钉成一直记着、迟到才同步来（修改时间早于这台 Mac 上更晚记下的那条）：在跑的这一轮照样当场收到。
+    @Test func 一轮在跑时别的设备迟到同步来的规矩_这一轮也照它() async throws {
+        let rig = try await Rig()
+        let keeper = try #require(rig.services.cue.keeper)
+        let line = try await rig.store.noteCueLine("推送前先问我", source: .you).line
+        try await Task.sleep(for: .milliseconds(5))  // 之后记下的那条修改时间更晚
+        try await rig.store.noteCueLine("周报每周五发", source: .you)
+        try await rig.say("请等我放行")
+        try await eventually("这一轮停在模型那里") { rig.model.holding }
+        var row = try #require(try await rig.store.syncRow(recordName: line.id.uuidString.lowercased()))
+        row.fields["pinned"] = .int(1)
+        row.fields["modifiedAt"] = .int(Int64((line.modifiedAt.timeIntervalSince1970 * 1000).rounded()) + 1)
+        #expect(try await rig.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
+        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains("一直记着的刚变了") && $0.contains("推送前先问我") } == true }
         rig.model.release()
         let answer = try await rig.message(.cue, containing: "这一轮照新规矩")
         #expect(answer.text.contains("推送前先问我"))
