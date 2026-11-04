@@ -11,7 +11,7 @@ struct AttachmentBody: View {
     var body: some View {
         let blocks = Self.blocks(content), attached = blocks.compactMap(DraftFile.init)
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Spacing.group) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
                     case .text(let text): Paragraphs(verbatim: text).font(Typography.body).foregroundStyle(palette.ink)

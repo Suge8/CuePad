@@ -47,12 +47,12 @@ struct CardPicker: View {
     }
     #else
     private var content: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Spacing.block) {
             PanelHeader(Self.title)
             PanelSearchField(prompt: Self.prompt, text: $text)
             list
         }
-        .padding(.top, 18)
+        .padding(.top, Spacing.block)
         .frame(width: Self.macSize.width).frame(maxHeight: Self.macSize.height)
     }
     #endif
@@ -62,7 +62,7 @@ struct CardPicker: View {
 
     private var list: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
+            LazyVStack(alignment: .leading, spacing: Spacing.group) {
                 if let data {
                     if data.shown == 0, !settled.isEmpty { EmptyState.noMatch(settled) }
                     if !data.pins.isEmpty {
@@ -73,7 +73,7 @@ struct CardPicker: View {
                         let own = project.flatMap { workspace.catalog?.project($0) }
                         header(own.map { .verbatim($0.shownName) } ?? "本项目", project: own)
                         rows(data.own)
-                        if !data.rest.isEmpty { header("其他", project: nil).padding(.top, 8) }
+                        if !data.rest.isEmpty { header("其他", project: nil).padding(.top, Spacing.item) }
                     }
                     rows(data.rest, showsProject: true)
                     if data.total > data.shown {
@@ -81,7 +81,7 @@ struct CardPicker: View {
                     }
                 }
             }
-            .padding(.horizontal, 16).padding(.bottom, 24)
+            .padding(.horizontal, Spacing.block).padding(.bottom, 24)
         }
         #if os(iOS)
         .background(palette.desk)
@@ -101,7 +101,7 @@ struct CardPicker: View {
     }
 
     private func header(_ title: LocalizedStringResource, project: Project?) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Spacing.glyph) {
             if let project { ProjectGlyph(project: project, size: 12) }
             SectionHeader(title)
         }
@@ -185,17 +185,17 @@ struct CardRow: View {
 
     private var row: some View {
         let card = entry.card, text = entry.text
-        return HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+        return HStack(alignment: .top, spacing: Spacing.group) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
                 // 标题在前、时间靠右，与其余列表同一种读法
-                MetaLine(spacing: 8, gap: 0) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                MetaLine(spacing: Spacing.item, gap: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                         // 任务用全 App 同一个任务圈打头，一眼分得出任务与灵感
                         if card.isTask { TaskRingView(status: card.status, done: false, size: Self.ring).frame(width: Self.ring) }
                         Text(marked(text.label)).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(2)
                     }
                 } meta: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Spacing.item) {
                         if text.files > 0 { AttachmentMark(count: text.files) }
                         Text(DateLabel.short(card.modifiedAt)).monospacedDigit()
                     }
@@ -207,11 +207,11 @@ struct CardRow: View {
                     Text(marked(preview)).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2)
                 }
                 if let project {
-                    HStack(spacing: 4) {
+                    HStack(spacing: Spacing.tight) {
                         ProjectGlyph(project: project, size: 10)
                         Text(project?.shownName ?? "")
                     }
-                    .font(Typography.caption).foregroundStyle(palette.ink3).padding(.top, 2)
+                    .font(Typography.caption).foregroundStyle(palette.ink3).padding(.top, Spacing.hair)
                 }
             }
             .multilineTextAlignment(.leading)
@@ -220,7 +220,7 @@ struct CardRow: View {
                 Thumbnail(hash: image, height: 64, cornerRadius: Radius.chip).frame(width: 80)
             }
         }
-        .padding(14)
+        .padding(Spacing.group)
         .frame(maxWidth: .infinity, alignment: .leading)
         .paper()
         .contentShape(.rect(cornerRadius: Radius.card))

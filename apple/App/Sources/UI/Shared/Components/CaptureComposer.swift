@@ -43,7 +43,7 @@ struct CaptureComposer: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.item) {
             destinationMenu
             Spacer(minLength: 8)
             if pinnedOpen, let notice = workspace.notice {
@@ -55,7 +55,7 @@ struct CaptureComposer: View {
             if pinnedOpen { handOffButton }
         }
         .animation(Motion.fade, value: workspace.notice)
-        .padding(.horizontal, 12).padding(.top, 10)
+        .padding(.horizontal, Spacing.group).padding(.top, Spacing.item)
     }
 
     private var destinationMenu: some View {
@@ -115,7 +115,7 @@ struct DestinationChip<Icon: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Spacing.tight) {
             if let lead { Text(lead).foregroundStyle(palette.ink3) }
             icon
             title

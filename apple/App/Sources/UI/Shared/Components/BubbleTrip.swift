@@ -45,7 +45,7 @@ private struct TripMark: View {
             switch trip {
             case .arrived: EmptyView()
             case .sending(let transit):
-                HStack(spacing: 4) {
+                HStack(spacing: Spacing.tight) {
                     OnTheWay(size: 13, color: palette.ink3, landed: transit == .sent || transit == .delivering || transit == .unconfirmed)
                     if transit != .sending { Text(transit.label).fixedSize() }
                 }

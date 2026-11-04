@@ -16,7 +16,7 @@ struct ArchiveList: View {
                 ScrollView {
                     EmptyState(mascot: .clean, title: "还没有归档的", message: "做完的灵感与任务归档后放在这里")
                         #if os(iOS)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, Spacing.block)
                         #endif
                 }
             } else {
@@ -33,7 +33,7 @@ struct ArchiveList: View {
     private func row(_ card: Card) -> some View {
         let project = workspace.catalog?.project(card.projectID)
         return Button { open(card) } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 Group {
                     if card.isTask {
                         TaskRingView(status: card.status, done: card.status == .done, size: 17)
@@ -44,7 +44,7 @@ struct ArchiveList: View {
                 .frame(width: 20)
                 .accessibilityElement()
                 .accessibilityLabel(card.isTask ? "任务" : "灵感")
-                MetaLine(spacing: 10, gap: 8) {
+                MetaLine(spacing: Spacing.item, gap: Spacing.item) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(card.title).foregroundStyle(palette.ink).lineLimit(1)
                         Text(project?.shownName ?? "").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
