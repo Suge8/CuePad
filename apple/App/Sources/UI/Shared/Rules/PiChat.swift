@@ -158,10 +158,11 @@ nonisolated enum PiChat {
     /// 会话页顶栏状态后写它，会话行在你看过以后（不再整行写"没能送达"）留一个小标记、读屏念它：两处同一个数。没有时是 nil。
     static func undeliveredNote(_ count: Int) -> String? { count > 0 ? String(localized: "\(count) 句没送到") : nil }
 
-    /// 对话只同步最近 `transcriptWindow` 内活跃过的会话；更早的会话打开时没有对话，请它所在的 Mac 补写。
+    /// 对话只同步最近这么久内活跃过的会话（Mac 的历史索引按它决定读不读对话），对话也在会话安静这么久之后清理；
+    /// 更早的会话打开时没有对话，请它所在的 Mac 补写。
     static let transcriptWindow: TimeInterval = 7 * 86_400
 
-    static func needsTranscript(_ session: PiSessionState, messages: [PiChatMessage], now: Date = .now) -> Bool {
-        messages.isEmpty && now.timeIntervalSince(session.stateSince) > transcriptWindow
+    static func needsTranscript(_ session: PiSessionState, messages: [PiChatMessage]) -> Bool {
+        messages.isEmpty && Date.now.timeIntervalSince(session.stateSince) > transcriptWindow
     }
 }
