@@ -180,14 +180,15 @@ extension CueTools {
   /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，太长截掉中间；更早的截短），每行缩进两格。
   /// `opening`：叶子的标题与正文（`opening(in:body:)` 认出了开工那一句）：那一句标明是开工的第一句，原文照列。
   /// 前面先列更早你对它说过的（`earlier`，开工那句在正文里、重发的同一句只列一次）：托付的事常在几轮之前，交回时不提它就会被漏掉
-  /// （长程评测里"做完顺手升版本号"漏核对就 done，实测）。
+  /// （长程评测里"做完顺手升版本号"漏核对就 done，实测）。原文照列、不截：截掉的后半句里可能正是要核对的那件；这是 Cue 自己写的短话
+  /// （长程评测 234 句 say 中位 92 字、最长 347 字）。
   private static func conversation(_ detail: CueSessionDetail, body: String? = nil, opening: String? = nil) -> [String] {
     var lines: [String] = [], listed = Set(detail.recent.map { flat(CueFormat.plainText($0.text)) })
     if let body { listed.insert(flat(CueFormat.plainText(body))) }
     let earlier = detail.earlier.map { CueFormat.plainText($0.text) }.filter { listed.insert(flat($0)).inserted }
     if !earlier.isEmpty {
       lines.append("  你更早对它说过的（交回时逐件核对做到没有，没做到的不算做完）：")
-      lines += earlier.map { "  - \(CueEnvelope.clip($0, 200))" }
+      lines += earlier.map { "  - \(flat($0))" }
     }
     let latest = detail.recent.lastIndex { $0.role == .known(.pi) }
     let agent = agentName(detail.session)

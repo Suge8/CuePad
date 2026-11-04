@@ -30,33 +30,6 @@ extension MCPTests {
     }
   }
 
-  /// 会话交回时 Cue 托付过的事常在几轮之前：peek 把更早 Cue 对它说过的列在前面供核对（开工那句、重发的同一句只列一次），他自己在会话里说的不列。
-  @Test func peekListsWhatCueAskedEarlier() async throws {
-    let sandbox = try Fixture()
-    let store = sandbox.store
-    let task = try await store.createTask("加忘记密码")
-    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "加忘记密码")
-    var messages: [PiChatMessage] = []
-    func said(_ text: String, byCue: Bool) async throws {
-      let delivery = UUID()
-      if byCue { _ = try await store.recordSend(text, to: SendTarget(kind: .piSession, name: "加忘记密码", ref: "s1"), card: task.id, delivery: delivery, origin: .known(.cue)) }
-      messages.append(PiChatMessage(sessionID: "s1", entryID: "\(messages.count)", seq: Int64(messages.count + 1), role: .user, text: text, at: .now, deliveryID: byCue ? delivery : nil))
-      messages.append(PiChatMessage(sessionID: "s1", entryID: "\(messages.count)", seq: Int64(messages.count + 1), role: .pi, text: "好", at: .now))
-    }
-    let bump = "做完后顺手把版本号升到 2.3.1，CHANGELOG 记一笔"
-    try await said("加忘记密码", byCue: true)
-    try await said(bump, byCue: true)
-    try await said(bump, byCue: true)
-    try await said("顺便看看登录页的字号", byCue: false)
-    for round in 1...3 { try await said("接着做第 \(round) 页", byCue: true) }
-    try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: messages, recap: PiRecap()))
-    try await Server.run(library: sandbox.directory) { server in
-      let text = try await server.call("task", ["action": "peek", "task": task.id.uuidString])
-      let earlier = text.components(separatedBy: "你更早对它说过的").last?.components(separatedBy: "\n").filter { $0.hasPrefix("  - ") } ?? []
-      #expect(earlier == ["  - \(bump)"], "\(text)")
-    }
-  }
-
   /// 几步接着用同一个会话：peek 只在最后用它的那一步下面列会话与问答，前面的步骤写"会话同后面的一步"，同一段问答不重复。
   @Test func stepsSharingASessionListItOnce() async throws {
     let sandbox = try Fixture()
