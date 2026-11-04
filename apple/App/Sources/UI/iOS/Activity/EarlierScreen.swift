@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 窄屏的"更早"（WORDS.md）：已结束的会话。Cue 页会话条最底下一格写"更早"与个数，点它推入"更早"那一页（`Route.earlier`）；
-/// 宽屏同一件事在会话条里原地展开（`RailEarlier`）。个数与那一页读同一个查询（`PiSessionQuery.ended`，置顶任务上的也在里面），两边对得上。
+/// 宽屏同一件事在会话条里原地展开（`RailEarlier`）。个数与那一页读同一个查询（`PiSessionList.earlier`：置顶任务上的也在里面，正在唤醒的不在），两边对得上。
 /// 没有已结束的会话时这一格不画：没有可去的地方。
 struct EarlierTile: View {
     @Environment(Workspace.self) private var workspace
@@ -35,8 +35,8 @@ struct EarlierTile: View {
         .padding(.horizontal, SessionRail.phoneInset)
         .frame(width: SessionRail.Form.phone.width)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-        .observing(services.store, into: $total, onError: workspace.fail) { store in
-            try store.piSessionPage(PiSessionQuery(scope: .ended, limit: 1)).total
+        .observing(services.store, id: services.speech, into: $total, onError: workspace.fail) { [moment = services.speech] store in
+            try PiSessionList.earlier(PiSessionQuery(limit: 1), at: moment, from: store).total
         }
     }
 

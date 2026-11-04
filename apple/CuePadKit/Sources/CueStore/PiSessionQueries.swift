@@ -3,7 +3,7 @@ import Foundation
 extension CueStore {
   /// 会话列表的一页（Mac 与手机共用的唯一查询）。顺序见 `PiSessionPage`。
   public func piSessionPage(_ query: PiSessionQuery) throws -> PiSessionPage {
-    let (condition, arguments) = Self.condition(query)
+    let (condition, arguments) = try Self.condition(query)
     // 只有一种状态的范围里"已结束的排后面"是常量，留着它 SQLite 就不走按状态的索引、把整个范围排一遍（真实库已结束的一页 17 万步对 3 千步）
     let endedLast = query.scope == .all || query.scope == .current ? "state = '\(PiWorkState.ended.rawValue)', " : ""
     let states = try select(
@@ -17,7 +17,7 @@ extension CueStore {
     CASE WHEN projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL) THEN projectID ELSE '\(Project.defaultID.uuidString.lowercased())' END
     """
 
-  private static func condition(_ query: PiSessionQuery) -> (String, [any SQLBindable]) {
+  private static func condition(_ query: PiSessionQuery) throws -> (String, [any SQLBindable]) {
     var conditions: [String] = []
     var arguments: [any SQLBindable] = []
     switch query.scope {
@@ -55,6 +55,10 @@ extension CueStore {
     if let id = query.id {
       conditions.append("id = ?")
       arguments.append(id)
+    }
+    if !query.excluding.isEmpty {
+      conditions.append("sessionID NOT IN (SELECT value FROM json_each(?))")
+      arguments.append(String(decoding: try JSONEncoder().encode(query.excluding), as: UTF8.self))
     }
     if let pinned = query.pinned {
       conditions.append("sessionID \(pinned ? "IN" : "NOT IN") (\(pinnedSessions))")

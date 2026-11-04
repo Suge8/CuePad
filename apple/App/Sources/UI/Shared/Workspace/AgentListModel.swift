@@ -29,10 +29,9 @@ final class AgentListModel {
 }
 
 extension PiSessionList {
-    /// "历史"按结束时间分的段；正在唤醒的列在"现在"，这里不再列。
+    /// "历史"按结束时间分的段（正在唤醒的读的时候就排掉了，`PiSessionList.earlier`）。
     var historyRuns: [TimeSection.Run<PiSessionListItem>] {
-        let current = Set(now.map(\.id))
-        return TimeSection.split(ended.filter { !current.contains($0.id) }, date: \.state.stateSince, now: .now)
+        TimeSection.split(ended, date: \.state.stateSince, now: .now)
     }
 }
 

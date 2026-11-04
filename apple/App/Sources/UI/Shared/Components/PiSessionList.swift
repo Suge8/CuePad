@@ -3,9 +3,9 @@ import SwiftUI
 
 /// 会话页读到的会话（Mac 与手机同一份）：一条列表，最上面是置顶的——绑在置顶任务上的（`PiSessionQuery.pinned`，在线的在前，结束了也留着；不多，不分页）；
 /// 接着"现在"——其余在线的与正在唤醒的（`PiSessionListItem.isCurrent`；不多，不分页），按要你注意的先后；
-/// "历史"在最下——其余已结束的（"现在"里有的不再列），按结束时间从新到旧分页读（分段见 `TimeSection`）。
-/// 三部分用同一个搜索词与项目范围（`Workspace.projectScope`）。`endedOnly`（"更早"那一页，`EarlierScreen`）只读已结束的、置顶的也在里面，
-/// 与会话条那一格的个数同一个查询（`PiSessionQuery.ended`），没有置顶与"现在"两部分。
+/// "历史"在最下——其余已结束的（`earlier`：正在唤醒的在"现在"，不再列），按结束时间从新到旧分页读（分段见 `TimeSection`）。
+/// 三部分用同一个搜索词与项目范围（`Workspace.projectScope`）。`endedOnly`（"更早"那一页，`EarlierScreen`）只读"历史"、置顶的也在里面，
+/// 与会话条"更早"的个数同一个查询（`earlier`），没有置顶与"现在"两部分。
 nonisolated struct PiSessionList: Sendable, Equatable {
     static let pageSize = 40
 
@@ -43,7 +43,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         text: String, project: UUID? = nil, endedOnly: Bool = false, historyLimit: Int, at moment: Speech.Moment, from store: isolated CueStore
     ) throws -> PiSessionList {
         if endedOnly {
-            let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
+            let ended = try earlier(PiSessionQuery(text: text, project: project, limit: historyLimit), at: moment, from: store)
             return PiSessionList(filter: Filter(text: text, project: project), pinned: [], now: [], ended: ended.items, endedTotal: ended.total)
         }
         let pinned = try store.piSessionPage(PiSessionQuery(scope: .all, text: text, project: project, pinned: true, limit: .max)).items
@@ -51,12 +51,22 @@ nonisolated struct PiSessionList: Sendable, Equatable {
             .filter { $0.isCurrent(at: moment) }
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
         let now = PiSessionState.inListOrder(live, state: \.state, deliveries: deliveries, cue: try store.cueDuty(), at: moment)
-        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, pinned: false, limit: historyLimit))
+        let ended = try earlier(PiSessionQuery(text: text, project: project, pinned: false, limit: historyLimit), at: moment, from: store)
         return PiSessionList(
             filter: Filter(text: text, project: project), pinned: pinned, now: now,
             ended: ended.items, endedTotal: ended.total,
             ends: try (pinned.filter { $0.state.state != .known(.ended) } + live).reduce(into: [:]) { ends, item in
                 ends[item.id] = DeliveryRequest.shownEnd(in: try store.deliveryRequests(toSession: item.state.sessionID), at: moment)
             })
+    }
+
+    /// "更早"（会话列表的"历史"、手机"更早"那一格与那一页、宽屏会话条的"更早"只读它）：已结束、此刻没在唤醒的。
+    /// 正在唤醒的已在"现在"与会话条上（`PiSessionListItem.isCurrent`），唤醒按此刻算、库里认不出，读出来按会话 id 排掉，个数与分页才对得上。
+    static func earlier(_ query: PiSessionQuery, at moment: Speech.Moment, from store: isolated CueStore) throws -> PiSessionPage {
+        var query = query
+        query.scope = .ended
+        query.excluding = try store.piSessionPage(.current).items
+            .filter { $0.state.state == .known(.ended) && $0.isCurrent(at: moment) }.map(\.state.sessionID)
+        return try store.piSessionPage(query)
     }
 }

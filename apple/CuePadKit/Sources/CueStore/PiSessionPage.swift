@@ -40,6 +40,8 @@ public struct PiSessionQuery: Sendable, Equatable {
   public var id: UUID?
   /// 只要绑在置顶任务上的（true）或其余的（false）；nil 表示不限。
   public var pinned: Bool?
+  /// 不要这些会话（Pi 的会话 id）：库里认不出、要按此刻算的（"更早"不列正在唤醒的，`PiSessionList.earlier`）。
+  public var excluding: [String] = []
   public var offset: Int
   /// 一页多少条；`Int.max` 表示不分页（只用于本就不多的范围，如在线的）。
   public var limit: Int
