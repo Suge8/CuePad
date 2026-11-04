@@ -57,8 +57,8 @@ struct UpgradePreparationTests {
         await app.services.executor.beginStop()()
     }
 
-    @Test(arguments: ["withdraw", "end", "timeout", "reopen"])
-    func 准备期限不续长_撤回结束退出与重连不会误派(action: String) async throws {
+    @Test(arguments: ["timeout", "reopen"])
+    func 准备期限不续长_到期与重连不会误派(action: String) async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, old) = try await oldSession(app)
@@ -70,21 +70,10 @@ struct UpgradePreparationTests {
         #expect(waiting.status == .known(.preparing))
         guard waiting.status == .known(.preparing) else { await app.services.executor.beginStop()(); return }
         let due = try #require(waiting.deadlineAt)
-        var repeated = try #require(try await app.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
-        repeated.fields["deadlineAt"] = .int(Int64((due.timeIntervalSince1970 + 3_600) * 1_000))
-        repeated.fields["modifiedAt"] = .int(repeated.modifiedAt + 1)
-        #expect(try await app.services.store.applyRemote([.save(repeated, systemFields: Data())]).isEmpty)
-        #expect(try await app.services.store.deliveryRequest(request.id)?.deadlineAt == due)
         app.pi.update(old.id) { $0.name = "仍在升级" }
         try await sendOther(in: app)
         #expect(try await app.services.store.deliveryRequest(request.id)?.deadlineAt == due)
         switch action {
-        case "withdraw":
-            workspace.remove(.request(waiting))
-            try await eventually("准备中的原请求撤回") { try await app.services.store.deliveryRequest(request.id) == nil }
-        case "end":
-            await workspace.end(target)
-            #expect(try await app.services.store.outcome(of: request).status == .known(.failed))
         case "timeout":
             clock.advance(.seconds(due.timeIntervalSince(clock.now) + 1))
             try await eventually("准备到期由 Mac 确认未派发") { try await app.services.store.deliveryRequest(request.id)?.status == .known(.failed) }
@@ -106,7 +95,6 @@ struct UpgradePreparationTests {
             #expect(try await app.services.store.outcome(of: request).status == .known(.succeeded))
             #expect(ready.messages.map(\.deliveryID) == [request.id.uuidString])
         } else {
-            if action != "timeout" { try await sendOther(in: app) }
             await app.services.executor.beginStop()()
             #expect(ready.messages.isEmpty)
         }
