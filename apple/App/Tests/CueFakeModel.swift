@@ -176,6 +176,8 @@ nonisolated final class FakeModel: Sendable {
             if let view = text.firstMatch(of: /<view>[\s\S]*<\/view>/)?.0, let code = view.firstMatch(of: /暗号是 (\S+)/)?.1 { return say("从视图接上：暗号是 \(code)") }
             return say("不记得暗号")
         }
+        // 问额度：照信封里吃紧的那几行答
+        if text.contains("额度吃紧吗") { return say(text.firstMatch(of: /额度吃紧：\n(- [^\n]*\n)+/).map { String($0.0) } ?? "额度不吃紧") }
         if last["role"] as? String == "tool" {
             if text.contains("建好了"), let id = text.firstMatch(of: /（([0-9a-f]{8})）/)?.1 {
                 return call("task", ["action": "start", "task": String(id), "model": "fake/m", "effort": "high"])  // 测试 Mac 上 Pi 报的模型（TestSupport 的 piProbeLine）

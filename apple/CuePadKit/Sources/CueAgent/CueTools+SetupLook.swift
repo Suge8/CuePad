@@ -8,7 +8,7 @@ extension CueTools {
     let host = try await host()
     let profile = try await store.cueProfile() ?? CueProfile()
     let mac = try await store.macAgents(on: host)
-    let quotas = try await store.accountQuotas().filter { $0.hostID == host }
+    let quotas = try await store.accountQuotas(on: host)
     let lines: [String]
     switch part {
     case nil:

@@ -72,7 +72,7 @@ extension CueKeeper {
     private func resetsAt(_ agent: MacAgent?, kind: AgentKind, model: String?) async -> Date? {
         guard let agent,
               let option = model.flatMap(kind.modelKey).flatMap({ key in agent.models.first { $0.key == key } }) ?? agent.defaultModel,
-              let quotas = try? await store.accountQuotas(),
+              let quotas = try? await store.accountQuotas(on: setup.recorder.hostID),
               let quota = option.quota(in: quotas)
         else { return nil }
         return quota.binding(at: .now, model: option.key.id)?.resetsAt
