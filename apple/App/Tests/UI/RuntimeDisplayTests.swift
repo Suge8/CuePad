@@ -132,7 +132,7 @@ struct RuntimeDisplayTests {
             return (before, renewed)
         }
         // 不以 CueFeed/Observations 给出新值为前提。
-        let completed = Self.holdUI(until: progressed)
+        let completed = holdThread(until: progressed)
         #expect(completed)
         if !completed { observe.cancel() }
         let observed = try await observe.value
@@ -240,10 +240,6 @@ struct RuntimeDisplayTests {
         #expect(snapshot.shown(at: clock.now + 360).subagents == 0)
         #expect(snapshot.shown(at: clock.now + 600).advancing == 2 && snapshot.shown(at: clock.now + 600).subagents == 0)
         #expect(snapshot.shown(at: clock.now + 600).isLive && !snapshot.shown(at: clock.now + 600).hasConfirmedActivity)
-    }
-
-    nonisolated private static func holdUI(until signal: DispatchSemaphore) -> Bool {
-        signal.wait(timeout: .now() + Double(conditionBudget.components.seconds)) == .success
     }
 
     #if os(macOS)
