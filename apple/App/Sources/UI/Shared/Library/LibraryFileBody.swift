@@ -29,17 +29,17 @@ struct LibraryFileTop: View {
             #if os(macOS)
             .frame(maxWidth: LibraryLayout.column, alignment: .leading).padding(.horizontal, LibraryLayout.textInset)
             #else
-            .padding(.horizontal, 16).padding(.vertical, 8)
+            .padding(.horizontal, Spacing.page).padding(.vertical, Spacing.item)
             #endif
         }
     }
 
     #if os(macOS)
-    private static let gap: CGFloat = 14
+    private static let gap = Spacing.block
     private static let fieldsInset: CGFloat = 0
     #else
-    private static let gap: CGFloat = 12
-    private static let fieldsInset: CGFloat = 4
+    private static let gap = Spacing.group
+    private static let fieldsInset = Spacing.tight
     #endif
 }
 
