@@ -2,8 +2,8 @@ import Foundation
 
 /// 一台 Mac 在不在线（同步表 `macPresence`，每台 Mac 一条，只由它自己写；手机与别的 Mac 只读）：Mac 在不在、Cue 在不在值班
 /// （`CueProfile.onDuty`、Cue 页的"在睡觉"）都只从这里推出。记录只有一个期限：此刻早于 `onlineUntil` 就在线，没有记录是不在线。
-/// 醒着的 Mac 每 `renewal` 续一次，把期限推到此刻加 `lifetime`；将睡眠、退出时写成此刻（当场离线）；醒来、启动立即续期
-/// （写的时机在 App 的 `MacPresenceKeeper`）。到期由订阅重读（`expire(at:)`），不轮询；期限是那台 Mac 的时钟写的，各端时钟大致对准即可。
+/// 醒着的 Mac 每 `renewal` 续一次，把期限推到此刻加 `lifetime`；将睡眠、退出时写成此刻（当场离线）；启动时画第一帧之前写下在线（`launchMac`），
+/// 醒来立即续期（其余写的时机在 App 的 `MacPresenceKeeper`）。到期由订阅重读（`expire(at:)`），不轮询；期限是那台 Mac 的时钟写的，各端时钟大致对准即可。
 public struct MacPresence: Equatable, Sendable {
   public var hostID: String
   public var onlineUntil: Date
@@ -42,6 +42,23 @@ extension CueStore {
         hostID: host, onlineUntil: awake() ? now.addingTimeInterval(MacPresence.lifetime) : offline, bootID: bootID, modifiedAt: Date.stamp)
       try upsert(presence, updating: ["onlineUntil", "modifiedAt", "bootID"])
       return MacPresence.recordID(host: host)
+    }
+  }
+
+  /// 这台 Mac 的 App 启动：打开资料库之后、画第一帧之前，在资料库的队列上当场写完（调用方等着，那时还没有别的写在排队）——
+  /// 先对账这台 Mac 上次留下的会话记录（`reconcilePiStates`，`running` 判断记下的进程是不是还是那一个），再写下在线。
+  /// 退出时写下的是离线：不先写在线，第一帧读到的本机会话与 Cue 都是"状态未确认"，要等启动后的续期才变；在线又必须在对账之后，
+  /// 不然进程已经没了的记录会被当成确认的在跑。返回对账后可沿用的状态与计时（`PiBridge.carryOver`）。
+  public nonisolated func launchMac(
+    host: String, bootID: String? = SystemBoot.id, running: @Sendable (PiProcess) -> Bool
+  ) throws -> [String: (state: PiWorkState, times: PiTimes)] {
+    let now = timing.now()
+    return try queue!.sync {
+      try assumeIsolated { store in
+        let open = try store.reconcilePiStates(host: host, bootID: bootID, running: running, at: now)
+        try store.recordMacPresence(host: host, bootID: bootID) { true }
+        return open
+      }
     }
   }
 

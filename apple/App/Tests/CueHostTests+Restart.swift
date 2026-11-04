@@ -73,7 +73,7 @@ extension CueHostTests {
         try await store.linkCard(upgraded.id, toSession: "h1")
         try await eventually("记下在干活") { try await store.allPiSessionStates().filter { $0.state.isWorking }.count == 2 }
 
-        try await rig.services.resetPiState()  // 启动对账：桥上的托管会话还连着，它的进程还在
+        try rig.services.reconcileLaunch()  // 启动对账：桥上的托管会话还连着，它的进程还在
         let states = Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0) })
         #expect(states["h0"]?.state == .known(.thinking))
         #expect(states["h1"]?.state == .known(.tool) && states["h1"]?.detail == "bash · swift test" && states["h1"]?.subagents == [helper])

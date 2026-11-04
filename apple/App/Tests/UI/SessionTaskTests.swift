@@ -20,7 +20,7 @@ struct SessionTaskTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
         try await enableCue()
-        try await services.resetPiState()  // Mac 启动
+        try services.reconcileLaunch()  // Mac 启动
         var session = CuePi.PiSession(
             id: "s1.100", sessionID: "s1", agent: .pi, sessionFile: URL(filePath: "/tmp/never-\(UUID().uuidString).jsonl"), pid: 100,
             cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: PiTerminal(),
@@ -195,7 +195,7 @@ struct SessionTaskTests {
     @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
-        try await services.resetPiState()  // Mac 启动
+        try services.reconcileLaunch()  // Mac 启动
         try await rig.offersPi()
         let leaf = try await store.createTask("修登录", in: project.id)
         let workspace = Workspace(services: services)

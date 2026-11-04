@@ -12,7 +12,7 @@ import Foundation
 ///   2026-10-24 复现：两者同在一条队列时，被节流的进程里这条队列 89% 的时间在重读，拉取读令牌排了 26–70 秒。
 public actor CueStore {
   let db: SQLite
-  private nonisolated let queue: DispatchSerialQueue?
+  nonisolated let queue: DispatchSerialQueue?
   private nonisolated let executor: UnownedSerialExecutor
   public nonisolated var unownedExecutor: UnownedSerialExecutor { executor }
   /// 主线程当场读用的只读连接（`snapshot`）；只读连接自己的是 nil。

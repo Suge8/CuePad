@@ -245,7 +245,6 @@ struct RuntimeDisplayTests {
             try await store.bindSession(id, to: task.id)
         }
         _ = app.relaunch()
-        try await app.services.resetPiState()
         #expect(identity.isRunning)
         let alive = try #require(try await store.piSessions(sessionIDs: ["alive"])["alive"]?.state)
         #expect(try await store.runtimeIsConfirmed(alive))
@@ -255,7 +254,7 @@ struct RuntimeDisplayTests {
         #expect(unknown.state == .known(.compacting) && workspace.shown(unknown, delivery: nil).status == .unknown())
         try input.fileHandleForWriting.close()
         process.waitUntilExit()
-        try await app.services.resetPiState()
+        try app.services.reconcileLaunch()
         #expect(try await store.piSessions(sessionIDs: ["alive"])["alive"]?.state.state == .known(.interrupted))
     }
     #endif

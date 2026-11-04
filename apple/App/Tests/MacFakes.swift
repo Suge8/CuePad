@@ -217,4 +217,9 @@ final class RecordingCueNotifier: CueNotifying {
 
     func post(title: String, body: String) async { posted.append((title, body)) }
 }
+
+extension AppServices {
+    /// 演 App 重开：库与桥都留着，只把启动时那一步（对账、写下在线，`AppServices.launch`）再走一遍。
+    func reconcileLaunch() throws { try Self.launch(store, on: hostID, bridge: pi) }
+}
 #endif

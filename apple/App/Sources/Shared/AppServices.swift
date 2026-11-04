@@ -207,6 +207,7 @@ final class AppServices {
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
         let store = try CueStore(location: location, timing: mac.timing)
+        try Self.launch(store, on: mac.hostID, bridge: mac.pi)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location

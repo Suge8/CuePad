@@ -79,7 +79,7 @@ import Testing
       process: PiProcess(pid: 1, startedAt: 1))
     clock.advance(.seconds(60))
 
-    try await recorder().reset { _ in false }
+    _ = try store.launchMac(host: "mac-a") { _ in false }
 
     let failed = try await states()["failed"]
     #expect(failed?.state == .known(.error) && failed?.detail == "额度用完" && failed?.stateSince == before)
