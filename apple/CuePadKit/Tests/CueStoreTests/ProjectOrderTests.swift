@@ -21,12 +21,14 @@ import Testing
     let task = try await store.createTask("t", in: work.id)
     let done = try await store.createTask("d", in: tidy.id)
     try await store.setStatus(done.id, .done)
-    // 每次一个新的记录器：同一个会攒着上次的一轮开始时刻、还按间隔压写入
-    func session(_ state: PiWorkState, turn: Date? = nil) async throws {
+    // 每次一个新的记录器：同一个会攒着上次的一轮开始时刻、还按间隔压写入。新一轮的开始时刻在隔开之后才取：
+    // 库里时刻按毫秒存，先取再隔开会和上一步的写入落在同一毫秒，并列时按项目 id 排，顺序随机（#69）
+    func session(_ state: PiWorkState, newTurn: Bool = false) async throws {
       try await Task.sleep(for: .milliseconds(2))
-      _ = try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: state, title: "s", projectID: talk.id, turnStartedAt: turn)
+      _ = try await PiStateRecorder(store: store, hostID: "mac").update(
+        sessionID: "s1", state: state, title: "s", projectID: talk.id, turnStartedAt: newTurn ? .now : nil)
     }
-    try await session(.thinking, turn: .now)
+    try await session(.thinking, newTurn: true)
     // 起点：都在很久以前，收拾的那个项目最早
     try at("UPDATE projects SET createdAt = 1000, modifiedAt = 1000")
     try at("UPDATE cards SET todoAt = 1000, startedAt = NULL, completedAt = 1000, modifiedAt = 1000 WHERE id = '\(done.id.uuidString.lowercased())'")
@@ -50,7 +52,7 @@ import Testing
     try await Task.sleep(for: .milliseconds(2))
     try await store.updateCard(note.id) { $0.body = "n2" }
     #expect(try await order() == ["置顶", "灵感", "任务", "会话", "收拾好"])
-    try await session(.thinking, turn: .now)
+    try await session(.thinking, newTurn: true)
     #expect(try await order() == ["置顶", "会话", "灵感", "任务", "收拾好"])
   }
 }
