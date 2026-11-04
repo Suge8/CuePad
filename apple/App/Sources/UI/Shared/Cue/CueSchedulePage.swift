@@ -146,7 +146,7 @@ private enum ScheduleMetrics {
     #if os(macOS)
     static let time = Typography.bodyStrong.weight(.medium)
     #else
-    static let time = Font.system(.title3, weight: .medium)
+    static let time = Typography.title.weight(.medium)
     #endif
     static let gap: CGFloat = 14
 }

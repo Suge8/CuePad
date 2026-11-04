@@ -11,10 +11,13 @@ struct CueStarters: View {
     var body: some View {
         VStack(spacing: 8) {
             ForEach(Self.lines(agents?.agents.map(\.kind) ?? []), id: \.self) { line in
-                EmptyStateButton(title: .verbatim(line), icon: nil, kind: .small) {
+                Button {
                     workspace.cue.draft.text = line
                     workspace.cueFocusPending = true
+                } label: {
+                    Text(verbatim: line)
                 }
+                .buttonStyle(ControlButtonStyle(size: .compact))
             }
         }
         .observing(services.store, id: workspace.cue.hostID, into: $agents, onError: workspace.fail) { [host = workspace.cue.hostID] in

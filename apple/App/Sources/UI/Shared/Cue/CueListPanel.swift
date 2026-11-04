@@ -1,7 +1,9 @@
 import SwiftUI
 
 /// Cue 的两张清单弹层（记忆 `CueMemoryPage`、定时 `CueSchedulePage`）共用的壳：Mac 是 480 宽的窗口内浮层，手机是整屏 sheet。
-/// 顶上不写标题（`title` 只给读屏与多任务），右上一颗问号，点开一句说明；底部浮着玻璃输入胶囊，列表从它后面透过；空时正中是空态。
+/// 顶上不写标题（`title` 只给读屏与多任务），右上一颗问号，点开一句说明的气泡；底部浮着玻璃输入胶囊，列表从它后面透过；空时正中是空态。
+/// Mac 的问号是浮层右上与关闭并排的淡底圆钮（`HelpButton`）；手机的在 sheet 的系统导航栏里，栏里的项开不出气泡，
+/// 照 `LibraryScreen`：点下时按读屏标识量它的框（`PanelHost.frame(of:)`），气泡挂在页上（sheet 自己那一层）。
 struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
     let title: String
     let help: String
@@ -11,6 +13,12 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
     @ViewBuilder let empty: Empty
     @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
+    #if os(iOS)
+    @Environment(PanelHost.self) private var host
+    @State private var helpOpen = false
+    @State private var helpFrame: CGRect?
+    private static var helpID: String { "cueList.help" }
+    #endif
 
     private var list: some View {
         ScrollView {
@@ -41,7 +49,7 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
             .contentMargins(.top, -CueListMetrics.top, for: .scrollIndicators)
             .overlay(alignment: .topTrailing) {
                 HStack(spacing: 6) {
-                    CueListHelp(text: help)
+                    HelpButton { CueListHelp(text: help) }
                     PanelCloseButton()
                 }
                 .padding(12)
@@ -62,36 +70,35 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
-                    ToolbarItem(placement: .primaryAction) { CueListHelp(text: help) }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("说明", icon: .help) {
+                            helpFrame = host.frame(of: Self.helpID)
+                            helpOpen.toggle()
+                        }
+                        .accessibilityIdentifier(Self.helpID)
+                    }
                 }
         }
+        .panel(isPresented: $helpOpen, style: .bubble(helpFrame.map(BubbleSource.control) ?? .unanchored)) { CueListHelp(text: help) }
         .presentationDetents([.large])
     }
     #endif
 }
 
-/// 右上那颗问号：点开一句说明，从它长出的气泡里。
+/// 问号点开的那一句说明。
 private struct CueListHelp: View {
     let text: String
-    @State private var open = false
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Button("说明", icon: .help) { open.toggle() }
-            #if os(macOS)
-            .labelStyle(.iconOnly).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
-            .frame(width: 26, height: 26).background(palette.fill, in: .circle).contentShape(.circle)
-            .buttonStyle(PressStyle())
-            #endif
-            .popover(isPresented: $open, arrowEdge: .top) {
-                Text(verbatim: text)
-                    .font(Typography.secondary).foregroundStyle(palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(width: 260, alignment: .leading)
-                    .padding(16)
-                    .presentationCompactAdaptation(.popover)
-            }
+        Text(verbatim: text)
+            .font(Typography.secondary).foregroundStyle(palette.ink)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: Self.width, alignment: .leading)
+            .padding(Spacing.block)
     }
+
+    private static let width: CGFloat = 260
 }
 
 /// 清单里的一行：内容占满宽度；两个动作手机上在右滑、左滑，菜单与读屏另有复制；菜单抬头与读屏另说 `meta`（什么时候、谁说的）。
@@ -150,7 +157,7 @@ private struct CueListHoverActions: View {
                     .labelStyle(.iconOnly)
                     .font(Typography.meta.weight(.medium))
                     .foregroundStyle(item.action.tone == .destructive ? palette.failure : palette.ink2)
-                    .frame(width: 24, height: 24)
+                    .frame(width: ControlSize.target, height: ControlSize.target)
                     .contentShape(.rect)
                     .buttonStyle(PressStyle(.button))
                     .help(item.action.title)

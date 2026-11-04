@@ -21,7 +21,7 @@ struct LibraryScreen: View {
                 LibraryDeck(library: library)
             } else {
                 Text("在 Mac 上打开 CuePad，它会把那台的技能与规则报过来")
-                    .font(.subheadline).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
+                    .font(Typography.secondary).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
                     .padding(.horizontal, 32).padding(.top, 80)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }

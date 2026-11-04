@@ -120,10 +120,10 @@ struct CueWelcome: View {
                 if !host.selectable { Text(host.note).font(Typography.meta).foregroundStyle(palette.ink3) }
                 let others = hosts.filter { $0.id != host.id }
                 #if os(macOS)
-                let menu = hostMenu(others, title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, compact: true))
+                let menu = hostMenu(others, title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, size: .compact))
                 if others.isEmpty { menu.hidden() } else { menu }
                 #else
-                if !others.isEmpty { hostMenu(others, title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, compact: true)) }
+                if !others.isEmpty { hostMenu(others, title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, size: .compact)) }
                 #endif
             }
         } else {
@@ -139,9 +139,9 @@ struct CueWelcome: View {
 
     private func hostMenu(_ hosts: [CueSettings.Host], title: String, surface: ControlSurface) -> some View {
         CueHostMenu(hosts: hosts, use: .enable { enable(on: $0) }, accessibilityLabel: title) {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.glyph) {
                 Text(title)
-                Image(.expand).font(.footnote.weight(.semibold))
+                Chevron(.expand)
             }
             .modifier(surface)
         }

@@ -55,9 +55,9 @@ struct CueHostSetting: View {
 
     var body: some View {
         CueHostMenu(hosts: hosts, use: .setting(running: running) { model.choose($0, services) }, accessibilityLabel: CueSettings.hostTitle) {
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.tight) {
                 Text(CueSettings.shown(running, in: hosts)).lineLimit(1)
-                Image(.expand).font(.footnote.weight(.semibold))
+                Chevron(.expand)
             }
             .foregroundStyle(palette.ink2)
         }

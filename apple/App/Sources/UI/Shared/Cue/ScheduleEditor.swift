@@ -70,7 +70,7 @@ struct ScheduleDraft: Equatable {
 }
 
 /// 原地改一条定时（任务气泡里点"改"、定时页里改一条或点新定时的几点）：同一块原地展开，不另开一页。
-/// 从上到下：标题"定时"与取消、好；改的是哪一条；一次｜每天｜每周｜每月；按它选哪天（每周几、每月几号、一次的日期）；几点；
+/// 从上到下：标题"定时"与取消、好（主按钮）；改的是哪一条；一次｜每天｜每周｜每月（`PaneSegment`）；按它选哪天（每周几一排胶囊、每月几号、一次的日期）；几点；
 /// 最下面一行写改完的下一次在哪台 Mac 上（定时到点由那台 Mac 上的 Cue 开工），已有的定时右边是"不再定时"。
 struct ScheduleEditor: View {
     let text: String
@@ -91,22 +91,18 @@ struct ScheduleEditor: View {
                 Label("定时", icon: .schedule).font(BubbleMetrics.strong).foregroundStyle(palette.ink)
                 Spacer(minLength: 8)
                 Button("取消", action: cancel).buttonStyle(PressStyle(.inline)).foregroundStyle(palette.ink2)
-                Button(action: save) {
-                    Text("好").font(BubbleMetrics.meta.weight(.semibold)).foregroundStyle(palette.onFill)
-                        .padding(.horizontal, 14).frame(height: BubbleMetrics.capsule)
-                        .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
-                }
-                .buttonStyle(PressStyle())
-                .disabled(!savable || !draft.valid())
-                .opacity(savable && draft.valid() ? 1 : ControlMetrics.disabledOpacity)
+                Button("好", action: save)
+                    .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
+                    .disabled(!savable || !draft.valid())
             }
             if !text.isEmpty {
                 Text(verbatim: text).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(2)
             }
-            Picker("重复", selection: $draft.cycle) {
-                ForEach(ScheduleDraft.Cycle.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented).labelsHidden()
+            PaneSegment(items: ScheduleDraft.Cycle.allCases.map { .init(value: $0, title: $0.title) }, selection: draft.cycle) { draft.cycle = $0 }
+                .fixedSize()
+                .paneSlot(.compact)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("重复")
             day
             DatePicker("时刻", selection: $draft.date, displayedComponents: .hourAndMinute)
                 #if os(iOS)
@@ -129,7 +125,7 @@ struct ScheduleEditor: View {
         .background(palette.fill, in: Radius.nested)
     }
 
-    /// 选哪天：每周几一排圆钮（周一在前），每月几号一个菜单，一次的是日期；每天的没有这一行。
+    /// 选哪天：每周几一排胶囊（周一在前），每月几号一个菜单，一次的是日期；每天的没有这一行。
     @ViewBuilder private var day: some View {
         switch draft.cycle {
         case .daily: EmptyView()
@@ -153,11 +149,10 @@ struct ScheduleEditor: View {
     #endif
 }
 
-/// 每周几的一颗圆钮：选中的描一圈靛青、铺选中底，读屏念全名与选没选。
+/// 每周几的一颗胶囊（`chip`，七颗等宽铺满一排）：选中的是选中底、墨字半粗，读屏念全名与选没选。
 private struct WeekdayChip: View {
     let weekday: Int
     @Binding var days: Set<Int>
-    @Environment(\.palette) private var palette
 
     var body: some View {
         let on = days.contains(weekday)
@@ -165,11 +160,8 @@ private struct WeekdayChip: View {
             if on { days.remove(weekday) } else { days.insert(weekday) }
         } label: {
             Text(verbatim: Calendar.current.veryShortWeekdaySymbols[weekday - 1])
-                .font(BubbleMetrics.meta.weight(on ? .semibold : .regular))
-                .foregroundStyle(on ? palette.ink : palette.ink2)
-                .frame(maxWidth: .infinity).frame(height: BubbleMetrics.capsule)
-                .background(on ? palette.selection : palette.fill, in: .circle)
-                .contentShape(.circle)
+                .frame(maxWidth: .infinity)
+                .chip(on: on, size: .compact)
         }
         .buttonStyle(PressStyle())
         .accessibilityLabel(Calendar.current.weekdaySymbols[weekday - 1])
