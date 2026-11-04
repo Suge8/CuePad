@@ -26,6 +26,7 @@ extension CueKeeper {
                 input.yield(.kick)
                 return
             }
+            if let shift, shift.turn != nil, try await !tellRules(shift) { return }
             let pending = ready(try await store.cueMessagesToDeliver())
             if !pending.isEmpty {
                 if case .restarting(let failures, _, _) = phase { await startShift(failures: failures) }
@@ -137,6 +138,29 @@ extension CueKeeper {
     private func outworn(_ shift: Shift) async throws -> Bool {
         if shift.retiring { return true }
         return try await CueMemoryView(store.cueMemory()).pinned.map(\.line.id) != shift.pinned
+    }
+
+    /// 一轮在跑时一直记着的变了：当场插一句给在跑的大脑（同插进来的你的话），这一轮接下来的动作就照新的；系统提示等这一轮做完换班次时跟上（`outworn`）。
+    /// 一轮里每个大脑事件都对一次账：记忆的版本没变不读记忆。插不进去按大脑出了问题处理，返回 false。
+    private func tellRules(_ shift: Shift) async throws -> Bool {
+        let version = try await store.cueMemoryVersion()
+        guard version != shift.memory else { return true }
+        updateShift { $0.memory = version }
+        let memory = CueMemoryView(try await store.cueMemory())
+        let pinned = memory.pinned.map(\.line.id)
+        guard pinned != shift.told else { return true }
+        let note = "一直记着的刚变了，这一轮接下来照这份做（盖过系统提示里那一节）：\n" + memory.pinnedText
+        do {
+            try await shift.brain.send(note, images: [])
+        } catch {
+            await broke(ShownText("发不进去：\(ShownText(error).embedded)"))
+            return false
+        }
+        updateShift {
+            $0.told = pinned
+            $0.turn?.round.sent.append(note)
+        }
+        return true
     }
 
     /// 他发起的一轮停下当场留给他回（`CueStore.leaveHisStops`），留了就立即上传：手机上马上进等你。

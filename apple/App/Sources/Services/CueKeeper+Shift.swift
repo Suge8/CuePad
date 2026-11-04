@@ -34,7 +34,7 @@ extension CueKeeper {
                 tools: ["--wait", "\(setup.timing.sayWait)"])
             shifts += 1
             let id = shifts, input = input
-            phase = .running(Shift(id: id, brain: brain, pinned: memory.pinned.map(\.line.id), failures: failures))
+            phase = .running(Shift(id: id, brain: brain, pinned: memory.pinned.map(\.line.id), told: memory.pinned.map(\.line.id), failures: failures))
             Task { for await event in brain.events { input.yield(.brain(id, event)) } }
             Self.log.notice("Cue 第 \(id) 个班次开始（\(runtime.rawValue, privacy: .public)）")
         } catch {

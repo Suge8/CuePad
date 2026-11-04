@@ -32,11 +32,19 @@ nonisolated final class FakeModel: Sendable {
     var tidyAsks: Int { pinnedShown.withLock { $0 } }
     /// 不回的请求的连接：留着，免得释放时断开
     private let hung = Mutex<[NWConnection]>([])
+    /// 先不回、等 `release()` 再回一句话的请求（这一轮停在模型那里，测试趁这时改库）
+    private let held = Mutex<[(NWConnection, String)]>([])
+    var holding: Bool { held.withLock { !$0.isEmpty } }
+    func release() {
+        let replies = held.withLock { held in defer { held = [] }; return held }
+        for (connection, text) in replies { send(connection, .delta(["role": "assistant", "content": text], finish: "stop")) }
+    }
 
     private enum Reply {
         case delta([String: Any], finish: String)
         case error(String)
         case hang
+        case hold(String)
     }
 
     init(usage: Int, failingOnce: [String] = [], asksOnEnable: Bool = false) throws {
@@ -107,6 +115,7 @@ nonisolated final class FakeModel: Sendable {
         let delta: [String: Any], finish: String
         switch reply {
         case .hang: return hung.withLock { $0.append(connection) }
+        case .hold(let text): return held.withLock { $0.append((connection, text)) }
         case .error(let message):
             let json = String(decoding: try! JSONSerialization.data(withJSONObject: ["error": ["message": message, "type": "invalid_request_error"]]), as: UTF8.self)
             let out = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(json.utf8.count)\r\nConnection: close\r\n\r\n" + json
@@ -176,6 +185,9 @@ nonisolated final class FakeModel: Sendable {
             if let view = text.firstMatch(of: /<view>[\s\S]*<\/view>/)?.0, let code = view.firstMatch(of: /暗号是 (\S+)/)?.1 { return say("从视图接上：暗号是 \(code)") }
             return say("不记得暗号")
         }
+        // 一轮里插进来的新规矩（`CueKeeper.tellRules`）：照它答
+        if text.contains("一直记着的刚变了") { return say("这一轮照新规矩：" + text) }
+        if last["role"] as? String == "user", text.contains("请等我放行") { return .hold("先这样") }
         // 问规矩：照这次请求的系统提示里一直记着的那一节答（在系统提示末尾）
         if text.contains("一直记着什么") {
             let messages = request["messages"] as? [[String: Any]] ?? []

@@ -36,6 +36,9 @@ extension CueKeeper {
         let brain: any HostedSession
         /// 起它时系统提示里一直记着的那几条：变了就在下一轮前换班次（`outworn`）
         let pinned: [UUID]
+        /// 这个大脑此刻知道的一直记着的那几条（系统提示里的，或一轮里插给它的，`tellRules`）与据以核对的记忆版本
+        var told: [UUID]
+        var memory: CueMemoryVersion?
         /// 这个大脑的会话已经接上（第一条输入带过视图）；没有时下一次醒来带上
         var primed = false
         let startedAt = Date.now
