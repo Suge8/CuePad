@@ -319,7 +319,7 @@ private struct ConflictsRow: View {
                 Text(Dotted(version.label, DateLabel.short(version.card.modifiedAt))).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
                 Spacer()
                 Button(SyncChoices.keep) { choices.keep(version.keep, of: conflict, services) }
-                    .settingButton()
+                    .buttonStyle(ControlButtonStyle(size: .compact))
                     .disabled(choices.working)
             }
             Text(Outgoing.text(of: version.card)).font(Typography.secondary).foregroundStyle(palette.ink2)

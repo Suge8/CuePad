@@ -266,17 +266,16 @@ struct SetupPanel: View {
         }
     }
 
-    /// 与设置窗口的分组同一种样子：纸色圆角底，行间一条细线。
+    /// 与设置窗口的分组同一种纸色圆角底。
     private func group(@ViewBuilder _ rows: () -> some View) -> some View {
         VStack(spacing: 0) {
             Group(subviews: rows()) { subviews in
                 ForEach(subviews) { row in
                     row.padding(.horizontal, 12).padding(.vertical, 9)
-                    if row.id != subviews.last?.id { Divider().padding(.leading, 12) }
                 }
             }
         }
-        .background(palette.paper, in: .rect(cornerRadius: Radius.block))
+        .rowPaper(cornerRadius: Radius.block)
     }
 }
 

@@ -70,7 +70,7 @@ private struct VariablesChip: View {
                     .foregroundStyle(card.variableValues[names[0]]?.isEmpty == false ? palette.ink : palette.ink2)
                     .lineLimit(1)
                 if names.count > 1 { Text("+\(names.count - 1)").foregroundStyle(palette.ink2) }
-                Image(.expand).font(Glyph.mark).foregroundStyle(palette.ink2).accessibilityHidden(true)
+                Chevron(.expand).foregroundStyle(palette.ink2)
             }
             .font(Typography.secondary.weight(.medium))
             .padding(.horizontal, 14).frame(height: 44)
@@ -79,7 +79,7 @@ private struct VariablesChip: View {
         }
         .buttonStyle(PressStyle())
         .glass(in: .capsule, interactive: true)
-        .popover(isPresented: $editing, arrowEdge: .top) { VariablesForm(card: card, names: names) { editing = false } }
+        .bubble(isPresented: $editing) { VariablesForm(card: card, names: names) { editing = false } }
         .help("变量取值")
         .accessibilityLabel("变量取值，共 \(names.count) 个")
     }

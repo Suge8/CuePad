@@ -27,7 +27,7 @@ struct SyncRow: View {
         ) {
             if services.canSyncNow {
                 Button("立即同步") { Task { await services.syncNow() } }
-                    .settingButton()
+                    .buttonStyle(ControlButtonStyle(size: .compact))
                     .disabled(services.isSyncingNow)
             }
         } fix: {
@@ -94,7 +94,7 @@ struct SyncRow: View {
         VStack(alignment: .leading, spacing: 4) {
             // 会删东西的那颗字用胭脂，与确认框里同一颗一致
             Button(action: action) { Text(choice.title).foregroundStyle(destructive ? palette.failure : primary ? palette.onFill : palette.ink) }
-                .settingButton(primary: primary)
+                .buttonStyle(ControlButtonStyle(kind: primary ? .primary : .secondary, size: .compact))
             Text(choice.consequence).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
         }
     }

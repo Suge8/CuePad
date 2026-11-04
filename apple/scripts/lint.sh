@@ -70,7 +70,6 @@ forbid "投影只经 elevation 的几档（Theme/Surfaces.swift 的 Elevation，
 forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（.caption、.footnote、Font.subheadline…）：它们编进 Mac 是系统的小号（.caption、.footnote 10 点），低于 Mac 的 12 点下限；iOS 缺的角色在 Typography 里按用途加。扩展（Widget）里没有 Typography，例外" \
   '(?:\.font\(\s*\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\bFont\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\.system\(\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b)' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/**' \
-  'App/Sources/UI/Shared/Components/LastCrashRow.swift' \
   'App/Sources/UI/Shared/Components/ProjectScope.swift' \
   'App/Sources/UI/Shared/Components/RowActions.swift' \
   'App/Sources/UI/Shared/Components/TaskNextMark.swift' \
@@ -80,7 +79,6 @@ forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（
   'App/Sources/UI/Shared/Library/LibraryFileParts.swift' \
   'App/Sources/UI/Shared/Library/LibrarySections.swift' \
   'App/Sources/UI/Shared/Library/SkillSection.swift' \
-  'App/Sources/UI/Wide/WideDrop.swift' \
   'App/Sources/UI/iOS/Activity/NewSessionInput.swift' \
   'App/Sources/UI/iOS/Activity/SessionScreen.swift' \
   'App/Sources/UI/iOS/Home/ShelfScreen.swift' \
@@ -98,8 +96,7 @@ forbid "小东西冒出来、收回去用 Motion.pop（AppGroup/Motion.swift）�
   'App/Sources/UI/Shared/Cue/CueDot.swift'
 forbid "Mac 主窗口里从控件弹出的说明与小表单用 bubble(isPresented:) 或 HelpButton，不用系统 popover：它另起一扇窗，第一次弹 85～113ms，开着时主窗口的快捷键不响应（docs/layout.md）；设置窗口与只编进 iOS 的文件例外" \
   '\.popover\(' 'App/Sources/UI/iOS/**' '**/*+iOS.swift' 'App/Sources/UI/macOS/Settings/**' 'App/Sources/UI/Debug/**' \
-  'App/Sources/UI/Shared/Cue/CueListPanel.swift' \
-  'App/Sources/UI/macOS/Editor/CardEditorBar.swift'
+  'App/Sources/UI/Shared/Cue/CueListPanel.swift'
 forbid "色值只在色板（AppGroup/Palette.swift）：界面取 palette 的令牌，新颜色先进色板、定语义名与浅深两档，一样东西只有一份颜色" \
   '\b(?:Color|UIColor|NSColor|CGColor)\(\s*(?:hex|red|white|hue|srgbRed|calibratedRed|displayP3Red|deviceRed|calibratedWhite)\s*:' \
   'App/AppGroup/Palette.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
