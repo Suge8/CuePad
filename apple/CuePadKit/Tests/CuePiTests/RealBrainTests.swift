@@ -176,8 +176,8 @@ struct RealBrainTests {
         }
     }
 
-    /// 这一轮唯一的一次请求模型还在飞时再说一句：收下它的那一轮照它回答（Claude Code 在这一轮收尾后另开一轮收下，Codex、Grok 在这一轮里
-    /// 再请求一次），收下（`received`）报在那一轮里，不记到只回答了第一句的那一轮上；每句话只收下一次。
+    /// 这一轮唯一的一次请求模型还在飞时再说一句：收下它的那一轮照它回答（Claude Code 在这一轮收尾后另开一轮收下，Codex 在这一轮里
+    /// 再请求一次，Grok 等排着的第一句跑起来再插进这一轮），收下（`received`）报在那一轮里，不记到只回答了第一句的那一轮上；每句话只收下一次。
     /// dsh 不在其中：它的录像带要 DeepSeek 的 key 才录得了（`RealAgents`）。
     @Test(arguments: runtimes.filter { $0 != .dsh }) func aMessageSentDuringTheLastRequestIsReceivedByTheTurnThatAnswersIt(_ runtime: AgentKind) async throws {
         AgentTape.use(runtime)

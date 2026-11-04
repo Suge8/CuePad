@@ -6,7 +6,8 @@ import Foundation
 /// 当 Cue 的大脑开（`init(dialect:)` 再 `start`）：不挂桥、不进会话列表，一轮的状态与托管会话同一套，经 `events` 交出。
 /// 系统提示、工具白名单与不落会话这些标准没有的配法在各家（`ACPDialect.brain`）；CuePad 的 MCP 服务照标准随 `session/new` 交（stdio）。
 /// - 会话开好、CuePad 的 MCP 服务连上之后才算起好（`ACPDialect.connectsMCPLater` 的那几家等它报），之前说的话模型用不了它的工具；
-/// - 正忙时说的话经各家并进这一轮（`ACPDialect.steer`，只并进 CuePad 开的那一轮），做不到的等这一轮做完再开新的一轮；他的话以 `/` 开头时前面垫一个空格，
+/// - 正忙时说的话经各家并进这一轮（`ACPDialect.steer`，只并进 CuePad 开的那一轮；排进 Agent 队列的那一轮等它报跑起来再并进，`ACPDialect.queuesPrompts`），
+///   做不到的等这一轮做完再开新的一轮；他的话以 `/` 开头时前面垫一个空格，
 ///   不被当成斜杠命令。哪一轮收下：以它开的那一轮（`session/prompt` 就是这一轮）；并进的按各家报的（`ACPSteers`）；
 /// - 开新会话是另开一个 `session/new`（进程与 MCP 服务的配置不变），就地换过的模型与强度随后再交一次。
 extension ACPSession: HostedSession {
@@ -37,16 +38,18 @@ extension ACPSession: HostedSession {
         try await mcpReady(within: AgentTimeouts.launch)
     }
 
-    /// 插不进这一轮的等它做完再开一轮：一轮结束时 Agent 可能当场接着自己开一轮（Grok 的搁浅插话），醒来再看一次。
+    /// 插不进这一轮时等它变了再看：排着的那一句跑起来了就并进；做完了开新的一轮——一轮结束时 Agent 可能当场接着自己开一轮
+    /// （Grok 的搁浅插话），那就等它也做完。
     func send(_ text: String, images: [PiImage], id: UUID) async throws {
         let text = text.hasPrefix("/") ? " " + text : text
         while facts.running {
+            let connection = try live
             guard let sessionID else { throw HostedSessionError.notRunning }
-            if steerable, let steer = try await dialect.steer(text, images: images, session: sessionID, on: live) {
+            if steerable, let steer = try await dialect.steer(text, images: images, session: sessionID, on: connection) {
                 if let taken = steers.add(id, text: text, claim: steer.claim) { emit(.received(taken)) }
                 return
             }
-            await untilFinished()
+            await nextChange()
         }
         try prompt(ACPContent.prompt(text: text, images: images))
         emit(.received(id))

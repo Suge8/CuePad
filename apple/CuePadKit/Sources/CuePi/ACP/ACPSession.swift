@@ -56,8 +56,8 @@ final class ACPSession {
     private var draft: DraftParts?
     /// 停下这一轮后它的结束不算出错
     private var stopping = false
-    /// 等这一轮结束的；进程退出时也放行
-    private var closing: [CheckedContinuation<Void, Never>] = []
+    /// 等这一轮变化的（排着的那一句跑起来、这一轮结束）；进程退出时也放行
+    private var waiting: [CheckedContinuation<Void, Never>] = []
     private var loading = false
     /// CuePad 的 MCP 服务连上没有（`ACPDialect.connectsMCPLater`）：nil 是这个会话还没报
     private var mcp: Result<Void, HostedSessionError>?
@@ -160,7 +160,7 @@ final class ACPSession {
 
     // MARK: 一轮
 
-    /// 以这句开一轮（不等模型）：回应到了这一轮结束。
+    /// 以这句开一轮（不等模型）：读到回应的那一刻这一轮结束，之后读到的通知归下一轮。
     func prompt(_ blocks: [JSONValue], deliveryID: String? = nil) throws {
         let connection = try live
         guard let sessionID else { throw HostedSessionError.notRunning }
@@ -169,16 +169,11 @@ final class ACPSession {
         let mine = begin()
         prompted = mine
         promptRunning = !dialect.queuesPrompts
-        Task { [weak self] in
-            do {
-                try await connection.call("session/prompt", .object(params), timed: false)
-                self?.finish(mine, failure: nil)
-            } catch ACPError.closed {
-                // 进程退出：由 `ended` 收尾
-            } catch ACPError.server(_, let message) {
-                self?.finish(mine, failure: message)
-            } catch {
-                self?.finish(mine, failure: error.localizedDescription)
+        connection.request("session/prompt", .object(params)) { [weak self] reply in
+            switch reply {
+            case .success: self?.finish(mine, failure: nil)
+            case .failure(.server(_, let message)): self?.finish(mine, failure: message)
+            case .failure: break  // 进程退出：由 `ended` 收尾
             }
         }
     }
@@ -195,10 +190,16 @@ final class ACPSession {
     /// 在跑的是 CuePad 开的那一轮：插话只并进它（Agent 自己开的一轮各家不保证收下，等它做完再开）
     var steerable: Bool { facts.running && prompted == turn && promptRunning }
 
-    /// 等这一轮结束（没在跑立即返回）。
+    /// 等这一轮结束（没在跑立即返回，进程退出时也返回）。
     func untilFinished() async {
-        guard facts.running else { return }
-        await withCheckedContinuation { closing.append($0) }
+        let current = turn
+        while turn == current, facts.running, connection?.isClosed == false { await nextChange() }
+    }
+
+    /// 等这一轮变一次：排着的那一句跑起来、这一轮结束，或进程退出；没在跑或进程已退出时立即返回。
+    func nextChange() async {
+        guard facts.running, connection?.isClosed == false else { return }
+        await withCheckedContinuation { waiting.append($0) }
     }
 
     private func begin() -> Int {
@@ -240,8 +241,8 @@ final class ACPSession {
     }
 
     private func release() {
-        closing.forEach { $0.resume() }
-        closing = []
+        waiting.forEach { $0.resume() }
+        waiting = []
     }
 
     /// 没答的作废（`ACPAsk.withdrawn`）。
@@ -307,7 +308,12 @@ final class ACPSession {
     private func apply(_ signal: ACPSignal) {
         switch signal {
         case .turnStarted:
-            if !facts.running { _ = begin() } else if prompted == turn { promptRunning = true }
+            if !facts.running {
+                _ = begin()
+            } else if prompted == turn, !promptRunning {
+                promptRunning = true
+                release()
+            }
         case .turnFinished(let failure):
             guard facts.running, prompted == turn else { return finish(nil, failure: failure) }
             // 它已不再收插话：之后的话等回应结束这一轮再开新的一轮
