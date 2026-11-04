@@ -72,19 +72,12 @@ forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/**' \
   'App/Sources/UI/Shared/Components/BoardLane.swift' \
   'App/Sources/UI/Shared/Components/CaptureComposer.swift' \
-  'App/Sources/UI/Shared/Components/CardPicker.swift' \
-  'App/Sources/UI/Shared/Components/ChatFollow.swift' \
-  'App/Sources/UI/Shared/Components/ChatScrubber.swift' \
-  'App/Sources/UI/Shared/Components/Composer+Attachments.swift' \
-  'App/Sources/UI/Shared/Components/Deliverables.swift' \
-  'App/Sources/UI/Shared/Components/FileChip.swift' \
   'App/Sources/UI/Shared/Components/FloatingHeader.swift' \
   'App/Sources/UI/Shared/Components/LastCrashRow.swift' \
   'App/Sources/UI/Shared/Components/NewTaskField.swift' \
   'App/Sources/UI/Shared/Components/Panes.swift' \
   'App/Sources/UI/Shared/Components/ProjectScope.swift' \
   'App/Sources/UI/Shared/Components/RowActions.swift' \
-  'App/Sources/UI/Shared/Components/SessionDock.swift' \
   'App/Sources/UI/Shared/Components/TaskBubble.swift' \
   'App/Sources/UI/Shared/Components/TaskMetrics.swift' \
   'App/Sources/UI/Shared/Components/TaskNextMark.swift' \
@@ -115,9 +108,7 @@ forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（
 forbid "小东西冒出来、收回去用 Motion.pop（AppGroup/Motion.swift）：从 0.9 长到原大并淡入，减弱动态效果时只淡；各处写的 .scale 起点不一（0、0.6），从 0 长读作跳出来" \
   '(?:\.transition\(\s*|\bAnyTransition)\.scale\b' 'App/AppGroup/Motion.swift' \
   'App/AppGroup/CueNowViews.swift' \
-  'App/Sources/UI/Shared/Components/ChatFollow.swift' \
   'App/Sources/UI/Shared/Components/ChatScroll.swift' \
-  'App/Sources/UI/Shared/Components/Composer+Attachments.swift' \
   'App/Sources/UI/Shared/Components/Composer.swift' \
   'App/Sources/UI/Shared/Components/PiStateDot.swift' \
   'App/Sources/UI/Shared/Cue/CueDot.swift'

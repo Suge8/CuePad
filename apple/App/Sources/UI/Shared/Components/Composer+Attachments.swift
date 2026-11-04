@@ -9,7 +9,7 @@ extension Composer {
             ChoiceMenu.Choice(title: choice.title, image: .icon(choice.icon)) { source = choice.source }
         } : []
         return MenuButton(sections: [ChoiceMenu.Section(choices: cards + files)], press: .button, accessibilityLabel: "添加") {
-            CircleGlyph(fill: palette.fill) { Image(.add).font(.body.weight(.semibold)).foregroundStyle(palette.ink) }
+            CircleGlyph(fill: palette.fill) { Image(.add).font(Glyph.control.weight(.semibold)).foregroundStyle(palette.ink) }
                 .frame(width: ComposerMetrics.slot, height: buttonHeight)
         }
         .fixedSize()
@@ -66,13 +66,13 @@ extension Composer {
                         Button { draft.files.removeAll { $0 == file } } label: {
                             // 图上是压暗的底，文件牌上是纸色的叉落在二墨的圆上
                             Image(.clear).symbolRenderingMode(.palette)
-                                .foregroundStyle(file.isImage ? palette.onMedia : palette.paper, file.isImage ? palette.mediaScrim : palette.ink2).font(.body)
+                                .foregroundStyle(file.isImage ? palette.onMedia : palette.paper, file.isImage ? palette.mediaScrim : palette.ink2).font(Glyph.control)
                                 .frame(width: 44, height: 44, alignment: .topTrailing)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(file.isImage ? "移除这张图片" : "移除这个文件")
                     }
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    .modifier(AttachmentPop())
                 }
             }
         }
@@ -103,6 +103,14 @@ extension Composer {
         drop(outbox)
         previewing = nil
         focus.wrappedValue = true
+    }
+}
+
+private struct AttachmentPop: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.transition(Motion.pop(reduceMotion: reduceMotion))
     }
 }
 

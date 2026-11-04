@@ -207,7 +207,7 @@ struct DeliverableTile: View {
                 } else if file == nil {
                     // 还没到本机：点名的图没有下面那行字，传了几成、怎么取写在画面上
                     VStack(spacing: 3) {
-                        Image(.downloading).font(.callout)
+                        Image(.downloading).font(Glyph.control)
                         Text(verbatim: services.awayLine(preview.key)).font(Typography.caption).monospacedDigit().multilineTextAlignment(.center)
                     }
                     .padding(.horizontal, 6)
@@ -216,7 +216,7 @@ struct DeliverableTile: View {
                 } else {
                     // 画面出得慢（或这种文件没有画面）：写它是什么
                     VStack(spacing: 4) {
-                        Image(kindIcon).font(radius < Radius.block ? .callout : .title2)
+                        Image(kindIcon).font(radius < Radius.block ? Glyph.control : Glyph.large)
                         if preview.kind == .audio, let detail = shown?.detail { Text(detail).font(Typography.caption).monospacedDigit() }
                     }
                     .foregroundStyle(palette.ink3)
@@ -225,7 +225,7 @@ struct DeliverableTile: View {
             }
             .overlay(alignment: .bottomLeading) {
                 if preview.kind == .video, shown?.image != nil {
-                    Image(.play).font(.caption.weight(.bold)).foregroundStyle(palette.onMedia)
+                    Image(.play).font(Glyph.small.weight(.bold)).foregroundStyle(palette.onMedia)
                         .padding(7).background(palette.mediaScrim, in: .circle).padding(8)
                 }
             }
