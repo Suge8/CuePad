@@ -34,7 +34,7 @@ extension CueKeeper {
     struct Shift {
         let id: Int
         let brain: any HostedSession
-        /// 起它时系统提示里一直记着的那几条：换新时变了就换班次（`renewDue`）
+        /// 起它时系统提示里一直记着的那几条：变了就在下一轮前换班次（`outworn`）
         let pinned: [UUID]
         /// 这个大脑的会话已经接上（第一条输入带过视图）；没有时下一次醒来带上
         var primed = false

@@ -17,10 +17,10 @@ extension CueKeeper {
             let store = self.store, now = Date.now
             let profile = try await store.cueProfile() ?? CueProfile()
             await follow(BrainSettings(profile))
-            // 要换的班次（工具服务没了、换了 Agent），或该换新了、一直记着的又变过（系统提示跟上）：换个班次，再接着对账。
-            // 在交你的话之前：退回的话要交给新的大脑
-            if let shift, shift.turn == nil, try await outworn(shift, now: now) {
-                Self.log.notice("Cue 换个班次（\(shift.retiring ? "这个大脑不能接着用" : "换新时一直记着的变了", privacy: .public)）")
+            // 要换的班次（工具服务没了、换了 Agent），或一直记着的变过（系统提示跟上）：换个班次，再接着对账。
+            // 在交你的话之前：退回的话要交给新的大脑，你改过规矩之后的话按新规矩答
+            if let shift, shift.turn == nil, try await outworn(shift) {
+                Self.log.notice("Cue 换个班次（\(shift.retiring ? "这个大脑不能接着用" : "一直记着的变了", privacy: .public)）")
                 await shift.brain.stop()()
                 await startShift()
                 input.yield(.kick)
@@ -132,10 +132,10 @@ extension CueKeeper {
         }
     }
 
-    /// 这个班次不接着用了：要换的（`Shift.retiring`），或该换新了、一直记着的又变过。
-    private func outworn(_ shift: Shift, now: Date) async throws -> Bool {
+    /// 这个班次不接着用了：要换的（`Shift.retiring`），或一直记着的（在系统提示里）在它起来后变过（钉上、取消、忘掉）。
+    /// 规矩一变下一轮就换，不等换新：照旧的系统提示接着跑，他刚立的规矩要到缓存过期才生效，这之间 Cue 会照旧规矩动手；一直记着的很少变，换一次的开销可以不计。
+    private func outworn(_ shift: Shift) async throws -> Bool {
         if shift.retiring { return true }
-        guard shift.primed, renewDue(shift, now: now) else { return false }
         return try await CueMemoryView(store.cueMemory()).pinned.map(\.line.id) != shift.pinned
     }
 

@@ -176,6 +176,12 @@ nonisolated final class FakeModel: Sendable {
             if let view = text.firstMatch(of: /<view>[\s\S]*<\/view>/)?.0, let code = view.firstMatch(of: /暗号是 (\S+)/)?.1 { return say("从视图接上：暗号是 \(code)") }
             return say("不记得暗号")
         }
+        // 问规矩：照这次请求的系统提示里一直记着的那一节答（在系统提示末尾）
+        if text.contains("一直记着什么") {
+            let messages = request["messages"] as? [[String: Any]] ?? []
+            let system = messages.first { $0["role"] as? String == "system" }?["content"] as? String ?? ""
+            return say("一直记着：" + (system.components(separatedBy: "# 一直记着\n").last ?? ""))
+        }
         // 问额度：照信封里吃紧的那几行答
         if text.contains("额度吃紧吗") { return say(text.firstMatch(of: /额度吃紧：\n(- [^\n]*\n)+/).map { String($0.0) } ?? "额度不吃紧") }
         if last["role"] as? String == "tool" {

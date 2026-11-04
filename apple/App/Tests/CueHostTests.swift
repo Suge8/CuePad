@@ -90,6 +90,20 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// 你在记忆里把一条改成一直记着：Cue 下一轮就照它（系统提示跟上，不等换新）。
+    @Test func 改了一直记着的规矩_下一轮就照新规矩() async throws {
+        let rig = try await Rig()
+        try await rig.say("你好")
+        try await rig.message(.cue, containing: "收到：你好")
+        let line = try await rig.store.noteCueLine("推送前先问我", source: .you).line
+        Workspace(services: rig.services).pinCueLine(line.id, true)
+        try await eventually("钉上了") { try await rig.store.cueMemory().lines.contains { $0.id == line.id && $0.pinned } }
+        try await rig.say("一直记着什么")
+        let answer = try await rig.message(.cue, containing: "一直记着：")
+        #expect(answer.text.contains("推送前先问我"))
+        await rig.stop()
+    }
+
     /// 额度只看 Cue 运行的这台 Mac（额度各台各登各的）：别的 Mac 上吃紧的账号不写进信封，这台的照写。
     @Test func 信封里的额度只写这台Mac的() async throws {
         let rig = try await Rig()
