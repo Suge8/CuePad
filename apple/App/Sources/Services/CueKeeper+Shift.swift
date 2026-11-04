@@ -64,20 +64,13 @@ extension CueKeeper {
         switch phase {
         case .starting(let before): failures = before + 1
         case .running(let shift):
-            let failure = shift.turn?.round.failure ?? reason.text
             if var round = shift.turn?.round {
-                round.failure = failure
+                round.failure = round.failure ?? reason.text
                 archive(round)
-                retrying = failure
+                retrying = round.failure
             }
             await shift.brain.stop()()
             speech.offer(nil)
-            // 这一轮已换了 Agent（`Turn.replay`）：这个大脑之后的出错不再换、不再说，这一轮照样交给新的那家马上重来
-            if let turn = shift.turn, turn.replay {
-                await replay(turn, failure: failure)
-                phase = .restarting(failures: 0, reason: reason, at: .now)
-                return
-            }
             if let delivered = shift.turn?.delivered, !delivered.isEmpty {
                 do {
                     try await store.unmarkCueMessagesDelivered(delivered)
@@ -125,8 +118,6 @@ extension CueKeeper {
         case .failed(let raw):
             updateShift { $0.turn?.round.failure = raw }
             trouble = CueHealth.Failure(at: .now, text: raw)
-            // 这一轮已换了 Agent：同一个大脑再报的错不再换、不再说
-            if turn?.replay == true { return }
             // 额度、登录卡住且换得了 Agent：只说换到了哪，这一轮交给新的大脑重来（`Turn.replay`）
             if let switched = await failOver(raw) {
                 updateShift {
