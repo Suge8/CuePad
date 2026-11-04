@@ -82,6 +82,7 @@ final class ScriptedSession {
     func ask(said: String, question: String, options: [String], rig: CueHostTests.Rig) async throws {
         try await working(rig)
         append(.pi, said)
+        try await rig.app.historyRead(id)
         try await rig.store.writePiTranscript(PiTranscript(sessionID: id, messages: messages, recap: PiRecap(pendingPrompt: oneLine(lastPrompt))))
         session.sendInfo(["question": ["id": "q\(messages.count)", "kind": "select", "text": question, "options": options]])
         session.setState(["kind": "waiting_user", "title": question])
