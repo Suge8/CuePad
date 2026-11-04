@@ -50,7 +50,7 @@ struct NavTriple: View {
             Text(title).font(PaneMetrics.font).lineLimit(1)
                 .padding(.horizontal, PaneMetrics.padding)
                 .frame(maxHeight: .infinity)
-                .foregroundStyle(on ? palette.signature : palette.ink2)
+                .foregroundStyle(on ? palette.ink : palette.ink2)
                 .background(on ? palette.selection : .clear, in: .capsule)
                 .contentShape(.capsule)
         }
@@ -155,7 +155,7 @@ struct ScopePiece: View {
     }
 }
 
-private struct ScopeButton: View {
+struct ScopeButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -176,6 +176,144 @@ private struct ScopeButton: View {
         .menuStyle(.button)
         .buttonStyle(ControlButtonStyle(kind: .circular))
         .accessibilityLabel(Text(current.map { "项目范围：\($0.shownName)" } ?? String(localized: "项目范围：全部项目")))
+    }
+}
+
+/// 方案 1 之上，侧栏那一排的摆法（`-CuePadBar a|b`，只在 `-CuePadNav one` 下起作用）：项目｜进展在正中，两侧各放同样多的圆钮、贴边对齐，都只画图标。
+/// a：两侧各一颗，左搜索、右 Cue 头像，换段时这一排一点不变；新建项目是项目列表末尾一行，项目范围是看板顶上一行。
+/// b：两侧各两颗，左搜索与这一段的低频（项目段新建项目、进展段项目范围），右额度与 Cue 头像；内容里不放操作。
+enum BarVariant: String {
+    case a, b
+
+    static let current = NavVariant.current == .one ? DebugHooks.preset.bar : nil
+}
+
+/// 正中一组分段、两侧各 `count` 颗圆钮的一排：两侧按同样的宽占位（多颗时按 `count` 算），分段在两侧之间居中，放不下带字时只画图标。
+struct CenteredBar: View {
+    let variant: BarVariant
+    @Environment(Workspace.self) private var workspace
+
+    private var count: Int { variant == .a ? 1 : 2 }
+    private var side: CGFloat { CGFloat(count) * FloatingHeaderLayout.height + CGFloat(count - 1) * Self.gap }
+    private static let gap: CGFloat = 6
+
+    var body: some View {
+        HStack(spacing: Self.gap) {
+            HStack(spacing: Self.gap) {
+                circle("搜索", icon: .search) { workspace.openSearch() }
+                if variant == .b { paneTool }
+            }
+            .frame(width: side, alignment: .leading)
+            ViewThatFits(in: .horizontal) {
+                panes(titles: true)
+                panes(titles: false)
+            }
+            .frame(maxWidth: .infinity)
+            HStack(spacing: Self.gap) {
+                if variant == .b { QuotaButton() }
+                HeadCue()
+            }
+            .frame(width: side, alignment: .trailing)
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(ControlButtonStyle(kind: .circular))
+        .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+        .padding(.horizontal, FloatingHeaderLayout.margin)
+    }
+
+    private func panes(titles: Bool) -> some View {
+        PaneSegment(
+            items: [.init(value: NavigationPane.projects, title: "项目", icon: .projects), .init(value: .progress, title: "进展", icon: .task)],
+            selection: workspace.navigationPane, titles: titles, select: workspace.selectPane)
+            .frame(height: FloatingHeaderLayout.height - PaneMetrics.inset * 2)
+            .padding(PaneMetrics.inset)
+            .glass(in: .capsule, interactive: true)
+            .fixedSize()
+    }
+
+    @ViewBuilder private var paneTool: some View {
+        switch workspace.navigationPane {
+        case .projects: circle("新建项目", icon: .newProject) { workspace.projectForm = .init() }
+        case .progress: ScopeButton()
+        }
+    }
+
+    private func circle(_ title: LocalizedStringResource, icon: Icon, action: @escaping () -> Void) -> some View {
+        Button(title, icon: icon, action: action).help(Text(title))
+    }
+}
+
+/// 回 Cue 的头像圆钮（同 `NarrowSidebarBar` 右边那一颗）。
+private struct HeadCue: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        Button { workspace.select(.cue) } label: {
+            CueAvatar(workspace.cue.beat, size: .row)
+                .relaySpot(cue: .entry)
+                .frame(width: FloatingHeaderLayout.height, height: FloatingHeaderLayout.height)
+        }
+        .buttonStyle(ControlButtonStyle(kind: .circular))
+        .accessibilityLabel(workspace.cue.name)
+        .accessibilityIdentifier("narrow-cue")
+    }
+}
+
+/// b：额度一颗圆钮，里面是余量最紧的那个账号的环（同 `QuotaRings` 的环），点它弹出明细。
+/// PROTOTYPE：明细借系统弹出框（`popover`）；落地时从这颗钮长出 `GrowPanel`。
+private struct QuotaButton: View {
+    @Environment(AppServices.self) private var services
+    @State private var open = DebugHooks.preset.quotaOpen
+
+    var body: some View {
+        let quotas = services.accountQuotas.items
+        Button { open = true } label: {
+            Moments(next: quotas.nextReset(after:)) { now in
+                let first = quotas.lazy.compactMap { quota in quota.binding(at: now).map { (quota, QuotaMeter.Window($0, at: now)) } }.first
+                if let (quota, window) = first {
+                    ModelBadge(mark: PiProvider(id: quota.provider).mark, binding: window)
+                } else {
+                    Text("额度").font(.caption2.weight(.semibold))
+                }
+            }
+            .frame(width: FloatingHeaderLayout.height, height: FloatingHeaderLayout.height)
+        }
+        .accessibilityLabel(Text("额度"))
+        .help(Text("额度"))
+        .popover(isPresented: $open) {
+            QuotaDetail().padding(16).frame(width: 340).refreshesQuota().presentationCompactAdaptation(.popover)
+        }
+        .refreshesQuota()
+    }
+}
+
+/// a：看板顶上一行项目范围（看全部时"全部项目 ⌄"，选了写名字带 ✕），与看板的卡同一条左边。
+struct ScopeLine: View {
+    var body: some View {
+        HStack { ProjectScope(nameWidth: 200); Spacer(minLength: 0) }
+            .padding(.leading, BoardRowMetrics.lead - 14)
+            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+    }
+}
+
+/// a：项目列表末尾一行"新建项目"（同书架的行，`ShelfRow` 的高与左边）。
+struct NewProjectRow: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 17
+
+    var body: some View {
+        Button { workspace.projectForm = .init() } label: {
+            HStack(spacing: 12) {
+                Image(.add).font(.system(size: glyph)).frame(width: glyph + 6).accessibilityHidden(true)
+                Text("新建项目")
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(palette.ink2)
+            .padding(.horizontal, 16).frame(minHeight: 48)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.row)
     }
 }
 #endif

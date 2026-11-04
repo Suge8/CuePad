@@ -71,9 +71,71 @@
 - 深色、辅助字号、读屏、英文（方案 2 三段英文「Projects Board Sessions」在 402 宽可能放不下）、iPhone 横屏都没看。
 - 实拍：iPhone 17 浅色，iPad 窄窗 320、375 只拍了进展段顶上那一排。
 
+## 第二轮：选中态与侧栏那一排收口
+
+效果图：[摆法a.png](摆法a.png)（推荐）、[摆法b.png](摆法b.png)、[Mac选中.png](Mac选中.png)。两种摆法都在方案 1 之上（`-CuePadNav one -CuePadBar a|b`）。
+
+### 根因（核实过）
+
+选中态有三套实现，规则不一：
+
+1. **分段**（`PaneSegment`）：选中是胶囊淡底加靛青字。带字时每段按自己的字宽排（手机最窄 76），只画图标时是 38 的正圆，同一排里一扁一圆。
+2. **Mac 左栏项目、进展两行**（`WideRail.place`）：行只在左栏里让出 8，`RowStyle` 的底又向两边伸出 8，而这两行不在任何行容器里，按窗口算圆角下限——选中底贴到窗口左边沿；80 图标条同样贴边（`Mac选中.png` 的现状）。
+3. **会话格**（`SessionRail` 的纸里，`rowContainer(flush: true)`）：选中铺满纸宽、中间的行是直角，和上面两行的圆角、内缩都不同。
+
+另有几处开关自己画靛青选中字：搜索的筛选胶囊（手机 `FilterChip`、Mac `FilterCapsule`）、项目范围（`ProjectScope`）、定时的星期（还多一圈靛青描边）。`SearchEntry` 的 `selected`（靛青"搜索"）没有调用方，是死分支，已删。
+
+侧栏那一排：`BarRow` 两头先排定、中间的工具在空隙里居中，所以项目｜进展贴左、工具浮在中间、Cue 贴右，几块不对齐；搜索是带"搜索"两字的胶囊。
+
+### 统一规则（已写进 docs/ui.md「选中」与 `Rows.swift`、`PaneSegment` 的头注释）
+
+- 选中只有一套：中性淡底（`Palette.selection`）加墨字，字半粗；字与图标都不着靛青。靛青只留给焦点与在跑。
+- 形状按容器分两种，各一个出处：
+  - **玻璃里的分段**（`PaneSegment`）：每段等宽（按最宽那段）、同高胶囊，整组全带字或全只画图标，不混排。
+  - **列表行**（`RowStyle`、`row()`）：底与行容器同心、不越出栏边。会话条上项目与进展两行、各组的格、更早是同一种行容器：行左右各让出 `SessionRail.rowInset`（12），底比行宽 8、离栏边还留 4。宽版与 80 图标条同一套。
+- 低频操作只画图标，读屏名与悬停提示保留。
+
+原型里这几处已经按规则改了（不分变体，现状截图是改之前拍的）：分段、行容器、筛选胶囊、项目范围、星期、搜索入口。
+
+### 侧栏那一排的两种摆法
+
+项目｜进展都在正中、两段等宽，两侧圆钮数量对称、贴边对齐，都只画图标。
+
+| | 摆法 a（推荐） | 摆法 b |
+|---|---|---|
+| 两侧 | 左搜索，右 Cue 头像 | 左搜索、这一段的低频，右额度、Cue 头像 |
+| 换段时这一排 | 一点不变，只有选中块滑过去 | 左边第二颗换成另一样 |
+| 新建项目 | 项目列表末尾一行 | 圆钮 |
+| 项目范围 | 看板顶上一行，看板卡下移约 44pt | 圆钮（筛选图标，选了项目画那个项目的图标） |
+| 额度 | 项目段末尾那一组的一行（同方案 1） | 圆钮，点了弹出明细 |
+| iPad 320 窄窗 | 项目｜进展照写字 | 项目｜进展退成只画图标 |
+
+推荐 a：这一排只剩去处与搜索，和 Cue 页那一排（侧栏钮、名牌）一样稳；两侧各一颗才真对称，b 的左边第二颗随段换东西，同一个位置一会儿是筛选、一会儿是新建项目。a 的代价是看板少约 44pt（范围那一行），可以接受：手机看板四行按屏高分，少的是每行一点高度。
+
+### 要删的重复实现（落地时）
+
+- `PaneSegment` 里按字宽排的 `minWidth` 与"图标时正圆"两种尺寸（等宽排法 `EqualSegments` 取代）；进展页那组的 `titles: false` 随方案 1 的会话段一起删。
+- `FilterChip`、`FilterCapsule`、`ProjectScope`、定时星期里各自写的靛青选中字与描边。
+- `SearchEntry` 的 `selected` 分支（已删）。
+- `WideRail`、`RailEarlier` 各自写的 `padding(.horizontal, SessionRail.Form.wide.inset)` / `RowMetrics.bleed` 让位，统一按 `SessionRail.rowInset` 进行容器。
+- 窄屏侧栏的 `BarRow`、`GiveWay` 与中间工具那一套（`NarrowSidebarBar` 换成正中分段加两侧圆钮）；`SearchEntry` 在窄屏不再用（搜索变圆钮），只剩搜索页本身的 `SearchCapsule`。
+- 摆法 a：`ShelfQuota` 之外，额度不再进侧栏那一排；`NewProjectButton` 在窄屏换成列表末尾一行。
+
+### 和 Mac 的对应
+
+Mac 已在这个检出里按同一套改了：项目、进展两行与会话格、更早同一种行容器，选中的字半粗墨色。宽版、80 图标条各拍一张（`Mac选中.png`）。Mac 的分段（技能与规则的规则｜技能）同样是等宽胶囊、墨字。
+
+### 第二轮没验证的
+
+- 选中块在分段间滑动、换段的动效没录，只看了终态。
+- Mac 的悬停、按下底没看（同一套 `RowStyle`，理应一致），技能与规则页的分段、⌘K 的筛选胶囊没拍。
+- 摆法 b 的额度明细借系统弹出框；落地要从圆钮长出（`GrowPanel`）。
+- 深色、高对比（`selection` 在高对比下 22%）、辅助字号、英文（分段等宽后英文 "Projects | Progress" 在 402 宽是否放得下）都没看。
+- 提示横幅盖在新那一排上时谁让开：原型没接（`CenteredBar` 没有 `GiveWay`）。
+
 ## 原型怎么起
 
-一次性分支 `proto/head-phone2`，`-CuePadNav one|two` 切方案，不给是现状；`-CuePadNavEarlier YES` 起来推入「更早」页。实现在 `apple/App/Sources/UI/iOS/NavProto.swift` 与几处标了 PROTOTYPE 的分支。效果图：`swift annotate.swift 方案1.json`。
+一次性分支 `proto/head-phone2`，`-CuePadNav one|two` 切方案，不给是现状；`-CuePadBar a|b`（配 `one`）切侧栏那一排的摆法；`-CuePadNavEarlier YES` 起来推入「更早」页。实现在 `apple/App/Sources/UI/iOS/NavProto.swift` 与几处标了 PROTOTYPE 的分支。效果图：`swift annotate.swift 方案1.json`。
 
 ```
 apple/scripts/xc.sh shot ios -- -CuePadDemo YES -CuePadNarrow YES -CuePadQuiet YES -CuePadNav one -CuePadScene cue -CuePadNarrowPane progress -CuePadProgressPane board

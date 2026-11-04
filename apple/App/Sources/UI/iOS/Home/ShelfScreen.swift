@@ -33,6 +33,7 @@ struct ShelfScreen: View {
             if !rest.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(rest) { ShelfRow(project: $0) }
+                    if BarVariant.current == .a { NewProjectRow() }
                 }
                 .padding(.vertical, Self.paperInset)
                 .rowPaper(cornerRadius: Radius.sheet)
@@ -145,7 +146,7 @@ private struct ShelfFooter: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if NavVariant.current != .now { ShelfQuota() }
+            if NavVariant.current != .now, BarVariant.current != .b { ShelfQuota() }
             ShelfLine(route: .archive, icon: .archive, title: String(localized: "归档"))
             ShelfLine(route: .trash, icon: .trash, title: String(localized: "回收站"))
             ShelfLine(route: .settings, icon: .settings, title: String(localized: "设置"), alert: services.macAlert)

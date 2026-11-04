@@ -59,6 +59,8 @@ enum DebugHooks {
         var quietAlerts = false
         /// PROTOTYPE：窄屏侧栏进展段的收口方案（`-CuePadNav one|two`，`NavVariant`）。
         var nav = NavVariant.now
+        /// PROTOTYPE：方案 1 之上侧栏那一排的摆法（`-CuePadBar a|b`，`BarVariant`）。
+        var bar: BarVariant?
         #endif
     }
 

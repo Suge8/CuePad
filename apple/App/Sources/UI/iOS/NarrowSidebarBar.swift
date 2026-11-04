@@ -12,6 +12,11 @@ struct NarrowSidebarBar: View {
     @ScaledMetric(relativeTo: .body) private var searchWidth: CGFloat = 92
 
     var body: some View {
+        // PROTOTYPE：方案 1 之上的两种摆法（`CenteredBar`）
+        if let bar = BarVariant.current { CenteredBar(variant: bar) } else { row }
+    }
+
+    @ViewBuilder private var row: some View {
         let open = quotaOpen && workspace.navigationPane == .progress && NavVariant.current == .now
         let givesWay = workspace.notice != nil
         BarRow(open: open) {

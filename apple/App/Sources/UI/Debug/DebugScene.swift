@@ -127,6 +127,7 @@ enum DebugScene {
         preset.cuePanelOpen = defaults.bool(forKey: "CuePadCuePanel")
         preset.quietAlerts = defaults.bool(forKey: "CuePadQuiet")
         preset.nav = defaults.string(forKey: "CuePadNav").flatMap(NavVariant.init(rawValue:)) ?? .now
+        preset.bar = defaults.string(forKey: "CuePadBar").flatMap(BarVariant.init(rawValue:))
         #endif
         return preset
     }

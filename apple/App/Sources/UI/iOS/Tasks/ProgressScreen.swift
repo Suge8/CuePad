@@ -32,7 +32,12 @@ struct ProgressScreen: View {
     var body: some View {
         let pane = inSidebar && NavVariant.current != .one ? workspace.progressPane : .board
         ZStack(alignment: .top) {
-            if mounted.contains(.board) || pane == .board { shown(.board, pane) { boardView } }
+            if mounted.contains(.board) || pane == .board {
+                shown(.board, pane) {
+                    // PROTOTYPE a：项目范围是看板顶上一行
+                    boardView.safeAreaInset(edge: .top, spacing: 0) { if inSidebar, BarVariant.current == .a { ScopeLine() } }
+                }
+            }
             if mounted.contains(.sessions) || pane == .sessions {
                 shown(.sessions, pane) {
                     SessionList(model: sessions, filter: workspace.scopedProject) {

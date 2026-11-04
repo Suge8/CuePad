@@ -96,6 +96,7 @@ struct SessionRailCell: View {
 
     private var name: some View {
         Text(verbatim: item.session.title)
+            .fontWeight(selected ? .semibold : nil)
             .foregroundStyle(item.pulse.tier == .resting && item.waiting == nil ? palette.ink3 : palette.ink)
             .lineLimit(1)
     }

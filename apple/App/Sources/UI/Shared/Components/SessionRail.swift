@@ -13,6 +13,11 @@ struct SessionRail: View {
     }
 
     static let chatInset: CGFloat = 52
+    /// 会话条上一组行（项目与进展、等你与推进中各组的格、更早）的行容器：行在容器里左右各让出 `rowInset`，
+    /// 选中、按下、悬停的底比行宽出 `RowMetrics.bleed`，离容器边还留 `rowGap`，四角与容器同心——底不越出栏边、不贴窗口边，
+    /// 宽版与图标条同一套，图标条上的底在条里居中。手机竖条（60 宽）格铺满纸、不显示选中，不走这一套。
+    static let rowGap: CGFloat = 4
+    static var rowInset: CGFloat { RowMetrics.bleed + rowGap }
 
     enum Opening { case primary, beside }
 
@@ -100,6 +105,8 @@ private struct SessionRailContent: View {
                                 .id(item.id)
                         }
                     }
+                    // 行底伸出行框：滚动内容自己留出让出的那一截（滚动区按自己的边裁）
+                    .padding(.horizontal, form == .phone ? 0 : SessionRail.rowInset)
                     .scrollTargetLayout()
                     .safeAreaPadding(.bottom, Self.bottomInset)
                 }
@@ -118,7 +125,7 @@ private struct SessionRailContent: View {
                 .onDisappear { reveal.remove(column) }
             }
         }
-        .rowContainer(.rect(cornerRadius: Radius.block), flush: true)
+        .rowContainer(.rect(cornerRadius: Radius.block), flush: form == .phone)
         .clipShape(.rect(cornerRadius: Radius.block))
         .paper(cornerRadius: Radius.block, wash: column.paper(palette))
         .padding(.horizontal, form.inset)
@@ -139,7 +146,8 @@ private struct SessionRailHeader: View {
             if wide { Spacer(minLength: 0) }
         }
         .font(Typography.caption.weight(.semibold))
-        .padding(.horizontal, wide ? 8 : 2)
+        // 宽版与格里的标志对齐（格让出 `rowInset`、格里再 8）
+        .padding(.horizontal, wide ? SessionRail.rowInset + 8 : 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(column.title)
         .accessibilityValue(Text(count, format: .number))

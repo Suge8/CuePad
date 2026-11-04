@@ -27,10 +27,13 @@ struct WideRail: View {
     var body: some View {
         VStack(spacing: 0) {
             top
+            // 与会话格同一种行容器（`SessionRail.rowInset`）：选中底不越出栏边、不贴窗口边
             VStack(spacing: 2) {
                 place("项目", icon: .folder, pane: .projects)
                 place("进展", icon: .task, pane: .progress)
             }
+            .padding(.horizontal, SessionRail.rowInset)
+            .rowContainer(.rect(cornerRadius: Radius.block))
             .padding(.horizontal, SessionRail.Form.wide.inset)
             SessionRail(data: services.liveSessions.rail, form: wide ? .wide : .narrow,
                         marked: Set(workspace.shownSessions.compactMap(\.sessionID)), pulse: workspace.pulse) { session, opening in
@@ -93,7 +96,7 @@ struct WideRail: View {
             HStack(spacing: 8) {
                 Image(icon).font(Glyph.control).foregroundStyle(palette.ink2).frame(width: 18)
                 if wide {
-                    Text(title).font(Typography.body).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(title).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 0)
                 }
             }
@@ -179,7 +182,7 @@ struct RailEarlier: View {
         Group {
             if wide {
                 VStack(spacing: 2) {
-                    header(total)
+                    header(total).padding(.horizontal, SessionRail.rowInset)
                     if open, let earlier {
                         ScrollView {
                             LazyVStack(spacing: 2) {
@@ -187,7 +190,7 @@ struct RailEarlier: View {
                                 // 滑到这里才读下一页（同进展页会话段的分页）
                                 if earlier.hasMore { Spinner(.small).frame(maxWidth: .infinity).padding(8).task(id: earlier.items.count) { more() } }
                             }
-                            .padding(.horizontal, RowMetrics.bleed)
+                            .padding(.horizontal, SessionRail.rowInset)
                         }
                         .frame(maxHeight: Self.listHeight)
                         .fixedSize(horizontal: false, vertical: true)
@@ -215,8 +218,11 @@ struct RailEarlier: View {
                 .disabled(total == 0)
                 .accessibilityLabel(Text("更早"))
                 .accessibilityValue(Text(total, format: .number))
+                .padding(.horizontal, SessionRail.rowInset)
             }
         }
+        // 同会话格的行容器（`SessionRail.rowInset`）
+        .rowContainer(.rect(cornerRadius: Radius.block))
         .padding(.horizontal, SessionRail.Form.wide.inset)
         .padding(.top, 6)
         .observing(services.store, id: limit, into: $earlier, onError: workspace.fail) { [limit] store in

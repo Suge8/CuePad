@@ -166,10 +166,9 @@ private struct WeekdayChip: View {
         } label: {
             Text(verbatim: Calendar.current.veryShortWeekdaySymbols[weekday - 1])
                 .font(BubbleMetrics.meta.weight(on ? .semibold : .regular))
-                .foregroundStyle(on ? palette.signature : palette.ink2)
+                .foregroundStyle(on ? palette.ink : palette.ink2)
                 .frame(maxWidth: .infinity).frame(height: BubbleMetrics.capsule)
                 .background(on ? palette.selection : palette.fill, in: .circle)
-                .overlay { if on { Circle().strokeBorder(palette.signature, lineWidth: 1) } }
                 .contentShape(.circle)
         }
         .buttonStyle(PressStyle())
