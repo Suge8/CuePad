@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`choosesProject` 时右边可换落到哪个项目（Mac 进展页跨项目）。
+/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`choosesProject` 时右边一颗项目胶囊（`chip`）可换落到哪个项目（进展页跨项目）；手机上经 `MenuButton`，菜单开着键盘不跳。
 /// 失焦且没写字时收回：点出来的那一行（`writing`）变回入口，`autofocus` 浮出的那一行交给 `dismiss`；写了字的留着字。Mac 上点这一行外面就算失焦（`resignsFocusOnOutsideClick`）。
 struct NewTaskField: View {
     let project: UUID?
@@ -51,30 +51,29 @@ struct NewTaskField: View {
                 .buttonStyle(PressStyle())
                 .accessibilityLabel(prompt)
             }
-            #if os(macOS)
             if choosesProject, let projects = workspace.catalog?.projects {
-                Menu {
-                    ForEach(projects) { item in Button(item.shownName) { chosen = item.id } }
-                } label: {
-                    let current = projects.first { $0.id == target }
-                    HStack(spacing: 4) {
-                        ProjectGlyph(project: current, size: 10)
-                        Text(current?.shownName ?? "").lineLimit(1)
-                    }
-                    .font(Typography.meta).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, 8).frame(height: 24)
-                    .background(palette.fill, in: .capsule)
-                    .contentShape(.capsule)
-                    .menuLabel("挂到 \(current?.shownName ?? "")")
-                }
-                .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
+                projectMenu(projects)
             }
-            #endif
         }
         .frame(minHeight: TaskMetrics.rowHeight)
         #if os(macOS)
         .resignsFocusOnOutsideClick()
         #endif
+    }
+
+    private func projectMenu(_ projects: [Project]) -> some View {
+        let current = projects.first { $0.id == target }
+        return MenuButton(sections: [
+            ChoiceMenu.Section(choices: projects.map { item in
+                ChoiceMenu.Choice(title: .verbatim(item.shownName), checked: item.id == target) { chosen = item.id }
+            }),
+        ], accessibilityLabel: "挂到 \(current?.shownName ?? "")") {
+            HStack(spacing: 4) {
+                ProjectGlyph(project: current, size: 10)
+                Text(current?.shownName ?? "")
+            }
+            .chip()
+        }
     }
 
     private func collapse() {
@@ -83,15 +82,9 @@ struct NewTaskField: View {
 
     // 入口不用系统占位灰：那样看起来像不能点
     private var glyph: some View {
-        Image(.add).font(Self.glyph).foregroundStyle(palette.ink2).accessibilityHidden(true)
+        Image(.add).font(Glyph.small).foregroundStyle(palette.ink2).accessibilityHidden(true)
             .frame(width: TaskMetrics.ringColumn)
     }
-
-    #if os(macOS)
-    private static let glyph = Glyph.small
-    #else
-    private static let glyph = Font.footnote.weight(.semibold)
-    #endif
 
     private func add() {
         let content = text.trimmingCharacters(in: .whitespaces)

@@ -7,7 +7,7 @@ import SwiftUI
 /// 也不用圈里一块扇形（像录制钮或表盘）。
 /// 与模型、思考强度同样高；用到七成百分比加粗转墨色、铺色加深；九成时铺色换成胭脂（赭黄只给等你确认），百分比仍是墨色加粗——
 /// 胭脂字压在胭脂铺色上，深色下到不了 4.5:1，颜色只放在铺色上，字留给墨色。刚压缩过、Agent 还不知道
-/// 已用多少时没有这颗胶囊。悬停与读屏说"上下文 · 已用 x% · 剩 y%"（快满了加一句可以压缩）；点一下是同样的说明，
+/// 已用多少时没有这颗胶囊。悬停与读屏说"上下文 · 已用 x% · 剩 y%"（快满了加一句可以压缩）；点一下是从胶囊长出的气泡写同样的说明，
 /// 接近上限时多一个"压缩"，等于发出 /compact（会话能用斜杠命令时，`AgentCapabilities.commands`）。
 struct PiContextGauge: View {
     let session: PiSessionState
@@ -15,6 +15,10 @@ struct PiContextGauge: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var showsDetail = false
+    #if os(iOS)
+    @State private var anchor = ControlAnchor("context.\(UUID().uuidString)")
+    @State private var source: BubbleSource?
+    #endif
     @ScaledMetric(relativeTo: .footnote) private var ringSide: CGFloat = 11
     private static let ringLine: CGFloat = 2
 
@@ -31,30 +35,42 @@ struct PiContextGauge: View {
     }
 
     var body: some View {
-        Button { showsDetail.toggle() } label: {
+        Button {
+            #if os(iOS)
+            source = anchor.frame.map(BubbleSource.control)
+            #endif
+            showsDetail.toggle()
+        } label: {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 4) { Text("上下文").foregroundStyle(palette.ink3); percent }
                 HStack(spacing: 4) { ring; percent }
             }
-            .font(Typography.meta)
-            .padding(.horizontal, 10)
-            .configCapsuleHeight()
-            .background(palette.fill, in: .capsule)
-            .background(alignment: .leading) {
-                GeometryReader { proxy in
-                    used.frame(width: proxy.size.width * meter.fraction)
-                }
-                .clipShape(.capsule)
-            }
-            .frame(minHeight: ConfigCapsule.hitHeight)
-            .contentShape(.capsule)
+            .chip()
+            .background { usedFill }
         }
         .buttonStyle(PressStyle())
         .help(meter.help.visible)
-        .popover(isPresented: $showsDetail) { detail.presentationCompactAdaptation(.popover) }
+        #if os(macOS)
+        .bubble(isPresented: $showsDetail) { detail }
+        #else
+        .accessibilityIdentifier(anchor.id)
+        .background { ControlAnchor.Probe(anchor: anchor) }
+        .panel(isPresented: $showsDetail, style: .bubble(source ?? .unanchored)) { detail }
+        #endif
         .accessibilityLabel("上下文")
         .accessibilityValue(meter.help.spoken)
         .animation(Motion.fade, value: meter)
+    }
+
+    /// 铺在胶囊淡底下面、到已用比例的那层。手机上 `chip` 的点按区比胶囊高，铺色只占胶囊那么高（标准字号下胶囊就是 `inline` 高）。
+    private var usedFill: some View {
+        GeometryReader { proxy in
+            used.frame(width: proxy.size.width * meter.fraction)
+        }
+        #if os(iOS)
+        .frame(height: ControlSize.inline.height)
+        #endif
+        .clipShape(.capsule)
     }
 
     private var percent: some View {
@@ -90,7 +106,7 @@ struct PiContextGauge: View {
             }
         }
         .padding(16)
-        .frame(minWidth: 220, maxWidth: 300, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func compact() {

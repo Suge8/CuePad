@@ -1,9 +1,9 @@
 import SwiftUI
 
+/// 工具排里的加速开关：开着是选中的胶囊（`chip(on:)`），点一下换；不知道开没开时点开选。
 struct PiFastCapsule: View {
     let fast: Bool?
     let choose: (Bool) -> Void
-    @Environment(\.palette) private var palette
 
     var body: some View {
         Group {
@@ -27,12 +27,6 @@ struct PiFastCapsule: View {
             Text("加速")
             if fast == true { Text("开") } else if fast == false { Text("关") } else { Text("未知") }
         }
-        .font(Typography.meta.weight(.medium))
-        .foregroundStyle(fast == true ? palette.ink : palette.ink3)
-        .padding(.horizontal, 10)
-        .configCapsuleHeight()
-        .background(palette.fill, in: .capsule)
-        .frame(minHeight: ConfigCapsule.hitHeight)
-        .contentShape(.capsule)
+        .chip(on: fast == true)
     }
 }
