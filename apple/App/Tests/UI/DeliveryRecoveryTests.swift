@@ -48,18 +48,9 @@ struct DeliveryRecoveryTests {
     }
 
     private func history(_ messages: [PiMessage], session: String, app: TestApp) async throws {
-        let file = app.directory.appending(path: "late.jsonl")
-        let now = Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(.now)
-        var rows: [[String: Any]] = [["type": "session", "version": 3, "id": session, "timestamp": now, "cwd": app.directory.path]]
-        for (index, message) in messages.enumerated() {
-            rows.append([
-                "type": "message", "id": "u\(index)", "parentId": index == 0 ? NSNull() : "u\(index - 1)" as Any, "timestamp": now,
-                "message": ["role": "user", "content": message.text, "cuepadDelivery": message.deliveryID ?? ""],
-            ])
-        }
-        var data = Data()
-        for row in rows { data.append(try JSONSerialization.data(withJSONObject: row)); data.append(0x0A) }
-        try data.write(to: file)
+        let file = app.directory.appending(path: "late.jsonl"), log = SessionFile(url: file, sessionID: session, cwd: app.directory.path)
+        try log.reset()
+        for message in messages { try log.user(message.text, delivery: message.deliveryID) }
         let update = try PiHistory.index(file: file, agent: .pi, from: nil, files: app.services.store.files)
         await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: .pi)
     }

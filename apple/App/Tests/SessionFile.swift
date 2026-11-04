@@ -33,6 +33,15 @@ nonisolated struct SessionFile: Sendable {
         try append(["role": "assistant", "stopReason": "toolUse", "content": [["type": "text", "text": text]]], at: date)
     }
 
+    /// 换掉整份对话：文件只剩文件头（同一个文件，不换掉它：Mac 盯着的还是它），之后的话照常追加。
+    func reset() throws {
+        let header = try Self.line(["type": "session", "version": 3, "id": sessionID, "timestamp": Self.stamp.format(.now), "cwd": cwd])
+        try Self.writing.withLock { _ in
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try header.write(to: url)
+        }
+    }
+
     private func append(_ message: [String: Any], at date: Date) throws {
         let time = Self.stamp.format(date)
         // 条目 id 像 Pi 那样每条不同（索引按它认消息）
