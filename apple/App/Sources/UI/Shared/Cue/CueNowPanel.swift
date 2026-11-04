@@ -1,11 +1,11 @@
-#if os(iOS)
 import CueStore
 import SwiftUI
 
-/// Cue 名牌长出的面板（`CueHeader`）：只放 Cue 自己的、会天天变的（Mac 上这些分在 Cue 页输入框、记忆与定时两张弹层与设置里）。名牌长成的名片之下沿中轴排三块：
+/// Cue 的面板：只放 Cue 自己的、会天天变的，三端同这一份。手机与 iPad 是名牌长出的（`CueHeader`，名牌长成名片、面板在它下面），
+/// Mac 是从 Cue 栏头的头像那一块长出的气泡（`CueTitle`：开合不逐帧长大，同额度明细）。沿中轴排三块：
 /// 它的大脑（Agent、模型与思考强度，`CueConfigControls`）；它的记忆（`CueRecall`：刚记下的两条，整块点进记忆）；
-/// 底下几行：它的定时（`ScheduleLine`，点了打开定时），它在用的技能与规则（`LibraryLine`，点了推入技能与规则），它在哪台 Mac 上运行（点了进设置）与它的开关。
-/// 上下文用了几成不在这里：换新是自动的、多在歇过一小时后，看了也没有可做的，只留在 Mac 的"运行情况"（`CueContextLine`）。
+/// 底下几行：它的定时（`ScheduleLine`，点了打开定时），它在用的技能与规则（`LibraryLine`，点了去技能与规则），它在哪台 Mac 上运行（点了进设置）与它的开关。
+/// 上下文用了几成不在这里：换新是自动的、多在歇过一小时后，看了也没有可做的，只留在 Mac 的"运行情况"（`CueContextLine`，Cue 在这台 Mac 上值班时末尾多一行开它，`RunLine`）。
 /// 在做的会话不在这里：进行中的在进展页的会话段（左滑就到），点进会话只有那一条路，返回落点与行的长相都只有一种。
 /// 面板定高：空、一条、记满都一样高（两条各占两行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
 /// 面板里不放滚动区（docs/layout.md）。Cue 的设置（`CueSettingsModel`）整块读一份：选 Mac 与底行的开关读写同一份，改 Mac 的确认框也只挂这一个。
@@ -19,16 +19,19 @@ struct CueNowPanel: View {
     private static let largestType = DynamicTypeSize.accessibility1
 
     var body: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: Self.blockGap) {
             BrainBlock(brain: brain, settings: settings)
             CueRecall { go { workspace.cue.showsMemory = true } }
-            VStack(spacing: 6) {
+            VStack(spacing: Self.lineGap) {
                 ScheduleLine { go { workspace.cue.showsSchedules = true } }
-                LibraryLine { go { workspace.push(.library) } }
-                CueHostLine(model: settings) { go { workspace.push(.settings) } }
+                LibraryLine { go(openLibrary) }
+                CueHostLine(model: settings) { go(openSettings) }
+                #if os(macOS)
+                RunLine { go { workspace.cue.showsRun.toggle() } }
+                #endif
             }
         }
-        .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 18)
+        .padding(.horizontal, Self.side).padding(.top, Self.top).padding(.bottom, Self.bottom)
         .dynamicTypeSize(...Self.largestType)
         .cueSettings(settings)
     }
@@ -38,6 +41,33 @@ struct CueNowPanel: View {
         close()
         action()
     }
+
+    /// 技能与规则：手机推入那一页，Mac 换到主区。
+    private func openLibrary() {
+        #if os(macOS)
+        workspace.show(.library)
+        #else
+        workspace.push(.library)
+        #endif
+    }
+
+    /// 设置：手机推入设置页，Mac 开设置窗口的通用页（Cue 那一组在最上面）。
+    private func openSettings() {
+        #if os(macOS)
+        SettingsPane.open(.general)
+        #else
+        workspace.push(.settings)
+        #endif
+    }
+
+    /// 三块之间、底下几行之间、面板的边。
+    private static let blockGap: CGFloat = 22
+    private static let lineGap: CGFloat = 6
+    private static let side: CGFloat = 22
+    private static let top: CGFloat = 14
+    private static let bottom: CGFloat = 18
+    /// 底下几行一行至少多高。
+    fileprivate static let line: CGFloat = 28
 }
 
 /// 大脑那一排，启用前后同一块、同样高：
@@ -151,7 +181,7 @@ private struct ScheduleLine: View {
                 Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
             }
             .font(Typography.secondary)
-            .frame(minHeight: 28)
+            .frame(minHeight: CueNowPanel.line)
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle())
@@ -182,7 +212,7 @@ private struct LibraryLine: View {
                 Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
             }
             .font(Typography.secondary)
-            .frame(minHeight: 28)
+            .frame(minHeight: CueNowPanel.line)
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle())
@@ -224,15 +254,15 @@ private struct CueHostLine: View {
                     Spacer(minLength: 0)
                 }
                 .font(Typography.secondary)
-                .frame(minHeight: 28)
+                .frame(minHeight: CueNowPanel.line)
                 .contentShape(.rect)
             }
             .buttonStyle(PressStyle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Dotted(lead.text, String(localized: "设置")).spoken)
             .accessibilityAddTraits(.isButton)
-            CueSwitch(model: model, here: nil)
-                .disabled(!model.isOn && (settings.gate(services).waitingReason != nil || settings.hosts(here: nil).isEmpty))
+            CueSwitch(model: model, here: workspace.localHost)
+                .disabled(!model.isOn && (settings.gate(services).waitingReason != nil || settings.hosts(here: workspace.localHost).isEmpty))
                 .opacity(workspace.cue.hostID == nil ? 0 : 1)
                 .readerHidden(workspace.cue.hostID == nil)
         }
@@ -275,6 +305,7 @@ private extension CueHostLine.Lead {
 /// 还没和 iCloud 对过时只写在等什么，还没有哪台 Mac 写下过自己时写先去 Mac 上打开、同步不通时写同步那一行的标题（`CueSettings.noHost`）。
 private struct CueHostPick: View {
     let model: CueSettingsModel
+    @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
@@ -282,7 +313,7 @@ private struct CueHostPick: View {
 
     var body: some View {
         let settings = model.settings ?? .empty
-        let hosts = settings.hosts(here: nil)
+        let hosts = settings.hosts(here: workspace.localHost)
         VStack(spacing: 6) {
             if let waiting = settings.gate(services).waitingReason {
                 HStack(spacing: 8) {
@@ -291,7 +322,10 @@ private struct CueHostPick: View {
                 }
                 .font(Typography.secondary).foregroundStyle(palette.ink3)
             } else if hosts.isEmpty {
+                // 只在手机上：Mac 上这台总在列表里
+                #if os(iOS)
                 Text(CueSettings.noHost(services)).font(Typography.secondary).foregroundStyle(palette.ink3)
+                #endif
             } else {
                 HStack(spacing: 8) {
                     CueHostMenu(hosts: hosts, use: .enable { model.choose($0, services) }, accessibilityLabel: Self.title) {
@@ -306,6 +340,33 @@ private struct CueHostPick: View {
             if let failure = model.failure {
                 Text(failure).font(Typography.meta).foregroundStyle(palette.failure).multilineTextAlignment(.center).lineLimit(2)
             }
+        }
+    }
+}
+
+#if os(macOS)
+/// "运行情况"那一行（给开发者看）：只在 Cue 于这台 Mac 值班时有（经过只在值班的管理器里），点了开合 Cue 页右边的运行情况（`CueRunPanel`）。
+private struct RunLine: View {
+    let toggle: () -> Void
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if services.cue.keeper != nil {
+            Button(action: toggle) {
+                HStack(spacing: 8) {
+                    Image(.session).foregroundStyle(palette.ink3)
+                    Text("运行情况").foregroundStyle(palette.ink2).lineLimit(1)
+                    Spacer(minLength: 8)
+                    if workspace.cue.showsRun { Image(.checked).foregroundStyle(palette.ink3) }
+                }
+                .font(Typography.secondary)
+                .frame(minHeight: CueNowPanel.line)
+                .contentShape(.rect)
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityValue(workspace.cue.showsRun ? Text("开着") : Text("关着"))
         }
     }
 }

@@ -5,12 +5,39 @@ import SwiftUI
 /// 内容一直滚到它们后面、从玻璃之间与玻璃里透出来——栏后面、栏下面不加任何遮罩、渐变、模糊或底色，滚动区也不从它们的下沿开始，
 /// 系统的滚动边缘效果也关掉（`RouteView`：系统导航栏下它糊满整条栏），玻璃本身就是唯一的遮挡。
 /// 否决过：顶栏后面的整条淡出（为了返回钮与页头之间的窄缝不露半截字）把内容遮住了。
+/// 例外只有一处：Mac 上栏头不是玻璃、只是写着字的一排的两栏（右边的 Cue、会话）。字滚到字后面两边都读不出，所以这两栏的内容从栏头下沿开始，
+/// 下沿那一截（`fade`）淡进栏的底色，不是一刀切开（`fadesUnderHead`，两栏同这一处）。
 /// 窗口最顶上那一条：Mac（红绿灯与工具栏那一条）什么都不垫，内容透到窗口顶。iOS 的状态栏那一条是一层渐进模糊（`StatusBarBlur`）：
 /// 时间与电量是系统画的、没有玻璃可垫，不糊就和滚过去的字叠成一团。否决过：垫页底色的渐变，底色看得出，淡完的那一处像一刀切开。
 /// 内容离栏多远靠内容边距（`contentGap`）：系统导航栏下的页由 `RouteView` 一处让出（上安全区再加这么多），自己画页顶那一排的页（窄屏与 iPad 的根、iPad 的 Cue 面板，`HeaderHost`；Mac 的会话页）让到那一排下面；Mac 其余页的控件在工具栏里，内容让到工具栏下面再隔这么多。
 enum Bars {
     static let contentGap: CGFloat = 12
+    /// Mac 上文字栏头下沿那一截淡出的高（`fadesUnderHead`）。
+    static let fade: CGFloat = 16
 }
+
+#if os(macOS)
+extension View {
+    /// Mac 上栏头是写着字的一排的那两栏（右边的 Cue、会话）：内容裁在栏头下沿，最上面 `Bars.fade` 那一截淡进栏的底色（头注释的例外）。
+    /// 淡出是盖在内容上的一层底色渐变、不接点按，不是遮罩：两栏的底都是桌面色（`palette.desk`），看起来一样，滚动时不用每帧离屏再合成一遍整栏。
+    func fadesUnderHead() -> some View { modifier(HeadFade()) }
+}
+
+private struct HeadFade: ViewModifier {
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content
+            .clipped()
+            .overlay(alignment: .top) {
+                LinearGradient(colors: [palette.desk, palette.desk.opacity(0)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Bars.fade)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+    }
+}
+#endif
 
 #if os(iOS)
 /// 状态栏那一条的渐进模糊，整个窗口一份（`IOSRoot` 最外层），各页、推入转场与弹出的纸上都一样：顶上最糊，往下平滑减到不糊，不着色、不垫底，

@@ -1,7 +1,12 @@
 import SwiftUI
 
 /// 宽屏三栏的尺寸：会话条（宽 `Chrome.rail`、收起是图标条 `Chrome.strip`）、主区、右边的 Cue（400；收起成一颗钮时 0）。
-/// 只由窗口宽、主区放着什么与两个用户选择推出（会话条开合 `railExpanded`、Cue 开合 `cueOpen`）；自动收起只改呈现，不改这两个选择。
+/// 只由窗口宽、主区放着什么与用户的开合选择推出（会话条开合、Cue 开合 `cueOpen`）；自动收起只改呈现，不改选择。
+/// 会话条的开合在看板与别处各记一份（`Workspace.railExpanded`：主区放着看板时是 `AppSettings.boardRailExpanded`，默认收成图标条，别处是 `railExpanded`，默认宽版）：
+/// 看板的推进中、等你两列与会话条列的是同一批会话，看板上把宽让给四列；进会话、项目页就回到宽版，那里会话条是导航。
+/// 两份互不干扰、只由用户改：在看板上按侧栏钮或 ⌃⌘S 改的是看板那一份（下次回看板还是这样），在别处改的是别处那一份，换页不改写任何一份。
+/// 窗口宽度的自动收起叠在选择之上：选了宽版、窗口放不下时照样收成图标条（下面的临界宽），放得下了回到所选。
+/// 否决过：看板上一律收起、手动展开只管这一次停留——每回到看板又要再展开一次，自动与手动打架；只记一份、看板上临时盖掉——改了一处另一处跟着变，读不出规律。
 /// 窗口变窄时只往收里走：先把会话条收成图标条，再把 Cue 收成钮；收 Cue 时不把会话条放回宽版——拖窗口的人会看见左边忽然又宽了。
 /// 主区最窄：Mac 看板 776（四列最窄 732，`BoardColumns.narrowest`，加列头那一排末尾"⋯"的一截 `boardMenu`）、并排两个会话各 390、其余 390。Mac 窗口与 iPad 同一套；
 /// 只有 iPad 主区放不下四列时换竖版看板（`boardFits`），所以 iPad 收 Cue 按会话的最窄算，会话条仍按四列。
@@ -27,6 +32,11 @@ struct WideMetrics {
     let split: Bool
     /// Cue 放得下：没露出来是用户收起的；放不下时收起的 Cue 钮点了是浮出。
     let cueFits: Bool
+    /// Cue 放不下、此刻浮在主区右边（`Workspace.cueFloats`）。
+    let floats: Bool
+
+    /// Cue 此刻露着：放在右边，或浮着。
+    var cueShown: Bool { cue > 0 || floats }
 
     /// 并排时左半的宽（只开一个时是整个主区）。
     var leading: CGFloat { split ? (main / 2).rounded() : main }
@@ -46,6 +56,7 @@ struct WideMetrics {
         rail = workspace.sidebarOpen && width >= Self.railThreshold(need: need.rail, cueOpen: open) ? Chrome.rail : Chrome.strip
         cueFits = width >= rail + need.cue + Self.cue
         cue = open && cueFits ? Self.cue : 0
+        floats = cue == 0 && !cueFits && workspace.cueFloats
         main = max(0, width - rail - cue)
     }
 

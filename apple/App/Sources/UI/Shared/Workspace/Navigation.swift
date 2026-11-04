@@ -65,7 +65,7 @@ extension Workspace {
         get {
             switch navigation {
             case .narrow(let state): state.sidebarOpen
-            case .wide: services.settings.railExpanded
+            case .wide: railExpanded
             }
         }
         set {
@@ -73,7 +73,7 @@ extension Workspace {
             case .narrow(var state):
                 state.sidebarOpen = newValue
                 navigation = .narrow(state)
-            case .wide: services.settings.railExpanded = newValue
+            case .wide: railExpanded = newValue
             }
         }
     }

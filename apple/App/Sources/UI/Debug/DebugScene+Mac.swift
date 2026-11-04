@@ -14,8 +14,11 @@ extension DebugScene {
         if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
         Task { await SyncBench.run(workspace) }
         Task { await cueNowTourIfAsked(workspace) }
-        // 两个开合偏好每次按参数摆（隔离实例的偏好域在几次截图之间留着）：会话条默认宽版，`-CuePadSidebar hidden` 收成图标条；Cue 默认开着，`-CuePadCue shut` 收起
-        workspace.sidebarOpen = defaults.string(forKey: "CuePadSidebar") != "hidden"
+        // 开合偏好每次按参数摆（隔离实例的偏好域在几次截图之间留着）：会话条同正式版的默认（看板上图标条、别处宽版），`-CuePadSidebar hidden` 两处都收成图标条、
+        // `shown` 两处都是宽版；Cue 默认开着，`-CuePadCue shut` 收起
+        let sidebar = defaults.string(forKey: "CuePadSidebar")
+        workspace.services.settings.railExpanded = sidebar != "hidden"
+        workspace.services.settings.boardRailExpanded = sidebar == "shown"
         workspace.services.settings.cueOpen = defaults.string(forKey: "CuePadCue") != "shut"
         switch scene {
         case "collapsed": workspace.sidebarOpen = false

@@ -2,8 +2,7 @@ import CueStore
 import Observation
 import SwiftUI
 
-/// Cue 的设置，各入口同一份：两端设置里 Cue 那一组（`CueSettingsSection`）、Cue 页的开关（Mac 的"⋯"、手机 Cue 面板）、手机 Cue 面板的选 Mac
-/// （`CueNowPanel`）与两端 Cue 页的启用（`CueWelcome`）都读写它。读的是同步的设置（`CueProfile`）与各台 Mac 自报的名字与能用的 Agent
+/// Cue 的设置，各入口同一份：两端设置里 Cue 那一组（`CueSettingsSection`）、Cue 面板的开关与选 Mac（`CueNowPanel`，三端同一份）与两端 Cue 页的启用（`CueWelcome`）都读写它。读的是同步的设置（`CueProfile`）与各台 Mac 自报的名字与能用的 Agent
 /// （`CueStore.allMacAgents`，Cue 能在哪台上运行就是这几台）；动作是改名、开关（`turn`）、在哪台运行并启用（`AppServices.enableCue`，
 /// 规则在 `CueStore.enableCue`），写完都立即上传。停用只经开关：它是唯一的停用入口，在哪台运行的菜单里没有"不启用"。
 /// 没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。
@@ -85,7 +84,7 @@ final class CueSettingsModel {
 }
 
 extension AppServices {
-    /// Cue 的开关，各处同一个（两端设置里 Cue 那一行、Mac Cue 页的"⋯"、手机 Cue 面板、Cue 页停用后的那张小纸），也是唯一的停用入口：
+    /// Cue 的开关，各处同一个（两端设置里 Cue 那一行、Cue 面板、Cue 页停用后的那张小纸），也是唯一的停用入口：
     /// 关是停用（库里记着那台，`CueProfile.hostID`）；开是在接着干活的那台启用（`CueSettings.resumeHost`，规则同 `enableCue`）。
     /// 开的时候按此刻库里的读，不按界面上一次读到的。`here` 是这台 Mac（手机为 nil）。一台 Mac 都没有时开不了，各处的开关那时停用。
     func turnCue(_ on: Bool, here: String?) async throws {

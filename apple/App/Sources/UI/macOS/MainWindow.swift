@@ -15,8 +15,8 @@ struct MainWindow: View {
     var body: some View {
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
-            let floats = sizes.cue == 0 && !sizes.cueFits && workspace.cueFloats
-            let shown = sizes.cue > 0 || floats
+            let floats = sizes.floats
+            let shown = sizes.cueShown
             let trail = sizes.cue == 0 ? CueButton.reserve : Spacing.page
             HStack(spacing: 0) {
                 WideRail(width: sizes.rail)
@@ -137,7 +137,7 @@ extension Workspace {
     }
 }
 
-/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 进展页、⌃⌘S 会话条开合与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
+/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 进展页、⌃⌘S 会话条开合、⌃⌘I 右栏（Cue）开合与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
 /// ⌘1–9 的唯一处理者在这里。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace

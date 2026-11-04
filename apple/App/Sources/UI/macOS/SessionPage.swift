@@ -94,8 +94,8 @@ struct SessionPage: View {
                     .frame(maxWidth: Self.readingWidth)
                     .animation(Motion.fade, value: session.question)
                 }
-                // 对话裁在栏头下沿：栏头是写着字的一排、不是玻璃，滚过去的字会叠在会话名上
-                .clipped()
+                // 对话到栏头下沿淡出：栏头是写着字的一排、不是玻璃，滚过去的字会叠在会话名上
+                .fadesUnderHead()
             } else if stored != nil {
                 EmptyState(mascot: .empty, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
                     .frame(maxHeight: .infinity)

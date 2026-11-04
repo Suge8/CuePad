@@ -119,6 +119,7 @@ extension InteractionBench {
     /// 改窗口宽不该动的东西：偏好、主区去处与草稿。
     private struct Snapshot: Equatable {
         let rail: Bool
+        let boardRail: Bool
         let cue: Bool
         let pane: NavigationPane
         let project: UUID?
@@ -130,7 +131,7 @@ extension InteractionBench {
     private static func snapshot(_ workspace: Workspace, ids: [UUID]) -> Snapshot {
         let settings = workspace.services.settings
         return Snapshot(
-            rail: settings.railExpanded, cue: settings.cueOpen, pane: settings.navigationPane, project: settings.currentProject,
+            rail: settings.railExpanded, boardRail: settings.boardRailExpanded, cue: settings.cueOpen, pane: settings.navigationPane, project: settings.currentProject,
             main: workspace.mainRoute, beside: workspace.besideSession?.id,
             drafts: ids.map { settings.replyDraft(for: $0).text } + [workspace.cue.draft.text])
     }

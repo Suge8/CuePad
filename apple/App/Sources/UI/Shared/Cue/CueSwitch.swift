@@ -58,19 +58,3 @@ struct CueSwitch: View {
         .toggleStyle(.switch)
     }
 }
-
-#if os(macOS)
-extension Workspace {
-    /// Mac Cue 页"⋯"里的开关：经各处同一个 `AppServices.turnCue`，没写成的原因弹提示。
-    /// 回到这台而这台一家 Agent 都没接上时打开接入面板（`SetupPanel`：给装法，接上的同一下启用），同 Cue 页的启用钮。
-    func turnCue(_ on: Bool) {
-        attempt { [self] in
-            do {
-                try await services.turnCue(on, here: localHost)
-            } catch CueEnableError.noRuntime {
-                showsSetup = true
-            }
-        }
-    }
-}
-#endif

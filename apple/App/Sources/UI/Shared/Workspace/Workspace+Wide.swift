@@ -20,6 +20,30 @@ extension Workspace {
         cueFloats = true
     }
 
+    /// 宽屏会话条开着（用户的选择）：主区放着看板时读写看板那一份，别处读写另一份（`WideMetrics` 头注释的规则）。
+    var railExpanded: Bool {
+        get { onBoard ? services.settings.boardRailExpanded : services.settings.railExpanded }
+        set { if onBoard { services.settings.boardRailExpanded = newValue } else { services.settings.railExpanded = newValue } }
+    }
+
+    /// 主区放着进展的看板（会话条的开合按看板那一份算）。
+    var onBoard: Bool { mainRoute == .progress }
+
+    /// 收起露着的 Cue（Mac 栏头的收起右栏、iPad 的 Cue 钮、⌃⌘I）：浮出来的收回，放在右边的收起（用户的选择，`AppSettings.cueOpen`）。
+    func hideCue() {
+        if cueFloats { cueFloats = false } else { services.settings.cueOpen = false }
+    }
+
+    /// 放回收着的 Cue（Cue 钮、⌃⌘I）：放得下放回右边（用户的选择），放不下从右边浮出（这一刻的呈现）。
+    func revealCue(fits: Bool) {
+        if fits { services.settings.cueOpen = true } else { cueFloats = true }
+    }
+
+    /// ⌃⌘I（"显示 › 右栏"）：按这个窗口此刻的尺寸（`WideMetrics`）收起或放回。
+    func toggleCue(_ sizes: WideMetrics) {
+        if sizes.cueShown { hideCue() } else { revealCue(fits: sizes.cueFits) }
+    }
+
     /// 会话已在另一边时挪过来、不复制。`main` 替换左半（右半是它时右半关掉）；`beside` 在主区已是别的会话时开在右半并排，否则同 `main`。
     func openWideSession(_ session: SessionRoute, in column: Column) {
         guard case .wide(var state) = navigation else { return }

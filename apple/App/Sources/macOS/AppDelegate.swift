@@ -121,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// 主菜单里写"等 N 个 Agent 做完再装"的那一行（停用，只是说明）。
     static let updateNoteTag = 1
 
-    /// 主菜单"显示"里的搜索（⌘K）、进展（⌘⇧T）与侧栏（⌃⌘S）：搜索与侧栏是开关，开着时同一条命令把它关掉；进展是去进展页（收起开着的搜索）。
+    /// 主菜单"显示"里的搜索（⌘K）、进展（⌘⇧T）、侧栏（⌃⌘S）与右栏（⌃⌘I）：搜索与两栏是开关，开着时同一条命令把它关掉；进展是去进展页（收起开着的搜索）。
     /// 放在主菜单而不是窗口里的快捷键：模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
     @objc func showProgress(_ sender: Any?) {
@@ -132,6 +132,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func newSession(_ sender: Any?) { workspace?.newSession() }
     /// 不叫 `toggleSidebar(_:)`：AppKit 的分栏控制器自己响应那个动作，在响应链上先接走，带着分栏动画开合。
     @objc func toggleCueSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
+    /// 右边的 Cue 收起或放回：放不放得下按主窗口此刻的宽（`WideMetrics`，与窗口排版同一份）。
+    @objc func toggleCueColumn(_ sender: Any?) {
+        guard let workspace, let window = services?.windowShell else { return }
+        workspace.toggleCue(WideMetrics(width: window.frame.width, workspace: workspace))
+    }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
@@ -140,7 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // 资料库读不出来时：搜索结果能打开卡片、进展页能增改任务，都是写入入口
         case #selector(toggleSearch(_:)), #selector(showProgress(_:)), #selector(newCard(_:)), #selector(newSession(_:)):
             workspace?.isLibraryReady == true && NSApp.mainWindow === services?.windowShell
-        case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === services?.windowShell
+        case #selector(toggleCueSidebar(_:)), #selector(toggleCueColumn(_:)): NSApp.mainWindow === services?.windowShell
         default: true
         }
     }

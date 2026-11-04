@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 
-/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、新建（"文件"：⌘N 记一条灵感、⌥⌘N 新会话）、编辑快捷键与查找（⌘F、⌘G）、搜索与侧栏的开关、去进展页（"显示"），
+/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、新建（"文件"：⌘N 记一条灵感、⌥⌘N 新会话）、编辑快捷键与查找（⌘F、⌘G）、搜索、侧栏与右栏的开关、去进展页（"显示"），
 /// 以及会话回复框的快捷键（"回复"，`ReplyShortcut`）。⌘N 已是记一条灵感，新会话用 ⌥⌘N（Mac 上"另一种新建"的惯例）。
 enum MainMenu {
     static func install() {
@@ -48,6 +48,8 @@ enum MainMenu {
             .item("进展", #selector(AppDelegate.showProgress(_:)), "T"),
             // macOS 标准的显示/隐藏侧栏；不用 ⌘\：常见的 1Password 把它占作全局快捷键，按键到不了 App
             .item("侧栏", #selector(AppDelegate.toggleCueSidebar(_:)), "s", [.control, .command]),
+            // 右边那一栏（Cue）：同 SwiftUI 检查器的系统惯例（`InspectorCommands` 的 ⌃⌘I），与 ⌃⌘S 成对
+            .item("右栏", #selector(AppDelegate.toggleCueColumn(_:)), "i", [.control, .command]),
             .item("切换栏焦点", #selector(WideColumnView.switchWideFocus(_:)), "\t", [.control]),
             .item("会话移到左边", #selector(WideColumnView.moveWideLeft(_:)), "\u{F702}", [.command, .option]),
             .item("会话移到右边", #selector(WideColumnView.moveWideRight(_:)), "\u{F703}", [.command, .option]),

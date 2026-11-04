@@ -18,6 +18,8 @@ nonisolated enum Icon: Hashable, Sendable {
     // 导航与页面入口
     case cue
     case idea, task, session, search, settings, archive, trash, sidebar
+    /// 收起、放回右边那一栏（Mac 的 Cue 栏）：侧栏左右翻过来
+    case rightColumn
     case agent, all, filter, extensionNote
     /// 技能与规则（侧栏底下那颗、Cue 面板那一行）；规则（AGENTS.md）一份
     case skill, instruction
@@ -67,6 +69,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .archive: .ink("archive")
         case .trash: .ink("trash")
         case .sidebar: .ink("sidebar")
+        case .rightColumn: .ink("sidebar.right")
         case .add: .ink("plus")
         case .close, .remove: .ink("close")
         case .clear: .ink("clear")

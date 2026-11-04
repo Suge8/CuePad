@@ -19,9 +19,21 @@ extension View {
     }
 
     /// 从这个控件（按钮、圆钮、胶囊）长出的气泡：挂在它的框下（放不下挂上面），尾巴指它的中线；点、键盘、读屏打开都一样。
+    /// 开合的状态用 `BubbleSwitch`：按在开关上收起的那一下，松开时不再打开。
     func bubble(isPresented: Binding<Bool>, width: CGFloat = BubblePlacement.width, @ViewBuilder content: @escaping () -> some View) -> some View {
         modifier(ControlBubble(isPresented: isPresented, width: width, panel: content))
     }
+}
+
+/// 从控件长出的气泡开没开（`bubble(isPresented:)` 绑 `open`，控件点了 `toggle`）：点气泡外收起时按下的就是开关的话，
+/// 松开时开关又要打开它——刚在这一下收起的不再打开（`PressPoint.reopens`）。
+struct BubbleSwitch {
+    var open: Bool { didSet { if oldValue, !open { closedAt = .now } } }
+    private var closedAt: ContinuousClock.Instant?
+
+    init(open: Bool = false) { self.open = open }
+
+    mutating func toggle() { open = !open && !PressPoint.reopens(closedAt: closedAt) }
 }
 
 extension View {

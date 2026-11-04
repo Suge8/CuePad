@@ -107,6 +107,15 @@ def sidebar(m):
     return [Layer("window", [main]), Layer("panel", [panel])]
 
 
+def sidebar_right(m):
+    """右栏（Mac 的 Cue 栏开合）：侧栏左右翻过来，右边窄的那块是右栏。"""
+    g, c = GROW[m], CARVE[m]
+    y0, y1, split = -9.0, 9.0, 3.8
+    panel = grown([(split, y0), (11.2, y0), (11.2, y1), (split, y1)], [0, 2.8, 2.8, 0], g)
+    main = grown([(-11.2, y0), (split - c - 2 * g, y0), (split - c - 2 * g, y1), (-11.2, y1)], [2.8, 0, 0, 2.8], g)
+    return [Layer("window", [main]), Layer("panel", [panel])]
+
+
 def cross_shape(L, w, deg=0):
     """十字（格）：臂长 L、半宽 w，外角圆、内角利，转 deg 度。"""
     pts = [(-w, -L), (w, -L), (w, -w), (L, -w), (L, w), (w, w), (w, L), (-w, L), (-w, w), (-L, w), (-L, -w), (-w, -w)]

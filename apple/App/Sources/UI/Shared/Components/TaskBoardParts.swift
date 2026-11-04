@@ -1,62 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 四列并排（Mac、宽屏 iPad 与 iPhone 横屏的进展页）：每列（`BoardColumn`）的列头浮在顶上（`BoardColumnHeader`，写字玻璃），卡各自滚动、从列头后面过。
-/// 每列先给最窄的 `minColumn`，可见宽多出来的按各列的份数分（`TaskBoard.Column.share`：推进中、等你多分，待办、已完成少分）——宽窗口里轻重分得开，
-/// iPad 竖屏这类刚够四列的宽里四列差不多一样宽、轻的两列不被挤成一行三四个字；四列总在眼前，放不下四列时（如 Mac 窄窗开着侧栏）
-/// 整排横向滚动、最右一列露出一截（看得出能横划）：两侧页边是滚动区内容的边（`margin`），列滚到窗口边才裁，滚到头右边照样留页边。
-/// 卡换列时从原处飞到新处（`boardFlight`），四列共用量飞行位置的坐标系与正被拖着的那件（`boardStage`）。
-struct BoardColumns: View {
-    let board: TaskBoard
-    @Binding var adding: Bool
-    let newTaskProject: UUID?
-    /// 两侧页边。
-    let margin: CGFloat
-
-    /// 一列最窄（三端同一个）：放得下圈、项目小图形与折两行后够读的标题（`BoardCardMetrics.title`）。
-    /// iPad 竖屏、iPhone 横屏、Mac 900 宽收起侧栏的窗口都排得下四列；900 宽开着侧栏排不下，横滑（压窄到排得下时一行只剩三个字）。
-    private static let minColumn: CGFloat = 160
-    /// 列与列之间：列没有底，靠这段留白分开。
-    private static let gap: CGFloat = 20
-
-    /// 四列都取最窄、连同列间与两侧页边要多宽（`WideMetrics` 按它算放不放得下看板）。
-    static func narrowest(margin: CGFloat) -> CGFloat { minColumn * 4 + gap * 3 + margin * 2 }
-
-    @Environment(\.dynamicTypeSize) private var typeSize
-    #if os(macOS)
-    @Environment(\.boardBand) private var band
-    #endif
-
-    var body: some View {
-        // 按可见宽算一次各列宽与卡标题的行数，每列的卡都用这一份（几何读数只给子视图，不写回状态）
-        GeometryReader { proxy in
-            let spare = max(0, proxy.size.width - margin * 2 - Self.gap * 3 - Self.minColumn * 4)
-            let unit = spare / TaskBoard.Column.allCases.map(\.share).reduce(0, +)
-            // 放得下、放不下都是这一个滚动区（放得下时只是滚不动）：窗口拖过看板最窄宽时不换结构，列里的滚动位置留着
-            ScrollView(.horizontal) { columns(unit) }
-                .safeAreaPadding(.horizontal, margin)
-                .scrollBounceBehavior(.basedOnSize)
-                .scrollIndicators(.never)
-                .boardStage()
-        }
-    }
-
-    private func columns(_ unit: CGFloat) -> some View {
-        HStack(alignment: .top, spacing: Self.gap) {
-            ForEach(TaskBoard.Column.allCases) { item in
-                let width = Self.minColumn + unit * item.share
-                BoardColumn(column: item, board: board, adding: $adding, newTaskProject: newTaskProject)
-                    .frame(width: width)
-                    .environment(\.boardTitle, BoardCardMetrics.title(item, cardWidth: width - 2 * BoardCardMetrics.inset, typeSize: typeSize))
-            }
-        }
-        #if os(macOS)
-        // Mac 的列头那一排就是标题栏那一排：列与列之间空着的那截按住拖窗口。垫在滚动区的内容里：要横滑时按下归滚动区，垫在它后面的接不到（HID 实测）
-        .background(alignment: .top) { Color.clear.frame(height: band).windowDragArea() }
-        #endif
-    }
-}
-
 /// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：身后不铺底（`BoardLane`，拖进来时一层选中底），一件一张卡——
 /// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是一件一张的卡（`BoardWaitCard`，拍板在前、待回复在后），都在懒加载栈里（列可能很长，只建看得见的）。
 /// 推进中置顶的在最前，其余按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardLine.maxMoving` 张的线在动，
@@ -73,6 +17,8 @@ struct BoardColumn: View {
     /// 待办顶上浮出添加任务那一行（"+ 新任务"）；新任务落在 `newTaskProject`。
     @Binding var adding: Bool
     let newTaskProject: UUID?
+    /// 已完成列末尾"更早做完的"展开着：四列并排时由 `BoardColumns` 持有（它展开了已完成就不是空列，列宽跟着变）；不给时这一列自己记（手机的一行）。
+    var earlier: Binding<Bool>?
     #if os(iOS)
     /// 手机竖版看板的一行（`PhoneBoard`）：排成横着滑的一行（`BoardRowLane`）；否则是一列、列头浮在顶上（Mac、宽屏 iPad）。
     var row = false
@@ -82,7 +28,7 @@ struct BoardColumn: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.boardMoves) private var moves
     @Environment(\.cardDrags) private var drags
-    @State private var showsEarlier = DebugHooks.preset.showsDone
+    @State private var ownEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
     /// 拖到已完成的那件与它这一下（同点完成圈，`taskCheck`）。
     @State private var finishing: TaskBoard.Item?
@@ -152,6 +98,9 @@ struct BoardColumn: View {
         #endif
     }
 
+    /// 更早做完的展开着没有（给了 `earlier` 读写它，否则这一列自己那一份）。
+    private var showsEarlier: Binding<Bool> { earlier ?? $ownEarlier }
+
     /// 拖着卡停在这一列上：只在有一张卡正被拖着时算（`CardDrags`），拖完不留着底。
     private var lit: Bool { targeted && drags?.current != nil }
 
@@ -209,7 +158,7 @@ struct BoardColumn: View {
             // 列头的数只数今天的：今天没有时先说没有，再接更早的，数与字对得上
             if board.done.isEmpty { empty("今天还没做完的") }
             if !board.earlier.isEmpty { earlierToggle }
-            if showsEarlier { ForEach(board.earlier) { card($0) } }
+            if showsEarlier.wrappedValue { ForEach(board.earlier) { card($0) } }
         }
     }
 
@@ -244,19 +193,19 @@ struct BoardColumn: View {
     private var earlierToggle: some View {
         HStack(spacing: 12) {
             Button {
-                withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { showsEarlier.toggle() }
+                withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { showsEarlier.wrappedValue.toggle() }
             } label: {
                 HStack(spacing: 4) {
                     Text("更早做完的 \(board.earlier.count)").monospacedDigit()
                     Image(.forward).font(Glyph.mark)
-                        .rotationEffect(.degrees(showsEarlier ? 90 : 0)).accessibilityHidden(true)
+                        .rotationEffect(.degrees(showsEarlier.wrappedValue ? 90 : 0)).accessibilityHidden(true)
                 }
                 .frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
             }
             .buttonStyle(PressStyle())
-            .accessibilityValue(showsEarlier ? "已展开" : "已折叠")
+            .accessibilityValue(showsEarlier.wrappedValue ? "已展开" : "已折叠")
             Spacer(minLength: 0)
-            if showsEarlier {
+            if showsEarlier.wrappedValue {
                 // 做完的一键收走：归档后不占列表，照样搜得到
                 Button { workspace.attempt { try await workspace.archiveCompletedTasks() } } label: {
                     Text("全部归档").frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)

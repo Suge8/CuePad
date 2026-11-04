@@ -44,6 +44,7 @@ SYMBOLS = {
     "archive": archive,
     "trash": trash,
     "sidebar": sidebar,
+    "sidebar.right": sidebar_right,
     "plus": plus,
     "close": close,
     "clear": clear,

@@ -13,6 +13,7 @@ enum InkSymbols {
         "cue.archive",
         "cue.trash",
         "cue.sidebar",
+        "cue.sidebar.right",
         "cue.plus",
         "cue.close",
         "cue.clear",

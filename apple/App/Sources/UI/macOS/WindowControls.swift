@@ -90,24 +90,6 @@ struct WindowFrame<Value: Equatable>: NSViewRepresentable {
     }
 }
 
-/// 右边 Cue 栏头的右端：记忆与定时两颗圆钮，各打开自己的弹层（`CueMemoryPage`、`CueSchedulePage`）。
-struct CueListSlots: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        let cue = workspace.cue
-        HStack(spacing: Spacing.toolbarGap) {
-            Button("\(cue.name) 记得什么", icon: .memory) { cue.showsMemory = true }
-                .help("\(cue.name) 记得什么")
-            Button("定时", icon: .schedule) { cue.showsSchedules = true }
-                .help("定时")
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(ControlButtonStyle(kind: .circular))
-        .padding(.leading, Spacing.toolbarGap)
-    }
-}
-
 /// 主区栏头右端、"⋯"之前：同步需要关注时（没登录 iCloud、连不上、需要你决定、出错等）露一个图标，悬停看原因，点开设置处理。
 /// 有同步就常驻一格圆钮宽，平时只是看不见（`keepsPlace`）：提醒一出一收不挤动左边的编辑页标题与项目名。
 struct SyncAlertSlot: View {
