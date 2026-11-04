@@ -8,24 +8,27 @@ import Foundation
 extension CueKeeper {
     // MARK: 重起与看门狗
 
-    /// 大脑这时该有人管的那一下（对账的定时器排它，`reconcile`）：等着重起的到点时刻，或在跑的一轮最近一次大脑事件之后 `CueTiming.silence`（看门狗）。
+    /// 大脑这时该有人管的那一下（对账的定时器排它，`reconcile`）：等着重起的到点时刻，或在跑的一轮还差多久没动静满 `CueTiming.silence`（看门狗）。
+    /// 定时器照墙钟睡，睡着的 Mac 醒来时它先到点：看门狗按醒着的时长再算一次（`revive`），没满就按剩下的重排。
     var alarm: Date? {
         switch phase {
         case .restarting(_, _, let at): at
-        case .running(let shift) where shift.turn != nil: heardAt + setup.timing.silence.seconds
+        case .running(let shift) where shift.turn != nil: .now + (setup.timing.silence - quiet).seconds
         case .starting, .running: nil
         }
     }
 
-    /// 到了 `alarm`：等着重起的起一个；在跑的一轮还是那么久没动静就当大脑挂了（停掉，按 `broke` 重起、交出去的话重新交）。
+    /// 在跑的这一轮醒着的时间里多久没有大脑事件（Mac 睡着的那段不算，`CueTiming.awake`）。
+    private var quiet: Duration { setup.timing.awake() - heardAt }
+
+    /// 到了 `alarm`：等着重起的起一个；在跑的一轮醒着那么久没动静就当大脑挂了（停掉，按 `broke` 重起、交出去的话重新交）。
     func revive() async {
-        guard let alarm, alarm <= .now else { return }
         switch phase {
-        case .restarting(let failures, _, _): await startShift(failures: failures)
-        case .running:
+        case .restarting(let failures, _, let at) where at <= .now: await startShift(failures: failures)
+        case .running(let shift) where shift.turn != nil && quiet >= setup.timing.silence:
             let minutes = Int(setup.timing.silence.seconds / 60)
             await broke(ShownText("这一轮 \(minutes) 分钟没有动静，大脑像是卡住了"))
-        case .starting: break
+        case .starting, .running, .restarting: break
         }
     }
 

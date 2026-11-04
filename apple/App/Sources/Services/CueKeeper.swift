@@ -57,7 +57,7 @@ import os
 /// 额度、登录卡住（这一轮或起大脑时），这台 Mac 上另有能用的 Agent 就换过去（`failOver`：只说从哪换到哪，这一轮交给新的大脑重来）；换回由 Cue 自己定。
 /// 没有能换的了（都试过）：这一轮（你发起的也算）按慢速周期一直重来，直到一轮好好做完（`setBack`），那个错只说一次。
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、额度与登录类的错立刻说；会重试的那次先不说，重试也错了才说。回答你的一轮的回复与出错（一轮只响一次）、起不来都提示你（`CueMessage.urgent`）。
-/// 大脑意外退出、起不来、一轮里太久没有事件（看门狗，`CueTiming.silence`）都按 `CueTiming.restartDelay` 退避重试，
+/// 大脑意外退出、起不来、一轮里醒着太久没有事件（看门狗，`CueTiming.silence`；Mac 睡着的那段不算）都按 `CueTiming.restartDelay` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；快的几次用完写一条 Cue 消息说起不来（这次故障只说一次），转慢的一直试，你发消息就马上再试，
 /// 之后第一轮好好做完时说一句又能干活了。工具服务没了（`toolsDown`）的班次做完这一轮就换。
 /// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它；上下文随状态写进库，各端读 `CueState.context`。
@@ -104,8 +104,8 @@ final class CueKeeper {
     var setback: Setback?
     /// 对账的唯一定时器（`schedule`）：下一个到点的定时、巡视、等着的停住，或等着重起的那一下、看门狗看一眼（`alarm`），每次对账重排
     var timer: Task<Void, Never>?
-    /// 最近一次大脑事件（或一轮开始）的时刻：看门狗从它算（`alarm`）
-    @ObservationIgnored var heardAt = Date.now
+    /// 最近一次大脑事件（或一轮开始）在看门狗的钟上的时刻（`CueTiming.awake`）：看门狗从它算（`alarm`）
+    @ObservationIgnored var heardAt: SuspendingClock.Instant
     /// 这次故障里因额度、登录换走过的 Agent（`failOver`）：不再换回；一轮好好做完清空
     @ObservationIgnored var tried: Set<AgentKind> = []
     /// 这次故障已告诉你起不来了（`tellDown`），恢复时说一句
@@ -127,6 +127,7 @@ final class CueKeeper {
 
     init(_ setup: Setup) {
         self.setup = setup
+        heardAt = setup.timing.awake()
         (inputs, input) = AsyncStream.makeStream()
         progress = (try? JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))) ?? Progress()
     }

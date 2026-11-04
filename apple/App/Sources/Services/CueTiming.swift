@@ -19,7 +19,10 @@ nonisolated struct CueTiming: Sendable {
     /// 快的用完之后的重试间隔，最后一个一直用下去：起不来不停在终态，网络、登录恢复了自己接上；你发消息时不等它，马上再试。
     var slowRestarts: [Duration] = [.seconds(5 * 60), .seconds(15 * 60), .seconds(30 * 60)]
     /// 看门狗：一轮里这么久没有任何大脑事件，就当大脑挂了（停掉重起，交出去的话重新交）。Cue 的工具都在几十秒内回（说话最长 `sayWait`）。
+    /// 按 `awake` 量：Mac 睡着的那段不算没动静。
     var silence: Duration = .seconds(10 * 60)
+    /// 看门狗的钟：Mac 睡着时不走（`SuspendingClock`），一轮跑到一半合盖、醒来不当成卡住；测试换成能停住的钟。
+    var awake: @Sendable () -> SuspendingClock.Instant = { .now }
     /// Cue 自己醒来的一轮出错后，隔这么久再醒一次（只一次）。
     var retryWake: Duration = .seconds(120)
     /// Cue 的说话工具（say、answer）写下请求后等结果多久（`cuepad mcp --wait`）。

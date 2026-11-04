@@ -96,7 +96,7 @@ extension CueKeeper {
         case .speaking, .context: break
         default: Self.log.info("Cue 的大脑：\(String(describing: event).prefix(200), privacy: .private)")
         }
-        heardAt = .now
+        heardAt = setup.timing.awake()
         switch event {
         case .turnStarted:
             speech.offer(nil)

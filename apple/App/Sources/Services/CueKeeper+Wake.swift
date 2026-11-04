@@ -66,7 +66,7 @@ extension CueKeeper {
             $0.turn = turn
         }
         retrying = nil
-        heardAt = .now
+        heardAt = setup.timing.awake()
         save()
         try await markDelivered(delivering)
         return true

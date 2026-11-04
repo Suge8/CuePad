@@ -58,6 +58,26 @@ extension CueHostTests {
         await rig.stop()
     }
 
+    /// Mac 睡着正赶上一轮在跑：睡着的那段不算没动静，醒来不把大脑当成卡住、不重起；醒着又那么久没动静，看门狗才重起、你的话重新交。
+    @Test func Mac睡着时一轮在跑_醒来不当成卡住() async throws {
+        let clock = AwakeClock()
+        let rig = try await Rig(timing: {
+            $0.silence = .seconds(2)
+            $0.awake = { clock.now() }
+        })
+        let first = try #require(rig.brainPIDs.first)
+        try await rig.say("请慢慢想")
+        try await eventually("请求挂在模型那里") { rig.model.hanging }
+        clock.sleep()
+        try await Task.sleep(for: .seconds(4))  // 合盖的这段：墙钟走过两个看门狗的时长
+        #expect(rig.brainPIDs == [first])
+        #expect(try await rig.count("收到：请慢慢想") == 0)
+        clock.wake()
+        try await rig.message(.cue, containing: "收到：请慢慢想")
+        #expect(!rig.brainPIDs.contains(first))
+        await rig.stop()
+    }
+
     /// 你的一轮碰上额度用完，这台 Mac 上还能用 Claude Code：设置换过去（模型清空、fast 关），只说一句从哪换到哪，不再报那个错；
     /// 你的话退回，交给新的大脑答。健康里记着这次换大脑。
     @Test func 额度用完_换到另一家Agent_只说一次() async throws {

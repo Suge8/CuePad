@@ -25,6 +25,21 @@ extension CueHostTests {
         }
     }
 
+    /// 看门狗的钟（`CueTiming.awake`）的替身：`sleep()` 到 `wake()` 之间停住，像 Mac 合盖的那一段。
+    nonisolated final class AwakeClock: Sendable {
+        private let state = Mutex((asleepAt: SuspendingClock.Instant?.none, slept: Duration.zero))
+
+        func now() -> SuspendingClock.Instant { state.withLock { ($0.asleepAt ?? .now).advanced(by: .zero - $0.slept) } }
+        func sleep() { state.withLock { $0.asleepAt = .now } }
+        func wake() {
+            state.withLock { state in
+                guard let asleepAt = state.asleepAt else { return }
+                state.slept += .now - asleepAt
+                state.asleepAt = nil
+            }
+        }
+    }
+
     final class Rig {
         let model: FakeModel
         let notifier = RecordingCueNotifier()
