@@ -143,6 +143,15 @@ extension CueHostTests {
 
         func say(_ text: String) async throws { try await store.addCueMessage(.you, text: text) }
 
+        /// 在 Cue 页的选择器里选 Pi 的这个模型与强度（`AppServices.updateCue`），等值班的大脑用上。
+        func chose(model: String, effort: PiThinkingLevel) async throws {
+            try await services.updateCue {
+                $0.model = model
+                $0.effort = .known(effort)
+            }
+            try await eventually("大脑用上了选的模型") { self.health?.model == model }
+        }
+
         /// 起 Pi 时多带收尾闸扩展（`settle-gate.ts`）、交给它的每一行另记一份（`handed`）的启动脚本。
         private static func gatedPi() throws -> URL {
             let gate = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

@@ -80,7 +80,9 @@ extension CueKeeper {
             return await say(.cue, switched)
         }
         phase = .restarting(failures: failures, reason: reason, at: .now + setup.timing.restartDelay(after: failures).seconds)
-        if setup.timing.isDown(after: failures) { await tellDown(reason) }
+        guard setup.timing.isDown(after: failures) else { return }
+        markDown()
+        await tellDown(reason)
     }
 
     /// 停掉这个班次的大脑：交给它、还没答上的你的话（`Shift.unanswered`）退回（`giveBack`），下一个大脑重新交。出了问题、换班次与不再值班都经这里。
@@ -144,9 +146,11 @@ extension CueKeeper {
             let summary = PiErrorSummary(raw)
             // Cue 自己醒来的一轮第一次出错（会重试的那种）先不说：多是网络偶发，重试也失败了再告诉你；你在等的一轮立刻说
             if turn?.selfStarted != nil, setback == nil, Self.retryable(summary) { return }
-            // 同一个错一轮轮重复（如额度）只说一次：按摘要认，原文里常带每次不同的请求 id
-            guard summary.line != toldFailure else { return }
+            // 同一个错一轮轮重复（如额度）只说一次：按摘要认，原文里常带每次不同的请求 id；卡住后慢速周期里换着家重来的错都不再说
+            guard setback?.persistent != true, summary.line != toldFailure else { return }
             toldFailure = summary.line
+            // 卡住了（额度、登录，没得换）：好好做完的那一轮说一句恢复了（`recovered`）
+            if !Self.retryable(summary) { outageTold = true }
             // 认不出的错，摘要只是原文的首行
             let text = summary.kind == .other ? ShownText("这一轮出错了：\(raw)") : ShownText("这一轮出错了：\(summary.shownTitle.embedded)\n\(raw)")
             if let turn, turn.answersYou { await reply(text, in: turn) } else { await say(.cue, text) }
@@ -173,14 +177,10 @@ extension CueKeeper {
                 else if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
                 else if !Self.retryable(PiErrorSummary(failure)) { await setBack(failure, retrying: .message, as: .cue) }
             } else {
-                if setback?.persistent != true || setback?.wake == finished.round.wake {
-                    setback = nil
-                    tried = []
-                    await recovered()
-                } else {
-                    // 卡着的那家又好好做完了别的一轮：卡住的那件不等慢速周期，马上重来
-                    setback?.retryAt = .now
-                }
+                let resolved = setback?.persistent != true || setback?.wake == finished.round.wake
+                // 卡着的那家又好好做完了别的一轮：卡住的那件不等慢速周期，马上重来
+                if resolved { setback = nil } else { setback?.retryAt = .now }
+                await recovered(resolved)
                 await markTold(finished.round)
                 if let held = finished.held { progress.held = held }
                 await advanceBaseline(from: finished.mark, seen: finished.round.startedAt)

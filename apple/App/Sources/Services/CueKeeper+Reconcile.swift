@@ -18,6 +18,10 @@ extension CueKeeper {
 
     /// 对账里按先后只做一件事（`CueKeeper` 头注释的 1–6），返回歇着时下一次要对账的时刻（定时、巡视、停住、重来）。
     private func step() async -> Date? {
+        if await steer() {
+            input.yield(.kick)
+            return nil
+        }
         do {
             let store = self.store, now = Date.now
             let profile = try await store.cueProfile() ?? CueProfile()
@@ -81,10 +85,14 @@ extension CueKeeper {
             // 等子代理停住不写库：到点由定时器叫醒对账
             if let stall = try await store.nextCueStall(after: now) { deadlines.append(stall) }
 
-            // 额度、登录卡住的持续重试只按慢速周期重交原来的醒来原因（新变化不替代它、不催它：卡着时重来只会再失败），变化随信封一起看。
-            // 重来的那一轮半路断了（`broke`）也还在：到点的时刻留着，起好就再来
+            // 额度、登录卡住的持续重试只按慢速周期重交原来的醒来原因（新变化不替代它、不催它：卡着时重来只会再失败），变化随信封一起看；
+            // 到点时先按绕行的规则换到这一周期要试的那家（`steer`），新大脑起好再来。重来的那一轮半路断了（`broke`）也还在：到点的时刻留着，起好就再来
             if let held = setback, held.persistent {
                 guard let at = held.retryAt, now >= at else { return held.retryAt }
+                if await steer(attempt: true) {
+                    input.yield(.kick)
+                    return nil
+                }
                 _ = try await wakeUp(held.wake, as: held.author)
                 return nil
             }
