@@ -18,18 +18,17 @@ struct UnreadableLibraryView: View {
         EmptyState(mascot: .error, title: "读不出资料库", message: .verbatim(failure.summary)) {
             VStack(spacing: 16) {
                 DisclosureGroup("详情") {
-                    Text(failure.reason).font(.caption.monospaced()).textSelection(.enabled)
+                    Text(failure.reason).font(Typography.caption.monospaced()).textSelection(.enabled)
                         .multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .font(.footnote).frame(maxWidth: 420)
-                // iOS 的系统默认按钮没有外形，用与"新建项目"同一个主按钮；Mac 的系统按钮本身有外形
+                .font(Typography.meta).frame(maxWidth: 420)
                 #if os(iOS)
-                EmptyStateButton(title: "重试", icon: .retry, action: retry)
-                ExportDiagnosticsButton(text: failure.diagnostics).controlSize(.large).frame(minHeight: 44)
+                Button("重试", icon: .retry, action: retry)
+                ExportDiagnosticsButton(text: failure.diagnostics).buttonStyle(ControlButtonStyle(kind: .secondary))
                 #else
                 HStack {
-                    EmptyStateButton(title: "重试", icon: .retry, kind: .small, action: retry)
-                    ExportDiagnosticsButton(text: failure.diagnostics)
+                    Button("重试", icon: .retry, action: retry)
+                    ExportDiagnosticsButton(text: failure.diagnostics).buttonStyle(ControlButtonStyle(kind: .secondary))
                 }
                 #endif
             }

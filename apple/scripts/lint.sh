@@ -88,7 +88,6 @@ forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（
   'App/Sources/UI/Shared/Components/TaskBubble.swift' \
   'App/Sources/UI/Shared/Components/TaskMetrics.swift' \
   'App/Sources/UI/Shared/Components/TaskNextMark.swift' \
-  'App/Sources/UI/Shared/Components/UnreadableLibraryView.swift' \
   'App/Sources/UI/Shared/Cue/CueHostMenu.swift' \
   'App/Sources/UI/Shared/Cue/CueNowPanel+iOS.swift' \
   'App/Sources/UI/Shared/Cue/CueSchedulePage.swift' \
