@@ -52,15 +52,10 @@ struct MacSyncTests {
             outcome.withLock { $0 = failure }
             done.signal()
         }
-        #expect(Self.blockCurrentThread(until: done, seconds: 30), "主线程被占住时收尾等不到")
+        #expect(holdThread(until: done), "主线程被占住时收尾等不到")
         let failure = outcome.withLock { $0 }
         #expect(uploadAccepted ? failure == nil : failure?.contains("尚未确认云端已接受") == true)
         #expect(rig.sync.stopped == 1)
-    }
-
-    /// 同步地占住当前（主）线程，直到信号或超时。
-    nonisolated static func blockCurrentThread(until signal: DispatchSemaphore, seconds: Double) -> Bool {
-        signal.wait(timeout: .now() + seconds) == .success
     }
 
     /// 退出时这台 Mac 当场离线：排在前面的组件卡住、耗尽了收尾的上限，离线这一条也已写下并上传。
