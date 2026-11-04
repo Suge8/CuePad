@@ -115,9 +115,9 @@ public enum CueEnvelope {
     }.joined(separator: "\n\n")
   }
 
-  /// 交出去的话里他自己说的（不含他对卡的回答：回答里转述的提问不是他在问）：`CueTools.related` 按它查。
-  public static func asked(_ pending: [CueMessage]) -> String {
-    pending.filter { $0.author == .known(.you) }.map(\.text).joined(separator: "\n")
+  /// 交出去的话里他自己说的，一条一句（不含他对卡的回答：回答里转述的提问不是他在问）：`CueTools.related` 一句一句查。
+  public static func asked(_ pending: [CueMessage]) -> [String] {
+    pending.filter { $0.author == .known(.you) }.map(\.text)
   }
 
   /// 他的话按词在会话回复里查到的那一节（`CueTools.related`）：信封里与插给在跑那一轮的话后面是同一种写法；没查到为空。

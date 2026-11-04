@@ -77,5 +77,29 @@ extension CueHostTests {
         rig.model.release()
         await rig.stop()
     }
+
+    /// 一次交出去几句（Cue 停着时他先贴一段长交代、再问一句以前的事）：那句短问句照样按它自己查会话回复，不和长交代拼在一起才查（拼起来超了短问句的长度就查不到）。
+    @Test func 一次交几句_里面的短问句照样带上查到的会话回复() async throws {
+        let rig = try await Rig()
+        let project = try #require(try await rig.store.projects().first)
+        let task = try await rig.store.createTask("出依赖升级清单", in: project.id)
+        try await rig.store.linkCard(task.id, toSession: "remote-deps")
+        try await rig.store.writePiTranscript(PiTranscript(sessionID: "remote-deps", messages: [
+            PiChatMessage(sessionID: "remote-deps", entryID: "a1", seq: 1, role: .pi, text: "Node 20 已经结束维护，建议把 CI 与部署的 Node 升到 22。", at: .now),
+        ], recap: PiRecap()))
+        // 停用时说的几句攒着，再启用时一起交出去
+        _ = try await rig.store.updateCueProfile { $0.enabledAt = nil }
+        try await eventually("停用收尾做完") { rig.health == nil }
+        let long = "设置页那件照这份反馈改：" + String(repeating: "改了不生效、找不到入口、误操作丢了数据，这三类都要处理，先改最多的那类。", count: 4)
+        let asked = "依赖清单里建议 Node 升到几？"
+        try await rig.say(long)
+        try await rig.say(asked)
+        let host = TestApp.hostID
+        _ = try await rig.store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
+        try await eventually("两句一起交出去") { rig.rounds.contains { $0.sent.joined().contains(asked) && $0.sent.joined().contains("先改最多的那类") } }
+        let sent = try #require(rig.rounds.first { $0.sent.joined().contains(asked) }).sent.joined()
+        #expect(sent.contains("他问的话在会话回复里查到的") && sent.contains("升到 22"), "\(sent)")
+        await rig.stop()
+    }
 }
 #endif
