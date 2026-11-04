@@ -50,13 +50,18 @@ enum CodexHistory {
         switch item.type {
         case "UserMessage":
             var said = transcript.said()
+            // 用技能说的（技能条目在前、话在后，`CodexRuntime.input`）写回你发的样子：`/skill:名字 话`，同 Pi 的 `PiSkillCall.line`
+            var skill = item.content?.first { $0.type == "skill" }?.name.map { "/skill:\($0)" }
             for input in item.content ?? [] {
                 switch input.type {
-                case "text": said.text(input.text)
+                case "text":
+                    said.text([skill, input.text].compactMap(\.self).joined(separator: " "))
+                    skill = nil
                 case "image": try said.image(input.imageURL.flatMap(imageData))
                 default: break
                 }
             }
+            if let skill { said.text(skill) }
             let delivery = item.clientID.flatMap { $0.hasPrefix(clientIDPrefix) ? String($0.dropFirst(clientIDPrefix.count)) : nil }
             cp.said(said, entry, deliveryID: delivery, into: &transcript)
         case "AgentMessage":
@@ -210,9 +215,11 @@ enum CodexHistory {
         var type: String
         var text: String?
         var imageURL: String?
+        /// `skill`：技能名
+        var name: String?
 
         private enum CodingKeys: String, CodingKey {
-            case type, text
+            case type, text, name
             case imageURL = "image_url"
         }
     }

@@ -23,6 +23,22 @@ extension Workspace {
         return write(stored, to: listener) { box.wrappedValue = taken.followed(by: box.wrappedValue, keeping: kept) }
     }
 
+    /// 从回复框交给会话（会话页的回复框、手机的交给 Agent，同一条规则）：草稿是一条命令（`PiSlash.line`）就按命令交出，批注留着跟下一句发；
+    /// 其余按 `mode` 说出去，模板与技能也在其中（`PiSlash.said`：你打的那行在最前）。`kinds` 是回复框此刻收的内容。
+    @discardableResult
+    func reply(
+        to session: PiSessionState, commands: [PiSlashCommand], from box: Binding<ComposerDraft>, accepting kinds: ComposerKinds,
+        mode: DeliveryMode = .send, card: UUID? = nil, saying: Dotted? = nil
+    ) -> Task<Void, Never> {
+        if let line = PiSlash.line(of: box.wrappedValue.accepting(kinds), in: commands, for: session) {
+            return speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }, saying: saying) { _ in line }
+        }
+        return speak(to: .session(session, mode: mode, card: card), from: box, saying: saying) { draft in
+            let draft = draft.accepting(kinds)
+            return PiSlash.said(draft, in: commands, for: session) ?? draft.stored
+        }
+    }
+
     /// 不是从输入框说的（任务的正文、压缩按钮）：写不进库时只提示，原文还在原处。
     @discardableResult
     func speak(_ stored: String, to listener: Listener, saying: Dotted? = nil) -> Task<Void, Never> {

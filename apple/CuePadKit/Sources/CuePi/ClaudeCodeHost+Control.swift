@@ -6,15 +6,17 @@ import Foundation
 extension ClaudeHostedSession {
     /// 托管会话起进程：权限确认经标准输入问 CuePad，模式 auto（见类注释）。
     func host(executable: URL, arguments: [String], directory: URL, environment: [String: String]) async throws -> ChildProcess {
-        try await launch(
+        let process = try await launch(
             executable, ["--permission-prompt-tool", "stdio", "--permission-mode", "auto"] + arguments, directory: directory, environment: environment)
+        stream?.onReply = { [deliveries] in deliveries.replying() }
+        return process
     }
 
     func send(_ message: PiMessage, in _: PiSession.ID) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
             throw PiBridgeError.rejected("empty")
         }
-        try await say(hosted(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID), interrupting: true)
+        try await deliver(hosted(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID))
         // 托管进程自己的钩子不登记（见类注释），首条消息由这里记，与终端会话的 UserPromptSubmit 同一规则
         if !message.text.isEmpty, let id {
             bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(PiSessionName.firstMessageLimit)) } }
@@ -22,11 +24,17 @@ extension ClaudeHostedSession {
     }
 
     /// 斜杠命令就是以 / 开头的一句话：托管进程会执行它（内置命令、skill、自定义命令）。
-    func command(_ line: String, in _: PiSession.ID) async throws {
+    func command(_ line: String, deliveryID: String?, in _: PiSession.ID) async throws {
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let name = line.dropFirst().split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
         guard commands.contains(name) else { throw PiBridgeError.rejected("unknown_command") }
-        try await say(hosted(.string(line)), interrupting: true)
+        try await deliver(hosted(.string(line), uuid: deliveryID))
+    }
+
+    /// 先停下在跑的这一轮，再交出、等它定下送没送达（`ClaudeDelivery`）。
+    private func deliver(_ message: JSONValue) async throws {
+        try await interrupt(restarting: true)
+        try await deliveries.deliver(message["uuid"]?.string ?? "") { try put(message) }
     }
 
     /// 托管会话发的话：带上 `uuid`（投送请求的 id 落进会话文件），写明 `next`——不写时缺省可能是 `later`，

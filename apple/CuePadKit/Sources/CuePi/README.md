@@ -62,8 +62,8 @@ CuePad → 扩展（都带 `id`）：
 
 | `t` | 字段 | 拒绝 |
 | --- | --- | --- |
-| `send` | `text`（文件写成一行"附件：文件名（本机路径）"，会话看不了图时图片也这样写，`AttachmentFiles.agentLine`）、`images[{mimeType, data}]`（base64 原图）、`deliveryId`（可选，落盘为消息上的 `cuepadDelivery`）、`cueTurn{deliveryId}`（可选，见下） | `empty`、`bad_request`、`unconfirmed_turn`、`user_turn` |
-| `command` | `text`：`/` 开头的整行 | `bad_request`、`unknown_command`、`missing_argument`、`unknown_model`、`no_auth` |
+| `send` | `text`（以提示词模板或 skill 的名字开头时由 Pi 展开，同在 Pi 里打出来；文件写成一行"附件：文件名（本机路径）"，会话看不了图时图片也这样写，`AttachmentFiles.agentLine`）、`images[{mimeType, data}]`（base64 原图）、`deliveryId`（可选，落盘为消息上的 `cuepadDelivery`）、`cueTurn{deliveryId}`（可选，见下） | `empty`、`bad_request`、`unconfirmed_turn`、`user_turn` |
+| `command` | `text`：`/` 开头的整行（内置与扩展命令；模板与 skill 也认，但 CuePad 经 `send` 交出它们） | `bad_request`、`unknown_command`、`missing_argument`、`unknown_model`、`no_auth` |
 | `config` | `model{provider, id}`、`thinking`、`fast`、`name`，至少一项 | `bad_request`、`unknown_model`、`no_auth` |
 | `answer` | `promptId`、`value`（`confirm` 为布尔，`select` 为选项原文，`text` 为字符串） | `no_prompt`、`stale_prompt`、`bad_answer` |
 | `abort` | — | — |
@@ -81,7 +81,7 @@ CuePad → 扩展（都带 `id`）：
 
 `end` 先中止当前轮、等真实空闲，再按 mode 收尾：TUI 调宿主 shutdown 恢复终端，RPC 对自身发 SIGTERM；不向第三方 PID 发强杀。手动 `/reload` 与自动升级共用空闲门，等待进程内子代理与 SDK 待处理消息，不把重载当取消。托管 RPC 的 stdout 直接接空设备：不保存完整 RPC 事件、工具输出或任意第三方日志。stderr 接管道，App 只读到认领为止、留末尾 4KB 给起来就退出时的原因（模型不存在、没登录），认领后由启动时留下的看守 `cat` 读走丢掉；App 退出后也没有增长的输出文件、EPIPE 或读端背压。
 
-模型错误由公开的完成消息与 settled 事件上报；CuePad 自己观察到的预检、压缩及内部操作错误通过既有 ACK 或 state 报出。`/compact` 等真实结果才回 ACK，不设提前成功窗口；超过确认时限的失败仍由公开 `session_compact_failed` 事件进入状态，原生手动与自动压缩共用这条收尾，取消不记成失败。其他扩展命令没有公开完成/错误回调，交出后不回成功 ACK，等待以 `ackTimeout` 或 `sessionEnded` 表达结果未确认，不能自动重投。第三方扩展只在 RPC stdout 上输出的错误原文不可观测，不冒充已执行成功；启动即退出带上 Pi 在 stderr 里说的最后一句。
+模型错误由公开的完成消息与 settled 事件上报；CuePad 自己观察到的预检、压缩及内部操作错误通过既有 ACK 或 state 报出。`/compact` 等真实结果才回 ACK，不设提前成功窗口；超过确认时限的失败仍由公开 `session_compact_failed` 事件进入状态，原生手动与自动压缩共用这条收尾，取消不记成失败。其他扩展的命令交出即回 ACK：Pi 在任何检查之前同步调起处理函数，忙时也执行、没有拒收的路，ACK 证明 Pi 执行了它；处理函数的完成与出错没有公开回调，第三方扩展的错误原文只在 Pi 自己的界面或 RPC stdout 上，不可观测。启动即退出带上 Pi 在 stderr 里说的最后一句。
 
 `ack` 只回给发命令的连接；多个客户端同连一个会话时各自收到全部状态，扩展不仲裁。
 

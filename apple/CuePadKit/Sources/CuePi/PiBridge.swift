@@ -150,11 +150,10 @@ extension PiBridge {
         }
     }
 
-    /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令、提示词模板与 skill 由 Pi 派发；会开一轮的
-    /// （模板与 skill 展开成这一轮的提示词）与 `send` 同一规则，在跑就先打断。Pi 转发的扩展命令没有公开完成回执，结果保持未确认；
-    /// 清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
-    public func command(_ line: String, in id: PiSession.ID) async throws {
-        try await control(id, needs: .commands).command(line, in: id)
+    /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令由 Pi 派发，Pi 执行了它就确认（处理函数的结果没有公开回执）；
+    /// 模板与 skill 是说的话，经 `send` 交出。清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
+    public func command(_ line: String, deliveryID: String? = nil, in id: PiSession.ID) async throws {
+        try await control(id, needs: .commands).command(line, deliveryID: deliveryID, in: id)
     }
 
     /// 让该会话从会话文件重新载入到最新（同一会话的另一个进程刚写过文件后）；扩展判断能否安全重载，不能就提示用户。只有 Pi 有。

@@ -90,10 +90,12 @@ struct RealClaudeHostTests {
 
             // 模型还没回出一个字就停：这一轮的用量全是 0，上下文仍是上一次的
             let used = try #require(testbed.bridge.session(id: id)?.context?.tokens)
-            try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id)
+            // 送达等模型开始回话；这一轮在那之前就被停下：开始了就是收下了
+            let writing = Task { try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id) }
             try await eventually("开始这一轮") { testbed.bridge.session(id: id)?.state.isWorking == true }
             try await testbed.bridge.abort(id)
             try await eventually("又停下") { testbed.bridge.session(id: id)?.state == .settled }
+            try await writing.value
             #expect(try #require(testbed.bridge.session(id: id)?.context?.tokens) >= used)
 
             let after = Date()
@@ -190,10 +192,11 @@ struct RealClaudeHostTests {
             try await testbed.waitForTurn(id, since: start)
             let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
             try await testbed.bridge.configure(model: other, in: id)
-            try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id)
+            let writing = Task { try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id) }
             try await eventually("开始这一轮") { testbed.bridge.session(id: id)?.state.isWorking == true }
             try await testbed.bridge.abort(id)
             try await eventually("停下") { testbed.bridge.session(id: id)?.state == .settled }
+            try await writing.value
             try await testbed.record(id)
             let log = ChangeLog(testbed.bridge)
 

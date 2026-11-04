@@ -36,6 +36,7 @@ final class ClaudeHostedSession: SessionLink {
     /// 在等的 `can_use_tool`（请求 id 与问题）
     var permission: (request: String, permission: ClaudePermission)?
     var commands: Set<String> = []
+    let deliveries = ClaudeDelivery()
     /// 停下这一轮（停止或发来新的一句）后的 `result` 是被打断的，不算出错
     private var stopping = false
     /// 为送进一句话停下这一轮：被停下的这一轮的 `result` 不算歇下，接着就是这句开的新一轮（从这一刻算）
@@ -152,6 +153,7 @@ final class ClaudeHostedSession: SessionLink {
     // MARK: 输出
 
     private func received(_ message: JSONValue) {
+        deliveries.observe(message)
         let now = Date.now
         let main = message["parent_tool_use_id"] == nil || message["parent_tool_use_id"] == .null
         switch message["type"]?.string {
@@ -229,7 +231,9 @@ final class ClaudeHostedSession: SessionLink {
         permission = nil
         // 被停下的一轮不一定标出错（那时 `ClaudeStream` 才清掉正在说的话）
         if stopped { emit(.speaking(nil)) }
-        finishTurn(failure: stopped ? nil : failure(of: message))
+        let failure = stopped ? nil : failure(of: message)
+        if let failure { deliveries.failed(failure, in: message) }
+        finishTurn(failure: failure)
         apiError = nil
         started()
         if restart {
@@ -307,6 +311,7 @@ final class ClaudeHostedSession: SessionLink {
 
     /// 输出读完了（进程退出）：没答的请求 `ClaudeStream` 已以会话结束收尾；托管会话下桥，大脑报退出。
     private func ended() {
+        deliveries.close()
         started()
         release()
         clearing?.resume(throwing: PiBridgeError.sessionEnded)
@@ -320,6 +325,11 @@ final class ClaudeHostedSession: SessionLink {
     /// 送进一句话（`userMessage`）：`interrupting` 时在跑就先停下这一轮、等它收尾，否则并进这一轮。
     func say(_ message: JSONValue, interrupting: Bool) async throws {
         if interrupting { try await interrupt(restarting: true) }
+        try put(message)
+    }
+
+    /// 写进去，从这一刻算这一轮。
+    func put(_ message: JSONValue) throws {
         try live.write(message)
         began()
     }
