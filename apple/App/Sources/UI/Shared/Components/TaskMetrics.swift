@@ -47,6 +47,9 @@ enum TaskMetrics {
 enum BoardCardMetrics {
     static let inset: CGFloat = 8
     static let gap: CGFloat = 8
+    /// 相邻两列的卡（与列头玻璃）横着隔多少：就是两列各自的 `inset`，列与列之间不另留缝（`BoardWidths`）。
+    /// 否决过：列间再留 20——四列三道缝连同卡离列边共白占约 100，1280 宽时待办一行只剩三四个字。
+    static var columnGap: CGFloat { 2 * inset }
     /// 卡里开头记号、项目小图形、标题、尾巴之间（`BoardCardLayout`）。
     static let leadGap: CGFloat = 8
     /// 推进中卡下沿那条线最窄多宽才画（`BoardLineRow`）：过去两颗点与现在一截波读得出来；再窄整条不画，只留读数。
@@ -72,7 +75,9 @@ enum BoardCardMetrics {
     static var waveGap: CGFloat { 2 * titlePadding - titleTop - WaveStrip.height - waveBottom }
 
     /// 卡标题至多几行、上下留多少（三端的列与手机的行同一条，所在的列或行按卡宽与字号算一次交给卡，`boardTitle`）：
-    /// 按标题那一截一行放得下几个字定（卡宽去掉左右内边距、开头的圈与项目小图形连同它们与标题之间的缝，`lead`）：至少两行，一行放不下 `twoLine` 个字时
+    /// 按标题那一截一行放得下几个字定（卡宽去掉左右内边距、开头的圈与项目小图形连同它们与标题之间的缝，`lead`）。
+    /// 带着项目小图形一行放不下 `glyphLine` 个字时项目小图形让位（`BoardTitle.glyph`），只留状态圈：项目色在会话条、项目页与悬停提示里都有，窄卡上字要紧。
+    /// 至少两行，一行放不下 `twoLine` 个字时
     /// （列压到最窄附近：Mac 1280 宽开着 Cue 时）排三行；辅助字号下再多一行。标题多是十到十二个字（大库里九到二十二个），
     /// 一行八个字、两行一行五个字都会截成"改走统…"。行数是上限、不预留：一行写得下的卡就一行高（`BoardCardLayout`），不在标题下空一块；
     /// 所以上限不给一行——宽列里二十来个字的标题给一行只会截断（1512 宽等你列的"README 截图换成 Swif…"），不省地方。
@@ -81,14 +86,20 @@ enum BoardCardMetrics {
     static func title(_ column: TaskBoard.Column, cardWidth: CGFloat?, typeSize: DynamicTypeSize) -> BoardTitle {
         let more = typeSize.isAccessibilitySize ? 1 : 0
         guard let cardWidth else { return BoardTitle(lines: 2 + more) }
-        let chars = (cardWidth - 2 * TaskMetrics.cardPadding - lead) / titleSize(typeSize)
+        let room = cardWidth - 2 * TaskMetrics.cardPadding, size = titleSize(typeSize)
+        let glyph = (room - lead(glyph: true)) / size >= glyphLine
+        let chars = (room - lead(glyph: glyph)) / size
         let lines = (chars >= twoLine ? 2 : 3) + more
-        return BoardTitle(lines: lines, padding: column.light ? lightPadding : titlePadding)
+        return BoardTitle(lines: lines, padding: column.light ? lightPadding : titlePadding, glyph: glyph)
     }
 
     private static let twoLine: CGFloat = 7
-    /// 圈、项目小图形与三道缝（圈与图形、图形与标题、标题与右边的空）。
-    private static var lead: CGFloat { TaskMetrics.cardLead + TaskMetrics.cardGlyph + 3 * leadGap }
+    /// 带着项目小图形一行至少放得下几个字：再少就让它让位。
+    private static let glyphLine: CGFloat = 6
+    /// 圈、项目小图形与它们之间、到标题、标题到右边的缝。
+    private static func lead(glyph: Bool) -> CGFloat {
+        TaskMetrics.cardLead + leadGap * 2 + (glyph ? TaskMetrics.cardGlyph + leadGap : 0)
+    }
 
     /// 列里卡标题的字号（`TaskMetrics.lineFont`）：中文字宽等于字号。
     private static func titleSize(_ typeSize: DynamicTypeSize) -> CGFloat {
@@ -104,4 +115,6 @@ enum BoardCardMetrics {
 struct BoardTitle: Equatable {
     var lines = 1
     var padding: CGFloat = 0
+    /// 卡标题前画项目小图形（看全部项目时）；窄卡上让位（`BoardCardMetrics.title`）。
+    var glyph = true
 }

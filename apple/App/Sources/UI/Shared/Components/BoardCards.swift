@@ -72,20 +72,23 @@ struct BoardPin: View {
     }
 }
 
-/// 卡上标题前的项目小图形：看全部项目时才画（选了项目范围时范围已经说了）。Mac 上指针停在它上面是项目联动（`boardDim`），悬停提示写项目名。
+/// 卡上标题前的项目小图形：看全部项目时才画（选了项目范围时范围已经说了）；卡窄时让位给标题（`BoardTitle.glyph`，三种卡同这一处）。Mac 上指针停在它上面是项目联动（`boardDim`），悬停提示写项目名。
 struct BoardProjectGlyph: View {
     let project: Project
     #if os(macOS)
     @Environment(Workspace.self) private var workspace
     #endif
+    @Environment(\.boardTitle) private var band
 
     var body: some View {
-        ProjectGlyph(project: project, size: TaskMetrics.cardGlyph)
-            .help(project.shownName)
-        #if os(macOS)
-            .onHover { workspace.hoverProject(project.id, $0) }
-            .presetHover(Binding { false } set: { if $0 { workspace.hoverProject(project.id, true) } })
-        #endif
+        if band.glyph {
+            ProjectGlyph(project: project, size: TaskMetrics.cardGlyph)
+                .help(project.shownName)
+            #if os(macOS)
+                .onHover { workspace.hoverProject(project.id, $0) }
+                .presetHover(Binding { false } set: { if $0 { workspace.hoverProject(project.id, true) } })
+            #endif
+        }
     }
 }
 

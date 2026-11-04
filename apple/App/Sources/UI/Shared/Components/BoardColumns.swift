@@ -68,17 +68,18 @@ struct BoardColumns: View {
 /// - 有卡的待办、已完成：也从 `compact` 起（卡上标题多折一行）；
 /// - 有卡的推进中、等你：均分宽（四列平分可见宽），窄到不足 `minColumn` 时取它；
 /// 剩下的宽按份数（`TaskBoard.Column.share`：推进中、等你多分）分给有卡的列，四列全空时分给四列（不全挤在左边、右边空一大片）。
-/// 看板放得下的最窄处（1280 宽开着 Cue）四列按 `minColumn` 算的宽，待办、已完成各让出 20 给推进中、等你：等你那一列的标题照行数规则读得全。
+/// 看板放得下的最窄处（1280 宽开着 Cue）四列合起来是 `minColumn` 的四倍，待办、已完成从 `compact` 起，让出的宽给推进中、等你：等你那一列的标题照行数规则读得全。
 /// 否决过：按卡数分档、宽只给卡多的列——等你常只有一两张却最要紧，1512 宽时被压到 160，`notes-edit` 截成"notes-…"。
 /// 分档只看有没有卡、不看标题多长：标题变长不让整排改宽，换档只在列空了或有了卡时，跟着那一下的过渡走。
 enum BoardWidths {
-    /// 一列最窄（三端同一个）：放得下圈、项目小图形与折几行后够读的标题（`BoardCardMetrics.title`）。
+    /// 一列最窄（三端同一个）：放得下圈与折几行后够读的标题（`BoardCardMetrics.title`）。列间不另留缝（`gap`），
+    /// 四列连同页边的最窄总宽与列间留 20 时一样（175 × 4 = 160 × 4 + 20 × 3）：省下的缝都给了列里的卡，临界宽不变。
     /// iPad 竖屏、iPhone 横屏、Mac 900 宽收起侧栏的窗口都排得下四列；900 宽开着侧栏排不下，横滑。
-    static let minColumn: CGFloat = 160
+    static let minColumn: CGFloat = 175
     /// 空列：列头（`BoardColumnHeader`）的记号、四个字的列名、数与"+"连同玻璃里外的边刚好放下。
     static let compact: CGFloat = 140
-    /// 列与列之间：列没有底，靠这段留白分开。
-    static let gap: CGFloat = 20
+    /// 列与列之间：列没有底，相邻两列的卡靠各自离列边的 `BoardCardMetrics.inset` 分开（看着隔 `BoardCardMetrics.columnGap`），不另留缝。
+    static let gap = BoardCardMetrics.columnGap - 2 * BoardCardMetrics.inset
 
     /// `filled`：各列有没有卡；`room`：可见宽去掉两侧页边。顺序同 `TaskBoard.Column.allCases`。
     static func of(_ filled: [Bool], room: CGFloat) -> [CGFloat] {
