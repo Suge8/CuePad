@@ -63,7 +63,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var shrunkDraft: String? { shrunk ? draft.preview : nil }
     private static var compactWidth: CGFloat { 220 }
     private static var headerTransition: AnyTransition {
-        .asymmetric(insertion: .opacity.animation(Motion.fade.delay(0.12)), removal: .identity)
+        .asymmetric(insertion: .opacity.animation(Motion.fade.delay(Motion.Fade.settle)), removal: .identity)
     }
     /// 玻璃上方允许浮出的高度（见 `field` 的裁切）。
     private static var overhang: CGFloat { 120 }
@@ -132,7 +132,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if !paletteCommands.isEmpty {
                 PiSlashPalette(commands: paletteCommands, highlighted: min(highlighted, paletteCommands.count - 1), pick: pick)
                     .transition(.opacity)
-                Divider().padding(.horizontal, 12)
             }
             if accepts.contains(.cards) {
                 ForEach(draft.attachments) { chip($0).padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity) }
@@ -190,7 +189,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     tools().environment(\.singleLineConfig, workspace.layout == .wide)
                         .frame(minHeight: ComposerMetrics.slot - 2 * ComposerMetrics.inset)
                         .padding(.bottom, ComposerMetrics.inset)
-                        .transition(.scale(scale: 0.6, anchor: .leading).combined(with: .opacity))
+                        .transition(Motion.pop(reduceMotion: reduceMotion))
                 }
             }
             if !shrunk { slotSpace }
@@ -222,7 +221,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     private var sendSlot: some View {
         ZStack {
-            if sendVisible { send().transition(.scale(scale: 0.6).combined(with: .opacity)) }
+            if sendVisible { send().transition(Motion.pop(reduceMotion: reduceMotion)) }
         }
         .frame(width: ComposerMetrics.slot, height: buttonHeight)
         // 只管钮自己进出：打第一个字时钮出现与一行变两层是同一次更新，挂在整块上的话"＋"的挪位也跟着它动画（减弱动态效果时也滑）
