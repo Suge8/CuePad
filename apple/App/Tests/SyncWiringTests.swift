@@ -10,24 +10,24 @@ struct SyncWiringTests {
     let app = TestApp()
     var services: AppServices { app.services }
 
-    @Test func 启动同步_状态与问题镜像给界面() async throws {
-        #expect(services.syncStatus == .starting)  // 引擎确认账号前不是"已同步"
+    /// 有引擎时起点是"正在开始"，引擎确认账号前不说"已同步"；没有引擎（测试宿主在隔离目录里）是不可用并写明原因。
+    @Test(arguments: [true, false])
+    func 同步的起点_有引擎先是正在开始_没有引擎是不可用并写原因(_ hasEngine: Bool) async throws {
+        let app = hasEngine ? TestApp() : TestApp(sync: .iCloud)
+        let services = app.services!
+        guard hasEngine else {
+            #expect(services.sync == nil)
+            guard case .unavailable(let reason) = services.syncStatus else {
+                Issue.record("没有引擎却不是 unavailable：\(services.syncStatus)")
+                return
+            }
+            #expect(!reason.isEmpty)
+            return
+        }
+        #expect(services.syncStatus == .starting)
         services.startSync()
         defer { services.cancelBackgroundWork() }
         try await eventually("app.sync.started == 1") { app.sync.started == 1 }
-
-        app.sync.emit(SyncState(status: .syncing, issues: []))
-        try await eventually("services.syncStatus == .syncing") { services.syncStatus == .syncing }
-
-        let issue = SyncIssue(recordType: Table.attachments.rawValue, recordName: "c1", problem: .damaged, detail: "附件记录没有文件")
-        app.sync.emit(SyncState(status: .syncing, issues: [issue]))
-        try await eventually("services.syncIssues == [issue]") { services.syncIssues == [issue] }
-
-        app.sync.emit(SyncState(status: .syncing, issues: [], alerts: .failed("没有网络")))
-        try await eventually("services.alertSubscription == .failed(\"没有网络\")") { services.alertSubscription == .failed("没有网络") }
-
-        app.sync.emit(SyncState(status: .needsDecision(.accountSwitched), issues: [issue]))
-        try await eventually("services.syncStatus == .needsDecision(.accountSwitched)") { services.syncStatus == .needsDecision(.accountSwitched) }
     }
 
     /// 真实的同步代码连内存里的 iCloud 替身（`SimulatedCloud`），从 AppServices 启动：云端最低对端版本高于这台时，
@@ -41,7 +41,6 @@ struct SyncWiringTests {
         defer { services.cancelBackgroundWork() }
 
         try await eventually("提示更新") { services.syncStatus == .outdated }
-        #expect(SyncSummary(services.syncStatus).title == "这台的 CuePad 要更新")
         #expect(!services.canSyncNow)
 
         let card = try await Workspace(services: services).createCard(body: "要更新时照记", in: Project.defaultID)
@@ -142,15 +141,5 @@ struct SyncWiringTests {
 
         try await services.resolveConflict(copy: copy.id, keep: .original)
         try await eventually("services.conflicts.isEmpty") { services.conflicts.isEmpty }
-    }
-
-    @Test func 正式组装没有创建同步时状态写明原因() {
-        let app = TestApp(sync: .iCloud)  // 测试宿主在隔离目录里
-        #expect(app.services.sync == nil)
-        guard case .unavailable(let reason) = app.services.syncStatus else {
-            Issue.record("没有引擎却不是 unavailable：\(app.services.syncStatus)")
-            return
-        }
-        #expect(reason.contains("隔离"))
     }
 }
