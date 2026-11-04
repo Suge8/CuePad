@@ -20,7 +20,7 @@
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
 #   xc.sh perf launch mac [次数] [启动参数…]            冷启动：到主窗口上屏、首屏内容出来、能交互（perf-launch.sh）
 #   xc.sh perf ab <旧检出> <新检出> <轮数> <perf 的参数…>   新旧交替跑同一条 perf（含 idle、launch），每轮一行、最后对比表，前台阻塞到结束（perf-ab.py）
-#   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）
+#   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）；用到描述文件的那一段全机排队（_lock.sh 规则 3）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 DebugScene.swift）。
 # 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限、任务时限、结束时的用时行见 _lock.sh；模拟器槽位见 _lock.sh 与 _sim.sh。
 # CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如真实库的只读副本）。
@@ -61,7 +61,7 @@ case "$cmd" in
     esac ;;
   device) exec "$APPLE_DIR/scripts/release-ios.sh" device ;;
   strings) "$0" build mac; "$0" build ios; exec python3 "$APPLE_DIR/scripts/strings.py" sync ;;
-  provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
+  provision) signing_begin; exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;  # 签名锁见 _lock.sh 规则 3
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
   perf) [ "$platform" != ab ] || exec python3 "$APPLE_DIR/scripts/perf-ab.py" "${@:3}" ;;  # 其余先构建、再测量，两段各自进锁（见下）
   test|shot|rec|run)
@@ -111,10 +111,11 @@ if [ "$platform" = mac ]; then build_settings+=(INFOPLIST_KEY_LSUIElement=YES); 
 sign_development() {
   [ "${CUEPAD_SIGN:-}" = development ] || return 0
   [ "$platform" = mac ] || { echo "CUEPAD_SIGN=development 只用于 mac" >&2; exit 2; }
+  signing_begin
   python3 "$APPLE_DIR/scripts/provision.py" unlock
   local profile entitlements="$DERIVED/CuePad-macOS-development.entitlements" decoded="$DERIVED/profile.plist"
   # if 而不是 &&：最后一个描述文件不是它时循环以非零结束，pipefail 下整个赋值失败、set -e 一声不吭地退出
-  profile="$(for f in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"/*.provisionprofile; do
+  profile="$(for f in "$PROFILES_DIR"/*.provisionprofile; do
     if security cms -D -i "$f" > "$decoded" 2>/dev/null && [ "$(plutil -extract Name raw "$decoded")" = "CuePad macOS Development" ]; then echo "$f"; fi; done | head -1)"
   [ -n "$profile" ] || { echo "没有「CuePad macOS Development」描述文件：先 provision.py profiles" >&2; exit 1; }
   cp "$profile" "$app/Contents/embedded.provisionprofile"
@@ -123,6 +124,7 @@ sign_development() {
     -c "Add :com.apple.application-identifier string $CUEPAD_TEAM_ID.$CUEPAD_APP_ID" -c "Add :com.apple.developer.team-identifier string $CUEPAD_TEAM_ID" "$entitlements"
   # 证书只认专用钥匙串里那份（描述文件按它建）；登录钥匙串里可能有同名的另一张
   codesign --force --keychain "$HOME/.appstoreconnect/cuepad-signing.keychain-db" --sign "Apple Development" --entitlements "$entitlements" "$app"
+  signing_end
 }
 
 case "$cmd" in
@@ -144,6 +146,7 @@ case "$cmd" in
     exit $status ;;
   activity-log)
     xcd all
+    signing_begin  # 脚本随它结束，锁一起放
     python3 "$APPLE_DIR/scripts/activity-log.py" "$app" "${2:-$DERIVED/activity-diagnostics.json}" ;;
   build) xcd all; sign_development ;;
   build-perf) built "$DERIVED/build-key-$platform" "$app" all xcb -quiet build ;;
