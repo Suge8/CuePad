@@ -10,8 +10,9 @@ extension View {
             switch style {
             case .fullScreen:
                 self.fullScreenCover(item: item) { content($0).modalPage(close) }
-            case .bubble(let source, _):
-                self.overlay { BubbleLayer(item: item.wrappedValue, source: source, close: close, content: content) }
+            case .bubble(let source, let width):
+                let shown = item.wrappedValue
+                self.modifier(BubbleSlot(key: shown.map { AnyHashable($0.id) }, source: source, width: width, close: close) { if let shown { content(shown) } })
             case .sheet:
                 self.sheet(item: item) { content($0).modalPage(close) }
             }
@@ -22,7 +23,9 @@ extension View {
     /// 页顶那一排画在它自己的导航栏里（根页、iPad 的 Cue 面板给的 `HeaderHost` 会让它不画标题、改画成根页那一排），
     /// 底下那页被提示横幅盖着时它不跟着让开、不算长开的面板里，它在前台（看板分段、翻走的根页给的 `pageActive` 不算数）。
     fileprivate func modalPage(_ close: ClosePanel) -> some View {
-        environment(\.closePanel, close)
+        // sheet 是另一层呈现，窗口那一层的气泡画不到它上面：里面长出的气泡画在它自己的这一层
+        panelHost()
+            .environment(\.closePanel, close)
             .environment(\.headerHost, .navigationBar)
             .environment(\.headerGivesWay, false)
             .environment(\.headerGrown, false)
@@ -36,14 +39,156 @@ extension View {
     }
 }
 
-/// 气泡那一层：铺满所在的视图、一直在，气泡在里面进出（进出场挂在被插入、移除的那一层上）。手指落在气泡外面就关（那一下照常落到下面，
+/// 窗口里的气泡（`PanelStyle.bubble`）都画在这里，同 Mac 的 `PanelHost`：场景的根挂一次（`panelHost()`，盖住窄屏与宽屏），
+/// sheet 与全屏页里各挂一次（`modalPage`）。挂在页里、控件上的气泡画不出控件那么大的框（输入框还把它裁掉），所以不各画各的。
+/// 一次只开一个：手指落在开着的那个外面就先关它，再点出下一个。内容带着呈现处的环境画（`BubbleSlot`），这一层在 Workspace、色板之外也画得对。
+@Observable
+final class PanelHost {
+    struct Shown {
+        let token: UUID
+        /// 换了这个就是另一个气泡（换一条任务）：旧的退场、新的进场。
+        let identity: AnyHashable
+        let source: BubbleSource
+        let width: BubblePlacement.Width
+        let content: AnyView
+        let close: ClosePanel
+    }
+
+    private(set) var shown: Shown?
+    @ObservationIgnored fileprivate weak var window: UIWindow?
+    /// 这一层（窗口、sheet）的字号：气泡内容按它画，不按呈现处——呈现处可能在一排封了字号的控件里（工具排），气泡里是能放大的说明。
+    @ObservationIgnored fileprivate var typeSize = DynamicTypeSize.large
+
+    /// 气泡里字号的上限，同 Cue 面板。
+    static let largestType = DynamicTypeSize.accessibility1
+
+    func show(_ entry: Shown) { shown = entry }
+
+    func hide(_ token: UUID) {
+        if shown?.token == token { shown = nil }
+    }
+
+    /// 系统导航栏里带读屏标识 `id` 的项在窗口里的框（点下时量一次，推入转场里栏在动，不跟着量）：栏里的项是系统按 SwiftUI 的按钮另建的，
+    /// SwiftUI 量的框对不上，读屏标识系统照样带过去。找不到为 nil。
+    func frame(of id: String) -> CGRect? {
+        guard let window, let control = Self.find(id, in: window) else { return nil }
+        return control.convert(control.bounds, to: nil)
+    }
+
+    private static func find(_ id: String, in view: UIView) -> UIView? {
+        if view.accessibilityIdentifier == id { return view }
+        for child in view.subviews { if let found = find(id, in: child) { return found } }
+        return nil
+    }
+}
+
+extension View {
+    /// 场景的根与 sheet 各挂一次（同 Mac 的 `panelHost`）：这一层的气泡都画在这里。
+    func panelHost() -> some View { modifier(PanelHostModifier()) }
+
+    /// 从这个控件（按钮、圆钮、胶囊）长出的气泡，同 Mac：挂在它的框下（放不下挂上面），尾巴指它。宽默认随内容（`BubblePlacement.Width`）。
+    func bubble(isPresented: Binding<Bool>, width: BubblePlacement.Width = .fitting, @ViewBuilder content: @escaping () -> some View) -> some View {
+        modifier(ControlBubble(isPresented: isPresented, width: width, panel: content))
+    }
+}
+
+private struct PanelHostModifier: ViewModifier {
+    @State private var host = PanelHost()
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
+            .overlay { BubbleLayer(shown: host.shown) }
+            .background { WindowProbe(host: host) }
+            .environment(host)
+    }
+}
+
+/// 把所在的窗口报给 `PanelHost`（导航栏里的控件按读屏标识在窗口里找）。
+private struct WindowProbe: UIViewRepresentable {
+    let host: PanelHost
+
+    func makeUIView(context: Context) -> Probe { Probe(host: host) }
+    func updateUIView(_ view: Probe, context: Context) {}
+
+    final class Probe: UIView {
+        private let host: PanelHost
+
+        init(host: PanelHost) {
+            self.host = host
+            super.init(frame: .zero)
+            isUserInteractionEnabled = false
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            host.window = window
+        }
+    }
+}
+
+/// 一处 `panel(style: .bubble)`：开着时把内容交给这一层的 `PanelHost`，连同呈现处的环境（这一层可能在 Workspace、色板之外）；字号除外，按这一层的（`PanelHost.typeSize`）。
+private struct BubbleSlot<Panel: View>: ViewModifier {
+    let key: AnyHashable?
+    let source: BubbleSource
+    let width: BubblePlacement.Width
+    let close: ClosePanel
+    @ViewBuilder let panel: () -> Panel
+    @Environment(PanelHost.self) private var host: PanelHost?
+    @Environment(\.self) private var environment
+    @State private var token = UUID()
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: Mode(key: key, source: source, width: width), initial: true) { _, mode in
+                guard let host else { return }
+                guard let key = mode.key else { return host.hide(token) }
+                host.show(PanelHost.Shown(
+                    token: token, identity: [AnyHashable(token), key], source: mode.source, width: mode.width,
+                    content: AnyView(
+                        panel().environment(\.closePanel, close)
+                            .environment(\.dynamicTypeSize, min(host.typeSize, PanelHost.largestType))
+                            .environment(\.self, environment)),
+                    close: close))
+            }
+            .onDisappear { host?.hide(token) }
+    }
+
+    private struct Mode: Equatable {
+        let key: AnyHashable?
+        let source: BubbleSource
+        let width: BubblePlacement.Width
+    }
+}
+
+/// 从控件长出的气泡（`View.bubble(isPresented:)`）：开着时按 SwiftUI 量的框长出。量的框记在不触发重算的盒子里：控件随滚动、键盘挪动不重算这一层。
+/// 系统导航栏里的项用不了它：栏里的项建好之后系统不再跑它上面的 `onChange`，开了也交不到这一层——页上挂 `panel(style: .bubble)`，
+/// 点下时按读屏标识量钮的框（`PanelHost.frame(of:)`，`LibraryScreen`）。
+private struct ControlBubble<Panel: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    let width: BubblePlacement.Width
+    @ViewBuilder let panel: () -> Panel
+    @State private var measured = Measured()
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { measured.frame = $0 }
+            .panel(isPresented: $isPresented, style: .bubble(isPresented ? measured.frame.map(BubbleSource.control) ?? .unanchored : .unanchored, width: width), content: panel)
+    }
+
+    private final class Measured {
+        var frame: CGRect?
+    }
+}
+
+/// 气泡那一层：铺满宿主、一直在，气泡在里面进出（进出场挂在被插入、移除的那一层上）。手指落在气泡外面就关（那一下照常落到下面，
 /// 点另一条任务就是换成它的气泡）。键盘升起时（在气泡里写字）气泡收起尾巴、整块往上挪到键盘上沿之上，只挪不重排；
 /// 放不下才矮下去、在里面滚。这一层不让键盘（`ignoresSafeArea(.keyboard)`）：摆法始终对着整个容器算，键盘只给一条下沿（`BubbleStage.floor`）。
-private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
-    let item: Item?
-    let source: BubbleSource
-    let close: ClosePanel
-    @ViewBuilder let content: (Item) -> Panel
+private struct BubbleLayer: View {
+    let shown: PanelHost.Shown?
     /// 键盘上沿（窗口坐标）；键盘收着为 nil。
     @State private var keyboardTop: CGFloat?
     /// 贴在底部的纸被往下拖了多远（`BubbleDrag`）。
@@ -51,37 +196,40 @@ private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let source = shown?.source ?? .unanchored
         GeometryReader { proxy in
             let frame = proxy.frame(in: .global)
-            let placement = BubblePlacement(source: source, container: frame, insets: Self.insets).lifted(keyboardTop != nil)
+            let placement = BubblePlacement(source: source, container: frame, insets: Self.insets, width: shown?.width ?? .fitting).lifted(keyboardTop != nil)
             BubbleStage(floor: keyboardTop.map { $0 - frame.minY - Self.insets.bottom }, ceiling: Self.insets.top) {
-                if let item {
+                if let shown {
                     BubbleFrame(placement: placement) {
-                        content(item).environment(\.closePanel, close)
+                        shown.content
                     } area: {
                         TouchWatch { point, area in
-                            if !area.bounds.contains(area.convert(point, from: nil)) { close() }
+                            if !area.bounds.contains(area.convert(point, from: nil)) { shown.close() }
                         }
                     }
                     .offset(y: drag)
                     .environment(\.bubbleDrag, source == .bottom ? BubbleDrag(changed: dragged, ended: released) : nil)
-                    .id(item.id)
+                    .id(shown.identity)
                     .transition(placement.transition(reduceMotion: reduceMotion))
                 }
             }
+            .coordinateSpace(.named(BubbleStage.space))
         }
         // 贴在底部的纸伸进 Home 指示条那一截：与屏幕圆角同心
         .ignoresSafeArea(source == .bottom ? .all : .keyboard, edges: source == .bottom ? .bottom : .all)
-        .animation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: item?.id)
+        .allowsHitTesting(shown != nil)
+        .animation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: shown?.identity)
         .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: keyboardTop)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
-            guard item != nil, let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+            guard shown != nil, let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
             // 键盘开着时只往上让、不往下回：菜单一开候选栏收起、键盘矮一截，气泡跟着掉下去再弹回来是看得见的抖（同 `KeyboardHold`）；
             // 收起时末位在屏幕下面，也不往下挪，随后的 willHide 清掉
             keyboardTop = min(keyboardTop ?? end.minY, end.minY)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardTop = nil }
-        .onChange(of: item == nil) { if item == nil { keyboardTop = nil } else { drag = 0 } }
+        .onChange(of: shown == nil) { if shown == nil { keyboardTop = nil } else { drag = 0 } }
     }
 
     /// 往下跟手；往上拉不动，越拉越沉。
@@ -91,7 +239,7 @@ private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
 
     /// 松手按去势定去留（`predicted` 是照这股劲滑到哪）：拖得够远或甩得够快就关、从此刻的位置落回底边，否则弹回。
     private func released(_ translation: CGFloat, predicted: CGFloat) {
-        if max(translation, predicted) > Self.dismissDrag { return close() }
+        if max(translation, predicted) > Self.dismissDrag { shown?.close(); return }
         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { drag = 0 }
     }
 
@@ -177,39 +325,3 @@ private struct TouchWatch: UIViewRepresentable {
 }
 #endif
 
-#if os(iOS)
-/// 导航栏里的圆钮在窗口里的框（从它长出气泡，`BubbleSource.control`）：栏里的项是系统按 SwiftUI 的按钮另建的，挂在按钮上的视图不跟过去，
-/// SwiftUI 量的框也对不上页。圆钮带一个读屏标识（`accessibilityIdentifier`，系统照样给栏里那颗），点下时从页所在的窗口里按它找、
-/// 按窗口坐标量一次（推入转场里栏在动，不跟着量）。找不到为 nil，调用处退回贴底的纸。
-@MainActor final class ControlAnchor {
-    let id: String
-    fileprivate weak var view: UIView?
-
-    init(_ id: String) { self.id = id }
-
-    var frame: CGRect? {
-        guard let window = view?.window, let control = Self.find(id, in: window) else { return nil }
-        return control.convert(control.bounds, to: nil)
-    }
-
-    private static func find(_ id: String, in view: UIView) -> UIView? {
-        if view.accessibilityIdentifier == id { return view }
-        for child in view.subviews { if let found = find(id, in: child) { return found } }
-        return nil
-    }
-
-    /// 挂在页上（`background`）：认出页所在的窗口。
-    struct Probe: UIViewRepresentable {
-        let anchor: ControlAnchor
-
-        func makeUIView(context: Context) -> UIView {
-            let view = UIView()
-            view.isUserInteractionEnabled = false
-            anchor.view = view
-            return view
-        }
-
-        func updateUIView(_ view: UIView, context: Context) {}
-    }
-}
-#endif

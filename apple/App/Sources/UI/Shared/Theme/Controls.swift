@@ -41,6 +41,16 @@ enum ControlSize {
         }
     }
 
+    /// 字离上下边的最小距离（字号大了胶囊随字长高）。Mac 的 `inline` 只留 2：12 点的字行高 15、胶囊上的模型标志 20，
+    /// 留 6 就撑破 24 的档，一排里带标志的、不带的、思考强度条各高各的。
+    var verticalPadding: CGFloat {
+        #if os(macOS)
+        self == .inline ? 2 : 6
+        #else
+        6
+        #endif
+    }
+
     /// 带字的控件里字离两头。
     var padding: CGFloat {
         switch self {
@@ -83,12 +93,19 @@ struct ControlButtonStyle: ButtonStyle {
 
 /// 控件的外形（`ControlButtonStyle` 的样子，不含按压）；停用时整体变淡，挂在菜单按钮上的同样。
 /// `selected`：开着的筛选、选中的那一颗（全 App 一套选中：选中底、墨字半粗，docs/ui.md「选中」），只对带字的胶囊有意义；胶囊的外形经 `chip`。
+/// `level`：胶囊自己当读数用（上下文用量）——底下从左铺一层到比例，高就是胶囊实际的高（随字号长），不含触屏补出来的点按区。
 struct ControlSurface: ViewModifier {
+    struct Level: Equatable {
+        let fraction: Double
+        let color: Color
+    }
+
     var kind = ControlButtonStyle.Kind.secondary
     var size = ControlSize.regular
     var compact = false
     var selected = false
     var destructive = false
+    var level: Level?
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var isEnabled
 
@@ -126,15 +143,22 @@ struct ControlSurface: ViewModifier {
                 .font((compact ? Typography.meta : size.font).weight(selected ? .semibold : .medium))
                 .foregroundStyle(kind == .primary ? palette.onFill : kind == .highlight ? palette.signature : ink)
                 .padding(.horizontal, compact ? 10 : size.padding)
-                .padding(.vertical, 6)
+                .padding(.vertical, compact ? 6 : size.verticalPadding)
                 .frame(minHeight: compact ? ControlMetrics.compactHeight : size.height)
                 .background(background, in: .capsule)
+                .background {
+                    if let level {
+                        // 缩放不改排版，不用读几何
+                        level.color.scaleEffect(x: level.fraction, anchor: .leading).clipShape(.capsule)
+                    }
+                }
                 .overlay { Capsule().strokeBorder(kind == .secondary && !selected ? palette.hair : .clear, lineWidth: ControlMetrics.stroke) }
                 #if os(iOS)
                 .frame(minHeight: ControlSize.target)
                 #endif
                 .contentShape(.capsule)
                 .animation(Motion.fade, value: selected)
+                .animation(Motion.fade, value: level)
         }
     }
 

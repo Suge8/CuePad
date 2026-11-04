@@ -71,10 +71,8 @@ forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（
   '(?:\.font\(\s*\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\bFont\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\.system\(\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b)' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/**' \
   'App/Sources/UI/Shared/Components/BoardLane.swift' \
-  'App/Sources/UI/Shared/Components/CaptureComposer.swift' \
   'App/Sources/UI/Shared/Components/FloatingHeader.swift' \
   'App/Sources/UI/Shared/Components/LastCrashRow.swift' \
-  'App/Sources/UI/Shared/Components/NewTaskField.swift' \
   'App/Sources/UI/Shared/Components/Panes.swift' \
   'App/Sources/UI/Shared/Components/ProjectScope.swift' \
   'App/Sources/UI/Shared/Components/RowActions.swift' \
@@ -110,7 +108,6 @@ forbid "小东西冒出来、收回去用 Motion.pop（AppGroup/Motion.swift）�
 forbid "Mac 主窗口里从控件弹出的说明与小表单用 bubble(isPresented:) 或 HelpButton，不用系统 popover：它另起一扇窗，第一次弹 85～113ms，开着时主窗口的快捷键不响应（docs/layout.md）；设置窗口与只编进 iOS 的文件例外" \
   '\.popover\(' 'App/Sources/UI/iOS/**' '**/*+iOS.swift' 'App/Sources/UI/macOS/Settings/**' 'App/Sources/UI/Debug/**' \
   'App/Sources/UI/Shared/Cue/CueListPanel.swift' \
-  'App/Sources/UI/Shared/Components/PiContextGauge.swift' \
   'App/Sources/UI/macOS/Editor/CardEditorBar.swift'
 forbid "色值只在色板（AppGroup/Palette.swift）：界面取 palette 的令牌，新颜色先进色板、定语义名与浅深两档，一样东西只有一份颜色" \
   '\b(?:Color|UIColor|NSColor|CGColor)\(\s*(?:hex|red|white|hue|srgbRed|calibratedRed|displayP3Red|deviceRed|calibratedWhite)\s*:' \
