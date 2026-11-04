@@ -36,13 +36,6 @@ extension CueStore {
   /// 项目那几个键全是空值，再按 `t.projectID` 排：同一项目的任务总是连在一起，按项目分组时每个项目只成一组。
   static let taskProjectOrder = "\(projectOrder("p")), t.projectID"
 
-  /// 回收站里的条数：删除的项目加单独删除的卡片（`trashedProjects()` 与 `trashedCards()` 的个数之和），只数不读正文。
-  public func trashCount() throws -> Int {
-    try db.first(
-      "SELECT (SELECT COUNT(*) FROM projects WHERE deletedAt IS NOT NULL) + (SELECT COUNT(*) FROM cards WHERE deletedAt IS NOT NULL)"
-    ) { Int($0.int(0)) } ?? 0
-  }
-
   /// 回收站里每个项目带进来的卡片数（项目被删后其下的卡片都看不见，含先前单独删除的）：一次查询，没有卡片的项目不在结果里。
   public func trashedProjectCardCounts() throws -> [UUID: Int] {
     Dictionary(uniqueKeysWithValues: try db.query(
