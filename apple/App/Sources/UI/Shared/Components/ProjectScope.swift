@@ -8,8 +8,8 @@ struct ProjectScope: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    /// 项目名最宽多少：名字再长也不挤到两侧的圆钮底下。
-    private static let nameWidth: CGFloat = 150
+    /// 项目名最宽多少：名字再长也不挤到两侧的圆钮底下（PROTOTYPE：窄屏侧栏那一排给得更窄）。
+    var nameWidth: CGFloat = 150
 
     var body: some View {
         @Bindable var workspace = workspace
@@ -26,7 +26,7 @@ struct ProjectScope: View {
                 HStack(spacing: 5) {
                     if let current { ProjectGlyph(project: current, size: 13) }
                     (current.map { Text($0.shownName) } ?? Text("全部项目")).fontWeight(current == nil ? nil : .semibold)
-                        .lineLimit(1).frame(maxWidth: Self.nameWidth)
+                        .lineLimit(1).frame(maxWidth: nameWidth)
                     if current == nil { Image(.expand).font(.caption.weight(.semibold)).accessibilityHidden(true) }
                 }
                 .menuLabel(current.map { "项目范围：\($0.shownName)" } ?? "项目范围：全部项目")

@@ -57,6 +57,8 @@ enum DebugHooks {
         var cuePanelOpen = false
         /// 不弹演示会话的前台横幅（`-CuePadQuiet YES`）。
         var quietAlerts = false
+        /// PROTOTYPE：窄屏侧栏进展段的收口方案（`-CuePadNav one|two`，`NavVariant`）。
+        var nav = NavVariant.now
         #endif
     }
 

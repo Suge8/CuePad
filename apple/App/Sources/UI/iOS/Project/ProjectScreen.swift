@@ -130,7 +130,7 @@ struct ProjectScreen: View {
     private var actions: some View {
         Menu("更多", icon: .more) {
             Button("记一条灵感", icon: .write, action: workspace.newCard)
-            if workspace.layout == .wide {
+            if workspace.layout == .wide || NavVariant.current == .one {
                 Button("看这个项目的进展", icon: .task) { workspace.showProgress(of: projectID) }
             } else {
                 Button("看这个项目的会话", icon: .session) {

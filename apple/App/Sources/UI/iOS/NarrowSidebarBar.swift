@@ -12,12 +12,18 @@ struct NarrowSidebarBar: View {
     @ScaledMetric(relativeTo: .body) private var searchWidth: CGFloat = 92
 
     var body: some View {
-        let open = quotaOpen && workspace.navigationPane == .progress
+        let open = quotaOpen && workspace.navigationPane == .progress && NavVariant.current == .now
         let givesWay = workspace.notice != nil
         BarRow(open: open) {
-            ViewThatFits(in: .horizontal) {
-                panes(titles: true)
-                panes(titles: false)
+            Group {
+                if NavVariant.current == .two {
+                    NavTriple()
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        panes(titles: true)
+                        panes(titles: false)
+                    }
+                }
             }
             .modifier(GiveWay(hidden: givesWay))
             cue
@@ -62,7 +68,13 @@ struct NarrowSidebarBar: View {
             }
         case .progress:
             // 收着时只占自己的宽，在两头之间居中；长开时铺满给的整排
-            ProgressHeader(open: $quotaOpen, scopeInPanel: true).fixedSize(horizontal: !quotaOpen, vertical: false)
+            if NavVariant.current == .now {
+                // 收着时只占自己的宽，在两头之间居中；长开时铺满给的整排
+                ProgressHeader(open: $quotaOpen, scopeInPanel: true).fixedSize(horizontal: !quotaOpen, vertical: false)
+            } else {
+                // PROTOTYPE one、two：中间只放项目范围，额度去了项目段末尾那一组（`ShelfQuota`）
+                ScopePiece()
+            }
         }
     }
 }

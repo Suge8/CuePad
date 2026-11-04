@@ -145,6 +145,7 @@ private struct ShelfFooter: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if NavVariant.current != .now { ShelfQuota() }
             ShelfLine(route: .archive, icon: .archive, title: String(localized: "归档"))
             ShelfLine(route: .trash, icon: .trash, title: String(localized: "回收站"))
             ShelfLine(route: .settings, icon: .settings, title: String(localized: "设置"), alert: services.macAlert)
