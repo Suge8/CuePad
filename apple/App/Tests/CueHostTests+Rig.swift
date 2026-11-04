@@ -161,6 +161,7 @@ extension CueHostTests {
         /// `messages` 是这时读到的对话（peek 里看得到）。
         func answered(_ sessionID: String, prompt: String = "接着做", reply: String = "好了", messages: [PiChatMessage] = []) async throws {
             try await eventually("歇下写进库") { try await self.store.sessions(matching: sessionID).first?.state == .known(.settled) }
+            try await app.historyRead(sessionID)
             try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: PiRecap(lastPrompt: prompt, lastReply: reply, answeredAt: .now)))
         }
 
