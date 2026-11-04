@@ -5,6 +5,7 @@ import SwiftUI
 /// 一键整理那块纸（只在有不用你选的几件时出现，`TidyPaper`）、规则（`InstructionSection`）、技能（`SkillSection`）。
 /// 点任何一份都在 CuePad 里打开它的文件页（`LibraryFilePage`、`LibraryFileScreen`）；去重与合并在文件页顶上那一条里做。
 /// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。行末只画读不到这一份的那几家（`UnseenMarks`）。
+/// 一份规则是一行 `LinkRow`；行与行之间不画线，靠纸分组。
 
 /// 两段共用的排版：一列居中、最宽 `column`（同 Mac 文件页那一列字），块与块之间 `gap`。段名只在分段上（Mac 工具栏、手机页顶），段里不再写组名与个数。
 enum LibraryLayout {
@@ -22,68 +23,29 @@ enum LibraryLayout {
     static let flush = false
     /// 文件页里正文与上面各块的左右留白
     static let textInset: CGFloat = 24
+    /// 行尾的前进箭头：Mac 上点行打开的是盖在主区上的文件页（浮层，不是进一页），不画
+    static let chevron = false
     #else
     static let radius = Radius.sheet
     static let paperVertical: CGFloat = 0
     static let flush = true
     static let textInset: CGFloat = 20
+    static let chevron = true
     #endif
 }
 
-/// 一组行的纸：行与行之间一线发丝（同设置的分组），手机上行铺满纸宽、首尾的圆角跟着纸（`rowContainer`）。
+/// 一组行的纸：行与行之间不画线，手机上行铺满纸宽、首尾的圆角跟着纸（`rowContainer`）。
 struct LibraryPaper<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(spacing: 0) {
-            Group(subviews: content) { rows in
-                ForEach(rows) { row in
-                    row
-                    if row.id != rows.last?.id { Divider().padding(.leading, LibraryLayout.inset + LibraryRowMetrics.icon + LibraryRowMetrics.gap) }
-                }
-            }
-        }
-        .padding(.vertical, LibraryLayout.paperVertical)
-        .paper(cornerRadius: LibraryLayout.radius)
-        .rowContainer(.rect(cornerRadius: LibraryLayout.radius), flush: LibraryLayout.flush)
+        VStack(spacing: 0) { content }
+            .padding(.vertical, LibraryLayout.paperVertical)
+            .paper(cornerRadius: LibraryLayout.radius)
+            .rowContainer(.rect(cornerRadius: LibraryLayout.radius), flush: LibraryLayout.flush)
     }
 }
 
-enum LibraryRowMetrics {
-    #if os(macOS)
-    static let icon: CGFloat = 18
-    static let gap: CGFloat = 12
-    static let height: CGFloat = 44
-    static let titleFont = Typography.body.weight(.medium)
-    #else
-    static let icon: CGFloat = 22
-    static let gap: CGFloat = 12
-    static let height: CGFloat = 58
-    static let titleFont = Typography.body
-    #endif
-}
-
-/// 一行：图标一列、名字、右边的东西。
-struct LibraryRow<Icon: View, Trailing: View>: View {
-    let title: String
-    @ViewBuilder var icon: Icon
-    @ViewBuilder var trailing: Trailing
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: LibraryRowMetrics.gap) {
-            icon.frame(width: LibraryRowMetrics.icon)
-            // 写不下一行就折成两行，不截掉（手机窄、英文长）
-            Text(verbatim: title).font(LibraryRowMetrics.titleFont).foregroundStyle(palette.ink).lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            trailing
-        }
-        .padding(.horizontal, LibraryLayout.inset)
-        .padding(.vertical, 8)
-        .frame(minHeight: LibraryRowMetrics.height)
-        .contentShape(.rect)
-    }
-}
 
 /// 一键整理那块纸：按段分开，规则段只列规则的事（内容相同换链接、Claude Code 读不到项目规则），技能段只列技能的事（旧目录、读不到、空文件夹），
 /// 那一段没有就不出现，有就在那一段最上面。不用你选的那几件逐条写结果的事实，不带逐条的按钮、不写标题，
@@ -120,7 +82,7 @@ struct TidyPaper: View {
     #if os(macOS)
     private static var font: Font { Typography.body }
     #else
-    private static var font: Font { .subheadline }
+    private static var font: Font { Typography.secondary }
     #endif
 }
 
@@ -132,12 +94,13 @@ struct TidyFacts: View {
     var font: Font?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .body) private var iconColumn = Chrome.icon
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(tidies) { tidy in
-                HStack(alignment: .firstTextBaseline, spacing: LibraryRowMetrics.gap) {
-                    Image(tidy.icon).foregroundStyle(palette.ink2).frame(width: LibraryRowMetrics.icon)
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.group) {
+                    Image(tidy.icon).foregroundStyle(palette.ink2).frame(width: iconColumn)
                     Text(verbatim: workspace.fact(of: tidy, in: library)).font(font).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -232,7 +195,7 @@ struct InstructionSection: View {
 
     private func row(_ instruction: LibraryInstruction) -> some View {
         Button { workspace.openLibrary(.instruction(instruction.kind)) } label: {
-            LibraryRow(title: workspace.instructionName(instruction.kind)) {
+            LinkRow(title: Text(verbatim: workspace.instructionName(instruction.kind)), chevron: LibraryLayout.chevron) {
                 InstructionIcon(kind: instruction.kind)
             } trailing: {
                 InstructionTrailing(library: library, instruction: instruction)
@@ -242,31 +205,33 @@ struct InstructionSection: View {
     }
 }
 
-/// 全局规则那一张纸：名字一行，下面露出正文开头四行（留足四行的高，短的不缩），点开就改。正文读同步来的那一条（`LibraryFileText`），不另存一份预览。
+/// 全局规则那一张纸：名字一行（字、图标列与边同 `LinkRow`），下面露出正文开头四行（留足四行的高，短的不缩），点开就改。正文读同步来的那一条（`LibraryFileText`），不另存一份预览。
 /// 露出的是渲染后的样子（`MarkdownBlock`）：标题加粗、不带 #，列表带圆点，行内记号只留字，代码块、表格与分割线跳过。
 private struct GlobalRuleRow: View {
     let library: AgentLibrary
     let instruction: LibraryInstruction
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .body) private var iconColumn = Chrome.icon
     @State private var texts: [String: String]?
 
     var body: some View {
         Button { workspace.openLibrary(.instruction(.global)) } label: {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: LibraryRowMetrics.gap) {
-                    InstructionIcon(kind: .global).frame(width: LibraryRowMetrics.icon)
-                    Text(verbatim: workspace.instructionName(.global)).font(LibraryRowMetrics.titleFont).foregroundStyle(palette.ink)
+                HStack(spacing: Spacing.group) {
+                    InstructionIcon(kind: .global).frame(width: iconColumn)
+                    Text(verbatim: workspace.instructionName(.global)).font(Typography.body).foregroundStyle(palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     InstructionTrailing(library: library, instruction: instruction)
+                    if LibraryLayout.chevron { Chevron(.forward).foregroundStyle(palette.ink3) }
                 }
                 Text(opening)
-                    .font(Self.textFont).foregroundStyle(instruction.hash == nil ? palette.ink3 : palette.ink2)
+                    .font(Typography.meta).foregroundStyle(instruction.hash == nil ? palette.ink3 : palette.ink2)
                     .lineLimit(Self.lines, reservesSpace: true).lineSpacing(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, LibraryRowMetrics.icon + LibraryRowMetrics.gap)
+                    .padding(.leading, iconColumn + Spacing.group)
             }
-            .padding(.horizontal, LibraryLayout.inset)
+            .padding(.horizontal, Spacing.inset)
             .padding(.vertical, 12)
             .contentShape(.rect)
         }
@@ -302,12 +267,6 @@ private struct GlobalRuleRow: View {
             all += line
         }
     }
-
-    #if os(macOS)
-    private static var textFont: Font { Typography.meta }
-    #else
-    private static var textFont: Font { .footnote }
-    #endif
 }
 
 /// 规则行首的图：全局规则一张纸，Pi 的系统提示是 Pi 的标志，项目是它的图形。
@@ -331,7 +290,7 @@ private struct InstructionIcon: View {
     #endif
 }
 
-/// 规则行末：读不到的那几家与另写了一份的那家（还没有这个文件时写"还没有"），手机上再一个箭头。
+/// 规则行末：读不到的那几家与另写了一份的那家（还没有这个文件时写"还没有"）。
 private struct InstructionTrailing: View {
     let library: AgentLibrary
     let instruction: LibraryInstruction
@@ -345,8 +304,5 @@ private struct InstructionTrailing: View {
             let unseen = library.unseen(instruction)
             UnseenMarks(agents: library.agents, unseen: library.agents.filter { unseen.contains($0) || writers.contains($0) })
         }
-        #if os(iOS)
-        Image(.forward).font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
-        #endif
     }
 }

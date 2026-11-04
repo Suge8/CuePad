@@ -33,11 +33,7 @@ struct SkillSection: View {
             if !library.selfManaged.isEmpty {
                 LibraryPaper {
                     ForEach(library.selfManaged, id: \.agent) { managed in
-                        LibraryRow(title: managed.title) {
-                            managed.agent.mark.image.foregroundStyle(palette.ink2)
-                        } trailing: {
-                            EmptyView()
-                        }
+                        LinkRow(title: Text(verbatim: managed.title), chevron: false) { managed.agent.mark.image }
                     }
                 }
                 .padding(.top, 8)
@@ -148,18 +144,16 @@ private struct SkillRow: View {
         #endif
     }
 
-    #if os(macOS)
     private static let nameFont = Typography.body.weight(.medium)
     private static let descriptionFont = Typography.meta
+    #if os(macOS)
     private static let markFont = Glyph.small
     private static let nameWidth: CGFloat = 188
     private static let markWidth: CGFloat = 16
     private static let vertical: CGFloat = 0
     private static let height: CGFloat = 36
     #else
-    private static let nameFont = Font.body.weight(.medium)
-    private static let descriptionFont = Font.footnote
-    private static let markFont = Font.footnote
+    private static let markFont = Typography.meta
     private static let vertical: CGFloat = 8
     private static let height: CGFloat = 56
     #endif

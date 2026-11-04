@@ -42,7 +42,7 @@ enum Typography {
     /// 页内分组标题（最近、更早、现在、历史）与它旁边的计数。
     static let sectionTitle = Font.system(size: 15, weight: .semibold)
     static let sectionCount = Font.system(size: 13).monospacedDigit()
-    /// 面板顶上的大标题（接入 Agent）。
+    /// 面板与文件页顶上的大标题（接入 Agent、技能的名字）。
     static let heading = Font.system(size: 22, weight: .semibold)
     /// ⌘K 搜索框的输入与右侧预览的标题：浮层里最大的两行字。
     static let searchField = Font.system(size: 18)
@@ -96,6 +96,8 @@ enum Typography {
     static let laneTitle = Font.headline
     static let laneCount = Font.title2.weight(.semibold)
     static let title = Font.title3.weight(.semibold)
+    /// 文件页顶上的大标题（技能的名字），同 Mac 那一档的角色。
+    static let heading = Font.title2.weight(.bold)
     static let emptyTitle = Font.title3.weight(.semibold)
     static let gaugeNumber = Font.system(.body, design: .rounded, weight: .semibold).monospacedDigit()
     /// 底栏上的字：栏高固定，不随动态字体。

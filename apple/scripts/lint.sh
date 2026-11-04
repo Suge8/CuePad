@@ -77,9 +77,6 @@ forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（
   'App/Sources/UI/Shared/Cue/CueHostMenu.swift' \
   'App/Sources/UI/Shared/Cue/CueSchedulePage.swift' \
   'App/Sources/UI/Shared/Cue/CueWelcome.swift' \
-  'App/Sources/UI/Shared/Library/LibraryFileParts.swift' \
-  'App/Sources/UI/Shared/Library/LibrarySections.swift' \
-  'App/Sources/UI/Shared/Library/SkillSection.swift' \
   'App/Sources/UI/Wide/WideDrop.swift' \
   'App/Sources/UI/iOS/Activity/NewSessionInput.swift' \
   'App/Sources/UI/iOS/Activity/SessionScreen.swift' \

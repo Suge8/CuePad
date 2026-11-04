@@ -7,7 +7,7 @@ import SwiftUI
 /// 文件在别处改过、你也改着时的那一条（`ConflictBar`）；
 /// 技能的 name、description 两个输入框（`SkillFields`，格式哪里不对标在对应的框下）；合并前标出会并进来的段落（`MergePreview`）。
 
-/// 同名的技能：几份的分段（按范围名，换一份就换成那一份的文件页）加"只留这份"（`TidyOrder.keep`，其余进废纸篓；手机发往 Mac）。
+/// 同名的技能：几份的分段（`PaneSegment`，按范围名，换一份就换成那一份的文件页）加"只留这份"（`TidyOrder.keep`，其余进废纸篓；手机发往 Mac），一排同高。
 struct DuplicateBar: View {
     let path: String
     let tidy: LibraryTidy
@@ -18,15 +18,16 @@ struct DuplicateBar: View {
     var body: some View {
         if case .duplicate(_, let copies) = tidy.kind {
             LibraryFileBar {
-                Picker(selection: Binding(get: { path }, set: { workspace.openLibrary(.skill($0)) })) {
-                    ForEach(copies, id: \.path) { copy in Text(verbatim: workspace.copyName(copy, among: copies)).tag(copy.path) }
-                } label: {
-                    Text("几份同名的")
+                PaneSegment(items: copies.map { .init(value: $0.path, verbatim: workspace.copyName($0, among: copies)) }, selection: path) {
+                    workspace.openLibrary(.skill($0))
                 }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
+                .fixedSize()
+                .paneSlot(.compact)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("几份同名的")
                 Spacer(minLength: 8)
                 Button { keep() } label: { TidyLabel(title: "只留这份", working: working) }
-                    .buttonStyle(ControlButtonStyle(kind: .primary, compact: true))
+                    .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
                     .disabled(working)
             } consequence: {
                 TidyConsequence(kind: .duplicate)
@@ -67,11 +68,11 @@ struct MergeBar: View {
             Spacer(minLength: 8)
             if draft.previewing {
                 Button("取消") { draft.previewing = false }
-                    .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
+                    .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))
                     .disabled(working)
             }
             Button { merge() } label: { TidyLabel(title: draft.previewing ? "合并" : "合并进来", working: working) }
-                .buttonStyle(ControlButtonStyle(kind: draft.previewing ? .primary : .secondary, compact: true))
+                .buttonStyle(ControlButtonStyle(kind: draft.previewing ? .primary : .secondary, size: .compact))
                 .disabled(working || tidy.preview(retiring: draft.retire, texts: texts) == nil || Self.unsent(draft))
         } consequence: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -128,9 +129,9 @@ struct ConflictBar: View {
             Spacer(minLength: 8)
             if case .conflict(_?) = draft.state {
                 Button(Self.take) { draft.takeFile() }
-                    .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
+                    .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))
                 Button("留我的") { Task { await draft.keepMine() } }
-                    .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
+                    .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))
             }
         } consequence: {
             EmptyView()
@@ -231,13 +232,8 @@ struct SkillFields: View {
         }
     }
 
-    #if os(macOS)
     private static let nameFont = Typography.heading
     private static let summaryFont = Typography.body
-    #else
-    private static let nameFont = Font.title2.weight(.bold)
-    private static let summaryFont = Font.body
-    #endif
 }
 
 /// 格式哪里不对：出错的记号加一句。
