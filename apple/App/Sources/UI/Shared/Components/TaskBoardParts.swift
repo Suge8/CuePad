@@ -20,6 +20,9 @@ struct BoardColumns: View {
     private static let gap: CGFloat = 20
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    #if os(macOS)
+    @Environment(\.boardBand) private var band
+    #endif
 
     var body: some View {
         // 按可见宽算一次各列宽与卡标题的行数，每列的卡都用这一份（几何读数只给子视图，不写回状态）
@@ -44,6 +47,10 @@ struct BoardColumns: View {
                     .environment(\.boardTitle, BoardCardMetrics.title(item, cardWidth: width - 2 * BoardCardMetrics.inset, typeSize: typeSize))
             }
         }
+        #if os(macOS)
+        // Mac 的列头那一排就是标题栏那一排：列与列之间空着的那截按住拖窗口。垫在滚动区的内容里：要横滑时按下归滚动区，垫在它后面的接不到（HID 实测）
+        .background(alignment: .top) { Color.clear.frame(height: band).windowDragArea() }
+        #endif
     }
 }
 

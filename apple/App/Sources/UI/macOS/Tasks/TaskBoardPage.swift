@@ -30,8 +30,6 @@ struct TaskBoardPage: View {
             // `animation = nil` 挡不住里层的 `.animation(_:value:)`，只有 `disablesAnimations` 挡得住
             .transaction(value: scope) { $0.disablesAnimations = true }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            // 列与列之间、"⋯"左边那截空着的最顶一排照样按住能拖窗口
-            .background(alignment: .top) { Color.clear.frame(height: WideMetrics.band).windowDragArea() }
             .background(palette.desk)
             .animation(Motion.fade, value: workspace.addsTask)
             .onChange(of: workspace.scopedProject) { workspace.addsTask = false }
