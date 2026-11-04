@@ -37,10 +37,10 @@ extension ACPSession: HostedSession {
         try await mcpReady(within: AgentTimeouts.launch)
     }
 
-    /// 插不进这一轮的等它做完再开一轮。
+    /// 插不进这一轮的等它做完再开一轮：一轮结束时 Agent 可能当场接着自己开一轮（Grok 的搁浅插话），醒来再看一次。
     func send(_ text: String, images: [PiImage], id: UUID) async throws {
         let text = text.hasPrefix("/") ? " " + text : text
-        if facts.running {
+        while facts.running {
             guard let sessionID else { throw HostedSessionError.notRunning }
             if steerable, let steer = try await dialect.steer(text, images: images, session: sessionID, on: live) {
                 if let taken = steers.add(id, text: text, claim: steer.claim) { emit(.received(taken)) }
@@ -53,6 +53,7 @@ extension ACPSession: HostedSession {
     }
 
     func newSession() async throws {
+        steers = ACPSteers()
         try await openBrain()
         let (model, effort) = configured
         if model != nil || effort != nil { try await configure(model: model, effort: effort) }
@@ -64,8 +65,9 @@ extension ACPSession: HostedSession {
     }
 }
 
-/// 大脑插进在跑这一轮、还没认出哪一轮收下的话（`ACPSteer`）：各家报收下的（`claim`）就此认；搁浅的（`ACPSignal.stranded`，按原话认）
-/// 是 Agent 接着自己开的那一轮收下的；其余的到插进的那一轮结束时就是它收下的（`ended`）。
+/// 大脑插进在跑这一轮、还没认出哪一轮收下的话（`ACPSteer`）：各家报收下的（`claim`）只按那个报告认，这一轮结束也不算；
+/// 不报的里搁浅的（`ACPSignal.stranded`）是 Agent 接着自己开的那一轮收下的——一轮一句，按原话整句认（Grok 1.0.70 实测每句搁浅的插话各开一轮、
+/// `runningText` 就是那一句）；其余的到插进的那一轮结束时就是它收下的（`ended`）。
 struct ACPSteers {
     private var waiting: [(id: UUID, text: String, claim: String?)] = []
     /// 先于插话的回应报来的收下
@@ -88,16 +90,17 @@ struct ACPSteers {
         return waiting.remove(at: index).id
     }
 
-    /// Agent 以这些原话自己开了一轮：不报收下的那几句里在其中的，归那一轮。
+    /// Agent 以这句原话自己开了一轮：不报收下的里最早插进、原话就是它的那一句，归那一轮。
     mutating func strand(_ text: String) {
-        stranded += waiting.filter { $0.claim == nil && text.contains($0.text.trimmingCharacters(in: .whitespacesAndNewlines)) }.map(\.id)
-        waiting.removeAll { stranded.contains($0.id) }
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let index = waiting.firstIndex(where: { $0.claim == nil && $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == text }) else { return }
+        stranded.append(waiting.remove(at: index).id)
     }
 
-    /// 插进的那一轮结束：还等着的是它收下的。
+    /// 插进的那一轮结束：还等着、这家不报收下的是它收下的；报收下的还没报的留着等报告。
     mutating func ended() -> [UUID] {
-        defer { waiting = [] }
-        return waiting.map(\.id)
+        defer { waiting.removeAll { $0.claim == nil } }
+        return waiting.filter { $0.claim == nil }.map(\.id)
     }
 
     mutating func takeStranded() -> [UUID] {
