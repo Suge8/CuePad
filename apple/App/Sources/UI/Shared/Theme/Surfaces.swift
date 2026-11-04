@@ -24,9 +24,9 @@ extension View {
 enum Elevation {
     /// 卡片角上的小圆钮。
     case hover
-    /// 抬起的纸与提示横幅。
+    /// 抬起的纸。
     case lifted
-    /// 窗口内浮层与气泡：要从整窗里浮出来，比 `lifted` 重。
+    /// 窗口内浮层、气泡与提示条：要从整窗里浮出来，比 `lifted` 重。
     case panel
 
     fileprivate var radius: CGFloat {

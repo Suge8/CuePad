@@ -31,6 +31,7 @@ struct NoticeCapsule: View {
         .frame(maxWidth: fills ? .infinity : nil)
         .frame(height: ControlSize.regular.height)
         .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil)
+        .elevation(.panel)
         .onHover { hovering = $0 }
         .onChange(of: held, initial: true) { was, now in if was != now || now { workspace.holdNotice(now) } }
         .onAppear { AccessibilityNotification.Announcement(notice.text.spoken).post() }

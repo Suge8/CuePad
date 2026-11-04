@@ -24,7 +24,6 @@ struct NoticeBanner: View {
         ZStack {
             if let notice = workspace.notice {
                 NoticeCapsule(notice: notice, fills: true)
-                    .elevation(.lifted)
                     .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                     .id(notice.id)
             }
