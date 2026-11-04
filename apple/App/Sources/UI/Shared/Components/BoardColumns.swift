@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 四列并排（Mac、宽屏 iPad 与 iPhone 横屏的进展页）：每列（`BoardColumn`）的列头浮在顶上（`BoardColumnHeader`，写字玻璃），卡各自滚动、从列头后面过。
-/// 列宽按内容分（`BoardWidths`）：空列收窄到只放得下列头，卡少的列只给最窄，宽给卡多的列；换了档的那一下跟着看板这一次读到的过渡走
+/// 列宽按内容分（`BoardWidths`）：推进中、等你有卡时不低于均分宽，待办、已完成与空列让宽；换了档的那一下跟着看板这一次读到的过渡走
 /// （`observingBoard` 的事务：卡换列、列宽一起滑到新处），拖窗口改宽、换项目范围（整块换内容，`TaskBoardPage`）时一步到位。
 /// 四列总在眼前，放不下时（如 Mac 窄窗开着侧栏）整排横向滚动、最右一列露出一截（看得出能横划）：两侧页边是滚动区内容的边（`margin`），
 /// 列滚到窗口边才裁，滚到头右边照样留页边。卡换列时从原处飞到新处（`boardFlight`），四列共用量飞行位置的坐标系与正被拖着的那件（`boardStage`）。
@@ -24,10 +24,10 @@ struct BoardColumns: View {
     #endif
 
     var body: some View {
-        let fills = TaskBoard.Column.allCases.map { BoardWidths.Fill(count: count($0)) }
+        let filled = TaskBoard.Column.allCases.map { count($0) > 0 }
         // 按可见宽算一次各列宽与卡标题的行数，每列的卡都用这一份（几何读数只给子视图，不写回状态）
         GeometryReader { proxy in
-            let widths = BoardWidths.of(fills, room: proxy.size.width - margin * 2)
+            let widths = BoardWidths.of(filled, room: proxy.size.width - margin * 2)
             // 放得下、放不下都是这一个滚动区（放得下时只是滚不动）：窗口拖过看板最窄宽时不换结构，列里的滚动位置留着
             ScrollView(.horizontal) { columns(widths) }
                 .safeAreaPadding(.horizontal, margin)
@@ -62,21 +62,16 @@ struct BoardColumns: View {
     }
 }
 
-/// 四列各多宽（`BoardColumns`）：按这一列此刻排着几张卡分三档（`Fill`）——
-/// - 空的（只有占位那一句）：`compact`，放得下列头（记号、列名、数与"+"）就够，占位那一句在里面折行；空列占一整列宽时，卡多的那几列反而被挤成一行三四个字；
-/// - 一两张卡的：最窄 `minColumn`，不分多出来的宽——卡少，竖着有的是地方，标题多折一行也不用滚；
-/// - 三张起的：最窄之外按份数（`TaskBoard.Column.share`：推进中、等你多分，待办、已完成少分）分可见宽多出来的。
-/// 多出来的宽只给有卡最多的那一档：四列都只有一两张时分给它们，四列全空时照份数分给四列（不全挤在左边、右边空一大片）。
-/// 分档按张数、不按标题多长：一张卡的标题变长不让整排改宽，换档只在卡进出这一列时，跟着那一下的过渡走。
+/// 四列各多宽（`BoardColumns`）。要你看的两列（推进中、等你，`TaskBoard.Column.light` 为假）有卡时不低于均分宽：
+/// 只有待办、已完成与空列让宽——
+/// - 空列（只有占位那一句）：`compact`，放得下列头（记号、列名、数与"+"）就够，占位那一句在里面折行；
+/// - 有卡的待办、已完成：也从 `compact` 起（卡上标题多折一行）；
+/// - 有卡的推进中、等你：均分宽（四列平分可见宽），窄到不足 `minColumn` 时取它；
+/// 剩下的宽按份数（`TaskBoard.Column.share`：推进中、等你多分）分给有卡的列，四列全空时分给四列（不全挤在左边、右边空一大片）。
+/// 看板放得下的最窄处（1280 宽开着 Cue）四列按 `minColumn` 算的宽，待办、已完成各让出 20 给推进中、等你：等你那一列的标题照行数规则读得全。
+/// 否决过：按卡数分档、宽只给卡多的列——等你常只有一两张却最要紧，1512 宽时被压到 160，`notes-edit` 截成"notes-…"。
+/// 分档只看有没有卡、不看标题多长：标题变长不让整排改宽，换档只在列空了或有了卡时，跟着那一下的过渡走。
 enum BoardWidths {
-    enum Fill: Int, Comparable {
-        case empty, few, full
-
-        init(count: Int) { self = count == 0 ? .empty : count <= BoardWidths.fewCards ? .few : .full }
-
-        static func < (a: Fill, b: Fill) -> Bool { a.rawValue < b.rawValue }
-    }
-
     /// 一列最窄（三端同一个）：放得下圈、项目小图形与折几行后够读的标题（`BoardCardMetrics.title`）。
     /// iPad 竖屏、iPhone 横屏、Mac 900 宽收起侧栏的窗口都排得下四列；900 宽开着侧栏排不下，横滑。
     static let minColumn: CGFloat = 160
@@ -84,16 +79,16 @@ enum BoardWidths {
     static let compact: CGFloat = 140
     /// 列与列之间：列没有底，靠这段留白分开。
     static let gap: CGFloat = 20
-    /// 几张卡以内算卡少。
-    static let fewCards = 2
 
-    /// `room`：可见宽去掉两侧页边。顺序同 `TaskBoard.Column.allCases`。
-    static func of(_ fills: [Fill], room: CGFloat) -> [CGFloat] {
+    /// `filled`：各列有没有卡；`room`：可见宽去掉两侧页边。顺序同 `TaskBoard.Column.allCases`。
+    static func of(_ filled: [Bool], room: CGFloat) -> [CGFloat] {
         let columns = TaskBoard.Column.allCases
-        let base = fills.map { $0 == .empty ? compact : minColumn }
-        let spare = max(0, room - gap * CGFloat(columns.count - 1) - base.reduce(0, +))
-        let top = fills.max() ?? .empty
-        let shares = zip(columns, fills).map { column, fill in fill == top ? column.share : 0 }
+        let avail = room - gap * CGFloat(columns.count - 1)
+        let even = max(minColumn, avail / CGFloat(columns.count))
+        let base = zip(columns, filled).map { column, filled in !filled || column.light ? compact : even }
+        let spare = max(0, avail - base.reduce(0, +))
+        let anyFilled = filled.contains(true)
+        let shares = zip(columns, filled).map { column, filled in filled || !anyFilled ? column.share : 0 }
         let total = shares.reduce(0, +)
         return zip(base, shares).map { base, share in base + (total > 0 ? spare * share / total : 0) }
     }

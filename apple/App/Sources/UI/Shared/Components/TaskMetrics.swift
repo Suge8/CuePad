@@ -72,20 +72,20 @@ enum BoardCardMetrics {
     static var waveGap: CGFloat { 2 * titlePadding - titleTop - WaveStrip.height - waveBottom }
 
     /// 卡标题至多几行、上下留多少（三端的列与手机的行同一条，所在的列或行按卡宽与字号算一次交给卡，`boardTitle`）：
-    /// 按标题那一截一行放得下几个字定（卡宽去掉左右内边距、开头的圈与项目小图形连同它们与标题之间的缝，`lead`）：放得下 `oneLine` 个字排一行，放得下 `twoLine` 个字排两行，
-    /// 再窄（列压到最窄附近：Mac 1280 宽、1512 宽开着 Cue 时待办那一列）排三行；辅助字号下再多一行。标题多是十到十二个字（大库里九到二十二个），
-    /// 一行八个字、两行一行五个字都会截成"改走统…"。行数是上限、不预留：一行写得下的卡就一行高（`BoardCardLayout`），不在标题下空一块。
+    /// 按标题那一截一行放得下几个字定（卡宽去掉左右内边距、开头的圈与项目小图形连同它们与标题之间的缝，`lead`）：至少两行，一行放不下 `twoLine` 个字时
+    /// （列压到最窄附近：Mac 1280 宽开着 Cue 时）排三行；辅助字号下再多一行。标题多是十到十二个字（大库里九到二十二个），
+    /// 一行八个字、两行一行五个字都会截成"改走统…"。行数是上限、不预留：一行写得下的卡就一行高（`BoardCardLayout`），不在标题下空一块；
+    /// 所以上限不给一行——宽列里二十来个字的标题给一行只会截断（1512 宽等你列的"README 截图换成 Swif…"），不省地方。
     /// 轻的两列（`TaskBoard.Column.light`）是矮卡：上下只留 `lightPadding`。
     /// 手机的行里卡总窄（`cardWidth` 给 nil）：两行，卡铺满行给的格，不另留高。
     static func title(_ column: TaskBoard.Column, cardWidth: CGFloat?, typeSize: DynamicTypeSize) -> BoardTitle {
         let more = typeSize.isAccessibilitySize ? 1 : 0
         guard let cardWidth else { return BoardTitle(lines: 2 + more) }
         let chars = (cardWidth - 2 * TaskMetrics.cardPadding - lead) / titleSize(typeSize)
-        let lines = (chars >= oneLine ? 1 : chars >= twoLine ? 2 : 3) + more
+        let lines = (chars >= twoLine ? 2 : 3) + more
         return BoardTitle(lines: lines, padding: column.light ? lightPadding : titlePadding)
     }
 
-    private static let oneLine: CGFloat = 12
     private static let twoLine: CGFloat = 7
     /// 圈、项目小图形与三道缝（圈与图形、图形与标题、标题与右边的空）。
     private static var lead: CGFloat { TaskMetrics.cardLead + TaskMetrics.cardGlyph + 3 * leadGap }
