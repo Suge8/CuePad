@@ -162,6 +162,7 @@ extension CueKeeper {
                 $0.turn = nil
                 $0.failures = 0
             }
+            save()  // 这一轮接走的都答上了，落盘的不再退回
             if let failure = finished.round.failure {
                 if finished.replay { await replay(finished, failure: failure) }
                 else if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }

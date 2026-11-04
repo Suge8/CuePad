@@ -122,6 +122,29 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// 一轮还没答完 App 就崩溃（没走到收尾）：磁盘上留着的是那句已送达、进度里记着它没答上。再值班时退回、重新交给它并答上。
+    /// 崩溃留下的样子用正常停用后改回去摆出来：进度文件换回停用前的那份，那句再记成已送达。
+    @Test func 一轮没答完App就崩溃_那句再值班时答上() async throws {
+        let rig = try await Rig()
+        try await rig.say("请等我放行")
+        try await eventually("这一轮停在模型那里") { rig.model.holding }
+        let said = try #require(try await rig.store.cueMessages().first { $0.text == "请等我放行" })
+        let progress = rig.app.directory.appending(path: "Library/Cue/keeper.json")
+        let crashed = try Data(contentsOf: progress)
+        _ = try await rig.store.updateCueProfile { $0.enabledAt = nil }
+        try await eventually("停用收尾退回了那句") { try await rig.store.cueMessages().first { $0.id == said.id }?.deliveredAt == nil }
+        rig.model.release()
+        try crashed.write(to: progress)
+        try await rig.store.markCueMessagesDelivered([said.id])
+        let host = TestApp.hostID
+        _ = try await rig.store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
+        try await eventually("再值班时重新交出、停在模型那里") { rig.model.holding }
+        rig.model.release()
+        try await rig.message(.cue, containing: "先这样")
+        #expect(try await rig.count("先这样") == 1)
+        await rig.stop()
+    }
+
     /// 你在 Cue 页发图：资料库里的图片引用转成图片交给大脑（假模型收到的是图片，不只是文字里的引用），Cue 照图回答。
     @Test func 你发图_Cue看得见() async throws {
         let rig = try await Rig()

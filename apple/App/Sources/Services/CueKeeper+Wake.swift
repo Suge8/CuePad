@@ -102,8 +102,9 @@ extension CueKeeper {
         return used >= setup.timing.renewAt || now.timeIntervalSince(last) > setup.timing.cacheLifetime.seconds
     }
 
-    /// 记下送达并立即上传（不等上传完就接着对账）。
+    /// 记下送达并立即上传（不等上传完就接着对账）。先把交出去还没答上的落盘（`save`）：送达写下之后崩溃，下次值班据此退回。
     func markDelivered(_ ids: [UUID]) async throws {
+        if !ids.isEmpty { save() }
         try await store.markCueMessagesDelivered(ids)
         unfetchable.subtract(ids)
         guard !ids.isEmpty else { return }
@@ -184,6 +185,7 @@ extension CueKeeper {
     }
 
     func save() {
+        progress.unanswered = shift?.unanswered ?? []
         do {
             try FileManager.default.createDirectory(at: setup.directory, withIntermediateDirectories: true)
             try JSONEncoder().encode(progress).write(to: setup.directory.appending(path: "keeper.json"), options: .atomic)

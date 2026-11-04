@@ -194,6 +194,15 @@ final class CueKeeper {
                 }
             }
             group.addTask { await self.dreams() }
+            // 上一次没收好尾（崩溃、强杀，没走到 `retire`）时交出去没答上的你的话：退回没送达，这次重新交
+            if let unanswered = progress.unanswered, !unanswered.isEmpty {
+                do {
+                    try await store.unmarkCueMessagesDelivered(unanswered)
+                    save()
+                } catch {
+                    Self.log.error("Cue 上次没答上的消息没能退回：\(error.localizedDescription, privacy: .public)")
+                }
+            }
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
             if progress.marks == nil {
