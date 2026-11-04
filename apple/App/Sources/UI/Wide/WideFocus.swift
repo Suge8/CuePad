@@ -250,8 +250,10 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
         return controller
     }
 
+    /// 每一块铺满桌面色（同窄屏的根，`NarrowRoot`）：托管控制器的视图默认是系统底色（白），系统导航栏之外的地方——会话的栏头、
+    /// Cue 那一栏名牌两侧与状态栏那一条——会露出一条白。
     func updateUIViewController(_ controller: WideColumnController, context: Context) {
-        controller.rootView = AnyView(content.overlay { WideDropFeedback(state: controller.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
+        controller.rootView = AnyView(content.background(environment.palette.desk.ignoresSafeArea()).overlay { WideDropFeedback(state: controller.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
         controller.view.isHidden = hidden
     }
 }
