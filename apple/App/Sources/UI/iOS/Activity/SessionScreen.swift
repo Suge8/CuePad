@@ -106,7 +106,7 @@ private struct DigestKey: Equatable {
 
 #if os(iOS)
 extension View {
-    /// 进展页的会话段与会话近况页：在屏上（出现了、又是前台的页，`pageActive`）期间算作"正在看 Pi"，手机按节奏拉，状态与近况是活的（见 `AppServices.pollingCadence`）。
+    /// Cue 页与会话近况页：在屏上（出现了、又是前台的页，`pageActive`）期间算作"正在看 Pi"，手机按节奏拉，状态与近况是活的（见 `AppServices.pollingCadence`）。
     func countsAsPiViewer() -> some View { modifier(PiViewing()) }
 }
 

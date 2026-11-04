@@ -19,15 +19,13 @@ extension IOSInteractionBench {
     /// 滑动的几项量 1 秒：滑 0.25 秒、松手后转场还要走半秒，800ms 时常停在半路上。
     static let swipeWindow = Duration.milliseconds(1000)
 
-    /// 手势开合侧栏与返回（每项两遍），再在会话行与任务看板上横滑核对没被侧栏的横拖抢走（`NarrowPan`：手指下还能横滚的先滚，行上慢拖是行的动作）。
-    /// `press`：请脚本按或滑一下、不量（收起滑出的行动作）。
+    /// 手势开合侧栏与返回（每项两遍），再在任务看板上横滑核对没被侧栏的横拖抢走（`NarrowPan`：手指下还能横滚的先滚）。
     static func gestures(
-        _ workspace: Workspace, session: UUID, wants: (String) -> Bool, fail: (String) -> Never, press: (String, Finger) async -> Void, step: Step
+        _ workspace: Workspace, session: UUID, wants: (String) -> Bool, fail: (String) -> Never, step: Step
     ) async {
         guard let bounds = window?.bounds else { return }
         let left = bounds.width / 4, right = bounds.width * 3 / 4, mid = bounds.midY
-        func land(_ root: Route, pane: ProgressPane = .board) async {
-            workspace.progressPane = pane
+        func land(_ root: Route) async {
             workspace.select(root)
             await Task.wait(for: .seconds(1))
         }
@@ -37,12 +35,10 @@ extension IOSInteractionBench {
                 await land(.cue)
                 await step("滑动开侧栏", swipeWindow, .swipe(from: CGPoint(x: left, y: mid), to: CGPoint(x: right, y: mid))) {}
             }
-            // 侧栏会话段的中部满是会话行（行上左滑露出行的动作），收侧栏滑在第一行上面的分组标题那一条
+            // 侧栏进展段满是横着滚的看板行（手指下能滚的先滚），收侧栏从右屏边起手（`NarrowPan` 认屏边起手）
             if wants("滑动收侧栏") {
-                await land(.progress, pane: .sessions)
-                let row = sessionRow(in: window, fail: fail)
-                let y = row.minY - 20
-                await step("滑动收侧栏", swipeWindow, .swipe(from: CGPoint(x: right, y: y), to: CGPoint(x: left, y: y))) {}
+                await land(.progress)
+                await step("滑动收侧栏", swipeWindow, .swipe(from: CGPoint(x: bounds.width - 8, y: mid), to: CGPoint(x: left, y: mid))) {}
             }
             // 右滑返回从内容区起（x=60），不贴边：推入页的返回是系统的
             guard wants("右滑返回") else { continue }
@@ -50,25 +46,6 @@ extension IOSInteractionBench {
             workspace.openSession(session)
             await Task.wait(for: .seconds(1.5))
             await step("右滑返回", swipeWindow, .swipe(from: CGPoint(x: 60, y: mid), to: CGPoint(x: right, y: mid))) {}
-        }
-        // 会话行：慢慢左拖 150pt（约 0.9 秒）露出行的动作；同一行上快甩是收侧栏回 Cue
-        for _ in 0..<2 where wants("误触·会话行左滑") {
-            await land(.cue)
-            await land(.progress, pane: .sessions)
-            let row = sessionRow(in: window, fail: fail)
-            rowBefore = pixels(row)
-            await step("误触·会话行左滑", .milliseconds(1500), .drag(from: CGPoint(x: right, y: row.midY), to: CGPoint(x: right - 150, y: row.midY), seconds: 0.9)) {}
-            // 页常驻、不重建：滑出的行动作点一下行收起，不留给下一遍（没滑出时这一下会打开会话，也算没收起）
-            await press("收起行动作", .press(CGPoint(x: left, y: row.midY)))
-            await Task.wait(for: .seconds(1))
-            if landed(workspace) != "progress" { fail("点一下没收起行动作：\(landed(workspace))") }
-            rowBefore = nil
-        }
-        for _ in 0..<2 where wants("会话行快甩") {
-            await land(.cue)
-            await land(.progress, pane: .sessions)
-            let row = sessionRow(in: window, fail: fail).midY
-            await step("会话行快甩", swipeWindow, .swipe(from: CGPoint(x: right, y: row), to: CGPoint(x: left, y: row), seconds: 0.12)) {}
         }
         for _ in 0..<2 where wants("误触·看板左滑") || wants("误触·看板右滑") {
             await land(.progress)
@@ -78,7 +55,7 @@ extension IOSInteractionBench {
         }
     }
 
-    /// 量完时停在哪：根上那一层（`cue`，侧栏开着是侧栏那一段）与推入的页（`cue>session`），露出了行的轻扫按钮记"+行动作"，进展页的看板记第一行横着滚到了哪。
+    /// 量完时停在哪：根上那一层（`cue`，侧栏开着是侧栏那一段）与推入的页（`cue>session`），进展页的看板记第一行横着滚到了哪。
     static func landed(_ workspace: Workspace) -> String {
         func brief(_ route: Route) -> String {
             switch route {
@@ -90,8 +67,7 @@ extension IOSInteractionBench {
         }
         let root: Route = workspace.sidebarOpen ? workspace.sidebarRoute : .cue
         var text = ([root] + workspace.path).map(brief).joined(separator: ">")
-        if workspace.mainRoute == .progress, workspace.progressPane == .sessions, workspace.path.isEmpty, let before = rowBefore, moved(before) { text += "+行动作" }
-        if workspace.mainRoute == .progress, workspace.progressPane == .board, let offset = boardOffset(in: window) { text += " 行横移=\(offset)" }
+        if workspace.mainRoute == .progress, let offset = boardOffset(in: window) { text += " 行横移=\(offset)" }
         return text
     }
 
@@ -122,13 +98,6 @@ extension IOSInteractionBench {
         return [view] + view.subviews.flatMap { all(in: $0) }
     }
 
-    /// 会话列表（SwiftUI 的 List）里屏上的第一行。
-    private static func sessionRow(in window: UIWindow?, fail: (String) -> Never) -> CGRect {
-        guard let window, let row = all(in: window).compactMap({ $0 as? UICollectionViewCell }).compactMap({ onScreen($0, window) })
-            .filter({ $0.height >= 44 }).min(by: { $0.minY < $1.minY })
-        else { fail("会话页上找不到会话行") }
-        return row
-    }
 
     /// 任务看板（竖排四行，每行一条横滚区）：屏上最靠上、横着放不下的那一行。
     private static func board(in window: UIWindow?) -> UIScrollView? {
@@ -146,36 +115,6 @@ extension IOSInteractionBench {
     /// 看板那一行横着滚到了哪（点）。
     private static func boardOffset(in window: UIWindow?) -> Int? {
         board(in: window).map { Int($0.contentOffset.x + $0.adjustedContentInset.left) }
-    }
-
-    /// 慢拖之前那一行的样子（`pixels`）：自绘的轻扫按钮是 SwiftUI 画的、不是 UIKit 视图，也不进读屏，只能比画面认。
-    nonisolated(unsafe) private static var rowBefore: (rect: CGRect, pixels: [UInt8])?
-
-    /// 窗口里 `rect` 那一块的像素（1 倍，RGBA）。
-    private static func pixels(_ rect: CGRect) -> (rect: CGRect, pixels: [UInt8]) {
-        let width = Int(rect.width), height = Int(rect.height)
-        var buffer = [UInt8](repeating: 0, count: width * height * 4)
-        buffer.withUnsafeMutableBytes { bytes in
-            guard let context = CGContext(data: bytes.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
-                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
-            context.translateBy(x: -rect.minX, y: rect.maxY)
-            context.scaleBy(x: 1, y: -1)
-            UIGraphicsPushContext(context)
-            window?.drawHierarchy(in: window?.bounds ?? .zero, afterScreenUpdates: false)
-            UIGraphicsPopContext()
-        }
-        return (rect, buffer)
-    }
-
-    /// 那一行露出了动作：行整体左移一个托盘宽，和慢拖之前比超过 8% 的像素明显变了（卡片底色大块是白的，露出动作时约 17%，收着时是 0）。
-    private static func moved(_ before: (rect: CGRect, pixels: [UInt8])) -> Bool {
-        let now = pixels(before.rect).pixels
-        var changed = 0
-        for i in stride(from: 0, to: now.count, by: 4) {
-            let diff = (0..<3).reduce(0) { $0 + abs(Int(now[i + $1]) - Int(before.pixels[i + $1])) }
-            if diff > 60 { changed += 1 }
-        }
-        return Double(changed) / Double(now.count / 4) > 0.08
     }
 
     private static func menuInteractions(in view: UIView?) -> [UIInteraction] {

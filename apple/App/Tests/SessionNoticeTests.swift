@@ -62,9 +62,9 @@ struct SessionNoticeTests {
         let session = UUID()
         let workspace = Workspace(services: app.services)
         #expect(workspace.showsAlert(about: session))  // Cue 页
-        workspace.showSessions()
+        workspace.push(.earlier)
         #expect(workspace.showsAlert(about: session))
-        workspace.push(.session(UUID()))  // 列表上推了别的会话
+        workspace.push(.session(UUID()))  // "更早"列表上推了别的会话
         #expect(workspace.showsAlert(about: session))
         workspace.path = [.session(session)]
         #expect(!workspace.showsAlert(about: session))

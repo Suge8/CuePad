@@ -4,16 +4,16 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏侧栏与宽屏主区的"项目"）、cue（Cue 页，宽屏会话条展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看说过话后停用时输入框上方那张启用的小纸（`CueWelcome`））、cuememory（再打开"Cue 记得什么"）、cueschedules（再打开定时）、project、older、editor、progress（进展页看板段，窄屏侧栏与宽屏主区的"进展"；给了 `-CuePadProject` 先把项目范围设成它）、sessions（进展页的会话段；给了 `-CuePadProject` 先把项目范围设成它，`-CuePadQuotaOpen YES` 顶栏胶囊长出额度明细）、send、search、trash、archive、settings（配 -CuePadDemo 时 Cue 运行在演示的 Mac 上）、sidebar（窄屏开着侧栏、宽屏会话条展开；给了 `-CuePadProject` 先打开那个项目）；不给是打开 App 的第一屏（Cue 页）。
+/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏侧栏与宽屏主区的"项目"）、cue（Cue 页，宽屏会话条展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看说过话后停用时输入框上方那张启用的小纸（`CueWelcome`））、cuememory（再打开"Cue 记得什么"）、cueschedules（再打开定时）、project、older、editor、progress（进展的看板，窄屏侧栏与宽屏主区的"进展"；给了 `-CuePadProject` 先把项目范围设成它，`-CuePadQuotaOpen YES` 额度明细一出现就长开）、sessions（搜索页的会话一栏：在线的与历史的会话行）、earlier（"更早"那一页，已结束的会话）、send、search、trash、archive、settings（配 -CuePadDemo 时 Cue 运行在演示的 Mac 上）、sidebar（窄屏开着侧栏、宽屏会话条展开；给了 `-CuePadProject` 先打开那个项目）；不给是打开 App 的第一屏（Cue 页）。
 /// search 是搜索页，出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
 /// library 是技能与规则（`-CuePadLibraryTab skills` 打开在技能那一段），再推入文件页：instruction 是全局规则（给了 `-CuePadProject` 是那个项目的，
 /// 演示的全局规则顶上有合并那一条，`-CuePadMergePreview YES` 已点过一下"合并进来"、标出会并进来的段），skill 是 write-swift，duplicate 是同名的 release。
 /// task 打开进行中第一条的任务气泡（没有落点、在上方居中；没有进行中的就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
-/// session：打开 `-CuePadSession <会话名>`（默认 homepage）的会话页，从进展页的会话段进（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
+/// session：打开 `-CuePadSession <会话名>`（默认 homepage）的会话页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// style：视觉样板（`StyleBoard`）盖在最上层；icons：图标总览（`IconSheet`，iPad 竖屏一屏）；stateicons：状态图形总览（`StateGlyphSheet`，一列往下滚，Mac 也有）。
 /// widgets：小组件的小号与中号（`DebugWidgetStage`）；activity：实时活动的各态（`DebugActivityStage`）；share：分享扩展的表单（`DebugShareStage`）。都盖在最上层。
-/// newsession：进展页的会话段上浮起新会话输入框；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
+/// newsession：进展的看板上浮起新会话输入框；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
 /// `-CuePadDemoMac YES`：发给演示 Mac（demo-mac）上会话的话由它慢慢接手、送达、再回状态，对运行在它上面的 Cue 说的话也会交给 Cue（见 `runDemoMac`）。
 /// `-CuePadCuePresence away`（cue 画面）：一夜里 Cue 陆续说了几句，回到 Cue 页从新消息读起；`-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页、
 /// 那几句这时才来，再回到 Cue 页，录"离开很久后回来"的定位（`awayIfAsked`）。
@@ -128,7 +128,7 @@ extension DebugScene {
             workspace.show(.cue)
         case "cuerows":
             await seedCueRows(workspace.services)
-            workspace.showSessions()
+            workspace.openSearch()
         case "progress":
             // 看板的等你列：配 -CuePadDemo 时写入 Cue 的等你（会话在问的随演示 Mac 的会话来）
             if defaults.bool(forKey: "CuePadDemo") {
@@ -142,19 +142,18 @@ extension DebugScene {
             // 没给 -CuePadTask 时是进行中的第一条
             await openTask(workspace) { $0.status == .inProgress }
         case "session":
-            // 打开 -CuePadSession（会话名，默认 homepage）的会话页，从进展页的会话段进
+            // 打开 -CuePadSession（会话名，默认 homepage）的会话页
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             guard let session = try await demoSession(titled: title, store: workspace.services.store) else { break }
             if defaults.bool(forKey: "CuePadNotify") {
                 workspace.open(DeepLink.session(session.id))  // 点锁屏通知进来：只带记录 id
             } else {
-                workspace.showSessions()
                 workspace.openSession(session.id, sessionID: session.sessionID)
             }
             if defaults.bool(forKey: "CuePadStream") { Task { await stream(session.sessionID, store: workspace.services.store) } }
         case "newsession":
-            workspace.showSessions()
+            workspace.show(.progress)
             var sheet = NewSessionInput.Start(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（交给 Cue 那台 Mac 建工作区）
             if defaults.bool(forKey: "CuePadLaunch"),
                let table = try await workspace.services.store.projects().first(where: { $0.name == String(localized: "圆桌", table: "Demo") })?.id {
@@ -169,8 +168,10 @@ extension DebugScene {
         case "sessions":
             // 配 -CuePadDemo 时 Cue 在演示 Mac 上值班（同 Mac 的 sessions）：会话行按值班时的样子写（歇着、等 Cue 回答、待回复）
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
-            workspace.projectScope = project
-            workspace.showSessions()
+            workspace.openSearch()
+        case "earlier":
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
+            workspace.push(.earlier)
         case "search":
             workspace.openSearch()
         default: break

@@ -33,6 +33,8 @@ struct PaletteProvider: ViewModifier {
             .transformEnvironment(\._accessibilityReduceMotion) { if DebugHooks.preset.reducesMotion { $0 = true } }
             // 同理按最大的辅助字号画（`-CuePadLargestType`）
             .transformEnvironment(\.dynamicTypeSize) { if DebugHooks.preset.largestType { $0 = .accessibility5 } }
+            // 同理按"增强对比度"画（`-CuePadHighContrast`）
+            .transformEnvironment(\._colorSchemeContrast) { if DebugHooks.preset.highContrast { $0 = .increased } }
     }
 }
 

@@ -1,4 +1,4 @@
-/// 项目｜进展的持久选择；看板｜会话仍由 `ProgressPane` 管。
+/// 项目｜进展的持久选择。
 enum NavigationPane: String, CaseIterable {
     case projects, progress
 }

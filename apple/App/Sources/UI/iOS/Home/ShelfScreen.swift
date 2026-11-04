@@ -33,7 +33,6 @@ struct ShelfScreen: View {
             if !rest.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(rest) { ShelfRow(project: $0) }
-                    if BarVariant.current == .a { NewProjectRow() }
                 }
                 .padding(.vertical, Self.paperInset)
                 .rowPaper(cornerRadius: Radius.sheet)
@@ -146,7 +145,6 @@ private struct ShelfFooter: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if NavVariant.current != .now, BarVariant.current != .b { ShelfQuota() }
             ShelfLine(route: .archive, icon: .archive, title: String(localized: "归档"))
             ShelfLine(route: .trash, icon: .trash, title: String(localized: "回收站"))
             ShelfLine(route: .settings, icon: .settings, title: String(localized: "设置"), alert: services.macAlert)
@@ -187,8 +185,8 @@ private struct ShelfLine: View {
     }
 }
 
-/// "新建项目"：窄屏在侧栏顶上那一排（`NarrowSidebarBar`），宽屏在书架页顶右边。
-struct NewProjectButton: View {
+/// "新建项目"：iPad 宽屏在书架页顶右边（窄屏是侧栏那一排左边第二颗，`NarrowSidebarBar`）。
+private struct NewProjectButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {

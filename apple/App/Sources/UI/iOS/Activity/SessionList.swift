@@ -2,71 +2,61 @@
 import CueStore
 import SwiftUI
 
-/// 会话列表（进展页的会话段、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）：最上面"已置顶"（绑在置顶任务上的），
+/// 会话列表（搜索页的会话一栏、"更早"那一页同一个，数据是两端共用的 `PiSessionList`）：最上面"已置顶"（绑在置顶任务上的），
 /// 接着"现在"（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），"历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。
+/// "更早"那一页（`AgentListModel.endedOnly`）只有历史，不写"历史"两字：页名就是"更早"。
 /// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。长按是会话的菜单（`SessionActions`），慢慢左滑可结束、重命名。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
 struct SessionList<Top: View>: View {
     @Bindable var model: AgentListModel
-    let filter: UUID?
-    /// PROTOTYPE（`NavVariant.one` 的"更早"页）：只列已结束的，不写"历史"两字（页名就是"更早"）。
-    var endedOnly = false
     @ViewBuilder var top: Top
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
 
     private static var margin: CGFloat { 16 }
 
-    /// 最上面那一行的 id：换项目范围时滚回它。
-    private static var topID: String { "top" }
-
     var body: some View {
-        ScrollViewReader { proxy in
-            List {
-                // 每一行（卡片、分组标题、空态、读下一页的转圈）都不画底、不画分隔线：一处给全，漏了的那一行会在空态下面拖出一条孤线
-                Group {
-                    Color.clear.frame(height: 0).listRowInsets(EdgeInsets()).id(Self.topID)
-                    if Top.self != EmptyView.self { top.listRowInsets(EdgeInsets()) }
-                    if let list = model.list { sessions(list) }
-                }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
+        List {
+            // 每一行（卡片、分组标题、空态、读下一页的转圈）都不画底、不画分隔线：一处给全，漏了的那一行会在空态下面拖出一条孤线
+            Group {
+                if Top.self != EmptyView.self { top.listRowInsets(EdgeInsets()) }
+                if let list = model.list { sessions(list) }
             }
-            // 每个会话一张卡片（`sessionCard`）：平铺列表，分组标题是普通的行（平铺列表的分组标题会吸顶）
-            .listStyle(.plain)
-            // 顶上那一行只是滚回去的锚，不占系统给行的最小高度
-            .environment(\.defaultMinListRowHeight, 0)
-            .scrollContentBackground(.hidden)
-            .safeAreaPadding(.horizontal, Self.margin)
-            .safeAreaPadding(.top, Bars.contentGap)
-            // 滚动条仍贴屏幕边与顶栏下沿，不随内容的边缩进
-            .contentMargins(.horizontal, -Self.margin, for: .scrollIndicators)
-            .contentMargins(.top, -Bars.contentGap, for: .scrollIndicators)
-            .scrollDismissesKeyboard(.immediately)
-            .refreshable { await services.syncNow() }
-            // 换了项目范围：回到顶上，从这个项目的第一条看起
-            .onChange(of: filter) { proxy.scrollTo(Self.topID, anchor: .top) }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
-        .agentList(model, filter: filter)
+        // 每个会话一张卡片（`sessionCard`）：平铺列表，分组标题是普通的行（平铺列表的分组标题会吸顶）
+        .listStyle(.plain)
+        // 分组标题这类矮行不占系统给行的最小高度
+        .environment(\.defaultMinListRowHeight, 0)
+        .scrollContentBackground(.hidden)
+        .safeAreaPadding(.horizontal, Self.margin)
+        .safeAreaPadding(.top, Bars.contentGap)
+        // 滚动条仍贴屏幕边与顶栏下沿，不随内容的边缩进
+        .contentMargins(.horizontal, -Self.margin, for: .scrollIndicators)
+        .contentMargins(.top, -Bars.contentGap, for: .scrollIndicators)
+        .scrollDismissesKeyboard(.immediately)
+        .refreshable { await services.syncNow() }
+        .agentList(model)
     }
 
-    /// 会话列表。换搜索词或项目时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）；同一筛选下会话进出、换状态才有动画。
+    /// 会话列表。换搜索词时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）；同一筛选下会话进出、换状态才有动画。
     @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {
         if list.isEmpty {
             empty
         } else {
             Group {
-                if !endedOnly, !list.pinned.isEmpty {
+                if !list.pinned.isEmpty {
                     header { SectionTitle(text: "已置顶").padding(.horizontal, 4) }
                     ForEach(list.pinned) { row($0, in: list, end: list.ends[$0.id]) }
                 }
-                if !endedOnly, !list.now.isEmpty {
+                if !list.now.isEmpty {
                     header { SectionTitle(text: "现在").padding(.horizontal, 4) }
                     ForEach(list.now) { row($0, in: list, end: list.ends[$0.id]) }
                 }
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                     header {
                         VStack(alignment: .leading, spacing: 10) {
-                            if index == 0, !endedOnly { SectionTitle(text: "历史") }
+                            if index == 0, !model.endedOnly { SectionTitle(text: "历史") }
                             SectionLabel(text: Dotted(run.section.title))
                         }
                         .padding(.horizontal, 4)
@@ -107,13 +97,8 @@ struct SessionList<Top: View>: View {
     @ViewBuilder private var empty: some View {
         if model.searching {
             EmptyState.noMatch(model.query).padding(.top, 40)
-        } else if let filter {
-            EmptyState(mascot: .empty, title: .verbatim(AgentListModel.noneTitle(filter: filter)), waitsForSync: true) {
-                EmptyStateButton(title: "新会话", icon: .add, action: { workspace.newSession = .init(project: filter) })
-            }
-            .padding(.top, 40)
         } else {
-            EmptyState(mascot: .empty, title: .verbatim(AgentListModel.noneTitle(filter: nil)), message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
+            EmptyState(mascot: .empty, title: .verbatim(AgentListModel.noneTitle), message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
                 EmptyStateButton(title: "新会话", icon: .add, action: { workspace.newSession = .init() })
             }
             .padding(.top, 40)
@@ -122,10 +107,10 @@ struct SessionList<Top: View>: View {
 }
 
 extension SessionList where Top == EmptyView {
-    init(model: AgentListModel, filter: UUID?, endedOnly: Bool = false) { self.init(model: model, filter: filter, endedOnly: endedOnly) { EmptyView() } }
+    init(model: AgentListModel) { self.init(model: model) { EmptyView() } }
 }
 
-/// "新会话"：在 `project` 里开（宽屏进展页顶右边的那一个操作，那里没有会话段）。
+/// "新会话"：在 `project` 里开（iPad 宽屏进展页顶右边的那一个操作）。
 struct NewSessionButton: View {
     let project: UUID?
 
@@ -133,29 +118,6 @@ struct NewSessionButton: View {
     var body: some View {
         Button("新会话", icon: .add) { workspace.newSession = .init(project: project) }
             .accessibilityHint("让 Mac 开一个 Agent 会话")
-    }
-}
-
-/// 会话列表的第一行"新会话"（窄屏侧栏的会话段：页顶那一排是侧栏的，放不下它）：长相同添加任务那一行的入口（`NewTaskLine`），
-/// 不铺底、不是一张卡，读作操作；点它在 `project` 里开（`Workspace.newSession`）。
-struct NewSessionLine: View {
-    let project: UUID?
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button { workspace.newSession = .init(project: project) } label: {
-            HStack(spacing: 2) {
-                Image(.add).frame(width: 44).accessibilityHidden(true)
-                Text("新会话")
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(palette.ink2)
-            .frame(minHeight: 44)
-            .contentShape(.rect)
-        }
-        .buttonStyle(PressStyle(.wide))
-        .accessibilityHint("让 Mac 开一个 Agent 会话")
     }
 }
 

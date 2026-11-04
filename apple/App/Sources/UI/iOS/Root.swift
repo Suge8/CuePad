@@ -108,6 +108,7 @@ struct RouteView: View {
         case .progress: ProgressScreen()
         case .cue: CuePage().countsAsPiViewer()
         case .search: SearchScreen()
+        case .earlier: EarlierScreen()
         case .library: LibraryScreen()
         case .libraryFile(let file): LibraryFileScreen(file: file)
         case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()

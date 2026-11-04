@@ -65,8 +65,6 @@ struct SharedPagesTests {
         for (id, date) in [("future", now + 20), ("today", now - 3_600), ("week", now - 3 * 86_400)] {
             try await recorder.update(sessionID: id, state: .ended, title: id, times: PiTimes(stateSince: date, busySince: nil))
         }
-        let workspace = Workspace(services: app.services)
-        workspace.showSessions()
         let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(at: now), from: store)
         let before = TimeSection.split(list.ended, date: \.state.stateSince, now: now, calendar: calendar)
         #expect(before.map(\.section) == [.today, .thisWeek])
@@ -85,8 +83,6 @@ struct SharedPagesTests {
         for (id, date) in [("future", now.addingTimeInterval(90 * 86_400)), ("today", now), ("past", now.addingTimeInterval(-90 * 86_400))] {
             try await recorder.update(sessionID: id, state: .ended, title: id, times: PiTimes(stateSince: date, busySince: nil))
         }
-        let workspace = Workspace(services: app.services)
-        workspace.showSessions()
         func checkList(expectNew: Bool = false) async throws {
             let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
             let sections = list.historyRuns.map(\.section)
