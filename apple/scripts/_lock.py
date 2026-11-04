@@ -212,7 +212,7 @@ def lease_signing():
     global record
     me.update(pid=owner, start=processes([owner])[owner][1])
     record = f"{holders}/{owner}.json"
-    acquire([(open(fd, closefd=False), "签名（全机）")], fcntl.LOCK_EX,
+    acquire([(fd, "签名（全机）")], fcntl.LOCK_EX,
             "别的检出在生成描述文件或签名归档（列表里没有持有者时，是被结束的发版留下的子进程还开着描述文件目录：lsof 它看）")
     print(record, flush=True)
 
