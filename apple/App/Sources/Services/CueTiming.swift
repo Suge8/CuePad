@@ -23,6 +23,8 @@ nonisolated struct CueTiming: Sendable {
     var silence: Duration = .seconds(10 * 60)
     /// 看门狗的钟：Mac 睡着时不走（`SuspendingClock`），一轮跑到一半合盖、醒来不当成卡住；测试换成能停住的钟。
     var awake: @Sendable () -> SuspendingClock.Instant = { .now }
+    /// 交出去没答上的你的话退回没写进库（`CueKeeper.giveBack`）：隔这么久再对一次账重试，不等别的动静叫醒。
+    var returnRetry: Duration = .seconds(30)
     /// Cue 自己醒来的一轮出错后，隔这么久再醒一次（只一次）。
     var retryWake: Duration = .seconds(120)
     /// Cue 的说话工具（say、answer）写下请求后等结果多久（`cuepad mcp --wait`）。

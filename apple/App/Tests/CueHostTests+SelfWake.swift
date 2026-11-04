@@ -1,7 +1,7 @@
 #if os(macOS)
 import CueAgent
 import CuePi
-import CueStore
+@testable import CueStore
 import CueTestSupport
 import Foundation
 import Testing
@@ -98,7 +98,7 @@ extension CueHostTests {
 
     /// 一直记着的过了软线（上次整理之后只新钉了几条，不够"新钉多了"那条线）：后台另起的大脑拿到钉着的全部行整理
     /// （假模型看了觉得都不用动），跑完记下交给它的那组；之后记忆再变、那组没变就不再交给它（合待合并的块时也不带）；
-    /// 再钉一条，那组变了、仍过软线，再整理一次。
+    /// 别的设备把一条旧记忆钉上、迟到才同步来（改动时刻早于这台上更晚记下的那些），那组变了、仍过软线，再整理一次。
     @Test func 一直记着的过了软线_后台整理_那组不变不再整理() async throws {
         let tidiedFile = { (rig: Rig) in rig.app.directory.appending(path: "Library/Cue/tidied.json") }
         // 一条至多 280 字节：十五条合起来刚过软线（`CueMemoryLine.pinnedSoft`）；前十一条算上次整理过的
@@ -117,11 +117,23 @@ extension CueHostTests {
             return rig.model.tidyAsks == 1 && tidied() == set
         }
 
+        let old = try await rig.store.noteCueLine("规矩 15 \(long)", source: .you).line
+        try await Task.sleep(for: .milliseconds(5))  // 之后记下的改动时刻都更晚
         for index in 0..<(CueMemoryView.budget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
         try await eventually("后台合了待合并的块") { try await !rig.store.cueMemory().summaries.isEmpty }
         #expect(rig.model.tidyAsks == 1)
+        // 后台整理歇下（两秒里模型没再收到请求）：之后的整理只能是那条同步叫醒的，不是合块时顺带看到的
+        var requests = rig.model.requests.count
+        while true {
+            try await Task.sleep(for: .seconds(2))
+            if rig.model.requests.count == requests { break }
+            requests = rig.model.requests.count
+        }
 
-        try await rig.store.noteCueLine("规矩 15 \(long)", source: .you, pinned: true)
+        var row = try #require(try await rig.store.syncRow(recordName: old.id.uuidString.lowercased()))
+        row.fields["pinned"] = .int(1)
+        row.fields["modifiedAt"] = .int(old.modifiedAt.stored + 1)
+        #expect(try await rig.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         try await eventually("那组变了，再整理一次") {
             let set = try await pinned()
             return rig.model.tidyAsks == 2 && tidied() == set && set.count == 16

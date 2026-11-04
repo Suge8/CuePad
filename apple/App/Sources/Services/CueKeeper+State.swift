@@ -71,9 +71,70 @@ extension CueKeeper {
         var greeted: Date?
         /// 他在场、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
         var held: [String: Date] = [:]
-        /// 交给大脑、还没答上的你的话（`Shift.unanswered` 落盘的那一份，`save` 时取）：上一次没收好尾（崩溃、强杀）时，
+        /// 交给大脑、还没答上的你的话与要退回还没退回成的（`Shift.unanswered` 与 `CueKeeper.owed` 合起来，`save` 时取）：上一次没收好尾（崩溃、强杀）时，
         /// 下次值班一开始退回没送达、重新交（`run`），至少答一次。可选：旧的进度文件没有它
         var unanswered: [UUID]?
+        /// 额度、登录卡住后的绕行（`Detour`）；没在绕行为 nil
+        var detour: Detour?
+    }
+
+    /// 额度、登录卡住后的绕行（规则在 `CueKeeper+Recover` 的头注释）：你设定的那家与它的模型、强度、fast（绕行前的设置），与这次卡住的几家。
+    nonisolated struct Detour: Codable, Equatable, Sendable {
+        struct Stuck: Codable, Equatable, Sendable {
+            /// 卡住的时刻：轮流从最近卡住的那家后面数
+            var at: Date
+            /// 卡住时读到的重置时刻；读不到（登录、额度读不出、起不来）为 nil
+            var resets: Date?
+        }
+
+        var runtime: AgentKind
+        var model: String?
+        var effort: PiThinkingLevel?
+        var fast: Bool
+        var stuck: [AgentKind: Stuck] = [:]
+
+        init(_ settings: BrainSettings, from runtime: AgentKind) {
+            (self.runtime, model, effort, fast) = (runtime, settings.model, settings.effort, settings.fast)
+        }
+
+        /// 这家此刻该能用：这次没卡住，或读到的重置时刻已过。
+        func open(_ kind: AgentKind, at now: Date) -> Bool {
+            guard let stuck = stuck[kind] else { return true }
+            return stuck.resets.map { $0 <= now } ?? false
+        }
+
+        /// 此刻该用哪家（唯一规则）：你设定的那家该能用就是它；此刻用的那家没卡住就留它；否则没卡过的那家，再否则重置已过的里最早的
+        /// （这几种 `open`：该能用，马上换）；都不是就轮到最近卡住的那家后面的一家（碰运气，只在慢速周期到点时换）。
+        /// 轮流与没卡过的按 Agent 的顺序从最近卡住的那家后面数。这台一家都没有为 nil。
+        func next(from current: AgentKind, among kinds: [AgentKind], at now: Date) -> (kind: AgentKind, open: Bool)? {
+            if kinds.contains(runtime), open(runtime, at: now) { return (runtime, true) }
+            if stuck[current] == nil, kinds.contains(current) { return (current, true) }
+            let last = stuck.max { $0.value.at < $1.value.at }?.key ?? current
+            let split = kinds.firstIndex(of: last).map { $0 + 1 } ?? 0
+            let order = kinds[split...] + kinds[..<split]
+            if let fresh = order.first(where: { stuck[$0] == nil }) { return (fresh, true) }
+            let passed = order.compactMap { kind in stuck[kind]?.resets.flatMap { $0 <= now ? (kind, $0) : nil } }
+            if let earliest = passed.min(by: { $0.1 < $1.1 }) { return (earliest.0, true) }
+            return order.first.map { ($0, false) }
+        }
+
+        /// 换到这家时设置写成什么：你设定的那家照原样；别的那家用它自己的默认模型（模型名各家不通用）、fast 关，强度照你设定的。
+        func apply(_ kind: AgentKind, to profile: inout CueProfile) {
+            let home = kind == runtime
+            profile.runtime = .known(kind)
+            (profile.model, profile.effort, profile.fast) = (home ? model : nil, effort.map(Open.known), home && fast)
+        }
+
+        /// 设置还是绕行写下的样子；不是就是你或 Cue 后来改了（后来的选择就是你设定的，不再绕行）。
+        func wrote(_ profile: CueProfile) -> Bool {
+            guard let kind = profile.runtime.known else { return false }
+            var written = profile
+            apply(kind, to: &written)
+            return written == profile
+        }
+
+        /// 下一个还没到的重置时刻：到点时对一次账，该能用的那家马上换过去（`CueKeeper.alarm`）。
+        func nextReset(after now: Date) -> Date? { stuck.values.compactMap(\.resets).filter { $0 > now }.min() }
     }
 
     struct Turn {
@@ -133,8 +194,6 @@ extension CueKeeper {
         var lastYou: Date?
         var active: Bool
         var memory: CueMemoryVersion
-        /// 一直记着的那几条：别的设备迟到同步来的钉上、取消、忘掉不一定改得动 `memory`（修改时间可能早于最晚那条），单独看
-        var pinned: [UUID]
         var profile: CueProfile?
         /// 各设备开着的会话（`Viewer`）：他离开了在场的会话，要再报给 Cue
         var viewing: [String]

@@ -25,8 +25,9 @@ import os
 /// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起（没有终态，一直试下去）；Cue 此刻在做什么（`work`）由它直接得出，
 /// 每次对完账写进库（`PiStateRecorder.updateCue`；值班结束时由 `CueService` 写回歇着），大脑好不好写进本机的健康文件（`CueHealth`，`writeHealth`）。
 ///
-/// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账。定时器只有一个（`timer`），每次对账重排：
-/// 歇着时排下一个定时、巡视或停住，等着重起时排重起的时刻，一轮在跑时排看门狗（`alarm`）。先接上大脑（到点重起、挂住的停掉，`revive`），再按先后只做一件事：
+/// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账。定时器只有一个（`timer`），每次对账重排成最早的那个：
+/// 歇着时下一个定时、巡视或停住，等着重起时重起的时刻，一轮在跑时看门狗，你的话退回没写成时的再试与绕行里的重置时刻（`alarm`）。
+/// 先接上大脑（到点重起、挂住的停掉，`revive`）、退回上次没退回成的你的话（`giveBack`），绕行时让设置跟上（`steer`），再按先后只做一件事：
 /// 1. 你的消息（连同它收起的卡，`CueEnvelope.delivered`）与"等你"的回答（选的那一项）：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
 ///    回答你的是大脑报接走它的那一轮（`TurnEvent.received`）：插进去时那一轮可能正好收尾，由下一轮接走。
 /// 2. 这一轮还没完就等。
@@ -57,12 +58,12 @@ import os
 /// 基线（变化从哪算起）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
 /// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
 /// Cue 自己醒来（刚启用、定时与 5–6）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次（信封带上这次的错，先核对做到了哪），再错就等下一个新变化。
-/// 额度、登录卡住（这一轮或起大脑时），这台 Mac 上另有能用的 Agent 就换过去（`failOver`：只说从哪换到哪，这一轮交给新的大脑重来）；换回由 Cue 自己定。
-/// 没有能换的了（都试过）：这一轮（你发起的也算）只按慢速周期一直重来（新变化不催它，卡着时重来只会再失败；别的一轮好好做完了才马上重来），
-/// 直到它好好做完（`setBack`），那个错只说一次。
+/// 额度、登录卡住（这一轮或起大脑时）按绕行的规则换家（`CueKeeper+Recover` 头注释）：有该能用的另一家就换过去（只说从哪换到哪，这一轮交给新的大脑重来），
+/// 你设定的那家重置时刻一到换回它。都卡着：这一轮（你发起的也算）只按慢速周期一直重来、每个周期换一家试（新变化不催它，卡着时重来只会再失败；
+/// 别的一轮好好做完了才马上重来），直到它好好做完（`setBack`），那个错只说一次，好好做完时说一句恢复了。
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、额度与登录类的错立刻说；会重试的那次先不说，重试也错了才说。回答你的一轮的回复与出错（一轮只响一次）、起不来都提示你（`CueMessage.urgent`）。
 /// 大脑意外退出、起不来、一轮里醒着太久没有事件（看门狗，`CueTiming.silence`；Mac 睡着的那段不算）都按 `CueTiming.restartDelay` 退避重试，
-/// 那一轮里交出去的你的话清掉送达、重起后重新交；快的几次用完写一条 Cue 消息说起不来（这次故障只说一次），转慢的一直试，你发消息就马上再试，
+/// 那一轮里交出去的你的话清掉送达、重起后重新交（退回没写进库的过一阵再退，`giveBack`）；快的几次用完写一条 Cue 消息说起不来（这次故障只说一次），转慢的一直试，你发消息就马上再试，
 /// 之后第一轮好好做完时说一句又能干活了。工具服务没了（`toolsDown`）的班次做完这一轮就换。
 /// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它；上下文随状态写进库，各端读 `CueState.context`。
 /// 给人看的经过由它推出（`CueRound.process`），写在对话里这一轮开始的位置那一行上（`recordRound`）：Cue 自己醒来的一轮醒来时就写下、带着为什么醒
@@ -110,16 +111,23 @@ final class CueKeeper {
     var timer: Task<Void, Never>?
     /// 最近一次大脑事件（或一轮开始）在看门狗的钟上的时刻（`CueTiming.awake`）：看门狗从它算（`alarm`）
     @ObservationIgnored var heardAt: SuspendingClock.Instant
-    /// 这次故障里因额度、登录换走过的 Agent（`failOver`）：不再换回；一轮好好做完清空
-    @ObservationIgnored var tried: Set<AgentKind> = []
-    /// 这次故障已告诉你起不来了（`tellDown`），恢复时说一句
-    @ObservationIgnored var outageTold = false
+    /// 这次故障里告诉过你什么：换了一家（`failOver`），或起不来、卡住了（`tellDown`，额度登录没得换时的那个错）；好好做完的那一轮说一句恢复了就清掉（`recovered`）
+    @ObservationIgnored var outage: Outage?
+
+    enum Outage {
+        /// 说过换到哪家接着干：之后那家起不来照样说起不来
+        case switched
+        /// 说过起不来、卡住：这次故障里不再说
+        case down
+    }
     /// 下一次醒来是上一轮出错后的重来：上一轮的错，随信封交给大脑（`CueEnvelope.Input.retrying`），交出去就清掉
     @ObservationIgnored var retrying: String?
     /// 最近一次出错与换大脑：写进健康（`health`）
     @ObservationIgnored var trouble: CueHealth.Failure?
     @ObservationIgnored var failover: CueHealth.Failover?
     @ObservationIgnored var writtenHealth: CueHealth?
+    /// 要退回没送达、还没退回成的你的话（`giveBack`）：退回时库没写成就留在这里，落盘（`save`），退回写成才删
+    @ObservationIgnored var owed: Set<UUID> = []
     /// 他发起的一轮停下已对到的写入序号（`CueStore.leaveHisStops`）；nil 是这次上班还没对过，从变化的基线算起
     @ObservationIgnored var handedOver: Int?
     /// 做完的几轮，旧的在前，至多 `roundsKept`
@@ -186,8 +194,8 @@ final class CueKeeper {
                     for try await _ in store.observe({ store in
                         Signal(
                             toDeliver: try store.cueMessagesToDeliver().map(\.id), lastYou: try store.cueLastYou()?.said,
-                            active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(), pinned: try store.pinnedCueLineIDs(),
-                            profile: try store.cueProfile(), viewing: try store.viewers().compactMap(\.sessionID), written: try store.lastWrite(), runtime: try store.runtimeDeadlines())
+                            active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(), profile: try store.cueProfile(),
+                            viewing: try store.viewers().compactMap(\.sessionID), written: try store.lastWrite(), runtime: try store.runtimeDeadlines())
                     }) { input.yield(.kick) }
                 } catch {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")
@@ -195,14 +203,7 @@ final class CueKeeper {
             }
             group.addTask { await self.dreams() }
             // 上一次没收好尾（崩溃、强杀，没走到 `retire`）时交出去没答上的你的话：退回没送达，这次重新交
-            if let unanswered = progress.unanswered, !unanswered.isEmpty {
-                do {
-                    try await store.unmarkCueMessagesDelivered(unanswered)
-                    save()
-                } catch {
-                    Self.log.error("Cue 上次没答上的消息没能退回：\(error.localizedDescription, privacy: .public)")
-                }
-            }
+            await giveBack(progress.unanswered ?? [])
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
             if progress.marks == nil {
