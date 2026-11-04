@@ -24,7 +24,7 @@ struct SkillSection: View {
                         Text(verbatim: workspace.projectName(group.project))
                     }
                     .font(Typography.label).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, LibraryLayout.inset)
+                    .padding(.horizontal, Spacing.inset)
                     .accessibilityAddTraits(.isHeader)
                     skills(group.skills.map(SkillLine.skill))
                 }
@@ -33,11 +33,7 @@ struct SkillSection: View {
             if !library.selfManaged.isEmpty {
                 LibraryPaper {
                     ForEach(library.selfManaged, id: \.agent) { managed in
-                        LibraryRow(title: managed.title) {
-                            managed.agent.mark.image.foregroundStyle(palette.ink2)
-                        } trailing: {
-                            EmptyView()
-                        }
+                        LinkRow(title: Text(verbatim: managed.title), chevron: false) { managed.agent.mark.image }
                     }
                 }
                 .padding(.top, 8)
@@ -59,7 +55,7 @@ struct SkillSection: View {
                     Text(verbatim: name.isEmpty ? String(localized: "不在分类里") : name)
                         .font(Typography.label).foregroundStyle(palette.ink3)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, LibraryLayout.inset).padding(.top, 10).padding(.bottom, 2)
+                        .padding(.horizontal, Spacing.inset).padding(.top, 10).padding(.bottom, 2)
                         .accessibilityAddTraits(.isHeader)
                 case .skill(let skill): SkillRow(skill: skill, library: library)
                 }
@@ -119,7 +115,7 @@ private struct SkillRow: View {
             #endif
             UnseenMarks(agents: library.agents, unseen: skill.unseenBy)
         }
-        .padding(.horizontal, LibraryLayout.inset)
+        .padding(.horizontal, Spacing.inset)
         .padding(.vertical, Self.vertical)
         .frame(minHeight: Self.height)
         .contentShape(.rect)
@@ -148,18 +144,16 @@ private struct SkillRow: View {
         #endif
     }
 
-    #if os(macOS)
     private static let nameFont = Typography.body.weight(.medium)
     private static let descriptionFont = Typography.meta
+    #if os(macOS)
     private static let markFont = Glyph.small
     private static let nameWidth: CGFloat = 188
     private static let markWidth: CGFloat = 16
     private static let vertical: CGFloat = 0
     private static let height: CGFloat = 36
     #else
-    private static let nameFont = Font.body.weight(.medium)
-    private static let descriptionFont = Font.footnote
-    private static let markFont = Font.footnote
+    private static let markFont = Typography.meta
     private static let vertical: CGFloat = 8
     private static let height: CGFloat = 56
     #endif

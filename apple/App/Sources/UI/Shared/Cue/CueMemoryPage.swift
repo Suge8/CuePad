@@ -107,7 +107,7 @@ private struct GroupTitle<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            SectionLabel(text: Dotted(title), icon: icon)
+            SectionHeader(Dotted(title), level: .group, icon: icon)
             Spacer(minLength: 0)
             trailing
         }

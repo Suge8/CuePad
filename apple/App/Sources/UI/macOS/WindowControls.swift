@@ -31,65 +31,6 @@ struct CloseButton: View {
     }
 }
 
-/// 量这一块在窗口里的框（左上为原点，同窗口里浮层的坐标），或它的一条边（`CGRect.minX`、`maxX`）：宽屏几块各是一个托管视图，
-/// SwiftUI 的全局坐标只到所在那一栏，按窗口坐标量。会话条换宽时挪的是外面的几层，听这几层的框变了再量。
-struct WindowFrame<Value: Equatable>: NSViewRepresentable {
-    let edge: KeyPath<CGRect, Value>
-    let report: (Value) -> Void
-
-    init(_ edge: KeyPath<CGRect, Value>, report: @escaping (Value) -> Void) {
-        self.edge = edge
-        self.report = report
-    }
-
-    func makeNSView(context: Context) -> Probe { Probe(edge: edge, report: report) }
-    func updateNSView(_ probe: Probe, context: Context) { probe.report = report }
-
-    final class Probe: NSView {
-        let edge: KeyPath<CGRect, Value>
-        var report: (Value) -> Void
-        private var observers: [any NSObjectProtocol] = []
-        private var last: Value?
-
-        init(edge: KeyPath<CGRect, Value>, report: @escaping (Value) -> Void) {
-            self.edge = edge
-            self.report = report
-            super.init(frame: .zero)
-        }
-
-        required init?(coder: NSCoder) { nil }
-
-        isolated deinit { observers.forEach(NotificationCenter.default.removeObserver) }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            observers.forEach(NotificationCenter.default.removeObserver)
-            observers = sequence(first: self as NSView, next: \.superview).map { view in
-                NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: view, queue: nil) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.measure() }
-                }
-            }
-            measure()
-        }
-
-        override func layout() {
-            super.layout()
-            measure()
-        }
-
-        private func measure() {
-            guard let window else { return }
-            let frame = convert(bounds, to: nil)
-            let height = window.contentView?.bounds.height ?? 0
-            let x = CGRect(x: frame.minX, y: height - frame.maxY, width: frame.width, height: frame.height)[keyPath: edge]
-            guard x != last else { return }
-            last = x
-            // 不在布局的这一圈里改可观察的值
-            DispatchQueue.main.async { [report] in report(x) }
-        }
-    }
-}
-
 /// 主区栏头右端、"⋯"之前：同步需要关注时（没登录 iCloud、连不上、需要你决定、出错等）露一个图标，悬停看原因，点开设置处理。
 /// 有同步就常驻一格圆钮宽，平时只是看不见（`keepsPlace`）：提醒一出一收不挤动左边的编辑页标题与项目名。
 struct SyncAlertSlot: View {

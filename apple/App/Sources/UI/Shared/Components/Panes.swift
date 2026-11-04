@@ -1,17 +1,33 @@
 import SwiftUI
 
-/// 一页里换看哪一段的分段：全 App 只有这一种（窄屏侧栏的项目｜进展、技能与规则的规则｜技能、搜索的灵感与任务｜会话）。
+/// 一页里换看哪一段、几样里选一样的分段：全 App 只有这一种（窄屏侧栏的项目｜进展、技能与规则的规则｜技能、搜索的灵感与任务｜会话、
+/// 同名技能的几份、定时的重复）。各段可以不带图标（只写字），整组照样要么全带字、要么全只画图标。
 /// 选中态同全 App 一套（docs/ui.md「选中」）：中性淡底（`selection`）、墨字，其余次一档的墨，字一律半粗——选中不换字重，段宽不跟着跳；不用靛青。
 /// 形状只有一种：每段等宽（按最宽那一段）、同高的胶囊，整组要么全带字、要么全只画图标（`titles: false`，字给悬停与读屏），不在一排里一扁一圆。
 /// 放不下带字的时，调用处退成全只画图标（`ViewThatFits`），不截半个词。
-/// 放在哪见 docs/layout.md「栏头与页顶」；底由调用处给（栏头、页顶的玻璃，搜索范围自带淡底的槽）。
+/// 放在哪见 docs/layout.md「栏头与页顶」；底由调用处给：栏头、页顶的玻璃，纸与面板上是淡底的槽（`paneSlot`）。
 /// 选中块只有一块，换段时从上一段滑到这一段（不回弹的弹簧 `Motion.nudge`，中途再点从当前位置折回）；减弱动态效果时选中块直接到位，字色照样淡。
 /// 点着的那一段再点不动。
 struct PaneSegment<Value: Hashable>: View {
     struct Item {
         let value: Value
-        let title: LocalizedStringResource
-        let icon: Icon
+        let title: Text
+        let icon: Icon?
+
+        init(value: Value, title: LocalizedStringResource, icon: Icon? = nil) {
+            self.init(value: value, title: Text(title), icon: icon)
+        }
+
+        /// 段名是用户或库里的名字（同名技能所在的范围）：原样显示。
+        init(value: Value, verbatim title: String, icon: Icon? = nil) {
+            self.init(value: value, title: Text(verbatim: title), icon: icon)
+        }
+
+        private init(value: Value, title: Text, icon: Icon?) {
+            self.value = value
+            self.title = title
+            self.icon = icon
+        }
     }
 
     let items: [Item]
@@ -31,8 +47,8 @@ struct PaneSegment<Value: Hashable>: View {
                     withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { select(item.value) }
                 } label: {
                     HStack(spacing: PaneMetrics.iconGap) {
-                        Image(item.icon).font(PaneMetrics.iconFont)
-                        if titles { Text(item.title).font(PaneMetrics.font).lineLimit(1) }
+                        if let icon = item.icon { Image(icon).font(PaneMetrics.iconFont) }
+                        if titles { item.title.font(PaneMetrics.font).lineLimit(1) }
                     }
                     .padding(.horizontal, titles ? PaneMetrics.padding : 0)
                     .frame(minWidth: titles ? PaneMetrics.minWidth : PaneMetrics.square, maxWidth: .infinity, maxHeight: .infinity)
@@ -41,8 +57,8 @@ struct PaneSegment<Value: Hashable>: View {
                     .contentShape(.capsule)
                 }
                 .buttonStyle(PressStyle())
-                .help(Text(item.title))
-                .accessibilityLabel(Text(item.title))
+                .help(item.title)
+                .accessibilityLabel(item.title)
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
@@ -99,12 +115,28 @@ enum SearchScope {
 
 struct SearchScopePanes: View {
     @Binding var scope: SearchScope
-    @Environment(\.palette) private var palette
 
     var body: some View {
         PaneSegment(items: [.init(value: .cards, title: "灵感与任务", icon: .idea), .init(value: .sessions, title: "会话", icon: .session)],
                     selection: scope) { scope = $0 }
             .fixedSize()
+            .paneSlot()
+    }
+}
+
+extension View {
+    /// 纸与面板上的分段底下那道槽（玻璃不叠玻璃，纸上没有玻璃托着）：淡底胶囊，比选中块大一圈（`PaneMetrics.inset`）。
+    /// 给了 `size` 就与同一排那一档控件同高（旁边是那一档的按钮时）。
+    func paneSlot(_ size: ControlSize? = nil) -> some View { modifier(PaneSlot(size: size)) }
+}
+
+private struct PaneSlot: ViewModifier {
+    let size: ControlSize?
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content
+            .frame(height: size.map { $0.height - PaneMetrics.inset * 2 })
             .padding(PaneMetrics.inset)
             .background(palette.fill, in: .capsule)
     }

@@ -2,17 +2,18 @@ import SwiftUI
 
 /// 去 Cue 的入口角上的小点：不在 Cue 页时，Cue 那边有事一眼看得到，不打断。新消息（石绿，有新回复的颜色，`CueWatch.unread`）
 /// 先于等你（赭黄，见 `Palette.waiting`）：刚来的那句是此刻的事，等你一直在、在 Cue 页与会话里各有它的卡；都没有不画。
-/// 又来一句时点上漾开一圈（`CueArrival`）。挂在宽屏收起的 Cue 钮上（`CueButton`）。
+/// 又来一句时点上漾开一圈（`CueArrival`）。挂在宽屏收起的 Cue 钮上（`CueButton`）。点就是记号点（`StatusDot`），冒出、收回经 `Motion.pop`。
 struct CueDot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static let size: CGFloat = 7
+    static let size = StatusDot.size
 
     var body: some View {
         let color = workspace.cue.unread > 0 ? palette.replied : workspace.cue.now.needsYou > 0 ? palette.waiting : nil
         ZStack {
-            if let color { Circle().fill(color).transition(.scale.combined(with: .opacity)) }
+            if let color { StatusDot(color: color).transition(Motion.pop(reduceMotion: reduceMotion)) }
             CueArrival(color: palette.replied)
         }
         .frame(width: Self.size, height: Self.size)

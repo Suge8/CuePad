@@ -57,10 +57,8 @@ struct CueSchedulePage: View {
                 Button { picking.toggle() } label: {
                     let when = ScheduleText.when(draft)
                     Label { Text(verbatim: "\(when.day) \(when.time)") } icon: { Image(.schedule) }
-                        .font(Typography.meta.weight(.medium)).monospacedDigit()
-                        .foregroundStyle(picking ? palette.signature : palette.ink2)
-                        .padding(.horizontal, 10).frame(height: 28)
-                        .background(picking ? palette.selection : palette.fill, in: .capsule).contentShape(.capsule)
+                        .monospacedDigit()
+                        .chip(on: picking, size: .compact)
                         .fixedSize()
                 }
                 .buttonStyle(PressStyle())
@@ -146,7 +144,7 @@ private enum ScheduleMetrics {
     #if os(macOS)
     static let time = Typography.bodyStrong.weight(.medium)
     #else
-    static let time = Font.system(.title3, weight: .medium)
+    static let time = Typography.title.weight(.medium)
     #endif
     static let gap: CGFloat = 14
 }
