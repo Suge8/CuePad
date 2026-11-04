@@ -2,7 +2,9 @@ import CueStore
 import Foundation
 
 /// 回复框里的斜杠命令（iOS 与 Mac 共用）：输入 "/" 弹出的面板列哪些命令，输入框里的内容算不算一条命令。
-/// 命令清单来自会话所在目录的目录记录（`AgentCatalog.commands`，Agent 随会话上报，同步到手机）；命令由 Pi 派发执行（投送方式 `command`）。
+/// 命令清单来自会话所在目录的目录记录（`AgentCatalog.commands`，Agent 随会话上报，同步到手机）。
+/// 送达各家一条规则：提示词模板与技能展开成你的一句话（`speaks`），同别的话走投送方式 `send`——带着请求 id 交出，展开后落成的那条消息带着它，
+/// 气泡等对话里出现这句再换下，送达同说话；其余是命令（`command`，内置与扩展命令），不产生你的话，以 Agent 执行了它为送达，进度在回复框上方一行。
 nonisolated enum PiSlash {
     /// 面板此刻要列的命令；输入框里不是 "/名字片段" 的形态（不以 / 开头、已经在写参数）时为 nil，面板不出现。
     /// 按相关度排：名字以片段开头的在前，名字里含有的其次，说明里含有的最后；同一档里内置在前，其次扩展、提示词模板、技能，各自保持清单顺序。
@@ -38,16 +40,24 @@ nonisolated enum PiSlash {
     /// 选中一条命令后输入框里的内容：斜杠加名字加一个空格，接着写参数。
     static func insertion(for command: PiSlashCommand) -> String { "/\(command.name) " }
 
-    /// 草稿是一条已知的斜杠命令时，要发出的整行；否则为 nil（当普通消息发）。
+    /// 草稿是一条命令（清单里不是 `speaks` 的那些）时，要发出的整行；否则为 nil（当你说的话发，模板与技能也是）。
     /// 命令行是输入的文字（首个词是清单里的名字），带上的卡片文字接在后面当参数（发给 Agent 时）；带图片的不算命令，命令不能携带图片。
-    @MainActor static func line(of draft: ComposerDraft, in commands: [PiSlashCommand]) -> String? {
+    @MainActor static func line(of draft: ComposerDraft, in commands: [PiSlashCommand], for session: PiSessionState) -> String? {
         // 回复框每次重算都问一遍：先只看开头，是命令再整串修剪（长草稿每次都整串复制一遍，打一个字就要几毫秒）
         let start = draft.text.drop { $0.isWhitespace }
         guard start.hasPrefix("/"), !draft.hasFiles else { return nil }
         let name = start.dropFirst().prefix { !$0.isWhitespace }
-        guard commands.contains(where: { $0.name == name }) else { return nil }
+        guard commands.contains(where: { $0.name == name && !speaks($0, in: session) }) else { return nil }
         let typed = start.trimmingCharacters(in: .whitespacesAndNewlines)
         return ([typed] + draft.attachments.map(\.content)).joined(separator: "\n\n")
+    }
+
+    /// 这条命令是你说的话：提示词模板与技能，且这家说话时能把它连同请求 id 交出——Pi 由桥扩展展开（`expandPromptTemplates`），
+    /// Codex 在 `CodexRuntime` 里认 `skill:`。OpenCode 的命令端点不收消息 id（展开出的那条认不回请求，气泡会一直挂着），
+    /// 它的模板仍是命令，以端点执行完的回执为送达；Claude Code、Grok Build、dsh 报的命令都是内置。
+    static func speaks(_ command: PiSlashCommand, in session: PiSessionState) -> Bool {
+        guard session.agent != .known(.opencode) else { return false }
+        return command.source == .known(.prompt) || command.source == .known(.skill)
     }
 }
 
