@@ -75,7 +75,6 @@ struct PiConfigControls<Trailing: View>: View {
     let trailing: Trailing
     /// 这一排在给的宽里靠哪边（Cue 面板里居中）。
     var alignment = Alignment.leading
-    @Environment(\.singleLineConfig) private var singleLine
     @Environment(AppServices.self) var services
     #if os(macOS)
     /// 键盘弹出的菜单贴着哪枚胶囊。
@@ -106,9 +105,9 @@ struct PiConfigControls<Trailing: View>: View {
     }
 
     var body: some View {
-        ConfigRow(singleLine: singleLine) {
-            if let agent { PiAgentCapsule(pick: agent).layoutValue(key: ConfigGive.self, value: .agent) }
-            modelCapsule.layoutValue(key: ConfigGive.self, value: .model)
+        ConfigRow {
+            if let agent { PiAgentCapsule(pick: agent).layoutValue(key: ConfigGive.self, value: [.agent]) }
+            modelCapsule.layoutValue(key: ConfigGive.self, value: [.model])
             if let model = shown.model, let url = model.account?.usageURL(provider: model.key.provider) {
                 Link("管理用量", destination: url).font(Typography.meta).buttonStyle(PressStyle())
             }
@@ -117,10 +116,10 @@ struct PiConfigControls<Trailing: View>: View {
                     #if os(macOS)
                     .popUpAnchor(anchors[.thinking])
                     #endif
-                    .layoutValue(key: ConfigGive.self, value: .wording)
+                    .layoutValue(key: ConfigGive.self, value: [.wording, .secondary])
             }
             if shown.model?.supportsFast == true {
-                PiFastCapsule(fast: shown.fast, choose: chooseFast)
+                PiFastCapsule(fast: shown.fast, choose: chooseFast).layoutValue(key: ConfigGive.self, value: [.secondary])
             }
             trailing
         }
@@ -150,12 +149,18 @@ struct PiConfigControls<Trailing: View>: View {
     }
 }
 
-/// 工具排：胶囊按内容宽从左排成一行，竖直居中，整排不超出给的宽（超出的话输入框跟着撑宽、伸出屏幕两边）。
-/// 一行放不下时按 `Give` 依次收短思考、间距、上下文；普通页面再换行。宽屏回复框保持单行，先把 Agent 收成标志，再将剩余宽度给模型。
+/// 工具排：胶囊按内容宽从左排成一行，竖直居中，两端都只有一行、永不折行，整排不超出给的宽（超出的话输入框跟着撑宽、伸出屏幕两边）。
+/// 放不下时按 `Give` 的次序一步步让，够了就停，每一步把标了它的胶囊换成下一档短写法（胶囊里的 `ViewThatFits`，按"比现在窄一点"去量）：
+/// 1. `wording`：思考强度去掉"思考"二字（`PiThinkingDial`）；
+/// 2. `spacing`：胶囊之间收紧；
+/// 3. `context`："上下文"三个字收成圆环（`PiContextGauge`）；
+/// 4. `agent`：Agent 胶囊只留产品标志（`PiAgentCapsule`）；
+/// 5. `secondary`：次要的再收一档——思考强度只剩竖格、上下文只剩圆环（百分比留在读屏与点开的气泡里）、加速只写"加速"（开着靠选中底）；
+/// 6. `model`：剩下的宽都给模型，放不下全名就只留标志（没有标志的模型名字截断）；完整名称悬停、读屏、菜单里看。
+/// 先收字、留标志与操作；不把胶囊收进"⋯"：排版定不了菜单里该有哪几项（`Layout` 不能藏起子视图，藏不掉的照样被读屏读到、点到），一律收短、留在原地。
+/// 六步收完仍放不下（最大的辅助字号）就伸出输入框的右边、被裁掉，不折行、不撑宽输入框。
 private struct ConfigRow: Layout {
-    var singleLine = false
-    /// 让的次序：先去掉思考强度前的"思考"二字（`PiThinkingDial`），再收紧间距，再把"上下文"收成圆环（`PiContextGauge`）。
-    enum Give: CaseIterable { case wording, spacing, context, agent, model }
+    enum Give: CaseIterable { case wording, spacing, context, agent, secondary, model }
 
     private static let spacing: CGFloat = 6
     private static let tightSpacing: CGFloat = 2
@@ -163,39 +168,27 @@ private struct ConfigRow: Layout {
     private struct Arrangement {
         var widths: [CGFloat]
         var spacing: CGFloat
-        /// 每行从第几枚起；一行时只有 0。
-        var breaks = [0]
         var width: CGFloat { widths.reduce(0, +) + spacing * CGFloat(max(widths.count - 1, 0)) }
-
-        func lines(_ count: Int) -> [Range<Int>] {
-            zip(breaks, breaks.dropFirst() + [count]).map { $0..<$1 }
-        }
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let row = arrange(in: proposal.width, subviews)
-        let lines = row.lines(subviews.count).map { line(row, $0, subviews) }
-        return CGSize(width: lines.map(\.width).max() ?? 0, height: lines.map(\.height).reduce(0, +))
+        // 收完仍放不下时只报给的宽：多出的伸出去被输入框裁掉，输入框不跟着撑宽
+        return CGSize(width: min(row.width, proposal.width ?? row.width), height: height(row, subviews))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let row = arrange(in: proposal.width, subviews)
-        var y = bounds.minY
-        for range in row.lines(subviews.count) {
-            let height = line(row, range, subviews).height
-            var x = bounds.minX
-            for index in range {
-                subviews[index].place(at: CGPoint(x: x, y: y + height / 2), anchor: .leading, proposal: ProposedViewSize(width: row.widths[index], height: height))
-                x += row.widths[index] + row.spacing
-            }
-            y += height
+        let height = height(row, subviews)
+        var x = bounds.minX
+        for index in subviews.indices {
+            subviews[index].place(at: CGPoint(x: x, y: bounds.minY + height / 2), anchor: .leading, proposal: ProposedViewSize(width: row.widths[index], height: height))
+            x += row.widths[index] + row.spacing
         }
     }
 
-    private func line(_ row: Arrangement, _ range: Range<Int>, _ subviews: Subviews) -> CGSize {
-        let width = range.map { row.widths[$0] }.reduce(0, +) + row.spacing * CGFloat(max(range.count - 1, 0))
-        let height = range.map { subviews[$0].sizeThatFits(ProposedViewSize(width: row.widths[$0], height: nil)).height }.max() ?? 0
-        return CGSize(width: width, height: height)
+    private func height(_ row: Arrangement, _ subviews: Subviews) -> CGFloat {
+        subviews.indices.map { subviews[$0].sizeThatFits(ProposedViewSize(width: row.widths[$0], height: nil)).height }.max() ?? 0
     }
 
     private func arrange(in available: CGFloat?, _ subviews: Subviews) -> Arrangement {
@@ -206,30 +199,13 @@ private struct ConfigRow: Layout {
             case .spacing:
                 row.spacing = Self.tightSpacing
             case .model:
-                guard singleLine else { continue }
-                for index in subviews.indices where subviews[index][ConfigGive.self] == give {
+                for index in subviews.indices where subviews[index][ConfigGive.self].contains(give) {
                     row.widths[index] = width(of: subviews[index], in: max(0, available - row.width + row.widths[index]))
                 }
-            case .agent:
-                guard singleLine else { continue }
-                for index in subviews.indices where subviews[index][ConfigGive.self] == give {
-                    row.widths[index] = width(of: subviews[index], in: 0)
+            case .wording, .context, .agent, .secondary:
+                for index in subviews.indices where subviews[index][ConfigGive.self].contains(give) {
+                    row.widths[index] = width(of: subviews[index], in: max(0, row.widths[index] - 1))
                 }
-            case .wording, .context:
-                for index in subviews.indices where subviews[index][ConfigGive.self] == give {
-                    row.widths[index] = width(of: subviews[index], in: 0)
-                }
-            }
-        }
-        guard !singleLine, row.width > available else { return row }
-        var x: CGFloat = 0
-        for index in subviews.indices {
-            if row.widths[index] > available { row.widths[index] = width(of: subviews[index], in: available) }
-            if index > 0, x + row.spacing + row.widths[index] > available {
-                row.breaks.append(index)
-                x = row.widths[index]
-            } else {
-                x += (index > 0 ? row.spacing : 0) + row.widths[index]
             }
         }
         return row
@@ -241,9 +217,9 @@ private struct ConfigRow: Layout {
     }
 }
 
-/// 工具排里这一枚放不下时怎么让（`ConfigRow.Give`）；没标的按内容宽不让。
+/// 工具排里这一枚在哪几步让（`ConfigRow.Give`）；没标的按内容宽不让。
 nonisolated private struct ConfigGive: LayoutValueKey {
-    static let defaultValue: ConfigRow.Give? = nil
+    static let defaultValue: Set<ConfigRow.Give> = []
 }
 
 
@@ -266,7 +242,7 @@ struct SessionConfigControls: View {
             configure(PiConfig(fast: $0))
         }) {
             if let meter = shown.context.flatMap(PiContextMeter.init) {
-                PiContextGauge(session: session, meter: meter).layoutValue(key: ConfigGive.self, value: .context)
+                PiContextGauge(session: session, meter: meter).layoutValue(key: ConfigGive.self, value: [.context, .secondary])
             }
         }
     }
@@ -279,6 +255,6 @@ struct SessionConfigControls: View {
 }
 
 extension EnvironmentValues {
-    /// 回复框工具排只占一行：先收短装饰与 Agent 名，最后把剩余宽度给模型；完整名称仍可读屏、打开菜单查看。
+    /// 宽屏的回复框（两端的工具排都只有一行，`ConfigRow`）：思考强度的竖格画细一点。
     @Entry var singleLineConfig = false
 }

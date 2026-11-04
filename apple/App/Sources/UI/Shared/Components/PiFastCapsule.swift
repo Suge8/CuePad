@@ -22,9 +22,13 @@ struct PiFastCapsule: View {
     }
 
     private var label: some View {
-        HStack(spacing: 4) {
+        // 工具排放不下时（`ConfigRow`）只写"加速"：开没开看选中底，读屏照说
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 4) {
+                Text("加速")
+                if fast == true { Text("开") } else if fast == false { Text("关") } else { Text("未知") }
+            }
             Text("加速")
-            if fast == true { Text("开") } else if fast == false { Text("关") } else { Text("未知") }
         }
         .chip(on: fast == true, menu: fast == nil)
     }

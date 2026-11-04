@@ -10,6 +10,8 @@ struct SceneRoot: View {
 
     var body: some View {
         IOSRoot(services: services)
+            // 窗口里的气泡（窄屏与宽屏、任务气泡、控件上的说明）都画在这一层
+            .panelHost()
             .debugCompact()
             .environment(alerts)
             .task { if services.sync != nil { await alerts.enable() } }

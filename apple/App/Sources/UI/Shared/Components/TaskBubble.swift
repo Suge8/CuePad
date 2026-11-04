@@ -86,7 +86,7 @@ struct TaskBubbleSlot: View {
 
     var body: some View {
         @Bindable var workspace = workspace
-        // 铺满：手机上气泡在这一层里摆（Mac 上画在窗口的浮层那一层，`panelHost`）
+        // 画在窗口的浮层那一层（`panelHost`）
         let source = source
         Color.clear.panel(item: $workspace.openTask, style: .bubble(source)) { TaskBubble(request: $0, sheet: source == .bottom) }
     }

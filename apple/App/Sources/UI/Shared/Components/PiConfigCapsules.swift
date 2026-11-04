@@ -36,21 +36,31 @@ struct PiModelCapsule: View {
     private func label(at now: Date) -> some View {
         let mark = current.flatMap(BrandMark.model), binding = binding(at: now)
         let badged = mark != nil || binding != nil
-        return HStack(spacing: 5) {
+        let name = (current.map { Text(Dotted(PiModelName.short($0), $0.account?.label(provider: $0.key.provider)).visible) } ?? Text(unnamed))
+            .contentTransition(.opacity)
+        return HStack(spacing: 0) {
             // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
             if badged {
                 ModelBadge(mark: mark, binding: binding)
                     .modifier(Breathing(active: pending))
                     .accessibilityHidden(true)
+                // 工具排给的宽放不下全名（`ConfigRow` 的 `model`）就只留标志，不截成"G…"；完整模型名可悬停、读屏或在菜单里看
+                ViewThatFits(in: .horizontal) {
+                    name.padding(.leading, Self.gap)
+                    Color.clear.frame(width: 0, height: 0)
+                }
+            } else {
+                // 没有标志可留：名字截断
+                name.truncationMode(.tail)
             }
-            // 先按内容宽，宽屏回复框用剩余宽度截断；完整模型名可悬停或读屏查看。
-            (current.map { Text(Dotted(PiModelName.short($0), $0.account?.label(provider: $0.key.provider)).visible) } ?? Text(unnamed)).truncationMode(.tail)
-                .contentTransition(.opacity)
         }
         .chip(menu: true)
         .help(spoken(at: now))
         .animation(Motion.fade, value: current?.key)
     }
+
+    /// 标志与名字之间。
+    private static let gap: CGFloat = 5
 
     private func spoken(at now: Date) -> String {
         Dotted(current?.displayName ?? String(localized: unnamed), current.flatMap { $0.account?.label(provider: $0.key.provider) }, binding(at: now).map { String(localized: "\($0.name)额度剩 \($0.percent)") }).spoken
@@ -174,12 +184,13 @@ struct PiThinkingDial: View {
 
     private var content: some View {
         let drawn = drawn
-        return HStack(spacing: labelGap) {
+        return HStack(spacing: 0) {
             // 写出档名（与"上下文 86%"同一种写法）：只有一个脑图标加几根竖条要猜；按着时跟着指到的档变。
-            // 工具排放不下时（`ConfigRow`）只写档名
+            // 工具排放不下时（`ConfigRow`）先只写档名，再只剩竖格（档名在读屏里）
             ViewThatFits(in: .horizontal) {
-                reading(drawn, wordy: true)
-                reading(drawn, wordy: false)
+                reading(drawn, wordy: true).padding(.trailing, labelGap)
+                reading(drawn, wordy: false).padding(.trailing, labelGap)
+                Color.clear.frame(width: 0, height: 0)
             }
             .accessibilityHidden(true)
             meterBars(drawn)

@@ -74,7 +74,7 @@ struct LinkRow<Icon: View, Trailing: View>: View {
 
 现在：技能与规则的 `LibraryHelp`（经气泡）、记忆与定时的 `CueListHelp`（系统 popover、Mac 上 26 点手画圆）、上下文用量 `PiContextGauge` 的明细（系统 popover）；另有编辑页变量 `VariablesForm`（系统 popover）。
 
-已落（`Components/HelpButton.swift`）：`HelpButton(kind: .round, size: .compact) { 说明 }`，Mac 经 `bubble(isPresented:)`，手机按 `ControlAnchor` 量钮的框、走 `.bubble` 弹层；页顶那一排给 `kind: .circular`。
+已落（`Components/HelpButton.swift`）：`HelpButton(kind: .round, size: .compact) { 说明 }`，两端经 `bubble(isPresented:)`（手机的气泡也画在场景根那一层 `panelHost`）；页顶那一排给 `kind: .circular`。
 
 变量与上下文明细不是问号，直接改挂 `bubble(isPresented:)`。
 

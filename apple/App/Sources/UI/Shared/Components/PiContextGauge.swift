@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 回复框工具排里思考强度条旁的上下文用量（iOS 与 Mac 共用，读数规则见 `PiContextMeter`）：胶囊里写"上下文 86%"，
 /// 胶囊自己就是用量计——底下从左铺一层淡色，铺到已用的比例。写出"上下文"三个字，数字不会被读成别的；工具排放不下时（`ConfigRow`）
-/// 三个字收成一个小圆环：淡圈上一道弧描到已用的比例，静止、紧挨着百分比，读得出是用量。不用一条短横（挨着数字读成减号"−86%"），
+/// 三个字收成一个小圆环、再放不下只剩圆环（百分比在读屏与气泡里）：淡圈上一道弧描到已用的比例，静止、紧挨着百分比，读得出是用量。不用一条短横（挨着数字读成减号"−86%"），
 /// 也不用圈里一块扇形（像录制钮或表盘）。
 /// 与模型、思考强度同样高；用到七成百分比加粗转墨色、铺色加深；九成时铺色换成胭脂（赭黄只给等你确认），百分比仍是墨色加粗——
 /// 胭脂字压在胭脂铺色上，深色下到不了 4.5:1，颜色只放在铺色上，字留给墨色。刚压缩过、Agent 还不知道
@@ -15,10 +15,6 @@ struct PiContextGauge: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var showsDetail = false
-    #if os(iOS)
-    @State private var anchor = ControlAnchor("context.\(UUID().uuidString)")
-    @State private var source: BubbleSource?
-    #endif
     @ScaledMetric(relativeTo: .footnote) private var ringSide: CGFloat = 11
     private static let ringLine: CGFloat = 2
 
@@ -35,27 +31,17 @@ struct PiContextGauge: View {
     }
 
     var body: some View {
-        Button {
-            #if os(iOS)
-            source = anchor.frame.map(BubbleSource.control)
-            #endif
-            showsDetail.toggle()
-        } label: {
+        Button { showsDetail.toggle() } label: {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 4) { Text("上下文").foregroundStyle(palette.ink3); percent }
                 HStack(spacing: 4) { ring; percent }
+                ring
             }
             .chip(level: ControlSurface.Level(fraction: meter.fraction, color: used))
         }
         .buttonStyle(PressStyle())
         .help(meter.help.visible)
-        #if os(macOS)
         .bubble(isPresented: $showsDetail) { detail }
-        #else
-        .accessibilityIdentifier(anchor.id)
-        .background { ControlAnchor.Probe(anchor: anchor) }
-        .panel(isPresented: $showsDetail, style: .bubble(source ?? .unanchored)) { detail }
-        #endif
         .accessibilityLabel("上下文")
         .accessibilityValue(meter.help.spoken)
         .animation(Motion.fade, value: meter)
