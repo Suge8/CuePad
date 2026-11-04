@@ -28,7 +28,7 @@ struct ReplyNoteStack: View {
         .accessibilityLabel("\(notes.count) 条批注，随下一句发出")
     }
 
-    private static let pad: CGFloat = 4
+    private static let pad = Spacing.tight
 
     private var rows: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -59,7 +59,7 @@ private struct NoteRow: View {
     var body: some View {
         HStack(spacing: 0) {
             Button(action: reveal) {
-                HStack(spacing: 10) {
+                HStack(spacing: Spacing.item) {
                     Capsule().fill(palette.ink2).frame(width: 3, height: 14).accessibilityHidden(true)
                     Text(note.note).font(Typography.secondary).foregroundStyle(palette.ink).lineLimit(1)
                         .layoutPriority(1)
@@ -67,7 +67,7 @@ private struct NoteRow: View {
                         .lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 0)
                 }
-                .padding(.leading, 12)
+                .padding(.leading, Spacing.group)
                 .frame(minHeight: Self.height).contentShape(.rect)
             }
             .buttonStyle(PressStyle(.wide))

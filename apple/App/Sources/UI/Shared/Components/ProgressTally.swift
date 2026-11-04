@@ -23,7 +23,7 @@ struct ProgressTally: View {
 
     private func counts(advancing: Text, waiting: Text) -> some View {
         let shows = (advancing: workspace.cue.now.advancing > 0, waiting: workspace.cue.now.needsYou > 0)
-        return HStack(spacing: 4) {
+        return HStack(spacing: Spacing.tight) {
             if shows.advancing { advancing.foregroundStyle(palette.ink2).rollingCount(workspace.cue.now.advancing) }
             if shows.advancing, shows.waiting { Dot().foregroundStyle(palette.ink2) }
             if shows.waiting { waiting.foregroundStyle(palette.waiting).fontWeight(.semibold).rollingCount(workspace.cue.now.needsYou) }

@@ -371,11 +371,11 @@ struct PanelHeader<Trailing: View>: View {
             .frame(maxWidth: .infinity)
             .accessibilityAddTraits(.isHeader)
             .overlay(alignment: .trailing) {
-                HStack(spacing: 10) {
+                HStack(spacing: Spacing.item) {
                     trailing
                     PanelCloseButton()
                 }
-                .padding(.trailing, 16)
+                .padding(.trailing, Spacing.block)
             }
     }
 }
@@ -416,14 +416,14 @@ struct PanelSearchField: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.item) {
             Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
             TextField(prompt, text: $text, palette: palette).textFieldStyle(.plain).focused($focused)
         }
         .font(Typography.body)
-        .padding(.horizontal, 12).frame(height: 34)
+        .padding(.horizontal, Spacing.group).frame(height: 34)
         .panelFieldSurface()
-        .padding(.horizontal, 20)
+        .padding(.horizontal, Spacing.panel)
         .onAppear { focused = true }
     }
 }

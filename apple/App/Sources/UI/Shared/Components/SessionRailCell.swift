@@ -70,7 +70,7 @@ struct SessionRailCell: View {
     private var label: some View {
         Group {
             if form == .wide {
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.item) {
                     mark.frame(width: Chrome.icon)
                     name.font(Typography.body)
                     Spacer(minLength: 0)
@@ -88,7 +88,7 @@ struct SessionRailCell: View {
                 .padding(.horizontal, 2)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Spacing.tight)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(.rect)
         // 挂在行底以内：读的是这一行的悬停（`rowHovered`）

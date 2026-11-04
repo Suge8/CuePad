@@ -33,8 +33,8 @@ struct PiContextGauge: View {
     var body: some View {
         Button { showsDetail.toggle() } label: {
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 4) { Text("上下文").foregroundStyle(palette.ink3); percent }
-                HStack(spacing: 4) { ring; percent }
+                HStack(spacing: Spacing.tight) { Text("上下文").foregroundStyle(palette.ink3); percent }
+                HStack(spacing: Spacing.tight) { ring; percent }
                 ring
             }
             .chip(level: ControlSurface.Level(fraction: meter.fraction, color: used))
@@ -64,7 +64,7 @@ struct PiContextGauge: View {
     }
 
     private var detail: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             Text("上下文").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
             Text(meter.summary).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -79,7 +79,7 @@ struct PiContextGauge: View {
                 }
             }
         }
-        .padding(16)
+        .padding(Spacing.block)
     }
 
     private func compact() {

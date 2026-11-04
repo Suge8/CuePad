@@ -18,7 +18,7 @@ struct ProjectStylePicker: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
             LazyVGrid(columns: columns, spacing: Self.spacing) {
                 ForEach(ProjectIcon.allCases, id: \.self) { choice in
                     let selected = icon == choice

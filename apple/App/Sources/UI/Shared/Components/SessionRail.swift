@@ -153,7 +153,7 @@ private struct SessionRailHeader: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Spacing.tight) {
             BoardLaneMark(column: column, size: Self.mark)
             if wide { Text(column.title).foregroundStyle(palette.ink2) }
             Text(count, format: .number).foregroundStyle(column.countInk(palette)).monospacedDigit()

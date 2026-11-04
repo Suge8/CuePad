@@ -42,7 +42,7 @@ struct ProjectPlaceLabel: View {
     var icon = true
 
     var body: some View {
-        let label = HStack(spacing: 4) {
+        let label = HStack(spacing: Spacing.tight) {
             if icon { Image(.folder).imageScale(.small).accessibilityHidden(true) }
             if place.isPath {
                 Text(place.text).lineLimit(1).truncationMode(.middle)

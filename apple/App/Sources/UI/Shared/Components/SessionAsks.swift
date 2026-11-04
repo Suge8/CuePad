@@ -54,7 +54,7 @@ private struct RenameSheet: View {
     #else
     /// 同项目表单：标题、输入框、右下取消与改名（↩ 改名，Esc 由弹层接）。
     private var content: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Spacing.block) {
             Text("重命名会话").font(Typography.bodyStrong)
             field.textFieldStyle(.roundedBorder)
             HStack {
@@ -63,7 +63,7 @@ private struct RenameSheet: View {
                 Button("改名", action: commit).keyboardShortcut(.defaultAction).disabled(changed == nil)
             }
         }
-        .padding(20)
+        .padding(Spacing.panel)
         .frame(width: 360)
     }
     #endif

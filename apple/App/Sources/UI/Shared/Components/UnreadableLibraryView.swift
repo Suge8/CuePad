@@ -16,9 +16,9 @@ struct UnreadableLibraryView: View {
 
     var body: some View {
         EmptyState(mascot: .error, title: "读不出资料库", message: .verbatim(failure.summary)) {
-            VStack(spacing: 16) {
+            VStack(spacing: Spacing.block) {
                 Button { details.toggle() } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.glyph) {
                         Text("详情")
                         Chevron(details ? .expand : .forward)
                     }

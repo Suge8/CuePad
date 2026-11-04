@@ -200,7 +200,7 @@ private struct WaitReply: View {
                 .disabled(!canSend)
                 .accessibilityLabel("回答")
         }
-        .padding(.leading, 12).padding(.trailing, 3).padding(.vertical, 3)
+        .padding(.leading, Spacing.group).padding(.trailing, 3).padding(.vertical, 3)
         .background(palette.fill, in: Radius.nested)
     }
 

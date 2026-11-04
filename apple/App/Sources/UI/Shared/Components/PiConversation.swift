@@ -263,7 +263,7 @@ struct PiSessionSubtitle: View {
         // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
         ZStack(alignment: .leading) {
             if speaks || undelivered != nil || mark != nil {
-                HStack(spacing: 4) {
+                HStack(spacing: Spacing.tight) {
                     if mark != nil {
                         AgentMark(session: session, font: Self.font)
                         if speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
@@ -297,7 +297,7 @@ struct PiShownLabel: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Spacing.tight) {
             #if os(iOS)
             PiStateDot(shown: shown, size: 6)
             #endif

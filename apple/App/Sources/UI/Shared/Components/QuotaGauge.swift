@@ -62,7 +62,7 @@ private struct QuotaEmpty: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
             Text("还没有额度").font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
             Text("连接 Agent 会话后，这里显示订阅额度与 API 余额")
                 .font(Typography.meta).foregroundStyle(palette.ink2)
@@ -305,7 +305,7 @@ struct QuotaRings: View {
     private func button(_ quotas: [AccountQuota]) -> some View {
         Button(action: action) {
             Moments(next: quotas.nextReset(after:)) { now in rings(quotas, at: now) }
-                .padding(.horizontal, row ? 0 : cell ? RowMetrics.bleed + Chrome.rowLead : 10)
+                .padding(.horizontal, row ? 0 : cell ? RowMetrics.bleed + Chrome.rowLead : Spacing.item)
                 .frame(height: height)
                 .contentShape(.rect)
         }

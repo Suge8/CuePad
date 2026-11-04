@@ -7,7 +7,7 @@ import SwiftUI
 struct TaskLineLayout: Layout {
     let trailing: Bool
 
-    static let gap: CGFloat = 8
+    static let gap = Spacing.item
     #if os(macOS)
     static let minTitle: CGFloat = 96
     #else

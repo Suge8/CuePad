@@ -34,7 +34,7 @@ struct TaskBubblePage: View {
                     ForEach(data.steps) { TaskLine(task: $0, step: true) }
                 }
                 .padding(.leading, BubbleMetrics.stepLead).padding(.trailing, BubbleMetrics.textTrailing)
-                .padding(.top, 4)
+                .padding(.top, Spacing.tight)
                 .animation(Motion.fade, value: data.steps.map(\.id))
             }
         }

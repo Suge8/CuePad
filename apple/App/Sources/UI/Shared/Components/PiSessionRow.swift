@@ -42,7 +42,7 @@ struct PiSessionRow: View {
         /// 整页：一张卡片。
         var card = false
 
-        static let page = Style(name: Typography.bodyStrong, line: Typography.secondary, meta: Typography.meta, dot: 11, spacing: 4, card: true)
+        static let page = Style(name: Typography.bodyStrong, line: Typography.secondary, meta: Typography.meta, dot: 11, spacing: Spacing.tight, card: true)
         static let compact = Style(name: Typography.body, line: Typography.meta, meta: Typography.meta, dot: 6, spacing: 1)
     }
 
