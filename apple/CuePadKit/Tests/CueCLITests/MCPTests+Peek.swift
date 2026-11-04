@@ -4,14 +4,14 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// peek 一件事：每个叶子最新的那条回答给全文（至多 4000 字，超了截尾并注明），更早的截短。
+  /// peek 一件事：每个叶子最新的那条回答给全文（至多 4000 字，超了留开头的结论与结尾的证据、截掉中间并注明），更早的截短。
   @Test func peekGivesTheLatestReplyInFull() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
     let task = try await store.createTask("跑测试")
     try await store.linkCard(task.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "跑测试")
-    let older = String(repeating: "旧", count: 500), output = "全部通过 " + String(repeating: "过", count: 4500) + "尾巴"
+    let older = String(repeating: "旧", count: 500), output = "结论：全部通过\n" + String(repeating: "过", count: 4500) + "\n证据：退出码 0"
     try await store.writePiTranscript(PiTranscript(
       sessionID: "s1",
       messages: [
@@ -23,9 +23,9 @@ extension MCPTests {
       recap: PiRecap()))
     try await Server.run(library: sandbox.directory) { server in
       let text = try await server.call("task", ["action": "peek", "task": task.id.uuidString])
-      // 前 4000 字里的"过"（含开头"全部通过"的那个）都在：长串重复字符的子串查找不可靠，按个数比
-      #expect(text.filter { $0 == "过" }.count == output.prefix(4000).filter { $0 == "过" }.count)
-      #expect(!text.contains("尾巴") && text.contains("后面还有 \(output.count - 4000) 字"))
+      // 开头 1000 字与结尾 3000 字里的"过"都在、中间的没了：长串重复字符的子串查找不可靠，按个数比
+      #expect(text.filter { $0 == "过" }.count == (output.prefix(1000) + output.suffix(3000)).filter { $0 == "过" }.count)
+      #expect(text.contains("结论：全部通过") && text.contains("证据：退出码 0") && text.contains("中间截掉 \(output.count - 4000) 字"))
       #expect(!text.contains(older) && text.contains(String(older.prefix(200))))
     }
   }

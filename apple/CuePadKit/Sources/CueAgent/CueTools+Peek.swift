@@ -70,8 +70,10 @@ extension CueTools {
   /// 不带参数的 peek 末尾列几件最近完成的。
   static let recentlyDone = 5
 
-  /// peek 里每个叶子最新的那条回答最多给这么多字。
+  /// peek 里每个叶子最新的那条回答最多给这么多字：超了留开头 `latestReplyHead` 字与结尾，截掉中间。结论多在开头，证据、没做完的多在结尾
+  /// （真实库里超长的回答不到 0.3%，多数的证据在第 4000 字之后），截尾会把它们截掉；中间多是过程。
   static let latestReplyLimit = 4000
+  static let latestReplyHead = 1000
 
   /// 不带 task 的 peek 的文字最多这么多行（含开头一行、项目名与"还有 N 件"）。
   static let overviewLimit = 60
@@ -168,7 +170,7 @@ extension CueTools {
     }
   }
 
-  /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，更早的截短），每行缩进两格。
+  /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，太长截掉中间；更早的截短），每行缩进两格。
   /// `opening`：叶子的标题与正文（`opening(in:body:)` 认出了开工那一句）：那一句标明是开工的第一句，原文照列。
   private static func conversation(_ detail: CueSessionDetail, opening: String? = nil) -> [String] {
     var lines: [String] = []
@@ -183,8 +185,9 @@ extension CueTools {
         lines.append("  \(who)\(opens ? "（开工的第一句，即标题与正文）" : "")：\(CueEnvelope.clip(text, 300))")
         continue
       }
-      let full = text.count > latestReplyLimit
-        ? String(text.prefix(latestReplyLimit)) + "\n（后面还有 \(text.count - latestReplyLimit) 字，截掉了）" : text
+      let cut = text.count - latestReplyLimit
+      let full = cut > 0
+        ? "\(text.prefix(latestReplyHead))\n（中间截掉 \(cut) 字；要找其中的话用 memory recall 查那里的词）\n\(text.suffix(latestReplyLimit - latestReplyHead))" : text
       lines.append("  \(agent)（最新的回答）：\n" + full.split(separator: "\n", omittingEmptySubsequences: false).map { "    " + $0 }.joined(separator: "\n"))
     }
     return lines
