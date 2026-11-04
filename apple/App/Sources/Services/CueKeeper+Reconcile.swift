@@ -84,15 +84,20 @@ extension CueKeeper {
             // 等子代理停住不写库：到点由定时器叫醒对账
             if let stall = try await store.nextCueStall(after: now) { deadlines.append(stall) }
 
+            // 额度、登录卡住的持续重试只按慢速周期重交原来的醒来原因（新变化不替代它、不催它：卡着时重来只会再失败），变化随信封一起看。
+            // 重来的那一轮半路断了（`broke`）也还在：到点的时刻留着，起好就再来
+            if let held = setback, held.persistent {
+                guard let at = held.retryAt, now >= at else { return schedule(held.retryAt) }
+                return _ = try await wakeUp(held.wake, as: held.author)
+            }
             let changes = try await self.changes(at: now)
-            // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化。
-            // 持续重试的工作不被新变化替代：重交原来的醒来原因，变化随信封一起看。
+            // 别的出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化。
             if let held = setback {
                 // 等子代理停住只按时刻认新旧：它的序号是会话记录的，会话处理交回、又回到等子代理时也会变
                 let fresh = changes.due.contains { $0.kind == .stalled ? $0.at > held.since : $0.seq > held.latest ?? Int.min }
-                if fresh, !held.persistent {
+                if fresh {
                     setback = nil
-                } else if fresh || held.retryAt.map({ now >= $0 }) == true {
+                } else if held.retryAt.map({ now >= $0 }) == true {
                     setback?.retryAt = nil
                     return _ = try await wakeUp(held.wake, as: held.author)
                 } else {

@@ -101,7 +101,7 @@ extension CueKeeper {
         var latest: Int?
         var since: Date
         var retryAt: Date?
-        /// 额度、登录阻塞的工作必须承接原轮次；新变化不能替代它。
+        /// 额度、登录阻塞的工作必须承接原轮次；新变化不能替代它，也不提前它。
         var persistent: Bool
         /// 持续重试已按慢速周期重来了几轮（`CueTiming.slowDelay`）
         var stalls: Int

@@ -120,23 +120,28 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    @Test func 定时额度失败等待重试时_新会话变化不丢掉定时() async throws {
+    /// 定时那一轮额度用完、又没得换：卡着时新来的会话变化不催它重来（重来只会再失败），定时也不丢；
+    /// 你的话照常答，答好了说明额度回来了，卡着的定时马上接着做完，不等慢速周期。
+    @Test func 额度卡住时新变化不催重来_你的一轮做完就接着做定时() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
         let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
         try await remote.update(sessionID: "remote-retry", state: .thinking, title: "旁边的工作", turnStartedAt: .now)
         rig.model.blockQuota(times: 1)
         let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)
         try await rig.message(.cue, containing: "达到用量限制")
-        try await eventually("一次性定时已触发，正在等慢速重试") {
-            guard let keeper = rig.services.cue.keeper else { return false }
-            return keeper.setback?.retryAt != nil && keeper.turn == nil
-        }
+        let keeper = try #require(rig.services.cue.keeper)
+        try await eventually("一次性定时已触发，正在等慢速重试") { keeper.setback?.retryAt != nil && keeper.turn == nil }
         #expect(try await rig.store.cueLine(reminder.line.id)?.deletedAt != nil)
         try await remote.update(sessionID: "remote-retry", state: .settled)
         try await rig.answered("remote-retry")
+        try await Task.sleep(for: .seconds(1))  // 留出对账的时间：新变化不该叫它重来
+        #expect(rig.model.errors == 1 && keeper.turn == nil)
+        #expect(try await rig.count("定时到点") == 0)
+        try await rig.say("你好")
+        try await rig.message(.cue, containing: "收到：你好")
         let done = try await rig.message(.cue, containing: "定时到点：#\(reminder.index) 核对发布结果")
         #expect(done.text.contains("一次"))
-        let keeper = try #require(rig.services.cue.keeper)
+        #expect(rig.model.errors == 1)
         try await eventually("承接原定时的一轮完成") {
             keeper.rounds.contains { round in
                 guard case .schedule(let fires) = round.wake else { return false }

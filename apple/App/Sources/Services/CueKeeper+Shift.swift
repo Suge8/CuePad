@@ -156,6 +156,9 @@ extension CueKeeper {
                     setback = nil
                     tried = []
                     await recovered()
+                } else {
+                    // 卡着的那家又好好做完了别的一轮：卡住的那件不等慢速周期，马上重来
+                    setback?.retryAt = .now
                 }
                 await markTold(finished.round)
                 if let held = finished.held { progress.held = held }
