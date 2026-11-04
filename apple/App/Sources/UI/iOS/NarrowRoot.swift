@@ -59,9 +59,9 @@ private struct NarrowCue: View {
                     workspace.openSession(session.id, sessionID: session.sessionID)
                 }
                 // 已结束的会话：会话条最底下一格（`EarlierTile`）
-                .safeAreaInset(edge: .bottom, spacing: 8) { EarlierTile() }
+                .safeAreaInset(edge: .bottom, spacing: Spacing.item) { EarlierTile() }
                 .padding(.top, CueHeader.height + Bars.contentGap)
-                .padding(.bottom, ComposerMetrics.slot + 16)
+                .padding(.bottom, ComposerMetrics.slot + Spacing.block)
                 .opacity(panelOpen ? 0 : 1)
                 .allowsHitTesting(!panelOpen)
                 .readerHidden(panelOpen)

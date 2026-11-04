@@ -29,11 +29,11 @@ struct FolderCandidateList: View {
                 Section(group.name ?? "") {
                     ForEach(group.items) { candidate in
                         Button { pick(candidate) } label: {
-                            HStack(spacing: 10) {
+                            HStack(spacing: Spacing.item) {
                                 Image(.folder).foregroundStyle(palette.ink3).accessibilityHidden(true)
                                 Text(candidate.folder).foregroundStyle(palette.ink).lineLimit(1)
                                 Spacer(minLength: 8)
-                                if let usedBy = candidate.usedBy { Text("「\(usedBy)」在用").font(.footnote).foregroundStyle(palette.ink3).lineLimit(1) }
+                                if let usedBy = candidate.usedBy { Text("「\(usedBy)」在用").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1) }
                             }
                             .frame(minHeight: 44).contentShape(.rect)
                         }
@@ -96,14 +96,14 @@ struct FolderPickerSheet: View {
         switch phase {
         case .idle: EmptyView()
         case .binding(let folder):
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.item) {
                 Spinner(.small)
-                Text("Mac 正在绑定「\(folder)」…").font(.footnote).foregroundStyle(palette.ink2)
+                Text("Mac 正在绑定「\(folder)」…").font(Typography.meta).foregroundStyle(palette.ink2)
             }
-            .frame(maxWidth: .infinity).padding(14).background(.bar)
+            .frame(maxWidth: .infinity).padding(Spacing.group).background(.bar)
         case .failed(let reason):
-            Text(reason).font(.footnote).foregroundStyle(palette.failure)
-                .frame(maxWidth: .infinity, alignment: .leading).padding(14).background(.bar)
+            Text(reason).font(Typography.meta).foregroundStyle(palette.failure)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(Spacing.group).background(.bar)
         }
     }
 

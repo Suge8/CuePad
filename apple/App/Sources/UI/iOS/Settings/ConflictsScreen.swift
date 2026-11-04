@@ -11,7 +11,7 @@ struct ConflictsScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 if let failure = choices.failure {
-                    Label { Text(failure).font(.footnote) } icon: { FailureMark() }
+                    Label { Text(failure).font(Typography.meta) } icon: { FailureMark() }
                 }
                 if services.conflicts.isEmpty {
                     EmptyState(mascot: .clean, title: "没有待处理的冲突")
@@ -19,7 +19,7 @@ struct ConflictsScreen: View {
                 }
                 ForEach(services.conflicts, id: \.copy.id) { ConflictPair(conflict: $0, choices: choices) }
             }
-            .padding(16)
+            .padding(Spacing.block)
             .animation(Motion.fade, value: services.conflicts.map(\.copy.id))
         }
         .floatingHeader("两个版本", detail: services.conflicts.isEmpty ? nil : Dotted(String(localized: "\(services.conflicts.count) 处")))
@@ -33,13 +33,13 @@ private struct ConflictPair: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
             Text(conflict.original.title)
-                .font(.headline).foregroundStyle(palette.ink)
+                .font(Typography.bodyStrong).foregroundStyle(palette.ink)
                 .accessibilityAddTraits(.isHeader)
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 12) { versions }
-                VStack(spacing: 12) { versions }
+                HStack(alignment: .top, spacing: Spacing.group) { versions }
+                VStack(spacing: Spacing.group) { versions }
             }
         }
     }
@@ -49,16 +49,16 @@ private struct ConflictPair: View {
     }
 
     private func version(_ version: ConflictVersion) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(Dotted(version.label, DateLabel.short(version.card.modifiedAt))).font(.caption.weight(.medium)).foregroundStyle(palette.ink3)
-            Text(Outgoing.text(of: version.card)).font(.subheadline).foregroundStyle(palette.ink2)
+        VStack(alignment: .leading, spacing: Spacing.item) {
+            Text(Dotted(version.label, DateLabel.short(version.card.modifiedAt))).font(Typography.caption.weight(.medium)).foregroundStyle(palette.ink3)
+            Text(Outgoing.text(of: version.card)).font(Typography.secondary).foregroundStyle(palette.ink2)
                 .lineLimit(12).frame(maxWidth: .infinity, alignment: .leading)
             Button(SyncChoices.keep) { choices.keep(version.keep, of: conflict, services) }
                 .buttonStyle(.bordered)
                 .disabled(choices.working)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(14)
+        .padding(Spacing.group)
         .frame(minWidth: 280, maxWidth: .infinity, alignment: .topLeading)
         .paper()
         .accessibilityElement(children: .contain)

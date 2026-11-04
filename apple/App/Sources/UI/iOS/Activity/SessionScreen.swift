@@ -37,7 +37,7 @@ struct SessionScreen: View {
             if let session {
                 // 在看历史时回复框收成短胶囊，点它展开（不挪正在读的内容）
                 SessionDock(session: session, digest: digest, compact: !follow.atNewest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, Spacing.group)
                     .frame(maxWidth: Self.readingWidth)
                     .animation(Motion.fade, value: session.question)
             }
@@ -46,7 +46,7 @@ struct SessionScreen: View {
         // 看历史时标题与"⋯"让开（返回钮留着），点标题原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）
         .floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
             if shownEnd?.inTransit == true {
-                Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
+                Text("正在结束…").font(Typography.caption).foregroundStyle(palette.ink3)
             } else if let session {
                 PiSessionSubtitle(session: session, delivery: digest?.delivery, undelivered: PiChat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
             }
@@ -86,7 +86,7 @@ struct SessionScreen: View {
                         .replyNotes(session: session.id, messages: digest.messages)
                 } else {
                     EmptyState(mascot: .search, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, Spacing.page)
                         .frame(maxHeight: .infinity)
                 }
             } else {

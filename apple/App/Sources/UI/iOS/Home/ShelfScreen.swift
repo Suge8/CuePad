@@ -39,8 +39,8 @@ struct ShelfScreen: View {
             }
             if narrow { ShelfFooter() }
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 24)
+        .padding(.horizontal, Spacing.page)
+        .padding(.bottom, Spacing.section)
         .animation(Motion.nudge, value: catalog.projects.map(\.id))
         // 宽屏不把一行项目拉满整屏
         .frame(maxWidth: Self.readableWidth)
@@ -56,10 +56,10 @@ struct ShelfScreen: View {
     /// 横着排成矮的一条（`wide`）——不让单出来的那张（常是最不活跃、甚至空的项目）成为首屏最大的一块。
     /// 一行里的卡同高。置顶的不多，不用懒加载。
     private func pinnedGrid(_ pinned: [Project], columns: Int) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.group) {
             ForEach(Array(stride(from: 0, to: pinned.count, by: columns)), id: \.self) { start in
                 let row = pinned[start..<min(start + columns, pinned.count)]
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.group) {
                     ForEach(row) { PinnedShelfCard(project: $0, wide: row.count == 1 && columns > 1) }
                 }
                 .fixedSize(horizontal: false, vertical: true)
@@ -80,20 +80,20 @@ private struct PinnedShelfCard: View {
         NavigationLink(value: Route.project(project.id)) {
             Group {
                 if wide {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.group) {
                         ProjectGlyph(project: project, size: glyph)
-                        VStack(alignment: .leading, spacing: 4) { lines }
+                        VStack(alignment: .leading, spacing: Spacing.tight) { lines }
                         Spacer(minLength: 0)
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ProjectGlyph(project: project, size: glyph).padding(.bottom, 8)
+                    VStack(alignment: .leading, spacing: Spacing.tight) {
+                        ProjectGlyph(project: project, size: glyph).padding(.bottom, Spacing.item)
                         lines
                         Spacer(minLength: 0)
                     }
                 }
             }
-            .padding(16)
+            .padding(Spacing.block)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             // 渐变只铺在填充上（不用渐变描边，见 docs/ui.md「渲染性能约束」）
             .background(

@@ -15,11 +15,11 @@ struct CardTileView: View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Route.card(card.id)) {
             // 标题与正文挨着读成一段，日期另起一小段
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
                 if let image = text.images.first {
-                    Thumbnail(hash: image, height: 96, cornerRadius: Radius.block).padding(.bottom, 4)
+                    Thumbnail(hash: image, height: 96, cornerRadius: Radius.block).padding(.bottom, Spacing.tight)
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
                     Text(text.label)
                         .font(Typography.secondary.weight(.semibold))
                         .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
@@ -36,7 +36,7 @@ struct CardTileView: View {
                     .padding(.top, 6)
             }
             .multilineTextAlignment(.leading)
-            .padding(14)
+            .padding(Spacing.group)
             .frame(maxWidth: .infinity, alignment: .leading)
             .paper()
             .contentShape(.rect(cornerRadius: Radius.card))
@@ -71,7 +71,7 @@ struct OlderGroupHeader: View {
                 Spacer()
                 if collapsible && !open { Text("\(group.cards.count) 条").font(Typography.caption).foregroundStyle(palette.ink3) }
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, Spacing.tight)
             // 能折起的月份要点得到；周标题只是标题，紧贴它下面那组
             .frame(minHeight: collapsible ? 44 : nil)
             .padding(.top, collapsible ? 4 : 12).padding(.bottom, collapsible ? 0 : 6)
@@ -104,9 +104,9 @@ struct OlderRow: View {
     var body: some View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Route.card(card.id)) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 if pinned { Image(.pin).font(Typography.meta).foregroundStyle(palette.ink2).accessibilityLabel("已置顶") }
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
                     Text(text.label).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                     // 只有标题的也占着第二行：同一张纸上的行一样高
                     Text(text.preview.isEmpty ? " " : text.preview).font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
@@ -117,7 +117,7 @@ struct OlderRow: View {
                 if !text.attachments.isEmpty { AttachmentMark(count: text.attachments.count).font(Typography.caption2).foregroundStyle(palette.ink3) }
                 Text(DateLabel.short(card.modifiedAt)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
+            .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
             .contentShape(.rect)
         }
         .buttonStyle(.row)

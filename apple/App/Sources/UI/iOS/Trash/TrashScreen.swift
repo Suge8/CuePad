@@ -43,14 +43,14 @@ struct TrashScreen: View {
             leading: [RowAction("恢复", icon: .restore, tone: .primary) { workspace.restore(item) }],
             trailing: [RowAction("永久删除", icon: .trash, tone: .destructive) { workspace.purge(item) }])
         // 删除时间单独靠右：摘要再长也不把它挤出去
-        return MetaLine(spacing: 12, gap: 0) {
-            VStack(alignment: .leading, spacing: 2) {
+        return MetaLine(spacing: Spacing.group, gap: 0) {
+            VStack(alignment: .leading, spacing: Spacing.hair) {
                 Text(item.title).foregroundStyle(palette.ink).lineLimit(1)
-                if !item.detail.isEmpty { Text(item.detail).font(.footnote).foregroundStyle(palette.ink2).lineLimit(1) }
+                if !item.detail.isEmpty { Text(item.detail).font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1) }
             }
         } meta: {
             if let deletedAt = item.deletedAt {
-                Text("删于 \(DateLabel.short(deletedAt))").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
+                Text("删于 \(DateLabel.short(deletedAt))").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
             }
         }
         .listRowBackground(palette.paper)

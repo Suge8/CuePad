@@ -23,7 +23,7 @@ struct FloatingInput<Content: View>: View {
                     .accessibilityHidden(true)
                 content()
                     .frame(maxWidth: Self.maxWidth)
-                    .padding(.horizontal, 12).padding(.bottom, 8)
+                    .padding(.horizontal, Spacing.group).padding(.bottom, Spacing.item)
                     .offset(y: drag)
                     .gesture(swipeDown)
                     .transition(.opacity)

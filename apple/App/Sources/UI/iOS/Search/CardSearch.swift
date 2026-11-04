@@ -13,13 +13,13 @@ struct CardSearchResults<Leading: View>: View {
     @State private var data: CardMatches?
 
     private var columns: [GridItem] {
-        sizeClass == .regular ? [GridItem(.adaptive(minimum: 320), spacing: 12, alignment: .top)] : [GridItem(.flexible())]
+        sizeClass == .regular ? [GridItem(.adaptive(minimum: 320), spacing: Spacing.group, alignment: .top)] : [GridItem(.flexible())]
     }
 
     var body: some View {
         ResultsScroll(query: query) {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: Spacing.group) {
+                HStack(spacing: Spacing.item) {
                     ChipRow {
                         leading
                         SearchFilters(query: $query, targets: data?.targets ?? [])
@@ -27,18 +27,18 @@ struct CardSearchResults<Leading: View>: View {
                     if let data, !query.text.isEmpty || query.isFiltered {
                         Text(CountCopy.hits(data.total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
                             .contentTransition(.numericText()).animation(Motion.fade, value: data.total)
-                            .fixedSize().padding(.trailing, 16)
+                            .fixedSize().padding(.trailing, Spacing.block)
                     }
                 }
-                .padding(.horizontal, -16)
+                .padding(.horizontal, -Spacing.page)
                 if let data {
                     if data.total == 0 {
                         // 没有搜索词与条件时列的是全部：一条都没有就是库里还没有，不是没搜到
                         if !query.text.isEmpty || query.isFiltered {
-                            EmptyState.noMatch(query.text).padding(.top, 24)
+                            EmptyState.noMatch(query.text).padding(.top, Spacing.section)
                         } else {
                             EmptyState(mascot: .search, title: "还没有灵感与任务", message: "记下的灵感、建的任务都能在这里搜到", waitsForSync: true)
-                                .padding(.top, 24)
+                                .padding(.top, Spacing.section)
                         }
                     }
                     ForEach(data.groups) { group in
@@ -47,8 +47,8 @@ struct CardSearchResults<Leading: View>: View {
                             ProjectGlyph(project: project, size: 12)
                             SectionHeader(Dotted(project?.shownName))
                         }
-                        .padding(.top, 8)
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
+                        .padding(.top, Spacing.item)
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.group) {
                             ForEach(group.cards) { CardRow(entry: $0, highlight: query.text) }
                         }
                     }
@@ -58,7 +58,7 @@ struct CardSearchResults<Leading: View>: View {
                     }
                 }
             }
-            .padding(.horizontal, 16).padding(.bottom, 24)
+            .padding(.horizontal, Spacing.page).padding(.bottom, Spacing.section)
         }
         .scrollDismissesKeyboard(.immediately)
         // 搜索框只报上屏的字（`SearchCapsule`）：拼音组字时不搜
@@ -68,14 +68,14 @@ struct CardSearchResults<Leading: View>: View {
     }
 }
 
-/// 一排横向滑动的筛选胶囊。调用方给它让出页边距（`.padding(.horizontal, -16)`），它延伸到边缘、右侧 24pt 渐隐：
+/// 一排横向滑动的筛选胶囊。调用方给它让出页边距（`.padding(.horizontal, -Spacing.page)`），它延伸到边缘、右侧 24pt 渐隐：
 /// 看得出还能横着滑，而不是被页边距切断。
 struct ChipRow<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) { content }.padding(.horizontal, 16)
+            HStack(spacing: Spacing.item) { content }.padding(.horizontal, Spacing.page)
         }
         .mask {
             HStack(spacing: 0) {

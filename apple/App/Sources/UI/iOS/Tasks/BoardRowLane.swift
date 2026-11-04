@@ -146,7 +146,7 @@ private struct BoardRowSpine: View {
         VStack(spacing: 0) {
             marks
             if let add {
-                LaneAddButton(add).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: BoardRowMetrics.addHeight)
+                LaneAddButton(add).font(Typography.secondary.weight(.semibold)).frame(maxWidth: .infinity, minHeight: BoardRowMetrics.addHeight)
             }
         }
     }
@@ -155,17 +155,17 @@ private struct BoardRowSpine: View {
         Group {
             if column.light {
                 VStack(spacing: 3) {
-                    HStack(spacing: 2) {
+                    HStack(spacing: Spacing.hair) {
                         BoardLaneMark(column: column, size: lightMark)
-                        number.font(.caption2.weight(.semibold))
+                        number.font(Typography.caption2.weight(.semibold))
                     }
-                    title.font(.caption2.weight(.semibold))
+                    title.font(Typography.caption2.weight(.semibold))
                 }
             } else {
                 VStack(spacing: 3) {
                     BoardLaneMark(column: column, size: mark)
-                    title.font(.caption.weight(.semibold))
-                    number.font(.headline)
+                    title.font(Typography.caption.weight(.semibold))
+                    number.font(Typography.bodyStrong)
                 }
             }
         }

@@ -88,7 +88,7 @@ struct NewSessionInput: View {
             draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
             cardsFrom: chosen?.project.id, submitsEmpty: true,
             tooled: brain != nil,
-            header: { header.padding(.horizontal, 12).padding(.top, 10) },
+            header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: {
                 if let brain {
                     PiConfigControls(choice: brain) { agent in
@@ -102,7 +102,7 @@ struct NewSessionInput: View {
                 Button(action: launch) { SendGlyph(canStart ? .ready : .idle) }
                     .buttonStyle(PressStyle(.button)).disabled(!canStart).accessibilityLabel("开始")
             })
-        .composerNotice(status != nil) { if let status { statusLine(status).font(.caption) } }
+        .composerNotice(status != nil) { if let status { statusLine(status).font(Typography.caption) } }
         .disabled(inFlight)
         // 浮在 `FloatingInput` 里（与发给 Agent 同一种）；发出后等它开好时不让收起
         .floatingInputLocked(inFlight)
@@ -132,7 +132,7 @@ struct NewSessionInput: View {
 
     /// 头部：落点胶囊；进度或原因叠在输入框上方（`status`）。Agent 与模型在工具排里。
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.item) {
             MenuButton(sections: [ChoiceMenu.Section(choices: places.map { place in
                 ChoiceMenu.Choice(
                     title: .verbatim(Dotted(place.project.shownName, place.detail).visible),
@@ -167,7 +167,7 @@ struct NewSessionInput: View {
         case .phase(.failed(let failure)): Text(failure.text).foregroundStyle(palette.failure)
         case .phase(.unconfirmed(let reason)): Text(verbatim: reason).foregroundStyle(palette.ink3)
         case .phase(.sending(let transit)):
-            HStack(spacing: 6) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+            HStack(spacing: Spacing.glyph) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
         case .phase: Text("Mac 正在开 Agent 会话…").foregroundStyle(palette.ink3)
         }
     }

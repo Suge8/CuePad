@@ -76,7 +76,7 @@ struct HandOffInput: View {
             draft: box, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
             accepts: chosen == nil ? [.files, .cards] : .reply, cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil,
             commands: commands,
-            header: { header.padding(.horizontal, 12).padding(.top, 10) },
+            header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: {
                 if let tools { SessionConfigControls(session: tools.session, models: tools.models, shown: tools.config) }
             },
@@ -113,7 +113,7 @@ struct HandOffInput: View {
 
     /// 头部：交给谁的胶囊（菜单里是在线会话与"新会话"）；没选到 Mac、没换成的原因叠在输入框上方（`composerNotice`）。
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.item) {
             // 新会话放最上面：会话多了也不用往下翻
             MenuButton(sections: [
                 ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话…", image: .icon(.add), choose: newSession)]),
