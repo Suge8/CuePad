@@ -20539,18 +20539,18 @@
         }
       }
     },
-    "资料库没能打开，你的内容没有被改动。可以重试；还不行就导出诊断，发给开发者。" : {
+    "资料库没能打开，你的内容没有被改动。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The library couldn't be opened. Your content hasn't been changed. Try again; if it still fails, export diagnostics and send them to the developer."
+            "value" : "The library couldn’t be opened. Your content hasn’t been changed."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "资料库没能打开，你的内容没有被改动。可以重试；还不行就导出诊断，发给开发者。"
+            "value" : "资料库没能打开，你的内容没有被改动。"
           }
         }
       }

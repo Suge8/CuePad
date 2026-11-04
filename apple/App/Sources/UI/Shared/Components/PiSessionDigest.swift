@@ -134,7 +134,11 @@ private struct CalloutSurface: ViewModifier {
     let docked: Bool
 
     func body(content: Content) -> some View {
-        if docked { content.glass(in: .rect(cornerRadius: Radius.field)) } else { content.paper() }
+        if docked {
+            content.glass(in: .rect(cornerRadius: Radius.field)).containerShape(.rect(cornerRadius: Radius.field))
+        } else {
+            content.paper().containerShape(.rect(cornerRadius: Radius.card))
+        }
     }
 }
 

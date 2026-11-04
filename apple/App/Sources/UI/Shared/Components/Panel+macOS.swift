@@ -369,13 +369,11 @@ struct PanelHeader<Trailing: View>: View {
 /// Mac 浮层右上的关闭钮（Esc 同）。
 struct PanelCloseButton: View {
     @Environment(\.closePanel) private var close
-    @Environment(\.palette) private var palette
 
     var body: some View {
         Button("关闭", icon: .close) { close() }
-            .labelStyle(.iconOnly).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
-            .frame(width: 26, height: 26).background(palette.fill, in: .circle).contentShape(.circle)
-            .buttonStyle(PressStyle())
+            .labelStyle(.iconOnly)
+            .buttonStyle(ControlButtonStyle(kind: .round, size: .compact))
             .help("关闭（Esc）")
     }
 }

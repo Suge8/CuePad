@@ -41,7 +41,7 @@ private struct LaunchStrip: View {
             }
         } trailing: {
             // 与"去会话"同高：连上后换成它时这一行不跳
-            Color.clear.frame(width: 0, height: BubbleMetrics.capsule)
+            Color.clear.frame(width: 0, height: max(ControlSize.compact.height, ControlSize.target))
         }
         .accessibilityElement(children: .combine)
     }
@@ -86,10 +86,8 @@ private struct AgentStrip: View {
                 }
             }
         } trailing: {
-            Text("去会话").font(BubbleMetrics.meta.weight(.semibold))
-                .foregroundStyle(shown.needsYou ? palette.onFill : palette.ink)
-                .padding(.horizontal, 14).frame(height: BubbleMetrics.capsule)
-                .background(shown.needsYou ? palette.signatureFill : palette.fill, in: .capsule)
+            Text("去会话")
+                .modifier(ControlSurface(kind: shown.needsYou ? .primary : .secondary, size: .compact))
         }
     }
 }
@@ -144,11 +142,8 @@ private struct StartBar: View {
             Spacer(minLength: 0)
             Button(action: start) {
                 Label(failure != nil ? "重试" : caption == nil ? "开始" : "开始这一步", icon: .start)
-                    .font(BubbleMetrics.meta.weight(.semibold)).foregroundStyle(palette.onFill)
-                    .padding(.horizontal, 16).frame(height: BubbleMetrics.capsule)
-                    .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
             }
-            .buttonStyle(PressStyle())
+            .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
             .accessibilityHint("把任务的正文交给 Agent，开始做")
         }
     }

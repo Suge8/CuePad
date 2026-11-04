@@ -51,7 +51,8 @@ struct AgentDot: View {
             let shown = workspace.shown(item)
             #if os(iOS)
             Button { workspace.openSession(item.state.id, sessionID: item.state.sessionID) } label: {
-                PiStateDot(shown: shown, size: 8).relaySpot(session: item.state.sessionID, row: .task).frame(width: 28, height: 28).contentShape(.rect)
+                PiStateDot(shown: shown, size: 8).relaySpot(session: item.state.sessionID, row: .task)
+                    .frame(width: ControlSize.target, height: ControlSize.target).contentShape(.rect)
             }
             .buttonStyle(PressStyle(.inline))
             .accessibilityLabel("\(item.state.title) \(shown.presence)")

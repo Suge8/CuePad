@@ -174,7 +174,7 @@ struct PreviewStill: View {
             Text(preview.name).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).multilineTextAlignment(.center)
             if preview.kind == .model {
                 Button("转动查看", icon: .inspect3D) { inspecting = file }
-                    .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
+                    .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))
             }
         }
         .padding(24)
