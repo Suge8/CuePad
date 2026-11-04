@@ -83,9 +83,16 @@ extension CueEvalTests {
         return [
             Check(.result, "回复说了没成（或换了路）", rerouted || reply.contains(/没送|没发|发不|未送|没能|没有送|没开|开不/), counted: refused),
             Check(.result, "回复带着结果里的原因（或换了路）", rerouted || refusals.contains { echoes(reply, reason: $0) }, counted: refused),
-            Check(.result, "没许诺之后再发", !reply.contains(/下一轮|稍后|回头|重新发|再发|重发|再开|会再试|再试一次/), counted: refused),
+            Check(.result, "没许诺之后再发", !promisesRetry(reply), counted: refused),
             Check(.result, "没猜别的原因", !reply.contains(/可能|也许|大概|休眠|断开/), counted: refused),
         ]
+    }
+
+    /// 回复里有一小句是 Cue 说之后自己再发、再开（"接上后我再让它推""下一轮会重新发"）：去掉引号里转述的原话，按标点切成小句，
+    /// 有再做的动作、又不是否定（"没再试""不再重发"）或请他回头叫它（"你得再叫我一次"）的就算。按小句认，不列整句措辞：同一句承诺换个说法照样认。
+    static func promisesRetry(_ reply: String) -> Bool {
+        reply.replacing(/“[^”]*”|"[^"]*"|「[^」]*」/, with: "").split(whereSeparator: { "，。；！？,.;!?\n".contains($0) })
+            .contains { $0.contains(/再(发|开|推|试|让它|去)|重发|重新发|下一轮/) && !$0.contains(/没|不|别|免得|叫我|告诉我|让我/) }
     }
 
     /// 回复转述了出错结果里的原因：结果第一句（去掉「」里的名字）里任意连着的三个汉字出现在回复里。不认措辞，换了说法的结果照样认。
