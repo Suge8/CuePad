@@ -132,9 +132,10 @@ final class Duty: EvalScript, Playable {
         }
         // 它记得升版本号、没收尾：会话补上，让托付（忘记密码做完才删 SendGrid）有个兑现的时候
         let loginClosed = { (step: Step) in self.calls(step, "task", ["done"]).contains { !$0.call.failed && self.target($0.args) === login } }
-        var closed = finish
+        var closed = finish, wrapUp = [finish]
         if !loginClosed(finish) {
             let bumped = try await event("忘记密码：补上版本号与 CHANGELOG", on: login) { try await login.settle(LongScript.bumpDone, rig: rig) }
+            wrapUp.append(bumped)
             if loginClosed(bumped) { closed = bumped }
         }
         try await event("官网：做完交回", on: website) {
@@ -145,7 +146,7 @@ final class Duty: EvalScript, Playable {
 
         var checks = try await judge(login: login, settings: settings, site: website, digest: digest, key: Points(
             go: go, progress: progress, readmeStatus: readmeStatus, provider: provider, tabs: tabs, e2e: e2e, trip: trip, bounce: bounce,
-            finish: finish, certified: certified, wrap: wrap, cert: cert))
+            certified: certified, wrap: wrap, wrapUp: wrapUp, cert: cert))
         checks += try await probes(Probes(
             depsListed: depsListed, node: node, layout: layout, instant: instant, sendgrid: sendgrid, finish: closed,
             widget: widget, widgetAgain: widgetAgain, page1: page1, page2: page2, page3: page3, links: links, site: website, loginTask: login.task.id))

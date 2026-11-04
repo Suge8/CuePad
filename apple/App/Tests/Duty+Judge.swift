@@ -9,7 +9,9 @@ extension Duty {
 
     /// 判定要看的那几步
     struct Points {
-        let go, progress, readmeStatus, provider, tabs, e2e, trip, bounce, finish, certified, wrap: Step
+        let go, progress, readmeStatus, provider, tabs, e2e, trip, bounce, certified, wrap: Step
+        /// 忘记密码的收尾：做完交回那一步，与 Cue 没收、会话补上版本号的那一步（有的话）
+        let wrapUp: [Step]
         let cert: ScriptedSession
     }
 
@@ -33,20 +35,22 @@ extension Duty {
         let afterRejection = try await eval.said(since: key.go.window?.upperBound ?? .distantFuture).map(\.text)
             + says(steps.filter { ($0.window?.lowerBound ?? .distantPast) > (key.go.window?.upperBound ?? .distantFuture) }, to: settings)
         let tabsAnswers = answers([key.tabs], to: settings), e2eAnswers = answers([key.e2e], to: site), providerAnswers = answers([key.provider], to: digest)
-        // 升版本号：收尾时交代（say、edit、add，或开工写着它的步骤），或还排在这件事没做完的步骤里（Cue 早先把它加成了步骤）
+        // 升版本号：收尾时交代（交回没做到时 say 让它补，或 edit、add、开工写着它的步骤），或还排在这件事没做完的步骤里（Cue 早先把它加成了步骤）。
+        // 收尾跨做完交回与补上版本号两步：交回没提就 done 的不过；让它补、补上后才 done 的过。这件一直没收、也没提到它的不计
         let bump = /2\.3\.1|CHANGELOG|changelog/
-        let started = CueEval.calls(in: rounds(key.finish), "task", ["start"]).compactMap { call in
+        let wrapRounds = key.wrapUp.flatMap { rounds($0) }
+        let started = CueEval.calls(in: wrapRounds, "task", ["start"]).compactMap { call in
             login.cards.first { card in (call.args["task"] as? String).map { card.id.uuidString.lowercased().hasPrefix($0.lowercased()) } == true }?.body
         }
         // 他要的：证书查完时告诉他签发方（会话交回里写着 Sectigo）
         let certDone = calls(key.certified, "task", ["done", "leave"]).contains { !$0.call.failed && target($0.args) === key.cert }
         let certSaid = try await told(key.certified)
-        let loginDone = calls(key.finish, "task", ["done"]).contains { !$0.call.failed && target($0.args) === login }
-        let wrapUp = CueEval.calls(in: rounds(key.finish), "task", ["say", "edit", "add"]).map { Self.texts($0.args) } + started
+        let loginDone = key.wrapUp.contains { calls($0, "task", ["done"]).contains { !$0.call.failed && target($0.args) === login } }
+        let wrapUp = CueEval.calls(in: wrapRounds, "task", ["say", "edit", "add"]).map { Self.texts($0.args) } + started
         let planned = try await rig.store.cueTaskDetail(login.task.id).leaves.contains { $0.leaf.status != .done && $0.leaf.body.contains(bump) }
         return [
             Check(.carry, "(a) 他口头交代的升 2.3.1、记 CHANGELOG：收尾时交代了，或排成了下一步",
-                  wrapUp.contains { $0.contains(bump) } || planned, note: loginDone ? "" : "（这件没收尾）", counted: loginDone),
+                  wrapUp.contains { $0.contains(bump) } || planned, note: loginDone ? "" : "（这件没收尾）", counted: loginDone || wrapUp.contains { $0.contains(bump) }),
             Check(.memory, "(a) 他口头交代的：官网问跑不跑 e2e，答只跑单元测试", e2eAnswers == ["只跑单元测试就交"]),
             Check(.memory, "(b) 早先会话查清的：周报邮件问走哪家发信，答 Postmark", providerAnswers == ["Postmark"]),
             Check(.carry, "(c) README 只建了一个任务（问进展时没另建）", readmeAdds == 1 && calls(key.readmeStatus, "task", ["add", "start"]).isEmpty),
