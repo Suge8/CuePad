@@ -7,16 +7,15 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// 列头在各自的列内、排在窗口最顶那一排，卡片从玻璃后滚过。`add` 是待办列头的 ＋（添加任务）。
-    func boardTopRow(column: TaskBoard.Column, count: Int, add: (() -> Void)?) -> some View {
-        modifier(BoardTopRow(column: column, count: count, add: add))
+    /// 列头在各自的列内、排在窗口最顶那一排，卡片从玻璃后滚过。
+    func boardTopRow(column: TaskBoard.Column, count: Int) -> some View {
+        modifier(BoardTopRow(column: column, count: count))
     }
 }
 
 private struct BoardTopRow: ViewModifier {
     let column: TaskBoard.Column
     let count: Int
-    let add: (() -> Void)?
     @Environment(\.boardBand) private var band
     func body(content: Content) -> some View {
         content
@@ -25,10 +24,7 @@ private struct BoardTopRow: ViewModifier {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            BoardColumnHeader(column: column, count: count)
-            if let add { BoardAddTask(action: add) }
-        }
+        BoardColumnHeader(column: column, count: count)
             .padding(.horizontal, Self.inner)
             .glass(in: .capsule)
             .padding(.leading, BoardCardMetrics.inset)

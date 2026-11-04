@@ -4,7 +4,7 @@ import SwiftUI
 /// 进展页（项目｜进展的"进展"、⌘⇧T）：流水看板（`TaskBoard`）四列并排——待办 → 推进中 → 等你 → 已完成（今天），列不按状态铺色。
 /// 宽屏没有会话一段：在跑与等你的会话都在看板上，已结束的在会话条的"更早"。
 /// 四个列头就是窗口最顶那一排（`boardTopRow`，与红绿灯同一中线），卡各自滚动、从列头下面过；那一排右端是主区栏头的同步提醒与"⋯"（`MainColumn`），看板右边让出它们。
-/// 项目范围收在"⋯"里（选了项目以后列头的数也只数这个项目，"⋯"角上带它的小图形）；待办列头的 ＋ 添加任务，落在范围里的项目或当前项目。
+/// 项目范围收在"⋯"里（选了项目以后列头的数也只数这个项目，"⋯"角上带它的小图形）；待办列头的 ＋（`laneAddsTask`）添加任务，落在范围里的项目或当前项目。
 struct TaskBoardPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -25,6 +25,7 @@ struct TaskBoardPage: View {
         BoardColumns(board: (board ?? .empty).only(scope), adding: Bindable(workspace).addsTask, newTaskProject: scope ?? workspace.currentProject, margin: Self.margin)
             .padding(.trailing, trailing)
             .environment(\.boardBand, WideMetrics.band)
+            .environment(\.laneAddsTask, { workspace.addsTask = true })
             // 换范围是整块换内容：列里按卡挪位的动画与列头数字滚动都不跟着走（跟着走时四列每帧重排、数字每帧在 CPU 上重画，掉帧半秒）。
             // `animation = nil` 挡不住里层的 `.animation(_:value:)`，只有 `disablesAnimations` 挡得住
             .transaction(value: scope) { $0.disablesAnimations = true }

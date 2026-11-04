@@ -121,7 +121,7 @@ struct BoardColumn: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
             .boardLane(column)
-            .boardTopRow(column: column, count: board.count(column), add: column == .todo ? { adding = true } : nil)
+            .boardTopRow(column: column, count: board.count(column))
             .background { BoardLane(targeted: lit) }
         #else
         ScrollView { cards }
@@ -130,10 +130,7 @@ struct BoardColumn: View {
             .boardLane(column)
             .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
             .overlay(alignment: .top) {
-                HStack(spacing: 8) {
-                    BoardColumnHeader(column: column, count: board.count(column))
-                    if column == .todo { BoardAddTask { adding = true } }
-                }
+                BoardColumnHeader(column: column, count: board.count(column))
                     .padding(.horizontal, TaskMetrics.cardPadding)
                     .glass(in: .rect(cornerRadius: TaskMetrics.cardRadius))
                     .padding([.horizontal, .top], BoardCardMetrics.inset)
@@ -340,17 +337,5 @@ private enum AdvancingSlot: Identifiable {
             let cards = group.work.enumerated().map { AdvancingSlot.work($1, moves: group.tier == .running && $0 < BoardLine.maxMoving) }
             return (gap ? [.gap(pinned: group.pinned, group.tier)] : []) + cards
         }
-    }
-}
-
-/// 待办列头里的 ＋：添加任务，待办顶上浮出添加那一行（落在范围里的项目或当前项目）。四列并排的看板只有这一个入口。
-struct BoardAddTask: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) { Image(.add).font(Glyph.small) }
-            .buttonStyle(PressStyle(.button))
-            .help("添加任务")
-            .accessibilityLabel("添加任务")
     }
 }

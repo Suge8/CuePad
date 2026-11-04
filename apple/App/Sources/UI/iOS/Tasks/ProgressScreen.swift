@@ -4,13 +4,15 @@ import SwiftUI
 
 /// 进展页（窄屏侧栏与宽屏主区的"进展"）：看板与会话两段，看哪一段只有 `Workspace.progressPane` 一份
 /// （项目页"⋯"的"看这个项目的会话"经 `showSessions` 换到会话段）。两段只看项目范围里的（`Workspace.scopedProject`）。
-/// 顶栏中间一块玻璃（`ProgressHeader`）：两段的分段、项目范围、额度环；右上角随段是"添加任务"或"新会话"。
+/// 顶栏中间一块玻璃（`ProgressHeader`）：两段的分段、项目范围、额度环；宽屏右上角随段是"添加任务"或"新会话"。
+/// 窄屏的那一排是侧栏的（`NarrowSidebarBar`，同一块玻璃、项目范围收进额度面板），放不下这一页自己的操作：添加任务是待办头上的"+"
+/// （`laneAddsTask`：竖版看板的行头、横屏四列的列头），新会话是会话列表的第一行（`NewSessionLine`）。
 /// 看板一段是流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）；选了项目以后卡上不画项目小图形、列头的数也只数这个项目。
 /// 宽屏（iPad）主栏放得下看板最窄宽（`WideMetrics.board`，`boardFits`）与 iPhone 横屏同 Mac 四列并排（`BoardColumns`）；放不下的主栏（iPad 竖屏、
 /// 11 寸横屏旁边开着 Cue 或会话）与窄屏竖着拿是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点：
 /// 四列压到最窄的 160 时，iPad 的字号下卡上一行只剩两三个字。
 /// 横屏的屏高减去顶栏只剩两百多点，四行连各自的最矮都叠不下；横过来的宽正好排四列。
-/// "添加任务"去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
+/// 添加任务去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 /// 会话一段是全部会话（`SessionList`）：在线的在上、历史在下；搜会话在搜索页，这里不另放搜索框。
 struct ProgressScreen: View {
     @Environment(Workspace.self) private var workspace
@@ -19,8 +21,10 @@ struct ProgressScreen: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.boardFits) private var boardFits
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.headerHost) private var host
     @State private var board: TaskBoard?
     @State private var adding = false
+    @State private var quotaOpen = DebugHooks.preset.quotaOpen
     @State private var sessions = AgentListModel()
     /// 去过的段：一直挂着，换段只换哪一段看得见（同 Mac 的 `ProgressPage`），不重建整块看板或会话列表。
     @State private var mounted: Set<ProgressPane> = []
@@ -31,13 +35,17 @@ struct ProgressScreen: View {
         ZStack(alignment: .top) {
             if mounted.contains(.board) || pane == .board { shown(.board, pane) { boardView } }
             if mounted.contains(.sessions) || pane == .sessions {
-                shown(.sessions, pane) { SessionList(model: sessions, filter: workspace.scopedProject) }
+                shown(.sessions, pane) {
+                    SessionList(model: sessions, filter: workspace.scopedProject) {
+                        // 空着时空态里就有"新会话"，不再写一遍
+                        if inSidebar, sessions.list?.isEmpty == false { NewSessionLine(project: workspace.scopedProject) }
+                    }
+                }
             }
         }
         .onChange(of: pane, initial: true) { mounted.insert(pane) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // 顶上不写页名（窄屏侧栏的项目｜进展已经说了在哪一页，`HeaderHost.namesPage`）
-        .floatingHeader("进展", center: { ProgressHeader() }) {
+        .floatingHeader("进展", center: { ProgressHeader(open: $quotaOpen, scopeInPanel: false) }) {
             if workspace.progressPane == .sessions {
                 NewSessionButton(project: workspace.scopedProject)
             } else {
@@ -60,6 +68,7 @@ struct ProgressScreen: View {
                 PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)
             }
         }
+        .environment(\.laneAddsTask, inSidebar ? { adding = true } : nil)
         // 换范围不带里层的挪位与数字动画，理由同 Mac 的 `TaskBoardPage`
         .transaction(value: scope) { $0.disablesAnimations = true }
     }
@@ -77,28 +86,44 @@ struct ProgressScreen: View {
 
     private var newTaskProject: UUID? { workspace.scopedProject ?? workspace.currentProject }
 
+    /// 在窄屏侧栏里：页顶那一排不是这一页的，添加任务、新会话落到内容里。
+    private var inSidebar: Bool { host == .sidebar }
+
     /// 待办顶上浮出添加那一行（手机看板先把待办那一行滑到行首，`BoardRowLane`）。
     private func add() { adding = true }
 }
 
 /// 进展页顶栏中间那一块玻璃：左边看板｜会话两颗图标（`ProgressPanes`），中间项目范围，右边额度环；点环从这一块长出额度明细（`GrowPanel`）。
 /// 三样并成一块：各占一块玻璃时 iPhone 两侧圆钮之间挤不下，也读成三件事；它们说的都是"这一页看什么"。
-private struct ProgressHeader: View {
+/// `scopeInPanel`（窄屏侧栏那一排，左右还有项目｜进展与 Cue 头像）：项目范围收进长出的面板、排在额度明细上面，块里只在选了项目时画它的小图形。
+/// 开合由所在的那一排持有：长开时那一排把整排宽让给它（`NarrowSidebarBar`）。
+struct ProgressHeader: View {
+    @Binding var open: Bool
+    let scopeInPanel: Bool
+    @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var open = DebugHooks.preset.quotaOpen
-    private static let pane: CGFloat = 38
 
     var body: some View {
         GrowPanel(open: $open, radius: FloatingHeaderLayout.height / 2) {
             HStack(spacing: 0) {
-                ProgressPanes().frame(height: Self.pane).padding(.leading, 3)
-                ProjectScope()
+                ProgressPanes().frame(height: PaneMetrics.square).padding(.leading, PaneMetrics.inset)
+                if !scopeInPanel {
+                    ProjectScope()
+                } else if let scoped = workspace.catalog?.project(workspace.scopedProject) {
+                    ProjectGlyph(project: scoped, size: Self.glyph).padding(.leading, 10).accessibilityLabel("项目范围：\(scoped.shownName)")
+                }
                 QuotaRings(open: open, height: FloatingHeaderLayout.height) { $open.grow(reduceMotion: reduceMotion) }
             }
         } panel: {
-            QuotaDetail().padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 18).refreshesQuota()
+            VStack(alignment: .leading, spacing: 10) {
+                if scopeInPanel { ProjectScope() }
+                QuotaDetail()
+            }
+            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 18).refreshesQuota()
         }
     }
+
+    private static let glyph: CGFloat = 15
 }
 
 /// 一行新建任务：↩ 添加并保持焦点，便于连续输入。给了 `projects` 时尾部可选挂到哪个项目。

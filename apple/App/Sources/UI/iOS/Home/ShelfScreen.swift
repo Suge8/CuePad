@@ -18,9 +18,7 @@ struct ShelfScreen: View {
             if let catalog = workspace.catalog { content(catalog) }
         }
         .refreshable { await services.syncNow() }
-        .floatingHeader("项目") {
-            Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
-        }
+        .floatingHeader("项目") { NewProjectButton() }
     }
 
     private func content(_ catalog: ProjectCatalog) -> some View {
@@ -184,6 +182,15 @@ private struct ShelfLine: View {
         .buttonStyle(.row)
         .accessibilityElement(children: .combine)
         .accessibilityValue(alert?.title ?? "")
+    }
+}
+
+/// "新建项目"：窄屏在侧栏顶上那一排（`NarrowSidebarBar`），宽屏在书架页顶右边。
+struct NewProjectButton: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
     }
 }
 #endif

@@ -15,27 +15,46 @@ struct BoardLane: View {
     }
 }
 
+extension EnvironmentValues {
+    /// 看板待办那一列（行）头上的"+"：点它开添加任务（窄屏侧栏的进展页给，`ProgressScreen`：页顶那一排是侧栏的、放不下它；Mac 的看板也给，`TaskBoardPage`：列头就是窗口最顶那一排）；nil 不画。
+    /// 读它的是手机竖版看板的行头（`BoardRowLane`）与四列看板的列头（`BoardColumnHeader`）。
+    @Entry var laneAddsTask: (() -> Void)? = nil
+}
+
 /// 列头：状态色实心圆里一个白字形（`BoardLaneMark`）、列名，右边是这一列的数。数随列的轻重（`BoardWeight.swift`）：推进中、等你放大、着状态色，
 /// 待办、已完成与列名同字号、列名与数都是 ink3。卡片开头的记号是空心描边，与它分得开。
+/// 待办的列头在数右边可带一颗"+"（`laneAddsTask`，同手机竖版看板待办行头的那一颗）。
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
     @Environment(\.palette) private var palette
+    @Environment(\.laneAddsTask) private var addTask
 
     var body: some View {
-        // 窄到放不下时先不写列名、再不画记号，数一直在（Mac 待办的列头给左上的分段让位、侧栏收起时）
-        ViewThatFits(in: .horizontal) {
-            row(title: true, mark: true)
-            row(title: false, mark: true)
-            row(title: false, mark: false)
+        HStack(spacing: 0) {
+            // 窄到放不下时先不写列名、再不画记号，数一直在（Mac 待办的列头给左上的分段让位、侧栏收起时）
+            ViewThatFits(in: .horizontal) {
+                row(title: true, mark: true)
+                row(title: false, mark: true)
+                row(title: false, mark: false)
+            }
+            .lineLimit(1)
+            // 读屏总念列名与数，不随看得见的那一档少念
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(column.title)
+            .accessibilityValue("\(count)")
+            .accessibilityAddTraits(.isHeader)
+            if column == .todo, let addTask {
+                Button("添加任务", icon: .add, action: addTask)
+                    .labelStyle(.iconOnly)
+                    .font(Self.font)
+                    .foregroundStyle(palette.signature)
+                    .frame(width: Self.height, height: Self.height)
+                    .contentShape(.rect)
+                    .buttonStyle(PressStyle(.inline))
+            }
         }
-        .lineLimit(1)
         .frame(height: Self.height)
-        // 读屏总念列名与数，不随看得见的那一档少念
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(column.title)
-        .accessibilityValue("\(count)")
-        .accessibilityAddTraits(.isHeader)
     }
 
     private func row(title: Bool, mark: Bool) -> some View {

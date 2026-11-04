@@ -5,12 +5,13 @@ extension View {
     /// 页顶那一排（全 App 只此一种，手机与 iPad、根页与推入页同一个）：左边一颗圆钮，中间一两块玻璃，右边至多一颗圆钮
     /// （多个操作时调用方给一个"⋯"`Menu`），各是一块玻璃，玻璃之间透出内容；内容一直滚到这一排后面，栏后面不垫模糊或渐变（`Bars`）。
     /// 中间是标题与下面一行要紧信息（推入页），或调用方给的 `center`（根页：这一页的范围，Cue 页是 Cue 的名牌），不写页名大标题：
-    /// 窄屏侧栏的项目｜进展已经说了在哪一页（`HeaderHost.namesPage`）。中间那几块由 `headerPiece` 或 `GrowPanel` 画，提示横幅盖在这一排上时让开。
+    /// 窄屏侧栏的项目｜进展已经说了在哪一页（那一排是侧栏的，`HeaderHost.sidebar`）。中间那几块由 `headerPiece` 或 `GrowPanel` 画，提示横幅盖在这一排上时让开。
     /// 画在哪由所在的地方定（`HeaderHost`），调用处不分：
     /// - 系统导航栏（推入的页）：左边是系统的圆形返回（左缘右滑返回、长按返回菜单都是系统的），
     ///   中间与右边是导航栏里的两项。两项推入时就建好、一直在，标题与信息只在项里面换，让开也只是透明：推入转场期间系统不重建工具栏项，
     ///   换项要等转场结束才显示；中间这一项不在时系统还会把标题当普通文字摆回中间。
-    /// - 页自己画（窄屏根上的 Cue 页与侧栏两段、宽屏栏里的页）：系统导航栏藏着，这一排是页的一部分，开合侧栏、推入时随页走，
+    /// - 窄屏侧栏的两段：这一排是侧栏的（`NarrowSidebarBar`），页只让出一排的高。
+    /// - 页自己画（窄屏的 Cue 页、宽屏栏里的页）：系统导航栏藏着，这一排是页的一部分，开合侧栏、推入时随页走，
     ///   不与推入页的栏项交叉；从中间长出的面板（`GrowPanel`）只能在这里长：导航栏里的项按栏高摆、画不到栏外。
     /// `hidden` 时中间与右边让开（淡到透明、不可点、读屏跳过），左边一直在；占的高度不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。标题同时是读屏、返回菜单与多任务切换器里的名字。
@@ -19,7 +20,7 @@ extension View {
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         modifier(FloatingHeader(
-            title: title, hidden: hidden, reveal: reveal, titled: true,
+            title: title, hidden: hidden, reveal: reveal,
             center: TitleStack(title: title, detail: detail(), wording: wording).padding(.horizontal, 16).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1),
             trailing: trailing()))
     }
@@ -29,7 +30,7 @@ extension View {
     func floatingHeader<Center: View, Trailing: View>(
         _ title: LocalizedStringResource, height: CGFloat = FloatingHeaderLayout.height, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        modifier(FloatingHeader(title: title, hidden: false, reveal: nil, titled: false, height: height, center: center(), trailing: trailing()))
+        modifier(FloatingHeader(title: title, hidden: false, reveal: nil, height: height, center: center(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
@@ -48,31 +49,17 @@ extension View {
     func headerPiece(interactive: Bool = false) -> some View { modifier(HeaderPiece(interactive: interactive)) }
 }
 
-/// 页顶那一排画在哪（`FloatingHeader`）：系统导航栏，或页自己画。
+/// 页顶那一排画在哪（`FloatingHeader`）：系统导航栏、窄屏侧栏，或页自己画。
 enum HeaderHost: Equatable {
     /// 推入的页。
     case navigationBar
-    /// 窄屏根上的页，系统导航栏藏着；`search`：这一排的搜索入口（由页面容器指定）。
-    case page(search: HeaderSearch?)
+    /// 窄屏的 Cue 页，系统导航栏藏着：左边开侧栏的圆钮是窄屏根的（`NarrowCue`），中间那块（名牌）让出它、铺满到右边（`CueHeader`）。
+    case page
+    /// 窄屏侧栏里的项目、进展两段：那一排是侧栏的（`NarrowSidebarBar`：项目｜进展、这一段的工具、Cue 头像），页只让出一排的高。
+    /// 页名不写：侧栏顶上的项目｜进展已经说了在哪一页。
+    case sidebar
     /// 宽屏（iPad）栏里的页：自己画，不为提示横幅让开。
     case panel
-
-    var search: HeaderSearch? {
-        if case .page(let search) = self { search } else { nil }
-    }
-
-    /// 这一页的名字此刻在别处写着（窄屏侧栏顶上的项目｜进展）：页顶那一排不再写标题，同一屏不重复。
-    var namesPage: Bool {
-        if case .page = self { true } else { false }
-    }
-}
-
-/// 页自己画的那一排里的搜索入口，两种的放大镜落在同一处，侧栏换段时不跳。
-enum HeaderSearch {
-    /// 左边一颗圆钮：中间放着这一页看什么。
-    case button
-    /// 中间一条搜索框（`SearchEntry`），从左页边铺到右边圆钮前：中间没有别的；盖在上面的提示横幅同一范围（`NoticeBanner`）。
-    case field
 }
 
 extension EnvironmentValues {
@@ -99,8 +86,6 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
     let title: LocalizedStringResource
     let hidden: Bool
     let reveal: (() -> Void)?
-    /// 中间是标题：这一页的名字在别处写着时（`HeaderHost.namesPage`）不写，只留两边的圆钮。
-    let titled: Bool
     var height = FloatingHeaderLayout.height
     let center: Center
     let trailing: Trailing
@@ -110,20 +95,22 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
     func body(content: Content) -> some View {
         Group {
             switch host {
+            case .sidebar:
+                content.safeAreaPadding(.top, height + Bars.contentGap)
             case .page, .panel:
                 // 内容让到这一排下面再隔 `Bars.contentGap`；这一排排在让出之前的安全区里，贴着状态栏下沿，同导航栏里的圆钮
                 content
                     .safeAreaPadding(.top, height + Bars.contentGap)
                     .overlay(alignment: .top) {
-                        PageBar(host: host, height: height, trailing: trailing) { if showsMiddle { middle } }
+                        PageBar(height: height, trailing: trailing) { middle }
                     }
             case .navigationBar:
                 content
                     // 标题只在中间那块玻璃里：不在 `RouteView` 里的页（任务正文的编辑 sheet）也不能让系统在下面再排一个大标题
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        // 不写标题时也留着这一项（空的）：中间这一项不在时系统会把标题当普通文字摆回中间
-                        ToolbarItem(placement: .principal) { if showsMiddle { middle } else { Color.clear.frame(width: 1, height: 1) } }
+                        // 中间这一项一直在：不在时系统会把标题当普通文字摆回中间
+                        ToolbarItem(placement: .principal) { middle }
                             // 玻璃自己画，不再套一层系统的玻璃底（玻璃不叠玻璃）
                             .sharedBackgroundVisibility(.hidden)
                         if Trailing.self != EmptyView.self {
@@ -139,7 +126,6 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
         .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
     }
 
-    private var showsMiddle: Bool { !(titled && host.namesPage) }
 
     private var middle: some View {
         HStack(spacing: 8) { center }
@@ -165,19 +151,16 @@ private struct Yield: ViewModifier {
     }
 }
 
-/// 页自己画的那一排：左边搜索入口（`HeaderSearch`），右边这一页的那一个操作，圆钮的位置同导航栏里的返回钮与圆钮；
+/// 页自己画的那一排：右边这一页的那一个操作，圆钮的位置同导航栏里的圆钮；
 /// 中间那几块盖在圆钮之上一层：从中间长出的面板（`GrowPanel`）铺满这一排往下长。
 private struct PageBar<Middle: View, Trailing: View>: View {
-    let host: HeaderHost
     let height: CGFloat
     let trailing: Trailing
     @ViewBuilder let middle: Middle
-    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         ZStack(alignment: .top) {
             HStack {
-                if host.search == .button { Button("搜索", icon: .search) { workspace.openSearch() } }
                 Spacer(minLength: 8)
                 trailing
             }
@@ -185,9 +168,6 @@ private struct PageBar<Middle: View, Trailing: View>: View {
             .buttonStyle(ControlButtonStyle(kind: .circular))
             .dynamicTypeSize(...FloatingHeaderLayout.largestType)
             .frame(height: height)
-            if host.search == .field {
-                SearchEntry().padding(.trailing, Trailing.self == EmptyView.self ? 0 : FloatingHeaderLayout.slot)
-            }
             middle
         }
         .padding(.horizontal, FloatingHeaderLayout.margin)
