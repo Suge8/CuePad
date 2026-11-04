@@ -8,15 +8,13 @@ struct CueDot: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static let size = StatusDot.size
-
     var body: some View {
         let color = workspace.cue.unread > 0 ? palette.replied : workspace.cue.now.needsYou > 0 ? palette.waiting : nil
         ZStack {
             if let color { StatusDot(color: color).transition(Motion.pop(reduceMotion: reduceMotion)) }
             CueArrival(color: palette.replied)
         }
-        .frame(width: Self.size, height: Self.size)
+        .frame(width: StatusDot.size, height: StatusDot.size)
         .animation(Motion.fade, value: color)
         .accessibilityHidden(true)
     }

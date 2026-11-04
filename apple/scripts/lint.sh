@@ -69,16 +69,7 @@ forbid "投影只经 elevation 的几档（Theme/Surfaces.swift 的 Elevation，
 # 下面三条是棘轮（design/system/migration.md）：例外里的文件是还没迁的存量，迁完一个删一行，不往里加
 forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（.caption、.footnote、Font.subheadline…）：它们编进 Mac 是系统的小号（.caption、.footnote 10 点），低于 Mac 的 12 点下限；iOS 缺的角色在 Typography 里按用途加。扩展（Widget）里没有 Typography，例外" \
   '(?:\.font\(\s*\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\bFont\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\.system\(\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b)' \
-  '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/**' \
-  'App/Sources/UI/Shared/Components/RowActions.swift' \
-  'App/Sources/UI/Shared/Components/TaskNextMark.swift' \
-  'App/Sources/UI/iOS/Activity/NewSessionInput.swift' \
-  'App/Sources/UI/iOS/Activity/SessionScreen.swift' \
-  'App/Sources/UI/iOS/Project/FolderCandidates.swift' \
-  'App/Sources/UI/iOS/Settings/ConflictsScreen.swift' \
-  'App/Sources/UI/iOS/Settings/SettingsScreen.swift' \
-  'App/Sources/UI/iOS/Tasks/BoardRowLane.swift' \
-  'App/Sources/UI/iOS/Trash/TrashScreen.swift'
+  '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/**'
 forbid "小东西冒出来、收回去用 Motion.pop（AppGroup/Motion.swift）：从 0.9 长到原大并淡入，减弱动态效果时只淡；各处写的 .scale 起点不一（0、0.6），从 0 长读作跳出来" \
   '(?:\.transition\(\s*|\bAnyTransition)\.scale\b' 'App/AppGroup/Motion.swift'
 forbid "Mac 主窗口里从控件弹出的说明与小表单用 bubble(isPresented:) 或 HelpButton，不用系统 popover：它另起一扇窗，第一次弹 85～113ms，开着时主窗口的快捷键不响应（docs/layout.md）；设置窗口与只编进 iOS 的文件例外" \

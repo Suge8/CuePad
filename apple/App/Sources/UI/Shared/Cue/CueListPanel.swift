@@ -48,7 +48,6 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
                 .padding(12)
             }
             .frame(width: 480).frame(maxHeight: 600)
-            .background(palette.desk)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(title)
     }

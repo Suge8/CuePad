@@ -80,7 +80,7 @@ struct UnreadCount: View {
     var body: some View {
         if count > 0 {
             HStack(spacing: 5) {
-                Circle().fill(palette.replied).frame(width: CueDot.size, height: CueDot.size)
+                Circle().fill(palette.replied).frame(width: StatusDot.size, height: StatusDot.size)
                 Text(count, format: .number).fontWeight(.semibold).monospacedDigit().contentTransition(.numericText(value: Double(count)))
             }
             .foregroundStyle(palette.replied)

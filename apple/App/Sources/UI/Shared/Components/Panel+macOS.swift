@@ -313,6 +313,7 @@ private struct PanelLayer: View {
                 palette.backdrop.ignoresSafeArea().accessibilityHidden(true)
             }
             shown.content
+                .background(palette.paper)
                 .background { area(shown.id) }
                 .clipShape(.rect(cornerRadius: Radius.card))
                 .rowContainer(.rect(cornerRadius: Radius.card))

@@ -65,7 +65,6 @@ struct SetupPanel: View {
             footer.padding(.horizontal, 24).padding(.bottom, Spacing.panel)
         }
         .frame(width: 520)
-        .background(palette.desk)
         .animation(Motion.fade, value: checked)
         .onAppear { withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { shown = true } }
         .observing(services.store, into: $here, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }

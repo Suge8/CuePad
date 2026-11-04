@@ -52,8 +52,6 @@ struct ProjectForm: View {
         }
         .padding(Spacing.panel)
         .frame(width: 340)
-        // 浮层自己不铺底（Mac 的模态内容各自铺），纸只能在这里给
-        .background(palette.paper)
     }
 
     /// 名称与介绍：同一种淡底单行框，与一排控件同高。

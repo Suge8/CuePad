@@ -357,9 +357,9 @@ private struct RailTipLabel: View {
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, Spacing.group)
-            .frame(height: ControlMetrics.compactHeight)
+            .frame(height: ControlSize.compact.height)
             .paper(cornerRadius: Radius.block, lifted: true)
-            .offset(x: frame.maxX + Chrome.groupGap, y: frame.midY - ControlMetrics.compactHeight / 2)
+            .offset(x: frame.maxX + Chrome.groupGap, y: frame.midY - ControlSize.compact.height / 2)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }

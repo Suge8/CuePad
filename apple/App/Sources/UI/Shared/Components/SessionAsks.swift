@@ -65,7 +65,6 @@ private struct RenameSheet: View {
         }
         .padding(20)
         .frame(width: 360)
-        .background(palette.desk)
     }
     #endif
 
