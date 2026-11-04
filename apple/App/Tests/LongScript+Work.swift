@@ -10,7 +10,7 @@ extension LongScript {
         - `POST /api/password/reset-request`：收邮箱，不管存不存在都返回 202 和同一句提示；存在时生成 32 字节随机令牌，库里只存 SHA-256 哈希（password_resets 表：user_id、token_hash、expires_at、used_at），发重置邮件。邮箱先做 trim 和小写，再查用户。
         - `POST /api/password/reset`：收令牌和新密码，按哈希查、校验没过期没用过，改密码、把 used_at 填上，同一用户其余未用的令牌一并作废，并让该用户已登录的会话全部下线（sessions 表按 user_id 删，refresh token 一起吊销）。
         - 限流：同一邮箱 60 秒内只发一次（第二次返回 429，前端照样显示同一句提示），按邮箱的哈希计数，存在 password_reset_throttle 表里；另外同一 IP 每小时最多 20 次，防止拿一堆邮箱轮着刷。
-        - 邮件：沿用注册验证邮件的模板（templates/mail/verify.mjml），换了标题、正文和按钮文案，链接是 https://demo.dev/reset?token=…，30 分钟有效。邮件走现有的 `createTransport()`。
+        - 邮件：新建 templates/mail/reset.mjml，用 mj-include 引进注册验证邮件（templates/mail/verify.mjml）那套页眉、按钮与页脚，只写自己的标题、正文和按钮文案，链接是 https://demo.dev/reset?token=…，30 分钟有效。邮件走现有的 `createTransport()`。
         - 迁移：20261019_add_password_resets.sql，建两张表与索引；本地与 CI 的测试库都跑过。回滚脚本也写了（down 里删两张表）。
         - 清理：加了一个每天凌晨跑的定时任务，删掉过期超过 7 天的令牌记录和限流记录，免得表一直涨。
 
@@ -19,7 +19,7 @@ extension LongScript {
         | 要求 | 怎么做的 | 对应的测试 |
         | --- | --- | --- |
         | 链接 30 分钟有效、只能用一次 | expires_at = 签发时间 + 30 分钟；用过填 used_at，再用返回 410 | reset.test.ts 第 2、3 条 |
-        | 沿用注册验证邮件的模板 | 同一个 verify.mjml，只换文案 | 手动看了 MailHog 里的样子 |
+        | 沿用注册验证邮件的模板 | reset.mjml 引进 verify.mjml 的页眉、按钮与页脚，只写自己的文案 | 手动看了 MailHog 里的样子 |
         | 同一邮箱一分钟最多一次 | password_reset_throttle 按邮箱哈希计数 | reset-request.test.ts 第 3、4、5 条 |
         | 不泄露用户是否存在 | 两种情况同一状态码、同一句提示、响应时间补齐到 300 ms | reset-request.test.ts 第 1、2 条 |
 

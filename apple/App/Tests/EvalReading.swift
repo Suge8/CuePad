@@ -27,6 +27,13 @@ enum EvalReading {
         }
     }
 
+    /// Cue 对会话交代的提交口径：按先后最后一句说到提交的，要它本地提交（"本地提交、不推送""请做成一个本地提交"）为真，
+    /// 不提交（"不提交、不推送""我说过不提交"）或没说到为假。只说推送的不算。剧本照它决定会话交回时提交了没有。
+    static func asksToCommit(_ said: [String]) -> Bool {
+        guard let last = said.flatMap({ sentences(unquoted($0)) }).last(where: { $0.contains("提交") || $0.contains(/commit/.ignoresCase()) }) else { return false }
+        return !last.contains(/不(?:要|用|做)?提交|别提交|先不提交/) && last.contains(/本地提交|提交到本地|做成[^。；]{0,8}提交|请[^。；]{0,4}提交|commit/.ignoresCase())
+    }
+
     // MARK: 被拒后照实说
 
     /// 说话、开工被拒的原因（`CueStoreError` 的 macOffline、sessionUnconfirmed、turnSourceUnconfirmed），从结果认是哪一种（`marker`）。
