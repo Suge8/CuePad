@@ -123,7 +123,7 @@ extension SessionList where Top == EmptyView {
     init(model: AgentListModel, filter: UUID?) { self.init(model: model, filter: filter) { EmptyView() } }
 }
 
-/// "新会话"：在 `project` 里开（顶栏右边的那一个操作）。
+/// "新会话"：在 `project` 里开（宽屏顶栏右边的那一个操作）。
 struct NewSessionButton: View {
     let project: UUID?
 
@@ -131,6 +131,29 @@ struct NewSessionButton: View {
     var body: some View {
         Button("新会话", icon: .add) { workspace.newSession = .init(project: project) }
             .accessibilityHint("让 Mac 开一个 Agent 会话")
+    }
+}
+
+/// 会话列表的第一行"新会话"（窄屏侧栏的会话段：页顶那一排是侧栏的，放不下它）：长相同添加任务那一行的入口（`NewTaskLine`），
+/// 不铺底、不是一张卡，读作操作；点它在 `project` 里开（`Workspace.newSession`）。
+struct NewSessionLine: View {
+    let project: UUID?
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button { workspace.newSession = .init(project: project) } label: {
+            HStack(spacing: 2) {
+                Image(.add).frame(width: 44).accessibilityHidden(true)
+                Text("新会话")
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(palette.ink2)
+            .frame(minHeight: 44)
+            .contentShape(.rect)
+        }
+        .buttonStyle(PressStyle(.wide))
+        .accessibilityHint("让 Mac 开一个 Agent 会话")
     }
 }
 

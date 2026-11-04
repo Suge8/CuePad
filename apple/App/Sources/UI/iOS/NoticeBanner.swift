@@ -1,8 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-/// 每个窗口只显示一条短提示，沿用 `Workspace` 的消退计时。暂时盖在顶栏中间的名牌或搜索框的位置（它们让开）：中间是铺满的搜索框时
-/// （`HeaderSearch.field`）完整盖住它，左右边缘对齐、同高，其余页在两侧圆钮之间居中；
+/// 每个窗口只显示一条短提示，沿用 `Workspace` 的消退计时。暂时盖在顶栏中间的位置（盖住的让开）：窄屏侧栏那一排（`NarrowSidebarBar`）
+/// 从左页边盖到右边的 Cue 头像前，项目｜进展与这一段的工具一起让开；其余页在两侧圆钮之间居中；
 /// 两侧操作仍可用；不在 Cue 对话上另占一排，iPad 面板也共用窗口的提示。窄屏盖在整个窗口上，宽屏在右边那一栏里居中（不盖侧栏顶上的圆钮）。
 /// 提示与会话前台提示的变化只在这里读：根视图读了的话，每弹一条、消一条整个窗口（分栏的每一栏）都要重算一遍。
 struct NoticeBanner: View {
@@ -20,7 +20,7 @@ struct NoticeBanner: View {
     }
 
     var body: some View {
-        let field = workspace.layout == .narrow && workspace.top == .shelf
+        let field = workspace.layout == .narrow && (workspace.top == .shelf || workspace.top == .progress)
         ZStack {
             if let notice = workspace.notice {
                 NoticeCapsule(notice: notice)

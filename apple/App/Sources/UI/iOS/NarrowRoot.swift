@@ -43,32 +43,32 @@ private struct NarrowHome: View {
     }
 }
 
+/// Cue 页与左边常驻的会话条；名牌长开 Cue 的面板时会话条让开（面板盖住这一屏，`CuePanelOpen`）。
 private struct NarrowCue: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @State private var panelOpen = false
 
     var body: some View {
         RouteView(route: .cue)
-            .environment(\.headerHost, .page(search: nil))
+            .environment(\.headerHost, .page)
             .background(palette.desk.ignoresSafeArea())
-            .overlay(alignment: .topLeading) {
-                Button("侧栏", icon: .sidebar) { workspace.toggleSidebar() }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(ControlButtonStyle(kind: .circular))
-                    .frame(height: CueHeader.height)
-                    .padding(.leading, FloatingHeaderLayout.margin)
-                    .accessibilityIdentifier("narrow-sidebar")
-            }
+            .onPreferenceChange(CuePanelOpen.self) { panelOpen = $0 }
             .overlay(alignment: .leading) {
                 SessionRail(data: workspace.services.liveSessions.rail, form: .phone, pulse: workspace.pulse) { session, _ in
                     workspace.openSession(session.id, sessionID: session.sessionID)
                 }
                 .padding(.top, CueHeader.height + Bars.contentGap)
                 .padding(.bottom, ComposerMetrics.slot + 16)
+                .opacity(panelOpen ? 0 : 1)
+                .allowsHitTesting(!panelOpen)
+                .readerHidden(panelOpen)
+                .animation(Motion.fade, value: panelOpen)
             }
     }
 }
 
+/// 侧栏：项目、进展两段叠着、只换看得见的那段；顶上一排是侧栏的（`NarrowSidebarBar`），两段只让出一排的高（`HeaderHost.sidebar`）。
 private struct NarrowSidebar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -78,22 +78,21 @@ private struct NarrowSidebar: View {
         let pane = workspace.navigationPane
         ZStack {
             if mounted.contains(.projects) || pane == .projects {
-                page(.shelf, pane: .projects, search: .field)
+                page(.shelf, pane: .projects)
             }
             if mounted.contains(.progress) || pane == .progress {
-                page(.progress, pane: .progress, search: .button)
+                page(.progress, pane: .progress)
             }
         }
-        .safeAreaPadding(.top, FloatingHeaderLayout.height + Bars.contentGap)
-        .overlay(alignment: .top) { switcher.padding(.horizontal, FloatingHeaderLayout.margin) }
+        .overlay(alignment: .top) { NarrowSidebarBar() }
         .background(palette.desk.ignoresSafeArea())
         .onChange(of: pane, initial: true) { mounted.insert(pane) }
     }
 
-    private func page(_ route: Route, pane: NavigationPane, search: HeaderSearch) -> some View {
+    private func page(_ route: Route, pane: NavigationPane) -> some View {
         let shown = workspace.navigationPane == pane
         return RouteView(route: route)
-            .environment(\.headerHost, .page(search: search))
+            .environment(\.headerHost, .sidebar)
             .environment(\.pagePrefetch, true)
             .environment(\.pageActive, shown && workspace.sidebarOpen && workspace.path.isEmpty)
             .opacity(shown ? 1 : 0)
@@ -101,27 +100,6 @@ private struct NarrowSidebar: View {
             .readerHidden(!shown)
     }
 
-    private var switcher: some View {
-        HStack(spacing: 8) {
-            PaneSegment(
-                items: [.init(value: NavigationPane.projects, title: "项目", icon: .projects), .init(value: .progress, title: "进展", icon: .task)],
-                selection: workspace.navigationPane, select: workspace.selectPane)
-                .fixedSize()
-                .frame(height: FloatingHeaderLayout.height - PaneMetrics.inset * 2)
-                .padding(PaneMetrics.inset)
-                .glass(in: .capsule, interactive: true)
-            Spacer(minLength: 0)
-            Button { workspace.select(.cue) } label: {
-                CueAvatar(workspace.cue.beat, size: .row)
-                    .relaySpot(cue: .entry)
-                    .frame(width: FloatingHeaderLayout.height, height: FloatingHeaderLayout.height)
-            }
-            .buttonStyle(ControlButtonStyle(kind: .circular))
-            .accessibilityLabel(workspace.cue.name)
-            .accessibilityIdentifier("narrow-cue")
-        }
-        .dynamicTypeSize(...FloatingHeaderLayout.largestType)
-    }
 }
 
 /// 位移的读数只影响最外面的两层；两页正文不读取每帧进度。读屏只给开合值指着的那层，不随拖动与动画中途变。
