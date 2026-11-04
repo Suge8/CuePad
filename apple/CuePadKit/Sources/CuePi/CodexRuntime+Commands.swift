@@ -6,7 +6,18 @@ import Foundation
 extension CodexRuntime {
     public func send(_ message: PiMessage, in id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        try await deliver(CodexRPC.input(text: message.text, images: message.images), clientID: CodexHistory.clientID(for: message.deliveryID), to: session)
+        try await deliver(Self.input(message.text, images: message.images, skills: session.skills), clientID: CodexHistory.clientID(for: message.deliveryID), to: session)
+    }
+
+    /// 你的一句话交给 Codex 的输入：以这个会话的 `/skill:名字` 开头的是用这个技能说的——技能条目在前、其余的话在后（同在 Codex 里选了技能再打字），
+    /// 投送请求 id 照样随这条消息进会话文件；名字不是它的技能的照原文。
+    static func input(_ text: String, images: [PiImage], skills: [(name: String, path: String)]) -> [JSONValue] {
+        let head = text.prefix { !$0.isWhitespace }
+        guard head.hasPrefix("/skill:"), let skill = skills.first(where: { "/skill:\($0.name)" == head }) else {
+            return CodexRPC.input(text: text, images: images)
+        }
+        let rest = text.dropFirst(head.count).trimmingCharacters(in: .whitespacesAndNewlines)
+        return [["type": "skill", "name": .string(skill.name), "path": .string(skill.path)]] + CodexRPC.input(text: rest, images: images)
     }
 
     /// 以这句开新一轮：在跑就先停下这一轮。`turn/interrupt` 等这一轮真的中止了才回（实测 0.162.1：回应与 `turn/completed` 的
@@ -51,10 +62,8 @@ extension CodexRuntime {
                 try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
             }
         case _ where name.hasPrefix("skill:"):
-            guard let skill = session.skills.first(where: { "skill:\($0.name)" == name }) else { throw PiBridgeError.rejected("unknown_command") }
-            var input: [JSONValue] = [["type": "skill", "name": .string(skill.name), "path": .string(skill.path)]]
-            input += CodexRPC.input(text: argument, images: [])
-            try await deliver(input, clientID: CodexHistory.clientID(for: nil), to: session)
+            guard session.skills.contains(where: { "skill:\($0.name)" == name }) else { throw PiBridgeError.rejected("unknown_command") }
+            try await deliver(Self.input(line, images: [], skills: session.skills), clientID: CodexHistory.clientID(for: nil), to: session)
         default:
             throw PiBridgeError.rejected("unknown_command")
         }
