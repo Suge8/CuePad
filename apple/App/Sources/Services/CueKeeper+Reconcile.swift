@@ -137,7 +137,7 @@ extension CueKeeper {
         guard try await store.pinnedCueLineIDs() != shift.told else { return true }
         let memory = CueMemoryView(try await store.cueMemory())
         let pinned = memory.pinned.map(\.line.id)
-        guard await interject("一直记着的刚变了，这一轮接下来照这份做（盖过系统提示里那一节）：\n" + memory.pinnedText) else { return false }
+        guard await interject("# 一直记着（刚改了，换掉系统提示里的这一节，接下来照它做）\n" + memory.pinnedText) else { return false }
         updateShift { $0.told = pinned }
         return true
     }

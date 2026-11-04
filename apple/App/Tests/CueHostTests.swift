@@ -89,7 +89,7 @@ struct CueHostTests {
         try await held()
         let line = try await rig.store.noteCueLine("推送前先问我", source: .you).line
         Workspace(services: rig.services).pinCueLine(line.id, true)
-        try await rig.handed("一直记着的刚变了")
+        try await rig.handed("一直记着（刚改了")
         try await rig.say("第二句")
         try await rig.handed("第二句")
         try rig.releaseSettle()
@@ -201,7 +201,7 @@ struct CueHostTests {
         try await eventually("这一轮停在模型那里") { rig.model.holding }
         let line = try await rig.store.noteCueLine("推送前先问我", source: .you).line
         Workspace(services: rig.services).pinCueLine(line.id, true)
-        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains("一直记着的刚变了") && $0.contains("推送前先问我") } == true }
+        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains("一直记着（刚改了") && $0.contains("推送前先问我") } == true }
         rig.model.release()
         let answer = try await rig.message(.cue, containing: "这一轮照新规矩")
         #expect(answer.text.contains("推送前先问我"))
@@ -221,7 +221,7 @@ struct CueHostTests {
         row.fields["pinned"] = .int(1)
         row.fields["modifiedAt"] = .int(Int64((line.modifiedAt.timeIntervalSince1970 * 1000).rounded()) + 1)
         #expect(try await rig.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
-        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains("一直记着的刚变了") && $0.contains("推送前先问我") } == true }
+        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains("一直记着（刚改了") && $0.contains("推送前先问我") } == true }
         rig.model.release()
         let answer = try await rig.message(.cue, containing: "这一轮照新规矩")
         #expect(answer.text.contains("推送前先问我"))

@@ -186,7 +186,7 @@ nonisolated final class FakeModel: Sendable {
             return say("不记得暗号")
         }
         // 一轮里插进来的新规矩（`CueKeeper.tellRules`）：照它答
-        if text.contains("一直记着的刚变了") { return say("这一轮照新规矩：" + text) }
+        if text.contains("一直记着（刚改了") { return say("这一轮照新规矩：" + text) }
         if last["role"] as? String == "user", text.contains("请等我放行") { return .hold("先这样") }
         // 问规矩：照这次请求的系统提示里一直记着的那一节答（在系统提示末尾）
         if text.contains("一直记着什么") {
