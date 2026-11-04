@@ -185,13 +185,28 @@ extension CueKeeper {
     }
 
     func save() {
-        progress.unanswered = shift?.unanswered ?? []
+        progress.unanswered = Array(owed.union(shift?.unanswered ?? []))
         do {
             try FileManager.default.createDirectory(at: setup.directory, withIntermediateDirectories: true)
             try JSONEncoder().encode(progress).write(to: setup.directory.appending(path: "keeper.json"), options: .atomic)
         } catch {
             Self.log.error("Cue 的对账进度没能存下：\(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// 交出去没答上的你的话退回没送达、重新交，连同此前没退回成的（`owed`）。退回你的话只经这里：出了问题、换班次、不再值班（`retire`），
+    /// 换了 Agent 重来（`replay`），一轮的回答没写进库，上次没收好尾（`run`）。没写成的留在 `owed`（落盘），对账时再试（`alarm` 排着）：
+    /// 你的话只在答上或退回写进库之后才放下。
+    func giveBack(_ ids: [UUID]) async {
+        owed.formUnion(ids)
+        guard !owed.isEmpty else { return }
+        do {
+            try await store.unmarkCueMessagesDelivered(Array(owed))
+            owed = []
+        } catch {
+            Self.log.error("Cue 没答上的消息没能退回，过一阵再试：\(error.localizedDescription, privacy: .public)")
+        }
+        save()
     }
 
     /// 这一轮的回复写成谁的：你发来消息、刚启用写成 cue；其余写成 note（不写回复，只给醒来后出错重试时判断是不是在回答你，`Turn.answersYou`）。

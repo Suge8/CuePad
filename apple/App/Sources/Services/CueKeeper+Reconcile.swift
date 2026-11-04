@@ -9,10 +9,15 @@ extension CueKeeper {
     func reconcile() async {
         timer?.cancel()
         timer = nil
-        // 下面排的定时只在歇着时有，`alarm` 只在等着重起或一轮在跑时有：两者不会同时要排
-        defer { schedule(alarm) }
         await revive()
+        await giveBack([])  // 上次没退回成的再退一次
         await leaveHisStops()
+        let next = await step()
+        schedule([next, alarm].compactMap(\.self).min())
+    }
+
+    /// 对账里按先后只做一件事（`CueKeeper` 头注释的 1–6），返回歇着时下一次要对账的时刻（定时、巡视、停住、重来）。
+    private func step() async -> Date? {
         do {
             let store = self.store, now = Date.now
             let profile = try await store.cueProfile() ?? CueProfile()
@@ -24,38 +29,38 @@ extension CueKeeper {
                 await retire(shift)
                 await startShift()
                 input.yield(.kick)
-                return
+                return nil
             }
-            if let shift, shift.turn != nil, try await !tellRules(shift) { return }
+            if let shift, shift.turn != nil, try await !tellRules(shift) { return nil }
             let pending = ready(try await store.cueMessagesToDeliver())
             if !pending.isEmpty {
                 if case .restarting(let failures, _, _) = phase { await startShift(failures: failures) }
-                guard let shift else { return }
+                guard let shift else { return nil }
                 let ids = pending.map(\.id)
                 let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside(), files: store.files, imagesAsFiles: !shift.brain.seesImages)
                 let images = await images(in: pending, for: shift.brain)
                 if shift.turn != nil {
-                    guard await interject(said, images: images, delivering: ids) else { return }
+                    guard await interject(said, images: images, delivering: ids) else { return nil }
                     try await markDelivered(ids)
                 } else {
                     _ = try await wakeUp(.message, said: said, images: images, delivering: ids)
                 }
-                return
+                return nil
             }
-            guard let shift, shift.turn == nil else { return }
+            guard let shift, shift.turn == nil else { return nil }
 
             if brainSettings?.needsNewBrain(for: BrainSettings(profile)) == true {
                 await retire(shift)
                 await startShift()
                 input.yield(.kick)
-                return
+                return nil
             }
 
             if progress.greeted != profile.enabledAt {
                 progress.greeted = profile.enabledAt
                 guard try await handsEmpty() else {
                     _ = try await wakeUp(.enabled)
-                    return
+                    return nil
                 }
                 save()
             }
@@ -67,9 +72,9 @@ extension CueKeeper {
                 let fires = due.compactMap { line in
                     line.remindAt.map { CueFire(line: line.id, due: line.repeats?.latest(from: $0, until: now) ?? $0) }
                 }
-                guard try await wakeUp(.schedule(fires)) else { return }
+                guard try await wakeUp(.schedule(fires)) else { return nil }
                 try await store.fireCueSchedules(due, at: now)
-                return
+                return nil
             }
             var deadlines: [Date] = []
             if let next = try await store.nextCueSchedule(after: now) { deadlines.append(next) }
@@ -79,8 +84,9 @@ extension CueKeeper {
             // 额度、登录卡住的持续重试只按慢速周期重交原来的醒来原因（新变化不替代它、不催它：卡着时重来只会再失败），变化随信封一起看。
             // 重来的那一轮半路断了（`broke`）也还在：到点的时刻留着，起好就再来
             if let held = setback, held.persistent {
-                guard let at = held.retryAt, now >= at else { return schedule(held.retryAt) }
-                return _ = try await wakeUp(held.wake, as: held.author)
+                guard let at = held.retryAt, now >= at else { return held.retryAt }
+                _ = try await wakeUp(held.wake, as: held.author)
+                return nil
             }
             let changes = try await self.changes(at: now)
             // 别的出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化。
@@ -91,13 +97,15 @@ extension CueKeeper {
                     setback = nil
                 } else if held.retryAt.map({ now >= $0 }) == true {
                     setback?.retryAt = nil
-                    return _ = try await wakeUp(held.wake, as: held.author)
+                    _ = try await wakeUp(held.wake, as: held.author)
+                    return nil
                 } else {
-                    return schedule([deadlines.min(), held.retryAt].compactMap { $0 }.min())
+                    return [deadlines.min(), held.retryAt].compactMap(\.self).min()
                 }
             }
             if !changes.due.isEmpty {
-                return _ = try await wakeUp(.sessionActivity(changes.due.map(CueStir.init)))
+                _ = try await wakeUp(.sessionActivity(changes.due.map(CueStir.init)))
+                return nil
             }
             // 没叫醒 Cue：他新在场的停下记下，不再记的划掉（叫醒的一轮做完才换）
             if changes.held != progress.held {
@@ -114,13 +122,15 @@ extension CueKeeper {
                     progress.patrols = (progress.patrolDay == today ? progress.patrols : 0) + 1
                     progress.patrolDay = today
                     if due.warm { progress.warmedIdle = idleSince } else { progress.patrolledIdle = idleSince }
-                    return _ = try await wakeUp(.idle)
+                    _ = try await wakeUp(.idle)
+                    return nil
                 }
                 deadlines.append(due.at)
             }
-            schedule(deadlines.min())
+            return deadlines.min()
         } catch {
             Self.log.error("Cue 对账失败：\(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 

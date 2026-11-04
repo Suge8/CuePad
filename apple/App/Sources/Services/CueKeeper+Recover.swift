@@ -10,12 +10,14 @@ extension CueKeeper {
 
     /// 大脑这时该有人管的那一下（对账的定时器排它，`reconcile`）：等着重起的到点时刻，或在跑的一轮还差多久没动静满 `CueTiming.silence`（看门狗）。
     /// 定时器照墙钟睡，睡着的 Mac 醒来时它先到点：看门狗按醒着的时长再算一次（`revive`），没满就按剩下的重排。
+    /// 你的话退回没写成时也排在这里：隔一阵再试（`giveBack`）。
     var alarm: Date? {
-        switch phase {
+        let brain: Date? = switch phase {
         case .restarting(_, _, let at): at
         case .running(let shift) where shift.turn != nil: .now + (setup.timing.silence - quiet).seconds
         case .starting, .running: nil
         }
+        return [brain, owed.isEmpty ? nil : Date.now + setup.timing.returnRetry.seconds].compactMap(\.self).min()
     }
 
     /// 在跑的这一轮醒着的时间里多久没有大脑事件（Mac 睡着的那段不算，`CueTiming.awake`）。

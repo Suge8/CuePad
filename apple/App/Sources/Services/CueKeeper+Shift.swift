@@ -83,15 +83,14 @@ extension CueKeeper {
         if setup.timing.isDown(after: failures) { await tellDown(reason) }
     }
 
-    /// 停掉这个班次的大脑：交给它、还没答上的你的话（`Shift.unanswered`）清掉送达，下一个大脑重新交。出了问题、换班次与不再值班都经这里。
+    /// 停掉这个班次的大脑：交给它、还没答上的你的话（`Shift.unanswered`）退回（`giveBack`），下一个大脑重新交。出了问题、换班次与不再值班都经这里。
     func retire(_ shift: Shift) async {
         await shift.brain.stop()()
-        guard !shift.unanswered.isEmpty else { return }
-        do {
-            try await store.unmarkCueMessagesDelivered(shift.unanswered)
-        } catch {
-            Self.log.error("Cue 没读完的消息没能退回：\(error.localizedDescription, privacy: .public)")
+        updateShift { shift in
+            (shift.handed, shift.taken) = ([:], [])
+            shift.turn?.delivered = []
         }
+        await giveBack(shift.unanswered)
     }
 
     func handle(_ event: TurnEvent) async {
@@ -156,13 +155,19 @@ extension CueKeeper {
             guard var finished = turn else { return }
             let reply = finished.writesReply ? finished.speaking?.text : nil
             if reply?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { toldFailure = nil }
-            finished.round.row = await finish(finished, reply: reply)
+            do {
+                finished.round.row = try await finish(finished, reply: reply)
+            } catch {
+                // 回答没写进库：这一轮接走的你的话不算答上，退回重交
+                Self.log.error("Cue 这一轮的收尾没能写进资料库：\(error.localizedDescription, privacy: .public)")
+                await giveBack(finished.delivered)
+            }
             archive(finished.round)
             updateShift {
                 $0.turn = nil
                 $0.failures = 0
             }
-            save()  // 这一轮接走的都答上了，落盘的不再退回
+            save()  // 这一轮接走的答上了（没答上的已在 `owed`），落盘的不再记着
             if let failure = finished.round.failure {
                 if finished.replay { await replay(finished, failure: failure) }
                 else if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
@@ -221,15 +226,10 @@ extension CueKeeper {
     }
 
     /// 一轮做完：经过那一行最后一次改（中途插了你的话，这一轮成了回答你的）、这一轮写给你的话与歇着一次写下（`CueStore.finishCueRound`），返回那一行。
-    func finish(_ turn: Turn, reply: String?) async -> UUID? {
-        do {
-            return try await setup.recorder.finishCueRound(
-                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.calls.isEmpty ? nil : turn.round.process,
-                reply: reply, as: turn.author, context: shift?.context)
-        } catch {
-            Self.log.error("Cue 这一轮的收尾没能写进资料库：\(error.localizedDescription, privacy: .public)")
-            return turn.round.row
-        }
+    func finish(_ turn: Turn, reply: String?) async throws -> UUID? {
+        try await setup.recorder.finishCueRound(
+            turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.calls.isEmpty ? nil : turn.round.process,
+            reply: reply, as: turn.author, context: shift?.context)
     }
 
     /// 好好做完的一轮里，说话工具当场报给 Cue 的没送到：它已经知道了，不再进变化。只认做完的一轮——
@@ -280,13 +280,7 @@ extension CueKeeper {
     private func replay(_ turn: Turn, failure: String) async {
         retrying = failure
         if let woke = turn.selfStarted { await setBack(failure, retrying: woke, as: turn.author, now: true) }
-        let returned = turn.delivered + (shift?.unanswered ?? [])
-        guard !returned.isEmpty else { return }
-        do {
-            try await store.unmarkCueMessagesDelivered(returned)
-        } catch {
-            Self.log.error("Cue 没答上的消息没能退回：\(error.localizedDescription, privacy: .public)")
-        }
+        await giveBack(turn.delivered + (shift?.unanswered ?? []))
     }
 }
 #endif

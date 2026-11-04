@@ -71,7 +71,7 @@ extension CueKeeper {
         var greeted: Date?
         /// 他在场、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
         var held: [String: Date] = [:]
-        /// 交给大脑、还没答上的你的话（`Shift.unanswered` 落盘的那一份，`save` 时取）：上一次没收好尾（崩溃、强杀）时，
+        /// 交给大脑、还没答上的你的话与要退回还没退回成的（`Shift.unanswered` 与 `CueKeeper.owed` 合起来，`save` 时取）：上一次没收好尾（崩溃、强杀）时，
         /// 下次值班一开始退回没送达、重新交（`run`），至少答一次。可选：旧的进度文件没有它
         var unanswered: [UUID]?
     }

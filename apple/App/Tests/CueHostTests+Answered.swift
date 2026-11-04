@@ -8,7 +8,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 交出去的你的话最终答上、只答一次：收尾那一刻插进去的、停用与崩溃时没答上的。
+/// 交出去的你的话最终答上、只答一次：收尾那一刻插进去的、停用与崩溃时没答上的、退回或回答没写进库的。
 extension CueHostTests {
     /// 收尾那一刻追问：会话的动静叫醒的那一轮在 Pi 里已收尾、还没报出来时你说一句，这台 Mac 以为那一轮还在跑、把话插进去，
     /// Pi 报完收尾另开一轮接走它。这句在接走它的那一轮得到回答、只答一次；叫醒的那一轮最后的话不当成回答你写进对话。
@@ -87,6 +87,7 @@ extension CueHostTests {
         let crashed = try Data(contentsOf: progress)
         _ = try await rig.store.updateCueProfile { $0.enabledAt = nil }
         try await eventually("停用收尾退回了那句") { try await rig.store.cueMessages().first { $0.id == said.id }?.deliveredAt == nil }
+        try await eventually("停用收尾做完、不再写进度") { rig.health == nil }
         rig.model.release()
         try crashed.write(to: progress)
         try await rig.store.markCueMessagesDelivered([said.id])
@@ -96,6 +97,40 @@ extension CueHostTests {
         rig.model.release()
         try await rig.message(.cue, containing: "先这样")
         #expect(try await rig.count("先这样") == 1)
+        await rig.stop()
+    }
+
+    /// 一轮中途大脑没了，退回交出去的那句时库写不进（触发器拦下，同磁盘满、库坏这类真实失败）：那句不丢，库好了不等新动静自己退回、
+    /// 交给新的大脑，答上一次。
+    @Test func 退回那句时库写不进_库好了自己再退回_答上一次() async throws {
+        let rig = try await Rig(timing: { $0.returnRetry = .milliseconds(300) })
+        let first = try #require(rig.brainPIDs.first)
+        try await rig.say("请慢慢想")
+        try await eventually("请求挂在模型那里") { rig.model.hanging }
+        let db = RawDB(rig.services.location.databaseURL)
+        try db.exec("CREATE TRIGGER no_return BEFORE UPDATE OF deliveredAt ON cueMessages WHEN new.deliveredAt IS NULL BEGIN SELECT RAISE(ABORT, '写不进'); END;")
+        kill(first, SIGKILL)
+        try await eventually("新的大脑起好") { !rig.brainPIDs.isEmpty && !rig.brainPIDs.contains(first) && rig.health?.phase == .running }
+        try await Task.sleep(for: .seconds(1))  // 再试的几次都撞上写不进
+        #expect(try await rig.count("收到：请慢慢想") == 0)
+        try db.exec("DROP TRIGGER no_return;")
+        try await rig.message(.cue, containing: "收到：请慢慢想")
+        try await eventually("Cue 歇下") { try await rig.store.cueState()?.state == .known(.settled) }
+        #expect(try await rig.count("收到：请慢慢想") == 1)
+        await rig.stop()
+    }
+
+    /// 一轮做完、回答写不进库（触发器拦下）：那句不算答上，退回重新交给 Cue；库好了答上，只落一次。
+    @Test func 回答写不进库_那句重新交出_库好了答上一次() async throws {
+        let rig = try await Rig()
+        let db = RawDB(rig.services.location.databaseURL)
+        try db.exec("CREATE TRIGGER no_reply BEFORE INSERT ON cueMessages WHEN new.author = 'cue' BEGIN SELECT RAISE(ABORT, '写不进'); END;")
+        try await rig.say("第一句")
+        try await eventually("回答没写成、那句又交了一次") { rig.rounds.filter { $0.sent.contains { $0.contains("第一句") } }.count >= 2 }
+        try db.exec("DROP TRIGGER no_reply;")
+        try await rig.message(.cue, containing: "收到：第一句")
+        try await eventually("Cue 歇下") { try await rig.store.cueState()?.state == .known(.settled) }
+        #expect(try await rig.count("收到：第一句") == 1)
         await rig.stop()
     }
 }

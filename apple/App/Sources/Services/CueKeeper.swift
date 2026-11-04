@@ -25,8 +25,9 @@ import os
 /// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起（没有终态，一直试下去）；Cue 此刻在做什么（`work`）由它直接得出，
 /// 每次对完账写进库（`PiStateRecorder.updateCue`；值班结束时由 `CueService` 写回歇着），大脑好不好写进本机的健康文件（`CueHealth`，`writeHealth`）。
 ///
-/// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账。定时器只有一个（`timer`），每次对账重排：
-/// 歇着时排下一个定时、巡视或停住，等着重起时排重起的时刻，一轮在跑时排看门狗（`alarm`）。先接上大脑（到点重起、挂住的停掉，`revive`），再按先后只做一件事：
+/// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账。定时器只有一个（`timer`），每次对账重排成最早的那个：
+/// 歇着时下一个定时、巡视或停住，等着重起时重起的时刻，一轮在跑时看门狗，你的话退回没写成时的再试（`alarm`）。
+/// 先接上大脑（到点重起、挂住的停掉，`revive`）、退回上次没退回成的你的话（`giveBack`），再按先后只做一件事：
 /// 1. 你的消息（连同它收起的卡，`CueEnvelope.delivered`）与"等你"的回答（选的那一项）：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
 ///    回答你的是大脑报接走它的那一轮（`TurnEvent.received`）：插进去时那一轮可能正好收尾，由下一轮接走。
 /// 2. 这一轮还没完就等。
@@ -62,7 +63,7 @@ import os
 /// 直到它好好做完（`setBack`），那个错只说一次。
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、额度与登录类的错立刻说；会重试的那次先不说，重试也错了才说。回答你的一轮的回复与出错（一轮只响一次）、起不来都提示你（`CueMessage.urgent`）。
 /// 大脑意外退出、起不来、一轮里醒着太久没有事件（看门狗，`CueTiming.silence`；Mac 睡着的那段不算）都按 `CueTiming.restartDelay` 退避重试，
-/// 那一轮里交出去的你的话清掉送达、重起后重新交；快的几次用完写一条 Cue 消息说起不来（这次故障只说一次），转慢的一直试，你发消息就马上再试，
+/// 那一轮里交出去的你的话清掉送达、重起后重新交（退回没写进库的过一阵再退，`giveBack`）；快的几次用完写一条 Cue 消息说起不来（这次故障只说一次），转慢的一直试，你发消息就马上再试，
 /// 之后第一轮好好做完时说一句又能干活了。工具服务没了（`toolsDown`）的班次做完这一轮就换。
 /// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它；上下文随状态写进库，各端读 `CueState.context`。
 /// 给人看的经过由它推出（`CueRound.process`），写在对话里这一轮开始的位置那一行上（`recordRound`）：Cue 自己醒来的一轮醒来时就写下、带着为什么醒
@@ -120,6 +121,8 @@ final class CueKeeper {
     @ObservationIgnored var trouble: CueHealth.Failure?
     @ObservationIgnored var failover: CueHealth.Failover?
     @ObservationIgnored var writtenHealth: CueHealth?
+    /// 要退回没送达、还没退回成的你的话（`giveBack`）：退回时库没写成就留在这里，落盘（`save`），退回写成才删
+    @ObservationIgnored var owed: Set<UUID> = []
     /// 他发起的一轮停下已对到的写入序号（`CueStore.leaveHisStops`）；nil 是这次上班还没对过，从变化的基线算起
     @ObservationIgnored var handedOver: Int?
     /// 做完的几轮，旧的在前，至多 `roundsKept`
@@ -195,14 +198,7 @@ final class CueKeeper {
             }
             group.addTask { await self.dreams() }
             // 上一次没收好尾（崩溃、强杀，没走到 `retire`）时交出去没答上的你的话：退回没送达，这次重新交
-            if let unanswered = progress.unanswered, !unanswered.isEmpty {
-                do {
-                    try await store.unmarkCueMessagesDelivered(unanswered)
-                    save()
-                } catch {
-                    Self.log.error("Cue 上次没答上的消息没能退回：\(error.localizedDescription, privacy: .public)")
-                }
-            }
+            await giveBack(progress.unanswered ?? [])
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
             if progress.marks == nil {
