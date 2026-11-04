@@ -14,7 +14,7 @@ protocol ACPDialect: Sendable {
     func brain(_ config: CueBrainConfig, directory: URL) throws -> ACPBrainSetup
     /// 会话开好后 MCP 服务才连（标准里 `session/new` 回来时已连上）：大脑等它报 `ACPSignal.mcp` 再说第一句话
     var connectsMCPLater: Bool { get }
-    /// `session/prompt` 先进 Agent 自己的队列、跑起来时报 `ACPSignal.turnStarted`：报之前不插话（Grok 会把插话先跑成一轮，排到这句前面）
+    /// `session/prompt` 先进 Agent 自己的队列、跑起来时报 `ACPSignal.turnStarted`：报之前不插话（Grok 会把插话先跑成一轮，排到这句前面），等它报了再插
     var queuesPrompts: Bool { get }
     /// 正忙时把这句并进在跑的这一轮：做不到（标准没有这个动作）返回 nil，驱动等这一轮做完再以它开新一轮；并进了返回这家怎么认它被收下
     @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> ACPSteer?
