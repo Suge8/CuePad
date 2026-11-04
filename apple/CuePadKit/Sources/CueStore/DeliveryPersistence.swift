@@ -18,12 +18,13 @@ extension CueStore {
     }
   }
 
-  /// 起进程等可能有副作用的操作在这里领取；不能退回准备。
+  /// 起进程等可能有副作用的操作在这里领取；不能退回准备。执行起来就不再是准备时的说明（`failure`）：
+  /// 留着的话，执行中断后核对不出结果时会把"准备就绪"这类旧说明当成未确认的原因。
   func claimDelivery(_ id: UUID, host: String, until deadline: Date) throws -> DeliveryRequest? {
     try write {
       try db.run(
         """
-        UPDATE deliveryRequests AS r SET status = 'executing', handledBy = ?, deadlineAt = ?,
+        UPDATE deliveryRequests AS r SET status = 'executing', handledBy = ?, deadlineAt = ?, failure = NULL,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
           AND (deadlineAt IS NULL OR deadlineAt > ?)
           AND NOT (\(Self.abandonedDelivery))
@@ -57,7 +58,7 @@ extension CueStore {
   func beginDelivery(_ id: UUID, on host: String, until deadline: Date) throws -> DeliveryRequest? {
     try write {
       try db.run("""
-        UPDATE deliveryRequests AS r SET status = 'executing', deadlineAt = ?,
+        UPDATE deliveryRequests AS r SET status = 'executing', deadlineAt = ?, failure = NULL,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status = 'preparing' AND handledBy = ?
           AND (deadlineAt IS NULL OR deadlineAt > ?)
           AND NOT (\(Self.abandonedDelivery))
