@@ -88,8 +88,15 @@ extension CueTools {
       "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (detail.progress.map { " · 子任务 \($0.done)/\($0.total)" } ?? "")
         + " · " + status(detail.task)
     ]
-    for leaf in detail.leaves {
+    // 几步接着用同一个会话（start 的缺省）时，会话与它的问答只列在最后用它的那一步下面：每步各列一遍是同一段字重复几次
+    let lastUse = Dictionary(detail.leaves.enumerated().compactMap { index, leaf in leaf.session.map { ($0.session.sessionID, index) } }) { _, later in later }
+    for (index, leaf) in detail.leaves.enumerated() {
       var head = leaf.leaf.id == detail.task.id ? "-" : "- 「\(leaf.leaf.heading)」（\(leaf.leaf.id.shortID)）\(status(leaf.leaf))"
+      if let session = leaf.session, lastUse[session.session.sessionID] != index {
+        lines.append(head + " · 会话同后面的一步")
+        if let rest = leaf.leaf.rest { lines.append("  正文：\(CueEnvelope.clip(CueFormat.plainText(rest), 200))") }
+        continue
+      }
       if let session = leaf.session {
         head += " · " + Self.sessionHead(session.session, now: now, left: left)
       } else if let request = leaf.handoffs.last, case .preparing(let reason) = Speech.trip(request, at: .always(at: now)) {
