@@ -133,9 +133,49 @@ Mac 已在这个检出里按同一套改了：项目、进展两行与会话格�
 - 深色、高对比（`selection` 在高对比下 22%）、辅助字号、英文（分段等宽后英文 "Projects | Progress" 在 402 宽是否放得下）都没看。
 - 提示横幅盖在新那一排上时谁让开：原型没接（`CenteredBar` 没有 `GiveWay`）。
 
+## 第三轮：Mac 图标条顶部
+
+效果图：[图标条顶部.png](图标条顶部.png)。原型开关 `-CuePadRailTop stack|wide`（甲、乙），不给是现状。
+
+### 为什么怪（量过，1280×800 截图）
+
+1. 红绿灯左沿 19、右沿 78.5（点）。图标条 80 宽只为对齐右沿，灯左边留 19、右边只剩 1.5，贴边不对称。
+2. 侧栏钮与搜索在 80 宽里横排两颗，下面的项目、进展与会话格是居中的单列，两颗钮不在那一列的中轴上。
+3. 选中底贴窗口边：第二轮已修（行容器）。
+
+### 两种收口
+
+- **甲**：图标条仍 80。侧栏钮、搜索竖排，与项目、进展同一列、同一种 30 点格（`RailIcon` 在列里铺满列宽，`railColumn`），顶上这一组与去处之间空 12。红绿灯不动：中间那颗在 48.5，那一列中轴在 40，仍偏 8.5，右边仍只留 1.5。
+- **乙（推荐）**：同甲，图标条加宽到 98（19 + 灯 59.5 + 19.5），红绿灯两侧留白相等，中间那颗正对那一列的中轴（49）。
+
+推荐乙：怪的根子是灯与那一列不在一条中轴上，甲只把两颗钮排齐，灯和下面那一列仍错开 8.5，只有乙同时解决两条。代价是主区与 Cue 的几个临界宽各加 18（下表），1280 宽开看板时 Cue 收成钮——pick2 把 1280 定成看板 + Cue 恰好放下的点，这一条要用户定；13 寸 MacBook Air 默认 1470 不受影响（那时左栏是宽版 256，图标条的宽不参与）。
+
+### WideMetrics 阈值重算（只动图标条那一项，`SessionRail.Form.narrow.width` 80 → 98）
+
+Cue 收成钮的临界宽 = 图标条 + 主区最窄 + Cue 400（`cueThreshold`）；宽版左栏收成图标条的临界宽（`railThreshold`，256 + 主区最窄 + 400）不变。
+
+| 主区放着 | 主区最窄 | Cue 收成钮：甲（80） | 乙（98） |
+|---|---|---|---|
+| 看板（Mac 含列头末尾"⋯"） | 800 | < 1280 | < 1298 |
+| 一个会话 / 项目页 | 400 | < 880 | < 898 |
+| 两个会话 | 800 | < 1280 | < 1298 |
+
+实拍：乙在 1280×800 看板时 Cue 收成右上一颗钮，1298×800 放回。
+
+### 落地要删、要改的
+
+- 图标条顶上 `HStack { toggle; search }` 横排（`WideRail.top` 的窄分支）换成竖排进同一种行容器；`RailIcon` 的列里铺满（原型 `railColumn`）转正。
+- 乙：`SessionRail.Form.narrow` 改 98，`WideLayout` 头注释与 docs/layout.md 里"收起 80""与红绿灯右沿对齐"的说法改成"红绿灯两侧留白相等"；`InteractionBench+Wide`、`-CuePadWideReverse` 按新临界宽跑一遍。
+- iPad（没有红绿灯）：甲、乙原型都同样竖排；乙的 98 在 iPad 上没有理由，落地时 iPad 可留 80，图标条宽按平台分。
+
+### 第三轮没验证的
+
+- 拖窗口跨过 1298 时的收放没录；悬停、按下底只看了终态。
+- iPad 图标条没拍；全屏（没有红绿灯）时的顶部没看。
+
 ## 原型怎么起
 
-一次性分支 `proto/head-phone2`，`-CuePadNav one|two` 切方案，不给是现状；`-CuePadBar a|b`（配 `one`）切侧栏那一排的摆法；`-CuePadNavEarlier YES` 起来推入「更早」页。实现在 `apple/App/Sources/UI/iOS/NavProto.swift` 与几处标了 PROTOTYPE 的分支。效果图：`swift annotate.swift 方案1.json`。
+一次性分支 `proto/head-phone2`，`-CuePadNav one|two` 切方案，不给是现状；`-CuePadBar a|b`（配 `one`）切侧栏那一排的摆法；`-CuePadRailTop stack|wide` 切 Mac 图标条顶部的甲、乙；`-CuePadNavEarlier YES` 起来推入「更早」页。实现在 `apple/App/Sources/UI/iOS/NavProto.swift` 与几处标了 PROTOTYPE 的分支。效果图：`swift annotate.swift 方案1.json`。
 
 ```
 apple/scripts/xc.sh shot ios -- -CuePadDemo YES -CuePadNarrow YES -CuePadQuiet YES -CuePadNav one -CuePadScene cue -CuePadNarrowPane progress -CuePadProgressPane board

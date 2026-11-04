@@ -65,6 +65,20 @@ struct WideRail: View {
             }
             .padding(.horizontal, 10)
             .frame(height: WideMetrics.band)
+        } else if RailTop.current != .now {
+            // PROTOTYPE 甲、乙：侧栏钮、搜索与下面的项目、进展同一列竖排、同一种格，顶上这一组与去处之间用间距分组
+            #if os(macOS)
+            Color.clear.frame(height: WideMetrics.band)
+            #endif
+            VStack(spacing: 2) { toggle; search }
+                .environment(\.railColumn, true)
+                .padding(.horizontal, SessionRail.rowInset)
+                .rowContainer(.rect(cornerRadius: Radius.block))
+                .padding(.horizontal, SessionRail.Form.wide.inset)
+                .padding(.bottom, RailTop.groupGap)
+            #if os(iOS)
+            if let cue { CueButton(fits: cue.fits, shown: cue.shown).padding(.bottom, 6) }
+            #endif
         } else {
             // 图标条：Mac 红绿灯那一排留给红绿灯，两颗钮排在它下面
             #if os(macOS)
@@ -130,6 +144,7 @@ struct RailIcon: View {
     let help: LocalizedStringResource
     let action: () -> Void
     @Environment(\.palette) private var palette
+    @Environment(\.railColumn) private var column
 
     #if os(macOS)
     static let side: CGFloat = 30
@@ -146,13 +161,29 @@ struct RailIcon: View {
     var body: some View {
         Button(action: action) {
             Image(icon).font(Glyph.control).foregroundStyle(palette.ink2)
-                .frame(width: Self.side, height: Self.side)
+                .frame(width: column ? nil : Self.side, height: Self.side)
+                .frame(maxWidth: column ? .infinity : nil)
                 .contentShape(.rect)
         }
         .buttonStyle(.row)
         .help(Text(help))
         .accessibilityLabel(Text(help))
     }
+}
+
+/// PROTOTYPE（proto/head-phone2）：图标条顶上那一组（侧栏钮、搜索）的收口。
+/// stack（甲）：图标条仍 80，两颗钮竖排、与项目、进展同一列同一种格。wide（乙）：同甲，图标条加宽到 98，红绿灯两侧留白相等。
+enum RailTop: String {
+    case now, stack, wide
+
+    static let current = DebugHooks.preset.railTop
+    /// 顶上这一组与下面的去处之间。
+    static let groupGap: CGFloat = 12
+}
+
+extension EnvironmentValues {
+    /// 图标钮排在会话条的一列里（PROTOTYPE `RailTop`）：格铺满列宽，同项目、进展两行。
+    @Entry var railColumn = false
 }
 
 /// 会话条底部的"更早"：已结束的会话（宽屏的进展页没有会话一段，已结束的只在这里与 ⌘K 搜索），默认折起、只写个数，组头同等你、推进中那一种。

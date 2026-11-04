@@ -8,7 +8,7 @@ import SwiftUI
 struct SessionRail: View {
     enum Form {
         case phone, wide, narrow
-        var width: CGFloat { switch self { case .phone: 60; case .wide: 256; case .narrow: 80 } }
+        var width: CGFloat { switch self { case .phone: 60; case .wide: 256; case .narrow: RailTop.current == .wide ? 98 : 80 } }
         var inset: CGFloat { self == .phone ? 2 : 8 }
     }
 
