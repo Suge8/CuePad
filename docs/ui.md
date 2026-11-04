@@ -24,6 +24,7 @@
 - 看板分轻重：推进中、等你是此刻要看的，重；待办、已完成是清单与回顾，轻。轻重只出自列（`BoardWeight.swift`）：卡的纸色（每列一种同色系的极淡一档，推进中就是白纸）、标题的墨、列头的数、列宽与手机每行排几排，各组件只问列。列身后仍不铺色，颜色只在记号与纸上。
 - Mac 照原生控件（按下与指针的做法在 `PressFeedback` 头注释）：单击选中、双击打开的列表两种点按并列识别，单击不等双击间隔。和系统应用不一样的地方，用户会觉得是坏了。
 - 悬停：点得到的东西指针一过就有回应（同 macOS 26 工具栏的玻璃钮、Linear、Arc）——自绘的按钮浮一层淡底、卡片亮一档、行铺淡底，淡入淡出、不挪位置不缩放；只经 `PressStyle`（按种类 `Press`）与 `RowStyle`，自绘的可点控件不用 `.plain`、`.borderless`（`lint.sh` 查），悬停时要换颜色、露记号的按钮读 `buttonHovered`，不各自挂 `onHover`；浮在内容上的玻璃胶囊与圆钮只经 `ControlButtonStyle`（`glass`、`circular`）。系统控件的悬停与焦点环交给系统。
+- 控件只有一套尺寸：高按 `ControlSize` 三档取（一排里同高，点得到的边至少 `ControlSize.target`）；按钮经 `ControlButtonStyle`，胶囊只经 `chip`（关着同次按钮的安静底，开着就是选中），箭头只经 `Chevron`，记号点只经 `StatusDot`，问号说明只经 `HelpButton`，节头只经 `SectionHeader`。列表行之间不画分割线，靠间距与纸分组（系统 `Form` 与菜单除外）。
 - 项目联动（宽屏）：指针停在看板卡的项目小图形上时，看板上别的项目的卡淡下去，同一项目的不动。只读写 `Workspace.hoveredProject`（`boardDim`）。
 - 悬停、选中时才出现的东西不改动周围的排版：悬停才露的操作只经 `hoverReveal` 浮在行上，随选中变的只换颜色与字重、不插不撤占位置的东西。露出一个钮挤动了标题与时间、选中一格让整条会话条上下跳，都是用户能一眼看见的抖。
 - 圆角只有 `Radius` 的几档，按东西的种类取，Theme 以外不写数（`lint.sh` 查）；嵌在容器里的块用 `Radius.nested`，内角随容器走、不手算；胶囊与圆写 `.capsule`、`.circle`。字号只经 `Typography`、图标尺寸只经 `Glyph`、投影只经 `Elevation`，Theme 以外同样不写数（`lint.sh` 查）。列表行的底（选中、按下、悬停）只有 `RowStyle` 一份，调用处不自己画底与负边距。

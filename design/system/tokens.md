@@ -68,7 +68,7 @@ Mac 按角色给固定字号，iOS 映射到系统文字样式、跟随动态字
 
 ## Spacing
 
-建议的档（两端同名，值按平台；最终值在 B0b 定、拍前后对比给你看）：
+B0b 落的档（两端同名，值按平台，4 点格；落地时拍前后对比）：
 
 | 名字 | 用途 | Mac | iOS |
 |---|---|---:|---:|
@@ -82,11 +82,11 @@ Mac 按角色给固定字号，iOS 映射到系统文字样式、跟随动态字
 | `page` | 一栏的边 | 24 | 16 |
 | `section` | 页内分组之间 | 32 | 24 |
 
-现有的 `pageTop`、`sectionTitle`、`toolbarGap` 并进上表（`pageTop` 留 Mac 专用）。10、14、18 这些值逐处判断落到哪一档，不另开档。
+现有的 `pageTop`、`sectionTitle`、`toolbarGap` 并进上表（`pageTop` 留 Mac 专用）。10、14、18 不另开档，按角色就近：组件内部往下取 8／12／16，组与组之间往上取 12／16／24。
 
 ## Motion
 
-令牌与 lint 都在。缺两样：一个"冒出来"的转场（`.scale(0.9)` 加淡入，减弱动态效果时只淡），代替各处 `.scale`（从 0 起违反 ui-craft 的 0.9～0.97 起点）与 `.scale(scale: 0.6)`；一个"等容器落定再淡入"的延迟（`Fade.settle` = 0.12），代替两处字面量。提示条时长是产品取舍，见 audit.md 第 1 条。
+令牌与 lint 都在。B0a 补了两样（`Motion.pop`、`Motion.Fade.settle`），lint 禁了 `.transition(.scale`：一个"冒出来"的转场（`.scale(0.9)` 加淡入，减弱动态效果时只淡），代替各处 `.scale`（从 0 起违反 ui-craft 的 0.9～0.97 起点）与 `.scale(scale: 0.6)`；一个"等容器落定再淡入"的延迟（`Fade.settle` = 0.12），代替两处字面量。提示条时长是产品取舍，见 audit.md 第 1 条。
 
 ## Radius
 

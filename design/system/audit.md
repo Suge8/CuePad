@@ -11,7 +11,7 @@
 
 ## 结论
 
-**Block**：有一条 HIGH（提示条），它是产品取舍，要你拍板；其余是 MEDIUM／LOW，靠先落一层共享边界、再按文件分批迁移收口。
+**Block**：一条 HIGH（提示条）等 W2-2 落地；其余是 MEDIUM／LOW，靠先落一层共享边界（B0a 已落）、再按文件分批迁移收口。待拍板的几项已定，写在各条与 [components.md](components.md) 里。
 
 颜色、圆角、投影、动画曲线已经有 lint 守着，绕开的只有个位数。缺口在三处没有令牌、也没有 lint 的地方：**间距**（Mac 只有 5 个名字，iOS 没有）、**控件高度**（十几种高散在 15 个局部尺寸枚举里）、**iOS 字号角色**（iOS 的 `Typography` 只有 21 个名字，Mac 有 36 个，缺的那些各组件拿系统文字样式自己拼）。写死的尺寸数共 1012 处、分布在 185 个文件里；重复组件约 14 组。
 
@@ -19,15 +19,15 @@
 
 1. **HIGH · 提示条 2.4 秒就收，撤销与出错只在这里**
    现状：`Workspace.noticeDuration = 2.4s`（`Workspace+Notice.swift:5`），不随悬停、聚焦暂停；`fail()` 的出错也走它。iOS 没有 ⌘Z，提示里的"撤销"是唯一入口。Mac `NoticeView` 与 iOS `NoticeCapsule` 是两份实现。
-   改成：普通结果至少 5 秒、悬停或聚焦时暂停；带撤销或出错的留到手动关、或下一条提示顶掉；两端合成一个提示条组件。时长是产品取舍，派强模型并先给你看。批次 W2-2。
+   改成（已定）：普通结果 4 秒；带动作（撤销、归档）或出错 8 秒；指针悬停、键盘焦点、读屏焦点在提示上时暂停计时，读屏开着时不自动收；两端合成一个提示条组件。批次 W2-2。
 
 2. **MEDIUM · 间距没有跨端令牌**
    现状：`Spacing` 只在 Mac（`Typography.swift` 尾部，5 个名字，全 App 用 30 次）。写死的 `padding` 333 处、`spacing:` 340 处；4 点格外（不算 2、6、10 这几个光学值）114 处，10 与 14 合起来 145 处。同一个"栏边"散在 8 个具名常量里，外加 38 处字面 16。
-   改成：`Spacing` 搬进 `Theme/Spacing.swift`、两端同名不同值，按"是什么"取（[tokens.md](tokens.md#spacing)）。批次 B0b、W3。
+   改成：`Spacing` 搬进 `Theme/Spacing.swift`、两端同名不同值，按"是什么"取，4 点格（[tokens.md](tokens.md#spacing)）。10、14、18 不另立档，按角色就近（已定）：组件内部往下取 8／12／16，组与组之间往上取 12／16／24。批次 B0b、W3。
 
 3. **MEDIUM · 控件高度没有一张表**
    现状：Mac 胶囊与钮的高有 24、28、30、34、36，iOS 有 30、32、36、38、44、48、50、58；同一个输入框里，落点胶囊 24、工具排胶囊 30（Mac）。来源是 `ControlMetrics`、`ConfigCapsule`、`ChipMetrics`、`BubbleMetrics.capsule`、`PaneMetrics`、`CueListMetrics`、`LibraryRowMetrics` 等。
-   改成：`ControlSize` 三档（inline、compact、regular）加一个最小命中边，两端各一组值；相邻控件同高（[components.md](components.md#c1-按钮)）。批次 B0a。
+   改成：`ControlSize` 三档（inline、compact、regular）加一个最小命中边，两端各一组值；相邻控件同高（[components.md](components.md#c1-按钮)）。B0a 已落，调用处随 W 批迁。
 
 4. **MEDIUM · Mac 上有 20 处 iOS 文字样式，字落到 10～11 点**
    现状：共用文件里写 `.font(.caption)`、`.footnote`、`.subheadline`、`.headline`，编进 Mac 后是 10～13 点，低于 Mac `Typography` 的 12 点下限。最显眼的是 Mac 选卡片面板的时间与摘要（`CardPicker.swift:194-213`，证据 `evidence-mac-textstyle.png`）。其余在 `SessionDock`、`UnreadableLibraryView`、`Composer+Attachments`、`FileChip`、`Deliverables`、`ChatScrubber`、`ChatFollow`、`Atoms.SectionHeader`、`TaskMetrics`、`CueHostMenu`、`CueWelcome`、`WideDrop`。全 App 另有 85 处只编进 iOS 的同类写法。
@@ -39,7 +39,7 @@
 
 6. **MEDIUM · 胶囊 7 套**
    现状：筛选胶囊 iOS `FilterChip`（纸底细边、36 高）与 Mac `FilterCapsule`（淡底、28 高）关着时不是一个样子（证据 `evidence-segments-ios.png` 第二排、`evidence-mac-filters.png`）；另有 `DestinationChip`、`ConfigCapsule` 一族、`NewTaskField` 的项目胶囊、`ProjectScope`、`WeekdayChip`。
-   改成：一个 `chip(on:menu:size:)`（[C2](components.md#c2-胶囊)）。批次 W1-1、W2-1、W2-6。
+   改成（已定）：一个 `chip(on:menu:size:)`，外形就是 `ControlSurface` 的次按钮：关着同次按钮的安静底，开着是中性选中底加墨字半粗，同分段（[C2](components.md#c2-胶囊)）。批次 W1-1、W2-1、W2-6。
 
 7. **MEDIUM · 手绘按钮绕开 ControlButtonStyle**
    现状：任务气泡的"去会话""开始"（`TaskBubbleFooter.swift:89-92,145-149`）、定时的"好"（`ScheduleEditor.swift:93-98`）、两端提示条里的动作各画一颗胶囊；`EmptyStateButton`、`settingButton` 只是给 `ControlButtonStyle` 换个名字。
@@ -48,11 +48,11 @@
 
 8. **MEDIUM · 命中区不够**
    现状：手机 Cue 面板里定时、技能与规则、在哪台 Mac 三行只有 28 高（`CueNowPanel+iOS.swift:154,185,227`，证据 `evidence-cuepanel-rows.png`）；Mac 浮层右上的关闭与问号 26（`Panel+macOS.swift:377`、`CueListPanel.swift:83`，证据 `evidence-mac-panel-circles.png`），墙上卡的删除与记忆行的悬停钮 24（`CardWall.swift:123`、`CueListPanel.swift:153`），都低于 Mac 常用操作的 28；iOS 灵感卡角上的会话点 28（`AgentLinks.swift:47,54`）、项目范围的 ✕ 宽 32（`ProjectScope.swift:41`）。
-   改成：命中边只读 `ControlSize` 的最小边。批次 W1-2、W2-3、W2-4、W2-6。
+   改成：命中边只读 `ControlSize.target`；Cue 面板三行升到 44，面板随之变高（已定，接受）。批次 W1-2、W2-3、W2-4、W2-6。
 
-9. **MEDIUM · 分段三种长相**（需设计判断）
+9. **MEDIUM · 分段三种长相**
    现状：`PaneSegment`（玻璃里、或自带淡底的槽里）与系统 `segmented` Picker（外观 `ThemePicker`、定时的重复、同名技能的几份 `DuplicateBar`）并存；同一屏里看得到两种选中块（证据 `evidence-segments-ios.png`）。
-   改成：建议 App 内的分段都用 `PaneSegment`，只留设置表单里的系统分段（[C3](components.md#c3-分段)）。批次 W1-6、W2-6。
+   改成（已定）：App 内的系统分段（定时的重复、同名技能的几份）都换 `PaneSegment`；外观在设置表单里，留系统分段（[C3](components.md#c3-分段)）。批次 W1-6、W2-6。
 
 10. **MEDIUM · Mac 主窗口里用系统 popover**
     现状：编辑页的变量（`CardEditorBar.swift:82`）、记忆与定时的问号（`CueListPanel.swift:86`）、上下文用量的明细（`PiContextGauge.swift:54`）。docs/layout.md 已写明 Mac 不用系统 popover（另起一扇窗、首弹 85～113ms、开着时主窗口快捷键不响应）。
@@ -66,9 +66,9 @@
     现状：`.scale` 从 0 起 3 处（`CueDot.swift:15`、`ChatFollow.swift:204`、`CueNowViews.swift:142`），从 0.6 起 5 处、0.9 起 1 处；字面延迟 0.12 两处（`Composer.swift:66`、`NoticeBanner.swift:19`）；Mac 上两处 `.move` 转场（`NoticeView.swift:44`、`CuePage.swift:72`），与 docs/layout.md「Mac 上开合不逐帧挪位置」冲突。
     改成：`Motion` 加 `pop` 转场与 `Fade.settle` 延迟，Mac 的两处改原地淡入。批次 B0a、W1-3、W1-4、W2-2、W2-6。
 
-13. **LOW · 列表分割线三种写法**（需设计判断）
+13. **LOW · 列表分割线三种写法**
     现状：非菜单的分割线 7 处：`Divider()`、`Rectangle().fill(hair)` 配手写 `.padding(.leading, 40)`（`OlderList.swift:59`、`ProjectPage.swift:120`）、iOS "更早"手拼首尾圆角加分割线（`CardViews.swift:101,126`）。
-    改成：去掉还是留，二选一；留就只经一个 `Hairline(inset:)`。批次 B0a、W1-4、W1-6、W2-4、W2-5、W2-7。
+    改成（已定）：列表行之间不画分割线，靠间距与纸分组；不建 `Hairline`，这些分割线一律删。系统 `Form` 的设置页保持系统默认，菜单里的 `Divider()` 是菜单分组、不算。批次 W1-4、W1-6、W2-4、W2-5、W2-7。
 
 14. **LOW · 同心与绕开 Radius**
     现状：回答框 `card` 圆角嵌在同样圆角的问题卡里（`WaitAnswer.swift:204`）；项目表单格子的圆角按 `cell / 4` 现算（`ProjectStyle.swift:27,42`，lint 只认数字字面量所以漏了）。
@@ -96,7 +96,7 @@
 未验证：
 - 动效：没录屏，转场一条只读了代码。
 - 最大辅助字号、英文界面、iPad 指针悬停、真机命中：没拍。
-- 间距改 4 点格（10、14 改 8／12／16）的视觉影响：要等 B0b 定值后拍前后对比。
+- 间距改 4 点格（10、14、18 按角色就近）的视觉影响：B0b 拍前后对比。
 
 ## 截图证据
 

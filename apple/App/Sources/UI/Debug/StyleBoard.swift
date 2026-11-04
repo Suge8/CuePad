@@ -14,6 +14,7 @@ struct StyleBoard: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 swatches
+                controls
                 surfaces
                 presses
                 motion
@@ -88,6 +89,42 @@ struct StyleBoard: View {
         }
         .foregroundStyle(palette.ink)
     }
+
+    /// 共享控件：按钮三档与淡底圆钮、问号、胶囊（关、开、带箭头）、两级节头、箭头与记号点。
+    private var controls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Button("主按钮") {}.buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
+                Button {} label: { Text(verbatim: "次按钮") }.buttonStyle(ControlButtonStyle(size: .compact))
+                Button {} label: { Text(verbatim: "安静") }.buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
+                Button {} label: { Image(.close) }.buttonStyle(ControlButtonStyle(kind: .round, size: .compact)).accessibilityLabel("关闭")
+                HelpButton { Text(verbatim: "说明气泡里的一句").padding(16) }
+            }
+            HStack(spacing: 8) {
+                ForEach(Self.sizes, id: \.name) { size in
+                    Button(size.name) {}.buttonStyle(ControlButtonStyle(size: size.value))
+                }
+            }
+            HStack(spacing: 8) {
+                Text(verbatim: "关着").chip()
+                Text("开着").chip(on: true)
+                Text("项目").chip(menu: true)
+                Text("全部").chip(on: true, menu: true)
+            }
+            SectionHeader("最近", count: 13)
+            SectionHeader("一直记着", level: .group, icon: .pin)
+            HStack(spacing: 12) {
+                Chevron(.forward)
+                Chevron(.expand)
+                Chevron(.back)
+                StatusDot(color: palette.ink)
+                StatusDot(color: palette.replied, rim: palette.desk)
+            }
+        }
+        .foregroundStyle(palette.ink)
+    }
+
+    private static let sizes: [(name: String, value: ControlSize)] = [("inline", .inline), ("compact", .compact), ("regular", .regular)]
 
     private static let statuses: [PiShown.Status] = [
         .working(.thinking), .delivery(.inTransit(.sending)), .delivery(.inTransit(.waking)), .asking, .awaitsReply, .failed(.other), .delivery(.failed(.reported(DeliveryRequest.unexplainedFailure))),

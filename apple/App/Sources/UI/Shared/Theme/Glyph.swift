@@ -6,6 +6,8 @@ import SwiftUI
 nonisolated enum Glyph {
     /// 小记号：展开与前进的小箭头、角标里的小图标。
     static let mark = Font.system(size: 9, weight: .bold)
+    /// 箭头（前进、展开、返回，`Chevron`）：跟在字后面，比字小一号、半粗。
+    static let chevron = Font.system(size: 11, weight: .semibold)
     /// 小钮与行内的图标：收起钮、新任务的加号、行尾的状态。
     static let small = Font.system(size: 12, weight: .semibold)
     /// 列表行首与区头动作的图标。

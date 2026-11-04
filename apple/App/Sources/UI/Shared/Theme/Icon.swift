@@ -258,7 +258,7 @@ extension Image {
     init(_ icon: Icon) { self = icon.image }
 }
 
-/// 点睛上色的图标（着色规则只在这里）：平时同 `Image(_:)`，点睛是前景色的次一级；`lit`（选中、正在发生）点睛靛青；
+/// 点睛上色的图标（着色规则只在这里）：平时同 `Image(_:)`，点睛是前景色的次一级；`lit`（焦点、正在发生；选中不点亮，docs/ui.md「选中」）点睛靛青；
 /// `state(色)` 是状态图标的点按状态色（等你赭黄…），只在那个状态存在时给。主体照外面的前景色。反白符号不点亮，整个照前景色。
 struct IconImage: View {
     enum Accent: Equatable {

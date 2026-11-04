@@ -30,6 +30,12 @@ nonisolated enum Motion {
     /// 手机松开：一点回弹（15% 还不觉得弹，只让尾巴利落些，WWDC23）。
     static let release = Animation.spring(duration: 0.3, bounce: 0.15)
 
+    /// 冒出来：小东西（角上的点、输入框里的钮与附件、状态标换样子）出现消失时从九成大长到原大并淡入，减弱动态效果时只淡。
+    /// 不从零长：一个点从无到有像是跳出来的，起点 0.9～0.97 才读作"浮现"（ui-craft）。用的动画照旧是外面给的（多是 `fade`、`nudge`）。
+    static func pop(reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity)
+    }
+
     /// 位置、尺寸、旋转的动画；减弱动态效果时直接到终态——一个动画事务里分不出只淡不挪，换曲线照样插值。
     static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation? {
         reduceMotion ? nil : animation
@@ -61,6 +67,8 @@ extension Motion {
     nonisolated enum Fade {
         static let duration: TimeInterval = 0.16
         static let yield: TimeInterval = 0.08
+        /// 等容器先落定再淡入的那一拍（输入框展开后的头部、提示横幅换下一条）：淡入压在还在动的框上会糊成一团。
+        static let settle: TimeInterval = 0.12
         static var timing: CAMediaTimingFunction { CAMediaTimingFunction(name: .easeOut) }
     }
 }
