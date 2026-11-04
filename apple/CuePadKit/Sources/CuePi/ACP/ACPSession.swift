@@ -160,7 +160,7 @@ final class ACPSession {
 
     // MARK: 一轮
 
-    /// 以这句开一轮（不等模型）：回应到了这一轮结束。
+    /// 以这句开一轮（不等模型）：读到回应的那一刻这一轮结束，之后读到的通知归下一轮。
     func prompt(_ blocks: [JSONValue], deliveryID: String? = nil) throws {
         let connection = try live
         guard let sessionID else { throw HostedSessionError.notRunning }
@@ -169,16 +169,11 @@ final class ACPSession {
         let mine = begin()
         prompted = mine
         promptRunning = !dialect.queuesPrompts
-        Task { [weak self] in
-            do {
-                try await connection.call("session/prompt", .object(params), timed: false)
-                self?.finish(mine, failure: nil)
-            } catch ACPError.closed {
-                // 进程退出：由 `ended` 收尾
-            } catch ACPError.server(_, let message) {
-                self?.finish(mine, failure: message)
-            } catch {
-                self?.finish(mine, failure: error.localizedDescription)
+        connection.request("session/prompt", .object(params)) { [weak self] reply in
+            switch reply {
+            case .success: self?.finish(mine, failure: nil)
+            case .failure(.server(_, let message)): self?.finish(mine, failure: message)
+            case .failure: break  // 进程退出：由 `ended` 收尾
             }
         }
     }
