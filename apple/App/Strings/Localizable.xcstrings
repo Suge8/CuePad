@@ -8307,18 +8307,18 @@
         }
       }
     },
-    "又能干活了。" : {
+    "又能干活了，用的是 %@。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I'm back to work."
+            "value" : "I'm back to work, running on %@."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "又能干活了。"
+            "value" : "又能干活了，用的是 %@。"
           }
         }
       }

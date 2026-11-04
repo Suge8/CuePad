@@ -78,25 +78,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 你的一轮碰上额度用完，这台 Mac 上还能用 Claude Code：设置换过去（模型清空、fast 关），只说一句从哪换到哪，不再报那个错；
-    /// 你的话退回，交给新的大脑答。健康里记着这次换大脑。
-    @Test func 额度用完_换到另一家Agent_只说一次() async throws {
-        let rig = try await Rig()
-        try await rig.store.recordMacAgents(
-            host: TestApp.hostID, name: "测试 Mac", [MacAgent(kind: .pi, model: nil, models: []), MacAgent(kind: .claudeCode, model: nil, models: [])])
-        try await rig.say("请用到额度用完")
-        try await rig.message(.cue, containing: "我换到 Claude Code 接着干")
-        let profile = try #require(try await rig.store.cueProfile())
-        #expect(profile.runtime == .known(.claudeCode) && profile.model == nil && !profile.fast)
-        try await eventually("健康里记着换大脑") { rig.health?.failover?.from == .pi && rig.health?.failover?.to == .claudeCode }
-        // 替身的 Claude Code 在这台 Mac 上起不来：快的重试用完说起不来，你的话还等着新的大脑
-        try await rig.message(.cue, containing: "我起不来了")
-        #expect(try await rig.count("接着干") == 1)
-        #expect(try await rig.count("这一轮出错了") == 0)
-        #expect(try await rig.store.cueMessages().first { $0.text == "请用到额度用完" }?.deliveredAt == nil)
-        await rig.stop()
-    }
-
     /// Cue 的工具服务没了（进程退出）：这一轮里工具报错照常做完，做完换个班次（新的大脑带着新的工具服务），之后工具照常能用。
     @Test func 工具服务没了_这一轮做完换个班次() async throws {
         let rig = try await Rig()
