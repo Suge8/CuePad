@@ -12,7 +12,8 @@ extension EnvironmentValues {
 /// - 右段固定占 `nowShare` 是现在（`BoardPulse.Trace`）：在跑是从最后一颗（靛青）点长出的波浪或子代理直轨（`WaveStrip`）；
 ///   停住是淡线接到右端、末端一颗与状态词同色的点，被打断是断线；歇着是淡线、不带点。每张卡的现在在同一位置、同一长度，一列读起来整齐；
 /// - 歇着、这次停下 Cue 已交给别处时整条线换成在等哪一处做完（`HandoffLine`），同高、不挪卡；
-/// - 右端只写一个时长：会话在此刻这个状态里待了多久（同会话行那一格，`PiClock.Style.span`；数字加粗、单位小一号淡色），要你管的状态词紧跟。
+/// - 右端只写一个时长：会话在此刻这个状态里待了多久（同会话行那一格，`PiClock.Style.span`；数字加粗、单位小一号淡色），要你管的状态词紧跟；
+///   卡窄时怎么让、绝不越出卡边，在 `BoardLineRow`。
 /// 动只经 `LoopLayer`，只有看得见的在动：卡在懒加载栈里，出屏就不存在；不放循环动效时（`LoopsPlay`）静止；
 /// 一列里排在第 `maxMoving` 条以后的静止（`moves` 由列按先后给）——"同屏最多几条"要逐行读几何才判得出，每行一个几何读数的开销比省下的动画还大，
 /// 按列里的先后数是最轻的等价做法：列从上往下读，排在前面的就是一屏里先看到的。读屏不念：卡的读屏标签已说了状态。
@@ -51,17 +52,29 @@ struct BoardLine: View {
     }
 
     private var history: some View {
-        HStack(spacing: 8) {
-            if let handoff = pulse.handoff {
-                HandoffLine(handoff: handoff).font(TaskMetrics.caption).foregroundStyle(palette.ink2).frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                let marks = PastDots.marks(said: pulse.session.flatMap { said[$0.sessionID] } ?? [], origin: pulse.session?.createdAt)
-                LineSplit(share: Self.nowShare) {
-                    past(marks)
-                    now(joint: !marks.isEmpty)
+        BoardLineRow {
+            Group {
+                if let handoff = pulse.handoff {
+                    HandoffLine(handoff: handoff).font(TaskMetrics.caption).foregroundStyle(palette.ink2).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    let marks = PastDots.marks(said: pulse.session.flatMap { said[$0.sessionID] } ?? [], origin: pulse.session?.createdAt)
+                    LineSplit(share: Self.nowShare) {
+                        past(marks)
+                        now(joint: !marks.isEmpty)
+                    }
                 }
             }
-            reading
+            .layoutValue(key: BoardLineRow.Part.self, value: .line)
+            Group {
+                if let clock = pulse.shown?.clock { TimeSpent(clock: clock).fact().layoutValue(key: BoardLineRow.Part.self, value: .time) }
+                switch pulse.word {
+                case .state(let shown): Text(shown.label).font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(pulse.tint(palette)).fact()
+                case .context(let meter): ContextFact(meter: meter).font(TaskMetrics.caption).fact()
+                case nil: EmptyView()
+                }
+            }
+            .lineLimit(1)
+            .allowsTightening(true)
         }
     }
 
@@ -101,18 +114,6 @@ struct BoardLine: View {
         Tail(joint: joint).stroke(palette.track, style: StrokeStyle(lineWidth: Self.stroke, lineCap: .round, dash: dashed ? [4, 4] : []))
     }
 
-    private var reading: some View {
-        HStack(spacing: 4) {
-            if let clock = pulse.shown?.clock { TimeSpent(clock: clock) }
-            switch pulse.word {
-            case .state(let shown): Text(shown.label).font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(pulse.tint(palette))
-            case .context(let meter): ContextFact(meter: meter).font(TaskMetrics.caption)
-            case nil: EmptyView()
-            }
-        }
-        .fixedSize()
-    }
-
     /// 时长：数字加粗、单位小一号淡色（"12 分钟""42 sec"；不到一分钟是"刚刚"，整段淡色），一段字里分两种样子；经 `LiveText` 只在字会变的那一刻重画。
     private struct TimeSpent: View {
         let clock: PiClock
@@ -135,6 +136,55 @@ struct BoardLine: View {
     }
 }
 
+/// 卡下沿那一行（推进中的任务卡、会话卡，与从推进中飞出时还带着线的卡同这一处）：左边是线（或在等谁），右端是读数——时长、状态词（`Part`）。
+/// 卡变窄时按这个顺序让，整行绝不比卡给的宽：照常排（线与读数隔 8、时长与词隔 4）→ 收两道缝（4、2）→ 丢时长、让位给状态词 →
+/// 收字距（`allowsTightening`）→ 状态词截断；线至少留 `minLine`（末端那颗点与一小截线，看得出停在哪）。没有状态词时时长就是那一项，只截断不丢。
+/// 1280 宽的推进中列里线这一行约 97 宽："达到用量限制""上下文 94%"丢了时长后放得下，英文的"Usage limit reached"截断。
+/// 每次排版各量一次理想宽，不按 `ViewThatFits` 把几种排法都建出来；丢掉的排成 0 宽裁掉（`fact()`），读屏仍由卡的标签说状态。
+/// 被否决的：读数 `fixedSize`、线占剩下的——卡一窄读数就越过卡的右沿（1280 宽的推进中列，"1 小时 达到用量限制"）。
+struct BoardLineRow: Layout {
+    enum Part: LayoutValueKey {
+        case line, time, word
+        static let defaultValue = Part.word
+    }
+
+    static let minLine: CGFloat = 16
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? WaveStrip.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let line = subviews.first { $0[Part.self] == .line }
+        let time = subviews.first { $0[Part.self] == .time }
+        let word = subviews.first { $0[Part.self] == .word }
+        // 必留的那一项（状态词，没有时是时长）与可丢的那一项（有状态词时的时长）
+        let (keep, spare) = word.map { ($0, time) } ?? (time, nil)
+        let keepWidth = keep?.sizeThatFits(.unspecified).width ?? 0
+        let spareWidth = spare?.sizeThatFits(.unspecified).width ?? 0
+        let room = bounds.width - Self.minLine
+        let plan: (lineGap: CGFloat, gap: CGFloat, spare: Bool) = [(8, 4, true), (4, 2, true), (4, 2, false)].first { plan in
+            let reading = keepWidth + (plan.2 && spare != nil ? spareWidth + plan.1 : 0)
+            return reading + (keep == nil ? 0 : plan.0) <= room + 0.5
+        } ?? (4, 2, false)
+        let shownKeep = min(keepWidth, max(0, room - plan.lineGap))
+        let shownSpare = plan.spare ? spareWidth : 0
+        // 从右往左摆：先必留的、再可丢的（时长在词左边），线占剩下的
+        var x = bounds.maxX
+        let height = bounds.height
+        if let keep {
+            x -= shownKeep
+            keep.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: shownKeep, height: height))
+        }
+        if let spare {
+            if shownSpare > 0 { x -= plan.gap + shownSpare }
+            spare.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: shownSpare, height: height))
+        }
+        if keep != nil { x -= plan.lineGap }
+        line?.place(at: bounds.origin, proposal: ProposedViewSize(width: max(0, x - bounds.minX), height: height))
+    }
+}
+
 /// 两段按比例分：后一段占 `share`。一次排完，不读几何。
 private struct LineSplit: Layout {
     let share: CGFloat
@@ -151,7 +201,7 @@ private struct LineSplit: Layout {
     }
 }
 
-/// 过去那段的每颗点：位置（0…1）乘宽，挨得太近的往左推开、至少隔 `spacing`，最后一颗钉在右端。
+/// 过去那段的每颗点：位置（0…1）乘宽，挨得太近的往左推开、至少隔 `spacing`，最后一颗钉在右端；推出左端的不画（卡窄、线让给读数时，`BoardLineRow`），不叠成一团。
 nonisolated private struct PastDots: Shape {
     enum Pick { case earlier, last }
     let marks: [CGFloat]
@@ -174,7 +224,7 @@ nonisolated private struct PastDots: Shape {
     static func xs(_ marks: [CGFloat], width: CGFloat) -> [CGFloat] {
         var xs = marks.map { $0 * width }
         for index in xs.indices.reversed().dropFirst() { xs[index] = min(xs[index], xs[index + 1] - spacing) }
-        return xs.map { max($0, spacing) }
+        return xs.indices.compactMap { index in index == xs.count - 1 ? max(xs[index], spacing) : xs[index] >= spacing ? xs[index] : nil }
     }
 
     /// 说过的每句在过去那段里的位置（0…1），最后一句落在 1：从会话开始起，相邻两个时刻隔多久开方当间距（至少一分钟那么宽），

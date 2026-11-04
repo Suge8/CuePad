@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 看板上一张卡的外形：纸面（`paper`），纸色随所在的列（`TaskBoard.Column.paper`，四列分轻重），多高由里面的排法定（`BoardCardLayout`：同一列的卡一样宽，就一样高；
+    /// 看板上一张卡的外形：纸面（`paper`），纸色随所在的列（`TaskBoard.Column.paper`，四列分轻重），多高由里面的排法定（`BoardCardLayout`：跟着标题实际排了几行走；
     /// 手机竖版看板里铺满行给的格），左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠纸与桌面的明度、色相差把纸托出来。
     func boardCard(_ column: TaskBoard.Column) -> some View { modifier(BoardCardFrame(column: column)) }
 
@@ -21,7 +21,7 @@ extension EnvironmentValues {
     /// 卡在手机竖版看板（`PhoneBoard`）的一行里：卡铺满行给的那一格（格多高只由行高定，`BoardRowLane`）、标题小一档；
     /// 列里的卡（Mac、宽屏 iPad、iPhone 横屏）不是。
     @Entry var boardRow = false
-    /// 卡标题留几行、多高：所在的列或行按卡宽与字号算一次（`BoardCardMetrics.title`），同一列、同一行的卡都一样。
+    /// 卡标题至多几行、上下留多少：所在的列或行按卡宽与字号算一次（`BoardCardMetrics.title`），同一列、同一行的卡都一样。
     @Entry var boardTitle = BoardTitle()
 }
 
@@ -98,6 +98,36 @@ extension Workspace {
 }
 #endif
 
+/// 卡标题的字（任务卡、会话卡、等你卡同这一处）：拉丁词按词断——词里的连字符换成不断行的（U+2011），"notes-edit"不拆成"notes- / edit"；
+/// 整个标题只是一个拉丁词（没有空格、没有汉字）时只排一行，放不下先收字距、再截断，不按字母折行。中文照常按字折，至多所在的列给的行数（`boardTitle`）。
+/// 几个拉丁词里有一个比一行还长时系统仍会在词中间折：标题里少见，不为它另排。
+struct BoardCardTitle: View {
+    let text: String
+    @Environment(\.boardTitle) private var band
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(Self.joined(text)).lineLimit(Self.oneWord(text) ? 1 : band.lines).allowsTightening(true)
+    }
+
+    private static func joined(_ text: String) -> String {
+        guard text.contains("-") else { return text }
+        let chars = Array(text)
+        return String(chars.indices.map { index in
+            chars[index] == "-" && index > 0 && index < chars.count - 1 && chars[index - 1].isLetterOrDigit && chars[index + 1].isLetterOrDigit ? "\u{2011}" : chars[index]
+        })
+    }
+
+    private static func oneWord(_ text: String) -> Bool {
+        !text.isEmpty && text.allSatisfy { !$0.isWhitespace && !$0.unicodeScalars.contains { $0.properties.isIdeographic } }
+    }
+}
+
+private extension Character {
+    var isLetterOrDigit: Bool { isLetter || isNumber }
+}
+
 /// 推进中一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：同任务卡（`BoardTaskCard`）的语法——
 /// 开头是这家 Agent 的品牌标（`AgentKind.mark`，任务是完成圈），标题是会话名，下沿是那条线（`BoardLine`，按 `BoardPulse` 画，右端写此刻状态多久与要你管的状态词），
 /// 看全部项目时标题前是它归处的项目小图形；悬停提示写项目与哪家 Agent。点了打开会话；长按与右键是会话的菜单（`SessionActions`，各处同一份）。
@@ -122,7 +152,7 @@ struct BoardSessionCard: View {
                 .font(.system(size: TaskMetrics.cardLead * 0.85)).foregroundStyle(resting ? palette.ink3 : palette.ink2)
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
-                Text(session.title).foregroundStyle(resting ? palette.ink2 : palette.ink)
+                BoardCardTitle(session.title).foregroundStyle(resting ? palette.ink2 : palette.ink)
             }
             .boardCard(.advancing)
         }
@@ -135,7 +165,7 @@ struct BoardSessionCard: View {
 
 /// 卡里的排法（看板上所有的卡同一种）：开头记号、项目小图形与标题一行带，右端是调用处给的尾巴；
 /// 推进中的卡标题贴上沿，下面是那条线（`BoardLine`，时长与要你管的状态词在线的右端）：标题一整带都给字（状态词放在标题右端时，窄列里标题只剩四五个字）。
-/// 卡多高只由这里加出来：上下留白、标题（按所在的列或行给的行数与留白，`boardTitle`：只有一行字的卡也一样高）、线。
+/// 卡多高只由这里加出来：上下留白、标题（实际排了几行就多高，至多所在的列或行给的行数，`boardTitle`；行数是上限、不预留）、线。
 struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
@@ -183,7 +213,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
             Spacer(minLength: 0)
             trailing
         }
-        .frame(minHeight: titleBand.height)
+        .frame(minHeight: BoardCardMetrics.titleRow)
     }
 
     /// 推进中：标题下面让出线那一截，线压在卡的下沿、从标题的字下面起。列里标题贴上沿、线离它 `waveGap`；
