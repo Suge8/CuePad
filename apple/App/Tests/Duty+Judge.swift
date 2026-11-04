@@ -40,7 +40,10 @@ extension Duty {
         let bump = /2\.3\.1|CHANGELOG|changelog/
         let wrapCalls = CueEval.calls(in: key.wrapUp.flatMap { rounds($0) }, "task")
         let closing = wrapCalls.firstIndex { $0.args["action"] as? String == "done" && !$0.call.failed && target($0.args) === login }
-        let beforeClose = wrapCalls[..<(closing ?? wrapCalls.endIndex)].map { call in
+        // 只认成了的、对着这件的交代：失败的、给别的任务的不算补办
+        let beforeClose = wrapCalls[..<(closing ?? wrapCalls.endIndex)].filter { call in
+            ["say", "edit", "add", "start"].contains(call.args["action"] as? String ?? "") && !call.call.failed && target(call.args) === login
+        }.map { call in
             guard call.args["action"] as? String == "start" else { return Self.texts(call.args) }
             return login.cards.first { card in (call.args["task"] as? String).map { card.id.uuidString.lowercased().hasPrefix($0.lowercased()) } == true }?.body ?? ""
         }
