@@ -23,8 +23,7 @@ extension CueKeeper {
     /// 大脑这时该有人管的那一下（对账的定时器排它，`reconcile`）：等着重起的到点时刻，或在跑的一轮还差多久没动静满 `CueTiming.silence`（看门狗）。
     /// 定时器照墙钟睡，睡着的 Mac 醒来时它先到点：看门狗按醒着的时长再算一次（`revive`），没满就按剩下的重排。
     /// 另有两种也排在这里：你的话退回没写成时隔一阵再试（`giveBack`），绕行里下一个重置时刻（到点换回该能用的那家，`steer`）。
-    var alarm: Date? {
-        let now = self.now
+    func alarm(at now: Date) -> Date? {
         let brain: Date? = switch phase {
         case .restarting(_, _, let at): at
         case .running(let shift) where shift.turn != nil: now + (setup.timing.silence - quiet).seconds
@@ -38,10 +37,10 @@ extension CueKeeper {
     private var quiet: Duration { setup.timing.awake() - heardAt }
 
     /// 到了 `alarm`：等着重起的起一个；在跑的一轮醒着那么久没动静就当大脑挂了（停掉，按 `broke` 重起、交出去的话重新交）。
-    func revive() async {
+    func revive(at now: Date) async {
         switch phase {
         case .restarting(let failures, _, let at) where at <= now:
-            _ = await steer(attempt: true)
+            _ = await steer(attempt: true, at: now)
             await startShift(failures: failures)
         case .running(let shift) where shift.turn != nil && quiet >= setup.timing.silence:
             let minutes = Int(setup.timing.silence.seconds / 60)
@@ -84,9 +83,8 @@ extension CueKeeper {
 
     /// 绕行时让设置跟上规则（`Detour.next`）：你或 Cue 改过设置就不再绕行；该能用的那家（你设定的那家重置已过……）马上换过去；
     /// `attempt`（慢速周期到点：重来那一轮、重起大脑）时轮到碰运气的那家也换。改了设置返回 true：下一次对账按新设置换大脑。
-    func steer(attempt: Bool = false) async -> Bool {
+    func steer(attempt: Bool = false, at now: Date) async -> Bool {
         guard var detour = progress.detour else { return false }
-        let now = self.now
         do {
             guard let profile = try await store.cueProfile(), let current = profile.runtime.known, detour.wrote(profile) else {
                 progress.detour = nil

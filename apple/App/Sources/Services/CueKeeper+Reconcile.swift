@@ -6,24 +6,27 @@ import CueText
 import Foundation
 
 extension CueKeeper {
+    /// 一次对账只认一个此刻（开始时取）：到没到点、下一次排在哪都按它判断。对账途中才过的时刻照样排上，排成马上（`schedule` 不早于真实的此刻）；
+    /// 否则过点的那一下两头落空：判断时还没到，排定时器时已过、不再排（如绕行的重置时刻，`Detour.nextReset`），要等别的动静才补上。
     func reconcile() async {
         timer?.cancel()
         timer = nil
-        await revive()
+        let now = self.now
+        await revive(at: now)
         await giveBack([])  // 上次没退回成的再退一次
         await leaveHisStops()
-        let next = await step()
-        schedule([next, alarm].compactMap(\.self).min())
+        let next = await step(at: now)
+        schedule([next, alarm(at: now)].compactMap(\.self).min())
     }
 
     /// 对账里按先后只做一件事（`CueKeeper` 头注释的 1–6），返回歇着时下一次要对账的时刻（定时、巡视、停住、重来）。
-    private func step() async -> Date? {
-        if await steer() {
+    private func step(at now: Date) async -> Date? {
+        if await steer(at: now) {
             input.yield(.kick)
             return nil
         }
         do {
-            let store = self.store, now = self.now
+            let store = self.store
             let profile = try await store.cueProfile() ?? CueProfile()
             await follow(BrainSettings(profile))
             // 要换的班次（工具服务没了、换了 Agent），或一直记着的变过（系统提示跟上）：换个班次，再接着对账。
@@ -89,7 +92,7 @@ extension CueKeeper {
             // 到点时先按绕行的规则换到这一周期要试的那家（`steer`），新大脑起好再来。重来的那一轮半路断了（`broke`）也还在：到点的时刻留着，起好就再来
             if let held = setback, held.persistent {
                 guard let at = held.retryAt, now >= at else { return held.retryAt }
-                if await steer(attempt: true) {
+                if await steer(attempt: true, at: now) {
                     input.yield(.kick)
                     return nil
                 }
