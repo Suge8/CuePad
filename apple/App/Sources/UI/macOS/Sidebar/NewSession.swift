@@ -98,7 +98,6 @@ struct NewSessionForm: View {
         }
         .padding(Spacing.block)
         .frame(width: Self.width)
-        .background(palette.desk)
     }
 
     @ViewBuilder private func progressLine(_ progress: LaunchProgress?) -> some View {

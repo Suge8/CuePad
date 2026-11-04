@@ -197,28 +197,6 @@ extension EmptyState where Action == EmptyView {
     }
 }
 
-/// 空态的动作按钮：small 给次要动作（墨色，签名色留给页上别处），primary 给整页唯一的主动作。两种尺寸共用同一字体、圆角、线宽、按压和触感。
-struct EmptyStateButton: View {
-    enum Kind { case small, primary }
-
-    let title: LocalizedStringResource
-    let icon: Icon?
-    var kind = Kind.primary
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            if let icon {
-                Label(title, icon: icon)
-            } else {
-                Text(title)
-            }
-        }
-        .labelStyle(.titleAndIcon)
-        .buttonStyle(ControlButtonStyle(kind: kind == .small ? .secondary : .primary, compact: kind == .small))
-    }
-}
-
 /// 吉祥物的表情，对应 Assets 里的 mascot 图。
 enum Mascot: String {
     case welcome = "mascot-welcome"

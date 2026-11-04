@@ -44,7 +44,7 @@ struct CueWaitCard: View {
     /// 怎么答（至少一颗按钮）、上下的边与卡下面的空（`CueWaitDock.below`）；叠边不算。只能数少。
     static func floor(_ wait: CueWait, shots: [UUID: [CueShown]], width: CGFloat) -> CGFloat {
         let pictures = wait.message.flatMap { shots[$0.id] }.map { gap + CueShots.floor(count: $0.count, width: width - 2 * side) } ?? 0
-        return edge + CueWaitEyebrow.height + lead + Typography.titleSize + pictures + gap + ControlMetrics.compactHeight + edge + CueWaitDock.below
+        return edge + CueWaitEyebrow.height + lead + Typography.titleSize + pictures + gap + ControlSize.compact.height + edge + CueWaitDock.below
     }
 
     var body: some View {

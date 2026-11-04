@@ -174,37 +174,6 @@ extension View {
     func menuLabel(_ spoken: LocalizedStringResource) -> some View { accessibilityElement(children: .ignore).accessibilityLabel(spoken) }
 }
 
-/// 列表里的大段标题（会话页的"现在""历史"）：页面的骨架，不比行里的字弱。左右缩进由所在列表给，同那一列卡片的左缘。
-struct SectionTitle: View {
-    let text: LocalizedStringResource
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Text(text).font(Typography.sectionTitle).foregroundStyle(palette.ink).accessibilityAddTraits(.isHeader)
-    }
-}
-
-/// 组头：小号半粗次要色，可带一个图标（"一直记着"的钉子）。按时间分的段（`TimeSection`：会话历史、记忆）与别的小组都用它。
-/// 不用 `Label`：iOS 的 Label 给图标留一格固定宽，小图标与字之间空得太开。左右缩进与上下留白由所在列表给。
-struct SectionLabel: View {
-    let text: Dotted
-    var icon: Icon?
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 5) {
-            if let icon { Image(icon) }
-            Text(text)
-        }
-        .font(Typography.label)
-        .foregroundStyle(palette.ink3)
-        // 图标是装饰：读屏只读文字（否则会读出"瞄准镜十字线"这类符号名），作为小节标题
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(text.spoken)
-        .accessibilityAddTraits(.isHeader)
-    }
-}
-
 /// 全 App 唯一的"什么时候"写法（灵感、任务、回收站、Agent 会话、对话里的时间标记都用它）：一分钟内"刚刚"，一天内"N 分钟前""N 小时前"；
 /// 再往前按日历（`day`）：昨天、一周内写星期、今年写月日、更早带年份。粗到小时为止，几小时前的事不写到分钟。都用系统格式，跟随界面语言。
 /// 会话的计时会随时间刷新（`PiElapsed`）；灵感卡、回收站这些不加定时器，写的是打开时的值。
@@ -243,7 +212,7 @@ nonisolated enum DateLabel {
 
 /// 一节的头，全 App 只这一种：`page` 是页内大段（最近、更早、现在、历史），与行里的字一样重、可带计数；
 /// `group` 是组头（按时间分的段、一直记着），小号半粗淡墨，可带一个图标。左右缩进与上下留白由所在列表给；能折的组由调用处在旁边放 `Chevron`。
-/// 读屏作为一个标题，图标是装饰不读。`init(title:count:)` 是旧样子（iOS 文字样式、左右各缩 4），调用处迁完删掉。
+/// 读屏作为一个标题，图标是装饰不读。
 struct SectionHeader: View {
     enum Level { case page, group }
 
@@ -251,7 +220,6 @@ struct SectionHeader: View {
     var level = Level.page
     var count: Int?
     var icon: Icon?
-    private var legacy = false
     @Environment(\.palette) private var palette
 
     init(_ title: Dotted, level: Level = .page, count: Int? = nil, icon: Icon? = nil) {
@@ -265,11 +233,6 @@ struct SectionHeader: View {
         self.init(Dotted(String(localized: title)), level: level, count: count, icon: icon)
     }
 
-    init(title: LocalizedStringResource, count: Int?) {
-        self.init(title, count: count)
-        legacy = true
-    }
-
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: level == .page ? 6 : 5) {
             if let icon { Image(icon).accessibilityHidden(true) }
@@ -278,18 +241,15 @@ struct SectionHeader: View {
         }
         .font(titleFont)
         .foregroundStyle(level == .page ? palette.ink : palette.ink3)
-        .padding(.horizontal, legacy ? 4 : 0)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
 
     private var titleFont: Font {
-        if legacy { return .headline }
-        return level == .page ? Typography.sectionTitle : Typography.label
+        level == .page ? Typography.sectionTitle : Typography.label
     }
 
     private var countFont: Font {
-        if legacy { return .footnote }
-        return level == .page ? Typography.sectionCount : Typography.label
+        level == .page ? Typography.sectionCount : Typography.label
     }
 }

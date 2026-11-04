@@ -53,7 +53,7 @@ struct TaskNextMark: View {
     private var edge: Alignment { sizeClass == .regular || typeSize.isAccessibilitySize ? .leading : .trailing }
     private static let dot: CGFloat = 7
     /// 跟着动态字体走：辅助字号下与旁边的字一起放大。
-    private static let glyph = Font.caption2.weight(.bold)
+    private static let glyph = Typography.caption2.weight(.bold)
     private static let target: CGFloat = TaskMetrics.chipTarget
     #endif
 

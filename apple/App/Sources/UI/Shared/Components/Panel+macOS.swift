@@ -290,7 +290,7 @@ private struct WindowReader: NSViewRepresentable {
 }
 
 /// 浮层那一层。模态的：压暗整窗的底（挡住下面的悬停与滚动），居中一块圆角面板，内容自己定大小、太大时让出窗口四周 24。
-/// 气泡（不压暗）摆法在 `BubbleFrame`。
+/// 弹层底由容器统一铺桌面色，内容里的行和卡是纸；弹层内容不自己铺底。气泡（不压暗）摆法在 `BubbleFrame`。
 private struct PanelLayer: View {
     @Environment(PanelHost.self) private var host
     @Environment(\.palette) private var palette
@@ -313,6 +313,7 @@ private struct PanelLayer: View {
                 palette.backdrop.ignoresSafeArea().accessibilityHidden(true)
             }
             shown.content
+                .background(palette.desk)
                 .background { area(shown.id) }
                 .clipShape(.rect(cornerRadius: Radius.card))
                 .rowContainer(.rect(cornerRadius: Radius.card))
@@ -395,6 +396,18 @@ extension PanelHeader where Trailing == EmptyView {
     init(_ title: String) { self.init(title: title) { EmptyView() } }
 }
 
+extension View {
+    func panelFieldSurface() -> some View { modifier(PanelFieldSurface()) }
+}
+
+private struct PanelFieldSurface: ViewModifier {
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content.background(palette.fill, in: .rect(cornerRadius: Radius.block))
+    }
+}
+
 /// Mac 浮层里占满一行的搜索框，弹出即聚焦。
 struct PanelSearchField: View {
     let prompt: String
@@ -409,7 +422,7 @@ struct PanelSearchField: View {
         }
         .font(Typography.body)
         .padding(.horizontal, 12).frame(height: 34)
-        .background(palette.fill, in: .rect(cornerRadius: Radius.block))
+        .panelFieldSurface()
         .padding(.horizontal, 20)
         .onAppear { focused = true }
     }

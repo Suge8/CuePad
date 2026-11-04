@@ -134,7 +134,7 @@ private struct StartBar: View {
                     .fixedSize(horizontal: false, vertical: true)
             } else if caption == nil {
                 Menu { SessionBindItems(leaf: leaf) } label: { Text("绑定会话") }
-                    .menuStyle(.button).menuIndicator(.hidden).buttonStyle(ControlButtonStyle(kind: .secondary, compact: true)).fixedSize()
+                    .menuStyle(.button).menuIndicator(.hidden).buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact)).fixedSize()
             }
             #endif
             if let caption { Text(caption).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(1) }

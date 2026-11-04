@@ -64,11 +64,6 @@ enum ControlSize {
 /// 圆钮、胶囊与行尾动作的几何：可见尺寸按平台，iPhone 的命中高度始终至少 44。
 enum ControlMetrics {
     static var height: CGFloat { ControlSize.regular.height }
-    #if os(iOS)
-    static let compactHeight: CGFloat = 32
-    #else
-    static let compactHeight: CGFloat = 28
-    #endif
     static let stroke: CGFloat = 1
     /// 停用的控件整体变淡到这么多，看得出点不了。
     static let disabledOpacity = 0.45
@@ -78,15 +73,13 @@ enum ControlMetrics {
 /// 外形单拆成 `ControlSurface`：点开菜单的按钮（`MenuButton`）不是 `Button`，要同一个样子时直接挂它。
 /// `glass`：浮在内容上的玻璃胶囊（Mac 工具栏与页顶那一排的项目范围、新任务、收起、清空回收站），与 `circular` 的玻璃圆钮同高；
 /// `round`：纸与面板上的淡底圆钮（浮层的关闭、问号）——玻璃不叠玻璃，纸上不用 `circular`。毁掉东西的（`role: .destructive`）字是出错色。
-/// `compact` 与 `highlight` 是旧写法，调用处迁到 `size` 与选中后删掉（design/system/migration.md W2-9）。
 struct ControlButtonStyle: ButtonStyle {
-    enum Kind { case primary, highlight, secondary, quiet, circular, glass, round }
+    enum Kind { case primary, secondary, quiet, circular, glass, round }
     var kind = Kind.secondary
     var size = ControlSize.regular
-    var compact = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.modifier(ControlSurface(kind: kind, size: size, compact: compact, destructive: configuration.role == .destructive))
+        configuration.label.modifier(ControlSurface(kind: kind, size: size, destructive: configuration.role == .destructive))
             .modifier(PressFeedback(pressed: configuration.isPressed, kind: kind == .circular || kind == .round ? .button : .control))
     }
 }
@@ -102,7 +95,6 @@ struct ControlSurface: ViewModifier {
 
     var kind = ControlButtonStyle.Kind.secondary
     var size = ControlSize.regular
-    var compact = false
     var selected = false
     var destructive = false
     var level: Level?
@@ -140,11 +132,11 @@ struct ControlSurface: ViewModifier {
                 .glass(in: .capsule, interactive: true)
         default:
             content
-                .font((compact ? Typography.meta : size.font).weight(selected ? .semibold : .medium))
-                .foregroundStyle(kind == .primary ? palette.onFill : kind == .highlight ? palette.signature : ink)
-                .padding(.horizontal, compact ? 10 : size.padding)
-                .padding(.vertical, compact ? 6 : size.verticalPadding)
-                .frame(minHeight: compact ? ControlMetrics.compactHeight : size.height)
+                .font(size.font.weight(selected ? .semibold : .medium))
+                .foregroundStyle(kind == .primary ? palette.onFill : ink)
+                .padding(.horizontal, size.padding)
+                .padding(.vertical, size.verticalPadding)
+                .frame(minHeight: size.height)
                 .background(background, in: .capsule)
                 .background {
                     if let level {
@@ -168,7 +160,6 @@ struct ControlSurface: ViewModifier {
         if selected { return palette.selection }
         return switch kind {
         case .primary: palette.signatureFill
-        case .highlight: palette.selection
         case .quiet, .glass: .clear
         case .secondary, .circular, .round: palette.fill
         }

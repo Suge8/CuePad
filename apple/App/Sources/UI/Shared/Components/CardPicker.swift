@@ -54,7 +54,6 @@ struct CardPicker: View {
         }
         .padding(.top, 18)
         .frame(width: Self.macSize.width).frame(maxHeight: Self.macSize.height)
-        .background(palette.desk)
     }
     #endif
 
@@ -84,7 +83,9 @@ struct CardPicker: View {
             }
             .padding(.horizontal, 16).padding(.bottom, 24)
         }
+        #if os(iOS)
         .background(palette.desk)
+        #endif
     }
 
     private func rows(_ entries: [CardEntry], showsProject: Bool = false) -> some View {
@@ -102,7 +103,7 @@ struct CardPicker: View {
     private func header(_ title: LocalizedStringResource, project: Project?) -> some View {
         HStack(spacing: 6) {
             if let project { ProjectGlyph(project: project, size: 12) }
-            SectionHeader(title: title, count: nil).padding(.horizontal, -4)
+            SectionHeader(title)
         }
     }
 
