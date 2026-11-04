@@ -71,7 +71,6 @@ forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（
   '(?:\.font\(\s*\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\bFont\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\.system\(\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b)' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/**' \
   'App/Sources/UI/Shared/Components/LastCrashRow.swift' \
-  'App/Sources/UI/Shared/Components/ProjectScope.swift' \
   'App/Sources/UI/Shared/Components/RowActions.swift' \
   'App/Sources/UI/Shared/Components/TaskNextMark.swift' \
   'App/Sources/UI/Shared/Cue/CueHostMenu.swift' \

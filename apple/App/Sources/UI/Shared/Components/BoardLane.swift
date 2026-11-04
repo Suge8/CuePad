@@ -86,7 +86,7 @@ struct BoardColumnHeader: View {
             .accessibilityValue("\(count)")
             .accessibilityAddTraits(.isHeader)
             if let add = LaneAdd.of(column, task: addTask, session: addSession) {
-                LaneAddButton(add).font(Self.font).frame(width: Self.add, height: Self.height)
+                LaneAddButton(add).font(Self.font).frame(width: ControlSize.target, height: Self.height)
             }
         }
         .frame(height: Self.height)
@@ -105,17 +105,13 @@ struct BoardColumnHeader: View {
 
     private static let font = Typography.laneTitle
     private static let countFont = Typography.laneCount
+    /// 一排控件的高（Mac 同栏头那一排的玻璃，`boardTopRow`）。"+"宽 `ControlSize.target`：手机上与列头同高见方；
+    /// Mac 只取点得准的宽，不按列头高见方——那样白占一截、把列名挤短。
+    static var height: CGFloat { ControlSize.regular.height }
     #if os(macOS)
     private static let mark: CGFloat = 16
-    /// 与栏头那一排的玻璃同高（`boardTopRow`）
-    static let height = ControlMetrics.height
-    /// "+"占的宽：字形加一点按得到的余量（悬停底向外宽出，`PressStyle(.inline)`）；按列头高的方块会白占一截、把列名挤短。
-    private static let add: CGFloat = 24
     #else
     private static let mark: CGFloat = 20
-    static let height: CGFloat = 52
-    /// 手指点得到的一格：高是列头的 52，宽收到 32（横屏四列的待办列头里，44 宽会把"待办"挤成省略号）。
-    private static let add: CGFloat = 32
     #endif
 }
 
