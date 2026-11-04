@@ -3,11 +3,16 @@ import SwiftUI
 /// 宽屏三栏的尺寸：会话条（宽 256、收起 80，`SessionRail.Form`）、主区、右边的 Cue（400；收起成一颗钮时 0）。
 /// 只由窗口宽、主区放着什么与两个用户选择推出（会话条开合 `railExpanded`、Cue 开合 `cueOpen`）；自动收起只改呈现，不改这两个选择。
 /// 窗口变窄时只往收里走：先把会话条收成 80，再把 Cue 收成钮；收 Cue 时不把会话条放回宽版——拖窗口的人会看见左边忽然又宽了。
-/// 主区最窄：看板 756（四列最窄，`BoardColumns`）、并排两个会话各 400、其余 400。Mac 窗口与 iPad 同一套；
+/// 主区最窄：看板 756（四列最窄，`BoardColumns`；Mac 另加列头那一排末尾"⋯"的一截，`boardMenu`，共 800）、并排两个会话各 400、其余 400。Mac 窗口与 iPad 同一套；
 /// 只有 iPad 主区放不下四列时换竖版看板（`boardFits`），所以 iPad 收 Cue 按会话的最窄算，会话条仍按四列。
 /// 1470 宽（13 寸 MacBook Air）开两个会话 + Cue 时会话条仍是宽版（256 + 800 + 400 = 1456）。
 struct WideMetrics {
     static let board: CGFloat = 756
+    #if os(macOS)
+    /// Mac 看板右边让给最顶那一排末尾的"⋯"（列头与它同一排，`TaskBoardPage`）：栏头右边距、钮前那道缝、圆钮，再与最后一列隔 12，减去看板自己的右页边。
+    /// 算进主区放看板的最窄宽：少了它，正好在临界宽时看板放不下四列、套上横向滚动区，列头的 ＋ 在标题栏那一排点不进去（`BoardColumns`）。
+    static let boardMenu: CGFloat = 16 + 8 + ControlMetrics.height + 12 - (Spacing.page - 8)
+    #endif
     static let session: CGFloat = 400
     static let cue: CGFloat = 400
     #if os(macOS)
@@ -66,7 +71,7 @@ struct WideMetrics {
         if workspace.besideSession != nil { return (2 * session, 2 * session, true) }
         guard workspace.mainRoute == .progress else { return (session, session, false) }
         #if os(macOS)
-        return (board, board, false)
+        return (board + boardMenu, board + boardMenu, false)
         #else
         return (board, session, false)
         #endif

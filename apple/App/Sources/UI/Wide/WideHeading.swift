@@ -39,3 +39,15 @@ struct WideProjectHeading: View {
         #endif
     }
 }
+
+extension View {
+    /// 宽屏栏头里空着的那截按住拖窗口（Mac；栏头在标题栏那一排，主区与 Cue 的托管视图不让标题栏自己拖，`ColumnHostingView`）。
+    /// 挂在栏头那一排的底上：钮在上面照常点，钮之间的空处接拖动；双击同标题栏（缩放窗口）。iOS 上什么都不做。
+    @ViewBuilder func windowDragArea() -> some View {
+        #if os(macOS)
+        background { Color.clear.contentShape(.rect).gesture(WindowDragGesture()).allowsWindowActivationEvents(true) }
+        #else
+        self
+        #endif
+    }
+}

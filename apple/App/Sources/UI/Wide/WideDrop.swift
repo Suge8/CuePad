@@ -97,6 +97,7 @@ struct WideSessionTitle: View {
         .font(.headline)
         .accessibilityElement(children: .contain)
         .padding(inset).frame(height: WideMetrics.band)
+        .windowDragArea()
     }
 }
 

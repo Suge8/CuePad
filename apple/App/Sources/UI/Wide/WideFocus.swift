@@ -133,8 +133,18 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     }
 }
 
+/// 每一块的托管视图：按下不当成拖窗口。块的栏头在窗口最顶那一排（标题栏里）：标题栏按按下那一点最深的视图问它能不能拖窗口，
+/// 答"能"的那一下整个归标题栏、内容收不到（同 `isMovable` 无关），嵌着的托管视图默认答"能"，栏头的钮就点不进去。
+/// 栏头的空处要拖窗口的由栏头自己挂系统的拖窗口手势（`windowDragArea`）。
+/// 标题栏那一排里不能有滚动区的内部视图（它们也答"能"、改不了）：看板放得下四列时不套横向滚动区（`BoardColumns`）。
+/// 窗口不在前台时第一下就交给内容（同栏头那一排在窗口自己的托管视图里、会话条上的钮）：不然主区与 Cue 栏头的钮第一下只把窗口叫到前面。
+final class ColumnHostingView: NSHostingView<AnyView> {
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 final class WideColumnView: NSView {
-    let host = NSHostingView(rootView: AnyView(EmptyView()))
+    let host = ColumnHostingView(rootView: AnyView(EmptyView()))
     let drop = WideDropState()
     let slot: WideSlot
     let focus: WideFocus
@@ -142,6 +152,7 @@ final class WideColumnView: NSView {
     private var previous: (origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape)?
     private var sequence = 0
     override var acceptsFirstResponder: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
 
     init(slot: WideSlot, focus: WideFocus, workspace: Workspace) {
         self.slot = slot
@@ -152,6 +163,8 @@ final class WideColumnView: NSView {
         // 按栏的框裁（矩形裁剪，不离屏）：滑动时右缘随图层的宽走（`move`）
         clipsToBounds = true
         host.sizingOptions = []
+        // 不带标题栏那一截安全区：页里的滚动区不再向上伸到栏头底下（伸上去时按下落在滚动视图上，栏头的钮点不进去）；那一排页自己按 `WideMetrics.band` 让出
+        host.safeAreaRegions = []
         host.autoresizingMask = [.width, .height]
         addSubview(host)
         // 会话拖进主区的两边；Cue 那一块不接

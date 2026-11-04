@@ -2,11 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 进展页（窄屏侧栏与宽屏主区的"进展"）：看板与会话两段，看哪一段只有 `Workspace.progressPane` 一份
-/// （项目页"⋯"的"看这个项目的会话"经 `showSessions` 换到会话段）。两段只看项目范围里的（`Workspace.scopedProject`）。
-/// 顶栏中间一块玻璃（`ProgressHeader`）：两段的分段、项目范围、额度环；宽屏右上角随段是"添加任务"或"新会话"。
-/// 窄屏的那一排是侧栏的（`NarrowSidebarBar`，同一块玻璃、项目范围收进额度面板），放不下这一页自己的操作：添加任务是待办头上的"+"
-/// （`laneAddsTask`：竖版看板的行头、横屏四列的列头），新会话是会话列表的第一行（`NewSessionLine`）。
+/// 进展页（窄屏侧栏与宽屏主区的"进展"）。窄屏是看板与会话两段，看哪一段只有 `Workspace.progressPane` 一份
+/// （项目页"⋯"的"看这个项目的会话"经 `showSessions` 换到会话段）；宽屏（iPad 宽窗，同 Mac）只有看板，已结束的会话在会话条的"更早"。都只看项目范围里的（`Workspace.scopedProject`）。
+/// 窄屏的那一排是侧栏的（`NarrowSidebarBar`：看板｜会话、额度环，项目范围收进额度面板）；宽屏页顶中间一块玻璃（`ProgressHeader` 不带分段）：项目范围与额度环。
+/// 添加任务是待办头上的"+"（`laneAddsTask`：竖版看板的行头、四列的列头）；新会话窄屏是会话列表的第一行（`NewSessionLine`），宽屏在页顶右边（`NewSessionButton`）。
 /// 看板一段是流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）；选了项目以后卡上不画项目小图形、列头的数也只数这个项目。
 /// 宽屏（iPad）主栏放得下看板最窄宽（`WideMetrics.board`，`boardFits`）与 iPhone 横屏同 Mac 四列并排（`BoardColumns`）；放不下的主栏（iPad 竖屏、
 /// 11 寸横屏旁边开着 Cue 或会话）与窄屏竖着拿是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点：
@@ -31,7 +30,7 @@ struct ProgressScreen: View {
     @Environment(\.pageActive) private var active
 
     var body: some View {
-        let pane = workspace.progressPane
+        let pane = inSidebar ? workspace.progressPane : .board
         ZStack(alignment: .top) {
             if mounted.contains(.board) || pane == .board { shown(.board, pane) { boardView } }
             if mounted.contains(.sessions) || pane == .sessions {
@@ -45,12 +44,8 @@ struct ProgressScreen: View {
         }
         .onChange(of: pane, initial: true) { mounted.insert(pane) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .floatingHeader("进展", center: { ProgressHeader(open: $quotaOpen, scopeInPanel: false) }) {
-            if workspace.progressPane == .sessions {
-                NewSessionButton(project: workspace.scopedProject)
-            } else {
-                Button("添加任务", icon: .add) { add() }
-            }
+        .floatingHeader("进展", center: { ProgressHeader(open: $quotaOpen, scopeInPanel: false, panes: false) }) {
+            NewSessionButton(project: workspace.scopedProject)
         }
         .refreshesQuota()
         .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: adding)
@@ -68,7 +63,7 @@ struct ProgressScreen: View {
                 PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)
             }
         }
-        .environment(\.laneAddsTask, inSidebar ? { adding = true } : nil)
+        .environment(\.laneAddsTask, add)
         // 换范围不带里层的挪位与数字动画，理由同 Mac 的 `TaskBoardPage`
         .transaction(value: scope) { $0.disablesAnimations = true }
     }
@@ -86,27 +81,28 @@ struct ProgressScreen: View {
 
     private var newTaskProject: UUID? { workspace.scopedProject ?? workspace.currentProject }
 
-    /// 在窄屏侧栏里：页顶那一排不是这一页的，添加任务、新会话落到内容里。
+    /// 在窄屏侧栏里：页顶那一排是侧栏的、有看板｜会话两段；不在侧栏的是宽屏主区，只有看板。
     private var inSidebar: Bool { host == .sidebar }
 
     /// 待办顶上浮出添加那一行（手机看板先把待办那一行滑到行首，`BoardRowLane`）。
     private func add() { adding = true }
 }
 
-/// 进展页顶栏中间那一块玻璃：左边看板｜会话两颗图标（`ProgressPanes`），中间项目范围，右边额度环；点环从这一块长出额度明细（`GrowPanel`）。
+/// 进展页顶栏中间那一块玻璃：左边看板｜会话两颗图标（`ProgressPanes`，窄屏侧栏；宽屏没有会话段，`panes` 为假），中间项目范围，右边额度环；点环从这一块长出额度明细（`GrowPanel`）。
 /// 三样并成一块：各占一块玻璃时 iPhone 两侧圆钮之间挤不下，也读成三件事；它们说的都是"这一页看什么"。
 /// `scopeInPanel`（窄屏侧栏那一排，左右还有项目｜进展与 Cue 头像）：项目范围收进长出的面板、排在额度明细上面，块里只在选了项目时画它的小图形。
 /// 开合由所在的那一排持有：长开时那一排把整排宽让给它（`NarrowSidebarBar`）。
 struct ProgressHeader: View {
     @Binding var open: Bool
     let scopeInPanel: Bool
+    var panes = true
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GrowPanel(open: $open, radius: FloatingHeaderLayout.height / 2) {
             HStack(spacing: 0) {
-                ProgressPanes().frame(height: PaneMetrics.square).padding(.leading, PaneMetrics.inset)
+                if panes { ProgressPanes().frame(height: PaneMetrics.square).padding(.leading, PaneMetrics.inset) }
                 if !scopeInPanel {
                     ProjectScope()
                 } else if let scoped = workspace.catalog?.project(workspace.scopedProject) {

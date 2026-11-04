@@ -111,6 +111,11 @@ struct CueListSlots: View {
 /// 主区栏头右端、"⋯"之前：同步需要关注时（没登录 iCloud、连不上、需要你决定、出错等）露一个图标，悬停看原因，点开设置处理。
 /// 有同步就常驻一格圆钮宽，平时只是看不见（`keepsPlace`）：提醒一出一收不挤动左边的编辑页标题与项目名。
 struct SyncAlertSlot: View {
+    /// 同步此刻要你关注（不在平静态）：看板那一排不常驻这一格，只在要关注时露出（`TaskBoardPage` 跟着让出）。
+    static func needed(_ services: AppServices) -> Bool {
+        services.sync != nil && SyncSummary(services.syncStatus).tone != .calm
+    }
+
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 

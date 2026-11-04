@@ -37,8 +37,10 @@ struct SessionRailCell: View {
         .accessibilityLabel(item.session.title)
         .accessibilityValue(Dotted(item.session.agentMark, item.pulse.shown?.label, item.pulse.fullContext?.help.spoken).spoken)
         .accessibilityIdentifier("session-rail-\(item.id)")
-        .modifier(CellHelp(form: form, text: Dotted(item.session.title, item.pulse.shown?.label).visible))
+        .modifier(CellHelp(form: form, text: help))
     }
+
+    private var help: String { Dotted(item.session.title, item.pulse.shown?.label).visible }
 
     @ViewBuilder private var control: some View {
         #if os(macOS)
@@ -88,6 +90,8 @@ struct SessionRailCell: View {
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(.rect)
+        // 挂在行底以内：读的是这一行的悬停（`rowHovered`）
+        .railTip(form == .narrow ? help : nil)
     }
 
     private var name: some View {
@@ -118,12 +122,12 @@ struct SessionRailCell: View {
     }
 }
 
-/// 格子的悬停说明：收起的图标条（80）上没写名字，指针一停名字就浮在格子右边（`railTip`）；其余照系统的慢提示。
+/// 格子的悬停说明：收起的图标条（80）上没写名字，指针一停名字就浮在格子右边（`railTip`，挂在 `label` 里）；其余照系统的慢提示。
 private struct CellHelp: ViewModifier {
     let form: SessionRail.Form
     let text: String
 
     func body(content: Content) -> some View {
-        if form == .narrow { content.railTip(text) } else { content.help(text) }
+        if form == .narrow { content } else { content.help(text) }
     }
 }

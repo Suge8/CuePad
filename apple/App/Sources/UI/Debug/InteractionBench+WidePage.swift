@@ -2,12 +2,12 @@
 import AppKit
 
 /// 宽屏跨阈值时主区与 Cue 的页面保住了没有（`InteractionBench+Wide` 的 `page`：ok、untested、broken）。
-/// - 栏视图与栏里每个滚动视图还是原来那个对象：页面没被重建，内容随路由与会话一起由 `Snapshot` 比；
+/// - 块视图与块里原来的每个滚动视图都还在（宽了多露出的不算）：页面没被重建，内容随路由与会话一起由 `Snapshot` 比；收起的 Cue 藏着时不比，露出来那一下再比；
 /// - 每栏滚得最远的那个滚动视图像用户那样滚到中段（`scrollToMiddle`），记下可视区正中的那一条（看板卡、对话里的一条，按它们自己报的位置认，`benchSpot`）；
 ///   跨阈值后这一条还在可视区里，且没被滚回顶或底。栏宽变了内容会重新折行，离两端的距离跟着变，所以认那一条、不比距离。
 ///   读屏树认不了：没有辅助功能客户端连着时 SwiftUI 不在进程里建它。
 struct WidePage {
-    private let views: [ObjectIdentifier]
+    private let views: [WideSlot: [ObjectIdentifier]]
     private let readings: [Reading]
     /// 栏里没有能滚 `minimumTravel` 的滚动视图（内容不到一屏多）：阅读位置在这一栏验不了，只比对象，测量行里列出来。
     let untested: [String]
@@ -58,7 +58,7 @@ struct WidePage {
     private static let settleFrames = 120
 
     init(_ columns: [WideColumnView]) {
-        views = columns.flatMap { [ObjectIdentifier($0)] + Self.scrolls(in: $0).map(ObjectIdentifier.init) }
+        views = Dictionary(uniqueKeysWithValues: columns.map { ($0.slot, Self.objects(in: $0)) })
         baseline = columns.map { column in
             let scroll = Self.primary(in: column)
             return [
@@ -83,10 +83,15 @@ struct WidePage {
 
     /// 跨阈值之后的样子比起这份：对象换了或任一栏没保住是 broken；都保住了但有栏验不了是 untested，不算通过。逐栏的明细给测量行：
     /// 离两端的距离、那一条离可视区正中多远、它报的框与可视区（跨阈值前后；看不见了为空）。
+    /// 收起的 Cue 只是藏起、一直挂着（`MainWindow`）：藏着的那一块不比对象也不读位置（记作 kept），露出来的那一下再比。
     func compare(_ columns: [WideColumnView]) -> (verdict: Verdict, detail: [[String: Any]]) {
-        let now = columns.flatMap { [ObjectIdentifier($0)] + Self.scrolls(in: $0).map(ObjectIdentifier.init) }
+        let hidden = Set(columns.filter(\.isHidden).map(\.slot))
+        // 原来的对象都还在就是没重建；宽了多露出一块（如对话下面放得下了的一排）不算
+        let swapped = columns.filter { column in !hidden.contains(column.slot) && !Set(views[column.slot] ?? []).isSubset(of: Self.objects(in: column)) }
+        let changed = !swapped.isEmpty
         let detail = readings.map { reading -> [String: Any] in
             let column = columns.first { $0.slot == reading.column }
+            if hidden.contains(reading.column) { return ["column": "\(reading.column)", "verdict": Verdict.ok.rawValue, "kept": true] }
             let scroll = column.flatMap { Self.scrolls(in: $0).first { ObjectIdentifier($0) == reading.scroll } }
             let ends = scroll.flatMap(Self.ends)
             let shown = reading.anchor.flatMap { anchor in
@@ -104,8 +109,19 @@ struct WidePage {
             ]
         }
         let verdicts = detail.compactMap { $0["verdict"] as? String }.compactMap(Verdict.init)
-        if now != views || verdicts.contains(.broken) { return (.broken, detail) }
+        if changed || verdicts.contains(.broken) {
+            // 对象换了的那一块：列出它此刻的滚动视图（原来就有的 same、新出现或换了的 new），看是页被重建还是多出一块
+            let objects = swapped.map { column -> [String: Any] in
+                ["column": "\(column.slot)", "swapped": Self.scrolls(in: column).map { "\(type(of: $0)) \(Int($0.frame.width))x\(Int($0.frame.height)) \(views[column.slot]?.contains(ObjectIdentifier($0)) == true ? "same" : "new")" },
+                 "before": views[column.slot]?.count ?? 0]
+            }
+            return (.broken, detail + objects)
+        }
         return (untested.isEmpty ? .ok : .untested, detail)
+    }
+
+    private static func objects(in column: WideColumnView) -> [ObjectIdentifier] {
+        [ObjectIdentifier(column)] + scrolls(in: column).map(ObjectIdentifier.init)
     }
 
     private static func json(_ rect: CGRect?) -> Any {

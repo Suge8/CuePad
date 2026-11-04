@@ -14,10 +14,10 @@ struct TaskBoardPage: View {
 
     private static let margin = Spacing.page - 8
 
-    /// 看板右边让出栏头右端那几颗钮：同步提醒（有同步时常驻一格，`SyncAlertSlot`）、"⋯"与它前面的一道缝，再与最后一列隔一截。
+    /// 看板右边让出栏头右端那几颗钮："⋯"（`WideMetrics.boardMenu`，收起的 Cue 钮压在这一排时多让它那一截），同步要你关注时它左边再多一颗提醒（`SyncAlertSlot`，这一页不常驻）。
     private var trailing: CGFloat {
-        let menu = Spacing.toolbarGap + ControlMetrics.height + (services.sync == nil ? 0 : ControlMetrics.height)
-        return max(0, inset.trailing + menu + 12 - Self.margin)
+        let alert = SyncAlertSlot.needed(services) ? Spacing.toolbarGap + ControlMetrics.height : 0
+        return inset.trailing - MainColumn.edge + WideMetrics.boardMenu + alert
     }
 
     var body: some View {
@@ -30,6 +30,8 @@ struct TaskBoardPage: View {
             // `animation = nil` 挡不住里层的 `.animation(_:value:)`，只有 `disablesAnimations` 挡得住
             .transaction(value: scope) { $0.disablesAnimations = true }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // 列与列之间、"⋯"左边那截空着的最顶一排照样按住能拖窗口
+            .background(alignment: .top) { Color.clear.frame(height: WideMetrics.band).windowDragArea() }
             .background(palette.desk)
             .animation(Motion.fade, value: workspace.addsTask)
             .onChange(of: workspace.scopedProject) { workspace.addsTask = false }

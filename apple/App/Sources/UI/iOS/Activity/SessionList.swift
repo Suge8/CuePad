@@ -123,7 +123,7 @@ extension SessionList where Top == EmptyView {
     init(model: AgentListModel, filter: UUID?) { self.init(model: model, filter: filter) { EmptyView() } }
 }
 
-/// "新会话"：在 `project` 里开（宽屏顶栏右边的那一个操作）。
+/// "新会话"：在 `project` 里开（宽屏进展页顶右边的那一个操作，那里没有会话段）。
 struct NewSessionButton: View {
     let project: UUID?
 

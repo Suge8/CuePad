@@ -50,6 +50,7 @@ struct CueTitle: View {
         }
         .padding(.horizontal, MainColumn.edge)
         .frame(height: WideMetrics.band)
+        .windowDragArea()
     }
 }
 

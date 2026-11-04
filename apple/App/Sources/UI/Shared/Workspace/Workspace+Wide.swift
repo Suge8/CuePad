@@ -74,7 +74,10 @@ extension Workspace {
     func closeColumn(_ column: Column) {
         guard case .wide(var state) = navigation else { return }
         switch column {
-        case .main: state.main = state.beside.map(WideNavigation.Main.session) ?? .browse
+        case .main:
+            let beside = state.beside
+            state.beside = nil
+            state.main = beside.map(WideNavigation.Main.session) ?? .browse
         case .beside: state.beside = nil
         }
         presentWide(state)

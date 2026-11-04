@@ -28,10 +28,19 @@ struct MainColumn: View {
                 .zIndex(1)
             }
             .overlay(alignment: .bottom) { CaptureSlot() }
-            if !session { MainHead().padding(inset).frame(height: WideMetrics.band) }
+            if !session { head }
         }
         .environment(\.topBand, WideMetrics.band)
         .ignoresSafeArea(.container, edges: .top)
+    }
+
+    /// 进展页那一排是看板的列头：栏头只占右端那几颗钮，不盖住列头（空处拖窗口由看板自己接，`TaskBoardPage`）；别的页栏头铺满这一排，空处接拖窗口。
+    @ViewBuilder private var head: some View {
+        if workspace.mainRoute == .progress, workspace.overlay == nil {
+            MainHead().padding(inset).frame(maxWidth: .infinity, alignment: .trailing).frame(height: WideMetrics.band)
+        } else {
+            MainHead().padding(inset).frame(height: WideMetrics.band).windowDragArea()
+        }
     }
 }
 
@@ -50,6 +59,7 @@ struct BesideColumn: View {
 /// 主区的栏头（不是会话页时）：左边这一页是什么，右边同步提醒与"⋯"。
 private struct MainHead: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
 
     var body: some View {
         HStack(spacing: 0) {
@@ -60,7 +70,8 @@ private struct MainHead: View {
                 page
             }
             Spacer(minLength: Spacing.toolbarGap)
-            SyncAlertSlot()
+            // 看板那一排是列头，不给提醒常驻一格（列头少让一截）；要关注时才露
+            if workspace.mainRoute != .progress || SyncAlertSlot.needed(services) { SyncAlertSlot() }
             if workspace.mainRoute == .library, workspace.overlay == nil { LibraryHelpSlot() }
             PageMenuSlot()
         }
