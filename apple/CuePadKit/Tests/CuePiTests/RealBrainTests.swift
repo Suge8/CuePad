@@ -114,7 +114,7 @@ struct RealBrainTests {
     }
 
     /// 起一个大脑跑完测试体，不论成败都等它退出、收掉 OpenCode 的隔离环境。
-    private func withRig(_ runtime: AgentKind, _ body: (Rig) async throws -> Void) async throws {
+    func withRig(_ runtime: AgentKind, _ body: (Rig) async throws -> Void) async throws {
         let rig = try await Rig(runtime)
         let outcome: Result<Void, any Error>
         do { try await body(rig); outcome = .success(()) } catch { outcome = .failure(error) }
