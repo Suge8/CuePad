@@ -14,7 +14,8 @@ import Foundation
 /// - 都不是（试过的都卡着、重置没过或读不到）：轮到最近卡住的那家后面的一家，只在慢速周期到点（重来那一轮、重起大脑）时换，每个周期只试一家。
 /// - 一轮好好做完：那家不再算卡住，别的卡住记录清掉（你设定的那家的留着，等它的重置时刻）；它就是你设定的那家，绕行结束。
 ///   你或 Cue（`setup set`）改了设置也结束：后来的选择就是你设定的。
-/// 说的话：卡住当场换过去说一句从哪换到哪；没得换时那个错只说一次，慢速周期里换着家重来不再说；好好做完的那一轮说一句恢复了、用的哪家（`recovered`）。
+/// 说的话：卡住当场换过去说一句从哪换到哪；没得换时那个错只说一次，慢速周期里换着家重来不再说；换过去的那一家起不来照样说一次起不来；
+/// 不论换没换家，好好做完卡着的那件的一轮说一句恢复了、用的哪家（`recovered`）。
 /// 取舍：换回只认读得到的重置时刻，不为探你设定的那家好没好而反复换大脑（每换一次丢一次会话与提示缓存）；读不到的（登录）留在能用的那家，换回由你或 Cue 定。
 extension CueKeeper {
     // MARK: 重起与看门狗
@@ -68,6 +69,7 @@ extension CueKeeper {
             guard let (to, open) = detour.next(from: from, among: agents.kinds, at: .now), open, to != from else { return nil }
             try await switchBrain(to)
             failover = CueHealth.Failover(from: from, to: to, reason: summary.title, at: .now)
+            outage = outage ?? .switched
             let why = summary.shownTitle.embedded
             guard let resets else { return ShownText("\(from.name) \(why)，我换到 \(to.name) 接着干。") }
             let at = resets.formatted(Calendar.current.isDateInToday(resets) ? .dateTime.hour().minute() : .dateTime.month().day().hour().minute())
@@ -138,13 +140,14 @@ extension CueKeeper {
 
     /// 快的重试用完、要转慢的了：这次故障里说一次起不来（提示你），之后不再说，恢复时说一句（`recovered`）。绕行换过去的那家起不来也算卡住（`markDown`）。
     func tellDown(_ reason: ShownText) async {
-        guard !outageTold else { return }
-        outageTold = true
+        guard outage != .down else { return }
+        outage = .down
         await say(.cue, ShownText("我起不来了：\(reason.embedded)\n我隔一阵会自己再试；你发条消息，我马上再试。"), urgent: true)
     }
 
     /// 一轮好好做完：这家能用，绕行里留它（不再算卡住，别的卡住记录清掉，你设定的那家的留着等重置）；它就是你设定的那家，绕行结束。
-    /// `resolved`（卡着的那件也做完了）且说过起不来、卡住（`outageTold`）：说一句恢复了、用的哪家，这次故障里只说这一句；起好又挂、反复起不来的都不算。
+    /// `resolved`（卡着的那件也做完了）且这次故障告诉过你（换了家、起不来、卡住，`outage`）：说一句恢复了、用的哪家，这次故障里只说这一句；
+    /// 起好又挂、反复起不来的都不算。
     func recovered(_ resolved: Bool) async {
         let kind = brainSettings?.runtime.known
         if let detour = progress.detour, let kind {
@@ -156,8 +159,8 @@ extension CueKeeper {
                 save()
             }
         }
-        guard resolved, outageTold, let kind else { return }
-        outageTold = false
+        guard resolved, outage != nil, let kind else { return }
+        outage = nil
         await say(.cue, ShownText("又能干活了，用的是 \(kind.name)。"))
     }
 

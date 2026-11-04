@@ -150,7 +150,7 @@ extension CueKeeper {
             guard setback?.persistent != true, summary.line != toldFailure else { return }
             toldFailure = summary.line
             // 卡住了（额度、登录，没得换）：好好做完的那一轮说一句恢复了（`recovered`）
-            if !Self.retryable(summary) { outageTold = true }
+            if !Self.retryable(summary) { outage = .down }
             // 认不出的错，摘要只是原文的首行
             let text = summary.kind == .other ? ShownText("这一轮出错了：\(raw)") : ShownText("这一轮出错了：\(summary.shownTitle.embedded)\n\(raw)")
             if let turn, turn.answersYou { await reply(text, in: turn) } else { await say(.cue, text) }

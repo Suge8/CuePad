@@ -111,8 +111,15 @@ final class CueKeeper {
     var timer: Task<Void, Never>?
     /// 最近一次大脑事件（或一轮开始）在看门狗的钟上的时刻（`CueTiming.awake`）：看门狗从它算（`alarm`）
     @ObservationIgnored var heardAt: SuspendingClock.Instant
-    /// 这次故障已告诉你起不来了（`tellDown`）或卡住了（额度、登录），恢复时说一句（`recovered`）
-    @ObservationIgnored var outageTold = false
+    /// 这次故障里告诉过你什么：换了一家（`failOver`），或起不来、卡住了（`tellDown`，额度登录没得换时的那个错）；好好做完的那一轮说一句恢复了就清掉（`recovered`）
+    @ObservationIgnored var outage: Outage?
+
+    enum Outage {
+        /// 说过换到哪家接着干：之后那家起不来照样说起不来
+        case switched
+        /// 说过起不来、卡住：这次故障里不再说
+        case down
+    }
     /// 下一次醒来是上一轮出错后的重来：上一轮的错，随信封交给大脑（`CueEnvelope.Input.retrying`），交出去就清掉
     @ObservationIgnored var retrying: String?
     /// 最近一次出错与换大脑：写进健康（`health`）
