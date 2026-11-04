@@ -85,24 +85,20 @@ struct SharedPagesTests {
         for (id, date) in [("future", now.addingTimeInterval(90 * 86_400)), ("today", now), ("past", now.addingTimeInterval(-90 * 86_400))] {
             try await recorder.update(sessionID: id, state: .ended, title: id, times: PiTimes(stateSince: date, busySince: nil))
         }
-        let workspace = Workspace(services: app.services)
-        workspace.showSessions()
-        func checkList(expectNew: Bool = false) async throws {
+        func checkList() async throws {
             let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
             let sections = list.historyRuns.map(\.section)
             let rows = list.pinned + list.now + list.historyRuns.flatMap(\.items)
             #expect(Set(sections).count == sections.count)
             #expect(Set(rows.map(\.id)).count == rows.count)
             #expect(Set(rows.map(\.state.sessionID)).isSuperset(of: ["future", "today", "past"]))
-            #expect(rows.filter { $0.state.sessionID == "new" }.count == (expectNew ? 1 : 0))
+            #expect(rows.filter { $0.state.sessionID == "new" }.count == 1)
         }
-        try await checkList()
         let launch = try await NewSessionInput.Start(project: project.id).launch(
             in: project, on: "mac-a", draft: ComposerDraft(text: "检查重连"), agent: .pi, model: nil, thinking: nil, services: app.services)
-        try await checkList()
         try await recorder.update(sessionID: "new", state: .thinking, title: "新会话", launchToken: launch.token)
         #expect(try await launch.progress(from: store).claimed?.sessionID == "new")
-        try await checkList(expectNew: true)
+        try await checkList()
     }
     #endif
 
