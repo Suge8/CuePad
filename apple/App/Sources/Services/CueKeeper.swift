@@ -218,7 +218,8 @@ final class CueKeeper {
             group.cancelAll()
         }
         timer?.cancel()
-        await shift?.brain.stop()()
+        // 不再值班（停用、App 退出）：在跑的那一轮没答上的你的话退回，下次值班重新交
+        if let shift { await retire(shift) }
         clearHealth()
     }
 

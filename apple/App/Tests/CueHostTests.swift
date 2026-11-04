@@ -104,6 +104,24 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// 一轮还没答完你就停用 Cue（App 退出同一条路）：交出去没答上的那句退回没送达，再启用时重新交给它、只答一次。
+    @Test func 一轮没答完就停用_那句退回_再启用时答上() async throws {
+        let rig = try await Rig()
+        try await rig.say("请等我放行")
+        try await eventually("这一轮停在模型那里") { rig.model.holding }
+        _ = try await rig.store.updateCueProfile { $0.enabledAt = nil }
+        try await eventually("那句退回没送达") { try await rig.store.cueMessages().first { $0.text == "请等我放行" }?.deliveredAt == nil }
+        rig.model.release()
+        let host = TestApp.hostID
+        _ = try await rig.store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
+        try await eventually("再启用后重新交出") { try await rig.store.cueMessages().first { $0.text == "请等我放行" }?.deliveredAt != nil }
+        try await eventually("答上了") { rig.model.holding }
+        rig.model.release()
+        try await rig.message(.cue, containing: "先这样")
+        #expect(try await rig.count("先这样") == 1)
+        await rig.stop()
+    }
+
     /// 你在 Cue 页发图：资料库里的图片引用转成图片交给大脑（假模型收到的是图片，不只是文字里的引用），Cue 照图回答。
     @Test func 你发图_Cue看得见() async throws {
         let rig = try await Rig()

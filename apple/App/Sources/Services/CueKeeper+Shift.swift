@@ -83,7 +83,7 @@ extension CueKeeper {
         if setup.timing.isDown(after: failures) { await tellDown(reason) }
     }
 
-    /// 停掉这个班次的大脑：交给它、还没答上的你的话（`Shift.unanswered`）清掉送达，下一个大脑重新交。出了问题与换班次都经这里。
+    /// 停掉这个班次的大脑：交给它、还没答上的你的话（`Shift.unanswered`）清掉送达，下一个大脑重新交。出了问题、换班次与不再值班都经这里。
     func retire(_ shift: Shift) async {
         await shift.brain.stop()()
         guard !shift.unanswered.isEmpty else { return }
