@@ -13,12 +13,7 @@ struct OlderList: View {
     var body: some View {
         let total = groups.reduce(0) { $0 + $1.cards.count }
         VStack(alignment: .leading, spacing: 18) {
-            // 与"最近"同一种分组标题
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("更早").font(Typography.sectionTitle).foregroundStyle(palette.ink)
-                Text("\(total)").font(Typography.sectionCount).foregroundStyle(palette.ink3)
-            }
-            .id(ScrollAnchor.older)
+            SectionHeader("更早", count: total).id(ScrollAnchor.older)
             let titled = OlderGroup.needsTitles(in: groups)
             ForEach(groups, id: \.period) { group in
                 section(group, titled: titled)
@@ -29,10 +24,7 @@ struct OlderList: View {
     private func section(_ group: OlderGroup, titled: Bool) -> some View {
         let open = isExpanded(group)
         let header = HStack {
-            if group.isMonth {
-                Image(.forward).font(Glyph.mark).accessibilityHidden(true)
-                    .rotationEffect(.degrees(open ? 90 : 0))
-            }
+            if group.isMonth { Chevron(.forward).rotationEffect(.degrees(open ? 90 : 0)) }
             Text(OlderGroupTitle.text(group.period)).font(Typography.label).foregroundStyle(palette.ink2)
             Spacer()
             Text("\(group.cards.count) 条").font(Typography.meta).foregroundStyle(palette.ink3)
@@ -55,8 +47,7 @@ struct OlderList: View {
                 // 懒加载：大项目三个月内按周展开的行可达上千，全建出来时每个滚轮事件的命中测试与每帧布局都按行数增长。
                 // 行高固定，未建出的部分高度估得准，滚动条不跳
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(group.cards.compactMap { cards[$0] }.enumerated()), id: \.element.id) { index, card in
-                        if index > 0 { Rectangle().fill(palette.hair).frame(height: 1).padding(.leading, 40) }
+                    ForEach(group.cards.compactMap { cards[$0] }) { card in
                         OlderRow(card: card, lastTarget: lastTarget[card.id])
                     }
                 }
@@ -125,7 +116,7 @@ extension OlderRow {
     }
 }
 
-/// 行首的小图标（置顶的是图钉）；批量选择里选上时换成签名色的对勾。
+/// 行首的小图标（置顶的是图钉）；批量选择里选上时换成墨色对勾（`PickedMark`，底是行的选中底）。
 private struct RowGlyph: View {
     let attached: Bool
     let pinned: Bool
@@ -135,7 +126,7 @@ private struct RowGlyph: View {
     var body: some View {
         Group {
             if selected {
-                Image(.picked).foregroundStyle(palette.onFill, palette.signature)
+                PickedMark()
             } else {
                 Image(pinned ? .pin : attached ? .attachment : .document).foregroundStyle(pinned ? palette.ink2 : palette.ink3)
             }

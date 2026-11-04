@@ -19,6 +19,7 @@ enum ProjectDirectory {
 }
 
 /// 新建或编辑项目：名称、一句话介绍、图标、颜色；新建时还可以选文件夹（不选的第一次开工时建工作区，之后在项目菜单里换）。
+/// 只给内容，圆角、描边与投影是所在的浮层（`panel`）的；按钮同一档高（`compact`），"创建""保存"是这里唯一的主按钮。
 struct ProjectForm: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.closePanel) private var close
@@ -32,24 +33,37 @@ struct ProjectForm: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(draft.title).font(Typography.bodyStrong)
-            TextField(ProjectDraft.namePrompt, text: $draft.name).textFieldStyle(.roundedBorder).onSubmit(save)
-            TextField(ProjectDraft.introPrompt, text: $draft.intro).textFieldStyle(.roundedBorder).onSubmit(save)
+        VStack(alignment: .leading, spacing: Spacing.block) {
+            Text(draft.title).font(Typography.bodyStrong).foregroundStyle(palette.ink)
+            field(ProjectDraft.namePrompt, text: $draft.name)
+            field(ProjectDraft.introPrompt, text: $draft.intro)
             ProjectStylePicker(icon: $draft.icon, color: $draft.color, cell: 30)
             if draft.project == nil { folderRow }
-            HStack {
+            HStack(spacing: Spacing.item) {
                 Spacer()
                 // Esc 由弹层接（关掉即取消）
                 Button("取消", role: .cancel) { close() }
+                    .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
                 Button(draft.confirm, action: save)
+                    .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
                     .keyboardShortcut(.defaultAction)
                     .disabled(!draft.canSave)
             }
         }
-        .padding(20)
+        .padding(Spacing.panel)
         .frame(width: 340)
-        .background(palette.desk)
+        // 浮层自己不铺底（Mac 的模态内容各自铺），纸只能在这里给
+        .background(palette.paper)
+    }
+
+    /// 名称与介绍：同一种淡底单行框，与一排控件同高。
+    private func field(_ prompt: String, text: Binding<String>) -> some View {
+        TextField(prompt, text: text, palette: palette)
+            .textFieldStyle(.plain).font(Typography.body).foregroundStyle(palette.ink)
+            .padding(.horizontal, Spacing.inset)
+            .frame(height: ControlSize.regular.height)
+            .background(palette.fill, in: Radius.nested)
+            .onSubmit(save)
     }
 
     /// 文件夹：没选时是"选择…"，选了写末段名（悬停看完整路径）并可清掉。
@@ -63,6 +77,7 @@ struct ProjectForm: View {
                     .labelStyle(.iconOnly).buttonStyle(PressStyle(.inline)).foregroundStyle(palette.ink2)
             } else {
                 Button("选择…") { Task { folder = await ProjectDirectory.pick() } }
+                    .buttonStyle(ControlButtonStyle(size: .compact))
             }
         }
     }

@@ -66,14 +66,14 @@ struct CardTile: View {
         Button(action: open) {
         CardFace(card: card, lastTarget: lastTarget, floated: floated)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(SelectedCard())
         .paper()
-        .overlay { SelectedFrame() }
         .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(CardOpenStyle())
         .overlay(alignment: .bottomTrailing) {
             if hovering, !workspace.presses.isSelecting {
-                DeleteCardButton(card: card.id).padding(10).transition(.opacity)
+                DeleteCardButton(card: card.id).padding(Spacing.item).transition(.opacity)
             }
         }
         .cardPresence(card.id, in: workspace)
@@ -111,7 +111,8 @@ struct DeleteCardButton: View {
     }
 }
 
-/// 删除钮的样子：指针停在钮上（`buttonHovered`）时垃圾桶变成出错色。
+/// 删除钮的样子：看得见的圆是 `inline` 那一档（浮在卡角、行尾，不压字），点得到的是 `ControlSize.target` 见方；
+/// 指针停在钮上（`buttonHovered`）时垃圾桶变成出错色。
 private struct DeleteGlyph: View {
     @Environment(\.buttonHovered) private var lit
     @Environment(\.palette) private var palette
@@ -120,29 +121,40 @@ private struct DeleteGlyph: View {
         Image(.trash)
             .font(Typography.meta.weight(.medium))
             .foregroundStyle(lit ? palette.failure : palette.ink2)
-            .frame(width: 24, height: 24)
+            .frame(width: ControlSize.inline.height, height: ControlSize.inline.height)
             .background(palette.paperLit, in: .circle)
             .overlay(Circle().strokeBorder(palette.hair))
             .elevation(.hover)
+            .frame(width: ControlSize.target, height: ControlSize.target)
             .contentShape(.circle)
     }
 }
 
-/// 批量选择里选上的卡：一圈签名色的边，右上角一个对勾。
-private struct SelectedFrame: View {
+/// 批量选择里选上的卡：纸上铺一层选中底，右上角一个墨色对勾（全 App 一套选中，docs/ui.md「选中」，不着靛青）。
+/// 挂在卡面外、纸里面：底垫在字下，卡面不随选中重算。
+private struct SelectedCard: ViewModifier {
     @Environment(\.cardSelected) private var selected
     @Environment(\.palette) private var palette
 
-    var body: some View {
-        if selected {
-            RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.signature, lineWidth: 2)
-                .overlay(alignment: .topTrailing) {
-                    Image(.picked).font(Glyph.large).foregroundStyle(palette.onFill, palette.signature)
-                        .padding(10)
+    func body(content: Content) -> some View {
+        content
+            .background {
+                if selected { RoundedRectangle(cornerRadius: Radius.card).fill(palette.selection).transition(.opacity) }
+            }
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    PickedMark().font(Glyph.large).padding(10).transition(.opacity)
                 }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-        }
+            }
+    }
+}
+
+/// 批量选择里选上的记号：墨色圆里一个纸色对勾（深色下墨是浅的，勾跟着取纸色才看得见）。墙上的卡与"更早"的行同一个。
+struct PickedMark: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Image(.picked).foregroundStyle(palette.paper, palette.ink).allowsHitTesting(false)
     }
 }
 

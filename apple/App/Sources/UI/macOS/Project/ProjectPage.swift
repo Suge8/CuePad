@@ -7,7 +7,6 @@ struct ProjectPage: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.pageActive) private var active
     @State private var data: ProjectPageData?
@@ -116,8 +115,7 @@ struct ProjectPage: View {
     /// 置顶的灵感：长期参考的，一行一条压在任务纸下面；不另起组名，行首的图钉认得出。
     private func pinned(_ cards: [Card], lastTarget: [UUID: String]) -> some View {
         VStack(spacing: 0) {
-            ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
-                if index > 0 { Rectangle().fill(palette.hair).frame(height: 1).padding(.leading, 40) }
+            ForEach(cards) { card in
                 OlderRow(card: card, lastTarget: lastTarget[card.id], pinned: true)
             }
         }
@@ -126,10 +124,7 @@ struct ProjectPage: View {
 
     private func wallSection(title: LocalizedStringResource, count: Int, ids: [UUID], byID: [UUID: Card], lastTarget: [UUID: String]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.group) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(title).font(Typography.sectionTitle).foregroundStyle(palette.ink)
-                Text("\(count)").font(Typography.sectionCount).foregroundStyle(palette.ink3)
-            }
+            SectionHeader(title, count: count)
             MasonryLayout(minColumnWidth: Self.minColumnWidth, maxColumns: Self.maxColumns, spacing: Self.wallSpacing) {
                 ForEach(ids.compactMap { byID[$0] }) { card in
                     CardTile(card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id))
