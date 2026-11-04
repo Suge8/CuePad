@@ -76,9 +76,9 @@ extension LongScript {
         后端那 21 个测试也重跑了一遍，都还是绿的。接下来做 /reset 页。
         """
 
-    /// 补上版本号的交回：CHANGELOG 记的是评测当天（写死的日期 Cue 会照实要它改，剧本就走不到 done）；同做完交回一样没提交、证据给全
-    /// （改动、测试、lint、类型检查）。剧本只回这一次：缺哪样 Cue 都会再要，这件就收不了尾
-    static var bumpDone: String {
+    /// 补上版本号的交回：CHANGELOG 记的是评测当天（写死的日期 Cue 会照实要它改，剧本就走不到 done）；证据给全（改动、测试、lint、类型检查）。
+    /// 提交了没有照 Cue 这一遍对它交代的（`EvalReading.asksToCommit`）：Cue 每遍交代的不一样，写死哪一种都有几遍收不了尾
+    static func bumpDone(committed: Bool) -> String {
         let today = Date.now.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
         return """
             补上了：package.json 的版本号 2.3.0 → 2.3.1，CHANGELOG.md 加了一条。
@@ -101,11 +101,50 @@ extension LongScript {
             ✔ No problems
             $ npm run typecheck
             ✔ tsc --noEmit: 0 errors
-            ```
+            \(committed ? committedLog : "")```
 
-            和前面的改动一样都还没提交、没有推送；e2e 按要求没跑。
+            \(committed ? "按你说的连同前面的改动做成了一个本地提交，没有推送" : "和前面的改动一样都还没提交、没有推送")；e2e 按要求没跑。
             """
     }
+
+    /// 补上版本号之后 Cue 还要的（实测是提交与模板关系）：照它最新的交代答提交，说清两个模板的关系，证据再贴一遍
+    static func wrapFollowUp(committed: Bool) -> String {
+        """
+        \(committed ? "提交好了，没有推送" : "按你说的没提交、没有推送")。模板：新的 reset.mjml 用 mj-include 引进 verify.mjml 那套页眉、按钮与页脚，\
+        只写自己的标题、正文和按钮文案，所以 git status 里它是新文件、verify.mjml 没改。
+
+        ```
+        $ npm test
+        Tests:       46 passed, 46 total
+        $ npm run lint
+        ✔ No problems
+        $ npm run typecheck
+        ✔ tsc --noEmit: 0 errors
+        \(committed ? committedLog : "")```
+
+        e2e 按要求没跑。
+        """
+    }
+
+    private static let committedLog = """
+        $ git log -1 --stat --format='%h %s'
+        7c41e9a 登录页加忘记密码，版本升到 2.3.1
+         CHANGELOG.md                                |   6 +
+         migrations/20261019_add_password_resets.sql |  12 +
+         package.json                                |   2 +-
+         src/pages/ForgotPage.tsx                    |  88 +
+         src/pages/LoginPage.tsx                     |   6 +-
+         src/pages/ResetPage.tsx                     | 104 +
+         src/server/auth/reset.ts                    | 131 +
+         src/server/routes/auth.ts                   |  24 +-
+         templates/mail/reset.mjml                   |  41 +
+         tests/auth/reset-request.test.ts            |  77 +
+         tests/auth/reset.test.ts                    |  81 +
+         tests/pages/ForgotPage.test.tsx             |  58 +
+         tests/pages/ResetPage.test.tsx              |  70 +
+         13 files changed, 697 insertions(+), 3 deletions(-)
+
+        """
 
     static let widgetQuestion = """
         客服挂件怎么改？
