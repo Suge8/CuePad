@@ -155,11 +155,11 @@ enum BubbleMetrics {
     static let capsule: CGFloat = 28
     static let stripPadding = EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
     #else
-    static let strong = Font.subheadline.weight(.semibold)
-    static let meta = Font.footnote
+    static let strong = Typography.secondary.weight(.semibold)
+    static let meta = Typography.meta
     static let padding = EdgeInsets(top: 6, leading: 8, bottom: 14, trailing: 8)
     static let laneMark: CGFloat = 20
-    static let laneFont = Font.subheadline.weight(.semibold)
+    static let laneFont = Typography.secondary.weight(.semibold)
     static let titleSize: CGFloat = 20
     static let bodySize: CGFloat = 16
     static let editorInset: CGFloat = 10

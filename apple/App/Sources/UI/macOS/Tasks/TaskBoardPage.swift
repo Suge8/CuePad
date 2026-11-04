@@ -18,7 +18,7 @@ struct TaskBoardPage: View {
 
     /// 看板右边让出栏头右端那几颗钮："⋯"（`WideMetrics.boardMenu`，收起的 Cue 钮压在这一排时多让它那一截），同步要你关注时它左边再多一颗提醒（`SyncAlertSlot`，这一页不常驻）。
     private var trailing: CGFloat {
-        let alert = SyncAlertSlot.needed(services) ? Spacing.toolbarGap + ControlMetrics.height : 0
+        let alert = SyncAlertSlot.needed(services) ? Spacing.item + ControlMetrics.height : 0
         return inset.trailing - Spacing.page + WideMetrics.boardMenu + alert
     }
 

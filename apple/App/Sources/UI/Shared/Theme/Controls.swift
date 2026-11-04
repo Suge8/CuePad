@@ -134,7 +134,7 @@ struct ControlSurface: ViewModifier {
             content
                 .font(Typography.secondary.weight(.medium))
                 .foregroundStyle(ink)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, ControlSize.compact.padding)
                 .frame(height: ControlMetrics.height)
                 .contentShape(.capsule)
                 .glass(in: .capsule, interactive: true)

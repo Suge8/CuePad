@@ -9,11 +9,7 @@ struct UnreadableLibraryView: View {
     @State private var details = false
 
     /// 纸离窗口或屏幕左右边的距离：与各平台页面内容的边距一致。
-    #if os(iOS)
-    private static let margin: CGFloat = 16
-    #else
     private static let margin = Spacing.page
-    #endif
 
     /// 纸最宽多少：整窗只有这一张（Mac 主窗口、iPad）时不铺满，同启动时打不开库那一扇窗的宽。
     private static let widest: CGFloat = 520

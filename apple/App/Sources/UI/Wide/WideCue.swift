@@ -11,7 +11,7 @@ struct CueButton: View {
 
     #if os(macOS)
     /// 它压在最右那一块的栏头右端，那一块的栏头右边让出：窗边、钮宽、与 × 之间一道缝。
-    static let reserve: CGFloat = Spacing.page + ControlMetrics.height + Spacing.toolbarGap
+    static let reserve: CGFloat = Spacing.page + ControlMetrics.height + Spacing.item
     #endif
 
     var body: some View {

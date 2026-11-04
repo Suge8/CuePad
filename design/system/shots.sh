@@ -38,6 +38,8 @@ ios-sidebar         $d -CuePadScene sidebar
 ios-project         $d -CuePadScene project -CuePadProject CuePad
 ios-progress        $d -CuePadScene progress
 ios-sessions        $d -CuePadScene sessions
+ios-panel-rows      $d -CuePadScene cue -CuePadCuePanel YES -theme dark
+ios-quota           $d -CuePadScene progress -CuePadQuotaOpen YES
 ios-session         $d -CuePadScene session
 ios-session-dark    $d -CuePadScene session -theme dark
 ios-cardpicker      $d -CuePadScene session -CuePadSession scratch -CuePadComposer cards

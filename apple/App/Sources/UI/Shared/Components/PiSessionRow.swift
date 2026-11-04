@@ -63,7 +63,7 @@ struct PiSessionRow: View {
     private var ended: Bool { session.state == .known(.ended) && !session.isWaking(by: delivery, at: services.speech) }
 
     private func card(shown: PiShown, facts: PiRowFacts) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
             if !ended { PiStateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID) }
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
@@ -188,7 +188,7 @@ struct SessionCard: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: Radius.card)
         content
-            .padding(.horizontal, 16).padding(.vertical, 14)
+            .padding(.horizontal, Spacing.inset).padding(.vertical, Spacing.group)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 shape.fill(wash ?? palette.paper)

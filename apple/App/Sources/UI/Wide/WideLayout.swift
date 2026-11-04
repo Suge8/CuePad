@@ -17,7 +17,7 @@ struct WideMetrics {
     static var board: CGFloat { BoardColumns.narrowest(margin: TaskBoardPage.margin) }
     /// Mac 看板右边让给最顶那一排末尾的"⋯"（列头与它同一排，`TaskBoardPage`）：钮前那道缝与圆钮——栏头右边距与看板的页边、卡离列边加起来一样多，抵掉了。
     /// 算进主区放看板的最窄宽：少了它，正好在临界宽时最后一列钻到"⋯"底下、要横滑才看得全。
-    static var boardMenu: CGFloat { Spacing.toolbarGap + ControlMetrics.height }
+    static var boardMenu: CGFloat { Spacing.item + ControlMetrics.height }
     #else
     static let board: CGFloat = 756
     #endif

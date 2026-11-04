@@ -23,7 +23,7 @@ struct QuotaDetail: View {
         } else {
             Moments(next: quotas.nextReset(after:)) { now in
                 let meters = QuotaMeter.all(quotas, at: now)
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: Spacing.block) {
                     // 读屏按定好的顺序：两栏的块上沿相近时，系统按几何会先读左栏下面那块
                     QuotaColumns {
                         ForEach(Array(meters.enumerated()), id: \.element.id) { index, meter in
@@ -40,6 +40,13 @@ struct QuotaDetail: View {
         }
     }
 }
+
+#if os(iOS)
+extension QuotaDetail {
+    /// 从顶栏长出的玻璃里（`GrowPanel`：窄屏侧栏的额度钮、宽屏进展页顶那一块）明细离玻璃的边：上面贴着长出它的那一排，左右与下面是面板的内边。
+    static let grownInsets = EdgeInsets(top: Spacing.tight, leading: Spacing.panel, bottom: Spacing.panel, trailing: Spacing.panel)
+}
+#endif
 
 #if os(macOS)
 extension QuotaDetail {
@@ -140,15 +147,15 @@ private struct QuotaAccount: View {
     private static let iconGap: CGFloat = 8
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             HStack(spacing: Self.iconGap) {
                 PiProvider(id: meter.provider).mark?.image
                     .foregroundStyle(palette.ink2)
                     .frame(width: iconColumn)
-                MetaLine(gap: 8) { title } meta: { status }
+                MetaLine(gap: Spacing.item) { title } meta: { status }
             }
             if meter.balance != nil || !meter.values.isEmpty || !meter.windows.isEmpty || meter.usageURL != nil {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Spacing.item) {
                     if let balance = meter.balance { balanceRow(balance) }
                     ForEach(Array(meter.values.enumerated()), id: \.offset) { _, value in QuotaValueRow(value: value) }
                     ForEach(meter.windows) { QuotaWindowRow(window: $0) }
@@ -191,7 +198,7 @@ private struct QuotaAccount: View {
 
     /// 余额与窗口同一种排法：左边名字、右边大号的数；欠费时名字写欠费、数用胭脂，原串不改。
     private func balanceRow(_ balance: String) -> some View {
-        MetaLine(gap: 8) {
+        MetaLine(gap: Spacing.item) {
             Text(meter.owes ? "欠费" : "余额").font(Typography.meta).fontWeight(.medium).foregroundStyle(meter.owes ? palette.failure : palette.ink)
         } meta: {
             Text(verbatim: balance).font(Typography.gaugeNumber).foregroundStyle(meter.owes ? palette.failure : palette.ink)
@@ -207,8 +214,8 @@ private struct QuotaWindowRow: View {
 
     var body: some View {
         let critical = window.level == .critical
-        VStack(alignment: .leading, spacing: 6) {
-            MetaLine(gap: 8) {
+        VStack(alignment: .leading, spacing: Spacing.glyph) {
+            MetaLine(gap: Spacing.item) {
                 heading.font(Typography.meta)
             } meta: {
                 Text("剩 \(Text(window.percent).font(Typography.gaugeNumber).foregroundStyle(critical ? palette.failure : palette.ink))")

@@ -47,7 +47,7 @@ struct SettingsForm<Content: View>: View {
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    private static var readableWidth: CGFloat { 640 }
+    private static var readableWidth: CGFloat { Spacing.reading }
 
     var body: some View {
         Form {

@@ -26,7 +26,7 @@ struct CloseButton: View {
             .keyboardShortcut(.cancelAction)
             .help("收起（Esc）")
             .accessibilityLabel("收起")
-            .padding(.trailing, Spacing.toolbarGap)
+            .padding(.trailing, Spacing.item)
         }
     }
 }

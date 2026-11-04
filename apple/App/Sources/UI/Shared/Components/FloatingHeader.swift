@@ -73,8 +73,8 @@ extension EnvironmentValues {
 nonisolated enum FloatingHeaderLayout {
     /// 与系统返回钮、工具栏圆钮同高；顶部的提示横幅与它同高、盖在中间那块的位置（`NoticeBanner`）。
     static let height: CGFloat = 44
-    /// 这一排离屏幕左右边的空。
-    static let margin: CGFloat = 16
+    /// 这一排离屏幕左右边的空（同页面内容的边）。
+    static let margin = Spacing.page
     /// 一颗圆钮连同它与中间那块之间的空：铺满中间的那块（搜索框、提示横幅）按它让出圆钮。
     static let slot = height + 8
     /// 这一排定高，字号跟着动态字体放大到这一档为止（同系统的导航栏与标签栏）：再大圆钮里的图标与中间那块的字就撑出这一排、把两颗圆钮挤出屏幕。
@@ -198,7 +198,7 @@ private struct TitleStack<Detail: View>: View {
 
     var body: some View {
         VStack(spacing: 1) {
-            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+            Text(title).font(Typography.toolbarTitlePaired).foregroundStyle(palette.ink).lineLimit(1)
             detail
         }
         .handOff(id: ["title"] + wording)
@@ -215,7 +215,7 @@ private struct HeaderDetail: View {
     var body: some View {
         Group {
             if let text {
-                (text.isEmpty ? Text(" ") : Text(text)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1).rollingCount(text)
+                (text.isEmpty ? Text(" ") : Text(text)).font(Typography.toolbarSubtitle.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1).rollingCount(text)
             }
         }
     }

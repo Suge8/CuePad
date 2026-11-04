@@ -29,8 +29,13 @@ import SwiftUI
 /// 只能管铺满的行；系统 `List` 的选中——Mac 上是灰胶囊、压不过墨色体系（见 `Sidebar`），手机上要整页换成 `List`。
 enum RowMetrics {
     #if os(iOS)
+    /// 带字的一行的高（列表行、点进去的行 `LinkRow`、会话条宽版的行，`Chrome.row` 就是它）。触控：手指点得准的最小高（HIG 44）；
+    /// 接了触控板的 iPad 也是这一档——手指随时会点，iPadOS 自己的侧栏也不因指针改行高。
+    static let height: CGFloat = 44
     static let bleed: CGFloat = 10
     #else
+    /// 指针（Mac）：同访达侧栏的中号行。
+    static let height: CGFloat = 32
     static let bleed: CGFloat = 8
     #endif
     /// 悬停露出的操作垫的实底靠字那一侧淡入的宽度（`hoverReveal`）。

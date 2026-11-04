@@ -32,7 +32,7 @@ struct CardEditorPage: View {
     /// 一行字最宽：苹方 15.5pt 约 44 个字，再宽读到行尾回头找下一行就费劲。
     fileprivate static let textWidth: CGFloat = 680
     /// 字离编辑区左右边的最小距离（窗口窄时）。
-    fileprivate static let inset: CGFloat = 24
+    fileprivate static let inset = Spacing.page
     private static let barClearance: CGFloat = 84
     /// 编辑区下沿淡出的那一段（内容自己的透明度，不往上画颜色）。
     private static let bottomFade: CGFloat = 28

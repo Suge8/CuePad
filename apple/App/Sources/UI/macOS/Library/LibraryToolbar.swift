@@ -30,7 +30,7 @@ struct LibraryHelpSlot: View {
             .panel(isPresented: $open, style: .bubble(frame.map(BubbleSource.control) ?? .unanchored)) {
                 if let library = workspace.library { LibraryHelp(library: library) }
             }
-            .padding(.leading, Spacing.toolbarGap)
+            .padding(.leading, Spacing.item)
             .keepsPlace(shown: workspace.overlay == nil)
     }
 }

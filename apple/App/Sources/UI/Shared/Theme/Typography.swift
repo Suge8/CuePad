@@ -85,9 +85,16 @@ enum Typography {
     static let codeNote = Font.caption.monospaced()
     static let inlineCode = Font.callout.monospaced()
     static let readingLineSpacing: CGFloat = 4
-    /// 宽屏栏头的标题与它后面那一行（iPad，同 Mac 那两档的角色）。
+    static let sectionCount = Font.footnote.monospacedDigit()
+    /// 宽屏栏头的标题与它后面那一行（iPad，同 Mac 那两档的角色）；页顶玻璃里两行的标题是 `toolbarTitlePaired`，下面那一行仍是 `toolbarSubtitle`。
     static let toolbarTitle = Font.headline
+    static let toolbarTitlePaired = Font.subheadline.weight(.semibold)
     static let toolbarSubtitle = Font.caption
+    /// 钮上的字（分段的各段）。手机上半粗：触屏的段比 Mac 宽，中号字重在玻璃上发虚。
+    static let toolbarLabel = Font.subheadline.weight(.semibold)
+    /// 看板列头（横屏与 iPad 四列、手机的行头）：列名与数，同 Mac 那两档的角色。
+    static let laneTitle = Font.headline
+    static let laneCount = Font.title2.weight(.semibold)
     static let title = Font.title3.weight(.semibold)
     static let emptyTitle = Font.title3.weight(.semibold)
     static let gaugeNumber = Font.system(.body, design: .rounded, weight: .semibold).monospacedDigit()
@@ -100,23 +107,3 @@ enum Typography {
     /// 一个换行撑出的空行：`Text` 不认段距，块与块之间用一个这个字号的换行拉开。
     static func gap(_ height: CGFloat) -> Font { .system(size: height) }
 }
-
-#if os(macOS)
-/// Mac 的间距：栏边、分组间距（窗口外框——栏头那一排与会话条——的尺寸在 `Chrome`）。都在 4 点的格上。
-nonisolated enum Spacing {
-    /// 一栏的边：页面内容的左右边距，也是这一栏栏头里第一样东西与最后一颗钮离栏边（栏头与下面的内容同一条左边、同一条右边）。
-    /// 看板的卡、项目页的纸、对话的列（`SessionChat`、`CuePage` 的 inset）都从这里起。
-    static let page: CGFloat = 24
-    /// 对话的阅读栏最宽（会话、Cue）：长回答一行不至于太长，气泡也不挤；两侧仍离栏边 `page`。
-    static let reading: CGFloat = 760
-    /// 回复框（会话的、对 Cue 说）与它上面的拍板卡离栏底。
-    static let replyBottom: CGFloat = 16
-    /// 页面内容离工具栏下沿。
-    static let pageTop: CGFloat = 24
-    /// 页内分组之间、分组标题到内容。
-    static let section: CGFloat = 32
-    static let sectionTitle: CGFloat = 12
-    /// 栏头里相邻两颗钮、两块玻璃之间：不共用系统玻璃底的项，系统不给留空。
-    static let toolbarGap: CGFloat = 8
-}
-#endif

@@ -27,7 +27,7 @@
 - 控件只有一套尺寸：高按 `ControlSize` 三档取（一排里同高，点得到的边至少 `ControlSize.target`）；按钮经 `ControlButtonStyle`，胶囊只经 `chip`（关着同次按钮的安静底，开着就是选中），箭头只经 `Chevron`，记号点只经 `StatusDot`，问号说明只经 `HelpButton`，节头只经 `SectionHeader`。列表行之间不画分割线，靠间距与纸分组（系统 `Form` 与菜单除外）。
 - 项目联动（宽屏）：指针停在看板卡的项目小图形上时，看板上别的项目的卡淡下去，同一项目的不动。只读写 `Workspace.hoveredProject`（`boardDim`）。
 - 悬停、选中时才出现的东西不改动周围的排版：悬停才露的操作只经 `hoverReveal` 浮在行上，随选中变的只换颜色与字重、不插不撤占位置的东西。露出一个钮挤动了标题与时间、选中一格让整条会话条上下跳，都是用户能一眼看见的抖。
-- 圆角只有 `Radius` 的几档，按东西的种类取，Theme 以外不写数（`lint.sh` 查）；嵌在容器里的块用 `Radius.nested`，内角随容器走、不手算；胶囊与圆写 `.capsule`、`.circle`。字号只经 `Typography`、图标尺寸只经 `Glyph`、投影只经 `Elevation`，Theme 以外同样不写数（`lint.sh` 查）。列表行的底（选中、按下、悬停）只有 `RowStyle` 一份，调用处不自己画底与负边距。
+- 圆角只有 `Radius` 的几档，按东西的种类取，Theme 以外不写数（`lint.sh` 查）；嵌在容器里的块用 `Radius.nested`，内角随容器走、不手算；胶囊与圆写 `.capsule`、`.circle`。字号只经 `Typography`、图标尺寸只经 `Glyph`、投影只经 `Elevation`，Theme 以外同样不写数（`lint.sh` 查）。间距只经 `Spacing` 的几档，不在 4 点格上的 10、14、18 按角色就近（组件内部往下、组与组之间往上，规则在它的头注释）。列表行的底（选中、按下、悬停）只有 `RowStyle` 一份，调用处不自己画底与负边距。
 - 少写字：不写说明句与次级标签，要解释的放问号气泡；撤不回的后果写在按钮旁。叫法见 WORDS.md。
 
 ## 加载与同步

@@ -113,7 +113,7 @@ private struct QuotaButton: View {
             .accessibilityExpanded(open)
             .accessibilityHint(open ? "收起" : quotas.isEmpty ? "看怎么才会有额度" : "看每个窗口还剩多少、多久后重置")
         } panel: {
-            QuotaDetail().padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 18)
+            QuotaDetail().padding(QuotaDetail.grownInsets)
         }
         .refreshesQuota()
     }

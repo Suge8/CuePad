@@ -113,6 +113,9 @@ struct StyleBoard: View {
             }
             SectionHeader("最近", count: 13)
             SectionHeader("一直记着", level: .group, icon: .pin)
+            Button {} label: { LinkRow(title: Text(verbatim: "定时"), value: Text(verbatim: "8:00"), alert: palette.ink) { Image(.schedule) } }
+                .buttonStyle(.row)
+                .rowPaper(cornerRadius: Radius.card)
             HStack(spacing: 12) {
                 Chevron(.forward)
                 Chevron(.expand)

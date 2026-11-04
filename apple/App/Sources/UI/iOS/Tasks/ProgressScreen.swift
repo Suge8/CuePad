@@ -68,7 +68,7 @@ struct ProgressHeader: View {
                 QuotaRings(open: open, height: FloatingHeaderLayout.height) { $open.grow(reduceMotion: reduceMotion) }
             }
         } panel: {
-            QuotaDetail().padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 18).refreshesQuota()
+            QuotaDetail().padding(QuotaDetail.grownInsets).refreshesQuota()
         }
     }
 }

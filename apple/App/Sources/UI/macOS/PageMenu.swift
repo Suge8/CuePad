@@ -61,7 +61,7 @@ struct PageMenuSlot: View {
         .menuStyle(.button).menuIndicator(.hidden)
         .buttonStyle(ControlButtonStyle(kind: .circular))
         .fixedSize()
-        .padding(.leading, Spacing.toolbarGap)
+        .padding(.leading, Spacing.item)
         .disabled(content == .none || content == .card(nil))
         .help(content.help)
         .accessibilityLabel("更多")

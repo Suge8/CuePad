@@ -81,7 +81,7 @@ struct ProjectPage: View {
 
     /// 最上面那行取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
     @ViewBuilder private var content: some View {
-        VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
             ProjectIntroLine(project: workspace.catalog?.project(projectID), intro: false)
             VStack(alignment: .leading, spacing: Spacing.section) {
                 if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
@@ -125,7 +125,7 @@ struct ProjectPage: View {
     }
 
     private func wallSection(title: LocalizedStringResource, count: Int, ids: [UUID], byID: [UUID: Card], lastTarget: [UUID: String]) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title).font(Typography.sectionTitle).foregroundStyle(palette.ink)
                 Text("\(count)").font(Typography.sectionCount).foregroundStyle(palette.ink3)

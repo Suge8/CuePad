@@ -24,7 +24,7 @@ struct SessionScreen: View {
     }
 
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
-    private static let readingWidth: CGFloat = 640
+    private static let readingWidth = Spacing.reading
     private var session: PiSessionState? { digest?.session ?? lastSeen }
     /// 此刻要显示的结束（还在路上的，或没能结束、之后没再发过别的），与 Agent 页同一条规则。
     private var shownEnd: Speech.Trip? { DeliveryRequest.shownEnd(in: digest?.deliveries ?? [], at: services.speech) }
@@ -82,7 +82,7 @@ struct SessionScreen: View {
             // 没有首帧时（点通知、点横幅）整页没有任何视图，读库不启动，页面永远空白
             if let digest {
                 if let session {
-                    SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 16, follow: $follow)
+                    SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: Spacing.page, follow: $follow)
                         .replyNotes(session: session.id, messages: digest.messages)
                 } else {
                     EmptyState(mascot: .search, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")

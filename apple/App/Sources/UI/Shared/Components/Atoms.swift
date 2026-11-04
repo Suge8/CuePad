@@ -290,12 +290,6 @@ struct SectionHeader: View {
 
     private var countFont: Font {
         if legacy { return .footnote }
-        guard level == .page else { return Typography.label }
-        // iOS 还没有 sectionCount 这一档（在 Mac 组的 Typography 里，B0b 补）
-        #if os(macOS)
-        return Typography.sectionCount
-        #else
-        return Typography.meta
-        #endif
+        return level == .page ? Typography.sectionCount : Typography.label
     }
 }

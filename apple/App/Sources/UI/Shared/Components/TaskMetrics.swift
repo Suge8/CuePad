@@ -4,12 +4,12 @@ import SwiftUI
 enum TaskMetrics {
     #if os(iOS)
     nonisolated static let rowHeight: CGFloat = 44
-    static let caption = Font.footnote
+    static let caption = Typography.meta
     static let chipTarget: CGFloat = 44
     static let titleRing: CGFloat = 24
     // 任务行（`TaskLine`）：上级正文字号、子任务小一档，圈也小一档
-    static let lineFont = Font.body
-    static let stepFont = Font.subheadline
+    static let lineFont = Typography.body
+    static let stepFont = Typography.secondary
     static let ring: CGFloat = 24
     static let stepRing: CGFloat = 16
     /// 圈那一列（也是它的点按区）多宽、与标题隔多少；行没有左右内边距（纸自己留了）。
@@ -57,7 +57,7 @@ enum BoardCardMetrics {
     /// 手机竖版看板（`boardRow`）：卡窄，内边距、记号与标题之间都收一点，标题小一档。
     static let rowPadding: CGFloat = 12
     static let rowGap: CGFloat = 6
-    static let rowTitle = Font.subheadline.weight(.medium)
+    static let rowTitle = Typography.secondary.weight(.medium)
     #if os(macOS)
     static let titlePadding: CGFloat = 14
     static let lightPadding: CGFloat = 7

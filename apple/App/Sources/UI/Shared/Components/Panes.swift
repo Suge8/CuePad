@@ -76,21 +76,19 @@ private struct EqualSegments: Layout {
 enum PaneMetrics {
     /// 选中块与外沿（玻璃、槽）之间：槽比选中块大一圈。
     static let inset: CGFloat = 3
-    #if os(macOS)
     static let font = Typography.toolbarLabel
+    /// 只画图标时一颗的宽：同一排控件里选中块那么高（控件高减去两边的 `inset`），成正方。
+    static let square = ControlSize.regular.height - inset * 2
+    #if os(macOS)
     static let iconFont = Glyph.small
     static let iconGap: CGFloat = 5
     static let padding: CGFloat = 12
     static let minWidth: CGFloat = 64
-    /// 只画图标时一颗的宽（同工具栏控件里的选中块那么高，成正方）。
-    static let square: CGFloat = ControlMetrics.height - inset * 2
     #else
-    static let font = Font.subheadline.weight(.semibold)
-    static let iconFont = Font.subheadline.weight(.semibold)
+    static let iconFont = Typography.toolbarLabel
     static let iconGap: CGFloat = 6
-    static let padding: CGFloat = 14
+    static let padding: CGFloat = 12
     static let minWidth: CGFloat = 76
-    static let square: CGFloat = 38
     #endif
 }
 

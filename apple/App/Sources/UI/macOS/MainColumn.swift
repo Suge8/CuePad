@@ -66,7 +66,7 @@ private struct MainHead: View {
             } else {
                 page
             }
-            Spacer(minLength: Spacing.toolbarGap)
+            Spacer(minLength: Spacing.item)
             // 看板那一排是列头，不给提醒常驻一格（列头少让一截）；要关注时才露
             if workspace.mainRoute != .progress || SyncAlertSlot.needed(services) { SyncAlertSlot() }
             if workspace.mainRoute == .library, workspace.overlay == nil { LibraryHelpSlot() }

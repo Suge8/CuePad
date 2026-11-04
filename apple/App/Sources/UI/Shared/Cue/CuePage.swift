@@ -32,13 +32,11 @@ struct CuePage: View {
     /// 末尾在屏上的新消息（`CueViewing`）。
     @State private var seen: [UUID: Date] = [:]
 
-    #if os(macOS)
     static let readingWidth = Spacing.reading
     static let inset = Spacing.page
+    #if os(macOS)
     static let replyPadding = Spacing.replyBottom
     #else
-    static let readingWidth: CGFloat = 640
-    static let inset: CGFloat = 16
     #endif
 
     private var cue: CueWatch { workspace.cue }

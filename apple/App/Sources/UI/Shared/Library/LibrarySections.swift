@@ -12,9 +12,9 @@ enum LibraryLayout {
     static let gap: CGFloat = 12
     /// 纸里行与块的左右留白
     static let inset: CGFloat = 16
+    static let margin = Spacing.page
+    static let bottom = Spacing.section
     #if os(macOS)
-    static let margin: CGFloat = Spacing.page
-    static let bottom: CGFloat = Spacing.section
     /// 纸的圆角
     static let radius = Radius.block
     /// 一张纸里行上下留的边；手机上行铺满纸宽（`flush`），不留
@@ -23,8 +23,6 @@ enum LibraryLayout {
     /// 文件页里正文与上面各块的左右留白
     static let textInset: CGFloat = 24
     #else
-    static let margin: CGFloat = 16
-    static let bottom: CGFloat = 24
     static let radius = Radius.sheet
     static let paperVertical: CGFloat = 0
     static let flush = true
@@ -61,7 +59,7 @@ enum LibraryRowMetrics {
     static let icon: CGFloat = 22
     static let gap: CGFloat = 12
     static let height: CGFloat = 58
-    static let titleFont = Font.body
+    static let titleFont = Typography.body
     #endif
 }
 

@@ -296,7 +296,7 @@ private struct PanelLayer: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let margin: CGFloat = 24
+    private static let margin = Spacing.page
 
     var body: some View {
         ZStack {

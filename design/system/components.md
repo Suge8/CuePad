@@ -56,7 +56,7 @@ struct LinkRow<Icon: View, Trailing: View>: View {
 }
 ```
 
-`RowMetrics.height`（Mac 32、iOS 44）加在 `Rows.swift`，那是 Mac 组的文件。Cue 面板三行升到 44、面板随之变高（已定，接受）；面板"空、少、满一个尺寸"仍要守住，W2-3 拍空与满两种核对。
+已落（`Components/LinkRow.swift`，B0b）：`LinkRow(title:value:alert:chevron:icon:trailing:)` 只是行的内容，外面套 `Button`／`NavigationLink` 加 `.buttonStyle(.row)`。高 `RowMetrics.height`（Mac 32、iOS 44，`Chrome.row` 就读它）。Cue 面板三行升到 44、面板随之变高（已定，接受）；面板"空、少、满一个尺寸"仍要守住，W2-3 拍空与满两种核对。
 
 ## C6 分组纸与分隔线
 
@@ -109,11 +109,11 @@ B0 之后各枚举只留组件自己的几何（具名），字号进 `Typograph
 | 枚举 | 留下 | 搬走 | 路径归属 |
 |---|---|---|---|
 | `ChipMetrics`、`ConfigCapsule` | — | 整个删（C2） | 无主 |
-| `BubbleMetrics` | 列宽、圈位等几何 | `strong`、`meta`、`laneFont` 进 Typography；`capsule` → `ControlSize.compact`；内边进 Spacing | 无主 |
-| `TaskMetrics` | 圈与列宽 | `caption`、`lineFont`、`stepFont` 进 Typography | 无主（同文件的 `BoardCardMetrics` 归 Mac 组） |
+| `BubbleMetrics` | 列宽、圈位等几何 | 字号已改读角色（B0b）；`capsule` → `ControlSize.compact`；内边进 Spacing（W3-2） | — |
+| `TaskMetrics`、`BoardCardMetrics` | 圈、列宽与卡的几何 | 字号已改读角色（B0b） | — |
 | `LibraryLayout`、`LibraryRowMetrics` | 列宽 680、纸的形状 | 栏边 → `Spacing.page`；行高 → `RowMetrics.height`；字号进 Typography | 无主 |
-| `PaneMetrics` | `inset` | 字号、内边 | 手机组 |
-| `FloatingHeaderLayout` | `largestType` | 高 → `ControlSize.regular`；边 → `Spacing.page` | 无主，但属页顶外框，等合并后 |
+| `PaneMetrics` | `inset`、`square`（读 `ControlSize.regular`） | 字号已改读 `toolbarLabel`（B0b） | — |
+| `FloatingHeaderLayout` | `largestType` | 边已读 `Spacing.page`（B0b）；高 → `ControlSize.regular` | — |
 | `CueListMetrics`、`ScheduleMetrics`、`BoardCardMetrics` | 几何 | 字号、间距 | Mac 组 |
 | `BoardRowMetrics` | 几何 | 间距 | 手机组 |
 | `ComposerMetrics`、`ChatLayout`、`DocumentLayout` | 全部（量高与对话排版的几何） | — | 无主 |
