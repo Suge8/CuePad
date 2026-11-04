@@ -25,19 +25,12 @@ extension CueHostTests {
         }
     }
 
-    /// 看门狗的钟（`CueTiming.awake`）的替身：`sleep()` 到 `wake()` 之间停住，像 Mac 合盖的那一段。
+    /// 看门狗的钟（`CueTiming.awake`）的替身：真的醒着的时长，加上醒着跳过的（`Rig.jump`）；像 Mac 合盖那样跳过的不算。
     nonisolated final class AwakeClock: Sendable {
-        private let state = Mutex((asleepAt: SuspendingClock.Instant?.none, slept: Duration.zero))
+        private let skipped = Mutex(Duration.zero)
 
-        func now() -> SuspendingClock.Instant { state.withLock { ($0.asleepAt ?? .now).advanced(by: .zero - $0.slept) } }
-        func sleep() { state.withLock { $0.asleepAt = .now } }
-        func wake() {
-            state.withLock { state in
-                guard let asleepAt = state.asleepAt else { return }
-                state.slept += .now - asleepAt
-                state.asleepAt = nil
-            }
-        }
+        func now() -> SuspendingClock.Instant { SuspendingClock.now.advanced(by: skipped.withLock { $0 }) }
+        func skip(_ duration: Duration) { skipped.withLock { $0 += duration } }
     }
 
     final class Rig {
@@ -46,6 +39,9 @@ extension CueHostTests {
         /// 起 Pi 的大脑要过的门：关上时这台 Mac 找不到 Pi（起不来），数着试了几次
         let launches = LaunchGate()
         let app: TestApp
+        /// App 的钟（资料库、会话状态的写入节流、Cue 的对账定时器都走它）：要等的时限不真等，跳过去（`jump`）
+        let clock: JumpTiming
+        private let awake: AwakeClock
         let folder: URL
         /// 真大脑的临时目录（`EvalBrain.launch`，开销记录在里面）；假模型时为 nil
         let brainDirectory: URL?
@@ -70,6 +66,9 @@ extension CueHostTests {
             var timing = CueTiming(
                 patrolAfter: patrolAfter, cacheLifetime: cacheLifetime, renewAt: renewAt,
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), sayWait: 5, quietHours: [], clock: clock)
+            let jumping = JumpTiming(), awake = AwakeClock()
+            (self.clock, self.awake) = (jumping, awake)
+            timing.awake = { awake.now() }
             tune(&timing)
             let launch = CuePad.CueLaunch(
                 executable: settleGate ? try Self.gatedPi() : realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
@@ -79,7 +78,8 @@ extension CueHostTests {
             let brainLaunch = try real.map { try $0.launch(in: directory!) }, runtime = real?.runtime, gate = launches
             app = TestApp(cue: CueDependencies(
                 launch: { agent, _ in agent == runtime ? brainLaunch : agent == .pi ? gate.pass(launch) : nil },
-                helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
+                helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing),
+                timing: jumping.timing)
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
             try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000,"input":\#(seesImages ? #"["text","image"]"# : #"["text"]"#)},{"id":"fake-model-2","contextWindow":200000,"reasoning":true,"input":["text"]}]}}}"#.utf8)
@@ -143,6 +143,45 @@ extension CueHostTests {
 
         func say(_ text: String) async throws { try await store.addCueMessage(.you, text: text) }
 
+        /// 往前跳 `duration`：App 的钟与看门狗的钟一起跳；`asleep` 像 Mac 合盖的那一段，看门狗的钟不走。
+        func jump(by duration: Duration, asleep: Bool = false) {
+            if !asleep { awake.skip(duration) }
+            clock.jump(by: duration)
+        }
+
+        /// 醒着跳到 `date`；已经过了就不动。
+        func jump(to date: Date) {
+            let ahead = date.timeIntervalSince(clock.now)
+            if ahead > 0 { jump(by: .seconds(ahead)) }
+        }
+
+        /// 出错后等着重来、起不来等着重起：跳到那一刻（`Setback.retryAt`、`Phase.restarting`），退避不真等。还没排上就不动。
+        func skipBackoff() {
+            guard let keeper = services.cue.keeper else { return }
+            var due = keeper.setback?.retryAt
+            if case .restarting(_, _, let at) = keeper.phase { due = [due, at].compactMap(\.self).min() }
+            if let due { jump(to: due) }
+        }
+
+        /// 一轮在跑、大脑一直没动静：跳过看门狗剩下的时长。从最后一次大脑事件算：挂住之后才到的事件会重新算起，所以每次都按剩下的跳。
+        func skipSilence() {
+            guard let keeper = services.cue.keeper, keeper.turn != nil else { return }
+            let left = keeper.setup.timing.silence - (awake.now() - keeper.heardAt)
+            if left > .zero { jump(by: left) }
+        }
+
+        /// 叫值班的管理器对账，等它对完、重新睡下（对账的定时器换了一个）：负向断言前让它看过此刻的库与钟。
+        /// 叫两次：第一次等到的可能是叫它时已经在对的那一次，第二次等到的一定是那之后开始的。
+        /// 要有排着的时刻（定时、巡视、重来、看门狗……）：什么都没排时它不睡，这里等不到。
+        func reconciled() async throws {
+            let keeper = try #require(services.cue.keeper)
+            for _ in 0..<2 {
+                let before = keeper.timer
+                keeper.input.yield(.kick)
+                try await eventually("对过账、重新睡下") { keeper.timer != nil && keeper.timer != before }
+            }
+        }
+
         /// 在 Cue 页的选择器里选 Pi 的这个模型与强度（`AppServices.updateCue`），等值班的大脑用上。
         func chose(model: String, effort: PiThinkingLevel) async throws {
             try await services.updateCue {
@@ -178,7 +217,14 @@ extension CueHostTests {
             }
         }
 
-        func releaseSettle() throws { try Data().write(to: settleGate.appending(path: "release")) }
+        /// 放行停住的收尾，等它放行；到了上限才放行（没看到 release）的算失败。
+        func releaseSettle() async throws {
+            let gate = settleGate
+            try Data().write(to: gate.appending(path: "release"))
+            func exists(_ name: String) -> Bool { FileManager.default.fileExists(atPath: gate.appending(path: name).path) }
+            try await eventually("收尾闸放行") { exists("released") || exists("ceiling") }
+            #expect(!exists("ceiling"), "收尾闸到了上限才放行：没看到 release")
+        }
 
         /// 含 `text` 的那一行交到了 Pi（收尾闸停着时 Pi 先收下、等报完收尾再处理）。
         func handed(_ text: String) async throws {
@@ -201,10 +247,12 @@ extension CueHostTests {
         func image() throws -> String { CueFormat.imageMarkup(key: try store.files.store(pngData(shade: 0.5))) }
 
         /// 等到出现一条 `author` 写的、含 `text` 的消息（中间隔着真 Pi 大脑起进程、读剧本）。
+        /// `skippingBackoff`：等的途中跳过出错后的重来、起不来后的重起（`skipBackoff`）。
         @discardableResult
-        func message(_ author: CueAuthor, containing text: String) async throws -> CueMessage {
+        func message(_ author: CueAuthor, containing text: String, skippingBackoff: Bool = false) async throws -> CueMessage {
             var found: CueMessage?
             try await eventually("\(author) 说「\(text)」") {
+                if skippingBackoff { self.skipBackoff() }
                 found = try await self.store.cueMessages().last { $0.author == .known(author) && $0.text.contains(text) }
                 return found != nil
             }

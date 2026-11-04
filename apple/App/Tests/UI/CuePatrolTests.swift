@@ -14,7 +14,7 @@ struct CuePatrolTests {
     /// 终端里开着的会话一句话没说就退出了（没有会话文件：记录删掉，不算会话的动静）。它原是唯一在做的事，在做的就没了：
     /// 你跟 Cue 说过话之后空闲够久，Cue 巡视一次。
     @Test func 唯一在做的会话没说话就退出_Cue随后巡视() async throws {
-        let rig = try await CueHostTests.Rig(patrolAfter: .seconds(2), prepare: CueHostTests.Rig.handOverWork)
+        let rig = try await CueHostTests.Rig(patrolAfter: Self.patrolAfter, prepare: CueHostTests.Rig.handOverWork)
         let store = rig.store
         let session = try await rig.app.host.connect("quiet", cwd: rig.folder.path, busy: true)
         try await eventually("会话记进库") { try await store.sessions(matching: "quiet").first != nil }
@@ -27,6 +27,7 @@ struct CuePatrolTests {
         let exited = Date.now
         session.close(bye: "quit")
         try await eventually("会话的记录删掉") { try await store.sessions(matching: "quiet").isEmpty }
+        try await idle(rig)
         try await eventually("退出之后巡视") {
             try await store.cueMessages().contains { $0.author == .known(.cue) && $0.text.contains("巡视了一圈") && $0.createdAt > exited }
         }
@@ -36,7 +37,7 @@ struct CuePatrolTests {
     /// 唯一在做的事是一件正在别的 Mac 上开会话的任务；你在手机上删了它，经同步到这台 Mac（软删除带着手机上更早的修改时间，
     /// 早于这台 Mac 上之后改过的卡片）。在做的没了：你跟 Cue 说过话之后空闲够久，Cue 巡视一次。
     @Test func 唯一在做的任务经同步删掉_Cue随后巡视() async throws {
-        let rig = try await CueHostTests.Rig(patrolAfter: .seconds(2), prepare: CueHostTests.Rig.handOverWork)
+        let rig = try await CueHostTests.Rig(patrolAfter: Self.patrolAfter, prepare: CueHostTests.Rig.handOverWork)
         let store = rig.store
         let project = try #require(try await store.projects().first)
         let task = try await store.createTask("在别的 Mac 上开工", in: project.id)
@@ -57,10 +58,19 @@ struct CuePatrolTests {
         let synced = Date.now
         #expect(try await store.applyRemote([.save(deleted, systemFields: Data())]).isEmpty)
         #expect(try await store.card(task.id)?.deletedAt != nil)
+        try await idle(rig)
         try await eventually("删掉之后巡视") {
             try await store.cueMessages().contains { $0.author == .known(.cue) && $0.text.contains("巡视了一圈") && $0.createdAt > synced }
         }
         await rig.stop()
+    }
+
+    private static let patrolAfter = Duration.seconds(60)
+
+    /// 你最后一句之后空闲够久（冷巡视的时长）：不真等，跳过去。
+    private func idle(_ rig: CueHostTests.Rig) async throws {
+        let lastYou = try #require(try await rig.store.cueLastYou()?.said)
+        rig.jump(to: lastYou + Self.patrolAfter.seconds)
     }
 }
 #endif

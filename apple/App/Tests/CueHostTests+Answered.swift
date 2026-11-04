@@ -22,7 +22,7 @@ extension CueHostTests {
         try await held()
         try await rig.say("第二句")
         try await rig.handed("第二句")
-        try rig.releaseSettle()
+        try await rig.releaseSettle()
         try await rig.message(.cue, containing: "收到：第二句")
         try await eventually("Cue 歇下") { try await rig.store.cueState()?.state == .known(.settled) }
         #expect(try await rig.count("登录页那边歇下了") == 1)
@@ -33,6 +33,7 @@ extension CueHostTests {
 
     /// 收尾那一刻改规矩又追问：叫醒的那一轮在 Pi 里已收尾、还没报出来时你钉上一条、再说一句，两句都插给了以为在跑的那一轮。
     /// 规矩一变这一轮做完就换班次：插进去的规矩不另开一轮、不写进对话，新班次照新规矩；你那句没被接走，退回交给新班次，只答一次。
+    /// Pi 在收尾停住时不回插进来的那句（规矩），管理器等着它回才交下一句：你那句在放行之后才交到 Pi，那时管理器还没读到收尾、仍当这一轮在跑。
     @Test func 收尾那一刻改规矩又追问_这句换班次后只答一次_规矩照样生效() async throws {
         let rig = try await Rig(settleGate: true)
         let held = try rig.armSettle()
@@ -45,8 +46,7 @@ extension CueHostTests {
         Workspace(services: rig.services).pinCueLine(line.id, true)
         try await rig.handed("一直记着（刚改了")
         try await rig.say("第二句")
-        try await rig.handed("第二句")
-        try rig.releaseSettle()
+        try await rig.releaseSettle()
         try await rig.message(.cue, containing: "收到：第二句")
         try await eventually("Cue 歇下") { try await rig.store.cueState()?.state == .known(.settled) }
         #expect(try await rig.count("收到：第二句") == 1)
@@ -111,7 +111,7 @@ extension CueHostTests {
         try db.exec("CREATE TRIGGER no_return BEFORE UPDATE OF deliveredAt ON cueMessages WHEN new.deliveredAt IS NULL BEGIN SELECT RAISE(ABORT, '写不进'); END;")
         kill(first, SIGKILL)
         try await eventually("新的大脑起好") { !rig.brainPIDs.isEmpty && !rig.brainPIDs.contains(first) && rig.health?.phase == .running }
-        try await Task.sleep(for: .seconds(1))  // 再试的几次都撞上写不进
+        try await rig.reconciled()  // 再试退回，又撞上写不进
         #expect(try await rig.count("收到：请慢慢想") == 0)
         try db.exec("DROP TRIGGER no_return;")
         try await rig.message(.cue, containing: "收到：请慢慢想")

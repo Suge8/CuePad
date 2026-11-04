@@ -109,7 +109,7 @@ struct ScheduleTests {
         let last = try #require(scheduled.last)
         let latest = try #require(Calendar.current.date(byAdding: .day, value: 2, to: missed))
         #expect(abs(last.due.timeIntervalSince(latest)) < 1 && last.late)
-        await quietPeriod(.seconds(2))
+        try await rig.reconciled()
         #expect(try await rig.store.cueMessages().filter { if case .schedule? = $0.wake { true } else { false } }.count == 1)
         await rig.stop()
     }

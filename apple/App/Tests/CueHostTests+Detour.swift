@@ -14,7 +14,7 @@ extension CueHostTests {
     /// 说一次起不来，你的话还等着。到了 Pi 的重置时刻（慢速重试还远）换回 Pi，连同你选的模型与强度，你的话交给它答一次，说一句恢复了。
     @Test func 额度用完换到另一家_重置时刻一到换回你选的模型与强度() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
-        let resets = try await stuckPi(rig, resetsIn: 5, alongside: [.claudeCode])
+        let resets = try await stuckPi(rig, resetsIn: 60, alongside: [.claudeCode])
         try await rig.chose(model: "fake/fake-model-2", effort: .high)
         rig.model.blockQuota(times: 1)
         try await rig.say("你好")
@@ -25,9 +25,11 @@ extension CueHostTests {
         try await eventually("健康里记着换大脑") { rig.health?.failover?.from == .pi && rig.health?.failover?.to == .claudeCode }
         try await rig.message(.cue, containing: "我起不来了")
         #expect(try await rig.store.cueMessages().first { $0.text == "你好" }?.deliveredAt == nil)
+        try await untilReset(rig, resets)
+        #expect(try await rig.store.cueProfile()?.runtime == .known(.claudeCode))
 
+        rig.jump(to: resets)
         try await rig.message(.cue, containing: "收到：你好")
-        #expect(Date.now >= resets)
         let home = try #require(try await rig.store.cueProfile())
         #expect(home.runtime == .known(.pi) && home.model == "fake/fake-model-2" && home.effort == .known(.high))
         let used = try #require(rig.model.requests.last)
@@ -43,7 +45,7 @@ extension CueHostTests {
     /// 额度用完（读不到几点重置）换到 Claude Code，那家也起不来：不一直守着它重试，慢速周期到点轮到 Pi 再试（每个周期只试一家），
     /// Pi 好了就留在 Pi、你选的模型与强度照旧，你的话答上一次，只在答上的那一轮说一句恢复了。
     @Test func 换到的那家也起不来_慢速周期轮回Pi_好了就留下() async throws {
-        let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(1)] })
+        let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(60)] })
         try await rig.store.recordMacAgents(
             host: TestApp.hostID, name: "测试 Mac", [MacAgent(kind: .pi, model: nil, models: []), MacAgent(kind: .claudeCode, model: nil, models: [])])
         try await rig.chose(model: "fake/fake-model-2", effort: .high)
@@ -51,11 +53,14 @@ extension CueHostTests {
         try await rig.say("你好")
         try await rig.message(.cue, containing: "我换到 Claude Code 接着干")
         try await rig.message(.cue, containing: "我起不来了")
-        try await rig.message(.cue, containing: "收到：你好")
+        try await rig.message(.cue, containing: "收到：你好", skippingBackoff: true)
         let profile = try #require(try await rig.store.cueProfile())
         #expect(profile.runtime == .known(.pi) && profile.model == "fake/fake-model-2" && profile.effort == .known(.high))
         try await rig.message(.cue, containing: "又能干活了，用的是 Pi")
-        try await Task.sleep(for: .seconds(2))  // 再过两个慢速周期：好了就留下，不再换
+        // 远处排一个定时：好了之后手上没有排着的时刻，对账后不睡下就等不到
+        _ = try await rig.store.noteCueLine("下周的事", source: .you, remindAt: rig.clock.now.addingTimeInterval(7 * 86_400))
+        rig.jump(by: .seconds(120))  // 再过两个慢速周期：好了就留下，不再换
+        try await rig.reconciled()
         #expect(try await rig.store.cueProfile()?.runtime == .known(.pi))
         #expect(try await rig.count("收到：你好") == 1)
         #expect(try await rig.count("又能干活了") == 1)
@@ -68,13 +73,15 @@ extension CueHostTests {
     /// 换回 Pi、起好，卡着的定时接着做完，说一句恢复了。
     @Test func 定时卡住换家又起不来_重置时刻一到换回Pi做完定时() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
-        let resets = try await stuckPi(rig, resetsIn: 5, alongside: [.claudeCode])
+        let resets = try await stuckPi(rig, resetsIn: 60, alongside: [.claudeCode])
         rig.model.blockQuota(times: 1)
         let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)
         try await rig.message(.cue, containing: "我换到 Claude Code 接着干")
         try await rig.message(.cue, containing: "我起不来了")
+        try await untilReset(rig, resets)
+        #expect(try await rig.count("定时到点") == 0)
+        rig.jump(to: resets)
         try await rig.message(.cue, containing: "定时到点：#\(reminder.index) 核对发布结果")
-        #expect(Date.now >= resets)
         #expect(try await rig.store.cueProfile()?.runtime == .known(.pi))
         try await rig.message(.cue, containing: "又能干活了，用的是 Pi")
         #expect(rig.model.errors == 1)
@@ -85,12 +92,14 @@ extension CueHostTests {
     /// 你的一轮碰上额度用完，这台 Mac 上只有 Pi（读得到几点重置）：那个错只说一次；不等慢速重试（还远），到了重置时刻就重来、做完，说一句恢复了。
     @Test func 额度用完没得换_重置时刻一到就重来() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
-        let resets = try await stuckPi(rig, resetsIn: 5, alongside: [])
+        let resets = try await stuckPi(rig, resetsIn: 60, alongside: [])
         rig.model.blockQuota(times: 1)
         try await rig.say("你好")
         try await rig.message(.cue, containing: "达到用量限制")
+        try await untilReset(rig, resets)
+        #expect(try await rig.count("接着做上一轮没做完的") == 0)
+        rig.jump(to: resets)
         try await rig.message(.cue, containing: "接着做上一轮没做完的")
-        #expect(Date.now >= resets)
         try await rig.message(.cue, containing: "又能干活了，用的是 Pi")
         #expect(try await rig.count("达到用量限制") == 1)
         #expect(rig.model.errors == 1)
@@ -128,13 +137,19 @@ extension CueHostTests {
         await rig.stop()
     }
 
+    /// 跳到重置时刻的前一刻，等 Cue 对过账：调用方断言这时还没换回、没重来。
+    private func untilReset(_ rig: Rig, _ resets: Date) async throws {
+        rig.jump(to: resets - 1)
+        try await rig.reconciled()
+    }
+
     /// 这台 Mac 上能用 Pi（默认模型 Fake Model 2，额度读得到：此刻用满、`seconds` 秒后重置）与 `others`；返回重置时刻。
     private func stuckPi(_ rig: Rig, resetsIn seconds: TimeInterval, alongside others: [AgentKind]) async throws -> Date {
         let account = PiAccount(kind: .oauth, scope: "fake-plan", name: "fake")
         let model = PiModelOption(key: PiModelKey(provider: "fake", id: "fake-model-2"), name: "Fake Model 2", thinkingLevels: [.high], account: account)
         try await rig.store.recordMacAgents(
             host: TestApp.hostID, name: "测试 Mac", [MacAgent(kind: .pi, model: model.key, models: [model])] + others.map { MacAgent(kind: $0, model: nil, models: []) })
-        let resets = Date.now.addingTimeInterval(seconds)
+        let resets = rig.clock.now.addingTimeInterval(seconds)
         let window = QuotaWindow(seconds: 18_000, used: 1, resetsAt: resets, isBinding: true)
         try await rig.store.recordQuota(QuotaReport(provider: "fake", windows: [window], complete: true, account: account), host: TestApp.hostID)
         return resets
