@@ -27,9 +27,9 @@ struct PageMenuSlot: View {
         var help: LocalizedStringResource {
             switch self {
             case .card: "置顶、移到项目、复制、归档、删除"
-            case .project: "选择灵感、看这个项目的会话、项目操作"
+            case .project: "选择灵感、看这个项目的进展、项目操作"
             case .cue: "运行情况、设置"
-            case .progress: "新任务、新会话、项目范围、搜索、归档做完的、接入 Agent"
+            case .progress: "新会话、项目范围、归档做完的、接入 Agent"
             case .trash: "清空回收站"
             case .none: "这一页没有更多操作"
             }
@@ -60,11 +60,8 @@ struct PageMenuSlot: View {
                 }
                 Button("\(workspace.cue.name) 的设置…", icon: .settings) { SettingsPane.open(.general) }
             case .progress:
-                Button("新任务", icon: .add) { workspace.progressPane = .board; workspace.addsTask = true }
                 Button("新会话", icon: .add) { workspace.newSession() }
                 ProjectScopeItems()
-                Button("搜索（⌘K）", icon: .search) { workspace.searching = true }
-                    .disabled(!workspace.isLibraryReady)
                 Divider()
                 Button("全部归档做完的", icon: .archive) { workspace.attempt { try await workspace.archiveCompletedTasks() } }
                 Button("接入 Agent…", icon: .extensionNote) { workspace.showsSetup = true }
@@ -73,9 +70,9 @@ struct PageMenuSlot: View {
             case .card(nil), .none: EmptyView()
             }
         } label: {
-            // 看板段选了项目范围（范围收在这里）：钮角上带这个项目的小图形，一眼看得出只在看一个项目
+            // 看板选了项目范围（范围收在这里）：钮角上带这个项目的小图形，一眼看得出只在看一个项目
             Image(.more).overlay(alignment: .topTrailing) {
-                if content == .progress, workspace.progressPane == .board, let project = workspace.catalog?.project(workspace.scopedProject) {
+                if content == .progress, let project = workspace.catalog?.project(workspace.scopedProject) {
                     ProjectGlyph(project: project, size: 10).offset(x: 12, y: -10)
                 }
             }
@@ -93,7 +90,7 @@ struct PageMenuSlot: View {
     }
 }
 
-/// 项目页"⋯"里的几项：进入批量选择（`CardPresses`，一条都还没选，点卡再选）、看这个项目的会话（进展页两段共用的项目范围设成它，再去会话段）、项目的操作。
+/// 项目页"⋯"里的几项：进入批量选择（`CardPresses`，一条都还没选，点卡再选）、看这个项目的进展（项目范围设成它，再去进展的看板）、项目的操作。
 /// 添加任务就在页上的任务区里。
 private struct ProjectMenuItems: View {
     let projectID: UUID
@@ -103,9 +100,9 @@ private struct ProjectMenuItems: View {
         let ready = workspace.isLibraryReady
         Button("选择灵感", icon: CardMenu.Item.select.icon) { workspace.presses.beginSelecting() }
             .disabled(!ready || (workspace.catalog?.cardCounts[projectID] ?? 0) == 0)
-        Button("看这个项目的会话", icon: .session) {
+        Button("看这个项目的进展", icon: .task) {
             workspace.projectScope = projectID
-            workspace.showSessions()
+            workspace.selectPane(.progress)
         }
         if let project = workspace.catalog?.project(projectID) {
             Divider()

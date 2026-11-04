@@ -113,12 +113,12 @@ final class Workspace {
     var searching = false
     /// 接入 Agent 并启用 Cue 的面板（`SetupPanel`；首次打开由 `offerSetup` 置起，Cue 页的启用钮（`CueWelcome`）与会话页的"接入"也打开它，主窗口弹出）。
     var showsSetup = false
-    /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
+    /// 新会话的表单开着（`NewSessionForm`，主窗口弹出；菜单"文件 › 新会话"与进展页"⋯"里的"新会话"置起，`newSession`）。
     var showsNewSession = false
     /// 这台 Mac 上点"开始"没开成会话的叶子与原因（`handOff`）：任务气泡那一行一直写着、给"重试"，再点开始时清掉。
     /// 只记在这台：没开成的开新会话请求过一会儿就清掉（`DeliveryExecutor.retention`），提示条两秒多就收，原因就只剩这里。
     var launchFailures: [UUID: String] = [:]
-    /// 进展页待办顶上浮出添加那一行（页上的"新任务"与右上"⋯"里的同一下）。
+    /// 进展页待办顶上浮出添加那一行（待办列头的 ＋）。
     var addsTask = false
     /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
     var confirmsEmptyTrash = false
@@ -138,11 +138,11 @@ final class Workspace {
     /// 每次 ⌘K（或点搜索钮、项目页与侧栏顶上的搜索框）加一：搜索页据此聚焦搜索框，已在搜索页时同样生效。
     var searchFocusRequests = 0
     #endif
-    /// 项目范围：进展页的看板与会话两段共用这一份（顶栏那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话段），nil 是全部项目。
+    /// 项目范围：进展页共用这一份（窄屏看板与会话两段；宽屏在看板那一行的"⋯"里，项目页"⋯"里的"看这个项目的进展"设成这个项目），nil 是全部项目。
     var projectScope: UUID?
     /// 页面按哪个项目筛（进展页的两段）：项目范围里的项目进了回收站就是全部（nil）。
     var scopedProject: UUID? { catalog?.project(projectScope)?.id }
-    /// 进展页此刻在哪一段：看板或会话。三端同一份：主操作（新任务 / 新会话）与分段都读它，去会话段经 `showSessions`。
+    /// 进展页此刻在哪一段：看板或会话。只有窄屏与 iPad 有会话段（宽屏 Mac 的进展页只有看板），去会话段经 `showSessions`。
     /// 就是本机偏好里的那一份（`AppSettings.progressPane`）：下次打开停在你上次看的那一段。
     var progressPane: ProgressPane {
         get { services.settings.progressPane }
@@ -150,6 +150,8 @@ final class Workspace {
     }
     /// 技能与规则页此刻在哪一段：规则或技能。两端同一份：Mac 工具栏与手机页顶的分段都读它，去文件页再回来、换页再回来都还在这一段。
     var libraryPane = LibraryPane.rules
+    /// 宽屏的 Cue 放不下时浮在主区右边（`showCue` 与收起时的 Cue 钮置起，换主区、点钮收回）；放得下时不起作用。用户收没收起在 `AppSettings.cueOpen`。
+    var cueFloats = false
     /// Cue 页拍板卡露的是哪一件（`CueWait.id`）：在拍板卡上换一件写这里；不在等了露第一件。
     var cueAsking: String?
     var notice: Notice?

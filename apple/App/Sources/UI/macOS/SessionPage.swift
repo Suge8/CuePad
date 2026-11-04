@@ -70,7 +70,7 @@ struct SessionPage: View {
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
         VStack(spacing: 0) {
             if let session = digest.session {
-                WideSessionTitle(title: digest.title(at: services.speech) ?? session.title, column: column)
+                WideSessionTitle(title: digest.title(at: services.speech) ?? session.title, project: digest.project?.shownName, column: column)
                     .contextMenu {
                         if let state = headerState(digest, menu: secondary, task: task) { SessionMenuItems(state: state) }
                     }
@@ -94,6 +94,8 @@ struct SessionPage: View {
                     .frame(maxWidth: Self.readingWidth)
                     .animation(Motion.fade, value: session.question)
                 }
+                // 对话裁在栏头下沿：栏头是写着字的一排、不是玻璃，滚过去的字会叠在会话名上
+                .clipped()
             } else if stored != nil {
                 EmptyState(mascot: .empty, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
                     .frame(maxHeight: .infinity)
@@ -150,7 +152,7 @@ private struct SessionLink: ViewModifier {
         let button = Button {
             workspace.searching = false
             workspace.openSession(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID,
-                                  in: NSEvent.modifierFlags.contains(.command) ? .main : .side)
+                                  in: NSEvent.modifierFlags.contains(.command) ? .beside : .main)
         } label: {
             content.contentShape(.rect)
         }

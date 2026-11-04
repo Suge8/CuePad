@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// 去哪一页：两端共用，经 Workspace 的布局入口摆到单栈或两栏。
+/// 去哪一页：两端共用，经 Workspace 的布局入口摆到单栈或宽屏主区。
 /// （Mac 只用其中的 `project`、`archive`、`trash`、`library`、`progress`、`cue`、`session`；技能与规则的文件页在 Mac 上盖在当前页上，见 `Workspace.overlay`）。
 nonisolated enum Route: Hashable {
     /// 项目书架：全部项目（窄屏侧栏与宽屏主区的“项目”）。

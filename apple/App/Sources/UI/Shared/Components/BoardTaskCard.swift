@@ -49,7 +49,7 @@ struct BoardTaskCard: View {
         .taskSpoken(task, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) {
             if let shot = item.shot { Button("看成果") { openShot(BoardShot.opening(shot, group: task.id.uuidString)) } }
             if let session = pulse.session {
-                OpenSessionLeading(session: session)
+                OpenSessionBeside(session: session)
                 HandoffButton(session: session)
                 if let end = SessionActions.end(session, ending: false, in: workspace) { RowActionButtons(actions: [end]) }
             }
@@ -103,7 +103,7 @@ struct BoardTaskCard: View {
         #endif
     }
 
-    private func enter(_ leading: Bool) { workspace.enter(task, session: item.agent?.state, in: leading ? .main : .side) }
+    private func enter(_ beside: Bool) { workspace.enter(task, session: item.agent?.state, in: beside ? .beside : .main) }
 
     private func follow(_ next: TaskNext?) {
         if let next { workspace.follow(next) }
@@ -112,7 +112,7 @@ struct BoardTaskCard: View {
     /// 长按（Mac 右键）菜单：点卡进的是会话时第一项"打开任务"（`CardActions.opens`）；歇着、在等 Cue 交出去的那一处时先是去那一处（`HandoffButton`）。
     @ViewBuilder private var menu: some View {
         let session = item.agent?.state
-        if let session { OpenSessionLeading(session: session); HandoffButton(session: session) }
+        if let session { OpenSessionBeside(session: session); HandoffButton(session: session) }
         #if os(macOS)
         CardActions(card: task, leaf: item.steps == nil, opens: session != nil, session: session)
         #else

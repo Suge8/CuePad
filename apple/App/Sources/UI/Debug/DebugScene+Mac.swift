@@ -14,7 +14,9 @@ extension DebugScene {
         if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
         Task { await SyncBench.run(workspace) }
         Task { await cueNowTourIfAsked(workspace) }
-        if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.sidebarOpen = false }
+        // 两个开合偏好每次按参数摆（隔离实例的偏好域在几次截图之间留着）：会话条默认宽版，`-CuePadSidebar hidden` 收成图标条；Cue 默认开着，`-CuePadCue shut` 收起
+        workspace.sidebarOpen = defaults.string(forKey: "CuePadSidebar") != "hidden"
+        workspace.services.settings.cueOpen = defaults.string(forKey: "CuePadCue") != "shut"
         switch scene {
         case "collapsed": workspace.sidebarOpen = false
         case "search": workspace.searching = true
@@ -38,7 +40,7 @@ extension DebugScene {
         case "connected":
             await connectAgents(workspace.services)
             await bindFolderIfAsked(workspace.services.store)
-            workspace.showSessions()
+            workspace.show(.progress)
         case "wallgap":
             // 卡片墙删卡后的排布：在当前项目（配 -CuePadProject Flow）新记两条，再删掉最早那条（它独占一列），看留下的几张怎么排
             await running("卡片墙删卡") { try await wallGap(workspace) }
@@ -49,10 +51,10 @@ extension DebugScene {
             // 没给 -CuePadTask 时是本项目第一条没完成的顶层任务
             await openTask(workspace) { $0.parentID == nil && $0.projectID == workspace.currentProject }
         case "sessions":
-            // 给了 -CuePadProject 先把项目范围设成它（同 iOS）
+            // 宽屏没有会话段：进展看板（给了 -CuePadProject 先把项目范围设成它，同 iOS）
             await seedDemo(workspace.services)
             workspace.projectScope = opened
-            workspace.showSessions()
+            workspace.show(.progress)
         case "cue", "cuememory", "cueschedules", "cuerun":
             // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cueschedules 打开定时，cuerun 打开"运行情况"（Cue 在这台值班时才有）
             await seedDemo(workspace.services)
@@ -64,7 +66,7 @@ extension DebugScene {
         case "cuerows":
             await connectAgents(workspace.services)
             await seedCueRows(workspace.services)
-            workspace.showSessions()
+            workspace.show(.progress)
         case "menubar", "cuebar":
             await seedDemo(workspace.services)
         case "updatewait":
@@ -84,6 +86,7 @@ extension DebugScene {
             SettingsPane.open(defaults.string(forKey: "CuePadSettingsPane").flatMap(SettingsPane.init(rawValue:)))
             mainWindow?.animationBehavior = .none
             mainWindow?.orderOut(nil)
+        case "shelf": workspace.show(.shelf)
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
         case "library", "instruction", "skill", "duplicate":
@@ -105,9 +108,9 @@ extension DebugScene {
             }
         default: break
         }
-        // 宽屏验收：-CuePadWideMain <sessionID> 在左栏打开演示会话，右栏仍由 session 场景选择。
-        if let left = defaults.string(forKey: "CuePadWideMain") {
-            workspace.openSession(PiSessionState.recordID(sessionID: left), sessionID: left, in: .main)
+        // 宽屏验收：-CuePadBeside <sessionID> 在主区右半并排打开演示会话（左半是 session 场景的 -CuePadSession）
+        if let beside = defaults.string(forKey: "CuePadBeside") {
+            workspace.openSession(PiSessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
         }
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
         if defaults.string(forKey: "CuePadSidebarCycle") != nil { Task { await cycleSidebar() } }

@@ -4,7 +4,7 @@ import Observation
 
 /// 共用入口只分派布局；窄屏与宽屏的去处规则分别在 Workspace+Narrow、Workspace+Wide。
 extension Workspace {
-    /// 窄屏栈顶，宽屏主区；宽屏会话可见性读 shownSessions，不用 top 推测右栏。
+    /// 窄屏栈顶，宽屏主区（并排时是左半）；看得见哪些会话读 shownSessions。
     var top: Route { mainRoute }
 
     var currentProject: UUID? {
@@ -14,7 +14,7 @@ extension Workspace {
         }.first
     }
 
-    /// 一个窗口可见的会话，按左、右排列且不重复；窄屏只有侧栏、没有推入页时没有可见会话。
+    /// 一个窗口可见的会话：宽屏是主区开着的（并排时左、右），窄屏是推入的会话页；不重复。
     /// 只表达导航可见性；前后台、窗口遮挡与人在不在由 ViewerKeeper 处理。
     var shownSessions: [ViewerKeeper.Page] {
         let sessions: [SessionRoute]
@@ -23,12 +23,12 @@ extension Workspace {
             if case .session(let route)? = state.path.last { sessions = [route] } else { sessions = [] }
         case .wide(let state):
             let main: SessionRoute? = if case .session(let route) = state.main { route } else { nil }
-            sessions = [main, state.side].compactMap(\.self)
+            sessions = [main, state.beside].compactMap(\.self)
         }
         return sessions.map { ViewerKeeper.Page(id: $0.id, sessionID: $0.sessionID) }
     }
 
-    /// 外部导航：窄屏会话推入，其余重选；宽屏会话默认右栏、Cue 回右栏、其余换主区。
+    /// 外部导航：窄屏会话推入，其余重选；宽屏会话与其余去处都换主区，Cue 在右边露出来（`showCue`）。
     func show(_ route: Route) {
         openTask = nil
         switch layout {
@@ -61,7 +61,7 @@ extension Workspace {
         }
     }
 
-    /// 去进展页的会话段（原会话页的去向都是这里："看这个项目的会话"、⌥⌘N）。
+    /// 去进展页的会话段（窄屏："看这个项目的会话"）。宽屏没有会话段，已结束的会话在会话条的"更早"。
     func showSessions() {
         progressPane = .sessions
         show(.progress)
@@ -85,7 +85,8 @@ extension Workspace {
 
     /// 打开一个会话页（`sessionID` 是 Pi 的会话 id，只有记录 id 的入口不带）。去之前当场读好这一页（`sessionRoute`）：
     /// 读的是只读连接、只要几毫秒，推入的第一帧就有标题与对话，也不会被晚到的读取结果拉回已经离开的地方。读不到要去的会话时不去。
-    func openSession(_ id: UUID, sessionID: String? = nil, in column: Column = .side) {
+    /// 宽屏开在主区：默认替换左半（`main`），⌘ 点的开在右半并排（`beside`）。
+    func openSession(_ id: UUID, sessionID: String? = nil, in column: Column = .main) {
         guard let route = sessionRoute(id, sessionID: sessionID) else { return }
         openTask = nil
         switch layout {

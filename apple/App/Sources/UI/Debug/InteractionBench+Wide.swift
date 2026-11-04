@@ -2,42 +2,39 @@
 import AppKit
 import CueStore
 
-/// 宽屏自动阈值（`-CuePadBench interact` 的最后一段）：四种两栏组合各在会话条自动收窄的临界宽度上下 1 点来回改窗口宽（同人拖窗口边的那一下），
-/// 每一下按 `measure` 的口径量回合、指令与掉帧，行里另记：
-/// - `railPt`、`sidePt`：停下后会话条与右栏的宽，`railOK` 是会话条宽对，`crossed` 是这一下真的跨过了阈值（会话条换了宽；反向那一项是主栏真的滑起来了）；
-///   `stateOK`：偏好（会话条开合、项目｜进展、当前项目、看板｜会话）、两栏去处与各份草稿都没被改；`page`：页面没被重建、每栏停在中段读的那一项还在眼前（`WidePage`；ok、验不了的 untested、没保住的 broken，`pageUntested` 列出验不了的栏），
+/// 宽屏自动阈值（`-CuePadBench interact` 的最后一段）：三种主区（看板、一个会话、并排两个会话）各在两道临界宽度上下 1 点来回改窗口宽（同人拖窗口边的那一下）：
+/// 会话条自动收起（`WideMetrics.railThreshold`，256 ↔ 80）与 Cue 自动收成钮（`cueThreshold`）。每一下按 `measure` 的口径量回合、指令与掉帧，行里另记：
+/// - `railPt`、`cue`：停下后会话条的宽与 Cue 露没露着，`railOK` 是这两样都对，`crossed` 是这一下真的跨过了阈值（会话条换了宽或 Cue 换了样；反向那一项是主区真的滑起来了）；
+///   `stateOK`：偏好（会话条开合、Cue 开合、项目｜进展、当前项目）、主区去处与各份草稿都没被改；`page`：页面没被重建、每块停在中段读的那一项还在眼前（`WidePage`；ok、验不了的 untested、没保住的 broken，`pageUntested` 列出验不了的块），
 ///   `pages` 是逐栏的判定、锚点、跨阈值前后离顶与离底的距离、锚点离可视区正中多远、锚点的框与可视区（窗口坐标）。除了验不了，任一项不对 `perf-mac.sh` 判失败；
 /// - `idleMainM`、`idleProcessM`：停下后再静置 500ms 主线程与整个进程的指令（百万）：布局反馈环会让窗口停着主线程也一直排版，它降不下来；进程那份含后台线程（同步、读库），不算排版；
 /// - 反向那一项（`宽屏反向·…`）：收窄后 50ms（滑动刚起头）就拉回，滑动途中逐帧取主栏图层的呈现偏移（呈现层树里的左缘，即屏上的位置），`perFramePt` 是平均到每帧的最大位移（取样在主线程，主线程忙的那几帧取不到，两次取样之间按隔了几帧摊开；`gapFrames` 是隔得最多的一次）、`restPt` 是停下时离终点多远；`samples` 保留原始时刻与位置。
 ///   漏采的那几帧里有没有跳，这里证明不了：逐帧看屏上的样子录 `-CuePadWideReverse`（`DebugScene+Wide.swift`）。
-/// 没被 `-CuePadInteractOnly` 选中的步骤照样改窗口宽、只是不量，选中的那一步总是从阈值另一侧跨过来。临界宽度取 `WideMetrics.threshold`。
+/// 没被 `-CuePadInteractOnly` 选中的步骤照样改窗口宽、只是不量，选中的那一步总是从阈值另一侧跨过来。
 extension InteractionBench {
-    /// 跨阈值与侧栏开合是同一种变化（会话条换宽、两栏按新宽排一次、叠一段滑动），用同一份预算。
+    /// 跨阈值与侧栏开合是同一种变化（会话条或 Cue 换宽、主区按新宽排一次、叠一段滑动），用同一份预算。
     private static var wideBudget: (clickMs: Double, hitches: Int) { budgets["侧栏收起"]! }
 
-    /// 四种两栏组合：主栏是看板还是一份会话，右栏是 Cue 还是另一份会话。
+    /// 三种主区：进展的看板，开着一个会话，并排两个会话；右边都是 Cue。
     struct WideCase {
         let name: String
-        let main: Bool
-        let side: Bool
+        let sessions: Int
     }
 
     static let wideCases = [
-        WideCase(name: "看板+Cue", main: false, side: false),
-        WideCase(name: "看板+会话", main: false, side: true),
-        WideCase(name: "双会话", main: true, side: true),
-        WideCase(name: "左会话+Cue", main: true, side: false),
+        WideCase(name: "看板+Cue", sessions: 0),
+        WideCase(name: "会话+Cue", sessions: 1),
+        WideCase(name: "双会话+Cue", sessions: 2),
     ]
 
-    /// 摆成这种组合：主栏回进展的看板、右栏回 Cue，再按组合把 `sessions` 的前两份放进主栏、右栏。
+    /// 摆成这种组合：主区回进展的看板、Cue 开着，再按组合把 `sessions` 的前一两份开在主区（第二份并排）。
     static func arrange(_ item: WideCase, in workspace: Workspace, sessions: [String]) {
         let ids = sessions.prefix(2).map { PiSessionState.recordID(sessionID: $0) }
         workspace.services.settings.navigationPane = .progress
-        workspace.progressPane = .board
+        workspace.services.settings.cueOpen = true
         workspace.selectWide(.progress)
-        workspace.selectWide(.cue)
-        if item.main { workspace.openSession(ids[0], sessionID: sessions[0], in: .main) }
-        if item.side { workspace.openSession(ids[1], sessionID: sessions[1], in: .side) }
+        if item.sessions > 0 { workspace.openSession(ids[0], sessionID: sessions[0], in: .main) }
+        if item.sessions > 1 { workspace.openSession(ids[1], sessionID: sessions[1], in: .beside) }
     }
 
     static func measureWide(_ workspace: Workspace, in window: NSWindow, sessions: [String], only: Set<String>?, foreground: Bool) async throws {
@@ -51,22 +48,23 @@ extension InteractionBench {
         let height = window.contentLayoutRect.height
         for item in selected {
             arrange(item, in: workspace, sessions: sessions)
-            let threshold = WideMetrics.threshold(workspace)
+            let threshold = WideMetrics.railThreshold(workspace), cueThreshold = WideMetrics.cueThreshold(workspace)
             window.setContentSize(NSSize(width: threshold, height: height))
             await Task.wait(for: .seconds(1))
             await WidePage.scrollToMiddle(wideColumns(in: view))
             let before = snapshot(workspace, ids: ids)
             let page = WidePage(wideColumns(in: view))
-            func step(_ name: String, width: CGFloat, rail: CGFloat, reverse: Bool = false) async {
+            func step(_ name: String, width: CGFloat, rail: CGFloat, cue: Bool = true, reverse: Bool = false) async {
                 guard only?.contains(name) ?? true else {
                     // 不量也照样改宽：下一步才是从阈值另一侧跨过来（反向那一下停回原宽，不必做）
                     if !reverse { window.setContentSize(NSSize(width: width, height: height)) }
                     return
                 }
                 let slide = reverse ? SlideSampler(columns(in: view)) : nil
-                var railBefore: CGFloat = -1
+                var railBefore: CGFloat = -1, cueBefore = false
                 var row = await measure(name, in: view) {
                     railBefore = columns(in: view).main?.windowFrame.minX ?? -1
+                    cueBefore = columns(in: view).cue?.isHidden == false
                     window.setContentSize(NSSize(width: width, height: height))
                     slide?.start(in: view)
                     if reverse { Task { await Task.wait(for: .milliseconds(50)); window.setContentSize(NSSize(width: threshold, height: height)) } }
@@ -82,10 +80,11 @@ extension InteractionBench {
                 row["idleProcessM"] = ((instructionsMillions() - idle.process) * 10).rounded() / 10
                 let shown = columns(in: view)
                 let railPt = shown.main.map(\.windowFrame.minX) ?? -1
+                let cueShown = shown.cue?.isHidden == false
                 row["railPt"] = railPt
-                row["sidePt"] = shown.side?.frame.width ?? -1
-                row["railOK"] = railPt == rail
-                row["crossed"] = reverse ? moved : railBefore != railPt
+                row["cue"] = cueShown
+                row["railOK"] = railPt == rail && cueShown == cue
+                row["crossed"] = reverse ? moved : railBefore != railPt || cueBefore != cueShown
                 row["stateOK"] = snapshot(workspace, ids: ids) == before
                 let shownPage = page.compare(wideColumns(in: view))
                 row["page"] = shownPage.verdict.rawValue
@@ -104,33 +103,41 @@ extension InteractionBench {
                 await step("宽屏展开·\(item.name)", width: threshold, rail: wide)
             }
             await step("宽屏反向·\(item.name)", width: threshold - 1, rail: wide, reverse: true)
+            window.setContentSize(NSSize(width: cueThreshold, height: height))
+            await Task.wait(for: .seconds(1))
+            for _ in 0..<2 {
+                await step("Cue 收钮·\(item.name)", width: cueThreshold - 1, rail: narrow, cue: false)
+                await step("Cue 露出·\(item.name)", width: cueThreshold, rail: narrow)
+            }
         }
     }
 
-    private static func names(_ item: WideCase) -> [String] { ["收窄", "展开", "反向"].map { "宽屏\($0)·\(item.name)" } }
+    private static func names(_ item: WideCase) -> [String] {
+        ["宽屏收窄", "宽屏展开", "宽屏反向", "Cue 收钮", "Cue 露出"].map { "\($0)·\(item.name)" }
+    }
 
-    /// 改窗口宽不该动的东西：偏好、两栏去处与草稿。
+    /// 改窗口宽不该动的东西：偏好、主区去处与草稿。
     private struct Snapshot: Equatable {
         let rail: Bool
+        let cue: Bool
         let pane: NavigationPane
         let project: UUID?
-        let progress: ProgressPane
         let main: Route
-        let side: UUID?
+        let beside: UUID?
         let drafts: [String]
     }
 
     private static func snapshot(_ workspace: Workspace, ids: [UUID]) -> Snapshot {
         let settings = workspace.services.settings
         return Snapshot(
-            rail: settings.railExpanded, pane: settings.navigationPane, project: settings.currentProject, progress: workspace.progressPane,
-            main: workspace.mainRoute, side: workspace.sideSession?.id,
+            rail: settings.railExpanded, cue: settings.cueOpen, pane: settings.navigationPane, project: settings.currentProject,
+            main: workspace.mainRoute, beside: workspace.besideSession?.id,
             drafts: ids.map { settings.replyDraft(for: $0).text } + [workspace.cue.draft.text])
     }
 
-    private static func columns(in view: NSView) -> (main: WideColumnView?, side: WideColumnView?) {
+    private static func columns(in view: NSView) -> (main: WideColumnView?, cue: WideColumnView?) {
         let all = wideColumns(in: view)
-        return (all.first { $0.column == .main }, all.first { $0.column == .side })
+        return (all.first { $0.slot == .main }, all.first { $0.slot == .cue })
     }
 
     static func wideColumns(in view: NSView) -> [WideColumnView] {
@@ -148,7 +155,7 @@ private final class SlideSampler: NSObject {
     /// 取到的最左位置（没取到时是无穷大）。
     var minimum: CGFloat { offsets.map(\.x).min() ?? .infinity }
 
-    init(_ columns: (main: WideColumnView?, side: WideColumnView?)) { column = columns.main }
+    init(_ columns: (main: WideColumnView?, cue: WideColumnView?)) { column = columns.main }
 
     func start(in view: NSView) {
         let link = view.displayLink(target: self, selector: #selector(tick))

@@ -29,18 +29,20 @@ struct BoardLink<Label: View>: View {
         #endif
     }
 
-    private func open(_ leading: Bool) {
-        workspace.openSession(to.id, sessionID: to.sessionID, in: leading ? .main : .side)
+    /// 宽屏开在主区；⌘ 点（iPad 是按住 ⌘ 轻点）的开在右半并排。
+    private func open(_ beside: Bool) {
+        workspace.openSession(to.id, sessionID: to.sessionID, in: beside ? .beside : .main)
     }
 }
 
-struct OpenSessionLeading: View {
+/// 右键菜单里的"在旁边打开"（宽屏）：开在主区右半、与此刻的会话并排（同 ⌘ 点）。
+struct OpenSessionBeside: View {
     let session: PiSessionState
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         if workspace.layout == .wide {
-            Button("在左边打开") { workspace.openSession(session.id, sessionID: session.sessionID, in: .main) }
+            Button("在旁边打开") { workspace.openSession(session.id, sessionID: session.sessionID, in: .beside) }
         }
     }
 }

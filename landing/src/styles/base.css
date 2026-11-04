@@ -26,8 +26,8 @@
 	);
 	--signature: light-dark(#2f4a9e, #8fa8e2);
 	--selection: light-dark(
-		color-mix(in srgb, var(--signature) 12%, transparent),
-		color-mix(in srgb, var(--signature) 20%, transparent)
+		color-mix(in srgb, var(--ink) 9%, transparent),
+		color-mix(in srgb, var(--ink) 14%, transparent)
 	);
 	--waiting: light-dark(#845a06, #edbd57);
 	--replied: light-dark(#17704a, #55b988);

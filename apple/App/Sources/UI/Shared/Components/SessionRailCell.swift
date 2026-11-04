@@ -37,12 +37,12 @@ struct SessionRailCell: View {
         .accessibilityLabel(item.session.title)
         .accessibilityValue(Dotted(item.session.agentMark, item.pulse.shown?.label, item.pulse.fullContext?.help.spoken).spoken)
         .accessibilityIdentifier("session-rail-\(item.id)")
-        .help(Dotted(item.session.title, item.pulse.shown?.label).visible)
+        .modifier(CellHelp(form: form, text: Dotted(item.session.title, item.pulse.shown?.label).visible))
     }
 
     @ViewBuilder private var control: some View {
         #if os(macOS)
-        Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .leading : .primary) } label: { label }
+        Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .beside : .primary) } label: { label }
             .buttonStyle(RowStyle(selected: selected))
         #else
         if form == .phone {
@@ -51,7 +51,7 @@ struct SessionRailCell: View {
         } else {
             label
                 .row(selected: selected)
-                .gesture(SessionTap { open(item.session, $0 ? .leading : .primary) })
+                .gesture(SessionTap { open(item.session, $0 ? .beside : .primary) })
                 .focusable(interactions: .activate)
                 .onKeyPress(.space) { open(item.session, .primary); return .handled }
                 .accessibilityElement(children: .ignore)
@@ -62,7 +62,7 @@ struct SessionRailCell: View {
     }
 
     private var leadingAction: some View {
-        Button("在左边打开") { open(item.session, .leading) }
+        Button("在旁边打开") { open(item.session, .beside) }
     }
 
     private var label: some View {
@@ -78,7 +78,8 @@ struct SessionRailCell: View {
             } else {
                 VStack(spacing: 2) {
                     mark.frame(height: 16)
-                    name.font(Typography.caption2)
+                    // 收起的图标条只有标志与状态记号，名字在悬停提示里（`CellHelp`）；手机的竖条照写名字
+                    if form == .phone { name.font(Typography.caption2) }
                     signal.frame(width: 34)
                 }
                 .padding(.horizontal, 2)
@@ -114,5 +115,15 @@ struct SessionRailCell: View {
         }
         .frame(height: WaveStrip.height)
         .accessibilityHidden(true)
+    }
+}
+
+/// 格子的悬停说明：收起的图标条（80）上没写名字，指针一停名字就浮在格子右边（`railTip`）；其余照系统的慢提示。
+private struct CellHelp: ViewModifier {
+    let form: SessionRail.Form
+    let text: String
+
+    func body(content: Content) -> some View {
+        if form == .narrow { content.railTip(text) } else { content.help(text) }
     }
 }

@@ -5,8 +5,8 @@ import SwiftUI
 /// 小人自己会动：这一拍放哪条帧序列只在 `CueSprite.of`，由 `LoopLayer(sprite:sheet:intro:)` 从拼图（`CueAtlas`）里换帧；不放循环动效时（`LoopsPlay`：减弱动态效果、省电、
 /// 页不在前台）与拼图解好之前画这一拍的静止图。32pt 及以下只放轮廓变了的帧（`compact`）。
 /// 换拍子时脸软糖地动一下（`JellyMove.cue`），在压得最扁那一刻姿势、点、变淡一起换（都在 `Jelly` 画的那个值里）；做完的欢呼只在换进来的那一下放。
-/// 四档尺寸：行内（16pt，只露上半身：纸面、折角和眼睛，不动；点与变淡照样有，在动、起不来、不在分得出）、一行（窄屏侧栏的 Cue 钮、Mac 右栏页头、随手记条）、
-/// 大一档的 `header`、手机与 iPad 的名片（`card`；名牌收着时缩到 `CueHeader.face`，长成名片时原样）。`size` 是那块圆的直径。
+/// 四档尺寸：行内（16pt，只露上半身：纸面、折角和眼睛，不动；点与变淡照样有，在动、起不来、不在分得出）、一行（窄屏侧栏的 Cue 钮、Mac 右边 Cue 的栏头与收起的 Cue 钮、随手记条）、
+/// 大一档的 `header`、手机与 iPad 的名片（`card`；名牌收着时缩到 `PlateStyle.face`，长成名片时原样）。`size` 是那块圆的直径。
 struct CueAvatar: View {
     nonisolated enum Size {
         case inline, row, header, card

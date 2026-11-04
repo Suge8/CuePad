@@ -14,7 +14,6 @@ import os
 ///   直到画面第一次变（画面的变化看窗口图层树里看得见的层，见 `TurnLog`）；CPU 时间不随机器忙闲变，墙钟会。
 /// - **合计、最重一圈、指令数**：动作后 800ms 里主线程 CPU 的总数与最重的一圈（点击回合小而合计大，是活被挪到了后面的帧里，不是没了）；进程执行的指令数（百万）不随机器忙闲变，前后对比以它为准。两端同一份探针与键名（`Probes.swift`）。
 /// - **掉帧**：动作后 800ms 内窗口 display link 相邻两次回调间隔超过 1.5 帧的次数与最长一次（毫秒）。
-/// - **到对话出现**（`contentMs`，只有"Cue 页首访"）：动作发出到 Cue 页的对话排出来的墙钟毫秒（`PerfProbe` 的 `cue`）；第一次变的画面可能还是空的页。
 /// 默认在后台量：指令数照样能前后对比，帧与掉帧偏乐观（前台才有玻璃等实际合成）。和预算比要在前台量（`-CuePadForeground YES`，见 `DebugForeground`），
 /// 每行的 `foreground` 记这次在不在前台；量完退出，退出时把前台还回去。
 enum InteractionBench {
@@ -24,32 +23,28 @@ enum InteractionBench {
     /// 回访页面、收起、关闭只是换可见性，对点击要跟手；首访、打开要建视图，给四帧。
     /// 会话页单独给 90ms（人对 100ms 内的回应感知为即时）：它的第一帧必须带标题与最新的对话，晚一帧出内容的空白闪动比慢一点更差，
     /// 而页面壳加最新对话的构建本身就在 45～70ms（工具栏与回复框等次要部分已挪到后面的帧，见 `SessionPage`）。
-    /// Cue 页首访给 120ms：第一帧同样要带页头与铺满一屏的最新对话，另有拍板卡与输入框；第一次进页的成本（真实的字第一次画、视图第一次建）
-    /// 只能挪到启动后先挂上整页或少画首帧才躲得开，两样都不做（启动后先挂上是把活挪走，不是去掉）。
+    /// Cue 收起、放回同会话条开合（右边那一栏换可见、主区按新的宽排一次）：Cue 一直挂着，不重建。
     static let budgets: [String: (clickMs: Double, hitches: Int)] = [
         "页面回访": (14, 1),
         "页面首访": (28, 2),
-        "Agent 页首访": (28, 2),
         "会话页": (90, 2),
-        "Cue 页首访": (120, 2),
         "开编辑页": (28, 2),
         "收编辑页": (14, 2),
         "任务气泡开": (28, 2),
         "任务气泡关": (14, 2),
         "进进展页": (28, 2),
-        "看板→会话": (28, 2),
-        "会话→看板": (14, 1),
         "看板→项目页": (14, 1),
         "项目页→看板": (14, 1),
         "换项目范围": (28, 2),
         "清项目范围": (28, 2),
         "卡换列": (14, 2),
         "卡回待办": (14, 2),
-        "回 Cue 页": (14, 2),
         "⌘K 面板开": (28, 2),
         "⌘K 面板关": (14, 2),
         "侧栏收起": (28, 2),
         "侧栏展开": (28, 2),
+        "Cue 收起": (28, 2),
+        "Cue 放回": (28, 2),
         "展开任务": (28, 2),
         "收起任务": (14, 2),
         "发送·会话页": (14, 1),
@@ -73,7 +68,7 @@ enum InteractionBench {
         // `-CuePadInteractOnly 会话页,开编辑页`：只量这几项，前后对比时省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）
         // Cue 页的对话在等之前写好（库里没有时）：用户点开 Cue 页时对话早在库里
         let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
-        let measuresCue = only.map { $0.contains("Cue 页首访") || $0.contains("发送·Cue 页") } ?? true
+        let measuresCue = only.map { $0.contains("发送·Cue 页") } ?? true
         if measuresCue { await DebugScene.seedCue(workspace.services) }
         await Task.wait(for: .seconds(3))
         guard let window = DebugScene.mainWindow,
@@ -120,9 +115,6 @@ enum InteractionBench {
                 await step("页面回访") { workspace.show(.project(b)) }
             }
         }
-        await step("Agent 页首访") { workspace.showSessions() }
-        if let a { await step("页面回访") { workspace.show(.project(a)) } }
-        await step("页面回访") { workspace.showSessions() }
         for id in sessions.prefix(2) { await step("会话页") { workspace.show(.session(id)) } }
         // 发送：回复框里写好几行再按 ⌘↩（主菜单"回复"的项经响应链交给文字区，这里直接交给它），量输入框收起、话贴到对话末尾、滚到最新那一下。
         // 大库在最长的那段对话里发，演示库在最近的会话里发；Cue 页先写好一段对话（库里没有时）
@@ -135,8 +127,6 @@ enum InteractionBench {
             }
         }
         if measuresCue {
-            await step("Cue 页首访") { workspace.show(.cue) }
-            workspace.show(.cue)
             for _ in 0..<2 {
                 workspace.cue.draft = ComposerDraft(text: sample)
                 await step("发送·Cue 页") { sendShortcut(in: window, field: "对 ") }
@@ -167,19 +157,15 @@ enum InteractionBench {
         }
         for _ in 0..<2 {
             await step("进进展页") { workspace.show(.progress) }
-            await step("回 Cue 页") { workspace.show(.cue) }
+            if let a { await step("页面回访") { workspace.show(.project(a)) } }
             await step("⌘K 面板开") { workspace.searching = true }
             await step("⌘K 面板关") { workspace.searching = false }
         }
-        // 进展页看板与会话两段（共用项目范围）来回、与项目页来回，与进展页上换项目范围：
-        // 量顶栏（工具栏常驻项只换内容）跟着换段、换页、换范围的开销
+        // 进展页与项目页来回，与进展页上换项目范围：量栏头跟着换页、换范围的开销
         if let a {
-            workspace.progressPane = .board
             workspace.show(.progress)
             await Task.wait(for: .seconds(1))
             for _ in 0..<2 {
-                await step("看板→会话") { workspace.progressPane = .sessions }
-                await step("会话→看板") { workspace.progressPane = .board }
                 await step("看板→项目页") { workspace.show(.project(a)) }
                 await step("项目页→看板") { workspace.show(.progress) }
                 await step("换项目范围") { workspace.projectScope = a }
@@ -189,7 +175,6 @@ enum InteractionBench {
         // 看板上一件待办做完、再打开：卡从待办整张飞到已完成、再飞回来（隔着两列，最远的一趟），量飞行那段的帧。
         // 写库是异步的：动作只是发出写入，画面在库变了、看板重读之后才动，800ms 的窗口盖得住写入加飞行
         if only.map({ $0.contains("卡换列") || $0.contains("卡回待办") }) ?? true, let task = tasks.first(where: { $0.status == .todo }) {
-            workspace.progressPane = .board
             workspace.show(.progress)
             await Task.wait(for: .seconds(1))
             for _ in 0..<2 {
@@ -207,12 +192,14 @@ enum InteractionBench {
                 await step("收起任务") { DebugScene.toggleTaskFold() }
             }
         }
-        // 会话条宽窄开合（220 与 72）在卡最多的项目页上量：主区整页按新的宽重排。走 ⌃⌘S 那条路（主菜单动作经响应链），不直接调方法
+        // 会话条宽窄开合（256 与 80）与 Cue 收起、放回在卡最多的项目页上量：主区整页按新的宽重排。会话条走 ⌃⌘S 那条路（主菜单动作经响应链），不直接调方法
         if let big = workspace.catalog?.cardCounts.max(by: { $0.value < $1.value })?.key {
             await step("页面回访") { workspace.show(.project(big)) }
             for _ in 0..<2 {
                 await step("侧栏收起") { NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil) }
                 await step("侧栏展开") { NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil) }
+                await step("Cue 收起") { workspace.services.settings.cueOpen = false }
+                await step("Cue 放回") { workspace.services.settings.cueOpen = true }
             }
         }
         try await measureWide(workspace, in: window, sessions: sessions, only: only, foreground: foreground)
@@ -306,9 +293,7 @@ enum InteractionBench {
 
     private static func finish(_ name: String, instructions: Double, recorder: FrameRecorder) async -> [String: Any] {
         await Task.wait(for: .milliseconds(800))
-        let began = turns.began
         var row = TurnLog.metrics(turns.finish(), instructions: instructions, frames: recorder.stop())
-        if let shown = PerfProbe.lastSeen["cue"], shown >= began { row["contentMs"] = ((shown - began) * 10_000).rounded() / 10 }
         row["name"] = name
         row["budgetClickMs"] = budgets[name]?.clickMs ?? 0
         row["budgetHitches"] = budgets[name]?.hitches ?? 0

@@ -3,26 +3,10 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 暂时用不上、一会儿还要出现的栏头控件：看不见、不接点、读屏跳过，仍挂着、位置照留。只给两种：
-    /// 一出一收会挤动同一排旁边的（同步提醒、技能与规则的说明），与来回换着用、现建要花一截首帧的（进展页会话段的范围与新会话）；其余按条件写。
+    /// 暂时用不上、一会儿还要出现的栏头控件：看不见、不接点、读屏跳过，仍挂着、位置照留。只给一种：
+    /// 一出一收会挤动同一排旁边的（同步提醒、技能与规则的说明）；其余按条件写。
     func keepsPlace(shown: Bool) -> some View {
         opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
-    }
-}
-
-/// 开合会话条（`Workspace.toggleSidebar`，⌃⌘S 同，宽 220 与 72 两档）。收起时 Cue 有等你或新消息，钮角上带点（`CueDot`）。
-struct SidebarToggle: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        // 点画在标签里：工具栏把"字 + 图标"的标签换成系统按钮，挂在按钮外面的会被丢掉
-        Button { workspace.toggleSidebar() } label: {
-            Image(.sidebar).overlay(alignment: .topTrailing) {
-                if !workspace.sidebarOpen, workspace.mainRoute != .cue { CueDot().offset(x: 5, y: -4) }
-            }
-        }
-        .accessibilityLabel("侧栏")
-        .help("显示或隐藏侧栏（⌃⌘S）")
     }
 }
 
@@ -47,7 +31,7 @@ struct CloseButton: View {
     }
 }
 
-/// 量这一块在窗口里的框（左上为原点，同窗口里浮层的坐标），或它的一条边（`CGRect.minX`、`maxX`）：两栏各是一个托管视图，
+/// 量这一块在窗口里的框（左上为原点，同窗口里浮层的坐标），或它的一条边（`CGRect.minX`、`maxX`）：宽屏几块各是一个托管视图，
 /// SwiftUI 的全局坐标只到所在那一栏，按窗口坐标量。会话条换宽时挪的是外面的几层，听这几层的框变了再量。
 struct WindowFrame<Value: Equatable>: NSViewRepresentable {
     let edge: KeyPath<CGRect, Value>
@@ -106,25 +90,7 @@ struct WindowFrame<Value: Equatable>: NSViewRepresentable {
     }
 }
 
-/// 进展页顶上那一排、两段分段之后：会话段的项目范围（`ProjectScopeMenu`，`Workspace.projectScope`；看板段那一排是列头，范围在"⋯"里）。
-/// 栏头里的控件只有一条规矩（这一格、`PageActionSlot`、`SearchSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，
-/// 栏头读不到页面读的库，抄一份过来就是第二个事实源；状态归页面的（会话段的搜索、新会话表单读的这台 Mac 上有哪些 Agent）留在页里。
-/// 只在会话段看得见，看板段仍挂着（`keepsPlace`）：换到会话段时现建整份项目菜单与新会话钮，那一下多 50～70M 条指令（13%～25%，后台量的"看板→会话"）。
-/// 按项目名的宽、最宽 `maxWidth`（再长截断）。
-struct ScopeSlot: View {
-    @Environment(Workspace.self) private var workspace
-
-    private static let maxWidth: CGFloat = 200
-
-    var body: some View {
-        ProjectScopeMenu()
-            .frame(maxWidth: Self.maxWidth, minHeight: Spacing.toolbarControl, maxHeight: Spacing.toolbarControl)
-            .padding(.leading, Spacing.toolbarGap)
-            .keepsPlace(shown: workspace.showsSessionsBar)
-    }
-}
-
-/// 右栏 Cue 页栏头的右边：记忆与定时两颗圆钮，各打开自己的弹层（`CueMemoryPage`、`CueSchedulePage`）。
+/// 右边 Cue 栏头的右端：记忆与定时两颗圆钮，各打开自己的弹层（`CueMemoryPage`、`CueSchedulePage`）。
 struct CueListSlots: View {
     @Environment(Workspace.self) private var workspace
 
@@ -142,25 +108,7 @@ struct CueListSlots: View {
     }
 }
 
-/// 进展页顶上那一排的右边：会话段的"新会话"（弹出新会话的表单，`NewSessionPanel`，⌥⌘N 同）；看板段的新任务在"⋯"里。
-/// 规矩同 `ScopeSlot`。
-struct PageActionSlot: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        // 写明图标与字两样都要
-        Button("新会话", icon: .add) { workspace.showsNewSession = true }
-            .labelStyle(.titleAndIcon)
-            .buttonStyle(ControlButtonStyle(kind: .glass))
-            .help("开一个新的 Agent 会话（⌥⌘N）")
-            .fixedSize()
-            .frame(height: Spacing.toolbarControl)
-            .padding(.leading, Spacing.toolbarGap)
-            .keepsPlace(shown: workspace.showsSessionsBar)
-    }
-}
-
-/// 主栏栏头右边、搜索之前：同步需要关注时（没登录 iCloud、连不上、需要你决定、出错等）露一个图标，悬停看原因，点开设置处理。
+/// 主区栏头右端、"⋯"之前：同步需要关注时（没登录 iCloud、连不上、需要你决定、出错等）露一个图标，悬停看原因，点开设置处理。
 /// 有同步就常驻一格圆钮宽，平时只是看不见（`keepsPlace`）：提醒一出一收不挤动左边的编辑页标题与项目名。
 struct SyncAlertSlot: View {
     @Environment(AppServices.self) private var services
@@ -180,25 +128,4 @@ struct SyncAlertSlot: View {
     }
 }
 
-/// 主栏栏头右边的搜索（⌘K 同）。进展页上不在这里，收在"⋯"里（`PageMenuSlot`）：看板段那一排是列头，会话段那一排已有范围与新会话，页里还有搜会话的框。
-struct SearchSlot: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        // 资料库读不出来时：搜索结果能打开卡片，是写入入口
-        if workspace.mainRoute != .progress {
-            Button { workspace.searching.toggle() } label: { Image(.search) }
-                .buttonStyle(ControlButtonStyle(kind: .circular))
-                .help("搜索（⌘K）")
-                .accessibilityLabel("搜索")
-                .disabled(!workspace.isLibraryReady)
-                .padding(.leading, Spacing.toolbarGap)
-        }
-    }
-}
-
-extension Workspace {
-    /// 进展页的会话段：那一排左边是项目范围，右边新会话。
-    var showsSessionsBar: Bool { mainRoute == .progress && progressPane == .sessions }
-}
 #endif

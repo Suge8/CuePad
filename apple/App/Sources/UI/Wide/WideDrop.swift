@@ -17,8 +17,8 @@ extension EnvironmentValues {
 #if os(iOS)
 extension WideColumnController: UIDropInteractionDelegate {
     func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
-        // 看板、项目页的卡片落点在主栏浏览页里，与这个接收器挂在同一个托管视图上：带卡片的拖放（有会话的任务卡也带会话）归它们，不在这里打开会话
-        if column == .main, workspace.session(in: .main) == nil, session.hasItemsConforming(toTypeIdentifiers: [UTType.cuepadCard.identifier]) { return false }
+        // 看板、项目页的卡片落点在主区浏览页里，与这个接收器挂在同一个托管视图上：带卡片的拖放（有会话的任务卡也带会话）归它们，不在这里打开会话
+        if slot == .main, workspace.session(in: .main) == nil, session.hasItemsConforming(toTypeIdentifiers: [UTType.cuepadCard.identifier]) { return false }
         return session.hasItemsConforming(toTypeIdentifiers: [DraggedColumn.type.identifier, UTType.cuepadSession.identifier])
     }
 
@@ -32,14 +32,14 @@ extension WideColumnController: UIDropInteractionDelegate {
 
     func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
         drop.targeted = false
-        guard let provider = session.items.first?.itemProvider else { return }
+        guard let column = slot.column, let provider = session.items.first?.itemProvider else { return }
         if provider.hasItemConformingToTypeIdentifier(DraggedColumn.type.identifier) {
             load(DraggedColumn.self, type: DraggedColumn.type, from: provider) {
-                self.workspace.dropSession(SessionRoute(id: $0.recordID, sessionID: $0.sessionID), in: self.column, movingWithinWindow: $0.windowID == self.focus.windowID)
+                self.workspace.dropSession(SessionRoute(id: $0.recordID, sessionID: $0.sessionID), in: column, movingWithinWindow: $0.windowID == self.focus.windowID)
             }
         } else {
             load(DraggedSession.self, type: .cuepadSession, from: provider) {
-                self.workspace.openSession(PiSessionState.recordID(sessionID: $0.sessionID), sessionID: $0.sessionID, in: self.column)
+                self.workspace.openSession(PiSessionState.recordID(sessionID: $0.sessionID), sessionID: $0.sessionID, in: column)
             }
         }
     }
@@ -62,30 +62,47 @@ extension WideColumnController: UIDropInteractionDelegate {
 
 #endif
 
+/// 会话的栏头（宽屏主区的一边）：「项目 / 会话名」，项目淡一档；右边 ×（`closeColumn`）。拖标题到主区的另一半换边，松手才改去处。
+/// 排在窗口最顶那一排（`WideMetrics.band`），左右让出多少由主区给（`headInset`：收起的 Cue 钮压在最右那一块的栏头上）。
 struct WideSessionTitle: View {
     let title: String
+    let project: String?
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
     @Environment(\.wideWindowID) private var windowID
+    @Environment(\.headInset) private var inset
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack {
+        HStack(spacing: 6) {
+            if let project {
+                Text(verbatim: project).foregroundStyle(palette.ink3).lineLimit(1)
+                Text(verbatim: "/").foregroundStyle(palette.ink3).accessibilityHidden(true)
+            }
             if let windowID, let session = workspace.session(in: column) {
                 #if os(iOS)
                 WideTitleDrag(title: title, item: DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
                     .frame(maxWidth: .infinity)
                 #else
-                WideHeading(title: title)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1)
                     .contentShape(.rect)
                     .draggable(DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
+                    .layoutPriority(1)
                 #endif
             }
+            Spacer(minLength: 8)
             Button("关闭", icon: .close) { workspace.closeColumn(column) }
                 .labelStyle(.iconOnly)
         }
-        .padding(.horizontal, 16).frame(height: 44)
+        .font(.headline)
+        .accessibilityElement(children: .contain)
+        .padding(inset).frame(height: WideMetrics.band)
     }
+}
+
+extension EnvironmentValues {
+    /// 这一块栏头左右让出多少：收起的 Cue 钮压在最右那一块的栏头右端（`MainWindow`、`SplitRoot` 给）。
+    @Entry var headInset = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
 }
 
 @Observable

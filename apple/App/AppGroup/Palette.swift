@@ -116,8 +116,9 @@ struct Palette {
         case (true, true): Color(hex: 0x3F5AAE)
         }
     }
-    /// 选中的底：侧栏与列表的当前项、选中的胶囊；字保持墨色。
-    var selection: Color { signature.opacity(highContrast ? 0.28 : (dark ? 0.2 : 0.12)) }
+    /// 选中的底：会话条、侧栏与列表的当前项、选中的胶囊，全 App 只这一种；中性的墨，比悬停与按下的 `fill` 深一档，字保持墨色。
+    /// 不用靛青：靛青只给焦点与正在发生的事（在跑的线），整行铺一块靛青会把"这里放着它"读成"这里有动静"，一屏几块就压过真正在跑的。
+    var selection: Color { ink.opacity(highContrast ? 0.22 : (dark ? 0.14 : 0.09)) }
     /// 搜索命中的字垫的底：命中是在构造富文本时标的、拿不到外观，两种外观共用一份中等明度的靛青（浅纸上是淡蓝、暗纸上是暗蓝）。
     static let searchMatch = Color(hex: indigoMid).opacity(0.22)
     private static let indigoMid: UInt32 = 0x4A64B8

@@ -9,8 +9,9 @@ struct NarrowNavigation {
     var sidebarOpen = false
 }
 
-/// 宽屏只有两栏的去处。main 的浏览落点从偏好推出；side 为 nil 就是 Cue。
-/// 同一个会话最多在一栏，回复草稿仍按会话 id 由 AppSettings 持有。
+/// 宽屏只有主区的去处：浏览落点（从偏好推出）、辅助页、一个会话，或并排两个会话（⌘ 点开的第二个在右半边，`beside`）。
+/// 右边一直是 Cue，不进导航：它收没收起是用户的选择（`AppSettings.cueOpen`），放不下时浮出是这一刻的呈现（`Workspace.cueFloats`）。
+/// 同一个会话最多在一边，回复草稿仍按会话 id 由 AppSettings 持有。
 struct WideNavigation {
     enum Main {
         /// 浏览去处直接引用持久选择，不再复制项目 id 与分段。
@@ -27,13 +28,17 @@ struct WideNavigation {
         }
     }
 
-    var main: Main = .browse
-    var side: SessionRoute?
+    var main: Main = .browse {
+        didSet { if case .session = main {} else { beside = nil } }
+    }
+    /// 并排时右半边的会话；主区不是会话时没有（`main` 换走会话时一并清掉）。
+    var beside: SessionRoute?
 }
 
 extension Workspace {
     enum Layout { case narrow, wide }
-    enum Column { case main, side }
+    /// 主区里一个会话占的那一边：`main` 是左半（只开一个时就是整个主区），`beside` 是并排时的右半。
+    enum Column { case main, beside }
     enum Navigation {
         case narrow(NarrowNavigation)
         case wide(WideNavigation)
@@ -90,8 +95,8 @@ extension Workspace {
         }
     }
 
-    var sideSession: SessionRoute? {
-        if case .wide(let state) = navigation { state.side } else { nil }
+    var besideSession: SessionRoute? {
+        if case .wide(let state) = navigation { state.beside } else { nil }
     }
 
     var navigationPane: NavigationPane { services.settings.navigationPane }
@@ -128,8 +133,8 @@ extension Workspace {
         }
     }
 
-    /// 宽→窄：浏览入口在侧栏，主区详情先入栈，右栏会话在最上。
-    /// 窄→宽：栈顶会话进右栏，其下页进主区；否则栈顶或浏览落点进主区。
+    /// 宽→窄：浏览入口在侧栏，主区详情先入栈，并排的第二个会话在最上。
+    /// 窄→宽：栈顶或浏览落点进主区（会话独占主区，其下的页回到浏览落点）。
     /// 只转换此刻的导航，不缓存旧布局。
     func setLayout(_ next: Layout) {
         guard next != layout else { return }
@@ -141,16 +146,11 @@ extension Workspace {
             case .project: narrow = NarrowNavigation(path: [mainRoute], sidebarOpen: true)
             default: narrow = NarrowNavigation(path: [mainRoute])
             }
-            if let session = state.side { narrow.path.append(.session(session)) }
+            if let session = state.beside { narrow.path.append(.session(session)) }
             navigation = .narrow(narrow)
         case .narrow(let state):
             var wide = WideNavigation()
-            if case .session(let session)? = state.path.last {
-                wide.side = session
-                wide.main = state.path.dropLast().last.map(WideNavigation.Main.init) ?? .browse
-            } else if let page = state.path.last {
-                wide.main = WideNavigation.Main(page)
-            }
+            if let page = state.path.last { wide.main = WideNavigation.Main(page) }
             navigation = .wide(wide)
         }
     }

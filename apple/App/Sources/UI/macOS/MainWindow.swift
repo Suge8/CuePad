@@ -2,7 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 主窗口的主区与右栏分别呈现导航去处，编辑页与文件页盖在主区上。
+/// 主窗口：左栏（会话条，`WideRail`，导航只在这一处）、主区（浏览页、辅助页、一个会话或并排两个，`MainColumn`）、右边一直是 Cue（`CueColumn`）。
+/// 三栏各自的栏头都排在窗口最顶那一排（红绿灯那一排，`WideMetrics.band`），同一基线；窗口工具栏只留一条空的，给这一排定高、把红绿灯放在它中线上。
+/// 尺寸与自动收起只在 `WideMetrics`。Cue 收起后右上一颗 Cue 钮（`CueButton`），它压在最右那一块的栏头右端，那一块的栏头让出它（`headInset`）。
+/// 收起的 Cue 仍挂着（对话、滚动位置都在），只是藏起；放不下时点 Cue 钮，它从右边浮出、盖在主区上（`Workspace.cueFloats`）。
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
@@ -12,19 +15,37 @@ struct MainWindow: View {
     var body: some View {
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
+            let floats = sizes.cue == 0 && !sizes.cueFits && workspace.cueFloats
+            let shown = sizes.cue > 0 || floats
+            let trail = sizes.cue == 0 ? CueButton.reserve : MainColumn.edge
             HStack(spacing: 0) {
                 WideRail(width: sizes.rail)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { WideRailTools(wide: sizes.rail == SessionRail.Form.wide.width) }
-                WideColumnHost(column: .main, focus: focus, rail: sizes.rail, origin: sizes.rail, width: sizes.main) {
-                    main
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape) {
+                    MainColumn().environment(\.headInset, Self.inset(trailing: sizes.split ? MainColumn.edge : trail))
                 }
-                .frame(width: sizes.main)
-                WideColumnHost(column: .side, focus: focus, rail: sizes.rail, origin: sizes.rail + sizes.main, width: sizes.side) {
-                    side
+                .frame(width: sizes.leading)
+                if sizes.split {
+                    WideColumnHost(slot: .beside, focus: focus, origin: sizes.rail + sizes.leading, width: sizes.main - sizes.leading, shape: sizes.shape) {
+                        BesideColumn().environment(\.headInset, Self.inset(trailing: trail))
+                    }
+                    .frame(width: sizes.main - sizes.leading)
                 }
-                .frame(width: sizes.side)
+                Spacer(minLength: 0)
+            }
+            .overlay(alignment: .trailing) {
+                WideColumnHost(slot: .cue, focus: focus, origin: geometry.size.width - WideMetrics.cue, width: WideMetrics.cue, shape: sizes.shape, hidden: !shown) {
+                    CueColumn(shown: shown)
+                }
+                .frame(width: WideMetrics.cue)
+                .background { if floats { palette.desk.elevation(.panel) } }
+            }
+            .overlay(alignment: .topTrailing) {
+                if sizes.cue == 0 { CueButton(fits: sizes.cueFits).padding(.trailing, MainColumn.edge).frame(height: WideMetrics.band) }
             }
         }
+        // 三栏从窗口上沿起，栏头排进红绿灯那一排（各栏里自己让出这一排）
+        .ignoresSafeArea(.container, edges: .top)
+        .railTips()
         .previewPresenter(Bindable(workspace).preview, reply: nil)
         .background(palette.desk)
         .background { WindowPanels(workspace: workspace) }
@@ -33,47 +54,14 @@ struct MainWindow: View {
         .background { CardPressMonitor(workspace: workspace) }
         .overlay { Prewarm().environment(workspace) }
         .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
-        .toolbar { ToolbarItem(placement: .navigation) { SidebarToggle() } }
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .panelHost()
         .environment(workspace)
     }
 
-    private var main: some View {
-        VStack(spacing: 0) {
-            HStack {
-                WidePlaces()
-                WideProjectHeading().padding(.leading, 8)
-                Spacer(minLength: 8)
-                CloseButton()
-                if workspace.overlay != nil { OverlayTitle() }
-                if workspace.mainRoute == .library { LibraryPanesSlot(); LibraryHelpSlot() }
-                SyncAlertSlot()
-                SearchSlot()
-                if case .session = workspace.mainRoute {} else { PageMenuSlot() }
-            }
-            .padding(.horizontal, 16).frame(height: 44)
-            ZStack {
-                CatalogGate { PageStack() }
-                EditorLayer().zIndex(1)
-                LibraryFileLayer().zIndex(1)
-            }
-            .overlay(alignment: .bottom) { CaptureSlot() }
-        }
-    }
-
-    @ViewBuilder private var side: some View {
-        CatalogGate {
-            if let session = workspace.sideSession, let id = session.sessionID {
-                SessionPage(sessionID: id, column: .side).id(id)
-            } else {
-                VStack(spacing: 0) {
-                    HStack { CueTitle(); Spacer(); CueListSlots() }.padding(.horizontal, 16).frame(height: 44)
-                    CuePage()
-                }
-            }
-        }
+    private static func inset(trailing: CGFloat) -> EdgeInsets {
+        EdgeInsets(top: 0, leading: MainColumn.edge, bottom: 0, trailing: trailing)
     }
 }
 
@@ -95,12 +83,13 @@ private struct WindowPanels: View {
                 mountsPalette = true
             }
             .panel(item: $workspace.projectForm) { ProjectForm($0) }
+            .modifier(NewSessionPanel())
             .panel(isPresented: $workspace.showsSetup) { SetupPanel() }
             .sessionAsks(workspace)
     }
 }
 
-private struct EditorLayer: View {
+struct EditorLayer: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -112,7 +101,7 @@ private struct EditorLayer: View {
 
 /// 底部输入条：盖着一页（`Workspace.overlay`；灵感的编辑页含淡出途中）时不显示，底栏只有一套，先退后进；⌘K 打开时只是藏起来（不卸下），关掉面板的同一帧就回来。
 /// 只在项目页与归档放：回收站、进展页与会话页不是记灵感的地方（进展页的主操作是新任务、新会话，会话页有回复框），它只会压住列表最后几行。
-private struct CaptureSlot: View {
+struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -142,9 +131,8 @@ private extension Route {
 }
 
 extension Workspace {
-    /// ⌥⌘N（"文件 › 新会话"）：去进展页的会话段、弹出新会话的表单（表单只有这一个出处）。
+    /// ⌥⌘N（"文件 › 新会话"）与进展页"⋯"里的"新会话"：弹出新会话的表单（表单只有这一个出处，挂在主窗口上）。
     func newSession() {
-        showSessions()
         showsNewSession = true
     }
 }

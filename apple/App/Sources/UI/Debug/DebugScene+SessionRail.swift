@@ -21,7 +21,7 @@ struct DebugSessionRail: View {
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             SessionRail(data: workspace.services.liveSessions.rail, form: form, pulse: workspace.pulse) { session, opening in
-                event = "\(opening == .leading ? "leading" : "primary"): \(session.sessionID)"
+                event = "\(opening == .beside ? "beside" : "primary"): \(session.sessionID)"
             }
             .frame(height: 650)
             VStack(alignment: .leading, spacing: 16) {

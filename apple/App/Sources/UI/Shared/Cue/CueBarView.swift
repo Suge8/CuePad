@@ -136,31 +136,6 @@ struct CueStatusLine: View {
     }
 }
 
-#if os(macOS)
-/// Mac Cue 页的页头（右栏栏头那一排的左边）：头像，名字接此刻在做什么，一行（等你的卡就在输入框上方，这里不写）。输入框里有没说出去的话时头像露"在听"。
-/// 手机与 iPad 的页头是 `CueHeader`。
-struct CueTitle: View {
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let cue = workspace.cue
-        HStack(spacing: 8) {
-            CueAvatar(cue.beat, size: .row)
-                .relaySpot(cue: .header)
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(cue.name).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(font: Typography.toolbarSubtitle).lineLimit(1)
-            }
-            .padding(.trailing, 14)
-        }
-        .animation(Motion.fade, value: cue.presence)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-}
-#endif
-
 extension CueStatusRow where Trailing == EmptyView {
     init(font: Font = Typography.body.weight(.semibold), status: Bool = true) { self.init(font: font, status: status) { EmptyView() } }
 }

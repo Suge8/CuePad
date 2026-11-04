@@ -127,9 +127,9 @@ struct BoardSessionCard: View {
             .boardCard(.advancing)
         }
         .help(Dotted(project?.shownName, session.agentMark).visible)
-        .contextMenu { OpenSessionLeading(session: session); SessionActions(session: session) }
+        .contextMenu { OpenSessionBeside(session: session); SessionActions(session: session) }
         .accessibilityLabel(Dotted(session.title, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label, pulse.handoff?.waiting).spoken)
-        .accessibilityActions { OpenSessionLeading(session: session); SessionActions(session: session) }
+        .accessibilityActions { OpenSessionBeside(session: session); SessionActions(session: session) }
     }
 }
 

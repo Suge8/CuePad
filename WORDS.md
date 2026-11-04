@@ -13,12 +13,14 @@
 - **项目**只是容器（可选一句 `intro`）；避免：目标卡（已退役）
 - **工作区** vs **绑定的文件夹**：工作区是没绑文件夹的项目第一次开工时自动建的 `~/CuePad/<项目名>`（`Workspaces`），建好就是绑定的文件夹；避免：没绑文件夹开不了会话（已没有这种状态）
 - **只记下** vs **对 Cue 说**：同一个输入框，长按发送只记下（进默认项目、不叫 Cue），点发送对 Cue 说；避免：写、记一笔
-- **进展**（`Route.progress`，窄屏侧栏与宽屏主区里的去处）：看板与会话两段（`Workspace.progressPane`），会话段是全部会话（在线在上、历史在下）；避免：任务页（已退役）；会话页只指打开的那一个会话
+- **进展**（`Route.progress`，窄屏侧栏与宽屏会话条里的去处）：窄屏与 iPad 是看板与会话两段（`Workspace.progressPane`），会话段是全部会话（在线在上、历史在下）；Mac 宽屏只有看板；避免：任务页（已退役）；会话页只指打开的那一个会话
 - **会话**（进展页的一段）；避免：Agent 标签
 - **Agent 会话**；避免：Pi 会话（界面上）。"Pi"只指 Pi 这个产品（安装、扩展、版本、模型与 `pi` 命令）
 - **项目**（项目段列出全部项目，置顶的在前；窄屏侧栏的项目段与宽屏主区共用选择）
-- **项目范围**（`Workspace.projectScope`）：进展页看板与会话两段共用的"只看哪个项目"，顶栏中间不选时写"全部项目 ⌄"、选了是"项目名 ✕"；避免：筛选、过滤（界面上）
-- **会话条**（两端通用的会话入口，分组格）；避免：底部那一排、标签栏、Tab（主导航已退役）
+- **项目范围**（`Workspace.projectScope`）：进展页共用的"只看哪个项目"（窄屏收在额度面板里；Mac 收在看板那一行的"⋯"里，选了项目时"⋯"角上带它的小图形）；避免：筛选、过滤（界面上）
+- **会话条**（两端通用的会话入口，分组格；宽屏的会话条也是左栏，项目、进展两行在它顶上）；避免：底部那一排、标签栏、Tab（主导航已退役）、侧栏（宽屏）
+- **更早**（宽屏会话条底部折起的一组，`RailEarlier`）：已结束的会话，组头写个数，点开一列；宽屏的进展页没有会话段，已结束的会话只在这里与 ⌘K。项目页的"更早"是另一样（没在墙上的旧灵感），两处不混；避免：历史、已结束（作组名）
+- **并排**（宽屏主区开着两个会话，⌘ 点或右键"在旁边打开"开第二个）；避免：分屏、左栏、右栏（宽屏右边一直是 Cue）
 - **任务气泡**（`TaskBubble`，手机上是贴在底部的纸）：看一条任务只有它；避免：浮窗、详情页
 - **批注**（`ReplyNote`）vs **灵感**：批注是对回答某一段的意见，只在回复框的草稿里随下一句发出，不入库；避免：评论
 - **投送请求**（`DeliveryRequest`）vs **发送记录**（`sendRecords`）：请求是待执行的指令及其结果；发送记录是说过的话的快照，命令类请求不写
@@ -46,7 +48,7 @@
 英文界面只用这些叫法，没列的名词照 Apple 自家应用的说法。大小写只按字在界面上的位置定：导航与结构用 Title Case——页面与去处名、窗口与弹框标题（问句也是，"Forget This?"）、分段与标签页、列名、分组标题、按钮、菜单项、工具栏项、设置行的名字、空态标题；其余用句首大写——状态词与徽标（"Needs your OK"、"Not delivered"、"Not syncing"、"Running tool"）、说明、副标题、提示、帮助气泡、占位符、读屏标签与提示（同一个键也是按钮名时按按钮）、报错、横幅、通知正文、空态说明、复选框说明、斜杠命令的说明。下面的叫法作标题时 Title Case，嵌在句子与计数里小写（"3 need you"、"9 active"、"the agent session"）；Agent 不是专名，句中写 agent。一句里嵌状态词时状态词在句首（"Not syncing, can't answer now."）。同一个中文键在两种位置要不同大小写时拆键：改一处中文措辞或整句化，不在代码里改大小写。
 
 - 灵感 Idea · 任务 Task · 子任务 Subtask · 正文 Notes · 项目 Project · 默认项目 Default Project · 置顶 Pin / Unpin / Pinned · 归档 Archive · 回收站 Trash · 批注 Comment（不叫 Note，免得和 Notes 混）
-- 进展 Progress · 看板 Board · 会话 Session · Agent 会话 Agent Session · 全部项目 All Projects · 工作区 Workspace · 绑定的文件夹 Linked Folder
+- 进展 Progress · 看板 Board · 会话 Session · 更早 Earlier · 在旁边打开 Open Beside · Agent 会话 Agent Session · 全部项目 All Projects · 工作区 Workspace · 绑定的文件夹 Linked Folder
 - Cue 的四个：Cue · 推进中 Active · 等你 Needs You · 记忆 Memory；一直记着 Always Remember
 - 拍板 Your Call（"等你拍板" Needs Your Call）；数字账（名牌、小组件、灵动岛与锁屏、菜单栏面板）与会话条的计数里数接小写短形：N for you（拍板）· N to reply · N active · N subagent(s) · N need(s) you
 - 进行中 In Progress（任务自己的状态，不与 Active 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…

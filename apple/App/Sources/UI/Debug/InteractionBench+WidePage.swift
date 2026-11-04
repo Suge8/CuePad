@@ -1,7 +1,7 @@
 #if os(macOS) && DEBUG
 import AppKit
 
-/// 宽屏跨阈值时两栏的页面保住了没有（`InteractionBench+Wide` 的 `page`：ok、untested、broken）。
+/// 宽屏跨阈值时主区与 Cue 的页面保住了没有（`InteractionBench+Wide` 的 `page`：ok、untested、broken）。
 /// - 栏视图与栏里每个滚动视图还是原来那个对象：页面没被重建，内容随路由与会话一起由 `Snapshot` 比；
 /// - 每栏滚得最远的那个滚动视图像用户那样滚到中段（`scrollToMiddle`），记下可视区正中的那一条（看板卡、对话里的一条，按它们自己报的位置认，`benchSpot`）；
 ///   跨阈值后这一条还在可视区里，且没被滚回顶或底。栏宽变了内容会重新折行，离两端的距离跟着变，所以认那一条、不比距离。
@@ -15,7 +15,7 @@ struct WidePage {
     let baseline: [[String: Any]]
 
     private struct Reading {
-        let column: Workspace.Column
+        let column: WideSlot
         let scroll: ObjectIdentifier
         /// 可视区正中那一条与它离正中多远；没有条目落在可视区里时为 nil。
         let anchor: (id: AnyHashable, offset: CGFloat)?
@@ -32,7 +32,7 @@ struct WidePage {
     /// 滚到中段的那个滚动视图至少要能滚这么远：离两端各留出一截，滚回一端看得出来。
     private static let minimumTravel: CGFloat = 200
 
-    /// 两栏各把滚得最远的那个滚动视图滚到中段，像用户那样：先发开始实时滚动的通知（同 `ChatScrollBench` 的 direct），等两帧滚动区认出"用户在滚"再挪，
+    /// 各块各把滚得最远的那个滚动视图滚到中段，像用户那样：先发开始实时滚动的通知（同 `ChatScrollBench` 的 direct），等两帧滚动区认出"用户在滚"再挪，
     /// 再等两帧、滚动区按这次滚动读过数才发结束的通知。挪与通知同在一拍里的话，读数到时还算没在滚，贴着最新的对话会被滚回最新处。
     static func scrollToMiddle(_ columns: [WideColumnView]) async {
         for column in columns {
@@ -62,7 +62,7 @@ struct WidePage {
         baseline = columns.map { column in
             let scroll = Self.primary(in: column)
             return [
-                "column": "\(column.column)", "scrolls": Self.scrolls(in: column).map { Self.round(($0.documentView?.frame.height ?? 0) - $0.contentView.bounds.height) },
+                "column": "\(column.slot)", "scrolls": Self.scrolls(in: column).map { Self.round(($0.documentView?.frame.height ?? 0) - $0.contentView.bounds.height) },
                 "spots": InteractionBench.rows.count, "shown": scroll.map { Self.items(in: column, shownBy: $0).count } ?? 0,
                 "ends": scroll.flatMap(Self.ends).map { [Self.round($0.top), Self.round($0.bottom)] } ?? [],
             ]
@@ -70,12 +70,12 @@ struct WidePage {
         let readings: [Reading] = columns.compactMap { column in
             guard let scroll = Self.primary(in: column), let (top, bottom) = Self.ends(of: scroll) else { return nil }
             let anchor = Self.items(in: column, shownBy: scroll).min { abs($0.offset) < abs($1.offset) }
-            return Reading(column: column.column, scroll: ObjectIdentifier(scroll), anchor: anchor, top: top, bottom: bottom,
+            return Reading(column: column.slot, scroll: ObjectIdentifier(scroll), anchor: anchor, top: top, bottom: bottom,
                            frame: anchor.flatMap { InteractionBench.rows[$0.id] }, visible: Self.visible(scroll, in: column))
         }
         self.readings = readings
         // 验不了的栏：没有能滚的、没停在中段、中段没认出一条
-        untested = columns.map(\.column).filter { column in
+        untested = columns.map(\.slot).filter { column in
             guard let reading = readings.first(where: { $0.column == column }) else { return true }
             return reading.anchor == nil || reading.top <= 1 || reading.bottom <= 1
         }.map { "\($0)" }
@@ -86,7 +86,7 @@ struct WidePage {
     func compare(_ columns: [WideColumnView]) -> (verdict: Verdict, detail: [[String: Any]]) {
         let now = columns.flatMap { [ObjectIdentifier($0)] + Self.scrolls(in: $0).map(ObjectIdentifier.init) }
         let detail = readings.map { reading -> [String: Any] in
-            let column = columns.first { $0.column == reading.column }
+            let column = columns.first { $0.slot == reading.column }
             let scroll = column.flatMap { Self.scrolls(in: $0).first { ObjectIdentifier($0) == reading.scroll } }
             let ends = scroll.flatMap(Self.ends)
             let shown = reading.anchor.flatMap { anchor in

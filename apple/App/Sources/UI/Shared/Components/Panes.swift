@@ -66,7 +66,7 @@ enum PaneMetrics {
     #endif
 }
 
-/// 进展页的两段：看板｜会话，看哪一段只有 `Workspace.progressPane` 一份。手机与 iPad 在顶上那块玻璃里（`ProgressHeader`），Mac 在进展页自己顶上那一排的左边（`ProgressPage`）。
+/// 进展页的两段：看板｜会话，看哪一段只有 `Workspace.progressPane` 一份。手机与 iPad 在顶上那块玻璃里（`ProgressHeader`）；Mac 的进展页只有看板，已结束的会话在会话条的"更早"。
 struct ProgressPanes: View {
     @Environment(Workspace.self) private var workspace
 

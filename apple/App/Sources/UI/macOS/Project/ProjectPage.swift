@@ -15,8 +15,8 @@ struct ProjectPage: View {
     /// 墙与"更早"要用的、由数据和分区推出的东西：数据或分区变了才重算（任务行里 Agent 的状态一变页面就要重算，每次都从上千张卡里重新分组太贵）。
     @State private var shape: PageShape?
     @State private var collapsed = false
-    /// 窗口最顶那一排的高（`readsTopBand`）：下滚后的回到顶部排在那一排里。
-    @State private var band: CGFloat = 0
+    /// 窗口最顶那一排的高（`topBand`）：下滚后的回到顶部排在那一排里。
+    @Environment(\.topBand) private var band
     /// 任务纸收起其余任务时连带的滚动（`TaskFoldAnchor`）。
     @State private var position = ScrollPosition()
     @State private var anchor = TaskFoldAnchor()
@@ -53,11 +53,11 @@ struct ProjectPage: View {
                         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
                     }
                     .frame(height: band)
+                    .frame(maxHeight: .infinity, alignment: .top)
                     .ignoresSafeArea(edges: .top)
                     .transition(.opacity)
                 }
             }
-            .readsTopBand(into: $band)
             .debugScrollsToOlder(proxy, ready: board.arrangement != nil)
         }
         // 批量选择的"全选"范围：看得见的这一页上散放的灵感（置顶、墙、更早），按页上的顺序

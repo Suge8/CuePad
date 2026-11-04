@@ -89,7 +89,7 @@ extension Workspace {
     /// 点一条任务（项目页的任务行、看板的卡同一条规则）：它写着哪个会话的状态就进那个会话——看板的卡是此刻干活那一步的
     /// （`TaskBoard.Item.agent`，有子任务的也是），任务行是这条自己交给的（做完了也算）；没有会话的打开任务气泡（改标题与正文，子任务在气泡里）。
     /// 进会话的那一下，任务气泡从长按菜单的"打开任务"进（`CardActions` 的 `opens`）。
-    func enter(_ task: Card, session: PiSessionState?, in column: Column = .side) {
+    func enter(_ task: Card, session: PiSessionState?, in column: Column = .main) {
         guard let session else { return openTask(task) }
         openTask = nil
         openSession(session.id, sessionID: session.sessionID, in: column)

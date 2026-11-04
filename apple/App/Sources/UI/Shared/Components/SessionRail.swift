@@ -2,19 +2,19 @@ import CueStore
 import SwiftUI
 
 /// 分组格会话条：等你纸钉在上面、推进中在下面独立滚。尺寸只影响排版，三端共用数据、格子、注意顺序与动画预算。
-/// 60 点竖条在默认字号、650 点高内完整放下十个会话；72 点用于宽屏收起；220 点一行一个会话。
+/// 60 点竖条（手机）在默认字号、650 点高内完整放下十个会话；80 点是宽屏收起的图标条（与 Mac 的红绿灯右沿对齐，格子只有 Agent 标志与状态记号，名字在悬停提示里）；256 点一行一个会话。
 /// 等你过多时自身也能滚、最多占一半可用高度，不能把推进中或待回复挤到再也点不到。两组为空时保留列宽，不重排对话。
-/// 打开只回报会话与意图；宽屏的 ⌘ 点、右键与拖出都不在这里写导航。`marked` 是调用方两栏已打开的会话投影，不在组件内记选中。
+/// 打开只回报会话与意图（`Opening`：默认，或 ⌘ 点、右键"在旁边打开"的并排）；不在这里写导航。`marked` 是调用方主区开着的会话投影，不在组件内记选中。
 struct SessionRail: View {
     enum Form {
         case phone, wide, narrow
-        var width: CGFloat { switch self { case .phone: 60; case .wide: 220; case .narrow: 72 } }
+        var width: CGFloat { switch self { case .phone: 60; case .wide: 256; case .narrow: 80 } }
         var inset: CGFloat { self == .phone ? 2 : 8 }
     }
 
     static let chatInset: CGFloat = 52
 
-    enum Opening { case primary, leading }
+    enum Opening { case primary, beside }
 
     let data: SessionRailData
     let form: Form
@@ -40,12 +40,15 @@ private struct SessionRailContent: View {
     let open: (PiSessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 52
+    /// 收起的图标条（80）的格：没有名字，只有标志与状态记号。
+    @ScaledMetric(relativeTo: .caption2) private var iconHeight: CGFloat = 40
 
     @Environment(\.relayStage) private var stage
     @Environment(\.pageActive) private var active
     @State private var reveal = SessionRailReveal()
 
     private var rowHeight: CGFloat {
+        if form == .narrow { return iconHeight }
         if form != .wide { return tileHeight }
         #if os(macOS)
         return 32

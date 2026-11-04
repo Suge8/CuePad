@@ -1,29 +1,8 @@
 #if os(macOS)
 import SwiftUI
 
-/// 项目范围（`Workspace.projectScope`，进展页看板与会话两段共用一份）在 Mac 上的入口：进展页顶上那一排、两段分段的右边（`ScopeSlot`），
-/// 进展页右上的"⋯"里也有一份（`ProjectScopeItems`）：全部项目或一个项目，列全部项目。
-/// 手机与 iPad 的入口在顶栏中间（`ProjectScope`）。选中的项目进了回收站就当作全部项目（`Workspace.scopedProject`）。
-struct ProjectScopeMenu: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        let current = workspace.catalog?.project(workspace.scopedProject)
-        Menu {
-            ProjectScopePicker().pickerStyle(.inline)
-        } label: {
-            HStack(spacing: 6) {
-                if let current { ProjectGlyph(project: current, size: 13) } else { Image(.filter) }
-                Text(current?.shownName ?? String(localized: "全部项目")).lineLimit(1)
-            }
-            .menuLabel("项目范围：\(current?.shownName ?? String(localized: "全部项目"))")
-        }
-        .menuStyle(.button).buttonStyle(ControlButtonStyle(kind: .glass)).menuIndicator(.hidden)
-        // 横向不定死：给的地方窄于字宽时项目名截断（`ScopeSlot` 最宽 200 的那一格）
-        .fixedSize(horizontal: false, vertical: true)
-    }
-}
-/// 进展页"⋯"里的项目范围：一个子菜单，勾着此刻的范围。
+/// 项目范围（`Workspace.projectScope`）在 Mac 上只有一处入口：进展页（看板）那一行右端"⋯"里的一个子菜单，勾着此刻的范围（全部项目或一个项目，列全部项目）。
+/// 选了项目时"⋯"角上带它的小图形（`PageMenuSlot`）。手机与 iPad 的入口在顶栏中间（`ProjectScope`）。选中的项目进了回收站就当作全部项目（`Workspace.scopedProject`）。
 struct ProjectScopeItems: View {
     @Environment(Workspace.self) private var workspace
 

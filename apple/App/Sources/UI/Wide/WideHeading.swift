@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 栏头的标题位，宽屏两栏同一套：会话栏写会话名（`WideSessionTitle`），主栏开着项目页时写项目名（`WideProjectHeading`）。
+/// 宽屏主区栏头的标题位：项目页写项目名与介绍（`WideProjectHeading`），项目列表、归档、回收站写页名；会话的栏头另是「项目 / 会话名」（`WideSessionTitle`）。
 /// 一行标题；`detail` 不为 nil 时下面一行小字（空串也占着这一行：项目有没有写介绍，栏头的字都不上下跳）。
 struct WideHeading: View {
     let title: String

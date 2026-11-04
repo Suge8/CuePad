@@ -283,22 +283,6 @@
         }
       }
     },
-    "%@ 和 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ and %2$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ 和 %2$@"
-          }
-        }
-      }
-    },
     "%@ 在等回答" : {
       "localizations" : {
         "en" : {
@@ -5847,6 +5831,38 @@
         }
       }
     },
+    "会话移到右边" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Session Right"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话移到右边"
+          }
+        }
+      }
+    },
+    "会话移到左边" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Session Left"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话移到左边"
+          }
+        }
+      }
+    },
     "会话结束了" : {
       "localizations" : {
         "en" : {
@@ -7423,22 +7439,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "切换模型"
-          }
-        }
-      }
-    },
-    "切换项目（⌘1–9）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Switch project (⌘1–9)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切换项目（⌘1–9）"
           }
         }
       }
@@ -9911,22 +9911,6 @@
         }
       }
     },
-    "在左边打开" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open on the Left"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在左边打开"
-          }
-        }
-      }
-    },
     "在想" : {
       "localizations" : {
         "en" : {
@@ -9955,6 +9939,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在文中搜索"
+          }
+        }
+      }
+    },
+    "在旁边打开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Beside"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在旁边打开"
           }
         }
       }
@@ -10003,22 +10003,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在等你回答"
-          }
-        }
-      }
-    },
-    "在终端里开一个 Agent，或点右上角开新会话（⌥⌘N）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Start an agent in Terminal, or click New Session at the top right (⌥⌘N)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在终端里开一个 Agent，或点右上角开新会话（⌥⌘N）"
           }
         }
       }
@@ -11935,22 +11919,6 @@
         }
       }
     },
-    "开一个新的 Agent 会话（⌥⌘N）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Start a new agent session (⌥⌘N)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开一个新的 Agent 会话（⌥⌘N）"
-          }
-        }
-      }
-    },
     "开不了新会话：%@" : {
       "localizations" : {
         "en" : {
@@ -12235,22 +12203,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当前轮次的来源尚未确认，Cue 没有打断"
-          }
-        }
-      }
-    },
-    "当前项目，点按切换" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Current project; click to switch"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前项目，点按切换"
           }
         }
       }
@@ -13279,22 +13231,6 @@
         }
       }
     },
-    "接入以后 CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connecting adds a skill to its config folder (plus hooks for Claude Code and Codex). Turn it off in Settings to remove them."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入以后 CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除"
-          }
-        }
-      }
-    },
     "接入后新开的会话里生效。" : {
       "localizations" : {
         "en" : {
@@ -13339,22 +13275,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "接入后，在终端和桌面版里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。"
-          }
-        }
-      }
-    },
-    "接入后，在终端和桌面版里开的会话也列在这里，能看进展、回话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect to see their sessions here and reply"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入后，在终端和桌面版里开的会话也列在这里，能看进展、回话"
           }
         }
       }
@@ -13599,38 +13519,6 @@
         }
       }
     },
-    "搜 %@ 的会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search %@ sessions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜 %@ 的会话"
-          }
-        }
-      }
-    },
-    "搜会话、目录、说过的话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search sessions, folders, messages"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜会话、目录、说过的话"
-          }
-        }
-      }
-    },
     "搜索" : {
       "localizations" : {
         "en" : {
@@ -13855,6 +13743,22 @@
         }
       }
     },
+    "收起 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收起 %@"
+          }
+        }
+      }
+    },
     "收起原话" : {
       "localizations" : {
         "en" : {
@@ -14071,6 +13975,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "改技能与规则"
+          }
+        }
+      }
+    },
+    "放回 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放回 %@"
           }
         }
       }
@@ -14343,38 +14263,6 @@
         }
       }
     },
-    "新任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New Task"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新任务"
-          }
-        }
-      }
-    },
-    "新任务、新会话、项目范围、搜索、归档做完的、接入 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New task, new session, project, search, archive done tasks, connect agents"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新任务、新会话、项目范围、搜索、归档做完的、接入 Agent"
-          }
-        }
-      }
-    },
     "新会话" : {
       "localizations" : {
         "en" : {
@@ -14403,6 +14291,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新会话…"
+          }
+        }
+      }
+    },
+    "新会话、项目范围、归档做完的、接入 Agent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New session, project filter, archive done, connect agents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新会话、项目范围、归档做完的、接入 Agent"
           }
         }
       }
@@ -17463,22 +17367,6 @@
         }
       }
     },
-    "清除" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clear"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清除"
-          }
-        }
-      }
-    },
     "演示文稿" : {
       "localizations" : {
         "en" : {
@@ -18071,6 +17959,22 @@
         }
       }
     },
+    "看 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看 %@"
+          }
+        }
+      }
+    },
     "看 Agent 的会话" : {
       "localizations" : {
         "en" : {
@@ -18279,18 +18183,18 @@
         }
       }
     },
-    "移到右栏" : {
+    "看这个项目的进展" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Move to Right Column"
+            "value" : "See This Project’s Progress"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "移到右栏"
+            "value" : "看这个项目的进展"
           }
         }
       }
@@ -18307,22 +18211,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移到回收站"
-          }
-        }
-      }
-    },
-    "移到左栏" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move to Left Column"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移到左栏"
           }
         }
       }
@@ -18715,34 +18603,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等你"
-          }
-        }
-      }
-    },
-    "等你 %lld" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld needs you"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld need you"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等你 %lld"
           }
         }
       }
@@ -20131,6 +19991,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "设置…"
+          }
+        }
+      }
+    },
+    "设置（⌘,）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings (⌘,)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置（⌘,）"
           }
         }
       }
@@ -21899,22 +21775,6 @@
         }
       }
     },
-    "这台 Mac 上有 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Found %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这台 Mac 上有 %@"
-          }
-        }
-      }
-    },
     "这台 Mac 上没有在线的 Agent 会话，查不了额度" : {
       "localizations" : {
         "en" : {
@@ -22731,18 +22591,18 @@
         }
       }
     },
-    "选择灵感、看这个项目的会话、项目操作" : {
+    "选择灵感、看这个项目的进展、项目操作" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Select ideas, view this project's sessions, project actions"
+            "value" : "Select ideas, see this project’s progress, project actions"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "选择灵感、看这个项目的会话、项目操作"
+            "value" : "选择灵感、看这个项目的进展、项目操作"
           }
         }
       }
