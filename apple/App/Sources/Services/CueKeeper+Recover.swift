@@ -10,6 +10,7 @@ import Foundation
 /// - 卡住的那家记进绕行（读得到就带重置时刻）；换过去的那家起不来（快的重试用完）也算卡住。绕行记着你设定的那家与它的模型、强度、fast。
 /// - 你设定的那家没卡住或重置已过就用它（原模型、强度）；否则此刻用的那家没卡住就留它（哪家好好做完一轮就留哪家）；否则没卡过的那家；
 ///   否则重置已过的里最早的。这几种该能用，马上换：卡住当场换过去，你设定的那家重置时刻一到就换回（对账的定时器排这一刻）。
+///   重置已过的不再算卡住；换到该能用的那家或这家重置刚过，卡着的那件马上在它上面重来，不等慢速周期（只有这一家时也是）。
 /// - 都不是（试过的都卡着、重置没过或读不到）：轮到最近卡住的那家后面的一家，只在慢速周期到点（重来那一轮、重起大脑）时换，每个周期只试一家。
 /// - 一轮好好做完：那家不再算卡住，别的卡住记录清掉（你设定的那家的留着，等它的重置时刻）；它就是你设定的那家，绕行结束。
 ///   你或 Cue（`setup set`）改了设置也结束：后来的选择就是你设定的。
@@ -80,15 +81,25 @@ extension CueKeeper {
     /// 绕行时让设置跟上规则（`Detour.next`）：你或 Cue 改过设置就不再绕行；该能用的那家（你设定的那家重置已过……）马上换过去；
     /// `attempt`（慢速周期到点：重来那一轮、重起大脑）时轮到碰运气的那家也换。改了设置返回 true：下一次对账按新设置换大脑。
     func steer(attempt: Bool = false) async -> Bool {
-        guard let detour = progress.detour else { return false }
+        guard var detour = progress.detour else { return false }
         do {
             guard let profile = try await store.cueProfile(), let current = profile.runtime.known, detour.wrote(profile) else {
                 progress.detour = nil
                 save()
                 return false
             }
+            // 重置已过的不再算卡住：在它上面再试，又卡住时重新记下（`failOver`）
+            let lapsed = Set(detour.stuck.filter { $0.value.resets.map { $0 <= .now } == true }.keys)
+            if !lapsed.isEmpty {
+                lapsed.forEach { detour.stuck[$0] = nil }
+                progress.detour = detour
+                save()
+            }
             let kinds = try await store.macAgents(on: setup.recorder.hostID).kinds
-            guard let (to, open) = detour.next(from: current, among: kinds, at: .now), to != current, open || attempt else { return false }
+            guard let (to, open) = detour.next(from: current, among: kinds, at: .now) else { return false }
+            // 该能用的那家（换过去的，或重置刚过的这家）：卡着的那件不等慢速周期，马上在它上面重来
+            if open, to != current || lapsed.contains(to), setback?.persistent == true { setback?.retryAt = .now }
+            guard to != current, open || attempt else { return false }
             try await switchBrain(to)
             return true
         } catch {
