@@ -344,7 +344,7 @@ private struct FactsLayout: Layout {
     }
 }
 
-private extension View {
-    /// 读数一行里的一项：能被排成 0 宽并裁掉（`FactsLayout`）。
+extension View {
+    /// 读数一行里的一项：能被排成 0 宽并裁掉（`FactsLayout`、`BoardLineRow`）。
     func fact() -> some View { frame(minWidth: 0, alignment: .leading).clipped() }
 }

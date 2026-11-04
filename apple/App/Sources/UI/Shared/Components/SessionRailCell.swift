@@ -45,14 +45,14 @@ struct SessionRailCell: View {
     @ViewBuilder private var control: some View {
         #if os(macOS)
         Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .beside : .primary) } label: { label }
-            .buttonStyle(RowStyle(selected: selected))
+            .buttonStyle(RowStyle(selected: selected, cell: form == .narrow))
         #else
         if form == .phone {
             Button { open(item.session, .primary) } label: { label }
                 .buttonStyle(RowStyle(selected: selected))
         } else {
             label
-                .row(selected: selected)
+                .row(selected: selected, cell: form == .narrow)
                 .gesture(SessionTap { open(item.session, $0 ? .beside : .primary) })
                 .focusable(interactions: .activate)
                 .onKeyPress(.space) { open(item.session, .primary); return .handled }
@@ -71,18 +71,19 @@ struct SessionRailCell: View {
         Group {
             if form == .wide {
                 HStack(spacing: 8) {
-                    mark.frame(width: 18)
+                    mark.frame(width: Chrome.icon)
                     name.font(Typography.body)
                     Spacer(minLength: 0)
                     signal.frame(width: 40)
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, Chrome.rowLead)
             } else {
                 VStack(spacing: 2) {
                     mark.frame(height: 16)
                     // 收起的图标条只有标志与状态记号，名字在悬停提示里（`CellHelp`）；手机的竖条照写名字
                     if form == .phone { name.font(Typography.caption2) }
-                    signal.frame(width: 34)
+                    // 图标条上的格是 `Chrome.control` 见方：线收到格里、两边留纸的内边
+                    signal.frame(width: form == .narrow ? Chrome.control - 2 * Chrome.pad : 34)
                 }
                 .padding(.horizontal, 2)
             }
@@ -96,6 +97,7 @@ struct SessionRailCell: View {
 
     private var name: some View {
         Text(verbatim: item.session.title)
+            .fontWeight(selected ? .semibold : nil)
             .foregroundStyle(item.pulse.tier == .resting && item.waiting == nil ? palette.ink3 : palette.ink)
             .lineLimit(1)
     }

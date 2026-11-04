@@ -31,10 +31,18 @@ struct BoardRowLane<Above: View, Content: View>: View {
     @ScaledMetric(relativeTo: .caption) private var spineHeight = BoardRowMetrics.spineHeight
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.laneAddsTask) private var addTask
+    @Environment(\.laneAddsSession) private var addSession
     @ScaledMetric(relativeTo: .subheadline) private var addHeight = BoardRowMetrics.addHeight
 
-    /// 这一行的行头带"+"。
-    private var adds: Bool { column == .todo && addTask != nil }
+    /// 这一行的行头带的"+"：待办是添加任务，推进中是新会话（PROTOTYPE one）。
+    private var add: (title: LocalizedStringResource, action: () -> Void)? {
+        switch column {
+        case .todo: addTask.map { ("添加任务", $0) }
+        case .advancing: addSession.map { ("新会话", $0) }
+        default: nil
+        }
+    }
+    private var adds: Bool { add != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: BoardRowMetrics.gap) {
@@ -43,7 +51,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
         }
         .frame(minHeight: column.light ? lightHeight + (adds ? addHeight : 0) : spineHeight + 2 * BoardRowMetrics.spineInset, maxHeight: .infinity)
         .overlay(alignment: .leading) {
-            BoardRowSpine(column: column, count: count, add: adds ? addTask : nil)
+            BoardRowSpine(column: column, count: count, add: add)
                 .frame(width: BoardRowMetrics.spine)
                 .frame(minHeight: column.light ? lightHeight : spineHeight, maxHeight: column.light ? nil : .infinity)
                 .fixedSize(horizontal: false, vertical: column.light)
@@ -135,7 +143,7 @@ enum BoardRowMetrics {
 private struct BoardRowSpine: View {
     let column: TaskBoard.Column
     let count: Int
-    let add: (() -> Void)?
+    let add: (title: LocalizedStringResource, action: () -> Void)?
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .caption) private var mark: CGFloat = 16
     @ScaledMetric(relativeTo: .caption2) private var lightMark: CGFloat = 12
@@ -144,7 +152,7 @@ private struct BoardRowSpine: View {
         VStack(spacing: 0) {
             marks
             if let add {
-                Button("添加任务", icon: .add, action: add)
+                Button(add.title, icon: .add, action: add.action)
                     .labelStyle(.iconOnly)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(palette.signature)
@@ -213,5 +221,10 @@ private struct Sideways: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center, proposal: .unspecified)
     }
+}
+
+extension EnvironmentValues {
+    /// PROTOTYPE one：手机看板推进中行头的"+"，点它开新会话；nil 不画。
+    @Entry var laneAddsSession: (() -> Void)? = nil
 }
 #endif

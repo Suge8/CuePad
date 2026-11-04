@@ -80,12 +80,12 @@ private struct Chip: View {
     var body: some View {
         FilterChip(on: on) {
             HStack(spacing: 4) {
-                Text(name).foregroundStyle(on ? palette.signatureSoft : palette.ink)
+                Text(name).foregroundStyle(palette.ink)
                 if let value, on {
                     Text(value).fontWeight(.medium)
                 }
                 if value != nil {
-                    Image(.expand).font(.caption2.weight(.bold)).foregroundStyle(on ? palette.signatureSoft : palette.ink3).accessibilityHidden(true)
+                    Image(.expand).font(.caption2.weight(.bold)).foregroundStyle(on ? palette.ink2 : palette.ink3).accessibilityHidden(true)
                 }
             }
         }
@@ -110,7 +110,7 @@ struct ChipRow<Content: View>: View {
     }
 }
 
-/// 一颗筛选胶囊（搜索的筛选）：生效的是选中底（`selection`）与靛青字（选中一律用签名色），其余是纸底细边、墨色字。
+/// 一颗筛选胶囊（搜索的筛选）：生效的是选中底（`selection`）与半粗的墨字（全 App 一套选中，docs/ui.md「选中」），其余是纸底细边、墨色字。
 struct FilterChip<Label: View>: View {
     let on: Bool
     @ViewBuilder let label: Label
@@ -120,7 +120,7 @@ struct FilterChip<Label: View>: View {
         label
             .font(.subheadline)
             .fontWeight(on ? .semibold : nil)
-            .foregroundStyle(on ? palette.signature : palette.ink)
+            .foregroundStyle(palette.ink)
             .padding(.horizontal, 12).frame(minHeight: 36)
             .background(on ? palette.selection : palette.paper, in: .capsule)
             .overlay { if !on { Capsule().strokeBorder(palette.hair) } }

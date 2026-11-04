@@ -66,11 +66,11 @@ struct BoardColumnHeader: View {
     }
 
     #if os(macOS)
-    private static let font = Typography.secondary.weight(.semibold)
-    private static let countFont = Typography.heading
+    private static let font = Typography.laneTitle
+    private static let countFont = Typography.laneCount
     private static let mark: CGFloat = 16
     /// 与栏头那一排的玻璃同高（`boardTopRow`）
-    static let height = Spacing.toolbarControl
+    static let height = ControlMetrics.height
     /// "+"占的宽：字形加一点按得到的余量（悬停底向外宽出，`PressStyle(.inline)`）；按列头高的方块会白占一截、把列名挤短。
     private static let add: CGFloat = 24
     #else

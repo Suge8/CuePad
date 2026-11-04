@@ -8,6 +8,8 @@ import SwiftUI
 struct SessionList<Top: View>: View {
     @Bindable var model: AgentListModel
     let filter: UUID?
+    /// PROTOTYPE（`NavVariant.one` 的"更早"页）：只列已结束的，不写"历史"两字（页名就是"更早"）。
+    var endedOnly = false
     @ViewBuilder var top: Top
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -53,18 +55,18 @@ struct SessionList<Top: View>: View {
             empty
         } else {
             Group {
-                if !list.pinned.isEmpty {
+                if !endedOnly, !list.pinned.isEmpty {
                     header { SectionTitle(text: "已置顶").padding(.horizontal, 4) }
                     ForEach(list.pinned) { row($0, in: list, end: list.ends[$0.id]) }
                 }
-                if !list.now.isEmpty {
+                if !endedOnly, !list.now.isEmpty {
                     header { SectionTitle(text: "现在").padding(.horizontal, 4) }
                     ForEach(list.now) { row($0, in: list, end: list.ends[$0.id]) }
                 }
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                     header {
                         VStack(alignment: .leading, spacing: 10) {
-                            if index == 0 { SectionTitle(text: "历史") }
+                            if index == 0, !endedOnly { SectionTitle(text: "历史") }
                             SectionLabel(text: Dotted(run.section.title))
                         }
                         .padding(.horizontal, 4)
@@ -120,7 +122,7 @@ struct SessionList<Top: View>: View {
 }
 
 extension SessionList where Top == EmptyView {
-    init(model: AgentListModel, filter: UUID?) { self.init(model: model, filter: filter) { EmptyView() } }
+    init(model: AgentListModel, filter: UUID?, endedOnly: Bool = false) { self.init(model: model, filter: filter, endedOnly: endedOnly) { EmptyView() } }
 }
 
 /// "新会话"：在 `project` 里开（宽屏进展页顶右边的那一个操作，那里没有会话段）。

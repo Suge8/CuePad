@@ -97,7 +97,7 @@ extension InteractionBench {
                 print(jsonLine("INTERACT", row))
                 fflush(stdout)
             }
-            let narrow = SessionRail.Form.narrow.width, wide = SessionRail.Form.wide.width
+            let narrow = Chrome.strip, wide = Chrome.rail
             for _ in 0..<2 {
                 await step("宽屏收窄·\(item.name)", width: threshold - 1, rail: narrow)
                 await step("宽屏展开·\(item.name)", width: threshold, rail: wide)

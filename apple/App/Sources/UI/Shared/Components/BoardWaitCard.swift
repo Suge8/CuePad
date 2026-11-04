@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 等你列的一张卡（`TaskBoard.Held`）：一个在等你的会话，与看板别的卡同一种（`BoardCardLayout`，一样高，一个记号加名字）。
+/// 等你列的一张卡（`TaskBoard.Held`）：一个在等你的会话，与看板别的卡同一种（`BoardCardLayout`，一个记号加名字）。
 /// - 记号说状态：会话在问你是赭黄问号（`PiStateGlyph(.asking)`），待回复是墨点（`PiStateGlyph(.awaitsReply)`，各处待回复同一个，赭黄只给拍板）。
 /// - 名字同别的列：绑着的任务名，没绑任务的会话名，换列不换名字，折几行同别的卡（`BoardCardMetrics.title`）；看全部项目时前面是项目小图形。
 ///   问什么在 Mac 的悬停提示里（项目、问句或"待回复"、等了多久）与点进去看。
@@ -29,7 +29,7 @@ struct BoardWaitCard: View {
                     .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
                 if held.item?.task.isPinned == true { BoardPin() }
-                Text(held.title).foregroundStyle(palette.ink)
+                BoardCardTitle(held.title).foregroundStyle(palette.ink)
             }
             .boardCard(.waiting)
         }

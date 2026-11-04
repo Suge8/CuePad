@@ -1,0 +1,85 @@
+{
+ "title": "Mac 左栏　选中底收进栏里",
+ "summary": "项目、进展两行与会话格、更早放进同一种行容器：行左右各让出 12，选中底比行宽 8、离栏边还留 4，四角与容器同心；选中的字半粗、墨色。宽版与 80 图标条同一套。（截图是左栏放大）",
+ "out": "Mac选中.png",
+ "blocks": [
+  {
+   "label": "① 1512 宽版 · 进展选中",
+   "regions": [
+    [
+     0,
+     200
+    ]
+   ],
+   "panels": [
+    {
+     "tag": "现状",
+     "image": "shots/mac-now-1512-board.jpg"
+    },
+    {
+     "tag": "收口后",
+     "image": "shots/mac-new-1512-board.jpg",
+     "notes": [
+      {
+       "x": 320,
+       "y": 115,
+       "text": "进展：选中底不再贴窗口左边沿，与会话格同一种圆角、内缩"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "② 1512 宽版 · 会话格选中",
+   "regions": [
+    [
+     0,
+     300
+    ]
+   ],
+   "panels": [
+    {
+     "tag": "现状",
+     "image": "shots/mac-now-1512-session.jpg"
+    },
+    {
+     "tag": "收口后",
+     "image": "shots/mac-new-1512-session.jpg",
+     "notes": [
+      {
+       "x": 240,
+       "y": 48,
+       "text": "会话格：底不再铺满纸、直角，左右与上面两行对齐"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "③ 1280 · 80 图标条",
+   "regions": [
+    [
+     0,
+     360
+    ]
+   ],
+   "panels": [
+    {
+     "tag": "现状",
+     "image": "shots/mac-now-1280-board.jpg"
+    },
+    {
+     "tag": "收口后",
+     "image": "shots/mac-new-1280-board.jpg",
+     "notes": [
+      {
+       "x": 200,
+       "y": 300,
+       "text": "图标条：选中底在条里居中、两边留白，不贴窗口边"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

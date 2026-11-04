@@ -6,13 +6,10 @@ import SwiftUI
 /// 栏头只说这一页是什么、放这一页的操作："⋯"（`PageMenuSlot`）在右端，同步提醒在它左边。浏览页与辅助页的栏头由这里画：
 /// 项目页是项目名与介绍（`WideProjectHeading`），项目列表、归档、回收站写页名，技能与规则是规则｜技能与说明，编辑浮层是收起与是哪一份（`OverlayTitle`）。
 /// 进展页没有另一排：看板四列的列头就是这一排（`TaskBoardPage`），右端只有"⋯"（项目范围收在里面）。会话页的栏头是页自己画的（`WideSessionTitle`）。
-/// 页从这一排下面开始、内容滚到它后面（`PageStack` 按页让出 `WideMetrics.band`）；搜索在会话条顶上，项目｜进展在会话条里，栏头不放导航。
+/// 页从这一排下面开始、内容滚到它后面（`PageStack` 按页让出 `Chrome.band`）；搜索在会话条顶上，项目｜进展在会话条里，栏头不放导航。
 struct MainColumn: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.headInset) private var inset
-
-    /// 栏头离这一块两边多远（收起的 Cue 钮在最右那一块时右边另让，`CueButton.reserve`）。
-    static let edge: CGFloat = 16
 
     private var session: Bool { if case .session = workspace.mainRoute, workspace.overlay == nil { true } else { false } }
 
@@ -24,22 +21,22 @@ struct MainColumn: View {
                     EditorLayer()
                     LibraryFileLayer()
                 }
-                .safeAreaPadding(.top, WideMetrics.band)
+                .safeAreaPadding(.top, Chrome.band)
                 .zIndex(1)
             }
             .overlay(alignment: .bottom) { CaptureSlot() }
             if !session { head }
         }
-        .environment(\.topBand, WideMetrics.band)
+        .environment(\.topBand, Chrome.band)
         .ignoresSafeArea(.container, edges: .top)
     }
 
     /// 进展页那一排是看板的列头：栏头只占右端那几颗钮，不盖住列头（空处拖窗口由看板自己接，`TaskBoardPage`）；别的页栏头铺满这一排，空处接拖窗口。
     @ViewBuilder private var head: some View {
         if workspace.mainRoute == .progress, workspace.overlay == nil {
-            MainHead().padding(inset).frame(maxWidth: .infinity, alignment: .trailing).frame(height: WideMetrics.band)
+            MainHead().padding(inset).frame(maxWidth: .infinity, alignment: .trailing).frame(height: Chrome.band)
         } else {
-            MainHead().padding(inset).frame(height: WideMetrics.band).windowDragArea()
+            MainHead().padding(inset).frame(height: Chrome.band).windowDragArea()
         }
     }
 }

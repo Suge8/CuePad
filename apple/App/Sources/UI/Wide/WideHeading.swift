@@ -9,9 +9,9 @@ struct WideHeading: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(verbatim: title).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+            Text(verbatim: title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
             if let detail {
-                Text(verbatim: detail.isEmpty ? " " : detail).font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
+                Text(verbatim: detail.isEmpty ? " " : detail).font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3).lineLimit(1)
                     .help(detail)
             }
         }

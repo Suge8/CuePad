@@ -62,8 +62,9 @@ extension WideColumnController: UIDropInteractionDelegate {
 
 #endif
 
-/// 会话的栏头（宽屏主区的一边）：「项目 / 会话名」，项目淡一档；右边 ×（`closeColumn`）。拖标题到主区的另一半换边，松手才改去处。
-/// 排在窗口最顶那一排（`WideMetrics.band`），左右让出多少由主区给（`headInset`：收起的 Cue 钮压在最右那一块的栏头上）。
+/// 会话的栏头（宽屏主区的一边）：「项目 / 会话名」，项目淡一档，字同各栏栏头的标题（`Typography.toolbarTitle`）；右边 ×（`closeColumn`），
+/// 同这一排别的钮一样是玻璃圆钮（`Chrome.control`）。拖标题到主区的另一半换边，松手才改去处。
+/// 排在窗口最顶那一排（`Chrome.band`），左右让出多少由主区给（`headInset`：收起的 Cue 钮压在最右那一块的栏头上）。
 struct WideSessionTitle: View {
     let title: String
     let project: String?
@@ -93,10 +94,12 @@ struct WideSessionTitle: View {
             Spacer(minLength: 8)
             Button("关闭", icon: .close) { workspace.closeColumn(column) }
                 .labelStyle(.iconOnly)
+                .buttonStyle(ControlButtonStyle(kind: .circular))
+                .font(Typography.body)
         }
-        .font(.headline)
+        .font(Typography.toolbarTitle)
         .accessibilityElement(children: .contain)
-        .padding(inset).frame(height: WideMetrics.band)
+        .padding(inset).frame(height: Chrome.band)
         .windowDragArea()
     }
 }

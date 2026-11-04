@@ -48,8 +48,8 @@ struct CueTitle: View {
             Spacer(minLength: Spacing.toolbarGap)
             CueListSlots()
         }
-        .padding(.horizontal, MainColumn.edge)
-        .frame(height: WideMetrics.band)
+        .padding(.horizontal, Spacing.page)
+        .frame(height: Chrome.band)
         .windowDragArea()
     }
 }

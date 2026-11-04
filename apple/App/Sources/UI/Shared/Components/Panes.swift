@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// 一页里换看哪一段的分段：全 App 只有这一种（项目｜进展、进展页的看板｜会话、技能与规则的规则｜技能、搜索的灵感与任务｜会话）。
-/// 每段图标加字，选中的靛青字、浅底，其余次一档的墨；进展页那组只画图标（`titles: false`，字给悬停与读屏）：手机那块玻璃里还要放范围与额度。
+/// 选中态同全 App 一套（docs/ui.md「选中」）：中性淡底（`selection`）、墨字，其余次一档的墨，字一律半粗——选中不换字重，段宽不跟着跳；不用靛青。
+/// 形状只有一种：每段等宽（按最宽那一段）、同高的胶囊，整组要么全带字、要么全只画图标（`titles: false`，字给悬停与读屏），不在一排里一扁一圆。
 /// 放在哪见 docs/layout.md「栏头与页顶」；底由调用处给（栏头、页顶的玻璃，搜索范围自带淡底的槽）。
 /// 换段的动画在这里定一份：不回弹的弹簧，减弱动态效果时只交叉淡入淡出；点着的那一段再点不动。
 struct PaneSegment<Value: Hashable>: View {
@@ -19,7 +20,7 @@ struct PaneSegment<Value: Hashable>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 0) {
+        EqualSegments {
             ForEach(items, id: \.value) { item in
                 let on = selection == item.value
                 Button {
@@ -31,8 +32,8 @@ struct PaneSegment<Value: Hashable>: View {
                         if titles { Text(item.title).font(PaneMetrics.font).lineLimit(1) }
                     }
                     .padding(.horizontal, titles ? PaneMetrics.padding : 0)
-                    .frame(minWidth: titles ? PaneMetrics.minWidth : PaneMetrics.square, maxHeight: .infinity)
-                    .foregroundStyle(on ? palette.signature : palette.ink2)
+                    .frame(minWidth: titles ? PaneMetrics.minWidth : PaneMetrics.square, maxWidth: .infinity, maxHeight: .infinity)
+                    .foregroundStyle(on ? palette.ink : palette.ink2)
                     .background(on ? palette.selection : .clear, in: .capsule)
                     .contentShape(.capsule)
                 }
@@ -41,6 +42,26 @@ struct PaneSegment<Value: Hashable>: View {
                 .accessibilityLabel(Text(item.title))
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
+        }
+    }
+}
+
+/// 分段的排法：每段一样宽（最宽那一段的理想宽）、铺满给的高，按次序挨着排。不读几何，一次排定。
+private struct EqualSegments: Layout {
+    private func width(_ subviews: Subviews) -> CGFloat {
+        subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let height = proposal.height ?? subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
+        return CGSize(width: width(subviews) * CGFloat(subviews.count), height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let w = width(subviews)
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + w * CGFloat(index), y: bounds.minY), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: w, height: bounds.height))
         }
     }
 }
@@ -55,7 +76,7 @@ enum PaneMetrics {
     static let padding: CGFloat = 12
     static let minWidth: CGFloat = 64
     /// 只画图标时一颗的宽（同工具栏控件里的选中块那么高，成正方）。
-    static let square: CGFloat = Spacing.toolbarControl - inset * 2
+    static let square: CGFloat = ControlMetrics.height - inset * 2
     #else
     static let font = Font.subheadline.weight(.semibold)
     static let iconFont = Font.subheadline.weight(.semibold)

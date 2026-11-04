@@ -60,7 +60,7 @@ struct OverlayTitle: View {
             }
             .lineLimit(1)
             .padding(.horizontal, 16)
-            .frame(height: Spacing.toolbarControl)
+            .frame(height: ControlMetrics.height)
             .glass(in: .capsule)
             .help(content?.help ?? "")
             .accessibilityElement(children: .combine)

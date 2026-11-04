@@ -22,6 +22,8 @@ extension DebugScene {
             if let pane = defaults.string(forKey: "CuePadNarrowPane").flatMap(NavigationPane.init(rawValue:)) {
                 workspace.selectPane(pane)
             }
+            // PROTOTYPE：`-CuePadNavEarlier YES` 起来就推入"更早"那一页（方案 one）
+            if defaults.bool(forKey: "CuePadNavEarlier") { NavProtoBus.shared.earlier = true }
         }
         if defaults.bool(forKey: "CuePadNarrowCycle") { Task { await cycleNarrow(workspace) } }
     }

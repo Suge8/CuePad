@@ -162,7 +162,7 @@ final class WideColumnView: NSView {
         // 按栏的框裁（矩形裁剪，不离屏）：滑动时右缘随图层的宽走（`move`）
         clipsToBounds = true
         host.sizingOptions = []
-        // 不带标题栏那一截安全区：页里的滚动区不再向上伸到栏头底下（伸上去时按下落在滚动视图上，栏头的钮点不进去）；那一排页自己按 `WideMetrics.band` 让出
+        // 不带标题栏那一截安全区：页里的滚动区不再向上伸到栏头底下（伸上去时按下落在滚动视图上，栏头的钮点不进去）；那一排页自己按 `Chrome.band` 让出
         host.safeAreaRegions = []
         host.autoresizingMask = [.width, .height]
         addSubview(host)

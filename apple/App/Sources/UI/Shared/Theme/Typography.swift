@@ -51,15 +51,17 @@ enum Typography {
     static let keycap = Font.system(size: 11, weight: .medium, design: .rounded)
     /// 空态的标题。
     static let emptyTitle = Font.system(size: 17, weight: .semibold)
-    /// 工具栏：按钮上的字（收起、项目切换），会话页的标题与其后的状态；标题下面还有一行（任务 · 子任务）时标题收小，两行放进一个控件的高度。
+    /// 栏头（窗口最顶那一排）：钮上的字（收起、项目范围）；三栏栏头的标题只有一种（项目名、会话名与它前面的项目、Cue 的名字、页名），
+    /// 下面或后面跟的那一行（项目介绍、Cue 的数字账）是 `toolbarSubtitle`；标题下面还有一行（任务 · 子任务）时标题收小，两行放进一个控件的高度。
     static let toolbarLabel = Font.system(size: 13, weight: .medium)
     static let toolbarTitle = Font.system(size: 15, weight: .semibold)
     static let toolbarTitlePaired = Font.system(size: 13, weight: .semibold)
     static let toolbarSubtitle = Font.system(size: 12)
+    /// 看板列头：列名与轻的两列的数（同钮上的字），重的两列（推进中、等你）的数大一档、着状态色（`BoardWeight.swift`）——
+    /// 只大一档：再大列头就成了一排读数，压过下面的卡（卡才是这一页要看的）。
+    static let laneTitle = Font.system(size: 13, weight: .semibold)
+    static let laneCount = Font.system(size: 15, weight: .semibold)
     static let toolbarPath = Font.system(size: 11)
-    /// 侧栏：行、分组标题。
-    static let sidebarRow = Font.system(size: 14)
-    static let sidebarHeader = Font.system(size: 12, weight: .semibold)
     /// 侧栏最上面的 Cue 名片的名字。
     static let cueCardName = Font.system(size: 18, weight: .semibold)
     /// 多行正文的行距：苹方的默认行高偏紧，加上这些约是 1.5 倍行高。
@@ -83,6 +85,9 @@ enum Typography {
     static let codeNote = Font.caption.monospaced()
     static let inlineCode = Font.callout.monospaced()
     static let readingLineSpacing: CGFloat = 4
+    /// 宽屏栏头的标题与它后面那一行（iPad，同 Mac 那两档的角色）。
+    static let toolbarTitle = Font.headline
+    static let toolbarSubtitle = Font.caption
     static let title = Font.title3.weight(.semibold)
     static let emptyTitle = Font.title3.weight(.semibold)
     static let gaugeNumber = Font.system(.body, design: .rounded, weight: .semibold).monospacedDigit()
@@ -97,22 +102,17 @@ enum Typography {
 }
 
 #if os(macOS)
-/// Mac 的间距：页面边距、分组间距、工具栏与侧栏的行高。
+/// Mac 的间距：栏边、分组间距（窗口外框——栏头那一排与会话条——的尺寸在 `Chrome`）。都在 4 点的格上。
 nonisolated enum Spacing {
-    /// 页面内容的左右边距。
-    static let page: CGFloat = 36
+    /// 一栏的边：页面内容的左右边距，也是这一栏栏头里第一样东西与最后一颗钮离栏边（栏头与下面的内容同一条左边、同一条右边）。
+    /// 看板的卡、项目页的纸、对话的列（`SessionChat`、`CuePage` 的 inset）都从这里起。
+    static let page: CGFloat = 24
     /// 页面内容离工具栏下沿。
     static let pageTop: CGFloat = 24
     /// 页内分组之间、分组标题到内容。
     static let section: CGFloat = 32
     static let sectionTitle: CGFloat = 12
-    /// 工具栏里自绘控件的高度：与系统工具栏的圆钮同高。
-    static let toolbarControl: CGFloat = 36
-    /// 工具栏里相邻两块自绘的玻璃之间：不共用系统玻璃底的项，系统不给留空。
+    /// 栏头里相邻两颗钮、两块玻璃之间：不共用系统玻璃底的项，系统不给留空。
     static let toolbarGap: CGFloat = 8
-    /// 侧栏行高。
-    static let sidebarRow: CGFloat = 32
-    /// 侧栏行首的图标列（项目图标、会话状态标在里面居中）。
-    static let sidebarIcon: CGFloat = 20
 }
 #endif

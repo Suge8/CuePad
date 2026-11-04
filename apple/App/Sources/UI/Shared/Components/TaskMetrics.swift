@@ -41,12 +41,14 @@ enum TaskMetrics {
 
 /// 任务看板的卡（`boardCard`）：左右内边距 `cardPadding`、圆角 `cardRadius`；开头的记号占 `cardLead` 见方，看全部项目时标题前一个 `cardGlyph` 的项目小图形；
 /// 卡离列边与卡与卡之间都是 `inset`（列的托盘与拖入底是 `Radius.sheet`，与卡近似同心）。
-/// 卡的高度由几段加出来（`BoardCardLayout`），不另写一个数：列里的卡是上下留白（重的列 `titlePadding`、轻的列 `lightPadding`）、标题（按 `title` 留足行数，至少 `titleRow`）；
+/// 卡的高度由几段加出来（`BoardCardLayout`），不另写一个数：列里的卡是上下留白（重的列 `titlePadding`、轻的列 `lightPadding`）、标题（实际排了几行，至多 `title` 给的行数，至少 `titleRow`）；
 /// 推进中的卡是 `titleTop`、标题那一带、`waveGap`、线（`WaveStrip.height`）、`waveBottom`，与等你的卡同高。
 /// 标题与线之间那一截（Mac 6、手机 8）不能再窄：再贴近，线读起来像标题的下划线或删除线。手机竖版看板里卡铺满行给的格（`BoardRowLane`）。
 enum BoardCardMetrics {
     static let inset: CGFloat = 8
     static let gap: CGFloat = 8
+    /// 卡里开头记号、项目小图形、标题、尾巴之间（`BoardCardLayout`）。
+    static let leadGap: CGFloat = 8
     /// 手机竖版看板（`boardRow`）：卡窄，内边距、记号与标题之间都收一点，标题小一档。
     static let rowPadding: CGFloat = 12
     static let rowGap: CGFloat = 6
@@ -67,40 +69,37 @@ enum BoardCardMetrics {
     /// 推进中的卡与别的列的卡同高：线占掉的那一截从上下两份 `titlePadding` 里出。
     static var waveGap: CGFloat { 2 * titlePadding - titleTop - WaveStrip.height - waveBottom }
 
-    /// 卡标题留几行、那一截多高、上下留多少（三端的列与手机的行同一条，所在的列或行按卡宽与字号算一次交给卡，`boardTitle`）：
-    /// 卡里放字那一截（去掉左右内边距，连开头记号与项目小图形）宽得下 `oneLine` 个字排一行，否则两行——Mac 常用窗口与 iPad 横屏的列里
-    /// 一行写得下大多数标题，iPad 竖屏、窄窗口、iPhone 横屏的列里写不下；辅助字号下再多一行。高按行数留足（只有一行字的卡也一样高，
-    /// 字在里面竖直居中）。轻的两列（`TaskBoard.Column.light`）是矮卡：宽得下 `lightLine` 个字就排一行，上下只留 `lightPadding`。
+    /// 卡标题至多几行、上下留多少（三端的列与手机的行同一条，所在的列或行按卡宽与字号算一次交给卡，`boardTitle`）：
+    /// 按标题那一截一行放得下几个字定（卡宽去掉左右内边距、开头的圈与项目小图形连同它们与标题之间的缝，`lead`）：放得下 `oneLine` 个字排一行，放得下 `twoLine` 个字排两行，
+    /// 再窄（列压到最窄附近：Mac 1280 宽、1512 宽开着 Cue 时待办那一列）排三行；辅助字号下再多一行。标题多是十到十二个字（大库里九到二十二个），
+    /// 一行八个字、两行一行五个字都会截成"改走统…"。行数是上限、不预留：一行写得下的卡就一行高（`BoardCardLayout`），不在标题下空一块。
+    /// 轻的两列（`TaskBoard.Column.light`）是矮卡：上下只留 `lightPadding`。
     /// 手机的行里卡总窄（`cardWidth` 给 nil）：两行，卡铺满行给的格，不另留高。
     static func title(_ column: TaskBoard.Column, cardWidth: CGFloat?, typeSize: DynamicTypeSize) -> BoardTitle {
         let more = typeSize.isAccessibilitySize ? 1 : 0
         guard let cardWidth else { return BoardTitle(lines: 2 + more) }
-        let font = titleFont(typeSize)
-        let wide = cardWidth - 2 * TaskMetrics.cardPadding >= (column.light ? lightLine : oneLine) * font.pointSize
-        let lines = (wide ? 1 : 2) + more
-        return BoardTitle(
-            lines: lines, height: max(titleRow, (font.lineHeight * CGFloat(lines)).rounded(.up)), padding: column.light ? lightPadding : titlePadding)
+        let chars = (cardWidth - 2 * TaskMetrics.cardPadding - lead) / titleSize(typeSize)
+        let lines = (chars >= oneLine ? 1 : chars >= twoLine ? 2 : 3) + more
+        return BoardTitle(lines: lines, padding: column.light ? lightPadding : titlePadding)
     }
 
-    private static let oneLine: CGFloat = 14
-    /// 开头的圈与项目小图形约占三个字宽：一行放得下八个字的标题。
-    private static let lightLine: CGFloat = 11
+    private static let oneLine: CGFloat = 12
+    private static let twoLine: CGFloat = 7
+    /// 圈、项目小图形与三道缝（圈与图形、图形与标题、标题与右边的空）。
+    private static var lead: CGFloat { TaskMetrics.cardLead + TaskMetrics.cardGlyph + 3 * leadGap }
 
-    /// 列里卡标题的字（`TaskMetrics.lineFont`）：中文字宽等于字号。
-    private static func titleFont(_ typeSize: DynamicTypeSize) -> (pointSize: CGFloat, lineHeight: CGFloat) {
+    /// 列里卡标题的字号（`TaskMetrics.lineFont`）：中文字宽等于字号。
+    private static func titleSize(_ typeSize: DynamicTypeSize) -> CGFloat {
         #if os(macOS)
-        let font = NSFont.systemFont(ofSize: Typography.bodySize, weight: .medium)
-        return (font.pointSize, NSLayoutManager().defaultLineHeight(for: font))
+        Typography.bodySize
         #else
-        let font = UIFont.preferredFont(forTextStyle: .body, compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(typeSize)))
-        return (font.pointSize, font.lineHeight)
+        UIFont.preferredFont(forTextStyle: .body, compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(typeSize))).pointSize
         #endif
     }
 }
 
-/// 卡标题留几行、那一截至少多高、上下留多少（`BoardCardMetrics.title`；手机的行里卡铺满格，不另留高与上下）。
+/// 卡标题至多几行、上下留多少（`BoardCardMetrics.title`；手机的行里卡铺满格，不另留上下）。
 struct BoardTitle: Equatable {
     var lines = 1
-    var height: CGFloat = 0
     var padding: CGFloat = 0
 }

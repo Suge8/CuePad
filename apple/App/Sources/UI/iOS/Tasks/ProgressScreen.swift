@@ -30,9 +30,14 @@ struct ProgressScreen: View {
     @Environment(\.pageActive) private var active
 
     var body: some View {
-        let pane = inSidebar ? workspace.progressPane : .board
+        let pane = inSidebar && NavVariant.current != .one ? workspace.progressPane : .board
         ZStack(alignment: .top) {
-            if mounted.contains(.board) || pane == .board { shown(.board, pane) { boardView } }
+            if mounted.contains(.board) || pane == .board {
+                shown(.board, pane) {
+                    // PROTOTYPE a：项目范围是看板顶上一行
+                    boardView.safeAreaInset(edge: .top, spacing: 0) { if inSidebar, BarVariant.current == .a { ScopeLine() } }
+                }
+            }
             if mounted.contains(.sessions) || pane == .sessions {
                 shown(.sessions, pane) {
                     SessionList(model: sessions, filter: workspace.scopedProject) {
@@ -64,6 +69,8 @@ struct ProgressScreen: View {
             }
         }
         .environment(\.laneAddsTask, add)
+        // PROTOTYPE one：新会话是推进中行头的"+"（会话段没了）
+        .environment(\.laneAddsSession, inSidebar && NavVariant.current == .one ? { workspace.newSession = .init(project: workspace.scopedProject) } : nil)
         // 换范围不带里层的挪位与数字动画，理由同 Mac 的 `TaskBoardPage`
         .transaction(value: scope) { $0.disablesAnimations = true }
     }

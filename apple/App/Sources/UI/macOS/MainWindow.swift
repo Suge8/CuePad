@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 主窗口：左栏（会话条，`WideRail`，导航只在这一处）、主区（浏览页、辅助页、一个会话或并排两个，`MainColumn`）、右边一直是 Cue（`CueColumn`）。
-/// 三栏各自的栏头都排在窗口最顶那一排（红绿灯那一排，`WideMetrics.band`），同一基线；窗口工具栏只留一条空的，给这一排定高、把红绿灯放在它中线上。
+/// 三栏各自的栏头都排在窗口最顶那一排（红绿灯那一排，`Chrome.band`），同一基线；窗口工具栏只留一条空的，给这一排定高、把红绿灯放在它中线上。
 /// 尺寸与自动收起只在 `WideMetrics`。Cue 收起后右上一颗 Cue 钮（`CueButton`），它压在最右那一块的栏头右端，那一块的栏头让出它（`headInset`）。
 /// 收起的 Cue 仍挂着（对话、滚动位置都在），只是藏起；放不下时点 Cue 钮，它从右边浮出、盖在主区上（`Workspace.cueFloats`）。
 struct MainWindow: View {
@@ -17,11 +17,11 @@ struct MainWindow: View {
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
             let floats = sizes.cue == 0 && !sizes.cueFits && workspace.cueFloats
             let shown = sizes.cue > 0 || floats
-            let trail = sizes.cue == 0 ? CueButton.reserve : MainColumn.edge
+            let trail = sizes.cue == 0 ? CueButton.reserve : Spacing.page
             HStack(spacing: 0) {
                 WideRail(width: sizes.rail)
                 WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape) {
-                    MainColumn().environment(\.headInset, Self.inset(trailing: sizes.split ? MainColumn.edge : trail))
+                    MainColumn().environment(\.headInset, Self.inset(trailing: sizes.split ? Spacing.page : trail))
                 }
                 .frame(width: sizes.leading)
                 if sizes.split {
@@ -40,7 +40,7 @@ struct MainWindow: View {
                 .background { if floats { palette.desk.elevation(.panel) } }
             }
             .overlay(alignment: .topTrailing) {
-                if sizes.cue == 0 { CueButton(fits: sizes.cueFits).padding(.trailing, MainColumn.edge).frame(height: WideMetrics.band) }
+                if sizes.cue == 0 { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
             }
         }
         // 三栏从窗口上沿起，栏头排进红绿灯那一排（各栏里自己让出这一排）
@@ -61,7 +61,7 @@ struct MainWindow: View {
     }
 
     private static func inset(trailing: CGFloat) -> EdgeInsets {
-        EdgeInsets(top: 0, leading: MainColumn.edge, bottom: 0, trailing: trailing)
+        EdgeInsets(top: 0, leading: Spacing.page, bottom: 0, trailing: trailing)
     }
 }
 

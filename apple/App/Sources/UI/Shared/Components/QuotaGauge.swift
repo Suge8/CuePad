@@ -273,11 +273,15 @@ struct QuotaRing: View, Animatable {
 /// 手机会话页顶栏那颗胶囊的右半、菜单栏面板的 Cue 那一行、Mac 侧栏的一行（`SidebarQuota`）。账号多时只放前 `limit` 颗；
 /// 还没有可画的环时（还没有额度记录）环的位置写"额度"二字，照样能点，点开明细那里说怎么才会有（`QuotaDetail`）：一颗空环读不出是什么。
 /// 两个字与一颗环差不多宽，菜单栏面板不变宽；手机那块玻璃第一次有额度时窄几点，只变这一次。
-/// `row`：铺满宽的一行（Mac 侧栏）：左边一直写"额度"（字号随所在处）、环靠右，按下与展开着是行的底（`RowStyle`）。
+/// `row`：铺满宽的一行：左边一直写"额度"（字号随所在处）、环靠右，按下与展开着是行的底（`RowStyle`）。
+/// `cell`：会话条最底下那一行（`SidebarQuota`）：只有环，同那一行的图标钮一种底（格，`RowStyle(cell: true)`），第一颗环落在各行行首的图标那一列（`Chrome.icon`）。
 struct QuotaRings: View {
     let open: Bool
     let height: CGFloat
     var row = false
+    var cell = false
+    /// PROTOTYPE（手机项目段末尾那一组的一行）：`row` 时"额度"写成墨色、让出同组各行图标那一格，同"归档""设置"对齐。
+    var rowInk = false
     let action: () -> Void
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -287,7 +291,7 @@ struct QuotaRings: View {
     var body: some View {
         let quotas = Array(services.accountQuotas.items.prefix(Self.limit))
         Group {
-            if row { button(quotas).buttonStyle(RowStyle(selected: open)) } else { button(quotas).buttonStyle(PressStyle()) }
+            if row || cell { button(quotas).buttonStyle(RowStyle(selected: open, cell: cell)) } else { button(quotas).buttonStyle(PressStyle()) }
         }
         .accessibilityExpanded(open)
         .accessibilityHint(open ? "收起" : quotas.isEmpty ? "看怎么才会有额度" : "看每个窗口还剩多少、多久后重置")
@@ -296,7 +300,7 @@ struct QuotaRings: View {
     private func button(_ quotas: [AccountQuota]) -> some View {
         Button(action: action) {
             Moments(next: quotas.nextReset(after:)) { now in rings(quotas, at: now) }
-                .padding(.horizontal, row ? 0 : 10)
+                .padding(.horizontal, row ? 0 : cell ? RowMetrics.bleed + Chrome.rowLead : 10)
                 .frame(height: height)
                 .contentShape(.rect)
         }
@@ -306,7 +310,7 @@ struct QuotaRings: View {
         let rings = quotas.compactMap { quota in quota.binding(at: now).map { (id: quota.id, provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
         return HStack(spacing: 6) {
             if row {
-                Text("额度").foregroundStyle(palette.ink3)
+                Text("额度").foregroundStyle(rowInk ? palette.ink : palette.ink3).padding(.leading, rowInk ? 31 : 0)
                 Spacer(minLength: 0)
             } else if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
             ForEach(rings, id: \.id) { ModelBadge(mark: PiProvider(id: $0.provider).mark, binding: $0.window) }
