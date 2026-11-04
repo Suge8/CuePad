@@ -76,7 +76,7 @@ enum BoardWidths {
     /// 四列连同页边的最窄总宽与列间留 20 时一样（175 × 4 = 160 × 4 + 20 × 3）：省下的缝都给了列里的卡，临界宽不变。
     /// iPad 竖屏、iPhone 横屏、Mac 900 宽收起侧栏的窗口都排得下四列；900 宽开着侧栏排不下，横滑。
     static let minColumn: CGFloat = 175
-    /// 空列：列头（`BoardColumnHeader`）的记号、四个字的列名、数与"+"连同玻璃里外的边刚好放下。
+    /// 空列：列头（`BoardColumnHeader`）的记号、四个字的列名、数与"+"连同玻璃里外的边刚好放下（"+"只算看得见的那一格，命中外扩不占宽，`LaneAddButton`）。
     static let compact: CGFloat = 140
     /// 列与列之间：列没有底，相邻两列的卡靠各自离列边的 `BoardCardMetrics.inset` 分开（看着隔 `BoardCardMetrics.columnGap`），不另留缝。
     static let gap = BoardCardMetrics.columnGap - 2 * BoardCardMetrics.inset
