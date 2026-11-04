@@ -73,7 +73,7 @@ final class PiBrain: HostedSession {
                 config.executable, arguments, directory: config.workingDirectory, environment: config.launchEnvironment(adding: [
                     "PI_CACHE_RETENTION": "long", "CUEPAD_CLAUDE": Self.claude(config), "CUEPAD_CUE_MCP": jsonString(config.mcp),
                 ]),
-                placement: .group, input: .pipe, output: .lines)
+                placement: .group, input: .pipe, output: .lines, timing: config.timing)
             self.process = process
             Task {
                 for await line in process.output { received(line) }

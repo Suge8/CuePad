@@ -60,7 +60,8 @@ final class OpenCodeBrain: HostedSession {
             let environment = config.launchEnvironment(adding: [
                 "OPENCODE_CONFIG_CONTENT": jsonString(Self.inlineConfig(config)), "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
             ])
-            let (process, client) = try await OpenCodeClient.serve(config.executable, environment: environment, directory: config.workingDirectory)
+            let (process, client) = try await OpenCodeClient.serve(
+                config.executable, environment: environment, directory: config.workingDirectory, timing: config.timing)
             self.process = process
             self.client = client
             Task { [weak self] in

@@ -27,10 +27,12 @@ final class CodexDriver {
     var onEvent: (TurnEvent) -> Void = { _ in }
     var onNotification: (String, JSONValue) -> Void = { _, _ in }
 
-    /// 起进程并握手（失败时进程已停掉），接上它的通知；进程退出报 `exited`（`stop` 让它退的为 nil）。
+    /// 起进程并握手（失败时进程已停掉），接上它的通知；进程退出报 `exited`（`stop` 让它退的为 nil）。`timing` 交给进程（`ChildProcess`）。
     @discardableResult
-    func launch(_ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil) async throws -> CodexRPC {
-        let rpc = try await CodexRPC.launch(executable, arguments: arguments, environment: environment, directory: directory)
+    func launch(
+        _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil, timing: Timing = .system
+    ) async throws -> CodexRPC {
+        let rpc = try await CodexRPC.launch(executable, arguments: arguments, environment: environment, directory: directory, timing: timing)
         self.rpc = rpc
         rpc.onNotification = { [weak self] in self?.notification($0, $1) }
         rpc.onDraft = { [weak self] thread, draft in

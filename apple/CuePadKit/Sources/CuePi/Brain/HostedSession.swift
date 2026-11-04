@@ -21,10 +21,12 @@ public struct CueBrainConfig: Sendable {
     public let mcp: [String]
     /// 加给运行时与 MCP 服务的环境变量（在 CuePad 自己的环境之上）
     public let environment: [String: String]
+    /// 量运行时进程收尾宽限的钟（`ChildProcess` 的 `stop`、`end`）
+    public let timing: Timing
 
     public init(
         runtime: AgentKind, executable: URL, model: String?, effort: PiThinkingLevel?, fast: Bool = false, systemPrompt: String,
-        workingDirectory: URL, mcp: [String], environment: [String: String]
+        workingDirectory: URL, mcp: [String], environment: [String: String], timing: Timing = .system
     ) {
         self.runtime = runtime
         self.executable = executable
@@ -35,6 +37,7 @@ public struct CueBrainConfig: Sendable {
         self.workingDirectory = workingDirectory
         self.mcp = mcp
         self.environment = environment
+        self.timing = timing
     }
 }
 

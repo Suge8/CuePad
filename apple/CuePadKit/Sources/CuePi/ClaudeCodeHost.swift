@@ -75,20 +75,16 @@ final class ClaudeHostedSession: SessionLink {
         }
     }
 
-    /// 起进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。
-    func launch(_ executable: URL, _ arguments: [String], directory: URL, environment: [String: String]) async throws -> ChildProcess {
-        let stream = try await ClaudeStream(executable: executable, arguments: arguments, directory: directory, environment: environment)
+    /// 起进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。`timing` 交给进程（`ChildProcess`）。
+    func launch(
+        _ executable: URL, _ arguments: [String], directory: URL, environment: [String: String], timing: Timing = .system
+    ) async throws -> ChildProcess {
+        let stream = try await ClaudeStream(executable: executable, arguments: arguments, directory: directory, environment: environment, timing: timing)
         self.stream = stream
         stream.onMessage = { [weak self] in self?.received($0) }
         stream.onDraft = { [weak self] in self?.emit(.speaking($0)) }
         stream.onClose = { [weak self] in self?.ended() }
         return stream.process
-    }
-
-    /// 托管会话起进程：权限确认经标准输入问 CuePad，模式 auto（见类注释）。
-    func host(executable: URL, arguments: [String], directory: URL, environment: [String: String]) async throws -> ChildProcess {
-        try await launch(
-            executable, ["--permission-prompt-tool", "stdio", "--permission-mode", "auto"] + arguments, directory: directory, environment: environment)
     }
 
     /// 握手（`initialize` 拿到可换的模型与命令）并上桥；接着已结束的会话时 `known` 是索引里记下的名字与首条消息，

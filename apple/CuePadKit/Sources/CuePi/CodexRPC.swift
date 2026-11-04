@@ -50,12 +50,13 @@ final class CodexRPC {
     }
 
     /// 起一个 `codex app-server --listen stdio://`（`arguments` 接在后面，如 `-c` 覆盖配置）并完成握手；握手失败或超时时停掉这个进程再抛错。
+    /// `timing` 交给进程（`ChildProcess`）。
     static func launch(
-        _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil
+        _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil, timing: Timing = .system
     ) async throws -> CodexRPC {
         let process = try await ChildProcess(
             executable, ["app-server", "--listen", "stdio://"] + arguments, directory: directory, environment: environment,
-            placement: .group, input: .pipe, output: .lines)
+            placement: .group, input: .pipe, output: .lines, timing: timing)
         let rpc = CodexRPC(pid: process.pid, transport: .stdio(process), messages: process.output)
         try await rpc.handshake()
         return rpc
