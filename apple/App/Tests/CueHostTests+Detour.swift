@@ -126,6 +126,7 @@ extension CueHostTests {
         }
         try await rig.message(.cue, containing: "我换到 Claude Code 接着干")
         try await eventually("Claude Code 起不来，等着重起") { rig.health?.runtime == .claudeCode && rig.health?.phase == .restarting }
+        try await untilReset(rig, resets)
         rig.jump(to: resets)
         try await rig.message(.cue, containing: done)
         try await rig.message(.cue, containing: "又能干活了，用的是 Pi")
@@ -135,7 +136,8 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 跳到重置时刻的前一刻，等 Cue 对过账：调用方断言这时还没换回、没重来。
+    /// 跳到重置时刻的前一刻，等 Cue 对过账、睡到重置时刻：调用方断言这时还没换回、没重来，再跳到重置时刻。
+    /// 不在它对账时跳过重置时刻：那时它可能已经看过绕行、还没排定时器，排的就不再是这个已过的时刻（`Detour.nextReset`）。
     private func untilReset(_ rig: Rig, _ resets: Date) async throws {
         rig.jump(to: resets - 1)
         try await rig.reconciled()
