@@ -75,10 +75,6 @@ extension View {
     /// 状态后面的解决链接：靛青字、链接指针（同访达里打开链接的字）。
     func settingFix() -> some View { modifier(SettingFixStyle()) }
 
-    /// 右边那一个控件是按钮时：`primary` 是这一窗此刻唯一该点的（靛青底），其余是安静的胶囊。
-    func settingButton(primary: Bool = false) -> some View {
-        buttonStyle(ControlButtonStyle(kind: primary ? .primary : .secondary, compact: true))
-    }
 }
 
 private struct SettingFixStyle: ViewModifier {

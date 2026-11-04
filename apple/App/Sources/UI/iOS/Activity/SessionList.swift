@@ -46,18 +46,18 @@ struct SessionList<Top: View>: View {
         } else {
             Group {
                 if !list.pinned.isEmpty {
-                    header { SectionTitle(text: "已置顶").padding(.horizontal, 4) }
+                    header { SectionHeader("已置顶").padding(.horizontal, 4) }
                     ForEach(list.pinned) { row($0, in: list, end: list.ends[$0.id]) }
                 }
                 if !list.now.isEmpty {
-                    header { SectionTitle(text: "现在").padding(.horizontal, 4) }
+                    header { SectionHeader("现在").padding(.horizontal, 4) }
                     ForEach(list.now) { row($0, in: list, end: list.ends[$0.id]) }
                 }
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                     header {
                         VStack(alignment: .leading, spacing: 10) {
-                            if index == 0, !model.endedOnly { SectionTitle(text: "历史") }
-                            SectionLabel(text: Dotted(run.section.title))
+                            if index == 0, !model.endedOnly { SectionHeader("历史") }
+                            SectionHeader(Dotted(run.section.title), level: .group)
                         }
                         .padding(.horizontal, 4)
                     }
@@ -99,7 +99,7 @@ struct SessionList<Top: View>: View {
             EmptyState.noMatch(model.query).padding(.top, 40)
         } else {
             EmptyState(mascot: .empty, title: .verbatim(AgentListModel.noneTitle), message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
-                EmptyStateButton(title: "新会话", icon: .add, action: { workspace.newSession = .init() })
+                Button("新会话", icon: .add) { workspace.newSession = .init() }
             }
             .padding(.top, 40)
         }

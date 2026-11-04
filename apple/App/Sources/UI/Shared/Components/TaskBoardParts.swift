@@ -172,16 +172,14 @@ struct BoardColumn: View {
     /// 卡上的项目小图形：只看一个项目时不画（范围已经说了）。
     private func glyph(_ project: Project?) -> Project? { workspace.scopedProject == nil ? project : nil }
 
-    @ViewBuilder private var newTask: some View {
-        #if os(macOS)
+    private var newTask: some View {
         NewTaskField(project: newTaskProject, choosesProject: true, autofocus: true) { adding = false }
+            #if os(macOS)
             .padding(.horizontal, TaskMetrics.cardPadding)
-            .paper(cornerRadius: TaskMetrics.cardRadius)
-        #else
-        NewTaskLine(project: newTaskProject, projects: workspace.catalog?.projects) { adding = false }
+            #else
             .padding(.horizontal, 6)
+            #endif
             .paper(cornerRadius: TaskMetrics.cardRadius)
-        #endif
     }
 
     /// 空列的占位：空列收窄了（`BoardWidths.compact`），一句话在里面居中折行。
@@ -199,8 +197,7 @@ struct BoardColumn: View {
             } label: {
                 HStack(spacing: 4) {
                     Text("更早做完的 \(board.earlier.count)").monospacedDigit()
-                    Image(.forward).font(Glyph.mark)
-                        .rotationEffect(.degrees(showsEarlier.wrappedValue ? 90 : 0)).accessibilityHidden(true)
+                    Chevron(.forward).rotationEffect(.degrees(showsEarlier.wrappedValue ? 90 : 0))
                 }
                 .frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
             }

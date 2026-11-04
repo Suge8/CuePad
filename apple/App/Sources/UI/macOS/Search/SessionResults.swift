@@ -83,16 +83,12 @@ struct SessionResultList: View {
     }
 
     private func header(_ group: SessionGroup) -> some View {
-        HStack(spacing: 6) {
-            switch group.key {
-            case .now: Text("现在")
-            case .ended(let section): Text(section.title)
-            }
-            Text("\(group.sessions.count)").foregroundStyle(palette.ink3)
+        let title: Dotted = switch group.key {
+        case .now: Dotted(String(localized: "现在"))
+        case .ended(let section): Dotted(section.title)
         }
-        .font(Typography.label).foregroundStyle(palette.ink2)
-        .padding(.top, 10).padding(.bottom, 2)
-        .accessibilityAddTraits(.isHeader)
+        return SectionHeader(title, level: .group, count: group.sessions.count)
+            .padding(.top, 10).padding(.bottom, 2)
     }
 
     private func row(_ session: PiSessionState) -> some View {

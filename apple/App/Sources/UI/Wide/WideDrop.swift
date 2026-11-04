@@ -120,7 +120,7 @@ struct WideDropFeedback: View {
 
     var body: some View {
         if state.targeted {
-            palette.selection.overlay { Text("放在这里").font(.title2) }.allowsHitTesting(false)
+            palette.selection.overlay { Text("放在这里").font(Typography.title) }.allowsHitTesting(false)
         }
     }
 }

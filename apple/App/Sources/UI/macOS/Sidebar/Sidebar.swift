@@ -24,7 +24,6 @@ struct ProjectShelf: View {
                     .buttonStyle(.row)
                     .contextMenu { ProjectActions(project: project, edit: { workspace.projectForm = .init(project: project) }) }
                 }
-                Divider().padding(.vertical, 4)
                 place("归档", icon: .archive, route: .archive)
                 place("回收站", icon: .trash, route: .trash)
             }.padding(16)

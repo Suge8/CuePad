@@ -60,7 +60,7 @@ struct CrashReportView: View {
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                     .background(palette.fill, in: .rect(cornerRadius: Radius.chip))
             }
-            ExportDiagnosticsButton(text: report.diagnostics).settingButton()
+            ExportDiagnosticsButton(text: report.diagnostics).buttonStyle(ControlButtonStyle(size: .compact))
             Text(Self.note).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -87,7 +87,7 @@ struct CrashReportView: View {
             if !report.frames.isEmpty {
                 Section("崩溃线程顶部") {
                     ForEach(Array(report.frames.enumerated()), id: \.offset) { _, frame in
-                        Text(frame).font(.footnote.monospaced())
+                        Text(frame).font(Typography.meta.monospaced())
                     }
                 }
             }
