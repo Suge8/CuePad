@@ -56,7 +56,7 @@ public final class PiBridge {
 
     @ObservationIgnored let directory: URL
     @ObservationIgnored let hostedIdle: Duration
-    /// 量回执（`AgentTimeouts.ack`）与结束（`AgentTimeouts.end`）时限的钟；App 给的是它自己的那一个（`MacDependencies.timing`）。
+    /// 桥的钟：回执（`AgentTimeouts.ack`）、结束（`AgentTimeouts.end`）的时限与托管会话歇着的计时（`hostedIdle`）；App 给的是它自己的那一个（`MacDependencies.timing`）。
     @ObservationIgnored let timing: Timing
     /// 显式结束正在等待的承载进程；让出后的接手重载不能干扰同一个结束请求。
     @ObservationIgnored private(set) var ending: Set<PiSession.ID> = []

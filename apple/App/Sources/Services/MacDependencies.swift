@@ -17,7 +17,7 @@ struct MacDependencies {
     var workspaces: Workspaces
     /// 系统睡眠与唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
-    /// App 的钟：资料库里随时间变的读与在线记录续期（`CueStore.timing`），桥的回执与结束时限（`PiBridge.timing`，`pi` 用同一个建）；测试换成手动推进的。
+    /// App 的钟：资料库里随时间变的读与在线记录续期（`CueStore.timing`），桥的时限与托管会话的闲置计时（`PiBridge.timing`，`pi` 用同一个建）；测试换成手动推进的。
     var timing: Timing = .system
     /// 命令行工具 `cuepad` 的链接（设置里的开关；Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖它）。
     var commandLineTool: CommandLineToolInstaller
