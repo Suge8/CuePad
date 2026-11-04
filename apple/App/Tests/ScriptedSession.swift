@@ -20,7 +20,6 @@ final class ScriptedSession {
     private(set) var cards: [Card] = []
     private(set) var title = ""
     private let inbox = Inbox()
-    private var file: SessionFile { host.sessionFiles[id]! }
 
     init(_ id: String, on host: RecordingHost, task: Card) {
         self.id = id
@@ -70,7 +69,7 @@ final class ScriptedSession {
     /// 这一轮说了 `said` 后停下来问一个选择题（问他的对话框由工具调起：这段话在这一轮的经过里，这一轮没收尾）。
     func ask(said: String, question: String, options: [String], rig: CueHostTests.Rig) async throws {
         try await working(rig)
-        try file.spoke(said)
+        try await rig.spoke(said, in: id)
         session.sendInfo(["question": ["id": UUID().uuidString, "kind": "select", "text": question, "options": options]])
         session.setState(["kind": "waiting_user", "title": question])
     }

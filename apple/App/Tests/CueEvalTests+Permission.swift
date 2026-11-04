@@ -19,7 +19,7 @@ extension CueEvalTests {
             let work = try await rig.working("创建问候文件", "在当前工作区创建 hello.txt，内容为一行 hello。完成后提供文件路径及读回的原文作为证据。")
             let question = "允许 Codex 运行命令？\nprintf 'hello\\n' > hello.txt\n当前环境为只读沙箱，是否允许在工作区创建 hello.txt？"
             try await eval.trigger {
-                try work.file.spoke("我会创建 `hello.txt`，然后读回内容作为证据。")
+                try await rig.spoke("我会创建 `hello.txt`，然后读回内容作为证据。", in: work.id)
                 work.session.sendInfo(["question": ["id": "p1", "kind": "confirm", "text": question]])
                 work.session.setState(["kind": "waiting_user", "title": question])
             }

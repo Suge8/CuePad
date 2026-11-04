@@ -41,6 +41,16 @@ extension CueHostTests.Rig {
         }
     }
 
+    /// 会话这一轮说了 `said`、接着调工具（问他的对话框由工具调起）：写进会话文件，等 Mac 读进这一轮的经过再往下（真会话里这段话先落盘、对话框才弹出），
+    /// 叫醒的 Cue 看得到它。
+    func spoke(_ said: String, in sessionID: String) async throws {
+        try app.host.sessionFiles[sessionID]!.spoke(said)
+        let shown = said.trimmingCharacters(in: .whitespacesAndNewlines).clipped(PiChatMessage.Tools.saidLimit)
+        try await eventually("「\(said.prefix(20))」读进这一轮的经过") {
+            try await self.store.sessions(matching: sessionID).first?.pendingTools?.items.last { $0.kind == .said }?.target == shown
+        }
+    }
+
     /// 会话发来几张效果图（默认按文件名画，见 `mockShot`）。
     @MainActor @discardableResult
     func shots(_ files: [(name: String, title: String)], from work: Working, drawing: @MainActor (String) throws -> Data = mockShot) async throws -> [PiPreviewAdded] {
@@ -81,7 +91,7 @@ extension CueHostTests.Rig {
 
     /// 会话这一轮说了 `said` 后停下来问一个选择题（问他的对话框由工具调起：这段话在这一轮的经过里，这一轮没收尾）。
     func ask(_ work: Working, said: String, question: String, options: [String]) async throws {
-        try work.file.spoke(said)
+        try await spoke(said, in: work.id)
         work.session.sendInfo(["question": ["id": "p1", "kind": "select", "text": question, "options": options]])
         work.session.setState(["kind": "waiting_user", "title": question])
     }

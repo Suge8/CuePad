@@ -66,9 +66,11 @@ extension CueEvalTests {
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
             try await eval.trigger {
+                let his = "测试都过了就提交吧。"
                 try work.file.reply("后端和登录页都做好了，测试 23 个、lint 全过。", at: .now - 16 * 60)
-                try work.file.user("测试都过了就提交吧。", at: .now - 15 * 60)
-                try work.file.spoke("提交好了（3f9c2ab）。")
+                try work.file.user(his, at: .now - 15 * 60)
+                try await rig.read(his, in: work.id)  // 他 15 分钟前说的，早已读进库
+                try await rig.spoke("提交好了（3f9c2ab）。", in: work.id)
                 let question = "要推送到 origin/main 吗？"
                 work.session.sendInfo(["question": ["id": "p1", "kind": "select", "text": question, "options": ["推送", "不推送"]]])
                 work.session.setState(["kind": "waiting_user", "title": question])
