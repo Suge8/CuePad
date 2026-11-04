@@ -21,10 +21,12 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadNotice <文字>`：就绪前弹一条带去处的提示（点它去进展页），停一分钟：截图、录屏拍得到提示条。
-    static func noticeIfAsked(_ workspace: Workspace) {
+    /// `-CuePadNotice <文字>`：就绪后 5 秒弹一条带去处（点它去进展页）与撤销（什么都不做）的提示，按真实时长收：
+    /// 录屏都在就绪后才开录（Mac 实测晚 3 秒多），等这么久才录得到进场、停留与收起；`CUEPAD_REC_SECONDS` 给到 18。
+    static func noticeIfAsked(_ workspace: Workspace) async {
         guard let text = defaults.string(forKey: "CuePadNotice") else { return }
-        workspace.say(Dotted(text), status: .unread, link: .progress, duration: .seconds(60))
+        await Task.wait(for: .seconds(5))
+        workspace.say(Dotted(text), status: .unread, link: .progress, action: .undo {})
     }
 
     /// 就绪文件：脚本起的实例都带（`CUEPAD_SHOT_READY`，见 app.py），App 也据此认出是脚本起的（`DebugHooks.scripted`）。

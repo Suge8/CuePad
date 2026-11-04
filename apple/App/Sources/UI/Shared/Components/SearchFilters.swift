@@ -1,15 +1,15 @@
 import CueStore
 import SwiftUI
 
-/// 搜索的四个筛选（项目、含附件、发给过哪个 Agent、时间）：有哪几项、菜单里列什么、生效时写什么两端同一份，胶囊的样子由调用方给（`chip`）。
-/// 项目列表读 `Workspace.catalog`，目标读这一页结果（`CardMatches.targets`）。菜单与按钮的样式跟外面的环境（Mac 在外面套 `PressStyle`）。
-struct SearchFilters<Chip: View>: View {
+/// 搜索的四个筛选（项目、含附件、发给过哪个 Agent、时间）两端同一份：有哪几项、菜单里列什么、生效时写什么，胶囊是 `chip`（生效的是选中）。
+/// 没筛（取默认）时只写名字；筛了是选中，名字退到次一档墨、后面跟墨色的取值（"项目 圆桌"），一眼扫得到筛的是什么。开关没有取值，也没有菜单与箭头。
+/// 项目列表读 `Workspace.catalog`，目标读这一页结果（`CardMatches.targets`）。菜单的样式跟外面的环境（Mac 在外面套 `.menuStyle(.button)`）。
+struct SearchFilters: View {
     @Binding var query: PaletteQuery
     let targets: [SendTarget]
-    /// 名字、取值（开关没有取值，也没有菜单）、生效没有。
-    @ViewBuilder let chip: (_ name: String, _ value: String?, _ on: Bool) -> Chip
 
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let projects = workspace.catalog?.projects ?? []
@@ -18,7 +18,8 @@ struct SearchFilters<Chip: View>: View {
             Divider()
             ForEach(projects) { project in Button(project.shownName) { query.project = project.id } }
         }
-        Button { query.withAttachments.toggle() } label: { chip(String(localized: "含附件"), nil, query.withAttachments) }
+        Button { query.withAttachments.toggle() } label: { chip(String(localized: "含附件"), nil, on: query.withAttachments) }
+            .buttonStyle(PressStyle())
             .accessibilityAddTraits(query.withAttachments ? .isSelected : [])
         menu("Agent", query.sentLabel, on: query.sent != .any) {
             Button("任意") { query.sent = .any }
@@ -38,7 +39,19 @@ struct SearchFilters<Chip: View>: View {
     }
 
     private func menu(_ name: String, _ value: String, on: Bool, @ViewBuilder items: () -> some View) -> some View {
-        Menu { items() } label: { chip(name, value, on).menuLabel("\(name)：\(value)") }
+        Menu { items() } label: { chip(name, value, on: on).menuLabel("\(name)：\(value)") }
+    }
+
+    private func chip(_ name: String, _ value: String?, on: Bool) -> some View {
+        HStack(spacing: Spacing.tight) {
+            if let value, on {
+                Text(name).fontWeight(.regular).foregroundStyle(palette.ink2)
+                Text(value).fontWeight(.medium)
+            } else {
+                Text(name)
+            }
+        }
+        .chip(on: on, menu: value != nil)
     }
 }
 

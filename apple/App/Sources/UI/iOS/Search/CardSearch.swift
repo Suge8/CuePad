@@ -22,9 +22,7 @@ struct CardSearchResults<Leading: View>: View {
                 HStack(spacing: 8) {
                     ChipRow {
                         leading
-                        SearchFilters(query: $query, targets: data?.targets ?? []) { name, value, on in
-                            Chip(name: name, value: value, on: on)
-                        }
+                        SearchFilters(query: $query, targets: data?.targets ?? [])
                     }
                     if let data, !query.text.isEmpty || query.isFiltered {
                         Text(CountCopy.hits(data.total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
@@ -45,9 +43,9 @@ struct CardSearchResults<Leading: View>: View {
                     }
                     ForEach(data.groups) { group in
                         let project = workspace.catalog?.project(group.id)
-                        HStack(spacing: 6) {
+                        HStack(spacing: Spacing.glyph) {
                             ProjectGlyph(project: project, size: 12)
-                            SectionHeader(title: .verbatim(project?.shownName ?? ""), count: nil).padding(.horizontal, -4)
+                            SectionHeader(Dotted(project?.shownName))
                         }
                         .padding(.top, 8)
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
@@ -70,28 +68,6 @@ struct CardSearchResults<Leading: View>: View {
     }
 }
 
-/// 搜索的筛选胶囊：名称，生效时加上取值；有菜单的带下拉箭头。
-private struct Chip: View {
-    let name: String
-    let value: String?
-    let on: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        FilterChip(on: on) {
-            HStack(spacing: 4) {
-                Text(name).foregroundStyle(palette.ink)
-                if let value, on {
-                    Text(value).fontWeight(.medium)
-                }
-                if value != nil {
-                    Image(.expand).font(.caption2.weight(.bold)).foregroundStyle(on ? palette.ink2 : palette.ink3).accessibilityHidden(true)
-                }
-            }
-        }
-    }
-}
-
 /// 一排横向滑动的筛选胶囊。调用方给它让出页边距（`.padding(.horizontal, -16)`），它延伸到边缘、右侧 24pt 渐隐：
 /// 看得出还能横着滑，而不是被页边距切断。
 struct ChipRow<Content: View>: View {
@@ -107,26 +83,6 @@ struct ChipRow<Content: View>: View {
                 LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24)
             }
         }
-    }
-}
-
-/// 一颗筛选胶囊（搜索的筛选）：生效的是选中底（`selection`）与半粗的墨字（全 App 一套选中，docs/ui.md「选中」），其余是纸底细边、墨色字。
-struct FilterChip<Label: View>: View {
-    let on: Bool
-    @ViewBuilder let label: Label
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        label
-            .font(.subheadline)
-            .fontWeight(on ? .semibold : nil)
-            .foregroundStyle(palette.ink)
-            .padding(.horizontal, 12).frame(minHeight: 36)
-            .background(on ? palette.selection : palette.paper, in: .capsule)
-            .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
-            .padding(.vertical, 4)
-            .contentShape(.rect)
-            .animation(Motion.fade, value: on)
     }
 }
 #endif

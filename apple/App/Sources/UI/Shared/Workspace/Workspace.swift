@@ -231,7 +231,7 @@ final class Workspace {
     private func followFilesQuota() async {
         var was = false
         for await over in Observations({ self.services.syncFilesOverQuota }) {
-            if over, !was { say(Dotted(FileStatus.overQuota), tone: .paused, duration: .seconds(6)) }
+            if over, !was { say(Dotted(FileStatus.overQuota), tone: .paused) }
             was = over
         }
     }

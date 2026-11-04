@@ -73,7 +73,6 @@ struct StyleBoard: View {
                 Button {} label: { Text("胶囊").padding(.horizontal, 16).frame(height: 36).background(palette.fill, in: .capsule) }
                     .buttonStyle(PressStyle())
                 Button("主按钮") {}.buttonStyle(ControlButtonStyle(kind: .primary)).controlSize(.large)
-                FilterChip(on: true) { Text("选中") }
             }
             .foregroundStyle(palette.ink)
             Button {} label: {
