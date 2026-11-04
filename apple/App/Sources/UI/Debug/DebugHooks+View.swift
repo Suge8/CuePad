@@ -92,6 +92,7 @@ extension View {
         .task {
             await DebugScene.prepare(workspace)
             await DebugScene.seedRailIfAsked(workspace.services)
+            await DebugScene.projectFormIfAsked(workspace)
             await DebugScene.signalReady(workspace.services)
             // 接力与关窗不挂在窗口内容上：关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
             Task { await DebugScene.wakeIfAsked(workspace) }
@@ -180,7 +181,7 @@ private struct DebugSettling: ViewModifier {
 #endif
 
 #if os(macOS)
-/// 主窗口的内容：截图只截主窗口，调试画面要拍的另一扇窗（菜单栏面板、项目表单、新会话）放进主窗口里拍；其余是 `main`。
+/// 主窗口的内容：截图只截主窗口，调试画面要拍的另一扇窗（菜单栏面板、新会话）放进主窗口里拍；其余是 `main`。
 struct DebugStage<Main: View>: View {
     let workspace: Workspace
     @ViewBuilder let main: () -> Main
@@ -190,7 +191,6 @@ struct DebugStage<Main: View>: View {
         switch DebugScene.scene {
         case "menubar": DebugMenuBarStage().environment(workspace)
         case "cuebar": DebugMenuBarStage(cueBar: true).environment(workspace)
-        case "projectform": ProjectForm(ProjectFormRequest()).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         case "newsession": DebugNewSessionForm().environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         default: main()
         }
@@ -202,6 +202,19 @@ struct DebugStage<Main: View>: View {
 #endif
 
 #if os(macOS) && DEBUG
+private extension DebugScene {
+    /// `projectform` 画面：项目表单经浮层弹出（同真用时，压暗的窗口上居中一块），给了 `-CuePadProject` 是编辑它（项目页垫在下面），否则新建。
+    static func projectFormIfAsked(_ workspace: Workspace) async {
+        guard scene == "projectform" else { return }
+        await running("项目表单") {
+            // 主区开着哪个项目不算（启动就停在上次的项目页），只认参数打开的（`prepareLibrary` 已打开它）
+            let asked = defaults.string(forKey: "CuePadProject") == nil ? nil : workspace.currentProject
+            let existing = if let asked { try await workspace.services.store.project(asked) } else { Project?.none }
+            workspace.projectForm = .init(project: existing)
+        }
+    }
+}
+
 private struct BenchSpot<ID: Hashable>: ViewModifier {
     let id: ID
     @Environment(\.pageActive) private var active
