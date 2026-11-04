@@ -62,7 +62,7 @@ struct ProjectScreen: View {
         let data = page.data, lastTarget = data.lastTarget
         // 任务纸不进懒加载栈：纸在懒加载栈的一格里时，收起后按 id 滚回纸底那一行会偏出一屏（`TaskFoldAnchor`）
         VStack(alignment: .leading, spacing: 0) {
-            if inColumn { ProjectIntroLine(project: project, intro: false).padding(.leading, 4).padding(.bottom, 12) }
+            if inColumn { ProjectIntroLine(project: project, intro: false).padding(.leading, Spacing.tight).padding(.bottom, Spacing.group) }
             if data.project != nil { FocusCard(data: data, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
             // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角），段与段之间的距离各自写在段上
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -108,8 +108,8 @@ struct ProjectScreen: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 24)
+        .padding(.horizontal, Spacing.page)
+        .padding(.bottom, Spacing.section)
         .cardDragStage()
     }
 
@@ -206,7 +206,7 @@ private struct FocusCard: View {
             .taskFoldBar(anchor)
             .newTaskDrop()
         }
-        .padding(16)
+        .padding(Spacing.block)
         .frame(maxWidth: .infinity, alignment: .leading)
         .paper()
         .debugExposesTaskFold { toggle(\.showsAll) }
@@ -223,7 +223,7 @@ private struct FocusCard: View {
 
     private func toggleButton(_ title: String, open: Bool, _ key: WritableKeyPath<TaskFold, Bool>) -> some View {
         Button { toggle(key) } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.tight) {
                 Text(title)
                 Chevron(.expand).rotationEffect(.degrees(open ? 180 : 0))
             }

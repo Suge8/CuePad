@@ -12,7 +12,7 @@ struct SessionList<Top: View>: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
 
-    private static var margin: CGFloat { 16 }
+    private static var margin: CGFloat { Spacing.page }
 
     var body: some View {
         List {
@@ -46,20 +46,20 @@ struct SessionList<Top: View>: View {
         } else {
             Group {
                 if !list.pinned.isEmpty {
-                    header { SectionHeader("已置顶").padding(.horizontal, 4) }
+                    header { SectionHeader("已置顶").padding(.horizontal, Spacing.tight) }
                     ForEach(list.pinned) { row($0, in: list, end: list.ends[$0.id]) }
                 }
                 if !list.now.isEmpty {
-                    header { SectionHeader("现在").padding(.horizontal, 4) }
+                    header { SectionHeader("现在").padding(.horizontal, Spacing.tight) }
                     ForEach(list.now) { row($0, in: list, end: list.ends[$0.id]) }
                 }
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                     header {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: Spacing.group) {
                             if index == 0, !model.endedOnly { SectionHeader("历史") }
                             SectionHeader(Dotted(run.section.title), level: .group)
                         }
-                        .padding(.horizontal, 4)
+                        .padding(.horizontal, Spacing.tight)
                     }
                     ForEach(run.items) { row($0, in: list, end: list.ends[$0.id]) }
                 }
@@ -81,7 +81,7 @@ struct SessionList<Top: View>: View {
     private func header(@ViewBuilder _ title: () -> some View) -> some View {
         title()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .listRowInsets(EdgeInsets(top: 14, leading: 0, bottom: 4, trailing: 0))
+            .listRowInsets(EdgeInsets(top: Spacing.block, leading: 0, bottom: Spacing.tight, trailing: 0))
     }
 
     /// 一张卡片：长按是会话的菜单（`SessionActions`），慢慢左滑露出其中的结束与重命名。会话记录没有删除（会话文件在 Mac 上，归 Pi 管）。
@@ -133,7 +133,7 @@ private struct SessionRow: View {
 private extension View {
     /// 会话卡片在列表里的一行：卡片之间留 8 点。
     func cardRow() -> some View {
-        listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+        listRowInsets(EdgeInsets(top: Spacing.tight, leading: 0, bottom: Spacing.tight, trailing: 0))
     }
 }
 #endif

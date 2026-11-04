@@ -10,12 +10,12 @@ struct SearchCapsule: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Spacing.glyph) {
             // 导航栏里的项会把符号放大一档：定在常规档，与搜索入口、进展页搜索钮里的放大镜一样大
             Image(.search).imageScale(.medium).foregroundStyle(palette.ink3).accessibilityHidden(true)
             BarTextField(text: $query, focusRequests: focusRequests, prompt: SearchScreen.prompt)
         }
-        .padding(.leading, 14).padding(.trailing, 8).frame(maxWidth: .infinity)
+        .padding(.leading, Spacing.group).padding(.trailing, Spacing.item).frame(maxWidth: .infinity)
         .headerPiece()
     }
 }

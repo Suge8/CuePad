@@ -48,7 +48,7 @@ struct SplitRoot: View {
         VStack(spacing: 0) {
             if case .session(let session) = route { WideSessionHeading(session: session, column: column) }
             if case .project = route {
-                WideProjectHeading().frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).frame(height: Chrome.band)
+                WideProjectHeading().frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Spacing.page).frame(height: Chrome.band)
             }
             NavigationStack(path: Binding<[Route]>(get: { [] }, set: { if let route = $0.last { workspace.show(route) } })) {
                 RouteView(route: route)

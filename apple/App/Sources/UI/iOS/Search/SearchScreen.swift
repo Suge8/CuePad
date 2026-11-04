@@ -18,7 +18,7 @@ struct SearchScreen: View {
         Group {
             switch scope {
             case .cards: CardSearchResults(query: $query) { scopes }
-            case .sessions: SessionList(model: sessions) { ChipRow { scopes }.padding(.horizontal, -16) }
+            case .sessions: SessionList(model: sessions) { ChipRow { scopes }.padding(.horizontal, -Spacing.page) }
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }

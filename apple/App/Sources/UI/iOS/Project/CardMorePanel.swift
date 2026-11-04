@@ -42,7 +42,7 @@ private struct CardMorePanel: View {
             Group {
                 if moving { projects.transition(page(from: .trailing)) } else { actions.transition(page(from: .leading)) }
             }
-            .padding(.bottom, 8)
+            .padding(.bottom, Spacing.item)
         }
         .scrollBounceBehavior(.basedOnSize)
         .clipped()
@@ -59,7 +59,7 @@ private struct CardMorePanel: View {
     private var actions: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(card.title).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(2)
-                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
+                .padding(.horizontal, Spacing.page).padding(.top, Spacing.group).padding(.bottom, 6)
             ForEach(CardMenu.swipeMore(for: card, opens: opens), id: \.self) { item in
                 if let run = item.run(on: card, in: workspace) {
                     Button {
@@ -85,12 +85,12 @@ private struct CardMorePanel: View {
     private var projects: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button { flip(false) } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.glyph) {
                     Chevron(.back).foregroundStyle(palette.ink2)
                     Text(CardMenu.Item.move.title).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 16).frame(minHeight: RowMetrics.height).contentShape(.rect)
+                .padding(.horizontal, Spacing.page).frame(minHeight: RowMetrics.height).contentShape(.rect)
             }
             .buttonStyle(PressStyle())
             .accessibilityLabel("返回")

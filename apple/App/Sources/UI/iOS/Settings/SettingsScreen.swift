@@ -23,13 +23,13 @@ struct SettingsScreen: View {
             if !services.startupIssues.isEmpty {
                 Section("启动问题") {
                     ForEach(Array(services.startupIssues.enumerated()), id: \.offset) { _, issue in
-                        Label { Text(issue.text) } icon: { FailureMark() }.font(.footnote)
+                        Label { Text(issue.text) } icon: { FailureMark() }.font(Typography.meta)
                     }
                 }
             }
             if services.diagnostics.latest != nil { Section { LastCrashRow() } }
             Section {} footer: {
-                Text("CuePad \(AppServices.version)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
+                Text("CuePad \(AppServices.version)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -68,13 +68,13 @@ private struct StatusText: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
             Text(title)
             ZStack(alignment: .topLeading) {
                 Text(reserve ?? "").hidden()
                 if let detail { Text(detail) }
             }
-            .font(.footnote).foregroundStyle(palette.ink3)
+            .font(Typography.meta).foregroundStyle(palette.ink3)
         }
     }
 }
@@ -99,7 +99,7 @@ private struct AlertSection: View {
             }
             if let diagnostics = status.diagnostics {
                 DisclosureGroup("详情") {
-                    Text(diagnostics).font(.caption.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
+                    Text(diagnostics).font(Typography.caption.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
                 }
             }
             switch status.action {
@@ -159,10 +159,10 @@ private struct SyncSection: View {
                     .disabled(services.isSyncingNow)
             }
             if let failure = choices.failure {
-                Label { Text(failure).font(.footnote) } icon: { FailureMark() }
+                Label { Text(failure).font(Typography.meta) } icon: { FailureMark() }
             }
             if services.syncFilesOverQuota {
-                Label { Text(FileStatus.overQuota).font(.footnote) } icon: { Image(.syncPaused).foregroundStyle(palette.color(.notice)) }
+                Label { Text(FileStatus.overQuota).font(Typography.meta) } icon: { Image(.syncPaused).foregroundStyle(palette.color(.notice)) }
             }
             if !services.conflicts.isEmpty {
                 NavigationLink(value: Route.conflicts) {
@@ -173,12 +173,12 @@ private struct SyncSection: View {
             if !services.syncIssues.isEmpty {
                 DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
                     ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
-                        Text(issue.text).font(.footnote)
+                        Text(issue.text).font(Typography.meta)
                         if let detail = issue.detail {
                             DisclosureGroup("详情") {
-                                Text(detail).font(.caption2.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
+                                Text(detail).font(Typography.caption2.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
                             }
-                            .font(.footnote).foregroundStyle(palette.ink3)
+                            .font(Typography.meta).foregroundStyle(palette.ink3)
                         }
                     }
                 }
