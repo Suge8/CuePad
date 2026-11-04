@@ -11,8 +11,6 @@ import SwiftUI
 enum LibraryLayout {
     static let column: CGFloat = 680
     static let gap: CGFloat = 12
-    /// 纸里行与块的左右留白
-    static let inset: CGFloat = 16
     static let margin = Spacing.page
     static let bottom = Spacing.section
     #if os(macOS)
@@ -66,7 +64,7 @@ struct TidyPaper: View {
                 TidyConsequence(kind: .automatic)
             }
         }
-        .padding(LibraryLayout.inset)
+        .padding(Spacing.inset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .paper(cornerRadius: LibraryLayout.radius)
     }

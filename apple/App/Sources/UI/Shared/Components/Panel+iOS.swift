@@ -64,6 +64,19 @@ final class PanelHost {
 
     func show(_ entry: Shown) { shown = entry }
 
+    /// 把一处气泡的内容交给这一层（`panel(style: .bubble)` 与导航栏里的问号 `BarHelpButton` 同这一份）：连同呈现处的环境，字号按这一层的。
+    func present(
+        token: UUID, key: AnyHashable, source: BubbleSource, width: BubblePlacement.Width, close: ClosePanel, environment: EnvironmentValues, content: some View
+    ) {
+        show(Shown(
+            token: token, identity: [AnyHashable(token), key], source: source, width: width,
+            content: AnyView(
+                content.environment(\.closePanel, close)
+                    .environment(\.dynamicTypeSize, min(typeSize, Self.largestType))
+                    .environment(\.self, environment)),
+            close: close))
+    }
+
     func hide(_ token: UUID) {
         if shown?.token == token { shown = nil }
     }
@@ -146,13 +159,7 @@ private struct BubbleSlot<Panel: View>: ViewModifier {
             .onChange(of: Mode(key: key, source: source, width: width), initial: true) { _, mode in
                 guard let host else { return }
                 guard let key = mode.key else { return host.hide(token) }
-                host.show(PanelHost.Shown(
-                    token: token, identity: [AnyHashable(token), key], source: mode.source, width: mode.width,
-                    content: AnyView(
-                        panel().environment(\.closePanel, close)
-                            .environment(\.dynamicTypeSize, min(host.typeSize, PanelHost.largestType))
-                            .environment(\.self, environment)),
-                    close: close))
+                host.present(token: token, key: key, source: mode.source, width: mode.width, close: close, environment: environment, content: panel())
             }
             .onDisappear { host?.hide(token) }
     }
@@ -165,8 +172,7 @@ private struct BubbleSlot<Panel: View>: ViewModifier {
 }
 
 /// 从控件长出的气泡（`View.bubble(isPresented:)`）：开着时按 SwiftUI 量的框长出。量的框记在不触发重算的盒子里：控件随滚动、键盘挪动不重算这一层。
-/// 系统导航栏里的项用不了它：栏里的项建好之后系统不再跑它上面的 `onChange`，开了也交不到这一层——页上挂 `panel(style: .bubble)`，
-/// 点下时按读屏标识量钮的框（`PanelHost.frame(of:)`，`LibraryScreen`）。
+/// 系统导航栏里的项用不了它（栏里的项建好之后系统不再跑它上面的 `onChange`）：问号经 `BarHelpButton`。
 private struct ControlBubble<Panel: View>: ViewModifier {
     @Binding var isPresented: Bool
     let width: BubblePlacement.Width

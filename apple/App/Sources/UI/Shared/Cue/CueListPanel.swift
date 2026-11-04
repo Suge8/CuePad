@@ -2,8 +2,7 @@ import SwiftUI
 
 /// Cue 的两张清单弹层（记忆 `CueMemoryPage`、定时 `CueSchedulePage`）共用的壳：Mac 是 480 宽的窗口内浮层，手机是整屏 sheet。
 /// 顶上不写标题（`title` 只给读屏与多任务），右上一颗问号，点开一句说明的气泡；底部浮着玻璃输入胶囊，列表从它后面透过；空时正中是空态。
-/// Mac 的问号是浮层右上与关闭并排的淡底圆钮（`HelpButton`）；手机的在 sheet 的系统导航栏里，栏里的项开不出气泡，
-/// 照 `LibraryScreen`：点下时按读屏标识量它的框（`PanelHost.frame(of:)`），气泡挂在页上（sheet 自己那一层）。
+/// Mac 的问号是浮层右上与关闭并排的淡底圆钮（`HelpButton`）；手机的在 sheet 的系统导航栏里（`BarHelpButton`，气泡画在 sheet 自己那一层）。
 struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
     let title: String
     let help: String
@@ -13,12 +12,6 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
     @ViewBuilder let empty: Empty
     @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(PanelHost.self) private var host
-    @State private var helpOpen = false
-    @State private var helpFrame: CGRect?
-    private static var helpID: String { "cueList.help" }
-    #endif
 
     private var list: some View {
         ScrollView {
@@ -70,16 +63,9 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("说明", icon: .help) {
-                            helpFrame = host.frame(of: Self.helpID)
-                            helpOpen.toggle()
-                        }
-                        .accessibilityIdentifier(Self.helpID)
-                    }
+                    ToolbarItem(placement: .primaryAction) { BarHelpButton(id: "cueList.help") { CueListHelp(text: help) } }
                 }
         }
-        .panel(isPresented: $helpOpen, style: .bubble(helpFrame.map(BubbleSource.control) ?? .unanchored)) { CueListHelp(text: help) }
         .presentationDetents([.large])
     }
     #endif

@@ -77,15 +77,14 @@ struct MergeBar: View {
         } consequence: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 ForEach(tidy.sources.map(\.origin).filter(\.replacesBasePrompt), id: \.self) { origin in
-                    Toggle(isOn: Binding(get: { draft.retire.contains(origin) }, set: { if $0 { draft.retire.insert(origin) } else { draft.retire.remove(origin) } })) {
-                        Text(verbatim: String(localized: "也合并 \(workspace.replacementName(origin))")).font(Typography.meta).foregroundStyle(palette.ink2)
+                    let on = draft.retire.contains(origin)
+                    Button {
+                        if on { draft.retire.remove(origin) } else { draft.retire.insert(origin) }
+                    } label: {
+                        Text(verbatim: String(localized: "也合并 \(workspace.replacementName(origin))")).chip(on: on)
                     }
-                    #if os(macOS)
-                    .toggleStyle(.checkbox)
-                    #else
-                    // 一颗选中时着色的小胶囊：手机上没有勾选框
-                    .toggleStyle(.button).buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
-                    #endif
+                    .buttonStyle(PressStyle())
+                    .accessibilityAddTraits(on ? .isSelected : [])
                     .opacity(draft.previewing ? 1 : 0).disabled(!draft.previewing || working)
                 }
                 Spacer(minLength: 8)

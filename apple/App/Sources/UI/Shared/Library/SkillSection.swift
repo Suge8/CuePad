@@ -24,7 +24,7 @@ struct SkillSection: View {
                         Text(verbatim: workspace.projectName(group.project))
                     }
                     .font(Typography.label).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, LibraryLayout.inset)
+                    .padding(.horizontal, Spacing.inset)
                     .accessibilityAddTraits(.isHeader)
                     skills(group.skills.map(SkillLine.skill))
                 }
@@ -55,7 +55,7 @@ struct SkillSection: View {
                     Text(verbatim: name.isEmpty ? String(localized: "不在分类里") : name)
                         .font(Typography.label).foregroundStyle(palette.ink3)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, LibraryLayout.inset).padding(.top, 10).padding(.bottom, 2)
+                        .padding(.horizontal, Spacing.inset).padding(.top, 10).padding(.bottom, 2)
                         .accessibilityAddTraits(.isHeader)
                 case .skill(let skill): SkillRow(skill: skill, library: library)
                 }
@@ -115,7 +115,7 @@ private struct SkillRow: View {
             #endif
             UnseenMarks(agents: library.agents, unseen: skill.unseenBy)
         }
-        .padding(.horizontal, LibraryLayout.inset)
+        .padding(.horizontal, Spacing.inset)
         .padding(.vertical, Self.vertical)
         .frame(minHeight: Self.height)
         .contentShape(.rect)

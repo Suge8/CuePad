@@ -208,11 +208,7 @@ struct ScheduleStrip: View {
                     }
                 }
                 Spacer(minLength: 4)
-                Button { draft = ScheduleDraft(line) } label: {
-                    Text("改").font(BubbleMetrics.meta.weight(.semibold)).foregroundStyle(palette.ink)
-                        .padding(.horizontal, 14).frame(height: BubbleMetrics.capsule)
-                        .background(palette.fill, in: .capsule).contentShape(.capsule)
-                }
+                Button { draft = ScheduleDraft(line) } label: { Text("改").chip(size: .compact) }
                 .buttonStyle(PressStyle())
                 .accessibilityLabel("改定时")
             }
