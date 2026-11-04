@@ -12,6 +12,7 @@ extension CueHostTests {
     /// 你在 Cue 页选了 Pi 的 Fake Model 2、强度高，你的一轮碰上 Pi 额度用完（读得到几点重置），这台 Mac 上还能用 Claude Code：
     /// 设置换过去（模型清空、fast 关），只说一句从哪换到哪、几点重置，不再报那个错；健康里记着这次换大脑。替身的 Claude Code 在这台 Mac 上起不来：
     /// 说一次起不来，你的话还等着。到了 Pi 的重置时刻（慢速重试还远）换回 Pi，连同你选的模型与强度，你的话交给它答一次，说一句恢复了。
+    /// 重置时刻正赶在 Cue 对账途中（它又试了一次 Claude Code）走过：不能因为排定时器时已过就漏掉，等到下一次重起（一小时后）才换回。
     @Test func 额度用完换到另一家_重置时刻一到换回你选的模型与强度() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
         let resets = try await stuckPi(rig, resetsIn: 60, alongside: [.claudeCode])
@@ -28,7 +29,8 @@ extension CueHostTests {
         try await untilReset(rig, resets)
         #expect(try await rig.store.cueProfile()?.runtime == .known(.claudeCode))
 
-        rig.jump(to: resets)
+        rig.launches.whenTryingElsewhere { [clocks = rig.clocks] in clocks.jump(to: resets) }
+        try #require(rig.services.cue.keeper).input.yield(.kick)  // 你的话等着交：对账时再试一次 Claude Code
         try await rig.message(.cue, containing: "收到：你好")
         let home = try #require(try await rig.store.cueProfile())
         #expect(home.runtime == .known(.pi) && home.model == "fake/fake-model-2" && home.effort == .known(.high))
@@ -126,7 +128,6 @@ extension CueHostTests {
         }
         try await rig.message(.cue, containing: "我换到 Claude Code 接着干")
         try await eventually("Claude Code 起不来，等着重起") { rig.health?.runtime == .claudeCode && rig.health?.phase == .restarting }
-        try await untilReset(rig, resets)
         rig.jump(to: resets)
         try await rig.message(.cue, containing: done)
         try await rig.message(.cue, containing: "又能干活了，用的是 Pi")
@@ -136,8 +137,7 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 跳到重置时刻的前一刻，等 Cue 对过账、睡到重置时刻：调用方断言这时还没换回、没重来，再跳到重置时刻。
-    /// 不在它对账时跳过重置时刻：那时它可能已经看过绕行、还没排定时器，排的就不再是这个已过的时刻（`Detour.nextReset`）。
+    /// 跳到重置时刻的前一刻，等 Cue 对过账：调用方断言这时还没换回、没重来。
     private func untilReset(_ rig: Rig, _ resets: Date) async throws {
         rig.jump(to: resets - 1)
         try await rig.reconciled()

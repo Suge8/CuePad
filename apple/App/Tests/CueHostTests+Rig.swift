@@ -13,7 +13,7 @@ import Testing
 extension CueHostTests {
     /// 起大脑的门（`Rig.launches`）：起大脑在主线程之外问它，所以用锁。
     nonisolated final class LaunchGate: Sendable {
-        private let state = Mutex((open: true, attempts: 0))
+        private let state = Mutex((open: true, attempts: 0, elsewhere: (@Sendable () -> Void)?.none))
         var attempts: Int { state.withLock { $0.attempts } }
         func set(open: Bool) { state.withLock { $0.open = open } }
 
@@ -23,14 +23,39 @@ extension CueHostTests {
                 return state.open ? launch : nil
             }
         }
+
+        /// 下一次试起别家（这台 Mac 上找不到、起不来）时先做 `action`，只做一次：在对账途中让什么发生（如钟走过某一刻）。
+        func whenTryingElsewhere(_ action: @escaping @Sendable () -> Void) { state.withLock { $0.elsewhere = action } }
+
+        func passElsewhere() -> CuePad.CueLaunch? {
+            state.withLock { state in
+                defer { state.elsewhere = nil }
+                return state.elsewhere
+            }?()
+            return nil
+        }
     }
 
-    /// 看门狗的钟（`CueTiming.awake`）的替身：真的醒着的时长，加上醒着跳过的（`Rig.jump`）；像 Mac 合盖那样跳过的不算。
-    nonisolated final class AwakeClock: Sendable {
-        private let skipped = Mutex(Duration.zero)
+    /// Rig 的钟：App 的钟（`app`：资料库、会话状态的写入节流、Cue 的对账定时器都走它）与看门狗的钟（`CueTiming.awake`）。
+    /// 要等的时限不真等，跳过去；起大脑在主线程之外，所以也能在那里跳（`LaunchGate.whenTryingElsewhere`）。
+    nonisolated final class Clocks: Sendable {
+        let app = JumpTiming()
+        /// 看门狗的钟醒着跳过的；像 Mac 合盖那样跳过的不算
+        private let awakeSkipped = Mutex(Duration.zero)
 
-        func now() -> SuspendingClock.Instant { SuspendingClock.now.advanced(by: skipped.withLock { $0 }) }
-        func skip(_ duration: Duration) { skipped.withLock { $0 += duration } }
+        func awake() -> SuspendingClock.Instant { SuspendingClock.now.advanced(by: awakeSkipped.withLock { $0 }) }
+
+        /// 往前跳 `duration`：两个钟一起跳；`asleep` 像 Mac 合盖的那一段，看门狗的钟不走。
+        func jump(by duration: Duration, asleep: Bool = false) {
+            if !asleep { awakeSkipped.withLock { $0 += duration } }
+            app.jump(by: duration)
+        }
+
+        /// 醒着跳到 `date`；已经过了就不动。
+        func jump(to date: Date) {
+            let ahead = date.timeIntervalSince(app.now)
+            if ahead > 0 { jump(by: .seconds(ahead)) }
+        }
     }
 
     final class Rig {
@@ -39,9 +64,8 @@ extension CueHostTests {
         /// 起 Pi 的大脑要过的门：关上时这台 Mac 找不到 Pi（起不来），数着试了几次
         let launches = LaunchGate()
         let app: TestApp
-        /// App 的钟（资料库、会话状态的写入节流、Cue 的对账定时器都走它）：要等的时限不真等，跳过去（`jump`）
-        let clock: JumpTiming
-        private let awake: AwakeClock
+        let clocks = Clocks()
+        var clock: JumpTiming { clocks.app }
         let folder: URL
         /// 真大脑的临时目录（`EvalBrain.launch`，开销记录在里面）；假模型时为 nil
         let brainDirectory: URL?
@@ -66,9 +90,8 @@ extension CueHostTests {
             var timing = CueTiming(
                 patrolAfter: patrolAfter, cacheLifetime: cacheLifetime, renewAt: renewAt,
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), sayWait: 5, quietHours: [], clock: clock)
-            let jumping = JumpTiming(), awake = AwakeClock()
-            (self.clock, self.awake) = (jumping, awake)
-            timing.awake = { awake.now() }
+            let clocks = clocks
+            timing.awake = { clocks.awake() }
             tune(&timing)
             let launch = CuePad.CueLaunch(
                 executable: settleGate ? try Self.gatedPi() : realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
@@ -77,9 +100,9 @@ extension CueHostTests {
             brainDirectory = directory
             let brainLaunch = try real.map { try $0.launch(in: directory!) }, runtime = real?.runtime, gate = launches
             app = TestApp(cue: CueDependencies(
-                launch: { agent, _ in agent == runtime ? brainLaunch : agent == .pi ? gate.pass(launch) : nil },
+                launch: { agent, _ in agent == runtime ? brainLaunch : agent == .pi ? gate.pass(launch) : gate.passElsewhere() },
                 helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing),
-                timing: jumping.timing)
+                timing: clocks.app.timing)
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
             try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000,"input":\#(seesImages ? #"["text","image"]"# : #"["text"]"#)},{"id":"fake-model-2","contextWindow":200000,"reasoning":true,"input":["text"]}]}}}"#.utf8)
@@ -143,17 +166,8 @@ extension CueHostTests {
 
         func say(_ text: String) async throws { try await store.addCueMessage(.you, text: text) }
 
-        /// 往前跳 `duration`：App 的钟与看门狗的钟一起跳；`asleep` 像 Mac 合盖的那一段，看门狗的钟不走。
-        func jump(by duration: Duration, asleep: Bool = false) {
-            if !asleep { awake.skip(duration) }
-            clock.jump(by: duration)
-        }
-
-        /// 醒着跳到 `date`；已经过了就不动。
-        func jump(to date: Date) {
-            let ahead = date.timeIntervalSince(clock.now)
-            if ahead > 0 { jump(by: .seconds(ahead)) }
-        }
+        func jump(by duration: Duration, asleep: Bool = false) { clocks.jump(by: duration, asleep: asleep) }
+        func jump(to date: Date) { clocks.jump(to: date) }
 
         /// 出错后等着重来、起不来等着重起：跳到那一刻（`Setback.retryAt`、`Phase.restarting`），退避不真等。还没排上就不动。
         func skipBackoff() {
@@ -166,7 +180,7 @@ extension CueHostTests {
         /// 一轮在跑、大脑一直没动静：跳过看门狗剩下的时长。从最后一次大脑事件算：挂住之后才到的事件会重新算起，所以每次都按剩下的跳。
         func skipSilence() {
             guard let keeper = services.cue.keeper, keeper.turn != nil else { return }
-            let left = keeper.setup.timing.silence - (awake.now() - keeper.heardAt)
+            let left = keeper.setup.timing.silence - (clocks.awake() - keeper.heardAt)
             if left > .zero { jump(by: left) }
         }
 
