@@ -92,9 +92,14 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         var since: Date
         var subagents: Int
         var slot = 0
+        /// 状态未确认是因为它的会话所在的那台 Mac 没开：那台的名字（`RuntimeTimeline.Work.offline`），这一行写"「那台」没开"（`label`）。
+        var offline: String? = nil
 
         enum CodingKeys: String, CodingKey { case id, kind, name, since, subagents
-            case slot = "p" }
+            case slot = "p", offline = "o" }
+
+        /// 这一行写的样子：同会话行与 Cue 那一句，那台 Mac 没开就说哪台没开，不说状态未确认。
+        var label: String { offline.map { String(localized: "「\($0)」没开") } ?? kind.label }
 
         /// 到这一刻收掉：刚做完的只留 `doneWindow`，别的不按时刻收。
         var expiry: Date? { kind == .done ? since.addingTimeInterval(CueNow.doneWindow) : nil }

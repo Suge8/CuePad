@@ -8,6 +8,15 @@ nonisolated extension PiSessionState {
     }
 }
 
+nonisolated extension PiSessionState {
+    /// 没确认是因为它所在的那台 Mac 没开：那台的名字，否则为 nil。会话行（`PiShown`）与 Cue 此刻的每件一行（`CueNow.Item.offline`）只认它。
+    /// 此刻同步不通时那台的在线记录可能只是没同步来，那台就是本机（刚启动、还没写下在线）也不算：都照旧说不准。
+    func macOff(at moment: Speech.Moment) -> String? {
+        guard let mac = offlineMac, !moment.isLocal(hostID), moment.reachableSince(hostID) != nil else { return nil }
+        return mac
+    }
+}
+
 nonisolated extension PiSessionListItem {
     /// 列在"现在"（"在做"、Agent 页）：没结束的，与正在唤醒的——唤醒中当场列出、写"正在唤醒"，上了桥就是在线的那一行。
     func isCurrent(at moment: Speech.Moment) -> Bool {
@@ -174,8 +183,7 @@ nonisolated struct PiShown: Hashable, Sendable {
         /// 做到一半被打断（进程没了）：停着，说一句它就接着做。
         case interrupted
         /// 此刻说不准：其他版本写入、本版本不认识的状态，或没确认它此刻还是那样（`PiSessionState.runtimeState`）。
-        /// 没确认是因为它所在的 Mac 没开时带上那台的名字（`PiSessionState.offlineMac`）：说的是那台没开，同 Cue 那一句（`CuePresence.asleep`）；
-        /// 此刻同步不通时那台的在线记录可能只是没同步来，照旧说不准；那台就是本机（刚启动、还没写下在线）也只说不准。
+        /// 没确认是因为它所在的 Mac 没开时带上那台的名字（`PiSessionState.macOff`）：说的是那台没开，同 Cue 那一句（`CuePresence.asleep`）。
         case unknown(macOff: String? = nil)
     }
 
@@ -210,7 +218,7 @@ nonisolated extension PiShown {
         let own = PiClock.reading(session.runtimeState, stateSince: session.stateSince, busySince: session.busySince)
         let busy = session.runtimeState.isWorking || session.runtimeState == .known(.waitingForUser)
         var reported = Self.status(of: session.runtimeState, failure: session.failure?.known)
-        if let mac = session.offlineMac, !moment.isLocal(session.hostID), moment.reachableSince(session.hostID) != nil { reported = .unknown(macOff: mac) }
+        if let mac = session.macOff(at: moment) { reported = .unknown(macOff: mac) }
         let asked = session.waitsForCue(duty) ? Status.cueAsking : reported
         switch PiDelivery.phase(of: delivery, for: session, seen: seen, at: moment) {
         case .failed(let failure):
