@@ -242,8 +242,13 @@ extension CueHostTests {
 
         /// 含 `text` 的那一行交到了 Pi（收尾闸停着时 Pi 先收下、等报完收尾再处理）。
         func handed(_ text: String) async throws {
+            try await eventually("「\(text)」交到 Pi") { self.handings(of: text) > 0 }
+        }
+
+        /// 含 `text` 的行交到 Pi 几次（各个班次的大脑合起来）。
+        func handings(of text: String) -> Int {
             let log = settleGate.appending(path: "stdin.log")
-            try await eventually("「\(text)」交到 Pi") { ((try? String(contentsOf: log, encoding: .utf8)) ?? "").contains(text) }
+            return ((try? String(contentsOf: log, encoding: .utf8)) ?? "").split(separator: "\n").count { $0.contains(text) }
         }
 
         /// 另一台 Mac（mac-b）醒着、它的在线记录同步到了这里：它上面的会话这才算在跑，Cue 才能对它说话（`CueStore.runtimeIsConfirmed`）。
