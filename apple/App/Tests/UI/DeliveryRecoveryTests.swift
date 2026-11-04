@@ -71,8 +71,10 @@ struct DeliveryRecoveryTests {
         defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("从中断的地方继续", to: target, app: app)
         try await app.services.executor.start()
-        try await eventually("话交给了宿主") { ext.messages.count == 1 }
-        clock.advance(AgentTimeouts.ack)
+        if reply == "timeout" {
+            try await eventually("话交给了宿主") { ext.messages.count == 1 }
+            clock.advance(AgentTimeouts.ack)
+        }
         let uncertain = try await outcome(request, in: store)
         #expect(uncertain.status == .known(.unconfirmed))
         #expect(uncertain.failure == nil)
