@@ -9,7 +9,8 @@
 //   - `session/load`：dsh-acp 只有 `session/resume`（不重放历史），改名转给它
 //   - 模型选项的值：dsh-acp 的是 `["提供方","模型"]` 的 JSON 原文，进出都换成 CuePad 的写法 `提供方/模型`
 // 标准没有的，CuePad 的扩展方法（`ACPDialect`）：
-//   `_cuepad/steer`  {sessionId, text, images?[{mimeType, data}]}：插进在跑的这一轮，下一步就读到；歇着时回错误码 -32001，该走 session/prompt
+//   `_cuepad/steer`  {sessionId, text, images?[{mimeType, data}]} → {messageId}：插进在跑的这一轮，下一步就读到；歇着时回错误码 -32001，该走 session/prompt。
+//     它被一轮收下（`agent/inbox/claimed`）时发通知 `_cuepad/claimed` {sessionId, messageId}：可能先于这个回应到
 //   `_cuepad/rename` {sessionId, name}
 // 插件发给 CuePad 的请求（CuePad 回了才接着做）：
 //   `_cuepad/ask_user_question` {sessionId, questions}：`ask_user_question` 工具要你回答（dsh 的 `AskUserQuestionItem`，托管会话才插这个工具）；
@@ -89,6 +90,10 @@ export async function apply(ctx, config = {}) {
     streamed.set(sessionId, (streamed.get(sessionId) ?? "") + frame.chunk.text);
     update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: frame.chunk.text } });
   });
+  ctx.on("agent/inbox/claimed", ({ agent, message }) => {
+    if (!steered.delete(message.id)) return;
+    send({ jsonrpc: "2.0", method: `${prefix}claimed`, params: { sessionId: agent.session.id, messageId: message.id } });
+  });
   ctx.on("agent/inbox/inserted", ({ agent, message }) => {
     const delivery = deliveries.get(agent.session.id);
     if (delivery === undefined || message.source?.kind !== "user") return;
@@ -96,7 +101,9 @@ export async function apply(ctx, config = {}) {
     record(agent.session, message.id, delivery);
   });
 
-  const methods = extensions(ctx);
+  /** 经 `_cuepad/steer` 插进去、还没被收下的消息 id */
+  const steered = new Set();
+  const methods = extensions(ctx, steered);
   const toAgent = (message) => {
     if (typeof message.method === "string" && message.method.startsWith(prefix)) return answer(message, () => methods[message.method.slice(prefix.length)], send);
     // 插件自己发出的请求的回应不交给 dsh-acp（已收回的提问也是）
@@ -163,7 +170,7 @@ function commands(ctx, agent) {
   return ctx.commands.list(agent).map((c) => ({ name: c.name, description: c.description ?? "", ...(c.input?.hint ? { input: { hint: c.input.hint } } : {}) }));
 }
 
-function extensions(ctx) {
+function extensions(ctx, steered) {
   const agent = (sessionId) => {
     const found = ctx.agents.get(sessionId);
     if (!found) throw failure(`unknown session ${sessionId}`);
@@ -177,8 +184,9 @@ function extensions(ctx) {
         images.map((image) => ({ mediaType: image.mimeType, data: Buffer.from(image.data, "base64") })));
       const content = [...(text ? [{ type: "text", text }] : []), ...refs.map((attachment) => ({ type: "image", attachment }))];
       const message = Object.freeze({ id: randomUUID(), role: "user", content, source: { kind: "user" } });
+      steered.add(message.id);
       target.steer(message);
-      return {};
+      return { messageId: message.id };
     },
     async rename({ sessionId, name }) {
       await ctx.get("sessionTitle").rename(agent(sessionId).session, name);

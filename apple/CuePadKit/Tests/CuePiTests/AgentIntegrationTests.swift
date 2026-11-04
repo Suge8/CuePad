@@ -68,7 +68,7 @@ struct AgentIntegrationTests {
         (AgentKind.pi, "0.84.3", AgentStatus.Presence.tooOld(AgentVersion(0, 84, 3))),
         (.pi, "command not found: hello", .notFound),
         (.opencode, "1.19.0", .tooOld(AgentVersion(1, 19, 0))),
-        (.claudeCode, "2.1.144 (Claude Code)", .tooOld(AgentVersion(2, 1, 144))),
+        (.claudeCode, "2.1.168 (Claude Code)", .tooOld(AgentVersion(2, 1, 168))),
         (.dsh, "0.2.1-rc.1", .tooOld(AgentVersion(0, 2, 1, prerelease: "rc.1"))),
     ])
     func anAgentTooOldOrWithoutAVersionIsNotConnectable(kind: AgentKind, output: String, presence: AgentStatus.Presence) async throws {

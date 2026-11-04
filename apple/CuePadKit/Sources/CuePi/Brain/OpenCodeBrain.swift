@@ -15,7 +15,7 @@ import Foundation
 ///   起大脑时先删掉这个工作目录里服务已不在的带标记会话（崩溃留下的；同时在跑的另一个大脑的不动）；
 /// - MCP 是起服务后异步连上的：起大脑时等 `/api/mcp` 报 `cuepad` 已连上（`mcp.status.changed` 时再看）、再等它的工具进了工具表
 ///   （没有信号可等，见 `mcpToolsSettle`），之前说的话模型看不到它的工具；
-/// - 说的话以 `steer` 交：空闲时开一轮，正忙时在下一个步骤边界并进这一轮；
+/// - 说的话以 `steer` 交：空闲时开一轮，正忙时在下一个步骤边界并进这一轮；带上发送标识（`metadata.cuepadDelivery`），哪一轮收下看它送进会话的那一刻（`OpenCodeTurn`）；
 /// - 模型写成 `提供方/模型`，换模型与强度（模型的 `variant`，按 `OpenCodeModel.variant(for:)` 夹取）先在 `/api/model` 里认：
 ///   服务对不存在的模型也回 204；能不能看图看模型的 `capabilities.input`；
 /// - 事件流断了（服务卡住）就结束进程，报成退出。
@@ -186,10 +186,11 @@ final class OpenCodeBrain: HostedSession {
     func send(_ text: String, images: [PiImage], id: UUID) async throws {
         guard let client, let sessionID else { throw HostedSessionError.notRunning }
         struct File: Encodable { var uri: String }
-        struct Prompt: Encodable { var text: String; var files: [File]; var delivery = "steer" }
+        struct Metadata: Encodable { var cuepadDelivery: String }
+        struct Prompt: Encodable { var text: String; var files: [File]; var metadata: Metadata; var delivery = "steer" }
         let files = images.map { File(uri: "data:\($0.mimeType);base64,\($0.data.base64EncodedString())") }
-        try await client.call("POST", "/api/session/\(sessionID)/prompt", directory: directory, body: Prompt(text: text, files: files))
-        session.emit(.received(id))
+        let prompt = Prompt(text: text, files: files, metadata: Metadata(cuepadDelivery: id.uuidString))
+        try await client.call("POST", "/api/session/\(sessionID)/prompt", directory: directory, body: prompt)
     }
 
     /// 先删会话再关输入；删不掉的（服务已卡住或退出）留给下次起大脑时清。

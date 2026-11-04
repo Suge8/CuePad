@@ -14,8 +14,10 @@ protocol ACPDialect: Sendable {
     func brain(_ config: CueBrainConfig, directory: URL) throws -> ACPBrainSetup
     /// 会话开好后 MCP 服务才连（标准里 `session/new` 回来时已连上）：大脑等它报 `ACPSignal.mcp` 再说第一句话
     var connectsMCPLater: Bool { get }
-    /// 正忙时把这句并进在跑的这一轮：做不到（标准没有这个动作）返回 false，驱动等这一轮做完再以它开新一轮
-    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> Bool
+    /// `session/prompt` 先进 Agent 自己的队列、跑起来时报 `ACPSignal.turnStarted`：报之前不插话（Grok 会把插话先跑成一轮，排到这句前面）
+    var queuesPrompts: Bool { get }
+    /// 正忙时把这句并进在跑的这一轮：做不到（标准没有这个动作）返回 nil，驱动等这一轮做完再以它开新一轮；并进了返回这家怎么认它被收下
+    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> ACPSteer?
     /// 改会话名：做不到返回 false
     @MainActor func rename(_ name: String, session: String, cwd: URL, on connection: ACPConnection) async throws -> Bool
     /// `session/prompt` 的 `_meta`：带上 CuePad 的投送请求 id，好在会话记录里认回（`deliveryID` 为 nil 是 CuePad 自己起的话）
@@ -40,6 +42,12 @@ struct ACPBrainSetup {
     var meta: JSONValue?
 }
 
+/// 并进在跑的这一轮的一句插话，这家怎么报它被哪一轮收下（`TurnEvent.received`）：`claim` 是它被收下时这家报的标识（`ACPSignal.claimed`）；
+/// 不报的为 nil——这家只报插话搁浅、转成它自己开的一轮（`ACPSignal.stranded`），没搁浅的就是插进的那一轮收下的
+struct ACPSteer {
+    var claim: String?
+}
+
 /// 各家通知翻成的驱动动作
 enum ACPSignal {
     /// Agent 自己开了一轮（不是 CuePad 的 `session/prompt` 开的）；已在跑时不算
@@ -48,14 +56,19 @@ enum ACPSignal {
     case turnFinished(failure: String?)
     /// 最近一次请求模型的输入合计（口径同 `TurnEvent.context`）
     case context(used: Int)
+    /// 一句插话被收下（`ACPSteer.claim` 给的标识）
+    case claimed(String)
+    /// 插话来不及并进那一轮（它已不再请求模型），Agent 以它们（原话在 `text` 里）自己开了一轮
+    case stranded(text: String)
     /// CuePad 的 MCP 服务连上了，或连不上（`failure` 是原因）
     case mcp(failure: String?)
 }
 
 extension ACPDialect {
     var connectsMCPLater: Bool { false }
+    var queuesPrompts: Bool { false }
 
-    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> Bool { false }
+    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? { nil }
 
     @MainActor func rename(_ name: String, session: String, cwd: URL, on connection: ACPConnection) async throws -> Bool { false }
 

@@ -188,7 +188,9 @@ final class FakeResponses: Sendable {
         if let command = query.firstMatch(of: /run exactly: (.+?)  Then/)?.output.1 {
             return calls.isEmpty ? .call("run_terminal_command", ["command": String(command), "description": "run it"]) : .say("DONE")
         }
-        if let word = query.firstMatch(of: /single word ([A-Za-z]+)/)?.output.1 { return .say(String(word)) }
+        // 这一轮里插进来的话（你那句之后的用户消息）也算：照最近说的那个词
+        let said = input[queryIndex...].filter { $0["role"] as? String == "user" }.map(text)
+        if let word = said.reversed().lazy.compactMap({ $0.firstMatch(of: /single word ([A-Za-z]+)/)?.output.1 }).first { return .say(String(word)) }
         return .say("ECHO \(query)")
     }
 

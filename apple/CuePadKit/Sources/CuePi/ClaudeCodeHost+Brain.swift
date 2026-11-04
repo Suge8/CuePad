@@ -7,7 +7,9 @@ import Foundation
 /// 启动参数（见 `start`）保证：不落会话（不进 `claude --resume` 的列表）；系统提示整份替换，不读 CLAUDE.md、自动记忆与 skill；
 /// 不跑用户的钩子（也就不会报给 CuePad 成一个会话）；工具只有读文件（Cue 只读文件核对证据，搜代码交给会话）与 CuePad 的 MCP，其余需要批准的一律拒绝（`--permission-prompts none`），
 /// 不会停下来等人。斜杠命令开着，只为开新会话的 `/clear`（见下）。
-/// - 正忙时说的话并进当前这一轮（不先停下，与托管会话的发话不同）；他的话以 `/` 开头时前面垫一个空格，不被当成命令；
+/// - 正忙时说的话不先停下（与托管会话的发话不同）：带上发送标识（`uuid`）排进它的命令队列，下一次请求模型前并进这一轮，
+///   赶上这一轮最后一次请求就在收尾后自己另开一轮；哪一轮收下看 `command_lifecycle` 的 `started`：并进时报在这一轮里，另开时先于那一轮的
+///   `system/init` 到（2.1.317 实测）。他的话以 `/` 开头时前面垫一个空格，不被当成命令；
 /// - 起好要等 CuePad 的 MCP 服务连上（`toolsConnected`）；
 /// - 开新会话是写一句 `/clear`：Claude Code 清掉对话（进程、MCP 连接、模型与强度都留着），回一条不调模型的 `result`，不报成一轮；
 /// - 提示缓存留 1 小时（`ENABLE_PROMPT_CACHING_1H`：订阅登录多数时候本来就是，API 密钥与超额时默认 5 分钟）；
@@ -62,8 +64,8 @@ extension ClaudeHostedSession: HostedSession {
 
     func send(_ text: String, images: [PiImage], id: UUID) async throws {
         let text = text.hasPrefix("/") ? " " + text : text
-        try await say(Self.userMessage(ClaudeStream.content(text: text, images: images)), interrupting: false)
-        brain?.emit(.received(id))
+        let uuid: JSONValue = .string(id.uuidString.lowercased())
+        try await say(Self.userMessage(ClaudeStream.content(text: text, images: images), extra: ["uuid": uuid]), interrupting: false)
     }
 
     func newSession() async throws {
