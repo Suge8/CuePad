@@ -196,7 +196,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             if follow.wrappedValue.showsJump {
                 JumpToNewest(unseen: unseen) { follow.wrappedValue.jumpToNewest() }
                     .padding(.trailing, JumpToNewest.inset).padding(.bottom, JumpToNewest.inset + bottomInset)
-                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    .transition(Motion.pop(reduceMotion: reduceMotion))
             }
         }
         .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: follow.wrappedValue.showsJump)

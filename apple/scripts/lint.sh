@@ -114,12 +114,8 @@ forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（
   'App/Sources/UI/iOS/Trash/TrashScreen.swift'
 forbid "小东西冒出来、收回去用 Motion.pop（AppGroup/Motion.swift）：从 0.9 长到原大并淡入，减弱动态效果时只淡；各处写的 .scale 起点不一（0、0.6），从 0 长读作跳出来" \
   '(?:\.transition\(\s*|\bAnyTransition)\.scale\b' 'App/AppGroup/Motion.swift' \
-  'App/AppGroup/CueNowViews.swift' \
   'App/Sources/UI/Shared/Components/ChatFollow.swift' \
-  'App/Sources/UI/Shared/Components/ChatScroll.swift' \
   'App/Sources/UI/Shared/Components/Composer+Attachments.swift' \
-  'App/Sources/UI/Shared/Components/Composer.swift' \
-  'App/Sources/UI/Shared/Components/PiStateDot.swift' \
   'App/Sources/UI/Shared/Cue/CueDot.swift'
 forbid "Mac 主窗口里从控件弹出的说明与小表单用 bubble(isPresented:) 或 HelpButton，不用系统 popover：它另起一扇窗，第一次弹 85～113ms，开着时主窗口的快捷键不响应（docs/layout.md）；设置窗口与只编进 iOS 的文件例外" \
   '\.popover\(' 'App/Sources/UI/iOS/**' '**/*+iOS.swift' 'App/Sources/UI/macOS/Settings/**' 'App/Sources/UI/Debug/**' \
