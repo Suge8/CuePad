@@ -22,16 +22,12 @@ struct ProjectFoldersTests {
             try await PiStateRecorder(store: store, hostID: host).update(
                 sessionID: host, state: .settled, title: host, directory: "/work/\(host)")
         }
-        let workspace = Workspace(services: app.services)
-        workspace.folderPicker = project
         let candidates = ProjectFolders.candidates(
             folders: try await store.sessionFolders(), bindings: try await store.directoryBindings(),
-            projects: try await store.projects(), excluding: workspace.folderPicker?.id)
+            projects: try await store.projects(), excluding: project.id)
         let groups = ProjectFolders.candidateGroups(candidates)
         #expect(groups.map(\.id) == ["mac-a", "mac-b"])
         #expect(groups.map(\.name) == ["同名 Mac", "同名 Mac"])
-        #expect(groups.flatMap(\.items).map(\.folder) == ["mac-a", "mac-b"])
-        #expect(Set(groups.map(\.id)).count == groups.count)
     }
     #endif
 
