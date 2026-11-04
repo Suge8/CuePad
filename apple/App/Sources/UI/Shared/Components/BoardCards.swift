@@ -199,9 +199,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
             }
     }
 
-    private var gap: CGFloat { row ? BoardCardMetrics.rowGap : Self.gap }
-
-    static var gap: CGFloat { 8 }
+    private var gap: CGFloat { row ? BoardCardMetrics.rowGap : BoardCardMetrics.leadGap }
 }
 
 /// 已完成卡尾的成果图：一张小缩略图（同一种交付物缩略图 `DeliverableTile`），点开全屏看（`previewPresenter`）。

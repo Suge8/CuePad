@@ -76,7 +76,7 @@ enum PaneMetrics {
     static let padding: CGFloat = 12
     static let minWidth: CGFloat = 64
     /// 只画图标时一颗的宽（同工具栏控件里的选中块那么高，成正方）。
-    static let square: CGFloat = Spacing.toolbarControl - inset * 2
+    static let square: CGFloat = ControlMetrics.height - inset * 2
     #else
     static let font = Font.subheadline.weight(.semibold)
     static let iconFont = Font.subheadline.weight(.semibold)

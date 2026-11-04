@@ -1,11 +1,13 @@
 import CueStore
 import SwiftUI
 
-/// 宽屏左栏（会话条）：导航只在这一处。从上到下是顶上一排（Mac 是红绿灯那一排：搜索、侧栏钮）、项目与进展两行（与会话格同一种行、同一种选中底，
-/// 选中是"主区此刻放的就是它"）、等你与推进中（`SessionRail`）、更早（`RailEarlier`），Mac 最底下一行图标（额度、技能与规则、设置）。
-/// 宽 256，不能拖：它是每个自动收起临界宽的一项（`WideMetrics`），拖宽要么逐帧挪三栏（违背 Mac 开合不逐帧挪位置），要么只拖一条线、松手才变，换来的只是二十来点。
-/// 收起是 80 的图标条（与红绿灯右沿对齐）：去处只剩图标，格子只剩 Agent 标志与状态记号，名字在悬停提示里（`railTip`）。图标条不放额度（同菜单栏面板那一份）。
-/// 会话条上的图标钮不带玻璃：会话条是实底，玻璃圆钮放上去是两层；悬停、按下同行的淡底（`RowStyle`）。
+/// 宽屏左栏（会话条）：导航只在这一处。从上到下是顶上一排（Mac 是红绿灯那一排：搜索、侧栏钮）、项目与进展（选中是"主区此刻放的就是它"）、
+/// 等你与推进中（`SessionRail`）、更早（`RailEarlier`），Mac 最底下一行（额度、技能与规则、设置）。尺寸全在 `Chrome`。
+/// 宽 `Chrome.rail`，不能拖：它是每个自动收起临界宽的一项（`WideMetrics`），拖宽要么逐帧挪三栏（违背 Mac 开合不逐帧挪位置），要么只拖一条线、松手才变，换来的只是二十来点。
+/// 宽版带字的是行（`Chrome.row` 高，行容器离栏边 `Chrome.gutter`）；收起是图标条（`Chrome.strip`）：只有图标的格（侧栏钮、搜索、项目、进展、会话、更早、
+/// 技能与规则、设置）都是 `Chrome.control` 见方、底同形，每一组是一格宽的一列、在条的中轴上（Mac 的中轴正对中间那颗红绿灯）；
+/// 名字在悬停提示里（`railTip`）。图标条不放额度（同菜单栏面板那一份）。
+/// 会话条上的图标钮不带玻璃：会话条是一整块实底的栏，钮平放在上面，悬停、按下同行的淡底（`RowStyle`）；玻璃圆钮留给浮在内容上的栏头。
 struct WideRail: View {
     let width: CGFloat
     #if os(iOS)
@@ -16,7 +18,7 @@ struct WideRail: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
-    private var wide: Bool { width == SessionRail.Form.wide.width }
+    private var wide: Bool { width == Chrome.rail }
 
     /// 主区放的是项目｜进展的浏览落点（不是会话、辅助页）时，那一行才画选中底。
     private var browsing: Bool {
@@ -27,19 +29,15 @@ struct WideRail: View {
     var body: some View {
         VStack(spacing: 0) {
             top
-            // 与会话格同一种行容器（`SessionRail.rowInset`）：选中底不越出栏边、不贴窗口边
-            VStack(spacing: 2) {
+            RailGroup(wide: wide) {
                 place("项目", icon: .folder, pane: .projects)
                 place("进展", icon: .task, pane: .progress)
             }
-            .padding(.horizontal, SessionRail.rowInset)
-            .rowContainer(.rect(cornerRadius: Radius.block))
-            .padding(.horizontal, SessionRail.Form.wide.inset)
             SessionRail(data: services.liveSessions.rail, form: wide ? .wide : .narrow,
                         marked: Set(workspace.shownSessions.compactMap(\.sessionID)), pulse: workspace.pulse) { session, opening in
                 workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .beside : .main)
             }
-            .padding(.top, 12)
+            .padding(.top, Chrome.groupGap)
             RailEarlier(wide: wide)
             #if os(macOS)
             tools
@@ -51,7 +49,7 @@ struct WideRail: View {
 
     @ViewBuilder private var top: some View {
         if wide {
-            HStack(spacing: 2) {
+            HStack(spacing: Chrome.cellGap) {
                 #if os(iOS)
                 toggle
                 Spacer(minLength: 0)
@@ -63,31 +61,22 @@ struct WideRail: View {
                 toggle
                 #endif
             }
-            .padding(.horizontal, 10)
-            .frame(height: WideMetrics.band)
-        } else if RailTop.current != .now {
-            // PROTOTYPE 甲、乙：侧栏钮、搜索与下面的项目、进展同一列竖排、同一种格，顶上这一组与去处之间用间距分组
-            #if os(macOS)
-            Color.clear.frame(height: WideMetrics.band)
-            #endif
-            VStack(spacing: 2) { toggle; search }
-                .environment(\.railColumn, true)
-                .padding(.horizontal, SessionRail.rowInset)
-                .rowContainer(.rect(cornerRadius: Radius.block))
-                .padding(.horizontal, SessionRail.Form.wide.inset)
-                .padding(.bottom, RailTop.groupGap)
-            #if os(iOS)
-            if let cue { CueButton(fits: cue.fits, shown: cue.shown).padding(.bottom, 6) }
-            #endif
+            // 右沿与下面各行的底对齐（离栏边 `gutter` 加 `pad`）
+            .padding(.horizontal, Chrome.gutter + Chrome.pad)
+            .frame(height: Chrome.band)
         } else {
-            // 图标条：Mac 红绿灯那一排留给红绿灯，两颗钮排在它下面
+            // 图标条：Mac 红绿灯那一排留给红绿灯，侧栏钮与搜索竖排在它下面，与下面的去处同一列、同一种格
             #if os(macOS)
-            Color.clear.frame(height: WideMetrics.band)
+            Color.clear.frame(height: Chrome.band)
             #endif
-            HStack(spacing: 0) { toggle; search }.padding(.bottom, 6)
-            #if os(iOS)
-            if let cue { CueButton(fits: cue.fits, shown: cue.shown).padding(.bottom, 6) }
-            #endif
+            RailGroup(wide: false) {
+                toggle
+                search
+                #if os(iOS)
+                if let cue { CueButton(fits: cue.fits, shown: cue.shown) }
+                #endif
+            }
+            .padding(.bottom, Chrome.groupGap)
         }
     }
 
@@ -104,86 +93,93 @@ struct WideRail: View {
         RailIcon(icon: .sidebar, help: "显示或隐藏侧栏（⌃⌘S）") { workspace.toggleSidebar() }
     }
 
+    /// 项目、进展：宽版是一行（图标与名字），图标条上是一格（只有图标，名字在悬停提示里）。
     private func place(_ title: LocalizedStringResource, icon: Icon, pane: NavigationPane) -> some View {
         let selected = browsing && workspace.navigationPane == pane
         return Button { workspace.selectPane(pane) } label: {
-            HStack(spacing: 8) {
-                Image(icon).font(Glyph.control).foregroundStyle(palette.ink2).frame(width: 18)
+            Group {
                 if wide {
-                    Text(title).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
-                    Spacer(minLength: 0)
+                    HStack(spacing: 8) {
+                        Image(icon).font(Glyph.control).foregroundStyle(palette.ink2).frame(width: Chrome.icon)
+                        Text(title).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, Chrome.rowLead)
+                    .frame(maxWidth: .infinity, minHeight: Chrome.row)
+                } else {
+                    Image(icon).font(Glyph.control).foregroundStyle(selected ? palette.ink : palette.ink2)
+                        .frame(width: Chrome.control, height: Chrome.control)
                 }
             }
-            .padding(.horizontal, wide ? 8 : 0)
-            .frame(maxWidth: .infinity, minHeight: wide ? RailIcon.row : RailIcon.side)
             .contentShape(.rect)
             .railTip(wide ? nil : String(localized: title))
         }
-        .buttonStyle(RowStyle(selected: selected))
+        .buttonStyle(RowStyle(selected: selected, cell: !wide))
         .accessibilityLabel(Text(title))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     #if os(macOS)
-    /// 最底下一行：宽时左边额度（点开明细气泡），右边技能与规则、设置；图标条只有后两颗。归档、回收站在项目列表末尾（`ProjectShelf`），新建项目在项目列表顶上。
+    /// 最底下一行：宽时左边额度（点开明细气泡），右边技能与规则、设置；图标条只有后两颗，并排在中轴两边。
+    /// 归档、回收站在项目列表末尾（`ProjectShelf`），新建项目在项目列表顶上。
     private var tools: some View {
-        HStack(spacing: 2) {
-            if wide { SidebarQuota() } else { Spacer(minLength: 0) }
+        HStack(spacing: Chrome.cellGap) {
+            if wide {
+                SidebarQuota()
+                Spacer(minLength: 0)
+            }
             RailIcon(icon: .instruction, help: "技能与规则") { workspace.show(.library) }
             RailIcon(icon: .settings, help: "设置（⌘,）") { SettingsPane.open() }
         }
-        .padding(.horizontal, wide ? 10 : 0)
-        .frame(height: RailIcon.toolsHeight)
+        // 宽版与各行的底同一条边；图标条上两格合起来居中
+        .padding(.horizontal, wide ? Chrome.gutter + Chrome.pad : 0)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Chrome.gutter)
     }
     #endif
 }
 
-/// 会话条上的图标钮：不带玻璃，悬停、按下同行的淡底（`WideRail` 头注释）。
+/// 会话条上的一组（项目与进展、顶上那几颗钮、更早）：宽版是行容器（离栏边 `Chrome.gutter`，行让出 `Chrome.rowInset`）；
+/// 图标条上是一格宽的一列（`Chrome.stripGroup`），在条的中轴上。等你与推进中的纸同这一套（`SessionRail`）。
+struct RailGroup<Content: View>: View {
+    let wide: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: Chrome.cellGap) { content }.modifier(RailGroupModifier(wide: wide))
+    }
+}
+
+struct RailGroupModifier: ViewModifier {
+    let wide: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, wide ? Chrome.rowInset : Chrome.pad)
+            .frame(width: wide ? nil : Chrome.stripGroup)
+            .rowContainer(.rect(cornerRadius: Radius.block))
+            .padding(.horizontal, wide ? Chrome.gutter : 0)
+            .frame(maxWidth: .infinity)
+    }
+}
+
+/// 会话条上的图标钮：一格（`Chrome.control` 见方），不带玻璃，悬停、按下是这一格的淡底（`WideRail` 头注释）。
 struct RailIcon: View {
     let icon: Icon
     let help: LocalizedStringResource
     let action: () -> Void
     @Environment(\.palette) private var palette
-    @Environment(\.railColumn) private var column
-
-    #if os(macOS)
-    static let side: CGFloat = 30
-    /// 项目、进展那两行的高（同会话格）。
-    static let row = Spacing.sidebarRow
-    /// Mac 会话条最底下那一行的高。
-    static let toolsHeight: CGFloat = 44
-    #else
-    /// 手指点得到的最小一格（同系统 44）。
-    static let side: CGFloat = 44
-    static let row: CGFloat = 44
-    #endif
 
     var body: some View {
         Button(action: action) {
             Image(icon).font(Glyph.control).foregroundStyle(palette.ink2)
-                .frame(width: column ? nil : Self.side, height: Self.side)
-                .frame(maxWidth: column ? .infinity : nil)
+                .frame(width: Chrome.control, height: Chrome.control)
                 .contentShape(.rect)
         }
-        .buttonStyle(.row)
+        .buttonStyle(RowStyle(cell: true))
         .help(Text(help))
         .accessibilityLabel(Text(help))
     }
-}
-
-/// PROTOTYPE（proto/head-phone2）：图标条顶上那一组（侧栏钮、搜索）的收口。
-/// stack（甲）：图标条仍 80，两颗钮竖排、与项目、进展同一列同一种格。wide（乙）：同甲，图标条加宽到 98，红绿灯两侧留白相等。
-enum RailTop: String {
-    case now, stack, wide
-
-    static let current = DebugHooks.preset.railTop
-    /// 顶上这一组与下面的去处之间。
-    static let groupGap: CGFloat = 12
-}
-
-extension EnvironmentValues {
-    /// 图标钮排在会话条的一列里（PROTOTYPE `RailTop`）：格铺满列宽，同项目、进展两行。
-    @Entry var railColumn = false
 }
 
 /// 会话条底部的"更早"：已结束的会话（宽屏的进展页没有会话一段，已结束的只在这里与 ⌘K 搜索），默认折起、只写个数，组头同等你、推进中那一种。
@@ -212,21 +208,24 @@ struct RailEarlier: View {
         let total = earlier?.total ?? 0
         Group {
             if wide {
-                VStack(spacing: 2) {
-                    header(total).padding(.horizontal, SessionRail.rowInset)
+                VStack(spacing: Chrome.cellGap) {
+                    header(total).padding(.horizontal, Chrome.rowInset)
                     if open, let earlier {
                         ScrollView {
-                            LazyVStack(spacing: 2) {
+                            LazyVStack(spacing: Chrome.cellGap) {
                                 ForEach(earlier.items, id: \.sessionID) { row($0) }
                                 // 滑到这里才读下一页（同进展页会话段的分页）
                                 if earlier.hasMore { Spinner(.small).frame(maxWidth: .infinity).padding(8).task(id: earlier.items.count) { more() } }
                             }
-                            .padding(.horizontal, SessionRail.rowInset)
+                            // 行底伸出行框：滚动内容自己留出让出的那一截
+                            .padding(.horizontal, Chrome.rowInset)
                         }
                         .frame(maxHeight: Self.listHeight)
                         .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                .rowContainer(.rect(cornerRadius: Radius.block))
+                .padding(.horizontal, Chrome.gutter)
             } else {
                 Menu {
                     ForEach(earlier?.items ?? [], id: \.sessionID) { session in
@@ -242,20 +241,17 @@ struct RailEarlier: View {
                         Text(total, format: .number).foregroundStyle(palette.ink3).monospacedDigit()
                     }
                     .font(Typography.caption.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .frame(width: Chrome.control, height: Chrome.control)
                     .contentShape(.rect)
                 }
-                .menuStyle(.button).buttonStyle(.row).menuIndicator(.hidden)
+                .menuStyle(.button).buttonStyle(RowStyle(cell: true)).menuIndicator(.hidden)
                 .disabled(total == 0)
                 .accessibilityLabel(Text("更早"))
                 .accessibilityValue(Text(total, format: .number))
-                .padding(.horizontal, SessionRail.rowInset)
+                .modifier(RailGroupModifier(wide: false))
             }
         }
-        // 同会话格的行容器（`SessionRail.rowInset`）
-        .rowContainer(.rect(cornerRadius: Radius.block))
-        .padding(.horizontal, SessionRail.Form.wide.inset)
-        .padding(.top, 6)
+        .padding(.top, Chrome.groupGap)
         .observing(services.store, id: limit, into: $earlier, onError: workspace.fail) { [limit] store in
             let page = try store.piSessionPage(PiSessionQuery(scope: .ended, limit: limit))
             return Earlier(items: page.items.map(\.listed), total: page.total)
@@ -275,8 +271,8 @@ struct RailEarlier: View {
                 Image(open ? .collapse : .expand).font(Glyph.mark).foregroundStyle(palette.ink3)
             }
             .font(Typography.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, minHeight: 28)
+            .padding(.horizontal, Chrome.rowLead)
+            .frame(maxWidth: .infinity, minHeight: Chrome.groupHeader)
             .contentShape(.rect)
         }
         .buttonStyle(.row)
@@ -290,15 +286,15 @@ struct RailEarlier: View {
         Button { open(session) } label: {
             HStack(spacing: 8) {
                 Group { if let agent = session.agent.known { agent.mark.image } else { Image(.terminal) } }
-                    .font(Glyph.control).foregroundStyle(palette.ink3).frame(width: 18)
+                    .font(Glyph.control).foregroundStyle(palette.ink3).frame(width: Chrome.icon)
                     .accessibilityHidden(true)
                 Text(verbatim: session.title).font(Typography.body).foregroundStyle(palette.ink2).lineLimit(1)
                 Spacer(minLength: 4)
                 Text(session.stateSince, format: .relative(presentation: .named, unitsStyle: .abbreviated))
                     .font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
             }
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, minHeight: 30)
+            .padding(.horizontal, Chrome.rowLead)
+            .frame(maxWidth: .infinity, minHeight: Chrome.row)
             .contentShape(.rect)
         }
         .buttonStyle(RowStyle(selected: workspace.shownSessions.contains { $0.sessionID == session.sessionID }))
@@ -313,7 +309,7 @@ struct RailEarlier: View {
     }
 }
 
-/// 收起的会话条（80）上一行的名字：指针停在行上时浮在行的右边，整窗一层画（`railTips`），不挤排版、不被会话条裁掉；系统的提示要等一秒多，这里一停就出。
+/// 收起的图标条上一格的名字：指针停在格上时浮在格的右边，整窗一层画（`railTips`），不挤排版、不被会话条裁掉；系统的提示要等一秒多，这里一停就出。
 /// 指针停没停读的是行底给的 `rowHovered`（挂在 `RowStyle` 或 `row()` 的内容上），不另挂 `onHover`。`text` 为 nil 时不出（宽版有名字）。
 nonisolated struct RailTip: Equatable {
     let text: String
@@ -361,12 +357,10 @@ private struct RailTipLabel: View {
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, 12)
-            .frame(height: Self.height)
+            .frame(height: ControlMetrics.compactHeight)
             .paper(cornerRadius: Radius.block, lifted: true)
-            .offset(x: frame.maxX + RowMetrics.bleed + 6, y: frame.midY - Self.height / 2)
+            .offset(x: frame.maxX + Chrome.groupGap, y: frame.midY - ControlMetrics.compactHeight / 2)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
-
-    private static let height: CGFloat = 30
 }

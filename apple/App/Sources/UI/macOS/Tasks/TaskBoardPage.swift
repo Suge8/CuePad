@@ -12,19 +12,20 @@ struct TaskBoardPage: View {
     @Environment(\.headInset) private var inset
     @State private var board: TaskBoard?
 
-    private static let margin = Spacing.page - 8
+    /// 看板两侧页边：再加卡离列边的 `BoardCardMetrics.inset`，卡与列头的左沿正好在栏边 `Spacing.page` 上（同栏头、同别的页）。
+    static let margin = Spacing.page - BoardCardMetrics.inset
 
     /// 看板右边让出栏头右端那几颗钮："⋯"（`WideMetrics.boardMenu`，收起的 Cue 钮压在这一排时多让它那一截），同步要你关注时它左边再多一颗提醒（`SyncAlertSlot`，这一页不常驻）。
     private var trailing: CGFloat {
         let alert = SyncAlertSlot.needed(services) ? Spacing.toolbarGap + ControlMetrics.height : 0
-        return inset.trailing - MainColumn.edge + WideMetrics.boardMenu + alert
+        return inset.trailing - Spacing.page + WideMetrics.boardMenu + alert
     }
 
     var body: some View {
         let scope = workspace.scopedProject
         BoardColumns(board: (board ?? .empty).only(scope), adding: Bindable(workspace).addsTask, newTaskProject: scope ?? workspace.currentProject, margin: Self.margin)
             .padding(.trailing, trailing)
-            .environment(\.boardBand, WideMetrics.band)
+            .environment(\.boardBand, Chrome.band)
             .environment(\.laneAddsTask, { workspace.addsTask = true })
             // 换范围是整块换内容：列里按卡挪位的动画与列头数字滚动都不跟着走（跟着走时四列每帧重排、数字每帧在 CPU 上重画，掉帧半秒）。
             // `animation = nil` 挡不住里层的 `.animation(_:value:)`，只有 `disablesAnimations` 挡得住

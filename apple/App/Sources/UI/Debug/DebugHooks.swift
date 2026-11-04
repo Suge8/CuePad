@@ -62,8 +62,6 @@ enum DebugHooks {
         /// PROTOTYPE：方案 1 之上侧栏那一排的摆法（`-CuePadBar a|b`，`BarVariant`）。
         var bar: BarVariant?
         #endif
-        /// PROTOTYPE：宽屏图标条顶上那一组的收口（`-CuePadRailTop stack|wide`，`RailTop`）。
-        var railTop = RailTop.now
     }
 
     #if os(macOS)

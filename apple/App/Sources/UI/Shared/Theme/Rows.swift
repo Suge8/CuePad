@@ -8,9 +8,11 @@ import SwiftUI
 /// 形状只有一条规则：同心圆角矩形（系统的 `ConcentricRectangle`），四角与最近的行容器（`rowContainer`）同心——
 /// 挨着容器圆角的角是容器的圆角减去两者的间距，离容器角远的角取下限。容器只分两种：
 /// - 浮着的行（默认：面板、侧栏、Mac 的列表）：底比行左右各宽出 `bleed`（行里的字仍与本栏的字对齐，底向两边让出一截），下限是 `Radius.row`；
-///   行在容器里至少让出 `bleed`，底才不越出容器（会话条上的几组行都按 `SessionRail.rowInset` 让）；
+///   行在容器里至少让出 `bleed`，底才不越出容器（会话条上的几组行都按 `Chrome.rowInset` 让）；
 /// - 铺满的行（`rowContainer(_:flush: true)`，手机的分组纸，同系统的分组列表）：底就是行的框，下限是直角——中间的行是直角，首尾两行的外角跟着纸。
 ///   行要贴到纸边：纸的首尾要多留白时放进首尾两行里，不给纸加内边距（不然底与纸边之间留一道缝，圆角也不同心）。
+/// 只有图标的格（`Chrome`：收起的图标条上的格、会话条上的图标钮）是第三种：底就是这一格见方的框，不向两边让出（`RowStyle(cell: true)`、`row(selected:cell:)`），
+/// 四角同样与容器同心——行与格两种形状不混，图标钮不铺成横条。
 /// 底多大，能点的就多大。
 ///
 /// 没声明容器的行按系统给的容器（窗口）算，落在下限。只在亮着时才建这块底：滚动时没亮的行不跟着算同心。
@@ -38,9 +40,11 @@ enum RowMetrics {
 /// 按钮行（`RowMetrics` 的底）。
 struct RowStyle: ButtonStyle {
     var selected = false
+    /// 只有图标的一格（头注释）：底就是框，不向两边让出。
+    var cell = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.modifier(RowHighlight(selected: selected, pressed: configuration.isPressed))
+        configuration.label.modifier(RowHighlight(selected: selected, pressed: configuration.isPressed, cell: cell))
     }
 }
 
@@ -50,8 +54,8 @@ extension ButtonStyle where Self == RowStyle {
 
 extension View {
     /// 不是按钮的一行（`RowMetrics` 的底）：点按自己挂手势，行里另有按钮。
-    func row(selected: Bool = false) -> some View {
-        modifier(RowHighlight(selected: selected, pressed: false))
+    func row(selected: Bool = false, cell: Bool = false) -> some View {
+        modifier(RowHighlight(selected: selected, pressed: false, cell: cell))
     }
 
     /// 不在行里、按行的框另画的一块底（拖放的落点：大纲按行的位置摆的亮起、纸底新建的那一格）：形状与向两边的让出同行底，
@@ -117,15 +121,15 @@ private struct HoverReveal<Actions: View>: View {
 private struct RowFit {
     var flush = false
 
-    /// 底比行的框向外伸出多少（取负就是收回来）。
-    func bleed(_ sign: CGFloat = 1) -> EdgeInsets {
-        guard !flush else { return EdgeInsets() }
+    /// 底比行的框向外伸出多少（取负就是收回来）；格不伸出。
+    func bleed(_ sign: CGFloat = 1, cell: Bool = false) -> EdgeInsets {
+        guard !flush, !cell else { return EdgeInsets() }
         let side = RowMetrics.bleed * sign
         return EdgeInsets(top: 0, leading: side, bottom: 0, trailing: side)
     }
 
-    var shape: ConcentricRectangle {
-        ConcentricRectangle(corners: .concentric(minimum: .fixed(flush ? 0 : Radius.row)))
+    func shape(cell: Bool = false) -> ConcentricRectangle {
+        ConcentricRectangle(corners: .concentric(minimum: .fixed(flush && !cell ? 0 : Radius.row)))
     }
 }
 
@@ -134,13 +138,14 @@ private struct RowPlate<Plate: View>: ViewModifier {
     @Environment(\.rowFit) private var fit
 
     func body(content: Content) -> some View {
-        content.padding(fit.bleed()).background { plate(fit.shape) }.padding(fit.bleed(-1))
+        content.padding(fit.bleed()).background { plate(fit.shape()) }.padding(fit.bleed(-1))
     }
 }
 
 private struct RowHighlight: ViewModifier {
     let selected: Bool
     let pressed: Bool
+    let cell: Bool
     @State private var hovering = false
     @Environment(\.rowFit) private var fit
     @Environment(\.palette) private var palette
@@ -149,8 +154,8 @@ private struct RowHighlight: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.rowHovered, hovering)
-            .padding(fit.bleed())
-            .background { if let tint { fit.shape.fill(tint).transition(.opacity) } }
+            .padding(fit.bleed(cell: cell))
+            .background { if let tint { fit.shape(cell: cell).fill(tint).transition(.opacity) } }
             .contentShape(.rect)
             .onHover { hovering = $0 }
             #if os(iOS)
@@ -158,7 +163,7 @@ private struct RowHighlight: ViewModifier {
             #else
             .presetHover($hovering)
             #endif
-            .padding(fit.bleed(-1))
+            .padding(fit.bleed(-1, cell: cell))
             .animation(Self.fade, value: selected)
             .animation(Motion.fade, value: hovering)
             .animation(pressed ? nil : Self.fade, value: pressed)

@@ -47,6 +47,8 @@ enum TaskMetrics {
 enum BoardCardMetrics {
     static let inset: CGFloat = 8
     static let gap: CGFloat = 8
+    /// 卡里开头记号、项目小图形、标题、尾巴之间（`BoardCardLayout`）。
+    static let leadGap: CGFloat = 8
     /// 手机竖版看板（`boardRow`）：卡窄，内边距、记号与标题之间都收一点，标题小一档。
     static let rowPadding: CGFloat = 12
     static let rowGap: CGFloat = 6
@@ -68,23 +70,25 @@ enum BoardCardMetrics {
     static var waveGap: CGFloat { 2 * titlePadding - titleTop - WaveStrip.height - waveBottom }
 
     /// 卡标题留几行、那一截多高、上下留多少（三端的列与手机的行同一条，所在的列或行按卡宽与字号算一次交给卡，`boardTitle`）：
-    /// 卡里放字那一截（去掉左右内边距，连开头记号与项目小图形）宽得下 `oneLine` 个字排一行，否则两行——Mac 常用窗口与 iPad 横屏的列里
-    /// 一行写得下大多数标题，iPad 竖屏、窄窗口、iPhone 横屏的列里写不下；辅助字号下再多一行。高按行数留足（只有一行字的卡也一样高，
-    /// 字在里面竖直居中）。轻的两列（`TaskBoard.Column.light`）是矮卡：宽得下 `lightLine` 个字就排一行，上下只留 `lightPadding`。
+    /// 按标题那一截一行放得下几个字定（卡宽去掉左右内边距、开头的圈与项目小图形连同它们与标题之间的缝，`lead`）：放得下 `oneLine` 个字排一行，放得下 `twoLine` 个字排两行，
+    /// 再窄（列压到最窄附近：Mac 1280 宽、1512 宽开着 Cue 时待办那一列）排三行；辅助字号下再多一行。标题多是十到十二个字（大库里九到二十二个），
+    /// 一行八个字、两行一行五个字都会截成"改走统…"。高按行数留足（只有一行字的卡也一样高，字在里面竖直居中）。
+    /// 轻的两列（`TaskBoard.Column.light`）是矮卡：上下只留 `lightPadding`。
     /// 手机的行里卡总窄（`cardWidth` 给 nil）：两行，卡铺满行给的格，不另留高。
     static func title(_ column: TaskBoard.Column, cardWidth: CGFloat?, typeSize: DynamicTypeSize) -> BoardTitle {
         let more = typeSize.isAccessibilitySize ? 1 : 0
         guard let cardWidth else { return BoardTitle(lines: 2 + more) }
         let font = titleFont(typeSize)
-        let wide = cardWidth - 2 * TaskMetrics.cardPadding >= (column.light ? lightLine : oneLine) * font.pointSize
-        let lines = (wide ? 1 : 2) + more
+        let chars = (cardWidth - 2 * TaskMetrics.cardPadding - lead) / font.pointSize
+        let lines = (chars >= oneLine ? 1 : chars >= twoLine ? 2 : 3) + more
         return BoardTitle(
             lines: lines, height: max(titleRow, (font.lineHeight * CGFloat(lines)).rounded(.up)), padding: column.light ? lightPadding : titlePadding)
     }
 
-    private static let oneLine: CGFloat = 14
-    /// 开头的圈与项目小图形约占三个字宽：一行放得下八个字的标题。
-    private static let lightLine: CGFloat = 11
+    private static let oneLine: CGFloat = 12
+    private static let twoLine: CGFloat = 7
+    /// 圈、项目小图形与三道缝（圈与图形、图形与标题、标题与右边的空）。
+    private static var lead: CGFloat { TaskMetrics.cardLead + TaskMetrics.cardGlyph + 3 * leadGap }
 
     /// 列里卡标题的字（`TaskMetrics.lineFont`）：中文字宽等于字号。
     private static func titleFont(_ typeSize: DynamicTypeSize) -> (pointSize: CGFloat, lineHeight: CGFloat) {

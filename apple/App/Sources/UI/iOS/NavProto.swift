@@ -98,7 +98,7 @@ struct PhoneEarlierTile: View {
                 Color.clear.frame(height: 0)
             }
         }
-        .padding(.horizontal, SessionRail.Form.phone.inset)
+        .padding(.horizontal, SessionRail.phoneInset)
         .frame(width: SessionRail.Form.phone.width)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .observing(services.store, into: $total, onError: workspace.fail) { store in

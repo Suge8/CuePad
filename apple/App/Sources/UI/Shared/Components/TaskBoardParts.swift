@@ -19,6 +19,9 @@ struct BoardColumns: View {
     /// 列与列之间：列没有底，靠这段留白分开。
     private static let gap: CGFloat = 20
 
+    /// 四列都取最窄、连同列间与两侧页边要多宽（`WideMetrics` 按它算放不放得下看板）。
+    static func narrowest(margin: CGFloat) -> CGFloat { minColumn * 4 + gap * 3 + margin * 2 }
+
     @Environment(\.dynamicTypeSize) private var typeSize
     #if os(macOS)
     @Environment(\.boardBand) private var band
