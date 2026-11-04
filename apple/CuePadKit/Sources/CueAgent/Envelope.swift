@@ -83,10 +83,7 @@ public enum CueEnvelope {
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
     lines += input.waiting.map { "- " + question($0) }
 
-    if !input.related.isEmpty {
-      lines.append("他问的话在会话回复里查到的（按他的词查的，不全；要全用 memory recall）：")
-      lines += input.related.map { "- " + $0 }
-    }
+    lines += related(input.related)
 
     lines.append("醒来：" + wake(input.wake))
     if case .schedule = input.wake { lines += input.fired.map { "- " + fired($0, now: input.now) } }
@@ -116,6 +113,16 @@ public enum CueEnvelope {
       guard !cards.isEmpty else { return said }
       return ([said, "", "（他开口收起了等你里的 \(cards.count) 张；他这句与它无关就 tell 带 restore 放回：）"] + cards.map { "- " + question($0) }).joined(separator: "\n")
     }.joined(separator: "\n\n")
+  }
+
+  /// 交出去的话里他自己说的（不含他对卡的回答：回答里转述的提问不是他在问）：`CueTools.related` 按它查。
+  public static func asked(_ pending: [CueMessage]) -> String {
+    pending.filter { $0.author == .known(.you) }.map(\.text).joined(separator: "\n")
+  }
+
+  /// 他的话按词在会话回复里查到的那一节（`CueTools.related`）：信封里与插给在跑那一轮的话后面是同一种写法；没查到为空。
+  public static func related(_ found: [String]) -> [String] {
+    found.isEmpty ? [] : ["他问的话在会话回复里查到的（按他的词查的，不全；要全用 memory recall）："] + found.map { "- " + $0 }
   }
 
   /// 定时到点的一条：哪条定时（带序号）、本该几点（`CueFire`）与挂着的任务。

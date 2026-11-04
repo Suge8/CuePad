@@ -46,12 +46,14 @@ extension CueKeeper {
                 let ids = pending.map(\.id)
                 let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside(), files: store.files, imagesAsFiles: !shift.brain.seesImages)
                 let images = await images(in: pending, for: shift.brain)
+                // 他问以前的事：按他的话查会话回复，新开一轮写进信封，插给在跑的那一轮就接在话后面（同一种写法）
+                let related = try await CueTools(store: store).related(to: CueEnvelope.asked(pending))
                 if shift.turn != nil {
-                    guard await interject(said, images: images, delivering: ids) else { return nil }
+                    let text = related.isEmpty ? said : said + "\n\n" + CueEnvelope.related(related).joined(separator: "\n")
+                    guard await interject(text, images: images, delivering: ids) else { return nil }
                     try await markDelivered(ids)
                 } else {
-                    let asked = pending.filter { $0.author == .known(.you) }.map(\.text).joined(separator: "\n")
-                    _ = try await wakeUp(.message, said: said, asked: asked, images: images, delivering: ids)
+                    _ = try await wakeUp(.message, said: said, related: related, images: images, delivering: ids)
                 }
                 return nil
             }

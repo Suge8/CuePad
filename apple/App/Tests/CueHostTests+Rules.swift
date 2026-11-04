@@ -55,5 +55,27 @@ extension CueHostTests {
         #expect(answer.text.contains("推送前先问我"))
         await rig.stop()
     }
+
+    /// 一轮在跑时他问以前的事（Cue 还在派活时他顺口问依赖清单里的 Node）：插进去的那段跟信封一样，带上按他的话在会话回复里查到的（`CueTools.related`）。
+    @Test func 一轮在跑时他问以前的事_插进去的那段带上查到的会话回复() async throws {
+        let rig = try await Rig()
+        let project = try #require(try await rig.store.projects().first)
+        let task = try await rig.store.createTask("出依赖升级清单", in: project.id)
+        try await rig.store.linkCard(task.id, toSession: "remote-deps")
+        // 另一台 Mac 上那个会话早先交回的清单（这台没有它的会话文件，替那台 Mac 写下它读到的）
+        try await rig.store.writePiTranscript(PiTranscript(sessionID: "remote-deps", messages: [
+            PiChatMessage(sessionID: "remote-deps", entryID: "a1", seq: 1, role: .pi, text: "Node 20 已经结束维护，建议把 CI 与部署的 Node 升到 22。", at: .now),
+        ], recap: PiRecap()))
+        try await rig.say("请等我放行")
+        try await eventually("这一轮停在模型那里") { rig.model.holding }
+        let asked = "依赖清单里建议 Node 升到几？"
+        try await rig.say(asked)
+        let keeper = try #require(rig.services.cue.keeper)
+        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains(asked) } == true }
+        let interjected = try #require(keeper.turn?.round.sent.last { $0.contains(asked) })
+        #expect(interjected.contains("他问的话在会话回复里查到的") && interjected.contains("升到 22"), "\(interjected)")
+        rig.model.release()
+        await rig.stop()
+    }
 }
 #endif
