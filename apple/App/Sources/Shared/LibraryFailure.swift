@@ -29,7 +29,7 @@ struct LibraryFailure: Equatable, Sendable {
     var summary: String {
         if newerLibrary { return String(localized: "这份资料库是更新版本的 CuePad 建的，请先把 CuePad 更新到最新版。你的内容没有被改动。") }
         if olderLibrary { return String(localized: "这份资料库是更早版本的 CuePad 建的，这个版本不再升级它。你的内容没有被改动，请导出诊断，发给开发者。") }
-        return String(localized: "资料库没能打开，你的内容没有被改动。可以重试；还不行就导出诊断，发给开发者。")
+        return String(localized: "资料库没能打开，你的内容没有被改动。")
     }
 
     /// 复制给开发者的诊断：错误原文、库文件与结构版本、App 版本。
