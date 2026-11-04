@@ -136,7 +136,7 @@ struct PiConfigControls<Trailing: View>: View {
             }
             trailing
         }
-        // 字号到这一档为止（输入的正文照常放大）：再大最窄的手机上收完六步也放不下
+        // 字号到这一档为止（输入的正文与上下文气泡照常放大，气泡按窗口的字号画，`PanelHost.typeSize`）：再大最窄的手机上收完六步也放不下
         .dynamicTypeSize(...Self.largestType)
         .frame(maxWidth: .infinity, alignment: alignment)
         #if os(macOS)

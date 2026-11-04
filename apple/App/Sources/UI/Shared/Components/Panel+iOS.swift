@@ -56,6 +56,11 @@ final class PanelHost {
 
     private(set) var shown: Shown?
     @ObservationIgnored fileprivate weak var window: UIWindow?
+    /// 这一层（窗口、sheet）的字号：气泡内容按它画，不按呈现处——呈现处可能在一排封了字号的控件里（工具排），气泡里是能放大的说明。
+    @ObservationIgnored fileprivate var typeSize = DynamicTypeSize.large
+
+    /// 气泡里字号的上限，同 Cue 面板。
+    static let largestType = DynamicTypeSize.accessibility1
 
     func show(_ entry: Shown) { shown = entry }
 
@@ -89,9 +94,11 @@ extension View {
 
 private struct PanelHostModifier: ViewModifier {
     @State private var host = PanelHost()
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     func body(content: Content) -> some View {
         content
+            .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
             .overlay { BubbleLayer(shown: host.shown) }
             .background { WindowProbe(host: host) }
             .environment(host)
@@ -123,7 +130,7 @@ private struct WindowProbe: UIViewRepresentable {
     }
 }
 
-/// 一处 `panel(style: .bubble)`：开着时把内容交给这一层的 `PanelHost`，连同呈现处的环境（这一层可能在 Workspace、色板之外）。
+/// 一处 `panel(style: .bubble)`：开着时把内容交给这一层的 `PanelHost`，连同呈现处的环境（这一层可能在 Workspace、色板之外）；字号除外，按这一层的（`PanelHost.typeSize`）。
 private struct BubbleSlot<Panel: View>: ViewModifier {
     let key: AnyHashable?
     let source: BubbleSource
@@ -141,7 +148,11 @@ private struct BubbleSlot<Panel: View>: ViewModifier {
                 guard let key = mode.key else { return host.hide(token) }
                 host.show(PanelHost.Shown(
                     token: token, identity: [AnyHashable(token), key], source: mode.source, width: mode.width,
-                    content: AnyView(panel().environment(\.closePanel, close).environment(\.self, environment)), close: close))
+                    content: AnyView(
+                        panel().environment(\.closePanel, close)
+                            .environment(\.dynamicTypeSize, min(host.typeSize, PanelHost.largestType))
+                            .environment(\.self, environment)),
+                    close: close))
             }
             .onDisappear { host?.hide(token) }
     }
