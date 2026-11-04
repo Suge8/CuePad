@@ -5947,22 +5947,6 @@
         }
       }
     },
-    "会话当前状态还未确认，重新接上后再试" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The session’s current status is unconfirmed. Try again after it reconnects."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会话当前状态还未确认，重新接上后再试"
-          }
-        }
-      }
-    },
     "会话扩展正在升级" : {
       "localizations" : {
         "en" : {
@@ -22535,22 +22519,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条提问已经结束了"
-          }
-        }
-      }
-    },
-    "这轮的来源还未确认，先不打断" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This turn’s origin is unconfirmed. It won’t be interrupted."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这轮的来源还未确认，先不打断"
           }
         }
       }
