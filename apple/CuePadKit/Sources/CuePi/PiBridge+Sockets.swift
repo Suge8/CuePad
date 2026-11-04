@@ -29,7 +29,7 @@ extension PiBridge {
 
         func send(_ message: PiMessage, in _: PiSession.ID) async throws { _ = try await request { try PiWire.sendCommand(id: $0, message) } }
 
-        func command(_ line: String, in _: PiSession.ID) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
+        func command(_ line: String, deliveryID _: String?, in _: PiSession.ID) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
 
         func reload() async throws { _ = try await request { try PiWire.bare("reload", id: $0) } }
 

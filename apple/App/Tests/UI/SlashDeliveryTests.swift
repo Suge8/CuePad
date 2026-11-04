@@ -58,5 +58,35 @@ struct SlashDeliveryTests {
         #expect(ext.received.contains("command") == !said)
         await app.services.executor.beginStop()()
     }
+
+    /// 托管的 Claude Code 报的命令都是它自己执行的（自定义命令与技能也在其中）：它真做了才是已送达；没登录、模型不可用、额度用完时
+    /// 它取消这一条，回复框上方写它的原话，不报已送达，也不只写"尚未确认"。Claude Code 这一端的真实行为在 CuePiTests 的 `RealClaudeHostTests`。
+    @Test(arguments: [nil, "Not logged in · Please run /login"])
+    func 托管ClaudeCode执行了命令才算送达_拒收写它的原话(refusal: String?) async throws {
+        let app = TestApp(), store = app.services.store
+        defer { app.pi.stop(); app.services.cancelBackgroundWork() }
+        app.claude.refusal = refusal
+        app.claude.host("claude", state: .settled)
+        try await app.runtimeRecorder(on: TestApp.hostID).update(sessionID: "claude", state: .settled, agent: .claudeCode)
+        let session = try #require(try await store.allPiSessionStates().first { $0.sessionID == "claude" })
+        let review = PiSlashCommand(name: "review", summary: "Review the changes", source: .known(.builtin))
+
+        let box = app.services.settings.replyDraftBinding(for: session.id)
+        box.wrappedValue = ComposerDraft(text: "/review 登录页")
+        await Workspace(services: app.services).reply(to: session, commands: [review], from: box, accepting: .reply).value
+        let request = try #require(try await store.deliveryRequests(toSession: "claude").last)
+        #expect(request.mode == .known(.command))
+        try await app.services.executor.start()
+        let done = try await store.outcome(of: request)
+        let progress = MacDelivery.commandProgress([done], messages: [], at: app.services.speech)
+        if let refusal {
+            #expect(progress == .failed(command: "/review", failure: .reported(refusal)))
+            #expect(app.claude.commands.isEmpty)
+        } else {
+            #expect(Speech.trip(done, at: app.services.speech) == .delivered && progress == nil)
+            #expect(app.claude.commands == ["/review 登录页"])
+        }
+        await app.services.executor.beginStop()()
+    }
 }
 #endif

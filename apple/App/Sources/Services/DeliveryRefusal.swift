@@ -14,7 +14,7 @@ nonisolated enum DeliveryRefusal {
         switch error {
         case is SendError: true
         case PiBridgeError.unknownSession, PiBridgeError.unsupported,
-             PiBridgeError.unknownModel: true
+             PiBridgeError.unknownModel, PiBridgeError.refused: true
         case PiBridgeError.rejected(let reason):
             ["empty", "unknown_command", "missing_argument", "no_prompt", "stale_prompt", "bad_answer", "no_auth",
              "nothing_to_retry", "unconfirmed_turn", "user_turn"].contains(reason)

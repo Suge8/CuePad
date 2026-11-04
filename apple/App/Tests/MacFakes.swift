@@ -159,9 +159,11 @@ extension TestApp {
 }
 
 /// 撑不过 App 重启的那几家（Claude Code、Codex 这类靠管道连着 App 的）托管会话的替身：经桥的 `attach` 上桥（各家接入就是这样上桥的），
-/// 状态由测试改，命令都受理不做事。
+/// 状态由测试改，命令都受理不做事；`refusal` 有值时像没登录的 Claude Code 那样拒收说的话与命令，原话是它。
 final class PipedHostedAgent: AgentRuntime, SessionLink {
     private(set) var messages: [PiMessage] = []
+    private(set) var commands: [String] = []
+    var refusal: String?
     private let bridge: PiBridge
     private let agent: AgentKind
 
@@ -191,8 +193,14 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
 
     func set(_ id: PiSession.ID, _ state: PiWorkState) { bridge.update(id) { $0.state = state } }
 
-    func send(_ message: PiMessage, in id: PiSession.ID) async throws { messages.append(message) }
-    func command(_ line: String, in id: PiSession.ID) async throws {}
+    func send(_ message: PiMessage, in id: PiSession.ID) async throws {
+        if let refusal { throw PiBridgeError.refused(refusal) }
+        messages.append(message)
+    }
+    func command(_ line: String, deliveryID: String?, in id: PiSession.ID) async throws {
+        if let refusal { throw PiBridgeError.refused(refusal) }
+        commands.append(line)
+    }
     func end(_ id: PiSession.ID) async throws {}
     func abort(_ id: PiSession.ID) async throws {}
     func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {}

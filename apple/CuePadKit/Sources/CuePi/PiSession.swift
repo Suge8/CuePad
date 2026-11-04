@@ -218,6 +218,8 @@ public enum PiBridgeError: Error, Equatable {
     case rejected(String)
     /// 这个 Agent 的模型表里没有要换的模型（Pi 扩展回 `unknown_model`，其余几家的接入自己判断）
     case unknownModel(AgentKind)
+    /// Agent 明确没做这件事（托管的 Claude Code 没登录、模型不可用、额度用完时取消了这条命令或这句话）：原因是它自己的原话；确定没送达，可以重发
+    case refused(String)
     /// 当前扩展尚未就绪；不能据此推断调用方的复合操作此前没有副作用。
     case upgradingExtension
     /// 已进入接入的复合操作，不能再把其中的升级错误用作准备证明。
@@ -247,6 +249,7 @@ extension PiBridgeError: ShownError {
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
         case .unknownModel(let agent): "\(agent.name) 里没有这个模型"
+        case .refused(let reason): ShownText.verbatim(reason).value
         case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
         case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
         case .rejected("missing_argument"): "这个命令需要带上参数"

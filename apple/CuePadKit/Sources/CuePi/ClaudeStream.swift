@@ -20,6 +20,8 @@ final class ClaudeStream {
     private var openBlock: Int?
     /// 输出读完了（进程退出）；只调一次
     var onClose: (() -> Void)?
+    /// 主会话的模型开始回话（流里的 `message_start`）：请求被模型收下了。没登录、模型不可用、额度用完时没有它（`ClaudeDelivery`）
+    var onReply: (() -> Void)?
     private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: PiBridgeError.ackTimeout)
     private var inputClosed = false
 
@@ -117,6 +119,7 @@ final class ClaudeStream {
         switch event["type"]?.string {
         case "message_start":
             restart(event["message"]?["id"]?.string, since: .now)
+            onReply?()
         case "content_block_start" where event["content_block"]?["type"]?.string == "tool_use":
             restart(speech.message)
         case "content_block_start" where event["content_block"]?["type"]?.string == "text":

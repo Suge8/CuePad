@@ -26,7 +26,7 @@ extension OpenCodeRuntime {
     }
 
     /// `/compact` 不开轮，照它的缺省（下一个步骤边界压缩）；其余命令展开成这一轮的提示词，与 `send` 同一规则。
-    public func command(_ line: String, in id: PiSession.ID) async throws {
+    public func command(_ line: String, deliveryID _: String?, in id: PiSession.ID) async throws {
         let (connection, tracked, sessionID) = try live(id)
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let parts = line.dropFirst().split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)

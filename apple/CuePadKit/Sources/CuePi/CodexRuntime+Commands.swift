@@ -40,7 +40,7 @@ extension CodexRuntime {
         publish(session)
     }
 
-    public func command(_ line: String, in id: PiSession.ID) async throws {
+    public func command(_ line: String, deliveryID _: String?, in id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let parts = line.dropFirst().split(separator: " ", maxSplits: 1)
