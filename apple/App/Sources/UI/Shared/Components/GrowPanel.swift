@@ -8,10 +8,13 @@ import SwiftUI
 /// （无回弹弹簧 `Motion.nudge`，减弱动态效果时直接到终态）。
 /// 里面的高度只在开合时变：长大的动画里挨一下不带动画的改高，整块玻璃就有几帧不画。面板能长到的高不让键盘：键盘起落时里面不跟着重排
 /// （Cue 的名牌开面板前先收起键盘，按的是收完的高）。
-/// 只放在页自己画的那一排里（手机与 iPad 的根页、iPad 右侧的 Cue 面板，`HeaderHost`）。
+/// 只放在页自己画的那一排里（手机与 iPad 的根页、iPad 右侧的 Cue 面板与窄屏侧栏那一排，`HeaderHost`）。
+/// `edge`：收着的那块贴在给的宽的哪一边，长开后 `head` 也留在那一边——默认居中（名牌、进展页那一块）；窄屏侧栏右边的额度钮贴右（`.trailing`），
+/// 调用处给它从左页边到钮的右沿那一段，玻璃从钮往左、往下长，钮不挪。
 struct GrowPanel<Head: View, Panel: View>: View {
     @Binding var open: Bool
     let radius: CGFloat
+    var edge = HorizontalAlignment.center
     @ViewBuilder let head: Head
     @ViewBuilder let panel: Panel
     @Environment(\.headerGivesWay) private var givesWay
@@ -20,15 +23,15 @@ struct GrowPanel<Head: View, Panel: View>: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius)
-        return ZStack(alignment: .top) {
+        return ZStack(alignment: Alignment(horizontal: edge, vertical: .top)) {
             if open {
                 Color.clear.contentShape(.rect).ignoresSafeArea()
                     .onTapGesture { $open.grow(to: false, reduceMotion: reduceMotion) }
                     .transition(.identity)
                     .accessibilityHidden(true)
             }
-            GrownWidth(open: open) {
-                VStack(spacing: 0) {
+            GrownWidth(open: open, edge: edge) {
+                VStack(alignment: edge, spacing: 0) {
                     head
                         .environment(\.headerGrown, true)
                         .dynamicTypeSize(...FloatingHeaderLayout.largestType)
@@ -41,7 +44,7 @@ struct GrowPanel<Head: View, Panel: View>: View {
                 .opacity(givesWay && !open ? 0 : 1)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: open ? .infinity : nil, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: open ? .infinity : nil, alignment: Alignment(horizontal: edge, vertical: .top))
         .ignoresSafeArea(.keyboard)
         .sensoryFeedback(.impact(weight: .light), trigger: open)
         .onDisappear { open = false }
@@ -54,6 +57,7 @@ struct GrowPanel<Head: View, Panel: View>: View {
 /// 放不下（手机、iPad 排着侧栏的竖屏）就铺满这一排、整颗盖住两侧圆钮，不露半颗。收着时照原样排。按给的宽一次排定，不读几何。
 private struct GrownWidth: Layout {
     let open: Bool
+    let edge: HorizontalAlignment
     static let widest: CGFloat = 440
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -61,7 +65,11 @@ private struct GrownWidth: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews[0].place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top, proposal: offer(proposal))
+        if edge == .trailing {
+            subviews[0].place(at: CGPoint(x: bounds.maxX, y: bounds.minY), anchor: .topTrailing, proposal: offer(proposal))
+        } else {
+            subviews[0].place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top, proposal: offer(proposal))
+        }
     }
 
     private func offer(_ proposal: ProposedViewSize) -> ProposedViewSize {

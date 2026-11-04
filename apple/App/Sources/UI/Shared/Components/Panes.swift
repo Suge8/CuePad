@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// 一页里换看哪一段的分段：全 App 只有这一种（项目｜进展、进展页的看板｜会话、技能与规则的规则｜技能、搜索的灵感与任务｜会话）。
+/// 一页里换看哪一段的分段：全 App 只有这一种（窄屏侧栏的项目｜进展、技能与规则的规则｜技能、搜索的灵感与任务｜会话）。
 /// 选中态同全 App 一套（docs/ui.md「选中」）：中性淡底（`selection`）、墨字，其余次一档的墨，字一律半粗——选中不换字重，段宽不跟着跳；不用靛青。
 /// 形状只有一种：每段等宽（按最宽那一段）、同高的胶囊，整组要么全带字、要么全只画图标（`titles: false`，字给悬停与读屏），不在一排里一扁一圆。
+/// 放不下带字的时，调用处退成全只画图标（`ViewThatFits`），不截半个词。
 /// 放在哪见 docs/layout.md「栏头与页顶」；底由调用处给（栏头、页顶的玻璃，搜索范围自带淡底的槽）。
-/// 换段的动画在这里定一份：不回弹的弹簧，减弱动态效果时只交叉淡入淡出；点着的那一段再点不动。
+/// 选中块只有一块，换段时从上一段滑到这一段（不回弹的弹簧 `Motion.nudge`，中途再点从当前位置折回）；减弱动态效果时选中块直接到位，字色照样淡。
+/// 点着的那一段再点不动。
 struct PaneSegment<Value: Hashable>: View {
     struct Item {
         let value: Value
@@ -20,12 +22,13 @@ struct PaneSegment<Value: Hashable>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        EqualSegments {
+        EqualSegments(selected: items.firstIndex { $0.value == selection } ?? 0) {
+            Capsule().fill(palette.selection).allowsHitTesting(false).accessibilityHidden(true)
             ForEach(items, id: \.value) { item in
                 let on = selection == item.value
                 Button {
                     guard !on else { return }
-                    withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { select(item.value) }
+                    withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { select(item.value) }
                 } label: {
                     HStack(spacing: PaneMetrics.iconGap) {
                         Image(item.icon).font(PaneMetrics.iconFont)
@@ -34,7 +37,7 @@ struct PaneSegment<Value: Hashable>: View {
                     .padding(.horizontal, titles ? PaneMetrics.padding : 0)
                     .frame(minWidth: titles ? PaneMetrics.minWidth : PaneMetrics.square, maxWidth: .infinity, maxHeight: .infinity)
                     .foregroundStyle(on ? palette.ink : palette.ink2)
-                    .background(on ? palette.selection : .clear, in: .capsule)
+                    .animation(Motion.fade, value: on)
                     .contentShape(.capsule)
                 }
                 .buttonStyle(PressStyle())
@@ -46,22 +49,26 @@ struct PaneSegment<Value: Hashable>: View {
     }
 }
 
-/// 分段的排法：每段一样宽（最宽那一段的理想宽）、铺满给的高，按次序挨着排。不读几何，一次排定。
+/// 分段的排法：第一个子视图是选中块，排在第 `selected` 段的位置；其余是各段，每段一样宽（最宽那一段的理想宽）、铺满给的高，按次序挨着排。
+/// 选中块是同一个视图换位置，换段的动画里它从上一段滑过去。不读几何，一次排定。
 private struct EqualSegments: Layout {
+    let selected: Int
+
     private func width(_ subviews: Subviews) -> CGFloat {
-        subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+        subviews.dropFirst().map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let height = proposal.height ?? subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
-        return CGSize(width: width(subviews) * CGFloat(subviews.count), height: height)
+        let height = proposal.height ?? subviews.dropFirst().map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
+        return CGSize(width: width(subviews) * CGFloat(subviews.count - 1), height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let w = width(subviews)
-        for (index, subview) in subviews.enumerated() {
-            subview.place(at: CGPoint(x: bounds.minX + w * CGFloat(index), y: bounds.minY), anchor: .topLeading,
-                          proposal: ProposedViewSize(width: w, height: bounds.height))
+        let size = ProposedViewSize(width: w, height: bounds.height)
+        subviews[0].place(at: CGPoint(x: bounds.minX + w * CGFloat(selected), y: bounds.minY), anchor: .topLeading, proposal: size)
+        for (index, subview) in subviews.dropFirst().enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + w * CGFloat(index), y: bounds.minY), anchor: .topLeading, proposal: size)
         }
     }
 }
@@ -85,16 +92,6 @@ enum PaneMetrics {
     static let minWidth: CGFloat = 76
     static let square: CGFloat = 38
     #endif
-}
-
-/// 进展页的两段：看板｜会话，看哪一段只有 `Workspace.progressPane` 一份。窄屏在侧栏那一排的玻璃里（`NarrowSidebarBar`）；宽屏的进展页只有看板，已结束的会话在会话条的"更早"。
-struct ProgressPanes: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        PaneSegment(items: [.init(value: .board, title: "看板", icon: .task), .init(value: .sessions, title: "会话", icon: .session)],
-                    selection: workspace.progressPane, titles: false) { workspace.progressPane = $0 }
-    }
 }
 
 /// 搜索的两个范围：灵感与任务、会话（一个搜索词两边共用，换范围不清空）。Mac 在 ⌘K 面板搜索框那一行的右边，手机是结果最上面那排胶囊的头一块。

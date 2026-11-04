@@ -11,7 +11,7 @@ enum ScrollAnchor {
 /// - `-CuePadDemo YES`：库为空（只有默认项目）时写入演示数据；
 /// - `-CuePadSeed perf`（仅 Mac）：库为空（只有默认项目）时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`；
 /// - `-CuePadProject <名称>`：打开该项目；
-/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张散放的灵感进编辑页）、task（打开本项目第一条任务的气泡，没有落点、在上方居中；给了 `-CuePadTask <标题开头>` 是那一条）、search、progress（进展页的看板；配 -CuePadDemo 时写入演示会话与 Cue 的等你，推进中的带会话状态）、sessions（进展的看板，宽屏没有会话段；给了 -CuePadProject 先把项目范围设成它）、shelf（项目列表）、agentsetup（首次打开的接入面板：接入 Agent 并启用 Cue；配 `-CuePadAgentHome <空目录>` 看一家都没装时的安装与登录（点安装真跑官方脚本，装进那个目录），配 `-CuePadSync newmac` 看换新 Mac、还没和 iCloud 对过时 Cue 那一行在等）、connected（几家 Agent 接进隔离目录、打开进展页：看接入后的会话与新会话里选 Agent；配 `-CuePadFolder <路径>` 再建一个绑着这个文件夹的项目，给隔离实例里真跑 Cue 派活用）、select（批量选择本页前三条灵感）、wallgap（配 -CuePadProject Flow：新记两条再删最早那条，看删卡后卡片墙的排布）、trash、archive、settings（拍真的设置窗口，主窗口收起；`-CuePadSettingsPane general|agents` 翻到那一页）、menubar、cuebar（"对 Cue 说"的输入条）、projectform、library 与 instruction、skill、duplicate（技能与规则，及直接打开的三份文件页，同 iOS，见 `DebugScene+iOS.swift` 头注释）；
+/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张散放的灵感进编辑页）、task（打开本项目第一条任务的气泡，没有落点、在上方居中；给了 `-CuePadTask <标题开头>` 是那一条）、search、progress（进展页的看板；配 -CuePadDemo 时写入演示会话与 Cue 的等你，推进中的带会话状态）、sessions（进展的看板，会话在会话条上；给了 -CuePadProject 先把项目范围设成它）、shelf（项目列表）、agentsetup（首次打开的接入面板：接入 Agent 并启用 Cue；配 `-CuePadAgentHome <空目录>` 看一家都没装时的安装与登录（点安装真跑官方脚本，装进那个目录），配 `-CuePadSync newmac` 看换新 Mac、还没和 iCloud 对过时 Cue 那一行在等）、connected（几家 Agent 接进隔离目录、打开进展页：看接入后的会话与新会话里选 Agent；配 `-CuePadFolder <路径>` 再建一个绑着这个文件夹的项目，给隔离实例里真跑 Cue 派活用）、select（批量选择本页前三条灵感）、wallgap（配 -CuePadProject Flow：新记两条再删最早那条，看删卡后卡片墙的排布）、trash、archive、settings（拍真的设置窗口，主窗口收起；`-CuePadSettingsPane general|agents` 翻到那一页）、menubar、cuebar（"对 Cue 说"的输入条）、projectform、library 与 instruction、skill、duplicate（技能与规则，及直接打开的三份文件页，同 iOS，见 `DebugScene+iOS.swift` 头注释）；
 ///   cue 打开 Cue 页、cuememory 再打开"Cue 记得什么"、cueschedules 再打开定时（`-CuePadScheduleOpen YES` 时新定时的几点展开；配 task 画面时任务气泡里的定时展开改）、cuerun 再打开"运行情况"（仅 Mac；演示数据里 Cue 这时运行在这台，见 `DebugScene+Cue.swift`）；
 ///   agent 打开 Agent 整页列表，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`；notes 里你的话带一张图、relay 里发出还没进对话的话带一张图，核对对话里的图片；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；
 ///   iOS 见 `DebugScene+iOS.swift`；
@@ -29,7 +29,7 @@ enum ScrollAnchor {
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/perf.md）；
 /// - `-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadQuiet YES`（iOS）：不弹演示会话的前台横幅；
 ///   `-CuePadCueDraft <文字>`（配 cue 画面）：Cue 的输入框里先有这句草稿；
-/// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；`-CuePadLargestType YES` 同理按最大的辅助字号画；
+/// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；`-CuePadLargestType YES` 同理按最大的辅助字号画，`-CuePadHighContrast YES` 按增强对比度画；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；`-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘；`-CuePadLandscape YES`（iPhone）：转成横屏；`-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类，窄屏容器 `NarrowRoot`，`debugCompact`），不给时 iPad 的调试实例起来先铺满屏（窗口模式下系统记着别的会话缩过的窗口，`fillScreenOnPad`）；
 /// - `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的醒来记录与经过一开始就全部展开（`RoundProcess`、`PiSubagentList`、`CueNoteLog`、`CueTrace`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
@@ -111,6 +111,7 @@ enum DebugScene {
         preset.cueFocus = defaults.bool(forKey: "CuePadCueFocus")
         preset.reducesMotion = defaults.bool(forKey: "CuePadReduceMotion")
         preset.largestType = defaults.bool(forKey: "CuePadLargestType")
+        preset.highContrast = defaults.bool(forKey: "CuePadHighContrast")
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         preset.cueNow = defaults.string(forKey: "CuePadCueNow").flatMap { CueActivitySamples.named($0) ?? CueNowSamples.all[$0] }
@@ -123,11 +124,10 @@ enum DebugScene {
         if defaults.string(forKey: "CuePadLibraryTab") == "skills" { preset.libraryPane = .skills }
         #if os(iOS)
         preset.alertStatus = alertStatus
-        if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
+        // sessions、cuerows 画面看会话行：手机的会话列表在搜索页的会话一栏
+        if defaults.string(forKey: "CuePadSearchScope") == "sessions" || scene.map(["sessions", "cuerows"].contains) == true { preset.searchScope = .sessions }
         preset.cuePanelOpen = defaults.bool(forKey: "CuePadCuePanel")
         preset.quietAlerts = defaults.bool(forKey: "CuePadQuiet")
-        preset.nav = defaults.string(forKey: "CuePadNav").flatMap(NavVariant.init(rawValue:)) ?? .now
-        preset.bar = defaults.string(forKey: "CuePadBar").flatMap(BarVariant.init(rawValue:))
         #endif
         return preset
     }

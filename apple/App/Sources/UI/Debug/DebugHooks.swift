@@ -31,6 +31,8 @@ enum DebugHooks {
         var reducesMotion = false
         /// 整个窗口按最大的辅助字号画（`-CuePadLargestType`，`PaletteProvider`）：同上，不碰系统设置。
         var largestType = false
+        /// 整个窗口按"增强对比度"画（`-CuePadHighContrast`，`PaletteProvider`）：同上，不碰系统设置。
+        var highContrast = false
         #if os(macOS)
         /// 窗口里这几点（左上为原点，同 `-CuePadClick`）上的按钮、行与卡一出现就画成指针停着的样子（`-CuePadHover x,y[;x,y…]`，`presetHover`）：
         /// 后台截图里指针进不来，合成的鼠标移动事件也不触发不在前台的应用的悬停。一张图里看几处时给几个点。
@@ -57,10 +59,6 @@ enum DebugHooks {
         var cuePanelOpen = false
         /// 不弹演示会话的前台横幅（`-CuePadQuiet YES`）。
         var quietAlerts = false
-        /// PROTOTYPE：窄屏侧栏进展段的收口方案（`-CuePadNav one|two`，`NavVariant`）。
-        var nav = NavVariant.now
-        /// PROTOTYPE：方案 1 之上侧栏那一排的摆法（`-CuePadBar a|b`，`BarVariant`）。
-        var bar: BarVariant?
         #endif
     }
 

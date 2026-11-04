@@ -2,34 +2,6 @@
 import SwiftUI
 import UIKit
 
-/// 搜索入口（窄屏侧栏项目段那一排）：长相同搜索框（`SearchCapsule`），点它把搜索页推在当前页上，那里的搜索框接着拿到键盘（同 ⌘K）。
-/// 窄到放不下整句时只写"搜索"，不截成半句。
-struct SearchEntry: View {
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button(action: workspace.openSearch) {
-            HStack(spacing: 6) {
-                Image(.search).imageScale(.medium).foregroundStyle(palette.ink3)
-                ViewThatFits(in: .horizontal) {
-                    Text(SearchScreen.prompt)
-                    Text("搜索")
-                }
-                .foregroundStyle(palette.ink3)
-                .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14)
-            .headerPiece(interactive: true)
-        }
-        .buttonStyle(PressStyle(.wide))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("搜索")
-        .accessibilityAddTraits([.isButton, .isSearchField])
-    }
-}
-
 /// 搜索页的搜索框：页顶那一排中间的一块写字玻璃（`headerPiece`），有字时右端是系统的清除钮。
 /// `focusRequests` 每变一次（进入搜索页、再按 ⌘K）聚焦一次。
 struct SearchCapsule: View {

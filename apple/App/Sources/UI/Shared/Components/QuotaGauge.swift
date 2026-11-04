@@ -280,8 +280,6 @@ struct QuotaRings: View {
     let height: CGFloat
     var row = false
     var cell = false
-    /// PROTOTYPE（手机项目段末尾那一组的一行）：`row` 时"额度"写成墨色、让出同组各行图标那一格，同"归档""设置"对齐。
-    var rowInk = false
     let action: () -> Void
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -310,7 +308,7 @@ struct QuotaRings: View {
         let rings = quotas.compactMap { quota in quota.binding(at: now).map { (id: quota.id, provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
         return HStack(spacing: 6) {
             if row {
-                Text("额度").foregroundStyle(rowInk ? palette.ink : palette.ink3).padding(.leading, rowInk ? 31 : 0)
+                Text("额度").foregroundStyle(palette.ink3)
                 Spacer(minLength: 0)
             } else if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
             ForEach(rings, id: \.id) { ModelBadge(mark: PiProvider(id: $0.provider).mark, binding: $0.window) }

@@ -15,11 +15,13 @@ nonisolated enum Route: Hashable {
     case libraryFile(LibraryFile)
     case settings
     case conflicts
-    /// 进展：跨项目的看板与会话两段（`Workspace.progressPane`；窄屏侧栏与宽屏主区的“进展”）。
+    /// 进展：跨项目的看板（窄屏侧栏与宽屏主区的“进展”）。
     case progress
     /// Cue 页：和总控 Agent Cue 的对话（`CuePage`）。
     case cue
     case search
+    /// 更早：已结束的会话，按结束时间分段（窄屏从 Cue 页会话条底下"更早"那一格推入，`EarlierScreen`；宽屏在会话条里原地展开，`RailEarlier`）。
+    case earlier
     case card(UUID)
     /// 一个 Pi 会话的整页（近况与回复）。
     case session(SessionRoute)

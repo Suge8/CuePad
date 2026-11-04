@@ -5,15 +5,12 @@ import SwiftUI
 /// Cue 为根的唯一导航栈；侧栏只是根上的覆盖层。推入页和系统返回都绑定 Workspace.path，不另存返回来源。
 struct NarrowRoot: View {
     @Environment(Workspace.self) private var workspace
-    @Bindable private var bus = NavProtoBus.shared
 
     var body: some View {
         NavigationStack(path: Binding(get: { workspace.path }, set: workspace.setNarrowPath)) {
             NarrowHome()
                 .toolbarVisibility(.hidden, for: .navigationBar)
                 .navigationDestination(for: Route.self) { RouteView(route: $0) }
-                // PROTOTYPE one："更早"那一页
-                .navigationDestination(isPresented: $bus.earlier) { EarlierScreen() }
         }
     }
 }
@@ -46,7 +43,7 @@ private struct NarrowHome: View {
     }
 }
 
-/// Cue 页与左边常驻的会话条；名牌长开 Cue 的面板时会话条让开（面板盖住这一屏，`CuePanelOpen`）。
+/// Cue 页与左边常驻的会话条（最底下是"更早"那一格）；名牌长开 Cue 的面板时会话条让开（面板盖住这一屏，`CuePanelOpen`）。
 private struct NarrowCue: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -61,8 +58,8 @@ private struct NarrowCue: View {
                 SessionRail(data: workspace.services.liveSessions.rail, form: .phone, pulse: workspace.pulse) { session, _ in
                     workspace.openSession(session.id, sessionID: session.sessionID)
                 }
-                // PROTOTYPE one：会话条底下"更早"一格
-                .safeAreaInset(edge: .bottom, spacing: 8) { if NavVariant.current == .one { PhoneEarlierTile() } }
+                // 已结束的会话：会话条最底下一格（`EarlierTile`）
+                .safeAreaInset(edge: .bottom, spacing: 8) { EarlierTile() }
                 .padding(.top, CueHeader.height + Bars.contentGap)
                 .padding(.bottom, ComposerMetrics.slot + 16)
                 .opacity(panelOpen ? 0 : 1)

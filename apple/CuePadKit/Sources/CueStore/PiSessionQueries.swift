@@ -98,7 +98,7 @@ extension CueStore {
     FROM cards WHERE piSessionID IS NOT NULL AND todoAt IS NOT NULL AND \(cardActive)
     """
 
-  /// 绑在置顶任务上的会话：会话段的置顶在最前（`PiSessionQuery.pinned`）。
+  /// 绑在置顶任务上的会话：会话列表的置顶在最前（`PiSessionQuery.pinned`）。
   private static let pinnedSessions = "SELECT sessionID FROM (\(sessionTaskRows)) WHERE pinned = 1"
 
   /// 这些会话绑着的顶层任务（`sessionTaskRows`），按 Pi 的会话 id；绑着几件时置顶的那件在先。

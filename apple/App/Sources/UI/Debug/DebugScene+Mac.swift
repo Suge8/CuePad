@@ -51,7 +51,7 @@ extension DebugScene {
             // 没给 -CuePadTask 时是本项目第一条没完成的顶层任务
             await openTask(workspace) { $0.parentID == nil && $0.projectID == workspace.currentProject }
         case "sessions":
-            // 宽屏没有会话段：进展看板（给了 -CuePadProject 先把项目范围设成它，同 iOS）
+            // 宽屏的会话在会话条上：进展看板（给了 -CuePadProject 先把项目范围设成它，同 iOS）
             await seedDemo(workspace.services)
             workspace.projectScope = opened
             workspace.show(.progress)

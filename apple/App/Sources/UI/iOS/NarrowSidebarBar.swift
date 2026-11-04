@@ -1,53 +1,55 @@
 #if os(iOS)
+import CueStore
 import SwiftUI
 
-/// 窄屏侧栏顶上那一排（侧栏只有这一排，项目、进展两段不再自己画页顶，`HeaderHost.sidebar`）：左边项目｜进展，右边回 Cue 的头像，
-/// 中间是这一段的工具——项目段一条搜索入口（`SearchEntry`）与新建项目，进展段是看板｜会话与额度环那一块（`ProgressHeader`，项目范围收在它长出的面板里）。
-/// 两头先排定，中间铺在两头之间；放不下全宽的项目｜进展时它只画图标（`BarRow`，按给的宽一次排定，不读几何）。
-/// 额度面板长开时那一块铺满整排、盖住两头。提示横幅盖在这一排上时左边与中间让开，Cue 头像留着（`NoticeBanner`）。
+/// 窄屏侧栏顶上那一排（侧栏只有这一排，项目、进展两段不再自己画页顶，`HeaderHost.sidebar`）：正中是项目｜进展，两侧各两颗只画图标的圆钮、贴页边——
+/// 左边搜索与这一段的低频操作（项目段新建项目，进展段项目范围），右边额度与回 Cue 的头像。换段时只有选中块滑过去、左边第二颗换成这一段的那一颗，
+/// 其余不动。圆钮的名字在读屏与悬停提示里。
+/// 项目｜进展放不下带字的（英文、iPad 窄窗口、大字）时整组只画图标，不截字（`PaneSegment`）。
+/// 额度明细从额度钮原地长出（`GrowPanel` 贴右）：玻璃从钮往左往下长到左页边，钮与 Cue 头像不挪；长开时左边两颗与项目｜进展让开。
+/// 提示横幅盖在这一排上（从左页边到 Cue 头像前，`NoticeBanner`）时左边、正中与额度钮让开，Cue 头像留着。
 struct NarrowSidebarBar: View {
     @Environment(Workspace.self) private var workspace
     @State private var quotaOpen = DebugHooks.preset.quotaOpen
-    /// 搜索入口最窄多宽：放得下放大镜与"搜索"两个字；再窄先让项目｜进展只画图标。
-    @ScaledMetric(relativeTo: .body) private var searchWidth: CGFloat = 92
 
     var body: some View {
-        // PROTOTYPE：方案 1 之上的两种摆法（`CenteredBar`）
-        if let bar = BarVariant.current { CenteredBar(variant: bar) } else { row }
-    }
-
-    @ViewBuilder private var row: some View {
-        let open = quotaOpen && workspace.navigationPane == .progress && NavVariant.current == .now
         let givesWay = workspace.notice != nil
-        BarRow(open: open) {
-            Group {
-                if NavVariant.current == .two {
-                    NavTriple()
-                } else {
-                    ViewThatFits(in: .horizontal) {
-                        panes(titles: true)
-                        panes(titles: false)
-                    }
+        SidebarRow(open: quotaOpen) {
+            HStack(spacing: SidebarRow.gap) {
+                circle("搜索", icon: .search) { workspace.openSearch() }
+                switch workspace.navigationPane {
+                case .projects: circle("新建项目", icon: .newProject) { workspace.projectForm = .init() }
+                case .progress: ScopeButton()
                 }
             }
-            .modifier(GiveWay(hidden: givesWay))
-            cue
-            tools.modifier(GiveWay(hidden: givesWay && !open))
+            .modifier(Circles())
+            .modifier(GiveWay(hidden: givesWay || quotaOpen))
+            ViewThatFits(in: .horizontal) {
+                panes(titles: true)
+                panes(titles: false)
+            }
+            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+            .modifier(GiveWay(hidden: givesWay || quotaOpen))
+            QuotaButton(open: $quotaOpen)
+            cue.modifier(Circles())
         }
         .padding(.horizontal, FloatingHeaderLayout.margin)
         .environment(\.headerGivesWay, givesWay)
         .animation(NoticeBanner.giveWay(workspace.notice), value: givesWay)
     }
 
+    private func circle(_ title: LocalizedStringResource, icon: Icon, action: @escaping () -> Void) -> some View {
+        Button(title, icon: icon, action: action).help(Text(title))
+    }
+
     private func panes(titles: Bool) -> some View {
         PaneSegment(
             items: [.init(value: NavigationPane.projects, title: "项目", icon: .projects), .init(value: .progress, title: "进展", icon: .task)],
             selection: workspace.navigationPane, titles: titles, select: workspace.selectPane)
-            .fixedSize()
             .frame(height: FloatingHeaderLayout.height - PaneMetrics.inset * 2)
             .padding(PaneMetrics.inset)
             .glass(in: .capsule, interactive: true)
-            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+            .fixedSize()
     }
 
     private var cue: some View {
@@ -56,35 +58,93 @@ struct NarrowSidebarBar: View {
                 .relaySpot(cue: .entry)
                 .frame(width: FloatingHeaderLayout.height, height: FloatingHeaderLayout.height)
         }
-        .buttonStyle(ControlButtonStyle(kind: .circular))
         .accessibilityLabel(workspace.cue.name)
         .accessibilityIdentifier("narrow-cue")
     }
+}
 
-    @ViewBuilder private var tools: some View {
-        switch workspace.navigationPane {
-        case .projects:
-            HStack(spacing: BarRow.gap) {
-                SearchEntry().frame(minWidth: searchWidth)
-                NewProjectButton()
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(ControlButtonStyle(kind: .circular))
-                    .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+/// 项目范围（`Workspace.projectScope`）的圆钮：看全部时是筛选图标，选了是那个项目的图标；点开是项目菜单（同 `ProjectScope` 那一份）。
+private struct ScopeButton: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        @Bindable var workspace = workspace
+        let current = workspace.catalog?.project(workspace.scopedProject)
+        Menu {
+            Picker("项目范围", selection: $workspace.projectScope) {
+                Label("全部项目", icon: .all).tag(UUID?.none)
+                ForEach(workspace.catalog?.projects ?? []) { project in
+                    Label { Text(project.shownName) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
+                }
             }
-        case .progress:
-            // 收着时只占自己的宽，在两头之间居中；长开时铺满给的整排
-            if NavVariant.current == .now {
-                // 收着时只占自己的宽，在两头之间居中；长开时铺满给的整排
-                ProgressHeader(open: $quotaOpen, scopeInPanel: true).fixedSize(horizontal: !quotaOpen, vertical: false)
-            } else {
-                // PROTOTYPE one、two：中间只放项目范围，额度去了项目段末尾那一组（`ShelfQuota`）
-                ScopePiece()
+        } label: {
+            Group {
+                if let current { ProjectGlyph(project: current, size: Self.glyph) } else { Image(.filter) }
             }
         }
+        .menuStyle(.button)
+        .help(Text("项目范围"))
+        .accessibilityLabel(Text("项目范围"))
+        .accessibilityValue(Text(current?.shownName ?? String(localized: "全部项目")))
+        .sensoryFeedback(.selection, trigger: current?.id)
+    }
+
+    private static let glyph: CGFloat = 15
+}
+
+/// 额度钮：一颗环，是余量最紧的那个账号（还没有额度记录时写"额度"二字）；点它从这颗钮长出明细（`QuotaDetail`）。
+/// 读屏念全部账号的读数（同 `QuotaRings`）。
+private struct QuotaButton: View {
+    @Binding var open: Bool
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let quotas = services.accountQuotas.items
+        GrowPanel(open: $open, radius: FloatingHeaderLayout.height / 2, edge: .trailing) {
+            Button { $open.grow(reduceMotion: reduceMotion) } label: {
+                Moments(next: quotas.nextReset(after:)) { now in ring(quotas, at: now) }
+                    .frame(width: FloatingHeaderLayout.height, height: FloatingHeaderLayout.height)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(PressStyle())
+            .help(Text("额度"))
+            .accessibilityExpanded(open)
+            .accessibilityHint(open ? "收起" : quotas.isEmpty ? "看怎么才会有额度" : "看每个窗口还剩多少、多久后重置")
+        } panel: {
+            QuotaDetail().padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 18)
+        }
+        .refreshesQuota()
+    }
+
+    private func ring(_ quotas: [AccountQuota], at now: Date) -> some View {
+        let rings = quotas.compactMap { quota in quota.binding(at: now).map { (provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
+        return Group {
+            if let tightest = rings.min(by: { $0.window.left < $1.window.left }) {
+                ModelBadge(mark: PiProvider(id: tightest.provider).mark, binding: tightest.window)
+            } else {
+                Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize()
+            }
+        }
+        .foregroundStyle(palette.ink2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("额度")
+        .accessibilityValue(Dotted(rings.map { String(localized: "\(PiProvider(id: $0.provider).account) \($0.window.name)剩 \($0.window.percent)") }).spoken)
     }
 }
 
-/// 提示横幅盖在这一排上：淡到透明、不可点、读屏跳过（同页顶那一排的让开）。
+/// 两侧的圆钮：只画图标、玻璃圆钮，字号封顶同页顶那一排。额度钮的玻璃是它长出的那块（`GrowPanel`），不经这里。
+private struct Circles: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .labelStyle(.iconOnly)
+            .buttonStyle(ControlButtonStyle(kind: .circular))
+            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+    }
+}
+
+/// 让开（提示横幅盖上来、额度明细长开）：淡到透明、不可点、读屏跳过（同页顶那一排的让开）。
 private struct GiveWay: ViewModifier {
     let hidden: Bool
 
@@ -93,48 +153,38 @@ private struct GiveWay: ViewModifier {
     }
 }
 
-/// 一排三块：左、右排在两头，中间铺在两头之间、各隔 `gap`。左边先让出中间最窄要的宽，再按剩下的给（`ViewThatFits` 在全宽与只画图标之间挑）；
-/// `open` 时中间铺满整排、画在两头上面，高是它长到的高（面板往下长）。子视图依次是左、右、中。
-private struct BarRow: Layout {
+/// 这一排的排法，子视图依次是左边那组、正中的分段、额度、Cue 头像：
+/// - 左边那组贴左页边，Cue 头像贴右页边，额度在 Cue 头像左边隔 `gap`；两侧一样宽（两颗圆钮加一道缝），分段在两侧之间、对着整排的正中。
+/// - 额度给的是从左页边到它右沿那一段（`GrowPanel` 贴右）：收着时只占右边一颗钮，长开时往左铺满那一段、往下长，这一排的高是它长到的高。
+/// 按给的宽一次排定，不读几何。
+private struct SidebarRow: Layout {
     let open: Bool
-    /// 比页顶那一排的 8 窄一点：iPhone 17（402 宽）上项目｜进展、看板｜会话与两颗额度环、Cue 头像正好排下带字的项目｜进展。
     static let gap: CGFloat = 6
 
-    private struct Frames {
-        var size: CGSize
-        var leading: ProposedViewSize
-        var middle: CGRect
-    }
-
-    private func frames(_ proposal: ProposedViewSize, _ subviews: Subviews) -> Frames {
-        let row = FloatingHeaderLayout.height
-        let trailing = subviews[1].sizeThatFits(.unspecified).width
-        let width = proposal.width
-            ?? subviews[0].sizeThatFits(.unspecified).width + trailing + subviews[2].sizeThatFits(.unspecified).width + 2 * Self.gap
-        if open {
-            let middle = subviews[2].sizeThatFits(ProposedViewSize(width: width, height: proposal.height))
-            return Frames(size: CGSize(width: width, height: max(row, middle.height)), leading: ProposedViewSize(width: width, height: row),
-                          middle: CGRect(x: 0, y: 0, width: width, height: proposal.height ?? middle.height))
-        }
-        let narrowest = subviews[2].sizeThatFits(ProposedViewSize(width: 0, height: row)).width
-        let leading = ProposedViewSize(width: max(width - trailing - narrowest - 2 * Self.gap, 0), height: row)
-        let lead = subviews[0].sizeThatFits(leading).width
-        let x = lead + Self.gap
-        return Frames(size: CGSize(width: width, height: row), leading: leading,
-                      middle: CGRect(x: x, y: 0, width: max(width - x - trailing - Self.gap, 0), height: row))
-    }
+    private var row: CGFloat { FloatingHeaderLayout.height }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        frames(proposal, subviews).size
+        let width = proposal.width ?? subviews.map { $0.sizeThatFits(.unspecified).width }.reduce(0, +) + 3 * Self.gap
+        guard open else { return CGSize(width: width, height: row) }
+        let quota = subviews[2].sizeThatFits(ProposedViewSize(width: reach(width, subviews), height: proposal.height))
+        return CGSize(width: width, height: max(row, quota.height))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let f = frames(ProposedViewSize(width: bounds.width, height: proposal.height), subviews)
-        subviews[0].place(at: bounds.origin, anchor: .topLeading, proposal: f.leading)
-        subviews[1].place(at: CGPoint(x: bounds.maxX, y: bounds.minY), anchor: .topTrailing, proposal: .unspecified)
-        subviews[2].place(
-            at: CGPoint(x: bounds.minX + f.middle.midX, y: bounds.minY), anchor: .top,
-            proposal: ProposedViewSize(width: f.middle.width, height: f.middle.height))
+        let cue = subviews[3].sizeThatFits(.unspecified).width
+        let side = max(subviews[0].sizeThatFits(.unspecified).width, row + Self.gap + cue)
+        subviews[0].place(at: bounds.origin, anchor: .topLeading, proposal: .unspecified)
+        subviews[1].place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
+                          proposal: ProposedViewSize(width: max(bounds.width - 2 * (side + Self.gap), 0), height: row))
+        let reach = reach(bounds.width, subviews)
+        subviews[2].place(at: CGPoint(x: bounds.minX + reach, y: bounds.minY), anchor: .topTrailing,
+                          proposal: ProposedViewSize(width: reach, height: open ? proposal.height : row))
+        subviews[3].place(at: CGPoint(x: bounds.maxX, y: bounds.minY), anchor: .topTrailing, proposal: .unspecified)
+    }
+
+    /// 额度那一段的宽：从左页边到 Cue 头像左边那道缝。
+    private func reach(_ width: CGFloat, _ subviews: Subviews) -> CGFloat {
+        max(width - subviews[3].sizeThatFits(.unspecified).width - Self.gap, 0)
     }
 }
 #endif

@@ -31,14 +31,12 @@ struct BoardRowLane<Above: View, Content: View>: View {
     @ScaledMetric(relativeTo: .caption) private var spineHeight = BoardRowMetrics.spineHeight
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.laneAddsTask) private var addTask
-    @Environment(\.laneAddsSession) private var addSession
     @ScaledMetric(relativeTo: .subheadline) private var addHeight = BoardRowMetrics.addHeight
 
-    /// 这一行的行头带的"+"：待办是添加任务，推进中是新会话（PROTOTYPE one）。
+    /// 这一行的行头带的"+"（读屏名与动作）：待办是添加任务；其余列头的"+"与四列看板的列头同一份（`BoardColumnHeader`）。
     private var add: (title: LocalizedStringResource, action: () -> Void)? {
         switch column {
         case .todo: addTask.map { ("添加任务", $0) }
-        case .advancing: addSession.map { ("新会话", $0) }
         default: nil
         }
     }
@@ -221,10 +219,5 @@ private struct Sideways: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center, proposal: .unspecified)
     }
-}
-
-extension EnvironmentValues {
-    /// PROTOTYPE one：手机看板推进中行头的"+"，点它开新会话；nil 不画。
-    @Entry var laneAddsSession: (() -> Void)? = nil
 }
 #endif

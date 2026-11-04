@@ -121,11 +121,11 @@ enum IOSInteractionBench {
             await step("会话条进会话") { workspace.openSession(id) }
             await step("会话返回 Cue") { workspace.path.removeAll() }
         }
-        // 侧栏进展页会话段的列表滚动：每帧 40pt 往下再往上
+        // "更早"那一页的列表滚动：每帧 40pt 往下再往上
         if wants("会话列表滚动") {
-            workspace.showSessions()
+            workspace.push(.earlier)
             await Task.wait(for: .seconds(1))
-            guard let scroll = Self.scrollView(in: Self.window) else { fail("会话段上找不到可滚的列表") }
+            guard let scroll = Self.scrollView(in: Self.window) else { fail("\"更早\"那一页上找不到可滚的列表") }
             for _ in 0..<2 { await stepScroll("会话列表滚动", scroll, step: { name, action in await step(name, action) }) }
         }
         workspace.select(.shelf)
@@ -134,7 +134,7 @@ enum IOSInteractionBench {
             await step("开任务气泡") { workspace.openTask(task) }
             await step("关任务气泡") { workspace.openTask = nil }
         }
-        await gestures(workspace, session: sessions[0], wants: wants, fail: fail, press: { await Self.touch(write, $0, $1) }) { name, window, finger, action in
+        await gestures(workspace, session: sessions[0], wants: wants, fail: fail) { name, window, finger, action in
             await step(name, window: window, finger: finger, action)
         }
         try await typeLong(workspace, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })

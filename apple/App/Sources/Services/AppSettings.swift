@@ -27,7 +27,6 @@ final class AppSettings {
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
         static let lastAgent = "lastAgent"
-        static let progressPane = "progressPane"
         static let navigationPane = "navigationPane"
         static let currentProject = "currentProject"
         static let railExpanded = "railExpanded"
@@ -53,8 +52,6 @@ final class AppSettings {
 
     /// 新会话上次选的 Agent（两端的新会话在 Agent 胶囊上一选就记）：新会话默认用它（那台 Mac 上它不能用时退到第一个能用的，`MacAgents.preferred`）。
     var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
-    /// 进展页上次看的那一段（看板或会话，`Workspace.progressPane` 读写的就是它）。
-    var progressPane: ProgressPane { didSet { defaults.set(progressPane.rawValue, forKey: Key.progressPane) } }
 
     /// 窄屏侧栏与宽屏主区共用的项目｜进展选择。
     var navigationPane: NavigationPane { didSet { defaults.set(navigationPane.rawValue, forKey: Key.navigationPane) } }
@@ -181,7 +178,6 @@ final class AppSettings {
         alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
         #endif
         lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
-        progressPane = string(Key.progressPane).flatMap(ProgressPane.init(rawValue:)) ?? .board
         navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .projects
         railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
         cueOpen = defaults.object(forKey: Key.cueOpen) as? Bool ?? true

@@ -1,15 +1,16 @@
 #if os(iOS)
 import SwiftUI
 
-/// 项目范围（`Workspace.projectScope`，进展页两段共用一份），窄屏在顶栏中间：看全部时是"全部项目 ⌄"，选了是项目图标与名字（墨字、选中底，同全 App 的选中）接一颗 ✕ 清掉。
-/// 点字换项目（项目目录里的全部项目，默认项目在内）。只画字与选中底，玻璃由所在的那一块给（进展页与分段、额度环合成一颗）。
+/// 项目范围（`Workspace.projectScope`），宽屏进展页顶栏中间（窄屏侧栏那一排是一颗圆钮，`NarrowSidebarBar`）：看全部时是"全部项目 ⌄"，
+/// 选了是项目图标与名字（墨字、选中底，同全 App 的选中）接一颗 ✕ 清掉。
+/// 点字换项目（项目目录里的全部项目，默认项目在内）。只画字与选中底，玻璃由所在的那一块给（与额度环合成一颗，`ProgressHeader`）。
 /// 选中的项目进了回收站就当作全部项目（`Workspace.scopedProject`）。
 struct ProjectScope: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    /// 项目名最宽多少：名字再长也不挤到两侧的圆钮底下（PROTOTYPE：窄屏侧栏那一排给得更窄）。
-    var nameWidth: CGFloat = 150
+    /// 项目名最宽多少：名字再长也不挤到两侧的圆钮底下。
+    private static let nameWidth: CGFloat = 150
 
     var body: some View {
         @Bindable var workspace = workspace
@@ -26,7 +27,7 @@ struct ProjectScope: View {
                 HStack(spacing: 5) {
                     if let current { ProjectGlyph(project: current, size: 13) }
                     (current.map { Text($0.shownName) } ?? Text("全部项目")).fontWeight(current == nil ? nil : .semibold)
-                        .lineLimit(1).frame(maxWidth: nameWidth)
+                        .lineLimit(1).frame(maxWidth: Self.nameWidth)
                     if current == nil { Image(.expand).font(.caption.weight(.semibold)).accessibilityHidden(true) }
                 }
                 .menuLabel(current.map { "项目范围：\($0.shownName)" } ?? "项目范围：全部项目")

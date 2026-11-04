@@ -182,7 +182,7 @@ struct RailIcon: View {
     }
 }
 
-/// 会话条底部的"更早"：已结束的会话（宽屏的进展页没有会话一段，已结束的只在这里与 ⌘K 搜索），默认折起、只写个数，组头同等你、推进中那一种。
+/// 会话条底部的"更早"：已结束的会话（已结束的只在这里与搜索），默认折起、只写个数，组头同等你、推进中那一种。
 /// 宽时点组头原地展开成一列（Agent 标志、名字、多久前，最多占 `listHeight` 高、在里面滚，滚到底接着读下一页）；图标条上是"更早"与个数，点开是一份菜单（读到的那几页，末尾"显示更多"再读一页）。
 /// 个数是全部已结束的会话，每一个都翻得到。
 /// 点一行在主区打开（⌘ 点并排）。开合只在这一处，不进偏好：每次打开窗口都是折起的。
@@ -214,7 +214,7 @@ struct RailEarlier: View {
                         ScrollView {
                             LazyVStack(spacing: Chrome.cellGap) {
                                 ForEach(earlier.items, id: \.sessionID) { row($0) }
-                                // 滑到这里才读下一页（同进展页会话段的分页）
+                                // 滑到这里才读下一页（同手机"更早"那一页的分页）
                                 if earlier.hasMore { Spinner(.small).frame(maxWidth: .infinity).padding(8).task(id: earlier.items.count) { more() } }
                             }
                             // 行底伸出行框：滚动内容自己留出让出的那一截
