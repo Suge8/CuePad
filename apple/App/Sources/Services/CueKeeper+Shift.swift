@@ -51,7 +51,8 @@ extension CueKeeper {
         return try await CueBrainConfig(
             runtime: runtime, executable: launch.executable, model: model, effort: effort, fast: fast, systemPrompt: systemPrompt, workingDirectory: work,
             mcp: [setup.helper.path, "mcp"] + tools,
-            environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, AgentKind.pi.facts.homeVariable: setup.piAgentDirectory.path, "PATH": launch.path]
+            environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, AgentKind.pi.facts.homeVariable: setup.piAgentDirectory.path, "PATH": launch.path],
+            timing: store.timing
         ).startBrain()
     }
 
