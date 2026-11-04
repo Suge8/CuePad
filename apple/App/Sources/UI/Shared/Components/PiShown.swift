@@ -175,7 +175,7 @@ nonisolated struct PiShown: Hashable, Sendable {
         case interrupted
         /// 此刻说不准：其他版本写入、本版本不认识的状态，或没确认它此刻还是那样（`PiSessionState.runtimeState`）。
         /// 没确认是因为它所在的 Mac 没开时带上那台的名字（`PiSessionState.offlineMac`）：说的是那台没开，同 Cue 那一句（`CuePresence.asleep`）；
-        /// 此刻同步不通时那台的在线记录可能只是没同步来，照旧说不准。
+        /// 此刻同步不通时那台的在线记录可能只是没同步来，照旧说不准；那台就是本机（刚启动、还没写下在线）也只说不准。
         case unknown(macOff: String? = nil)
     }
 
@@ -210,7 +210,7 @@ nonisolated extension PiShown {
         let own = PiClock.reading(session.runtimeState, stateSince: session.stateSince, busySince: session.busySince)
         let busy = session.runtimeState.isWorking || session.runtimeState == .known(.waitingForUser)
         var reported = Self.status(of: session.runtimeState, failure: session.failure?.known)
-        if let mac = session.offlineMac, moment.reachableSince(session.hostID) != nil { reported = .unknown(macOff: mac) }
+        if let mac = session.offlineMac, !moment.isLocal(session.hostID), moment.reachableSince(session.hostID) != nil { reported = .unknown(macOff: mac) }
         let asked = session.waitsForCue(duty) ? Status.cueAsking : reported
         switch PiDelivery.phase(of: delivery, for: session, seen: seen, at: moment) {
         case .failed(let failure):
