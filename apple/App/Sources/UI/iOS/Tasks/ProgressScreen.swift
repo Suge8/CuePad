@@ -11,7 +11,7 @@ import SwiftUI
 /// 11 寸横屏旁边开着 Cue 或会话）与窄屏竖着拿是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点：
 /// 四列压到最窄的 160 时，iPad 的字号下卡上一行只剩两三个字。
 /// 横屏的屏高减去顶栏只剩两百多点，四行连各自的最矮都叠不下；横过来的宽正好排四列。
-/// 添加任务去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
+/// 添加任务去待办、顶上浮出添加那一行（`NewTaskField`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 struct ProgressScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -73,52 +73,4 @@ struct ProgressHeader: View {
     }
 }
 
-/// 一行新建任务：↩ 添加并保持焦点，便于连续输入。给了 `projects` 时尾部可选挂到哪个项目。
-/// 给了 `dismiss`（看板待办头上"+"浮出的那一行）：出现即聚焦，失焦时没写字就收回。
-struct NewTaskLine: View {
-    let project: UUID?
-    var projects: [Project]?
-    var dismiss: (() -> Void)?
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @State private var text = ""
-    @State private var chosen: UUID?
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        HStack(spacing: 2) {
-            // 入口不用系统占位灰：那样看起来像不能点
-            Image(.add).foregroundStyle(palette.ink2).frame(width: 44).accessibilityHidden(true)
-            TextField(String(localized: "添加任务"), text: $text, palette: palette)
-                .accessibilityLabel("添加任务")
-                .frame(minHeight: 44)
-                .contentShape(.rect)
-                .focused($focused)
-                .submitLabel(.done)
-                .onSubmit(add)
-                .onAppear { if dismiss != nil { focused = true } }
-                .onChange(of: focused) { if !focused, text.trimmingCharacters(in: .whitespaces).isEmpty { dismiss?() } }
-            if let projects {
-                Menu {
-                    ForEach(projects) { item in Button(item.shownName) { chosen = item.id } }
-                } label: {
-                    DestinationChip(project: current).frame(minHeight: 44).contentShape(.rect).menuLabel("记到 \(current?.shownName ?? "")")
-                }
-            }
-        }
-    }
-
-    /// 落到哪个项目：换过的，没换过是给的项目，都没有（不在项目里）是默认项目。
-    private var target: UUID { chosen ?? project ?? Project.defaultID }
-    private var current: Project? { projects?.first { $0.id == target } }
-
-    private func add() {
-        let content = text.trimmingCharacters(in: .whitespaces)
-        guard !content.isEmpty else { return }
-        text = ""
-        focused = true
-        let project = target
-        workspace.attempt { _ = try await workspace.createTask(content, in: project) }
-    }
-}
 #endif
