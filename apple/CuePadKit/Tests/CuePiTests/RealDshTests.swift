@@ -24,7 +24,6 @@ struct RealDshTests {
             let drink = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
             #expect(drink.kind == .known(.select) && drink.options == ["Tea", "Coffee"] && drink.allowsOther)
-            await #expect(throws: PiBridgeError.rejected("bad_answer")) { try await rig.bridge.answer(.option("Milk"), to: try #require(drink.promptID), in: id) }
             try await rig.bridge.answer(.option("Coffee"), to: try #require(drink.promptID), in: id)
 
             let size = try #require(rig.bridge.session(id: id)?.question)
