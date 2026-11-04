@@ -4,7 +4,8 @@ import Foundation
 
 extension CueTools {
   /// 看板：所有没做完的顶层任务，按项目分组，再是不归没做完的事的活会话，至多 `overviewLimit` 行；在做的归 Cue 管，其余是用户手上的清单。
-  /// 末尾是最近完成的 `recentlyDone` 件，各带会话与它此刻的状态：在旧会话上做别的事时从这里找（add 带 session）。
+  /// 末尾是最近完成的 `recentlyDone` 件，各带会话与它此刻的状态：他接着交代其中一件的下一步时在原任务上加一步（同系统提示"接着用"），
+  /// 在旧会话上做别的事才 add 带 session（只写后一种时，做完的调研他接着说"先升第一档"，长程评测里另建了一件）。
   func board() async throws -> Result {
     let board = try await store.cueBoard()
     let left = try await store.cueState()?.left ?? []
@@ -33,7 +34,7 @@ extension CueTools {
       lines.append(("还有 \(total - lines.filter(\.isItem).count) 件", false))
     }
     if !recent.isEmpty {
-      lines.append(("最近完成的（会话还能接着用：在它上面做别的事用 add 带 session）：", false))
+      lines.append(("最近完成的（他接着交代其中一件的下一步：edit 加子任务再 start；在它的会话上做另一件事：add 带 session）：", false))
       lines += recent.map { ("- \($0.task.heading)（\($0.task.id.shortID)） · " + CueEnvelope.sessionLine($0.session, now: now), true) }
     }
     return .ok(
