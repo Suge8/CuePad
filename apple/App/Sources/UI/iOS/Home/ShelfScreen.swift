@@ -129,7 +129,7 @@ private struct ShelfRow: View {
             } icon: {
                 ProjectGlyph(project: project, size: glyph)
             }
-            .padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            .padding(.horizontal, Spacing.inset).frame(maxWidth: .infinity, minHeight: RowMetrics.height, alignment: .leading)
             .contentShape(.rect)
         }
         .buttonStyle(.row)

@@ -222,18 +222,13 @@ private struct CueHostLine: View {
     var body: some View {
         let lead = lead
         let settings = model.settings ?? .empty
-        // 开关在行外：放进行里（LinkRow 的 trailing）读屏把它并进行、拨不了；隔开行底向两边让出的那一截，按下时底不压到开关
-        HStack(spacing: RowMetrics.bleed) {
-            Button(action: open) {
-                LinkRow(title: Text(lead.text).foregroundStyle(lead.failed ? palette.failure : palette.ink)) { Image(lead.icon) }
-            }
-            .buttonStyle(.row)
-            .accessibilityHint(Text("设置"))
+        LinkRow(title: Text(lead.text).foregroundStyle(lead.failed ? palette.failure : palette.ink), open: open) {
+            Image(lead.icon)
+        } trailing: {
             CueSwitch(model: model, here: workspace.localHost)
                 .disabled(!model.isOn && (settings.gate(services).waitingReason != nil || settings.hosts(here: workspace.localHost).isEmpty))
                 .opacity(workspace.cue.hostID == nil ? 0 : 1)
                 .readerHidden(workspace.cue.hostID == nil)
-                .padding(.trailing, Spacing.inset)
         }
         .animation(Motion.fade, value: lead.text)
     }
