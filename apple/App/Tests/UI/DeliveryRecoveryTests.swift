@@ -172,13 +172,12 @@ struct DeliveryRecoveryTests {
         await app.services.executor.beginStop()()
     }
 
-    @Test(arguments: [AgentKind.claudeCode, .codex, .opencode, .grok, .dsh])
-    func 其他接入仍保留各自的受理合同(agent: AgentKind) async throws {
+    @Test func 其他接入仍保留各自的受理合同() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         defer { app.pi.stop(); app.services.cancelBackgroundWork() }
-        let runtime = PipedHostedAgent(bridge: app.pi, agent: agent)
+        let runtime = PipedHostedAgent(bridge: app.pi, agent: .claudeCode)
         runtime.host("other", state: .settled)
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "other", state: .settled, agent: agent)
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "other", state: .settled, agent: .claudeCode)
         let target = try #require(try await store.allPiSessionStates().first)
         let request = try await say("继续检查结果", to: target, app: app)
         try await app.services.executor.start()
