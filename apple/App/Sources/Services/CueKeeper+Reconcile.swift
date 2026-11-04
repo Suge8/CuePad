@@ -23,7 +23,7 @@ extension CueKeeper {
             return nil
         }
         do {
-            let store = self.store, now = Date.now
+            let store = self.store, now = self.now
             let profile = try await store.cueProfile() ?? CueProfile()
             await follow(BrainSettings(profile))
             // 要换的班次（工具服务没了、换了 Agent），或一直记着的变过（系统提示跟上）：换个班次，再接着对账。

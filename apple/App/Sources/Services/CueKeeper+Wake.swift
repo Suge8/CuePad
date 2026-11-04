@@ -13,7 +13,7 @@ extension CueKeeper {
     ) async throws -> Bool {
         guard let shift else { return false }
         let author = chosen ?? Self.author(of: wake)
-        let store = self.store, now = Date.now
+        let store = self.store, now = self.now
         let mark = try await store.lastWrite()
         let board = try await store.cueBoard()
         let changes = try await self.changes(at: now)
@@ -177,9 +177,9 @@ extension CueKeeper {
 
     func schedule(_ date: Date?) {
         guard let date else { return }
-        let input = input, delay = max(0, date.timeIntervalSinceNow) + 0.05
+        let input = input, timing = store.timing, wake = max(date, now).addingTimeInterval(0.05)
         timer = Task {
-            guard (try? await Task.sleep(for: .seconds(delay))) != nil else { return }
+            guard (try? await timing.sleepUntil(wake)) != nil else { return }
             input.yield(.kick)
         }
     }
