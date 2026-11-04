@@ -97,18 +97,19 @@ final class DaysHistory {
         try await rig.store.recordSend(first, to: SendTarget(kind: .piSession, name: title, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
         let fake = try await rig.app.host.connect(id, cwd: folder.path, busy: true)
         fake.sendInfo(["name": title])
-        var history = [PiChatMessage(sessionID: id, entryID: "e1", seq: 1, role: .user, text: first, at: started, deliveryID: delivery)]
+        let file = try #require(rig.app.host.sessionFiles[id])
+        try file.user(first, delivery: delivery.uuidString, at: started)
         // 会话每次交回后让它继续的也是 Cue（带发送记录）：没有记录就算他在会话里说的，之后那一停标"他说的"、CuePad 当场留给他回，
         // 剧本要考的作答（S3）与兑现（访问量）就成了该留着不动
         for (text, at) in replies {
             let resumed = UUID()
             try await rig.store.recordSend("继续", to: SendTarget(kind: .piSession, name: title, ref: id), card: task.id, delivery: resumed, origin: .known(.cue))
-            history.append(PiChatMessage(sessionID: id, entryID: "e\(history.count + 1)", seq: Int64(history.count + 1), role: .pi, text: text, at: at))
-            history.append(PiChatMessage(sessionID: id, entryID: "e\(history.count + 1)", seq: Int64(history.count + 1), role: .user, text: "继续", at: at + 60, deliveryID: resumed))
+            try file.reply(text, at: at)
+            try file.user("继续", delivery: resumed.uuidString, at: at + 60)
         }
-        try await rig.store.writePiTranscript(PiTranscript(sessionID: id, messages: history, recap: PiRecap(pendingPrompt: "继续")))
+        try await rig.read("继续", in: id)
         try await eventually("\(title) 在干活写进库") { try await rig.store.sessions(matching: id).first?.state.isWorking == true }
-        return ScriptedSession(id, on: rig.app.host, task: task, history: history)
+        return ScriptedSession(id, on: rig.app.host, task: task)
     }
 }
 

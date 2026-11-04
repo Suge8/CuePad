@@ -8,11 +8,11 @@ import Testing
 @testable import CuePad
 
 /// 一件 Cue 开过工、正在做的任务：开工时送进会话的第一句记在发送记录里（会话里那句因此认作 Cue 说的，不是"他说的"），
-/// 会话是本机开着的假扩展（Cue 对它说话、作答都送得到）。
+/// 会话是本机开着的假扩展（Cue 对它说话、作答都送得到），会话说的写进它的会话文件（`file`）。
 struct Working {
     let task: Card
     let session: FakeExtension
-    let prompt: PiChatMessage
+    let file: SessionFile
     var id: String { session.sessionID }
     /// 会话收到的作答（选项原文或填的字），从早到晚。判"替他答了哪个"只认它：say 的话由库认成选项（"B. 留在 R2"按 B 答）才送到会话，
     /// 认不成的被拒、到不了这里。作答成功的请求随后就从库里清掉，会话收到的是留下来的那一份。
