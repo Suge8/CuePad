@@ -32,7 +32,7 @@ extension Duty {
         }
         let afterRejection = try await eval.said(since: key.go.window?.upperBound ?? .distantFuture).map(\.text)
             + says(steps.filter { ($0.window?.lowerBound ?? .distantPast) > (key.go.window?.upperBound ?? .distantFuture) }, to: settings)
-        let tabsSaid = says([key.tabs], to: settings), e2eSaid = says([key.e2e], to: site), providerSaid = says([key.provider], to: digest)
+        let tabsAnswers = answers([key.tabs], to: settings), e2eAnswers = answers([key.e2e], to: site), providerAnswers = answers([key.provider], to: digest)
         // 升版本号：收尾时交代（say、edit、add，或开工写着它的步骤），或还排在这件事没做完的步骤里（Cue 早先把它加成了步骤）
         let bump = /2\.3\.1|CHANGELOG|changelog/
         let started = CueEval.calls(in: rounds(key.finish), "task", ["start"]).compactMap { call in
@@ -47,16 +47,15 @@ extension Duty {
         return [
             Check(.carry, "(a) 他口头交代的升 2.3.1、记 CHANGELOG：收尾时交代了，或排成了下一步",
                   wrapUp.contains { $0.contains(bump) } || planned, note: loginDone ? "" : "（这件没收尾）", counted: loginDone),
-            Check(.memory, "(a) 他口头交代的：官网问跑不跑 e2e，答只跑单元测试", e2eSaid.contains { $0.contains(/单元|只跑|不跑|别跑/) } && !e2eSaid.contains { $0.contains("跑 e2e 回归") || $0 == "1" }),
-            Check(.memory, "(b) 早先会话查清的：周报邮件问走哪家发信，答 Postmark", providerSaid.contains { $0.localizedCaseInsensitiveContains("Postmark") } && !providerSaid.contains { $0 == "SendGrid" || $0 == "1" }),
+            Check(.memory, "(a) 他口头交代的：官网问跑不跑 e2e，答只跑单元测试", e2eAnswers == ["只跑单元测试就交"]),
+            Check(.memory, "(b) 早先会话查清的：周报邮件问走哪家发信，答 Postmark", providerAnswers == ["Postmark"]),
             Check(.carry, "(c) README 只建了一个任务（问进展时没另建）", readmeAdds == 1 && calls(key.readmeStatus, "task", ["add", "start"]).isEmpty),
             Check(.carry, "(c) 每件事只建一个任务", duplicated.isEmpty, note: duplicated.isEmpty ? "" : "（重复：\(duplicated.joined(separator: "、"))）"),
             Check(.carry, "(c) 没对同一个会话把同一件事说两遍", repeated.isEmpty, note: repeated.isEmpty ? "" : "（\(repeated.map(\.title).joined(separator: "、"))）"),
             Check(.result, "(c) 会话的每次动静都有接手", unhandled.isEmpty, note: unhandled.isEmpty ? "" : "（没接：\(unhandled.map(\.label).joined(separator: "、"))）"),
             Check(.ask, "(d) 设置页问拆不拆标签页：按他说的保持一页，不留给他、不问他",
-                  tabsSaid.contains { $0.contains(/一页|不拆|保持|不分|别拆|不要/) } && !tabsSaid.contains { $0 == "拆成标签页" || $0 == "1" }
-                    && calls(key.tabs, "tell").allSatisfy { $0.args["ask"] == nil }),
-            Check(.memory, "(d) 他否掉之后没再提分标签页", !afterRejection.contains(where: Self.proposesTabs)),
+                  tabsAnswers == ["保持一页长列表"] && calls(key.tabs, "tell").allSatisfy { $0.args["ask"] == nil }),
+            Check(.memory, "(d) 他否掉之后没再提分标签页", !afterRejection.contains(where: EvalReading.proposesTabs)),
             try await recalled("(e) 他顺口说的行程：答出下周三下午 3 点", key.trip) { $0.contains(/周三|28/) && $0.contains(/3 ?点|15[:：]|三点/) },
             try await recalled("(f) 已完成的调研里顺带的细节：答出 13 封", key.bounce) { $0.contains(/13|十三/) },
             Check(.carry, "(g) 证书查完时照他要的说了是哪家签发的", certSaid.contains { $0.localizedCaseInsensitiveContains("Sectigo") }, note: certDone ? "" : "（这一步没收尾）"),
@@ -66,17 +65,6 @@ extension Duty {
                 .contains { ($0.args["text"] as? String)?.contains(/继续|接着|做到哪|进展|汇报|回报/) == true }),
             Check(.result, "问今天的事：回了他、没派新活", try await reply(key.wrap) != nil && calls(key.wrap, "task", ["add", "start"]).isEmpty),
         ]
-    }
-
-    /// 说到分标签页、又是在提议它：按句看（句号、问号、分号、换行断开），不靠字距——这句说到标签页，
-    /// 整句（去掉"要不要"这类问法里的"不"）没有否定或否掉的表态（不、别、没、非、保持、一页、长列表、按你说的…），
-    /// 也不是在转述别人的问题（问、提到、提出）。"按标签定位"这类说的是别的标签。
-    static func proposesTabs(_ text: String) -> Bool {
-        text.split(whereSeparator: { "。！？!?；;\n".contains($0) }).contains { sentence in
-            guard sentence.contains(/标签页|页签|tab ?页|tabs/.ignoresCase()) else { return false }
-            let stance = sentence.replacing(/要不要|是不是|能不能/, with: "")
-            return !stance.contains(/不|别|没|无|非|否|保持|一页|长列表|按你说的|照你说的/) && !sentence.contains(/问|提到|提出/)
-        }
     }
 
     // MARK: 统计
