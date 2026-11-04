@@ -56,5 +56,29 @@ extension DebugScene {
             step += 1
         }
     }
+
+    /// `-CuePadLaneSwap YES|fast`（仅 Mac，配 progress 画面与 `-CuePadDemo YES` 录屏）：看板的项目范围设成待办最少的那个项目，
+    /// 就绪后把它的几件待办一起做完、再一起重新打开，来回换：待办那一列在空与有卡之间换档、已完成跟着换，列宽随看板这一次读到的过渡滑过去（`BoardWidths`）。
+    /// 每 1.5 秒换一次；`fast` 中途反向——换过去 0.1 秒就换回、再连换两次各隔 0.06 秒，各停 1.5 秒。
+    static func swapLaneIfAsked(_ workspace: Workspace) async {
+        guard let mode = defaults.string(forKey: "CuePadLaneSwap") else { return }
+        let store = workspace.services.store
+        await running("换列宽") {
+            let todo = try await TaskBoard.read(from: store).todo
+            let counts = Dictionary(grouping: todo.compactMap(\.task.projectID), by: { $0 }).mapValues(\.count)
+            guard let project = counts.min(by: { $0.value < $1.value })?.key else { throw Unmet("看板上没有待办") }
+            let tasks = todo.filter { $0.task.projectID == project }.map(\.task.id)
+            workspace.projectScope = project
+            // 两次之间停多久是录屏的节奏，不是在等别的事
+            let gaps: [Double] = mode == "fast" ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
+            await Task.wait(for: .seconds(2.5))
+            var step = 0
+            while !Task.isCancelled {
+                for id in tasks { try await store.setStatus(id, step.isMultiple(of: 2) ? .done : .todo) }
+                await Task.wait(for: .seconds(gaps[step % gaps.count]))
+                step += 1
+            }
+        }
+    }
 }
 #endif

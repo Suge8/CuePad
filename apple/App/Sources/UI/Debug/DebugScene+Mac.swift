@@ -119,6 +119,7 @@ extension DebugScene {
         if defaults.string(forKey: "CuePadSidebarCycle") != nil { Task { await cycleSidebar() } }
         await reverseWideIfAsked(workspace)
         Task { await swapBoardIfAsked(workspace) }
+        Task { await swapLaneIfAsked(workspace) }
         await presetSpeech(workspace)
         switch defaults.string(forKey: "CuePadBench") {
         case "churn": await benchChurn(workspace)
