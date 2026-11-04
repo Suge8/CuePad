@@ -36,9 +36,10 @@ actor RecordSender {
   private var inFlight: Set<String> = []
   /// 马上传了、还没收下的：有它们时退避上限小，到点先发它们。
   private var urgent: Set<String> = []
-  /// 要马上传时已在路上的（多半是刚领取的那一版，结果紧跟着写下）：在路上那批收下的是旧版，不算答复，回来就当场再发新版。
+  /// 要马上传时已在路上或已被另一趟马上传占下的（多半是刚领取的那一版，结果紧跟着写下）：那批收下的、那趟读库时看到"已不是待推送"的
+  /// 都可能是旧版，不算答复，当场再发一趟（新版还在就传，已收下就答收下）。
   private var newer: Set<String> = []
-  /// 那批已回来、新版该接着马上传的（`upload` 在它们离开 `inFlight` 后发）。
+  /// 答复里作废、该再马上传一趟的（`resendNewer` 在它们离开 `inFlight` 后发）。
   private var resend: Set<String> = []
   private var waiters: [(remaining: Set<String>, received: Bool, continuation: CheckedContinuation<Bool, Never>)] = []
   private var urgentRuns: [Int: Task<Void, Never>] = [:]
@@ -163,7 +164,8 @@ actor RecordSender {
     let settled = reserved.subtracting(batch.names).subtracting(batch.stuck).subtracting(batch.left)  // 已不是待推送（别的批已收下、删掉了）
     answer(settled, received: settled)
     answer(batch.stuck, received: [])
-    urgent.subtract(settled.union(batch.stuck))
+    urgent.subtract(batch.stuck)  // 收下的在答复里已去掉；作废的（读库时可能早于要马上传的那一版）留着，接着再发
+    resendNewer()
     guard !batch.isEmpty else { return }
     let sent = await upload(batch)
     trigger.yield()  // 在路上时又改过的，后台那一路接着发
@@ -178,12 +180,16 @@ actor RecordSender {
     await updateBusy()
     let next = await outcome(of: batch)
     inFlight.subtract(names)
-    if !resend.isEmpty {
-      resend = []
-      runUrgent()
-    }
+    resendNewer()
     await updateBusy()
     return next
+  }
+
+  /// 再马上传一趟答复里作废的（`resend`）。只在它们离开 `inFlight` 后调：之前发起的那一趟挑不到它们，在等的就一直等到别的批碰巧带上它们。
+  private func resendNewer() {
+    guard !resend.isEmpty else { return }
+    resend = []
+    runUrgent()
   }
 
   private func outcome(of prepared: OutgoingBatch) async -> Bool {
