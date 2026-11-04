@@ -76,38 +76,34 @@ extension LongScript {
         后端那 21 个测试也重跑了一遍，都还是绿的。接下来做 /reset 页。
         """
 
-    /// 补上版本号的交回：CHANGELOG 记的是评测当天（写死的日期 Cue 会照实要它改，剧本就走不到 done），连同前面的改动做成一个本地提交
+    /// 补上版本号的交回：CHANGELOG 记的是评测当天（写死的日期 Cue 会照实要它改，剧本就走不到 done）；同做完交回一样没提交、证据给全
+    /// （改动、测试、lint、类型检查）。剧本只回这一次：缺哪样 Cue 都会再要，这件就收不了尾
     static var bumpDone: String {
         let today = Date.now.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
         return """
-            补上了：package.json 的版本号 2.3.0 → 2.3.1，CHANGELOG.md 加了一条，连同忘记密码的全部改动做成了一个本地提交。
+            补上了：package.json 的版本号 2.3.0 → 2.3.1，CHANGELOG.md 加了一条。
 
             ```
-            $ sed -n 1,4p CHANGELOG.md
-            ## 2.3.1 - \(today)
-            ### 新增
-            - 登录页「忘记密码」：邮件重置链接 30 分钟有效、只能用一次；同一邮箱一分钟最多发一次
-            $ git log -1 --stat --format='%h %s'
-            7c41e9a 登录页加忘记密码，版本升到 2.3.1
-             CHANGELOG.md                         |   6 +
-             migrations/20261019_add_password_resets.sql |  12 +
-             package.json                         |   2 +-
-             src/pages/ForgotPage.tsx             |  88 +
-             src/pages/LoginPage.tsx              |   6 +-
-             src/pages/ResetPage.tsx              | 104 +
-             src/server/auth/reset.ts             | 131 +
-             src/server/routes/auth.ts            |  24 +-
-             templates/mail/reset.mjml            |  41 +
-             tests/auth/reset-request.test.ts     |  77 +
-             tests/auth/reset.test.ts             |  81 +
-             tests/pages/ForgotPage.test.tsx      |  58 +
-             tests/pages/ResetPage.test.tsx       |  70 +
-             13 files changed, 697 insertions(+), 3 deletions(-)
+            $ git diff package.json CHANGELOG.md
+            --- a/package.json
+            +++ b/package.json
+            -  "version": "2.3.0",
+            +  "version": "2.3.1",
+            --- a/CHANGELOG.md
+            +++ b/CHANGELOG.md
+            +## 2.3.1 - \(today)
+            +### 新增
+            +- 登录页「忘记密码」：邮件重置链接 30 分钟有效、只能用一次；同一邮箱一分钟最多发一次
             $ npm test
-            Tests: 46 passed, 46 total
+            Test Suites: 6 passed, 6 total
+            Tests:       46 passed, 46 total
+            $ npm run lint
+            ✔ No problems
+            $ npm run typecheck
+            ✔ tsc --noEmit: 0 errors
             ```
 
-            只在本地，没有推送；e2e 按要求没跑。
+            和前面的改动一样都还没提交、没有推送；e2e 按要求没跑。
             """
     }
 
