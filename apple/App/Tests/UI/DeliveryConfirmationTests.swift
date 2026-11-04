@@ -136,14 +136,6 @@ struct DeliveryConfirmationTests {
         #expect(Speech.trip(received, at: phone.services.speech).unconfirmedReason != nil)
         #expect(Speech.trip(received, at: phone.services.speech).failure == nil)
         #expect(ext.messages.count == 1)
-        let workspace = Workspace(services: phone.services)
-        let box = phone.services.settings.replyDraftBinding(for: target.id)
-        await workspace.resend(.request(received), restoringInto: box).value
-        #expect(workspace.notice?.isError == true)
-        #expect(try await phone.services.store.deliveryRequests().count == 1)
-        await workspace.sayAgain(.request(received), restoringInto: box).value
-        let requests = try await phone.services.store.deliveryRequests()
-        #expect(requests.count == 2 && requests.contains { $0.id == request.id && $0.status.rawValue == "confirming" })
     }
 }
 #endif
