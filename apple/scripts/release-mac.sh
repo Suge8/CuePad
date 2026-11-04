@@ -12,6 +12,8 @@ set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_signing.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_signing.sh"
+# shellcheck source=_lock.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_lock.sh"
 require_asc
 
 REPO=Suge8/CuePad
@@ -65,6 +67,8 @@ if [ -z "$resume" ]; then
 rm -rf "$OUT"; mkdir -p "$OUT"
 # Developer ID 证书在专用钥匙串里；描述文件（含 iCloud）由 API 创建并安装。
 # 手动签名：Xcode 的自动签名用 API 密钥时管不了 iCloud 容器，工程的 Release 配置已指定证书与描述文件名。
+# 描述文件全机一份，生成到导出完持着签名锁（_lock.sh 规则 3），公证不在锁里
+signing_begin
 python3 "$APPLE_DIR/scripts/provision.py" unlock
 python3 "$APPLE_DIR/scripts/provision.py" profiles
 
@@ -76,6 +80,7 @@ xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destin
 export_options "$OUT/export.plist" developer-id "Developer ID Application" "$CUEPAD_APP_ID"="CuePad macOS DeveloperID"
 xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" \
   -exportPath "$OUT/export"
+signing_end
 
 fi
 

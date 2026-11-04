@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# xc.sh 的入口锁，两条规则：
+# xc.sh 的入口锁，三条规则：
 # 1. 同一检出一次一个任务（<检出>/apple/.derived/xc.lock）：同一产物目录上的两个 xcodebuild 会抢构建数据库、互相覆盖产物。
 #    不同检出之间不设上限：实测同时 9 个增量编译测试，不排队比限 3 个快（链接、签名、起测试宿主时 CPU 空着，并发正好填上）。
 #    前台的 Mac 测量（perf mac … -CuePadForeground YES）也照普通任务跑：整机独占要先关闸门排空在跑的任务（实测每次 10–18 分钟），挡住所有检出的新任务，得不偿失。
@@ -7,6 +7,10 @@
 # 2. iOS 的测试、截图、录屏、测量从全机共 SIM_SLOTS 个槽位里领一个（每个槽位一把锁，见 _sim.sh），全占着就等空出一个。
 #    每个槽位同一时刻最多开着一台"CuePad <机型> #<槽位号>"：换机型时先关掉这个槽位上别的机型的；领槽位时先挑已开着这一机型的，少重开机。
 #    机型再多，全机开着的 CuePad 模拟器也不超过 SIM_SLOTS 台（按机型各开一池、不关时，实测同时开了 16 台、交换区满）。
+# 3. 描述文件全机一份（~/Library/Developer/Xcode/UserData/Provisioning Profiles）：provision 重建时先删同名的旧文件，
+#    别的检出正在归档、导出或给构建嵌描述文件就读不到（#63）。所以从生成描述文件到最后一个用它的签名步骤，全机一次一个（RUNTIME/signing.lock）：
+#    signing_begin 排队拿锁，signing_end 放掉，没到 signing_end 脚本就退出（失败、被 kill）时也放。它不受 HOLD_LIMIT 管，排队照样有 LOCK_WAIT 与持有者列表。
+#    用它的：发版与真机（release-*.sh）、独立的 xc.sh provision、读描述文件的 CUEPAD_SIGN=development 构建与 activity-log。公证、上传不用描述文件，不在锁里。
 # 锁都是 flock，只由这里的入口进程持有（Python 打开的文件不传给子进程），它退出时内核释放，崩了也不留死锁。持有者把 CUEPAD_SIM=<槽位号，没领为空> 传给子进程，
 # 脚本再调脚本不重复进锁。任务最多跑 HOLD_LIMIT 秒，超了连同它起的全部进程结束，防止卡死的任务一直占着。
 # 谁拿着锁记在运行目录（app_env.py 的 RUNTIME）的 holders/<PID>.json（PID、检出、完整命令行、持有的每把锁与真正拿到它的时刻、在等的锁），入口退出时删掉；
@@ -40,5 +44,14 @@ phase() {
 xc_enter() {
   [ -z "${CUEPAD_SIM+set}" ] || return 0
   local model="$1"; shift
-  exec python3 "$APPLE_DIR/scripts/_lock.py" "$HOLD_LIMIT" "$LOCK_WAIT" "$LOCK_REPORT" "$SIM_SLOTS" "$model" "$@"
+  exec python3 "$APPLE_DIR/scripts/_lock.py" task "$HOLD_LIMIT" "$LOCK_WAIT" "$LOCK_REPORT" "$SIM_SLOTS" "$model" "$@"
+}
+
+# 规则 3：锁由 _lock.py 的分身持着，守着本脚本（$$；exec 换了程序 PID 不变）。不嵌套：持着锁再 begin（含调 xc.sh provision）会等自己
+signing_begin() {
+  SIGNING_HOLDER="$(python3 "$APPLE_DIR/scripts/_lock.py" signing "$LOCK_WAIT" "$LOCK_REPORT" $$)"
+}
+
+signing_end() {
+  kill "$SIGNING_HOLDER"
 }

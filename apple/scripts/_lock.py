@@ -1,6 +1,9 @@
-"""xc.sh 的入口锁（规则与用法见 _lock.sh 头注释）：拿检出锁与（要模拟器的）一个模拟器槽位，登记持有者，
-在锁里起命令并守着它的时限，结束时连同它起的全部进程（swift test 的测试宿主、xcodebuild 的编译器各自另起进程组，按组结束会漏下它们），再打一行用时。
-用法：_lock.py <时限秒> <等待上限秒> <报告间隔秒> <模拟器槽位数> <机型，不要模拟器给空串> <命令…>；锁与登记在 app_env.RUNTIME，本检出的锁在 apple/.derived/xc.lock
+"""xc.sh 的入口锁（规则与用法见 _lock.sh 头注释），两种用法，锁与登记在 app_env.RUNTIME，本检出的锁在 apple/.derived/xc.lock：
+_lock.py task <时限秒> <等待上限秒> <报告间隔秒> <模拟器槽位数> <机型，不要模拟器给空串> <命令…>
+  拿检出锁与（要模拟器的）一个模拟器槽位，登记持有者，在锁里起命令并守着它的时限，结束时连同它起的全部进程
+  （swift test 的测试宿主、xcodebuild 的编译器各自另起进程组，按组结束会漏下它们），再打一行用时。
+_lock.py signing <等待上限秒> <报告间隔秒> <脚本 PID>
+  拿全机的签名锁（规则 3），交给分身持着、立即返回，标准输出是分身的 PID；脚本退出或分身收到 SIGTERM 时放掉。
 """
 import fcntl, json, os, re, shlex, signal, subprocess, sys, threading, time
 
@@ -8,8 +11,14 @@ sys.dont_write_bytecode = True
 from app_env import APPLE, CHECKOUT, RUNTIME  # noqa: E402
 from app_proc import descendants, silence, wait_exit  # noqa: E402
 
-hold, wait_limit, report, slots, model, *cmd = sys.argv[1:]
-hold, wait_limit, report, slots = int(hold), int(wait_limit), int(report), int(slots)
+mode = sys.argv[1]
+if mode == "signing":
+    wait_limit, report, owner = map(int, sys.argv[2:5])
+    cmd_line = subprocess.run(["ps", "-o", "command=", "-p", str(owner)], capture_output=True, text=True).stdout.strip()
+else:
+    hold, wait_limit, report, slots, model, *cmd = sys.argv[2:]
+    hold, wait_limit, report, slots = int(hold), int(wait_limit), int(report), int(slots)
+    cmd_line = shlex.join(cmd)
 holders, own = f"{RUNTIME}/holders", f"{APPLE}/.derived/xc.lock"
 os.makedirs(holders, exist_ok=True)
 os.makedirs(os.path.dirname(own), exist_ok=True)
@@ -27,7 +36,7 @@ def processes(pids):
 
 
 me = {"pid": os.getpid(), "start": processes([os.getpid()])[os.getpid()][1], "checkout": CHECKOUT,
-      "cmd": shlex.join(cmd), "held": [], "waiting": None}
+      "cmd": cmd_line, "held": [], "waiting": None}
 record = f"{holders}/{me['pid']}.json"
 
 
@@ -196,6 +205,37 @@ def summary(total):
     rest = max(0, total - sum(phases.values()))
     say(f"用时 {clock(total)}：{'、'.join(shown)}、其余 {clock(rest)} · 1 分钟负载 {os.getloadavg()[0]:.0f}")
 
+
+def lease_signing():
+    """规则 3：排队拿到签名锁后 fork，分身带着锁的描述符脱离脚本的会话（Ctrl-C 只打到脚本），登记换成分身的，
+    守到脚本退出（set -e 半路失败、被 kill 都算）或 signing_end 发来 SIGTERM；原进程打印分身的 PID 后退出。"""
+    global record
+    lock = open(f"{RUNTIME}/signing.lock", "a+")
+    acquire([(lock, "签名（全机）")], fcntl.LOCK_EX, "别的检出在生成描述文件或签名归档（描述文件目录全机一份）")
+    holder = os.fork()
+    if holder:
+        print(holder, flush=True)
+        return
+    os.setsid()
+    silence()
+    os.closerange(3, lock.fileno())
+    os.closerange(lock.fileno() + 1, 4096)
+    me.update(pid=os.getpid(), start=processes([os.getpid()])[os.getpid()][1])
+    record = f"{holders}/{me['pid']}.json"
+    publish()
+    signal.signal(signal.SIGTERM, lambda *_: (os.remove(record), os._exit(0)))
+    wait_exit(owner)
+    os.remove(record)
+    os._exit(0)
+
+
+if mode == "signing":
+    try:
+        lease_signing()
+    finally:
+        if os.path.exists(record):
+            os.remove(record)
+    sys.exit(0)
 
 try:
     checkout = open(own, "a+")

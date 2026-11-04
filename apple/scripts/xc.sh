@@ -61,7 +61,7 @@ case "$cmd" in
     esac ;;
   device) exec "$APPLE_DIR/scripts/release-ios.sh" device ;;
   strings) "$0" build mac; "$0" build ios; exec python3 "$APPLE_DIR/scripts/strings.py" sync ;;
-  provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
+  provision) signing_begin; exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;  # 签名锁见 _lock.sh 规则 3
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
   perf) [ "$platform" != ab ] || exec python3 "$APPLE_DIR/scripts/perf-ab.py" "${@:3}" ;;  # 其余先构建、再测量，两段各自进锁（见下）
   test|shot|rec|run)
@@ -111,6 +111,7 @@ if [ "$platform" = mac ]; then build_settings+=(INFOPLIST_KEY_LSUIElement=YES); 
 sign_development() {
   [ "${CUEPAD_SIGN:-}" = development ] || return 0
   [ "$platform" = mac ] || { echo "CUEPAD_SIGN=development 只用于 mac" >&2; exit 2; }
+  signing_begin
   python3 "$APPLE_DIR/scripts/provision.py" unlock
   local profile entitlements="$DERIVED/CuePad-macOS-development.entitlements" decoded="$DERIVED/profile.plist"
   # if 而不是 &&：最后一个描述文件不是它时循环以非零结束，pipefail 下整个赋值失败、set -e 一声不吭地退出
@@ -123,6 +124,7 @@ sign_development() {
     -c "Add :com.apple.application-identifier string $CUEPAD_TEAM_ID.$CUEPAD_APP_ID" -c "Add :com.apple.developer.team-identifier string $CUEPAD_TEAM_ID" "$entitlements"
   # 证书只认专用钥匙串里那份（描述文件按它建）；登录钥匙串里可能有同名的另一张
   codesign --force --keychain "$HOME/.appstoreconnect/cuepad-signing.keychain-db" --sign "Apple Development" --entitlements "$entitlements" "$app"
+  signing_end
 }
 
 case "$cmd" in
@@ -144,6 +146,7 @@ case "$cmd" in
     exit $status ;;
   activity-log)
     xcd all
+    signing_begin  # 脚本随它结束，锁一起放
     python3 "$APPLE_DIR/scripts/activity-log.py" "$app" "${2:-$DERIVED/activity-diagnostics.json}" ;;
   build) xcd all; sign_development ;;
   build-perf) built "$DERIVED/build-key-$platform" "$app" all xcb -quiet build ;;
