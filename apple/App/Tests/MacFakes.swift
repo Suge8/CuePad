@@ -33,6 +33,8 @@ final class RecordingHost: AgentRuntime {
     private(set) var calls: [Call] = []
     /// 开出的、已连上桥的假扩展，按 Pi 自己的会话 id：等它非空就是会话在桥上了（起来就记下的话，测试会在连上桥之前往下走）。
     private(set) var extensions: [String: FakeExtension] = [:]
+    /// 连上桥的会话报的会话文件，按 Pi 会话 id（收到话才建出来，见 `writeMessage`）
+    private(set) var sessionFiles: [String: URL] = [:]
     /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
     var openFailure: String?
     /// 宿主已创建后，开场消息被扩展明确拒绝。
@@ -112,6 +114,7 @@ final class RecordingHost: AgentRuntime {
         try ext.start()
         try await eventually("桥连上 \(sessionID)") { bridge.session(id: ext.id) != nil }
         extensions[sessionID] = ext
+        sessionFiles[sessionID] = file
         return ext
     }
     nonisolated private static func writeMessage(_ command: [String: Any], session: String, cwd: String, file: URL) throws {
@@ -138,6 +141,21 @@ final class RecordingHost: AgentRuntime {
         try handle.write(contentsOf: line(message))
     }
 
+}
+
+extension TestApp {
+    /// Mac 读完了这个会话的会话文件此刻写下的全部：历史索引的检查点停在文件末尾、修改时间也对上（`PiHistoryCheckpoint.isCurrent`），
+    /// 之后不会再为已有的内容写一次摘要。测试替 Mac 写问答（`writePiTranscript`）前先等它：摘要只由读会话文件写，读到的回复总在文件里已有的行之后；
+    /// 读得晚的那一次会拿文件里还没有回复的样子盖掉测试写下的。会话文件还没建出来（没收到过话）、不在这台 Mac 上的不用等。
+    func historyRead(_ sessionID: String) async throws {
+        guard let file = host.sessionFiles[sessionID], FileManager.default.fileExists(atPath: file.path) else { return }
+        let store = services.store
+        try await eventually("Mac 读完 \(sessionID) 的会话文件") {
+            let values = try URL(filePath: file.path).resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            guard let size = values.fileSize, let modified = values.contentModificationDate, let data = try await store.piCheckpoint(of: sessionID) else { return false }
+            return try JSONDecoder().decode(PiHistoryCheckpoint.self, from: data).isCurrent(size: UInt64(size), modified: modified)
+        }
+    }
 }
 
 /// 撑不过 App 重启的那几家（Claude Code、Codex 这类靠管道连着 App 的）托管会话的替身：经桥的 `attach` 上桥（各家接入就是这样上桥的），

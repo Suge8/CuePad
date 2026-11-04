@@ -81,6 +81,7 @@ extension CueHostTests.Rig {
 
     /// 会话这一轮说了 `said` 后停下来问一个选择题。
     func ask(_ work: Working, said: String, question: String, options: [String]) async throws {
+        try await app.historyRead(work.id)
         try await store.writePiTranscript(PiTranscript(
             sessionID: work.id, messages: [work.prompt, reply(work, said)], recap: PiRecap(pendingPrompt: oneLine(work.prompt.text))))
         work.session.sendInfo(["question": ["id": "p1", "kind": "select", "text": question, "options": options]])
