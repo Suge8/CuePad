@@ -31,10 +31,10 @@ extension CueHostTests {
     /// 刚启用那一轮出错，重试后照常看一眼；会话有动静那一轮出错，重试时看到的还是同一处变化，成了照常。
     @Test func 自己醒来出错后隔一会儿重试() async throws {
         let rig = try await Rig(failingOnce: ["醒来：刚启用"], prepare: Rig.handOverWork)
-        try await rig.message(.cue, containing: "我看了一眼")
+        try await rig.message(.cue, containing: "我看了一眼", skippingBackoff: true)
         #expect(rig.model.errors == 1)
         try await rig.settleTask(titled: "修好登录页 先出一次错")  // 假模型据此第一次报错
-        try await rig.message(.cue, containing: "登录页那边歇下了")
+        try await rig.message(.cue, containing: "登录页那边歇下了", skippingBackoff: true)
         #expect(rig.model.errors == 2)
         #expect(try await rig.store.cueMessages().allSatisfy { !$0.text.contains("bad things happened") })
         await rig.stop()
@@ -44,7 +44,7 @@ extension CueHostTests {
     @Test func 自己醒来重试也出错才告诉你() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 先出两次错")
-        try await rig.message(.cue, containing: "bad things happened")
+        try await rig.message(.cue, containing: "bad things happened", skippingBackoff: true)
         #expect(rig.model.errors == 2)
         #expect(try await rig.store.cueMessages().filter { $0.text.contains("bad things happened") }.count == 1)
         await rig.stop()

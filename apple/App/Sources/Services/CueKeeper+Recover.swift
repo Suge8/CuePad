@@ -23,24 +23,24 @@ extension CueKeeper {
     /// 大脑这时该有人管的那一下（对账的定时器排它，`reconcile`）：等着重起的到点时刻，或在跑的一轮还差多久没动静满 `CueTiming.silence`（看门狗）。
     /// 定时器照墙钟睡，睡着的 Mac 醒来时它先到点：看门狗按醒着的时长再算一次（`revive`），没满就按剩下的重排。
     /// 另有两种也排在这里：你的话退回没写成时隔一阵再试（`giveBack`），绕行里下一个重置时刻（到点换回该能用的那家，`steer`）。
-    var alarm: Date? {
+    func alarm(at now: Date) -> Date? {
         let brain: Date? = switch phase {
         case .restarting(_, _, let at): at
-        case .running(let shift) where shift.turn != nil: .now + (setup.timing.silence - quiet).seconds
+        case .running(let shift) where shift.turn != nil: now + (setup.timing.silence - quiet).seconds
         case .starting, .running: nil
         }
-        let retry = owed.isEmpty ? nil : Date.now + setup.timing.returnRetry.seconds
-        return [brain, retry, progress.detour?.nextReset(after: .now)].compactMap(\.self).min()
+        let retry = owed.isEmpty ? nil : now + setup.timing.returnRetry.seconds
+        return [brain, retry, progress.detour?.nextReset(after: now)].compactMap(\.self).min()
     }
 
     /// 在跑的这一轮醒着的时间里多久没有大脑事件（Mac 睡着的那段不算，`CueTiming.awake`）。
     private var quiet: Duration { setup.timing.awake() - heardAt }
 
     /// 到了 `alarm`：等着重起的起一个；在跑的一轮醒着那么久没动静就当大脑挂了（停掉，按 `broke` 重起、交出去的话重新交）。
-    func revive() async {
+    func revive(at now: Date) async {
         switch phase {
-        case .restarting(let failures, _, let at) where at <= .now:
-            _ = await steer(attempt: true)
+        case .restarting(let failures, _, let at) where at <= now:
+            _ = await steer(attempt: true, at: now)
             await startShift(failures: failures)
         case .running(let shift) where shift.turn != nil && quiet >= setup.timing.silence:
             let minutes = Int(setup.timing.silence.seconds / 60)
@@ -59,16 +59,17 @@ extension CueKeeper {
     func failOver(_ failure: String) async -> ShownText? {
         let summary = PiErrorSummary(failure)
         guard !summary.failure.retries, let settings = brainSettings, let from = settings.runtime.known else { return nil }
+        let now = self.now
         do {
             let agents = try await store.macAgents(on: setup.recorder.hostID)
             let resets = await resetsAt(agents.agent(from), kind: from, model: settings.model)
             var detour = progress.detour ?? Detour(settings, from: from)
-            detour.stuck[from] = Detour.Stuck(at: .now, resets: resets)
+            detour.stuck[from] = Detour.Stuck(at: now, resets: resets)
             progress.detour = detour
             save()
-            guard let (to, open) = detour.next(from: from, among: agents.kinds, at: .now), open, to != from else { return nil }
+            guard let (to, open) = detour.next(from: from, among: agents.kinds, at: now), open, to != from else { return nil }
             try await switchBrain(to)
-            failover = CueHealth.Failover(from: from, to: to, reason: summary.title, at: .now)
+            failover = CueHealth.Failover(from: from, to: to, reason: summary.title, at: now)
             outage = outage ?? .switched
             let why = summary.shownTitle.embedded
             guard let resets else { return ShownText("\(from.name) \(why)，我换到 \(to.name) 接着干。") }
@@ -82,7 +83,7 @@ extension CueKeeper {
 
     /// 绕行时让设置跟上规则（`Detour.next`）：你或 Cue 改过设置就不再绕行；该能用的那家（你设定的那家重置已过……）马上换过去；
     /// `attempt`（慢速周期到点：重来那一轮、重起大脑）时轮到碰运气的那家也换。改了设置返回 true：下一次对账按新设置换大脑。
-    func steer(attempt: Bool = false) async -> Bool {
+    func steer(attempt: Bool = false, at now: Date) async -> Bool {
         guard var detour = progress.detour else { return false }
         do {
             guard let profile = try await store.cueProfile(), let current = profile.runtime.known, detour.wrote(profile) else {
@@ -91,16 +92,16 @@ extension CueKeeper {
                 return false
             }
             // 重置已过的不再算卡住：在它上面再试，又卡住时重新记下（`failOver`）
-            let lapsed = Set(detour.stuck.filter { $0.value.resets.map { $0 <= .now } == true }.keys)
+            let lapsed = Set(detour.stuck.filter { $0.value.resets.map { $0 <= now } == true }.keys)
             if !lapsed.isEmpty {
                 lapsed.forEach { detour.stuck[$0] = nil }
                 progress.detour = detour
                 save()
             }
             let kinds = try await store.macAgents(on: setup.recorder.hostID).kinds
-            guard let (to, open) = detour.next(from: current, among: kinds, at: .now) else { return false }
+            guard let (to, open) = detour.next(from: current, among: kinds, at: now) else { return false }
             // 该能用的那家（换过去的，或重置刚过的这家）：卡着的那件不等慢速周期，马上在它上面重来
-            if open, to != current || lapsed.contains(to), setback?.persistent == true { setback?.retryAt = .now }
+            if open, to != current || lapsed.contains(to), setback?.persistent == true { setback?.retryAt = now }
             guard to != current, open || attempt else { return false }
             try await switchBrain(to)
             return true
@@ -121,7 +122,7 @@ extension CueKeeper {
     /// 起不来（快的重试用完）的是绕行换过去的那家：也算卡住（读不到重置），慢速周期到点轮到下一家。
     func markDown() {
         guard let kind = brainSettings?.runtime.known, var detour = progress.detour else { return }
-        detour.stuck[kind] = Detour.Stuck(at: .now, resets: detour.stuck[kind]?.resets)
+        detour.stuck[kind] = Detour.Stuck(at: now, resets: detour.stuck[kind]?.resets)
         progress.detour = detour
         save()
     }
@@ -133,7 +134,8 @@ extension CueKeeper {
               let quotas = try? await store.accountQuotas(on: setup.recorder.hostID),
               let quota = option.quota(in: quotas)
         else { return nil }
-        return quota.binding(at: .now, model: option.key.id).map(\.resetsAt).flatMap { $0 > .now ? $0 : nil }
+        let now = self.now
+        return quota.binding(at: now, model: option.key.id).map(\.resetsAt).flatMap { $0 > now ? $0 : nil }
     }
 
     // MARK: 起不来与恢复

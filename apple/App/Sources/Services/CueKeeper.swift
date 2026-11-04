@@ -93,6 +93,8 @@ final class CueKeeper {
         var directory: URL { library.appending(path: "Cue", directoryHint: .isDirectory) }
     }
     var store: CueStore { setup.recorder.store }
+    /// 对账用的此刻：资料库与 App 共用的钟（`CueStore.timing`，测试换成能往前跳的）。看门狗另按醒着的时长量（`CueTiming.awake`）。
+    var now: Date { store.timing.now() }
 
     nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "cue")
 
@@ -162,14 +164,14 @@ final class CueKeeper {
         }
     }
 
-    func beginRound(_ wake: CueWake, sent: [String], at date: Date = .now) -> CueRound {
+    func beginRound(_ wake: CueWake, sent: [String], at date: Date) -> CueRound {
         roundCount += 1
         return CueRound(id: roundCount, wake: wake, startedAt: date, sent: sent)
     }
 
     func archive(_ round: CueRound) {
         var round = round
-        round.finishedAt = .now
+        round.finishedAt = now
         round.context = shift?.context?.used
         history.append(round)
         if history.count > Self.roundsKept { history.removeFirst(history.count - Self.roundsKept) }
@@ -208,7 +210,7 @@ final class CueKeeper {
             await publish()
             if progress.marks == nil {
                 do {
-                    progress.marks = CueMarks(try await store.lastWrite(), stalls: .now)
+                    progress.marks = CueMarks(try await store.lastWrite(), stalls: now)
                     save()
                 } catch {
                     Self.log.error("Cue 读写入序号失败：\(error.localizedDescription, privacy: .public)")
