@@ -13,7 +13,6 @@ nonisolated enum DeliveryRefusal {
     static func definitelyNotHanded(_ error: any Error) -> Bool {
         switch error {
         case is SendError: true
-        case CueStoreError.cannotSpeakNow, CueStoreError.terminalOnly, CueStoreError.sessionUnconfirmed, CueStoreError.turnSourceUnconfirmed: true
         case PiBridgeError.unknownSession, PiBridgeError.unsupported,
              PiBridgeError.unknownModel: true
         case PiBridgeError.rejected(let reason):

@@ -173,8 +173,10 @@ nonisolated struct PiShown: Hashable, Sendable {
         case ended
         /// 做到一半被打断（进程没了）：停着，说一句它就接着做。
         case interrupted
-        /// 其他版本写入、本版本不认识的状态。
-        case unknown
+        /// 此刻说不准：其他版本写入、本版本不认识的状态，或没确认它此刻还是那样（`PiSessionState.runtimeState`）。
+        /// 没确认是因为它所在的 Mac 没开时带上那台的名字（`PiSessionState.offlineMac`）：说的是那台没开，同 Cue 那一句（`CuePresence.asleep`）；
+        /// 此刻同步不通时那台的在线记录可能只是没同步来，照旧说不准。
+        case unknown(macOff: String? = nil)
     }
 
     let status: Status
@@ -207,7 +209,8 @@ nonisolated extension PiShown {
         let cue = duty?.name
         let own = PiClock.reading(session.runtimeState, stateSince: session.stateSince, busySince: session.busySince)
         let busy = session.runtimeState.isWorking || session.runtimeState == .known(.waitingForUser)
-        let reported = Self.status(of: session.runtimeState, failure: session.failure?.known)
+        var reported = Self.status(of: session.runtimeState, failure: session.failure?.known)
+        if let mac = session.offlineMac, moment.reachableSince(session.hostID) != nil { reported = .unknown(macOff: mac) }
         let asked = session.waitsForCue(duty) ? Status.cueAsking : reported
         switch PiDelivery.phase(of: delivery, for: session, seen: seen, at: moment) {
         case .failed(let failure):
@@ -243,7 +246,7 @@ nonisolated extension PiShown {
         case .settled: .idle
         case .ended: .ended
         case .interrupted: .interrupted
-        case nil: .unknown
+        case nil: .unknown()
         }
     }
 }

@@ -13,6 +13,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var bootID: String?
   /// Store 读取时派生，不持久化；没有证明不等于空闲。
   public internal(set) var runtimeUntil: Date?
+  /// 没确认是因为所在的 Mac 此刻不在线时是那台的名字（`MacAgents.shownName`）；Store 读取时派生，不持久化。
+  public internal(set) var offlineMac: String?
   public var title: String
   public var projectID: UUID?
   public var state: Open<PiWorkState>

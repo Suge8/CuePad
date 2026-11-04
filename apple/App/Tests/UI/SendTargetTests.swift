@@ -184,7 +184,7 @@ struct SendTargetTests {
         #expect(mac.hostID == "mac-b" && mac.mode == .known(.send) && mac.target == SendTarget(kind: .piSession, name: "atlas", ref: "r"))
         #expect(rig.host.calls.isEmpty && rig.pi.sessions.isEmpty, "本机没有执行它")
         #expect(try await store.card(forMac.id)?.piSessionID == nil, "还没送达，这一步还没绑上")
-        await #expect(throws: CueStoreError.turnSourceUnconfirmed) { try await store.startLeaf(forCue.id, host: TestApp.hostID, cue: true) }
+        await #expect(throws: CueStoreError.turnSourceUnconfirmed("atlas")) { try await store.startLeaf(forCue.id, host: TestApp.hostID, cue: true) }
         #expect(try await store.deliveryRequests().map(\.id) == [mac.id], "Cue 被退回时什么都没写")
         try await remoteSession("r", title: "atlas")
         let cue = try await store.startLeaf(forCue.id, host: TestApp.hostID, cue: true)

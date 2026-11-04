@@ -75,7 +75,7 @@ struct StateGlyphSheet: View {
         ("歇着", .resting),
         ("新会话", .fresh),
         ("已结束", .ended),
-        ("未知", .unknown),
+        ("未知", .unknown()),
     ]
 
     private static func change(_ kind: CueChange.Kind) -> String {

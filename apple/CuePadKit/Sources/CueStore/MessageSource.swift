@@ -42,11 +42,12 @@ extension CueStore {
     return (last.deliveryID, state.turnStartedAt)
   }
 
+  /// 已结束、被打断的与这台 Mac 亲手收尾的托管会话（歇着，`close`）进程都不在：说一句就在后台唤醒它。
   func checkCueCanSpeak(in state: PiSessionState) throws {
     if state.state == .known(.ended) || state.state == .known(.interrupted) { return }
-    guard state.state.known != nil else { throw CueStoreError.sessionUnconfirmed }
-    guard try runtimeIsConfirmed(state, at: timing.now()) else {
-      throw CueStoreError.sessionUnconfirmed
+    guard state.state.known != nil, try runtimeIsConfirmed(state, at: timing.now()) else {
+      if let mac = state.offlineMac { throw CueStoreError.macOffline(state.title, mac) }
+      throw CueStoreError.sessionUnconfirmed(state.title)
     }
     if state.speakBlocked != nil {
       guard state.capabilities.contains(.speak) else { throw CueStoreError.terminalOnly(state.title) }
@@ -58,7 +59,7 @@ extension CueStore {
     case .user:
       throw CueStoreError.cannotSpeakNow(state.title, "正在跑他发起的一轮，现在说会打断它")
     case .unconfirmed, nil:
-      throw CueStoreError.turnSourceUnconfirmed
+      throw CueStoreError.turnSourceUnconfirmed(state.title)
     }
   }
 }

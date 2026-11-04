@@ -43,7 +43,7 @@ struct RuntimeDisplayTests {
         #expect(offline.subagents == 0 && offline.tally.moving == 0 && offline.advancing == 3)
         #expect(offline.isLive && !offline.hasConfirmedActivity)
         let board = try await TaskBoard.read(from: store)
-        #expect(board.advancing.allSatisfy { workspace.shown($0.agent!).status == .unknown })
+        #expect(board.advancing.allSatisfy { workspace.shown($0.agent!).status == .unknown(macOff: MacAgents.unnamed) })
         #expect(snapshot.shown(at: snapshot.at + 601).tally.moving == 0)
         #expect(snapshot.shown(at: snapshot.at + 601).isLive && !snapshot.shown(at: snapshot.at + 601).hasConfirmedActivity)
 
@@ -248,7 +248,7 @@ struct RuntimeDisplayTests {
         #expect(alive.state == .known(.compacting))
         let unknown = try #require(try await store.piSessions(sessionIDs: ["unknown"])["unknown"]?.state)
         #expect(try await !store.runtimeIsConfirmed(unknown))
-        #expect(unknown.state == .known(.compacting) && workspace.shown(unknown, delivery: nil).status == .unknown)
+        #expect(unknown.state == .known(.compacting) && workspace.shown(unknown, delivery: nil).status == .unknown())
         try input.fileHandleForWriting.close()
         process.waitUntilExit()
         try await app.services.resetPiState()
