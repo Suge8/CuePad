@@ -26,17 +26,17 @@ struct RuntimeGrokTests {
         let staleFile = try history("stale")
         let liveFile = try history("live"), otherFile = try history("other")
         let unrelated = try await ChildProcess(URL(filePath: "/bin/cat"), [], placement: .group, input: .pipe)
-        defer { unrelated.end(grace: .zero) }
+        defer { unrelated.end() }
         let wrongSession = try await ChildProcess(executable, ["-f", otherFile.path], placement: .group, output: .lines)
-        defer { wrongSession.end(grace: .zero) }
+        defer { wrongSession.end() }
         var otherOutput = wrongSession.output.makeAsyncIterator()
         _ = try #require(await otherOutput.next(), "只读替身没有打开会话文件：\(wrongSession.stderrTail)")
         let current = try await ChildProcess(executable, ["-f", liveFile.path], placement: .group, output: .lines)
-        defer { current.end(grace: .zero) }
+        defer { current.end() }
         var output = current.output.makeAsyncIterator()
         _ = try #require(await output.next(), "只读替身没有打开会话文件：\(current.stderrTail)")
         let oldRound = try await ChildProcess(executable, ["-f", staleFile.path], placement: .group, output: .lines)
-        defer { oldRound.end(grace: .zero) }
+        defer { oldRound.end() }
         var oldOutput = oldRound.output.makeAsyncIterator()
         _ = try #require(await oldOutput.next())
         _ = try history("live")
@@ -96,7 +96,7 @@ struct RuntimeGrokTests {
         consume.cancel()
         _ = await consume.result
         await runtime.stop()()
-        for process in [unrelated, wrongSession, oldRound, current] { process.end(grace: .zero); _ = await process.waitForExit() }
+        for process in [unrelated, wrongSession, oldRound, current] { process.end(); _ = await process.waitForExit() }
     }
 }
 #endif
