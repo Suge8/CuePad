@@ -85,9 +85,10 @@ struct RealSlashTests {
             let greet = UUID(), careful = UUID()
             try await bridge.send(PiMessage(text: "/greet world", deliveryID: greet.uuidString), to: s.id)
             try await eventually("模板展开后进了模型上下文") { fileTexts("user", in: s.sessionFile) == ["Say hello to world."] }
-            try await bridge.send(PiMessage(text: "/skill:careful 小心点", deliveryID: careful.uuidString), to: s.id)
+            // 回复框带着卡片发时卡片接在你打的话后面（`PiSlash.said`）：仍按 skill 展开，卡片是参数
+            try await bridge.send(PiMessage(text: "/skill:careful 小心点\n\n卡片：登录页改版", deliveryID: careful.uuidString), to: s.id)
             try await eventually("skill 展开后进了模型上下文") {
-                fileTexts("user", in: s.sessionFile).last?.contains("CAREFUL-BODY-MARKER") == true
+                fileTexts("user", in: s.sessionFile).last.map { $0.contains("CAREFUL-BODY-MARKER") && $0.hasSuffix("小心点\n\n卡片：登录页改版") } == true
             }
             let said = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages.filter { $0.role == .known(.user) }
             #expect(said.map(\.deliveryID) == [greet, careful])

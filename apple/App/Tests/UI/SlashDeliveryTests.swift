@@ -59,6 +59,30 @@ struct SlashDeliveryTests {
         await app.services.executor.beginStop()()
     }
 
+    /// 带着卡片（与批注）发：Agent 只认开头的 `/名字`，交出去的那句以你打的命令开头、名字后一个空格，卡片与批注接在后面当参数。
+    @Test(arguments: ["/greet", "/skill:careful", "/shout"])
+    func 带卡片与批注发命令_交出的仍以命令开头(line: String) async throws {
+        let app = TestApp(), store = app.services.store
+        let id = UUID().uuidString.lowercased()
+        let ext = try await app.host.connect(id, cwd: app.directory.path)
+        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        try await app.runtimeRecorder(on: TestApp.hostID).update(sessionID: id, state: .settled)
+        let session = try #require(try await store.allPiSessionStates().first { $0.sessionID == id })
+
+        let box = app.services.settings.replyDraftBinding(for: session.id)
+        let note = ReplyNote(entry: UUID(), run: 0, location: 0, quote: "登录按钮", note: "太小")
+        box.wrappedValue = ComposerDraft(text: line, attachments: [Outbox(content: "卡片：登录页改版")], notes: [note])
+        await Workspace(services: app.services).reply(to: session, commands: Self.commands, from: box, accepting: .reply).value
+        try await app.services.executor.start()
+        let request = try #require(try await store.deliveryRequests(toSession: id).last)
+        _ = try await store.outcome(of: request)
+        let sent = line == "/shout"
+            ? try #require(ext.commands.map(\.json).first { $0["t"] as? String == "command" }?["text"] as? String)
+            : try #require(ext.messages.first?.text)
+        #expect(sent.hasPrefix(line + " 卡片：登录页改版"), "\(sent)")
+        await app.services.executor.beginStop()()
+    }
+
     /// 托管的 Claude Code 报的命令都是它自己执行的（自定义命令与技能也在其中）：它真做了才是已送达；没登录、模型不可用、额度用完时
     /// 它取消这一条，回复框上方写它的原话，不报已送达，也不只写"尚未确认"。Claude Code 这一端的真实行为在 CuePiTests 的 `RealClaudeHostTests`。
     @Test(arguments: [nil, "Not logged in · Please run /login"])

@@ -48,8 +48,26 @@ nonisolated enum PiSlash {
         guard start.hasPrefix("/"), !draft.hasFiles else { return nil }
         let name = start.dropFirst().prefix { !$0.isWhitespace }
         guard commands.contains(where: { $0.name == name && !speaks($0, in: session) }) else { return nil }
-        let typed = start.trimmingCharacters(in: .whitespacesAndNewlines)
-        return ([typed] + draft.attachments.map(\.content)).joined(separator: "\n\n")
+        return invocation(start, then: draft.attachments.map(\.content))
+    }
+
+    /// 草稿是用模板或技能说的一句（清单里 `speaks` 的那些）时它的存储格式正文：Agent 只认开头的 `/名字`，所以你打的那行排最前，
+    /// 带上的卡片与批注接在后面当参数（`invocation`），附件在最后。不是时为 nil（按 `ComposerDraft.stored` 发）。
+    @MainActor static func said(_ draft: ComposerDraft, in commands: [PiSlashCommand], for session: PiSessionState) -> String? {
+        let start = draft.text.drop { $0.isWhitespace }
+        guard start.hasPrefix("/") else { return nil }
+        let name = start.dropFirst().prefix { !$0.isWhitespace }
+        guard commands.contains(where: { $0.name == name && speaks($0, in: session) }) else { return nil }
+        return StoredBody.make(text: invocation(start, then: draft.attachments.map(\.content) + [ReplyNote.message(draft.notes)]), files: draft.files)
+    }
+
+    /// `/名字` 后紧跟一个空格，再接你打的参数与 `more`（各成一段）：Pi 认扩展命令与技能的名字只到第一个空格，
+    /// 名字后直接换行会把参数并进名字里，认不出就当普通文字交给模型。
+    private static func invocation(_ typed: Substring, then more: [String]) -> String {
+        let name = typed.prefix { !$0.isWhitespace }
+        let arguments = typed.dropFirst(name.count).trimmingCharacters(in: .whitespacesAndNewlines)
+        let rest = ([arguments] + more).filter { !$0.isEmpty }.joined(separator: "\n\n")
+        return rest.isEmpty ? String(name) : "\(name) \(rest)"
     }
 
     /// 这条命令是你说的话：提示词模板与技能，且这家说话时能把它连同请求 id 交出——Pi 由桥扩展展开（`expandPromptTemplates`），
