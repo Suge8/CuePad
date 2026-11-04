@@ -215,7 +215,7 @@ struct DeliverableTile: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     // 画面出得慢（或这种文件没有画面）：写它是什么
-                    VStack(spacing: 4) {
+                    VStack(spacing: Spacing.tight) {
                         Image(kindIcon).font(radius < Radius.block ? Glyph.control : Glyph.large)
                         if preview.kind == .audio, let detail = shown?.detail { Text(detail).font(Typography.caption).monospacedDigit() }
                     }
@@ -226,7 +226,7 @@ struct DeliverableTile: View {
             .overlay(alignment: .bottomLeading) {
                 if preview.kind == .video, shown?.image != nil {
                     Image(.play).font(Glyph.small.weight(.bold)).foregroundStyle(palette.onMedia)
-                        .padding(7).background(palette.mediaScrim, in: .circle).padding(8)
+                        .padding(7).background(palette.mediaScrim, in: .circle).padding(Spacing.item)
                 }
             }
             .clipShape(shape)

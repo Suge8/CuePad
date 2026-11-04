@@ -165,7 +165,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 一直展开、有工具：文字铺满整宽在上，底下一排＋、工具与提交钮的位置。
     private var layered: some View {
         VStack(alignment: .leading, spacing: 0) {
-            text.padding(.horizontal, 18).padding(.top, ComposerMetrics.textTop).padding(.bottom, ComposerMetrics.textBottomOpen)
+            text.padding(.horizontal, Spacing.block).padding(.top, ComposerMetrics.textTop).padding(.bottom, ComposerMetrics.textBottomOpen)
             HStack(spacing: 0) {
                 if !accepts.isEmpty { plus }
                 tools().environment(\.singleLineConfig, workspace.layout == .wide)
@@ -181,7 +181,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if !accepts.isEmpty { plus }
             VStack(alignment: .leading, spacing: 0) {
                 text
-                    .padding(.leading, accepts.isEmpty ? 18 : 2).padding(.trailing, shrunk ? 18 : 2)
+                    .padding(.leading, accepts.isEmpty ? Spacing.block : 2).padding(.trailing, shrunk ? Spacing.block : 2)
                     .padding(.vertical, ComposerMetrics.textTop)
                     .frame(minHeight: buttonHeight)
                 // 工具排与两颗圆钮同一条中线；没有工具时这里是空的，不占位

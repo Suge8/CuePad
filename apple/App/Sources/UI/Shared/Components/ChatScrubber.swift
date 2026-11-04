@@ -151,7 +151,7 @@ struct ChatScrubber: View {
             Text(mark.preview).lineLimit(1)
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink)
-        .padding(.horizontal, 12).frame(height: 32)
+        .padding(.horizontal, Spacing.group).frame(height: 32)
         .glass(in: .capsule)
         .frame(maxWidth: 260, alignment: .trailing)
         .fixedSize()

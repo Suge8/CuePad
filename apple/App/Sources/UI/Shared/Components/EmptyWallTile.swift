@@ -30,7 +30,7 @@ struct EmptyWallTile: View {
     }
 
     private func cell(_ mascot: Mascot, @ViewBuilder line: () -> some View) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Spacing.item) {
             Image(mascot.rawValue).resizable().scaledToFit()
                 .frame(width: Self.mascot, height: Self.mascot)
                 .accessibilityHidden(true)
@@ -38,7 +38,7 @@ struct EmptyWallTile: View {
                 .font(Typography.bodyStrong).foregroundStyle(palette.ink2)
                 .lineLimit(1).minimumScaleFactor(0.6)
         }
-        .padding(.horizontal, 14).padding(.vertical, 18)
+        .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.block)
         .frame(maxWidth: .infinity)
         .paper()
         .contentShape(.rect(cornerRadius: Radius.card))

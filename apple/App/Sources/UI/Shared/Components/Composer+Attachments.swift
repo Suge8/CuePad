@@ -27,7 +27,7 @@ extension Composer {
         ])] : []
         return HStack(spacing: 0) {
             AttachmentButton(label: "带上：\(name)", menu: menu, open: { previewing = outbox }) {
-                HStack(spacing: 10) {
+                HStack(spacing: Spacing.item) {
                     Image(.pickCards).foregroundStyle(palette.ink3)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
@@ -39,7 +39,7 @@ extension Composer {
                     }
                     Spacer(minLength: 8)
                 }
-                .padding(.leading, 12).frame(minHeight: 44)
+                .padding(.leading, Spacing.group).frame(minHeight: 44)
                 .contentShape(.rect)
             }
             if removable {
@@ -55,7 +55,7 @@ extension Composer {
     /// 附件条：图片是方块缩略图，别的文件是文件牌（`FileChip`），各带一颗移除；点一个在全屏页里看（附件条里的几份左右翻）。
     var fileStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.item) {
                 ForEach(draft.files) { file in
                     ZStack(alignment: .topTrailing) {
                         if file.isImage {

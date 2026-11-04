@@ -56,13 +56,13 @@ struct AttachmentSheet: View {
     private static let macBar: CGFloat = 56
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Spacing.item) {
             PanelHeader(title: CardText.label(of: outbox.content)) {
                 Button("展开编辑", action: expand)
             }
             AttachmentBody(content: outbox.content, height: $contentHeight)
         }
-        .padding(.top, 18)
+        .padding(.top, Spacing.block)
         .frame(width: Self.macSize.width, height: min(Self.macSize.height, contentHeight + Self.macBar))
         .background(palette.desk)
     }

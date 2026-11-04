@@ -47,10 +47,10 @@ struct NoteThread<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) { content }
             .noteGlyph(.indent)
-            .padding(.bottom, 4)
+            .padding(.bottom, Spacing.tight)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(alignment: .leading) {
-                palette.hair.frame(width: 1).noteGlyph(.center).padding(.bottom, 4)
+                palette.hair.frame(width: 1).noteGlyph(.center).padding(.bottom, Spacing.tight)
             }
             .transition(.opacity)
     }
@@ -114,7 +114,7 @@ struct ChatMarker<Label: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.item) {
             if ruled { rule }
             marker.layoutPriority(1)
             if ruled { rule }
@@ -128,7 +128,7 @@ struct ChatMarker<Label: View>: View {
     @ViewBuilder private var marker: some View {
         let text = label
             .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
-            .padding(.horizontal, 8).padding(.vertical, 3)
+            .padding(.horizontal, Spacing.item).padding(.vertical, 3)
             .background { if highlighted { Capsule().fill(palette.selection).transition(.opacity) } }
             .animation(Motion.fade, value: highlighted)
         if let action {

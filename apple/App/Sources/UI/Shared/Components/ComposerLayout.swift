@@ -135,7 +135,7 @@ extension View {
                 VStack(alignment: .leading, spacing: ComposerMetrics.noticeSpacing) { notice() }
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 14).padding(.vertical, ComposerMetrics.noticePadding)
+                    .padding(.horizontal, Spacing.group).padding(.vertical, ComposerMetrics.noticePadding)
                     .glass(in: .rect(cornerRadius: Radius.card))
                     .allowsHitTesting(false)
             }

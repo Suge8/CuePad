@@ -27,7 +27,7 @@ struct FileChip: View {
     var body: some View {
         let status = FileStatus.line(name: name, file: file, transfer: services.fileTransfers[key])
         Button(action: tap) {
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.item) {
                 picture
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: name).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
@@ -36,7 +36,7 @@ struct FileChip: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, Spacing.item)
             .frame(height: height)
             .background(palette.fill, in: .rect(cornerRadius: Radius.block))
             .overlay(alignment: .bottom) {
@@ -45,7 +45,7 @@ struct FileChip: View {
                     Capsule().fill(palette.hair)
                         .overlay { Capsule().fill(palette.ink2).scaleEffect(x: progress, anchor: .leading) }
                         .frame(height: 3)
-                        .padding(.leading, thumbSide + 18).padding(.trailing, 12).padding(.bottom, 5)
+                        .padding(.leading, thumbSide + Spacing.block).padding(.trailing, Spacing.group).padding(.bottom, 5)
                         .animation(Motion.fade, value: progress)
                 }
             }

@@ -45,7 +45,7 @@ struct CrashReportView: View {
     /// Mac：挂在设置那一行"查看"上的弹出框，与设置里其余弹出框同一种外观（`SettingPopover`）。
     var body: some View {
         SettingPopover(title: report.kind.label, width: 420) {
-            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Spacing.group, verticalSpacing: 6) {
                 ForEach(facts(date: .abbreviated), id: \.0.key) { title, value in
                     GridRow {
                         Text(title).foregroundStyle(palette.ink3)
@@ -57,7 +57,7 @@ struct CrashReportView: View {
                 Text(report.frames.joined(separator: "\n")).font(Typography.meta.monospaced()).foregroundStyle(palette.ink2)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Spacing.item).frame(maxWidth: .infinity, alignment: .leading)
                     .background(palette.fill, in: .rect(cornerRadius: Radius.chip))
             }
             ExportDiagnosticsButton(text: report.diagnostics).buttonStyle(ControlButtonStyle(size: .compact))

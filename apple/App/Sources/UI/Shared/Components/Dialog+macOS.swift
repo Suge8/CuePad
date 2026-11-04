@@ -29,7 +29,7 @@ private struct DialogCard: View {
     private var primary: DialogButton? { buttons.last { $0.role == nil && !$0.disabled } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
             Text(title).font(Typography.bodyStrong).foregroundStyle(palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
@@ -40,7 +40,7 @@ private struct DialogCard: View {
                 TextField(String(localized: field.prompt), text: field.text).textFieldStyle(.roundedBorder).focused($focused)
                     .onSubmit { if let primary { run(primary) } }
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.item) {
                 Spacer()
                 if !buttons.contains(where: { $0.role == .cancel }) { Button("取消", role: .cancel) { close() } }
                 ForEach(buttons) { button in
@@ -55,9 +55,9 @@ private struct DialogCard: View {
                     }
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, Spacing.tight)
         }
-        .padding(20)
+        .padding(Spacing.panel)
         .frame(width: 360)
         .onAppear { focused = field != nil }
     }

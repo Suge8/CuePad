@@ -23,7 +23,7 @@ struct EmptyState<Action: View>: View {
     var body: some View {
         // 等同步那一句换成这里的空态：整块换身份，先淡掉再淡入（`handOff`），两块叠在同一张纸上、不同时交叉淡
         ZStack {
-            VStack(spacing: 16) {
+            VStack(spacing: Spacing.block) {
                 illustration
                 copy
                 if !syncing { action }
@@ -58,7 +58,7 @@ struct EmptyState<Action: View>: View {
 
     private var copy: some View {
         VStack(spacing: 6) {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.glyph) {
                 if syncing { Spinner(.small) }
                 Text(syncing ? "正在从 iCloud 同步" : title)
             }

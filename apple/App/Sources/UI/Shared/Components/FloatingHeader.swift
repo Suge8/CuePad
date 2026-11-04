@@ -21,7 +21,7 @@ extension View {
     ) -> some View {
         modifier(FloatingHeader(
             title: title, hidden: hidden, reveal: reveal,
-            center: TitleStack(title: title, detail: detail(), wording: wording).padding(.horizontal, 16).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1),
+            center: TitleStack(title: title, detail: detail(), wording: wording).padding(.horizontal, Spacing.block).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1),
             trailing: trailing()))
     }
 
@@ -128,7 +128,7 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
 
 
     private var middle: some View {
-        HStack(spacing: 8) { center }
+        HStack(spacing: Spacing.item) { center }
             .modifier(Yield(hidden: hidden))
             .background {
                 if hidden, let reveal { Color.clear.contentShape(.capsule).onTapGesture(perform: reveal).transition(.identity).accessibilityHidden(true) }
