@@ -89,5 +89,66 @@ enum EvalReading {
                     && !(clause.contains(/需要|^\s*(?:要|得)/) && !clause.contains("我"))
             }
     }
+
+    // MARK: 他问行程
+
+    /// 答对了起飞那一刻：同一句里有起飞的钟点（下午 3 点、15:00，整个认：13 点、15:30、凌晨 3 点都不是），它那一组日子全是 `month`-`day` 那天
+    /// 或"周三""下周三"。一句里的日子与钟点按先后排，中间只隔空白、括号、顿号的连成一组（逗号只在括号里才算连着："今天（11/05，周四）15:00"）；
+    /// 钟点那组里没有日子就看离它最近的那一组。一组里有一个不对就是答错："11-12（周三）15:00""周四（11-11）15:00"自相矛盾；
+    /// 只看那一组：同一句里常还有别的日子（提醒那天、括号外逗号后的回程），"今天 15:00 的飞机，我 11-11 提醒你"是答错。
+    /// 合同只到这里：已有长程输出里的真实答话判对，加上对照表里的写法（日期对钟点错、周几或周错、13 点与凌晨 3 点、同句两个日子、日期与周几自相矛盾、
+    /// 括号内外的逗号）。更刁的说法（否定、引号里转述、跨句才说清是哪天）不保证，宁可判错，不为它们再加规则。
+    static func flight(_ text: String, month: Int, day: Int) -> Bool {
+        let days = #/\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日号]?|\d{1,2} ?[-/月] ?\d{1,2} ?[日号]?|\d{1,2} ?[日号]|今天|明天|后天|今晚|明晚|昨天|(?:这|本|下|上)?(?:周|星期|礼拜)[一二三四五六日天]/#
+        let clocks = #/\d{1,2}[:：]\d{2}|(?:上午|下午|早上|晚上|凌晨|中午|傍晚)? ?(?:\d{1,2}|[一二三四五六七八九十两]{1,3}) ?点半?/#
+        func bare(_ text: Substring) -> String { text.filter { $0 != " " } }
+        func right(_ token: String) -> Bool {
+            if token.wholeMatch(of: /下?(?:周|星期|礼拜)三/) != nil { return true }
+            let numbers = token.matches(of: /\d+/).compactMap { Int($0.output) }
+            if numbers.count >= 2 { return Array(numbers.suffix(2)) == [month, day] }
+            return numbers == [day] && (token.hasSuffix("日") || token.hasSuffix("号"))
+        }
+        struct Item { let start: Int, end: Int, clock: Bool, text: String }
+        return sentences(text).contains { sentence in
+            let chars = Array(sentence)
+            func offset(_ index: Substring.Index) -> Int { sentence.distance(from: sentence.startIndex, to: index) }
+            let items = (sentence.matches(of: days).map { Item(start: offset($0.range.lowerBound), end: offset($0.range.upperBound), clock: false, text: bare($0.output)) }
+                + sentence.matches(of: clocks).map { Item(start: offset($0.range.lowerBound), end: offset($0.range.upperBound), clock: true, text: bare($0.output)) })
+                .sorted { $0.start < $1.start }
+            // 逗号按它所在那一刻在不在括号里算：沿空隙逐字数括号深度（"（周三），周四"出了括号的逗号不连）
+            func joined(_ from: Int, _ to: Int) -> Bool {
+                guard from < to else { return true }  // 叠在一起的（"周三十三点"里周三与三十三点共用一个字）
+                let openers = "（(【[", closers = "）)】]"
+                var depth = chars[..<from].count { openers.contains($0) } - chars[..<from].count { closers.contains($0) }
+                for char in chars[from..<to] {
+                    if openers.contains(char) { depth += 1 } else if closers.contains(char) { depth -= 1 }
+                    else if "，,".contains(char) { if depth <= 0 { return false } }
+                    else if !(char.isWhitespace || char == "、") { return false }
+                }
+                return true
+            }
+            var groups: [[Item]] = []
+            for item in items {
+                if let last = groups.last?.last, joined(last.end, item.start) { groups[groups.count - 1].append(item) } else { groups.append([item]) }
+            }
+            return groups.indices.contains { index in
+                groups[index].contains { clock in
+                    guard clock.clock, ["15:00", "15：00", "15点", "下午3点", "下午三点", "3点", "三点"].contains(clock.text) else { return false }
+                    var named = groups[index].filter { !$0.clock }
+                    if named.isEmpty {
+                        // 离它最近的那组日子（一样近取前面那组）
+                        let others = groups.indices.filter { $0 != index && groups[$0].contains { !$0.clock } }
+                        func gap(_ other: Int) -> (Int, Int) {
+                            let group = groups[other], after = group[0].start >= clock.end
+                            return (after ? group[0].start - clock.end : clock.start - group[group.count - 1].end, after ? 1 : 0)
+                        }
+                        guard let nearest = others.min(by: { gap($0) < gap($1) }) else { return false }
+                        named = groups[nearest].filter { !$0.clock }
+                    }
+                    return named.allSatisfy { right($0.text) }
+                }
+            }
+        }
+    }
 }
 #endif
