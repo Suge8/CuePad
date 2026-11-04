@@ -67,7 +67,7 @@ public enum CueStoreError: Error, Equatable {
   case sessionInUse(String)
   /// 会话在跑，Cue 这会儿说不了（参数是会话名与原因）：会打断他发起的那一轮，或停不下这一轮（`PiSessionState.speakBlocked`）。
   case cannotSpeakNow(String, String)
-  /// 会话所在的 Mac 此刻不在线，话送不到（参数是会话名与那台 Mac 的名字，`PiSessionState.offlineMac`）。
+  /// 会话所在的 Mac 此刻不在线，对它说话、停止都送不到（参数是会话名与那台 Mac 的名字，`PiSessionState.offlineMac`）。
   case macOffline(String, String)
   /// 会话此刻在做什么还没确认：那台 Mac 这次开机后没报过它、或报的状态这个版本不认识（参数是会话名）。
   case sessionUnconfirmed(String)
@@ -147,9 +147,9 @@ extension CueStoreError: LocalizedError {
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮、在等回答，或它在终端里开、不能从 CuePad 停止"
     case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去。等它歇下（会叫醒你）再说"
     case .macOffline(let title, let mac):
-      "会话「\(title)」所在的「\(mac)」此刻不在线（睡着、关机或 CuePad 没开）：没说出去，那台开机前说什么都送不到。别重说，等它开机再说；急的用 tell 告诉他"
+      "会话「\(title)」所在的「\(mac)」此刻不在线（睡着、关机或 CuePad 没开）：这次没有发出，那台开机前对它做什么都送不到。别重试，等它开机；急的用 tell 告诉他"
     case .sessionUnconfirmed(let title):
-      "会话「\(title)」此刻在做什么还没确认（它所在的 Mac 这次开机后还没报过它，或报的状态这个版本不认识）：没说出去。等它报了再说；要看它最后在做什么用 task peek"
+      "会话「\(title)」此刻在做什么还没确认（它所在的 Mac 这次开机后还没报过它，或报的状态这个版本不认识）：这次没有发出。等它报了再说；要看它最后在做什么用 task peek"
     case .turnSourceUnconfirmed(let title): "会话「\(title)」正在跑的这一轮查不到是谁开的：现在说会打断它，没说出去。等它歇下（会叫醒你）再说"
     case .terminalOnly(let title): "会话「\(title)」开在终端里，CuePad 只看得到它在做什么、对它说不了话：要它做的 tell 他在终端里说；它退出后再 say 会在后台接着它"
     case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束：那件事做完时 done 那件事"

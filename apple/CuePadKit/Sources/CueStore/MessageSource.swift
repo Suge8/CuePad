@@ -42,13 +42,21 @@ extension CueStore {
     return (last.deliveryID, state.turnStartedAt)
   }
 
-  /// 已结束、被打断的与这台 Mac 亲手收尾的托管会话（歇着，`close`）进程都不在：说一句就在后台唤醒它。
-  func checkCueCanSpeak(in state: PiSessionState) throws {
+  /// Cue 要对会话做什么（说话、停止）之前：此刻在做什么得是确认过的，不然说不准会不会打断它、停不停得了。
+  /// 所在的 Mac 不在线抛 `macOffline`，其余没确认的抛 `sessionUnconfirmed`。已结束、被打断的进程都不在，不用确认；
+  /// 这台 Mac 亲手收尾的托管会话（歇着，`close`）同一次启动里照常确认。
+  func requireRuntime(_ state: PiSessionState) throws {
     if state.state == .known(.ended) || state.state == .known(.interrupted) { return }
     guard state.state.known != nil, try runtimeIsConfirmed(state, at: timing.now()) else {
       if let mac = state.offlineMac { throw CueStoreError.macOffline(state.title, mac) }
       throw CueStoreError.sessionUnconfirmed(state.title)
     }
+  }
+
+  /// 进程不在的（已结束、被打断、歇着的托管会话）说一句就在后台唤醒它。
+  func checkCueCanSpeak(in state: PiSessionState) throws {
+    try requireRuntime(state)
+    if state.state == .known(.ended) || state.state == .known(.interrupted) { return }
     if state.speakBlocked != nil {
       guard state.capabilities.contains(.speak) else { throw CueStoreError.terminalOnly(state.title) }
       throw CueStoreError.cannotSpeakNow(state.title, "在跑，CuePad 打断不了它（在终端里开的）")
