@@ -81,6 +81,9 @@ extension PiBridge {
     /// （`AgentIntegration.retireLegacyPiExtension`）。连接在扫描 socket 目录时同步建立，所以已在跑的会话都算在内。
     public func allRun(extensionVersion version: Int) -> Bool { links.values.allSatisfy { $0.extensionVersion == version } }
 
+    /// 连着的 Pi 会话报的扩展版本（还没 hello 的不算）：过渡时找自己盯磁盘的旧扩展（`PiExtensionNudge`）
+    var extensionVersions: [Int] { links.values.compactMap(\.extensionVersion) }
+
     /// 装完新版扩展后：请连着的旧版会话换上（握手时版本不同的已在握手时请过，那时磁盘上可能还是旧的）。
     public func offerExtensionUpgrade() { for link in links.values where link.id != nil { link.offerUpgrade() } }
 
