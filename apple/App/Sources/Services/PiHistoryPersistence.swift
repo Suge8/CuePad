@@ -13,7 +13,6 @@ import os
 /// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：当作没有检查点，有这种文件时回填完成汇总记一行。
 actor PiHistoryPersistence {
     private static let log = Logger(subsystem: AppIdentity.id, category: "pi-history")
-    static let transcriptWindow = PiChat.transcriptWindow
     private let storage: CueStore
     /// 这台 Mac：会话文件索引也写成这台 Mac 的会话同步记录（见 `CueStore.upsertPiSession`）。
     private let host: String
@@ -101,7 +100,7 @@ actor PiHistoryPersistence {
     func keepPruned(timing: Timing = .system) async {
         repeat {
             do {
-                try await storage.prunePiMessages(olderThan: Self.transcriptWindow, now: timing.now())
+                try await storage.prunePiMessages(olderThan: PiChat.transcriptWindow, now: timing.now())
             } catch {
                 Self.log.error("清理对话失败：\(String(describing: error))")
             }

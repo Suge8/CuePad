@@ -85,7 +85,7 @@ struct MacDependencies {
                 .codex: CodexRuntime(bridge: pi, paths: paths, hooks: hooks, codex: { await agents.executable(.codex) }),
                 .opencode: OpenCodeRuntime(
                     bridge: pi, paths: paths, store: store, hostID: hostID, opencode: { await agents.executable(.opencode) },
-                    transcriptWindow: PiHistoryPersistence.transcriptWindow),
+                    transcriptWindow: PiChat.transcriptWindow),
                 .grok: GrokRuntime(bridge: pi, paths: paths, files: store.files, grok: { await agents.executable(.grok) }),
                 .dsh: DshRuntime(bridge: pi, paths: paths, dsh: { await agents.executable(.dsh) }),
             ] },
