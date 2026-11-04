@@ -26,7 +26,7 @@ struct PreviewReplyBar: View {
 
     private func field(_ prompt: String, to listener: Listener) -> some View {
         let empty = text.isEmpty
-        return HStack(spacing: 8) {
+        return HStack(spacing: Spacing.item) {
             // 一行：回车就发（多行的输入框回车是换行），长话照样横着滚
             TextField(prompt, text: $draft.text, palette: palette)
                 .textFieldStyle(.plain).font(Typography.body)
@@ -37,7 +37,7 @@ struct PreviewReplyBar: View {
                 .disabled(empty)
                 .accessibilityLabel("发送")
         }
-        .padding(.leading, 18).padding(.trailing, 8).frame(minHeight: ComposerMetrics.slot)
+        .padding(.leading, Spacing.block).padding(.trailing, Spacing.item).frame(minHeight: ComposerMetrics.slot)
     }
 
     private var text: String { draft.text.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -50,7 +50,7 @@ struct PreviewReplyBar: View {
     }
 
     private func choices(_ message: CueMessage) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             CueQuestionLine(message: message)
             CueChoices(message: message) { option in
                 workspace.attempt { try await workspace.services.answerCueQuestion(message.id, option) }
@@ -58,7 +58,7 @@ struct PreviewReplyBar: View {
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(14)
+        .padding(Spacing.group)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

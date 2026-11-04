@@ -106,8 +106,8 @@ struct Callout<Accessory: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 PiStateGlyph(status: status)
                 Text(Widow.joined(text)).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -116,7 +116,7 @@ struct Callout<Accessory: View>: View {
             .font(status == .asking ? Typography.title : Typography.body)
             accessory
         }
-        .padding(16)
+        .padding(Spacing.block)
         .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(CalloutSurface(docked: docked))
         .accessibilityElement(children: Accessory.self == EmptyView.self ? .combine : .contain)

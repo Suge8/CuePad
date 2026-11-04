@@ -74,7 +74,7 @@ struct CardMeta: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.item) {
             Text(DateLabel.short(card.modifiedAt))
             // 第一个链接的域名：长段文字里一眼认出是哪张
             if let host = text.linkHost {

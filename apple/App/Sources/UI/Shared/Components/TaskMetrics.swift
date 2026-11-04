@@ -15,7 +15,7 @@ enum TaskMetrics {
     /// 圈那一列（也是它的点按区）多宽、与标题隔多少；行没有左右内边距（纸自己留了）。
     static let ringColumn: CGFloat = 44
     static let columnGap: CGFloat = 2
-    static let cardPadding: CGFloat = 14
+    static let cardPadding = Spacing.group
     static let cardRadius = Radius.card
     static let cardLead: CGFloat = 24
     static let cardGlyph: CGFloat = 13
@@ -31,8 +31,8 @@ enum TaskMetrics {
     static let stepRing: CGFloat = 13
     /// 圈那一列多宽（新建行按它缩进，字与任务标题对齐）、与标题隔多少；悬停的淡底是行的底（`RowStyle`），向两边让出去。
     static let ringColumn: CGFloat = 18
-    static let columnGap: CGFloat = 10
-    static let cardPadding: CGFloat = 12
+    static let columnGap = Spacing.item
+    static let cardPadding = Spacing.group
     static let cardRadius = Radius.block
     static let cardLead: CGFloat = 16
     static let cardGlyph: CGFloat = 12
@@ -45,29 +45,29 @@ enum TaskMetrics {
 /// 推进中的卡是 `titleTop`、标题那一带、`waveGap`、线（`WaveStrip.height`）、`waveBottom`，与等你的卡同高。
 /// 标题与线之间那一截（Mac 6、手机 8）不能再窄：再贴近，线读起来像标题的下划线或删除线。手机竖版看板里卡铺满行给的格（`BoardRowLane`）。
 enum BoardCardMetrics {
-    static let inset: CGFloat = 8
-    static let gap: CGFloat = 8
+    static let inset = Spacing.item
+    static let gap = Spacing.item
     /// 相邻两列的卡（与列头玻璃）横着隔多少：就是两列各自的 `inset`，列与列之间不另留缝（`BoardWidths`）。
     /// 否决过：列间再留 20——四列三道缝连同卡离列边共白占约 100，1280 宽时待办一行只剩三四个字。
     static var columnGap: CGFloat { 2 * inset }
     /// 卡里开头记号、项目小图形、标题、尾巴之间（`BoardCardLayout`）。
-    static let leadGap: CGFloat = 8
+    static let leadGap = Spacing.item
     /// 推进中卡下沿那条线最窄多宽才画（`BoardLineRow`）：过去两颗点与现在一截波读得出来；再窄整条不画，只留读数。
     nonisolated static let lineMin: CGFloat = 40
     /// 手机竖版看板（`boardRow`）：卡窄，内边距、记号与标题之间都收一点，标题小一档。
-    static let rowPadding: CGFloat = 12
+    static let rowPadding = Spacing.group
     static let rowGap: CGFloat = 6
     static let rowTitle = Typography.secondary.weight(.medium)
     #if os(macOS)
-    static let titlePadding: CGFloat = 14
+    static let titlePadding = Spacing.group
     static let lightPadding: CGFloat = 7
     static let titleTop: CGFloat = 6
     static let titleRow: CGFloat = 20
     static let waveBottom: CGFloat = 4
     #else
-    static let titlePadding: CGFloat = 18
-    static let lightPadding: CGFloat = 10
-    static let titleTop: CGFloat = 10
+    static let titlePadding = Spacing.block
+    static let lightPadding = Spacing.item
+    static let titleTop = Spacing.item
     static let titleRow: CGFloat = 24
     static let waveBottom: CGFloat = 6
     #endif

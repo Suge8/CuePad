@@ -133,11 +133,11 @@ enum BubbleMetrics {
     /// 完成圈（点按区 `chipTarget` 宽）与标题之间：让标题的字落在 `textLeading`。
     static let titleGap: CGFloat = textLeading - TaskMetrics.chipTarget
     /// 贴在底部的纸（手机）下面让出的那一截（Home 指示条）。
-    static let sheetBottom: CGFloat = 12
+    static let sheetBottom = Spacing.group
     #if os(macOS)
     static let strong = Typography.secondary.weight(.semibold)
     static let meta = Typography.meta
-    static let padding = EdgeInsets(top: 6, leading: 10, bottom: 14, trailing: 6)
+    static let padding = EdgeInsets(top: 6, leading: Spacing.item, bottom: Spacing.group, trailing: 6)
     static let laneMark: CGFloat = 16
     static let laneFont = Typography.secondary.weight(.semibold)
     static let titleSize: CGFloat = 17
@@ -145,32 +145,32 @@ enum BubbleMetrics {
     static let editorInset: CGFloat = 6
     /// 标题第一行的中线对着完成圈的中线（截图核对）。
     static let ringTop: CGFloat = 2
-    static let textTrailing: CGFloat = 12
-    static let footerGap: CGFloat = 10
-    static let gap: CGFloat = 10
+    static let textTrailing = Spacing.group
+    static let footerGap = Spacing.item
+    static let gap = Spacing.item
     /// "下一步"那一条开头这家 Agent 的标志、它占的那一列，与标题前的状态标（`PiStateDot` 的尺寸）。
     static let brand: CGFloat = 20
     static let markSlot: CGFloat = 26
     static let dot: CGFloat = 8
     static let capsule: CGFloat = 28
-    static let stripPadding = EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+    static let stripPadding = EdgeInsets(top: Spacing.item, leading: Spacing.item, bottom: Spacing.item, trailing: Spacing.item)
     #else
     static let strong = Typography.secondary.weight(.semibold)
     static let meta = Typography.meta
-    static let padding = EdgeInsets(top: 6, leading: 8, bottom: 14, trailing: 8)
+    static let padding = EdgeInsets(top: 6, leading: Spacing.item, bottom: Spacing.group, trailing: Spacing.item)
     static let laneMark: CGFloat = 20
     static let laneFont = Typography.secondary.weight(.semibold)
     static let titleSize: CGFloat = 20
     static let bodySize: CGFloat = 16
-    static let editorInset: CGFloat = 10
+    static let editorInset = Spacing.item
     static let ringTop: CGFloat = 3
-    static let textTrailing: CGFloat = 12
-    static let footerGap: CGFloat = 12
-    static let gap: CGFloat = 8
+    static let textTrailing = Spacing.group
+    static let footerGap = Spacing.group
+    static let gap = Spacing.item
     static let brand: CGFloat = 24
     static let markSlot: CGFloat = 32
     static let dot: CGFloat = 9
     static let capsule: CGFloat = 36
-    static let stripPadding = EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10)
+    static let stripPadding = EdgeInsets(top: Spacing.item, leading: Spacing.item, bottom: Spacing.item, trailing: Spacing.item)
     #endif
 }

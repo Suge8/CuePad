@@ -50,7 +50,7 @@ struct OutlineTargets: View {
     private var badge: some View {
         Label("接到正文后面", icon: .add).labelStyle(.titleAndIcon)
             .font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.signature)
-            .padding(.horizontal, 8).padding(.vertical, 3)
+            .padding(.horizontal, Spacing.item).padding(.vertical, 3)
             .background(palette.selection, in: .capsule)
             .background(surface ?? palette.paper, in: .capsule)
     }

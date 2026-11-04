@@ -22,7 +22,7 @@ struct PiSlashPalette: View {
                         row(command, highlighted: index == highlighted).id(command.id)
                     }
                 }
-                .padding(.horizontal, 18).padding(.vertical, 6)
+                .padding(.horizontal, Spacing.block).padding(.vertical, 6)
             }
             .frame(maxHeight: Self.maxHeight)
             .fixedSize(horizontal: false, vertical: true)
@@ -36,7 +36,7 @@ struct PiSlashPalette: View {
 
     private func row(_ command: PiSlashCommand, highlighted: Bool) -> some View {
         Button { pick(command) } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text("/" + command.name).font(Typography.body.weight(.semibold)).foregroundStyle(palette.ink)
@@ -50,7 +50,7 @@ struct PiSlashPalette: View {
                 Spacer(minLength: 8)
                 Text(command.source.label).font(Typography.caption).foregroundStyle(palette.ink3)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, Spacing.item)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(.rect)
         }

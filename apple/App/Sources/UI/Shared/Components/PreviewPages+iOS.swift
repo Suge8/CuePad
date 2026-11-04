@@ -162,7 +162,7 @@ struct PreviewStill: View {
     private static let side: CGFloat = 600
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Spacing.block) {
             Group {
                 if let image = look?.image {
                     Image(decorative: image, scale: scale).resizable().scaledToFit()

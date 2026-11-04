@@ -28,13 +28,13 @@ struct SpeechBubble<Menu: View>: View {
         VStack(alignment: .trailing, spacing: look.statusSpacing) {
             UserBubble(stored: said.content, look: look, trip: shown, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
             if case .preparing(let reason) = trip {
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: Spacing.tight) {
                     Text(verbatim: reason)
                     Button("撤回", action: remove).buttonStyle(PressStyle(.inline))
                 }
                 .font(Typography.caption).foregroundStyle(palette.ink3).padding(.trailing, look.statusInset)
             } else if let reason = trip.unconfirmedReason {
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: Spacing.tight) {
                     Text(verbatim: reason)
                     Button("再说一次…") { confirmingAgain = true }.buttonStyle(PressStyle(.inline))
                 }
@@ -63,7 +63,7 @@ struct SpeechBubble<Menu: View>: View {
 
     /// 原因常驻；重发仍是行里的字，不画胶囊，点按区放大而不撑高这一行。
     private func failedLine(_ undelivered: Undelivered) -> some View {
-        VStack(alignment: .trailing, spacing: 4) {
+        VStack(alignment: .trailing, spacing: Spacing.tight) {
             Text(verbatim: undelivered.reason)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)

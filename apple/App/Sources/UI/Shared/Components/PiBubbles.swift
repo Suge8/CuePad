@@ -166,7 +166,7 @@ struct BubbleText: View {
             Button("展开", action: expand)
                 .font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink2)
                 .buttonStyle(PressStyle(.inline))
-                .padding(.leading, 4)
+                .padding(.leading, Spacing.tight)
                 .background(palette.bubble)
         }
         .fixedSize()

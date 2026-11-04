@@ -59,7 +59,7 @@ struct ReplyBlock: View {
     #endif
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             if let took { RoundProcess(tools: tools, ending: .took(took)) }
             MarkdownText(source: text, notes: notes).equatable()
         }
@@ -133,7 +133,7 @@ struct DraftReply<Header: View>: View {
     @ViewBuilder let header: Header
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             header
             MarkdownText(source: text).equatable()
         }
@@ -150,7 +150,7 @@ struct LiveStatus: View {
     let session: PiSessionState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             if let ending = Self.ending(of: session, speaking: false) {
                 RoundProcess(tools: session.pendingTools, ending: ending)
             }

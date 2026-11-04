@@ -17,7 +17,7 @@ struct SessionDock: View {
 
     var body: some View {
         let deliveries = digest?.deliveries ?? [], messages = digest?.messages ?? [], speech = services.speech
-        VStack(spacing: 8) {
+        VStack(spacing: Spacing.item) {
             PiQuestionDock(session: session, deliveries: deliveries)
             PiFailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
             if let end = deliveries.last(where: { $0.mode == .known(.end) }), let reason = Speech.trip(end, at: speech).unconfirmedReason,

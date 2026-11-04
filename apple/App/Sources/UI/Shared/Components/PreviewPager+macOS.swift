@@ -77,7 +77,7 @@ private struct PreviewPager: View {
         .overlay(alignment: .bottom) {
             if let reply {
                 PreviewReplyBar(reply: reply, about: title, done: { close() })
-                    .frame(maxWidth: 640).padding([.horizontal, .bottom], 16)
+                    .frame(maxWidth: 640).padding([.horizontal, .bottom], Spacing.block)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height + 16 } action: { barHeight = $0 }
             }
         }
@@ -88,13 +88,13 @@ private struct PreviewPager: View {
     /// 浮在内容上的顶栏：标题居中，右上各一块玻璃。
     private var header: some View {
         Text(title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
-            .padding(.horizontal, 16).frame(height: ControlMetrics.height)
+            .padding(.horizontal, Spacing.block).frame(height: ControlMetrics.height)
             .glass(in: .capsule)
             .accessibilityAddTraits(.isHeader)
             .padding(.horizontal, Self.titleRoom)
             .frame(maxWidth: .infinity)
             .overlay(alignment: .trailing) {
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.item) {
                     stepper
                     if let file = file(of: preview) {
                         ShareLink(item: file) { Image(.share).accessibilityLabel("分享") }
@@ -111,7 +111,7 @@ private struct PreviewPager: View {
 
     /// 前后箭头夹着"第几份 · 类型"（←→ 同）。
     private var stepper: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Spacing.tight) {
             if batch.count > 1 {
                 Button("上一个", icon: .back) { step(-1) }.labelStyle(.iconOnly).disabled(index == 0).help("上一个（←）")
             }
@@ -122,7 +122,7 @@ private struct PreviewPager: View {
             }
         }
         .buttonStyle(PressStyle(.inline)).foregroundStyle(palette.ink2)
-        .padding(.horizontal, 12).frame(height: ControlMetrics.height)
+        .padding(.horizontal, Spacing.group).frame(height: ControlMetrics.height)
         .glass(in: .capsule)
     }
 
@@ -135,7 +135,7 @@ private struct PreviewPager: View {
         services.store.files.fileURL(for: preview.key)
     }
 
-    private static let edge: CGFloat = 12
+    private static let edge = Spacing.group
     /// 顶栏占的高：内容让出它（`previewInsets`）
     private static let headerHeight = edge + ControlMetrics.height + 8
     /// 标题两边让出右上那几块的宽

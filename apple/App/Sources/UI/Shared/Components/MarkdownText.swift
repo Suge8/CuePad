@@ -28,7 +28,7 @@ struct MarkdownText: View, Equatable {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             ForEach(Array(Run.of(source, palette, notes: notes).enumerated()), id: \.offset) { _, run in
                 switch run {
                 case .prose(let text):
@@ -163,7 +163,7 @@ struct MarkdownText: View, Equatable {
 
 /// 成块的内容（回答里的表格，Cue 面板里的上下文卡与"运行情况"里的全文）同一套圆角、底色（`Palette.fill`）与内边距；对话里的旁注不铺底（`NoteLine`）。
 enum ChatBlock {
-    static let inset: CGFloat = 12
+    static let inset = Spacing.group
     static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Radius.block) }
 }
 
@@ -200,7 +200,7 @@ private struct MarkdownTableView: View {
                     .foregroundStyle(palette.ink)
                     .multilineTextAlignment(alignment.text)
             }
-            .padding(.horizontal, ChatBlock.inset).padding(.vertical, 8)
+            .padding(.horizontal, ChatBlock.inset).padding(.vertical, Spacing.item)
             .frame(maxWidth: .infinity, maxHeight: header ? .infinity : nil, alignment: alignment.frame)
             .background(header ? palette.fill : .clear)
             .gridColumnAlignment(alignment.horizontal)

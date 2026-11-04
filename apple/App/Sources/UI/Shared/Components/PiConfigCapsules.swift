@@ -202,7 +202,7 @@ struct PiThinkingDial: View {
                 Text("思考 \(Text(bubble.label).fontWeight(.semibold).foregroundStyle(palette.ink))")
                     .font(Typography.caption).foregroundStyle(palette.ink3)
                     .contentTransition(.opacity)
-                    .padding(.horizontal, 10).frame(height: 26)
+                    .padding(.horizontal, Spacing.item).frame(height: 26)
                     .glass(in: .capsule)
                     .fixedSize()
                     .offset(y: -32)

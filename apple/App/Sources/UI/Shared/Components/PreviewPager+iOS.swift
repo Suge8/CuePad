@@ -79,7 +79,7 @@ private struct PreviewPager: View {
             .safeAreaBar(edge: .bottom) {
                 if let reply {
                     PreviewReplyBar(reply: reply, about: title) { leave() }
-                        .padding(.horizontal, 12).padding(.bottom, 8)
+                        .padding(.horizontal, Spacing.group).padding(.bottom, Spacing.item)
                         .frame(maxWidth: 640)
                         .frame(maxWidth: .infinity)
                 }

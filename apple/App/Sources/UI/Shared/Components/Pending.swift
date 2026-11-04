@@ -34,5 +34,5 @@ struct SyncingLabel: View {
             .accessibilityElement(children: .combine)
     }
 
-    private static let gap: CGFloat = 4
+    private static let gap = Spacing.tight
 }

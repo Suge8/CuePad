@@ -173,7 +173,7 @@ struct PiReplyBar: View {
     private func notice(_ text: LocalizedStringResource, icon: Icon) -> some View {
         Label(text, icon: icon)
             .font(Typography.secondary).foregroundStyle(palette.ink2)
-            .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 2 * Radius.field, alignment: .leading)
+            .padding(.horizontal, Spacing.block).frame(maxWidth: .infinity, minHeight: 2 * Radius.field, alignment: .leading)
             .glass(in: .rect(cornerRadius: Radius.field))
     }
 

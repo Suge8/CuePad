@@ -61,7 +61,7 @@ struct TaskLine: View {
         }
         .frame(minHeight: TaskMetrics.rowHeight)
         #if os(macOS)
-        .hoverReveal(when: !done && next.map { !Self.inlines($0) } ?? false) { if let next { TaskNextMark(next: next).padding(.leading, 4) } }
+        .hoverReveal(when: !done && next.map { !Self.inlines($0) } ?? false) { if let next { TaskNextMark(next: next).padding(.leading, Spacing.tight) } }
         #endif
         .animation(Motion.fade, value: done)
     }
@@ -119,7 +119,7 @@ struct TaskLine: View {
     private var stacked: Bool { typeSize.isAccessibilitySize }
     private var titleLines: Int { typeSize.isAccessibilitySize ? 4 : 2 }
     /// 标题折成两行时上下留的白：单行时行高由 44pt 的点按高度撑着。
-    private static let titlePadding: CGFloat = 10
+    private static let titlePadding = Spacing.item
     private static let ringTarget: CGFloat = 44
 
     private func framed(_ content: some View) -> some View {
