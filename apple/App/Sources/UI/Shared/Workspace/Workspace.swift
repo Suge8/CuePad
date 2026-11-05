@@ -146,11 +146,13 @@ final class Workspace {
     var scopedProject: UUID? { catalog?.project(projectScope)?.id }
     /// 技能与规则页此刻在哪一段：规则或技能。两端同一份：Mac 工具栏与手机页顶的分段都读它，去文件页再回来、换页再回来都还在这一段。
     var libraryPane = LibraryPane.rules
-    /// 宽屏的 Cue 放不下时，右缘的抽屉开着（`showCue` 置起；点抽屉外、Esc、换主区关）；放得下时不起作用。用户放不放回右边在 `AppSettings.cueOpen`。
+    /// 宽屏的 Cue 放不下时，右缘的抽屉开着（放不下时 `showCue` 置起；点抽屉外、Esc、换主区、窗口跨过临界宽关，`fit`）；放得下时恒为假。用户放不放回右边在 `AppSettings.cueOpen`。
     var cueDrawer = false
-    /// 宽屏的会话条放不下时（窗口窄过 `WideMetrics.railThreshold`），左缘的抽屉开着（开合钮、⌃⌘S 置起，`toggleRail`；点抽屉外、Esc、去别处关）；放得下时不起作用。
+    /// 宽屏的会话条放不下时（窗口窄过 `WideMetrics.railThreshold`），左缘的抽屉开着（开合钮、⌃⌘S 置起，`toggleRail`；点抽屉外、Esc、去别处、窗口跨过临界宽关，`fit`）；放得下时恒为假。
     /// 用户要不要会话条开着在 `AppSettings.railExpanded`，抽屉不改它。
     var railDrawer = false
+    /// 窗口此刻放不放得下会话条与 Cue（窗口的根报来，`reportsWideFits`）；还没排过版时为 nil。没有视图读它，只给 `showCue` 与 `fit` 判断。
+    @ObservationIgnored var wideFits: WideMetrics.Fits?
     /// Cue 页拍板卡露的是哪一件（`CueWait.id`）：在拍板卡上换一件写这里；不在等了露第一件。
     var cueAsking: String?
     var notice: Notice?

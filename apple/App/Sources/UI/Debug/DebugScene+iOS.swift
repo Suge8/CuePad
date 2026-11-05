@@ -62,7 +62,7 @@ extension DebugScene {
         }
         presetColumns(workspace.services.settings)
         await running("摆画面") { try await presetScene(workspace, project: project) }
-        presetRailDrawer(workspace)
+        presetDrawers(workspace)
         await presetSpeech(workspace)
         await prepareNarrow(workspace)
     }

@@ -28,10 +28,21 @@ extension Workspace {
     /// 会话条此刻露着：在左边，或抽屉开着。
     func railShown(_ sizes: WideMetrics) -> Bool { sizes.rail > 0 || !sizes.railFits && railDrawer }
 
-    /// 去 Cue（深链、通知、对 Cue 说、收着时点 Cue 钮、⌃⌘I）：放得下就放回右边，放不下拉出抽屉。两样都置上：窗口之后跨过临界宽，Cue 照样露着。
+    /// 去 Cue（深链、通知、对 Cue 说、收着时点 Cue 钮、⌃⌘I）：放回右边（用户的选择），此刻放不下再拉出抽屉。
+    /// 放得下时不置抽屉位：它只说"放不下的这一段里抽屉开着"，留着的话窗口之后变窄，抽屉会自己滑出来。
     func showCue() {
         services.settings.cueOpen = true
-        cueDrawer = true
+        if wideFits?.cue != true { cueDrawer = true }
+    }
+
+    /// 窗口放不放得下变了（`reportsWideFits`）：跨过临界宽（放得下↔放不下）的那一刻关掉对应的抽屉，放得下时抽屉位恒为假——
+    /// 抽屉开着说的是"放不下的这一段里拉出来了"，跨出这一段就作废；不清的话拉宽再拖窄，抽屉会自己又出来。两个抽屉同一条规则，只在这里清。
+    /// 第一次报（还没排过版）放不下时不清：启动时就窄的窗口里，摆画面拉出的抽屉要留着。
+    func fit(_ fits: WideMetrics.Fits) {
+        let previous = wideFits
+        wideFits = fits
+        if fits.rail || previous.map({ $0.rail != fits.rail }) == true { railDrawer = false }
+        if fits.cue || previous.map({ $0.cue != fits.cue }) == true { cueDrawer = false }
     }
 
     /// 宽屏会话条开着（用户的选择，只有一份）。

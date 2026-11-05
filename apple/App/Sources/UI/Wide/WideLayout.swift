@@ -37,6 +37,14 @@ struct WideMetrics {
 
     var shape: Shape { Shape(rail: rail, cue: cue) }
 
+    /// 会话条、Cue 各自放不放得下：跨过临界宽（放得下↔放不下）的那一刻对应的抽屉关掉（`Workspace.fit`）。
+    struct Fits: Equatable {
+        let rail: Bool
+        let cue: Bool
+    }
+
+    var fits: Fits { Fits(rail: railFits, cue: cueFits) }
+
     init(width: CGFloat, workspace: Workspace) {
         let open = workspace.services.settings.cueOpen
         split = workspace.besideSession != nil
@@ -54,4 +62,11 @@ struct WideMetrics {
 
     /// Cue 自动收成钮的临界窗口宽（会话条已藏起）。
     static var cueThreshold: CGFloat { narrowestMain + cue }
+}
+
+extension View {
+    /// 宽屏窗口的根（Mac 的 `MainWindow`、iPad 的 `SplitRoot`）把这一刻放不放得下报给工作区：抽屉开没开只在 `Workspace.fit` 一处随它清。
+    func reportsWideFits(_ sizes: WideMetrics, to workspace: Workspace) -> some View {
+        onChange(of: sizes.fits, initial: true) { _, fits in workspace.fit(fits) }
+    }
 }

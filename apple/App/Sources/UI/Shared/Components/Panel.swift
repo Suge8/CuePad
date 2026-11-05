@@ -63,16 +63,20 @@ extension View {
 /// `panel(isPresented:)` 的身份：开着只有这一个。
 private struct Shown: Identifiable { let id = true }
 
-/// 抽屉的面（`PanelStyle.drawer`）：桌面底连同面板阴影、左缘一道发丝边，都铺到安全区外，内容照样排在安全区里。宽由内容定。
+/// 抽屉的面（Cue 的右缘抽屉 `PanelStyle.drawer`、会话条的左缘抽屉 `RailDrawer`，只这一份）：底色连同面板阴影、朝窗口里那一侧一道发丝边，
+/// 都铺到安全区外，内容照样排在安全区里。宽由内容定。底色随里面放的是什么：Cue 是桌面底，会话条是侧栏底。
 struct DrawerSurface: ViewModifier {
+    /// 贴在窗口哪一边：发丝边画在另一侧（朝主区那一侧）。
+    var edge = HorizontalEdge.trailing
+    var ground: KeyPath<Palette, Color> = \.desk
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content
             .frame(maxHeight: .infinity)
             // 影子只挂在底那块上：挂在整块内容上要先离屏合成里面的字再糊影子（同 `PaperSurface`）
-            .background { palette.desk.elevation(.panel).ignoresSafeArea() }
-            .overlay(alignment: .leading) { palette.hair.frame(width: 1).ignoresSafeArea() }
+            .background { palette[keyPath: ground].elevation(.panel).ignoresSafeArea() }
+            .overlay(alignment: edge == .trailing ? .leading : .trailing) { palette.hair.frame(width: ControlMetrics.stroke).ignoresSafeArea() }
     }
 }
 

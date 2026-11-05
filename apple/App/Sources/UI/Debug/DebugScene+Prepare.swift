@@ -9,9 +9,11 @@ extension DebugScene {
         settings.cueOpen = defaults.string(forKey: "CuePadCue") != "shut"
     }
 
-    /// `-CuePadSidebar drawer`：摆好画面后拉出会话条的左缘抽屉（窗口放不下会话条时才看得见，`Workspace.railDrawer`）。画面摆完再置：换主区会关抽屉。
-    static func presetRailDrawer(_ workspace: Workspace) {
+    /// `-CuePadSidebar drawer`、`-CuePadCue drawer`：摆好画面后拉出会话条的左缘抽屉、Cue 的右缘抽屉（窗口放不下它们时才看得见，`Workspace.railDrawer`、`showCue`）。
+    /// 画面摆完再置：换主区会关抽屉。
+    static func presetDrawers(_ workspace: Workspace) {
         if defaults.string(forKey: "CuePadSidebar") == "drawer" { workspace.railDrawer = true }
+        if defaults.string(forKey: "CuePadCue") == "drawer" { workspace.showCue() }
     }
 
     static func prepareLibrary(_ workspace: Workspace) async -> UUID? {

@@ -115,7 +115,8 @@ extension DebugScene {
             workspace.openSession(PiSessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
         }
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
-        presetRailDrawer(workspace)
+        presetDrawers(workspace)
+        crossWithDrawerIfAsked(workspace)
         if defaults.string(forKey: "CuePadSidebarCycle") != nil { Task { await cycleSidebar() } }
         await reverseWideIfAsked(workspace)
         await presetSpeech(workspace)

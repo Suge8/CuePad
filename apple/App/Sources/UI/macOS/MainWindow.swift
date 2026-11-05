@@ -68,6 +68,7 @@ struct MainWindow: View {
                 if !sizes.railFits { RailDrawer(open: workspace.railDrawer, close: { workspace.railDrawer = false }) { WideRail(width: Chrome.rail) } }
             }
             .overlay(alignment: .topLeading) { SidebarToggle(sizes: sizes) }
+            .reportsWideFits(sizes, to: workspace)
             .overlay(alignment: .topTrailing) {
                 if !workspace.cueShown(sizes) { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
             }

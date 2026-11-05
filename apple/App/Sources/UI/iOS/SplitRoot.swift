@@ -42,6 +42,7 @@ struct SplitRoot: View {
             .overlay(alignment: .leading) {
                 if !sizes.railFits { RailDrawer(open: workspace.railDrawer, close: { workspace.railDrawer = false }) { WideRail(width: Chrome.rail, sizes: sizes) } }
             }
+            .reportsWideFits(sizes, to: workspace)
             // 桌面色一处铺满窗口（托管的几块是透明的，`WideColumnController`）：几块只排在安全区里，状态栏那一条与底下横条那一截也要是桌面色
             .background(palette.desk)
         }
