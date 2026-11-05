@@ -229,7 +229,7 @@ private struct WindowPanel<Panel: View>: ViewModifier {
             // 样式也算：从控件长出的气泡，控件的框变了（窗口改大小、调试参数一出现就开时框还没量到）气泡跟着
             .onChange(of: Mode(key: key, retained: retained, style: style), initial: true) { _, mode in
                 if mode.key != nil || mode.retained {
-                    host.show(token, style: style, content: AnyView(panel().environment(\.closePanel, close)), close: close, open: mode.key != nil)
+                    host.show(token, style: style, content: AnyView(panel().environment(\.closePanel, close.of(token))), close: close, open: mode.key != nil)
                 } else {
                     host.hide(token)
                 }

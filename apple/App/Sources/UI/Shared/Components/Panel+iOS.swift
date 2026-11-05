@@ -9,12 +9,12 @@ extension View {
         Group {
             switch style {
             case .fullScreen:
-                self.fullScreenCover(item: item) { content($0).modalPage(close) }
+                self.fullScreenCover(item: item) { content($0).modalPage(close.of($0.id)) }
             case .bubble(let source, let width):
                 let shown = item.wrappedValue
                 self.modifier(BubbleSlot(key: shown.map { AnyHashable($0.id) }, source: source, width: width, close: close) { if let shown { content(shown) } })
             case .sheet:
-                self.sheet(item: item) { content($0).modalPage(close) }
+                self.sheet(item: item) { content($0).modalPage(close.of($0.id)) }
             case .drawer:
                 self.presentDrawer(isPresented: Binding { item.wrappedValue != nil } set: { if !$0 { close() } }) {
                     if let shown = item.wrappedValue { content(shown) }
@@ -88,7 +88,7 @@ final class PanelHost {
         show(Shown(
             token: token, identity: [AnyHashable(token), key], source: source, width: width,
             content: AnyView(
-                content.environment(\.closePanel, close)
+                content.environment(\.closePanel, close.of(token))
                     .environment(\.dynamicTypeSize, min(typeSize, Self.largestType))
                     .environment(\.self, environment)),
             close: close))
@@ -207,7 +207,7 @@ private struct DrawerSlot<Panel: View>: ViewModifier {
             .onChange(of: Mode(open: open, scheme: scheme, contrast: contrast, typeSize: typeSize), initial: true) { _, mode in
                 host?.drawer = PanelHost.Drawer(
                     token: token, open: mode.open,
-                    content: AnyView(panel().modifier(DrawerSurface()).environment(\.pageActive, mode.open).environment(\.closePanel, close).environment(\.self, environment)),
+                    content: AnyView(panel().modifier(DrawerSurface()).environment(\.pageActive, mode.open).environment(\.closePanel, close.of(token)).environment(\.self, environment)),
                     close: close)
             }
             .onDisappear { if host?.drawer?.token == token { host?.drawer = nil } }
