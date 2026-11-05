@@ -40,7 +40,7 @@ final class AppSettings {
     @ObservationIgnored private var draftTimer: Task<Void, Never>?
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
-    /// 上次打开的项目；项目段恢复与菜单栏随手记共用，当前项目仍从导航推出。
+    /// 上次看的项目：新记灵感（菜单栏随手记）默认进它，不决定导航落点；当前项目仍从导航推出。
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }

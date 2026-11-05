@@ -90,7 +90,7 @@ extension Workspace {
         if mainRoute != previous { willSelect(mainRoute, from: previous) }
     }
 
-    /// 会话栏头的 ×：关左半时右半的会话占满主区，只有一个时回项目｜进展的浏览落点（`browseRoute`，之前打开的项目还是那个）；关右半回到只开一个。不另存返回来源。
+    /// 会话栏头的 ×：关左半时右半的会话占满主区，只有一个时回项目列表或进展（`browseRoute`）；关右半回到只开一个。不另存返回来源。
     func closeColumn(_ column: Column) {
         guard case .wide(var state) = navigation else { return }
         switch column {

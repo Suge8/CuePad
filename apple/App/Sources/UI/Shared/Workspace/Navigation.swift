@@ -10,7 +10,7 @@ struct NarrowNavigation {
 }
 
 /// 宽屏只有主区的去处：浏览落点（项目列表或进展，从偏好推出）、别的页（项目页也是从列表进去的一页）、一个会话，或并排两个会话（⌘ 点开的第二个在右半边，`beside`）。
-/// 右边一直是 Cue，不进导航：它收没收起是用户的选择（`AppSettings.cueOpen`），放不下时浮出是这一刻的呈现（`Workspace.cueFloats`）。
+/// 右边一直是 Cue，不进导航：它收没收起是用户的选择（`AppSettings.cueOpen`），放不下时住进右缘抽屉、开没开是这一刻的呈现（`Workspace.cueDrawer`）。
 /// 同一个会话最多在一边，回复草稿仍按会话 id 由 AppSettings 持有。
 struct WideNavigation {
     enum Main {
