@@ -126,6 +126,11 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
         return view
     }
 
+    /// 块的大小只由外面给的框定（`frame(width:)`、铺满的高）：不答的话 SwiftUI 按 Auto Layout 量这块的合适大小，每次换宽都把整棵子树的约束灌进引擎走一遍。
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: WideColumnView, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
     func updateNSView(_ view: WideColumnView, context: Context) {
         if let layer = view.layer, let page = view.host.layer { view.slide.move(layer, page: page, origin: origin, width: width, shape: shape) }
         view.host.rootView = AnyView(content.overlay { WideDropFeedback(state: view.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels).environment(\.wideWindowID, focus.windowID))

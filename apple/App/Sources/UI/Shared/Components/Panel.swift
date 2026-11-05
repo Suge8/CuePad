@@ -1,9 +1,21 @@
 import SwiftUI
 
 /// 关掉自己所在的弹层（`panel`）。Mac 的窗口内浮层没有系统的 `dismiss`，两端的弹层内容都用它。
-struct ClosePanel {
+/// 交进浮层内容的环境前按那一层认（`of`：呈现它的那一处的 token 或条目 id），按它比较：
+/// 呈现处每更新一次都新建一个闭包，闭包没法比，按闭包比的话浮层里读它的视图次次重算；同一层的关法不变，比出相等时读者留着的旧闭包关的也是这一层。
+struct ClosePanel: Equatable {
+    /// 不可变、只拿来比（token 或条目 id）：比较不在主线程上也读得了。
+    nonisolated(unsafe) let id: AnyHashable?
     let run: @MainActor () -> Void
+
+    init(id: AnyHashable? = nil, run: @escaping @MainActor () -> Void) {
+        self.id = id
+        self.run = run
+    }
+
     func callAsFunction() { run() }
+    func of(_ id: AnyHashable) -> ClosePanel { ClosePanel(id: id, run: run) }
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.id == b.id }
 }
 
 extension EnvironmentValues {

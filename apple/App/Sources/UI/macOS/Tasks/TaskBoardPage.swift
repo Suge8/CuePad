@@ -33,8 +33,6 @@ struct TaskBoardPage: View {
             // 列头在最顶那一排：左边同栏头让出伸进来的开合钮（`headInset`，平时就是栏边）
             .padding(.leading, inset.leading - Spacing.page)
             .environment(\.boardBand, Chrome.band)
-            .environment(\.laneAddsTask, { workspace.addsTask = true })
-            .environment(\.laneAddsSession, { workspace.openNewSession(in: scope) })
             // 换范围是整块换内容：列里按卡挪位的动画与列头数字滚动都不跟着走（跟着走时四列每帧重排、数字每帧在 CPU 上重画，掉帧半秒）。
             // `animation = nil` 挡不住里层的 `.animation(_:value:)`，只有 `disablesAnimations` 挡得住
             .transaction(value: scope) { $0.disablesAnimations = true }

@@ -35,8 +35,11 @@ enum PreviewReply: Equatable {
 }
 
 /// 挂着全屏页的那一页交给页里的缩略图（如你的话里带的图片 `ChatImages`）：点一张就从这里打开，不各挂一个。
-struct PreviewOpener {
+/// 恒等：给它的全屏页每次更新都新建一个闭包，闭包没法比，不恒等的话读它的每一格缩略图都跟着重算。环境值比出相等时读它的视图留着旧的那一个，
+/// 所以闭包只能写给它的那一页的状态或绑定（旧的写的也是同一份），不能捕获会变的值。
+struct PreviewOpener: Equatable {
     let open: @MainActor (PreviewOpening) -> Void
+    nonisolated static func == (a: Self, b: Self) -> Bool { true }
     func callAsFunction(_ opening: PreviewOpening) { open(opening) }
 }
 

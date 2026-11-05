@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # CuePad 的构建、测试、截图、测量、发布只走这里（Agent 绕开它直接调 xcodebuild、swift build/test、simctl 开关机，
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
-#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 的整模块编译
+#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 的整模块编译；
+#                                                   自己的 Swift 源文件（App、CuePadKit）有一条编译警告就失败，第三方与生成的代码不算（_build.sh 的 own_warnings）
 #   xc.sh build <mac|ios|ipad>
 #   xc.sh activity-log [输出.json]                  生产 iCloud 活动取证只读导出：签隔离副本、不启动应用服务，不打开真实库、不重启正式版
 #   xc.sh strings                                   编 mac 与 ios，把界面文字收进 String Catalog，列出缺英文的（strings.py 头注释）
@@ -131,7 +132,7 @@ case "$cmd" in
   check)
     "$APPLE_DIR/scripts/lint.sh"
     # Kit 的 macOS 构建（CuePi、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
-    (cd "$APPLE_DIR/CuePadKit" && swift build --quiet) & kit=$!
+    kit_build & kit=$!
     # 归档（Release）是整模块编译，Debug 是按文件分批的增量编译：同一份源码，有些诊断（如 nonisolated 类型里静态存非 Sendable 值）只有整模块才报，
     # 整模块编译与优化档位无关（-Onone 同样报），所以 Mac App 用 Debug 加整模块编一遍（只编 App，不签名）。Mac 独有的代码也只在这里编到。产物与 Debug 增量构建分开，免得交替时互相作废
     (
@@ -143,6 +144,8 @@ case "$cmd" in
     if xcd all; then python3 "$APPLE_DIR/scripts/strings.py" check || status=$?; else status=$?; fi
     wait "$kit" || status=$?
     wait "$wmo" || status=$?
+    # shellcheck disable=SC2031 # 读外层的 iOS 产物目录：整模块那一段在子 shell 里换了 DERIVED 与 platform
+    no_warnings "$DERIVED/warnings-$platform" || status=1
     exit $status ;;
   activity-log)
     xcd all

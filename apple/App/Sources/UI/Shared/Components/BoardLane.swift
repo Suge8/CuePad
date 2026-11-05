@@ -15,23 +15,18 @@ struct BoardLane: View {
     }
 }
 
-extension EnvironmentValues {
-    /// 看板待办那一列（行）头上的"+"：点它开添加任务（进展页给：手机与 iPad `ProgressScreen`，Mac `TaskBoardPage`）；nil 不画。
-    @Entry var laneAddsTask: (() -> Void)? = nil
-    /// 推进中那一列（行）头上的"+"：点它开新会话（`Workspace.openNewSession`）。三端的新会话都只在这里，另外只有会话列表空着时那一颗（`SessionList`）；nil 不画。
-    @Entry var laneAddsSession: (() -> Void)? = nil
-}
-
-/// 列头、行头上的"+"（三端同这一处）：待办是添加任务（`laneAddsTask`），推进中是新会话（`laneAddsSession`），页没给就没有。
+/// 列头、行头上的"+"（三端同这一处，看板只在进展页）：待办是添加任务（待办顶上浮出添加那一行，`Workspace.addsTask`），
+/// 推进中是新会话（`Workspace.openNewSession`，开在项目范围里的项目）。三端的新会话都只在这里，另外只有会话列表空着时那一颗（`SessionList`）。
 /// 读它的是四列看板的列头（`BoardColumnHeader`）与手机竖版看板的行头（`BoardRowLane`），各自只给它多大。
+/// 动作直接调工作区，不经环境交下来：环境里的闭包没法比较，页每更新一次就让读它的列头全部重算。
 struct LaneAdd {
     let title: LocalizedStringResource
     let action: () -> Void
 
-    static func of(_ column: TaskBoard.Column, task: (() -> Void)?, session: (() -> Void)?) -> LaneAdd? {
+    static func of(_ column: TaskBoard.Column, in workspace: Workspace) -> LaneAdd? {
         switch column {
-        case .todo: task.map { LaneAdd(title: "添加任务", action: $0) }
-        case .advancing: session.map { LaneAdd(title: "新会话", action: $0) }
+        case .todo: LaneAdd(title: "添加任务") { workspace.addsTask = true }
+        case .advancing: LaneAdd(title: "新会话") { workspace.openNewSession(in: workspace.scopedProject) }
         case .waiting, .done: nil
         }
     }
@@ -92,8 +87,7 @@ struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
     @Environment(\.palette) private var palette
-    @Environment(\.laneAddsTask) private var addTask
-    @Environment(\.laneAddsSession) private var addSession
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         HStack(spacing: 0) {
@@ -104,7 +98,7 @@ struct BoardColumnHeader: View {
             .accessibilityLabel(column.title)
             .accessibilityValue("\(count)")
             .accessibilityAddTraits(.isHeader)
-            if let add = LaneAdd.of(column, task: addTask, session: addSession) {
+            if let add = LaneAdd.of(column, in: workspace) {
                 LaneAddButton(add, cell: CGSize(width: Self.add, height: Self.height)).font(Self.font)
             }
         }

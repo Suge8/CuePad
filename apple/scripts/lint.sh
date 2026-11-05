@@ -4,7 +4,8 @@
 # 只扫 App 与 CuePadKit 的 Swift，// 之后的注释不算；另查落地页的色令牌与色板同值。
 # 每条规则的原因与替代只写在它的报错里；新规则先在一个真实违规（历史提交或临时注入）上证明会红再加。
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+scripts="$(cd "$(dirname "$0")" && pwd)"
+cd "$scripts/../.."
 if [ "${1:-}" = --staged ]; then
   # 把暂存区（钩子里是 git 给的 GIT_INDEX_FILE，部分提交时是临时索引）的 Swift 文件取到临时目录，在那里跑同一组规则。
   # git 命令在检出根目录跑：钩子里设了 GIT_DIR，git 把当前目录当检出根
@@ -168,6 +169,9 @@ if hits:
           "不在 4 点格上的按角色就近落档；确是组件几何或光学校准的提成 static let，写一句为什么。0 与按比例的乘除（size * 0.08、height / 2）不算\n")
     raise SystemExit(1)
 PY
+
+# 环境值的类型里带闭包却比不了（规则与原因在 lint_env.py 头注释）
+python3 "$scripts/lint_env.py" || status=1
 
 # 落地页与 App 同一套颜色：落地页令牌里与 Palette 同名的（--signature-fill 对 signatureFill），浅、深两档都要与色板相等。
 # 只认两种写法：#rrggbb，与 color-mix(in srgb, var(--另一个令牌) N%, transparent)（对应色板里的 .opacity）

@@ -18,38 +18,33 @@ struct ProgressScreen: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var board: TaskBoard?
-    @State private var adding = false
 
     var body: some View {
         boardView
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .floatingHeader("进展", center: { ProgressHeader() }) { EmptyView() }
             .refreshesQuota()
-            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: adding)
-            .onChange(of: workspace.scopedProject) { adding = false }
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: workspace.addsTask)
+            .onChange(of: workspace.scopedProject) { workspace.addsTask = false }
             .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
     private var boardView: some View {
         let scope = workspace.scopedProject
         let shown = (board ?? .empty).only(scope)
+        let adding = Bindable(workspace).addsTask
         return Group {
             if verticalSizeClass == .compact || sizeClass == .regular {
-                BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject, margin: 12)
+                BoardColumns(board: shown, adding: adding, newTaskProject: newTaskProject, margin: 12)
             } else {
-                PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)
+                PhoneBoard(board: shown, adding: adding, newTaskProject: newTaskProject)
             }
         }
-        .environment(\.laneAddsTask, add)
-        .environment(\.laneAddsSession, { workspace.openNewSession(in: scope) })
         // 换范围不带里层的挪位与数字动画，理由同 Mac 的 `TaskBoardPage`
         .transaction(value: scope) { $0.disablesAnimations = true }
     }
 
     private var newTaskProject: UUID? { workspace.scopedProject ?? workspace.currentProject }
-
-    /// 待办顶上浮出添加那一行（手机看板先把待办那一行滑到行首，`BoardRowLane`）。
-    private func add() { adding = true }
 }
 
 /// 宽屏进展页顶栏中间那一块玻璃：项目范围、额度环；点环长出居中的额度明细浮窗（`popup`，同窄屏侧栏的额度钮）。两样并成一块：说的都是"这一页看什么"。

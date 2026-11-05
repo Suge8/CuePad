@@ -17,10 +17,13 @@ func jsonLine(_ tag: String, _ row: [String: Any]) -> String {
 func instructionsMillions() -> Double { Double(processCounters().instructions) / 1_000_000 }
 
 /// 调用它的线程累计执行的指令（百万）：内核的每线程计数器（`thread_selfcounts`，取指令与周期两项）。线程的计数跨 exec 不清零。
-func threadInstructionsMillions() -> Double {
+func threadInstructionsMillions() -> Double { threadCountersMillions().instructions }
+
+/// 调用它的线程累计的指令与 CPU 周期（百万）。周期除以核的频率就是这段活在不忙的机器上要多久：机器忙时 CPU 时间被拉长，周期几乎不变。
+func threadCountersMillions() -> (instructions: Double, cycles: Double) {
     var counts: (instructions: UInt64, cycles: UInt64) = (0, 0)
     _ = withUnsafeMutablePointer(to: &counts) { threadSelfCounts(1, $0, MemoryLayout<(UInt64, UInt64)>.size) }
-    return Double(counts.instructions) / 1_000_000
+    return (Double(counts.instructions) / 1_000_000, Double(counts.cycles) / 1_000_000)
 }
 
 /// xnu 的 `thread_selfcounts`（类型 1 是指令与周期）：SDK 头文件里没有，符号在系统库里，只给测量用。

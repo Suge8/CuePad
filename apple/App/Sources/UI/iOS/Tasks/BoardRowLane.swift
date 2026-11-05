@@ -15,7 +15,7 @@ import SwiftUI
 /// 行里的卡在懒加载的横排里，只建看得见的几张；卡换行时飞过行的上下沿（`boardFlight`），滚动区不裁内容（横向超出的在屏幕外）。
 /// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；它占的高另加在这一行的两个高上，卡的格不因它变矮。
 /// 要哪一格时（`rewind`：添加任务）这一行把它滑到行首。
-/// 待办的行头可带一颗"+"（`laneAddsTask`）：点它在待办顶上浮出添加那一行；行至少高到放得下它，行头不出行。
+/// 待办的行头可带一颗"+"（`LaneAdd`）：点它在待办顶上浮出添加那一行；行至少高到放得下它，行头不出行。
 struct BoardRowLane<Above: View, Content: View>: View {
     let column: TaskBoard.Column
     let count: Int
@@ -30,12 +30,11 @@ struct BoardRowLane<Above: View, Content: View>: View {
     @ScaledMetric(relativeTo: .caption2) private var lightHeight = BoardRowMetrics.lightHeight
     @ScaledMetric(relativeTo: .caption) private var spineHeight = BoardRowMetrics.spineHeight
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.laneAddsTask) private var addTask
-    @Environment(\.laneAddsSession) private var addSession
+    @Environment(Workspace.self) private var workspace
     @ScaledMetric(relativeTo: .subheadline) private var addHeight = BoardRowMetrics.addHeight
 
     /// 这一行的行头带的"+"：待办是添加任务，推进中是新会话（`LaneAdd`，与四列看板的列头同一份）。
-    private var add: LaneAdd? { LaneAdd.of(column, task: addTask, session: addSession) }
+    private var add: LaneAdd? { LaneAdd.of(column, in: workspace) }
     private var adds: Bool { add != nil }
 
     var body: some View {
@@ -122,7 +121,7 @@ enum BoardRowMetrics {
     /// 推进中、等你行头玻璃最矮：记号、三个字的竖排名与放大的数，上下各留一点；行高了它跟着拉长，离行的上下沿各 `spineInset`。
     static let spineHeight: CGFloat = 92
     static let spineInset: CGFloat = 10
-    /// 行头里"+"那一格的高（待办，`laneAddsTask`）：命中区比字大，竖着够一指。
+    /// 行头里"+"那一格的高(待办，`LaneAdd`):命中区比字大,竖着够一指。
     static let addHeight: CGFloat = 30
     /// 卡静止时离屏幕左边：行头加卡与卡之间的空，停着的上一张卡横向收在玻璃下面；比玻璃高的行里它在玻璃上下露出一截。
     static let lead: CGFloat = spine + gap

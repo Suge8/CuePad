@@ -9,12 +9,12 @@ extension View {
         Group {
             switch style {
             case .fullScreen:
-                self.fullScreenCover(item: item) { content($0).modalPage(close) }
+                self.fullScreenCover(item: item) { content($0).modalPage(close.of($0.id)) }
             case .bubble(let source, let width):
                 let shown = item.wrappedValue
                 self.modifier(BubbleSlot(key: shown.map { AnyHashable($0.id) }, source: source, width: width, close: close) { if let shown { content(shown) } })
             case .sheet:
-                self.sheet(item: item) { content($0).modalPage(close) }
+                self.sheet(item: item) { content($0).modalPage(close.of($0.id)) }
             case .drawer:
                 self.presentDrawer(isPresented: Binding { item.wrappedValue != nil } set: { if !$0 { close() } }) {
                     if let shown = item.wrappedValue { content(shown) }
@@ -87,7 +87,7 @@ final class PanelHost {
         show(Shown(
             token: token, identity: [AnyHashable(token), key], source: source, width: width,
             content: AnyView(
-                content.environment(\.closePanel, close)
+                content.environment(\.closePanel, close.of(token))
                     .environment(\.dynamicTypeSize, min(typeSize, Self.largestType))
                     .environment(\.self, environment)),
             close: close))
@@ -188,7 +188,7 @@ private struct DrawerSlot<Panel: View>: ViewModifier {
             .onChange(of: Mode(open: open, scheme: scheme, contrast: contrast, typeSize: typeSize), initial: true) { _, mode in
                 host?.drawer = PanelHost.Drawer(
                     token: token, open: mode.open,
-                    content: AnyView(panel().modifier(DrawerSurface()).environment(\.pageActive, mode.open).environment(\.closePanel, close).environment(\.self, environment)),
+                    content: AnyView(panel().modifier(DrawerSurface()).environment(\.pageActive, mode.open).environment(\.closePanel, close.of(token)).environment(\.self, environment)),
                     close: close)
             }
             .onDisappear { if host?.drawer?.token == token { host?.drawer = nil } }
@@ -269,7 +269,7 @@ private struct BubbleLayer: View {
                         }
                     }
                     .offset(y: drag)
-                    .environment(\.bubbleDrag, source == .bottom ? BubbleDrag(changed: dragged, ended: released) : nil)
+                    .environment(\.bubbleDrag, source == .bottom ? BubbleDrag(bubble: shown.identity, changed: dragged, ended: released) : nil)
                     .id(shown.identity)
                     .transition(placement.transition(reduceMotion: reduceMotion))
                 }
@@ -307,16 +307,6 @@ private struct BubbleLayer: View {
 
     /// 气泡离安全区的边（状态栏、Home 指示条、键盘）。
     private static var insets: EdgeInsets { EdgeInsets(top: 8, leading: BubblePlacement.margin, bottom: 8, trailing: BubblePlacement.margin) }
-}
-
-/// 贴在底部的纸里的把手报给纸那一层：拖了多远、松手时照去势会滑到哪。纸那一层只挪图层（`offset`），纸里不重排。
-struct BubbleDrag {
-    let changed: (CGFloat) -> Void
-    let ended: (_ translation: CGFloat, _ predicted: CGFloat) -> Void
-}
-
-extension EnvironmentValues {
-    @Entry var bubbleDrag: BubbleDrag?
 }
 
 /// 贴在底部的纸顶上的把手：整条横着都接拖动（往下关，`BubbleDrag`），只画中间一小截。

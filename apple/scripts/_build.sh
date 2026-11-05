@@ -24,7 +24,10 @@ built() {
   [ "$(head -1 "$keyfile" 2>/dev/null)" != "$key" ] || covered="$(tail -n +2 "$keyfile")"
   if [ -e "$product" ] && [ -n "$covered" ] && { [ "$need" = app ] || grep -qxF -e all -e "$need" <<<"$covered"; }; then return 0; fi
   rm -f "$keyfile"
+  warned=0
   phase 编译 "$@" || return
+  # 编出了自己源文件的警告（xcb 置 warned）：不记"编过"，下一次照编，check 才看得到它（`own_warnings`）
+  [ "$warned" = 0 ] || return 0
   [ "$need" != app ] || need=all
   { printf '%s\n' "$key"; [ -z "$covered" ] || printf '%s\n' "$covered"; printf '%s\n' "$need"; } >"$keyfile"
 }
@@ -38,13 +41,50 @@ shared_modules=(SDK_EXPLICIT_MODULES_OUTPUT_PATH="$shared_cache/SDKExplicitPreco
 # 目标之间的依赖都写在工程与包的声明里，真缺依赖会在编译时报"找不到模块"，所以整个关掉这项诊断。
 quiet_diagnostics=(DIAGNOSE_MISSING_TARGET_DEPENDENCIES=NO)
 
+# own_warnings <记录文件> < 编译输出：从中挑出本检出自己的 Swift 源文件（App 与 CuePadKit 下；Kit 的 .build、第三方包与生成的代码都不在这两处）的警告，
+# 写进记录文件（xc.sh check 见到非空就失败），并碰一下这些文件：增量编译不重编没改的文件，没改的文件上的警告就不再打出来，
+# 碰过之后下一次构建（不论 check、test 还是 shot）照样重编它、警告照样再报。没有警告时返回 0。
+own_warnings() {
+  local record="$1"
+  { grep -aE "^$APPLE_DIR/(App|CuePadKit)/[^:]+\.swift:[0-9]+:[0-9]+: warning: " || true; } | { grep -av "^$APPLE_DIR/CuePadKit/\.build/" || true; } | sort -u >"$record"
+  cut -d: -f1 "$record" | sort -u | while IFS= read -r file; do touch "$file"; done
+  [ ! -s "$record" ]
+}
+
+# check 的 Kit 构建：swift build 的增量同样不重报没改的文件，同 xcb 记进 .build/warnings、碰那些文件
+kit_build() {
+  local log status=0
+  log="$(mktemp)"
+  (cd "$APPLE_DIR/CuePadKit" && swift build --quiet) 2>&1 | tee "$log" || status=$?
+  own_warnings "$APPLE_DIR/CuePadKit/.build/warnings" <"$log" || true
+  rm -f "$log"
+  return $status
+}
+
+# no_warnings <iOS 那份记录>：check 的最后一道，Kit、Mac 整模块与 iOS 三处构建记下的自己源文件的警告，有一条就列出来、失败。
+# 跳过了编译的那一处读的是上一次的记录：有警告的构建不记编过（`built`），跳得过的一定是没警告的那次
+no_warnings() {
+  local warnings
+  warnings="$(cat "$APPLE_DIR/CuePadKit/.build/warnings" "$APPLE_DIR/.derived-wmo/warnings-mac" "$1" 2>/dev/null | sort -u || true)"
+  [ -n "$warnings" ] || return 0
+  printf '%s\n' "$warnings"
+  echo "check 不过：上面 $(grep -c . <<<"$warnings") 条编译警告在本检出自己的源文件里，修掉再提交" >&2
+  return 1
+}
+
 # 退出码即 xcodebuild 的退出码（pipefail）。-quiet 下只有警告的编译步骤会被打成
 # "error: the following command failed with exit code 0 but produced no further output"——不是失败，滤掉这一行免得误读。
+# 自己源文件的警告记进 $DERIVED/warnings-<平台>（`own_warnings`），有就置 warned（`built` 据此不记编过）。
 xcb() {
+  local log status=0
+  log="$(mktemp)"
   xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration "$configuration" \
     -destination "$destination" -derivedDataPath "$DERIVED" "$@" \
     "${shared_modules[@]}" "${quiet_diagnostics[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
-    | { grep -v 'failed with exit code 0 but produced no further output' || true; }
+    | tee "$log" | { grep -v 'failed with exit code 0 but produced no further output' || true; } || status=$?
+  own_warnings "$DERIVED/warnings-$platform" <"$log" || warned=1
+  rm -f "$log"
+  return $status
 }
 
 # Debug 一律连测试目标一起编（build-for-testing），与 test 同一张构建图：测试目标也链接 CuePadKit 时，Xcode 把被几个目标共用的
