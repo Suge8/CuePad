@@ -16,10 +16,13 @@ struct TaskBoardPage: View {
     /// 看板两侧页边：再加卡离列边的 `BoardCardMetrics.inset`，卡与列头的左沿正好在栏边 `Spacing.page` 上（同栏头、同别的页）。
     static let margin = Spacing.page - BoardCardMetrics.inset
 
-    /// 看板右边让出栏头右端那几颗钮："⋯"（`WideMetrics.boardMenu`，收起的 Cue 钮压在这一排时多让它那一截），同步要你关注时它左边再多一颗提醒（`SyncAlertSlot`，这一页不常驻）。
+    /// 看板右边让出最顶那一排末尾的"⋯"（列头与它同一排）：钮前那道缝与圆钮——栏头右边距与看板的页边、卡离列边加起来一样多，抵掉了。
+    private static let menu = Spacing.item + ControlMetrics.height
+
+    /// 看板右边让出栏头右端那几颗钮："⋯"（`menu`，收起的 Cue 钮压在这一排时多让它那一截），同步要你关注时它左边再多一颗提醒（`SyncAlertSlot`，这一页不常驻）。
     private var trailing: CGFloat {
         let alert = SyncAlertSlot.needed(services) ? Spacing.item + ControlMetrics.height : 0
-        return inset.trailing - Spacing.page + WideMetrics.boardMenu + alert
+        return inset.trailing - Spacing.page + Self.menu + alert
     }
 
     var body: some View {

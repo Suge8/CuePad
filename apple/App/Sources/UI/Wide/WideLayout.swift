@@ -1,28 +1,18 @@
 import SwiftUI
 
 /// 宽屏三栏的尺寸：会话条（宽 `Chrome.rail`、收起是图标条 `Chrome.strip`）、主区、右边的 Cue（400；收起成一颗钮时 0）。
-/// 只由窗口宽、主区放着什么与用户的开合选择推出（会话条开合、Cue 开合 `cueOpen`）；自动收起只改呈现，不改选择。
-/// 会话条的开合在看板与别处各记一份（`Workspace.railExpanded`：主区放着看板时是 `AppSettings.boardRailExpanded`，默认收成图标条，别处是 `railExpanded`，默认宽版）：
-/// 看板的推进中、等你两列与会话条列的是同一批会话，看板上把宽让给四列；进会话、项目页就回到宽版，那里会话条是导航。
-/// 两份互不干扰、只由用户改：在看板上按侧栏钮或 ⌃⌘S 改的是看板那一份（下次回看板还是这样），在别处改的是别处那一份，换页不改写任何一份。
-/// 窗口宽度的自动收起叠在选择之上：选了宽版、窗口放不下时照样收成图标条（下面的临界宽），放得下了回到所选。
-/// 否决过：看板上一律收起、手动展开只管这一次停留——每回到看板又要再展开一次，自动与手动打架；只记一份、看板上临时盖掉——改了一处另一处跟着变，读不出规律。
+/// 只由窗口宽与用户的两个开合选择推出（会话条 `AppSettings.railExpanded`、Cue `cueOpen`），不看主区放着什么页：换页时栏不动。
+/// 自动收起只改呈现、不改选择：选了宽版、窗口放不下时照样收成图标条，放得下了回到所选。
 /// 窗口变窄时只往收里走：先把会话条收成图标条，再把 Cue 收成钮；收 Cue 时不把会话条放回宽版——拖窗口的人会看见左边忽然又宽了。
-/// 主区最窄：Mac 看板 776（四列最窄 732，`BoardColumns.narrowest`，加列头那一排末尾"⋯"的一截 `boardMenu`）、并排两个会话各 390、其余 390。Mac 窗口与 iPad 同一套；
-/// 只有 iPad 主区放不下四列时换竖版看板（`boardFits`），所以 iPad 收 Cue 按会话的最窄算，会话条仍按四列。
-/// 1470 宽（13 寸 MacBook Air）看板 + Cue、两个会话 + Cue 时会话条都是宽版（256 + 776 + 400 = 1432、256 + 780 + 400 = 1436）；
-/// 1280 宽（常见的小窗）看板 + Cue、两个会话 + Cue 都放得下（98 + 776 + 400 = 1274、98 + 780 + 400 = 1278）：页边收到 24、会话最窄收到 390，正为这两条。
+/// Cue 收成钮后点它从窗口右缘拉出抽屉（`Workspace.cueDrawer`），不占主区的宽。
+/// 主区最窄只有一个数（`narrowestMain`）：并排两个会话各 390。看板在里面四列等分，放不下就整排横滑（`BoardColumns`）。
+/// Mac：会话条宽版要 256 + 780 + 400 = 1436，图标条 + Cue 要 98 + 780 + 400 = 1278（1280 宽的小窗正好放得下）；iPad 图标条 80，要 1260。
+/// 否决过：按主区放的页各算一份最窄（看板 776、会话 390），再给看板另记一份会话条开合——同一个窗口宽在不同页上栏宽不同，换页时会话条自己开合、读不出规律。
 struct WideMetrics {
-    #if os(macOS)
-    static var board: CGFloat { BoardColumns.narrowest(margin: TaskBoardPage.margin) }
-    /// Mac 看板右边让给最顶那一排末尾的"⋯"（列头与它同一排，`TaskBoardPage`）：钮前那道缝与圆钮——栏头右边距与看板的页边、卡离列边加起来一样多，抵掉了。
-    /// 算进主区放看板的最窄宽：少了它，正好在临界宽时最后一列钻到"⋯"底下、要横滑才看得全。
-    static var boardMenu: CGFloat { Spacing.item + ControlMetrics.height }
-    #else
-    static let board: CGFloat = 756
-    #endif
     static let session: CGFloat = 390
     static let cue: CGFloat = 400
+    /// 主区最窄：并排两个会话。
+    static let narrowestMain: CGFloat = 2 * session
 
     let rail: CGFloat
     /// 主区（并排两个会话时是两半合起来）。
@@ -30,13 +20,8 @@ struct WideMetrics {
     let cue: CGFloat
     /// 主区并排两个会话。
     let split: Bool
-    /// Cue 放得下：没露出来是用户收起的；放不下时收起的 Cue 钮点了是浮出。
+    /// Cue 放得下：没露出来是用户收起的；放不下时 Cue 钮拉出抽屉。
     let cueFits: Bool
-    /// Cue 放不下、此刻浮在主区右边（`Workspace.cueFloats`）。
-    let floats: Bool
-
-    /// Cue 此刻露着：放在右边，或浮着。
-    var cueShown: Bool { cue > 0 || floats }
 
     /// 并排时左半的宽（只开一个时是整个主区）。
     var leading: CGFloat { split ? (main / 2).rounded() : main }
@@ -50,42 +35,19 @@ struct WideMetrics {
     var shape: Shape { Shape(rail: rail, cue: cue) }
 
     init(width: CGFloat, workspace: Workspace) {
-        let need = Self.minimum(workspace)
         let open = workspace.services.settings.cueOpen
-        split = need.split
-        rail = workspace.sidebarOpen && width >= Self.railThreshold(need: need.rail, cueOpen: open) ? Chrome.rail : Chrome.strip
-        cueFits = width >= rail + need.cue + Self.cue
+        split = workspace.besideSession != nil
+        rail = workspace.sidebarOpen && width >= Self.railThreshold(cueOpen: open) ? Chrome.rail : Chrome.strip
+        cueFits = width >= rail + Self.narrowestMain + Self.cue
         cue = open && cueFits ? Self.cue : 0
-        floats = cue == 0 && !cueFits && workspace.cueFloats
         main = max(0, width - rail - cue)
     }
 
     /// 会话条自动收起的临界窗口宽：宽版会话条 + 主区最窄 + 开着的 Cue。
-    static func railThreshold(_ workspace: Workspace) -> CGFloat {
-        railThreshold(need: minimum(workspace).rail, cueOpen: workspace.services.settings.cueOpen)
+    static func railThreshold(cueOpen: Bool) -> CGFloat {
+        Chrome.rail + narrowestMain + (cueOpen ? cue : 0)
     }
 
     /// Cue 自动收成钮的临界窗口宽（会话条已收成图标条）。
-    static func cueThreshold(_ workspace: Workspace) -> CGFloat {
-        Chrome.strip + minimum(workspace).cue + cue
-    }
-
-    private static func railThreshold(need: CGFloat, cueOpen: Bool) -> CGFloat {
-        Chrome.rail + need + (cueOpen ? cue : 0)
-    }
-
-    private static func minimum(_ workspace: Workspace) -> (rail: CGFloat, cue: CGFloat, split: Bool) {
-        if workspace.besideSession != nil { return (2 * session, 2 * session, true) }
-        guard workspace.mainRoute == .progress else { return (session, session, false) }
-        #if os(macOS)
-        return (board + boardMenu, board + boardMenu, false)
-        #else
-        return (board, session, false)
-        #endif
-    }
-}
-
-extension EnvironmentValues {
-    /// 宽屏主区放得下看板四列的最窄宽（`WideMetrics.board`）：放不下时 iPad 的进展页换成竖版看板（`ProgressScreen`），不把四列压窄。
-    @Entry var boardFits = true
+    static var cueThreshold: CGFloat { Chrome.strip + narrowestMain + cue }
 }

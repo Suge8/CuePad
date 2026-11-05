@@ -45,11 +45,9 @@ enum InteractionBench {
         "侧栏展开": (28, 2),
         "Cue 收起": (28, 2),
         "Cue 放回": (28, 2),
-        // 看板这一页上的几下（`measureBoard`）：开会话同"会话页"，回看板同"进进展页"，列宽换档同"卡换列"，Cue 面板同任务气泡
+        // 看板这一页上的几下（`measureBoard`）：开会话同"会话页"，回看板同"进进展页"，Cue 面板同任务气泡
         "看板→会话": (90, 2),
         "会话→看板": (28, 2),
-        "列宽换档·列空": (14, 2),
-        "列宽换档·有卡": (14, 2),
         "展开 Cue 面板": (28, 2),
         "收起 Cue 面板": (14, 2),
         "展开任务": (28, 2),
@@ -88,14 +86,12 @@ enum InteractionBench {
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
         let sessions = try await store.piSessionPage(PiSessionQuery(limit: 3)).items.map(\.state.sessionID)
-        /// `check`：量完再往这一行里补正确性（列宽换档的阅读位置，`measureBoard`）。
-        func step(_ name: String, watching: NSView? = nil, check: (inout [String: Any]) async -> Void = { _ in }, _ action: () -> Void) async {
+        func step(_ name: String, _ action: () -> Void) async {
             if let only, !only.contains(name) { return }
             // 每一项在 trace 里是一段区间（CUEPAD_TRACE 录的掉帧、采样按它对到是哪一项）
             let interval = Self.signposter.beginInterval("交互", id: Self.signposter.makeSignpostID(), "\(name, privacy: .public)")
-            var row = await measure(name, in: view, watching: watching, action)
+            var row = await measure(name, in: view, action)
             Self.signposter.endInterval("交互", interval)
-            await check(&row)
             row["foreground"] = foreground
             print(jsonLine("INTERACT", row))
             fflush(stdout)
@@ -211,7 +207,7 @@ enum InteractionBench {
                 await step("Cue 放回") { workspace.services.settings.cueOpen = true }
             }
         }
-        try await measureBoard(workspace, in: view, sessions: sessions, only: only, step: step)
+        await measureBoard(workspace, sessions: sessions, only: only, step: step)
         try await measureWide(workspace, in: window, sessions: sessions, only: only, foreground: foreground)
         NSApp.terminate(nil)
     }
@@ -233,13 +229,12 @@ enum InteractionBench {
         return view.subviews.flatMap(textViews)
     }
 
-    /// `watching`：只看这一块的画面变没变（默认整个窗口）——一次写库同时动了别处（会话条先读到新会话）时，点击回合量到的是要量的那一块。
-    static func measure(_ name: String, in view: NSView, watching: NSView? = nil, _ action: () -> Void) async -> [String: Any] {
+    static func measure(_ name: String, in view: NSView, _ action: () -> Void) async -> [String: Any] {
         await Task.wait(for: .milliseconds(900))
         let recorder = FrameRecorder()
         recorder.start(in: view)
         let instructions = instructionsMillions()
-        turns.begin(CACurrentMediaTime(), root: watching?.layer ?? root(of: view))
+        turns.begin(CACurrentMediaTime(), root: root(of: view))
         action()
         return await finish(name, instructions: instructions, recorder: recorder)
     }

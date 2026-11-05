@@ -18,6 +18,12 @@ extension View {
             close: ClosePanel { isPresented.wrappedValue = false }, panel: content))
     }
 
+    func presentDrawer(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
+        modifier(WindowPanel(
+            key: isPresented.wrappedValue ? AnyHashable(true) : nil, retained: true, style: .drawer,
+            close: ClosePanel { isPresented.wrappedValue = false }) { content().modifier(DrawerSurface()) })
+    }
+
     /// 从这个控件（按钮、圆钮、胶囊）长出的气泡：挂在它的框下（放不下挂上面），尾巴指它的中线；点、键盘、读屏打开都一样。
     /// 开合的状态用 `BubbleSwitch`：按在开关上收起的那一下，松开时不再打开。
     func bubble(isPresented: Binding<Bool>, width: BubblePlacement.Width = .fitting, @ViewBuilder content: @escaping () -> some View) -> some View {
@@ -80,17 +86,13 @@ final class PanelHost {
 
     private func opened(_ entry: Shown) {
         let id = entry.id
-        if entry.modal {
-            if let window {
-                responders[id] = Weak(value: window.firstResponder)
-                window.makeFirstResponder(nil)
-            }
-            withAnimation(entry.style.fades ? Motion.fade : nil) {
-                if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
-            }
-        } else {
-            // 气泡：不动焦点（同系统 popover）：输入栏聚焦时交出焦点，它要收起再重排，开一次多约 800M 指令、点击回合多十几毫秒（实测）
-            withAnimation(Motion.nudge) { shown.append(entry) }
+        // 气泡与抽屉不动焦点（同系统 popover）：输入栏聚焦时交出焦点，它要收起再重排，开一次多约 800M 指令、点击回合多十几毫秒（实测）
+        if entry.modal, let window {
+            responders[id] = Weak(value: window.firstResponder)
+            window.makeFirstResponder(nil)
+        }
+        withAnimation(entry.style.motion) {
+            if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
         }
         if monitor == nil {
             monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
@@ -101,11 +103,7 @@ final class PanelHost {
 
     func hide(_ id: UUID) {
         guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
-        if shown[index].modal {
-            withAnimation(shown[index].style.fades ? Motion.fade : nil) { _ = shown.remove(at: index) }
-        } else {
-            withAnimation(Motion.nudge) { _ = shown.remove(at: index) }
-        }
+        withAnimation(shown[index].style.motion) { _ = shown.remove(at: index) }
         areas[id] = nil
         released(id)
     }
@@ -128,7 +126,7 @@ final class PanelHost {
     }
 
     /// 这个事件由浮层接下（不再交给窗口）则为真。关法只有一套：Esc 或在最上面那一层外面按下鼠标（左右键、本窗口任意处，含工具栏），关它。
-    /// 这一下交不交给下面同系统：模态的接下（sheet 外点不穿透）；气泡照常落到下面（点另一条任务就是换成它的气泡）。
+    /// 这一下交不交给下面同系统：模态的与抽屉接下（sheet 外点不穿透，`catchesOutside`）；气泡照常落到下面（点另一条任务就是换成它的气泡）。
     /// 模态的开着时：带 ⌘ 的组合键不交给窗口（下面那层的快捷键都在窗口里），先走主菜单——拷贝、粘贴、全选这些编辑命令由主菜单发给浮层里的
     /// 输入框；主菜单不接的再只问焦点所在的视图（浮层里编辑器的 ⌘↩），不问整个窗口。
     /// 不用停用（`disabled`）下面那层来做模态：停用整窗开、关各多 20～25ms。
@@ -145,7 +143,7 @@ final class PanelHost {
         }
         if areas[top.id]?.contains(event) == true { return false }
         top.close()
-        return top.modal
+        return top.style.catchesOutside
     }
 
     private static let escape: UInt16 = 53
@@ -176,8 +174,15 @@ private struct YieldsFocusWhenCovered: ViewModifier {
 }
 
 private extension PanelStyle {
-    /// 开、关时整块淡入淡出：全屏预览（里面的画面从缩略图飞出、飞回，`PreviewFlight`）；其余模态浮层原地出现、消失。
-    var fades: Bool { self == .fullScreen }
+    /// 开、关的动画：全屏预览整块淡入淡出（里面的画面从缩略图飞出、飞回，`PreviewFlight`），其余模态浮层原地出现、消失；
+    /// 气泡跟着自己的进出场走；抽屉一直挂着，滑入滑出由它那一层按开合画（`PanelLayer.drawer`）。
+    var motion: Animation? {
+        switch self {
+        case .fullScreen: Motion.fade
+        case .sheet, .drawer: nil
+        case .bubble: Motion.nudge
+        }
+    }
 }
 
 private struct Weak<Object: AnyObject> {
@@ -301,10 +306,22 @@ private struct PanelLayer: View {
     var body: some View {
         ZStack {
             ForEach(host.shown) { shown in
-                if shown.modal { modal(shown) }
+                if shown.modal { modal(shown) } else if shown.style == .drawer { drawer(shown) }
             }
             bubbles
         }
+    }
+
+    /// 抽屉：贴窗口右缘、整窗高（面在 `DrawerSurface`）。一直挂着，关着时整块平移到窗外（`DrawerSlide`）、点不到、暂停订阅。
+    private func drawer(_ shown: PanelHost.Shown) -> some View {
+        shown.content
+            .background { area(shown.id) }
+            .modifier(DrawerSlide(open: shown.open))
+            .accessibilityHidden(!shown.open)
+            .environment(\.pageActive, shown.open)
+            .environment(\.panelCovered, host.covers(shown.id))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            .ignoresSafeArea()
     }
 
     private func modal(_ shown: PanelHost.Shown) -> some View {
@@ -356,77 +373,6 @@ private struct PanelLayer: View {
 
     private func area(_ id: UUID) -> some View {
         AreaMark { [host] in host.areas[id] = Weak(value: $0) }
-    }
-}
-
-/// Mac 浮层顶上一行：标题居中，右上一颗关闭（Esc 同）；`trailing` 在关闭钮左边（如"展开编辑"）。
-struct PanelHeader<Trailing: View>: View {
-    let title: String
-    @ViewBuilder var trailing: Trailing
-    /// 标题两侧各让出右上那一组钮（"展开编辑"与关闭）的宽：标题仍在正中，长了截断、不压到钮下面。
-    private static var buttonRoom: CGFloat { 96 }
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Text(title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
-            .padding(.horizontal, Self.buttonRoom)
-            .frame(maxWidth: .infinity)
-            .accessibilityAddTraits(.isHeader)
-            .overlay(alignment: .trailing) {
-                HStack(spacing: Spacing.item) {
-                    trailing
-                    PanelCloseButton()
-                }
-                .padding(.trailing, Spacing.block)
-            }
-    }
-}
-
-/// Mac 浮层右上的关闭钮（Esc 同）。
-struct PanelCloseButton: View {
-    @Environment(\.closePanel) private var close
-
-    var body: some View {
-        Button("关闭", icon: .close) { close() }
-            .labelStyle(.iconOnly)
-            .buttonStyle(ControlButtonStyle(kind: .round, size: .compact))
-            .help("关闭（Esc）")
-    }
-}
-
-extension PanelHeader where Trailing == EmptyView {
-    init(_ title: String) { self.init(title: title) { EmptyView() } }
-}
-
-extension View {
-    func panelFieldSurface() -> some View { modifier(PanelFieldSurface()) }
-}
-
-private struct PanelFieldSurface: ViewModifier {
-    @Environment(\.palette) private var palette
-
-    func body(content: Content) -> some View {
-        content.background(palette.fill, in: .rect(cornerRadius: Radius.block))
-    }
-}
-
-/// Mac 浮层里占满一行的搜索框，弹出即聚焦。
-struct PanelSearchField: View {
-    let prompt: String
-    @Binding var text: String
-    @FocusState private var focused: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: Spacing.item) {
-            Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
-            TextField(prompt, text: $text, palette: palette).textFieldStyle(.plain).focused($focused)
-        }
-        .font(Typography.body)
-        .padding(.horizontal, Spacing.group).frame(height: 34)
-        .panelFieldSurface()
-        .padding(.horizontal, Spacing.panel)
-        .onAppear { focused = true }
     }
 }
 #endif

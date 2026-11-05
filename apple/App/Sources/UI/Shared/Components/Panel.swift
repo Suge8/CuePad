@@ -21,14 +21,20 @@ enum PanelStyle: Equatable {
     /// 长出来的气泡（`BubbleFrame`，摆法在 `BubblePlacement`）：不压暗，点外面或 Esc 关、那一下照常落到下面；两端同一个样子（iOS 不是系统 sheet）。
     /// 两端都画在窗口那一层（`panelHost`）。从控件长出的用 `bubble(isPresented:)`，它替控件量框。宽默认随内容（`BubblePlacement.Width`）。
     case bubble(BubbleSource, width: BubblePlacement.Width = .fitting)
+    /// 右缘抽屉（`drawer(isPresented:)`）：贴窗口右缘、整窗高，发丝边加面板阴影、不压暗，开合滑入滑出。
+    /// 点外面或 Esc 关，那一下不落到下面（同 sheet：点外面是"关掉它"，不是点了下面那张卡）；不拿走焦点，按键照常进窗口。
+    case drawer
 
-    /// 模态：压暗、拦下外面的点按（居中的 sheet 与全屏）。
+    /// 模态：压暗、拦下外面的点按、拿走焦点（居中的 sheet 与全屏）。
     var modal: Bool {
         switch self {
         case .sheet, .fullScreen: true
-        case .bubble: false
+        case .bubble, .drawer: false
         }
     }
+
+    /// 点外面关的那一下不落到下面。
+    var catchesOutside: Bool { modal || self == .drawer }
 }
 
 extension View {
@@ -44,7 +50,42 @@ extension View {
     ) -> some View {
         presentPanel(item: item, style: style, close: ClosePanel { item.wrappedValue = nil }, content: content)
     }
+
+    /// 右缘抽屉（`PanelStyle.drawer`）：挂上就建好内容、一直挂着（同 `keptPanel`），关着只是滑出窗外、暂停订阅（`pageActive`），开合不丢里面的状态与滚动位置。
+    /// 挂它的视图走了才卸下。
+    func drawer(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
+        presentDrawer(isPresented: isPresented, content: content)
+    }
 }
 
 /// `panel(isPresented:)` 的身份：开着只有这一个。
 private struct Shown: Identifiable { let id = true }
+
+/// 抽屉的面（`PanelStyle.drawer`）：桌面底连同面板阴影、左缘一道发丝边，都铺到安全区外，内容照样排在安全区里。宽由内容定。
+struct DrawerSurface: ViewModifier {
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxHeight: .infinity)
+            // 影子只挂在底那块上：挂在整块内容上要先离屏合成里面的字再糊影子（同 `PaperSurface`）
+            .background { palette.desk.elevation(.panel).ignoresSafeArea() }
+            .overlay(alignment: .leading) { palette.hair.frame(width: 1).ignoresSafeArea() }
+    }
+}
+
+/// 抽屉开合：整块从窗口右缘外滑入、滑回窗外（渲染端的平移，`visualEffect` 不让页每帧重排），关着时点不到；减弱动态效果时直接到位。
+struct DrawerSlide: ViewModifier {
+    let open: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 关着时多挪出去的一截：面板阴影不留在窗口右缘。
+    private static let shadowRoom: CGFloat = 40
+
+    func body(content: Content) -> some View {
+        content
+            .visualEffect { [open, room = Self.shadowRoom] effect, proxy in effect.offset(x: open ? 0 : proxy.size.width + room) }
+            .allowsHitTesting(open)
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: open)
+    }
+}

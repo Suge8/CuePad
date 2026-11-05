@@ -6,7 +6,7 @@ import SwiftUI
 ///   轻的两列比重的两列淡，一眼分得出列、不抢字（色值与对比度在 `Palette`）。
 /// - 卡上的字（`titleInk`、`titleWeight`、`leadOpacity`）：轻的两列标题降一档墨（待办 ink2、已完成 ink3）、常规字重，开头的圈淡一档。
 /// - 列头与行头的数（`BoardColumnHeader`、`BoardRowSpine`）：重的两列放大、着状态色（推进中靛青、等你赭黄），轻的两列与列名同字号、ink3。
-/// - 宽（`share`，Mac 与 iPad 四列）：重的两列宽；轻的两列卡压成一行标题的矮卡，列宽仍放得下一行十来个字（`BoardColumns`）。
+/// - 卡高（Mac 与 iPad 四列，四列等宽，`BoardColumns`）：轻的两列卡压成一行标题的矮卡（`BoardCardMetrics.title`）。
 /// - 手机的行（`rowTiers`、`BoardRowLane`）：重的两行理想高各三排卡、行头随行高拉长；轻的两行只一排矮卡、行头紧凑。
 /// 否决过：轻的两列去掉纸只留一层淡底（读成不可用的按钮）、推进中与等你身后垫一块托盘（页面多一块面）。
 extension TaskBoard.Column {
@@ -43,16 +43,6 @@ extension TaskBoard.Column {
         case .advancing: palette.signature
         case .waiting: palette.waiting
         case .todo, .done: palette.ink3
-        }
-    }
-
-    /// 四列并排时，各列最窄之外多出来的宽分几份（`BoardColumns`）：Mac 常用窗口里推进中最宽，轻的两列仍放得下一行十来个字。
-    var share: CGFloat {
-        switch self {
-        case .todo: 1
-        case .advancing: 2
-        case .waiting: 1.35
-        case .done: 0.9
         }
     }
 

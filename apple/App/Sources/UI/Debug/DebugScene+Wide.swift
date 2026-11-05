@@ -5,7 +5,7 @@ import CueStore
 extension DebugScene {
     /// `-CuePadWideReverse <组合>`（仅 Mac，录屏用；组合是 `InteractionBench.wideCases` 的名字，如 `双会话+Cue`）：就绪前摆好这种主区组合（会话取库里前两份），
     /// 就绪后每 2 秒在会话条自动收窄的临界宽度上反向一次：窄 1 点，50ms 后（滑动刚起头）拉回；`-CuePadWideHold <毫秒>` 改停多久（如 1500：收窄、展开各滑完一整段）。
-    /// 窗口用 `-CuePadWindowSize <临界宽>x<高>` 起在临界宽度上（`WideMetrics.railThreshold`），不在就以失败退出。
+    /// 窗口用 `-CuePadWindowSize <临界宽>x<高>` 起在临界宽度上（`WideMetrics.railThreshold`，Cue 开着时 1436），不在就以失败退出。
     /// 录出来的每一帧是屏上的样子、不经主线程：`InteractionBench+Wide` 在主线程取样，主线程忙的那几帧取不到，跳没跳要看这里。
     static func reverseWideIfAsked(_ workspace: Workspace) async {
         guard let name = defaults.string(forKey: "CuePadWideReverse") else { return }
@@ -25,7 +25,7 @@ extension DebugScene {
         await Task.wait(for: .seconds(1.5))
         guard let window = mainWindow else { return }
         let size = window.contentLayoutRect.size
-        let threshold = WideMetrics.railThreshold(workspace)
+        let threshold = WideMetrics.railThreshold(cueOpen: workspace.services.settings.cueOpen)
         guard size.width == threshold else { abandon("宽屏反向", Unmet("窗口宽 \(size.width) 不在临界宽度 \(threshold)")) }
         let hold = defaults.object(forKey: "CuePadWideHold") == nil ? 50 : defaults.integer(forKey: "CuePadWideHold")
         while !Task.isCancelled {
@@ -33,51 +33,6 @@ extension DebugScene {
             await Task.wait(for: .milliseconds(hold))
             window.setContentSize(size)
             await Task.wait(for: .seconds(2))
-        }
-    }
-
-    /// `-CuePadBoardSwap YES`（仅 Mac，配 `-CuePadDemo YES` 录屏）：就绪后每 1.5 秒在进展的看板与一个演示会话之间来回换主区，走会话条上那两下的同一条路
-    /// （`selectPane`、`openSession`）：看会话条在看板上自动收成图标条、进会话回到宽版，主区随之滑动、看板的列宽一步到位。
-    /// `fast`：中途反向——换过去 0.1 秒就换回、再连换两次各隔 0.06 秒，各停 1.5 秒，看打断时栏与栏是否仍对齐、停下时是否回到终点。
-    static func swapBoardIfAsked(_ workspace: Workspace) async {
-        guard let mode = defaults.string(forKey: "CuePadBoardSwap") else { return }
-        let session = defaults.string(forKey: "CuePadSession") ?? "notes"
-        // 两次之间停多久是录屏的节奏，不是在等别的事
-        let gaps: [Double] = mode == "fast" ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
-        await Task.wait(for: .seconds(1.5))
-        var step = 0
-        while !Task.isCancelled {
-            if workspace.onBoard {
-                workspace.openSession(PiSessionState.recordID(sessionID: session), sessionID: session)
-            } else {
-                workspace.selectPane(.progress)
-            }
-            await Task.wait(for: .seconds(gaps[step % gaps.count]))
-            step += 1
-        }
-    }
-
-    /// `-CuePadLaneSwap YES|fast`（仅 Mac，配 progress 画面与 `-CuePadDemo YES` 录屏）：看板的项目范围设成待办最少的那个项目，
-    /// 就绪后把它的几件待办一起做完、再一起重新打开，来回换：待办那一列在空与有卡之间换档、已完成跟着换，列宽随看板这一次读到的过渡滑过去（`BoardWidths`）。
-    /// 每 1.5 秒换一次；`fast` 中途反向——换过去 0.1 秒就换回、再连换两次各隔 0.06 秒，各停 1.5 秒。
-    static func swapLaneIfAsked(_ workspace: Workspace) async {
-        guard let mode = defaults.string(forKey: "CuePadLaneSwap") else { return }
-        let store = workspace.services.store
-        await running("换列宽") {
-            let todo = try await TaskBoard.read(from: store).todo
-            let counts = Dictionary(grouping: todo.compactMap(\.task.projectID), by: { $0 }).mapValues(\.count)
-            guard let project = counts.min(by: { $0.value < $1.value })?.key else { throw Unmet("看板上没有待办") }
-            let tasks = todo.filter { $0.task.projectID == project }.map(\.task.id)
-            workspace.projectScope = project
-            // 两次之间停多久是录屏的节奏，不是在等别的事
-            let gaps: [Double] = mode == "fast" ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
-            await Task.wait(for: .seconds(2.5))
-            var step = 0
-            while !Task.isCancelled {
-                for id in tasks { try await store.setStatus(id, step.isMultiple(of: 2) ? .done : .todo) }
-                await Task.wait(for: .seconds(gaps[step % gaps.count]))
-                step += 1
-            }
         }
     }
 }
