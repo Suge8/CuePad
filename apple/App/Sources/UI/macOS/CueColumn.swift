@@ -56,6 +56,7 @@ struct CueTitle: View {
         .frame(height: Chrome.band)
         .windowDragArea()
         .observingCueBrain(into: $brain)
+        .debugExposesCuePanel { panel.toggle() }
     }
 
     /// 面板同这一栏里的内容一样宽（栏宽减两侧栏边）。

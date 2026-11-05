@@ -79,6 +79,7 @@ struct BoardColumn: View {
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
+            .modifier(LaneAnchor(column))
             .boardLane(column)
             .boardTopRow(column: column, count: board.count(column))
             .background { BoardLane(targeted: lit) }
@@ -86,6 +87,7 @@ struct BoardColumn: View {
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
+            .modifier(LaneAnchor(column))
             .boardLane(column)
             .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
             .overlay(alignment: .top) {
@@ -114,6 +116,7 @@ struct BoardColumn: View {
 
     private var cards: some View {
         LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
+            .scrollTargetLayout()
             .padding(.horizontal, BoardCardMetrics.inset).padding(.vertical, BoardCardMetrics.inset).padding(.bottom, 24)
     }
 
@@ -254,6 +257,20 @@ extension TaskBoard {
         todo.first { $0.id == id } ?? advancing.lazy.compactMap(\.item).first { $0.id == id } ?? held.lazy.compactMap(\.item).first { $0.id == id }
             ?? done.first { $0.id == id } ?? earlier.first { $0.id == id }
     }
+}
+
+/// 一列滚到哪按卡记，不按偏移量：列宽一变（会话条换宽、Cue 收起放回、拖窗口跨阈值、列宽换档），标题重新折行、整列内容变高变矮，
+/// 按偏移量留着的话原来看着的那张卡滑出视野。这里记下可视区正中的那张卡（`scrollTargetLayout` 的直接子视图，即各列 `ForEach` 的身份），
+/// 内容一变由滚动视图自己把它留在正中（系统的 `scrollPosition`，不读几何回写）。身份的类型随列：待办、已完成是任务（`TaskBoard.Item.id`），
+/// 推进中、等你是会话与任务混排的那一份（`AdvancingSlot.id`、`TaskBoard.Held.id`）。
+private struct LaneAnchor: ViewModifier {
+    @State private var position: ScrollPosition
+
+    init(_ column: TaskBoard.Column) {
+        _position = State(initialValue: column.light ? ScrollPosition(idType: UUID.self) : ScrollPosition(idType: String.self))
+    }
+
+    func body(content: Content) -> some View { content.scrollPosition($position, anchor: .center) }
 }
 
 /// 已完成列点开的成果图（`BoardShot`）：一页只这一列挂全屏预览。
