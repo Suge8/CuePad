@@ -9,7 +9,7 @@ import AppKit
 struct WidePage {
     private let views: [WideSlot: [ObjectIdentifier]]
     private let readings: [Reading]
-    /// 验不了的，按滚动视图算：每个能滚 `minimumTravel` 的滚动视图都要有一条读数，没有的记成"栏#第几个（从左数，从 0 起）:为什么"
+    /// 验不了的，按滚动视图算：每个能滚 `minimumTravel` 的滚动视图都要有一条读数，没有的记成"栏#序号:为什么"——序号是这一栏全部滚动视图（`scrolls`，含滚不到的）从左数的下标，从 0 起，同基线里 `scrolls`、`short` 的序号
     /// （没到中段、中段没认出一条）；一栏里一个能滚的都没有记成"栏:没有能滚的"。有一条就不算通过：同一栏里读到了一列，别的列漏验照样记在这里。
     let untested: [String]
     /// 基线时逐栏读到的：各滚动视图能滚多远、中段那个离两端多远、报了位置的条目有多少落在它的可视区里（读不到中段那一条时看缺在哪）。
@@ -77,15 +77,15 @@ struct WidePage {
                 "spots": InteractionBench.rows.count, "shown": scrolls.map { Self.items(in: column, shownBy: $0).count },
                 "ends": scrolls.compactMap(Self.ends).map { [Self.round($0.top), Self.round($0.bottom)] },
                 // 滚不到 `minimumTravel` 的（列短、一屏放得下）：没有阅读位置可验，不算漏验，只列出来（能滚多远）
-                "short": Self.scrolls(in: column).filter { !scrolls.contains($0) }.map { Self.round(($0.documentView?.frame.height ?? 0) - $0.contentView.bounds.height) },
+                "short": Self.scrolls(in: column).enumerated().filter { !Self.isScrollable($0.element) }.map { "#\($0.offset):\(Self.round(($0.element.documentView?.frame.height ?? 0) - $0.element.contentView.bounds.height))" },
             ]
         }
         // 每个能滚的滚动视图要么有一条读数，要么记进验不了（连同第几个、为什么）：不让同一栏里读到了的那一列盖住漏验的那一列
         var readings: [Reading] = [], untested: [String] = []
         for column in columns {
-            let scrolls = Self.scrollables(in: column)
-            if scrolls.isEmpty { untested.append("\(column.slot):没有能滚的") }
-            for (index, scroll) in scrolls.enumerated() {
+            let all = Self.scrolls(in: column)
+            if !all.contains(where: Self.isScrollable) { untested.append("\(column.slot):没有能滚的") }
+            for (index, scroll) in all.enumerated() where Self.isScrollable(scroll) {
                 guard let (top, bottom) = Self.ends(of: scroll), top > 1, bottom > 1 else {
                     untested.append("\(column.slot)#\(index):没到中段")
                     continue
@@ -151,7 +151,7 @@ struct WidePage {
 
     private static func round(_ value: CGFloat) -> Double { Double((value * 10).rounded() / 10) }
 
-    /// 栏里看得见的滚动视图：没被藏起、不透明、真落在栏里（离开的页面常留在视图树里，只是藏起或透明）。
+    /// 栏里看得见的滚动视图：没被藏起、不透明、真落在栏里（离开的页面常留在视图树里，只是藏起或透明），从左到右。
     private static func scrolls(in column: WideColumnView) -> [NSScrollView] {
         func visit(_ view: NSView) -> [NSScrollView] {
             guard !view.isHidden, view.alphaValue > 0, view.layer?.opacity != 0 else { return [] }
@@ -160,19 +160,24 @@ struct WidePage {
             } ?? []
             return own + view.subviews.flatMap(visit)
         }
-        return visit(column)
+        // 按在窗口里从左到右排（左沿一样的按视图树里的先后）：漏验、基线与列宽都用这一套序号
+        return visit(column).enumerated()
+            .sorted { (visible($0.element, in: column).minX, $0.offset) < (visible($1.element, in: column).minX, $1.offset) }
+            .map(\.element)
     }
 
-    /// 栏里竖着能滚 `minimumTravel` 以上的（看板的每一列、对话），按在窗口里从左到右。
+    /// 栏里竖着能滚 `minimumTravel` 以上的（看板的每一列、对话），从左到右。
     private static func scrollables(in column: WideColumnView) -> [NSScrollView] {
-        scrolls(in: column)
-            .filter { ($0.documentView?.frame.height ?? 0) - $0.contentView.bounds.height >= minimumTravel }
-            .sorted { visible($0, in: column).minX < visible($1, in: column).minX }
+        scrolls(in: column).filter(isScrollable)
+    }
+
+    private static func isScrollable(_ scroll: NSScrollView) -> Bool {
+        (scroll.documentView?.frame.height ?? 0) - scroll.contentView.bounds.height >= minimumTravel
     }
 
     /// 栏里各个滚动视图在窗口里的宽，按从左到右（列宽换档换没换宽，`InteractionBench+Board`）。
     static func widths(in column: WideColumnView) -> [Double] {
-        scrolls(in: column).map { visible($0, in: column) }.sorted { $0.minX < $1.minX }.map { round($0.width) }
+        scrolls(in: column).map { round(visible($0, in: column).width) }
     }
 
     /// 可视区离文档顶、底多远（文档视图翻没翻转都按看到的顶与底算）。
