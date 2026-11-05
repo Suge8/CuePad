@@ -25,6 +25,9 @@ struct CueWaitDock: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chatHeight) private var chatHeight
     @Environment(\.pageActive) private var active
+    /// 读屏停在哪件的"第几件"上（`CueWaitEyebrow`）：换一件时卡按件换身份（叠边里上浮、旧卡飞出的转场靠它），读屏的焦点随旧卡一起没了，
+    /// 换完由卡把焦点放到新那件的这一格（`CueWaitCard.step`）。记在这里不记在卡里：旧卡走了它还在。
+    @AccessibilityFocusState private var counter: String?
     /// 手机上滑卡：卡跟着手指横移多少。
     @State private var drag: CGFloat = 0
     /// 滑走的那张往哪边飞出去（换一件时旧卡的去向）；不是滑走的（答完、点箭头）原地淡掉，为 0。
@@ -115,7 +118,7 @@ struct CueWaitDock: View {
     /// 铺开的那件（`CueWaitCard`）垫上纸；手机上左右滑换一件。
     /// 整张卡接这一拖（`contentShape`）：只挂在内容上的话卡里的空白处接不住。卡里的按钮照样先接自己的点按。
     private func card(_ pick: CueWaitPick) -> some View {
-        let card = CueWaitCard(pick: pick, shots: pick.wait.message.flatMap { shots[$0.id] }, open: open)
+        let card = CueWaitCard(pick: pick, shots: pick.wait.message.flatMap { shots[$0.id] }, counter: $counter, open: open)
             .frame(maxWidth: .infinity, alignment: .leading)
         #if os(iOS)
             .contentShape(.rect(cornerRadius: Radius.field))

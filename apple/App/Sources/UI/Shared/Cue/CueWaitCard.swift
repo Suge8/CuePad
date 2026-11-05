@@ -24,6 +24,8 @@ struct CueWaitCard: View {
     let pick: CueWaitPick
     /// 提问点名的图（`CueThread.shots` 里这一问的）
     let shots: [CueShown]?
+    /// 读屏停在哪件的"第几件"上（`CueWaitDock` 持有）。
+    let counter: AccessibilityFocusState<String?>.Binding
     let open: (PreviewOpening) -> Void
     @Environment(Workspace.self) private var workspace
     #if os(iOS)
@@ -98,14 +100,19 @@ struct CueWaitCard: View {
     #endif
 
     private var eyebrow: some View {
-        CueWaitEyebrow(wait: pick.wait, index: pick.index, count: pick.waits.count, step: step)
+        CueWaitEyebrow(wait: pick.wait, index: pick.index, count: pick.waits.count, counter: counter, step: step)
             .padding(.top, Self.edge)
     }
 
     /// 换到挨着的那件（眉题行的小箭头、读屏在"第几件"上下扫；手机上滑卡在 `CueWaitDock`）。
+    /// 新那件是另一张卡（按件换身份，转场要两张同在）：读屏的焦点跟着旧卡没了，等新卡画上屏把它放回新卡的"第几件"，接着扫还在这一格。读屏没开时这一下什么都不做。
     private func step(by offset: Int) {
         guard let next = pick.neighbor(by: offset) else { return }
         withAnimation(Motion.fade) { workspace.cueAsking = next.id }
+        Task { [counter] in
+            await NextFrame.drawn()
+            counter.wrappedValue = next.id
+        }
     }
 
     /// Cue 点名的图（`CueShots`）："可以"选的是其中一张时那张描靛青圈；点开全屏时底栏就是这几个选项，看完当场定。

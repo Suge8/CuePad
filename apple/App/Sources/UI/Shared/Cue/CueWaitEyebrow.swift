@@ -10,6 +10,8 @@ struct CueWaitEyebrow: View {
     let wait: CueWait
     let index: Int
     let count: Int
+    /// 读屏停在哪件的"第几件"上（`CueWaitDock` 持有，换一件后放回这一格）。
+    let counter: AccessibilityFocusState<String?>.Binding
     let step: (Int) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -76,6 +78,7 @@ struct CueWaitEyebrow: View {
             // 读屏在这一格上下扫换一件（同滑卡、小箭头）：动作挂在已有的元素上，挂在卡上的话整张卡多出一个没有标签的元素（#67）
             Text("\(index + 1)/\(count)").monospacedDigit()
                 .accessibilityLabel("第 \(index + 1) 件，共 \(count) 件")
+                .accessibilityFocused(counter, equals: wait.id)
                 .accessibilityAdjustableAction { direction in
                     switch direction {
                     case .increment: step(1)
