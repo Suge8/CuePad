@@ -60,10 +60,7 @@ struct MainWindow: View {
                     .frame(width: WideMetrics.cue)
                 } else {
                     // 抽屉里同样嵌在自己的托管视图里：栏头在标题栏那一排，在窗口的托管视图里时 Cue 页的滚动区伸到标题栏底下，系统在那一截盖上滚动边缘效果、栏头看不见（`ColumnHostingView`）
-                    Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) {
-                        WideColumnHost(slot: .cue, focus: focus, origin: 0, width: WideMetrics.cue, shape: WideMetrics.Shape(rail: 0, cue: WideMetrics.cue)) { CueColumn(fits: false) }
-                            .frame(width: WideMetrics.cue)
-                    }
+                    Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) { DrawerCue(focus: focus) }
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -74,6 +71,19 @@ struct MainWindow: View {
 
     private static func inset(trailing: CGFloat) -> EdgeInsets {
         EdgeInsets(top: 0, leading: Spacing.page, bottom: 0, trailing: trailing)
+    }
+}
+
+/// 抽屉里的 Cue 栏：关上滑到窗外后藏起托管视图（同收起的 Cue 栏），⌃Tab 不轮到看不见的它，也接不到键入；开的那一下当即露出。
+private struct DrawerCue: View {
+    let focus: WideFocus
+    @Environment(\.drawerParked) private var parked
+
+    var body: some View {
+        WideColumnHost(slot: .cue, focus: focus, origin: 0, width: WideMetrics.cue, shape: WideMetrics.Shape(rail: 0, cue: WideMetrics.cue), hidden: parked) {
+            CueColumn(fits: false)
+        }
+        .frame(width: WideMetrics.cue)
     }
 }
 
