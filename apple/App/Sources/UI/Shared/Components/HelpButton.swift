@@ -12,6 +12,7 @@ struct HelpButton<Content: View>: View {
 
     var body: some View {
         Button { open.toggle() } label: { Image(.help) }
+            .debugOpensHelp { open = true }
             .buttonStyle(ControlButtonStyle(kind: kind, size: size))
             .help("说明")
             .accessibilityLabel("说明")
@@ -35,12 +36,17 @@ struct BarHelpButton<Content: View>: View {
     var body: some View {
         Button("说明", icon: .help) {
             if host.shown?.token == token { return host.hide(token) }
-            host.present(
-                token: token, key: id, source: host.frame(of: id).map(BubbleSource.control) ?? .unanchored, width: .fitting,
-                close: ClosePanel { [host, token] in host.hide(token) }, environment: environment, content: Live(content: content))
+            show()
         }
         .accessibilityIdentifier(id)
+        .debugOpensHelp(show)
         .onDisappear { host.hide(token) }
+    }
+
+    private func show() {
+        host.present(
+            token: token, key: id, source: host.frame(of: id).map(BubbleSource.control) ?? .unanchored, width: .fitting,
+            close: ClosePanel { [host, token] in host.hide(token) }, environment: environment, content: Live(content: content))
     }
 
     private struct Live: View {

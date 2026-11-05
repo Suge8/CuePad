@@ -23,6 +23,20 @@ extension DebugScene {
             }
         }
         if defaults.bool(forKey: "CuePadNarrowCycle") { Task { await cycleNarrow(workspace) } }
+        if defaults.bool(forKey: "CuePadQuotaCycle") { Task { await cycleQuota() } }
+    }
+
+    /// `-CuePadQuotaCycle YES`（配 progress 画面录屏）：就绪后点额度钮开浮窗、过一会儿走点浮窗外面那条路关（`ModalScrim` 调的同一个 `close`），来回几遍；
+    /// 第三遍在长出的半途就关，看中途反向。
+    private static func cycleQuota() async {
+        let stays: [Double] = [1.5, 1.5, 0.12, 1.5]
+        await Task.wait(for: .seconds(3))
+        for stay in stays {
+            toggleQuota()
+            await Task.wait(for: .seconds(stay))
+            modals?.modal?.close()
+            await Task.wait(for: .seconds(1.2))
+        }
     }
 
     private static func cycleNarrow(_ workspace: Workspace) async {

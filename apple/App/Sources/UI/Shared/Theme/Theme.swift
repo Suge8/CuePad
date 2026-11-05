@@ -25,7 +25,7 @@ extension Palette {
     }
 }
 
-/// App 窗口的根：注入配色（`withPalette`）。
+/// App 窗口的根：系统控件按墨着色（`withPalette`），验收时按启动参数改外观环境。配色本身随外观算出，不在这里注入（`EnvironmentValues.palette`）。
 struct PaletteProvider: ViewModifier {
     func body(content: Content) -> some View {
         content.withPalette()

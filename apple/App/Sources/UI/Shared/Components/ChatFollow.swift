@@ -4,9 +4,9 @@ import SwiftUI
 /// 输入框长高、键盘弹出这类不是用户滚动带来的位移不解除。离最新处超过一屏出"回到最新"圆钮（离开后来了新内容时带的点在 `ChatScroll`）。
 /// 顶栏让开（`showsHeader`，iPhone 与 Mac 同一条）：离开最新就让开，看历史期间怎么滑都不出现（往回滑也不出来，
 /// 免得读的时候顶栏一闪一闪）；点它原来的位置唤出（`reveal`），再滑又让开；回到最新（滑到底、点"回到最新"、发出消息）自动出现。
-/// 平台不同的只有"⋯"：iPhone 上跟标题一起让开（顶栏浮在对话上，少一颗圆钮就少一块遮挡，`floatingHeader` 的 `hidden`）；
-/// Mac 上只让开标题、"⋯"一直在——Mac 没有状态栏，工具栏本来就一直在，让开只在那组玻璃里留下一格空位。iPhone 的返回钮不在这条规则里，
-/// 一直在：看历史时也看得到怎么回去（Mac 没有返回钮，导航在侧栏）。
+/// 平台不同的只有"⋯"：iPhone 上返回、标题、"⋯"整排一起让开（顶栏浮在对话上，整排让开读的时候顶上一块遮挡都没有，左缘右滑照样返回，
+/// `floatingHeader` 的 `hidden`）；Mac 上只让开标题、"⋯"一直在——Mac 没有状态栏，工具栏本来就一直在，让开只在那组玻璃里留下一格空位
+/// （Mac 没有返回钮，导航在侧栏）。
 nonisolated struct ChatFollow: Equatable {
     private(set) var atNewest = true
     /// 离最新处超过一屏：出"回到最新"圆钮。
@@ -52,7 +52,7 @@ nonisolated struct ChatFollow: Equatable {
     /// 离最早那头不到一屏、上一批也排上去了：对话在上面再排开一批（`ChatColumn`）。
     var wantsEarlier: Bool { nearOldest && !prepending }
 
-    /// 标题此刻露着（iPhone 的"⋯"跟着它；返回钮与 Mac 的"⋯"一直在，见上）。
+    /// 标题此刻露着（iPhone 的返回与"⋯"跟着它；Mac 的"⋯"一直在，见上）。
     var showsHeader: Bool { atNewest || revealed }
 
     struct Target: Equatable {

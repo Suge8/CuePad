@@ -22,6 +22,60 @@ extension View {
         #endif
     }
 
+    #if os(iOS)
+    /// 窄屏侧栏额度钮开合浮窗的那条路（点一下额度钮）交给录屏驱动（`-CuePadQuotaCycle`）。
+    func debugExposesQuota(_ toggle: @escaping () -> Void) -> some View {
+        #if DEBUG
+        onAppear { DebugScene.toggleQuota = toggle }
+        #else
+        self
+        #endif
+    }
+
+    /// 模态浮出点外面关的那条路（`ModalScrim` 接到一下时调的就是开着那一个的 `close`）交给录屏驱动。
+    func debugExposesModals(_ host: ModalHost) -> some View {
+        #if DEBUG
+        onAppear { DebugScene.modals = host }
+        #else
+        self
+        #endif
+    }
+    #endif
+
+    #if os(iOS)
+    /// 会话页顶那一排的让开（`ChatFollow.showsHeader`）：`-CuePadHeaderHidden YES` 就绪前当作已滑去看历史（整排让开，拍截图）；
+    /// `-CuePadHeaderCycle YES`（配录屏）就绪后来回走：滑去看历史（让开）→ 点顶上唤出 → 再滑（让开）→ 回到最新（回来），每步 1.5 秒。
+    /// 走的是滚动区报读数与点顶部时调的同一些 `ChatFollow` 方法，滚动位置本身不动。
+    func debugDrivesHeader(_ follow: Binding<ChatFollow>) -> some View {
+        #if DEBUG
+        onAppear {
+            let away: @MainActor () -> Void = { follow.wrappedValue.scrolled(atNewest: false, beyondScreen: false, nearOldest: false, byUser: true) }
+            if DebugScene.defaults.bool(forKey: "CuePadHeaderHidden") { DebugScene.later(.seconds(1), away) }
+            guard DebugScene.defaults.bool(forKey: "CuePadHeaderCycle") else { return }
+            Task {
+                await Task.wait(for: .seconds(3))
+                let steps: [@MainActor () -> Void] = [away, { follow.wrappedValue.reveal() }, away, { follow.wrappedValue.jumpToNewest() }, away, { follow.wrappedValue.jumpToNewest() }]
+                for step in steps {
+                    step()
+                    await Task.wait(for: .seconds(1.5))
+                }
+            }
+        }
+        #else
+        self
+        #endif
+    }
+    #endif
+
+    /// `-CuePadHelpOpen YES`：问号的说明一出现就点开，同点一下问号（推入转场里栏在动，等它停下再量钮的框）。
+    func debugOpensHelp(_ open: @escaping @MainActor () -> Void) -> some View {
+        #if DEBUG
+        onAppear { if DebugHooks.preset.helpOpen { DebugScene.later(.seconds(1.2), open) } }
+        #else
+        self
+        #endif
+    }
+
     /// 项目页任务纸点"还有 N 条"的那条路交给测量（两端 `InteractionBench` 的"展开任务"）：看得见的那一页（`active`）的纸。
     func debugExposesTaskFold(active: Bool = true, _ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
@@ -120,7 +174,7 @@ extension View {
     func debugScene(_ workspace: Workspace) -> some View {
         #if DEBUG
         overlay {
-            // 盖在根上（在注入配色的那层外面），自己按外观取配色
+            // 盖在根上（在着色的那层外面），自己给系统控件着色
             Group {
                 switch DebugScene.scene {
                 case "style": StyleBoard()

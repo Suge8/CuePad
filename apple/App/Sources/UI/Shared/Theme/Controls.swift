@@ -85,6 +85,42 @@ struct ControlButtonStyle: ButtonStyle {
     }
 }
 
+#if os(iOS)
+extension View {
+    /// 浮在内容上的玻璃圆钮（手机与 iPad 页顶那一排、窄屏侧栏那一排；挂在一排上管里面所有的钮与菜单）：系统的 Liquid Glass 钮——
+    /// `.glass` 按钮样式配圆形的边（WWDC26 SwiftUI Group Lab：玻璃钮用玻璃按钮样式，不在钮上套 `glassEffect`，那是"钮坐在玻璃上"），
+    /// 按压、悬停的反应都是系统给的（玻璃随手指鼓起、透光），不再叠 `PressFeedback`；只画图标，墨色，字号封顶同页顶那一排。
+    /// 大小只有一种：`ControlMetrics.height` 见方（同系统导航栏里的圆钮），图标排在里面居中；一排里相邻两颗隔 `Spacing.item` 以内时放进同一个
+    /// `GlassEffectContainer`，玻璃彼此取样、开合时相融。Mac 的工具栏圆钮仍是 `ControlButtonStyle(kind: .circular)`。
+    func glassCircle() -> some View { modifier(GlassCircle()) }
+}
+
+private struct GlassCircle: ViewModifier {
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content
+            .font(Typography.body.weight(.medium))
+            .foregroundStyle(palette.ink)
+            .labelStyle(GlassIconLabel())
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+    }
+}
+
+/// 玻璃圆钮的标签（钮与点开菜单的钮都写成 `Label`）：只画图标（名字给读屏与悬停提示），排在 `face` 见方里居中——
+/// 系统样式在标签四周加它自己的边，标签随图标大小走的话一排里放大镜、筛选、头像各大各的。
+private struct GlassIconLabel: LabelStyle {
+    /// 标签那一块的边长：加上系统玻璃钮四周的边（iOS 27 实测每边约 7）是 `ControlMetrics.height`。
+    static let face: CGFloat = 30
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.icon.frame(width: Self.face, height: Self.face)
+    }
+}
+#endif
+
 /// 控件的外形（`ControlButtonStyle` 的样子，不含按压）；停用时整体变淡，挂在菜单按钮上的同样。
 /// `selected`：开着的筛选、选中的那一颗（全 App 一套选中：选中底、墨字半粗，docs/ui.md「选中」），只对带字的胶囊有意义；胶囊的外形经 `chip`。
 /// `level`：胶囊自己当读数用（上下文用量）——底下从左铺一层到比例，高就是胶囊实际的高（随字号长），不含触屏补出来的点按区。

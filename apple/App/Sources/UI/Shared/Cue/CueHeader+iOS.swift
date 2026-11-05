@@ -29,10 +29,11 @@ struct CueHeader: View {
             // 窄屏：开侧栏的圆钮与名牌同一排、同一条中线；名牌长开时盖住它（点面板外先收起）
             if host == .page {
                 Button("侧栏", icon: .sidebar) { workspace.toggleSidebar() }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(ControlButtonStyle(kind: .circular))
+                    .glassCircle()
                     .frame(height: Self.height)
                     .accessibilityIdentifier("narrow-sidebar")
+                    // 长开时面板盖住它、读屏只读面板（模态，`GrowPanel`）
+                    .readerHidden(expanded)
             }
             plate(style)
         }
@@ -52,7 +53,6 @@ struct CueHeader: View {
         }
         // 窄屏收着时让出左边的侧栏钮；长开时铺满整排、盖住它（`GrowPanel`）
         .padding(.leading, style.width == nil && !expanded ? FloatingHeaderLayout.slot : 0)
-        .preference(key: CuePanelOpen.self, value: expanded)
         .observingCueBrain(into: $brain)
         .debugExposesCuePanel(toggle)
     }
@@ -61,11 +61,5 @@ struct CueHeader: View {
         if !expanded { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
         $expanded.grow(reduceMotion: reduceMotion)
     }
-}
-
-/// 名牌长开着 Cue 的面板：窄屏 Cue 页据此让会话条让开（`NarrowCue`），面板盖住它、点面板外只收起。
-struct CuePanelOpen: PreferenceKey {
-    static let defaultValue = false
-    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
 }
 #endif

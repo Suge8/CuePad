@@ -36,6 +36,19 @@ nonisolated enum Motion {
         reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity)
     }
 
+    /// 换页（只这一种，各处的切页都经它）：同级的分段切页（项目｜进展、规则｜技能、搜索的两个范围）、气泡里往里翻一页与返回（"更多"里的移到项目、任务气泡翻到子任务）。
+    /// 这一页从它所在的那一侧（`edge`：分段里靠左的、外面那一页在 `.leading`，靠右的、里面那一页在 `.trailing`）滑进 `Turn.distance` 并淡入，离开时滑回那一侧并淡出：
+    /// 往右的段从右边进、往左的从左边进，往里翻从右边进、返回从左边进，同推入与返回。只挪一小段、不整页推过去：够看出从哪边来，不至于像翻过一整页。
+    /// 动画是触发它的那一下给的 `nudge`；减弱动态效果时只淡。两段都一直挂着、只换看得见的那一段的用 `paneTurn`（同一段距离与方向）。
+    static func turn(from edge: HorizontalEdge, reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .offset(x: Turn.offset(edge)).combined(with: .opacity)
+    }
+
+    nonisolated enum Turn {
+        static let distance: CGFloat = 28
+        static func offset(_ edge: HorizontalEdge) -> CGFloat { edge == .leading ? -distance : distance }
+    }
+
     /// 位置、尺寸、旋转的动画；减弱动态效果时直接到终态——一个动画事务里分不出只淡不挪，换曲线照样插值。
     static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation? {
         reduceMotion ? nil : animation

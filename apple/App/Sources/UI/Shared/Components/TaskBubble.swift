@@ -4,7 +4,7 @@ import SwiftUI
 /// 任务气泡：看一条任务只有它（看板的卡、项目页的任务行、Cue 页里提到与做完的任务、⌘K 与选择器、归档、小组件链接，都经 `Workspace.openTask`；
 /// 任务行与看板卡点开工了的叶子直接进会话，其余开它，`Workspace.enter`），
 /// 内容两端同一份（`TaskBubblePage`、挂在这一页上的定时 `ScheduleStrip`，加最下面的"下一步" `BubbleFooter`），只有摆法分端（`TaskBubbleSlot`）。不换页、不压暗；点外面或 Esc 关。
-/// 翻到一个子任务（点子任务行）原地换页、左上出返回；别处删掉、归档了它，气泡收起。
+/// 翻到一个子任务（点子任务行）原地换页、左上出返回（往里翻从右边进、返回从左边进，全 App 的切页 `Motion.turn`）；别处删掉、归档了它，气泡收起。
 /// "下一步"：交给了会话是它此刻的样子（这家 Agent 的标志、状态与一句话），点了去会话；还没开始的叶子是"开始"（正文连同标题交给 Agent）；
 /// 有子任务的看最该你看的那一步（`Workspace.lead`）。
 struct TaskBubble: View {
@@ -27,6 +27,7 @@ struct TaskBubble: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.closePanel) private var close
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var data: BubbleData?
     /// 这一页的编辑：页一出现就开着（编辑器从第一帧就在，点哪写哪），翻页、关气泡先写下没保存的字再换。"开始"先等它落盘再交出去。
     @State private var editing: CardEditing?
@@ -49,10 +50,10 @@ struct TaskBubble: View {
                 .padding(BubbleMetrics.padding)
                 .padding(.bottom, sheet ? BubbleMetrics.sheetBottom : 0)
                 .id(focus.id)
-                .transition(.opacity)
+                .transition(Motion.turn(from: step == nil ? .leading : .trailing, reduceMotion: reduceMotion))
             }
         }
-        .animation(Motion.fade, value: step)
+        .animation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: step)
         #if os(macOS)
         // Mac 的浮层挂在页面之外：子任务的状态点、"下一步"读的"交给了哪个会话"在这里补上
         .modifier(WindowCardAgents(workspace: workspace))

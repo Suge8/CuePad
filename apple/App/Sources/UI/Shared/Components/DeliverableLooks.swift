@@ -180,7 +180,7 @@ enum DeliverableLooks {
             .padding(Self.markdownMargin)
             .frame(width: markdownPage.width, height: markdownPage.height, alignment: .topLeading)
             .background(palette.paper)
-            .environment(\.palette, palette)
+            .environment(\.colorScheme, .light)
         let renderer = ImageRenderer(content: page)
         renderer.scale = CGFloat(box.longestSide(of: markdownPage)) / markdownPage.width
         return renderer.cgImage

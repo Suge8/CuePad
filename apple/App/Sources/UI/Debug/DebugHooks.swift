@@ -44,6 +44,8 @@ enum DebugHooks {
         var cueNow: CueNow?
         /// 额度环一出现就展开明细（`-CuePadQuotaOpen YES`：手机进展页顶栏、Mac 侧栏）。
         var quotaOpen = false
+        /// 问号的说明一出现就点开（`-CuePadHelpOpen YES`：页顶与导航栏里的问号，`HelpButton`、`BarHelpButton`）。
+        var helpOpen = false
         /// 定时一出现就原地展开改（`-CuePadScheduleOpen YES`）：任务气泡里那一条、定时页新定时的几点。
         var scheduleOpen = false
         /// 规则的文件页一打开就是合并前标出会并进来的段（`-CuePadMergePreview YES`）。
@@ -184,6 +186,18 @@ enum DebugHooks {
         }
         #endif
     }
+
+    #if os(iOS)
+    /// 推入页的整条导航栏让开、回来（`BarFade`）：Debug 里往标准错误记一行左缘右滑返回此刻还开不开（手势本身没法合规地驱动，验收看这一行）。
+    static func barFaded(_ hidden: Bool, navigation: UINavigationController?) {
+        #if DEBUG
+        let pop = navigation?.interactivePopGestureRecognizer
+        let line = "bar-fade hidden=\(hidden) alpha-target=\(hidden ? 0 : 1) pop-enabled=\(pop?.isEnabled ?? false) bar-hidden=\(navigation?.isNavigationBarHidden ?? true) "
+            + "back-hidden=\(navigation?.topViewController?.navigationItem.hidesBackButton ?? true) stack=\(navigation?.viewControllers.count ?? 0)\n"
+        FileHandle.standardError.write(Data(line.utf8))
+        #endif
+    }
+    #endif
 
     /// 性能打点：某件事出现了（`interact` 等它、量到它用了多久，见 `PerfProbe`）。
     static func mark(_ event: String) {

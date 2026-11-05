@@ -37,7 +37,6 @@ private struct LiftedContextMenu<Menu: View, Preview: View>: ViewModifier {
             preview()
                 .environment(workspace)
                 .environment(services)
-                .environment(\.palette, palette)
                 .tint(palette.ink)
                 .environment(\.cardAgents, agents)
         }

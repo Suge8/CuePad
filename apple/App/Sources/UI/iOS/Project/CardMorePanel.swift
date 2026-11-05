@@ -26,7 +26,7 @@ struct CardMoreSlot: View {
 /// - 第一页：头一行是这条任务的标题；下面是 `CardMenu.swipeMore` 那几项（做法同菜单，`CardMenu.Item.run`），末行"移到项目 当前项目 ›"。
 ///   删除在轻扫的最外侧，这里不放；子任务跟着上级走，没有末行。
 /// - 第二页：左上"‹"返回第一页，标题"移到项目"；项目一行一个点选，当前所在的那个打勾、点不了。项目多时在里面滚。
-/// 往里翻从右边进、返回从左边进（同推入与返回）。
+/// 往里翻从右边进、返回从左边进（同推入与返回，全 App 的切页 `Motion.turn`）。
 private struct CardMorePanel: View {
     let card: Card
     let opens: Bool
@@ -40,16 +40,16 @@ private struct CardMorePanel: View {
     var body: some View {
         ScrollView {
             Group {
-                if moving { projects.transition(page(from: .trailing)) } else { actions.transition(page(from: .leading)) }
+                if moving {
+                    projects.transition(Motion.turn(from: .trailing, reduceMotion: reduceMotion))
+                } else {
+                    actions.transition(Motion.turn(from: .leading, reduceMotion: reduceMotion))
+                }
             }
             .padding(.bottom, Spacing.item)
         }
         .scrollBounceBehavior(.basedOnSize)
         .clipped()
-    }
-
-    private func page(from edge: Edge) -> AnyTransition {
-        reduceMotion ? .opacity : .move(edge: edge).combined(with: .opacity)
     }
 
     private func flip(_ to: Bool) {

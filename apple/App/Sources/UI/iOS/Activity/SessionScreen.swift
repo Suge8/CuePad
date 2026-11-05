@@ -43,7 +43,7 @@ struct SessionScreen: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        // 看历史时标题与"⋯"让开（返回钮留着），点标题原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）
+        // 看历史时整排让开（返回、标题、"⋯"一起，左缘右滑返回照常），点顶上那一条唤出，回到最新自动出现（`ChatFollow.showsHeader`）
         .floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
             if shownEnd?.inTransit == true {
                 Text("正在结束…").font(Typography.caption).foregroundStyle(palette.ink3)
@@ -70,6 +70,7 @@ struct SessionScreen: View {
             if let session = digest?.session { lastSeen = session }
         }
         .requestsTranscript(digest)
+        .debugDrivesHeader($follow)
         // 开着这页就算看过：进来、Pi 每次换状态、离开时都记一下（列表里的"有新回复"据此消失）
         .task(id: session?.stateSince) { if let session { services.settings.markSeen(session) } }
         .onDisappear { if let session { services.settings.markSeen(session) } }

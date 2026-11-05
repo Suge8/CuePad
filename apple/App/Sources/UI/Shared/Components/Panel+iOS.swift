@@ -49,7 +49,7 @@ extension View {
 
 /// 窗口里的气泡（`PanelStyle.bubble`）都画在这里，同 Mac 的 `PanelHost`：场景的根挂一次（`panelHost()`，盖住窄屏与宽屏），
 /// sheet 与全屏页里各挂一次（`modalPage`）。挂在页里、控件上的气泡画不出控件那么大的框（输入框还把它裁掉），所以不各画各的。
-/// 一次只开一个：手指落在开着的那个外面就先关它，再点出下一个。内容带着呈现处的环境画（`BubbleSlot`），这一层在 Workspace、色板之外也画得对。
+/// 一次只开一个：手指落在开着的那个外面就先关它，再点出下一个。内容带着呈现处的环境画（`BubbleSlot`），这一层在 Workspace 之外也画得对。
 @Observable
 final class PanelHost {
     struct Shown {
@@ -124,10 +124,12 @@ extension View {
 
 private struct PanelHostModifier: ViewModifier {
     @State private var host = PanelHost()
+    @State private var modals = ModalHost()
     @Environment(\.dynamicTypeSize) private var typeSize
 
     func body(content: Content) -> some View {
         content
+            .modifier(ModalLayers(host: modals))
             .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
             .overlay { DrawerLayer(drawer: host.drawer) }
             .overlay { BubbleLayer(shown: host.shown) }
@@ -161,7 +163,7 @@ private struct WindowProbe: UIViewRepresentable {
     }
 }
 
-/// 一处 `panel(style: .bubble)`：开着时把内容交给这一层的 `PanelHost`，连同呈现处的环境（这一层可能在 Workspace、色板之外）；字号除外，按这一层的（`PanelHost.typeSize`）。
+/// 一处 `panel(style: .bubble)`：开着时把内容交给这一层的 `PanelHost`，连同呈现处的环境（这一层可能在 Workspace 之外）；字号除外，按这一层的（`PanelHost.typeSize`）。
 private struct BubbleSlot<Panel: View>: ViewModifier {
     let key: AnyHashable?
     let source: BubbleSource

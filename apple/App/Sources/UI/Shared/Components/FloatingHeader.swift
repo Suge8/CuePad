@@ -13,8 +13,9 @@ extension View {
     /// - 窄屏侧栏的两段：这一排是侧栏的（`NarrowSidebarBar`），页只让出一排的高。
     /// - 页自己画（窄屏的 Cue 页、宽屏栏里的页）：系统导航栏藏着，这一排是页的一部分，开合侧栏、推入时随页走，
     ///   不与推入页的栏项交叉；从中间长出的面板（`GrowPanel`）只能在这里长：导航栏里的项按栏高摆、画不到栏外。
-    /// `hidden` 时中间与右边让开（淡到透明、不可点、读屏跳过），左边一直在；占的高度不变，内容的边距不跟着变（会话页看历史时用，
-    /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。标题同时是读屏、返回菜单与多任务切换器里的名字。
+    /// `hidden` 时这一排整排让开（左边的返回、中间、右边连同各自的玻璃一起淡到透明、不可点、读屏跳过，同一个 `Motion.fade`）；
+    /// 占的高度不变，内容的边距不跟着变（会话页看历史时用，见 `ChatFollow.showsHeader`）；左缘右滑返回照常（`BarFade`）。
+    /// 给了 `reveal` 时让开的那一条仍接点按，点它整排一起回来。标题同时是读屏、返回菜单与多任务切换器里的名字。
     func floatingHeader<Detail: View, Trailing: View>(
         _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil, wording: [String] = [],
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
@@ -89,10 +90,14 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
     var height = FloatingHeaderLayout.height
     let center: Center
     let trailing: Trailing
+    @State private var grown = false
     @Environment(\.headerHost) private var host
     @Environment(Workspace.self) private var workspace
+    @Environment(ModalHost.self) private var modals: ModalHost?
 
     func body(content: Content) -> some View {
+        // 这一排里长开了面板（`GrowPanel`，模态）：读屏只读那一块，这一页的内容与右边的钮不读；别处长开的连中间这块也不读
+        let covered = modals?.modal?.inPage == true
         Group {
             switch host {
             case .sidebar:
@@ -101,8 +106,12 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                 // 内容让到这一排下面再隔 `Bars.contentGap`；这一排排在让出之前的安全区里，贴着状态栏下沿，同导航栏里的圆钮
                 content
                     .safeAreaPadding(.top, height + Bars.contentGap)
+                    .readerHidden(covered)
                     .overlay(alignment: .top) {
-                        PageBar(height: height, trailing: trailing) { middle }
+                        PageBar(height: height, trailing: trailing.modifier(Yield(hidden: hidden)).readerHidden(covered)) {
+                            middle.modifier(Yield(hidden: hidden)).readerHidden(covered && !grown).background { revealer(.capsule) }
+                        }
+                        .onPreferenceChange(Grown.self) { grown = $0 }
                     }
             case .navigationBar:
                 content
@@ -114,11 +123,12 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                             // 玻璃自己画，不再套一层系统的玻璃底（玻璃不叠玻璃）
                             .sharedBackgroundVisibility(.hidden)
                         if Trailing.self != EmptyView.self {
-                            ToolbarItem(placement: .primaryAction) { yielding(trailing) }
-                                // 圆钮的玻璃是系统给的：让开时连它一起不画
-                                .sharedBackgroundVisibility(hidden ? .hidden : .automatic)
+                            ToolbarItem(placement: .primaryAction) { trailing }
                         }
                     }
+                    // 让开是整条导航栏一起淡（返回钮、中间、右边连同系统给的玻璃）；它淡到透明就不接点按，点让开的那一条唤出由内容顶上这一条接
+                    .background { BarFade(hidden: hidden) }
+                    .overlay(alignment: .top) { revealer(.rect).frame(height: 0).ignoresSafeArea(edges: .top) }
             }
         }
         .navigationTitle(Text(title))
@@ -126,16 +136,76 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
         .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
     }
 
-
     private var middle: some View {
         HStack(spacing: Spacing.item) { center }
-            .modifier(Yield(hidden: hidden))
-            .background {
-                if hidden, let reveal { Color.clear.contentShape(.capsule).onTapGesture(perform: reveal).transition(.identity).accessibilityHidden(true) }
-            }
     }
 
-    private func yielding(_ view: some View) -> some View { view.modifier(Yield(hidden: hidden)) }
+    /// 让开时接点按、唤出整排的那一块：页自己画的那一排是中间那块原来的位置，导航栏是整条栏连同状态栏那一截。
+    @ViewBuilder private func revealer(_ shape: some Shape) -> some View {
+        if hidden, let reveal {
+            Color.clear.contentShape(shape).onTapGesture(perform: reveal).transition(.identity).readerHidden(true)
+        }
+    }
+}
+
+/// 这一排里有长开的面板（`GrowPanel` 报上来）：页里别的让读屏跳过，这一块不跳。
+struct Grown: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+
+/// 推入页的让开（`floatingHeader` 的 `hidden`）：整条系统导航栏淡到透明（`Motion.fade` 同一段时长与曲线）、读屏跳过，导航栏本身不藏、返回钮不藏。
+/// 否决过：藏返回钮（`navigationBarBackButtonHidden`、`hidesBackButton`）连带关掉左缘右滑返回；藏整条栏（`toolbarVisibility(.hidden)`）
+/// 改安全区、内容跳一下，左缘右滑也跟着停；返回钮的系统玻璃不认 `sharedBackgroundVisibility`，藏不掉，留一块空玻璃。
+/// 导航栏是整个栈共用的：这一页走开（推入下一页、返回，含左缘右滑的那一段）就放回不透明，转场取消回来再按 `hidden` 淡回去。
+private struct BarFade: UIViewControllerRepresentable {
+    let hidden: Bool
+
+    func makeUIViewController(context: Context) -> Controller { Controller() }
+
+    func updateUIViewController(_ controller: Controller, context: Context) { controller.hidden = hidden }
+
+    final class Controller: UIViewController {
+        var hidden = false {
+            didSet { if hidden != oldValue { apply(animated: true) } }
+        }
+        /// 这一页在栈顶、看得见（`viewWillAppear` 到 `viewWillDisappear` 之间）。
+        private var onTop = false
+
+        override func loadView() {
+            view = UIView()
+            view.isUserInteractionEnabled = false
+        }
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            onTop = true
+            apply(animated: false)
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            onTop = false
+            guard let bar = navigationController?.navigationBar else { return }
+            bar.accessibilityElementsHidden = false
+            if let coordinator = transitionCoordinator {
+                coordinator.animate { _ in bar.alpha = 1 }
+            } else {
+                bar.alpha = 1
+            }
+        }
+
+        private func apply(animated: Bool) {
+            guard onTop, let bar = navigationController?.navigationBar else { return }
+            bar.accessibilityElementsHidden = hidden
+            let alpha: CGFloat = hidden ? 0 : 1
+            DebugHooks.barFaded(hidden, navigation: navigationController)
+            guard animated else { return bar.alpha = alpha }
+            UIView.animate(withDuration: Motion.Fade.duration, delay: 0, options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction]) {
+                bar.alpha = alpha
+            }
+        }
+    }
 }
 
 /// 让开：淡到透明、不可点、读屏跳过。
@@ -153,6 +223,7 @@ private struct Yield: ViewModifier {
 
 /// 页自己画的那一排：右边这一页的那一个操作，圆钮的位置同导航栏里的圆钮；
 /// 中间那几块盖在圆钮之上一层：从中间长出的面板（`GrowPanel`）铺满这一排往下长。
+/// 不包玻璃容器（`GlassEffectContainer`）：容器把里面的玻璃合到一层画，中间那几块的玻璃是垫在字后面的底（`glass`），合上去就盖住了名牌上的字。
 private struct PageBar<Middle: View, Trailing: View>: View {
     let height: CGFloat
     let trailing: Trailing
@@ -161,12 +232,10 @@ private struct PageBar<Middle: View, Trailing: View>: View {
     var body: some View {
         ZStack(alignment: .top) {
             HStack {
-                Spacer(minLength: 8)
+                Spacer(minLength: Spacing.item)
                 trailing
             }
-            .labelStyle(.iconOnly)
-            .buttonStyle(ControlButtonStyle(kind: .circular))
-            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+            .glassCircle()
             .frame(height: height)
             middle
         }

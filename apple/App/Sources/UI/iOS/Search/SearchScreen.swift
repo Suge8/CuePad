@@ -9,6 +9,7 @@ struct SearchScreen: View {
     @State private var scope = DebugHooks.preset.searchScope
     @State private var sessions = AgentListModel()
     @Environment(Workspace.self) private var workspace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 页宽：导航栏中间那一格不会自己铺满，搜索框按页宽给定宽度（让出左边的返回与两侧页边）。
     @State private var width: CGFloat = 0
     private static let maxField: CGFloat = 560
@@ -17,8 +18,11 @@ struct SearchScreen: View {
     var body: some View {
         Group {
             switch scope {
-            case .cards: CardSearchResults(query: $query) { scopes }
-            case .sessions: SessionList(model: sessions) { ChipRow { scopes }.padding(.horizontal, -Spacing.page) }
+            // 换范围同全 App 的切页（`Motion.turn`）：灵感与任务在左、会话在右
+            case .cards: CardSearchResults(query: $query) { scopes }.transition(Motion.turn(from: .leading, reduceMotion: reduceMotion))
+            case .sessions:
+                SessionList(model: sessions) { ChipRow { scopes }.padding(.horizontal, -Spacing.page) }
+                    .transition(Motion.turn(from: .trailing, reduceMotion: reduceMotion))
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
