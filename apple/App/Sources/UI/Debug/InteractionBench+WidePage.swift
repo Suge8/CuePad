@@ -27,7 +27,17 @@ struct WidePage {
     }
 
     /// 一栏的阅读位置：保住了、验不了（没东西可滚、没滚到中段、中段没认出一条），或没保住（对象换了、那一条不见了、被滚回一端）。
+    /// 验不了不是通过：`perf-mac.sh` 在大库上把它判失败（大库的列与对话都长到能滚，就是为验这一条）。
     enum Verdict: String { case ok, untested, broken }
+
+    /// 动作之后每一条读数为什么是那个判定，按先后只取第一条：
+    /// - `scrollGone`：动作前那个滚动视图不在了（页被重建）；
+    /// - `atEnd`：滚动视图被滚回顶或底；
+    /// - `cardGone`：动作前正中那张卡不在可视区里了——不论是滚走了还是卡本身离开了这一列（列变空那一下推进中那张卡走了），都判没保住，
+    ///   找不到不当成保住：要验的列里那张卡就不该被这一下挪走，挪走的卡只能在不验的列里（`InteractionBench+Board`）；
+    /// - `kept`：还在眼前（藏起的 Cue 那一块不比，也记作它）。
+    /// 正中那张卡在动作之前取（`init`，在 `step` 发出动作之前建这一份）。
+    enum Reason: String { case kept, scrollGone, atEnd, cardGone }
 
     /// 滚到中段的那个滚动视图至少要能滚这么远：离两端各留出一截，滚回一端看得出来。
     private static let minimumTravel: CGFloat = 200
@@ -90,16 +100,17 @@ struct WidePage {
         let changed = !swapped.isEmpty
         let detail = readings.map { reading -> [String: Any] in
             let column = columns.first { $0.slot == reading.column }
-            if hidden.contains(reading.column) { return ["column": "\(reading.column)", "verdict": Verdict.ok.rawValue, "kept": true] }
+            if hidden.contains(reading.column) { return ["column": "\(reading.column)", "verdict": Verdict.ok.rawValue, "reason": Reason.kept.rawValue] }
             let scroll = column.flatMap { Self.scrolls(in: $0).first { ObjectIdentifier($0) == reading.scroll } }
             let ends = scroll.flatMap(Self.ends)
             let shown = reading.anchor.flatMap { anchor in
                 column.flatMap { column in scroll.flatMap { Self.items(in: column, shownBy: $0).first { $0.id == anchor.id } } }
             }
-            let verdict: Verdict = shown != nil && (ends.map { $0.top > 1 && $0.bottom > 1 } ?? false) ? .ok : .broken
+            let reason: Reason = scroll == nil ? .scrollGone : !(ends.map { $0.top > 1 && $0.bottom > 1 } ?? false) ? .atEnd : shown == nil ? .cardGone : .kept
+            let verdict: Verdict = reason == .kept ? .ok : .broken
             let frame = reading.anchor.flatMap { InteractionBench.rows[$0.id] }
             return [
-                "column": "\(reading.column)", "anchor": reading.anchor.map { "\($0.id.base)" } ?? "", "verdict": verdict.rawValue,
+                "column": "\(reading.column)", "anchor": reading.anchor.map { "\($0.id.base)" } ?? "", "verdict": verdict.rawValue, "reason": reason.rawValue,
                 "ends": [[Self.round(reading.top), Self.round(reading.bottom)], ends.map { [Self.round($0.top), Self.round($0.bottom)] } ?? []],
                 "anchorOffset": [reading.anchor.map { Self.round($0.offset) as Any } ?? NSNull(), shown.map { Self.round($0.offset) as Any } ?? NSNull()],
                 "anchorFrame": [Self.json(reading.frame), Self.json(frame)],
