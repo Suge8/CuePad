@@ -9,7 +9,8 @@ import AppKit
 struct WidePage {
     private let views: [WideSlot: [ObjectIdentifier]]
     private let readings: [Reading]
-    /// 栏里没有一个能滚 `minimumTravel`、停在中段又认出一条的滚动视图（内容不到一屏多）：阅读位置在这一栏验不了，只比对象，测量行里列出来。
+    /// 验不了的，按滚动视图算：每个能滚 `minimumTravel` 的滚动视图都要有一条读数，没有的记成"栏#第几个（从左数，从 0 起）:为什么"
+    /// （没到中段、中段没认出一条）；一栏里一个能滚的都没有记成"栏:没有能滚的"。有一条就不算通过：同一栏里读到了一列，别的列漏验照样记在这里。
     let untested: [String]
     /// 基线时逐栏读到的：各滚动视图能滚多远、中段那个离两端多远、报了位置的条目有多少落在它的可视区里（读不到中段那一条时看缺在哪）。
     let baseline: [[String: Any]]
@@ -75,22 +76,33 @@ struct WidePage {
                 "column": "\(column.slot)", "scrolls": Self.scrolls(in: column).map { Self.round(($0.documentView?.frame.height ?? 0) - $0.contentView.bounds.height) },
                 "spots": InteractionBench.rows.count, "shown": scrolls.map { Self.items(in: column, shownBy: $0).count },
                 "ends": scrolls.compactMap(Self.ends).map { [Self.round($0.top), Self.round($0.bottom)] },
+                // 滚不到 `minimumTravel` 的（列短、一屏放得下）：没有阅读位置可验，不算漏验，只列出来（能滚多远）
+                "short": Self.scrolls(in: column).filter { !scrolls.contains($0) }.map { Self.round(($0.documentView?.frame.height ?? 0) - $0.contentView.bounds.height) },
             ]
         }
-        // 验不了的那一个（没停在中段、中段没认出一条）不记：它那里比不出阅读位置
-        let readings: [Reading] = columns.flatMap { column in
-            Self.scrollables(in: column).compactMap { scroll in
-                guard let (top, bottom) = Self.ends(of: scroll), top > 1, bottom > 1,
-                      let anchor = Self.items(in: column, shownBy: scroll).min(by: { abs($0.offset) < abs($1.offset) }) else { return nil }
-                return Reading(column: column.slot, scroll: ObjectIdentifier(scroll), anchor: anchor, top: top, bottom: bottom,
-                               frame: InteractionBench.rows[anchor.id], visible: Self.visible(scroll, in: column))
+        // 每个能滚的滚动视图要么有一条读数，要么记进验不了（连同第几个、为什么）：不让同一栏里读到了的那一列盖住漏验的那一列
+        var readings: [Reading] = [], untested: [String] = []
+        for column in columns {
+            let scrolls = Self.scrollables(in: column)
+            if scrolls.isEmpty { untested.append("\(column.slot):没有能滚的") }
+            for (index, scroll) in scrolls.enumerated() {
+                guard let (top, bottom) = Self.ends(of: scroll), top > 1, bottom > 1 else {
+                    untested.append("\(column.slot)#\(index):没到中段")
+                    continue
+                }
+                guard let anchor = Self.items(in: column, shownBy: scroll).min(by: { abs($0.offset) < abs($1.offset) }) else {
+                    untested.append("\(column.slot)#\(index):中段没认出一条")
+                    continue
+                }
+                readings.append(Reading(column: column.slot, scroll: ObjectIdentifier(scroll), anchor: anchor, top: top, bottom: bottom,
+                                        frame: InteractionBench.rows[anchor.id], visible: Self.visible(scroll, in: column)))
             }
         }
         self.readings = readings
-        untested = columns.map(\.slot).filter { column in !readings.contains { $0.column == column } }.map { "\($0)" }
+        self.untested = untested
     }
 
-    /// 跨阈值之后的样子比起这份：对象换了或任一栏没保住是 broken；都保住了但有栏验不了是 untested，不算通过。逐栏的明细给测量行：
+    /// 跨阈值之后的样子比起这份：对象换了或任一条读数没保住是 broken；都保住了但有滚动视图验不了是 untested，不算通过（整项按最差的那一条）。逐栏的明细给测量行：
     /// 离两端的距离、那一条离可视区正中多远、它报的框与可视区（跨阈值前后；看不见了为空）。
     /// 收起的 Cue 只是藏起、一直挂着（`MainWindow`）：藏着的那一块不比对象也不读位置（记作 kept），露出来的那一下再比。
     func compare(_ columns: [WideColumnView]) -> (verdict: Verdict, detail: [[String: Any]]) {
