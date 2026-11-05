@@ -88,6 +88,7 @@ struct SessionPage: View {
                             Color.clear.frame(height: ComposerMetrics.openOneLine)
                         }
                     }
+                    .replyTray()
                     .padding(.horizontal, Spacing.page)
                     .frame(maxWidth: Spacing.reading)
                     .animation(Motion.fade, value: session.question)
