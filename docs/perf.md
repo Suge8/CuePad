@@ -43,6 +43,7 @@ Mac 看板这一页上的看板⇄会话与 Cue 面板开合是 `InteractionBenc
 - iPad 同样录：`xc.sh rec ipad -- -CuePadDemo YES -CuePadQuiet YES -CuePadLandscape YES … -CuePadSidebarCycle YES`（横屏才放得下会话条；iPad Pro 11 横屏宽 1210，会话条与 Cue 同开放不下，量会话条开合加 `-CuePadCue shut`），坐标同 Mac 按点、2x。
   2026-11-06 第一次在横屏上量：iPad 上补位原先没生效（SwiftUI 晚一步才把页摆到层上，会话页还晚一次提交，`WideColumnController.lastLayout`），居中与靠右的第一帧先反向跳 128 点；
   修完会话、看板两页的会话条开合与 Cue 收起放回都单调，`fast` 中途反向位置连着，最大单步会话条（挪 64～256 点）12～56、Cue（挪 200～400 点）30～71。录屏与逐帧在检出的 apple/.derived/cue-host/ipad/（`summary.txt`）。
+  同次与 f50c70dd8 交替 3 轮（Mac，开合 4 项与阈值 12 项，不含改前必失败的「Cue 露出」，负载 22～32）：演示库指令 −0.1～−1%，大库 −3～−18%（Cue 跨宽、开合不再重建），没有一项变多；点击回合只有「宽屏反向·会话+Cue」+40%，同项指令 −3.7%，是频率。全表在 apple/.derived/cue-host/perf-ab.log。
 
 ## 同步测量
 

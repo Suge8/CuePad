@@ -45,12 +45,15 @@ extension View {
     }
 
     #if os(iOS)
-    /// `-CuePadCompact <宽>`：按这么宽的窄窗口画（模拟器开不了分屏）。
+    /// `-CuePadCompact <宽>`：按这么宽的窄窗口画（模拟器开不了分屏）；`-CuePadWindowSize <宽>x<高>` 同样按这么宽画、尺寸类不变（台前调度里拖小的宽屏窗口）。
+    /// 不用场景的尺寸限制（`sizeRestrictions`）摆真窗口：模拟器是全屏应用模式，系统不理它（实测宽一直是整屏）。
     @ViewBuilder func debugCompact() -> some View {
         #if DEBUG
         let width = DebugScene.defaults.double(forKey: "CuePadCompact")
         if width > 0 {
             environment(\.horizontalSizeClass, .compact).frame(width: width).frame(maxWidth: .infinity, alignment: .leading)
+        } else if let size = DebugScene.windowSize {
+            frame(width: size.width).frame(maxWidth: .infinity, alignment: .leading)
         } else {
             self
         }
