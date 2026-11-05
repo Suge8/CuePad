@@ -49,10 +49,17 @@ extension InteractionBench {
         for (index, id) in ids.enumerated() { settings.setReplyDraft(ComposerDraft(text: "宽屏草稿 \(index)"), for: id) }
         workspace.cue.draft = ComposerDraft(text: "宽屏 Cue 草稿")
         let height = window.contentLayoutRect.height
+        // 不是这里要的改宽、主区去处与临界宽的变化都记下（连同改宽时的调用栈），附在下一行上：判不对时看是谁动了窗口或状态
+        let watch = WideWatch(window: window, workspace: workspace)
+        func resize(_ width: CGFloat) {
+            watch.expected = width
+            window.setContentSize(NSSize(width: width, height: height))
+        }
+        defer { watch.stop() }
         for item in selected {
             arrange(item, in: workspace, sessions: sessions)
             let threshold = WideMetrics.railThreshold(workspace), cueThreshold = WideMetrics.cueThreshold(workspace)
-            window.setContentSize(NSSize(width: threshold, height: height))
+            resize(threshold)
             await Task.wait(for: .seconds(1))
             await WidePage.scrollToMiddle(wideColumns(in: view))
             let before = snapshot(workspace, ids: ids)
@@ -60,27 +67,42 @@ extension InteractionBench {
             func step(_ name: String, width: CGFloat, rail: CGFloat, cue: Bool = true, reverse: Bool = false) async {
                 guard only?.contains(name) ?? true else {
                     // 不量也照样改宽：下一步才是从阈值另一侧跨过来（反向那一下停回原宽，不必做）
-                    if !reverse { window.setContentSize(NSSize(width: width, height: height)) }
+                    if !reverse { resize(width) }
                     return
                 }
                 let slide = reverse ? SlideSampler(columns(in: view)) : nil
                 var railBefore: CGFloat = -1, cueBefore = false
+                var timeline: [String] = []
+                var pullBack: Task<Void, Never>?
+                var start = CACurrentMediaTime()
+                func mark(_ what: String) {
+                    timeline.append("\(Int((CACurrentMediaTime() - start) * 1000))ms \(what) 窗宽\(Int(window.contentLayoutRect.width)) 主区x\(Int(columns(in: view).main?.windowFrame.minX ?? -1)) Cue露\(columns(in: view).cue?.isHidden == false)")
+                }
                 var row = await measure(name, in: view) {
                     railBefore = columns(in: view).main?.windowFrame.minX ?? -1
                     cueBefore = columns(in: view).cue?.isHidden == false
-                    window.setContentSize(NSSize(width: width, height: height))
+                    start = CACurrentMediaTime()
+                    resize(width)
+                    mark("改宽后")
                     slide?.start(in: view)
-                    if reverse { Task { await Task.wait(for: .milliseconds(50)); window.setContentSize(NSSize(width: threshold, height: height)) } }
+                    if reverse { pullBack = Task { await Task.wait(for: .milliseconds(50)); resize(threshold) } }
                 }
+                // 拉回那一下落地了才往下读、往下走：没等它的话它在负载高时晚到，会把后面某一步改过的窗口宽又改回临界宽（会话条变宽、Cue 露出），判那一步不对
+                await pullBack?.value
                 var moved = false
                 if let slide {
                     moved = slide.minimum < railBefore - 1
                     row.merge(slide.stop()) { $1 }
                 }
+                mark("量完")
                 let idle = (main: threadInstructionsMillions(), process: instructionsMillions())
                 await Task.wait(for: .milliseconds(500))
                 row["idleMainM"] = ((threadInstructionsMillions() - idle.main) * 10).rounded() / 10
                 row["idleProcessM"] = ((instructionsMillions() - idle.process) * 10).rounded() / 10
+                mark("静置后")
+                // 读的那一刻的时间线（离动作发出的毫秒、窗口宽、主区左缘、Cue 露没露）：判不对时看是窗口被改回去了还是排版没跟上
+                row["timeline"] = timeline
+                row["widthAsked"] = Double(width)
                 let shown = columns(in: view)
                 let railPt = shown.main.map(\.windowFrame.minX) ?? -1
                 let cueShown = shown.cue?.isHidden == false
@@ -97,6 +119,7 @@ extension InteractionBench {
                 row["budgetClickMs"] = wideBudget.clickMs
                 row["budgetHitches"] = wideBudget.hitches
                 row["foreground"] = foreground
+                row["unexpected"] = watch.drain()
                 print(jsonLine("INTERACT", row))
                 fflush(stdout)
             }
@@ -106,7 +129,7 @@ extension InteractionBench {
                 await step("宽屏展开·\(item.name)", width: threshold, rail: wide)
             }
             await step("宽屏反向·\(item.name)", width: threshold - 1, rail: wide, reverse: true)
-            window.setContentSize(NSSize(width: cueThreshold, height: height))
+            resize(cueThreshold)
             await Task.wait(for: .seconds(1))
             for _ in 0..<2 {
                 await step("Cue 收钮·\(item.name)", width: cueThreshold - 1, rail: narrow, cue: false)
@@ -190,5 +213,42 @@ private final class SlideSampler: NSObject {
 
 private extension NSView {
     var windowFrame: CGRect { convert(bounds, to: nil) }
+}
+
+/// 宽屏阈值测量期间盯着两样（`measureWide`）：窗口被改成不是测量要的宽（记下当时的调用栈），主区去处、两道临界宽与两个开合偏好的每一次变化。
+/// 各带离开始多少毫秒，攒到下一行测量里（`drain`）。
+@MainActor final class WideWatch {
+    var expected: CGFloat
+    private var events: [String] = []
+    private let start = CACurrentMediaTime()
+    private var observer: (any NSObjectProtocol)?
+    private var task: Task<Void, Never>?
+
+    init(window: NSWindow, workspace: Workspace) {
+        expected = window.contentLayoutRect.width
+        observer = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, window.contentLayoutRect.width != self.expected else { return }
+                self.note("窗宽变成 \(Int(window.contentLayoutRect.width))（要的是 \(Int(self.expected))）：" + Thread.callStackSymbols.prefix(18).joined(separator: " | "))
+            }
+        }
+        task = Task { [weak self] in
+            for await state in Observations({
+                "\(workspace.mainRoute) 收会话条\(Int(WideMetrics.railThreshold(workspace))) 收Cue\(Int(WideMetrics.cueThreshold(workspace))) 会话条\(workspace.sidebarOpen) Cue\(workspace.services.settings.cueOpen) 浮\(workspace.cueFloats)"
+            }) { self?.note(state) }
+        }
+    }
+
+    private func note(_ what: String) { events.append("\(Int((CACurrentMediaTime() - start) * 1000))ms \(what)") }
+
+    func drain() -> [String] {
+        defer { events = [] }
+        return events
+    }
+
+    func stop() {
+        observer.map(NotificationCenter.default.removeObserver)
+        task?.cancel()
+    }
 }
 #endif

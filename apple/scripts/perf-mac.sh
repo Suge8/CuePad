@@ -3,7 +3,7 @@
 #   单次交互：演示库与大库（-CuePadSeed perf：50 项目、5000 卡、300 张大图、200 个 Pi 历史会话，前 12 个带长对话）上的 -CuePadBench interact，
 #   逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）与其中的指令数、每毫秒跑的周期（GHz：活一样多而回合翻倍时它减半，是机器那一刻慢），
 #   合计、最重一圈、指令数与掉帧，取各次的中位数，
-#   列成表；宽屏自动阈值那几项另列一张（静置时主线程与进程的指令、反向时的滑动），没跨过阈值、画面没变、栏宽或保留的状态与页面不对时不论前后台都以 1 退出；页面的阅读位置验不了的栏（内容不到一屏多等）标「页面验不了」，不算通过也不判失败。默认在后台量（不抢前台）：指令数照样前后对比，帧与掉帧偏乐观，不和预算比；
+#   列成表；宽屏自动阈值那几项另列一张（静置时主线程与进程的指令、反向时的滑动），没跨过阈值、画面没变、栏宽或保留的状态与页面不对时不论前后台都以 1 退出；看板列宽换档那两项另列一张，列宽没换或各列的阅读位置没保住同样以 1 退出；页面的阅读位置验不了的栏（内容不到一屏多等）标「页面验不了」，不算通过也不判失败。默认在后台量（不抢前台）：指令数照样前后对比，帧与掉帧偏乐观，不和预算比；
 #   要和交互预算（docs/perf.md「交互预算」）比就加 -CuePadForeground YES 在前台量（规则见 docs/verify.md「占前台」），有一项超了就以 1 退出。
 #   CUEPAD_PERF_SEED=<库目录>（如真实库的只读副本）：只量这份库，每次从它克隆，换掉演示库与大库；配 -CuePadProject <库里的项目名>（单次交互从项目页起）。
 #   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/perf.md「交互预算」。
@@ -144,5 +144,18 @@ if wide:
         untested = sorted({c for r in samples for c in r["pageUntested"]})
         status = '不符：' + ','.join(bad) if bad else f"页面验不了：{','.join(untested)}" if untested else 'ok'
         print(f"{key[0]:6}{key[1]:18}{idle_main:12.1f}{idle_process:11.1f}{motion}  {status}")
-sys.exit(1 if over or broken else 0)
+# 看板列宽换档那两项（InteractionBench+Board.swift）：这一下列宽没换、画面没变或某一列滚到中段的那张卡没保住，前后台都判失败
+lanes = [r for r in rows if "laneShift" in r]
+lane_bad = [r for r in lanes if not (r["laneShift"] and r["seen"] and r["page"] != "broken")]
+if lanes:
+    print(f"\n{'库':6}{'列宽换档':16}  状态")
+    for key in order:
+        samples = [r for r in lanes if (r["库"], r["name"]) == key]
+        if not samples:
+            continue
+        bad = [k for k in ("laneShift", "seen") if not all(r[k] for r in samples)] + (["page"] if any(r["page"] == "broken" for r in samples) else [])
+        untested = sorted({c for r in samples for c in r["pageUntested"]})
+        status = '不符：' + ','.join(bad) if bad else f"页面验不了：{','.join(untested)}" if untested else 'ok'
+        print(f"{key[0]:6}{key[1]:16}  {status}")
+sys.exit(1 if over or broken or lane_bad else 0)
 PY
