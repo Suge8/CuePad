@@ -9,16 +9,20 @@ struct SearchScreen: View {
     @State private var scope = DebugHooks.preset.searchScope
     @State private var sessions = AgentListModel()
     @Environment(Workspace.self) private var workspace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 页宽：导航栏中间那一格不会自己铺满，搜索框按页宽给定宽度（让出左边的返回与两侧页边）。
     @State private var width: CGFloat = 0
     private static let maxField: CGFloat = 560
     static let prompt = String(localized: "搜索灵感、任务与会话")
 
     var body: some View {
-        Group {
+        TurnStack {
             switch scope {
-            case .cards: CardSearchResults(query: $query) { scopes }
-            case .sessions: SessionList(model: sessions) { ChipRow { scopes }.padding(.horizontal, -Spacing.page) }
+            // 换范围同全 App 的切页（`Motion.turn`）：灵感与任务在左、会话在右
+            case .cards: CardSearchResults(query: $query) { scopes }.transition(Motion.turn(from: .leading, reduceMotion: reduceMotion))
+            case .sessions:
+                SessionList(model: sessions) { ChipRow { scopes }.padding(.horizontal, -Spacing.page) }
+                    .transition(Motion.turn(from: .trailing, reduceMotion: reduceMotion))
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
@@ -27,6 +31,7 @@ struct SearchScreen: View {
             SearchCapsule(query: $query.text, focusRequests: workspace.searchFocusRequests).frame(width: fieldWidth)
         }) { EmptyView() }
         .onChange(of: query.text, initial: true) { sessions.query = query.text }
+        .debugCyclesTurn { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { scope = scope == .cards ? .sessions : .cards } }
         .onAppear { if query.text.isEmpty { query.text = DebugHooks.preset.searchText } }
     }
 
@@ -37,7 +42,7 @@ struct SearchScreen: View {
 
     /// 范围：结果最上面那排胶囊的头一块（`SearchScopePanes`，同 Mac ⌘K 的那一组）。
     private var scopes: some View {
-        SearchScopePanes(scope: $scope).frame(height: Self.scopeHeight)
+        SearchScopePanes(scope: $scope).frame(height: Self.scopeHeight).turnSteady()
     }
 
     private static let scopeHeight: CGFloat = 36

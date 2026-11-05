@@ -41,13 +41,6 @@ struct QuotaDetail: View {
     }
 }
 
-#if os(iOS)
-extension QuotaDetail {
-    /// 从顶栏长出的玻璃里（`GrowPanel`：窄屏侧栏的额度钮、宽屏进展页顶那一块）明细离玻璃的边：上面贴着长出它的那一排，左右与下面是面板的内边。
-    static let grownInsets = EdgeInsets(top: Spacing.tight, leading: Spacing.panel, bottom: Spacing.panel, trailing: Spacing.panel)
-}
-#endif
-
 #if os(macOS)
 extension QuotaDetail {
     /// Mac 侧栏气泡的宽：两个账号起放得下两栏（`QuotaColumns`），否则一栏、同别的气泡最宽那一档。定宽：读数随时间变，宽不跟着跳。

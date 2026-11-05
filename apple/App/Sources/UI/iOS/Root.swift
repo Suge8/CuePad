@@ -58,7 +58,6 @@ struct IOSRoot: View {
         .modifier(CueRelayStage(workspace: workspace))
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
         .environment(\.zoomNamespace, zoom)
-        .modifier(PaletteProvider())
         .environment(workspace)
         .environment(workspace.services)
         .onChange(of: sizeClass, initial: true) { workspace.setLayout(sizeClass == .regular ? .wide : .narrow) }

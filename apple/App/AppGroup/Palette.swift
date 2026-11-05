@@ -221,29 +221,22 @@ private extension Color {
     }
 }
 
-/// 环境里的配色；根视图按外观与对比度注入（`withPalette()`）。
-private struct PaletteKey: EnvironmentKey {
-    static let defaultValue = Palette(dark: false)
-}
-
 extension EnvironmentValues {
-    var palette: Palette {
-        get { self[PaletteKey.self] }
-        set { self[PaletteKey.self] = newValue }
-    }
+    /// 环境里的配色：只由外观与对比度算出，不另存一份、不靠谁注入。系统把这两样带进每一层（sheet、全屏、窗口那一层的气泡与浮出、
+    /// 导航栏与菜单的预览、另起的托管视图、小组件与扩展），哪一层都拿到对的配色；要按某种外观画就改外观（`colorScheme`），不改配色。
+    /// 否决过注入一份：注入点之外的层（窗口那一层的气泡挂在根视图外面）拿到默认的浅色，深色下浅纸上写着浅墨，整块发白读不出。
+    var palette: Palette { Palette(colorScheme, contrast: colorSchemeContrast) }
 }
 
 extension View {
-    /// 按外观、对比度注入 `palette`，并把墨设为系统控件的 tint（选中、焦点、开关、系统按钮）。每个根视图挂一次。
+    /// 把墨设为系统控件的 tint（选中、焦点、开关、系统按钮）。每个根视图挂一次。
     func withPalette() -> some View { modifier(PaletteReader()) }
 }
 
 private struct PaletteReader: ViewModifier {
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        let palette = Palette(scheme, contrast: contrast)
-        content.environment(\.palette, palette).tint(palette.ink)
+        content.tint(palette.ink)
     }
 }

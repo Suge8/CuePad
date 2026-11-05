@@ -43,17 +43,17 @@ private struct NarrowHome: View {
     }
 }
 
-/// Cue 页与左边常驻的会话条（最底下是"更早"那一格）；名牌长开 Cue 的面板时会话条让开（面板盖住这一屏，`CuePanelOpen`）。
+/// Cue 页与左边常驻的会话条（最底下是"更早"那一格）；名牌长开 Cue 的面板时会话条让开（面板盖住这一屏，模态浮出 `ModalHost`）。
 private struct NarrowCue: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(ModalHost.self) private var host: ModalHost?
     @Environment(\.palette) private var palette
-    @State private var panelOpen = false
 
     var body: some View {
+        let panelOpen = host?.modal?.inPage == true
         RouteView(route: .cue)
             .environment(\.headerHost, .page)
             .background(palette.desk.ignoresSafeArea())
-            .onPreferenceChange(CuePanelOpen.self) { panelOpen = $0 }
             .overlay(alignment: .leading) {
                 SessionRail(data: workspace.services.liveSessions.rail, form: .phone, pulse: workspace.pulse) { session, _ in
                     workspace.openSession(session.id, sessionID: session.sessionID)
@@ -91,15 +91,14 @@ private struct NarrowSidebar: View {
         .onChange(of: pane, initial: true) { mounted.insert(pane) }
     }
 
+    /// 换段同全 App 的切页（`paneTurn`）：进展在右，从右边进；项目在左，从左边进。
     private func page(_ route: Route, pane: NavigationPane) -> some View {
         let shown = workspace.navigationPane == pane
         return RouteView(route: route)
             .environment(\.headerHost, .sidebar)
             .environment(\.pagePrefetch, true)
             .environment(\.pageActive, shown && workspace.sidebarOpen && workspace.path.isEmpty)
-            .opacity(shown ? 1 : 0)
-            .allowsHitTesting(shown)
-            .readerHidden(!shown)
+            .paneTurn(pane == .projects ? 0 : 1, of: workspace.navigationPane == .projects ? 0 : 1)
     }
 
 }

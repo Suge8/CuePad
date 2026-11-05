@@ -62,7 +62,7 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
-                    ToolbarItem(placement: .primaryAction) { BarHelpButton(id: "cueList.help") { CueListHelp(text: help) } }
+                    ToolbarItem(placement: .primaryAction) { BarHelpButton { CueListHelp(text: help) } }
                 }
         }
         .presentationDetents([.large])

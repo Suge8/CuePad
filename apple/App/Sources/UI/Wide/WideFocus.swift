@@ -313,8 +313,8 @@ private struct WideEnvironment: ViewModifier {
         content
             .environment(workspace)
             .environment(workspace.services)
-            .environment(\.palette, values.palette)
             .environment(\.colorScheme, values.colorScheme)
+            .environment(\._colorSchemeContrast, values.colorSchemeContrast)
             .environment(\.locale, values.locale)
             .environment(\.dynamicTypeSize, values.dynamicTypeSize)
             .environment(\.panelCovered, values.panelCovered)

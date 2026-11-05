@@ -29,6 +29,8 @@ enum ScrollAnchor {
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/perf.md）；
 /// - `-CuePadNotice <文字>`：就绪后 5 秒弹一条带撤销的提示，按真实时长收（`noticeIfAsked`）；`-CuePadQuiet YES`（iOS）：不弹演示会话的前台横幅；
 ///   `-CuePadCueDraft <文字>`（配 cue 画面）：Cue 的输入框里先有这句草稿；
+/// - `-CuePadHelpOpen YES`：页顶与导航栏里的问号一出现就点开说明（`debugOpensHelp`）；`-CuePadQuotaCycle YES`（iOS，配 progress 录屏）：反复点额度钮开浮窗、走点外面那条路关（`cycleQuota`）；
+///   `-CuePadHeaderHidden YES`、`-CuePadHeaderCycle YES`（iOS，配 session）：会话页顶那一排让开、来回让开与回来（`debugDrivesHeader`）；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；`-CuePadLargestType YES` 同理按最大的辅助字号画，`-CuePadHighContrast YES` 按增强对比度画；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；`-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘；`-CuePadLandscape YES`（iPhone）：转成横屏；`-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类，窄屏容器 `NarrowRoot`，`debugCompact`），不给时 iPad 的调试实例起来先铺满屏（窗口模式下系统记着别的会话缩过的窗口，`fillScreenOnPad`）；
 /// - `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的醒来记录与经过一开始就全部展开（`RoundProcess`、`PiSubagentList`、`CueNoteLog`、`CueTrace`）；
@@ -83,6 +85,12 @@ enum DebugScene {
     static var toggleTaskFold: () -> Void = {}
     /// 点 Cue 页头（Mac 是 Cue 栏头）开合面板的那条路（`debugExposesCuePanel`）。
     static var toggleCuePanel: () -> Void = {}
+    #if os(iOS)
+    /// 点窄屏侧栏额度钮的那条路（`debugExposesQuota`）。
+    static var toggleQuota: () -> Void = {}
+    /// 窗口那一层的模态浮出（`debugExposesModals`）：点外面关调的是开着那一个的 `close`。
+    static weak var modals: ModalHost?
+    #endif
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。
     static func injectCatalogFailure(attempt: Int) throws {
@@ -121,6 +129,7 @@ enum DebugScene {
         #endif
         preset.quotaOpen = defaults.bool(forKey: "CuePadQuotaOpen")
         preset.scheduleOpen = defaults.bool(forKey: "CuePadScheduleOpen")
+        preset.helpOpen = defaults.bool(forKey: "CuePadHelpOpen")
         preset.mergePreview = defaults.bool(forKey: "CuePadMergePreview")
         if defaults.string(forKey: "CuePadLibraryTab") == "skills" { preset.libraryPane = .skills }
         #if os(iOS)

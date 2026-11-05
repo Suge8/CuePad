@@ -36,6 +36,12 @@ nonisolated enum Motion {
         reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity)
     }
 
+    /// 换页（`Motion.turn`、`paneTurn`，在 `PaneTurn.swift`）滑多远、往哪边：够看出从哪边来，不至于像翻过一整页。
+    nonisolated enum Turn {
+        static let distance: CGFloat = 28
+        static func offset(_ edge: HorizontalEdge) -> CGFloat { edge == .leading ? -distance : distance }
+    }
+
     /// 位置、尺寸、旋转的动画；减弱动态效果时直接到终态——一个动画事务里分不出只淡不挪，换曲线照样插值。
     static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation? {
         reduceMotion ? nil : animation

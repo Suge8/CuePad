@@ -49,7 +49,7 @@ extension View {
 
 /// 窗口里的气泡（`PanelStyle.bubble`）都画在这里，同 Mac 的 `PanelHost`：场景的根挂一次（`panelHost()`，盖住窄屏与宽屏），
 /// sheet 与全屏页里各挂一次（`modalPage`）。挂在页里、控件上的气泡画不出控件那么大的框（输入框还把它裁掉），所以不各画各的。
-/// 一次只开一个：手指落在开着的那个外面就先关它，再点出下一个。内容带着呈现处的环境画（`BubbleSlot`），这一层在 Workspace、色板之外也画得对。
+/// 一次只开一个：手指落在开着的那个外面就先关它，再点出下一个。内容带着呈现处的环境画（`BubbleSlot`），这一层在 Workspace 之外也画得对。
 @Observable
 final class PanelHost {
     struct Shown {
@@ -72,7 +72,6 @@ final class PanelHost {
     }
 
     fileprivate(set) var drawer: Drawer?
-    @ObservationIgnored fileprivate weak var window: UIWindow?
     /// 这一层（窗口、sheet）的字号：气泡内容按它画，不按呈现处——呈现处可能在一排封了字号的控件里（工具排），气泡里是能放大的说明。
     @ObservationIgnored fileprivate var typeSize = DynamicTypeSize.large
 
@@ -81,7 +80,7 @@ final class PanelHost {
 
     func show(_ entry: Shown) { shown = entry }
 
-    /// 把一处气泡的内容交给这一层（`panel(style: .bubble)` 与导航栏里的问号 `BarHelpButton` 同这一份）：连同呈现处的环境，字号按这一层的。
+    /// 把一处气泡的内容交给这一层（`panel(style: .bubble)`）：连同呈现处的环境，字号按这一层的。
     func present(
         token: UUID, key: AnyHashable, source: BubbleSource, width: BubblePlacement.Width, close: ClosePanel, environment: EnvironmentValues, content: some View
     ) {
@@ -98,18 +97,6 @@ final class PanelHost {
         if shown?.token == token { shown = nil }
     }
 
-    /// 系统导航栏里带读屏标识 `id` 的项在窗口里的框（点下时量一次，推入转场里栏在动，不跟着量）：栏里的项是系统按 SwiftUI 的按钮另建的，
-    /// SwiftUI 量的框对不上，读屏标识系统照样带过去。找不到为 nil。
-    func frame(of id: String) -> CGRect? {
-        guard let window, let control = Self.find(id, in: window) else { return nil }
-        return control.convert(control.bounds, to: nil)
-    }
-
-    private static func find(_ id: String, in view: UIView) -> UIView? {
-        if view.accessibilityIdentifier == id { return view }
-        for child in view.subviews { if let found = find(id, in: child) { return found } }
-        return nil
-    }
 }
 
 extension View {
@@ -124,44 +111,38 @@ extension View {
 
 private struct PanelHostModifier: ViewModifier {
     @State private var host = PanelHost()
+    @State private var modals = ModalHost()
     @Environment(\.dynamicTypeSize) private var typeSize
 
     func body(content: Content) -> some View {
+        let reader = ModalReader(modal: modals.modal, drawerOpen: host.drawer?.open == true)
         content
+            // 原位长开的面板（名牌）开着时读屏只读它：长在开着的抽屉里时，抽屉底下的整块不读（抽屉开着时点不到它下面，面板只会在抽屉里）；
+            // 长在页里时由所在的页藏起旁边的（`FloatingHeader`），这里不藏整块，不然连面板一起藏了
+            .readerHidden(reader.coversContent)
             .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
             .overlay { DrawerLayer(drawer: host.drawer) }
-            .overlay { BubbleLayer(shown: host.shown) }
-            .background { WindowProbe(host: host) }
+            // 任何模态浮出开着时，窗口的气泡都不读
+            .overlay { BubbleLayer(shown: host.shown).readerHidden(reader.coversBubbles) }
+            .onChange(of: reader, initial: true) { DebugHooks.readerLayers(content: reader.coversContent, bubbles: reader.coversBubbles) }
+            // 模态浮出盖在这一层的最上面：抽屉里长开的名牌外面、开着的气泡上的一下也由它接住，浮窗开着时抽屉与气泡一起不进读屏
+            .modifier(ModalLayers(host: modals))
             .environment(host)
     }
 }
 
-/// 把所在的窗口报给 `PanelHost`（导航栏里的控件按读屏标识在窗口里找）。
-private struct WindowProbe: UIViewRepresentable {
-    let host: PanelHost
+/// 模态浮出开着时，窗口那一层里哪几块不进读屏（浮窗开着时整块由 `ModalLayers` 藏）。
+private struct ModalReader: Equatable {
+    let coversContent: Bool
+    let coversBubbles: Bool
 
-    func makeUIView(context: Context) -> Probe { Probe(host: host) }
-    func updateUIView(_ view: Probe, context: Context) {}
-
-    final class Probe: UIView {
-        private let host: PanelHost
-
-        init(host: PanelHost) {
-            self.host = host
-            super.init(frame: .zero)
-            isUserInteractionEnabled = false
-        }
-
-        required init?(coder: NSCoder) { nil }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            host.window = window
-        }
+    init(modal: ModalHost.Modal?, drawerOpen: Bool) {
+        coversContent = modal?.inPage == true && drawerOpen
+        coversBubbles = modal != nil
     }
 }
 
-/// 一处 `panel(style: .bubble)`：开着时把内容交给这一层的 `PanelHost`，连同呈现处的环境（这一层可能在 Workspace、色板之外）；字号除外，按这一层的（`PanelHost.typeSize`）。
+/// 一处 `panel(style: .bubble)`：开着时把内容交给这一层的 `PanelHost`，连同呈现处的环境（这一层可能在 Workspace 之外）；字号除外，按这一层的（`PanelHost.typeSize`）。
 private struct BubbleSlot<Panel: View>: ViewModifier {
     let key: AnyHashable?
     let source: BubbleSource
@@ -244,7 +225,7 @@ private struct DrawerLayer: View {
 }
 
 /// 从控件长出的气泡（`View.bubble(isPresented:)`）：开着时按 SwiftUI 量的框长出。量的框记在不触发重算的盒子里：控件随滚动、键盘挪动不重算这一层。
-/// 系统导航栏里的项用不了它（栏里的项建好之后系统不再跑它上面的 `onChange`）：问号经 `BarHelpButton`。
+/// 系统导航栏里的项用不了它（栏里的项建好之后系统不再跑它上面的 `onChange`）：栏里的问号由钮自己量框交出气泡（`BarHelpButton`）。
 private struct ControlBubble<Panel: View>: ViewModifier {
     @Binding var isPresented: Bool
     let width: BubblePlacement.Width

@@ -12,6 +12,8 @@ struct SceneRoot: View {
         IOSRoot(services: services)
             // 窗口里的气泡（窄屏与宽屏、任务气泡、控件上的说明）都画在这一层
             .panelHost()
+            // 系统控件的 tint 与验收时改的外观环境（`PaletteProvider`）连同上面那一层一起管：那一层也在窗口里
+            .modifier(PaletteProvider())
             .debugCompact()
             .environment(alerts)
             .task { if services.sync != nil { await alerts.enable() } }

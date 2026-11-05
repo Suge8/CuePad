@@ -23,7 +23,7 @@ struct LibraryScreen: View {
         }
         // 标题给读屏、返回菜单与系统
         .floatingHeader("技能与规则", center: { LibraryPanes().padding(PaneMetrics.inset).headerPiece() }) {
-            BarHelpButton(id: "library.help") {
+            BarHelpButton {
                 if let library = workspace.library { LibraryHelp(library: library) }
             }
             .disabled(workspace.library == nil)

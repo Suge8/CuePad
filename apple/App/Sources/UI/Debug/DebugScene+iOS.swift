@@ -8,6 +8,7 @@ import UIKit
 /// search 是搜索页，出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
 /// library 是技能与规则（`-CuePadLibraryTab skills` 打开在技能那一段），再推入文件页：instruction 是全局规则（给了 `-CuePadProject` 是那个项目的，
 /// 演示的全局规则顶上有合并那一条，`-CuePadMergePreview YES` 已点过一下"合并进来"、标出会并进来的段），skill 是 write-swift，duplicate 是同名的 release。
+/// more 打开进行中第一条的"更多"气泡（任务行左滑那一下，没有落点）。`-CuePadTurnCycle YES` 配 more、task、search：就绪后来回翻页、换范围（`debugCyclesTurn`）。
 /// task 打开进行中第一条的任务气泡（没有落点、在上方居中；没有进行中的就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的会话页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
@@ -159,6 +160,11 @@ extension DebugScene {
         case "task":
             // 没给 -CuePadTask 时是进行中的第一条
             await openTask(workspace) { $0.status == .inProgress }
+        case "more":
+            // 任务行左滑"⋯ 更多"长出的气泡（同 `CardActions` 里那一下），进行中的第一条
+            if let task = try await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks).first {
+                workspace.moreCard = CardMoreRequest(card: task, opens: false, source: .unanchored)
+            }
         case "session":
             // 打开 -CuePadSession（会话名，默认 homepage）的会话页
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
