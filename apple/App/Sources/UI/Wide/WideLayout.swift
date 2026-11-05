@@ -70,3 +70,10 @@ extension View {
         onChange(of: sizes.fits, initial: true) { _, fits in workspace.fit(fits) }
     }
 }
+
+extension View {
+    /// 宽屏的一块（主区、并排的右半、Cue）伸到窗口下缘：iPad 的横条那一截也是这一块的，对话滚到窗口下缘、在回复框四周与横条后面透出来，
+    /// 不在横条上沿切齐（同手机）；块里的页照样让出它（托管视图按块在窗口里的位置算下安全区，`WideColumnController`）。只容器的那一份：键盘升起时块照样变矮。
+    /// Mac 的窗口下沿没有安全区，什么都不变。
+    func reachesWindowBottom() -> some View { ignoresSafeArea(.container, edges: .bottom) }
+}

@@ -275,7 +275,9 @@ final class WideColumnController: UIHostingController<AnyView> {
         self.focus = focus
         self.workspace = workspace
         super.init(rootView: AnyView(EmptyView()))
-        safeAreaRegions = []
+        // 只认容器的安全区(键盘不认:块排在窗口的键盘安全区里,键盘升起时整块变矮)。块的下沿伸到窗口下缘（`reachesWindowBottom`），
+        // 横条那一截照它在窗口里盖住多少算成页的下安全区：回复框停在横条上方，对话滚到窗口下缘、在横条后面透出来（同手机）
+        safeAreaRegions = .container
     }
     @MainActor required dynamic init?(coder: NSCoder) { nil }
 

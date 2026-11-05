@@ -48,7 +48,7 @@ struct CueDock<Column: View>: View {
     /// 窗口宽。
     let width: CGFloat
     let focus: WideFocus
-    /// 块只排在安全区里时（iPad），抽屉的面伸出去这么多，照样铺满整窗高。
+    /// 块的上沿排在安全区里（iPad 的状态栏底下），抽屉的面往上伸出去这么多，照样铺满整窗高；下沿块自己伸到窗口下缘（`reachesWindowBottom`）。
     var bleed = EdgeInsets()
     /// 这一栏：参数是放不放得下（放不下时它在抽屉里）。
     @ViewBuilder let column: (_ fits: Bool) -> Column
@@ -61,12 +61,11 @@ struct CueDock<Column: View>: View {
             if open { DrawerCatcher { workspace.hideCue(fits: false) }.transition(.identity) }
             WideColumnHost(slot: .cue, focus: focus, origin: width - shown, width: WideMetrics.cue, shape: WideMetrics.Shape(rail: 0, cue: shown), hidden: shown == 0) {
                 column(sizes.cueFits)
-                    // 按整块的框裁（含名牌那一截：对话滚进去再被淡出盖住，`fadesUnderHead`）；块自己不裁，抽屉的面与阴影在裁剪外面
-                    .clipped()
                     .modifier(DrawerSurface(shown: !sizes.cueFits, bleed: bleed))
                     .environment(\.pageActive, shown > 0)
             }
             .frame(width: WideMetrics.cue)
+            .reachesWindowBottom()
             .padding(.trailing, shown - WideMetrics.cue)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)

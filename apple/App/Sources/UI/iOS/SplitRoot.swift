@@ -22,11 +22,13 @@ struct SplitRoot: View {
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
                 }
                 .frame(width: sizes.leading)
+                .reachesWindowBottom()
                 if sizes.split, let beside = workspace.besideSession {
                     WideColumnHost(slot: .beside, focus: focus, origin: sizes.rail + sizes.leading, width: sizes.main - sizes.leading, shape: sizes.shape) {
                         destination(.session(beside), column: .beside)
                     }
                     .frame(width: sizes.main - sizes.leading)
+                    .reachesWindowBottom()
                 }
                 Spacer(minLength: 0)
             }
@@ -37,10 +39,10 @@ struct SplitRoot: View {
             }
             // 排在最上：抽屉开着时它与接点按的底盖住浮着的那一排与会话条的抽屉
             .overlay {
-                CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: geometry.safeAreaInsets.bottom, trailing: 0)) { _ in cue }
+                CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: 0, trailing: 0)) { _ in cue }
             }
             .reportsWideFits(sizes, to: workspace)
-            // 桌面色一处铺满窗口（托管的几块是透明的，`WideColumnController`）：几块只排在安全区里，状态栏那一条与底下横条那一截也要是桌面色
+            // 桌面色一处铺满窗口（托管的几块是透明的，`WideColumnController`）：几块的上沿排在状态栏底下，状态栏那一条也要是桌面色
             .background(palette.desk)
         }
         .overlay(alignment: .top) { NoticeBanner() }
