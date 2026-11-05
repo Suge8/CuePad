@@ -115,13 +115,30 @@ private struct PanelHostModifier: ViewModifier {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     func body(content: Content) -> some View {
+        let reader = ModalReader(modal: modals.modal, drawerOpen: host.drawer?.open == true)
         content
+            // 原位长开的面板（名牌）开着时读屏只读它：长在开着的抽屉里时，抽屉底下的整块不读（抽屉开着时点不到它下面，面板只会在抽屉里）；
+            // 长在页里时由所在的页藏起旁边的（`FloatingHeader`），这里不藏整块，不然连面板一起藏了
+            .readerHidden(reader.coversContent)
             .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
             .overlay { DrawerLayer(drawer: host.drawer) }
-            .overlay { BubbleLayer(shown: host.shown) }
+            // 任何模态浮出开着时，窗口的气泡都不读
+            .overlay { BubbleLayer(shown: host.shown).readerHidden(reader.coversBubbles) }
+            .onChange(of: reader, initial: true) { DebugHooks.readerLayers(content: reader.coversContent, bubbles: reader.coversBubbles) }
             // 模态浮出盖在这一层的最上面：抽屉里长开的名牌外面、开着的气泡上的一下也由它接住，浮窗开着时抽屉与气泡一起不进读屏
             .modifier(ModalLayers(host: modals))
             .environment(host)
+    }
+}
+
+/// 模态浮出开着时，窗口那一层里哪几块不进读屏（浮窗开着时整块由 `ModalLayers` 藏）。
+private struct ModalReader: Equatable {
+    let coversContent: Bool
+    let coversBubbles: Bool
+
+    init(modal: ModalHost.Modal?, drawerOpen: Bool) {
+        coversContent = modal?.inPage == true && drawerOpen
+        coversBubbles = modal != nil
     }
 }
 

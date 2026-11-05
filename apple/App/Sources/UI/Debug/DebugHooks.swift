@@ -197,6 +197,13 @@ enum DebugHooks {
         FileHandle.standardError.write(Data(line.utf8))
         #endif
     }
+
+    /// 模态浮出开合时窗口那一层哪几块不进读屏（`PanelHostModifier`）：Debug 里往标准错误记一行，验收看这一行（旁白本身不自动化）。
+    static func readerLayers(content: Bool, bubbles: Bool) {
+        #if DEBUG
+        FileHandle.standardError.write(Data("reader-hidden content=\(content) bubbles=\(bubbles)\n".utf8))
+        #endif
+    }
     #endif
 
     /// 性能打点：某件事出现了（`interact` 等它、量到它用了多久，见 `PerfProbe`）。
