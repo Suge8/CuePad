@@ -25,7 +25,7 @@ struct WideProjectHeading: View {
                     Button("项目") { workspace.select(.shelf) }
                         .buttonStyle(PressStyle(.inline))
                         .foregroundStyle(palette.ink3)
-                    Text(verbatim: "/").foregroundStyle(palette.ink3).accessibilityHidden(true)
+                    Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
                     Text(verbatim: project.shownName).foregroundStyle(palette.ink).lineLimit(1)
                         .accessibilityAddTraits(.isHeader)
                 }

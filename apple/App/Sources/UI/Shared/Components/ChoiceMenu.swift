@@ -60,7 +60,7 @@ struct MenuButton<Label: View>: View {
     var body: some View {
         label()
             .modifier(PressFeedback(pressed: pressed, kind: press))
-            .accessibilityHidden(true)
+            .readerHidden(true)
             .overlay {
                 MenuTrigger(
                     sections: sections, primary: primary, isEnabled: isEnabled, label: accessibilityLabel, value: value, hint: hint,

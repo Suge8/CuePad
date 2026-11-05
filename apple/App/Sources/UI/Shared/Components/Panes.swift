@@ -39,7 +39,7 @@ struct PaneSegment<Value: Hashable>: View {
 
     var body: some View {
         EqualSegments(selected: items.firstIndex { $0.value == selection } ?? 0) {
-            Capsule().fill(palette.selection).allowsHitTesting(false).accessibilityHidden(true)
+            Capsule().fill(palette.selection).allowsHitTesting(false)
             ForEach(items, id: \.value) { item in
                 let on = selection == item.value
                 Button {

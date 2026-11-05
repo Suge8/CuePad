@@ -78,7 +78,7 @@ struct WideSessionTitle: View {
         HStack(spacing: Spacing.glyph) {
             if let project {
                 Text(verbatim: project).foregroundStyle(palette.ink3).lineLimit(1)
-                Text(verbatim: "/").foregroundStyle(palette.ink3).accessibilityHidden(true)
+                Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
             }
             if let windowID, let session = workspace.session(in: column) {
                 #if os(iOS)

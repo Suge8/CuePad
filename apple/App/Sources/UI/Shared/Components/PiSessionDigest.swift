@@ -88,8 +88,8 @@ nonisolated struct PiConfigShown: Equatable {
 
 /// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的状态图形上（`PiStateGlyph`，与状态标同一个样子：问题是赭黄问号圆、出错是胭脂圆叹号），正文中性；
 /// 问题的正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
-/// 层级只有两层：对话里的（出错的原因）是纸，属于内容；贴在回复框上方、要你处理的（`docked`：问题卡、没能结束）是玻璃，
-/// 与回复框同属底部玻璃那一层。顶上只有系统玻璃（标题、圆钮），不在对话上另浮卡片。
+/// 对话里的（出错的原因）是平放的纸，属于内容；贴在回复框上方、要你处理的（`docked`：问题卡、没能结束）是浮起的纸，
+/// 与 Cue 页的拍板卡同一个面（`dockedPaper`）。
 struct Callout<Accessory: View>: View {
     /// 问题是 `.asking`，出错与没能结束是 `.failed`。
     let status: PiShown.Status
@@ -129,13 +129,13 @@ extension Callout where Accessory == EmptyView {
     }
 }
 
-/// 提示块的面：对话里是纸，贴在回复框上方是玻璃（与回复框同一层、同样的圆角）。
+/// 提示块的面：对话里是平放的纸，贴在回复框上方是浮起的纸（同拍板卡，与回复框同样的圆角）。
 private struct CalloutSurface: ViewModifier {
     let docked: Bool
 
     func body(content: Content) -> some View {
         if docked {
-            content.glass(in: .rect(cornerRadius: Radius.field)).containerShape(.rect(cornerRadius: Radius.field))
+            content.dockedPaper().containerShape(.rect(cornerRadius: Radius.field))
         } else {
             content.paper().containerShape(.rect(cornerRadius: Radius.card))
         }

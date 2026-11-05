@@ -45,7 +45,7 @@ struct CueAvatar: View {
                 .background(palette.hair, in: .circle)
             }
         }
-        .accessibilityHidden(true)
+        .readerHidden(true)
     }
 
     @ViewBuilder private func face(_ beat: CueBeat, intro: Bool) -> some View {

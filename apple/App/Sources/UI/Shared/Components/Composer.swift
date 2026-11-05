@@ -149,7 +149,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if !focused {
                 Color.clear.contentShape(.rect(cornerRadius: Radius.field))
                     .onTapGesture { focus.wrappedValue = true }
-                    .accessibilityHidden(true)
+                    .readerHidden(true)
             }
         }
         // 收成短胶囊时居中；展开是同一块玻璃从中间向两边长到全宽

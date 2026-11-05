@@ -18,8 +18,8 @@ struct IconSheet: View {
                 ForEach(InkSymbols.names, id: \.self) { name in
                     VStack(spacing: 2) {
                         HStack(spacing: 6) {
-                            Image(name).symbolRenderingMode(.hierarchical)
-                            Image(name).symbolRenderingMode(.monochrome)
+                            Image(decorative: name).symbolRenderingMode(.hierarchical)
+                            Image(decorative: name).symbolRenderingMode(.monochrome)
                         }
                         .font(.system(size: Self.symbolSize))
                         Text(name.dropFirst(4)).font(.system(size: 8).monospaced()).foregroundStyle(palette.ink2).lineLimit(1)

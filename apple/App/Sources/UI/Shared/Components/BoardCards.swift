@@ -68,7 +68,7 @@ struct BoardPin: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Image(.pin).font(.system(size: TaskMetrics.cardGlyph)).foregroundStyle(palette.ink3).accessibilityHidden(true)
+        Image(.pin).font(.system(size: TaskMetrics.cardGlyph)).foregroundStyle(palette.ink3).readerHidden(true)
     }
 }
 

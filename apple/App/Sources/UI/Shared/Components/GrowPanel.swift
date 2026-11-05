@@ -28,7 +28,7 @@ struct GrowPanel<Head: View, Panel: View>: View {
                 Color.clear.contentShape(.rect).ignoresSafeArea()
                     .onTapGesture { $open.grow(to: false, reduceMotion: reduceMotion) }
                     .transition(.identity)
-                    .accessibilityHidden(true)
+                    .readerHidden(true)
             }
             GrownWidth(open: open, edge: edge) {
                 VStack(alignment: edge, spacing: 0) {

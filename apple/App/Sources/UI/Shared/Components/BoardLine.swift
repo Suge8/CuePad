@@ -48,7 +48,7 @@ struct BoardLine: View {
             }
         }
         .frame(height: WaveStrip.height)
-        .accessibilityHidden(true)
+        .readerHidden(true)
     }
 
     private var history: some View {

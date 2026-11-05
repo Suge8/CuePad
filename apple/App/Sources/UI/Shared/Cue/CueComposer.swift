@@ -171,7 +171,7 @@ private struct CueHostNote: View {
         if let elsewhere = workspace.cue.now.elsewhere {
             Image(.mac)
                 .font(Typography.meta).foregroundStyle(palette.ink3)
-                .help(elsewhere).accessibilityLabel(elsewhere)
+                .help(elsewhere).iconLabel(elsewhere)
                 .padding(.trailing, Spacing.tight)
                 .transition(.opacity)
         }

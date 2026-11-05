@@ -147,7 +147,7 @@ private struct SessionAnswer: View {
                     Text("送达中")
                 } else {
                     #if os(macOS)
-                    if let number { Keycap(text: "\(number)").accessibilityHidden(true) }
+                    if let number { Keycap(text: "\(number)").accessibilityHidden(true) } // 合并：按钮的标签，读屏念 accessibilityLabel
                     #endif
                     Text(value.label).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 }

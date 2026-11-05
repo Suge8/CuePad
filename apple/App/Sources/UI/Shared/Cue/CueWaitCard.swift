@@ -76,8 +76,6 @@ struct CueWaitCard: View {
                 .onGeometryChange(for: Bool.self) { $0.size.height > 0 } action: { folded = $0 }
                 .fitRole(.folded, hidden: !folded)
         }
-        .accessibilityAction(named: "上一件") { step(by: -1) }
-        .accessibilityAction(named: "下一件") { step(by: 1) }
     }
 
     /// 连紧凑的样子都放不下（横屏弹着键盘）：整张卡收成问句一行。点它收起键盘，地方够了卡就按上面的挑法展开。
@@ -104,7 +102,7 @@ struct CueWaitCard: View {
             .padding(.top, Self.edge)
     }
 
-    /// 换到挨着的那件（眉题行的小箭头、读屏的"上一件""下一件"；手机上滑卡在 `CueWaitDock`）。
+    /// 换到挨着的那件（眉题行的小箭头、读屏在"第几件"上下扫；手机上滑卡在 `CueWaitDock`）。
     private func step(by offset: Int) {
         guard let next = pick.neighbor(by: offset) else { return }
         withAnimation(Motion.fade) { workspace.cueAsking = next.id }

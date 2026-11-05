@@ -20,7 +20,7 @@ struct FloatingInput<Content: View>: View {
                 // 背后的页面不压色、不虚化（沉浸式，同回复框）：这一层透明，只接点按收起
                 Color.clear.contentShape(.rect).ignoresSafeArea()
                     .gesture(DragGesture(minimumDistance: 0).onEnded { _ in dismiss() })
-                    .accessibilityHidden(true)
+                    .readerHidden(true)
                 content()
                     .frame(maxWidth: Self.maxWidth)
                     .padding(.horizontal, Spacing.group).padding(.bottom, Spacing.item)

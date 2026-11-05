@@ -60,7 +60,7 @@ private struct NoteRow: View {
         HStack(spacing: 0) {
             Button(action: reveal) {
                 HStack(spacing: Spacing.item) {
-                    Capsule().fill(palette.ink2).frame(width: 3, height: 14).accessibilityHidden(true)
+                    Capsule().fill(palette.ink2).frame(width: 3, height: 14)
                     Text(note.note).font(Typography.secondary).foregroundStyle(palette.ink).lineLimit(1)
                         .layoutPriority(1)
                     Text("「\(ReplyNote.excerpt(note.quote))」").font(Typography.caption).foregroundStyle(palette.ink3)

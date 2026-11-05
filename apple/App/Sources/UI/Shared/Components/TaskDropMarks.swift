@@ -136,7 +136,7 @@ private struct NewTaskSlot: View {
 
     var body: some View {
         HStack(spacing: TaskMetrics.columnGap) {
-            Image(.add).font(TaskMetrics.caption.weight(.semibold)).frame(width: TaskMetrics.ringColumn).accessibilityHidden(true)
+            Image(.add).font(TaskMetrics.caption.weight(.semibold)).frame(width: TaskMetrics.ringColumn).readerHidden(true)
             Text("新建任务").font(Typography.body.weight(.medium))
             Spacer(minLength: 0)
         }

@@ -17,7 +17,7 @@ struct NoticeCapsule: View {
 
     private enum Part { case link, action }
 
-    private var held: Bool { hovering || focus != nil || voiceOver }
+    private var held: Bool { hovering || focus != nil || voiceOver || DebugHooks.preset.readerOn }
 
     var body: some View {
         ViewThatFits(in: .vertical) {
@@ -33,6 +33,9 @@ struct NoticeCapsule: View {
         .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil)
         .elevation(.panel)
         .onHover { hovering = $0 }
+        #if os(macOS)
+        .presetHover($hovering)
+        #endif
         .onChange(of: held, initial: true) { was, now in if was != now || now { workspace.holdNotice(now) } }
         .onAppear { AccessibilityNotification.Announcement(notice.text.spoken).post() }
         .accessibilityHint(notice.link == nil ? "" : "去那里看看")

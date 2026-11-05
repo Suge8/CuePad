@@ -16,7 +16,7 @@ struct CueDot: View {
         }
         .frame(width: StatusDot.size, height: StatusDot.size)
         .animation(Motion.fade, value: color)
-        .accessibilityHidden(true)
+        .readerHidden(true)
     }
 }
 
@@ -38,7 +38,7 @@ struct CueArrival: View {
         }
         .onChange(of: workspace.cue.unread) { old, new in if new > old, !reduceMotion, services.cueViewers == 0 { arrivals += 1 } }
         .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .readerHidden(true)
     }
 
     private struct Ripple: View {

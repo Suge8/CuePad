@@ -96,7 +96,7 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
 
 /// 一行元信息里隔开两段的"·"：只是版面，读屏不念（行要读的话由行自己的标签给）。颜色跟随外层，要淡一档的调用处自己加。
 struct Dot: View {
-    var body: some View { Text("·").accessibilityHidden(true) }
+    var body: some View { Text("·").readerHidden(true) }
 }
 
 // MARK: 项目图标
@@ -112,7 +112,7 @@ struct ProjectGlyph: View {
             // 项目还没同步到时是墨色，不借系统灰或系统强调色（侧栏列表会把 Label 的图标染成强调蓝）
             .foregroundStyle(project.map { palette.project($0.color) } ?? palette.ink2)
             .frame(width: size + 6)
-            .accessibilityHidden(true) // 项目名总在旁边，图标只是装饰
+            .readerHidden(true)
     }
 
     /// 项目的图标；项目还没同步到时是文件夹。
@@ -235,7 +235,7 @@ struct SectionHeader: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
-            if let icon { Image(icon).accessibilityHidden(true) }
+            if let icon { Image(icon).readerHidden(true) }
             Text(title)
             if let count { Text("\(count)").font(countFont).monospacedDigit().foregroundStyle(palette.ink3).counting(count) }
         }

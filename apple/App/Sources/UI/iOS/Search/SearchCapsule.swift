@@ -12,7 +12,7 @@ struct SearchCapsule: View {
     var body: some View {
         HStack(spacing: Spacing.glyph) {
             // 导航栏里的项会把符号放大一档：定在常规档，与搜索入口、进展页搜索钮里的放大镜一样大
-            Image(.search).imageScale(.medium).foregroundStyle(palette.ink3).accessibilityHidden(true)
+            Image(.search).imageScale(.medium).foregroundStyle(palette.ink3).readerHidden(true)
             BarTextField(text: $query, focusRequests: focusRequests, prompt: SearchScreen.prompt)
         }
         .padding(.leading, Spacing.group).padding(.trailing, Spacing.item).frame(maxWidth: .infinity)

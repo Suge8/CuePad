@@ -43,7 +43,7 @@ struct ProjectPlaceLabel: View {
 
     var body: some View {
         let label = HStack(spacing: Spacing.tight) {
-            if icon { Image(.folder).imageScale(.small).accessibilityHidden(true) }
+            if icon { Image(.folder).imageScale(.small).readerHidden(true) }
             if place.isPath {
                 Text(place.text).lineLimit(1).truncationMode(.middle)
             } else {
@@ -94,11 +94,11 @@ struct ProjectIntroLine: View {
                 Text(intro).foregroundStyle(inHeader ? palette.ink3 : palette.ink2)
                     .lineLimit(1).truncationMode(.tail).help(intro).textSelection(.enabled)
                     .layoutPriority(1)
-                if place != nil { Dotted.inline.foregroundStyle(palette.ink3).accessibilityHidden(true) }
+                if place != nil { Dotted.inline.foregroundStyle(palette.ink3).readerHidden(true) }
             }
             if let place { ProjectPlaceLabel(place: place, icon: !inHeader).foregroundStyle(palette.ink3) }
             if !inHeader, let project, let rules = workspace.rules(of: project.id) {
-                Dotted.inline.foregroundStyle(palette.ink3).accessibilityHidden(true)
+                Dotted.inline.foregroundStyle(palette.ink3).readerHidden(true)
                 Button { workspace.openLibrary(rules) } label: {
                     Label("规则", icon: .instruction).labelStyle(.titleAndIcon).imageScale(.small)
                 }
@@ -107,7 +107,7 @@ struct ProjectIntroLine: View {
                 .fixedSize()
                 .help("这个项目的 AGENTS.md")
             }
-            Text(verbatim: " ").accessibilityHidden(true)
+            Text(verbatim: " ").readerHidden(true)
         }
         .font(inHeader ? .caption : Typography.secondary)
         // 靠左铺满用外框，不在行里放 Spacer：Spacer 与文件夹那段分剩下的宽，几段的放得下也只给一段

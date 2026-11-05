@@ -73,7 +73,7 @@ struct CueMacSteps<Finish: View>: View {
             }
             .font(Typography.meta)
             .frame(width: 20)
-            .accessibilityHidden(true)
+            .readerHidden(true)
             VStack(alignment: .leading, spacing: Spacing.hair) {
                 VStack(alignment: .leading, spacing: Spacing.hair) {
                     Text(title(step)).font(Typography.secondary.weight(lit ? .semibold : .regular))

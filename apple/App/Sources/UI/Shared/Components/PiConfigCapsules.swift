@@ -43,7 +43,7 @@ struct PiModelCapsule: View {
             if badged {
                 ModelBadge(mark: mark, binding: binding)
                     .modifier(Breathing(active: pending))
-                    .accessibilityHidden(true)
+                    .readerHidden(true)
                 // 工具排给的宽放不下全名（`ConfigRow` 的 `model`）就只留标志，不截成"G…"；完整模型名可悬停、读屏或在菜单里看
                 ViewThatFits(in: .horizontal) {
                     name.padding(.leading, Self.gap)
@@ -102,10 +102,10 @@ struct PiAgentCapsule: View {
         let kind = pick.current
         return ViewThatFits(in: .horizontal) {
             HStack(spacing: PiModelCapsule.gap) {
-                ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
+                ModelBadge(mark: kind.mark, binding: nil).readerHidden(true)
                 Text(kind.name).lineLimit(1).contentTransition(.opacity)
             }.fixedSize()
-            ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
+            ModelBadge(mark: kind.mark, binding: nil).readerHidden(true)
         }
         .chip(menu: pick.choosable)
         .help(kind.name)
@@ -192,7 +192,7 @@ struct PiThinkingDial: View {
                 reading(drawn, wordy: false).padding(.trailing, labelGap)
                 Color.clear.frame(width: 0, height: 0)
             }
-            .accessibilityHidden(true)
+            .readerHidden(true)
             meterBars(drawn)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { track = $0 }
         }

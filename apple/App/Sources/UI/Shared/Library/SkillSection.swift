@@ -133,9 +133,9 @@ private struct SkillRow: View {
     @ViewBuilder private var mark: some View {
         Group {
             if skill.problem != nil {
-                FailureMark().accessibilityLabel(String(localized: "格式不对"))
+                FailureMark().iconLabel("格式不对")
             } else if library.duplicate(of: skill.path) != nil {
-                Image(.duplicate).foregroundStyle(palette.ink2).accessibilityLabel(String(localized: "有同名的"))
+                Image(.duplicate).foregroundStyle(palette.ink2).iconLabel("有同名的")
             }
         }
         .font(Self.markFont)

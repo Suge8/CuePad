@@ -11,7 +11,7 @@ struct Chevron: View {
     init(_ direction: Direction) { self.direction = direction }
 
     var body: some View {
-        Image(icon).font(Glyph.chevron(size)).accessibilityHidden(true)
+        Image(icon).font(Glyph.chevron(size)).readerHidden(true)
     }
 
     private var icon: Icon {
@@ -36,6 +36,5 @@ struct StatusDot: View {
         Circle().fill(color).frame(width: Self.size, height: Self.size)
             .padding(rim == nil ? 0 : Self.rimWidth)
             .background(rim ?? .clear, in: .circle)
-            .accessibilityHidden(true)
     }
 }

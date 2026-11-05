@@ -7,5 +7,6 @@ nonisolated enum WidgetIcon: String, Sendable {
     case agent
     case done
 
-    var image: Image { Image("cue.\(rawValue)") }
+    /// 装饰图：读屏念的是所在元素的标签，不念资源名（同 `Icon`）。
+    var image: Image { Image(decorative: "cue.\(rawValue)") }
 }

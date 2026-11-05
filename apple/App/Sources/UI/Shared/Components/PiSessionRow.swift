@@ -144,10 +144,9 @@ struct PiSessionRow: View {
             // 时间只占它要的宽度，名字拿剩下的
             HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
                 if shown.undelivered == nil, let unsent = PiChat.undeliveredNote(undelivered) {
-                    PiStateGlyph.undelivered.font(style.meta.weight(.semibold))
-                        .accessibilityHidden(false).accessibilityLabel(unsent)
+                    PiStateGlyph.undelivered.font(style.meta.weight(.semibold)).iconLabel(unsent)
                 }
-                if style.card, let project { ProjectGlyph(project: project, size: Self.placeIcon).accessibilityLabel("在 \(project.shownName)") }
+                if style.card, let project { ProjectGlyph(project: project, size: Self.placeIcon).iconLabel("在 \(project.shownName)") }
                 PiElapsed(shown: shown, font: style.meta, style: .span)
             }
         }

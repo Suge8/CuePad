@@ -29,8 +29,8 @@ struct TaskRingView: View {
                 open
             }
         }
+        .readerHidden(true)
         .alignmentGuide(.firstTextBaseline) { $0.height * 0.82 }
-        .accessibilityHidden(true)
     }
 
     /// 与 SF 的 circle 同尺寸同线宽的实线圈（颜色照状态）；进行中左半填满，与圈线留一线缝。

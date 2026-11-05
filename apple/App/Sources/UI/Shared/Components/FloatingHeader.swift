@@ -131,7 +131,7 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
         HStack(spacing: Spacing.item) { center }
             .modifier(Yield(hidden: hidden))
             .background {
-                if hidden, let reveal { Color.clear.contentShape(.capsule).onTapGesture(perform: reveal).transition(.identity).accessibilityHidden(true) }
+                if hidden, let reveal { Color.clear.contentShape(.capsule).onTapGesture(perform: reveal).transition(.identity).readerHidden(true) }
             }
     }
 

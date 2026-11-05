@@ -23,7 +23,7 @@ struct NoteLine<Glyph: View, Label: View>: View {
     var body: some View {
         // 按第一行字对齐：字折成两行时图标对着第一行
         HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-            glyph.foregroundStyle(palette.ink3).noteGlyph().accessibilityHidden(true)
+            glyph.foregroundStyle(palette.ink3).readerHidden(true).noteGlyph()
             label
             if let open { DisclosureChevron(open: open) }
         }
@@ -74,7 +74,7 @@ struct ChatLiveSlot<Content: View>: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            NoteLine(icon: .pondering) { Text(verbatim: " ").font(font) }.hidden().accessibilityHidden(true)
+            NoteLine(icon: .pondering) { Text(verbatim: " ").font(font) }.hidden().readerHidden(true)
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)

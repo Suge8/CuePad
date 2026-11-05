@@ -232,7 +232,7 @@ private struct DrawerLayer: View {
                 if drawer.open {
                     Color.clear.contentShape(.rect)
                         .gesture(DragGesture(minimumDistance: 0).onChanged { _ in drawer.close() })
-                        .overlay { Button("关闭") { drawer.close() }.keyboardShortcut(.escape, modifiers: []).opacity(0).accessibilityHidden(true) }
+                        .overlay { Button("关闭") { drawer.close() }.keyboardShortcut(.escape, modifiers: []).opacity(0).readerHidden(true) }
                         .ignoresSafeArea()
                         .transition(.identity)
                 }
@@ -351,7 +351,7 @@ struct SheetGrabber: View {
                 DragGesture(minimumDistance: 2, coordinateSpace: .global)
                     .onChanged { drag?.changed($0.translation.height) }
                     .onEnded { drag?.ended($0.translation.height, $0.predictedEndTranslation.height) })
-            .accessibilityHidden(true)
+            .readerHidden(true)
     }
 }
 

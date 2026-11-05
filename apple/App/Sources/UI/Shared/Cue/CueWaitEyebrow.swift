@@ -35,6 +35,7 @@ struct CueWaitEyebrow: View {
                 ProjectGlyph(project: project, size: 11)
                 Text(project.shownName).lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
             .fixedSize()
             .padding(.trailing, Spacing.item)
         }
@@ -72,8 +73,16 @@ struct CueWaitEyebrow: View {
             #if os(macOS)
             arrow(.back, enabled: index > 0, label: "上一件") { step(-1) }
             #endif
+            // 读屏在这一格上下扫换一件（同滑卡、小箭头）：动作挂在已有的元素上，挂在卡上的话整张卡多出一个没有标签的元素（#67）
             Text("\(index + 1)/\(count)").monospacedDigit()
                 .accessibilityLabel("第 \(index + 1) 件，共 \(count) 件")
+                .accessibilityAdjustableAction { direction in
+                    switch direction {
+                    case .increment: step(1)
+                    case .decrement: step(-1)
+                    @unknown default: break
+                    }
+                }
             #if os(macOS)
             arrow(.forward, enabled: index < count - 1, label: "下一件") { step(1) }
             #endif

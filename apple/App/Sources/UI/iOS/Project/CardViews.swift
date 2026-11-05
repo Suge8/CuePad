@@ -107,7 +107,7 @@ struct OlderRow: View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Route.card(card.id)) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                if pinned { Image(.pin).font(Typography.meta).foregroundStyle(palette.ink2).accessibilityLabel("已置顶") }
+                if pinned { Image(.pin).font(Typography.meta).foregroundStyle(palette.ink2).iconLabel("已置顶") }
                 VStack(alignment: .leading, spacing: Spacing.hair) {
                     Text(text.label).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                     // 只有标题的也占着第二行：同一张纸上的行一样高

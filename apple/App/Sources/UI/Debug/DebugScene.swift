@@ -38,7 +38,8 @@ enum ScrollAnchor {
 /// - `-CuePadNoIdeas YES`：`-CuePadProject` 那个项目的灵感都移到回收站，看项目页没有灵感时的空态（改的是库本身，之后的画面也没有这些灵感：配一个新的 `CUEPAD_SHOT_LIBRARY`）；
 /// - `-CuePadFiles YES`：默认项目里写一条带附件的灵感「交接材料」，`-CuePadFileArrives <秒>` 演示那份还在 iCloud 的文件下载、落地（`seedFiles`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
-/// - `-CuePadHover x,y[;x,y…]`（仅 Mac）：窗口里这几点上的按钮、行与卡画成指针停着的样子（坐标同 `-CuePadClick`，`presetHover`）；
+/// - `-CuePadHover x,y[;x,y…]`（仅 Mac）：窗口里这几点上的按钮、行与卡、提示条画成指针停着的样子（坐标同 `-CuePadClick`，`presetHover`）；`-CuePadHoverSeconds <秒>`：停这么久后移开（从那一块出现起算），录提示条悬停停表、移开重新计满；
+/// - `-CuePadReader YES`：提示条当作读屏开着（`NoticeCapsule`），录读屏下不自动收；
 /// - `-CuePadShowsDone YES`：已完成列的"更早做完的"一开始就展开；
 ///   `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中里再放几件 Agent 正在多步推进的任务（`seedBusyBoard`）；
 ///   `-CuePadCanvasSteps YES`（配 tasks 画面）：待办里一件写了正文、有三个子任务的任务，看任务气泡的正文与子任务（`seedCanvasSteps`）；
@@ -110,11 +111,13 @@ enum DebugScene {
         preset.reducesMotion = defaults.bool(forKey: "CuePadReduceMotion")
         preset.largestType = defaults.bool(forKey: "CuePadLargestType")
         preset.highContrast = defaults.bool(forKey: "CuePadHighContrast")
+        preset.readerOn = defaults.bool(forKey: "CuePadReader")
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         preset.cueNow = defaults.string(forKey: "CuePadCueNow").flatMap { CueActivitySamples.named($0) ?? CueNowSamples.all[$0] }
         #if os(macOS)
         preset.hovered = hoverPoints
+        preset.hoverSeconds = defaults.object(forKey: "CuePadHoverSeconds") == nil ? nil : seconds("CuePadHoverSeconds", default: 0)
         #endif
         preset.quotaOpen = defaults.bool(forKey: "CuePadQuotaOpen")
         preset.scheduleOpen = defaults.bool(forKey: "CuePadScheduleOpen")

@@ -146,7 +146,7 @@ struct RootShortcuts: View {
         }
         .opacity(0)
         .frame(width: 0, height: 0)
-        .accessibilityHidden(true)
+        .readerHidden(true)
     }
 }
 #endif

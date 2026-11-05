@@ -53,7 +53,7 @@ struct AttachmentSpotLayer: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .readerHidden(true)
     }
 }
 

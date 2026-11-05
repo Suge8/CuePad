@@ -31,9 +31,9 @@ struct EmptyWallTile: View {
 
     private func cell(_ mascot: Mascot, @ViewBuilder line: () -> some View) -> some View {
         VStack(spacing: Spacing.item) {
-            Image(mascot.rawValue).resizable().scaledToFit()
+            Image(decorative: mascot.rawValue).resizable().scaledToFit()
                 .frame(width: Self.mascot, height: Self.mascot)
-                .accessibilityHidden(true)
+                .readerHidden(true)
             line()
                 .font(Typography.bodyStrong).foregroundStyle(palette.ink2)
                 .lineLimit(1).minimumScaleFactor(0.6)

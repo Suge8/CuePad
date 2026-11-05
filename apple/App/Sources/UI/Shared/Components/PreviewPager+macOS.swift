@@ -99,7 +99,7 @@ private struct PreviewPager: View {
                 HStack(spacing: Spacing.item) {
                     stepper
                     if let file = file(of: preview) {
-                        ShareLink(item: file) { Image(.share).accessibilityLabel("分享") }
+                        ShareLink(item: file) { Label("分享", icon: .share).labelStyle(.iconOnly) }
                             .buttonStyle(ControlButtonStyle(kind: .circular))
                     }
                     Button("关闭", icon: .close) { close() }

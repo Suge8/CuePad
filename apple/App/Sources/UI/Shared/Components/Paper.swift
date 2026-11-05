@@ -83,9 +83,9 @@ struct CardMeta: View {
             if let lastTarget { SentMark(target: lastTarget) }
             Spacer(minLength: 0)
             if text.files > 0 { AttachmentMark(count: text.files) }
-            if card.isTask { Image(.task).help("任务").accessibilityLabel("任务") }
-            if floated { Image(.floated).help("刚从更早的灵感里拿回来").accessibilityLabel("刚从更早的灵感里拿回来") }
-            if card.isPinned { Image(.pin).help("已置顶").accessibilityLabel("已置顶") }
+            if card.isTask { Image(.task).help("任务").iconLabel("任务") }
+            if floated { Image(.floated).help("刚从更早的灵感里拿回来").iconLabel("刚从更早的灵感里拿回来") }
+            if card.isPinned { Image(.pin).help("已置顶").iconLabel("已置顶") }
         }
         .font(font)
         .foregroundStyle(palette.ink3)

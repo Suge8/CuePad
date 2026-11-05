@@ -9,6 +9,8 @@ import AppKit
 /// 全 App 的图标，按意思取名，全是自家的墨块符号（cue.*，由 design/tools/cue-symbols.py 生成）；哪个意思画成哪个符号只在 `source` 一处写。
 /// 别处不写符号名，全 App 不用系统符号（lint 拦）：界面用 `Image(_:)`、`Label(_:icon:)`、`Button(_:icon:)`、`Menu(_:icon:)`，
 /// UIKit、AppKit 的菜单与工具条用 `platformImage`。品牌标志（`BrandMark`）不在这里；项目图标走 `project`（闭合表 `ProjectIcon`）。
+/// 图标是装饰图：按名字取的图读屏念资源名（"cue.plus"），意思由所在控件的标签说——只画图标的按钮写 `accessibilityLabel`，只靠图标表意的记号用 `iconLabel`。
+/// iOS 上装饰图照样是一个没有名字的"图像"让旁白停下（模拟器旁白实测）：不在按钮、`Label`、合并元素里的图标挂 `readerHidden(true)`。`Label` 里的图标照名字取（`labelImage`）：只画图标的标签（`.iconOnly`）把字挂到图标上当读屏标签，装饰图挂不上，按钮就没了名字。
 ///
 /// 着色（墨块符号的第二层是点睛，只是小部件，主体都在主层，见 design/tools/cue-symbols.py）：
 /// - 平时点睛是这一处前景色的次一级（层级渲染：墨色前景时就是次墨），不用另上色；单色场合（系统菜单、工具栏）照系统。
@@ -206,18 +208,26 @@ nonisolated enum Icon: Hashable, Sendable {
     }
     #endif
 
+    /// `Label(_:icon:)` 的图标位：读屏念的是标签的字（只画图标时字挂在它上面），不念资源名。
+    fileprivate var labelImage: Image {
+        switch source {
+        case .ink(let name): Image(Self.ink(name)).symbolRenderingMode(.hierarchical)
+        case .filled(let name): Image(Self.ink(name))
+        }
+    }
+
     fileprivate var image: Image {
         switch source {
         // 层级渲染：点睛是前景色的次一级。写在 Image 上，外面再设渲染方式也不覆盖它（要点亮用 `IconImage`）
-        case .ink(let name): Image(Self.ink(name)).symbolRenderingMode(.hierarchical)
-        case .filled(let name): Image(Self.ink(name))
+        case .ink(let name): Image(decorative: Self.ink(name)).symbolRenderingMode(.hierarchical)
+        case .filled(let name): Image(decorative: Self.ink(name))
         }
     }
 
     /// 调色板渲染的墨块符号：主体、点睛各取外面给的一种颜色（`IconImage`）。
     fileprivate var paletteImage: Image {
         guard case .ink(let name) = source else { return image }
-        return Image(Self.ink(name)).symbolRenderingMode(.palette)
+        return Image(decorative: Self.ink(name)).symbolRenderingMode(.palette)
     }
 
     private static func ink(_ name: String) -> String { "cue." + name }
@@ -261,6 +271,18 @@ extension Image {
     init(_ icon: Icon) { self = icon.image }
 }
 
+extension View {
+    /// 只靠图标表意、旁边没有字说它的（卡上的图钉、格式不对的叉）：图标是装饰图，直接挂标签不进读屏，这里把它收成一个带标签的图。
+    func iconLabel(_ label: Text) -> some View {
+        accessibilityElement().accessibilityLabel(label).accessibilityAddTraits(.isImage)
+    }
+
+    func iconLabel(_ label: LocalizedStringResource) -> some View { iconLabel(Text(label)) }
+
+    @_disfavoredOverload
+    func iconLabel(_ label: some StringProtocol) -> some View { iconLabel(Text(label)) }
+}
+
 /// 点睛上色的图标（着色规则只在这里）：平时同 `Image(_:)`，点睛是前景色的次一级；`lit`（焦点、正在发生；选中不点亮，docs/ui.md「选中」）点睛靛青；
 /// `state(色)` 是状态图标的点按状态色（等你赭黄…），只在那个状态存在时给。主体照外面的前景色。反白符号不点亮，整个照前景色。
 struct IconImage: View {
@@ -298,12 +320,12 @@ struct IconImage: View {
 extension Label where Title == Text, Icon == Image {
     // 带图标的标签、按钮、菜单：界面字收 LocalizedStringResource（字面量与算好的本地化字都行），String 原样显示
     init(_ title: LocalizedStringResource, icon: AppIcon) {
-        self.init { Text(title) } icon: { Image(icon) }
+        self.init { Text(title) } icon: { icon.labelImage }
     }
 
     @_disfavoredOverload
     init(_ title: some StringProtocol, icon: AppIcon) {
-        self.init { Text(title) } icon: { Image(icon) }
+        self.init { Text(title) } icon: { icon.labelImage }
     }
 }
 

@@ -27,7 +27,7 @@ struct HandoffLine: View {
 
     private func line(_ text: String) -> some View {
         HStack(spacing: Spacing.tight) {
-            Image(CueTrace.icon(handoff.kind)).accessibilityHidden(true)
+            Image(CueTrace.icon(handoff.kind)).readerHidden(true)
             Text(text).lineLimit(1)
         }
     }

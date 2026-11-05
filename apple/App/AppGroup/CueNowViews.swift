@@ -175,12 +175,12 @@ struct CueNowFace: View {
     @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
-        Image(now.beat.still).resizable().scaledToFit().padding(size * 0.06)
+        Image(decorative: now.beat.still).resizable().scaledToFit().padding(size * 0.06)
             .contentTransition(dimmed ? .identity : .opacity)
             .animation(dimmed ? nil : Motion.fade, value: now.beat)
             .cueDisc(size: size)
             .cueMarks(size: size, beat: now.beat, badge: badge ? now.needsYou : nil, rim: rim)
-            .accessibilityHidden(true)
+            .readerHidden(true)
     }
 }
 

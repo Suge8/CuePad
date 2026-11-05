@@ -147,7 +147,6 @@ struct BoardLaneMark: View {
             .stroke(palette.onFill, style: StrokeStyle(lineWidth: size * 1.5 / LaneGlyph.grid, lineCap: .round, lineJoin: .round))
             .background(column.mark(palette), in: .circle)
             .frame(width: size, height: size)
-            .accessibilityHidden(true)
     }
 }
 

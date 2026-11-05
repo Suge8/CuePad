@@ -178,7 +178,7 @@ private struct SwipeRow: ViewModifier {
         .buttonStyle(PressStyle(.button))
         .disabled(!action.enabled)
         .clipped()
-        .accessibilityHidden(true)
+        .readerHidden(true)
     }
 
     /// 这一拖归不归这一行（`velocity` 是开始那一刻的横向速度）：停开着时都归它（拖回去收起）；否则要慢拖、那个方向有动作，快甩让给页上的横拖。

@@ -42,6 +42,7 @@ extension DebugScene {
     static func prepare(_ workspace: Workspace) async {
         if defaults.string(forKey: "CuePadBench") == "interact" { IOSInteractionBench.beginCold() }
         dumpAccessibilityIfAsked()
+        logAccessibilityFocusIfAsked()
         if defaults.bool(forKey: "CuePadSoftKeyboard") { showSoftwareKeyboard() }
         fillScreenOnPad()
         if defaults.bool(forKey: "CuePadLandscape") {

@@ -102,14 +102,14 @@ struct CueWaitDock: View {
     private var deck: some View {
         let behind = waiting.count > 1
         return Color.clear
-            .paper(cornerRadius: Radius.field, lifted: true)
+            .dockedPaper()
             // 不透明：对话滚到卡后面（`FloatingReply` 不铺底），半透的叠边会透出后面的字
             .opacity(behind ? 1 : 0)
             .padding(.horizontal, Self.tuck)
             .padding(.top, Self.peek)
             .padding(.bottom, Self.below)
             .animation(Motion.fade, value: behind)
-            .accessibilityHidden(true)
+            .readerHidden(true)
     }
 
     /// 铺开的那件（`CueWaitCard`）垫上纸；手机上左右滑换一件。
@@ -122,7 +122,7 @@ struct CueWaitDock: View {
             .gesture(HorizontalPan(allows: { swipes(pick, toward: $0) }, changed: { track($0, on: pick) }, ended: { release(pick, commits: $0, velocity: $1) }))
         #endif
         return card
-            .paper(cornerRadius: Radius.field, lifted: true)
+            .dockedPaper()
             .padding(.bottom, Self.below + Self.peek)
     }
 

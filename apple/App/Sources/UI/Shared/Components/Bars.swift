@@ -42,7 +42,7 @@ private struct HeadFade: ViewModifier {
                         .ignoresSafeArea(edges: .top)
                     }
                     .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+                    .readerHidden(true)
                 }
         } else {
             content
@@ -59,7 +59,7 @@ private struct HeadFade: ViewModifier {
 /// 开销全在渲染服务，主线程每帧没有活：会话列表每帧滚 40pt，主线程指令与掉帧同垫一层渐变一样（Release、模拟器）；真机 GPU 没量。
 struct StatusBarBlur: View {
     var body: some View {
-        Band().ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
+        Band().ignoresSafeArea().allowsHitTesting(false).readerHidden(true)
     }
 
     private struct Band: UIViewRepresentable {

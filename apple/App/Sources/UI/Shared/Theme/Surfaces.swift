@@ -7,6 +7,10 @@ extension View {
         modifier(PaperSurface(radius: cornerRadius, lifted: lifted, wash: wash))
     }
 
+    /// 浮在回复框上方、要你处理的卡（Cue 页的拍板卡与它的叠边、会话页的问题卡、没能结束、出错）：同一张不透明的纸、抬起的影，与输入框同圆角。
+    /// 不用玻璃：拍板卡后面垫着叠边，玻璃不叠玻璃；卡浮在对话上，对话从它后面滚过，半透的面透出后面的字。
+    func dockedPaper() -> some View { paper(cornerRadius: Radius.field, lifted: true) }
+
     /// 计数变化时数字滚动过去（增大往上滚、减小往下滚），不整块换字。
     func counting(_ value: Int) -> some View {
         contentTransition(.numericText(value: Double(value))).animation(Motion.nudge, value: value)
@@ -248,11 +252,15 @@ extension EnvironmentValues {
 
 extension View {
     /// 调试预设（`-CuePadHover`，`DebugHooks.Preset.hovered`）：这块盖住其中一点时画成指针停着的样子——后台截图里指针进不来；
-    /// 按钮、行与卡的悬停都经它，平时什么都不挂。
+    /// 给了 `hoverSeconds` 时停那么久后移开。按钮、行与卡、提示条的悬停都经它，平时什么都不挂。
     @ViewBuilder func presetHover(_ hovering: Binding<Bool>) -> some View {
         let points = DebugHooks.preset.hovered
         if !points.isEmpty {
             onGeometryChange(for: Bool.self) { frame in points.contains { frame.frame(in: .global).contains($0) } } action: { hovering.wrappedValue = $0 }
+                .task {
+                    guard let seconds = DebugHooks.preset.hoverSeconds, (try? await Task.sleep(for: .seconds(seconds))) != nil else { return }
+                    hovering.wrappedValue = false
+                }
         } else {
             self
         }

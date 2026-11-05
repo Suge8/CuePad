@@ -153,7 +153,7 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
     var body: some View {
         let words = text.foregroundStyle(palette.ink3).lineLimit(1)
         HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-            glyph.foregroundStyle(tint ?? palette.ink3).noteGlyph().accessibilityHidden(true)
+            glyph.foregroundStyle(tint ?? palette.ink3).readerHidden(true).noteGlyph()
             if let time {
                 MetaLine(gap: Note.spacing) {
                     words

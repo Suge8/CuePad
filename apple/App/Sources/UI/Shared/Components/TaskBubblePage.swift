@@ -112,7 +112,7 @@ private struct BodyHint: View {
                 .lineLimit(1)
                 .padding(.bottom, inset)
                 .allowsHitTesting(false)
-                .accessibilityHidden(true)
+                .readerHidden(true)
         }
     }
 }

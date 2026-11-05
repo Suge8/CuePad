@@ -78,7 +78,7 @@ struct SetupPanel: View {
     /// 标题说这一步做成什么；要启用 Cue 时下面一句说它是什么（第一次打开的人只认得 Agent）。
     private var header: some View {
         HStack(alignment: .center, spacing: Spacing.block) {
-            Image(Mascot.hello.rawValue).resizable().scaledToFit().frame(width: 64, height: 64)
+            Image(decorative: Mascot.hello.rawValue).resizable().scaledToFit().frame(width: 64, height: 64)
                 .scaleEffect(shown || reduceMotion ? 1 : 0.9)
                 .opacity(shown ? 1 : 0)
                 .accessibilityHidden(true)

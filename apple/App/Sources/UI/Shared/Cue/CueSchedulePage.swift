@@ -49,7 +49,7 @@ struct CueSchedulePage: View {
                     .padding(.top, Spacing.group)
             }
             HStack(spacing: Spacing.item) {
-                Image(.add).font(Glyph.row).foregroundStyle(palette.ink2).accessibilityHidden(true)
+                Image(.add).font(Glyph.row).foregroundStyle(palette.ink2).readerHidden(true)
                 TextField(String(localized: "到时候做什么"), text: $text, palette: palette).textFieldStyle(.plain).font(Typography.body)
                     .focused($adding)
                     .onSubmit(add)

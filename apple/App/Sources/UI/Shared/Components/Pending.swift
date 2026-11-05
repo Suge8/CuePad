@@ -29,7 +29,7 @@ struct SyncingLabel: View {
     var body: some View {
         Text("正在同步")
             .padding(.leading, Spinner.Size.mini.side + Self.gap)
-            .overlay(alignment: .leading) { Spinner(.mini).accessibilityHidden(true) }
+            .overlay(alignment: .leading) { Spinner(.mini).readerHidden(true) }
             .foregroundStyle(palette.ink3)
             .accessibilityElement(children: .combine)
     }

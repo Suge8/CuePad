@@ -92,7 +92,7 @@ private struct PreviewPager: View {
     }
 
     @ViewBuilder private var share: some View {
-        if let file = file(of: preview) { ShareLink(item: file) { Image(.share).accessibilityLabel("分享") } }
+        if let file = file(of: preview) { ShareLink(item: file) { Label("分享", icon: .share).labelStyle(.iconOnly) } }
     }
 
     /// 左右翻的几份：系统的分页（UIKit 的分页滚动区，相邻的一份提前建好，翻过去时图已经解好）；翻到哪一份只有 `current` 一份。

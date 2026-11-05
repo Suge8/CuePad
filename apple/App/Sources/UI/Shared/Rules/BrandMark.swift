@@ -28,7 +28,8 @@ nonisolated struct BrandMark: Hashable, Sendable {
     static let opencode = Self("opencode")
     static let pi = Self("pi")
 
-    var image: Image { Image("brand-" + asset) }
+    /// 装饰图：名字总在旁边或在所在元素的标签里，读屏不念资源名（同 `Icon`）。
+    var image: Image { Image(decorative: "brand-" + asset) }
 
     /// 嵌在一行字里的"标志 名字"；没有标志只写名字。
     static func label(_ mark: BrandMark?, _ name: String) -> Text {

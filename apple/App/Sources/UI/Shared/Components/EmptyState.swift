@@ -51,9 +51,9 @@ struct EmptyState<Action: View>: View {
     }
 
     private var illustration: some View {
-        Image(syncing ? Mascot.search.rawValue : mascot.rawValue).resizable().scaledToFit()
+        Image(decorative: syncing ? Mascot.search.rawValue : mascot.rawValue).resizable().scaledToFit()
             .frame(width: 104, height: 104)
-            .accessibilityHidden(true)
+            .readerHidden(true)
     }
 
     private var copy: some View {

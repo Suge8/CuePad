@@ -33,10 +33,14 @@ enum DebugHooks {
         var largestType = false
         /// 整个窗口按"增强对比度"画（`-CuePadHighContrast`，`PaletteProvider`）：同上，不碰系统设置。
         var highContrast = false
+        /// 当作读屏开着（`-CuePadReader YES`）：只给提示条，与真开着旁白同一条路（`NoticeCapsule`），模拟器的旁白没有设置开关、Mac 上那是用户的全局设置。
+        var readerOn = false
         #if os(macOS)
         /// 窗口里这几点（左上为原点，同 `-CuePadClick`）上的按钮、行与卡一出现就画成指针停着的样子（`-CuePadHover x,y[;x,y…]`，`presetHover`）：
         /// 后台截图里指针进不来，合成的鼠标移动事件也不触发不在前台的应用的悬停。一张图里看几处时给几个点。
         var hovered: [CGPoint] = []
+        /// 指针停这么久后移开（`-CuePadHoverSeconds <秒>`，从那一块出现起算）：录悬停停表、移开重新计满。不给是一直停着。
+        var hoverSeconds: Double?
         #endif
         /// 进展页已完成列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false

@@ -57,10 +57,14 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后会自己退�
 
 - 机器上常开着正式版和别的检出的实例：只按 PID 认根。
 - SwiftUI 输入框用 `setText` 进不了绑定：先 `click` 再 `typeText`。
-- 提示条 4 秒就收（带撤销、归档或出错的 8 秒），指针停在上面时不收：`expect` 写进同一组动作。
+- 提示条 4 秒就收（带撤销、归档或出错的 8 秒），指针停在上面时不收：`expect` 写进同一组动作。后台录屏计时：`xc.sh rec mac -- … -CuePadNotice 字 -CuePadHover <提示条上一点> -CuePadHoverSeconds <秒>`（停那么久后移开，应在移开后再满 8 秒才收），读屏开着不收用 `-CuePadReader YES`（同一条路）；真实指针、键盘焦点与真机旁白仍要人工。
 - 任务行右键在后台弹得出菜单；墙上灵感卡的右键被当成点按，它的操作从编辑页走。
 - 让 Cue 真跑：隔离实例里各家的配置目录是空的、没有登录的大脑。起实例前同 `ClaudeTestbed` 把这台 Claude Code 的登录交给它：`export CLAUDE_CODE_OAUTH_TOKEN="$(<ClaudeLogin.tokenCommand 那条命令>)" ANTHROPIC_API_KEY=`（只读钥匙串里的访问令牌，不刷新），启用时选 Claude Code。
 - iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；点按 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 换算；`axe describe-ui` 读不到 SwiftUI 的元素）。`run` 起的实例由后台看守租着那台模拟器（别的检出领不到），到 `CUEPAD_RUN_SECONDS`、实例退出或 `xc.sh stop` 才放；`shot`、`rec` 只在拍的那几秒占着。槽位全机共用（`_lock.sh`），换机型的任务会关掉同槽位上别的机型。模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。
+
+## 读屏验收
+
+iOS 旁白走到哪以旁白真走为准，不用 axe 的树（它连 `accessibilityHidden` 的也列出）。`xc.sh run ios -- … -CuePadAXFocus YES` 起实例，在租到的模拟器里开旁白：`xcrun simctl spawn <UDID> defaults write com.apple.Accessibility VoiceOverTouchEnabled -bool true`，再 `launchctl kickstart user/foreground/com.apple.VoiceOverTouch`（第一次弹的"旁白手势"说明双击"好"收掉）。单指快扫（`axe swipe`，0.12 秒、180 点）走一格，点一下落焦点；双击要两次点按隔 0.15 秒，同一个 `axe batch` 里太慢，起两个 `axe touch`。每一格写进库目录的 `ax-focus.txt`。验完关掉（`VoiceOverTouchEnabled -bool false`、`launchctl kill SIGTERM user/foreground/com.apple.VoiceOverTouch`）再 `xc.sh stop`：槽位全机共用，下一个任务会接着开着旁白。
 
 ## 陌生人第一次打开
 

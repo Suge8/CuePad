@@ -78,7 +78,7 @@ struct NewTaskField: View {
 
     // 入口不用系统占位灰：那样看起来像不能点
     private var glyph: some View {
-        Image(.add).font(Glyph.small).foregroundStyle(palette.ink2).accessibilityHidden(true)
+        Image(.add).font(Glyph.small).foregroundStyle(palette.ink2).readerHidden(true)
             .frame(width: TaskMetrics.ringColumn)
     }
 

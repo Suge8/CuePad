@@ -23,7 +23,7 @@ struct LinkRow<Leading: View, Trailing: View>: View {
     var body: some View {
         if let open {
             content
-                .background { Button(action: open) { Color.clear }.buttonStyle(.row).accessibilityHidden(true) }
+                .background { Button(action: open) { Color.clear }.buttonStyle(.row).readerHidden(true) }
                 .accessibilityElement(children: .contain)
         } else {
             content.contentShape(.rect)
@@ -33,7 +33,7 @@ struct LinkRow<Leading: View, Trailing: View>: View {
     private var content: some View {
         HStack(spacing: Spacing.item) {
             HStack(spacing: Spacing.group) {
-                icon.foregroundStyle(palette.ink2).frame(width: iconColumn).accessibilityHidden(true)
+                icon.foregroundStyle(palette.ink2).frame(width: iconColumn).readerHidden(true)
                 title.foregroundStyle(palette.ink).lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: Spacing.item) {

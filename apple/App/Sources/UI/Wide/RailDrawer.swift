@@ -13,7 +13,7 @@ struct RailDrawer<Rail: View>: View {
             if open {
                 Color.clear.contentShape(.rect)
                     .gesture(DragGesture(minimumDistance: 0).onChanged { _ in close() })
-                    .overlay { Button("关闭", action: close).keyboardShortcut(.escape, modifiers: []).opacity(0).accessibilityHidden(true) }
+                    .overlay { Button("关闭", action: close).keyboardShortcut(.escape, modifiers: []).opacity(0).readerHidden(true) }
                     .ignoresSafeArea()
                     .transition(.identity)
             }

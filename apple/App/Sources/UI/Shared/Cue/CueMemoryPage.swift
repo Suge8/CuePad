@@ -51,7 +51,7 @@ struct CueMemoryPage: View {
     private var field: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
             HStack(spacing: Spacing.item) {
-                Image(.add).font(Glyph.row).foregroundStyle(palette.ink2).accessibilityHidden(true)
+                Image(.add).font(Glyph.row).foregroundStyle(palette.ink2).readerHidden(true)
                 TextField(String(localized: "记一条"), text: $text, palette: palette).textFieldStyle(.plain).font(Typography.body)
                     .focused($adding)
                     .onSubmit(add)

@@ -137,7 +137,7 @@ struct SessionRailCell: View {
         }
         .font(Glyph.control)
         .foregroundStyle(palette.ink2)
-        .accessibilityHidden(true)
+        .readerHidden(true)
     }
 
     private var signal: some View {
@@ -149,7 +149,7 @@ struct SessionRailCell: View {
             }
         }
         .frame(height: WaveStrip.height)
-        .accessibilityHidden(true)
+        .readerHidden(true)
     }
 }
 
