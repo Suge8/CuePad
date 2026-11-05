@@ -116,8 +116,8 @@ struct BoardColumnHeader: View {
         HStack(spacing: 0) {
             BoardLaneMark(column: column, size: Self.mark)
             Text(column.title).font(Self.font).foregroundStyle(column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
-                .padding(.leading, 6)
-            Spacer(minLength: 4)
+                .padding(.leading, Spacing.glyph)
+            Spacer(minLength: Spacing.tight)
             Text("\(count)").font(column.light ? Self.font : Self.countFont).monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
         }
     }

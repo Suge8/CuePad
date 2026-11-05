@@ -86,10 +86,10 @@ struct ScheduleEditor: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
+            HStack(spacing: Spacing.item) {
                 Label("定时", icon: .schedule).font(BubbleMetrics.strong).foregroundStyle(palette.ink)
-                Spacer(minLength: 8)
+                Spacer(minLength: Spacing.item)
                 Button("取消", action: cancel).buttonStyle(PressStyle(.inline)).foregroundStyle(palette.ink2)
                 Button("好", action: save)
                     .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
@@ -110,11 +110,11 @@ struct ScheduleEditor: View {
                 #else
                 .datePickerStyle(.stepperField)
                 #endif
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.glyph) {
                 Image(.mac).foregroundStyle(palette.ink3)
                 Text(Dotted(String(localized: "下一次：\(ScheduleText.moment(draft.next()))"), workspace.cue.hostName ?? MacAgents.unnamed))
                     .foregroundStyle(palette.ink2).lineLimit(1)
-                Spacer(minLength: 8)
+                Spacer(minLength: Spacing.item)
                 if let end {
                     Button("不再定时", action: end).buttonStyle(PressStyle(.inline)).foregroundStyle(palette.failure)
                 }
@@ -207,7 +207,7 @@ struct ScheduleStrip: View {
                         Text(ScheduleText.missed(last)).font(BubbleMetrics.meta).foregroundStyle(palette.ink3).lineLimit(2)
                     }
                 }
-                Spacer(minLength: 4)
+                Spacer(minLength: Spacing.tight)
                 Button { draft = ScheduleDraft(line) } label: { Text("改").chip(size: .compact) }
                 .buttonStyle(PressStyle())
                 .accessibilityLabel("改定时")

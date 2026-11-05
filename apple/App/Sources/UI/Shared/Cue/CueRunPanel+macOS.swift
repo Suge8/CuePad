@@ -27,9 +27,9 @@ struct CueRunPanel: View {
                     .frame(width: 28, height: 28).contentShape(.rect)
                     .buttonStyle(PressStyle(.button))
             }
-            .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
+            .padding(.leading, Spacing.block).padding(.trailing, Spacing.item).padding(.vertical, Spacing.item)
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Spacing.block) {
                     CueContextLine(context: workspace.cue.context)
                     Text(Dotted(String(localized: "最近几轮"), rounds.isEmpty ? nil : "\(rounds.count)"))
                         .font(Typography.label).foregroundStyle(palette.ink3)
@@ -43,7 +43,7 @@ struct CueRunPanel: View {
                         }
                     }
                 }
-                .padding(.horizontal, 16).padding(.bottom, 16)
+                .padding(.horizontal, Spacing.block).padding(.bottom, Spacing.block)
             }
             .scrollIndicators(.automatic)
         }
@@ -63,37 +63,41 @@ private struct CueRoundRow: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             Button { withAnimation(Motion.nudge) { expanded.toggle() } } label: { header }
                 .buttonStyle(PressStyle())
                 .accessibilityValue(expanded ? "已展开" : "已收起")
             if expanded { detail.transition(.opacity) }
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
+        .padding(.horizontal, Spacing.item).padding(.vertical, 6)
         .background(expanded ? palette.fill : .clear, in: ChatBlock.shape)
     }
+
+    /// 为什么醒那一列图标的宽；第二行与展开的内容从图标后面的字起（`lead`）。
+    private static let icon: CGFloat = 16
+    private static let lead = icon + Spacing.item
 
     /// 第一行为什么醒与几点，第二行用时、工具次数、做完时的上下文。
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.item) {
                 Image(round.wake.icon).font(Typography.caption).foregroundStyle(palette.ink2)
-                    .frame(width: 16).accessibilityHidden(true)
+                    .frame(width: Self.icon).accessibilityHidden(true)
                 Text(CueRunFormat.reason(round.wake)).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                 if round.sent.count > 1 {
                     Text("插话 \(round.sent.count - 1)").font(Typography.caption2).foregroundStyle(palette.ink2)
                         .padding(.horizontal, 5).padding(.vertical, 1).background(palette.fill, in: .capsule)
                 }
-                Spacer(minLength: 4)
+                Spacer(minLength: Spacing.tight)
                 Text(CueRunFormat.clock(round.startedAt)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
                 DisclosureChevron(open: expanded)
             }
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.glyph) {
                 if round.finishedAt == nil { Spinner(.mini) }
                 Text(summary).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
                 if round.failure != nil { Text("出错").font(Typography.caption).foregroundStyle(palette.failure) }
             }
-            .padding(.leading, 24)
+            .padding(.leading, Self.lead)
         }
         .frame(minHeight: 36).contentShape(.rect)
     }
@@ -106,14 +110,14 @@ private struct CueRoundRow: View {
     }
 
     private var detail: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             if !round.sent.isEmpty {
                 Button { withAnimation(Motion.fade) { showsSent.toggle() } } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.glyph) {
                         Image(.mail).frame(width: 13).accessibilityHidden(true)
                         Text("交给 Cue 的话")
                         Text(CueRunFormat.preview(round.sent[0])).foregroundStyle(palette.ink3).lineLimit(1).truncationMode(.tail)
-                        Spacer(minLength: 4)
+                        Spacer(minLength: Spacing.tight)
                         DisclosureChevron(open: showsSent)
                     }
                     .font(Typography.caption).foregroundStyle(palette.ink2)
@@ -127,7 +131,7 @@ private struct CueRoundRow: View {
                 TraceText(text: failure, tint: palette.failure)
             }
         }
-        .padding(.leading, 24).padding(.bottom, 4)
+        .padding(.leading, Self.lead).padding(.bottom, Spacing.tight)
     }
 }
 
@@ -188,7 +192,7 @@ private struct TraceText: View {
     private static let maxHeight: CGFloat = 260
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
             if let label { Text(label).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3) }
             ScrollView {
                 Text(text).font(Typography.codeNote).foregroundStyle(tint ?? palette.ink2)

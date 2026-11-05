@@ -18,8 +18,8 @@ struct CueQuestionLine<Below: View>: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 9) {
             if tone != .ended { PiStateGlyph(status: .asking).font(Typography.title).accessibilityHidden(true) }
-            VStack(alignment: .leading, spacing: 4) {
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
+                VStack(alignment: .leading, spacing: Spacing.tight) {
                     line.fixedSize(horizontal: false, vertical: true)
                     if let note {
                         Text(CueQuestionLine<EmptyView>.keepingTail(note)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
@@ -111,13 +111,13 @@ struct CueChoices: View {
         .multilineTextAlignment(accessible ? .trailing : .leading)
         let primary = once(options.first ?? CueAsk.once, paused: paused).lineLimit(1).fixedSize()
         if accessible {
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: Spacing.tight) {
                 primary
                 side
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         } else {
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.group) {
                 side
                 Spacer(minLength: 0)
                 primary
@@ -196,7 +196,7 @@ struct CueShots: View {
         let batch = shots.map(\.preview), looks = Dictionary(uniqueKeysWithValues: shots.map { ($0.id, $0.look) })
         ShotRow {
             ForEach(shots) { shot in
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.item) {
                     DeliverableTile(
                         preview: shot.preview, label: shot.look, shape: .shot(side: Self.side, chosen: shot.id == chosen), captioned: false,
                         zoom: PreviewZoomKey(group: group, preview: shot.id)

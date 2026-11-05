@@ -36,12 +36,12 @@ struct CueWelcome: View {
                 }
             } else {
                 // 说过话后停用了：页头已写"已停用"，这里只说启用后怎样与那一步，不再自我介绍
-                VStack(spacing: 10) {
+                VStack(spacing: Spacing.item) {
                     Text("启用后 \(name) 接着干活").font(Typography.secondary).foregroundStyle(palette.ink2)
                     steps(settings, hosts)
                 }
                 .multilineTextAlignment(.center)
-                .padding(16)
+                .padding(Spacing.block)
                 .frame(maxWidth: .infinity)
                 .paper(cornerRadius: Radius.sheet)
                 .buttonStyle(ControlButtonStyle(kind: .primary))
@@ -60,7 +60,7 @@ struct CueWelcome: View {
     }
 
     private func enabling(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Spacing.item) {
             action(settings, hosts)
             if let failure = model.failure {
                 Text(failure).font(Typography.meta).foregroundStyle(palette.failure)
@@ -85,12 +85,12 @@ struct CueWelcome: View {
 
     @ViewBuilder private func action(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {
         if let why = settings.gate(services).waitingReason {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.item) {
                 Spinner(.small)
                 Text(why).font(Typography.secondary).foregroundStyle(palette.ink3)
             }
         } else {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.item) {
                 enableButton(settings, hosts)
                 if model.enabling != nil { Spinner(.small) }
             }

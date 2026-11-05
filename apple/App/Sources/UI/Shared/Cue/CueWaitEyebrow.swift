@@ -20,9 +20,9 @@ struct CueWaitEyebrow: View {
         HStack(spacing: 0) {
             project
             name.layoutPriority(-1)
-            Spacer(minLength: 12)
+            Spacer(minLength: Spacing.group)
             LiveText(style: PiClock.Waited(since: wait.since)).monospacedDigit().fixedSize()
-            if count > 1 { position.padding(.leading, 10) }
+            if count > 1 { position.padding(.leading, Spacing.item) }
         }
         .font(Typography.caption)
         .foregroundStyle(palette.ink3)
@@ -31,12 +31,12 @@ struct CueWaitEyebrow: View {
 
     @ViewBuilder private var project: some View {
         if let project = workspace.catalog?.project(wait.project) {
-            HStack(spacing: 2) {
+            HStack(spacing: Spacing.hair) {
                 ProjectGlyph(project: project, size: 11)
                 Text(project.shownName).lineLimit(1)
             }
             .fixedSize()
-            .padding(.trailing, 10)
+            .padding(.trailing, Spacing.item)
         }
     }
 
@@ -60,7 +60,7 @@ struct CueWaitEyebrow: View {
     private func label(_ title: String, linked: Bool) -> some View {
         HStack(spacing: 3) {
             Text(title).lineLimit(1)
-            if linked { Image(.forward).font(Glyph.mark) }
+            if linked { Chevron(.forward) }
         }
         .foregroundStyle(palette.ink2)
         // 小字本身矮：点得到的范围往上下扩，不撑高这一行
@@ -82,9 +82,9 @@ struct CueWaitEyebrow: View {
     }
 
     #if os(macOS)
-    private func arrow(_ icon: Icon, enabled: Bool, label: LocalizedStringResource, action: @escaping () -> Void) -> some View {
+    private func arrow(_ direction: Chevron.Direction, enabled: Bool, label: LocalizedStringResource, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(icon).font(Glyph.mark).frame(width: Self.height, height: Self.height).contentShape(.rect)
+            Chevron(direction).frame(width: Self.height, height: Self.height).contentShape(.rect)
         }
         .buttonStyle(PressStyle(.inline))
         .disabled(!enabled)

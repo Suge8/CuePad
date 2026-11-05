@@ -7,11 +7,11 @@ import SwiftUI
 /// 同一边连着说的几颗收紧成一串（`joinedGap`），后面几颗那一边的上角也收小，连成一列。圆角、内边距只在这里定。
 enum CueBubble {
     #if os(macOS)
-    static let padding = EdgeInsets(top: 13, leading: 18, bottom: 13, trailing: 18)
+    static let padding = EdgeInsets(top: 13, leading: Spacing.block, bottom: 13, trailing: Spacing.block)
     #else
-    static let padding = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
+    static let padding = EdgeInsets(top: Spacing.group, leading: Spacing.inset, bottom: Spacing.group, trailing: Spacing.inset)
     #endif
-    static let joinedGap: CGFloat = 4
+    static let joinedGap = Spacing.tight
     /// Cue 的话最宽占所在一栏的比例：回答常带列表与代码，比你的话（`UserBubble.widthFraction`）宽（手机上窄，再宽一点）。
     #if os(macOS)
     static let cueWidth: CGFloat = 0.86
@@ -58,7 +58,7 @@ struct CueSays: View {
 
     var body: some View {
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
-            VStack(alignment: .leading, spacing: card ? 12 : 8) {
+            VStack(alignment: .leading, spacing: card ? Spacing.group : Spacing.item) {
                 words
                 if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, open: open) }
                 if let task { CueTaskLine(task: task, message: message) }
@@ -188,9 +188,9 @@ private struct OriginalToggle: View {
 
     var body: some View {
         Button { open.toggle() } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.tight) {
                 Text("原话")
-                Image(.expand).font(Glyph.mark).rotationEffect(.degrees(open ? 180 : 0))
+                Chevron(.expand).rotationEffect(.degrees(open ? 180 : 0))
             }
             .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
             // 不另占一行高：按得到的范围往外扩一圈，不撑高气泡

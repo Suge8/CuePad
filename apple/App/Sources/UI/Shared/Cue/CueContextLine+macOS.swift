@@ -15,7 +15,7 @@ struct CueContextLine: View {
 
     var body: some View {
         let level = UsageLevel(used: fraction)
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.item) {
             Text("上下文").foregroundStyle(palette.ink3)
             MarkedBar(fill: fraction, mark: nil, level: level)
             Text(percent).fontWeight(.semibold).monospacedDigit().foregroundStyle(level == .critical ? palette.failure : palette.ink2)

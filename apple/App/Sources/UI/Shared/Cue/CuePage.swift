@@ -69,7 +69,7 @@ struct CuePage: View {
             // 原地淡入淡出、对话这一下就让到终点的宽：Mac 上开合不逐帧挪位置（docs/layout.md「Mac 上开合」）
             if cue.showsRun, let keeper = services.cue.keeper {
                 CueRunPanel(keeper: keeper)
-                    .padding([.trailing, .bottom], 12)
+                    .padding([.trailing, .bottom], Spacing.group)
                     .transition(.opacity.animation(Motion.fade))
             }
         }
@@ -82,7 +82,7 @@ struct CuePage: View {
             chat.padding(.leading, railInset)
         } reply: {
             bottom
-                .padding(.horizontal, 12)
+                .padding(.horizontal, Spacing.group)
                 .frame(maxWidth: Self.readingWidth)
         }
         .scrollDismissesKeyboard(.interactively)

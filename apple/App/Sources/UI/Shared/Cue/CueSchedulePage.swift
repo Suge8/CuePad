@@ -43,12 +43,12 @@ struct CueSchedulePage: View {
     }
 
     private var field: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
             if picking {
                 ScheduleEditor(text: "", draft: $draft, savable: CueMemoryLine.fits(text), save: add, cancel: { picking = false })
-                    .padding(.top, 12)
+                    .padding(.top, Spacing.group)
             }
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.item) {
                 Image(.add).font(Glyph.row).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 TextField(String(localized: "到时候做什么"), text: $text, palette: palette).textFieldStyle(.plain).font(Typography.body)
                     .focused($adding)
@@ -146,5 +146,5 @@ private enum ScheduleMetrics {
     #else
     static let time = Typography.title.weight(.medium)
     #endif
-    static let gap: CGFloat = 14
+    static let gap = Spacing.group
 }

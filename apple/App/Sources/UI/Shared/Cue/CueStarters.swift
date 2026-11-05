@@ -9,7 +9,7 @@ struct CueStarters: View {
     @State private var agents: MacAgents?
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Spacing.item) {
             ForEach(Self.lines(agents?.agents.map(\.kind) ?? []), id: \.self) { line in
                 Button {
                     workspace.cue.draft.text = line

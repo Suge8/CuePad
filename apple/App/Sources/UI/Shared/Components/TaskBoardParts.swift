@@ -194,11 +194,11 @@ struct BoardColumn: View {
     }
 
     private var earlierToggle: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.group) {
             Button {
                 withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { showsEarlier.wrappedValue.toggle() }
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: Spacing.tight) {
                     Text("更早做完的 \(board.earlier.count)").monospacedDigit()
                     Chevron(.forward).rotationEffect(.degrees(showsEarlier.wrappedValue ? 90 : 0))
                 }
@@ -217,7 +217,7 @@ struct BoardColumn: View {
             }
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, Spacing.tight)
         // 手机一行里它占一格：与旁边的空格一样高、字在中间
         .frame(maxHeight: isRow ? .infinity : nil)
     }

@@ -106,17 +106,16 @@ struct CueUnreadDot: View {
     let unread: Bool
     @Environment(\.palette) private var palette
 
-    nonisolated static let size: CGFloat = 7
     /// 点与气泡左缘之间。
     nonisolated static let gap: CGFloat = 6
     /// 页边距至少这么宽才把点放在气泡外（点、缝，离屏缘再留一条缝），不然骑在气泡左缘上（`CueRow`）。
-    nonisolated static let room: CGFloat = size + gap + 8
+    static let room = StatusDot.size + gap + Spacing.item
 
     var body: some View {
         Text(verbatim: " ").font(Typography.reading).hidden()
-            .frame(width: Self.size)
+            .frame(width: StatusDot.size)
             .overlay {
-                if unread { Circle().fill(palette.replied).frame(width: Self.size, height: Self.size).transition(.opacity) }
+                if unread { StatusDot(color: palette.replied).transition(.opacity) }
             }
             .animation(Motion.fade, value: unread)
             .padding(.top, CueBubble.padding.top)

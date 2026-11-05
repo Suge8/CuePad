@@ -154,7 +154,7 @@ private struct CueBrainRow: View {
     @State private var brain: AgentModelChoice?
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.item) {
             CueConfigControls(choice: brain, opening: $opening)
             CueHostNote()
         }
@@ -172,7 +172,7 @@ private struct CueHostNote: View {
             Image(.mac)
                 .font(Typography.meta).foregroundStyle(palette.ink3)
                 .help(elsewhere).accessibilityLabel(elsewhere)
-                .padding(.trailing, 4)
+                .padding(.trailing, Spacing.tight)
                 .transition(.opacity)
         }
     }

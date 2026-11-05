@@ -22,7 +22,7 @@ struct CueSettingsSection: View {
                     CueHostSetting(running: running, hosts: hosts, model: model)
                 } label: {
                     Label {
-                        HStack(spacing: 6) {
+                        HStack(spacing: Spacing.glyph) {
                             Text(CueSettings.hostTitle)
                             if model.enabling != nil { Spinner(.mini) }
                         }

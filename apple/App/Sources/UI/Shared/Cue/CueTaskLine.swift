@@ -31,10 +31,10 @@ struct CueTaskLine: View {
         let place = message.place(task: task), title = message.name(task: task)
         let done = place?.status == .known(.done)
         CueTaskButton(task: task) {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.glyph) {
                 TaskRingView(status: place?.status?.known, done: done, size: 13, steps: place?.progress).relaySpot(task: task)
                 Text(title).lineLimit(1)
-                Image(.forward).font(Glyph.mark)
+                Chevron(.forward)
             }
             .font(Typography.meta).foregroundStyle(palette.ink2)
             .frame(minHeight: Self.lineHeight).contentShape(.rect)

@@ -49,7 +49,7 @@ struct CueMacSteps<Finish: View>: View {
         if setup.stuck == nil {
             finish
         } else {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: Spacing.group) {
                 ForEach(CueMacSetup.Step.allCases, id: \.self, content: row)
                 Text("没有 Mac 也能先用：记灵感、建任务，Mac 接上后接着做")
                     .font(Typography.meta).foregroundStyle(palette.ink3)
@@ -62,7 +62,7 @@ struct CueMacSteps<Finish: View>: View {
 
     private func row(_ step: CueMacSetup.Step) -> some View {
         let done = setup.done(step), lit = setup.stuck == step
-        return HStack(alignment: .firstTextBaseline, spacing: 10) {
+        return HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
             Group {
                 if done {
                     Image(.done).foregroundStyle(palette.ink2)
@@ -78,7 +78,7 @@ struct CueMacSteps<Finish: View>: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title(step)).font(Typography.secondary.weight(lit ? .semibold : .regular))
                         .foregroundStyle(lit || done ? palette.ink : palette.ink3)
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.glyph) {
                         if lit, step == .iCloud, setup.waiting != nil { Spinner(.mini) }
                         Text(detail(step, done: done)).fixedSize(horizontal: false, vertical: true)
                     }
@@ -86,7 +86,7 @@ struct CueMacSteps<Finish: View>: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityValue(done ? String(localized: "已完成") : lit ? String(localized: "卡在这一步") : "")
-                if lit { action(step).padding(.top, 4) }
+                if lit { action(step).padding(.top, Spacing.tight) }
             }
             Spacer(minLength: 0)
         }

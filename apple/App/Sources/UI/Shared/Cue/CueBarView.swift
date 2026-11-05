@@ -8,14 +8,16 @@ struct CueBarView: View {
     let bar: CueBar?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             CueStatusRow()
-                .padding(.horizontal, 14).padding(.vertical, 10)
+                .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
                 .glass(in: .rect(cornerRadius: Radius.sheet))
             CueComposer(style: .bar(opens: bar?.opens ?? 0)) { bar?.hide() }
         }
-        .frame(width: 560)
+        .frame(width: Self.width)
     }
+
+    private static let width: CGFloat = 560
 }
 
 #endif
@@ -45,7 +47,7 @@ struct CueStatusRow<Trailing: View>: View {
 
     private func row(unread: Int) -> some View {
         let cue = workspace.cue
-        return HStack(spacing: 10) {
+        return HStack(spacing: Spacing.item) {
             CueEntryAvatar()
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(font).fontWeight(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink).lineLimit(1)
@@ -80,7 +82,7 @@ struct UnreadCount: View {
     var body: some View {
         if count > 0 {
             HStack(spacing: 5) {
-                Circle().fill(palette.replied).frame(width: StatusDot.size, height: StatusDot.size)
+                StatusDot(color: palette.replied)
                 Text(count, format: .number).fontWeight(.semibold).monospacedDigit().contentTransition(.numericText(value: Double(count)))
             }
             .foregroundStyle(palette.replied)

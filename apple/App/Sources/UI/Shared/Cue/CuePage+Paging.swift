@@ -10,11 +10,11 @@ extension CuePage {
     /// `speaker`：这一格是谁的气泡（`CueThread.Row.speaker`），不是气泡为 nil。
     static func gap(before speaker: HorizontalEdge?, joined: Bool) -> CGFloat {
         if joined { return CueBubble.joinedGap }
-        return speaker == .trailing ? 24 : 16
+        return speaker == .trailing ? 24 : Spacing.block
     }
 
     /// 隔了一阵写时间的那一格：时间上面空多少、时间与这一格之间空多少（`ChatTimeMarker`；排的与估高的同用这两个）。
-    static let stampAbove: CGFloat = 16, stampBelow: CGFloat = 4
+    static let stampAbove = Spacing.block, stampBelow = Spacing.tight
 
     /// 打开时铺一屏（`conversation`），往上每批铺半屏、至多一段（`segment` 格），按每格至少多高（`floor`）从下往上数，只算数到的那几格；
     /// 打开时最新处停在浮着的那一块上方，只铺它上面那一截（`covered`）。一批排的是一整块主线程的活（Cue 的回答长，真实库上一屏要一百多毫秒），

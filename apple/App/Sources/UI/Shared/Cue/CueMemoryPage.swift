@@ -49,8 +49,8 @@ struct CueMemoryPage: View {
     }
 
     private var field: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
+            HStack(spacing: Spacing.item) {
                 Image(.add).font(Glyph.row).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 TextField(String(localized: "记一条"), text: $text, palette: palette).textFieldStyle(.plain).font(Typography.body)
                     .focused($adding)
@@ -60,7 +60,7 @@ struct CueMemoryPage: View {
             .frame(minHeight: CueListMetrics.field)
             if tooLong {
                 Text("一条最多 \(CueMemoryLine.maxBytes) 字节，拆成几条记").font(Typography.meta).foregroundStyle(palette.failure)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, Spacing.group)
             }
         }
     }
@@ -106,7 +106,7 @@ private struct GroupTitle<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.group) {
             SectionHeader(Dotted(title), level: .group, icon: icon)
             Spacer(minLength: 0)
             trailing
@@ -132,7 +132,7 @@ private struct PinnedUsage: View {
         let level = UsageLevel(used: fraction)
         let used = Measurement(value: Double(bytes), unit: UnitInformationStorage.bytes).converted(to: .kilobytes)
             .formatted(.measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(1))))
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.item) {
             MarkedBar(fill: fraction, mark: nil, level: level).frame(width: Self.width)
             Text(verbatim: used).monospacedDigit().foregroundStyle(level == .critical ? palette.failure : palette.ink3)
                 .contentTransition(.numericText(value: fraction))

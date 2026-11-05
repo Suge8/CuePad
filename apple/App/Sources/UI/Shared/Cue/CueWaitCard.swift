@@ -32,10 +32,10 @@ struct CueWaitCard: View {
     @State private var folded = false
     #endif
 
-    nonisolated static let side: CGFloat = 16
+    nonisolated static let side = Spacing.block
     /// 卡里上下的边与几部分之间：眉题离卡顶、怎么答离卡底、各部分之间。
-    nonisolated static let edge: CGFloat = 12
-    nonisolated static let gap: CGFloat = 12
+    nonisolated static let edge = Spacing.group
+    nonisolated static let gap = Spacing.group
     /// 眉题与问句之间。
     nonisolated static let lead: CGFloat = 6
 

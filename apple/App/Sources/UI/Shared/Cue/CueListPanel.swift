@@ -17,18 +17,18 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) { rows }
                 .padding(.horizontal, CueListMetrics.margin)
-                .padding(.bottom, 12)
+                .padding(.bottom, Spacing.group)
         }
         .scrollEdgeEffectHidden()
         .overlay { if isEmpty { empty.padding(20) } }
         // 滚动区止于胶囊半高处，胶囊下半截伸出滚动区：内容只从胶囊背后滚过，不在它下面与圆角外露出被面板下沿切掉的半行
         .safeAreaInset(edge: .bottom, spacing: 0) {
             field
-                .padding(.horizontal, 18)
+                .padding(.horizontal, Spacing.block)
                 // 单行时两头正好是半圆（胶囊）；新定时在上面展开几点时是圆角的块，里面那块随它同心（`Radius.nested`）
                 .containerShape(.rect(cornerRadius: Radius.field))
                 .glass(in: .rect(cornerRadius: Radius.field))
-                .padding(.horizontal, 16)
+                .padding(.horizontal, Spacing.block)
                 .padding(.bottom, -CueListMetrics.field / 2)
         }
         .padding(.bottom, CueListMetrics.fieldBottom + CueListMetrics.field / 2)
@@ -45,7 +45,7 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
                     HelpButton { CueListHelp(text: help) }
                     PanelCloseButton()
                 }
-                .padding(12)
+                .padding(Spacing.group)
             }
             .frame(width: 480).frame(maxHeight: 600)
             .accessibilityElement(children: .contain)
@@ -148,7 +148,7 @@ private struct CueListHoverActions: View {
                     .help(item.action.title)
             }
         }
-        .padding(.leading, 4)
+        .padding(.leading, Spacing.tight)
     }
 }
 #endif
@@ -157,16 +157,16 @@ private struct CueListHoverActions: View {
 enum CueListMetrics {
     #if os(macOS)
     static let top: CGFloat = 48
-    static let margin: CGFloat = 20
+    static let margin = Spacing.panel
     static let inset: CGFloat = 0
     static let vertical: CGFloat = 7
     static let field: CGFloat = 44
-    static let fieldBottom: CGFloat = 16
+    static let fieldBottom = Spacing.block
     #else
-    static let margin: CGFloat = 4
-    static let inset: CGFloat = 16
+    static let margin = Spacing.tight
+    static let inset = Spacing.inset
     static let vertical: CGFloat = 9
     static let field: CGFloat = 50
-    static let fieldBottom: CGFloat = 8
+    static let fieldBottom = Spacing.item
     #endif
 }
