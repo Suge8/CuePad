@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// "现在在哪个项目"与往哪存：Mac 的首屏、⌘1–9、新建落点，手机的导航路径；项目失效（不存在、进了回收站、写入时被删）时回落并提示，不吞错。
+/// "现在在哪个项目"与往哪存：Mac 的首屏（项目段总是项目列表）、⌘1–9、新建落点，手机的导航路径；项目失效（不存在、进了回收站、写入时被删）时回落并提示，不吞错。
 #if os(macOS)
 struct ProjectsTests {
     let rig = TestApp()
@@ -15,8 +15,8 @@ struct ProjectsTests {
         Task { await workspace.follow() }
     }
 
-    @Test func 启动回到上次的项目_失效时回到项目书架_数字键按当下顺序取() async throws {
-        // 保存的项目不存在：清掉失效的设置，首屏是项目书架
+    @Test func 启动是项目列表_失效设置清掉_数字键按当下顺序取() async throws {
+        // 保存的项目不存在：清掉失效的设置，首屏是项目列表
         _ = try await store.createProject(name: "A", color: "#000000")
         let pinned = try await store.createProject(name: "B", color: "#000000")
         try await store.updateProject(pinned.id) { $0.isPinned = true }
@@ -28,24 +28,27 @@ struct ProjectsTests {
         try await eventually("目录读到三个项目，失效设置清掉") { workspace.catalog?.projects.count == 3 && services.settings.currentProject == nil }
         #expect(workspace.mainRoute == .shelf)
 
-        // 打开过的项目：下次打开回到它
+        // 打开过的项目只决定新记灵感进哪：下次打开仍是项目列表，「项目」那一行选中
         services.settings.currentProject = pinned.id
         let fresh = Workspace(services: services)
         let freshCatalog = observing(fresh)
         defer { freshCatalog.cancel() }
-        #expect(fresh.mainRoute == .project(pinned.id))
+        #expect(fresh.mainRoute == .shelf && fresh.shownPane == .projects)
         let last = try await store.createProject(name: "C", color: "#000000")
         try await store.updateProject(last.id) { $0.isPinned = true }
         try await eventually("fresh.catalog?.projects.first?.id == last.id") { fresh.catalog?.projects.first?.id == last.id }
 
         // ⌘N 打开侧栏里此刻的第 N 个：顺序变了不能还绑在旧顺序上；没有那么多个就不动
         fresh.showProject(number: 1)
-        #expect(fresh.mainRoute == .project(last.id) && services.settings.currentProject == last.id)
+        #expect(fresh.mainRoute == .project(last.id) && fresh.shownPane == .projects && services.settings.currentProject == last.id)
         fresh.showProject(number: 3)
         let third = try #require(fresh.catalog?.projects[2].id)
         #expect(fresh.mainRoute == .project(third) && third != last.id)
         fresh.showProject(number: 9)
         #expect(fresh.mainRoute == .project(third))
+        // 项目页栏头的「项目」与会话条的「项目」都回到列表；上次看的项目还记着
+        fresh.select(.shelf)
+        #expect(fresh.mainRoute == .shelf && services.settings.currentProject == third)
 
         // 当前项目进了回收站：回到项目书架；默认项目删不掉
         services.settings.currentProject = third
