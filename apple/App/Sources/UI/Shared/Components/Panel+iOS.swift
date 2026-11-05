@@ -72,7 +72,6 @@ final class PanelHost {
     }
 
     fileprivate(set) var drawer: Drawer?
-    @ObservationIgnored fileprivate weak var window: UIWindow?
     /// 这一层（窗口、sheet）的字号：气泡内容按它画，不按呈现处——呈现处可能在一排封了字号的控件里（工具排），气泡里是能放大的说明。
     @ObservationIgnored fileprivate var typeSize = DynamicTypeSize.large
 
@@ -81,7 +80,7 @@ final class PanelHost {
 
     func show(_ entry: Shown) { shown = entry }
 
-    /// 把一处气泡的内容交给这一层（`panel(style: .bubble)` 与导航栏里的问号 `BarHelpButton` 同这一份）：连同呈现处的环境，字号按这一层的。
+    /// 把一处气泡的内容交给这一层（`panel(style: .bubble)`）：连同呈现处的环境，字号按这一层的。
     func present(
         token: UUID, key: AnyHashable, source: BubbleSource, width: BubblePlacement.Width, close: ClosePanel, environment: EnvironmentValues, content: some View
     ) {
@@ -98,18 +97,6 @@ final class PanelHost {
         if shown?.token == token { shown = nil }
     }
 
-    /// 系统导航栏里带读屏标识 `id` 的项在窗口里的框（点下时量一次，推入转场里栏在动，不跟着量）：栏里的项是系统按 SwiftUI 的按钮另建的，
-    /// SwiftUI 量的框对不上，读屏标识系统照样带过去。找不到为 nil。
-    func frame(of id: String) -> CGRect? {
-        guard let window, let control = Self.find(id, in: window) else { return nil }
-        return control.convert(control.bounds, to: nil)
-    }
-
-    private static func find(_ id: String, in view: UIView) -> UIView? {
-        if view.accessibilityIdentifier == id { return view }
-        for child in view.subviews { if let found = find(id, in: child) { return found } }
-        return nil
-    }
 }
 
 extension View {
@@ -133,33 +120,7 @@ private struct PanelHostModifier: ViewModifier {
             .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
             .overlay { DrawerLayer(drawer: host.drawer) }
             .overlay { BubbleLayer(shown: host.shown) }
-            .background { WindowProbe(host: host) }
             .environment(host)
-    }
-}
-
-/// 把所在的窗口报给 `PanelHost`（导航栏里的控件按读屏标识在窗口里找）。
-private struct WindowProbe: UIViewRepresentable {
-    let host: PanelHost
-
-    func makeUIView(context: Context) -> Probe { Probe(host: host) }
-    func updateUIView(_ view: Probe, context: Context) {}
-
-    final class Probe: UIView {
-        private let host: PanelHost
-
-        init(host: PanelHost) {
-            self.host = host
-            super.init(frame: .zero)
-            isUserInteractionEnabled = false
-        }
-
-        required init?(coder: NSCoder) { nil }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            host.window = window
-        }
     }
 }
 
@@ -246,7 +207,7 @@ private struct DrawerLayer: View {
 }
 
 /// 从控件长出的气泡（`View.bubble(isPresented:)`）：开着时按 SwiftUI 量的框长出。量的框记在不触发重算的盒子里：控件随滚动、键盘挪动不重算这一层。
-/// 系统导航栏里的项用不了它（栏里的项建好之后系统不再跑它上面的 `onChange`）：问号经 `BarHelpButton`。
+/// 系统导航栏里的项用不了它（栏里的项建好之后系统不再跑它上面的 `onChange`）：栏里的问号是系统 popover（`BarHelpButton`）。
 private struct ControlBubble<Panel: View>: ViewModifier {
     @Binding var isPresented: Bool
     let width: BubblePlacement.Width

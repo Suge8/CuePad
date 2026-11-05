@@ -33,8 +33,8 @@ struct TaskBubble: View {
     @State private var editing: CardEditing?
 
     var body: some View {
-        // ZStack 而不是 Group：数据读到之前 Group 里没有视图，挂在它上面的读库也就不会开始
-        ZStack {
+        // 是一个容器而不是 Group：数据读到之前 Group 里没有视图，挂在它上面的读库也就不会开始；翻页的两页叠在 `TurnStack` 里（`Motion.turn`）
+        TurnStack {
             if let data, let editing, editing.cardID == data.focus(step).id {
                 let focus = data.focus(step)
                 VStack(alignment: .leading, spacing: BubbleMetrics.footerGap) {
@@ -53,7 +53,7 @@ struct TaskBubble: View {
                 .transition(Motion.turn(from: step == nil ? .leading : .trailing, reduceMotion: reduceMotion))
             }
         }
-        .animation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: step)
+        .debugCyclesTurn { if let data { workspace.openTask(step == nil ? data.steps.first ?? data.goal : data.goal) } }
         #if os(macOS)
         // Mac 的浮层挂在页面之外：子任务的状态点、"下一步"读的"交给了哪个会话"在这里补上
         .modifier(WindowCardAgents(workspace: workspace))
@@ -61,7 +61,14 @@ struct TaskBubble: View {
         .observing(services.store, id: request.task, into: $data, onError: workspace.fail) { [task = request.task] in try BubbleData.read(task, from: $0) }
         .onChange(of: data?.gone) { if data?.gone == true { close() } }
         .onChange(of: data?.focus(step).id, initial: true) { edit(data?.focus(step)) }
-        .onChange(of: live, initial: true) { if let live { step = live.step } }
+        // 翻页时编辑跟着在同一次更新里换好：等焦点变了再换的话，旧页先撤、新页晚一次更新才插进来，气泡先塌下去再长出来
+        .onChange(of: live, initial: true) {
+            guard let live, live.step != step || editing == nil else { return }
+            withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) {
+                step = live.step
+                edit(data?.focus(step))
+            }
+        }
         .onDisappear { editing?.leave() }
     }
 

@@ -67,6 +67,23 @@ extension View {
     }
     #endif
 
+    /// `-CuePadTurnCycle YES`（配录屏）：就绪后把这一处的切页来回翻几遍（"更多"里的移到项目、任务气泡的子任务、搜索的范围），
+    /// 第四下落在上一下的弹簧中途（中途反向）。`turn` 是界面上点那一下调的同一条路。
+    func debugCyclesTurn(_ turn: @escaping @MainActor () -> Void) -> some View {
+        #if DEBUG
+        task {
+            guard DebugScene.defaults.bool(forKey: "CuePadTurnCycle") else { return }
+            // 每步之前停多久是录屏的节奏
+            for pause in [3.0, 1.5, 1.5, 0.1, 1.5, 1.5] {
+                guard await Task.wait(for: .seconds(pause)) else { return }
+                turn()
+            }
+        }
+        #else
+        self
+        #endif
+    }
+
     /// `-CuePadHelpOpen YES`：问号的说明一出现就点开，同点一下问号（推入转场里栏在动，等它停下再量钮的框）。
     func debugOpensHelp(_ open: @escaping @MainActor () -> Void) -> some View {
         #if DEBUG

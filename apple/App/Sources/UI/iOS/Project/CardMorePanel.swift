@@ -39,7 +39,7 @@ private struct CardMorePanel: View {
 
     var body: some View {
         ScrollView {
-            Group {
+            TurnStack {
                 if moving {
                     projects.transition(Motion.turn(from: .trailing, reduceMotion: reduceMotion))
                 } else {
@@ -50,6 +50,7 @@ private struct CardMorePanel: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .clipped()
+        .debugCyclesTurn { flip(!moving) }
     }
 
     private func flip(_ to: Bool) {

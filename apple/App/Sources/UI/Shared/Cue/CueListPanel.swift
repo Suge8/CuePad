@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Cue 的两张清单弹层（记忆 `CueMemoryPage`、定时 `CueSchedulePage`）共用的壳：Mac 是 480 宽的窗口内浮层，手机是整屏 sheet。
 /// 顶上不写标题（`title` 只给读屏与多任务），右上一颗问号，点开一句说明的气泡；底部浮着玻璃输入胶囊，列表从它后面透过；空时正中是空态。
-/// Mac 的问号是浮层右上与关闭并排的淡底圆钮（`HelpButton`）；手机的在 sheet 的系统导航栏里（`BarHelpButton`，气泡画在 sheet 自己那一层）。
+/// Mac 的问号是浮层右上与关闭并排的淡底圆钮（`HelpButton`）；手机的在 sheet 的系统导航栏里（`BarHelpButton`，系统 popover）。
 struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
     let title: String
     let help: String
@@ -62,7 +62,7 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
-                    ToolbarItem(placement: .primaryAction) { BarHelpButton(id: "cueList.help") { CueListHelp(text: help) } }
+                    ToolbarItem(placement: .primaryAction) { BarHelpButton { CueListHelp(text: help) } }
                 }
         }
         .presentationDetents([.large])

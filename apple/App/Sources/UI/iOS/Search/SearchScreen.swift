@@ -16,7 +16,7 @@ struct SearchScreen: View {
     static let prompt = String(localized: "搜索灵感、任务与会话")
 
     var body: some View {
-        Group {
+        TurnStack {
             switch scope {
             // 换范围同全 App 的切页（`Motion.turn`）：灵感与任务在左、会话在右
             case .cards: CardSearchResults(query: $query) { scopes }.transition(Motion.turn(from: .leading, reduceMotion: reduceMotion))
@@ -31,6 +31,7 @@ struct SearchScreen: View {
             SearchCapsule(query: $query.text, focusRequests: workspace.searchFocusRequests).frame(width: fieldWidth)
         }) { EmptyView() }
         .onChange(of: query.text, initial: true) { sessions.query = query.text }
+        .debugCyclesTurn { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { scope = scope == .cards ? .sessions : .cards } }
         .onAppear { if query.text.isEmpty { query.text = DebugHooks.preset.searchText } }
     }
 
@@ -41,7 +42,7 @@ struct SearchScreen: View {
 
     /// 范围：结果最上面那排胶囊的头一块（`SearchScopePanes`，同 Mac ⌘K 的那一组）。
     private var scopes: some View {
-        SearchScopePanes(scope: $scope).frame(height: Self.scopeHeight)
+        SearchScopePanes(scope: $scope).frame(height: Self.scopeHeight).turnSteady()
     }
 
     private static let scopeHeight: CGFloat = 36
