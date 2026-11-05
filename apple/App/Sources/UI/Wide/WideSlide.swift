@@ -12,9 +12,12 @@ import UIKit
 ///
 /// 块整个平移只对得上一种对齐：页按终点的宽排过，居中的阅读栏、靠右的钮、随会话条让出的栏头字，各自离块左缘的距离都变了。
 /// 所以块里每一层另按自己补（`Positions`）：排之前记下各层离块左缘多远，排完再量一次，差多少就叠一段同曲线的偏移从旧处回到新处，
-/// 页里的东西不论怎么对齐都从自己的旧位置连续走到新位置，不用页声明谁按什么对齐。层按对象认（SwiftUI 排版前后沿用同一个层），排完才有的层随它的上一层走。
+/// 页里的东西不论怎么对齐都从自己的旧位置连续走到新位置，不用页声明谁按什么对齐。层按对象认（SwiftUI 排版前后沿用同一个层）；
+/// 排完才有的层（宽了才放得下的计时、横滑区里新露出的卡）没有旧位置可滑，随它的上一层走、等别的快落定才淡入（`SlideCurve.appear`）：
+/// 不然它这一下就在终点，挡在还在滑过来的字前面。
 /// 没画内容的层（容器、裁剪区、纯色与圆角的底）宽也从旧宽走到新宽：卡片的底跟着它里面的字一起收放，横滑区不把从旧处滑来的列裁掉。
-/// 画了内容的层（文字、图）宽直接到位——拉伸位图会把字压扁；文字的断行这一下就换成终点的。只补横向：竖向因换行而变的直接到位。
+/// 画了内容的层（文字、图）宽直接到位——拉伸位图会把字压扁；文字的断行这一下就换成终点的。变宽的那些滑动期间另挂一层遮罩，露出的宽同曲线从旧宽走到新宽
+/// （`reveals`）：按终点排宽的一行字不越出还在长的卡片、伸进旁边那一列，滑完撤掉。只补横向：竖向因换行而变的直接到位。
 /// 否决的方案（数据见 docs/layout.md「宽屏开合」）：逐帧排版（栏宽逐帧动画，或逐帧把栏宽交给页）——主线程每帧按当时的宽重排整页，掉帧、长圈；
 /// 页内一个 SwiftUI 布局动画——每帧照样重摆懒加载列表、按插值的尺寸重画文字，开头几帧被终点那一次排版堵住，SwiftUI 画的部分一帧跳完。
 enum WideSlide {
@@ -27,6 +30,12 @@ enum WideSlide {
     static func slide(_ layer: CALayer, _ keyPath: String, by distance: CGFloat, key: String) {
         guard !reduceMotion, abs(distance) >= SlideCurve.rest else { return }
         layer.add(SlideCurve(distance: distance).offset(keyPath), forKey: key)
+    }
+
+    /// 排完才有的层：先不显，同一次滑动快落定时淡入。
+    static func appear(_ layer: CALayer, key: String) {
+        guard !reduceMotion, layer.opacity > 0 else { return }
+        layer.add(SlideCurve(distance: -CGFloat(layer.opacity)).appear("opacity"), forKey: key)
     }
 
     private static var reduceMotion: Bool {
@@ -62,10 +71,29 @@ enum WideSlide {
         /// 排完之后：每一层从记下的旧处滑到此刻的新处，扣掉上一层已经叠上的那段（偏移随层树相加）；没记过的层随上一层走。
         func follow(in root: CALayer, key: String) {
             guard !WideSlide.reduceMotion else { return }
-            follow(root, at: 0, carried: 0, key: key)
+            var masked: [(layer: CALayer, mask: CALayer)] = []
+            CATransaction.begin()
+            CATransaction.setCompletionBlock {
+                for (layer, mask) in masked where layer.mask === mask { layer.mask = nil }
+            }
+            follow(root, at: 0, carried: 0, fading: false, key: key, masked: &masked)
+            CATransaction.commit()
         }
 
-        private func follow(_ layer: CALayer, at x: CGFloat, carried: CGFloat, key: String) {
+        /// 画了内容、变宽了的层：挂一层从旧宽长到新宽的遮罩（左缘对齐，同一条曲线）。已经有遮罩的不动（那是页自己的）。
+        private static func reveal(_ layer: CALayer, from width: CGFloat, key: String) -> CALayer? {
+            let growth = layer.bounds.width - width
+            guard growth >= SlideCurve.rest, layer.mask == nil else { return nil }
+            let mask = CALayer()
+            mask.backgroundColor = CGColor(gray: 0, alpha: 1)
+            mask.anchorPoint = .zero
+            mask.frame = CGRect(origin: layer.bounds.origin, size: layer.bounds.size)
+            WideSlide.slide(mask, "bounds.size.width", by: -growth, key: key)
+            layer.mask = mask
+            return mask
+        }
+
+        private func follow(_ layer: CALayer, at x: CGFloat, carried: CGFloat, fading: Bool, key: String, masked: inout [(layer: CALayer, mask: CALayer)]) {
             for sublayer in layer.sublayers ?? [] where Self.shown(sublayer) {
                 let left = x + sublayer.frame.minX - layer.bounds.minX
                 let before = lefts[ObjectIdentifier(sublayer)]
@@ -74,7 +102,10 @@ enum WideSlide {
                 let grows = before.map { $0.width - sublayer.bounds.width }.flatMap { Self.stretches(sublayer) ? $0 : nil } ?? 0
                 WideSlide.slide(sublayer, "bounds.size.width", by: grows, key: key + ".w")
                 WideSlide.slide(sublayer, "position.x", by: wanted - carried + sublayer.anchorPoint.x * grows, key: key)
-                follow(sublayer, at: left, carried: wanted, key: key)
+                if let before, !Self.stretches(sublayer), let mask = Self.reveal(sublayer, from: before.width, key: key + ".reveal") { masked.append((sublayer, mask)) }
+                // 新层只在最外那一层淡入，里面的随它
+                if before == nil, !fading { WideSlide.appear(sublayer, key: key + ".fade") }
+                follow(sublayer, at: left, carried: wanted, fading: fading || before == nil, key: key, masked: &masked)
             }
         }
     }
@@ -181,6 +212,19 @@ private struct SlideCurve {
         var time = 0.0
         while Double(distance) * remaining(time) > Double(rest) { time += 0.005 }
         return time
+    }
+
+    /// 离终点还剩这么多时才开始淡入（`appear`）：前面那截别的东西还在大步挪。
+    private static let appearsAt = 0.15
+
+    /// 同 `offset`，但离终点剩 `appearsAt` 之前一直停在 `distance`（不透明度叠上 -1 就是不显），之后随曲线回到 0。
+    func appear(_ keyPath: String) -> CAKeyframeAnimation {
+        let animation = offset(keyPath)
+        animation.values = animation.values?.map { value in
+            let left = (value as? CGFloat ?? 0) / distance
+            return distance * min(1, left / Self.appearsAt)
+        }
+        return animation
     }
 
     /// 叠加在模型值上的一段偏移：从 `distance` 按曲线回到 0。不写起点：同一次提交里加的动画都从那次提交起，几段一起开始、一起结束；
