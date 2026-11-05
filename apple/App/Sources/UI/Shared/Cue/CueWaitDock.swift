@@ -23,7 +23,6 @@ struct CueWaitDock: View {
     @Environment(Workspace.self) private var workspace
     #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.chatHeight) private var chatHeight
     @Environment(\.pageActive) private var active
     /// 读屏停在哪件的"第几件"上（`CueWaitEyebrow`）：换一件时卡按件换身份（叠边里上浮、旧卡飞出的转场靠它），读屏的焦点随旧卡一起没了，
     /// 换完由卡把焦点放到新那件的这一格（`CueWaitCard.step`）。记在这里不记在卡里：旧卡走了它还在。
@@ -71,7 +70,9 @@ struct CueWaitDock: View {
         waiting.firstIndex { $0.id == pick.id }.map { CueWaitPick(waits: waiting, index: $0) } ?? CueWaitPick(waits: [pick.wait], index: 0)
     }
 
-    /// 来了从输入框后面升起（`RiseBehind`）；都答完让出的高一下到位、卡浮在原处淡掉：对话里接着长出这一问与你的回答，对话一次滑到终位。
+    /// 来了从输入框后面升起（`RiseBehind`）；都答完让出的高一下到位、卡浮在原处淡掉：对话里同一次更新接着长出这一问与你的回答，让出的与长出的相抵，对话一次到终位。
+    /// 不像会话页的整卡那样沉回去（`DockedCard`）：沉的那 0.25 秒里让出的高一点点收，长出的那段却当帧就在，对话先一下顶上去一截再往回落
+    /// （#36 实测：浮着淡掉当帧挪 7.5 点，沉回去当帧顶上 85 点再落回 74 点）。
     /// 换一件时新的从叠边里上浮一截淡入，旧的滑走的往那边飞出、其余原地淡掉（底边对齐叠放）。减弱动态效果时来也只淡入。卡与下面输入框的间距在卡里（`below`）。
     /// 卡上有字、有回答框，进场不缩放（理由同 `BubblePlacement.transition`；Mac 上缩放还让回答框的 AppKit 文本框每帧按缩放重报尺寸，SwiftUI 报 min <= max 不成立）。
     var body: some View {
@@ -88,7 +89,7 @@ struct CueWaitDock: View {
         // 叠边按卡的整高垫在后面：滑卡时露出的是后一件的纸，不跟着卡动、不随换卡进出
         .background { if shown != nil { deck } }
         .opacity(floats ? level : 1)
-        .modifier(RiseBehind(shown: floats ? (waiting.isEmpty ? 0 : 1) : level, floats: floats, limit: chatHeight / 2))
+        .modifier(RiseBehind(shown: floats ? (waiting.isEmpty ? 0 : 1) : level, floats: floats))
         .onChange(of: current?.id, initial: true) { old, new in follow(animated: old != new) }
         .onChange(of: active) { if active { watching = .now } }
         .debugSettling(moving || leaving)

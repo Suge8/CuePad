@@ -16,6 +16,9 @@ extension View {
     /// `hidden` 时这一排整排让开（左边的返回、中间、右边连同各自的玻璃一起淡到透明、不可点、读屏跳过，同一个 `Motion.fade`）；
     /// 占的高度不变，内容的边距不跟着变（会话页看历史时用，见 `ChatFollow.showsHeader`）；左缘右滑返回照常（`BarFade`）。
     /// 给了 `reveal` 时让开的那一条仍接点按，点它整排一起回来。标题同时是读屏、返回菜单与多任务切换器里的名字。
+    /// 中间那块玻璃随内容定宽，内容换了宽（会话页状态那一行）玻璃当帧换宽（#36 未解）。试过的修法都抬高了开销：
+    /// 玻璃连同字连续换宽——玻璃里每有一段动画主线程就连着忙一两秒，会话页状态轮播时唤醒约为改前的三倍；
+    /// 只长不缩（记下排过的最宽当下限）——静置时渲染服务的指令多四成；玻璃铺满两侧圆钮之间；按最宽的样子固定占位。
     func floatingHeader<Detail: View, Trailing: View>(
         _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil, wording: [String] = [],
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
@@ -201,9 +204,7 @@ private struct BarFade: UIViewControllerRepresentable {
             let alpha: CGFloat = hidden ? 0 : 1
             DebugHooks.barFaded(hidden, navigation: navigationController)
             guard animated else { return bar.alpha = alpha }
-            UIView.animate(withDuration: Motion.Fade.duration, delay: 0, options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction]) {
-                bar.alpha = alpha
-            }
+            Motion.Fade.animate { bar.alpha = alpha }
         }
     }
 }
