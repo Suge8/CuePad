@@ -62,14 +62,8 @@ enum DebugHooks {
         #endif
     }
 
-    /// 会话条重设计原型（`-CuePadRailProto A`，`RailProto`）：不给是现状；只在 Debug 读。
-    static let railProto: Bool = {
-        #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadRailProto") == "A"
-        #else
-        false
-        #endif
-    }()
+    #if os(macOS)
+    #endif
 
     static let preset: Preset = {
         #if DEBUG

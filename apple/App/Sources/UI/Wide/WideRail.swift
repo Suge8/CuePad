@@ -1,12 +1,16 @@
 import CueStore
 import SwiftUI
 
-/// 宽屏左栏（会话条）：导航只在这一处。从上到下是顶上那一组（侧栏钮、搜索；iPad 还有 Cue 钮）、项目与进展（选中是"主区此刻放的就是它"）、
-/// 等你与推进中（`SessionRail`）、更早，Mac 最底下一行（技能与规则、设置、额度）。尺寸全在 `Chrome`。
-/// 收起与展开同一套排法（`Chrome` 头注释）：每一行行首是一格（图标），名字在它右边，收起时淡去、名字改在悬停提示里（`railTip`）；
-/// Mac 红绿灯那一排两种宽都空着留给红绿灯。展开时多出来的只有名字、个数与额度，格一个都不挪。
+/// 宽屏左栏（会话条）：导航只在这一处。从上到下是去处（项目、进展、更早，选中是"主区此刻放的就是它"）、等你与推进中（`SessionRail`）、
+/// Mac 最底下一行（技能与规则、设置、额度）；iPad 顶上另有一组钮（侧栏钮、搜索、Cue 钮）。尺寸全在 `Chrome`。
+/// 收起与展开同一套排法（`Chrome` 头注释）：每一行行首是一格（图标、状态标），名字在它右边，收起时淡去、名字改在悬停提示里（`railTip`）。
+/// 展开时多出来的只有名字、读数与额度，格一个都不挪。
+/// Mac 的窗口最顶那一排（`Chrome.band`）不归会话条：那一排整窗是一块连续的桌面底，会话条的底色从它下面才开始，开合钮钉在红绿灯右边（`SidebarToggle`），
+/// 两种宽下不动、也没有会话条与主区的分界可骑。搜索是这一页的操作，在主区栏头右端（`SearchSlot`）。
 /// 宽 `Chrome.rail`，不能拖：它是每个自动收起临界宽的一项（`WideMetrics`），拖宽要么逐帧挪三栏（违背 Mac 开合不逐帧挪位置），要么只拖一条线、松手才变，换来的只是二十来点。
 /// 会话条上的钮不带玻璃：会话条是一整块实底的栏，钮平放在上面，悬停、按下同行的淡底（`RowStyle`）；玻璃圆钮留给浮在内容上的栏头。
+/// 被否决的：开合钮与搜索放在会话条顶上一行（占一整行，搜索与会话条无关）；开合钮做成玻璃圆钮（收起时跨过会话条与主区的分界，圆底压在那条边上）；
+/// 图标条放宽到装得下开合钮（要 132 以上，中轴离开中间那颗红绿灯，每个临界宽都跟着变）。
 struct WideRail: View {
     let width: CGFloat
     #if os(iOS)
@@ -20,78 +24,100 @@ struct WideRail: View {
     private var wide: Bool { width == Chrome.rail }
 
     var body: some View {
-        if DebugHooks.railProto {
-            #if os(iOS)
-            RailProto(width: width, cue: cue)
-            #else
-            RailProto(width: width)
-            #endif
-        } else {
-            current
-        }
-    }
-
-    private var current: some View {
         VStack(spacing: Chrome.groupGap) {
-            #if os(macOS)
-            Color.clear.frame(height: Chrome.band - Chrome.groupGap)
-            #endif
+            #if os(iOS)
             RailGroup {
                 RailIcon(icon: .sidebar, help: "显示或隐藏侧栏（⌃⌘S）") { workspace.toggleSidebar() }
-                search
-                #if os(iOS)
+                RailIcon(icon: .search, help: "搜索") { workspace.openSearch() }
                 if let cue { CueButton(fits: cue.fits, shown: cue.shown).frame(width: Chrome.control, height: Chrome.control) }
-                #endif
             }
+            #endif
             RailGroup {
                 RailRow(title: "项目", icon: .folder, selected: workspace.shownPane == .projects, wide: wide) { workspace.selectPane(.projects) }
                 RailRow(title: "进展", icon: .task, selected: workspace.shownPane == .progress, wide: wide) { workspace.selectPane(.progress) }
+                RailEarlier(wide: wide)
             }
             SessionRail(data: services.liveSessions.rail, form: wide ? .wide : .narrow,
                         marked: Set(workspace.shownSessions.compactMap(\.sessionID)), pulse: workspace.pulse) { session, opening in
                 workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .beside : .main)
             }
-            RailEarlier(wide: wide)
             #if os(macOS)
             tools
             #endif
         }
+        #if os(macOS)
+        .padding(.top, Chrome.railTop)
+        .frame(width: width)
+        .background(alignment: .bottom) { palette.sidebar.padding(.top, Chrome.band) }
+        #else
         .frame(width: width)
         .background(palette.sidebar)
-    }
-
-    private var search: some View {
-        #if os(macOS)
-        RailIcon(icon: .search, help: "搜索（⌘K）") { workspace.searching.toggle() }
-            .disabled(!workspace.isLibraryReady)
-        #else
-        RailIcon(icon: .search, help: "搜索") { workspace.openSearch() }
         #endif
     }
 
     #if os(macOS)
-    /// 最底下一行：技能与规则、设置两格并排在中轴两边，展开时右边接着额度（点开明细气泡；收起时额度在菜单栏面板）。
+    /// 最底下一行：技能与规则、设置两格并排在中轴两边，展开时额度靠右、右沿同行尾的读数（点开明细气泡；收起时额度在菜单栏面板）。
     /// 归档、回收站在项目列表末尾（`ProjectShelf`），新建项目在项目列表顶上。
     private var tools: some View {
         HStack(spacing: Chrome.cellGap) {
             RailIcon(icon: .instruction, help: "技能与规则") { workspace.show(.library) }
             RailIcon(icon: .settings, help: "设置（⌘,）") { SettingsPane.open() }
-            if wide { SidebarQuota() }
             Spacer(minLength: 0)
+            if wide { SidebarQuota().padding(.trailing, Chrome.edge + Chrome.pad - Chrome.pairEdge) }
         }
-        .padding(.leading, (Chrome.strip - 2 * Chrome.control - Chrome.cellGap) / 2)
+        .padding(.horizontal, Chrome.pairEdge)
         .padding(.bottom, Chrome.pad)
     }
     #endif
 }
 
-/// 会话条上的一组（顶上那几颗钮、项目与进展、更早）：左沿在 `Chrome.edge`，右沿跟着会话条的宽；里面的行与格靠左排，行首那一格在条的中轴上。
-/// 等你与推进中的纸同这一套（`SessionRail`）。
+#if os(macOS)
+/// 会话条的开合钮（⌃⌘S）：窗口最顶那一排、红绿灯右边的一格（`Chrome.toggle`），会话条展开、收起都不动（同备忘录、访达）。
+/// 无底的图标，悬停、按下是这一格的淡底（`PressStyle(.button)`，同系统工具栏的图标钮）。这一排整窗是一块连续的底（`WideRail` 头注释），
+/// 收起时它伸进主区栏头那一段也不骑在任何边上；主区栏头左边让出它（`MainWindow` 给 `headInset`）。
+struct SidebarToggle: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button { workspace.toggleSidebar() } label: {
+            Image(.sidebar).font(Glyph.control).foregroundStyle(palette.ink2)
+                .frame(width: Chrome.control, height: Chrome.control)
+                .contentShape(.rect)
+        }
+        .buttonStyle(PressStyle(.button))
+        .help(Text("显示或隐藏侧栏（⌃⌘S）"))
+        .accessibilityLabel(Text("显示或隐藏侧栏"))
+        .padding(.leading, Chrome.toggle)
+        .frame(height: Chrome.band)
+    }
+}
+
+/// 搜索（⌘K）：主区栏头右端、"⋯"左边的一颗玻璃圆钮（Mac 的惯例：工具栏右端是这一页的操作与搜索）。
+/// 浏览页与辅助页的栏头（`MainColumn`）、看板那一排、会话栏头（`WideSessionTitle`）都有；并排两个会话时只在左半的栏头上，一个窗口只一颗。
+struct SearchSlot: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        Button("搜索", icon: .search) { workspace.searching.toggle() }
+            .labelStyle(.iconOnly)
+            .buttonStyle(ControlButtonStyle(kind: .circular))
+            .help("搜索（⌘K）")
+            .disabled(!workspace.isLibraryReady)
+    }
+
+    /// 栏头右端让给它的宽：钮前那道缝与圆钮。
+    static let reserve = Spacing.item + ControlMetrics.height
+}
+#endif
+
+/// 会话条上的一组（去处、iPad 顶上那几颗钮）：左沿在 `Chrome.edge`，右沿跟着会话条的宽；里面的行与格靠左排，行首那一格在条的中轴上，
+/// 行与行之间一道缝（`Spacing.hair`，同各组的会话）。
 struct RailGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Chrome.cellGap) { content }.modifier(RailGroupModifier())
+        VStack(alignment: .leading, spacing: Spacing.hair) { content }.modifier(RailGroupModifier())
     }
 }
 
@@ -105,11 +131,11 @@ struct RailGroupModifier: ViewModifier {
     }
 }
 
-/// 会话条上的一行：行首一格（`lead`，`Chrome.control` 见方），右边是名字等（`rest`），收起时淡去、行就只剩那一格。
+/// 会话条上的一行：行首一格（`lead`，`Chrome.control` 宽、`height` 高），右边是名字等（`rest`），收起时淡去（`Motion.fade`）、行就只剩那一格。
 /// 名字叠在行上、不参与排版：收起时它要的最小宽（省略号、行尾留白）会把行撑宽，整组跟着往左偏。
 struct RailLine<Lead: View, Rest: View>: View {
     let wide: Bool
-    /// 组头矮一些（`Chrome.groupHeader`）。
+    /// 组头矮一些（`Chrome.groupHeader`），等你组的会话高一档（`Chrome.tallRow`）。
     var height = Chrome.control
     @ViewBuilder let lead: Lead
     @ViewBuilder let rest: Rest
@@ -118,14 +144,15 @@ struct RailLine<Lead: View, Rest: View>: View {
         lead.frame(width: Chrome.control, height: height)
             .frame(maxWidth: .infinity, minHeight: height, alignment: .leading)
             .overlay(alignment: .leading) {
-                HStack(spacing: Spacing.tight) { rest }
+                HStack(spacing: Spacing.glyph) { rest }
                     .padding(.leading, Chrome.control)
                     .padding(.trailing, Spacing.item)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .opacity(wide ? 1 : 0)
+                    .animation(Motion.fade, value: wide)
             }
             .clipped()
-        .contentShape(.rect)
+            .contentShape(.rect)
     }
 }
 
@@ -172,7 +199,7 @@ struct RailIcon: View {
     }
 }
 
-/// 会话条上的"更早"：已结束的会话（`PiSessionList.earlier`，正在唤醒的在推进中；已结束的只在这里与搜索），同项目、进展一种行，写个数。
+/// 会话条上的"更早"：已结束的会话（`PiSessionList.earlier`，正在唤醒的在推进中；已结束的只在这里与搜索），排在去处一组的进展下面、同一种行，写个数。
 /// 点它在主区打开"更早"那一页（`Route.earlier`，`EarlierPage`，三端同一页）；个数与那一页读同一个查询，两边对得上。没有已结束的会话时置灰。
 struct RailEarlier: View {
     let wide: Bool
@@ -184,23 +211,21 @@ struct RailEarlier: View {
     var body: some View {
         let total = total ?? 0
         let selected = workspace.mainRoute == .earlier
-        RailGroup {
-            Button { workspace.show(.earlier) } label: {
-                RailLine(wide: wide) {
-                    Image(.session).font(Glyph.control).foregroundStyle(selected ? palette.ink : palette.ink2)
-                } rest: {
-                    Text("更早").font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
-                    Spacer(minLength: 0)
-                    Text(total, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
-                }
-                .railTip(wide ? nil : Dotted(String(localized: "更早"), total.formatted()).visible)
+        Button { workspace.show(.earlier) } label: {
+            RailLine(wide: wide) {
+                Image(.session).font(Glyph.control).foregroundStyle(selected ? palette.ink : palette.ink2)
+            } rest: {
+                Text("更早").font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
+                Spacer(minLength: 0)
+                Text(total, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
             }
-            .buttonStyle(RowStyle(selected: selected, cell: true))
-            .disabled(total == 0)
-            .accessibilityLabel(Text("更早"))
-            .accessibilityValue(Text(total, format: .number))
-            .accessibilityAddTraits(selected ? .isSelected : [])
+            .railTip(wide ? nil : Dotted(String(localized: "更早"), total.formatted()).visible)
         }
+        .buttonStyle(RowStyle(selected: selected, cell: true))
+        .disabled(total == 0)
+        .accessibilityLabel(Text("更早"))
+        .accessibilityValue(Text(total, format: .number))
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .observing(services.store, id: services.speech, into: $total, onError: workspace.fail) { [moment = services.speech] store in
             try PiSessionList.earlier(PiSessionQuery(limit: 1), at: moment, from: store).total
         }
