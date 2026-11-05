@@ -60,7 +60,7 @@ struct BoardColumn: View {
     @ViewBuilder private var lane: some View {
         #if os(iOS)
         if row {
-            BoardRowLane(column: column, count: board.count(column), targeted: lit, rewind: adding && column == .todo ? board.todo.first?.id : nil) {
+            BoardRowLane(column: column, count: board.count(column), targeted: lit, rewind: rewind) {
                 if adding && column == .todo { newTask.transition(.opacity) }
             } content: {
                 content
@@ -79,7 +79,7 @@ struct BoardColumn: View {
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
-            .modifier(LaneAnchor(column))
+            .modifier(LaneAnchor(column, rewind: rewind))
             .boardLane(column)
             .boardTopRow(column: column, count: board.count(column))
             .background { BoardLane(targeted: lit) }
@@ -87,7 +87,7 @@ struct BoardColumn: View {
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
-            .modifier(LaneAnchor(column))
+            .modifier(LaneAnchor(column, rewind: rewind))
             .boardLane(column)
             .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
             .overlay(alignment: .top) {
@@ -99,6 +99,9 @@ struct BoardColumn: View {
             .background { BoardLane(targeted: lit) }
         #endif
     }
+
+    /// 打开添加任务时待办回到开头（行滑到首格，列滚回顶）：添加那一行在待办最前，滚过的列要把它带进视野。
+    private var rewind: UUID? { adding && column == .todo ? board.todo.first?.id : nil }
 
     /// 更早做完的展开着没有（给了 `earlier` 读写它，否则这一列自己那一份）。
     private var showsEarlier: Binding<Bool> { earlier ?? $ownEarlier }
@@ -263,14 +266,24 @@ extension TaskBoard {
 /// 按偏移量留着的话原来看着的那张卡滑出视野。这里记下可视区正中的那张卡（`scrollTargetLayout` 的直接子视图，即各列 `ForEach` 的身份），
 /// 内容一变由滚动视图自己把它留在正中（系统的 `scrollPosition`，不读几何回写）。身份的类型随列：待办、已完成是任务（`TaskBoard.Item.id`），
 /// 推进中、等你是会话与任务混排的那一份（`AdvancingSlot.id`、`TaskBoard.Held.id`）。
+/// 给了 `rewind`（打开添加任务）就滚回顶边：添加那一行插在列顶，留在原来那张卡上它就落在视野上方；回顶边不回首卡，它在首卡之上。
 private struct LaneAnchor: ViewModifier {
+    let rewind: UUID?
     @State private var position: ScrollPosition
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(_ column: TaskBoard.Column) {
+    init(_ column: TaskBoard.Column, rewind: UUID?) {
+        self.rewind = rewind
         _position = State(initialValue: column.light ? ScrollPosition(idType: UUID.self) : ScrollPosition(idType: String.self))
     }
 
-    func body(content: Content) -> some View { content.scrollPosition($position, anchor: .center) }
+    func body(content: Content) -> some View {
+        content
+            .scrollPosition($position, anchor: .center)
+            .onChange(of: rewind) {
+                if rewind != nil { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { position.scrollTo(edge: .top) } }
+            }
+    }
 }
 
 /// 已完成列点开的成果图（`BoardShot`）：一页只这一列挂全屏预览。
