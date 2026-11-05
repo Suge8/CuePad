@@ -4,7 +4,7 @@
 # 描述文件全机一份：生成到最后一个签名步骤（归档导出、真机构建）持着签名锁（_lock.sh 规则 3），上传与安装不在锁里。
 # testflight 打包前确认部署完成：docs/release.md「待部署到生产」没有条目、CloudKit 生产结构不缺字段（ck-production.sh，Mac 发版也跑）；
 # 门铃与实时活动中转打包前、归档后各核对一次（check_relay）。
-# 上传后在这个提交上打 ios/<构建号> 标签：release-mac.sh 据它核对发版顺序（docs/release.md「发版顺序」）。
+# 上传后在这个提交上打 ios/<构建号> 标签并推到远端：release-mac.sh 据它核对发版顺序（docs/release.md「发版顺序」），也是这一版源码的唯一记号。
 # 前提：docs/release.md。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -44,7 +44,9 @@ case "$mode" in
     signing_end
     # 上传走 altool（xcodebuild 的 destination=upload 用 API 密钥时会报"账号凭据过期"）
     xcrun altool --upload-app -f "$OUT/export/CuePad.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
-    git -C "$APPLE_DIR" tag "ios/${versions[1]#CURRENT_PROJECT_VERSION=}"
+    tag="ios/${versions[1]#CURRENT_PROJECT_VERSION=}"
+    git -C "$APPLE_DIR" tag "$tag"
+    git -C "$APPLE_DIR" push -q origin "$tag"
     echo "已上传 ${versions[*]}，App Store Connect 处理完成后出现在 TestFlight"
     python3 "$APPLE_DIR/scripts/testflight.py" group
     ;;
