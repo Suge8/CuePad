@@ -9,19 +9,19 @@ struct NarrowNavigation {
     var sidebarOpen = false
 }
 
-/// 宽屏只有主区的去处：浏览落点（从偏好推出）、辅助页、一个会话，或并排两个会话（⌘ 点开的第二个在右半边，`beside`）。
+/// 宽屏只有主区的去处：浏览落点（项目列表或进展，从偏好推出）、别的页（项目页也是从列表进去的一页）、一个会话，或并排两个会话（⌘ 点开的第二个在右半边，`beside`）。
 /// 右边一直是 Cue，不进导航：它收没收起是用户的选择（`AppSettings.cueOpen`），放不下时浮出是这一刻的呈现（`Workspace.cueFloats`）。
 /// 同一个会话最多在一边，回复草稿仍按会话 id 由 AppSettings 持有。
 struct WideNavigation {
     enum Main {
-        /// 浏览去处直接引用持久选择，不再复制项目 id 与分段。
+        /// 浏览落点直接引用持久选择（`browseRoute`），不复制分段。
         case browse
         case session(SessionRoute)
         case page(Route)
 
         init(_ route: Route) {
             switch route {
-            case .shelf, .progress, .project, .cue: self = .browse
+            case .shelf, .progress, .cue: self = .browse
             case .session(let session): self = .session(session)
             default: self = .page(route)
             }
@@ -95,6 +95,15 @@ extension Workspace {
         }
     }
 
+    /// 主区此刻放的是项目｜进展的哪一段（会话条那两行的选中）：项目列表与从它进去的项目页都算"项目"，别的页与会话不算。
+    var shownPane: NavigationPane? {
+        switch mainRoute {
+        case .shelf, .project: .projects
+        case .progress: .progress
+        default: nil
+        }
+    }
+
     var besideSession: SessionRoute? {
         if case .wide(let state) = navigation { state.beside } else { nil }
     }
@@ -103,9 +112,10 @@ extension Workspace {
     var sidebarRoute: Route { navigationPane == .projects ? .shelf : .progress }
     var browseRoute: Route { Self.browseRoute(services.settings) }
 
+    /// 「项目」只表示项目列表：上次看的项目只决定新记灵感默认进哪（`AppSettings.currentProject`），不决定落点。
     static func browseRoute(_ settings: AppSettings) -> Route {
         switch settings.navigationPane {
-        case .projects: settings.currentProject.map(Route.project) ?? .shelf
+        case .projects: .shelf
         case .progress: .progress
         }
     }
@@ -120,14 +130,13 @@ extension Workspace {
         }
     }
 
+    /// 记下浏览分段，与新记灵感默认进的项目（看过的最后一个项目）。
     func remember(_ route: Route) {
         switch route {
         case .project(let id):
             services.settings.navigationPane = .projects
             services.settings.currentProject = id
-        case .shelf:
-            services.settings.navigationPane = .projects
-            services.settings.currentProject = nil
+        case .shelf: services.settings.navigationPane = .projects
         case .progress: services.settings.navigationPane = .progress
         default: break
         }

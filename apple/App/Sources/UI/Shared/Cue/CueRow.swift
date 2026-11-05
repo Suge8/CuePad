@@ -9,7 +9,7 @@ struct CueSegment: View, Equatable {
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.rows.map(\.key) == b.rows.map(\.key) }
 
-    /// 新到的淡入挂在插进来的那一格上（`equatable()` 外面）：挂在格子里面的过渡不会播。各格用 `equatable()` 包着，带时间的一格也只是一个子视图（`ChatRows` 按一格一个认）。
+    /// 新到的淡入挂在插进来的那一格上（`equatable()` 外面）：挂在格子里面的过渡不会播。各格用 `equatable()` 包着，带时间的一格也只是一个子视图（`ChatRows` 按一格一个认，`CueRow` 的时间与内容在它自己的竖排里）。
     var body: some View {
         ChatRows(ids: rows.map(\.row.id), spacing: 0) {
             ForEach(rows, id: \.row.id) { row in
@@ -48,8 +48,15 @@ struct CueRow: View, Equatable {
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
 
+    /// 时间与内容排进同一个竖排：并列的两个视图在外面的修饰（`equatable()`、`benchSpot`、过渡）下会被叠到同一处。
     var body: some View {
-        if let stamp { ChatTimeMarker(date: stamp).padding(.top, CuePage.stampAbove) }
+        VStack(alignment: .leading, spacing: 0) {
+            if let stamp { ChatTimeMarker(date: stamp).padding(.top, CuePage.stampAbove) }
+            item
+        }
+    }
+
+    private var item: some View {
         content
             .overlay(alignment: .topLeading) {
                 CueUnreadDot(unread: unread).alignmentGuide(.leading) { [straddlesDot] in

@@ -1,5 +1,5 @@
 extension Workspace {
-    /// NavigationLink 和系统返回直接写路径；项目书架的链接也要更新持久浏览落点。
+    /// NavigationLink 和系统返回直接写路径；书架的链接也要记下浏览分段与新记灵感默认进的项目（`remember`）。
     func setNarrowPath(_ next: [Route]) {
         guard layout == .narrow else { return }
         if let route = next.last { remember(route) }
