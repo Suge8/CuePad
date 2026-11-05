@@ -5,7 +5,8 @@ import SwiftUI
 /// 主窗口：左栏（会话条，`WideRail`，导航只在这一处）、主区（浏览页、辅助页、一个会话或并排两个，`MainColumn`）、右边一直是 Cue（`CueColumn`）。
 /// 三栏各自的栏头都排在窗口最顶那一排（红绿灯那一排，`Chrome.band`），同一基线；窗口工具栏只留一条空的，给这一排定高、把红绿灯放在它中线上。
 /// 尺寸与自动收起只在 `WideMetrics`。Cue 收起后右上一颗 Cue 钮（`CueButton`），它压在最右那一块的栏头右端，那一块的栏头让出它（`headInset`）。
-/// 收起的 Cue 仍挂着（对话、滚动位置都在），只是藏起；放不下时点 Cue 钮，它从右边浮出、盖在主区上（`Workspace.cueFloats`）。
+/// 收起的 Cue 仍挂着（对话、滚动位置都在），只是藏起。放不下时它住进窗口右缘的抽屉（`drawer`，`Workspace.cueDrawer`），点 Cue 钮拉出、盖在主区上，
+/// 开着时右上不再画 Cue 钮；一个时刻只挂一份 Cue 页，窗口跨过放得下的临界宽时换到另一处、重建一次。
 /// 资料库读不出时整窗只有一张"读不出资料库"的卡（`CatalogGate` 挂在三栏外面，同启动时打不开库、同 iOS 的整窗）：三栏都读它，每栏各放一张就是一屏两三张一样的卡；
 /// 会话条也收起——点进去的哪一页都读不出，一屏只留重试这一个焦点。
 struct MainWindow: View {
@@ -36,8 +37,6 @@ struct MainWindow: View {
     private var columns: some View {
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
-            let floats = sizes.floats
-            let shown = sizes.cueShown
             let trail = sizes.cue == 0 ? CueButton.reserve : Spacing.page
             HStack(spacing: 0) {
                 WideRail(width: sizes.rail)
@@ -54,14 +53,21 @@ struct MainWindow: View {
                 Spacer(minLength: 0)
             }
             .overlay(alignment: .trailing) {
-                WideColumnHost(slot: .cue, focus: focus, origin: geometry.size.width - WideMetrics.cue, width: WideMetrics.cue, shape: sizes.shape, hidden: !shown) {
-                    CueColumn(shown: shown)
+                if sizes.cueFits {
+                    WideColumnHost(slot: .cue, focus: focus, origin: geometry.size.width - WideMetrics.cue, width: WideMetrics.cue, shape: sizes.shape, hidden: sizes.cue == 0) {
+                        CueColumn(fits: true).environment(\.pageActive, sizes.cue > 0)
+                    }
+                    .frame(width: WideMetrics.cue)
+                } else {
+                    // 抽屉里同样嵌在自己的托管视图里：栏头在标题栏那一排，在窗口的托管视图里时 Cue 页的滚动区伸到标题栏底下，系统在那一截盖上滚动边缘效果、栏头看不见（`ColumnHostingView`）
+                    Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) {
+                        WideColumnHost(slot: .cue, focus: focus, origin: 0, width: WideMetrics.cue, shape: WideMetrics.Shape(rail: 0, cue: WideMetrics.cue)) { CueColumn(fits: false) }
+                            .frame(width: WideMetrics.cue)
+                    }
                 }
-                .frame(width: WideMetrics.cue)
-                .background { if floats { palette.desk.elevation(.panel) } }
             }
             .overlay(alignment: .topTrailing) {
-                if sizes.cue == 0 { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
+                if !workspace.cueShown(sizes) { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
             }
         }
     }

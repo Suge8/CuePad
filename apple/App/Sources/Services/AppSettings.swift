@@ -31,7 +31,6 @@ final class AppSettings {
         static let currentProject = "currentProject"
         static let railExpanded = "railExpanded"
         static let cueOpen = "cueOpen"
-        static let boardRailExpanded = "boardRailExpanded"
     }
 
     @ObservationIgnored let defaults: UserDefaults
@@ -56,12 +55,10 @@ final class AppSettings {
 
     /// 窄屏侧栏与宽屏主区共用的项目｜进展选择。
     var navigationPane: NavigationPane { didSet { defaults.set(navigationPane.rawValue, forKey: Key.navigationPane) } }
-    /// 宽屏会话条的用户选择；窗口不够宽时只改变呈现，不写这个值。
+    /// 宽屏会话条的用户选择（只有这一份，不随主区放着什么页变）；窗口不够宽时只改变呈现，不写这个值。
     var railExpanded: Bool { didSet { defaults.set(railExpanded, forKey: Key.railExpanded) } }
     /// 宽屏右边的 Cue 开着（用户点 Cue 页头收起、点右上的 Cue 钮放回）；窗口放不下时只改呈现，不写这个值。
     var cueOpen: Bool { didSet { defaults.set(cueOpen, forKey: Key.cueOpen) } }
-    /// 宽屏主区放着看板时会话条的用户选择（同 `railExpanded`，看板与别处各记一份，规则在 `WideMetrics`）：默认收成图标条——看板的推进中、等你两列与会话条列的是同一批会话。
-    var boardRailExpanded: Bool { didSet { defaults.set(boardRailExpanded, forKey: Key.boardRailExpanded) } }
 
     /// 本机最后一次看每个 Pi 会话的时间（按 sessionID），判断"有新回复"（`PiUnread`）；只留最近看的 `seenLimit` 个。
     private(set) var sessionSeen: [String: Date] { didSet { defaults.set(sessionSeen, forKey: Key.sessionSeen) } }
@@ -184,7 +181,6 @@ final class AppSettings {
         navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .projects
         railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
         cueOpen = defaults.object(forKey: Key.cueOpen) as? Bool ?? true
-        boardRailExpanded = defaults.object(forKey: Key.boardRailExpanded) as? Bool ?? false
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (defaults.data(forKey: Key.replyDrafts).flatMap { try? JSONDecoder().decode([UUID: SavedDraft].self, from: $0) } ?? [:])
             .mapValues(ReplyDraftSlot.init)

@@ -3,7 +3,7 @@ import AppKit
 import CueStore
 
 /// 宽屏自动阈值（`-CuePadBench interact` 的最后一段）：三种主区（看板、一个会话、并排两个会话）各在两道临界宽度上下 1 点来回改窗口宽（同人拖窗口边的那一下）：
-/// 会话条自动收起（`WideMetrics.railThreshold`，256 ↔ 80）与 Cue 自动收成钮（`cueThreshold`）。每一下按 `measure` 的口径量回合、指令与掉帧，行里另记：
+/// 会话条自动收起（`WideMetrics.railThreshold`，256 ↔ 98）与 Cue 自动收成钮（`cueThreshold`）。临界宽不随主区放什么变，三种主区量的是同一下里各页重排的开销。每一下按 `measure` 的口径量回合、指令与掉帧，行里另记：
 /// - `railPt`、`cue`：停下后会话条的宽与 Cue 露没露着，`railOK` 是这两样都对，`crossed` 是这一下真的跨过了阈值（会话条换了宽或 Cue 换了样；反向那一项是主区真的滑起来了）；
 ///   `stateOK`：偏好（会话条开合、Cue 开合、项目｜进展、当前项目）、主区去处与各份草稿都没被改；`page`：页面没被重建、每块停在中段读的那一项还在眼前（`WidePage`；ok、验不了的 untested、没保住的 broken，`pageUntested` 列出验不了的滚动视图，哪一栏第几个、为什么），
 ///   `pages` 是逐栏的判定、锚点、跨阈值前后离顶与离底的距离、锚点离可视区正中多远、锚点的框与可视区（窗口坐标）。除了验不了，任一项不对 `perf-mac.sh` 判失败；
@@ -27,14 +27,12 @@ extension InteractionBench {
         WideCase(name: "双会话+Cue", sessions: 2),
     ]
 
-    /// 摆成这种组合：主区回进展的看板、Cue 开着，再按组合把 `sessions` 的前一两份开在主区（第二份并排）。
-    /// 会话条在看板与别处都选宽版（`Workspace.railExpanded`）：看板上默认是图标条、没有可跨的会话条阈值，量的是在看板上选了宽版的那种。
+    /// 摆成这种组合：主区回进展的看板、会话条选宽版、Cue 开着，再按组合把 `sessions` 的前一两份开在主区（第二份并排）。
     static func arrange(_ item: WideCase, in workspace: Workspace, sessions: [String]) {
         let ids = sessions.prefix(2).map { PiSessionState.recordID(sessionID: $0) }
         workspace.services.settings.navigationPane = .progress
         workspace.services.settings.cueOpen = true
         workspace.services.settings.railExpanded = true
-        workspace.services.settings.boardRailExpanded = true
         workspace.selectWide(.progress)
         if item.sessions > 0 { workspace.openSession(ids[0], sessionID: sessions[0], in: .main) }
         if item.sessions > 1 { workspace.openSession(ids[1], sessionID: sessions[1], in: .beside) }
@@ -58,7 +56,7 @@ extension InteractionBench {
         defer { watch.stop() }
         for item in selected {
             arrange(item, in: workspace, sessions: sessions)
-            let threshold = WideMetrics.railThreshold(workspace), cueThreshold = WideMetrics.cueThreshold(workspace)
+            let threshold = WideMetrics.railThreshold(cueOpen: true), cueThreshold = WideMetrics.cueThreshold
             resize(threshold)
             await Task.wait(for: .seconds(1))
             await WidePage.scrollToMiddle(wideColumns(in: view))
@@ -145,7 +143,6 @@ extension InteractionBench {
     /// 改窗口宽不该动的东西：偏好、主区去处与草稿。
     private struct Snapshot: Equatable {
         let rail: Bool
-        let boardRail: Bool
         let cue: Bool
         let pane: NavigationPane
         let project: UUID?
@@ -157,7 +154,7 @@ extension InteractionBench {
     private static func snapshot(_ workspace: Workspace, ids: [UUID]) -> Snapshot {
         let settings = workspace.services.settings
         return Snapshot(
-            rail: settings.railExpanded, boardRail: settings.boardRailExpanded, cue: settings.cueOpen, pane: settings.navigationPane, project: settings.currentProject,
+            rail: settings.railExpanded, cue: settings.cueOpen, pane: settings.navigationPane, project: settings.currentProject,
             main: workspace.mainRoute, beside: workspace.besideSession?.id,
             drafts: ids.map { settings.replyDraft(for: $0).text } + [workspace.cue.draft.text])
     }
@@ -215,7 +212,7 @@ private extension NSView {
     var windowFrame: CGRect { convert(bounds, to: nil) }
 }
 
-/// 宽屏阈值测量期间盯着两样（`measureWide`）：窗口被改成不是测量要的宽（记下当时的调用栈），主区去处、两道临界宽与两个开合偏好的每一次变化（开盯时的那一份不算变化，不记）。
+/// 宽屏阈值测量期间盯着两样（`measureWide`）：窗口被改成不是测量要的宽（记下当时的调用栈），主区去处、两个开合偏好与抽屉的每一次变化（开盯时的那一份不算变化，不记）。
 /// 各带离开始多少毫秒，攒到下一行测量里（`drain`）。
 @MainActor final class WideWatch {
     var expected: CGFloat
@@ -234,7 +231,7 @@ private extension NSView {
         }
         task = Task { [weak self] in
             for await state in Observations({
-                "\(workspace.mainRoute) 收会话条\(Int(WideMetrics.railThreshold(workspace))) 收Cue\(Int(WideMetrics.cueThreshold(workspace))) 会话条\(workspace.sidebarOpen) Cue\(workspace.services.settings.cueOpen) 浮\(workspace.cueFloats)"
+                "\(workspace.mainRoute) 会话条\(workspace.sidebarOpen) Cue\(workspace.services.settings.cueOpen) 抽屉\(workspace.cueDrawer)"
             }).dropFirst() { self?.note(state) }
         }
     }

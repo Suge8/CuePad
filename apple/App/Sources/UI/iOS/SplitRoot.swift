@@ -4,24 +4,21 @@ import SwiftUI
 
 /// iPad 宽屏（宽窗）：会话条（`WideRail`，导航只在这一处）、主区（浏览页、辅助页、一个会话或并排两个）、右边一直是 Cue。尺寸与自动收起同 Mac（`WideMetrics`）。
 /// 主区与 Cue 的页自己画页顶（`floatingHeader`）；会话页上面是会话的栏头（`WideSessionTitle`），项目页上面一排写项目名与介绍（`WideProjectHeading`，页里不另写）。
-/// Cue 钮一直在会话条顶上那一排（`CueButton`）：露着时点了收起，收着时放回（放不下时从右边浮出、盖在主区上）；收起的 Cue 仍挂着，只是藏起。
+/// Cue 钮一直在会话条顶上那一排（`CueButton`）：露着时点了收起，收着时放回；收起的 Cue 仍挂着，只是藏起。
+/// 放不下时 Cue 住进窗口右缘的抽屉（同 Mac 的 `MainWindow`，`Workspace.cueDrawer`）：一个时刻只挂一份 Cue 页，跨过临界宽时换处、重建一次。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var focus = WideFocus()
 
     var body: some View {
+        @Bindable var workspace = workspace
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
-            let floats = sizes.cue == 0 && !sizes.cueFits && workspace.cueFloats
-            let shown = sizes.cue > 0 || floats
             HStack(spacing: 0) {
-                WideRail(width: sizes.rail, cue: (sizes.cueFits, shown))
-                WideColumnHost(slot: .main, focus: focus) {
-                    destination(workspace.mainRoute, column: .main)
-                        .environment(\.boardFits, sizes.leading >= WideMetrics.board)
-                }
-                .frame(width: sizes.leading)
+                WideRail(width: sizes.rail, cue: (sizes.cueFits, workspace.cueShown(sizes)))
+                WideColumnHost(slot: .main, focus: focus) { destination(workspace.mainRoute, column: .main) }
+                    .frame(width: sizes.leading)
                 if sizes.split, let beside = workspace.besideSession {
                     WideColumnHost(slot: .beside, focus: focus) { destination(.session(beside), column: .beside) }
                         .frame(width: sizes.main - sizes.leading)
@@ -29,14 +26,12 @@ struct SplitRoot: View {
                 Spacer(minLength: 0)
             }
             .overlay(alignment: .trailing) {
-                WideColumnHost(slot: .cue, focus: focus, hidden: !shown) {
-                    CuePage().countsAsPiViewer()
-                        .environment(\.headerHost, .panel)
-                        .environment(\.pageActive, shown)
-                        .modifier(KeyboardHold())
+                if sizes.cueFits {
+                    WideColumnHost(slot: .cue, focus: focus, hidden: sizes.cue == 0) { cue.environment(\.pageActive, sizes.cue > 0) }
+                        .frame(width: WideMetrics.cue)
+                } else {
+                    Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) { cue.frame(width: WideMetrics.cue) }
                 }
-                .frame(width: WideMetrics.cue)
-                .background { if floats { palette.desk.elevation(.panel) } }
             }
             // 桌面色一处铺满窗口（托管的几块是透明的，`WideColumnController`）：几块只排在安全区里，状态栏那一条与底下横条那一截也要是桌面色
             .background(palette.desk)
@@ -44,6 +39,12 @@ struct SplitRoot: View {
         .railTips()
         .overlay(alignment: .top) { NoticeBanner() }
         .environment(\.wideWindowID, focus.windowID)
+    }
+
+    private var cue: some View {
+        CuePage().countsAsPiViewer()
+            .environment(\.headerHost, .panel)
+            .modifier(KeyboardHold())
     }
 
     @ViewBuilder private func destination(_ route: Route, column: Workspace.Column) -> some View {

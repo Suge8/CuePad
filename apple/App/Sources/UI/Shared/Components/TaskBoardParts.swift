@@ -188,7 +188,7 @@ struct BoardColumn: View {
             .paper(cornerRadius: TaskMetrics.cardRadius)
     }
 
-    /// 空列的占位：空列收窄了（`BoardWidths.compact`），一句话在里面居中折行。
+    /// 空列的占位：一句话在里面居中折行。
     private func empty(_ text: LocalizedStringResource) -> some View {
         Text(text).font(Typography.secondary).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
             .padding(.horizontal, BoardCardMetrics.inset)
@@ -262,7 +262,7 @@ extension TaskBoard {
     }
 }
 
-/// 一列滚到哪按卡记，不按偏移量：列宽一变（会话条换宽、Cue 收起放回、拖窗口跨阈值、列宽换档），标题重新折行、整列内容变高变矮，
+/// 一列滚到哪按卡记，不按偏移量：列宽一变（会话条换宽、Cue 收起放回、拖窗口跨阈值），标题重新折行、整列内容变高变矮，
 /// 按偏移量留着的话原来看着的那张卡滑出视野。这里记下可视区正中的那张卡（`scrollTargetLayout` 的直接子视图，即各列 `ForEach` 的身份），
 /// 内容一变由滚动视图自己把它留在正中（系统的 `scrollPosition`，不读几何回写）。身份的类型随列：待办、已完成是任务（`TaskBoard.Item.id`），
 /// 推进中、等你是会话与任务混排的那一份（`AdvancingSlot.id`、`TaskBoard.Held.id`）。

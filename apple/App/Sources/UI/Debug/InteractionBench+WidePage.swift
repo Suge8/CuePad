@@ -173,11 +173,6 @@ struct WidePage {
         (scroll.documentView?.frame.height ?? 0) - scroll.contentView.bounds.height >= minimumTravel
     }
 
-    /// 栏里各个滚动视图在窗口里的宽，按从左到右（列宽换档换没换宽，`InteractionBench+Board`）。
-    static func widths(in column: WideColumnView) -> [Double] {
-        scrolls(in: column).map { round(visible($0, in: column).width) }
-    }
-
     /// 可视区离文档顶、底多远（文档视图翻没翻转都按看到的顶与底算）。
     private static func ends(of scroll: NSScrollView) -> (top: CGFloat, bottom: CGFloat)? {
         guard let document = scroll.documentView else { return nil }

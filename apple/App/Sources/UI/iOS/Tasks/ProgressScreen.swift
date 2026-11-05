@@ -7,17 +7,14 @@ import SwiftUI
 /// 窄屏那一排是侧栏的（`NarrowSidebarBar`：左边项目范围，右边额度）；宽屏页顶中间一块玻璃（`ProgressHeader`）：项目范围与额度环。
 /// 添加任务是待办头上的"+"、新会话是推进中头上的"+"（`LaneAdd`：竖版看板的行头、四列的列头），页顶不另放新会话。
 /// 看板是流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）；选了项目以后卡上不画项目小图形、列头的数也只数这个项目。
-/// 宽屏（iPad）主栏放得下看板最窄宽（`WideMetrics.board`，`boardFits`）与 iPhone 横屏同 Mac 四列并排（`BoardColumns`）；放不下的主栏（iPad 竖屏、
-/// 11 寸横屏旁边开着 Cue 或会话）与窄屏竖着拿是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点：
-/// 四列压到最窄的 160 时，iPad 的字号下卡上一行只剩两三个字。
-/// 横屏的屏高减去顶栏只剩两百多点，四行连各自的最矮都叠不下；横过来的宽正好排四列。
+/// 宽屏（iPad）与 iPhone 横屏同 Mac 四列并排（`BoardColumns`，主栏放不下四列最窄时整排横滑）；窄屏竖着拿是四行竖排、每行横划的竖版看板（`PhoneBoard`），
+/// 四行一打开都在眼前，不另设落点。横屏的屏高减去顶栏只剩两百多点，四行连各自的最矮都叠不下；横过来的宽正好排四列。
 /// 添加任务去待办、顶上浮出添加那一行（`NewTaskField`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 struct ProgressScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @Environment(\.boardFits) private var boardFits
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var board: TaskBoard?
     @State private var adding = false
@@ -37,7 +34,7 @@ struct ProgressScreen: View {
         let scope = workspace.scopedProject
         let shown = (board ?? .empty).only(scope)
         return Group {
-            if verticalSizeClass == .compact || (sizeClass == .regular && boardFits) {
+            if verticalSizeClass == .compact || sizeClass == .regular {
                 BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject, margin: 12)
             } else {
                 PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)
