@@ -108,6 +108,8 @@ final class Workspace {
     /// 任务行左滑"更多"长出的气泡（`CardMorePanel`）。
     var moreCard: CardMoreRequest?
     #endif
+    /// 进展页待办顶上浮出添加那一行（待办列头、行头的 ＋，`LaneAdd`）。
+    var addsTask = false
     #if os(macOS)
     /// ⌘K 搜索开着（`SearchPalette`）。
     var searching = false
@@ -120,8 +122,6 @@ final class Workspace {
     /// 这台 Mac 上点"开始"没开成会话的叶子与原因（`handOff`）：任务气泡那一行一直写着、给"重试"，再点开始时清掉。
     /// 只记在这台：没开成的开新会话请求过一会儿就清掉（`DeliveryExecutor.retention`），提示条两秒多就收，原因就只剩这里。
     var launchFailures: [UUID: String] = [:]
-    /// 进展页待办顶上浮出添加那一行（待办列头的 ＋）。
-    var addsTask = false
     /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
     var confirmsEmptyTrash = false
     /// 指针此刻停在哪个项目上（侧栏的项目行、看板卡上的项目小图形）：看板上别的项目的卡淡下去（`boardDim`）。侧栏与看板读写这一份。
