@@ -215,7 +215,7 @@ private extension NSView {
     var windowFrame: CGRect { convert(bounds, to: nil) }
 }
 
-/// 宽屏阈值测量期间盯着两样（`measureWide`）：窗口被改成不是测量要的宽（记下当时的调用栈），主区去处、两道临界宽与两个开合偏好的每一次变化。
+/// 宽屏阈值测量期间盯着两样（`measureWide`）：窗口被改成不是测量要的宽（记下当时的调用栈），主区去处、两道临界宽与两个开合偏好的每一次变化（开盯时的那一份不算变化，不记）。
 /// 各带离开始多少毫秒，攒到下一行测量里（`drain`）。
 @MainActor final class WideWatch {
     var expected: CGFloat
@@ -235,7 +235,7 @@ private extension NSView {
         task = Task { [weak self] in
             for await state in Observations({
                 "\(workspace.mainRoute) 收会话条\(Int(WideMetrics.railThreshold(workspace))) 收Cue\(Int(WideMetrics.cueThreshold(workspace))) 会话条\(workspace.sidebarOpen) Cue\(workspace.services.settings.cueOpen) 浮\(workspace.cueFloats)"
-            }) { self?.note(state) }
+            }).dropFirst() { self?.note(state) }
         }
     }
 
