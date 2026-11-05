@@ -4,8 +4,6 @@ import SwiftUI
 /// 离边 `inset`，与外框同心。一直展开时文字区下面只留 `textBottomOpen`，再下面是一格高的那一排；会展开收起的工具排在文字下面，
 /// 至少圆钮的圆高（`slot - 2 * inset`，字号大了工具排折行时随它长高），离底 `inset`，与两颗圆钮同一条中线。
 enum ComposerMetrics {
-    /// 输入框上面叠着的几层（Cue 页的拍板卡）彼此之间与离输入框都隔这么多，纸与玻璃的圆角同 `Radius.field`：底部一套数。
-    static let stackGap: CGFloat = 8
     static let inset: CGFloat = 8
     static let slot: CGFloat = 56
     static let textTop: CGFloat = 17
@@ -20,7 +18,7 @@ enum ComposerMetrics {
 
     /// 两行说明连同离输入框的间隔占多高（字高 `textHeight`）。
     static func noticeClearance(textHeight: CGFloat) -> CGFloat {
-        textHeight + 2 * noticePadding + stackGap
+        textHeight + 2 * noticePadding + Spacing.item
     }
 
     /// 一行字与上下边距合起来的高，至少 `slot`：没露出工具排时圆钮占这么高、居中，与最后一行字同一条中线。
@@ -118,12 +116,12 @@ enum ComposerForm: Equatable {
 }
 
 extension View {
-    /// 叠在这一块上沿之上（隔 `stackGap`）、底边对着上沿往上长，不进排版：挂在上沿一条零高的线上，叠放的东西多高都不改这一块的高。
+    /// 叠在这一块上沿之上（隔 `Spacing.item`，同输入框上面叠着的卡）、底边对着上沿往上长，不进排版：挂在上沿一条零高的线上，叠放的东西多高都不改这一块的高。
     /// 排进来的话它一出一收这一块就当帧变高变矮，浮在它上面的对话跟着跳；对话页上盖住的是对话末尾常驻那一行的位置（`ChatLiveSlot` 按它的高让出），不是内容。
     /// 输入框上方的说明（`composerNotice`）。
     func floatingAbove(@ViewBuilder _ content: () -> some View) -> some View {
         overlay(alignment: .top) {
-            Color.clear.frame(height: 0).overlay(alignment: .bottomLeading) { content().padding(.bottom, ComposerMetrics.stackGap) }
+            Color.clear.frame(height: 0).overlay(alignment: .bottomLeading) { content().padding(.bottom, Spacing.item) }
         }
     }
 

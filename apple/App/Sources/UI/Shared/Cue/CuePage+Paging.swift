@@ -10,7 +10,7 @@ extension CuePage {
     /// `speaker`：这一格是谁的气泡（`CueThread.Row.speaker`），不是气泡为 nil。
     static func gap(before speaker: HorizontalEdge?, joined: Bool) -> CGFloat {
         if joined { return CueBubble.joinedGap }
-        return speaker == .trailing ? 24 : Spacing.block
+        return speaker == .trailing ? Spacing.part : Spacing.block
     }
 
     /// 隔了一阵写时间的那一格：时间上面空多少、时间与这一格之间空多少（`ChatTimeMarker`；排的与估高的同用这两个）。
@@ -46,7 +46,7 @@ extension CuePage {
         // 露哪一件随时会换（`Workspace.cueAsking`）：取几件里最矮的，仍只数少
         let floor = thread.waiting.map { CueWaitCard.floor($0, shots: thread.shots, width: min(size.width, readingWidth) - 2 * inset) }.min() ?? 0
         let dock = min(floor, size.height / 2)
-        return composer + replyPadding + dock
+        return composer + Spacing.replyBottom + dock
         #else
         0
         #endif

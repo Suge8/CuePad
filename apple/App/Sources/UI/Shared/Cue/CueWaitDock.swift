@@ -3,11 +3,11 @@ import SwiftUI
 
 /// 拍板卡：固定在输入框上方的一张纸，Cue 的提问只在这里答（进展页等你列只看，点了来这里；会话在问的也可在会话页答）——与进展页等你列里的拍板同一份（`CueThread.waiting`，出自 `CueStore.cueTally`；待回复不进来，在上方的提示里）：
 /// Cue 的提问与会话在问的同排（等得最久的在前），一次铺开一件：露哪件只记在 `Workspace.cueAsking`（滑卡与小箭头换的写它），不在等了露第一件。
-/// 不止一件时像叠在一起的通知：卡后面露出一两层叠边（`deck`），眉题行写第几件（`CueWaitEyebrow`）；手机上左右滑卡换一件（跟手，甩过或拖过一段就换，
+/// 不止一件时像叠在一起的通知：卡后面露出一层叠边（`deck`），眉题行写第几件（`CueWaitEyebrow`）；手机上左右滑卡换一件（跟手，甩过或拖过一段就换，
 /// 到头了不接），Mac 上点眉题行的小箭头。答完一件，下一件从叠边里顶上来。
 /// 铺开的那件：眉题（`CueWaitEyebrow`）、问句（`CueQuestionLine`）、点名的图、怎么答（`WaitAnswer`，与会话页问题卡同一个；主动作在右下角）。问句是代码按 Cue 写的动作短语写出的
 /// （`CueAsking.question`），不靠 Cue 的措辞；要看细节（Cue 的原话、会话里的来龙去脉）点眉题进任务或会话。对话里不另挂还在等你的提问：同一问同屏只一处。
-/// 圆角、与输入框之间的空同一套（`Radius.field`、`stackGap`）。
+/// 与输入框同宽、同圆角（`Radius.field`）；卡下沿离输入框 `below`，再加叠边那一截。
 /// 卡上只能答：别的话在 Cue 页底下的输入框说，一开口 Cue 的提问就收起（Cue 判断不是在答它会放回）；在挂着它的会话里说也当场收起（见 `CueQuestionEnd`）。没有关掉。
 /// Cue 停用着时卡照样露、Cue 的选项停用并写"启用后再答"（`CueChoices`）。答了等库里那件结束才换下一件。
 struct CueWaitDock: View {
@@ -91,30 +91,24 @@ struct CueWaitDock: View {
         .debugSettling(moving || leaving)
     }
 
-    static let below = ComposerMetrics.stackGap
-    /// 叠边：每层比上一层往下多露这么多、两边各收这么多，至多两层；露得够一眼数出后面还有几件。
-    private static let peek: CGFloat = 9
+    static let below = Spacing.item
+    /// 叠边比卡往下多露这么多、两边各收这么多。只露一层：第几件已写在眉题行，叠边只说后面还有。
+    /// 否决两层：卡下沿要按最多层数一直让着，只有一件时卡离输入框也空出一大截。
+    private static let peek: CGFloat = 8
     private static let tuck: CGFloat = 12
-    private static let layers = 2
 
-    /// 卡后面露出几层叠边：还有几件在等，至多 `layers`。
-    private var behind: Int { min(max(waiting.count - 1, 0), Self.layers) }
-
-    /// 卡后面的叠边：与卡一样高，一层比一层窄、往下多露 `peek`，平时只露出卡下沿那一截。露几层跟着在等的件数，不随滑卡挪；
-    /// 卡下沿让出的位置按最多层数一直留着（`card`，没有时留白）：按件数让的话，来一件、答掉一件拍板卡就变高变矮，浮在上面的对话当帧跳一下。
+    /// 卡后面的叠边：与卡一样高、两边各收 `tuck`、往下多露 `peek`，平时只露出卡下沿那一截；后面还有件才露，不随滑卡挪。
+    /// 卡下沿让出的那一截一直留着（`card`，没有时留白）：按件数让的话，来一件、答掉一件拍板卡就变高变矮，浮在上面的对话当帧跳一下。
     private var deck: some View {
-        ZStack {
-            ForEach((1...Self.layers).reversed(), id: \.self) { layer in
-                Color.clear
-                    .paper(cornerRadius: Radius.field, lifted: true)
-                    .opacity(layer > behind ? 0 : layer == 1 ? 0.85 : 0.6)
-                    .padding(.horizontal, Self.tuck * CGFloat(layer))
-                    .padding(.top, Self.peek * CGFloat(layer))
-                    .padding(.bottom, Self.below + Self.peek * CGFloat(Self.layers - layer))
-            }
-        }
-        .animation(Motion.fade, value: behind)
-        .accessibilityHidden(true)
+        let behind = waiting.count > 1
+        return Color.clear
+            .paper(cornerRadius: Radius.field, lifted: true)
+            .opacity(behind ? 0.85 : 0)
+            .padding(.horizontal, Self.tuck)
+            .padding(.top, Self.peek)
+            .padding(.bottom, Self.below)
+            .animation(Motion.fade, value: behind)
+            .accessibilityHidden(true)
     }
 
     /// 铺开的那件（`CueWaitCard`）垫上纸；手机上左右滑换一件。
@@ -128,7 +122,7 @@ struct CueWaitDock: View {
         #endif
         return card
             .paper(cornerRadius: Radius.field, lifted: true)
-            .padding(.bottom, Self.below + Self.peek * CGFloat(Self.layers))
+            .padding(.bottom, Self.below + Self.peek)
     }
 
     /// 卡浮着、露出的比例当不透明度用：减弱动态效果时与离开时。

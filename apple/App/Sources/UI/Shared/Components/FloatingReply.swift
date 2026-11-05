@@ -9,10 +9,9 @@ import SwiftUI
 /// `backed`：这一块铺页底色、盖住身后的对话（Mac）；手机上回复框是玻璃、卡是纸，对话在它们周围清楚可见，不铺。
 ///
 /// 键盘只经系统的安全区让，两页同一套：对话与这一块的底边是安全区底边，键盘弹出时就是键盘顶（第三方键盘长高、换键盘、下拖收起都由系统跟着键盘的动画走），
-/// 这一块离键盘或安全区底边 `gap`。键盘高在排版里量，不经焦点状态：外接键盘有焦点也没有软键盘。
+/// 这一块离键盘或安全区底边（Mac 是栏底）`Spacing.replyBottom`，各页不另加。键盘高在排版里量，不经焦点状态：外接键盘有焦点也没有软键盘。
 struct FloatingReply<Chat: View, Reply: View>: View {
     var backed = true
-    var gap: CGFloat = ChatLayout.replyGap
     @ViewBuilder let chat: Chat
     @ViewBuilder let reply: Reply
     @Environment(\.palette) private var palette
@@ -27,7 +26,7 @@ struct FloatingReply<Chat: View, Reply: View>: View {
                 let page = room.bounds(of: .named(floatingReplyPage))?.maxY ?? room.size.height
                 let keyboard = room.size.height - page
                 reply
-                    .padding(.bottom, gap)
+                    .padding(.bottom, Spacing.replyBottom)
                     // 对话区可见的高：透到上安全区里（页头、状态栏底下也是对话）的那段连同算；下边不算，键盘弹出时那是键盘，盖住的不可见。
                     // 与键盘高同在这一遍排版里定，不写回状态
                     .environment(\.chatHeight, page + room.safeAreaInsets.top)

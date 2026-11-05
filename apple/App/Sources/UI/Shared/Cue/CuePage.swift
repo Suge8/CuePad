@@ -34,10 +34,6 @@ struct CuePage: View {
 
     static let readingWidth = Spacing.reading
     static let inset = Spacing.page
-    #if os(macOS)
-    static let replyPadding = Spacing.replyBottom
-    #else
-    #endif
 
     private var cue: CueWatch { workspace.cue }
     private var catchingUp: Bool { services.isCatchingUp(on: cue.hostID) }
@@ -59,7 +55,7 @@ struct CuePage: View {
     #if os(macOS)
     private var page: some View {
         HStack(spacing: 0) {
-            FloatingReply(gap: Self.replyPadding) {
+            FloatingReply {
                 chat
             } reply: {
                 bottom
@@ -172,7 +168,7 @@ struct CuePage: View {
                 CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, shots: thread.shots, open: { opened = $0 }, moving: $docking)
                     .padding(.leading, railInset)
                 // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
-                if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, ComposerMetrics.stackGap).transition(.opacity) }
+                if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, Spacing.item).transition(.opacity) }
             }
             // 宽屏没启用时不放输入框：主区底部已有记下灵感的那一条（`CaptureSlot`），一屏只留一个；这一栏只剩启用那一张（`CueWelcome`）
             if cue.canHear || workspace.layout == .narrow {

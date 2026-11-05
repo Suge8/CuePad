@@ -36,10 +36,11 @@ nonisolated enum Spacing {
     static let vacant: CGFloat = 120
     /// 页面内容离工具栏下沿（只 Mac：手机的页顶那一排自己让出内容，`floatingHeader`）。
     static let pageTop: CGFloat = 24
-    /// 回复框（会话的、对 Cue 说）与它上面的拍板卡离栏底。
-    static let replyBottom: CGFloat = 16
     /// 对话的阅读栏最宽（会话、Cue、设置这类读的一列）：长回答一行不至于太长，气泡也不挤；两侧仍离栏边 `page`。
     static let reading: CGFloat = 760
+    /// 浮在对话底上的那一块（回复框、对 Cue 说，连同叠在上面的卡）离对话区底边，各页只经 `FloatingReply` 用它：
+    /// Mac 是栏底，与主区底部那一条同高；手机与 iPad 是安全区底边，键盘弹出时是键盘顶，那里已有系统留的边、只隔一条缝。
+    static let replyBottom: CGFloat = 16
     #else
     static let inset: CGFloat = 16
     static let panel: CGFloat = 16
@@ -47,5 +48,6 @@ nonisolated enum Spacing {
     static let section: CGFloat = 24
     static let vacant: CGFloat = 40
     static let reading: CGFloat = 640
+    static let replyBottom: CGFloat = 8
     #endif
 }
