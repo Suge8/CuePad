@@ -6,9 +6,11 @@ import SwiftUI
 /// - 开着时铺一层接点按的底，盖在整窗上（会话条、提示横幅、iPad 的别的栏都在它下面）：手指一落在浮出外面就关，
 ///   那一下不落到下面（点外面是"关掉它"，不是点了下面那张卡）；收起那一下就撤（`transition(.identity)`），紧接着的点按照常落到下面。
 ///   页里长开的面板在这一层下面：它报来自己的框（`ModalHost.hole`），底在那一块开个洞，面板自己接点按。
-/// - 读屏：浮窗开着时背后整窗不进读屏；页里长开的面板由所在的页藏起旁边的（`FloatingHeader`、`NarrowCue`）。
+/// - 读屏：浮窗开着时背后整窗不进读屏；页里长开的面板由所在的页藏起旁边的（`FloatingHeader`、`NarrowCue`），iPad 上 Cue 那一块以外的由 `SplitRoot` 藏，窗口的气泡由 `panelHost` 藏。
 ///   浮出标为模态，开时读屏从它读起，关后焦点回到长出它的那颗钮（#68）。
-/// 气泡（`PanelStyle.bubble`）不是模态：点外面关、那一下照常落到下面（`BubbleLayer`）；右缘抽屉的点外面关在它自己那一层（`DrawerLayer`）。
+/// 气泡（`PanelStyle.bubble`）不是模态：点外面关、那一下照常落到下面（`BubbleLayer`）。
+/// 宽屏两侧的抽屉（Cue 的 `CueDock`、会话条的 `RailDrawer`）点外面关在它们自己的 `DrawerCatcher`，不并进这里：抽屉两端共用（Mac 也是它），这里只编进 iOS；
+/// 抽屉里还会长开名牌，两个同时开着，这里一次只开一个、后开的顶掉先开的，并进来开名牌就会关掉抽屉。名牌开着时两层都在：点抽屉外，先由这里接住、只收名牌。
 @Observable
 final class ModalHost {
     /// 开着的那一个：一个窗口一次只一个。

@@ -31,7 +31,6 @@ Mac 看板这一页上的看板⇄会话与 Cue 面板开合是 `InteractionBenc
 
 宽屏开合（会话条、Cue、跨临界宽，做法在 [layout.md](layout.md)「宽屏开合」）量两样，缺一不可：
 - 主线程开销：`xc.sh perf ab <旧> <新> 3 mac 1 -CuePadInteractOnly "侧栏收起,侧栏展开,Cue 收起,Cue 放回"`，再加宽屏阈值那几项（`宽屏收窄·…`、`宽屏展开·…`、`宽屏反向·…`、`Cue 收钮·…`）。比指令、掉帧与动作后点击那一圈之外最长的一圈（`interact.jsonl` 的 `heavy`，偏移大于 0 的那几项）；点击那一圈有时拆成两圈（第一圈很轻、隔十几毫秒才是排版那一圈），两圈加起来才是它。
-  「Cue 露出·会话+Cue」在大库上的页面判定改前就失败（Cue 从抽屉回到右边那一下重建，`scrollGone`），有它在时 `perf ab` 会中途退出，阈值那几项分别在两个检出里跑 `xc.sh perf mac 2 …` 再对比。
   「宽屏反向」的每帧位移（`SlideSampler` 在主线程取样）在大库上常读成 128 或 256：主线程忙的那几帧漏采，2026-11 改前改后一样（9 次里 5、6 次），跳没跳以录屏为准。
 - 屏上每样东西是不是连续地走：`xc.sh rec mac -- -CuePadDemo YES … -CuePadWindowSize 1512x900 -CuePadSidebarCycle YES`（`fast` 中途反向；`-CuePadRightCycle` 开合 Cue；`-CuePadWideReverse <组合>` 跨临界宽，窗口起在临界宽上），
   再用 `apple/scripts/frame-track.py`（用法在它的头注释）逐帧量三类东西的左缘：左对齐的（栏头字、看板第一列）、居中的（会话与项目页的阅读栏、回复框、输入条）、靠右的（搜索与"⋯"）。每段单调、没有反向步才算过；`fast` 看按下那一下前后位置是否连着。
@@ -41,6 +40,10 @@ Mac 看板这一页上的看板⇄会话与 Cue 面板开合是 `InteractionBenc
 2026-11-05 改成按元素补位时（与 main 交替 3 轮，后台量，负载 20～34、14 核）：指令大库 +2～7%、演示库 +20～36%（约 100～150M：排版前后各走一遍层树、叠上的动画与遮罩），掉帧每次 0～1 同 main，没有新长圈；
 三页三类元素收起、展开、Cue 收起放回都单调，`fast` 中途反向位置连着。最大单步随距离：会话条开合（挪 156 点）20～38，Cue 收起放回（挪 200～356 点）30～65；
 合成晚交一帧的那一步到 94～112（同一帧里各样东西进度相同）。录屏、逐帧结果与汇总在检出的 apple/.derived/live-slide/element/（`summary.txt`）。被否决的两种实时排版的数字在 #75。
+- iPad 同样录：`xc.sh rec ipad -- -CuePadDemo YES -CuePadQuiet YES -CuePadLandscape YES … -CuePadSidebarCycle YES`（横屏才放得下会话条；iPad Pro 11 横屏宽 1210，会话条与 Cue 同开放不下，量会话条开合加 `-CuePadCue shut`），坐标同 Mac 按点、2x。
+  2026-11-06 第一次在横屏上量：iPad 上补位原先没生效（SwiftUI 晚一步才把页摆到层上，会话页还晚一次提交，`WideColumnController.lastLayout`），居中与靠右的第一帧先反向跳 128 点；
+  修完会话、看板两页的会话条开合与 Cue 收起放回都单调，`fast` 中途反向位置连着，最大单步会话条（挪 64～256 点）12～56、Cue（挪 200～400 点）30～71。录屏与逐帧在检出的 apple/.derived/cue-host/ipad/（`summary.txt`）。
+  同次与 f50c70dd8 交替 3 轮（Mac，开合 4 项与阈值 12 项，不含改前必失败的「Cue 露出」，负载 22～32）：总指令演示库多数在 ±1% 内（≈），Cue 收钮三页 −8～−15%；大库 +0.4～−14%，点击回合指令最多 −32%，减少集中在 Cue 跨宽、开合不再重建与 Cue 收钮。增加的两项（大库「宽屏收窄·会话+Cue」总指令 +0.4%、「宽屏收窄·双会话+Cue」点击回合指令 +3.6%）都在范围重叠内，没有不带 ≈ 的增加；点击时长只有「宽屏反向·会话+Cue」+40%，同项点击回合指令 −3.7%，是频率。全表在 apple/.derived/cue-host/perf-ab.log。
 
 ### 主区换宽一次
 

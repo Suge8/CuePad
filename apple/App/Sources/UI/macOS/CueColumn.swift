@@ -3,7 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 右边的 Cue（宽 400，`WideMetrics.cue`）：栏头在窗口最顶那一排（`CueTitle`），下面是 Cue 页（`CuePage`），对话到栏头下沿淡出（`fadesUnderHead`）。
-/// 收起时也一直挂着（`MainWindow` 只是藏起它，`pageActive` 为假时暂停订阅与实时状态、不算在看 Cue）；放不下时同一栏住在右缘的抽屉里（`fits` 为假）。
+/// 收起时也一直挂着（`CueDock` 只是藏起它，`pageActive` 为假时暂停订阅与实时状态、不算在看 Cue）；放不下时同一栏就是右缘的抽屉（`fits` 为假）。
+/// 它嵌在自己的托管视图里（`WideColumnHost`）：栏头在标题栏那一排，在窗口的托管视图里时 Cue 页的滚动区伸到标题栏底下，系统在那一截盖上滚动边缘效果、栏头看不见（`ColumnHostingView`）。
 struct CueColumn: View {
     /// 在右边那一栏里（放得下）；假的是在抽屉里。
     let fits: Bool

@@ -18,8 +18,11 @@ enum Bars {
 }
 
 extension View {
-    /// 宽屏那两栏（右边的 Cue、会话）：内容到栏头下沿淡进栏的底色（头注释的例外）。栏头让出的那一截（上安全区：iPad 的页顶那一排在它里面）铺满底色，
-    /// 最下面 `Bars.fade` 那一截淡出；Mac 的内容本来就从栏头下沿开始（没有上安全区），只剩淡出的那一截。`on` 为假时照沉浸式什么都不加。
+    /// 宽屏那两栏（右边的 Cue、会话）：内容到栏头下沿淡进栏的底色（头注释的例外）。栏头让出的那一截（上安全区：iPad 的页顶那一排连同它下面的 `contentGap`）
+    /// 铺满底色到那一排的下沿，从下沿起 `Bars.fade` 那一截淡出；Mac 两栏与 iPad 会话的栏头是页外的一排（没有上安全区），内容从它下沿开始，只剩淡出的那一截。
+    /// 淡出从栏头下沿起、不收在它上面：iPad 的 Cue 名牌带投影，淡出收在名牌后面的话露出来的只剩最后几点，看着仍是一刀。
+    /// Mac 的内容裁在栏头下沿；iPad 不裁：栏头与横条让出的都是安全区，按页的框裁就裁在名牌下沿与横条上沿，对话滚不进去、在那儿一刀切开。
+    /// 滚动区自己伸进安全区、按它自己的框裁，越不出这一栏。
     /// 淡出是盖在内容上的一层底色、不接点按，不是遮罩：两栏的底都是桌面色（`palette.desk`），看起来一样，滚动时不用每帧离屏再合成一遍整栏。
     func fadesUnderHead(_ on: Bool = true) -> some View { modifier(HeadFade(on: on)) }
 }
@@ -31,11 +34,13 @@ private struct HeadFade: ViewModifier {
     func body(content: Content) -> some View {
         if on {
             content
+                #if os(macOS)
                 .clipped()
+                #endif
                 .overlay {
                     GeometryReader { proxy in
                         VStack(spacing: 0) {
-                            palette.desk.frame(height: max(0, proxy.safeAreaInsets.top - Bars.fade))
+                            palette.desk.frame(height: max(0, proxy.safeAreaInsets.top - Bars.contentGap))
                             LinearGradient(colors: [palette.desk, palette.desk.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: Bars.fade)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

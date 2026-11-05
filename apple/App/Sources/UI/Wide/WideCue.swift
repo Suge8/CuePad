@@ -35,3 +35,39 @@ struct CueButton: View {
         if shown { CueAvatar(workspace.cue.beat, size: .row) } else { CueAvatar(workspace.cue.beat, size: .row).relaySpot(cue: .entry) }
     }
 }
+
+/// 宽屏右边的 Cue（Mac 的 `MainWindow`、iPad 的 `SplitRoot` 同一份）：一个窗口任何时刻只挂这一块，放得下时是右边那一栏，放不下时是右缘的抽屉（`Workspace.cueDrawer`），
+/// 只是同一块的两种摆法，窗口跨过临界宽不拆不建：对话、滚动位置、输入框里的话都在。
+/// 摆法只有一个数：露出多宽（`shown`：放得下时是右边那一栏的宽，收起是 0；放不下时抽屉开着是整栏、关着是 0），块的左缘在窗口右缘往里这么远；
+/// 露出 0 时排在窗口右缘外，滑出去落定才藏起（看不见、点不到、⌃Tab 跳过），订阅暂停（`pageActive`）。
+/// 收起与放回、跨过临界宽、抽屉开合都只是这个数变了，同一段渲染端的平移（`WideColumnSlide`）：主区跟着让出时，块的左缘每一帧贴着主区的右缘。
+/// 抽屉的面（`DrawerSurface`）只在放不下时画，画在块里、随块平移；开着时下面先铺一层接点按的透明底（`DrawerCatcher`），盖在主区上，不拿走焦点。
+/// 否决过：放得下与放不下各挂一份（右边一份、抽屉在窗口的浮层那一层一份）——跨过临界宽时拆一份建一份，对话回到最新处、读到一半的位置丢了。
+struct CueDock<Column: View>: View {
+    let sizes: WideMetrics
+    /// 窗口宽。
+    let width: CGFloat
+    let focus: WideFocus
+    /// 块的上沿排在安全区里（iPad 的状态栏底下），抽屉的面往上伸出去这么多，照样铺满整窗高；下沿块自己伸到窗口下缘（`reachesWindowBottom`）。
+    var bleed = EdgeInsets()
+    /// 这一栏：参数是放不放得下（放不下时它在抽屉里）。
+    @ViewBuilder let column: (_ fits: Bool) -> Column
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        let open = !sizes.cueFits && workspace.cueDrawer
+        let shown = sizes.cueFits ? sizes.cue : open ? WideMetrics.cue : 0
+        ZStack(alignment: .trailing) {
+            if open { DrawerCatcher { workspace.hideCue(fits: false) }.transition(.identity) }
+            WideColumnHost(slot: .cue, focus: focus, origin: width - shown, width: WideMetrics.cue, shape: WideMetrics.Shape(rail: 0, cue: shown), hidden: shown == 0) {
+                column(sizes.cueFits)
+                    .modifier(DrawerSurface(shown: !sizes.cueFits, bleed: bleed))
+                    .environment(\.pageActive, shown > 0)
+            }
+            .frame(width: WideMetrics.cue)
+            .reachesWindowBottom()
+            .padding(.trailing, shown - WideMetrics.cue)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+    }
+}

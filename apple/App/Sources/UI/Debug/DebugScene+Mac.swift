@@ -242,10 +242,8 @@ extension DebugScene {
 
     /// 只调整主窗口尺寸，外框样式由壳层创建窗口时决定，这里不碰。
     private static func resizeWindow() {
-        guard let value = defaults.string(forKey: "CuePadWindowSize") else { return }
-        let parts = value.split(separator: "x").compactMap { Double($0) }
-        guard parts.count == 2, let window = mainWindow else { return }
-        window.setContentSize(NSSize(width: parts[0], height: parts[1]))
+        guard let size = windowSize, let window = mainWindow else { return }
+        window.setContentSize(size)
         if offscreen { placeOffscreen(window) } else { window.center() }
     }
 

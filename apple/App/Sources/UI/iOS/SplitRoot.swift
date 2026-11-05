@@ -6,14 +6,17 @@ import SwiftUI
 /// 主区与 Cue 的页自己画页顶（`floatingHeader`）；会话页上面是会话的栏头（`WideSessionTitle`），项目页上面一排写项目名与介绍（`WideProjectHeading`，页里不另写）。
 /// Cue 钮在会话条顶上那一排（`RailTopTools`）：露着时点了收起，收着时放回；收起的 Cue 仍挂着，只是藏起。
 /// 会话条藏起时那一排（侧栏钮、搜索、Cue 钮）原地浮在主区左上角，主区的栏头左边让出它们（`Chrome.headLead`）；放不下时侧栏钮从左缘拉出会话条的抽屉（`RailDrawer`）。
-/// 放不下时 Cue 住进窗口右缘的抽屉（同 Mac 的 `MainWindow`，`Workspace.cueDrawer`）：一个时刻只挂一份 Cue 页，跨过临界宽时换处、重建一次。
+/// 放不下时同一块是窗口右缘的抽屉（同 Mac，`CueDock`，`Workspace.cueDrawer`）：一个窗口只挂这一份 Cue 页，跨过临界宽不重建。
+/// Cue 的名牌长开着（原位的模态浮出，`ModalHost`）时读屏只读 Cue 那一块：宽屏的名牌只长在 Cue 里（Cue 不进主区），右栏与抽屉同一块，
+/// 所以这里把它以外的（主区、会话条与它的抽屉、浮着的那一排、提示横幅）整块藏起；Cue 那一块里由名牌所在的页藏起旁边的（`FloatingHeader`）。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(ModalHost.self) private var modals: ModalHost?
     @Environment(\.palette) private var palette
     @State private var focus = WideFocus()
 
     var body: some View {
-        @Bindable var workspace = workspace
+        let covered = modals?.modal?.inPage == true
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
             HStack(spacing: 0) {
@@ -23,37 +26,33 @@ struct SplitRoot: View {
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
                 }
                 .frame(width: sizes.leading)
+                .reachesWindowBottom()
                 if sizes.split, let beside = workspace.besideSession {
                     WideColumnHost(slot: .beside, focus: focus, origin: sizes.rail + sizes.leading, width: sizes.main - sizes.leading, shape: sizes.shape) {
                         destination(.session(beside), column: .beside)
                     }
                     .frame(width: sizes.main - sizes.leading)
+                    .reachesWindowBottom()
                 }
                 Spacer(minLength: 0)
-            }
-            .overlay(alignment: .trailing) {
-                if sizes.cueFits {
-                    // 收起时排在窗口右缘外：收起、放回是同一段平移（`WideColumnSlide`）
-                    WideColumnHost(slot: .cue, focus: focus, origin: geometry.size.width - sizes.cue, width: WideMetrics.cue, shape: sizes.shape, hidden: sizes.cue == 0) {
-                        cue.environment(\.pageActive, sizes.cue > 0)
-                    }
-                    .frame(width: WideMetrics.cue)
-                    .padding(.trailing, sizes.cue - WideMetrics.cue)
-                } else {
-                    Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) { cue.frame(width: WideMetrics.cue) }
-                }
             }
             // 藏起时顶上那一排原地浮着；放不下时拉出的抽屉里有同一排（同一个位置），抽屉开着就不再浮一份
             .overlay(alignment: .topLeading) { if !workspace.railShown(sizes) { RailTopTools(sizes: sizes, floating: true) } }
             .overlay(alignment: .leading) {
                 if !sizes.railFits { RailDrawer(open: workspace.railDrawer, close: { workspace.railDrawer = false }) { WideRail(width: Chrome.rail, sizes: sizes) } }
             }
+            .readerHidden(covered)
+            // 排在最上：抽屉开着时它与接点按的底盖住浮着的那一排与会话条的抽屉
+            .overlay {
+                CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: 0, trailing: 0)) { _ in cue }
+            }
             .reportsWideFits(sizes, to: workspace)
-            // 桌面色一处铺满窗口（托管的几块是透明的，`WideColumnController`）：几块只排在安全区里，状态栏那一条与底下横条那一截也要是桌面色
+            // 桌面色一处铺满窗口（托管的几块是透明的，`WideColumnController`）：几块的上沿排在状态栏底下，状态栏那一条也要是桌面色
             .background(palette.desk)
         }
-        .overlay(alignment: .top) { NoticeBanner() }
+        .overlay(alignment: .top) { NoticeBanner().readerHidden(covered) }
         .environment(\.wideWindowID, focus.windowID)
+        .onChange(of: covered) { DebugHooks.readerLayers(outsideCue: covered, drawer: workspace.cueDrawer) }
     }
 
     private var cue: some View {

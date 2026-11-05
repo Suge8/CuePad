@@ -202,10 +202,10 @@ enum DebugHooks {
         #endif
     }
 
-    /// 模态浮出开合时窗口那一层哪几块不进读屏（`PanelHostModifier`）：Debug 里往标准错误记一行，验收看这一行（旁白本身不自动化）。
-    static func readerLayers(content: Bool, bubbles: Bool) {
+    /// iPad 上名牌长开、收起时 Cue 那一块以外藏没藏（`SplitRoot`）：Debug 里往标准错误记一行，验收看这一行（旁白本身不自动化）。
+    static func readerLayers(outsideCue: Bool, drawer: Bool) {
         #if DEBUG
-        FileHandle.standardError.write(Data("reader-hidden content=\(content) bubbles=\(bubbles)\n".utf8))
+        FileHandle.standardError.write(Data("reader-hidden outside-cue=\(outsideCue) cue-in-drawer=\(drawer)\n".utf8))
         #endif
     }
     #endif

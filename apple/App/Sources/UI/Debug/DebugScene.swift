@@ -16,7 +16,7 @@ enum ScrollAnchor {
 ///   agent 打开 Agent 整页列表，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`；notes 里你的话带一张图、relay 里发出还没进对话的话带一张图，核对对话里的图片；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；
 ///   iOS 见 `DebugScene+iOS.swift`；
 /// - `-CuePadSearch <关键词>`：search 画面与卡片选择器（`-CuePadComposer cards`）的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；`-CuePadSelect <起点:长度>`：编辑器载入后选中这一段（看选区操作）；
-/// - `-CuePadWindowSize 1280x800`（仅 Mac）：主窗口尺寸（内容铺满标题栏，即整窗尺寸）；`-CuePadSidebar hidden`：宽屏会话条藏起（不给是正式版的默认：开着），`drawer`：窗口放不下会话条时拉出它的左缘抽屉（`-CuePadCue drawer` 同理拉出 Cue 的右缘抽屉）；`-CuePadDrawerCross rail|cue`（仅 Mac）：拉出那个抽屉后反复跨过临界宽来回拖（`DebugScene+Wide.swift`）；`-CuePadBeside <会话>`（仅 Mac）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）；`-CuePadCue shut`：收起右边的 Cue；`-CuePadSidebarCycle YES`（Mac、iPad 宽屏）：就绪后反复开合会话条（录开合的动效），`fast` 在动画中途反向；`-CuePadRightCycle YES|fast`：同样开合右栏（Cue）；`-CuePadWideReverse <组合>`（仅 Mac）：摆好一种主区组合、就绪后反复在会话条自动藏起的临界宽度上反向（录宽屏跨阈值的滑动，`DebugScene+Wide.swift`）；
+/// - `-CuePadWindowSize 1280x800`：主窗口尺寸（Mac 内容铺满标题栏，即整窗尺寸；iPad 只取宽，按这么宽画、尺寸类不变，同台前调度里拖小的宽屏窗口，如横屏 1100x0 看放不下 Cue 时的抽屉，`debugCompact`）；`-CuePadSidebar hidden`：宽屏会话条藏起（不给是正式版的默认：开着），`drawer`：窗口放不下会话条时拉出它的左缘抽屉（`-CuePadCue drawer` 同理拉出 Cue 的右缘抽屉）；`-CuePadDrawerCross rail|cue`（仅 Mac）：拉出那个抽屉后反复跨过临界宽来回拖（`DebugScene+Wide.swift`）；`-CuePadBeside <会话>`（仅 Mac）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）；`-CuePadCue shut`：收起右边的 Cue；`-CuePadSidebarCycle YES`（Mac、iPad 宽屏）：就绪后反复开合会话条（录开合的动效），`fast` 在动画中途反向；`-CuePadRightCycle YES|fast`：同样开合右栏（Cue）；`-CuePadWideReverse <组合>`（仅 Mac）：摆好一种主区组合、就绪后反复在会话条自动藏起的临界宽度上反向（录宽屏跨阈值的滑动，`DebugScene+Wide.swift`）；
 /// - `-CuePadBench <interact|chatscroll|churn>`（量完退出）：interact 是单次交互的点击回合与掉帧，与交互预算比较（Mac 见 `InteractionBench`，iOS 见 `IOSInteractionBench`，`-CuePadInteractOnly 项,项` 只量列出的几项）；
 ///   chatscroll（仅 Mac）是长对话里滚动的每圈主线程 CPU、指令数与掉帧（`ChatScrollBench`；`-CuePadScrollDriver`、`-CuePadScrollPointer` 与方法限制见它的注释）；
 ///   churn（仅 Mac）边加卡边逐点拉宽窗口，查布局反馈环（`layout-stress.sh`）；
@@ -32,7 +32,7 @@ enum ScrollAnchor {
 /// - `-CuePadHelpOpen YES`：页顶与导航栏里的问号一出现就点开说明（`debugOpensHelp`）；`-CuePadQuotaCycle YES`（iOS，配 progress 录屏）：反复点额度钮开浮窗、走点外面那条路关（`cycleQuota`）；
 ///   `-CuePadHeaderHidden YES`、`-CuePadHeaderCycle YES`（iOS，配 session）：会话页顶那一排让开、来回让开与回来（`debugDrivesHeader`）；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；`-CuePadLargestType YES` 同理按最大的辅助字号画，`-CuePadHighContrast YES` 按增强对比度画；
-/// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；`-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘；`-CuePadLandscape YES`（iPhone）：转成横屏；`-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类，窄屏容器 `NarrowRoot`，`debugCompact`），不给时 iPad 的调试实例起来先铺满屏（窗口模式下系统记着别的会话缩过的窗口，`fillScreenOnPad`）；
+/// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；`-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘；横屏由 `xc.sh` 转模拟器（`-CuePadLandscape YES`，见它的头注释）；`-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类，窄屏容器 `NarrowRoot`，`debugCompact`），不给时 iPad 的调试实例起来先铺满屏（窗口模式下系统记着别的会话缩过的窗口，`fillScreenOnPad`）；
 /// - `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的醒来记录与经过一开始就全部展开（`RoundProcess`、`PiSubagentList`、`CueNoteLog`、`CueTrace`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
 /// - `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批（`seedAllKinds`）；每次启动都往 scratch 追加一遍，要从空起配新的 `CUEPAD_SHOT_LIBRARY`；
@@ -68,6 +68,11 @@ enum DebugScene {
         defaults.object(forKey: key) == nil ? fallback : defaults.double(forKey: key)
     }
     static var scene: String? { defaults.string(forKey: "CuePadScene") }
+    /// `-CuePadWindowSize <宽>x<高>`：主窗口尺寸（Mac `resizeWindow`、iPad `debugCompact`）；没给或写错为 nil。
+    static var windowSize: CGSize? {
+        let parts = defaults.string(forKey: "CuePadWindowSize")?.split(separator: "x").compactMap { Double($0) } ?? []
+        return parts.count == 2 ? CGSize(width: parts[0], height: parts[1]) : nil
+    }
     /// 搜索框预填的字：只认启动参数（参数域），不读已存的偏好（`UserDefaults.standard` 是真实的偏好域）。
     static var searchText: String {
         (UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)["CuePadSearch"] as? String) ?? ""

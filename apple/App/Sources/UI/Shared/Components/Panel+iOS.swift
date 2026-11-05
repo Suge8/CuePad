@@ -15,16 +15,8 @@ extension View {
                 self.modifier(BubbleSlot(key: shown.map { AnyHashable($0.id) }, source: source, width: width, close: close) { if let shown { content(shown) } })
             case .sheet:
                 self.sheet(item: item) { content($0).modalPage(close.of($0.id)) }
-            case .drawer:
-                self.presentDrawer(isPresented: Binding { item.wrappedValue != nil } set: { if !$0 { close() } }) {
-                    if let shown = item.wrappedValue { content(shown) }
-                }
             }
         }
-    }
-
-    func presentDrawer(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
-        modifier(DrawerSlot(open: isPresented.wrappedValue, close: ClosePanel { isPresented.wrappedValue = false }, panel: content))
     }
 
     /// sheet 与全屏是盖在上面的一页新的，不吃挂它那一页的页内环境（呈现的内容照样继承呈现处的环境）：
@@ -63,15 +55,6 @@ final class PanelHost {
     }
 
     private(set) var shown: Shown?
-    /// 右缘抽屉（`PanelStyle.drawer`）：挂上就一直在，关着时滑在窗外（`open`）。
-    struct Drawer {
-        let token: UUID
-        let open: Bool
-        let content: AnyView
-        let close: ClosePanel
-    }
-
-    fileprivate(set) var drawer: Drawer?
     /// 这一层（窗口、sheet）的字号：气泡内容按它画，不按呈现处——呈现处可能在一排封了字号的控件里（工具排），气泡里是能放大的说明。
     @ObservationIgnored fileprivate var typeSize = DynamicTypeSize.large
 
@@ -115,30 +98,14 @@ private struct PanelHostModifier: ViewModifier {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     func body(content: Content) -> some View {
-        let reader = ModalReader(modal: modals.modal, drawerOpen: host.drawer?.open == true)
+        let covered = modals.modal != nil
         content
-            // 原位长开的面板（名牌）开着时读屏只读它：长在开着的抽屉里时，抽屉底下的整块不读（抽屉开着时点不到它下面，面板只会在抽屉里）；
-            // 长在页里时由所在的页藏起旁边的（`FloatingHeader`），这里不藏整块，不然连面板一起藏了
-            .readerHidden(reader.coversContent)
             .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
-            .overlay { DrawerLayer(drawer: host.drawer) }
-            // 任何模态浮出开着时，窗口的气泡都不读
-            .overlay { BubbleLayer(shown: host.shown).readerHidden(reader.coversBubbles) }
-            .onChange(of: reader, initial: true) { DebugHooks.readerLayers(content: reader.coversContent, bubbles: reader.coversBubbles) }
-            // 模态浮出盖在这一层的最上面：抽屉里长开的名牌外面、开着的气泡上的一下也由它接住，浮窗开着时抽屉与气泡一起不进读屏
+            // 任何模态浮出开着时，窗口的气泡都不读；浮出外面的页与栏由放它的地方藏（浮窗：`ModalLayers` 整块，名牌：所在的页与 iPad 的 `SplitRoot`）
+            .overlay { BubbleLayer(shown: host.shown).readerHidden(covered) }
+            // 模态浮出盖在这一层的最上面：开着的气泡上、iPad 抽屉里长开的名牌外面的一下也由它接住，浮窗开着时气泡一起不进读屏
             .modifier(ModalLayers(host: modals))
             .environment(host)
-    }
-}
-
-/// 模态浮出开着时，窗口那一层里哪几块不进读屏（浮窗开着时整块由 `ModalLayers` 藏）。
-private struct ModalReader: Equatable {
-    let coversContent: Bool
-    let coversBubbles: Bool
-
-    init(modal: ModalHost.Modal?, drawerOpen: Bool) {
-        coversContent = modal?.inPage == true && drawerOpen
-        coversBubbles = modal != nil
     }
 }
 
@@ -167,60 +134,6 @@ private struct BubbleSlot<Panel: View>: ViewModifier {
         let key: AnyHashable?
         let source: BubbleSource
         let width: BubblePlacement.Width
-    }
-}
-
-/// 一处 `drawer(isPresented:)`：挂上就把内容交给这一层的 `PanelHost`（连同呈现处的环境，同 `BubbleSlot`），走了才收回。
-/// 开合与外观（深浅色、字号、对比度）变了重交一次：内容一直挂着，带的环境不跟着这些变就停在交出去那一刻；类型不变，里面的状态照留。
-private struct DrawerSlot<Panel: View>: ViewModifier {
-    let open: Bool
-    let close: ClosePanel
-    @ViewBuilder let panel: () -> Panel
-    @Environment(PanelHost.self) private var host: PanelHost?
-    @Environment(\.self) private var environment
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var token = UUID()
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: Mode(open: open, scheme: scheme, contrast: contrast, typeSize: typeSize), initial: true) { _, mode in
-                host?.drawer = PanelHost.Drawer(
-                    token: token, open: mode.open,
-                    content: AnyView(panel().modifier(DrawerSurface()).environment(\.pageActive, mode.open).environment(\.closePanel, close.of(token)).environment(\.self, environment)),
-                    close: close)
-            }
-            .onDisappear { if host?.drawer?.token == token { host?.drawer = nil } }
-    }
-
-    private struct Mode: Equatable {
-        let open: Bool
-        let scheme: ColorScheme
-        let contrast: ColorSchemeContrast
-        let typeSize: DynamicTypeSize
-    }
-}
-
-/// 抽屉那一层：开着时先铺一层接点按的透明底（手指落在抽屉外就关，那一下不落到下面；收起那一下就撤，`transition(.identity)`），
-/// 抽屉贴右缘、整窗高；外接键盘的 Esc 同关。
-private struct DrawerLayer: View {
-    let drawer: PanelHost.Drawer?
-
-    var body: some View {
-        ZStack(alignment: .trailing) {
-            if let drawer {
-                if drawer.open {
-                    Color.clear.contentShape(.rect)
-                        .gesture(DragGesture(minimumDistance: 0).onChanged { _ in drawer.close() })
-                        .overlay { Button("关闭") { drawer.close() }.keyboardShortcut(.escape, modifiers: []).opacity(0).readerHidden(true) }
-                        .ignoresSafeArea()
-                        .transition(.identity)
-                }
-                drawer.content.modifier(DrawerSlide(open: drawer.open)).readerHidden(!drawer.open)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
     }
 }
 

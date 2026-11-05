@@ -6,6 +6,7 @@ Debug 认的启动参数只在 `DebugScene.swift`（及同目录 `DebugScene+*.s
 
 截图、录屏用 `xc.sh shot|rec`（首次要给终端屏幕录制权限）。几个场景一次调用拍完：`xc.sh shot ios -- -CuePadScene shelf , -- -CuePadScene cue -theme dark`（一次进锁、构建、装包；外观用 `-theme`，iOS 的模拟器外观随每张切）。源码没变时构建自动跳过。
 
+- iPhone、iPad 横屏加 `-CuePadLandscape YES`：`xc.sh` 起实例前把模拟器的物理朝向横过来（`devicectl device orientation`，不发键鼠事件）。App 自己转不了 iPad：支持多任务的 App，系统按设备朝向定界面方向，不理 `requestGeometryUpdate`。iPad Pro 11 横屏宽 1210，会话条与 Cue 同开放不下，会话条开着的样子要 Cue 收起（`WideMetrics`）。
 - Mac 的 shot、rec、run 期间自动让显示器醒着（`caffeinate -d -u`），不用自己 `caffeinate -u`。
 - Mac 按窗口拍，图的像素是窗口在屏上的像素（1x 屏上与点数相同，Retina 屏上翻倍）。报窗口被缩小显示时是调度中心或台前调度开着：请用户收起，不发系统按键。
 - 后台窗口里的网页过几秒就成空白，截图不可信：用 `-CuePadWebSnapshot`。

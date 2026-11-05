@@ -48,8 +48,15 @@ enum WideSlide {
 
     /// 块里各层离块左缘多远（模型值，排版前记、排完比，`follow`）。藏起与全透明的不记：看不见，排不排都一样。
     /// 握着层本身：这一圈里它们不会被释放、地址不会给了新层而认错。
+    /// 页不一定一次排齐（`WideColumnSlide.layoutPasses`）：补第二遍时只补这一遍新挪的那一截，每层自己已叠上多少记在 `own`，收放宽度、遮罩与淡入每层只做一次。
     struct Positions {
         private var lefts: [ObjectIdentifier: (layer: CALayer, x: CGFloat, width: CGFloat)] = [:]
+        /// 各层自己已叠上的平移（不含上一层的）。
+        private var own: [ObjectIdentifier: CGFloat] = [:]
+        private var resized: Set<ObjectIdentifier> = []
+        private var appeared: Set<ObjectIdentifier> = []
+        /// 第几遍：每遍的动画用自己的键，不顶掉前几遍叠上的。
+        private var pass = 0
 
         init(_ root: CALayer) { visit(root, at: 0) }
 
@@ -68,15 +75,16 @@ enum WideSlide {
             layer.contents == nil && !(layer is CAShapeLayer) && !(layer is CATextLayer)
         }
 
-        /// 排完之后：每一层从记下的旧处滑到此刻的新处，扣掉上一层已经叠上的那段（偏移随层树相加）；没记过的层随上一层走。
-        func follow(in root: CALayer, key: String) {
+        /// 排完之后：每一层从记下的旧处滑到此刻的新处，扣掉上一层已经叠上的那段（偏移随层树相加）与自己前几遍叠上的；没记过的层随上一层走。
+        mutating func follow(in root: CALayer, key: String) {
             guard !WideSlide.reduceMotion else { return }
+            pass += 1
             var masked: [(layer: CALayer, mask: CALayer)] = []
             CATransaction.begin()
             CATransaction.setCompletionBlock {
                 for (layer, mask) in masked where layer.mask === mask { layer.mask = nil }
             }
-            follow(root, at: 0, carried: 0, fading: false, key: key, masked: &masked)
+            follow(root, at: 0, carried: 0, fading: false, key: "\(key).\(pass)", masked: &masked)
             CATransaction.commit()
         }
 
@@ -93,18 +101,22 @@ enum WideSlide {
             return mask
         }
 
-        private func follow(_ layer: CALayer, at x: CGFloat, carried: CGFloat, fading: Bool, key: String, masked: inout [(layer: CALayer, mask: CALayer)]) {
+        private mutating func follow(_ layer: CALayer, at x: CGFloat, carried: CGFloat, fading: Bool, key: String, masked: inout [(layer: CALayer, mask: CALayer)]) {
             for sublayer in layer.sublayers ?? [] where Self.shown(sublayer) {
+                let id = ObjectIdentifier(sublayer)
                 let left = x + sublayer.frame.minX - layer.bounds.minX
-                let before = lefts[ObjectIdentifier(sublayer)]
+                let before = lefts[id]
                 let wanted = before.map { $0.x - left } ?? carried
+                let change = before.map { $0.width - sublayer.bounds.width } ?? 0
+                let resizes = abs(change) >= SlideCurve.rest && resized.insert(id).inserted
                 // 宽从旧宽走到新宽时，图层按锚点收放：位置另补锚点那一份，左缘仍照 `wanted` 走
-                let grows = before.map { $0.width - sublayer.bounds.width }.flatMap { Self.stretches(sublayer) ? $0 : nil } ?? 0
+                let grows = resizes && Self.stretches(sublayer) ? change : 0
                 WideSlide.slide(sublayer, "bounds.size.width", by: grows, key: key + ".w")
-                WideSlide.slide(sublayer, "position.x", by: wanted - carried + sublayer.anchorPoint.x * grows, key: key)
-                if let before, !Self.stretches(sublayer), let mask = Self.reveal(sublayer, from: before.width, key: key + ".reveal") { masked.append((sublayer, mask)) }
+                WideSlide.slide(sublayer, "position.x", by: wanted - carried - (own[id] ?? 0) + sublayer.anchorPoint.x * grows, key: key)
+                own[id] = wanted - carried
+                if resizes, let before, !Self.stretches(sublayer), let mask = Self.reveal(sublayer, from: before.width, key: key + ".reveal") { masked.append((sublayer, mask)) }
                 // 新层只在最外那一层淡入，里面的随它
-                if before == nil, !fading { WideSlide.appear(sublayer, key: key + ".fade") }
+                if before == nil, !fading, appeared.insert(id).inserted { WideSlide.appear(sublayer, key: key + ".fade") }
                 follow(sublayer, at: left, carried: wanted, fading: fading || before == nil, key: key, masked: &masked)
             }
         }
@@ -120,7 +132,7 @@ enum WideSlide {
 /// 会话条自己一直不动（藏起时也照原宽画在主区下面，`WideRail`），看得见的只有主区像一张纸从它上面滑过：
 /// 放回时主区从旧边起往右滑开、露出它；藏起时主区的左边往左滑回来盖住它——图层的左缘就停在终点、只把里面的页（铺满桌面色）按同一条曲线从旧处挪回来
 /// （`bounds.origin.x`），左边还没盖到的那截透出的就是下面的会话条本身，行、字、选中的底都在，不是一块空的底色。
-/// 收起的 Cue 栏排在窗口右缘外（`MainWindow`、`SplitRoot`）：收起、放回同是一段平移，左缘每一帧贴着主区的右缘，滑出去落定才藏起（`park`）。
+/// 收起的 Cue 栏排在窗口右缘外（`CueDock`）：收起、放回、跨过临界宽、抽屉开合同是一段平移，左缘每一帧贴着主区的右缘，滑出去落定才藏起（`park`）。
 final class WideColumnSlide {
     private let slot: WideSlot
     private let apply: (_ hidden: Bool) -> Void
@@ -131,8 +143,17 @@ final class WideColumnSlide {
     private var hidden = false
     /// 滑完再藏起。
     private var hidesWhenLanded = false
-    /// 页里各层排版前的位置，等页按新宽排完（`laidOut`）。
-    private var pending: (positions: WideSlide.Positions, key: String)?
+    /// 页里各层排版前的位置与还要补几遍（`laidOut`）。
+    private var pending: (positions: WideSlide.Positions, key: String, passes: Int)?
+    /// 页里各层还等着页排完来补：页排完要报（`laidOut`）。
+    var awaitsLayout: Bool { pending != nil }
+    /// 页排几次才齐：Mac 的页在一个托管视图里，排一次就齐；iPad 的会话页在导航栈里另有一个托管视图，下一次提交才摆到层上（`WideColumnController.lastLayout`）。
+    /// 不一直补到滑完：有的页滑动期间每帧排两次，每次都走一遍整页的层，主线程在动画里有了活（实测 Mac 大库上宽屏阈值测量随之读不出 Cue 栏的中段）。
+    #if os(macOS)
+    private static let layoutPasses = 1
+    #else
+    private static let layoutPasses = 2
+    #endif
 
     /// `apply`：真的藏起或露出这一块（看不见、点不到、⌃Tab 跳过）。
     init(slot: WideSlot, apply: @escaping (_ hidden: Bool) -> Void) {
@@ -161,14 +182,15 @@ final class WideColumnSlide {
         }
         WideSlide.slide(layer, "bounds.size.width", by: edge, key: "wide.edge.\(turn)")
         WideSlide.slide(layer, "position.x", by: layer.anchorPoint.x * edge, key: "wide.edge.anchor.\(turn)")
-        if previous.width != width { pending = (WideSlide.Positions(page), "wide.page.\(turn)") }
+        if previous.width != width { pending = (WideSlide.Positions(page), "wide.page.\(turn)", Self.layoutPasses) }
     }
 
-    /// 页按新宽排完（托管视图排版之后调）：各层从记下的旧处滑到此刻的新处，同一次提交里起步。
+    /// 页按新宽排完（托管视图排版之后调）：各层从记下的旧处滑到此刻的新处，同一次提交里起步；第二遍只补新挪的（`Positions`）。没排齐就滑完了的作废（`landed`）。
     func laidOut(_ page: CALayer) {
-        guard let pending else { return }
-        self.pending = nil
+        guard var pending else { return }
         pending.positions.follow(in: page, key: pending.key)
+        pending.passes -= 1
+        self.pending = pending.passes > 0 ? pending : nil
     }
 
     /// 藏起或露出（收起的 Cue 仍挂着，只是藏起）。正在滑走时等滑完再藏，露出当即露出。
@@ -182,6 +204,7 @@ final class WideColumnSlide {
     private func landed(_ turn: Int) {
         guard sliding == turn else { return }
         sliding = nil
+        pending = nil
         guard hidesWhenLanded else { return }
         hidesWhenLanded = false
         hidden = true
@@ -242,3 +265,4 @@ private struct SlideCurve {
         return animation
     }
 }
+

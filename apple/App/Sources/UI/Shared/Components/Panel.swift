@@ -23,8 +23,6 @@ extension EnvironmentValues {
     /// 这一层上面有开着的模态浮层（Mac 的窗口内浮层，`PanelHost.covers`；iOS 的弹层是系统的，恒为假）：
     /// 被盖住的输入框不要焦点——出现时的自动聚焦、焦点请求都先看它（盖上时交出见 `yieldsFocusWhenCovered`）。
     @Entry var panelCovered = false
-    /// 抽屉关着、已滑到窗外（`DrawerSlide`）：里面自己托管的视图（Mac 的 Cue 栏）据此藏起，⌃Tab 不轮到看不见的那一块。
-    @Entry var drawerParked = false
 }
 
 enum PanelStyle: Equatable {
@@ -35,20 +33,14 @@ enum PanelStyle: Equatable {
     /// 长出来的气泡（`BubbleFrame`，摆法在 `BubblePlacement`）：不压暗，点外面或 Esc 关、那一下照常落到下面；两端同一个样子（iOS 不是系统 sheet）。
     /// 两端都画在窗口那一层（`panelHost`）。从控件长出的用 `bubble(isPresented:)`，它替控件量框。宽默认随内容（`BubblePlacement.Width`）。
     case bubble(BubbleSource, width: BubblePlacement.Width = .fitting)
-    /// 右缘抽屉（`drawer(isPresented:)`）：贴窗口右缘、整窗高，发丝边加面板阴影、不压暗，开合滑入滑出。
-    /// 点外面或 Esc 关，那一下不落到下面（同 sheet：点外面是"关掉它"，不是点了下面那张卡）；不拿走焦点，按键照常进窗口。
-    case drawer
 
     /// 模态：压暗、拦下外面的点按、拿走焦点（居中的 sheet 与全屏）。
     var modal: Bool {
         switch self {
         case .sheet, .fullScreen: true
-        case .bubble, .drawer: false
+        case .bubble: false
         }
     }
-
-    /// 点外面关的那一下不落到下面。
-    var catchesOutside: Bool { modal || self == .drawer }
 }
 
 extension View {
@@ -64,56 +56,66 @@ extension View {
     ) -> some View {
         presentPanel(item: item, style: style, close: ClosePanel { item.wrappedValue = nil }, content: content)
     }
-
-    /// 右缘抽屉（`PanelStyle.drawer`）：挂上就建好内容、一直挂着（同 `keptPanel`），关着只是滑出窗外、暂停订阅（`pageActive`），开合不丢里面的状态与滚动位置。
-    /// 挂它的视图走了才卸下。
-    func drawer(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
-        presentDrawer(isPresented: isPresented, content: content)
-    }
 }
 
 /// `panel(isPresented:)` 的身份：开着只有这一个。
 private struct Shown: Identifiable { let id = true }
 
-/// 抽屉的面（Cue 的右缘抽屉 `PanelStyle.drawer`、会话条的左缘抽屉 `RailDrawer`，只这一份）：底色连同面板阴影、朝窗口里那一侧一道发丝边，
+/// 抽屉的面（Cue 的右缘抽屉 `CueDock`、会话条的左缘抽屉 `RailDrawer`，只这一份）：底色连同面板阴影、朝窗口里那一侧一道发丝边，
 /// 都铺到安全区外，内容照样排在安全区里。宽由内容定。底色随里面放的是什么：Cue 是桌面底，会话条是侧栏底。
 struct DrawerSurface: ViewModifier {
     /// 贴在窗口哪一边：发丝边画在另一侧（朝主区那一侧）。
     var edge = HorizontalEdge.trailing
     var ground: KeyPath<Palette, Color> = \.desk
+    /// 画不画：Cue 那一块放得下时是右边那一栏、不是抽屉（`CueDock`），面不画、块不换。
+    var shown = true
+    /// 内容自己托管、里面没有安全区时（iPad 的 Cue 块），面伸出块外这么多。
+    var bleed = EdgeInsets()
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content
             .frame(maxHeight: .infinity)
             // 影子只挂在底那块上：挂在整块内容上要先离屏合成里面的字再糊影子（同 `PaperSurface`）
-            .background { palette[keyPath: ground].elevation(.panel).ignoresSafeArea() }
-            .overlay(alignment: edge == .trailing ? .leading : .trailing) { palette.hair.frame(width: ControlMetrics.stroke).ignoresSafeArea() }
+            .background { if shown { palette[keyPath: ground].elevation(.panel).padding(bled).ignoresSafeArea() } }
+            .overlay(alignment: edge == .trailing ? .leading : .trailing) {
+                if shown { palette.hair.frame(width: ControlMetrics.stroke).padding(bled).ignoresSafeArea() }
+            }
+    }
+
+    private var bled: EdgeInsets { EdgeInsets(top: -bleed.top, leading: -bleed.leading, bottom: -bleed.bottom, trailing: -bleed.trailing) }
+}
+
+/// 抽屉开着时铺在它下面、整窗的透明底（`CueDock`、`RailDrawer`）：点外面关、那一下不落到下面（同 sheet：点外面是"关掉它"，不是点了下面那张卡），Esc 同关。
+/// 调用处挂 `transition(.identity)`：收起那一下就撤，不然它跟着收起的动画淡完之前还接点按。
+struct DrawerCatcher: View {
+    let close: () -> Void
+
+    var body: some View {
+        Color.clear.contentShape(.rect)
+            .gesture(DragGesture(minimumDistance: 0).onChanged { _ in close() })
+            .overlay { Button("关闭", action: close).keyboardShortcut(.escape, modifiers: []).opacity(0).readerHidden(true) }
+            .ignoresSafeArea()
     }
 }
 
-/// 抽屉开合：整块从窗口一边（`edge`：Cue 的在右缘，会话条的在左缘，`RailDrawer`）外滑入、滑回窗外（渲染端的平移，`visualEffect` 不让页每帧重排），关着时点不到；减弱动态效果时直接到位。
-/// 滑出去落定后报 `drawerParked`，开的那一下当即撤掉。
+/// 会话条的左缘抽屉开合（`RailDrawer`）：整块从窗口左缘外滑入、滑回窗外（渲染端的平移，`visualEffect` 不让页每帧重排），关着时点不到；减弱动态效果时直接到位。
 struct DrawerSlide: ViewModifier {
     let open: Bool
-    var edge = HorizontalEdge.trailing
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
-    @State private var parked = true
 
     /// 关着时多挪出去的一截：面板阴影不留在窗口边上。
     private static let shadowRoom: CGFloat = 40
 
     func body(content: Content) -> some View {
         content
-            .environment(\.drawerParked, parked)
-            .visualEffect { [shown, room = Self.shadowRoom, sign = edge == .trailing ? 1.0 : -1.0] effect, proxy in
-                effect.offset(x: shown ? 0 : sign * (proxy.size.width + room))
+            .visualEffect { [shown, room = Self.shadowRoom] effect, proxy in
+                effect.offset(x: shown ? 0 : -(proxy.size.width + room))
             }
             .allowsHitTesting(open)
             .onChange(of: open, initial: true) { _, open in
-                if open { parked = false }
-                withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { shown = open } completion: { parked = !shown }
+                withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { shown = open }
             }
     }
 }
