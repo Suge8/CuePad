@@ -28,13 +28,11 @@ struct SubagentWakeTests {
         let task = try #require(try await store.cueBoard().tasks.first?.task)
         try await store.linkCard(task.id, toSession: session.sessionID)  // 认领（假扩展不带开会话的标识）
         try await store.updateCard(task.id) { $0.body = "修好登录页 派子代理" }
-        var file = try SessionLog(rig.app.piPaths.sessionsDirectory.appending(path: "--demo--/\(session.sessionID).jsonl"), id: session.sessionID)
-
+        // 开工的第一句由假扩展收下时记进会话文件，带着投送请求 id：会话认得出是 Cue 发的，不算他在场
         try await eventually("开工的第一句发进会话") { !session.messages.isEmpty }
-        let opening = try #require(session.messages.first)
-        try file.append(user: opening.text, delivery: opening.deliveryID)  // 带着投送请求 id：会话认得出是 Cue 发的，不算他在场
+        let file = try #require(rig.app.host.sessionFiles[session.sessionID])
         session.setState(["kind": "thinking"])
-        try file.append(reply: "派了 ui 去跑测试")
+        try file.reply("派了 ui 去跑测试")
         session.sendInfo(["subagents": [Self.ui("running", action: "Run $ swift test")]])
         try await eventually("名册写进库") { try await store.sessions(matching: session.sessionID).first?.subagents.isEmpty == false }
         session.setState(["kind": "delegating"])
@@ -55,11 +53,11 @@ struct SubagentWakeTests {
         // 子代理交回（在主会话为它跑完那一轮之前仍在飞）；FireCode 投回结果、指挥官再跑一轮：歇下先写进库，回答随后才落盘
         try await store.recordViewing(device: "phone", sessionIDs: [session.sessionID], cue: false)
         session.sendInfo(["subagents": [Self.ui("done", action: "测试全过")]])
-        try file.append(user: "<firecode_master_event>\nui 交回：测试全过\n</firecode_master_event>")
+        try file.user("<firecode_master_event>\nui 交回：测试全过\n</firecode_master_event>")
         session.setState(["kind": "thinking"])
         session.setState(["kind": "idle"])
         try await eventually("歇下写进库") { try await store.sessions(matching: session.sessionID).first?.state == .known(.settled) }
-        try file.append(reply: "子代理做完：测试全过")
+        try file.reply("子代理做完：测试全过")
         try await rig.message(.cue, containing: "登录页那边歇下了")
         try await eventually("这一轮做完") { try await store.cueState()?.state == .known(.settled) }
         let woke = keeper.rounds.filter { $0.wake.isSessionActivity }
@@ -151,49 +149,6 @@ struct SubagentWakeTests {
 
     private static func ui(_ state: String, action: String) -> [String: Any] {
         ["name": "ui", "role": "工程师", "state": state, "action": action, "startedAt": FakeExtension.nowMillis, "settledAt": NSNull(), "model": NSNull()]
-    }
-}
-
-/// 像 Pi 那样逐条追加的会话文件（v3：每条接在上一条后面）：时间戳是写下的此刻。
-private struct SessionLog {
-    let url: URL
-    private var last: String?
-
-    init(_ url: URL, id: String) throws {
-        self.url = url
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data().write(to: url)
-        try write(["type": "session", "version": 3, "id": id, "timestamp": Self.stamp(), "cwd": url.deletingLastPathComponent().path])
-    }
-
-    /// `delivery` 是 CuePad 投进来的那句的请求 id（Pi 写成 `cuepadDelivery`）。
-    mutating func append(user text: String, delivery: String? = nil) throws {
-        try message(["role": "user", "content": text, "cuepadDelivery": delivery ?? NSNull()])
-    }
-
-    mutating func append(reply text: String) throws {
-        try message(["role": "assistant", "stopReason": "stop", "content": [["type": "text", "text": text]]])
-    }
-
-    private mutating func message(_ body: [String: Any]) throws {
-        let id = UUID().uuidString
-        var message = body
-        message["timestamp"] = Int(Date.now.timeIntervalSince1970 * 1000)
-        try write(["type": "message", "id": id, "parentId": last ?? NSNull(), "timestamp": Self.stamp(), "message": message])
-        last = id
-    }
-
-    private func write(_ entry: [String: Any]) throws {
-        let handle = try FileHandle(forWritingTo: url)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: try JSONSerialization.data(withJSONObject: entry) + Data("\n".utf8))
-    }
-
-    private static func stamp() -> String {
-        let format = ISO8601DateFormatter()
-        format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return format.string(from: .now)
     }
 }
 #endif

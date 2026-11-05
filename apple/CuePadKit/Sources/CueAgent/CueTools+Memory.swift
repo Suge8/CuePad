@@ -3,19 +3,35 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// 命中的那一段，至多 `excerptLimit` 字：截在最少见的命中词（在这段话里出现得最少的，一样少取最长的）第一次出现处前面一点，
-  /// 不从开头截——长回复的开头多半不是要找的，常见的词（"测试""完成"）也定位不到要找的地方。
+  /// 命中的那一段，至多 `excerptLimit` 字：从某个命中词前面一点起，取含不同的命中词最多的一段，一样多取命中次数多的，再一样取靠前的。
+  /// 不从开头截：长回复的开头多半不是要找的。不只认最少见的那个词：问的说法常与原文对不上（问"停止维护"，原文写"结束维护"），
+  /// 只认一个词就落到别处（长程评测里查 Node 的建议，落到了 ESLint 那一行），几个词凑在一起的地方才是要找的。
   static func excerpt(_ text: String, around words: [String]) -> String {
-    let flat = CueEnvelope.clip(text, Int.max), lowered = flat.lowercased()
-    let ranked = words.map { $0.lowercased() }.filter { !$0.isEmpty }.map { ($0, lowered.components(separatedBy: $0).count - 1) }
-      .filter { $0.1 > 0 }.min { ($0.1, -$0.0.count) < ($1.1, -$1.0.count) }
-    guard let word = ranked?.0, let hit = flat.range(of: word, options: .caseInsensitive) else { return flat.clipped(excerptLimit) }
-    let start = flat.index(hit.lowerBound, offsetBy: -excerptLead, limitedBy: flat.startIndex) ?? flat.startIndex
-    return (start == flat.startIndex ? "" : "…") + String(flat[start...]).clipped(excerptLimit)
+    let flat = CueEnvelope.clip(text, Int.max)
+    var hits: [(word: Int, at: Int, end: Int)] = []
+    for (index, word) in words.enumerated() where !word.isEmpty {
+      var from = flat.startIndex
+      while let range = flat.range(of: word, options: .caseInsensitive, range: from..<flat.endIndex) {
+        hits.append((index, flat.distance(from: flat.startIndex, to: range.lowerBound), flat.distance(from: flat.startIndex, to: range.upperBound)))
+        from = range.upperBound
+      }
+    }
+    func rank(_ start: Int) -> (Int, Int, Int) {
+      let inside = hits.filter { $0.at >= start && $0.end < start + excerptLimit }
+      return (Set(inside.map(\.word)).count, inside.count, -start)
+    }
+    guard let start = hits.map({ max(0, $0.at - excerptLead) }).max(by: { rank($0) < rank($1) }) else { return flat.clipped(excerptLimit) }
+    return (start == 0 ? "" : "…") + String(flat.dropFirst(start)).clipped(excerptLimit)
   }
 
   static let excerptLimit = 200
   static let excerptLead = 40
+
+  /// recall 查到的一条会话回复：哪个会话、什么时候、命中的那一段。
+  func replyLine(_ reply: CueRecall.Reply, around words: [String]) -> String {
+    let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
+    return "\(name) \(iso(reply.message.at)) 回复：\(Self.excerpt(reply.message.text, around: words))"
+  }
 
   func memory(_ args: Args) async throws -> Result {
     switch try args.required("action") {
@@ -37,10 +53,7 @@ extension CueTools {
       var lines = found.lines.map { $0.line.shown(at: $0.index) + ($0.line.deletedAt == nil ? "" : "（已忘掉）") }
       lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(Self.excerpt(CueFormat.plainText($0.text), around: words))" }
       lines += found.cards.map { "\($0.isTask ? "任务" : "灵感")「\($0.heading)」（\($0.id.shortID)）" }
-      lines += found.replies.map { reply in
-        let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
-        return "\(name) \(iso(reply.message.at)) 回复：\(Self.excerpt(reply.message.text, around: words))"
-      }
+      lines += found.replies.map { replyLine($0, around: words) }
       let more = found.unlisted
       let unlisted = [("记忆", more.lines), ("对话", more.messages), ("任务", more.cards), ("会话回复", more.replies)].filter { $0.1 > 0 }
       if !unlisted.isEmpty {

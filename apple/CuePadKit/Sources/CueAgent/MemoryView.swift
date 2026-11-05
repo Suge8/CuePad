@@ -192,12 +192,23 @@ public struct CueMemoryView: Equatable, Sendable {
 }
 
 extension CueMemoryLine {
-  /// Cue 看到的一条记忆（记忆视图、一直记着、zoom、recall 与待合并的原文只有这一种写法）：#序号 日期 [他] 正文。
+  /// Cue 看到的一条记忆（记忆视图、一直记着、zoom、recall 与待合并的原文只有这一种写法）：#序号 日期 [他] 定时 正文。
   /// 日期是记下的那天（本机时区，今年 10-21、往年 2025-10-21），[他] 只在他的原话（`source` 是 `you`）时有；摘要行不带。
+  /// 定时写到点的时刻（一次的）或怎么重复：正文是写给到点那时的（"今天 15:00 的飞机"），只挂在记下的日期下面会被读成记下那天
+  /// （长程评测里问行程，答成记下那天的 15:00）。
   func shown(at index: Int, now: Date = .now) -> String {
+    "#\(index) \(Self.day(createdAt, now: now)) " + (source == .known(.you) ? "[他] " : "") + schedule(now: now) + text
+  }
+
+  private func schedule(now: Date) -> String {
+    if let repeats { return "定时 \(CueScheduleWords.repeats(repeats))：" }
+    guard let remindAt else { return "" }
+    return "定时 \(Self.day(remindAt, now: now)) \(remindAt.formatted(CueEnvelope.clock))："
+  }
+
+  private static func day(_ date: Date, now: Date) -> String {
     let calendar = Calendar(identifier: .gregorian)
-    let sameYear = calendar.component(.year, from: createdAt) == calendar.component(.year, from: now)
-    let day = createdAt.formatted(sameYear ? CueEnvelope.monthDay : CueEnvelope.fullDay)
-    return "#\(index) \(day) " + (source == .known(.you) ? "[他] " : "") + text
+    let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
+    return date.formatted(sameYear ? CueEnvelope.monthDay : CueEnvelope.fullDay)
   }
 }

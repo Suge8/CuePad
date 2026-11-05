@@ -64,8 +64,20 @@ extension CueTools {
     }
     return .ok(
       "「\(card.heading)」（\(card.id.shortID)）完成了" + ended
-        + (report.map { "；结果已告诉用户（\($0.id.shortID)）" + (shots.isEmpty ? "，没挂图。" : "，挂着你点名的 \(shots.count) 张。") } ?? "。"))
+        + (report.map { "；结果已告诉用户（\($0.id.shortID)）" + (shots.isEmpty ? "，没挂图。" : "，挂着你点名的 \(shots.count) 张。") } ?? "。")
+        + (reports ? try await waiting(beside: card) : ""))
   }
+
+  /// 做完一件顶层任务时，同一个项目里还没开工的几件（至多 `waitingLimit`）：等这件做完再做的事常已建好、没开工（他交代"做完这件再派"），
+  /// 信封的"在做"里没有它们，做完那一刻看不到就另建一件同样的（长程评测 17 遍里 9 遍另建，4 遍靠同名才没建成两件）。没有为空。
+  private func waiting(beside card: Card) async throws -> String {
+    let todo = try await store.cueBoard().tasks.filter { $0.task.projectID == card.projectID && $0.task.status == .todo && !$0.isActive }
+    guard !todo.isEmpty else { return "" }
+    let named = todo.prefix(Self.waitingLimit).map { "「\($0.task.heading)」（\($0.task.id.shortID)）" }.joined(separator: "、")
+    return "\n同项目里还没开工的：\(named)\(todo.count > Self.waitingLimit ? " 等 \(todo.count) 件" : "")；要接着做的是其中一件就 start 它，不另建。"
+  }
+
+  static let waitingLimit = 5
 
   /// 证据（done 做完顶层任务时）：1–`evidenceCount` 条，每条宽不过 `evidenceLimit`；不合就整件退回，什么都不写。
   private static func evidence(_ args: Args) throws -> [String] {

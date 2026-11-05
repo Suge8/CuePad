@@ -11,20 +11,31 @@ extension CueStore {
 
   /// 一批会话索引在同一个事务里写（首次回填几千个文件时：一次提交、一次变更通知，界面不为每个文件重读重画）。
   public func upsertPiSessions(_ batch: [PiSessionUpsert], host: String) throws {
+    try write { try upsertPiSessionRows(batch, host: host) }
+  }
+
+  /// 读会话文件之前先记下桥给出的会话文件（投送确认要跟着它）：索引里还没有这个会话才插一行，已有的不动。
+  /// 查有没有与插入在同一个事务里：分两步时，中间读会话文件的那一路可能已写下标题与检查点，再插就拿桥上的名字（没报名字时是文件夹名）盖掉标题。
+  public func seedPiSession(_ session: IndexedSession, host: String) throws {
+    try write {
+      guard try find(IndexedSession.self, session.id) == nil else { return }
+      try upsertPiSessionRows([PiSessionUpsert(session: session, checkpoint: nil, transcript: nil)], host: host)
+    }
+  }
+
+  private func upsertPiSessionRows(_ batch: [PiSessionUpsert], host: String) throws {
     let assignments = IndexedSession.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
     let placeholders = (IndexedSession.columns + ["checkpoint"]).map { _ in "?" }.joined(separator: ", ")
-    try write {
-      let bound = try boundDirectories()
-      for item in batch {
-        try writePiHistory(item.session, host: host, bound: bound)
-        if let transcript = item.transcript { try applyTranscript(transcript) }
-        try db.run(
-          """
-          INSERT INTO piSessions (\(IndexedSession.columns.joined(separator: ", ")), checkpoint) VALUES (\(placeholders))
-          ON CONFLICT(id) DO UPDATE SET \(assignments),
-            checkpoint = COALESCE(excluded.checkpoint, piSessions.checkpoint)
-          """, item.session.bindings + [item.checkpoint])
-      }
+    let bound = try boundDirectories()
+    for item in batch {
+      try writePiHistory(item.session, host: host, bound: bound)
+      if let transcript = item.transcript { try applyTranscript(transcript) }
+      try db.run(
+        """
+        INSERT INTO piSessions (\(IndexedSession.columns.joined(separator: ", ")), checkpoint) VALUES (\(placeholders))
+        ON CONFLICT(id) DO UPDATE SET \(assignments),
+          checkpoint = COALESCE(excluded.checkpoint, piSessions.checkpoint)
+        """, item.session.bindings + [item.checkpoint])
     }
   }
 

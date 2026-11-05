@@ -74,7 +74,9 @@ class EvalScript {
         try await rig.store.recordSend(task.body, to: SendTarget(kind: .piSession, name: task.heading, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
         let fake = try await rig.app.host.connect(id, cwd: folder, busy: true)
         fake.sendInfo(["name": task.heading])
-        let session = ScriptedSession(id, on: rig.app.host, task: task, history: [PiChatMessage(sessionID: id, entryID: "e1", seq: 1, role: .user, text: task.body, at: .now, deliveryID: delivery)])
+        try rig.app.host.sessionFiles[id]!.user(task.body, delivery: delivery.uuidString)
+        try await rig.read(task.body, in: id)
+        let session = ScriptedSession(id, on: rig.app.host, task: task)
         sessions.append(session)
         return session
     }

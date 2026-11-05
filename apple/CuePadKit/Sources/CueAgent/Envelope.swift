@@ -4,7 +4,7 @@ import Foundation
 
 /// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。
 /// 块里第一行是时间（带时区），然后是项目、变化（说到的事多半在下面带着近况，哪些带见 `CueTools.recaps`）、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、醒来的原因，
-/// 有才写的：上一轮出错重试、吃紧的额度。
+/// 有才写的：他的短问句在会话回复里查到的（`CueTools.related`）、上一轮出错重试、吃紧的额度。
 /// 新会话的第一条输入里，它前面还有记忆视图与对话视图（`CueKeeper`）。信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
   public struct Input: Sendable {
@@ -31,12 +31,15 @@ public enum CueEnvelope {
     public var quotas: [AccountQuota]
     /// 这一轮是上一轮出错后的重试：上一轮的错（原文首行），Cue 先核对上一轮做到了哪、不重做
     public var retrying: String?
+    /// 他的短问句按词在会话回复里查到的（`CueTools.related`），一条一行
+    public var related: [String]
 
     public init(
       now: Date, projects: [Project], changes: [CueChange], recaps: [Subject: String] = [:],
       board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, fired: [Fired] = [], schedules: [CueMemoryLine] = [], language: String? = nil,
-      quotas: [AccountQuota] = [], retrying: String? = nil
+      quotas: [AccountQuota] = [], retrying: String? = nil, related: [String] = []
     ) {
+      self.related = related
       self.quotas = quotas
       self.retrying = retrying
       self.language = language
@@ -80,6 +83,8 @@ public enum CueEnvelope {
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
     lines += input.waiting.map { "- " + question($0) }
 
+    lines += related(input.related)
+
     lines.append("醒来：" + wake(input.wake))
     if case .schedule = input.wake { lines += input.fired.map { "- " + fired($0, now: input.now) } }
     if let retrying = input.retrying { lines.append("上一轮出错重试：\(clip(retrying, 160))；先 peek 核对上一轮做到哪，做过的不重做") }
@@ -108,6 +113,16 @@ public enum CueEnvelope {
       guard !cards.isEmpty else { return said }
       return ([said, "", "（他开口收起了等你里的 \(cards.count) 张；他这句与它无关就 tell 带 restore 放回：）"] + cards.map { "- " + question($0) }).joined(separator: "\n")
     }.joined(separator: "\n\n")
+  }
+
+  /// 交出去的话里他自己说的，一条一句（不含他对卡的回答：回答里转述的提问不是他在问）：`CueTools.related` 一句一句查。
+  public static func asked(_ pending: [CueMessage]) -> [String] {
+    pending.filter { $0.author == .known(.you) }.map(\.text)
+  }
+
+  /// 他的话按词在会话回复里查到的那一节（`CueTools.related`）：信封里与插给在跑那一轮的话后面是同一种写法；没查到为空。
+  public static func related(_ found: [String]) -> [String] {
+    found.isEmpty ? [] : ["他问的话在会话回复里查到的（按他的词查的，不全；要全用 memory recall）："] + found.map { "- " + $0 }
   }
 
   /// 定时到点的一条：哪条定时（带序号）、本该几点（`CueFire`）与挂着的任务。

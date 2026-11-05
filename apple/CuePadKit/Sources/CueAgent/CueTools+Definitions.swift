@@ -40,7 +40,7 @@ extension CueTools {
           start{task,agent?,model?,effort?,fresh?}：开工叶子（有子任务时是第一个没做完的子任务）。同一任务的上一步有会话就接着用（已结束的先恢复），否则在项目文件夹开新会话：agent 缺省是那台 Mac 的默认，model 写 provider/id（claude、codex 只写 id）。叶子已有会话用 say；fresh:true 开新会话（上一步的会话随之结束）；
           say{task|session,text,model?,effort?}：对会话说话（给 task 是它在做的叶子的会话；结束了的先恢复）。会话在等回答时 text 就是答案（选项原文、从 1 起的序号或 是/否；允许自己写的题才收别的话）；会话在跑时打断这一轮、以这句开新一轮，他发起的那一轮在跑时不能说（报错，歇下会叫醒你）。带 model、effort 先给会话换上；
           say 与接着用上一步会话的 start 至多等 \(Int(Speech.cueWait)) 秒，结果写明送没送到；
-          peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答（超 \(latestReplyLimit) 字截掉中间）、发到手机的文件（带本机路径）。带 session：那个会话；
+          peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答（超 \(latestReplyLimit) 字截掉中间）、这一轮没答完时最后说的、发到手机的文件（带本机路径）。带 session：那个会话；
           stop{task|session}：停下会话这一轮；
           leave{task|session}：把你发起的、停着的那一轮（歇下、等回答或出错）留给他回：歇着、出错的显示"待回复"，等回答的成了他的拍板，都进等你；他或你再对它说话就作废。已 tell 带 ask 问他的不用再 leave；
           take{task|session}：收回留给他回的（待回复，或成了他拍板的等回答），出了等你；要推进直接 say，不用先收回；
