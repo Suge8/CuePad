@@ -20,11 +20,11 @@ struct WideRail: View {
     private var wide: Bool { width == Chrome.rail }
 
     var body: some View {
-        if let look = DebugHooks.railLook {
+        if DebugHooks.railProto {
             #if os(iOS)
-            RailProto(look: look, width: width, cue: cue)
+            RailProto(width: width, cue: cue)
             #else
-            RailProto(look: look, width: width)
+            RailProto(width: width)
             #endif
         } else {
             current

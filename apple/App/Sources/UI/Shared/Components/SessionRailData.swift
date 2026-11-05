@@ -39,7 +39,6 @@ struct SessionRailRows {
         let session: PiSessionState
         let pulse: BoardPulse
         let waiting: PiShown.Status?
-        let project: Project?
         var id: String { session.sessionID }
     }
 
@@ -50,7 +49,7 @@ struct SessionRailRows {
     init(_ data: SessionRailData, pulse: (PiSessionListItem) -> BoardPulse) {
         func item(_ value: PiSessionListItem, waiting: PiShown.Status?) -> Item {
             let pulse = pulse(value)
-            return Item(session: pulse.session ?? value.state, pulse: pulse, waiting: waiting, project: value.project)
+            return Item(session: pulse.session ?? value.state, pulse: pulse, waiting: waiting)
         }
         waiting = data.waiting.map { item($0.agent, waiting: $0.deciding ? .asking : .awaitsReply) }
         advancing = data.advancing.map { item($0, waiting: nil) }.enumerated().sorted {

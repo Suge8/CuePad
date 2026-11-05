@@ -1,16 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// 原型会话那一段的容器：分组、注意顺序、等你最多占一半高、接力滚入照 `SessionRail`，不铺纸；行高与组头由各方向给。
-/// 行增删：留下的行按 `Motion.nudge` 让位，进出的行淡入淡出（减弱动态效果时不挪、只淡）。
+/// 原型会话那一段的容器：分组、注意顺序、等你最多占一半高、接力滚入照 `SessionRail`，不铺纸；行高与组头由 `RailProtoSessions` 给。
+/// 行与行之间一道缝（`Spacing.hair`，同去处那一组）。行增删：留下的行按 `Motion.nudge` 让位，进出的行淡入淡出（减弱动态效果时不挪、只淡）。
 struct RailProtoGroups<Header: View, Row: View>: View {
     let rows: SessionRailRows
     let wide: Bool
     let marked: Set<String>
-    /// 组头多高；0 是不画组头。
-    var headerHeight = Chrome.groupHeader
-    /// 相邻两个会话之间：一道缝（`Spacing.hair`），一屏多放两三个。
-    var gap = Spacing.hair
     let height: (SessionRailRows.Item) -> CGFloat
     @ViewBuilder let header: (TaskBoard.Column, Int) -> Header
     @ViewBuilder let row: (SessionRailRows.Item, _ moves: Bool, _ selected: Bool) -> Row
@@ -41,17 +37,15 @@ struct RailProtoGroups<Header: View, Row: View>: View {
     }
 
     private func ideal(_ items: [SessionRailRows.Item]) -> CGFloat {
-        headerHeight + items.map(height).reduce(0, +) + CGFloat(max(0, items.count - 1)) * gap + Chrome.pad
+        Chrome.groupHeader + items.map(height).reduce(0, +) + CGFloat(max(0, items.count - 1)) * Spacing.hair + Chrome.pad
     }
 
     private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, moving: Set<String>) -> some View {
         VStack(spacing: 0) {
-            if headerHeight > 0 {
-                header(column, items.count).frame(height: headerHeight).padding(.horizontal, Chrome.pad)
-            }
+            header(column, items.count).frame(height: Chrome.groupHeader).padding(.horizontal, Chrome.pad)
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: gap) {
+                    LazyVStack(spacing: Spacing.hair) {
                         ForEach(items) { item in
                             let selected = marked.contains(item.id)
                             RailProtoCell(item: item, wide: wide, selected: selected, open: open) { row(item, moving.contains(item.id), selected) }
@@ -148,20 +142,17 @@ extension SessionRailRows.Item {
         return PiShown(status: waiting, clock: pulse.shown?.clock)
     }
 
-    /// 要你管：等你组，与推进中要你管的那一档（出错、被打断、没能送达、有新回复、上下文快满）。
-    var needsYou: Bool { waiting != nil || pulse.tier == .needsYou }
     var resting: Bool { waiting == nil && pulse.tier == .resting }
 }
 
 /// 行尾的读数：要你管的写状态词（同状态色），其余写在这个状态里待了多久。
 struct ProtoReadout: View {
     let item: SessionRailRows.Item
-    var timeOnly = false
     @Environment(\.palette) private var palette
 
     var body: some View {
         Group {
-            switch timeOnly || item.waiting != nil ? nil : item.pulse.word {
+            switch item.pulse.word {
             case .state(let shown): Text(shown.label).fontWeight(.semibold).foregroundStyle(shown.labelTint(palette))
             case .context(let meter): ContextFact(meter: meter)
             case nil: ProtoTime(item: item)

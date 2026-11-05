@@ -41,18 +41,21 @@ enum Chrome {
     /// 会话条上每一组的左沿离会话条边：收起时一组正在条的中轴上，展开时左沿不动、右沿离边同样远。
     static var edge: CGFloat { (strip - stripGroup) / 2 }
 
-    // MARK: 会话条重设计原型（`-CuePadRailProto A|B|C`，`RailProto`）
+    // MARK: 会话条重设计原型（`-CuePadRailProto A`，`RailProto`）
 
-    /// 收起时并排两格（顶上侧栏钮与搜索、底部技能与规则与设置）的左格离条边：两格连同中缝正在中轴上。
+    /// 收起时并排两格（底部技能与规则、设置）的左格离条边：两格连同中缝正在中轴上。
     static var pairEdge: CGFloat { (strip - 2 * control - cellGap) / 2 }
-    /// A：行首状态标的基准直径（`PiStateDot.size`，外框 1.8 倍，Mac 约 18 见方）。
+    /// 行首状态标的基准直径（`PiStateDot.size`，外框 1.8 倍，Mac 约 18 见方）。
     static let railMark: CGFloat = 10
-    /// B：带状态环的头像的直径（环外沿），一格里四边各让一档，外扩的波纹才放得下。
-    static var avatar: CGFloat { control - Spacing.item }
-    /// B 的会话行、C 要你管的会话行：名字下面多一行，比一格高一档。
+    /// 等你组的会话行：名字下面一行写它要什么，比一格高一档，这一组每行同高。
     static var tallRow: CGFloat { control + Spacing.item }
-    /// C 歇着的会话行：轻，同卡里钮的高。
-    static var lightRow: CGFloat { ControlSize.compact.height }
-    /// C 在跑的行行尾那一截心电线（`BoardLine` 的现在）。
-    static let trace: CGFloat = 32
+    /// 第一组行离窗口顶：最顶那一排下面隔一档，开合钮与"项目"那一行不贴在一起。
+    static var railTop: CGFloat { band + Spacing.item }
+    #if os(macOS)
+    /// 开合钮的左沿离窗口左边：红绿灯的右沿（`strip` 那条注释的 19 + 59.5）再隔一档（`Spacing.item`）、落在 4 点格上。
+    /// 两种宽下都在这里（同备忘录、访达）：它属于最顶那一排，不属于会话条。
+    static let bandTools: CGFloat = 88
+    /// 开合钮与搜索两颗玻璃圆钮之后的右沿：会话条收起时伸进主区栏头那一段，主区栏头左边让到它再隔一档（`MainWindow` 的 `headInset`）。
+    static var bandToolsEnd: CGFloat { bandTools + 2 * ControlMetrics.height + Spacing.item }
+    #endif
 }

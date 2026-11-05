@@ -41,7 +41,7 @@ struct MainWindow: View {
             HStack(spacing: 0) {
                 WideRail(width: sizes.rail)
                 WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape) {
-                    MainColumn().environment(\.headInset, Self.inset(trailing: sizes.split ? Spacing.page : trail))
+                    MainColumn().environment(\.headInset, Self.inset(leading: Self.lead(rail: sizes.rail), trailing: sizes.split ? Spacing.page : trail))
                 }
                 .frame(width: sizes.leading)
                 if sizes.split {
@@ -63,14 +63,21 @@ struct MainWindow: View {
                     Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) { DrawerCue(focus: focus) }
                 }
             }
+            .overlay(alignment: .topLeading) { if DebugHooks.railProto { WindowBandTools() } }
             .overlay(alignment: .topTrailing) {
                 if !workspace.cueShown(sizes) { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
             }
         }
     }
 
-    private static func inset(trailing: CGFloat) -> EdgeInsets {
-        EdgeInsets(top: 0, leading: Spacing.page, bottom: 0, trailing: trailing)
+    private static func inset(leading: CGFloat = Spacing.page, trailing: CGFloat) -> EdgeInsets {
+        EdgeInsets(top: 0, leading: leading, bottom: 0, trailing: trailing)
+    }
+
+    /// 主区栏头左边让多少：开合钮与搜索钉在红绿灯右边（`WindowBandTools`），会话条收起时它们伸进主区那一段，栏头让到它们右沿再隔一档。
+    private static func lead(rail: CGFloat) -> CGFloat {
+        guard DebugHooks.railProto else { return Spacing.page }
+        return max(Spacing.page, Chrome.bandToolsEnd - rail + Spacing.item)
     }
 }
 

@@ -11,8 +11,6 @@ struct LoopLayer {
     enum Kind: Equatable {
         /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽是直径的 14%。
         case orbit
-        /// 同 `orbit`，线细（直径的 8%）：会话条原型 B 头像外的状态环，在跑时那段弧绕着头像走。
-        case halo
         /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽是边长的 9%，淡波形是三成的颜色。
         case heartbeat
         /// 话在路上：一架纸飞机（与发送钮、"已送达"同一架，`Icon.send`）从左下飞进来、在正中停一下、朝机头的右上飞出去，裁在自己的框里，
@@ -95,9 +93,9 @@ struct LoopLayer {
             CATransaction.setDisableActions(true)
             let bounds = root.bounds
             switch kind {
-            case .orbit, .halo:
+            case .orbit:
                 loop.frame = bounds
-                let width = min(bounds.width, bounds.height) * (kind == .halo ? 0.08 : 0.14)
+                let width = min(bounds.width, bounds.height) * 0.14
                 let ring = CGPath(ellipseIn: CGRect(origin: .zero, size: bounds.size).insetBy(dx: width / 2, dy: width / 2), transform: nil)
                 for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
                     shape.frame = loop.bounds
@@ -155,7 +153,7 @@ struct LoopLayer {
 
         private static func make(_ kind: Kind, intro: Bool) -> CALayer {
             switch kind {
-            case .orbit, .halo:
+            case .orbit:
                 let layer = CALayer()
                 let track = CAShapeLayer(), arc = CAShapeLayer()
                 for shape in [track, arc] {

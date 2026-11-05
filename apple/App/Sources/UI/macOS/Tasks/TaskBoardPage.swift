@@ -29,6 +29,8 @@ struct TaskBoardPage: View {
         let scope = workspace.scopedProject
         BoardColumns(board: (board ?? .empty).only(scope), adding: Bindable(workspace).addsTask, newTaskProject: scope ?? workspace.currentProject, margin: Self.margin)
             .padding(.trailing, trailing)
+            // 列头在最顶那一排：左边同栏头让出伸进来的开合钮与搜索（`headInset`，平时就是栏边）
+            .padding(.leading, inset.leading - Spacing.page)
             .environment(\.boardBand, Chrome.band)
             .environment(\.laneAddsTask, { workspace.addsTask = true })
             .environment(\.laneAddsSession, { workspace.openNewSession(in: scope) })
