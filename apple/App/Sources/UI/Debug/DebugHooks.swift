@@ -254,6 +254,19 @@ enum DebugHooks {
         #endif
     }
 
+    /// 资料库没能打开。脚本起的实例没人去点失败页，等它的脚本只会等到时限、说不出原因（如沿用旧检出留下的、早于 `baseVersion` 的隔离库）：
+    /// 量的时候（`-CuePadBench`）报 `BENCH-ERR` 一行，其余脚本实例同 `DebugScene.abandon`，都以 1 退出。
+    static func libraryFailed(_ failure: LibraryFailure) {
+        #if DEBUG
+        if DebugScene.defaults.string(forKey: "CuePadBench") != nil {
+            print("BENCH-ERR 资料库没能打开：\(failure.reason)")
+            fflush(stdout)
+            exit(1)
+        }
+        if scripted { DebugScene.abandon("资料库没能打开", DebugScene.Unmet(failure.diagnostics)) }
+        #endif
+    }
+
     #if os(macOS)
     /// 主窗口的类：Debug 里是不被系统夹回屏幕内的 `DebugWindow`（`-CuePadOffscreen`）。
     #if DEBUG
@@ -267,16 +280,6 @@ enum DebugHooks {
         #if DEBUG
         DebugForeground.requireUserAway()
         LaunchBench.start()
-        #endif
-    }
-
-    /// 资料库没能打开。量的时候（`-CuePadBench`）没人去点失败页，量的脚本会一直等：报出原因（`BENCH-ERR` 一行）后以 1 退出。
-    static func libraryFailed(_ reason: String) {
-        #if DEBUG
-        guard DebugScene.defaults.string(forKey: "CuePadBench") != nil else { return }
-        print("BENCH-ERR 资料库没能打开：\(reason)")
-        fflush(stdout)
-        exit(1)
         #endif
     }
 

@@ -70,7 +70,7 @@ struct TaskOutlineTests {
     /// 层级限制与 Store 同一口径：已完成、不显示的子任务也算层级；拖起来又放回原处什么都不改。
     @Test func 带着已完成子任务的任务不能再缩进_拖起来放回原处不换项目() async throws {
         let second = try await store.createTask("发布")
-        let first = try await store.createTask("备份")
+        _ = try await store.createTask("备份")
         let done = try await store.createTask("写说明", under: second.id)
         try await store.setStatus(done.id, .done)
         let all = try await store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
@@ -78,9 +78,10 @@ struct TaskOutlineTests {
         #expect(tree.indent(second.id) == nil)
         let rows = tree.rows()
         let frames = rowFrames(of: rows)
-        let onto = tree.drop(second.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)
-        #expect(onto?.mark != .onto(first.id))
-        if let move = onto?.move { try await store.moveCard(second.id, to: move.slot, after: move.after) }
+        if let move = tree.drop(second.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)?.move {
+            try await store.moveCard(second.id, to: move.slot, after: move.after)
+        }
+        #expect(try await store.card(second.id)?.parentID == nil)
 
         let site = try await store.createProject(name: "网站", color: "#000000")
         let loose = try await store.createTask("续费域名")

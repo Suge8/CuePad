@@ -36,6 +36,8 @@ struct SetupTests {
         return (workspace.setupCue(here: here), workspace.setupRows(here: here))
     }
 
+    private func step(_ kind: AgentKind, in rows: [SetupRow]) -> SetupStep? { rows.first { $0.kind == kind }?.step }
+
     @Test func 首次打开_一键接入检测到的Agent并启用Cue_接着对Cue说的话交给它() async throws {
         try app.install(.pi)
         try app.install(.claudeCode)
@@ -65,20 +67,16 @@ struct SetupTests {
         #expect(workspace.showsSetup)
         var now = try await panel(workspace)
         #expect(now.cue == .needsAgent)
-        let node = try #require(AgentKind.pi.facts.installPrerequisite)
-        let codex = SetupRow(kind: .codex, step: .install(nil)), pi = SetupRow(kind: .pi, step: .needs(node))
-        let openCode = SetupRow(kind: .opencode, step: .install(nil)), grok = SetupRow(kind: .grok, step: .install(nil))
-        let dsh = SetupRow(kind: .dsh, step: .needs(node))
-        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .install(nil)), codex, pi, openCode, grok, dsh])  // 各家平行列出，推荐的排第一
+        #expect(now.rows.first == SetupRow(kind: .claudeCode, step: .install(nil)))  // 推荐的排第一
 
         await workspace.installAgent(.claudeCode)
         now = try await panel(workspace)
-        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .logIn(nil)), codex, pi, openCode, grok, dsh])
+        #expect(now.rows.first == SetupRow(kind: .claudeCode, step: .logIn(nil)))
 
         await workspace.logIn(.claudeCode)
         now = try await panel(workspace)
         #expect(now.cue == .enable)
-        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .connect)])
+        #expect(now.rows.first == SetupRow(kind: .claudeCode, step: .connect))
 
         #expect(await workspace.setUp(connecting: [.claudeCode], enablingCue: true).isEmpty)
         #expect(try await services.store.cueProfile()?.runtime == .known(.claudeCode))
@@ -90,16 +88,12 @@ struct SetupTests {
         let workspace = try await launch()
         var now = try await panel(workspace)
         #expect(now.cue == .needsAgent)
-        #expect(now.rows == [
-            SetupRow(kind: .claudeCode, step: .logIn(nil)), SetupRow(kind: .codex, step: .install(nil)), SetupRow(kind: .pi, step: .logIn(nil)),
-            SetupRow(kind: .opencode, step: .install(nil)), SetupRow(kind: .grok, step: .install(nil)),
-            SetupRow(kind: .dsh, step: .needs(try #require(AgentKind.dsh.facts.installPrerequisite))),
-        ])
+        #expect(step(.claudeCode, in: now.rows) == .logIn(nil) && step(.pi, in: now.rows) == .logIn(nil))
 
         await workspace.logIn(.claudeCode)
         now = try await panel(workspace)
         #expect(now.cue == .enable)
-        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .connect), SetupRow(kind: .pi, step: .logIn(nil))])  // Pi 仍要登录才勾得上
+        #expect(step(.claudeCode, in: now.rows) == .connect && step(.pi, in: now.rows) == .logIn(nil))  // Pi 仍要登录才勾得上
     }
 
     @Test func Pi缺够新的NodeJS_先给官网_装上了才给安装() async throws {

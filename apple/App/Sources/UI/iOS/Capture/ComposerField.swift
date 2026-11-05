@@ -20,6 +20,7 @@ struct ComposerField: UIViewRepresentable {
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     /// 收下粘贴进来的附件（放进附件条）；nil 是这个输入框不收附件，剪贴板里的照常当文字粘。
     var files: (([IncomingFile]) -> Void)?
+    @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
 
@@ -32,7 +33,7 @@ struct ComposerField: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> GrowingTextView {
-        let view = GrowingTextView()
+        let view = GrowingTextView(pasteboard: workspace.services.pasteboard)
         view.delegate = context.coordinator
         view.font = .preferredFont(forTextStyle: .body)
         view.adjustsFontForContentSizeCategory = true
@@ -113,8 +114,8 @@ final class GrowingTextView: UITextView {
     var keys: (ComposerKey) -> Bool = { _ in false }
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     var files: (([IncomingFile]) -> Void)?
-    /// 粘贴从哪个剪贴板取（测试换成私有的）
-    var pasteboard: UIPasteboard = .general
+    /// 粘贴从哪个剪贴板取：与复制写进的是同一个（`AppServices.pasteboard`）
+    let pasteboard: UIPasteboard
     /// 外部刚写进文字：之后的排版里滚到末尾，直到高度不再变。
     var revealsEnd = false { didSet { revealedHeight = nil } }
     private var revealedHeight: CGFloat?
@@ -192,8 +193,9 @@ final class GrowingTextView: UITextView {
         layOutAll()
     }
 
-    override init(frame: CGRect, textContainer: NSTextContainer?) {
-        super.init(frame: frame, textContainer: textContainer)
+    init(pasteboard: UIPasteboard) {
+        self.pasteboard = pasteboard
+        super.init(frame: .zero, textContainer: nil)
         placeholder.font = .preferredFont(forTextStyle: .body)
         placeholder.adjustsFontForContentSizeCategory = true
         placeholder.isAccessibilityElement = false

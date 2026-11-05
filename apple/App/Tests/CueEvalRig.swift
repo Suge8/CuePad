@@ -27,10 +27,28 @@ extension CueHostTests.Rig {
             return ack(connection, command)
         }
         session.sendInfo(["name": title])
-        let prompt = PiChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: .now, deliveryID: delivery)
-        try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [prompt], recap: PiRecap(pendingPrompt: oneLine(first))))
+        let file = try #require(app.host.sessionFiles[id])
+        try file.user(first, delivery: delivery.uuidString)
+        try await read(first, in: id)
         try await eventually("会话在干活写进库") { try await self.store.sessions(matching: id).first?.state.isWorking == true }
-        return Working(task: task, session: session, prompt: prompt)
+        return Working(task: task, session: session, file: file)
+    }
+
+    /// 等 Mac 把会话文件里你的这句话读进库（对话里最后一句你的话就是它）：之后叫醒的 Cue 看得到它与它之前的对话。
+    func read(_ text: String, in sessionID: String) async throws {
+        try await eventually("「\(text.prefix(20))」读进库") {
+            try await self.store.piMessages(of: sessionID).last { $0.role == .known(.user) }?.text == text
+        }
+    }
+
+    /// 会话这一轮说了 `said`、接着调工具（问他的对话框由工具调起）：写进会话文件，等 Mac 读进这一轮的经过再往下（真会话里这段话先落盘、对话框才弹出），
+    /// 叫醒的 Cue 看得到它。
+    func spoke(_ said: String, in sessionID: String) async throws {
+        try app.host.sessionFiles[sessionID]!.spoke(said)
+        let shown = said.trimmingCharacters(in: .whitespacesAndNewlines).clipped(PiChatMessage.Tools.saidLimit)
+        try await eventually("「\(said.prefix(20))」读进这一轮的经过") {
+            try await self.store.sessions(matching: sessionID).first?.pendingTools?.items.last { $0.kind == .said }?.target == shown
+        }
     }
 
     /// 会话发来几张效果图（默认按文件名画，见 `mockShot`）。
@@ -45,44 +63,35 @@ extension CueHostTests.Rig {
         return try await store.addPreviews(sent, sessionID: work.id)
     }
 
-    func reply(_ work: Working, _ text: String) -> PiChatMessage {
-        PiChatMessage(sessionID: work.id, entryID: "a1", seq: 2, role: .pi, text: text, at: .now)
-    }
-
     /// 会话做完这一轮歇下，回复是 `reply`。
     func settle(_ work: Working, reply text: String) async throws {
         work.session.setState(["kind": "idle"])
-        try await answered(work.id, prompt: oneLine(work.prompt.text), reply: text, messages: [work.prompt, reply(work, text)])
+        try await answered(work.id, reply: text)
     }
 
     /// 他 `ago` 秒前直接在会话里（终端里打的，不带 Cue 的发送记录）说了 `said`，会话做完他这一轮、回复 `reply` 后歇下。
     func settleHisTurn(_ work: Working, said: String, ago: TimeInterval, reply text: String) async throws {
-        let first = reply(work, "后端做完了：发重置邮件的接口、令牌校验与限流，14 个测试全过。")
-        let his = PiChatMessage(sessionID: work.id, entryID: "u2", seq: 3, role: .user, text: said, at: .now - ago)
-        let answer = PiChatMessage(sessionID: work.id, entryID: "a2", seq: 4, role: .pi, text: text, at: .now)
+        try work.file.reply("后端做完了：发重置邮件的接口、令牌校验与限流，14 个测试全过。", at: .now - ago - 60)
+        try work.file.user(said, at: .now - ago)
         work.session.setState(["kind": "idle"])
-        try await answered(work.id, prompt: said, reply: text, messages: [work.prompt, first, his, answer])
+        try await answered(work.id, reply: text)
     }
 
     /// 他 `ago` 秒前直接在会话里说了 `his`，之后 Cue 说了 `cue`（发送记录是 Cue 的）开了这一轮，做完回复 `reply` 后歇下。
     func settleCueTurn(_ work: Working, his: String, ago: TimeInterval, cue: String, reply text: String) async throws {
         let delivery = UUID()
         try await store.recordSend(cue, to: SendTarget(kind: .piSession, name: work.task.heading, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
-        let messages = [
-            work.prompt, reply(work, "重置邮件发出去了，测试在补。"),
-            PiChatMessage(sessionID: work.id, entryID: "u2", seq: 3, role: .user, text: his, at: .now - ago),
-            PiChatMessage(sessionID: work.id, entryID: "a2", seq: 4, role: .pi, text: "接口与邮件都好了，在补测试。", at: .now - ago + 60),
-            PiChatMessage(sessionID: work.id, entryID: "u3", seq: 5, role: .user, text: cue, at: .now - 120, deliveryID: delivery),
-            PiChatMessage(sessionID: work.id, entryID: "a3", seq: 6, role: .pi, text: text, at: .now),
-        ]
+        try work.file.reply("重置邮件发出去了，测试在补。", at: .now - ago - 60)
+        try work.file.user(his, at: .now - ago)
+        try work.file.reply("接口与邮件都好了，在补测试。", at: .now - ago + 60)
+        try work.file.user(cue, delivery: delivery.uuidString, at: .now - 120)
         work.session.setState(["kind": "idle"])
-        try await answered(work.id, prompt: cue, reply: text, messages: messages)
+        try await answered(work.id, reply: text)
     }
 
-    /// 会话这一轮说了 `said` 后停下来问一个选择题。
+    /// 会话这一轮说了 `said` 后停下来问一个选择题（问他的对话框由工具调起：这段话在这一轮的经过里，这一轮没收尾）。
     func ask(_ work: Working, said: String, question: String, options: [String]) async throws {
-        try await store.writePiTranscript(PiTranscript(
-            sessionID: work.id, messages: [work.prompt, reply(work, said)], recap: PiRecap(pendingPrompt: oneLine(work.prompt.text))))
+        try await spoke(said, in: work.id)
         work.session.sendInfo(["question": ["id": "p1", "kind": "select", "text": question, "options": options]])
         work.session.setState(["kind": "waiting_user", "title": question])
     }

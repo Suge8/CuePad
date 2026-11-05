@@ -66,7 +66,7 @@ struct RuntimeDisplayTests {
         }
     }
 
-    @Test func 多台Mac按各自期限失效_同件并行去重_续期贯通读取与完整信封() async throws {
+    @Test func 多台Mac按各自期限失效_同件并行去重_到期由订阅重读() async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let workspace = Workspace(services: app.services), store = app.services.store
@@ -103,6 +103,23 @@ struct RuntimeDisplayTests {
         clock.advance(.seconds(360))
         let fresh = try await now()
         #expect(fresh.tally == onlyB.tally && fresh.subagents == onlyB.subagents)
+        var expiration = CueReading(store: store, widget: false).updates().makeAsyncIterator()
+        _ = try #require(try await expiration.next())
+        await clock.waitForSleeper()
+        clock.advance(.seconds(601))
+        let reread = try #require(try await expiration.next())
+        let timedOut = CueNow(reread.digest, at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
+        #expect(timedOut.tally.moving == 0 && timedOut.subagents == 0 && timedOut.unconfirmed && timedOut.isLive)
+    }
+
+    @Test func 界面队列被占住时_共享事实的订阅仍收到续期() async throws {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing)
+        let workspace = Workspace(services: app.services), store = app.services.store
+        let task = try await workspace.createTask("续期", in: Project.defaultID)
+        let recorder = try await app.runtimeRecorder(on: "mac-b", boot: "test-boot")
+        try await recorder.update(sessionID: "b", state: .thinking, title: "续期")
+        try await store.bindSession("b", to: task.id)
         let reading = CueReading(store: store, widget: false)
         let progressed = DispatchSemaphore(value: 0)
         let observe = Task.detached {
@@ -114,8 +131,8 @@ struct RuntimeDisplayTests {
             let renewed = try await updates.next()
             return (before, renewed)
         }
-        // 界面队列被占住时，共享事实的订阅也必须能收到续期；不以 CueFeed/Observations 给出新值为前提。
-        let completed = Self.holdUI(until: progressed)
+        // 不以 CueFeed/Observations 给出新值为前提。
+        let completed = holdThread(until: progressed)
         #expect(completed)
         if !completed { observe.cancel() }
         let observed = try await observe.value
@@ -123,7 +140,18 @@ struct RuntimeDisplayTests {
         let old = CueNow(before.digest, at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
         let renewed = CueNow(renewal.digest, at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
         #expect(!old.same(as: renewed))
+    }
 
+    @Test func 八台Mac八件在跑_活动推送的完整信封不超过4096字节() async throws {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing)
+        let workspace = Workspace(services: app.services), store = app.services.store
+        let task = try await workspace.createTask("两台 Mac 并行交付", in: Project.defaultID)
+        let b = try await app.runtimeRecorder(on: "mac-b", boot: "test-boot")
+        try await b.update(sessionID: "b", state: .delegating, title: "审查", subagents: [
+            PiSubagentState(name: "reviewer", role: "审查员", phase: .known(.running)),
+        ])
+        try await store.bindSession("b", to: task.id)
         for index in 0..<7 {
             clock.advance(.seconds(1))
             let task = try await workspace.createTask("并行交付含中文任务名称与归属第\(index)项", in: Project.defaultID)
@@ -137,21 +165,12 @@ struct RuntimeDisplayTests {
             profile.enabledAt = clock.now
         }
         try await b.updateCue(.tool, detail: "read · Sources/Runtime/SharedRuntimeProjection.swift")
-        let full = try await now()
+        let full = CueNow(try await CueDigest.read(from: store), at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
         let content = try ActivityPush.fitted(CueActivityState(now: full))
         let bytes = try JSONEncoder().encode(ActivityPush.Payload(content)).count
-        print("RUNTIME complete APNs update envelope: \(bytes) bytes; 8 active hosts, 8 works, 8 visible items, fitted production payload")
         #expect(full.items.count == 8 && full.isBusy && full.first?.detail != nil && bytes <= 4096)
-        let decoded = try JSONDecoder().decode(CueActivityState.self, from: JSONEncoder().encode(content))
-        #expect(decoded.now.shown(at: clock.now + 601).tally.moving == 0 && decoded.now.shown(at: clock.now + 601).isLive)
-        var expiration = reading.updates().makeAsyncIterator()
-        _ = try #require(try await expiration.next())
-        await clock.waitForSleeper()
-        clock.advance(.seconds(601))
-        let reread = try #require(try await expiration.next())
-        let timedOut = CueNow(reread.digest, at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
-        #expect(timedOut.tally.moving == 0 && timedOut.subagents == 0 && timedOut.unconfirmed && timedOut.isLive)
     }
+
 
     @Test func 同件事的拍板到期不遮住另一台仍在跑的会话_后续快照与即时读取相同() async throws {
         let clock = ManualTiming()
@@ -223,10 +242,6 @@ struct RuntimeDisplayTests {
         #expect(snapshot.shown(at: clock.now + 600).isLive && !snapshot.shown(at: clock.now + 600).hasConfirmedActivity)
     }
 
-    nonisolated private static func holdUI(until signal: DispatchSemaphore) -> Bool {
-        signal.wait(timeout: .now() + Double(conditionBudget.components.seconds)) == .success
-    }
-
     #if os(macOS)
     @Test func 重开App只对账真实进程_无证据的旧报告不获得确认() async throws {
         let app = TestApp(), workspace = Workspace(services: app.services), store = app.services.store
@@ -252,10 +267,6 @@ struct RuntimeDisplayTests {
         let unknown = try #require(try await store.piSessions(sessionIDs: ["unknown"])["unknown"]?.state)
         #expect(try await !store.runtimeIsConfirmed(unknown))
         #expect(unknown.state == .known(.compacting) && workspace.shown(unknown, delivery: nil).status == .unknown())
-        try input.fileHandleForWriting.close()
-        process.waitUntilExit()
-        try app.services.reconcileLaunch()
-        #expect(try await store.piSessions(sessionIDs: ["alive"])["alive"]?.state.state == .known(.interrupted))
     }
     #endif
 }

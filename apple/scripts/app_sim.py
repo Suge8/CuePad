@@ -1,6 +1,7 @@
 """iOS、iPadOS 模拟器里的实例：装、起、截图、录屏；run 起的实例由看守租着这台模拟器。"""
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -20,8 +21,8 @@ SHOT_HOLD = HOLD + 2 * SIMCTL_TIMEOUT + 2 * BOOT_TIMEOUT
 class Sim:
     """领到的那台模拟器（调用方已持着它的槽位锁，重启不会撞上别人）。"""
 
-    def __init__(self, device):
-        self.device, self.status_bar_set = device, False
+    def __init__(self, device, log):
+        self.device, self.status_bar_set, self.log = device, False, log
 
     def run(self, *args, env=None):
         """跑一条 simctl，返回它的输出。"""
@@ -54,7 +55,7 @@ class Sim:
         if os.path.exists(ready):
             os.remove(ready)
         env = dict(os.environ, SIMCTL_CHILD_CUEPAD_LIBRARY_DIR=os.path.abspath(library), SIMCTL_CHILD_CUEPAD_SHOT_READY=ready)
-        return int(self.run("launch", "--terminate-running-process", self.device, BUNDLE_ID, *args, env=env).rsplit(":", 1)[1])
+        return int(self.run("launch", "--terminate-running-process", f"--stderr={self.log}", self.device, BUNDLE_ID, *args, env=env).rsplit(":", 1)[1])
 
     def terminate(self):
         """收尾，尽力而为：没在跑会报错，卡住了下一次 launch 也带 --terminate-running-process。"""
@@ -82,7 +83,9 @@ def stop_recording(proc):
 
 def sim(cmd, device, app, library, shots):
     """装一次包、设一次状态栏，逐张起实例拍（外观随 -theme 变时才切）。"""
-    s = Sim(device)
+    # App 的标准错误（`DebugScene.abandon` 报的原因、崩溃前的输出），就绪前退出时 wait_ready 指向它。放在产物目录（同 app-mac.log）：
+    # simctl launch 把 /tmp 下的路径换到模拟器自己的数据目录里
+    s = Sim(device, re.sub(r"/Build/Products/.*", "/app-sim.log", app))
     ready = f"{RUNTIME}/ready-{device}"
     s.run("install", device, app)
     s.set_status_bar()
@@ -106,7 +109,7 @@ def sim(cmd, device, app, library, shots):
                 stop_recording(rec)
             else:
                 pid = s.launch(library, shot.args, ready)
-                wait_ready(ready, pid)
+                wait_ready(ready, pid, s.log)
                 if cmd == "run":
                     return keep(s, pid)
                 if cmd == "rec":

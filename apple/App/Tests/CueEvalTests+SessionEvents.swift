@@ -76,10 +76,9 @@ extension CueEvalTests {
             let delivery = UUID()
             try await rig.store.recordSend(next, to: SendTarget(kind: .piSession, name: Self.title, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
             let backend = "后端做完了：POST /api/password/reset-request 发重置邮件（沿用注册验证邮件模板），令牌 30 分钟过期、用过即失效，同一邮箱 60 秒限一次。新增 14 个测试全过。"
-            try await rig.store.writePiTranscript(PiTranscript(
-                sessionID: work.id,
-                messages: [work.prompt, rig.reply(work, backend), PiChatMessage(sessionID: work.id, entryID: "u2", seq: 3, role: .user, text: next, at: .now, deliveryID: delivery)],
-                recap: PiRecap(lastPrompt: oneLine(work.prompt.text), lastReply: backend, pendingPrompt: next)))
+            try work.file.reply(backend, at: .now - 600)
+            try work.file.user(next, delivery: delivery.uuidString)
+            try await rig.read(next, in: work.id)
             work.session.setState(["kind": "tool", "tool": "bash", "detail": "npm test -- reset-password"])
             try await eventually("在跑测试写进库") { try await rig.store.sessions(matching: work.id).first?.state == .known(.tool) }
             try await eval.trigger { try await rig.say("登录页那件做到哪了？") }
@@ -99,12 +98,11 @@ extension CueEvalTests {
             try await rig.store.setStatus(work.task.id, .done)  // 早已做完，会话是被下面这句恢复的
             let asked = "复查一遍：限流有没有绕过的办法？", delivery = UUID()
             try await rig.store.recordSend(asked, to: SendTarget(kind: .piSession, name: Self.title, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
-            let question = PiChatMessage(sessionID: work.id, entryID: "u2", seq: 3, role: .user, text: asked, at: .now, deliveryID: delivery)
-            let answer = PiChatMessage(sessionID: work.id, entryID: "a2", seq: 4, role: .pi, text: "复查过了：限流按邮箱哈希计数、存在服务端，换 IP 或改大小写都绕不过去。", at: .now)
+            try work.file.reply(Self.doneReply, at: .now - 600)
+            try work.file.user(asked, delivery: delivery.uuidString)
             try await eval.trigger {
                 work.session.setState(["kind": "idle"])
-                try await rig.answered(
-                    work.id, prompt: asked, reply: answer.text, messages: [work.prompt, rig.reply(work, Self.doneReply), question, answer])
+                try await rig.answered(work.id, reply: "复查过了：限流按邮箱哈希计数、存在服务端，换 IP 或改大小写都绕不过去。")
             }
             let ended = try await rig.store.deliveryRequests(toSession: work.id).contains { $0.mode == .known(.end) }
             return [

@@ -75,21 +75,23 @@ struct RealSlashTests {
         }
     }
 
-    @Test func slashCommandsAreExpandedAndRunByPi() async throws {
+    /// #58：扩展命令不产生你的话，Pi 执行了它就确认；模板与 skill 是你说的话，经 send 交出、由 Pi 展开，落成的那条消息带着这次投送的 id（对话据此换下气泡）。
+    @Test func extensionCommandsAreConfirmedAndTemplatesAndSkillsLandWithTheirDelivery() async throws {
         try await withRig { pi, bridge, s in
-            // 扩展命令没有公开的完成回执：交出后不确认，以 ackTimeout 结束（与后面的步骤并行等）
-            let shout = Task { try await bridge.command("/shout hi there", in: s.id) }
+            try await bridge.command("/shout hi there", in: s.id)
             _ = try await pi.waitForEvent("扩展命令跑了") { $0["method"] as? String == "notify" && $0["message"] as? String == "shout:hi there" }
             #expect(fileTexts("user", in: s.sessionFile).isEmpty, "扩展命令不产生发给模型的消息")
 
-            try await bridge.command("/greet world", in: s.id)
+            let greet = UUID(), careful = UUID()
+            try await bridge.send(PiMessage(text: "/greet world", deliveryID: greet.uuidString), to: s.id)
             try await eventually("模板展开后进了模型上下文") { fileTexts("user", in: s.sessionFile) == ["Say hello to world."] }
-
-            try await bridge.command("/skill:careful 小心点", in: s.id)
+            // 回复框带着卡片发时卡片接在你打的话后面（`PiSlash.said`）：仍按 skill 展开，卡片是参数
+            try await bridge.send(PiMessage(text: "/skill:careful 小心点\n\n卡片：登录页改版", deliveryID: careful.uuidString), to: s.id)
             try await eventually("skill 展开后进了模型上下文") {
-                fileTexts("user", in: s.sessionFile).last?.contains("CAREFUL-BODY-MARKER") == true
+                fileTexts("user", in: s.sessionFile).last.map { $0.contains("CAREFUL-BODY-MARKER") && $0.hasSuffix("小心点\n\n卡片：登录页改版") } == true
             }
-            await #expect(throws: PiBridgeError.ackTimeout) { try await shout.value }
+            let said = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages.filter { $0.role == .known(.user) }
+            #expect(said.map(\.deliveryID) == [greet, careful])
         }
     }
 

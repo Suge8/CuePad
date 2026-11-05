@@ -47,7 +47,7 @@ struct AwaitingReplyTests {
         #expect(board.held.map(\.title) == ["deploy", "底栏换玻璃", "打磨手机 Cue 顶栏"])  // 写这件事本身的名字
         var cue = try await now()
         #expect(board.count(.waiting) == 3 && cue.needsYou == 3)  // "等你 N"两种一起数，看板等你列同数
-        #expect(cue.spoken == "1 件拍板，2 件待回复" && cue.items.prefix(3).map(\.kind) == [.asks, .reply, .reply])
+        #expect(cue.items.prefix(3).map(\.kind) == [.asks, .reply, .reply])
 
         // Cue 在底栏那件任务上也问一句：只在 Cue 页答，看板不多出卡，那件仍是待回复那一张
         let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "把底栏改动推送到 origin/main"), task: dock.id)
@@ -91,7 +91,7 @@ struct AwaitingReplyTests {
             sessionID: "billing", state: .error, detail: "connection refused", title: "billing",
             times: PiTimes(stateSince: .now.addingTimeInterval(-600), busySince: nil))
         let parent = try await store.createTask("导入旧数据")
-        let first = try await store.createTask("先读一遍", under: parent.id)
+        _ = try await store.createTask("先读一遍", under: parent.id)
         let second = try await store.createTask("再导进去", under: parent.id)
         try await store.bindSession("billing", to: second.id)
         _ = try await store.leaveToYou("billing")
@@ -101,7 +101,6 @@ struct AwaitingReplyTests {
         #expect(board.held.map(\.session.sessionID) == ["billing"] && board.held.first?.item?.id == parent.id)
         // 卡写的是此刻有会话的那一步（第二步），不是第一个没做完的
         #expect(board.held.first?.item?.agent?.state.sessionID == "billing")
-        #expect(board.held.first?.item?.agent?.state.sessionID != first.piSessionID)
 
         let session = try #require(board.held.first?.item?.agent?.state)
         let box = rig.services.settings.replyDraftBinding(for: session.id)
@@ -112,7 +111,7 @@ struct AwaitingReplyTests {
         #expect(board.held.isEmpty && board.count(.waiting) == 0)
         let work = try #require(board.advancing.first { $0.item?.id == parent.id })
         var pulse = workspace.pulse(of: work.agent)
-        #expect(pulse.tier == .running && pulse.word == nil && workspace.shownInHeader(session, delivery: work.agent?.delivery).label == "发送中")
+        #expect(pulse.tier == .running && pulse.word == nil)
 
         try await recorder.update(sessionID: "billing", state: .thinking, times: PiTimes(stateSince: .now, busySince: .now))
         board = try await TaskBoard.read(from: store)

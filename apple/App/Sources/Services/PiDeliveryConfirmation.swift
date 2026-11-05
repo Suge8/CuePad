@@ -11,9 +11,9 @@ struct PiDeliveryConfirmation {
     func pending(in session: CuePi.PiSession, reason: ShownText? = nil) -> DeliveryOutcome {
         .confirming { request in
             do {
-                if let file = session.sessionFile, try await store.piSession(session.sessionID) == nil {
+                if let file = session.sessionFile {
                     // 桥给出的文件位置是事实，尚未读到文件不等于消息已落盘；检查点仍为空。
-                    try await store.upsertPiSession(IndexedSession(
+                    try await store.seedPiSession(IndexedSession(
                         id: session.sessionID, path: file.path, cwd: session.cwd.path, title: session.displayName,
                         lastActivityAt: session.stateSince), host: request.hostID)
                 }

@@ -85,8 +85,8 @@ struct PiReplyBar: View {
     private var canStop: Bool { session.canStop }
     private var shownSending: Bool { !hasDraft && !canStop && (launched || sending) }
     private var glyph: SendGlyph.Phase { canSend ? .ready : shownSending ? .sending : .idle }
-    /// 输入框里是一条已知的斜杠命令时要发出的整行（`PiSlash.line`）。
-    private var commandLine: String? { commands.isEmpty ? nil : PiSlash.line(of: draft, in: commands) }
+    /// 输入框里是一条命令时要发出的整行（`PiSlash.line`；模板与技能是说的话，不算）。
+    private var commandLine: String? { commands.isEmpty ? nil : PiSlash.line(of: draft, in: commands, for: session) }
     private var button: PiReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
 
     var body: some View {
@@ -243,19 +243,12 @@ struct PiReplyBar: View {
 
     private func removeNote(_ note: ReplyNote) { services.settings.removeReplyNote(note.id, in: session.id) }
 
-    /// 斜杠命令走投送方式 `command`（由 Agent 展开执行）：是不是命令只在发出这一刻按草稿与会话报的清单认
-    /// （`commandLine`），不看按钮上次排版时带来的方式。
+    /// 是命令还是说的话只在发出这一刻按草稿与会话报的清单认（`Workspace.reply`），不看按钮上次排版时带来的方式。
     private func send(_ mode: DeliveryMode) {
         guard canSend else { return }
-        let accepts = accepts
-        let card = draft.attachments.first?.card, command = commandLine
-        if let line = command {
-            // 命令不是说的话：批注留着，跟下一句发
-            workspace.speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }) { _ in line }
-        } else {
-            workspace.speak(to: .session(session, mode: mode, card: card), from: box) { $0.accepting(accepts).stored }
-        }
-        didSend(talked: command == nil)
+        let talked = commandLine == nil
+        workspace.reply(to: session, commands: commands, from: box, accepting: accepts, mode: mode, card: draft.attachments.first?.card)
+        didSend(talked: talked)
     }
 }
 

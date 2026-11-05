@@ -67,12 +67,10 @@ extension CueEvalTests {
             let work = try await rig.working(Self.title, Self.body)
             try await eval.trigger {
                 let his = "测试都过了就提交吧。"
-                let messages = [
-                    work.prompt, rig.reply(work, "后端和登录页都做好了，测试 23 个、lint 全过。"),
-                    PiChatMessage(sessionID: work.id, entryID: "u2", seq: 3, role: .user, text: his, at: .now - 15 * 60),
-                    PiChatMessage(sessionID: work.id, entryID: "a2", seq: 4, role: .pi, text: "提交好了（3f9c2ab）。", at: .now),
-                ]
-                try await rig.store.writePiTranscript(PiTranscript(sessionID: work.id, messages: messages, recap: PiRecap(pendingPrompt: his)))
+                try work.file.reply("后端和登录页都做好了，测试 23 个、lint 全过。", at: .now - 16 * 60)
+                try work.file.user(his, at: .now - 15 * 60)
+                try await rig.read(his, in: work.id)  // 他 15 分钟前说的，早已读进库
+                try await rig.spoke("提交好了（3f9c2ab）。", in: work.id)
                 let question = "要推送到 origin/main 吗？"
                 work.session.sendInfo(["question": ["id": "p1", "kind": "select", "text": question, "options": ["推送", "不推送"]]])
                 work.session.setState(["kind": "waiting_user", "title": question])

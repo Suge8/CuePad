@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """记忆基准（LongMemEval、LoCoMo、ConvoMem）给 Cue 的长期记忆打分：抽题、判分、出报告。跑法见 docs/cue-eval.md「记忆基准」。
 
-  bench.py sample BENCH [--data DIR] [--holdout]  下载 BENCH（lme / locomo / convomem）的官方数据到 DIR（缺省 /tmp/bench/BENCH，缺时才下），
+  bench.py sample BENCH [--data DIR] [--holdout]  下载 BENCH（lme / locomo / convomem）的官方数据到 DIR（缺省 ~/Library/Caches/cuepad-bench/BENCH：可重下的缓存，缺时才下），
                                       按层抽 100 题（种子 42）写成评测读的 DIR/sample.jsonl；--holdout 另抽一份与它不相交、各层题数相同的 holdout.jsonl
   bench.py judge RUN [RUN…]           给每个 RUN/<题号>.json 判分（各家的判分提示，经 Pi 用 claude-sonnet-5-5），按给的先后比这几遍，写最后一个 RUN/report.md
 
@@ -44,7 +44,7 @@ BENCHES = {bench.name: bench for bench in (LongMemEval, LoCoMo, ConvoMem)}
 
 
 def cmd_sample(args):
-    bench = BENCHES[args.bench](args.data or Path("/tmp/bench") / args.bench)
+    bench = BENCHES[args.bench](args.data or Path.home() / "Library/Caches/cuepad-bench" / args.bench)
     entries = bench.entries()
     picked = bench.sample(entries)
     if args.holdout:

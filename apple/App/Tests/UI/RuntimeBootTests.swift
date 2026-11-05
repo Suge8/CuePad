@@ -5,7 +5,7 @@ import Testing
 
 /// #43：旧 boot 或旧宿主晚到的 Cue 报告不能重新变成当前运行证明。
 struct RuntimeBootTests {
-    @Test func Cue旧报告晚到与换Mac不复活忙碌_新报告与同boot重开保持确认() async throws {
+    @Test func Cue旧报告晚到与换Mac不复活忙碌_新报告保持确认() async throws {
         let source = TestApp(), receiver = TestApp()
         let sourceStore = source.services.store, store = receiver.services.store
         _ = try await sourceStore.updateCueProfile { $0.hostID = "mac-a"; $0.enabledAt = .now }
@@ -26,9 +26,6 @@ struct RuntimeBootTests {
         let current = PiStateRecorder(store: store, hostID: "mac-a", minInterval: .zero, bootID: "new-boot")
         try await current.updateCue(.thinking)
         #expect(try await now().isBusy)
-        let reopened = receiver.relaunch()
-        let sameBoot = CueNow(try await CueDigest.read(from: reopened.store), at: .always(), local: .init(waiting: nil, here: nil))
-        #expect(sameBoot.isBusy && sameBoot.hasConfirmedActivity)
         old.fields["modifiedAt"] = .int(Int64(Date.now.addingTimeInterval(10).timeIntervalSince1970 * 1000))
         #expect(try await store.applyRemote([.save(old, systemFields: Data())]).isEmpty)
         let late = try await now()
@@ -46,7 +43,7 @@ struct RuntimeBootTests {
         #expect(try await !now().isLive)
     }
 
-    @Test(arguments: ["主干82", "本分支82", "本分支84"])
+    @Test(arguments: ["已发布82_活动地址", "81及更早_经82额度分区"])
     func 历史库升级不补签Cue_真实新报告才恢复确认(_ origin: String) async throws {
         let app = TestApp(), store = app.services.store
         _ = try await store.updateCueProfile { $0.hostID = "mac-a"; $0.enabledAt = .now }
@@ -58,13 +55,13 @@ struct RuntimeBootTests {
         let location = app.services.location
         let db = RawDB(location.databaseURL)
         app.services.cancelBackgroundWork()
-        if origin == "主干82" {
+        if origin == "已发布82_活动地址" {
             _ = try await store.recordActivityDestination(device: "phone", activityID: "existing", token: "token", environment: "development", startedAt: .now)
             try db.exec("ALTER TABLE accountQuotas DROP COLUMN account; ALTER TABLE accountQuotas DROP COLUMN status; ALTER TABLE accountQuotas DROP COLUMN observedAt;")
         } else {
             try db.exec("DROP TABLE activityDestinations;")
         }
-        if origin != "本分支84" { try db.exec("""
+        try db.exec("""
             DROP TRIGGER piSessionStates_writeSeq_update;
             ALTER TABLE piSessionStates DROP COLUMN bootID;
             ALTER TABLE macPresence DROP COLUMN bootID;
@@ -77,14 +74,15 @@ struct RuntimeBootTests {
               UPDATE piSessionStates SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;
             END;
             ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
-            """) }
-        let oldVersion = origin == "本分支84" ? 84 : 82
-        try db.exec("ALTER TABLE sessionViewers DROP COLUMN sessionIDs; ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT; PRAGMA user_version = \(oldVersion);")
-        #expect(CueStore.schemaVersion(of: location.databaseURL) == oldVersion)
+            ALTER TABLE sessionViewers DROP COLUMN sessionIDs;
+            ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT;
+            PRAGMA user_version = 82;
+            """)
+        #expect(CueStore.schemaVersion(of: location.databaseURL) == 82)
         let upgraded = try CueStore(location: location)
         // 83 的运行证明与 84 的期限，旧端读写会做错事：对端下限不能低于 84
         #expect(CueStore.schemaVersion(of: location.databaseURL) == CueStore.supportedSchemaVersions.upperBound && CueStore.peerFloor >= 84)
-        #expect(try await upgraded.activityDestinations().map(\.activityID) == (origin == "主干82" ? ["existing"] : []))
+        #expect(try await upgraded.activityDestinations().map(\.activityID) == (origin == "已发布82_活动地址" ? ["existing"] : []))
         #expect(try await upgraded.accountQuotas().isEmpty)
         #expect(try db.rows("SELECT hostID IS NULL, bootID IS NULL FROM cueState") == [["1", "1"]])
         let legacy = try #require(try await upgraded.cueState())

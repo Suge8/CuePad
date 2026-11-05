@@ -3,7 +3,7 @@
 # 用法：release-mac.sh [--dry-run] [--resume <提交 id>]
 #   --dry-run  停在本地产物：<产物目录>/release/mac/ 下的 zip 与 appcast.xml（已用 EdDSA 签名校验），不上传
 #   --resume   公证有时要等很久（新账号首次提交可能数小时）：中断后接着等这次提交，再装订并继续后面的步骤
-# 下载位置只有一处：Release $TAG 的三个资产，不新建版本或标签，每次发布原地替换；三个资产各自的用途与上传顺序的理由见 docs/release.md。
+# 下载位置只有一处：Release $TAG 的三个资产，不新建 Release，每次发布原地替换；回读校验过后在这个提交上打 mac/<构建号> 标签并推到远端（这一版源码的唯一记号）；三个资产各自的用途与上传顺序的理由见 docs/release.md。
 # 更新源 SUFeedURL 直接是这里的 appcast.xml（releases/latest/download/appcast.xml），回读校验从 App 的 Info.plist 读这个地址。
 # 打包前先核对生产环境的 CloudKit 结构（ck-production.sh），缺字段就不发；待部署清单只拦 iOS（release-ios.sh）。
 # 也核对发版顺序（check_ios_floor）：这一版的同步下界不高于 TestFlight 上处理好的最新 iOS 版（docs/release.md「发版顺序」）。门铃中转打包前、导出后各核对一次（check_relay）。
@@ -12,6 +12,8 @@ set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_signing.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_signing.sh"
+# shellcheck source=_lock.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_lock.sh"
 require_asc
 
 REPO=Suge8/CuePad
@@ -65,6 +67,8 @@ if [ -z "$resume" ]; then
 rm -rf "$OUT"; mkdir -p "$OUT"
 # Developer ID 证书在专用钥匙串里；描述文件（含 iCloud）由 API 创建并安装。
 # 手动签名：Xcode 的自动签名用 API 密钥时管不了 iCloud 容器，工程的 Release 配置已指定证书与描述文件名。
+# 描述文件全机一份，生成到导出完持着签名锁（_lock.sh 规则 3），公证不在锁里
+signing_begin
 python3 "$APPLE_DIR/scripts/provision.py" unlock
 python3 "$APPLE_DIR/scripts/provision.py" profiles
 
@@ -76,6 +80,7 @@ xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destin
 export_options "$OUT/export.plist" developer-id "Developer ID Application" "$CUEPAD_APP_ID"="CuePad macOS DeveloperID"
 xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" \
   -exportPath "$OUT/export"
+signing_end
 
 fi
 
@@ -140,4 +145,7 @@ curl -fsSL -o "$check/$ASSET" "$DOWNLOAD/$ASSET"
 cmp "$check/update.zip" "$update"
 cmp "$check/$ASSET" "$zip"
 "$APPLE_DIR/scripts/sparkle.sh" verify "$check/update.zip" "$check/appcast.xml"
-echo "已发布：$DOWNLOAD/$ASSET"
+tag="mac/${versions[1]#CURRENT_PROJECT_VERSION=}"
+git -C "$APPLE_DIR" tag "$tag"
+git -C "$APPLE_DIR" push -q origin "$tag"
+echo "已发布：$DOWNLOAD/$ASSET（$tag）"

@@ -29,12 +29,15 @@ enum Launch {
 
     static func make() -> Launch {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return .testHost }
+        let launch: Launch
         do {
-            return open(try LibraryLocation.resolve())
+            launch = open(try LibraryLocation.resolve())
         } catch {
             // 位置本身解析不出来（比如没有 App Group 权限）：没有库文件可读，失败里的版本为空
-            return .failed(LibraryFailure(error, location: nil))
+            launch = .failed(LibraryFailure(error, location: nil))
         }
+        if case .failed(let failure) = launch { DebugHooks.libraryFailed(failure) }
+        return launch
     }
 
     static func open(_ location: LibraryLocation) -> Launch {

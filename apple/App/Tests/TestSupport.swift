@@ -105,7 +105,7 @@ final class TestApp {
     let pasteboard = NSPasteboard(name: .init("cuepad-tests-\(UUID().uuidString)"))
     /// socket 路径有 104 字节上限，所以假扩展的目录放在短路径下。
     let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
-    lazy var pi = PiBridge(socketDirectory: socketDirectory)
+    lazy var pi = PiBridge(socketDirectory: socketDirectory, timing: timing)
     lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory, sessions: piPaths.sessionsDirectory)
     /// 托管的 Claude Code 会话（撑不过 App 重启的那一类）
     lazy var claude = PipedHostedAgent(bridge: pi, agent: .claudeCode)

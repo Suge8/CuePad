@@ -105,15 +105,14 @@ struct AgentLibraryPhoneTests {
         draft.changed(body: "先读模板，再写\n")
         await draft.send()
 
-        var file = await mac.skill
-        #expect(file == "---\nname: pr\ndescription: 写 PR 描述\nlicense: MIT\n---\n\n先读模板，再写\n" && draft.state == .saved)
+        #expect(draft.state == .saved)
         try await eventually("快照写回") { workspace.library?.skill(at: Self.skillPath)?.description == "写 PR 描述" }
 
         try await mac.editSkill("---\nname: pr\ndescription: Mac 上改的\n---\n")
         draft.changed(body: "手机又改\n")
         await draft.send()
 
-        file = await mac.skill
+        let file = await mac.skill
         #expect(draft.conflicted && draft.body == "手机又改\n" && file == "---\nname: pr\ndescription: Mac 上改的\n---\n", "Mac 上刚改过：不写，留着你的字")
         try await eventually("快照跟上 Mac") { workspace.library?.skill(at: Self.skillPath)?.description == "Mac 上改的" }
         draft.follow(try await text(.skill(Self.skillPath), workspace))

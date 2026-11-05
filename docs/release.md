@@ -2,13 +2,15 @@
 
 入口是 `xc.sh release mac|ios`、`xc.sh device`、`xc.sh provision`，每步做什么在 `apple/scripts/` 下各脚本的头注释里（`release-mac.sh`、`release-ios.sh`、`provision.py`、`testflight.py`、`sparkle.sh`、`ck-production.sh`）。对外发布只在用户明确要求时做：发出去的包会推给所有用户。发布只在干净检出运行，否则 `xc.sh` 拒绝。
 
+描述文件全机一份：几个检出同时发版、跑 `device` 或 `provision` 时，从生成描述文件到归档导出这一段全机排队，一次一个（`_lock.sh` 规则 3），公证与上传不排。
+
 ## 发版核对
 
 `release mac` 导出后、公证前由脚本核对，不过就停：门铃中转活着、签名完整、包里的正式版标记 `CuePadRelease` 是 YES（`Signing.xcconfig` 的 `CUEPAD_RELEASE`，只有发版脚本归档时设）、包里的命令行在空家目录下去找正式资料库 `CuePad/Library` 而不是开发库 `CuePad Dev`。少了标记，装上的正式版会开开发库，用户看到的是空库。只核对、不上传用 `xc.sh release mac --dry-run`（照样提交公证）。
 
 ## 发版顺序
 
-同步下界（`Schema.peerFloor`，什么时候抬见它的注释）抬高的那一版先发 iOS，等 TestFlight 处理完（`testflight.py builds` 显示 VALID）再发 Mac：Mac 经 Sparkle 几分钟就装上，iOS 要等苹果处理十几分钟到一小时，反过来发，这段时间里手机停下收发。`release ios` 上传后在那个提交上打 `ios/<构建号>` 标签，`release mac` 核对 TestFlight 上处理好的最新一版的下界不低于这一版，不够就不发。下界没变的版本通常先后随意；首次启用远程实时活动的这一版先更新负责发布的 Mac，再更新 iPhone：新版手机不再用本地库更新远程活动。
+同步下界（`Schema.peerFloor`，什么时候抬见它的注释）抬高的那一版先发 iOS，等 TestFlight 处理完（`testflight.py builds` 显示 VALID）再发 Mac：Mac 经 Sparkle 几分钟就装上，iOS 要等苹果处理十几分钟到一小时，反过来发，这段时间里手机停下收发。`release ios` 上传后、`release mac` 回读校验后各在那个提交上打 `ios/<构建号>`、`mac/<构建号>` 标签并推到远端（查某一版的源码只看标签，不另留发版分支），`release mac` 核对 TestFlight 上处理好的最新一版的下界不低于这一版，不够就不发。下界没变的版本通常先后随意；首次启用远程实时活动的这一版先更新负责发布的 Mac，再更新 iPhone：新版手机不再用本地库更新远程活动。
 
 先装上新版的那台把下界抬上去，另一台停下同步、写下的照记，更新后自动发出：Mac 停下时当场查一次更新（`UpdateService.checkInBackground`），手机在设置的同步那一行点「在 TestFlight 里更新」。
 
@@ -46,7 +48,7 @@ enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用�
 
 ## CloudKit 数据结构
 
-`apple/CloudKit/cuepad.ckdb` 由同步记录映射推出：映射改了 `CloudKitSchemaTests` 会失败，用 `TEST_RUNNER_CUEPAD_REGENERATE_SCHEMA=1 apple/scripts/xc.sh test kit '-only-testing:CueSyncTests/CloudKitSchemaTests/regenerateSchemaFile()'` 重新生成，再导入开发环境。管理令牌在钥匙串 `cuepad-cloudkit-management-token`（过期时在这里更新），不入库、不打印：
+`apple/CloudKit/cuepad.ckdb` 由同步记录映射推出：映射改了 `CloudKitSchemaTests` 会失败，用 `TEST_RUNNER_CUEPAD_REGENERATE_SCHEMA=1 apple/scripts/xc.sh test kit -only-testing:CueSyncTests/CloudKitSchemaTests` 重新生成，再导入开发环境。管理令牌在钥匙串 `cuepad-cloudkit-management-token`（过期时在这里更新），不入库、不打印：
 
 ```bash
 export CLOUDKIT_MANAGEMENT_TOKEN=$(security find-generic-password -a cuepad -s cuepad-cloudkit-management-token -w)

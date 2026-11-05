@@ -77,17 +77,21 @@ extension CueHostTests {
         let context = String(repeating: "登录页的入口、填邮箱页和设新密码页照正文做，提示文案统一。", count: 10)
         let bump = context + "最后：做完后顺手把版本号升到 2.3.1，CHANGELOG 记一笔", his = "顺便看看登录页的字号"
         let last = context + "最后：交回时贴 git log -1 --stat", echoed = context + "最后：改完的页面截图发到手机"
-        var messages: [PiChatMessage] = []
-        for (text, byCue) in [(bump, true), (bump, true), (his, false), (echoed, true), ("接着做第 1 页", true), (echoed, false), (last, true)] {
+        let file = try #require(rig.app.host.sessionFiles[id])
+        func said(_ text: String, byCue: Bool = true) async throws {
             let delivery = UUID()
             if byCue { _ = try await rig.store.recordSend(text, to: SendTarget(kind: .piSession, name: task.heading, ref: id), card: task.id, delivery: delivery, origin: .known(.cue)) }
-            messages.append(PiChatMessage(sessionID: id, entryID: "u\(messages.count)", seq: Int64(messages.count + 1), role: .user, text: text, at: .now, deliveryID: byCue ? delivery : nil))
-            messages.append(PiChatMessage(sessionID: id, entryID: "a\(messages.count)", seq: Int64(messages.count + 1), role: .pi, text: "好", at: .now))
+            try file.user(text, delivery: byCue ? delivery.uuidString : nil)
+        }
+        for (text, byCue) in [(bump, true), (bump, true), (his, false), (echoed, true), ("接着做第 1 页", true), (echoed, false)] {
+            try await said(text, byCue: byCue)
+            try file.reply("好")
         }
         session.setState(["kind": "thinking"])
         try await eventually("在干活写进库") { try await rig.store.sessions(matching: id).first?.state.isWorking == true }
+        try await said(last)
         session.setState(["kind": "idle"])
-        try await rig.answered(id, messages: messages)
+        try await rig.answered(id, reply: "好")
         try await eventually("被叫醒的那一轮做完") { rig.rounds.contains { $0.wake.isSessionActivity && $0.finishedAt != nil } }
         let envelope = try #require(rig.rounds.last { $0.wake.isSessionActivity }).sent.joined()
         let earlier = envelope.components(separatedBy: "你更早对它说过的").dropFirst().first?.split(separator: "\n").dropFirst()

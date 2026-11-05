@@ -13,7 +13,7 @@ extension PiBridge {
         var id: PiSession.ID?
         /// hello 里报的扩展版本
         var extensionVersion: Int?
-        let replies = PendingReplies<String, PiWire.Ack>(timeout: AgentTimeouts.ack, timeoutError: PiBridgeError.ackTimeout)
+        let replies: PendingReplies<String, PiWire.Ack>
         var nextCommand = 0
         var bye: PiWire.Bye?
         var rejected = false
@@ -22,13 +22,14 @@ extension PiBridge {
             self.connection = connection
             self.file = file
             self.bridge = bridge
+            replies = PendingReplies(timeout: AgentTimeouts.ack, timing: bridge.timing, timeoutError: PiBridgeError.ackTimeout)
         }
 
         var session: PiSession? { id.flatMap { bridge?.session(id: $0) } }
 
         func send(_ message: PiMessage, in _: PiSession.ID) async throws { _ = try await request { try PiWire.sendCommand(id: $0, message) } }
 
-        func command(_ line: String, in _: PiSession.ID) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
+        func command(_ line: String, deliveryID _: String?, in _: PiSession.ID) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
 
         func reload() async throws { _ = try await request { try PiWire.bare("reload", id: $0) } }
 
@@ -79,6 +80,9 @@ extension PiBridge {
     /// 连着的 Pi 会话都报了这个扩展版本（还没 hello 的不算）：过渡时判断旧单文件扩展还有没有会话在用
     /// （`AgentIntegration.retireLegacyPiExtension`）。连接在扫描 socket 目录时同步建立，所以已在跑的会话都算在内。
     public func allRun(extensionVersion version: Int) -> Bool { links.values.allSatisfy { $0.extensionVersion == version } }
+
+    /// 连着的 Pi 会话报的扩展版本（还没 hello 的不算）：过渡时找自己盯磁盘的旧扩展（`PiExtensionNudge`）
+    var extensionVersions: [Int] { links.values.compactMap(\.extensionVersion) }
 
     /// 装完新版扩展后：请连着的旧版会话换上（握手时版本不同的已在握手时请过，那时磁盘上可能还是旧的）。
     public func offerExtensionUpgrade() { for link in links.values where link.id != nil { link.offerUpgrade() } }

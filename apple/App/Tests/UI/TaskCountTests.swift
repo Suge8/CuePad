@@ -48,9 +48,9 @@ struct TaskCountTests {
 
     #if os(macOS)
     /// 任务页的流水看板（Mac 侧栏"任务"与手机任务页同一份）：拖到「推进中」就是开始（同"开始"，`Workspace.handOff`），会话开好它就推进中；
-    /// Cue 问到它，它不挪列（提问只在 Cue 页答，不上看板），没绑任务的会话在问进等你；推进中的数就是 Cue 摘要里的数，等你列头是摘要的"等你"去掉 Cue 的提问；
+    /// Cue 问到它，它不挪列（提问只在 Cue 页答，不上看板）；推进中的数就是 Cue 摘要里的数，等你列头是摘要的"等你"去掉 Cue 的提问；
     /// 拖到做完就是做完（同点完成圈，`Workspace.toggle`），落在今天做完的那一列，它还活着的会话留在「推进中」；做完了 Cue 还在问它，它仍在已完成。
-    @Test func 看板_拖到推进中就是开始_Cue问它不挪列_会话在问进等你_拖到做完就是做完() async throws {
+    @Test func 看板_拖到推进中就是开始_Cue问它不挪列_拖到做完就是做完() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
@@ -74,25 +74,22 @@ struct TaskCountTests {
         try await expectCountsMatchCue(columns)
 
         let ask = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送发言顺序的修复"), task: task.id)
-        try await (rig.runtimeRecorder(on: "mac-a"))
-            .update(sessionID: "rename", state: .waitingForUser, title: "rename", question: PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？"))
         _ = try await store.addCueMessage(.cue, text: "要删旧脚本吗？", ask: try CueAsking(.delete, action: "删掉 scripts/legacy"))
         columns = try await board()
         #expect(columns.advancing.map(\.item?.id) == [task.id])
-        #expect(columns.held.map(\.session.sessionID) == ["rename"])
         try await expectCountsMatchCue(columns)
 
         try await workspace.services.answerCueQuestion(ask.id, CueAsk.once)
         #expect(try await board().advancing.map(\.item?.id) == [task.id])
         try await workspace.toggle(task.id)
         columns = try await board()
-        #expect(columns.done.map(\.id) == [task.id] && columns.advancing.map(\.id) == ["session/s1"] && columns.held.count == 1)
+        #expect(columns.done.map(\.id) == [task.id] && columns.advancing.map(\.id) == ["session/s1"])
         try await expectCountsMatchCue(columns)
 
         // 做完了 Cue 还在问它：它仍在已完成
         _ = try await store.addCueMessage(.cue, text: "要删分支吗？", ask: try CueAsking(.delete, action: "删掉修发言乱序的分支"), task: task.id)
         columns = try await board()
-        #expect(columns.done.map(\.id) == [task.id] && columns.held.count == 1)
+        #expect(columns.done.map(\.id) == [task.id])
         try await expectCountsMatchCue(columns)
     }
     #endif

@@ -13,17 +13,23 @@ extension CueHostTests {
     /// 大脑没了又起不来（这台 Mac 上找不到 Pi）：快的几次重试用完，告诉你一次起不来，此刻是出错；之后隔一阵自己再试，
     /// Pi 回来了就起好；之后第一轮好好做完（答你的话）才说一句又能干活了。
     @Test func 起不来后隔一阵自己再试_起好了说又能干活了() async throws {
-        let rig = try await Rig(timing: { $0.slowRestarts = [.milliseconds(500)] })
+        let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(60)] })
         let first = try #require(rig.brainPIDs.first)
         rig.launches.set(open: false)
         let before = rig.launches.attempts
         kill(first, SIGKILL)
-        try await rig.message(.cue, containing: "我起不来了")
+        try await rig.message(.cue, containing: "我起不来了", skippingBackoff: true)
         try await eventually("此刻是出错") { try await rig.store.cueState()?.state == .known(.error) }
-        try await eventually("转慢的之后还在试") { rig.launches.attempts >= before + 6 }
+        try await eventually("转慢的之后还在试") {
+            rig.skipBackoff()
+            return rig.launches.attempts >= before + 6
+        }
         try await eventually("健康是等着重起") { rig.health?.phase == .restarting && rig.health?.nextRetry != nil }
         rig.launches.set(open: true)
-        try await eventually("自己起好了") { rig.health?.phase == .running }
+        try await eventually("自己起好了") {
+            rig.skipBackoff()
+            return rig.health?.phase == .running
+        }
         #expect(try await rig.count("又能干活了") == 0)
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
@@ -49,33 +55,37 @@ extension CueHostTests {
 
     /// 一轮里模型一直不回、大脑也没有任何动静：看门狗到点停掉它、重起一个，你的话重新交给新的大脑答。
     @Test func 一轮挂住没动静_看门狗重起_你的话重新交出() async throws {
-        let rig = try await Rig(timing: { $0.silence = .seconds(2) })
+        let rig = try await Rig(timing: { $0.silence = .seconds(60) })
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("请求挂在模型那里") { rig.model.hanging }
+        try await stalled(rig, first)
         try await rig.message(.cue, containing: "收到：请慢慢想")
-        #expect(!rig.brainPIDs.contains(first))
         await rig.stop()
     }
 
     /// Mac 睡着正赶上一轮在跑：睡着的那段不算没动静，醒来不把大脑当成卡住、不重起；醒着又那么久没动静，看门狗才重起、你的话重新交。
     @Test func Mac睡着时一轮在跑_醒来不当成卡住() async throws {
-        let clock = AwakeClock()
-        let rig = try await Rig(timing: {
-            $0.silence = .seconds(2)
-            $0.awake = { clock.now() }
-        })
+        let rig = try await Rig(timing: { $0.silence = .seconds(60) })
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("请求挂在模型那里") { rig.model.hanging }
-        clock.sleep()
-        try await Task.sleep(for: .seconds(4))  // 合盖的这段：墙钟走过两个看门狗的时长
+        rig.jump(by: .seconds(120), asleep: true)  // 合盖的这段：墙钟走过两个看门狗的时长
+        try await rig.reconciled()
         #expect(rig.brainPIDs == [first])
         #expect(try await rig.count("收到：请慢慢想") == 0)
-        clock.wake()
+        try await stalled(rig, first)
         try await rig.message(.cue, containing: "收到：请慢慢想")
-        #expect(!rig.brainPIDs.contains(first))
         await rig.stop()
+    }
+
+    /// 醒着过了看门狗的时长、挂住的那个大脑被停掉。
+    private func stalled(_ rig: Rig, _ brain: pid_t) async throws {
+        try await eventually("看门狗停掉挂住的大脑") {
+            guard rig.brainPIDs.contains(brain) else { return true }
+            rig.skipSilence()
+            return false
+        }
     }
 
     /// Cue 的工具服务没了（进程退出）：这一轮里工具报错照常做完，做完换个班次（新的大脑带着新的工具服务），之后工具照常能用。
@@ -92,10 +102,10 @@ extension CueHostTests {
 
     /// 额度用完、这台 Mac 上没有别的 Agent 可换：那个错只说一次，你的这一轮按慢速周期一直重来（信封带上那个错），额度回来了就接着做完。
     @Test func 额度用完又没得换_慢速周期重来直到做完() async throws {
-        let rig = try await Rig(timing: { $0.slowRestarts = [.milliseconds(500)] })
+        let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(60)] })
         rig.model.blockQuota(times: 3)
         try await rig.say("你好")
-        try await rig.message(.cue, containing: "接着做上一轮没做完的")
+        try await rig.message(.cue, containing: "接着做上一轮没做完的", skippingBackoff: true)
         #expect(rig.model.errors == 3)
         #expect(try await rig.count("达到用量限制") == 1)
         await rig.stop()
@@ -115,7 +125,7 @@ extension CueHostTests {
         #expect(try await rig.store.cueLine(reminder.line.id)?.deletedAt != nil)
         try await remote.update(sessionID: "remote-retry", state: .settled)
         try await rig.answered("remote-retry")
-        try await Task.sleep(for: .seconds(1))  // 留出对账的时间：新变化不该叫它重来
+        try await rig.reconciled()  // 新变化对过账：不该叫它重来
         #expect(rig.model.errors == 1 && keeper.turn == nil)
         #expect(try await rig.count("定时到点") == 0)
         try await rig.say("你好")
@@ -133,7 +143,7 @@ extension CueHostTests {
     }
 
     @Test func 持续重试期间新定时不先消费_两项失败都能恢复() async throws {
-        let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3)] })
+        let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(60)] })
         rig.model.blockQuota(times: 1)
         let first = try await rig.store.noteCueLine("核对发布结果 A", source: .you, remindAt: .now)
         let keeper = try #require(rig.services.cue.keeper)
@@ -145,13 +155,13 @@ extension CueHostTests {
         try await eventually("A 失败后等待重试") { waiting(first.line.id) }
         let second = try await rig.store.noteCueLine("核对发布结果 B", source: .you, remindAt: .now)
         rig.model.blockQuota(times: 1, containing: "醒来：定时到点\n- #\(second.index) 核对发布结果 B")
-        // B 已到期，留出对账时间；A 的慢速重试还没到点。
-        try await Task.sleep(for: .seconds(1))
+        // B 已到期、对过账；A 的慢速重试还没到点。
+        try await rig.reconciled()
         #expect(try await rig.store.cueLine(second.line.id)?.deletedAt == nil)
-        #expect(try await rig.store.dueCueSchedules(at: .now).contains { $0.id == second.line.id })
-        try await rig.message(.cue, containing: "定时到点：#\(first.index) 核对发布结果 A")
+        #expect(try await rig.store.dueCueSchedules(at: rig.clock.now).contains { $0.id == second.line.id })
+        try await rig.message(.cue, containing: "定时到点：#\(first.index) 核对发布结果 A", skippingBackoff: true)
         try await eventually("B 随后失败，也等着持续重试") { waiting(second.line.id) }
-        try await rig.message(.cue, containing: "定时到点：#\(second.index) 核对发布结果 B")
+        try await rig.message(.cue, containing: "定时到点：#\(second.index) 核对发布结果 B", skippingBackoff: true)
         try await eventually("两个定时各自完成") {
             [first.line.id, second.line.id].allSatisfy { id in
                 keeper.rounds.contains { round in
@@ -166,16 +176,21 @@ extension CueHostTests {
 
     /// 你说完话之后不久（缓存还热）没再说话：Cue 趁热巡视一次，不等冷巡视的空闲时长；这段空闲里只热巡视这一次。
     @Test func 缓存还热时趁热巡视一次() async throws {
+        let warm = Duration.seconds(60)
         let rig = try await Rig(
-            cacheLifetime: .seconds(30), timing: { ($0.warmPatrolAfter, $0.cacheMargin) = (.seconds(2), .seconds(5)) }, prepare: Rig.handOverWork)
+            cacheLifetime: .seconds(600), timing: { ($0.warmPatrolAfter, $0.cacheMargin) = (warm, .seconds(60)) }, prepare: Rig.handOverWork)
         try await rig.message(.cue, containing: "我看了一眼")
         try await rig.say("你好")
-        let said = try await rig.message(.cue, containing: "收到：你好")
-        let patrol = try await rig.message(.cue, containing: "巡视了一圈")
+        try await rig.message(.cue, containing: "收到：你好")
         let lastYou = try #require(try await rig.store.cueLastYou()?.said)
-        #expect(patrol.createdAt.timeIntervalSince(lastYou) >= 2)
-        #expect(patrol.createdAt < said.createdAt + 25)
-        try await Task.sleep(for: .seconds(4))  // 再过一个热巡视的时长：同一段空闲不再巡视
+        rig.jump(to: lastYou + warm.seconds - 1)
+        try await rig.reconciled()
+        #expect(try await rig.count("巡视了一圈") == 0)  // 热巡视的时长差一刻还不巡视
+        rig.jump(to: lastYou + warm.seconds)  // 离冷巡视（一小时）、缓存过期都还远
+        try await rig.message(.cue, containing: "巡视了一圈")
+        try await eventually("巡视的这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
+        rig.jump(by: warm)  // 再过一个热巡视的时长：同一段空闲不再巡视
+        try await rig.reconciled()
         #expect(try await rig.count("巡视了一圈") == 1)
         await rig.stop()
     }

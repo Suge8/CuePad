@@ -13,7 +13,7 @@ import Testing
 extension CueHostTests {
     /// 起大脑的门（`Rig.launches`）：起大脑在主线程之外问它，所以用锁。
     nonisolated final class LaunchGate: Sendable {
-        private let state = Mutex((open: true, attempts: 0))
+        private let state = Mutex((open: true, attempts: 0, elsewhere: (@Sendable () -> Void)?.none))
         var attempts: Int { state.withLock { $0.attempts } }
         func set(open: Bool) { state.withLock { $0.open = open } }
 
@@ -23,20 +23,38 @@ extension CueHostTests {
                 return state.open ? launch : nil
             }
         }
+
+        /// 下一次试起别家（这台 Mac 上找不到、起不来）时先做 `action`，只做一次：在对账途中让什么发生（如钟走过某一刻）。
+        func whenTryingElsewhere(_ action: @escaping @Sendable () -> Void) { state.withLock { $0.elsewhere = action } }
+
+        func passElsewhere() -> CuePad.CueLaunch? {
+            state.withLock { state in
+                defer { state.elsewhere = nil }
+                return state.elsewhere
+            }?()
+            return nil
+        }
     }
 
-    /// 看门狗的钟（`CueTiming.awake`）的替身：`sleep()` 到 `wake()` 之间停住，像 Mac 合盖的那一段。
-    nonisolated final class AwakeClock: Sendable {
-        private let state = Mutex((asleepAt: SuspendingClock.Instant?.none, slept: Duration.zero))
+    /// Rig 的钟：App 的钟（`app`：资料库、会话状态的写入节流、Cue 的对账定时器都走它）与看门狗的钟（`CueTiming.awake`）。
+    /// 要等的时限不真等，跳过去；起大脑在主线程之外，所以也能在那里跳（`LaunchGate.whenTryingElsewhere`）。
+    nonisolated final class Clocks: Sendable {
+        let app = JumpTiming()
+        /// 看门狗的钟醒着跳过的；像 Mac 合盖那样跳过的不算
+        private let awakeSkipped = Mutex(Duration.zero)
 
-        func now() -> SuspendingClock.Instant { state.withLock { ($0.asleepAt ?? .now).advanced(by: .zero - $0.slept) } }
-        func sleep() { state.withLock { $0.asleepAt = .now } }
-        func wake() {
-            state.withLock { state in
-                guard let asleepAt = state.asleepAt else { return }
-                state.slept += .now - asleepAt
-                state.asleepAt = nil
-            }
+        func awake() -> SuspendingClock.Instant { SuspendingClock.now.advanced(by: awakeSkipped.withLock { $0 }) }
+
+        /// 往前跳 `duration`：两个钟一起跳；`asleep` 像 Mac 合盖的那一段，看门狗的钟不走。
+        func jump(by duration: Duration, asleep: Bool = false) {
+            if !asleep { awakeSkipped.withLock { $0 += duration } }
+            app.jump(by: duration)
+        }
+
+        /// 醒着跳到 `date`；已经过了就不动。
+        func jump(to date: Date) {
+            let ahead = date.timeIntervalSince(app.now)
+            if ahead > 0 { jump(by: .seconds(ahead)) }
         }
     }
 
@@ -46,6 +64,8 @@ extension CueHostTests {
         /// 起 Pi 的大脑要过的门：关上时这台 Mac 找不到 Pi（起不来），数着试了几次
         let launches = LaunchGate()
         let app: TestApp
+        let clocks = Clocks()
+        var clock: JumpTiming { clocks.app }
         let folder: URL
         /// 真大脑的临时目录（`EvalBrain.launch`，开销记录在里面）；假模型时为 nil
         let brainDirectory: URL?
@@ -70,6 +90,8 @@ extension CueHostTests {
             var timing = CueTiming(
                 patrolAfter: patrolAfter, cacheLifetime: cacheLifetime, renewAt: renewAt,
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), sayWait: 5, quietHours: [], clock: clock)
+            let clocks = clocks
+            timing.awake = { clocks.awake() }
             tune(&timing)
             let launch = CuePad.CueLaunch(
                 executable: settleGate ? try Self.gatedPi() : realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
@@ -78,8 +100,9 @@ extension CueHostTests {
             brainDirectory = directory
             let brainLaunch = try real.map { try $0.launch(in: directory!) }, runtime = real?.runtime, gate = launches
             app = TestApp(cue: CueDependencies(
-                launch: { agent, _ in agent == runtime ? brainLaunch : agent == .pi ? gate.pass(launch) : nil },
-                helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
+                launch: { agent, _ in agent == runtime ? brainLaunch : agent == .pi ? gate.pass(launch) : gate.passElsewhere() },
+                helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing),
+                timing: clocks.app.timing)
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
             try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000,"input":\#(seesImages ? #"["text","image"]"# : #"["text"]"#)},{"id":"fake-model-2","contextWindow":200000,"reasoning":true,"input":["text"]}]}}}"#.utf8)
@@ -114,34 +137,37 @@ extension CueHostTests {
             model.stop()
         }
 
-        /// 请 Cue 建任务并开工，会话开出来后绑上叶子、改成这个标题（标题进信封，假模型按它演），然后让会话做完一轮歇下；
-        /// 会话要等开工这一轮做完才歇下：同一刻歇下的，状态记进库时可能已落在这一轮前移的基线之前，Cue 就看不到这处变化。
-        /// 等的是开工结果之后那句回复、且 Cue 空闲：只等"办好了"会撞上更早一轮的同一句。
-        func settleTask(titled title: String) async throws {
-            try await say("请建个任务并开工")
-            try await eventually("开工这一轮做完") { try await self.store.cueState()?.state == .known(.settled) && self.model.answered("开新会话") }
-            try await eventually("执行器开出会话") { !self.app.host.extensions.isEmpty }
-            let session = try #require(app.host.extensions.values.first)
-            let task = try #require(try await store.cueBoard().tasks.first?.task)
-            // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
-            try await store.linkCard(task.id, toSession: session.sessionID)
-            try await store.updateCard(task.id) { $0.body = title }
-            // 开出来的会话一上桥就记成歇着：先等这一轮的在干活写进库，回复才不会早于这一轮的开始（早了不算读到回答，Cue 不醒）
-            session.setState(["kind": "thinking"])
-            try await eventually("在干活写进库") { try await self.store.sessions(matching: session.sessionID).first?.state.isWorking == true }
-            session.setState(["kind": "idle"])
-            try await answered(session.sessionID)
-        }
-
-        /// 会话这一轮的回复读到了：像 Mac 读会话文件那样写下问答。放在歇下写进库之后，是回复晚于状态到的那一路
-        /// （Claude Code 的轮末标记写在报歇下的钩子之后）：Cue 要等读到回复才醒，信封里带着它。
-        /// `messages` 是这时读到的对话（peek 里看得到）。
-        func answered(_ sessionID: String, prompt: String = "接着做", reply: String = "好了", messages: [PiChatMessage] = []) async throws {
-            try await eventually("歇下写进库") { try await self.store.sessions(matching: sessionID).first?.state == .known(.settled) }
-            try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: PiRecap(lastPrompt: prompt, lastReply: reply, answeredAt: .now)))
-        }
-
         func say(_ text: String) async throws { try await store.addCueMessage(.you, text: text) }
+
+        func jump(by duration: Duration, asleep: Bool = false) { clocks.jump(by: duration, asleep: asleep) }
+        func jump(to date: Date) { clocks.jump(to: date) }
+
+        /// 出错后等着重来、起不来等着重起：跳到那一刻（`Setback.retryAt`、`Phase.restarting`），退避不真等。还没排上就不动。
+        func skipBackoff() {
+            guard let keeper = services.cue.keeper else { return }
+            var due = keeper.setback?.retryAt
+            if case .restarting(_, _, let at) = keeper.phase { due = [due, at].compactMap(\.self).min() }
+            if let due { jump(to: due) }
+        }
+
+        /// 一轮在跑、大脑一直没动静：跳过看门狗剩下的时长。从最后一次大脑事件算：挂住之后才到的事件会重新算起，所以每次都按剩下的跳。
+        func skipSilence() {
+            guard let keeper = services.cue.keeper, keeper.turn != nil else { return }
+            let left = keeper.setup.timing.silence - (clocks.awake() - keeper.heardAt)
+            if left > .zero { jump(by: left) }
+        }
+
+        /// 叫值班的管理器对账，等它对完、重新睡下（对账的定时器换了一个）：负向断言前让它看过此刻的库与钟。
+        /// 叫两次：第一次等到的可能是叫它时已经在对的那一次，第二次等到的一定是那之后开始的。
+        /// 要有排着的时刻（定时、巡视、重来、看门狗……）：什么都没排时它不睡，这里等不到。
+        func reconciled() async throws {
+            let keeper = try #require(services.cue.keeper)
+            for _ in 0..<2 {
+                let before = keeper.timer
+                keeper.input.yield(.kick)
+                try await eventually("对过账、重新睡下") { keeper.timer != nil && keeper.timer != before }
+            }
+        }
 
         /// 在 Cue 页的选择器里选 Pi 的这个模型与强度（`AppServices.updateCue`），等值班的大脑用上。
         func chose(model: String, effort: PiThinkingLevel) async throws {
@@ -178,12 +204,24 @@ extension CueHostTests {
             }
         }
 
-        func releaseSettle() throws { try Data().write(to: settleGate.appending(path: "release")) }
+        /// 放行停住的收尾，等它放行；到了上限才放行（没看到 release）的算失败。
+        func releaseSettle() async throws {
+            let gate = settleGate
+            try Data().write(to: gate.appending(path: "release"))
+            func exists(_ name: String) -> Bool { FileManager.default.fileExists(atPath: gate.appending(path: name).path) }
+            try await eventually("收尾闸放行") { exists("released") || exists("ceiling") }
+            #expect(!exists("ceiling"), "收尾闸到了上限才放行：没看到 release")
+        }
 
         /// 含 `text` 的那一行交到了 Pi（收尾闸停着时 Pi 先收下、等报完收尾再处理）。
         func handed(_ text: String) async throws {
+            try await eventually("「\(text)」交到 Pi") { self.handings(of: text) > 0 }
+        }
+
+        /// 含 `text` 的行交到 Pi 几次（各个班次的大脑合起来）。
+        func handings(of text: String) -> Int {
             let log = settleGate.appending(path: "stdin.log")
-            try await eventually("「\(text)」交到 Pi") { ((try? String(contentsOf: log, encoding: .utf8)) ?? "").contains(text) }
+            return ((try? String(contentsOf: log, encoding: .utf8)) ?? "").split(separator: "\n").count { $0.contains(text) }
         }
 
         /// 另一台 Mac（mac-b）醒着、它的在线记录同步到了这里：它上面的会话这才算在跑，Cue 才能对它说话（`CueStore.runtimeIsConfirmed`）。
@@ -201,10 +239,12 @@ extension CueHostTests {
         func image() throws -> String { CueFormat.imageMarkup(key: try store.files.store(pngData(shade: 0.5))) }
 
         /// 等到出现一条 `author` 写的、含 `text` 的消息（中间隔着真 Pi 大脑起进程、读剧本）。
+        /// `skippingBackoff`：等的途中跳过出错后的重来、起不来后的重起（`skipBackoff`）。
         @discardableResult
-        func message(_ author: CueAuthor, containing text: String) async throws -> CueMessage {
+        func message(_ author: CueAuthor, containing text: String, skippingBackoff: Bool = false) async throws -> CueMessage {
             var found: CueMessage?
             try await eventually("\(author) 说「\(text)」") {
+                if skippingBackoff { self.skipBackoff() }
                 found = try await self.store.cueMessages().last { $0.author == .known(author) && $0.text.contains(text) }
                 return found != nil
             }

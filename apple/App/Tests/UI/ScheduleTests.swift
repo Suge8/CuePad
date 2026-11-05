@@ -83,6 +83,7 @@ struct ScheduleTests {
         let rig = try await CueHostTests.Rig()
         try await rig.say("请隔天 9 点清理分支")
         try await rig.message(.cue, containing: "办好了")
+        #expect(rig.model.answers("（时刻取 at 的）：FREQ=DAILY;INTERVAL=2") == 1)
         #expect(try await rig.store.cueSchedules().isEmpty)
         await rig.stop()
     }
@@ -109,7 +110,7 @@ struct ScheduleTests {
         let last = try #require(scheduled.last)
         let latest = try #require(Calendar.current.date(byAdding: .day, value: 2, to: missed))
         #expect(abs(last.due.timeIntervalSince(latest)) < 1 && last.late)
-        await quietPeriod(.seconds(2))
+        try await rig.reconciled()
         #expect(try await rig.store.cueMessages().filter { if case .schedule? = $0.wake { true } else { false } }.count == 1)
         await rig.stop()
     }

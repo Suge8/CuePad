@@ -9,7 +9,7 @@ extension Duty {
 
     /// 判定要看的那几步
     struct Points {
-        let go, progress, readmeStatus, provider, tabs, e2e, trip, bounce, certified, wrap: Step
+        let go, progress, readmeStatus, provider, tabs, e2e, tripSaid, trip, bounce, certified, wrap: Step
         /// 忘记密码的收尾：做完交回那一步，与 Cue 没收、会话补上版本号的那一步（有的话）
         let wrapUp: [Step]
         let cert: ScriptedSession
@@ -28,6 +28,7 @@ extension Duty {
         let duplicated = topics.filter { _, topic in adds.count { ($0.args["title"] as? String)?.contains(topic) == true } > 1 }.map(\.0)
         let readmeAdds = adds.count { ($0.args["title"] as? String)?.contains(/README/) == true }
         let repeated = resaid()
+        let flight = Self.weekday(of: key.tripSaid)
         let unhandled = steps.filter { step in
             guard let session = step.session else { return false }
             return !calls(step, "task").contains { !$0.call.failed && target($0.args) === session } && calls(step, "tell").isEmpty
@@ -64,7 +65,7 @@ extension Duty {
             Check(.ask, "(d) 设置页问拆不拆标签页：按他说的保持一页，不留给他、不问他",
                   tabsAnswers == ["保持一页长列表"] && calls(key.tabs, "tell").allSatisfy { $0.args["ask"] == nil }),
             Check(.memory, "(d) 他否掉之后没再提分标签页", !afterRejection.contains(where: EvalReading.proposesTabs)),
-            try await recalled("(e) 他顺口说的行程：答出下周三下午 3 点", key.trip) { $0.contains(/周三|28/) && $0.contains(/3 ?点|15[:：]|三点/) },
+            try await recalled("(e) 他顺口说的行程：答出下周三下午 3 点", key.trip) { EvalReading.flight($0, month: flight.month, day: flight.day) },
             try await recalled("(f) 已完成的调研里顺带的细节：答出 13 封", key.bounce) { $0.contains(/13|十三/) },
             Check(.carry, "(g) 证书查完时照他要的说了是哪家签发的", certSaid.contains { $0.localizedCaseInsensitiveContains("Sectigo") }, note: certDone ? "" : "（这一步没收尾）"),
             Check(.result, "问登录页进展：答了进展、没派新活", try await reply(key.progress)?.contains(/后端|前端|测试|接口/) == true && calls(key.progress, "task", ["add", "start"]).isEmpty),
@@ -73,6 +74,14 @@ extension Duty {
                 .contains { ($0.args["text"] as? String)?.contains(/继续|接着|做到哪|进展|汇报|回报/) == true }),
             Check(.result, "问今天的事：回了他、没派新活", try await reply(key.wrap) != nil && calls(key.wrap, "task", ["add", "start"]).isEmpty),
         ]
+    }
+
+    /// 他说"下周三"的那一天：他说那句时的下一周（周一起算）的周三。从剧本跑的那一刻推，不写死：剧本的"此刻"就是跑的时候。怎么认答对见 `EvalReading.flight`。
+    static func weekday(of said: Step) -> (month: Int, day: Int) {
+        let calendar = Calendar(identifier: .gregorian), at = said.window?.lowerBound ?? .now
+        let sinceMonday = (calendar.component(.weekday, from: at) + 5) % 7
+        let wednesday = calendar.dateComponents([.month, .day], from: calendar.date(byAdding: .day, value: 9 - sinceMonday, to: at)!)
+        return (wednesday.month!, wednesday.day!)
     }
 
     // MARK: 统计

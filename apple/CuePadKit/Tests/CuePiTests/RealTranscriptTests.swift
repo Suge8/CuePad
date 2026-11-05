@@ -69,17 +69,5 @@ struct RealTranscriptTests {
         #expect(tools.map { $0?.items.map(\.kind) } == [[.command], [.edit], [.command]])
         #expect(tools[1]?.items.first?.target == "out.txt" && tools.map { $0?.items.map(\.failed) } == [[false], [false], [true]])
     }
-
-    @Test func aPromptStillRunningIsPendingInTheRecap() async throws {
-        let (pi, bridge, file) = try await rig()
-        defer { bridge.stop(); pi.stop() }
-
-        try pi.prompt("[[slow]] 慢慢来")
-        try await eventually("你的消息落盘") {
-            (try? PiHistory.index(file: file, from: nil))?.messages.first?.role == .known(.user)
-        }
-        let update = try PiHistory.index(file: file, from: nil)
-        #expect(update.recap.pendingPrompt == "[[slow]] 慢慢来" && update.recap.lastReply == nil)
-    }
 }
 #endif

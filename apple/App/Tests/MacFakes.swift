@@ -33,6 +33,8 @@ final class RecordingHost: AgentRuntime {
     private(set) var calls: [Call] = []
     /// 开出的、已连上桥的假扩展，按 Pi 自己的会话 id：等它非空就是会话在桥上了（起来就记下的话，测试会在连上桥之前往下走）。
     private(set) var extensions: [String: FakeExtension] = [:]
+    /// 连上桥的会话报的会话文件，按 Pi 会话 id：收到的话（`writesMessages`）与剧本写的会话说的都追加在这里，Mac 读它（第一条写下前还不存在）
+    private(set) var sessionFiles: [String: SessionFile] = [:]
     /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
     var openFailure: String?
     /// 宿主已创建后，开场消息被扩展明确拒绝。
@@ -94,16 +96,18 @@ final class RecordingHost: AgentRuntime {
     ) async throws -> FakeExtension {
         var options = FakeExtension.Options(extensionVersion: extensionVersion, cwd: cwd, hosted: hosted)
         if !seesImages { options.model?.images = false }
-        let file = sessionFile.map { URL(filePath: $0) } ?? sessions.appending(path: "--demo--/\(sessionID).jsonl")
-        options.sessionFile = file.path
+        let file = SessionFile(url: sessionFile.map { URL(filePath: $0) } ?? sessions.appending(path: "--demo--/\(sessionID).jsonl"), sessionID: sessionID, cwd: cwd)
+        options.sessionFile = file.url.path
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
         if busy { ext.setState(["kind": "thinking"]) }
         let writesMessages = self.writesMessages
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }
             if writesMessages, command["t"] as? String == "send" {
-                do { try Self.writeMessage(command, session: sessionID, cwd: cwd, file: file) }
-                catch { return ["ok": false, "error": "failed: \(error)"] }
+                do {
+                    try file.user(
+                        command["text"] as? String ?? "", images: command["images"] as? [[String: Any]] ?? [], delivery: command["deliveryId"] as? String)
+                } catch { return ["ok": false, "error": "failed: \(error)"] }
             }
             return ["ok": true]
         }
@@ -112,38 +116,17 @@ final class RecordingHost: AgentRuntime {
         try ext.start()
         try await eventually("桥连上 \(sessionID)") { bridge.session(id: ext.id) != nil }
         extensions[sessionID] = ext
+        sessionFiles[sessionID] = file
         return ext
     }
-    nonisolated private static func writeMessage(_ command: [String: Any], session: String, cwd: String, file: URL) throws {
-        let timestamp = Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(.now)
-        func line(_ object: [String: Any]) throws -> Data {
-            var data = try JSONSerialization.data(withJSONObject: object)
-            data.append(0x0A)
-            return data
-        }
-        if !FileManager.default.fileExists(atPath: file.path) {
-            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try line(["type": "session", "version": 3, "id": session, "timestamp": timestamp, "cwd": cwd]).write(to: file)
-        }
-        var content: [[String: Any]] = [["type": "text", "text": command["text"] as? String ?? ""]]
-        content += (command["images"] as? [[String: Any]] ?? []).map { $0.merging(["type": "image"]) { _, new in new } }
-        let message: [String: Any] = [
-            // 条目 id 像 Pi 那样每条不同：桥的命令 id 按连接从 c1 数起，唤醒后的新进程会与先前写下的条目撞上
-            "type": "message", "id": UUID().uuidString, "timestamp": timestamp,
-            "message": ["role": "user", "content": content, "cuepadDelivery": command["deliveryId"] as? String ?? ""],
-        ]
-        let handle = try FileHandle(forWritingTo: file)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: line(message))
-    }
-
 }
 
 /// 撑不过 App 重启的那几家（Claude Code、Codex 这类靠管道连着 App 的）托管会话的替身：经桥的 `attach` 上桥（各家接入就是这样上桥的），
-/// 状态由测试改，命令都受理不做事。
+/// 状态由测试改，命令都受理不做事；`refusal` 有值时像没登录的 Claude Code 那样拒收说的话与命令，原话是它。
 final class PipedHostedAgent: AgentRuntime, SessionLink {
     private(set) var messages: [PiMessage] = []
+    private(set) var commands: [String] = []
+    var refusal: String?
     private let bridge: PiBridge
     private let agent: AgentKind
 
@@ -173,8 +156,14 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
 
     func set(_ id: PiSession.ID, _ state: PiWorkState) { bridge.update(id) { $0.state = state } }
 
-    func send(_ message: PiMessage, in id: PiSession.ID) async throws { messages.append(message) }
-    func command(_ line: String, in id: PiSession.ID) async throws {}
+    func send(_ message: PiMessage, in id: PiSession.ID) async throws {
+        if let refusal { throw PiBridgeError.refused(refusal) }
+        messages.append(message)
+    }
+    func command(_ line: String, deliveryID: String?, in id: PiSession.ID) async throws {
+        if let refusal { throw PiBridgeError.refused(refusal) }
+        commands.append(line)
+    }
     func end(_ id: PiSession.ID) async throws {}
     func abort(_ id: PiSession.ID) async throws {}
     func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {}

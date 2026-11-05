@@ -139,12 +139,8 @@ struct HandOffInput: View {
             guard choice == nil else { return newSession() }
             return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, opening: planned?.opening, workspace: workspace)
         }
-        let saying = Dotted(String(localized: "已交给 \(session.title)"))
-        if let line = PiSlash.line(of: draft.accepting(.reply), in: commands) {
-            workspace.speak(to: .session(session, mode: .command, card: outbox.card), from: box, saying: saying) { _ in line }
-        } else {
-            workspace.speak(to: .session(session, mode: .send, card: outbox.card), from: box, saying: saying) { $0.accepting(.reply).stored }
-        }
+        workspace.reply(
+            to: session, commands: commands, from: box, accepting: .reply, card: outbox.card, saying: Dotted(String(localized: "已交给 \(session.title)")))
         focused = false
         workspace.outbox = nil
     }

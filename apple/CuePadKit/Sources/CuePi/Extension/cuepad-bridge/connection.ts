@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_COMMANDS, contextInfo, findModel, INTERNAL_COMMAND, isThinkingLevel, modelInfo, reason, type BuiltinCommand } from "./info.ts";
 import { supportsFast } from "./fast.ts";
 import { retry } from "./retry.ts";
@@ -144,7 +145,22 @@ async function handleSend(session: Session, command: Command, ack: Ack, reject: 
 	const cueTurn = command.cueTurn;
 	if (cueTurn !== undefined && (typeof cueTurn !== "object" || cueTurn === null || Array.isArray(cueTurn)
 		|| ("deliveryId" in cueTurn && cueTurn.deliveryId !== null && typeof cueTurn.deliveryId !== "string"))) return reject("bad_request");
-	await session.startRound({ content, expand: false, text, id, ack, cueTurn: cueTurn as { deliveryId?: string | null } | undefined });
+	// 以提示词模板或 skill 开头的话由 Pi 展开，与在 Pi 里打出来一样；展开后落成的那条消息带着投送请求 id（`startRound`）
+	const found = slashCommand(session, text);
+	const expand = found !== undefined && "source" in found && (found.source === "prompt" || found.source === "skill");
+	await session.startRound({ content, expand, text, id, ack, cueTurn: cueTurn as { deliveryId?: string | null } | undefined });
+}
+
+/**
+ * 一行以哪条斜杠命令开头，与 Pi 派发同一先后：本扩展执行的内置命令（`BUILTIN_COMMANDS`，返回它）先于 Pi 清单里的扩展命令、提示词模板与 skill
+ * （返回清单里的那条，同名时扩展命令在前，Pi 也先执行它）；不以清单里的名字开头为 undefined。
+ */
+function slashCommand(session: Session, text: string): BuiltinCommand | SlashCommandInfo | undefined {
+	if (!text.startsWith("/")) return undefined;
+	const space = text.search(/\s/);
+	const name = text.slice(1, space < 0 ? undefined : space);
+	if (name === INTERNAL_COMMAND) return undefined;
+	return BUILTIN_COMMANDS.find((c) => c.name === name) ?? session.pi.getCommands().find((c) => c.name === name);
 }
 
 /**
@@ -167,25 +183,24 @@ function handleReload(session: Session, ack: Ack) {
 
 /**
  * 斜杠命令：内置的（能在非 TUI 下执行的）由本扩展调 Pi 的接口做，其余（扩展命令、提示词模板、skill）经
- * `sendUserMessage(…, { expandPromptTemplates: true })` 交给 Pi 派发——扩展命令执行（会话正忙也立即执行，不开轮）、模板与 skill
- * 展开成新一轮的提示词，与 `send` 同一规则（`startRound`）；不带这个选项的 `sendUserMessage` 只把它当普通文字。清单里没有的名字拒绝，不当文字发出去。
- * 其他扩展的命令没有公开的完成/错误回执：交出后不回成功 ACK，等待以未确认结束，不伪造执行结果。
+ * `sendUserMessage(…, { expandPromptTemplates: true })` 交给 Pi 派发；不带这个选项的 `sendUserMessage` 只把它当普通文字。清单里没有的名字拒绝，不当文字发出去。
+ * 扩展命令交出即确认：Pi 在任何检查之前同步调起它的处理函数（`AgentSession.prompt`，1.4.0 起；只有正在发 agent_settled 时推到发完再调），
+ * 会话正忙也立即执行、不开轮，没有拒收的路。处理函数的完成与出错没有公开回执（出错 Pi 报在它自己的界面），ACK 只证明 Pi 执行了它。
+ * 模板与 skill 是你说的话，CuePad 经 `send` 交出（落成的消息带投送请求 id）；经这里来的照样展开开轮，同 `startRound` 的确认。
  */
 async function handleSlash(session: Session, command: Command, ack: Ack, reject: Reject) {
 	const text = command.text;
 	if (typeof text !== "string" || !text.startsWith("/")) return reject("bad_request");
-	const space = text.search(/\s/);
-	const name = text.slice(1, space < 0 ? undefined : space);
-	const args = space < 0 ? "" : text.slice(space + 1).trim();
-	const builtin = BUILTIN_COMMANDS.find((c) => c.name === name);
-	if (builtin) {
-		const error = await runBuiltin(session, builtin, args);
+	const found = slashCommand(session, text);
+	if (!found) return reject("unknown_command");
+	if (!("source" in found)) {
+		const space = text.search(/\s/);
+		const error = await runBuiltin(session, found, space < 0 ? "" : text.slice(space + 1).trim());
 		return error ? reject(error) : ack({ ok: true });
 	}
-	const found = name === INTERNAL_COMMAND ? undefined : session.pi.getCommands().find((c) => c.name === name);
-	if (!found) return reject("unknown_command");
-	if (found.source === "extension") session.pi.sendUserMessage(text, { expandPromptTemplates: true });
-	else await session.startRound({ content: text, expand: true, text, ack });
+	if (found.source !== "extension") return session.startRound({ content: text, expand: true, text, ack });
+	session.pi.sendUserMessage(text, { expandPromptTemplates: true });
+	ack({ ok: true });
 }
 
 /** 执行一条内置命令；返回拒绝原因，成功返回 undefined。 */

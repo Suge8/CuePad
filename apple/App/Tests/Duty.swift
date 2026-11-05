@@ -31,7 +31,7 @@ final class Duty: EvalScript, Playable {
         let login = try await adopt(/忘记密码|重置密码/, after: reset, title: "登录页加忘记密码", in: "演示")
         try await say("他：做完后升版本号（口头、不记规矩）", "对了，忘记密码那件做完以后，让它顺手把演示项目的版本号从 2.3.0 升到 2.3.1，CHANGELOG 里记一笔。就这一次，不用记成规矩。")
         try await say("他：贴站会纪要（长）", LongScript.standup)
-        try await say("他：顺口说行程（与任务无关）", "对了，我下周三下午 3 点的飞机去成都，周四晚上回来。")
+        let tripSaid = try await say("他：顺口说行程（与任务无关）", "对了，我下周三下午 3 点的飞机去成都，周四晚上回来。")
         let mailAsk = try await say("他：查邮件服务", "演示项目现在发邮件用的是哪家服务、这个月额度还剩多少？找个会话查清楚。")
         let mail = try await adopt(/邮件|发信|额度/, after: mailAsk, title: "查清邮件服务与额度", in: "演示")
         try await event("忘记密码：问令牌存哪", on: login) {
@@ -155,7 +155,7 @@ final class Duty: EvalScript, Playable {
         let wrap = try await say("他：问今天的事", "今天这些事现在都怎么样了？")
 
         var checks = try await judge(login: login, settings: settings, site: website, digest: digest, key: Points(
-            go: go, progress: progress, readmeStatus: readmeStatus, provider: provider, tabs: tabs, e2e: e2e, trip: trip, bounce: bounce,
+            go: go, progress: progress, readmeStatus: readmeStatus, provider: provider, tabs: tabs, e2e: e2e, tripSaid: tripSaid, trip: trip, bounce: bounce,
             certified: certified, wrap: wrap, wrapUp: wrapUp, cert: cert))
         checks += try await probes(Probes(
             depsListed: depsListed, node: node, layout: layout, instant: instant, sendgrid: sendgrid, finish: closed,

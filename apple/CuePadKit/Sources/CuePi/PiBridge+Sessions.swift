@@ -82,9 +82,9 @@ extension PiBridge {
             } else if busy {
                 idleTimers.removeValue(forKey: session.id)?.cancel()
             } else if idleTimers[session.id] == nil {
-                let id = session.id, limit = hostedIdle
+                let id = session.id, limit = hostedIdle, timing = timing
                 idleTimers[id] = Task { [weak self] in
-                    guard (try? await Task.sleep(for: limit)) != nil else { return }
+                    guard (try? await timing.sleep(limit)) != nil else { return }
                     self?.release(id)
                 }
             }

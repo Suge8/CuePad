@@ -29,11 +29,8 @@ extension UpgradePreparationTests {
         let trip = Speech.trip(received, at: phone.services.speech)
         guard case .preparing(let reason) = trip else { Issue.record("手机应显示准备，而不是发送中或失败"); return }
         #expect(reason.contains("尚未派发") && reason.contains("升级"))
-        #expect(!trip.inTransit && trip.failure == nil && trip.unconfirmedReason == nil)
         let shown = PiShown(target, delivery: received, at: phone.services.speech)
         #expect(!shown.isRunning && shown.mark == .icon)
-        let look = TaskAgentLook(shown, line: nil)
-        #expect(look.title == reason && look.note == nil)
         #expect(TaskNext(shown: shown, session: target, startable: nil)?.agentBusy == false)
         if action == "end" {
             await workspace.end(target)

@@ -196,6 +196,17 @@ struct TimedOut: Error, CustomStringConvertible {
 /// 取九成是让「等不到：X」这句话赶在它之前说出来。
 public let conditionBudget: Duration = .seconds(Double(ProcessInfo.processInfo.environment["CUEPAD_TEST_TIME_LIMIT"].flatMap(Int.init) ?? 120) * 0.9)
 
+/// 同步占住当前（主）线程，直到 `signal` 或 `conditionBudget` 到。轮询而不阻塞等：主线程阻塞等默认级线程会被
+/// Thread Performance Checker 报优先级反转，iOS 模拟器上 xcodebuild 随后收集诊断要卡满 600 秒。
+public func holdThread(until signal: DispatchSemaphore) -> Bool {
+  let deadline = DispatchTime.now() + Double(conditionBudget.components.seconds)
+  while signal.wait(timeout: .now()) != .success {
+    guard DispatchTime.now() < deadline else { return false }
+    usleep(1_000)
+  }
+  return true
+}
+
 /// 有界条件等待，只给没有事件可订阅的异步用（文件系统通知、socket、子进程、系统弹窗与布局、后台落盘）：
 /// 条件一成立马上返回，到了上限抛 `TimedOut`。库里的变化用下面按读取订阅的那个。
 public func eventually(_ what: String, _ condition: () async throws -> Bool) async throws {

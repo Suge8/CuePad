@@ -36,6 +36,7 @@ final class ClaudeHostedSession: SessionLink {
     /// 在等的 `can_use_tool`（请求 id 与问题）
     var permission: (request: String, permission: ClaudePermission)?
     var commands: Set<String> = []
+    let deliveries = ClaudeDelivery()
     /// 停下这一轮（停止或发来新的一句）后的 `result` 是被打断的，不算出错
     private var stopping = false
     /// 为送进一句话停下这一轮：被停下的这一轮的 `result` 不算歇下，接着就是这句开的新一轮（从这一刻算）
@@ -75,20 +76,16 @@ final class ClaudeHostedSession: SessionLink {
         }
     }
 
-    /// 起进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。
-    func launch(_ executable: URL, _ arguments: [String], directory: URL, environment: [String: String]) async throws -> ChildProcess {
-        let stream = try await ClaudeStream(executable: executable, arguments: arguments, directory: directory, environment: environment)
+    /// 起进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。`timing` 交给进程（`ChildProcess`）。
+    func launch(
+        _ executable: URL, _ arguments: [String], directory: URL, environment: [String: String], timing: Timing = .system
+    ) async throws -> ChildProcess {
+        let stream = try await ClaudeStream(executable: executable, arguments: arguments, directory: directory, environment: environment, timing: timing)
         self.stream = stream
         stream.onMessage = { [weak self] in self?.received($0) }
         stream.onDraft = { [weak self] in self?.emit(.speaking($0)) }
         stream.onClose = { [weak self] in self?.ended() }
         return stream.process
-    }
-
-    /// 托管会话起进程：权限确认经标准输入问 CuePad，模式 auto（见类注释）。
-    func host(executable: URL, arguments: [String], directory: URL, environment: [String: String]) async throws -> ChildProcess {
-        try await launch(
-            executable, ["--permission-prompt-tool", "stdio", "--permission-mode", "auto"] + arguments, directory: directory, environment: environment)
     }
 
     /// 握手（`initialize` 拿到可换的模型与命令）并上桥；接着已结束的会话时 `known` 是索引里记下的名字与首条消息，
@@ -156,6 +153,7 @@ final class ClaudeHostedSession: SessionLink {
     // MARK: 输出
 
     private func received(_ message: JSONValue) {
+        deliveries.observe(message)
         let now = Date.now
         let main = message["parent_tool_use_id"] == nil || message["parent_tool_use_id"] == .null
         switch message["type"]?.string {
@@ -233,7 +231,9 @@ final class ClaudeHostedSession: SessionLink {
         permission = nil
         // 被停下的一轮不一定标出错（那时 `ClaudeStream` 才清掉正在说的话）
         if stopped { emit(.speaking(nil)) }
-        finishTurn(failure: stopped ? nil : failure(of: message))
+        let failure = stopped ? nil : failure(of: message)
+        if let failure { deliveries.failed(failure, in: message) }
+        finishTurn(failure: failure)
         apiError = nil
         started()
         if restart {
@@ -311,6 +311,7 @@ final class ClaudeHostedSession: SessionLink {
 
     /// 输出读完了（进程退出）：没答的请求 `ClaudeStream` 已以会话结束收尾；托管会话下桥，大脑报退出。
     private func ended() {
+        deliveries.close()
         started()
         release()
         clearing?.resume(throwing: PiBridgeError.sessionEnded)
@@ -324,6 +325,11 @@ final class ClaudeHostedSession: SessionLink {
     /// 送进一句话（`userMessage`）：`interrupting` 时在跑就先停下这一轮、等它收尾，否则并进这一轮。
     func say(_ message: JSONValue, interrupting: Bool) async throws {
         if interrupting { try await interrupt(restarting: true) }
+        try put(message)
+    }
+
+    /// 写进去，从这一刻算这一轮。
+    func put(_ message: JSONValue) throws {
         try live.write(message)
         began()
     }

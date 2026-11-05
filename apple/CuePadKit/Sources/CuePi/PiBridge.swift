@@ -56,6 +56,8 @@ public final class PiBridge {
 
     @ObservationIgnored let directory: URL
     @ObservationIgnored let hostedIdle: Duration
+    /// 桥的钟：回执（`AgentTimeouts.ack`）、结束（`AgentTimeouts.end`）的时限与托管会话歇着的计时（`hostedIdle`）；App 给的是它自己的那一个（`MacDependencies.timing`）。
+    @ObservationIgnored let timing: Timing
     /// 显式结束正在等待的承载进程；让出后的接手重载不能干扰同一个结束请求。
     @ObservationIgnored private(set) var ending: Set<PiSession.ID> = []
     @ObservationIgnored var links: [String: Link] = [:]       // socket 文件名（不含 .sock）→ 连接
@@ -77,9 +79,10 @@ public final class PiBridge {
     @ObservationIgnored private var subscribers: [UUID: AsyncStream<PiSessionChange>.Continuation] = [:]
 
     /// - Parameter hostedIdle: 托管的 Claude Code、Codex 会话歇着满这么久就请它退出（不算结束，发话时再接着）。
-    public init(socketDirectory: URL = PiPaths().socketDirectory, hostedIdle: Duration = AgentTimeouts.hostedIdle) {
+    public init(socketDirectory: URL = PiPaths().socketDirectory, hostedIdle: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system) {
         directory = socketDirectory
         self.hostedIdle = hostedIdle
+        self.timing = timing
     }
 
     // MARK: 生命周期
@@ -147,11 +150,10 @@ extension PiBridge {
         }
     }
 
-    /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令、提示词模板与 skill 由 Pi 派发；会开一轮的
-    /// （模板与 skill 展开成这一轮的提示词）与 `send` 同一规则，在跑就先打断。Pi 转发的扩展命令没有公开完成回执，结果保持未确认；
-    /// 清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
-    public func command(_ line: String, in id: PiSession.ID) async throws {
-        try await control(id, needs: .commands).command(line, in: id)
+    /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令由 Pi 派发，Pi 执行了它就确认（处理函数的结果没有公开回执）；
+    /// 模板与 skill 是说的话，经 `send` 交出。清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
+    public func command(_ line: String, deliveryID: String? = nil, in id: PiSession.ID) async throws {
+        try await control(id, needs: .commands).command(line, deliveryID: deliveryID, in: id)
     }
 
     /// 让该会话从会话文件重新载入到最新（同一会话的另一个进程刚写过文件后）；扩展判断能否安全重载，不能就提示用户。只有 Pi 有。
@@ -176,7 +178,7 @@ extension PiBridge {
         let link = try control(id, needs: .end)
         let changes = changes()  // 先订阅再动手：下线的那一刻不会漏
         try await link.end(id)
-        try await withDeadline(AgentTimeouts.end, orThrow: PiBridgeError.notEnded) {
+        try await withDeadline(AgentTimeouts.end, timing: timing, orThrow: PiBridgeError.notEnded) {
             for await change in changes {
                 if case .ended(let ended, let reason) = change, ended.id == id {
                     if ended.agent == .pi, reason != .closed(reason: "quit") { throw PiBridgeError.notEnded }

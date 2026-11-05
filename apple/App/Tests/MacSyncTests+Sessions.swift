@@ -212,7 +212,7 @@ extension MacSyncTests {
         let catalogID = try #require(stored.catalogID)
         let catalog = try await services.store.agentCatalog(catalogID)
         #expect(catalog?.models.isEmpty ?? true)  // 可选模型不留
-        #expect(PiSlash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands(in: catalog)) == "/default")
+        #expect(PiSlash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands(in: catalog), for: stored) == "/default")
     }
 
     /// 后台托管着时，用户在自己的终端里打开了同一个会话：同步记录跟着用户那个进程（不再标"后台托管"），

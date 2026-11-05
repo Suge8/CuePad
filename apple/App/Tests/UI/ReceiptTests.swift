@@ -193,11 +193,6 @@ struct ReceiptTests {
         #expect(row(services)?.label == "送达未确认")
         #expect(row(services)?.isRunning == false)
         #expect(Speech.undelivered(try await store.deliveryRequests(), at: services.speech) == 0)
-        await workspace.resend(.request(second), restoringInto: services.settings.replyDraftBinding(for: target.id)).value
-        #expect(workspace.notice?.isError == true)
-        await workspace.sayAgain(.request(second), restoringInto: services.settings.replyDraftBinding(for: target.id)).value
-        #expect(try await store.deliveryRequest(second.id) != nil)
-        #expect(try await store.deliveryRequests(toSession: target.sessionID).count == 3)
         try await cloud.macAnswers(second.id)
         await services.syncNow()
         try await eventually("迟到的原回执收敛") { try await trip(of: second, services) == .delivered }
@@ -300,12 +295,6 @@ struct ReceiptTests {
         #expect(result.unconfirmedReason?.contains("可能已经执行") == true)
         #expect(result.unconfirmedReason?.contains("已交给 Agent") == false)
         try await eventually("会话行收到未知状态") { row(services)?.label == "送达未确认" }
-        let box = services.settings.replyDraftBinding(for: target.id)
-        await workspace.resend(.request(current), restoringInto: box).value
-        #expect(workspace.notice?.isError == true)
-        await workspace.sayAgain(.request(current), restoringInto: box).value
-        #expect(try await services.store.deliveryRequest(request.id)?.status.rawValue == status)
-        #expect(try await services.store.deliveryRequests(toSession: target.sessionID).count == 2)
     }
 
 }

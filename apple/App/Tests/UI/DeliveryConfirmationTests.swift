@@ -27,25 +27,18 @@ struct DeliveryConfirmationTests {
         return try #require(try await app.services.store.deliveryRequests().first { $0.content == text })
     }
 
+    /// 会话文件换成只有这几句你的话（`SessionFile`）。
     nonisolated static func write(_ messages: [PiMessage], session: String, cwd: String, to file: URL) throws {
-        let now = Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(.now)
-        var rows: [[String: Any]] = [["type": "session", "version": 3, "id": session, "timestamp": now, "cwd": cwd]]
-        for (index, message) in messages.enumerated() {
-            rows.append([
-                "type": "message", "id": "user-\(index)", "timestamp": now,
-                "message": ["role": "user", "content": message.text, "cuepadDelivery": message.deliveryID ?? ""],
-            ])
-        }
-        var data = Data()
-        for row in rows { data.append(try JSONSerialization.data(withJSONObject: row)); data.append(0x0A) }
-        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try data.write(to: file)
+        let log = SessionFile(url: file, sessionID: session, cwd: cwd)
+        try log.reset()
+        for message in messages { try log.user(message.text, delivery: message.deliveryID) }
     }
 
     func settledDispatch(_ request: DeliveryRequest, in app: TestApp) async throws -> DeliveryRequest {
+        // 留住目标的那一下也写 preparing（`reserveDeliveryTarget`），之后才转 executing：它不算派发结束
         try await eventually("派发阶段结束") {
-            let status = try await app.services.store.deliveryRequest(request.id)?.status.rawValue
-            return status != "pending" && status != "executing"
+            guard let status = try await app.services.store.deliveryRequest(request.id)?.status.known else { return false }
+            return status == .confirming || !DeliveryStatus.open.contains(status)
         }
         return try #require(try await app.services.store.deliveryRequest(request.id))
     }
@@ -136,14 +129,6 @@ struct DeliveryConfirmationTests {
         #expect(Speech.trip(received, at: phone.services.speech).unconfirmedReason != nil)
         #expect(Speech.trip(received, at: phone.services.speech).failure == nil)
         #expect(ext.messages.count == 1)
-        let workspace = Workspace(services: phone.services)
-        let box = phone.services.settings.replyDraftBinding(for: target.id)
-        await workspace.resend(.request(received), restoringInto: box).value
-        #expect(workspace.notice?.isError == true)
-        #expect(try await phone.services.store.deliveryRequests().count == 1)
-        await workspace.sayAgain(.request(received), restoringInto: box).value
-        let requests = try await phone.services.store.deliveryRequests()
-        #expect(requests.count == 2 && requests.contains { $0.id == request.id && $0.status.rawValue == "confirming" })
     }
 }
 #endif

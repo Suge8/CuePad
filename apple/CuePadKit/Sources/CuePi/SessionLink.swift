@@ -7,10 +7,13 @@ import Foundation
 /// 桥（`PiBridge`）按会话找到它转交命令；这个 Agent 的这类会话做不到的（`AgentCapabilities`）桥先拒绝，到不了这里。
 @MainActor
 public protocol SessionLink: AnyObject {
-    /// 以这句话开新一轮：会话歇着就直接开始，在跑（含压缩、等你确认）就先打断这一轮。受理即返回，不等模型。
+    /// 以这句话开新一轮：会话歇着就直接开始，在跑（含压缩、等你确认）就先打断这一轮。受理即返回，不等模型做完；
+    /// 托管的 Claude Code 先报收下再拒收，等它开始回话或明确拒收才返回（`ClaudeDelivery`）。
+    /// 以这家的提示词模板或技能开头的由它展开（Pi 的桥扩展、Codex 的 `skill:`），投送请求 id 随展开后的那条消息进会话。
     func send(_ message: PiMessage, in id: PiSession.ID) async throws
-    /// 斜杠命令：会开一轮的（模板、skill、带话的模式切换）与 `send` 同一规则，不开轮的照原样执行。
-    func command(_ line: String, in id: PiSession.ID) async throws
+    /// 斜杠命令：不开轮的照原样执行，返回即这家执行了它；会开一轮的（带话的模式切换、OpenCode 的模板）与 `send` 同一规则。
+    /// `deliveryID` 是投送请求 id，收得下的（托管的 Claude Code）随命令交出、据它认这条命令的结果。
+    func command(_ line: String, deliveryID: String?, in id: PiSession.ID) async throws
     /// 请会话退出：托管的进程退出（不论这一轮在不在跑），终端里的像在终端里退出那样收尾。受理即返回，下线随后经 `PiBridge.detach` 报告。
     func end(_ id: PiSession.ID) async throws
     func abort(_ id: PiSession.ID) async throws
@@ -25,7 +28,7 @@ public protocol SessionLink: AnyObject {
 /// 做不到的操作缺省拒绝（终端里只读的会话、没有斜杠命令或停止的终端会话）：桥按能力表先拒，实际到不了这里。
 extension SessionLink {
     public func send(_ message: PiMessage, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func command(_ line: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
+    public func command(_ line: String, deliveryID: String?, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func end(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func abort(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func retry(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }

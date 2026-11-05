@@ -10,16 +10,16 @@ extension OpenCodeClient {
     /// - 不盯文件（`OPENCODE_DISABLE_FILEWATCHER`）：它盯着家目录与配置目录，关输入后要等这些盯守逐个停下，
     ///   实测 2.1.4 退出从 0.03 秒拖到 3～60 秒，启动也慢几秒；不自动更新。
     ///
-    /// `environment` 是完整的环境。没握手就退出抛 `launchFailed`（退出原因），超时抛 `launchTimedOut`，起了的进程都已停掉。
+    /// `environment` 是完整的环境，`timing` 交给进程（`ChildProcess`）。没握手就退出抛 `launchFailed`（退出原因），超时抛 `launchTimedOut`，起了的进程都已停掉。
     static func serve(
-        _ executable: URL, environment: [String: String], directory: URL
+        _ executable: URL, environment: [String: String], directory: URL, timing: Timing = .system
     ) async throws -> (process: ChildProcess, client: OpenCodeClient) {
         let password = UUID().uuidString
         let environment = environment.merging(
             ["OPENCODE_SERVER_PASSWORD": password, "OPENCODE_DISABLE_FILEWATCHER": "1", "OPENCODE_DISABLE_AUTOUPDATE": "1"]) { $1 }
         let process = try await ChildProcess(
             executable, ["serve", "--stdio", "--port", "0"], directory: directory, environment: environment, placement: .group,
-            input: .pipe, output: .lines)
+            input: .pipe, output: .lines, timing: timing)
         let output = process.output
         let handshake: Data?
         do {

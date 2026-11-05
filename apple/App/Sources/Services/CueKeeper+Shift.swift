@@ -34,7 +34,8 @@ extension CueKeeper {
                 tools: ["--wait", "\(setup.timing.sayWait)"])
             shifts += 1
             let id = shifts, input = input
-            phase = .running(Shift(id: id, brain: brain, pinned: memory.pinned.map(\.line.id), told: memory.pinned.map(\.line.id), failures: failures))
+            phase = .running(Shift(
+                id: id, brain: brain, pinned: memory.pinned.map(\.line.id), told: memory.pinned.map(\.line.id), startedAt: now, failures: failures))
             Task { for await event in brain.events { input.yield(.brain(id, event)) } }
             Self.log.notice("Cue 第 \(id) 个班次开始（\(runtime.rawValue, privacy: .public)）")
         } catch {
@@ -51,7 +52,8 @@ extension CueKeeper {
         return try await CueBrainConfig(
             runtime: runtime, executable: launch.executable, model: model, effort: effort, fast: fast, systemPrompt: systemPrompt, workingDirectory: work,
             mcp: [setup.helper.path, "mcp"] + tools,
-            environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, AgentKind.pi.facts.homeVariable: setup.piAgentDirectory.path, "PATH": launch.path]
+            environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, AgentKind.pi.facts.homeVariable: setup.piAgentDirectory.path, "PATH": launch.path],
+            timing: store.timing
         ).startBrain()
     }
 
@@ -59,7 +61,7 @@ extension CueKeeper {
     /// 快的用完时告诉你一次起不来。额度、登录卡住且另有能用的 Agent 就换过去（`failOver`），换了设置的下一次对账马上按新的起。
     func broke(_ reason: ShownText) async {
         Self.log.error("Cue 的大脑出了问题：\(reason.text, privacy: .public)")
-        trouble = CueHealth.Failure(at: .now, text: reason.text)
+        trouble = CueHealth.Failure(at: now, text: reason.text)
         let failures: Int
         switch phase {
         case .starting(let before): failures = before + 1
@@ -76,10 +78,10 @@ extension CueKeeper {
         }
         // 换了 Agent：新的那家马上起，从头算失败次数
         if let switched = await failOver(reason.text) {
-            phase = .restarting(failures: 0, reason: reason, at: .now)
+            phase = .restarting(failures: 0, reason: reason, at: now)
             return await say(.cue, switched)
         }
-        phase = .restarting(failures: failures, reason: reason, at: .now + setup.timing.restartDelay(after: failures).seconds)
+        phase = .restarting(failures: failures, reason: reason, at: now + setup.timing.restartDelay(after: failures).seconds)
         guard setup.timing.isDown(after: failures) else { return }
         markDown()
         await tellDown(reason)
@@ -107,7 +109,7 @@ extension CueKeeper {
             speech.offer(nil)
             // 没有醒来就开始的一轮只能是插进来的你的话开的（以为在跑的那一轮已收尾）；只插了规矩的轮来不及开：规矩一变这一轮做完就换班次（`outworn`）
             if turn == nil {
-                let round = beginRound(.message, sent: [])
+                let round = beginRound(.message, sent: [], at: now)
                 updateShift {
                     $0.turn = Turn(author: .cue, round: round, delivered: $0.taken)
                     $0.taken = []
@@ -127,13 +129,13 @@ extension CueKeeper {
         case .context(let used, _):
             updateShift {
                 $0.context = CueContext(used: used)
-                $0.lastRequest = .now
+                $0.lastRequest = now
             }
         case .tool(let id, let name, let arguments): await began(id, name, arguments)
         case .toolDone(let id, let result, let failed): await ended(id, result: result, failed: failed)
         case .failed(let raw):
             updateShift { $0.turn?.round.failure = raw }
-            trouble = CueHealth.Failure(at: .now, text: raw)
+            trouble = CueHealth.Failure(at: now, text: raw)
             // 额度、登录卡住且换得了 Agent：只说换到了哪，这一轮交给新的大脑重来（`Turn.replay`）
             if let switched = await failOver(raw) {
                 updateShift {
@@ -179,7 +181,7 @@ extension CueKeeper {
             } else {
                 let resolved = setback?.persistent != true || setback?.wake == finished.round.wake
                 // 卡着的那家又好好做完了别的一轮：卡住的那件不等慢速周期，马上重来
-                if resolved { setback = nil } else { setback?.retryAt = .now }
+                if resolved { setback = nil } else { setback?.retryAt = now }
                 await recovered(resolved)
                 await markTold(finished.round)
                 if let held = finished.held { progress.held = held }
@@ -197,7 +199,7 @@ extension CueKeeper {
         let step = CueActivity.step(tool: name, arguments: arguments, named: named)
         updateShift { $0.turn?.round.calls.append(CueToolCall(
             id: id, name: name, arguments: arguments, named: named, step: step,
-            detail: step == nil ? CueActivity.detail(tool: name, arguments: arguments) : nil, startedAt: .now)) }
+            detail: step == nil ? CueActivity.detail(tool: name, arguments: arguments) : nil, startedAt: now)) }
         await recordRound()
     }
 
@@ -244,7 +246,7 @@ extension CueKeeper {
     }
 
     /// 该报给 Cue 的变化：基线之后的（到 `now` 为止到了的停住），与记着的他在场的停下（`CueStore.cueChanges`）。
-    func changes(at now: Date = .now) async throws -> CueChanges {
+    func changes(at now: Date) async throws -> CueChanges {
         try await store.cueChanges(after: progress.marks ?? CueMarks(0), held: progress.held, at: now)
     }
 
@@ -265,7 +267,8 @@ extension CueKeeper {
     private func setBack(_ failure: String, retrying wake: CueWake, as author: CueAuthor, now: Bool = false) async {
         if let held = setback, held.persistent, held.wake != wake { return }
         let persistent = setback?.persistent == true || !Self.retryable(PiErrorSummary(failure))
-        let latest = try? await changes().due.filter { $0.kind != .stalled }.map(\.seq).max()
+        let at = self.now
+        let latest = try? await changes(at: at).due.filter { $0.kind != .stalled }.map(\.seq).max()
         let stalls = (setback?.stalls ?? 0) + (persistent && !now ? 1 : 0)
         let delay: Duration?
         if now { delay = .zero }
@@ -273,7 +276,7 @@ extension CueKeeper {
         else { delay = setback == nil ? setup.timing.retryWake : nil }
         if delay != nil { retrying = failure }
         setback = Setback(
-            latest: latest, since: .now, retryAt: delay.map { .now + $0.seconds }, persistent: persistent, stalls: stalls, wake: wake, author: author)
+            latest: latest, since: at, retryAt: delay.map { at + $0.seconds }, persistent: persistent, stalls: stalls, wake: wake, author: author)
     }
 
     /// 出错后换了 Agent 的一轮：交出去的你的话退回（新的大脑起好就交），Cue 自己醒来的那次马上重来；都带上这次的错。

@@ -81,6 +81,27 @@ struct RealCodexHostedTests {
         }
     }
 
+    /// #58：用技能说的话（`/skill:名字 …`）照说话交出：技能随这句交给 Codex，Codex 照它回答；会话文件里你的这句带着这次投送的 id
+    /// （对话据此换下气泡），写回你发的样子。
+    @Test func aSkillLineIsSpokenWithItsDelivery() async throws {
+        try await withCodexRig { rig in
+            let skill = rig.codex.home.appending(path: "skills/kiwi-echo", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
+            try "---\nname: kiwi-echo\ndescription: Echo the user's word with a fixed tag\n---\nReply with exactly KIWI-7 followed by a space and the user's word in uppercase, nothing else.\n"
+                .write(to: skill.appending(path: "SKILL.md"), atomically: true, encoding: .utf8)
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-skill", name: nil, model: nil, thinking: nil)
+            try await eventually("命令清单里有这个技能") { rig.bridge.session(id: id)?.commands.contains { $0.name == "skill:kiwi-echo" } == true }
+
+            let delivery = UUID()
+            try await rig.bridge.send(PiMessage(text: "/skill:kiwi-echo banana", deliveryID: delivery.uuidString), to: id)
+            let session = try #require(rig.bridge.session(id: id))
+            try await eventually("照技能回答了") { rig.replies(session).last?.contains("KIWI-7 BANANA") == true }
+            let mine = try #require(try rig.transcript(session).messages.first { $0.role == .known(.user) })
+            #expect(mine.deliveryID == delivery)
+            #expect(mine.text == "/skill:kiwi-echo banana")
+        }
+    }
+
     /// CuePad 起的 `codex` 是外壳（npm 装的就是 node 外壳）、真 codex 是它的子进程：钩子仍认回这个托管会话，不另接一个；
     /// 忙闲来自托管进程自己的通知，第一句照常进入思考、答完歇下。
     @Test func aWrappedCodexAnswersTheFirstMessage() async throws {

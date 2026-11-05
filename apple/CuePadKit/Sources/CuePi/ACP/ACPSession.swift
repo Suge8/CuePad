@@ -95,9 +95,9 @@ final class ACPSession {
 
     // MARK: 起与开
 
-    /// 起 Agent 的 ACP 服务并握手，接上它的通知与请求。
-    func launch(_ executable: URL, environment: [String: String], directory: URL) async throws {
-        let connection = try await ACPConnection.launch(executable, dialect.arguments, environment: environment, directory: directory)
+    /// 起 Agent 的 ACP 服务并握手，接上它的通知与请求。`timing` 交给进程（`ChildProcess`）。
+    func launch(_ executable: URL, environment: [String: String], directory: URL, timing: Timing = .system) async throws {
+        let connection = try await ACPConnection.launch(executable, dialect.arguments, environment: environment, directory: directory, timing: timing)
         connection.onNotification = { [weak self] in self?.notified($0, $1) }
         connection.onRequest = { [weak self] method, params, request in self?.asked(method, params, request: request) ?? false }
         connection.onClose = { [weak self] in self?.ended() }

@@ -53,7 +53,8 @@ final class ClaudeTestbed {
     /// - Parameter wrapper: CuePad 起的 `claude` 换成这段 shell 脚本的外壳，真 claude 在 `$REAL`（`passThrough`：托管进程是它的子进程，
     ///   钩子的父进程不是 CuePad 起的那个）。终端里开的仍是真 claude。脚本经 `TestScript` 放，内容里不写本次运行的路径：
     ///   它要用的文件放在 `wrapperDirectory`，脚本里写 `${0%/*}`。
-    init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil) async throws {
+    /// - Parameter signedIn: false 时不给登录（录制时也一样），Claude Code 照常起来、上桥，要用模型的都被它拒收。
+    init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true) async throws {
         root = try makeTempDirectory()
         wrapperDirectory = root.appending(path: "wrapper", directoryHint: .isDirectory)
         config = root.appending(path: "config")
@@ -74,7 +75,7 @@ final class ClaudeTestbed {
             "XDG_DATA_HOME": root.appending(path: "xdg-data").path, "XDG_STATE_HOME": root.appending(path: "xdg-state").path,
             "XDG_CACHE_HOME": root.appending(path: "xdg-cache").path, "XDG_CONFIG_HOME": root.appending(path: "xdg-config").path,
             "CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path,
-            "CLAUDE_CODE_OAUTH_TOKEN": AgentTape.current?.mode == .replay ? "" : ClaudeLogin.token ?? "", "ANTHROPIC_API_KEY": "",
+            "CLAUDE_CODE_OAUTH_TOKEN": AgentTape.current?.mode == .replay || !signedIn ? "" : ClaudeLogin.token ?? "", "ANTHROPIC_API_KEY": "",
             // 不要自动记忆：叫它"记住"什么时它会先去翻记忆文件、要用 Bash，等你确认
             "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         ]
@@ -104,10 +105,10 @@ final class ClaudeTestbed {
 
     /// 搭好测试台跑 `body`，不论成败都停掉起的进程（临时目录随测试进程退出整体删除）。
     static func run(
-        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil,
+        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true,
         _ body: (ClaudeTestbed) async throws -> Void
     ) async throws {
-        let testbed = try await ClaudeTestbed(installHooks: installHooks, settings: settings, idleLimit: idleLimit, wrapper: wrapper)
+        let testbed = try await ClaudeTestbed(installHooks: installHooks, settings: settings, idleLimit: idleLimit, wrapper: wrapper, signedIn: signedIn)
         do {
             try await body(testbed)
         } catch {

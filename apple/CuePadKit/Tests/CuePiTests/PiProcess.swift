@@ -7,7 +7,7 @@ import Testing
 
 /// Pi（RPC 模式）的测试驱动：起的是录像带里的替身（`AgentTape`），录制时背后是真实 Pi（`~/.local/bin/pi`）。
 /// 所有状态落在临时 agent 目录（`PI_CODING_AGENT_DIR`），绝不碰真实 ~/.pi；模型是假模型扩展，零网络。
-let realPiURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
+let realPiURL = ProcessInfo.processInfo.environment["CUEPAD_PI"].map { URL(filePath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
 let realPiInstalled = FileManager.default.isExecutableFile(atPath: realPiURL.path)
 
 private let fixtures = fixturesDirectory

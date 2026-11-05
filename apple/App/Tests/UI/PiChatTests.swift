@@ -70,14 +70,16 @@ struct PiChatTests {
     }
 
     @Test func 七天前活跃过又没有对话的会话_打开时请Mac补写() async throws {
-        let now = start.addingTimeInterval(30 * 86_400)
-        let old = PiSessionState(
-            id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(.ended), detail: nil, folder: nil,
-            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: start, busySince: nil, createdAt: start, modifiedAt: start)
-        var recent = old
-        recent.stateSince = now.addingTimeInterval(-86_400)
-        #expect(PiChat.needsTranscript(old, messages: [], now: now))
-        #expect(!PiChat.needsTranscript(old, messages: [message(1, .user, "你好")], now: now))
-        #expect(!PiChat.needsTranscript(recent, messages: [], now: now))
+        func session(activeSecondsAgo seconds: TimeInterval) -> PiSessionState {
+            let since = Date.now.addingTimeInterval(-seconds)
+            return PiSessionState(
+                id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(.ended), detail: nil, folder: nil,
+                lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: since, busySince: nil, createdAt: since, modifiedAt: since)
+        }
+        let week: TimeInterval = 7 * 86_400
+        let old = session(activeSecondsAgo: week + 1)
+        #expect(PiChat.needsTranscript(old, messages: []))
+        #expect(!PiChat.needsTranscript(old, messages: [message(1, .user, "你好")]))
+        #expect(!PiChat.needsTranscript(session(activeSecondsAgo: week - 1), messages: []))
     }
 }

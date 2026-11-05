@@ -1,6 +1,9 @@
-"""xc.sh 的入口锁（规则与用法见 _lock.sh 头注释）：拿检出锁与（要模拟器的）一个模拟器槽位，登记持有者，
-在锁里起命令并守着它的时限，结束时连同它起的全部进程（swift test 的测试宿主、xcodebuild 的编译器各自另起进程组，按组结束会漏下它们），再打一行用时。
-用法：_lock.py <时限秒> <等待上限秒> <报告间隔秒> <模拟器槽位数> <机型，不要模拟器给空串> <命令…>；锁与登记在 app_env.RUNTIME，本检出的锁在 apple/.derived/xc.lock
+"""xc.sh 的入口锁（规则与用法见 _lock.sh 头注释），两种用法，锁与登记在 app_env.RUNTIME，本检出的锁在 apple/.derived/xc.lock：
+_lock.py task <时限秒> <等待上限秒> <报告间隔秒> <模拟器槽位数> <机型，不要模拟器给空串> <命令…>
+  拿检出锁与（要模拟器的）一个模拟器槽位，登记持有者，在锁里起命令并守着它的时限，结束时连同它起的全部进程
+  （swift test 的测试宿主、xcodebuild 的编译器各自另起进程组，按组结束会漏下它们），再打一行用时。
+_lock.py signing <等待上限秒> <报告间隔秒> <脚本 PID> <描述符>
+  在脚本打开的描述符上拿全机的签名锁（规则 3），登记后返回，标准输出是登记文件；锁在脚本与它起的进程都关掉描述符时放掉。
 """
 import fcntl, json, os, re, shlex, signal, subprocess, sys, threading, time
 
@@ -8,8 +11,14 @@ sys.dont_write_bytecode = True
 from app_env import APPLE, CHECKOUT, RUNTIME  # noqa: E402
 from app_proc import descendants, silence, wait_exit  # noqa: E402
 
-hold, wait_limit, report, slots, model, *cmd = sys.argv[1:]
-hold, wait_limit, report, slots = int(hold), int(wait_limit), int(report), int(slots)
+mode = sys.argv[1]
+if mode == "signing":
+    wait_limit, report, owner, fd = map(int, sys.argv[2:6])
+    cmd_line = subprocess.run(["ps", "-o", "command=", "-p", str(owner)], capture_output=True, text=True).stdout.strip()
+else:
+    hold, wait_limit, report, slots, model, *cmd = sys.argv[2:]
+    hold, wait_limit, report, slots = int(hold), int(wait_limit), int(report), int(slots)
+    cmd_line = shlex.join(cmd)
 holders, own = f"{RUNTIME}/holders", f"{APPLE}/.derived/xc.lock"
 os.makedirs(holders, exist_ok=True)
 os.makedirs(os.path.dirname(own), exist_ok=True)
@@ -27,7 +36,7 @@ def processes(pids):
 
 
 me = {"pid": os.getpid(), "start": processes([os.getpid()])[os.getpid()][1], "checkout": CHECKOUT,
-      "cmd": shlex.join(cmd), "held": [], "waiting": None}
+      "cmd": cmd_line, "held": [], "waiting": None}
 record = f"{holders}/{me['pid']}.json"
 
 
@@ -195,6 +204,27 @@ def summary(total):
     shown = [f"{name} {clock(seconds)}" for name, seconds in phases.items() if seconds >= 1 or name == "排队"]
     rest = max(0, total - sum(phases.values()))
     say(f"用时 {clock(total)}：{'、'.join(shown)}、其余 {clock(rest)} · 1 分钟负载 {os.getloadavg()[0]:.0f}")
+
+
+def lease_signing():
+    """规则 3：在脚本传下来的描述符（打开的描述文件目录）上排队拿锁。锁跟着这份打开的文件走：脚本和它起的进程（xcodebuild 等）
+    都关掉它才放，脚本被 kill 而归档还在跑时照样持着。登记挂在脚本名下，打印登记文件给 signing_end 删；脚本没走到那一步就退出时，读的人当场清掉。"""
+    global record
+    me.update(pid=owner, start=processes([owner])[owner][1])
+    record = f"{holders}/{owner}.json"
+    acquire([(fd, "签名（全机）")], fcntl.LOCK_EX,
+            "别的检出在生成描述文件或签名归档（列表里没有持有者时，是被结束的发版留下的子进程还开着描述文件目录：lsof 它看）")
+    print(record, flush=True)
+
+
+if mode == "signing":
+    try:
+        lease_signing()
+    except BaseException:
+        if os.path.exists(record):
+            os.remove(record)
+        raise
+    sys.exit(0)
 
 
 try:

@@ -5,7 +5,7 @@ import Foundation
 import os
 
 /// 历史索引的落盘：会话行与检查点都存在 Store（本机表）；同一次读出的对话与摘要在同一事务里写
-/// （要不要对话由索引器定：最近 `transcriptWindow` 内活跃过的、或本机已存着对话的会话，见 `PiHistoryStart`）。
+/// （要不要对话由索引器定：最近 `PiChat.transcriptWindow` 内活跃过的、或本机已存着对话的会话，见 `PiHistoryStart`）。
 /// 首次回填按批写（`AppServices.backfillBatch`），之后文件一变化就写，不节流：Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
 /// 索引器按文件要"从哪接着读"：启动后第一次要时一次读出全部（`CueStore.piIndexStarts`），之后随写入更新。
 ///
@@ -13,9 +13,6 @@ import os
 /// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：当作没有检查点，有这种文件时回填完成汇总记一行。
 actor PiHistoryPersistence {
     private static let log = Logger(subsystem: AppIdentity.id, category: "pi-history")
-    /// 自动同步对话的范围：这么久之内活跃过的会话；对话也在会话安静这么久之后清理
-    static let transcriptWindow: TimeInterval = 7 * 86_400
-
     private let storage: CueStore
     /// 这台 Mac：会话文件索引也写成这台 Mac 的会话同步记录（见 `CueStore.upsertPiSession`）。
     private let host: String
@@ -103,7 +100,7 @@ actor PiHistoryPersistence {
     func keepPruned(timing: Timing = .system) async {
         repeat {
             do {
-                try await storage.prunePiMessages(olderThan: Self.transcriptWindow, now: timing.now())
+                try await storage.prunePiMessages(olderThan: PiChat.transcriptWindow, now: timing.now())
             } catch {
                 Self.log.error("清理对话失败：\(String(describing: error))")
             }

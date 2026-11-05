@@ -176,7 +176,8 @@ final class MacExecutor {
     private func runCommand(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws {
         let content = SendContent(stored: request.content)
         let (ref, id, _) = try await connect(request.target, access: access)
-        try await pi.command(try content.agentText(from: store.files, imagesAsFiles: true).trimmingCharacters(in: .whitespacesAndNewlines), in: id)
+        let line = try content.agentText(from: store.files, imagesAsFiles: true).trimmingCharacters(in: .whitespacesAndNewlines)
+        try await pi.command(line, deliveryID: request.id.uuidString, in: id)
         do { try await store.linkDeliveredCard(request, toSession: ref) } catch {
             reportIssue(String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)"))
         }

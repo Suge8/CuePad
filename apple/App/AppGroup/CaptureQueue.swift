@@ -46,7 +46,7 @@ nonisolated enum CaptureQueue {
         func files() -> [(url: URL, name: String)] { capture.files.map { (directory.appending(path: $0.stored), $0.name) } }
     }
 
-    static func enqueue(_ content: ShareContent, project: UUID, into queue: URL, now: Date = .now) throws {
+    static func enqueue(_ content: ShareContent, project: UUID, into queue: URL) throws {
         let directory = queue.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var files: [PendingCapture.File] = []
@@ -56,7 +56,7 @@ nonisolated enum CaptureQueue {
             try FileManager.default.copyItem(at: file.url, to: directory.appending(path: stored))
             files.append(PendingCapture.File(stored: stored, name: file.name))
         }
-        let capture = PendingCapture(text: content.text, urls: content.urls, files: files, project: project, createdAt: now)
+        let capture = PendingCapture(text: content.text, urls: content.urls, files: files, project: project, createdAt: .now)
         try encoder.encode(capture).write(to: directory.appending(path: manifestName), options: .atomic)
     }
 
