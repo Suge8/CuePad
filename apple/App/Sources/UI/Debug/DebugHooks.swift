@@ -62,8 +62,18 @@ enum DebugHooks {
         #endif
     }
 
-    #if os(macOS)
-    #endif
+    /// 会话条的面怎么画（`-CuePadRailV4 a|b`：a 浮起的一块、b 贴边的实底，`RailSurface`）：两个方向的原型对比，只在 Debug 读；不给是定下的那一种。
+    static let railSurface: RailSurface? = {
+        #if DEBUG
+        switch DebugScene.defaults.string(forKey: "CuePadRailV4") {
+        case "a": .floating
+        case "b": .flush
+        default: nil
+        }
+        #else
+        nil
+        #endif
+    }()
 
     static let preset: Preset = {
         #if DEBUG

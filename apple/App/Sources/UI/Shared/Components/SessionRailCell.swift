@@ -43,7 +43,7 @@ struct SessionRailCell: View {
         .accessibilityLabel(item.session.title)
         .accessibilityValue(Dotted(item.shown.label, item.session.agentMark, item.pulse.fullContext?.help.spoken).spoken)
         .accessibilityIdentifier("session-rail-\(item.id)")
-        .modifier(CellHelp(form: form, text: help))
+        .help(help)
     }
 
     private var help: String { Dotted(item.session.title, item.shown.label, item.session.agentMark).visible }
@@ -51,14 +51,14 @@ struct SessionRailCell: View {
     @ViewBuilder private var control: some View {
         #if os(macOS)
         Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .beside : .primary) } label: { label }
-            .buttonStyle(RowStyle(selected: selected, cell: true))
+            .buttonStyle(RowStyle(selected: selected))
         #else
         if form == .phone {
             Button { open(item.session, .primary) } label: { label }
                 .buttonStyle(RowStyle(selected: selected))
         } else {
             label
-                .row(selected: selected, cell: true)
+                .row(selected: selected)
                 .gesture(SessionTap { open(item.session, $0 ? .beside : .primary) })
                 .focusable(interactions: .activate)
                 .onKeyPress(.space) { open(item.session, .primary); return .handled }
@@ -87,7 +87,7 @@ struct SessionRailCell: View {
                 .padding(.vertical, Spacing.tight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                RailLine(wide: form == .wide, height: item.waiting == nil ? Chrome.control : Chrome.tallRow) {
+                RailLine(height: item.waiting == nil ? Chrome.row : Chrome.tallRow) {
                     PiStateDot(shown: item.shown, size: Chrome.railMark)
                 } rest: {
                     if item.waiting == nil {
@@ -101,8 +101,6 @@ struct SessionRailCell: View {
             }
         }
         .contentShape(.rect)
-        // 挂在行底以内：读的是这一行的悬停（`rowHovered`）
-        .railTip(form == .narrow ? help : nil)
     }
 
     private var name: some View {
@@ -200,15 +198,5 @@ extension SessionRailRows.Item {
         let text = waiting == .asking ? session.question?.displayText ?? session.detail : session.lastReply
         let line = text?.split(whereSeparator: \.isNewline).first.map(String.init)
         return line?.isEmpty == false ? line : nil
-    }
-}
-
-/// 格子的悬停说明：收起的会话条上名字淡去，指针一停名字就浮在格子右边（`railTip`，挂在 `label` 里）；其余照系统的慢提示。
-private struct CellHelp: ViewModifier {
-    let form: SessionRail.Form
-    let text: String
-
-    func body(content: Content) -> some View {
-        if form == .narrow { content } else { content.help(text) }
     }
 }

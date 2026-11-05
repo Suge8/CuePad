@@ -3,27 +3,38 @@ import SwiftUI
 
 /// 宽屏左栏（会话条）：导航只在这一处。从上到下是去处（项目、进展、更早，选中是"主区此刻放的就是它"）、等你与推进中（`SessionRail`）、
 /// Mac 最底下一行（技能与规则、设置、额度）；iPad 顶上另有一组钮（侧栏钮、搜索、Cue 钮）。尺寸全在 `Chrome`。
-/// 收起与展开同一套排法（`Chrome` 头注释）：每一行行首是一格（图标、状态标），名字在它右边，收起时淡去、名字改在悬停提示里（`railTip`）。
-/// 展开时多出来的只有名字、读数与额度，格一个都不挪。
-/// Mac 的窗口最顶那一排（`Chrome.band`）不归会话条：那一排整窗是一块连续的桌面底，会话条的底色从它下面才开始，开合钮钉在红绿灯右边（`SidebarToggle`），
-/// 两种宽下不动、也没有会话条与主区的分界可骑。搜索是这一页的操作，在主区栏头右端（`SearchSlot`）。
-/// 宽 `Chrome.rail`，不能拖：它是每个自动收起临界宽的一项（`WideMetrics`），拖宽要么逐帧挪三栏（违背 Mac 开合不逐帧挪位置），要么只拖一条线、松手才变，换来的只是二十来点。
-/// 会话条上的钮不带玻璃：会话条是一整块实底的栏，钮平放在上面，悬停、按下同行的淡底（`RowStyle`）；玻璃圆钮留给浮在内容上的栏头。
-/// 被否决的：开合钮与搜索放在会话条顶上一行（占一整行，搜索与会话条无关）；开合钮做成玻璃圆钮（收起时跨过会话条与主区的分界，圆底压在那条边上）；
-/// 图标条放宽到装得下开合钮（要 132 以上，中轴离开中间那颗红绿灯，每个临界宽都跟着变）。
+/// 只有开着、藏起两态（`Chrome` 头注释）：藏起时排版上宽 0；视图树一直挂着（滚动位置、读到的数都在），不放循环动效、点不到、读屏跳过，放回来不重建。
+/// Mac 上藏起时它照原宽画在主区下面（主区铺满桌面色、盖住它）：开合时看得见的只有主区从它上面滑过（`WideColumnView.move`），它自己不动、不换样子；iPad 裁成 0 宽。
+/// 藏起后注意力不丢：开合钮角上一颗点说有没有在等你（`SidebarToggle`），Cue 的名牌写着数字账，看板也在。
+/// 每一行是系统侧栏那种带字的行（`RailLine`），行首图标那一列正对红绿灯的左沿（`Chrome.lead`）。面怎么画在 `RailSurface`。
+/// Mac 的开合钮在窗口最顶那一排、红绿灯右边（`SidebarToggle`），开着藏起都不动；搜索是这一页的操作，在主区栏头右端（`SearchSlot`）。
+/// 宽 `Chrome.rail`，不能拖：它是每个自动藏起临界宽的一项（`WideMetrics`），拖宽要么逐帧挪三栏（违背 Mac 开合不逐帧挪位置），要么只拖一条线、松手才变，换来的只是二十来点。
+/// 被否决的：开合钮与搜索放在会话条顶上一行（占一整行，搜索与会话条无关）；开合钮做成玻璃圆钮（圆底压在会话条与主区的分界上）。
 struct WideRail: View {
+    /// 此刻的宽：`Chrome.rail` 或藏起的 0。
     let width: CGFloat
     #if os(iOS)
-    /// iPad 的 Cue 钮一直排在顶上那一组（`CueButton`）；Mac 的在窗口右上、只在 Cue 收着时有。
+    /// iPad 的 Cue 钮在顶上那一组（`CueButton`）；Mac 的在窗口右上、只在 Cue 收着时有。
     var cue: (fits: Bool, shown: Bool)?
     #endif
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
 
-    private var wide: Bool { width == Chrome.rail }
+    private var shown: Bool { width > 0 }
 
     var body: some View {
+        RailSurfaceView(surface: RailSurface.current) { rows }
+            .frame(width: Chrome.rail)
+            .environment(\.pageActive, shown)
+            .frame(width: width, alignment: .leading)
+            #if os(iOS)
+            .clipped()
+            #endif
+            .allowsHitTesting(shown)
+            .readerHidden(!shown)
+    }
+
+    private var rows: some View {
         VStack(spacing: Chrome.groupGap) {
             #if os(iOS)
             RailGroup {
@@ -33,11 +44,11 @@ struct WideRail: View {
             }
             #endif
             RailGroup {
-                RailRow(title: "项目", icon: .folder, selected: workspace.shownPane == .projects, wide: wide) { workspace.selectPane(.projects) }
-                RailRow(title: "进展", icon: .task, selected: workspace.shownPane == .progress, wide: wide) { workspace.selectPane(.progress) }
-                RailEarlier(wide: wide)
+                RailRow(title: "项目", icon: .folder, selected: workspace.shownPane == .projects) { workspace.selectPane(.projects) }
+                RailRow(title: "进展", icon: .task, selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) }
+                RailEarlier()
             }
-            SessionRail(data: services.liveSessions.rail, form: wide ? .wide : .narrow,
+            SessionRail(data: services.liveSessions.rail, form: .wide,
                         marked: Set(workspace.shownSessions.compactMap(\.sessionID)), pulse: workspace.pulse) { session, opening in
                 workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .beside : .main)
             }
@@ -45,47 +56,97 @@ struct WideRail: View {
             tools
             #endif
         }
-        #if os(macOS)
-        .padding(.top, Chrome.railTop)
-        .frame(width: width)
-        .background(alignment: .bottom) { palette.sidebar.padding(.top, Chrome.band) }
-        #else
-        .frame(width: width)
-        .background(palette.sidebar)
-        #endif
     }
 
     #if os(macOS)
-    /// 最底下一行：技能与规则、设置两格并排在中轴两边，展开时额度靠右、右沿同行尾的读数（点开明细气泡；收起时额度在菜单栏面板）。
+    /// 最底下一行：技能与规则、设置两颗无底图标钮（`RailTool`），图标正在行首那一列上；额度靠右，右沿同行尾的读数（点开明细气泡；藏起时额度在菜单栏面板）。
     /// 归档、回收站在项目列表末尾（`ProjectShelf`），新建项目在项目列表顶上。
     private var tools: some View {
-        HStack(spacing: Chrome.cellGap) {
-            RailIcon(icon: .instruction, help: "技能与规则") { workspace.show(.library) }
-            RailIcon(icon: .settings, help: "设置（⌘,）") { SettingsPane.open() }
+        HStack(spacing: Spacing.tight) {
+            RailTool(icon: .instruction, help: "技能与规则") { workspace.show(.library) }
+            RailTool(icon: .settings, help: "设置（⌘,）") { SettingsPane.open() }
             Spacer(minLength: 0)
-            if wide { SidebarQuota().padding(.trailing, Chrome.edge + Chrome.pad - Chrome.pairEdge) }
+            SidebarQuota()
         }
-        .padding(.horizontal, Chrome.pairEdge)
-        .padding(.bottom, Chrome.pad)
+        // 两颗钮的圆比行首那一列宽：往左让出多出来的一半，图标正在那一列的中线上；额度的右沿落在行尾读数那条线（行底让出的那一截）
+        .padding(.leading, RowMetrics.bleed - (ControlSize.compact.height - Chrome.icon) / 2)
+        .padding(.trailing, RowMetrics.bleed)
+        .frame(height: Chrome.control)
     }
     #endif
 }
 
-#if os(macOS)
-/// 会话条的开合钮（⌃⌘S）：窗口最顶那一排、红绿灯右边的一格（`Chrome.toggle`），会话条展开、收起都不动（同备忘录、访达）。
-/// 无底的图标钮（`ControlButtonStyle.icon`，同 Cue 栏头的收起右栏，悬停才浮淡底）。这一排整窗是一块连续的底（`WideRail` 头注释），
-/// 收起时它伸进主区栏头那一段也不骑在任何边上；主区栏头左边让出它（`MainWindow` 给 `headInset`）。
-struct SidebarToggle: View {
-    @Environment(Workspace.self) private var workspace
+/// 会话条的面：两种画法的原型对比（`-CuePadRailV4 a|b`，`DebugHooks.railSurface`），定下后只留一种。
+/// - `floating`（a）：浮起的一块（macOS 26 的侧栏：WWDC25「Build an AppKit app with the new design」"sidebars appear as a pane of glass that floats above the window's content"）。
+///   离窗口上、左、下与主区各一档（`Chrome.float`），圆角与窗口同心（`Radius.card`），红绿灯坐在它里面；一层发丝描边与最轻的投影，读作浮在桌面上。
+///   不用 Liquid Glass 的材质：它背后只有一片平的桌面色，玻璃折射不出东西，只剩一层发灰的着色。
+/// - `flush`（b）：贴边的实底：会话条的底色从窗口顶一直铺到底，红绿灯与开合钮坐在会话条的底色上（Things 3、Linear 的做法），与主区靠底色分开、不画分割线。
+enum RailSurface {
+    case floating, flush
+
+    static let current = DebugHooks.railSurface ?? .floating
+
+    /// 会话条那一块离会话条外框多少（浮起的一块四周让出一档；贴边的不让）。
+    var inset: CGFloat { self == .floating ? Chrome.float : 0 }
+    /// 那一块的圆角（贴边的直角，窗口自己的圆角裁它）。
+    var radius: CGFloat { self == .floating ? Radius.card : 0 }
+}
+
+/// 会话条那一块：底、圆角、描边与里面行的排法。里面的行左右离那一块的边让到 `Chrome.gutter`（两种面行首都对着红绿灯）；
+/// Mac 上第一组从最顶那一排下面开始（那一排是红绿灯与开合钮）。
+private struct RailSurfaceView<Content: View>: View {
+    let surface: RailSurface
+    @ViewBuilder let content: Content
+    @Environment(\.palette) private var palette
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: surface.radius, style: .continuous)
+        content
+            #if os(macOS)
+            .padding(.top, Chrome.band - surface.inset)
+            .padding(.bottom, Chrome.float - surface.inset)
+            #endif
+            .padding(.horizontal, Chrome.gutter - surface.inset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .rowContainer(shape)
+            .environment(\.rowSurface, palette.sidebar)
+            .background {
+                shape.fill(palette.sidebar)
+                    .overlay { if surface == .floating { shape.strokeBorder(palette.hair) } }
+                    .elevation(surface == .floating && !palette.dark ? .hover : nil)
+            }
+            .padding(surface.inset)
+    }
+}
+
+#if os(macOS)
+/// 会话条的开合钮（⌃⌘S）：窗口最顶那一排、红绿灯右边一颗无底的图标钮（`ControlButtonStyle.icon`，圆与红绿灯一个分量：`ControlSize.compact`），
+/// 悬停才浮淡底，同系统工具栏不带玻璃的项。会话条开着、藏起都不动（`Chrome.toggle`，同访达、备忘录）。
+/// 会话条藏起时角上一颗点说有没有在等你：有要拍板的是赭黄，只有待回复的是墨色（数只读 `CueNow.Tally`，同 Cue 的名牌与 App 图标的角标，不另算）；开着时等你那一组就在眼前，不画。
+struct SidebarToggle: View {
+    let railShown: Bool
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let tally = workspace.cue.now.tally
+        let dot: Color? = railShown ? nil : tally.asks > 0 ? palette.waiting : tally.reply > 0 ? palette.ink : nil
         Button("显示或隐藏侧栏", icon: .sidebar) { workspace.toggleSidebar() }
             .labelStyle(.iconOnly)
-            .buttonStyle(ControlButtonStyle(kind: .icon))
+            .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
+            .overlay(alignment: .topTrailing) {
+                if let dot { StatusDot(color: dot, rim: palette.desk).offset(x: Self.dotShift, y: -Self.dotShift).transition(Motion.pop(reduceMotion: reduceMotion)) }
+            }
+            .animation(Motion.fade, value: dot)
             .help(Text("显示或隐藏侧栏（⌃⌘S）"))
-        .padding(.leading, Chrome.toggle)
-        .frame(height: Chrome.band)
+            .accessibilityValue(dot == nil ? Text("") : Text("等你 \(tally.needsYou)"))
+            .padding(.leading, Chrome.toggle)
+            .frame(height: Chrome.band)
     }
+
+    /// 点压在圆的右上角外沿上（圆心约在圆框的内切点）。
+    private static let dotShift: CGFloat = Spacing.hair
 }
 
 /// 搜索（⌘K）：主区栏头右端、"⋯"左边的一颗玻璃圆钮（Mac 的惯例：工具栏右端是这一页的操作与搜索）。
@@ -104,78 +165,81 @@ struct SearchSlot: View {
     /// 栏头右端让给它的宽：钮前那道缝与圆钮。
     static let reserve = Spacing.item + ControlMetrics.height
 }
-#endif
 
-/// 会话条上的一组（去处、iPad 顶上那几颗钮）：左沿在 `Chrome.edge`，右沿跟着会话条的宽；里面的行与格靠左排，行首那一格在条的中轴上，
-/// 行与行之间一道缝（`Spacing.hair`，同各组的会话）。
-struct RailGroup<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.hair) { content }.modifier(RailGroupModifier())
-    }
-}
-
-struct RailGroupModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(.horizontal, Chrome.pad)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .rowContainer(.rect(cornerRadius: Radius.block))
-            .padding(.horizontal, Chrome.edge)
-    }
-}
-
-/// 会话条上的一行：行首一格（`lead`，`Chrome.control` 宽、`height` 高），右边是名字等（`rest`），收起时淡去（`Motion.fade`）、行就只剩那一格。
-/// 名字叠在行上、不参与排版：收起时它要的最小宽（省略号、行尾留白）会把行撑宽，整组跟着往左偏。
-struct RailLine<Lead: View, Rest: View>: View {
-    let wide: Bool
-    /// 组头矮一些（`Chrome.groupHeader`），等你组的会话高一档（`Chrome.tallRow`）。
-    var height = Chrome.control
-    @ViewBuilder let lead: Lead
-    @ViewBuilder let rest: Rest
-
-    var body: some View {
-        lead.frame(width: Chrome.control, height: height)
-            .frame(maxWidth: .infinity, minHeight: height, alignment: .leading)
-            .overlay(alignment: .leading) {
-                HStack(spacing: Spacing.glyph) { rest }
-                    .padding(.leading, Chrome.control)
-                    .padding(.trailing, Spacing.item)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .opacity(wide ? 1 : 0)
-                    .animation(Motion.fade, value: wide)
-            }
-            .clipped()
-            .contentShape(.rect)
-    }
-}
-
-/// 项目、进展：图标与名字的一行；收起时名字在悬停提示里。
-private struct RailRow: View {
-    let title: LocalizedStringResource
+/// 会话条最底下的图标钮（技能与规则、设置）：同开合钮一种无底、悬停才浮一圈淡底的钮（`PressStyle(.button)`，圆同红绿灯一个分量），
+/// 图标同会话条上别的行首图标（`Glyph.control`、次一档的墨）：放在会话条里的都是会话条的一员，不比行首图标重。
+private struct RailTool: View {
     let icon: Icon
-    let selected: Bool
-    let wide: Bool
+    let help: LocalizedStringResource
     let action: () -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
         Button(action: action) {
-            RailLine(wide: wide) {
+            Image(icon).font(Glyph.control).foregroundStyle(palette.ink2)
+                .frame(width: ControlSize.compact.height, height: ControlSize.compact.height)
+                .contentShape(.circle)
+        }
+        .buttonStyle(PressStyle(.button))
+        .help(Text(help))
+        .accessibilityLabel(Text(help))
+    }
+}
+#endif
+
+/// 会话条上的一组行（去处、iPad 顶上那几颗钮）：行与行之间一道缝（`Spacing.hair`，同各组的会话），行的框让出行底向两边伸出的那一截。
+struct RailGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.hair) { content }
+            .padding(.horizontal, RowMetrics.bleed)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 会话条上的一行：行首图标那一列（`Chrome.icon` 宽：图标或状态标），右边隔一档是名字与读数（`rest`）。
+struct RailLine<Lead: View, Rest: View>: View {
+    /// 等你组的会话高一档（`Chrome.tallRow`）。
+    var height = Chrome.row
+    @ViewBuilder let lead: Lead
+    @ViewBuilder let rest: Rest
+
+    var body: some View {
+        HStack(spacing: Spacing.item) {
+            lead.frame(width: Chrome.icon)
+            HStack(spacing: Spacing.glyph) { rest }
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(height: height)
+        .contentShape(.rect)
+    }
+}
+
+/// 项目、进展：图标与名字的一行。
+private struct RailRow: View {
+    let title: LocalizedStringResource
+    let icon: Icon
+    let selected: Bool
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: action) {
+            RailLine {
                 Image(icon).font(Glyph.control).foregroundStyle(selected ? palette.ink : palette.ink2)
             } rest: {
                 Text(title).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
             }
-            .railTip(wide ? nil : String(localized: title))
         }
-        .buttonStyle(RowStyle(selected: selected, cell: true))
+        .buttonStyle(RowStyle(selected: selected))
         .accessibilityLabel(Text(title))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
-/// 会话条上的图标钮：一格（`Chrome.control` 见方），不带玻璃，悬停、按下是这一格的淡底（`WideRail` 头注释）。
+#if os(iOS)
+/// iPad 会话条顶上的图标钮：一格（`Chrome.control` 见方），悬停、按下是这一格的淡底。
 struct RailIcon: View {
     let icon: Icon
     let help: LocalizedStringResource
@@ -193,11 +257,11 @@ struct RailIcon: View {
         .accessibilityLabel(Text(help))
     }
 }
+#endif
 
 /// 会话条上的"更早"：已结束的会话（`PiSessionList.earlier`，正在唤醒的在推进中；已结束的只在这里与搜索），排在去处一组的进展下面、同一种行，写个数。
 /// 点它在主区打开"更早"那一页（`Route.earlier`，`EarlierPage`，三端同一页）；个数与那一页读同一个查询，两边对得上。没有已结束的会话时置灰。
 struct RailEarlier: View {
-    let wide: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -207,16 +271,15 @@ struct RailEarlier: View {
         let total = total ?? 0
         let selected = workspace.mainRoute == .earlier
         Button { workspace.show(.earlier) } label: {
-            RailLine(wide: wide) {
+            RailLine {
                 Image(.session).font(Glyph.control).foregroundStyle(selected ? palette.ink : palette.ink2)
             } rest: {
                 Text("更早").font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: 0)
                 Text(total, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
             }
-            .railTip(wide ? nil : Dotted(String(localized: "更早"), total.formatted()).visible)
         }
-        .buttonStyle(RowStyle(selected: selected, cell: true))
+        .buttonStyle(RowStyle(selected: selected))
         .disabled(total == 0)
         .accessibilityLabel(Text("更早"))
         .accessibilityValue(Text(total, format: .number))
@@ -227,58 +290,3 @@ struct RailEarlier: View {
     }
 }
 
-/// 收起的图标条上一格的名字：指针停在格上时浮在格的右边，整窗一层画（`railTips`），不挤排版、不被会话条裁掉；系统的提示要等一秒多，这里一停就出。
-/// 指针停没停读的是行底给的 `rowHovered`（挂在 `RowStyle` 或 `row()` 的内容上），不另挂 `onHover`。`text` 为 nil 时不出（宽版有名字）。
-nonisolated struct RailTip: Equatable {
-    let text: String
-    let anchor: Anchor<CGRect>
-}
-
-private struct RailTipKey: PreferenceKey {
-    static let defaultValue: RailTip? = nil
-    static func reduce(value: inout RailTip?, nextValue: () -> RailTip?) { value = value ?? nextValue() }
-}
-
-extension View {
-    func railTip(_ text: String?) -> some View { modifier(RailTipSource(text: text)) }
-
-    /// 宽屏窗口的根上：把收起的会话条报上来的悬停名字画在行的右边。
-    func railTips() -> some View {
-        overlayPreferenceValue(RailTipKey.self) { tip in
-            GeometryReader { proxy in
-                if let tip { RailTipLabel(text: tip.text, frame: proxy[tip.anchor]) }
-            }
-        }
-    }
-}
-
-private struct RailTipSource: ViewModifier {
-    let text: String?
-    @Environment(\.rowHovered) private var hovered
-
-    func body(content: Content) -> some View {
-        content.anchorPreference(key: RailTipKey.self, value: .bounds) { anchor in
-            if hovered, let text { RailTip(text: text, anchor: anchor) } else { nil }
-        }
-    }
-}
-
-private struct RailTipLabel: View {
-    let text: String
-    let frame: CGRect
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Text(verbatim: text)
-            .font(Typography.secondary.weight(.medium))
-            .foregroundStyle(palette.ink)
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.horizontal, Spacing.group)
-            .frame(height: ControlSize.compact.height)
-            .paper(cornerRadius: Radius.block, lifted: true)
-            .offset(x: frame.maxX + Chrome.groupGap, y: frame.midY - ControlSize.compact.height / 2)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-}

@@ -14887,6 +14887,22 @@
         }
       }
     },
+    "显示或隐藏侧栏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show or hide sidebar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示或隐藏侧栏"
+          }
+        }
+      }
+    },
     "显示或隐藏侧栏（⌃⌘S）" : {
       "localizations" : {
         "en" : {
@@ -14899,22 +14915,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示或隐藏侧栏（⌃⌘S）"
-          }
-        }
-      }
-    },
-    "显示更多" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show More"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示更多"
           }
         }
       }
@@ -18767,6 +18767,34 @@
         }
       }
     },
+    "等你 %lld" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld needs you"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld need you"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等你 %lld"
+          }
+        }
+      }
+    },
     "等你回答" : {
       "localizations" : {
         "en" : {
@@ -22487,22 +22515,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选一条灵感或任务"
-          }
-        }
-      }
-    },
-    "选中" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selected"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选中"
           }
         }
       }

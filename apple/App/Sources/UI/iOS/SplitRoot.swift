@@ -4,7 +4,8 @@ import SwiftUI
 
 /// iPad 宽屏（宽窗）：会话条（`WideRail`，导航只在这一处）、主区（浏览页、辅助页、一个会话或并排两个）、右边一直是 Cue。尺寸与自动收起同 Mac（`WideMetrics`）。
 /// 主区与 Cue 的页自己画页顶（`floatingHeader`）；会话页上面是会话的栏头（`WideSessionTitle`），项目页上面一排写项目名与介绍（`WideProjectHeading`，页里不另写）。
-/// Cue 钮一直在会话条顶上那一排（`CueButton`）：露着时点了收起，收着时放回；收起的 Cue 仍挂着，只是藏起。
+/// Cue 钮在会话条顶上那一组（`CueButton`）：露着时点了收起，收着时放回；收起的 Cue 仍挂着，只是藏起。
+/// 会话条藏起时那一组（侧栏钮、Cue 钮）浮在窗口左上角（`RailReveal`），放回会话条、找 Cue 都还点得到。
 /// 放不下时 Cue 住进窗口右缘的抽屉（同 Mac 的 `MainWindow`，`Workspace.cueDrawer`）：一个时刻只挂一份 Cue 页，跨过临界宽时换处、重建一次。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
@@ -33,10 +34,10 @@ struct SplitRoot: View {
                     Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) { cue.frame(width: WideMetrics.cue) }
                 }
             }
+            .overlay(alignment: .topLeading) { if sizes.rail == 0 { RailReveal(cue: (sizes.cueFits, workspace.cueShown(sizes))) } }
             // 桌面色一处铺满窗口（托管的几块是透明的，`WideColumnController`）：几块只排在安全区里，状态栏那一条与底下横条那一截也要是桌面色
             .background(palette.desk)
         }
-        .railTips()
         .overlay(alignment: .top) { NoticeBanner() }
         .environment(\.wideWindowID, focus.windowID)
     }
@@ -62,6 +63,22 @@ struct SplitRoot: View {
             // 会话的栏头是写着字的一排：对话到它下沿淡出，同 Mac（`Bars`）
             .fadesUnderHead(route.isSession)
         }
+    }
+}
+
+/// 会话条藏起时浮在窗口左上角的侧栏钮与 Cue 钮：浮在内容上，是玻璃圆钮（同页顶那一排）。
+private struct RailReveal: View {
+    let cue: (fits: Bool, shown: Bool)
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        HStack(spacing: Spacing.item) {
+            Button("显示或隐藏侧栏", icon: .sidebar) { workspace.toggleSidebar() }
+                .labelStyle(.iconOnly)
+                .buttonStyle(ControlButtonStyle(kind: .circular))
+            CueButton(fits: cue.fits, shown: cue.shown).frame(width: Chrome.control, height: Chrome.control)
+        }
+        .padding(.leading, Spacing.page)
     }
 }
 

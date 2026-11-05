@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// `-CuePadScene rail -CuePadRailForm phone|wide|narrow`：正式会话条的隔离验收场景，默认 phone。
+/// `-CuePadScene rail -CuePadRailForm phone|wide`：正式会话条的隔离验收场景，默认 phone。
 /// 写 15 个真实会话：两拍板、一待回复、一出错、各步态与子代理；不是 UI 假状态。不要配 CuePadDemo，使用新的隔离库。
 /// 右侧只记组件发出的打开意图与系统拖放收到的会话 id；不调用 Workspace 导航。`-CuePadRailEmpty YES` 验空列占位。
 struct DebugSessionRail: View {
@@ -13,7 +13,6 @@ struct DebugSessionRail: View {
     private var form: SessionRail.Form {
         switch DebugScene.defaults.string(forKey: "CuePadRailForm") {
         case "wide": .wide
-        case "narrow": .narrow
         default: .phone
         }
     }
@@ -23,9 +22,9 @@ struct DebugSessionRail: View {
             SessionRail(data: workspace.services.liveSessions.rail, form: form, pulse: workspace.pulse) { session, opening in
                 event = "\(opening == .beside ? "beside" : "primary"): \(session.sessionID)"
             }
-            .frame(height: 650)
+            .frame(width: form.width ?? Chrome.rail, height: 650)
             VStack(alignment: .leading, spacing: 16) {
-                Text(verbatim: "SessionRail · \(Int(form.width)) pt").font(Typography.bodyStrong)
+                Text(verbatim: "SessionRail · \(Int(form.width ?? Chrome.rail)) pt").font(Typography.bodyStrong)
                 Text(verbatim: event).font(Typography.body).accessibilityIdentifier("rail-event")
                 Color.clear.contentShape(.rect)
                     .dropDestination(for: DraggedSession.self) { items, _ in

@@ -129,7 +129,8 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     func updateNSView(_ view: WideColumnView, context: Context) {
         view.host.rootView = AnyView(content.overlay { WideDropFeedback(state: view.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels).environment(\.wideWindowID, focus.windowID))
         view.isHidden = hidden
-        view.skirt.backgroundColor = environment.palette.sidebar.resolve(in: environment).cgColor
+        // 主区的页铺满桌面色：会话条藏起、放回时它从会话条上滑过，盖住它或露出它（`move`），页里透明的地方不能透出下面的会话条
+        if slot == .main { view.host.layer?.backgroundColor = environment.palette.desk.resolve(in: environment).cgColor }
         view.move(origin: origin, width: width, shape: shape)
     }
 }
@@ -146,8 +147,6 @@ final class ColumnHostingView: NSHostingView<AnyView> {
 final class WideColumnView: NSView {
     let host = ColumnHostingView(rootView: AnyView(EmptyView()))
     let drop = WideDropState()
-    /// 主区左边那一截会话条的底色：会话条变窄时露出来（`move`），平时在框外、裁掉看不见。Mac 上从最顶那一排下面起（那一排整窗一块桌面底，`WideRail`）。
-    let skirt = CALayer()
     let slot: WideSlot
     let focus: WideFocus
     let workspace: Workspace
@@ -169,7 +168,7 @@ final class WideColumnView: NSView {
         host.safeAreaRegions = []
         host.autoresizingMask = [.width, .height]
         addSubview(host)
-        layer?.addSublayer(skirt)
+        host.wantsLayer = true
         // 会话拖进主区的两边；Cue 那一块不接
         if slot.column != nil { registerForDraggedTypes([.init(DraggedColumn.type.identifier), .init(UTType.cuepadSession.identifier)]) }
     }
@@ -178,17 +177,16 @@ final class WideColumnView: NSView {
     override func layout() {
         super.layout()
         host.frame = bounds
-        skirt.frame = CGRect(x: -Chrome.rail, y: 0, width: Chrome.rail, height: bounds.height - Chrome.band)
     }
 
-    /// 会话条换宽、Cue 收起或放回时，各块这一下就到了终点的位置与宽（页按新的宽排一次），看得见的滑动是渲染端的两段叠加动画（`SidebarSlide`，主线程不逐帧挪）：
+    /// 会话条开合、Cue 收起或放回时，各块这一下就到了终点的位置与宽（页按新的宽排一次），看得见的滑动是渲染端的两段叠加动画（`SidebarSlide`，主线程不逐帧挪）：
     /// 整块从旧位置平移回来，右缘从旧宽收放到新宽。几块平移的距离不同（主区随会话条的边，并排的右半随两半的分界），只平移的话主区已按终点排宽、
     /// 又多平移了一截，滑动途中右缘压进右边那一块；按终点的框裁又在两块之间露出一道缝。
     /// 图层的宽按同一条曲线从旧宽走到新宽（图层的锚点在左上，只动右缘；页的排版不跟着变）：相邻两块的边每一帧都对齐，
     /// 几段偏移随同一条弹簧按比例收敛（离终点的比例只随时间走，与距离无关）。
-    /// 会话条自己不滑（它在窗口的托管视图里，换宽是一步到位的）：变宽时主区从它的旧边起往右滑、盖着它新露出来的那截，看着是它的右缘在长；
-    /// 变窄时主区的左边要往左滑回来，这一下左边空出的那截铺会话条的底色（`skirt`）：图层的左缘就停在终点、只把里面的内容按同一条曲线从旧处挪回来
-    /// （`bounds.origin.x`），左边让出的那截就是它，看着是会话条的右缘跟着收回去，不在两块之间露一道桌面色的缝。
+    /// 会话条自己一直不动（Mac 上它藏起时也照原宽画在主区下面，`WideRail`），看得见的只有主区像一张纸从它上面滑过：
+    /// 放回时主区从旧边起往右滑开、露出它；藏起时主区的左边往左滑回来盖住它——图层的左缘就停在终点、只把里面的页（铺满桌面色）按同一条曲线从旧处挪回来
+    /// （`bounds.origin.x`），左边还没盖到的那截透出的就是下面的会话条本身，行、字、选中的底都在，不是一块空的底色。
     func move(origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape) {
         defer { previous = (origin, width, shape) }
         guard let previous, previous.shape != shape, let layer else { return }
@@ -198,9 +196,29 @@ final class WideColumnView: NSView {
             SidebarSlide.slide(layer, "bounds.origin.x", by: -distance, key: "wide.\(sequence)")
             SidebarSlide.slide(layer, "bounds.size.width", by: previous.width + distance - width, key: "wide.edge.\(sequence)")
         } else {
+            CATransaction.begin()
+            if slot == .main, shape.rail > previous.shape.rail { shadeToggle(layer, origin: origin, distance: distance) }
             SidebarSlide.translate(layer, by: distance, key: "wide.\(sequence)")
             SidebarSlide.slide(layer, "bounds.size.width", by: previous.width - width, key: "wide.edge.\(sequence)")
+            CATransaction.commit()
         }
+    }
+
+    /// 会话条放回时主区整块从窗口左边滑开：栏头里的字这一下就排到了开着时的位置（离主区左沿一档），滑动的头几帧它会从红绿灯与开合钮底下过。
+    /// 滑动期间把最顶那一排里红绿灯到开合钮右沿那一截（窗口坐标里不动，`Chrome.headLead` 藏起时那一截）从主区裁掉：遮罩同一条曲线反着平移，抵掉主区的滑动；
+    /// 滑完撤掉（藏起时主区盖着会话条，那一截要照常画桌面色）。藏起时主区往左滑，栏头的字始终在开合钮右边，不用裁。
+    private func shadeToggle(_ layer: CALayer, origin: CGFloat, distance: CGFloat) {
+        let mask = CAShapeLayer()
+        mask.frame = layer.bounds
+        let path = CGMutablePath()
+        path.addRect(layer.bounds.insetBy(dx: -layer.bounds.width, dy: -layer.bounds.height))
+        // 图层不翻转：y 朝上，最顶那一排在上沿
+        path.addRect(CGRect(x: -origin, y: layer.bounds.height - Chrome.band, width: Chrome.headLead(rail: 0), height: Chrome.band))
+        mask.path = path
+        mask.fillRule = .evenOdd
+        layer.mask = mask
+        SidebarSlide.translate(mask, by: -distance, key: "wide.shade")
+        CATransaction.setCompletionBlock { [weak layer] in if layer?.mask === mask { layer?.mask = nil } }
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {

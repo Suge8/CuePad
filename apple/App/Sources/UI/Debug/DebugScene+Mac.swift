@@ -14,7 +14,7 @@ extension DebugScene {
         if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
         Task { await SyncBench.run(workspace) }
         Task { await cueNowTourIfAsked(workspace) }
-        // 开合偏好每次按参数摆（隔离实例的偏好域在几次截图之间留着）：会话条默认宽版，`-CuePadSidebar hidden` 收成图标条；Cue 默认开着，`-CuePadCue shut` 收起
+        // 开合偏好每次按参数摆（隔离实例的偏好域在几次截图之间留着）：会话条默认开着，`-CuePadSidebar hidden` 藏起；Cue 默认开着，`-CuePadCue shut` 收起
         workspace.services.settings.railExpanded = defaults.string(forKey: "CuePadSidebar") != "hidden"
         workspace.services.settings.cueOpen = defaults.string(forKey: "CuePadCue") != "shut"
         switch scene {

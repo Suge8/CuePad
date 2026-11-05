@@ -4,11 +4,11 @@ import SwiftUI
 
 /// 主窗口：左栏（会话条，`WideRail`，导航只在这一处）、主区（浏览页、辅助页、一个会话或并排两个，`MainColumn`）、右边一直是 Cue（`CueColumn`）。
 /// 三栏各自的栏头都排在窗口最顶那一排（红绿灯那一排，`Chrome.band`），同一基线；窗口工具栏只留一条空的，给这一排定高、把红绿灯放在它中线上。
-/// 尺寸与自动收起只在 `WideMetrics`。会话条的开合钮钉在红绿灯右边（`SidebarToggle`），会话条收起时它伸进主区那一段，主区栏头左边让出它（`Chrome.headLead`）。Cue 收起后右上一颗 Cue 钮（`CueButton`），它压在最右那一块的栏头右端，那一块的栏头让出它（`headInset`）。
+/// 尺寸与自动收起只在 `WideMetrics`。会话条的开合钮钉在红绿灯右边（`SidebarToggle`），会话条藏起时它在主区那一段的最顶一排上，主区栏头左边让出它（`Chrome.headLead`）。Cue 收起后右上一颗 Cue 钮（`CueButton`），它压在最右那一块的栏头右端，那一块的栏头让出它（`headInset`）。
 /// 收起的 Cue 仍挂着（对话、滚动位置都在），只是藏起。放不下时它住进窗口右缘的抽屉（`drawer`，`Workspace.cueDrawer`），点 Cue 钮拉出、盖在主区上，
 /// 开着时右上不再画 Cue 钮；一个时刻只挂一份 Cue 页，窗口跨过放得下的临界宽时换到另一处、重建一次。
 /// 资料库读不出时整窗只有一张"读不出资料库"的卡（`CatalogGate` 挂在三栏外面，同启动时打不开库、同 iOS 的整窗）：三栏都读它，每栏各放一张就是一屏两三张一样的卡；
-/// 会话条也收起——点进去的哪一页都读不出，一屏只留重试这一个焦点。
+/// 会话条也藏起——点进去的哪一页都读不出，一屏只留重试这一个焦点。
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
@@ -19,7 +19,6 @@ struct MainWindow: View {
         CatalogGate { columns }
         // 三栏从窗口上沿起，栏头排进红绿灯那一排（各栏里自己让出这一排）
         .ignoresSafeArea(.container, edges: .top)
-        .railTips()
         .previewPresenter(Bindable(workspace).preview, reply: nil)
         .background(palette.desk)
         .background { WindowPanels(workspace: workspace) }
@@ -63,7 +62,7 @@ struct MainWindow: View {
                     Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) { DrawerCue(focus: focus) }
                 }
             }
-            .overlay(alignment: .topLeading) { SidebarToggle() }
+            .overlay(alignment: .topLeading) { SidebarToggle(railShown: sizes.rail > 0) }
             .overlay(alignment: .topTrailing) {
                 if !workspace.cueShown(sizes) { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
             }

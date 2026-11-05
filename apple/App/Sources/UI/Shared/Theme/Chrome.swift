@@ -5,55 +5,51 @@ import SwiftUI
 /// 密度：Mac 的外框是桌面工具栏的密度（指针点，ui-craft 的 compact～comfortable 之间），一排里只有一种控件高；
 /// 页里的内容（卡、对话）照 `Typography` 与 `Spacing` 的阅读密度。iPad 是触屏：同一张表，控件按手指 44。
 ///
-/// 会话条只有一套排法（`WideRail`）：每一组的左沿钉在 `edge`，组里每一行行首是一格（`control` 宽）的那一列，正在条的中轴上（Mac 对着中间那颗红绿灯）。
-/// Mac 的最顶那一排不归会话条：整窗一块连续的底，开合钮钉在红绿灯右边（`toggle`），两种宽下不动。
-/// 收起（`strip`）与展开（`rail`）是同一棵视图树，只差会话条多宽：组的右沿跟着宽走，格与行的位置一点不动，展开只是把行首那一列右边的名字露出来。
-/// 选中、悬停的底就是这一行的框（`RowStyle(cell: true)`）：收起时一行就是一格，底也就是一格见方。
+/// 会话条只有开着、藏起两态（同 macOS 26 的访达、备忘录、邮件）：开着宽 `rail`，藏起是整条不在（宽 0），没有中间的图标条。
+/// 里面每一行是系统侧栏那种带字的行（`RowMetrics.height`，选中、悬停的底向两边让出 `RowMetrics.bleed`），行首图标那一列（`icon`）的左沿在 `lead`，
+/// Mac 上正对红绿灯的左沿：窗口左边从上到下一条线。会话条的面怎么画（浮起的一块或贴边的实底）在 `RailSurface`。
+/// 开合钮属于最顶那一排、钉在红绿灯右边（`toggle`），开着藏起都不动；藏起时主区栏头左边让出它（`headLead`）。
 ///
-/// 被否决的：收起与展开各一套排法（宽版是带字的行、图标条是一列格）——开合时每一格都换位置，眼睛要重新找；图标条上的格照行的形状铺满条宽（图标钮该是正方，ui-craft）。
+/// 被否决的：收起成一条图标条（Mac 98、iPad 80）——一列没有名字的格要靠悬停才认得出，收起时开合钮又骑在图标条与主区的分界上；
+/// 为了"开合格不挪"把每一行做成见方的格，行首那一列被钉在 98 的中轴上，字离窗边远、行像一格格的钮，不像一条栏。
 enum Chrome {
     #if os(macOS)
     /// 窗口最顶那一排的高：系统按统一工具栏定，红绿灯在它的中线上；三栏的栏头都排在这一排。
     static let band: CGFloat = 52
-    /// 收起的会话条：红绿灯两侧留白相等（灯左沿 19、三颗灯连同间隔 59.5、右边再留 19.5），会话条的中轴就是中间那颗灯。
-    static let strip: CGFloat = 98
+    /// 会话条每一行行首图标那一列的左沿离窗口左边：红绿灯的左沿（实测 19.5，落在 4 点格上），窗口左边从红绿灯到最底下一行同一条线。
+    static let lead: CGFloat = 20
+    /// 开合钮（`SidebarToggle`，一颗 `ControlSize.compact` 的无底图标钮）的左沿离窗口左边：红绿灯的右沿（19.5 + 三颗连同间隔 59.5）再隔一档（`Spacing.item`），落在 4 点格上。
+    static let toggle: CGFloat = 88
+    /// 主区栏头左边让多少：会话条藏起时开合钮在主区那一段的最顶一排上，栏头让到它右沿再隔一档；开着时就是栏边（`Spacing.page`）。
+    static func headLead(rail: CGFloat) -> CGFloat { rail > 0 ? Spacing.page : toggle + ControlSize.compact.height + Spacing.item }
     #else
     /// iPad 窗口最顶那一排的高（主区的栏头）。
     static let band: CGFloat = 44
-    /// iPad 没有红绿灯，收起的会话条只放得下一格加两边的纸。
-    static let strip: CGFloat = 80
+    /// iPad 没有红绿灯：行首那一列离窗边同字离纸边。
+    static let lead: CGFloat = Spacing.inset
     #endif
-    /// 一格的边长、会话条上一行的高与一排控件的高：圆钮、图标钮、玻璃列头、会话条上的每一行都是它（`ControlSize.regular`：Mac 36 同系统工具栏的玻璃钮，iPad 44）。
+    /// 一排控件的高：圆钮、图标钮、玻璃列头（`ControlSize.regular`：Mac 36 同系统工具栏的玻璃钮，iPad 44）。
     static var control: CGFloat { ControlSize.regular.height }
-    /// 展开的会话条。
+    /// 开着的会话条（连同浮起那一块离窗边的一档）。
     static let rail: CGFloat = 256
-    /// 带字的行行首的图标那一列（`LinkRow`、技能与规则的行）。
+    /// 带字的行行首的图标那一列（会话条、`LinkRow`、技能与规则的行）。
     static let icon: CGFloat = 20
-    /// 组头（等你、推进中）的高。
+    /// 会话条上一行的高：同系统侧栏、列表的行（`RowMetrics.height`，Mac 32、iPad 44）。
+    static var row: CGFloat { RowMetrics.height }
+    /// 等你组的会话行：名字下面一行写它要什么，比一行高一档；这一组每行同高，不随状态跳。
+    static var tallRow: CGFloat { row + Spacing.group }
+    /// 组头（等你、推进中）的高：字贴着下沿，离它那一组近、离上一组远。
     static let groupHeader: CGFloat = 28
+    /// 会话行行首状态标的基准直径（`PiStateDot.size`，外框 1.8 倍，Mac 18 见方，放在 `icon` 那一列里）。
+    static let railMark: CGFloat = 10
     /// 容器的内边：选中、悬停的底离容器边这么多（底的四角与容器同心，`Rows.swift`）。
     static let pad = Spacing.tight
-    /// 一组里相邻两行之间。
+    /// 手机竖条一组里相邻两格之间。
     static let cellGap = Spacing.tight
-    /// 组与组之间（顶上那一组、去处、等你、推进中、更早、底部那一行）。
+    /// 会话条上组与组之间（去处、等你、推进中、底部那一行）。
     static let groupGap = Spacing.group
-    /// 收起时一组的宽：一格加两边的内边。
-    static var stripGroup: CGFloat { control + 2 * pad }
-    /// 会话条上每一组的左沿离会话条边：收起时一组正在条的中轴上，展开时左沿不动、右沿离边同样远。
-    static var edge: CGFloat { (strip - stripGroup) / 2 }
-
-    /// 收起时并排两格（Mac 最底下的技能与规则、设置）的左格离条边：两格连同中缝正在中轴上。
-    static var pairEdge: CGFloat { (strip - 2 * control - cellGap) / 2 }
-    /// 会话行行首状态标的基准直径（`PiStateDot.size`，外框 1.8 倍，Mac 约 18 见方）。
-    static let railMark: CGFloat = 10
-    /// 等你组的会话行：名字下面一行写它要什么，比一格高一档；这一组每行同高，不随状态跳。
-    static var tallRow: CGFloat { control + Spacing.item }
-    #if os(macOS)
-    /// 会话条第一行离窗口顶：最顶那一排下面隔一档，开合钮与"项目"那一行不贴在一起。
-    static var railTop: CGFloat { band + Spacing.item }
-    /// 开合钮（`SidebarToggle`）那一格的左沿离窗口左边：红绿灯的右沿（`strip` 那条注释的 19 + 59.5）隔开一档悬停底，落在 4 点格上。
-    static let toggle: CGFloat = 84
-    /// 主区栏头左边让多少：会话条收起时开合钮伸进主区那一段（98 到 120），栏头让到它右沿再隔一档；展开时就是栏边（`Spacing.page`）。
-    static func headLead(rail: CGFloat) -> CGFloat { max(Spacing.page, toggle + control - rail + Spacing.item) }
-    #endif
+    /// 浮起的会话条（`RailSurface.floating`）离窗口上、左、下三边与离主区：一档，窗口的圆角在它外面同心地绕一圈。
+    static let float = Spacing.item
+    /// 会话条里一行的底（选中、悬停）左沿离窗口左边：行首那一列的左沿让出行底向两边伸出的那一截。两种面都在这条线上。
+    static var gutter: CGFloat { lead - RowMetrics.bleed }
 }
