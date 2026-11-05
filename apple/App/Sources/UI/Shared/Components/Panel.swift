@@ -11,6 +11,8 @@ extension EnvironmentValues {
     /// 这一层上面有开着的模态浮层（Mac 的窗口内浮层，`PanelHost.covers`；iOS 的弹层是系统的，恒为假）：
     /// 被盖住的输入框不要焦点——出现时的自动聚焦、焦点请求都先看它（盖上时交出见 `yieldsFocusWhenCovered`）。
     @Entry var panelCovered = false
+    /// 抽屉关着、已滑到窗外（`DrawerSlide`）：里面自己托管的视图（Mac 的 Cue 栏）据此藏起，⌃Tab 不轮到看不见的那一块。
+    @Entry var drawerParked = false
 }
 
 enum PanelStyle: Equatable {
@@ -75,17 +77,24 @@ struct DrawerSurface: ViewModifier {
 }
 
 /// 抽屉开合：整块从窗口右缘外滑入、滑回窗外（渲染端的平移，`visualEffect` 不让页每帧重排），关着时点不到；减弱动态效果时直接到位。
+/// 滑出去落定后报 `drawerParked`，开的那一下当即撤掉。
 struct DrawerSlide: ViewModifier {
     let open: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
+    @State private var parked = true
 
     /// 关着时多挪出去的一截：面板阴影不留在窗口右缘。
     private static let shadowRoom: CGFloat = 40
 
     func body(content: Content) -> some View {
         content
-            .visualEffect { [open, room = Self.shadowRoom] effect, proxy in effect.offset(x: open ? 0 : proxy.size.width + room) }
+            .environment(\.drawerParked, parked)
+            .visualEffect { [shown, room = Self.shadowRoom] effect, proxy in effect.offset(x: shown ? 0 : proxy.size.width + room) }
             .allowsHitTesting(open)
-            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: open)
+            .onChange(of: open, initial: true) { _, open in
+                if open { parked = false }
+                withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { shown = open } completion: { parked = !shown }
+            }
     }
 }
