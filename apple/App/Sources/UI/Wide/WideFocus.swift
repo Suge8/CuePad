@@ -146,7 +146,7 @@ final class ColumnHostingView: NSHostingView<AnyView> {
 final class WideColumnView: NSView {
     let host = ColumnHostingView(rootView: AnyView(EmptyView()))
     let drop = WideDropState()
-    /// 主区左边那一截会话条的底色：会话条变窄时露出来（`move`），平时在框外、裁掉看不见。
+    /// 主区左边那一截会话条的底色：会话条变窄时露出来（`move`），平时在框外、裁掉看不见。Mac 上从最顶那一排下面起（那一排整窗一块桌面底，`WideRail`）。
     let skirt = CALayer()
     let slot: WideSlot
     let focus: WideFocus
@@ -178,7 +178,7 @@ final class WideColumnView: NSView {
     override func layout() {
         super.layout()
         host.frame = bounds
-        skirt.frame = CGRect(x: -Chrome.rail, y: 0, width: Chrome.rail, height: bounds.height)
+        skirt.frame = CGRect(x: -Chrome.rail, y: 0, width: Chrome.rail, height: bounds.height - Chrome.band)
     }
 
     /// 会话条换宽、Cue 收起或放回时，各块这一下就到了终点的位置与宽（页按新的宽排一次），看得见的滑动是渲染端的两段叠加动画（`SidebarSlide`，主线程不逐帧挪）：

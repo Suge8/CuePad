@@ -5,7 +5,8 @@ import SwiftUI
 /// 密度：Mac 的外框是桌面工具栏的密度（指针点，ui-craft 的 compact～comfortable 之间），一排里只有一种控件高；
 /// 页里的内容（卡、对话）照 `Typography` 与 `Spacing` 的阅读密度。iPad 是触屏：同一张表，控件按手指 44。
 ///
-/// 会话条只有一套排法（`WideRail`）：每一组的左沿钉在 `edge`，组里每一行行首是一格见方（`control`）的那一列，正在条的中轴上（Mac 对着中间那颗红绿灯）。
+/// 会话条只有一套排法（`WideRail`）：每一组的左沿钉在 `edge`，组里每一行行首是一格（`control` 宽）的那一列，正在条的中轴上（Mac 对着中间那颗红绿灯）。
+/// Mac 的最顶那一排不归会话条：整窗一块连续的底，开合钮钉在红绿灯右边（`toggle`），两种宽下不动。
 /// 收起（`strip`）与展开（`rail`）是同一棵视图树，只差会话条多宽：组的右沿跟着宽走，格与行的位置一点不动，展开只是把行首那一列右边的名字露出来。
 /// 选中、悬停的底就是这一行的框（`RowStyle(cell: true)`）：收起时一行就是一格，底也就是一格见方。
 ///
@@ -40,4 +41,19 @@ enum Chrome {
     static var stripGroup: CGFloat { control + 2 * pad }
     /// 会话条上每一组的左沿离会话条边：收起时一组正在条的中轴上，展开时左沿不动、右沿离边同样远。
     static var edge: CGFloat { (strip - stripGroup) / 2 }
+
+    /// 收起时并排两格（Mac 最底下的技能与规则、设置）的左格离条边：两格连同中缝正在中轴上。
+    static var pairEdge: CGFloat { (strip - 2 * control - cellGap) / 2 }
+    /// 会话行行首状态标的基准直径（`PiStateDot.size`，外框 1.8 倍，Mac 约 18 见方）。
+    static let railMark: CGFloat = 10
+    /// 等你组的会话行：名字下面一行写它要什么，比一格高一档；这一组每行同高，不随状态跳。
+    static var tallRow: CGFloat { control + Spacing.item }
+    #if os(macOS)
+    /// 会话条第一行离窗口顶：最顶那一排下面隔一档，开合钮与"项目"那一行不贴在一起。
+    static var railTop: CGFloat { band + Spacing.item }
+    /// 开合钮（`SidebarToggle`）那一格的左沿离窗口左边：红绿灯的右沿（`strip` 那条注释的 19 + 59.5）隔开一档悬停底，落在 4 点格上。
+    static let toggle: CGFloat = 84
+    /// 主区栏头左边让多少：会话条收起时开合钮伸进主区那一段（98 到 120），栏头让到它右沿再隔一档；展开时就是栏边（`Spacing.page`）。
+    static func headLead(rail: CGFloat) -> CGFloat { max(Spacing.page, toggle + control - rail + Spacing.item) }
+    #endif
 }
