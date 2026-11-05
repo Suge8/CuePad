@@ -59,8 +59,8 @@ struct PiModelCapsule: View {
         .animation(Motion.fade, value: current?.key)
     }
 
-    /// 标志与名字之间。
-    private static let gap: CGFloat = 5
+    /// 标志与名字之间：胶囊（`inline` 档）里的图标贴字，比一般的图标与字（`glyph`）紧一档——工具排一排放到头，每颗省一点才不把名字挤掉。
+    static let gap = Spacing.tight
 
     private func spoken(at now: Date) -> String {
         Dotted(current?.displayName ?? String(localized: unnamed), current.flatMap { $0.account?.label(provider: $0.key.provider) }, binding(at: now).map { String(localized: "\($0.name)额度剩 \($0.percent)") }).spoken
@@ -101,7 +101,7 @@ struct PiAgentCapsule: View {
     private var label: some View {
         let kind = pick.current
         return ViewThatFits(in: .horizontal) {
-            HStack(spacing: 5) {
+            HStack(spacing: PiModelCapsule.gap) {
                 ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
                 Text(kind.name).lineLimit(1).contentTransition(.opacity)
             }.fixedSize()

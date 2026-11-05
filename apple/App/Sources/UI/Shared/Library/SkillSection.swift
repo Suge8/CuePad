@@ -18,7 +18,7 @@ struct SkillSection: View {
                 skills(groups.global.flatMap { category in (labeled ? [SkillLine.category(category.name)] : []) + category.skills.map(SkillLine.skill) })
             }
             ForEach(groups.projects) { group in
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.tight) {
                     HStack(spacing: Spacing.glyph) {
                         ProjectGlyph(project: workspace.catalog?.project(group.project), size: Self.glyph)
                         Text(verbatim: workspace.projectName(group.project))
@@ -55,7 +55,7 @@ struct SkillSection: View {
                     Text(verbatim: name.isEmpty ? String(localized: "不在分类里") : name)
                         .font(Typography.label).foregroundStyle(palette.ink3)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, Spacing.inset).padding(.top, Spacing.item).padding(.bottom, 2)
+                        .padding(.horizontal, Spacing.inset).padding(.top, Spacing.item).padding(.bottom, Spacing.hair)
                         .accessibilityAddTraits(.isHeader)
                 case .skill(let skill): SkillRow(skill: skill, library: library)
                 }
@@ -107,7 +107,7 @@ private struct SkillRow: View {
             .frame(width: Self.nameWidth)
             description.frame(maxWidth: .infinity, alignment: .leading)
             #else
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.hair) {
                 HStack(spacing: Spacing.tight) { name.layoutPriority(1); mark }
                 description
             }

@@ -48,7 +48,7 @@ struct OverlayTitle: View {
         let content = workspace.overlayHeader.content.flatMap { $0.page == workspace.overlay ? $0 : nil }
         HStack(spacing: 0) {
             Spacer(minLength: 0)
-            VStack(spacing: 1) {
+            VStack(spacing: Spacing.hair) {
                 Text(verbatim: content?.title ?? "").font(Typography.toolbarTitlePaired).foregroundStyle(palette.ink)
                     .accessibilityAddTraits(.isHeader)
                 ZStack {

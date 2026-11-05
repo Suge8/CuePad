@@ -162,7 +162,7 @@ struct SearchPalette: View {
     private var results: some View {
         ScrollViewReader { proxy in
             ResultsScroll(query: query) {
-                LazyVStack(alignment: .leading, spacing: 2) {
+                LazyVStack(alignment: .leading, spacing: Spacing.hair) {
                     if let data = data?.matches {
                         if data.groups.isEmpty {
                             Text(query.text.isEmpty && !query.isFiltered ? "输入关键词，或用上面的筛选" : "没有找到灵感或任务")
@@ -171,13 +171,13 @@ struct SearchPalette: View {
                         }
                         ForEach(data.groups) { group in
                             let project = workspace.catalog?.project(group.id)
-                            HStack(spacing: 6) {
+                            HStack(spacing: Spacing.glyph) {
                                 ProjectGlyph(project: project, size: 11)
                                 Text(project?.shownName ?? "")
                                 Text("\(group.cards.count)").foregroundStyle(palette.ink3)
                             }
                             .font(Typography.label).foregroundStyle(palette.ink2)
-                            .padding(.top, Spacing.group).padding(.bottom, 2)
+                            .padding(.top, Spacing.group).padding(.bottom, Spacing.hair)
                             ForEach(group.cards) { entry in row(entry).id(entry.id) }
                         }
                         if data.total > data.shown {
@@ -229,7 +229,7 @@ struct SearchPalette: View {
             let project = workspace.catalog?.project(card.projectID)
             VStack(alignment: .leading, spacing: Spacing.group) {
                 Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.item) {
                     Text(Dotted(project?.shownName, DateLabel.short(card.modifiedAt)))
                     if let name = data.lastSends[card.id]?.target.shownName { SentMark(target: name) }
                 }

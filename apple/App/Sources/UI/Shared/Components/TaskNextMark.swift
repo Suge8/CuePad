@@ -22,7 +22,7 @@ struct TaskNextMark: View {
     }
 
     private var label: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: Spacing.glyph) {
             switch next {
             case .agent(let shown, let session):
                 PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID, row: .task)

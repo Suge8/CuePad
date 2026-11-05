@@ -8,7 +8,7 @@ struct WideHeading: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
             Text(verbatim: title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
             if let detail {
                 Text(verbatim: detail.isEmpty ? " " : detail).font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3).lineLimit(1)

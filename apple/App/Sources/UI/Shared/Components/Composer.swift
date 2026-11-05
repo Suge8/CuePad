@@ -181,7 +181,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if !accepts.isEmpty { plus }
             VStack(alignment: .leading, spacing: 0) {
                 text
-                    .padding(.leading, accepts.isEmpty ? Spacing.block : 2).padding(.trailing, shrunk ? Spacing.block : 2)
+                    .padding(.leading, accepts.isEmpty ? Spacing.block : Spacing.hair).padding(.trailing, shrunk ? Spacing.block : Spacing.hair)
                     .padding(.vertical, ComposerMetrics.textTop)
                     .frame(minHeight: buttonHeight)
                 // 工具排与两颗圆钮同一条中线；没有工具时这里是空的，不占位

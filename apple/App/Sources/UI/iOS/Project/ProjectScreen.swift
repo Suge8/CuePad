@@ -193,7 +193,7 @@ private struct FocusCard: View {
                 ForEach(data.done) { TaskLine(task: $0) }
             }
             // 辅助字号下开合挪到"添加任务"下面一行：并排时输入框会被挤没
-            let bar = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 0)) : AnyLayout(HStackLayout(spacing: 6))
+            let bar = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 0)) : AnyLayout(HStackLayout(spacing: Spacing.item))
             bar {
                 NewTaskField(project: data.project?.id)
                 Group {

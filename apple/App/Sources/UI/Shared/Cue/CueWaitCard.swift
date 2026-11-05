@@ -85,7 +85,7 @@ struct CueWaitCard: View {
         Button {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         } label: {
-            HStack(spacing: 9) {
+            HStack(spacing: Spacing.item) {
                 PiStateGlyph(status: .asking).font(Typography.title)
                 Text(pick.wait.asked.line).font(Typography.title).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: 0)

@@ -79,7 +79,7 @@ struct CueSchedulePage: View {
                 },
                 cancel: { rescheduling = nil }, end: { ending = line }
             )
-            .padding(.vertical, 6)
+            .padding(.vertical, Spacing.item)
         } else {
             let day = ScheduleText.days(line)
             let task = line.task.flatMap { shown?.tasks[$0] }.map { String(localized: "开工「\($0)」") }
@@ -98,7 +98,7 @@ struct CueSchedulePage: View {
                         Text(verbatim: ScheduleText.time(line)).foregroundStyle(palette.ink)
                     }
                     .font(ScheduleMetrics.time).monospacedDigit()
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
                         Text(verbatim: line.text).font(Typography.body).foregroundStyle(palette.ink)
                         Text(note).font(Typography.meta).foregroundStyle(palette.ink3)
                     }

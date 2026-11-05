@@ -154,7 +154,7 @@ private struct BoardRowSpine: View {
     private var marks: some View {
         Group {
             if column.light {
-                VStack(spacing: 3) {
+                VStack(spacing: Spacing.hair) {
                     HStack(spacing: Spacing.hair) {
                         BoardLaneMark(column: column, size: lightMark)
                         number.font(Typography.caption2.weight(.semibold))
@@ -162,7 +162,7 @@ private struct BoardRowSpine: View {
                     title.font(Typography.caption2.weight(.semibold))
                 }
             } else {
-                VStack(spacing: 3) {
+                VStack(spacing: Spacing.hair) {
                     BoardLaneMark(column: column, size: mark)
                     title.font(Typography.caption.weight(.semibold))
                     number.font(Typography.bodyStrong)
@@ -187,10 +187,13 @@ private struct BoardRowSpine: View {
         Text("\(count)").monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).minimumScaleFactor(0.7).lineLimit(1)
     }
 
+    /// 竖排的汉字按字的行高排，一字一行太散：收这么多读成一个词（光学校准，随字号的行高走不了档）。
+    private static let charTuck: CGFloat = 2
+
     /// 汉字一字一行竖排；拉丁字母竖排读不成词，整词侧转 90°。
     @ViewBuilder private static func name(_ title: String) -> some View {
         if title.unicodeScalars.allSatisfy(\.properties.isIdeographic) {
-            VStack(spacing: -2) {
+            VStack(spacing: -Self.charTuck) {
                 ForEach(Array(title.enumerated()), id: \.offset) { Text(String($1)) }
             }
         } else {

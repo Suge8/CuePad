@@ -67,8 +67,8 @@ struct PiSessionRow: View {
             if !ended { PiStateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID) }
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
-                MetaLine(spacing: 6, gap: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                MetaLine(spacing: Spacing.item, gap: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                         if let searchHit {
                             Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2)
                         } else if ended {
@@ -108,11 +108,11 @@ struct PiSessionRow: View {
     }
 
     private func compact(shown: PiShown, facts: PiRowFacts) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
+        HStack(alignment: .firstTextBaseline, spacing: style.dot + Spacing.hair) {
             PiStateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID)
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
-                MetaLine(alignment: .center, spacing: 6, gap: 4) {
+                MetaLine(alignment: .center, spacing: Spacing.item, gap: 0) {
                     if let searchHit {
                         Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2).lineLimit(1)
                     } else {
@@ -132,8 +132,8 @@ struct PiSessionRow: View {
 
     /// 第一层：名字（有新回复时加粗）、Agent 标志、没送到的折回箭头、整页卡片所在项目的图标、右上的时长。
     private func headline(shown: PiShown) -> some View {
-        MetaLine(spacing: 6, gap: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+        MetaLine(spacing: Spacing.item, gap: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
                 Text(Highlight.matches(PiRename.title(of: session, request: rename, at: services.speech), highlight))
                     .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
                     .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
@@ -142,7 +142,7 @@ struct PiSessionRow: View {
             }
         } meta: {
             // 时间只占它要的宽度，名字拿剩下的
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
                 if shown.undelivered == nil, let unsent = PiChat.undeliveredNote(undelivered) {
                     PiStateGlyph.undelivered.font(style.meta.weight(.semibold))
                         .accessibilityHidden(false).accessibilityLabel(unsent)
@@ -268,7 +268,7 @@ struct ContextFact: View {
 /// （宽给到 0、裁掉：看不见，读屏照样读到）。
 /// 每次排版各量一次理想宽度，不像 `ViewThatFits` 那样把每种排法都试排一遍。
 private struct FactsLayout: Layout {
-    var spacing: CGFloat = 10
+    var spacing = Spacing.item
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let sizes = subviews.map { $0.sizeThatFits(.unspecified) }

@@ -14,7 +14,7 @@ struct ChatImages: View {
 
     private static var side: CGFloat { 120 }
     private static var singleWidth: CGFloat { side * 2.5 }
-    private static var spacing: CGFloat { 6 }
+    private static var spacing: CGFloat { Spacing.tight }
     #if os(macOS)
     private static var perRow: Int { 3 }
     #else
@@ -70,7 +70,7 @@ private struct ChatImage: View {
                     if place.isAway {
                         Text(verbatim: services.awayLine(hash))
                             .font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3)
-                            .multilineTextAlignment(.center).padding(6)
+                            .multilineTextAlignment(.center).padding(Spacing.tight)
                     }
                 }
         }
@@ -90,7 +90,7 @@ struct ChatFiles: View {
     private static var maxWidth: CGFloat { 300 }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .trailing, spacing: Spacing.tight) {
             ForEach(files) { file in
                 FileChip(key: file.key, name: file.name, among: files, group: "chat-files-" + files.map(\.key).joined(separator: ","))
                     .frame(maxWidth: Self.maxWidth)

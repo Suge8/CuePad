@@ -59,7 +59,10 @@ struct StruckBrandMark: View {
             .overlay { Self.slash(width: line) }
     }
 
+    /// 斜杠两头比标志伸出这么多：压过标志的上下沿，读作划掉整个标志、不是标志里的一笔。
+    private static let slashReach: CGFloat = 2
+
     private static func slash(width: CGFloat) -> some View {
-        Capsule().frame(width: width).padding(.vertical, -2).rotationEffect(.degrees(-45))
+        Capsule().frame(width: width).padding(.vertical, -Self.slashReach).rotationEffect(.degrees(-45))
     }
 }

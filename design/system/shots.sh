@@ -22,6 +22,9 @@ mac-library         $d -CuePadScene library $w
 mac-trash           $d -CuePadScene trash $w
 mac-cuememory       $d -CuePadScene cuememory $w
 mac-cuerun          $d -CuePadScene cuerun $w
+mac-cueschedules    $d -CuePadScene cueschedules $w
+mac-notes           $d -CuePadScene session -CuePadSession notes $w
+mac-slash           $d -CuePadScene session -CuePadSession atlas -CuePadComposer slash $w
 mac-editor          $d -CuePadScene editor $w
 mac-projectform     $d -CuePadScene projectform $w
 mac-select          $d -CuePadScene select -CuePadProject CuePad $w
@@ -50,6 +53,9 @@ ios-search          $d -CuePadScene search -CuePadSearch 落地
 ios-library         $d -CuePadScene library
 ios-trash           $d -CuePadScene trash
 ios-cuememory       $d -CuePadScene cuememory
+ios-cueschedules    $d -CuePadScene cueschedules
+ios-notes           $d -CuePadScene session -CuePadSession notes
+ios-slash           $d -CuePadScene session -CuePadSession atlas -CuePadComposer slash
 ios-editor          $d -CuePadScene editor
 ios-projectform     $d -CuePadScene projectform -CuePadProject CuePad
 ios-style           $d -CuePadScene style

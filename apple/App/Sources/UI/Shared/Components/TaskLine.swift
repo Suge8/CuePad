@@ -46,7 +46,7 @@ struct TaskLine: View {
             ring(next: next)
             if stacked {
                 // 辅助字号时：旁注换到标题下面，不与标题抢一行
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
                     title
                     HStack(alignment: .firstTextBaseline, spacing: TaskLineLayout.gap) { notes(next: next, done: done) }.fixedSize()
                 }
@@ -133,6 +133,8 @@ struct TaskLine: View {
     private var titleLines: Int { 1 }
     private static let titlePadding: CGFloat = 0
     private static let ringTarget: CGFloat = TaskMetrics.ring
+    /// 行与行之间那道缝：行高 `TaskMetrics.rowHeight` 加上下这一截，一行正好占一行的高（`RowMetrics.height`），悬停的底相邻两行不粘在一起。
+    private static let rowGap = (RowMetrics.height - TaskMetrics.rowHeight) / 2
 
     private func framed(_ content: some View) -> some View {
         content
@@ -144,7 +146,7 @@ struct TaskLine: View {
                 let session = agents.items[task.id]?.state
                 CardActions(card: task, leaf: subtasks == nil, opens: session != nil, session: session)
             }
-            .padding(.vertical, 1)
+            .padding(.vertical, Self.rowGap)
     }
     #endif
 }

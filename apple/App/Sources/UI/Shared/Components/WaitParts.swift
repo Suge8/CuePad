@@ -23,7 +23,7 @@ nonisolated extension PiSessionState {
 
 /// 一排胶囊靠右，放不下换行（等你的选项）：每行按自己的宽靠右排；一颗比整行还长时独占一行、字折行。
 struct ChipFlow: Layout {
-    var spacing: CGFloat = 6
+    var spacing = Spacing.item
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let rows = rows(width: proposal.width ?? .infinity, subviews)

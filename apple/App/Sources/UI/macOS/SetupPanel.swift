@@ -54,7 +54,7 @@ struct SetupPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header.padding(.horizontal, 24).padding(.top, 24)
+            header.padding(.horizontal, Spacing.panel).padding(.top, Spacing.panel)
             // 不用 Form：浮层里的 Form 给开关报错位置、没有按下动作，读屏与辅助控制点不中（macOS 27 实测），这里按设置窗口的样子自己排
             VStack(alignment: .leading, spacing: Spacing.group) { content }
                 .font(Typography.body)
@@ -62,7 +62,7 @@ struct SetupPanel: View {
                 .labelStyle(RowLabel())
                 .controlSize(.mini)
                 .padding(.horizontal, Spacing.panel).padding(.vertical, Spacing.block)
-            footer.padding(.horizontal, 24).padding(.bottom, Spacing.panel)
+            footer.padding(.horizontal, Spacing.panel).padding(.bottom, Spacing.panel)
         }
         .frame(width: 520)
         .animation(Motion.fade, value: checked)
@@ -117,7 +117,7 @@ struct SetupPanel: View {
     /// 一行一句的提示（检测中、都已接入）：纸色底。
     private func note(@ViewBuilder _ content: () -> some View) -> some View {
         HStack(spacing: Spacing.item) { content() }.foregroundStyle(palette.ink2)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Spacing.inset).padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Spacing.inset).padding(.vertical, Spacing.item)
             .background(palette.paper, in: .rect(cornerRadius: Radius.block))
     }
 
@@ -270,7 +270,7 @@ struct SetupPanel: View {
         VStack(spacing: 0) {
             Group(subviews: rows()) { subviews in
                 ForEach(subviews) { row in
-                    row.padding(.horizontal, Spacing.inset).padding(.vertical, 9)
+                    row.padding(.horizontal, Spacing.inset).padding(.vertical, Spacing.item)
                 }
             }
         }
@@ -294,7 +294,7 @@ private struct RowLabel: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
             configuration.icon
-            VStack(alignment: .leading, spacing: 2) { configuration.title }
+            VStack(alignment: .leading, spacing: Spacing.hair) { configuration.title }
         }
     }
 }

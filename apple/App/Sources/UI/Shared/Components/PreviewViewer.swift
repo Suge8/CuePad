@@ -78,7 +78,7 @@ struct PreviewContent: View {
                 default: PreviewPage(preview: preview, file: file, active: active)
                 }
             } else {
-                EmptyState(mascot: .error, title: "读不了这个文件").padding(24).frame(maxHeight: .infinity)
+                EmptyState(mascot: .error, title: "读不了这个文件").padding(Spacing.page).frame(maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -92,7 +92,7 @@ private struct PreviewMarkdown: View {
 
     var body: some View {
         ScrollView {
-            MarkdownText(source: text ?? "").padding(20).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
+            MarkdownText(source: text ?? "").padding(Spacing.panel).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
         }
         .task { text = (try? String(contentsOf: file, encoding: .utf8)) ?? "" }
     }

@@ -105,7 +105,7 @@ private struct SessionAnswer: View {
 
     /// 几颗回答，下面一行此刻到哪了（已答、没送到）。
     private func answers(_ values: [PiAnswerValue], numbered: Bool = false, other: Bool = false) -> some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .trailing, spacing: Spacing.tight) {
             chips {
                 ForEach(Array(values.enumerated()), id: \.offset) { index, value in
                     chip(value, number: numbered && index < 9 ? index + 1 : nil)
@@ -141,7 +141,7 @@ private struct SessionAnswer: View {
     private func chip(_ value: PiAnswerValue, number: Int?) -> some View {
         let busy = answering && tapped == value
         return Button { answer(value) } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.glyph) {
                 if busy {
                     Spinner(.small)
                     Text("送达中")
@@ -189,7 +189,7 @@ private struct WaitReply: View {
 
     var body: some View {
         // 一行时字与发送钮同一条中线（字的格至少与钮同高、竖直居中）；写成几行长高时钮贴在最后一行旁（底对齐，上下边距让最后一行对着钮的中线）
-        HStack(alignment: .bottom, spacing: 6) {
+        HStack(alignment: .bottom, spacing: Spacing.glyph) {
             TextField(String(localized: "回答"), text: box.text, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain).font(Typography.secondary).lineLimit(1...4)
                 .padding(.vertical, Self.textInset)
@@ -200,7 +200,7 @@ private struct WaitReply: View {
                 .disabled(!canSend)
                 .accessibilityLabel("回答")
         }
-        .padding(.leading, Spacing.group).padding(.trailing, 3).padding(.vertical, 3)
+        .padding(.leading, Spacing.group).padding(.trailing, Spacing.hair).padding(.vertical, Spacing.hair)
         .background(palette.fill, in: Radius.nested)
     }
 

@@ -102,8 +102,8 @@ struct MarkdownText: View, Equatable {
             if let previous {
                 switch (previous, block) {
                 case (.item, .item): result += newline()
-                case (_, .heading): result += newline(gap: 8)
-                default: result += newline(gap: 2)
+                case (_, .heading): result += newline(gap: Spacing.item)
+                default: result += newline(gap: Spacing.hair)
                 }
             }
             previous = block

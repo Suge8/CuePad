@@ -115,7 +115,7 @@ struct CueWelcome: View {
     /// 手机上从没选过、有几台时，主按钮本身就是选哪台的菜单（带下拉箭头）。一颗按钮只做一件事：点了直接启用的不带箭头，带箭头的点开是菜单。
     @ViewBuilder private func enableButton(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {
         if let host = primary(settings, hosts) {
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.item) {
                 Button(host.isHere ? "在这台 Mac 上启用" : "在「\(host.name)」上启用") { enable(on: host) }.disabled(!host.selectable)
                 if !host.selectable { Text(host.note).font(Typography.meta).foregroundStyle(palette.ink3) }
                 let others = hosts.filter { $0.id != host.id }

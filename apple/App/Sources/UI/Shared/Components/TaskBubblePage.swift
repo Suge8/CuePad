@@ -127,7 +127,7 @@ extension CueEditorTheme {
         theme.textColor = CueColor(palette.ink2)
         theme.lineSpacing = 5
         theme.verticalInset = BubbleMetrics.editorInset
-        theme.title = Title(font: Typeface.pingFang(BubbleMetrics.titleSize, weight: .semibold), color: CueColor(done ? palette.ink3 : palette.ink), spacing: 6)
+        theme.title = Title(font: Typeface.pingFang(BubbleMetrics.titleSize, weight: .semibold), color: CueColor(done ? palette.ink3 : palette.ink), spacing: Spacing.item)
         return theme
     }
 }

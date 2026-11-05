@@ -15,7 +15,7 @@ struct MetaLine<Lead: View, Meta: View>: View {
 
     var body: some View {
         if typeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.hair) {
                 lead
                 meta.fixedSize()
             }

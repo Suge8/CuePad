@@ -8,7 +8,7 @@ struct RecapPreview: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: PiConversation.spacing) {
             Text("最近一轮，完整对话还在同步").font(Typography.caption).foregroundStyle(palette.ink3)
             UserBubble(stored: prompt, look: .session) {}
             if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
@@ -88,7 +88,7 @@ struct MachineCards: View {
     let text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
             // 存进对话时总是整块的信封；认不出时（别的扩展的纯文字）整条当一块，不丢字
             ForEach(Array((PiEnvelope.parse(text) ?? [PiEnvelope(name: "", body: text)]).enumerated()), id: \.offset) { _, envelope in
                 MachineCard(note: MachineNote(envelope))

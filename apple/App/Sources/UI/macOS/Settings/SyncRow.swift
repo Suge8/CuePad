@@ -104,7 +104,7 @@ struct SyncRow: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.group) {
                     ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Spacing.hair) {
                             Text(issue.text).font(Typography.meta).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
                             if let detail = issue.detail {
                                 DisclosureGroup("详情") {

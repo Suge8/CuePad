@@ -45,7 +45,7 @@ struct ArchiveList: View {
                 .accessibilityElement()
                 .accessibilityLabel(card.isTask ? "任务" : "灵感")
                 MetaLine(spacing: Spacing.item, gap: Spacing.item) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
                         Text(card.title).foregroundStyle(palette.ink).lineLimit(1)
                         Text(project?.shownName ?? "").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
                     }

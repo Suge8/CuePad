@@ -10,7 +10,7 @@ import SwiftUI
 struct MasonryLayout: Layout {
     var minColumnWidth: CGFloat = 220
     var maxColumns = 4
-    var spacing: CGFloat = 16
+    var spacing = Spacing.block
 
     private static let idealWidth: CGFloat = 900
 

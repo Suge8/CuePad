@@ -78,14 +78,14 @@ struct SessionRailCell: View {
                 }
                 .padding(.horizontal, Chrome.rowLead)
             } else {
-                VStack(spacing: 2) {
+                VStack(spacing: Spacing.hair) {
                     mark.frame(height: 16)
                     // 收起的图标条只有标志与状态记号，名字在悬停提示里（`CellHelp`）；手机的竖条照写名字
                     if form == .phone { name.font(Typography.caption2) }
                     // 图标条上的格是 `Chrome.control` 见方：线收到格里、两边留纸的内边
                     signal.frame(width: form == .narrow ? Chrome.control - 2 * Chrome.pad : 34)
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, Spacing.hair)
             }
         }
         .padding(.vertical, Spacing.tight)

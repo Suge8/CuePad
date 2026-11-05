@@ -61,7 +61,7 @@ struct SessionResultList: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
+                LazyVStack(alignment: .leading, spacing: Spacing.hair) {
                     if groups.isEmpty {
                         Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端里开一个，会话就会出现在这里")
                             .font(Typography.secondary).foregroundStyle(palette.ink2).padding(.vertical, Spacing.block)
@@ -88,7 +88,7 @@ struct SessionResultList: View {
         case .ended(let section): Dotted(section.title)
         }
         return SectionHeader(title, level: .group, count: group.sessions.count)
-            .padding(.top, Spacing.group).padding(.bottom, 2)
+            .padding(.top, Spacing.group).padding(.bottom, Spacing.hair)
     }
 
     private func row(_ session: PiSessionState) -> some View {
@@ -96,7 +96,7 @@ struct SessionResultList: View {
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
             undelivered: undelivered[session.sessionID] ?? 0).equatable()
-            .padding(.vertical, 7)
+            .padding(.vertical, Spacing.item)
             .contentShape(.rect)
             .row(selected: isSelected)
             .onTapGesture { open(session.sessionID) }

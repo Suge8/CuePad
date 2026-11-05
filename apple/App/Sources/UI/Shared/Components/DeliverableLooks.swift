@@ -170,11 +170,14 @@ enum DeliverableLooks {
 
     /// Markdown 的首屏：纸色底上的 `MarkdownText`，4:3（同网页快照）。只读开头一段，首屏之外的字不进排版；
     /// 按浅色画，深色下由缩略图统一压暗（同网页快照）。
+    /// 渲染成缩略图的那一页的页边：照纸上文档的页边比例留（缩到卡上看着像一页纸），与界面的间距档无关。
+    private static let markdownMargin: CGFloat = 20
+
     private static func markdown(_ file: URL, box: LookBox) async -> CGImage? {
         guard let source = await head(of: file) else { return nil }
         let palette = Palette(dark: false)
         let page = MarkdownText(source: source)
-            .padding(20)
+            .padding(Self.markdownMargin)
             .frame(width: markdownPage.width, height: markdownPage.height, alignment: .topLeading)
             .background(palette.paper)
             .environment(\.palette, palette)

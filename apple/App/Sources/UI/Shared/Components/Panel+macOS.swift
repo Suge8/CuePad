@@ -363,11 +363,13 @@ private struct PanelLayer: View {
 struct PanelHeader<Trailing: View>: View {
     let title: String
     @ViewBuilder var trailing: Trailing
+    /// 标题两侧各让出右上那一组钮（"展开编辑"与关闭）的宽：标题仍在正中，长了截断、不压到钮下面。
+    private static var buttonRoom: CGFloat { 96 }
     @Environment(\.palette) private var palette
 
     var body: some View {
         Text(title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
-            .padding(.horizontal, 96)
+            .padding(.horizontal, Self.buttonRoom)
             .frame(maxWidth: .infinity)
             .accessibilityAddTraits(.isHeader)
             .overlay(alignment: .trailing) {

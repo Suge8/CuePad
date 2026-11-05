@@ -206,11 +206,11 @@ struct DeliverableTile: View {
                     EmptyView()
                 } else if file == nil {
                     // 还没到本机：点名的图没有下面那行字，传了几成、怎么取写在画面上
-                    VStack(spacing: 3) {
+                    VStack(spacing: Spacing.tight) {
                         Image(.downloading).font(Glyph.control)
                         Text(verbatim: services.awayLine(preview.key)).font(Typography.caption).monospacedDigit().multilineTextAlignment(.center)
                     }
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, Spacing.tight)
                     .foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -226,7 +226,7 @@ struct DeliverableTile: View {
             .overlay(alignment: .bottomLeading) {
                 if preview.kind == .video, shown?.image != nil {
                     Image(.play).font(Glyph.small.weight(.bold)).foregroundStyle(palette.onMedia)
-                        .padding(7).background(palette.mediaScrim, in: .circle).padding(Spacing.item)
+                        .padding(Spacing.item).background(palette.mediaScrim, in: .circle).padding(Spacing.item)
                 }
             }
             .clipShape(shape)

@@ -59,7 +59,7 @@ struct NewSessionForm: View {
             Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
             ScrollView {
                 // 行的底向两边让出一截，留在滚动区里不被裁
-                VStack(spacing: 2) { ForEach(places) { row($0, selected: $0.id == place?.id) } }.padding(.horizontal, RowMetrics.bleed)
+                VStack(spacing: Spacing.hair) { ForEach(places) { row($0, selected: $0.id == place?.id) } }.padding(.horizontal, RowMetrics.bleed)
             }
             .frame(maxHeight: Self.listHeight).fixedSize(horizontal: false, vertical: true)
             TextField(String(localized: "开场的话（可不填）"), text: $prompt, palette: palette, axis: .vertical)
@@ -120,7 +120,7 @@ struct NewSessionForm: View {
                 // 对勾一直占着位置、只随选中显隐：换选中时名字不跟着让位
                 Image(.checked).foregroundStyle(palette.ink2).opacity(selected ? 1 : 0).accessibilityHidden(true)
             }
-            .padding(.vertical, 5)
+            .padding(.vertical, Spacing.tight)
             .contentShape(.rect)
         }
         .buttonStyle(RowStyle(selected: selected))

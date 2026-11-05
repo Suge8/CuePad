@@ -31,7 +31,7 @@ struct OlderList: View {
         }
         .padding(.horizontal, Spacing.tight)
         .contentShape(.rect)
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: Spacing.tight) {
             if group.isMonth {
                 Button {
                     withAnimation(Motion.fade) {

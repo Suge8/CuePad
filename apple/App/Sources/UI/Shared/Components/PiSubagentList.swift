@@ -17,7 +17,7 @@ struct PiSubagentList: View {
             VStack(alignment: .leading, spacing: 0) {
                 header(summary)
                 if expanded {
-                    NoteThread { ForEach(agents.identified, id: \.id) { row($0.agent).padding(.vertical, 3) } }
+                    NoteThread { ForEach(agents.identified, id: \.id) { row($0.agent).padding(.vertical, Spacing.hair) } }
                 }
             }
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: expanded)
@@ -55,11 +55,11 @@ struct PiSubagentList: View {
     }
 
     private func row(_ agent: PiSubagentState) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
             // 名字、角色与模型是一段字：放不下就折行，不截成"…"（模型名截了就认不出）；用时不折，辅助字号下挪到下一行
             HStack(spacing: Note.spacing) {
                 PiStateDot(shown: agent.shown, size: 6).noteGlyph()
-                MetaLine(alignment: .center, spacing: Note.spacing, gap: 8) {
+                MetaLine(alignment: .center, spacing: Note.spacing, gap: Spacing.item) {
                     Text("\(Text(agent.name).foregroundStyle(palette.ink2)) \(agent.role)\(agent.model.map { model in Text("\(Dotted.separator)\(BrandMark.label(.model(reference: model), PiModelName.short(model)))") } ?? Text(verbatim: ""))")
                         .foregroundStyle(palette.ink3)
                 } meta: {

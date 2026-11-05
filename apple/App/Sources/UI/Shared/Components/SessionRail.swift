@@ -161,7 +161,7 @@ private struct SessionRailHeader: View {
         }
         .font(Typography.caption.weight(.semibold))
         // 宽版的记号与格里的标志同一列（格让出 `Chrome.rowInset`、格里再 `rowLead`，记号在 `Chrome.icon` 那一列里居中）
-        .padding(.horizontal, wide ? Chrome.rowInset + Chrome.rowLead + (Chrome.icon - Self.mark) / 2 : 2)
+        .padding(.horizontal, wide ? Chrome.rowInset + Chrome.rowLead + (Chrome.icon - Self.mark) / 2 : Spacing.hair)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(column.title)
         .accessibilityValue(Text(count, format: .number))

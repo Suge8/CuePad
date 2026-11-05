@@ -33,7 +33,7 @@ struct CardEditorScreen: View {
             .overlay {
                 if wide { RoundedRectangle(cornerRadius: Radius.sheet).strokeBorder(palette.hair).allowsHitTesting(false) }
             }
-            .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
+            .padding(wide ? EdgeInsets(top: Spacing.item, leading: Spacing.sheet, bottom: 0, trailing: Spacing.sheet) : EdgeInsets())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .floatingHeader(.verbatim(data?.project?.shownName ?? ""), detail: data.map(detail)) { actions }
             .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in

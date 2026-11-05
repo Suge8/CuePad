@@ -75,7 +75,7 @@ struct WideSessionTitle: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Spacing.glyph) {
             if let project {
                 Text(verbatim: project).foregroundStyle(palette.ink3).lineLimit(1)
                 Text(verbatim: "/").foregroundStyle(palette.ink3).accessibilityHidden(true)
@@ -106,7 +106,7 @@ struct WideSessionTitle: View {
 
 extension EnvironmentValues {
     /// 这一块栏头左右让出多少：收起的 Cue 钮压在最右那一块的栏头右端（`MainWindow`、`SplitRoot` 给）。
-    @Entry var headInset = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
+    @Entry var headInset = EdgeInsets(top: 0, leading: Spacing.page, bottom: 0, trailing: Spacing.page)
 }
 
 @Observable

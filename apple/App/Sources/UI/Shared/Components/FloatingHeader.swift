@@ -197,7 +197,7 @@ private struct TitleStack<Detail: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(spacing: 1) {
+        VStack(spacing: Spacing.hair) {
             Text(title).font(Typography.toolbarTitlePaired).foregroundStyle(palette.ink).lineLimit(1)
             detail
         }

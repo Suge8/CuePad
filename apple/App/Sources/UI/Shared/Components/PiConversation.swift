@@ -54,7 +54,7 @@ struct PiConversation: View {
         .debugOpensPreview(in: items, session: session, $opened)
     }
 
-    static var spacing: CGFloat { 16 }
+    static var spacing: CGFloat { Spacing.block }
     /// 最初至少排开几条；一段约几条（`ChatSegments`），每次再排开这么多条。
     static let firstWindow = 4, segment = 5
     static let paging = ChatPaging.fixed(first: firstWindow, step: segment)

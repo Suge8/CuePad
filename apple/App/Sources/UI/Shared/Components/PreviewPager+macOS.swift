@@ -54,6 +54,8 @@ private struct PreviewPager: View {
     @Environment(\.closePanel) private var close
 
     private var batch: [PiPreview] { opening.batch }
+    /// 这一批不止一份：有前后箭头。
+    private var paged: Bool { batch.count > 1 }
     private var index: Int { opening.index(of: current) }
     private var preview: PiPreview { batch[index] }
     private var title: String { opening.title(of: preview) }
@@ -112,12 +114,12 @@ private struct PreviewPager: View {
     /// 前后箭头夹着"第几份 · 类型"（←→ 同）。
     private var stepper: some View {
         HStack(spacing: Spacing.tight) {
-            if batch.count > 1 {
+            if paged {
                 Button("上一个", icon: .back) { step(-1) }.labelStyle(.iconOnly).disabled(index == 0).help("上一个（←）")
             }
             Text(opening.position(at: index)).font(Typography.caption).foregroundStyle(palette.ink2).monospacedDigit()
-                .padding(.horizontal, batch.count > 1 ? 0 : 6)
-            if batch.count > 1 {
+                .padding(.horizontal, paged ? 0 : Spacing.tight)
+            if paged {
                 Button("下一个", icon: .forward) { step(1) }.labelStyle(.iconOnly).disabled(index == batch.count - 1).help("下一个（→）")
             }
         }

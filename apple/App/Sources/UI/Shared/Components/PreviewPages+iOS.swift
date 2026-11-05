@@ -33,6 +33,8 @@ struct PreviewPage: View {
 /// 页内搜索是系统的查找（`UIFindInteraction`）：页顶的搜索钮或接了键盘时 ⌘F 打开（`PreviewFinds`）。
 struct PreviewPDF: UIViewRepresentable {
     let file: URL
+    /// 页与页之间那道缝（系统 PDF 视图的页距，按页的四边给）：同"预览"连续翻页时的页距，是 PDF 的版面、不随界面的间距档。
+    private static let pageGaps = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
     @Environment(\.palette) private var palette
     @Environment(\.previewInsets) private var insets
     @Environment(\.previewFinds) private var finds
@@ -43,7 +45,7 @@ struct PreviewPDF: UIViewRepresentable {
         finds?.register(file, view.findInteraction)
         view.displayMode = .singlePageContinuous
         view.displaysPageBreaks = true
-        view.pageBreakMargins = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
+        view.pageBreakMargins = Self.pageGaps
         view.backgroundColor = UIColor(palette.desk)
         view.document = PDFDocument(url: file)
         view.autoScales = true
@@ -177,7 +179,7 @@ struct PreviewStill: View {
                     .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))
             }
         }
-        .padding(24)
+        .padding(Spacing.page)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: file) {
             look = await DeliverableLooks.load(
@@ -198,7 +200,7 @@ struct PreviewText: UIViewRepresentable {
         view.isEditable = false
         view.backgroundColor = .clear
         view.font = Typography.codeUIFont
-        view.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 16, right: 12)
+        view.textContainerInset = UIEdgeInsets(top: Spacing.block, left: Spacing.group, bottom: Spacing.block, right: Spacing.group)
         Task { view.text = await Self.read(file) }
         return view
     }

@@ -60,7 +60,7 @@ private struct LiveMoreFold: View {
 
     var body: some View {
         Button { expanded.toggle() } label: {
-            HStack(spacing: style.dot + 2) {
+            HStack(spacing: style.dot + Spacing.hair) {
                 Text(expanded ? "收起" : "还有 \(hidden) 个").monospacedDigit()
                 Image(.expand).font(style.line.weight(.semibold))
                     .rotationEffect(.degrees(expanded ? 180 : 0))
@@ -68,7 +68,7 @@ private struct LiveMoreFold: View {
                 Spacer(minLength: 0)
             }
             .font(style.line.weight(.medium)).foregroundStyle(palette.ink3)
-            .padding(.leading, style.dot * 1.8 + style.dot + 2)
+            .padding(.leading, style.dot * 1.8 + style.dot + Spacing.hair)
             .frame(minHeight: 28)
             .contentShape(.rect)
         }

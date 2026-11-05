@@ -22,7 +22,7 @@ struct FocusBand: View {
 
     var body: some View {
         taskRows
-        .padding(.horizontal, 20).padding(.vertical, Spacing.inset)
+        .padding(.horizontal, Spacing.panel).padding(.vertical, Spacing.inset)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .paper()
         .accessibilityElement(children: .contain)
@@ -47,14 +47,14 @@ struct FocusBand: View {
                 // 已完成的行：淡一档，点圆圈回到待办
                 ForEach(data.done) { TaskLine(task: $0) }
             }
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.item) {
                 NewTaskField(project: data.project?.id)
                 if hidden > 0 { toggleButton(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
                 if hidden > 0, done > 0 { Dot() }
                 if done > 0 { toggleButton(TaskCopy.done(done), open: fold.showsDone, \.showsDone) }
             }
             .font(Typography.meta).foregroundStyle(palette.ink3)
-            .padding(.top, 2)
+            .padding(.top, Spacing.hair)
             .taskFoldBar(anchor)
             .newTaskDrop()
         }
@@ -68,7 +68,7 @@ struct FocusBand: View {
 
     private func toggleButton(_ title: String, open: Bool, _ key: WritableKeyPath<TaskFold, Bool>) -> some View {
         Button { toggle(key) } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: Spacing.hair) {
                 Text(title)
                 Image(open ? .collapse : .expand).font(Glyph.mark).accessibilityHidden(true)
             }

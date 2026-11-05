@@ -31,9 +31,9 @@ struct CueTitle: View {
         let cue = workspace.cue
         HStack(spacing: 0) {
             Button { panel.toggle() } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.item) {
                     CueAvatar(cue.beat, size: .row).relaySpot(cue: .header)
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                         Text(cue.name).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
                         CueStatusLine(tally: true, font: Typography.toolbarSubtitle).lineLimit(1)
                     }

@@ -58,7 +58,7 @@ struct CueWaitEyebrow: View {
     }
 
     private func label(_ title: String, linked: Bool) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: Spacing.hair) {
             Text(title).lineLimit(1)
             if linked { Chevron(.forward) }
         }

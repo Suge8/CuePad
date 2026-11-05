@@ -86,7 +86,7 @@ struct ProjectPage: View {
                 if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
             }
         }
-        .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 150)
+        .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, CaptureBar.clearance)
         .cardDragStage()
     }
 

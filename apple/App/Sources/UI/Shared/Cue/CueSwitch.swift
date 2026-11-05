@@ -17,7 +17,7 @@ struct CueSwitchRow: View {
         let note = model.failure ?? (model.isOn ? nil : blocked)
         HStack(spacing: Spacing.group) {
             CueAvatar(beat, size: .row)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.hair) {
                 CueNameField(model: model)
                     .font(Typography.bodyStrong)
                     .labelsHidden()

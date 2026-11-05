@@ -4,6 +4,8 @@ import SwiftUI
 /// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；轻扫同所有灵感（`CardMenu.swipes`）；交给过 Agent 时右上角是那个会话的状态点；
 /// 长按是菜单，菜单出来后往外一拖就拖起来：拖到上面任务纸的一行上接进那条任务（`TaskOutline`），拖到纸底"添加任务"上照它新建一条（`newTaskDrop`）。
 struct CardTileView: View {
+    /// 会话点（看得见的那颗，不是它 44 的点按格）往卡的右内边里收一截：点离卡右边与标题离左边看着一样。
+    private static let dotTuck: CGFloat = 6
     let entry: CardEntry
     let lastTarget: String?
     let floated: Bool
@@ -25,7 +27,7 @@ struct CardTileView: View {
                         .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
                         .lineLimit(3)
                     Spacer(minLength: 0)
-                    AgentDot(card: card.id).padding(.vertical, -8).padding(.trailing, -6)
+                    AgentDot(card: card.id).padding(.vertical, -AgentDot.overhang).padding(.trailing, -Self.dotTuck)
                 }
                 if !text.preview.isEmpty {
                     Text(VariableText.styled(text.preview, palette))
@@ -33,7 +35,7 @@ struct CardTileView: View {
                         .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
                 }
                 CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
-                    .padding(.top, 6)
+                    .padding(.top, Spacing.tight)
             }
             .multilineTextAlignment(.leading)
             .padding(Spacing.group)
@@ -74,7 +76,7 @@ struct OlderGroupHeader: View {
             .padding(.horizontal, Spacing.tight)
             // 能折起的月份要点得到；周标题只是标题，紧贴它下面那组
             .frame(minHeight: collapsible ? 44 : nil)
-            .padding(.top, collapsible ? 4 : 12).padding(.bottom, collapsible ? 0 : 6)
+            .padding(.top, collapsible ? Spacing.tight : Spacing.group).padding(.bottom, collapsible ? 0 : Spacing.tight)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -112,7 +114,7 @@ struct OlderRow: View {
                     Text(text.preview.isEmpty ? " " : text.preview).font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                AgentDot(card: card.id).padding(.vertical, -8)
+                AgentDot(card: card.id).padding(.vertical, -AgentDot.overhang)
                 if let lastTarget { SentMark(target: lastTarget).font(Typography.caption2).foregroundStyle(palette.ink3) }
                 if !text.attachments.isEmpty { AttachmentMark(count: text.attachments.count).font(Typography.caption2).foregroundStyle(palette.ink3) }
                 Text(DateLabel.short(card.modifiedAt)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)

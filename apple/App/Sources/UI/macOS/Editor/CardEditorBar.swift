@@ -64,7 +64,7 @@ private struct VariablesChip: View {
 
     var body: some View {
         Button { editing.toggle() } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.tight) {
                 Text("{{\(names[0])}}").foregroundStyle(palette.ink)
                 Text(card.variableValues[names[0]].flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "未填"))
                     .foregroundStyle(card.variableValues[names[0]]?.isEmpty == false ? palette.ink : palette.ink2)

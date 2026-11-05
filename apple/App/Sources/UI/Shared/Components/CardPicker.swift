@@ -81,7 +81,7 @@ struct CardPicker: View {
                     }
                 }
             }
-            .padding(.horizontal, Spacing.block).padding(.bottom, 24)
+            .padding(.horizontal, Spacing.block).padding(.bottom, Spacing.section)
         }
         #if os(iOS)
         .background(palette.desk)

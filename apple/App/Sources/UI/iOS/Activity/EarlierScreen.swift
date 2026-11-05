@@ -15,7 +15,7 @@ struct EarlierTile: View {
         Group {
             if let total, total > 0 {
                 Button { workspace.push(.earlier) } label: {
-                    VStack(spacing: 1) {
+                    VStack(spacing: Spacing.hair) {
                         Text("更早").foregroundStyle(palette.ink2)
                         Text(total, format: .number).foregroundStyle(palette.ink3).monospacedDigit()
                     }

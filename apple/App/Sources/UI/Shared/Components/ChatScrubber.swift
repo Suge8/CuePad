@@ -144,7 +144,7 @@ struct ChatScrubber: View {
 
     /// 手指旁浮出的那一条：你的话是它的第一行，换了上下文的地方带一个同样的标。
     private func preview(_ mark: ChatMark) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: Spacing.glyph) {
             if mark.kind == .boundary {
                 Image(.renew).font(Glyph.mark).foregroundStyle(palette.ink2)
             }

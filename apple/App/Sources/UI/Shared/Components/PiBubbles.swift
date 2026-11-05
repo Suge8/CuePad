@@ -25,7 +25,7 @@ enum BubbleLook: Equatable {
 
     var padding: EdgeInsets {
         switch self {
-        case .session: EdgeInsets(top: 11, leading: 16, bottom: 11, trailing: 16)
+        case .session: EdgeInsets(top: Spacing.group, leading: Spacing.block, bottom: Spacing.group, trailing: Spacing.block)
         case .cue: CueBubble.padding
         }
     }
@@ -59,7 +59,7 @@ struct UserBubble<Menu: View>: View {
     var body: some View {
         let parts = BubbleParts(stored), text = parts.text, images = parts.images, skill = PiSkillCall.parse(text)
         BubbleWidth(fraction: Self.widthFraction, edge: .trailing) {
-            VStack(alignment: .trailing, spacing: 6) {
+            VStack(alignment: .trailing, spacing: Spacing.tight) {
                 if fromCue { CueByline() }
                 // 到哪了的记号挂在最下面那一块（文字气泡，带图时是图）的左边
                 if !text.isEmpty || images.isEmpty {
@@ -138,7 +138,7 @@ struct BubbleText: View {
 
     var body: some View {
         let shape = look.shape
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
             if let quote { QuoteLine(quote: quote) }
             Paragraphs(verbatim: text, lineLimit: lineLimit)
                 .font(Typography.reading).foregroundStyle(palette.ink)

@@ -73,7 +73,7 @@
 
 W2-9 完成标准另加：`rg 'compact: (true|false)|kind: \.highlight|EmptyStateButton|SectionTitle|SectionLabel|FilterChip|FilterCapsule|NewTaskLine|settingButton|compactHeight'` 在 `apple/App` 下为零。
 
-## W3：写死的间距（便，按目录；同目录的 W1-6／W2 合并后）
+## W3：写死的间距——已完成
 
 | 批 | 档 | 前置 | 范围 |
 |---|---|---|---|
@@ -85,7 +85,9 @@ W2-9 完成标准另加：`rg 'compact: (true|false)|kind: \.highlight|EmptyStat
 | W3-6 | 便 | W2-3、W2-6、W2-11 | `UI/Shared/Cue`、`UI/Shared/Components/Board*`、`TaskBoardParts.swift` |
 | W3-7 | 强 | W3-1～6 | `apple/scripts/lint.sh`：禁 `padding`、`spacing:` 写数字（Theme、Debug、Widget 与 `static let` 具名常量除外）；W3-1～6 留下拿不准角色的值逐处定档、拍前后对比 |
 
-便宜模型的做法：等于某档值的换成那一档（4→`tight`、8→`item`、12→`group`、16 在块与块之间→`block`；6 只在图标与字之间换 `glyph`、2 只在光学校准处换 `hair`；页级容器的左右边换 `page`，纸、卡里的字离边换 `inset`，浮层里的换 `panel`）；10、14、18 按角色就近：组件内部（控件、行、卡、气泡里）往下取 8／12／16，组与组之间往上取 12／16／24；拿不准是内部还是组间的，和 3、5、22 这类一起不动，列进交付说明给 W3-7。组件自己的几何（面板宽、缩略图边长）提成组件里的具名常量，不进 `Spacing`。B0b 已经落过规则的几行（`Controls` 玻璃胶囊、`PaneMetrics`、`SessionCard`、`QuotaGauge` 的明细）不再动。截图：该目录页面对应的基线全拍。
+W3-1～6 按目录迁完；W3-7 把各批留下的值逐处定档：进 `Spacing` 的按角色落到某一档（新增 `part`、`sheet`、`vacant` 三档，`hair` 的用途从光学校准放宽到「紧贴」），组件几何与光学校准提成组件里有名字的 `static let`、写一句为什么，0 与负值的对齐照留。`lint.sh` 加一条：Theme、Debug、Widget 以外 `padding`、`safeAreaPadding`、`spacing:`、`EdgeInsets` 的参数不写数（0 与按比例的乘除不算），全仓清零、没有例外。每档的两端值与用途在 docs/ui.md「间距」。W3-2 留下的 57 对像素差逐对归因在 [w3-2-pixel-diff.md](w3-2-pixel-diff.md)。
+
+定时页「汇总昨天各项目的进展，发到手机」那一行在 iPhone 17（402pt）只余约 3pt（字到 379.3pt、行右边 382pt），再窄几点就折成两行；W3-7 没动这一行的左右（清单边 4、字离边 16、几点那一列后 12）。以后改这几样先拍 402 与 390 两宽。
 
 ## 总验收的缺口
 

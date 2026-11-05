@@ -74,7 +74,7 @@ struct CueByline: View {
 
     var body: some View {
         let cue = workspace.cue
-        HStack(spacing: 5) {
+        HStack(spacing: Spacing.glyph) {
             CueAvatar(.resting, size: .inline)
             Text(cue.name).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
         }

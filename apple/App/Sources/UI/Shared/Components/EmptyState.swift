@@ -33,7 +33,7 @@ struct EmptyState<Action: View>: View {
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: 420)
-        .padding(24)
+        .padding(Spacing.sheet)
         .frame(maxWidth: .infinity)
         .paper(cornerRadius: Radius.sheet)
         .scaleEffect(shown || reduceMotion ? 1 : 0.97)
@@ -57,7 +57,7 @@ struct EmptyState<Action: View>: View {
     }
 
     private var copy: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Spacing.tight) {
             HStack(spacing: Spacing.glyph) {
                 if syncing { Spinner(.small) }
                 Text(syncing ? "正在从 iCloud 同步" : title)

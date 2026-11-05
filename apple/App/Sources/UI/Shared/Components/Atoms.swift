@@ -234,7 +234,7 @@ struct SectionHeader: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: level == .page ? 6 : 5) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
             if let icon { Image(icon).accessibilityHidden(true) }
             Text(title)
             if let count { Text("\(count)").font(countFont).monospacedDigit().foregroundStyle(palette.ink3).counting(count) }

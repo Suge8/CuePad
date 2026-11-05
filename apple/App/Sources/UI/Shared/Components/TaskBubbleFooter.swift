@@ -35,7 +35,7 @@ private struct LaunchStrip: View {
 
     var body: some View {
         BubbleStrip(mark: kind.mark.image) {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.glyph) {
                 Spinner(.small)
                 Text("正在开 \(kind.name) 会话…").font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
             }
@@ -74,8 +74,8 @@ private struct AgentStrip: View {
     private func strip(_ look: TaskAgentLook, shown: PiShown, session: PiSessionState) -> some View {
         // 同看板的会话卡（`BoardSessionCard`）：认得出是哪家就是它的标志，认不出是终端
         BubbleStrip(mark: session.agent.known?.mark.image ?? Image(.terminal), markLabel: session.agentMark) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: Spacing.hair) {
+                HStack(spacing: Spacing.glyph) {
                     PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session.sessionID, row: .task)
                     Text(look.title).font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
                 }

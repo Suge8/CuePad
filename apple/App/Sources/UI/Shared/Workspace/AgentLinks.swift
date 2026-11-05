@@ -36,6 +36,8 @@ struct WindowCardAgents: ViewModifier {
 /// 开新会话还没开好时是一圈石绿空心点（"正在开会话"，在动的状态同 `PiShown.tint`）。没交给过 Agent 时不画。
 struct AgentDot: View {
     let card: UUID
+    /// 点按格比挂着它的那一行字高（手机 44 见方）：挂在行里时上下各伸出这么多，不把行撑高。
+    static let overhang: CGFloat = 8
     @Environment(\.cardAgents) private var agents
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

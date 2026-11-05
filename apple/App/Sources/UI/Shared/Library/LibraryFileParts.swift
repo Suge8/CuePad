@@ -182,7 +182,7 @@ struct MergePreview: View {
                         text(block.text).foregroundStyle(palette.ink).lineSpacing(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.vertical, Spacing.tight).padding(.trailing, 6).padding(.leading, Self.mark)
+                    .padding(.vertical, Spacing.tight).padding(.trailing, Spacing.tight).padding(.leading, Self.mark)
                     .background(block.incoming ? palette.bubble : .clear, in: .rect(cornerRadius: Radius.chip))
                     // 记号与底挂在字的左边：字与编辑器里的对齐
                     .padding(.leading, -(Self.mark + Self.bar + Self.gap))
@@ -220,7 +220,7 @@ struct SkillFields: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
             TextField(String(localized: "名字"), text: Binding(get: { draft.name }, set: { draft.changed(name: $0) }), palette: palette)
                 .textFieldStyle(.plain).font(Self.nameFont).foregroundStyle(palette.ink)
             if problem?.field == .name, let problem { ProblemLine(problem: problem) }

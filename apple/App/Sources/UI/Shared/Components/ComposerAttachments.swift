@@ -20,7 +20,7 @@ struct AttachmentBody: View {
                     }
                 }
             }
-            .padding(blocks.isEmpty ? 0 : 20)
+            .padding(blocks.isEmpty ? 0 : Spacing.panel)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
         }

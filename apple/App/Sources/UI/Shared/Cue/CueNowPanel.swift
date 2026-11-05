@@ -68,7 +68,7 @@ struct CueNowPanel: View {
     }
 
     /// 三块之间：组与组之间，取 4 点格上松的那一档。
-    private static let blockGap: CGFloat = 24
+    private static let blockGap = Spacing.part
 }
 
 /// 大脑那一排，启用前后同一块、同样高：

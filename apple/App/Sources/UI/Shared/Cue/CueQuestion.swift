@@ -16,7 +16,7 @@ struct CueQuestionLine<Below: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 9) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
             if tone != .ended { PiStateGlyph(status: .asking).font(Typography.title).accessibilityHidden(true) }
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 VStack(alignment: .leading, spacing: Spacing.tight) {
@@ -212,7 +212,7 @@ struct CueShots: View {
         // 名字与说明之间是"："（英文是": "）
         let split = look.range(of: "：") ?? look.range(of: ": ")
         let parts = split.map { [String(look[..<$0.lowerBound]), String(look[$0.upperBound...])] } ?? [look]
-        return VStack(alignment: .leading, spacing: 1) {
+        return VStack(alignment: .leading, spacing: Spacing.hair) {
             Text(CueQuestionLine.keepingTail(parts.first ?? look)).fontWeight(.semibold).foregroundStyle(palette.ink)
             if parts.count > 1 { Text(CueQuestionLine.keepingTail(parts[1])).foregroundStyle(palette.ink2) }
         }

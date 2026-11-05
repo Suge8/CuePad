@@ -50,7 +50,7 @@ struct OutlineTargets: View {
     private var badge: some View {
         Label("接到正文后面", icon: .add).labelStyle(.titleAndIcon)
             .font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.signature)
-            .padding(.horizontal, Spacing.item).padding(.vertical, 3)
+            .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.tight)
             .background(palette.selection, in: .capsule)
             .background(surface ?? palette.paper, in: .capsule)
     }
@@ -147,7 +147,7 @@ private struct NewTaskSlot: View {
                 .overlay { if over { shape.fill(palette.selection) } }
                 .overlay { shape.stroke(over ? palette.signature : palette.signatureSoft, style: StrokeStyle(lineWidth: 1.5, dash: over ? [] : [5, 4])) }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Spacing.hair)
         .animation(Motion.fade, value: over)
         .allowsHitTesting(false)
     }

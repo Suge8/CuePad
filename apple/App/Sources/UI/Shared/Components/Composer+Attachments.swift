@@ -30,7 +30,7 @@ extension Composer {
                 HStack(spacing: Spacing.item) {
                     Image(.pickCards).foregroundStyle(palette.ink3)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
                         Text(name).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
                         // 去处收不了附件时卡片里的附件不发（`ComposerDraft.accepting`），不写个数
                         if accepts.contains(.files), attached > 0 {

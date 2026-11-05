@@ -17,12 +17,12 @@ struct PiSlashPalette: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 2) {
+                LazyVStack(spacing: Spacing.hair) {
                     ForEach(Array(commands.enumerated()), id: \.element.id) { index, command in
                         row(command, highlighted: index == highlighted).id(command.id)
                     }
                 }
-                .padding(.horizontal, Spacing.block).padding(.vertical, 6)
+                .padding(.horizontal, Spacing.block).padding(.vertical, Spacing.tight)
             }
             .frame(maxHeight: Self.maxHeight)
             .fixedSize(horizontal: false, vertical: true)
@@ -37,8 +37,8 @@ struct PiSlashPalette: View {
     private func row(_ command: PiSlashCommand, highlighted: Bool) -> some View {
         Button { pick(command) } label: {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
+                    HStack(spacing: Spacing.item) {
                         Text("/" + command.name).font(Typography.body.weight(.semibold)).foregroundStyle(palette.ink)
                         if let hint = command.hint { Text(hint).font(Typography.meta).foregroundStyle(palette.ink3) }
                     }

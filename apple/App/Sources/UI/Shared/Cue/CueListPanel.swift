@@ -20,7 +20,7 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
                 .padding(.bottom, Spacing.group)
         }
         .scrollEdgeEffectHidden()
-        .overlay { if isEmpty { empty.padding(20) } }
+        .overlay { if isEmpty { empty.padding(Spacing.panel) } }
         // 滚动区止于胶囊半高处，胶囊下半截伸出滚动区：内容只从胶囊背后滚过，不在它下面与圆角外露出被面板下沿切掉的半行
         .safeAreaInset(edge: .bottom, spacing: 0) {
             field
@@ -41,7 +41,7 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
             .safeAreaPadding(.top, CueListMetrics.top)
             .contentMargins(.top, -CueListMetrics.top, for: .scrollIndicators)
             .overlay(alignment: .topTrailing) {
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.item) {
                     HelpButton { CueListHelp(text: help) }
                     PanelCloseButton()
                 }
@@ -136,7 +136,7 @@ private struct CueListHoverActions: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: Spacing.hair) {
             ForEach(actions.keyed, id: \.key) { item in
                 Button(item.action.title, icon: item.action.icon, action: item.action.run)
                     .labelStyle(.iconOnly)

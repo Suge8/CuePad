@@ -137,7 +137,7 @@ struct ScheduleEditor: View {
             }
             .pickerStyle(.menu)
         case .weekly:
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.item) {
                 ForEach(ScheduleText.weekOrder, id: \.self) { weekday in WeekdayChip(weekday: weekday, days: $draft.weekdays) }
             }
         }
@@ -199,7 +199,7 @@ struct ScheduleStrip: View {
         } else {
             HStack(alignment: .top, spacing: BubbleMetrics.gap) {
                 Image(.schedule).font(.system(size: BubbleMetrics.brand * 0.8)).foregroundStyle(palette.ink2).frame(width: BubbleMetrics.markSlot)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
                     Text(line.repeats.map(ScheduleText.repeats) ?? line.remindAt.map { ScheduleText.moment($0) } ?? "")
                         .font(BubbleMetrics.strong).foregroundStyle(palette.ink)
                     Text(next).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(2)

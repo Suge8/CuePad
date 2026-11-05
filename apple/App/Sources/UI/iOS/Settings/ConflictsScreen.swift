@@ -9,13 +9,13 @@ struct ConflictsScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: Spacing.section) {
                 if let failure = choices.failure {
                     Label { Text(failure).font(Typography.meta) } icon: { FailureMark() }
                 }
                 if services.conflicts.isEmpty {
                     EmptyState(mascot: .clean, title: "没有待处理的冲突")
-                        .padding(.top, 60)
+                        .padding(.top, Spacing.vacant)
                 }
                 ForEach(services.conflicts, id: \.copy.id) { ConflictPair(conflict: $0, choices: choices) }
             }

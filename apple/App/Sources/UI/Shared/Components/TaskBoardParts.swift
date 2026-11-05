@@ -117,7 +117,7 @@ struct BoardColumn: View {
     private var cards: some View {
         LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
             .scrollTargetLayout()
-            .padding(.horizontal, BoardCardMetrics.inset).padding(.vertical, BoardCardMetrics.inset).padding(.bottom, 24)
+            .padding(.horizontal, BoardCardMetrics.inset).padding(.vertical, BoardCardMetrics.inset).padding(.bottom, Spacing.section)
     }
 
     @ViewBuilder private var content: some View {
@@ -180,7 +180,7 @@ struct BoardColumn: View {
             #if os(macOS)
             .padding(.horizontal, TaskMetrics.cardPadding)
             #else
-            .padding(.horizontal, 6)
+            .padding(.horizontal, Spacing.tight)
             #endif
             .paper(cornerRadius: TaskMetrics.cardRadius)
     }

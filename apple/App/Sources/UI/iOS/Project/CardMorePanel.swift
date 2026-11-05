@@ -59,7 +59,7 @@ private struct CardMorePanel: View {
     private var actions: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(card.title).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(2)
-                .padding(.horizontal, Spacing.page).padding(.top, Spacing.group).padding(.bottom, 6)
+                .padding(.horizontal, Spacing.page).padding(.top, Spacing.group).padding(.bottom, Spacing.tight)
             ForEach(CardMenu.swipeMore(for: card, opens: opens), id: \.self) { item in
                 if let run = item.run(on: card, in: workspace) {
                     Button {

@@ -18,7 +18,7 @@ struct PreviewWeb: View {
             if let rules {
                 OfflineWebView(file: file, rules: rules).ignoresSafeArea(.container, edges: OfflineWebView.edges)
             } else if let failure {
-                EmptyState(mascot: .error, title: "没法安全地打开这个页面", message: .verbatim(failure)).padding(24).frame(maxHeight: .infinity)
+                EmptyState(mascot: .error, title: "没法安全地打开这个页面", message: .verbatim(failure)).padding(Spacing.page).frame(maxHeight: .infinity)
             } else {
                 #if os(iOS)
                 // 规则还在装时就铺缩略图的画面，与载入时盖在页面上的那张同一处（`OfflineWebView`）

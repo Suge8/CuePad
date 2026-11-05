@@ -49,7 +49,7 @@ struct CueStatusRow<Trailing: View>: View {
         let cue = workspace.cue
         return HStack(spacing: Spacing.item) {
             CueEntryAvatar()
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: Spacing.hair) {
                 Text(cue.name).font(font).fontWeight(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink).lineLimit(1)
                 if status { CueStatusLine(tally: true).lineLimit(1).transition(.opacity) }
             }
@@ -81,7 +81,7 @@ struct UnreadCount: View {
 
     var body: some View {
         if count > 0 {
-            HStack(spacing: 5) {
+            HStack(spacing: Spacing.glyph) {
                 StatusDot(color: palette.replied)
                 Text(count, format: .number).fontWeight(.semibold).monospacedDigit().contentTransition(.numericText(value: Double(count)))
             }

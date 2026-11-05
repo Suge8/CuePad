@@ -7,7 +7,7 @@ struct QuotaValueRow: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        MetaLine(gap: 8) {
+        MetaLine(gap: Spacing.item) {
             if let resetsAt = value.resetsAt {
                 LiveText(style: QuotaMeter.Countdown(end: resetsAt)) { Text("\(name)\(Dotted.inline)\(Text("\($0)后重置").foregroundStyle(palette.ink3))") }
             } else {

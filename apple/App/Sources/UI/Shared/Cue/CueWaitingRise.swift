@@ -24,7 +24,7 @@ struct RiseBehind: ViewModifier, Animatable {
         RiseLayout(shown: shown, floats: floats, limit: limit) { content }
             .mask {
                 Rectangle()
-                    .padding(.horizontal, -RiseBehind.shadowRoom * (floats ? 1 : shown))
+                    .padding(.horizontal, floats ? -RiseBehind.shadowRoom : -RiseBehind.shadowRoom * shown)
                     .padding(.top, floats ? -(limit + RiseBehind.shadowRoom) : -RiseBehind.shadowRoom * shown)
             }
     }

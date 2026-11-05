@@ -7,7 +7,7 @@ import SwiftUI
 /// 同一边连着说的几颗收紧成一串（`joinedGap`），后面几颗那一边的上角也收小，连成一列。圆角、内边距只在这里定。
 enum CueBubble {
     #if os(macOS)
-    static let padding = EdgeInsets(top: 13, leading: Spacing.block, bottom: 13, trailing: Spacing.block)
+    static let padding = EdgeInsets(top: Spacing.group, leading: Spacing.block, bottom: Spacing.group, trailing: Spacing.block)
     #else
     static let padding = EdgeInsets(top: Spacing.group, leading: Spacing.inset, bottom: Spacing.group, trailing: Spacing.inset)
     #endif
@@ -82,7 +82,7 @@ struct CueSays: View {
     private var asked: some View {
         CueQuestionLine(message: message, tone: .ended) {
             if reading {
-                MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, 6)
+                MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, Spacing.tight)
                     .transition(.opacity)
             }
             OriginalToggle(open: $reading)
@@ -93,7 +93,7 @@ struct CueSays: View {
     @ViewBuilder private var said: some View {
         let parts: (title: String?, body: String) = card ? Self.headline(message.text) : (nil, message.text)
         if let title = parts.title {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
                 Text(Self.inline(title)).font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink)
                     .lineSpacing(Typography.readingLineSpacing)
                     .fixedSize(horizontal: false, vertical: true)

@@ -23,7 +23,7 @@ struct LibraryFileScreen: View {
                 LibraryFileBody(file: file, library: library, draft: draft, texts: texts)
             } else if library?.file(file) != nil {
                 // 快照先到了、正文那一条还在路上
-                Spinner(.small).padding(.top, 40)
+                Spinner(.small).padding(.top, Spacing.vacant)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

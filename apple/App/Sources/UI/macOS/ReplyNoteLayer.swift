@@ -38,7 +38,7 @@ private struct ReplyNoteLayer: ViewModifier {
             .background { WatchView(watch: watch, changed: selectionChanged) }
             .overlay {
                 if let float {
-                    Anchored(spot: float.at, gap: Self.lineHalf + 4) { floating(float) }
+                    Anchored(spot: float.at, gap: Self.lineHalf + Spacing.tight) { floating(float) }
                         .transition(.opacity)
                 }
             }
@@ -148,7 +148,7 @@ private struct NoteEditor: View {
                 .focused($focused)
                 .onSubmit(submit)
         }
-        .padding(.horizontal, Spacing.inset).padding(.vertical, 11)
+        .padding(.horizontal, Spacing.inset).padding(.vertical, Spacing.group)
         .frame(width: Self.width, alignment: .leading)
         .glass(in: Self.shape)
         .resignsFocusOnOutsideClick()

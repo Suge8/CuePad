@@ -99,7 +99,7 @@ struct RoundProcess: View {
         ForEach(Array(tools.items.enumerated()), id: \.offset) { _, item in row(item) }
         let listed = tools.items.count { $0.kind != .said }
         if tools.steps > listed {
-            Text("另有 \(tools.steps - listed) 步未列出").font(Typography.caption).foregroundStyle(palette.ink3).padding(.leading, 19)
+            Text("另有 \(tools.steps - listed) 步未列出").font(Typography.caption).foregroundStyle(palette.ink3).noteGlyph(.indent)
         }
     }
 
@@ -122,12 +122,12 @@ struct RoundProcess: View {
 
     /// 正在跑的那一步：与清单同一种行，文字是会话状态里的当前动作、带流光，放得下两行。
     private func liveStep(_ doing: String, icon: Icon) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
             Image(icon).font(Typography.caption2).foregroundStyle(palette.ink3)
                 .noteGlyph().accessibilityHidden(true)
             Text(doing).font(Typography.codeNote).lineLimit(2).truncationMode(.middle).shimmering()
         }
-        .padding(.bottom, 2)
+        .padding(.bottom, Spacing.hair)
         .accessibilityElement(children: .combine)
         .transition(.opacity)
     }
@@ -214,7 +214,7 @@ struct SaidRow: View {
             // 全文的可以挑字；收成几行的在按钮里（点它回到对话里那一条），不开
             if lines == nil { said.fixedSize(horizontal: false, vertical: true).selectable() } else { said }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Spacing.hair)
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
         .transition(.opacity)

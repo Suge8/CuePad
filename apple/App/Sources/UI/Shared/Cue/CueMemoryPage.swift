@@ -111,7 +111,7 @@ private struct GroupTitle<Trailing: View>: View {
             Spacer(minLength: 0)
             trailing
         }
-        .padding(.horizontal, CueListMetrics.inset).padding(.top, 20).padding(.bottom, 2)
+        .padding(.horizontal, CueListMetrics.inset).padding(.top, Spacing.part).padding(.bottom, Spacing.hair)
     }
 }
 

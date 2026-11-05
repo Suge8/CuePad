@@ -8,7 +8,7 @@ import SwiftUI
 enum Note {
     /// 图标位的宽（常规字号下）：标题行的图标、清单的细线都对着它的中线。随动态字体放大，只经 `noteGlyph`。
     static let glyphWidth: CGFloat = 14
-    static let spacing: CGFloat = 6
+    static let spacing = Spacing.glyph
     /// 一行的最小高：一串旁注排得齐，点按区也够。
     static let lineHeight: CGFloat = 24
 }
@@ -45,7 +45,7 @@ struct NoteThread<Content: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) { content }
+        VStack(alignment: .leading, spacing: Spacing.hair) { content }
             .noteGlyph(.indent)
             .padding(.bottom, Spacing.tight)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -128,7 +128,7 @@ struct ChatMarker<Label: View>: View {
     @ViewBuilder private var marker: some View {
         let text = label
             .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
-            .padding(.horizontal, Spacing.item).padding(.vertical, 3)
+            .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.tight)
             .background { if highlighted { Capsule().fill(palette.selection).transition(.opacity) } }
             .animation(Motion.fade, value: highlighted)
         if let action {

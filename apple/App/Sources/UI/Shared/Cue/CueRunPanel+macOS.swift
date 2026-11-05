@@ -36,7 +36,7 @@ struct CueRunPanel: View {
                     if rounds.isEmpty {
                         Text("还没醒过").font(Typography.meta).foregroundStyle(palette.ink3)
                     }
-                    LazyVStack(alignment: .leading, spacing: 6) {
+                    LazyVStack(alignment: .leading, spacing: Spacing.item) {
                         ForEach(rounds.reversed()) { round in
                             let newest = round.id == rounds.last?.id
                             CueRoundRow(round: round, expanded: Binding { opened[round.id] ?? newest } set: { opened[round.id] = $0 })
@@ -69,7 +69,7 @@ private struct CueRoundRow: View {
                 .accessibilityValue(expanded ? "已展开" : "已收起")
             if expanded { detail.transition(.opacity) }
         }
-        .padding(.horizontal, Spacing.item).padding(.vertical, 6)
+        .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.item)
         .background(expanded ? palette.fill : .clear, in: ChatBlock.shape)
     }
 
@@ -79,14 +79,14 @@ private struct CueRoundRow: View {
 
     /// 第一行为什么醒与几点，第二行用时、工具次数、做完时的上下文。
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
             HStack(spacing: Spacing.item) {
                 Image(round.wake.icon).font(Typography.caption).foregroundStyle(palette.ink2)
                     .frame(width: Self.icon).accessibilityHidden(true)
                 Text(CueRunFormat.reason(round.wake)).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                 if round.sent.count > 1 {
                     Text("插话 \(round.sent.count - 1)").font(Typography.caption2).foregroundStyle(palette.ink2)
-                        .padding(.horizontal, 5).padding(.vertical, 1).background(palette.fill, in: .capsule)
+                        .padding(.horizontal, Spacing.tight).padding(.vertical, Spacing.hair).background(palette.fill, in: .capsule)
                 }
                 Spacer(minLength: Spacing.tight)
                 Text(CueRunFormat.clock(round.startedAt)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
@@ -142,7 +142,7 @@ private struct CueCallRow: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
             Button { withAnimation(Motion.fade) { expanded.toggle() } } label: {
                 ToolRow(icon: CueRunFormat.icon(tool: call.name), target: target, truncation: .tail) { status }
                     .frame(minHeight: 22).contentShape(.rect)
@@ -150,13 +150,13 @@ private struct CueCallRow: View {
             .buttonStyle(PressStyle())
             .accessibilityValue(expanded ? "已展开" : "已收起")
             if expanded {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.tight) {
                     TraceText(label: "参数", text: CueRunFormat.pretty(call.arguments))
                     if let result = call.result {
                         TraceText(label: "结果", text: result.isEmpty ? String(localized: "（空）") : CueRunFormat.pretty(result), tint: call.failed ? palette.failure : nil)
                     }
                 }
-                .padding(.leading, 19)
+                .noteGlyph(.indent)
                 .transition(.opacity)
             }
         }

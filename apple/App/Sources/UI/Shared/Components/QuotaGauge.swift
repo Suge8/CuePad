@@ -313,7 +313,7 @@ struct QuotaRings: View {
 
     private func rings(_ quotas: [AccountQuota], at now: Date) -> some View {
         let rings = quotas.compactMap { quota in quota.binding(at: now).map { (id: quota.id, provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
-        return HStack(spacing: 6) {
+        return HStack(spacing: Spacing.glyph) {
             if row {
                 Text("额度").foregroundStyle(palette.ink3)
                 Spacer(minLength: 0)

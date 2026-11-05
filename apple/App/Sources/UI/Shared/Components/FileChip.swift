@@ -29,7 +29,7 @@ struct FileChip: View {
         Button(action: tap) {
             HStack(spacing: Spacing.item) {
                 picture
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
                     Text(verbatim: name).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
                         .lineLimit(1).truncationMode(.middle)
                     Text(verbatim: status.detail).font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1)
@@ -45,7 +45,7 @@ struct FileChip: View {
                     Capsule().fill(palette.hair)
                         .overlay { Capsule().fill(palette.ink2).scaleEffect(x: progress, anchor: .leading) }
                         .frame(height: 3)
-                        .padding(.leading, thumbSide + Spacing.block).padding(.trailing, Spacing.group).padding(.bottom, 5)
+                        .padding(.leading, thumbSide + Spacing.block).padding(.trailing, Spacing.group).padding(.bottom, Spacing.tight)
                         .animation(Motion.fade, value: progress)
                 }
             }

@@ -19,7 +19,7 @@ struct LibraryPage: View {
                     Text("正在读这台 Mac 上的技能与规则…")
                 }
                 .font(Typography.secondary).foregroundStyle(palette.ink3)
-                .padding(.top, 120)
+                .padding(.top, Spacing.vacant)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }

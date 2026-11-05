@@ -9,7 +9,7 @@ struct ContextBoundary: View {
 
     var body: some View {
         ChatMarker(ruled: true, highlighted: highlighted, action: nil) {
-            HStack(spacing: 5) {
+            HStack(spacing: Spacing.glyph) {
                 Image(.renew).imageScale(.small)
                 Text(title).foregroundStyle(palette.ink2)
             }

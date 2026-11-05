@@ -96,12 +96,12 @@ struct SessionList<Top: View>: View {
 
     @ViewBuilder private var empty: some View {
         if model.searching {
-            EmptyState.noMatch(model.query).padding(.top, 40)
+            EmptyState.noMatch(model.query).padding(.top, Spacing.vacant)
         } else {
             EmptyState(mascot: .empty, title: .verbatim(AgentListModel.noneTitle), message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
                 Button("新会话", icon: .add) { workspace.newSession = .init() }
             }
-            .padding(.top, 40)
+            .padding(.top, Spacing.vacant)
         }
     }
 }

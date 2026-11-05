@@ -14,7 +14,7 @@ struct TrashPage: View {
             VStack(alignment: .leading, spacing: Spacing.page) {
                 if let data { content(data) }
             }
-            .padding(.horizontal, Spacing.page).padding(.bottom, 40)
+            .padding(.horizontal, Spacing.page).padding(.bottom, Spacing.section)
         }
         .safeAreaPadding(.top, Bars.contentGap)
         .dialog(
@@ -81,7 +81,7 @@ private struct TrashRow<Icon: View>: View {
         }
         .padding(.horizontal, Spacing.inset).frame(minHeight: 40)
         .hoverReveal {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.item) {
                 Button("恢复", action: restore).controlSize(.small)
                 Button("永久删除…") { confirming = true }.controlSize(.small).foregroundStyle(palette.failure)
             }

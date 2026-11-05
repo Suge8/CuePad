@@ -17,7 +17,7 @@ struct LibraryScreen: View {
             } else {
                 Text("在 Mac 上打开 CuePad，它会把那台的技能与规则报过来")
                     .font(Typography.secondary).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
-                    .padding(.horizontal, 32).padding(.top, 80)
+                    .padding(.horizontal, Spacing.page + Spacing.inset).padding(.top, Spacing.vacant)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }

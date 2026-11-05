@@ -160,7 +160,7 @@ private struct SwipeRow: ViewModifier {
     private func button(_ action: RowAction, width: CGFloat, stretched: Bool) -> some View {
         let progress = min(width / Self.slot, 1)
         return Button { run(action) } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: Spacing.glyph) {
                 Image(action.icon)
                     .font(Typography.body.weight(.semibold))
                     .foregroundStyle(palette.onFill)

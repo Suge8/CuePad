@@ -32,7 +32,7 @@ struct SelectionBar: View {
         .buttonStyle(PressStyle())
         .font(Typography.secondary)
         .foregroundStyle(palette.ink2)
-        .padding(.leading, 20).padding(.trailing, Spacing.item)
+        .padding(.leading, Spacing.panel).padding(.trailing, Spacing.item)
         .frame(width: 460, height: 48)
         .glass(in: .capsule, interactive: true)
     }

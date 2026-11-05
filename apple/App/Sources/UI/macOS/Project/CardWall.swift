@@ -32,9 +32,9 @@ private struct CardFace: View {
         let text = CardText(card.body)
         VStack(alignment: .leading, spacing: Spacing.item) {
             if let image = text.images.first {
-                Thumbnail(hash: image, height: 118).padding(-8).padding(.bottom, 6)
+                Thumbnail(hash: image, height: 118).padding(-Spacing.item).padding(.bottom, Spacing.item)
             }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
                 Text(text.label)
                     .font(Typography.bodyStrong)
                     .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
@@ -48,7 +48,7 @@ private struct CardFace: View {
                     .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
             }
             CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated, font: Typography.meta)
-                .padding(.top, 2)
+                .padding(.top, Spacing.hair)
         }
         .padding(Spacing.block)
     }

@@ -128,7 +128,7 @@ struct TidyLabel: View {
     let working: Bool
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: Spacing.glyph) {
             #if os(iOS)
             Image(.send).imageScale(.small)
             #endif
@@ -215,7 +215,7 @@ private struct GlobalRuleRow: View {
 
     var body: some View {
         Button { workspace.openLibrary(.instruction(.global)) } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
                 HStack(spacing: Spacing.group) {
                     InstructionIcon(kind: .global).frame(width: iconColumn)
                     Text(verbatim: workspace.instructionName(.global)).font(Typography.body).foregroundStyle(palette.ink)
