@@ -12,8 +12,9 @@ import SwiftUI
 /// iPad 顶上那一排藏起时原地浮成玻璃圆钮（`RailTopTools`，位置不动），主区栏头让出它们。
 /// 宽 `Chrome.rail`，不能拖：它是每个自动藏起临界宽的一项（`WideMetrics`），拖宽要么逐帧挪三栏（违背 Mac 开合不逐帧挪位置），要么只拖一条线、松手才变，换来的只是二十来点。
 /// 被否决的：收起成一列图标条（`Chrome` 头注释）；浮起的一块（macOS 26 那样离窗边一档、圆角，红绿灯坐在里面）——四周一圈桌面色的缝分散左边的注意力，macOS 27 也改回贴边；
-/// 开合钮与搜索放在会话条顶上一行（占一整行，搜索与会话条无关）；开合钮做成玻璃圆钮（圆底压在会话条与主区的分界上）；
-/// 项目、进展、更早的图标用强调色（HIG「Sidebars」的默认）——这里的强调色靛青只给正在发生的事，同一列下面就是在跑的靛青心电线，图标染上读作"在跑"。
+/// 开合钮与搜索放在会话条顶上一行（占一整行，搜索与会话条无关）；开合钮做成玻璃圆钮（圆底压在会话条与主区的分界上）。
+/// 项目、进展、更早三行的图标是强调色（签名色靛青，HIG「Sidebars」："By default, sidebar icons use your app's accent color."）：是静止的符号、自成一组在会话的上面，
+/// 与下面会动的靛青心电线、赭黄与胭脂的状态标靠形状和位置分开；会话行首只画状态标，不用强调色。
 struct WideRail: View {
     /// 此刻的宽：`Chrome.rail` 或藏起的 0。
     let width: CGFloat
@@ -90,7 +91,7 @@ struct WideRail: View {
 
 #if os(iOS)
 /// iPad 会话条顶上那一排：侧栏钮、搜索、Cue 钮，左沿在行首那一列（`Chrome.lead`）。会话条开着时是会话条上平放的格（`RailIcon`）；
-/// 藏起时同一排原地浮在内容上（`floating`，玻璃圆钮，同页顶那一排），三颗钮一点不挪——主区栏头让出它们（`Chrome.headLead`）。
+/// 藏起时同一排原地浮在内容上（`floating`，玻璃圆钮，同页顶那一排），三颗钮一点不挪——主区栏头让出它们（`Chrome.headLead`）；侧栏钮角上同 Mac 的开合钮带等你的点（`railWaitingDot`）。
 struct RailTopTools: View {
     let sizes: WideMetrics
     let floating: Bool
@@ -99,6 +100,7 @@ struct RailTopTools: View {
     var body: some View {
         HStack(spacing: Spacing.item) {
             tool(.sidebar, "显示或隐藏侧栏（⌃⌘S）") { workspace.toggleRail(sizes) }
+                .railWaitingDot(hidden: !workspace.railShown(sizes))
             tool(.search, "搜索") { workspace.openSearch() }
             CueButton(fits: sizes.cueFits, shown: workspace.cueShown(sizes)).frame(width: Chrome.control, height: Chrome.control)
         }

@@ -43,7 +43,7 @@ struct RailRow: View {
     var body: some View {
         Button(action: action) {
             RailLine {
-                Image(icon).font(Glyph.control).foregroundStyle(selected ? palette.ink : palette.ink2)
+                Image(icon).font(Glyph.control).foregroundStyle(palette.signature)
             } rest: {
                 Text(title).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
             }
@@ -110,7 +110,7 @@ struct RailEarlier: View {
         let selected = workspace.mainRoute == .earlier
         Button { workspace.show(.earlier) } label: {
             RailLine {
-                Image(.session).font(Glyph.control).foregroundStyle(selected ? palette.ink : palette.ink2)
+                Image(.session).font(Glyph.control).foregroundStyle(palette.signature)
             } rest: {
                 Text("更早").font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: 0)
@@ -125,6 +125,33 @@ struct RailEarlier: View {
         .observing(services.store, id: services.speech, into: $total, onError: workspace.fail) { [moment = services.speech] store in
             try PiSessionList.earlier(PiSessionQuery(limit: 1), at: moment, from: store).total
         }
+    }
+}
+
+extension View {
+    /// 会话条的开合钮（Mac 的 `SidebarToggle`、iPad 顶上那一排的侧栏钮）在会话条没露着时角上一颗点：有要拍板的是赭黄，只有待回复的是墨色；
+    /// 数只读 `CueNow.Tally`（同 Cue 的名牌与 App 图标的角标，不另算）。会话条露着时等你那一组就在眼前，不画。
+    func railWaitingDot(hidden railHidden: Bool) -> some View { modifier(RailWaitingDot(railHidden: railHidden)) }
+}
+
+private struct RailWaitingDot: ViewModifier {
+    let railHidden: Bool
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 点压在圆的右上角外沿上（圆心约在圆框的内切点）。
+    private static let shift: CGFloat = Spacing.hair
+
+    func body(content: Content) -> some View {
+        let tally = workspace.cue.now.tally
+        let dot: Color? = !railHidden ? nil : tally.asks > 0 ? palette.waiting : tally.reply > 0 ? palette.ink : nil
+        content
+            .overlay(alignment: .topTrailing) {
+                if let dot { StatusDot(color: dot, rim: palette.desk).offset(x: Self.shift, y: -Self.shift).transition(Motion.pop(reduceMotion: reduceMotion)) }
+            }
+            .animation(Motion.fade, value: dot)
+            .accessibilityValue(dot == nil ? Text("") : Text("等你 \(tally.needsYou)"))
     }
 }
 
