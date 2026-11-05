@@ -61,6 +61,8 @@ struct CueDock<Column: View>: View {
             if open { DrawerCatcher { workspace.hideCue(fits: false) }.transition(.identity) }
             WideColumnHost(slot: .cue, focus: focus, origin: width - shown, width: WideMetrics.cue, shape: WideMetrics.Shape(rail: 0, cue: shown), hidden: shown == 0) {
                 column(sizes.cueFits)
+                    // 按整块的框裁（含名牌那一截：对话滚进去再被淡出盖住，`fadesUnderHead`）；块自己不裁，抽屉的面与阴影在裁剪外面
+                    .clipped()
                     .modifier(DrawerSurface(shown: !sizes.cueFits, bleed: bleed))
                     .environment(\.pageActive, shown > 0)
             }
