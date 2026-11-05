@@ -32,8 +32,8 @@ struct WideRail: View {
                 #endif
             }
             RailGroup {
-                RailRow(title: "项目", icon: .folder, selected: projects, wide: wide) { workspace.selectPane(.projects) }
-                RailRow(title: "进展", icon: .task, selected: workspace.mainRoute == .progress, wide: wide) { workspace.selectPane(.progress) }
+                RailRow(title: "项目", icon: .folder, selected: workspace.shownPane == .projects, wide: wide) { workspace.selectPane(.projects) }
+                RailRow(title: "进展", icon: .task, selected: workspace.shownPane == .progress, wide: wide) { workspace.selectPane(.progress) }
             }
             SessionRail(data: services.liveSessions.rail, form: wide ? .wide : .narrow,
                         marked: Set(workspace.shownSessions.compactMap(\.sessionID)), pulse: workspace.pulse) { session, opening in
@@ -46,14 +46,6 @@ struct WideRail: View {
         }
         .frame(width: width)
         .background(palette.sidebar)
-    }
-
-    /// 项目列表与从它进去的项目页都算"项目"。
-    private var projects: Bool {
-        switch workspace.mainRoute {
-        case .shelf, .project: true
-        default: false
-        }
     }
 
     private var search: some View {
@@ -183,7 +175,7 @@ struct RailEarlier: View {
         RailGroup {
             Button { workspace.show(.earlier) } label: {
                 RailLine(wide: wide) {
-                    Image(.ended).font(Glyph.control).foregroundStyle(selected ? palette.ink : palette.ink2)
+                    Image(.session).font(Glyph.control).foregroundStyle(selected ? palette.ink : palette.ink2)
                 } rest: {
                     Text("更早").font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 0)
