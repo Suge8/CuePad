@@ -116,10 +116,11 @@ private struct PanelHostModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .modifier(ModalLayers(host: modals))
             .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
             .overlay { DrawerLayer(drawer: host.drawer) }
             .overlay { BubbleLayer(shown: host.shown) }
+            // 模态浮出盖在这一层的最上面：抽屉里长开的名牌外面、开着的气泡上的一下也由它接住，浮窗开着时抽屉与气泡一起不进读屏
+            .modifier(ModalLayers(host: modals))
             .environment(host)
     }
 }
@@ -195,7 +196,7 @@ private struct DrawerLayer: View {
                 if drawer.open {
                     Color.clear.contentShape(.rect)
                         .gesture(DragGesture(minimumDistance: 0).onChanged { _ in drawer.close() })
-                        .overlay { Button("关闭") { drawer.close() }.keyboardShortcut(.escape, modifiers: []).opacity(0).accessibilityHidden(true) }
+                        .overlay { Button("关闭") { drawer.close() }.keyboardShortcut(.escape, modifiers: []).opacity(0).readerHidden(true) }
                         .ignoresSafeArea()
                         .transition(.identity)
                 }
@@ -207,7 +208,7 @@ private struct DrawerLayer: View {
 }
 
 /// 从控件长出的气泡（`View.bubble(isPresented:)`）：开着时按 SwiftUI 量的框长出。量的框记在不触发重算的盒子里：控件随滚动、键盘挪动不重算这一层。
-/// 系统导航栏里的项用不了它（栏里的项建好之后系统不再跑它上面的 `onChange`）：栏里的问号是系统 popover（`BarHelpButton`）。
+/// 系统导航栏里的项用不了它（栏里的项建好之后系统不再跑它上面的 `onChange`）：栏里的问号由钮自己量框交出气泡（`BarHelpButton`）。
 private struct ControlBubble<Panel: View>: ViewModifier {
     @Binding var isPresented: Bool
     let width: BubblePlacement.Width
@@ -314,7 +315,7 @@ struct SheetGrabber: View {
                 DragGesture(minimumDistance: 2, coordinateSpace: .global)
                     .onChanged { drag?.changed($0.translation.height) }
                     .onEnded { drag?.ended($0.translation.height, $0.predictedEndTranslation.height) })
-            .accessibilityHidden(true)
+            .readerHidden(true)
     }
 }
 

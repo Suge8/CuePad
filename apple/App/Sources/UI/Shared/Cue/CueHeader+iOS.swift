@@ -27,13 +27,13 @@ struct CueHeader: View {
         let style = host == .page ? PlateStyle.fill : .compact
         ZStack(alignment: .topLeading) {
             // 窄屏：开侧栏的圆钮与名牌同一排、同一条中线；名牌长开时盖住它（点面板外先收起）
-            if host == .page {
+            // 长开时面板盖住它、读屏只读面板（模态，`GrowPanel`）：撤掉，不只是变透明——它的玻璃与面板在同一个容器里由容器一起画，透明度管不到钮上的图标
+            if host == .page, !expanded {
                 Button("侧栏", icon: .sidebar) { workspace.toggleSidebar() }
                     .glassCircle()
                     .frame(height: Self.height)
                     .accessibilityIdentifier("narrow-sidebar")
-                    // 长开时面板盖住它、读屏只读面板（模态，`GrowPanel`）
-                    .readerHidden(expanded)
+                    .transition(.opacity)
             }
             plate(style)
         }

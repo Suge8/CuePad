@@ -223,21 +223,24 @@ private struct Yield: ViewModifier {
 
 /// 页自己画的那一排：右边这一页的那一个操作，圆钮的位置同导航栏里的圆钮；
 /// 中间那几块盖在圆钮之上一层：从中间长出的面板（`GrowPanel`）铺满这一排往下长。
-/// 不包玻璃容器（`GlassEffectContainer`）：容器把里面的玻璃合到一层画，中间那几块的玻璃是垫在字后面的底（`glass`），合上去就盖住了名牌上的字。
+/// 整排的玻璃（两侧圆钮、中间那几块、长开的面板）在同一个玻璃容器里：彼此取样，名牌长开盖过侧栏钮时两块相融，不是玻璃叠玻璃。
+/// 容器里的玻璃都挂在内容本身上（`glass`、`glassCircle`）：挂在空背景上的会被容器合成到字上面。相融的距离比相邻两块之间的缝小，静止时各是各的。
 private struct PageBar<Middle: View, Trailing: View>: View {
     let height: CGFloat
     let trailing: Trailing
     @ViewBuilder let middle: Middle
 
     var body: some View {
-        ZStack(alignment: .top) {
-            HStack {
-                Spacer(minLength: Spacing.item)
-                trailing
+        GlassEffectContainer(spacing: Spacing.tight) {
+            ZStack(alignment: .top) {
+                HStack {
+                    Spacer(minLength: Spacing.item)
+                    trailing
+                }
+                .glassCircle()
+                .frame(height: height)
+                middle
             }
-            .glassCircle()
-            .frame(height: height)
-            middle
         }
         .padding(.horizontal, FloatingHeaderLayout.margin)
     }

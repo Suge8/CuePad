@@ -37,7 +37,8 @@ struct GrowPanel<Head: View, Panel: View>: View {
             }
             .frame(maxWidth: open ? .infinity : nil)
             .clipShape(shape)
-            .background { Color.clear.glass(in: shape) }
+            // 玻璃挂在内容本身上（不挂在一块空的背景上）：页顶那一排的玻璃容器把容器里挂在空背景上的玻璃合成到字上面
+            .glass(in: shape)
             .opacity(givesWay && !open ? 0 : 1)
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(open ? .isModal : [])
