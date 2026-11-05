@@ -17,7 +17,7 @@ struct CueWaitDock: View {
     /// 提问点名的图（`CueThread.shots`）
     let shots: [UUID: [CueShown]]
     let open: (PreviewOpening) -> Void
-    /// 卡正在升起或淡入：这期间对话不另外往上滑（`ChatColumn` 的 `holding`），只跟着它让出的高挪，停了再滑一次。离开时不压（`follow`）。
+    /// 卡正在升起、沉回或淡入淡出：这期间对话不另外往上滑（`ChatColumn` 的 `holding`），只跟着它让出的高挪，停了再滑一次。
     @Binding var moving: Bool
     #if os(iOS)
     @Environment(Workspace.self) private var workspace
@@ -31,12 +31,10 @@ struct CueWaitDock: View {
     @State private var drag: CGFloat = 0
     /// 滑走的那张往哪边飞出去（换一件时旧卡的去向）；不是滑走的（答完、点箭头）原地淡掉，为 0。
     @State private var exit: CGFloat = 0
-    /// 露出的那件：选中的那件；答完淡掉的这一段里还是它（那时它已不在 `waiting` 里）。
+    /// 露出的那件：选中的那件；答完沉回去的这一段里还是它（那时它已不在 `waiting` 里）。
     @State private var shown: CueWaitPick?
-    /// 露出了多少，0…1：升起的比例（`RiseBehind`，0 是全藏在输入框后面）；减弱动态效果时与离开时是不透明度。
+    /// 露出了多少，0…1：升起的比例（`RiseBehind`，0 是全藏在输入框后面）；减弱动态效果时是不透明度。
     @State private var level: CGFloat
-    /// 都答完（或撤回）正在离开：让出的高一下到位，卡浮在原处淡掉（同减弱动态效果）。
-    @State private var leaving = false
     /// 这一页从什么时候起在前台：在这之前就在等的不算"来了"，不升起。Mac 上挂着不看的页不跟着库变（`pageActive`），
     /// 回到前台时才读到的那几件当场就在、不再从输入框后面升起（升起的这一段对话跟着每帧重排）。
     @State private var watching = Date.now
@@ -65,14 +63,14 @@ struct CueWaitDock: View {
 
     private var current: CueWaitPick? { Self.pick(in: waiting, asking: asking) }
 
-    /// 露出的那件此刻的样子：还在等就取库里最新的那份（连同第几件），已经不在了（答完淡掉时）是它最后的样子、只此一件。
+    /// 露出的那件此刻的样子：还在等就取库里最新的那份（连同第几件），已经不在了（答完沉回去时）是它最后的样子、只此一件。
     private func live(_ pick: CueWaitPick) -> CueWaitPick {
         waiting.firstIndex { $0.id == pick.id }.map { CueWaitPick(waits: waiting, index: $0) } ?? CueWaitPick(waits: [pick.wait], index: 0)
     }
 
-    /// 来了从输入框后面升起（`RiseBehind`）；都答完让出的高一下到位、卡浮在原处淡掉：对话里同一次更新接着长出这一问与你的回答，让出的与长出的相抵，对话一次到终位。
-    /// 不像会话页的整卡那样沉回去（`DockedCard`）：沉的那 0.25 秒里让出的高一点点收，长出的那段却当帧就在，对话先一下顶上去一截再往回落
-    /// （#36 实测：浮着淡掉当帧挪 7.5 点，沉回去当帧顶上 85 点再落回 74 点）。
+    /// 来了从输入框后面升起、都答完沉回去（`RiseBehind`，同会话页的整卡）：对话跟着让出的高每帧挪。答完时同一次更新里对话长出这一问与回答，
+    /// 那一下先不跟（`ChatScroll.dockLeft`），沉的这一段压着（`moving`），沉完再一次滑上去；卡比长出的那段高时，对话随让出的高连续落下。
+    /// 否决过浮在原处淡掉、让出的高一下收掉：长出的与让出的不一样高时对话当帧挪那一截差（卡上带图时上百点）。
     /// 换一件时新的从叠边里上浮一截淡入，旧的滑走的往那边飞出、其余原地淡掉（底边对齐叠放）。减弱动态效果时来也只淡入。卡与下面输入框的间距在卡里（`below`）。
     /// 卡上有字、有回答框，进场不缩放（理由同 `BubblePlacement.transition`；Mac 上缩放还让回答框的 AppKit 文本框每帧按缩放重报尺寸，SwiftUI 报 min <= max 不成立）。
     var body: some View {
@@ -92,7 +90,7 @@ struct CueWaitDock: View {
         .modifier(RiseBehind(shown: floats ? (waiting.isEmpty ? 0 : 1) : level, floats: floats))
         .onChange(of: current?.id, initial: true) { old, new in follow(animated: old != new) }
         .onChange(of: active) { if active { watching = .now } }
-        .debugSettling(moving || leaving)
+        .debugSettling(moving)
     }
 
     static let below = Spacing.item
@@ -130,24 +128,21 @@ struct CueWaitDock: View {
             .padding(.bottom, Self.below + Self.peek)
     }
 
-    /// 卡浮着、露出的比例当不透明度用：减弱动态效果时与离开时。
-    private var floats: Bool { reduceMotion || leaving }
+    /// 卡浮着、露出的比例当不透明度用：减弱动态效果时。
+    private var floats: Bool { reduceMotion }
 
-    /// 跟上选中的那件：来了升起，都没了淡掉、淡完再拿掉，换了一件原地交替；减弱动态效果时来也只淡。
+    /// 跟上选中的那件：来了升起，都没了沉回去、沉完再拿掉，换了一件原地交替；减弱动态效果时来去都只淡。
     /// 页到前台之前就在等的不升起，当场就在（`watching`）。
     /// 升起用无回弹弹簧、从卡排进去的下一帧起播：卡插进来那一帧排版重，从这一帧起算的话前几十毫秒被吃掉。
-    /// 淡入稍慢、淡出要快：淡出时对话正滑向终位，卡叠在字上的那几帧越短越好。离开时不压住对话（`moving`）。
     private func follow(animated: Bool) {
         guard let next = current else {
             guard shown != nil else { return }
             guard animated else { return leave() }
-            leaving = true
-            // 收尾看此刻的状态（`leaving`）：淡的这 80ms 里又来了一件时不把它拿掉
-            move(to: 0, Motion.yield, holds: false) { if leaving { leave() } }
+            // 沉到一半又来了一件时这一段被接走（`move` 的收尾看 `level`），不把它拿掉
+            move(to: 0, Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { leave() }
             return
         }
         let swapping = shown != nil
-        leaving = false
         withAnimation(swapping && animated ? Motion.fade : nil) { shown = next }
         guard animated, level < 1, next.wait.since > watching else { return level = 1 }
         moving = true
@@ -158,9 +153,9 @@ struct CueWaitDock: View {
         }
     }
 
-    /// 播一段卡的来去，`holds` 时播着的时候 `moving`；动画走完再收尾。淡到一半又来了一件时前一段被接走，它的收尾不算数。
-    private func move(to target: CGFloat, _ animation: Animation, holds: Bool = true, then done: @escaping () -> Void = {}) {
-        moving = holds
+    /// 播一段卡的来去，播着的时候 `moving`；动画走完再收尾。沉到一半又来了一件时前一段被接走，它的收尾不算数。
+    private func move(to target: CGFloat, _ animation: Animation, then done: @escaping () -> Void = {}) {
+        moving = true
         withAnimation(animation, completionCriteria: .removed) { level = target } completion: {
             guard level == target else { return }
             moving = false
@@ -171,7 +166,6 @@ struct CueWaitDock: View {
     private func leave() {
         shown = nil
         level = 0
-        leaving = false
     }
 
     #if os(iOS)

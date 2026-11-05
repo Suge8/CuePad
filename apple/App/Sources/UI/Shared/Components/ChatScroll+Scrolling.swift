@@ -14,7 +14,11 @@ extension ChatScroll {
     var unseen: Bool { leftAt.map { $0 != followKey } ?? false }
 
     /// 内容变高矮时底锚：贴着最新、用户没在滚、没在等和 iCloud 对完（或自己要回到最新）。滚走了、在对的期间新的长在下面，正在读的不动。
-    var pinned: Bool { follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling && (!holding || unheld) && !deferred }
+    var pinned: Bool { follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling && (!holding || unheld) && !deferred && !dockLeft }
+
+    /// 拍板卡这次更新里走了（`docked` 刚变成 nil，读数 action 还没记下）：答完时同一次更新里对话长出这一问与回答，
+    /// 这时贴底的话整段当帧顶上去一截，再随卡沉回落下来。先不跟，同 `holding` 期间长在下面，卡沉完（`holding` 落下）一次滑上去。
+    var dockLeft: Bool { docked == nil && offset.dock != nil }
 
     /// 内容底下让出浮着的回复框（Mac，`chatBottomInset`）的留白。发出时回复框当下收起，发出的话要等写进库才到：那之前留白不跟着变矮，
     /// 那句到了（内容真的长高）再收，与它出现在同一帧；跟着变矮的话贴着最新的整段对话先被拉下来一两帧，再一下顶上去。
@@ -38,6 +42,8 @@ extension ChatScroll {
         private var delivered: (reading: Reading, container: CGFloat)?
         /// 上一回记下的最新一条新到的（`arrival`）；还没有过为 nil。
         private var arrival: UUID?
+        /// 上一次读数 action 时浮在对话底上的拍板卡（`docked`）。
+        var dock: String?
 
         /// 交给 action 时上一次交过去的读数，与这之间可见区从底下变矮了没有。
         struct Delivered {

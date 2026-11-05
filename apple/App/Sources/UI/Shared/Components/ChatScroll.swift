@@ -31,6 +31,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     let holding: Bool
     /// 最新一条是新到时要撑上去的那种就是它（`rise`）。
     let arrival: UUID?
+    /// 浮在对话底上的那张拍板卡（`CueWaitDock`）；没有为 nil。它走的那次更新里对话同时长出的不跟（`dockLeft`）。
+    let docked: String?
     private let content: Content
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.chatBottomInset) var bottomInset
@@ -53,13 +55,14 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
 
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, arrival: UUID? = nil,
-        @ViewBuilder content: () -> Content
+        docked: String? = nil, @ViewBuilder content: () -> Content
     ) {
         self.followKey = followKey
         self.readingWidth = readingWidth
         self.inset = inset
         self.holding = holding
         self.arrival = arrival
+        self.docked = docked
         self.follow = follow
         self.content = content()
     }
@@ -115,6 +118,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             height: (geometry.contentSize.height - padding).rounded(), floating: padding, anchor: tracked)
                     } action: { previous, reading in
                         let delivered = offset.deliver(reading)
+                        let left = dockLeft
+                        offset.dock = docked
                         let last = delivered.reading ?? previous
                         let grown = reading.height - last.height
                         // 新到的那一条带来的长高（它插进来的那次排版）：在对、滚走了时它照常长在下面
@@ -151,7 +156,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             byUser: next.scrolling)
                         if next != follow.wrappedValue { follow.wrappedValue = next }
                         guard following else { return }
-                        if holding, !unheld, grown > 0 {
+                        if (holding && !unheld) || left, grown > 0 {
                             deferred = true
                             return
                         }
