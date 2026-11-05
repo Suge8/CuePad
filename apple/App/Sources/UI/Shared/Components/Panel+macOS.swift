@@ -258,6 +258,8 @@ private struct PanelHostModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.panelCovered, host.covers(nil))
+            // 有浮层开着时 Esc 由按键监听收最上面那层（`takes`），抽屉不挂自己的（`DrawerCatcher`）
+            .environment(\.escapeTaken, host.shown.contains(where: \.open))
             .overlay { PanelLayer() }
             .background { WindowReader(host: host) }
             .environment(host)

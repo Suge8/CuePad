@@ -100,6 +100,8 @@ private struct PanelHostModifier: ViewModifier {
     func body(content: Content) -> some View {
         let covered = modals.modal != nil
         content
+            // 模态浮出开着时 Esc 归它（`ModalScrim`），抽屉不挂自己的（`DrawerCatcher`）
+            .environment(\.escapeTaken, covered)
             .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
             // 任何模态浮出开着时，窗口的气泡都不读；浮出外面的页与栏由放它的地方藏（浮窗：`ModalLayers` 整块，名牌：所在的页与 iPad 的 `SplitRoot`）
             .overlay { BubbleLayer(shown: host.shown).readerHidden(covered) }

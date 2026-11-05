@@ -210,6 +210,13 @@ enum DebugHooks {
     }
     #endif
 
+    /// 抽屉的 Esc 钮挂没挂（`DrawerCatcher`）：Debug 里往标准错误记一行，验收看这一行（外接键盘的 Esc 不自动化）。
+    static func drawerEscape(hung: Bool) {
+        #if DEBUG
+        FileHandle.standardError.write(Data("drawer-escape hung=\(hung)\n".utf8))
+        #endif
+    }
+
     /// 性能打点：某件事出现了（`interact` 等它、量到它用了多久，见 `PerfProbe`）。
     static func mark(_ event: String) {
         #if DEBUG

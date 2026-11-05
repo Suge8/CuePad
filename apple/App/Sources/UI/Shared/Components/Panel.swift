@@ -23,6 +23,9 @@ extension EnvironmentValues {
     /// 这一层上面有开着的模态浮层（Mac 的窗口内浮层，`PanelHost.covers`；iOS 的弹层是系统的，恒为假）：
     /// 被盖住的输入框不要焦点——出现时的自动聚焦、焦点请求都先看它（盖上时交出见 `yieldsFocusWhenCovered`）。
     @Entry var panelCovered = false
+    /// 窗口里有浮出开着（Mac 的任何一层 `panel`，`PanelHost`；手机与 iPad 的模态浮出，`ModalHost`）：Esc 归它，先收最上面那层。
+    /// 由两端的浮层宿主一处报（`panelHost`），抽屉的 Esc 据此让位（`DrawerCatcher`）。
+    @Entry var escapeTaken = false
 }
 
 enum PanelStyle: Equatable {
@@ -88,14 +91,20 @@ struct DrawerSurface: ViewModifier {
 
 /// 抽屉开着时铺在它下面、整窗的透明底（`CueDock`、`RailDrawer`）：点外面关、那一下不落到下面（同 sheet：点外面是"关掉它"，不是点了下面那张卡），Esc 同关。
 /// 调用处挂 `transition(.identity)`：收起那一下就撤，不然它跟着收起的动画淡完之前还接点按。
+/// Esc 同一时刻只有一个出处、先收最上面那层：窗口里有浮出开着（抽屉里长开的名牌、抽屉里弹的气泡与浮层，`escapeTaken`）时抽屉不挂自己的 Esc，
+/// 收给那一层（Mac 是 `PanelHost` 的按键监听，手机与 iPad 是 `ModalScrim`）；浮出收了才挂回来，再按一下收抽屉。两个同键的快捷键谁先响由系统定，不留给运气。
 struct DrawerCatcher: View {
     let close: () -> Void
+    @Environment(\.escapeTaken) private var escapeTaken
 
     var body: some View {
         Color.clear.contentShape(.rect)
             .gesture(DragGesture(minimumDistance: 0).onChanged { _ in close() })
-            .overlay { Button("关闭", action: close).keyboardShortcut(.escape, modifiers: []).opacity(0).readerHidden(true) }
+            .overlay {
+                if !escapeTaken { Button("关闭", action: close).keyboardShortcut(.escape, modifiers: []).opacity(0).readerHidden(true) }
+            }
             .ignoresSafeArea()
+            .onChange(of: escapeTaken, initial: true) { DebugHooks.drawerEscape(hung: !escapeTaken) }
     }
 }
 
