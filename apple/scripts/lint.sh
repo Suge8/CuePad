@@ -66,7 +66,6 @@ forbid "字号只经 Typography（文字，Theme/Typography.swift）与 Glyph（
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/IslandType.swift'
 forbid "投影只经 elevation 的几档（Theme/Surfaces.swift 的 Elevation，按浮多高分：hover、lifted、panel）：各处自写的半径与偏移是又一套手感，颜色随外观由色板给" \
   '\.shadow\(' '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**'
-# 下面三条是棘轮（design/system/migration.md）：例外里的文件是还没迁的存量，迁完一个删一行，不往里加
 forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（.caption、.footnote、Font.subheadline…）：它们编进 Mac 是系统的小号（.caption、.footnote 10 点），低于 Mac 的 12 点下限；iOS 缺的角色在 Typography 里按用途加。扩展（Widget）里没有 Typography，例外" \
   '(?:\.font\(\s*\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\bFont\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\.system\(\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b)' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/**'
