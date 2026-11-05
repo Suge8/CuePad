@@ -22,7 +22,7 @@ class Sim:
     """领到的那台模拟器（调用方已持着它的槽位锁，重启不会撞上别人）。"""
 
     def __init__(self, device, log):
-        self.device, self.status_bar_set, self.log = device, False, log
+        self.device, self.status_bar_set, self.log, self.landscape = device, False, log, False
 
     def run(self, *args, env=None):
         """跑一条 simctl，返回它的输出。"""
@@ -46,6 +46,20 @@ class Sim:
         if self.status_bar_set:
             self.set_status_bar()  # 状态栏的覆盖随关机清掉
 
+    def orient(self, args):
+        """按这一张的参数摆模拟器的物理朝向：`-CuePadLandscape YES` 横过来，否则竖着（devicectl，同人转设备；不发键鼠事件、不开 Simulator.app）。
+        不在 App 里转：iPad 支持多任务，系统按设备朝向定界面方向，不理 App 的 requestGeometryUpdate（UIRequiresFullScreen 已弃用）。
+        每张都摆：槽位全机共用，上一个任务可能停在横屏（拍完 `terminate` 转回竖屏）。"""
+        self.landscape = flag(args, "-CuePadLandscape") == "YES"
+        want = "landscapeLeft" if self.landscape else "portrait"
+        try:
+            subprocess.run(["xcrun", "devicectl", "device", "orientation", "set", "--device", self.device, want, "--quiet"],
+                           check=True, timeout=SIMCTL_TIMEOUT, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            die(f"devicectl 转模拟器朝向失败：{e.stderr.strip()}")
+        except subprocess.TimeoutExpired:
+            die(f"devicectl 转模拟器朝向 {SIMCTL_TIMEOUT} 秒没有返回")
+
     def set_status_bar(self):
         self.run("status_bar", self.device, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100",
                  "--cellularMode", "active", "--cellularBars", "4", "--wifiBars", "3")
@@ -54,15 +68,25 @@ class Sim:
     def launch(self, library, args, ready):
         if os.path.exists(ready):
             os.remove(ready)
+        self.orient(args)
         env = dict(os.environ, SIMCTL_CHILD_CUEPAD_LIBRARY_DIR=os.path.abspath(library), SIMCTL_CHILD_CUEPAD_SHOT_READY=ready)
         return int(self.run("launch", "--terminate-running-process", f"--stderr={self.log}", self.device, BUNDLE_ID, *args, env=env).rsplit(":", 1)[1])
 
     def terminate(self):
-        """收尾，尽力而为：没在跑会报错，卡住了下一次 launch 也带 --terminate-running-process。"""
+        """收尾，尽力而为：没在跑会报错，卡住了下一次 launch 也带 --terminate-running-process；横着的转回竖屏（下一次 launch 照样会摆）。"""
         try:
             subprocess.run(["xcrun", "simctl", "terminate", self.device, BUNDLE_ID], capture_output=True, timeout=SIMCTL_TIMEOUT)
+            if self.landscape:
+                subprocess.run(["xcrun", "devicectl", "device", "orientation", "set", "--device", self.device, "portrait", "--quiet"],
+                               capture_output=True, timeout=SIMCTL_TIMEOUT)
+                self.landscape = False
         except subprocess.TimeoutExpired:
             pass
+
+
+def flag(args, name):
+    """启动参数里 `name` 后面那个值；没有这一项（或它在最后、没跟值）为 None。"""
+    return args[args.index(name) + 1] if name in args[:-1] else None
 
 
 def recorder(device, out):
@@ -95,7 +119,7 @@ def sim(cmd, device, app, library, shots):
     def take(shot):
         nonlocal appearance
         # 模拟器的系统外观跟 -theme 走：App 钉的外观与系统的不同时，状态栏要到 App 起来后才淡过去，会拍到半途
-        want = "dark" if "-theme" in shot.args[:-1] and shot.args[shot.args.index("-theme") + 1] == "dark" else "light"
+        want = "dark" if flag(shot.args, "-theme") == "dark" else "light"
         if want != appearance:
             s.run("ui", device, "appearance", want)
             appearance = want

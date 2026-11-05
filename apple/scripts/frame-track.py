@@ -2,7 +2,7 @@
 """逐帧量录屏里几样东西的横向位置：看开合、跨临界宽这类滑动里每个元素是不是从旧处连续走到新处（docs/perf.md「开合的逐帧量法」）。
 
 用法：uv run --with numpy python3 apple/scripts/frame-track.py 片.mov 名:y:x0:x1[:高] … [--ref=帧号] [--rows=1]
-  片.mov 是 xc.sh rec 录的（Mac 按窗口录，Retina 屏上 2x）；坐标都是点、相对窗口左上，--scale 改倍数（默认 2）。
+  片.mov 是 xc.sh rec 录的（Mac 按窗口录，Retina 屏上 2x；模拟器横屏录的按转正后的画面量）；坐标都是点、相对窗口左上，--scale 改倍数（默认 2）。
   每样东西在参考帧（默认第 0 帧）里取 y 上下各 高/2（默认 12）、x0～x1 的一条做模板，之后每帧在同一条带里按最小绝对差找它，
   只在上一帧位置左右 --search（默认 420）点内找。挑纹理清楚的字：会动的头像、低对比的空块会认到别处，读成跳。
   输出每样东西按"动—停"切的段（连着 6 帧不到 0.25 点算停）：起止位置、最大单步与反向步（与这一段总方向相反、超过 0.5 点的一步）；
@@ -36,7 +36,10 @@ def probe(entries):
 
 
 times = [float(t) for t in probe("frame=pts_time")]
-width = int(probe("stream=width")[0])
+# 横屏的模拟器录出来是竖着的像素加一个转 90° 的显示矩阵，ffmpeg 解出来已转正：宽高要对调
+width, height = map(int, probe("stream=width,height")[0].split(","))
+if abs(int(float((probe("stream_side_data=rotation") or ["0"])[0]))) == 90:
+    width = height
 
 
 def track(spec):

@@ -44,9 +44,6 @@ extension DebugScene {
         dumpAccessibilityIfAsked()
         if defaults.bool(forKey: "CuePadSoftKeyboard") { showSoftwareKeyboard() }
         fillScreenOnPad()
-        if defaults.bool(forKey: "CuePadLandscape") {
-            (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
-        }
         let project = await prepareLibrary(workspace)
         if defaults.bool(forKey: "CuePadDemo") {
             await seedRemote(workspace.services)

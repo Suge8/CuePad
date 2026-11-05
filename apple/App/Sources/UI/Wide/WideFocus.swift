@@ -168,8 +168,8 @@ final class WideColumnView: NSView {
         self.workspace = workspace
         super.init(frame: .zero)
         wantsLayer = true
-        // 按栏的框裁（矩形裁剪，不离屏）：滑动时右缘随图层的宽走（`WideColumnSlide`）
-        clipsToBounds = true
+        // 按栏的框裁（矩形裁剪，不离屏）：滑动时右缘随图层的宽走（`WideColumnSlide`）。Cue 那一块宽一直不变、不裁：它是抽屉时面板阴影落在块外（`CueDock`）
+        clipsToBounds = slot != .cue
         host.sizingOptions = []
         host.laidOut = { [unowned self] in if let page = host.layer { slide.laidOut(page) } }
         // 不带标题栏那一截安全区：页里的滚动区不再向上伸到栏头底下（伸上去时按下落在滚动视图上，栏头的钮点不进去）；那一排页自己按 `Chrome.band` 让出
@@ -247,6 +247,18 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     }
 }
 
+/// 排到它时报一声的空层（`WideColumnController.lastLayout`）。
+nonisolated private final class LayoutMark: CALayer {
+    var laidOut: (@MainActor () -> Void)?
+
+    override func layoutSublayers() {
+        super.layoutSublayers()
+        // 块的层只在主线程的提交里排
+        let laidOut = laidOut
+        MainActor.assumeIsolated { laidOut?() }
+    }
+}
+
 final class WideColumnController: UIHostingController<AnyView> {
     let slot: WideSlot
     let drop = WideDropState()
@@ -254,6 +266,10 @@ final class WideColumnController: UIHostingController<AnyView> {
     let workspace: Workspace
     /// 会话条开合、Cue 收起或放回时这一块怎么滑（`WideColumnSlide`）。
     private(set) lazy var slide = WideColumnSlide(slot: slot) { [unowned self] in self.view.isHidden = $0 }
+    /// 块的图层最后一个子层：CA 提交时按层树先父后子排版，排到它时这一次提交里块里各处托管的页都已摆到层上，页里各层的补位在这里接上（`WideColumnSlide.laidOut`）。
+    /// 在块自己排完时（`viewDidLayoutSubviews`）接的话，SwiftUI 还没把页摆到层上，补的全是 0，居中的、靠右的只跟着整块平移、第一帧先跳到反方向。
+    /// 会话页在导航栈里另有一个托管视图，下一次提交才摆：下一圈再排它一次、补上新挪的（`WideColumnSlide.layoutPasses`）。
+    private let lastLayout = LayoutMark()
     init(slot: WideSlot, focus: WideFocus, workspace: Workspace) {
         self.slot = slot
         self.focus = focus
@@ -264,16 +280,25 @@ final class WideColumnController: UIHostingController<AnyView> {
     @MainActor required dynamic init?(coder: NSCoder) { nil }
 
     /// 托管视图默认铺系统底色（白、深色下黑），会盖住窗口的桌面色（`SplitRoot`）：页没画到的地方——会话的栏头、Cue 那一栏名牌两侧——露出一条白。主区铺桌面色（`WideColumnHost`）。
-    /// 按栏的框裁：滑动时右缘随图层的宽走（`WideColumnSlide`）。
+    /// 按栏的框裁：滑动时右缘随图层的宽走（`WideColumnSlide`）。Cue 那一块宽一直不变、不裁：它是抽屉时面板阴影与伸进状态栏的面落在块外（`CueDock`）。
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
-        view.clipsToBounds = true
+        view.clipsToBounds = slot != .cue
+        lastLayout.laidOut = { [unowned self] in
+            slide.laidOut(view.layer)
+            guard slide.awaitsLayout else { return }
+            Task { [weak self] in self?.lastLayout.setNeedsLayout() }
+        }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        slide.laidOut(view.layer)
+        // 每次排完都挪回最后：页排版时可能在它后面加了层
+        if slide.awaitsLayout {
+            view.layer.addSublayer(lastLayout)
+            lastLayout.setNeedsLayout()
+        }
         installDropTargets(in: view)
     }
 

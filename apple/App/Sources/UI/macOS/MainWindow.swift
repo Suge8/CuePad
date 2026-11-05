@@ -6,8 +6,8 @@ import SwiftUI
 /// 三栏各自的栏头都排在窗口最顶那一排（红绿灯那一排，`Chrome.band`），同一基线；窗口工具栏只留一条空的，给这一排定高、把红绿灯放在它中线上。
 /// 尺寸与自动收起只在 `WideMetrics`。会话条的开合钮钉在红绿灯右边（`SidebarToggle`），会话条藏起时它在主区那一段的最顶一排上，主区栏头左边让出它（`Chrome.headLead`）；
 /// 会话条放不下时开合钮从左缘拉出它的抽屉（`RailDrawer`，开合钮压在抽屉之上、位置不动）。Cue 收起后右上一颗 Cue 钮（`CueButton`），它压在最右那一块的栏头右端，那一块的栏头让出它（`headInset`）。
-/// 收起的 Cue 仍挂着（对话、滚动位置都在），只是藏起。放不下时它住进窗口右缘的抽屉（`drawer`，`Workspace.cueDrawer`），点 Cue 钮拉出、盖在主区上，
-/// 开着时右上不再画 Cue 钮；一个时刻只挂一份 Cue 页，窗口跨过放得下的临界宽时换到另一处、重建一次。
+/// 收起的 Cue 仍挂着（对话、滚动位置都在），只是藏起。放不下时同一块是窗口右缘的抽屉（`CueDock`，`Workspace.cueDrawer`），点 Cue 钮拉出、盖在主区上，
+/// 开着时右上不再画 Cue 钮；一个窗口只挂这一份 Cue 页，跨过临界宽不重建。
 /// 资料库读不出时整窗只有一张"读不出资料库"的卡（`CatalogGate` 挂在三栏外面，同启动时打不开库、同 iOS 的整窗）：三栏都读它，每栏各放一张就是一屏两三张一样的卡；
 /// 会话条也藏起——点进去的哪一页都读不出，一屏只留重试这一个焦点。
 struct MainWindow: View {
@@ -53,19 +53,6 @@ struct MainWindow: View {
                 }
                 Spacer(minLength: 0)
             }
-            .overlay(alignment: .trailing) {
-                if sizes.cueFits {
-                    // 收起时排在窗口右缘外：收起、放回是同一段平移，左缘每一帧贴着主区的右缘（滑出去落定才藏起，`WideColumnSlide.park`）
-                    WideColumnHost(slot: .cue, focus: focus, origin: geometry.size.width - sizes.cue, width: WideMetrics.cue, shape: sizes.shape, hidden: sizes.cue == 0) {
-                        CueColumn(fits: true).environment(\.pageActive, sizes.cue > 0)
-                    }
-                    .frame(width: WideMetrics.cue)
-                    .padding(.trailing, sizes.cue - WideMetrics.cue)
-                } else {
-                    // 抽屉里同样嵌在自己的托管视图里：栏头在标题栏那一排，在窗口的托管视图里时 Cue 页的滚动区伸到标题栏底下，系统在那一截盖上滚动边缘效果、栏头看不见（`ColumnHostingView`）
-                    Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) { DrawerCue(focus: focus) }
-                }
-            }
             .overlay(alignment: .leading) {
                 if !sizes.railFits { RailDrawer(open: workspace.railDrawer, close: { workspace.railDrawer = false }) { WideRail(width: Chrome.rail) } }
             }
@@ -74,24 +61,13 @@ struct MainWindow: View {
             .overlay(alignment: .topTrailing) {
                 if !workspace.cueShown(sizes) { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
             }
+            // 排在最上：抽屉开着时它与接点按的底盖住会话条、开合钮与别的抽屉
+            .overlay { CueDock(sizes: sizes, width: geometry.size.width, focus: focus) { CueColumn(fits: $0) } }
         }
     }
 
     private static func inset(leading: CGFloat = Spacing.page, trailing: CGFloat) -> EdgeInsets {
         EdgeInsets(top: 0, leading: leading, bottom: 0, trailing: trailing)
-    }
-}
-
-/// 抽屉里的 Cue 栏：关上滑到窗外后藏起托管视图（同收起的 Cue 栏），⌃Tab 不轮到看不见的它，也接不到键入；开的那一下当即露出。
-private struct DrawerCue: View {
-    let focus: WideFocus
-    @Environment(\.drawerParked) private var parked
-
-    var body: some View {
-        WideColumnHost(slot: .cue, focus: focus, origin: 0, width: WideMetrics.cue, shape: WideMetrics.Shape(rail: 0, cue: WideMetrics.cue), hidden: parked) {
-            CueColumn(fits: false)
-        }
-        .frame(width: WideMetrics.cue)
     }
 }
 
