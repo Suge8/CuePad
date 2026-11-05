@@ -6,8 +6,8 @@ import SwiftUI
 /// 发出的话要等写进库才到，中间那一两帧就是一下闪动；它一变高（卡升起）系统当帧挪对话、滚动区下一帧才跟上。
 /// 浮着时可见区不变，边距由 `ChatScroll` 留到那句到了再一起收。
 /// 这一块贴着底：比可见区还高时（键盘很高、输入框撑到好几行）往上伸出去，不把输入框挤到键盘底下。
-/// 这一块不铺底：回复框是垫实底的玻璃、卡是纸，对话一直滚到它们后面、从圆角四周与它们之间露出来（docs/layout.md「沉浸式的栏」），两端同一套；
-/// 铺一块页底色的话，对话在这一块上沿被一刀横着切掉，和卡、框的圆角不搭。
+/// 这一块不铺整宽的底：铺一块页底色的话，对话在这一块上沿被一刀横着切掉，和卡、框的圆角不搭。Mac 上卡与框后面垫一块同宽的托底（`replyTray`），
+/// 对话只从这一叠上沿的圆角两侧露出来；手机上回复框是玻璃、卡是纸，对话在它们周围清楚可见（docs/layout.md「沉浸式的栏」）。
 ///
 /// 键盘只经系统的安全区让，两页同一套：对话与这一块的底边是安全区底边，键盘弹出时就是键盘顶（第三方键盘长高、换键盘、下拖收起都由系统跟着键盘的动画走），
 /// 这一块离键盘或安全区底边（Mac 是栏底）`Spacing.replyBottom`，各页不另加。键盘高在排版里量，不经焦点状态：外接键盘有焦点也没有软键盘。
@@ -44,3 +44,26 @@ struct FloatingReply<Chat: View, Reply: View>: View {
 
 /// 对话区（`FloatingReply`）的坐标：放回复框的那层伸过键盘，拿它量出键盘高。
 private let floatingReplyPage = "FloatingReply.page"
+
+#if os(macOS)
+extension View {
+    /// 浮在对话底上那一叠（拍板卡、问题卡、回复框）后面的托底：与这一叠同宽、上沿同输入框的圆角（`Radius.field`），页底色，往下一直铺到栏底
+    /// （盖住 `Spacing.replyBottom` 那一截）。叠里几块之间的缝、框下面那一截不再露出被切成半行的对话字；对话仍从上沿圆角两侧露出来。
+    /// 挂在页给这一叠加左右边距之前：铺整宽就又是一刀平切。卡升起时这一叠的高跟着卡的顶边长（`RiseBehind`），托底的上沿也就是卡的上沿。
+    /// 否决了把卡坐进输入框、共用一块纸：卡是纸、框是玻璃，合成一块要改设计系统的层，卡的叠边、升起与会话页几张问题卡也都得跟着改。
+    func replyTray() -> some View { modifier(ReplyTray()) }
+}
+
+private struct ReplyTray: ViewModifier {
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content.background {
+            UnevenRoundedRectangle(topLeadingRadius: Radius.field, topTrailingRadius: Radius.field)
+                .fill(palette.desk)
+                .padding(.bottom, -Spacing.replyBottom)
+        }
+    }
+}
+#endif
+

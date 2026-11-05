@@ -59,6 +59,7 @@ struct CuePage: View {
                 chat
             } reply: {
                 bottom
+                    .replyTray()
                     .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth)
             }
