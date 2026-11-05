@@ -98,22 +98,26 @@ def trash(m):
     return [Layer("can", [lid, can] + slots)]
 
 
+def window_split(m, split):
+    """一扇窗被一道竖框分成两格：窗框连同竖框是一块墨，两格是挖空的孔（读作线描的窗，但仍是体块不是描边）。
+    窗口最顶那一排的图标钮无底、平时只有图标，实心的两块在那里太重。框厚同放大镜的镜圈一档；没有点睛。"""
+    g = GROW[m]
+    x0, x1, y0, y1, T = -11.2, 11.2, -9.0, 9.0, 2.6
+    frame = grown([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], [3.4] * 4, g)
+    def hole(a, b, left, right):
+        # 靠窗框外角的两角随外角圆，靠竖框的两角近乎直
+        return rev(grown([(a, y0 + T), (b, y0 + T), (b, y1 - T), (a, y1 - T)], [left, right, right, left], -g))
+    return [Layer("window", [frame, hole(x0 + T, split - T / 2, 1.2, 0.4), hole(split + T / 2, x1 - T, 0.4, 1.2)])]
+
+
 def sidebar(m):
-    """侧栏：一扇窗切成两块，左边窄的那块是侧栏，中间一道竖刀口。没有点睛（侧栏占了三分之一，不是小部件）。"""
-    g, c = GROW[m], CARVE[m]
-    y0, y1, split = -9.0, 9.0, -3.8
-    panel = grown([(-11.2, y0), (split, y0), (split, y1), (-11.2, y1)], [2.8, 0, 0, 2.8], g)
-    main = grown([(split + c + 2 * g, y0), (11.2, y0), (11.2, y1), (split + c + 2 * g, y1)], [0, 2.8, 2.8, 0], g)
-    return [Layer("window", [main]), Layer("panel", [panel])]
+    """侧栏：窗的左边一窄格是侧栏。"""
+    return window_split(m, -3.8)
 
 
 def sidebar_right(m):
-    """右栏（Mac 的 Cue 栏开合）：侧栏左右翻过来，右边窄的那块是右栏。"""
-    g, c = GROW[m], CARVE[m]
-    y0, y1, split = -9.0, 9.0, 3.8
-    panel = grown([(split, y0), (11.2, y0), (11.2, y1), (split, y1)], [0, 2.8, 2.8, 0], g)
-    main = grown([(-11.2, y0), (split - c - 2 * g, y0), (split - c - 2 * g, y1), (-11.2, y1)], [2.8, 0, 0, 2.8], g)
-    return [Layer("window", [main]), Layer("panel", [panel])]
+    """右栏（Mac 的 Cue 栏开合）：侧栏左右翻过来，右边窄的那格是右栏。"""
+    return window_split(m, 3.8)
 
 
 def cross_shape(L, w, deg=0):

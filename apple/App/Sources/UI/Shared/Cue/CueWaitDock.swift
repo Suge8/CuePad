@@ -103,7 +103,8 @@ struct CueWaitDock: View {
         let behind = waiting.count > 1
         return Color.clear
             .paper(cornerRadius: Radius.field, lifted: true)
-            .opacity(behind ? 0.85 : 0)
+            // 不透明：对话滚到卡后面（`FloatingReply` 不铺底），半透的叠边会透出后面的字
+            .opacity(behind ? 1 : 0)
             .padding(.horizontal, Self.tuck)
             .padding(.top, Self.peek)
             .padding(.bottom, Self.below)

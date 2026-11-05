@@ -20,6 +20,8 @@ import SwiftUI
 /// 行若离内容原点有一段边距，整段对话就被横着推出那一段。
 /// 不用 `contentMargins` 的原因在 docs/layout.md（这里犯过：Cue 页拍板卡那一排件的边被写到对话上，整段左移、上移 16）。
 /// `.scrollView` 坐标空间两种边一样不含，对话里按它量的（`CueEndProbe`）不变。
+/// Mac 上不画系统滚动条，定位靠右缘的刻度滑条与"回到最新"（`ChatColumn`）：按"显示滚动条"的系统设置，它要么是常驻的一根粗灰条，
+/// 要么是悬浮的、栏露出时亮一下再在主线程逐帧淡掉（约 250ms、千万条指令，每露出一次一回）。手机上的滚动指示条细、只在滚时出现，照系统。
 struct ChatScroll<Content: View, Key: Equatable>: View {
     let followKey: Key
     let readingWidth: CGFloat
@@ -86,10 +88,14 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     .environment(\.readingColumnBleeds, proxy.size.width <= readingWidth)
                     .safeAreaPadding(.horizontal, margin(proxy.size.width))
                     .safeAreaPadding(.vertical, ChatLayout.edge)
+                    #if os(macOS)
+                    .scrollIndicators(.hidden)
+                    #else
                     // 滚动条不随栏的边缩进：仍贴滚动区的左右边，上下只让开栏与回复框
                     .contentMargins(.horizontal, -margin(proxy.size.width), for: .scrollIndicators)
                     .contentMargins(.top, -ChatLayout.edge, for: .scrollIndicators)
                     .contentMargins(.bottom, bottomInset - ChatLayout.edge, for: .scrollIndicators)
+                    #endif
                     .onScrollPhaseChange { _, phase in
                         let scrolling = phase == .interacting || phase == .decelerating
                         if follow.wrappedValue.scrolling != scrolling { follow.wrappedValue.scrolling = scrolling }

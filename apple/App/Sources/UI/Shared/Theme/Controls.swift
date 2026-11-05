@@ -73,14 +73,15 @@ enum ControlMetrics {
 /// 外形单拆成 `ControlSurface`：点开菜单的按钮（`MenuButton`）不是 `Button`，要同一个样子时直接挂它。
 /// `glass`：浮在内容上的玻璃胶囊（Mac 工具栏与页顶那一排的项目范围、新任务、收起、清空回收站），与 `circular` 的玻璃圆钮同高；
 /// `round`：纸与面板上的淡底圆钮（浮层的关闭、问号）——玻璃不叠玻璃，纸上不用 `circular`。毁掉东西的（`role: .destructive`）字是出错色。
+/// `icon`：窗口最顶那一排不浮在内容上的图标钮（收起右栏、会话条开合）：同系统工具栏里不带玻璃的项，平时只有图标，悬停浮一层圆的淡底（`PressFeedback`）。
 struct ControlButtonStyle: ButtonStyle {
-    enum Kind { case primary, secondary, quiet, circular, glass, round }
+    enum Kind { case primary, secondary, quiet, circular, glass, round, icon }
     var kind = Kind.secondary
     var size = ControlSize.regular
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.modifier(ControlSurface(kind: kind, size: size, destructive: configuration.role == .destructive))
-            .modifier(PressFeedback(pressed: configuration.isPressed, kind: kind == .circular || kind == .round ? .button : .control))
+            .modifier(PressFeedback(pressed: configuration.isPressed, kind: [.circular, .round, .icon].contains(kind) ? .button : .control))
     }
 }
 
@@ -114,6 +115,12 @@ struct ControlSurface: ViewModifier {
                 .frame(width: ControlMetrics.height, height: ControlMetrics.height)
                 .contentShape(.circle)
                 .glass(in: .circle, interactive: true, ink: .clear)
+        case .icon:
+            content
+                .font(Typography.body.weight(.medium))
+                .foregroundStyle(ink)
+                .frame(width: ControlMetrics.height, height: ControlMetrics.height)
+                .contentShape(.circle)
         case .round:
             content
                 .font(Glyph.small)
@@ -160,7 +167,7 @@ struct ControlSurface: ViewModifier {
         if selected { return palette.selection }
         return switch kind {
         case .primary: palette.signatureFill
-        case .quiet, .glass: .clear
+        case .quiet, .glass, .icon: .clear
         case .secondary, .circular, .round: palette.fill
         }
     }

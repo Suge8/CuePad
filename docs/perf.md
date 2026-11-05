@@ -24,10 +24,6 @@ Mac 看板这一页上的看板⇄会话与 Cue 面板开合是 `InteractionBenc
 5 轮全量约 35 分钟，超过任务时限（`_lock.sh` 的 HOLD_LIMIT，默认 1800 秒），要这样跑：`CUEPAD_TEST_TIME_LIMIT=3600 xc.sh perf mac 5`。
 看板这一页那几项的预算借最近的已有项：看板→会话 90ms/2（同会话页）、会话→看板 28ms/2（同进进展页）、展开 Cue 面板 28ms/2、收起 14ms/2（同任务气泡开、关）。
 
-- 「Cue 露出·…」静置主线程约 1000 万指令（两库都是；别的项约 100 万），不是我们的代码：Cue 栏露出那一下 AppKit 把对话的悬浮滚动条亮出来，约 1 秒后自己逐帧淡掉，
-  这段淡出在主线程跑约 250ms、每帧约 30 万指令（Time Profiler：样本都在 `NSAnimationManager performAnimations`，由 display link 驱动），淡完就停，不常驻、每露出一次一回。
-  两库的 Cue 对话都长到有滚动条。对照：把对话的系统滚动条藏掉，这一项降到 120 万。不修：要动就是藏掉滚动条，改长相。
-
 - `-CuePadInteractOnly 项,项`（跟在 `xc.sh perf <mac|ios> 次数` 之后）只量列出的几项，前后对比省下整套流程；列的项之间要自己够得着（开编辑页配收编辑页）。
 - 冷启动进 Cue 页要量真实大小的对话：`CUEPAD_PERF_SEED=<真实库的只读副本> xc.sh perf ios 5 -CuePadInteractOnly "冷启动·Cue 页"`（副本先用这个构建打开一次，免得每次都量进升级库结构）。项名带空格要加引号。
 

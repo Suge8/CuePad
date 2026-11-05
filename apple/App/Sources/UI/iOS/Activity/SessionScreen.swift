@@ -31,7 +31,7 @@ struct SessionScreen: View {
 
     var body: some View {
         // 回复框浮在对话底上（`FloatingReply`，同 Cue 页与 Mac）：发出时回复框收回一行，对话不被系统先拉下来再滑上去
-        FloatingReply(backed: false) {
+        FloatingReply {
             chat
         } reply: {
             if let session {

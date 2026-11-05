@@ -74,7 +74,7 @@ struct CuePage: View {
     #else
     /// 名牌保留整页坐标；仅对话与拍板卡给常驻会话条让位。
     private var page: some View {
-        FloatingReply(backed: false) {
+        FloatingReply {
             chat.padding(.leading, railInset)
         } reply: {
             bottom

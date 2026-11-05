@@ -71,8 +71,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             }
             .overlay(alignment: .trailing) {
                 if !marks.isEmpty {
-                    ChatScrubber(marks: marks, scrolling: follow.scrolling, crowded: margin < Self.scrollerWidth + ChatScrubber.room) { follow.seek($0) }
-                        .padding(.trailing, Self.scrollerWidth)
+                    ChatScrubber(marks: marks, scrolling: follow.scrolling, crowded: margin < ChatScrubber.room) { follow.seek($0) }
                 }
             }
             // 改记成接上的那条，之后不用每次再找
@@ -99,13 +98,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             follow.jump(to: target)
         }
     }
-
-    /// 刻度滑条让开的系统滚动条宽：Mac 窗口右缘的悬浮滚动条（手机上的滚动指示条由滑条自己让，见 `ChatScrubber.edge`）。
-    #if os(macOS)
-    private static var scrollerWidth: CGFloat { 16 }
-    #else
-    private static var scrollerWidth: CGFloat { 0 }
-    #endif
 
     /// 先描圈、排开到那一条（离屏远的地方排的是空白，跳去的那条所在的段由内容钉成真的），排好了再跳。
     private func seek(_ target: ChatFollow.Target, size: CGSize) {

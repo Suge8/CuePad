@@ -53,12 +53,8 @@ struct ChatScrubber: View {
     /// 放大波及的范围（离手指多远的刻度还跟着变长）。
     private static let reach: CGFloat = 44
     static let width: CGFloat = 28
-    /// 刻度离右缘：手机上让开系统的滚动指示条（Mac 由 `ChatColumn` 让开窗口的滚动条）。
-    #if os(iOS)
+    /// 刻度离右缘：手机上让开系统的滚动指示条，Mac 上不贴着栏边（Mac 的对话不画系统滚动条，`ChatScroll`）。
     private static let edge: CGFloat = 8
-    #else
-    private static let edge: CGFloat = 3
-    #endif
     /// 刻度区在可见区里的上下边：上沿在三成高处（避开顶栏，进拇指够得着的区），下沿让开回复框右上方的"回到最新"圆钮。
     private static let bandTop: CGFloat = 0.3
     /// 平时（没在滚、没按着、指针不在上面）的不透明度：看得见、不抢字。
