@@ -20,6 +20,18 @@ struct WideRail: View {
     private var wide: Bool { width == Chrome.rail }
 
     var body: some View {
+        if let look = DebugHooks.railLook {
+            #if os(iOS)
+            RailProto(look: look, width: width, cue: cue)
+            #else
+            RailProto(look: look, width: width)
+            #endif
+        } else {
+            current
+        }
+    }
+
+    private var current: some View {
         VStack(spacing: Chrome.groupGap) {
             #if os(macOS)
             Color.clear.frame(height: Chrome.band - Chrome.groupGap)

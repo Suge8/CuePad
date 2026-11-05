@@ -62,8 +62,15 @@ enum DebugHooks {
         #endif
     }
 
-    #if os(macOS)
-    #endif
+    /// 会话条重设计原型（`-CuePadRailProto A|B|C`，`RailProto`）：不给是现状；只在 Debug 读。
+    enum RailLook: String { case a = "A", b = "B", c = "C" }
+    static let railLook: RailLook? = {
+        #if DEBUG
+        DebugScene.defaults.string(forKey: "CuePadRailProto").flatMap(RailLook.init)
+        #else
+        nil
+        #endif
+    }()
 
     static let preset: Preset = {
         #if DEBUG

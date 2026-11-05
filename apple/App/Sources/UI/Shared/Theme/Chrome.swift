@@ -40,4 +40,19 @@ enum Chrome {
     static var stripGroup: CGFloat { control + 2 * pad }
     /// 会话条上每一组的左沿离会话条边：收起时一组正在条的中轴上，展开时左沿不动、右沿离边同样远。
     static var edge: CGFloat { (strip - stripGroup) / 2 }
+
+    // MARK: 会话条重设计原型（`-CuePadRailProto A|B|C`，`RailProto`）
+
+    /// 收起时并排两格（顶上侧栏钮与搜索、底部技能与规则与设置）的左格离条边：两格连同中缝正在中轴上。
+    static var pairEdge: CGFloat { (strip - 2 * control - cellGap) / 2 }
+    /// A：行首状态标的基准直径（`PiStateDot.size`，外框 1.8 倍，Mac 约 18 见方）。
+    static let railMark: CGFloat = 10
+    /// B：带状态环的头像的直径（环外沿），一格里四边各让一档，外扩的波纹才放得下。
+    static var avatar: CGFloat { control - Spacing.item }
+    /// B 的会话行、C 要你管的会话行：名字下面多一行，比一格高一档。
+    static var tallRow: CGFloat { control + Spacing.item }
+    /// C 歇着的会话行：轻，同卡里钮的高。
+    static var lightRow: CGFloat { ControlSize.compact.height }
+    /// C 在跑的行行尾那一截心电线（`BoardLine` 的现在）。
+    static let trace: CGFloat = 32
 }
