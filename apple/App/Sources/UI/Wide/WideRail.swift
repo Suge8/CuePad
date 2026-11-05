@@ -73,21 +73,16 @@ struct WideRail: View {
 
 #if os(macOS)
 /// 会话条的开合钮（⌃⌘S）：窗口最顶那一排、红绿灯右边的一格（`Chrome.toggle`），会话条展开、收起都不动（同备忘录、访达）。
-/// 无底的图标，悬停、按下是这一格的淡底（`PressStyle(.button)`，同系统工具栏的图标钮）。这一排整窗是一块连续的底（`WideRail` 头注释），
+/// 无底的图标钮（`ControlButtonStyle.icon`，同 Cue 栏头的收起右栏，悬停才浮淡底）。这一排整窗是一块连续的底（`WideRail` 头注释），
 /// 收起时它伸进主区栏头那一段也不骑在任何边上；主区栏头左边让出它（`MainWindow` 给 `headInset`）。
 struct SidebarToggle: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        Button { workspace.toggleSidebar() } label: {
-            Image(.sidebar).font(Glyph.control).foregroundStyle(palette.ink2)
-                .frame(width: Chrome.control, height: Chrome.control)
-                .contentShape(.rect)
-        }
-        .buttonStyle(PressStyle(.button))
-        .help(Text("显示或隐藏侧栏（⌃⌘S）"))
-        .accessibilityLabel(Text("显示或隐藏侧栏"))
+        Button("显示或隐藏侧栏", icon: .sidebar) { workspace.toggleSidebar() }
+            .labelStyle(.iconOnly)
+            .buttonStyle(ControlButtonStyle(kind: .icon))
+            .help(Text("显示或隐藏侧栏（⌃⌘S）"))
         .padding(.leading, Chrome.toggle)
         .frame(height: Chrome.band)
     }
