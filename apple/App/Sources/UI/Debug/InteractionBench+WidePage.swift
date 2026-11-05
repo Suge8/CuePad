@@ -18,8 +18,8 @@ struct WidePage {
     private struct Reading {
         let column: WideSlot
         let scroll: ObjectIdentifier
-        /// 可视区正中那一条与它离正中多远；没有条目落在可视区里时为 nil。
-        let anchor: (id: AnyHashable, offset: CGFloat)?
+        /// 可视区正中那一条与它离正中多远。
+        let anchor: (id: AnyHashable, offset: CGFloat)
         let top: CGFloat
         let bottom: CGFloat
         /// 那一条报的框与可视区（托管视图坐标）：认不出时看是测量没对上还是它真的走了。
@@ -43,7 +43,7 @@ struct WidePage {
     /// 滚到中段的那个滚动视图至少要能滚这么远：离两端各留出一截，滚回一端看得出来。
     private static let minimumTravel: CGFloat = 200
 
-    /// 各块各把滚得最远的那个滚动视图滚到中段，像用户那样：先发开始实时滚动的通知（同 `ChatScrollBench` 的 direct），等两帧滚动区认出"用户在滚"再挪，
+    /// 各块里每个能滚的滚动视图都滚到中段，像用户那样：先发开始实时滚动的通知（同 `ChatScrollBench` 的 direct），等两帧滚动区认出"用户在滚"再挪，
     /// 再等两帧、滚动区按这次滚动读过数才发结束的通知。挪与通知同在一拍里的话，读数到时还算没在滚，贴着最新的对话会被滚回最新处。
     static func scrollToMiddle(_ columns: [WideColumnView]) async {
         for scroll in columns.flatMap(scrollables) {
@@ -115,16 +115,14 @@ struct WidePage {
             if hidden.contains(reading.column) { return ["column": "\(reading.column)", "verdict": Verdict.ok.rawValue, "reason": Reason.kept.rawValue] }
             let scroll = column.flatMap { Self.scrolls(in: $0).first { ObjectIdentifier($0) == reading.scroll } }
             let ends = scroll.flatMap(Self.ends)
-            let shown = reading.anchor.flatMap { anchor in
-                column.flatMap { column in scroll.flatMap { Self.items(in: column, shownBy: $0).first { $0.id == anchor.id } } }
-            }
+            let shown = column.flatMap { column in scroll.flatMap { Self.items(in: column, shownBy: $0).first { $0.id == reading.anchor.id } } }
             let reason: Reason = scroll == nil ? .scrollGone : !(ends.map { $0.top > 1 && $0.bottom > 1 } ?? false) ? .atEnd : shown == nil ? .cardGone : .kept
             let verdict: Verdict = reason == .kept ? .ok : .broken
-            let frame = reading.anchor.flatMap { InteractionBench.rows[$0.id] }
+            let frame = InteractionBench.rows[reading.anchor.id]
             return [
-                "column": "\(reading.column)", "anchor": reading.anchor.map { "\($0.id.base)" } ?? "", "verdict": verdict.rawValue, "reason": reason.rawValue,
+                "column": "\(reading.column)", "anchor": "\(reading.anchor.id.base)", "verdict": verdict.rawValue, "reason": reason.rawValue,
                 "ends": [[Self.round(reading.top), Self.round(reading.bottom)], ends.map { [Self.round($0.top), Self.round($0.bottom)] } ?? []],
-                "anchorOffset": [reading.anchor.map { Self.round($0.offset) as Any } ?? NSNull(), shown.map { Self.round($0.offset) as Any } ?? NSNull()],
+                "anchorOffset": [Self.round(reading.anchor.offset), shown.map { Self.round($0.offset) as Any } ?? NSNull()],
                 "anchorFrame": [Self.json(reading.frame), Self.json(frame)],
                 "visible": [Self.json(reading.visible), Self.json(scroll.flatMap { scroll in column.map { Self.visible(scroll, in: $0) } })],
             ]

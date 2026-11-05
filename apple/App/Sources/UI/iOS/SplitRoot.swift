@@ -38,6 +38,8 @@ struct SplitRoot: View {
                 .frame(width: WideMetrics.cue)
                 .background { if floats { palette.desk.elevation(.panel) } }
             }
+            // 桌面色一处铺满窗口（托管的几块是透明的，`WideColumnController`）：几块只排在安全区里，状态栏那一条与底下横条那一截也要是桌面色
+            .background(palette.desk)
         }
         .railTips()
         .overlay(alignment: .top) { NoticeBanner() }
