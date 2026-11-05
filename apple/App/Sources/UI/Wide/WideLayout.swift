@@ -29,7 +29,7 @@ struct WideMetrics {
     /// 并排时左半的宽（只开一个时是整个主区）。
     var leading: CGFloat { split ? (main / 2).rounded() : main }
 
-    /// 会话条与 Cue 的宽：它们一变，主区几块滑到新位置（`WideColumnView.move`）；只是窗口改宽时不滑。
+    /// 会话条与 Cue 的宽：它们一变，主区几块滑到新位置（`WideColumnSlide`）；只是窗口改宽时不滑。
     struct Shape: Equatable {
         let rail: CGFloat
         let cue: CGFloat

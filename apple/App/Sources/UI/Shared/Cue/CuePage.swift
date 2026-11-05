@@ -63,7 +63,7 @@ struct CuePage: View {
                     .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth)
             }
-            // 原地淡入淡出、对话这一下就让到终点的宽：Mac 上开合不逐帧挪位置（docs/layout.md「Mac 上开合」）
+            // 原地淡入淡出、对话这一下就让到终点的宽：开合不逐帧排版（docs/layout.md「宽屏开合」）
             if cue.showsRun, let keeper = services.cue.keeper {
                 CueRunPanel(keeper: keeper)
                     .padding([.trailing, .bottom], Spacing.group)

@@ -111,7 +111,7 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     let focus: WideFocus
     let origin: CGFloat
     let width: CGFloat
-    /// 会话条与 Cue 的宽：它们一变，这一块滑到新位置（`WideColumnView.move`）；只是窗口改宽时不滑。
+    /// 会话条与 Cue 的宽：它们一变，这一块滑到新位置（`WideColumnSlide`）；只是窗口改宽时不滑。
     let shape: WideMetrics.Shape
     /// 收起的 Cue 仍挂着（回来时对话、滚动位置都在），只是藏起：看不见、点不到、⌃Tab 跳过。
     var hidden = false
@@ -127,11 +127,11 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WideColumnView, context: Context) {
+        if let layer = view.layer, let page = view.host.layer { view.slide.move(layer, page: page, origin: origin, width: width, shape: shape) }
         view.host.rootView = AnyView(content.overlay { WideDropFeedback(state: view.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels).environment(\.wideWindowID, focus.windowID))
-        view.isHidden = hidden
-        // 主区的页铺满桌面色：会话条藏起、放回时它从会话条上滑过，盖住它或露出它（`move`），页里透明的地方不能透出下面的会话条
+        view.slide.park(hidden)
+        // 主区的页铺满桌面色：会话条藏起、放回时它从会话条上滑过，盖住它或露出它（`WideColumnSlide`），页里透明的地方不能透出下面的会话条
         if slot == .main { view.host.layer?.backgroundColor = environment.palette.desk.resolve(in: environment).cgColor }
-        view.move(origin: origin, width: width, shape: shape)
     }
 }
 
@@ -139,9 +139,16 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
 /// 答"能"的那一下整个归标题栏、内容收不到（同 `isMovable` 无关），嵌着的托管视图默认答"能"，栏头的钮就点不进去。
 /// 栏头的空处要拖窗口的由栏头自己挂系统的拖窗口手势（`windowDragArea`）。
 /// 窗口不在前台时第一下就交给内容（同栏头那一排在窗口自己的托管视图里、会话条上的钮）：不然主区与 Cue 栏头的钮第一下只把窗口叫到前面。
+/// 页按新宽排完（`super.layout`）报给块（`laidOut`）：块换宽时页里各层的补位在这里接上（`WideColumnSlide.laidOut`）。
 final class ColumnHostingView: NSHostingView<AnyView> {
+    var laidOut: (() -> Void)?
     override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func layout() {
+        super.layout()
+        laidOut?()
+    }
 }
 
 final class WideColumnView: NSView {
@@ -150,8 +157,8 @@ final class WideColumnView: NSView {
     let slot: WideSlot
     let focus: WideFocus
     let workspace: Workspace
-    private var previous: (origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape)?
-    private var sequence = 0
+    /// 会话条开合、Cue 收起或放回时这一块怎么滑（`WideColumnSlide`）。
+    private(set) lazy var slide = WideColumnSlide(slot: slot) { [unowned self] in self.isHidden = $0 }
     override var acceptsFirstResponder: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
 
@@ -161,9 +168,10 @@ final class WideColumnView: NSView {
         self.workspace = workspace
         super.init(frame: .zero)
         wantsLayer = true
-        // 按栏的框裁（矩形裁剪，不离屏）：滑动时右缘随图层的宽走（`move`）
+        // 按栏的框裁（矩形裁剪，不离屏）：滑动时右缘随图层的宽走（`WideColumnSlide`）
         clipsToBounds = true
         host.sizingOptions = []
+        host.laidOut = { [unowned self] in if let page = host.layer { slide.laidOut(page) } }
         // 不带标题栏那一截安全区：页里的滚动区不再向上伸到栏头底下（伸上去时按下落在滚动视图上，栏头的钮点不进去）；那一排页自己按 `Chrome.band` 让出
         host.safeAreaRegions = []
         host.autoresizingMask = [.width, .height]
@@ -177,48 +185,6 @@ final class WideColumnView: NSView {
     override func layout() {
         super.layout()
         host.frame = bounds
-    }
-
-    /// 会话条开合、Cue 收起或放回时，各块这一下就到了终点的位置与宽（页按新的宽排一次），看得见的滑动是渲染端的两段叠加动画（`SidebarSlide`，主线程不逐帧挪）：
-    /// 整块从旧位置平移回来，右缘从旧宽收放到新宽。几块平移的距离不同（主区随会话条的边，并排的右半随两半的分界），只平移的话主区已按终点排宽、
-    /// 又多平移了一截，滑动途中右缘压进右边那一块；按终点的框裁又在两块之间露出一道缝。
-    /// 图层的宽按同一条曲线从旧宽走到新宽（图层的锚点在左上，只动右缘；页的排版不跟着变）：相邻两块的边每一帧都对齐，
-    /// 几段偏移随同一条弹簧按比例收敛（离终点的比例只随时间走，与距离无关）。
-    /// 会话条自己一直不动（Mac 上它藏起时也照原宽画在主区下面，`WideRail`），看得见的只有主区像一张纸从它上面滑过：
-    /// 放回时主区从旧边起往右滑开、露出它；藏起时主区的左边往左滑回来盖住它——图层的左缘就停在终点、只把里面的页（铺满桌面色）按同一条曲线从旧处挪回来
-    /// （`bounds.origin.x`），左边还没盖到的那截透出的就是下面的会话条本身，行、字、选中的底都在，不是一块空的底色。
-    func move(origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape) {
-        defer { previous = (origin, width, shape) }
-        guard let previous, previous.shape != shape, let layer else { return }
-        sequence += 1
-        let distance = previous.origin - origin
-        if slot == .main, shape.rail < previous.shape.rail {
-            SidebarSlide.slide(layer, "bounds.origin.x", by: -distance, key: "wide.\(sequence)")
-            SidebarSlide.slide(layer, "bounds.size.width", by: previous.width + distance - width, key: "wide.edge.\(sequence)")
-        } else {
-            CATransaction.begin()
-            if slot == .main, shape.rail > previous.shape.rail { shadeToggle(layer, origin: origin, distance: distance) }
-            SidebarSlide.translate(layer, by: distance, key: "wide.\(sequence)")
-            SidebarSlide.slide(layer, "bounds.size.width", by: previous.width - width, key: "wide.edge.\(sequence)")
-            CATransaction.commit()
-        }
-    }
-
-    /// 会话条放回时主区整块从窗口左边滑开：栏头里的字这一下就排到了开着时的位置（离主区左沿一档），滑动的头几帧它会从红绿灯与开合钮底下过。
-    /// 滑动期间把最顶那一排里红绿灯到开合钮右沿那一截（窗口坐标里不动，`Chrome.headLead` 藏起时那一截）从主区裁掉：遮罩同一条曲线反着平移，抵掉主区的滑动；
-    /// 滑完撤掉（藏起时主区盖着会话条，那一截要照常画桌面色）。藏起时主区往左滑，栏头的字始终在开合钮右边，不用裁。
-    private func shadeToggle(_ layer: CALayer, origin: CGFloat, distance: CGFloat) {
-        let mask = CAShapeLayer()
-        mask.frame = layer.bounds
-        let path = CGMutablePath()
-        path.addRect(layer.bounds.insetBy(dx: -layer.bounds.width, dy: -layer.bounds.height))
-        // 图层不翻转：y 朝上，最顶那一排在上沿
-        path.addRect(CGRect(x: -origin, y: layer.bounds.height - Chrome.band, width: Chrome.headLead(rail: 0), height: Chrome.band))
-        mask.path = path
-        mask.fillRule = .evenOdd
-        layer.mask = mask
-        SidebarSlide.translate(mask, by: -distance, key: "wide.shade")
-        CATransaction.setCompletionBlock { [weak layer] in if layer?.mask === mask { layer?.mask = nil } }
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
@@ -256,6 +222,10 @@ final class WideColumnView: NSView {
 struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     let slot: WideSlot
     let focus: WideFocus
+    let origin: CGFloat
+    let width: CGFloat
+    /// 会话条与 Cue 的宽：它们一变，这一块滑到新位置（`WideColumnSlide`）；只是窗口改宽时不滑。
+    let shape: WideMetrics.Shape
     var hidden = false
     @ViewBuilder let content: Content
     @Environment(\.self) private var environment
@@ -269,8 +239,11 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: WideColumnController, context: Context) {
+        controller.slide.move(controller.view.layer, page: controller.view.layer, origin: origin, width: width, shape: shape)
         controller.rootView = AnyView(content.overlay { WideDropFeedback(state: controller.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
-        controller.view.isHidden = hidden
+        controller.slide.park(hidden)
+        // 主区的页铺满桌面色：会话条藏起、放回时它从会话条上滑过、盖住它或露出它（`WideColumnSlide`），页里透明的地方不能透出下面的会话条
+        if slot == .main { controller.view.backgroundColor = UIColor(cgColor: environment.palette.desk.resolve(in: environment).cgColor) }
     }
 }
 
@@ -279,6 +252,8 @@ final class WideColumnController: UIHostingController<AnyView> {
     let drop = WideDropState()
     let focus: WideFocus
     let workspace: Workspace
+    /// 会话条开合、Cue 收起或放回时这一块怎么滑（`WideColumnSlide`）。
+    private(set) lazy var slide = WideColumnSlide(slot: slot) { [unowned self] in self.view.isHidden = $0 }
     init(slot: WideSlot, focus: WideFocus, workspace: Workspace) {
         self.slot = slot
         self.focus = focus
@@ -288,14 +263,17 @@ final class WideColumnController: UIHostingController<AnyView> {
     }
     @MainActor required dynamic init?(coder: NSCoder) { nil }
 
-    /// 托管视图默认铺系统底色（白、深色下黑），会盖住窗口的桌面色（`SplitRoot`）：页没画到的地方——会话的栏头、Cue 那一栏名牌两侧——露出一条白。
+    /// 托管视图默认铺系统底色（白、深色下黑），会盖住窗口的桌面色（`SplitRoot`）：页没画到的地方——会话的栏头、Cue 那一栏名牌两侧——露出一条白。主区铺桌面色（`WideColumnHost`）。
+    /// 按栏的框裁：滑动时右缘随图层的宽走（`WideColumnSlide`）。
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
+        view.clipsToBounds = true
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        slide.laidOut(view.layer)
         installDropTargets(in: view)
     }
 
