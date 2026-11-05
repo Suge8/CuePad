@@ -90,6 +90,10 @@ extension DebugScene {
             mainWindow?.animationBehavior = .none
             mainWindow?.orderOut(nil)
         case "shelf": workspace.show(.shelf)
+        case "earlier":
+            // "更早"那一页（配 -CuePadDemo YES 有演示的已结束会话）
+            await seedDemo(workspace.services)
+            workspace.show(.earlier)
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
         case "library", "instruction", "skill", "duplicate":

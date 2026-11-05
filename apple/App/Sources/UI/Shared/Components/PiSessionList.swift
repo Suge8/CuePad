@@ -4,7 +4,7 @@ import SwiftUI
 /// 会话页读到的会话（Mac 与手机同一份）：一条列表，最上面是置顶的——绑在置顶任务上的（`PiSessionQuery.pinned`，在线的在前，结束了也留着；不多，不分页）；
 /// 接着"现在"——其余在线的与正在唤醒的（`PiSessionListItem.isCurrent`；不多，不分页），按要你注意的先后；
 /// "历史"在最下——其余已结束的（`earlier`：正在唤醒的在"现在"，不再列），按结束时间从新到旧分页读（分段见 `TimeSection`）。
-/// 三部分用同一个搜索词与项目范围（`Workspace.projectScope`）。`endedOnly`（"更早"那一页，`EarlierScreen`）只读"历史"、置顶的也在里面，
+/// 三部分用同一个搜索词与项目范围（`Workspace.projectScope`）。`endedOnly`（"更早"那一页，`EarlierPage`）只读"历史"、置顶的也在里面，
 /// 与会话条"更早"的个数同一个查询（`earlier`），没有置顶与"现在"两部分。
 nonisolated struct PiSessionList: Sendable, Equatable {
     static let pageSize = 40

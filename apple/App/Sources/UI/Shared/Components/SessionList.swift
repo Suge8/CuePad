@@ -1,11 +1,10 @@
-#if os(iOS)
 import CueStore
 import SwiftUI
 
-/// 会话列表（搜索页的会话一栏、"更早"那一页同一个，数据是两端共用的 `PiSessionList`）：最上面"已置顶"（绑在置顶任务上的），
+/// 会话列表（手机搜索页的会话一栏、三端"更早"那一页同一个，数据是两端共用的 `PiSessionList`）：最上面"已置顶"（绑在置顶任务上的），
 /// 接着"现在"（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），"历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。
 /// "更早"那一页（`AgentListModel.endedOnly`）只有历史，不写"历史"两字：页名就是"更早"。
-/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。长按是会话的菜单（`SessionActions`），慢慢左滑可结束、重命名。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
+/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。长按（Mac 右键）是会话的菜单（`OpenSessionBeside` 与 `SessionActions`），手机上慢慢左滑可结束、重命名。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
 struct SessionList<Top: View>: View {
     @Bindable var model: AgentListModel
     @ViewBuilder var top: Top
@@ -34,8 +33,10 @@ struct SessionList<Top: View>: View {
         // 滚动条仍贴屏幕边与顶栏下沿，不随内容的边缩进
         .contentMargins(.horizontal, -Self.margin, for: .scrollIndicators)
         .contentMargins(.top, -Bars.contentGap, for: .scrollIndicators)
+        #if os(iOS)
         .scrollDismissesKeyboard(.immediately)
         .refreshable { await services.syncNow() }
+        #endif
         .agentList(model)
     }
 
@@ -84,13 +85,21 @@ struct SessionList<Top: View>: View {
             .listRowInsets(EdgeInsets(top: Spacing.block, leading: 0, bottom: Spacing.tight, trailing: 0))
     }
 
-    /// 一张卡片：长按是会话的菜单（`SessionActions`），慢慢左滑露出其中的结束与重命名。会话记录没有删除（会话文件在 Mac 上，归 Pi 管）。
+    /// 一张卡片：长按是会话的菜单，手机上慢慢左滑露出其中的结束与重命名。会话记录没有删除（会话文件在 Mac 上，归 Pi 管）。
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let ending = end?.inTransit == true
+        let row = SessionRow(item: item, showsPlace: list.showsPlace, end: end)
         // 行的边距挂在最外层：挂在自绘轻扫里面传不到列表上
-        return SessionRow(item: item, showsPlace: list.showsPlace, end: end)
-            .rowSwipes(SessionActions.swipes(item.state, ending: ending, in: workspace), clipped: false)
-            .contextMenu { SessionActions(session: item.state, task: item.task, ending: ending) }
+        #if os(iOS)
+        let card = row.rowSwipes(SessionActions.swipes(item.state, ending: ending, in: workspace), clipped: false)
+        #else
+        let card = row
+        #endif
+        return card
+            .contextMenu {
+                OpenSessionBeside(session: item.state)
+                SessionActions(session: item.state, task: item.task, ending: ending)
+            }
             .cardRow()
     }
 
@@ -99,7 +108,11 @@ struct SessionList<Top: View>: View {
             EmptyState.noMatch(model.query).padding(.top, Spacing.vacant)
         } else {
             EmptyState(mascot: .empty, title: .verbatim(AgentListModel.noneTitle), message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
+                #if os(iOS)
                 Button("新会话", icon: .add) { workspace.newSession = .init() }
+                #else
+                Button("新会话", icon: .add) { workspace.newSession() }
+                #endif
             }
             .padding(.top, Spacing.vacant)
         }
@@ -136,4 +149,19 @@ private extension View {
         listRowInsets(EdgeInsets(top: Spacing.tight, leading: 0, bottom: Spacing.tight, trailing: 0))
     }
 }
-#endif
+
+/// "更早"那一页（`Route.earlier`，WORDS.md）：已结束的会话按结束时间分段（`AgentListModel.endedOnly`），滑到底再读一页。三端同一页：
+/// 手机从 Cue 页会话条底下"更早"那一格推入（`EarlierTile`，左边是系统返回）；Mac 与 iPad 宽屏点会话条上的"更早"在主区打开（`RailEarlier`）。
+/// 在跑、等你的会话不在这里，它们在会话条上。
+struct EarlierPage: View {
+    @State private var model = AgentListModel(endedOnly: true)
+
+    var body: some View {
+        #if os(iOS)
+        SessionList(model: model).floatingHeader("更早")
+        #else
+        // 页名在窗口最顶那一排（主区的栏头）
+        SessionList(model: model)
+        #endif
+    }
+}

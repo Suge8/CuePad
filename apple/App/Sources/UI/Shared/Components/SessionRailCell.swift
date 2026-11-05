@@ -26,8 +26,8 @@ struct SessionRailCell: View {
                 control
             } else {
                 control
-                    .contextMenu { leadingAction }
-                    .accessibilityActions { leadingAction }
+                    .contextMenu { menu }
+                    .accessibilityActions { menu }
                     .contentShape(.dragPreview, .rect(cornerRadius: Radius.row))
                     .draggable(DraggedSession(sessionID: item.id))
             }
@@ -45,14 +45,14 @@ struct SessionRailCell: View {
     @ViewBuilder private var control: some View {
         #if os(macOS)
         Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .beside : .primary) } label: { label }
-            .buttonStyle(RowStyle(selected: selected, cell: form == .narrow))
+            .buttonStyle(RowStyle(selected: selected, cell: true))
         #else
         if form == .phone {
             Button { open(item.session, .primary) } label: { label }
                 .buttonStyle(RowStyle(selected: selected))
         } else {
             label
-                .row(selected: selected, cell: form == .narrow)
+                .row(selected: selected, cell: true)
                 .gesture(SessionTap { open(item.session, $0 ? .beside : .primary) })
                 .focusable(interactions: .activate)
                 .onKeyPress(.space) { open(item.session, .primary); return .handled }
@@ -63,33 +63,35 @@ struct SessionRailCell: View {
         #endif
     }
 
-    private var leadingAction: some View {
-        Button("在旁边打开") { open(item.session, .beside) }
+    /// 会话的菜单，同会话出现的每一处。
+    @ViewBuilder private var menu: some View {
+        OpenSessionBeside(session: item.session)
+        SessionActions(session: item.session)
     }
 
     private var label: some View {
         Group {
-            if form == .wide {
-                HStack(spacing: Spacing.item) {
-                    mark.frame(width: Chrome.icon)
-                    name.font(Typography.body)
-                    Spacer(minLength: 0)
-                    signal.frame(width: 40)
-                }
-                .padding(.horizontal, Chrome.rowLead)
-            } else {
+            if form == .phone {
                 VStack(spacing: Spacing.hair) {
                     mark.frame(height: 16)
-                    // 收起的图标条只有标志与状态记号，名字在悬停提示里（`CellHelp`）；手机的竖条照写名字
-                    if form == .phone { name.font(Typography.caption2) }
-                    // 图标条上的格是 `Chrome.control` 见方：线收到格里、两边留纸的内边
-                    signal.frame(width: form == .narrow ? Chrome.control - 2 * Chrome.pad : 34)
+                    name.font(Typography.caption2)
+                    signal.frame(width: 34)
                 }
                 .padding(.horizontal, Spacing.hair)
+                .padding(.vertical, Spacing.tight)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // 宽屏：行首一格是标志与状态记号（线收到格里、两边留纸的内边），名字在右边，收起时淡去、改在悬停提示里
+                RailLine(wide: form == .wide) {
+                    VStack(spacing: Spacing.hair) {
+                        mark.frame(height: 16)
+                        signal.frame(width: Chrome.control - 2 * Chrome.pad)
+                    }
+                } rest: {
+                    name.font(Typography.body)
+                }
             }
         }
-        .padding(.vertical, Spacing.tight)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(.rect)
         // 挂在行底以内：读的是这一行的悬停（`rowHovered`）
         .railTip(form == .narrow ? help : nil)
@@ -124,7 +126,7 @@ struct SessionRailCell: View {
     }
 }
 
-/// 格子的悬停说明：收起的图标条（80）上没写名字，指针一停名字就浮在格子右边（`railTip`，挂在 `label` 里）；其余照系统的慢提示。
+/// 格子的悬停说明：收起的会话条上名字淡去，指针一停名字就浮在格子右边（`railTip`，挂在 `label` 里）；其余照系统的慢提示。
 private struct CellHelp: ViewModifier {
     let form: SessionRail.Form
     let text: String

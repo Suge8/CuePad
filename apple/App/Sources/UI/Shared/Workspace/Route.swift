@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 去哪一页：两端共用，经 Workspace 的布局入口摆到单栈或宽屏主区。
-/// （Mac 只用其中的 `project`、`archive`、`trash`、`library`、`progress`、`cue`、`session`；技能与规则的文件页在 Mac 上盖在当前页上，见 `Workspace.overlay`）。
+/// （Mac 只用其中的 `shelf`、`earlier`、`project`、`archive`、`trash`、`library`、`progress`、`cue`、`session`；技能与规则的文件页在 Mac 上盖在当前页上，见 `Workspace.overlay`）。
 nonisolated enum Route: Hashable {
     /// 项目书架：全部项目（窄屏侧栏与宽屏主区的“项目”）。
     case shelf
@@ -20,7 +20,7 @@ nonisolated enum Route: Hashable {
     /// Cue 页：和总控 Agent Cue 的对话（`CuePage`）。
     case cue
     case search
-    /// 更早：已结束的会话，按结束时间分段（窄屏从 Cue 页会话条底下"更早"那一格推入，`EarlierScreen`；宽屏在会话条里原地展开，`RailEarlier`）。
+    /// 更早：已结束的会话，按结束时间分段（`EarlierPage`，三端同一页：窄屏从 Cue 页会话条底下"更早"那一格推入，宽屏点会话条上的"更早"在主区打开）。
     case earlier
     case card(UUID)
     /// 一个 Pi 会话的整页（近况与回复）。

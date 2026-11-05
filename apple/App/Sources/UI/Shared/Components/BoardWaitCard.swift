@@ -14,29 +14,29 @@ struct BoardWaitCard: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        #if os(macOS)
-        // 悬停提示里等了多久跟着走：到下一次换字的时刻（`PiClock.Waited`）才重画这张卡
-        Moments(next: PiClock.Waited(since: held.session.stateSince).discreteInput(after:)) { now in card.help(tip(at: now)) }
-        #else
-        card
-        #endif
-    }
-
-    private var card: some View {
         BoardLink(to: held.session) {
-            BoardCardLayout(advancing: false, pulse: leftPulse) {
-                PiStateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
-                    .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
-                if let project { BoardProjectGlyph(project: project) }
-                if held.item?.task.isPinned == true { BoardPin() }
-                BoardCardTitle(held.title).foregroundStyle(palette.ink)
-            }
-            .boardCard(.waiting)
+            #if os(macOS)
+            // 悬停提示里等了多久跟着走：到下一次换字的时刻（`PiClock.Waited`）只重画卡面，挂着菜单的那一层不随时间重建
+            Moments(next: PiClock.Waited(since: held.session.stateSince).discreteInput(after:)) { now in face.help(tip(at: now)) }
+            #else
+            face
+            #endif
         }
         .contextMenu { menu }
         .accessibilityLabel(Dotted(held.title, held.deciding ? String(localized: "等你拍板") : String(localized: "待回复")).spoken)
         .accessibilityActions { menu }
         .boardDim(project: held.project)
+    }
+
+    private var face: some View {
+        BoardCardLayout(advancing: false, pulse: leftPulse) {
+            PiStateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
+                .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
+            if let project { BoardProjectGlyph(project: project) }
+            if held.item?.task.isPinned == true { BoardPin() }
+            BoardCardTitle(held.title).foregroundStyle(palette.ink)
+        }
+        .boardCard(.waiting)
     }
 
     @ViewBuilder private var menu: some View {

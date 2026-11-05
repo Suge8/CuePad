@@ -2,10 +2,10 @@ import CueStore
 import SwiftUI
 
 /// 分组格会话条：等你纸钉在上面、推进中在下面独立滚。尺寸只影响排版，三端共用数据、格子、注意顺序与动画预算。
-/// 60 点竖条（手机）在默认字号、650 点高内完整放下十个会话；宽屏收起是图标条（`Chrome.strip`）：每个会话一格（`Chrome.control` 见方，Agent 标志上、状态记号下，
-/// 名字在悬停提示里），纸只比格宽出一圈、在条的中轴上；宽屏一行一个会话（`Chrome.rail`）。尺寸全在 `Chrome`。
+/// 60 点竖条（手机）在默认字号、650 点高内完整放下十个会话。宽屏（`wide` 展开、`narrow` 收起）同一套排法（`Chrome` 头注释）：每个会话一行，
+/// 行首一格（`Chrome.control` 见方，Agent 标志上、状态记号下）在条的中轴上，名字在它右边，收起时淡去、改在悬停提示里；组头的记号与个数也在那一列，组名在右边。
 /// 等你过多时自身也能滚、最多占一半可用高度，不能把推进中或待回复挤到再也点不到。两组为空时保留列宽，不重排对话。
-/// 打开只回报会话与意图（`Opening`：默认，或 ⌘ 点、右键"在旁边打开"的并排）；不在这里写导航。`marked` 是调用方主区开着的会话投影，不在组件内记选中。
+/// 点按只回报会话与意图（`Opening`：默认，或 ⌘ 点的并排）；右键是会话的菜单（`OpenSessionBeside` 与 `SessionActions`，同会话出现的每一处）。`marked` 是调用方主区开着的会话投影，不在组件内记选中。
 struct SessionRail: View {
     enum Form {
         case phone, wide, narrow
@@ -25,13 +25,9 @@ struct SessionRail: View {
     let open: (PiSessionState, Opening) -> Void
 
     var body: some View {
-        let rows = SessionRailRows(data, pulse: pulse)
-        if form == .wide {
-            SessionRailContent(rows: rows, form: form, marked: marked, open: open)
-        } else {
-            // 常驻窄列同页头限制可见字号；全文留在读屏标签，不能让大字把组头计数挤成省略号。
-            SessionRailContent(rows: rows, form: form, marked: marked, open: open).dynamicTypeSize(...DynamicTypeSize.xxLarge)
-        }
+        // 常驻的栏同页头限制可见字号；全文留在读屏标签，不能让大字把组头计数挤成省略号。
+        SessionRailContent(rows: SessionRailRows(data, pulse: pulse), form: form, marked: marked, open: open)
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 }
 
@@ -42,27 +38,12 @@ private struct SessionRailContent: View {
     let open: (PiSessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 52
-    #if os(iOS)
-    /// iPad 宽版一行：Chrome 的行高，随动态字体放大。
-    @ScaledMetric(relativeTo: .body) private var wideRow = Chrome.row
-    #endif
 
     @Environment(\.relayStage) private var stage
     @Environment(\.pageActive) private var active
     @State private var reveal = SessionRailReveal()
 
-    private var rowHeight: CGFloat {
-        switch form {
-        case .narrow: Chrome.control
-        case .phone: tileHeight
-        #if os(macOS)
-        case .wide: Chrome.row
-        #else
-        // 宽版一行只有名字与线（同 Mac），不按手机两行的格高
-        case .wide: wideRow
-        #endif
-        }
-    }
+    private var rowHeight: CGFloat { form == .phone ? tileHeight : Chrome.control }
 
     var body: some View {
         GeometryReader { geometry in
@@ -95,25 +76,18 @@ private struct SessionRailContent: View {
         Self.headerHeight + CGFloat(count) * rowHeight + CGFloat(max(0, count - 1)) * Self.cellGap + Self.bottomInset
     }
 
-    /// 格在纸里让出多少：宽版的行向两边让出底（`Chrome.rowInset`），图标条的格就是底、只留纸的内边（`Chrome.pad`），手机的格铺满纸。
-    private var cellInset: CGFloat {
-        switch form {
-        case .phone: 0
-        case .wide: Chrome.rowInset
-        case .narrow: Chrome.pad
-        }
-    }
+    /// 格在纸里让出多少：宽屏的行就是底、只留纸的内边（`Chrome.pad`），手机的格铺满纸。
+    private var cellInset: CGFloat { form == .phone ? 0 : Chrome.pad }
 
     private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, moving: Set<String>) -> some View {
         VStack(spacing: 0) {
-            SessionRailHeader(column: column, count: items.count, wide: form == .wide)
+            SessionRailHeader(column: column, count: items.count, form: form)
                 .frame(height: Self.headerHeight)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: Self.cellGap) {
                         ForEach(items) { item in
                             SessionRailCell(item: item, form: form, moves: moving.contains(item.id), selected: marked.contains(item.id), open: open)
-                                .frame(width: form == .narrow ? Chrome.control : nil)
                                 .frame(minHeight: rowHeight)
                                 .id(item.id)
                         }
@@ -138,34 +112,41 @@ private struct SessionRailContent: View {
                 .onDisappear { reveal.remove(column) }
             }
         }
-        .frame(width: form == .narrow ? Chrome.stripGroup : nil)
         .rowContainer(.rect(cornerRadius: Radius.block), flush: form == .phone)
         .clipShape(.rect(cornerRadius: Radius.block))
         .paper(cornerRadius: Radius.block, wash: column.paper(palette))
-        .padding(.horizontal, form == .phone ? SessionRail.phoneInset : form == .wide ? Chrome.gutter : 0)
+        .padding(.horizontal, form == .phone ? SessionRail.phoneInset : Chrome.edge)
     }
 }
 
+/// 组头：记号与个数。手机竖条上两者居中；宽屏在行首那一列（与格里的标志同一列），组名在右边、收起时淡去。
 private struct SessionRailHeader: View {
     let column: TaskBoard.Column
     let count: Int
-    let wide: Bool
+    let form: SessionRail.Form
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: Spacing.tight) {
-            BoardLaneMark(column: column, size: Self.mark)
-            if wide { Text(column.title).foregroundStyle(palette.ink2) }
-            Text(count, format: .number).foregroundStyle(column.countInk(palette)).monospacedDigit()
-            if wide { Spacer(minLength: 0) }
+        Group {
+            if form == .phone {
+                tally.padding(.horizontal, Spacing.hair)
+            } else {
+                RailLine(wide: form == .wide, height: Chrome.groupHeader) { tally } rest: { Text(column.title).foregroundStyle(palette.ink2).lineLimit(1) }
+                    .padding(.horizontal, Chrome.pad)
+            }
         }
         .font(Typography.caption.weight(.semibold))
-        // 宽版的记号与格里的标志同一列（格让出 `Chrome.rowInset`、格里再 `rowLead`，记号在 `Chrome.icon` 那一列里居中）
-        .padding(.horizontal, wide ? Chrome.rowInset + Chrome.rowLead + (Chrome.icon - Self.mark) / 2 : Spacing.hair)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(column.title)
         .accessibilityValue(Text(count, format: .number))
         .accessibilityAddTraits(.isHeader)
+    }
+
+    private var tally: some View {
+        HStack(spacing: Spacing.tight) {
+            BoardLaneMark(column: column, size: Self.mark)
+            Text(count, format: .number).foregroundStyle(column.countInk(palette)).monospacedDigit()
+        }
     }
 
     private static let mark: CGFloat = 14
