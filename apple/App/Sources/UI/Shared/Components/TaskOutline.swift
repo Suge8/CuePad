@@ -4,9 +4,17 @@ import SwiftUI
 private nonisolated let outlineSpace = "TaskOutline"
 
 /// 一行任务在大纲里能做的结构操作（做不了的为 nil）。手机上缩进进轻扫与同源的读屏动作（`RowSwipes.card`），任务行从环境里取来放进读屏动作（`spoken`）；做什么只在 `CardMenu.Item.run`。
-struct TaskStructure {
-    var indent: (() -> Void)?
-    var outdent: (() -> Void)?
+/// 交进环境（`taskStructure`），按哪一行、能挪到哪比：动作只由这三样与工作区定，比出相等时读它的行留着的旧动作做的是同一件事。
+struct TaskStructure: Equatable {
+    let row: UUID
+    let indentMove: TaskMove?
+    let outdentMove: TaskMove?
+    let commit: (TaskMove) -> Void
+
+    var indent: (() -> Void)? { indentMove.map { move in { commit(move) } } }
+    var outdent: (() -> Void)? { outdentMove.map { move in { commit(move) } } }
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.row == b.row && a.indentMove == b.indentMove && a.outdentMove == b.outdentMove }
 
     /// 读屏动作里的结构操作：手机上缩进已在右滑里（轻扫的读屏动作），反缩进只有拖放。
     #if os(macOS)
@@ -84,9 +92,7 @@ struct TaskOutline<Line: View>: View {
     }
 
     private func item(_ row: TaskTree.Row) -> some View {
-        let structure = TaskStructure(
-            indent: tree.indent(row.id).map { move in { commit(row.id, move) } },
-            outdent: tree.outdent(row.id).map { move in { commit(row.id, move) } })
+        let structure = TaskStructure(row: row.id, indentMove: tree.indent(row.id), outdentMove: tree.outdent(row.id)) { commit(row.id, $0) }
         return line(row)
         .padding(.leading, CGFloat(row.depth) * Self.indentWidth)
         .contentShape(.rect)

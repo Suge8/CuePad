@@ -288,7 +288,7 @@ private struct BubbleLayer: View {
                         }
                     }
                     .offset(y: drag)
-                    .environment(\.bubbleDrag, source == .bottom ? BubbleDrag(changed: dragged, ended: released) : nil)
+                    .environment(\.bubbleDrag, source == .bottom ? BubbleDrag(bubble: shown.identity, changed: dragged, ended: released) : nil)
                     .id(shown.identity)
                     .transition(placement.transition(reduceMotion: reduceMotion))
                 }
@@ -326,16 +326,6 @@ private struct BubbleLayer: View {
 
     /// 气泡离安全区的边（状态栏、Home 指示条、键盘）。
     private static var insets: EdgeInsets { EdgeInsets(top: 8, leading: BubblePlacement.margin, bottom: 8, trailing: BubblePlacement.margin) }
-}
-
-/// 贴在底部的纸里的把手报给纸那一层：拖了多远、松手时照去势会滑到哪。纸那一层只挪图层（`offset`），纸里不重排。
-struct BubbleDrag {
-    let changed: (CGFloat) -> Void
-    let ended: (_ translation: CGFloat, _ predicted: CGFloat) -> Void
-}
-
-extension EnvironmentValues {
-    @Entry var bubbleDrag: BubbleDrag?
 }
 
 /// 贴在底部的纸顶上的把手：整条横着都接拖动（往下关，`BubbleDrag`），只画中间一小截。
