@@ -2,7 +2,8 @@
 # 用法：xc.sh perf idle <mac|ios> [次数=3] [秒=30] [启动参数…]   启动参数原样传给 App，如 -CuePadScene cue
 #   空闲与常驻开销：每次全新进程、全新的演示库（给了 CUEPAD_PERF_SEED=<库目录> 时从那份库克隆，如真实库的只读副本），
 #   等就绪后至少静置 CUEPAD_IDLE_SETTLE 秒（默认 5，iOS 演示库首启那条"做完了"的提示 5 秒后收起），再等启动后的收尾做完（rusage.py 的 wait_quiet），
-#   量接下来 <秒> 内的唤醒、指令、CPU、能耗与内存（口径见 rusage.py），各次取中位数。
+#   量接下来 <秒> 内的唤醒、指令、CPU、能耗与内存（口径见 rusage.py），各次取中位数。等不到安静（QUIET_LIMIT 秒）整次失败、不出表；
+#   CUEPAD_IDLE_ALLOW_NOISY=1 放行照量，结果行与表尾标出哪几次没等到安静，那几次的数不可当静置基线。
 #   Mac 实例同所有本机构建在后台（窗口排在最后，不抢前台）；iOS 在领到的模拟器上，每次先重开机（同 perf-ios.sh）。
 #   CUEPAD_IDLE_BACKGROUND=1（仅 ios）：就绪后切到设置 App，量 CuePad 进后台之后的开销。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'、Allocations）：量的窗口里同时录 trace，存本检出的 apple/.derived-perf/Build/traces/idle-<平台>-<第几次>.trace；
@@ -71,5 +72,9 @@ python3 - "$rows" <<'PY'
 import json, statistics as st, sys
 rows = [json.loads(line) for line in open(sys.argv[1])]
 for k in rows[0]:
-    print(f"{k:14}{st.median(r[k] for r in rows):>10}   各次 {[r[k] for r in rows]}")
+    if k != "quiet":
+        print(f"{k:14}{st.median(r[k] for r in rows):>10}   各次 {[r[k] for r in rows]}")
+noisy = [n for n, r in enumerate(rows, 1) if not r["quiet"]]
+if noisy:
+    print(f"不可信：第 {noisy} 次没等到安静（CUEPAD_IDLE_ALLOW_NOISY=1 放行的），含启动收尾或别的负载，不能当静置基线")
 PY

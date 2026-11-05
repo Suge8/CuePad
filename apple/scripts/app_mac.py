@@ -7,6 +7,7 @@ import select
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 from app_env import APPLE, BUILD, FRONT, FRONT_RETRY, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SOCKETS, WINDOW, die, isolated_env
@@ -22,6 +23,30 @@ def read_note(slot):
         return {}
 
 
+SLOT_WAIT = 15  # 通知占着的看守退出后，等它放锁的上限秒数
+
+
+def wait_release(slot, note):
+    """通知过占着的看守（note 里登记的 app.py）之后等它放锁：放了就返回（flock 阻塞在线程里，事件驱动，不轮询）。
+    SLOT_WAIT 秒还不放（看守被暂停、忽略了 TERM，或登记不对应任何人）就报出它的身份退出，不凭旧 PID 去杀。"""
+    got = threading.Event()
+
+    def block():
+        fcntl.flock(slot, fcntl.LOCK_EX)
+        got.set()
+
+    threading.Thread(target=block, daemon=True).start()
+    if got.wait(SLOT_WAIT):
+        return
+    pid = note.get("holder")
+    who = subprocess.run(["ps", "-o", "pid=,stat=,lstart=,command=", "-p", str(pid)], capture_output=True, text=True).stdout.strip() if pid else ""
+    if alive(note):
+        die(f"本检出上一个 run 的看守 {SLOT_WAIT} 秒没放下 Mac 实例位（已发 TERM）：{who}\n"
+            "下一步：xc.sh stop 再试一次；上面状态是 T（被暂停）的先 kill -CONT <PID> 让它处理 TERM；仍不退出，请用户确认后只对这个 PID 发 KILL，不按名字找")
+    die(f"本检出的 Mac 实例位被占着 {SLOT_WAIT} 秒，登记里的看守不在（登记：{json.dumps(note, ensure_ascii=False)}）：多半是别的进程在用，或登记是旧的。\n"
+        f"下一步：等它用完再试；lsof {SLOT} 看谁开着它（开着不等于正持有）；不要删这个文件")
+
+
 def take_slot():
     """占住本检出那一份。占着的只会是 run 留下的看守（本检出的命令由 _lock.sh 排队），换掉它。"""
     os.makedirs(os.path.dirname(SLOT), exist_ok=True)
@@ -34,7 +59,7 @@ def take_slot():
     note = read_note(slot)  # 锁被占着，记录就是占着的那个写的
     if alive(note):
         os.kill(note["holder"], signal.SIGTERM)
-    fcntl.flock(slot, fcntl.LOCK_EX)
+    wait_release(slot, note)
     return slot
 
 
@@ -205,7 +230,7 @@ def stop():
         if not alive(note):
             return "本检出的 Mac 实例是 perf 在量，不是 run 起的，等它量完"
         os.kill(note["holder"], signal.SIGTERM)
-        fcntl.flock(slot, fcntl.LOCK_EX)  # 看守收完实例才放锁
+        wait_release(slot, note)  # 看守收完实例才放锁
     return f"已结束 Mac 实例 {note['app']}"
 
 

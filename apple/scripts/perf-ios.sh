@@ -6,6 +6,7 @@
 #   模拟器的合成与 GPU 和真机不同：只看主线程 CPU 与指令数，掉帧只作参考；第一次的数里有模拟器才有的 Swift 一致性查找，真机要另量。
 #   长按菜单与手势在进程内没有入口：App 写 `AWAIT 名 x y`（按）或 `AWAIT 名 x y x2 y2 swipe|drag 秒`（快滑或慢拖），这里用 axe（https://github.com/cameroncooke/AXe）
 #   在模拟器上真按（长按菜单按住 0.8 秒；收起在 App 里做）、真滑（axe swipe）、真拖（axe drag，每秒 60 个移动点）。
+#   每次最多等 CUEPAD_INTERACT_SECONDS 秒（默认 300），等的时候每 30 秒报一次进度（按了几个点、输出最后一行）。
 #   某一次没写完（App 写了 FAIL、中途退出或超时）整次失败、以 1 退出，不出部分结果的表。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'）：每次量的同时录整段 trace（启动前开录，含冷启动），存本检出的 apple/.derived-perf/Build/traces/interact-ios-<第几次>.trace。
 #   录的是整机（模拟器里的进程 xctrace 按 PID、按名字都认不出），按打印的 PID 筛；INTERACT 行的 at（墙钟）减 trace 的开始时刻就是各项在 trace 里的位置。
@@ -53,13 +54,14 @@ for run in $(seq "$runs"); do
   pid="$(SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" xcrun simctl launch "$udid" "$BUNDLE_ID" ${library_args[@]+"${library_args[@]}"} -CuePadBench interact "${@:3}" | sed 's/.*: //')"
   if [ -n "$tracer" ]; then echo "trace：${trace}（CuePad PID ${pid}）" >&2; fi
   sleep 2
-  # 量完自己退出；最多等 5 分钟。其间按 App 要的点真按
-  pressed=0 finished=0 deadline=$(( $(date +%s) + 300 )) tick=0
-  while [ "$(date +%s)" -lt "$deadline" ]; do
+  # 量完自己退出；最多等 limit 秒。其间按 App 要的点真按
+  pressed=0 finished=0 began=$(date +%s) tick=0 limit="${CUEPAD_INTERACT_SECONDS:-300}"
+  while [ "$(date +%s)" -lt $((began + limit)) ]; do
     tick=$((tick + 1))
     # 问模拟器"还在跑吗"要几百毫秒：每秒问一次，按点的请求每 0.1 秒看一次
     if [ $((tick % 10)) = 0 ] && ! running; then finished=1; break; fi
     awaits="$(grep -c '^AWAIT ' "$out" 2>/dev/null || true)"
+    if [ $((tick % 300)) = 0 ]; then echo "第 $run 次：已等 $(( $(date +%s) - began )) 秒（最多 $limit 秒），App 要按 ${awaits:-0} 个点、已按 $pressed 个；输出最后一行：$(tail -1 "$out" 2>/dev/null)" >&2; fi
     if [ "${awaits:-0}" -gt "$pressed" ]; then
       pressed=$((pressed + 1))
       read -r _ name x y x2 y2 how seconds < <(grep '^AWAIT ' "$out" | sed -n "${pressed}p")
@@ -80,7 +82,8 @@ for run in $(seq "$runs"); do
     for _ in $(seq 600); do kill -0 "$tracer" 2>/dev/null || break; sleep 0.1; done
     if kill -0 "$tracer" 2>/dev/null; then kill -9 "$tracer"; echo "xctrace 收到 Ctrl-C 60 秒没写完，$trace 不完整" >&2; exit 1; fi
   fi
-  if [ "$finished" = 0 ]; then xcrun simctl terminate "$udid" "$BUNDLE_ID" || true; echo "第 $run 次：5 分钟内没量完" >&2; exit 1; fi
+  if [ "$finished" = 0 ]; then xcrun simctl terminate "$udid" "$BUNDLE_ID" || true; echo "第 $run 次：$limit 秒内没量完（App 要按 ${awaits:-0} 个点、已按 $pressed 个）；输出最后一行：$(tail -1 "$out" 2>/dev/null)
+下一步：看 $out 的末尾判断卡在哪一项；机器忙或项目多就给 CUEPAD_INTERACT_SECONDS=<秒> 放宽" >&2; exit 1; fi
   if grep -q '^FAIL ' "$out" || ! grep -q '^DONE' "$out"; then
     echo "第 $run 次没量完：$(grep '^FAIL ' "$out" || echo 'App 中途退出')" >&2; exit 1
   fi

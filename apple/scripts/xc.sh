@@ -201,7 +201,17 @@ case "$cmd" in
     exec python3 "$APPLE_DIR/scripts/app.py" "$cmd" "$platform" "$app" "$library" ${target[@]+"${target[@]}"} "${@:3}" ;;
   perf)
     # 构建与测量各自按普通任务进锁；帧与回合时长随机器忙闲变，看结束时的负载，前后对比以指令数为准
-    "$0" build-perf "$platform" >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
+    # xcodebuild 的标准输出与错误已在 xcb 里并成一路写进 build.log；排队、用时、入口的报错走终端的标准错误，不进日志
+    status=0
+    "$0" build-perf "$platform" >"$DERIVED/build.log" || status=$?
+    if [ "$status" != 0 ]; then
+      {
+        echo "perf 的构建失败（退出码 $status；75 是排队超时，124 是任务超时，其余多半是 xcodebuild 的）。完整输出在 $DERIVED/build.log；排队与入口的报错在上面的终端输出里，不在日志里。"
+        echo "日志里的 error 行（最多 10 条，早先的错误常在末尾之前）："; grep -a 'error:' "$DERIVED/build.log" | head -10 || true
+        echo "日志末尾 30 行（只是末尾，不是全部）："; tail -30 "$DERIVED/build.log"
+      } >&2
+      exit "$status"
+    fi
     xc_enter "$([ "$platform" = ios ] && echo "$IOS_DEVICE")" "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}"
     exec "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}" ;;  # 已在锁里（脚本调脚本）时 xc_enter 直接返回
 esac

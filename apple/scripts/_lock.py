@@ -1,6 +1,7 @@
 """xc.sh 的入口锁（规则与用法见 _lock.sh 头注释），两种用法，锁与登记在 app_env.RUNTIME，本检出的锁在 apple/.derived/xc.lock：
-_lock.py task <时限秒> <等待上限秒> <报告间隔秒> <模拟器槽位数> <机型，不要模拟器给空串> <命令…>
-  拿检出锁与（要模拟器的）一个模拟器槽位，登记持有者，在锁里起命令并守着它的时限，结束时连同它起的全部进程
+_lock.py task <时限秒> <等待上限秒> <报告间隔秒> <模拟器准备期限秒> <模拟器槽位数> <机型，不要模拟器给空串> <命令…>
+  拿检出锁与（要模拟器的）一个模拟器槽位，登记持有者，准备模拟器（列出、关旧的；每步受准备期限管，超了结束自己起的 simctl、报错退出并放锁），
+  在锁里起命令并守着它的时限，结束时连同它起的全部进程
   （swift test 的测试宿主、xcodebuild 的编译器各自另起进程组，按组结束会漏下它们），再打一行用时。
 _lock.py signing <等待上限秒> <报告间隔秒> <脚本 PID> <描述符>
   在脚本打开的描述符上拿全机的签名锁（规则 3），登记后返回，标准输出是登记文件；锁在脚本与它起的进程都关掉描述符时放掉。
@@ -16,13 +17,13 @@ if mode == "signing":
     wait_limit, report, owner, fd = map(int, sys.argv[2:6])
     cmd_line = subprocess.run(["ps", "-o", "command=", "-p", str(owner)], capture_output=True, text=True).stdout.strip()
 else:
-    hold, wait_limit, report, slots, model, *cmd = sys.argv[2:]
-    hold, wait_limit, report, slots = int(hold), int(wait_limit), int(report), int(slots)
+    hold, wait_limit, report, prep, slots, model, *cmd = sys.argv[2:]
+    hold, wait_limit, report, prep, slots = int(hold), int(wait_limit), int(report), int(prep), int(slots)
     cmd_line = shlex.join(cmd)
 holders, own = f"{RUNTIME}/holders", f"{APPLE}/.derived/xc.lock"
 os.makedirs(holders, exist_ok=True)
 os.makedirs(os.path.dirname(own), exist_ok=True)
-begun = time.time()
+begun = time.monotonic()  # 等待与用时都按单调钟算：调系统时间不改变期限；持有时刻（me["held"]）只用来显示，按墙钟
 phases = {"排队": 0}  # 名字 → 秒，打在结束时的用时行里；命令自己量的段（xc.sh 的 phase）写在 phase_file，结束时并进来
 phase_file = f"{RUNTIME}/phases-{os.getpid()}"
 
@@ -75,16 +76,16 @@ def clock(seconds):
     return f"{minutes} 分 {seconds:02d} 秒" if minutes else f"{seconds} 秒"
 
 
-def line(text):
-    """显示时截成一行：命令行可以很长（测量的启动参数），排队的报告每个持有者一行命令。"""
-    return text if len(text) <= COMMAND_WIDTH else text[:COMMAND_WIDTH - 1] + "…"
-
-
 COMMAND_WIDTH = 150
 
 
-def listing():
-    """登记的持有者：每把锁拿到多久、在等什么、命令。"""
+def lock_path(f):
+    """打开着的锁文件（或描述符）在磁盘上的路径。"""
+    return os.fsdecode(fcntl.fcntl(f, fcntl.F_GETPATH, bytes(1024)).rstrip(b"\0"))
+
+
+def listing(paths):
+    """登记的持有者：每把锁拿到多久、在等什么、命令（一行；截断时指出登记文件，完整命令在那里）。没有登记不代表锁空着，见末尾的说明。"""
     now, lines = time.time(), []
     for h, stat in others():
         if not h["held"]:
@@ -96,8 +97,13 @@ def listing():
             entry += f"，在等 {h['waiting']}"
         if stat.startswith("T"):
             entry += "  （进程停住了：不受时限管，要有人 kill -CONT 或结束它）"
-        lines.append(f"{entry}\n    命令：{line(h['cmd'])}")
-    return "\n".join(lines) or "  （此刻没有持有者：锁马上就会空出）"
+        cmd = h["cmd"] if len(h["cmd"]) <= COMMAND_WIDTH else f"{h['cmd'][:COMMAND_WIDTH - 1]}…（完整命令：{holders}/{h['pid']}.json）"
+        lines.append(f"{entry}\n    命令：{cmd}")
+    return "\n".join(lines) or (
+        "  （没有已登记的持有者：这不等于锁是空的。刚拿到锁还没登记、旧版入口、被结束的发版留下的仍开着锁文件的子进程，都不在登记里）\n"
+        f"  锁文件：{'、'.join(paths)}\n"
+        f"  只读排查：lsof {' '.join(shlex.quote(p) for p in paths)}（列出开着它的进程；开着不等于正持有，对照命令判断）。不要删锁文件：删后重建，新旧进程锁住的就是不同的文件，互斥失效。\n"
+        "  下一步：等；等满上限会以 75 退出，那时重跑一次。确认某个进程是残留且没人在用，才对它的 PID 发 TERM；拿不准就请用户处理")
 
 
 def say(text):
@@ -118,8 +124,9 @@ def acquire(options, kind, why):
     if free is None:
         me["waiting"] = why
         publish()
-        blocked = time.time()
-        say(f"排队：{why}\n{listing()}")
+        blocked = time.monotonic()
+        paths = [lock_path(f) for f, _ in options]
+        say(f"排队：{why}\n{listing(paths)}")
         # 每把一个线程阻塞在 flock 上，先拿到的算数，其余拿到后马上放掉
         won, pick, result = threading.Event(), threading.Lock(), []
 
@@ -135,15 +142,15 @@ def acquire(options, kind, why):
         for n in range(len(options)):
             threading.Thread(target=claim, args=(n,), daemon=True).start()
         deadline = begun + wait_limit
-        while not won.wait(max(0, min(report, deadline - time.time()))):
-            waited = int(time.time() - begun)
-            if time.time() >= deadline:
-                say(f"等了 {clock(waited)}还没轮到（上限 LOCK_WAIT）：{why}\n{listing()}")
+        while not won.wait(max(0, min(report, deadline - time.monotonic()))):
+            waited = int(time.monotonic() - begun)
+            if time.monotonic() >= deadline:
+                say(f"等了 {clock(waited)}还没轮到（上限 LOCK_WAIT）：{why}\n{listing(paths)}")
                 os.remove(record)
                 os._exit(75)
-            say(f"还在等（{clock(waited)}）：{why}\n{listing()}")
+            say(f"还在等（{clock(waited)}）：{why}\n{listing(paths)}")
         free = result[0]
-        phases["排队"] += time.time() - blocked
+        phases["排队"] += time.monotonic() - blocked
         me["waiting"] = None
     me["held"].append([options[free][1], time.time()])
     publish()
@@ -153,24 +160,35 @@ def acquire(options, kind, why):
 POOL_NAME = re.compile(r"CuePad (.+) #(\d+)")
 
 
-def booted_pool():
-    """开着的本项目模拟器（名为"CuePad <机型> #<号>"）：[(UDID, 机型, 号)]。别的模拟器不碰。"""
-    out = subprocess.run(["xcrun", "simctl", "list", "devices", "booted", "-j"], capture_output=True, text=True, check=True, timeout=60).stdout
+def prep_failed(what):
+    raise SystemExit(f"准备模拟器超过 {prep} 秒仍没完成（卡在：{what}）：simctl 没有响应。已结束本次自己起的 simctl，放掉锁；可能已关掉了一部分旧模拟器。\n"
+                     "下一步：直接重跑一次；再超时就是这台 Mac 的 CoreSimulator 服务卡住，请用户处理（重启该服务或重启 Mac），不要自己结束别的进程；"
+                     "机器很忙时用 CUEPAD_SIM_PREP_LIMIT=<秒> 放宽这个期限。")
+
+
+def booted_pool(until):
+    """开着的本项目模拟器（名为"CuePad <机型> #<号>"）：[(UDID, 机型, 号)]。别的模拟器不碰。until：准备期限的截止时刻（单调钟）。"""
+    try:
+        out = subprocess.run(["xcrun", "simctl", "list", "devices", "booted", "-j"], capture_output=True, text=True, check=True,
+                             timeout=max(1, until - time.monotonic())).stdout
+    except subprocess.TimeoutExpired:
+        prep_failed("列出开着的模拟器")
     return [(d["udid"], m[1], int(m[2])) for devices in json.loads(out)["devices"].values() for d in devices if (m := POOL_NAME.fullmatch(d["name"]))]
 
 
 def free_slot_order():
     """槽位的领取顺序：已开着这一机型的在前（不用重开机），空槽居中，开着别的机型的最后（要先关它）。"""
-    have = {n: {m for _, m, k in booted_pool() if k == n} for n in range(slots)}
+    have = {n: {m for _, m, k in booted_pool(time.monotonic() + prep) if k == n} for n in range(slots)}
     return sorted(range(slots), key=lambda n: 0 if model in have[n] else 2 if have[n] else 1)
 
 
 def clear_slots(files, slot):
     """持着槽位 slot 时收拾模拟器：每个槽位同一时刻最多开着一台，全机开机数封在槽位数以内。
     关掉自己槽位上别的机型的；别的槽位（编号超出槽位数的是旧版每机型一池留下的）只动拿得到锁的空闲槽位：超出的全关，槽位内多开的留一台（优先自己的机型）。
-    持着它的锁关完才放；关不掉就报错退出，不带着多开的模拟器往下跑。"""
+    持着它的锁关完才放；关不掉就报错退出，不带着多开的模拟器往下跑。整段受准备期限管。"""
+    until = time.monotonic() + prep
     by_slot = {}
-    for udid, m, n in booted_pool():
+    for udid, m, n in booted_pool(until):
         by_slot.setdefault(n, []).append((udid, m))
     stale, locked = [], []
     for n, devices in by_slot.items():
@@ -183,10 +201,16 @@ def clear_slots(files, slot):
             locked.append(f)
             keep = None if n >= slots else next((u for u, m in devices if m == model), devices[0][0])
             stale += [u for u, _ in devices if u != keep]
-    for p in [subprocess.Popen(["xcrun", "simctl", "shutdown", udid]) for udid in stale]:
-        p.wait()
+    shutdowns = [subprocess.Popen(["xcrun", "simctl", "shutdown", udid]) for udid in stale]
+    for p in shutdowns:
+        try:
+            p.wait(max(0, until - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            for q in shutdowns:
+                q.kill()
+            prep_failed("关旧模拟器")
     # 退出码不可信：另一个任务刚把它关了也会报错。以还开着为准
-    left = [name for udid, m, n in booted_pool() if udid in stale for name in [f"CuePad {m} #{n}"]]
+    left = [name for udid, m, n in booted_pool(until) if udid in stale for name in [f"CuePad {m} #{n}"]]
     if left:
         raise SystemExit(f"关不掉模拟器：{'、'.join(left)}")
     for f in locked:
@@ -213,7 +237,7 @@ def lease_signing():
     me.update(pid=owner, start=processes([owner])[owner][1])
     record = f"{holders}/{owner}.json"
     acquire([(fd, "签名（全机）")], fcntl.LOCK_EX,
-            "别的检出在生成描述文件或签名归档（列表里没有持有者时，是被结束的发版留下的子进程还开着描述文件目录：lsof 它看）")
+            "别的检出在生成描述文件或签名归档")
     print(record, flush=True)
 
 
@@ -235,9 +259,9 @@ try:
         files = {n: open(f"{RUNTIME}/sim{n}", "a+") for n in range(slots)}
         order = free_slot_order()
         sim = str(order[acquire([(files[n], f"模拟器槽位 {n}") for n in order], fcntl.LOCK_EX, f"{slots} 个模拟器槽位都在用")])
-        cleared = time.time()
+        cleared = time.monotonic()
         clear_slots(files, int(sim))
-        phases["关旧模拟器"] = time.time() - cleared
+        phases["关旧模拟器"] = time.monotonic() - cleared
 
     lease = f"{RUNTIME}/lease-{me['pid']}"  # run ios 留下实例时，看守把自己的 PID 写在这里（app_sim.keep）
     child = subprocess.Popen(cmd, env=dict(os.environ, CUEPAD_SIM=sim, CUEPAD_PHASES=phase_file, CUEPAD_LEASE=lease))
@@ -261,7 +285,7 @@ try:
         except subprocess.TimeoutExpired:
             signal_tree(signal.SIGKILL)
         code = 124
-    summary(time.time() - begun)
+    summary(time.monotonic() - begun)
     if code == 0 and os.path.exists(lease) and os.fork() == 0:
         # 租约：分身只带着这台模拟器的槽位锁（flock 跟着打开的文件描述符走，原进程退出不放），别的锁随分身关掉的描述符放掉，
         # 守到看守退出；登记换成分身的，排队的人看得到谁租着

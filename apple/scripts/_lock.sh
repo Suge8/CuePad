@@ -13,11 +13,12 @@
 #    它不受 HOLD_LIMIT 管，排队照样有 LOCK_WAIT 与持有者列表。
 #    用它的：发版与真机（release-*.sh）、独立的 xc.sh provision、读描述文件的 CUEPAD_SIGN=development 构建与 activity-log。公证、上传不用描述文件，不在锁里。
 # 锁都是 flock，规则 1、2 只由这里的入口进程持有（Python 打开的文件不传给子进程），它退出时内核释放，崩了也不留死锁。持有者把 CUEPAD_SIM=<槽位号，没领为空> 传给子进程，
-# 脚本再调脚本不重复进锁。任务最多跑 HOLD_LIMIT 秒，超了连同它起的全部进程结束，防止卡死的任务一直占着。
+# 脚本再调脚本不重复进锁。任务最多跑 HOLD_LIMIT 秒，超了连同它起的全部进程结束，防止卡死的任务一直占着；模拟器准备另受 SIM_PREP_LIMIT 管（它在任务开始前，HOLD_LIMIT 管不到）。
 # 谁拿着锁记在运行目录（app_env.py 的 RUNTIME）的 holders/<PID>.json（PID、检出、完整命令行、持有的每把锁与真正拿到它的时刻、在等的锁），入口退出时删掉；
 # 被 KILL 留下的、PID 已不是那个进程的，读的人当场清掉。排队时开头与每 LOCK_REPORT 秒列一次持有者：每把锁持有了多久（不含排队），命令截成一行，
-# 停住的进程标出来（它不受时限管）；
-# 等满 LOCK_WAIT 秒还没轮到就列出持有者、以 75 退出，不静默挂着。
+# 停住的进程标出来（它不受时限管）；命令太长被截断时给出登记文件（完整命令在那里）；
+# 没有登记的持有者不等于锁空着（刚拿到还没登记、旧版入口、被结束的发版留下的子进程仍开着锁文件）：这时报告改列锁文件路径、只读排查（lsof）与下一步，不说"马上空出"；
+# 等满 LOCK_WAIT 秒还没轮到就列出持有者、以 75 退出，不静默挂着；等待与用时都按单调钟算，调系统时间不改期限。
 # 任务结束时入口往 stderr 打一行用时：排队、命令自己量的段、其余（测试、实例、没单列的开机），加 1 分钟负载。命令量段用 phase <名> <命令…>：
 # 跑命令、把用时记给入口（环境变量 CUEPAD_PHASES 指的文件），退出码照传。
 # 用法：xc_enter <机型，不要模拟器给空串> <命令…>，在锁里 exec 这条命令（通常是 "$0" "$@"）。
@@ -29,6 +30,8 @@ SIM_SLOTS=4
 TEST_TIME_LIMIT=${CUEPAD_TEST_TIME_LIMIT:-120}
 HOLD_LIMIT=$((TEST_TIME_LIMIT + 600 > 1800 ? TEST_TIME_LIMIT + 600 : 1800))
 LOCK_REPORT=30
+# 拿到锁之后、起命令之前的模拟器准备（列出开着的、关旧的）：simctl 挂住时不占着检出锁与槽位等到任务时限，超了结束自己起的 simctl、报错退出。机器很忙时给 CUEPAD_SIM_PREP_LIMIT=<秒>
+SIM_PREP_LIMIT=${CUEPAD_SIM_PREP_LIMIT:-120}
 # 前面的任务都受 HOLD_LIMIT 管，正常排队等不过一个任务的时限（另留收尾的余量）；超过它，是前面有停住的进程、
 # 或排着不止一件长任务，报出来让人处理。等得起更久的给 CUEPAD_LOCK_WAIT=<秒>
 LOCK_WAIT=${CUEPAD_LOCK_WAIT:-$((HOLD_LIMIT + 300))}
@@ -45,7 +48,7 @@ phase() {
 xc_enter() {
   [ -z "${CUEPAD_SIM+set}" ] || return 0
   local model="$1"; shift
-  exec python3 "$APPLE_DIR/scripts/_lock.py" task "$HOLD_LIMIT" "$LOCK_WAIT" "$LOCK_REPORT" "$SIM_SLOTS" "$model" "$@"
+  exec python3 "$APPLE_DIR/scripts/_lock.py" task "$HOLD_LIMIT" "$LOCK_WAIT" "$LOCK_REPORT" "$SIM_PREP_LIMIT" "$SIM_SLOTS" "$model" "$@"
 }
 
 PROFILES_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"

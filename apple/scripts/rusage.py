@@ -3,7 +3,9 @@
 
 用法：rusage.py <pid> <就绪标记> <静置秒> <量的秒数> [--on-ready <命令>] [--during <命令>]
 等就绪标记出现（app_proc.wait_ready：kqueue，最多 60 秒，App 先退出就失败），记下启动到就绪的毫秒；跑 --on-ready（如切到别的 App）；
-至少静置 <静置秒>，再等到连续 QUIET_SPAN 秒安静（每秒指令低于 QUIET_RATE），然后量一个窗口，窗口开始时起 --during（如 xctrace，量完等它写完），打印一行 JSON：
+至少静置 <静置秒>，再等到连续 QUIET_SPAN 秒安静（每秒指令低于 QUIET_RATE），然后量一个窗口，窗口开始时起 --during（如 xctrace，量完最多等它 DURING_WAIT 秒写完，超了结束它并失败），打印一行 JSON。
+QUIET_LIMIT 秒内等不到安静就失败（非零退出、不打结果行）：那时量到的是启动收尾或别的负载，不是静置基线。CUEPAD_IDLE_ALLOW_NOISY=1 才照量，结果行 quiet 为 false，数不可当静置基线：
+  quiet          窗口开始前等到了安静（false 只在 CUEPAD_IDLE_ALLOW_NOISY=1 放行时出现）
   readyMs        启动到就绪标记出现（标记的含义见 DebugScene.signalReady：画面摆好、读库回来、动画停下）。
                  Mac 从 app.py exec 成 CuePad 那一刻算（锁记录里的 execAt），iOS 从进程启动算
   readyInstructionsM  进程从启动到就绪执行的指令（百万），启动那段的前后对比看它；
@@ -20,7 +22,7 @@
                  WindowServer 合成整个屏幕：别的 App 在动的开销也在里面，前后交替多跑几次再比
 指令与唤醒不随机器忙闲变，前后对比看它们；readyMs、cpuMs、能耗受调度（性能核还是能效核）影响，机器忙时只作参考。
 """
-import ctypes, json, os, subprocess, sys, time
+import ctypes, json, os, signal, subprocess, sys, time
 
 sys.dont_write_bytecode = True
 from app_env import SLOT  # noqa: E402
@@ -41,7 +43,9 @@ NS = timebase.numer / timebase.denom
 # 固定静置几秒就开窗，量到的是这段收尾而不是静置。收尾一阵一阵地来，阵与阵之间实测空过 9 秒。
 QUIET_RATE = 30e6  # 每秒指令低于它算安静：静置的 iOS 模拟器每秒几百万，收尾时每秒几亿起
 QUIET_SPAN = 15
-QUIET_LIMIT = 120  # 等到这么久还不安静就照量，并在 stderr 说一声：一直不安静本身就是要量的
+QUIET_LIMIT = 120  # 等到这么久还不安静就失败（CUEPAD_IDLE_ALLOW_NOISY=1 放行时照量、结果标 quiet=false）
+ALLOW_NOISY = os.environ.get("CUEPAD_IDLE_ALLOW_NOISY") == "1"
+DURING_WAIT = 120  # 量完窗口后等 --during 写完的上限（xctrace 写大 trace 要几十秒）
 # rusage_info_v6：16 字节 uuid 之后全是 uint64（sys/resource.h），这里只取用到的下标
 FIELDS = {"user": 0, "system": 1, "idle_wkups": 2, "interrupt_wkups": 3, "footprint": 7, "start": 8,
           "peak": 28, "instructions": 29, "energy_nj": 40}
@@ -81,18 +85,17 @@ def started_ns(pid):
 
 
 def wait_quiet(pid):
-    """等到连续 QUIET_SPAN 秒、每秒指令都低于 QUIET_RATE，返回那一刻的记账；内核记账没有"变安静了"的通知，只能按秒读。"""
+    """等到连续 QUIET_SPAN 秒、每秒指令都低于 QUIET_RATE，返回（那一刻的记账，是否等到了安静）；内核记账没有"变安静了"的通知，只能按秒读。"""
     start, quiet = time.monotonic(), 0
     last = usage(pid)
     while quiet < QUIET_SPAN:
         if time.monotonic() - start > QUIET_LIMIT:
-            print(f"等了 {QUIET_LIMIT} 秒还不安静，照量", file=sys.stderr)
-            break
+            return last, False
         time.sleep(1)
         now = usage(pid)
         quiet = quiet + 1 if now["instructions"] - last["instructions"] < QUIET_RATE else 0
         last = now
-    return last
+    return last, True
 
 
 def main():
@@ -106,16 +109,27 @@ def main():
     if "--on-ready" in hooks:
         subprocess.run(hooks["--on-ready"], shell=True, check=True, stdout=subprocess.DEVNULL)
     time.sleep(settle)
-    a = wait_quiet(pid)
+    a, quiet = wait_quiet(pid)
+    if not quiet:
+        if not ALLOW_NOISY:
+            raise SystemExit(f"进程 {pid} 等了 {QUIET_LIMIT} 秒仍不安静（连续 {QUIET_SPAN} 秒每秒指令低于 {QUIET_RATE / 1e6:g}M 才算）：此刻量到的是启动收尾或别的负载，不是静置，没有量。\n"
+                             "下一步：看机器负载（uptime）、等别的任务跑完再重跑；这个 App 本身一直不安静就是要查的问题，不是量法的问题。"
+                             "确要带着噪声量，给 CUEPAD_IDLE_ALLOW_NOISY=1，结果行 quiet 为 false，不能当静置基线。")
+        print(f"等了 {QUIET_LIMIT} 秒仍不安静，CUEPAD_IDLE_ALLOW_NOISY=1 放行照量：结果行 quiet=false，不可当静置基线", file=sys.stderr)
     render = int(os.environ.get("CUEPAD_IDLE_RENDER_PID", 0))
     ra = render_usage(render) if render else None
     settled = time.monotonic_ns()
-    during = subprocess.Popen(hooks["--during"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) if "--during" in hooks else None
+    during = subprocess.Popen(hooks["--during"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True) if "--during" in hooks else None
     time.sleep(seconds)  # 量的就是这一段
     b = usage(pid)
     rb = render_usage(render) if render else None
     if during:
-        during.wait()
+        try:
+            during.wait(DURING_WAIT)
+        except subprocess.TimeoutExpired:
+            os.killpg(during.pid, signal.SIGTERM)  # 自己起的那一组（shell 与它的子进程），不按名字找
+            raise SystemExit(f"--during 命令 {DURING_WAIT} 秒还没结束（{hooks['--during']}）：已结束它（进程组 {during.pid}），它写的东西不完整，这次不出结果。\n"
+                             "下一步：重跑；反复出现就单独跑这条命令看卡在哪（xctrace 连不上设备时常如此）。")
     d = lambda k: b[k] - a[k]
     extra = {}
     if render:
@@ -127,6 +141,7 @@ def main():
         "readyMs": round(ready_ms),
         "readyInstructionsM": round(ready_instructions / 1e6, 1),
         "tailInstructionsM": round((a["instructions"] - ready_instructions) / 1e6, 1),
+        "quiet": quiet,
         "settleS": round((settled - ready_at) / 1e9, 1),
         "wakeupsPerSec": round((d("idle_wkups") + d("interrupt_wkups")) / seconds, 2),
         "instructionsM": round(d("instructions") / 1e6, 1),
