@@ -117,7 +117,8 @@ extension DebugScene {
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
         presetDrawers(workspace)
         crossWithDrawerIfAsked(workspace)
-        if defaults.string(forKey: "CuePadSidebarCycle") != nil { Task { await cycleSidebar() } }
+        if let pace = defaults.string(forKey: "CuePadSidebarCycle") { Task { await cycle(#selector(AppDelegate.toggleCueSidebar(_:)), fast: pace == "fast") } }
+        if let pace = defaults.string(forKey: "CuePadRightCycle") { Task { await cycle(#selector(AppDelegate.toggleCueColumn(_:)), fast: pace == "fast") } }
         await reverseWideIfAsked(workspace)
         await presetSpeech(workspace)
         switch defaults.string(forKey: "CuePadBench") {
@@ -148,15 +149,15 @@ extension DebugScene {
         if let oldest = cards.filter({ !$0.isTask }).min(by: { $0.modifiedAt < $1.modifiedAt }) { try await workspace.trash(oldest.id) }
     }
 
-    /// `-CuePadSidebarCycle YES`（配录屏）：画面就绪后每 1.5 秒开合一次侧栏，走 ⌃⌘S 那条路（主菜单动作经响应链），看开合的动效。
-    /// `-CuePadSidebarCycle fast`：动画中途反向——按下后 0.1 秒再按、0.06 秒连按三次，各停 1.5 秒，看打断时页是否仍贴着侧栏、停下时是否回到终点。
-    private static func cycleSidebar() async {
+    /// `-CuePadSidebarCycle YES`（配录屏）：画面就绪后每 1.5 秒开合一次侧栏，走 ⌃⌘S 那条路（主菜单动作经响应链），看开合的动效；
+    /// `-CuePadRightCycle YES` 同样开合右栏（Cue，⌃⌘I）。`fast`：动画中途反向——按下后 0.1 秒再按、0.06 秒连按三次，各停 1.5 秒，看打断时是否连续、停下时是否回到终点。
+    private static func cycle(_ action: Selector, fast: Bool) async {
         // 两次之间停多久是录屏的节奏，不是在等别的事
-        let gaps: [Double] = defaults.string(forKey: "CuePadSidebarCycle") == "fast" ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
+        let gaps: [Double] = fast ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
         await Task.wait(for: .seconds(1.5))
         var step = 0
         while !Task.isCancelled {
-            NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil)
+            NSApp.sendAction(action, to: nil, from: nil)
             await Task.wait(for: .seconds(gaps[step % gaps.count]))
             step += 1
         }

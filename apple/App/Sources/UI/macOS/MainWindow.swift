@@ -55,10 +55,12 @@ struct MainWindow: View {
             }
             .overlay(alignment: .trailing) {
                 if sizes.cueFits {
-                    WideColumnHost(slot: .cue, focus: focus, origin: geometry.size.width - WideMetrics.cue, width: WideMetrics.cue, shape: sizes.shape, hidden: sizes.cue == 0) {
+                    // 收起时排在窗口右缘外：收起、放回是同一段平移，左缘每一帧贴着主区的右缘（滑出去落定才藏起，`WideColumnSlide.park`）
+                    WideColumnHost(slot: .cue, focus: focus, origin: geometry.size.width - sizes.cue, width: WideMetrics.cue, shape: sizes.shape, hidden: sizes.cue == 0) {
                         CueColumn(fits: true).environment(\.pageActive, sizes.cue > 0)
                     }
                     .frame(width: WideMetrics.cue)
+                    .padding(.trailing, sizes.cue - WideMetrics.cue)
                 } else {
                     // 抽屉里同样嵌在自己的托管视图里：栏头在标题栏那一排，在窗口的托管视图里时 Cue 页的滚动区伸到标题栏底下，系统在那一截盖上滚动边缘效果、栏头看不见（`ColumnHostingView`）
                     Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) { DrawerCue(focus: focus) }

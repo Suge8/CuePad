@@ -48,7 +48,7 @@ nonisolated enum Motion {
 }
 
 extension Motion {
-    /// 弹簧 token 的参数：渲染端照同一条走（`SidebarSlide` 按它取样）。
+    /// 弹簧 token 的参数：渲染端照同一条走（`WideSlide` 按它取样）。
     nonisolated enum Spring {
         static let nudge = SwiftUI.Spring(duration: 0.25)
         static let travel = SwiftUI.Spring(duration: 0.4)

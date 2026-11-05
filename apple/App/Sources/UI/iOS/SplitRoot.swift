@@ -18,21 +18,27 @@ struct SplitRoot: View {
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
-                WideColumnHost(slot: .main, focus: focus) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape) {
                     destination(workspace.mainRoute, column: .main)
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
                 }
                 .frame(width: sizes.leading)
                 if sizes.split, let beside = workspace.besideSession {
-                    WideColumnHost(slot: .beside, focus: focus) { destination(.session(beside), column: .beside) }
-                        .frame(width: sizes.main - sizes.leading)
+                    WideColumnHost(slot: .beside, focus: focus, origin: sizes.rail + sizes.leading, width: sizes.main - sizes.leading, shape: sizes.shape) {
+                        destination(.session(beside), column: .beside)
+                    }
+                    .frame(width: sizes.main - sizes.leading)
                 }
                 Spacer(minLength: 0)
             }
             .overlay(alignment: .trailing) {
                 if sizes.cueFits {
-                    WideColumnHost(slot: .cue, focus: focus, hidden: sizes.cue == 0) { cue.environment(\.pageActive, sizes.cue > 0) }
-                        .frame(width: WideMetrics.cue)
+                    // 收起时排在窗口右缘外：收起、放回是同一段平移（`WideColumnSlide`）
+                    WideColumnHost(slot: .cue, focus: focus, origin: geometry.size.width - sizes.cue, width: WideMetrics.cue, shape: sizes.shape, hidden: sizes.cue == 0) {
+                        cue.environment(\.pageActive, sizes.cue > 0)
+                    }
+                    .frame(width: WideMetrics.cue)
+                    .padding(.trailing, sizes.cue - WideMetrics.cue)
                 } else {
                     Color.clear.frame(width: 0).drawer(isPresented: $workspace.cueDrawer) { cue.frame(width: WideMetrics.cue) }
                 }

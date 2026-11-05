@@ -6,7 +6,7 @@ import SwiftUI
 /// 贴着窗口的边：底色从窗口顶一直铺到底（Mac 的红绿灯与开合钮坐在它上面），与主区只靠底色分开、不画分割线——
 /// 同 macOS 27 的侧栏（WWDC26 主题演讲："Sidebars now expand to the very edges of the window. This helps reduce distractions along the left edge."）。
 /// 只有开着、藏起两态（`Chrome` 头注释）：藏起时排版上宽 0；视图树一直挂着（滚动位置、读到的数都在），不放循环动效、点不到、读屏跳过，放回来不重建。
-/// Mac 上藏起时它照原宽画在主区下面（主区铺满桌面色、盖住它）：开合时看得见的只有主区从它上面滑过（`WideColumnView.move`），它自己不动、不换样子；iPad 裁成 0 宽。
+/// 藏起时它照原宽画在主区下面（主区铺满桌面色、盖住它）：开合时看得见的只有主区从它上面滑过（`WideColumnSlide`），它自己不动、不换样子。
 /// 藏起后注意力不丢：开合钮角上一颗点说有没有在等你（`SidebarToggle`），Cue 的名牌写着数字账，看板也在。
 /// Mac 的开合钮在窗口最顶那一排、红绿灯右边（`SidebarToggle`），开着藏起都不动；搜索是这一页的操作，在主区栏头右端（`SearchSlot`）。
 /// iPad 顶上那一排藏起时原地浮成玻璃圆钮（`RailTopTools`，位置不动），主区栏头让出它们。
@@ -44,9 +44,6 @@ struct WideRail: View {
             .background { palette.sidebar.ignoresSafeArea() }
             .environment(\.pageActive, active && shown)
             .frame(width: width, alignment: .leading)
-            #if os(iOS)
-            .clipped()
-            #endif
             .allowsHitTesting(shown)
             .readerHidden(!shown)
     }
