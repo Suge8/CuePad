@@ -55,6 +55,8 @@ forbid "iOS 上按条件不进读屏用 readerHidden（ReaderHidden.swift）：a
   '\.accessibilityHidden\((?!(?:true|false)\))(?!.*//\s*合并)' '**/ReaderHidden.swift' '**/macOS/**' '**/*+macOS.swift'
 forbid "自绘玻璃只经 glass(in:)（Surfaces.swift）：材质统一 .regular，降低透明度、增强对比度时退回实底" \
   '\.glassEffect\(' '**/Theme/Surfaces.swift'
+forbid "玻璃只挂在内容本身上（content.glass(in:)），不挂在空背景、空形状上（Color.clear、Rectangle() 这类再 .glass）：玻璃容器（GlassEffectContainer）把挂在空东西上的玻璃合成到同一层、画在旁边的字上面，名牌的字就这样被盖住过；字也要在玻璃里才随玻璃的明暗取色" \
+  '(?:\bColor\.\w+|\b(?:Rectangle|RoundedRectangle|UnevenRoundedRectangle|ConcentricRectangle|Capsule|Circle|Ellipse|EmptyView|Spacer)\([^)]*\))(?:\s*\.\w+\([^()]*(?:\([^()]*\)[^()]*)*\))*\s*\.glass(?:Effect)?\('
 forbid "产品代码不写 #if DEBUG，经 DebugHooks 碰调试画面：两种构建的分叉收在 DebugHooks 一处（Release 里钩子什么都不做）；调试代码放 App/Sources/UI/Debug，演示数据在 Seed.swift" \
   '^\s*#(?:if|elseif)\b.*\bDEBUG\b' 'App/Sources/UI/Debug/**' '**/CueStore/Seed.swift'
 forbid "圆角只用 Radius 的几档（Theme/Radius.swift，按东西的种类分：chip、block、card、sheet、field）：各处自写的数是又一套手感，新东西先问它是哪一类；嵌在容器里的块用 Radius.nested 同心；胶囊与圆写 .capsule、.circle，不写半高" \

@@ -172,8 +172,10 @@ private struct PopupGrow: ViewModifier, Animatable {
         content
             .opacity(min(max((progress - Self.textFrom) / (1 - Self.textFrom), 0), 1))
             .clipShape(shape)
-            // 收回最后那一截玻璃落在钮上淡掉，钮从它底下露出来，不是一块白板盖着钮等弹簧的尾巴
-            .background { Color.clear.glass(in: shape).opacity(min(progress / Self.glassFrom, 1)) }
+            // 玻璃挂在内容本身上（字在玻璃里，lint 查）；字的透明度挂在玻璃之前，只淡字不淡玻璃
+            .glass(in: shape)
+            // 收回最后那一截玻璃落在钮上淡掉，钮从它底下露出来，不是一块白板盖着钮等弹簧的尾巴；这一截里字早已淡完（`textFrom` 在它之后）
+            .opacity(min(progress / Self.glassFrom, 1))
     }
 
     /// 玻璃在这一点之前淡着：长出时一离开钮就是整块玻璃，收回时贴着钮淡掉。
