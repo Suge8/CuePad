@@ -60,7 +60,9 @@ extension DebugScene {
             Task { await IOSInteractionBench.run(workspace) }
             return
         }
+        presetColumns(workspace.services.settings)
         await running("摆画面") { try await presetScene(workspace, project: project) }
+        presetRailDrawer(workspace)
         await presetSpeech(workspace)
         await prepareNarrow(workspace)
     }

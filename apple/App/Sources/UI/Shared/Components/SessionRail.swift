@@ -6,7 +6,8 @@ import SwiftUI
 /// 宽屏（`wide`）：不铺纸，组就是会话条那一块上的一段行，靠组头与间距分开；每个会话一行（`RailLine`），行首那一列是会话的状态标（`PiStateDot`），名字在它右边。
 /// 组头是小号淡字组名加着色计数，左沿同行首那一列、字贴着下沿，离它那一组近、离上一组远。
 /// 等你组每行两行高（`Chrome.tallRow`），推进中一行一种高（`Chrome.row`），长相在 `SessionRailCell`。
-/// 等你过多时自身也能滚、最多占一半可用高度，不能把推进中或待回复挤到再也点不到。两组为空时保留列宽，不重排对话。
+/// 等你过多时自身也能滚、最多占一半可用高度，不能把推进中或待回复挤到再也点不到。一组多到要滚时下沿淡出一截（`Chrome.scrollFade`），看得出下面还有；
+/// 放得下时不淡。两组为空时手机保留列宽、不重排对话；宽屏在那儿写一行"没有在推进的会话"（`SessionRailEmpty`），不留一大块不知道是不是没读到的空白。
 /// 宽屏的行增删：留下的行按 `Motion.nudge` 让位，进出的淡入淡出（减弱动态效果时不挪、只淡）。
 /// 点按只回报会话与意图（`Opening`：默认，或 ⌘ 点的并排）；右键是会话的菜单（`OpenSessionBeside` 与 `SessionActions`，同会话出现的每一处）。`marked` 是调用方主区开着的会话投影，不在组件内记选中。
 /// 被否决的：宽屏每组一张纸（等你赭黄、推进中白纸）——三种材质叠在侧栏底上像一摞卡片，不像一条栏；行首放 Agent 标志——同一家的都一样，零信息，状态挤成标志底下一截细线读不出。
@@ -53,15 +54,20 @@ private struct SessionRailContent: View {
 
     var body: some View {
         GeometryReader { geometry in
+            // 两组各要多高、放不放得下只由这里的可用高度与行数推出（不读滚动区的几何）：等你最多一半，推进中拿剩下的
+            let waitingIdeal = idealHeight(rows.waiting), waitingCap = geometry.size.height * (rows.advancing.isEmpty ? 1 : 0.5)
+            let waitingHeight = min(waitingIdeal, waitingCap)
+            let advancingRoom = geometry.size.height - (rows.waiting.isEmpty ? 0 : waitingHeight + Chrome.groupGap)
             VStack(spacing: Chrome.groupGap) {
                 if !rows.waiting.isEmpty {
-                    group(rows.waiting, column: .waiting, moving: [])
-                        .frame(height: min(idealHeight(rows.waiting), geometry.size.height * (rows.advancing.isEmpty ? 1 : 0.5)))
+                    group(rows.waiting, column: .waiting, moving: [], overflows: waitingIdeal > waitingCap)
+                        .frame(height: waitingHeight)
                 }
                 if !rows.advancing.isEmpty {
-                    group(rows.advancing, column: .advancing, moving: rows.moving)
+                    group(rows.advancing, column: .advancing, moving: rows.moving, overflows: idealHeight(rows.advancing) > advancingRoom)
                         .frame(maxHeight: idealHeight(rows.advancing))
                 }
+                if rows.waiting.isEmpty, rows.advancing.isEmpty, !phone { SessionRailEmpty() }
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity)
@@ -85,8 +91,10 @@ private struct SessionRailContent: View {
         Chrome.groupHeader + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.pad
     }
 
-    private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, moving: Set<String>) -> some View {
-        VStack(spacing: 0) {
+    /// `overflows`：这一组放不下、要滚（宽屏下沿淡出一截，滚到底时最后一行在淡出的上面）。
+    private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, moving: Set<String>, overflows: Bool) -> some View {
+        let fades = overflows && !phone
+        return VStack(spacing: 0) {
             SessionRailHeader(column: column, count: items.count, form: form)
                 .frame(height: Chrome.groupHeader)
             ScrollViewReader { proxy in
@@ -102,9 +110,10 @@ private struct SessionRailContent: View {
                     // 行底伸出行框：滚动内容自己留出伸出的那一截（滚动区按自己的边裁）；手机的格铺满纸
                     .padding(.horizontal, phone ? 0 : RowMetrics.bleed)
                     .scrollTargetLayout()
-                    .safeAreaPadding(.bottom, Chrome.pad)
+                    .safeAreaPadding(.bottom, fades ? Chrome.scrollFade : Chrome.pad)
                 }
                 .scrollIndicators(.hidden)
+                .modifier(BottomFade(on: fades))
                 .animation(phone ? nil : Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: items.map(\.id))
                 .onScrollPhaseChange { _, phase in
                     if phase == .idle { reveal.busy.remove(column) } else { reveal.busy.insert(column) }
@@ -180,4 +189,37 @@ private struct SessionRailHeader: View {
     }
 
     private static let mark: CGFloat = 14
+}
+
+/// 要滚的一组下沿淡出一截：遮罩只在要滚时挂（挂着的遮罩每一帧都要离屏合成一遍，放得下的组不付这笔）。
+private struct BottomFade: ViewModifier {
+    let on: Bool
+
+    func body(content: Content) -> some View {
+        if on {
+            content.mask {
+                VStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Chrome.scrollFade)
+                }
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// 宽屏两组都空（没有等你、没有在推进的会话）：在两组的位置写一行淡字，左沿同名字那一列，不画图标、不加按钮（新会话只在看板推进中列头的 ＋）。
+private struct SessionRailEmpty: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RailLine {
+            Color.clear
+        } rest: {
+            Text("没有在推进的会话").font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
+        }
+        .padding(.horizontal, RowMetrics.bleed)
+        .transition(.opacity)
+    }
 }

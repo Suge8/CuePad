@@ -3,6 +3,17 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
+    /// 宽屏两栏的开合偏好每次按参数摆（隔离实例的偏好域在几次截图之间留着）：会话条默认开着，`-CuePadSidebar hidden` 藏起；Cue 默认开着，`-CuePadCue shut` 收起。
+    static func presetColumns(_ settings: AppSettings) {
+        settings.railExpanded = defaults.string(forKey: "CuePadSidebar") != "hidden"
+        settings.cueOpen = defaults.string(forKey: "CuePadCue") != "shut"
+    }
+
+    /// `-CuePadSidebar drawer`：摆好画面后拉出会话条的左缘抽屉（窗口放不下会话条时才看得见，`Workspace.railDrawer`）。画面摆完再置：换主区会关抽屉。
+    static func presetRailDrawer(_ workspace: Workspace) {
+        if defaults.string(forKey: "CuePadSidebar") == "drawer" { workspace.railDrawer = true }
+    }
+
     static func prepareLibrary(_ workspace: Workspace) async -> UUID? {
         var project: UUID?
         await running("摆画面的数据") { project = try await prepare(workspace) }

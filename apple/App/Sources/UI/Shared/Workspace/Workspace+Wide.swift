@@ -10,9 +10,23 @@ extension Workspace {
             state.main = WideNavigation.Main(route)
         }
         cueDrawer = false
+        railDrawer = false
         navigation = .wide(state)
         willSelect(mainRoute, from: previous)
     }
+
+    /// 会话条的开合钮与 ⌃⌘S：放得下时开合用户的选择（`railExpanded`），放不下时拉出、收回左缘的抽屉（`railDrawer`），同 Cue 放不下时的右缘抽屉。
+    func toggleRail(_ sizes: WideMetrics) {
+        if sizes.railFits {
+            railDrawer = false
+            railExpanded.toggle()
+        } else {
+            railDrawer.toggle()
+        }
+    }
+
+    /// 会话条此刻露着：在左边，或抽屉开着。
+    func railShown(_ sizes: WideMetrics) -> Bool { sizes.rail > 0 || !sizes.railFits && railDrawer }
 
     /// 去 Cue（深链、通知、对 Cue 说、收着时点 Cue 钮、⌃⌘I）：放得下就放回右边，放不下拉出抽屉。两样都置上：窗口之后跨过临界宽，Cue 照样露着。
     func showCue() {
@@ -86,6 +100,7 @@ extension Workspace {
     private func presentWide(_ state: WideNavigation) {
         let previous = mainRoute
         cueDrawer = false
+        railDrawer = false
         navigation = .wide(state)
         if mainRoute != previous { willSelect(mainRoute, from: previous) }
     }

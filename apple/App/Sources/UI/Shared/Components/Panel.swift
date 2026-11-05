@@ -76,21 +76,24 @@ struct DrawerSurface: ViewModifier {
     }
 }
 
-/// 抽屉开合：整块从窗口右缘外滑入、滑回窗外（渲染端的平移，`visualEffect` 不让页每帧重排），关着时点不到；减弱动态效果时直接到位。
+/// 抽屉开合：整块从窗口一边（`edge`：Cue 的在右缘，会话条的在左缘，`RailDrawer`）外滑入、滑回窗外（渲染端的平移，`visualEffect` 不让页每帧重排），关着时点不到；减弱动态效果时直接到位。
 /// 滑出去落定后报 `drawerParked`，开的那一下当即撤掉。
 struct DrawerSlide: ViewModifier {
     let open: Bool
+    var edge = HorizontalEdge.trailing
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
     @State private var parked = true
 
-    /// 关着时多挪出去的一截：面板阴影不留在窗口右缘。
+    /// 关着时多挪出去的一截：面板阴影不留在窗口边上。
     private static let shadowRoom: CGFloat = 40
 
     func body(content: Content) -> some View {
         content
             .environment(\.drawerParked, parked)
-            .visualEffect { [shown, room = Self.shadowRoom] effect, proxy in effect.offset(x: shown ? 0 : proxy.size.width + room) }
+            .visualEffect { [shown, room = Self.shadowRoom, sign = edge == .trailing ? 1.0 : -1.0] effect, proxy in
+                effect.offset(x: shown ? 0 : sign * (proxy.size.width + room))
+            }
             .allowsHitTesting(open)
             .onChange(of: open, initial: true) { _, open in
                 if open { parked = false }

@@ -148,6 +148,9 @@ final class Workspace {
     var libraryPane = LibraryPane.rules
     /// 宽屏的 Cue 放不下时，右缘的抽屉开着（`showCue` 置起；点抽屉外、Esc、换主区关）；放得下时不起作用。用户放不放回右边在 `AppSettings.cueOpen`。
     var cueDrawer = false
+    /// 宽屏的会话条放不下时（窗口窄过 `WideMetrics.railThreshold`），左缘的抽屉开着（开合钮、⌃⌘S 置起，`toggleRail`；点抽屉外、Esc、去别处关）；放得下时不起作用。
+    /// 用户要不要会话条开着在 `AppSettings.railExpanded`，抽屉不改它。
+    var railDrawer = false
     /// Cue 页拍板卡露的是哪一件（`CueWait.id`）：在拍板卡上换一件写这里；不在等了露第一件。
     var cueAsking: String?
     var notice: Notice?

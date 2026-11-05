@@ -46,7 +46,8 @@ struct SessionRailCell: View {
         .help(help)
     }
 
-    private var help: String { Dotted(item.session.title, item.shown.label, item.session.agentMark).visible }
+    /// 悬停说明写全：名字、状态、它要什么（行里截断的那几处）与哪家 Agent。
+    private var help: String { Dotted(item.session.title, item.shown.label, item.ask, item.session.agentMark).visible }
 
     @ViewBuilder private var control: some View {
         #if os(macOS)
@@ -168,6 +169,8 @@ private struct SessionRailReadout: View {
         .font(Typography.caption)
         .lineLimit(1)
         .fixedSize()
+        // 换状态（在跑 → 出错、上下文到了九成）时读数交叉淡过去，不跳字
+        .animation(Motion.fade, value: item.pulse.word)
     }
 }
 

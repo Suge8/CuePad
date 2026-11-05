@@ -131,7 +131,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func newCard(_ sender: Any?) { workspace?.newCard() }
     @objc func newSession(_ sender: Any?) { workspace?.newSession() }
     /// 不叫 `toggleSidebar(_:)`：AppKit 的分栏控制器自己响应那个动作，在响应链上先接走，带着分栏动画开合。
-    @objc func toggleCueSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
+    /// 放不放得下按主窗口此刻的宽（`WideMetrics`，同 `toggleCueColumn`）：放不下时拉出左缘的抽屉。
+    @objc func toggleCueSidebar(_ sender: Any?) {
+        guard let workspace, let window = services?.windowShell else { return }
+        workspace.toggleRail(WideMetrics(width: window.frame.width, workspace: workspace))
+    }
     /// 右边的 Cue 收起或放回：放不放得下按主窗口此刻的宽（`WideMetrics`，与窗口排版同一份）。
     @objc func toggleCueColumn(_ sender: Any?) {
         guard let workspace, let window = services?.windowShell else { return }

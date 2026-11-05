@@ -4,7 +4,8 @@ import SwiftUI
 /// 只由窗口宽与用户的两个开合选择推出（会话条 `AppSettings.railExpanded`、Cue `cueOpen`），不看主区放着什么页：换页时栏不动。
 /// 自动收起只改呈现、不改选择：选了开着、窗口放不下时照样藏起，放得下了回到所选（HIG「Sidebars」：窗口变小时自动藏起侧栏，同邮件）。
 /// 窗口变窄时只往收里走：先藏起会话条，再把 Cue 收成钮；收 Cue 时不把会话条放回来——拖窗口的人会看见左边忽然又多出一栏。
-/// Cue 收成钮后点它从窗口右缘拉出抽屉（`Workspace.cueDrawer`），不占主区的宽。
+/// Cue 收成钮后点它从窗口右缘拉出抽屉（`Workspace.cueDrawer`），会话条藏起后放不下时开合钮从左缘拉出抽屉（`Workspace.railDrawer`）：都不占主区的宽，
+/// 再窄的窗口（竖着的 iPad）也够得着导航。
 /// 主区最窄只有一个数（`narrowestMain`）：并排两个会话各 390。看板在里面四列等分，放不下就整排横滑（`BoardColumns`）。
 /// 会话条 + Cue 要 256 + 780 + 400 = 1436；会话条藏起、Cue 露着要 780 + 400 = 1180；再窄 Cue 收成钮（Mac、iPad 同一组数）。
 /// 否决过：按主区放的页各算一份最窄（看板 776、会话 390），再给看板另记一份会话条开合——同一个窗口宽在不同页上栏宽不同，换页时会话条自己开合、读不出规律。
@@ -15,6 +16,8 @@ struct WideMetrics {
     static let narrowestMain: CGFloat = 2 * session
 
     let rail: CGFloat
+    /// 会话条放得下：没露出来是用户藏起的；放不下时开合钮拉出左缘的抽屉（`Workspace.railDrawer`）。
+    let railFits: Bool
     /// 主区（并排两个会话时是两半合起来）。
     let main: CGFloat
     let cue: CGFloat
@@ -37,7 +40,8 @@ struct WideMetrics {
     init(width: CGFloat, workspace: Workspace) {
         let open = workspace.services.settings.cueOpen
         split = workspace.besideSession != nil
-        rail = workspace.sidebarOpen && width >= Self.railThreshold(cueOpen: open) ? Chrome.rail : 0
+        railFits = width >= Self.railThreshold(cueOpen: open)
+        rail = workspace.sidebarOpen && railFits ? Chrome.rail : 0
         cueFits = width >= rail + Self.narrowestMain + Self.cue
         cue = open && cueFits ? Self.cue : 0
         main = max(0, width - rail - cue)

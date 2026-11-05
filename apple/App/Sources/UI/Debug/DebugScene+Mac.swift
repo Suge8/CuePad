@@ -14,9 +14,7 @@ extension DebugScene {
         if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
         Task { await SyncBench.run(workspace) }
         Task { await cueNowTourIfAsked(workspace) }
-        // 开合偏好每次按参数摆（隔离实例的偏好域在几次截图之间留着）：会话条默认开着，`-CuePadSidebar hidden` 藏起；Cue 默认开着，`-CuePadCue shut` 收起
-        workspace.services.settings.railExpanded = defaults.string(forKey: "CuePadSidebar") != "hidden"
-        workspace.services.settings.cueOpen = defaults.string(forKey: "CuePadCue") != "shut"
+        presetColumns(workspace.services.settings)
         switch scene {
         case "collapsed": workspace.sidebarOpen = false
         case "search": workspace.searching = true
@@ -117,6 +115,7 @@ extension DebugScene {
             workspace.openSession(PiSessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
         }
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
+        presetRailDrawer(workspace)
         if defaults.string(forKey: "CuePadSidebarCycle") != nil { Task { await cycleSidebar() } }
         await reverseWideIfAsked(workspace)
         await presetSpeech(workspace)

@@ -16887,6 +16887,22 @@
         }
       }
     },
+    "没有在推进的会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No active sessions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有在推进的会话"
+          }
+        }
+      }
+    },
     "没有工作目录或 tty 匹配的终端/标签页" : {
       "localizations" : {
         "en" : {

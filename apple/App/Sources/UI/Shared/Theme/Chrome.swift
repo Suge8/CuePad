@@ -5,10 +5,10 @@ import SwiftUI
 /// 密度：Mac 的外框是桌面工具栏的密度（指针点，ui-craft 的 compact～comfortable 之间），一排里只有一种控件高；
 /// 页里的内容（卡、对话）照 `Typography` 与 `Spacing` 的阅读密度。iPad 是触屏：同一张表，控件按手指 44。
 ///
-/// 会话条只有开着、藏起两态（同 macOS 26 的访达、备忘录、邮件）：开着宽 `rail`，藏起是整条不在（宽 0），没有中间的图标条。
+/// 会话条只有开着、藏起两态（同访达、备忘录、邮件）：开着宽 `rail`，藏起是整条不在（宽 0），没有中间的图标条。
 /// 里面每一行是系统侧栏那种带字的行（`RowMetrics.height`，选中、悬停的底向两边让出 `RowMetrics.bleed`），行首图标那一列（`icon`）的左沿在 `lead`，
-/// Mac 上正对红绿灯的左沿：窗口左边从上到下一条线。会话条的面怎么画（浮起的一块或贴边的实底）在 `RailSurface`。
-/// 开合钮属于最顶那一排、钉在红绿灯右边（`toggle`），开着藏起都不动；藏起时主区栏头左边让出它（`headLead`）。
+/// Mac 上正对红绿灯的左沿：窗口左边从上到下一条线。会话条贴着窗口的边，底色从窗口顶铺到底、不留离边的缝（macOS 27 的侧栏：WWDC26「Sidebars extend to the window's edges」，`WideRail` 头注释）。
+/// 开合钮属于最顶那一排、钉在红绿灯右边（`toggle`），开着藏起都不动；藏起时主区栏头左边让出它（`headLead`）。iPad 顶上那一排同理（`RailTopTools`）。
 ///
 /// 被否决的：收起成一条图标条（Mac 98、iPad 80）——一列没有名字的格要靠悬停才认得出，收起时开合钮又骑在图标条与主区的分界上；
 /// 为了"开合格不挪"把每一行做成见方的格，行首那一列被钉在 98 的中轴上，字离窗边远、行像一格格的钮，不像一条栏。
@@ -27,10 +27,12 @@ enum Chrome {
     static let band: CGFloat = 44
     /// iPad 没有红绿灯：行首那一列离窗边同字离纸边。
     static let lead: CGFloat = Spacing.inset
+    /// 主区栏头左边让多少：会话条藏起时顶上那一排三颗钮（侧栏钮、搜索、Cue 钮，`RailTopTools`）原地浮在主区那一段上，栏头让到它们右沿再隔一档。
+    static func headLead(rail: CGFloat) -> CGFloat { rail > 0 ? Spacing.page : lead + 3 * (control + Spacing.item) }
     #endif
     /// 一排控件的高：圆钮、图标钮、玻璃列头（`ControlSize.regular`：Mac 36 同系统工具栏的玻璃钮，iPad 44）。
     static var control: CGFloat { ControlSize.regular.height }
-    /// 开着的会话条（连同浮起那一块离窗边的一档）。
+    /// 开着的会话条。
     static let rail: CGFloat = 256
     /// 带字的行行首的图标那一列（会话条、`LinkRow`、技能与规则的行）。
     static let icon: CGFloat = 20
@@ -48,8 +50,8 @@ enum Chrome {
     static let cellGap = Spacing.tight
     /// 会话条上组与组之间（去处、等你、推进中、底部那一行）。
     static let groupGap = Spacing.group
-    /// 浮起的会话条（`RailSurface.floating`）离窗口上、左、下三边与离主区：一档，窗口的圆角在它外面同心地绕一圈。
-    static let float = Spacing.item
-    /// 会话条里一行的底（选中、悬停）左沿离窗口左边：行首那一列的左沿让出行底向两边伸出的那一截。两种面都在这条线上。
+    /// 一组会话多到要滚时下沿淡出的那一截（ui-craft：可滚动的区域给出可见的提示）；不满一屏时不淡，最后一行不被盖。
+    static let scrollFade = Spacing.block
+    /// 会话条里一行的底（选中、悬停）左沿离窗口左边：行首那一列的左沿让出行底向两边伸出的那一截。
     static var gutter: CGFloat { lead - RowMetrics.bleed }
 }
