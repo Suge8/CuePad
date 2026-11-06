@@ -76,7 +76,8 @@ public actor DeliveryExecutor {
       for id in try await store.abandonPreparedDeliveries(for: hostID) { notifyWritten(id) }
       for request in try await store.unsettledDeliveries(for: hostID) {
         guard started, !Task.isCancelled else { return }
-        await finish(request, await recover(request), resuming: true)
+        guard let outcome = try? await abandonable({ [recover] in await recover(request) }) else { return }
+        await finish(request, outcome, resuming: true)
       }
       guard started, !Task.isCancelled else { return }
       let next = try await deleteExpired()
