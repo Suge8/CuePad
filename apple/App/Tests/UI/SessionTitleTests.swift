@@ -112,5 +112,35 @@ struct SessionTitleTests {
         consume.cancel()
         _ = await consume.result
     }
+    /// Grok 起好、改过的名字只写 `summary.json`，会话记录不动：盯着的会话照样换上新名字，CuePad 重开后回填也读到这期间改的。
+    @Test func 只有旁边存名字的文件变了_名字照样跟上_重开后也是() async throws {
+        defer { app.services.cancelBackgroundWork() }
+        let paths = AgentPaths(pi: app.piPaths, environment: app.agentHomes)
+        let file = GrokRuntime.sessionFile(in: paths.home(of: .grok), cwd: app.directory.path, id: "g2")
+        try Self.lines([["timestamp": Date.now.timeIntervalSince1970, "method": "session/update", "params": [
+            "sessionId": "g2", "update": ["sessionUpdate": "user_message_chunk", "content": ["type": "text", "text": "生成一段黑屏视频"]]]]], to: file)
+        let summary = file.deletingLastPathComponent().appending(path: "summary.json")
+        func title(_ name: String) throws {
+            try JSONSerialization.data(withJSONObject: ["generated_title": name, "title_is_manual": false]).write(to: summary, options: .atomic)
+        }
+        let row: @Sendable (isolated CueStore) throws -> String? = { try $0.piSessions(sessionIDs: ["g2"])["g2"]?.state.title }
+        func indexing(following live: Set<URL>) -> Task<Void, Never> {
+            let indexer = PiHistoryIndexer(agent: .grok, paths: paths, files: store.files) { [services = app.services] in await services.loadHistoryStart(for: $0) }!
+            return Task { await app.services.consumePiHistory(indexer.events(following: AsyncStream { $0.yield(live) }, scope: .all), agent: .grok) }
+        }
+
+        try title("黑屏视频")
+        let first = indexing(following: [file])
+        _ = try await eventually(store, row) { $0 == "黑屏视频" }
+        try title("6 秒黑屏视频")
+        _ = try await eventually(store, row) { $0 == "6 秒黑屏视频" }
+        first.cancel()
+        _ = await first.value
+
+        try title("纯黑静音视频")
+        let again = indexing(following: [])
+        defer { again.cancel() }
+        _ = try await eventually(store, row) { $0 == "纯黑静音视频" }
+    }
 }
 #endif

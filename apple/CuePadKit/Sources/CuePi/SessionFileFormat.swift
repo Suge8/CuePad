@@ -35,9 +35,17 @@ struct SessionFileFormat: Sendable {
     /// Grok 是 `<工作目录>/<id>/updates.jsonl`。
     let depth: Int
     let naming: Naming
-    /// 会话名不在会话文件里、另存在旁边的（Codex 的 `session_index.jsonl`、Grok 的 `summary.json`）：每次读完会话文件按路径与会话 id
-    /// 取一次，取到的是 Agent 此刻的会话名（你起的或它自己起的，分不出），盖过文件里读到的。
-    var sidecarName: (@Sendable (_ file: URL, _ sessionID: String) -> String?)?
+    /// 会话名不在会话文件里、另存在旁边的（Codex 的 `session_index.jsonl`、Grok 的 `summary.json`）
+    var sidecar: Sidecar?
+
+    /// 另存会话名的文件：每次读会话文件都读它一次，取到的是 Agent 此刻的会话名（你起的或它自己起的，分不出），盖过会话文件里读到的。
+    /// 它会在会话文件不动时单独变（一轮结束后才起好名、改名不写会话文件）：索引器也盯着它、按它的修改时间认会话文件读没读过（`PiHistoryIndexer`）。
+    struct Sidecar: Sendable {
+        /// 会话文件旁边那个文件（几个会话可以共用一个）
+        let file: @Sendable (_ sessionFile: URL) -> URL
+        /// 它的内容里这个会话的名字
+        let name: @Sendable (_ contents: Data, _ sessionID: String) -> String?
+    }
     /// 会话目录（`AgentPaths.sessionsDirectory`）
     let directory: @Sendable (AgentPaths) -> URL
 

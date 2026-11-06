@@ -20,12 +20,15 @@ enum CodexHistory {
         deliveryID.map { clientIDPrefix + $0 } ?? UUID().uuidString
     }
 
-    /// `session_index.jsonl` 里这个会话的名字：Codex 改名（`/rename`、`thread/name/set`）与终端界面自动起名都追加一行 `{id, thread_name}`，
-    /// 最后一行为准。会话文件在 `<CODEX_HOME>/sessions/YYYY/MM/DD/` 下。
-    static func name(of file: URL, sessionID: String) -> String? {
+    /// `<CODEX_HOME>/session_index.jsonl`（会话文件在 `<CODEX_HOME>/sessions/YYYY/MM/DD/` 下，全部会话共用一个）：Codex 改名（`/rename`、
+    /// `thread/name/set`）与终端界面自动起名都追加一行 `{id, thread_name}`，同一会话最后一行为准。
+    static let sidecar = SessionFileFormat.Sidecar(file: { file in
         var home = file
         for _ in 0..<5 { home.deleteLastPathComponent() }
-        guard let data = try? Data(contentsOf: home.appending(path: indexFile)) else { return nil }
+        return home.appending(path: indexFile)
+    }, name: name)
+
+    private static func name(in data: Data, sessionID: String) -> String? {
         let id = Data(sessionID.utf8)
         return data.split(separator: 0x0A).last { $0.firstRange(of: id) != nil }
             .flatMap { try? decoder.decode(IndexEntry.self, from: Data($0)) }.flatMap { $0.id == sessionID ? $0.threadName : nil }

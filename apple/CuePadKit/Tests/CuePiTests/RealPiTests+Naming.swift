@@ -6,17 +6,20 @@ import Testing
 @testable import CuePi
 
 extension RealPiTests {
-    /// 按第一句话起名（`SessionNameSuggestion`）走真实 Pi 的桥扩展：用会话所在 provider 里最便宜、标了价的模型（假模型里只有 echo-b），
-    /// 交的是第一句话；只回名字不写，写回走改名，会话名随即上报。
-    @Test func theSessionIsNamedFromItsFirstMessageByTheCheapestModelOfItsProvider() async throws {
+    /// 按第一句话起名（`SessionNameSuggestion`）走真实 Pi 的桥扩展：用会话所在 provider 里最便宜的模型（假模型里是 echo-b），
+    /// 交的是第一句话，用 Pi 的改名接口写下，会话名随即上报；已有名字的会话不动。
+    @Test func theSessionNamesItselfFromItsFirstMessageWithTheCheapestModelOfItsProvider() async throws {
         try await withRig { _, bridge, s in
+            #expect(bridge.canNameItself(s.id))
             try await bridge.send(PiMessage(text: "帮我看看登录页为什么白屏"), to: s.id)
             try await eventually("第一句话上报") { bridge.sessions.first?.firstMessage != nil }
-            let name = try await bridge.suggestName(for: s.id)
-            #expect(name == "echo-b：帮我看看登录页为什么白屏")
-            #expect(bridge.sessions.first?.name == nil, "只起名，不写回")
-            try await bridge.configure(name: name, in: s.id)
-            try await eventually("写回成会话名") { bridge.sessions.first?.name == name }
+            try await bridge.nameItself(s.id)
+            try await eventually("写下成会话名") { bridge.sessions.first?.name == "echo-b：帮我看看登录页为什么白屏" }
+
+            try await bridge.configure(name: "我起的", in: s.id)
+            try await eventually("改名") { bridge.sessions.first?.name == "我起的" }
+            try await bridge.nameItself(s.id)
+            #expect(bridge.sessions.first?.name == "我起的", "已有名字不动")
         }
     }
 }

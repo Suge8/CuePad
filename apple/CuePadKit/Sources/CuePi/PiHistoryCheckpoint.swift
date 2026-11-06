@@ -12,6 +12,8 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     public internal(set) var offset: UInt64 = 0
     /// 读到 `offset` 那次文件的修改时间（列目录或读之前取的）
     public internal(set) var modified: Date?
+    /// 那次读的另存会话名的文件（`SessionFileFormat.Sidecar`）的修改时间
+    var sidecarModified: Date?
     var fingerprint: UInt64 = 0
     var fingerprintLength = 0
     var sessionID: String?
@@ -61,7 +63,10 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
 
     /// 文件从上次读完就没动过：大小正好读到头、修改时间与那次相同。回填时据此不打开文件——启动时绝大多数会话文件都这样，
     /// 逐个打开、核对开头与偏移曾占回填的八成。被改写或替换的文件修改时间会变，照常走读时的核对（`isResumable`）。
-    func isCurrent(size: UInt64, modified: Date) -> Bool { offset == size && self.modified == modified }
+    /// 另存会话名的文件（`sidecarModified`）也要没动过。
+    func isCurrent(size: UInt64, modified: Date, sidecarModified: Date?) -> Bool {
+        offset == size && self.modified == modified && self.sidecarModified == sidecarModified
+    }
 
     struct Round: Sendable, Codable, Equatable {
         var startedAt: Date?

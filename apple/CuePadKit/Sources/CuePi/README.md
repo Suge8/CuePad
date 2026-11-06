@@ -71,7 +71,7 @@ CuePad → 扩展（都带 `id`）：
 | `end` | — | — |
 | `reload` | — | — |
 | `quota` | — | — |
-| `title` | `instructions`（给模型的说明）、`text`（会话的第一句话）、`timeoutMs`；回 `ack` 的 `title` 是起好的名字，不写回会话（`SessionNameSuggestion`） | `bad_request`、`no_model`、`failed: <原因>` |
+| `title` | `instructions`（给模型的说明）、`limit`（名字的字数上限）、`text`（会话的第一句话）、`timeoutMs`：起好名字，会话还没名字就用 Pi 的改名接口写下（随 `info` 报回），v58 起（`SessionNameSuggestion`） | `bad_request`、`no_model`、`failed: <原因>` |
 
 `{"t":"upgrade"}`：请扩展核对磁盘上的扩展版本。不带 `id`，扩展不回 `ack`，CuePad 读不懂的扩展也发。
 **这一行的格式永远不能变**，扩展也要一直认它：要叫醒的也有 CuePad 读不懂的旧扩展，它们只认得出这一行（与 hello 里身份那几项、`bye`）；格式一变，旧会话就再也换不上新扩展（与扩展装在 Pi 扩展目录下的路径必须稳定是同一类约束）。v38 及更早的扩展不认它（回 `bad_request`），它们自己盯着扩展目录；Pi 1.4.0 及更早的二进制会吞掉一次安装里排在后面的目录事件，所以 CuePad 在它们握手时与每次装完，等扩展目录安静后单独碰一下它们盯的名字（`PiExtensionNudge`）。

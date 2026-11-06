@@ -1,12 +1,13 @@
 #if os(macOS)
 import CueStore
 import Foundation
+import Synchronization
 
 /// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex、Grok Build 的会话文件，怎么认、怎么读见 `SessionFileFormat`）：先按修改时间倒序回填
 /// `scope` 里的会话文件（最近的会话最先可用），发出 `backfillFinished` 后只跟着在线会话的文件（桥上的，`PiBridge.sessionFiles`；
 /// `FileFollower` 当场报），只读新增字节。会话的对话只从这里来：托管的会话没接入也开得出，所以没接入的 Agent 也要回填它托管过的那些。
 /// 整棵目录只在回填时列一次，没经接入的会话（如 Pi 关了扩展）下次启动时进历史。会话从开始到结束都在桥上（各家的接入上报），
-/// 下桥时最后读一次。歇下要等这一轮的回答从文件里读到才算（`PiSessionState.answered`），读晚一步 Cue 就晚一步被叫醒。
+/// 下桥时最后读一次。会话名另存在旁边的（`SessionFileFormat.Sidecar`）也盯着那个文件，它变了就重读用它的在线会话。歇下要等这一轮的回答从文件里读到才算（`PiSessionState.answered`），读晚一步 Cue 就晚一步被叫醒。
 ///
 /// 不持有全部检查点：从哪接着读由调用方通过 `start` 提供（App 层从 Store 读），每个 `updated` 里带回新检查点由调用方持久化。
 /// 索引器只对最近修改/最近被触碰的若干文件在内存里保留，这样调用方持久化滞后时增量也不会退化成重读。
@@ -56,11 +57,16 @@ public struct PiHistoryIndexer: Sendable {
         let root = self.root.realPath
         let follower = FileFollower() // 先开始盯：回填期间的写入不会丢
         defer { follower.stop() }
+        /// 盯着的另存会话名的文件 → 用它的在线会话文件
+        let sidecars = Mutex<[String: [URL]]>([:])
         let following = Task { [format] in
             var last: Set<URL>?
             for await files in liveFiles where files != last {  // 会话的每次状态变化都会再给一份
                 last = files
-                follower.follow(only: Set(files.map(\.realPath.path).filter { Self.isSessionFile($0, under: root, format: format) }))
+                let mine = files.map(\.realPath).filter { Self.isSessionFile($0.path, under: root, format: format) }
+                let named = format.sidecar.map { sidecar in Dictionary(grouping: mine) { sidecar.file($0).realPath.path } } ?? [:]
+                sidecars.withLock { $0 = named }
+                follower.follow(only: Set(mine.map(\.path)).union(named.keys))
             }
         }
         defer { following.cancel() }
@@ -78,7 +84,8 @@ public struct PiHistoryIndexer: Sendable {
             let from = wanted && base?.hasTranscript != true ? nil : base?.checkpoint
             let checkpoint: PiHistoryCheckpoint
             var update: PiHistoryUpdate?
-            if let from, let size, let written, from.isCurrent(size: size, modified: written) {
+            let sidecarWritten = format.sidecar.flatMap { Self.modified($0.file(file)) }
+            if let from, let size, let written, from.isCurrent(size: size, modified: written, sidecarModified: sidecarWritten) {
                 checkpoint = from
             } else {
                 // 文件已被删除/尚未落盘等：跳过，等下一次变化
@@ -93,8 +100,10 @@ public struct PiHistoryIndexer: Sendable {
                 return
             }
             guard format.isSession(checkpoint) else { return }
-            // 没读到新内容也要写的：第一次索引，与修改时间变了（记下它，下次启动才认得出没动过）
-            guard let update, update.bytesRead > 0 || base?.checkpoint.map({ $0.modified != checkpoint.modified }) ?? true else { return }
+            // 没读到新内容也要写的：第一次索引，修改时间变了（记下它，下次启动才认得出没动过），另存的会话名变了
+            guard let update, update.bytesRead > 0 || update.renamed
+                || base?.checkpoint.map({ $0.modified != checkpoint.modified || $0.sidecarModified != checkpoint.sidecarModified }) ?? true
+            else { return }
             continuation.yield(.updated(update))
         }
 
@@ -109,7 +118,7 @@ public struct PiHistoryIndexer: Sendable {
 
         for await path in follower.paths {
             if Task.isCancelled { return }
-            await index(URL(filePath: path), modified: nil, remember: true)
+            for file in sidecars.withLock({ $0[path] }) ?? [URL(filePath: path)] { await index(file, modified: nil, remember: true) }
         }
     }
 
@@ -121,7 +130,7 @@ public struct PiHistoryIndexer: Sendable {
         return parent.path == root.path
     }
 
-    private static func modified(_ file: URL) -> Date? {
+    static func modified(_ file: URL) -> Date? {
         try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 

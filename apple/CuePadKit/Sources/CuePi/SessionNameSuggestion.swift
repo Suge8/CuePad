@@ -2,12 +2,13 @@
 import CueStore
 import Foundation
 
-/// 没有自带语义会话名的会话（Pi 默认取首句、Codex 托管会话）按第一句话起的短名：由会话自己那一家起（数据只发给你本就在用的那家），
-/// 写回走改名（`PiBridge.configure`），名字照各家会话名回来。要不要起、起了还写不写由 App 定（只在你没起过名、绑着的任务没有标题时）。
-/// - Pi：桥扩展用会话所在 provider 里最便宜的可用模型（`title.ts`）；
-/// - Codex 托管：同 Codex 终端界面自动起名——在它自己的 app-server 里开用完不留的临时线程，模型 `gpt-5.6-luna`（`CodexRuntime+Naming`）。
+/// 没有自带语义会话名的会话（Pi 默认取首句、Codex 托管会话）按第一句话起的短名：由会话自己那一家起、自己写回（数据只发给你本就在用的那家），
+/// 写之前那家的会话已有名字（你在起名途中改了名）就不写；名字照各家会话名回来。要不要起由 App 定（只在你没起过名、绑着的任务没有标题时）。
+/// - Pi：桥扩展用会话所在 provider 里最便宜的可用模型，用 Pi 的改名接口写回（`title.ts`）；
+/// - Codex 托管：同 Codex 终端界面自动起名——在它自己的 app-server 里开用完不留的临时线程，模型 `gpt-5.6-luna`，`thread/name/set` 写回（`CodexRuntime+Naming`）。
 public enum SessionNameSuggestion {
-    /// 名字的长度上限（字符），同 Codex 终端界面起名（`THREAD_TITLE_MAX_CHARS`）
+    /// 名字的长度上限（字符），同 Codex 终端界面起名（`THREAD_TITLE_MAX_CHARS`）。模型的回话取第一行、去掉首尾空白、截到这么长
+    /// （Pi 扩展里同一条，上限随命令给）
     static let limit = 36
     /// 起一个名最多等这么久，过了就放弃：Pi 扩展要在桥等 ack 的时限（`AgentTimeouts.ack`）之内回话
     static let budget: Duration = .seconds(8)
@@ -20,24 +21,22 @@ public enum SessionNameSuggestion {
         Do not use quotes, markdown, or trailing punctuation. Do not answer the request.
         """
 
-    /// 模型给的名字整理成会话名：取第一行，去掉成对的引号与句末标点，超长截断；剩下空的为 nil。
+    /// 模型的回话整理成会话名；空的为 nil。
     static func cleaned(_ reply: String) -> String? {
-        var line = reply.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-        line = line.trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: "\"'`“”‘’「」*#")))
-        while let last = line.last, ".。!！?？,，;；:：".contains(last) { line.removeLast() }
-        line = String(line.prefix(limit)).trimmingCharacters(in: .whitespaces)
+        let line = reply.split(whereSeparator: \.isNewline).first.map { String($0.trimmingCharacters(in: .whitespaces).prefix(limit)) } ?? ""
         return line.isEmpty ? nil : line
     }
 }
 
 extension PiBridge {
-    /// 请会话按它的第一句话起一个短名（`SessionNameSuggestion`），只返回不写：还没有第一句话、这家起不了名（不支持的抛 `unsupported`）、
+    /// 这个会话能不能给自己起名（`SessionLink.canNameItself`）。
+    public func canNameItself(_ id: PiSession.ID) -> Bool { controls[id]?.canNameItself(id) ?? false }
+
+    /// 请会话按它的第一句话给自己起名并写回（`SessionNameSuggestion`）：还没有第一句话、这家起不了（抛 `unsupported`）、
     /// 起不出（超时、出错、空回答）都抛错。
-    public func suggestName(for id: PiSession.ID) async throws -> String {
+    public func nameItself(_ id: PiSession.ID) async throws {
         guard let link = controls[id], let first = session(id: id)?.firstMessage else { throw PiBridgeError.unknownSession(id) }
-        let reply = try await link.suggestName(from: PiSessionName.display(name: nil, firstMessage: first, folder: ""), in: id)
-        guard let name = SessionNameSuggestion.cleaned(reply) else { throw PiBridgeError.rejected("failed: empty title") }
-        return name
+        try await link.nameItself(from: PiSessionName.display(name: nil, firstMessage: first, folder: ""), in: id)
     }
 }
 #endif

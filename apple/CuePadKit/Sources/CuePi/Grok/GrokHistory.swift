@@ -15,11 +15,12 @@ import Foundation
 enum GrokHistory {
     static let fileName = "updates.jsonl"
 
-    /// 同目录 `summary.json` 里的会话名：Grok 按对话起的与 `/rename` 起的都写进 `generated_title`（`title_is_manual` 标出后者），
-    /// 旧版只写 `session_summary`；都空是还没起名。
-    static func name(of file: URL, sessionID: String) -> String? {
-        guard let data = try? Data(contentsOf: file.deletingLastPathComponent().appending(path: "summary.json")),
-              let summary = try? JSONDecoder().decode(Summary.self, from: data) else { return nil }
+    /// 同目录的 `summary.json`：Grok 按对话起的与 `/rename` 起的都写进 `generated_title`（`title_is_manual` 标出后者），
+    /// 旧版只写 `session_summary`；都空是还没起名。一轮结束后才起好、之后几轮还会改，都不写会话记录。
+    static let sidecar = SessionFileFormat.Sidecar(file: { $0.deletingLastPathComponent().appending(path: "summary.json") }, name: name)
+
+    private static func name(in data: Data, sessionID _: String) -> String? {
+        guard let summary = try? JSONDecoder().decode(Summary.self, from: data) else { return nil }
         return [summary.generatedTitle, summary.sessionSummary].lazy.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
     }
 

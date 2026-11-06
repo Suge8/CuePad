@@ -105,7 +105,11 @@ public enum PiHistory {
         var transcript = Transcript(fallbackID: format.sessionID(of: file), files: wanted ? files : nil, file: file)
         let consumed = try forEachLine(handle, from: start, size: size) { line in try format.ingest(line, &state, &transcript) }
         if !wanted { transcript.messages = [] }
-        if let name = format.sidecarName?(file, state.sessionID ?? format.sessionID(of: file)) { state.name = name }
+        if let sidecar = format.sidecar {
+            let named = sidecar.file(file)
+            state.sidecarModified = PiHistoryIndexer.modified(named)
+            if let data = try? Data(contentsOf: named), let name = sidecar.name(data, state.sessionID ?? format.sessionID(of: file)) { state.name = name }
+        }
         state.offset = consumed
         state.modified = modified
         try refreshFingerprint(&state, handle: handle)
