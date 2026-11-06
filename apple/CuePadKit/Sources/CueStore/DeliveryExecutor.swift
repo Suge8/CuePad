@@ -193,8 +193,11 @@ public actor DeliveryExecutor {
       self.notifyWritten(request.id)
     })
     let began = timing.now()
-    let outcome = await handler(request, dispatch.access)
+    // 与取消隔开：handler 不响应取消时 stop 不被它拖住，它留在脱离的任务里自己收尾，结果丢弃（请求已领取，重启时按未知对账）
+    let running = request
+    let outcome = try? await abandonable { [handler] in await handler(running, dispatch.access) }
     roles.cancel(.claimUpload)
+    guard let outcome else { return }
     let took = timing.now().timeIntervalSince(began)
     Self.log.info("执行投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public) 用时 \(took, format: .fixed(precision: 2)) 秒")
     await finish(request, outcome)
@@ -247,7 +250,7 @@ public actor DeliveryExecutor {
       let stored = await reporting({ try await store.deliveryRequest(request.id) }), let stored,
       stored.status != .known(.succeeded), started, !Task.isCancelled {
       confirmations.put(stored.id, .spawn { id in
-        let result = await verify(stored)
+        guard let result = try? await abandonable({ await verify(stored) }) else { return }
         await self.finish(stored, result)
         self.confirmations.release(stored.id, id)
       })
@@ -300,7 +303,7 @@ public actor DeliveryExecutor {
     let token = UUID()
     uploads.put(token, .spawn { [onWritten] owner in
       guard !Task.isCancelled else { return }
-      await onWritten(id)
+      guard (try? await abandonable({ await onWritten(id) })) != nil else { return }
       self.uploads.release(token, owner)
     })
   }

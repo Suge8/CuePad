@@ -153,9 +153,16 @@ extension CueStore {
   }
 
   /// `body`（含它的写事务）提交后，删它返回的键的文件；删不掉的键作为错误报告（永久删除本身已生效）。
+  /// 提交到删文件之间别的进程可能又引用了同一个键（写入引用并登记记录），所以另开一个写事务，持着写锁重新核对
+  /// 没有记录也没有引用再删（同 `removeStrayFiles`：事务里只读，删文件没有回滚不了的半截状态）。
   func removingFiles(_ body: () throws -> [String]) throws {
-    let failed = try body().filter { key in
-      do { try files.remove(key); return false } catch { return true }
+    let keys = try body()
+    guard !keys.isEmpty else { return }
+    let failed = try write {
+      try keys.filter { key in
+        guard try !hasAttachment(key), try !isAttachmentReferenced(key) else { return false }
+        do { try files.remove(key); return false } catch { return true }
+      }
     }
     if !failed.isEmpty { throw CueStoreError.attachmentFilesNotRemoved(failed) }
   }
