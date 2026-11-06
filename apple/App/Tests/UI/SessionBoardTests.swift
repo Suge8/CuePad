@@ -112,6 +112,25 @@ struct SessionBoardTests {
         #expect(try await store.deliveryRequests(toSession: "s2").compactMap(\.config?.name) == ["问问部署"])
     }
 
+    @Test func 做完的旧任务还绑着_会话回到看板再改名_当场建新任务_旧任务名字不动() async throws {
+        let live = try await session("s1", title: "修登录")
+        let workspace = Workspace(services: services)
+        try await workspace.rename(live, to: "登录页白屏", adopts: true)
+        let old = try #require(try await tasks().first)
+        try await workspace.toggle(old.id)
+        let recorder = PiStateRecorder(store: store, hostID: Self.mac)
+        try await recorder.update(sessionID: "s1", state: .thinking)
+        let back = try #require(try await TaskBoard.read(from: store).advancing.first { $0.loose?.state.sessionID == "s1" }?.loose?.state)
+
+        try await workspace.rename(back, to: "注册页白屏", adopts: true)
+        let made = try await tasks()
+        #expect(made.count == 2)
+        let fresh = try #require(made.first { $0.id != old.id })
+        #expect(fresh.heading == "注册页白屏" && fresh.piSessionID == "s1" && fresh.completedAt == nil)
+        #expect(try await store.card(old.id)?.heading == "登录页白屏")
+        #expect(try await names(fresh.id, "s1") == ["注册页白屏", "注册页白屏"], "会话行写正在用它的那件")
+    }
+
     @Test func 任务标题为空_随会话改名变_改过后以任务为准() async throws {
         let live = try await session("s1", title: "修登录")
         let workspace = Workspace(services: services)

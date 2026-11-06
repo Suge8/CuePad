@@ -23,13 +23,14 @@ extension Workspace {
         try await services.store.updateCard(task) { $0.isPinned = true }
     }
 
-    /// 重命名会话（会话菜单的"重命名"，`SessionAsk.rename`）：绑着任务的改那个叶子的标题；没绑的在看板上（`adopts`）先建任务，
-    /// 别处的只让 Agent 改名。
+    /// 重命名会话（会话菜单的"重命名"，`SessionAsk.rename`）：绑着没做完的任务的改那个叶子（最近开始的）的标题；没有的在看板上（`adopts`）先建任务——
+    /// 只绑着做完的旧任务的也建，不改旧任务的名字；别处的改它绑着的最近那件，一件都没绑的只让 Agent 改名。挑哪件同会话行读名字（`CueStore.sessionTasks`）。
     func rename(_ session: PiSessionState, to name: String, adopts: Bool) async throws {
         guard let name = PiRename.clean(name) else { throw CueStoreError.blankDeliveryContent }
         let store = services.store
-        var leaf = try await store.tasks(boundTo: session.sessionID).first { $0.task.piSessionID == session.sessionID }?.task.id
-        if leaf == nil, adopts { leaf = try await adopt(session) }
+        let bound = try await store.tasks(boundTo: session.sessionID).map(\.task).filter { $0.piSessionID == session.sessionID }
+        var leaf = bound.last { $0.completedAt == nil }?.id
+        if leaf == nil { leaf = adopts ? try await adopt(session) : bound.last?.id }
         guard let leaf else {
             _ = try await services.rename(session, to: name)
             return

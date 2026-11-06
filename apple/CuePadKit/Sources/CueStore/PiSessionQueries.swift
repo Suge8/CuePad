@@ -99,18 +99,20 @@ extension CueStore {
   /// （任务至多两级，`Card.maxTaskDepth`）。
   private static let sessionTaskRows = """
     SELECT piSessionID AS sessionID, COALESCE(parentID, id) AS task,
-      COALESCE((SELECT p.isPinned FROM cards p WHERE p.id = cards.parentID), isPinned) AS pinned, body
+      COALESCE((SELECT p.isPinned FROM cards p WHERE p.id = cards.parentID), isPinned) AS pinned, body, completedAt, startedAt
     FROM cards WHERE piSessionID IS NOT NULL AND todoAt IS NOT NULL AND \(cardActive)
     """
 
   /// 绑在置顶任务上的会话：会话列表的置顶在最前（`PiSessionQuery.pinned`）。
   private static let pinnedSessions = "SELECT sessionID FROM (\(sessionTaskRows)) WHERE pinned = 1"
 
-  /// 这些会话绑着的顶层任务（`sessionTaskRows`），按 Pi 的会话 id；绑着几件时置顶的那件在先。
+  /// 这些会话绑着的顶层任务（`sessionTaskRows`），按 Pi 的会话 id；绑着几件时取没做完的，再取置顶的，再取最近开始的
+  /// （同 App 改名写的那一个，`Workspace.rename`）：做完的旧任务不抢正在用它的那件的名字。
   private func sessionTasks(_ sessionIDs: [String]) throws -> [String: SessionTask] {
     guard !sessionIDs.isEmpty else { return [:] }
     let rows = try db.query(
-      "SELECT sessionID, task, pinned, body FROM (\(Self.sessionTaskRows)) WHERE sessionID IN (SELECT value FROM json_each(?)) ORDER BY pinned DESC",
+      "SELECT sessionID, task, pinned, body FROM (\(Self.sessionTaskRows)) WHERE sessionID IN (SELECT value FROM json_each(?)) "
+        + "ORDER BY completedAt IS NULL DESC, pinned DESC, startedAt DESC",
       [JSONColumn.encode(sessionIDs)]
     ) { ($0.text(0), SessionTask(id: $0.uuid(1), isPinned: $0.bool(2), title: CueSummary.title(of: $0.text(3)))) }
     return Dictionary(rows, uniquingKeysWith: { first, _ in first })
