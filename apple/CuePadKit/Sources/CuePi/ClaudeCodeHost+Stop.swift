@@ -35,6 +35,12 @@ extension ClaudeHostedSession {
     }
 
     /// `/clear` 的 `result` 到了（或进程退出）：结束最早发出的那一条。
+    /// 会话结束（进程退出，或 `/clear` 无回应而关掉它）：等着的 `/clear` 都以会话已结束收尾，之后的也直接抛它。
+    func closeClears() {
+        clearWaits.closeAll(PiBridgeError.sessionEnded)
+        clearing.removeAll()
+    }
+
     /// 等的人已超时或走了的也占着自己的位置：它那条 `/clear` 迟到的 `result` 不能算给后面的。
     func endClear(_ outcome: Result<Void, any Error>) {
         guard !clearing.isEmpty else { return }

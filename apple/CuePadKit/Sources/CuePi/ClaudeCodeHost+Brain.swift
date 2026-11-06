@@ -83,7 +83,7 @@ extension ClaudeHostedSession: HostedSession {
             // `/clear` 的 `result` 没有能对上请求的标识，只能按先后配：一条没回应，之后的回应就都错一位。
             // 这个大脑进程已不可信，关掉它（之后的清除得到会话已结束），由管理器重起
             stream.closeInput()
-            clearing.removeAll()
+            closeClears()
             await stop()()
             throw PiBridgeError.ackTimeout
         }

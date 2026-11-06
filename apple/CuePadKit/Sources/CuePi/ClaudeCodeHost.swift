@@ -327,7 +327,7 @@ final class ClaudeHostedSession: SessionLink {
         deliveries.close()
         started()
         release()
-        while !clearing.isEmpty { endClear(.failure(PiBridgeError.sessionEnded)) }
+        closeClears()
         if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }
         if let brain, let process = stream?.process {
             Task { brain.exited(await process.exited()) }

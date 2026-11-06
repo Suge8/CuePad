@@ -43,7 +43,7 @@ func withDeadline<T: Sendable>(
 }
 
 /// 发话里"先停下上一轮"那一段（发停止请求、等回应、等它收尾）：新话还没交出，所以停止（`abort`）可以把整段取消，
-/// 不论它卡在哪个等待上；之后的段（交出新话、等送达）不在里面，开始了就是收下了。
+/// 不论它卡在哪个等待上；之后的段（交出新话、等送达）不在里面：话已交出，取消会把已收下的话误报成未确认、引起重发。
 @MainActor
 final class StopPhase {
     private var running: [UUID: Task<Void, any Error>] = [:]
