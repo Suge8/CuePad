@@ -10,6 +10,8 @@ struct PreviewBatch: View {
     let previews: [PiPreview]
     /// 放大与缩回按"哪一组 + 哪一份"认那张缩略图
     let group: String
+    /// 长按（Mac 右键）"回复"：会话的回复框带上这一份的引用（`Workspace.quote`）
+    let reply: (PiPreview) -> Void
     let open: (PiPreview) -> Void
 
     var body: some View {
@@ -46,6 +48,7 @@ struct PreviewBatch: View {
     private func tile(_ preview: PiPreview, _ shape: DeliverableTile.Shape) -> some View {
         DeliverableTile(
             preview: preview, label: preview.title, shape: shape, captioned: true, zoom: PreviewZoomKey(group: group, preview: preview.id), open: open)
+        .contextMenu { Button("回复", icon: .reply) { reply(preview) } }
     }
 
     nonisolated static let gap: CGFloat = 8
@@ -158,7 +161,7 @@ struct DeliverableTile: View {
         case .video: .play
         case .model: .inspect3D
         case .image, nil: .file
-        case .web, .markdown, .pdf, .document, .spreadsheet, .presentation, .text: .document
+        case .web, .markdown, .pdf, .document, .spreadsheet, .presentation, .diff, .text: .document
         }
     }
 

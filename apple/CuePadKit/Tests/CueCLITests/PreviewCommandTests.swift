@@ -27,7 +27,7 @@ import Testing
     #expect(reply.map { $0.string("id") } == stored.map { $0.id.uuidString.lowercased() })
     #expect(reply.map { $0.string("kind") } == ["web", "audio", "document", "text"] && reply.allSatisfy { $0.string("session") == "s1" })
     #expect(reply.map { $0.string("title") } == titles && stored.map(\.title) == titles)
-    #expect(reply[0]["bytes"] as? Int == stored[0].byteCount && reply[0]["outsideReferences"] as? [String] == ["a.css"])
+    #expect(reply[0]["bytes"] as? Int == "<link rel=\"stylesheet\" href=\"a.css\">".utf8.count && reply[0]["outsideReferences"] as? [String] == ["a.css"])
   }
 
   @Test func withoutASessionInTheEnvironmentItRefusesAndSaysWhy() async throws {

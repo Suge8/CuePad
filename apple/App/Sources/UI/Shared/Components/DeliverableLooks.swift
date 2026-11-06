@@ -48,8 +48,8 @@ nonisolated struct LookBox: Hashable, Sendable {
 }
 
 /// 交付物缩略图（`DeliverableTile`）全是真内容：图片按框降采样（`LookBox`）；网页是离线 WebKit 渲的一张快照（`PageSnapshots`）；
-/// Markdown 用全屏页同一个 `MarkdownText` 画首屏（不另写一套 Markdown 渲染）；
-/// 音频只有时长；其余（视频、PDF、演示文稿、文稿、表格、3D、文本）交给系统缩略图。解码与系统缩略图不在主线程；网页快照（`WebPage`）与
+/// Markdown 用全屏页同一个 `MarkdownText` 画首屏（不另写一套 Markdown 渲染），改动用全屏页同一种行（`DiffRow`），文本画等宽字的头几行；
+/// 音频只有时长；其余（视频、PDF、演示文稿、文稿、表格、3D）交给系统缩略图。解码与系统缩略图不在主线程；网页快照（`WebPage`）与
 /// Markdown 首屏（`ImageRenderer`）只能在主线程上起，新出一张排在这一帧画上屏之后（`NextFrame.drawn`）：排在这一帧提交之前的话，起网页进程那几十毫秒就压在
 /// 页面出来的这一帧上（第一次打开 Cue 页，结果卡与拍板卡里点名的网页还没有快照）。
 /// 出好的画面按"哈希 + 框"存一份到磁盘（`LookFiles`），也留在内存里（系统内存紧张时自动清）：每次启动后第一次打开 Cue 页不再把几十张原图重新解一遍
@@ -94,6 +94,7 @@ enum DeliverableLooks {
         case .image: await decode(file, box: box)
         case .web: if let snapshot = await PageSnapshots.png(for: preview, file: file, caches: caches) { await decode(snapshot, box: box) } else { nil }
         case .markdown: await markdown(file, box: box)
+        case .diff, .text: await code(file, diff: preview.kind == .diff, box: box)
         case .audio: nil
         default: await systemThumbnail(file, box: box, scale: scale)
         }
@@ -176,9 +177,35 @@ enum DeliverableLooks {
     private static func markdown(_ file: URL, box: LookBox) async -> CGImage? {
         guard let source = await head(of: file) else { return nil }
         let palette = Palette(dark: false)
-        let page = MarkdownText(source: source)
-            .padding(Self.markdownMargin)
+        return rendered(MarkdownText(source: source, style: .document).padding(Self.markdownMargin), palette: palette, box: box)
+    }
+
+    /// 改动与文本的首屏：改动用全屏页同一种行（`DiffRow`），文本是等宽字的头几行。系统给纯文本的缩略图是一页纸上的几粒小字，缩进卡片就是一张白纸。
+    private static func code(_ file: URL, diff: Bool, box: LookBox) async -> CGImage? {
+        guard let source = await head(of: file) else { return nil }
+        let palette = Palette(dark: false)
+        guard diff else {
+            let lines = source.split(separator: "\n", omittingEmptySubsequences: false).prefix(codeLines).joined(separator: "\n")
+            return rendered(Text(verbatim: lines).font(Typography.diff).foregroundStyle(palette.ink).padding(Self.markdownMargin), palette: palette, box: box)
+        }
+        let parsed = await parse(source)
+        let layout = DiffLayout(parsed, viewport: markdownPage.width)
+        let rows = VStack(alignment: .leading, spacing: 0) {
+            ForEach(parsed.lines.prefix(codeLines)) { DiffRow(line: $0, layout: layout) }
+        }
+        return rendered(rows, palette: palette, box: box)
+    }
+
+    /// 首屏几行：缩进卡片后还认得出字
+    private static let codeLines = 18
+
+    @concurrent private static func parse(_ source: String) async -> UnifiedDiff { UnifiedDiff(source) }
+
+    /// 把一页内容按 `markdownPage` 的大小画成图（浅色、纸底），缩进卡片的框。
+    private static func rendered(_ content: some View, palette: Palette, box: LookBox) -> CGImage? {
+        let page = content
             .frame(width: markdownPage.width, height: markdownPage.height, alignment: .topLeading)
+            .clipped()
             .background(palette.paper)
             .environment(\.colorScheme, .light)
         let renderer = ImageRenderer(content: page)

@@ -106,6 +106,8 @@ final class Workspace {
     /// 刚收起的气泡是哪件事、什么时候：按在它那一行上收起的（按下就关，松开时那一行又要打开它），这一下不再打开。
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?
     @ObservationIgnored var press = PressPoint()
+    /// 拉起别的 App（在 Mac 上操作的 UU 远程，`Workspace+Remote`）；测试换替身。
+    @ObservationIgnored var apps = ExternalApps.system
     #if os(iOS)
     /// 任务行左滑"更多"长出的气泡（`CardMorePanel`）。
     var moreCard: CardMoreRequest?
@@ -160,6 +162,8 @@ final class Workspace {
     var notice: Notice?
     /// 窗口根上的全屏页开着哪一份（`previewPresenter`，没有底栏）：正文、输入框里的附件，与没挂全屏页的小窗（菜单栏、Cue 条）点的附件都在这里看。
     var preview: PreviewOpening?
+    /// 刚在哪个会话的回复框里引用了预览（`quote`）：那个回复框聚焦后清掉。
+    var replyFocus: UUID?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
 

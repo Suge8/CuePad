@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 一个会话的菜单项（长按 / Mac 右键，或会话页的"⋯"）：会话出现的每一处共用这一份，有哪几项、什么顺序只在这里——
 /// 标为未读、去它在等的那一处（`HandoffButton`）、置顶（绑着任务时：会话自己没有置顶，置的是那件任务，`SessionTask`）、重命名、
-/// 跳到所在终端（Mac 本机桥上开在终端里的）、结束会话。挂在会话列表的行（"更早"、搜索）、看板推进中的会话卡、两端会话页的"⋯"上；
+/// 跳到所在终端（Mac 本机桥上开在终端里的）、结束会话，手机与 iPad 上再隔一段是在它那台 Mac 上操作（`RemoteMacActions`）。挂在会话列表的行（"更早"、搜索）、看板推进中的会话卡、两端会话页的"⋯"上；
 /// 手机会话行的左滑露出结束与重命名（`swipes`）。重命名与结束要再确认，交给窗口上那一格（`Workspace.sessionAsk`）。
 struct SessionActions: View {
     let session: PiSessionState
@@ -26,6 +26,9 @@ struct SessionActions: View {
         }
         #endif
         if let end = Self.end(session, ending: ending, in: workspace) { RowActionButtons(actions: [end]) }
+        #if os(iOS)
+        Section { RemoteMacActions(host: session.hostID) }
+        #endif
     }
 
     /// 重命名：做得到的（`MacDelivery.canRename`，已结束的也能改）；手机上够不着 Mac 时置灰。

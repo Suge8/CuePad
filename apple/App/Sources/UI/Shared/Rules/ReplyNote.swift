@@ -1,9 +1,12 @@
+import CueStore
 import Foundation
 
-/// 一条批注：你在 Agent 某条回答里选中的一段（`quote`）和你对它说的话（`note`，一定有字），随回复框里的下一句一起发出
-/// （`ComposerDraft.notes`，发出时排成 `message(_:)`）。
-/// 位置记在渲染后的文字里：哪条回答（`entry`，消息 id）、第几段可选文字（`run`，`MarkdownText.proseTexts` 的下标）、段内 UTF-16 偏移。
-/// 回答写完后文字不再变，偏移是确切的，同一句话出现两次也不会挂错；那一处已不是 `quote` 时（渲染规则改了）只是不画高亮，发出时照样带摘录。
+/// 一条批注，随回复框里的下一句一起发出（`ComposerDraft.notes`，发出时排成 `message(_:said:)`），两种：
+/// - 对回答的：你在 Agent 某条回答里选中的一段（`quote`）和你对它说的话（`note`，一定有字）。
+///   位置记在渲染后的文字里：哪条回答（`entry`，消息 id）、第几段可选文字（`run`，`MarkdownText.proseTexts` 的下标）、段内 UTF-16 偏移。
+///   回答写完后文字不再变，偏移是确切的，同一句话出现两次也不会挂错；那一处已不是 `quote` 时（渲染规则改了）只是不画高亮，发出时照样带摘录。
+/// - 引用一份预览（`preview`，像聊天里的引用回复）：只记它是哪份、标题（`quote`）与在对话里的那一批（`entry`，点回复框上那一行回到那里），
+///   不碰文件，网页地址那类预览也一样引用；话就是回复框里你写的那句，自己没有字（`note` 空）。
 nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
     var id = UUID()
     let entry: UUID
@@ -11,6 +14,22 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
     let location: Int
     let quote: String
     var note = ""
+    /// 引用的那份预览（`PiPreview.id`）；对回答的批注为 nil。
+    var preview: UUID?
+
+    init(entry: UUID, run: Int, location: Int, quote: String, note: String = "") {
+        self.entry = entry
+        self.run = run
+        self.location = location
+        self.quote = quote
+        self.note = note
+    }
+
+    /// 引用 `preview`，它在对话里的那一批是 `entry`（`PiChatEntry.id`）。
+    init(quoting preview: PiPreview, in entry: UUID) {
+        self.init(entry: entry, run: 0, location: 0, quote: preview.title)
+        self.preview = preview.id
+    }
 
     var range: NSRange { NSRange(location: location, length: quote.utf16.count) }
 
@@ -21,9 +40,9 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
         var id: UUID { note.id }
     }
 
-    /// 同一处（同一条回答、同一段、同样的选区）。
+    /// 同一处（同一条回答、同一段、同样的选区；或同一份预览）。
     func marksSamePlace(as other: ReplyNote) -> Bool {
-        entry == other.entry && run == other.run && location == other.location && quote == other.quote
+        entry == other.entry && run == other.run && location == other.location && quote == other.quote && preview == other.preview
     }
 
     /// 高亮上挂的链接：点高亮打开这条批注（`id(of:)` 认回来）。
@@ -35,15 +54,25 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
 
     private static let scheme = "cuepad-note"
 
-    /// 按在对话里的先后排（`order` 是对话里回答的 id 顺序）：Agent 读到的顺序就是原文的顺序，不是批注的先后。
+    /// 按在对话里的先后排（`order` 是对话里回答的 id 顺序）：Agent 读到的顺序就是原文的顺序，不是批注的先后。引用的预览不在里面，排在最后、按引用的先后。
     static func sorted(_ notes: [ReplyNote], by order: [UUID]) -> [ReplyNote] {
         let index = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
-        return notes.sorted { (index[$0.entry] ?? .max, $0.run, $0.location) < (index[$1.entry] ?? .max, $1.run, $1.location) }
+        let passages = notes.filter { $0.preview == nil }
+            .sorted { (index[$0.entry] ?? .max, $0.run, $0.location) < (index[$1.entry] ?? .max, $1.run, $1.location) }
+        return passages + notes.filter { $0.preview != nil }
     }
 
-    /// 发给 Agent 的那一段。原文已经在 Agent 自己的上下文里，所以不重发原文，只给能认出位置的摘录（`excerpt`）：
+    /// 发给 Agent 的话：对回答的批注一段排在最前；原文已经在 Agent 自己的上下文里，所以不重发原文，只给能认出位置的摘录（`excerpt`）：
     /// 一条批注的定位只占二十来个 token，选得再长也一样。不用 Markdown 引用块（每行一个前缀）、不给行号（Agent 看不到行号）。
-    static func message(_ notes: [ReplyNote]) -> String {
+    /// 引用的预览写在你那句话前头：`预览「标题」：话`——标题是 Agent 发它时自己写的（`cuepad show --title`），它认得出是哪份。
+    static func message(_ notes: [ReplyNote], said text: String) -> String {
+        let passages = notes.filter { $0.preview == nil }
+        let quoted = notes.filter { $0.preview != nil }.map { String(localized: "预览「\($0.quote)」") }.formatted(.list(type: .and))
+        let said = quoted.isEmpty ? text : text.allSatisfy(\.isWhitespace) ? quoted : String(localized: "\(quoted)：\(text)")
+        return [comments(passages), said].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    private static func comments(_ notes: [ReplyNote]) -> String {
         guard !notes.isEmpty else { return "" }
         let lines = notes.enumerated().map { index, note in
             let said = note.note.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)

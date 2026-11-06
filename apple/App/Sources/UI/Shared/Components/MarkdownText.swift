@@ -13,23 +13,28 @@ import SwiftUI
 /// 否决的方案：gonzalezreal/textual 0.5.0（能跨块选择，但 macOS 上整段排进一帧的短回答选不上，上游修复 #71 没合；内容更新时选区崩溃 #87；
 /// 还带数学公式与语法高亮两个用不到的依赖）。
 struct MarkdownText: View, Equatable {
+    /// `reply` 是对话里的回答；`document` 是全屏预览里的整份 Markdown（与它的缩略图）：标题分三级（`Typography.documentTitle` 起），
+    /// 代码块自成一块、不折行、整块横着滚（同表格），读的是一份文稿、不是一句回答。
+    nonisolated enum Style: Equatable { case reply, document }
+
     let source: String
     var notes: [ReplyNote] = []
+    var style = Style.reply
     @Environment(\.palette) private var palette
     @Environment(\.readingColumnBleeds) private var columnBleeds
 
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.source == rhs.source && lhs.notes == rhs.notes }
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.source == rhs.source && lhs.notes == rhs.notes && lhs.style == rhs.style }
 
     /// 每段可选文字（相邻的非表格块排成的那一个 `Text`）渲染出来的字，按先后：批注按它认出选区在哪条回答的第几段（`ReplyNote.run`）。
     static func proseTexts(_ source: String) -> [String] {
-        Run.of(source, Palette(dark: false), notes: []).compactMap { run in
+        Run.of(source, Palette(dark: false), notes: [], style: .reply).compactMap { run in
             if case .prose(let text) = run { String(text.characters) } else { nil }
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
-            ForEach(Array(Run.of(source, palette, notes: notes).enumerated()), id: \.offset) { _, run in
+            ForEach(Array(Run.of(source, palette, notes: notes, style: style).enumerated()), id: \.offset) { _, run in
                 switch run {
                 case .prose(let text):
                     // 中文正文行距放开一点：长回答是会话页的主角，读起来不挤
@@ -42,24 +47,32 @@ struct MarkdownText: View, Equatable {
                         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                         .scrollClipDisabled(columnBleeds)
                         .modifier(MoreToTheRight(enabled: !columnBleeds))
+                case .code(let code):
+                    ScrollView(.horizontal) {
+                        Text(verbatim: code).font(Typography.code).foregroundStyle(palette.ink).fixedSize().textSelection(.enabled)
+                            .padding(ChatBlock.inset)
+                    }
+                    .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                    .background(palette.fill, in: ChatBlock.shape)
                 }
             }
         }
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// 回答里相邻的非表格块是一段文字，表格自成一块。
+    /// 回答里相邻的非表格块是一段文字，表格自成一块；文稿里代码块也自成一块。
     private enum Run {
         case prose(AttributedString)
         case table(MarkdownTable)
+        case code(String)
 
-        static func of(_ source: String, _ palette: Palette, notes: [ReplyNote]) -> [Run] {
+        static func of(_ source: String, _ palette: Palette, notes: [ReplyNote], style: Style) -> [Run] {
             var runs: [Run] = []
             var pending: [MarkdownBlock] = []
             var prose = 0
             func flush() {
                 guard !pending.isEmpty else { return }
-                var text = MarkdownText.attributed(pending, palette)
+                var text = MarkdownText.attributed(pending, palette, style: style)
                 for note in notes where note.run == prose { MarkdownText.mark(note, in: &text, palette) }
                 runs.append(.prose(text))
                 prose += 1
@@ -69,6 +82,9 @@ struct MarkdownText: View, Equatable {
                 if case .table(let table) = block {
                     flush()
                     runs.append(.table(table))
+                } else if style == .document, case .code(let code) = block {
+                    flush()
+                    runs.append(.code(code))
                 } else {
                     pending.append(block)
                 }
@@ -79,7 +95,7 @@ struct MarkdownText: View, Equatable {
     }
 
     /// 一串块排成一段带属性的文字。块与块之间的段距是一个换行加一个小字号的空行（`Text` 不认段距）；连着的列表项只隔一个换行。
-    static func attributed(_ blocks: [MarkdownBlock], _ palette: Palette) -> AttributedString {
+    static func attributed(_ blocks: [MarkdownBlock], _ palette: Palette, style: Style = .reply) -> AttributedString {
         func styled(_ source: String, font: Font, color: Color, background: Color? = nil) -> AttributedString {
             var text = inline(source, palette)
             // 行内代码已经带了自己的字体与底色，其余按这一块的
@@ -110,7 +126,7 @@ struct MarkdownText: View, Equatable {
             switch block {
             case .paragraph(let text): result += styled(text, font: Typography.reading, color: palette.ink)
             case .heading(let level, let text):
-                result += styled(text, font: level <= 2 ? Typography.readingHeading : Typography.reading.weight(.semibold), color: palette.ink)
+                result += styled(text, font: Self.heading(level, style), color: palette.ink)
             case .item(let marker, let text, let depth):
                 var lead = AttributedString(String(repeating: "\u{2003}\u{2003}", count: depth) + (marker == "•" && depth > 0 ? "◦" : marker) + "\u{2002}")
                 lead.font = Typography.reading
@@ -138,6 +154,15 @@ struct MarkdownText: View, Equatable {
             }
         }
         return result
+    }
+
+    private static func heading(_ level: Int, _ style: Style) -> Font {
+        switch (style, level) {
+        case (.document, 1): Typography.documentTitle
+        case (.document, 2): Typography.documentHeading
+        case (.document, 3), (.reply, ...2): Typography.readingHeading
+        default: Typography.reading.weight(.semibold)
+        }
     }
 
     private static func mark(_ note: ReplyNote, in text: inout AttributedString, _ palette: Palette) {

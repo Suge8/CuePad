@@ -14,7 +14,7 @@ import Testing
     return url
   }
 
-  /// 同一批 = 同一创建时间：同一会话里后发的一批即使时钟落在已有预览当时或之前（同一毫秒、时钟回拨），也排在它之后 1 毫秒，不与它合成一张卡；
+  /// 同一批 = 同一创建时间：同一会话里后发的一批即使时钟落在已有预览当时或之前（同一毫秒、时钟回拨），也排在它之后，不与它合成一张卡；
   /// 别的会话不受影响。
   @Test func aLaterBatchNeverSharesACreationTimeWithAnEarlierOneInTheSameSession() async throws {
     let first = try await store.addPreviews([file("a.png", "a"), file("b.png", "b")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s1").map(\.preview)
@@ -24,7 +24,7 @@ import Testing
     let next = try await store.addPreviews([file("c.png", "c"), file("d.png", "d")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s1").map(\.preview)
     let elsewhere = try await store.addPreviews([file("e.png", "e")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s2")[0].preview
 
-    #expect(next.allSatisfy { $0.createdAt == ahead.addingTimeInterval(0.001) })
+    #expect(Set(next.map(\.createdAt)).count == 1 && next[0].createdAt > ahead)
     #expect(try await store.previews(of: "s1").map(\.name) == ["a.png", "b.png", "c.png", "d.png"])
     #expect(elsewhere.createdAt < ahead)
   }

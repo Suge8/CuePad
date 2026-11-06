@@ -120,6 +120,11 @@ struct PiReplyBar: View {
             .onChange(of: canStop) { workspace.launching.settle(session) }
             .onDisappear { workspace.launching.settle(session) }
             .task { await DebugHooks.pressSendIfAsked(session: true) { shortcuts[.send]?() } }
+            .onChange(of: workspace.replyFocus, initial: true) {
+                guard workspace.replyFocus == session.id else { return }
+                workspace.replyFocus = nil
+                focused = true
+            }
             #if os(macOS)
             .onAppear { focused = active && !covered }
             #endif

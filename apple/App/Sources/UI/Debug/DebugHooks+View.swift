@@ -102,13 +102,14 @@ extension View {
         #endif
     }
 
-    /// 会话页直接打开 `-CuePadOpenPreview <标题或文件名>` 那张预览（对话里的交付物到了再找）。
-    func debugOpensPreview(in items: [PiChatEntry], session: PiSessionState, _ opened: Binding<PreviewOpening?>) -> some View {
+    /// 会话页直接打开 `-CuePadOpenPreview <标题或文件名>` 那张预览（对话里的预览到了再找）；`-CuePadQuotePreview <标题或文件名>` 是回复它（`Workspace.quote`）。
+    func debugOpensPreview(in items: [PiChatEntry], session: PiSessionState, _ opened: Binding<PreviewOpening?>, quote: @escaping (PiPreview, UUID) -> Void) -> some View {
         #if DEBUG
         task(id: items.count) {
-            guard let title = DebugScene.defaults.string(forKey: "CuePadOpenPreview") else { return }
-            opened.wrappedValue = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString) } }
-                .first { $0.preview.title == title || $0.preview.name == title }
+            let openings = items.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString) } }
+            let quoting = DebugScene.defaults.string(forKey: "CuePadQuotePreview"), opening = DebugScene.defaults.string(forKey: "CuePadOpenPreview")
+            if let quoted = openings.first(where: { $0.preview.title == quoting || $0.preview.name == quoting }), let entry = quoted.entry { quote(quoted.preview, entry) }
+            if let shown = openings.first(where: { $0.preview.title == opening || $0.preview.name == opening }) { opened.wrappedValue = shown }
         }
         #else
         self

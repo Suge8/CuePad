@@ -9,7 +9,7 @@ import SwiftUI
 // 下拉收不起。文稿、表格、演示文稿交给 WebKit（`PreviewWeb`），3D 与认不出的类型是一张静态的图（`PreviewStill`）。
 // 每页铺满整屏：会滚的（图、PDF、文本、网页）铺到两条栏后面、按 `previewInsets` 让出内容边，其余排在两条栏之间（全屏页给的安全区）。
 
-/// 全屏页里除网页与 Markdown 外的每一类（`PreviewContent`）。
+/// 全屏页里除网页、Markdown 与改动外的每一类（`PreviewContent`）。
 /// 图、视频、网页与文稿在内容出来前先铺缩略图的画面（`previewLook`）：从缩略图飞出来的第一帧就有图，不是一张空的纸。
 struct PreviewPage: View {
     let preview: PiPreview
@@ -24,7 +24,7 @@ struct PreviewPage: View {
         case .video, .audio: PreviewPlayer(file: file, active: active, look: look)
         case .text: PreviewText(file: file).ignoresSafeArea()
         case .document, .spreadsheet, .presentation: PreviewWeb(file: file)
-        case .model, .web, .markdown, nil: PreviewStill(preview: preview, file: file)
+        case .model, .web, .markdown, .diff, nil: PreviewStill(preview: preview, file: file)
         }
     }
 }

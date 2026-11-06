@@ -46,19 +46,22 @@ extension DebugScene {
         }
     }
 
-    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 先截了手机宽度的图，再在命令行里 `cuepad show` 了两次——
-    /// 页面一张卡，截图与评审结论一起一张卡（对话里按创建时间排在你的话与回答之间）；工具清单只有截图那条，发卡片的命令不列（`PiToolLog`）。
+    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 先截了手机宽度的图，再在命令行里 `cuepad show` 了三次——
+    /// 页面一张卡，截图与评审结论一起一张卡，改动一张卡（对话里按创建时间排在你的话与回答之间）；工具清单只有截图那条，发卡片的命令不列（`PiToolLog`）。
     static func seedPreviews(_ store: CueStore, now: Date) async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-previews", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let page = directory.appending(path: "login-v2.html")
         let shot = directory.appending(path: "login-mobile.png")
         let report = directory.appending(path: "review.md")
+        let change = directory.appending(path: "login.diff")
         try Self.loginPage.write(to: page, atomically: true, encoding: .utf8)
+        try Self.loginDiff.write(to: change, atomically: true, encoding: .utf8)
         try Self.review.write(to: report, atomically: true, encoding: .utf8)
         try Self.screenshotPNG()?.write(to: shot)
         var created: [Date] = []
-        for batch in [[(page, String(localized: "登录页 v2：可点的完整页面", table: "Demo"))], [(shot, String(localized: "手机截图：登录钮在键盘上方", table: "Demo")), (report, String(localized: "评审结论：还有三处要改", table: "Demo"))]] {
+        for batch in [[(page, String(localized: "登录页 v2：可点的完整页面", table: "Demo"))], [(shot, String(localized: "手机截图：登录钮在键盘上方", table: "Demo")), (report, String(localized: "评审结论：还有三处要改", table: "Demo"))],
+                      [(change, String(localized: "改动：错误提示改成一行字", table: "Demo"))]] {
             created.append(try await store.addPreviews(batch.map { (url: $0.0, title: $0.1) }, sessionID: "notes")[0].preview.createdAt)
         }
         // 对话围着预览的创建时间排：你的话在先，回答在后

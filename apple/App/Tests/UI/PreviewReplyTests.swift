@@ -1,0 +1,138 @@
+import CueStore
+import Foundation
+import Testing
+@testable import CuePad
+
+/// 回复预览：长按缩略图或全屏里点"回复"（`Workspace.quote`），会话的回复框带上"预览「标题」"一行并聚焦，话在回复框里写，
+/// 同对回答的批注一起随下一句发出；同一份不重复引用，删掉那一行就不带。
+struct PreviewReplyTests {
+    @Test func 引用的预览随下一句发出_同批注一起_同一份不重复() async throws {
+        let app = TestApp()
+        let store = app.services.store
+        try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s", state: .settled, title: "s")
+        let session = try #require(try await store.piSessionPage(.live).items.first?.state)
+        let folder = FileManager.default.temporaryDirectory.appending(path: "preview-reply-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let files = ["login.diff", "review.md"].map { folder.appending(path: $0) }
+        for file in files { try Data(file.lastPathComponent.utf8).write(to: file) }
+        let previews = try await store.addPreviews(zip(files, ["改动：错误提示", "评审结论"]).map { (url: $0, title: $1) }, sessionID: "s").map(\.preview)
+        let workspace = Workspace(services: app.services), batch = UUID()
+
+        workspace.quote(previews[0], in: batch, of: session)
+        workspace.quote(previews[1], in: batch, of: session)
+        workspace.quote(previews[0], in: batch, of: session)
+        #expect(workspace.replyFocus == session.id)
+        var draft = app.services.settings.replyDraft(for: session.id)
+        #expect(draft.notes.map(\.quote) == ["改动：错误提示", "评审结论"] && draft.notes.allSatisfy { $0.entry == batch })
+
+        draft.notes.insert(ReplyNote(entry: UUID(), run: 0, location: 0, quote: "改动都在 login/ 下", note: "好"), at: 0)
+        draft.text = "按这个改"
+        let request = try await workspace.said(draft, to: session, mode: .send)
+        #expect(request.content == """
+            对你回答的批注（「」里是原话摘录）：
+            「改动都在 login/ 下」好
+
+            预览「改动：错误提示」和预览「评审结论」：按这个改
+            """)
+
+        // 删掉那一行就不带；只引用、不写话也能发
+        app.services.settings.setReplyDraft(ComposerDraft(), for: session.id)
+        workspace.quote(previews[1], in: batch, of: session)
+        let only = app.services.settings.replyDraft(for: session.id)
+        #expect(!only.isEmpty(accepting: .reply) && only.stored == "预览「评审结论」")
+        app.services.settings.removeReplyNote(only.notes[0].id, in: session.id)
+        #expect(app.services.settings.replyDraft(for: session.id).isEmpty(accepting: .reply))
+    }
+}
+
+/// 在 Mac 上操作（`Workspace+Remote`）：替身记下拉起了哪些链接（只用替身，不真去拉起 UU 远程）。
+/// 第一次连一台 Mac 先去 UU 里选电脑，回跳后记下并直接远控，以后一点即连；没装 UU 时提示去 App Store；
+/// 几台 Mac 时先选一台，之后连上次那台；回跳的 nonce 对不上的不认。
+@MainActor
+struct MacRemoteTests {
+    private final class Apps {
+        var installed = true
+        var opened: [URL] = []
+        var external: ExternalApps {
+            ExternalApps { [self] url in
+                guard installed || url.scheme != "uuremote" else { return false }
+                opened.append(url)
+                return true
+            }
+        }
+    }
+
+    private func query(_ url: URL?, _ name: String) -> String? {
+        url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value }
+    }
+
+    @Test func 第一次先在UU里选电脑_回跳后直接远控_以后一点即连() async throws {
+        let app = TestApp(), apps = Apps()
+        let workspace = Workspace(services: app.services)
+        workspace.apps = apps.external
+
+        await workspace.operate(on: "studio")
+        let authorize = try #require(apps.opened.last)
+        #expect(authorize.host() == "external" && authorize.path() == "/device/authorize")
+        #expect(query(authorize, "callback") == "cuepad://uu-bound")
+        let nonce = try #require(query(authorize, "nonce"))
+
+        // 回跳先经链接认出来（同系统打开 cuepad://uu-bound?…）；nonce 对不上的不认
+        await workspace.remoteBound(device: "enc-x", error: nil, nonce: "other")
+        #expect(apps.opened.count == 1)
+        let link = try #require(DeepLink(url: URL(string: "cuepad://uu-bound?anonymous_device_id=enc-1&nonce=\(nonce)")!))
+        guard case .remoteBound(let device, let error, let back) = link else { Issue.record("认不出回跳"); return }
+        await workspace.remoteBound(device: device, error: error, nonce: back)
+        #expect(apps.opened.last == MacRemote.control("enc-1") && query(apps.opened.last, "window_type") == "0")
+
+        await workspace.operate(on: "studio")
+        #expect(apps.opened.count == 3 && apps.opened.last == MacRemote.control("enc-1"))
+
+        // 重新选择：再去 UU 里选一次
+        await workspace.rebindMac("studio")
+        #expect(apps.opened.last?.path() == "/device/authorize")
+    }
+
+    @Test func 没装UU时提示去AppStore_绑定失败说原因_取消的不说() async throws {
+        let app = TestApp(), apps = Apps()
+        apps.installed = false
+        let workspace = Workspace(services: app.services)
+        workspace.apps = apps.external
+
+        await workspace.operate(on: "studio")
+        #expect(apps.opened.isEmpty)
+        let notice = try #require(workspace.notice)
+        #expect(notice.text.parts.joined().contains("UU 远程"))
+        try await #require(notice.action).run()
+        #expect(apps.opened == [MacRemote.appStore])
+
+        apps.installed = true
+        workspace.notice = nil
+        await workspace.operate(on: "studio")
+        let nonce = try #require(query(apps.opened.last, "nonce"))
+        await workspace.remoteBound(device: nil, error: "user_cancel", nonce: nonce)
+        #expect(workspace.notice == nil)
+        await workspace.operate(on: "studio")
+        let again = try #require(query(apps.opened.last, "nonce"))
+        await workspace.remoteBound(device: nil, error: "no_device", nonce: again)
+        #expect(workspace.notice?.isError == true)
+    }
+
+    @Test func 几台Mac时先选一台_之后连上次那台() async throws {
+        let app = TestApp(), apps = Apps()
+        let workspace = Workspace(services: app.services)
+        workspace.apps = apps.external
+        let store = app.services.store
+        let before = try await store.allMacAgents().count
+        for (host, name) in [("studio", "Mac Studio"), ("air", "MacBook Air")] {
+            try await store.recordMacAgents(host: host, name: name, [])
+        }
+
+        let choices = try #require(await workspace.operateMac())
+        #expect(choices.count == before + 2 && apps.opened.isEmpty)
+        await workspace.operate(on: "air")
+        #expect(await workspace.operateMac() == nil)
+        #expect(apps.opened.count == 2 && apps.opened.allSatisfy { $0.path() == "/device/authorize" })
+        #expect(app.services.settings.remoteLastHost == "air")
+    }
+}
