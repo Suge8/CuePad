@@ -50,6 +50,8 @@ public actor CloudSync {
   private var accountWatcher: Task<Void, Never>?
   /// 重试的等待结束时补拉、网络路径恢复时提前结束连不上的等待（`SyncCoordinator+Hold`）。
   private var retryWatchers: [Task<Void, Never>] = []
+  /// 还没收尾的停止：`start` 等它收尾才建新一代（新旧发送者不并存，`RecordSender`）。
+  private var stopping: Task<Void, Never>?
   /// 本代起的其余后台任务（文件那一路的启动、建通知订阅）：`stop` 统一取消、等收尾。
   private var background: [UUID: Task<Void, Never>] = [:]
   /// `start()` 之前就要拉的（冷启动时先到的推送）：开始了再拉（true）；等的时候被取消、或停下了（false）。
@@ -133,6 +135,7 @@ public actor CloudSync {
 
   /// 连上 iCloud 并认一次账号（返回时认完；认不了的这里自己按退避再认）。
   public func start() async {
+    await stopping?.value
     if case .running = phase { return }
     let generation = UUID()
     phase = .running(generation)
@@ -180,13 +183,19 @@ public actor CloudSync {
     accountRetryAt = nil
     accountBackoff.reset()
     alertsAttemptedAt = nil
-    authenticating?.cancel()
-    running.forEach { $0.cancel() }
-    for task in running { await task.value }
-    _ = await authenticating?.value
-    await senders.sender?.stop()
-    await senders.fileSender?.stop()
-    await senders.fileFetcher?.stop()
+    let previous = stopping
+    let teardown = Task {
+      await previous?.value
+      authenticating?.cancel()
+      running.forEach { $0.cancel() }
+      for task in running { await task.value }
+      _ = await authenticating?.value
+      await senders.sender?.stop()
+      await senders.fileSender?.stop()
+      await senders.fileFetcher?.stop()
+    }
+    stopping = teardown
+    await teardown.value
   }
 
   /// 认过就是 true；没认过的认一次（同时要认的等同一次）。

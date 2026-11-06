@@ -99,7 +99,11 @@ actor FileSender {
       do { taken = try await coordinator.takeFile(name) } catch { return }  // 停下了或读库出错：协调器已记下，下一次触发再来
       guard let record = taken else { continue }  // 已在路上，或这一版传不上去
       guard !stopped else { return await coordinator.fileDone(name) }  // 读库时停下了：放回，不开始
-      Task { await self.finish([record]) { progress in try await self.cloud.uploadFile(record, progress: progress) } }
+      Task {
+        // 任务排上去到真正跑之间停下了：放回，不开始
+        guard !self.stopped else { return await self.coordinator.fileDone(record.recordID.recordName) }
+        await self.finish([record]) { progress in try await self.cloud.uploadFile(record, progress: progress) }
+      }
     }
   }
 
