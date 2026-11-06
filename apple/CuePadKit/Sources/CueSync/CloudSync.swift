@@ -57,7 +57,7 @@ public actor CloudSync {
   /// 本代起的其余后台任务（文件那一路的启动、建通知订阅）：`stop` 统一取消、等收尾。
   private var background: [UUID: Task<Void, Never>] = [:]
   /// `start()` 之前就要拉的（冷启动时先到的推送）：开始了再拉（true）；等的时候被取消、或停下了（false）。
-  private var startWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
+  private var startWaiters: [Promise<Bool>] = []
   /// 每认完一次账号给一个：等账号认好的（`relaySecret`）据此再看能不能同步。
   let accountChecks = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
   /// 上一次建通知订阅的时刻：没建成时 `syncNow` 顺带重试，至多每 `alertRetryInterval` 一次（按节奏的拉取、门铃也走它，可能很密）。
@@ -111,18 +111,13 @@ public actor CloudSync {
     case .stopped: return false
     case .idle: break
     }
-    let id = UUID()
-    return await withTaskCancellationHandler {
-      await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-        if Task.isCancelled { return continuation.resume(returning: false) }
-        startWaiters[id] = continuation
-      }
-    } onCancel: {
-      Task { await self.stopWaiting(id) }
-    }
+    let waiter = Promise<Bool>()
+    startWaiters.append(waiter)
+    defer { startWaiters.removeAll { $0 === waiter } }
+    return (try? await waiter.value()) ?? false
   }
 
-  private func stopWaiting(_ id: UUID) { startWaiters.removeValue(forKey: id)?.resume(returning: false) }
+  private func answerStartWaiters(_ started: Bool) { startWaiters.forEach { $0.resolve(.success(started)) } }
 
   var stopped: Bool { if case .stopped = phase { true } else { false } }
 
@@ -164,7 +159,7 @@ public actor CloudSync {
         await self?.accountChanged()
       }
     }
-    for id in Array(startWaiters.keys) { startWaiters.removeValue(forKey: id)?.resume(returning: true) }
+    answerStartWaiters(true)
     await connectNow()
   }
 
@@ -173,7 +168,7 @@ public actor CloudSync {
   public func stop() async {
     if case .running(let generation) = phase { generation.end() }
     phase = .stopped
-    for id in Array(startWaiters.keys) { stopWaiting(id) }
+    answerStartWaiters(false)
     accountChecks.yield(())
     let running = Array(background.values) + retryWatchers + [accountWatcher, accountRetry].compactMap { $0 }
     let authenticating = connecting

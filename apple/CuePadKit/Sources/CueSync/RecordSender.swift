@@ -29,8 +29,8 @@ actor RecordSender {
   /// 下一轮不攒窗口（立即同步、重试到点、连通了）；`urgentRound` 另越过连不上与被拒的等待（进后台前，`SyncCoordinator.admits`）。
   private var explicit = false
   private var urgentRound = false
-  /// 等下一轮结束的（`flush`）；轮开始时取走、轮结束时答复。
-  private var flushes: [CheckedContinuation<Void, Never>] = []
+  /// 等下一轮结束的（`flush`）；轮开始时取走、轮结束时答复。停下时随这一代结束一起答（`SyncGeneration.value`）。
+  private var flushes: [Promise<Void>] = []
   private var prepared = false
   private var preparing: Task<Bool, Never>?
   /// 在路上的（或马上传已占下的）记录名：另一路不再挑它们。
@@ -42,7 +42,13 @@ actor RecordSender {
   private var newer: Set<String> = []
   /// 答复里作废、该再马上传一趟的（`resendNewer` 在它们离开 `inFlight` 后发）。
   private var resend: Set<String> = []
-  private var waiters: [(remaining: Set<String>, received: Bool, continuation: CheckedContinuation<Bool, Never>)] = []
+  /// 马上传在等结果的（`send`）。停下时随这一代结束一起答。
+  private var waiters: [Waiter] = []
+  private struct Waiter {
+    var remaining: Set<String>
+    var received = true
+    let answer = Promise<Bool>()
+  }
   private var urgentRuns: [Int: Task<Void, Never>] = [:]
   private var nextRun = 0
   private var limit = CloudKitLimits.recordsPerRequest
@@ -86,10 +92,6 @@ actor RecordSender {
     tasks = []
     preparation?.cancel()
     running.forEach { $0.cancel() }
-    for waiter in waiters { waiter.continuation.resume(returning: false) }
-    waiters = []
-    for flush in flushes { flush.resume() }
-    flushes = []
     for task in running { await task.value }
     _ = await preparation?.value
   }
@@ -106,11 +108,11 @@ actor RecordSender {
   func flush() async {
     guard !stopped else { return }
     let sending = Array(urgentRuns.values)
-    await withCheckedContinuation { continuation in
-      flushes.append(continuation)
-      urgentRound = true
-      kick()
-    }
+    let done = Promise<Void>()
+    flushes.append(done)
+    urgentRound = true
+    kick()
+    try? await generation.value(of: done, cancellable: false)
     for run in sending { await run.value }
   }
 
@@ -119,10 +121,10 @@ actor RecordSender {
     guard !stopped else { return false }
     urgent.formUnion(names)
     newer.formUnion(names.intersection(inFlight))
-    return await withCheckedContinuation { continuation in
-      waiters.append((names, true, continuation))
-      runUrgent()
-    }
+    let waiter = Waiter(remaining: names)
+    waiters.append(waiter)
+    runUrgent()
+    return (try? await generation.value(of: waiter.answer, cancellable: false)) ?? false
   }
 
   /// 碰过 Cue 对话的提交：Cue 对你说的话还没传的马上传（`CueStore.pendingSpeech`），不等攒批窗口、不排在后台那批后面。
@@ -157,7 +159,7 @@ actor RecordSender {
     (explicit, urgentRound) = (false, false)
     let waiting = flushes
     flushes = []
-    defer { waiting.forEach { $0.resume() } }
+    defer { waiting.forEach { $0.resolve(.success(())) } }
     guard await coordinator.admits(.upload(urgent: urgent)), await coordinator.canSync, await ready() else { return }
     for _ in 0..<Self.batchesPerRound {
       guard !stopped, await coordinator.admits(.upload(urgent: urgent)) else { return }  // 另一路这期间被要求等了
@@ -327,12 +329,12 @@ actor RecordSender {
     resend.formUnion(stale)
     let names = names.subtracting(stale)
     urgent.subtract(names.intersection(received))
-    var rest: [(remaining: Set<String>, received: Bool, continuation: CheckedContinuation<Bool, Never>)] = []
+    var rest: [Waiter] = []
     for var waiter in waiters {
       let hit = waiter.remaining.intersection(names)
       waiter.received = waiter.received && hit.isSubset(of: received)
       waiter.remaining.subtract(hit)
-      if waiter.remaining.isEmpty { waiter.continuation.resume(returning: waiter.received) } else { rest.append(waiter) }
+      if waiter.remaining.isEmpty { waiter.answer.resolve(.success(waiter.received)) } else { rest.append(waiter) }
     }
     waiters = rest
   }

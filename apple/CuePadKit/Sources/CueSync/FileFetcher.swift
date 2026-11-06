@@ -30,8 +30,8 @@ actor FileFetcher {
   private var skipped: [String: (attachment: Attachment, error: any Error)] = [:]
   /// 每个 key 有几个用到时取的调用方在等。
   private var demand: [String: Int] = [:]
-  /// 用到时要取、记录还没到的：记录到了就取。
-  private var waiters: [UUID: (key: String, continuation: CheckedContinuation<Attachment, any Error>)] = [:]
+  /// 用到时要取、记录还没到的：记录到了就取。停下时随这一代结束一起答（`fetch` 抛 `notSyncing`）。
+  private var waiters: [(key: String, answer: Promise<Attachment>)] = []
   private var tasks: [Task<Void, Never>] = []
   private let generation: SyncGeneration
 
@@ -63,8 +63,6 @@ actor FileFetcher {
     tasks.forEach { $0.cancel() }
     tasks = []
     running.values.forEach { $0.cancel() }
-    for waiter in waiters.values { waiter.continuation.resume(throwing: FileFetchFailure.notSyncing) }
-    waiters = [:]
   }
 
   /// 这个文件在本机的位置：本机没有就现在取（不看自动取的条件），记录还没到就等它到，服务器要求等就等到点。
@@ -117,28 +115,17 @@ actor FileFetcher {
 
   /// 等这个 key 的附件记录到本机库。
   private func record(of key: String) async throws -> Attachment {
-    let id = UUID()
-    return try await withTaskCancellationHandler {
-      try await withCheckedThrowingContinuation { continuation in
-        if Task.isCancelled { return continuation.resume(throwing: CancellationError()) }
-        waiters[id] = (key, continuation)
-      }
-    } onCancel: {
-      Task { await self.cancelWaiter(id) }
-    }
-  }
-
-  private func cancelWaiter(_ id: UUID) {
-    waiters.removeValue(forKey: id)?.continuation.resume(throwing: CancellationError())
+    let answer = Promise<Attachment>()
+    waiters.append((key, answer))
+    defer { waiters.removeAll { $0.answer === answer } }
+    return try await generation.value(of: answer)
   }
 
   private func seen(_ rows: [Attachment]) async {
     known = Dictionary(rows.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
     skipped = skipped.filter { known[$0.key] == $0.value.attachment }
-    for (id, waiter) in waiters {
-      guard let attachment = known[waiter.key] else { continue }
-      waiters[id] = nil
-      waiter.continuation.resume(returning: attachment)
+    for waiter in waiters {
+      if let attachment = known[waiter.key] { waiter.answer.resolve(.success(attachment)) }
     }
     await scan()
   }
