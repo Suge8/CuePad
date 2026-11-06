@@ -10,7 +10,7 @@ import Foundation
 /// - 一行一个事件 `{type, seq, time, data}`：`turn/start` 开始一轮，`turn/end` 结束（`aborted` 是被停下）；`user/message` 里来源是
 ///   `user` 的是你的话（含一轮在跑时插进去的），子代理交回的结果（`subagent-settled`）是机器消息，运行时上下文等别的来源不算；
 ///   `assistant/message` 的文字块是说的一段，最后一段在这一轮结束时成为回答；`tool/call`、`tool/result` 记工具活动；
-///   `compaction/end` 没出错是压缩；会话名只认来源是 `user` 的 `session/title`（CuePad 的改名），dsh 自己按首句取的不算。
+///   `compaction/end` 没出错是压缩；`session/title` 是会话名：来源是 `user` 的（你或 CuePad 改的）是你起的，dsh 自己起的（首句占位或标题模型给的）在你没起过时算。
 /// - 你的话里的图片是 dsh 附件库里的引用（`<DSH_HOME>/attachments/v1/objects/<前两位>/<sha256>`），按会话文件的位置找到那个 DSH_HOME。
 ///   `tool/result` 的内容块与你的话同一种（图片是引用或内嵌的 base64），工具结果里的图缩小后记在那一步上（`ToolImage`）。
 /// - CuePad 送进去的话：插件在它进收件箱时先记一条 `plugin:cuepad/delivery` {message, delivery}（`dsh-cuepad.mjs`），随后那条 `user/message` 按 id 认领。
@@ -52,7 +52,7 @@ enum DshHistory {
         case "compaction/end":
             if data?.error == nil { cp.compacted(entry, into: &transcript) }
         case "session/title":
-            if data?.source?.kind == "user", let title = data?.title { cp.name = title }
+            cp.named(data?.title, byYou: data?.source?.kind == "user")
         case "plugin:cuepad/delivery":
             if let message = data?.messageID, let delivery = data?.delivery { cp.deliveries[message] = delivery }
         default:

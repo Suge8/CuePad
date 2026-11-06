@@ -10,7 +10,8 @@ extension GrokRuntime {
     nonisolated public static let facts = AgentFacts(
         command: "grok", homeVariable: "GROK_HOME", minimumVersion: AgentVersion(1, 0, 52),
         installScript: "curl -fsSL https://x.ai/cli/install.sh | bash", upgradeCommand: "grok update", loginArguments: ["login"],
-        sessionFiles: SessionFileFormat(ingest: GrokHistory.ingest, depth: 3, naming: .inDirectory(file: GrokHistory.fileName, cwdInPath: true)) {
+        sessionFiles: SessionFileFormat(ingest: GrokHistory.ingest, depth: 3, naming: .inDirectory(file: GrokHistory.fileName, cwdInPath: true),
+            sidecarName: GrokHistory.name) {
             $0.home(of: .grok).appending(path: "sessions", directoryHint: .isDirectory)
         },
         releasesIdleHosted: true, probe: ask, brain: { ACPSession(dialect: GrokDialect()) }, projectFolder: ".grok")

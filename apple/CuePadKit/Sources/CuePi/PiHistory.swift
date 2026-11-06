@@ -40,6 +40,8 @@ public struct PiHistoryUpdate: Sendable {
     public var messages: [PiChatMessage]
     /// 这次读的时候要不要对话（调用方——索引器——的判定）：写不写对话以它为准
     public var includesTranscript: Bool
+    /// 这次读完会话名与接着读的那个检查点里的不一样（从头读的有名字就算）：Agent 这期间起了或改了名（`PiBridge.read`）
+    public var renamed: Bool
     /// 会话 id：会话文件头里的；还没读到文件头时是路径里的（只有文件名就是会话 id 的才会这样发出）。
     public var sessionID: String { history.sessionID ?? agent.facts.sessionFiles?.sessionID(of: file) ?? file.deletingPathExtension().lastPathComponent }
     public var recap: PiRecap { checkpoint.projectedRecap }
@@ -103,6 +105,7 @@ public enum PiHistory {
         var transcript = Transcript(fallbackID: format.sessionID(of: file), files: wanted ? files : nil, file: file)
         let consumed = try forEachLine(handle, from: start, size: size) { line in try format.ingest(line, &state, &transcript) }
         if !wanted { transcript.messages = [] }
+        if let name = format.sidecarName?(file, state.sessionID ?? format.sessionID(of: file)) { state.name = name }
         state.offset = consumed
         state.modified = modified
         try refreshFingerprint(&state, handle: handle)
@@ -110,7 +113,7 @@ public enum PiHistory {
             sessionID: state.sessionID, cwd: state.cwd, name: state.name, firstMessage: state.firstMessage, lastActivity: state.lastActivity)
         return PiHistoryUpdate(
             file: file, agent: agent, checkpoint: state, history: history, messages: transcript.messages, includesTranscript: wanted,
-            bytesRead: Int(consumed - start))
+            renamed: state.name != resumed?.name, bytesRead: Int(consumed - start))
     }
 
     /// 逐个完整行（不含换行）交给 `body`；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。

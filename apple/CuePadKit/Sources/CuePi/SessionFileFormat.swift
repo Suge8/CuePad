@@ -35,6 +35,9 @@ struct SessionFileFormat: Sendable {
     /// Grok 是 `<工作目录>/<id>/updates.jsonl`。
     let depth: Int
     let naming: Naming
+    /// 会话名不在会话文件里、另存在旁边的（Codex 的 `session_index.jsonl`、Grok 的 `summary.json`）：每次读完会话文件按路径与会话 id
+    /// 取一次，取到的是 Agent 此刻的会话名（你起的或它自己起的，分不出），盖过文件里读到的。
+    var sidecarName: (@Sendable (_ file: URL, _ sessionID: String) -> String?)?
     /// 会话目录（`AgentPaths.sessionsDirectory`）
     let directory: @Sendable (AgentPaths) -> URL
 
