@@ -71,7 +71,7 @@ extension Workspace {
             } catch {
                 // 页面已经走了，待写的字交给 Workspace 带着：再打开这条时接回来、再试着写
                 if let text = flush?.unsaved {
-                    self.unsavedBodies[id] = UnsavedBody(text: text, base: try? await store.card(id)?.modifiedAt)
+                    self.unsavedBodies[id] = UnsavedBody(text: text, base: try? await store.card(id)?.body)
                 }
                 throw error
             }

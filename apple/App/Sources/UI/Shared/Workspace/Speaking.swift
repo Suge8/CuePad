@@ -88,9 +88,9 @@ extension Workspace {
     ) -> Task<Void, Never> {
         let services = services
         let key = listener.orderKey, before = sendOrder.tails[key]
-        let task = Task {
-            // 同一个去处的话按按下的先后落库：前一句在等附件存好时，后一句也等它
-            await before?.value
+        // 同一个去处的话按按下的先后落库：前一句在等附件存好时，后一句也等它（只等落库，不等上传）
+        let recording = Task<UUID?, Never> {
+            _ = await before?.value
             let id: UUID
             let (sent, body) = await taking()
             do {
@@ -102,12 +102,14 @@ extension Workspace {
                 case .session(let target, let host, _, _): launching.settle(host: host, target: target)
                 }
                 fail(error)
-                return
+                return nil
             }
-            await services.upload(id)
+            return id
         }
-        sendOrder.tails[key] = task
-        return task
+        sendOrder.tails[key] = recording
+        return Task {
+            if let id = await recording.value { await services.upload(id) }
+        }
     }
 
     private static func record(_ stored: String, to listener: Listener, in store: CueStore) async throws -> UUID {
@@ -125,9 +127,9 @@ extension Workspace {
     }
 }
 
-/// 每个去处最近一句话的落库任务：后一句等前一句（前一句可能在等附件存好），落库的先后就是按下的先后。
+/// 每个去处最近一句话的落库任务（到写进库为止，不含上传）：后一句等前一句（前一句可能在等附件存好），落库的先后就是按下的先后。
 final class SendOrder {
-    var tails: [String: Task<Void, Never>] = [:]
+    var tails: [String: Task<UUID?, Never>] = [:]
 }
 
 extension Listener {

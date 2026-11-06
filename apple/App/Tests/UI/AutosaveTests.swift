@@ -103,4 +103,29 @@ struct AutosaveTests {
         try await eventually("写成了就不再带着") { workspace.unsavedBodies[blank.id] == nil }
         withExtendedLifetime(reopened) {}
     }
+
+    /// 离开时写失败的字：再打开前这条只是别的属性变了（置顶）照常接回；正文在别处被改了就接在新正文后面，两份都不丢。
+    @Test func 写失败的字再打开_正文没变接回_正文被别处改了接在后面() async throws {
+        struct Boom: Error {}
+        let workspace = Workspace(services: app.services)
+        let store = store
+        func fail(_ card: Card, typing text: String) async throws {
+            let failing = Autosave(save: { _ in throw Boom() }, onError: { _ in })
+            failing.changed(text)
+            workspace.leaveEditing(card.id, flush: failing)
+            try await eventually("字被带着") { workspace.unsavedBodies[card.id]?.text == text }
+        }
+        let pinned = try await store.createCard(body: "原文")
+        try await fail(pinned, typing: "原文加我的字")
+        try await store.updateCard(pinned.id) { $0.isPinned = true }
+        let first = CardEditing(try #require(try await store.card(pinned.id)), workspace: workspace)
+        #expect(first.initialText == "原文加我的字")
+
+        let edited = try await store.createCard(body: "原文")
+        try await fail(edited, typing: "原文加我的字")
+        try await store.updateCard(edited.id) { $0.body = "别处改的" }
+        let second = CardEditing(try #require(try await store.card(edited.id)), workspace: workspace)
+        #expect(second.initialText == "别处改的\n\n原文加我的字")
+        withExtendedLifetime([first, second]) {}
+    }
 }
