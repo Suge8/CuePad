@@ -80,13 +80,14 @@ struct MacRemoteTests {
         // 回跳先经链接认出来（同系统打开 cuepad://uu-bound?…）；nonce 对不上的不认
         await workspace.remoteBound(device: "enc-x", error: nil, nonce: "other")
         #expect(apps.opened.count == 1)
-        let link = try #require(DeepLink(url: URL(string: "cuepad://uu-bound?anonymous_device_id=enc-1&nonce=\(nonce)")!))
+        let link = try #require(DeepLink(url: URL(string: "cuepad://uu-bound?anonymous_device_id=a%2Bb%2Fc%3D%3D&nonce=\(nonce)")!))
         guard case .remoteBound(let device, let error, let back) = link else { Issue.record("认不出回跳"); return }
         await workspace.remoteBound(device: device, error: error, nonce: back)
-        #expect(apps.opened.last == MacRemote.control("enc-1") && query(apps.opened.last, "window_type") == "0")
+        // 标识里的 + / = 照转义发回 UU：原样的 + 会被读成空格，全屏远控连不上又不回报
+        #expect(apps.opened.last?.query(percentEncoded: true) == "anonymous_device_id=a%2Bb%2Fc%3D%3D&window_type=0")
 
         await workspace.operate(on: "studio")
-        #expect(apps.opened.count == 3 && apps.opened.last == MacRemote.control("enc-1"))
+        #expect(apps.opened.count == 3 && query(apps.opened.last, "anonymous_device_id") == "a+b/c==")
 
         // 重新选择：再去 UU 里选一次
         await workspace.rebindMac("studio")

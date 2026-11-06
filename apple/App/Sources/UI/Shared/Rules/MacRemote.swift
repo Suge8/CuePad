@@ -14,17 +14,23 @@ enum MacRemote {
 
     /// 绑定：UU 里选一台电脑，结果接在 `DeepLink.remoteCallback` 后面回跳，`nonce` 原样带回。
     static func authorize(nonce: String) -> URL {
-        URL(string: "uuremote://external/device/authorize")!.appending(queryItems: [
-            URLQueryItem(name: "callback", value: DeepLink.remoteCallback.absoluteString), URLQueryItem(name: "nonce", value: nonce),
-        ])
+        link("authorize", ["callback": DeepLink.remoteCallback.absoluteString, "nonce": nonce])
     }
 
     /// 全屏远控已绑定的那台（`window_type=0`）。
     static func control(_ device: String) -> URL {
-        URL(string: "uuremote://external/device/control")!.appending(queryItems: [
-            URLQueryItem(name: "anonymous_device_id", value: device), URLQueryItem(name: "window_type", value: "0"),
-        ])
+        link("control", ["anonymous_device_id": device, "window_type": "0"])
     }
+
+    /// 参数值除字母数字与 `-._~` 外一律转义（文档 4.5）：设备标识带 `+`、`/`、`=`，`appending(queryItems:)` 留着原样的 `+`，
+    /// UU 读成空格，标识就坏了，全屏远控又不回报，只停在它的设备列表。
+    private static func link(_ action: String, _ items: KeyValuePairs<String, String>) -> URL {
+        var components = URLComponents(string: "uuremote://external/device/\(action)")!
+        components.percentEncodedQueryItems = items.map { URLQueryItem(name: $0.key, value: $0.value.addingPercentEncoding(withAllowedCharacters: unreserved)) }
+        return components.url!
+    }
+
+    private static let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 
     /// 绑定失败要告诉用户的话；用户自己取消、被后一次绑定顶掉的不说（文档 2.5 的错误码）。
     static func failure(_ code: String) -> String? {
