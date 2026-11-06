@@ -81,7 +81,9 @@ extension CueStore {
         try db.run("UPDATE cards SET body = ?, modifiedAt = ? WHERE id = ?", [kept + "\n\n" + added, now, task])
       }
       try trashRow(card, at: now)
-      return .merge(idea: idea, task: task, body: target.body, modifiedAt: added.isEmpty ? target.modifiedAt : now)
+      // 读回库里的版本：同一毫秒里刚写过这条任务时，`guards` 把它改成旧值 + 1，不等于 `now`
+      let written = try find(Card.self, task)?.modifiedAt ?? target.modifiedAt
+      return .merge(idea: idea, task: task, body: target.body, modifiedAt: written)
     }
   }
 
