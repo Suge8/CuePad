@@ -109,11 +109,14 @@ private final class Race<T: Sendable>: Sendable {
     if ends { finish(.failure(error)) }
   }
 
+  /// 交出结论：只有在锁里把"比完了"翻过来的那一次答复，后到的（被取消的那路抛出的错、调用方的取消）直接返回，不跟胜出的抢答。
   func finish(_ result: Result<T, any Error>) {
-    let tasks = state.withLock { state in
+    let tasks = state.withLock { state -> [Task<Void, Never>]? in
+      guard !state.over else { return nil }
       defer { (state.over, state.tasks) = (true, []) }
       return state.tasks
     }
+    guard let tasks else { return }
     tasks.forEach { $0.cancel() }
     answer.resolve(result)
   }
