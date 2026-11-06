@@ -5,5 +5,5 @@ final class Flights {
     var captureDrainAgain = false
     /// 快照更新（`AppServices.writeSnapshots`）：最新一个请求的序号，与排队的队尾（一份做完才轮到下一份）。
     var snapshotTicket = 0
-    var snapshotTurn: Task<Void, any Error>?
+    var snapshotTurn: Task<Bool, any Error>?
 }

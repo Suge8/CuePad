@@ -57,18 +57,29 @@ extension AppServices {
     /// 读库、发布活动与角标、落盘是一个单元，按到达先后串行（活动与角标会让出主线程）。读在轮到自己时才做：
     /// 每个单元读到的都不比前一个单元更旧，最后一个单元写下的就是最新一次读取，旧读取不会晚于新读取写回。
     /// 后面还排着更新的请求时，前面的（不要重发的）直接跳过，由最后那个读最新的；要重发的不跳。
+    /// 被跳过的也等到队尾那一份做完才返回：调用方（后台推送叫醒后的收尾、回到前台）返回时快照已按最新落盘，之后系统挂起 App 也不缺。
     func writeSnapshots(resend: Bool = false) async throws {
         flights.snapshotTicket += 1
         let ticket = flights.snapshotTicket
         let previous = flights.snapshotTurn
         let turn = Task {
             _ = await previous?.result  // 前一份的失败由它的调用方报告
-            guard resend || ticket == flights.snapshotTicket else { return }
+            guard resend || ticket == flights.snapshotTicket else { return false }
             let read = try await CueReading.Read.read(from: store, widget: true)
             try await render(read.widget!, read.digest, at: speech, local: cueLocal, resend: resend)
+            return true
         }
         flights.snapshotTurn = turn
-        try await turn.value
+        guard try await turn.value else { return await latestSnapshot(after: turn) }
+    }
+
+    /// 被顶掉的请求等队尾：等的时候又来了新的就接着等新的队尾。队尾的失败由它自己的调用方报告。
+    private func latestSnapshot(after skipped: Task<Bool, any Error>) async {
+        var awaited = skipped
+        while let latest = flights.snapshotTurn, latest != awaited {
+            awaited = latest
+            _ = await latest.result
+        }
     }
 
     /// 不依赖观察任务赶在挂起前执行；前台重开、后台收尾都显式等这一份完成。
