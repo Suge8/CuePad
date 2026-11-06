@@ -36,10 +36,10 @@ extension CueTextView {
         let pasted = PastedItem(item.itemProvider)
         if pasted.isFile {
             nonisolated(unsafe) let item = item
-            return core.importFiles([.pasted(pasted)]) { [weak self] result in
+            return core.importFiles([.pasted(pasted)], at: selectedRange, selection: { [weak self] in self?.selectedRange ?? NSRange(location: 0, length: 0) }) { [weak self] result in
                 guard let self else { return item.setNoResult() }
                 switch result {
-                case .success(let insertion?): item.setResult(attributedString: core.onOwnLine(insertion, replacing: selectedRange))
+                case .success((let insertion, let range)?): item.setResult(attributedString: core.onOwnLine(insertion, replacing: range))
                 case .success(nil): item.setNoResult()
                 case .failure(let error):
                     onError?(error)
@@ -63,12 +63,12 @@ extension CueTextView {
 
     /// 相册、文件选择器选来的：存好（后台）再插到此刻的光标处，光标落在后面。
     public func insert(_ files: [IncomingFile]) {
-        core.importFiles(files) { [weak self] result in
+        core.importFiles(files, at: selectedRange, selection: { [weak self] in self?.selectedRange ?? NSRange(location: 0, length: 0) }) { [weak self] result in
             guard let self else { return }
             switch result {
-            case .success(let insertion?):
-                let lined = core.onOwnLine(insertion, replacing: selectedRange)
-                replace(selectedRange, with: lined, caret: selectedRange.location + lined.length)
+            case .success((let insertion, let range)?):
+                let lined = core.onOwnLine(insertion, replacing: range)
+                replace(range, with: lined, caret: range.location + lined.length)
             case .success(nil): break
             case .failure(let error): onError?(error)
             }

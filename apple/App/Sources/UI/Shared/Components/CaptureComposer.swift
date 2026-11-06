@@ -92,14 +92,20 @@ struct CaptureComposer: View {
     }
 
     private func save() {
-        let project = project, claim = workspace.claimImports(state.draft)
-        guard !state.draft.isEmpty(accepting: .files), !saving else { return }
+        let project = project, taken = state.draft, claim = workspace.claimImports(taken)
+        guard !taken.isEmpty(accepting: .files), !saving else { return }
         saving = true
+        // 同发送：输入框当场清空，等待导入与保存期间新打的字留在输入框里；写不成放回去，新打的接在后面
+        state.draft = ComposerDraft()
         workspace.attempt {
             defer { saving = false }
             let settled = await claim.settled()
-            try await CaptureDraft(text: settled.text, files: settled.files).save(in: project, workspace: workspace)
-            state.draft = ComposerDraft()
+            do {
+                try await CaptureDraft(text: settled.text, files: settled.files).save(in: project, workspace: workspace)
+            } catch {
+                state.draft = settled.followed(by: state.draft, keeping: ComposerDraft())
+                throw error
+            }
             saved()
         }
     }

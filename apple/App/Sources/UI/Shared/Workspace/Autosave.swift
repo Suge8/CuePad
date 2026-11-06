@@ -18,6 +18,9 @@ final class Autosave {
         self.onError = onError
     }
 
+    /// 还没写进库的正文（待写的；写失败放回的也在这里）。
+    var unsaved: String? { pending }
+
     func changed(_ text: String) {
         pending = text
         timer?.cancel()
@@ -30,11 +33,12 @@ final class Autosave {
         }
     }
 
-    /// 丢下还没写的（编辑器换成了别处的正文）：之后的 `flush` 不再写它。在途的那次不撤回，由调用方自己核对它写完时还算不算数。
+    /// 丢下还没写的（编辑器换成了别处的正文）：之后的 `flush` 不再写它，在途的那次也取消（能取消的写入会停；已经交出去的由调用方核对它写完时还算不算数）。
     func discard() {
         pending = nil
         timer?.cancel()
         timer = nil
+        writing?.cancel()
     }
 
     func flush() async throws {
@@ -51,7 +55,7 @@ final class Autosave {
             writing = Task {
                 defer { writing = nil }
                 do { try await save(text) } catch {
-                    if pending == nil { pending = text }
+                    if pending == nil, !Task.isCancelled { pending = text }
                     throw error
                 }
             }

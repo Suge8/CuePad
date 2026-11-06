@@ -30,7 +30,8 @@ final class CardEditing {
     /// `titled`：任务下面还没写话时多载入一个空段，提示写在那里，点那里光标落在第二行。
     init(_ card: Card, titled: Bool = false, workspace: Workspace) {
         cardID = card.id
-        initialText = titled && card.rest == nil ? CueLines.split(card.body).title + "\n" : card.body
+        let unsaved = workspace.unsavedBodies[card.id]
+        initialText = unsaved ?? (titled && card.rest == nil ? CueLines.split(card.body).title + "\n" : card.body)
         text = initialText
         self.workspace = workspace
         let store = workspace.services.store, id = card.id
@@ -44,9 +45,11 @@ final class CardEditing {
                     throw error
                 }
                 self?.saveState = .saved
+                workspace.unsavedBodies[id] = nil
             },
             onError: { workspace.fail($0) })
         self.autosave = autosave
+        if unsaved != nil { autosave.changed(initialText) }
         #if os(iOS)
         flushToken = workspace.services.addBackgroundFlush {
             do { try await autosave.flush() } catch { workspace.fail(error) }

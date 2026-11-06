@@ -20,10 +20,10 @@ extension CueTextView {
 
     /// 拖入、粘贴、"插入文件…"选来的：存好（后台）再插到此刻的光标处。
     public func insert(_ files: [IncomingFile]) {
-        core.importFiles(files) { [weak self] result in
+        core.importFiles(files, at: selectedRange(), selection: { [weak self] in self?.selectedRange() ?? NSRange(location: 0, length: 0) }) { [weak self] result in
             guard let self else { return }
             switch result {
-            case .success(let insertion?): insertText(core.onOwnLine(insertion, replacing: selectedRange()), replacementRange: selectedRange())
+            case .success((let insertion, let range)?): insertText(core.onOwnLine(insertion, replacing: range), replacementRange: range)
             case .success(nil): break
             case .failure(let error): onError?(error)
             }

@@ -42,6 +42,19 @@ struct ImageTests {
         #expect(h.stored == "另一条")
     }
 
+    @Test("存附件的途中光标挪走了（没改字）：附件仍插在发起时的位置")
+    func importKeepsStartingSelection() async throws {
+        let h = EditorHarness()
+        h.load("前文后文")
+        h.setCaret(2)
+
+        h.textView.insert([.data(makePNG())])
+        h.setCaret(0)
+        #expect(await h.wait { CueFormat.hasAttachments(h.stored) })
+
+        #expect(h.stored.hasPrefix("前文\n![](cuepad://file/") && h.stored.hasSuffix(")\n后文"))
+    }
+
     @Test("剪贴板只有 TIFF 时（如浏览器复制的图）转成 PNG 入库")
     func pasteTIFF() async throws {
         let h = EditorHarness()

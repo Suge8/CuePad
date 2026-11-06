@@ -61,12 +61,18 @@ extension Workspace {
         say("已新建任务「\(task.title.textGlyphs)」", action: .undo(undo))
     }
 
-    /// 离开一条灵感或任务正文的编辑：先写下没保存的字（等在途的写入落库；写不成就报错、不删，字还在待写里），
+    /// 离开一条灵感或任务正文的编辑：先写下没保存的字（等在途的写入落库；写不成就报错、不删，字记在 `unsavedBodies` 里），
     /// 还是空白（`Card.isBlank`）的灵感就不留下——记一条是先建一条空的再编辑。
     func leaveEditing(_ id: UUID, flush: Autosave?) {
         let store = services.store
         attempt {
-            try await flush?.flush()
+            do {
+                try await flush?.flush()
+            } catch {
+                // 页面已经走了，待写的字交给 Workspace 带着：再打开这条时接回来、再试着写
+                if let text = flush?.unsaved { self.unsavedBodies[id] = text }
+                throw error
+            }
             try await store.dropIfBlank(id)
         }
     }

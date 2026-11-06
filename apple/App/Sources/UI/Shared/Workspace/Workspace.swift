@@ -188,6 +188,8 @@ final class Workspace {
 
     /// 刚发给会话、页面还没读到的话（回复框的发送中）。
     let launching = Launching()
+    /// 离开时没能写进库的正文（卡片 id → 字）：再打开这条时接回来（`CardEditing`），写成了就清掉。
+    var unsavedBodies: [UUID: String] = [:]
     /// 输入框里在存的附件（`importFiles`）。
     let imports = Imports()
 

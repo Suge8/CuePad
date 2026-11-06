@@ -30,6 +30,7 @@ extension Workspace {
     func importFiles(_ incoming: [IncomingFile], into box: Binding<ComposerDraft>) {
         let id = UUID(), files = services.store.files
         let task = Task {
+            await DebugHooks.importDelay()
             var stored: [DraftFile] = []
             for item in incoming {
                 do { stored.append(try await DraftFile.store(item, in: files)) } catch { fail(error) }
