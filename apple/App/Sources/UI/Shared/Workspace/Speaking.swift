@@ -87,7 +87,10 @@ extension Workspace {
         to listener: Listener, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void
     ) -> Task<Void, Never> {
         let services = services
-        return Task {
+        let key = listener.orderKey, before = sendOrder.tails[key]
+        let task = Task {
+            // 同一个去处的话按按下的先后落库：前一句在等附件存好时，后一句也等它
+            await before?.value
             let id: UUID
             let (sent, body) = await taking()
             do {
@@ -103,6 +106,8 @@ extension Workspace {
             }
             await services.upload(id)
         }
+        sendOrder.tails[key] = task
+        return task
     }
 
     private static func record(_ stored: String, to listener: Listener, in store: CueStore) async throws -> UUID {
@@ -116,6 +121,21 @@ extension Workspace {
             } else {
                 try await store.requestDelivery(stored, to: target, on: host, mode: mode, card: card).id
             }
+        }
+    }
+}
+
+/// 每个去处最近一句话的落库任务：后一句等前一句（前一句可能在等附件存好），落库的先后就是按下的先后。
+final class SendOrder {
+    var tails: [String: Task<Void, Never>] = [:]
+}
+
+extension Listener {
+    /// 同一个回复框（同一个对话）、Cue 各一条队。
+    var orderKey: String {
+        switch self {
+        case .cue: "cue"
+        case .session(let target, let host, _, _): "\(host)\n\(target.name)"
         }
     }
 }

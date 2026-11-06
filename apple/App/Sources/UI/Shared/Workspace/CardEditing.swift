@@ -30,8 +30,14 @@ final class CardEditing {
     /// `titled`：任务下面还没写话时多载入一个空段，提示写在那里，点那里光标落在第二行。
     init(_ card: Card, titled: Bool = false, workspace: Workspace) {
         cardID = card.id
-        let unsaved = workspace.unsavedBodies[card.id]
-        initialText = unsaved ?? (titled && card.rest == nil ? CueLines.split(card.body).title + "\n" : card.body)
+        // 离开时没写成的字：库里这条之后没被别处改过才接回，改过的以库里的为准（提示一句）
+        var unsaved = workspace.unsavedBodies[card.id]
+        if let found = unsaved, let base = found.base, card.modifiedAt > base {
+            workspace.unsavedBodies[card.id] = nil
+            workspace.say(Dotted(String(localized: "这条在别处改过，没能保存的字没有接回")), tone: .failure)
+            unsaved = nil
+        }
+        initialText = unsaved?.text ?? (titled && card.rest == nil ? CueLines.split(card.body).title + "\n" : card.body)
         text = initialText
         self.workspace = workspace
         let store = workspace.services.store, id = card.id

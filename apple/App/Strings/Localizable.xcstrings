@@ -22615,6 +22615,22 @@
         }
       }
     },
+    "这条在别处改过，没能保存的字没有接回" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This note was changed elsewhere, so the unsaved text was not restored"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这条在别处改过，没能保存的字没有接回"
+          }
+        }
+      }
+    },
     "这条提问已经结束了" : {
       "localizations" : {
         "en" : {

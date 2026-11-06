@@ -32,8 +32,11 @@ extension Workspace {
         box.wrappedValue = ComposerDraft()
         return Task {
             let taken = await claim.settled()
+            let note = CaptureDraft(text: taken.text, files: taken.files)
+            // 附件都没存成（已提示导入失败）又没有字：不建空灵感
+            guard !note.isEmpty else { return }
             do {
-                try await CaptureDraft(text: taken.text, files: taken.files).save(in: Project.defaultID, workspace: self)
+                try await note.save(in: Project.defaultID, workspace: self)
             } catch {
                 box.wrappedValue = taken.followed(by: box.wrappedValue, keeping: ComposerDraft())
                 fail(error)

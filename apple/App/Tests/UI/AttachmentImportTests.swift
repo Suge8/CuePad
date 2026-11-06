@@ -60,4 +60,39 @@ struct AttachmentImportTests {
         let said = try #require(try await store.cueMessages().last { $0.author == .known(.you) })
         #expect(CueFormat.attachmentKeys(in: said.text).count == 1 && draft.files.isEmpty)
     }
+
+    /// 先发带慢附件的 A、紧接着发 B：库里的先后仍是 A、B。
+    @Test func 带慢附件的先发_后发的不抢在前面落库() async throws {
+        let workspace = Workspace(services: app.services)
+        DebugScene.defaults.set(1.0, forKey: "CuePadImportDelay")
+        defer { DebugScene.defaults.removeObject(forKey: "CuePadImportDelay") }
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).txt")
+        try Data(repeating: 2, count: 1000).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        var draft = ComposerDraft(text: "A")
+        let box = Binding(get: { draft }, set: { draft = $0 })
+
+        workspace.importFiles([.file(url)], into: box)
+        let first = workspace.speak(to: .cue, from: box) { $0.stored }
+        draft.text = "B"
+        let second = workspace.speak(to: .cue, from: box) { $0.stored }
+        await first.value
+        await second.value
+
+        let said = try await store.cueMessages().filter { $0.author == .known(.you) }.map { String($0.text.prefix(1)) }
+        #expect(said == ["A", "B"], "落库顺序：\(said)")
+    }
+
+    /// 只选了存不进去的附件就记下：不建空灵感。
+    @Test func 附件都没存成_随手记不建空灵感() async throws {
+        let workspace = Workspace(services: app.services)
+        let before = try await store.cards(in: Project.defaultID).count
+        var draft = ComposerDraft()
+        let box = Binding(get: { draft }, set: { draft = $0 })
+
+        workspace.importFiles([.file(URL(fileURLWithPath: "/nonexistent/\(UUID().uuidString).txt"))], into: box)
+        await workspace.note(from: box)?.value
+
+        #expect(try await store.cards(in: Project.defaultID).count == before)
+    }
 }

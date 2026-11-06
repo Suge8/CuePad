@@ -100,8 +100,11 @@ struct CaptureComposer: View {
         workspace.attempt {
             defer { saving = false }
             let settled = await claim.settled()
+            let note = CaptureDraft(text: settled.text, files: settled.files)
+            // 附件都没存成（已提示导入失败）又没有字：不建空灵感
+            guard !note.isEmpty else { return }
             do {
-                try await CaptureDraft(text: settled.text, files: settled.files).save(in: project, workspace: workspace)
+                try await note.save(in: project, workspace: workspace)
             } catch {
                 state.draft = settled.followed(by: state.draft, keeping: ComposerDraft())
                 throw error

@@ -96,7 +96,7 @@ struct AutosaveTests {
         #expect(try await store.card(blank.id) != nil)
 
         // 页面已走：字由 Workspace 带着，再打开这条时接回来并写进库
-        try await eventually("字被带着") { workspace.unsavedBodies[blank.id] == "写不进去" }
+        try await eventually("字被带着") { workspace.unsavedBodies[blank.id]?.text == "写不进去" }
         let reopened = CardEditing(try #require(try await store.card(blank.id)), workspace: workspace)
         #expect(reopened.initialText == "写不进去")
         _ = try await eventually(store, { try $0.card(blank.id)?.body }) { $0 == "写不进去" }

@@ -33,6 +33,8 @@ final class FileDraft {
     @ObservationIgnored private let workspace: Workspace
     @ObservationIgnored private var autosave: Autosave?
     @ObservationIgnored private var epoch = 0
+    /// 正在写的那一版：它的回声（同步来的、等于它的文件）是自己写的，不是别处的改动。
+    @ObservationIgnored private var inflight: String?
 
     enum State: Equatable {
         case idle
@@ -96,6 +98,8 @@ final class FileDraft {
         epoch += 1
         let mine = epoch
         state = .saving
+        inflight = text
+        defer { if inflight == text { inflight = nil } }
         do {
             try await workspace.saveFile(LibraryEdit(file: file, base: LibraryEdit.base(of: base), text: text), in: library)
             guard epoch == mine else { return }
@@ -123,12 +127,23 @@ final class FileDraft {
     }
 
     /// 这份同步来的正文变了（`LibraryFileText`，对上了快照的哈希）：是自己写成的那一版就只记下；你没改过就跟上；改着的留着，说出文件变了。
+    /// 在冲突里：文件变得和我的字一样，就是已保存；文件回到了基准（别处改回去了），没有别处的改动要选了，有没写的字照常自动存。
     func follow(_ file: String?) {
         let file = file ?? ""
-        guard file != base else { return }
-        if file == text {
+        if file == text || file == inflight {
             base = file
             mark()
+            if conflicted, file == text {
+                drop()
+                state = .saved
+            }
+            return
+        }
+        guard file != base else {
+            if conflicted {
+                state = .idle
+                if dirty { autosave?.changed(text) }
+            }
             return
         }
         if dirty {

@@ -115,5 +115,48 @@ extension AgentLibraryTests {
 
         #expect(draft.state == .conflict(file: "ext\n") && draft.dirty, "旧写入完成后冲突还在：\(draft.state)")
     }
+
+    private func ready(_ text: String) async throws -> (FileDraft, Task<Void, Never>, Task<Void, Never>) {
+        try write(text, agents.appending(path: "AGENTS.md"))
+        let keeping = keep()
+        let workspace = Workspace(services: services)
+        let following = Task { await workspace.follow() }
+        try await eventually("快照") { workspace.library?.instruction(.global)?.hash == hash(text) }
+        return (FileDraft(.instruction(.global), text: text, workspace: workspace), keeping, following)
+    }
+
+    /// 自己那次写入在途时又打了字，自己写入的回声先到：不是别处的改动，不报冲突，后来打的字照常写。
+    @Test func 自己写入的回声先到_期间又打了字_不报冲突() async throws {
+        let (draft, keeping, following) = try await ready("# a\n")
+        defer { keeping.cancel(); following.cancel() }
+        draft.changed(body: "v1\n")
+        let writing = Task { await draft.send() }
+        await Task.yield()
+        draft.changed(body: "v2\n")
+        draft.follow("v1\n")
+        await writing.value
+        #expect(!draft.conflicted, "把自己的写入误报成冲突：\(draft.state)")
+        await draft.leave()
+        #expect(read(agents.appending(path: "AGENTS.md")) == "v2\n" && draft.state == .saved)
+    }
+
+    /// 冲突后文件被改回打开时的样子、或改成和我的字一样：冲突自动解除，不留冲突条。
+    @Test func 冲突后文件改回基准或变得和我的一样_冲突自动解除() async throws {
+        let (draft, keeping, following) = try await ready("# a\n")
+        defer { keeping.cancel(); following.cancel() }
+        draft.changed(body: "mine\n")
+        draft.follow("ext\n")
+        #expect(draft.conflicted)
+        draft.follow("# a\n")
+        #expect(!draft.conflicted && draft.dirty, "回到基准：没有别处的改动了，我的字照常存")
+        await draft.leave()
+        #expect(draft.state == .saved && read(agents.appending(path: "AGENTS.md")) == "mine\n")
+
+        draft.changed(body: "mine2\n")
+        draft.follow("ext2\n")
+        #expect(draft.conflicted)
+        draft.follow("mine2\n")
+        #expect(draft.state == .saved && !draft.dirty, "变得和我的一样：已保存")
+    }
 }
 #endif
