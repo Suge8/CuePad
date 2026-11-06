@@ -3,7 +3,7 @@ import Foundation
 /// 会话闲置（唯一规则，`CueStore.dormancy` 读出此刻的那一份）：没结束、停着没在问（歇着或出错），进入这个状态已超过 `after`，
 /// 也不是 Cue 留给你回的那次停下（`CueLeft`，待回复属于等你，不收）。闲置的会话不算活跃：看板与 Cue 管的不归没做完的事的活会话（`CueStore.isLoose`）、
 /// 会话条与会话列表的"现在"都不列它，它收进"更早"（`PiSessionScope.earlier`）。会话一有新动静（状态变了，`stateSince` 前进）自然回来，不用谁去清。
-/// 只是活动信号：不改任务的状态，绑着它的任务照旧在它的列（`CueBoardLeaf.isActive` 不读它）。
+/// 只是活动信号：不改任务的状态，绑着它的任务照旧在它的列（`CueBoardLeaf.isActive` 不读它：看板的列是"Cue 在做"的投影，读了它任务就落回待办）。
 /// 阈值取 2 小时：够一次午饭或会议回来接着做，又不让一早随手开的会话占着看板一整天（同类的 Agent Kanban 也取 2 小时）。
 public struct SessionDormancy: Sendable, Equatable {
   public static let after: TimeInterval = 2 * 60 * 60

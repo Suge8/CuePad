@@ -159,7 +159,7 @@ struct BoardColumn: View {
         case .waiting:
             ForEach(board.held) { held in
                 let card = BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project))).boardFlight(held.id).benchSpot(held.id)
-                if let item = held.item { card.boardDraggable(item.id, session: held.session.sessionID) } else { card }
+                if let item = held.item { card.boardDraggable(item.id, session: held.session.sessionID) } else { card.boardDraggable(session: held.session.sessionID) }
             }
             if board.count(.waiting) == 0 { empty("没有等你的事") }
         case .done:
@@ -246,9 +246,10 @@ struct BoardColumn: View {
         }
     }
 
-    /// 会话卡拖到已完成（别的列不接）。
+    /// 会话卡（推进中、等你里没归没做完的事的）拖到已完成（别的列不接）。
     private func drop(session id: String) {
-        guard column == .done, let session = board.advancing.lazy.compactMap(\.loose).first(where: { $0.state.sessionID == id })?.state else { return }
+        let loose = board.advancing.compactMap(\.loose?.state) + board.held.filter { $0.item == nil }.map(\.session)
+        guard column == .done, let session = loose.first(where: { $0.sessionID == id }) else { return }
         workspace.attempt { try await workspace.complete(session) }
     }
 

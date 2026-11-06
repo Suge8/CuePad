@@ -63,6 +63,18 @@ struct SessionBoardTests {
         #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["session/s1"])
     }
 
+    @Test func 等你里的无主会话_同样当场建卡完成() async throws {
+        // 在问你只认宿主在线时报的（`runtimeUntil`）
+        try await rig.runtimeRecorder(on: Self.mac).update(sessionID: "q1", state: .waitingForUser, title: "要不要推送")
+        let board = try await TaskBoard.read(from: store)
+        let held = try #require(board.held.first { $0.session.sessionID == "q1" })
+        #expect(held.item == nil && board.advancing.isEmpty)
+
+        try await Workspace(services: services).complete(held.session)
+        let task = try #require(try await tasks().first)
+        #expect(task.status == .done && task.piSessionID == "q1")
+    }
+
     @Test func 置顶无主会话_建一件进行中的置顶任务_再点不再多建() async throws {
         let live = try await session("s1", title: "修登录")
         let workspace = Workspace(services: services)
@@ -132,21 +144,27 @@ struct SessionBoardTests {
         #expect(try await names(task.id, "g1") == ["查崩溃日志", "查崩溃日志"])
     }
 
-    @Test func 闲置超过两小时_收进更早_有动静就回来() async throws {
+    @Test func 闲置超过两小时_收进更早_有动静就回来_绑着的任务不换状态不回待办() async throws {
         let stale = Date.now.addingTimeInterval(-SessionDormancy.after - 60)
         _ = try await session("old", title: "昨天的", since: stale)
         _ = try await session("new", title: "刚歇下")
+        let task = try await store.createTask("修登录", in: Project.defaultID)
+        try await store.setStatus(task.id, .inProgress)
+        try await store.linkCard(task.id, toSession: "bound")
+        _ = try await session("bound", title: "修登录", since: stale)
+        #expect(try await store.card(task.id)?.status == .inProgress)
         let board = try await TaskBoard.read(from: store)
-        #expect(board.advancing.map(\.id) == ["session/new"])
+        #expect(Set(board.advancing.map(\.id)) == ["session/new", "task/\(task.id)"], "绑着闲置会话的任务不回待办")
         #expect(try await store.cueBoard().sessions.map(\.sessionID) == ["new"], "Cue 管的同一条规则")
         let earlier = try await PiSessionList.read(text: "", earlierOnly: true, historyLimit: 40, at: .always(), from: store)
-        #expect(earlier.ended.map(\.state.sessionID) == ["old"])
+        #expect(Set(earlier.ended.map(\.state.sessionID)) == ["old", "bound"])
         let listed = try await PiSessionList.read(text: "", historyLimit: 40, at: .always(), from: store)
         #expect(listed.now.map(\.state.sessionID) == ["new"])
         #expect(try await SessionRailData.read(from: store).advancing.map(\.state.sessionID) == ["new"])
 
         let recorder = PiStateRecorder(store: store, hostID: Self.mac)
         try await recorder.update(sessionID: "old", state: .thinking, times: PiTimes(stateSince: .now, busySince: .now))
-        #expect(Set(try await TaskBoard.read(from: store).advancing.map(\.id)) == ["session/old", "session/new"])
+        try await recorder.update(sessionID: "bound", state: .thinking, times: PiTimes(stateSince: .now, busySince: .now))
+        #expect(Set(try await TaskBoard.read(from: store).advancing.map(\.id)) == ["session/old", "session/new", "task/\(task.id)"])
     }
 }
