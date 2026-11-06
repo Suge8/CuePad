@@ -16,6 +16,17 @@ enum ToolImage {
     /// 缩小后的编码：HEIC 留得住透明，同样清楚时约是 JPEG 的一半
     static let quality = 0.7
 
+    /// 各家把图写成地址时（Codex 的 `image_url`、OpenCode 工具结果的 `uri`）：`data:<类型>;base64,<数据>` 取数据，`file://` 读那个本机文件；
+    /// 别的地址（网络图片）不取。
+    static func data(at uri: String) -> Data? {
+        if uri.hasPrefix("data:") {
+            guard let comma = uri.firstIndex(of: ","), uri[..<comma].hasSuffix(";base64") else { return nil }
+            return Data(base64Encoded: String(uri[uri.index(after: comma)...]))
+        }
+        guard let url = URL(string: uri), url.isFileURL else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
     /// 存进附件，返回键；不是图片、解不出图为 nil。
     static func store(_ data: Data, in files: AttachmentFiles) throws -> String? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0,

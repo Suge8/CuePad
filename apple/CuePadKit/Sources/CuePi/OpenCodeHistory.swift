@@ -56,6 +56,26 @@ struct OpenCodeMessage: Decodable, Sendable {
         var status: String
         var input: OpenCodeToolInput?
         var error: OpenCodeFailure?
+        /// 工具结果里的图：内容块里 `file` 的图片（`uri` 是 data: 或 file:// 地址），取不出的为 nil
+        var images: [Data?] = []
+
+        private struct Block: Decodable {
+            var type: String?
+            var uri: String?
+            var mime: String?
+        }
+
+        private enum Keys: String, CodingKey { case status, input, error, content }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: Keys.self)
+            status = try c.decode(String.self, forKey: .status)
+            input = try c.decodeIfPresent(OpenCodeToolInput.self, forKey: .input)
+            error = try c.decodeIfPresent(OpenCodeFailure.self, forKey: .error)
+            // 结果的形状不认得时当没有图，不连累这一步
+            let blocks = (try? c.decodeIfPresent([Block].self, forKey: .content)) ?? []
+            images = blocks.filter { $0.type == "file" && $0.mime?.hasPrefix("image/") == true }.map { $0.uri.flatMap(ToolImage.data(at:)) }
+        }
     }
 
     /// 这条的时刻：助手的一步取说完的那一刻（与各家对话里回答的时刻同一规则，回答上的"用时"从你说话算到它），其余取建立的那一刻。
@@ -74,7 +94,8 @@ struct OpenCodeMessage: Decodable, Sendable {
 /// OpenCode 会话的对话与摘要：消息逐条解码进与 Pi 会话文件同一个检查点与对话模型（`PiHistoryCheckpoint`、`PiHistory.Transcript`），
 /// 轮次、摘要与工具活动的规则与各家同一处（`PiHistoryCheckpoint` 的 `said`、`answered`……）。这里与 Pi 不同的只有：
 /// - 你的消息是 `user`，文字在前、图片（`files` 里的原图）随后各占一行；CuePad 发的那条在 `metadata.cuepadDelivery` 里带着投送请求 id。
-/// - 助手的一步是一条 `assistant`：`finish` 为 `tool-calls` 的只累计工具，其余结束一轮；工具的成败就在同一条里（`state.status`）。
+/// - 助手的一步是一条 `assistant`：`finish` 为 `tool-calls` 的只累计工具，其余结束一轮；工具的成败就在同一条里（`state.status`），
+///   结果里的图是 `state.content` 里的图片文件块（缩小后记在那一步上，`ToolImage`）。
 /// - 压缩完成是一条 `compaction`（系统行）；`idle` 标记一轮彻底结束（被停止、出错时没有最后的回答）；被停下的那一步带 `aborted` 错误。
 /// - 你在终端里直接跑的命令（`shell`）、系统与合成消息、切模型与切 agent 的记录不进对话（终端的对话里它们不是谁说的话）。
 enum OpenCodeHistory {
@@ -148,7 +169,7 @@ enum OpenCodeHistory {
                 if tool.state?.error?.message == Self.declinedTool {
                     cp.toolDeclined(id: id)
                 } else if let status = tool.state?.status, status == "completed" || status == "error" {
-                    cp.toolFinished(id: id, failed: status == "error")
+                    cp.toolFinished(id: id, failed: status == "error", images: try transcript.toolImages(tool.state?.images ?? []))
                 }
             }
             // 被停下的那一步带着 `aborted` 的错误（接着的 `idle` 也是 `interrupted`）
