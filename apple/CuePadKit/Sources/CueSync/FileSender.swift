@@ -10,6 +10,8 @@ import os
 /// 结果与后台那一路一样交给协调器记账（`SyncCoordinator.sent`），服务器收下了就删本机的保底（`AttachmentFiles.uploaded`）。
 /// 重试守同步层唯一的调度（`SyncCoordinator.admits(.fileUpload)`、`hold`，等待结束时 `retryDue` 接着传），空间不足的停顿也在那里（`holdFiles`）。
 /// 在路上的只记在协调器（`SyncCoordinator.fileUploads`，跨发送者的新旧两代）。`stop` 之后不再开始新的上传、不再补位，在路上的结果照常记账。
+/// `stop` 不取消也不等在途的上传（取舍已定）：系统长期上传要在退出后接着传完，旧结果照常记账——服务器确实收下了；换账号时协调器处于停下状态，`sent` 拒收，
+/// 不会写进新账号的状态。否决的做法：stop 后旧结果不再记账、留给下一代重传（会重复上传或版本冲突，且没有真实 CloudKit 验证）。
 actor FileSender {
   static let parallel = 2
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
