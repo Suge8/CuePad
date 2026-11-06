@@ -169,13 +169,19 @@ struct PiReplyBar: View {
         sent()
     }
 
-    /// 等你确认、不能发自由文本时收成的一行。
+    /// 等你确认、不能发自由文本时收成的一行，与空着的回复框同高（Mac 是两层的高）：问题卡来去时回复框不跟着变高变矮，浮在上面的对话只跟着卡挪（`RiseBehind`）。
     private func notice(_ text: LocalizedStringResource, icon: Icon) -> some View {
         Label(text, icon: icon)
             .font(Typography.secondary).foregroundStyle(palette.ink2)
-            .padding(.horizontal, Spacing.block).frame(maxWidth: .infinity, minHeight: 2 * Radius.field, alignment: .leading)
+            .padding(.horizontal, Spacing.block).frame(maxWidth: .infinity, minHeight: Self.noticeHeight, alignment: .leading)
             .glass(in: .rect(cornerRadius: Radius.field))
     }
+
+    #if os(macOS)
+    private static let noticeHeight = ComposerMetrics.openOneLine
+    #else
+    private static let noticeHeight = 2 * Radius.field
+    #endif
 
     @ViewBuilder private var sendControl: some View {
         switch button {

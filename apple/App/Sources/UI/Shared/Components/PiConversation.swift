@@ -242,8 +242,8 @@ extension PiConversation {
 }
 
 
-/// 会话顶栏（Mac 工具栏标题、手机顶栏）里名字旁的状态，只在在跑或要你注意时出现：在跑（工作中、话在路上）是状态标、状态词与到秒的计时；
-/// 等你确认、出错、没能送达、已结束只有状态标与状态词（带色）。Mac 不画状态标，只有着色的字：标题玻璃里唯一的圆是任务的完成圈；有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`）。
+/// 手机会话页顶栏标题下那一行的状态，只在在跑或要你注意时出现：在跑（工作中、话在路上）是状态标、状态词与到秒的计时；
+/// 等你确认、出错、没能送达、已结束只有状态标与状态词（带色）；有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`）。Mac 的会话栏头只写名字（`WideSessionTitle`）。
 /// 最前面写是哪家 Agent（`AgentMark`），歇着时也写；歇着（该你了、新会话、有新回复）时只有它。所在不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
@@ -316,12 +316,12 @@ struct PiQuestionDock: View {
     var deliveries: [DeliveryRequest] = []
 
     var body: some View {
-        if session.runtimeState == .known(.waitingForUser) {
-            if let question = session.answerableQuestion {
-                QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
+        DockedCard(session.runtimeState == .known(.waitingForUser) ? session : nil) { asked in
+            if let question = asked.answerableQuestion {
+                QuestionCard(session: asked, question: question, deliveries: deliveries).id(question.promptID)
             } else {
                 // 去哪答写在回复框的位置上（各平台不同），这里只放问题
-                Callout(.asking, text: session.question?.displayText ?? session.detail ?? "", docked: true)
+                Callout(.asking, text: asked.question?.displayText ?? asked.detail ?? "", docked: true)
             }
         }
     }

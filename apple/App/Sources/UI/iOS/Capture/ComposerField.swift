@@ -266,9 +266,7 @@ final class GrowingTextView: UITextView {
                 super.contentOffset = newValue
                 return
             }
-            UIView.animate(withDuration: 0.16, delay: 0, options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction]) {
-                super.contentOffset = newValue
-            }
+            Motion.Fade.animate { super.contentOffset = newValue }
         }
     }
 }

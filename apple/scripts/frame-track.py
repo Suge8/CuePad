@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """逐帧量录屏里几样东西的横向位置：看开合、跨临界宽这类滑动里每个元素是不是从旧处连续走到新处（docs/perf.md「开合的逐帧量法」）。
 
-用法：uv run --with numpy python3 apple/scripts/frame-track.py 片.mov 名:y:x0:x1[:高] … [--ref=帧号] [--rows=1]
+用法：uv run --with numpy python3 apple/scripts/frame-track.py 片.mov 名:y:x0:x1[:高] … [--ref=帧号] [--rows=1] [--axis=y]
+  --axis=y 量竖向位置（整卡进出时对话让没让、跳没跳）：每样写成 名:x:y0:y1[:宽]，横竖对调，其余同。
   片.mov 是 xc.sh rec 录的（Mac 按窗口录，Retina 屏上 2x；模拟器横屏录的按转正后的画面量）；坐标都是点、相对窗口左上，--scale 改倍数（默认 2）。
   每样东西在参考帧（默认第 0 帧）里取 y 上下各 高/2（默认 12）、x0～x1 的一条做模板，之后每帧在同一条带里按最小绝对差找它，
   只在上一帧位置左右 --search（默认 420）点内找。挑纹理清楚的字：会动的头像、低对比的空块会认到别处，读成跳。
@@ -24,6 +25,7 @@ movie, specs = args[0], args[1:]
 scale = float(opts.get("scale", 2))
 ref = int(opts.get("ref", 0))
 search = int(float(opts.get("search", 420)) * scale)
+vertical = opts.get("axis") == "y"
 STILL_FRAMES = 6
 STILL_PT = 0.25
 REVERSE_PT = 0.5
@@ -39,22 +41,26 @@ times = [float(t) for t in probe("frame=pts_time")]
 # 横屏的模拟器录出来是竖着的像素加一个转 90° 的显示矩阵，ffmpeg 解出来已转正：宽高要对调
 width, height = map(int, probe("stream=width,height")[0].split(","))
 if abs(int(float((probe("stream_side_data=rotation") or ["0"])[0]))) == 90:
-    width = height
+    width, height = height, width
 
 
 def track(spec):
     parts = spec.split(":")
     y, x0, x1 = float(parts[1]), float(parts[2]), float(parts[3])
     band = float(parts[4]) if len(parts) > 4 else 12
-    top, rows = int((y - band / 2) * scale), int(band * scale)
-    raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", movie, "-fps_mode", "passthrough", "-vf", f"crop={width}:{rows}:0:{top}",
+    # 条带的起点与厚度取偶数：yuv420 的画面按 2 像素对齐裁
+    top, rows = int((y - band / 2) * scale) // 2 * 2, int(band * scale) // 2 * 2
+    crop = f"crop={rows}:{height}:{top}:0" if vertical else f"crop={width}:{rows}:0:{top}"
+    raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", movie, "-fps_mode", "passthrough", "-vf", crop,
                           "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True, check=True).stdout
-    frames = np.frombuffer(raw, dtype=np.uint8).reshape(-1, rows, width).astype(np.int16)
+    frames = np.frombuffer(raw, dtype=np.uint8)
+    frames = (frames.reshape(-1, height, rows).transpose(0, 2, 1) if vertical else frames.reshape(-1, rows, width)).astype(np.int16)
+    length = frames.shape[2]
     left, right = int(x0 * scale), int(x1 * scale)
     template, span = frames[ref][:, left:right], right - left
     found, last = [], left
     for frame in frames:
-        lo, hi = max(0, last - search), min(width - span, last + search)
+        lo, hi = max(0, last - search), min(length - span, last + search)
         windows = np.lib.stride_tricks.sliding_window_view(frame[:, lo:hi + span], span, axis=1)
         last = lo + int(np.abs(windows - template[:, None, :]).sum(axis=(0, 2)).argmin())
         found.append(last / scale)

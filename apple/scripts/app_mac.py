@@ -84,7 +84,8 @@ class Mac:
         subprocess.Popen(["caffeinate", "-d", "-u", "-w", str(os.getpid())], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return self
 
-    def start(self, args):
+    def start(self, args, launched=None):
+        """launched(pid)：进程起来、还没就绪时调（冷启动录屏在这一刻开录）。"""
         self.quit()
         if "-CuePadWindowSize" not in args:
             args = [*args, "-CuePadWindowSize", WINDOW]
@@ -95,6 +96,8 @@ class Mac:
                                      stdin=subprocess.DEVNULL, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
         front_keeper(self.proc.pid, args)
         write_note(self.slot, holder=os.getpid(), app=self.proc.pid, what=self.what)
+        if launched:
+            launched(self.proc.pid)
         return wait_ready(self.ready, self.proc.pid, self.log)
 
     def quit(self):
@@ -124,6 +127,8 @@ def mac(cmd, app, library, shots):
         def take(shot):
             signal.alarm(HOLD + int(seconds))  # 每张从起实例算，排队等别人的不算
             try:
+                if cmd == "rec" and os.environ.get("CUEPAD_REC_LAUNCH"):
+                    return record_launch(m, shot)
                 size = m.start(shot.args)
                 if len(size) != 2:
                     die("就绪文件里没有窗口尺寸：画面没有可拍的普通窗口")
@@ -135,6 +140,16 @@ def mac(cmd, app, library, shots):
                 signal.alarm(0)
 
         batch(shots, take)
+
+
+def record_launch(m, shot):
+    """冷启动：进程一起来就开录（wincap 等窗口出现），录满秒数、不等就绪。窗口尺寸按启动参数（点），同 Mac.start 给的默认。"""
+    points = (dict(zip(shot.args, shot.args[1:])).get("-CuePadWindowSize") or WINDOW).split("x")
+    os.makedirs(os.path.dirname(os.path.abspath(shot.out)), exist_ok=True)
+    rec, binary = [], wincap()  # 先编好：编译不能占进程起来到窗口出现那一段
+    m.start(shot.args, lambda pid: rec.append(subprocess.Popen([binary, "launch", str(pid), str(REC_SECONDS), *points, shot.out])))
+    if rec[0].wait():
+        die(f"冷启动录屏失败（wincap 退出码 {rec[0].returncode}）")
 
 
 def run_mac(app, library, args):

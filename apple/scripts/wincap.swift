@@ -1,5 +1,6 @@
 // 用法：wincap shot <pid> <宽> <高> <图.png>
 //       wincap rec <pid> <秒> <宽> <高> <片.mov>
+//       wincap launch <pid> <秒> <宽点> <高点> <片.mov>   冷启动：等这个进程的窗口出现就开录，宽高是点（按所在屏的倍数换成像素），不查缩小显示
 // 用 ScreenCaptureKit 拍这个进程屏上最大的那扇普通窗口本身：挡在上面的窗口、阴影、指针、录屏标记都不进画面。
 // 按给的像素尺寸（App 写在就绪文件里的窗口像素尺寸，见 DebugScene.shotSize）出 PNG，或 60fps 的 H.264 视频。app.py 编译并调用它。
 // 窗口在屏上被系统缩小显示（调度中心、台前调度）时拍到的也是缩小的：比就绪尺寸小 2% 以上就失败、不出文件
@@ -15,14 +16,15 @@ func fail(_ message: String, code: Int32 = 1) -> Never {
 }
 
 let args = Array(CommandLine.arguments.dropFirst())
-let recording = args.first == "rec"
+let launching = args.first == "launch"
+let recording = launching || args.first == "rec"
 guard args.count == (recording ? 6 : 5), let pid = pid_t(args[1]) else {
-    fail("用法：wincap shot <pid> <宽> <高> <图.png> | wincap rec <pid> <秒> <宽> <高> <片.mov>", code: 2)
+    fail("用法：wincap shot <pid> <宽> <高> <图.png> | wincap rec|launch <pid> <秒> <宽> <高> <片.mov>", code: 2)
 }
 let seconds = recording ? Double(args[2]) ?? 0 : 0
 let size = args.dropFirst(recording ? 3 : 2).prefix(2).compactMap { Int($0) }
 guard size.count == 2 else { fail("宽、高要是整数", code: 2) }
-let (width, height) = (size[0], size[1])
+var (width, height) = (size[0], size[1])
 let out = URL(fileURLWithPath: args.last!)
 try? FileManager.default.removeItem(at: out)
 
@@ -77,15 +79,28 @@ func shoot(_ filter: SCContentFilter, _ config: SCStreamConfiguration) async thr
     guard CGImageDestinationFinalize(file) else { fail("写不了 \(out.path)") }
 }
 
+/// 这个进程屏上最大的普通窗口；冷启动时窗口还没建，每 10ms 再找一次（录的就是它出现的那一刻，没有可等的事件），到 `launchWait` 为止。
+func largestWindow() async throws -> SCWindow? {
+    let deadline = ContinuousClock.now + launchWait
+    while true {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let windows = content.windows.filter { $0.owningApplication?.processID == pid && $0.windowLayer == 0 }
+        if let window = windows.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) { return window }
+        guard launching, ContinuousClock.now < deadline else { return nil }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+}
+
+let launchWait = Duration.seconds(20)
+
 let done = DispatchSemaphore(value: 0)
 Task {
     do {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        let windows = content.windows.filter { $0.owningApplication?.processID == pid && $0.windowLayer == 0 }
-        guard let window = windows.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else { fail("没有找到 \(pid) 的窗口") }
+        guard let window = try await largestWindow() else { fail("没有找到 \(pid) 的窗口") }
         let scale = NSScreen.screens.first { $0.frame.intersects(window.frame) }?.backingScaleFactor ?? 1
+        if launching { (width, height) = (Int(Double(width) * scale), Int(Double(height) * scale)) }
         let shown = (Int(window.frame.width * scale), Int(window.frame.height * scale))
-        guard Double(shown.0) >= Double(width) * 0.98, Double(shown.1) >= Double(height) * 0.98 else {
+        guard launching || Double(shown.0) >= Double(width) * 0.98 && Double(shown.1) >= Double(height) * 0.98 else {
             fail("窗口在屏上被缩小显示（\(shown.0)×\(shown.1)，应为 \(width)×\(height)）：调度中心或台前调度开着，关掉再拍")
         }
         let config = SCStreamConfiguration()

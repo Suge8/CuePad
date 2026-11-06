@@ -78,3 +78,13 @@ extension Motion {
         static var timing: CAMediaTimingFunction { CAMediaTimingFunction(name: .easeOut) }
     }
 }
+
+#if os(iOS)
+extension Motion.Fade {
+    /// `fade` 的 UIKit 那一份（同一段时长与缓出）：改在 UIKit 视图上、不经 SwiftUI 事务的那几处——推入页整条导航栏淡到透明（`BarFade`）、
+    /// 输入框里光标跟着换行的那一小段滚动（`GrowingTextView`）。从当前呈现值接着走，动画里照样接点按。
+    @MainActor static func animate(_ changes: @escaping () -> Void) {
+        UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction], animations: changes)
+    }
+}
+#endif

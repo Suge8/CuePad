@@ -17,15 +17,16 @@ struct SessionDock: View {
 
     var body: some View {
         let deliveries = digest?.deliveries ?? [], messages = digest?.messages ?? [], speech = services.speech
-        VStack(spacing: Spacing.item) {
+        let ended = session.state == .known(.ended)
+        // 卡与回复框之间的缝在卡里（`DockedCard`）：卡升起、沉回时缝跟着长、跟着收
+        VStack(spacing: 0) {
             PiQuestionDock(session: session, deliveries: deliveries)
             PiFailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
-            if let end = deliveries.last(where: { $0.mode == .known(.end) }), let reason = Speech.trip(end, at: speech).unconfirmedReason,
-               session.state != .known(.ended) {
+            DockedCard(ended ? nil : deliveries.last { $0.mode == .known(.end) }.flatMap { Speech.trip($0, at: speech).unconfirmedReason }) { reason in
                 Callout(.unknown(), text: String(localized: "结束结果尚未确认：\(reason)"), docked: true)
             }
-            if let failure = DeliveryRequest.shownEnd(in: deliveries, at: speech)?.failure, session.state != .known(.ended) {
-                Callout(.failed(.other), text: String(localized: "没能结束：\(failure.text)"), docked: true)
+            DockedCard(ended ? nil : DeliveryRequest.shownEnd(in: deliveries, at: speech)?.failure?.text) { failure in
+                Callout(.failed(.other), text: String(localized: "没能结束：\(failure)"), docked: true)
             }
             if let digest, digest.session == nil {
                 Text("这个会话已经不在了，发不到它").font(Typography.meta).foregroundStyle(palette.ink3)
