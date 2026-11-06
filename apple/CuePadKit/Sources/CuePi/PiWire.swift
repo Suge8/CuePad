@@ -205,6 +205,8 @@ enum PiWire {
         var id: String?
         var ok: Bool
         var error: String?
+        /// `title` 的回话：起好的会话名
+        var title: String?
     }
 
     struct Bye: Decodable { var reason: String }
@@ -314,6 +316,21 @@ enum PiWire {
     static func configCommand(id: String, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool? = nil, name: String?) throws -> Data {
         try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, fast: fast, name: name))
     }
+
+    /// 认 `title` 的最早的扩展版本：更早的会话换上新扩展前不起名（`PiBridge.Link.canNameItself`）
+    static let titleSince = 58
+
+    private struct TitleCommand: Encodable {
+        var t = "title"
+        var id: String
+        var instructions = SessionNameSuggestion.instructions
+        var limit = SessionNameSuggestion.limit
+        var text: String
+        var timeoutMs = Int(SessionNameSuggestion.budget.seconds * 1000)
+    }
+
+    /// 按第一句话起会话名（`SessionNameSuggestion`）：说明、长度上限与时限随命令给，扩展挑模型、问一次，只回不写。
+    static func titleCommand(id: String, text: String) throws -> Data { try encodeLine(TitleCommand(id: id, text: text)) }
 
     private struct AnswerCommand<Value: Encodable>: Encodable {
         var t = "answer"

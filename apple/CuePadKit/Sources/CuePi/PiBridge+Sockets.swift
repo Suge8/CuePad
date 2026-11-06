@@ -62,6 +62,14 @@ extension PiBridge {
             connection.write(PiWire.upgrade)
         }
 
+        func canNameItself(_: PiSession.ID) -> Bool { extensionVersion.map { $0 >= PiWire.titleSince } ?? false }
+
+        func suggestName(from firstMessage: String, in _: PiSession.ID) async throws -> String {
+            let ack = try await request { try PiWire.titleCommand(id: $0, text: firstMessage) }
+            guard let title = ack.title.flatMap(SessionNameSuggestion.cleaned) else { throw PiBridgeError.rejected("failed: empty title") }
+            return title
+        }
+
         func refreshQuota() async throws { _ = try await request { try PiWire.bare("quota", id: $0) } }
 
         private func request(encode: (String) throws -> Data) async throws -> PiWire.Ack {

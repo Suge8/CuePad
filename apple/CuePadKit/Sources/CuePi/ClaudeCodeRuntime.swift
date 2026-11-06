@@ -10,7 +10,7 @@ import OSLog
 /// - 终端会话：第一次钩子调用时上桥，id 是 `<会话 id>.<进程 pid>`；同一进程里 /clear、/resume 换了会话，旧的下桥、新的上桥；
 ///   进程退出（kqueue）时下桥。CuePad 启动时已经在跑的会话（还没触发钩子）从 `claude agents --json` 补上。
 ///   只接归 CuePad 管的（`follow` 给的范围，没接入时只有托管过的会话）：钩子与补上都按它，出了范围的下桥。
-///   会话名与首条消息随钩子来（`session_title`、`UserPromptSubmit`）；重新上桥（托管接着、CuePad 重开后补上、钩子先到）时先取会话索引里记下的
+///   会话名与首条消息随钩子来（`session_title`、`UserPromptSubmit`），只落在会话文件里的名字（`ai-title`）经历史索引补上（`PiBridge.read`）；重新上桥（托管接着、CuePad 重开后补上、钩子先到）时先取会话索引里记下的
 ///   （`remembered`，不在这里读会话文件），钩子带来新的再换。
 /// - 托管会话：开新会话（`--session-id`）与接着已结束的会话（`--resume`，带上 CuePad 记下的这个会话最后的模型）；接着之前先确认它没开在别处（终端里开着时两边会各写各的）。
 ///   让出与空闲退出由桥决定（`PiBridge` 的托管会话一节）。

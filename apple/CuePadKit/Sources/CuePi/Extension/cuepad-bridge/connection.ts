@@ -7,6 +7,7 @@ import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_COMMANDS, contextInfo, findModel, INTERNAL_COMMAND, isThinkingLevel, modelInfo, reason, type BuiltinCommand } from "./info.ts";
 import { supportsFast } from "./fast.ts";
 import { retry } from "./retry.ts";
+import { handleTitle } from "./title.ts";
 import type { Ack, Session } from "./session.ts";
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -126,6 +127,7 @@ function handleCommand(session: Session, socket: net.Socket, command: Command | 
 		if (command?.t === "retry") return void handleRetry(session, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "config") return void handleConfig(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "quota") return handleQuota(session, ack, reject);
+		if (command?.t === "title") return void handleTitle(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		reject("bad_request");
 	} catch (error) {
 		reject(`failed: ${reason(error)}`);

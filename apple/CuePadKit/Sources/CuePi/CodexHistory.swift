@@ -11,13 +11,39 @@ import Foundation
 /// 等它的话歇下时对话里还没有回答；没有回答就结束的轮由 `task_complete` 结束）、`CommandExecution`/`FileChange`/`McpToolCall`/`WebSearch` 记工具活动、
 /// `ContextCompaction` 是压缩；`turn_aborted` 是这一轮被停下（没有回答）。工具结果里的图：`ImageView`（view_image 看的那个本机文件，条目只带路径，
 /// 读的时候从文件取）与 `McpToolCall` 结果里的图片块，缩小后记在那一步上（`ToolImage`）。`response_item` 里同一条你的话没有 `client_id`，不读。
-/// 会话名只在 `<CODEX_HOME>/session_index.jsonl` 里，会话文件没有：历史会话的名字退回首条消息。
+/// 会话名不在会话文件里，在 `<CODEX_HOME>/session_index.jsonl`（`name`）。
 enum CodexHistory {
     /// CuePad 发出的话写进 `clientUserMessageId` 的前缀，后接投送请求的 UUID：终端里打的话 Codex 也给一个随机 UUID，靠前缀分开。
     static let clientIDPrefix = "cuepad-"
 
     static func clientID(for deliveryID: String?) -> String {
         deliveryID.map { clientIDPrefix + $0 } ?? UUID().uuidString
+    }
+
+    /// `<CODEX_HOME>/session_index.jsonl`（会话文件在 `<CODEX_HOME>/sessions/YYYY/MM/DD/` 下，全部会话共用一个）：Codex 改名（`/rename`、
+    /// `thread/name/set`）与终端界面自动起名都追加一行 `{id, thread_name}`，同一会话最后一行为准。
+    static let sidecar = SessionFileFormat.Sidecar(file: { file in
+        var home = file
+        for _ in 0..<5 { home.deleteLastPathComponent() }
+        return home.appending(path: indexFile)
+    }, name: name)
+
+    private static func name(in data: Data, sessionID: String) -> String? {
+        let id = Data(sessionID.utf8)
+        return data.split(separator: 0x0A).last { $0.firstRange(of: id) != nil }
+            .flatMap { try? decoder.decode(IndexEntry.self, from: Data($0)) }.flatMap { $0.id == sessionID ? $0.threadName : nil }
+    }
+
+    private static let indexFile = "session_index.jsonl"
+
+    private struct IndexEntry: Decodable {
+        var id: String
+        var threadName: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case threadName = "thread_name"
+        }
     }
 
     static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {

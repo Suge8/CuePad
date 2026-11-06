@@ -113,7 +113,7 @@ public struct PiSession: Identifiable, Sendable, Equatable {
 }
 
 /// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致：
-/// `/name` 设的名字 → 会话文件里第一条有文字的用户消息 → 工作目录名。控制字符换成空格并去掉首尾空白，所以是单行。
+/// Agent 的会话名（`/name` 之类你起的，或 Agent 自己按对话起的，见 `PiHistoryCheckpoint.named`）→ 会话文件里第一条有文字的用户消息 → 工作目录名。控制字符换成空格并去掉首尾空白，所以是单行。
 /// 用斜杠技能说的写你发的样子（`PiSkillCall`），不写 Pi 展开后的正文；交给 Agent 的附件行只留文件名（`AttachmentFiles.namingAgentLines`）。
 public enum PiSessionName {
     /// 首条用户消息只用来当单行显示名：只取开头这么多字符（扩展的 `FIRST_MESSAGE_LIMIT` 与之相同）。

@@ -12,11 +12,16 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     public internal(set) var offset: UInt64 = 0
     /// 读到 `offset` 那次文件的修改时间（列目录或读之前取的）
     public internal(set) var modified: Date?
+    /// 那次读的另存会话名的文件（`SessionFileFormat.Sidecar`）的修改时间
+    var sidecarModified: Date?
     var fingerprint: UInt64 = 0
     var fingerprintLength = 0
     var sessionID: String?
     var cwd: String?
+    /// 会话名：Agent 记下的（你起的，或它自己按对话起的），见 `named`
     var name: String?
+    /// `name` 是你起的（Claude Code 的 `custom-title`、dsh 来源是 `user` 的标题）：之后 Agent 自己起的不再盖过它
+    var nameIsYours = false
     var lastActivity: Date?
     var firstMessage: String?
     /// 已消费的行数（对话消息的 `seq`）
@@ -35,10 +40,10 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 你说的一句、还在等它的投送请求 id：Grok 把发它的请求 id 写在它之后的那几行上（`GrokHistory`），等到下一行再照常 `said`
     var held: Held?
 
-    /// 读会话的规则的版本：规则变了、已读过的轮次要按新规则重写时（长度截断的回答改记未完成、工具结果里的图）加一，
+    /// 读会话的规则的版本：规则变了、已读过的部分要按新规则重读时（长度截断的回答改记未完成、工具结果里的图、Agent 自己起的会话名）加一，
     /// 旧版本的检查点解不开，各家的会话在窗口内从头重读、对话按新规则改写（`CueStore.applyTranscript` 只改写变了的）。
     struct ReadRules: Codable, Equatable {
-        static let current = 2
+        static let current = 3
         let version: Int
 
         init() { version = Self.current }
@@ -58,7 +63,10 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
 
     /// 文件从上次读完就没动过：大小正好读到头、修改时间与那次相同。回填时据此不打开文件——启动时绝大多数会话文件都这样，
     /// 逐个打开、核对开头与偏移曾占回填的八成。被改写或替换的文件修改时间会变，照常走读时的核对（`isResumable`）。
-    func isCurrent(size: UInt64, modified: Date) -> Bool { offset == size && self.modified == modified }
+    /// 另存会话名的文件（`sidecarModified`）也要没动过。
+    func isCurrent(size: UInt64, modified: Date, sidecarModified: Date?) -> Bool {
+        offset == size && self.modified == modified && self.sidecarModified == sidecarModified
+    }
 
     struct Round: Sendable, Codable, Equatable {
         var startedAt: Date?
@@ -101,6 +109,13 @@ extension PiHistoryCheckpoint {
         var projected = recap
         projected.pendingTools = round?.tools.settled
         return projected
+    }
+
+    /// 会话文件里的一个会话名：你起的总是算（最后一个为准）；Agent 自己起的只在你没起过时算。
+    mutating func named(_ title: String?, byYou: Bool) {
+        guard let title, !title.isEmpty, byYou || !nameIsYours else { return }
+        name = title
+        nameIsYours = byYou
     }
 
     /// 你说的一句：第一条有文字的成为标题（`PiSessionName.firstMessage`），开始一轮，进对话、成为进行中的提问（单行，≤`PiRecap.promptLimit`）。

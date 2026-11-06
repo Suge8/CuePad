@@ -10,6 +10,7 @@ extension CodexRuntime {
             threads["\(id).\(pid)"] = threads["\(id).\(pid)"] ?? .foreign
         }
         guard let threadID = params["threadId"]?.string else { return }
+        if let turn = naming["\(threadID).\(pid)"] { return turn.receive(method, params) }
         guard let session = tracked["\(threadID).\(pid)"] else { return child(method, params, thread: threadID, pid: pid) }
         // 托管会话的一轮归它的驱动（`event`），下面两项只管终端会话
         let terminal = hosted[pid] == nil

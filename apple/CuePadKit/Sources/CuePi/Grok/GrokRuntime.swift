@@ -126,6 +126,7 @@ public final class GrokRuntime: AgentRuntime {
             id: id, sessionID: entry.sessionID, agent: .grok, sessionFile: file, pid: entry.pid,
             cwd: URL(filePath: entry.cwd, directoryHint: .isDirectory), terminal: PiTerminal(tty: PiTerminal.controllingTerminal(of: entry.pid)),
             state: .settled, stateSince: .now)
+        session.name = checkpoint.name
         follow(terminal, checkpoint)
         terminal.facts.publish(to: &session)
         bridge.attach(session, via: self)

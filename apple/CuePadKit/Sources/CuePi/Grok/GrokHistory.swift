@@ -11,9 +11,28 @@ import Foundation
 /// - `agent_message_chunk` 是说的一段，`tool_call`、`tool_call_update` 是工具活动；做完那条的 `content` 里 ACP 的图片块
 ///   （`{type: content, content: {type: image, data}}`，grok 1.0.70 读图实测）是工具结果里的图，缩小后记在那一步上（`ToolImage`）；
 /// - `turn_completed`（方法 `_x.ai/session/update`）结束这一轮：`cancelled` 是被停下，其余是做完（出错的原话不在记录里）。
-/// 工作目录在路径里（`SessionFileFormat.cwd`）；会话名不在这个文件里，历史会话的名字退回首条消息。
+/// 工作目录在路径里（`SessionFileFormat.cwd`）；会话名不在这个文件里，在同目录的 `summary.json`（`name`）。
 enum GrokHistory {
     static let fileName = "updates.jsonl"
+
+    /// 同目录的 `summary.json`：Grok 按对话起的与 `/rename` 起的都写进 `generated_title`（`title_is_manual` 标出后者），
+    /// 旧版只写 `session_summary`；都空是还没起名。一轮结束后才起好、之后几轮还会改，都不写会话记录。
+    static let sidecar = SessionFileFormat.Sidecar(file: { $0.deletingLastPathComponent().appending(path: "summary.json") }, name: name)
+
+    private static func name(in data: Data, sessionID _: String) -> String? {
+        guard let summary = try? JSONDecoder().decode(Summary.self, from: data) else { return nil }
+        return [summary.generatedTitle, summary.sessionSummary].lazy.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
+    }
+
+    private struct Summary: Decodable {
+        var generatedTitle: String?
+        var sessionSummary: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case generatedTitle = "generated_title"
+            case sessionSummary = "session_summary"
+        }
+    }
     static let deliveryPrefix = "cuepad-"
 
     static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {

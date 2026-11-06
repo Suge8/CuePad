@@ -8,7 +8,7 @@ extension CodexRuntime {
     nonisolated public static let facts = AgentFacts(
         command: "codex", homeVariable: "CODEX_HOME", installScript: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
         loginArguments: ["login"],
-        sessionFiles: SessionFileFormat(ingest: CodexHistory.ingest, depth: 4, naming: .idSuffix) {
+        sessionFiles: SessionFileFormat(ingest: CodexHistory.ingest, depth: 4, naming: .idSuffix, sidecar: CodexHistory.sidecar) {
             $0.home(of: .codex).appending(path: "sessions", directoryHint: .isDirectory)
         },
         channel: { integration, codex in

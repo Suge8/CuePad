@@ -26,6 +26,15 @@ extension PiBridge {
         replace(slot, with: session)
     }
 
+    /// 历史索引读到的会话名放到在线的同一会话上：各家自己起的、改的名字有的只落在文件里（Claude Code 的 `ai-title`、终端里的 Grok 与 Codex），
+    /// 这是它们到在线会话的唯一入口。名字这次变了才换（文件落后于接入报来的改名时不倒回去），在线的还没名字时补上（CuePad 重开后接回）。
+    public func read(_ update: PiHistoryUpdate) {
+        guard let name = update.history.name else { return }
+        for slot in slots where slot.session.agent == update.agent && slot.sessionID == update.sessionID && (update.renamed || slot.session.name == nil) {
+            self.update(slot.id) { $0.name = name }
+        }
+    }
+
     /// 改一个在线会话的快照：状态或那句说明变了报 `stateChanged`，否则报 `infoChanged`；没有变化不报。不在线时什么也不做。
     public func update(_ id: PiSession.ID, _ change: (inout PiSession) -> Void) {
         guard let slot = slots.first(where: { $0.id == id }) else { return }

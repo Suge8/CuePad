@@ -11,7 +11,7 @@ import Foundation
 ///   `queued_command` 附件。工具结果（带的图缩小后记在那一步上，`ToolImage`）、斜杠命令的回显（`<command-name>`、`<local-command-…>`）、`isMeta` 的提醒不算。
 /// - CuePad 送进去的话：托管进程的 stream-json 与收件箱 socket 都把投送请求 id 当作这条消息的 `uuid`（插进去的是 `source_uuid`）；
 ///   收件箱送来的会被包上"另一个 Claude 会话发来的"英文说明，这里剥掉。终端里直接打的（`origin.kind` 为 `human`）没有投送请求。
-/// - 会话名只认 `/rename`（及 CuePad 的改名）写下的 `custom-title`；自动生成的 `ai-title` 不算，与 Pi 的 `/name` 同一层意思。
+/// - 会话名：`/rename`（及 CuePad 的改名）写下的 `custom-title` 是你起的；Claude Code 按对话起的 `ai-title` 在你没起过时算（`PiHistoryCheckpoint.named`）。
 enum ClaudeHistory {
     static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
         cp.seq += 1
@@ -25,7 +25,9 @@ enum ClaudeHistory {
         let entry = PiHistory.Entry(id: line.uuid ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
         switch line.type {
         case "custom-title":
-            if let title = line.customTitle { cp.name = title }
+            cp.named(line.customTitle, byYou: true)
+        case "ai-title":
+            cp.named(line.aiTitle, byYou: false)
         case "system":
             switch line.subtype {
             case "compact_boundary": cp.compacted(entry, into: &transcript)
@@ -127,6 +129,7 @@ enum ClaudeHistory {
         var isCompactSummary: Bool?
         var isApiErrorMessage: Bool?
         var customTitle: String?
+        var aiTitle: String?
         var promptSource: String?
         var origin: Origin?
         var message: Message?
