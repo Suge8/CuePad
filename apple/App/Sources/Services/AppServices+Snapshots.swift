@@ -14,8 +14,8 @@ extension AppServices {
     func startSnapshots() {
         follow(reporting: { .widgetDataUnavailable("\($0)") }) {
             for try await seen in self.cueUpdates() {
-                guard let widget = seen.read.widget else { continue }
-                try await self.present(widget, seen.read.digest, at: seen.moment, local: seen.local)
+                guard seen.read.widget != nil else { continue }
+                try await self.writeSnapshots()  // 观察只当通知：读在发布的串行段里重做，见 writeSnapshots
             }
         }
     }
@@ -51,11 +51,24 @@ extension AppServices {
         return CueNow.Local(waiting: CueGate.of(self, running: nil, name: nil).waitingReason, here: here)
     }
 
-    /// 立即按当前库内容更新，不等快照那条异步的观察：进入后台前（`resend`：岛按此刻重发一次，过时时刻从这时算）、
-    /// 推送叫醒拉完之后（回调一返回系统就可能挂起 App，`IOSAppDelegate`）。
+    /// 按当前库内容更新快照，也是观察的落点：进入后台前（`resend`：岛按此刻重发一次，过时时刻从这时算）、
+    /// 推送叫醒拉完之后（回调一返回系统就可能挂起 App，`IOSAppDelegate`）也直接调，不等那条异步的观察。
+    ///
+    /// 读库、发布活动与角标、落盘是一个单元，按到达先后串行（活动与角标会让出主线程）。读在轮到自己时才做：
+    /// 每个单元读到的都不比前一个单元更旧，最后一个单元写下的就是最新一次读取，旧读取不会晚于新读取写回。
+    /// 后面还排着更新的请求时，前面的（不要重发的）直接跳过，由最后那个读最新的；要重发的不跳。
     func writeSnapshots(resend: Bool = false) async throws {
-        let read = try await CueReading.Read.read(from: store, widget: true)
-        try await present(read.widget!, read.digest, at: speech, local: cueLocal, resend: resend)
+        flights.snapshotTicket += 1
+        let ticket = flights.snapshotTicket
+        let previous = flights.snapshotTurn
+        let turn = Task {
+            _ = await previous?.result  // 前一份的失败由它的调用方报告
+            guard resend || ticket == flights.snapshotTicket else { return }
+            let read = try await CueReading.Read.read(from: store, widget: true)
+            try await render(read.widget!, read.digest, at: speech, local: cueLocal, resend: resend)
+        }
+        flights.snapshotTurn = turn
+        try await turn.value
     }
 
     /// 不依赖观察任务赶在挂起前执行；前台重开、后台收尾都显式等这一份完成。
@@ -65,19 +78,6 @@ extension AppServices {
         } catch {
             reportIssue(.widgetDataUnavailable("\(error)"))
         }
-    }
-
-    /// 发布按到达的先后一份份来：活动与角标让出主线程时，后来的不能超过先到的，旧读取也就不会晚于新读取写回组件与角标。
-    private func present(
-        _ content: WidgetContent, _ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local, resend: Bool = false
-    ) async throws {
-        let previous = flights.snapshotTurn
-        let turn = Task {
-            _ = await previous?.result  // 前一份的失败由它的调用方报告
-            try await render(content, digest, at: moment, local: local, resend: resend)
-        }
-        flights.snapshotTurn = turn
-        try await turn.value
     }
 
     private func render(
