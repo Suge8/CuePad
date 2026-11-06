@@ -27,7 +27,7 @@ extension Command {
         .project("挂到该项目"),
         Opt("parent", "作为该任务的子任务（项目随它；任务 → 子任务，最多 \(Card.maxTaskDepth) 级）", value: "任务"),
       ],
-      notes: Schema.defaultScope(otherwise: Schema.defaultTarget) + "；给了 --parent 时不能再给 --project。\n"
+      notes: Schema.defaultScope(otherwise: Schema.defaultTarget) + "给了 --parent 时不能再给 --project。\n"
         + "正文取所有位置参数，以空格连接：第一行是标题，其余几行是它的正文（开始时连同标题发给 Agent）。\n"
         + Schema.output("新建的 Card", Schema.card)
     ) { call in

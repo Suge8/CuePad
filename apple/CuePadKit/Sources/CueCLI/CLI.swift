@@ -75,7 +75,7 @@ enum CLI {
       return .command(single, Array(tokens.dropFirst()))
     }
     let verbs = Command.all.filter { $0.path.count == 2 && $0.path[0] == first }
-    guard !verbs.isEmpty else { throw CLIError.usage("未知命令「\(first)」") }
+    guard !verbs.isEmpty else { throw CLIError.usage("未知命令「\(first)」，可用：\(Command.nouns.joined(separator: " / "))") }
     guard tokens.count > 1, !tokens[1].hasPrefix("-") else { return .help(Help.group(first, verbs)) }
     guard let verb = verbs.first(where: { $0.path[1] == tokens[1] }) else {
       let known = verbs.map { $0.path[1] }.joined(separator: " / ")

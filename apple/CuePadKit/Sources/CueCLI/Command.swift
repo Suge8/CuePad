@@ -29,6 +29,8 @@ struct Command: Sendable {
   var name: String { path.joined(separator: " ") }
 
   static let all: [Command] = project + card + task + [search, show] + conflicts
+  /// 顶层的命令名（名词或单词命令），按 `all` 的先后。
+  static let nouns: [String] = all.map(\.path[0]).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
 }
 
 /// 命令的输出：文本给人读，`json` 给 agent；`--json` 时只输出后者。

@@ -82,6 +82,8 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
   public static let maxBytes = 20_000_000
   /// 标题宽不过这么多（`CueName.width`，约 20 个汉字）：缩略图下至多两行写得下。
   public static let titleLimit = 40
+  /// 标题怎么写（接在"每个一句，"或"标题要"后面）：技能、命令的帮助与标题不合时的报错共用这一句。
+  public static let titleRule = "说清这份是什么、看哪里，用和用户对话的语言；一行、宽不过 \(titleLimit)（约 \(titleLimit / 2) 个汉字），同一次发的各不相同"
 
   /// 这台设备不认识的类型（别的版本发来的）为 nil
   public var kind: PiPreviewKind? { PiPreviewKind(fileName: name) }
@@ -118,6 +120,20 @@ extension PiPreview: Record {
   }
 }
 
+/// 一份预览的标题哪里不合 `PiPreview.titleRule`：报错说出这一条，Agent 照着改一处就对。
+public enum PreviewTitleProblem: Equatable, Sendable {
+  case blank, multiline, tooWide(Int), repeated
+
+  var phrase: String {
+    switch self {
+    case .blank: "是空的"
+    case .multiline: "不止一行"
+    case .tooWide(let width): "宽 \(width)，超过 \(PiPreview.titleLimit)"
+    case .repeated: "与同一次发的另一份重复"
+    }
+  }
+}
+
 /// `CueStore.addPreviews` 的结果，一个文件一份：预览，以及 HTML 里引用了、手机上预览时拿不到的外部资源。
 public struct PiPreviewAdded: Equatable, Sendable {
   public var preview: PiPreview
@@ -138,9 +154,11 @@ extension CueStore {
     var titles: [String] = []
     for file in sent {
       let title = file.title.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !title.isEmpty, !title.contains(where: \.isNewline), CueName.width(title) <= PiPreview.titleLimit, !titles.contains(title) else {
-        throw CueStoreError.previewTitle(file.url.lastPathComponent, limit: PiPreview.titleLimit)
-      }
+      let width = CueName.width(title)
+      let problem: PreviewTitleProblem? =
+        if title.isEmpty { .blank } else if title.contains(where: \.isNewline) { .multiline }
+        else if width > PiPreview.titleLimit { .tooWide(width) } else if titles.contains(title) { .repeated } else { nil }
+      if let problem { throw CueStoreError.previewTitle(file.url.lastPathComponent, problem) }
       titles.append(title)
     }
     let urls = sent.map(\.url)
@@ -150,7 +168,7 @@ extension CueStore {
         throw CueStoreError.previewUnreadable(url.path)
       }
       guard let kind = PiPreviewKind(fileName: url.lastPathComponent) else { throw CueStoreError.previewUnsupported(url.pathExtension.lowercased()) }
-      guard size <= PiPreview.maxBytes else { throw CueStoreError.previewTooLarge(url.path, limit: PiPreview.maxBytes) }
+      guard size <= PiPreview.maxBytes else { throw CueStoreError.previewTooLarge(url.path, bytes: size) }
       return (url: url, kind: kind, size: size)
     }
     let hashes = try checked.map { file in

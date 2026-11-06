@@ -22,29 +22,29 @@ extension Call {
   /// 含回收站里的卡片，也含随项目进回收站的卡片。
   func card(_ ref: String) async throws -> Card {
     if let id = UUID(uuidString: ref) {
-      guard let card = try await store.card(id) else { throw CLIError.notFound("找不到灵感或任务 \(ref)") }
+      guard let card = try await store.card(id) else { throw CLIError.notFound("找不到灵感或任务 \(ref)（cuepad search 查找）") }
       return card
     }
-    return try await unique(ref, kind: "灵感或任务", describe: { $0.body }) { try await store.cards(idPrefix: ref) }
+    return try await unique(ref, kind: "灵感或任务", lister: "cuepad search", describe: { $0.body }) { try await store.cards(idPrefix: ref) }
   }
 
   /// 任务（要做的卡片）：id 或唯一前缀，只在可见任务里找。
   func task(_ ref: String) async throws -> Card {
     let all = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
     if let id = UUID(uuidString: ref) {
-      guard let task = all.first(where: { $0.id == id }) else { throw CLIError.notFound("找不到任务 \(ref)") }
+      guard let task = all.first(where: { $0.id == id }) else { throw CLIError.notFound("找不到任务 \(ref)（cuepad task list --all 查看）") }
       return task
     }
-    return try await unique(ref, kind: "任务", describe: { $0.body }) { all.filter { matches(ref, $0.id) } }
+    return try await unique(ref, kind: "任务", lister: "cuepad task list --all", describe: { $0.body }) { all.filter { matches(ref, $0.id) } }
   }
 
-  /// 前缀至少 4 位才查；`candidates` 给出以它开头的全部对象。
+  /// 前缀至少 4 位才查；`candidates` 给出以它开头的全部对象，`lister` 是找不到时让 Agent 去查 id 的命令。
   private func unique<T: Identifiable>(
-    _ ref: String, kind: String, describe: (T) -> String, candidates: () async throws -> [T]
+    _ ref: String, kind: String, lister: String, describe: (T) -> String, candidates: () async throws -> [T]
   ) async throws -> T where T.ID == UUID {
     let hits = ref.count >= 4 ? try await candidates() : []
     if hits.count == 1 { return hits[0] }
-    guard hits.count > 1 else { throw CLIError.notFound("找不到\(kind) \(ref)（id 或至少 4 位的唯一前缀）") }
+    guard hits.count > 1 else { throw CLIError.notFound("找不到\(kind) \(ref)：写 id 或至少 4 位的唯一前缀（\(lister) 查看）") }
     let lines = hits.map { "  \($0.id.uuidString.lowercased())  \(describe($0).prefix(30))" }
     throw CLIError(kind: .ambiguous, message: "前缀「\(ref)」匹配到 \(hits.count) 个\(kind)，请写长一点：\n" + lines.joined(separator: "\n"))
   }

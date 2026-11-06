@@ -1,24 +1,29 @@
 /// 帮助是命令行的唯一文档：根帮助只教常用任务；选项与 JSON 字段在各命令的 --help 里。
 enum Help {
-  static let root = """
-    cuepad — 读写本机 CuePad 资料库（项目、灵感、任务）
+  static let root: String = {
+    let examples = [
+      ("cuepad search 部署 脚本", "查灵感与任务（每个词都要命中）"),
+      ("cuepad card list", "列灵感"),
+      ("printf '正文' | cuepad card add", "记一条灵感（正文也可用 --body）"),
+      ("cuepad task add 写发布说明", "加任务"),
+      ("cuepad task list", "看未完成任务"),
+      ("cuepad task done <id>", "完成任务"),
+      ("cuepad show a.png --title 改后首页", "把文件发到用户手机上看（在 Agent 的命令里运行）"),
+    ]
+    let width = examples.map(\.0.displayWidth).max() ?? 0
+    return """
+      cuepad — 读写本机 CuePad 资料库（项目、灵感、任务），把文件发到用户手机上
 
-    常用：
-      cuepad search 部署 脚本            查灵感与任务（每个词都要命中）
-      cuepad card list                   列灵感
-      printf '正文' | cuepad card add    记一条灵感（正文也可用 --body）
-      cuepad task add 写发布说明          加任务
-      cuepad task list                   看未完成任务
-      cuepad task done <id>              完成任务
-      cuepad show a.png --title 改后首页 把文件发到用户手机上看，每个文件一句标题（在 Agent 的命令里运行）
+      常用：
+      \(examples.map { "  \($0.padded(to: width))  \($1)" }.joined(separator: "\n"))
 
-    默认范围：在绑定了目录的项目里运行时，读写默认限定该项目；--project 名称指定，--all-projects 不限；新建的不在这样的目录里时进项目「默认」。
-    全部命令：cuepad project --help、cuepad card --help、cuepad task --help、cuepad conflicts --help
-    选项与输出字段：cuepad <命令> --help，例如 cuepad card add --help
-    --json 输出 JSON（失败时 stderr 为 {"error":{"code","message"}}）；退出码 0 成功、1 运行错误、2 用法错误。
-    隔离库：CUEPAD_LIBRARY_DIR=<绝对路径>；默认是 CuePad.app 的库（需先打开过一次）；从源码编的用开发库 ~/Library/Application Support/CuePad Dev。
-    cuepad hook <agent> 是 CuePad 写进 Claude Code、Codex 钩子配置的转发命令，不用手动运行。
-    """
+      全部命令：\(Command.nouns.joined(separator: "、"))；选项与输出字段看 cuepad <命令> --help（如 cuepad card add --help）。
+      默认范围：在绑定了目录的项目里运行时读写限定该项目；--project 指定，--all-projects 不限；别处新建的进默认项目。
+      --json 输出 JSON（失败时 stderr 为 {"error":{"code","message"}}）；退出码 0 成功、1 运行错误、2 用法错误。
+      隔离库：CUEPAD_LIBRARY_DIR=<绝对路径>；默认是 CuePad.app 的库（需先打开过一次），从源码编的用 ~/Library/Application Support/CuePad Dev。
+      cuepad hook <agent> 是 CuePad 写进 Claude Code、Codex 钩子配置的转发命令，不用手动运行。
+      """
+  }()
 
   static func group(_ noun: String, _ commands: [Command]) -> String {
     let width = commands.map { $0.name.displayWidth }.max() ?? 0

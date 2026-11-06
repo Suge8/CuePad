@@ -234,9 +234,10 @@ import Testing
   @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
     let sb = try Fixture()
     let root = await sb.run("--help").out
+    let listed = try #require(root.split(separator: "\n").first { $0.hasPrefix("全部命令：") })
     for command in Command.all {
       let noun = command.path[0]
-      #expect(root.contains("cuepad \(noun)"), "根帮助没有提到 \(noun)")
+      #expect(listed.contains(noun), "根帮助的全部命令没有 \(noun)")
       if command.path.count == 2 {
         #expect((await sb.run(noun, "--help")).out.contains(command.name), "\(noun) --help 没列出 \(command.name)")
       }
