@@ -25,6 +25,7 @@ extension ACPSession: SessionLink {
     }
 
     func abort(_: PiSession.ID) async throws {
+        cancelStopWaits()
         try await interrupt()
     }
 

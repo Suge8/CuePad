@@ -111,6 +111,7 @@ extension CodexRuntime {
         if tracked[id] != nil { return id }
         // 正在跑一轮：接上时就是工作中（钩子要等下一个事件才来），从这一轮的开始算
         let last = try await Self.lastTurn(threadID, on: rpc)
+        try Task.checkCancellation()
         let running = last?["status"]?.string == "inProgress"
         if tracked[id] != nil { return id }
         // thread/read 不返回 serviceTier；resume 虽然返回，却会订阅线程并接走终端的审批，所以保持未知。

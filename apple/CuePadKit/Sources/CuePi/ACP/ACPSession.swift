@@ -194,6 +194,9 @@ final class ACPSession {
     /// 在跑的是 CuePad 开的那一轮：插话只并进它（Agent 自己开的一轮各家不保证收下，等它做完再开）
     var steerable: Bool { facts.running && prompted == turn && promptRunning }
 
+    /// 停止：卡在"等上一轮停下"的发话以取消结束，不再各等到时限。
+    func cancelStopWaits() { stops.cancelAll() }
+
     /// 等这一轮结束（没在跑立即返回，进程退出时也返回）；取消的回应不来时到 `AgentTimeouts.stop` 抛 `ackTimeout`。
     func untilFinished() async throws {
         let current = turn

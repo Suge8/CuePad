@@ -107,6 +107,13 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
         for continuation in all { continuation.resume() }
     }
 
+    /// 等着的全部以取消结束（调用方的任务没被取消，是别处要它们放手，如停止）；之后的请求照常。
+    func cancelAll() {
+        let all = waiting.values
+        waiting = [:]
+        for continuation in all { continuation.resume(throwing: CancellationError()) }
+    }
+
     /// 连接断了：等着的全部以 `error` 失败，之后的请求直接抛它。
     func closeAll(_ error: any Error) {
         closed = error

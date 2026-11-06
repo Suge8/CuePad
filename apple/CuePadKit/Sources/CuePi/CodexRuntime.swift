@@ -107,6 +107,8 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         var lastError: String?
         /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮
         var restarting: Restart?
+        /// `restarting` 是第几次 `deliver` 设的
+        var restartGeneration = 0
         var skills: [(name: String, path: String)] = []
 
         init(id: PiSession.ID, threadID: String, pid: Int32) {

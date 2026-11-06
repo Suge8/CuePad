@@ -24,18 +24,21 @@ extension CodexRuntime {
     /// `interrupted` 同时到），所以紧接着的 `turn/start` 开的是新一轮——它碰上还在跑的一轮会变成插话（压缩那一轮则拒收）。
     /// 被停下的那一轮不报歇下（`restarting`）：这句开出新一轮就从此刻算起（托管的从驱动报的开始算，见 `event`），没开成才歇下。
     func deliver(_ input: [JSONValue], clientID: String, to session: Tracked) async throws {
+        // 代次：几处并发进来（发话、带话的斜杠命令、回答问题）时，后来的接手 `restarting`，先到的结束时不清、也不据它判断
+        session.restartGeneration += 1
+        let mine = session.restartGeneration
         session.restarting = .stopping
-        defer { session.restarting = nil }
+        defer { if session.restartGeneration == mine { session.restarting = nil } }
         do {
             try await interrupt(session)
             try await turnStart(session, input, options: ["clientUserMessageId": .string(clientID)])
         } catch {
-            if session.restarting == .stopped { session.facts.endTurn() }
+            if session.restartGeneration == mine, session.restarting == .stopped { session.facts.endTurn() }
             publish(session)
             throw error
         }
         // 托管的这一轮由驱动报开始（`event`），这里只补终端会话的
-        guard session.restarting == .stopped, hosted[session.pid] == nil else { return }
+        guard session.restartGeneration == mine, session.restarting == .stopped, hosted[session.pid] == nil else { return }
         startTurn(session, at: .now)
         publish(session)
     }

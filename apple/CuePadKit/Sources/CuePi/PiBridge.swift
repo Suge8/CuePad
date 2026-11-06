@@ -131,7 +131,7 @@ public final class PiBridge {
 extension PiBridge {
     /// 发消息（文字 + 图片），以这句开新一轮：会话歇着就直接开始，在跑就先打断这一轮；打断不了的（`AgentCapabilities.speakBlocked`）
     /// 拒收、带上原因，不排队。受理即返回，不代表模型成功。
-    /// 同一会话的 `send` 一次一句（`SessionGate`）；`abort` 与斜杠命令不排队（`/compact` 要等压完才确认，发话得能在它进行中打断它）。
+    /// 同一会话的 `send` 一次一句（`SessionGate`）；`abort` 不排队、还取消排着的发话；斜杠命令不排队（`/compact` 要等压完才确认，发话得能在它进行中打断它）。
     public func send(_ message: PiMessage, to id: PiSession.ID) async throws {
         try await turns.run(id) { try await deliver(message, to: id) }
     }
@@ -199,7 +199,9 @@ extension PiBridge {
     /// 停止该会话正在跑的这一轮（相当于在 Agent 里按 Esc）：受理即返回，会话随后歇下（`.settled`），能接着说。
     /// 已经空闲时什么也不发生（也成功）；只停它自己这一轮，它派出的子代理照常跑。
     public func abort(_ id: PiSession.ID) async throws {
-        try await control(id, needs: .abort).abort(id)
+        let link = try control(id, needs: .abort)
+        turns.abort(id)
+        try await link.abort(id)
     }
 
     /// 把该会话出错的那一轮原样重跑一遍（`PiSessionState.canRetry`）：对话里不多一句话、也不发"继续"，只多出新的回答。受理即返回，会话随即回到在跑；
