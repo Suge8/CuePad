@@ -34,6 +34,8 @@ struct BoardColumn: View {
     /// 拖到已完成的那件与它这一下（同点完成圈，`taskCheck`）。
     @State private var finishing: TaskBoard.Item?
     @State private var check = TaskCheck()
+    /// 拖到已完成、还在做或在等你的会话卡：问过再完成。
+    @State private var closing: PiSessionState?
     /// 点开的成果图（已完成列）。
     @State private var opened: PreviewOpening?
 
@@ -44,6 +46,9 @@ struct BoardColumn: View {
                 if let session = card.session { drop(session: session) }
             }
             .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
+            .agentBusyDialog(closing, isPresented: Binding(get: { closing != nil }, set: { if !$0 { closing = nil } })) {
+                if let closing { complete(closing) }
+            }
             .modifier(ShotPresenter(column: column, opened: $opened))
             // 有卡飞进来的那一列（行）排在别的列上面：往左、往上飞的卡不从别的列的卡下面钻过去（`boardFlight`）
             .zIndex(moves?.lands(in: board.flights(column)) == true ? 1 : 0)
@@ -246,21 +251,24 @@ struct BoardColumn: View {
         }
     }
 
-    /// 会话卡（推进中、等你里没归没做完的事的）拖到已完成（别的列不接）。
+    /// 会话卡（推进中、等你里没归没做完的事的）拖到已完成（别的列不接）。同拖任务卡：会话在做或在等你时先问一句（`agentBusyDialog`），
+    /// 答应了才建任务、完成；取消什么都不留，卡留在原处。
     private func drop(session id: String) {
-        let loose = board.advancing.compactMap(\.loose?.state) + board.held.filter { $0.item == nil }.map(\.session)
-        guard column == .done, let session = loose.first(where: { $0.sessionID == id }) else { return }
-        workspace.attempt { try await workspace.complete(session) }
+        let loose = board.advancing.compactMap(\.loose) + board.held.filter { $0.item == nil }.map { PiSessionListItem(state: $0.session) }
+        guard column == .done, let agent = loose.first(where: { $0.state.sessionID == id }) else { return }
+        if workspace.pulse(of: agent).shown?.agentBusy == true { closing = agent.state } else { complete(agent.state) }
     }
+
+    private func complete(_ session: PiSessionState) { workspace.attempt { try await workspace.complete(session) } }
 
     private func start(_ task: Card) { workspace.handOff(task) }
 
     /// 同点完成圈（`Workspace.tap`，确认、停留与写入同 `taskCheck`）。
     private func finish(_ item: TaskBoard.Item) {
-        let busy = workspace.next(for: item, shown: workspace.pulse(of: item.agent).shown)?.agentBusy ?? false
+        let busy = workspace.next(for: item, shown: workspace.pulse(of: item.agent).shown)?.busySession
         finishing = item
         check = TaskCheck()
-        workspace.tap($check, task: item.task, subtasks: item.steps, agentBusy: busy)
+        workspace.tap($check, task: item.task, subtasks: item.steps, busy: busy)
     }
 }
 

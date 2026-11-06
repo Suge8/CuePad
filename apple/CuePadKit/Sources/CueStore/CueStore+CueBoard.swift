@@ -27,6 +27,9 @@ extension CueStore {
   /// 表 `alias`（会话记录）里不归没做完的事的活会话：没结束，没有没做完的任务绑着它，
   /// 也不是哪个没做完的任务以前用过的（`Card.formerSessionIDs`）。只有已完成的事绑着的算在内：它还活着，Cue 管它——
   /// 但那件事完成之后它还没动过的不算：完成时它随那件事收起（终端里你自己开的会话 CuePad 不结束，`endUnused`），再有动静才回来。
+  /// 活着就在看板上，一件事只出现一处：收起的会话在看板上是它绑着的那张已完成的任务卡；完成之后它有了新状态，才作为无主会话回到推进中。
+  /// 先后看本机写入序号（`writeSeq`：任务只在完成、上级、是不是任务变了时盖，会话只在状态变了时盖，全库一个计数器、不重号），
+  /// 不比时刻——完成与新状态落在同一毫秒时比时刻分不出先后。
   /// 离开了看板的任务（`taskOpen`：归档、删除、项目进了回收站）不算。
   static func isLoose(_ alias: String) -> String {
     """
@@ -34,7 +37,7 @@ extension CueStore {
       AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskOpen))
       AND NOT EXISTS (
         SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL
-          AND c.completedAt >= \(alias).stateSince)
+          AND c.completedAt IS NOT NULL AND c.writeSeq > \(alias).writeSeq)
       AND NOT EXISTS (
         SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
         WHERE c.formerSessionIDs IS NOT NULL AND \(taskOpen) AND f.value = \(alias).sessionID)

@@ -87,7 +87,7 @@ extension CueStore {
     let deliveries = try latestDeliveries(to: ids)
     let renames = try latestRenames(to: ids)
     let unsettled = try unsettledTalk(to: ids)
-    let tasks = try sessionTasks(ids)
+    let tasks = try sessionOwners(ids).mapValues { SessionTask(id: $0.task.id, isPinned: $0.task.isPinned, title: CueSummary.title(of: $0.leaf.body)) }
     return states.map {
       PiSessionListItem(
         state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
@@ -95,28 +95,16 @@ extension CueStore {
     }
   }
 
-  /// 会话绑着的顶层任务，一行一处绑定（会话 id、顶层任务、它置顶没有、绑着它的那个叶子的正文）：会话置不置顶、叫什么只看这一份。从绑着它、还在列表里的任务往上一级就是顶层
+  /// 会话绑着的顶层任务，一行一处绑定（会话 id、顶层任务、它置顶没有）：会话列表的置顶分组按它（绑着的任务里有置顶的就算）。从绑着它、还在列表里的任务往上一级就是顶层
   /// （任务至多两级，`Card.maxTaskDepth`）。
   private static let sessionTaskRows = """
     SELECT piSessionID AS sessionID, COALESCE(parentID, id) AS task,
-      COALESCE((SELECT p.isPinned FROM cards p WHERE p.id = cards.parentID), isPinned) AS pinned, body, completedAt, startedAt
+      COALESCE((SELECT p.isPinned FROM cards p WHERE p.id = cards.parentID), isPinned) AS pinned
     FROM cards WHERE piSessionID IS NOT NULL AND todoAt IS NOT NULL AND \(cardActive)
     """
 
   /// 绑在置顶任务上的会话：会话列表的置顶在最前（`PiSessionQuery.pinned`）。
   private static let pinnedSessions = "SELECT sessionID FROM (\(sessionTaskRows)) WHERE pinned = 1"
-
-  /// 这些会话绑着的顶层任务（`sessionTaskRows`），按 Pi 的会话 id；绑着几件时取没做完的，再取置顶的，再取最近开始的
-  /// （同 App 改名写的那一个，`Workspace.rename`）：做完的旧任务不抢正在用它的那件的名字。
-  private func sessionTasks(_ sessionIDs: [String]) throws -> [String: SessionTask] {
-    guard !sessionIDs.isEmpty else { return [:] }
-    let rows = try db.query(
-      "SELECT sessionID, task, pinned, body FROM (\(Self.sessionTaskRows)) WHERE sessionID IN (SELECT value FROM json_each(?)) "
-        + "ORDER BY completedAt IS NULL DESC, pinned DESC, startedAt DESC",
-      [JSONColumn.encode(sessionIDs)]
-    ) { ($0.text(0), SessionTask(id: $0.uuid(1), isPinned: $0.bool(2), title: CueSummary.title(of: $0.text(3)))) }
-    return Dictionary(rows, uniquingKeysWith: { first, _ in first })
-  }
 
   /// 在问你的会话："等你"里会话那一半（规则在 `PiSessionState.asksYou`，汇总在 `cueTally`）。只读在等回答的那几条，订阅也只依赖它们（`narrow`）：
   /// 别的会话变状态时"等你"不重读。

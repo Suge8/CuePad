@@ -93,11 +93,11 @@ extension CueStore {
     return try endUnused(sessions.filter { !used.contains($0) }, outside: top.id, cue: cue)
   }
 
-  /// 这些会话里在 `root` 这件事之外也没人再用（`usedElsewhere`；nil 是哪件事都不除外）、CuePad 托管且做得到的（`PiSessionState.hosted`、`canEnd`），
+  /// 这些会话里在 `root` 这件事之外也没人再用（`usedElsewhere`；nil 是哪件事都不除外）、CuePad 托管且做得到的（`PiSessionState.endsWithTask`），
   /// 请它所在的 Mac 结束；已结束的、记录还没到的不动。返回结束请求。必须在写事务内调用。
   func endUnused(_ sessions: [String], outside root: UUID?, cue: Bool) throws -> [DeliveryRequest] {
     try sessions.compactMap { sessionID in
-      guard try db.first(Self.usedElsewhere, [sessionID, root], { _ in true }) == nil, let state = try sessionState(sessionID), state.hosted, state.canEnd
+      guard try db.first(Self.usedElsewhere, [sessionID, root], { _ in true }) == nil, let state = try sessionState(sessionID), state.endsWithTask
       else { return nil }
       return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue)
     }

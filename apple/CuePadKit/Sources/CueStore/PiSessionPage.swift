@@ -76,7 +76,7 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var rename: DeliveryRequest?
   /// 发给它、还没有回执或失败了的话（说话的方式，没被领取或失败、还没重发或移除的）：哪几句没能送达按说的话那条规则看此刻（`undelivered`）。
   public var unsettled: [DeliveryRequest]
-  /// 绑着它的顶层任务（`CueStore.sessionTasks`）：会话的"置顶"置的是它；没绑还在列表里的任务为 nil。
+  /// 它此刻归的那件事的顶层任务（`CueStore.sessionOwners`）：会话的"置顶"置的是它；没绑还在列表里的任务为 nil。
   public var task: SessionTask?
   public var id: UUID { state.id }
   /// 会话归在哪个项目（会话页按它筛、项目的此刻按它归）：它的项目还在就是它，没有项目或项目已删的归默认项目。

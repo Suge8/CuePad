@@ -8,12 +8,7 @@ extension CueStore {
   /// 两台设备离线时同时建会多出一件，照常同步，不为它做确定性 id。返回顶层任务的 id。
   public func adoptSession(_ sessionID: String) throws -> UUID {
     try write {
-      if let bound = try db.first(
-        "SELECT COALESCE(parentID, id) FROM cards WHERE piSessionID = ? AND \(Self.taskOpen) ORDER BY parentID IS NOT NULL, startedAt, id", [sessionID],
-        { $0.uuid(0) })
-      {
-        return bound
-      }
+      if let owner = try sessionOwners([sessionID])[sessionID], owner.leaf.completedAt == nil { return owner.task.id }
       guard let session = try sessionState(sessionID) else { throw CueStoreError.notFound }
       let live = try session.projectID.flatMap { id in try db.first("SELECT 1 FROM projects WHERE id = ? AND deletedAt IS NULL", [id]) { _ in id } }
       let project = live ?? Project.defaultID

@@ -115,6 +115,10 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 
   // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
 
+  /// 它绑着的事完成时 CuePad 替你结束它：只结束 CuePad 托管、做得到结束的（`CueStore.endUnused`）。终端里你自己开的会话不结束
+  /// （结束它就是关掉你的终端进程），只随那件事收起；完成前的确认照这个说（App 的 `agentBusyDialog`）。
+  public var endsWithTask: Bool { hosted && canEnd }
+
   public var canEnd: Bool {
     capabilities.contains(.end) && state != .known(.ended)
   }

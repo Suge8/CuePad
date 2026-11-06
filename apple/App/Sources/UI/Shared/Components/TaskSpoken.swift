@@ -36,7 +36,7 @@ private struct TaskSpoken<More: View>: ViewModifier {
             .accessibilityValue(TaskSpeech.value(done ? .done : task.status))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(check.phase == .pending ? String(localized: "撤销完成") : TaskSpeech.toggle(done: done))
-            .accessibilityAction { workspace.tap($check, task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false) }
+            .accessibilityAction { workspace.tap($check, task: task, subtasks: subtasks, busy: next?.busySession) }
             .accessibilityActions {
                 Button("打开", action: open)
                 more

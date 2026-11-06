@@ -3,11 +3,11 @@ import SwiftUI
 
 /// 点完成圈的这一下（任务行、任务标题、子任务，Mac 与手机同一份）：点了立即显示完成（圈落下对勾、标题划线、手机一下成功触感），
 /// 停留 `linger` 再写入、由列表移走——看得清，也来得及反悔：这段时间里再点一下就撤销。还有没完成的子任务时先问一起完成；
-/// 它的 Agent 还在做或在等你时先问一句（完成会把它的会话一起结束，`Workspace.toggle`）。已完成的点一下立即回到待办。
+/// 它的 Agent 还在做或在等你时先问一句（`agentBusyDialog`：托管的会话一起结束，终端里你开的不结束）。已完成的点一下立即回到待办。
 /// 状态只是这一行界面上的过渡，完成与否以 Store 为准：写入落地或别处改了，这一行回到 `idle`。
 struct TaskCheck: Equatable {
     enum Phase { case idle, pending, committed }
-    enum Ask { case steps, agent }
+    enum Ask: Equatable { case steps, agent(PiSessionState) }
 
     var phase = Phase.idle
     var ask: Ask?
@@ -21,7 +21,8 @@ struct TaskCheck: Equatable {
 
 extension Workspace {
     /// 点完成圈（圈本身、读屏的默认动作同一条路）。
-    func tap(_ check: Binding<TaskCheck>, task: Card, subtasks: TaskProgress?, agentBusy: Bool) {
+    /// `busy`：在做或在等你的会话（`TaskNext.busySession`），完成前先问它。
+    func tap(_ check: Binding<TaskCheck>, task: Card, subtasks: TaskProgress?, busy: PiSessionState?) {
         if task.status == .done {
             let id = task.id
             return attempt { try await self.toggle(id) }
@@ -30,8 +31,8 @@ extension Workspace {
         case .idle:
             if TaskCopy.hasOpen(subtasks) {
                 check.wrappedValue.ask = .steps
-            } else if agentBusy {
-                check.wrappedValue.ask = .agent
+            } else if let busy {
+                check.wrappedValue.ask = .agent(busy)
             } else {
                 check.wrappedValue.phase = .pending
             }
@@ -75,7 +76,7 @@ struct TaskCheckButton: View {
     private var trigger: some View { Button(action: tap) { ring }.buttonStyle(PressStyle(.button)) }
     #endif
 
-    private func tap() { workspace.tap($check, task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false) }
+    private func tap() { workspace.tap($check, task: task, subtasks: subtasks, busy: next?.busySession) }
 }
 
 extension View {
@@ -95,9 +96,7 @@ private struct TaskCheckFlow: ViewModifier {
     func body(content: Content) -> some View {
         content
         .dialog(.verbatim(TaskCopy.openSubtasks(subtasks)), isPresented: asking(.steps), buttons: [DialogButton(title: "全部完成") { check.phase = .pending }])
-        .dialog(
-            "Agent 还在做这件事", isPresented: asking(.agent), message: "完成会把它的会话一起结束。",
-            buttons: [DialogButton(title: "完成并结束会话") { check.phase = .pending }])
+        .agentBusyDialog(busy, isPresented: Binding(get: { busy != nil }, set: { if !$0, busy != nil { check.ask = nil } })) { check.phase = .pending }
         .task(id: check.phase) {
             guard check.phase == .pending else { return }
             try? await Task.sleep(for: TaskCheck.linger)
@@ -108,6 +107,8 @@ private struct TaskCheckFlow: ViewModifier {
         .onDisappear { if check.phase == .pending { commit() } }
         .onChange(of: task?.completedAt) { check.phase = .idle }
     }
+
+    private var busy: PiSessionState? { if case .agent(let session) = check.ask { session } else { nil } }
 
     private func asking(_ ask: TaskCheck.Ask) -> Binding<Bool> {
         Binding(get: { check.ask == ask }, set: { if !$0, check.ask == ask { check.ask = nil } })
