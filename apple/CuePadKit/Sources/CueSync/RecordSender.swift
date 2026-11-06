@@ -47,11 +47,16 @@ actor RecordSender {
   private var nextRun = 0
   private var limit = CloudKitLimits.recordsPerRequest
   private var busy = false
-  private var stopped = false
+  private let generation: SyncGeneration
+  private var stopped: Bool { generation.isOver }
 
-  init(uploader: any RecordUploader, coordinator: SyncCoordinator, prepare: @escaping @Sendable () async throws -> Void = {}) {
+  init(
+    uploader: any RecordUploader, coordinator: SyncCoordinator, generation: SyncGeneration = SyncGeneration(),
+    prepare: @escaping @Sendable () async throws -> Void = {}
+  ) {
     self.uploader = uploader
     self.coordinator = coordinator
+    self.generation = generation
     self.prepare = prepare
     (triggers, trigger) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
   }
@@ -75,7 +80,7 @@ actor RecordSender {
   }
 
   func stop() async {
-    stopped = true
+    generation.end()
     let running = tasks + Array(urgentRuns.values)
     let preparation = preparing
     tasks = []
@@ -223,6 +228,7 @@ actor RecordSender {
       }
       let outcome = await coordinator.sent(sent, for: batch)
       answer(names, received: Set(sent.saved.map(\.recordID.recordName) + sent.deleted.map(\.recordName)))
+      if outcome.paused { return false }  // 协调器停下了（等你决定、要更新）：结果没记账，也不定重试时刻
       if outcome.zoneMissing { try await uploader.saveZone() }
       if let fault = outcome.fault {
         await schedule(fault)
