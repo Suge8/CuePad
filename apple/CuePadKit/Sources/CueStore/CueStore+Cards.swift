@@ -10,6 +10,23 @@ extension CueStore {
     }
   }
 
+  /// 分享队列的一条入库成灵感：建卡与记下"这条已入库"（`capture` 是条目的稳定标识）在同一个事务里，同一条再来返回 nil、不重复建。
+  /// 条目删掉后调 `finishCapture` 忘掉标记；删失败重试时标记还在，只重试删除。
+  public func createCard(in project: UUID = Project.defaultID, body: String, capture: String) throws -> Card? {
+    try write {
+      let key = Self.captureKey(capture)
+      guard try syncState(key) == nil else { return nil }
+      try requireLiveProject(project)
+      let card = try insertCard(body, project: project, parent: nil, todo: false, sortKey: SortKey.before(firstTopKey(in: project)))
+      try db.run("INSERT INTO syncState (key, value) VALUES (?, ?)", [key, Data()])
+      return card
+    }
+  }
+
+  public func finishCapture(_ capture: String) throws { try setSyncState(Self.captureKey(capture), nil) }
+
+  private static func captureKey(_ capture: String) -> String { "capture:\(capture)" }
+
   /// 新任务（要做的卡片）放在所在项目顶层的最前。正文不能为空，否则抛 `blankTaskContent`；第一行是标题，其余是它的正文（`CueLines.split`）。
   public func createTask(_ body: String, in project: UUID = Project.defaultID) throws -> Card {
     try requireContent(body)

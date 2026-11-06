@@ -25,11 +25,9 @@ extension AppServices {
     private func importPendingCaptures() async {
         for entry in CaptureQueue.pending(in: location.captureDirectory) {
             do {
-                if !entry.isImported {
-                    try await importCapture(entry)
-                    try CaptureQueue.markImported(entry)
-                }
+                try await importCapture(entry)
                 try CaptureQueue.remove(entry)
+                try await store.finishCapture(entry.id)
             } catch {
                 reportIssue(.captureImportFailed("\(error)"))
             }
@@ -54,7 +52,7 @@ extension AppServices {
             files.joined(separator: "\n"),
         ].filter { !$0.isEmpty }
         let project = try await existingProject(capture.project)
-        _ = try await store.createCard(in: project, body: sections.joined(separator: "\n\n"))
+        _ = try await store.createCard(in: project, body: sections.joined(separator: "\n\n"), capture: entry.id)  // 已入库过的返回 nil
     }
 
     /// 选的项目此后已被删除（卡片放进已删除的项目会不可见）的，进默认项目。

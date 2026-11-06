@@ -169,6 +169,9 @@ public actor CloudSync {
     for id in Array(startWaiters.keys) { stopWaiting(id) }
     let running = Array(background.values) + retryWatchers + [accountWatcher, accountRetry].compactMap { $0 }
     let authenticating = connecting
+    // 本代的组件当场摘下：收尾期间别的调用 start 起的新一代用的是新的，这里只停摘下的这几个
+    let senders = (sender: sender, fileSender: fileSender, fileFetcher: fileFetcher)
+    (sender, fileSender, fileFetcher, puller, cloud, connected) = (nil, nil, nil, nil, nil, false)
     background = [:]
     retryWatchers = []
     accountWatcher = nil
@@ -181,15 +184,9 @@ public actor CloudSync {
     running.forEach { $0.cancel() }
     for task in running { await task.value }
     _ = await authenticating?.value
-    await sender?.stop()
-    sender = nil
-    await fileSender?.stop()
-    fileSender = nil
-    await fileFetcher?.stop()
-    fileFetcher = nil
-    puller = nil
-    cloud = nil
-    connected = false
+    await senders.sender?.stop()
+    await senders.fileSender?.stop()
+    await senders.fileFetcher?.stop()
   }
 
   /// 认过就是 true；没认过的认一次（同时要认的等同一次）。
