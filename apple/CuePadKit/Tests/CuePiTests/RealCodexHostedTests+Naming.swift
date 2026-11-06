@@ -17,7 +17,8 @@ extension RealCodexHostedTests {
                 rig.bridge.session(id: id).map { $0.state == .settled && $0.firstMessage != nil && rig.replies($0).last != nil } == true
             }
             let name = try await rig.bridge.suggestName(for: id)
-            #expect(name.count <= 36 && name.lowercased().contains("blank"), "\(name)")
+            // 真模型的说法每次重录都可能变：只看起出了名字、没超长，不查用词
+            #expect(!name.isEmpty && name.count <= SessionNameSuggestion.limit, "\(name)")
             #expect(rig.bridge.session(id: id)?.name == nil, "只起名，不写回")
             #expect(rig.bridge.sessions.map(\.id) == [id], "临时线程不是会话")
             try await rig.bridge.configure(name: name, in: id)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 源码约束检查：规则多是"某写法只准出现在白名单路径里"（forbid），另有调试目录的整文件门；命中就列出位置、原因与该用什么，退出 1。
 # 用法：lint.sh [--staged]   默认查工作区；--staged 查暂存区里的内容（提交钩子用，结论对应实际提交）。xc.sh check 跑默认模式。
-# 只扫 App 与 CuePadKit 的 Swift，// 之后的注释不算；另查落地页的色令牌与色板同值。
+# 只扫 App 与 CuePadKit 的 Swift，// 之后的注释不算；另查落地页的色令牌与色板同值，与 Pi 桥扩展改了升没升版本（只在默认模式）。
 # 每条规则的原因与替代只写在它的报错里；新规则先在一个真实违规（历史提交或临时注入）上证明会红再加。
 set -euo pipefail
 scripts="$(cd "$(dirname "$0")" && pwd)"
@@ -179,5 +179,8 @@ python3 "$scripts/lint_env.py" || status=1
 
 # 落地页与 App 同一套颜色（规则在 lint_palette.py 头注释）
 python3 "$scripts/lint_palette.py" App/AppGroup/Palette.swift ../landing/src/styles/base.css || status=1
+
+# Pi 桥扩展改了要升版本（规则在 lint_extension.py 头注释）；比的是检出与 origin/main，提交钩子查的暂存区副本里没有 git，不查
+[ "${1:-}" = --staged ] || python3 "$scripts/lint_extension.py" || status=1
 
 exit $status
