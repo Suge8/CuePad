@@ -7,16 +7,19 @@ import WebKit
 /// 网页的只读离线渲染（手机上还有文稿、表格、演示文稿：WebKit 按文件类型把它们转成页面）：脚本可以跑（演示页常带图表与交互），
 /// 但一切联网与读别的文件的请求都被拦掉（`PreviewWebGuard`），页内链接不跳转。拦截规则没能装上时不打开页面，不退回到不设防。
 /// 每个视图自己建一个 WKWebView 载入：全屏页的翻页会给同一页重建视图，SwiftUI 的 `WebView` 不许两个视图共用一个 `WebPage`
-/// （同一组两份网页左右翻时曾因此崩溃）。
+/// （同一组两份网页左右翻时曾因此崩溃）。WebKit 载不出来（文稿坏了、这台转不了）时同文件不在本机一样写读不了，不留一张白页或 WebKit 的报错码。
 struct PreviewWeb: View {
     let file: URL
     @State private var rules: WKContentRuleList?
     @State private var failure: String?
+    @State private var unreadable = false
 
     var body: some View {
         Group {
             if let rules {
-                OfflineWebView(file: file, rules: rules).ignoresSafeArea(.container, edges: OfflineWebView.edges)
+                // 读不了时盖在藏起的页面上，不换掉页面：在全屏页的分页里换掉，WebKit 的视图不会被撤走，它铺的报错还露在下面（模拟器实测）
+                OfflineWebView(file: file, rules: rules, unreadable: $unreadable).ignoresSafeArea(.container, edges: OfflineWebView.edges)
+                    .overlay { if unreadable { EmptyState(mascot: .error, title: "读不了这个文件").padding(Spacing.page) } }
             } else if let failure {
                 EmptyState(mascot: .error, title: "没法安全地打开这个页面", message: .verbatim(failure)).padding(Spacing.page).frame(maxHeight: .infinity)
             } else {
@@ -95,8 +98,9 @@ enum PreviewWebGuard {
 private struct OfflineWebView {
     let file: URL
     let rules: WKContentRuleList
+    @Binding var unreadable: Bool
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator { Coordinator(unreadable: $unreadable) }
 
     fileprivate func make(_ coordinator: Coordinator) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -127,6 +131,11 @@ private struct OfflineWebView {
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         var loading: Task<Void, Never>?
+        private let unreadable: Binding<Bool>
+        /// 自己装载的那一次载完了：之后的失败是页里点的链接被拦下（`allows`），不算读不了
+        private var finished = false
+
+        init(unreadable: Binding<Bool>) { self.unreadable = unreadable }
 
         deinit { loading?.cancel() }
 
@@ -134,18 +143,31 @@ private struct OfflineWebView {
             PreviewWebGuard.allows(action.navigationType, to: action.request.url) ? .allow : .cancel
         }
 
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            finished = true
+            uncover()
+        }
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) { fail(webView) }
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) { fail(webView) }
+
+        /// 自己装载的那一次没载出来：WebKit 会在页上铺一行它的报错（如"OfficeImportErrorDomain 错误 912"），藏起页面、换成读不了
+        private func fail(_ webView: WKWebView) {
+            uncover()
+            guard !finished else { return }
+            webView.isHidden = true
+            unreadable.wrappedValue = true
+        }
+
         #if os(iOS)
         /// 载完（或载不了）之前盖在页面上的缩略图画面（`PreviewCover`）；拦截规则装好不算载完
         var cover: UIView?
-
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { uncover() }
-        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) { uncover() }
-        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) { uncover() }
 
         private func uncover() {
             cover?.removeFromSuperview()
             cover = nil
         }
+        #else
+        private func uncover() {}
         #endif
     }
 }

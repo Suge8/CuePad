@@ -3,7 +3,8 @@ import SwiftUI
 
 /// 会话页里 Agent 一次发来看的几个（同一时刻的一批，`PiChat.entries`）：一张纸，上面是交付物；会话发到手机的文件在会话页里只有这一个样子。
 /// Cue 点名的图（提问卡、结果卡）是另一种：方形缩略图配看什么（`CueShots`），共用一张一张的 `DeliverableTile`。
-/// 一份是整宽主图（按内容真实比例夹在 4:3～16:9），两份并排（各按真实比例，不高过主图），三份起横向滑、各按真实比例定宽同高，放不下的露出一截；
+/// 一两份排成同高的一排、宽按比例分（`PreviewRow`）：一份是主图（比例夹在 4:3～16:9），两份并排（比例夹在 1:2～2:1），纸随这一排收窄；
+/// 三份起横向滑、各按真实比例定宽同高，放不下的露出一截；
 /// 每张下面写它的标题（Agent 发时每份一句、同批各不相同，至多两行）与类型（时长、页数）。缩略图全是真内容（`DeliverableLooks`）。
 /// 文件还没到这台时画面上写传了几成（还没开始取的写"点一下从 iCloud 取"，点了就取），到了自动换成内容。点一张交给 `open`，全屏页从这张放大出来（`previewPresenter`）。
 struct PreviewBatch: View {
@@ -15,19 +16,19 @@ struct PreviewBatch: View {
     let open: (PiPreview) -> Void
 
     var body: some View {
+        // 横向滑的一排铺满栏宽（右边露出一截说明还有）；一两份的纸只包住它们
         strip
             .padding(Self.inset)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: previews.count > 2 ? .infinity : nil, alignment: .leading)
             .paper()
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder private var strip: some View {
         switch previews.count {
-        case 1:
-            tile(previews[0], .hero(maxHeight: Self.heroMaxHeight))
-        case 2:
-            HStack(alignment: .top, spacing: Self.gap) {
-                ForEach(previews) { tile($0, .column(maxHeight: Self.heroMaxHeight)) }
+        case 1, 2:
+            PreviewRow(maxHeight: Self.rowHeight, gap: Self.gap) {
+                ForEach(previews) { tile($0, previews.count == 1 ? .hero : .column) }
             }
         default:
             // 懒加载：一个会话一次可能发几十份，只建看得见与附近的几张。从最前面滑起、同高，位置不靠估；越过纸的内边距滑到纸边
@@ -56,10 +57,11 @@ struct PreviewBatch: View {
 
     #if os(macOS)
     private static let stripHeight: CGFloat = 176
-    private static let heroMaxHeight: CGFloat = 320
+    /// 一两份那一排最高多高（`PreviewRow`）
+    static let rowHeight: CGFloat = 320
     #else
     private static let stripHeight: CGFloat = 132
-    private static let heroMaxHeight: CGFloat = 260
+    static let rowHeight: CGFloat = 260
     #endif
 }
 
@@ -76,10 +78,10 @@ extension EnvironmentValues {
 /// 交付物的一张：画面（按比例）与下面的标题、类型。
 struct DeliverableTile: View {
     enum Shape {
-        /// 整宽，比例夹在 4:3～16:9，不高过 `maxHeight`
-        case hero(maxHeight: CGFloat)
-        /// 并排的几份之一：各占等宽的一份，不高过 `maxHeight`
-        case column(maxHeight: CGFloat)
+        /// 独一份的主图，比例夹在 4:3～16:9；宽由 `PreviewRow` 给
+        case hero
+        /// 并排的两份之一，比例夹在 1:2～2:1（一横一竖并排时都不至于细成一条）；宽由 `PreviewRow` 给
+        case column
         /// 横向滑的一排里：同高，宽按比例
         case strip(height: CGFloat)
         /// 提问点名的图（`CueShots`）：方形、宽随给的（至多 `side`）、取细节最多的那一段填满（`LookBox.framed`），白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
@@ -131,6 +133,7 @@ struct DeliverableTile: View {
         .pending(loading, shown: $slow)
         // 截图等画面读到再拍：读的头 `Pending.delay` 里格子只有边，拍下来就是一张空白占位
         .debugSettling(loading)
+        .layoutValue(key: PreviewAspect.self, value: aspect)
     }
 
     /// 类型，视频与音频接时长、PDF 接页数："视频 0:12""PDF 3 页"。
@@ -144,8 +147,11 @@ struct DeliverableTile: View {
     private var aspect: CGFloat {
         // 读到之前按类型猜：PDF 多是竖着的一页，其余（网页、截图、文稿的首屏）多是横的；猜对了读到时不跳
         let raw = shown?.aspect ?? (preview.kind == .pdf ? 3 / 4 : 4 / 3)
-        guard case .hero = shape else { return raw }
-        return min(max(raw, 4 / 3), 16 / 9)
+        return switch shape {
+        case .hero: min(max(raw, 4 / 3), 16 / 9)
+        case .column: min(max(raw, 1 / 2), 2)
+        case .strip, .shot: raw
+        }
     }
 
     /// 文件在本机、画面还没读到（内存里没有，在读磁盘上那份或现出）。
@@ -174,10 +180,8 @@ struct DeliverableTile: View {
 
     @ViewBuilder private var framed: some View {
         switch shape {
-        case .hero(let maxHeight):
-            picture.aspectRatio(aspect, contentMode: .fit).frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: .leading)
-        case .column(let maxHeight):
-            picture.aspectRatio(aspect, contentMode: .fit).frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: .leading)
+        case .hero, .column:
+            picture.aspectRatio(aspect, contentMode: .fit)
         case .strip(let height):
             picture.frame(width: (height * aspect).rounded(), height: height)
         case .shot:
@@ -259,13 +263,13 @@ struct DeliverableTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 画面的框（像素，见 `framed`）：主图的比例夹在 4:3～16:9、不高过上限，所以宽不过上限的 16/9，夹过的多出来的裁掉；
-    /// 并排的按真实比例整张放进半栏（阅读栏约 760 点）、不高过上限；横向滑的一排同高、宽随比例。
+    /// 画面的框（像素，见 `framed`）：一排不高过 `PreviewBatch.rowHeight`，主图的比例夹在 4:3～16:9，所以宽不过它的 16/9，夹过的多出来的裁掉；
+    /// 并排的比例夹在 1:2～2:1，整张放进它的两倍宽（夹过的同样裁掉）；横向滑的一排同高、宽随比例。
     private var box: LookBox {
-        let pixels = { (points: CGFloat) in Int(points * scale) }
+        let pixels = { (points: CGFloat) in Int(points * scale) }, row = PreviewBatch.rowHeight
         return switch shape {
-        case .hero(let maxHeight): LookBox(width: pixels(maxHeight * 16 / 9), height: pixels(maxHeight), fills: true)
-        case .column(let maxHeight): LookBox(width: pixels(380), height: pixels(maxHeight), fills: false)
+        case .hero: LookBox(width: pixels(row * 16 / 9), height: pixels(row), fills: true)
+        case .column: LookBox(width: pixels(row * 2), height: pixels(row), fills: false)
         case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true)
         case .shot(let side, _): LookBox(width: pixels(side), height: pixels(side), fills: true, framed: true)
         }
