@@ -43,6 +43,8 @@ public actor DeliveryExecutor {
   /// 上一次 `stop` 等旧任务收尾的那一段：`start` 等它过去才开新一轮，旧 handler 不会与新循环同时在跑。
   private var draining: Task<Void, Never>?
   private var rerun = false
+  /// 最近一次交给 handler 的执行。取消时调用方不等它（`abandonable`），但"一次一个"不能因此破：新一轮在派下一条前先等它真正结束（`settleHandler`）。
+  private var handling: Task<DeliveryOutcome, Never>?
   private var cleanupWake: Date?
 
   public init(
@@ -115,8 +117,16 @@ public actor DeliveryExecutor {
     defer { roles.release(.runner, id) }
     repeat {
       rerun = false
-      while started, !Task.isCancelled, let next = await nextActionable() { await run(next) }
+      while started, !Task.isCancelled, await settleHandler(), let next = await nextActionable() { await run(next) }
     } while rerun && !Task.isCancelled
+  }
+
+  /// 上一条的 handler 还没结束就等它（可被取消：停止时不等，返回 false）。
+  private func settleHandler() async -> Bool {
+    guard let prior = handling else { return true }
+    guard (try? await abandonable({ _ = await prior.value })) != nil else { return false }
+    handling = nil
+    return true
   }
 
   private func nextActionable() async -> Dispatch? {
@@ -195,9 +205,12 @@ public actor DeliveryExecutor {
     let began = timing.now()
     // 与取消隔开：handler 不响应取消时 stop 不被它拖住，它留在脱离的任务里自己收尾，结果丢弃（请求已领取，重启时按未知对账）
     let running = request
-    let outcome = try? await abandonable { [handler] in await handler(running, dispatch.access) }
+    let work = Task { [handler] in await handler(running, dispatch.access) }
+    handling = work
+    let outcome = try? await abandonable { await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() } }
     roles.cancel(.claimUpload)
     guard let outcome else { return }
+    handling = nil
     let took = timing.now().timeIntervalSince(began)
     Self.log.info("执行投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public) 用时 \(took, format: .fixed(precision: 2)) 秒")
     await finish(request, outcome)
