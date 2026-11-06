@@ -9,12 +9,13 @@ import os
 ///   后面发给别的会话、对 Cue 说的话照常先执行；取不来按失败写回；准备与执行分别以 maxAge 为安全上限；
 /// - 每次领取只交给 handler 一次；任何执行后未知都留待正证据对账，不在领取内重试；
 /// - 启动时只恢复上次请求的核对，不重派、不续期；确认任务独立于执行通道，由 stop 取消并收齐；
+/// - 完成的请求里，发出的话、Cue 的失败请求和结果未确认（`unconfirmed`）的至多留 7 天（等真实消息的正证据来对账，之后清掉）；
 /// - 读写 Store 失败交给 `onIssue`；持久阶段的期限仍使发送方有界收敛；
 /// - 写回结果后调用一次 `onWritten`（App 用它立即上传这一条，排在其余待推送前面）；执行超过 `claimGrace` 的，领取那一版先传一次：
 ///   发起的设备据领取知道 Mac 接手了，但不能据此断言已交给 Agent。多数执行几十毫秒就完，只传结果那一版：
 ///   领取那一版在路上时结果得等它回来才能传（同一条记录一次只一版在路上），回执要多等一个来回。
 public actor DeliveryExecutor {
-  private let store: CueStore
+  let store: CueStore
   private let hostID: String
   /// 服务器收下后多久还没执行就放弃。
   package static let maxAge: Duration = .seconds(600)
@@ -22,7 +23,7 @@ public actor DeliveryExecutor {
   package static let retention: Duration = .seconds(60)
   /// 执行多久还没完就先把领取传出去。说给在线会话的话交给桥几十毫秒就有结果，留足机器忙时的余量；远短于 `Speech.receiptLimit`。
   package static let claimGrace: Duration = .milliseconds(500)
-  private let timing: Timing
+  let timing: Timing
   private let onIssue: @Sendable (any Error) -> Void
   private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
   private let recover: @Sendable (DeliveryRequest) async -> DeliveryOutcome
@@ -36,16 +37,18 @@ public actor DeliveryExecutor {
   /// 在旁边取附件的请求
   private var fetching = Slots<DeliveryRequest.ID>()
   private static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
-  private var started = false
+  var started = false
   /// 各只有一个的后台任务：`claimUpload` 是正在执行的那一条到 `claimGrace` 才传领取（结果先写下就不传）。
-  private enum Role { case watcher, cleanup, runner, claimUpload }
-  private var roles = Slots<Role>()
+  enum Role { case starting, watcher, cleanup, runner, claimUpload }
+  var roles = Slots<Role>()
   /// 上一次 `stop` 等旧任务收尾的那一段：`start` 等它过去才开新一轮，旧 handler 不会与新循环同时在跑。
   private var draining: Task<Void, Never>?
   private var rerun = false
-  /// 最近一次交给 handler 的执行。取消时调用方不等它（`abandonable`），但"一次一个"不能因此破：新一轮在派下一条前先等它真正结束（`settleHandler`）。
+  /// 最近一次交给 handler 或 recover 的执行（`perform`）。
   private var handling: Task<DeliveryOutcome, Never>?
-  private var cleanupWake: Date?
+  var cleanupWake: Date?
+  /// 启动恢复段失败的原因（`start` 取走后抛出）。
+  private var startFailure: (any Error)?
 
   public init(
     store: CueStore, hostID: String,
@@ -71,12 +74,27 @@ public actor DeliveryExecutor {
     await draining?.value
     guard !started else { return }
     started = true
+    // 恢复段登记为 stop 能取消并收齐的任务：停止再启动时，旧一轮的恢复已被取消，不会与新一轮同时跑、也不会覆盖新一轮的监听
+    let boot = Owned.spawn { id in await self.boot() }
+    roles.put(.starting, boot)
+    await boot.task.value
+    roles.release(.starting, boot.id)
+    if let failure = startFailure {
+      startFailure = nil
+      await stop()
+      throw failure
+    }
+  }
+
+  /// 启动恢复：收回领取、对账上次没结的请求、清一轮、开始监听。
+  private func boot() async {
     do {
       try await store.releaseDeliveryReservations(for: hostID)
       for id in try await store.abandonPreparedDeliveries(for: hostID) { notifyWritten(id) }
       for request in try await store.unsettledDeliveries(for: hostID) {
-        guard started, !Task.isCancelled else { return }
-        guard let outcome = try? await abandonable({ [recover] in await recover(request) }) else { return }
+        // 被丢下的上一条 handler 没结束时，对账也等它（与派发同样"一次一个"）
+        guard started, !Task.isCancelled, await settleHandler() else { return }
+        guard let outcome = await perform({ [recover] in await recover(request) }) else { return }
         await finish(request, outcome, resuming: true)
       }
       guard started, !Task.isCancelled else { return }
@@ -91,8 +109,7 @@ public actor DeliveryExecutor {
         }
       })
     } catch {
-      await stop()
-      throw error
+      if !Task.isCancelled { startFailure = error }
     }
   }
 
@@ -122,7 +139,17 @@ public actor DeliveryExecutor {
     } while rerun && !Task.isCancelled
   }
 
-  /// 上一条的 handler 还没结束就等它（可被取消：停止时不等，返回 false）。
+  /// 执行 handler 或启动对账的 recover：取消时调用方不等它（`abandonable`），但回调留在 `handling` 里，下一次执行前先等它结束（`settleHandler`），
+  /// 所以停止再启动后新一轮不会与还没结束的旧回调同时执行。被取消返回 nil。
+  private func perform(_ operation: @escaping @Sendable () async -> DeliveryOutcome) async -> DeliveryOutcome? {
+    let work = Task { await operation() }
+    handling = work
+    let outcome = try? await abandonable { await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() } }
+    if outcome != nil { handling = nil }
+    return outcome
+  }
+
+  /// 上一条的 handler 或 recover 还没结束就等它（可被取消：停止时不等，返回 false）。
   private func settleHandler() async -> Bool {
     guard let prior = handling else { return true }
     guard (try? await abandonable({ _ = await prior.value })) != nil else { return false }
@@ -206,12 +233,9 @@ public actor DeliveryExecutor {
     let began = timing.now()
     // 与取消隔开：handler 不响应取消时 stop 不被它拖住，它留在脱离的任务里自己收尾，结果丢弃（请求已领取，重启时按未知对账）
     let running = request
-    let work = Task { [handler] in await handler(running, dispatch.access) }
-    handling = work
-    let outcome = try? await abandonable { await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() } }
+    let outcome = await perform { [handler] in await handler(running, dispatch.access) }
     roles.cancel(.claimUpload)
     guard let outcome else { return }
-    handling = nil
     let took = timing.now().timeIntervalSince(began)
     Self.log.info("执行投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public) 用时 \(took, format: .fixed(precision: 2)) 秒")
     await finish(request, outcome)
@@ -324,47 +348,10 @@ public actor DeliveryExecutor {
 
   /// 执行 Store 读写；失败交给 `onIssue` 并返回 nil。`stop()` 之后（所在任务已取消）的失败不再上报。
   @discardableResult
-  private func reporting<T>(_ operation: () async throws -> T) async -> T? {
+  func reporting<T>(_ operation: () async throws -> T) async -> T? {
     do { return try await operation() } catch {
       if !Task.isCancelled { onIssue(error) }
       return nil
-    }
-  }
-
-  /// 发出的话与 Cue 的失败请求最多留多久（与对话的保留期一样是 7 天）。
-  private static let keptRetention: TimeInterval = 7 * 86_400
-
-  /// 在 `wake`（缺省是保留期后）清理一轮；已排了不晚于它的就不动，更晚的换成它——刚完成的请求的清理不能排在发出的话的 7 天后面。
-  private func scheduleCleanup(at wake: Date? = nil) {
-    guard started else { return }
-    let wake = wake ?? timing.now().addingTimeInterval(Self.retention.seconds)
-    if roles.has(.cleanup), let current = cleanupWake, current <= wake { return }
-    roles.cancel(.cleanup)
-    cleanupWake = wake
-    roles.put(.cleanup, .spawn { [timing] id in
-      guard (try? await timing.sleepUntil(wake)) != nil else { return }
-      let next = await self.reporting { try await self.deleteExpired() }
-      self.cleanupFinished(id, next: next)
-    })
-  }
-
-  /// 清理一轮；返回下一轮该在什么时候做，没有剩下的为 nil：普通的完成请求一个保留期后，发出的话与 Cue 的失败请求等到它们的 7 天到期。
-  private func deleteExpired() async throws -> Date? {
-    let now = timing.now()
-    let left = try await store.deleteCompletedDeliveries(
-      before: now.addingTimeInterval(-Self.retention.seconds), claimCutoff: now.addingTimeInterval(-Self.maxAge.seconds),
-      keptCutoff: now.addingTimeInterval(-Self.keptRetention))
-    if left.transient { return now.addingTimeInterval(Self.retention.seconds) }
-    return left.oldestKept.map { $0.addingTimeInterval(Self.keptRetention + 1) }  // 到期那一刻的判断是"晚于"，多留 1 秒
-  }
-
-  /// `next` 外层 nil 是这一轮读写失败：过一个保留期再来。
-  private func cleanupFinished(_ id: UUID, next: Date??) {
-    guard roles.release(.cleanup, id) else { return }
-    cleanupWake = nil
-    switch next {
-    case .none: scheduleCleanup()
-    case .some(let wake): if let wake { scheduleCleanup(at: wake) }
     }
   }
 }
