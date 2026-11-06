@@ -49,7 +49,8 @@ extension CueStore {
     if let parent = try find(Card.self, id)?.parentID { try settle(around: [parent]) }
   }
 
-  /// 拨回一次改动（`trashCard`、`moveCard`、`mergeIdea`、`createTask(fromIdea:)` 的回执），整个拨回是一个事务：
+  /// 拨回一次改动（`trashCard`、`moveCard`、`mergeIdea`、`createTask(fromIdea:)` 的回执），整个拨回是一个事务；
+  /// 合并与新建的回执带着任务当时的修改时刻，之后又改过就抛 `changedSinceUndo`、什么都不撤。其余：
   /// 删除恢复、提上去的下级回到它下面；挪动放回原来的位置；接进任务的灵感恢复、任务正文改回；照灵感新建的任务进回收站、灵感恢复。
   /// 其间已经不在了的下级跳过，原来的前一个同级不在了就排到最前。
   public func undo(_ change: CardChange) throws { try undo([change]) }
@@ -68,11 +69,15 @@ extension CueStore {
     case .move(let id, let slot, let after):
       let survivor = try after.flatMap { try find(Card.self, $0)?.id }
       try relocate(id, to: slot, after: survivor)
-    case .merge(let idea, let task, let body):
+    case .merge(let idea, let task, let body, let modifiedAt):
+      guard let current = try find(Card.self, task), current.modifiedAt == modifiedAt else { throw CueStoreError.changedSinceUndo }
       try db.run("UPDATE cards SET body = ?, modifiedAt = ? WHERE id = ?", [body, Date.stamp, task])
       try restoreRow(idea)
-    case .spawn(let idea, let task):
-      if let card = try find(Card.self, task), card.deletedAt == nil { _ = try trashRow(card, at: Date.stamp) }
+    case .spawn(let idea, let task, let modifiedAt):
+      if let card = try find(Card.self, task), card.deletedAt == nil {
+        guard card.modifiedAt == modifiedAt else { throw CueStoreError.changedSinceUndo }
+        _ = try trashRow(card, at: Date.stamp)
+      }
       try restoreRow(idea)
     }
   }

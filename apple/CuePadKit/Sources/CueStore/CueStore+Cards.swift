@@ -64,7 +64,7 @@ extension CueStore {
         try db.run("UPDATE cards SET body = ?, modifiedAt = ? WHERE id = ?", [kept + "\n\n" + added, now, task])
       }
       try trashRow(card, at: now)
-      return .merge(idea: idea, task: task, body: target.body)
+      return .merge(idea: idea, task: task, body: target.body, modifiedAt: added.isEmpty ? target.modifiedAt : now)
     }
   }
 
@@ -76,7 +76,7 @@ extension CueStore {
       try requireContent(body)
       let task = try insertCard(body, project: card.projectID, parent: nil, todo: true, sortKey: SortKey.before(firstTopKey(in: card.projectID)))
       try trashRow(card, at: Date.stamp)
-      return (task, .spawn(idea: idea, task: task.id))
+      return (task, .spawn(idea: idea, task: task.id, modifiedAt: task.modifiedAt))
     }
   }
 

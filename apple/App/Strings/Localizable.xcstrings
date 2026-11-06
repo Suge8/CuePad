@@ -11871,6 +11871,22 @@
         }
       }
     },
+    "已改过，无法撤销" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edited since — can’t undo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已改过，无法撤销"
+          }
+        }
+      }
+    },
     "已新建任务「%@」" : {
       "localizations" : {
         "en" : {
