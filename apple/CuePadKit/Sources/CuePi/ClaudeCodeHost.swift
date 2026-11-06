@@ -43,6 +43,8 @@ final class ClaudeHostedSession: SessionLink {
     var restart = false
     /// 等着这一轮收尾（`result`）的停下；进程退出时也放行，对端不发 `result` 时到 `AgentTimeouts.stop` 放弃
     let closing: PendingReplies<UUID, Void>
+    /// 发话里停下上一轮的那一段（`abort` 整段取消）
+    let stopPhase = StopPhase()
     /// 收尾过的轮数：停下时据此认出它在等回应的工夫里已经收尾
     var closed = 0
     /// 发出的话开了一轮、还没等到它的 `system/init`
@@ -230,7 +232,8 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     private func result(_ message: JSONValue, at now: Date) {
-        endClear(.success(()))
+        // 一轮在跑时的 `result` 是那一轮的；`/clear` 的回应在歇着时来
+        if !facts.running { endClear(.success(())) }
         var window = contextWindow
         for usage in (message["modelUsage"]?.object ?? [:]).values {
             if let reported = usage["contextWindow"]?.int { window = reported }

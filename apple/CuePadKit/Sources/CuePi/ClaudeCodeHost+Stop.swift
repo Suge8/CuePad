@@ -34,26 +34,28 @@ extension ClaudeHostedSession {
         startWaits.releaseAll()
     }
 
-    /// `/clear` 的 `result` 到了（或进程退出）：结束最早还在等的那一个。
+    /// `/clear` 的 `result` 到了（或进程退出）：结束最早发出的那一条。
+    /// 等的人已超时或走了的也占着自己的位置：它那条 `/clear` 迟到的 `result` 不能算给后面的。
     func endClear(_ outcome: Result<Void, any Error>) {
-        while !clearing.isEmpty {
-            if clearWaits.resolve(clearing.removeFirst(), with: outcome) { return }
-        }
+        guard !clearing.isEmpty else { return }
+        clearWaits.resolve(clearing.removeFirst(), with: outcome)
     }
 
     /// 停下在跑的这一轮并等它收尾；还没开跑的（`starting`）先等它开跑。歇着什么都不做。
     func interrupt(restarting: Bool) async throws {
-        if starting { try await startWaits.wait() }
-        guard facts.running else { return }
-        stopping = true
-        restart = restarting
-        let turn = closed
-        do {
-            _ = try await live.request(["subtype": "interrupt"])
-            if closed == turn { try await closing.wait() }
-        } catch {
-            restart = false
-            throw error
+        try await stopPhase.run { [self] in
+            if starting { try await startWaits.wait() }
+            guard facts.running else { return }
+            stopping = true
+            restart = restarting
+            let turn = closed
+            do {
+                _ = try await live.request(["subtype": "interrupt"])
+                if closed == turn { try await closing.wait() }
+            } catch {
+                restart = false
+                throw error
+            }
         }
     }
 

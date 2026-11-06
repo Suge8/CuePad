@@ -109,6 +109,8 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         var restarting: Restart?
         /// `restarting` 是第几次 `deliver` 设的
         var restartGeneration = 0
+        /// `deliver` 里停下上一轮的那一段（`abort` 整段取消）
+        let stopPhase = StopPhase()
         var skills: [(name: String, path: String)] = []
 
         init(id: PiSession.ID, threadID: String, pid: Int32) {

@@ -30,7 +30,7 @@ extension CodexRuntime {
         session.restarting = .stopping
         defer { if session.restartGeneration == mine { session.restarting = nil } }
         do {
-            try await interrupt(session)
+            try await session.stopPhase.run { [self] in try await interrupt(session) }
             try await turnStart(session, input, options: ["clientUserMessageId": .string(clientID)])
         } catch {
             if session.restartGeneration == mine, session.restarting == .stopped { session.facts.endTurn() }
@@ -85,6 +85,7 @@ extension CodexRuntime {
 
     public func abort(_ id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
+        session.stopPhase.cancelAll()
         try await interrupt(session)
     }
 
