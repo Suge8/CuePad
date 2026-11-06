@@ -21,6 +21,8 @@ public enum AgentTimeouts {
     public static let list: Duration = .seconds(15)
     /// CuePad 自有子进程的强制收尾宽限；已认领的 Pi 经桥走宿主退出，不用强杀兜底。
     public static let endGrace: Duration = .seconds(5)
+    /// 停下在跑的一轮后等它收尾（ACP 的取消回应、Claude Code 的 `result`、等发出的话开跑）与 `/clear` 的结果：对端接了请求却不收尾时到点放弃，免得停止与随后的发话永远等下去
+    public static let stop: Duration = .seconds(30)
     /// 托管的会话歇着满这么久就退出（不算结束，发话时再接着）
     public static let hostedIdle: Duration = .seconds(30 * 60)
 }
@@ -40,17 +42,42 @@ func withDeadline<T: Sendable>(
     }
 }
 
-/// 一条连接上等回应的请求（Pi 扩展的 ack、Claude Code 的控制请求、Codex、ACP 与 Pi 大脑的 RPC）：按 id 配上回应，至多等 `timeout`（按 `timing` 量）；
+/// 发话里"先停下上一轮"那一段（发停止请求、等回应、等它收尾）：新话还没交出，所以停止（`abort`）可以把整段取消，
+/// 不论它卡在哪个等待上；之后的段（交出新话、等送达）不在里面：话已交出，取消会把已收下的话误报成未确认、引起重发。
+/// 取消按代次认：这一段已跑完、外层还没恢复时来的停止，同样让外层不再交话（`run` 返回前核对）。
+@MainActor
+final class StopPhase {
+    private var running: [UUID: Task<Void, any Error>] = [:]
+    private var generation = 0
+
+    /// `cancellable` 为 false 的是停止自己的这一段：再按一次停止不该把前一次（中止已发出）报成取消。
+    func run(cancellable: Bool = true, _ body: @escaping @MainActor () async throws -> Void) async throws {
+        let id = UUID()
+        let started = generation
+        let work = Task { try await body() }
+        if cancellable { running[id] = work }
+        defer { running[id] = nil }
+        try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
+        if cancellable, generation != started { throw CancellationError() }
+    }
+
+    func cancelAll() {
+        generation += 1
+        for work in running.values { work.cancel() }
+    }
+}
+
+/// 一条连接上等回应的请求（Pi 扩展的 ack、Claude Code 的控制请求、Codex、ACP 与 Pi 大脑的 RPC）：按 id 配上回应，至多等 `timeout`（按 `timing` 量；nil 不限时）；
 /// 调用方取消时立即以取消结束（请求已发出，对端照常处理）；连接断了等着的全部失败，之后的请求不再发。
 @MainActor
 final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
     private var waiting: [ID: CheckedContinuation<Reply, any Error>] = [:]
     private var closed: (any Error)?
-    private let timeout: Duration
+    private let timeout: Duration?
     private let timing: Timing
     private let timeoutError: any Error
 
-    init(timeout: Duration, timing: Timing = .system, timeoutError: any Error) {
+    init(timeout: Duration?, timing: Timing = .system, timeoutError: any Error) {
         self.timeout = timeout
         self.timing = timing
         self.timeoutError = timeoutError
@@ -72,6 +99,7 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
                     waiting.removeValue(forKey: id)?.resume(throwing: error)
                     return
                 }
+                guard let timeout else { return }
                 let (deadline, error, timing) = (timing.now().addingTimeInterval(timeout.seconds), timeoutError, timing)
                 timer = Task { [weak self] in
                     guard (try? await timing.sleepUntil(deadline)) != nil else { return }
@@ -90,6 +118,18 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
         guard let continuation = waiting.removeValue(forKey: id) else { return false }
         continuation.resume(with: result)
         return true
+    }
+
+    /// 等一件没有回应 id 的事（一轮收尾、开跑）：每个等待者自己一个 id，事件到了 `releaseAll` 一起放行；超时与取消同 `request`。
+    func wait() async throws where ID == UUID, Reply == Void {
+        _ = try await request(UUID()) {}
+    }
+
+    /// 等的那件事到了：放行全部等待者。
+    func releaseAll() where Reply == Void {
+        let all = waiting.values
+        waiting = [:]
+        for continuation in all { continuation.resume() }
     }
 
     /// 连接断了：等着的全部以 `error` 失败，之后的请求直接抛它。

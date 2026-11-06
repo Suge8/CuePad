@@ -40,6 +40,8 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     private var watcher: FileFollower?
     private var watching: Task<Void, Never>?
     var connection: Connection?
+    /// 每个会话发话里"等重连、停下上一轮"那一段（`abort` 整段取消）
+    var stopPhases: [PiSession.ID: StopPhase] = [:]
     var waiters: [UUID: CheckedContinuation<Connection, any Error>] = [:]
 
     var sessions: [String: Tracked] = [:]
@@ -199,6 +201,8 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
             } catch {
                 Self.log.error("OpenCode 事件流断开或快照失败，\(delay, privacy: .public) 后重连：\(String(describing: error), privacy: .public)")
             }
+            // 事件流断了：到重新拉完快照之前，状态不再是最新的，命令要等重连（`ensureService`）
+            connection.ready = false
             guard (try? await Task.sleep(for: delay)) != nil else { return }
             delay = min(delay * 2, Self.retryCeiling)
         }

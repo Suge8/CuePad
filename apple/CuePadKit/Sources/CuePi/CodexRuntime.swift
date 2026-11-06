@@ -48,7 +48,13 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     /// 托管进程环境里的标记（`HostMark`）→ 进程号
     var marks: [String: Int32] = [:]
     var daemon: CodexRPC?
-    var connecting: Task<CodexRPC, any Error>?
+    var connecting: Task<CodexRPC?, any Error>?
+    /// 正在做的发现（`discover`）与做的时候又来了一次
+    var scanning: Scan?
+    final class Scan {
+        var task: Task<Void, Never>?
+        var again = false
+    }
     /// 常驻服务的控制 socket（服务在跑时问到的）
     var controlSocket: String?
     var exitWatchers: [Int32: ProcessExitWatcher] = [:]
@@ -101,6 +107,10 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         var lastError: String?
         /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮
         var restarting: Restart?
+        /// `restarting` 是第几次 `deliver` 设的
+        var restartGeneration = 0
+        /// `deliver` 里停下上一轮的那一段（`abort` 整段取消）
+        let stopPhase = StopPhase()
         var skills: [(name: String, path: String)] = []
 
         init(id: PiSession.ID, threadID: String, pid: Int32) {
@@ -141,8 +151,17 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         exitWatchers = [:]
         daemon?.close()
         daemon = nil
+        let (connecting, scan) = (connecting, scanning?.task)
+        connecting?.cancel()
+        scan?.cancel()
+        self.connecting = nil
+        scanning = nil
         let waits = hosted.values.compactMap(\.rpc).map { rpc in Task { await rpc.shutdown() } }
-        return { for wait in waits { await wait.value } }
+        return {
+            _ = try? await connecting?.value
+            await scan?.value
+            for wait in waits { await wait.value }
+        }
     }
 
     public func open(

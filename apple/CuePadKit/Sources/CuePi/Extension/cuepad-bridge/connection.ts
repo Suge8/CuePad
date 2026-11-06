@@ -256,8 +256,9 @@ function handleEnd(session: Session, ack: Ack) {
 	session.runInternal("end");
 }
 
-/** 停止这一轮（`stopRound`）；子代理落定后照常把结果投回来开始新的一轮。 */
+/** 停止这一轮（`stopRound`）；子代理落定后照常把结果投回来开始新的一轮。排着、还没交出的话一并作废（停下之后不该又开一轮），它们的确认回未执行。 */
 function handleAbort(session: Session, ack: Ack) {
+	session.abortQueued();
 	session.stopRound();
 	ack({ ok: true });
 }

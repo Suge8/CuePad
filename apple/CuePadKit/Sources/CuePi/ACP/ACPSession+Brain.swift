@@ -50,7 +50,7 @@ extension ACPSession: HostedSession {
                 if let taken = steers.add(id, text: text, claim: steer.claim) { emit(.received(taken)) }
                 return
             }
-            await nextChange()
+            try await nextChange()
         }
         try prompt(ACPContent.prompt(text: text, images: images))
         emit(.received(id))

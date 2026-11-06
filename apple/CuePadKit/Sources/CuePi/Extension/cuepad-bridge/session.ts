@@ -2,8 +2,9 @@ import { execFile } from "node:child_process";
 import type net from "node:net";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { account } from "./account.ts";
+import { Draft } from "./draft.ts";
 import { phaseOf, StateTracker, type Asking, type Clock, type Phase } from "./events.ts";
-import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, replyText, type Info, type Subagent } from "./info.ts";
+import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, type Info, type Subagent } from "./info.ts";
 import { IdleExit, IS_HOSTED, SelfReload } from "./lifecycle.ts";
 import { preflight } from "./preflight.ts";
 import { QuotaFetcher, type Quota, type QuotaWindow } from "./quota.ts";
@@ -51,8 +52,13 @@ export class Session {
 	/**
 	 * 已交给 Pi、还没观察到对应用户消息事件的那句。message_end 先于文件写入，ACK 不是持久化证明。
 	 * 没有可关联事件时超时或断连都只能表示未知，不能授权自动重投；真实消息由历史读取对账。
+	 * 按交出先后排队：交出到落成之间宿主仍是空闲的，下一句照样交出，各认各的（`landed`）。
 	 */
-	starting: Said | null = null;
+	readonly starting: Said[] = [];
+	/** 停止的次数：停止前发来、还在预检的话，预检回来时不再交出（`abortedSince`） */
+	private abortEpoch = 0;
+	/** 开新一轮的请求排成一队：预检是异步的，并发的两句不排队就会按预检返回的先后交出，颠倒用户发话的顺序。 */
+	private rounds: Promise<unknown> = Promise.resolve();
 	/** 已交给 Pi、还没落成会话里一条消息的重跑（`retry.ts`）：落成时回它的确认，同 `starting` */
 	retrying: Ack | null = null;
 	asking: Asking | null = null;
@@ -222,10 +228,17 @@ export class Session {
 	}
 
 	/** 以这句开新一轮（见 `pending`）。 */
-	async startRound(said: Said) {
-		if (this.rejectSend(said)) return;
-		if (this.pending.length === 0 && this.ctx.isIdle()) return this.submit(said);
-		if (!(await this.prepare(said.ack)) || this.rejectSend(said)) return;
+	startRound(said: Said): Promise<void> {
+		const epoch = this.abortEpoch;
+		const run = this.rounds.then(() => this.dispatchRound(said, epoch));
+		this.rounds = run.catch(() => {});
+		return run;
+	}
+
+	private async dispatchRound(said: Said, epoch: number) {
+		if (this.abortedSince(epoch, said) || this.rejectSend(said)) return;
+		if (this.pending.length === 0 && this.ctx.isIdle()) return this.submit(said, epoch);
+		if (!(await this.prepare(said.ack)) || this.abortedSince(epoch, said) || this.rejectSend(said)) return;
 		this.pending.push(said);
 		this.stopRound();
 	}
@@ -234,13 +247,13 @@ export class Session {
 	 * 不带 deliverAs：只在歇着时交（见 `pending`），Pi 直接开始这一轮。歇着又没有等着的话时，之前交出、还没落成消息的那句
 	 * 不构成未执行证据；旧等待不阻止宿主空闲时的新意图。
 	 */
-	private async submit(said: Said) {
-		if (this.rejectSend(said) || !(await this.prepare(said.ack)) || this.rejectSend(said)) return;
-		this.starting = said;
+	private async submit(said: Said, epoch: number) {
+		if (this.rejectSend(said) || !(await this.prepare(said.ack)) || this.abortedSince(epoch, said) || this.rejectSend(said)) return;
+		this.starting.push(said);
 		try {
 			this.pi.sendUserMessage(said.content, said.expand ? { expandPromptTemplates: true } : undefined);
 		} catch (error) {
-			this.starting = null;
+			this.starting.splice(this.starting.indexOf(said), 1);
 			this.reportFailure(reason(error));
 			said.ack?.({ ok: false, error: `failed: ${reason(error)}` });
 		}
@@ -271,8 +284,27 @@ export class Session {
 		this.later("等着的话", () => {
 			if (!this.ctx.isIdle()) return this.stopForPending();
 			const next = this.pending.shift();
-			if (next) void this.submit(next);
+			if (next) void this.submit(next, this.abortEpoch);
 		});
+	}
+
+	/** 停止：排着的话作废。 */
+	abortQueued() {
+		this.abortEpoch++;
+		for (const said of this.pending.splice(0)) said.ack?.({ ok: false, error: "failed: aborted before it started" });
+	}
+
+	private abortedSince(epoch: number, said: Said) {
+		if (epoch === this.abortEpoch) return false;
+		said.ack?.({ ok: false, error: "failed: aborted before it started" });
+		return true;
+	}
+
+	/** 一条用户消息落成了：认出它是交出的哪一句（先交的先认；模板与 skill 展开后认不出原话，取最早的），
+	 * 排在它前面的没认到的就是没落成，不再等。 */
+	landed(text: string): Said | undefined {
+		const at = this.starting.findIndex((said) => said.expand || text.startsWith(said.text));
+		return at < 0 ? undefined : this.starting.splice(0, at + 1)[at];
 	}
 
 	/** 宿主可以在排队后开出新的人类轮：每次打断前以当前投影的标识重新核对。 */
@@ -344,68 +376,3 @@ export class Session {
 }
 
 /** 正在说的话（`draft`）最多每这么久上报一次：增量在这里合并，这条说完时立即补发最后一次 */
-const DRAFT_INTERVAL_MS = 100;
-
-/**
- * 正在说的话（`draft`）：主会话当前这条助手消息到目前为止的正文，给 CuePad 逐字显示；思考与工具参数不算，FireCode 的子代理是别的会话、不经这里。
- * 增量合并到每 `DRAFT_INTERVAL_MS` 一次，这条说完时立即补发全文；它转成工具调用、被停下或出错、下一条助手消息开始时清掉（`text: null`）。
- * 正常说完的不清：CuePad 在对话（读会话文件）里出现这一条后自己换下。`since` 是这条开始出字的时刻。
- */
-class Draft {
-	private draft: { text: string; since: number } | null = null;
-	/** 这条消息已转成工具调用：之后的正文不再算草稿 */
-	private closed = false;
-	private sentAt = 0;
-	private timer: ReturnType<typeof setTimeout> | undefined;
-
-	private readonly broadcast: (message: object) => void;
-
-	constructor(broadcast: (message: object) => void) {
-		this.broadcast = broadcast;
-	}
-
-	/** 一条新的助手消息开始了 */
-	restart() {
-		this.closed = false;
-		this.clear();
-	}
-
-	/** 这条消息转成了工具调用 */
-	close() {
-		this.closed = true;
-		this.clear();
-	}
-
-	/** `now`：这条说完了，不等合并的间隔 */
-	grow(message: object, now = false) {
-		const text = replyText(message);
-		if (this.closed || !text || text === this.draft?.text) {
-			if (now && this.timer) this.send();
-			return;
-		}
-		this.draft = { text, since: this.draft?.since ?? Date.now() };
-		if (now) return this.send();
-		if (this.timer) return;
-		const wait = this.sentAt + DRAFT_INTERVAL_MS - Date.now();
-		if (wait <= 0) this.send();
-		else this.timer = setTimeout(() => this.send(), wait);
-	}
-
-	clear() {
-		if (!this.draft) return;
-		this.draft = null;
-		this.send();
-	}
-
-	/** 会话关闭：不再补发 */
-	cancel() {
-		clearTimeout(this.timer);
-	}
-
-	private send() {
-		clearTimeout(this.timer);
-		this.timer = undefined;
-		this.sentAt = Date.now();
-		this.broadcast({ t: "draft", text: this.draft?.text ?? null, since: this.draft?.since ?? null });
-	}
-}
