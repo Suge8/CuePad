@@ -6,6 +6,8 @@ import MachO
 nonisolated enum DiagnosticSummary {
     /// 同一种列出的时间至多这么多个，再多的只计数。
     static let shownTimes = 5
+    /// 同一种里原文不同的原因（并成一种时抹掉了数字、只认终止码）至多列这么多条，再多的写"…"。
+    static let shownReasons = 3
 
     static func text(_ reports: [CrashReport]) -> String {
         let groups = Dictionary(grouping: reports, by: signature).values.sorted { $0[0].date > $1[0].date }
@@ -28,7 +30,10 @@ nonisolated enum DiagnosticSummary {
         let versions = Set(group.compactMap(\.app?.visible)).sorted()
         if !versions.isEmpty { lines.append(String(localized: "版本：\(versions.formatted(.list(type: .and)))")) }
         if let explanation = report.explanation { lines.append(String(localized: "说明：\(explanation)")) }
-        if let reason = report.reason { lines.append(String(localized: "原因：\(reason.replacing("\n", with: " "))")) }
+        var seen = Set<String>()
+        let reasons = group.compactMap { $0.reason?.replacing("\n", with: " ") }.filter { seen.insert($0).inserted }
+        lines += reasons.prefix(shownReasons).map { String(localized: "原因：\($0)") }
+        if reasons.count > shownReasons { lines.append("…") }
         lines += report.trail.map { "  \($0)" }
         if !report.frames.isEmpty {
             lines.append(report.kind == .crash ? String(localized: "崩溃线程：") : String(localized: "主线程："))

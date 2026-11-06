@@ -5,7 +5,7 @@ extension DebugScene {
     /// `-CuePadSampleCrash YES` 存进存档的样例：照 2611060241 上真机交来的那份（从后台划掉卡住的 App，5 秒没退出被看门狗结束）的形状，
     /// 同一种两次（导出时并成一条、计两次），其中一个包里同时带一次卡死（一个包里的几次各算一份），外加一条本机记下的主线程卡住。
     static var sampleDiagnostics: [Data] {
-        [watchdogCrash(end: "2026-11-06 12:02:47", hang: true), watchdogCrash(end: "2026-11-06 11:41:05", hang: false)]
+        [watchdogCrash(end: "2026-11-06 12:02:47", cpu: "5.408", hang: true), watchdogCrash(end: "2026-11-06 11:41:05", cpu: "5.391", hang: false)]
     }
 
     static var sampleFreeze: FreezeNote {
@@ -15,11 +15,12 @@ extension DebugScene {
             version: "2026.11.6（2611060241）", device: "iPhone18,1", os: "Version 27.2 (Build 24B5089g)")
     }
 
-    private static func watchdogCrash(end: String, hang: Bool) -> Data {
+    /// `cpu`：App 在那 5 秒里的 CPU 用时，每次都不同（同一种并成一条时原因原文各列一行）。
+    private static func watchdogCrash(end: String, cpu: String, hang: Bool) -> Data {
         let reason = "RBSTerminateContext domain:10 code:0x8BADF00D explanation:[app<com.sugeh.cuepad>] Failed to terminate gracefully after 5.0s "
             + "ProcessVisibility: Foreground ProcessState: Running WatchdogEvent: process-exit WatchdogVisibility: Foreground "
             + "WatchdogCPUStatistics: ( \\\"Elapsed total CPU time (seconds): 16.470 (user 10.110, system 6.360), 51% CPU\\\", "
-            + "\\\"Elapsed application CPU time (seconds): 5.408, 17% CPU\\\" ) ThermalInfo: ( \\\"Thermal Level: 1\\\", \\\"Thermal State: fair\\\" )"
+            + "\\\"Elapsed application CPU time (seconds): \(cpu), 17% CPU\\\" ) ThermalInfo: ( \\\"Thermal Level: 1\\\", \\\"Thermal State: fair\\\" )"
         return Data("""
         {
           "timeStampBegin": "2026-11-06 00:00:00", "timeStampEnd": "\(end)",
