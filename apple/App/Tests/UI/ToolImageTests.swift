@@ -20,6 +20,8 @@ struct ToolImageTests {
         try log.reset()
         let shot = pngData(width: 3200, height: 2000, shade: 0.3), icon = pngData(width: 40, height: 40, shade: 0.6)
         try log.user("截个图看看")
+        // 清单只列 30 条不落结果的调用：先跑满，带图的那几步照样列上
+        for step in 0..<31 { try log.tool("bash", id: "b\(step)", arguments: ["command": "ls \(step)"]) }
         try log.tool("read", id: "c1", arguments: ["path": "shot.png"], images: [shot])
         try log.tool("read", id: "c2", arguments: ["path": "icon.png"], images: [icon])
         try log.tool("read", id: "c3", arguments: ["path": "shot.png"], images: [shot])
@@ -30,6 +32,14 @@ struct ToolImageTests {
         let round = try #require(try await store.piMessages(of: "s").last { $0.role == .known(.pi) })
         let images = try #require(round.tools?.images)
         #expect(images.count == 2)
+        #expect(round.tools?.steps == 33)  // 31 条命令 + 读两个文件（同一个文件读两次只算一次）
+
+        // 升级前按旧规则读过的会话：检查点作废、从头重读，窗口内已有的轮次也补上图
+        let stored = try JSONEncoder().encode(update.checkpoint)
+        var old = try #require(try JSONSerialization.jsonObject(with: stored) as? [String: Any])
+        old["rules"] = 1
+        #expect(throws: (any Error).self) { try JSONDecoder().decode(PiHistoryCheckpoint.self, from: JSONSerialization.data(withJSONObject: old)) }
+        #expect(try JSONDecoder().decode(PiHistoryCheckpoint.self, from: stored) == update.checkpoint)
         let shrunk = try #require(files.fileURL(for: images[0]))
         let size = try #require(CGImageSourceCreateWithURL(shrunk as CFURL, nil).flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) } as? [CFString: Any])
         #expect(size[kCGImagePropertyPixelWidth] as? Int == 1600 && size[kCGImagePropertyPixelHeight] as? Int == 1000)

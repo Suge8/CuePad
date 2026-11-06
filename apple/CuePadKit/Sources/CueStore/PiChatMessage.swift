@@ -204,7 +204,7 @@ extension PiChatMessage {
 
     /// 调用数（与清单的行同一口径；说的话不算）
     public var steps: Int
-    /// 清单，按发生先后。落了结果的（`Kind.acts`）与说的话总在里面；其余调用至多列到 `itemLimit` 条，超出的只进计数
+    /// 清单，按发生先后。落了结果的（`Kind.acts`）、结果里带图的与说的话总在里面；其余调用至多列到 `itemLimit` 条，超出的只进计数
     public var items: [Item]
 
     /// 这一轮工具结果里的图，按先后、同一份只算一次：会话页那一行经过下的缩略图（`RoundProcess`）
@@ -227,11 +227,12 @@ extension PiChatMessage {
       self.items = items
     }
 
-    /// 记下一条：说的话照列、不算一步；做完的一次调用计一步，清单没满或它落了结果（`Kind.acts`）就列上。
+    /// 记下一条：说的话照列、不算一步；做完的一次调用计一步，清单没满、它落了结果（`Kind.acts`）或结果里带图就列上——
+    /// 图只记在清单的那一条上，不列就看不到。
     public mutating func record(_ item: Item) {
       guard item.kind != .said else { return items.append(item) }
       steps += 1
-      if item.kind.acts || items.count(where: { $0.kind != .said }) < Self.itemLimit { items.append(item) }
+      if item.kind.acts || item.images != nil || items.count(where: { $0.kind != .said }) < Self.itemLimit { items.append(item) }
     }
   }
 }

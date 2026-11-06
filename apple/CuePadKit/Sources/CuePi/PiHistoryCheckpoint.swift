@@ -4,10 +4,10 @@ import CueText
 import Foundation
 
 /// 增量索引的可持久化状态。调用方存起来（Codable），下次传回来就只读新增字节。只存摘要与跨行的轮次状态，不存正文。
-/// 解不开（格式随 CuePi 升级变了）的检查点当作没有，从头重读。
+/// 解不开（格式随 CuePi 升级变了、读的规则换了版本）的检查点当作没有，从头重读。
 public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
-    /// 重新读取旧检查点，把曾按普通完成入库的 length 回答改为未完成。
-    var terminalFormat: Int = 1
+    /// 按哪一版规则读出来的（`ReadRules`）
+    var rules = ReadRules()
     /// 已消费到的字节偏移（总在一个换行之后）
     public internal(set) var offset: UInt64 = 0
     /// 读到 `offset` 那次文件的修改时间（列目录或读之前取的）
@@ -34,6 +34,27 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var excluded = false
     /// 你说的一句、还在等它的投送请求 id：Grok 把发它的请求 id 写在它之后的那几行上（`GrokHistory`），等到下一行再照常 `said`
     var held: Held?
+
+    /// 读会话的规则的版本：规则变了、已读过的轮次要按新规则重写时（长度截断的回答改记未完成、工具结果里的图）加一，
+    /// 旧版本的检查点解不开，各家的会话在窗口内从头重读、对话按新规则改写（`CueStore.applyTranscript` 只改写变了的）。
+    struct ReadRules: Codable, Equatable {
+        static let current = 2
+        let version: Int
+
+        init() { version = Self.current }
+
+        init(from decoder: any Decoder) throws {
+            version = try decoder.singleValueContainer().decode(Int.self)
+            guard version == Self.current else {
+                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "读的规则换了版本"))
+            }
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var c = encoder.singleValueContainer()
+            try c.encode(version)
+        }
+    }
 
     /// 文件从上次读完就没动过：大小正好读到头、修改时间与那次相同。回填时据此不打开文件——启动时绝大多数会话文件都这样，
     /// 逐个打开、核对开头与偏移曾占回填的八成。被改写或替换的文件修改时间会变，照常走读时的核对（`isResumable`）。
