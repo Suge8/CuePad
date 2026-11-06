@@ -51,8 +51,11 @@ export class Session {
 	/**
 	 * 已交给 Pi、还没观察到对应用户消息事件的那句。message_end 先于文件写入，ACK 不是持久化证明。
 	 * 没有可关联事件时超时或断连都只能表示未知，不能授权自动重投；真实消息由历史读取对账。
+	 * 按交出先后排队：交出到落成之间宿主仍是空闲的，下一句照样交出，各认各的（`landed`）。
 	 */
-	starting: Said | null = null;
+	readonly starting: Said[] = [];
+	/** 开新一轮的请求排成一队：预检是异步的，并发的两句不排队就会按预检返回的先后交出，颠倒用户发话的顺序。 */
+	private rounds: Promise<unknown> = Promise.resolve();
 	/** 已交给 Pi、还没落成会话里一条消息的重跑（`retry.ts`）：落成时回它的确认，同 `starting` */
 	retrying: Ack | null = null;
 	asking: Asking | null = null;
@@ -222,7 +225,13 @@ export class Session {
 	}
 
 	/** 以这句开新一轮（见 `pending`）。 */
-	async startRound(said: Said) {
+	startRound(said: Said): Promise<void> {
+		const run = this.rounds.then(() => this.dispatchRound(said));
+		this.rounds = run.catch(() => {});
+		return run;
+	}
+
+	private async dispatchRound(said: Said) {
 		if (this.rejectSend(said)) return;
 		if (this.pending.length === 0 && this.ctx.isIdle()) return this.submit(said);
 		if (!(await this.prepare(said.ack)) || this.rejectSend(said)) return;
@@ -236,11 +245,11 @@ export class Session {
 	 */
 	private async submit(said: Said) {
 		if (this.rejectSend(said) || !(await this.prepare(said.ack)) || this.rejectSend(said)) return;
-		this.starting = said;
+		this.starting.push(said);
 		try {
 			this.pi.sendUserMessage(said.content, said.expand ? { expandPromptTemplates: true } : undefined);
 		} catch (error) {
-			this.starting = null;
+			this.starting.splice(this.starting.indexOf(said), 1);
 			this.reportFailure(reason(error));
 			said.ack?.({ ok: false, error: `failed: ${reason(error)}` });
 		}
@@ -273,6 +282,13 @@ export class Session {
 			const next = this.pending.shift();
 			if (next) void this.submit(next);
 		});
+	}
+
+	/** 一条用户消息落成了：认出它是交出的哪一句（先交的先认；模板与 skill 展开后认不出原话，取最早的），
+	 * 排在它前面的没认到的就是没落成，不再等。 */
+	landed(text: string): Said | undefined {
+		const at = this.starting.findIndex((said) => said.expand || text.startsWith(said.text));
+		return at < 0 ? undefined : this.starting.splice(0, at + 1)[at];
 	}
 
 	/** 宿主可以在排队后开出新的人类轮：每次打断前以当前投影的标识重新核对。 */

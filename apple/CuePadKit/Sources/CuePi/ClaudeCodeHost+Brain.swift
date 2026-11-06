@@ -70,14 +70,11 @@ extension ClaudeHostedSession: HostedSession {
 
     func newSession() async throws {
         let stream = try live
-        try await withCheckedThrowingContinuation { continuation in
-            clearing = continuation
-            do {
-                try stream.write(Self.userMessage("/clear"))
-            } catch {
-                clearing = nil
-                continuation.resume(throwing: error)
-            }
+        let id = UUID()
+        defer { clearing.removeAll { $0 == id } }
+        _ = try await clearWaits.request(id) {
+            clearing.append(id)
+            try stream.write(Self.userMessage("/clear"))
         }
     }
 

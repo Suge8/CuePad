@@ -91,10 +91,13 @@ extension PiBridge {
         }
     }
 
+    /// 请它退出；失败（含 Pi 扩展的确认超时 `ackTimeout`）就摘掉标记，下次审查（任何状态变化）再请一次。
     private func release(_ id: PiSession.ID) {
         guard let link = controls[id], releasing.insert(id).inserted else { return }
         idleTimers.removeValue(forKey: id)?.cancel()
-        Task { try? await link.end(id) }
+        Task {
+            do { try await link.end(id) } catch { releasing.remove(id) }
+        }
     }
 }
 #endif

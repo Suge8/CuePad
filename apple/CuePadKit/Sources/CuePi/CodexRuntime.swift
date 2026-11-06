@@ -48,7 +48,13 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     /// 托管进程环境里的标记（`HostMark`）→ 进程号
     var marks: [String: Int32] = [:]
     var daemon: CodexRPC?
-    var connecting: Task<CodexRPC, any Error>?
+    var connecting: Task<CodexRPC?, any Error>?
+    /// 正在做的发现（`discover`）与做的时候又来了一次
+    var scanning: Scan?
+    final class Scan {
+        var task: Task<Void, Never>?
+        var again = false
+    }
     /// 常驻服务的控制 socket（服务在跑时问到的）
     var controlSocket: String?
     var exitWatchers: [Int32: ProcessExitWatcher] = [:]
@@ -141,8 +147,17 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         exitWatchers = [:]
         daemon?.close()
         daemon = nil
+        let (connecting, scan) = (connecting, scanning?.task)
+        connecting?.cancel()
+        scan?.cancel()
+        self.connecting = nil
+        scanning = nil
         let waits = hosted.values.compactMap(\.rpc).map { rpc in Task { await rpc.shutdown() } }
-        return { for wait in waits { await wait.value } }
+        return {
+            _ = try? await connecting?.value
+            await scan?.value
+            for wait in waits { await wait.value }
+        }
     }
 
     public func open(

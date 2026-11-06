@@ -53,9 +53,8 @@ export function follow(session: Session): (() => void)[] {
 			// 交出到开轮之间（预检、Pi 查登录）别的扩展抢先开轮会认错：落成的消息不带来源，input 事件的 source 对各扩展都是
 			// extension、又早于展开，Pi 没有能精确区分的字段。
 			// 扩展先收到 message_end、Pi 再把同一个消息对象写进会话文件，所以 id 随消息落盘，对话（读会话文件）据此认出它
-			const said = session.starting;
-			if (!said || (!said.expand && !messageText(event.message).startsWith(said.text))) return;
-			session.starting = null;
+			const said = session.landed(messageText(event.message));
+			if (!said) return;
 			if (said.id) Object.assign(event.message, { cuepadDelivery: said.id });
 			said.ack?.({ ok: true });
 		}),
@@ -65,7 +64,7 @@ export function follow(session: Session): (() => void)[] {
 		// FireCode 交回结果时，在飞数在这之后、agent_start 之前就归零了，从这里接上，连续处理才不会在交接处断开。
 		// 自己交出的话从 agent_start 起算：Pi 在 input 之后才查模型与登录，拒收了这里就会一直报工作中
 		pi.on("input", (event) => {
-			if (tracker.active || session.starting?.text === event.text) return;
+			if (tracker.active || session.starting.some((said) => said.text === event.text)) return;
 			tracker.active = true;
 			session.commit();
 		}),

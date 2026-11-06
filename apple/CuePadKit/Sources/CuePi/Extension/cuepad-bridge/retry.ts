@@ -27,7 +27,8 @@ export async function retry(session: Session, ack: Ack): Promise<string | undefi
 	const failed = isFailedAnswer(ctx.sessionManager.buildSessionProjection().messages.at(-1));
 	if (session.phase !== "error" || !failed || !ctx.isIdle()) return NOTHING_TO_RETRY;
 	if (!(await session.prepare(ack))) return;
-	if (session.phase !== "error" || !ctx.isIdle()) return NOTHING_TO_RETRY;
+	// 预检期间另一个重跑已经交出：它的确认还在等，不能被覆盖
+	if (session.phase !== "error" || !ctx.isIdle() || session.retrying) return NOTHING_TO_RETRY;
 	settleRetry(session);
 	session.retrying = ack;
 	try {

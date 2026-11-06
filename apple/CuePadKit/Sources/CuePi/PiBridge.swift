@@ -70,6 +70,8 @@ public final class PiBridge {
     @ObservationIgnored var idleTimers: [PiSession.ID: Task<Void, Never>] = [:]
     /// 已经请它退出的托管会话：同一个只请一次（Pi 收尾中再收到一次 SIGTERM 会跳过收尾直接退出）
     @ObservationIgnored var releasing: Set<PiSession.ID> = []
+    /// 同一会话的发话一次一句（`SessionGate`）
+    @ObservationIgnored let turns = SessionGate()
     /// 没告别就断开的会话：断开可能先于进程退出（强杀后还是僵尸），留着退出监视，退出时再删残留 socket
     @ObservationIgnored var orphanExitWatchers: [String: ProcessExitWatcher] = [:]
     /// 已报告不兼容的 socket 文件：同一个文件还在时不再重连、不重复报告。按文件本身认（不按名字）：
@@ -129,7 +131,12 @@ public final class PiBridge {
 extension PiBridge {
     /// 发消息（文字 + 图片），以这句开新一轮：会话歇着就直接开始，在跑就先打断这一轮；打断不了的（`AgentCapabilities.speakBlocked`）
     /// 拒收、带上原因，不排队。受理即返回，不代表模型成功。
+    /// 同一会话的 `send` 一次一句（`SessionGate`）；`abort` 与斜杠命令不排队（`/compact` 要等压完才确认，发话得能在它进行中打断它）。
     public func send(_ message: PiMessage, to id: PiSession.ID) async throws {
+        try await turns.run(id) { try await deliver(message, to: id) }
+    }
+
+    private func deliver(_ message: PiMessage, to id: PiSession.ID) async throws {
         try Task.checkCancellation()
         let link = try control(id, needs: message.images.isEmpty ? [] : .images)
         guard let peer = session(id: id) else { throw PiBridgeError.sessionEnded }

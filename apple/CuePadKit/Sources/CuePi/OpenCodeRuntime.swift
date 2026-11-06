@@ -199,6 +199,8 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
             } catch {
                 Self.log.error("OpenCode 事件流断开或快照失败，\(delay, privacy: .public) 后重连：\(String(describing: error), privacy: .public)")
             }
+            // 事件流断了：到重新拉完快照之前，状态不再是最新的，命令要等重连（`ensureService`）
+            connection.ready = false
             guard (try? await Task.sleep(for: delay)) != nil else { return }
             delay = min(delay * 2, Self.retryCeiling)
         }

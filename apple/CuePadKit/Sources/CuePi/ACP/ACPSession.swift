@@ -56,8 +56,10 @@ final class ACPSession {
     private var draft: DraftParts?
     /// 停下这一轮后它的结束不算出错
     private var stopping = false
-    /// 等这一轮变化的（排着的那一句跑起来、这一轮结束）；进程退出时也放行
-    private var waiting: [CheckedContinuation<Void, Never>] = []
+    /// 等这一轮变化的（排着的那一句跑起来、这一轮结束）；进程退出时也放行。大脑等一轮自然做完，不限时
+    private let changes = PendingReplies<UUID, Void>(timeout: nil, timeoutError: PiBridgeError.ackTimeout)
+    /// 停下这一轮后等它结束的：取消的回应不来（Agent 收下取消却不回也不断线）时到 `AgentTimeouts.stop` 放弃
+    private let stops: PendingReplies<UUID, Void>
     private var loading = false
     /// CuePad 的 MCP 服务连上没有（`ACPDialect.connectsMCPLater`）：nil 是这个会话还没报
     private var mcp: Result<Void, HostedSessionError>?
@@ -70,16 +72,18 @@ final class ACPSession {
     var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
 
     /// 托管会话：`launch`、`open`/`load` 后 `attach` 上桥。
-    init(dialect: any ACPDialect, bridge: PiBridge) {
+    init(dialect: any ACPDialect, bridge: PiBridge, timing: Timing = .system) {
         self.dialect = dialect
         self.bridge = bridge
         brain = nil
+        stops = PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout)
     }
 
     /// Cue 的大脑：`start` 起进程。
     init(dialect: any ACPDialect) {
         self.dialect = dialect
         brain = BrainSession()
+        stops = PendingReplies(timeout: AgentTimeouts.stop, timeoutError: PiBridgeError.ackTimeout)
     }
 
     /// 起好的连接；没起或进程已退出时抛错（托管会话 `sessionEnded`，大脑 `notRunning`）
@@ -184,22 +188,22 @@ final class ACPSession {
         stopping = true
         decline()
         try live.notify("session/cancel", ["sessionId": .string(sessionID)])
-        await untilFinished()
+        try await untilFinished()
     }
 
     /// 在跑的是 CuePad 开的那一轮：插话只并进它（Agent 自己开的一轮各家不保证收下，等它做完再开）
     var steerable: Bool { facts.running && prompted == turn && promptRunning }
 
-    /// 等这一轮结束（没在跑立即返回，进程退出时也返回）。
-    func untilFinished() async {
+    /// 等这一轮结束（没在跑立即返回，进程退出时也返回）；取消的回应不来时到 `AgentTimeouts.stop` 抛 `ackTimeout`。
+    func untilFinished() async throws {
         let current = turn
-        while turn == current, facts.running, connection?.isClosed == false { await nextChange() }
+        while turn == current, facts.running, connection?.isClosed == false { try await stops.wait() }
     }
 
-    /// 等这一轮变一次：排着的那一句跑起来、这一轮结束，或进程退出；没在跑或进程已退出时立即返回。
-    func nextChange() async {
+    /// 等这一轮变一次：排着的那一句跑起来、这一轮结束，或进程退出；没在跑或进程已退出时立即返回。不限时（大脑等一轮自然做完）。
+    func nextChange() async throws {
         guard facts.running, connection?.isClosed == false else { return }
-        await withCheckedContinuation { waiting.append($0) }
+        try await changes.wait()
     }
 
     private func begin() -> Int {
@@ -241,8 +245,8 @@ final class ACPSession {
     }
 
     private func release() {
-        waiting.forEach { $0.resume() }
-        waiting = []
+        changes.releaseAll()
+        stops.releaseAll()
     }
 
     /// 没答的作废（`ACPAsk.withdrawn`）。

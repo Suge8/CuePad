@@ -16,15 +16,25 @@ extension CodexRuntime {
         return path
     }
 
-    /// 连上常驻服务（已连着就用那条）；服务没跑为 nil。
+    /// 连上常驻服务（已连着就用那条，正在连的大家等同一次）；服务没跑为 nil。`stop` 取消正在连的那次，连上后核对没被取消才装上。
     private func daemonConnection() async throws -> CodexRPC? {
         if let daemon, !daemon.isClosed { return daemon }
-        if let connecting { return try await connecting.value }
+        let task = connecting ?? {
+            let attempt = Task { try await connectDaemon() }
+            connecting = attempt
+            return attempt
+        }()
+        defer { if connecting == task { connecting = nil } }
+        return try await task.value
+    }
+
+    private func connectDaemon() async throws -> CodexRPC? {
         guard let path = await daemonSocket() else { return nil }
-        let task = Task { try await CodexRPC.connect(socket: path) }
-        connecting = task
-        defer { connecting = nil }
-        let rpc = try await task.value
+        let rpc = try await CodexRPC.connect(socket: path)
+        guard !Task.isCancelled else {
+            rpc.close()
+            return nil
+        }
         let pid = rpc.pid
         rpc.onNotification = { [weak self] method, params in self?.notification(method, params, from: pid) }
         rpc.onClose = { [weak self, weak rpc] in
@@ -36,15 +46,36 @@ extension CodexRuntime {
     }
 
     /// 启动时把常驻服务里已经载入的线程接上（CuePad 晚于终端里的会话启动）：会话先接上，子代理的线程再补进它们的名册。
+    /// 同一时刻只有一次在做，做的时候又来的并进再做一遍（范围到那时才读）；`stop` 取消它。
     func discover() async {
+        if let scan = scanning {
+            scan.again = true
+            await scan.task?.value
+            return
+        }
+        let scan = Scan()
+        scanning = scan
+        scan.task = Task {
+            repeat {
+                scan.again = false
+                await scanDaemon()
+            } while scan.again && !Task.isCancelled
+            if scanning === scan { scanning = nil }
+        }
+        await scan.task?.value
+    }
+
+    private func scanDaemon() async {
         do {
             guard let rpc = try await daemonConnection() else { return }
             let loaded = try await rpc.call("thread/loaded/list", [:])
             var children: [JSONValue] = []
             for threadID in loaded["data"]?.array?.compactMap(\.string) ?? [] where tracked["\(threadID).\(rpc.pid)"] == nil {
+                try Task.checkCancellation()
                 // Codex 自己起的临时线程（起标题等）不是会话
                 guard let thread = try await rpc.call("thread/read", ["threadId": .string(threadID)])["thread"],
                       thread["ephemeral"]?.bool != true else { continue }
+                try Task.checkCancellation()
                 if thread["parentThreadId"]?.string != nil {
                     children.append(thread)
                 } else if scope.covers(sessionID: threadID) {
@@ -52,10 +83,12 @@ extension CodexRuntime {
                 }
             }
             for child in children {
+                try Task.checkCancellation()
                 guard let id = child["id"]?.string, threads["\(id).\(rpc.pid)"] == nil else { continue }
                 threads["\(id).\(rpc.pid)"] = .asking([])
                 await register(child, on: rpc)
             }
+        } catch is CancellationError {
         } catch {
             Self.log.notice("没能读出常驻服务里的会话：\(String(describing: error))")
         }
