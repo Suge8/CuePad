@@ -40,6 +40,8 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     private var watcher: FileFollower?
     private var watching: Task<Void, Never>?
     var connection: Connection?
+    /// 每个会话发话里"等重连、停下上一轮"那一段（`abort` 整段取消）
+    var stopPhases: [PiSession.ID: StopPhase] = [:]
     var waiters: [UUID: CheckedContinuation<Connection, any Error>] = [:]
 
     var sessions: [String: Tracked] = [:]

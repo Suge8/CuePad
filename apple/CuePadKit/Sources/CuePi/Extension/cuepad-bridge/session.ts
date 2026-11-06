@@ -237,7 +237,7 @@ export class Session {
 
 	private async dispatchRound(said: Said, epoch: number) {
 		if (this.abortedSince(epoch, said) || this.rejectSend(said)) return;
-		if (this.pending.length === 0 && this.ctx.isIdle()) return this.submit(said);
+		if (this.pending.length === 0 && this.ctx.isIdle()) return this.submit(said, epoch);
 		if (!(await this.prepare(said.ack)) || this.abortedSince(epoch, said) || this.rejectSend(said)) return;
 		this.pending.push(said);
 		this.stopRound();
@@ -247,8 +247,8 @@ export class Session {
 	 * 不带 deliverAs：只在歇着时交（见 `pending`），Pi 直接开始这一轮。歇着又没有等着的话时，之前交出、还没落成消息的那句
 	 * 不构成未执行证据；旧等待不阻止宿主空闲时的新意图。
 	 */
-	private async submit(said: Said) {
-		if (this.rejectSend(said) || !(await this.prepare(said.ack)) || this.rejectSend(said)) return;
+	private async submit(said: Said, epoch: number) {
+		if (this.rejectSend(said) || !(await this.prepare(said.ack)) || this.abortedSince(epoch, said) || this.rejectSend(said)) return;
 		this.starting.push(said);
 		try {
 			this.pi.sendUserMessage(said.content, said.expand ? { expandPromptTemplates: true } : undefined);
@@ -284,7 +284,7 @@ export class Session {
 		this.later("等着的话", () => {
 			if (!this.ctx.isIdle()) return this.stopForPending();
 			const next = this.pending.shift();
-			if (next) void this.submit(next);
+			if (next) void this.submit(next, this.abortEpoch);
 		});
 	}
 

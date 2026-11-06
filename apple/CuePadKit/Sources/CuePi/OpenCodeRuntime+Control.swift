@@ -18,11 +18,17 @@ extension OpenCodeRuntime {
     /// 之后收进来的话在被停下的这一轮收尾时开出新一轮（服务的 `SessionRunCoordinator`），所以不会并进被停下的这一轮。
     /// 原生的 `interrupt?resume=true` 是"先收话再打断"：两次请求之间这一轮到了步骤边界就会把话读进将被停下的这一轮，不用。
     public func send(_ message: PiMessage, in id: PiSession.ID) async throws {
-        let (connection, _, sessionID) = try await live(id)
+        var target: (Connection, String)?
+        // 等重连与停下上一轮是可被停止取消的一段；prompt 交出后不取消（话已收下）
+        try await stopPhase(id).run { [self] in
+            let (connection, _, sessionID) = try await live(id)
+            try await interrupt(sessionID, connection)
+            target = (connection, sessionID)
+        }
+        guard let (connection, sessionID) = target else { return }
         struct File: Encodable { var uri: String }
         struct Metadata: Encodable { var cuepadDelivery: String }
         struct Prompt: Encodable { var text: String; var files: [File]; var metadata: Metadata? }
-        try await interrupt(sessionID, connection)
         let prompt = Prompt(
             text: message.text, files: message.images.map { File(uri: "data:\($0.mimeType);base64,\($0.data.base64EncodedString())") },
             metadata: message.deliveryID.map(Metadata.init))
@@ -54,8 +60,18 @@ extension OpenCodeRuntime {
     }
 
     public func abort(_ id: PiSession.ID) async throws {
-        let (connection, _, sessionID) = try await live(id)
-        try await interrupt(sessionID, connection)
+        stopPhase(id).cancelAll()
+        try await stopPhase(id).run(cancellable: false) { [self] in
+            let (connection, _, sessionID) = try await live(id)
+            try await interrupt(sessionID, connection)
+        }
+    }
+
+    private func stopPhase(_ id: PiSession.ID) -> StopPhase {
+        if let phase = stopPhases[id] { return phase }
+        let phase = StopPhase()
+        stopPhases[id] = phase
+        return phase
     }
 
     /// 停下在跑的这一轮（含压缩）。在不在跑由服务判断（歇着时是空操作），不看事件流推出的忙闲。
@@ -190,7 +206,11 @@ extension OpenCodeRuntime {
             self?.waiters.removeValue(forKey: id)?.resume(throwing: AgentRuntimeError.launchTimedOut(.opencode))
         }
         defer { timeout.cancel() }
-        return try await withCheckedThrowingContinuation { waiters[id] = $0 }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { waiters[id] = $0 }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.waiters.removeValue(forKey: id)?.resume(throwing: CancellationError()) }
+        }
     }
 
     /// CuePad 起的服务不读 `.claude/skills`：技能都在 `.agents/skills`（Claude Code 那边是链到它的链接），两处都读就是同一个技能读到两次、报重名。
