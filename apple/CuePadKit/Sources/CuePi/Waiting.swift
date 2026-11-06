@@ -44,20 +44,27 @@ func withDeadline<T: Sendable>(
 
 /// 发话里"先停下上一轮"那一段（发停止请求、等回应、等它收尾）：新话还没交出，所以停止（`abort`）可以把整段取消，
 /// 不论它卡在哪个等待上；之后的段（交出新话、等送达）不在里面：话已交出，取消会把已收下的话误报成未确认、引起重发。
+/// 取消按代次认：这一段已跑完、外层还没恢复时来的停止，同样让外层不再交话（`run` 返回前核对）。
 @MainActor
 final class StopPhase {
     private var running: [UUID: Task<Void, any Error>] = [:]
+    private var generation = 0
 
     /// `cancellable` 为 false 的是停止自己的这一段：再按一次停止不该把前一次（中止已发出）报成取消。
     func run(cancellable: Bool = true, _ body: @escaping @MainActor () async throws -> Void) async throws {
         let id = UUID()
+        let started = generation
         let work = Task { try await body() }
         if cancellable { running[id] = work }
         defer { running[id] = nil }
         try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
+        if cancellable, generation != started { throw CancellationError() }
     }
 
-    func cancelAll() { for work in running.values { work.cancel() } }
+    func cancelAll() {
+        generation += 1
+        for work in running.values { work.cancel() }
+    }
 }
 
 /// 一条连接上等回应的请求（Pi 扩展的 ack、Claude Code 的控制请求、Codex、ACP 与 Pi 大脑的 RPC）：按 id 配上回应，至多等 `timeout`（按 `timing` 量；nil 不限时）；
