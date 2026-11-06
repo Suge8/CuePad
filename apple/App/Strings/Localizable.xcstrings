@@ -2851,6 +2851,22 @@
         }
       }
     },
+    "CPU 异常" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CPU Exception"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CPU 异常"
+          }
+        }
+      }
+    },
     "CUEPAD_LIBRARY_DIR 必须是绝对路径，收到「%@」" : {
       "localizations" : {
         "en" : {
@@ -3421,6 +3437,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "CuePad 直接改这台 Mac 上的这些文件，不经过 Agent"
+          }
+        }
+      }
+    },
+    "CuePad 诊断摘要：%lld 份，%lld 种" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad diagnostics summary: %lld reports, %lld kinds"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 诊断摘要：%1$lld 份，%2$lld 种"
           }
         }
       }
@@ -4731,6 +4763,22 @@
         }
       }
     },
+    "上次卡住" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last Freeze"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次卡住"
+          }
+        }
+      }
+    },
     "上次卡死" : {
       "localizations" : {
         "en" : {
@@ -5271,6 +5319,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "主按钮"
+          }
+        }
+      }
+    },
+    "主线程" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Main Thread"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主线程"
+          }
+        }
+      }
+    },
+    "主线程 %lld 秒没回到事件循环，之后恢复了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The main thread didn’t return to its event loop for %lld seconds, then recovered"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主线程 %lld 秒没回到事件循环，之后恢复了"
+          }
+        }
+      }
+    },
+    "主线程卡住" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Main Thread Freeze"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主线程卡住"
+          }
+        }
+      }
+    },
+    "主线程卡住，没等到恢复 App 就被结束了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The main thread froze, and the app was ended before it recovered"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主线程卡住，没等到恢复 App 就被结束了"
+          }
+        }
+      }
+    },
+    "主线程：" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Main thread:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主线程："
           }
         }
       }
@@ -7427,6 +7555,22 @@
         }
       }
     },
+    "分享原始文件…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Raw Files…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享原始文件…"
+          }
+        }
+      }
+    },
     "分享进来的内容没能存成灵感，下次会重试：%@" : {
       "localizations" : {
         "en" : {
@@ -7919,6 +8063,22 @@
         }
       }
     },
+    "卡住前" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Before the Freeze"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡住前"
+          }
+        }
+      }
+    },
     "卡在这一步" : {
       "localizations" : {
         "en" : {
@@ -7931,6 +8091,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "卡在这一步"
+          }
+        }
+      }
+    },
+    "卡死" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hang"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡死"
           }
         }
       }
@@ -7979,6 +8155,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原因"
+          }
+        }
+      }
+    },
+    "原因：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reason: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原因：%@"
           }
         }
       }
@@ -8567,18 +8759,18 @@
         }
       }
     },
-    "只存在这台设备上，不会自动上传；点导出把摘要和原始诊断复制出来，发给开发者。" : {
+    "只存在这台设备上，不会自动上传。导出诊断复制每次出事的要点，发给开发者；开发者要完整原文时，再分享原始文件。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stored only on this device and never uploaded automatically. Export copies the summary and raw diagnostics so you can send them to the developer."
+            "value" : "Stays on this device and is never uploaded. Export Diagnostics copies the key facts of each incident to send to the developer; share the raw files only if the developer asks for them."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只存在这台设备上，不会自动上传；点导出把摘要和原始诊断复制出来，发给开发者。"
+            "value" : "只存在这台设备上，不会自动上传。导出诊断复制每次出事的要点，发给开发者；开发者要完整原文时，再分享原始文件。"
           }
         }
       }
@@ -8979,6 +9171,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "否"
+          }
+        }
+      }
+    },
+    "含义" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meaning"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "含义"
           }
         }
       }
@@ -11095,18 +11303,50 @@
         }
       }
     },
-    "崩溃线程顶部" : {
+    "崩溃" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Top of Crashed Thread"
+            "value" : "Crash"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "崩溃线程顶部"
+            "value" : "崩溃"
+          }
+        }
+      }
+    },
+    "崩溃线程" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crashed Thread"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "崩溃线程"
+          }
+        }
+      }
+    },
+    "崩溃线程：" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crashed thread:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "崩溃线程："
           }
         }
       }
@@ -12591,6 +12831,22 @@
         }
       }
     },
+    "所在页：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Page: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所在页：%@"
+          }
+        }
+      }
+    },
     "手上没有事" : {
       "localizations" : {
         "en" : {
@@ -13759,6 +14015,22 @@
         }
       }
     },
+    "收到 VoIP 推送后没向系统报来电，被系统结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ended by the system: a VoIP push arrived but no call was reported"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收到 VoIP 推送后没向系统报来电，被系统结束"
+          }
+        }
+      }
+    },
     "收到一张损坏的图片，已跳过" : {
       "localizations" : {
         "en" : {
@@ -14707,6 +14979,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "时间"
+          }
+        }
+      }
+    },
+    "时间：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "时间：%@"
           }
         }
       }
@@ -17751,6 +18039,22 @@
         }
       }
     },
+    "版本：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "版本：%@"
+          }
+        }
+      }
+    },
     "状态未确认" : {
       "localizations" : {
         "en" : {
@@ -17907,6 +18211,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用云端数据替换本机…"
+          }
+        }
+      }
+    },
+    "用户强制退出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Force quit by the user"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用户强制退出"
           }
         }
       }
@@ -18371,6 +18691,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "看这个项目的进展"
+          }
+        }
+      }
+    },
+    "看门狗：主线程太久没响应，被系统结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Watchdog: the main thread stopped responding for too long and the system ended the app"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看门狗：主线程太久没响应，被系统结束"
+          }
+        }
+      }
+    },
+    "磁盘写入异常" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disk Write Exception"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "磁盘写入异常"
           }
         }
       }
@@ -20151,6 +20503,22 @@
         }
       }
     },
+    "设备过热，被系统结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ended by the system because the device overheated"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备过热，被系统结束"
+          }
+        }
+      }
+    },
     "设置" : {
       "localizations" : {
         "en" : {
@@ -20243,6 +20611,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "说明"
+          }
+        }
+      }
+    },
+    "说明：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meaning: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "说明：%@"
           }
         }
       }
@@ -22263,6 +22647,22 @@
         }
       }
     },
+    "进后台挂起时还握着共享的文件锁（如 SQLite），被系统结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ended by the system for holding a shared file lock (such as SQLite) while suspending in the background"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "进后台挂起时还握着共享的文件锁（如 SQLite），被系统结束"
+          }
+        }
+      }
+    },
     "进展" : {
       "localizations" : {
         "en" : {
@@ -23843,6 +24243,54 @@
         }
       }
     },
+    "（切前后台、场景更新时没按时答复）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (didn’t respond in time to a scene update, such as moving to or from the background)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（切前后台、场景更新时没按时答复）"
+          }
+        }
+      }
+    },
+    "（启动太久）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (launch took too long)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（启动太久）"
+          }
+        }
+      }
+    },
+    "（建窗口时没按时答复）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (didn’t respond in time while creating a window)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（建窗口时没按时答复）"
+          }
+        }
+      }
+    },
     "（空）" : {
       "localizations" : {
         "en" : {
@@ -23855,6 +24303,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "（空）"
+          }
+        }
+      }
+    },
+    "（系统要结束 App 时 5 秒内没退出：多半主线程在那之前就卡住了，比如从后台划掉卡住的 App）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (it didn’t exit within 5 seconds of the system asking it to; the main thread was most likely already frozen, for example when a frozen app is swiped away)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（系统要结束 App 时 5 秒内没退出：多半主线程在那之前就卡住了，比如从后台划掉卡住的 App）"
           }
         }
       }

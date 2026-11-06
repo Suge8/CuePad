@@ -55,7 +55,9 @@ final class Workspace {
 
     let services: AppServices
     /// 只保留当前布局的导航值；尺寸切换经 `setLayout` 转换，不缓存另一套去处。
-    var navigation: Navigation
+    var navigation: Navigation {
+        didSet { MainThreadWatch.shared.page(navigation.trail) }
+    }
     /// 新建（`project` 为 nil）或编辑项目的表单：侧栏、书架与项目页的入口都经这里，窗口的根弹出。
     var projectForm: ProjectFormRequest?
     /// 请过"对 Cue 说"拿到焦点（`speakToCue`：随手记小组件、手机的 ⌘⇧N），Cue 页的输入框还没接：它出现时或已在屏上时接下并清掉。
@@ -198,6 +200,7 @@ final class Workspace {
         #if os(macOS)
         sendState = SendState(services: services)
         #endif
+        MainThreadWatch.shared.page(navigation.trail)
         readCatalog()
         if let catalog { reconcileNavigation(projects: Set(catalog.projects.map(\.id))) }
         readLibrary()

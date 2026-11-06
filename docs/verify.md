@@ -93,5 +93,7 @@ CUEPAD_FAKE_HOME=$PWD/apple/.derived/fakehome apple/scripts/xc.sh run mac -- -Cu
 
 ## 崩溃诊断
 
-- 真机崩溃拿不到栈时，请用户从设置的"上次崩溃"里"导出诊断"发来：摘要未符号化，靠 dSYM 还原，每次发布的归档在 `~/Library/Developer/Xcode/Archives/<日期>/CuePad <ios|mac> <构建号>.xcarchive`。
+- 真机崩溃拿不到栈时，请用户从设置的"上次崩溃"里"导出诊断"发来：复制的是存档里每份的要点（本地时间、版本、设备、异常与终止原因的人话、崩溃线程前几帧，CuePad 自己的帧标 `← CuePad`），同一种并成一条计次数；要完整 JSON 再请用户点"分享原始文件…"。帧未符号化，靠 dSYM 还原，每次发布的归档在 `~/Library/Developer/Xcode/Archives/<日期>/CuePad <ios|mac> <构建号>.xcarchive`（`dwarfdump --uuid` 对上 UUID；系统库要那台设备系统版本的符号）。
+- 0x8BADF00D 加 `WatchdogEvent: process-exit` 多半是主线程先卡住、用户再从后台划掉：看同一份摘要里的"主线程卡住"（App 内的看守记下的：卡住时在哪一页、之前开合过什么）。
+- 偶发的卡死用 `xc.sh explore [种子] [秒]` 找：随机点滑三页，看守一记下卡住就停手连取样本，记录可按种子回放（`explore.py` 头注释）。验看守本身用 `-CuePadFreeze <秒>`。
 - 模拟器里 `xc.sh shot`/`rec` 报"App 在画面就绪前退出了"就是崩了，报告在 `~/Library/Logs/DiagnosticReports/CuePad-*.ips`。只在会话跑着时崩的，用 `-CuePadStream YES` 让它一轮一轮跑起来。

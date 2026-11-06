@@ -151,9 +151,11 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         // 不然贴底状态先变后变回来，读它的对话与页面跟着重算两遍
                         let following = follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling
                         var next = follow.wrappedValue
+                        // 算用户滚走的只有偏移真的挪了的那次：手指按着、甩着的期间可见区变高矮（键盘、输入框随贴底状态收起与展开）、内容边距变了，
+                        // 离最新处也会越线，那不是用户滚的。算进去的话贴底状态改了回复框，回复框又改回可见区，一次排版里来回翻、永不收敛，主线程卡死
                         next.scrolled(
                             atNewest: reading.nearNewest || following, beyondScreen: reading.beyondScreen && !following, nearOldest: reading.nearOldest,
-                            byUser: next.scrolling)
+                            byUser: next.scrolling && delivered.moved)
                         if next != follow.wrappedValue { follow.wrappedValue = next }
                         guard following else { return }
                         if (holding && !unheld) || left, grown > 0 {

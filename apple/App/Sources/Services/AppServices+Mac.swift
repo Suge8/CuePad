@@ -12,7 +12,7 @@ extension AppServices {
         guard !tasks.isRunning else { return }
         Self.raiseFileLimit()
         register(hotkey)
-        if location.touchesRealWorld { diagnostics.start() }
+        diagnostics.start(metricKit: location.touchesRealWorld)
         let piChanges = pi.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
         let legacyPiChanges = pi.changes()
         agents.uninstalled = { [weak self] kind in await self?.runtimes[kind]?.integrationRemoved() }

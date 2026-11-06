@@ -21,12 +21,14 @@ final class ModalHost {
     /// 开着一个：后开的顶掉先开的（先关它，同点在它外面）。页里长开的给它此刻的框。
     func cover(_ entry: Modal, hole: CGRect? = nil) {
         if let modal, modal.token != entry.token { modal.close() }
+        MainThreadWatch.shared.action(entry.popup == nil ? "open panel" : "open popup")
         modal = entry
         self.hole = hole
     }
 
     func uncover(_ token: UUID) {
         guard modal?.token == token else { return }
+        MainThreadWatch.shared.action("close modal")
         modal = nil
         hole = nil
     }

@@ -37,6 +37,28 @@ nonisolated enum Route: Hashable {
 
 }
 
+extension Route {
+    /// 诊断里记的页名（`MainThreadWatch`）：只有哪种页，不带内容（会话页的 `seed` 是整页的对话）。
+    var trail: String {
+        switch self {
+        case .shelf: "shelf"
+        case .project: "project"
+        case .archive: "archive"
+        case .trash: "trash"
+        case .library: "library"
+        case .libraryFile: "libraryFile"
+        case .settings: "settings"
+        case .conflicts: "conflicts"
+        case .progress: "progress"
+        case .cue: "cue"
+        case .search: "search"
+        case .earlier: "earlier"
+        case .card: "card"
+        case .session: "session"
+        }
+    }
+}
+
 /// 会话页的路由：身份是会话记录 id（`PiSessionState.id`，由 Pi 的会话 id 算出，锁屏通知只带它）。`sessionID` 是 Pi 的会话 id
 /// （Mac 的桥按它认在线的会话），只有记录 id 的入口不带。`seed` 是推入前读好的这一页，只作首帧
 /// （标题、状态与最新的对话推入第一帧就在），之后一律以 Store 的观察流为准；两者都不参与相等。

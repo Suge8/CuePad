@@ -55,7 +55,8 @@ enum ScrollAnchor {
 /// - `-CuePadActsAs development|stranger`（仅 Mac）：隔离库当作本机构建的开发库来定碰不碰真实世界（`DebugHooks.actsAs`）：development 照真的找这台装没装正式版，
 ///   stranger 当作没装，碰真实世界的几处照正式版走（接入写各家配置、发通知），这些目录仍由 xc.sh 的环境变量换进隔离库；配 `-CuePadOfferSetup YES` 走克隆仓库自己编的人第一次打开的那一遍；
 /// - `-CuePadOfferSetup YES`（仅 Mac）：脚本起的实例也像正式版与从 Xcode 直接打开的那样首次打开时决定弹不弹接入面板（`Workspace.offerSetup`，只弹一次记在隔离库的偏好里），核对第一次打开与老用户升级后自动弹的那一次；
-/// - `-CuePadSampleCrash YES`：存一份样例崩溃诊断（配 `-CuePadCrashSheet YES` 直接打开摘要）；
+/// - `-CuePadSampleCrash YES`：存几份样例诊断（`DebugScene+Crash.swift`；配 `-CuePadCrashSheet YES` 直接打开摘要），导出的摘要写在库目录的 summary.txt；
+/// - `-CuePadFreeze <秒>`：就绪后把主线程堵住这么久（`freezeIfAsked`），核对卡住的记录；
 /// - `-CuePadNotifications YES`：隔离库下也要通知权限、发真实的系统通知（两端，规则见 docs/verify.md「通知」）；
 ///   `-CuePadQuotaSample magpie|stress`（配 `-CuePadDemo YES` 与空库）：演示额度换成一处网关报来的账号（`DemoLibrary.seedQuotaSample`）；
 ///   `-CuePadQuotaRemindIn <秒>`（配 `-CuePadDemo YES -CuePadNotifications YES` 与空库）：演示额度里 Claude 的本周这么多秒后到提醒时刻（`DemoLibrary.seedQuotas`，核对周额度提醒）；

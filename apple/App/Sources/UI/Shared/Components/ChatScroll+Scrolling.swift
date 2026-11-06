@@ -39,16 +39,17 @@ extension ChatScroll {
         private(set) var container: CGFloat = 0
         /// 上一次交给 action 的读数与那时可见区的高。不用 action 给的旧值：那是上一次求值，中间几次变化（打开时排开更早的一段）可能求了值却没调 action，
         /// 拿它比内容变没变高会漏掉。
-        private var delivered: (reading: Reading, container: CGFloat)?
+        private var delivered: (reading: Reading, container: CGFloat, read: CGFloat)?
         /// 上一回记下的最新一条新到的（`arrival`）；还没有过为 nil。
         private var arrival: UUID?
         /// 上一次读数 action 时浮在对话底上的拍板卡（`docked`）。
         var dock: String?
 
-        /// 交给 action 时上一次交过去的读数，与这之间可见区从底下变矮了没有。
+        /// 交给 action 时上一次交过去的读数，与这之间可见区从底下变矮了没有、偏移挪了没有。
         struct Delivered {
             let reading: Reading?
             let viewShrank: Bool
+            let moved: Bool
         }
 
         func set(read: CGFloat, end: CGFloat, container: CGFloat) {
@@ -57,8 +58,9 @@ extension ChatScroll {
 
         /// 换上这次交给 action 的读数。
         func deliver(_ reading: Reading) -> Delivered {
-            defer { delivered = (reading, container) }
-            return Delivered(reading: delivered?.reading, viewShrank: delivered.map { container < $0.container } ?? false)
+            defer { delivered = (reading, container, read) }
+            return Delivered(
+                reading: delivered?.reading, viewShrank: delivered.map { container < $0.container } ?? false, moved: delivered.map { $0.read != read } ?? true)
         }
 
         /// 换上这次读数时的 `arrival`，返回它是不是刚换成的一条。第一回有它时只记下：打开时已在的（对话读进来那一下）不算新到。

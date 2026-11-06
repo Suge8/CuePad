@@ -25,10 +25,15 @@ struct LastCrashRow: View {
 }
 #endif
 
-/// 一份诊断的摘要与导出。
+/// 一份诊断的要点，与整份存档的导出：复制的是每种只留要点的摘要（`DiagnosticSummary`），完整原文作文件分享，不进剪贴板。
 struct CrashReportView: View {
     let report: CrashReport
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+
+    private var summary: String { DiagnosticSummary.text(services.diagnostics.reports) }
+    private var files: [URL] { services.diagnostics.reports.map { services.diagnostics.archive.url($0.id) } }
+    private var lines: [String] { report.trail + report.frames.map(\.text) }
 
     #if os(iOS)
     @Environment(\.closePanel) private var close
@@ -53,14 +58,18 @@ struct CrashReportView: View {
                     }
                 }
             }
-            if !report.frames.isEmpty {
-                Text(report.frames.joined(separator: "\n")).font(Typography.meta.monospaced()).foregroundStyle(palette.ink2)
+            if !lines.isEmpty {
+                Text(lines.joined(separator: "\n")).font(Typography.meta.monospaced()).foregroundStyle(palette.ink2)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(Spacing.item).frame(maxWidth: .infinity, alignment: .leading)
                     .background(palette.fill, in: .rect(cornerRadius: Radius.chip))
             }
-            ExportDiagnosticsButton(text: report.diagnostics).buttonStyle(ControlButtonStyle(size: .compact))
+            HStack(spacing: Spacing.item) {
+                ExportDiagnosticsButton(text: summary)
+                ShareLink(items: files) { Text(Self.share) }
+            }
+            .buttonStyle(ControlButtonStyle(size: .compact))
             Text(Self.note).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -69,12 +78,14 @@ struct CrashReportView: View {
     private func facts(date: Date.FormatStyle.DateStyle) -> [(LocalizedStringResource, Dotted)] {
         var facts: [(LocalizedStringResource, Dotted)] = [("时间", Dotted(report.date.formatted(date: date, time: .standard)))]
         if let exception = report.exception { facts.append(("异常", Dotted(exception + (report.signal.map { "（\($0)）" } ?? "")))) }
-        if let reason = report.reason { facts.append(("原因", Dotted(reason))) }
+        // 有人话的不再列原文（终止原因原文一长段，占满整页）：原文在导出的摘要里
+        if let explanation = report.explanation { facts.append(("含义", Dotted(explanation))) } else if let reason = report.reason { facts.append(("原因", Dotted(reason))) }
         if let app = report.app { facts.append(("版本", app)) }
         return facts
     }
 
-    private static let note: LocalizedStringResource = "只存在这台设备上，不会自动上传；点导出把摘要和原始诊断复制出来，发给开发者。"
+    private static let note: LocalizedStringResource = "只存在这台设备上，不会自动上传。导出诊断复制每次出事的要点，发给开发者；开发者要完整原文时，再分享原始文件。"
+    private static let share: LocalizedStringResource = "分享原始文件…"
 
     #if os(iOS)
     private var list: some View {
@@ -84,15 +95,19 @@ struct CrashReportView: View {
                     LabeledContent { Text(value).foregroundStyle(palette.ink3).multilineTextAlignment(.trailing).textSelection(.enabled) } label: { Text(title) }
                 }
             }
+            if !report.trail.isEmpty {
+                Section("卡住前") {
+                    ForEach(Array(report.trail.enumerated()), id: \.offset) { _, line in Text(verbatim: line).font(Typography.meta.monospaced()) }
+                }
+            }
             if !report.frames.isEmpty {
-                Section("崩溃线程顶部") {
-                    ForEach(Array(report.frames.enumerated()), id: \.offset) { _, frame in
-                        Text(frame).font(Typography.meta.monospaced())
-                    }
+                Section(report.kind == .crash ? "崩溃线程" : "主线程") {
+                    ForEach(Array(report.frames.enumerated()), id: \.offset) { _, frame in Text(verbatim: frame.text).font(Typography.meta.monospaced()) }
                 }
             }
             Section {
-                ExportDiagnosticsButton(text: report.diagnostics)
+                ExportDiagnosticsButton(text: summary)
+                ShareLink(items: files) { Text(Self.share) }
             } footer: {
                 Text(Self.note)
                     .lineLimit(nil)

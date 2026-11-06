@@ -32,6 +32,7 @@ private struct ScenePhaseWork: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onChange(of: phase) { _, phase in
+                MainThreadWatch.shared.action("scene \(phase)")
                 guard phase == .background, UIApplication.shared.connectedScenes.allSatisfy({ $0.activationState == .background }) else { return }
                 Task { await BackgroundWork.run { await services.prepareForBackground() } }
             }

@@ -71,6 +71,17 @@ extension DebugScene {
             still = pending == 0 && unsettled.isEmpty && !animating ? still + 1 : 0
         }
         FileManager.default.createFile(atPath: path, contents: shotSize.map { Data($0.utf8) })
+        freezeIfAsked()
+    }
+
+    /// `-CuePadFreeze <秒>`：就绪后 1 秒把主线程堵住这么久，核对 `MainThreadWatch` 记下的卡住（存档里的 freeze 那份、设置里的"上次卡住"）。
+    private static func freezeIfAsked() {
+        let seconds = defaults.double(forKey: "CuePadFreeze")
+        guard seconds > 0 else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            usleep(useconds_t(seconds * 1_000_000))
+        }
     }
 
     /// Mac：要拍的那扇窗（屏上最大的普通窗口，同 `xc.sh` 取的那扇）按像素算多大，写进就绪文件："宽 高"。

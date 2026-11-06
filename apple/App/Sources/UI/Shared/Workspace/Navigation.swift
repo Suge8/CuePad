@@ -164,3 +164,18 @@ extension Workspace {
         }
     }
 }
+
+extension Workspace.Navigation {
+    /// 诊断里记的所在页：窄屏是栈（根是 Cue）加侧栏开没开，宽屏是主区。
+    var trail: String {
+        switch self {
+        case .narrow(let state): (["cue"] + state.path.map(\.trail)).joined(separator: " > ") + (state.sidebarOpen ? " + sidebar" : "")
+        case .wide(let state):
+            switch state.main {
+            case .browse: "wide browse"
+            case .session: state.beside == nil ? "wide session" : "wide session | session"
+            case .page(let route): "wide \(route.trail)"
+            }
+        }
+    }
+}

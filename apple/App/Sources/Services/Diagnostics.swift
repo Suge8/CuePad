@@ -2,22 +2,27 @@ import MetricKit
 import Observation
 import os
 
-/// 崩溃诊断：订阅 MetricKit，系统把崩溃、卡死、CPU 与磁盘写入异常的诊断（一般在下次启动或隔天）交来时存进 `DiagnosticArchive`，
-/// 设置页据 `latest` 写"上次崩溃"。只存本机、不联网；真机上拿崩溃栈靠用户在设置页"导出诊断"。
+/// 崩溃诊断：订阅 MetricKit，系统把崩溃、卡死、CPU 与磁盘写入异常的诊断（一般在下次启动或隔天）交来时存进 `DiagnosticArchive`；
+/// 主线程卡住由 `MainThreadWatch` 当场记进同一个存档。设置页据 `latest` 写"上次崩溃"，导出整份存档的摘要（`DiagnosticSummary`）。
+/// 只存本机、不联网；真机上拿崩溃栈靠用户在设置页"导出诊断"。
 @Observable
 final class Diagnostics {
-    private(set) var latest: CrashReport?
-    @ObservationIgnored private let archive: DiagnosticArchive
+    /// 存档里的诊断，新的在前。
+    private(set) var reports: [CrashReport]
+    @ObservationIgnored let archive: DiagnosticArchive
     @ObservationIgnored private var subscriber: Subscriber?
+
+    var latest: CrashReport? { reports.first }
 
     init(directory: URL) {
         archive = DiagnosticArchive(directory: directory)
-        latest = archive.reports().first
+        reports = archive.reports()
     }
 
-    /// 幂等。开始订阅，并取一次系统已经攒着的（订阅之前到的）。
-    func start() {
-        guard subscriber == nil else { return }
+    /// 幂等。看着主线程；`metricKit` 时（用户的设备上，`touchesRealWorld`）再订阅 MetricKit，并取一次系统已经攒着的（订阅之前到的）。
+    func start(metricKit: Bool) {
+        MainThreadWatch.shared.start(archive: archive, version: AppServices.version) { [weak self] in self?.reload() }
+        guard metricKit, subscriber == nil else { return }
         let subscriber = Subscriber { [weak self] payloads in Task { @MainActor in self?.record(payloads) } }
         MXMetricManager.shared.add(subscriber)
         self.subscriber = subscriber
@@ -29,10 +34,12 @@ final class Diagnostics {
         for payload in payloads {
             do { try archive.store(payload) } catch { AppServices.log.error("诊断存档失败：\(String(describing: error))") }
         }
-        latest = archive.reports().first
+        reload()
     }
 
-    /// MetricKit 在自己的队列上回调；包不是 Sendable，在回调里就转成 JSON。
+    private func reload() { reports = archive.reports() }
+
+    /// MetricKit 在自己的队列上回调；包不是 Sendable，在回调里就转成 JSON（时间按这一刻的本地时区写，`CrashReport` 按本地时区读）。
     private final class Subscriber: NSObject, MXMetricManagerSubscriber, Sendable {
         let handler: @Sendable ([Data]) -> Void
 

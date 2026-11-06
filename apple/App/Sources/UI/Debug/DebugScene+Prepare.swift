@@ -24,8 +24,13 @@ extension DebugScene {
 
     private static func prepare(_ workspace: Workspace) async throws -> UUID? {
         let store = workspace.services.store
-        // -CuePadSampleCrash YES：存一份样例崩溃诊断，设置里出现"上次崩溃"（配 -CuePadCrashSheet YES 直接打开摘要）
-        if defaults.bool(forKey: "CuePadSampleCrash") { workspace.services.diagnostics.record([sampleCrash]) }
+        // -CuePadSampleCrash YES：存几份样例诊断，设置里出现"上次崩溃"（配 -CuePadCrashSheet YES 直接打开摘要）；导出的摘要另写进存档旁的 summary.txt
+        if defaults.bool(forKey: "CuePadSampleCrash") {
+            let diagnostics = workspace.services.diagnostics
+            try diagnostics.archive.store(sampleFreeze)
+            diagnostics.record(sampleDiagnostics)
+            try Data(DiagnosticSummary.text(diagnostics.reports).utf8).write(to: diagnostics.archive.directory.deletingLastPathComponent().appending(path: "summary.txt"))
+        }
         #if os(macOS)
         if defaults.string(forKey: "CuePadSeed") == "perf" { try await seedIfFresh(store, PerfLibrary.seed) }
         try await isolateBoundFolders(store)

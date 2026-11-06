@@ -21,7 +21,7 @@ extension AppServices {
             follow(reporting: { .syncUnavailable(String(localized: "这台手机开着的页没能写下：\(String(describing: $0))")) }) { try await viewer.keep() }
             followArrivals(viewer)
         }
-        if location.touchesRealWorld { diagnostics.start() }
+        diagnostics.start(metricKit: location.touchesRealWorld)
     }
 
     /// 回到前台（整个 App 只订这一份，iPad 开几个窗口都只做一次）：当场记下回前台的时刻，先开立即同步（`handleActivation`：恢复按节奏拉、重连门铃、拉一次），
