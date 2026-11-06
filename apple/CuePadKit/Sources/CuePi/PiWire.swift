@@ -205,6 +205,8 @@ enum PiWire {
         var id: String?
         var ok: Bool
         var error: String?
+        /// `title` 的回话：起好的会话名
+        var title: String?
     }
 
     struct Bye: Decodable { var reason: String }
@@ -327,7 +329,7 @@ enum PiWire {
         var timeoutMs = Int(SessionNameSuggestion.budget.seconds * 1000)
     }
 
-    /// 按第一句话起会话名并写回（`SessionNameSuggestion`）：说明、长度上限与时限随命令给，扩展挑模型、问一次、会话还没名字就用 Pi 的改名接口写下。
+    /// 按第一句话起会话名（`SessionNameSuggestion`）：说明、长度上限与时限随命令给，扩展挑模型、问一次，只回不写。
     static func titleCommand(id: String, text: String) throws -> Data { try encodeLine(TitleCommand(id: id, text: text)) }
 
     private struct AnswerCommand<Value: Encodable>: Encodable {

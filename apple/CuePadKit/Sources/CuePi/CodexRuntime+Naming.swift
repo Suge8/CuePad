@@ -4,7 +4,7 @@ import Foundation
 
 /// 托管会话按第一句话起名（`SessionNameSuggestion`），照 Codex 终端界面自动起名（0.166 起的 `thread_title.rs`）：app-server 没有起名的接口，
 /// 在承载这个会话的进程里开一个用完不留的临时线程（`ephemeral`，只读、不审批，钩子、工具、MCP 都关），用输出格式跑一轮拿到 `{title}`，
-/// 再退订它；会话那时还没名字就 `thread/name/set` 写回（同改名）。模型用终端界面起名的那个（账号的模型清单里有时，低强度），没有就用会话当前的模型。
+/// 再退订它；只回不写（写回由 App 复核后走改名，即 `thread/name/set`）。模型用终端界面起名的那个（账号的模型清单里有时，低强度），没有就用会话当前的模型。
 /// 临时线程报出 `thread/started` 时已记为不是子代理（`notification`），它的推送只到这里（`naming`），不进会话。
 /// 终端里的会话不起：终端界面自己会起。
 extension CodexRuntime {
@@ -20,11 +20,10 @@ extension CodexRuntime {
 
     public func canNameItself(_ id: PiSession.ID) -> Bool { tracked[id].map { hosted[$0.pid]?.rpc != nil } ?? false }
 
-    public func nameItself(from firstMessage: String, in id: PiSession.ID) async throws {
+    public func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String {
         let title = try await suggestion(from: firstMessage, in: id)
         guard let name = SessionNameSuggestion.cleaned(title) else { throw PiBridgeError.rejected("failed: empty title") }
-        guard bridge.session(id: id)?.name == nil else { return }
-        try await configure(model: nil, thinking: nil, name: name, in: id)
+        return name
     }
 
     private func suggestion(from firstMessage: String, in id: PiSession.ID) async throws -> String {

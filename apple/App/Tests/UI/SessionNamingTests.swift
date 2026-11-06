@@ -6,8 +6,8 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 没有自带会话名的会话（Pi、Codex 托管）有了第一句话，承载它的 Mac 请它那一家按这句话起个短名、写回成会话名；
-/// 你起过名（绑着的任务有标题、发过改名）以你的为准，这家此刻起不了（还没换上新扩展）的等能起了再起，起名失败保持原名、不再试。
+/// 没有自带会话名的会话（Pi、Codex 托管）有了第一句话，承载它的 Mac 请它那一家按这句话起个短名、核对后写回成会话名；
+/// 你起过名（绑着的任务有标题、发过改名，起名途中才有的也算）就不写，这家此刻起不了（还没换上新扩展）的等能起了再起，起名失败保持原名、不再试。
 /// 起名的那一家是替身（`NamingLink`）：真实的 Pi 扩展与 Codex 起名、写回见 CuePiTests 的 `RealPiTests`、`RealCodexHostedTests`。
 @MainActor
 struct SessionNamingTests {
@@ -16,22 +16,27 @@ struct SessionNamingTests {
     nonisolated static let first = "帮我看看登录页为什么白屏"
     nonisolated static let suggested = "修复登录页白屏"
 
-    /// 替身：记下被要求起名时拿到的第一句话；`held` 时停在起名中，等测试 `release`；起好了像各家那样只在会话还没名字时写下，名字报回桥上。
+    /// 替身：记下被要求起名时拿到的第一句话；`held` 时停在起名中，等测试 `release`；改名照 Pi 那样把会话名报回桥上。
     final class NamingLink: SessionLink {
         weak var bridge: PiBridge?
         var able = true
         var reply: Result<String, any Error> = .success(SessionNamingTests.suggested)
         var held = false
         private(set) var asked: [String] = []
+        private(set) var renamed: [String] = []
         private var waiting: CheckedContinuation<Void, Never>?
 
         func canNameItself(_ id: PiSession.ID) -> Bool { able }
 
-        func nameItself(from firstMessage: String, in id: PiSession.ID) async throws {
+        func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String {
             asked.append(firstMessage)
             if held { await withCheckedContinuation { waiting = $0 } }
-            let name = try reply.get()
-            guard bridge?.session(id: id)?.name == nil else { return }
+            return try reply.get()
+        }
+
+        func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
+            guard let name else { return }
+            renamed.append(name)
             bridge?.update(id) { $0.name = name }
         }
 
@@ -70,7 +75,7 @@ struct SessionNamingTests {
         }
     }
 
-    @Test func 起名时绑上的任务有了标题_名字是任务标题() async throws {
+    @Test func 起名时绑上的任务有了标题_不写回_名字是任务标题() async throws {
         let link = NamingLink()
         link.held = true
         try await live(link) {
@@ -79,12 +84,14 @@ struct SessionNamingTests {
             let task = try await Workspace(services: app.services).createTask("登录白屏", in: Project.defaultID)
             try await store.bindSession("p1", to: task.id)
             link.release()
-            _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"]?.state.title }) { $0 == Self.suggested }
-            #expect(try await shown() == "登录白屏", "任务标题是名字的唯一事实源")
+            await quietPeriod(.milliseconds(300))
+            #expect(!link.renamed.contains(Self.suggested), "写回前再核对一遍：任务标题为准")
+            #expect(try await store.piSessions(sessionIDs: ["p1"])["p1"]?.state.title != Self.suggested)
+            #expect(try await shown() == "登录白屏")
         }
     }
 
-    @Test func 起名时你先改了名_显示你起的() async throws {
+    @Test func 起名时你先改了名_不盖过你起的() async throws {
         let link = NamingLink()
         link.held = true
         try await live(link) {
@@ -92,8 +99,9 @@ struct SessionNamingTests {
             let state = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"]?.state }) { $0 != nil }
             try await app.services.rename(try #require(state), to: "我起的名字")
             link.release()
-            _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"]?.state.title }) { $0 == Self.suggested }
-            #expect(try await shown() == "我起的名字", "改名请求在起好的名字之后送到，盖过它")
+            await quietPeriod(.milliseconds(300))
+            #expect(!link.renamed.contains(Self.suggested), "发过改名就不写起好的名字")
+            #expect(try await store.piSessions(sessionIDs: ["p1"])["p1"]?.state.title != Self.suggested)
         }
     }
 
