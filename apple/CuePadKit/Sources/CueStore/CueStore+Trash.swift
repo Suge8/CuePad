@@ -98,12 +98,12 @@ extension CueStore {
 
   /// 永久删除；发送记录保留内容快照。
   public func purgeCard(_ id: UUID) throws {
-    try reportingFileFailures { try write { try reclaimAttachments(purgeCards(where: "id = ?", [id])) } }
+    try removingFiles { try write { try reclaimAttachments(purgeCards(where: "id = ?", [id])) } }
   }
 
   /// 清空回收站：单独删除的卡片，以及回收站项目连同其卡片。
   public func emptyTrash() throws {
-    try reportingFileFailures { try write {
+    try removingFiles { try write {
       let orphaned = try purgeCards(
         where: "deletedAt IS NOT NULL OR projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)")
       try db.run("DELETE FROM projects WHERE deletedAt IS NOT NULL")
@@ -122,21 +122,18 @@ extension CueStore {
     return referenced
   }
 
-  /// 删除候选附件中已无人引用的（`isAttachmentReferenced`）：先删文件，成功后再删记录，
-  /// 所以记录与文件始终配对；删不掉的文件保留记录并返回其键。
+  /// 候选附件中已无人引用的（`isAttachmentReferenced`）：在事务里删记录，返回它们的键，文件由 `removingFiles` 在提交后删——
+  /// 事务中途失败回滚时，记录还在、文件也还在。提交后没删成的文件成了没记录没引用的游离文件，下次启动的 `removeStrayFiles` 会收走。
   /// 只看被删的东西引用过的附件，不做全表扫描：刚粘贴、正文尚未保存的附件不能被顺手回收。
   /// 不处理跨设备竞态：另一台设备可能刚好在引用同一个键。
   func reclaimAttachments(_ candidates: Set<String>) throws -> [String] {
-    var failed: [String] = []
+    var reclaimed: [String] = []
     for key in candidates.sorted() where try !isAttachmentReferenced(key) {
       guard let parts = AttachmentKey.parts(key) else { continue }
-      do { try files.remove(key) } catch {
-        failed.append(key)
-        continue
-      }
       try db.run("DELETE FROM attachments WHERE hash = ? AND format = ?", [parts.hash, parts.format])
+      reclaimed.append(key)
     }
-    return failed
+    return reclaimed
   }
 
   /// 对话里你的消息中带附件的行（只有你的消息引用附件）；`?1` 是某个附件的引用（`CueFormat.reference`）或所有引用都含的 `CueFormat.referencePrefix`。
@@ -155,9 +152,11 @@ extension CueStore {
     return try db.query("SELECT name FROM previews WHERE hash = ?", [hash]) { $0.text(0) }.contains { AttachmentKey.make(hash: hash, name: $0) == key }
   }
 
-  /// 事务已提交后，把删不掉文件的键作为错误报告（永久删除本身已生效）。
-  func reportingFileFailures(_ body: () throws -> [String]) throws {
-    let failed = try body()
+  /// `body`（含它的写事务）提交后，删它返回的键的文件；删不掉的键作为错误报告（永久删除本身已生效）。
+  func removingFiles(_ body: () throws -> [String]) throws {
+    let failed = try body().filter { key in
+      do { try files.remove(key); return false } catch { return true }
+    }
     if !failed.isEmpty { throw CueStoreError.attachmentFilesNotRemoved(failed) }
   }
 }

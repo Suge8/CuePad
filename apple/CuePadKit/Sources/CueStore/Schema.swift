@@ -18,14 +18,16 @@
 /// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields` / `retiredTypes`，生产环境删不掉）。
 enum Schema {
   /// 一步结构升级：多数是 SQL；要用 Swift 算的（如按正文规则取标题）给一个闭包。都在同一个事务里执行。
-  /// 要动附件文件的（78）拿到这个库的 `AttachmentFiles`。
+  /// 要动附件文件的（78）拿到这个库的 `AttachmentFiles`：事务里只许新增（链接），不可回滚的删除交回 `AfterCommit`，等整个升级提交之后再做——
+  /// 事务回滚时旧文件原样还在，下次重跑读到的与第一次相同。
   struct Upgrade: ExpressibleByStringInterpolation, Sendable {
-    let run: @Sendable (SQLite, AttachmentFiles) throws -> Void
+    typealias AfterCommit = @Sendable () -> Void
+    let run: @Sendable (SQLite, AttachmentFiles) throws -> AfterCommit?
 
-    init(stringLiteral sql: String) { run = { db, _ in try db.exec(sql) } }
+    init(stringLiteral sql: String) { run = { db, _ in try db.exec(sql); return nil } }
     init(stringInterpolation: DefaultStringInterpolation) { self.init(stringLiteral: String(stringInterpolation: stringInterpolation)) }
-    init(_ run: @escaping @Sendable (SQLite) throws -> Void) { self.run = { db, _ in try run(db) } }
-    init(files run: @escaping @Sendable (SQLite, AttachmentFiles) throws -> Void) { self.run = run }
+    init(_ run: @escaping @Sendable (SQLite) throws -> Void) { self.run = { db, _ in try run(db); return nil } }
+    init(files run: @escaping @Sendable (SQLite, AttachmentFiles) throws -> AfterCommit?) { self.run = run }
   }
 
   /// 能打开的最老结构版本（`upgrades` 的起点）：更早的库不升级、不打开（`schemaTooOld`）。发出的版本把用户的库都升过了某一版，就把那一版及以前的步骤折进 `create`、起点挪到那一版：

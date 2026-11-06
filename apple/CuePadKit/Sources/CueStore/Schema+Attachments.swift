@@ -16,7 +16,7 @@ extension Schema {
   /// 推不出来的（这台没有记录也没有文件）只在本机改成不带扩展名的键、不加版本：推得出来的那台传上来的版本在这里会直接盖掉它。
   /// 只改了 format 的记录照常经文件那一路整条上传（`FileSender`），不另做只传字段的分支：CloudKit 对同内容的资产整文件去重，
   /// 同一份内容的另一条记录实测只传约 0.1MB，真实库里这样的 301 条（约 360MB）不会再传一遍。
-  static func keyedAttachments(_ db: SQLite, _ files: AttachmentFiles) throws {
+  static func keyedAttachments(_ db: SQLite, _ files: AttachmentFiles) throws -> Upgrade.AfterCommit? {
     let records = try db.query(
       """
       SELECT a.id, a.hash, a.format, a.byteCount, a.createdAt, a.modifiedAt, s.pushedModifiedAt FROM attachments a
@@ -89,12 +89,16 @@ extension Schema {
 
     let pushed = Set(records.filter(\.pushed).map(\.hash))
     let old = (try? FileManager.default.contentsOfDirectory(atPath: files.backups.path)) ?? []
+    var superseded: [URL] = []
     for name in old where AttachmentKey.parts(name)?.format == "" {
       let source = files.backups.appending(path: name)
       let primary = format(of: name) ?? ""
       let keys = ([primary] + previewFormats[name, default: []]).map { AttachmentKey.make(hash: name, format: $0) }
-      try files.adoptLegacy(source, as: Array(Set(keys)), backup: registered.contains(name) && !pushed.contains(name))
+      if try files.adoptLegacy(source, as: Array(Set(keys)), backup: registered.contains(name) && !pushed.contains(name)) { superseded.append(source) }
     }
+    // 旧名等升级提交后再删：升级中途失败回滚后旧文件还在，重跑算出的格式、登记与第一次一样。提交后没删成的旧名只是多出的一份硬链接，不再有人读
+    let obsolete = superseded
+    return { for url in obsolete { try? FileManager.default.removeItem(at: url) } }
   }
 
   /// 旧版给非图片附件写的 format
@@ -104,14 +108,15 @@ extension Schema {
 }
 
 extension AttachmentFiles {
-  /// 78 的那一步：库旁的旧文件（以哈希为名）链成这几个键在缓存目录里的那份，要保底的再链成 `Attachments/<键>`；旧名不再是哪个键的保底就删掉。
-  func adoptLegacy(_ old: URL, as keys: [String], backup: Bool) throws {
+  /// 78 的那一步：库旁的旧文件（以哈希为名）链成这几个键在缓存目录里的那份，要保底的再链成 `Attachments/<键>`；只新增，不删。
+  /// 返回旧名是否不再是哪个键的保底、该在升级提交后删掉。
+  func adoptLegacy(_ old: URL, as keys: [String], backup: Bool) throws -> Bool {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     for key in keys {
       let cached = directory.appending(path: key)
       if !FileManager.default.fileExists(atPath: cached.path) { try FileManager.default.linkItem(at: old, to: cached) }
       if backup, key != old.lastPathComponent { try link(old, to: backups.appending(path: key)) }
     }
-    if !(backup && keys.contains(old.lastPathComponent)) { try FileManager.default.removeItem(at: old) }
+    return !(backup && keys.contains(old.lastPathComponent))
   }
 }

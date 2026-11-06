@@ -185,13 +185,13 @@ extension CueStore {
       where: "hostID = ? AND (status IN ('executing', 'confirming', 'unconfirmed') OR (status = 'pending' AND handledBy IS NOT NULL))", [host])
   }
 
-  /// 删除完成时间早于 `cutoff` 的请求；返回是否还剩已完成的（还剩就再排一轮）。
+  /// 删除完成时间早于 `cutoff` 的请求；返回还剩什么：`transient` 是按保留期清的还有（下一轮一个保留期后），`oldestKept` 是下面留到 7 天的里最早完成的那条（下一轮等它到期）。
   /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
   /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
   /// 发出的话（`send`）不按保留期清：送到的等它在对话里的那条消息上了服务器再收走（`markPushed`），气泡才不会在消息到别的设备之前没了；
   /// 没能送达的留着等用户重发或移除（重发写成后移除它）。Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`）。
   /// 这几种都至多留到完成早于 `keptCutoff`。
-  func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> Bool {
+  func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> (transient: Bool, oldestKept: Date?) {
     let done = "status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)')"
     let kept = """
       completedAt >= ?3 AND (mode IN ('send', 'withdraw') OR (status = '\(DeliveryStatus.failed.rawValue)' AND origin IS '\(DeliveryOrigin.cue.rawValue)'))
@@ -205,7 +205,9 @@ extension CueStore {
       try db.run(
         "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(kept))",
         arguments)
-      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(kept))", arguments) { _ in true } != nil
+      let transient = try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(kept))", arguments) { _ in true } != nil
+      let oldestKept = try db.first("SELECT MIN(completedAt) FROM deliveryRequests WHERE \(done) AND (\(kept))", arguments) { $0.dateOrNil(0) } ?? nil
+      return (transient, oldestKept)
     }
   }
 }

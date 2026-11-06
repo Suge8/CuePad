@@ -186,7 +186,7 @@ extension CueStore {
 
   /// 选定保留的版本并删除副本。原卡已不存在时，副本是唯一的版本：转为普通卡，不删除。
   public func resolveConflict(copy id: UUID, keep choice: ConflictChoice) throws {
-    try reportingFileFailures {
+    try removingFiles {
       try write {
         guard let copy = try find(Card.self, id), let originalID = copy.conflictOf else {
           throw CueStoreError.notAConflictCopy
