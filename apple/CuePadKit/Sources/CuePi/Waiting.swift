@@ -48,10 +48,11 @@ func withDeadline<T: Sendable>(
 final class StopPhase {
     private var running: [UUID: Task<Void, any Error>] = [:]
 
-    func run(_ body: @escaping @MainActor () async throws -> Void) async throws {
+    /// `cancellable` 为 false 的是停止自己的这一段：再按一次停止不该把前一次（中止已发出）报成取消。
+    func run(cancellable: Bool = true, _ body: @escaping @MainActor () async throws -> Void) async throws {
         let id = UUID()
         let work = Task { try await body() }
-        running[id] = work
+        if cancellable { running[id] = work }
         defer { running[id] = nil }
         try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
     }
@@ -122,13 +123,6 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
         let all = waiting.values
         waiting = [:]
         for continuation in all { continuation.resume() }
-    }
-
-    /// 等着的全部以取消结束（调用方的任务没被取消，是别处要它们放手，如停止）；之后的请求照常。
-    func cancelAll() {
-        let all = waiting.values
-        waiting = [:]
-        for continuation in all { continuation.resume(throwing: CancellationError()) }
     }
 
     /// 连接断了：等着的全部以 `error` 失败，之后的请求直接抛它。

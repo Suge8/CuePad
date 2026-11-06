@@ -60,6 +60,8 @@ final class ACPSession {
     private let changes = PendingReplies<UUID, Void>(timeout: nil, timeoutError: PiBridgeError.ackTimeout)
     /// 停下这一轮后等它结束的：取消的回应不来（Agent 收下取消却不回也不断线）时到 `AgentTimeouts.stop` 放弃
     private let stops: PendingReplies<UUID, Void>
+    /// 发话里停下上一轮的那一段（`abort` 整段取消）
+    let stopPhase = StopPhase()
     private var loading = false
     /// CuePad 的 MCP 服务连上没有（`ACPDialect.connectsMCPLater`）：nil 是这个会话还没报
     private var mcp: Result<Void, HostedSessionError>?
@@ -183,19 +185,18 @@ final class ACPSession {
     }
 
     /// 停下在跑的这一轮，等它结束；歇着什么都不做。
-    func interrupt() async throws {
-        guard facts.running, let sessionID else { return }
-        stopping = true
-        decline()
-        try live.notify("session/cancel", ["sessionId": .string(sessionID)])
-        try await untilFinished()
+    func interrupt(cancellable: Bool = true) async throws {
+        try await stopPhase.run(cancellable: cancellable) { [self] in
+            guard facts.running, let sessionID else { return }
+            stopping = true
+            decline()
+            try live.notify("session/cancel", ["sessionId": .string(sessionID)])
+            try await untilFinished()
+        }
     }
 
     /// 在跑的是 CuePad 开的那一轮：插话只并进它（Agent 自己开的一轮各家不保证收下，等它做完再开）
     var steerable: Bool { facts.running && prompted == turn && promptRunning }
-
-    /// 停止：卡在"等上一轮停下"的发话以取消结束，不再各等到时限。
-    func cancelStopWaits() { stops.cancelAll() }
 
     /// 等这一轮结束（没在跑立即返回，进程退出时也返回）；取消的回应不来时到 `AgentTimeouts.stop` 抛 `ackTimeout`。
     func untilFinished() async throws {

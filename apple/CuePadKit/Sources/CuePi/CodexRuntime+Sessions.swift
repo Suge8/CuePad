@@ -18,6 +18,7 @@ extension CodexRuntime {
 
     /// 连上常驻服务（已连着就用那条，正在连的大家等同一次）；服务没跑为 nil。`stop` 取消正在连的那次，连上后核对没被取消才装上。
     private func daemonConnection() async throws -> CodexRPC? {
+        guard !stopped else { return nil }
         if let daemon, !daemon.isClosed { return daemon }
         let task = connecting ?? {
             let attempt = Task { try await connectDaemon() }
@@ -31,7 +32,7 @@ extension CodexRuntime {
     private func connectDaemon() async throws -> CodexRPC? {
         guard let path = await daemonSocket() else { return nil }
         let rpc = try await CodexRPC.connect(socket: path)
-        guard !Task.isCancelled else {
+        guard !Task.isCancelled, !stopped else {
             rpc.close()
             return nil
         }
@@ -48,6 +49,7 @@ extension CodexRuntime {
     /// 启动时把常驻服务里已经载入的线程接上（CuePad 晚于终端里的会话启动）：会话先接上，子代理的线程再补进它们的名册。
     /// 同一时刻只有一次在做，做的时候又来的并进再做一遍（范围到那时才读）；`stop` 取消它。
     func discover() async {
+        guard !stopped else { return }
         if let scan = scanning {
             scan.again = true
             await scan.task?.value

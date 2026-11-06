@@ -2,8 +2,9 @@ import { execFile } from "node:child_process";
 import type net from "node:net";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { account } from "./account.ts";
+import { Draft } from "./draft.ts";
 import { phaseOf, StateTracker, type Asking, type Clock, type Phase } from "./events.ts";
-import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, replyText, type Info, type Subagent } from "./info.ts";
+import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, type Info, type Subagent } from "./info.ts";
 import { IdleExit, IS_HOSTED, SelfReload } from "./lifecycle.ts";
 import { preflight } from "./preflight.ts";
 import { QuotaFetcher, type Quota, type QuotaWindow } from "./quota.ts";
@@ -54,6 +55,8 @@ export class Session {
 	 * 按交出先后排队：交出到落成之间宿主仍是空闲的，下一句照样交出，各认各的（`landed`）。
 	 */
 	readonly starting: Said[] = [];
+	/** 停止的次数：停止前发来、还在预检的话，预检回来时不再交出（`abortedSince`） */
+	private abortEpoch = 0;
 	/** 开新一轮的请求排成一队：预检是异步的，并发的两句不排队就会按预检返回的先后交出，颠倒用户发话的顺序。 */
 	private rounds: Promise<unknown> = Promise.resolve();
 	/** 已交给 Pi、还没落成会话里一条消息的重跑（`retry.ts`）：落成时回它的确认，同 `starting` */
@@ -226,15 +229,16 @@ export class Session {
 
 	/** 以这句开新一轮（见 `pending`）。 */
 	startRound(said: Said): Promise<void> {
-		const run = this.rounds.then(() => this.dispatchRound(said));
+		const epoch = this.abortEpoch;
+		const run = this.rounds.then(() => this.dispatchRound(said, epoch));
 		this.rounds = run.catch(() => {});
 		return run;
 	}
 
-	private async dispatchRound(said: Said) {
-		if (this.rejectSend(said)) return;
+	private async dispatchRound(said: Said, epoch: number) {
+		if (this.abortedSince(epoch, said) || this.rejectSend(said)) return;
 		if (this.pending.length === 0 && this.ctx.isIdle()) return this.submit(said);
-		if (!(await this.prepare(said.ack)) || this.rejectSend(said)) return;
+		if (!(await this.prepare(said.ack)) || this.abortedSince(epoch, said) || this.rejectSend(said)) return;
 		this.pending.push(said);
 		this.stopRound();
 	}
@@ -282,6 +286,18 @@ export class Session {
 			const next = this.pending.shift();
 			if (next) void this.submit(next);
 		});
+	}
+
+	/** 停止：排着的话作废。 */
+	abortQueued() {
+		this.abortEpoch++;
+		for (const said of this.pending.splice(0)) said.ack?.({ ok: false, error: "failed: aborted before it started" });
+	}
+
+	private abortedSince(epoch: number, said: Said) {
+		if (epoch === this.abortEpoch) return false;
+		said.ack?.({ ok: false, error: "failed: aborted before it started" });
+		return true;
 	}
 
 	/** 一条用户消息落成了：认出它是交出的哪一句（先交的先认；模板与 skill 展开后认不出原话，取最早的），
@@ -360,68 +376,3 @@ export class Session {
 }
 
 /** 正在说的话（`draft`）最多每这么久上报一次：增量在这里合并，这条说完时立即补发最后一次 */
-const DRAFT_INTERVAL_MS = 100;
-
-/**
- * 正在说的话（`draft`）：主会话当前这条助手消息到目前为止的正文，给 CuePad 逐字显示；思考与工具参数不算，FireCode 的子代理是别的会话、不经这里。
- * 增量合并到每 `DRAFT_INTERVAL_MS` 一次，这条说完时立即补发全文；它转成工具调用、被停下或出错、下一条助手消息开始时清掉（`text: null`）。
- * 正常说完的不清：CuePad 在对话（读会话文件）里出现这一条后自己换下。`since` 是这条开始出字的时刻。
- */
-class Draft {
-	private draft: { text: string; since: number } | null = null;
-	/** 这条消息已转成工具调用：之后的正文不再算草稿 */
-	private closed = false;
-	private sentAt = 0;
-	private timer: ReturnType<typeof setTimeout> | undefined;
-
-	private readonly broadcast: (message: object) => void;
-
-	constructor(broadcast: (message: object) => void) {
-		this.broadcast = broadcast;
-	}
-
-	/** 一条新的助手消息开始了 */
-	restart() {
-		this.closed = false;
-		this.clear();
-	}
-
-	/** 这条消息转成了工具调用 */
-	close() {
-		this.closed = true;
-		this.clear();
-	}
-
-	/** `now`：这条说完了，不等合并的间隔 */
-	grow(message: object, now = false) {
-		const text = replyText(message);
-		if (this.closed || !text || text === this.draft?.text) {
-			if (now && this.timer) this.send();
-			return;
-		}
-		this.draft = { text, since: this.draft?.since ?? Date.now() };
-		if (now) return this.send();
-		if (this.timer) return;
-		const wait = this.sentAt + DRAFT_INTERVAL_MS - Date.now();
-		if (wait <= 0) this.send();
-		else this.timer = setTimeout(() => this.send(), wait);
-	}
-
-	clear() {
-		if (!this.draft) return;
-		this.draft = null;
-		this.send();
-	}
-
-	/** 会话关闭：不再补发 */
-	cancel() {
-		clearTimeout(this.timer);
-	}
-
-	private send() {
-		clearTimeout(this.timer);
-		this.timer = undefined;
-		this.sentAt = Date.now();
-		this.broadcast({ t: "draft", text: this.draft?.text ?? null, since: this.draft?.since ?? null });
-	}
-}

@@ -49,7 +49,7 @@ extension ClaudeHostedSession {
 
     /// 停下在跑的这一轮并等它收尾；还没开跑的（`starting`）先等它开跑。歇着什么都不做。
     func interrupt(restarting: Bool) async throws {
-        try await stopPhase.run { [self] in
+        try await stopPhase.run(cancellable: restarting) { [self] in
             if starting { try await startWaits.wait() }
             guard facts.running else { return }
             stopping = true
