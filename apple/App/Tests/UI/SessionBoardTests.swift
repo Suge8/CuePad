@@ -154,7 +154,7 @@ struct SessionBoardTests {
         let workspace = Workspace(services: services)
         try await workspace.rename(live, to: "登录页白屏", adopts: true)
         let old = try #require(try await tasks().first)
-        try await workspace.toggle(old.id)
+        try await workspace.complete(old.id)
         try await moves("s1", after: old.id)
         let back = try #require(try await TaskBoard.read(from: store).advancing.first { $0.loose?.state.sessionID == "s1" }?.loose?.state)
 

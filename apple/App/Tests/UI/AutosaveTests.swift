@@ -42,7 +42,7 @@ struct AutosaveTests {
 
         autosave.changed("刚打的字")
         await gate.started()
-        workspace.leaveEditing(id, flush: autosave)
+        workspace.leaveEditing(id, flush: autosave, heading: "")
         await quietPeriod(.milliseconds(200))
         #expect(try await store.card(id) != nil, "写入还没落库，离开不能先把它当空白删掉")
         gate.open()
@@ -84,14 +84,14 @@ struct AutosaveTests {
 
         autosave.changed("刚打的字")
         try await eventually("停手触发的写入失败了") { failures.withLock { $0 } == 1 }
-        workspace.leaveEditing(id, flush: autosave)
+        workspace.leaveEditing(id, flush: autosave, heading: "")
         _ = try await eventually(store, { try $0.card(id)?.body }) { $0 == "刚打的字" }
 
         // 再失败：不删，字还在待写里
         let blank = try await store.createCard(body: "")
         let failing = Autosave(save: { _ in throw Boom() }, onError: { _ in })
         failing.changed("写不进去")
-        workspace.leaveEditing(blank.id, flush: failing)
+        workspace.leaveEditing(blank.id, flush: failing, heading: "")
         try await eventually("报了错") { workspace.notice?.isError == true }
         #expect(try await store.card(blank.id) != nil)
 
@@ -112,7 +112,7 @@ struct AutosaveTests {
         func fail(_ card: Card, typing text: String) async throws {
             let failing = Autosave(save: { _ in throw Boom() }, onError: { _ in })
             failing.changed(text)
-            workspace.leaveEditing(card.id, flush: failing)
+            workspace.leaveEditing(card.id, flush: failing, heading: "")
             try await eventually("字被带着") { workspace.unsavedBodies[card.id]?.text == text }
         }
         let pinned = try await store.createCard(body: "原文")

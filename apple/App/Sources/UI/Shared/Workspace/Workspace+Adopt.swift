@@ -22,10 +22,10 @@ extension Workspace {
     /// 问过了、答应完成（`SessionAsk.complete` 的确认按钮）。
     func confirmFinish(_ session: PiSessionState) async throws { try await complete(session) }
 
-    /// 建任务再完成它（同点完成圈，`toggle`；托管的会话照做完的规则结束，终端里的随之收起）。只经 `finish` 与 `confirmFinish`：
+    /// 建任务再完成它（同点完成圈，`complete`；托管的会话照做完的规则结束，终端里的随之收起）。只经 `finish` 与 `confirmFinish`：
     /// 界面直接调它就跳过了在做时的那一问。
     private func complete(_ session: PiSessionState) async throws {
-        try await toggle(try await adopt(session))
+        try await complete(try await adopt(session))
     }
 
     /// 看板上的会话置顶：置的是给它建的那件任务。
