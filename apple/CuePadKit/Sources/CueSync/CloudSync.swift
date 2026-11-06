@@ -11,6 +11,9 @@ import os
 /// 附件文件的进度订阅 `fileTransfers`，用到本机还没有的文件调 `fetchFile`。
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
 ///
+/// 一次 `start()` 到 `stop()` 是一代（`Phase.running` 带代次）：本代起的认账号、重试、订阅、文件启动等后台任务都挂在本代上，
+/// `stop` 取消并等它们收尾，任务在每个 await 之后先核对自己的代次（`current`）再改状态，旧代不会在停止或重启之后写新一代的状态。
+///
 /// 冷启动：认过账号就能拉，第一拉不等别的；最低对端版本（`PeerFloor`）由发送者在第一次上传前对（上传等它，拉取不等：拉到的页里有门槛就当场看，
 /// `SyncCoordinator.meet`）；通知订阅在后台另建，彼此独立。状态在第一次请求成功前一直是正在连接。
 ///
@@ -24,6 +27,12 @@ public actor CloudSync {
   private let coordinator: SyncCoordinator
   /// 连上 iCloud（`SyncCloud`）：`start()` 里才连，没有 entitlement 的进程一建容器就崩。
   private let connect: @Sendable () -> any SyncCloud
+  private enum Phase: Equatable {
+    case idle
+    case running(UUID)
+    case stopped
+  }
+  private var phase = Phase.idle
   private var cloud: (any SyncCloud)?
   private var puller: ZonePuller?
   private var sender: RecordSender?
@@ -41,8 +50,10 @@ public actor CloudSync {
   private var accountWatcher: Task<Void, Never>?
   /// 重试的等待结束时补拉、网络路径恢复时提前结束连不上的等待（`SyncCoordinator+Hold`）。
   private var retryWatchers: [Task<Void, Never>] = []
-  /// `start()` 之前就要拉的（冷启动时先到的推送）：开始了再拉。
-  private var startWaiters: [CheckedContinuation<Void, Never>] = []
+  /// 本代起的其余后台任务（文件那一路的启动、建通知订阅）：`stop` 统一取消、等收尾。
+  private var background: [UUID: Task<Void, Never>] = [:]
+  /// `start()` 之前就要拉的（冷启动时先到的推送）：开始了再拉（true）；等的时候被取消、或停下了（false）。
+  private var startWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
   /// 每认完一次账号给一个：等账号认好的（`relaySecret`）据此再看能不能同步。
   private let accountChecks = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
   /// 上一次建通知订阅的时刻：没建成时 `syncNow` 顺带重试，至多每 `alertRetryInterval` 一次（按节奏的拉取、门铃也走它，可能很密）。
@@ -81,14 +92,50 @@ public actor CloudSync {
   /// 服务器要求等就等到点；没开始同步的等开始。这台不同步（没认过账号、停下了）抛 `FileFetchFailure.notSyncing`，文件坏了抛 `.damaged`，网络与 iCloud 的失败原样抛出；被取消就抛出。
   /// Mac 把带附件的话交给会话前用它确保文件在本机。
   public func fetchFile(_ key: String) async throws -> URL {
-    if cloud == nil { await withCheckedContinuation { startWaiters.append($0) } }
+    guard await started() else {
+      try Task.checkCancellation()
+      throw FileFetchFailure.notSyncing
+    }
     guard await connectNow(), let fileFetcher else { throw FileFetchFailure.notSyncing }
     return try await fileFetcher.fetch(key)
   }
 
+  /// 开始了（true）；还没开始的等到开始，等的时候被取消、或停下了（含等的时候停下）为 false。
+  private func started() async -> Bool {
+    switch phase {
+    case .running: return true
+    case .stopped: return false
+    case .idle: break
+    }
+    let id = UUID()
+    return await withTaskCancellationHandler {
+      await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+        if Task.isCancelled { return continuation.resume(returning: false) }
+        startWaiters[id] = continuation
+      }
+    } onCancel: {
+      Task { await self.stopWaiting(id) }
+    }
+  }
+
+  private func stopWaiting(_ id: UUID) { startWaiters.removeValue(forKey: id)?.resume(returning: false) }
+
+  private func current(_ generation: UUID) -> Bool { phase == .running(generation) }
+
+  /// 本代的后台任务：结束时自己从登记里去掉。
+  private func spawn(_ body: @escaping @Sendable () async -> Void) {
+    let id = UUID()
+    background[id] = Task {
+      await body()
+      background[id] = nil
+    }
+  }
+
   /// 连上 iCloud 并认一次账号（返回时认完；认不了的这里自己按退避再认）。
   public func start() async {
-    guard cloud == nil else { return }
+    if case .running = phase { return }
+    let generation = UUID()
+    phase = .running(generation)
     let cloud = connect()
     self.cloud = cloud
     let puller = ZonePuller(source: cloud, coordinator: coordinator)
@@ -101,6 +148,7 @@ public actor CloudSync {
     fileSender = FileSender(cloud: cloud, coordinator: coordinator, board: transfers) { await sender.ready() }
     fileFetcher = FileFetcher(cloud: cloud, coordinator: coordinator, board: transfers)
     await coordinator.loadToken()
+    guard current(generation) else { return }  // 读令牌期间停下了
     let due = coordinator.retryDue.stream(), network = NetworkReturns.stream()
     retryWatchers = [
       Task { [coordinator] in for await _ in network { await coordinator.connected() } },
@@ -111,18 +159,28 @@ public actor CloudSync {
         await self?.accountChanged()
       }
     }
-    for waiter in startWaiters { waiter.resume() }
-    startWaiters = []
+    for id in Array(startWaiters.keys) { startWaiters.removeValue(forKey: id)?.resume(returning: true) }
     await connectNow()
   }
 
+  /// 停下这一代：取消并等本代的认账号、重试、订阅、文件启动收尾，再停发送者与文件两路；等开始的调用方得到"没在同步"。
   public func stop() async {
-    accountWatcher?.cancel()
-    accountWatcher = nil
-    accountRetry?.cancel()
-    accountRetry = nil
-    retryWatchers.forEach { $0.cancel() }
+    phase = .stopped
+    for id in Array(startWaiters.keys) { stopWaiting(id) }
+    let running = Array(background.values) + retryWatchers + [accountWatcher, accountRetry].compactMap { $0 }
+    let authenticating = connecting
+    background = [:]
     retryWatchers = []
+    accountWatcher = nil
+    accountRetry = nil
+    connecting = nil
+    accountRetryAt = nil
+    accountBackoff.reset()
+    alertsAttemptedAt = nil
+    authenticating?.cancel()
+    running.forEach { $0.cancel() }
+    for task in running { await task.value }
+    _ = await authenticating?.value
     await sender?.stop()
     sender = nil
     await fileSender?.stop()
@@ -140,28 +198,32 @@ public actor CloudSync {
     if connected { return true }
     if let connecting { return await connecting.value }
     if let accountRetryAt, ContinuousClock.now < accountRetryAt { return false }
-    guard let cloud else { return false }
-    let task = Task { await self.checkAccount(cloud) }
+    guard case .running(let generation) = phase, let cloud else { return false }
+    let task = Task { await self.checkAccount(cloud, generation) }
     connecting = task
     let result = await task.value
-    connecting = nil
+    if current(generation) { connecting = nil }
     return result
   }
 
   /// 认账号：状态交给协调器，可用时再认是不是上次同步的那个账号（换了就停下来等你决定）。还没开始的，认过且能同步就开始上传、在后台建订阅；
   /// 已开始后的账号变化（退出、受限、换了账号）由协调器停下（`canSync`）。认不了、暂不可用的按退避再认（`accountBackoff`）；没登录的等账号变化。
-  /// 返回此刻是否已开始。拉取由调用方接着发起（`syncNow`、账号变化）。
+  /// 返回此刻是否已开始。拉取由调用方接着发起（`syncNow`、账号变化）。每个 await 之后核对代次：停下或重启了的旧一代什么都不再改。
   @discardableResult
-  private func checkAccount(_ cloud: any SyncCloud) async -> Bool {
+  private func checkAccount(_ cloud: any SyncCloud, _ generation: UUID) async -> Bool {
     do {
       let status = try await withDeadline(RequestLimits.request) { try await cloud.accountStatus() }
+      guard current(generation) else { return false }
       await coordinator.accountStatus(status)
       guard status == .available else {
-        if [.temporarilyUnavailable, .couldNotDetermine].contains(status) { retryAccount() }
+        if [.temporarilyUnavailable, .couldNotDetermine].contains(status) { retryAccount(generation) }
         return connected
       }
-      await coordinator.account(try await withDeadline(RequestLimits.request) { try await cloud.accountName() })
+      let name = try await withDeadline(RequestLimits.request) { try await cloud.accountName() }
+      guard current(generation) else { return false }
+      await coordinator.account(name)
     } catch {
+      guard current(generation) else { return false }
       guard !connected else { return true }
       // 连不上的经协调器按段记（`SyncCoordinator.noteWaiting`）；其余的在这里只记开始认不了的那一次
       if SyncFault(error).isOffline {
@@ -170,45 +232,47 @@ public actor CloudSync {
         if accountRetryAt == nil { Self.log.notice("认 iCloud 账号失败，按退避再认：\(error.brief, privacy: .public)") }
         await coordinator.accountStatus(.couldNotDetermine)
       }
-      retryAccount()
+      retryAccount(generation)
       return false
     }
+    guard current(generation) else { return false }
     accountRetry?.cancel()
     if accountRetryAt != nil { Self.log.notice("认好 iCloud 账号") }
     accountRetryAt = nil
     accountBackoff.reset()
     defer { accountChecks.yield(()) }
     guard !connected else { return true }
-    guard await coordinator.canSync, let sender, let fileSender, let fileFetcher else { return false }
+    guard await coordinator.canSync, current(generation), let sender, let fileSender, let fileFetcher else { return false }
     connected = true
     await sender.start()
-    Task {  // 文件那一路（接上一个进程交给系统的上传、看哪些文件要取）：第一拉不等它
+    spawn {  // 文件那一路（接上一个进程交给系统的上传、看哪些文件要取）：第一拉不等它
       await fileFetcher.start()
       await fileSender.start()
     }
     alertsAttemptedAt = .now  // 立即同步不另起一遍
-    Task { await ensureAlertSubscriptions(cloud) }  // 第一拉不等订阅
+    spawn { await self.ensureAlertSubscriptions(cloud, generation) }  // 第一拉不等订阅
     return true
   }
 
-  private func retryAccount() {
+  private func retryAccount(_ generation: UUID) {
     let at = ContinuousClock.now + accountBackoff.next()
     accountRetryAt = at
     accountRetry?.cancel()
     accountRetry = Task {
       try? await Task.sleep(until: at, clock: .continuous)
-      guard !Task.isCancelled else { return }
+      guard !Task.isCancelled, current(generation) else { return }
       _ = try? await self.syncNow()  // 拉取失败由协调器归类、按段记（`SyncCoordinator.noteWaiting`）
     }
   }
 
   /// 账号变了：再认一次（换了账号就停下等你决定）；能同步的在新账号的数据库里建订阅（里面还没有），再拉一次。
   private func accountChanged() async {
-    guard let cloud else { return }
+    guard case .running(let generation) = phase, let cloud else { return }
     let wasConnected = connected
     accountRetryAt = nil  // 账号变了是新情况，不等上次失败的退避
-    guard wasConnected ? await checkAccount(cloud) : await connectNow() else { return }
-    if wasConnected { await ensureAlertSubscriptions(cloud) }  // 刚开始的已在建
+    guard wasConnected ? await checkAccount(cloud, generation) : await connectNow() else { return }
+    guard current(generation) else { return }
+    if wasConnected { await ensureAlertSubscriptions(cloud, generation) }  // 刚开始的已在建
     _ = try? await puller?.pull()
   }
 
@@ -217,12 +281,16 @@ public actor CloudSync {
   /// 返回本次拉取的结果；账号、暂停与退避导致的未拉取不是成功，不能从全局同步状态反推。
   @discardableResult
   public func syncNow() async throws -> SyncPullResult {
-    if cloud == nil { await withCheckedContinuation { startWaiters.append($0) } }
-    guard await connectNow(), let cloud, let puller, let sender else { return .incomplete }
-    if Self.subscribesToAlerts, await coordinator.alertSubscription != .active,
+    guard await started() else {
+      try Task.checkCancellation()
+      return .incomplete
+    }
+    guard await connectNow(), case .running(let generation) = phase, let cloud, let puller, let sender else { return .incomplete }
+    if Self.subscribesToAlerts, await coordinator.alertSubscription != .active, current(generation),
       alertsAttemptedAt.map({ ContinuousClock.now - $0 >= Self.alertRetryInterval }) ?? true
     {
-      Task { await ensureAlertSubscriptions(cloud) }
+      alertsAttemptedAt = .now  // 任务起来之前再来的不另起
+      spawn { await self.ensureAlertSubscriptions(cloud, generation) }
     }
     await sender.kick()
     return try await puller.pull()
@@ -258,10 +326,11 @@ public actor CloudSync {
 
   private func accountUsable() async -> Bool { connected ? await coordinator.canSync : false }
 
-  private func ensureAlertSubscriptions(_ cloud: any SyncCloud) async {
-    guard Self.subscribesToAlerts else { return }
+  private func ensureAlertSubscriptions(_ cloud: any SyncCloud, _ generation: UUID) async {
+    guard Self.subscribesToAlerts, current(generation) else { return }
     alertsAttemptedAt = .now
     let status = await AlertSubscriptions(zoneID: Self.zoneID).ensure(in: cloud)
+    guard current(generation) else { return }
     await coordinator.setAlerts(status)
   }
 

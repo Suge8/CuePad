@@ -16,6 +16,8 @@ import Synchronization
 /// 断了按退避加抖动重连（`retry`），网络恢复时不等退避；每次入房先补按欠下的门铃（`ring`），同时开始心跳、收门铃并拉一次：
 /// 没连着的那段时间（包括启动到第一次连上）的门铃听不到。
 /// 心跳用 WebSocket 协议层的 ping，每 `pingInterval` 一次，`pongLimit` 内没回就断开重连：静默断线最迟 `silenceLimit` 发现。
+/// 同一时刻至多一条连接任务：旧的还在收尾（`disconnect` 等它）时 `resume`、`ring` 不另起新的，收尾完了再按那时想不想连来决定，
+/// 所以旧任务的收尾（`isLive`、`socket`、`connection`）碰不到新连接的状态。
 /// 用 URLSessionWebSocketTask：带系统代理设置、协议层 ping、自动回中转的 ping；连接是 wss（证书由系统校验）。
 @Observable
 final class Relay {
@@ -31,6 +33,8 @@ final class Relay {
     @ObservationIgnored private var known: RelayCredentials?
     /// 保持连接的任务（断了自己重连）；断开着时为 nil。
     @ObservationIgnored private var connection: Task<Void, Never>?
+    /// 旧的连接任务正在收尾（`disconnect` 在等它）：这期间不起新的。
+    @ObservationIgnored private var closing = false
     /// 最后一个按出去的门铃（之前的都已发完或失败）：`settle` 与短连等它。
     @ObservationIgnored private var sending: Task<Void, Never>?
     /// 有改动被收下时门铃没通（或没按出去），入房后先补按一次。
@@ -88,7 +92,7 @@ final class Relay {
         let (cancelled, keep) = AsyncStream<Never>.makeStream()
         for await _ in cancelled {}  // 任务取消时结束
         withExtendedLifetime(keep) {}
-        await disconnect()
+        await disconnect(thenConnect: false)
     }
 
     /// 想连着：没连着就连（还没 `run` 时只记下）。
@@ -106,20 +110,19 @@ final class Relay {
     func settle() async {
         await sending?.value
         guard !wanted else { return }
-        await disconnect()
+        await disconnect(thenConnect: true)
     }
 
     /// 换了 iCloud 账号：连着的那条在旧账号的房间里，断开后按新账号的密钥重连。
     func reconnect() async {
         known = nil
         guard connection != nil else { return }
-        await disconnect()
-        connect()
+        await disconnect(thenConnect: true)
     }
 
     /// 想连着、或欠着门铃时连（后者是短连：iOS 在后台任务里，按完就断）。
     private func connect() {
-        guard connection == nil, let rang, wanted || owesRing else { return }
+        guard connection == nil, !closing, let rang, wanted || owesRing else { return }
         let done: @MainActor @Sendable () -> Void
         #if os(iOS)
         if wanted { done = {} } else { done = BackgroundWork.begin() }
@@ -132,11 +135,15 @@ final class Relay {
         }
     }
 
-    private func disconnect() async {
+    /// 断开并等旧任务收尾。`thenConnect`：收尾期间 `resume`、`ring` 来过的（这时才不被挡）按此刻想不想连决定要不要连。
+    private func disconnect(thenConnect: Bool) async {
         guard let connection else { return }
         self.connection = nil
+        closing = true
         connection.cancel()
         await connection.value
+        closing = false
+        if thenConnect { connect() }
     }
 
     /// 想连着就一直连着，只为补按门铃连上的按完就走；断了按退避重连。自己结束（不是被 `disconnect` 取消）时清掉 `connection`。

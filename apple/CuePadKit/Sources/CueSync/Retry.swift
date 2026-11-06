@@ -75,8 +75,14 @@ private final class Race<T: Sendable>: Sendable {
   private let state = Mutex(State())
 
   func begin(_ continuation: CheckedContinuation<T, any Error>, _ legs: [Leg]) {
-    guard !Task.isCancelled else { return continuation.resume(throwing: CancellationError()) }
-    state.withLock { $0.continuation = continuation }
+    // 取消检查与登记在同一个临界区：取消状态先于回调置位，回调（`finish`）又要等这把锁——
+    // 回调若先拿到锁，这里一定看到已取消；这里先拿到锁，回调一定看到已登记的续体。
+    let admitted = state.withLock { state in
+      guard !Task.isCancelled else { return false }
+      state.continuation = continuation
+      return true
+    }
+    guard admitted else { return continuation.resume(throwing: CancellationError()) }
     let tasks = legs.map { leg in
       Task {
         if leg.delay > .zero { try? await Task.sleep(for: leg.delay) }

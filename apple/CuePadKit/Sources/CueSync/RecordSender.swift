@@ -9,6 +9,7 @@ import Foundation
 /// （`speak`）：多半是命令行进程里 Cue 的工具写的，写的人叫不了上传。同一条记录同一时刻只在一批里（`inFlight`）：
 /// 不会有两个版本同时上传、互相以版本冲突拒绝。`.ifServerRecordUnchanged`；结果交给协调器记账（`SyncCoordinator.sent`）。
 /// 开始上传前先对一次最低对端版本（`prepare`），成功为止；拉取不等它。
+/// `stop` 取消并等在途的轮次与请求收尾才返回：之后不再挑、不再发，接手的新发送者不会与旧的同时传同一条记录（`inFlight` 随发送者，新旧不并存）。
 ///
 /// 服务器拒收的单条记录不挡别的：协调器记下这一版跳过它（`SyncCoordinator.unsendable`），这一批照常算有进展。
 /// 整批的失败交给同步层唯一的重试调度（协调器的 `hold`，与拉取共用）：立即同步与按节奏的拉取顺带的一轮都守它的时刻，等待结束时（`retryDue`）接着发。
@@ -46,6 +47,7 @@ actor RecordSender {
   private var nextRun = 0
   private var limit = CloudKitLimits.recordsPerRequest
   private var busy = false
+  private var stopped = false
 
   init(uploader: any RecordUploader, coordinator: SyncCoordinator, prepare: @escaping @Sendable () async throws -> Void = {}) {
     self.uploader = uploader
@@ -57,6 +59,7 @@ actor RecordSender {
   /// 开始跟随本机提交与重试的等待结束，并立即发一轮（上次没发完的）。
   func start() async {
     let changes = await coordinator.store.syncChanges()  // 先订阅：返回后的提交都不会漏
+    guard !stopped else { return }  // 订阅期间停下了
     let due = coordinator.retryDue.stream()
     tasks = [
       Task { [triggers] in for await _ in triggers { await self.round() } },
@@ -71,16 +74,24 @@ actor RecordSender {
     kick()
   }
 
-  func stop() {
-    tasks.forEach { $0.cancel() }
+  func stop() async {
+    stopped = true
+    let running = tasks + Array(urgentRuns.values)
+    let preparation = preparing
+    tasks = []
+    preparation?.cancel()
+    running.forEach { $0.cancel() }
     for waiter in waiters { waiter.continuation.resume(returning: false) }
     waiters = []
     for flush in flushes { flush.resume() }
     flushes = []
+    for task in running { await task.value }
+    _ = await preparation?.value
   }
 
   /// 发一轮（立即同步、按节奏的拉取顺带的），不等；守着重试的时刻。
   func kick() {
+    guard !stopped else { return }
     explicit = true
     trigger.yield()
   }
@@ -88,6 +99,7 @@ actor RecordSender {
   /// 现在发一轮并等它结束，连同在路上的马上传（iOS 进入后台前）：越过连不上与被拒的等待试一次，服务器要求的等待照守。
   /// 挂住的请求至多到 CloudKit 的超时（`RequestLimits.request`），在系统给的后台时间之内。
   func flush() async {
+    guard !stopped else { return }
     let sending = Array(urgentRuns.values)
     await withCheckedContinuation { continuation in
       flushes.append(continuation)
@@ -99,6 +111,7 @@ actor RecordSender {
 
   /// 马上传这几条：不进攒批窗口，不等后台那批，等到它们都有了结果（全收下为 true；离线等没传成的为 false，之后照常重试，且优先）。
   func send(_ names: Set<String>) async -> Bool {
+    guard !stopped else { return false }
     urgent.formUnion(names)
     newer.formUnion(names.intersection(inFlight))
     return await withCheckedContinuation { continuation in
@@ -116,6 +129,7 @@ actor RecordSender {
   /// 马上传那一路发一次，记着在跑的（`flush` 等它们）。
   @discardableResult
   private func runUrgent() -> Task<Void, Never> {
+    guard !stopped else { return Task {} }
     let id = nextRun
     nextRun += 1
     let run = Task {
@@ -133,6 +147,7 @@ actor RecordSender {
     if !explicit {
       try? await Task.sleep(for: Self.gatherWindow)  // 提交触发：同一阵子的写入合成一批
     }
+    guard !stopped else { return }
     let urgent = urgentRound
     (explicit, urgentRound) = (false, false)
     let waiting = flushes
@@ -140,7 +155,7 @@ actor RecordSender {
     defer { waiting.forEach { $0.resume() } }
     guard await coordinator.admits(.upload(urgent: urgent)), await coordinator.canSync, await ready() else { return }
     for _ in 0..<Self.batchesPerRound {
-      guard await coordinator.admits(.upload(urgent: urgent)) else { return }  // 另一路这期间被要求等了
+      guard !stopped, await coordinator.admits(.upload(urgent: urgent)) else { return }  // 另一路这期间被要求等了
       // 准备不了（停下了、读库出错）由协调器记下状态，下一次触发再来
       guard var batch = try? await coordinator.nextBatch(.pending(excluding: inFlight), limit: limit) else { return }
       batch.drop(inFlight)  // 挑的时候马上传那一路占下的
@@ -154,7 +169,7 @@ actor RecordSender {
   /// 一批装不下的这一批收下后接着发，这一批没成就一起答没传成（仍在 `urgent` 里，重试时先发）。
   private func sendUrgent() async {
     let wanted = urgent.subtracting(inFlight)
-    guard !wanted.isEmpty else { return }
+    guard !stopped, !wanted.isEmpty else { return }
     guard await coordinator.admits(.upload(urgent: true)), await coordinator.canSync, await ready() else { return answer(wanted, received: []) }
     let reserved = wanted.subtracting(inFlight)  // 等的时候后台那一路可能已带走
     inFlight.formUnion(reserved)
@@ -166,7 +181,7 @@ actor RecordSender {
     answer(batch.stuck, received: [])
     urgent.subtract(batch.stuck)  // 收下的在答复里已去掉；作废的（读库时可能早于要马上传的那一版）留着，接着再发
     resendNewer()
-    guard !batch.isEmpty else { return }
+    guard !batch.isEmpty, !stopped else { return answer(batch.names, received: []) }
     let sent = await upload(batch)
     trigger.yield()  // 在路上时又改过的，后台那一路接着发
     guard !batch.left.isEmpty else { return }
@@ -225,6 +240,7 @@ actor RecordSender {
       return true
     } catch {
       answer(names, received: [])
+      if stopped { return false }  // 停下时被取消的请求不是同步的失败，不记
       if let error = error as? CKError, error.code == .userDeletedZone {
         await coordinator.zoneMissing(deletedByUser: true)
         return false
@@ -253,6 +269,7 @@ actor RecordSender {
 
   /// 上传前对一次最低对端版本，成功为止（同一时刻只对一次）；停下（这台要更新、要你决定）的不再对。文件那一路（`FileSender`）同样等它。
   func ready() async -> Bool {
+    guard !stopped else { return false }
     if prepared { return true }
     if let preparing { return await preparing.value }
     let task = Task { () -> Bool in
@@ -262,7 +279,7 @@ actor RecordSender {
       } catch is SyncPaused {
         return false
       } catch {
-        await schedule(await coordinator.failed(error))
+        if !stopped { await schedule(await coordinator.failed(error)) }
         return false
       }
     }
@@ -280,6 +297,7 @@ actor RecordSender {
 
   /// 等待结束：有话在等先只发它们，成了再发一轮后台的（没成就又定了时刻，那一轮守着它）：断网时每次重试只一个请求。
   private func resume() {
+    guard !stopped else { return }
     guard !urgent.isEmpty else { return kick() }
     let run = runUrgent()
     Task {

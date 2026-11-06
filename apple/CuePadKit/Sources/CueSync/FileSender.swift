@@ -9,7 +9,7 @@ import os
 /// 上传是长期操作（`FileCloud.uploadFile`）：App 退出后系统接着传，下次开始时先接上（`resume`），接上的那几条不再另传。
 /// 结果与后台那一路一样交给协调器记账（`SyncCoordinator.sent`），服务器收下了就删本机的保底（`AttachmentFiles.uploaded`）。
 /// 重试守同步层唯一的调度（`SyncCoordinator.admits(.fileUpload)`、`hold`，等待结束时 `retryDue` 接着传），空间不足的停顿也在那里（`holdFiles`）。
-/// 在路上的只记在协调器（`SyncCoordinator.fileUploads`）。
+/// 在路上的只记在协调器（`SyncCoordinator.fileUploads`，跨发送者的新旧两代）。`stop` 之后不再开始新的上传、不再补位，在路上的结果照常记账。
 actor FileSender {
   static let parallel = 2
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
@@ -20,6 +20,10 @@ actor FileSender {
   /// 对过最低对端版本（`RecordSender.ready`）：文件同别的记录一样在那之后才传。
   private let ready: @Sendable () async -> Bool
   private var tasks: [Task<Void, Never>] = []
+  private var stopped = false
+  /// 补位同一时刻只有一趟在跑；跑的时候又被叫到记成再补一趟（两趟交错会各自按同一个在路上的数多取）。
+  private var filling = false
+  private var refill = false
 
   init(cloud: any FileCloud & RecordUploader, coordinator: SyncCoordinator, board: TransferBoard, ready: @escaping @Sendable () async -> Bool) {
     self.cloud = cloud
@@ -31,6 +35,7 @@ actor FileSender {
   /// 接上上次没交回结果的，再跟随本机提交与重试的等待结束开始传。
   func start() async {
     let changes = await coordinator.store.syncChanges()  // 先订阅：返回后的提交都不会漏
+    guard !stopped else { return }  // 订阅期间停下了
     let due = coordinator.retryDue.stream()
     tasks = [
       Task { for await tables in changes where tables.contains(.attachments) { await self.fill() } },
@@ -40,13 +45,17 @@ actor FileSender {
     await fill()
   }
 
-  /// 不再开始新的上传；在路上的不取消（退出时系统接着传完，下次 `resume`）。
-  func stop() {
-    tasks.forEach { $0.cancel() }
+  /// 不再开始新的上传，等跟随的任务收尾；在路上的不取消、不等（退出时系统接着传完，下次 `resume`）。
+  func stop() async {
+    stopped = true
+    let running = tasks
     tasks = []
+    running.forEach { $0.cancel() }
+    for task in running { await task.value }
   }
 
   private func resume() async {
+    guard !stopped else { return }
     do {
       for upload in try await cloud.resumedFileUploads() {
         let records = upload.records
@@ -64,7 +73,20 @@ actor FileSender {
 
   /// 补足在路上的：守重试的时刻与空间不足的停顿，先对过门槛。
   private func fill() async {
-    guard await coordinator.fileUploads.count < Self.parallel, await coordinator.admits(.fileUpload), await coordinator.canSync, await ready()
+    if filling {
+      refill = true
+      return
+    }
+    filling = true
+    defer { filling = false }
+    repeat {
+      refill = false
+      await fillOnce()
+    } while refill && !stopped
+  }
+
+  private func fillOnce() async {
+    guard !stopped, await coordinator.fileUploads.count < Self.parallel, await coordinator.admits(.fileUpload), await coordinator.canSync, await ready()
     else { return }
     let pending: [String]
     do { pending = try await coordinator.store.pendingAttachments() } catch {
@@ -72,7 +94,7 @@ actor FileSender {
       return
     }
     for name in pending {
-      guard await coordinator.fileUploads.count < Self.parallel else { return }
+      guard !stopped, await coordinator.fileUploads.count < Self.parallel else { return }
       let taken: CKRecord?
       do { taken = try await coordinator.takeFile(name) } catch { return }  // 停下了或读库出错：协调器已记下，下一次触发再来
       guard let record = taken else { continue }  // 已在路上，或这一版传不上去

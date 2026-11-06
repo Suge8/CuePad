@@ -67,8 +67,21 @@ extension AppServices {
         }
     }
 
+    /// 发布按到达的先后一份份来：活动与角标让出主线程时，后来的不能超过先到的，旧读取也就不会晚于新读取写回组件与角标。
     private func present(
         _ content: WidgetContent, _ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local, resend: Bool = false
+    ) async throws {
+        let previous = flights.snapshotTurn
+        let turn = Task {
+            _ = await previous?.result  // 前一份的失败由它的调用方报告
+            try await render(content, digest, at: moment, local: local, resend: resend)
+        }
+        flights.snapshotTurn = turn
+        try await turn.value
+    }
+
+    private func render(
+        _ content: WidgetContent, _ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local, resend: Bool
     ) async throws {
         let now = Self.cueNow(digest, at: moment, local: local)
         #if os(iOS)

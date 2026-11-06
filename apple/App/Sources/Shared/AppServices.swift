@@ -109,6 +109,7 @@ final class AppServices {
     @ObservationIgnored var syncConnected = false
     /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。
     var isSyncingNow: Bool { syncing != nil }
+    @ObservationIgnored let flights = Flights()
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 这台设备开着哪一页的唯一写入口；手机拿不到 identifierForVendor 时没有。

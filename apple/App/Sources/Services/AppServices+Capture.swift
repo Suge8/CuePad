@@ -5,10 +5,30 @@ import Foundation
 /// 分享扩展留在共享容器里的内容入库：主 App 是资料库唯一写者。
 extension AppServices {
     /// 把 `Capture/` 里已写完的条目存成卡片并删除条目。失败的条目保留（下次再试）并报告。
+    /// 同一时刻只有一趟在跑（启动跟随者、Darwin 通知、回到前台都会调）：跑的时候再来的记成再扫一遍，并等这趟扫完。
     func drainCaptures() async {
+        if let running = flights.captureDrain {
+            flights.captureDrainAgain = true
+            return await running.value
+        }
+        let running = Task {
+            repeat {
+                flights.captureDrainAgain = false
+                await importPendingCaptures()
+            } while flights.captureDrainAgain
+            flights.captureDrain = nil
+        }
+        flights.captureDrain = running
+        await running.value
+    }
+
+    private func importPendingCaptures() async {
         for entry in CaptureQueue.pending(in: location.captureDirectory) {
             do {
-                try await importCapture(entry)
+                if !entry.isImported {
+                    try await importCapture(entry)
+                    try CaptureQueue.markImported(entry)
+                }
                 try CaptureQueue.remove(entry)
             } catch {
                 reportIssue(.captureImportFailed("\(error)"))

@@ -111,10 +111,18 @@ extension SyncCoordinator {
   /// 已在传、传不上去（文件不在本机、这一版被拒过）为 nil。读库出错抛出。
   func takeFile(_ name: String) async throws -> CKRecord? {
     guard canSync else { throw SyncPaused() }
-    guard !fileUploads.contains(name), let record = try await record(for: recordID(name)), let stamp = record.modifiedAt else { return nil }
-    try await store.noteSent([(name, .attachments, stamp)])
-    fileUploads.insert(name)
-    return record
+    guard fileUploads.insert(name).inserted else { return nil }  // 先占下再读：两趟同时来也只有一趟拿到
+    do {
+      guard let record = try await record(for: recordID(name)), let stamp = record.modifiedAt else {
+        fileUploads.remove(name)
+        return nil
+      }
+      try await store.noteSent([(name, .attachments, stamp)])
+      return record
+    } catch {
+      fileUploads.remove(name)
+      throw error
+    }
   }
 
   /// 接上的上一个进程交给系统的上传（`FileSender.resume`）：同 `takeFile` 交出的，传完之前不删、不另传。

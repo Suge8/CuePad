@@ -32,15 +32,19 @@ nonisolated struct PendingCapture: Codable, Equatable, Sendable {
 /// 分享扩展与主 App 之间的数据通路：扩展只往容器里的 `Capture/` 放内容，由主 App 入库，
 /// 资料库始终只有主 App 一个写者，主 App 的界面订阅也照常触发。
 /// 每条是一个目录：先放文件，最后原子写 `capture.json`；没有 json 的目录是尚未写完的，读取时跳过。
+/// 主 App 入库后先在目录里记 `imported`、再删目录：删失败的条目下次只重试删除，不再入库一遍。
 nonisolated enum CaptureQueue {
     /// 扩展写完后发出的进程间通知，主 App 收到后入库。
     static let notification = "\(AppIdentity.id).capture-enqueued"
 
     private static let manifestName = "capture.json"
+    private static let importedName = "imported"
 
     struct Entry: Sendable {
         let directory: URL
         let capture: PendingCapture
+        /// 已入库、只差删除。
+        var isImported: Bool { FileManager.default.fileExists(atPath: directory.appending(path: CaptureQueue.importedName).path) }
 
         /// 这条带的文件：条目目录里的那份与显示的文件名。
         func files() -> [(url: URL, name: String)] { capture.files.map { (directory.appending(path: $0.stored), $0.name) } }
@@ -68,6 +72,10 @@ nonisolated enum CaptureQueue {
             else { return nil }
             return Entry(directory: directory, capture: capture)
         }.sorted { $0.capture.createdAt < $1.capture.createdAt }
+    }
+
+    static func markImported(_ entry: Entry) throws {
+        try Data().write(to: entry.directory.appending(path: importedName), options: .atomic)
     }
 
     static func remove(_ entry: Entry) throws {
