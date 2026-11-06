@@ -2,18 +2,19 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 你的话里带的图片（对话里的气泡与还没进对话的气泡共用）：缩略图排在文字气泡下面，靠右；只有一张时按原比例（同高，宽不超过 `singleWidth`，
-/// 不裁），几张时一行 `perRow` 张方块；点一张在交付物同一个全屏页里看（`openPreview`，几张左右翻）。
+/// 对话里的图片：你的话里带的（对话里的气泡与还没进对话的气泡共用，排在文字气泡下面、靠右）与一轮经过里工具结果的（`RoundProcess`，靠左、小一档）。
+/// 只有一张时按原比例（同高，宽不超过 `singleWidth`，不裁），几张时一行 `perRow` 张方块；点一张在交付物同一个全屏页里看（`openPreview`，几张左右翻）。
 /// 图片文件随同步晚于对话到：到达之前是占位，写着传了几成（还没开始取的写怎么取，点了就取），到达的那一刻换成图。
 /// 还在路上的话整片变淡，与文字气泡一致。
 struct ChatImages: View {
     let hashes: [String]
     var trip = BubbleTrip.arrived
+    var alignment = HorizontalAlignment.trailing
+    var side: CGFloat = 120
     @Environment(Workspace.self) private var workspace
     @Environment(\.openPreview) private var openPreview
 
-    private static var side: CGFloat { 120 }
-    private static var singleWidth: CGFloat { side * 2.5 }
+    private var singleWidth: CGFloat { side * 2.5 }
     private static var spacing: CGFloat { Spacing.tight }
     #if os(macOS)
     private static var perRow: Int { 3 }
@@ -25,12 +26,12 @@ struct ChatImages: View {
     private var group: String { "chat-" + hashes.joined(separator: ",") }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: Self.spacing) {
+        VStack(alignment: alignment, spacing: Self.spacing) {
             ForEach(Array(stride(from: 0, to: hashes.count, by: Self.perRow)), id: \.self) { start in
                 HStack(spacing: Self.spacing) {
                     ForEach(start..<min(start + Self.perRow, hashes.count), id: \.self) { index in
                         ChatImage(
-                            hash: hashes[index], side: Self.side, fitWidth: hashes.count == 1 ? Self.singleWidth : nil,
+                            hash: hashes[index], side: side, fitWidth: hashes.count == 1 ? singleWidth : nil,
                             zoom: PreviewZoomKey(group: group, preview: PiPreview.id(of: hashes[index]))
                         ) { open(hashes[index]) }
                     }

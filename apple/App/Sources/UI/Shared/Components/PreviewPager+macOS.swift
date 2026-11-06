@@ -78,7 +78,7 @@ private struct PreviewPager: View {
         .overlay(alignment: .top) { header }
         .overlay(alignment: .bottom) {
             if let reply {
-                PreviewReplyBar(reply: reply, about: title, done: { close() })
+                PreviewReplyBar(reply: reply, preview: preview, about: title, entry: opening.entry, done: { close() })
                     .frame(maxWidth: 640).padding([.horizontal, .bottom], Spacing.block)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height + 16 } action: { barHeight = $0 }
             }

@@ -44,6 +44,12 @@ extension Workspace {
         }
     }
 
+    /// 回复某份预览（缩略图长按、右键或全屏页的"回复"）：会话的回复框带上它的引用并聚焦，话就在回复框里写，随下一句发出（`ReplyNote`）。
+    func quote(_ preview: PiPreview, in entry: UUID, of session: PiSessionState) {
+        services.settings.quote(preview, in: entry, for: session.id)
+        replyFocus = session.id
+    }
+
     /// 不是从输入框说的（任务的正文、压缩按钮）：写不进库时只提示，原文还在原处。
     @discardableResult
     func speak(_ stored: String, to listener: Listener, saying: Dotted? = nil) -> Task<Void, Never> {

@@ -33,6 +33,14 @@ nonisolated struct SessionFile: Sendable {
         try append(["role": "assistant", "stopReason": "toolUse", "content": [["type": "text", "text": text]]], at: date)
     }
 
+    /// 调一次工具并交回结果：`images` 是结果里的图（PNG 字节，像 Pi 的 read 读进来的图片块）。
+    func tool(_ name: String, id: String, arguments: [String: Any], images: [Data] = [], at date: Date = .now) throws {
+        try append(["role": "assistant", "stopReason": "toolUse", "content": [["type": "toolCall", "id": id, "name": name, "arguments": arguments]]], at: date)
+        let blocks: [[String: Any]] = [["type": "text", "text": "Read image file [image/png]"]]
+            + images.map { ["type": "image", "data": $0.base64EncodedString(), "mimeType": "image/png"] }
+        try append(["role": "toolResult", "toolCallId": id, "toolName": name, "content": blocks, "isError": false], at: date)
+    }
+
     /// 换掉整份对话：文件只剩文件头（同一个文件，不换掉它：Mac 盯着的还是它），之后的话照常追加。
     func reset() throws {
         let header = try Self.line(["type": "session", "version": 3, "id": sessionID, "timestamp": Self.stamp.format(.now), "cwd": cwd])

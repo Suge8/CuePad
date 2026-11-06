@@ -12,6 +12,7 @@ import Foundation
 ///   `assistant/message` 的文字块是说的一段，最后一段在这一轮结束时成为回答；`tool/call`、`tool/result` 记工具活动；
 ///   `compaction/end` 没出错是压缩；会话名只认来源是 `user` 的 `session/title`（CuePad 的改名），dsh 自己按首句取的不算。
 /// - 你的话里的图片是 dsh 附件库里的引用（`<DSH_HOME>/attachments/v1/objects/<前两位>/<sha256>`），按会话文件的位置找到那个 DSH_HOME。
+///   `tool/result` 的内容块与你的话同一种（图片是引用或内嵌的 base64），工具结果里的图缩小后记在那一步上（`ToolImage`）。
 /// - CuePad 送进去的话：插件在它进收件箱时先记一条 `plugin:cuepad/delivery` {message, delivery}（`dsh-cuepad.mjs`），随后那条 `user/message` 按 id 认领。
 enum DshHistory {
     static let fileName = "session.v4.jsonl"
@@ -46,7 +47,8 @@ enum DshHistory {
             cp.toolStarted(id: id, name: data?.name ?? "", arguments: arguments)
         case "tool/result":
             guard let id = data?.message?.toolCallId else { return }
-            cp.toolFinished(id: id, failed: data?.message?.isError == true)
+            let images = (data?.message?.content ?? []).filter { $0.type == "image" }.map { image($0, near: transcript.file) }
+            cp.toolFinished(id: id, failed: data?.message?.isError == true, images: try transcript.toolImages(images))
         case "compaction/end":
             if data?.error == nil { cp.compacted(entry, into: &transcript) }
         case "session/title":
@@ -66,7 +68,7 @@ enum DshHistory {
             for block in data.content ?? [] {
                 switch block.type {
                 case "text": said.text(block.text)
-                case "image": try said.image(block.attachment.flatMap { image($0, near: transcript.file) })
+                case "image": try said.image(image(block, near: transcript.file))
                 default: break
                 }
             }
@@ -78,9 +80,10 @@ enum DshHistory {
         }
     }
 
-    /// 附件库里的原图：会话文件在 `<DSH_HOME>/<DshRuntime.sessions>/<项目>/<id>/` 下。
-    private static func image(_ attachment: Line.Attachment, near file: URL?) -> Data? {
-        guard let file, let hash = attachment.attachmentId?.split(separator: ":").last, hash.count > 2 else { return nil }
+    /// 图片块的原图：内嵌的 base64，或附件库里的引用（会话文件在 `<DSH_HOME>/<DshRuntime.sessions>/<项目>/<id>/` 下）。
+    private static func image(_ block: Line.Block, near file: URL?) -> Data? {
+        if let data = block.data { return Data(base64Encoded: data) }
+        guard let file, let hash = block.attachment?.attachmentId?.split(separator: ":").last, hash.count > 2 else { return nil }
         var home = file
         for _ in 0..<(DshRuntime.sessions.split(separator: "/").count + 3) { home.deleteLastPathComponent() }
         return try? Data(contentsOf: home.appending(path: "attachments/v1/objects/\(hash.prefix(2))/\(hash)"))
@@ -150,6 +153,7 @@ enum DshHistory {
             var type: String
             var text: String?
             var attachment: Attachment?
+            var data: String?
         }
 
         struct Attachment: Decodable { var attachmentId: String? }

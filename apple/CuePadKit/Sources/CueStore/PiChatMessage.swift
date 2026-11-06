@@ -20,7 +20,7 @@ public enum PiChatRole: String, Sendable, CaseIterable {
 ///
 /// 唯一来源是 Pi 的会话文件：Mac 读会话文件写出（在线会话随文件追加跟上，更早的按需补写），记录 id 由会话 id 与
 /// 文件里那一条的 id 算出，重读不重复。一轮一条 Pi 消息：这一轮最后的回答；中途调工具时说的话、思考与工具输出都不同步，
-/// 只记这一轮的经过（`tools`：工具调用的分类计数、调用与中途说的话按先后的一份紧凑清单，不含工具输出）和从你说话起做了多久
+/// 只记这一轮的经过（`tools`：工具调用的分类计数、调用与中途说的话按先后的一份紧凑清单，不含工具输出；结果里的图除外，缩小的一份记在那一步上）和从你说话起做了多久
 /// （界面写"跑了 12 步 · 改了 3 个文件 · 2 分钟"）。还在跑的这一轮到目前为止的经过在会话记录上（`PiRecap.pendingTools`）。
 public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -145,7 +145,7 @@ extension PiChatMessage {
 
 extension PiChatMessage {
   /// 一轮的经过：调了几次工具（失败的也算，读、改同一个文件只算一次；界面上的"跑了 N 步"）和一份按先后的清单——
-  /// 每次调用一条（自己标成败），中途说的每段话也一条（`said`，不是调用）；最后那段话是回答，不在清单里。
+  /// 每次调用一条（自己标成败，结果里带的图记在那一条上），中途说的每段话也一条（`said`，不是调用）；最后那段话是回答，不在清单里。
   /// Agent 会话的由 Mac 从会话文件汇出，Cue 的由值班的管理器从这一轮的调用汇出（`CueActivity`）；同步记录里存为 JSON（加密字段）。
   public struct Tools: StoredJSON, Equatable, Sendable {
     public enum Kind: String, Codable, CaseIterable, Sendable {
@@ -183,10 +183,12 @@ extension PiChatMessage {
       public var name: String?
       /// Cue 碰到的会话（`PiSessionState.id`）：点了进会话
       public var session: UUID?
+      /// 这一步的结果里带的图（Agent 截的屏、读进来的图）：附件的键，存的是 Mac 读会话时缩小的那份（`ToolImage`）；没有为 nil
+      public var images: [String]?
 
       public init(
         kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil, name: String? = nil,
-        session: UUID? = nil
+        session: UUID? = nil, images: [String]? = nil
       ) {
         self.kind = kind
         self.target = target
@@ -196,13 +198,23 @@ extension PiChatMessage {
         self.task = task
         self.name = name
         self.session = session
+        self.images = images
       }
     }
 
     /// 调用数（与清单的行同一口径；说的话不算）
     public var steps: Int
-    /// 清单，按发生先后。落了结果的（`Kind.acts`）与说的话总在里面；其余调用至多列到 `itemLimit` 条，超出的只进计数
+    /// 清单，按发生先后。落了结果的（`Kind.acts`）、结果里带图的与说的话总在里面；其余调用至多列到 `itemLimit` 条，超出的只进计数
     public var items: [Item]
+
+    /// 这一轮工具结果里的图，按先后、同一份只算一次：会话页那一行经过下的缩略图（`RoundProcess`）
+    public var images: [String] {
+      var seen = Set<String>()
+      return items.flatMap { $0.images ?? [] }.filter { seen.insert($0).inserted }
+    }
+
+    /// 存下的 JSON 里带图的那一项的键名：库里按它找带图的经过（`CueStore.toolImages`）
+    static let imagesField = "\"images\""
 
     static let itemLimit = 30
     /// 清单里一条调用的目标至多这么多字符
@@ -215,11 +227,12 @@ extension PiChatMessage {
       self.items = items
     }
 
-    /// 记下一条：说的话照列、不算一步；做完的一次调用计一步，清单没满或它落了结果（`Kind.acts`）就列上。
+    /// 记下一条：说的话照列、不算一步；做完的一次调用计一步，清单没满、它落了结果（`Kind.acts`）或结果里带图就列上——
+    /// 图只记在清单的那一条上，不列就看不到。
     public mutating func record(_ item: Item) {
       guard item.kind != .said else { return items.append(item) }
       steps += 1
-      if item.kind.acts || items.count(where: { $0.kind != .said }) < Self.itemLimit { items.append(item) }
+      if item.kind.acts || item.images != nil || items.count(where: { $0.kind != .said }) < Self.itemLimit { items.append(item) }
     }
   }
 }

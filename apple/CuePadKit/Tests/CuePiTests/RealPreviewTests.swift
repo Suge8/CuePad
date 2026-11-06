@@ -5,7 +5,8 @@ import Testing
 @testable import CuePi
 
 /// "发给手机看"的端到端：真实 Pi + 安装器装进临时目录的扩展与 skill + 假模型 + 真实的 `cuepad` 命令行。
-/// 模型在 bash 里一次 `cuepad show` 两个文件：Pi 给这条命令带着 `PI_SESSION_ID`，命令行据此认出会话、把预览写进（隔离的）资料库。
+/// 模型在 bash 里一次 `cuepad show` 两个文件：这条命令带着会话的环境变量（扩展设的 `CUEPAD_SESSION_ID` 在先，Pi 自己的 `PI_SESSION_ID`），
+/// 命令行据此认出会话、把预览写进（隔离的）资料库。
 @MainActor
 @Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealPreviewTests {

@@ -204,6 +204,12 @@ public enum PiHistory {
         }
 
         func said() -> Said { Said(files: files) }
+
+        /// 工具结果里的图存成缩小的那份（`ToolImage`），返回附件的键；不存图片（`files` 为 nil）、不是图片的不算。
+        func toolImages(_ images: [Data?]) throws -> [String] {
+            guard let files else { return [] }
+            return try images.compactMap { data in try data.flatMap { try ToolImage.store($0, in: files) } }
+        }
     }
 
     /// 你说的一句：文字块去掉 Pi 附给模型的图片说明行（`PiSessionName.withoutImageNotes`），图片存进附件目录。

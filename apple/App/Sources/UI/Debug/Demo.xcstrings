@@ -113,18 +113,18 @@
         }
       }
     },
-    "# 登录页评审结论\n\n改动都在 `login/` 下，**没有动接口**。\n\n## 已处理\n- 错误提示从弹窗改成输入框下方的一行字\n- 密码框加了显示/隐藏\n\n## 要你定\n1. 记住我默认勾选吗？\n2. 第三方登录放在页面底部还是顶部？\n\n| 项 | 之前 | 现在 |\n|:---|---:|---:|\n| 首屏可点元素 | 9 | 5 |\n| 登录成功率（内测） | 91% | 94% |" : {
+    "# 登录页评审结论\n\n改动都在 `login/` 下，**没有动接口**。\n\n## 已处理\n- 错误提示从弹窗改成输入框下方的一行字\n- 密码框加了显示/隐藏\n\n## 要你定\n1. 记住我默认勾选吗？\n2. 第三方登录放在页面底部还是顶部？\n\n| 项 | 之前 | 现在 |\n|:---|---:|---:|\n| 首屏可点元素 | 9 | 5 |\n| 登录成功率（内测） | 91% | 94% |\n\n### 改了哪里\n\n```swift\nerrorLine.text = message  // 不再弹窗\n```" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "# Login Page Review\n\nAll changes are under `login/`; **the API is untouched**.\n\n## Done\n- Error message moved from an alert to a line under the field\n- Password field got a show/hide toggle\n\n## Needs your call\n1. Should “Remember me” be checked by default?\n2. Should third-party sign-in go at the bottom or the top?\n\n| Item | Before | Now |\n|:---|---:|---:|\n| Tappable elements above the fold | 9 | 5 |\n| Sign-in success rate (beta) | 91% | 94% |"
+            "value" : "# Login Page Review\n\nAll changes are under `login/`, **no API changes**.\n\n## Done\n- Errors now show as a line under the field instead of an alert\n- Password field can show/hide\n\n## Your Call\n1. Check \"Remember me\" by default?\n2. Third-party sign-in at the bottom or the top?\n\n| Item | Before | Now |\n|:---|---:|---:|\n| Tappable on first screen | 9 | 5 |\n| Sign-in success (beta) | 91% | 94% |\n\n### What Changed\n\n```swift\nerrorLine.text = message  // no more alert\n```"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "# 登录页评审结论\n\n改动都在 `login/` 下，**没有动接口**。\n\n## 已处理\n- 错误提示从弹窗改成输入框下方的一行字\n- 密码框加了显示/隐藏\n\n## 要你定\n1. 记住我默认勾选吗？\n2. 第三方登录放在页面底部还是顶部？\n\n| 项 | 之前 | 现在 |\n|:---|---:|---:|\n| 首屏可点元素 | 9 | 5 |\n| 登录成功率（内测） | 91% | 94% |"
+            "value" : "# 登录页评审结论\n\n改动都在 `login/` 下，**没有动接口**。\n\n## 已处理\n- 错误提示从弹窗改成输入框下方的一行字\n- 密码框加了显示/隐藏\n\n## 要你定\n1. 记住我默认勾选吗？\n2. 第三方登录放在页面底部还是顶部？\n\n| 项 | 之前 | 现在 |\n|:---|---:|---:|\n| 首屏可点元素 | 9 | 5 |\n| 登录成功率（内测） | 91% | 94% |\n\n### 改了哪里\n\n```swift\nerrorLine.text = message  // 不再弹窗\n```"
           }
         }
       }
@@ -4999,6 +4999,22 @@
         }
       }
     },
+    "改动：错误提示改成一行字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diff: error shown as one line"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改动：错误提示改成一行字"
+          }
+        }
+      }
+    },
     "改好了，深色下玻璃边缘偏亮，我调低了 8%。要再看一版截图吗？" : {
       "localizations" : {
         "en" : {
@@ -6327,6 +6343,22 @@
         }
       }
     },
+    "登录改动.diff" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Login Change.diff"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录改动.diff"
+          }
+        }
+      }
+    },
     "登录超时，请重新登录" : {
       "localizations" : {
         "en" : {
@@ -7507,6 +7539,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "评审"
+          }
+        }
+      }
+    },
+    "评审结论.md" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review.md"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评审结论.md"
           }
         }
       }

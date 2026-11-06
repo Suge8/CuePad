@@ -40,6 +40,8 @@ nonisolated enum Icon: Hashable, Sendable {
     // 输入、发送与会话
     case send, save, checked, stop, endSession, handOff, delivered, retry, toLatest, fetching, compact, renew
     case declined, mac, yourAnswer, above, floated, earlier
+    /// 引用一份预览回话（长按、右键与全屏页的"回复"）；用网易 UU 远程到这台 Mac 上操作
+    case reply, remoteMac
     /// 带着附件（回形针）：只带文件的灵感在列表、卡片与搜索里的标记
     case attachment
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
@@ -160,7 +162,8 @@ nonisolated enum Icon: Hashable, Sendable {
         case .terminal: .ink("terminal")
         case .readFile: .ink("doc")
         case .tool: .ink("wrench")
-        case .said: .ink("bubble.text")
+        case .said, .reply: .ink("bubble.text")
+        case .remoteMac: .ink("mac")
         case .started: .ink("ring.play")
         case .added: .ink("ring.plus")
         case .branch: .ink("branch")

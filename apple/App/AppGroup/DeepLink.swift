@@ -11,6 +11,8 @@ nonisolated enum DeepLink: Equatable, Sendable {
     case cue
     /// 打开一个会话（会话状态记录的 id，`PiSessionState.id`）：实时活动里会话在问的那件"打开"。
     case session(UUID)
+    /// 网易 UU 远程绑定完回跳（`MacRemote`）：选好的电脑的加密标识，或失败的错误码；`nonce` 认是哪一次绑定。
+    case remoteBound(device: String?, error: String?, nonce: String?)
 
     init?(url: URL) {
         guard url.scheme == Self.scheme, let host = url.host() else { return nil }
@@ -29,6 +31,10 @@ nonisolated enum DeepLink: Equatable, Sendable {
         case ("session", 1):
             guard let id = UUID(uuidString: parts[0]) else { return nil }
             self = .session(id)
+        case ("uu-bound", 0):
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            func value(_ name: String) -> String? { query.first { $0.name == name }?.value.flatMap { $0.isEmpty ? nil : $0 } }
+            self = .remoteBound(device: value("anonymous_device_id"), error: value("error"), nonce: value("nonce"))
         default:
             return nil
         }
@@ -41,6 +47,13 @@ nonisolated enum DeepLink: Equatable, Sendable {
         case .card(let id): URL(string: "cuepad://card/\(id.uuidString.lowercased())")!
         case .cue: URL(string: "cuepad://cue")!
         case .session(let id): URL(string: "cuepad://session/\(id.uuidString.lowercased())")!
+        case .remoteBound(let device, let error, let nonce):
+            Self.remoteCallback.appending(queryItems: [("anonymous_device_id", device), ("error", error), ("nonce", nonce)].compactMap { name, value in
+                value.map { URLQueryItem(name: name, value: $0) }
+            })
         }
     }
+
+    /// 交给 UU 远程的回跳地址（`MacRemote.authorize`）：它把结果接在后面打开。
+    static let remoteCallback = URL(string: "cuepad://uu-bound")!
 }

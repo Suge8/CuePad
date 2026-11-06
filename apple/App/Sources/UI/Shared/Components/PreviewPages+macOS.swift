@@ -11,7 +11,7 @@ import SwiftUI
 // 文本、文稿、表格、演示文稿、3D 与认不出的类型仍嵌快速查看：这些系统才认得全，也没有要和翻页抢的手势。
 // 图片与 PDF 一直铺到两条栏下面（放大、滚动时内容从栏后透出来），按 `previewInsets` 让出栏占的边；其余在两条栏之间。
 
-/// 全屏页里除网页与 Markdown 外的每一类（`PreviewContent`）。
+/// 全屏页里除网页、Markdown 与改动外的每一类（`PreviewContent`）。
 struct PreviewPage: View {
     let preview: PiPreview
     let file: URL

@@ -9,6 +9,8 @@ import SwiftUI
 ///   话至多三行，那一步至多两行、文字有流光。做完的几步与说过的话来自会话文件（`PiRecap.pendingTools`），
 ///   正在跑的来自会话状态（`detail`），两者不重叠。
 ///   Mac 上正在说的话出字时（`PiShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
+/// - 工具结果里有图（Agent 截的屏、读进来的图）时，标题行下面总挂着这一轮的图（收着、展开都在，`ChatImages`，靠左、小一档），点开全屏看：
+///   用户看得到 Agent 看到的，Agent 不必为了给人看再发一遍。
 /// 清单是注脚：小一档的字、次要墨色；调用每条一行，图标、等宽的文件路径或命令、状态——改文件写 +行数 −行数，失败的只把"失败"两个字标胭脂，
 /// 不显示工具输出；中途说的话按先后夹在调用之间，正常字形、至多三行。
 /// 在跑的与做完后的同一种排法、同样高（同样的步骤时）：Mac 上正在说的话落库时原位换下，这一块不跳（`SessionDraft`）。
@@ -40,6 +42,9 @@ struct RoundProcess: View {
                     .buttonStyle(PressStyle())
                     .accessibilityLabel(spoken(line))
                     .accessibilityExpanded(expanded)
+                if !tools.images.isEmpty {
+                    NoteThread { ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide).padding(.vertical, Spacing.hair) }
+                }
                 if expanded {
                     NoteThread {
                         list(tools)
@@ -63,6 +68,9 @@ struct RoundProcess: View {
                 .accessibilityElement(children: .ignore).accessibilityLabel(doing)
         }
     }
+
+    /// 工具图的边长：比你的话里的图小一档，是注脚
+    private static let imageSide: CGFloat = 88
 
     /// 读屏读的一句：经过与结尾（用时或此刻在做的）。
     private func spoken(_ line: Dotted) -> String {

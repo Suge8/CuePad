@@ -86,11 +86,9 @@ struct ComposerDraft {
         return draft
     }
 
-    /// 存储格式正文（附件选好时已存进附件目录）。批注（`ReplyNote.message`）排在你写的话前面。
+    /// 存储格式正文（附件选好时已存进附件目录）。批注与引用的预览按 `ReplyNote.message` 接上你写的话。
     var stored: String {
-        StoredBody.make(
-            attachments: attachments.map(\.content), text: [ReplyNote.message(notes), text].filter { !$0.isEmpty }.joined(separator: "\n\n"),
-            files: files)
+        StoredBody.make(attachments: attachments.map(\.content), text: ReplyNote.message(notes, said: text), files: files)
     }
 }
 

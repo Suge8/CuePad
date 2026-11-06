@@ -9,7 +9,8 @@ import Foundation
 /// `task_started` 开始一轮；`item_completed` 里 `UserMessage` 是你的话（`client_id` 是 CuePad 发的那条的投送请求，见 `clientID`）、
 /// `AgentMessage` 是说的一段（中途的 `commentary`；`final_answer` 是最后一段，结束这一轮：Codex 先报歇下、钩子返回后才写 `task_complete`，
 /// 等它的话歇下时对话里还没有回答；没有回答就结束的轮由 `task_complete` 结束）、`CommandExecution`/`FileChange`/`McpToolCall`/`WebSearch` 记工具活动、
-/// `ContextCompaction` 是压缩；`turn_aborted` 是这一轮被停下（没有回答）。`response_item` 里同一条你的话没有 `client_id`，不读。
+/// `ContextCompaction` 是压缩；`turn_aborted` 是这一轮被停下（没有回答）。工具结果里的图：`ImageView`（view_image 看的那个本机文件，条目只带路径，
+/// 读的时候从文件取）与 `McpToolCall` 结果里的图片块，缩小后记在那一步上（`ToolImage`）。`response_item` 里同一条你的话没有 `client_id`，不读。
 /// 会话名只在 `<CODEX_HOME>/session_index.jsonl` 里，会话文件没有：历史会话的名字退回首条消息。
 enum CodexHistory {
     /// CuePad 发出的话写进 `clientUserMessageId` 的前缀，后接投送请求的 UUID：终端里打的话 Codex 也给一个随机 UUID，靠前缀分开。
@@ -57,7 +58,7 @@ enum CodexHistory {
                 case "text":
                     said.text([skill, input.text].compactMap(\.self).joined(separator: " "))
                     skill = nil
-                case "image": try said.image(input.imageURL.flatMap(imageData))
+                case "image": try said.image(input.imageURL.flatMap(ToolImage.data(at:)))
                 default: break
                 }
             }
@@ -74,15 +75,13 @@ enum CodexHistory {
             guard cp.round != nil else { return }
             for call in toolCalls(item) {
                 cp.toolStarted(id: call.id, name: call.name, arguments: call.arguments)
-                if item.status == "declined" { cp.toolDeclined(id: call.id) } else { cp.toolFinished(id: call.id, failed: call.failed) }
+                if item.status == "declined" {
+                    cp.toolDeclined(id: call.id)
+                } else {
+                    cp.toolFinished(id: call.id, failed: call.failed, images: try transcript.toolImages(call.images))
+                }
             }
         }
-    }
-
-    /// `data:<类型>;base64,<数据>`；别的地址（网络图片）不存。
-    private static func imageData(_ url: String) -> Data? {
-        guard url.hasPrefix("data:"), let comma = url.firstIndex(of: ","), url[..<comma].hasSuffix(";base64") else { return nil }
-        return Data(base64Encoded: String(url[url.index(after: comma)...]))
     }
 
     private struct ToolCall {
@@ -90,6 +89,8 @@ enum CodexHistory {
         var name: String
         var arguments: PiToolArguments
         var failed: Bool
+        /// 结果里的图（原字节）
+        var images: [Data?] = []
     }
 
     /// 一个完成的工具条目换成工具活动：命令按命令行、改文件按每个文件（新增、删除行数从补丁里数）、其余按工具名。
@@ -106,7 +107,13 @@ enum CodexHistory {
                 ToolCall(id: id + path, name: "edit", arguments: change.arguments(path: path), failed: failed)
             }
         case "McpToolCall":
-            return [ToolCall(id: id, name: item.tool ?? "mcp", arguments: PiToolArguments(), failed: item.status.map { $0 != "completed" } ?? false)]
+            return [ToolCall(
+                id: id, name: item.tool ?? "mcp", arguments: PiToolArguments(), failed: item.status.map { $0 != "completed" } ?? false,
+                images: item.result?.images ?? [])]
+        case "ImageView":
+            var arguments = PiToolArguments()
+            arguments.path = item.path.flatMap { URL(string: $0)?.path }
+            return [ToolCall(id: id, name: "read", arguments: arguments, failed: false, images: [item.path.flatMap(ToolImage.data(at:))])]
         case "WebSearch":
             var arguments = PiToolArguments()
             arguments.pattern = item.query
@@ -203,9 +210,13 @@ enum CodexHistory {
         var query: String?
         /// `AgentMessage`：`commentary` / `final_answer`
         var phase: String?
+        /// `ImageView`：看的那个文件（`file://` 地址）
+        var path: String?
+        /// `McpToolCall`：工具交回的结果
+        var result: ToolResult?
 
         private enum CodingKeys: String, CodingKey {
-            case type, id, content, command, status, changes, tool, query, phase
+            case type, id, content, command, status, changes, tool, query, phase, path, result
             case clientID = "client_id"
             case exitCode = "exit_code"
         }
@@ -221,6 +232,23 @@ enum CodexHistory {
         private enum CodingKeys: String, CodingKey {
             case type, text, name
             case imageURL = "image_url"
+        }
+    }
+
+    /// MCP 工具的结果（`CallToolResult`）：只读内容块里的图片（`{type: image, data: base64}`）。形状不认得时当没有，不连累整条。
+    private struct ToolResult: Decodable {
+        var images: [Data?] = []
+
+        private struct Block: Decodable {
+            var type: String?
+            var data: String?
+        }
+
+        private enum CodingKeys: String, CodingKey { case content }
+
+        init(from decoder: any Decoder) throws {
+            let blocks = (try? decoder.container(keyedBy: CodingKeys.self).decodeIfPresent([Block].self, forKey: .content)) ?? []
+            images = blocks.filter { $0.type == "image" }.map { $0.data.flatMap { Data(base64Encoded: $0) } }
         }
     }
 

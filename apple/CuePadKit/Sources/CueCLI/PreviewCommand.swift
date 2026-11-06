@@ -10,7 +10,7 @@ extension Command {
     notes: """
       会话从 Agent 给每条命令带的环境变量认出（\(sessionVariables.joined(separator: "、"))），按这个先后取第一个：\(AgentKind.watchedSessionVariable) 是 CuePad 的 Pi 扩展给的、用户在看的那个会话，子代理里发的也落在它的对话里；在一家的命令里又起了另一家时也取前面的。不在 Agent 的命令里运行会报错，不猜是哪个会话。
       一次给几个文件是同一张卡，点开后左右切换；缩略图下与全屏页顶上写的是标题，不是文件名。
-      可发：\(PiPreviewKind.supportedList)。网页与 Markdown 在 CuePad 里打开，其余用系统的快速查看；单个文件不超过 \(PiPreview.maxBytes / 1_000_000) MB。
+      可发：\(PiPreviewKind.supportedList)。网页只读打开，Markdown 按文稿排好，diff、patch 是增删对照；单个文件不超过 \(PiPreview.maxBytes / 1_000_000) MB。
       网页只读、不联网、读不到别的文件；outsideReferences 是页面引用了、手机上因此缺失的地址。经 iCloud 同步，CuePad.app 需要在运行。
       \(Schema.output("[Preview {id, session, title, name, kind, bytes, outsideReferences}]", "kind：\(PiPreviewKind.allCases.map(\.rawValue).joined(separator: "、"))"))
       """

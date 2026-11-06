@@ -60,8 +60,8 @@ extension DebugScene {
         if let media = defaults.string(forKey: "CuePadPreviewMedia") { try await seedPreviewMedia(store, from: media) }
     }
 
-    /// `-CuePadAllKinds YES|<n>`：scratch 会话里发六批，每批两份并排：3D 模型与一张还没到本机的（附件文件删掉，卡片写"下载中"；
-    /// 标题同文件名），之后每种能发的类型各一份；`-CuePadOpenPreview <文件名>` 打开其中一份的预览页。给数字只发前 n 批：
+    /// `-CuePadAllKinds YES|<n>`：scratch 会话里发七批，每批两份并排：3D 模型与一张还没到本机的（附件文件删掉，卡片写"下载中"；
+    /// 标题同文件名），之后每种能发的类型各一份（最后一批是改动与 Markdown）；`-CuePadOpenPreview <文件名>` 打开其中一份的预览页。给数字只发前 n 批：
     /// 会话页停在最新处，一屏看到的是最后两三批，换着 n 拍几张就每种都拍到了。
     /// 视频、音频、Office 与 3D 只要扩展名对，内容是占位的字节：系统给不出缩略图、时长时显示的正是类型图标。
     private static func seedAllKinds(_ store: CueStore, upTo count: Int?) async throws {
@@ -82,6 +82,7 @@ extension DebugScene {
             [file(String(localized: "汇报.pptx", table: "Demo"), filler), file(String(localized: "报告.pdf", table: "Demo"), reconnectReportPDF())],
             [file(String(localized: "日志.txt", table: "Demo"), Data("12:00 ok\n12:01 retry\n".utf8)), file(String(localized: "改动说明.md", table: "Demo"), Data(pricingNotes.utf8))],
             [file(String(localized: "定价页.html", table: "Demo"), Data(pricingPage.utf8)), file(String(localized: "预发.png", table: "Demo"), stagingOrderPNG())],
+            [file(String(localized: "登录改动.diff", table: "Demo"), Data(loginDiff.utf8)), file(String(localized: "评审结论.md", table: "Demo"), Data(review.utf8))],
         ]
         for files in batches.prefix(count ?? batches.count) {
             let added = try await store.addPreviews(files.map { (url: $0, title: $0.deletingPathExtension().lastPathComponent) }, sessionID: "scratch")

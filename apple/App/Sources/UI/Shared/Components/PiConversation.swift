@@ -25,6 +25,7 @@ struct PiConversation: View {
     var slot: PiBridge.Slot?
     #endif
     @Environment(\.chatHighlight) private var highlight
+    @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .footnote) private var noticeText = ComposerMetrics.noticeTextHeight
@@ -51,7 +52,7 @@ struct PiConversation: View {
         .environment(\.inlineTextSelection, false)
         #endif
         .previewPresenter($opened, reply: .session(session))
-        .debugOpensPreview(in: items, session: session, $opened)
+        .debugOpensPreview(in: items, session: session, $opened) { [workspace] in workspace.quote($0, in: $1, of: session) }
     }
 
     static var spacing: CGFloat { Spacing.block }
@@ -189,7 +190,7 @@ private struct ChatSegment: View, Equatable {
         case .machine:
             MachineCards(text: entry.text)
         case .preview:
-            PreviewBatch(previews: entry.previews, group: entry.id.uuidString) {
+            PreviewBatch(previews: entry.previews, group: entry.id.uuidString, reply: { workspace.quote($0, in: entry.id, of: session) }) {
                 opened = PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString)
             }
         }

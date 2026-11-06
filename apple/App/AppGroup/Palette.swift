@@ -163,6 +163,10 @@ struct Palette {
     /// 有新回复：淡石绿。石绿字 5.2，深色 5.1。
     var repliedWash: Color { dark ? Color(hex: 0x26382D) : Color(hex: 0xE2F1E7) }
 
+    /// 改动（diff）里增加的行垫淡石绿、删去的行垫淡胭脂（`PreviewDiff`）：同"做完"与"出错"的色相，行上的字照纸上的墨；+、− 与增删数写石绿、胭脂字。
+    var diffAdded: Color { repliedWash }
+    var diffRemoved: Color { failureWash }
+
     // MARK: 看板四列的纸（`TaskBoard.Column.paper`；推进中是纸本身）
 
     // 同上一组是色相的浅调；轻的两列（待办、已完成）比重的等你淡，深色下轻的两列比纸暗、重的比纸亮——深色里亮读作重。

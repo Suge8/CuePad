@@ -3697,6 +3697,54 @@
         }
       }
     },
+    "UU 远程没能选好这台 Mac，再试一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU Remote couldn't link this Mac. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU 远程没能选好这台 Mac，再试一次"
+          }
+        }
+      }
+    },
+    "UU 远程还没登录好，登录后再试一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in to UU Remote, then try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU 远程还没登录好，登录后再试一次"
+          }
+        }
+      }
+    },
+    "UU 远程里没有可连的电脑：先在 Mac 上装好 UU 远程并登录同一个账号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No computers in UU Remote. Install UU Remote on your Mac and sign in with the same account."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU 远程里没有可连的电脑：先在 Mac 上装好 UU 远程并登录同一个账号"
+          }
+        }
+      }
+    },
     "[话]" : {
       "localizations" : {
         "en" : {
@@ -5095,6 +5143,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不带了"
+          }
+        }
+      }
+    },
+    "不引用这份预览" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove Quote"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不引用这份预览"
           }
         }
       }
@@ -6743,6 +6807,22 @@
         }
       }
     },
+    "先装网易 UU 远程，并在 Mac 上也装好、登录同一个账号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install NetEase UU Remote here and on your Mac, signed in to the same account."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先装网易 UU 远程，并在 Mac 上也装好、登录同一个账号"
+          }
+        }
+      }
+    },
     "全局" : {
       "localizations" : {
         "en" : {
@@ -7039,22 +7119,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关于「%1$@」对 %2$@ 说…"
-          }
-        }
-      }
-    },
-    "关于「%@」对会话说…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tell the session about “%@”…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关于「%@」对会话说…"
           }
         }
       }
@@ -8255,6 +8319,22 @@
         }
       }
     },
+    "去 App Store" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open App Store"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去 App Store"
+          }
+        }
+      }
+    },
     "去会话" : {
       "localizations" : {
         "en" : {
@@ -9447,6 +9527,22 @@
         }
       }
     },
+    "回到这份预览" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show this preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回到这份预览"
+          }
+        }
+      }
+    },
     "回到那个问题" : {
       "localizations" : {
         "en" : {
@@ -9507,6 +9603,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "回复 %@"
+          }
+        }
+      }
+    },
+    "回复框带上这一份的引用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quotes this preview in the reply box"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回复框带上这一份的引用"
           }
         }
       }
@@ -9795,6 +9907,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 Mac 上接入 Agent"
+          }
+        }
+      }
+    },
+    "在 Mac 上操作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Control Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Mac 上操作"
           }
         }
       }
@@ -10115,6 +10243,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在听"
+          }
+        }
+      }
+    },
+    "在哪台 Mac 上操作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Control Which Mac?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在哪台 Mac 上操作"
           }
         }
       }
@@ -12495,6 +12639,22 @@
         }
       }
     },
+    "引用预览：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quoted preview: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用预览：%@"
+          }
+        }
+      }
+    },
     "归档" : {
       "localizations" : {
         "en" : {
@@ -14327,6 +14487,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "改会话名"
+          }
+        }
+      }
+    },
+    "改动" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diff"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改动"
           }
         }
       }
@@ -18279,6 +18455,22 @@
         }
       }
     },
+    "用网易 UU 远程控制 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses NetEase UU Remote to control your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用网易 UU 远程控制 Mac"
+          }
+        }
+      }
+    },
     "用量" : {
       "localizations" : {
         "en" : {
@@ -21659,6 +21851,22 @@
         }
       }
     },
+    "还没有 Mac 用过 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Mac has used CuePad yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有 Mac 用过 CuePad"
+          }
+        }
+      }
+    },
     "还没有哪台 Mac 可以运行 Cue" : {
       "localizations" : {
         "en" : {
@@ -22839,6 +23047,22 @@
         }
       }
     },
+    "连这台 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect To"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连这台 Mac"
+          }
+        }
+      }
+    },
     "退出 CuePad" : {
       "localizations" : {
         "en" : {
@@ -23511,6 +23735,22 @@
         }
       }
     },
+    "重新选择 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Mac Again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新选择 Mac"
+          }
+        }
+      }
+    },
     "重试" : {
       "localizations" : {
         "en" : {
@@ -24095,6 +24335,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "项目规则"
+          }
+        }
+      }
+    },
+    "预览「%@」" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览「%@」"
           }
         }
       }
