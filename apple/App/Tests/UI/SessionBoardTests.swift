@@ -17,10 +17,18 @@ struct SessionBoardTests {
     private func session(
         _ id: String, title: String, agent: AgentKind = .pi, hosted: Bool = false
     ) async throws -> PiSessionState {
-        let recorder = PiStateRecorder(store: store, hostID: Self.mac)
+        let recorder = try await rig.runtimeRecorder(on: Self.mac)
         try await recorder.update(
             sessionID: id, state: .settled, title: title, hosted: hosted, agent: agent)
         return try #require(try await store.piSessions(sessionIDs: [id])[id]?.state)
+    }
+
+    /// 会话在这件任务完成之后有了新状态：时刻显式排在完成之后（收起按时刻严格先后判定，不靠真实时钟走过一毫秒）。
+    /// `by` 为 0 时与完成同一毫秒。
+    private func moves(_ sessionID: String, after task: UUID, by seconds: TimeInterval = 1) async throws {
+        let done = try #require(try await store.card(task)?.completedAt)
+        let at = done.addingTimeInterval(seconds)
+        try await rig.runtimeRecorder(on: Self.mac).update(sessionID: sessionID, state: .thinking, times: PiTimes(stateSince: at, busySince: at))
     }
 
     private func tasks() async throws -> [Card] { try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks) }
@@ -41,8 +49,9 @@ struct SessionBoardTests {
         #expect(Set(before.advancing.map(\.id)) == ["session/s1", "session/s2"])
         #expect(try await tasks().isEmpty, "没当任务用过的会话不留卡")
 
-        try await workspace.complete(terminal)
-        try await workspace.complete(hosted)
+        try await workspace.finish(PiSessionListItem(state: terminal))
+        try await workspace.finish(PiSessionListItem(state: hosted))
+        #expect(workspace.sessionAsk == nil, "歇着的会话不问")
 
         let made = try await tasks()
         #expect(made.count == 2 && made.allSatisfy { $0.status == .done && $0.heading.isEmpty })
@@ -57,10 +66,32 @@ struct SessionBoardTests {
         #expect(try await store.deliveryRequests(toSession: "s1").isEmpty, "终端里你开的会话不替你结束")
         #expect(try await store.deliveryRequests(toSession: "s2").map(\.mode) == [.known(.end)], "托管的照做完的规则结束")
 
-        // 收起的会话再有动静就回到看板
-        let recorder = PiStateRecorder(store: store, hostID: Self.mac)
-        try await recorder.update(sessionID: "s1", state: .thinking)
+        // 收起的会话再有动静才回到看板：与完成同一毫秒的不算，严格晚于完成的才算
+        let s1 = try #require(made.first { $0.piSessionID == "s1" }).id
+        try await moves("s1", after: s1, by: 0)
+        #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "同一毫秒分不出先后，按没动过算")
+        try await moves("s1", after: s1)
         #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["session/s1"])
+    }
+
+    @Test func 完成后归档或项目进回收站_活会话没卡代表_照常回推进中() async throws {
+        let workspace = Workspace(services: services)
+        let project = try await store.createProject(name: "回收", color: "#000000")
+        let archived = try await session("s1", title: "修登录")
+        try await rig.runtimeRecorder(on: Self.mac).update(sessionID: "s2", state: .settled, title: "补测试", projectID: project.id)
+        let trashed = try #require(try await store.piSessions(sessionIDs: ["s2"])["s2"]?.state)
+        try await workspace.finish(PiSessionListItem(state: archived))
+        try await workspace.finish(PiSessionListItem(state: trashed))
+        #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "完成时随卡收起")
+
+        let made = try await tasks()
+        let first = try #require(made.first { $0.piSessionID == "s1" })
+        try await workspace.archive(first.id)
+        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["session/s1"], "卡归档了，会话没有东西代表，回推进中")
+
+        #expect(made.first { $0.piSessionID == "s2" }?.projectID == project.id, "建在会话所在的项目里")
+        try await store.trashProject(project.id)
+        #expect(Set(try await TaskBoard.read(from: store).advancing.map(\.id)) == ["session/s1", "session/s2"])
     }
 
     @Test func 等你里的无主会话点完成_先问一句_答应了才建卡完成() async throws {
@@ -72,11 +103,11 @@ struct SessionBoardTests {
 
         // 菜单里的完成与拖到已完成同一条路（`finish`）：在等你的会话先问，不先建卡
         let workspace = Workspace(services: services)
-        workspace.finish(PiSessionListItem(state: held.session))
+        try await workspace.finish(PiSessionListItem(state: held.session))
         #expect(workspace.sessionAsk == .complete(held.session))
         #expect(try await tasks().isEmpty, "问过之前什么都不留")
 
-        try await workspace.complete(held.session)
+        try await workspace.confirmFinish(held.session)
         let task = try #require(try await tasks().first)
         #expect(task.status == .done && task.piSessionID == "q1")
     }
@@ -124,8 +155,7 @@ struct SessionBoardTests {
         try await workspace.rename(live, to: "登录页白屏", adopts: true)
         let old = try #require(try await tasks().first)
         try await workspace.toggle(old.id)
-        let recorder = PiStateRecorder(store: store, hostID: Self.mac)
-        try await recorder.update(sessionID: "s1", state: .thinking)
+        try await moves("s1", after: old.id)
         let back = try #require(try await TaskBoard.read(from: store).advancing.first { $0.loose?.state.sessionID == "s1" }?.loose?.state)
 
         try await workspace.rename(back, to: "注册页白屏", adopts: true)
@@ -144,7 +174,7 @@ struct SessionBoardTests {
         let task = try #require(try await tasks().first)
         #expect(try await names(task.id, "s1") == ["修登录", "修登录"])
 
-        let recorder = PiStateRecorder(store: store, hostID: Self.mac)
+        let recorder = try await rig.runtimeRecorder(on: Self.mac)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录与注册")
         #expect(try await names(task.id, "s1") == ["修登录与注册", "修登录与注册"])
 
@@ -159,7 +189,7 @@ struct SessionBoardTests {
         #expect(grok.speakBlocked != nil, "只能在终端里说话")
         #expect(SessionActions.rename(grok, in: workspace) == nil && SessionActions.rename(grok, adopts: true, in: workspace) == nil)
 
-        try await workspace.complete(grok)
+        try await workspace.finish(PiSessionListItem(state: grok))
         let task = try #require(try await tasks().first)
         #expect(task.status == .done && task.piSessionID == "g1")
         // 改任务标题只改 CuePad 里的名字，不向它发改名

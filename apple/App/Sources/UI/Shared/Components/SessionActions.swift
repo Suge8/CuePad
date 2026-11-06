@@ -20,7 +20,7 @@ struct SessionActions: View {
         HandoffButton(session: session)
         if let board {
             let session = session
-            Button(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon) { workspace.finish(board) }
+            Button(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon) { workspace.attempt { try await workspace.finish(board) } }
             Button(CardMenu.Item.pin.title, icon: CardMenu.Item.pin.icon) { workspace.attempt { try await workspace.pin(session) } }
         } else if let task {
             let item: CardMenu.Item = task.isPinned ? .unpin : .pin

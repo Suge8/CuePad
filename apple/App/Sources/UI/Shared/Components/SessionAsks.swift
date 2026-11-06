@@ -94,7 +94,7 @@ private struct SessionAsks: ViewModifier {
                 [workspace, completing] in
                 // 按下后框自己关、问的那一格随之清空：会话在问的时候就记下
                 guard let completing else { return }
-                workspace.attempt { try await workspace.complete(completing) }
+                workspace.attempt { try await workspace.confirmFinish(completing) }
             }
         #if os(macOS)
             .dialog(Self.title, item: asked { if case .end(let session) = $0 { session } else { nil } }, message: Self.message) { session in

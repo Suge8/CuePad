@@ -116,8 +116,10 @@ struct SessionTaskTests {
         #expect(try await store.cueChanges(after: CueMarks(mark)).due.filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
 
         #expect(try await store.cueBoard().sessions.isEmpty, "随完成的事收起")
-        try await recorder.update(sessionID: "s1", state: .thinking, times: PiTimes(stateSince: .now, busySince: .now))
-        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: .now, busySince: nil))
+        // 再有动静：时刻显式排在完成之后（收起按时刻严格先后判定，不靠真实时钟走过一毫秒）
+        let later = try #require(try await store.card(old.id)?.completedAt).addingTimeInterval(1)
+        try await recorder.update(sessionID: "s1", state: .thinking, times: PiTimes(stateSince: later, busySince: later))
+        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: later.addingTimeInterval(1), busySince: nil))
         let board = try await store.cueBoard()
         #expect(board.sessions.map(\.sessionID) == ["s1"])
         // 分步做完的事：会话在前一步上，最后一步是手点完成的、没绑会话，列的仍是它用过的会话
@@ -180,8 +182,10 @@ struct SessionTaskTests {
 
         let said = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "白屏的根因是什么？"]))
         #expect(!said.isError)
-        try await recorder.update(sessionID: "s1", state: .thinking)  // Mac 在后台恢复它、答这一句
-        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: .now, busySince: nil))
+        // Mac 在后台恢复它、答这一句：时刻显式排在完成之后
+        let later = try #require(try await store.card(task.id)?.completedAt).addingTimeInterval(1)
+        try await recorder.update(sessionID: "s1", state: .thinking, times: PiTimes(stateSince: later, busySince: later))
+        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: later.addingTimeInterval(1), busySince: nil))
         #expect(Set(try await store.cueBoard().sessions.map(\.sessionID)) == ["s1", "s2"])
 
         let again = try #require(await cue.call("task", ["action": "done", "task": task.id.uuidString]))
