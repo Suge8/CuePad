@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 点完成圈的这一下（任务行、任务标题、子任务，Mac 与手机同一份）：点了立即显示完成（圈落下对勾、标题划线、手机一下成功触感），
 /// 停留 `linger` 再写入、由列表移走——看得清，也来得及反悔：这段时间里再点一下就撤销。还有没完成的子任务时先问一起完成；
-/// 它的 Agent 还在做或在等你时先问一句（完成会把它的会话一起结束，`Workspace.toggle`）。已完成的点一下立即回到待办。
+/// 它的 Agent 还在做或在等你时先问一句（完成会把它的会话一起结束，`Workspace.complete`）。已完成的点一下立即回到待办（`Workspace.reopen`）。
 /// 状态只是这一行界面上的过渡，完成与否以 Store 为准：写入落地或别处改了，这一行回到 `idle`。
 struct TaskCheck: Equatable {
     enum Phase { case idle, pending, committed }
@@ -24,7 +24,7 @@ extension Workspace {
     func tap(_ check: Binding<TaskCheck>, task: Card, subtasks: TaskProgress?, agentBusy: Bool) {
         if task.status == .done {
             let id = task.id
-            return attempt { try await self.toggle(id) }
+            return attempt { try await self.reopen(id) }
         }
         switch check.wrappedValue.phase {
         case .idle:
@@ -80,7 +80,7 @@ struct TaskCheckButton: View {
 
 extension View {
     /// 完成这一下的后半程（完成圈、看板上拖到做完同一份）：`Workspace.tap` 定下要问的就弹确认（`TaskCheck.Ask`），
-    /// 进了停留就停 `linger` 再写入，写不成恢复、照常报错。`task` 为 nil 时什么都不做。
+    /// 进了停留就停 `linger` 再写入（设为完成，不是翻转：等待时别处已做完也不会被翻回去），写不成恢复、照常报错。`task` 为 nil 时什么都不做。
     func taskCheck(_ task: Card?, subtasks: TaskProgress?, check: Binding<TaskCheck>) -> some View {
         modifier(TaskCheckFlow(task: task, subtasks: subtasks, check: check))
     }
@@ -120,7 +120,7 @@ private struct TaskCheckFlow: ViewModifier {
         let workspace = workspace, check = $check
         Task {
             do {
-                try await workspace.toggle(id)
+                try await workspace.complete(id)
             } catch {
                 check.wrappedValue.phase = .idle
                 workspace.fail(error)

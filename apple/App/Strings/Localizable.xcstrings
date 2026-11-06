@@ -21659,6 +21659,22 @@
         }
       }
     },
+    "还没有哪台 Mac 可以运行 Cue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Mac is available to run Cue yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有哪台 Mac 可以运行 Cue"
+          }
+        }
+      }
+    },
     "还没有定时" : {
       "localizations" : {
         "en" : {
@@ -22611,6 +22627,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条不是冲突副本"
+          }
+        }
+      }
+    },
+    "这条在别处改过，没能保存的字接在了后面" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This note was changed elsewhere, so the unsaved text was added at the end"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这条在别处改过，没能保存的字接在了后面"
           }
         }
       }

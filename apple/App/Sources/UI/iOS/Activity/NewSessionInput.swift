@@ -174,10 +174,11 @@ struct NewSessionInput: View {
 
     private func launch() {
         guard let place = chosen, let host = place.host, let agent, let brain, canStart else { return }
-        let draft = draft
+        let claim = workspace.claimImports(draft)
         sending = true
         workspace.attempt {
             defer { sending = false }
+            let draft = await claim.settled()
             launched = try await start.launch(
                 in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, fast: brain.launchFast, services: services)
         }

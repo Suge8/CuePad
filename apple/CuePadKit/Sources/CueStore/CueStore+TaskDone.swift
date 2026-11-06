@@ -3,7 +3,7 @@ import Foundation
 
 extension CueStore {
   /// Cue 做完一件事：算不算做完由 Cue 按证据自己定，不请你确认。还有没完成的子任务抛 `stepsRemaining`、什么都不改；否则完成它，
-  /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
+  /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `completeTask`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
   /// （`CueReport.text`：标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。结果上只挂 Cue 点名的图（`shots`，
   /// 证明结论的最终成果、`CueShot.checked` 过的），没点名就不挂；这件事发到手机的其余文件仍在它的会话里。点名的不在发到手机的里抛 `shotMissing`、什么都不改。
   /// 已完成的再做完一次只结束没人再用的会话（说话会恢复已结束的会话，答完就空着），状态与结果不再写。
@@ -29,16 +29,15 @@ extension CueStore {
     guard remaining == 0 else { throw CueStoreError.stepsRemaining(remaining) }
   }
 
-  /// 点任务的圆圈：待办与进行中都变完成（连同结束做完了的会话，同 `finishTask`），完成的不再算做完（`reopen`）。下一个状态按库里此刻的值决定，
-  /// 读与改在一个事务里——界面手里的副本可能已过时，两次 `await` 之间也可能有同步来的改动插进来。返回新状态与结束请求。
-  public func toggleDone(_ id: UUID) throws -> (status: TaskStatus, ended: [DeliveryRequest]) {
+  /// 把任务设为完成（连同结束做完了的会话，同 `finishTask`）：已完成的什么都不改，所以界面手里的副本过时（别的设备刚做完）、或延迟提交时它已被做完，
+  /// 都不会把它翻回去。读与改在一个事务里：两次 `await` 之间也可能有同步来的改动插进来。返回新状态与结束请求。
+  /// 点掉已完成的圆圈是 `reopenTask`，不是再来一次它。
+  @discardableResult
+  public func completeTask(_ id: UUID) throws -> (status: TaskStatus, ended: [DeliveryRequest]) {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
       guard let current = card.status else { throw CueStoreError.notATask }
-      guard current != .done else {
-        try reopen([id])
-        return (try find(Card.self, id)?.status ?? .todo, [])
-      }
+      guard current != .done else { return (.done, []) }
       return (try applyStatus(id, .done), try endUnusedSessions(of: id, cue: false))
     }
   }
@@ -48,7 +47,7 @@ extension CueStore {
     try write { try reopen([id]) }
   }
 
-  /// 不再算做完，只在这里写：点掉圆圈（`toggleDone`）、Cue 的 edit reopen（`reopenTask`）、给已完成的事加子任务（`createTask(_:under:)`）、
+  /// 不再算做完，只在这里写：点掉已完成的圆圈与 Cue 的 edit reopen（都是 `reopenTask`）、给已完成的事加子任务（`createTask(_:under:)`）、
   /// 把完成的改成别的状态（`applyStatus`）。`tasks` 连同各自已完成的上级清掉完成时间：开始过的回到进行中，没开始过的回到待办；
   /// 在归档里的，整件连同下级取回。说话不经这里：任务的状态只由明确的动作改。必须在写事务内调用。
   func reopen(_ tasks: [UUID]) throws {
@@ -63,7 +62,7 @@ extension CueStore {
     try setArchived(chains.filter { !reopened.isDisjoint(with: $0) }.map { $0.last! }, at: nil)
   }
 
-  /// 会话的去留只在这里定。任务离开看板（做完：你点圆圈 `toggleDone`、Cue 做完 `finishTask`；归档 `archive`；删除 `trashCards`；
+  /// 会话的去留只在这里定。任务离开看板（做完：你点圆圈 `completeTask`、Cue 做完 `finishTask`；归档 `archive`；删除 `trashCards`；
   /// 所在项目进回收站 `trashProject`），或叶子换去别的会话的那一刻（开工、交话时开新会话或交给别的会话都经 `insertDelivery`，你绑定经 `bindSession`），
   /// 写下改动之后对这件事里绑着的会话各看一遍，没人再用就请它所在的 Mac 结束：
   /// 1. 有还在看板上（`taskOpen`）、也没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去（接着用它时话送到才绑上），留着；

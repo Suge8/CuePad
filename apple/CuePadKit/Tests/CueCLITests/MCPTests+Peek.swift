@@ -37,7 +37,7 @@ extension MCPTests {
     let task = try await store.createTask("逐页查死链")
     let first = try await store.createTask("查首页", under: task.id), second = try await store.createTask("查价格页", under: task.id)
     for step in [first, second] { try await store.linkCard(step.id, toSession: "s1") }
-    _ = try await store.toggleDone(first.id)
+    _ = try await store.completeTask(first.id)
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "查死链")
     try await store.writePiTranscript(PiTranscript(
       sessionID: "s1",
@@ -89,9 +89,9 @@ extension MCPTests {
     try await Server.run(library: sandbox.directory) { server in
       func shown(_ step: Card) async throws -> Bool { try await server.call("task", ["action": "peek"]).contains("· \(step.heading) ›") }
 
-      _ = try await store.toggleDone(first.id)
+      _ = try await store.completeTask(first.id)
       #expect(try await shown(second))  // 在做第二步
-      _ = try await store.toggleDone(second.id)
+      _ = try await store.completeTask(second.id)
       // 完成时刻直接给定先后（毫秒）：取的是最后做完的那一步，不是排在最后的那一步
       func finish(_ step: Card, atMinute minute: Int) throws {
         try RawDB(sandbox.directory.appending(path: "cuepad.db"))

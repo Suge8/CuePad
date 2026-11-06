@@ -79,20 +79,8 @@ extension Composer {
 
     static var stripSide: CGFloat { 64 }
 
-    /// 存进附件目录（后台）再接进附件条；已带着的不重复。
-    func add(_ incoming: [IncomingFile]) {
-        let files = workspace.services.store.files
-        Task {
-            for item in incoming {
-                do {
-                    let file = try await DraftFile.store(item, in: files)
-                    if !draft.files.contains(file) { draft.files.append(file) }
-                } catch {
-                    workspace.fail(error)
-                }
-            }
-        }
-    }
+    /// 存进附件目录（后台）再接进附件条；已带着的不重复。存的途中发出，附件随这句发出（`Workspace.importFiles`）。
+    func add(_ incoming: [IncomingFile]) { workspace.importFiles(incoming, into: $draft) }
 
     func drop(_ outbox: Outbox) { draft.attachments.removeAll { $0.id == outbox.id } }
 

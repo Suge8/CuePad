@@ -27,18 +27,12 @@ final class CueSettingsModel {
     /// 开关（`AppServices.turnCue`）：开关先翻到按下的那一态、停在那里直到库里读回来（没写成就回去）。`here` 是这台 Mac（手机为 nil）。
     func turn(_ on: Bool, here: String?, _ services: AppServices) {
         turning = on
-        run {
-            defer { self.settle() }
-            try await services.turnCue(on, here: here)
-        }
+        run(.turn) { try await services.turnCue(on, here: here) } finished: { self.settle() }
     }
 
     func enable(on host: String, moving: Bool = false, _ services: AppServices) {
         enabling = host
-        run {
-            defer { self.enabling = nil }
-            try await services.enableCue(on: host, moving: moving)
-        }
+        run(.enable) { try await services.enableCue(on: host, moving: moving) } finished: { self.enabling = nil }
     }
 
     /// 选在哪台运行：就在那台启用，Cue 正在别的 Mac 上运行时先请你确认（`moving`）。
@@ -61,10 +55,10 @@ final class CueSettingsModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let name = trimmed.isEmpty ? CueProfile.defaultName : trimmed
         guard name != settings?.profile.name else { return }
-        run { try await services.updateCue { $0.name = name } }
+        run(.rename) { try await services.updateCue { $0.name = name } } finished: {}
     }
 
-    /// 读不出来、写不成：原因就地写出，开关回到库里那一态。
+    /// 读不出来：原因就地写出，开关回到库里那一态。
     func fail(_ error: any Error) {
         failure = error.localizedDescription
         turning = nil
@@ -75,10 +69,24 @@ final class CueSettingsModel {
         if turning == settings?.isOn { turning = nil }
     }
 
-    private func run(_ work: @escaping @MainActor () async throws -> Void) {
+    private enum Action: Hashable { case turn, enable, rename }
+    /// 每种动作最新的一代：连续按时只有最新的一次改界面状态，先到的旧结果（完成或失败）不清掉后来那次的忙与乐观翻转。
+    @ObservationIgnored private var generations: [Action: Int] = [:]
+
+    /// 一次动作：写不成时原因就地写出，开关回到库里那一态；`finished` 在写完（成败都）时收尾，只收自己这一代。
+    private func run(_ action: Action, _ work: @escaping @MainActor () async throws -> Void, finished: @escaping @MainActor () -> Void) {
         failure = nil
+        let mine = (generations[action] ?? 0) + 1
+        generations[action] = mine
         Task {
-            do { try await work() } catch { fail(error) }
+            var failed: (any Error)?
+            do { try await work() } catch { failed = error }
+            guard generations[action] == mine else { return }
+            if let failed {
+                failure = failed.localizedDescription
+                if action == .turn { turning = nil }
+            }
+            finished()
         }
     }
 }
@@ -89,7 +97,7 @@ extension AppServices {
     /// 开的时候按此刻库里的读，不按界面上一次读到的。`here` 是这台 Mac（手机为 nil）。一台 Mac 都没有时开不了，各处的开关那时停用。
     func turnCue(_ on: Bool, here: String?) async throws {
         guard on else { return try await updateCue { $0.enabledAt = nil } }
-        guard let host = try await CueSettings.read(from: store).resumeHost(here: here) else { return }
+        guard let host = try await CueSettings.read(from: store).resumeHost(here: here) else { throw CueEnableError.noMac }
         try await enableCue(on: host.id, moving: false)
     }
 }

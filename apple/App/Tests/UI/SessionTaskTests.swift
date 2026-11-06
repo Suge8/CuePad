@@ -61,7 +61,7 @@ struct SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let workspace = Workspace(services: services)
         try await store.bindSession("s1", to: task.id)
-        try await workspace.toggle(task.id)
+        try await workspace.complete(task.id)
         #expect(try await store.card(task.id)?.status == .done)
         let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
         try await executor.start()
@@ -92,7 +92,7 @@ struct SessionTaskTests {
         let again = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
         #expect(again.isError)
 
-        try await workspace.toggle(task.id)
+        try await workspace.complete(task.id)
         _ = try await store.createTask("补测试", under: task.id)
         #expect(try await store.card(task.id)?.status == .inProgress)
     }
@@ -112,7 +112,7 @@ struct SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)
         try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "修登录", lastReply: "修好了", answeredAt: .now)))
         try await recorder.update(sessionID: "s1", state: .settled)
-        try await workspace.toggle(old.id)
+        try await workspace.complete(old.id)
         #expect(try await store.cueChanges(after: CueMarks(mark)).due.filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
 
         let board = try await store.cueBoard()
@@ -123,9 +123,9 @@ struct SessionTaskTests {
         let second = try await store.createTask("写 README", under: stepped.id)
         try await recorder.update(sessionID: "s2", state: .settled, title: "加 --lang")
         try await store.bindSession("s2", to: first.id)
-        try await workspace.toggle(first.id)
-        try await workspace.toggle(second.id)
-        try await workspace.toggle(stepped.id)
+        try await workspace.complete(first.id)
+        try await workspace.complete(second.id)
+        try await workspace.complete(stepped.id)
         let cue = CueTools(store: store, wait: 0)
         let peek = try #require(await cue.call("task", ["action": "peek"]))
         #expect(peek.text.contains("- 会话「修登录」（s1） · 歇着"))

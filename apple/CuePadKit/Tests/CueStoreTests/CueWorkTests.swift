@@ -26,7 +26,7 @@ import Testing
     let ends = try await store.finishTask(task.id, evidence: ["检查都过了"]).ended
     #expect(try await store.card(task.id)?.status == .done)
     #expect(ends.compactMap(\.target.ref) == ["s2"] && ends.allSatisfy { $0.mode == .known(.end) })
-    #expect(try await store.toggleDone(other.id).ended.compactMap(\.target.ref) == ["s1"])
+    #expect(try await store.completeTask(other.id).ended.compactMap(\.target.ref) == ["s1"])
   }
 
   /// 会话归哪件事只有一条规则：绑着它的任务里最近修改的那件，做完了的也算（问题没答就还是在等你）。

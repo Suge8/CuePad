@@ -30,23 +30,36 @@ final class CardEditing {
     /// `titled`：任务下面还没写话时多载入一个空段，提示写在那里，点那里光标落在第二行。
     init(_ card: Card, titled: Bool = false, workspace: Workspace) {
         cardID = card.id
-        initialText = titled && card.rest == nil ? CueLines.split(card.body).title + "\n" : card.body
+        // 离开时没写成的字：库里的正文之后没被别处改过就接回；改过的不盖过去，接在新正文后面（提示一句）
+        let unsaved = workspace.unsavedBodies[card.id]
+        var restored = unsaved?.text
+        if let found = unsaved, let base = found.base, card.body != base {
+            restored = [card.body, found.text].joined(separator: "\n\n")
+            workspace.say(Dotted(String(localized: "这条在别处改过，没能保存的字接在了后面")), tone: .failure)
+        }
+        initialText = restored ?? (titled && card.rest == nil ? CueLines.split(card.body).title + "\n" : card.body)
         text = initialText
         self.workspace = workspace
         let store = workspace.services.store, id = card.id
         let autosave = Autosave(
             save: { [weak self] text in
                 self?.saveState = .saving
-                try await store.updateCard(id) { $0.body = text }
+                do {
+                    try await store.updateCard(id) { $0.body = text }
+                } catch {
+                    self?.saveState = .failed
+                    throw error
+                }
                 self?.saveState = .saved
+                workspace.unsavedBodies[id] = nil
             },
-            onError: { [weak self] error in
-                self?.saveState = .failed
-                workspace.fail(error)
-            })
+            onError: { workspace.fail($0) })
         self.autosave = autosave
+        if unsaved != nil { autosave.changed(initialText) }
         #if os(iOS)
-        flushToken = workspace.services.addBackgroundFlush { await autosave.flush() }
+        flushToken = workspace.services.addBackgroundFlush {
+            do { try await autosave.flush() } catch { workspace.fail(error) }
+        }
         #endif
     }
 
@@ -59,7 +72,7 @@ final class CardEditing {
 
     /// 写下没保存的字，再读库里此刻的这条（任务气泡的"开始"、编辑器里的 ⌘↩ 交给 Agent 的就是它）。
     func flushed() async throws -> Card? {
-        await autosave?.flush()
+        try await autosave?.flush()
         return try await workspace.services.store.card(cardID)
     }
 

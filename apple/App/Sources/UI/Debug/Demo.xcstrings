@@ -2807,6 +2807,38 @@
         }
       }
     },
+    "季度复盘.txt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quarterly review.txt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "季度复盘.txt"
+          }
+        }
+      }
+    },
+    "季度复盘的要点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Key points of the quarterly review"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "季度复盘的要点"
+          }
+        }
+      }
+    },
     "完整页面可以直接点按钮试交互" : {
       "localizations" : {
         "en" : {

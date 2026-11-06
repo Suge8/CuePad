@@ -186,6 +186,15 @@ final class Workspace {
     let overlayHeader = OverlayHeader()
     #endif
 
+    /// 刚发给会话、页面还没读到的话（回复框的发送中）。
+    let launching = Launching()
+    /// 离开时没能写进库的正文（卡片 id → 字）：再打开这条时接回来（`CardEditing`），写成了就清掉。
+    var unsavedBodies: [UUID: UnsavedBody] = [:]
+    /// 每个去处（一个回复框、Cue）发出的话落库的先后（`SendOrder`）。
+    let sendOrder = SendOrder()
+    /// 输入框里在存的附件（`importFiles`）。
+    let imports = Imports()
+
     @ObservationIgnored var noticeTask: Task<Void, Never>?
 
     /// 项目目录当场读（`CueStore.snapshot`），Cue 的现状取整个 App 手里那份（`CueFeed.latest`）：第一帧就是读到的样子，没有"还没读到"这一态。
