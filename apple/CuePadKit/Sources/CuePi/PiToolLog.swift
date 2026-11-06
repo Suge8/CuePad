@@ -29,9 +29,10 @@ struct PiToolLog: Codable, Equatable {
     /// 发预览的命令行：`cuepad show …`，cuepad 可以带路径（技能里写的是 App 内的绝对路径，含空格时整段加单引号）。
     private static var preview: Regex<Substring> { /(?:'[^']*\/|[^\s']*\/)?cuepad'?\s+show(?:\s|$)/ }
 
-    mutating func finish(id: String, failed: Bool) {
+    /// 调用做完：`images` 是结果里带的图（附件的键，`ToolImage`）。
+    mutating func finish(id: String, failed: Bool, images: [String] = []) {
         guard let call = pending.removeValue(forKey: id) else { return }
-        settle(call, failed: failed)
+        settle(call, failed: failed, images: images)
     }
 
     /// 助手说了一段话（空白的不来）。
@@ -51,15 +52,18 @@ struct PiToolLog: Codable, Equatable {
     }
 
     /// 失败的调用与成功的一样计数、各占清单里一行（只是行上标着失败）；同一个文件成功地读或改多次合成一行、只算一次。
-    private mutating func settle(_ call: Call, failed: Bool) {
+    private mutating func settle(_ call: Call, failed: Bool, images: [String] = []) {
         if !failed, call.kind == .edit || call.kind == .read,
            let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
             let item = activity.items[index]
             activity.items[index].added = item.added.map { $0 + (call.added ?? 0) } ?? call.added
             activity.items[index].removed = item.removed.map { $0 + (call.removed ?? 0) } ?? call.removed
+            let fresh = images.filter { !(item.images ?? []).contains($0) }
+            if !fresh.isEmpty { activity.items[index].images = (item.images ?? []) + fresh }
             return
         }
-        activity.record(.init(kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed))
+        activity.record(.init(
+            kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed, images: images.isEmpty ? nil : images))
     }
 }
 

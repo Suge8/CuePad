@@ -91,6 +91,7 @@ extension CueStore {
   func applyTranscript(_ transcript: PiTranscript) throws {
     try applyPiMessages(transcript.messages, session: transcript.sessionID)
     let recap = transcript.recap
+    for key in recap.pendingTools?.images ?? [] { try registerAttachment(key) }
     try db.run(
       """
       UPDATE piSessionStates SET lastPrompt = ?1, lastReply = ?2, pendingPrompt = ?3, pendingTools = ?4, answeredAt = ?7, modifiedAt = ?5
@@ -113,6 +114,7 @@ extension CueStore {
   private func applyPiMessages(_ messages: [PiChatMessage], session: String) throws {
     for message in messages {
       try registerAttachments(in: message.text)
+      for key in message.tools?.images ?? [] { try registerAttachment(key) }
       if try insert(message, ignoringExisting: true) { continue }
       // 已写过的消息只有正文和工具活动会变（读会话文件的规则升级后重读）：同样的内容不改写，免得重复上传
       try db.run(
@@ -158,7 +160,8 @@ extension CueStore {
 
   /// 删掉不再需要同步的对话：会话 `window` 内没有活动（按本机会话索引里会话文件的最后活动；索引里没有的按最后一条消息）、
   /// 对话也是 `window` 之前写出的（按需补写的留够 `window`）。在写对话的那台 Mac 上调用。
-  /// 对话没了的会话的预览（`window` 之前发的）一起删，文件没有别的预览或图片用着时随之删掉；对话里的图片同样，没有卡片、发送记录、别的对话用着时随之删掉。
+  /// 对话没了的会话的预览（`window` 之前发的）一起删，文件没有别的预览或图片用着时随之删掉；对话里的图片（你的话里的、工具结果里的）同样，
+  /// 没有卡片、发送记录、别的对话用着时随之删掉。
   public func prunePiMessages(olderThan window: TimeInterval, now: Date = .now) throws {
     let cutoff = now.addingTimeInterval(-window)
     try removingFiles {
@@ -177,6 +180,10 @@ extension CueStore {
             "SELECT text FROM piMessages WHERE \(Self.userAttachments) AND sessionID IN (SELECT value FROM json_each(?2))",
             [CueFormat.referencePrefix, sessions]) { $0.text(0) }
           keys.formUnion(said.flatMap(CueFormat.attachmentKeys(in:)))
+          let shown = try db.query(
+            "SELECT tools FROM piMessages WHERE \(Self.toolImages) AND sessionID IN (SELECT value FROM json_each(?2))",
+            [PiChatMessage.Tools.imagesField, sessions]) { $0.text(0) }
+          keys.formUnion(shown.flatMap { PiChatMessage.Tools(stored: $0)?.images ?? [] })
           try db.run("DELETE FROM piMessages WHERE sessionID IN (SELECT value FROM json_each(?))", [sessions])
         }
         let expired = "createdAt < ? AND sessionID NOT IN (SELECT sessionID FROM piMessages)"

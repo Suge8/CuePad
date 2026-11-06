@@ -58,6 +58,12 @@ extension PiHistory {
             }
         }
 
+        /// 图片块的原字节（工具结果里的）
+        var images: [Data?] {
+            guard case .blocks(let b) = self else { return [] }
+            return b.filter { $0.type == "image" }.map { $0.data.flatMap { Data(base64Encoded: $0) } }
+        }
+
         var toolCalls: [Block] {
             guard case .blocks(let b) = self else { return [] }
             return b.filter { $0.type == "toolCall" }
@@ -84,16 +90,18 @@ extension PiHistory {
     /// toolResult 行占会话体积的绝大部分（工具输出、图片），摘要只要其中的两样（哪个调用、成没成）：先按 Pi 现在写出的键序
     /// 在两头取，不做 JSON 解码——行首依次是 type, id, parentId, timestamp, message{role, toolCallId, toolName, …}，
     /// 行尾是 …, isError, durationMs, timestamp。两头没找到想要的（键序变了）就不当快速路径处理，落到完整解码，结果不变、只是慢。
+    /// 带图片块的（截屏、读图）也完整解码：图要存进附件（`ToolImage`）；找图片块是一趟 memmem，比解码便宜得多。
     private static let toolResultMarker = Data(#""role":"toolResult""#.utf8)
     private static let toolCallIDMarker = Data(#""toolCallId":""#.utf8)
     private static let failedMarker = Data(#""isError":true"#.utf8)
     private static let succeededMarker = Data(#""isError":false"#.utf8)
+    private static let imageMarker = Data(#""type":"image""#.utf8)
     private static let headLength = 512
     private static let tailLength = 128
 
     static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout Transcript) throws {
         cp.seq += 1
-        if let result = toolResult(raw) {
+        if let result = toolResult(raw), !contains(raw, imageMarker) {
             cp.toolFinished(id: result.id, failed: result.failed)
             return
         }
@@ -137,7 +145,8 @@ extension PiHistory {
                 default: cp.answered(message.content?.reply ?? "", entry, into: &transcript)
                 }
             case "toolResult":
-                if let id = message.toolCallId { cp.toolFinished(id: id, failed: message.isError == true) }
+                guard let id = message.toolCallId else { return }
+                cp.toolFinished(id: id, failed: message.isError == true, images: try transcript.toolImages(message.content?.images ?? []))
             default: break
             }
         default:

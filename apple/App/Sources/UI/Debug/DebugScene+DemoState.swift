@@ -47,7 +47,8 @@ extension DebugScene {
     }
 
     /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 先截了手机宽度的图，再在命令行里 `cuepad show` 了三次——
-    /// 页面一张卡，截图与评审结论一起一张卡，改动一张卡（对话里按创建时间排在你的话与回答之间）；工具清单只有截图那条，发卡片的命令不列（`PiToolLog`）。
+    /// 页面一张卡，截图与评审结论一起一张卡，改动一张卡（对话里按创建时间排在你的话与回答之间）；工具清单是截图与读那张截图两条，发卡片的命令不列（`PiToolLog`）；
+    /// 读进来的截图是工具结果里的图，挂在这一轮经过下面（`RoundProcess`）。
     static func seedPreviews(_ store: CueStore, now: Date) async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-previews", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -67,6 +68,7 @@ extension DebugScene {
         // 对话围着预览的创建时间排：你的话在先，回答在后
         guard let first = created.first, let last = created.last else { return }
         let screenshot = try screenshotMarkup(store), pdf = try demoPDF(store)
+        let looked = try Self.screenshotPNG().map { try store.files.store($0) }
         let messages = [
             PiChatMessage(
                 sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: String(localized: "把登录页的新样子、手机上的截图和评审结论发给我看看，样子参考这张", table: "Demo") + (screenshot.map { "\n" + $0 } ?? "")
@@ -74,7 +76,10 @@ extension DebugScene {
                 at: first.addingTimeInterval(-50)),
             PiChatMessage(
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: String(localized: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。", table: "Demo"),
-                at: last.addingTimeInterval(2), tools: .init(steps: 1, items: [.init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png")]), roundStartedAt: first.addingTimeInterval(-50)),
+                at: last.addingTimeInterval(2), tools: .init(steps: 2, items: [
+                    .init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png"),
+                    .init(kind: .read, target: "login-mobile.png", images: looked.map { [$0] }),
+                ]), roundStartedAt: first.addingTimeInterval(-50)),
         ]
         try await store.writePiTranscript(PiTranscript(
             sessionID: "notes", messages: messages,

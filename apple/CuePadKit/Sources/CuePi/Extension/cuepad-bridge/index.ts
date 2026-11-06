@@ -15,10 +15,10 @@ import { listen } from "./connection.ts";
 import { captureDialogs, follow } from "./events.ts";
 import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
 import { supportsFast } from "./fast.ts";
-import { trackShows, watchSession } from "./phone.ts";
+import { watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 56;
+const EXTENSION_VERSION = 57;
 
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
  * 与 FireCode 判断"会话进行中"用同一个事实 */
@@ -96,8 +96,6 @@ export default function (pi: ExtensionAPI) {
 		return { ...event.payload, service_tier: "priority" };
 	});
 
-	trackShows(pi);
-
 	pi.on("session_start", async (_event, ctx) => {
 		if (process.env[PROBE_ENV]) {
 			// 没有配好密钥的模型（没登录）时 Pi 仍给出一个占位的当前模型，报成没有模型
@@ -119,7 +117,7 @@ export default function (pi: ExtensionAPI) {
 	/** 服务一个终端或 RPC 会话：开 socket、跟踪状态、托管时空闲自退；返回会话与拆掉它的函数。 */
 	function serve(ctx: ExtensionContext, launchToken: string | null) {
 		const session = new Session(pi, ctx, firecode, { extensionVersion: EXTENSION_VERSION, launchToken });
-		const unsubscribe = [...follow(session), watchSession(pi, ctx)];
+		const unsubscribe = [...follow(session), watchSession(ctx)];
 		session.idleExit.follow(session.phase);
 		captureDialogs(ctx.ui, session);
 		let stop: ((reason: string) => void) | undefined;

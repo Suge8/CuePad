@@ -115,8 +115,8 @@ extension PiHistoryCheckpoint {
         round = current
     }
 
-    mutating func toolFinished(id: String, failed: Bool) {
-        round?.tools.finish(id: id, failed: failed)
+    mutating func toolFinished(id: String, failed: Bool, images: [String] = []) {
+        round?.tools.finish(id: id, failed: failed, images: images)
     }
 
     mutating func toolDeclined(id: String) {

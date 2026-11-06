@@ -144,15 +144,21 @@ extension CueStore {
   /// 对话里你的消息中带附件的行（只有你的消息引用附件）；`?1` 是某个附件的引用（`CueFormat.reference`）或所有引用都含的 `CueFormat.referencePrefix`。
   static let userAttachments = "role = '\(PiChatRole.user.rawValue)' AND instr(text, ?1) > 0"
 
-  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、对话里你的消息或 Cue 页的对话引用这个附件，或有预览用着这份文件。
+  /// 一轮经过里带图的（`?1` 是 `Tools.imagesField` 或某个键加引号）：工具结果里的图只记在经过上（`PiChatMessage.Tools.Item.images`）。
+  static let toolImages = "tools IS NOT NULL AND instr(tools, ?1) > 0"
+
+  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、对话里你的消息、一轮经过里的工具图（做完的与在跑的）或 Cue 页的对话引用这个附件，
+  /// 或有预览用着这份文件。
   func isAttachmentReferenced(_ key: String) throws -> Bool {
     let referenced = try db.first(
       """
       SELECT 1 FROM cards WHERE instr(body, ?1) > 0
       UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
       UNION ALL SELECT 1 FROM piMessages WHERE \(Self.userAttachments)
+      UNION ALL SELECT 1 FROM piMessages WHERE tools IS NOT NULL AND instr(tools, ?2) > 0
+      UNION ALL SELECT 1 FROM piSessionStates WHERE pendingTools IS NOT NULL AND instr(pendingTools, ?2) > 0
       UNION ALL SELECT 1 FROM cueMessages WHERE instr(text, ?1) > 0
-      """, [CueFormat.reference(key: key)]) { _ in true } != nil
+      """, [CueFormat.reference(key: key), "\"\(key)\""]) { _ in true } != nil
     guard !referenced, let hash = AttachmentKey.parts(key)?.hash else { return referenced }
     return try db.query("SELECT name FROM previews WHERE hash = ?", [hash]) { $0.text(0) }.contains { AttachmentKey.make(hash: hash, name: $0) == key }
   }

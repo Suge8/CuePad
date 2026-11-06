@@ -8,7 +8,7 @@ import Foundation
 /// - 一次模型回答按内容块拆成好几行（同一个 `message.id`）；`stop_reason` 不是 `tool_use` 的那行带着文字时，这一轮做完，
 ///   它的文字就是 Claude Code 这一轮的回答。没有文字就做完的一轮（只调了工具）在 `stop_hook_summary` / `turn_duration` 收尾。
 /// - 你的话：`type: user` 的文字与图片（图片内嵌 base64，存进附件目录）；一轮正在跑时插进去的话不是 user 行，是
-///   `queued_command` 附件。工具结果、斜杠命令的回显（`<command-name>`、`<local-command-…>`）、`isMeta` 的提醒不算。
+///   `queued_command` 附件。工具结果（带的图缩小后记在那一步上，`ToolImage`）、斜杠命令的回显（`<command-name>`、`<local-command-…>`）、`isMeta` 的提醒不算。
 /// - CuePad 送进去的话：托管进程的 stream-json 与收件箱 socket 都把投送请求 id 当作这条消息的 `uuid`（插进去的是 `source_uuid`）；
 ///   收件箱送来的会被包上"另一个 Claude 会话发来的"英文说明，这里剥掉。终端里直接打的（`origin.kind` 为 `human`）没有投送请求。
 /// - 会话名只认 `/rename`（及 CuePad 的改名）写下的 `custom-title`；自动生成的 `ai-title` 不算，与 Pi 的 `/name` 同一层意思。
@@ -63,7 +63,7 @@ enum ClaudeHistory {
             // 你拒绝了要用的工具与停下了在跑的工具，Claude Code 写的一样（同一句拒绝、`toolDenialKind: user-rejected`，2.1.299 实测），
             // 分不出来：都照停下处理，不写"已拒绝"
             for result in blocks where result.type == "tool_result" {
-                cp.toolFinished(id: result.toolUseID ?? "", failed: result.isError == true)
+                cp.toolFinished(id: result.toolUseID ?? "", failed: result.isError == true, images: try transcript.toolImages(result.content?.images ?? []))
             }
             return
         }
@@ -184,6 +184,12 @@ enum ClaudeHistory {
         init(from decoder: any Decoder) throws {
             let c = try decoder.singleValueContainer()
             if let s = try? c.decode(String.self) { self = .text(s) } else { self = .blocks(try c.decode([Block].self)) }
+        }
+
+        /// 图片块的原字节（工具结果里的）
+        var images: [Data?] {
+            guard case .blocks(let blocks) = self else { return [] }
+            return blocks.filter { $0.type == "image" }.map { $0.source?.data.flatMap { Data(base64Encoded: $0) } }
         }
 
         var plainText: String {
