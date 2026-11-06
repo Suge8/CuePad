@@ -110,6 +110,7 @@ struct TaskOutline<Line: View>: View {
         switch dragged {
         case .idea: drag.setIdea(row(at: point, in: rows))
         case .task(let id): drag.set(target(id, at: point, rows: rows))
+        case .session: drag.end()  // 看板的会话卡，大纲不接
         }
     }
 
@@ -122,6 +123,7 @@ struct TaskOutline<Line: View>: View {
         case .task(let task):
             guard let move = target(task, at: point, rows: rows)?.move else { return }
             commit(task, move)
+        case .session: break
         }
     }
 

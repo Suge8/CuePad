@@ -57,11 +57,13 @@ extension Workspace {
     }
 
     /// 离开一条灵感或任务正文的编辑：先写下没保存的字，还是空白（`Card.isBlank`）的灵感就不留下——记一条是先建一条空的再编辑。
-    func leaveEditing(_ id: UUID, flush: Autosave?) {
+    /// 任务的标题比打开时（`heading`）变了，它绑着的会话跟着改名（`pushName`：任务标题是名字的唯一事实源）。
+    func leaveEditing(_ id: UUID, flush: Autosave?, heading: String) {
         let store = services.store
         attempt {
             await flush?.flush()
             try await store.dropIfBlank(id)
+            if let card = try await store.card(id), card.isTask, card.heading != heading { try await self.pushName(of: id) }
         }
     }
 

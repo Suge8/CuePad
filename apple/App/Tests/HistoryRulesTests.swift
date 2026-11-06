@@ -165,7 +165,7 @@ struct HistoryRulesTests {
         // 用户在 CuePad 里结束它：这时才进历史
         let end = try await rig.services.end(again)
         #expect(try await rig.services.store.outcome(of: end).failure == nil)
-        try await eventually("结束后进历史") { try await rig.records(.ended).map(\.sessionID) == [sessionID] }
+        try await eventually("结束后进历史") { try await rig.records(.earlier).map(\.sessionID) == [sessionID] }
         #expect(try await rig.records(.live).isEmpty)
     }
 
@@ -177,7 +177,7 @@ struct HistoryRulesTests {
         #expect(state.hosted && state.runtimeState == .known(.settled), "托管、歇着")
         let shown = Workspace(services: rig.services).shown(state, delivery: nil)
         #expect([.idle, .unread, .resting, .awaitsReply].contains(shown.status), "界面写的是「\(shown.label)」")
-        #expect(try await rig.records(.ended).isEmpty, "不进历史")
+        #expect(try await rig.records(.earlier).isEmpty, "不进历史")
         return state
     }
 }

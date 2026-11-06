@@ -43,3 +43,11 @@ extension AppServices {
         return try await configure(PiConfig(name: name), for: session)
     }
 }
+
+extension PiSessionListItem {
+    /// 会话自己此刻的名字（改名在路上时是新名，`PiRename.title`）。
+    func shownTitle(at moment: Speech.Moment) -> String { PiRename.title(of: state, request: rename, at: moment) }
+
+    /// 会话行、会话条与看板写的名字：绑着任务的是那个叶子的标题（任务标题是名字的唯一事实源），标题为空或没绑任务的是会话自己的名字。
+    func name(at moment: Speech.Moment) -> String { task?.title.nonEmpty ?? shownTitle(at: moment) }
+}

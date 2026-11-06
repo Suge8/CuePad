@@ -97,8 +97,8 @@ struct SessionTaskTests {
         #expect(try await store.card(task.id)?.status == .inProgress)
     }
 
-    /// 已完成的事用过、还活着的会话不归没做完的事：不带参数的 peek 里有它，它的动静只报一次；peek 末尾列着最近完成的事和它的会话。
-    /// Cue 在它上面做别的事：add 带 session 另建任务绑上它，旧任务照旧完成、照旧绑着；会话正被没做完的事用着时不让再绑。
+    /// 已完成的事用过、还活着的会话不归没做完的事：完成时它随那件事收起（终端里的不结束），再有动静就回来，不带参数的 peek 里有它，它的动静只报一次；
+    /// peek 末尾列着最近完成的事和它的会话。Cue 在它上面做别的事：add 带 session 另建任务绑上它，旧任务照旧完成、照旧绑着；会话正被没做完的事用着时不让再绑。
     @Test func 已完成的事的会话还活着_算在做_Cue在它上面另建任务() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
@@ -115,6 +115,9 @@ struct SessionTaskTests {
         try await workspace.toggle(old.id)
         #expect(try await store.cueChanges(after: CueMarks(mark)).due.filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
 
+        #expect(try await store.cueBoard().sessions.isEmpty, "随完成的事收起")
+        try await recorder.update(sessionID: "s1", state: .thinking, times: PiTimes(stateSince: .now, busySince: .now))
+        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: .now, busySince: nil))
         let board = try await store.cueBoard()
         #expect(board.sessions.map(\.sessionID) == ["s1"])
         // 分步做完的事：会话在前一步上，最后一步是手点完成的、没绑会话，列的仍是它用过的会话
@@ -138,7 +141,7 @@ struct SessionTaskTests {
         #expect(fresh.title == "补注册页" && fresh.piSessionID == "s1")
         let kept = try #require(try await store.card(old.id))
         #expect(kept.status == .done && kept.piSessionID == "s1")
-        #expect(try await store.cueBoard().sessions.map(\.sessionID) == ["s2"])
+        #expect(try await store.cueBoard().sessions.isEmpty, "s2 随做完的事收起，s1 归了新任务")
         let taken = try #require(await cue.call("task", ["action": "add", "title": "再补一处", "session": "s1"]))
         #expect(taken.isError && taken.text.contains("正在做「补注册页」"))
     }
@@ -178,7 +181,7 @@ struct SessionTaskTests {
         let said = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "白屏的根因是什么？"]))
         #expect(!said.isError)
         try await recorder.update(sessionID: "s1", state: .thinking)  // Mac 在后台恢复它、答这一句
-        try await recorder.update(sessionID: "s1", state: .settled)
+        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: .now, busySince: nil))
         #expect(Set(try await store.cueBoard().sessions.map(\.sessionID)) == ["s1", "s2"])
 
         let again = try #require(await cue.call("task", ["action": "done", "task": task.id.uuidString]))

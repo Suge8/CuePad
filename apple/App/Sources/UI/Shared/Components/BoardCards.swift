@@ -133,7 +133,8 @@ private extension Character {
 
 /// 推进中一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：同任务卡（`BoardTaskCard`）的语法——
 /// 开头是这家 Agent 的品牌标（`AgentKind.mark`，任务是完成圈），标题是会话名，下沿是那条线（`BoardLine`，按 `BoardPulse` 画，右端写此刻状态多久与要你管的状态词），
-/// 看全部项目时标题前是它归处的项目小图形；悬停提示写项目与哪家 Agent。点了打开会话；长按与右键是会话的菜单（`SessionActions`，各处同一份）。
+/// 看全部项目时标题前是它归处的项目小图形；悬停提示写项目与哪家 Agent。点了打开会话；长按与右键是会话的菜单（`SessionActions`，各处同一份），
+/// 在看板上多完成与置顶两项。它与任务支持同一组操作：拖到已完成、完成、置顶、改名（`Workspace+Adopt`），第一次这样用时当场给它建任务绑上。
 struct BoardSessionCard: View {
     /// 会话连同发给它的最近一条话（`TaskBoard.Work.agent`，与列同一次读）。
     let agent: PiSessionListItem
@@ -147,6 +148,7 @@ struct BoardSessionCard: View {
     var body: some View {
         let pulse = workspace.pulse(of: agent)
         let resting = pulse.tier == .resting
+        let name = agent.name(at: workspace.services.speech)
         BoardLink(to: session) {
             BoardCardLayout(advancing: true, pulse: pulse, moves: moves) {
                 Group {
@@ -155,14 +157,14 @@ struct BoardSessionCard: View {
                 .font(.system(size: TaskMetrics.cardLead * 0.85)).foregroundStyle(resting ? palette.ink3 : palette.ink2)
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
-                BoardCardTitle(session.title).foregroundStyle(resting ? palette.ink2 : palette.ink)
+                BoardCardTitle(name).foregroundStyle(resting ? palette.ink2 : palette.ink)
             }
             .boardCard(.advancing)
         }
         .help(Dotted(project?.shownName, session.agentMark).visible)
-        .contextMenu { OpenSessionBeside(session: session); SessionActions(session: session) }
-        .accessibilityLabel(Dotted(session.title, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label, pulse.handoff?.waiting).spoken)
-        .accessibilityActions { OpenSessionBeside(session: session); SessionActions(session: session) }
+        .contextMenu { OpenSessionBeside(session: session); SessionActions(session: session, onBoard: true) }
+        .accessibilityLabel(Dotted(name, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label, pulse.handoff?.waiting).spoken)
+        .accessibilityActions { OpenSessionBeside(session: session); SessionActions(session: session, onBoard: true) }
     }
 }
 

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 会话列表（手机搜索页的会话一栏、三端"更早"那一页同一个，数据是两端共用的 `PiSessionList`）：最上面"已置顶"（绑在置顶任务上的），
 /// 接着"现在"（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），"历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。
-/// "更早"那一页（`AgentListModel.endedOnly`）只有历史，不写"历史"两字：页名就是"更早"。
+/// "更早"那一页（`AgentListModel.earlierOnly`）只有历史，不写"历史"两字：页名就是"更早"。
 /// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。长按（Mac 右键）是会话的菜单（`OpenSessionBeside` 与 `SessionActions`），手机上慢慢左滑可结束、重命名。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
 struct SessionList<Top: View>: View {
     @Bindable var model: AgentListModel
@@ -57,7 +57,7 @@ struct SessionList<Top: View>: View {
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                     header {
                         VStack(alignment: .leading, spacing: Spacing.group) {
-                            if index == 0, !model.endedOnly { SectionHeader("历史") }
+                            if index == 0, !model.earlierOnly { SectionHeader("历史") }
                             SectionHeader(Dotted(run.section.title), level: .group)
                         }
                         .padding(.horizontal, Spacing.tight)
@@ -91,7 +91,7 @@ struct SessionList<Top: View>: View {
         let row = SessionRow(item: item, showsPlace: list.showsPlace, end: end)
         // 行的边距挂在最外层：挂在自绘轻扫里面传不到列表上
         #if os(iOS)
-        let card = row.rowSwipes(SessionActions.swipes(item.state, ending: ending, in: workspace), clipped: false)
+        let card = row.rowSwipes(SessionActions.swipes(item.state, task: item.task, ending: ending, in: workspace), clipped: false)
         #else
         let card = row
         #endif
@@ -135,7 +135,7 @@ private struct SessionRow: View {
     var body: some View {
         let session = item.state
         Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
-            PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
+            PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, task: item.task?.title, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
                 .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(PressStyle(.card))
@@ -150,11 +150,11 @@ private extension View {
     }
 }
 
-/// "更早"那一页（`Route.earlier`，WORDS.md）：已结束的会话按结束时间分段（`AgentListModel.endedOnly`），滑到底再读一页。三端同一页：
+/// "更早"那一页（`Route.earlier`，WORDS.md）：已结束与闲置的会话（`SessionDormancy`）按结束（闲置的是停下）时间分段（`AgentListModel.earlierOnly`），滑到底再读一页。三端同一页：
 /// 手机从 Cue 页会话条底下"更早"那一格推入（`EarlierTile`，左边是系统返回）；Mac 与 iPad 宽屏点会话条上的"更早"在主区打开（`RailEarlier`）。
 /// 在跑、等你的会话不在这里，它们在会话条上。
 struct EarlierPage: View {
-    @State private var model = AgentListModel(endedOnly: true)
+    @State private var model = AgentListModel(earlierOnly: true)
 
     var body: some View {
         #if os(iOS)

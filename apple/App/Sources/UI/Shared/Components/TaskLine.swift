@@ -37,7 +37,7 @@ struct TaskLine: View {
 
     private func line(next: TaskNext?, done: Bool) -> some View {
         // 置顶的顶层任务标题前一枚图钉（看板上同一个，`BoardPin`）
-        let name = Text(task.title.textGlyphs)
+        let name = Text(task.title(session: agents.items[task.id]?.shownTitle(at: workspace.services.speech)).textGlyphs)
         let title = (task.isPinned ? Text("\(Text(Image(.pin)).foregroundStyle(palette.ink3)) \(name)") : name).strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(titleInk)
             .font(step ? TaskMetrics.stepFont : TaskMetrics.lineFont)
             .lineLimit(titleLines)

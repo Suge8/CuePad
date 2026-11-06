@@ -68,7 +68,8 @@ extension CueStore {
   /// 写下改动之后对这件事里绑着的会话各看一遍，没人再用就请它所在的 Mac 结束：
   /// 1. 有还在看板上（`taskOpen`）、也没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去（接着用它时话送到才绑上），留着；
   /// 2. 这件事的下一步（排在最前的还在看板上的子任务）还没开工、也没在往别处交，照交给的规则（`handOffPlan`）默认接着用它，留着；
-  /// 3. 其余结束：没有下一步了、下一步换了别的会话、整件事完成、归档或删掉了。做不到的（`PiSessionState.canEnd`：终端里开的 Codex 会话这类）留着；
+  /// 3. 其余结束：没有下一步了、下一步换了别的会话、整件事完成、归档或删掉了。只结束 CuePad 托管的（`PiSessionState.hosted`）：
+  ///    终端里你自己开的会话不替你结束（结束它就是关掉你的终端进程），它随这件事从看板收起（`isLoose`），再有动静才回来；做不到的（`canEnd`）也留着；
   ///    已结束的、记录还没到的不动。取回归档、撤销删除不重开：再对它说话就在后台恢复。
   /// `task` 是这件事里的任意一个任务，可以已经归档或删掉（删掉的从它原来的上级往上找这件事）；灵感不管。返回结束请求。必须在写事务内调用。
   @discardableResult
@@ -92,11 +93,11 @@ extension CueStore {
     return try endUnused(sessions.filter { !used.contains($0) }, outside: top.id, cue: cue)
   }
 
-  /// 这些会话里在 `root` 这件事之外也没人再用（`usedElsewhere`；nil 是哪件事都不除外）、做得到的（`PiSessionState.canEnd`），
+  /// 这些会话里在 `root` 这件事之外也没人再用（`usedElsewhere`；nil 是哪件事都不除外）、CuePad 托管且做得到的（`PiSessionState.hosted`、`canEnd`），
   /// 请它所在的 Mac 结束；已结束的、记录还没到的不动。返回结束请求。必须在写事务内调用。
   func endUnused(_ sessions: [String], outside root: UUID?, cue: Bool) throws -> [DeliveryRequest] {
     try sessions.compactMap { sessionID in
-      guard try db.first(Self.usedElsewhere, [sessionID, root], { _ in true }) == nil, let state = try sessionState(sessionID), state.canEnd
+      guard try db.first(Self.usedElsewhere, [sessionID, root], { _ in true }) == nil, let state = try sessionState(sessionID), state.hosted, state.canEnd
       else { return nil }
       return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue)
     }

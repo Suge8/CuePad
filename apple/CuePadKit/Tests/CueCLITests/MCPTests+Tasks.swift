@@ -48,7 +48,7 @@ extension MCPTests {
     }
     let task = try await store.createTask("修好登录页", in: project.id)
     try await store.linkCard(task.id, toSession: "s1")
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "修好登录页")
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "修好登录页", hosted: true)
     try await Server.run(library: sandbox.directory) { server in
       try await server.refused("task", ["action": "done", "task": task.id.uuidString])
       // 证据多于 3 条或一条太长：退回，什么都不写

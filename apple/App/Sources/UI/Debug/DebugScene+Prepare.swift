@@ -41,6 +41,7 @@ extension DebugScene {
             try await seedAgentLibrary(workspace.services)
             try await seedScratchFiles(store)
         }
+        try await adoptIfAsked(workspace)
         try await seedOneMac(store)
         await seedFiles(workspace.services)
         await presetSync(workspace.services)

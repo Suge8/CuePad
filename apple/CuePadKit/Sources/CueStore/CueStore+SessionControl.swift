@@ -111,13 +111,13 @@ extension CueStore {
     return try requestStop(of: session.target, on: session.host(or: host), cue: cue)
   }
 
-  /// Cue 收掉一个会话（done 给 session）：与做完一件事同一条规则（`endUnused`），只是不除外哪件事。做不到的抛 `cannotEnd`，
+  /// Cue 收掉一个会话（done 给 session）：与做完一件事同一条规则（`endUnused`），只是不除外哪件事。做不到的、终端里他自己开的抛 `cannotEnd`，
   /// 在用的抛 `sessionInUse`：Cue 点名要收，得知道为什么没收。已结束的不动、返回 nil，否则返回结束请求。
   public func endIdleSession(_ sessionID: String) throws -> DeliveryRequest? {
     try write {
       guard let state = try sessionState(sessionID) else { throw CueStoreError.notFound }
       guard state.state != .known(.ended) else { return nil }
-      guard state.canEnd else { throw CueStoreError.cannotEnd(state.title) }
+      guard state.hosted, state.canEnd else { throw CueStoreError.cannotEnd(state.title) }
       guard let end = try endUnused([sessionID], outside: nil, cue: true).first else { throw CueStoreError.sessionInUse(state.title) }
       return end
     }

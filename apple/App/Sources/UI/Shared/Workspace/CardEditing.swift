@@ -64,7 +64,7 @@ final class CardEditing {
     }
 
     func leave() {
-        workspace.leaveEditing(cardID, flush: autosave)
+        workspace.leaveEditing(cardID, flush: autosave, heading: CueSummary.title(of: initialText))
         #if os(iOS)
         if let flushToken { workspace.services.removeBackgroundFlush(flushToken) }
         flushToken = nil

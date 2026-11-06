@@ -5,7 +5,7 @@ extension CueStore {
   /// 看板在不在做事（`CueBoard.active` 不为空）：有不归没做完的事的活会话，或有在做的事（`CueBoardItem.isActive`）。
   /// 不读整块看板、有活会话就不看各件事：值班的 Cue 管理器每次会话状态变化都读它（读整块看板曾占会话忙时常驻开销的一成多）。
   public func cueBoardActive() throws -> Bool {
-    try db.first("SELECT 1 FROM piSessionStates WHERE \(Self.isLoose("piSessionStates")) LIMIT 1") { _ in true } != nil
+    try db.first("SELECT 1 FROM piSessionStates WHERE \(try isLoose("piSessionStates")) LIMIT 1") { _ in true } != nil
       || boardItems(try topTasks(where: Self.onBoard)).contains(where: \.isActive)
   }
 
@@ -14,7 +14,7 @@ extension CueStore {
   public func cueBoard() throws -> CueBoard {
     CueBoard(
       tasks: try boardItems(try topTasks(where: Self.onBoard)),
-      sessions: try select(PiSessionState.self, where: Self.isLoose("piSessionStates"), orderBy: "stateSince DESC, id"))
+      sessions: try select(PiSessionState.self, where: try isLoose("piSessionStates"), orderBy: "stateSince DESC, id"))
   }
 
   /// 最近完成、绑过会话的 `limit` 件顶层任务（没删除，归档了的也算），最近完成的在前，各带它（自己或子任务）的会话里最近有动静的那个此刻的样子：
@@ -24,16 +24,21 @@ extension CueStore {
       .compactMap { task in try latestSession(of: task.id).map { (task, $0) } }
   }
 
-  /// 表 `alias`（会话记录）里不归没做完的事的活会话：没结束，没有没做完的任务绑着它，
-  /// 也不是哪个没做完的任务以前用过的（`Card.formerSessionIDs`）。只有已完成的事绑着的算在内：它还活着，Cue 管它。
+  /// 表 `alias`（会话记录）里不归没做完的事的活会话：没结束、没闲置（`SessionDormancy`），没有没做完的任务绑着它，
+  /// 也不是哪个没做完的任务以前用过的（`Card.formerSessionIDs`）。只有已完成的事绑着的算在内：它还活着，Cue 管它——
+  /// 但那件事完成之后它还没动过的不算：完成时它随那件事收起（终端里你自己开的会话 CuePad 不结束，`endUnused`），再有动静才回来。
   /// 离开了看板的任务（`taskOpen`：归档、删除、项目进了回收站）不算。
-  static func isLoose(_ alias: String) -> String {
+  func isLoose(_ alias: String) throws -> String {
     """
     \(PiWorkState.outsideSQL([.ended], column: "\(alias).state"))
-      AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskOpen))
+      AND NOT \(try dormancy().sql(alias))
+      AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(Self.taskOpen))
+      AND NOT EXISTS (
+        SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL
+          AND c.completedAt >= \(alias).stateSince)
       AND NOT EXISTS (
         SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
-        WHERE c.formerSessionIDs IS NOT NULL AND \(taskOpen) AND f.value = \(alias).sessionID)
+        WHERE c.formerSessionIDs IS NOT NULL AND \(Self.taskOpen) AND f.value = \(alias).sessionID)
     """
   }
 

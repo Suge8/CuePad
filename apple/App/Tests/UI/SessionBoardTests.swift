@@ -1,0 +1,152 @@
+import CueStore
+import CueTestSupport
+import Foundation
+import Testing
+@testable import CuePad
+
+/// 会话进看板：不归没做完的事的活会话与任务支持同一组操作，第一次拖到已完成、置顶、改名时当场建任务绑上，从没这样用过的不留卡；
+/// 名字只有一个事实源——任务标题，标题为空时随会话名变；只读跟读的会话能拖状态，不能发话与改名；闲置超过两小时的收进"更早"。
+struct SessionBoardTests {
+    let rig = TestApp()
+    var services: AppServices { rig.services }
+    var store: CueStore { services.store }
+    /// 会话所在的那台 Mac（手机上跑也一样：投送请求写给它）。
+    static let mac = "mac-a"
+
+    /// 一个歇着的会话（默认终端里的 Pi，只记了一次状态）。
+    private func session(
+        _ id: String, title: String, agent: AgentKind = .pi, hosted: Bool = false, since: Date? = nil
+    ) async throws -> PiSessionState {
+        let recorder = PiStateRecorder(store: store, hostID: Self.mac)
+        try await recorder.update(
+            sessionID: id, state: .settled, title: title, times: since.map { PiTimes(stateSince: $0, busySince: nil) }, hosted: hosted, agent: agent)
+        return try #require(try await store.piSessions(sessionIDs: [id])[id]?.state)
+    }
+
+    private func tasks() async throws -> [Card] { try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks) }
+
+    /// 看板上这件任务写的名字与会话行写的名字（同各自的视图：`BoardTaskCard`、`PiSessionRow`）。
+    private func names(_ task: UUID, _ sessionID: String) async throws -> [String] {
+        let board = try await TaskBoard.read(from: store)
+        let item = try #require(board.item(task))
+        let row = try #require(try await store.piSessions(sessionIDs: [sessionID])[sessionID])
+        return [item.task.title(session: item.agent?.shownTitle(at: services.speech)), row.name(at: services.speech)]
+    }
+
+    @Test func 无主会话拖到已完成_当场建卡绑上_任务完成_终端里的会话不结束只收起() async throws {
+        let terminal = try await session("s1", title: "修登录")
+        let hosted = try await session("s2", title: "补测试", hosted: true)
+        let workspace = Workspace(services: services)
+        let before = try await TaskBoard.read(from: store)
+        #expect(Set(before.advancing.map(\.id)) == ["session/s1", "session/s2"])
+        #expect(try await tasks().isEmpty, "没当任务用过的会话不留卡")
+
+        try await workspace.complete(terminal)
+        try await workspace.complete(hosted)
+
+        let made = try await tasks()
+        #expect(made.count == 2 && made.allSatisfy { $0.status == .done && $0.heading.isEmpty })
+        #expect(Set(made.compactMap(\.piSessionID)) == ["s1", "s2"])
+        let board = try await TaskBoard.read(from: store)
+        #expect(board.advancing.isEmpty, "两张会话卡都随完成收起")
+        #expect(Set(board.done.compactMap(\.agent?.state.sessionID)) == ["s1", "s2"])
+        for card in made {
+            let name = card.piSessionID == "s1" ? "修登录" : "补测试"
+            #expect(try await names(card.id, card.piSessionID!) == [name, name], "标题为空的写会话名")
+        }
+        #expect(try await store.deliveryRequests(toSession: "s1").isEmpty, "终端里你开的会话不替你结束")
+        #expect(try await store.deliveryRequests(toSession: "s2").map(\.mode) == [.known(.end)], "托管的照做完的规则结束")
+
+        // 收起的会话再有动静就回到看板
+        let recorder = PiStateRecorder(store: store, hostID: Self.mac)
+        try await recorder.update(sessionID: "s1", state: .thinking)
+        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["session/s1"])
+    }
+
+    @Test func 置顶无主会话_建一件进行中的置顶任务_再点不再多建() async throws {
+        let live = try await session("s1", title: "修登录")
+        let workspace = Workspace(services: services)
+        try await workspace.pin(live)
+        try await workspace.pin(live)
+        let made = try await tasks()
+        #expect(made.count == 1)
+        let task = try #require(made.first)
+        #expect(task.isPinned && task.status == .inProgress && task.piSessionID == "s1" && task.parentID == nil)
+        let board = try await TaskBoard.read(from: store)
+        #expect(board.advancing.map(\.id) == ["task/\(task.id)"], "会话卡换成它的任务卡")
+    }
+
+    @Test func 改名_看板与会话行同名_并让Agent跟着改() async throws {
+        let live = try await session("s1", title: "修登录")
+        let workspace = Workspace(services: services)
+        try await workspace.rename(live, to: "登录页白屏", adopts: true)
+        let task = try #require(try await tasks().first)
+        #expect(task.heading == "登录页白屏" && task.piSessionID == "s1")
+        #expect(try await names(task.id, "s1") == ["登录页白屏", "登录页白屏"])
+        #expect(try await store.deliveryRequests(toSession: "s1").compactMap(\.config?.name) == ["登录页白屏"])
+
+        // 在任务正文里改标题：离开编辑时会话跟着改名
+        try await store.updateCard(task.id) { $0.body = "登录页白屏（Safari）\n先查缓存" }
+        workspace.leaveEditing(task.id, flush: nil, heading: "登录页白屏")
+        try await eventually("改名请求发出") {
+            try await store.deliveryRequests(toSession: "s1").compactMap(\.config?.name) == ["登录页白屏", "登录页白屏（Safari）"]
+        }
+        #expect(try await names(task.id, "s1") == ["登录页白屏（Safari）", "登录页白屏（Safari）"])
+
+        // 没绑任务的会话在看板外改名：只让 Agent 改，不建卡
+        let other = try await session("s2", title: "随便问问")
+        try await workspace.rename(other, to: "问问部署", adopts: false)
+        #expect(try await tasks().count == 1)
+        #expect(try await store.deliveryRequests(toSession: "s2").compactMap(\.config?.name) == ["问问部署"])
+    }
+
+    @Test func 任务标题为空_随会话改名变_改过后以任务为准() async throws {
+        let live = try await session("s1", title: "修登录")
+        let workspace = Workspace(services: services)
+        try await workspace.pin(live)
+        let task = try #require(try await tasks().first)
+        #expect(try await names(task.id, "s1") == ["修登录", "修登录"])
+
+        let recorder = PiStateRecorder(store: store, hostID: Self.mac)
+        try await recorder.update(sessionID: "s1", state: .settled, title: "修登录与注册")
+        #expect(try await names(task.id, "s1") == ["修登录与注册", "修登录与注册"])
+
+        try await store.updateCard(task.id) { $0.body = "注册页" }
+        try await recorder.update(sessionID: "s1", state: .settled, title: "别的名字")
+        #expect(try await names(task.id, "s1") == ["注册页", "注册页"])
+    }
+
+    @Test func 只读会话_能拖状态_没有发话与改名() async throws {
+        let grok = try await session("g1", title: "看日志", agent: .grok)
+        let workspace = Workspace(services: services)
+        #expect(grok.speakBlocked != nil, "只能在终端里说话")
+        #expect(SessionActions.rename(grok, in: workspace) == nil && SessionActions.rename(grok, adopts: true, in: workspace) == nil)
+
+        try await workspace.complete(grok)
+        let task = try #require(try await tasks().first)
+        #expect(task.status == .done && task.piSessionID == "g1")
+        // 改任务标题只改 CuePad 里的名字，不向它发改名
+        try await store.updateCard(task.id) { $0.body = "查崩溃日志" }
+        try await workspace.pushName(of: task.id)
+        #expect(try await store.deliveryRequests(toSession: "g1").isEmpty)
+        #expect(try await names(task.id, "g1") == ["查崩溃日志", "查崩溃日志"])
+    }
+
+    @Test func 闲置超过两小时_收进更早_有动静就回来() async throws {
+        let stale = Date.now.addingTimeInterval(-SessionDormancy.after - 60)
+        _ = try await session("old", title: "昨天的", since: stale)
+        _ = try await session("new", title: "刚歇下")
+        let board = try await TaskBoard.read(from: store)
+        #expect(board.advancing.map(\.id) == ["session/new"])
+        #expect(try await store.cueBoard().sessions.map(\.sessionID) == ["new"], "Cue 管的同一条规则")
+        let earlier = try await PiSessionList.read(text: "", earlierOnly: true, historyLimit: 40, at: .always(), from: store)
+        #expect(earlier.ended.map(\.state.sessionID) == ["old"])
+        let listed = try await PiSessionList.read(text: "", historyLimit: 40, at: .always(), from: store)
+        #expect(listed.now.map(\.state.sessionID) == ["new"])
+        #expect(try await SessionRailData.read(from: store).advancing.map(\.state.sessionID) == ["new"])
+
+        let recorder = PiStateRecorder(store: store, hostID: Self.mac)
+        try await recorder.update(sessionID: "old", state: .thinking, times: PiTimes(stateSince: .now, busySince: .now))
+        #expect(Set(try await TaskBoard.read(from: store).advancing.map(\.id)) == ["session/old", "session/new"])
+    }
+}

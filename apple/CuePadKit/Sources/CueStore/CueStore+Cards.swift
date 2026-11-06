@@ -132,11 +132,11 @@ extension CueStore {
   }
 
   /// 项目顶层（灵感与任务共用一个手动顺序）最前面的排序键。
-  private func firstTopKey(in project: UUID) throws -> String? {
+  func firstTopKey(in project: UUID) throws -> String? {
     try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID = ? AND parentID IS NULL", [project]) { $0.textOrNil(0) } ?? nil
   }
 
-  private func insertCard(_ body: String, project: UUID, parent: UUID?, todo: Bool, sortKey: String) throws -> Card {
+  func insertCard(_ body: String, project: UUID, parent: UUID?, todo: Bool, sortKey: String) throws -> Card {
     let now = Date.stamp
     let card = Card(
       id: UUID(), projectID: project, body: body, isPinned: false, variableValues: [:], conflictOf: nil, sortKey: sortKey,

@@ -1,11 +1,13 @@
 import CueStore
 import SwiftUI
 
-/// 改会话名（`SessionActions` 的"重命名"，窗口上那一格弹出，`sessionAsks`）：一张小表单，输入框预填现在的名字、弹出即聚焦，
-/// 确定后经 `AppServices.rename` 让 Pi 改（会话名只来自 Pi）。没改动或空着时"改名"停用——用系统工具栏按钮而不是提示框：
+/// 改会话名（`SessionActions` 的"重命名"，窗口上那一格弹出，`sessionAsks`）：一张小表单，输入框预填现在写的名字、弹出即聚焦，
+/// 确定后经 `Workspace.rename`：绑着任务的改任务标题（名字的唯一事实源）再让 Agent 跟着改，没绑的让 Agent 改。没改动或空着时"改名"停用——用系统工具栏按钮而不是提示框：
 /// iOS 的提示框不画按钮的停用态，点不了也看不出来。
 private struct RenameSheet: View {
     let target: PiSessionState
+    let shown: String
+    let adopts: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
@@ -13,13 +15,13 @@ private struct RenameSheet: View {
     @FocusState private var focused: Bool
 
     private var changed: String? {
-        guard let name = PiRename.clean(name), name != PiRename.clean(target.title) else { return nil }
+        guard let name = PiRename.clean(name), name != PiRename.clean(shown) else { return nil }
         return name
     }
 
     var body: some View {
         content.onAppear {
-            name = target.title
+            name = shown
             focused = true
         }
     }
@@ -70,8 +72,8 @@ private struct RenameSheet: View {
 
     private func commit() {
         guard let name = changed else { return }
-        let target = target, services = workspace.services
-        workspace.attempt { try await services.rename(target, to: name) }
+        let target = target, adopts = adopts, workspace = workspace
+        workspace.attempt { try await workspace.rename(target, to: name, adopts: adopts) }
         close()
     }
 }
@@ -87,7 +89,7 @@ private struct SessionAsks: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .panel(item: asked { if case .rename(let session) = $0 { session } else { nil } }) { RenameSheet(target: $0) }
+            .panel(item: renaming) { RenameSheet(target: $0.session, shown: $0.shown, adopts: $0.adopts) }
         #if os(macOS)
             .dialog(Self.title, item: asked { if case .end(let session) = $0 { session } else { nil } }, message: Self.message) { session in
                 [DialogButton(title: "结束会话", role: .destructive) { end(session) }]
@@ -104,6 +106,22 @@ private struct SessionAsks: ViewModifier {
 
     private static let title: LocalizedStringResource = "结束这个会话？"
     private static let message: LocalizedStringResource = "对话会保留，再给它发消息会在后台恢复"
+
+    /// 在问的改名：会话、预填的名字、要不要先建任务。
+    private struct Renaming: Identifiable {
+        let session: PiSessionState
+        let shown: String
+        let adopts: Bool
+        var id: UUID { session.id }
+    }
+
+    private var renaming: Binding<Renaming?> {
+        Binding {
+            if case .rename(let session, let shown, let adopts) = workspace.sessionAsk { Renaming(session: session, shown: shown, adopts: adopts) } else { nil }
+        } set: {
+            if $0 == nil, case .rename = workspace.sessionAsk { workspace.sessionAsk = nil }
+        }
+    }
 
     private var ending: PiSessionState? { if case .end(let session) = workspace.sessionAsk { session } else { nil } }
 

@@ -4,7 +4,8 @@ import Foundation
 /// 会话条唯一的数据口径：从 `cueTally` 同一次读取里取 `works`（即 `CueBoard.active`）的所有未结束会话，加上等你的会话，按 sessionID 去重。
 /// 等你同看板：会话拍板在前、待回复在后，各自等得最久的在前；Cue 自己的提问不列。因此名牌的「拍板」= 会话拍板 + Cue 提问，
 /// 会话条只数会话拍板；「推进中」数会话，不是名牌与看板的工作项数。一项工作有多个会话、一个会话参与多项工作时不能拿两处数字相减。
-/// 从 works 而不是 advancing 展开：一个会话等你会让整项任务被 held 占着，其余并行会话仍要留在推进中。歇着也是 active，不按图形的 rank 偷删。
+/// 从 works 而不是 advancing 展开：一个会话等你会让整项任务被 held 占着，其余并行会话仍要留在推进中。歇着也是 active，不按图形的 rank 偷删；
+/// 闲置的（`SessionDormancy`，绑着没做完的事的也算）不列，它在"更早"里。
 /// 组件不订阅、不碰导航；`LiveSessions` 与接力事实同次读一份给三种尺寸，状态呈现交给现有的 `Workspace.pulse`（包括本机实时状态、投送与未读）。
 nonisolated struct SessionRailData: Equatable, Sendable {
     struct Waiting: Equatable, Sendable {
@@ -22,7 +23,8 @@ nonisolated struct SessionRailData: Equatable, Sendable {
         }.sorted { ($0.stateSince, $0.sessionID) < ($1.stateSince, $1.sessionID) }
         let waiting = asking + tally.replies.map(\.session)
         var seen = Set(waiting.map(\.sessionID))
-        let advancing = tally.works.flatMap(\.sessions)
+        let dormancy = try store.dormancy()
+        let advancing = tally.works.flatMap(\.sessions).filter { !dormancy.holds($0) }
             .sorted { ($0.stateSince, $0.sessionID) > ($1.stateSince, $1.sessionID) }
             .filter { seen.insert($0.sessionID).inserted }
         let items = try store.piSessions(sessionIDs: waiting.map(\.sessionID) + advancing.map(\.sessionID))
@@ -37,6 +39,8 @@ nonisolated struct SessionRailData: Equatable, Sendable {
 struct SessionRailRows {
     struct Item: Identifiable {
         let session: PiSessionState
+        /// 写的名字：绑着的叶子的标题，空的或没绑任务的是会话名（`PiSessionListItem.name`）。
+        let name: String
         let pulse: BoardPulse
         let waiting: PiShown.Status?
         var id: String { session.sessionID }
@@ -49,7 +53,8 @@ struct SessionRailRows {
     init(_ data: SessionRailData, pulse: (PiSessionListItem) -> BoardPulse) {
         func item(_ value: PiSessionListItem, waiting: PiShown.Status?) -> Item {
             let pulse = pulse(value)
-            return Item(session: pulse.session ?? value.state, pulse: pulse, waiting: waiting)
+            let session = pulse.session ?? value.state
+            return Item(session: session, name: value.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: waiting)
         }
         waiting = data.waiting.map { item($0.agent, waiting: $0.deciding ? .asking : .awaitsReply) }
         advancing = data.advancing.map { item($0, waiting: nil) }.enumerated().sorted {

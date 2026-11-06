@@ -68,7 +68,7 @@ struct BoardTaskCard: View {
     /// 标题：墨与字重随列（`TaskBoard.Column.titleInk`）；推进中歇着的淡一档；点圈停留的那一下最淡、划线（看得清刚勾掉的是哪条）。
     private func title(resting: Bool) -> some View {
         let ink = check.phase != .idle ? palette.ink3 : resting ? palette.ink2 : column.titleInk(palette)
-        return BoardCardTitle(task.title.textGlyphs).fontWeight(column.titleWeight)
+        return BoardCardTitle(task.title(session: item.agent?.shownTitle(at: workspace.services.speech)).textGlyphs).fontWeight(column.titleWeight)
             .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink)
     }
 

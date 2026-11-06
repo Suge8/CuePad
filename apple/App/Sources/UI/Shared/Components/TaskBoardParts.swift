@@ -8,7 +8,8 @@ import SwiftUI
 /// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
 /// 等你的卡只看不答：拍板点了去 Cue 页那一问（会话在问的进会话），待回复进会话。已完成卡尾的成果图点开全屏看（这一列挂一个 `previewPresenter`）。
 /// 拖放：行拖到推进中是开始（同"开始"：Mac 交给 Agent，手机浮起发给 Agent 的输入框）、拖到已完成是做完（同点完成圈，还有没完成的子任务、
-/// Agent 还在做时先问一句，`TaskCheck`）；待办里拖到一行前面是排序（`TaskBoard.move`），拖进来不改状态。别的拖法不接。
+/// Agent 还在做时先问一句，`TaskCheck`）；待办里拖到一行前面是排序（`TaskBoard.move`），拖进来不改状态。不归没做完的事的会话卡只接拖到已完成：
+/// 当场给它建任务、完成（`Workspace.complete`；它本来就在推进中，拖到待办按列的投影会弹回来，所以不接）。别的拖法不接。
 /// 已完成列末尾是"更早做完的 N"：原地展开（它们没进归档，跳去归档页看到的是别的），展开后旁边是"全部归档"。
 struct BoardColumn: View {
     let column: TaskBoard.Column
@@ -40,6 +41,7 @@ struct BoardColumn: View {
         fed
             .cardDrop(isEnabled: column != .waiting, hover: { targeted = $0 != nil && column != .todo }) { card, _ in
                 if let task = card.task { drop(task, before: nil) }
+                if let session = card.session { drop(session: session) }
             }
             .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
             .modifier(ShotPresenter(column: column, opened: $opened))
@@ -146,6 +148,7 @@ struct BoardColumn: View {
                         card(item, moves: moves).boardDraggable(item.id, session: item.agent?.state.sessionID)
                     } else if let agent = work.loose {
                         BoardSessionCard(agent: agent, project: glyph(workspace.catalog?.project(work.project)), moves: moves)
+                            .boardDraggable(session: agent.state.sessionID)
                             .boardDim(project: work.project)
                             .boardFlight(work.id)
                             .benchSpot(work.id)
@@ -241,6 +244,12 @@ struct BoardColumn: View {
         case .waiting:
             break
         }
+    }
+
+    /// 会话卡拖到已完成（别的列不接）。
+    private func drop(session id: String) {
+        guard column == .done, let session = board.advancing.lazy.compactMap(\.loose).first(where: { $0.state.sessionID == id })?.state else { return }
+        workspace.attempt { try await workspace.complete(session) }
     }
 
     private func start(_ task: Card) { workspace.handOff(task) }

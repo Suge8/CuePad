@@ -1,9 +1,10 @@
+import CueText
 import Foundation
 
 extension CueStore {
   /// 会话列表的一页（Mac 与手机共用的唯一查询）。顺序见 `PiSessionPage`。
   public func piSessionPage(_ query: PiSessionQuery) throws -> PiSessionPage {
-    let (condition, arguments) = try Self.condition(query)
+    let (condition, arguments) = try self.condition(query)
     // 只有一种状态的范围里"已结束的排后面"是常量，留着它 SQLite 就不走按状态的索引、把整个范围排一遍（真实库已结束的一页 17 万步对 3 千步）
     let endedLast = query.scope == .all || query.scope == .current ? "state = '\(PiWorkState.ended.rawValue)', " : ""
     let states = try select(
@@ -17,12 +18,12 @@ extension CueStore {
     CASE WHEN projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL) THEN projectID ELSE '\(Project.defaultID.uuidString.lowercased())' END
     """
 
-  private static func condition(_ query: PiSessionQuery) throws -> (String, [any SQLBindable]) {
+  private func condition(_ query: PiSessionQuery) throws -> (String, [any SQLBindable]) {
     var conditions: [String] = []
     var arguments: [any SQLBindable] = []
     switch query.scope {
-    case .live: conditions.append(PiWorkState.outsideSQL([.ended]))
-    case .ended: conditions.append("state = '\(PiWorkState.ended.rawValue)'")
+    case .live: conditions.append("\(PiWorkState.outsideSQL([.ended])) AND NOT \(try dormancy().sql("piSessionStates"))")
+    case .earlier: conditions.append("(state = '\(PiWorkState.ended.rawValue)' OR \(try dormancy().sql("piSessionStates")))")
     case .all: break
     case .current:
       conditions.append(
@@ -39,13 +40,13 @@ extension CueStore {
       conditions.append(
         """
         (title LIKE ? ESCAPE '\\' OR folder LIKE ? ESCAPE '\\' OR lastPrompt LIKE ? ESCAPE '\\'
-          OR \(home) IN (SELECT id FROM projects WHERE \(named.sql)))
+          OR \(Self.home) IN (SELECT id FROM projects WHERE \(named.sql)))
         """)
       arguments += [pattern, pattern, pattern, pattern] + named.arguments
     }
     if let project = query.project {
       // 别的项目走 projectID 的索引；默认项目还收没有项目的
-      conditions.append(project == Project.defaultID ? "\(home) = ?" : "projectID = ?")
+      conditions.append(project == Project.defaultID ? "\(Self.home) = ?" : "projectID = ?")
       arguments.append(project)
     }
     if let token = query.launchToken {
@@ -61,7 +62,7 @@ extension CueStore {
       arguments.append(String(decoding: try JSONEncoder().encode(query.excluding), as: UTF8.self))
     }
     if let pinned = query.pinned {
-      conditions.append("sessionID \(pinned ? "IN" : "NOT IN") (\(pinnedSessions))")
+      conditions.append("sessionID \(pinned ? "IN" : "NOT IN") (\(Self.pinnedSessions))")
     }
     return (conditions.isEmpty ? "1" : conditions.joined(separator: " AND "), arguments)
   }
@@ -94,11 +95,11 @@ extension CueStore {
     }
   }
 
-  /// 会话绑着的顶层任务，一行一处绑定（会话 id、顶层任务、它置顶没有）：会话置不置顶只看这一份。从绑着它、还在列表里的任务往上一级就是顶层
+  /// 会话绑着的顶层任务，一行一处绑定（会话 id、顶层任务、它置顶没有、绑着它的那个叶子的正文）：会话置不置顶、叫什么只看这一份。从绑着它、还在列表里的任务往上一级就是顶层
   /// （任务至多两级，`Card.maxTaskDepth`）。
   private static let sessionTaskRows = """
     SELECT piSessionID AS sessionID, COALESCE(parentID, id) AS task,
-      COALESCE((SELECT p.isPinned FROM cards p WHERE p.id = cards.parentID), isPinned) AS pinned
+      COALESCE((SELECT p.isPinned FROM cards p WHERE p.id = cards.parentID), isPinned) AS pinned, body
     FROM cards WHERE piSessionID IS NOT NULL AND todoAt IS NOT NULL AND \(cardActive)
     """
 
@@ -109,9 +110,9 @@ extension CueStore {
   private func sessionTasks(_ sessionIDs: [String]) throws -> [String: SessionTask] {
     guard !sessionIDs.isEmpty else { return [:] }
     let rows = try db.query(
-      "SELECT sessionID, task, pinned FROM (\(Self.sessionTaskRows)) WHERE sessionID IN (SELECT value FROM json_each(?)) ORDER BY pinned DESC",
+      "SELECT sessionID, task, pinned, body FROM (\(Self.sessionTaskRows)) WHERE sessionID IN (SELECT value FROM json_each(?)) ORDER BY pinned DESC",
       [JSONColumn.encode(sessionIDs)]
-    ) { ($0.text(0), SessionTask(id: $0.uuid(1), isPinned: $0.bool(2))) }
+    ) { ($0.text(0), SessionTask(id: $0.uuid(1), isPinned: $0.bool(2), title: CueSummary.title(of: $0.text(3)))) }
     return Dictionary(rows, uniquingKeysWith: { first, _ in first })
   }
 
