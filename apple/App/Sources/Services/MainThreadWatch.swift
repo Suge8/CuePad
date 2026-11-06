@@ -22,7 +22,7 @@ nonisolated struct FreezeNote: Codable, Equatable, Sendable {
 
 /// 看着主线程的事件循环：每轮醒来记下时刻、回去等事件时清掉；在忙时另一条队列每 `interval` 看一眼，同一轮忙过 `threshold`（1 秒）就记一条 `FreezeNote`。
 /// 主线程闲着时看守停着（不为它唤醒），醒来的那一轮再开。所在页与最近的动作由界面在变时报来（`page`、`action`），卡住时看守直接读，不经主线程。
-/// 只在用户的设备上开（与 MetricKit 订阅同一处，`touchesRealWorld`）：调试实例与测试不记。
+/// 处处都开（调试实例也记：`xc.sh explore` 靠它发现卡住后取样）；只有 MetricKit 订阅限在用户的设备上（`Diagnostics.start`）。
 nonisolated final class MainThreadWatch: Sendable {
     static let shared = MainThreadWatch()
     static let threshold: UInt64 = 1_000_000_000
