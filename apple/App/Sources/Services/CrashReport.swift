@@ -1,9 +1,10 @@
 import Foundation
 
-/// 一份诊断的要点：类型、时间、版本与设备、异常与终止原因（看门狗那类附人话）、崩溃线程（卡死是主线程）的帧。
+/// 一次出事的要点：类型、时间、版本与设备、异常与终止原因（看门狗那类附人话）、崩溃线程（卡死是主线程）的帧。
+/// 一个 MetricKit 包里每种诊断都是数组，同一个包可以带好几次（崩溃加卡死、两次卡死）：每一次各是一份（`reports(file:json:)`）。
 /// MetricKit 的 JSON 里时间是交来时这台设备本地时区的 "yyyy-MM-dd HH:mm:ss"、不带时区（实测，文档没写）：按本地时区读。
 nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
-    /// 一个包同时带多种时按声明的顺序（崩溃、卡死、CPU、磁盘）取第一种，文件名与设置页那一行都按它；`freeze` 是本机记下的主线程卡住。
+    /// 一个包里的几份按声明的顺序（崩溃、卡死、CPU、磁盘）排，存档文件名按排第一的那份；`freeze` 是本机记下的主线程卡住。
     enum Kind: String, CaseIterable, Sendable {
         case crash, hang, cpu, disk, freeze
 
@@ -15,11 +16,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
             case .disk: "diskWriteExceptionDiagnostics"
             case .freeze: FreezeNote.File.key
             }
-        }
-
-        fileprivate init?(root: [String: Any]) {
-            guard let kind = Self.allCases.first(where: { root[$0.key] is [String: Any] || !((root[$0.key] as? [Any]) ?? []).isEmpty }) else { return nil }
-            self = kind
         }
 
         /// 导出的摘要里的叫法
@@ -58,13 +54,17 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         }
     }
 
+    /// 存档里的文件名与它在包里排第几份。
     let id: String
+    let file: String
     let kind: Kind
     let date: Date
     /// 异常类型（如 EXC_BAD_ACCESS）、信号（如 SIGSEGV）、原文的终止原因；包里没有的为 nil。
     let exception: String?
     let signal: String?
     let reason: String?
+    /// 并成同一种时比的原因：异常与终止码（有终止码时只认码与看门狗事件；没有时是原文，数字抹掉：CPU 用时、地址每次都不同）。
+    let cause: String
     /// 终止原因的人话（看门狗、过热这类有名的终止码）。
     let explanation: String?
     /// "版本（构建）· 设备 · 系统"。
@@ -77,20 +77,23 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
     static let topFrames = 8
     static let ownFrames = 4
 
-    init?(id: String, json data: Data) {
-        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let kind = Kind(root: root) else { return nil }
-        if kind == .freeze {
-            guard let note = try? JSONDecoder.diagnostics.decode(FreezeNote.File.self, from: data).cuepadFreeze else { return nil }
-            self.init(id: id, freeze: note)
-            return
+    /// 存档里一个文件的每一份；读不出、没有诊断内容的是空的。
+    static func reports(file: String, json data: Data) -> [CrashReport] {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return [] }
+        if root[FreezeNote.File.key] != nil {
+            return (try? JSONDecoder.diagnostics.decode(FreezeNote.File.self, from: data)).map { [CrashReport(file: file, freeze: $0.cuepadFreeze)] } ?? []
         }
-        guard let diagnostic = (root[kind.key] as? [[String: Any]])?.first else { return nil }
-        self.init(id: id, kind: kind, end: root["timeStampEnd"] as? String, diagnostic: diagnostic)
+        let end = root["timeStampEnd"] as? String
+        let diagnostics = Kind.allCases.flatMap { kind in ((root[kind.key] as? [[String: Any]]) ?? []).map { (kind, $0) } }
+        return diagnostics.enumerated().map { index, item in
+            CrashReport(id: "\(file)#\(index)", file: file, kind: item.0, end: end, diagnostic: item.1)
+        }
     }
 
-    private init(id: String, kind: Kind, end: String?, diagnostic: [String: Any]) {
+    private init(id: String, file: String, kind: Kind, end: String?, diagnostic: [String: Any]) {
         let meta = diagnostic["diagnosticMetaData"] as? [String: Any] ?? [:]
         self.id = id
+        self.file = file
         self.kind = kind
         date = end.flatMap { try? Self.metricKitTime.parse($0) } ?? .distantPast
         exception = (meta["exceptionType"] as? Int).map(Self.exceptionName)
@@ -101,6 +104,7 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         let termination = meta["terminationReason"] as? String ?? ""
         let reasons = [exceptionReason, termination].filter { !$0.isEmpty }
         reason = reasons.isEmpty ? nil : reasons.joined(separator: "\n")
+        cause = [exceptionReason.replacing(/\d+/, with: "#"), Termination.key(termination)].joined(separator: "|")
         explanation = Termination.explain(termination)
         app = Self.app(
             version: (meta["appVersion"] as? String).map { "\($0)（\(meta["appBuildVersion"] as? String ?? "?")）" },
@@ -109,14 +113,16 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         trail = []
     }
 
-    private init(id: String, freeze note: FreezeNote) {
-        self.id = id
+    private init(file: String, freeze note: FreezeNote) {
+        id = file
+        self.file = file
         kind = .freeze
         date = note.start
         exception = nil
         signal = nil
         reason = note.seconds.map { String(localized: "主线程 \(Int($0.rounded())) 秒没回到事件循环，之后恢复了") }
             ?? String(localized: "主线程卡住，没等到恢复 App 就被结束了")
+        cause = ""
         explanation = nil
         app = Self.app(version: note.version, device: note.device, os: note.os)
         frames = []
@@ -161,9 +167,15 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
 /// 系统结束进程时终止原因里的终止码与看门狗事件（"code:0x8BADF00D … WatchdogEvent: process-exit"）的人话。
 /// 码见 Apple 的 "Understanding the exception types in a crash report"。
 nonisolated enum Termination {
+    /// 同一种终止的认法：终止码与看门狗事件；没有终止码时是原文抹掉数字。
+    static func key(_ reason: String) -> String {
+        guard let code = code(reason) else { return reason.replacing(/\d+/, with: "#") }
+        return [code, event(reason) ?? ""].joined(separator: " ")
+    }
+
     static func explain(_ reason: String) -> String? {
-        guard let code = reason.firstMatch(of: /code:(0x[0-9A-Fa-f]+)/)?.1.uppercased() else { return nil }
-        let event = reason.firstMatch(of: /WatchdogEvent: ([\w-]+)/).map { String($0.1) }
+        guard let code = code(reason) else { return nil }
+        let event = event(reason)
         switch code {
         case "0X8BADF00D":
             let base = String(localized: "看门狗：主线程太久没响应，被系统结束")
@@ -182,4 +194,7 @@ nonisolated enum Termination {
         default: return nil
         }
     }
+
+    private static func code(_ reason: String) -> String? { reason.firstMatch(of: /code:(0x[0-9A-Fa-f]+)/)?.1.uppercased() }
+    private static func event(_ reason: String) -> String? { reason.firstMatch(of: /WatchdogEvent: ([\w-]+)/).map { String($0.1) } }
 }

@@ -3,9 +3,9 @@ import Foundation
 
 extension DebugScene {
     /// `-CuePadSampleCrash YES` 存进存档的样例：照 2611060241 上真机交来的那份（从后台划掉卡住的 App，5 秒没退出被看门狗结束）的形状，
-    /// 同一种两次（导出时并成一条、计两次），外加一条本机记下的主线程卡住。
+    /// 同一种两次（导出时并成一条、计两次），其中一个包里同时带一次卡死（一个包里的几次各算一份），外加一条本机记下的主线程卡住。
     static var sampleDiagnostics: [Data] {
-        [watchdogCrash(end: "2026-11-06 12:02:47"), watchdogCrash(end: "2026-11-06 11:41:05")]
+        [watchdogCrash(end: "2026-11-06 12:02:47", hang: true), watchdogCrash(end: "2026-11-06 11:41:05", hang: false)]
     }
 
     static var sampleFreeze: FreezeNote {
@@ -15,7 +15,7 @@ extension DebugScene {
             version: "2026.11.6（2611060241）", device: "iPhone18,1", os: "Version 27.2 (Build 24B5089g)")
     }
 
-    private static func watchdogCrash(end: String) -> Data {
+    private static func watchdogCrash(end: String, hang: Bool) -> Data {
         let reason = "RBSTerminateContext domain:10 code:0x8BADF00D explanation:[app<com.sugeh.cuepad>] Failed to terminate gracefully after 5.0s "
             + "ProcessVisibility: Foreground ProcessState: Running WatchdogEvent: process-exit WatchdogVisibility: Foreground "
             + "WatchdogCPUStatistics: ( \\\"Elapsed total CPU time (seconds): 16.470 (user 10.110, system 6.360), 51% CPU\\\", "
@@ -33,9 +33,24 @@ extension DebugScene {
             "callStackTree": { "callStackPerThread": true, "callStacks": [
               { "threadAttributed": true, "callStackRootFrames": [\(chain(sampleFrames))] }
             ] }
-          }]
+          }]\(hang ? ", \(sampleHang)" : "")
         }
         """.utf8)
+    }
+
+    /// 同一个包里的一次卡死：主线程停在 SwiftUI 的更新里，往下是 CuePad 自己的帧。
+    private static var sampleHang: String {
+        """
+        "hangDiagnostics": [{
+          "version": "1.0.0",
+          "diagnosticMetaData": {
+            "appVersion": "2026.11.6", "appBuildVersion": "2611060241", "deviceType": "iPhone18,1", "osVersion": "iPhone OS 27.2 (24B5089g)", "hangDuration": "4.2 sec"
+          },
+          "callStackTree": { "callStackPerThread": true, "callStacks": [
+            { "threadAttributed": true, "callStackRootFrames": [\(chain(sampleFrames.dropFirst(3)))] }
+          ] }
+        }]
+        """
     }
 
     /// 自顶向下：前 13 帧照那份真机诊断（UUID 与偏移），之后是常见的主线程底部；CuePad 那一帧的 UUID 是 2611060241 的主程序。

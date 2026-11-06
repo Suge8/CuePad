@@ -16,6 +16,7 @@ final class Diagnostics {
 
     init(directory: URL) {
         archive = DiagnosticArchive(directory: directory)
+        archive.tidy()
         reports = archive.reports()
     }
 
@@ -37,7 +38,10 @@ final class Diagnostics {
         reload()
     }
 
-    private func reload() { reports = archive.reports() }
+    private func reload() {
+        archive.tidy()
+        reports = archive.reports()
+    }
 
     /// MetricKit 在自己的队列上回调；包不是 Sendable，在回调里就转成 JSON（时间按这一刻的本地时区写，`CrashReport` 按本地时区读）。
     private final class Subscriber: NSObject, MXMetricManagerSubscriber, Sendable {

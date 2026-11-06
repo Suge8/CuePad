@@ -32,7 +32,7 @@ struct CrashReportView: View {
     @Environment(\.palette) private var palette
 
     private var summary: String { DiagnosticSummary.text(services.diagnostics.reports) }
-    private var files: [URL] { services.diagnostics.reports.map { services.diagnostics.archive.url($0.id) } }
+    private var files: [URL] { Array(Set(services.diagnostics.reports.map(\.file))).sorted().map(services.diagnostics.archive.url) }
     private var lines: [String] { report.trail + report.frames.map(\.text) }
 
     #if os(iOS)
@@ -51,7 +51,7 @@ struct CrashReportView: View {
     var body: some View {
         SettingPopover(title: report.kind.label, width: 420) {
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Spacing.group, verticalSpacing: 6) {
-                ForEach(facts(date: .abbreviated), id: \.0.key) { title, value in
+                ForEach(facts, id: \.0.key) { title, value in
                     GridRow {
                         Text(title).foregroundStyle(palette.ink3)
                         Text(value.visible).foregroundStyle(palette.ink).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
@@ -75,8 +75,8 @@ struct CrashReportView: View {
     }
     #endif
 
-    private func facts(date: Date.FormatStyle.DateStyle) -> [(LocalizedStringResource, Dotted)] {
-        var facts: [(LocalizedStringResource, Dotted)] = [("时间", Dotted(report.date.formatted(date: date, time: .standard)))]
+    private var facts: [(LocalizedStringResource, Dotted)] {
+        var facts: [(LocalizedStringResource, Dotted)] = [("时间", Dotted(report.shownDate))]
         if let exception = report.exception { facts.append(("异常", Dotted(exception + (report.signal.map { "（\($0)）" } ?? "")))) }
         // 有人话的不再列原文（终止原因原文一长段，占满整页）：原文在导出的摘要里
         if let explanation = report.explanation { facts.append(("含义", Dotted(explanation))) } else if let reason = report.reason { facts.append(("原因", Dotted(reason))) }
@@ -91,7 +91,7 @@ struct CrashReportView: View {
     private var list: some View {
         List {
             Section {
-                ForEach(facts(date: .complete), id: \.0.key) { title, value in
+                ForEach(facts, id: \.0.key) { title, value in
                     LabeledContent { Text(value).foregroundStyle(palette.ink3).multilineTextAlignment(.trailing).textSelection(.enabled) } label: { Text(title) }
                 }
             }

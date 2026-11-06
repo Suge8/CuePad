@@ -13,9 +13,9 @@ nonisolated enum DiagnosticSummary {
         return ([head] + groups.map(block)).joined(separator: "\n\n")
     }
 
-    /// 同一种：类型、异常、信号、终止码与看门狗事件、栈都相同（版本不算：同一个毛病跨了几个构建仍是一种）。
+    /// 同一种：类型、异常、信号、原因（`cause`）、栈都相同（版本不算：同一个毛病跨了几个构建仍是一种）。
     private static func signature(_ report: CrashReport) -> String {
-        [report.kind.rawValue, report.exception ?? "", report.signal ?? "", report.explanation ?? "", report.trail.first ?? ""]
+        [report.kind.rawValue, report.exception ?? "", report.signal ?? "", report.cause, report.trail.first ?? ""]
             .joined(separator: "|") + report.frames.map(\.text).joined(separator: "|")
     }
 
