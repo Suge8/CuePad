@@ -66,6 +66,8 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         case session(PiSession.ID, name: String, role: String)
         case foreign
     }
+    /// 起名开的临时线程（`<线程 id>.<承载进程>`）在等的那一轮（`CodexRuntime+Naming`）
+    var naming: [String: CodexNamingTurn] = [:]
     /// `model/list` 的结果（账号可用的模型对所有会话一样），第一次要时取
     var models: [CodexModel]?
     var stopped = true

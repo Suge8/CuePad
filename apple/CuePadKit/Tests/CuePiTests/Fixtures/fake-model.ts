@@ -15,6 +15,8 @@
 //   [[fail-compact]] 以 error 结束（压缩失败）
 // 停住与放行：不按时长等（机器负载高时测试自己的步骤会慢过任何固定窗口），由测试决定窗口多长。停住时在 <agent 目录>/fake-model-gate/ 下写
 //   held-<pid>-<序号>；测试往同目录写 release-<任意名> 放行一次（一个文件放行一次停住，先放后停也算）；请求被中止时立即结束停住，不消耗放行。
+// 起会话名的请求（系统提示是 CuePad 的起名说明，`SessionNameSuggestion`）：回复 "<模型 id>：<那句话>"，证明用了哪个模型、交的是哪句话。
+// 只有 echo-b 标了价：起名挑同一 provider 里最便宜的、标了价的模型。
 // 其余：回复 "ECHO <文字> IMAGES[<mime>:<base64长度>,…]"，证明文字与图片都进了模型上下文。
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import { mkdirSync, readdirSync, unlinkSync, watch, writeFileSync } from "node:fs";
@@ -66,7 +68,7 @@ export default function (pi: any) {
 		models: [
 			{ id: "echo", name: "Echo", reasoning: false, input: ["text", "image"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100000, maxTokens: 4096 },
 			{ id: "echo-think", name: "Echo Think", reasoning: true, input: ["text", "image"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100000, maxTokens: 4096 },
-			{ id: "echo-b", name: "Echo B", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100000, maxTokens: 4096 },
+			{ id: "echo-b", name: "Echo B", reasoning: false, input: ["text"], cost: { input: 0.1, output: 0.5, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100000, maxTokens: 4096 },
 		],
 		streamSimple(model: any, context: any, options?: any) {
 			const stream = createAssistantMessageEventStream();
@@ -77,6 +79,16 @@ export default function (pi: any) {
 				const parts = typeof lastUser.content === "string" ? [{ type: "text", text: lastUser.content }] : lastUser.content;
 				const text = parts.filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n");
 				const images = parts.filter((p: any) => p.type === "image").map((p: any) => `${p.mimeType}:${p.data.length}`);
+
+				const naming = context.messages.some((m: any) => m.role === "system" && JSON.stringify(m.content).includes("single-line task title"));
+				if (naming) {
+					const title = `${model.id}：${text}`;
+					msg.content.push({ type: "text", text: title });
+					stream.push({ type: "start", partial: msg });
+					stream.push({ type: "done", reason: "stop", message: msg });
+					stream.end();
+					return;
+				}
 
 				const summarizing = text.startsWith("<conversation>\n") || text.startsWith("# Conversation\n");
 				if (text.includes("[[slow]]") || (summarizing && text.includes("[[slow-compact]]"))) await hold(options?.signal);

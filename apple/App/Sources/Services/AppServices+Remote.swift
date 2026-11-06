@@ -15,9 +15,10 @@ extension AppServices {
 
     /// 把 Pi 桥的会话变化写成同步记录，直到流结束。一个会话一条记录：同一会话同时有两个进程（后台托管的那个正在让给
     /// 用户在终端里打开的那个）时，记录跟着用户的；其中一个结束而另一个还在时，记录不标为结束。
-    /// 进程都退出时记录怎么处理（历史、歇着、删除）只由 `PiStateRecorder.exited` 定。
+    /// 进程都退出时记录怎么处理（历史、歇着、删除）只由 `PiStateRecorder.exited` 定。没名字的会话顺带起名（`SessionNamer`）。
     func consumePiChanges(_ changes: AsyncStream<PiSessionChange>) async throws {
         var live: [CuePi.PiSession.ID: CuePi.PiSession] = [:]
+        let namer = SessionNamer(bridge: pi, store: store)
         func owner(of sessionID: String) -> CuePi.PiSession? {
             let processes = live.values.filter { $0.sessionID == sessionID }
             return processes.first { !$0.hosted } ?? processes.first
@@ -28,6 +29,7 @@ extension AppServices {
                 let previous = live[session.id]
                 live[session.id] = session
                 if owner(of: session.sessionID)?.id == session.id { try await recordPiState(of: session) }
+                namer.consider(session)
                 if previous?.model != session.model || previous?.availableModels != session.availableModels || previous?.proofs != session.proofs {
                     try await store.retainQuotaSources(on: hostID, live: live.values.map {
                         QuotaWitness(sessionID: $0.sessionID, models: $0.availableModels + [$0.model].compactMap { $0 }, proofs: $0.proofs)

@@ -23,6 +23,9 @@ public protocol SessionLink: AnyObject {
     /// 至少给一项；会话名已去掉首尾空白、不是空的（桥先检查过）。
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws
     func configure(_ config: PiConfig, in id: PiSession.ID) async throws
+    /// 按第一句话（`firstMessage`）起一个短名，返回模型的原话（`SessionNameSuggestion`）；不写回会话。
+    /// 自带会话名的几家（Claude Code、OpenCode、Grok、dsh）与终端里的 Codex 不起。
+    func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String
 }
 
 /// 做不到的操作缺省拒绝（终端里只读的会话、没有斜杠命令或停止的终端会话）：桥按能力表先拒，实际到不了这里。
@@ -40,5 +43,6 @@ extension SessionLink {
     public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
         throw PiBridgeError.unsupported
     }
+    public func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String { throw PiBridgeError.unsupported }
 }
 #endif
