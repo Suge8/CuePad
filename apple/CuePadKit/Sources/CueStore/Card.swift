@@ -124,10 +124,10 @@ public enum CardChange: Sendable, Equatable {
   case trash(id: UUID, lifted: [UUID])
   /// 挪动：原来的位置与原来的前一个同级。
   case move(id: UUID, from: CardSlot, after: UUID?)
-  /// 灵感接进任务：任务原来的正文。
-  case merge(idea: UUID, task: UUID, body: String)
-  /// 照灵感新建任务：新建的那条任务。
-  case spawn(idea: UUID, task: UUID)
+  /// 灵感接进任务：任务原来的正文，与接完那一刻任务的修改时刻（撤销时核对，变了就是之后又改过，不撤）。
+  case merge(idea: UUID, task: UUID, body: String, modifiedAt: Date)
+  /// 照灵感新建任务：新建的那条任务与它此刻的修改时刻（同上）。
+  case spawn(idea: UUID, task: UUID, modifiedAt: Date)
 }
 
 extension Card {

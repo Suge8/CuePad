@@ -2,6 +2,8 @@ import Foundation
 
 public enum CueStoreError: Error, Equatable {
   case notFound
+  /// 撤销前发现目标在回执之后又被改过：不撤，免得盖掉后来的改动（`CueStore.undo`）。
+  case changedSinceUndo
   case blankTaskContent
   case blankProjectName
   /// 单个文件超过上限（`AttachmentFiles.maxBytes`）。
@@ -110,6 +112,7 @@ extension CueStoreError: LocalizedError {
   public var errorDescription: String? {
     switch self {
     case .notFound: String(localized: "找不到这条记录，可能已被删除")
+    case .changedSinceUndo: String(localized: "已改过，无法撤销")
     case .blankTaskContent: String(localized: "任务内容不能为空")
     case .blankProjectName: String(localized: "项目名不能为空")
     case .fileTooLarge(let limit): String(localized: "文件超过 \(limit / 1_000_000) MB，存不进来")

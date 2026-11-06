@@ -144,6 +144,31 @@ struct TaskFlowTests {
 
     // MARK: 撤销与批量
 
+    /// 撤销前任务在回执之后又被改过：不撤（免得盖掉后来写的），提示"已改过，无法撤销"；没改过的撤销照常（上一条用例）。
+    @Test func 撤销前任务已改过_不撤并提示() async throws {
+        let workspace = Workspace(services: rig.services)
+        let check = try await store.createTask("上线前检查")
+        let note = try await store.createCard(body: "补一句")
+        try await workspace.mergeIdea(note.id, into: check.id)
+        let mergeUndo = try #require(workspace.notice?.action)
+        try await store.updateCard(check.id) { $0.body += "\n合并后又写的" }
+        workspace.run(mergeUndo)
+        try await eventually("提示已改过") { workspace.notice?.text.visible == "已改过，无法撤销" }
+        #expect(try await store.card(check.id)?.body == "上线前检查\n\n补一句\n合并后又写的")
+        #expect(try await store.trashedCards().map(\.id) == [note.id])
+
+        let idea = try await store.createCard(body: "排查闪退")
+        try await workspace.newTask(fromIdea: idea.id)
+        let spawnUndo = try #require(workspace.notice?.action)
+        let spawned = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.body == "排查闪退" })
+        try await store.updateCard(spawned.id) { $0.body += "\n补充" }
+        workspace.notice = nil
+        workspace.run(spawnUndo)
+        try await eventually("提示已改过") { workspace.notice?.text.visible == "已改过，无法撤销" }
+        #expect(try await store.card(spawned.id)?.deletedAt == nil)
+        #expect(Set(try await store.trashedCards().map(\.id)) == [note.id, idea.id])
+    }
+
     @Test func 灵感接进任务_拖成新任务_删除_都能撤销() async throws {
         let workspace = Workspace(services: rig.services)
         let body = "上线前检查\n把 changelog 过一遍"

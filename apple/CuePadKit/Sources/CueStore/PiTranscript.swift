@@ -161,7 +161,7 @@ extension CueStore {
   /// 对话没了的会话的预览（`window` 之前发的）一起删，文件没有别的预览或图片用着时随之删掉；对话里的图片同样，没有卡片、发送记录、别的对话用着时随之删掉。
   public func prunePiMessages(olderThan window: TimeInterval, now: Date = .now) throws {
     let cutoff = now.addingTimeInterval(-window)
-    try reportingFileFailures {
+    try removingFiles {
       try write {
         // 先按会话聚合再连会话索引：聚合只读 `piMessages_sessionID_at`，不逐条回表读带长文的行
         let quiet = try db.query(

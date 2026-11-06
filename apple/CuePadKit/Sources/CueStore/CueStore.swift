@@ -47,24 +47,7 @@ public actor CueStore {
       at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let connection = try SQLite(path: url.path)
     try connection.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL")
-    let version = try connection.first("PRAGMA user_version") { Int($0.int(0)) } ?? 0
-    if version == 0 {
-      _ = try connection.transaction {
-        try connection.exec(Schema.create)
-        try connection.exec("PRAGMA user_version = \(Schema.version)")
-      }
-    } else if version < Schema.baseVersion {
-      throw CueStoreError.schemaTooOld(version)
-    } else if version < Schema.version {
-      _ = try connection.transaction {
-        let files = Self.files(of: location)
-        for upgrade in Schema.upgrades[(version - Schema.baseVersion)...] { try upgrade.run(connection, files) }
-        try connection.exec("PRAGMA user_version = \(Schema.version)")
-      }
-      try Schema.reclaim(connection)
-    } else if version != Schema.version {
-      throw CueStoreError.unsupportedSchemaVersion(version)
-    }
+    if try Self.userVersion(connection) != Schema.version { try Self.migrate(connection, location) }
     try connection.exec(Self.guards)
     let queue = DispatchSerialQueue(label: "CueStore", qos: .userInitiated)
     let names = ChangeNotification.names(forDatabase: url)
@@ -83,6 +66,32 @@ public actor CueStore {
     Task { [weak self, events = listener.events] in
       for await _ in events { await self?.externalChangeNotified() }
     }
+  }
+
+  private static func userVersion(_ connection: SQLite) throws -> Int {
+    try connection.first("PRAGMA user_version") { Int($0.int(0)) } ?? 0
+  }
+
+  /// 新建或升级到当前结构。版本在写锁里重读：别的进程（App 与命令行同时打开旧库）可能在这一进程等锁时已经升完，
+  /// 按等锁前读到的旧版本重跑会在"加列、建表"上报重复而打不开。
+  private static func migrate(_ connection: SQLite, _ location: LibraryLocation) throws {
+    let (upgraded, afterCommit) = try connection.transaction { () -> (Bool, [Schema.Upgrade.AfterCommit]) in
+      let version = try userVersion(connection)
+      if version == Schema.version { return (false, []) }
+      if version == 0 {
+        try connection.exec(Schema.create)
+        try connection.exec("PRAGMA user_version = \(Schema.version)")
+        return (false, [])
+      }
+      if version < Schema.baseVersion { throw CueStoreError.schemaTooOld(version) }
+      if version > Schema.version { throw CueStoreError.unsupportedSchemaVersion(version) }
+      let files = Self.files(of: location)
+      let cleanups = try Schema.upgrades[(version - Schema.baseVersion)...].compactMap { try $0.run(connection, files) }
+      try connection.exec("PRAGMA user_version = \(Schema.version)")
+      return (true, cleanups)
+    }.result
+    afterCommit.forEach { $0() }
+    if upgraded { try Schema.reclaim(connection) }
   }
 
   /// 只读连接：跑在 `queue` 上，nil 是主线程；不收跨进程通知（订阅都在本体上）。
@@ -139,9 +148,19 @@ public actor CueStore {
 
   private func waited(since posted: ContinuousClock.Instant) -> Duration { .now - posted }
 
+  /// 事务里登记、提交成功后才做的事（删文件这类回滚不了的）；事务回滚就丢掉。`write` 的 body 里用 `afterCommit.append`。
+  var afterCommit: [@Sendable () -> Void] = []
+
   /// 一个写事务；提交后通知订阅者，并把改动的同步记录交给同步订阅者。
   func write<T>(_ body: () throws -> T) throws -> T {
-    let (result, changes) = try db.transaction(body)
+    let (result, changes): (T, Changes)
+    do { (result, changes) = try db.transaction(body) } catch {
+      afterCommit = []
+      throw error
+    }
+    let actions = afterCommit
+    afterCommit = []
+    actions.forEach { $0() }
     let tables = Set(changes.tables.compactMap(Table.init(rawValue:)))
     if !tables.isEmpty {
       for subscriber in subscriptions.committed(tables) where touches(tables, changes, reading: subscriber.tables, scopes: subscriber.scopes) {

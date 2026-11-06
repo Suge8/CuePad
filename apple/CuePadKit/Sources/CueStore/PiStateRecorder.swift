@@ -78,7 +78,7 @@ public actor PiStateRecorder {
       sessions[sessionID] = session
       return nil
     case .wait(let wait):
-      session.pace.timer = after(wait) { await $0.flush(sessionID) }
+      session.pace.timer = after(wait) { await $0.flush(sessionID, timer: $1) }
       sessions[sessionID] = session
       return nil
     case .now:
@@ -95,7 +95,7 @@ public actor PiStateRecorder {
 
   /// 用户结束会话：记录标为已结束，进历史（不算被打断）。
   public func end(sessionID: String) async throws {
-    sessions.removeValue(forKey: sessionID)?.pace.timer?.cancel()
+    sessions.removeValue(forKey: sessionID)?.pace.timer?.task.cancel()
     let now = timing.now()
     try await persist { [store, hostID, bootID] in try await store.endPiState(host: hostID, sessionID: sessionID, bootID: bootID, at: now) }
   }
@@ -115,7 +115,7 @@ public actor PiStateRecorder {
   /// 后两种在记录上手上还有活时记为做到一半被打断（`PiWorkState.interrupted`：崩溃、被杀）。
   /// 托管的会话要结束，由用户的结束请求写 `end`。
   public func exited(sessionID: String, spoke: Bool) async throws {
-    sessions.removeValue(forKey: sessionID)?.pace.timer?.cancel()
+    sessions.removeValue(forKey: sessionID)?.pace.timer?.task.cancel()
     let id = sessionID
     let now = timing.now()
     if spoke {
@@ -125,19 +125,19 @@ public actor PiStateRecorder {
     }
   }
 
-  private func flush(_ sessionID: String) async {
-    guard var session = sessions[sessionID], let content = session.pace.due() else { return }
+  private func flush(_ sessionID: String, timer: UUID) async {
+    guard var session = sessions[sessionID], let content = session.pace.due(timer) else { return }
     let write = commit(sessionID, &session, content, at: timing.now())
     sessions[sessionID] = session
     // 定时写入没有调用方可报告；记为未写入，下一次更新会重写
     do { try await persist(write) } catch { sessions[sessionID]?.pace.forget(content) }
   }
 
-  /// 挂起的写入等 `wait` 秒再交给 `fire`；被取消（取代、丢弃）就不写。
-  func after(_ wait: TimeInterval, _ fire: @escaping @Sendable (PiStateRecorder) async -> Void) -> Task<Void, Never> {
-    Task { [timing] in
+  /// 挂起的写入等 `wait` 秒再交给 `fire`（带这个计时任务的身份，`Pace.due` 据此核对）；被取消（取代、丢弃）就不写。
+  func after(_ wait: TimeInterval, _ fire: @escaping @Sendable (PiStateRecorder, UUID) async -> Void) -> Owned {
+    Owned.spawn { [timing] id in
       guard (try? await timing.sleep(.seconds(wait))) != nil else { return }
-      await fire(self)
+      await fire(self, id)
     }
   }
 
