@@ -32,6 +32,7 @@ nonisolated struct PendingCapture: Codable, Equatable, Sendable {
 /// 分享扩展与主 App 之间的数据通路：扩展只往容器里的 `Capture/` 放内容，由主 App 入库，
 /// 资料库始终只有主 App 一个写者，主 App 的界面订阅也照常触发。
 /// 每条是一个目录：先放文件，最后原子写 `capture.json`；没有 json 的目录是尚未写完的，读取时跳过。
+/// 目录名（UUID）是条目的稳定标识：入库时与建卡同事务记下（`CueStore.createCard(capture:)`），删失败的条目下次只重试删除。
 nonisolated enum CaptureQueue {
     /// 扩展写完后发出的进程间通知，主 App 收到后入库。
     static let notification = "\(AppIdentity.id).capture-enqueued"
@@ -41,6 +42,7 @@ nonisolated enum CaptureQueue {
     struct Entry: Sendable {
         let directory: URL
         let capture: PendingCapture
+        var id: String { directory.lastPathComponent }
 
         /// 这条带的文件：条目目录里的那份与显示的文件名。
         func files() -> [(url: URL, name: String)] { capture.files.map { (directory.appending(path: $0.stored), $0.name) } }

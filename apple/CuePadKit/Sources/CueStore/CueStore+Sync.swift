@@ -282,7 +282,7 @@ extension CueStore {
   package func resetSyncMetadata() throws {
     try write {
       try db.run("DELETE FROM syncRecords")
-      try db.run("DELETE FROM syncState")
+      try db.run("DELETE FROM syncState WHERE key NOT LIKE 'capture:%'")  // 分享入库的标记不属于同步状态：条目还在时要留着
     }
   }
 

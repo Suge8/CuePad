@@ -20,8 +20,6 @@ actor SyncCoordinator {
   nonisolated let acceptances = Broadcast<Void>()
   /// 重试的等待结束了（到点、连通了、收下了一批）：发送者接着发，拉取器补上被挡下的那一拉（`SyncCoordinator+Hold`）。
   nonisolated let retryDue = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
-  /// 下次最早什么时候发、因为什么（`hold`）；nil 是不用等。
-  var holding: Hold?
   var backoff = Backoff()
   var retryTimer: Task<Void, Never>?
   /// 正在等着自己恢复的这一段（`noteWaiting`）：进入、恢复各记一条日志，其间的重试不记。
@@ -42,8 +40,11 @@ actor SyncCoordinator {
     var status = SyncStatus.starting
     var sending = false
     var catchingUp = false
-    /// 服务器要求等着再发（限流、区忙）
-    var serverWait = false
+    /// 下次最早什么时候发、因为什么（`hold`）；nil 是不用等。服务器要求的等待（`Hold.server`）在界面上算同步中，只从这里读。
+    var holding: Hold?
+    /// 连着时账号没认清（账号变了之后取不到账号名、认账号失败）：不知道此刻是不是上次同步的那个账号，不拉不传，显示账号暂不可用，
+    /// 认清了（`account`）才放开。没连着时的认不了照旧（`accountStatus`）：那时本来就还没开始拉传。
+    var accountPending = false
     /// 库里有同步区令牌（`token()`、`setToken` 读写时记下）
     var reconciled = false
     var issues: [SyncIssue] = []
@@ -51,10 +52,19 @@ actor SyncCoordinator {
     /// 文件那一路因 iCloud 空间不足停着、到这一刻再试（`holdFiles`）；之后传上去一个才清掉：别的记录照常同步，所以不进 `status`。
     var filesHeldUntil: ContinuousClock.Instant?
 
+    /// 显示的状态：账号待核对时显示账号暂不可用（停下了、没有账号这些更要紧的照显示）。
+    var shown: SyncStatus {
+      guard accountPending else { return status }
+      return switch status {
+      case .needsDecision, .outdated, .noAccount, .accountRestricted: status
+      default: .accountUnavailable
+      }
+    }
+
     /// 界面看到的快照："同步中"是底层空闲、而一轮上传或拉积压正在进行，或服务器要求等着再发。
     var state: SyncState {
       SyncState(
-        status: status == .idle && (sending || catchingUp || serverWait) ? .syncing : status, issues: issues, alerts: alerts, catchingUp: catchingUp,
+        status: shown == .idle && (sending || catchingUp || holding?.server == true) ? .syncing : shown, issues: issues, alerts: alerts, catchingUp: catchingUp,
         reconciled: reconciled, filesOverQuota: filesHeldUntil != nil)
     }
   }
@@ -82,7 +92,7 @@ actor SyncCoordinator {
 
   /// 能不能和服务器同步：有可用的账号，也没有停下（`stopped`）。
   var canSync: Bool {
-    !stopped && ![.noAccount, .accountRestricted].contains(status)
+    !stopped && !facts.accountPending && ![.noAccount, .accountRestricted].contains(status)
   }
 
   /// 停下了：等你决定，或这台要更新（`SyncStatus.outdated`）。停下时不拉、不传，账号、同步区与上传失败都不改状态。
@@ -100,6 +110,7 @@ actor SyncCoordinator {
     }
     unsendable = [:]
     drained = nil
+    clearHolds()  // 上一个账号（或处理前）的退避、等待与空间不足不带进新的开始
     facts.reconciled = false  // 两种处理都清掉了令牌
     facts.status = .starting
   }
@@ -132,7 +143,7 @@ actor SyncCoordinator {
   /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下了）时抛出，拉取器不前移令牌。
   /// 单条记录不合法只报告（见 `ZonePuller`）。页里的门槛高于这台的，整页不应用，更新后从这页接着拉。
   func pulled(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
-    guard !stopped else { throw SyncPaused() }
+    guard canSync else { throw SyncPaused() }
     try meet(modifications)
     guard !modifications.isEmpty || !deletions.isEmpty else { return }
     try await applyFetched(modifications, deletions)  // 没应用成的由拉取器报（`failed`）
@@ -164,6 +175,7 @@ actor SyncCoordinator {
 
   /// 此刻登录的 iCloud 账号（用户记录名）。第一次同步记下；和上次同步的不是同一个时，本机数据属于上一个账号，停下来等你决定。
   func account(_ name: String) async {
+    facts.accountPending = false  // 认清了：是不是上次那个由下面判断
     guard !stopped else { return }
     let current = Data(name.utf8)
     do {
@@ -173,6 +185,9 @@ actor SyncCoordinator {
       failed(error)
     }
   }
+
+  /// 连着时认账号失败（`CloudSync`）：认清之前不拉不传（`Facts.accountPending`）。
+  func accountUnconfirmed() { facts.accountPending = true }
 
   /// 同步区不在了（`deletedByUser`：你在 iCloud 设置里删了 CuePad 的数据）：同步过的（有令牌或推送过的记录）是云端数据被删除或重置，
   /// 停下来等你决定；从没同步过的不用管，第一次上传时建区。

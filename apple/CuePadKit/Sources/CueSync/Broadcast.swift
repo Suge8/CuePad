@@ -1,11 +1,12 @@
 import Synchronization
 
-/// 一处发、多处收：每个订阅者一条自己的 AsyncStream，订阅结束时自己移除。`replaysLatest` 的新订阅者先拿到最近一个值。
+/// 一处发、多处收：每个订阅者一条自己的 AsyncStream，`replaysLatest` 的新订阅者先拿到最近一个值。
+/// 结束了的订阅在下一次发的时候移除，不用 `onTermination`：取消订阅时 AsyncStream 持着自己的锁调它，它再拿这里的锁，
+/// 而发的时候是持着这里的锁去拿流的锁，两边顺序相反会互等（取消订阅碰上发，实测卡死）。
 final class Broadcast<Element: Sendable>: Sendable {
   private struct State {
     var latest: Element?
-    var subscribers: [Int: AsyncStream<Element>.Continuation] = [:]
-    var next = 0
+    var subscribers: [AsyncStream<Element>.Continuation] = []
   }
 
   private let state: Mutex<State>
@@ -20,20 +21,19 @@ final class Broadcast<Element: Sendable>: Sendable {
 
   func stream() -> AsyncStream<Element> {
     let (stream, continuation) = AsyncStream.makeStream(of: Element.self, bufferingPolicy: policy)
-    let id = state.withLock { state in
-      defer { state.next += 1 }
-      state.subscribers[state.next] = continuation
+    state.withLock { state in
+      state.subscribers.append(continuation)
       if replaysLatest, let latest = state.latest { continuation.yield(latest) }
-      return state.next
     }
-    continuation.onTermination = { [weak self] _ in self?.state.withLock { _ = $0.subscribers.removeValue(forKey: id) } }
     return stream
   }
 
   func yield(_ value: Element) {
     state.withLock { state in
       state.latest = value
-      for subscriber in state.subscribers.values { subscriber.yield(value) }
+      state.subscribers.removeAll { subscriber in
+        if case .terminated = subscriber.yield(value) { true } else { false }
+      }
     }
   }
 }

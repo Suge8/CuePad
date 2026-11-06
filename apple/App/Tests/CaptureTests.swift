@@ -80,4 +80,26 @@ struct CaptureTests {
         let bodies = try await eventually(services.store, { try $0.cards(in: Project.defaultID).map(\.body) }) { !$0.isEmpty }
         #expect(bodies == ["来自扩展"])
     }
+
+    /// 启动跟随者、Darwin 通知、回到前台会同时触发入库；入库后删条目失败（条目被锁）再重试也一样：一次分享只出一张卡。
+    @Test func 同一次分享并发入库与删除失败后重试都只出一张卡() async throws {
+        try CaptureQueue.enqueue(ShareContent(text: "并发的一条"), project: Project.defaultID, into: queue)
+        async let first: Void = services.drainCaptures()
+        async let second: Void = services.drainCaptures()
+        _ = await (first, second)
+        #expect(try await bodies("并发的一条") == 1)
+
+        try CaptureQueue.enqueue(ShareContent(text: "删不掉的一条"), project: Project.defaultID, into: queue)
+        let manifest = try #require(CaptureQueue.pending(in: queue).first).directory.appending(path: "capture.json")
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: manifest.path)
+        defer { try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: manifest.path) }
+        await services.drainCaptures()
+        #expect(CaptureQueue.pending(in: queue).count == 1, "前提：条目没删掉")
+        await services.drainCaptures()
+        #expect(try await bodies("删不掉的一条") == 1)
+    }
+
+    private func bodies(_ body: String) async throws -> Int {
+        try await services.store.cards(in: Project.defaultID).count { $0.body == body }
+    }
 }

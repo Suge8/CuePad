@@ -14,6 +14,13 @@ extension SyncCoordinator {
     var fault: SyncFault
     /// 服务器给的最早时刻：连通的证据与收下一批都不提前它。
     var notBefore: ContinuousClock.Instant
+    /// 在等服务器要求的时刻（限流、区忙，或后来的失败盖过了它、它还没到）：界面显示同步中（`Facts.state`）。
+    let server: Bool
+
+    init(until: ContinuousClock.Instant, fault: SyncFault, notBefore: ContinuousClock.Instant) {
+      (self.until, self.fault, self.notBefore) = (until, fault, notBefore)
+      server = fault.isWait || notBefore > .now
+    }
   }
 
   enum Request {
@@ -42,7 +49,7 @@ extension SyncCoordinator {
   func admits(_ request: Request) -> Bool {
     let now = ContinuousClock.now
     if case .fileUpload = request, let until = facts.filesHeldUntil, now < until { return false }
-    guard let hold = holding, now < hold.until else { return true }
+    guard let hold = facts.holding, now < hold.until else { return true }
     guard now >= hold.notBefore else { return false }
     return switch (request, hold.fault) {
     case (.pull, .wait): false
@@ -57,7 +64,7 @@ extension SyncCoordinator {
   func hold(_ fault: SyncFault, waiting: Bool) {
     let now = ContinuousClock.now
     let cap = waiting ? Backoff.waitingCap : nil
-    let notBefore = max(now + (fault.retryAfter ?? .zero), holding?.notBefore ?? now)
+    let notBefore = max(now + (fault.retryAfter ?? .zero), facts.holding?.notBefore ?? now)
     let until: ContinuousClock.Instant =
       switch fault {
       case .offline: now + backoff.next(cap: cap)
@@ -92,13 +99,13 @@ extension SyncCoordinator {
   /// 有一批收下了：退避到此为止，服务器给的最早时刻照守（另一路被限流时它还在）。
   func progressed() {
     backoff.reset()
-    guard let hold = holding, ContinuousClock.now < hold.notBefore else { return release() }
+    guard let hold = facts.holding, ContinuousClock.now < hold.notBefore else { return release() }
     setHold(Hold(until: hold.notBefore, fault: hold.fault, notBefore: hold.notBefore))
   }
 
   /// 连通的证据（`succeeded`、网络路径恢复）：因连不上在等的不再等退避，服务器给的最早时刻照守。
   func connected() {
-    guard let hold = holding, hold.fault.isOffline else { return }
+    guard let hold = facts.holding, hold.fault.isOffline else { return }
     guard ContinuousClock.now >= hold.notBefore else { return setHold(Hold(until: hold.notBefore, fault: hold.fault, notBefore: hold.notBefore)) }
     release()
   }
@@ -123,8 +130,7 @@ extension SyncCoordinator {
   }
 
   private func setHold(_ next: Hold) {
-    holding = next
-    facts.serverWait = next.fault.isWait
+    facts.holding = next
     retryTimer?.cancel()
     retryTimer = Task { [until = next.until] in
       try? await Task.sleep(until: until, clock: .continuous)
@@ -135,12 +141,22 @@ extension SyncCoordinator {
 
   /// 等待结束（到点或提前）：在等的接着发、被挡下的那一拉补上。
   private func release() {
-    guard holding != nil else { return }
-    holding = nil
-    facts.serverWait = false
+    guard facts.holding != nil else { return }
+    facts.holding = nil
     retryTimer?.cancel()
     retryTimer = nil
     retryDue.yield(())
+  }
+
+  /// 处理完要你决定的事、重新开始之前（`resolve`）：退避、在等的时刻、空间不足的停顿与连不上的那一段都清掉，新的开始从头算。
+  /// 在等的照样给一次 `retryDue`（同 `release`），新一代当场发。
+  func clearHolds() {
+    backoff.reset()
+    outage = nil
+    release()
+    facts.filesHeldUntil = nil
+    quotaTimer?.cancel()
+    quotaTimer = nil
   }
 }
 
