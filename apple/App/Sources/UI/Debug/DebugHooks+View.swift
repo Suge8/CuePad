@@ -204,6 +204,7 @@ extension View {
                 case "widgets": DebugWidgetStage()
                 case "activity": DebugActivityStage(workspace: workspace)
                 case "share": DebugShareStage(location: workspace.services.location)
+                case "livepreview": LivePreviewSpike().ignoresSafeArea(edges: .bottom)
                 default: EmptyView()
                 }
             }

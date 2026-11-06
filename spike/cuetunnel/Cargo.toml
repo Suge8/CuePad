@@ -1,0 +1,25 @@
+[package]
+name = "cuetunnel"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+iroh = { version = "1.4", default-features = false, features = ["tls-ring"] }
+iroh-tickets = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "macros", "time", "sync"] }
+n0-future = "*"
+# libc 0.2.190 起路由常量（RTAX_*、RTM_VERSION）只在 macOS 上定义，netwatch 0.19.3 编 iOS 失败；钉住 0.2.188
+libc = "=0.2.188"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+codegen-units = 1
+lto = true
+debug = "none"
+strip = true
+
