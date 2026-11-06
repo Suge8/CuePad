@@ -90,6 +90,12 @@ private struct SessionAsks: ViewModifier {
     func body(content: Content) -> some View {
         content
             .panel(item: renaming) { RenameSheet(target: $0.session, shown: $0.shown, adopts: $0.adopts) }
+            .agentBusyDialog(completing, isPresented: Binding { completing != nil } set: { if !$0, completing != nil { workspace.sessionAsk = nil } }) {
+                [workspace, completing] in
+                // 按下后框自己关、问的那一格随之清空：会话在问的时候就记下
+                guard let completing else { return }
+                workspace.attempt { try await workspace.complete(completing) }
+            }
         #if os(macOS)
             .dialog(Self.title, item: asked { if case .end(let session) = $0 { session } else { nil } }, message: Self.message) { session in
                 [DialogButton(title: "结束会话", role: .destructive) { end(session) }]
@@ -123,6 +129,7 @@ private struct SessionAsks: ViewModifier {
         }
     }
 
+    private var completing: PiSessionState? { if case .complete(let session) = workspace.sessionAsk { session } else { nil } }
     private var ending: PiSessionState? { if case .end(let session) = workspace.sessionAsk { session } else { nil } }
 
     private func end(_ session: PiSessionState) { Task { await workspace.end(session) } }

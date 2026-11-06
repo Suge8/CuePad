@@ -3,14 +3,14 @@ import SwiftUI
 
 /// 一个会话的菜单项（长按 / Mac 右键，或会话页的"⋯"）：会话出现的每一处共用这一份，有哪几项、什么顺序只在这里——
 /// 标为未读、去它在等的那一处（`HandoffButton`）、置顶（绑着任务时：会话自己没有置顶，置的是那件任务，`SessionTask`）、重命名、
-/// 跳到所在终端（Mac 本机桥上开在终端里的）、结束会话。看板上不归没做完的事的会话卡（`onBoard`）与任务同一组操作：多一项完成，置顶与重命名
-/// 都落在当场给它建的那件任务上（`Workspace+Adopt`）。挂在会话列表的行（"更早"、搜索）、看板推进中与等你的会话卡、两端会话页的"⋯"上；
+/// 跳到所在终端（Mac 本机桥上开在终端里的）、结束会话。看板上不归没做完的事的会话卡（`board`）与任务同一组操作：多一项完成（在做或在等你时先问，
+/// `Workspace.finish`），置顶与重命名都落在当场给它建的那件任务上（`Workspace+Adopt`）。挂在会话列表的行（"更早"、搜索）、看板推进中与等你的会话卡、两端会话页的"⋯"上；
 /// 手机会话行的左滑露出结束与重命名（`swipes`）。重命名与结束要再确认，交给窗口上那一格（`Workspace.sessionAsk`）。
 struct SessionActions: View {
     let session: PiSessionState
     var task: SessionTask?
-    /// 看板推进中、等你里没归没做完的事的会话卡（`BoardSessionCard`、`BoardWaitCard`）上的：完成、置顶、改名当场给它建任务。
-    var onBoard = false
+    /// 看板推进中、等你里没归没做完的事的会话卡（`BoardSessionCard`、`BoardWaitCard`）上的：那张卡的会话，完成、置顶、改名当场给它建任务。
+    var board: PiSessionListItem?
     /// 结束请求在路上（`DeliveryRequest.shownEnd`）：结束会话置灰。
     var ending = false
     @Environment(Workspace.self) private var workspace
@@ -18,15 +18,15 @@ struct SessionActions: View {
     var body: some View {
         MarkUnreadButton(session: session)
         HandoffButton(session: session)
-        if onBoard {
+        if let board {
             let session = session
-            Button(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon) { workspace.attempt { try await workspace.complete(session) } }
+            Button(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon) { workspace.finish(board) }
             Button(CardMenu.Item.pin.title, icon: CardMenu.Item.pin.icon) { workspace.attempt { try await workspace.pin(session) } }
         } else if let task {
             let item: CardMenu.Item = task.isPinned ? .unpin : .pin
             Button(item.title, icon: item.icon) { workspace.setPinned(task.id, !task.isPinned) }
         }
-        if let rename = Self.rename(session, task: task, adopts: onBoard, in: workspace) { RowActionButtons(actions: [rename]) }
+        if let rename = Self.rename(session, task: task, adopts: board != nil, in: workspace) { RowActionButtons(actions: [rename]) }
         #if os(macOS)
         if let bridge = workspace.services.pi.session(sessionID: session.sessionID), bridge.canJump {
             Button("跳到所在终端", icon: .terminal) { workspace.jumpToTerminal(bridge.id) }
@@ -77,11 +77,14 @@ enum SessionAsk: Identifiable, Equatable {
     /// `shown` 是预填的名字（此刻写的那个）；`adopts`：看板上的会话卡发起的，没绑任务时先给它建任务（`Workspace.rename`）。
     case rename(PiSessionState, shown: String, adopts: Bool)
     case end(PiSessionState)
+    /// 看板上在做或在等你的会话卡点了完成（`Workspace.finish`）：先问一句再建任务、完成。
+    case complete(PiSessionState)
 
     var id: String {
         switch self {
         case .rename(let session, _, _): "rename/\(session.id)"
         case .end(let session): "end/\(session.id)"
+        case .complete(let session): "complete/\(session.id)"
         }
     }
 }

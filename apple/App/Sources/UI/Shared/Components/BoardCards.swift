@@ -162,9 +162,9 @@ struct BoardSessionCard: View {
             .boardCard(.advancing)
         }
         .help(Dotted(project?.shownName, session.agentMark).visible)
-        .contextMenu { OpenSessionBeside(session: session); SessionActions(session: session, onBoard: true) }
+        .contextMenu { OpenSessionBeside(session: session); SessionActions(session: session, board: agent) }
         .accessibilityLabel(Dotted(name, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label, pulse.handoff?.waiting).spoken)
-        .accessibilityActions { OpenSessionBeside(session: session); SessionActions(session: session, onBoard: true) }
+        .accessibilityActions { OpenSessionBeside(session: session); SessionActions(session: session, board: agent) }
     }
 }
 

@@ -12,7 +12,15 @@ extension Workspace {
         try await services.store.adoptSession(session.sessionID)
     }
 
-    /// 看板上的会话拖到已完成、点完成：建任务再完成它（同点完成圈，`toggle`；托管的会话照做完的规则结束，终端里的随之收起）。
+    /// 看板上会话卡的"完成"（菜单、读屏、拖到已完成同一条路）：同点完成圈，会话在做或在等你时先问一句（`SessionAsk.complete`，
+    /// `agentBusyDialog`），答应了才建任务、完成；取消什么都不留。否则直接完成。
+    func finish(_ agent: PiSessionListItem) {
+        let session = agent.state
+        if pulse(of: agent).shown?.agentBusy == true { return sessionAsk = .complete(session) }
+        attempt { try await self.complete(session) }
+    }
+
+    /// 建任务再完成它（同点完成圈，`toggle`；托管的会话照做完的规则结束，终端里的随之收起）。
     func complete(_ session: PiSessionState) async throws {
         try await toggle(try await adopt(session))
     }

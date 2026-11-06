@@ -63,14 +63,20 @@ struct SessionBoardTests {
         #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["session/s1"])
     }
 
-    @Test func 等你里的无主会话_同样当场建卡完成() async throws {
+    @Test func 等你里的无主会话点完成_先问一句_答应了才建卡完成() async throws {
         // 在问你只认宿主在线时报的（`runtimeUntil`）
         try await rig.runtimeRecorder(on: Self.mac).update(sessionID: "q1", state: .waitingForUser, title: "要不要推送")
         let board = try await TaskBoard.read(from: store)
         let held = try #require(board.held.first { $0.session.sessionID == "q1" })
         #expect(held.item == nil && board.advancing.isEmpty)
 
-        try await Workspace(services: services).complete(held.session)
+        // 菜单里的完成与拖到已完成同一条路（`finish`）：在等你的会话先问，不先建卡
+        let workspace = Workspace(services: services)
+        workspace.finish(PiSessionListItem(state: held.session))
+        #expect(workspace.sessionAsk == .complete(held.session))
+        #expect(try await tasks().isEmpty, "问过之前什么都不留")
+
+        try await workspace.complete(held.session)
         let task = try #require(try await tasks().first)
         #expect(task.status == .done && task.piSessionID == "q1")
     }
