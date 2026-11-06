@@ -103,7 +103,8 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "start", "task": claude.id.uuidString, "agent": "claude", "model": "opus", "fresh": true])
       let launch = try #require(try await store.deliveryRequests().first { $0.mode == .known(.start) })
       #expect(launch.launch?.agent == .claudeCode && launch.launch?.model == PiModelKey(provider: "claude", id: "opus"))
-      #expect(try await store.deliveryRequests(toSession: "c1").last?.mode == .known(.end))  // 换下来的会话结束
+      // 换下来的是终端里他自己开的会话：不替他结束（结束就是关掉他的终端进程）
+      #expect(try await store.deliveryRequests(toSession: "c1").allSatisfy { $0.mode != .known(.end) })
     }
   }
 }

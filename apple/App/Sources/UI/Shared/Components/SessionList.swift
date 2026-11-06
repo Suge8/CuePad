@@ -91,7 +91,7 @@ struct SessionList<Top: View>: View {
         let row = SessionRow(item: item, showsPlace: list.showsPlace, end: end)
         // 行的边距挂在最外层：挂在自绘轻扫里面传不到列表上
         #if os(iOS)
-        let card = row.rowSwipes(SessionActions.swipes(item.state, ending: ending, in: workspace), clipped: false)
+        let card = row.rowSwipes(SessionActions.swipes(item.state, task: item.task, ending: ending, in: workspace), clipped: false)
         #else
         let card = row
         #endif
@@ -135,7 +135,7 @@ private struct SessionRow: View {
     var body: some View {
         let session = item.state
         Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
-            PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
+            PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, task: item.task?.title, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
                 .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(PressStyle(.card))

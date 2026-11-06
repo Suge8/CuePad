@@ -21,7 +21,7 @@ extension MCPTests {
     let first = try await store.createTask("调研", under: task.id), second = try await store.createTask("改脚本", under: task.id)
     try await store.linkCard(first.id, toSession: "s1")
     try await store.recordMacPresence(host: "mac-a") { true }  // 会话所在的 Mac 醒着：下一步才能接着用它的会话
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "调研")
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "调研", hosted: true)
     try await Server.run(library: sandbox.directory) { server in
       _ = try await server.call("task", ["action": "done", "task": first.id.uuidString, "evidence": ["看完了"]])
       #expect(try await store.card(first.id)?.status == .done)
@@ -82,7 +82,7 @@ extension MCPTests {
     let docs = try await store.createTask("写说明", under: task.id)
     try await store.linkCard(sound.id, toSession: "s1")
     let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-    for session in ["s1", "s3"] { try await recorder.update(sessionID: session, state: .settled, title: session) }
+    for session in ["s1", "s3"] { try await recorder.update(sessionID: session, state: .settled, title: session, hosted: true) }
     try await store.recordMacAgents(host: "mac-a", name: nil, [MacAgent(kind: .pi, model: nil, models: [])])
     try await Server.run(library: sandbox.directory) { server in
       let ends = { try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref).sorted() }
@@ -99,7 +99,7 @@ extension MCPTests {
       _ = try await eventually(store, { try $0.deliveryRequest(launch.id)?.status }) { $0 == .known(.succeeded) }
       await executor.stop()
       _ = try await recorder.update(sessionID: "s1", state: .ended)  // 结束请求也执行了
-      _ = try await recorder.update(sessionID: "s2", state: .settled, title: "设置里加开关", launchToken: launch.launch?.token)
+      _ = try await recorder.update(sessionID: "s2", state: .settled, title: "设置里加开关", launchToken: launch.launch?.token, hosted: true)
       #expect(try await store.card(settings.id)?.piSessionID == "s2")
 
       _ = try await server.call("task", ["action": "done", "task": settings.id.uuidString, "evidence": ["开关能用"]])

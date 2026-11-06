@@ -69,7 +69,7 @@ struct TaskFlowTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let first = try await store.createTask("复现乱序\n先复现，别改代码", in: project.id)
         let second = try await store.createTask("补重连用例", in: project.id)
-        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas")
+        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas", hosted: true)
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
 
         try await store.bindSession("s1", to: first.id)
@@ -96,7 +96,7 @@ struct TaskFlowTests {
         let first = try await store.createTask("加 --lang", under: task.id)
         let second = try await store.createTask("写 README", under: task.id)
         let third = try await store.createTask("发版\n打 tag 再发", under: task.id)
-        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas")
+        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
         try await store.bindSession("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }

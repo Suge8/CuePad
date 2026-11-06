@@ -101,7 +101,7 @@ final class Workspace {
     var openTask: TaskBubble.Request? {
         didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }
     }
-    /// 等你确认的改名或结束会话（`SessionActions` 置起，窗口上那一格弹出，`sessionAsks`）。
+    /// 等你确认的改名、结束会话或完成在做的会话卡（`SessionActions` 置起，窗口上那一格弹出，`sessionAsks`）。
     var sessionAsk: SessionAsk?
     /// 刚收起的气泡是哪件事、什么时候：按在它那一行上收起的（按下就关，松开时那一行又要打开它），这一下不再打开。
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?

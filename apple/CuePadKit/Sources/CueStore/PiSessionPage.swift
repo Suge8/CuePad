@@ -76,7 +76,7 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var rename: DeliveryRequest?
   /// 发给它、还没有回执或失败了的话（说话的方式，没被领取或失败、还没重发或移除的）：哪几句没能送达按说的话那条规则看此刻（`undelivered`）。
   public var unsettled: [DeliveryRequest]
-  /// 绑着它的顶层任务（`CueStore.sessionTasks`）：会话的"置顶"置的是它；没绑还在列表里的任务为 nil。
+  /// 它此刻归的那件事的顶层任务（`CueStore.sessionOwners`）：会话的"置顶"置的是它；没绑还在列表里的任务为 nil。
   public var task: SessionTask?
   public var id: UUID { state.id }
   /// 会话归在哪个项目（会话页按它筛、项目的此刻按它归）：它的项目还在就是它，没有项目或项目已删的归默认项目。
@@ -102,6 +102,14 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
 public struct SessionTask: Sendable, Equatable {
   public var id: UUID
   public var isPinned: Bool
+  /// 绑着它的那个叶子的标题（`Card.heading`）：会话行、会话条写的名字以它为准，空的写会话自己的名字（任务标题是名字的唯一事实源）。
+  public var title: String
+
+  public init(id: UUID, isPinned: Bool, title: String) {
+    self.id = id
+    self.isPinned = isPinned
+    self.title = title
+  }
 }
 
 /// 一页会话与符合条件的总数。顺序：未结束的在前，各自按进入当前状态的时间从新到旧。

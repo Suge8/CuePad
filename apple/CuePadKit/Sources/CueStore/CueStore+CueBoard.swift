@@ -25,12 +25,20 @@ extension CueStore {
   }
 
   /// 表 `alias`（会话记录）里不归没做完的事的活会话：没结束，没有没做完的任务绑着它，
-  /// 也不是哪个没做完的任务以前用过的（`Card.formerSessionIDs`）。只有已完成的事绑着的算在内：它还活着，Cue 管它。
+  /// 也不是哪个没做完的任务以前用过的（`Card.formerSessionIDs`）。只有已完成的事绑着的算在内：它还活着，Cue 管它——
+  /// 但那件事完成之后它还没动过的不算：完成时它随那件事收起（终端里你自己开的会话 CuePad 不结束，`endUnused`），再有动静才回来。
+  /// 活着就在看板上，一件事只出现一处：收起的会话在看板上是它绑着的那张已完成的任务卡；完成之后它有了新状态，才作为无主会话回到推进中。
+  /// 那张卡离开了看板（`taskDoneOnBoard` 不成立：归档、删除、项目进了回收站）就没有东西代表它，照常作为无主会话在推进中。
+  /// 先后比记录自带的时刻（会话的 `stateSince` 与任务的 `completedAt`），不比本机写入的先后：同步乱序到达时，收到的先后与发生的先后相反，
+  /// 时刻在各设备上读到的都一样。只有会话的时刻严格晚于完成才算完成之后的新动静；时刻只记到毫秒，同一毫秒分不出先后，按没动过算——
+  /// 完成那一下与会话的这次变化同一毫秒，多半就是同一件事。
   /// 离开了看板的任务（`taskOpen`：归档、删除、项目进了回收站）不算。
   static func isLoose(_ alias: String) -> String {
     """
     \(PiWorkState.outsideSQL([.ended], column: "\(alias).state"))
       AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskOpen))
+      AND NOT EXISTS (
+        SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskDoneOnBoard) AND c.completedAt >= \(alias).stateSince)
       AND NOT EXISTS (
         SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
         WHERE c.formerSessionIDs IS NOT NULL AND \(taskOpen) AND f.value = \(alias).sessionID)

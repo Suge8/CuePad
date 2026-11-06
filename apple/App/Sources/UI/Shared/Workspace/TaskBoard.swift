@@ -76,7 +76,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     /// 没绑任务的会话归哪个项目：它的项目，没有项目的归默认项目（同 `PiSessionListItem.home`）。
     static func home(_ session: PiSessionState) -> UUID { session.projectID ?? Project.defaultID }
 
-    /// 等你列的一张卡：一个在等你的会话，在问你（拍板）或待回复。写的名字同别的列：绑着的任务名，没绑任务的会话名。
+    /// 等你列的一张卡：一个在等你的会话，在问你（拍板）或待回复。写的名字同别的列：绑着的任务名（标题为空的是会话名），没绑任务的会话名。
     struct Held: Identifiable, Sendable, Equatable {
         /// 同推进中那张卡的身份（`Item.flight`、`CueWork.id`）：任务是 `task/…`（并行的几步同时等你时只有第一张是），其余是 `session/…`，换列认得出是同一张。
         var id: String
@@ -85,7 +85,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         /// 会话在问你（拍板）；否则待回复。
         var deciding: Bool
 
-        var title: String { item?.task.title ?? session.title }
+        var title: String { item?.task.title(session: session.title) ?? session.title }
         /// 按项目筛时归哪个项目：绑着的任务的项目，否则会话的归处（`home`）。
         var project: UUID { item?.task.projectID ?? TaskBoard.home(session) }
     }

@@ -22599,6 +22599,22 @@
         }
       }
     },
+    "这是你在终端里开的会话，完成不会结束它。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You started this session in Terminal. Completing won't end it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是你在终端里开的会话，完成不会结束它。"
+          }
+        }
+      }
+    },
     "这是灵感，没有状态：要做的事另建任务，或把这条灵感接进一条任务" : {
       "localizations" : {
         "en" : {

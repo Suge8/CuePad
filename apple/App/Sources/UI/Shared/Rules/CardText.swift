@@ -45,6 +45,13 @@ nonisolated struct CardText: Equatable, Sendable {
 
 nonisolated extension Card {
     var title: String { CardText.label(of: body) }
+
+    /// 任务叫什么，它绑着的会话名（`session`，会话此刻显示的名字）在手时：标题；任务的标题为空时是会话名，随会话改名变
+    /// （从看板上的会话建的任务正文为空，`CueStore.adoptSession`）。名字的唯一事实源仍是任务标题，这里不另存。
+    func title(session: String?) -> String {
+        guard isTask, heading.isEmpty, let session = session?.nonEmpty else { return title }
+        return session
+    }
 }
 
 nonisolated extension String {

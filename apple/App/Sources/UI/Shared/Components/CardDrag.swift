@@ -2,13 +2,14 @@ import CueStore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 拖着的一条灵感或任务：项目页的墙与"更早"拖灵感，任务大纲与看板拖任务。
+/// 拖着的一条灵感或任务：项目页的墙与"更早"拖灵感，任务大纲与看板拖任务；看板上还有不归没做完的事的会话卡（Pi 的会话 id），它与任务同一组拖法（`BoardColumn.drop`）。
 /// 只在 App 里认的类型（`UTType.cuepadCard`）：拖成纯文字时，路上的输入框（"添加任务"、回复框）把它当字接走、写进一串 id，别的 App 也会收到它。
 nonisolated enum DraggedCard: Hashable, Codable, Sendable, Transferable {
-    case task(UUID), idea(UUID)
+    case task(UUID), idea(UUID), session(String)
 
     var task: UUID? { if case .task(let id) = self { id } else { nil } }
     var idea: UUID? { if case .idea(let id) = self { id } else { nil } }
+    var session: String? { if case .session(let id) = self { id } else { nil } }
 
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .cuepadCard)
