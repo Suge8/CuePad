@@ -4,7 +4,7 @@ import Foundation
 extension CueStore {
   /// 会话列表的一页（Mac 与手机共用的唯一查询）。顺序见 `PiSessionPage`。
   public func piSessionPage(_ query: PiSessionQuery) throws -> PiSessionPage {
-    let (condition, arguments) = try self.condition(query)
+    let (condition, arguments) = try Self.condition(query)
     // 只有一种状态的范围里"已结束的排后面"是常量，留着它 SQLite 就不走按状态的索引、把整个范围排一遍（真实库已结束的一页 17 万步对 3 千步）
     let endedLast = query.scope == .all || query.scope == .current ? "state = '\(PiWorkState.ended.rawValue)', " : ""
     let states = try select(
@@ -18,12 +18,12 @@ extension CueStore {
     CASE WHEN projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL) THEN projectID ELSE '\(Project.defaultID.uuidString.lowercased())' END
     """
 
-  private func condition(_ query: PiSessionQuery) throws -> (String, [any SQLBindable]) {
+  private static func condition(_ query: PiSessionQuery) throws -> (String, [any SQLBindable]) {
     var conditions: [String] = []
     var arguments: [any SQLBindable] = []
     switch query.scope {
-    case .live: conditions.append("\(PiWorkState.outsideSQL([.ended])) AND NOT \(try dormancy().sql("piSessionStates"))")
-    case .earlier: conditions.append("(state = '\(PiWorkState.ended.rawValue)' OR \(try dormancy().sql("piSessionStates")))")
+    case .live: conditions.append(PiWorkState.outsideSQL([.ended]))
+    case .ended: conditions.append("state = '\(PiWorkState.ended.rawValue)'")
     case .all: break
     case .current:
       conditions.append(
@@ -40,13 +40,13 @@ extension CueStore {
       conditions.append(
         """
         (title LIKE ? ESCAPE '\\' OR folder LIKE ? ESCAPE '\\' OR lastPrompt LIKE ? ESCAPE '\\'
-          OR \(Self.home) IN (SELECT id FROM projects WHERE \(named.sql)))
+          OR \(home) IN (SELECT id FROM projects WHERE \(named.sql)))
         """)
       arguments += [pattern, pattern, pattern, pattern] + named.arguments
     }
     if let project = query.project {
       // 别的项目走 projectID 的索引；默认项目还收没有项目的
-      conditions.append(project == Project.defaultID ? "\(Self.home) = ?" : "projectID = ?")
+      conditions.append(project == Project.defaultID ? "\(home) = ?" : "projectID = ?")
       arguments.append(project)
     }
     if let token = query.launchToken {
@@ -62,7 +62,7 @@ extension CueStore {
       arguments.append(String(decoding: try JSONEncoder().encode(query.excluding), as: UTF8.self))
     }
     if let pinned = query.pinned {
-      conditions.append("sessionID \(pinned ? "IN" : "NOT IN") (\(Self.pinnedSessions))")
+      conditions.append("sessionID \(pinned ? "IN" : "NOT IN") (\(pinnedSessions))")
     }
     return (conditions.isEmpty ? "1" : conditions.joined(separator: " AND "), arguments)
   }

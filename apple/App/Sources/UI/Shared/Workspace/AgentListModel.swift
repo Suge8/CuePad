@@ -2,18 +2,18 @@ import CueStore
 import SwiftUI
 
 /// 会话列表的状态（手机搜索页的会话一栏、"更早"那一页）：搜索词、翻到第几页、读到的会话列表。
-/// 两处都不按项目筛。`earlierOnly`："更早"那一页只读更早的（已结束与闲置的，`PiSessionList.read`）。
+/// 两处都不按项目筛。`endedOnly`："更早"那一页只读已结束的（`PiSessionList.read`）。
 /// 换搜索词或项目范围时回到第一页；历史按时间分页，滑到列表底再读下一页（`loadMore`）。
 @Observable
 final class AgentListModel {
-    let earlierOnly: Bool
+    let endedOnly: Bool
     var list: PiSessionList?
     var query = "" { didSet { resetPaging() } }
     private(set) var limit = PiSessionList.pageSize
 
     var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
-    init(earlierOnly: Bool = false) { self.earlierOnly = earlierOnly }
+    init(endedOnly: Bool = false) { self.endedOnly = endedOnly }
 
     var hasMore: Bool { list?.hasMore ?? false }
 
@@ -51,8 +51,8 @@ private struct AgentListReader: ViewModifier {
             .observing(
                 services.store, id: PiSessionList.Key(filter: .init(text: model.query, project: nil), limit: model.limit, moment: services.speech),
                 into: $model.list, onError: workspace.fail
-            ) { [query = model.query, earlierOnly = model.earlierOnly, limit = model.limit, moment = services.speech] store in
-                try PiSessionList.read(text: query, earlierOnly: earlierOnly, historyLimit: limit, at: moment, from: store)
+            ) { [query = model.query, endedOnly = model.endedOnly, limit = model.limit, moment = services.speech] store in
+                try PiSessionList.read(text: query, endedOnly: endedOnly, historyLimit: limit, at: moment, from: store)
             }
     }
 }

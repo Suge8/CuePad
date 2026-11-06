@@ -23,7 +23,7 @@ struct SessionGroup: Equatable {
     }
 }
 
-/// 会话范围读到的：全部活跃的（不多，不分页）与更早的（已结束与闲置的，`PiSessionScope.earlier`）前若干页（从新到旧），同一个搜索词。
+/// 会话范围读到的：全部在线的（不多，不分页）与已结束的前若干页（从新到旧），同一个搜索词。
 nonisolated struct SessionSearchData: Sendable, Equatable {
     var live: [PiSessionState]
     var ended: [PiSessionState]
@@ -36,7 +36,7 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
 
     static func read(text: String, pages: Int, at moment: Speech.Moment, from store: isolated CueStore) throws -> SessionSearchData {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max))
-        let ended = try store.piSessionPage(PiSessionQuery(scope: .earlier, text: text, limit: PiSessionList.pageSize * pages))
+        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: PiSessionList.pageSize * pages))
         return SessionSearchData(
             live: live.items.map(\.listed), ended: ended.items.map(\.listed), endedTotal: ended.total,
             deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },

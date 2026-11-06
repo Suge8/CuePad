@@ -1,10 +1,9 @@
 import Foundation
 
-/// 会话按状态分的范围：活跃的（未结束、没闲置，`SessionDormancy`）、更早的（已结束的含历史，加上闲置的）、全部；
-/// `current` 是此刻有事的——在线的（闲置的也算：还能直接发话），加上已结束但还有话发给它的
+/// 会话按状态分的范围：在线的（未结束）、已结束的（含历史）、全部；`current` 是此刻有事的——在线的，加上已结束但还有话发给它的
 /// （在唤醒、没能送达；投送请求了结后不久就被清理，所以只有这几条），项目的"此刻"读它。
 public enum PiSessionScope: Sendable, Equatable {
-  case live, earlier, all, current
+  case live, ended, all, current
 }
 
 /// 一台 Mac 上一个文件夹里跑过的 Agent 会话（`CueStore.sessionFolders`）：`sessionID` 与 `projectID` 是其中最近那个会话的。

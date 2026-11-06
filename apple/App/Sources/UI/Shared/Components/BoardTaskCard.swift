@@ -24,6 +24,8 @@ struct BoardTaskCard: View {
     @Environment(\.palette) private var palette
 
     private var task: Card { item.task }
+    /// 卡上写的名字：标题，为空时是绑着的会话名（`Card.title(session:)`）。
+    private var title: String { task.title(session: item.agent?.shownTitle(at: workspace.services.speech)) }
     private var advancing: Bool { column == .advancing }
 
     var body: some View {
@@ -46,7 +48,7 @@ struct BoardTaskCard: View {
             .boardCard(column)
         }
         .help(tip)
-        .taskSpoken(task, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) {
+        .taskSpoken(task, title: title, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) {
             if let shot = item.shot { Button("看成果") { openShot(BoardShot.opening(shot, group: task.id.uuidString)) } }
             if let session = pulse.session {
                 OpenSessionBeside(session: session)
@@ -68,7 +70,7 @@ struct BoardTaskCard: View {
     /// 标题：墨与字重随列（`TaskBoard.Column.titleInk`）；推进中歇着的淡一档；点圈停留的那一下最淡、划线（看得清刚勾掉的是哪条）。
     private func title(resting: Bool) -> some View {
         let ink = check.phase != .idle ? palette.ink3 : resting ? palette.ink2 : column.titleInk(palette)
-        return BoardCardTitle(task.title(session: item.agent?.shownTitle(at: workspace.services.speech)).textGlyphs).fontWeight(column.titleWeight)
+        return BoardCardTitle(title.textGlyphs).fontWeight(column.titleWeight)
             .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink)
     }
 

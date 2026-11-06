@@ -32,12 +32,14 @@ struct TaskLine: View {
         let next = workspace.next(for: task, in: agents, steps: subtasks)
         let done = check.done(task)
         framed(line(next: next, done: done))
-            .taskSpoken(task, subtasks: subtasks, next: next, aside: task.isPinned ? String(localized: "已置顶") : nil, check: $check, open: open) { start(next) }
+            .taskSpoken(task, title: title, subtasks: subtasks, next: next, aside: task.isPinned ? String(localized: "已置顶") : nil, check: $check, open: open) { start(next) }
     }
+
+    private var title: String { task.title(session: agents.items[task.id]?.shownTitle(at: workspace.services.speech)) }
 
     private func line(next: TaskNext?, done: Bool) -> some View {
         // 置顶的顶层任务标题前一枚图钉（看板上同一个，`BoardPin`）
-        let name = Text(task.title(session: agents.items[task.id]?.shownTitle(at: workspace.services.speech)).textGlyphs)
+        let name = Text(title.textGlyphs)
         let title = (task.isPinned ? Text("\(Text(Image(.pin)).foregroundStyle(palette.ink3)) \(name)") : name).strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(titleInk)
             .font(step ? TaskMetrics.stepFont : TaskMetrics.lineFont)
             .lineLimit(titleLines)
