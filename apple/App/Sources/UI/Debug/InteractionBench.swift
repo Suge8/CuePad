@@ -54,6 +54,9 @@ enum InteractionBench {
         "收起任务": (14, 2),
         "发送·会话页": (14, 1),
         "发送·Cue 页": (14, 1),
+        // 设置是另一扇窗：打开同首访要建内容，收起同收编辑页
+        "开设置": (28, 2),
+        "关设置": (14, 2),
     ]
 
     private static let turns = TurnLog()
@@ -93,6 +96,7 @@ enum InteractionBench {
             var row = await measure(name, in: view, action)
             Self.signposter.endInterval("交互", interval)
             row["foreground"] = foreground
+            row["freezes"] = PerfProbe.freezes(workspace.services.diagnostics)
             print(jsonLine("INTERACT", row))
             fflush(stdout)
         }
@@ -110,6 +114,7 @@ enum InteractionBench {
             print(jsonLine("INTERACT", row))
             fflush(stdout)
         }
+        await SettingsBench.run(workspace, only: only, step: step)
         let a = projects.indices.contains(1) ? projects[1] : nil, b = projects.indices.contains(2) ? projects[2] : nil
         // 页面：第一次去是首访，之后来回是回访
         if let a { await step("页面首访") { workspace.show(.project(a)) } }

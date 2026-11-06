@@ -281,6 +281,13 @@ enum PerfProbe {
         await withCheckedContinuation { waiting[event, default: []].append($0) }
     }
 
+    /// 这个进程里主线程看守记下的卡住条数（`MainThreadWatch`）：克隆来的库里带着写种子那次记的，不算。
+    /// 记录的时刻只到整秒，起点往前让一秒，启动那一圈就卡住的也算上。
+    static func freezes(_ diagnostics: Diagnostics) -> Int {
+        let start = processStart.addingTimeInterval(-1)
+        return diagnostics.reports.count { $0.kind == .freeze && $0.date >= start }
+    }
+
     /// 本进程启动的时刻（内核记的）：冷启动从这里起算。
     static var processStart: Date {
         var info = kinfo_proc()

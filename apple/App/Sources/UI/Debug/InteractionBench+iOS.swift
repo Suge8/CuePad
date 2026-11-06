@@ -13,6 +13,7 @@ import UIKit
 /// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
 /// - 冷启动·Cue 页：App 一打开就在 Cue 页上；`launchMs` 是进程启动到对话排出来（`PerfProbe` 的 `cue`）的墙钟毫秒，
 ///   主线程与帧从画面摆起来（`beginCold`）量到对话出来后一秒，指令数从进程启动算起。量真实大小的对话配 `CUEPAD_PERF_SEED`（`perf-ios.sh`）。
+/// - 开设置、关设置：见 `SettingsBench`。
 /// - 长文粘贴、长文打字：输入框（回复框、对 Cue 说）经剪贴板粘贴进一大段（诊断 JSON 那样，`pasted`），之后再敲一个字，
 ///   走键盘输入同一条路（`paste`、`UITextInput.insertText`），每个字一项；编辑页是正文已有那一大段时打字。`-CuePadPasteFile <路径>` 换成那个文件的内容。
 /// - 点击回合：动作发出到主线程第一次回到空闲的主线程 CPU 毫秒（只取第一圈 ≥2ms 的 run loop）。
@@ -35,6 +36,7 @@ enum IOSInteractionBench {
         var row = TurnLog.metrics(turns.finish(), instructions: 0, frames: coldFrames.stop())
         row["launchMs"] = ((PerfProbe.firstSeen["cue"] ?? .now).timeIntervalSince(PerfProbe.processStart) * 1000).rounded()
         row["name"] = "冷启动·Cue 页"
+        row["footprintMB"] = footprintMB()
         return row
     }
 
@@ -64,10 +66,21 @@ enum IOSInteractionBench {
         let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
         func wants(_ name: String) -> Bool { only?.contains(name) ?? true }
         func row(_ row: [String: Any]) { write(jsonLine("INTERACT", row)) }
+        /// `finger`：请测量脚本真按或真滑（`Finger`），从手指按下起量；不给时从 `action` 发出起量。
+        func step(_ name: String, window: Duration = .milliseconds(800), finger: Finger? = nil, _ action: () -> Void = {}) async {
+            guard wants(name) else { return }
+            let pressed: (() async -> Void)? = finger.map { finger in { await Self.touch(write, name, finger) } }
+            var measured = await measure(window: window, pressed: pressed, action)
+            measured["name"] = name
+            measured["landed"] = Self.landed(workspace)
+            measured["freezes"] = PerfProbe.freezes(workspace.services.diagnostics)
+            row(measured)
+        }
         let cold = await cold()
         if wants("冷启动·Cue 页") { row(cold) }
-        // 只量冷启动时不要求库里有别的项（真实库的副本不一定有演示库那几样）
-        if only == ["冷启动·Cue 页"] {
+        await SettingsBench.run(workspace, only: only) { name, action in await step(name, action) }
+        // 只量冷启动与设置时不要求库里有别的项（真实库的副本不一定有演示库那几样）
+        if let only, only.isSubset(of: SettingsBench.names.union(["冷启动·Cue 页"])) {
             write("DONE")
             exit(0)
         }
@@ -80,15 +93,6 @@ enum IOSInteractionBench {
         guard sessions.count >= 2 else { fail("演示库里不到两个会话") }
         guard let task = tasks.first else { fail("演示库里没有任务") }
         guard let idea = try await store.cards(in: Project.defaultID).first else { fail("演示库的默认项目里没有灵感") }
-        /// `finger`：请测量脚本真按或真滑（`Finger`），从手指按下起量；不给时从 `action` 发出起量。
-        func step(_ name: String, window: Duration = .milliseconds(800), finger: Finger? = nil, _ action: () -> Void = {}) async {
-            guard wants(name) else { return }
-            let pressed: (() async -> Void)? = finger.map { finger in { await Self.touch(write, name, finger) } }
-            var measured = await measure(window: window, pressed: pressed, action)
-            measured["name"] = name
-            measured["landed"] = Self.landed(workspace)
-            row(measured)
-        }
         workspace.select(.shelf)
         await Task.wait(for: .seconds(1))
         // 书架点项目（推入项目页）→ 返回；同一个项目两遍，另一个项目再一遍
