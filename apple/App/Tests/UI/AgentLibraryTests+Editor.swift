@@ -92,5 +92,28 @@ extension AgentLibraryTests {
         try await eventually("重扫标出 name 不对") { workspace.library?.skill(at: directory.path)?.problem == .nameMismatch("pr-new") }
         #expect(workspace.library?.skill(at: directory.path)?.problem?.field == .name)
     }
+
+    /// 写入在途时文件在别处改了：冲突提示要留着，旧写入完成不能把它盖成"已保存"。
+    @Test func 写入途中别处改了_冲突提示保持() async throws {
+        let file = agents.appending(path: "AGENTS.md")
+        try write("# a\n", file)
+        let keeping = keep()
+        defer { keeping.cancel() }
+        let workspace = Workspace(services: services)
+        let following = Task { await workspace.follow() }
+        defer { following.cancel() }
+        try await eventually("快照有全局规则") { workspace.library?.instruction(.global)?.hash == hash("# a\n") }
+        let draft = FileDraft(.instruction(.global), text: "# a\n", workspace: workspace)
+
+        draft.changed(body: "mine\n")
+        let writing = Task { await draft.send() }
+        await Task.yield()
+        #expect(draft.state == .saving, "写入在途中")
+        try write("ext\n", file)
+        draft.follow("ext\n")
+        await writing.value
+
+        #expect(draft.state == .conflict(file: "ext\n") && draft.dirty, "旧写入完成后冲突还在：\(draft.state)")
+    }
 }
 #endif

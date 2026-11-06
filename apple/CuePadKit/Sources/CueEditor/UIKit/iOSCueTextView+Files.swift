@@ -39,7 +39,8 @@ extension CueTextView {
             return core.importFiles([.pasted(pasted)]) { [weak self] result in
                 guard let self else { return item.setNoResult() }
                 switch result {
-                case .success(let insertion): item.setResult(attributedString: core.onOwnLine(insertion, replacing: selectedRange))
+                case .success(let insertion?): item.setResult(attributedString: core.onOwnLine(insertion, replacing: selectedRange))
+                case .success(nil): item.setNoResult()
                 case .failure(let error):
                     onError?(error)
                     item.setNoResult()
@@ -65,9 +66,10 @@ extension CueTextView {
         core.importFiles(files) { [weak self] result in
             guard let self else { return }
             switch result {
-            case .success(let insertion):
+            case .success(let insertion?):
                 let lined = core.onOwnLine(insertion, replacing: selectedRange)
                 replace(selectedRange, with: lined, caret: selectedRange.location + lined.length)
+            case .success(nil): break
             case .failure(let error): onError?(error)
             }
         }

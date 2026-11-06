@@ -37,16 +37,20 @@ final class CardEditing {
         let autosave = Autosave(
             save: { [weak self] text in
                 self?.saveState = .saving
-                try await store.updateCard(id) { $0.body = text }
+                do {
+                    try await store.updateCard(id) { $0.body = text }
+                } catch {
+                    self?.saveState = .failed
+                    throw error
+                }
                 self?.saveState = .saved
             },
-            onError: { [weak self] error in
-                self?.saveState = .failed
-                workspace.fail(error)
-            })
+            onError: { workspace.fail($0) })
         self.autosave = autosave
         #if os(iOS)
-        flushToken = workspace.services.addBackgroundFlush { await autosave.flush() }
+        flushToken = workspace.services.addBackgroundFlush {
+            do { try await autosave.flush() } catch { workspace.fail(error) }
+        }
         #endif
     }
 
@@ -59,7 +63,7 @@ final class CardEditing {
 
     /// 写下没保存的字，再读库里此刻的这条（任务气泡的"开始"、编辑器里的 ⌘↩ 交给 Agent 的就是它）。
     func flushed() async throws -> Card? {
-        await autosave?.flush()
+        try await autosave?.flush()
         return try await workspace.services.store.card(cardID)
     }
 

@@ -150,12 +150,19 @@ struct HandOffInput: View {
     static func startDefault(
         _ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?, opening: String?, workspace: Workspace
     ) {
-        workspace.handOffToNewSession(draft.retelling(card, as: opening), card: card, plan: plan)
+        handOff(draft, card: card, opening: opening, plan: plan, workspace: workspace)
+    }
+
+    /// 草稿里还有在存的附件时，存好再换页，一并带过去（`Workspace.claimImports`）；没有就当场换。
+    private static func handOff(_ draft: ComposerDraft, card: UUID?, opening: String?, plan: HandOffPlan?, workspace: Workspace) {
+        let claim = workspace.claimImports(draft)
+        guard !claim.isEmpty else { return workspace.handOffToNewSession(draft.retelling(card, as: opening), card: card, plan: plan) }
+        Task { workspace.handOffToNewSession(await claim.settled().retelling(card, as: opening), card: card, plan: plan) }
     }
 
     /// 开新会话交给它：换成新会话的输入框，正文与补的话带过去。
     private func newSession() {
-        workspace.handOffToNewSession(draft.retelling(outbox.card, as: planned?.opening), card: outbox.card, plan: planned?.fresh)
+        Self.handOff(draft, card: outbox.card, opening: planned?.opening, plan: planned?.fresh, workspace: workspace)
     }
 }
 #endif

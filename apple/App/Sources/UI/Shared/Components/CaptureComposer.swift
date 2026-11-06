@@ -92,12 +92,13 @@ struct CaptureComposer: View {
     }
 
     private func save() {
-        let note = CaptureDraft(text: state.draft.text, files: state.draft.files), project = project
-        guard !note.isEmpty, !saving else { return }
+        let project = project, claim = workspace.claimImports(state.draft)
+        guard !state.draft.isEmpty(accepting: .files), !saving else { return }
         saving = true
         workspace.attempt {
             defer { saving = false }
-            try await note.save(in: project, workspace: workspace)
+            let settled = await claim.settled()
+            try await CaptureDraft(text: settled.text, files: settled.files).save(in: project, workspace: workspace)
             state.draft = ComposerDraft()
             saved()
         }

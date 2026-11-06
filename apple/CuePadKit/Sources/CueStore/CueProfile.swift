@@ -65,12 +65,15 @@ public enum CueEnableError: LocalizedError, Equatable {
   case runsElsewhere(String)
   /// 这台的库还没和 iCloud 对过一遍：不知道 Cue 是否已在别的 Mac 上启用（App 层判断，`AppServices.enableCue`）
   case unsynced
+  /// 一台能运行 Cue 的 Mac 都没有（手机上还没有哪台 Mac 写下过自己）
+  case noMac
 
   public var errorDescription: String? {
     switch self {
     case .noRuntime(let why): String(localized: "没有能当 Cue 的 Agent：\(why)")
     case .runsElsewhere(let name): String(localized: "正在「\(name)」上运行，改过来要先确认")
     case .unsynced: String(localized: "还没和 iCloud 同步完")
+    case .noMac: String(localized: "还没有哪台 Mac 可以运行 Cue")
     }
   }
 }

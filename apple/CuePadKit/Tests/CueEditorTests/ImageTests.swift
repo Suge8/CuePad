@@ -27,6 +27,21 @@ struct ImageTests {
         #expect(notified == [h.stored])
     }
 
+    @Test("存附件的途中正文被整体换掉：附件不插进后来的正文")
+    func importAcrossReplacedBody() async throws {
+        let h = EditorHarness()
+        h.load("前文后文")
+        h.setCaret(2)
+        let png = makePNG()
+
+        h.textView.insert([.data(png)])
+        h.load("另一条")
+        #expect(await h.wait { h.store.storedData == [png] }, "文件照常存下")
+        await h.pump(0.2)
+
+        #expect(h.stored == "另一条")
+    }
+
     @Test("剪贴板只有 TIFF 时（如浏览器复制的图）转成 PNG 入库")
     func pasteTIFF() async throws {
         let h = EditorHarness()

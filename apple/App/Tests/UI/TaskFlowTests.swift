@@ -53,7 +53,7 @@ struct TaskFlowTests {
         #expect(started.status == .inProgress && started.body == "修乱序\n\n日志在 logs/0918.txt")
 
         // 任务不自动完成；用户勾选，提示里给归档
-        try await workspace.toggle(task.id)
+        try await workspace.complete(task.id)
         #expect(workspace.notice?.text.visible == "已完成")
         let archive = try #require(workspace.notice?.action)
         #expect(archive.title == "归档")
@@ -79,9 +79,9 @@ struct TaskFlowTests {
         #expect(try await Set(store.tasks(boundTo: "s1").map(\.task.id)) == [first.id, second.id])
 
         let ends = { [store] in try await store.deliveryRequests().filter { $0.mode == .known(.end) }.map(\.target.ref) }
-        try await workspace.toggle(first.id)
+        try await workspace.complete(first.id)
         #expect(try await ends().isEmpty)
-        try await workspace.toggle(second.id)
+        try await workspace.complete(second.id)
         #expect(try await ends() == ["s1"])
     }
 
@@ -101,7 +101,7 @@ struct TaskFlowTests {
         try await store.bindSession("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
 
-        try await workspace.toggle(first.id)
+        try await workspace.complete(first.id)
         #expect(try await requests(.end).isEmpty)
 
         try await store.bindSession("s1", to: second.id)
@@ -112,9 +112,9 @@ struct TaskFlowTests {
         #expect(launch?.launch?.prompt == "加语言参数\n命令行要能切中英文\n\n发版\n打 tag 再发")
         _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：开新会话的去向核对完即可
 
-        try await workspace.toggle(second.id)
+        try await workspace.complete(second.id)
         #expect(try await requests(.end).isEmpty)  // "发版"还没开工，默认接着用它
-        try await workspace.toggle(third.id)
+        try await workspace.complete(third.id)
         #expect(try await requests(.end).map(\.target.ref) == ["s1"])
     }
 

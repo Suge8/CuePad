@@ -70,7 +70,7 @@ struct AskShotsTests {
         let frozen = written(done)
         #expect(frozen.allSatisfy { $0?.name == "重做提问卡" } && frozen.last??.status == .known(.done), "\(frozen)")
         try await store.updateCard(task.id) { $0.body = "改了名的任务" }
-        _ = try await store.toggleDone(task.id)
+        _ = try await store.completeTask(task.id)
         #expect(written(try await thread()) == frozen)
     }
 }

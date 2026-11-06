@@ -16,6 +16,9 @@ final class CueWatch {
     private(set) var canHear = false
     /// 你最近一句还在路上（`CuePresence.sending`）：输入框的发送钮只看它，不随在想、用工具重算。
     private(set) var sending = false
+    /// 刚发出、还没读到这一句：库里那条记录要下一次读库才变成 `sending`，这一小段发送钮先当帧换成发送中，不先缩没再长出来。
+    /// 读到了这一句（`lastYouSaid` 变了，此时在不在路上都已算进 `sending`）或这句没写进库（`launchFailed`）就交还。
+    private(set) var launching = false
     /// 你最近一句写下的时刻（`CueDigest.lastYou`）：刚发出的那句读到了没有只看它。
     private(set) var lastYouSaid: Date?
     /// Cue 此刻（`CueNow`）：头像那一拍、数字账、拍板几件（会话条的等你、入口的点）、推进中几件、
@@ -77,7 +80,13 @@ final class CueWatch {
     }
 
     /// 你刚发出一句（`CueComposer`）：发出的光到点之前头像不露"在听"。同叫醒，由送出那一刻加 `RelayFlight.launchLanding` 推出，不等接力层回报。
-    func sent(_ event: Send) { hold(event.beat, until: event.at.addingTimeInterval(RelayFlight.launchLanding)) }
+    func sent(_ event: Send) {
+        launching = true
+        hold(event.beat, until: event.at.addingTimeInterval(RelayFlight.launchLanding))
+    }
+
+    /// 这一句没能写进库（`Workspace.speak` 放回了草稿）：没有"读到这一句"那一刻了，发送中不能留着。
+    func launchFailed() { launching = false }
 
     /// 跟随整个 App 那一份直到任务取消。
     func follow(_ services: AppServices) async throws {
@@ -93,6 +102,7 @@ final class CueWatch {
         self.presence = presence
         canHear = presence != .disabled
         sending = if case .sending = presence { true } else { false }
+        if lastYouSaid != digest.lastYou?.said { launching = false }
         lastYouSaid = digest.lastYou?.said
         // 推出的时刻每次都不同：内容一样就不写，免得读它的每一行跟着重算
         noteWake(digest.woke, catchingUp: catchingUp)

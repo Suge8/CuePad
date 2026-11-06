@@ -48,6 +48,8 @@ final class EditorCore {
     /// 宿主缩放后的实际样式，所有排版都读它。
     var style: CueEditorTheme
 
+    /// 整体替换过正文几次（`load`）：途中的异步结果核对它，正文已换就不再插。
+    private var loads = 0
     /// 自上次刷新以来的编辑：新坐标下的范围与长度变化。
     private var pendingEdits: [NSRange] = []
     /// 现有段落是按哪份装饰上下文排版的。
@@ -138,11 +140,13 @@ final class EditorCore {
 
     /// 存入几个文件（拖入、粘贴、选的；任意类型，调用方持有访问权直到回调），在后台算哈希、拷贝，回调在主线程：
     /// 每个附件自成一行（文件牌、图片之间与前后的字各隔一个换行）。有一个存不进就整批不插，报那个错。
-    func importFiles(_ sources: [IncomingFile], completion: @escaping @MainActor (Result<NSAttributedString, any Error>) -> Void) {
-        let files = files
+    /// 存的途中正文被整体换掉了（`load`：换了一条、同步来了新版本）就不再插——附件属于发起时的那份正文，成功时给 nil（回调仍到，粘贴的条目要交还）。
+    func importFiles(_ sources: [IncomingFile], completion: @escaping @MainActor (Result<NSAttributedString?, any Error>) -> Void) {
+        let files = files, started = loads
         Task {
             let stored = await Self.store(sources, in: files)
             completion(stored.map { pairs in
+                guard started == loads else { return nil }
                 let result = NSMutableAttributedString()
                 for (index, pair) in pairs.enumerated() {
                     if index > 0 { result.append(NSAttributedString(string: "\n", attributes: baseAttributes)) }
@@ -206,6 +210,7 @@ final class EditorCore {
 
     /// 整体替换正文；撤销栈、选区、`onChange` 由宿主处理。
     func load(_ stored: String) {
+        loads += 1
         storage.setAttributedString(attributed(CueFormat.parse(stored)))
         pendingEdits = []
         flushedDecorations = decorations

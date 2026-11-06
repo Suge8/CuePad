@@ -23,7 +23,8 @@ extension CueTextView {
         core.importFiles(files) { [weak self] result in
             guard let self else { return }
             switch result {
-            case .success(let insertion): insertText(core.onOwnLine(insertion, replacing: selectedRange()), replacementRange: selectedRange())
+            case .success(let insertion?): insertText(core.onOwnLine(insertion, replacing: selectedRange()), replacementRange: selectedRange())
+            case .success(nil): break
             case .failure(let error): onError?(error)
             }
         }

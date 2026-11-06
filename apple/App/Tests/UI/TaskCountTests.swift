@@ -81,7 +81,7 @@ struct TaskCountTests {
 
         try await workspace.services.answerCueQuestion(ask.id, CueAsk.once)
         #expect(try await board().advancing.map(\.item?.id) == [task.id])
-        try await workspace.toggle(task.id)
+        try await workspace.complete(task.id)
         columns = try await board()
         #expect(columns.done.map(\.id) == [task.id] && columns.advancing.map(\.id) == ["session/s1"])
         try await expectCountsMatchCue(columns)

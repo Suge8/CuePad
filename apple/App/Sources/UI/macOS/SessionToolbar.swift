@@ -110,9 +110,9 @@ extension Workspace {
         open(task)
     }
 
-    /// 完成会话绑着的任务：完成就是做完了，会话绑着的事都做完了就结束（见 `toggle`）。
+    /// 完成会话绑着的任务：完成就是做完了，会话绑着的事都做完了就结束（见 `complete`）。
     func completeTask(_ id: UUID) {
-        attempt { try await self.toggle(id) }
+        attempt { try await self.complete(id) }
     }
 }
 #endif

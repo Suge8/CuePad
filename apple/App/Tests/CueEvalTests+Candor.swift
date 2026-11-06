@@ -52,7 +52,7 @@ extension CueEvalTests {
             try await Self.remoteSession(rig, bound: backend, reply: "后端做完了：发重置邮件的接口、令牌校验与限流，14 个测试全过。")
             // 那台在线、但这次开机（另一个启动身份）后还没报过这个会话：不是不在线，是状态还没确认
             _ = try await rig.store.recordMacPresence(host: "mac-b", bootID: "mac-b-boot") { true }
-            _ = try await rig.store.toggleDone(backend.id)
+            _ = try await rig.store.completeTask(backend.id)
             try await eval.trigger { try await rig.say("登录页忘记密码那件，接着做页面那一步。") }
             return try await Self.refusalChecks(eval)
         }

@@ -10,17 +10,22 @@ import SwiftUI
 extension Workspace {
     /// 从输入框说出去：`box` 是输入框的草稿，`content` 把取走的草稿写成存储格式正文，
     /// `keeping` 是发出后输入框里留下的（斜杠命令留着批注跟下一句发）。返回写库与上传的那个任务（测试等它）。
+    /// 草稿里还有在存的附件（`importFiles`）时，这句等它们存好、连同附件一起写；输入框照样立刻清空。
     @discardableResult
     func speak(
         to listener: Listener, from box: Binding<ComposerDraft>, keeping: (ComposerDraft) -> ComposerDraft = { _ in ComposerDraft() },
-        saying: Dotted? = nil, content: (ComposerDraft) -> String
+        saying: Dotted? = nil, content: @escaping (ComposerDraft) -> String
     ) -> Task<Void, Never> {
         let taken = box.wrappedValue
-        let stored = content(taken)
         let kept = keeping(taken)
+        // 留在输入框里的编号，导入存好后还接给输入框，不随这句发出
+        let claim = claimImports(taken.withImports(notIn: kept))
         box.wrappedValue = kept
         if let saying { say(saying) }
-        return write(stored, to: listener) { box.wrappedValue = taken.followed(by: box.wrappedValue, keeping: kept) }
+        return write(to: listener, taking: {
+            let sent = await claim.settled()
+            return (sent, content(sent))
+        }, restore: { sent in box.wrappedValue = sent.followed(by: box.wrappedValue, keeping: kept) })
     }
 
     /// 从回复框交给会话（会话页的回复框、手机的交给 Agent，同一条规则）：草稿是一条命令（`PiSlash.line`）就按命令交出，批注留着跟下一句发；
@@ -74,13 +79,25 @@ extension Workspace {
     }
 
     private func write(_ stored: String, to listener: Listener, restore: @escaping () -> Void) -> Task<Void, Never> {
+        write(to: listener, taking: { (ComposerDraft(), stored) }, restore: { _ in restore() })
+    }
+
+    /// `taking` 给出要写的正文和取走的那份草稿（等在存的附件存好之后）；写库失败时 `restore` 拿到那份草稿放回输入框。
+    private func write(
+        to listener: Listener, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void
+    ) -> Task<Void, Never> {
         let services = services
         return Task {
             let id: UUID
+            let (sent, body) = await taking()
             do {
-                id = try await Self.record(stored, to: listener, in: services.store)
+                id = try await Self.record(body, to: listener, in: services.store)
             } catch {
-                restore()
+                restore(sent)
+                switch listener {
+                case .cue: cue.launchFailed()
+                case .session(let target, let host, _, _): launching.settle(host: host, target: target)
+                }
                 fail(error)
                 return
             }
@@ -104,6 +121,13 @@ extension Workspace {
 }
 
 extension ComposerDraft {
+    /// 去掉还留在输入框（`kept`）里的在存附件编号：它们存好后接给输入框，不随取走的这份发出。
+    func withImports(notIn kept: ComposerDraft) -> ComposerDraft {
+        var draft = self
+        draft.importing.removeAll { kept.importing.contains($0) }
+        return draft
+    }
+
     /// 写库失败时放回输入框的草稿：取走的在前，期间新打的接在后面（文字空一行，附件、带上的卡片与批注依次接上、不重复）；
     /// 发出时就留在输入框里的（`kept`）本来就在取走的里，不算新打的。
     func followed(by later: ComposerDraft, keeping kept: ComposerDraft) -> ComposerDraft {
@@ -113,6 +137,7 @@ extension ComposerDraft {
         merged.files += later.files.filter { !files.contains($0) }
         merged.attachments += later.attachments.filter { outbox in !attachments.contains { $0.card == outbox.card && $0.content == outbox.content } }
         merged.notes += later.notes.filter { note in !notes.contains { $0.id == note.id } }
+        merged.importing = later.importing
         return merged
     }
 }

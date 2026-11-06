@@ -17,7 +17,7 @@ struct CueActivityTests {
         let step = try await store.createTask("推送到 TestFlight", under: release.id)
         let canvas = try await store.createTask("画布缩放", in: project.id)
         let readme = try await store.createTask("README 截图换成 Swift 版", in: project.id)
-        try await workspace.toggle(readme.id)
+        try await workspace.complete(readme.id)
         let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4 到 TestFlight"), task: step.id)
         let recorder = try await rig.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "testflight", state: .thinking, title: "testflight")
@@ -52,8 +52,8 @@ struct CueActivityTests {
         #expect(kinds(cue) == [.running, .running, .done])
 
         // 两件都做完、会话都结束：只剩刚做完的，没活了，实时活动该结束；刚做完的那件过了一阵自己收掉
-        try await workspace.toggle(canvas.id)
-        try await workspace.toggle(release.id)
+        try await workspace.complete(canvas.id)
+        try await workspace.complete(release.id)
         try await recorder.update(sessionID: "zoom", state: .ended)
         try await recorder.update(sessionID: "testflight", state: .ended)
         cue = try await now()

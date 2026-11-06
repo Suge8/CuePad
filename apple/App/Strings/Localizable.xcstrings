@@ -21643,6 +21643,22 @@
         }
       }
     },
+    "还没有哪台 Mac 可以运行 Cue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Mac is available to run Cue yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有哪台 Mac 可以运行 Cue"
+          }
+        }
+      }
+    },
     "还没有定时" : {
       "localizations" : {
         "en" : {

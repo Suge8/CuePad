@@ -186,6 +186,11 @@ final class Workspace {
     let overlayHeader = OverlayHeader()
     #endif
 
+    /// 刚发给会话、页面还没读到的话（回复框的发送中）。
+    let launching = Launching()
+    /// 输入框里在存的附件（`importFiles`）。
+    let imports = Imports()
+
     @ObservationIgnored var noticeTask: Task<Void, Never>?
 
     /// 项目目录当场读（`CueStore.snapshot`），Cue 的现状取整个 App 手里那份（`CueFeed.latest`）：第一帧就是读到的样子，没有"还没读到"这一态。

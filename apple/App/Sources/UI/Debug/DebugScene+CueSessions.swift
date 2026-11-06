@@ -18,7 +18,7 @@ extension DebugScene {
         guard mode == "changed" else { return }
         for task in [importing, panel] {
             try await store.updateCard(task.id) { $0.body = $0.heading + String(localized: "（改过）", table: "Demo") }
-            _ = try await store.toggleDone(task.id)
+            _ = try await store.completeTask(task.id)
         }
     }
 
