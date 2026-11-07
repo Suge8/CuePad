@@ -4,7 +4,8 @@ import WebKit
 
 /// 实时语音的媒体那一头：系统 WebKit 里的一个 WebRTC 连接（`RTCPeerConnection`），声音进出都在这里，信令与控制在 `VoiceCall`。
 /// 选 WebKit 不另引 libwebrtc：订阅的语音只给 WebRTC（WebSocket 要 API Key），WebKit 自带完整 ICE，UDP 不通时自己用 TCP 连服务器的 443 候选，
-/// 回声消除、降噪、Opus 都是系统的；代价是一个 WebContent 进程（通话时才有）。
+/// Opus 编解码由 WebKit 提供；通话会创建一个 WebContent 进程。请求回声消除、降噪与自动增益约束，不代表 WebKit 都支持或实际启用。
+/// 本机实测 supportedConstraints 不含 noiseSuppression、autoGainControl；实际处理须核对支持列表与轨道 settings，不能由请求值推断。
 /// 网页要挂进一扇系统认为"看得见"的窗：WebKit 只在挂进窗口的网页里让 AudioContext 跑起来，页面被遮住（屏外的窗也算被遮住）时
 /// getUserMedia 一直挂着、不去问麦克风权限。所以是一扇屏内左下角、全透明、不接鼠标、浮在普通窗口之上的 8 点小窗（透明不算遮住，实测）。
 /// 声音来源二选一：麦克风（`getUserMedia`，要麦克风权限；给了设备名就用名字含它的那个输入，不然用系统默认的），
@@ -29,6 +30,9 @@ final class VoicePeer: NSObject {
     private let recording: URL?
     private let web: WKWebView
     private let window: NSWindow
+    private var closed = false
+    private var ready = false
+    private var operations: [UUID: CheckedContinuation<String?, Error>] = [:]
 
     init(source: Source, recording: URL?) {
         self.source = source
@@ -40,6 +44,7 @@ final class VoicePeer: NSObject {
         super.init()
         config.userContentController.add(WeakHandler(self), name: "peer")
         web.uiDelegate = self
+        web.navigationDelegate = self
         window.isReleasedWhenClosed = false
         window.contentView = web
         window.alphaValue = 0
@@ -52,46 +57,88 @@ final class VoicePeer: NSObject {
     /// 起连接、收集完本机候选（不逐个送出：服务器一次收下整份），返回要交给服务器的 SDP。
     func offer() async throws -> String {
         try await load()
+        try Task.checkCancellation()
+        try await DebugHooks.configureVoice(web, source: source)
+        try Task.checkCancellation()
         var file: Any = NSNull(), device: Any = NSNull()
         switch source {
         case .file(let url): file = try Data(contentsOf: url).base64EncodedString()
         case .microphone(let name): device = name ?? NSNull()
         }
-        let sdp = try await web.callAsyncJavaScript(
-            "return await start(file, device, record)", arguments: ["file": file, "device": device, "record": recording != nil], contentWorld: .page)
-        guard let sdp = sdp as? String else { throw VoicePeerError.noOffer }
+        let sdp = try await javascript(
+            "return await start(file, device, record)", arguments: ["file": file, "device": device, "record": recording != nil])
+        guard let sdp else { throw VoicePeerError.noOffer }
         return sdp
     }
 
     func accept(answer: String) async throws {
-        _ = try await web.callAsyncJavaScript("return await answer(sdp)", arguments: ["sdp": answer], contentWorld: .page)
+        _ = try await javascript("return await answer(sdp)", arguments: ["sdp": answer])
     }
 
     /// 文件来源：从现在起播进连接，播完报 `inputEnded`。
     func play() async throws {
-        _ = try await web.callAsyncJavaScript("return play()", contentWorld: .page)
+        _ = try await javascript("return play()")
     }
 
     /// 整次通话里你这边声音的最大峰值（0～1）：一次也没响起时看它是没声还是太弱。
     func inputMax() async -> Double {
-        (try? await web.callAsyncJavaScript("return inputMax", contentWorld: .page) as? Double) ?? 0
+        (try? await javascript("return String(inputMax)")).flatMap(Double.init) ?? 0
     }
 
-    /// 断开；有录音就写出。
-    func close() async {
-        if let recording, let pcm = try? await web.callAsyncJavaScript("return dump()", contentWorld: .page) as? String, let data = Data(base64Encoded: pcm) {
-            try? Self.wav(data).write(to: recording)
+    /// 先撤销还在等的 JS / 权限请求；关闭文档会终止未返回的 getUserMedia，晚回来的 callback 不再恢复 continuation。
+    func close() async throws {
+        guard !closed else { return }
+        defer { shutDown() }
+        if ready, operations.isEmpty, let recording {
+            guard let pcm = try await javascript("close(); return dump()"), let data = Data(base64Encoded: pcm) else { throw VoicePeerError.noRecording }
+            try Self.wav(data).write(to: recording)
         }
-        _ = try? await web.callAsyncJavaScript("close()", contentWorld: .page)
+    }
+
+    private func shutDown() {
+        guard !closed else { return }
+        closed = true
+        loaded?.finish()
+        loaded = nil
+        let pending = operations.values
+        operations.removeAll()
+        for continuation in pending { continuation.resume(throwing: CancellationError()) }
+        web.stopLoading()
+        web.loadHTMLString("", baseURL: nil)
         window.close()
     }
 
+    private func javascript(_ body: String, arguments: [String: Any] = [:]) async throws -> String? {
+        try Task.checkCancellation()
+        guard !closed else { throw CancellationError() }
+        let id = UUID()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String?, Error>) in
+                operations[id] = continuation
+                web.callAsyncJavaScript(body, arguments: arguments, in: nil, in: .page) { [weak self] result in
+                    guard let continuation = self?.operations.removeValue(forKey: id) else { return }
+                    continuation.resume(with: result.map { $0 as? String })
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.shutDown() }
+        }
+    }
+
     private func load() async throws {
-        // https 的源才算安全上下文（麦克风、WebRTC 都要）；页面不联网，源只是个名字
-        let ready = AsyncStream<Void>.makeStream()
-        loaded = ready.continuation
+        try Task.checkCancellation()
+        guard !closed else { throw CancellationError() }
+        let signal = AsyncStream<Void>.makeStream()
+        loaded = signal.continuation
+        // https 的源才算安全上下文；页面不联网，源只是个名字。
         web.loadHTMLString(Self.page, baseURL: URL(string: "https://voice.cuepad.invalid/"))
-        for await _ in ready.stream { break }
+        try await withTaskCancellationHandler {
+            for await _ in signal.stream { break }
+            try Task.checkCancellation()
+            guard !closed else { throw CancellationError() }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.shutDown() }
+        }
     }
 
     private var loaded: AsyncStream<Void>.Continuation?
@@ -99,11 +146,11 @@ final class VoicePeer: NSObject {
     fileprivate func receive(_ body: Any) {
         guard let body = body as? [String: Any], let kind = body["kind"] as? String else { return }
         switch kind {
-        case "ready": loaded?.yield(); loaded?.finish()
+        case "ready": ready = true; loaded?.yield(); loaded?.finish(); loaded = nil
         case "state":
             switch body["state"] as? String {
             case "connected": onEvent(.connected)
-            case "failed": onEvent(.failed)
+            case "failed", "disconnected", "closed": if !closed { onEvent(.failed) }
             default: break
             }
         case "inputEnded": onEvent(.inputEnded)
@@ -150,8 +197,8 @@ final class VoicePeer: NSObject {
         }
       }, sampleMs));
     }
+    const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
     async function microphone(device) {
-      const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
       let mic = await navigator.mediaDevices.getUserMedia({ audio });
       if (!device) return mic;
       // 设备名要授权之后才读得到：先用默认的开一次，按名字找到再换
@@ -169,7 +216,7 @@ final class VoicePeer: NSObject {
         dest = ctx.createMediaStreamDestination(); track = dest.stream.getAudioTracks()[0];
       } else {
         track = (await microphone(device)).getAudioTracks()[0];
-        post({ kind: "device", label: track.label });
+        post({ kind: "device", label: track.label + " " + JSON.stringify({ settings: track.getSettings(), supported: navigator.mediaDevices.getSupportedConstraints() }) });
       }
       localTrack = track;
       meter(new MediaStream([track]), "input");
@@ -212,9 +259,19 @@ final class VoicePeer: NSObject {
     """
 }
 
-enum VoicePeerError: Error { case noOffer }
+enum VoicePeerError: Error { case noOffer, noRecording }
 
-extension VoicePeer: WKUIDelegate {
+extension VoicePeer: WKUIDelegate, WKNavigationDelegate {
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { mediaFailed() }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { mediaFailed() }
+
+    private func mediaFailed() {
+        guard !closed else { return }
+        onEvent(.failed)
+        shutDown()
+    }
+
     /// 只有这一页、只要麦克风：直接给（系统那一层的麦克风权限照常弹一次）。
     func webView(
         _ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo,

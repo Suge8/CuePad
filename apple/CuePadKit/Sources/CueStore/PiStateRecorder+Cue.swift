@@ -33,13 +33,13 @@ extension PiStateRecorder {
   /// 记为已写下歇着（`context` 是这个班次的上下文），随后同样的歇着不再写。
   @discardableResult
   public func finishCueRound(
-    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?
+    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?, answeredRequests: [UUID] = []
   ) async throws -> UUID? {
     cue.cancel()
     let settled = cue.commit(CueStateContent(state: .settled, context: context), at: timing.now())
     do {
       return try await persist { [store, hostID, bootID] in
-        try await store.finishCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: tools, reply: reply, as: author, context: context, hostID: hostID, bootID: bootID)
+        try await store.finishCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: tools, reply: reply, as: author, context: context, answeredRequests: answeredRequests, hostID: hostID, bootID: bootID)
       }
     } catch {
       cue.forget(settled)

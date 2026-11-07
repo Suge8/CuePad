@@ -14,7 +14,10 @@ extension Workspace {
         let call = VoiceCall(VoiceCall.Dependencies(
             access: DebugHooks.voiceToken.map { file in { try Self.access(reading: file) } }
                 ?? { try await services.agents.integration.codexAccess(executable: services.agents.executable(.codex)) },
-            tell: { [weak self] text in self?.speak(StoredBody.make(text: text, files: []), to: .cue) },
+            tell: { [weak self] text in
+                guard let self else { throw CancellationError() }
+                return try await self.recordSpeech(StoredBody.make(text: text, files: []), to: .cue)
+            },
             store: services.store, cueName: cue.name, source: source, recording: recording))
         voice = call
         Task { await call.run() }

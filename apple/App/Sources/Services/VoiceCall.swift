@@ -1,23 +1,12 @@
 #if os(macOS)
 import CuePi
 import CueStore
-import CueText
 import Foundation
 import Observation
-import os
 
-/// 和 Cue 通话（这台 Mac 上）：实时语音模型（`VoiceWire.model`）只当 Cue 的耳朵和嘴。它听到的请求交出来（交接），这里原样当你对 Cue 说的一句写进对话
-/// （`tell`，与"对 Cue 说"同一个入口：`cueMessages` 一条你的消息，Cue 照常回答）；Cue 写进对话的话从库的订阅读到，交回模型念出来。
-/// 模型自己的寒暄与转写不落库，对话只有 `cueMessages` 一份；"停下"之类也只是交给 Cue 的一句，由它用自己的停止去做。
-/// 凭证每次通话向本机 Codex 要（`AgentIntegration.codexAccess`），不续期、不碰 Codex 的文件。
-///
-/// 状态只有 `Phase` 一个，所有输入（媒体、控制通道、Cue 的话、挂断）排进同一条队（`inputs`）按序处理：
-/// - 连接中 → 媒体连通后开控制通道，收到 `session.started` 进聆听；拿令牌、建通话、媒体、控制通道任一失败进出错。
-/// - 聆听 → 模型交出一句（`delegation.created`）写给 Cue，进交接中；模型自己开口（寒暄）进朗读。
-/// - 交接中 → Cue 写下回话，交回模型（`delegation.context.append`），进朗读；等的时候模型的过渡语（"我看看"）不改状态。
-/// - 朗读 → 模型这一轮说完（`turn.done`）或用户插话（用户的 `turn.created`）回聆听；期间又有交接就进交接中。
-/// - 不在等交接时 Cue 又说了话（它自己醒来做完了一件事）：直接交给模型念（`session.context.append`），进朗读。
-/// - 任何时候：挂断进结束；媒体断开、控制通道断开、服务器报错进出错（通话随之关掉，不重连）。结束、出错是终态，再通话就新起一个。
+/// GPT Live 筛选、整理并交接需要 Cue 处理的请求；转写只供通话观察，不写入 Cue。
+/// 已交接身份保留到挂断，Cue 的 answeredRequests 决定结果归属；模型音轨的实际电平决定说话状态。
+/// 上下文送达不代表模型必然播报，也不保证模型不会在结果返回前自行确认。
 @Observable
 final class VoiceCall {
     enum Phase: Equatable {
@@ -36,40 +25,64 @@ final class VoiceCall {
 
     struct Dependencies {
         var access: () async throws -> CodexAccess
-        /// 把交出来的那句当你对 Cue 说的写进对话（`Workspace.speak` 到 `.cue`）
-        var tell: (String) -> Void
+        var tell: (String) async throws -> UUID
         var store: CueStore
         var cueName: String
         var source: VoicePeer.Source = .microphone(device: nil)
         var recording: URL?
     }
 
-    private(set) var phase: Phase = .connecting
-    /// 这次通话到此刻用掉的音频时长（服务器报的，毫秒）
-    private(set) var audioMs = 0
-    /// 建通话时 Codex 周额度用掉的百分比
-    private(set) var usedPercent: Double?
-    /// 关键节点的时刻（测量用：建通话、开始聆听、交接、Cue 回话、交回、模型开口、每轮说完的转写……）
-    @ObservationIgnored var mark: (String) -> Void = { _ in }
+    enum Connection {
+        case connecting
+        case media(VoiceWire.Call, CodexAccess)
+        case starting(VoiceWire.Channel)
+        case ready(VoiceWire.Channel)
+        case finished(Phase)
+    }
 
-    @ObservationIgnored private let dependencies: Dependencies
+    struct Request {
+        enum Submission { case recording, recorded(UUID), returned(UUID) }
+        let delegation: VoiceWire.Delegation
+        var submission: Submission = .recording
+        var message: UUID? {
+            switch submission {
+            case .recording: nil
+            case .recorded(let id), .returned(let id): id
+            }
+        }
+        var pending: Bool { if case .returned = submission { false } else { true } }
+    }
+
+    private var connection: Connection = .connecting
+    private var outputActive = false
+    private(set) var userTurn: String?
+    var requests: [Request] = []
+    private(set) var audioMs = 0
+    private(set) var usedPercent: Double?
+    @ObservationIgnored var mark: (String) -> Void = { _ in }
+    @ObservationIgnored let dependencies: Dependencies
     @ObservationIgnored private let peer: VoicePeer
     @ObservationIgnored private let session = UUID()
-    @ObservationIgnored private let started = Date.now
-    @ObservationIgnored private let inputs = AsyncStream<Input>.makeStream()
-    @ObservationIgnored private var sideband: URLSessionWebSocketTask?
-    @ObservationIgnored private var access: CodexAccess?
-    @ObservationIgnored private var callID: String?
-    /// 还在等 Cue 回话的那次交接
-    @ObservationIgnored private var waiting: String?
-    @ObservationIgnored private var spoken: Set<UUID> = []
-    private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "voice")
+    @ObservationIgnored let inputs = AsyncStream<Input>.makeStream()
+    @ObservationIgnored private var connecting: Task<Void, Never>?
+    @ObservationIgnored private var observing: Task<Void, Never>?
+    @ObservationIgnored private var fileInput: Task<Void, Never>?
+    @ObservationIgnored var writing: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored var outgoing: Task<Void, Never>?
+    @ObservationIgnored var cursor = 0
+    @ObservationIgnored var latest = 0
+    @ObservationIgnored var pending: [CueMessagePage.Entry] = []
+    @ObservationIgnored private var inputPeak = 0.0
 
-    private enum Input {
+    enum Input {
+        case prepared(VoiceWire.Call, CodexAccess)
+        case failed(Failure)
         case peer(VoicePeer.Event)
         case wire(Result<VoiceWire.Event, VoiceWire.SidebandClosed>)
-        case cue([CueMessage])
-        case storeFailed(String)
+        case changed(Int)
+        case loaded(CueMessagePage)
+        case recorded(delegation: String, message: UUID)
+        case sent(sequence: Int, requests: Set<UUID>, forwarded: UUID?)
         case hangUp
     }
 
@@ -79,73 +92,95 @@ final class VoiceCall {
         peer.onEvent = { [inputs] in inputs.continuation.yield(.peer($0)) }
     }
 
-    var isLive: Bool { phase != .ended && !phase.isFailure }
+    var phase: Phase {
+        switch connection {
+        case .connecting, .media, .starting: return .connecting
+        case .finished(let end): return end
+        case .ready: break
+        }
+        if outputActive { return .speaking }
+        return requests.contains(where: \.pending) ? .handingOff : .listening
+    }
 
+    var channel: VoiceWire.Channel? {
+        if case .ready(let channel) = connection { channel } else { nil }
+    }
+    var isLive: Bool { if case .finished = connection { false } else { true } }
     func hangUp() { inputs.continuation.yield(.hangUp) }
 
-    /// 跑完整个通话（到结束或出错）。
+    /// 输入从起点就有人消费，挂断不等凭证、权限或网络返回。
     func run() async {
         do {
-            try await connect()
-        } catch {
-            return await finish(.failed(Self.failure(error)))
-        }
-        let replies = Task { [inputs, store = dependencies.store, started] in
-            do {
-                for try await messages in store.observe({ try $0.cueMessages(limit: 8).filter { $0.author == .known(.cue) && $0.createdAt >= started } }) {
-                    inputs.continuation.yield(.cue(messages))
-                }
-            } catch {
-                inputs.continuation.yield(.storeFailed(error.localizedDescription))
+            let start = try dependencies.store.snapshot { try $0.lastWrite() }
+            cursor = start.value
+            latest = cursor
+            observing = Task { [inputs, store = dependencies.store] in
+                do {
+                    for try await end in store.observe(from: start, { try $0.lastWrite() }) { inputs.continuation.yield(.changed(end)) }
+                } catch { inputs.continuation.yield(.failed(.other(error.localizedDescription))) }
             }
-        }
-        defer { replies.cancel() }
-        for await input in inputs.stream {
-            if let end = handle(input) { return await finish(end) }
-        }
+            connecting = Task { [self] in
+                do { try await connect() }
+                catch { if !Task.isCancelled { inputs.continuation.yield(.failed(Self.failure(error))) } }
+            }
+            for await input in inputs.stream {
+                if let end = handle(input) { await finish(end); return }
+                drain()
+            }
+        } catch { await finish(.failed(Self.failure(error))) }
     }
 
     private func connect() async throws {
+        try Task.checkCancellation()
         let access = try await dependencies.access()
-        self.access = access
+        try Task.checkCancellation()
         let offer = try await peer.offer()
+        try Task.checkCancellation()
         let call = try await VoiceWire.createCall(offer: offer, instructions: Self.instructions(name: dependencies.cueName), access: access, session: session)
-        callID = call.id
-        usedPercent = call.usedPercent
-        mark("call")
+        try Task.checkCancellation()
+        inputs.continuation.yield(.prepared(call, access))
         try await peer.accept(answer: call.answer)
+        try Task.checkCancellation()
     }
 
-    /// 处理一个输入；返回终态时通话到此为止。
     private func handle(_ input: Input) -> Phase? {
         switch input {
-        case .hangUp:
-            return .ended
+        case .hangUp: return .ended
+        case .failed(let failure): return .failed(failure)
+        case .prepared(let call, let access):
+            usedPercent = call.usedPercent
+            connection = .media(call, access)
+            mark("call")
         case .peer(.connected):
-            mark("media")
-            guard let callID, let access else { return nil }
-            sideband = VoiceWire.sideband(call: callID, access: access, session: session) { [inputs] in inputs.continuation.yield(.wire($0)) }
-        case .peer(.failed):
-            return .failed(.media)
-        case .peer(.inputEnded):
-            mark("input-ended")
-        case .peer(.level(let side, let loud, let peak)):
-            mark(loud ? "\(side.rawValue)-loud" : String(format: "%@-quiet peak=%.3f", side.rawValue, peak))
-        case .peer(.device(let label)):
-            mark("device \(label)")
-        case .wire(.failure(let closed)):
-            return phase == .connecting ? .failed(.closed("\(closed.status.map(String.init) ?? "-") \(closed.reason)")) : .failed(.closed(closed.reason))
-        case .wire(.success(let event)):
-            return handle(event)
-        case .storeFailed(let reason):
-            return .failed(.other(reason))
-        case .cue(let messages):
-            // 控制通道开之前 Cue 说的留到下一次读到再念
-            guard let sideband else { return nil }
-            for message in messages where !spoken.contains(message.id) {
-                spoken.insert(message.id)
-                say(message, on: sideband)
+            if case .media(let call, let access) = connection {
+                mark("media")
+                connection = .starting(VoiceWire.Channel(call: call.id, access: access, session: session) { [inputs] in inputs.continuation.yield(.wire($0)) })
             }
+        case .peer(.failed): return .failed(.media)
+        case .peer(.inputEnded): mark("input-ended")
+        case .peer(.device(let label)): mark("device \(label)")
+        case .peer(.level(let side, let loud, let peak)):
+            if side == .input { inputPeak = max(inputPeak, peak) }
+            else { outputActive = loud }
+            mark(loud ? "\(side.rawValue)-loud" : String(format: "%@-quiet peak=%.3f", side.rawValue, peak))
+        case .wire(.failure(let closed)): return .failed(.closed(closed.reason))
+        case .wire(.success(let event)): return handle(event)
+        case .changed(let end): latest = max(latest, end)
+        case .loaded(let page):
+            outgoing = nil
+            pending = page.entries
+            if pending.isEmpty { cursor = max(cursor, page.through) }
+        case .recorded(let delegation, let message):
+            writing[delegation] = nil
+            if let index = requests.firstIndex(where: { $0.delegation.id == delegation }) { requests[index].submission = .recorded(message) }
+        case .sent(let sequence, let answered, let forwarded):
+            outgoing = nil
+            pending.removeFirst()
+            cursor = sequence
+            for index in requests.indices {
+                if let id = requests[index].message, answered.contains(id) { requests[index].submission = .returned(id) }
+            }
+            if let forwarded { mark("cue-sent \(forwarded)") }
         }
         return nil
     }
@@ -153,54 +188,52 @@ final class VoiceCall {
     private func handle(_ event: VoiceWire.Event) -> Phase? {
         switch event {
         case .started:
-            mark("listening")
-            if phase == .connecting {
-                phase = .listening
-                if case .file = dependencies.source { Task { try? await peer.play() } }
+            if case .starting(let channel) = connection {
+                connection = .ready(channel)
+                mark("listening")
+                if case .file = dependencies.source {
+                    fileInput = Task { [peer, inputs] in
+                        do { try await peer.play() }
+                        catch { if !Task.isCancelled { inputs.continuation.yield(.failed(.media)) } }
+                    }
+                }
             }
-        case .delegation(let id, let text):
-            mark("handoff")
-            Self.log.info("交接：\(text, privacy: .private)")
-            waiting = id
-            phase = .handingOff
-            dependencies.tell(text)
-        case .turn(let assistant, let done, let text):
-            if done { mark("\(assistant ? "assistant" : "user")-said \(text)") }
-            if assistant, !done, phase == .listening { phase = .speaking }
-            if assistant, done, phase == .speaking { phase = .listening }
-            if !assistant, !done, phase == .speaking { phase = .listening }
-            if assistant, !done { mark("assistant-turn") }
-        case .usage(let ms):
-            audioMs = ms
-        case .error(let message):
-            return .failed(.server(message))
+        case .delegation(let delegation): submit(delegation)
+        case .turn(let id, let assistant, let done, let text):
+            if done { mark("\(assistant ? "assistant" : "user")-said \(id) \(text)") }
+            else if assistant { mark("assistant-turn \(id)") }
+            if !assistant {
+                if !done { userTurn = id }
+                else if userTurn == id { userTurn = nil }
+            }
+        case .context(let delegation, let endMs):
+            mark("context-accepted \(delegation ?? "session") end=\(endMs)")
+        case .usage(let ms): audioMs = ms
+        case .error(let message): return .failed(.server(message))
         }
         return nil
     }
 
-    /// Cue 写下的一句交给模型念：在等交接就作为这次交接的回话，不然直接念。
-    private func say(_ message: CueMessage, on sideband: URLSessionWebSocketTask) {
-        let text = CueFormat.hasAttachments(message.text) ? CueFormat.parse(message.text).map(\.shownText).joined() : message.text
-        mark("cue-reply")
-        if let waiting {
-            VoiceWire.send(.reply(delegation: waiting, text: text), on: sideband)
-            self.waiting = nil
-        } else {
-            VoiceWire.send(.say(text), on: sideband)
-        }
-        phase = .speaking
-    }
-
     private func finish(_ end: Phase) async {
-        if let sideband {
-            VoiceWire.send(.close, on: sideband)
-            sideband.cancel(with: .normalClosure, reason: nil)
-        }
-        sideband = nil
-        if case .microphone = dependencies.source { mark(String(format: "input-max %.3f", await peer.inputMax())) }
-        await peer.close()
+        let previous = connection
         inputs.continuation.finish()
-        phase = end
+        connecting?.cancel()
+        observing?.cancel()
+        fileInput?.cancel()
+        outgoing?.cancel()
+        writing.values.forEach { $0.cancel() }
+        switch previous {
+        case .starting(let channel), .ready(let channel): channel.close()
+        default: break
+        }
+        do { try await peer.close(); connection = .finished(end) }
+        catch { connection = .finished(.failed(Self.failure(error))) }
+        connecting = nil
+        observing = nil
+        fileInput = nil
+        outgoing = nil
+        writing.removeAll()
+        if case .microphone = dependencies.source { mark(String(format: "input-max %.3f", inputPeak)) }
         mark("end")
     }
 
@@ -212,15 +245,15 @@ final class VoiceCall {
         }
     }
 
-    /// 给实时模型的话：它是 Cue 的声音，什么都交给后台（Cue），后台的话照意思简短说出来。
     static func instructions(name: String) -> String {
         """
-        You are the voice of \(name), the user's assistant. You are only the ears and the mouth: \(name)'s backend does all the thinking and all the work.
+        You are the voice of \(name), the user's assistant. Speak naturally in the user's language. You can chat and clarify; \(name)'s backend handles requests about the user's cards, tasks, projects and ongoing work.
 
-        - Delegate every request, question, instruction, correction and "stop" to the backend. You may tidy what the user said: drop filler words and fold mid-sentence corrections into what they finally meant. Keep every condition the user stated, and add no judgement or content of your own. Never answer from your own knowledge, never invent results, never claim something was done.
-        - While waiting, say at most one very short acknowledgement, then stay quiet.
-        - When the backend replies, tell the user what it said, briefly and naturally, in the user's language. Do not read out lists, tables, code, links or IDs; give the gist. Add nothing of your own: no offers, suggestions or follow-up questions.
-        - Backend messages that arrive without a request are updates from \(name): pass them on the same way.
+        - Delegate work, questions about the user's data, and changes to previous requests. This includes updating or cancelling work. Organize the relevant context into one concise, self-contained request; preserve the user's titles, dates and constraints exactly. Delegate each request once.
+        - Handle greetings and ordinary conversation yourself. Do not delegate background speech or private thinking unless the user asks you to act on it. Clarify only when needed to understand what to do.
+        - A delegation asks the backend to work; it is not a result. Do not claim an action is complete, changed or stopped before the backend confirms it. While waiting, do not invent an answer.
+        - Backend context on the speakable channel is a result to tell the user now, briefly and naturally. Preserve what actually happened and any blocker. Add no invented details, offers or follow-up questions. Do not read code, URLs, IDs or markup aloud.
+        - Context may arrive for a delegated request or as a standalone update. Treat backend results as authoritative, while respecting the user's latest instruction and interruptions.
         - Present everything as \(name) speaking. Never mention a backend, delegation or another system.
         """
     }

@@ -38,14 +38,14 @@ extension CueStore {
   /// Cue 写下的置手机推送标志：要提示你的（`CueMessage.alerts`）且到得了你（`reaches`）出可见通知，其余静默叫醒（`CuePush`）。它提到的那几处此刻的样子一并记下（`CuePlace`）。
   func insertCueMessage(
     _ author: CueAuthor, text: String = "", shown: ShownText? = nil, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil,
-    urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil
+    urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil, answeredRequests: [UUID]? = nil
   ) throws -> CueMessage {
     let now = Date.stamp
     var message = CueMessage(
       id: UUID(), author: .known(author), text: shown?.text ?? text, shownText: shown, choices: asking?.ask.choices(in: project?.name),
       asked: asking.map { CueAsked($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, shots: shots,
       urgent: urgent, taskID: task,
-      answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, wake: wake,
+      answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, answeredRequests: answeredRequests, wake: wake,
       places: try CuePlace.capture(task: task, wake: wake, project: asking == nil ? nil : project?.id, in: db), notify: nil)
     if author == .cue { message.notify = try message.alerts && reaches(.cue) ? .alert : .wake }
     try insert(message)
@@ -72,16 +72,20 @@ extension CueStore {
     return id
   }
 
-  /// 一轮做完（值班的管理器调）：经过那一行的最终清单（`tools`；没调过工具为 nil，那一行不动）、这一轮写给你的话（`reply`，规则同 `replyCueRound`）
-  /// 与歇着（`setCueState`）在同一个事务里写下，返回那一行。"这一轮做完了"只看此刻的状态（`CueState.round`），各端都照它判断：
-  /// 分开写的话同步可能先把歇着带到别的设备、话与清单还在路上，那里的 Cue 页就把这一轮先当成没说话，话到了再改回来。
+  /// 一轮做完：清单、最终回复和歇着在同一事务写下，避免界面先看到歇着、后看到回答。
+  /// 已接走且不再重交的请求集合随最终回复保存（`CueMessage.answeredRequests`）；没有正文时保存到经过行，返回该行 ID。
+  /// CueKeeper 准备换大脑重跑的一轮只结束本轮，不把待重交请求记成已回答。
   @discardableResult
   public func finishCueRound(
-    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?, hostID: String? = nil, bootID: String? = nil
+    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?, answeredRequests: [UUID] = [], hostID: String? = nil, bootID: String? = nil
   ) throws -> UUID? {
     try write {
-      let row = try tools.map { try putCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: $0) } ?? id
-      if let reply { try putCueReply(startedAt: startedAt, reply: reply, as: author, answersYou: answersYou) }
+      var row = try tools.map { try putCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: $0) } ?? id
+      let answer = try reply.flatMap { try putCueReply(startedAt: startedAt, reply: $0, as: author, answersYou: answersYou, answeredRequests: answeredRequests) }
+      if answer == nil {
+        row = try putCueRound(row, startedAt: startedAt, answersYou: answersYou, tools: tools)
+        try db.run("UPDATE cueMessages SET answeredRequests = ?, modifiedAt = ? WHERE id = ?", [JSONColumn.encode(answeredRequests), Date.stamp, row])
+      }
       try putCueState(.settled, detail: nil, step: nil, round: nil, context: context, hostID: hostID, bootID: bootID)
       return row
     }
@@ -91,14 +95,14 @@ extension CueStore {
   /// （tell、done 的结果），最后那句只是复述，不写。回答你的一轮要提示你（`urgent`：你说完多半就离开了，在等它），一轮只响一次：
   /// 这一轮已经提示过你（提问卡、急事、出错）就不再提示。
   public func replyCueRound(startedAt: Date, reply: ShownText, as author: CueAuthor, answersYou: Bool) throws {
-    try write { try putCueReply(startedAt: startedAt, reply: "", shown: reply, as: author, answersYou: answersYou) }
+    try write { _ = try putCueReply(startedAt: startedAt, reply: "", shown: reply, as: author, answersYou: answersYou) }
   }
 
-  private func putCueReply(startedAt: Date, reply: String, shown: ShownText? = nil, as author: CueAuthor, answersYou: Bool) throws {
-    guard !(shown?.text ?? reply).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+  private func putCueReply(startedAt: Date, reply: String, shown: ShownText? = nil, as author: CueAuthor, answersYou: Bool, answeredRequests: [UUID]? = nil) throws -> UUID? {
+    guard !(shown?.text ?? reply).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
     let said = try select(CueMessage.self, where: "author = 'cue' AND createdAt >= ?", [startedAt])
-    guard answersYou || said.isEmpty else { return }
-    _ = try insertCueMessage(author, text: reply, shown: shown, urgent: answersYou && !said.contains(where: \.alerts))
+    guard answersYou || said.isEmpty else { return nil }
+    return try insertCueMessage(author, text: reply, shown: shown, urgent: answersYou && !said.contains(where: \.alerts), answeredRequests: answeredRequests).id
   }
 
   /// 待交给 Cue 的大脑的（唯一定义，也是它的部分索引的条件），交出去都叫醒它：你说了还没交的话，与还没交、或交过之后又从别处同步来另一个回答的回答。

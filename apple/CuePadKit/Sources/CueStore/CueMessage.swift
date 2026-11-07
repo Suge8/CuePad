@@ -62,6 +62,9 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 一轮的经过那一行的清单（Cue 那一轮调过的工具，`CueActivity`）：Cue 页读其中碰到的各处（`CueActivity.touches`），每一步的原文只进 Cue 的上下文；别的行没有。
   public var tools: PiChatMessage.Tools?
+  /// 这一轮已回答的请求集合（CueKeeper 实际接走的消息 ID，同步）。非 nil 表示轮已结束；主动通知为 nil。
+  /// 有正文时记在最终回复上；没有正文时记在经过那一行上，不编造一句回复。空集合是 Cue 自己醒来的轮次。
+  public var answeredRequests: [UUID]? = nil
   /// Cue 自己醒来的那一轮为什么醒（只在它的经过那一行上，起这一轮时写下、不再变）：Cue 页那一节的第一行与叫醒的接力都只读它。
   public var wake: CueWake? = nil
   /// 写下那一刻它提到的那几处的样子（关联的任务、叫醒它的那几处，`CuePlace`）：Cue 页按它画，写下就不再变。
@@ -80,13 +83,13 @@ extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify", "tools",
-    "ask", "askAction", "askRule", "askShots", "setAsideBy", "wake", "places", "shownText",
+    "ask", "askAction", "askRule", "askShots", "setAsideBy", "wake", "places", "shownText", "answeredRequests",
   ]
   var bindings: [any SQLBindable] {
     [
       id, author.rawValue, shownText == nil ? text : "", choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
       notify?.rawValue, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(shots), setAsideBy, wake?.stored,
-      places.isEmpty ? nil : JSONColumn.encode(places), shownText?.stored,
+      places.isEmpty ? nil : JSONColumn.encode(places), shownText?.stored, answeredRequests.map { JSONColumn.encode($0) },
     ]
   }
   init(row: Row) {
@@ -96,8 +99,9 @@ extension CueMessage: Record {
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAsked.init(stored:)),
       askAction: row.textOrNil(14), askRule: row.textOrNil(15), shots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
-      modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),
-      places: JSONColumn.decode([String: CuePlace].self, from: row.textOrNil(19)) ?? [:], notify: row.textOrNil(11).flatMap(CuePush.init(rawValue:)), reachedServer: row.bool(21))
+      modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), answeredRequests: JSONColumn.decode([UUID].self, from: row.textOrNil(21)),
+      wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),
+      places: JSONColumn.decode([String: CuePlace].self, from: row.textOrNil(19)) ?? [:], notify: row.textOrNil(11).flatMap(CuePush.init(rawValue:)), reachedServer: row.bool(22))
   }
 }
 

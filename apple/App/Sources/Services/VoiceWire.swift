@@ -2,10 +2,8 @@
 import CuePi
 import Foundation
 
-/// gpt-live（ChatGPT 订阅、Codex 同款的内部接口）的两根线：建通话（HTTP，带上 WebRTC 的 SDP，拿回应答与通话号）与控制通道
-/// （WebSocket，`wss://api.openai.com/v1/live/<通话号>`，收转写、交接、用量，发要念的话）。没有公开文档，写法照 openai/codex 的
-/// codex-api `realtime_call.rs` 与 `protocol_frameless_bidi.rs`；订阅凭证走纯 WebSocket 会被拒（"Voice session access denied."），只能 WebRTC。
-/// 音色只认 v3 那几种（`voice`）：给了别的（如 v2 的 marin）服务器照样回 201 和应答，但媒体会话不起，连通检查一个也不回。
+/// Codex v3 的 WebRTC 建连与单一控制连接；delegation 正文是派活入口，turn 只是转写。
+/// speakable 上下文是请模型播报的输入；发送成功或追加回执都不是播放确认。
 enum VoiceWire {
     static let model = "gpt-live-1-codex"
     static let voice = "cove"
@@ -44,7 +42,7 @@ enum VoiceWire {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body: [String: Any] = [
             "sdp": offer,
-            "session": ["model": model, "instructions": instructions, "audio": ["output": ["voice": voice]], "delegation": ["type": "client"]],
+            "session": ["model": model, "instructions": instructions, "audio": ["output": ["voice": voice]], "delegation": ["type": "client", "ack_filler": false]],
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -63,13 +61,18 @@ enum VoiceWire {
 
     // MARK: 控制通道
 
+    struct Delegation: Equatable {
+        let id: String
+        let turn: String?
+        let text: String
+    }
+
     enum Event: Equatable {
         case started
-        /// 模型把用户的话交出来（`delegation.created`，target client）
-        case delegation(id: String, text: String)
-        /// 一轮话开始（`turn.created`）、说完（`turn.done`，带整句转写）
-        case turn(assistant: Bool, done: Bool, text: String)
-        /// 到此刻这次通话用掉的音频时长（`session.usage.updated`）
+        case turn(id: String, assistant: Bool, done: Bool, text: String)
+        case delegation(Delegation)
+        /// 服务器把上下文放入时间线；这个回执不表示生成了语音或播放完成。
+        case context(delegation: String?, endMs: Int)
         case usage(audioMs: Int)
         case error(String)
     }
@@ -79,7 +82,6 @@ enum VoiceWire {
         case reply(delegation: String, text: String)
         /// 没有在等的交接时 Cue 说的话
         case say(String)
-        case close
 
         var messages: [[String: Any]] {
             switch self {
@@ -87,22 +89,25 @@ enum VoiceWire {
                 chunks(text).map { ["type": "delegation.context.append", "delegation_item_id": id, "channel": "speakable", "content": [["type": "input_text", "text": $0]]] }
             case .say(let text):
                 chunks(text).map { ["type": "session.context.append", "channel": "speakable", "content": [["type": "input_text", "text": $0]]] }
-            case .close: [["type": "session.close"]]
             }
         }
     }
 
     static func event(_ text: String) -> Event? {
         guard let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any], let type = json["type"] as? String else { return nil }
+        DebugHooks.voiceWire(text, type: type)
         switch type {
         case "session.started": return .started
+        case "turn.created", "turn.done":
+            guard let turn = json["turn"] as? [String: Any], let role = turn["role"] as? String, let id = turn["id"] as? String else { return nil }
+            return .turn(id: id, assistant: role == "assistant", done: type == "turn.done", text: turn["transcript"] as? String ?? "")
         case "delegation.created":
             guard let item = json["item"] as? [String: Any], item["target"] as? String == "client", let id = item["id"] as? String else { return nil }
-            let parts = item["content"] as? [[String: Any]] ?? []
-            return .delegation(id: id, text: parts.filter { $0["type"] as? String == "input_text" }.compactMap { $0["text"] as? String }.joined())
-        case "turn.created", "turn.done":
-            guard let turn = json["turn"] as? [String: Any], let role = turn["role"] as? String else { return nil }
-            return .turn(assistant: role == "assistant", done: type == "turn.done", text: turn["transcript"] as? String ?? "")
+            let content = item["content"] as? [[String: Any]] ?? []
+            let text = content.compactMap { $0["text"] as? String }.joined(separator: "\n")
+            return .delegation(Delegation(id: id, turn: item["user_bidi_turn_id"] as? String, text: text))
+        case "delegation.context.appended", "session.context.appended":
+            return .context(delegation: json["delegation_item_id"] as? String, endMs: json["end_ms"] as? Int ?? 0)
         case "session.usage.updated":
             return ((json["usage"] as? [String: Any])?["audio_duration_ms"] as? Int).map { .usage(audioMs: $0) }
         case "error":
@@ -120,35 +125,48 @@ enum VoiceWire {
         return current.isEmpty ? out : out + [current]
     }
 
-    /// 接入通话的控制通道。媒体连通前服务器回 404，所以在 `VoicePeer` 报连通之后才开。收到的事件与断开都交给 `received`（断开为 nil 加原因）。
-    static func sideband(call: String, access: CodexAccess, session: UUID, received: @escaping (Result<Event, SidebandClosed>) -> Void) -> URLSessionWebSocketTask {
-        var request = URLRequest(url: URL(string: sidebandBase + call)!)
-        for (key, value) in headers(access, session: session) { request.setValue(value, forHTTPHeaderField: key) }
-        let task = URLSession.shared.webSocketTask(with: request)
-        task.resume()
-        Task {
-            do {
-                while true {
-                    if case .string(let text) = try await task.receive(), let event = event(text) { received(.success(event)) }
+    /// 每个 call 只有一个控制连接，reader 与发送都由通话拥有；关闭会取消在等的收发。
+    final class Channel {
+        private let socket: URLSessionWebSocketTask
+        private var reader: Task<Void, Never>?
+
+        init(call: String, access: CodexAccess, session: UUID, received: @escaping (Result<Event, SidebandClosed>) -> Void) {
+            var request = URLRequest(url: URL(string: sidebandBase + call)!)
+            for (key, value) in headers(access, session: session) { request.setValue(value, forHTTPHeaderField: key) }
+            let socket = URLSession.shared.webSocketTask(with: request)
+            self.socket = socket
+            socket.resume()
+            reader = Task {
+                do {
+                    while !Task.isCancelled {
+                        if case .string(let text) = try await socket.receive(), let event = event(text) { received(.success(event)) }
+                    }
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    let reason = socket.closeReason.map { String(decoding: $0, as: UTF8.self) } ?? error.localizedDescription
+                    received(.failure(SidebandClosed(reason: reason, status: (socket.response as? HTTPURLResponse)?.statusCode)))
                 }
-            } catch {
-                let reason = task.closeReason.map { String(decoding: $0, as: UTF8.self) } ?? error.localizedDescription
-                received(.failure(SidebandClosed(reason: reason, status: (task.response as? HTTPURLResponse)?.statusCode)))
             }
         }
-        return task
+
+        func send(_ outgoing: Outgoing) async throws {
+            for message in outgoing.messages {
+                try Task.checkCancellation()
+                let data = try JSONSerialization.data(withJSONObject: message)
+                try await socket.send(.string(String(decoding: data, as: UTF8.self)))
+            }
+        }
+
+        func close() {
+            reader?.cancel()
+            reader = nil
+            socket.cancel(with: .normalClosure, reason: nil)
+        }
     }
 
     struct SidebandClosed: Error, Equatable {
         let reason: String
         let status: Int?
-    }
-
-    static func send(_ outgoing: Outgoing, on task: URLSessionWebSocketTask) {
-        for message in outgoing.messages {
-            guard let data = try? JSONSerialization.data(withJSONObject: message) else { continue }
-            task.send(.string(String(decoding: data, as: UTF8.self))) { _ in }
-        }
     }
 }
 #endif

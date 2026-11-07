@@ -231,7 +231,7 @@ extension CueKeeper {
     func finish(_ turn: Turn, reply: String?) async throws -> UUID? {
         try await setup.recorder.finishCueRound(
             turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.calls.isEmpty ? nil : turn.round.process,
-            reply: reply, as: turn.author, context: shift?.context)
+            reply: reply, as: turn.author, context: shift?.context, answeredRequests: turn.replay ? [] : turn.delivered)
     }
 
     /// 好好做完的一轮里，说话工具当场报给 Cue 的没送到：它已经知道了，不再进变化。只认做完的一轮——

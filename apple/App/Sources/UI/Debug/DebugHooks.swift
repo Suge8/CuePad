@@ -121,7 +121,7 @@ enum DebugHooks {
         #endif
     }
 
-    /// 隔离库下和 Cue 通话的令牌从 `-CuePadVoiceToken <文件>` 读（`scripts/voice-token.py` 向本机 Codex 只读地要来）：隔离目录里的 Codex 没登录，
+    /// 隔离库下和 Cue 通话的令牌从 `-CuePadVoiceToken <文件>` 读（`scripts/voice-token.py` 经本机 Codex app-server 获取，续期语义见 CodexAccess）：隔离目录里的 Codex 没登录，
     /// 实例也不碰真实的 `~/.codex`。nil：向检测到的 Codex 要。
     static var voiceToken: URL? {
         #if DEBUG

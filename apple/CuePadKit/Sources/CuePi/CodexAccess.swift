@@ -2,8 +2,8 @@
 import Foundation
 
 /// 本机 Codex 此刻的 ChatGPT 访问令牌（`AgentIntegration.codexAccess`），给要用同一个 ChatGPT 订阅的地方（实时语音）。
-/// 续期只归 Codex：ChatGPT 的续期令牌只能用一次，别人拿去续就把 Codex 踢下线（openai/codex#25599），所以这里只问、不续、不读写它的文件。
-/// 问的是 app-server 的 `getAuthStatus`（`includeToken`，`refreshToken` 为 false）：令牌临近过期时 Codex 自己先续（先从磁盘重读，别的 Codex 进程续过就用那份），再给出来。
+/// 通过 app-server 的 getAuthStatus（includeToken=true、refreshToken=false）获取；本客户端不直接读写 Codex 凭证文件，也不自行使用续期令牌。
+/// refreshToken=false 不强制续期，但令牌临近过期时 Codex 自身仍可能续期并写回凭证；不是整个调用链只读、不续期的保证。
 public struct CodexAccess: Sendable {
     public let token: String
     /// 令牌里的 ChatGPT 账号（请求头 `ChatGPT-Account-ID`）
