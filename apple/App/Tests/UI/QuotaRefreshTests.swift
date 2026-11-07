@@ -1,9 +1,11 @@
 #if os(iOS)
 import CueStore
+import CueTestSupport
 import Foundation
 import Synchronization
 import Testing
 @testable import CuePad
+@testable import CueStore
 
 /// 手机上的额度刷新（`AccountQuotas`）：进展页与额度钮出现、打开明细时自动问（`refreshesQuota` 调的就是 `refreshQuota(.automatic)`），明细里的重试是手动。
 /// 只问连着能答额度的会话的 Mac；没查到不弹提示，原因进明细，自动刷新冷却内不再问，重试照问。
@@ -13,12 +15,13 @@ struct QuotaRefreshTests {
     var services: AppServices { app.services }
     var store: CueStore { app.services.store }
 
-    private func quotaRequests() async throws -> [DeliveryRequest] {
-        try await store.deliveryRequests().filter { $0.mode == .known(.quota) }
+    private func quotaRequests(in app: TestApp? = nil) async throws -> [DeliveryRequest] {
+        try await (app ?? self.app).services.store.deliveryRequests().filter { $0.mode == .known(.quota) }
     }
 
-    /// 那台 Mac 写过额度、上面只有 Codex 会话（不能答额度）：问哪台的名单为空。
-    private func macWithQuota(_ agent: AgentKind) async throws {
+    /// 那台 Mac（mac-x）写过额度、上面有一个 `agent` 的在线会话。
+    private func macWithQuota(_ agent: AgentKind, in app: TestApp? = nil) async throws {
+        let app = app ?? self.app, services = app.services!, store = services.store
         try await store.recordQuota(
             QuotaReport(provider: "anthropic", windows: [], complete: true, account: PiAccount(kind: .oauth, scope: "a")), host: "mac-x")
         try await app.runtimeRecorder(on: "mac-x").update(sessionID: "s-\(agent.rawValue)", state: .thinking, title: "atlas", agent: agent)
@@ -71,6 +74,43 @@ struct QuotaRefreshTests {
         // 明细里点重试
         #expect(await services.refreshQuota(.manual) == nil)
         #expect(try await quotaRequests().count == 2)
+        #expect(services.accountQuotas.phase == .idle)
+        #expect(workspace.notice == nil)
+    }
+
+    /// Mac 一直不领取：请求到期后手机按未确认收尾，明细写没查到的原因、不弹提示；重试再发一条，这次 Mac 领了、查到。
+    @Test func Mac不领取_请求到期后明细显示没查到_可重试() async throws {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing), services = app.services!, store = services.store
+        defer { services.cancelBackgroundWork() }
+        try await macWithQuota(.pi, in: app)
+        let workspace = Workspace(services: services)
+
+        let query = Task { await services.refreshQuota(.automatic) }
+        let request = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.quota) } }) { $0 != nil })
+        // 给请求一个期限（投送层给每条请求的那种），Mac 不领取，时钟走过它
+        var row = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
+        row.fields["deadlineAt"] = .int(Int64(clock.now.addingTimeInterval(60).timeIntervalSince1970 * 1000))
+        row.fields["modifiedAt"] = .int(row.modifiedAt + 1)
+        #expect(try await store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
+        clock.advance(.seconds(61))
+
+        #expect(await query.value == Speech.unconfirmedReason)
+        guard case .failed(let reason, ["mac-x"], _) = services.accountQuotas.phase else {
+            Issue.record("明细里该有没查到的原因：\(services.accountQuotas.phase)")
+            return
+        }
+        #expect(reason == Speech.unconfirmedReason)
+        #expect(workspace.notice == nil)
+
+        // 明细里点重试：不受冷却限制，再发一条；这次 Mac 领了、查到
+        let mac = DeliveryExecutor(store: store, hostID: "mac-x", onIssue: { _ in }) { request, _ in
+            request.mode == .known(.quota) ? .succeeded : .failed(ShownText("不该有别的请求"))
+        }
+        try await mac.start()
+        defer { Task { await mac.stop() } }
+        #expect(await services.refreshQuota(.manual) == nil)
+        #expect(try await quotaRequests(in: app).count == 2)
         #expect(services.accountQuotas.phase == .idle)
         #expect(workspace.notice == nil)
     }

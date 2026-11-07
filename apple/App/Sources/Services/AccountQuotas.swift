@@ -11,7 +11,7 @@ import CuePi
 /// 同一批来源正在查就并进那一次；来源换了，等这一次查完再查新的。自动触发在同一批来源没查到后 `cooldown` 内不再问，手动不受限。
 /// 没有可问的来源（`quotaRefreshKey` 为空：Mac 上没有能答额度的会话，手机上没有连着这种会话的 Mac，见 `AgentCapabilities.quota`）时自动触发什么也不做。
 /// 没查到不弹提示：原因只在明细里写，旁边给重试；账号自己的读数照旧是上次的值与更新时间。界面离开、等它的任务被取消也不影响这一次：结果照样记进 `phase`。
-/// 结果只来自所等那一次的终态（Mac 直接问会话里的扩展；手机等投送请求写回，`CueStore.outcome(of:)`），这里不另设时限。
+/// 结果只来自所等那一次的终态（Mac 直接问会话里的扩展；手机等投送请求写回，`CueStore.outcome(of:)`，只有写回成功算查到），这里不另设时限。
 /// 不设周期刷新；已有观测的新鲜程度不能证明清单没变化，所以每次触发都问。`items` 的先后只在这里定（`QuotaMeter.ordered`），各处照这个顺序摆。
 /// 网关原观测时间只由 readAt 决定，读取清单不会刷新 Claude 的 /usage。
 @Observable
@@ -125,7 +125,10 @@ extension AppServices {
                     do {
                         let request = try await store.requestQuotaRefresh(on: host)
                         await upload(request.id)
-                        return try await store.outcome(of: request).failure.map(ShownText.verbatim)
+                        // 只有写回成功才算查到：没能送达、到期未确认、本版本不认识的状态都是没查到
+                        let done = try await store.outcome(of: request)
+                        guard done.status != .known(.succeeded) else { return nil }
+                        return done.failure.map(ShownText.verbatim) ?? done.reason ?? ShownText("那台 Mac 没有写回结果")
                     } catch { return ShownText(error) }
                 }
             }

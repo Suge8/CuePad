@@ -23751,6 +23751,22 @@
         }
       }
     },
+    "那台 Mac 没有写回结果" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That Mac didn’t report a result"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "那台 Mac 没有写回结果"
+          }
+        }
+      }
+    },
     "都不是？在下面的回复框里写你的回答" : {
       "localizations" : {
         "en" : {
