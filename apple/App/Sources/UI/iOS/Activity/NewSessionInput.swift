@@ -36,9 +36,9 @@ struct NewSessionInput: View {
         /// 开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`；没有就是带上的第一张）。`replacing` 是上一次没能开成的那条。
         func launch(
             in project: Project, on host: String, draft: ComposerDraft, agent: AgentKind, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool = false,
-            replacing previous: SessionLaunch?, services: AppServices
+            replacing previous: SessionLaunch?, workspace: Workspace
         ) async throws -> SessionLaunch {
-            try await services.launchSession(
+            try await workspace.launchSession(
                 in: project.id, prompt: draft.stored.nonEmpty, title: name ?? project.shownName, on: host,
                 card: card ?? draft.attachments.first?.card, agent: agent, model: model, thinking: thinking, fast: fast, replacing: previous?.request)
         }
@@ -181,7 +181,7 @@ struct NewSessionInput: View {
             defer { sending = false }
             let draft = await claim.settled()
             launched = try await start.launch(
-                in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, fast: brain.launchFast, replacing: launched, services: services)
+                in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, fast: brain.launchFast, replacing: launched, workspace: workspace)
         }
     }
 }

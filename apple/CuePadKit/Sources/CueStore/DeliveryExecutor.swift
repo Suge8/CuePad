@@ -110,7 +110,11 @@ public actor DeliveryExecutor {
       })
       roles.put(.watcher, .spawn { [store, hostID, onIssue] _ in
         do {
-          for try await _ in store.observe({ try $0.pendingDeliveries(for: hostID).map(\.id) }) { self.enqueue() }
+          for try await _ in store.observe({ try $0.pendingDeliveries(for: hostID).map(\.id) }) {
+            // 锚定在这里、不在执行队列里：上一条 handler 卡住、队列停着时，新写给自己的请求照样有期限，期限监视照样收尾
+            await self.reporting { try await store.anchorOwnDeliveries(for: hostID) }
+            self.enqueue()
+          }
         } catch {
           if !Task.isCancelled { onIssue(error) }
         }
@@ -176,7 +180,6 @@ public actor DeliveryExecutor {
   }
 
   private func nextActionable() async -> Dispatch? {
-    await reporting { try await store.anchorOwnDeliveries(for: hostID) }
     if let abandoned = await reporting({ try await store.abandonPreparedDeliveries(for: hostID) }) {
       for id in abandoned { notifyWritten(id) }
     }

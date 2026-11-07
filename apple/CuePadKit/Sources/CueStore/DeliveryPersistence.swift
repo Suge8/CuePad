@@ -2,7 +2,7 @@ import Foundation
 
 extension CueStore {
   /// 发给本机、还没有派发期限锚点的（这台写给自己、还没传上去的）按写下的时刻锚定（`DeliveryRequest.serverAt`）：
-  /// 执行器读待办之前调用，等待与到期从此只读这一个锚点。拉到的请求入库时就带着服务器收下的时刻，这里碰不到。
+  /// 执行器的待办监听每次先调用（不经执行队列），等待与到期从此只读这一个锚点。拉到的请求入库时就带着服务器收下的时刻，这里碰不到。
   func anchorOwnDeliveries(for host: String) throws {
     try write {
       try db.run("""

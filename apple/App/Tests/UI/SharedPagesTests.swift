@@ -93,7 +93,7 @@ struct SharedPagesTests {
             #expect(rows.filter { $0.state.sessionID == "new" }.count == 1)
         }
         let launch = try await NewSessionInput.Start(project: project.id).launch(
-            in: project, on: "mac-a", draft: ComposerDraft(text: "检查重连"), agent: .pi, model: nil, thinking: nil, replacing: nil, services: app.services)
+            in: project, on: "mac-a", draft: ComposerDraft(text: "检查重连"), agent: .pi, model: nil, thinking: nil, replacing: nil, workspace: Workspace(services: app.services))
         try await recorder.update(sessionID: "new", state: .thinking, title: "新会话", launchToken: launch.token)
         #expect(try await launch.progress(from: store).claimed?.sessionID == "new")
         try await checkList()

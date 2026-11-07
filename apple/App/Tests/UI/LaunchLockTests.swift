@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 手机的新会话输入框任何情况下都不会一直锁住（`LaunchProgress.locksInput`）：只在有期限的等待里锁，期限一过解锁、说明结果，可以再开。
+/// 新会话提交的流程与规则验证（视图订阅与到点刷新另做交互验收）：输入框任何情况下都不会一直锁住（`LaunchProgress.locksInput`）：只在有期限的等待里锁，期限一过解锁、说明结果，可以再开。
 /// "手机"开新会话走新会话输入框调的同一条 `launchSession`；那台 Mac 写回什么由服务器的回声给。
 @MainActor
 struct LaunchLockTests {
@@ -13,7 +13,7 @@ struct LaunchLockTests {
     private let month = Duration.seconds(30 * 86_400)
 
     private func launch(_ phone: TestApp, replacing previous: SessionLaunch? = nil) async throws -> SessionLaunch {
-        try await phone.services.launchSession(
+        try await Workspace(services: phone.services).launchSession(
             in: Project.defaultID, prompt: "hi", title: "CuePad", on: "mac-gone", card: nil, agent: .pi, replacing: previous?.request)
     }
 

@@ -80,3 +80,15 @@ nonisolated struct SessionLaunch: Equatable, Sendable {
             launch: request, request: try store.deliveryRequest(request), claimed: claimed.map { .init(id: $0.id, sessionID: $0.state.sessionID) })
     }
 }
+
+extension Workspace {
+    /// 新会话输入框提交开场，并在再次提交时尝试撤回上一条尚未交出的请求。
+    func launchSession(
+        in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
+        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false, replacing previous: UUID? = nil
+    ) async throws -> SessionLaunch {
+        try await services.launchSession(
+            in: project, prompt: prompt, title: title, on: host, card: card, agent: agent,
+            model: model, thinking: thinking, fast: fast, replacing: previous)
+    }
+}
