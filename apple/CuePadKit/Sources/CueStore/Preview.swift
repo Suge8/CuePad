@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 /// 能发到手机上看的文件类型（唯一定义）：按文件名的扩展名得出系统类型（UTType），归进第一个它属于的类。
 /// 两端怎么显示各自在 App 的 `PreviewPage`：网页只读、不联网；Markdown 按文稿排版；改动（diff、patch）是增删对照；其余用系统的视图。
-public enum PiPreviewKind: String, Sendable, CaseIterable {
+public enum PiPreviewKind: String, Codable, Sendable, CaseIterable {
   // 顺序即归类的先后：SVG 也是图片、HTML、Markdown 与 diff 也是文本，先认出来的算数
   case web, markdown, image, video, audio, pdf, document, spreadsheet, presentation, model, diff, text
 

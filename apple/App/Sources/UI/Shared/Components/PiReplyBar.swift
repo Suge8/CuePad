@@ -29,6 +29,8 @@ struct PiReplyBar: View {
     var sending = false
     /// 空着按 ↑ 调回的那一句（`PiChat.lastSaid`）。
     var recall: String?
+    /// 这个会话此刻的预览（`SessionDigest.previews`）：引用预览的那一行按编号取它的缩略图。
+    var previews: [PiPreview] = []
     /// 点批注一叠里的一条：回到原文（会话页给）。
     var revealNote: (ReplyNote) -> Void = { _ in }
     /// 发出之后（会话页回到最新）。
@@ -107,7 +109,7 @@ struct PiReplyBar: View {
                 cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending, keepsHeader: !draft.notes.isEmpty, tooled: hasTools,
                 commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
-                    if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, reveal: revealNote, remove: removeNote) }
+                    if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, previews: previews, reveal: revealNote, remove: removeNote) }
                 },
                 tools: {
                     if hasTools, let config { SessionConfigControls(session: session, models: models, shown: config, opening: $opening) }

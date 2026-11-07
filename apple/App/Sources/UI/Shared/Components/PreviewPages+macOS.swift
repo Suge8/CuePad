@@ -20,6 +20,8 @@ struct PreviewPage: View {
     var body: some View {
         switch preview.kind {
         case .image: PreviewImage(preview: preview.id, file: file).ignoresSafeArea()
+            // 图在平台视图里画，读屏摸不到：整张是一个图，读它的标题
+            .accessibilityElement().accessibilityLabel(Text(verbatim: preview.title)).accessibilityAddTraits(.isImage)
         case .pdf: PreviewPDF(preview: preview.id, file: file).ignoresSafeArea()
         case .video, .audio: PreviewPlayer(file: file, active: active)
         default: QuickLookPage(file: file)

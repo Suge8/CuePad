@@ -69,6 +69,9 @@ enum PreviewScale {
 
 /// 一个文件的内容：网页、Markdown 与改动两端一样，其余每类怎么显示在各端的 `PreviewPage`。
 struct PreviewContent: View {
+    /// Markdown 那一栏最宽（含页边）：一行不宽过它，居中（Mac 飞出的落点按它算，`PreviewFlight`）
+    static let measure: CGFloat = 680
+
     let preview: PiPreview
     let file: URL?
     /// 是不是翻到的这一页（翻页留着的邻页不是）
@@ -98,11 +101,9 @@ private struct PreviewMarkdown: View {
     let file: URL
     @State private var text: String?
 
-    private static let measure: CGFloat = 680
-
     var body: some View {
         ScrollView {
-            MarkdownText(source: text ?? "", style: .document).padding(Spacing.panel).frame(maxWidth: Self.measure, alignment: .leading).frame(maxWidth: .infinity)
+            MarkdownText(source: text ?? "", style: .document).padding(Spacing.panel).frame(maxWidth: PreviewContent.measure, alignment: .leading).frame(maxWidth: .infinity)
         }
         .task { text = (try? String(contentsOf: file, encoding: .utf8)) ?? "" }
     }

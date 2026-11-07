@@ -73,9 +73,11 @@ private struct PreviewPager: View {
         .opacity(landed ? 1 : 0)
         .background {
             PreviewFlight.Stage(
-                flight: flight, key: PreviewZoomKey(group: opening.group, preview: preview.id), kind: preview.kind, chrome: chrome, landed: $landed)
+                flight: flight, key: PreviewZoomKey(group: opening.group, preview: preview.id), kind: preview.kind,
+                page: preview.kind == .web && file(of: preview) != nil ? preview.key : nil, chrome: chrome, landed: $landed)
         }
-        .overlay(alignment: .top) { header }
+        // 读屏先读顶栏（标题、第几份、翻页、分享、关闭），再读内容，最后是底栏：顶栏是叠在内容上的，不排的话排在内容后面
+        .overlay(alignment: .top) { header.accessibilitySortPriority(1) }
         .overlay(alignment: .bottom) {
             if let reply {
                 PreviewReplyBar(reply: reply, preview: preview, about: title, entry: opening.entry, done: { close() })

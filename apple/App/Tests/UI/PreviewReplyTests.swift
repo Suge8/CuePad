@@ -4,7 +4,8 @@ import Testing
 @testable import CuePad
 
 /// 回复预览：长按缩略图或全屏里点"回复"（`Workspace.quote`），会话的回复框带上"预览「标题」"一行并聚焦，话在回复框里写，
-/// 同对回答的批注一起随下一句发出；同一份不重复引用，删掉那一行就不带。
+/// 同对回答的批注一起随下一句发出；同一份不重复引用，删掉那一行就不带。那一行的缩略图按编号从会话页读到的预览里取（草稿不存图）：
+/// 预览随对话过期删掉后取不到、退回引用时记下的类型的图标，引用照标题发出。
 struct PreviewReplyTests {
     @Test func 引用的预览随下一句发出_同批注一起_同一份不重复() async throws {
         let app = TestApp()
@@ -24,6 +25,9 @@ struct PreviewReplyTests {
         #expect(workspace.replyFocus == session.id)
         var draft = app.services.settings.replyDraft(for: session.id)
         #expect(draft.notes.map(\.quote) == ["改动：错误提示", "评审结论"] && draft.notes.allSatisfy { $0.entry == batch })
+        // 回复框那一行的缩略图是会话页读到的那份预览
+        let digest = try await SessionDigest.read(session.id, sessionID: session.sessionID, from: store)
+        #expect(draft.notes.map { $0.quoted(in: digest.previews)?.key } == previews.map(\.key))
 
         draft.notes.insert(ReplyNote(entry: UUID(), run: 0, location: 0, quote: "改动都在 login/ 下", note: "好"), at: 0)
         draft.text = "按这个改"
@@ -34,6 +38,13 @@ struct PreviewReplyTests {
 
             预览「改动：错误提示」和预览「评审结论」：按这个改
             """)
+
+        // 预览随对话过期删掉：那一行取不到缩略图（退回类型图标），引用照标题发出
+        try await store.prunePiMessages(olderThan: 0, now: .now.addingTimeInterval(60))
+        let expired = try await SessionDigest.read(session.id, sessionID: session.sessionID, from: store)
+        #expect(expired.previews.isEmpty && draft.notes.allSatisfy { $0.quoted(in: expired.previews) == nil })
+        #expect(draft.notes.compactMap(\.kind) == [.diff, .markdown])
+        #expect(try await workspace.said(draft, to: session, mode: .send).content.hasSuffix("预览「改动：错误提示」和预览「评审结论」：按这个改"))
 
         // 删掉那一行就不带；只引用、不写话也能发
         app.services.settings.setReplyDraft(ComposerDraft(), for: session.id)
