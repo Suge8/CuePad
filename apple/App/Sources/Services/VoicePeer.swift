@@ -5,7 +5,8 @@ import WebKit
 /// 实时语音的媒体那一头：系统 WebKit 里的一个 WebRTC 连接（`RTCPeerConnection`），声音进出都在这里，信令与控制在 `VoiceCall`。
 /// 选 WebKit 不另引 libwebrtc：订阅的语音只给 WebRTC（WebSocket 要 API Key），WebKit 自带完整 ICE，UDP 不通时自己用 TCP 连服务器的 443 候选，
 /// 回声消除、降噪、Opus 都是系统的；代价是一个 WebContent 进程（通话时才有）。
-/// WebKit 只在挂进窗口的网页里让 AudioContext 跑起来：放进一扇看不见的屏外小窗。
+/// 网页要挂进一扇系统认为"看得见"的窗：WebKit 只在挂进窗口的网页里让 AudioContext 跑起来，页面被遮住（屏外的窗也算被遮住）时
+/// getUserMedia 一直挂着、不去问麦克风权限。所以是一扇屏内左下角、全透明、不接鼠标、浮在普通窗口之上的 8 点小窗（透明不算遮住，实测）。
 /// 声音来源二选一：麦克风（`getUserMedia`，要麦克风权限），或一段音频文件（`play` 时播进连接，无人值守的验收用）；
 /// 给了 `recording` 时把对方的声音录成 24 kHz 单声道 WAV（`close` 时写出），这时不外放。
 @MainActor
@@ -31,13 +32,17 @@ final class VoicePeer: NSObject {
         let config = WKWebViewConfiguration()
         config.mediaTypesRequiringUserActionForPlayback = []
         web = WKWebView(frame: NSRect(x: 0, y: 0, width: 8, height: 8), configuration: config)
-        window = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 8, height: 8), styleMask: [.borderless], backing: .buffered, defer: false)
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 8, height: 8), styleMask: [.borderless], backing: .buffered, defer: false)
         super.init()
         config.userContentController.add(WeakHandler(self), name: "peer")
         web.uiDelegate = self
         window.isReleasedWhenClosed = false
         window.contentView = web
-        window.orderBack(nil)
+        window.alphaValue = 0
+        window.ignoresMouseEvents = true
+        window.level = .statusBar
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        window.orderFrontRegardless()
     }
 
     /// 起连接、收集完本机候选（不逐个送出：服务器一次收下整份），返回要交给服务器的 SDP。
