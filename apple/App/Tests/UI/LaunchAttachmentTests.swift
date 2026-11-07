@@ -103,7 +103,9 @@ struct LaunchAttachmentTests {
         let first = try await launch(replacing: nil)
         try await relay(first.request, from: phone, to: mac)
         try await eventually("Mac 在旁边取附件") { fetches.withLock { $0 } > 0 }
-        guard case .sending = try await phase(first) else { Issue.record("发出后应是在路上"); return }
+        let sending = try await phase(first)
+        guard case .sending = sending else { Issue.record("发出后应是在路上"); return }
+        #expect(sending.locksInput(sending: false, launched: true), "在路上时回复框锁住")
 
         let request = try #require(try await mac.services.store.deliveryRequest(first.request))
         await clock.waitForSleeper()
@@ -119,12 +121,15 @@ struct LaunchAttachmentTests {
             before: now, claimCutoff: now, keptCutoff: now.addingTimeInterval(-DeliveryExecutor.keptRetention))
         #expect(try await mac.services.store.deliveryRequest(first.request) != nil)
         try await relay(first.request, from: mac, to: phone)
-        #expect(try await phase(first) == .failed(.reported("附件到期还没传到这台 Mac，没有发出，可以重发")))
+        let failedPhase = try await phase(first)
+        #expect(failedPhase == .failed(.reported("附件到期还没传到这台 Mac，没有发出，可以重发")))
+        #expect(!failedPhase.locksInput(sending: false, launched: true), "失败后回复框解锁、可以再开")
 
         let second = try await launch(replacing: first)
         let after = try await phone.services.store.deliveryRequests()
         #expect(after.map(\.id) == [second.request])
         #expect(after.first?.launch?.prompt == draft.stored)
+        #expect(try await phase(second).locksInput(sending: false, launched: true), "再开后回复框又锁住")
         await mac.services.executor.beginStop()()
     }
 }

@@ -22,6 +22,12 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
         /// 明确没能开成：Mac 报的原因。
         case failed(Speech.Failure)
         case claimed
+
+        /// 新会话输入框锁不锁：正在写请求（`sending`）时锁；发出过（`launched`）就锁到它明确没能开成，失败了解锁、可以再开。
+        func locksInput(sending: Bool, launched: Bool) -> Bool {
+            if case .failed = self { return sending }
+            return sending || launched
+        }
     }
 
     func phase(at moment: Speech.Moment) -> Phase {

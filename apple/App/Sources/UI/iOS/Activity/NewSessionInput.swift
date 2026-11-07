@@ -72,10 +72,7 @@ struct NewSessionInput: View {
     }
     private var phase: LaunchProgress.Phase { progress?.phase(at: services.speech) ?? .idle }
     /// 发出且还没失败：输入框锁住，等它开好。
-    private var inFlight: Bool {
-        if case .failed = phase { return sending }
-        return sending || launched != nil
-    }
+    private var inFlight: Bool { phase.locksInput(sending: sending, launched: launched != nil) }
     private var agent: AgentKind? { agents?.preferred(services.settings.lastAgent) }
     private var brain: AgentModelChoice? {
         guard chosen?.host != nil, let agents, let agent else { return nil }
