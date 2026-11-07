@@ -5,13 +5,13 @@ import SwiftUI
 
 extension PreviewFlight {
     /// 全屏页内容区上飞的终点与起点：铺满内容区（含两条栏下面），`chrome` 是两条栏占的边，`key` 是翻到的那一份（跟着翻页换），
-    /// `kind` 定内容落在哪（`PreviewPlace`）；`waitsForPaint`：内容是本机有文件的网页，落地等它画上第一帧（`pagePainted`）；
+    /// `kind` 定内容落在哪（`PreviewPlace`）；`page`：内容是本机有文件的网页时是它的附件键，落地等它画上第一帧（`pagePainted`），并按它记那一屏（`PreviewPageShots`）；
     /// `landed` 是内容露没露出来（飞的这段藏着）；`ground` 是全屏页的底色（落地换内容时垫在快照下面）。
     struct Stage: NSViewRepresentable {
         let flight: PreviewFlight
         let key: PreviewZoomKey
         let kind: PiPreviewKind?
-        let waitsForPaint: Bool
+        let page: String?
         let chrome: EdgeInsets
         @Binding var landed: Bool
 
@@ -20,7 +20,8 @@ extension PreviewFlight {
         func updateNSView(_ mark: Mark, context: Context) {
             mark.key = key
             mark.kind = kind
-            mark.waitsForPaint = waitsForPaint
+            mark.page = page
+            mark.dark = context.environment.colorScheme == .dark
             mark.chrome = chrome
             mark.ground = context.environment.palette.desk.resolve(in: context.environment).cgColor
             mark.landed = { landed = $0 }
@@ -33,7 +34,8 @@ extension PreviewFlight.Stage {
         weak var flight: PreviewFlight?
         var key = PreviewZoomKey(group: "", preview: UUID())
         var kind: PiPreviewKind?
-        var waitsForPaint = false
+        var page: String?
+        var dark = false
         var chrome = EdgeInsets()
         var ground = CGColor.clear
         var landed: (Bool) -> Void = { _ in }
@@ -59,6 +61,9 @@ extension PreviewFlight.Stage {
             departed = true
             flight?.depart(to: self)
         }
+
+        /// 这一页网页此刻大小、深浅色下的那一屏记在哪（`PreviewPageShots.key`）；不是网页为 nil
+        var shotKey: String? { page.map { PreviewPageShots.key(page: $0, area: place.area.size, dark: dark) } }
 
         /// 内容落在哪（窗口坐标）：两条栏之间的那一块。
         var place: PreviewPlace {

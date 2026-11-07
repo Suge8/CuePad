@@ -196,7 +196,7 @@ private struct OfflineWebView {
 
         private func painted() {
             view?.alphaValue = 1
-            flight?.pagePainted()
+            flight?.pagePainted(view)
         }
         #endif
     }

@@ -74,7 +74,7 @@ private struct PreviewPager: View {
         .background {
             PreviewFlight.Stage(
                 flight: flight, key: PreviewZoomKey(group: opening.group, preview: preview.id), kind: preview.kind,
-                waitsForPaint: preview.kind == .web && file(of: preview) != nil, chrome: chrome, landed: $landed)
+                page: preview.kind == .web && file(of: preview) != nil ? preview.key : nil, chrome: chrome, landed: $landed)
         }
         // 读屏先读顶栏（标题、第几份、翻页、分享、关闭），再读内容，最后是底栏：顶栏是叠在内容上的，不排的话排在内容后面
         .overlay(alignment: .top) { header.accessibilitySortPriority(1) }

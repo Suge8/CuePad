@@ -2,6 +2,7 @@
 import AppKit
 import CueStore
 import SwiftUI
+import WebKit
 
 /// Mac 全屏预览的飞出、飞回（iOS 是系统的 zoom 转场）：打开时点的那张缩略图从原处长到内容落下的地方，关上时翻到的那一份缩回它自己的缩略图
 /// （那张不在屏上时只随浮层淡出）。飞的是缩略图的那张画面，一层 Core Animation 图层浮在整窗最上面，位置、尺寸与圆角都在渲染端走 `Motion.glide`
@@ -10,7 +11,8 @@ import SwiftUI
 /// 飞的这段内容藏着（`landed`），同一张图不会在两处同时出现：不用盖一层幕布——浮层淡入淡出时 SwiftUI 按层各自改透明度，半透明的幕布盖不住半透明的内容。
 /// 内容区上不占地方的 `Stage` 是飞的终点与起点：它知道翻到了哪一份、内容落在哪。浮层本身的淡入淡出在 `PanelLayer`。减弱动态效果时不飞，只淡。
 /// 网页落地不交叉淡：飞的是缩略图那张快照（1024 宽排的首屏），真网页按全屏页的宽排，字的位置不同，两层一淡一显就是重影。
-/// 所以网页的快照按 CSS 像素一比一落在内容区左上（同真网页的起点与字号，多出内容区的裁掉；`PreviewPlace.frame`），落地后快照停着，等真网页载完、画上第一帧（`pagePainted`）
+/// 所以同样大小打开过的网页飞真网页上次画好的那一屏（`PreviewPageShots`），落在它那一处；没有时缩略图按 CSS 像素一比一落在内容区左上
+/// （同真网页的起点与字号，块宽随宽度伸缩的差一点；`PreviewPlace.frame`）。落地后快照停着，等真网页载完、画上第一帧（`pagePainted`）
 /// 才在同一刻露出网页、撤掉快照：全程屏上只有一层字。不让网页按快照的宽排：那样全屏页里的网页就不是它真的样子。
 /// Markdown 与改动同理（缩略图是一页 360 宽的首屏，全屏页按栏宽重排）：快照按一比一落在全屏页正文开头的地方，标题与头几行字对得上，
 /// 落地后同一刻换成内容（`swaps`），不交叉淡。
@@ -31,6 +33,7 @@ import SwiftUI
     /// 开始关了：还在等网页的那趟飞就不再落地。
     private var closing = false
     private var shows: [UUID: WeakShowing] = [:]
+    private let pageShots = PreviewPageShots()
     weak var stage: Stage.Mark?
 
     func register(_ key: PreviewZoomKey, _ source: Source) { sources[key] = source }
@@ -52,12 +55,15 @@ import SwiftUI
         guard let window = stage.window, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
               let (source, from) = source(stage.key, in: window)
         else { return stage.landed(true) }
+        // 同样大小打开过这一页：飞真网页的那一屏，落在它那一处（`PreviewPageShots`）；没有就飞缩略图
+        let shot = stage.shotKey.flatMap { pageShots.shot($0) }
+        let area = stage.place.area
         Task {
-            guard let image = await source.image(), stage.window === window,
-                  let flight = await Flight(
-                    image, from: source.frame(from, showing: image),
-                    to: stage.place.frame(of: image, aspect: source.aspect, crop: source.alignment),
-                    in: window)
+            guard let thumbnail = await source.image(), stage.window === window else { return stage.landed(true) }
+            let image: Any = shot?.image ?? thumbnail
+            let to = shot.map { PreviewFrame(rect: $0.rect(in: area)) }
+                ?? stage.place.frame(of: thumbnail, aspect: source.aspect, crop: source.alignment)
+            guard let flight = await Flight(image, from: source.frame(from, showing: image), to: to, in: window)
             else { return stage.landed(true) }
             try? await Task.sleep(for: .seconds(Motion.Glide.duration))
             guard PreviewPlace.swaps(stage.kind) else {
@@ -66,7 +72,7 @@ import SwiftUI
                 flight.dissolve()
                 return
             }
-            if stage.waitsForPaint { await painted() }
+            if stage.page != nil { await painted() }
             guard !closing else { return flight.remove() }
             // 快照在最上面：内容露出来的这一帧它还盖着，画上屏之后再撤，中间没有两层同时露出的一帧。
             // Markdown、改动按栏宽排、比快照宽，快照下面先垫一块桌面色铺满内容区（同此刻它四周的底），露出的那一帧正文不从快照旁边透出来
@@ -78,10 +84,14 @@ import SwiftUI
     }
 
     /// 全屏页里的网页载完、画上了第一帧（载不出来、规则装不上也算：那时露出的是读不了的说明）。
-    func pagePainted() {
+    /// 带着画好的网页 `view` 时把它此刻的那一屏记下，下次同样大小打开时飞它（`PreviewPageShots`）。
+    func pagePainted(_ view: WKWebView? = nil) {
         painted = true
         paintWaiter?.resume()
         paintWaiter = nil
+        guard let view, let stage, let key = stage.shotKey else { return }
+        let area = stage.place.area
+        Task { await pageShots.keep(view, area: area, as: key) }
     }
 
     private func painted() async {
@@ -98,11 +108,13 @@ import SwiftUI
               let (source, to) = source(stage.key, in: window) else { return }
         let shown = shows[stage.key.preview]?.value?.shown(in: window) ?? .opened
         let place = stage.place
+        let shot = stage.shotKey.flatMap { pageShots.shot($0) }
         Task {
             let start: (Any, Frame)
             switch shown {
             case .picture(let contents, let frame): start = (contents, frame)
             case .opened:
+                if let shot { start = (shot.image, PreviewFrame(rect: shot.rect(in: place.area))); break }
                 guard let image = await source.image() else { return }
                 start = (image, place.frame(of: image, aspect: source.aspect, crop: source.alignment))
             }
