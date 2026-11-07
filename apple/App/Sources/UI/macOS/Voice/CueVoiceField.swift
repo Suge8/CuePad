@@ -2,7 +2,7 @@
 import SwiftUI
 
 /// 采样到达才更新路径；插值交给渲染服务，主线程没有帧循环。新路径从 presentation layer 接续，插话不排队。
-/// 静音、断线、减弱动态、不可见与省电直接撤掉插值；等待的唯一循环由上层 LoopLayer 承担。
+/// 静音与断线只收回一次，随后静止；减弱动态、不可见与省电直接落定。等待的唯一循环由上层 LoopLayer 承担。
 struct CueVoiceField: NSViewRepresentable {
     let form: CueVoiceRibbon.Form
     let samples: [CGFloat]

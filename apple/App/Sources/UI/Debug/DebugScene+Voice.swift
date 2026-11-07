@@ -15,6 +15,7 @@ import Foundation
 ///   单变量音频处理对照与本地电平模式见 `DebugVoice`；原始控制事件（不含音频块）写到 `-CuePadVoiceWireLog <文件>`。
 /// - `-CuePadVoiceReadFixture <原文>` 把原文作为隔离库的主动消息请 GPT Live 朗读，录成后续验收的声源；不使用系统 TTS。
 /// - 到 `-CuePadVoiceSeconds`（默认 60）挂断；配 `-CuePadVoiceHangUpAfterReply YES` 时，结果送出后观察到实际输出、模型回合结束且音轨安静才挂断。
+///   `-CuePadVoiceKeepOpen YES` 在首轮挂断后保留窗口，供真实按钮重连与结果阅读验收；不延长通话时限。
 ///   `-CuePadVoiceReplay YES` 在 Cue 结果送出后重放原 delegation 与用户 turn.done，核对请求没有重复落库。
 /// - 每个节点一行写进 `-CuePadVoiceLog <文件>`：`<距起点秒> <节点>`。`cue-forward` 是落库结果与交接归属，`cue-sent` 是发送完成，
 ///   `context-accepted` 是服务端追加回执，`assistant-said` 只是模型转写；真正出声要核对 `output-loud/quiet` 与输出录音。最后一行是终态与音频用量。
@@ -160,7 +161,7 @@ extension DebugScene {
         }
         limit.cancel()
         note("end \(call.phase) audioMs=\(call.audioMs) usedPercent=\(call.usedPercent.map { "\($0)" } ?? "-")")
-        Task { NSApp.terminate(nil) }
+        if !defaults.bool(forKey: "CuePadVoiceKeepOpen") { Task { NSApp.terminate(nil) } }
     }
 }
 #endif

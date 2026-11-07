@@ -22,12 +22,15 @@ struct CueVoiceTranscript: View {
         VStack(alignment: .leading, spacing: Spacing.item) {
             if let issue = presentation.issue {
                 VStack(alignment: .leading, spacing: Spacing.item) {
-                    Text(issue.message).foregroundStyle(palette.failure)
-                    Button { action(.recover) } label: { Text(issue.recovery) }
-                        .buttonStyle(ControlButtonStyle(size: .compact))
+                    Text(issue.message)
+                        .foregroundStyle(palette.failure)
+                        .font(Typography.body)
+                        .textSelection(.enabled)
+                    if presentation.activity.isLive {
+                        Button { action(.recover) } label: { Text(issue.recovery) }
+                            .buttonStyle(ControlButtonStyle(size: .compact))
+                    }
                 }
-                .font(Typography.body)
-                .textSelection(.enabled)
                 .padding(.horizontal, Spacing.page)
             }
             ForEach(presentation.executions) { execution in

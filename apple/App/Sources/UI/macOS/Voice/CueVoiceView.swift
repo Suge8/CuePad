@@ -1,57 +1,111 @@
 #if os(macOS)
 import SwiftUI
 
-/// Mac 的内嵌通话区：落在 Cue 栏内，主区继续看任务；固定高度，不随转写或错误长短挤动按钮。
-/// 展开/收起属于宿主的呈现选择；通话收起后仍保留静音、挂断和停止执行。Esc 只收起，不挂断。
+/// Mac 的内嵌通话区：总高固定，底部控制不随转写或错误长短挪动。
+/// 阅读由用户选择，舞台让出空间后不会因新回复或换轮次自行展开；收起、回来保留阅读位置。
+/// 开合只改呈现，Esc 只收起。挂断只结束通话，执行与真实文字仍由宿主投影。
+/// 请求失败不代表通话结束：通话中的恢复入口在错误区（收起时在标题区），不替换静音和挂断。
 struct CueVoiceView: View {
     let presentation: CueVoicePresentation
     let expanded: Bool
     let action: (CueVoiceAction) -> Void
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var reading = false
 
-    // Cue 栏最窄 320pt 时仍留出约六行可阅读文字；收起只占两排控件，不盖住任务。
     static let expandedHeight: CGFloat = 480
     static let compactHeight: CGFloat = 108
+    private static let foldedHeight: CGFloat = 48
+    private static let foldedWidth: CGFloat = 64
+    private static let headingHeight: CGFloat = 240
+    // 标题先让开角色的移动路径，另一份在落位后出现，途中不叠两份字。
+    private static let stageTitleEnd: CGFloat = 0.25
+    private static let compactTitleStart: CGFloat = 0.9
+    private var folded: Bool { !expanded || reading }
 
     var body: some View {
-        VStack(spacing: Spacing.group) {
-            heading
-            if expanded {
+        CueVoiceFold(fold: folded ? 1 : 0, reveal: expanded ? 1 : 0) { fold, reveal in
+            let height = Self.compactHeight + (Self.expandedHeight - Self.compactHeight) * reveal
+            let head = Self.headingHeight + (Self.foldedHeight - Self.headingHeight) * fold
+            let readingHeight = max(0, height - head - Spacing.item - Spacing.group * (2 + reveal) - ControlSize.compact.height)
+            VStack(spacing: 0) {
+                heading(fold: fold, height: head).padding(.bottom, Spacing.item)
                 CueVoiceTranscript(presentation: presentation, action: action)
-                    .frame(maxHeight: .infinity)
+                    .frame(height: readingHeight)
+                    .clipped()
+                    .opacity(reveal)
+                    .allowsHitTesting(expanded)
+                    .accessibilityHidden(!expanded)
+                    .padding(.bottom, Spacing.group * reveal)
+                controls
             }
-            controls
+            .padding(.vertical, Spacing.group)
+            .frame(height: height)
+            .background(palette.desk)
         }
-        .padding(.vertical, Spacing.group)
-        .frame(height: expanded ? Self.expandedHeight : Self.compactHeight)
-        .background(palette.desk)
         .onExitCommand { if expanded { action(.collapse) } }
+        .animation(Motion.spatial(Motion.glide, reduceMotion: reduceMotion), value: folded)
+        .animation(Motion.spatial(Motion.glide, reduceMotion: reduceMotion), value: expanded)
     }
 
-    private var heading: some View {
-        VStack(spacing: Spacing.tight) {
-            if expanded {
+    private func heading(fold: CGFloat, height: CGFloat) -> some View {
+        let stageHeight = CueVoiceSignal.size.height + (Self.foldedHeight - CueVoiceSignal.size.height) * fold
+        return GeometryReader { box in
+            ZStack(alignment: .topLeading) {
                 CueVoiceSignal(samples: presentation.samples, activity: presentation.activity, muted: presentation.muted)
-                    .frame(maxWidth: .infinity)
-                    .overlay(alignment: .topTrailing) { expansion }
-                Text(presentation.title)
-                    .font(Typography.title)
-                    .foregroundStyle(palette.ink)
-                    .lineLimit(1)
-            } else {
-                HStack(spacing: Spacing.item) {
-                    CueAvatar(.resting, size: .row).environment(\.pageActive, false)
-                    VStack(alignment: .leading, spacing: Spacing.hair) {
+                    .scaleEffect(stageHeight / CueVoiceSignal.size.height)
+                    .position(x: box.size.width / 2 + (Self.foldedWidth / 2 - box.size.width / 2) * fold, y: stageHeight / 2)
+                    .transformEnvironment(\.pageActive) { $0 = $0 && !folded }
+                VStack(alignment: .leading, spacing: Spacing.hair) {
+                    if !expanded, presentation.activity.isLive, let issue = presentation.issue {
+                        Text(issue.message).font(Typography.bodyStrong).foregroundStyle(palette.failure)
+                    } else {
                         Text(verbatim: presentation.name).font(Typography.bodyStrong)
-                        Text(presentation.title).font(Typography.meta).foregroundStyle(palette.ink2)
                     }
+                    Text(presentation.title).font(Typography.meta).foregroundStyle(palette.ink2)
+                }
+                .lineLimit(1)
+                .padding(.horizontal, Self.foldedWidth)
+                .padding(.top, Spacing.tight)
+                .opacity(max(0, (fold - Self.compactTitleStart) / (1 - Self.compactTitleStart)))
+                .accessibilityHidden(!folded)
+                Text(presentation.title)
+                    .font(Typography.title).foregroundStyle(palette.ink)
                     .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+                    .offset(y: height - ControlSize.compact.height)
+                    .opacity(max(0, 1 - fold / Self.stageTitleEnd))
+                    .accessibilityHidden(folded)
+                HStack(spacing: Spacing.tight) {
                     Spacer(minLength: 0)
+                    if !expanded, presentation.activity.isLive, let issue = presentation.issue {
+                        Button { action(.recover) } label: { Label(issue.recovery, icon: .retry) }
+                            .labelStyle(.iconOnly)
+                            .buttonStyle(ControlButtonStyle(kind: .icon))
+                            .help(Text(issue.recovery))
+                    } else {
+                        readingToggle.keepsPlace(shown: expanded)
+                    }
                     expansion
                 }
             }
         }
+        .frame(height: height)
         .padding(.horizontal, Spacing.page)
+        .background(palette.desk)
+        .zIndex(1)
+    }
+
+    private var readingToggle: some View {
+        Button {
+            reading.toggle()
+        } label: {
+            if reading { Label("查看通话舞台", icon: .audio) }
+            else { Label("阅读通话文字", icon: .readFile) }
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(ControlButtonStyle(kind: .icon))
+        .help(reading ? Text("查看通话舞台") : Text("阅读通话文字"))
     }
 
     private var expansion: some View {
@@ -66,22 +120,37 @@ struct CueVoiceView: View {
 
     private var controls: some View {
         HStack(spacing: Spacing.item) {
-            Button { action(.stopExecution) } label: { Text("停止执行") }
+            Button { action(.stopExecution) } label: {
+                ViewThatFits(in: .horizontal) {
+                    Text("停止执行").fixedSize()
+                    Label("停止执行", icon: .stop).labelStyle(.iconOnly)
+                }
+            }
                 .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
+                .accessibilityLabel("停止执行")
                 .disabled(!presentation.canStopExecution)
                 .help("停止已交给 Cue 的执行")
             Spacer(minLength: 0)
-            Button { action(.toggleMute) } label: {
-                if presentation.muted { Text("取消静音") }
-                else { Text("静音") }
-            }
-            .buttonStyle(ControlButtonStyle(size: .compact))
-            .disabled(!presentation.activity.isLive)
-            .accessibilityValue(presentation.muted ? Text("已静音") : Text("麦克风已开启"))
-            .keyboardShortcut("m", modifiers: [.command, .shift])
-            Button(role: .destructive) { action(.hangUp) } label: { Text("挂断") }
+            if presentation.activity.isLive {
+                Button { action(.toggleMute) } label: {
+                    if presentation.muted { Text("取消静音") }
+                    else { Text("静音") }
+                }
                 .buttonStyle(ControlButtonStyle(size: .compact))
-                .disabled(!presentation.activity.isLive)
+                .accessibilityValue(presentation.muted ? Text("已静音") : Text("麦克风已开启"))
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+            }
+            if let issue = presentation.issue, !presentation.activity.isLive {
+                Button { action(.recover) } label: { Text(issue.recovery).fixedSize() }
+                    .buttonStyle(ControlButtonStyle(size: .compact))
+                    .layoutPriority(1)
+            } else if presentation.activity == .ended {
+                Button { action(.start) } label: { Text("再次通话") }
+                    .buttonStyle(ControlButtonStyle(size: .compact))
+            } else {
+                Button(role: .destructive) { action(.hangUp) } label: { Text("挂断") }
+                    .buttonStyle(ControlButtonStyle(size: .compact))
+            }
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, Spacing.page)
@@ -99,6 +168,22 @@ struct CueVoiceEntry: View {
             else { Label("和 Cue 通话", icon: .audio) }
         }
         .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
+    }
+}
+/// 一次开合只插值这一对进度：舞台、标题交接、正文边界与外框同一帧到同一位置。
+/// 子视图不各自再插值，避免 AppKit 滚动内容先到终点、SwiftUI 标题还在旧位置时互相遮挡。
+private struct CueVoiceFold<Content: View>: View, Animatable {
+    var fold: CGFloat
+    var reveal: CGFloat
+    @ViewBuilder let content: (CGFloat, CGFloat) -> Content
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(fold, reveal) }
+        set { (fold, reveal) = (newValue.first, newValue.second) }
+    }
+
+    var body: some View {
+        content(fold, reveal).transaction { $0.animation = nil }
     }
 }
 #endif

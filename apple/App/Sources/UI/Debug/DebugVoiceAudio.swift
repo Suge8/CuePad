@@ -1,5 +1,11 @@
 #if os(macOS) && DEBUG
 import Foundation
+import Observation
+
+/// 高频样本与演示的低频状态分开观察；只有 CueVoiceSignal.body 调用采样闭包时订阅这一份。
+@Observable final class DebugVoiceSamples {
+    var samples = DebugVoiceAudio.samples(at: 0.35)
+}
 
 /// 明示的视觉夹具，只由 DebugVoiceStage 的启动参数启用；正式组件不含音频生成器或定时状态切换。
 enum DebugVoiceAudio {
@@ -9,15 +15,17 @@ enum DebugVoiceAudio {
 
     static func state(at time: TimeInterval) -> String {
         switch time {
-        case ..<1.7: "listening"
-        case ..<3: "processing"
-        case ..<5.1: "speaking"
+        case ..<1.5: "connecting"
+        case ..<5: "listening"
+        case ..<7: "processing"
+        case ..<10.5: "speaking"
         // 开口转向处理的 80ms 内立刻插话，验路径重定向不会等上一段播完。
-        case ..<5.18: "processing"
-        case ..<6.2: "listening"
-        case ..<6.9: "speaking"
-        case ..<8: "muted"
-        default: "failed"
+        case ..<10.58: "processing"
+        case ..<12: "listening"
+        case ..<15.5: "speaking-muted"
+        case ..<17: "muted"
+        case ..<20: "failed"
+        default: "ended"
         }
     }
 

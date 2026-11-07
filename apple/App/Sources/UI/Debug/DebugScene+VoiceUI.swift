@@ -1,4 +1,5 @@
 #if os(macOS) && DEBUG
+import CueStore
 import SwiftUI
 
 /// 隔离原型：`-CuePadVoiceUI YES -CuePadVoiceState connecting|listening|processing|speaking|muted|failed|ended`。
@@ -7,14 +8,18 @@ import SwiftUI
 /// `-CuePadVoiceSignal YES` 显式注入模拟音频；`-CuePadVoiceSequence YES` 演示状态转场（含插话、静音和断线）。
 /// 点击“播放模拟音频”才走时钟，之前停在夹具首帧；不连麦克风、不执行任务，默认仍是空样本。
 /// `-CuePadVoiceMuted YES` 可独立组合远端讲话与麦克风静音；合成样本与核心一样每 50ms 更新一次。
-/// `-CuePadVoiceShort YES` 用短请求与回复验首屏阅读边界。
+/// `-CuePadVoiceRequestFailed YES` 独立叠加请求失败，可与通话中、结束态组合；重试只清除这份演示失败。
+/// `-CuePadVoiceShort YES` 用短请求与回复验首屏阅读边界；`-CuePadVoiceCompact YES` 从收起的通话开始。
 /// `-CuePadReduceMotion YES` 验减弱动态；`-CuePadVoiceHidden YES` 验不可见门禁，不改系统偏好。
 struct DebugVoiceStage: View {
     @Environment(\.palette) private var palette
-    @State private var state = DebugScene.defaults.string(forKey: "CuePadVoiceState") ?? "listening"
-    @State private var expanded = true
+    @State private var state = DebugScene.defaults.bool(forKey: "CuePadVoiceSequence") ? "connecting" : (DebugScene.defaults.string(forKey: "CuePadVoiceState") ?? "listening")
+    @State private var audio = DebugVoiceSamples()
+    @State private var replyReady = !DebugScene.defaults.bool(forKey: "CuePadVoiceSequence")
+    @State private var expanded = !DebugScene.defaults.bool(forKey: "CuePadVoiceCompact")
     @State private var muted = DebugScene.defaults.string(forKey: "CuePadVoiceState") == "muted" || DebugScene.defaults.bool(forKey: "CuePadVoiceMuted")
     @State private var stopped = false
+    @State private var requestFailed = DebugScene.defaults.bool(forKey: "CuePadVoiceRequestFailed")
     @State private var lastAction = ""
     @State private var replies = Self.seedReplies()
     @State private var started: Date?
@@ -55,9 +60,7 @@ struct DebugVoiceStage: View {
                 }
             }
             Spacer(minLength: 0)
-            TimelineView(.periodic(from: started ?? .distantFuture, by: DebugVoiceAudio.interval)) { clock in
-                CueVoiceView(presentation: presentation(at: started.map { clock.date.timeIntervalSince($0) } ?? 0.35), expanded: expanded, action: receive)
-            }
+            CueVoiceView(presentation: presentation, expanded: expanded, action: receive)
             .transformEnvironment(\.pageActive) { if DebugScene.defaults.bool(forKey: "CuePadVoiceHidden") { $0 = false } }
             Spacer(minLength: 0)
             Text(verbatim: lastAction)
@@ -67,29 +70,47 @@ struct DebugVoiceStage: View {
         }
         .frame(width: Self.width)
         .background(palette.desk)
+        .task(id: started) {
+            guard let started else { return }
+            // 明示的 Debug 信号源；只发布样本。外层只在脚本换状态时更新，不由 20Hz 驱动历史排版。
+            while !Task.isCancelled {
+                let time = Date().timeIntervalSince(started)
+                audio.samples = DebugVoiceAudio.samples(at: time)
+                if sequencing {
+                    let next = DebugVoiceAudio.state(at: time)
+                    if state != next { state = next }
+                    if !replyReady, time >= 7 { replyReady = true }
+                }
+                do { try await Task.sleep(for: .seconds(DebugVoiceAudio.interval)) }
+                catch { return }
+            }
+        }
     }
 
-    private func presentation(at time: TimeInterval) -> CueVoicePresentation {
-        let state = sequencing ? DebugVoiceAudio.state(at: time) : state
-        let muted = muted || (sequencing && state == "muted")
+    private var presentation: CueVoicePresentation {
+        let muted = muted || (sequencing && ["muted", "speaking-muted"].contains(state))
         let activity: CueVoicePresentation.Activity = switch state {
         case "connecting": .connecting
         case "processing": .processing
-        case "speaking": .speaking
+        case "speaking", "speaking-muted": .speaking
         case "failed": .failed
         case "ended": .ended
         default: .listening
         }
         let long = DebugScene.defaults.bool(forKey: "CuePadVoiceLong")
         let request = DebugScene.defaults.bool(forKey: "CuePadVoiceShort") ? String(localized: "检查发布事项", table: "Demo") : String(localized: "把发布前的检查交给 Cue，保留需要我确认的事项", table: "Demo")
+        let delivery: Speech.Trip = if requestFailed { .failed(.reported(String(localized: "未交给 Cue"))) }
+            else if activity == .processing { .sending } else { .delivered }
+        let issue: CueVoicePresentation.Issue? = if requestFailed { .init(message: "未交给 Cue", recovery: "重试") }
+            else if activity == .failed { self.issue } else { nil }
         return CueVoicePresentation(
-            name: "Cue", activity: activity, muted: muted, samples: { simulated ? DebugVoiceAudio.samples(at: time) : [] },
+            name: "Cue", activity: activity, muted: muted, samples: { [audio, simulated] in simulated ? audio.samples : [] },
             request: activity == .connecting ? nil : .init(text: long ? String(repeating: request + "\n", count: 8) : request,
-                delivery: activity == .processing ? .sending : .delivered),
-            replies: activity == .connecting ? [] : replies.map {
+                delivery: delivery),
+            replies: !replyReady ? [] : replies.map {
                 .init(id: $0.id, text: $0.text, canRequestRepeat: activity.isLive)
             },
-            issue: activity == .failed ? issue : nil,
+            issue: issue,
             canStopExecution: !stopped && activity != .connecting)
     }
 
@@ -132,7 +153,7 @@ struct DebugVoiceStage: View {
     private func interruptSequence() {
         guard sequencing else { return }
         state = DebugVoiceAudio.state(at: started.map { Date().timeIntervalSince($0) } ?? 0.35)
-        muted = muted || state == "muted"
+        muted = muted || ["muted", "speaking-muted"].contains(state)
         sequencing = false
     }
 
@@ -141,6 +162,7 @@ struct DebugVoiceStage: View {
         case .start:
             interruptSequence()
             state = "connecting"
+            if simulated { sequencing = true; started = Date() }
         case .toggleMute:
             interruptSequence()
             muted.toggle()
@@ -151,6 +173,13 @@ struct DebugVoiceStage: View {
             stopped = true
             lastAction = String(localized: "演示：已收到停止执行操作", table: "Demo")
         case .recover:
+            if requestFailed {
+                requestFailed = false
+            } else {
+                interruptSequence()
+                state = "connecting"
+                if simulated { sequencing = true; started = Date() }
+            }
             lastAction = String(localized: "演示：已收到恢复操作", table: "Demo")
         case .requestRepeat:
             lastAction = String(localized: "演示：已收到再说一遍请求", table: "Demo")
