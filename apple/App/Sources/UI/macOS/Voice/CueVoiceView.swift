@@ -22,31 +22,45 @@ struct CueVoiceView: View {
     private static let minimumReadingHeight: CGFloat = 104
     private static let stageTitleEnd: CGFloat = 0.25
     private static let compactTitleStart: CGFloat = 0.9
-    private static let fixedHeight = CueVoiceStatus.height + CueVoiceExecutionSummary.height + controlsHeight + Spacing.group * 2 + Spacing.item
-    private var compactHeight: CGFloat { Self.fixedHeight + Self.foldedHeight }
-    private var constrained: Bool { availableHeight < Self.fixedHeight + Self.headingHeight + Self.minimumReadingHeight }
+    private static let regularFixedHeight = CueVoiceStatus.height + CueVoiceExecutionSummary.height + controlsHeight + Spacing.group * 2 + Spacing.item
+    // 紧凑档由宿主分配高度和内容预算决定，不因提示出现或记录数量变化而切档。
+    private var compact: Bool {
+        availableHeight < Self.regularFixedHeight + Self.foldedHeight + Self.minimumReadingHeight
+            + ChatLayout.edge * 2 + ControlSize.compact.height + Spacing.item
+    }
+    private var controlSpacing: CGFloat { compact ? Spacing.tight : Spacing.item }
+    private var verticalInset: CGFloat { compact ? Spacing.tight : Spacing.group }
+    private var headingSpacing: CGFloat { compact ? Spacing.tight : Spacing.item }
+    private var fixedHeight: CGFloat {
+        CueVoiceStatus.height + (compact ? 0 : CueVoiceExecutionSummary.height)
+            + ControlSize.compact.height * 2 + controlSpacing + verticalInset * 2 + headingSpacing
+    }
+    private var compactHeight: CGFloat { fixedHeight + Self.foldedHeight }
+    private var constrained: Bool { availableHeight < Self.regularFixedHeight + Self.headingHeight + Self.minimumReadingHeight }
     private var folded: Bool { !expanded || reading || constrained }
 
     var body: some View {
         CueVoiceFold(fold: folded ? 1 : 0, reveal: expanded ? 1 : 0) { fold, reveal in
             let shownHeight = min(availableHeight, compactHeight + (availableHeight - compactHeight) * reveal)
             let animatedHead = Self.headingHeight + (Self.foldedHeight - Self.headingHeight) * fold
-            let head = min(animatedHead, max(Self.foldedHeight, shownHeight - Self.fixedHeight - Self.minimumReadingHeight))
+            let head = min(animatedHead, max(Self.foldedHeight, shownHeight - fixedHeight - Self.minimumReadingHeight))
             let headingFold = (Self.headingHeight - head) / (Self.headingHeight - Self.foldedHeight)
-            let readingHeight = max(0, shownHeight - head - Self.fixedHeight)
+            let readingHeight = max(0, shownHeight - head - fixedHeight)
             VStack(spacing: 0) {
-                heading(fold: headingFold, height: head).padding(.bottom, Spacing.item)
-                CueVoiceStatus(presentation: presentation, action: action)
+                heading(fold: headingFold, height: head).padding(.bottom, headingSpacing)
+                CueVoiceStatus(presentation: presentation, compact: compact, action: action)
                 CueVoiceTranscript(presentation: presentation, action: action)
                     .frame(height: readingHeight)
                     .clipped()
                     .opacity(reveal)
                     .allowsHitTesting(expanded)
                     .accessibilityHidden(!expanded)
-                CueVoiceExecutionSummary(executions: presentation.executions) { executionDetails = true }
+                if !compact {
+                    CueVoiceExecutionSummary(executions: presentation.executions) { executionDetails = true }
+                }
                 controls
             }
-            .padding(.vertical, Spacing.group)
+            .padding(.vertical, verticalInset)
             .frame(height: shownHeight)
             .background(palette.desk)
         }
@@ -115,7 +129,7 @@ struct CueVoiceView: View {
     }
 
     private var controls: some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
+        VStack(alignment: .leading, spacing: controlSpacing) {
             HStack(spacing: Spacing.item) {
                 Button { action(.stopExecution) } label: { Label("停止执行", icon: .stop) }
                     .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))

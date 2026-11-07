@@ -2,9 +2,10 @@
 import SwiftUI
 
 /// 真实问题优先于最新请求摘要；问题与恢复对象由宿主投影，不把最新请求当作失败对象。
-/// 无问题时显示最新请求，详情始终保留两者；摘要不参与滚动和底部跟随。
+/// 无问题时显示最新请求，详情始终保留两者；紧凑档合入需注意执行与全部记录入口，摘要不参与滚动和底部跟随。
 struct CueVoiceStatus: View {
     let presentation: CueVoicePresentation
+    let compact: Bool
     let action: (CueVoiceAction) -> Void
     @State private var details = false
     @Environment(\.palette) private var palette
@@ -16,15 +17,27 @@ struct CueVoiceStatus: View {
                 VStack(alignment: .leading, spacing: Spacing.hair) {
                     if let issue = presentation.issue {
                         Text(issue.message).font(Typography.body).foregroundStyle(palette.failure)
-                            .lineLimit(2)
+                            .lineLimit(compact ? 1 : 2)
                     } else if let request = presentation.request {
                         Text("当前请求：\(request.status)").font(Typography.bodyStrong)
                             .foregroundStyle(request.delivery.failure != nil ? palette.failure : palette.ink)
-                        Text(verbatim: request.text).font(Typography.meta).foregroundStyle(palette.ink2)
+                        if !compact { Text(verbatim: request.text).font(Typography.meta).foregroundStyle(palette.ink2) }
+                    }
+                    if compact, let item = CueVoiceExecutionSummary.primary(presentation.executions) {
+                        if item.needsAttention {
+                            HStack(spacing: Spacing.tight) {
+                                Text("需注意").fixedSize()
+                                Text(verbatim: item.title)
+                            }
+                            .font(Typography.meta).foregroundStyle(palette.failure)
+                        } else {
+                            Text(Dotted(item.title, item.status))
+                                .font(Typography.meta).foregroundStyle(palette.ink2)
+                        }
                     }
                 }
                 .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: ControlSize.compact.height, alignment: .leading)
                 .contentShape(.rect)
             }
             .buttonStyle(PressStyle(.button))
@@ -40,6 +53,7 @@ struct CueVoiceStatus: View {
                         if let issue = presentation.issue {
                             Text(issue.message).foregroundStyle(palette.failure)
                         }
+                        if compact { CueVoiceExecutionRecords(executions: presentation.executions) }
                     }
                     .font(Typography.body)
                     .textSelection(.enabled)
@@ -56,7 +70,7 @@ struct CueVoiceStatus: View {
         }
         .padding(.horizontal, Spacing.page)
         .frame(height: Self.height, alignment: .top)
-        .keepsPlace(shown: presentation.request != nil || presentation.issue != nil)
+        .keepsPlace(shown: presentation.request != nil || presentation.issue != nil || (compact && !presentation.executions.isEmpty))
     }
 }
 
@@ -64,7 +78,6 @@ struct CueVoiceStatus: View {
 struct CueVoiceExecutions: View {
     let executions: [CueVoicePresentation.Execution]
     @Binding var showing: Bool
-    @Environment(\.palette) private var palette
 
     var body: some View {
         Button { showing = true } label: { Text("执行详情 \(executions.count)") }
@@ -74,15 +87,7 @@ struct CueVoiceExecutions: View {
                 ScrollViewReader { reader in
                     ScrollView {
                         VStack(alignment: .leading, spacing: Spacing.block) {
-                            ForEach(executions) { execution in
-                                VStack(alignment: .leading, spacing: Spacing.tight) {
-                                    Text(verbatim: execution.title).font(Typography.bodyStrong)
-                                    Text(verbatim: execution.status).font(Typography.body)
-                                        .foregroundStyle(execution.needsAttention ? palette.failure : palette.ink2)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .id(execution.id)
-                            }
+                            CueVoiceExecutionRecords(executions: executions)
                         }
                         .textSelection(.enabled)
                         .padding(Spacing.page)
@@ -103,9 +108,11 @@ struct CueVoiceExecutionSummary: View {
     @Environment(\.palette) private var palette
     static let height: CGFloat = 36
 
-    private var item: CueVoicePresentation.Execution? {
+    static func primary(_ executions: [CueVoicePresentation.Execution]) -> CueVoicePresentation.Execution? {
         executions.first(where: \.needsAttention) ?? executions.first
     }
+
+    private var item: CueVoicePresentation.Execution? { Self.primary(executions) }
 
     var body: some View {
         Button(action: showDetails) {
@@ -128,6 +135,22 @@ struct CueVoiceExecutionSummary: View {
         .frame(height: Self.height)
         .keepsPlace(shown: item != nil)
         .help("查看全部执行与停止记录")
+    }
+}
+private struct CueVoiceExecutionRecords: View {
+    let executions: [CueVoicePresentation.Execution]
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ForEach(executions) { execution in
+            VStack(alignment: .leading, spacing: Spacing.tight) {
+                Text(verbatim: execution.title).font(Typography.bodyStrong)
+                Text(verbatim: execution.status).font(Typography.body)
+                    .foregroundStyle(execution.needsAttention ? palette.failure : palette.ink2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .id(execution.id)
+        }
     }
 }
 #endif
