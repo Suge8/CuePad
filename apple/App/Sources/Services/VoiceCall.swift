@@ -40,7 +40,7 @@ final class VoiceCall {
         var tell: (String) -> Void
         var store: CueStore
         var cueName: String
-        var source: VoicePeer.Source = .microphone
+        var source: VoicePeer.Source = .microphone(device: nil)
         var recording: URL?
     }
 
@@ -129,8 +129,10 @@ final class VoiceCall {
             return .failed(.media)
         case .peer(.inputEnded):
             mark("input-ended")
-        case .peer(.output(let loud)):
-            mark(loud ? "output-loud" : "output-quiet")
+        case .peer(.level(let side, let loud, let peak)):
+            mark(loud ? "\(side.rawValue)-loud" : String(format: "%@-quiet peak=%.3f", side.rawValue, peak))
+        case .peer(.device(let label)):
+            mark("device \(label)")
         case .wire(.failure(let closed)):
             return phase == .connecting ? .failed(.closed("\(closed.status.map(String.init) ?? "-") \(closed.reason)")) : .failed(.closed(closed.reason))
         case .wire(.success(let event)):
@@ -195,6 +197,7 @@ final class VoiceCall {
             sideband.cancel(with: .normalClosure, reason: nil)
         }
         sideband = nil
+        if case .microphone = dependencies.source { mark(String(format: "input-max %.3f", await peer.inputMax())) }
         await peer.close()
         inputs.continuation.finish()
         phase = end

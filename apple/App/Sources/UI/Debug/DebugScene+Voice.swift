@@ -8,6 +8,7 @@ import Foundation
 ///   配了 `-CuePadCueBrain apple/scripts/cue-brain-stub.py` 时运行时是 Pi、大脑是替身（回 `CUE_STUB_REPLY` 那句）；没配时是真的 Claude Code，
 ///   登录照 docs/verify.md「让 Cue 真跑」在起实例前交给它（`CLAUDE_CODE_OAUTH_TOKEN`）。
 /// - `-CuePadVoice mic`：Cue 能听了就开始通话，声音走麦克风与扬声器（人工验收）；`-CuePadVoice <音频文件>`：接通后播一次这个文件当你说的话，
+///   `-CuePadVoiceDevice <设备名片段>` 指定麦克风设备（不改变系统默认输入）；不指定时使用默认输入。
 ///   对方的声音录到 `-CuePadVoiceRecord <wav>`（不外放；无人值守）。
 /// - 到 `-CuePadVoiceSeconds`（默认 60）挂断；配 `-CuePadVoiceHangUpAfterReply YES` 时 Cue 回话念完（回到聆听）1 秒后就挂。挂断也走 `toggleVoiceCall`，挂完退出。
 /// - 每个节点一行写进 `-CuePadVoiceLog <文件>`：`<距起点秒> <节点>`（含每轮说完的转写），最后一行是终态与音频用量。
@@ -34,7 +35,7 @@ extension DebugScene {
             lines.append(String(format: "%.3f ", Date.now.timeIntervalSince(started)) + line)
             if let log { try? lines.joined(separator: "\n").appending("\n").write(to: log, atomically: true, encoding: .utf8) }
         }
-        let source: VoicePeer.Source = input == "mic" ? .microphone : .file(URL(filePath: input))
+        let source: VoicePeer.Source = input == "mic" ? .microphone(device: defaults.string(forKey: "CuePadVoiceDevice")) : .file(URL(filePath: input))
         workspace.toggleVoiceCall(source: source, recording: defaults.string(forKey: "CuePadVoiceRecord").map { URL(filePath: $0) })
         guard let call = workspace.voice else { return }
         var replied = false

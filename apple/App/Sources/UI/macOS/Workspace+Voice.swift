@@ -7,7 +7,7 @@ import Foundation
 /// 交出来的话走"对 Cue 说"同一个入口（`speak` 到 `.cue`），所以 Cue 没启用（听不到）时不起通话。
 extension Workspace {
     /// 菜单的动作；无人值守与人工验收（`DebugScene.voiceCallIfAsked`）走同一个，只换声音来源与录音。
-    func toggleVoiceCall(source: VoicePeer.Source = .microphone, recording: URL? = nil) {
+    func toggleVoiceCall(source: VoicePeer.Source = .microphone(device: nil), recording: URL? = nil) {
         if let voice, voice.isLive { return voice.hangUp() }
         guard cue.canHear else { return say("Cue 还没启用，启用后才能通话", tone: .failure) }
         let services = services
