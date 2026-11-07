@@ -16,6 +16,9 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
     var note = ""
     /// 引用的那份预览（`PiPreview.id`）；对回答的批注为 nil。
     var preview: UUID?
+    /// 引用时那份预览的类型：预览随对话过期删掉、按编号取不到后，那一行照它写类型图标。
+    /// 可选字段，没有它的旧草稿照常解出来（只是过期后是一张纸）。
+    var kind: PiPreviewKind?
 
     init(entry: UUID, run: Int, location: Int, quote: String, note: String = "") {
         self.entry = entry
@@ -29,6 +32,7 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
     init(quoting preview: PiPreview, in entry: UUID) {
         self.init(entry: entry, run: 0, location: 0, quote: preview.title)
         self.preview = preview.id
+        kind = preview.kind
     }
 
     /// 引用的那份预览，按编号从这个会话此刻的预览里取（`SessionDigest.previews`）：引用只记编号，画面显示时再取，

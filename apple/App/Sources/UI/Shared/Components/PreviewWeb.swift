@@ -191,8 +191,13 @@ private struct OfflineWebView {
         #else
         /// 落地等这一页画上第一帧（`PreviewFlight.pagePainted`）
         weak var flight: PreviewFlight?
+        /// 画上第一帧之前透明（`makeNSView`）：翻页翻到网页时 WebKit 先铺一整页白底，深色下是一下白闪
+        weak var view: WKWebView?
 
-        private func painted() { flight?.pagePainted() }
+        private func painted() {
+            view?.alphaValue = 1
+            flight?.pagePainted()
+        }
         #endif
     }
 }
@@ -243,7 +248,11 @@ extension OfflineWebView: NSViewRepresentable {
     static let edges = Edge.Set.bottom
     func makeNSView(context: Context) -> WKWebView {
         context.coordinator.flight = context.environment.previewFlight
-        return make(context.coordinator)
+        let view = make(context.coordinator)
+        // 透明着照样排版、出帧（藏起来就不出帧了），画上第一帧再显出来（`Coordinator.painted`）
+        view.alphaValue = 0
+        context.coordinator.view = view
+        return view
     }
     func updateNSView(_ view: WKWebView, context: Context) {}
 }

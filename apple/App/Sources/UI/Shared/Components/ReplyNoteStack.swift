@@ -66,7 +66,7 @@ private struct NoteRow: View {
             Button(action: reveal) {
                 HStack(spacing: Spacing.item) {
                     if note.preview != nil {
-                        QuoteThumb(preview: quoted)
+                        QuoteThumb(preview: quoted, kind: note.kind)
                         Text("预览「\(note.quote)」").font(Typography.secondary).foregroundStyle(palette.ink2)
                             .lineLimit(1).truncationMode(.middle)
                     } else {
@@ -103,9 +103,10 @@ private struct NoteRow: View {
 }
 
 /// 引用那一行行首的小图：按编号取到的那份预览的画面（同会话里的缩略图一套 `DeliverableLooks`，草稿里不存图）。
-/// 文件还没到本机、画面还没出来或这种文件没有画面时写它的类型（`DeliverableTile.icon`）；预览已随对话过期、取不到时是一张纸。
+/// 文件还没到本机、画面还没出来或这种文件没有画面时写它的类型（`DeliverableTile.icon`）；预览已随对话过期、取不到时照引用时记下的类型（`ReplyNote.kind`）。
 private struct QuoteThumb: View {
     let preview: PiPreview?
+    let kind: PiPreviewKind?
     @Environment(\.palette) private var palette
 
     #if os(iOS)
@@ -117,7 +118,7 @@ private struct QuoteThumb: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Radius.chip)
         Group {
-            if let preview { Picture(preview: preview) } else { Self.mark(.document, palette) }
+            if let preview { Picture(preview: preview) } else { Self.mark(DeliverableTile.icon(kind), palette) }
         }
         .frame(width: Self.side, height: Self.side)
         .clipShape(shape)
