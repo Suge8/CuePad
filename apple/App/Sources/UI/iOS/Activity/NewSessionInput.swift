@@ -13,7 +13,7 @@ struct NewSessionInput: View {
     struct Start: Identifiable {
         let id = UUID()
         var project: UUID?
-        /// 已经发出的那一次：输入框打开时接着看它的进度（界面上的入口都不带，只有截图用的调试画面摆出发出后的样子）。
+        /// 已经发出的那一次：同一任务重开表单时从库中恢复，接着看进度并确认重复风险。
         var launched: SessionLaunch?
         /// 从"发给 Agent"选了新会话：任务的正文与补的话带过来作开场。
         var draft: ComposerDraft?

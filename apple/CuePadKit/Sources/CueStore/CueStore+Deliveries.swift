@@ -1,6 +1,13 @@
 import CueText
 import Foundation
 
+/// 安全替换与用户确认后的重复意图互斥；未知结果不能冒充可撤回。
+public enum SessionLaunchIntent: Sendable {
+    case new
+    case replacing(UUID)
+    case repeatingConfirmed
+}
+
 extension CueStore {
   /// 手机端：写一条投送请求，等 `host` 指定的那台 Mac 执行。必须指定：只有被指定的 Mac 会领取，
   /// 所以同一请求不会被多台 Mac 各执行一次。`host` 取自该目标 Pi 会话的 `PiSessionState.hostID`。
@@ -90,11 +97,16 @@ extension CueStore {
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或任务名）。
   /// 给了 `card`（从灵感或任务"新会话"发给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）；
   /// 会话名按它定（`sessionName(forCard:)`）。`cue` 为真时请求标明来自 Cue（`DeliveryOrigin`）。
-  /// 安全替换先在同一事务里撤旧再写新；同步发送者已领取旧记录或结果未知时整笔拒绝。
+  /// 同一任务未收尾的请求禁止冒充首次提交；安全替换同事务撤旧写新，撤不回就拒绝；重复须明确确认。
   public func requestLaunch(
-    _ launch: PiLaunch, title: String, on host: String, card: UUID? = nil, cue: Bool = false, replacing previous: UUID? = nil
+    _ launch: PiLaunch, title: String, on host: String, card: UUID? = nil, cue: Bool = false, intent: SessionLaunchIntent = .new
   ) throws -> DeliveryRequest {
     try write {
+      if case .new = intent, let card,
+        try handoffRequests(for: [card])[card]?.contains(where: { $0.mode == .known(.start) }) == true {
+        throw CueStoreError.deliveryAlreadyHanded
+      }
+      let previous: UUID? = if case .replacing(let id) = intent { id } else { nil }
       if let previous, try !removeFailedDelivery(previous), try !removeUnstartedDelivery(previous, locallyOn: nil) {
         throw CueStoreError.deliveryAlreadyHanded
       }

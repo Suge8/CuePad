@@ -34,8 +34,16 @@ extension Workspace {
             case .launch(let project, let host): (project, host)
             default: (outbox?.project, nil)
             }
-        outbox = nil
-        newSession = NewSessionInput.Start(project: project, draft: draft, card: card, name: plan?.name, host: host)
+        do {
+            let launched = try services.store.snapshot { store -> SessionLaunch? in
+                guard let card = card ?? draft.attachments.first?.card,
+                      let request = try store.handoffRequests(for: [card])[card]?.first(where: { $0.mode == .known(.start) }),
+                      let token = request.launch?.token else { return nil }
+                return SessionLaunch(request: request.id, token: token)
+            }.value
+            outbox = nil
+            newSession = NewSessionInput.Start(project: project, launched: launched, draft: draft, card: card, name: plan?.name, host: host)
+        } catch { fail(error) }
     }
 
     /// 搜索页推在当前页上并聚焦搜索框（已在搜索页时只聚焦），退出就是返回。

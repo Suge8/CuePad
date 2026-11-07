@@ -67,22 +67,14 @@ nonisolated struct SessionLaunch: Equatable, Sendable {
     }
 }
 
-/// 安全替换与用户确认后的重复意图互斥；未知结果不能冒充可撤回。
-nonisolated enum SessionLaunchIntent {
-    case new
-    case replacing(UUID)
-    case repeatingConfirmed
-}
-
 extension Workspace {
     /// 新会话输入框提交开场，并在再次提交时尝试撤回上一条尚未交出的请求。
     func launchSession(
         in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
         model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false, intent: SessionLaunchIntent = .new
     ) async throws -> SessionLaunch {
-        let previous: UUID? = if case .replacing(let id) = intent { id } else { nil }
-        return try await services.launchSession(
+        try await services.launchSession(
             in: project, prompt: prompt, title: title, on: host, card: card, agent: agent,
-            model: model, thinking: thinking, fast: fast, replacing: previous)
+            model: model, thinking: thinking, fast: fast, intent: intent)
     }
 }
