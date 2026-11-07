@@ -6,12 +6,13 @@ import Synchronization
 import Testing
 @testable import CuePad
 @testable import CueStore
+@testable import CueSync
 
 /// 手机上的额度刷新（`AccountQuotas`）：进展页与额度钮出现、打开明细时自动问（`refreshesQuota` 调的就是 `refreshQuota(.automatic)`），明细里的重试是手动。
 /// 只问连着能答额度的会话的 Mac；没查到不弹提示，原因进明细，自动刷新冷却内不再问，重试照问。
 @MainActor
 struct QuotaRefreshTests {
-    let app = TestApp()
+    let app = TestApp(sync: .built { CloudSync.simulated(store: $0, peerFloor: CueStore.peerFloor) })
     var services: AppServices { app.services }
     var store: CueStore { app.services.store }
 
@@ -25,13 +26,14 @@ struct QuotaRefreshTests {
         try await store.recordQuota(
             QuotaReport(provider: "anthropic", windows: [], complete: true, account: PiAccount(kind: .oauth, scope: "a")), host: "mac-x")
         try await app.runtimeRecorder(on: "mac-x").update(sessionID: "s-\(agent.rawValue)", state: .thinking, title: "atlas", agent: agent)
+        await services.sync?.start()
         services.startLiveSessions()
         services.startAccountQuotas()
         try await eventually("会话与额度到界面") { !services.liveSessions.live.isEmpty && !services.accountQuotas.items.isEmpty }
     }
 
     @Test func Mac上没有能答额度的会话时_自动刷新不发请求() async throws {
-        defer { services.cancelBackgroundWork() }
+        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
         try await macWithQuota(.codex)
 
         #expect(await services.refreshQuota(.automatic) == nil)
@@ -41,7 +43,7 @@ struct QuotaRefreshTests {
     }
 
     @Test func 没查到保留原因_冷却内自动不再问_重试照问() async throws {
-        defer { services.cancelBackgroundWork() }
+        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
         try await macWithQuota(.pi)
         #expect(services.quotaRefreshKey == ["mac-x"])
         // 演那台 Mac：第一次按会话还没连好写回失败，之后查到
@@ -74,7 +76,7 @@ struct QuotaRefreshTests {
     }
 
     @Test func 页面取消不取消查询_同来源并发合并_换来源不受旧冷却限制() async throws {
-        defer { services.cancelBackgroundWork() }
+        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
         try await macWithQuota(.pi)
         let gate = AsyncStream<Void>.makeStream()
         let attempts = Mutex(0)
@@ -123,7 +125,7 @@ struct QuotaRefreshTests {
 
     /// 查询还没结束时，页面的来源又变了；保留的等待者查最新批次，离开的页面不留下下一轮自动查询。
     @Test(arguments: [false, true]) func 查询途中来源变化_取消等待页不启动新查询_冷却对应实际来源(cancelPage: Bool) async throws {
-        defer { services.cancelBackgroundWork() }
+        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
         try await macWithQuota(.pi)
         let gate = AsyncStream<Void>.makeStream()
         let attempts = Mutex(0)
@@ -172,18 +174,52 @@ struct QuotaRefreshTests {
         }
     }
 
+    @Test func 离线未确认上传就结束刷新_联网后重试复用原请求() async throws {
+        let cloud = ReceiptTests.WeakCloud()
+        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
+        let services = app.services!, store = services.store
+        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
+        try await macWithQuota(.pi, in: app)
+        await cloud.setDown(true)
+
+        let failure = await services.refreshQuota(.automatic)
+        #expect(failure?.text == "请求尚未确认上传，联网后可重试")
+        let request = try #require(try await quotaRequests(in: app).first)
+        #expect(request.serverAt == nil)
+        #expect(request.status == .known(.pending))
+        #expect(await cloud.holds(request.id) == false)
+        guard case .failed(let reason, ["mac-x"], _) = services.accountQuotas.phase else {
+            Issue.record("未确认上传应结束本次刷新并保留原因")
+            return
+        }
+        #expect(reason == failure)
+
+        await cloud.setDown(false)
+        let retry = Task { await services.refreshQuota(.manual) }
+        _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.serverAt }) { $0 != nil }
+        #expect(await cloud.holds(request.id))
+        #expect(try await quotaRequests(in: app).map(\.id) == [request.id])
+        try await cloud.macAnswers(request.id)
+        _ = try await services.sync?.syncNow()
+        #expect(await retry.value == nil)
+        #expect(services.accountQuotas.phase == .idle)
+        #expect(try await store.deliveryRequest(request.id)?.status == .known(.succeeded))
+        #expect(try await quotaRequests(in: app).map(\.id) == [request.id])
+    }
+
     /// Mac 一直不领取：请求到期后手机按未确认收尾，明细写没查到的原因、不弹提示；重试再发一条，这次 Mac 领了、查到。
     @Test func Mac不领取_请求到期后明细显示没查到_可重试() async throws {
         let clock = ManualTiming()
-        let app = TestApp(timing: clock.timing), services = app.services!, store = services.store
-        defer { services.cancelBackgroundWork() }
+        let cloud = SimulatedCloud(now: { clock.now })
+        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, timing: clock.timing)
+        let services = app.services!, store = services.store
+        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
         try await macWithQuota(.pi, in: app)
 
         let query = Task { await services.refreshQuota(.automatic) }
         let request = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.quota) } }) { $0 != nil })
         // 服务器真实收下，上传回执带回派发锚点；Mac 不领取，走过派发期限与回执窗口。
-        let row = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
-        try await store.markPushed([(row, Data(), clock.now)])
+        _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.serverAt }) { $0 != nil }
         clock.advance(.seconds(DeliveryRequest.phaseLimit + Speech.receiptLimit + 1))
 
         #expect(await query.value == Speech.unconfirmedReason)
@@ -196,8 +232,7 @@ struct QuotaRefreshTests {
         // 明细里点重试：不受冷却限制，再发一条；这次 Mac 领了、查到
         let retry = Task { await services.refreshQuota(.manual) }
         let next = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.quota) && $0.id != request.id } }) { $0 != nil })
-        let retried = try #require(try await store.syncRow(recordName: next.id.uuidString.lowercased()))
-        try await store.markPushed([(retried, Data(), clock.now)])
+        _ = try await eventually(store, { try $0.deliveryRequest(next.id)?.serverAt }) { $0 != nil }
         let mac = DeliveryExecutor(store: store, hostID: "mac-x", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { request, _ in
             request.mode == .known(.quota) ? .succeeded : .failed(ShownText("不该有别的请求"))
         }
