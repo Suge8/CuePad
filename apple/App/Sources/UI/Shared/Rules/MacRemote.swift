@@ -8,7 +8,7 @@ import UIKit
 /// 回跳一个加密的设备标识（`DeepLink.remoteBound`）；之后拿标识发起远控。CuePad 的 Mac（`hostID`）对应 UU 里哪台电脑只有用户知道，
 /// 所以每台 Mac 第一次连时在 UU 里选一次，标识按 Mac 记在本机偏好（`AppSettings.remoteDevices`），不同步：它绑着这台手机上登录的 UU 账号。
 /// 文档说全屏远控成败都不回调（3.3），选错了、换了 UU 账号只能"重新选择 Mac"再绑一次；画中画模式有回调，但每次都要再点小窗才回到全屏、中间还先切回 CuePad，
-/// 为拿失败原因让每次连都多两下不值，不用。发远控照官方示例逐字带上 `callback`（示例全屏也带，文档说可省，但不带的那条路示例没走过）：真回了失败就说原因（`controlFailure`）。
+/// 为拿失败原因让每次连都多两下不值，不用。发远控必须带 `callback`：文档说全屏可省，实测 UU 4.45 不带时只停在设备列表、不连也不报错（2611071115 带上后真机连上）；真回了失败就说原因（`controlFailure`）。
 /// 没装 UU 时系统打不开它的链接，这时提示去 App Store 装（文档 1.3）。不先问装没装（`canOpenURL`，iOS 27 起弃用，系统建议直接打开、按结果处理）。
 enum MacRemote {
     static let appStore = URL(string: "itms-apps://apps.apple.com/app/id1642306791")!
