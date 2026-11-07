@@ -97,12 +97,12 @@ public enum CueEnvelope {
 
   /// 交给大脑的他的话与回答（`CueStore.cueMessagesToDeliver`），一条一段：他的话是原话，里面的文件在话后各接一行本机路径（`AttachmentFiles.agentLine`，
   /// 引用照留，Cue 转给会话时原样写进去）；模型看不了图（`imagesAsFiles`）时图片也这样接一行，看得了的图另附；收起了卡（`setAside` 里 `setAsideBy` 是它的）就在后面列出，
-  /// Cue 判断是不是在答它们；回答是他选了哪一项，选的是"以后……不用问"时说明 CuePad 已把它记进一直记着的记忆（免得 Cue 再记一条）。
+  /// Cue 判断是不是在答它们；回答是他选了哪一项，选的是"以后……不用问"时说明 CuePad 已把它记进重点记忆（免得 Cue 再记一条）。
   public static func delivered(_ pending: [CueMessage], setAside: [CueMessage], files: AttachmentFiles, imagesAsFiles: Bool) -> String {
     pending.map { message in
       guard message.author == .known(.you) else {
         let question = CueFormat.plainText(message.text).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-        let noted = message.allowsFromNowOn(message.answer) ? "（已照原话记进一直记着的记忆，不用再记）" : ""
+        let noted = message.allowsFromNowOn(message.answer) ? "（已照原话记进重点记忆，不用再记）" : ""
         return "他回答了「\(question)」：\(message.answer ?? "")\(noted)"
       }
       let paths = CueFormat.parse(message.text).compactMap { token in
@@ -125,13 +125,13 @@ public enum CueEnvelope {
     found.isEmpty ? [] : ["他问的话在会话回复里查到的（按他的词查的，不全；要全用 memory recall）："] + found.map { "- " + $0 }
   }
 
-  /// 定时到点的一条：哪条定时（带序号）、本该几点（`CueFire`）与挂着的任务。
+  /// 定时到点的一条：哪条定时（UUID）、本该几点（`CueFire`）与挂着的任务。
   public struct Fired: Sendable {
-    public var line: CueIndexedLine
+    public var line: CueMemoryLine
     public var due: Date
     public var task: Card?
 
-    public init(line: CueIndexedLine, due: Date, task: Card?) {
+    public init(line: CueMemoryLine, due: Date, task: Card?) {
       self.line = line
       self.due = due
       self.task = task
@@ -140,8 +140,8 @@ public enum CueEnvelope {
 
   /// "#15 清理过期分支（每周一 9:00）· 任务「清理过期分支」（ab12cd34）· 本该 9:00，错过了，现在补上"。
   private static func fired(_ fired: Fired, now: Date) -> String {
-    let line = fired.line.line
-    var parts = ["#\(fired.line.index) \(line.text)（\(line.repeats.map(CueScheduleWords.repeats) ?? "一次")）"]
+    let line = fired.line
+    var parts = ["\(line.id.uuidString.lowercased()) \(line.text)（\(line.repeats.map(CueScheduleWords.repeats) ?? "一次")）"]
     if let task = fired.task { parts.append("任务「\(task.heading)」（\(task.id.shortID)）") }
     if CueFire.late(fired.due, at: now) { parts.append("本该 \(CueScheduleWords.time(fired.due, now: now))，错过了，现在补上") }
     return parts.joined(separator: " · ")

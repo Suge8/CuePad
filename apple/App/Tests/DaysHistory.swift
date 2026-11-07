@@ -50,7 +50,7 @@ final class DaysHistory {
         try await store.seed(log.sorted { $0.at < $1.at })
         logged = log.count
 
-        // 记忆：先是一直记着的（含后来改掉的那条旧偏好），再是日常学到的，最后是 1 天前改的新偏好；共 94 行、6 行一直记着
+        // 记忆：先是重点（含后来改掉的那条旧偏好），再是日常学到的，最后是 1 天前改的新偏好；共 94 行、6 行是重点
         let pins = ["改数据库结构前先问我", "推送到远端前先问我", "提交信息用英文写", "界面方案先给几个让我在卡上选", "回复用中文、一两句", "官网的改动不要碰 blog 子目录"]
         // 序号按写下的先后：同一毫秒写下的按 id 排，所以一条一条隔开写
         let lines = pins.map { ($0, true) } + (0..<87).map { (DaysScript.learned[$0 % DaysScript.learned.count] + "（\($0 + 1)）", false) }

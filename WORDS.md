@@ -36,7 +36,7 @@
 - **待回复**（`PiSessionState.awaitsReply`）vs **该你了**：待回复是 Cue 值班时留给你回（`CueLeft`）、此刻停着没在问（歇着或出错）的会话，属于等你；会话条、会话行、看板等你列、名牌、推送都叫它，记号墨色。该你了是 Cue 不值班时歇着的会话，不算等你；避免：待处理、等你回话
 - **在场**（`SessionPresence`）：只在代码里，界面上不出现
 - **新消息**（Cue 页，`CueStore.cueUnread`）vs **有新回复**（会话的，`PiUnread`）：前者各端同步，后者只记在本机；避免：未读消息（界面上）
-- **记忆**（`cueLines`）vs **置顶**（项目里的灵感）；长期生效的叫"一直记着"。不用先问的例外也是记忆：一条他说的、一直记着的原话（提问卡上选"以后……不用问"记下的，或他亲口说的，`CueStore.endCueQuestion`），范围写在字面上；避免：笔记、规矩（界面上）、允许清单（已退役）
+- **记忆**（`cueLines`）vs **置顶**（项目里的灵感）；长期生效的叫**重点**（每个班次都在 Cue 的系统提示里，`CueMemoryLine.pinned`；只有 Cue 整理，后台做梦不碰），动作"标为重点""取消重点"。不用先问的例外也是记忆：一条他说的重点原话（提问卡上选"以后……不用问"记下的，或他亲口说的，`CueStore.endCueQuestion`），范围写在字面上；避免：笔记、规矩（界面上）、允许清单（已退役）、一直记着（已改名）
 - **技能与规则**（`AgentLibrary`）；**规则**是 AGENTS.md 那几份（全局规则、项目规则、Pi 的系统提示）；**文件页**是点开一份技能或规则、在 CuePad 里改它的那一页；避免：说明、指令、提示词、CLAUDE.md（界面上统称时）
 - 整理只有三个动作词（`LibraryTidy`）：**一键整理**（不用你选的那几件）、**去重**（同名的技能，按钮"只留这份"）、**合并**（内容不同的规则，按钮"合并进来"）；避免：修复、清理、同步（指整理时）
 - **发往 Mac**（手机上改技能与规则的纸飞机，`LibraryEdit`）：手机只攒着改，由那台 Mac 写进文件；避免：保存、上传
@@ -49,7 +49,7 @@
 
 - 灵感 Idea · 任务 Task · 子任务 Subtask · 正文 Notes · 项目 Project · 默认项目 Default Project · 置顶 Pin / Unpin / Pinned · 归档 Archive · 回收站 Trash · 批注 Comment（不叫 Note，免得和 Notes 混）
 - 进展 Progress · 看板 Board · 会话 Session · 更早 Earlier · 在旁边打开 Open Beside · Agent 会话 Agent Session · 全部项目 All Projects · 工作区 Workspace · 绑定的文件夹 Linked Folder
-- Cue 的四个：Cue · 推进中 Active · 等你 Needs You · 记忆 Memory；一直记着 Always Remember
+- Cue 的四个：Cue · 推进中 Active · 等你 Needs You · 记忆 Memory；重点 Key Points（标为重点 Key Point · 取消重点 Unmark：轻扫按钮下只放得下约 10 个字母）
 - 拍板 Your Call（"等你拍板" Needs Your Call）；数字账（名牌、小组件、灵动岛与锁屏、菜单栏面板）与会话条的计数里数接小写短形：N for you（拍板）· N to reply · N active · N subagent(s) · N need(s) you
 - 进行中 In Progress（任务自己的状态，不与 Active 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…
 - 经过的动作词：查看 View · 发给 Message · 新建 New · 修改 Edit · 开始 Start · 停止 Stop · 完成 Complete · 留给你 Left for You

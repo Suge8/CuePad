@@ -44,7 +44,7 @@ extension Workspace {
 
     /// 记一条（算你说的）；带 `schedule` 是一条定时（定时页的新定时）。
     func noteCueLine(_ text: String, schedule: ScheduleDraft? = nil) async throws {
-        let line = try await services.store.noteCueLine(text, source: .you, remindAt: schedule?.next(), repeats: schedule?.repeats).line
+        let line = try await services.store.noteCueLine(text, source: .you, remindAt: schedule?.next(), repeats: schedule?.repeats)
         await services.upload(line.id)
     }
 

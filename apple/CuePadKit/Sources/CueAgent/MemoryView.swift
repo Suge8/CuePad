@@ -1,96 +1,69 @@
 import CueStore
 import Foundation
 
-/// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出（在系统提示里，`pinnedText`，按字节有软硬两条线，见 `CueMemoryLine.pinnedSoft`）；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
+/// Cue 的记忆视图（OptMem 的读法）：重点全部列出（在系统提示里，`pinnedText`，过了 `CueMemoryLine.pinnedHard` 叫 Cue 自己收口）；其余按快照位置铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
 /// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；
-/// 缺的摘要列成"待合并"（`merges`，由小到大、一批合到顶），视图里不列，由后台整理记忆的一次性大脑写（`dreamText`，`CueKeeper` 起；一直记着的该收口时（`tidyDue`）一并交给它整理）。摘要可以一层层展开（`zoom`）。
+/// 输入就绪的缺失摘要列成"待合并"（`merges`，子块写完由回执接续父块），视图里不列，由后台整理记忆的一次性大脑写（`dreamText`，`CueKeeper` 起；重点只归 Cue 整理，做梦不碰）。摘要可以一层层展开（`zoom`）。
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
-  public enum Entry: Equatable, Sendable {
-    case line(index: Int, line: CueMemoryLine)
-    case summary(lo: Int, hi: Int, text: String)
+  public typealias Entry = CueMemoryInput
 
-    /// 视图里的写法：#序号 日期 [他] 正文（`CueMemoryLine.shown`），或 #a-b 摘要（b 含在内）
-    var text: String {
-      switch self {
-      case .line(let index, let line): line.shown(at: index)
-      case .summary(let lo, let hi, let text): "#\(lo)-\(hi - 1) \(text)"
-      }
-    }
-  }
-
-  /// 待合并的一块：区间与原文（小块是原行，不含忘掉的与一直记着的；大块是两半显示成的那一行，还要先合的指向同一批里排在前面的那一半）。
+  /// 待合并的一块：区间与原文（小块是原行，不含忘掉的与重点；大块是已经就绪的两半输入）。
   public struct Merge: Equatable, Sendable {
-    public var lo: Int
-    public var hi: Int
+    public let range: CueMemoryRange
     public var source: String
   }
 
-  public var pinned: [CueIndexedLine]
+  public var pinned: [CueMemoryLine]
   public var entries: [Entry]
   public var merges: [Merge]
-  /// 一直记着的合计字节（`CueMemoryLine.bytes`）
+  /// 重点合计字节（`CueMemoryLine.bytes`）
   public var pinnedBytes: Int
-  /// 一直记着的过了硬线（`CueMemoryLine.pinnedHard`）：系统提示里叫 Cue 合并
+  /// 重点过了硬线（`CueMemoryLine.pinnedHard`）：系统提示里叫 Cue 合并
   public var pinnedOverBudget: Bool { pinnedBytes > CueMemoryLine.pinnedHard }
-  private let lines: [CueMemoryLine]
-  private let summaries: [[Int]: String]
+  private let memory: CueMemory
+  private var lines: [CueMemoryLine] { memory.lines }
 
   /// 预算：视图最多这么多行（约 8k token）。
   public static let budget = 96
   /// 不超过这么多行的块直接从原行合并；更大的从两半的摘要合并。
-  private static let rawMax = 16
+  private static let rawMax = CueMemory.rawMax
 
   public init(_ memory: CueMemory) {
     let budget = Self.budget
     let lines = memory.lines
-    let summaries = Dictionary(memory.summaries.map { ([$0.lo, $0.hi], $0.text) }, uniquingKeysWith: { _, last in last })
-    (self.lines, self.summaries) = (lines, summaries)
-    pinned = lines.enumerated().filter { $1.pinned && $1.deletedAt == nil }.map { CueIndexedLine(index: $0, line: $1) }
-    pinnedBytes = CueMemoryLine.bytes(pinned.map(\.line))
+    self.memory = memory
+    pinned = lines.filter { $0.pinned && $0.deletedAt == nil }
+    pinnedBytes = CueMemoryLine.bytes(pinned)
     var entries: [Entry] = [], merges: [Merge] = []
-    // 区间在视图里显示成的几行：有摘要用摘要，没有就拆成两半，单行只列没忘掉、没一直记着的
-    func expand(_ lo: Int, _ hi: Int) -> [Entry] {
-      if hi - lo == 1 {
-        let line = lines[lo]
-        return line.deletedAt == nil && !line.pinned ? [.line(index: lo, line: line)] : []
-      }
-      if let text = summaries[[lo, hi]] { return [.summary(lo: lo, hi: hi, text: text)] }
-      return expand(lo, (lo + hi) / 2) + expand((lo + hi) / 2, hi)
-    }
-    // 显示不止一行的块才待合并（全是一直记着的、忘掉的，或只剩一行，合了也不省行）；缺摘要的大块连同缺摘要的两半一起列出（小块排在前面）：
-    // 一次换新就合到顶，不用等两半写好再等下一次换新
+    // 只发布输入已经就绪的块；子块完成后，工具回执发布新就绪的父块。
     func pending(_ lo: Int, _ hi: Int) {
-      guard summaries[[lo, hi]] == nil, expand(lo, hi).count > 1 else { return }
-      if hi - lo <= Self.rawMax {
-        let raw = (lo..<hi).filter { lines[$0].deletedAt == nil && !lines[$0].pinned }.map { lines[$0].shown(at: $0) }
-        merges.append(Merge(lo: lo, hi: hi, source: raw.joined(separator: "\n")))
-        return
+      guard !memory.summaries.contains(where: { $0.lo == lo && $0.hi == hi }), memory.expanded(lo: lo, hi: hi).count > 1 else { return }
+      if hi - lo > Self.rawMax {
+        let mid = (lo + hi) / 2
+        pending(lo, mid)
+        pending(mid, hi)
+        guard memory.expanded(lo: lo, hi: mid).count <= 1, memory.expanded(lo: mid, hi: hi).count <= 1 else { return }
       }
-      let halves = [(lo, (lo + hi) / 2), ((lo + hi) / 2, hi)]
-      for half in halves { pending(half.0, half.1) }
-      let source = halves.compactMap { half -> String? in
-        let shown = expand(half.0, half.1)
-        return shown.count > 1 ? "#\(half.0)-\(half.1 - 1)（上面先合的这一块写成的那一行）" : shown.first?.text
-      }
-      merges.append(Merge(lo: lo, hi: hi, source: source.joined(separator: "\n")))
+      let source = memory.summaryInput(lo: lo, hi: hi).map(\.text).joined(separator: "\n")
+      merges.append(Merge(range: memory.range(lo: lo, hi: hi)!, source: source))
     }
     for (lo, hi) in Self.cover(lines.count, budget: max(0, budget - pinned.count)) {
-      entries += expand(lo, hi)
+      entries += memory.expanded(lo: lo, hi: hi)
       if hi - lo > 1 { pending(lo, hi) }
     }
     self.entries = entries
-    self.merges = merges.sorted { ($0.hi - $0.lo, $0.lo) < ($1.hi - $1.lo, $1.lo) }
+    self.merges = merges.sorted { ($0.range.hi - $0.range.lo, $0.range.lo) < ($1.range.hi - $1.range.lo, $1.range.lo) }
   }
 
-  /// 系统提示里的一直记着的（班次内不变）：先一行用量，过了硬线跟一句叫 Cue 合并。
+  /// 系统提示里的重点（班次内不变）：先一行用量，过了硬线跟一句叫 Cue 合并。
   public var pinnedText: String {
     guard !pinned.isEmpty else { return "还没有。" }
     var out = ["\(pinned.count) 条，\(Self.kilobytes(pinnedBytes)) / \(Self.kilobytes(CueMemoryLine.pinnedHard))"]
     if pinnedOverBudget {
-      out[0] += "：超了。同一件事的几条用 note replaces 并成一条（保留他的原话与范围），过时的 forget，不必一直记着的 pin false"
+      out[0] += "：超了。按整理记忆的原则用 note replaces 合并重复项，过时的 forget，不必是重点的 pin false"
     }
-    out += pinned.map { $0.line.shown(at: $0.index) }
+    out += pinned.map { $0.shown() }
     return out.joined(separator: "\n")
   }
 
@@ -99,59 +72,40 @@ public struct CueMemoryView: Equatable, Sendable {
     (Double(bytes) / 1024).formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US_POSIX"))) + "KB"
   }
 
-  /// 自上次整理一直记着的以来新钉了这么多条，就再整理一次（没过软线也整理）。
-  public static let tidyAfterPins = 5
-
-  /// 该不该让后台整理一直记着的：钉着的那组和上次整理后的（`tidied`，从没整理过为空）不一样，且过了软线（`CueMemoryLine.pinnedSoft`）
-  /// 或新钉了 `tidyAfterPins` 条以上。整理时什么都没动，那组也就没变，不会一直重跑。
-  public func tidyDue(since tidied: Set<UUID>) -> Bool {
-    let ids = Set(pinned.map(\.line.id))
-    guard ids != tidied else { return false }
-    return pinnedBytes > CueMemoryLine.pinnedSoft || ids.subtracting(tidied).count >= Self.tidyAfterPins
-  }
-
-  /// 交给整理记忆的大脑的输入（规则在它的系统提示里，`CuePrompt.dream`）：待合并的块（`mergeText`），`tidy` 时另附一直记着的全部行；都没有为 nil。
-  public func dreamText(tidy: Bool) -> String? {
-    var parts: [String] = []
-    if let mergeText { parts.append("<merge>\n\(mergeText)\n</merge>") }
-    if tidy, !pinned.isEmpty {
-      let head = "\(pinned.count) 条，\(Self.kilobytes(pinnedBytes))（软线 \(Self.kilobytes(CueMemoryLine.pinnedSoft))）"
-      parts.append((["<pinned>", head] + pinned.map { $0.line.shown(at: $0.index) } + ["</pinned>"]).joined(separator: "\n"))
-    }
-    return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
-  }
+  /// 交给整理记忆的大脑的输入（规则在它的系统提示里，`CuePrompt.dream`）：待合并的块（`mergeText`）；没有为 nil。
+  public var dreamText: String? { mergeText.map { "<merge>\n\($0)\n</merge>" } }
 
   /// 新会话第一条输入里的 `<memory>` 块：其余的记忆，从早到晚、越早越粗；没有为 nil。
   public var viewText: String? {
     guard !entries.isEmpty else { return nil }
-    return (["<memory>", "你的记忆（一直记着的在系统提示里；其余从早到晚，越早越粗。一条是 #序号 记下的日期 [他] 正文，[他] 是他的原话；#a-b 是摘要，用 memory zoom 展开）："] + entries.map(\.text) + ["</memory>"])
+    return (["<memory>", "你的记忆（重点在系统提示里；其余从早到晚，越早越粗。一条是 UUID 记下的日期 [他] 正文，[他] 是他的原话；#a-b 是摘要的位置标签，展开时把 range 原样交给 memory zoom；读取当前视图用 memory zoom 不带 line 或 range）："] + entries.map(\.text) + ["</memory>"])
       .joined(separator: "\n")
   }
 
-  /// 展开 #lo-hi（hi 含在内，同视图里的写法）：两半各是摘要或原行，单行就是那一行。只展开对齐的块（视图与摘要里的 #a-b 都是）。
-  public func zoom(lo: Int, hi: Int) -> String? {
-    guard lo >= 0, hi >= lo, hi < lines.count else { return nil }
-    if lo == hi { return raw(lo) }
-    let size = hi + 1 - lo
-    guard size & (size - 1) == 0, lo % size == 0 else { return nil }
-    let mid = lo + size / 2
-    return [(lo, mid), (mid, hi + 1)].map { half in
-      let (start, end) = half
-      if let text = summaries[[start, end]] { return "#\(start)-\(end - 1) \(text)" }
-      if end - start > Self.rawMax { return "#\(start)-\(end - 1)（还没合并，再 zoom 展开）" }
+  /// 展开快照中的区间；迟到插入或区间内事实变化时拒绝，避免旧范围指向另一批内容。
+  public func zoom(range: CueMemoryRange) throws -> String {
+    guard memory.range(lo: range.lo, hi: range.hi) == range else { throw CueStoreError.staleMemoryRange }
+    let mid = range.lo + (range.hi - range.lo) / 2
+    return [(range.lo, mid), (mid, range.hi)].map { start, end in
+      if end - start == 1 { return raw(start) }
+      let child = memory.range(lo: start, hi: end)!
+      if let summary = memory.summaries.first(where: { $0.lo == start && $0.hi == end }) {
+        return "\(child.label) range=\(child.reference) \(summary.text)"
+      }
+      if end - start > Self.rawMax { return "\(child.label) range=\(child.reference)（还没合并，再 zoom 展开）" }
       return (start..<end).map(raw).joined(separator: "\n")
     }.joined(separator: "\n")
   }
 
   private func raw(_ index: Int) -> String {
     let line = lines[index]
-    return line.shown(at: index) + (line.deletedAt != nil ? "（已忘掉）" : line.pinned ? "（一直记着）" : "")
+    return line.shown() + (line.deletedAt != nil ? "（已忘掉）" : line.pinned ? "（重点）" : "")
   }
 
-  /// 待合并的块：由小到大，大块里还要先合的那一半指向排在前面的块；没有为 nil。
+  /// 输入已经就绪的待合并块；没有为 nil。
   var mergeText: String? {
     guard !merges.isEmpty else { return nil }
-    return merges.map { "#\($0.lo)-\($0.hi - 1)\n\($0.source)" }.joined(separator: "\n\n")
+    return merges.map { "\($0.range.label) range=\($0.range.reference)\n\($0.source)" }.joined(separator: "\n\n")
   }
 
   /// 用对齐的 2 的幂块铺满 [0, T)：块的大小不超过它年龄的 alpha 倍就整块保留。alpha 越大越粗、行越少。
@@ -191,13 +145,23 @@ public struct CueMemoryView: Equatable, Sendable {
   }
 }
 
+extension CueMemoryInput {
+  /// 范围引用也属于模型读取的子块输入，随依赖一起更新。
+  var text: String {
+    switch self {
+    case .line(let line): line.shown()
+    case .summary(let range, let text): "\(range.label) range=\(range.reference) \(text)"
+    }
+  }
+}
+
 extension CueMemoryLine {
-  /// Cue 看到的一条记忆（记忆视图、一直记着、zoom、recall 与待合并的原文只有这一种写法）：#序号 日期 [他] 定时 正文。
+  /// Cue 看到的一条记忆（记忆视图、重点、zoom、recall 与待合并的原文只有这一种写法）：UUID 日期 [他] 定时 正文。
   /// 日期是记下的那天（本机时区，今年 10-21、往年 2025-10-21），[他] 只在他的原话（`source` 是 `you`）时有；摘要行不带。
   /// 定时写到点的时刻（一次的）或怎么重复：正文是写给到点那时的（"今天 15:00 的飞机"），只挂在记下的日期下面会被读成记下那天
   /// （长程评测里问行程，答成记下那天的 15:00）。
-  func shown(at index: Int, now: Date = .now) -> String {
-    "#\(index) \(Self.day(createdAt, now: now)) " + (source == .known(.you) ? "[他] " : "") + schedule(now: now) + text
+  func shown(now: Date = .now) -> String {
+    "\(id.uuidString.lowercased()) \(Self.day(createdAt, now: now)) " + (source == .known(.you) ? "[他] " : "") + schedule(now: now) + text
   }
 
   private func schedule(now: Date) -> String {

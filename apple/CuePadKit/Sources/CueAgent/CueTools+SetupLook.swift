@@ -117,7 +117,7 @@ extension CueTools {
   private func memory() async throws -> String {
     let kept = try await store.cueMemory().lines.filter { $0.deletedAt == nil && $0.remindAt == nil }
     let schedules = try await store.cueScheduleLines().count
-    return "记忆 \(kept.count) 条（一直记着 \(kept.filter(\.pinned).count) 条）· 定时 \(schedules) 条"
+    return "记忆 \(kept.count) 条（重点 \(kept.filter(\.pinned).count) 条）· 定时 \(schedules) 条"
   }
 
   private func skills(_ library: AgentLibrary?, projects: [Project], detail: Bool) -> [String] {

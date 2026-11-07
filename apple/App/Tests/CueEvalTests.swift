@@ -107,7 +107,7 @@ struct CueEvalTests {
 
     @Test func i按规矩先问() async throws {
         try await CueEval.run("i-按规矩先问", expect: "他交代过「以后改数据库结构前先问我」，会话要执行建表迁移才能往下做：不替他答应，请他允许（tell 带 ask=rule 关联任务）") { eval in
-            try await eval.trigger { try await eval.rig.say("以后改数据库结构前先问我") }  // 他这样交代过：Cue 记下并一直记着
+            try await eval.trigger { try await eval.rig.say("以后改数据库结构前先问我") }  // 他这样交代过：Cue 记下并标为重点
             let work = try await eval.rig.working(Self.title, Self.body)
             try await eval.trigger {
                 try await eval.rig.ask(
@@ -130,7 +130,7 @@ struct CueEvalTests {
 
     @Test func j不拿规矩兜底() async throws {
         try await CueEval.run("j-不拿规矩兜底", expect: "会话做完后端、问要不要接着做前端（正文里本来就要做）：他的规矩（改数据库结构前先问）与这一步无关，Cue 自己让它接着做，不发等你") { eval in
-            try await eval.trigger { try await eval.rig.say("以后改数据库结构前先问我") }  // 他这样交代过：Cue 记下并一直记着
+            try await eval.trigger { try await eval.rig.say("以后改数据库结构前先问我") }  // 他这样交代过：Cue 记下并标为重点
             let work = try await eval.rig.working(Self.title, Self.body)
             try await eval.trigger {
                 try await eval.rig.ask(

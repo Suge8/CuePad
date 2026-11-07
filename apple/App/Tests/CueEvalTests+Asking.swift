@@ -41,7 +41,7 @@ extension CueEvalTests {
                 try await rig.ask(work, said: Self.pushReady, question: "要推送到 origin/main 吗？", options: ["推送", "不推送"])
             }
             return [
-                Check(.tool, "他放行时照原话记下并一直记着（memory note pin）", allowed),
+                Check(.tool, "他放行时照原话记下并标为重点（memory note pin）", allowed),
                 eval.notesArePlain(),
                 Check(.ask, "照放行直接答推送", work.answers == ["推送"]),
                 Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
@@ -50,7 +50,7 @@ extension CueEvalTests {
         }
     }
 
-    /// 测"不该问却问"的另一条路：他在推送的提问卡上选了"以后「项目」里推送代码不用问"（记成一条一直记着的记忆），同一个项目里的会话再问推不推，Cue 直接答。
+    /// 测"不该问却问"的另一条路：他在推送的提问卡上选了"以后「项目」里推送代码不用问"（记成一条重点记忆），同一个项目里的会话再问推不推，Cue 直接答。
     @Test func w2卡上放行过的不再问() async throws {
         try await CueEval.run(
             "w2-卡上放行过的不再问",
@@ -69,7 +69,7 @@ extension CueEvalTests {
             }
             let asks = try await eval.said().filter { $0.choices != nil && $0.id != card.id }
             return [
-                Check(.tool, "卡上的第二项记成一直记着的原话", remembered),
+                Check(.tool, "卡上的第二项记成标为重点的原话", remembered),
                 Check(.tool, "没把卡上的放行再记一条", pushLines.count == 1),
                 Check(.ask, "照放行直接答推送", work.answers == ["推送"]),
                 Check(.ask, "没再发等你", asks.isEmpty),

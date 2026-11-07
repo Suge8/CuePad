@@ -111,7 +111,7 @@ struct StyleBoard: View {
                 Text("全部").chip(on: true, menu: true)
             }
             SectionHeader("最近", count: 13)
-            SectionHeader("一直记着", level: .group, icon: .pin)
+            SectionHeader("重点", level: .group, icon: .pin)
             Button {} label: { LinkRow(title: Text(verbatim: "定时"), value: Text(verbatim: "8:00"), alert: palette.ink) { Image(.schedule) } }
                 .buttonStyle(.row)
                 .rowPaper(cornerRadius: Radius.card)

@@ -134,8 +134,8 @@ struct SubagentWakeTests {
         try await remote.update(sessionID: "remote-2", state: .delegating, title: "修好登录页", subagents: [ui])
         let line = try await store.noteCueLine("核对发布结果", source: .you, remindAt: rig.clock.now.addingTimeInterval(60))
         try await rig.reconciled()  // 会话来回写过都对过账，定时才到点
-        rig.jump(to: try #require(line.line.remindAt))
-        try await rig.message(.cue, containing: "定时到点：#\(line.index) 核对发布结果")
+        rig.jump(to: try #require(line.remindAt))
+        try await rig.message(.cue, containing: "定时到点：\(line.id.uuidString.lowercased()) 核对发布结果")
         let keeper = try #require(rig.services.cue.keeper)
         #expect(keeper.rounds.filter { $0.wake.isSessionActivity }.count == 2)
         #expect(try await rig.count("子代理那边停住了") == 0)

@@ -46,7 +46,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
   public var allowable: Bool { self != .rule && self != .taste }
 
   /// 提问的第二项：这类事以后在 `project`（关联任务所在项目的名字）里不用问，nil 是所有项目里都不用问。
-  /// 选了它 `CueStore.endCueQuestion` 把这句原话记成一条他说的、一直记着的记忆，范围就在字面上；项目名长到一条记忆放不下的截短（`CueMemoryLine.fitting`）。
+  /// 选了它 `CueStore.endCueQuestion` 把这句原话记成一条他说的重点，范围就在字面上；项目名长到一条记忆放不下的截短（`CueMemoryLine.fitting`）。
   /// 不能放行的（`allowable`）没有这一项。
   public func always(in project: String?) -> String? {
     guard allowable else { return nil }

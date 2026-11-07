@@ -1,9 +1,9 @@
 import CueText
 import Foundation
 
-/// `CueStore.recallCue` 的结果：命中的记忆（带序号）、对话、灵感任务，与 Cue 管过的会话里 Agent 的回复；每类另有多少条命中没列出（`unlisted`）。
+/// `CueStore.recallCue` 的结果：命中的记忆（UUID 身份）、对话、灵感任务，与 Cue 管过的会话里 Agent 的回复；每类另有多少条命中没列出（`unlisted`）。
 public struct CueRecall: Equatable, Sendable {
-  public var lines: [CueIndexedLine] = []
+  public var lines: [CueMemoryLine] = []
   public var messages: [CueMessage] = []
   public var cards: [Card] = []
   public var replies: [Reply] = []
@@ -37,12 +37,9 @@ extension CueStore {
     guard !patterns.isEmpty else { return CueRecall() }
     let text = Self.recallText
     var found = CueRecall()
-    let numbered = "(SELECT \(CueMemoryLine.columns.joined(separator: ", ")), ROW_NUMBER() OVER (ORDER BY createdAt, id) - 1 AS n FROM cueLines)"
-    let line = try recallQuery(from: numbered, where: "1", hit: text, patterns, length: "length(text)", then: "createdAt DESC, id DESC")
-    found.lines = try db.query(
-      "SELECT * FROM \(numbered) WHERE \(line.condition) ORDER BY \(line.orderBy) LIMIT \(limit)", line.arguments
-    ) { row in CueIndexedLine(index: Int(row.int(Int32(CueMemoryLine.columns.count))), line: CueMemoryLine(row: row)) }
-    found.unlisted.lines = try unlisted(numbered, line, limit)
+    let line = try recallQuery(from: "cueLines", where: "1", hit: text, patterns, length: "length(text)", then: "createdAt DESC, id DESC")
+    found.lines = try select(CueMemoryLine.self, where: line.condition, line.arguments, orderBy: line.orderBy, limit: limit)
+    found.unlisted.lines = try unlisted("cueLines", line, limit)
     let message = try recallQuery(from: CueMessage.table.rawValue, where: "1", hit: text, patterns, length: "length(text)", then: "createdAt DESC, rowid DESC")
     found.messages = try select(CueMessage.self, where: message.condition, message.arguments, orderBy: message.orderBy, limit: limit)
     found.unlisted.messages = try unlisted(CueMessage.table.rawValue, message, limit)

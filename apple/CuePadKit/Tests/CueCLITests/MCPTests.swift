@@ -114,9 +114,11 @@ import Testing
       #expect(try await store.workingLeaf(of: task).id == step.id)
       #expect(try await server.call("task", ["action": "peek"]).contains("调研 › 正在开会话"))
 
-      #expect(try await server.call("memory", ["action": "note", "text": "发布前先跑检查", "pin": true]).contains("#0"))
-      #expect(try await store.recallCue("发布前").lines.map(\.line.pinned) == [true])
-      _ = try await server.call("memory", ["action": "forget", "line": "#0"])
+      let receipt = try await server.call("memory", ["action": "note", "text": "发布前先跑检查", "pin": true])
+      let memory = try #require(try await store.recallCue("发布前").lines.first)
+      #expect(receipt.contains(memory.id.uuidString.lowercased()))
+      #expect(try await store.recallCue("发布前").lines.map(\.pinned) == [true])
+      _ = try await server.call("memory", ["action": "forget", "line": memory.id.uuidString])
       #expect(try await store.cueMemory().lines.map { $0.deletedAt != nil } == [true])
     }
   }

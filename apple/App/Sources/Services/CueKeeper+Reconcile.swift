@@ -29,16 +29,15 @@ extension CueKeeper {
             let store = self.store
             let profile = try await store.cueProfile() ?? CueProfile()
             await follow(BrainSettings(profile))
-            // 要换的班次（工具服务没了、换了 Agent），或一直记着的变过（系统提示跟上）：换个班次，再接着对账。
+            // 要换的班次（工具服务没了、换了 Agent），或重点变过（系统提示跟上）：换个班次，再接着对账。
             // 在交你的话之前：退回的话（含插进刚收尾那一轮、还没被接走的，`retire`）要交给新的大脑，你改过规矩之后的话按新规矩答
             if let shift, shift.turn == nil, try await outworn(shift) {
-                Self.log.notice("Cue 换个班次（\(shift.retiring ? "这个大脑不能接着用" : "一直记着的变了", privacy: .public)）")
+                Self.log.notice("Cue 换个班次（\(shift.retiring ? "这个大脑不能接着用" : "重点变了", privacy: .public)）")
                 await retire(shift)
                 await startShift()
                 input.yield(.kick)
                 return nil
             }
-            if let shift, shift.turn != nil, try await !tellRules(shift) { return nil }
             let pending = ready(try await store.cueMessagesToDeliver())
             if !pending.isEmpty {
                 if case .restarting(let failures, _, _) = phase { await startShift(failures: failures) }
@@ -148,29 +147,18 @@ extension CueKeeper {
         }
     }
 
-    /// 这个班次不接着用了：要换的（`Shift.retiring`），或一直记着的（在系统提示里）在它起来后变过（钉上、取消、忘掉）。
-    /// 规矩一变下一轮就换，不等换新：照旧的系统提示接着跑，他刚立的规矩要到缓存过期才生效，这之间 Cue 会照旧规矩动手；一直记着的很少变，换一次的开销可以不计。
+    /// 这个班次不接着用了：要换的（`Shift.retiring`），或重点（在系统提示里）在它起来后变过（钉上、取消、忘掉）。
+    /// 规矩一变下一轮就换，不等换新：照旧的系统提示接着跑，他刚立的规矩要到缓存过期才生效，这之间 Cue 会照旧规矩动手；重点很少变，换一次的开销可以不计。
     private func outworn(_ shift: Shift) async throws -> Bool {
         if shift.retiring { return true }
-        return try await CueMemoryView(store.cueMemory()).pinned.map(\.line.id) != shift.pinned
+        return try await CueMemoryView(store.cueMemory()).pinned.map(\.id) != shift.pinned
     }
 
-    /// 一轮在跑时一直记着的变了：当场插一句给在跑的大脑（`interject`，不带你的话），这一轮接下来的动作就照新的；系统提示等这一轮做完换班次时跟上（`outworn`）。
-    /// 一轮里每个大脑事件都对一次账：只读钉着的 id 核对（`CueStore.pinnedCueLineIDs`），变了才读记忆。插不进去按大脑出了问题处理，返回 false。
-    private func tellRules(_ shift: Shift) async throws -> Bool {
-        guard try await store.pinnedCueLineIDs() != shift.told else { return true }
-        let memory = CueMemoryView(try await store.cueMemory())
-        let pinned = memory.pinned.map(\.line.id)
-        guard await interject("# 一直记着（刚改了，换掉系统提示里的这一节，接下来照它做）\n" + memory.pinnedText) else { return false }
-        updateShift { $0.told = pinned }
-        return true
-    }
-
-    /// 插一句给以为在跑的那一轮（唯一的插话路径：你的话与规矩都经这里）。那一轮可能正好收尾、由下一轮接走：
-    /// 哪一轮接走只按大脑报的 `TurnEvent.received`，接走你的话（`delivering`）的那一轮才回答你；规矩不带你的话，不记账，
-    /// 赶上收尾的规矩也开不出一轮（规矩变了这一轮做完就换班次，`outworn`，新班次的系统提示里就是它）。
+    /// 把你的话插给以为在跑的那一轮（唯一的插话路径）。那一轮可能正好收尾、由下一轮接走：
+    /// 哪一轮接走只按大脑报的 `TurnEvent.received`，接走你的话（`delivering`）的那一轮才回答你。
+    /// 重点不经这里：一轮中途插规矩，模型会回应那句插话、盖掉这一轮给你的回复；规矩只在换班次时随系统提示生效（`outworn`）。
     /// 换班次、出了问题时没被接走的你的话退回重交（`retire`）。插不进去按大脑出了问题处理，返回 false。
-    private func interject(_ text: String, images: [PiImage] = [], delivering ids: [UUID] = []) async -> Bool {
+    private func interject(_ text: String, images: [PiImage], delivering ids: [UUID]) async -> Bool {
         guard let shift else { return false }
         let sending = UUID()
         do {
@@ -180,7 +168,7 @@ extension CueKeeper {
             return false
         }
         updateShift {
-            if !ids.isEmpty { $0.handed[sending] = ids }
+            $0.handed[sending] = ids
             $0.turn?.round.sent.append(text)
         }
         return true
