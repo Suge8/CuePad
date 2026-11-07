@@ -5,53 +5,18 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 一直记着的规矩变了（本机钉上、别的设备迟到同步来的）：下一轮、在跑的这一轮就照新规矩。
+/// 重点规矩变了：下一轮就照新规矩；一轮在跑时他的话插进去，带上查到的会话回复。
 extension CueHostTests {
-    /// 你在记忆里把一条改成一直记着：Cue 下一轮就照它（系统提示跟上，不等换新）。
-    @Test func 改了一直记着的规矩_下一轮就照新规矩() async throws {
+    /// 你在记忆里把一条标为重点：Cue 下一轮就照它（系统提示跟上，不等换新）。
+    @Test func 改了重点规矩_下一轮就照新规矩() async throws {
         let rig = try await Rig()
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
-        let line = try await rig.store.noteCueLine("推送前先问我", source: .you).line
+        let line = try await rig.store.noteCueLine("推送前先问我", source: .you)
         Workspace(services: rig.services).pinCueLine(line.id, true)
         try await eventually("钉上了") { try await rig.store.cueMemory().lines.contains { $0.id == line.id && $0.pinned } }
-        try await rig.say("一直记着什么")
-        let answer = try await rig.message(.cue, containing: "一直记着：")
-        #expect(answer.text.contains("推送前先问我"))
-        await rig.stop()
-    }
-
-    /// Cue 正在跑一轮时你把一条改成一直记着：这一轮当场收到新规矩，接下来的动作照它，不等下一轮。
-    @Test func 一轮在跑时改了规矩_这一轮就照新规矩() async throws {
-        let rig = try await Rig()
-        let keeper = try #require(rig.services.cue.keeper)
-        try await rig.say("请等我放行")
-        try await eventually("这一轮停在模型那里") { rig.model.holding }
-        let line = try await rig.store.noteCueLine("推送前先问我", source: .you).line
-        Workspace(services: rig.services).pinCueLine(line.id, true)
-        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains("一直记着（刚改了") && $0.contains("推送前先问我") } == true }
-        rig.model.release()
-        let answer = try await rig.message(.cue, containing: "这一轮照新规矩")
-        #expect(answer.text.contains("推送前先问我"))
-        await rig.stop()
-    }
-
-    /// 别的设备上把一条旧记忆钉成一直记着、迟到才同步来（修改时间早于这台 Mac 上更晚记下的那条）：在跑的这一轮照样当场收到。
-    @Test func 一轮在跑时别的设备迟到同步来的规矩_这一轮也照它() async throws {
-        let rig = try await Rig()
-        let keeper = try #require(rig.services.cue.keeper)
-        let line = try await rig.store.noteCueLine("推送前先问我", source: .you).line
-        try await Task.sleep(for: .milliseconds(5))  // 之后记下的那条修改时间更晚
-        try await rig.store.noteCueLine("周报每周五发", source: .you)
-        try await rig.say("请等我放行")
-        try await eventually("这一轮停在模型那里") { rig.model.holding }
-        var row = try #require(try await rig.store.syncRow(recordName: line.id.uuidString.lowercased()))
-        row.fields["pinned"] = .int(1)
-        row.fields["modifiedAt"] = .int(Int64((line.modifiedAt.timeIntervalSince1970 * 1000).rounded()) + 1)
-        #expect(try await rig.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
-        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains("一直记着（刚改了") && $0.contains("推送前先问我") } == true }
-        rig.model.release()
-        let answer = try await rig.message(.cue, containing: "这一轮照新规矩")
+        try await rig.say("重点有哪些")
+        let answer = try await rig.message(.cue, containing: "重点：")
         #expect(answer.text.contains("推送前先问我"))
         await rig.stop()
     }

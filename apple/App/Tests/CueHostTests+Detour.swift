@@ -83,7 +83,7 @@ extension CueHostTests {
         try await untilReset(rig, resets)
         #expect(try await rig.count("定时到点") == 0)
         rig.jump(to: resets)
-        try await rig.message(.cue, containing: "定时到点：#\(reminder.index) 核对发布结果")
+        try await rig.message(.cue, containing: "定时到点：\(reminder.id.uuidString.lowercased()) 核对发布结果")
         #expect(try await rig.store.cueProfile()?.runtime == .known(.pi))
         try await rig.message(.cue, containing: "又能干活了，用的是 Pi")
         #expect(rig.model.errors == 1)
@@ -124,7 +124,7 @@ extension CueHostTests {
             done = "收到：你好"
         case .schedule:
             let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)
-            done = "定时到点：#\(reminder.index) 核对发布结果"
+            done = "定时到点：\(reminder.id.uuidString.lowercased()) 核对发布结果"
         }
         try await rig.message(.cue, containing: "我换到 Claude Code 接着干")
         try await eventually("Claude Code 起不来，等着重起") { rig.health?.runtime == .claudeCode && rig.health?.phase == .restarting }

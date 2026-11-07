@@ -69,7 +69,7 @@ enum Schema {
     },
     // 68：Cue 此刻正在跑的那一步碰到的那一处（`CueState.step`）
     "ALTER TABLE cueState ADD COLUMN step TEXT;",
-    // 69：不用先问的例外并进记忆：允许清单（cueProfile.allows，"类别"或"类别/项目 id"）每项转成一条他说的、一直记着的记忆，字是这一步写下时提问卡的第二项
+    // 69：不用先问的例外并进记忆：允许清单（cueProfile.allows，"类别"或"类别/项目 id"）每项转成一条他说的重点，字是这一步写下时提问卡的第二项
     // （照抄在这里，之后改 `CueAsk` 的字不改这一步写出的；项目名照样截短，`CueMemoryLine.fitting`；项目已不在的、当时就不能放行的那项丢掉），清单那一列删掉。
     // 每台设备各自升级：行的 id 与时刻由清单项与设置的修改时间推出，写出的是同一行
     Upgrade { db in
@@ -182,8 +182,9 @@ enum Schema {
     // 90：派发期限从服务器收下起算（`DeliveryRequest.dispatchDeadline`）；升级前已传上去、还在等派发的，发送方没记下收下时刻，
     // 不补就永远不到期：按写下的时刻补（只改本机列，不改 modifiedAt、不同步）
     "\(deliveryServerAnchor)",
+    // 91：摘要改为绑定生成输入的完整指纹；旧派生缓存丢弃重建。
+    "DELETE FROM cueSummaries;",
     cueMessageUpgrade,
-
   ]
 
   static let activityDestinationsTable = """

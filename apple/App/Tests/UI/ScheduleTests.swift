@@ -13,7 +13,7 @@ struct ScheduleTests {
         let rig = TestApp()
         let store = rig.services.store
         let task = try await store.createTask("清理过期分支")
-        let line = try await store.noteCueLine("清理过期分支", source: .cue, remindAt: .now.addingTimeInterval(3600), task: task.id).line
+        let line = try await store.noteCueLine("清理过期分支", source: .cue, remindAt: .now.addingTimeInterval(3600), task: task.id)
         let workspace = Workspace(services: rig.services)
 
         var draft = ScheduleDraft(line)
@@ -44,7 +44,7 @@ struct ScheduleTests {
             let task = try await store.createTask(title)
             lines.append(try await store.noteCueLine(
                 title, source: .cue, remindAt: .now.addingTimeInterval(3600), repeats: CueRepeat(.daily, hour: 9, minute: 0), task: task.id
-            ).line.id)
+            ).id)
             switch title {
             case "清理过期分支":
                 try await workspace.complete(task.id)

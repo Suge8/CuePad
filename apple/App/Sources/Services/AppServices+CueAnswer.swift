@@ -11,7 +11,7 @@ extension AppServices {
     }
 
     /// 回答 Cue 的一件拍板：选一项（不选的话在 Cue 页直接说，见 `CueQuestionEnd`）。本地卡片与拉取完成后的远程活动同走这里。
-    /// 选"以后……不用问"时 Store 同时把这句原话记成一条一直记着的记忆，一起上传。
+    /// 选"以后……不用问"时 Store 同时把这句原话记成一条重点记忆，一起上传。
     func answerCueQuestion(_ message: UUID, _ choice: String) async throws {
         let noted = try await store.endCueQuestion(message, .answered(choice))
         #if os(iOS)

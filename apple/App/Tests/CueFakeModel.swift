@@ -27,9 +27,6 @@ nonisolated final class FakeModel: Sendable {
     /// 接下来几次请求（你的话与信封）报额度用完
     private let quotaBlocked = Mutex((left: 0, containing: String?.none))
     func blockQuota(times: Int, containing: String? = nil) { quotaBlocked.withLock { $0 = (times, containing) } }
-    /// 整理记忆的大脑收到过几次一直记着的（`<pinned>`）
-    private let pinnedShown = Mutex(0)
-    var tidyAsks: Int { pinnedShown.withLock { $0 } }
     /// 不回的请求的连接：留着，免得释放时断开
     private let hung = Mutex<[NWConnection]>([])
     /// 先不回、等 `release()` 再回一句话的请求（这一轮停在模型那里，测试趁这时改库）
@@ -185,14 +182,12 @@ nonisolated final class FakeModel: Sendable {
             if let view = text.firstMatch(of: /<view>[\s\S]*<\/view>/)?.0, let code = view.firstMatch(of: /暗号是 (\S+)/)?.1 { return say("从视图接上：暗号是 \(code)") }
             return say("不记得暗号")
         }
-        // 一轮里插进来的新规矩（`CueKeeper.tellRules`）：照它答
-        if text.contains("一直记着（刚改了") { return say("这一轮照新规矩：" + text) }
         if last["role"] as? String == "user", text.contains("请等我放行") { return .hold("先这样") }
-        // 问规矩：照这次请求的系统提示里一直记着的那一节答（在系统提示末尾）
-        if text.contains("一直记着什么") {
+        // 问规矩：照这次请求的系统提示里重点那一节答（在系统提示末尾）
+        if text.contains("重点有哪些") {
             let messages = request["messages"] as? [[String: Any]] ?? []
             let system = messages.first { $0["role"] as? String == "system" }?["content"] as? String ?? ""
-            return say("一直记着：" + (system.components(separatedBy: "# 一直记着\n").last ?? ""))
+            return say("重点：" + (system.components(separatedBy: "# 重点\n").last ?? ""))
         }
         // 问额度：照信封里吃紧的那几行答
         if text.contains("额度吃紧吗") { return say(text.firstMatch(of: /额度吃紧：\n(- [^\n]*\n)+/).map { String($0.0) } ?? "额度不吃紧") }
@@ -229,13 +224,10 @@ nonisolated final class FakeModel: Sendable {
             return .error("You have hit your usage limit.")
         }
         if text.contains("请慢慢想"), once("hang") { return .hang }
-        // 后台整理记忆的大脑：有待合并的块就合第一块；一直记着的（`<pinned>`）只看一眼、什么都不动
-        let dreaming = last["role"] as? String == "user" && (text.hasPrefix("<merge>") || text.hasPrefix("<pinned>"))
-        if dreaming, text.contains("<pinned>") { pinnedShown.withLock { $0 += 1 } }
-        if let block = text.firstMatch(of: /<merge>\n#(\d+)-(\d+)\n/) {
-            return call("merge", ["lo": Int(block.1)!, "hi": Int(block.2)!, "text": "合起来的偏好"])
+        // 后台整理记忆的大脑：合第一块
+        if let block = text.firstMatch(of: /<merge>\n#\d+-\d+ range=([^\n]+)\n/) {
+            return call("merge", ["range": String(block.1), "text": "合起来的偏好"])
         }
-        if dreaming { return say("都不用动") }
         if text.contains("三步并行"), let board = text.firstMatch(of: /在做 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
             return text.contains("醒来：会话有动静") ? tell("看板：\n" + board) : say("看板：\n" + board)
         }

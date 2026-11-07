@@ -119,7 +119,7 @@ extension DebugScene {
         let monthly = CueRepeat(.monthly(1), hour: 9, minute: 0)!
         let line = try await store.noteCueLine(
             String(localized: "查一遍域名哪些快到期，续上", table: "Demo"), source: .cue, remindAt: monthly.next(after: .now), repeats: monthly, task: task.id
-        ).line
+        )
         let late: TimeInterval = 41 * 60
         let due = CueRepeat(.daily, hour: 9, minute: 0)!.next(after: .now.addingTimeInterval(-late - 86_400))
         try await store.recordCueRound(nil, startedAt: due.addingTimeInterval(late), answersYou: false, tools: nil, wake: .schedule([CueFire(line: line.id, due: due)]))

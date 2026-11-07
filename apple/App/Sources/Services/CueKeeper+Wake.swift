@@ -84,14 +84,14 @@ extension CueKeeper {
             .compactMap { $0.session.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) } }
     }
 
-    /// 定时到点的一轮要列给它的那几条定时（带序号、本该几点与挂着的任务）；别的原因醒来没有。
+    /// 定时到点的一轮要列给它的那几条定时（带 UUID、本该几点与挂着的任务）；别的原因醒来没有。
     private func fired(of wake: CueWake) async throws -> [CueEnvelope.Fired] {
         guard case .schedule(let fires) = wake else { return [] }
         let lines = try await store.cueLines(fires.map(\.line))
         var fired: [CueEnvelope.Fired] = []
         for fire in fires {
-            guard let line = lines.first(where: { $0.line.id == fire.line }) else { continue }
-            let task = if let id = line.line.task { try await store.card(id) } else { Card?.none }
+            guard let line = lines.first(where: { $0.id == fire.line }) else { continue }
+            let task = if let id = line.task { try await store.card(id) } else { Card?.none }
             fired.append(CueEnvelope.Fired(line: line, due: fire.due, task: task))
         }
         return fired

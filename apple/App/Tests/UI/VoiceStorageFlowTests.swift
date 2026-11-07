@@ -32,12 +32,17 @@ struct VoiceStorageFlowTests {
         try await voice.hangUp()
     }
 
-    @Test func 正式90版库升级后_晚到回复关联仍送到通话() async throws {
+    @Test(arguments: [90, 91])
+    func 正式已发布库升级后_晚到回复关联仍送到通话(version: Int) async throws {
         let app = TestApp(), oldStore = app.services.store, host = TestApp.hostID
         try await oldStore.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
         let db = RawDB(app.databaseURL)
+        let previous = try await oldStore.addCueMessage(.you, text: "升级前的问题")
         try db.restoreVersion90()
+        // 91 只清理派生摘要；这里没有缓存，表结构与 90 相同。
+        try db.exec("PRAGMA user_version = \(version)")
         let services = app.relaunch(), store = services.store
+        #expect(try await store.cueMessages([previous.id]).first?.text == "升级前的问题")
         let voice = VoiceFlowFixture(services)
         defer { voice.call.hangUp(); services.cancelBackgroundWork() }
         try await voice.connect()

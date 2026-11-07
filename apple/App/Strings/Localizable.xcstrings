@@ -2,9 +2,7 @@
   "sourceLanguage" : "zh-Hans",
   "strings" : {
     "" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "\n\n— 插话 —\n\n" : {
@@ -24,27 +22,19 @@
       }
     },
     " " : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "!" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "$ swift test --filter Reconnect\nExecuted 4 tests, with 0 failures (0.90s)" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "%@" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "%@  %@" : {
@@ -647,18 +637,18 @@
         }
       }
     },
-    "%@ 自己记下的事和你说过的话。一直记着的每次都会看，其余的越早越概括，用到时再翻。" : {
+    "%@ 自己记下的事和你说过的话。重点每次都会看，其余的越早越概括，用到时再翻。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What %@ noted and what you've told it. Always Remember items are read every time; older ones are summarized and looked up when needed."
+            "value" : "What %@ noted and what you've told it. Key points are read every time; older ones are summarized and looked up when needed."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ 自己记下的事和你说过的话。一直记着的每次都会看，其余的越早越概括，用到时再翻。"
+            "value" : "%@ 自己记下的事和你说过的话。重点每次都会看，其余的越早越概括，用到时再翻。"
           }
         }
       }
@@ -1201,9 +1191,7 @@
       }
     },
     "%lld" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "%lld 个任务没做完" : {
@@ -2194,9 +2182,7 @@
       "shouldTranslate" : false
     },
     "+%lld" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "3D 模型" : {
@@ -2216,9 +2202,7 @@
       }
     },
     "9:41" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "<名字>" : {
@@ -2254,9 +2238,7 @@
       }
     },
     "Agent" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "Agent 会话「%@」已经结束，或不在这台 Mac 上" : {
@@ -3136,9 +3118,7 @@
       }
     },
     "Cue" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "Cue 已经收到这句了，撤不回" : {
@@ -3334,15 +3314,11 @@
       }
     },
     "CuePad" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "CuePad %@" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "CuePad 写给 Agent 的技能或扩展没能升级：%@" : {
@@ -4116,9 +4092,7 @@
       }
     },
     "me@example.com" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "opencode serve --stdio 没有报出地址" : {
@@ -4208,9 +4182,7 @@
       }
     },
     "staging-2.roundtable.app" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "tmux 没能切到 %@（会话可能没有附着的客户端）" : {
@@ -4230,39 +4202,27 @@
       }
     },
     "{{%@}}" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "¥0" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "¥198" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "¥68" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "·" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "••••••" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "↩ 打开" : {
@@ -4298,9 +4258,7 @@
       }
     },
     "✓" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "、" : {
@@ -4711,22 +4669,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "一次"
-          }
-        }
-      }
-    },
-    "一直记着" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Always Remember"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "一直记着"
           }
         }
       }
@@ -5191,22 +5133,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下载中 %@"
-          }
-        }
-      }
-    },
-    "不再一直记着" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stop Always Remembering"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不再一直记着"
           }
         }
       }
@@ -9083,6 +9009,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "取消置顶"
+          }
+        }
+      }
+    },
+    "取消重点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unmark"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消重点"
           }
         }
       }
@@ -16755,6 +16697,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "标为未读"
+          }
+        }
+      }
+    },
+    "标为重点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Key Point"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标为重点"
           }
         }
       }
@@ -24803,6 +24761,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新选择 Mac"
+          }
+        }
+      }
+    },
+    "重点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Key Points"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重点"
           }
         }
       }

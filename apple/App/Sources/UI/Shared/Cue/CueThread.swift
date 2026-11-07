@@ -67,7 +67,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         let fired = messages.flatMap { message -> [UUID] in if case .schedule(let fires)? = message.wake { fires.map(\.line) } else { [] } }
         return CueThread(
             messages: messages, waiting: waits, shots: shots, unread: Set(try store.cueUnread()),
-            lines: Dictionary(try store.cueLines(fired).map { ($0.line.id, $0.line) }) { first, _ in first })
+            lines: Dictionary(try store.cueLines(fired).map { ($0.id, $0) }) { first, _ in first })
     }
 
     /// 对话里的一格：你的话、你发起的一轮的经过（碰到的各处，`CueActivity.touches`；一处都没碰的一轮没有这一格；这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；

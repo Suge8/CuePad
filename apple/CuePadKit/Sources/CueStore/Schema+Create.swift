@@ -151,7 +151,7 @@ extension Schema {
       id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, hostID TEXT, runtime TEXT NOT NULL, model TEXT, effort TEXT, fast INTEGER,
       enabledAt INTEGER, modifiedAt INTEGER NOT NULL
     ) STRICT;
-    -- lineIDs：区间里各行 id 的指纹，行序变了（别处同步来更早的行）摘要随之作废
+    -- lineIDs：生成摘要时有序输入的完整指纹；事实或行序变了，摘要随之作废
     CREATE TABLE cueSummaries (
       lo INTEGER NOT NULL, hi INTEGER NOT NULL, text TEXT NOT NULL, lineIDs TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY (lo, hi)
     ) STRICT;

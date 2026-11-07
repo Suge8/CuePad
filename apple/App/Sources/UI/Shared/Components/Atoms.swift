@@ -211,7 +211,7 @@ nonisolated enum DateLabel {
 }
 
 /// 一节的头，全 App 只这一种：`page` 是页内大段（最近、更早、现在、历史），与行里的字一样重、可带计数；
-/// `group` 是组头（按时间分的段、一直记着），小号半粗淡墨，可带一个图标。左右缩进与上下留白由所在列表给；能折的组由调用处在旁边放 `Chevron`。
+/// `group` 是组头（按时间分的段、重点），小号半粗淡墨，可带一个图标。左右缩进与上下留白由所在列表给；能折的组由调用处在旁边放 `Chevron`。
 /// 读屏作为一个标题，图标是装饰不读。
 struct SectionHeader: View {
     enum Level { case page, group }

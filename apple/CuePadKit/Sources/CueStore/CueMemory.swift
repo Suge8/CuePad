@@ -6,14 +6,14 @@ public enum CueLineSource: String, Sendable, CaseIterable {
   case you, cue
 }
 
-/// Cue 的一条记忆。只追加，位置就是身份：按 (`createdAt`, `id`) 排的序号（含忘掉的）。
-/// 只有 `pinned`、定时（`remindAt`、`repeats`）、`deletedAt` 会变；忘掉是软删，位置不变。
+/// Cue 的一条记忆。UUID 是身份；按 (`createdAt`, `id`) 排列只用于视图分块（含忘掉的）。
+/// 只有 `pinned`、定时（`remindAt`、`repeats`）、`deletedAt` 会变；忘掉是软删，UUID 不变；追加与迟到同步都可能改变排序位置。
 /// 定时就是有 `remindAt` 的那几条：`remindAt` 是下一次，`repeats` 是怎么重复（一次性的没有），`task` 是挂在哪件任务上（到点 Cue 开工它）。
 /// 到点后值班的 Cue 把重复的推到下一次、一次性的忘掉（`CueStore.fireCueSchedules`，不留成普通记忆）；不再定时也是忘掉这一条，任务完成、归档、进回收站时连带（`endCueSchedules`），恢复不复活。
 public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var text: String
-  /// 一直记着：记忆视图里总是全文列出。
+  /// 重点：记忆视图里总是全文列出。
   public var pinned: Bool
   public var source: Open<CueLineSource>
   /// 定时的下一次：到点叫醒 Cue
@@ -28,12 +28,11 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   /// 一条最多这么多字节（UTF-8），超了拒绝。
   public static let maxBytes = 280
 
-  /// 一直记着的（每个班次都在系统提示里）合计多少字节（各条正文的 UTF-8）的两条线：过了 `pinnedSoft` 后台整理（做梦）把它们收口，
-  /// 过了 `pinnedHard` 系统提示里叫 Cue 自己合并（`CueMemoryView.pinnedText`）；记忆页的用量也按这两条画。
-  public static let pinnedSoft = 4096
+  /// 重点（每个班次都在系统提示里）合计多少字节（各条正文的 UTF-8）的上限：过了系统提示里叫 Cue 自己合并（`CueMemoryView.pinnedText`）；
+  /// 记忆页的用量按它画。重点只归 Cue 整理（他说的规矩，并错了他看得见、能纠正），后台做梦不碰。
   public static let pinnedHard = 8192
 
-  /// 这几条正文合计的字节数（一直记着的用量，同上两条线的口径）。
+  /// 这几条正文合计的字节数（重点用量，同上一条线的口径）。
   public static func bytes(_ lines: some Sequence<CueMemoryLine>) -> Int { lines.reduce(0) { $0 + $1.text.utf8.count } }
 
   /// 这段话能记成一条（去掉首尾空白后不空、不超过 `maxBytes` 字节）：界面输入时与写入时同一个判断。
@@ -77,8 +76,8 @@ extension CueMemoryLine: Record {
   }
 }
 
-/// 记忆里对齐的 2 的幂区间 [lo, hi) 的一行摘要（本机缓存，不同步）。区间里有行在摘要写下之后被忘掉（含同步晚到的）、或行序变了
-/// （别处同步来更早的行），它就作废：读出时已滤掉（`CueStore.cueMemory`）。
+/// 记忆里对齐的 2 的幂区间 [lo, hi) 的一行摘要（本机缓存，不同步）。底层行或生成时读取的子摘要依赖变化就作废；
+/// `CueStore.cueMemory` 从小块到大块验证，读出时只保留有效摘要。
 public struct CueMemorySummary: Equatable, Sendable {
   public var lo: Int
   public var hi: Int
@@ -114,7 +113,7 @@ public struct CueScheduled: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 记忆的全貌：全部行（序号即下标，含忘掉的）与仍然有效的摘要，一次读出。记忆视图（`CueAgent`）从它算。
+/// 记忆的全貌：全部行（数组下标仅用于布局，含忘掉的）与仍然有效的摘要，一次读出。记忆视图（`CueAgent`）从它算。
 public struct CueMemory: Equatable, Sendable {
   public var lines: [CueMemoryLine]
   public var summaries: [CueMemorySummary]

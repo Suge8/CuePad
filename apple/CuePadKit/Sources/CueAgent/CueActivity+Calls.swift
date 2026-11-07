@@ -89,7 +89,7 @@ extension CueActivity {
 
   /// 做完的一次调用在经过清单里的一条：动到的任务与会话是开始时认出的（`named`，新建的那件开始时还没有，做成了再认，`Named.added`），记在这一条上；
   /// 认不出（写错了、调用失败）就照它写的引用，不带任务与会话。
-  /// 对你说的话（tell）已在对话里：清单里只留首行。记忆的序号是 Cue 内部的身份，不写给人看。
+  /// 对你说的话（tell）已在对话里：清单里只留首行。记忆的 UUID 是 Cue 内部的身份，不写给人看。
   public static func item(tool: String, arguments: String, named: Named, failed: Bool, store: CueStore) async -> PiChatMessage.Tools.Item {
     let args = Parsed(arguments)
     func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, at place: Named? = nil) -> PiChatMessage.Tools.Item {
@@ -111,7 +111,10 @@ extension CueActivity {
     case "memory":
       switch args.line("action") {
       case "recall": return item(.search, args.line("query") ?? "记忆")
-      case "note": return item(.other, "记下：\(args.line("text") ?? "")")
+      case "note":
+        // 换掉了几条要写出来：下一个会话只从经过知道上一轮并过，看不到就会以为没并、否认自己说过的
+        let replaced = (args.raw["replaces"] as? [Any])?.count ?? 0
+        return item(.other, (replaced > 0 ? "记下（换掉 \(replaced) 条）：" : "记下：") + (args.line("text") ?? ""))
       case "remind":
         let text = args.line("text") ?? ""
         // 挂在任务上的点了开那件任务（气泡里就是这条定时）；没挂的不能点
@@ -120,7 +123,7 @@ extension CueActivity {
         return .init(kind: .schedule, target: "定时：\(text)".clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: task, name: text)
       case "zoom": return item(.read, "翻记忆")
       case "forget": return item(.other, "忘掉一条记忆")
-      case "pin": return item(.other, (args.raw["pinned"] as? Bool) == false ? "一条记忆不再一直记着" : "一条记忆一直记着")
+      case "pin": return item(.other, (args.raw["pinned"] as? Bool) == false ? "一条记忆取消重点" : "一条记忆标为重点")
       default: return item(.other, "memory")
       }
     case "setup": return item(args.line("action") == "look" ? .read : .other, setupWords(args))

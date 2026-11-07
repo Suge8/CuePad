@@ -63,7 +63,7 @@ extension MCPTests {
       let overview = try await server.call("setup", ["action": "look"])
       for expected in [
         "大脑：Pi · 默认（anthropic/claude-opus-5-5）", "在「工作室」", "健康：值班中", "429 rate limited", "codex 用不了：没登录",
-        "他在终端里开的 Claude Code 会话：不能发图、停下这一轮、换模型、用斜杠命令", "anthropic「Max」（吃紧） 5 小时 已过重置时间，等新的观测；本周 已用 86%", "卡着", "记忆 2 条（一直记着 1 条）",
+        "他在终端里开的 Claude Code 会话：不能发图、停下这一轮、换模型、用斜杠命令", "anthropic「Max」（吃紧） 5 小时 已过重置时间，等新的观测；本周 已用 86%", "卡着", "记忆 2 条（重点 1 条）",
         "官网（\(folder)）",
       ] {
         #expect(overview.contains(expected), "\(expected) 不在：\n\(overview)")
