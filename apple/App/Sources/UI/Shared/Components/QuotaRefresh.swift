@@ -43,8 +43,8 @@ struct QuotaRefreshNote: View {
 
     var body: some View {
         switch services.accountQuotas.phase {
-        case .idle, .running(after: nil): EmptyView()
-        case .running(after: let reason?): line(reason, retrying: true)
+        case .idle, .running(_, _, after: nil): EmptyView()
+        case .running(_, _, after: let reason?): line(reason, retrying: true)
         case .failed(let reason, _, _): line(reason, retrying: false)
         }
     }
