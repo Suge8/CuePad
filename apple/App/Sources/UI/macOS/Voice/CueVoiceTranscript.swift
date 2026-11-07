@@ -8,6 +8,7 @@ struct CueVoiceTranscript: View {
     let action: (CueVoiceAction) -> Void
     @Environment(\.palette) private var palette
     @State private var follow = ChatFollow()
+    @State private var requestAnchor = UUID()
 
     // 通话阅读区只有几行高，每批四条已足够铺满；更早的按滚动位置继续排开。
     private static let pageSize = 4
@@ -51,7 +52,8 @@ struct CueVoiceTranscript: View {
         ChatColumn(
             followKey: FollowKey(count: presentation.replies.count, lastID: presentation.replies.last?.id, text: presentation.replies.last?.text),
             readingWidth: Spacing.reading, inset: Spacing.page, follow: $follow, marks: [],
-            ids: presentation.replies.map(\.id), paging: .fixed(first: Self.pageSize, step: Self.pageSize), holding: false
+            ids: presentation.replies.map(\.id), paging: .fixed(first: Self.pageSize, step: Self.pageSize), holding: false,
+            arrival: presentation.replies.last?.id ?? requestAnchor
         ) { window in
             ChatStack(spacing: Spacing.block) {
                 if let request = presentation.request {
@@ -75,8 +77,7 @@ struct CueVoiceTranscript: View {
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // 同属 Cue 的桌面底文字区，沿用栏头下 16pt 淡出；不遮恢复按钮和下方控制。
-        .fadesUnderHead()
+        // 内嵌阅读区沿用 ChatColumn 的上下留白；栏头淡出由外层 Cue 栏承担，不在正文首行再叠一层。
         // 操作行在阅读区外，不继承宿主回复框给对话预留的空间。
         .environment(\.chatBottomInset, 0)
         .accessibilityElement(children: .contain)

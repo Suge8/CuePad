@@ -8,7 +8,7 @@ nonisolated enum CueVoiceRibbon {
         var isAudio: Bool { self == .inward || self == .outward }
     }
 
-    static let strands = 18
+    static let strands = 14
     static let sampleCount = 32
     private static let vertices = 80
     private static let innerDiameter: CGFloat = 130
@@ -35,9 +35,9 @@ nonisolated enum CueVoiceRibbon {
         let audio = form.isAudio ? amplitude(at: angle, samples: samples) : 0
         let outward = form == .outward
         // 截线在两侧展开、在斜对角汇成一道脊；是一张带状曲面，不是独立的圆。
-        let spread = form.isAudio ? 9 + 22 * pow(sin(angle + .pi / 4), 2) : 7
+        let spread = form.isAudio ? 9 + 16 * pow(sin(angle + .pi / 4), 2) : 7
         let fold = form.isAudio ? (sin(angle * 2) + 0.35 * cos(angle * 3)) * (outward ? 8 : 4) : 0
-        let displacement = audio * (outward ? 23 : -17)
+        let displacement = audio * (outward ? 16 : -12)
         let r = innerDiameter / 2 + lane * spread + fold + displacement
         let xScale: CGFloat = form == .inward ? 1.25 : 1
         let yScale: CGFloat = form == .inward ? 0.73 : 0.9

@@ -12,7 +12,7 @@ struct CueVoiceSignal: View {
 
     // 声纹的最大外扩也留在 320pt 栏的页面边距内，不参与文字与控件排版。
     static let size = CGSize(width: 264, height: 208)
-    private static let face: CGFloat = 100
+    private static let face: CGFloat = 132
 
     private var form: CueVoiceRibbon.Form {
         return switch activity {

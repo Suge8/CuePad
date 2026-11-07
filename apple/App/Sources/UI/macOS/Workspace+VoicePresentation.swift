@@ -16,7 +16,7 @@ extension Workspace {
         case .failed: .failed
         }
         return CueVoicePresentation(
-            name: cue.name, activity: activity, muted: voice.isMuted, samples: { voice.samples.map { CGFloat($0) } }, request: nil,
+            name: cue.name, activity: activity, muted: voice.isMuted, samples: { voice.samples.map { CGFloat($0) } }, request: voice.requests.last.map(voiceRequest),
             replies: voiceRows(voice), issue: voiceIssue(voice), canStopExecution: !stoppableVoiceExecutions.isEmpty,
             executions: voiceExecutions.map {
                 .init(id: $0.state.sessionID, title: $0.task?.title ?? $0.state.title,

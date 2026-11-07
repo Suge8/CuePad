@@ -2,9 +2,7 @@
   "sourceLanguage" : "zh-Hans",
   "strings" : {
     "" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "\n\n— 插话 —\n\n" : {
@@ -24,27 +22,19 @@
       }
     },
     " " : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "!" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "$ swift test --filter Reconnect\nExecuted 4 tests, with 0 failures (0.90s)" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "%@" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "%@  %@" : {
@@ -1201,9 +1191,7 @@
       }
     },
     "%lld" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "%lld 个任务没做完" : {
@@ -2194,9 +2182,7 @@
       "shouldTranslate" : false
     },
     "+%lld" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "3D 模型" : {
@@ -2216,9 +2202,7 @@
       }
     },
     "9:41" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "<名字>" : {
@@ -2254,9 +2238,7 @@
       }
     },
     "Agent" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "Agent 会话「%@」已经结束，或不在这台 Mac 上" : {
@@ -3136,9 +3118,7 @@
       }
     },
     "Cue" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "Cue 已经收到这句了，撤不回" : {
@@ -3334,15 +3314,11 @@
       }
     },
     "CuePad" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "CuePad %@" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "CuePad 写给 Agent 的技能或扩展没能升级：%@" : {
@@ -4116,9 +4092,7 @@
       }
     },
     "me@example.com" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "opencode serve --stdio 没有报出地址" : {
@@ -4208,9 +4182,7 @@
       }
     },
     "staging-2.roundtable.app" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "tmux 没能切到 %@（会话可能没有附着的客户端）" : {
@@ -4230,39 +4202,27 @@
       }
     },
     "{{%@}}" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "¥0" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "¥198" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "¥68" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "·" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "••••••" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "↩ 打开" : {
@@ -4298,9 +4258,7 @@
       }
     },
     "✓" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "、" : {
@@ -7395,6 +7353,22 @@
         }
       }
     },
+    "关闭麦克风" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mute microphone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭麦克风"
+          }
+        }
+      }
+    },
     "关闭（Esc）" : {
       "localizations" : {
         "en" : {
@@ -9083,22 +9057,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "取消重点"
-          }
-        }
-      }
-    },
-    "取消静音" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unmute"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "取消静音"
           }
         }
       }
@@ -12723,22 +12681,6 @@
         }
       }
     },
-    "已静音" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Muted"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已静音"
-          }
-        }
-      }
-    },
     "带 %lld 个附件" : {
       "localizations" : {
         "en" : {
@@ -12907,6 +12849,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开启通知"
+          }
+        }
+      }
+    },
+    "开启麦克风" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unmute microphone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启麦克风"
           }
         }
       }
@@ -25347,22 +25305,6 @@
         }
       }
     },
-    "静音" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mute"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "静音"
-          }
-        }
-      }
-    },
     "靶心" : {
       "localizations" : {
         "en" : {
@@ -25699,6 +25641,22 @@
         }
       }
     },
+    "麦克风关" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mic off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "麦克风关"
+          }
+        }
+      }
+    },
     "麦克风已开启" : {
       "localizations" : {
         "en" : {
@@ -25727,6 +25685,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "麦克风已静音"
+          }
+        }
+      }
+    },
+    "麦克风开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mic on"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "麦克风开"
           }
         }
       }

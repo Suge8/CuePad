@@ -13,8 +13,9 @@ struct CueVoiceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var reading = false
 
-    static let expandedHeight: CGFloat = 480
-    static let compactHeight: CGFloat = 108
+    static let expandedHeight: CGFloat = 528
+    static let compactHeight: CGFloat = 144
+    private static let controlsHeight = ControlSize.compact.height * 2 + Spacing.item
     private static let foldedHeight: CGFloat = 48
     private static let foldedWidth: CGFloat = 64
     private static let headingHeight: CGFloat = 240
@@ -27,7 +28,7 @@ struct CueVoiceView: View {
         CueVoiceFold(fold: folded ? 1 : 0, reveal: expanded ? 1 : 0) { fold, reveal in
             let height = Self.compactHeight + (Self.expandedHeight - Self.compactHeight) * reveal
             let head = Self.headingHeight + (Self.foldedHeight - Self.headingHeight) * fold
-            let readingHeight = max(0, height - head - Spacing.item - Spacing.group * (2 + reveal) - ControlSize.compact.height)
+            let readingHeight = max(0, height - head - Spacing.item - Spacing.group * (2 + reveal) - Self.controlsHeight)
             VStack(spacing: 0) {
                 heading(fold: fold, height: head).padding(.bottom, Spacing.item)
                 CueVoiceTranscript(presentation: presentation, action: action)
@@ -119,37 +120,34 @@ struct CueVoiceView: View {
     }
 
     private var controls: some View {
-        HStack(spacing: Spacing.item) {
-            Button { action(.stopExecution) } label: {
-                ViewThatFits(in: .horizontal) {
-                    Text("停止执行").fixedSize()
-                    Label("停止执行", icon: .stop).labelStyle(.iconOnly)
-                }
-            }
+        VStack(alignment: .leading, spacing: Spacing.item) {
+            Button { action(.stopExecution) } label: { Label("停止执行", icon: .stop) }
                 .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
-                .accessibilityLabel("停止执行")
                 .disabled(!presentation.canStopExecution)
                 .help("停止已交给 Cue 的执行")
-            Spacer(minLength: 0)
-            if presentation.activity.isLive {
-                Button { action(.toggleMute) } label: {
-                    if presentation.muted { Text("取消静音") }
-                    else { Text("静音") }
+            HStack(spacing: Spacing.item) {
+                if presentation.activity.isLive {
+                    Button { action(.toggleMute) } label: {
+                        if presentation.muted { Text("麦克风关") }
+                        else { Text("麦克风开") }
+                    }
+                    .buttonStyle(ControlButtonStyle(size: .compact))
+                    .accessibilityLabel(presentation.muted ? Text("开启麦克风") : Text("关闭麦克风"))
+                    .accessibilityValue(presentation.muted ? Text("麦克风已静音") : Text("麦克风已开启"))
+                    .help(presentation.muted ? Text("开启麦克风") : Text("关闭麦克风"))
+                    .keyboardShortcut("m", modifiers: [.command, .shift])
                 }
-                .buttonStyle(ControlButtonStyle(size: .compact))
-                .accessibilityValue(presentation.muted ? Text("已静音") : Text("麦克风已开启"))
-                .keyboardShortcut("m", modifiers: [.command, .shift])
-            }
-            if let issue = presentation.issue, !presentation.activity.isLive {
-                Button { action(.recover) } label: { Text(issue.recovery).fixedSize() }
-                    .buttonStyle(ControlButtonStyle(size: .compact))
-                    .layoutPriority(1)
-            } else if presentation.activity == .ended {
-                Button { action(.start) } label: { Text("再次通话") }
-                    .buttonStyle(ControlButtonStyle(size: .compact))
-            } else {
-                Button(role: .destructive) { action(.hangUp) } label: { Text("挂断") }
-                    .buttonStyle(ControlButtonStyle(size: .compact))
+                Spacer(minLength: 0)
+                if let issue = presentation.issue, !presentation.activity.isLive {
+                    Button { action(.recover) } label: { Text(issue.recovery).fixedSize() }
+                        .buttonStyle(ControlButtonStyle(size: .compact))
+                } else if presentation.activity == .ended {
+                    Button { action(.start) } label: { Text("再次通话") }
+                        .buttonStyle(ControlButtonStyle(size: .compact))
+                } else {
+                    Button(role: .destructive) { action(.hangUp) } label: { Text("挂断") }
+                        .buttonStyle(ControlButtonStyle(size: .compact))
+                }
             }
         }
         .fixedSize(horizontal: false, vertical: true)
