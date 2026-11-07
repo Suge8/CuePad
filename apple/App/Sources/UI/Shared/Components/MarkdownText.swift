@@ -81,14 +81,18 @@ struct MarkdownText: View, Equatable {
                 runs.append(.list(items))
                 items = []
             }
-            func flush() {
-                flushList()
+            func flushProse() {
                 guard !pending.isEmpty else { return }
                 var text = MarkdownText.attributed(pending, palette, style: style)
                 for note in notes where note.run == prose { MarkdownText.mark(note, in: &text, palette) }
                 runs.append(.prose(text))
                 prose += 1
                 pending = []
+            }
+            // 同一时刻只有一边攒着：列表项先收掉前面的文字，别的块先收掉前面的列表
+            func flush() {
+                flushList()
+                flushProse()
             }
             for block in MarkdownBlock.parse(source) {
                 if case .table(let table) = block {
@@ -98,7 +102,7 @@ struct MarkdownText: View, Equatable {
                     flush()
                     runs.append(.code(code))
                 } else if style == .document, case .item = block {
-                    flush()
+                    flushProse()
                     items.append(block)
                 } else {
                     flushList()
