@@ -91,8 +91,8 @@ public enum CueStoreError: Error, Equatable {
   case invalidAnswer([String])
   /// 一条记忆超过 `CueMemoryLine.maxBytes` 字节。
   case memoryLineTooLong(Int)
-  /// 摘要的区间不是记忆里对齐的 2 的幂区间。
-  case invalidSummaryRange
+  /// 范围引用中的输入已变化；旧摘要不能绑定当前事实，旧范围不能展开成另一批记忆。
+  case staleMemoryRange
   /// Cue 没启用（没有 `cueProfile`、停用了或没选运行在哪台 Mac）。
   case cueNotEnabled
   /// 这条提问已经结束了（答了或撤回了），或放不回（不是你开口收起的）。
@@ -163,7 +163,7 @@ extension CueStoreError: LocalizedError {
     case .notStopped(let title): "会话「\(title)」没停着（在跑、被打断或已结束）：留给他回只用在它歇着、在等回答或出错时"
     case .invalidAnswer(let options): "会话在等提问的回答，答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
     case .memoryLineTooLong(let limit): String(localized: "一条记忆最多 \(limit) 字节（UTF-8）")
-    case .invalidSummaryRange: "摘要的区间要是记忆里对齐的 2 的幂区间，至少两行、行都在"
+    case .staleMemoryRange: "记忆区间的输入已变化，请读取新视图后重新整理或展开"
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
     case .questionEnded: String(localized: "这条提问已经结束了")
     case .notAChoice(let answer): String(localized: "「\(answer)」不是这条提问的选项")

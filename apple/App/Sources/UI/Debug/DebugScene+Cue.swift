@@ -127,7 +127,7 @@ extension DebugScene {
             }
             if let variant = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(variant, store: store, task: order?.id) }
             let forgotten = try await store.noteCueLine(String(localized: "旧的计费脚本还在用", table: "Demo"), source: .cue)
-            try await store.forgetCueLine(forgotten.line.id)
+            try await store.forgetCueLine(forgotten.id)
             // 对话末尾 Cue 自己又醒了几轮（隔几分钟一轮，Cue 页每轮一行，去处只从动作推出）：空闲巡视（只看了看）、billing 出错（留给你）、atlas 停下了（让它继续，此刻又在跑）、
             // 三处一起有动静（deploy 在等回答、一件任务的子代理卡住、notes 停下：留给你 deploy）、notes-edit 在等回答（只能在编辑器里答，留给你）、
             // relay 推完停下（做完了）

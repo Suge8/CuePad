@@ -193,7 +193,7 @@ private final class Days: EvalScript, Playable {
         let cells = { (usage: BrainUsage) in usage.cells.replacingOccurrences(of: " | ", with: "、") }
         var lines = [
             "", "## 多日", "",
-            "- 预置历史：对话 \(history.logged) 条、记忆 \(history.memoryLines) 行（\(history.pinned) 行一直记着）、做完的任务 \(history.doneTasks) 件",
+            "- 预置历史：对话 \(history.logged) 条、记忆 \(history.memoryLines) 行（\(history.pinned) 行是重点）、做完的任务 \(history.doneTasks) 件",
             "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）"
                 + (renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、")),
             "- 其中合并的轮（写了摘要的轮，第 \(merged.map { "\($0["round"]!)" }.joined(separator: "、")) 轮）：\(cells(cost(merged.map { $0["round"] as! Int })))",

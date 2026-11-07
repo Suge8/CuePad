@@ -647,18 +647,18 @@
         }
       }
     },
-    "%@ 自己记下的事和你说过的话。一直记着的每次都会看，其余的越早越概括，用到时再翻。" : {
+    "%@ 自己记下的事和你说过的话。重点每次都会看，其余的越早越概括，用到时再翻。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What %@ noted and what you've told it. Always Remember items are read every time; older ones are summarized and looked up when needed."
+            "value" : "What %@ noted and what you've told it. Key points are read every time; older ones are summarized and looked up when needed."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ 自己记下的事和你说过的话。一直记着的每次都会看，其余的越早越概括，用到时再翻。"
+            "value" : "%@ 自己记下的事和你说过的话。重点每次都会看，其余的越早越概括，用到时再翻。"
           }
         }
       }
@@ -4667,22 +4667,6 @@
         }
       }
     },
-    "一直记着" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Always Remember"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "一直记着"
-          }
-        }
-      }
-    },
     "一行" : {
       "localizations" : {
         "en" : {
@@ -5143,22 +5127,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下载中 %@"
-          }
-        }
-      }
-    },
-    "不再一直记着" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stop Always Remembering"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不再一直记着"
           }
         }
       }
@@ -8907,6 +8875,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "取消置顶"
+          }
+        }
+      }
+    },
+    "取消重点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unmark"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消重点"
           }
         }
       }
@@ -16419,6 +16403,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "标为未读"
+          }
+        }
+      }
+    },
+    "标为重点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Key Point"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标为重点"
           }
         }
       }
@@ -24019,6 +24019,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新选择 Mac"
+          }
+        }
+      }
+    },
+    "重点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Key Points"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重点"
           }
         }
       }

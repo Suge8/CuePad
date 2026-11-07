@@ -1,21 +1,20 @@
-import CryptoKit
 import CueText
 import Foundation
 
 extension CueStore {
-  private static let lineOrder = "createdAt, id"
+  static let lineOrder = "createdAt, id"
   /// 定时与记忆同表，只分这一处：有下一次、没忘掉的是定时（`CueMemoryLine`），其余没忘掉的是记忆
   private static let scheduled = "remindAt IS NOT NULL AND deletedAt IS NULL"
   private static let kept = "remindAt IS NULL AND deletedAt IS NULL"
 
   /// 记一条（带 `remindAt` 是一条定时，见 `CueMemoryLine`）。记不成一条的（`CueMemoryLine.fits`：空白、超过 `CueMemoryLine.maxBytes` 字节）拒绝。
   /// `replacing` 是这一条取代的几条（改了说法、几条并成一条）：同一次写入里忘掉它们，要都还在、都不是定时，否则整件不写（`notFound`）。
-  /// 返回这一条与它的序号。
+  /// 返回这一条；UUID 是跨设备稳定身份。
   @discardableResult
   public func noteCueLine(
     _ text: String, source: CueLineSource, pinned: Bool = false, remindAt: Date? = nil, repeats: CueRepeat? = nil, task: UUID? = nil,
     replacing: [UUID] = []
-  ) throws -> (line: CueMemoryLine, index: Int) {
+  ) throws -> CueMemoryLine {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { throw CueStoreError.blankTaskContent }
     guard CueMemoryLine.fits(text) else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
@@ -26,7 +25,7 @@ extension CueStore {
         try db.run("UPDATE cueLines SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, id])
       }
       let line = try insertLine(text, source: source, pinned: pinned, remindAt: remindAt, repeats: repeats, task: task)
-      return (line, try index(of: line))
+      return line
     }
   }
 
@@ -42,31 +41,15 @@ extension CueStore {
     return line
   }
 
-  /// 第 `index` 条（按序号，含忘掉的）；没有为 nil。
-  public func cueLine(at index: Int) throws -> CueMemoryLine? {
-    guard index >= 0 else { return nil }
-    return try select(CueMemoryLine.self, orderBy: Self.lineOrder, limit: 1, offset: index).first
-  }
-
   public func cueLine(_ id: UUID) throws -> CueMemoryLine? { try find(CueMemoryLine.self, id) }
 
-  public func cueLineIndex(_ id: UUID) throws -> Int? {
-    try find(CueMemoryLine.self, id).map(index(of:))
-  }
-
-  /// 这几条记忆与它们的序号，按给的先后（定时到点叫醒的一轮：信封里列它们、Cue 页那一节写第一条）；不在了的跳过。
-  public func cueLines(_ ids: [UUID]) throws -> [CueIndexedLine] {
+  /// 按给定 UUID 的先后读出记忆；不在了的跳过。
+  public func cueLines(_ ids: [UUID]) throws -> [CueMemoryLine] {
     let found = try select(CueMemoryLine.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)])
-    return try ids.compactMap { id in try found.first { $0.id == id }.map { CueIndexedLine(index: try index(of: $0), line: $0) } }
+    return ids.compactMap { id in found.first { $0.id == id } }
   }
 
-  private func index(of line: CueMemoryLine) throws -> Int {
-    try db.first(
-      "SELECT count(*) FROM cueLines WHERE createdAt < ?1 OR (createdAt = ?1 AND id < ?2)", [line.createdAt, line.id]
-    ) { Int($0.int(0)) } ?? 0
-  }
-
-  /// 忘掉一条（软删，位置不变）；覆盖它的摘要随之作废（摘要的指纹含各行忘没忘，见 `cueMemory`）。已忘掉的不变。
+  /// 忘掉一条（软删，身份不变）；覆盖它的摘要随之作废（摘要的指纹含各行忘没忘，见 `cueMemory`）。已忘掉的不变。
   public func forgetCueLine(_ id: UUID) throws {
     try write {
       guard let line = try find(CueMemoryLine.self, id) else { throw CueStoreError.notFound }
@@ -153,19 +136,21 @@ extension CueStore {
       "UPDATE cueLines SET deletedAt = ?1, modifiedAt = ?1 WHERE \(Self.scheduled) AND taskID IN (\(tasks))", [now, argument])
   }
 
-  /// 全部记忆与有效的摘要，一次读出。摘要写下时区间里各行的 id、忘没忘、钉没钉记成指纹，现在对不上（别处同步来更早的行、
-  /// 本机或别的设备忘掉、钉上或取消了其中一行，哪怕同步晚到）就作废：摘要不含一直记着的（那些在系统提示里），钉上后旧摘要不能再带着它。
+  /// 全部记忆与有效的摘要，一次读出。摘要生成时区间里各行的身份与内容记成指纹，现在对不上（别处同步来更早的行、
+  /// 本机或别的设备忘掉、钉上或取消了其中一行，哪怕同步晚到），或实际读取的子摘要变了就作废。摘要不含重点，钉上后旧摘要不能再带着它。
   public func cueMemory() throws -> CueMemory {
     let lines = try select(CueMemoryLine.self, orderBy: Self.lineOrder)
     let summaries = try db.query("SELECT lo, hi, text, lineIDs, createdAt FROM cueSummaries ORDER BY lo, hi") { row in
       (summary: CueMemorySummary(lo: Int(row.int(0)), hi: Int(row.int(1)), text: row.text(2), createdAt: row.date(4)), ids: row.text(3))
     }
-    let valid = summaries.filter { entry in
-      let (lo, hi) = (entry.summary.lo, entry.summary.hi)
-      guard lo >= 0, hi <= lines.count, lo < hi else { return false }
-      return Self.fingerprint(lines[lo..<hi]) == entry.ids
+    var memory = CueMemory(lines: lines, summaries: [])
+    // 子块先验证；父块只能引用已经验证的子摘要，失效沿实际输入依赖向上传播。
+    for entry in summaries.sorted(by: { $0.summary.hi - $0.summary.lo < $1.summary.hi - $1.summary.lo }) {
+      if memory.range(lo: entry.summary.lo, hi: entry.summary.hi)?.fingerprint == entry.ids {
+        memory.summaries.append(entry.summary)
+      }
     }
-    return CueMemory(lines: lines, summaries: valid.map(\.summary))
+    return memory
   }
 
   /// 记忆（没忘掉、不是定时的）里最新的 `limit` 条（不给是全部）与一共几条（`CueMemoryRecent`）：手机面板读两条，记忆页读全部。
@@ -175,47 +160,9 @@ extension CueStore {
     return CueMemoryRecent(lines: lines, count: count)
   }
 
-  /// 一直记着的那几条的 id（按记忆的顺序）。
-  public func pinnedCueLineIDs() throws -> [UUID] {
-    try db.query("SELECT id FROM cueLines WHERE pinned = 1 AND deletedAt IS NULL ORDER BY \(Self.lineOrder)") { $0.uuid(0) }
-  }
-
   /// 记忆的版本读数（`CueMemoryVersion`）：一条聚合，不读行的内容。
   public func cueMemoryVersion() throws -> CueMemoryVersion {
     try db.first("SELECT count(*), coalesce(sum(modifiedAt), 0) FROM cueLines") { CueMemoryVersion(lines: Int($0.int(0)), stamps: $0.int(1)) }
       ?? CueMemoryVersion(lines: 0, stamps: 0)
-  }
-
-  /// 写区间 [lo, hi) 的摘要（覆盖旧的）：对齐的 2 的幂区间（至少两行），行要都在；摘要同一条记忆的长度上限。
-  public func setCueSummary(lo: Int, hi: Int, text: String) throws {
-    let size = hi - lo
-    guard lo >= 0, size >= 2, size & (size - 1) == 0, lo % size == 0 else { throw CueStoreError.invalidSummaryRange }
-    let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !text.isEmpty else { throw CueStoreError.blankTaskContent }
-    guard CueMemoryLine.fits(text) else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
-    try write {
-      let lines = try select(CueMemoryLine.self, orderBy: Self.lineOrder, limit: size, offset: lo)
-      guard lines.count == size else { throw CueStoreError.invalidSummaryRange }
-      try db.run(
-        """
-        INSERT INTO cueSummaries (lo, hi, text, lineIDs, createdAt) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(lo, hi) DO UPDATE SET text = excluded.text, lineIDs = excluded.lineIDs, createdAt = excluded.createdAt
-        """, [lo, hi, text, Self.fingerprint(lines[...]), Date.stamp])
-    }
-  }
-
-  private static func fingerprint(_ lines: ArraySlice<CueMemoryLine>) -> String {
-    SHA256.hash(data: Data(lines.map { $0.id.uuidString + ($0.deletedAt != nil ? "-" : $0.pinned ? "+" : "") }.joined(separator: ",").utf8)).prefix(12).hex
-  }
-}
-
-
-public struct CueIndexedLine: Equatable, Sendable {
-  public var index: Int
-  public var line: CueMemoryLine
-
-  public init(index: Int, line: CueMemoryLine) {
-    self.index = index
-    self.line = line
   }
 }

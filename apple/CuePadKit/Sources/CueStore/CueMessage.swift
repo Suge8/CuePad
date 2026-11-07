@@ -39,7 +39,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 卡片、通知与全屏预览只读它，没点名的没有图。看什么是用户内容，加密同步；列与同步字段沿用最初只有提问时的名字 askShots（同步表不改已有列）。
   public var shots: [CueShot] = []
   public var ask: CueAsk? { asked?.ask.known }
-  /// `answer` 是这条提问的"以后……不用问"（第二项，`CueAsk.always(in:)`）：选了它就照原话记成一条他说的、一直记着的记忆
+  /// `answer` 是这条提问的"以后……不用问"（第二项，`CueAsk.always(in:)`）：选了它就照原话记成一条他说的重点
   /// （`CueStore.endCueQuestion`），交给 Cue 时说明已记下（`Envelope.delivered`）。
   public func allowsFromNowOn(_ answer: String?) -> Bool {
     guard ask != nil, let choices, choices.count > 1 else { return false }

@@ -7,24 +7,15 @@ extension CueTools {
   static func definitions(_ toolset: Toolset) -> [[String: Any]] {
     switch toolset {
     case .cue: definitions
-    case .dream: [merge, tidy]
+    case .dream: [merge]
     }
-  }
-
-  private static var tidy: [String: Any] {
-    [
-      "name": "tidy",
-      "description": "收口 <pinned> 里一直记着的：lines 是序号的数组。带 text 把这几条（至少两条）并成一条一直记着的（≤\(CueMemoryLine.maxBytes) 字节）；不带 text 是让它们不再一直记着（回到普通记忆）。",
-      "inputSchema": schema(["lines": ["type": "array", "items": ["type": "integer"], "minItems": 1], "text": string], required: ["lines"]),
-      "annotations": ["readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false],
-    ]
   }
 
   private static var merge: [String: Any] {
     [
       "name": "merge",
-      "description": "把一块待合并的记忆写成一行摘要（≤\(CueMemoryLine.maxBytes) 字节）：lo、hi 照块头的 #lo-hi 写（hi 含在内）。",
-      "inputSchema": schema(["lo": ["type": "integer"], "hi": ["type": "integer"], "text": string], required: ["lo", "hi", "text"]),
+      "description": "把一块待合并的记忆写成一行摘要（≤\(CueMemoryLine.maxBytes) 字节）：range 原样复制块头的引用，绑定生成时输入；输入变化则拒绝写入；回执若带 <merge>，继续合并其中新就绪的父块。",
+      "inputSchema": schema(["range": string, "text": string], required: ["range", "text"]),
       "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false],
     ]
   }
@@ -63,7 +54,7 @@ extension CueTools {
           对他说一句（Cue 页里你的一行）。tell{text?,ask?,doing?,rule?,show?,urgent?,task?,withdraw?,restore?}，没有 action。ask 是请他允许、等他回答（进"等你"），只用于系统提示里先问的那几类。带 ask 必写 doing：一句说清要他定什么，动词开头写清对象，一行、≤\(CueAsking.phraseLimit) 字（如"推送 scheduler 的重连修复"；几个方案里挑时写推荐的那个）；ask=rule 还必写 rule：他那条规矩的原话。
           卡片、摘要与通知只显示"可以<doing>吗？"、rule、show 的图与选项，不显示 text。text 先一句要做的动作，再一句依据和不做会怎样；不写 push、rule 这类分类名。
           show 是回答必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就只放方案、每个一张（不带原样作对比）、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。
-          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；\(CueAsk.allCases.filter { !$0.allowable }.map(\.rawValue).joined(separator: "、")) 只有第一项），他选第二项就照原话记成一条一直记着的记忆。
+          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；\(CueAsk.allCases.filter { !$0.allowable }.map(\.rawValue).joined(separator: "、")) 只有第一项），他选第二项就照原话记成一条重点记忆。
           urgent 推送到手机；task 关联一个任务（第二项的范围是它的项目）；withdraw 写"等你"里一条的 id，撤回它，可同时带 text 说明；restore 写他在 Cue 页开口收起的那条的 id，放回"等你"。
           """,
         "inputSchema": schema(

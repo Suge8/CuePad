@@ -6,7 +6,7 @@ import Testing
 extension MCPTests {
   /// 带选项的"等你"只给收不回的那几类事（`CueAsk`），选项由 CuePad 给：Cue 自拟的确认（"照这个做吗"）发不出去。
   /// 第二项照实际范围写：任务在项目里是"以后「项目」里推送不用问"，不关联任务时是"以后推送代码都不用问"；
-  /// 选了第二项就把这句原话记成一条他说的、一直记着的记忆（不用先问的例外只在记忆里，问完任务挪了项目也照字面那句）。
+  /// 选了第二项就把这句原话记成一条他说的重点（不用先问的例外只在记忆里，问完任务挪了项目也照字面那句）。
   @Test func onlyIrreversibleThingsAreAskedAndAlwaysAllowIsRemembered() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store

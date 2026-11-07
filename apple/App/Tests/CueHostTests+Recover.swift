@@ -122,7 +122,7 @@ extension CueHostTests {
         try await rig.message(.cue, containing: "达到用量限制")
         let keeper = try #require(rig.services.cue.keeper)
         try await eventually("一次性定时已触发，正在等慢速重试") { keeper.setback?.retryAt != nil && keeper.turn == nil }
-        #expect(try await rig.store.cueLine(reminder.line.id)?.deletedAt != nil)
+        #expect(try await rig.store.cueLine(reminder.id)?.deletedAt != nil)
         try await remote.update(sessionID: "remote-retry", state: .settled)
         try await rig.answered("remote-retry")
         try await rig.reconciled()  // 新变化对过账：不该叫它重来
@@ -130,13 +130,13 @@ extension CueHostTests {
         #expect(try await rig.count("定时到点") == 0)
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
-        let done = try await rig.message(.cue, containing: "定时到点：#\(reminder.index) 核对发布结果")
+        let done = try await rig.message(.cue, containing: "定时到点：\(reminder.id.uuidString.lowercased()) 核对发布结果")
         #expect(done.text.contains("一次"))
         #expect(rig.model.errors == 1)
         try await eventually("承接原定时的一轮完成") {
             keeper.rounds.contains { round in
                 guard case .schedule(let fires) = round.wake else { return false }
-                return fires.contains { $0.line == reminder.line.id } && round.finishedAt != nil && round.failure == nil
+                return fires.contains { $0.line == reminder.id } && round.finishedAt != nil && round.failure == nil
             }
         }
         await rig.stop()
@@ -152,18 +152,18 @@ extension CueHostTests {
                   case .schedule(let fires) = held.wake else { return false }
             return fires.contains { $0.line == id }
         }
-        try await eventually("A 失败后等待重试") { waiting(first.line.id) }
+        try await eventually("A 失败后等待重试") { waiting(first.id) }
         let second = try await rig.store.noteCueLine("核对发布结果 B", source: .you, remindAt: .now)
-        rig.model.blockQuota(times: 1, containing: "醒来：定时到点\n- #\(second.index) 核对发布结果 B")
+        rig.model.blockQuota(times: 1, containing: "醒来：定时到点\n- \(second.id.uuidString.lowercased()) 核对发布结果 B")
         // B 已到期、对过账；A 的慢速重试还没到点。
         try await rig.reconciled()
-        #expect(try await rig.store.cueLine(second.line.id)?.deletedAt == nil)
-        #expect(try await rig.store.dueCueSchedules(at: rig.clock.now).contains { $0.id == second.line.id })
-        try await rig.message(.cue, containing: "定时到点：#\(first.index) 核对发布结果 A", skippingBackoff: true)
-        try await eventually("B 随后失败，也等着持续重试") { waiting(second.line.id) }
-        try await rig.message(.cue, containing: "定时到点：#\(second.index) 核对发布结果 B", skippingBackoff: true)
+        #expect(try await rig.store.cueLine(second.id)?.deletedAt == nil)
+        #expect(try await rig.store.dueCueSchedules(at: rig.clock.now).contains { $0.id == second.id })
+        try await rig.message(.cue, containing: "定时到点：\(first.id.uuidString.lowercased()) 核对发布结果 A", skippingBackoff: true)
+        try await eventually("B 随后失败，也等着持续重试") { waiting(second.id) }
+        try await rig.message(.cue, containing: "定时到点：\(second.id.uuidString.lowercased()) 核对发布结果 B", skippingBackoff: true)
         try await eventually("两个定时各自完成") {
-            [first.line.id, second.line.id].allSatisfy { id in
+            [first.id, second.id].allSatisfy { id in
                 keeper.rounds.contains { round in
                     guard case .schedule(let fires) = round.wake else { return false }
                     return fires.contains { $0.line == id } && round.finishedAt != nil && round.failure == nil
