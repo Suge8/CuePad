@@ -8,7 +8,8 @@ import WebKit
 /// 按内容哈希存进 `LookFiles`。一次只渲一张：每张要起一个网页进程，一屏几张同时渲会把内存与 CPU 一起顶上去。
 enum PageSnapshots {
     /// 渲染时的视口（CSS 像素）与快照宽（像素）：4:3 的一屏，够会话页的主图在 Mac 上铺满。
-    private static let viewport = CGSize(width: 1024, height: 768)
+    /// Mac 全屏页按视口一比一摆快照（`PreviewPlace.frame`），与真网页的字一样大。
+    static let viewport = CGSize(width: 1024, height: 768)
     private static let snapshotWidth: CGFloat = 1200
 
     private static var tail: Task<URL?, Never>?

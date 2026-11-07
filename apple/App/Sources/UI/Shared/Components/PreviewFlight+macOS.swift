@@ -10,7 +10,7 @@ import SwiftUI
 /// 飞的这段内容藏着（`landed`），同一张图不会在两处同时出现：不用盖一层幕布——浮层淡入淡出时 SwiftUI 按层各自改透明度，半透明的幕布盖不住半透明的内容。
 /// 内容区上不占地方的 `Stage` 是飞的终点与起点：它知道翻到了哪一份、内容落在哪。浮层本身的淡入淡出在 `PanelLayer`。减弱动态效果时不飞，只淡。
 /// 网页落地不交叉淡：飞的是缩略图那张快照（1024 宽排的首屏），真网页按全屏页的宽排，字的位置不同，两层一淡一显就是重影。
-/// 所以网页飞向整块内容区（铺满、留上沿，盖住真网页将来的整片），落地后快照停着，等真网页载完、画上第一帧（`pagePainted`）
+/// 所以网页的快照按 CSS 像素一比一落在内容区左上（同真网页的起点与字号，多出内容区的裁掉；`PreviewPlace.frame`），落地后快照停着，等真网页载完、画上第一帧（`pagePainted`）
 /// 才在同一刻露出网页、撤掉快照：全程屏上只有一层字。不让网页按快照的宽排：那样全屏页里的网页就不是它真的样子。
 /// Markdown 与改动同理（缩略图是一页 360 宽的首屏，全屏页按栏宽重排）：快照按一比一落在全屏页正文开头的地方，标题与头几行字对得上，
 /// 落地后同一刻换成内容（`swaps`），不交叉淡。
@@ -56,7 +56,7 @@ import SwiftUI
             guard let image = await source.image(), stage.window === window,
                   let flight = await Flight(
                     image, from: source.frame(from, showing: image),
-                    to: Frame(filling: stage.place.rect(aspect: source.aspect ?? Frame.aspect(of: image)), with: image, crop: source.alignment),
+                    to: stage.place.frame(of: image, aspect: source.aspect, crop: source.alignment),
                     in: window)
             else { return stage.landed(true) }
             try? await Task.sleep(for: .seconds(Motion.Glide.duration))
@@ -104,7 +104,7 @@ import SwiftUI
             case .picture(let contents, let frame): start = (contents, frame)
             case .opened:
                 guard let image = await source.image() else { return }
-                start = (image, Frame(filling: place.rect(aspect: source.aspect ?? Frame.aspect(of: image)), with: image, crop: source.alignment))
+                start = (image, place.frame(of: image, aspect: source.aspect, crop: source.alignment))
             }
             guard let flight = await Flight(start.0, from: start.1, to: source.frame(to, showing: start.0), in: window) else { return }
             stage.landed(false)

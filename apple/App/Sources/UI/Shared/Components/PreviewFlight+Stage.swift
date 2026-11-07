@@ -71,7 +71,7 @@ extension PreviewFlight.Stage {
 }
 
 /// 内容在两条栏之间的那块（`area`，窗口坐标）里落在哪：按画面比例整张放下、居中；PDF 按宽铺满、从上沿排起（`PreviewPDF`）；
-/// 网页铺满整块（快照留上沿、裁掉多的，盖住真网页的整片，见 `PreviewFlight` 头注释）；Markdown 与改动的快照一比一落在正文开头。
+/// 网页的快照按 CSS 像素一比一从左上摆起（见 `frame`）；Markdown 与改动的快照一比一落在正文开头。
 struct PreviewPlace {
     let kind: PiPreviewKind?
     let area: CGRect
@@ -79,8 +79,25 @@ struct PreviewPlace {
     /// 落地时换成内容、不交叉淡的几类（`PreviewFlight` 头注释）
     static func swaps(_ kind: PiPreviewKind?) -> Bool { [.web, .markdown, .diff].contains(kind) }
 
+    /// 飞的那一端：画面 `image`（缩略图的那张）落在哪、露出哪一截。
+    /// 网页：快照是 `PageSnapshots.viewport` 宽排的首屏，全屏页里的网页一个 CSS 像素一点、从内容区左上排起，
+    /// 快照照这个比例摆在左上、多出内容区的那截裁掉：字号、标题与第一张卡的位置同真网页，只有随宽度伸缩的块宽一点。
+    /// 按内容区的宽铺满则整页缩放，落地换成真网页时字跳一号（窄窗里约 6%）。
+    func frame(of image: Any, aspect: CGFloat?, crop: Alignment) -> PreviewFrame {
+        guard kind == .web, area.width > 0, area.height > 0 else {
+            return PreviewFrame(filling: rect(aspect: aspect ?? PreviewFrame.aspect(of: image)), with: image, crop: crop)
+        }
+        let page = PageSnapshots.viewport.width
+        let height = page / max(PreviewFrame.aspect(of: image), 0.01)
+        let width = min(area.width, page), shown = min(area.height, height)
+        // 单位坐标 y 朝上：露出顶上那一截
+        return PreviewFrame(
+            rect: CGRect(x: area.minX, y: area.maxY - shown, width: width, height: shown),
+            shown: CGRect(x: 0, y: 1 - shown / height, width: width / page, height: shown / height))
+    }
+
     func rect(aspect: CGFloat) -> CGRect {
-        guard aspect > 0, area.width > 0, area.height > 0, kind != .web else { return area }
+        guard aspect > 0, area.width > 0, area.height > 0 else { return area }
         let page = DeliverableLooks.markdownPage
         switch kind {
         // 窗口坐标 y 朝上：正文开头在 `area` 的上沿。Markdown 是居中的一栏、页边与快照的同宽；改动从左边排起，上面空一截（`PreviewDiff`）
