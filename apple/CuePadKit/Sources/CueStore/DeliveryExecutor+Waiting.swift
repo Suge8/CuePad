@@ -3,11 +3,19 @@ import Foundation
 /// 缺前提时在旁边等（`DeliveryExecutor` 头注释）：取附件、等现有会话就绪。两种等待都不抓一份期限，到点从库里重读这条请求的派发期限
 /// （`untilDue`）：锚点只有一个（`DeliveryRequest.dispatchDeadline`），期限监视、SQL 与这里读的是同一份。
 extension DeliveryExecutor {
-  /// 睡到这条请求的派发期限：每次醒来从库里重读，没到就接着睡；请求不在了或没有锚点也返回（之后的写回按库里的状态比较并交换，不会误写）。
+  /// 订阅同一份派发期限；锚点尚未落定就等它，删除则取消等待，不能把两者当作到期。
   func untilDue(_ id: DeliveryRequest.ID) async throws {
-    while let due = try await store.deliveryRequest(id)?.dispatchDeadline, timing.now() < due {
-      try await timing.sleepUntil(due)
+    for try await expired in store.observe({ store -> Bool? in
+      guard let request = try store.deliveryRequest(id) else { return nil }
+      guard let due = request.dispatchDeadline else { return false }
+      if store.timing.now() >= due { return true }
+      store.expire(at: due)
+      return false
+    }) {
+      guard let expired else { throw CancellationError() }
+      if expired { return }
     }
+    throw CancellationError()
   }
 
   /// 库里这条的派发期限已到（不在了算到了）。
@@ -47,6 +55,7 @@ extension DeliveryExecutor {
       let stored = await reporting({ try await store.awaitDeliveryTarget(request, reason: preparation.reason) }),
       let stored, started, !Task.isCancelled else { return }
     notifyWritten(stored.id)
+    guard stored.status == .known(.preparing) else { scheduleCleanup(); return }
     waiting.put(stored.id, .spawn { [store] id in
       do {
         let ready = try await withThrowingTaskGroup(of: Bool.self) { group in

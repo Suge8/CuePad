@@ -3617,22 +3617,6 @@
         }
       }
     },
-    "Mac 说已经开了，会话一直没连上来，结果没确认；可以再开" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The Mac says it started the session, but it never connected. Result not confirmed; you can start again."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac 说已经开了，会话一直没连上来，结果没确认；可以再开"
-          }
-        }
-      }
-    },
     "OpenAI API 按量计费" : {
       "localizations" : {
         "en" : {
@@ -4811,18 +4795,34 @@
         }
       }
     },
-    "上一次开会话的结果已经查不到了，可以再开" : {
+    "上一次可能已经开了会话，再开可能让 Agent 重复操作。原请求会保留。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The last session start can no longer be found. You can start again."
+            "value" : "The previous session may already be open. Starting another could make the agent repeat its work. The original request will be kept."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上一次开会话的结果已经查不到了，可以再开"
+            "value" : "上一次可能已经开了会话，再开可能让 Agent 重复操作。原请求会保留。"
+          }
+        }
+      }
+    },
+    "上一次开会话的结果已经查不到了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The result of the previous request is no longer available"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一次开会话的结果已经查不到了"
           }
         }
       }
@@ -5783,6 +5783,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "今天还没做完的"
+          }
+        }
+      }
+    },
+    "仍然再开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Anyway"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然再开"
           }
         }
       }
@@ -7359,6 +7375,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "内置"
+          }
+        }
+      }
+    },
+    "再开一个会话？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Another Session?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再开一个会话？"
           }
         }
       }

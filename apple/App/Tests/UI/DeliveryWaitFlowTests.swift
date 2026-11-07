@@ -67,6 +67,11 @@ extension UpgradePreparationTests {
         _ = try await workspace.said(ComposerDraft(text: "在另一处等ACK"), to: blockingTarget, mode: .send)
         try await eventually("另一处已接手") { blocker.messages.count == 1 }
 
+        // 通道已占住后才写下的本机请求，也必须由独立监听锚定并按时收尾。
+        let later = try await workspace.said(ComposerDraft(text: "阻塞后才写下的一句"), to: target, mode: .send)
+        _ = try await eventually(store, { try $0.deliveryRequest(later.id) }) { $0?.dispatchDeadline != nil }
+
+
         old.close(bye: "reload")
         let ready = try await app.host.connect(target.sessionID, cwd: app.directory.path)
         try await eventually("会话就绪") { try await store.deliveryRequest(request.id)?.reason == DeliveryPreparation.ready }
@@ -75,6 +80,9 @@ extension UpgradePreparationTests {
         let failed = try await eventually(store, { try $0.deliveryRequest(request.id) }) { $0?.status == .known(.failed) }
         let shown = Said.request(try #require(failed)).trip(at: app.services.speech)
         #expect(shown == .failed(.reported("到期仍未派发，没有发出，可以重发")))
+        let laterFailure = try await store.outcome(of: later)
+        #expect(laterFailure.status == .known(.failed))
+        #expect(Said.request(laterFailure).trip(at: app.services.speech) == .failed(.reported("到期仍未派发，没有发出，可以重发")))
         #expect(ready.messages.isEmpty)
         await app.services.executor.beginStop()()
     }

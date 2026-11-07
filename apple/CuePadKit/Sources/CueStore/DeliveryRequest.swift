@@ -77,7 +77,7 @@ public enum DeliveryOrigin: String, Sendable, CaseIterable {
 /// 生命周期只有这一个状态机（持久状态 `DeliveryStatus`，各端此刻的样子由 `Speech.trip` 从记录与此刻推出）：
 /// - 写下即 `pending`。派发期限只有一个锚点 `serverAt`（`dispatchDeadline`，各端、执行器与 SQL 都从它读）：发给别处的是服务器收下它的时刻，
 ///   不按写下时刻算——手机离线时写下、连上才传上去的照常送到，写方与 Mac 的钟差也不混进来；还没到服务器的不算到期，可以撤回。
-///   Mac 写给自己的不经服务器，执行器第一次看到它时按写下的时刻锚定（`anchorOwnDeliveries`）；锚点一经写下不再变；
+///   Mac 写给自己的不经服务器，执行器第一次看到它时按写下的时刻锚定（`actionableDeliveries`）；锚点一经写下不再变；
 /// - 执行的 Mac 缺附件时仍是 `pending`、在旁边取；现有会话没就绪时转 `preparing`（原因在 `reason`）；两种等待都守同一个派发期限、不续；
 /// - 期限前领取转 `executing`（新的执行期限），之后 `confirming` → `succeeded` / `failed` / `unconfirmed`；
 /// - 期限到了还没领取：执行的 Mac 写回 `failed`（`expiry`），手机收到后允许重发；

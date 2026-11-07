@@ -5,7 +5,7 @@ import SwiftUI
 /// 新会话：一个浮在键盘上方的输入框，写的就是给 Pi 的第一句话；头部落点胶囊选在哪开（只列项目，默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时写上 Mac 名）。
 /// 工具排与 Mac 的新会话表单、Cue 同一排（`PiConfigControls.init(choice:)`）：Agent 只列那台 Mac 上能用的（`MacAgents`），默认上次选的（`MacAgents.preferred`，选了就记作下次的默认）；
 /// 模型与思考强度默认跟着这家的默认，换了 Agent 或 Mac 回到默认。一家都不能用时输入框上方写那台为什么（`whyNone`）、开不了。
-/// 发送钮就是开始：Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；没能打开时输入框上方写原因，可以再发；这一次的请求库里已经找不到（清理掉了）时同样解锁（`LaunchProgress.locksInput`）。
+/// 发送钮就是开始：Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；等待时仍可编辑或关闭；明确失败可安全重试，未知或查不到结果时再开须确认重复风险。
 /// 新会话的目录只由项目绑定的文件夹推出；还没绑的项目也直接开：发给 Cue 运行的那台 Mac（没启用 Cue 时按名字排第一台，`CueStore.workMac`），
 /// 它开工时建好工作区并绑定。
 struct NewSessionInput: View {
@@ -33,14 +33,14 @@ struct NewSessionInput: View {
         }
 
         /// 在 `host` 那台 Mac、项目的文件夹（没绑的那台先建工作区）用 `agent`（与 `model`、`thinking`，nil 是默认）开新会话，`draft` 作开场：
-        /// 开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`；没有就是带上的第一张）。`replacing` 是上一次没能开成的那条。
+        /// 开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`；没有就是带上的第一张）。`intent` 区分安全替换与确认后另开。
         func launch(
             in project: Project, on host: String, draft: ComposerDraft, agent: AgentKind, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool = false,
-            replacing previous: SessionLaunch?, workspace: Workspace
+            intent: SessionLaunchIntent, workspace: Workspace
         ) async throws -> SessionLaunch {
             try await workspace.launchSession(
                 in: project.id, prompt: draft.stored.nonEmpty, title: name ?? project.shownName, on: host,
-                card: card ?? draft.attachments.first?.card, agent: agent, model: model, thinking: thinking, fast: fast, replacing: previous?.request)
+                card: card ?? draft.attachments.first?.card, agent: agent, model: model, thinking: thinking, fast: fast, intent: intent)
         }
     }
 
@@ -59,6 +59,7 @@ struct NewSessionInput: View {
     @State private var thinking: PiThinkingLevel?
     @State private var fast = false
     @State private var sending = false
+    @State private var confirmingAgain = false
     @FocusState private var focused: Bool
 
     /// 只列项目，按所有项目选择器的同一个顺序（`ProjectCatalog.projects`，最近活跃的在前）。
@@ -71,14 +72,15 @@ struct NewSessionInput: View {
         return places.first { $0.id == choice } ?? start.place(among: places)
     }
     private var phase: LaunchProgress.Phase { progress?.phase(at: services.speech) ?? .idle }
-    /// 发出、还在有期限的等待里：输入框锁住，等它开好（`LaunchProgress.locksInput`）。
-    private var inFlight: Bool { LaunchProgress.locksInput(sending: sending, launched: launched, progress: progress, at: services.speech) }
     private var agent: AgentKind? { agents?.preferred(services.settings.lastAgent) }
     private var brain: AgentModelChoice? {
         guard chosen?.host != nil, let agents, let agent else { return nil }
         return AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking, fast: fast)
     }
-    private var canStart: Bool { chosen?.host != nil && agent != nil && !inFlight }
+    private var canStart: Bool {
+        chosen?.host != nil && agent != nil && !sending
+            && (launched == nil || progress?.launch == launched?.request) && phase.submission != .waiting
+    }
 
     var body: some View {
         Composer(
@@ -92,20 +94,17 @@ struct NewSessionInput: View {
                         services.settings.lastAgent = agent
                         model = nil
                     } chooseModel: { model = $0 } chooseThinking: { thinking = $0 } chooseFast: { fast = $0 }
-                    .disabled(inFlight)
+                    .disabled(sending)
                 }
             },
             send: {
-                Button(action: launch) { SendGlyph(canStart ? .ready : .idle) }
+                Button(action: { launch() }) { SendGlyph(canStart ? .ready : .idle) }
                     .buttonStyle(PressStyle(.button)).disabled(!canStart).accessibilityLabel("开始")
             })
         .composerNotice(status != nil) { if let status { statusLine(status).font(Typography.caption) } }
-        .disabled(inFlight)
-        // 浮在 `FloatingInput` 里（与发给 Agent 同一种）；发出后等它开好时不让收起
-        .floatingInputLocked(inFlight)
-        .task(id: progress?.openingDeadline(at: services.speech)) {
-            if let due = progress?.openingDeadline(at: services.speech) { await services.speechClock.refresh(at: due) }
-        }
+        .dialog("再开一个会话？", isPresented: $confirmingAgain, message: "上一次可能已经开了会话，再开可能让 Agent 重复操作。原请求会保留。", buttons: [
+            DialogButton(title: "仍然再开") { launch(confirmedAgain: true) },
+        ])
         .onAppear {
             if launched == nil { launched = start.launched }
             if let seed = start.draft, draft.isEmpty(accepting: [.files, .cards]) { draft = seed }
@@ -142,7 +141,7 @@ struct NewSessionInput: View {
                     if let project = chosen?.project { ProjectGlyph(project: project, size: 13) }
                 }
             }
-            .disabled(inFlight)
+            .disabled(sending)
             Spacer(minLength: 0)
         }
     }
@@ -166,22 +165,26 @@ struct NewSessionInput: View {
         case .noAgents(let agents): Text("\(agents.shownName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
         case .phase(.failed(let failure)): Text(failure.text).foregroundStyle(palette.failure)
         case .phase(.unconfirmed(let reason)): Text(verbatim: reason).foregroundStyle(palette.ink3)
-        case .phase(.missing): Text("上一次开会话的结果已经查不到了，可以再开").foregroundStyle(palette.ink3)
+        case .phase(.missing): Text("上一次开会话的结果已经查不到了").foregroundStyle(palette.ink3)
         case .phase(.sending(let transit)):
             HStack(spacing: Spacing.glyph) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
         case .phase: Text("Mac 正在开 Agent 会话…").foregroundStyle(palette.ink3)
         }
     }
 
-    private func launch() {
+    private func launch(confirmedAgain: Bool = false) {
         guard let place = chosen, let host = place.host, let agent, let brain, canStart else { return }
+        if phase.submission == .confirm, !confirmedAgain { confirmingAgain = true; return }
+        let intent: SessionLaunchIntent = launched.map {
+            confirmedAgain ? .repeatingConfirmed : .replacing($0.request)
+        } ?? .new
         let claim = workspace.claimImports(draft)
         sending = true
         workspace.attempt {
             defer { sending = false }
             let draft = await claim.settled()
             launched = try await start.launch(
-                in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, fast: brain.launchFast, replacing: launched, workspace: workspace)
+                in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, fast: brain.launchFast, intent: intent, workspace: workspace)
         }
     }
 }

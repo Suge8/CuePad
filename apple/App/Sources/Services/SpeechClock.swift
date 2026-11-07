@@ -35,12 +35,6 @@ final class SpeechClock {
         schedule()
     }
 
-    /// 睡到 `date` 把"此刻"刷一次：不在库里的时限（开好的新会话等连上，`LaunchProgress.openingDeadline`）由看它的界面给，随界面消失取消。
-    func refresh(at date: Date) async {
-        guard (try? await timing.sleepUntil(date)) != nil else { return }
-        moment.now = max(moment.now, timing.now())
-    }
-
     /// 此刻还在等回执的话（库一变就给一次）。
     func track(_ waiting: [Awaiting]) {
         guard waiting != self.waiting else { return }

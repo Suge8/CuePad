@@ -10,8 +10,8 @@ import Testing
 @testable import CuePad
 
 /// 带附件的那句话一定走到终态：手机开新会话、第一句带新选的截图，图随请求传上去、Mac 开会话时交给 Agent 的就是这张图；
-/// 附件到派发期限还没传到 Mac，Mac 写回明确失败（说明在等什么），手机的新会话输入框按失败显示、可以再开。
-/// "手机"是第二个 Mac 进程（同 `AgentLibraryTests` 的经云同步），开会话从它的工作区走（`Workspace.startSession`，手机的新会话输入框调的同一条 `launchSession`）。
+/// 附件到派发期限还没传到 Mac，Mac 写回明确失败（说明在等什么），手机的新会话输入框按失败显示、可以安全重试。
+/// "手机"是第二个 Mac 进程（同 `AgentLibraryTests` 的经云同步），成功路径走 `Workspace.startSession`，附件失败与重试走手机输入框的 `Workspace.launchSession`。
 @MainActor
 struct LaunchAttachmentTests {
     @Test func 手机新会话第一句带新选截图_图传上去_Mac开会话时Agent收到这张图() async throws {
@@ -64,8 +64,8 @@ struct LaunchAttachmentTests {
         await mac.services.executor.beginStop()()
     }
 
-    /// 手机开新会话、第一句带的附件到派发期限还没传到 Mac：Mac 写回明确失败，手机的新会话输入框按失败显示原因、解锁；
-    /// 失败的请求过了 Mac 的保留期仍留着（原因还在），再开时新请求替换它；被替换、库里已找不到的那一次不再锁输入框。
+    /// 手机开新会话、第一句带的附件到派发期限还没传到 Mac：Mac 写回明确失败，手机的新会话输入框按失败显示原因、允许安全重试；
+    /// 失败的请求过了 Mac 的保留期仍留着（原因还在），再开时新请求替换它；被替换、库里已找不到的那一次不再允许安全替换。
     @Test func 新会话附件到期还没传到Mac_写回失败_手机解锁可再开() async throws {
         let clock = ManualTiming()
         let mac = TestApp(timing: clock.timing)
@@ -88,21 +88,18 @@ struct LaunchAttachmentTests {
         let draft = ComposerDraft(text: "看这张截图", files: [DraftFile(key: missing, name: "")])
         // 新会话输入框发出的同一条（`NewSessionInput.Start.launch`），随即传上去（上传回执带回服务器收下的时刻）
         func launch(replacing previous: SessionLaunch?) async throws -> SessionLaunch {
-            let launched = try await phone.services.launchSession(
-                in: Project.defaultID, prompt: draft.stored, title: "CuePad", on: TestApp.hostID, card: nil, agent: .pi, replacing: previous?.request)
+            let launched = try await Workspace(services: phone.services).launchSession(
+                in: Project.defaultID, prompt: draft.stored, title: "CuePad", on: TestApp.hostID, card: nil, agent: .pi, intent: previous.map { .replacing($0.request) } ?? .new)
             let row = try #require(try await phone.services.store.syncRow(recordName: launched.request.uuidString.lowercased()))
             try await phone.services.store.markPushed([(row, Data(), clock.now)])
             return launched
         }
-        // 输入框读的那份进度，与它据此锁不锁（`NewSessionInput` 的 `inFlight`）
+        // 输入框读的那份进度与提交动作
         func progress(_ launch: SessionLaunch) async throws -> LaunchProgress {
             for try await progress in phone.services.store.observe({ try launch.progress(from: $0) }) { return progress }
             throw CancellationError()
         }
         func phase(_ launch: SessionLaunch) async throws -> LaunchProgress.Phase { try await progress(launch).phase(at: phone.services.speech) }
-        func locked(_ launch: SessionLaunch) async throws -> Bool {
-            LaunchProgress.locksInput(sending: false, launched: launch, progress: try await progress(launch), at: phone.services.speech)
-        }
         // 经服务器转一手：此刻服务器收下（拉到它的那台记下收下的时刻）
         func relay(_ id: UUID, from: TestApp, to: TestApp) async throws {
             let row = try #require(try await from.services.store.syncRow(recordName: id.uuidString.lowercased()))
@@ -113,7 +110,7 @@ struct LaunchAttachmentTests {
         try await relay(first.request, from: phone, to: mac)
         try await eventually("Mac 在旁边取附件") { fetches.withLock { $0 } > 0 }
         guard case .sending = try await phase(first) else { Issue.record("发出后应是在路上"); return }
-        #expect(try await locked(first), "在路上时回复框锁住")
+        #expect(try await phase(first).submission == .waiting, "在路上不重复提交")
 
         let request = try #require(try await mac.services.store.deliveryRequest(first.request))
         await clock.waitForSleeper()
@@ -130,16 +127,16 @@ struct LaunchAttachmentTests {
         #expect(try await mac.services.store.deliveryRequest(first.request) != nil)
         try await relay(first.request, from: mac, to: phone)
         #expect(try await phase(first) == .failed(.reported("附件到期还没传到这台 Mac，没有发出，可以重发")))
-        #expect(try await !locked(first), "失败后回复框解锁、可以再开")
+        #expect(try await phase(first).submission == .safe, "明确失败允许安全替换")
 
         let second = try await launch(replacing: first)
         let after = try await phone.services.store.deliveryRequests()
         #expect(after.map(\.id) == [second.request])
         #expect(after.first?.launch?.prompt == draft.stored)
-        #expect(try await locked(second), "再开后回复框又锁住")
-        // 被替换的那一次库里已没有：说不出结果，也不锁
+        #expect(try await phase(second).submission == .waiting, "再次发出后不重复提交")
+        // 被替换的那一次库里已没有：说不出结果，另开须确认
         #expect(try await phase(first) == .missing)
-        #expect(try await !locked(first), "找不到这次的请求时解锁")
+        #expect(try await phase(first).submission == .confirm, "查不到结果不能冒充可安全重试")
         await mac.services.executor.beginStop()()
     }
 }

@@ -2,13 +2,14 @@ import Foundation
 
 extension CueStore {
   /// 发给本机、还没有派发期限锚点的（这台写给自己、还没传上去的）按写下的时刻锚定（`DeliveryRequest.serverAt`）：
-  /// 执行器的待办监听每次先调用（不经执行队列），等待与到期从此只读这一个锚点。拉到的请求入库时就带着服务器收下的时刻，这里碰不到。
-  func anchorOwnDeliveries(for host: String) throws {
+  /// 监听与派发读取共用这个事务（不依赖执行队列），等待与到期从此只读这一个锚点。拉到的请求入库时就带着服务器收下的时刻，这里碰不到。
+  func actionableDeliveries(for host: String) throws -> [DeliveryRequest] {
     try write {
       try db.run("""
         UPDATE deliveryRequests SET serverAt = createdAt
         WHERE hostID = ? AND serverAt IS NULL AND status IN ('pending', 'preparing') AND handledBy IS NULL
         """, [host])
+      return try pendingDeliveries(for: host)
     }
   }
 
@@ -157,16 +158,19 @@ extension CueStore {
       """, [id, timing.now()]) { _ in true } ?? false
   }
 
-  /// 等现有会话就绪时转准备，写下在等什么；派发期限不变。只能归还尚未开始的准备权；executing 与任何未知结果不可能从这里退回。
+  /// 等现有会话就绪时转准备，写下在等什么；派发期限不变。归还准备权与到期写失败在同一事务里；executing 与任何未知结果不可能从这里退回。
   func awaitDeliveryTarget(_ request: DeliveryRequest, reason: ShownText) throws -> DeliveryRequest? {
     try write {
       try db.run(
         """
         UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = NULL, failure = ?, modifiedAt = MAX(modifiedAt + 1, ?)
-        WHERE id = ? AND status = ? AND status IN ('pending', 'preparing') AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
-        """, [reason.stored, Date.stamp, request.id, request.status.rawValue, timing.now()])
-      let current = try find(DeliveryRequest.self, request.id)
-      return current?.status == .known(.preparing) && current?.handledBy == nil ? current : nil
+        WHERE id = ? AND status = ? AND status IN ('pending', 'preparing')
+        """, [reason.stored, Date.stamp, request.id, request.status.rawValue])
+      guard db.changes > 0, let current = try find(DeliveryRequest.self, request.id) else { return nil }
+      if let due = current.dispatchDeadline, timing.now() >= due {
+        _ = try applyDeliveryOutcome(current, .failed(current.expiry), at: timing.now())
+      }
+      return try find(DeliveryRequest.self, request.id)
     }
   }
 

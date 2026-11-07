@@ -2,12 +2,11 @@
 import SwiftUI
 
 /// 浮在键盘上方的输入框（新会话、发给 Agent 共用）：不弹面板，背后的页面不压色（内容直接透在玻璃后面），浮起时随键盘升上来。
-/// 点空白处或往下拖收起（输入框跟手往下走，没拖够就回位）；里面在忙时（内容标了 `floatingInputLocked`）不收起。
+/// 点空白处或往下拖收起（输入框跟手往下走，没拖够就回位）。
 struct FloatingInput<Content: View>: View {
     let isPresented: Bool
     let close: () -> Void
     @ViewBuilder let content: () -> Content
-    @State private var locked = false
     /// 没拖够松手时弹回原位。
     @GestureState(resetTransaction: Transaction(animation: Motion.nudge)) private var drag: CGFloat = 0
 
@@ -27,7 +26,6 @@ struct FloatingInput<Content: View>: View {
                     .offset(y: drag)
                     .gesture(swipeDown)
                     .transition(.opacity)
-                    .onPreferenceChange(FloatingInputLock.self) { locked = $0 }
                     .accessibilityAddTraits(.isModal)
                     .accessibilityAction(.escape, dismiss)
             }
@@ -39,27 +37,17 @@ struct FloatingInput<Content: View>: View {
 
     private var swipeDown: some Gesture {
         DragGesture(minimumDistance: 8)
-            .updating($drag) { value, drag, _ in if !locked { drag = max(0, value.translation.height) } }
+            .updating($drag) { value, drag, _ in drag = max(0, value.translation.height) }
             .onEnded { value in
                 if max(value.translation.height, value.predictedEndTranslation.height) > Self.dismissDistance { dismiss() }
             }
     }
 
     private func dismiss() {
-        guard !locked else { return }
         // 先放下键盘再移走输入框：等它移走后才失去焦点的话，键盘在它淡出之后才开始下落
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         close()
     }
 }
 
-private struct FloatingInputLock: PreferenceKey {
-    static let defaultValue = false
-    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
-}
-
-extension View {
-    /// 浮起的输入框里在忙（如新会话已发出、等 Mac 开好）：点空白处与下拖不收起。
-    func floatingInputLocked(_ locked: Bool) -> some View { preference(key: FloatingInputLock.self, value: locked) }
-}
 #endif

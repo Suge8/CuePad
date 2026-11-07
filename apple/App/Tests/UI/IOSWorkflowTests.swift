@@ -22,7 +22,7 @@ struct IOSWorkflowTests {
         let places = ProjectFolders.launchPlaces(
             projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil, workMac: try await store.workMac())
         let place = try #require(start.place(among: places)), host = try #require(place.host)
-        _ = try await start.launch(in: place.project, on: host, draft: try #require(start.draft), agent: .pi, model: nil, thinking: nil, replacing: nil, workspace: Workspace(services: app.services))
+        _ = try await start.launch(in: place.project, on: host, draft: try #require(start.draft), agent: .pi, model: nil, thinking: nil, intent: .new, workspace: Workspace(services: app.services))
         return (task, try #require(try await store.deliveryRequests().first))
     }
 

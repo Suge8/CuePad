@@ -40,15 +40,12 @@ struct DispatchDeadlineTests {
 
         // 连上：传上去、Mac 拉到，照常送到
         phone.services.startSync()
-        let pulling = Task {
-            while !Task.isCancelled {
-                await phone.services.syncNow()
-                await mac.services.syncNow()
-                try? await Task.sleep(for: .milliseconds(20))
-            }
-        }
-        defer { pulling.cancel() }
-        try await eventually("Mac 交给 Agent") { atlas.messages.map(\.text) == ["离线时写下的"] }
+        await phone.services.upload(request.id)
+        await phone.services.syncNow()
+        await mac.services.syncNow()
+        let result = try await mac.services.store.outcome(of: request)
+        #expect(result.status == .known(.succeeded))
+        #expect(atlas.messages.map(\.text) == ["离线时写下的"])
         let sent = try #require(try await phone.services.store.deliveryRequest(request.id))
         let received = try #require(try await mac.services.store.deliveryRequest(request.id))
         #expect(received.status != .known(.failed))

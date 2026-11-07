@@ -86,18 +86,16 @@ extension AppServices {
     /// 请 `host` 那台 Mac 在项目的文件夹里用 `agent` 开新会话（`model`、`thinking` 为 nil 是这家的默认），`prompt` 作开场。
     /// `title` 是给人看的目标名（会话名或项目名）。这里生成这一次的认领标识：同步记录上出现带同一个 `launchToken` 的会话就是它（`SessionLaunch`）。
     /// `card`：从这条灵感或任务开的（开好后它关联到新会话、会话名按它定，见 `CueStore.requestLaunch`、`CueStore.claimLaunchedCards`）。
-    /// `replacing`：上一次的那条（新会话输入框再开时给）：新的写成后，没能开成的移除，还没交出去（离线时）的撤回，同重发说的话；
-    /// 已经交出、结果未确认的留着（可能已经开了，不假装撤回）。
+    /// `replacing`：同一事务里撤回旧请求并写新请求；撤不回就不写。主动重复由 Workspace 在确认后另建意图。
     func launchSession(
         in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
         model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false, replacing previous: UUID? = nil
     ) async throws -> SessionLaunch {
         let token = UUID().uuidString
         let request = uploaded(try await store.requestLaunch(
-            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast), title: title, on: host, card: card))
-        if let previous, try await !store.withdrawFailedDelivery(previous) {
-            if try await store.withdrawDelivery(previous) { Task { await upload(previous, deleted: true) } }
-        }
+            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast),
+            title: title, on: host, card: card, replacing: previous))
+        if let previous { Task { await upload(previous, deleted: true) } }
         return SessionLaunch(request: request.id, token: token)
     }
 

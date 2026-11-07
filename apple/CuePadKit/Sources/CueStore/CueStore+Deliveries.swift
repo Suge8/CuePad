@@ -90,11 +90,19 @@ extension CueStore {
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或任务名）。
   /// 给了 `card`（从灵感或任务"新会话"发给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）；
   /// 会话名按它定（`sessionName(forCard:)`）。`cue` 为真时请求标明来自 Cue（`DeliveryOrigin`）。
-  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil, cue: Bool = false) throws -> DeliveryRequest {
-    var launch = launch
-    launch.name = try card.flatMap(sessionName(forCard:))
-    return try requestDelivery(
-      launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card, cue: cue)
+  /// 安全替换先在同一事务里撤旧再写新；同步发送者已领取旧记录或结果未知时整笔拒绝。
+  public func requestLaunch(
+    _ launch: PiLaunch, title: String, on host: String, card: UUID? = nil, cue: Bool = false, replacing previous: UUID? = nil
+  ) throws -> DeliveryRequest {
+    try write {
+      if let previous, try !removeFailedDelivery(previous), try !removeUnstartedDelivery(previous, locallyOn: nil) {
+        throw CueStoreError.deliveryAlreadyHanded
+      }
+      var launch = launch
+      launch.name = try card.flatMap(sessionName(forCard:))
+      return try insertDelivery(
+        launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card, cue: cue)
+    }
   }
 
   /// 从这张卡开的新会话叫什么（唯一的规则，`requestLaunch` 与 `handOffPlan` 都读它）：任务的标题，超长的截断（`CueName.clipped`）；
