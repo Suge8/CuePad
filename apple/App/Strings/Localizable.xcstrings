@@ -14027,6 +14027,22 @@
         }
       }
     },
+    "拍板与回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decisions and reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拍板与回复"
+          }
+        }
+      }
+    },
     "拍照" : {
       "localizations" : {
         "en" : {
