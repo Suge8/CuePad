@@ -161,6 +161,7 @@ extension View {
             if DebugScene.scene == "stateicons" { StateGlyphSheet().withPalette() }
             if DebugScene.scene == "rail" { DebugSessionRail(workspace: workspace).modifier(PaletteProvider()) }
         }
+        .modifier(DebugVoicePrototype())
         .task {
             await DebugScene.prepare(workspace)
             await DebugScene.seedRailIfAsked(workspace.services)

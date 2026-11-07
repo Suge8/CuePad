@@ -3799,6 +3799,22 @@
         }
       }
     },
+    "我已经整理好发布检查，正在核对 Mac 上的通话体验。需要你确认的事项会留在任务里。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I've organized the release checks and am reviewing the call experience on Mac. Anything that needs your approval will stay in your tasks."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我已经整理好发布检查，正在核对 Mac 上的通话体验。需要你确认的事项会留在任务里。"
+          }
+        }
+      }
+    },
     "截图" : {
       "localizations" : {
         "en" : {
@@ -3987,6 +4003,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把三个排序方案的对比做成表格"
+          }
+        }
+      }
+    },
+    "把发布前的检查交给 Cue，保留需要我确认的事项" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hand the release checks to Cue and keep anything that needs my approval"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把发布前的检查交给 Cue，保留需要我确认的事项"
           }
         }
       }
@@ -6099,6 +6131,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "滑过去，可以 ›"
+          }
+        }
+      }
+    },
+    "演示：已收到停止执行操作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: stop work action received"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：已收到停止执行操作"
+          }
+        }
+      }
+    },
+    "演示：已收到再说一遍请求" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: repeat request received"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：已收到再说一遍请求"
+          }
+        }
+      }
+    },
+    "演示：已收到恢复操作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: recovery action received"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：已收到恢复操作"
           }
         }
       }
