@@ -6135,6 +6135,38 @@
         }
       }
     },
+    "演示回复 %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo reply %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示回复 %lld"
+          }
+        }
+      }
+    },
+    "演示：加长回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: extend reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：加长回复"
+          }
+        }
+      }
+    },
     "演示：已收到停止执行操作" : {
       "localizations" : {
         "en" : {
@@ -6179,6 +6211,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "演示：已收到恢复操作"
+          }
+        }
+      }
+    },
+    "演示：追加回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: append reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：追加回复"
           }
         }
       }
