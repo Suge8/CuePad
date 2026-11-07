@@ -1,5 +1,5 @@
 #if os(iOS)
-import CueStore
+@testable import CueStore
 import Foundation
 import Testing
 @testable import CuePad
@@ -22,7 +22,7 @@ struct IOSWorkflowTests {
         let places = ProjectFolders.launchPlaces(
             projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil, workMac: try await store.workMac())
         let place = try #require(start.place(among: places)), host = try #require(place.host)
-        _ = try await start.launch(in: place.project, on: host, draft: try #require(start.draft), agent: .pi, model: nil, thinking: nil, services: app.services)
+        _ = try await start.launch(in: place.project, on: host, draft: try #require(start.draft), agent: .pi, model: nil, thinking: nil, intent: .new, workspace: Workspace(services: app.services))
         return (task, try #require(try await store.deliveryRequests().first))
     }
 
@@ -46,5 +46,53 @@ struct IOSWorkflowTests {
         #expect(request.launch?.name == "修乱序" && request.target.name == "修乱序" && request.cardID == task.id)
         #expect(request.launch?.prompt == "修乱序\n先复现")
     }
+    @Test(arguments: ["offline", "sent", "unconfirmed"])
+    func 同一任务关闭重开_恢复原请求且不能冒充首次提交(state: String) async throws {
+        defer { app.services.cancelBackgroundWork() }
+        try await store.recordMacAgents(host: "mac-z", name: "Mac", [])
+        let (task, first) = try await handOff(in: Project.defaultID)
+        if state != "offline" {
+            var row = try #require(try await store.syncRow(recordName: first.id.uuidString.lowercased()))
+            if state == "unconfirmed" {
+                row.fields["status"] = .text("unconfirmed")
+                row.fields["handledBy"] = .text("mac-z")
+                row.fields["modifiedAt"] = .int(row.modifiedAt + 1000)
+            }
+            #expect(try await store.applyRemote([.save(row, systemFields: Data(), serverAt: Date())]).isEmpty)
+        }
+        let workspace = Workspace(services: app.services)
+        let draft = ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: task), card: task.id, project: task.projectID)])
+        let plan = try await store.handOffPlan(task.id, host: nil)
+        workspace.handOff(task)
+        workspace.handOffToNewSession(draft, card: task.id, plan: plan)
+        workspace.newSession = nil
+        workspace.handOff(task)
+        workspace.handOffToNewSession(draft, card: task.id, plan: plan)
+        let start = try #require(workspace.newSession)
+        await #expect(throws: CueStoreError.deliveryAlreadyHanded) {
+            try await workspace.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
+                                             on: "mac-z", card: task.id, agent: .pi)
+        }
+        #expect(try await store.deliveryRequests().map(\.id) == [first.id])
+        let resumed = try #require(start.launched)
+        #expect(resumed.request == first.id)
+        let progress = try store.snapshot { try resumed.progress(from: $0) }.value
+        switch state {
+        case "offline":
+            #expect(progress.phase(at: app.services.speech).submission == .safe)
+            _ = try await workspace.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
+                                                 on: "mac-z", card: task.id, agent: .pi, intent: .replacing(resumed.request))
+            #expect(try await store.deliveryRequests().count == 1)
+        case "sent":
+            #expect(progress.phase(at: app.services.speech).submission == .waiting)
+        default:
+            #expect(progress.phase(at: app.services.speech).submission == .confirm)
+            _ = try await workspace.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
+                                                 on: "mac-z", card: task.id, agent: .pi, intent: .repeatingConfirmed)
+            #expect(try await store.deliveryRequests().count == 2)
+            #expect(try await store.deliveryRequest(first.id)?.status == .known(.unconfirmed))
+        }
+    }
+
 }
 #endif

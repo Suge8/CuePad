@@ -19,8 +19,9 @@ struct ReceiptTests {
         let inner: SimulatedCloud
         var down = false
 
-        init() {
-            inner = SimulatedCloud([.peerFloor(CueStore.peerFloor)])
+        /// `now`：服务器的钟（收下记录时盖的 `creationDate`）。
+        init(now: @escaping @Sendable () -> Date = Date.init) {
+            inner = SimulatedCloud([.peerFloor(CueStore.peerFloor)], now: now)
         }
 
         func setDown(_ down: Bool) { self.down = down }
@@ -125,10 +126,10 @@ struct ReceiptTests {
 
     /// 话传上服务器就是已发出（会话行、Cue 页头同一个说法），不等 Mac 回执。弱网：一次拉取失败、同步状态成了连不上 iCloud，
     /// 已发出的话不变红；断着时写下的话排在本机，一直是发送中、过了 `Speech.sendLimit` 也不判没能送达。恢复后它传上去回到已发出；
-    /// Mac 回执的那句已送达，另一句满 `Speech.receiptLimit` 没回执是未确认，显式再说保留原意图，迟到回执仍收敛原句。
+    /// Mac 回执的那句已送达；另一句一直没人领取，派发期限前是已发出，期限再过一个回执窗口是未确认，迟到的回执仍收敛原句。
     @Test
     func 说的话到服务器是已发出_回执是已送达_一次失败不让别的话变红_断着时排着不到点_没回执到点() async throws {
-        let cloud = WeakCloud()
+        let cloud = WeakCloud { [clock] in clock.now }
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, timing: clock.timing)
         let services = app.services!
         let store = services.store
@@ -182,15 +183,13 @@ struct ReceiptTests {
         try await eventually("回执回来") { try await trip(of: first, services) == .delivered }
         try await eventually("会话行回到已发出，不再数没送到") { row(services)?.label == "已发出" && services.liveSessions.undelivered["atlas"] == nil }
 
-        // 已发出满时限仍没回执，不能推断 Mac 没有执行。
-        let recovered = try #require(services.speech.reachableSince)
-        await advance(to: recovered.addingTimeInterval(Speech.receiptLimit - 1))
+        // 一直没人领取：派发期限前是已发出；期限再过一个回执窗口按未确认显示（领取结果可能还没同步回来）
+        // 派发期限从服务器收下起算（恢复后传上去的那一刻），不从断网时写下算
+        let expires = try #require(try await store.deliveryRequest(second.id)?.dispatchDeadline).addingTimeInterval(Speech.receiptLimit)
+        await advance(to: expires.addingTimeInterval(-1))
         #expect(try await trip(of: second, services) == .sent)
-        await advance(to: recovered.addingTimeInterval(Speech.receiptLimit))
-        try await eventually("回执等待到点") { services.speech.now >= recovered.addingTimeInterval(Speech.receiptLimit) }
-        let uncertain = try await trip(of: second, services)
-        #expect(uncertain.failure == nil && !uncertain.inTransit && uncertain != .delivered)
-        #expect(row(services)?.label == "送达未确认")
+        await advance(to: expires)
+        try await eventually("到期按未确认") { try await trip(of: second, services).unconfirmedReason != nil }
         #expect(row(services)?.isRunning == false)
         #expect(Speech.undelivered(try await store.deliveryRequests(), at: services.speech) == 0)
         try await cloud.macAnswers(second.id)
@@ -258,13 +257,13 @@ struct ReceiptTests {
         clock.advance(.seconds(Speech.sendLimit - 1))
         #expect(try await trips() == [.sending, .sending])
         #expect(try await presence(services) == .sending(.sending))
-        // 同步通着也不能凭缺少上传回执断言未交出。
+        // 同步通着也不能凭缺少上传回执断言未交出：对 Cue 说的是未确认；投送请求按自己的派发期限，还在路上
         clock.advance(.seconds(1))
         let since = try #require(services.speech.reachableSince)
         try await eventually("发送等待到点") { services.speech.now >= since.addingTimeInterval(Speech.sendLimit) }
-        for trip in try await trips() {
-            #expect(trip.failure == nil && !trip.inTransit && trip != .delivered)
-        }
+        let cueTrip = try await trip(of: toCue, services)
+        #expect(cueTrip.failure == nil && !cueTrip.inTransit && cueTrip != .delivered)
+        #expect(try await trip(of: toSession, services) == .sending)
         #expect(Speech.undelivered(try await store.deliveryRequests(), at: services.speech) == 0)
         await workspace.resend(.cue(toCue, host: "mac-cue"), restoringInto: Bindable(workspace.cue).draft).value
         #expect(workspace.notice?.isError == true)
@@ -275,7 +274,7 @@ struct ReceiptTests {
 
     @Test(arguments: ["future-outcome", "unconfirmed"])
     func 不认识或缺原因的未确认状态不冒充失败_显式再说保留原请求(status: String) async throws {
-        let cloud = WeakCloud()
+        let cloud = WeakCloud { [clock] in clock.now }
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!, workspace = Workspace(services: app.services)
         defer { services.cancelBackgroundWork() }

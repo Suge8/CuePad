@@ -147,7 +147,9 @@ extension SyncCoordinator {
     let received = Set(sent.saved.map(\.recordID.recordName) + sent.deleted.map(\.recordName))
     if let generation = batch.drains, received.count == batch.saves.count + batch.deletes.count { drained = generation }
     var outcome = SendOutcome(progressed: !received.isEmpty)
-    try await store.markPushed(sent.saved.compactMap { record in RecordMapper.row(from: record).map { ($0, RecordMapper.encodeSystemFields(record)) } })
+    try await store.markPushed(sent.saved.compactMap { record in
+      RecordMapper.row(from: record).map { ($0, RecordMapper.encodeSystemFields(record), record.creationDate) }
+    })
     try await store.dropSyncMetadata(sent.deleted.map(\.recordName))
     if !received.isEmpty {
       facts.issues.removeAll { $0.kind == .upload && $0.recordName.map(received.contains) == true }

@@ -23,7 +23,7 @@ extension DeliveryExecutor {
   func deleteExpired() async throws -> Date? {
     let now = timing.now()
     let left = try await store.deleteCompletedDeliveries(
-      before: now.addingTimeInterval(-Self.retention.seconds), claimCutoff: now.addingTimeInterval(-Self.maxAge.seconds),
+      before: now.addingTimeInterval(-Self.retention.seconds), claimCutoff: now.addingTimeInterval(-DeliveryRequest.phaseLimit),
       keptCutoff: now.addingTimeInterval(-Self.keptRetention))
     if left.transient { return now.addingTimeInterval(Self.retention.seconds) }
     return left.oldestKept.map { $0.addingTimeInterval(Self.keptRetention + 1) }  // 到期那一刻的判断是"晚于"，多留 1 秒

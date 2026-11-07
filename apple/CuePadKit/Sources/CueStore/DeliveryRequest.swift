@@ -3,7 +3,7 @@ import Foundation
 
 public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing
-  /// 等现有会话就绪，整个操作尚未开始；不能据此恢复目标进程。
+  /// 执行的 Mac 在等现有会话就绪，整个操作尚未开始；不能据此恢复目标进程。
   case preparing
   /// 派发已结束，正在从真实历史核对；不是执行成功的证据。
   case confirming
@@ -50,8 +50,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 以 Agent 可证实的受理为送达（Pi 执行了扩展命令、压缩做完）；OpenCode 的模板经它的命令端点，端点执行完才回（`PiSlash.speaks`）。
   /// 不是"你说的话"：不在对话里挂气泡、不写发送记录（与 config、answer 一样），带着卡片时只把卡片关联到会话；结果若在会话文件里（压缩）对话里自然有
   case command
-  /// 请 Mac 刷新订阅额度（手机上的额度视图打开、数据陈旧时）：由 Mac 上在线会话里的扩展查一次（`AccountQuota`），新值随同步回来；
-  /// 正文固定为 `quota`，不写发送记录；查不到时照常按失败写回，手机不提示，只显示上次的值与更新时间
+  /// 请 Mac 刷新订阅额度（手机上的额度出现、打开明细或点重试时，`AccountQuotas`）：由 Mac 上能答额度的会话里的扩展查一次（`AccountQuota`），新值随同步回来；
+  /// 正文固定为 `quota`，不写发送记录；查不到时照常按失败写回（原因写进手机额度明细的那一行，不弹提示，`AccountQuotas`），读数仍是上次的值与更新时间
   case quota
   /// 整理技能与规则（手机上的一键整理、去重、合并）：正文是 `[TidyOrder]`（见 `DeliveryRequest.tidyOrders`），由 Mac 照执行时的文件做，
   /// 那件已不在的不做；不写发送记录
@@ -73,6 +73,15 @@ public enum DeliveryOrigin: String, Sendable, CaseIterable {
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
+///
+/// 生命周期只有这一个状态机（持久状态 `DeliveryStatus`，各端此刻的样子由 `Speech.trip` 从记录与此刻推出）：
+/// - 写下即 `pending`。派发期限只有一个锚点 `serverAt`（`dispatchDeadline`，各端、执行器与 SQL 都从它读）：发给别处的是服务器收下它的时刻，
+///   不按写下时刻算——手机离线时写下、连上才传上去的照常送到，写方与 Mac 的钟差也不混进来；还没到服务器的不算到期，可以撤回。
+///   Mac 写给自己的不经服务器，执行器第一次看到它时按写下的时刻锚定（`actionableDeliveries`）；锚点一经写下不再变；
+/// - 执行的 Mac 缺附件时仍是 `pending`、在旁边取；现有会话没就绪时转 `preparing`（原因在 `reason`）；两种等待都守同一个派发期限、不续；
+/// - 期限前领取转 `executing`（新的执行期限），之后 `confirming` → `succeeded` / `failed` / `unconfirmed`；
+/// - 期限到了还没领取：执行的 Mac 写回 `failed`（`expiry`），手机收到后允许重发；
+/// - 发送方到期仍没收到结果：只结束等待，显示未确认；旧快照不能证明 Mac 没领取，不能授权安全重发。
 public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var content: String
@@ -87,12 +96,13 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var handledBy: String?
   public var createdAt: Date
   public var completedAt: Date?
-  /// 当前准备、执行或确认阶段的硬截止。只在进入阶段时写，不随同步、绑定或重开续期。
+  /// 领取后的执行、确认阶段的硬截止：进入阶段时写，不随同步、绑定或重开续期。等派发的期限不存在这里（`dispatchDeadline`）。
   public var deadlineAt: Date? = nil
   public var modifiedAt: Date
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
-  /// 服务器收下它的时刻（服务器的时钟，拉到它的那台记下）；只在本机，不同步。本机写的、还没拉到过的为 nil。执行它的 Mac 按它算过期（`DeliveryExecutor.maxAge`）。
+  /// 派发期限的锚点：服务器收下它的时刻（CloudKit 记录的 creationDate，服务器的钟）——拉到它的一方从拉到的记录记下，写它的一方从上传成功带回的记录记下，
+  /// 两边是同一个值；Mac 写给自己、还没传上去的由执行器按写下的时刻锚定。只在本机，不同步，只填空。还没有的为 nil。
   public internal(set) var serverAt: Date? = nil
   /// 谁写的（见 `DeliveryOrigin`）；nil 是你。
   public var origin: Open<DeliveryOrigin>?
@@ -112,6 +122,24 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     guard status == .known(.failed) else { return nil }
     guard let reason = reason?.text, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
     return reason
+  }
+
+  /// 每个持久阶段（等派发、执行）的期限：服务器收下后这么久还没领取就不再派发，领取后这么久还没结果就是未确认。
+  /// 留足手机传大附件、Mac 等会话就绪的时间。
+  public static let phaseLimit: TimeInterval = 600
+
+  /// 派发期限：锚点（`serverAt`）后 `phaseLimit`；还没有锚点的为 nil，不算到期。同一条请求的派发期限只有这一个出处，SQL 里是 `dispatchDeadlineSQL`。
+  public var dispatchDeadline: Date? { serverAt.map { $0.addingTimeInterval(Self.phaseLimit) } }
+
+  /// `dispatchDeadline` 的 SQL（毫秒），表别名 `alias`；没有锚点为 NULL（比较都不成立：不领取、不到期）。
+  static func dispatchDeadlineSQL(_ alias: String) -> String {
+    "(\(alias).serverAt + \(Int(phaseLimit * 1000)))"
+  }
+
+  /// 到期仍未派发的原因：执行的 Mac 写回，带着当时在等什么（`reason`）；准备就绪（`DeliveryPreparation.ready`）不是在等什么。
+  public var expiry: ShownText {
+    guard status == .known(.preparing), let waiting = reason, waiting != DeliveryPreparation.ready else { return ShownText("到期仍未派发，没有发出，可以重发") }
+    return ShownText("到期仍未派发（\(waiting.embedded)），没有发出，可以重发")
   }
 
   public static var interruptedReason: ShownText { ShownText("Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发") }
@@ -134,7 +162,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 新会话请求的内容；其他方式为 nil。
   public var launch: PiLaunch? { mode == .known(.start) ? PiLaunch(stored: content) : nil }
 
-  /// 要交出去的话里引用的附件（开工的是开场的话里的）。
+  /// 要交出去的话里引用的附件（开工的是开场的话里的）：写下时登记附件记录（随之上传）、执行的 Mac 取文件、回收附件时算引用，都只读这里。
   public var attachmentKeys: [String] { CueFormat.attachmentKeys(in: launch?.prompt ?? content) }
 
   /// 绑定文件夹请求的内容；其他方式、读不出的为 nil。

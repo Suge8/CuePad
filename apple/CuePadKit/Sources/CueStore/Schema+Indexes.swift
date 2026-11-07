@@ -60,7 +60,7 @@ extension Schema {
     \(cueMessageWrites)
     """
 
-  /// 90：轮结束的请求集合随对话同步；到达顺序复用本机计数器，不受对端时钟影响。
+  /// 91：轮结束的请求集合随对话同步；到达顺序复用本机计数器，不受对端时钟影响。
   static let cueMessageUpgrade: Upgrade = """
     ALTER TABLE cueMessages ADD COLUMN answeredRequests TEXT;
     ALTER TABLE cueMessages ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;

@@ -4843,6 +4843,38 @@
         }
       }
     },
+    "上一次可能已经开了会话，再开可能让 Agent 重复操作。原请求会保留。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The previous session may already be open. Starting another could make the agent repeat its work. The original request will be kept."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一次可能已经开了会话，再开可能让 Agent 重复操作。原请求会保留。"
+          }
+        }
+      }
+    },
+    "上一次开会话的结果已经查不到了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The result of the previous request is no longer available"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一次开会话的结果已经查不到了"
+          }
+        }
+      }
+    },
     "上下文" : {
       "localizations" : {
         "en" : {
@@ -5799,6 +5831,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "今天还没做完的"
+          }
+        }
+      }
+    },
+    "仍然再开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Anyway"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然再开"
           }
         }
       }
@@ -7379,6 +7427,38 @@
         }
       }
     },
+    "再开一个会话？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Another Session?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再开一个会话？"
+          }
+        }
+      }
+    },
+    "再查一次额度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checks usage again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再查一次额度"
+          }
+        }
+      }
+    },
     "再说一次" : {
       "localizations" : {
         "en" : {
@@ -7631,38 +7711,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "准备就绪，等待派发"
-          }
-        }
-      }
-    },
-    "准备期限已过，派发结果尚未确认" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preparation timed out; delivery is unconfirmed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "准备期限已过，派发结果尚未确认"
-          }
-        }
-      }
-    },
-    "准备超时，尚未派发，不会自动发送" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preparation timed out — not sent and won’t send automatically"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "准备超时，尚未派发，不会自动发送"
           }
         }
       }
@@ -8107,6 +8155,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "到时候做什么"
+          }
+        }
+      }
+    },
+    "到期仍未派发（%@），没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not sent before the deadline (%@). You can resend it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到期仍未派发（%@），没有发出，可以重发"
+          }
+        }
+      }
+    },
+    "到期仍未派发，没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not sent before the deadline. You can resend it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到期仍未派发，没有发出，可以重发"
           }
         }
       }
@@ -16951,6 +17031,22 @@
         }
       }
     },
+    "正在查询" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在查询"
+          }
+        }
+      }
+    },
     "正在检测 Agent…" : {
       "localizations" : {
         "en" : {
@@ -17799,6 +17895,22 @@
         }
       }
     },
+    "没有连着 Pi 会话的 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Mac has a Pi session online"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有连着 Pi 会话的 Mac"
+          }
+        }
+      }
+    },
     "没法安全地打开这个页面" : {
       "localizations" : {
         "en" : {
@@ -17907,6 +18019,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没能改名"
+          }
+        }
+      }
+    },
+    "没能查到最新额度：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t update usage: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没能查到最新额度：%@"
           }
         }
       }
@@ -21063,22 +21191,6 @@
         }
       }
     },
-    "请求到 iCloud 后超过 %lld 秒仍未执行，已放弃" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not run within %lld seconds of reaching iCloud, so it was dropped"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请求到 iCloud 后超过 %lld 秒仍未执行，已放弃"
-          }
-        }
-      }
-    },
     "请求太频繁，稍后再试" : {
       "localizations" : {
         "en" : {
@@ -21091,6 +21203,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请求太频繁，稍后再试"
+          }
+        }
+      }
+    },
+    "请求尚未确认上传，联网后可重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upload not confirmed. Reconnect and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求尚未确认上传，联网后可重试"
           }
         }
       }
@@ -22775,18 +22903,18 @@
         }
       }
     },
-    "这台 Mac 上没有在线的 Agent 会话，查不了额度" : {
+    "这台 Mac 上没有在线的 Pi 会话" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No agent session is running on this Mac, so usage can't be checked"
+            "value" : "No Pi session is online on this Mac"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这台 Mac 上没有在线的 Agent 会话，查不了额度"
+            "value" : "这台 Mac 上没有在线的 Pi 会话"
           }
         }
       }
@@ -23895,6 +24023,22 @@
         }
       }
     },
+    "那台 Mac 没有写回结果" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That Mac didn’t report a result"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "那台 Mac 没有写回结果"
+          }
+        }
+      }
+    },
     "都不是？在下面的回复框里写你的回答" : {
       "localizations" : {
         "en" : {
@@ -24303,6 +24447,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "附件内容与其哈希不符"
+          }
+        }
+      }
+    },
+    "附件到期还没传到这台 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment did not reach this Mac before the deadline"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件到期还没传到这台 Mac"
+          }
+        }
+      }
+    },
+    "附件到期还没传到这台 Mac，没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment did not reach this Mac before the deadline. Nothing was sent; you can resend it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件到期还没传到这台 Mac，没有发出，可以重发"
+          }
+        }
+      }
+    },
+    "附件取过了仍不在这台 Mac 上" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment still isn't on this Mac after fetching it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件取过了仍不在这台 Mac 上"
+          }
+        }
+      }
+    },
+    "附件取过了仍不在这台 Mac 上，没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment still isn't on this Mac after fetching it. Nothing was sent; you can resend it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件取过了仍不在这台 Mac 上，没有发出，可以重发"
           }
         }
       }
@@ -24751,22 +24959,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "额度查询失败"
-          }
-        }
-      }
-    },
-    "额度查询失败，请稍后再试" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t check usage. Try again later"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "额度查询失败，请稍后再试"
           }
         }
       }

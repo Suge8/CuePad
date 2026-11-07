@@ -5,12 +5,40 @@ import Observation
 import CuePi
 #endif
 
-/// 账号额度的唯一界面订阅。打开面板、回前台或连接来源变化时读取账号清单；已有观测的新鲜程度不能证明清单没变化。
-/// 同时来的请求合并；不设周期刷新。`items` 的先后只在这里定（`QuotaMeter.ordered`），各处照这个顺序摆。网关原观测时间只由 readAt 决定，读取清单不会刷新 Claude 的 /usage。
+/// 账号额度的唯一界面订阅，与额度刷新唯一的一份状态（`phase`）：空闲 → 在查 → 查到回空闲，没查到记下原因与时刻（`failed`）。
+/// 触发只有两种（`Trigger`）：自动——额度出现在前台的页上、可问的来源变了、打开明细、Mac 菜单栏面板弹出（`refreshesQuota`）；
+/// 手动——明细里没查到那一行的"重试"（`QuotaRefreshNote`），与 Mac 执行手机发来的刷新请求（投送方式 `quota`）。
+/// 同一批来源正在查就并进那一次；来源换了，等这一次查完再取最新来源快照，标识与查询使用同一批来源。自动触发在同一批来源没查到后 `cooldown` 内不再问，手动不受限。
+/// 没有可问的来源（`quotaRefreshKey` 为空：Mac 上没有能答额度的会话，手机上没有连着这种会话的 Mac，见 `AgentCapabilities.quota`）时自动触发什么也不做。
+/// 没查到不弹提示：原因只在明细里写，旁边给重试；账号自己的读数照旧是上次的值与更新时间。界面离开不取消已启动的共享查询，由查询自己记下终态；尚未启动的自动查询随页面取消。
+/// 结果来自所等那一次的终态（Mac 直接问会话里的扩展；手机等投送请求写回，只有写回成功算查到），这里不另设时限。
+/// 手机上传未获确认时重读请求：已有结果照用，有服务器锚点照原期限等；仍无锚点就结束本次刷新，原请求留给同步重试、下次查询复用。
+/// 不设周期刷新；已有观测的新鲜程度不能证明清单没变化，所以每次触发都问。`items` 的先后只在这里定（`QuotaMeter.ordered`），各处照这个顺序摆。
+/// 网关原观测时间只由 readAt 决定，读取清单不会刷新 Claude 的 /usage。
 @Observable
 final class AccountQuotas {
+    enum Trigger { case automatic, manual }
+
+    /// 查一次：返回没查到的原因，查到为 nil。
+    typealias Query = @MainActor () async -> ShownText?
+
+    struct Batch {
+        let key: [String]
+        let query: Query
+    }
+
+    enum Phase: Equatable {
+        case idle
+        /// 在查；上一次没查到时带着那次的原因（明细里那一行留着，只把重试换成在查，不闪掉再出现）
+        case running(key: [String], task: Task<ShownText?, Never>, after: ShownText?)
+        /// 对 `key` 那批来源没查到：`at` 是查完的时刻。
+        case failed(ShownText, key: [String], at: Date)
+    }
+
+    static let cooldown: TimeInterval = 60
+
     private(set) var items: [AccountQuota] = []
-    @ObservationIgnored private var running: (key: [String], task: Task<Void, any Error>)?
+    private(set) var phase: Phase = .idle
 
     func follow(_ store: CueStore, changed: ([AccountQuota]) async -> Void) async throws {
         for try await items in store.observe({ QuotaMeter.ordered(try $0.accountQuotas()) }) where items != self.items {
@@ -19,20 +47,32 @@ final class AccountQuotas {
         }
     }
 
-    /// 读取清单（Mac 经在线扩展，手机请各来源的 Mac 查）；正在查就等那一次。
-    /// 没有新报告不算新观测；时效只读记录，不另存"已刷新"标志。
-    func refresh(key: [String], using refresh: @escaping @MainActor () async throws -> Void) async throws {
-        if let running {
-            if running.key == key { return try await running.task.value }
-            _ = await running.task.result
-            return try await self.refresh(key: key, using: refresh)
+    /// 等待期间来源可以变化；每次获得空闲状态后重新取快照，不替取消的页面启动下一轮。
+    @discardableResult
+    func refresh(_ trigger: Trigger, batch: () -> Batch) async -> ShownText? {
+        while true {
+            if trigger == .automatic && Task.isCancelled { return nil }
+            let batch = batch()
+            if trigger == .automatic && batch.key.isEmpty { return nil }
+            if case .running(let key, let task, _) = phase {
+                if key == batch.key { return await task.value }
+                _ = await task.value
+                continue
+            }
+            var previous: ShownText?
+            if case .failed(let reason, let key, let at) = phase {
+                if trigger == .automatic && key == batch.key && Date.now.timeIntervalSince(at) < Self.cooldown { return nil }
+                previous = reason
+            }
+            // 任务返回前提交终态，任何等待者恢复时都不可能再等一个已完成但尚未清掉的任务。
+            let task = Task {
+                let failure = await batch.query()
+                phase = failure.map { .failed($0, key: batch.key, at: .now) } ?? .idle
+                return failure
+            }
+            phase = .running(key: batch.key, task: task, after: previous)
+            return await task.value
         }
-        let task = Task {
-            defer { self.running = nil }
-            try await refresh()
-        }
-        running = (key, task)
-        try await task.value
     }
 }
 
@@ -44,79 +84,76 @@ extension AppServices {
         }
     }
 
+    /// 刷新额度的唯一入口（规则见 `AccountQuotas`）；返回没查到的原因。
+    @discardableResult
+    func refreshQuota(_ trigger: AccountQuotas.Trigger) async -> ShownText? {
+        await accountQuotas.refresh(trigger) { quotaBatch }
+    }
+
+    var quotaRefreshKey: [String] { quotaBatch.key }
+
     #if os(macOS)
-    /// 此刻有没有可问的：在线的会话（额度视图据此在会话连上时再看一次）。
-    var canRefreshQuota: Bool { !quotaSessions.isEmpty }
-
+    /// 能答额度的会话：在线、带 `AgentCapabilities.quota`、扩展不在换新版本（换版本期间发不进命令）。
     /// 不同会话可能有独立的模型目录与授权；不根据当前模型推断其他会话的来源已覆盖。
-    private var quotaSessions: [PiBridge.Slot] { pi.slots.filter { !$0.session.upgrading && $0.session.agent == .pi } }
+    private var quotaSessions: [PiBridge.Slot] { pi.slots.filter { $0.session.capabilities.contains(.quota) && !$0.session.upgrading } }
 
-    var quotaRefreshKey: [String] {
-        quotaSessions.map { slot in
+    /// 可问的来源：每个能答额度的会话与它能用的授权（会话连上、换了模型目录时变，额度视图据此再看一次）。
+    private var quotaBatch: AccountQuotas.Batch {
+        let sessions = quotaSessions
+        let key = sessions.map { slot in
             let models = slot.session.availableModels + [slot.session.model].compactMap { $0 }
             return "\(slot.id)/\(models.map { "\($0.key.provider)/\($0.account?.source ?? $0.account?.scope ?? "")" }.sorted().joined(separator: "/"))"
         }.sorted()
+        return AccountQuotas.Batch(key: key) { await self.queryQuota(in: sessions) }
     }
 
-    /// 手机发来的刷新请求（投送方式 `quota`）：与本机视图合并同时来的查询，失败照常写回原因。
-    func refreshQuotaForRequest() async throws {
-        guard canRefreshQuota else { throw SendError.noLiveSession }
-        try await accountQuotas.refresh(key: quotaRefreshKey, using: refreshQuota)
-    }
-
-    /// 经在线会话里的扩展查（它有 Pi 的令牌与自动刷新，App 不碰 Pi 的登录文件），查到的随桥的 `.quota` 写进库。
-    fileprivate func refreshQuota() async throws {
-        let sessions = quotaSessions
-        guard !sessions.isEmpty else { throw SendError.noLiveSession }
-        let succeeded = await withTaskGroup(of: Bool.self) { group in
+    /// 经能答额度的会话里的扩展查（它有 Pi 的令牌与自动刷新，App 不碰 Pi 的登录文件），查到的随桥的 `.quota` 写进库；
+    /// 返回第一个没查到的会话报的原因。
+    private func queryQuota(in sessions: [PiBridge.Slot]) async -> ShownText? {
+        guard !sessions.isEmpty else { return ShownText("这台 Mac 上没有在线的 Pi 会话") }
+        return await withTaskGroup(of: ShownText?.self) { group in
             for session in sessions {
-                let id = session.id
-                group.addTask { [pi] in
-                    do { try await pi.refreshQuota(in: id); return true }
-                    catch { return false }
+                group.addTask { [pi, id = session.id] in
+                    do { try await pi.refreshQuota(in: id); return nil }
+                    catch { return ShownText(error) }
                 }
             }
-            var succeeded = true
-            for await result in group { succeeded = result && succeeded }
-            return succeeded
+            var failure: ShownText?
+            for await result in group { failure = failure ?? result }
+            return failure
         }
-        if !succeeded { throw SendError.quotaUnavailable }
     }
     #else
-    /// 此刻有没有可问的：知道哪台 Mac（写过额度的，或有在线会话的）。
-    var canRefreshQuota: Bool { !quotaHosts.isEmpty }
-
-    private var quotaHosts: [String] {
-        Array(Set(accountQuotas.items.map(\.hostID) + liveSessions.live.map { $0.state.hostID })).sorted()
+    /// 可问的来源：连着能答额度的会话的 Mac（`AgentCapabilities.quota`）。
+    private var quotaBatch: AccountQuotas.Batch {
+        let hosts = Array(Set(liveSessions.live.filter { $0.state.capabilities.contains(.quota) }.map(\.state.hostID))).sorted()
+        return AccountQuotas.Batch(key: hosts) { await self.queryQuota(on: hosts) }
     }
 
-    var quotaRefreshKey: [String] { quotaHosts }
-
-    /// 每台来源 Mac 都走已有投送通路，单台失败不阻止其他来源。写回的观测经原同步路径到达。
-    fileprivate func refreshQuota() async throws {
-        let hosts = quotaHosts
-        let succeeded = await withTaskGroup(of: Bool.self) { group in
+    /// 请每台可问的 Mac 经已有投送通路查一次，单台没查到不挡别的；写回的观测经原同步路径到达。返回第一台没查到的原因。
+    private func queryQuota(on hosts: [String]) async -> ShownText? {
+        guard !hosts.isEmpty else { return ShownText("没有连着 Pi 会话的 Mac") }
+        return await withTaskGroup(of: ShownText?.self) { group in
             for host in hosts {
                 group.addTask { [self] in
                     do {
-                        let request = try await store.requestQuotaRefresh(on: host)
-                        await upload(request.id)
-                        return try await store.outcome(of: request).failure == nil
-                    } catch { return false }
+                        var request = try await store.requestQuotaRefresh(on: host)
+                        if await sync?.upload(request.id) != true {
+                            guard let latest = try await store.latest(of: request) else { throw CueStoreError.notFound }
+                            request = latest
+                            if request.isOpen && request.serverAt == nil { return ShownText("请求尚未确认上传，联网后可重试") }
+                        }
+                        // 只有写回成功才算查到：没能送达、到期未确认、本版本不认识的状态都是没查到
+                        let done = if request.isOpen { try await store.outcome(of: request) } else { request }
+                        guard done.status != .known(.succeeded) else { return nil }
+                        return done.failure.map(ShownText.verbatim) ?? done.reason ?? ShownText("那台 Mac 没有写回结果")
+                    } catch { return ShownText(error) }
                 }
             }
-            var succeeded = true
-            for await result in group { succeeded = result && succeeded }
-            return succeeded
+            var failure: ShownText?
+            for await result in group { failure = failure ?? result }
+            return failure
         }
-        if !succeeded { throw SendError.quotaUnavailable }
     }
     #endif
-}
-
-extension Workspace {
-    func refreshQuota() async {
-        do { try await services.accountQuotas.refresh(key: services.quotaRefreshKey, using: services.refreshQuota) }
-        catch { fail(error) }
-    }
 }

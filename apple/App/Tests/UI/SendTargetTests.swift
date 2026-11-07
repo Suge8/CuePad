@@ -94,7 +94,8 @@ struct SendTargetTests {
             let request = try #require(try await store.deliveryRequests().first)
             #expect(request.mode == .known(.start) && request.target.name == "修乱序")
 
-            // 会话开好、开场的话送进去：任务绑上它（等执行器做完这一步，不抢在它前面写会话记录）
+            // 认领会话可以先于首句送达；两件都等到才核对正文。
+            #expect(try await store.outcome(of: request).status == .known(.succeeded))
             let opened = "new-\(token)"
             _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == opened }
             #expect(rig.host.extensions[opened]?.messages.map(\.text) == [Self.text])

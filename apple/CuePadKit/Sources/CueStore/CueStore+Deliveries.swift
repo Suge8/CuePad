@@ -1,6 +1,13 @@
 import CueText
 import Foundation
 
+/// 安全替换与用户确认后的重复意图互斥；未知结果不能冒充可撤回。
+public enum SessionLaunchIntent: Sendable {
+    case new
+    case replacing(UUID)
+    case repeatingConfirmed
+}
+
 extension CueStore {
   /// 手机端：写一条投送请求，等 `host` 指定的那台 Mac 执行。必须指定：只有被指定的 Mac 会领取，
   /// 所以同一请求不会被多台 Mac 各执行一次。`host` 取自该目标 Pi 会话的 `PiSessionState.hostID`。
@@ -36,7 +43,7 @@ extension CueStore {
       status: .known(.pending), reason: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
       resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
     try insert(request)
-    try registerAttachments(in: content)
+    for key in Set(request.attachmentKeys) { try registerAttachment(key) }
     if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
       let on = try questionsOn(session)
       _ = try endQuestions(setAsideBy: request.id, where: on.predicate, on.bindings)
@@ -90,11 +97,36 @@ extension CueStore {
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或任务名）。
   /// 给了 `card`（从灵感或任务"新会话"发给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）；
   /// 会话名按它定（`sessionName(forCard:)`）。`cue` 为真时请求标明来自 Cue（`DeliveryOrigin`）。
-  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil, cue: Bool = false) throws -> DeliveryRequest {
-    var launch = launch
-    launch.name = try card.flatMap(sessionName(forCard:))
-    return try requestDelivery(
-      launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card, cue: cue)
+  /// 同一任务未收尾的请求禁止冒充首次提交；安全替换同事务撤旧写新，撤不回就拒绝；重复须明确确认。
+  public func requestLaunch(
+    _ launch: PiLaunch, title: String, on host: String, card: UUID? = nil, cue: Bool = false, intent: SessionLaunchIntent = .new
+  ) throws -> DeliveryRequest {
+    try write {
+      let previous: UUID? = if case .replacing(let id) = intent { id } else { nil }
+      switch intent {
+      case .repeatingConfirmed: break
+      case .new, .replacing:
+        let owner = try card ?? previous.flatMap { try deliveryRequest($0)?.cardID }
+        if let owner, try unresolvedLaunches(for: owner).contains(where: { $0.id != previous }) {
+          throw CueStoreError.deliveryAlreadyHanded
+        }
+      }
+      if let previous, try !removeFailedDelivery(previous), try !removeUnstartedDelivery(previous, locallyOn: nil) {
+        throw CueStoreError.deliveryAlreadyHanded
+      }
+      var launch = launch
+      launch.name = try card.flatMap(sessionName(forCard:))
+      return try insertDelivery(
+        launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card, cue: cue)
+    }
+  }
+
+  /// 所有仍可能开出会话的请求：后来的失败或交接不消除旧风险；与只决定任务归属的 latestHandoff 分开。
+  /// 原请求明确失败或已看到其会话时才解除未知风险，不另存风险状态。
+  public func unresolvedLaunches(for card: UUID) throws -> [DeliveryRequest] {
+    try select(DeliveryRequest.self,
+      where: "cardID = ? AND mode = '\(DeliveryMode.start.rawValue)' AND status != '\(DeliveryStatus.failed.rawValue)' AND \(Self.launchUnclaimed)",
+      [card], orderBy: "createdAt DESC, rowid DESC")
   }
 
   /// 从这张卡开的新会话叫什么（唯一的规则，`requestLaunch` 与 `handOffPlan` 都读它）：任务的标题，超长的截断（`CueName.clipped`）；
@@ -152,8 +184,9 @@ extension CueStore {
   /// 所有投送请求，最近的在前。
   public func deliveryRequests() throws -> [DeliveryRequest] {
     let requests = try select(DeliveryRequest.self, orderBy: "createdAt DESC, rowid DESC")
-    for request in requests where request.isOpen {
-      if let due = request.deadlineAt, due > timing.now() { expire(at: due) }
+    let now = timing.now()
+    for request in requests {
+      if let due = Speech.deadline(request), due > now { expire(at: due) }
     }
     return requests
   }
@@ -179,7 +212,8 @@ extension CueStore {
     ) { CueOpenedSession(session: $0.text(0), card: $0.uuidOrNil(1), at: $0.date(2)) }
   }
 
-  /// 等到投送请求有结果（已送达或没能送达）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到。
+  /// 等到投送请求有结果（已送达、没能送达或未确认）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到；
+  /// 每条请求都带期限，没人领取、没人回执的到点也按 `latest(of:)` 推出的结果返回，不会一直等。
   /// 请求在等待期间被撤回、清理时抛 `CueStoreError.notFound`。
   public nonisolated func outcome(of request: DeliveryRequest) async throws -> DeliveryRequest {
     for try await current in observe({ try $0.latest(of: request) }) {
@@ -193,11 +227,14 @@ extension CueStore {
   /// 都不是（撤回、清理了）为 nil。
   public func latest(of request: DeliveryRequest) throws -> DeliveryRequest? {
     if var current = try deliveryRequest(request.id) {
-      if current.isOpen, current.deadlineAt != nil || current.handledBy != nil || current.status != .known(.pending) {
-        if case .unconfirmed = Speech.trip(current, at: .always(at: timing.now())) {
-          current.status = .known(.unconfirmed)
-          current.reason = Speech.unconfirmedReason
-        } else if let deadline = current.deadlineAt { expire(at: deadline) }
+      guard current.isOpen else { return current }
+      let moment = Speech.Moment.always(at: timing.now())
+      switch Speech.trip(current, at: moment) {
+      case .unconfirmed:
+        current.status = .known(.unconfirmed)
+        current.reason = Speech.unconfirmedReason
+      default:
+        if let due = Speech.deadline(current) { expire(at: due) }
       }
       return current
     }

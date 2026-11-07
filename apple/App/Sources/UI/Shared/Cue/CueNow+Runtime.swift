@@ -122,7 +122,7 @@ nonisolated struct RuntimeTimeline {
                 guard let activity = Speech.activity(request, at: moment) else { continue }
                 if case .unconfirmed = activity { entry.unknown += 1; continue }
                 entry.pending += 1
-                let due = min(Speech.deadline(request, at: moment) ?? now + CueNow.fastStale, now + CueNow.fastStale)
+                let due = min(Speech.deadline(request) ?? now + CueNow.fastStale, now + CueNow.fastStale)
                 events[due, default: []].append(Removal(work: index, pending: 1, unknown: 1))
             }
             for session in states {

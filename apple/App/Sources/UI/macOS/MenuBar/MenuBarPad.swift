@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 菜单栏面板：最上面一行 Cue（点它在主窗口里打开 Cue 页）与额度环（`QuotaRings`，点它就地展开明细 `QuotaDetail`，再点收回；面板弹出时数据陈旧就查一次，见 `AppDelegate`），
+/// 菜单栏面板：最上面一行 Cue（点它在主窗口里打开 Cue 页）与额度环（`QuotaRings`，点它就地展开明细 `QuotaDetail`，再点收回；面板弹出与展开明细时查一次，见 `refreshesQuota`），
 /// 那一行的第二行是数字账（`CueLedger`，同名牌）；
 /// 其下在做的会话（`MenuBarLive`，没有在做的不出这一块），最后是随手记（与主窗口底部同一个 `CaptureComposer`，一直展开；"交给 Cue"在它头部右边）。
 /// Cue 那一行右边只放额度环：数字账要写全拍板、待回复、推进中、子代理四样，再放一颗"交给 Cue"就只剩六十来点宽。
@@ -46,7 +46,7 @@ struct MenuBarPad: View {
 
     private var cueRow: some View {
         CueStatusRow {
-            QuotaRings(open: quotaOpen, height: 28) { quotaOpen.toggle() }
+            QuotaRings(open: quotaOpen, height: 28) { quotaOpen.toggle() }.refreshesQuota(open: quotaOpen)
         }
         .contentShape(.rect)
         .onTapGesture { open(.cue) }

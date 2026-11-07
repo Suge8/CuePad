@@ -8,6 +8,7 @@ import SwiftUI
 /// 下面的读数一样排法，左边是名字、右边是大号等宽的数，窗口再多一条剩余条（`MarkedBar`，刻线是匀速线）。同类条目行数固定：
 /// 一个窗口两行，余额与没有周期的计量一行。刚观测过的账号不各写时间，并成底下一行"x 前更新"（取它们里最早的那次），
 /// 陈旧与失败仍标在那个账号上。这就是最后一层，不再有点开的：不是按钮、没有按压。宽处排成两栏（`QuotaColumns`）。
+/// 最近一次刷新没查到时最底下一行写原因、旁边给重试（`QuotaRefreshNote`）；打开明细本身就会刷新，不另放刷新钮。
 ///
 /// 配色只用墨：余量足是次要墨色，用过七成是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）；胭脂时数字一起变色，欠费的余额同样。
 /// 读数在新观测到达、变陈旧与每个窗口的重置时刻变化（`Moments` 睡到 `nextReset(after:)`：等到重置是业务语义，不是周期刷新）：
@@ -18,23 +19,30 @@ struct QuotaDetail: View {
 
     var body: some View {
         let quotas = services.accountQuotas.items
-        if quotas.isEmpty {
-            QuotaEmpty()
-        } else {
-            Moments(next: quotas.nextReset(after:)) { now in
-                let meters = QuotaMeter.all(quotas, at: now)
-                VStack(alignment: .leading, spacing: Spacing.block) {
-                    // 读屏按定好的顺序：两栏的块上沿相近时，系统按几何会先读左栏下面那块
-                    QuotaColumns {
-                        ForEach(Array(meters.enumerated()), id: \.element.id) { index, meter in
-                            QuotaAccount(meter: meter).accessibilitySortPriority(Double(meters.count - index))
-                        }
+        VStack(alignment: .leading, spacing: Spacing.block) {
+            if quotas.isEmpty {
+                QuotaEmpty()
+            } else {
+                readings(quotas)
+            }
+            QuotaRefreshNote()
+        }
+    }
+
+    private func readings(_ quotas: [AccountQuota]) -> some View {
+        Moments(next: quotas.nextReset(after:)) { now in
+            let meters = QuotaMeter.all(quotas, at: now)
+            VStack(alignment: .leading, spacing: Spacing.block) {
+                // 读屏按定好的顺序：两栏的块上沿相近时，系统按几何会先读左栏下面那块
+                QuotaColumns {
+                    ForEach(Array(meters.enumerated()), id: \.element.id) { index, meter in
+                        QuotaAccount(meter: meter).accessibilitySortPriority(Double(meters.count - index))
                     }
-                    if let updated = meters.filter({ $0.status == nil }).compactMap(\.updatedAt).min() {
-                        LiveText(style: PiClock.ago(updated).live(.list)) { Text("\($0)更新") }
-                            .font(Typography.caption).foregroundStyle(palette.ink3)
-                            .help(updated.formatted(date: .abbreviated, time: .standard))
-                    }
+                }
+                if let updated = meters.filter({ $0.status == nil }).compactMap(\.updatedAt).min() {
+                    LiveText(style: PiClock.ago(updated).live(.list)) { Text("\($0)更新") }
+                        .font(Typography.caption).foregroundStyle(palette.ink3)
+                        .help(updated.formatted(date: .abbreviated, time: .standard))
                 }
             }
         }
@@ -101,32 +109,6 @@ struct QuotaColumns: Layout {
             heights[index] = y + block
         }
         return (places, heights)
-    }
-}
-
-extension View {
-    /// 打开额度或来源改变时读一次清单；不根据已有账号的观测时间阻止发现新账号。
-    func refreshesQuota() -> some View { modifier(QuotaRefreshOnAppear()) }
-}
-
-private struct QuotaRefreshOnAppear: ViewModifier {
-    @Environment(AppServices.self) private var services
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.pageActive) private var active
-    #if os(iOS)
-    // 手机回到前台再看一次；Mac 的窗口由 AppKit 托管，没有 SwiftUI 场景，场景阶段一直不是 active，只看页在不在前台
-    @Environment(\.scenePhase) private var phase
-    private var foreground: Bool { phase == .active }
-    #else
-    private var foreground: Bool { true }
-    #endif
-
-    func body(content: Content) -> some View {
-        let shouldRefresh = active && foreground && services.canRefreshQuota
-        content.task(id: shouldRefresh ? services.quotaRefreshKey : []) {
-            guard shouldRefresh else { return }
-            await workspace.refreshQuota()
-        }
     }
 }
 

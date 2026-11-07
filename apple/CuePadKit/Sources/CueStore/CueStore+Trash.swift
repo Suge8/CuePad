@@ -147,8 +147,8 @@ extension CueStore {
   /// 一轮经过里带图的（`?1` 是 `Tools.imagesField` 或某个键加引号）：工具结果里的图只记在经过上（`PiChatMessage.Tools.Item.images`）。
   static let toolImages = "tools IS NOT NULL AND instr(tools, ?1) > 0"
 
-  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、对话里你的消息、一轮经过里的工具图（做完的与在跑的）或 Cue 页的对话引用这个附件，
-  /// 或有预览用着这份文件。
+  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、还在库里的投送请求（等派发的、等重发的，引用只读 `DeliveryRequest.attachmentKeys`）、
+  /// 对话里你的消息、一轮经过里的工具图（做完的与在跑的）或 Cue 页的对话引用这个附件，或有预览用着这份文件。
   func isAttachmentReferenced(_ key: String) throws -> Bool {
     let referenced = try db.first(
       """
@@ -160,6 +160,8 @@ extension CueStore {
       UNION ALL SELECT 1 FROM cueMessages WHERE instr(text, ?1) > 0
       """, [CueFormat.reference(key: key), "\"\(key)\""]) { _ in true } != nil
     guard !referenced, let hash = AttachmentKey.parts(key)?.hash else { return referenced }
+    // 开会话请求的开场存在 JSON 里（斜杠被转义），按引用原文找不到：先按键里的哈希粗筛，再按请求自己的规则精判
+    if try select(DeliveryRequest.self, where: "instr(content, ?) > 0", [hash]).contains(where: { $0.attachmentKeys.contains(key) }) { return true }
     return try db.query("SELECT name FROM previews WHERE hash = ?", [hash]) { $0.text(0) }.contains { AttachmentKey.make(hash: hash, name: $0) == key }
   }
 

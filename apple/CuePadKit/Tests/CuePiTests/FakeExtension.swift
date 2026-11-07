@@ -46,6 +46,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var tty: String? = "ttys009"
         /// CuePad 在后台托管的进程（hello 里带 `hosted`）
         var hosted = false
+        var launchToken: String?
         var env: [String: String] = ["TERM_PROGRAM": "ghostty", "__CFBundleIdentifier": "com.mitchellh.ghostty",
                                      "TMUX_PANE": "%3", "TMUX": "/private/tmp/tmux-501/default,123,0"]
     }
@@ -216,6 +217,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         msg["commands"] = options.commands.map(\.json)
         msg["tty"] = options.tty ?? NSNull()
         if options.hosted { msg["hosted"] = true }
+        if let token = options.launchToken { msg["launchToken"] = token }
         return msg
     }
 

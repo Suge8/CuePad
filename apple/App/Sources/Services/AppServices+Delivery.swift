@@ -86,13 +86,16 @@ extension AppServices {
     /// 请 `host` 那台 Mac 在项目的文件夹里用 `agent` 开新会话（`model`、`thinking` 为 nil 是这家的默认），`prompt` 作开场。
     /// `title` 是给人看的目标名（会话名或项目名）。这里生成这一次的认领标识：同步记录上出现带同一个 `launchToken` 的会话就是它（`SessionLaunch`）。
     /// `card`：从这条灵感或任务开的（开好后它关联到新会话、会话名按它定，见 `CueStore.requestLaunch`、`CueStore.claimLaunchedCards`）。
+    /// `intent`：首次、安全替换或确认后重复，由 Store 在事务里按任务已有请求核对。
     func launchSession(
         in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false
+        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false, intent: SessionLaunchIntent = .new
     ) async throws -> SessionLaunch {
         let token = UUID().uuidString
         let request = uploaded(try await store.requestLaunch(
-            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast), title: title, on: host, card: card))
+            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast),
+            title: title, on: host, card: card, intent: intent))
+        if case .replacing(let previous) = intent { Task { await upload(previous, deleted: true) } }
         return SessionLaunch(request: request.id, token: token)
     }
 

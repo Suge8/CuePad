@@ -47,7 +47,7 @@ struct AuthIsolationTests {
         #expect(try #require(quotas.first { $0.provider == "anthropic" && $0.hostID == TestApp.hostID }).status == .unobserved)
 
         // 只有主动查询才进入 Claude 授权服务；即使它正在等待，GPT 的发话、设置仍独立。
-        let quota = Task { await workspace.refreshQuota() }
+        let quota = Task { await rig.services.refreshQuota(.manual) }
         defer { quota.cancel() }
         try await Self.control("entered", at: endpoint)
         workspace.attempt { _ = try await rig.services.configure(PiConfig(model: PiModelKey(provider: "openai", id: "echo")), for: current) }
@@ -58,8 +58,8 @@ struct AuthIsolationTests {
         _ = try await eventually(store, { try $0.piMessages(of: sessionID) }) { $0.filter { $0.role.known == .pi }.count == 2 }
 
         try await Self.control("reject", at: endpoint)
-        await quota.value
-        #expect(workspace.notice != nil)
+        #expect(await quota.value != nil)
+        #expect(workspace.notice?.isError != true)
         let failed = try #require(try await eventually(store, { try $0.accountQuotas().first { $0.provider == "anthropic" } }) { $0?.status == .failed })
         #expect(failed.observedAt == nil && failed.windows.isEmpty)
         #expect(QuotaMeter(failed, at: .now).message == "额度查询失败")

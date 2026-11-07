@@ -20,9 +20,8 @@ struct ChatGPTTests {
         _ = try await rig.host.open(in: rig.cwd, launchToken: "quota", name: nil, model: nil, thinking: nil)
         let records = try await eventually(rig.store, { try $0.allPiSessionStates() }) { $0.first?.model != nil }
         let model = try #require(records.first?.model)
-        let workspace = Workspace(services: rig.services)
 
-        await workspace.refreshQuota()
+        let failure = await rig.services.refreshQuota(.manual)
 
         let quotas = try await eventually(rig.store, { try $0.accountQuotas() }) { $0.contains { $0.provider == "openai" } }
         let shown = QuotaMeter(try #require(quotas.first { $0.provider == "openai" }), at: .now)
@@ -33,7 +32,7 @@ struct ChatGPTTests {
             #expect(shown.account == "使用 ChatGPT 套餐")
             #expect(shown.message == "ChatGPT 暂不提供额度数据")
             #expect(shown.usageURL?.absoluteString == "https://chatgpt.com/settings/usage")
-            #expect(workspace.notice == nil)
+            #expect(failure == nil)
         } else {
             #expect(model.account?.label(provider: model.key.provider) == "OpenAI API 按量计费")
             #expect(shown.account == "OpenAI API 按量计费")
