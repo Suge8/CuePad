@@ -53,6 +53,8 @@ final class VoiceCall {
     var requestState: [Request] = []
     var replyState: [Reply] = []
     var executionState: [PiSessionListItem] = []
+    /// 控制记录会被库定期清理；通话保留最后观察到的真实事实，不由它授予停止权限。
+    var stopRequests: [DeliveryRequest] = []
     var executions: [PiSessionListItem] { executionState }
     var requests: [Request] { requestState }
     var replies: [Reply] { replyState }
@@ -74,7 +76,7 @@ final class VoiceCall {
     @ObservationIgnored private var muting: Task<Void, Never>?
     @ObservationIgnored private var deadline: Task<Void, Never>?
     @ObservationIgnored var writing: [String: Task<Void, Never>] = [:]
-    @ObservationIgnored var outgoing: Task<Void, Never>?
+    @ObservationIgnored var outgoing: (attempt: UUID, message: UUID, task: Task<Void, Never>)?
     @ObservationIgnored var cursor: Int?
     @ObservationIgnored var latest = 0
     @ObservationIgnored var delegations: Set<String> = []
@@ -86,7 +88,7 @@ final class VoiceCall {
         case failed(Failure)
         case peer(VoicePeer.Event)
         case wire(Result<VoiceWire.Event, VoiceWire.SidebandClosed>)
-        case sent(UUID)
+        case sent(UUID, Failure?)
         case muted(Bool)
         case hangUp
     }
@@ -200,10 +202,12 @@ final class VoiceCall {
             mark(loud ? "\(side.rawValue)-loud" : String(format: "%@-quiet peak=%.3f", side.rawValue, peak))
         case .wire(.failure(let closed)): return .failed(.closed(closed.reason))
         case .wire(.success(let event)): return handle(event)
-        case .sent(let id):
+        case .sent(let attempt, let failure):
+            guard let sent = outgoing, sent.attempt == attempt else { break }
+            if let failure { return .failed(failure) }
             outgoing = nil
-            if let index = replies.firstIndex(where: { $0.id == id }) { replyState[index].delivery = .submitted }
-            mark("cue-sent \(id)")
+            if let index = replies.firstIndex(where: { $0.id == sent.message }) { replyState[index].delivery = .submitted }
+            mark("cue-sent \(sent.message)")
         case .muted(let muted): isMuted = muted; muting = nil
         }
         return nil
@@ -248,7 +252,7 @@ final class VoiceCall {
         fileInput?.cancel()
         muting?.cancel()
         deadline?.cancel()
-        outgoing?.cancel()
+        outgoing?.task.cancel()
         // 没有逐回复的服务端／播放确认；异步错误或挂断后，已提交与半途发送都不能当作未送出自动重投。
         for index in replyState.indices {
             switch replyState[index].delivery {

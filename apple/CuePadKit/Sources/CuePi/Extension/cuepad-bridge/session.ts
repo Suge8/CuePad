@@ -55,10 +55,8 @@ export class Session {
 	 * 按交出先后排队：交出到落成之间宿主仍是空闲的，下一句照样交出，各认各的（`landed`）。
 	 */
 	readonly starting: Said[] = [];
-	/** 停止的次数：停止前发来、还在预检的话，预检回来时不再交出（`abortedSince`） */
-	private abortEpoch = 0;
-	/** 开新一轮的请求排成一队：预检是异步的，并发的两句不排队就会按预检返回的先后交出，颠倒用户发话的顺序。 */
-	private rounds: Promise<unknown> = Promise.resolve();
+	/** 同时只预检队首；预检中的消息也属于 pending，停止或结束会话可以一次收回整队。 */
+	private dispatching = false;
 	/** 已交给 Pi、还没落成会话里一条消息的重跑（`retry.ts`）：落成时回它的确认，同 `starting` */
 	retrying: Ack | null = null;
 	asking: Asking | null = null;
@@ -227,28 +225,41 @@ export class Session {
 		};
 	}
 
-	/** 以这句开新一轮（见 `pending`）。 */
-	startRound(said: Said): Promise<void> {
-		const epoch = this.abortEpoch;
-		const run = this.rounds.then(() => this.dispatchRound(said, epoch));
-		this.rounds = run.catch(() => {});
-		return run;
-	}
-
-	private async dispatchRound(said: Said, epoch: number) {
-		if (this.abortedSince(epoch, said) || this.rejectSend(said)) return;
-		if (this.pending.length === 0 && this.ctx.isIdle()) return this.submit(said, epoch);
-		if (!(await this.prepare(said.ack)) || this.abortedSince(epoch, said) || this.rejectSend(said)) return;
+	/** 所有新一轮请求先入同一队列；预检、等待宿主歇下、交出之间不转移到隐形等待队列。 */
+	startRound(said: Said) {
 		this.pending.push(said);
-		this.stopRound();
+		this.submitPending();
 	}
 
-	/**
-	 * 不带 deliverAs：只在歇着时交（见 `pending`），Pi 直接开始这一轮。歇着又没有等着的话时，之前交出、还没落成消息的那句
-	 * 不构成未执行证据；旧等待不阻止宿主空闲时的新意图。
-	 */
-	private async submit(said: Said, epoch: number) {
-		if (this.rejectSend(said) || !(await this.prepare(said.ack)) || this.abortedSince(epoch, said) || this.rejectSend(said)) return;
+	private async dispatchNext() {
+		if (this.dispatching || this.lifetime.signal.aborted) return;
+		const said = this.pending[0];
+		if (!said) return;
+		this.dispatching = true;
+		try {
+			if (this.rejectSend(said)) { this.pending.shift(); return; }
+			const failure = await preflight(this.ctx);
+			// 等预检时可能已停止、结束或换了会话；被移出的请求已经收尾，不能再确认或交出。
+			if (this.lifetime.signal.aborted || this.pending[0] !== said) return;
+			if (failure) {
+				this.pending.shift();
+				this.reportFailure(failure.detail);
+				said.ack?.({ ok: false, error: failure.code });
+				return;
+			}
+			if (this.rejectSend(said)) { this.pending.shift(); return; }
+			// 预检后的当下状态决定下一步；判断与交出之间没有 await，不依赖过去发过的歇下事件。
+			if (!this.ctx.isIdle()) { this.stopRound(); return; }
+			this.pending.shift();
+			this.submit(said);
+		} finally {
+			this.dispatching = false;
+			if (this.pending[0] !== said) this.submitPending();
+		}
+	}
+
+	/** 只从预检后的空闲分支同步交给 Pi；后续 ACK 仍由真实用户消息事件产生。 */
+	private submit(said: Said) {
 		this.starting.push(said);
 		try {
 			this.pi.sendUserMessage(said.content, said.expand ? { expandPromptTemplates: true } : undefined);
@@ -278,26 +289,17 @@ export class Session {
 		this.submitPending();
 	}
 
-	/** 歇下了就交出等着的下一句。下一轮事件循环再看：压缩完成的事件在 Pi 收起压缩标记之前发出。 */
+	/** 新请求和宿主事件都唤醒同一个队列；下一轮事件循环再看，压缩完成事件早于 Pi 收起压缩标记。 */
 	submitPending() {
 		if (this.pending.length === 0) return;
 		this.later("等着的话", () => {
-			if (!this.ctx.isIdle()) return this.stopForPending();
-			const next = this.pending.shift();
-			if (next) void this.submit(next, this.abortEpoch);
+			void this.dispatchNext().catch((error) => this.reportFailure(reason(error)));
 		});
 	}
 
-	/** 停止：排着的话作废。 */
+	/** 普通停止清空尚未交出的整队，包含正在预检的队首；按回合停止不调用它。 */
 	abortQueued() {
-		this.abortEpoch++;
 		for (const said of this.pending.splice(0)) said.ack?.({ ok: false, error: "failed: aborted before it started" });
-	}
-
-	private abortedSince(epoch: number, said: Said) {
-		if (epoch === this.abortEpoch) return false;
-		said.ack?.({ ok: false, error: "failed: aborted before it started" });
-		return true;
 	}
 
 	/** 一条用户消息落成了：认出它是交出的哪一句（先交的先认；模板与 skill 展开后认不出原话，取最早的），
@@ -305,14 +307,6 @@ export class Session {
 	landed(text: string): Said | undefined {
 		const at = this.starting.findIndex((said) => said.expand || text.startsWith(said.text));
 		return at < 0 ? undefined : this.starting.splice(0, at + 1)[at];
-	}
-
-	/** 宿主可以在排队后开出新的人类轮：每次打断前以当前投影的标识重新核对。 */
-	stopForPending() {
-		for (let at = this.pending.length - 1; at >= 0; at--) {
-			if (this.rejectSend(this.pending[at])) this.pending.splice(at, 1);
-		}
-		if (this.pending.length > 0) this.stopRound();
 	}
 
 	private rejectSend(said: Said) {
@@ -331,7 +325,7 @@ export class Session {
 		return true;
 	}
 
-	/** 核对投送身份与停止之间没有 await；不清空别人的 pending 或改变 abortEpoch。
+	/** 核对投送身份与停止之间没有 await；不清空别人的 pending。
 	 * starting / SDK 待处理消息尚未有可证实的当前身份，拒绝而不冒险停止新工作。 */
 	stopDelivery(deliveryId: string): boolean {
 		if (this.starting.length || this.ctx.hasPendingMessages()) return false;

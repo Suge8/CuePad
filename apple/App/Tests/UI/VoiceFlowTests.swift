@@ -33,14 +33,14 @@ struct VoiceFlowTests {
         try await fixture.hangUp()
     }
 
-    @Test func 闲聊不派活_早到交接只写一次_乱序与合批回复各归原请求() async throws {
+    @Test func 闲聊不派活_重复交接只写一次_乱序与合批回复各归原请求() async throws {
         let (app, fixture) = try await setup(), store = app.services.store
         defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
         try await fixture.connect()
         fixture.received?(.success(.turn(id: "chat", assistant: false, done: true, text: "今天阳光很好")))
         fixture.received?(.success(.turn(id: "chat-reply", assistant: true, done: true, text: "是啊")))
-        let first = try await fixture.handoff("先建卡", id: "early")
-        fixture.received?(.success(.delegation(.init(id: "early", turn: nil, text: "先建卡"))))
+        let first = try await fixture.handoff("先建卡", id: "replayed")
+        fixture.received?(.success(.delegation(.init(id: "replayed", turn: nil, text: "先建卡"))))
         let second = try await fixture.handoff("再改期")
         #expect(try await store.cueMessages().filter { $0.author == .known(.you) }.map(\.id).count == 2)
         try await finish(store, "改期的结果", requests: [second])
@@ -53,6 +53,28 @@ struct VoiceFlowTests {
         #expect(rows.last?.request?.text == "先建卡\n\n再改期")
         #expect(rows.filter { $0.request?.delivery == .sending }.count == 3)
         #expect(rows.filter { !$0.text.isEmpty }.allSatisfy { $0.note == nil })
+        try await fixture.hangUp()
+    }
+
+    @Test func 未知来源后补为另一入口_撤下结果且不能再说_主动更新仍可播报() async throws {
+        let (app, fixture) = try await setup(), store = app.services.store
+        defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
+        try await fixture.connect()
+        _ = try await fixture.handoff("本次通话请求")
+        let foreign = try await store.addCueMessage(.you, text: "另一入口的请求")
+        let reply = try await store.addCueMessage(.cue, text: "另一入口的结果", answeredRequests: nil)
+        try await eventually("来源未知先可见但不自动播报") { fixture.call.replies.contains { $0.id == reply.id } }
+        #expect(fixture.controls[0].sends.isEmpty)
+        try await store.associateCueReply(reply.id, answering: [foreign.id])
+        let marker = try await store.addCueMessage(.cue, text: "合法主动更新", answeredRequests: [])
+        try await eventually("已消费来源更新之后的记录") {
+            fixture.call.replies.contains { $0.id == marker.id && $0.delivery == .submitted }
+        }
+        #expect(fixture.workspace.voicePresentation?.replies.contains { $0.id == reply.id } == false)
+        fixture.call.repeatReply(reply.id)
+        let later = try await store.addCueMessage(.cue, text: "后续主动更新", answeredRequests: [])
+        try await eventually("后续发送仍畅通") { fixture.call.replies.contains { $0.id == later.id && $0.delivery == .submitted } }
+        #expect(fixture.controls[0].sends.count == 2, "旧结果没有再发送，只有两条真实主动更新")
         try await fixture.hangUp()
     }
 

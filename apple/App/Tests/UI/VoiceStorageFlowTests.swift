@@ -32,22 +32,11 @@ struct VoiceStorageFlowTests {
         try await voice.hangUp()
     }
 
-    @Test(arguments: [false, true])
-    func 主线与开发90版库升级后_晚到回复关联仍送到通话(development: Bool) async throws {
+    @Test func 正式90版库升级后_晚到回复关联仍送到通话() async throws {
         let app = TestApp(), oldStore = app.services.store, host = TestApp.hostID
         try await oldStore.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
         let db = RawDB(app.databaseURL)
-        try db.exec("""
-            DROP TRIGGER cueMessages_writeSeq_insert;
-            DROP TRIGGER cueMessages_writeSeq_update;
-            DROP INDEX cueMessages_writeSeq;
-            PRAGMA user_version = 90;
-            """)
-        if development {
-            try db.exec("CREATE TRIGGER cueMessages_writeSeq_insert AFTER INSERT ON cueMessages BEGIN UPDATE writeCounter SET seq = seq + 1; UPDATE cueMessages SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid; END")
-        } else {
-            try db.exec("ALTER TABLE cueMessages DROP COLUMN answeredRequests; ALTER TABLE cueMessages DROP COLUMN writeSeq")
-        }
+        try db.restoreVersion90()
         let services = app.relaunch(), store = services.store
         let voice = VoiceFlowFixture(services)
         defer { voice.call.hangUp(); services.cancelBackgroundWork() }

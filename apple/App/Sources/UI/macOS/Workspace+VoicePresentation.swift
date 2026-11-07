@@ -20,7 +20,9 @@ extension Workspace {
             replies: voiceRows(voice), issue: voiceIssue(voice), canStopExecution: !stoppableVoiceExecutions.isEmpty,
             executions: voiceExecutions.map {
                 .init(id: $0.state.sessionID, title: $0.task?.title ?? $0.state.title,
-                      status: voiceExecutionStatus($0))
+                      status: shownInHeader($0.state, delivery: nil).label)
+            } + voice.stopRequests.map {
+                .init(id: $0.id.uuidString, title: String(localized: "停止「\($0.target.name)」"), status: voiceStopStatus($0))
             })
     }
 
@@ -32,14 +34,13 @@ extension Workspace {
         MacDelivery.stopping(execution.state, deliveries: [execution.delivery].compactMap(\.self), at: services.speech)
     }
 
-    private func voiceExecutionStatus(_ execution: PiSessionListItem) -> String {
-        if voiceStopping(execution) { return String(localized: "正在停止…") }
-        if let request = execution.delivery, [.known(.stop), .known(.stopTurn)].contains(request.mode) {
-            let trip = Speech.trip(request, at: services.speech)
-            if let reason = trip.unconfirmedReason { return reason }
-            if let failure = trip.failure { return failure.text }
+    private func voiceStopStatus(_ request: DeliveryRequest) -> String {
+        switch Speech.trip(request, at: services.speech) {
+        case .sending, .sent: String(localized: "正在停止…")
+        case .delivered: String(localized: "停止请求已受理")
+        case .preparing(let reason), .unconfirmed(let reason): reason
+        case .failed(let failure): failure.text
         }
-        return shownInHeader(execution.state, delivery: execution.delivery).label
     }
 
     var voiceRetryRequest: VoiceCall.Request? {

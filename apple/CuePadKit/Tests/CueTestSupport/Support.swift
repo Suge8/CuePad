@@ -51,6 +51,18 @@ public enum TestLibraries {
 
 /// 用独立的 sqlite3 连接直接读写库文件：构造并发场景、检查落盘格式。
 public struct RawDB {
+  /// 升级验收从已发布的 90 布局起步；更早的用例再在其上还原各自的旧字段，不能只把新库的版本号拨低。
+  public func restoreVersion90() throws {
+    try exec("""
+      DROP TRIGGER cueMessages_writeSeq_insert;
+      DROP TRIGGER cueMessages_writeSeq_update;
+      DROP INDEX cueMessages_writeSeq;
+      ALTER TABLE cueMessages DROP COLUMN answeredRequests;
+      ALTER TABLE cueMessages DROP COLUMN writeSeq;
+      PRAGMA user_version = 90;
+      """)
+  }
+
   public let path: String
 
   public init(_ url: URL) { path = url.path }

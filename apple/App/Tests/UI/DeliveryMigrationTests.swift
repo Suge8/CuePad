@@ -78,6 +78,7 @@ struct DeliveryMigrationTests {
         let row = try #require(try await app.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
         #expect(try await app.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         let db = RawDB(app.services.location.databaseURL)
+        try db.restoreVersion90()
         let handled = claimed ? "'\(TestApp.hostID)'" : "NULL"
         let reason = ShownText.verbatim("原来的失败原因").stored
         try db.exec("""
@@ -112,6 +113,7 @@ struct DeliveryMigrationTests {
         let row = try #require(try await phone.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
         try await phone.services.store.markPushed([(row, Data(), nil)])  // 旧版的上传回执不记收下时刻
         let lapsed = Int((DeliveryRequest.phaseLimit + Speech.receiptLimit + 60) * 1000)
+        try RawDB(phone.services.location.databaseURL).restoreVersion90()
         try RawDB(phone.services.location.databaseURL).exec("""
             UPDATE deliveryRequests SET createdAt = createdAt - \(lapsed), serverAt = NULL;
             PRAGMA user_version = 89;

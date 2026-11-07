@@ -6871,6 +6871,22 @@
         }
       }
     },
+    "停止「%@」" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止「%@」"
+          }
+        }
+      }
+    },
     "停止哪个会话？" : {
       "localizations" : {
         "en" : {
@@ -6915,6 +6931,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停止执行"
+          }
+        }
+      }
+    },
+    "停止请求已受理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop Request Accepted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止请求已受理"
           }
         }
       }

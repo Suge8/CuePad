@@ -49,8 +49,11 @@ extension Workspace {
 
     func stopVoiceExecution(_ sessionID: String) async throws -> DeliveryRequest {
         guard let voice else { throw CueStoreError.notFound }
-        return services.uploaded(try await services.store.stopVoiceExecution(
-            sessionID, requests: voice.requests.compactMap(\.message), host: services.hostID))
+        let request = try await services.store.stopVoiceExecution(
+            sessionID, requests: voice.requests.compactMap(\.message), host: services.hostID)
+        if !voice.stopRequests.contains(where: { $0.id == request.id }) { voice.stopRequests.append(request) }
+        voice.watchRequests()
+        return services.uploaded(request)
     }
 
     func retryVoiceRequest(_ id: String) async throws {

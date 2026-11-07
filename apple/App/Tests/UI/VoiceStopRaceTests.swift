@@ -76,6 +76,19 @@ struct VoiceStopRaceTests {
             return [.known(.succeeded), .known(.failed)].contains(request.status)
         }
         let result = try #require(try await rig.store.deliveryRequest(stop.id))
+        if next == "终端B" {
+            try await eventually("停止权限消失后仍看得到动作结果") {
+                voice.workspace.voiceExecutions.isEmpty && voice.workspace.voicePresentation?.executions.contains {
+                    $0.id == stop.id.uuidString && $0.status.contains("不再适用")
+                } == true
+            }
+            #expect(voice.workspace.voicePresentation?.canStopExecution == false)
+            await #expect(throws: CueStoreError.self) { _ = try await voice.workspace.stopVoiceExecution(session.sessionID) }
+            try await rig.store.deleteDelivery(stop.id)
+            try await voice.hangUp()
+            try await voice.connect()
+            #expect(voice.workspace.voicePresentation?.executions.contains { $0.status.contains("不再适用") } == true)
+        }
         if let b {
             #expect(result.status == .known(.failed))
             #expect(result.failure?.contains("不再适用") == true)

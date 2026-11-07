@@ -231,7 +231,7 @@ final class VoicePeer: NSObject, VoiceMedia {
         dest = ctx.createMediaStreamDestination(); track = dest.stream.getAudioTracks()[0];
       } else {
         track = (await microphone(device)).getAudioTracks()[0];
-        post({ kind: "device", label: track.label + " " + JSON.stringify({ settings: track.getSettings(), supported: navigator.mediaDevices.getSupportedConstraints() }) });
+        post({ kind: "device", label: track.label + " " + JSON.stringify({ state: track.readyState, enabled: track.enabled, muted: track.muted, settings: track.getSettings(), supported: navigator.mediaDevices.getSupportedConstraints() }) });
       }
       localTrack = track;
       meter(new MediaStream([track]), "input");

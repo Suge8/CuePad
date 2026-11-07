@@ -37,18 +37,23 @@ extension VoiceCall {
         let end: Int
         let requests: [CueMessage]
         let executions: [PiSessionListItem]
+        let stops: [DeliveryRequest]
     }
 
     /// 写入序号只负责读完整份结果；送达字段另外订阅原记录，不为了界面更新而触发重复播报。
     func watchRequests() {
         observing?.cancel()
-        let ids = requestState.compactMap(\.message), store = dependencies.store
+        let ids = requestState.compactMap(\.message), stops = stopRequests.map(\.id), store = dependencies.store
+        let read: @Sendable (isolated CueStore) throws -> Read = { store in
+            try Read(end: store.lastWrite(), requests: store.cueMessages(ids), executions: store.voiceExecutions(requests: ids),
+                     stops: stops.compactMap { try store.deliveryRequest($0) })
+        }
         do {
-            let start = try store.snapshot { Read(end: try $0.lastWrite(), requests: try $0.cueMessages(ids), executions: try $0.voiceExecutions(requests: ids)) }
+            let start = try store.snapshot(read)
             update(start.value)
             observing = Task { [weak self] in
                 do {
-                    for try await read in store.observe(from: start, { Read(end: try $0.lastWrite(), requests: try $0.cueMessages(ids), executions: try $0.voiceExecutions(requests: ids)) }) {
+                    for try await read in store.observe(from: start, read) {
                         guard !Task.isCancelled else { return }
                         self?.update(read)
                     }
@@ -60,6 +65,9 @@ extension VoiceCall {
     private func update(_ read: Read) {
         storeFailure = nil
         executionState = read.executions
+        for stop in read.stops {
+            if let index = stopRequests.firstIndex(where: { $0.id == stop.id }) { stopRequests[index] = stop }
+        }
         for index in requestState.indices {
             requestState[index].record = read.requests.first { $0.id == requestState[index].message }
         }
@@ -96,7 +104,11 @@ extension VoiceCall {
                 if let id = requestState[index].message, answered.contains(id) { requestState[index].submission = .returned(id) }
             }
             guard message.author == .known(.cue), !message.text.isEmpty,
-                  answered.isEmpty || requestState.contains(where: { $0.message.map(answered.contains) == true }) else { continue }
+                  answered.isEmpty || requestState.contains(where: { $0.message.map(answered.contains) == true }) else {
+                if outgoing?.message == message.id { outgoing?.task.cancel(); outgoing = nil }
+                replyState.removeAll { $0.id == message.id }
+                continue
+            }
             let proposed = Reply(message: message, delivery: message.answeredRequests == nil ? .awaitingOrigin : .queued)
             if let index = replyState.firstIndex(where: { $0.id == message.id }) {
                 let previous = replyState[index].delivery
@@ -130,9 +142,10 @@ extension VoiceCall {
         let text = replyState[index].text
         replyState[index].delivery = .sending
         let outgoingMessage: VoiceWire.Outgoing = delegation.map { .reply(delegation: $0, text: text) } ?? .say(text)
-        outgoing = Task { [inputs, mark] in
+        let attempt = UUID()
+        let task = Task { [inputs, mark] in
             let timeout = Task {
-                do { try await Task.sleep(for: .seconds(Speech.sendLimit)); inputs.continuation.yield(.failed(.timedOut)) }
+                do { try await Task.sleep(for: .seconds(Speech.sendLimit)); inputs.continuation.yield(.sent(attempt, .timedOut)) }
                 catch { }
             }
             defer { timeout.cancel() }
@@ -140,11 +153,12 @@ extension VoiceCall {
                 mark("cue-forward \(message.id) delegation=\(delegation ?? "session") \(text)")
                 try await channel.send(outgoingMessage)
                 try Task.checkCancellation()
-                inputs.continuation.yield(.sent(message.id))
+                inputs.continuation.yield(.sent(attempt, nil))
             } catch {
-                if !Task.isCancelled { inputs.continuation.yield(.failed(.closed(error.localizedDescription))) }
+                if !Task.isCancelled { inputs.continuation.yield(.sent(attempt, .closed(error.localizedDescription))) }
             }
         }
+        outgoing = (attempt, message.id, task)
     }
 }
 #endif
