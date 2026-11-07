@@ -118,7 +118,7 @@ extension CueStore {
       guard let state = try sessionState(sessionID) else { throw CueStoreError.notFound }
       guard state.state != .known(.ended) else { return nil }
       guard state.hosted, state.canEnd else { throw CueStoreError.cannotEnd(state.title) }
-      guard let end = try endUnused([sessionID], outside: nil, cue: true).first else { throw CueStoreError.sessionInUse(state.title) }
+      guard let end = try endUnused([sessionID], outside: nil, cue: true).ended.first else { throw CueStoreError.sessionInUse(state.title) }
       return end
     }
   }

@@ -33,11 +33,14 @@ extension Workspace {
     /// 完成就是做完了：它（和它的子任务）绑着的会话里，绑着的事都做完了的一起结束——结束哪些只由 Store 定（`CueStore.completeTask`，
     /// 与 Cue 的 done 同一条规则），结束请求写下就上传。
     func complete(_ id: UUID) async throws {
-        let (status, ended) = try await services.store.completeTask(id)
+        let (status, ended, terminalKept) = try await services.store.completeTask(id)
         for request in ended { _ = services.uploaded(request) }
         // 做完了就给一个归档（不自动归档）
         guard status == .done else { return }
-        say("已完成", action: NoticeAction(title: String(localized: "归档")) { try await self.archive(id) })
+        let archiving = NoticeAction(title: String(localized: "归档")) { try await self.archive(id) }
+        // 终端里你自己开的会话不替你结束，如实说它还在
+        let text: LocalizedStringResource = terminalKept ? "已完成，终端未结束" : "已完成"
+        say(text, action: archiving)
     }
 
     /// 点掉已完成的圆圈：回到没做完（开始过的回到进行中）；没完成的什么都不改。

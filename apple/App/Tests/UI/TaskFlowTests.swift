@@ -28,7 +28,7 @@ struct TaskFlowTests {
         #expect(try await next(task) == .start(leaf: task))
 
         // 开始：正文连同标题交出去；话在路上、没送到都看会话那一格，不再给"开始"
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas")
+        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
         let delivers = Mutex(false)
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request, _ in
             guard delivers.withLock({ $0 }) else { return .failed(.verbatim("会话在送达前关掉了")) }

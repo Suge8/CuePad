@@ -50,7 +50,9 @@ struct SessionBoardTests {
         #expect(try await tasks().isEmpty, "没当任务用过的会话不留卡")
 
         try await workspace.finish(PiSessionListItem(state: terminal))
+        #expect(workspace.notice?.text.visible.contains("终端未结束") == true, "终端里的会话不结束，提示如实说它还在")
         try await workspace.finish(PiSessionListItem(state: hosted))
+        #expect(workspace.notice?.text.visible.contains("终端未结束") == false, "托管的会话结束了，提示还是原文案")
         #expect(workspace.sessionAsk == nil, "歇着的会话不问")
 
         let made = try await tasks()

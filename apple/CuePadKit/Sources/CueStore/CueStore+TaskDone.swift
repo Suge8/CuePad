@@ -1,6 +1,13 @@
 import CueText
 import Foundation
 
+/// 一件事里没人再用的会话的去留（`CueStore.endUnused`）。
+struct UnusedSessions {
+  var ended: [DeliveryRequest] = []
+  /// 终端里你自己开的会话没被结束。
+  var terminalKept = false
+}
+
 extension CueStore {
   /// Cue 做完一件事：算不算做完由 Cue 按证据自己定，不请你确认。还有没完成的子任务抛 `stepsRemaining`、什么都不改；否则完成它，
   /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `completeTask`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
@@ -16,7 +23,7 @@ extension CueStore {
       guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
       let finished = card.status != .done
       _ = try applyStatus(task, .done)
-      let ended = try endUnusedSessions(of: task, cue: true)
+      let ended = try endUnusedSessions(of: task, cue: true).ended
       guard finished, card.parentID == nil else { return (nil, ended) }
       return (try insertCueMessage(.cue, shown: CueReport.text(task: card.heading, evidence: evidence), shots: shots, task: task), ended)
     }
@@ -30,15 +37,17 @@ extension CueStore {
   }
 
   /// 把任务设为完成（连同结束做完了的会话，同 `finishTask`）：已完成的什么都不改，所以界面手里的副本过时（别的设备刚做完）、或延迟提交时它已被做完，
-  /// 都不会把它翻回去。读与改在一个事务里：两次 `await` 之间也可能有同步来的改动插进来。返回新状态与结束请求。
+  /// 都不会把它翻回去。读与改在一个事务里：两次 `await` 之间也可能有同步来的改动插进来。返回新状态、结束请求，以及有没有终端里你自己开的会话没结束（`terminalKept`，提示里如实说）。
   /// 点掉已完成的圆圈是 `reopenTask`，不是再来一次它。
   @discardableResult
-  public func completeTask(_ id: UUID) throws -> (status: TaskStatus, ended: [DeliveryRequest]) {
+  public func completeTask(_ id: UUID) throws -> (status: TaskStatus, ended: [DeliveryRequest], terminalKept: Bool) {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
       guard let current = card.status else { throw CueStoreError.notATask }
-      guard current != .done else { return (.done, []) }
-      return (try applyStatus(id, .done), try endUnusedSessions(of: id, cue: false))
+      guard current != .done else { return (.done, [], false) }
+      let status = try applyStatus(id, .done)
+      let fate = try endUnusedSessions(of: id, cue: false)
+      return (status, fate.ended, fate.terminalKept)
     }
   }
 
@@ -72,14 +81,14 @@ extension CueStore {
   ///    已结束的、记录还没到的不动。取回归档、撤销删除不重开：再对它说话就在后台恢复。
   /// `task` 是这件事里的任意一个任务，可以已经归档或删掉（删掉的从它原来的上级往上找这件事）；灵感不管。返回结束请求。必须在写事务内调用。
   @discardableResult
-  func endUnusedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
-    guard let card = try find(Card.self, task), card.isTask else { return [] }
+  func endUnusedSessions(of task: UUID, cue: Bool) throws -> UnusedSessions {
+    guard let card = try find(Card.self, task), card.isTask else { return UnusedSessions() }
     let topID = try card.parentID.map { try ancestors(of: $0).last ?? $0 } ?? task
-    guard let top = try find(Card.self, topID) else { return [] }
+    guard let top = try find(Card.self, topID) else { return UnusedSessions() }
     let sessions = try db.query(
       "SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND (id = ?1 OR id IN (\(Self.subtree(from: "SELECT ?2"))))", [task, topID]
     ) { $0.text(0) }
-    guard !sessions.isEmpty else { return [] }
+    guard !sessions.isEmpty else { return UnusedSessions() }
     let open = try select(
       Card.self, where: "id IN (SELECT value FROM json_each(?)) AND \(Self.taskOpen)", [Self.idList(try leaves(of: top).map(\.id))], orderBy: "sortKey, id")
     let launching = try launchingLeaves(open.map(\.id))
@@ -93,13 +102,18 @@ extension CueStore {
   }
 
   /// 这些会话里在 `root` 这件事之外也没人再用（`usedElsewhere`；nil 是哪件事都不除外）、CuePad 托管且做得到的（`PiSessionState.endsWithTask`），
-  /// 请它所在的 Mac 结束；已结束的、记录还没到的不动。返回结束请求。必须在写事务内调用。
-  func endUnused(_ sessions: [String], outside root: UUID?, cue: Bool) throws -> [DeliveryRequest] {
-    try sessions.compactMap { sessionID in
-      guard try db.first(Self.usedElsewhere, [sessionID, root], { _ in true }) == nil, let state = try sessionState(sessionID), state.endsWithTask
-      else { return nil }
-      return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue)
+  /// 请它所在的 Mac 结束；已结束的、记录还没到的不动。终端里你自己开的、还没结束的不结束，记进 `terminalKept`。必须在写事务内调用。
+  func endUnused(_ sessions: [String], outside root: UUID?, cue: Bool) throws -> UnusedSessions {
+    var result = UnusedSessions()
+    for sessionID in sessions {
+      guard try db.first(Self.usedElsewhere, [sessionID, root], { _ in true }) == nil, let state = try sessionState(sessionID) else { continue }
+      if state.endsWithTask {
+        result.ended.append(try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue))
+      } else if !state.hosted, state.state != .known(.ended) {
+        result.terminalKept = true
+      }
     }
+    return result
   }
 
   /// 会话（?1）在这件事（以 ?2 为根；NULL 是哪件事都不除外）之外还有用：别的事没做完的叶子绑着它，或有话正送进去。

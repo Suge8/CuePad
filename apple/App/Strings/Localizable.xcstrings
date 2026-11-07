@@ -11923,6 +11923,22 @@
         }
       }
     },
+    "已完成，终端未结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done · still open"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已完成，终端未结束"
+          }
+        }
+      }
+    },
     "已展开" : {
       "localizations" : {
         "en" : {
