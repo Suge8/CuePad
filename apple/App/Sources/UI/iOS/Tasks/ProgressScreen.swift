@@ -23,7 +23,6 @@ struct ProgressScreen: View {
         boardView
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .floatingHeader("进展", center: { ProgressHeader() }) { EmptyView() }
-            .refreshesQuota()
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: workspace.addsTask)
             .onChange(of: workspace.scopedProject) { workspace.addsTask = false }
             .observingBoard(into: $board, store: services.store, onError: workspace.fail)
@@ -56,7 +55,8 @@ struct ProgressHeader: View {
         HStack(spacing: 0) {
             ProjectScope()
             QuotaRings(open: open, height: FloatingHeaderLayout.height) { open.toggle() }
-                .popup(isPresented: $open) { QuotaDetail().padding(Spacing.panel).refreshesQuota() }
+                .popup(isPresented: $open) { QuotaDetail().padding(Spacing.panel) }
+                .refreshesQuota(open: open)
         }
         .headerPiece()
     }

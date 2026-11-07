@@ -22,8 +22,7 @@ struct QuotaFlowTests {
             }
             return ["ok": true]
         }
-        let workspace = Workspace(services: services)
-        await workspace.refreshQuota()
+        await services.refreshQuota(.manual)
         let observed = try #require(try await eventually(services.store, { try $0.accountQuotas().first }) { $0?.windows.count == 1 })
         #expect(QuotaMeter(observed, at: .now).windows.first?.percent == "20%")
 

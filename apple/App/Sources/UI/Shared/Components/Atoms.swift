@@ -15,7 +15,8 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// 订阅 Store：`id` 变化时重新订阅；每次变更重读后写入 `value`。读失败交给 `onError`。页不在前台时暂停（见 `pageActive`），回到前台重新订阅；
+    /// 订阅 Store：`id` 变化时重新订阅；每次变更重读后写入 `value`。读失败交给 `onError`（多是提示条）：重新订阅后同一处又是同一个原因不再报，
+    /// 读到过一次之后再失败照报——页每回前台都重订阅，读不出的库不能每次都弹一遍。页不在前台时暂停（见 `pageActive`），回到前台重新订阅；
     /// 空闲时先挂上、还没去过的页（`pagePrefetch`）照样先读一份，第一次点开时内容已经建好。
     /// 依赖哪些表由读取本身定（`CueStore.observe(_:)`），这里不另写；读到的和上一次一样就不写——在 Store 一侧比一次，
     /// 重新订阅后手里已有的值当作"上一次"，没变的数据不送到主线程、界面也不重算。
@@ -49,6 +50,8 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     @Environment(\.pagePrefetch) private var prefetch
     /// 当场读到、还没交给订阅的那份。
     @State private var start: Snapshot<T>?
+    /// 报过、之后还没读到过的那个原因。
+    @State private var reported: String?
 
     private struct Run: Equatable {
         let id: ID
@@ -82,11 +85,15 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
         do {
             for try await next in updates {
                 value = next
+                reported = nil
                 DebugHooks.observed(next)
                 if !active { return }
             }
         } catch is CancellationError {
         } catch {
+            let reason = error.localizedDescription
+            guard reason != reported else { return }
+            reported = reason
             onError(error)
         }
     }

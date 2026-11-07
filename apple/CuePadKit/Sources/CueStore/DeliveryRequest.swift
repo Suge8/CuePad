@@ -50,8 +50,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 以 Agent 可证实的受理为送达（Pi 执行了扩展命令、压缩做完）；OpenCode 的模板经它的命令端点，端点执行完才回（`PiSlash.speaks`）。
   /// 不是"你说的话"：不在对话里挂气泡、不写发送记录（与 config、answer 一样），带着卡片时只把卡片关联到会话；结果若在会话文件里（压缩）对话里自然有
   case command
-  /// 请 Mac 刷新订阅额度（手机上的额度视图打开、数据陈旧时）：由 Mac 上在线会话里的扩展查一次（`AccountQuota`），新值随同步回来；
-  /// 正文固定为 `quota`，不写发送记录；查不到时照常按失败写回，手机不提示，只显示上次的值与更新时间
+  /// 请 Mac 刷新订阅额度（手机上的额度出现、打开明细或点重试时，`AccountQuotas`）：由 Mac 上能答额度的会话里的扩展查一次（`AccountQuota`），新值随同步回来；
+  /// 正文固定为 `quota`，不写发送记录；查不到时照常按失败写回（原因写进手机额度明细的那一行，不弹提示，`AccountQuotas`），读数仍是上次的值与更新时间
   case quota
   /// 整理技能与规则（手机上的一键整理、去重、合并）：正文是 `[TidyOrder]`（见 `DeliveryRequest.tidyOrders`），由 Mac 照执行时的文件做，
   /// 那件已不在的不做；不写发送记录

@@ -56,7 +56,7 @@ extension MacSyncTests {
         let request = try await services.store.requestQuotaRefresh(on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
-        #expect(done.failure == "这台 Mac 上没有在线的 Agent 会话，查不了额度")
+        #expect(done.failure == "这台 Mac 上没有在线的 Pi 会话")
         #expect(try await services.store.accountQuotas().isEmpty)
     }
 }

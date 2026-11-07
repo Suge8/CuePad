@@ -15,14 +15,14 @@ final class MacExecutor {
     private let library: AgentLibraryKeeper
     private let upload: @Sendable (UUID) async -> Void
     private let fetchFile: FileFetching
-    private let refreshQuota: @MainActor () async throws -> Void
+    private let refreshQuota: AccountQuotas.Query
     private let reportIssue: @MainActor (String) -> Void
     private var running: DeliveryExecutor?
 
     init(
         store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, workspaces: Workspaces, recorder: PiStateRecorder,
         library: AgentLibraryKeeper, upload: @escaping @Sendable (UUID) async -> Void, fetchFile: @escaping FileFetching,
-        refreshQuota: @escaping @MainActor () async throws -> Void,
+        refreshQuota: @escaping AccountQuotas.Query,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {
         self.store = store
@@ -88,7 +88,7 @@ final class MacExecutor {
         case .start: return try await startSession(request)
         case .transcript: try await writeTranscript(of: request.content)
         case .bind: try await bindFolder(request)
-        case .quota: try await refreshQuota()
+        case .quota: if let failure = await refreshQuota() { return .failed(failure) }
         case .end: try await end(request.target)
         case .stop: try await stop(request.target)
         case .retry: try await retry(request.target)
