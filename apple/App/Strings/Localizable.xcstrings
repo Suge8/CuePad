@@ -11799,6 +11799,22 @@
         }
       }
     },
+    "展开查看停止结果" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expand to view stop results"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展开查看停止结果"
+          }
+        }
+      }
+    },
     "展开编辑" : {
       "localizations" : {
         "en" : {

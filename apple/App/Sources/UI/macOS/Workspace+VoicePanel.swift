@@ -9,7 +9,13 @@ struct CueVoicePanel: View {
     var body: some View {
         Group {
             if let presentation = workspace.voicePresentation {
-                CueVoiceView(presentation: presentation, expanded: workspace.voiceExpanded, action: act)
+                VStack(spacing: Spacing.tight) {
+                    CueVoiceView(presentation: presentation, expanded: workspace.voiceExpanded, action: act)
+                    if !workspace.voiceExpanded, workspace.voice?.stopRequests.isEmpty == false {
+                        Button("展开查看停止结果") { workspace.voiceExpanded = true }
+                            .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
+                    }
+                }
             }
         }
         .panel(isPresented: $choosingExecution) {
