@@ -105,5 +105,22 @@ struct DeliveryMigrationTests {
         await workspace.resend(.request(migrated), restoringInto: services.settings.replyDraftBinding(for: UUID())).value
         #expect((workspace.notice?.isError == true) == claimed)
     }
+
+    /// 升级前已传上去、还在等派发的请求，发送方没记下服务器收下的时刻：升级按写下的时刻补上，到期照常转未确认，不一直显示已发出。
+    @Test func 升级前已传上去的待派发请求_升级后补上锚点_到期转未确认() async throws {
+        let phone = TestApp(host: "phone"), request = try await say(in: phone)
+        let row = try #require(try await phone.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
+        try await phone.services.store.markPushed([(row, Data(), nil)])  // 旧版的上传回执不记收下时刻
+        let lapsed = Int((DeliveryRequest.phaseLimit + Speech.receiptLimit + 60) * 1000)
+        try RawDB(phone.services.location.databaseURL).exec("""
+            UPDATE deliveryRequests SET createdAt = createdAt - \(lapsed), serverAt = NULL;
+            PRAGMA user_version = 89;
+            """)
+        let services = phone.relaunch(), store = services.store
+        defer { services.cancelBackgroundWork() }
+        let migrated = try #require(try await store.deliveryRequest(request.id))
+        #expect(migrated.serverAt == migrated.createdAt)
+        #expect(Speech.trip(migrated, at: services.speech).unconfirmedReason != nil)
+    }
 }
 #endif
