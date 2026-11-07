@@ -21127,6 +21127,22 @@
         }
       }
     },
+    "请求尚未确认上传，联网后可重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upload not confirmed. Reconnect and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求尚未确认上传，联网后可重试"
+          }
+        }
+      }
+    },
     "请求已放弃，尚未派发" : {
       "localizations" : {
         "en" : {

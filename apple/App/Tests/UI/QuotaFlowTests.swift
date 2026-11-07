@@ -1,4 +1,6 @@
 #if os(macOS)
+import AppKit
+import SwiftUI
 import CueStore
 import Foundation
 import Testing
@@ -7,6 +9,28 @@ import Testing
 
 /// #41：用户打开额度后，失败、过期与换授权不能伪装成新额度；只替换外部 bridge。
 struct QuotaFlowTests {
+    /// 菜单栏真实宿主摘下、挂回同一个视图：每次打开由额度视图自己查询，无须 AppDelegate 再发一次。
+    @Test func 菜单栏面板每次打开都刷新额度() async throws {
+        let app = TestApp(), services = app.services!
+        let workspace = Workspace(services: services)
+        let following = Task { await workspace.follow() }
+        defer { following.cancel(); services.cancelBackgroundWork() }
+        let ext = try await app.host.connect("menu-quota", cwd: "/work/quota")
+        try await eventually("菜单栏资料库就绪") { workspace.isLibraryReady }
+        let panel = MenuBarPanel()
+        panel.setContent(MenuBarPad().environment(workspace).environment(services).modifier(PaletteProvider()))
+        defer { panel.hide() }
+        for count in 1...2 {
+            panel.show(below: NSRect(x: 100, y: 800, width: 20, height: 20))
+            try await eventually("第 \(count) 次打开查完额度") {
+                ext.received.filter { $0 == "quota" }.count >= count && services.accountQuotas.phase == .idle
+            }
+            #expect(ext.received.filter { $0 == "quota" }.count == count)
+            panel.hide()
+            await NextFrame.drawn()
+        }
+    }
+
     @Test func 额度失败与过期不变满_换授权不继承旧观测() async throws {
         let app = TestApp()
         let services = app.services!
