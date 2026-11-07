@@ -102,11 +102,15 @@ extension CueStore {
     _ launch: PiLaunch, title: String, on host: String, card: UUID? = nil, cue: Bool = false, intent: SessionLaunchIntent = .new
   ) throws -> DeliveryRequest {
     try write {
-      if case .new = intent, let card,
-        try handoffRequests(for: [card])[card]?.contains(where: { $0.mode == .known(.start) }) == true {
-        throw CueStoreError.deliveryAlreadyHanded
-      }
       let previous: UUID? = if case .replacing(let id) = intent { id } else { nil }
+      switch intent {
+      case .repeatingConfirmed: break
+      case .new, .replacing:
+        let owner = try card ?? previous.flatMap { try deliveryRequest($0)?.cardID }
+        if let owner, try unresolvedLaunches(for: owner).contains(where: { $0.id != previous }) {
+          throw CueStoreError.deliveryAlreadyHanded
+        }
+      }
       if let previous, try !removeFailedDelivery(previous), try !removeUnstartedDelivery(previous, locallyOn: nil) {
         throw CueStoreError.deliveryAlreadyHanded
       }
@@ -115,6 +119,14 @@ extension CueStore {
       return try insertDelivery(
         launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card, cue: cue)
     }
+  }
+
+  /// 所有仍可能开出会话的请求：后来的失败或交接不消除旧风险；与只决定任务归属的 latestHandoff 分开。
+  /// 原请求明确失败或已看到其会话时才解除未知风险，不另存风险状态。
+  public func unresolvedLaunches(for card: UUID) throws -> [DeliveryRequest] {
+    try select(DeliveryRequest.self,
+      where: "cardID = ? AND mode = '\(DeliveryMode.start.rawValue)' AND status != '\(DeliveryStatus.failed.rawValue)' AND \(Self.launchUnclaimed)",
+      [card], orderBy: "createdAt DESC, rowid DESC")
   }
 
   /// 从这张卡开的新会话叫什么（唯一的规则，`requestLaunch` 与 `handOffPlan` 都读它）：任务的标题，超长的截断（`CueName.clipped`）；

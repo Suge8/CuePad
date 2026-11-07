@@ -7,6 +7,7 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
     var launch: UUID?
     var request: DeliveryRequest?
     var claimed: Claimed?
+    var otherRequests: [DeliveryRequest] = []
 
     /// 认领到的会话：记录 id 与 Pi 的会话 id。
     struct Claimed: Sendable, Equatable {
@@ -40,6 +41,12 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
         }
     }
 
+    /// 当前一次失败也不能授权重做旧的未知请求；仍在等待当前回执时继续等。
+    func submission(at moment: Speech.Moment) -> Submission {
+        let current = phase(at: moment).submission
+        return current == .waiting || otherRequests.isEmpty ? current : .confirm
+    }
+
     func phase(at moment: Speech.Moment) -> Phase {
         if claimed != nil { return .claimed }
         guard let request else { return launch == nil ? .idle : .missing }
@@ -62,8 +69,10 @@ nonisolated struct SessionLaunch: Equatable, Sendable {
 
     func progress(from store: isolated CueStore) throws -> LaunchProgress {
         let claimed = try store.piSessionPage(PiSessionQuery(launchToken: token, limit: 1)).items.first
+        let current = try store.deliveryRequest(request)
+        let others = try current?.cardID.map { try store.unresolvedLaunches(for: $0).filter { $0.id != request } } ?? []
         return LaunchProgress(
-            launch: request, request: try store.deliveryRequest(request), claimed: claimed.map { .init(id: $0.id, sessionID: $0.state.sessionID) })
+            launch: request, request: current, claimed: claimed.map { .init(id: $0.id, sessionID: $0.state.sessionID) }, otherRequests: others)
     }
 }
 

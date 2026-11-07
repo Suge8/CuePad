@@ -37,7 +37,7 @@ extension Workspace {
         do {
             let launched = try services.store.snapshot { store -> SessionLaunch? in
                 guard let card = card ?? draft.attachments.first?.card,
-                      let request = try store.handoffRequests(for: [card])[card]?.first(where: { $0.mode == .known(.start) }),
+                      let request = try store.unresolvedLaunches(for: card).first,
                       let token = request.launch?.token else { return nil }
                 return SessionLaunch(request: request.id, token: token)
             }.value

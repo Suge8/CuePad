@@ -72,6 +72,7 @@ struct NewSessionInput: View {
         return places.first { $0.id == choice } ?? start.place(among: places)
     }
     private var phase: LaunchProgress.Phase { progress?.phase(at: services.speech) ?? .idle }
+    private var submission: LaunchProgress.Submission { progress?.submission(at: services.speech) ?? .safe }
     private var agent: AgentKind? { agents?.preferred(services.settings.lastAgent) }
     private var brain: AgentModelChoice? {
         guard chosen?.host != nil, let agents, let agent else { return nil }
@@ -79,7 +80,7 @@ struct NewSessionInput: View {
     }
     private var canStart: Bool {
         chosen?.host != nil && agent != nil && !sending
-            && (launched == nil || progress?.launch == launched?.request) && phase.submission != .waiting
+            && (launched == nil || progress?.launch == launched?.request) && submission != .waiting
     }
 
     var body: some View {
@@ -174,7 +175,7 @@ struct NewSessionInput: View {
 
     private func launch(confirmedAgain: Bool = false) {
         guard let place = chosen, let host = place.host, let agent, let brain, canStart else { return }
-        if phase.submission == .confirm, !confirmedAgain { confirmingAgain = true; return }
+        if submission == .confirm, !confirmedAgain { confirmingAgain = true; return }
         let intent: SessionLaunchIntent = launched.map {
             confirmedAgain ? .repeatingConfirmed : .replacing($0.request)
         } ?? .new
