@@ -151,21 +151,53 @@ struct VoiceFlowTests {
         gate.continuation.finish()
         #expect(fixture.controls.isEmpty)
         #expect(fixture.workspace.voicePresentation?.activity == .ended)
+        #expect(fixture.workspace.voicePresentation?.issue == nil)
     }
 
-    @Test func 写库失败可明确重试_原文保留且只产生一条请求() async throws {
-        let (app, fixture) = try await setup(), store = app.services.store
+    @Test(arguments: ["failed", "unconfirmed"])
+    func 原请求失败或未确认后新请求已接走_重试仍指向原请求且不重投后者(kind: String) async throws {
+        let clock = ManualTiming(), app = TestApp(timing: clock.timing)
+        let store = app.services.store, host = TestApp.hostID
+        try await store.updateCueProfile { $0.enabledAt = clock.now; $0.hostID = host }
+        app.services.startSpeechClock()
+        let fixture = VoiceFlowFixture(app.services)
         defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
         try await fixture.connect()
         let db = RawDB(app.databaseURL)
-        try db.exec("CREATE TRIGGER voice_write_failure BEFORE INSERT ON cueMessages WHEN NEW.author = 'you' BEGIN SELECT RAISE(FAIL, 'voice test write failed'); END")
-        fixture.received?(.success(.delegation(.init(id: "write-failed", turn: nil, text: "保留这句话"))))
-        try await eventually("界面能看到未交出与原文") { fixture.workspace.voiceRetryRequest?.failure != nil }
+        if kind == "failed" {
+            try db.exec("CREATE TRIGGER voice_write_failure BEFORE INSERT ON cueMessages WHEN NEW.author = 'you' BEGIN SELECT RAISE(FAIL, 'voice test write failed'); END")
+            fixture.received?(.success(.delegation(.init(id: "write-failed", turn: nil, text: "保留这句话"))))
+            try await eventually("界面能看到未交出与原文") { fixture.workspace.voiceRetryRequest?.failure != nil }
+            try db.exec("DROP TRIGGER voice_write_failure")
+        } else {
+            _ = try await fixture.handoff("保留这句话", id: "write-failed")
+            clock.advance(.seconds(Speech.receiptLimit + 1))
+            try await eventually("A 未确认") { fixture.workspace.voiceRetryRequest?.id == "write-failed" }
+        }
         #expect(fixture.workspace.voicePresentation?.replies.first?.request?.text == "保留这句话")
-        try db.exec("DROP TRIGGER voice_write_failure")
-        try await fixture.workspace.retryVoiceRequest("write-failed")
-        try await eventually("重试后有真实记录") { fixture.call.requests.first?.record != nil }
-        #expect(try await store.cueMessages().filter { $0.author == .known(.you) }.count == 1)
+        let later = try await fixture.handoff("后来的请求已接走")
+        try await store.markCueMessagesDelivered([later])
+        try await eventually("B 已接走而恢复仍指向 A") {
+            fixture.workspace.voicePresentation?.request?.delivery == .delivered
+                && fixture.workspace.voiceRetryRequest?.id == "write-failed"
+        }
+        let issue = try #require(fixture.workspace.voicePresentation?.issue)
+        #expect(String(localized: issue.message).contains("保留这句话"))
+        #expect(String(localized: issue.message).contains(kind == "failed" ? "voice test write failed" : "可能已经执行"))
+        try await fixture.hangUp()
+        #expect(fixture.workspace.voicePresentation?.issue != nil)
+        try await fixture.connect()
+        if kind == "failed" {
+            try await fixture.workspace.retryVoiceRequest("write-failed")
+            try await eventually("重试后有真实记录") { fixture.call.requests.first?.record != nil }
+            #expect(fixture.workspace.voicePresentation?.issue == nil)
+        } else {
+            await #expect(throws: SendError.alreadyHanded) { try await fixture.workspace.retryVoiceRequest("write-failed") }
+            #expect(fixture.workspace.voiceRetryRequest?.id == "write-failed")
+        }
+        #expect(try await store.cueMessages().filter { $0.author == .known(.you) }.count == 2)
+        #expect(try await store.cueMessages([later]).first?.deliveredAt != nil)
+        #expect(fixture.workspace.voicePresentation?.request?.text == "后来的请求已接走")
         try await fixture.hangUp()
     }
 

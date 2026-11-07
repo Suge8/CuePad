@@ -60,12 +60,12 @@ extension Workspace {
 
     private func voiceIssue(_ voice: VoiceCall) -> CueVoicePresentation.Issue? {
         if let request = voiceRetryRequest {
-            return .init(message: "\(request.failure ?? Speech.unconfirmedReason.text)", recovery: "重新交给 Cue")
+            let reason = request.failure ?? voiceRequest(request).delivery.unconfirmedReason ?? Speech.unconfirmedReason.text
+            return .init(message: "请求「\(request.text)」：\(reason)", recovery: "重新交给 Cue")
         }
         if let failure = voice.storeFailure { return .init(message: "\(failure)", recovery: "重新接通") }
         switch voice.phase {
         case .failed(let failure): return .init(message: "\(failure.shown)", recovery: "重新接通")
-        case .ended: return .init(message: "请求和结果仍保留在这里", recovery: "重新接通")
         default: return nil
         }
     }
