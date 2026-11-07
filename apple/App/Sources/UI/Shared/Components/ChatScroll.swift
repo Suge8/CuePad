@@ -99,11 +99,14 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                 // 跟着正在读的那一条（`ChatAnchor`）：贴着最新时底锚管、跳去了某一条时对准那一条
                 let keeping = !pinned && follow.wrappedValue.target == nil
                 ScrollView {
-                    content.padding(.bottom, padding).background { ContentLift.Anchor(lift: lift) }
-                        .environment(\.chatAnchor, anchor)
-                        .environment(\.chatOnScreen, onScreen)
-                    // 最新处（`toEnd`）
-                    Color.clear.frame(height: 0).id(Self.end)
+                    // 显式竖排正文与末尾锚点：宿主的隐式布局可能把零高锚点放在正文中部。
+                    VStack(spacing: 0) {
+                        content.padding(.bottom, padding).background { ContentLift.Anchor(lift: lift) }
+                            .environment(\.chatAnchor, anchor)
+                            .environment(\.chatOnScreen, onScreen)
+                        // 最新处（`toEnd`）
+                        Color.clear.frame(height: 0).id(Self.end)
+                    }
                 }
                     .defaultScrollAnchor(.bottom, for: .initialOffset)
                     .defaultScrollAnchor(.bottom, for: .alignment)
