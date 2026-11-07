@@ -160,9 +160,12 @@ struct DeliverableTile: View {
     private var isShot: Bool { if case .shot = shape { true } else { false } }
     private var isChosen: Bool { if case .shot(_, true) = shape { true } else { false } }
 
+    private var kindIcon: Icon { Self.icon(preview.kind) }
+
     /// 画面出得慢（过了 `Pending.delay`）或出不来时写它是什么：成页的（网页、文稿、表格、PDF…）一张纸，音频、视频、3D 各自的记号，其余是文件。
-    private var kindIcon: Icon {
-        switch preview.kind {
+    /// 回复框里引用的那一行（`ReplyNoteStack`）没有画面时也写它。
+    static func icon(_ kind: PiPreviewKind?) -> Icon {
+        switch kind {
         case .audio: .audio
         case .video: .play
         case .model: .inspect3D
@@ -207,7 +210,7 @@ struct DeliverableTile: View {
                 if let image = shown?.image {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
                         // 深色下页面与截图多是亮底，原样放在暗纸上刺眼：压暗一层（同 `Thumbnail`）；要你看清的图不压
-                        .overlay { if preview.kind != .video, !isShot { palette.mediaDim } }
+                        .overlay { if preview.kind != .video, !isShot, !DeliverableLooks.drawn(preview.kind) { palette.mediaDim } }
                         .transition(.opacity)
                 } else if waiting {
                     EmptyView()
@@ -268,9 +271,9 @@ struct DeliverableTile: View {
     private var box: LookBox {
         let pixels = { (points: CGFloat) in Int(points * scale) }, row = PreviewBatch.rowHeight
         return switch shape {
-        case .hero: LookBox(width: pixels(row * 16 / 9), height: pixels(row), fills: true)
-        case .column: LookBox(width: pixels(row * 2), height: pixels(row), fills: false)
-        case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true)
+        case .hero: LookBox(width: pixels(row * 16 / 9), height: pixels(row), fills: true, dark: palette.dark)
+        case .column: LookBox(width: pixels(row * 2), height: pixels(row), fills: false, dark: palette.dark)
+        case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true, dark: palette.dark)
         case .shot(let side, _): LookBox(width: pixels(side), height: pixels(side), fills: true, framed: true)
         }
     }

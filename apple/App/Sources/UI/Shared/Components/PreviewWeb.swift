@@ -13,6 +13,9 @@ struct PreviewWeb: View {
     @State private var rules: WKContentRuleList?
     @State private var failure: String?
     @State private var unreadable = false
+    #if os(macOS)
+    @Environment(\.previewFlight) private var flight
+    #endif
 
     var body: some View {
         Group {
@@ -35,7 +38,12 @@ struct PreviewWeb: View {
             do {
                 rules = try await PreviewWebGuard.rules()
                 DebugHooks.previewWebLoaded(file)
-            } catch { failure = error.localizedDescription }
+            } catch {
+                failure = error.localizedDescription
+                #if os(macOS)
+                flight?.pagePainted()
+                #endif
+            }
         }
     }
 }
@@ -137,37 +145,54 @@ private struct OfflineWebView {
 
         init(unreadable: Binding<Bool>) { self.unreadable = unreadable }
 
-        deinit { loading?.cancel() }
+        deinit {
+            loading?.cancel()
+            painting?.cancel()
+        }
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
             PreviewWebGuard.allows(action.navigationType, to: action.request.url) ? .allow : .cancel
         }
 
+        /// 载完后等页面真画上一帧才换下占位（手机盖着的缩略图，Mac 飞来停着的快照，`painted`）：didFinish 时 WebKit 还没画，
+        /// 当场撤占位会露出几帧空白（模拟器逐帧录屏实测四帧）。页面再画两帧（脚本画的图表、字体落定；藏着时帧可能不来，最多等 300ms，
+        /// 同 `PageSnapshots`），App 这边再提交一帧。
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             finished = true
-            uncover()
+            painting = Task { [weak self, weak webView] in
+                _ = try? await webView?.callAsyncJavaScript(
+                    "await new Promise(done => { requestAnimationFrame(() => requestAnimationFrame(done)); setTimeout(done, 300) })",
+                    contentWorld: .page)
+                await NextFrame.wait()
+                self?.painted()
+            }
         }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) { fail(webView) }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) { fail(webView) }
 
         /// 自己装载的那一次没载出来：WebKit 会在页上铺一行它的报错（如"OfficeImportErrorDomain 错误 912"），藏起页面、换成读不了
         private func fail(_ webView: WKWebView) {
-            uncover()
+            painted()
             guard !finished else { return }
             webView.isHidden = true
             unreadable.wrappedValue = true
         }
 
+        var painting: Task<Void, Never>?
+
         #if os(iOS)
-        /// 载完（或载不了）之前盖在页面上的缩略图画面（`PreviewCover`）；拦截规则装好不算载完
+        /// 画上第一帧（或载不了）之前盖在页面上的缩略图画面（`PreviewCover`）；拦截规则装好不算载完
         var cover: UIView?
 
-        private func uncover() {
+        private func painted() {
             cover?.removeFromSuperview()
             cover = nil
         }
         #else
-        private func uncover() {}
+        /// 落地等这一页画上第一帧（`PreviewFlight.pagePainted`）
+        weak var flight: PreviewFlight?
+
+        private func painted() { flight?.pagePainted() }
         #endif
     }
 }
@@ -216,7 +241,10 @@ private enum DocumentLayout {
 #if os(macOS)
 extension OfflineWebView: NSViewRepresentable {
     static let edges = Edge.Set.bottom
-    func makeNSView(context: Context) -> WKWebView { make(context.coordinator) }
+    func makeNSView(context: Context) -> WKWebView {
+        context.coordinator.flight = context.environment.previewFlight
+        return make(context.coordinator)
+    }
     func updateNSView(_ view: WKWebView, context: Context) {}
 }
 #else
@@ -226,7 +254,8 @@ extension OfflineWebView: UIViewRepresentable {
     static let edges = Edge.Set.all
     func makeUIView(context: Context) -> WKWebView {
         let view = make(context.coordinator)
-        let cover = PreviewCover(look: context.environment.previewLook)
+        // 垫桌面色、盖住整页：页面画出一部分时不从缩略图四周露出来（两层字）
+        let cover = PreviewCover(look: context.environment.previewLook, ground: UIColor(context.environment.palette.desk))
         cover.frame = view.bounds
         cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(cover)

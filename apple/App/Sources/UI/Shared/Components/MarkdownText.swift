@@ -6,7 +6,9 @@ import SwiftUI
 /// 不用每块各开一套；iOS 上逐段一个 `Text`（整串一个时排版随段数成倍变慢，见 `Paragraphs`）。表格单独一块、整张横向滚，自己可选（一格一个选择单元，选不到表格外；
 /// 表格前后的正文是两段，也不连在一起）。
 /// `Text` 只认字体、颜色、底色、链接、下划线这类行内属性，不认段落缩进与段距，所以结构用字符摆：块与块之间隔一个小字号的空行当段距，
-/// 列表项是缩进的空格加序号，引用前一个竖条字符，代码块是等宽字加底色；列表项折行时回到左边，不悬挂缩进。
+/// 列表项是缩进的空格加序号，引用前一个竖条字符，代码块是等宽字加底色；回答里列表项折行时回到左边，不悬挂缩进：
+/// 悬挂缩进要每项一个视图（`Text` 不认段落样式的 headIndent，Xcode 27 实测），Mac 上一条回答就不能连着拖选了，连选更要紧。
+/// 文稿（`document`）是读的，列表一项一行、折行对齐正文（`ListRows`），选字在一项之内。
 /// 行内：链接加下划线（强调色是墨，不画线就认不出），行内代码垫一层淡底。表格只画细线：表头淡底，行间一道线。
 /// 批注过的那几处（`notes`，见 `ReplyNote`）垫选中色的浅底、下面一道签名色的点线，是一个链接：点它打开那条批注。
 /// 文字可选（`selectable()`）给每个 `Text` 多一个交互视图与一份 TextKit 版面，约占滚动一帧的一成半到两成半；表格一格一个，表格多的回答每帧更贵。
@@ -47,6 +49,8 @@ struct MarkdownText: View, Equatable {
                         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                         .scrollClipDisabled(columnBleeds)
                         .modifier(MoreToTheRight(enabled: !columnBleeds))
+                case .list(let items):
+                    ListRows(items: items)
                 case .code(let code):
                     ScrollView(.horizontal) {
                         Text(verbatim: code).font(Typography.code).foregroundStyle(palette.ink).fixedSize().textSelection(.enabled)
@@ -65,12 +69,20 @@ struct MarkdownText: View, Equatable {
         case prose(AttributedString)
         case table(MarkdownTable)
         case code(String)
+        case list([MarkdownBlock])
 
         static func of(_ source: String, _ palette: Palette, notes: [ReplyNote], style: Style) -> [Run] {
             var runs: [Run] = []
             var pending: [MarkdownBlock] = []
             var prose = 0
+            var items: [MarkdownBlock] = []
+            func flushList() {
+                guard !items.isEmpty else { return }
+                runs.append(.list(items))
+                items = []
+            }
             func flush() {
+                flushList()
                 guard !pending.isEmpty else { return }
                 var text = MarkdownText.attributed(pending, palette, style: style)
                 for note in notes where note.run == prose { MarkdownText.mark(note, in: &text, palette) }
@@ -85,7 +97,11 @@ struct MarkdownText: View, Equatable {
                 } else if style == .document, case .code(let code) = block {
                     flush()
                     runs.append(.code(code))
+                } else if style == .document, case .item = block {
+                    flush()
+                    items.append(block)
                 } else {
+                    flushList()
                     pending.append(block)
                 }
             }
@@ -183,6 +199,33 @@ struct MarkdownText: View, Equatable {
             }
         }
         return string
+    }
+}
+
+/// 文稿里的一串列表项：每项一行，序号占一列、折行对齐正文（悬挂缩进），下一级缩进一列；每项的字自己可选。
+private struct ListRows: View {
+    let items: [MarkdownBlock]
+    @Environment(\.palette) private var palette
+    /// 序号那一列宽（约一个半字，放得下"10."）；下一级也缩进这么多，正好对齐上一级的正文
+    @ScaledMetric(relativeTo: .body) private var marker: CGFloat = 24
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Typography.readingLineSpacing) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                if case .item(let mark, let text, let depth) = item {
+                    HStack(alignment: .firstTextBaseline, spacing: 0) {
+                        Text(verbatim: mark == "•" && depth > 0 ? "◦" : mark).font(Typography.reading).foregroundStyle(palette.ink3)
+                            .frame(width: marker, alignment: .leading)
+                        Text(MarkdownText.attributed([.paragraph(text)], palette, style: .document))
+                            .lineSpacing(Typography.readingLineSpacing).selectable()
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.leading, CGFloat(depth) * marker)
+                }
+            }
+        }
+        // 一段文字里块与块之间隔着一个小空行（`attributed`）；拆出来的列表与前后的段之间补回差不多的空
+        .padding(.vertical, Spacing.item)
     }
 }
 

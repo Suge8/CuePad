@@ -20,6 +20,8 @@ struct PreviewPage: View {
     var body: some View {
         switch preview.kind {
         case .image: PreviewImage(file: file, look: look).ignoresSafeArea()
+            // 图在平台视图里画，读屏摸不到：整张是一个图，读它的标题
+            .accessibilityElement().accessibilityLabel(Text(verbatim: preview.title)).accessibilityAddTraits(.isImage)
         case .pdf: PreviewPDF(file: file).ignoresSafeArea()
         case .video, .audio: PreviewPlayer(file: file, active: active, look: look)
         case .text: PreviewText(file: file).ignoresSafeArea()
@@ -106,9 +108,11 @@ final class PreviewCover: UIView {
     private let imageView = UIImageView()
     private var aspect: CGFloat?
 
-    init(look: PreviewLook?) {
+    /// `ground`：缩略图四周铺的底色，给了就盖住下面的内容（网页画出一部分时不露出来）；默认透明
+    init(look: PreviewLook?, ground: UIColor = .clear) {
         super.init(frame: .zero)
         isUserInteractionEnabled = false
+        backgroundColor = ground
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         addSubview(imageView)

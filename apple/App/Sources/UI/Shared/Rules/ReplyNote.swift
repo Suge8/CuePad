@@ -31,6 +31,12 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
         self.preview = preview.id
     }
 
+    /// 引用的那份预览，按编号从这个会话此刻的预览里取（`SessionDigest.previews`）：引用只记编号，画面显示时再取，
+    /// 预览随对话过期删掉后取不到（nil），这一行仍照标题发出。
+    func quoted(in previews: [PiPreview]) -> PiPreview? {
+        preview.flatMap { id in previews.first { $0.id == id } }
+    }
+
     var range: NSRange { NSRange(location: location, length: quote.utf16.count) }
 
     /// 正在写的一条（`AppSettings.editReplyNote`）：`fresh` 是还没进草稿的新的一条，记下时才排进去。
