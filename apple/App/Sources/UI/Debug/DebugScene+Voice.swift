@@ -91,7 +91,7 @@ extension DebugScene {
             if !fixturePosted, call.phase == .listening, let text = defaults.string(forKey: "CuePadVoiceReadFixture") {
                 fixturePosted = true
                 Task {
-                    do { try await workspace.services.store.addCueMessage(.cue, text: text) }
+                    do { try await workspace.services.store.addCueMessage(.cue, text: text, answeredRequests: []) }
                     catch { note("fixture-error \(error)"); call.hangUp() }
                 }
             }
