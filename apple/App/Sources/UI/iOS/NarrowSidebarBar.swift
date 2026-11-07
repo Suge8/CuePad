@@ -113,7 +113,7 @@ private struct QuotaButton: View {
         .accessibilityHint(quotas.isEmpty ? "看怎么才会有额度" : "看每个窗口还剩多少、多久后重置")
         .popup(isPresented: $open) { QuotaDetail().padding(Spacing.panel) }
         .debugExposesQuota { open.toggle() }
-        .refreshesQuota()
+        .refreshesQuota(open: open)
     }
 
     private func ring(_ quotas: [AccountQuota], at now: Date) -> some View {

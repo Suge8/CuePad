@@ -7331,6 +7331,22 @@
         }
       }
     },
+    "再查一次额度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checks usage again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再查一次额度"
+          }
+        }
+      }
+    },
     "再说一次" : {
       "localizations" : {
         "en" : {
@@ -16871,6 +16887,22 @@
         }
       }
     },
+    "正在查询" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在查询"
+          }
+        }
+      }
+    },
     "正在检测 Agent…" : {
       "localizations" : {
         "en" : {
@@ -17719,6 +17751,22 @@
         }
       }
     },
+    "没有连着 Pi 会话的 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Mac has a Pi session online"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有连着 Pi 会话的 Mac"
+          }
+        }
+      }
+    },
     "没法安全地打开这个页面" : {
       "localizations" : {
         "en" : {
@@ -17827,6 +17875,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没能改名"
+          }
+        }
+      }
+    },
+    "没能查到最新额度：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t update usage: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没能查到最新额度：%@"
           }
         }
       }
@@ -22695,18 +22759,18 @@
         }
       }
     },
-    "这台 Mac 上没有在线的 Agent 会话，查不了额度" : {
+    "这台 Mac 上没有在线的 Pi 会话" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No agent session is running on this Mac, so usage can't be checked"
+            "value" : "No Pi session is online on this Mac"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这台 Mac 上没有在线的 Agent 会话，查不了额度"
+            "value" : "这台 Mac 上没有在线的 Pi 会话"
           }
         }
       }
@@ -24543,22 +24607,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "额度查询失败"
-          }
-        }
-      }
-    },
-    "额度查询失败，请稍后再试" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t check usage. Try again later"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "额度查询失败，请稍后再试"
           }
         }
       }

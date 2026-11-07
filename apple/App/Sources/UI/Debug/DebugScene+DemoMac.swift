@@ -5,8 +5,24 @@ import Foundation
 import Observation
 
 extension DebugScene {
+    /// `-CuePadQuotaFails YES`（配 `-CuePadDemoMac YES`）：各台演示 Mac 对额度刷新请求按"没有在线的 Pi 会话"写回（同 Mac 上会话还没连好时），
+    /// 画面等到明细里没查到那一行出来才算就绪（截图看它的样子，`QuotaRefreshNote`）。
+    private static let quotaFails = defaults.bool(forKey: "CuePadQuotaFails")
+
     static func runDemoMac(_ services: AppServices) async {
         let store = services.store, host = "demo-mac"
+        if quotaFails {
+            // 别的演示 Mac（demo-mini）上也有在线会话：同样按没查到写回，不然手机一直等它（没人领取的请求由投送层收尾）
+            for other in services.quotaRefreshKey where other != host {
+                let executor = DeliveryExecutor(store: store, hostID: other, onIssue: { _ in }) { request, _ in
+                    request.mode == .known(.quota) ? .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) : .succeeded
+                }
+                await running("演示 Mac 答额度") { try await executor.start() }
+            }
+            holdingReady {
+                for await failed in Observations({ if case .failed = services.accountQuotas.phase { true } else { false } }) where failed { return }
+            }
+        }
         func reachable() async {
             for await offline in Observations({ services.syncStatus == .offline }) where !offline { return }
         }
@@ -29,9 +45,10 @@ extension DebugScene {
                 await reachable()
                 try await Task.sleep(for: .seconds(1.2))
                 // 与真的 Mac 一样，说出去的话送达后记一条发送记录（任务因此进行中、关联到这个会话）
-                let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request, _ in
+                let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { [quotaFails] request, _ in
                     await Task.wait(for: .seconds(1))
                     if let outcome = await DemoAgentLibrary.apply(request, store: store) { return outcome }
+                    if quotaFails, request.mode == .known(.quota) { return .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) }
                     if request.mode == .known(.send) {
                         do {
                             _ = try await store.recordSend(request.content, to: request.target, card: request.cardID, delivery: request.id, origin: request.origin)

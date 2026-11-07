@@ -160,7 +160,7 @@ final class AppServices {
         store: store, pi: pi, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: piStateRecorder, library: library,
         upload: { [weak self] id in await self?.upload(id) },
         fetchFile: { [sync] key in try await sync.fetchFile(key) },
-        refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
+        refreshQuota: { [weak self] in await self?.refreshQuota(.manual) },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
     @ObservationIgnored lazy var hotkey = GlobalHotkey(

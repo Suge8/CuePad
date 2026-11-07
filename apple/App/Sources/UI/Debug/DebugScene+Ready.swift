@@ -21,6 +21,15 @@ extension DebugScene {
         }
     }
 
+    /// 画面要等这件事做完才算摆好（同 `later`，等的是一件事而不是一段时间）。
+    static func holdingReady(_ work: @escaping @MainActor () async -> Void) {
+        pending += 1
+        Task {
+            await work()
+            pending -= 1
+        }
+    }
+
     /// `-CuePadNotice <文字>`：就绪后 5 秒弹一条带去处（点它去进展页）与撤销（什么都不做）的提示，按真实时长收：
     /// 录屏都在就绪后才开录（Mac 实测晚 3 秒多），等这么久才录得到进场、停留与收起；`CUEPAD_REC_SECONDS` 给到 18。
     static func noticeIfAsked(_ workspace: Workspace) async {

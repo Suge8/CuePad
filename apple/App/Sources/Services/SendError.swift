@@ -30,9 +30,6 @@ nonisolated enum SendError: Error, Equatable {
     case alreadyHanded
     /// 对 Cue 说的话已交给了它，撤不回。
     case alreadyHeard
-    /// 查订阅额度要经在线 Agent 会话里的扩展，这台 Mac 上此刻没有。
-    case noLiveSession
-    case quotaUnavailable
 }
 
 extension SendError: ShownError {
@@ -53,8 +50,6 @@ extension SendError: ShownError {
         case .directoryMissing(let folder): "目录不存在：\(folder)"
         case .alreadyHanded: "这句可能已经交出，不能安全撤回"
         case .alreadyHeard: "Cue 已经收到这句了，撤不回"
-        case .noLiveSession: "这台 Mac 上没有在线的 Agent 会话，查不了额度"
-        case .quotaUnavailable: "额度查询失败，请稍后再试"
         }
     }
 }

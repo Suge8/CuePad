@@ -90,8 +90,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         statusItem = DebugHooks.scripted ? nil : StatusItemController(
             togglePanel: {
                 panel.toggle(below: $0)
-                // 面板常驻、内容不重建：弹出时在这里看额度是否陈旧
-                if panel.isVisible { Task { await workspace.refreshQuota() } }
+                // 面板常驻、内容不重建（没有 SwiftUI 的出现）：弹出时在这里刷新一次额度
+                if panel.isVisible { Task { await services.refreshQuota(.automatic) } }
             },
             toggleWindow: { window.toggleFromMenu() })
 
