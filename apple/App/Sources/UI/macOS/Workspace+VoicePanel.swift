@@ -4,7 +4,7 @@ import SwiftUI
 /// 通话组件的宿主：开合与选择哪一件是呈现状态，业务动作全部回到 Workspace。
 struct CueVoicePanel: View {
     /// 宿主给阅读与控制保留的高度；回复区超出其余空间时滚动查看。
-    static let minimumHeight: CGFloat = 300
+    static let minimumHeight: CGFloat = 342
     let availableHeight: CGFloat
     @Environment(Workspace.self) private var workspace
     @State private var choosingExecution = false
