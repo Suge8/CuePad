@@ -115,7 +115,8 @@ extension CueKeeper {
     }
 
     /// 这会儿交得出去的：你的话里的附件都在这台 Mac 上（图交给大脑、文件的路径写进话里，`CueEnvelope.delivered`）。
-    /// 不在的在旁边取（`fetchAttachments`，至迟到写下后 `DeliveryRequest.phaseLimit`，同投送请求的派发期限），取到了再对一次账：等文件不挡后面的话。
+    /// 不在的在旁边取（`fetchAttachments`，从这台开始等起至多 `DeliveryRequest.phaseLimit`），取到了再对一次账：等文件不挡后面的话。
+    /// 不从写下算：手机离线时写下、连上才到的话照样等得到附件，手机与这台的钟差也不混进来。
     /// 取不来或到点的对你说一声，话照交。
     func ready(_ pending: [CueMessage]) -> [CueMessage] {
         pending.filter { message in
@@ -123,7 +124,7 @@ extension CueKeeper {
             let missing = CueFormat.attachmentKeys(in: message.text).filter { store.files.fileURL(for: $0) == nil }
             guard !missing.isEmpty else { return true }
             if fetchingFiles[message.id] == nil {
-                fetchingFiles[message.id] = fetch(missing, for: message.id, until: message.createdAt.addingTimeInterval(DeliveryRequest.phaseLimit))
+                fetchingFiles[message.id] = fetch(missing, for: message.id, until: store.timing.now().addingTimeInterval(DeliveryRequest.phaseLimit))
             }
             return false
         }

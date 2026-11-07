@@ -75,8 +75,9 @@ public enum DeliveryOrigin: String, Sendable, CaseIterable {
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
 ///
 /// 生命周期只有这一个状态机（持久状态 `DeliveryStatus`，各端此刻的样子由 `Speech.trip` 从记录与此刻推出）：
-/// - 写下即 `pending`，带着写它的一方定的派发期限（`deadlineAt` = 写下 + `phaseLimit`）；
-/// - 执行的 Mac 缺附件时仍是 `pending`、在旁边取；现有会话没就绪时转 `preparing`（原因在 `reason`）；两种等待的期限都不变、不续；
+/// - 写下即 `pending`。派发期限只有一个锚点：服务器收下它的时刻（`serverAt`）+ `phaseLimit`（`dispatchDeadline`）。
+///   不按写下时刻算：手机离线时写下、连上才传上去的照常送到，写方与 Mac 的钟差也不混进来。还没到服务器的不算到期，可以撤回；
+/// - 执行的 Mac 缺附件时仍是 `pending`、在旁边取；现有会话没就绪时转 `preparing`（原因在 `reason`）；两种等待都守同一个派发期限、不续；
 /// - 期限前领取转 `executing`（新的执行期限），之后 `confirming` → `succeeded` / `failed` / `unconfirmed`；
 /// - 期限到了还没领取：执行的 Mac 写回 `failed`（`expiry`），手机收到后允许重发；
 /// - 发送方到期仍没收到结果：只结束等待，显示未确认；旧快照不能证明 Mac 没领取，不能授权安全重发。
@@ -94,12 +95,14 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var handledBy: String?
   public var createdAt: Date
   public var completedAt: Date?
-  /// 当前阶段的硬截止：等派发（`pending`、`preparing`）的由写下它的一方定，领取后换成执行、确认的期限。不随同步、绑定或重开续期；
-  /// 没有期限的（结构 90 之前写下的）按已到期处理。
+  /// 领取后的执行、确认阶段的硬截止：进入阶段时写，不随同步、绑定或重开续期。等派发的期限不存在这里（`dispatchDeadline`）。
   public var deadlineAt: Date? = nil
   public var modifiedAt: Date
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
+  /// 服务器收下它的时刻（CloudKit 记录的 creationDate，服务器的钟）：拉到它的一方从拉到的记录记下，写它的一方从上传成功带回的记录记下，
+  /// 两边是同一个值；只在本机，不同步。还没到过服务器的为 nil。
+  public internal(set) var serverAt: Date? = nil
   /// 谁写的（见 `DeliveryOrigin`）；nil 是你。
   public var origin: Open<DeliveryOrigin>?
   /// 服务器收下过这条请求（读的时候由同步元数据推出，不存，`Speech.reachedServerSQL`）：说的话"已发出"的依据。
@@ -120,9 +123,20 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     return reason
   }
 
-  /// 每个持久阶段（等派发、执行）的期限：写下后这么久还没领取就不再派发，领取后这么久还没结果就是未确认。
+  /// 每个持久阶段（等派发、执行）的期限：服务器收下后这么久还没领取就不再派发，领取后这么久还没结果就是未确认。
   /// 留足手机传大附件、Mac 等会话就绪的时间。
   public static let phaseLimit: TimeInterval = 600
+
+  /// 派发期限：服务器收下后 `phaseLimit`。`local` 是接收的就是读它的这台（写给自己的不经服务器，还没传上去时按写下算，同一台的钟）；
+  /// 发给别处、还没到服务器的为 nil：不算到期。执行的 Mac 读到的请求都是发给它的，传 true；SQL 里同一条是 `dispatchDeadlineSQL`。
+  public func dispatchDeadline(local: Bool) -> Date? {
+    (serverAt ?? (local ? createdAt : nil)).map { $0.addingTimeInterval(Self.phaseLimit) }
+  }
+
+  /// `dispatchDeadline(local: true)` 的 SQL（毫秒），表别名 `alias`。
+  static func dispatchDeadlineSQL(_ alias: String) -> String {
+    "(COALESCE(\(alias).serverAt, \(alias).createdAt) + \(Int(phaseLimit * 1000)))"
+  }
 
   /// 到期仍未派发的原因：执行的 Mac 写回，带着当时在等什么（`reason`）。
   public var expiry: ShownText {
@@ -194,11 +208,11 @@ extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
     "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
-    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "deadlineAt",
+    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "serverAt", "deadlineAt",
   ]
-  static let syncedColumns = columns.filter { $0 != "resultReceivedAt" }
+  static let syncedColumns = columns.filter { !["resultReceivedAt", "serverAt"].contains($0) }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, reason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, deadlineAt]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, reason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt, deadlineAt]
   }
   init(row: Row) {
     self.init(
@@ -206,8 +220,8 @@ extension DeliveryRequest: Record {
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
       status: Open(rawValue: row.text(8)), reason: row.textOrNil(9).flatMap(ShownText.init(stored:)), handledBy: row.textOrNil(10),
-      createdAt: row.date(11), completedAt: row.dateOrNil(12), deadlineAt: row.dateOrNil(16), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14),
-      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(17))
+      createdAt: row.date(11), completedAt: row.dateOrNil(12), deadlineAt: row.dateOrNil(17), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14), serverAt: row.dateOrNil(16),
+      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(18))
   }
 }
 

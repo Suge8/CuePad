@@ -36,7 +36,8 @@ package struct SyncRow: Codable, Equatable, Sendable {
 }
 
 package enum RemoteChange: Sendable {
-  case save(SyncRow, systemFields: Data)
+  /// `serverAt`：服务器收下这条记录的时刻（投送请求记进本机列 `DeliveryRequest.serverAt`）。
+  case save(SyncRow, systemFields: Data, serverAt: Date? = nil)
   case delete(SyncKey)
 }
 
@@ -231,7 +232,8 @@ extension CueStore {
   /// 你发出的话的那条消息（带请求标识，`PiChatMessage.deliveryID`）上了服务器，同一事务里收走它的投送请求（写对话时已记为送到，`applyTranscript`）。
   /// 不在写对话时收：请求的删除随回执马上传，消息走后台那一路、要等合并窗口与前面的批次，别的设备会先收到删除、气泡就空着。
   /// 服务器上删除排在消息之后，拉到删除时消息已经在了。
-  package func markPushed(_ pushed: [(row: SyncRow, systemFields: Data)]) throws {
+  /// `serverAt` 是服务器收下它的时刻（上传回执里那条记录的 creationDate）：投送请求记进本机列 `DeliveryRequest.serverAt`，同拉到时（`RemoteChange.save`）。
+  package func markPushed(_ pushed: [(row: SyncRow, systemFields: Data, serverAt: Date?)]) throws {
     guard !pushed.isEmpty else { return }
     let messages = JSONColumn.encode(pushed.filter { $0.row.table == .piMessages }.map(\.row.id))
     let deletedMeanwhile = try write {
@@ -240,8 +242,11 @@ extension CueStore {
         DELETE FROM deliveryRequests WHERE mode = '\(DeliveryMode.send.rawValue)'
           AND id IN (SELECT deliveryID FROM piMessages WHERE id IN (SELECT value FROM json_each(?)) AND deliveryID IS NOT NULL)
         """, [messages])
-      return try pushed.compactMap { row, systemFields -> String? in
+      return try pushed.compactMap { row, systemFields, serverAt -> String? in
         try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
+        if row.table == .deliveryRequests, let serverAt {
+          try db.run("UPDATE deliveryRequests SET serverAt = ? WHERE id = ? AND serverAt IS NULL", [serverAt, row.id])
+        }
         // 通知标志随这次上传送出，之后不能再被本机别的改动带上去（见 `PiStateRecorder`）；不动修改时间，不会让记录重新待推送
         if Table.notifyFlagged.contains(row.table), let sent = row.fields["notify"], sent != .null {
           try db.run("UPDATE \(row.table.rawValue) SET notify = NULL WHERE id = ? AND notify = ?", [row.id, sent])

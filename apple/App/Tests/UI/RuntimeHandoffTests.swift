@@ -15,6 +15,11 @@ struct RuntimeHandoffTests {
         let text = mode == .start ? PiLaunch(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
         await workspace.speak(text, to: .session(target, host: "mac-worker", mode: mode, card: task.id)).value
         let request = try #require(try await store.deliveryRequests().first)
+        if status == "pending" {
+            // 服务器收下了（派发期限从这一刻起算），那台 Mac 一直没领取
+            let row = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
+            try await store.markPushed([(row, Data(), clock.now)])
+        }
         func now() async throws -> CueNow {
             CueNow(try await CueDigest.read(from: store), at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
         }

@@ -4795,6 +4795,22 @@
         }
       }
     },
+    "上一次开会话的结果已经查不到了，可以再开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The last session start can no longer be found. You can start again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一次开会话的结果已经查不到了，可以再开"
+          }
+        }
+      }
+    },
     "上下文" : {
       "localizations" : {
         "en" : {

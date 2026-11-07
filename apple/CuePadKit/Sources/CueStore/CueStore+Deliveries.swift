@@ -33,8 +33,8 @@ extension CueStore {
     let now = Date.stamp
     let request = DeliveryRequest(
       id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
-      status: .known(.pending), reason: nil, handledBy: nil, createdAt: now, completedAt: nil,
-      deadlineAt: now.addingTimeInterval(DeliveryRequest.phaseLimit), modifiedAt: now, resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
+      status: .known(.pending), reason: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
+      resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
     try insert(request)
     for key in Set(request.attachmentKeys) { try registerAttachment(key) }
     if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {

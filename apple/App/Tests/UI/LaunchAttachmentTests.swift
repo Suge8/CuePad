@@ -65,7 +65,7 @@ struct LaunchAttachmentTests {
     }
 
     /// 手机开新会话、第一句带的附件到派发期限还没传到 Mac：Mac 写回明确失败，手机的新会话输入框按失败显示原因、解锁；
-    /// 失败的请求过了 Mac 的保留期仍留着（不然输入框又锁回"在开"、原因也没了），再开时新请求替换它。
+    /// 失败的请求过了 Mac 的保留期仍留着（原因还在），再开时新请求替换它；被替换、库里已找不到的那一次不再锁输入框。
     @Test func 新会话附件到期还没传到Mac_写回失败_手机解锁可再开() async throws {
         let clock = ManualTiming()
         let mac = TestApp(timing: clock.timing)
@@ -91,25 +91,30 @@ struct LaunchAttachmentTests {
             try await phone.services.launchSession(
                 in: Project.defaultID, prompt: draft.stored, title: "CuePad", on: TestApp.hostID, card: nil, agent: .pi, replacing: previous?.request)
         }
-        func phase(_ launch: SessionLaunch) async throws -> LaunchProgress.Phase {
-            for try await progress in phone.services.store.observe({ try launch.progress(from: $0) }) { return progress.phase(at: phone.services.speech) }
+        // 输入框读的那份进度，与它据此锁不锁（`NewSessionInput` 的 `inFlight`）
+        func progress(_ launch: SessionLaunch) async throws -> LaunchProgress {
+            for try await progress in phone.services.store.observe({ try launch.progress(from: $0) }) { return progress }
             throw CancellationError()
         }
+        func phase(_ launch: SessionLaunch) async throws -> LaunchProgress.Phase { try await progress(launch).phase(at: phone.services.speech) }
+        func locked(_ launch: SessionLaunch) async throws -> Bool {
+            LaunchProgress.locksInput(sending: false, launched: launch, progress: try await progress(launch), at: phone.services.speech)
+        }
+        // 经服务器转一手：此刻服务器收下（拉到它的那台记下收下的时刻）
         func relay(_ id: UUID, from: TestApp, to: TestApp) async throws {
             let row = try #require(try await from.services.store.syncRow(recordName: id.uuidString.lowercased()))
-            #expect(try await to.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
+            #expect(try await to.services.store.applyRemote([.save(row, systemFields: Data(), serverAt: clock.now)]).isEmpty)
         }
 
         let first = try await launch(replacing: nil)
         try await relay(first.request, from: phone, to: mac)
         try await eventually("Mac 在旁边取附件") { fetches.withLock { $0 } > 0 }
-        let sending = try await phase(first)
-        guard case .sending = sending else { Issue.record("发出后应是在路上"); return }
-        #expect(sending.locksInput(sending: false, launched: true), "在路上时回复框锁住")
+        guard case .sending = try await phase(first) else { Issue.record("发出后应是在路上"); return }
+        #expect(try await locked(first), "在路上时回复框锁住")
 
         let request = try #require(try await mac.services.store.deliveryRequest(first.request))
         await clock.waitForSleeper()
-        clock.advance(.seconds(try #require(request.deadlineAt).timeIntervalSince(clock.now)))
+        clock.advance(.seconds(try #require(request.dispatchDeadline(local: true)).timeIntervalSince(clock.now)))
         let failed = try await mac.services.store.outcome(of: request)
         #expect(failed.failure == "附件到期还没传到这台 Mac，没有发出，可以重发")
         #expect(mac.host.calls.isEmpty)
@@ -121,15 +126,17 @@ struct LaunchAttachmentTests {
             before: now, claimCutoff: now, keptCutoff: now.addingTimeInterval(-DeliveryExecutor.keptRetention))
         #expect(try await mac.services.store.deliveryRequest(first.request) != nil)
         try await relay(first.request, from: mac, to: phone)
-        let failedPhase = try await phase(first)
-        #expect(failedPhase == .failed(.reported("附件到期还没传到这台 Mac，没有发出，可以重发")))
-        #expect(!failedPhase.locksInput(sending: false, launched: true), "失败后回复框解锁、可以再开")
+        #expect(try await phase(first) == .failed(.reported("附件到期还没传到这台 Mac，没有发出，可以重发")))
+        #expect(try await !locked(first), "失败后回复框解锁、可以再开")
 
         let second = try await launch(replacing: first)
         let after = try await phone.services.store.deliveryRequests()
         #expect(after.map(\.id) == [second.request])
         #expect(after.first?.launch?.prompt == draft.stored)
-        #expect(try await phase(second).locksInput(sending: false, launched: true), "再开后回复框又锁住")
+        #expect(try await locked(second), "再开后回复框又锁住")
+        // 被替换的那一次库里已没有：说不出结果，也不锁
+        #expect(try await phase(first) == .missing)
+        #expect(try await !locked(first), "找不到这次的请求时解锁")
         await mac.services.executor.beginStop()()
     }
 }

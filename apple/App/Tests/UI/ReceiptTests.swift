@@ -19,8 +19,9 @@ struct ReceiptTests {
         let inner: SimulatedCloud
         var down = false
 
-        init() {
-            inner = SimulatedCloud([.peerFloor(CueStore.peerFloor)])
+        /// `now`：服务器的钟（收下记录时盖的 `creationDate`）。
+        init(now: @escaping @Sendable () -> Date = Date.init) {
+            inner = SimulatedCloud([.peerFloor(CueStore.peerFloor)], now: now)
         }
 
         func setDown(_ down: Bool) { self.down = down }
@@ -128,7 +129,7 @@ struct ReceiptTests {
     /// Mac 回执的那句已送达；另一句一直没人领取，派发期限前是已发出，期限再过一个回执窗口是未确认，迟到的回执仍收敛原句。
     @Test
     func 说的话到服务器是已发出_回执是已送达_一次失败不让别的话变红_断着时排着不到点_没回执到点() async throws {
-        let cloud = WeakCloud()
+        let cloud = WeakCloud { [clock] in clock.now }
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, timing: clock.timing)
         let services = app.services!
         let store = services.store
@@ -183,7 +184,8 @@ struct ReceiptTests {
         try await eventually("会话行回到已发出，不再数没送到") { row(services)?.label == "已发出" && services.liveSessions.undelivered["atlas"] == nil }
 
         // 一直没人领取：派发期限前是已发出；期限再过一个回执窗口按未确认显示（领取结果可能还没同步回来）
-        let expires = try #require(second.deadlineAt).addingTimeInterval(Speech.receiptLimit)
+        // 派发期限从服务器收下起算（恢复后传上去的那一刻），不从断网时写下算
+        let expires = try #require(try await store.deliveryRequest(second.id)?.dispatchDeadline(local: false)).addingTimeInterval(Speech.receiptLimit)
         await advance(to: expires.addingTimeInterval(-1))
         #expect(try await trip(of: second, services) == .sent)
         await advance(to: expires)
@@ -272,7 +274,7 @@ struct ReceiptTests {
 
     @Test(arguments: ["future-outcome", "unconfirmed"])
     func 不认识或缺原因的未确认状态不冒充失败_显式再说保留原请求(status: String) async throws {
-        let cloud = WeakCloud()
+        let cloud = WeakCloud { [clock] in clock.now }
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!, workspace = Workspace(services: app.services)
         defer { services.cancelBackgroundWork() }

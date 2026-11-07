@@ -106,9 +106,10 @@ extension UpgradePreparationTests {
         let data = Data("等待下载的附件".utf8), source = app.directory.appending(path: "资料.txt")
         try data.write(to: source)
         let key = AttachmentKey.make(hash: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(), format: "txt")
-        let arrival = AsyncStream<Void>.makeStream()
+        let arrival = AsyncStream<Void>.makeStream(), asked = AsyncStream<Void>.makeStream()
         app.sync.fetching.withLock {
-            $0 = { [files = store.files, ready = arrival.stream] wanted in
+            $0 = { [files = store.files, ready = arrival.stream, asking = asked.continuation] wanted in
+                asking.yield()
                 for await _ in ready { break }
                 _ = try files.store(fileAt: source)
                 return try #require(files.fileURL(for: wanted))
@@ -117,7 +118,7 @@ extension UpgradePreparationTests {
         let request = try await Workspace(services: app.services).said(
             ComposerDraft(text: "恢复后读附件", files: [DraftFile(key: key, name: "资料.txt")]), to: target, mode: .send)
         try await app.services.executor.start()
-        try await eventually("历史会话先准备附件") { try await store.deliveryRequest(request.id)?.deadlineAt != nil }
+        for await _ in asked.stream { break }  // 历史会话先在旁边取附件
         #expect(try await store.deliveryRequest(request.id)?.status == .known(.pending))
         #expect(app.host.calls.isEmpty)
         arrival.continuation.yield()
@@ -160,7 +161,7 @@ extension UpgradePreparationTests {
         let request = try await Workspace(services: app.services).said(ComposerDraft(text: "最后一刻就绪也只送一次"), to: target, mode: .send)
         try await app.services.executor.start()
         let waiting = try await prepared(request, in: app)
-        let due = try #require(waiting.deadlineAt)
+        let due = try #require(waiting.dispatchDeadline(local: true))
         clock.advance(.seconds(due.timeIntervalSince(clock.now) - 1))
         old.close(bye: "reload")
         let file = app.directory.appending(path: "near-deadline.jsonl")
@@ -194,7 +195,7 @@ extension UpgradePreparationTests {
         historical.fields["handledBy"] = .text(TestApp.hostID)
         historical.fields["failure"] = .text(reason.stored)
         #expect(try await app.services.store.applyRemote([.save(historical, systemFields: Data())]).isEmpty)
-        try RawDB(app.databaseURL).exec("ALTER TABLE sessionViewers DROP COLUMN sessionIDs; ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT; ALTER TABLE deliveryRequests ADD COLUMN serverAt INTEGER; PRAGMA user_version = 85")
+        try RawDB(app.databaseURL).exec("ALTER TABLE sessionViewers DROP COLUMN sessionIDs; ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT; PRAGMA user_version = 85")
         app.relaunch()
         #expect(CueStore.schemaVersion(of: app.databaseURL) == CueStore.supportedSchemaVersions.upperBound)
         try await app.services.executor.start()

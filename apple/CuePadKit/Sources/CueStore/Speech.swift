@@ -1,7 +1,8 @@
 import Foundation
 
 /// 一句话的送达证据，由记录、服务器收下过没有与此刻推出，不另存。
-/// 投送请求：发送中、已发出、准备中都在等，到期没收到结果是未确认（本机快照不能证明 Mac 未领取）；
+/// 投送请求：发送中、已发出、准备中都在等；还没到服务器的一直是发送中、不到期；到了服务器，派发期限（`DeliveryRequest.dispatchDeadline`）
+/// 再过一个回执窗口没收到结果是未确认（本机快照不能证明 Mac 未领取）；
 /// 领取后执行、确认超时或本版本不认识的状态只说明未确认，不证明未交出。未确认不自动重发，晚到的正证据可以让它变为已送达。
 /// 对 Cue 说的话没有领取这一步：回执窗口只在同步通着时走，到点是未确认。
 public enum Speech {
@@ -89,8 +90,8 @@ public enum Speech {
   }
 
   public static func trip(_ request: DeliveryRequest, at moment: Moment) -> Trip {
-    if let expires = expiry(of: request) {
-      if moment.now >= expires { return .unconfirmed(unconfirmedReason.text) }
+    if awaitsDispatch(request) {
+      if let expires = expiry(of: request, at: moment), moment.now >= expires { return .unconfirmed(unconfirmedReason.text) }
       if request.status == .known(.preparing) { return .preparing(ShownText("尚未派发：\((request.reason ?? ShownText("等待目标就绪")).embedded)").text) }
       return request.reachedServer && !moment.isLocal(request.hostID) ? .sent : .sending
     }
@@ -103,11 +104,16 @@ public enum Speech {
     }
   }
 
+  /// 还在等派发（没领取、还没开始执行）。
+  private static func awaitsDispatch(_ request: DeliveryRequest) -> Bool {
+    request.status == .known(.preparing) || (request.status == .known(.pending) && request.handledBy == nil)
+  }
+
   /// 等派发快照从什么时候起按未确认显示：派发期限再过一个回执窗口——执行的 Mac 到期就写回失败，这一段等它的结果传回来；
-  /// 已领取或已收尾的为 nil。没有期限的按已到期。
-  static func expiry(of request: DeliveryRequest) -> Date? {
-    guard request.status == .known(.preparing) || (request.status == .known(.pending) && request.handledBy == nil) else { return nil }
-    return request.deadlineAt.map { $0.addingTimeInterval(receiptLimit) } ?? .distantPast
+  /// 已领取、已收尾或还没到服务器（不到期）的为 nil。
+  static func expiry(of request: DeliveryRequest, at moment: Moment) -> Date? {
+    guard awaitsDispatch(request) else { return nil }
+    return request.dispatchDeadline(local: moment.isLocal(request.hostID))?.addingTimeInterval(receiptLimit)
   }
 
   /// 等待到这一刻转为未确认；已有回执、已被领取或此刻同步不通时为 nil。
@@ -119,7 +125,7 @@ public enum Speech {
   /// 投送请求此刻的样子下一次变的时刻（派发、执行或确认等待到期）；已收尾的为 nil。
   public static func deadline(_ request: DeliveryRequest, at moment: Moment) -> Date? {
     guard request.isOpen else { return nil }
-    return expiry(of: request) ?? request.deadlineAt
+    return awaitsDispatch(request) ? expiry(of: request, at: moment) : request.deadlineAt
   }
 
   /// 失败的时刻：执行方写回的完成时刻；其余不算失败。

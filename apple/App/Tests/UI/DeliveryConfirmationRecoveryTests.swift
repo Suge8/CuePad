@@ -136,7 +136,6 @@ extension DeliveryConfirmationTests {
         try RawDB(app.databaseURL).exec("""
             UPDATE deliveryRequests SET status = 'executing', handledBy = '\(TestApp.hostID)';
             ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
-            ALTER TABLE deliveryRequests ADD COLUMN serverAt INTEGER;
             DROP TABLE activityDestinations;
             ALTER TABLE sessionViewers DROP COLUMN sessionIDs;
             ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT;

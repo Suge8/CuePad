@@ -1,7 +1,7 @@
 import Foundation
 
 /// 交出一句话之前，把它引用、本机还没有的附件取到本机，至迟到 `deadline`：投送执行器与 Cue 等附件只经这里，期限是那句话自己的
-/// （投送请求的派发期限 `DeliveryRequest.deadlineAt`；对 Cue 说的话写下后同一段 `DeliveryRequest.phaseLimit`）。
+/// （投送请求的派发期限 `DeliveryRequest.dispatchDeadline`；对 Cue 说的话从 Mac 开始等起同一段 `DeliveryRequest.phaseLimit`）。
 /// 取附件的回调（等附件记录同步过来、再下文件）本身没有时限，所以与期限隔开等（`abandonable`）。
 /// 取齐返回 true，到点返回 false；取不来的错误照原样抛出。
 public func fetchAttachments(

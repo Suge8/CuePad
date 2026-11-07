@@ -15,20 +15,20 @@ extension CueStore {
         """
         UPDATE deliveryRequests AS r SET status = 'executing', handledBy = ?, deadlineAt = ?, failure = NULL,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
-          AND deadlineAt > ?
+          AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [host, deadline, Date.stamp, id, timing.now()])
       return db.changes > 0 ? try find(DeliveryRequest.self, id) : nil
     }
   }
 
-  /// 派发期限不变（写下它的一方定的）。
+  /// 派发期限不变（`DeliveryRequest.dispatchDeadline`）。
   func reserveDeliveryTarget(_ id: UUID, host: String) throws -> DeliveryRequest? {
     try write {
       try db.run("""
         UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = ?, failure = ?,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
-          AND deadlineAt > ?
+          AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [host, DeliveryPreparation.ready.stored, Date.stamp, id, timing.now()])
       return db.changes > 0 ? try find(DeliveryRequest.self, id) : nil
@@ -50,7 +50,7 @@ extension CueStore {
       try db.run("""
         UPDATE deliveryRequests AS r SET status = 'executing', deadlineAt = ?, failure = NULL,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status = 'preparing' AND handledBy = ?
-          AND deadlineAt > ?
+          AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [deadline, Date.stamp, id, host, timing.now()])
       return db.changes > 0 ? try find(DeliveryRequest.self, id) : nil
@@ -151,8 +151,8 @@ extension CueStore {
     try write {
       try db.run(
         """
-        UPDATE deliveryRequests SET status = 'preparing', handledBy = NULL, failure = ?, modifiedAt = MAX(modifiedAt + 1, ?)
-        WHERE id = ? AND status = ? AND status IN ('pending', 'preparing') AND deadlineAt > ?
+        UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = NULL, failure = ?, modifiedAt = MAX(modifiedAt + 1, ?)
+        WHERE id = ? AND status = ? AND status IN ('pending', 'preparing') AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
         """, [reason.stored, Date.stamp, request.id, request.status.rawValue, timing.now()])
       let current = try find(DeliveryRequest.self, request.id)
       return current?.status == .known(.preparing) && current?.handledBy == nil ? current : nil
@@ -167,11 +167,11 @@ extension CueStore {
     }
   }
 
-  /// 派发期限已到、还没领取的（没有期限的按已到期）；还没到的登记到期重读：期限监视订阅它，到点就叫醒（`DeliveryExecutor`）。
+  /// 派发期限已到、还没领取的；还没到的登记到期重读：期限监视订阅它，到点就叫醒（`DeliveryExecutor`）。
   func expiredUnclaimedDeliveries(for host: String) throws -> [DeliveryRequest] {
     let now = timing.now()
     return try pendingDeliveries(for: host).filter { request in
-      guard let due = request.deadlineAt, due > now else { return true }
+      guard let due = request.dispatchDeadline(local: true), due > now else { return true }
       expire(at: due)
       return false
     }

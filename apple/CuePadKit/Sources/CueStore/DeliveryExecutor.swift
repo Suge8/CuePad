@@ -3,7 +3,7 @@ import os
 
 /// Mac 端的投送执行器：只领取发给本机（`hostID` 等于本机）的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，
 /// 把结果写回请求；完成的请求保留 `retention` 后清理（发出的话等它进对话、等认领的开新会话请求等认领，见 `deleteCompletedDeliveries`）。
-/// - 派发期限是写下请求的那一方定的（`DeliveryRequest.deadlineAt`）：到期还没领取的按失败写回（`DeliveryRequest.expiry`），
+/// - 派发期限从服务器收下它起算（`DeliveryRequest.dispatchDeadline`）：到期还没领取的按失败写回（`DeliveryRequest.expiry`），
 ///   Mac 离线太久后不再突然发出旧内容；领取只在期限前；
 /// - 缺前提时在旁边等，与派发期限赛跑，不占执行队列，后面的话照常先执行：引用的附件不在本机就取（`fetchAttachments`，一条请求一个任务，
 ///   请求仍是 pending）；现有会话没就绪就转准备（`preparing`，写下在等什么）等它（`preparation`）；取不来、到期都按失败写回；
@@ -227,8 +227,8 @@ public actor DeliveryExecutor {
     }
   }
 
-  /// 派发期限到了（没有期限的按已到期，`DeliveryRequest.deadlineAt`）。
-  private func isExpired(_ request: DeliveryRequest) -> Bool { request.deadlineAt.map { timing.now() >= $0 } ?? true }
+  /// 派发期限到了（`DeliveryRequest.dispatchDeadline`；领到这里的都是发给本机的）。
+  private func isExpired(_ request: DeliveryRequest) -> Bool { request.dispatchDeadline(local: true).map { timing.now() >= $0 } ?? false }
 
   private struct Dispatch {
     let request: DeliveryRequest
@@ -270,7 +270,7 @@ public actor DeliveryExecutor {
   /// 在旁边把这条请求的附件取齐，至迟到派发期限：取到了再过一遍队列（文件不在库里，库的变化叫不醒执行器），取不来或到期按失败写回。
   /// 等附件时请求仍是 `pending`：`preparing` 只许等现有会话、不许唤醒（`MacDeliveryPreparation`），等附件不该带上这条限制。
   private func fetch(_ keys: [String], for request: DeliveryRequest) {
-    guard started, !Task.isCancelled, !fetching.has(request.id), let deadline = request.deadlineAt else { return }
+    guard started, !Task.isCancelled, !fetching.has(request.id), let deadline = request.dispatchDeadline(local: true) else { return }
     fetching.put(request.id, .spawn { [fetchFile, timing] id in
       let failure: ShownText?
       do {
@@ -314,7 +314,7 @@ public actor DeliveryExecutor {
   private func prepare(_ request: DeliveryRequest, _ preparation: DeliveryPreparation) async {
     guard started, !Task.isCancelled, !waiting.has(request.id),
       let stored = await reporting({ try await store.awaitDeliveryTarget(request, reason: preparation.reason) }),
-      let stored, let deadline = stored.deadlineAt, started, !Task.isCancelled else { return }
+      let stored, let deadline = stored.dispatchDeadline(local: true), started, !Task.isCancelled else { return }
     notifyWritten(stored.id)
     waiting.put(stored.id, .spawn { [store, timing] id in
       do {

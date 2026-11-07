@@ -42,7 +42,7 @@ struct UpgradePreparationTests {
         try await app.services.executor.start()
         let waiting = try await prepared(request, in: app)
         #expect(waiting.status == .known(.preparing) && waiting.handledBy == nil)
-        #expect(waiting.deadlineAt != nil && waiting.reason != nil)
+        #expect(waiting.dispatchDeadline(local: true) != nil && waiting.reason != nil)
         #expect(waiting.failure == nil && !Speech.trip(waiting, at: app.services.speech).inTransit)
         #expect(old.messages.isEmpty)
         guard waiting.status == .known(.preparing) else { await app.services.executor.beginStop()(); return }
@@ -69,10 +69,10 @@ struct UpgradePreparationTests {
         let waiting = try await prepared(request, in: app)
         #expect(waiting.status == .known(.preparing))
         guard waiting.status == .known(.preparing) else { await app.services.executor.beginStop()(); return }
-        let due = try #require(waiting.deadlineAt)
+        let due = try #require(waiting.dispatchDeadline(local: true))
         app.pi.update(old.id) { $0.name = "仍在升级" }
         try await sendOther(in: app)
-        #expect(try await app.services.store.deliveryRequest(request.id)?.deadlineAt == due)
+        #expect(try await app.services.store.deliveryRequest(request.id)?.dispatchDeadline(local: true) == due)
         switch action {
         case "timeout":
             clock.advance(.seconds(due.timeIntervalSince(clock.now) + 1))
@@ -86,7 +86,7 @@ struct UpgradePreparationTests {
             try await app.services.executor.start()
             try await sendOther(in: app)
             let restored = try #require(try await app.services.store.deliveryRequest(request.id))
-            #expect(restored.status == .known(.preparing) && restored.deadlineAt == due)
+            #expect(restored.status == .known(.preparing) && restored.dispatchDeadline(local: true) == due)
             #expect(app.host.calls.isEmpty)
         }
         old.close(bye: "reload")
@@ -128,7 +128,7 @@ struct UpgradePreparationTests {
         blocker.sendRaw("{\"t\":\"ack\",\"id\":\"\(id)\",\"ok\":true}")
         try await sendOther(in: app)
         let again = try await prepared(request, in: app)
-        #expect(again.status == .known(.preparing) && again.deadlineAt == first.deadlineAt)
+        #expect(again.status == .known(.preparing) && again.dispatchDeadline(local: true) == first.dispatchDeadline(local: true))
         #expect(ready.messages.isEmpty)
         app.pi.update(ready.id) { $0.upgrading = false }
         #expect(try await store.outcome(of: request).status == .known(.succeeded))

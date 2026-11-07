@@ -127,8 +127,8 @@ import Testing
   func requestsOlderThanTheMaximumAgeAreAbandonedInsteadOfSurprisingTheUser() async throws {
     let handler = Handler()
     let stale = try await store.requestDelivery("old prompt", to: pi, on: "mac-a")
-    // 一天前写下的请求：派发期限早过了
-    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET createdAt = createdAt - 86400000, deadlineAt = deadlineAt - 86400000")
+    // 一天前写下的请求：比任何最长等待都旧
+    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET createdAt = createdAt - 86400000")
 
     let executor = executor(handler)
     try await executor.start()

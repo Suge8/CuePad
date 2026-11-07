@@ -4,6 +4,7 @@ import Foundation
 import os
 
 /// 内存里的 iCloud 替身：账号总是可用，同步区是一组按写入先后编号的记录，令牌就是编号；收下的上传照单记下（`saved`）。
+/// 同真服务器，收下的记录带着第一次收下的时刻（`creationDate`，按 `now` 的钟），上传的回执与之后的拉取都是这一份：投送请求的派发期限从它算。
 /// 删掉的记录留一个同样编号的墓碑，拉取时作为删除交给拉到它之后的设备（同 CloudKit 的变更令牌）。
 /// 测试与调试画面用它跑真实的同步代码（`CloudSync`），只换掉网络那一头。
 actor SimulatedCloud: SyncCloud {
@@ -14,8 +15,10 @@ actor SimulatedCloud: SyncCloud {
   /// 收下的上传（记录名），按先后。
   private(set) var saved: [String] = []
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
+  private let now: @Sendable () -> Date
 
-  init(_ records: [CKRecord] = []) {
+  init(_ records: [CKRecord] = [], now: @escaping @Sendable () -> Date = Date.init) {
+    self.now = now
     for record in records {
       seq += 1
       zone[record.recordID] = (seq, record)
@@ -62,6 +65,7 @@ actor SimulatedCloud: SyncCloud {
   }
 
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) -> SentRecords {
+    let saving = saving.map { $0.created(at: zone[$0.recordID]?.record.creationDate ?? now()) }
     for record in saving {
       put(record)
       saved.append(record.recordID.recordName)
@@ -121,10 +125,34 @@ extension CloudSync {
 }
 
 extension CKRecord {
+  /// 带着服务器收下时刻的一份：`creationDate` 没有公开的写法，整条归档后读回时换掉那一项。
+  fileprivate func created(at date: Date) -> CKRecord {
+    let archiver = NSKeyedArchiver(requiringSecureCoding: true)
+    encode(with: archiver)
+    archiver.finishEncoding()
+    guard let reader = try? CreationStamp(forReadingFrom: archiver.encodedData, date: date), let stamped = CKRecord(coder: reader) else { return self }
+    return stamped
+  }
+
   /// 去掉文件的一份（替身的拉取与按 ID 取同 CloudKit 只要列：不带文件）。
   var withoutFile: CKRecord {
     guard self[RecordMapper.fileKey] != nil, let copy = copy() as? CKRecord else { return self }
     copy[RecordMapper.fileKey] = nil
     return copy
+  }
+}
+
+/// 读回归档时把记录的创建时刻换成 `date`（`CKRecord.created(at:)`）。
+private final class CreationStamp: NSKeyedUnarchiver {
+  private let date: Date
+
+  init(forReadingFrom data: Data, date: Date) throws {
+    self.date = date
+    try super.init(forReadingFrom: data)
+    requiresSecureCoding = true
+  }
+
+  override func decodeObject(forKey key: String) -> Any? {
+    key == "RecordCtime" ? date : super.decodeObject(forKey: key)
   }
 }
