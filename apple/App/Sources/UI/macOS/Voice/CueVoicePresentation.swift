@@ -66,6 +66,8 @@ struct CueVoicePresentation {
         let id: String
         let title: String
         let status: String
+        /// 只表示提示强度；执行与停止的生命周期仍由来源记录决定。
+        var needsAttention: Bool = false
     }
 
     var title: LocalizedStringResource {

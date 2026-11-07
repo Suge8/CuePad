@@ -19,11 +19,14 @@ extension Workspace {
             name: cue.name, activity: activity, muted: voice.isMuted, samples: { voice.samples.map { CGFloat($0) } }, request: voice.requests.last.map(voiceRequest),
             replies: voiceRows(voice), issue: voiceIssue(voice), canStopExecution: !stoppableVoiceExecutions.isEmpty,
             executions: voiceExecutions.map {
-                .init(id: $0.state.sessionID, title: $0.task?.title ?? $0.state.title,
-                      status: shownInHeader($0.state, delivery: nil).label)
-            } + voice.stopRequests.map {
-                .init(id: $0.id.uuidString, title: String(localized: "停止「\($0.target.name)」"), status: voiceStopStatus($0))
-            })
+                let shown = shownInHeader($0.state, delivery: nil)
+                let attention: Bool = switch shown.status {
+                case .unknown: true
+                default: shown.needsYou
+                }
+                return .init(id: $0.state.sessionID, title: $0.task?.title ?? $0.state.title,
+                             status: shown.label, needsAttention: attention)
+            } + voice.stopRequests.map(voiceStopExecution))
     }
 
     var stoppableVoiceExecutions: [PiSessionListItem] {
@@ -34,13 +37,16 @@ extension Workspace {
         MacDelivery.stopping(execution.state, deliveries: [execution.delivery].compactMap(\.self), at: services.speech)
     }
 
-    private func voiceStopStatus(_ request: DeliveryRequest) -> String {
-        switch Speech.trip(request, at: services.speech) {
-        case .sending, .sent: String(localized: "正在停止…")
-        case .delivered: String(localized: "停止请求已受理")
-        case .preparing(let reason), .unconfirmed(let reason): reason
-        case .failed(let failure): failure.text
+    private func voiceStopExecution(_ request: DeliveryRequest) -> CueVoicePresentation.Execution {
+        let (status, attention): (String, Bool) = switch Speech.trip(request, at: services.speech) {
+        case .sending, .sent: (String(localized: "正在停止…"), false)
+        case .delivered: (String(localized: "停止请求已受理"), false)
+        case .preparing(let reason): (reason, false)
+        case .unconfirmed(let reason): (reason, true)
+        case .failed(let failure): (failure.text, true)
         }
+        return .init(id: request.id.uuidString, title: String(localized: "停止「\(request.target.name)」"),
+                     status: status, needsAttention: attention)
     }
 
     var voiceRetryRequest: VoiceCall.Request? {
