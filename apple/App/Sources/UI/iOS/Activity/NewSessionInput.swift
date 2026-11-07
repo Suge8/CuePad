@@ -33,14 +33,14 @@ struct NewSessionInput: View {
         }
 
         /// 在 `host` 那台 Mac、项目的文件夹（没绑的那台先建工作区）用 `agent`（与 `model`、`thinking`，nil 是默认）开新会话，`draft` 作开场：
-        /// 开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`；没有就是带上的第一张）。
+        /// 开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`；没有就是带上的第一张）。`replacing` 是上一次没能开成的那条。
         func launch(
             in project: Project, on host: String, draft: ComposerDraft, agent: AgentKind, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool = false,
-            services: AppServices
+            replacing previous: SessionLaunch?, services: AppServices
         ) async throws -> SessionLaunch {
             try await services.launchSession(
                 in: project.id, prompt: draft.stored.nonEmpty, title: name ?? project.shownName, on: host,
-                card: card ?? draft.attachments.first?.card, agent: agent, model: model, thinking: thinking, fast: fast)
+                card: card ?? draft.attachments.first?.card, agent: agent, model: model, thinking: thinking, fast: fast, replacing: previous?.request)
         }
     }
 
@@ -180,7 +180,7 @@ struct NewSessionInput: View {
             defer { sending = false }
             let draft = await claim.settled()
             launched = try await start.launch(
-                in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, fast: brain.launchFast, services: services)
+                in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, fast: brain.launchFast, replacing: launched, services: services)
         }
     }
 }

@@ -86,13 +86,15 @@ extension AppServices {
     /// 请 `host` 那台 Mac 在项目的文件夹里用 `agent` 开新会话（`model`、`thinking` 为 nil 是这家的默认），`prompt` 作开场。
     /// `title` 是给人看的目标名（会话名或项目名）。这里生成这一次的认领标识：同步记录上出现带同一个 `launchToken` 的会话就是它（`SessionLaunch`）。
     /// `card`：从这条灵感或任务开的（开好后它关联到新会话、会话名按它定，见 `CueStore.requestLaunch`、`CueStore.claimLaunchedCards`）。
+    /// `replacing`：上一次没能开成的那条（新会话输入框再开时给）：新的写成后移除它，同重发说的话。
     func launchSession(
         in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false
+        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false, replacing previous: UUID? = nil
     ) async throws -> SessionLaunch {
         let token = UUID().uuidString
         let request = uploaded(try await store.requestLaunch(
             PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast), title: title, on: host, card: card))
+        if let previous { _ = try await store.withdrawFailedDelivery(previous) }
         return SessionLaunch(request: request.id, token: token)
     }
 

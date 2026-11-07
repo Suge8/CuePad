@@ -38,7 +38,8 @@ public actor DeliveryExecutor {
   private static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
   var started = false
   /// 各只有一个的后台任务：`claimUpload` 是正在执行的那一条到 `claimGrace` 才传领取（结果先写下就不传）。
-  enum Role { case starting, watcher, cleanup, runner, claimUpload }
+  /// `expiry` 是期限监视：到期没领取的按失败写回，不经执行队列——上一条 handler 不响应取消、队列停在等它时（一次一个），后面的话照样到期收尾。
+  enum Role { case starting, watcher, expiry, cleanup, runner, claimUpload }
   var roles = Slots<Role>()
   /// 上一次 `stop` 等旧任务收尾的那一段：`start` 等它过去才开新一轮，旧 handler 不会与新循环同时在跑。
   private var draining: Task<Void, Never>?
@@ -100,6 +101,13 @@ public actor DeliveryExecutor {
       let next = try await deleteExpired()
       guard started, !Task.isCancelled else { return }
       if let next { scheduleCleanup(at: next) }
+      roles.put(.expiry, .spawn { [store, hostID, onIssue] _ in
+        do {
+          for try await expired in store.observe({ try $0.expiredUnclaimedDeliveries(for: hostID) }) { await self.expire(expired) }
+        } catch {
+          if !Task.isCancelled { onIssue(error) }
+        }
+      })
       roles.put(.watcher, .spawn { [store, hostID, onIssue] _ in
         do {
           for try await _ in store.observe({ try $0.pendingDeliveries(for: hostID).map(\.id) }) { self.enqueue() }
@@ -212,6 +220,13 @@ public actor DeliveryExecutor {
     return nil
   }
 
+  /// 期限监视读到的到期请求按失败写回；在旁边取附件、等会话就绪的由那个任务自己到期写回（带着在等什么），这里不抢。
+  private func expire(_ requests: [DeliveryRequest]) async {
+    for request in requests where !fetching.has(request.id) && !waiting.has(request.id) {
+      await finish(request, .failed(request.expiry))
+    }
+  }
+
   /// 派发期限到了（没有期限的按已到期，`DeliveryRequest.deadlineAt`）。
   private func isExpired(_ request: DeliveryRequest) -> Bool { request.deadlineAt.map { timing.now() >= $0 } ?? true }
 
@@ -269,8 +284,9 @@ public actor DeliveryExecutor {
   }
 
   private func fetched(_ request: DeliveryRequest, _ id: UUID, failure: ShownText?) async {
-    guard fetching.release(request.id, id) else { return }  // 停下了
+    // 先写回再让位：位置空出来之后期限监视才会接手，不抢着写没有原因的到期
     if let failure { await finish(request, .failed(failure)) }
+    guard fetching.release(request.id, id) else { return }  // 停下了
     enqueue()
   }
 
