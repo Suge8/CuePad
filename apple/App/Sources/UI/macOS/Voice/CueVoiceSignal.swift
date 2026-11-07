@@ -27,7 +27,7 @@ struct CueVoiceSignal: View {
         let current = motion && form.isAudio ? Array(samples().suffix(CueVoiceRibbon.sampleCount)) : []
         ZStack {
             CueVoiceField(form: form, samples: current,
-                          moving: motion, colors: form == .quiet ? [palette.track, palette.track] : [palette.signatureFill, palette.signature, palette.onFill, palette.signature])
+                          moving: motion, colors: form == .quiet ? [palette.track, palette.track, palette.track, palette.track] : [palette.signatureFill, palette.signature, palette.onFill, palette.signature])
             if form == .waiting && motion {
                 LoopLayer(kind: .pulse, color: palette.signature)
                     .mask(WaitingEdge().stroke(lineWidth: 1.5))

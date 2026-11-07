@@ -67,7 +67,20 @@ struct CueVoiceField: NSViewRepresentable {
             CATransaction.setDisableActions(true)
             silk.frame = bounds
             contours.frame = bounds
+            let previousColors = silk.presentation()?.colors ?? silk.colors
+            let changedColors = silk.colors as? [CGColor] != drawing.colors
             silk.colors = drawing.colors
+            if changedColors {
+                silk.removeAnimation(forKey: "colors")
+                if drawing.moving, !resized, let previousColors {
+                    let fade = CABasicAnimation(keyPath: "colors")
+                    fade.fromValue = previousColors
+                    fade.toValue = drawing.colors
+                    fade.duration = Motion.Glide.duration
+                    fade.timingFunction = Motion.Glide.timing
+                    silk.add(fade, forKey: "colors")
+                }
+            }
             for (index, line) in lines.enumerated() {
                 let path = CueVoiceRibbon.path(form: drawing.form, samples: drawing.samples, strand: index, in: bounds)
                 let from = line.presentation()?.path ?? line.path

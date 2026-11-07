@@ -1,47 +1,53 @@
 #if os(macOS)
 import SwiftUI
 
-/// Mac 的内嵌通话区：总高固定，底部控制不随转写或错误长短挪动。
-/// 阅读由用户选择，舞台让出空间后不会因新回复或换轮次自行展开；收起、回来保留阅读位置。
+/// Mac 的内嵌通话区：高度来自宿主实际分配的区域，固定摘要与控制不随记录数量增长。
+/// 阅读偏好由用户选择；空间不足时只临时压缩舞台，空间恢复后沿用原选择。
 /// 开合只改呈现，Esc 只收起。挂断只结束通话，执行与真实文字仍由宿主投影。
-/// 请求失败不代表通话结束：通话中的恢复入口在错误区（收起时在标题区），不替换静音和挂断。
+/// 请求失败不代表通话结束：通话中的恢复入口在固定摘要旁，不替换静音和挂断。
 struct CueVoiceView: View {
     let presentation: CueVoicePresentation
     let expanded: Bool
+    let availableHeight: CGFloat
     let action: (CueVoiceAction) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var reading = false
+    @State private var executionDetails = false
 
-    static let expandedHeight: CGFloat = 528
-    static let compactHeight: CGFloat = 144
     private static let controlsHeight = ControlSize.compact.height * 2 + Spacing.item
     private static let foldedHeight: CGFloat = 48
     private static let foldedWidth: CGFloat = 64
     private static let headingHeight: CGFloat = 240
-    // 标题先让开角色的移动路径，另一份在落位后出现，途中不叠两份字。
+    private static let minimumReadingHeight: CGFloat = 104
     private static let stageTitleEnd: CGFloat = 0.25
     private static let compactTitleStart: CGFloat = 0.9
-    private var folded: Bool { !expanded || reading }
+    private static let fixedHeight = CueVoiceStatus.height + CueVoiceExecutionSummary.height + controlsHeight + Spacing.group * 2 + Spacing.item
+    private var compactHeight: CGFloat { Self.fixedHeight + Self.foldedHeight }
+    private var constrained: Bool { availableHeight < Self.fixedHeight + Self.headingHeight + Self.minimumReadingHeight }
+    private var folded: Bool { !expanded || reading || constrained }
 
     var body: some View {
         CueVoiceFold(fold: folded ? 1 : 0, reveal: expanded ? 1 : 0) { fold, reveal in
-            let height = Self.compactHeight + (Self.expandedHeight - Self.compactHeight) * reveal
-            let head = Self.headingHeight + (Self.foldedHeight - Self.headingHeight) * fold
-            let readingHeight = max(0, height - head - Spacing.item - Spacing.group * (2 + reveal) - Self.controlsHeight)
+            let shownHeight = min(availableHeight, compactHeight + (availableHeight - compactHeight) * reveal)
+            let animatedHead = Self.headingHeight + (Self.foldedHeight - Self.headingHeight) * fold
+            let head = min(animatedHead, max(Self.foldedHeight, shownHeight - Self.fixedHeight - Self.minimumReadingHeight))
+            let headingFold = (Self.headingHeight - head) / (Self.headingHeight - Self.foldedHeight)
+            let readingHeight = max(0, shownHeight - head - Self.fixedHeight)
             VStack(spacing: 0) {
-                heading(fold: fold, height: head).padding(.bottom, Spacing.item)
+                heading(fold: headingFold, height: head).padding(.bottom, Spacing.item)
+                CueVoiceStatus(presentation: presentation, action: action)
                 CueVoiceTranscript(presentation: presentation, action: action)
                     .frame(height: readingHeight)
                     .clipped()
                     .opacity(reveal)
                     .allowsHitTesting(expanded)
                     .accessibilityHidden(!expanded)
-                    .padding(.bottom, Spacing.group * reveal)
+                CueVoiceExecutionSummary(executions: presentation.executions) { executionDetails = true }
                 controls
             }
             .padding(.vertical, Spacing.group)
-            .frame(height: height)
+            .frame(height: shownHeight)
             .background(palette.desk)
         }
         .onExitCommand { if expanded { action(.collapse) } }
@@ -58,11 +64,7 @@ struct CueVoiceView: View {
                     .position(x: box.size.width / 2 + (Self.foldedWidth / 2 - box.size.width / 2) * fold, y: stageHeight / 2)
                     .transformEnvironment(\.pageActive) { $0 = $0 && !folded }
                 VStack(alignment: .leading, spacing: Spacing.hair) {
-                    if !expanded, presentation.activity.isLive, let issue = presentation.issue {
-                        Text(issue.message).font(Typography.bodyStrong).foregroundStyle(palette.failure)
-                    } else {
-                        Text(verbatim: presentation.name).font(Typography.bodyStrong)
-                    }
+                    Text(verbatim: presentation.name).font(Typography.bodyStrong)
                     Text(presentation.title).font(Typography.meta).foregroundStyle(palette.ink2)
                 }
                 .lineLimit(1)
@@ -79,14 +81,7 @@ struct CueVoiceView: View {
                     .accessibilityHidden(folded)
                 HStack(spacing: Spacing.tight) {
                     Spacer(minLength: 0)
-                    if !expanded, presentation.activity.isLive, let issue = presentation.issue {
-                        Button { action(.recover) } label: { Label(issue.recovery, icon: .retry) }
-                            .labelStyle(.iconOnly)
-                            .buttonStyle(ControlButtonStyle(kind: .icon))
-                            .help(Text(issue.recovery))
-                    } else {
-                        readingToggle.keepsPlace(shown: expanded)
-                    }
+                    readingToggle.keepsPlace(shown: expanded && !constrained)
                     expansion
                 }
             }
@@ -121,21 +116,23 @@ struct CueVoiceView: View {
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
-            Button { action(.stopExecution) } label: { Label("停止执行", icon: .stop) }
-                .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
-                .disabled(!presentation.canStopExecution)
-                .help("停止已交给 Cue 的执行")
+            HStack(spacing: Spacing.item) {
+                Button { action(.stopExecution) } label: { Label("停止执行", icon: .stop) }
+                    .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
+                    .disabled(!presentation.canStopExecution)
+                    .help("停止已交给 Cue 的执行")
+                Spacer(minLength: 0)
+                CueVoiceExecutions(executions: presentation.executions, showing: $executionDetails)
+            }
             HStack(spacing: Spacing.item) {
                 if presentation.activity.isLive {
-                    Button { action(.toggleMute) } label: {
-                        if presentation.muted { Text("麦克风关") }
-                        else { Text("麦克风开") }
-                    }
-                    .buttonStyle(ControlButtonStyle(size: .compact))
-                    .accessibilityLabel(presentation.muted ? Text("开启麦克风") : Text("关闭麦克风"))
-                    .accessibilityValue(presentation.muted ? Text("麦克风已静音") : Text("麦克风已开启"))
-                    .help(presentation.muted ? Text("开启麦克风") : Text("关闭麦克风"))
-                    .keyboardShortcut("m", modifiers: [.command, .shift])
+                    Toggle("麦克风", isOn: Binding(get: { !presentation.muted }, set: { _ in action(.toggleMute) }))
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .fixedSize()
+                        .accessibilityValue(presentation.muted ? Text("麦克风已静音") : Text("麦克风已开启"))
+                        .help(presentation.muted ? Text("开启麦克风") : Text("关闭麦克风"))
+                        .keyboardShortcut("m", modifiers: [.command, .shift])
                 }
                 Spacer(minLength: 0)
                 if let issue = presentation.issue, !presentation.activity.isLive {

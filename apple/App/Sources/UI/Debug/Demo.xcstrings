@@ -1511,6 +1511,34 @@
         }
       }
     },
+    "停止演示任务 %lld" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Stop demo task %lld"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Stop demo task %lld"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止演示任务 %lld"
+          }
+        }
+      }
+    },
     "先列计划，确认后再动手" : {
       "localizations" : {
         "en" : {
@@ -6199,6 +6227,34 @@
         }
       }
     },
+    "演示任务 %lld" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Demo task %lld"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Demo task %lld"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示任务 %lld"
+          }
+        }
+      }
+    },
     "演示回复 %lld" : {
       "localizations" : {
         "en" : {
@@ -6211,6 +6267,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "演示回复 %lld"
+          }
+        }
+      }
+    },
+    "演示请求 %lld" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Demo request %lld"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Demo request %lld"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示请求 %lld"
+          }
+        }
+      }
+    },
+    "演示：停止失败，连接中断；执行可能仍在继续，请查看目标任务后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: stop failed because the connection was lost. Work may still be running. Check the task before retrying."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：停止失败，连接中断；执行可能仍在继续，请查看目标任务后重试"
+          }
+        }
+      }
+    },
+    "演示：停止结果未确认，请勿视为已停止" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: stop outcome unconfirmed. Do not assume work has stopped."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：停止结果未确认，请勿视为已停止"
           }
         }
       }
@@ -6275,6 +6391,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "演示：已收到恢复操作"
+          }
+        }
+      }
+    },
+    "演示：恢复空间" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More room"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：恢复空间"
+          }
+        }
+      }
+    },
+    "演示：断线" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: disconnect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：断线"
+          }
+        }
+      }
+    },
+    "演示：缩小空间" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Less room"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：缩小空间"
           }
         }
       }

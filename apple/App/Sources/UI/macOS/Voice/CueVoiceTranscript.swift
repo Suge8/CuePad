@@ -19,51 +19,16 @@ struct CueVoiceTranscript: View {
         let text: String?
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            if let issue = presentation.issue {
-                VStack(alignment: .leading, spacing: Spacing.item) {
-                    Text(issue.message)
-                        .foregroundStyle(palette.failure)
-                        .font(Typography.body)
-                        .textSelection(.enabled)
-                    if presentation.activity.isLive {
-                        Button { action(.recover) } label: { Text(issue.recovery) }
-                            .buttonStyle(ControlButtonStyle(size: .compact))
-                    }
-                }
-                .padding(.horizontal, Spacing.page)
-            }
-            ForEach(presentation.executions) { execution in
-                HStack(spacing: Spacing.item) {
-                    Text(verbatim: execution.title).lineLimit(1)
-                    Spacer(minLength: 0)
-                    Text(verbatim: execution.status)
-                }
-                .font(Typography.meta)
-                .padding(.horizontal, Spacing.page)
-            }
-            conversation
-                .padding(.top, Spacing.item)
-        }
-    }
+    var body: some View { conversation }
 
     private var conversation: some View {
         ChatColumn(
             followKey: FollowKey(count: presentation.replies.count, lastID: presentation.replies.last?.id, text: presentation.replies.last?.text),
             readingWidth: Spacing.reading, inset: Spacing.page, follow: $follow, marks: [],
-            ids: presentation.replies.map(\.id), paging: .fixed(first: Self.pageSize, step: Self.pageSize), holding: false,
+            ids: presentation.replies.map(\.id), paging: .fixed(first: Self.pageSize, step: Self.pageSize), holding: false, jumpPlacement: .separate,
             arrival: presentation.replies.last?.id ?? requestAnchor
         ) { window in
             ChatStack(spacing: Spacing.block) {
-                if let request = presentation.request {
-                    VStack(alignment: .leading, spacing: Spacing.tight) {
-                        Text(verbatim: request.status)
-                            .font(Typography.meta)
-                            .foregroundStyle(request.delivery.failure != nil ? palette.failure : palette.ink2)
-                        Text(verbatim: request.text).font(Typography.body)
-                    }
-                }
                 ChatSegments(items: presentation.replies, window: window, size: Self.pageSize) { replies in
                     ChatRows(ids: replies.map(\.id), spacing: Spacing.block) {
                         ForEach(replies) { reply in
@@ -93,19 +58,19 @@ struct CueVoiceTranscript: View {
                 Text(verbatim: request.text).font(Typography.body)
             }
             if !reply.text.isEmpty {
-            HStack(spacing: Spacing.item) {
-                Text(verbatim: presentation.name).font(Typography.label)
-                Spacer(minLength: 0)
-                Button { action(.requestRepeat(reply.id)) } label: {
-                    Text("再说一遍")
+                HStack(spacing: Spacing.item) {
+                    Text(verbatim: presentation.name).font(Typography.label)
+                    Spacer(minLength: 0)
+                    Button { action(.requestRepeat(reply.id)) } label: { Text("再说一遍") }
+                        .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
+                        .disabled(!reply.canRequestRepeat)
                 }
-                .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
-                .disabled(!reply.canRequestRepeat)
+                Text(verbatim: reply.text)
+                    .font(Typography.reading)
+                    .lineSpacing(Typography.readingLineSpacing)
             }
-            Text(verbatim: reply.text)
-                .font(Typography.reading)
-                .lineSpacing(Typography.readingLineSpacing)
-            if let note = reply.note { Text(verbatim: note).font(Typography.meta).foregroundStyle(palette.ink2) }
+            if let note = reply.note {
+                Text(verbatim: note).font(Typography.meta).foregroundStyle(palette.ink2)
             }
         }
     }

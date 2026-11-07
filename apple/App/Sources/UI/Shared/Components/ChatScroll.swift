@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// 普通聊天浮在正文上；内嵌阅读区独占一行，出现与消失不改变滚动视口。
+nonisolated enum ChatJumpPlacement { case floating, separate }
+
 /// 聊天式的滚动区（会话页与 Cue 页、Mac 与 iPhone 共用，经 `ChatColumn`）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，
 /// 用户滚走后这些都不再挪动正在读的内容；离最新处超过一屏时可见区右下角（回复框右上方）浮出圆形"回到最新"，
 /// 离开后来过新内容时带一个点，点它回到最新（`ChatFollow`）。离开最新处之后 `followKey` 变了就算来过新内容（`unseen`）：
@@ -29,6 +32,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// 贴底与否、请求跳到哪：由放它的页面持有（页面据它收起顶栏、输入框）。
     let follow: Binding<ChatFollow>
     let holding: Bool
+    let jumpPlacement: ChatJumpPlacement
     /// 最新一条是新到时要撑上去的那种就是它（`rise`）。
     let arrival: UUID?
     /// 浮在对话底上的那张拍板卡（`CueWaitDock`）；没有为 nil。它走的那次更新里对话同时长出的不跟（`dockLeft`）。
@@ -54,13 +58,14 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var leftAt: Key?
 
     init(
-        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, arrival: UUID? = nil,
+        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, jumpPlacement: ChatJumpPlacement = .floating, arrival: UUID? = nil,
         docked: String? = nil, @ViewBuilder content: () -> Content
     ) {
         self.followKey = followKey
         self.readingWidth = readingWidth
         self.inset = inset
         self.holding = holding
+        self.jumpPlacement = jumpPlacement
         self.arrival = arrival
         self.docked = docked
         self.follow = follow
@@ -68,6 +73,24 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            viewport
+            if jumpPlacement == .separate {
+                Button { follow.wrappedValue.jumpToNewest() } label: {
+                    Text(unseen ? "回到最新，有新内容" : "回到最新")
+                }
+                .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
+                .opacity(follow.wrappedValue.showsJump ? 1 : 0)
+                .allowsHitTesting(follow.wrappedValue.showsJump)
+                .readerHidden(!follow.wrappedValue.showsJump)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.horizontal, inset)
+                .frame(height: ControlSize.compact.height + Spacing.item)
+            }
+        }
+    }
+
+    private var viewport: some View {
         // 边距按滚动区的宽在同一次排版里定（GeometryReader 先拿到自己的尺寸再排里面），不写回状态：
         // 宽屏（iPad、Mac 宽窗口）首帧就是居中的栏，不会先按窄边距排一帧再挪
         GeometryReader { proxy in
@@ -206,7 +229,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if follow.wrappedValue.showsJump {
+            if jumpPlacement == .floating, follow.wrappedValue.showsJump {
                 JumpToNewest(unseen: unseen) { follow.wrappedValue.jumpToNewest() }
                     .padding(.trailing, JumpToNewest.inset).padding(.bottom, JumpToNewest.inset + bottomInset)
                     .transition(Motion.pop(reduceMotion: reduceMotion))

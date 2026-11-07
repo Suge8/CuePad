@@ -29,9 +29,9 @@ struct CueVoicePuppet: NSViewRepresentable {
                 right = Hand(x: 193, y: 146, angle: 66)
                 gaze = CGPoint(x: -3, y: 0)
             case .processing:
-                left = Hand(x: 80, y: 153, angle: 38)
+                left = Hand(x: 87, y: 150, angle: 22)
                 right = Hand(x: 193, y: 146, angle: 66)
-                gaze = CGPoint(x: 0, y: -5)
+                gaze = CGPoint(x: 4, y: -8)
             case .speaking:
                 left = Hand(x: 59, y: emphasis ? 130 : 139, angle: emphasis ? 20 : 0)
                 right = Hand(x: 195, y: emphasis ? 140 : 148, angle: emphasis ? -18 : 8)

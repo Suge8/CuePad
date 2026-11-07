@@ -6866,7 +6866,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stop Request Accepted"
+            "value" : "Stop request accepted"
           }
         },
         "zh-Hans" : {
@@ -13093,6 +13093,38 @@
         }
       }
     },
+    "当前请求" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current request"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前请求"
+          }
+        }
+      }
+    },
+    "当前请求：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current request: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前请求：%@"
+          }
+        }
+      }
+    },
     "当前轮次的来源尚未确认，Cue 没有打断" : {
       "localizations" : {
         "en" : {
@@ -13665,6 +13697,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开麦克风设置"
+          }
+        }
+      }
+    },
+    "执行与停止记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Execution and stop records"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "执行与停止记录"
+          }
+        }
+      }
+    },
+    "执行详情 %lld" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Details %lld"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Details %lld"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "执行详情 %lld"
           }
         }
       }
@@ -16653,6 +16729,22 @@
         }
       }
     },
+    "查看全部执行与停止记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View all execution and stop records"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看全部执行与停止记录"
+          }
+        }
+      }
+    },
     "查看大图" : {
       "localizations" : {
         "en" : {
@@ -16665,6 +16757,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查看大图"
+          }
+        }
+      }
+    },
+    "查看请求详情" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View request details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看请求详情"
           }
         }
       }
@@ -24738,7 +24846,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Send to Cue Again"
+            "value" : "Retry handoff"
           }
         },
         "zh-Hans" : {
@@ -25225,6 +25333,22 @@
         }
       }
     },
+    "需注意" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs attention"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需注意"
+          }
+        }
+      }
+    },
     "需要 %@ %@ 以上" : {
       "localizations" : {
         "en" : {
@@ -25641,18 +25765,18 @@
         }
       }
     },
-    "麦克风关" : {
+    "麦克风" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mic off"
+            "value" : "Microphone"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "麦克风关"
+            "value" : "麦克风"
           }
         }
       }
@@ -25685,22 +25809,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "麦克风已静音"
-          }
-        }
-      }
-    },
-    "麦克风开" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mic on"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "麦克风开"
           }
         }
       }
