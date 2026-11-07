@@ -3553,6 +3553,22 @@
         }
       }
     },
+    "Mac 不在线：唤醒它、开着 UU 远程再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac is offline. Wake it with UU Remote open, then try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 不在线：唤醒它、开着 UU 远程再试"
+          }
+        }
+      }
+    },
     "Mac 正在开 Agent 会话…" : {
       "localizations" : {
         "en" : {
@@ -3697,6 +3713,22 @@
         }
       }
     },
+    "UU 远程正连着别的电脑，先在那边结束再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU Remote is connected to another computer. End that session first."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU 远程正连着别的电脑，先在那边结束再试"
+          }
+        }
+      }
+    },
     "UU 远程没能选好这台 Mac，再试一次" : {
       "localizations" : {
         "en" : {
@@ -3713,6 +3745,38 @@
         }
       }
     },
+    "UU 远程没连上这台 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU Remote couldn't connect to this Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU 远程没连上这台 Mac"
+          }
+        }
+      }
+    },
+    "UU 远程认不出这台 Mac 了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU Remote no longer recognizes this Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU 远程认不出这台 Mac 了"
+          }
+        }
+      }
+    },
     "UU 远程还没登录好，登录后再试一次" : {
       "localizations" : {
         "en" : {
@@ -3725,6 +3789,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "UU 远程还没登录好，登录后再试一次"
+          }
+        }
+      }
+    },
+    "UU 远程连这台 Mac 超时了，再试一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU Remote timed out connecting to this Mac. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU 远程连这台 Mac 超时了，再试一次"
           }
         }
       }
@@ -13051,6 +13131,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "手机上只能从 Mac 上跑过 Agent 的文件夹里选；别的文件夹请在 Mac 上绑定。"
+          }
+        }
+      }
+    },
+    "手机没联网，联网后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're offline. Connect to the internet and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手机没联网，联网后再试"
           }
         }
       }
@@ -22643,6 +22739,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台 Mac 上的 CuePad 正在退出"
+          }
+        }
+      }
+    },
+    "这台 Mac 上的 UU 远程没开允许被控" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UU Remote on this Mac doesn't allow remote control"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac 上的 UU 远程没开允许被控"
           }
         }
       }

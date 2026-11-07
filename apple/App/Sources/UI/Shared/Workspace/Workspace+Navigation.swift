@@ -130,7 +130,7 @@ extension Workspace {
         cueFocusPending = true
     }
 
-    /// 小组件、分享扩展、实时活动的链接与点开的通知（`AppServices.pendingDeepLink`）：对 Cue 说、项目、卡片、Cue 页、会话；UU 远程绑定完的回跳。
+    /// 小组件、分享扩展、实时活动的链接与点开的通知（`AppServices.pendingDeepLink`）：对 Cue 说、项目、卡片、Cue 页、会话；UU 远程绑定完、远控失败的回跳。
     func open(_ link: DeepLink) {
         switch link {
         case .speak: speakToCue()
@@ -138,6 +138,7 @@ extension Workspace {
         case .cue: show(.cue)
         case .session(let id): openSession(id)
         case .remoteBound(let device, let error, let nonce): Task { await remoteBound(device: device, error: error, nonce: nonce) }
+        case .remoteFailed(let host, let reason): remoteFailed(host: host, reason: reason)
         case .card(let id):
             let store = services.store
             attempt { if let card = try await store.card(id) { self.open(card) } }

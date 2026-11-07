@@ -6,7 +6,7 @@ extension Workspace {
     /// 连这台 Mac（会话页"⋯"里：会话所在的那台）：绑过就发起远控，没绑过先去 UU 里选电脑，回跳后接着连（`remoteBound`）。
     func operate(on host: String) async {
         services.settings.remoteLastHost = host
-        if let device = services.settings.remoteDevices[host] { await launch(MacRemote.control(device)) } else { await bind(host) }
+        if let device = services.settings.remoteDevices[host] { await launch(MacRemote.control(device, host: host)) } else { await bind(host) }
     }
 
     /// 页顶那颗钮：只有一台 Mac 直接连它；几台时连上次连的那台，还没连过时返回这几台，由界面先选一台（换一台在钮的长按菜单里）。
@@ -50,9 +50,19 @@ extension Workspace {
         services.settings.remotePending = [:]
         if let device {
             services.settings.remoteDevices[host] = device
-            await launch(MacRemote.control(device))
+            await launch(MacRemote.control(device, host: host))
         } else if let message = error.flatMap(MacRemote.failure) {
             say(Dotted(message), tone: .failure)
         }
+    }
+
+    /// UU 远程说远控失败了：标识失效的忘掉，该重选的给"重新选择 Mac"，其余说原因。
+    func remoteFailed(host: String?, reason: String) {
+        guard let failure = MacRemote.controlFailure(reason) else { return }
+        if reason == "device_not_found", let host { services.settings.remoteDevices[host] = nil }
+        let rebind = host.flatMap { host in
+            failure.rebind ? NoticeAction(title: String(localized: "重新选择 Mac")) { await self.rebindMac(host) } : nil
+        }
+        say(Dotted(failure.message), tone: .failure, action: rebind)
     }
 }
