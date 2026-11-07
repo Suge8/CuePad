@@ -1,7 +1,8 @@
 #if os(macOS)
 import SwiftUI
 
-/// 当前请求是固定摘要，原文与归属仍由历史行负责；摘要不参与滚动和底部跟随。
+/// 真实问题优先于最新请求摘要；问题与恢复对象由宿主投影，不把最新请求当作失败对象。
+/// 无问题时显示最新请求，详情始终保留两者；摘要不参与滚动和底部跟随。
 struct CueVoiceStatus: View {
     let presentation: CueVoicePresentation
     let action: (CueVoiceAction) -> Void
@@ -13,12 +14,13 @@ struct CueVoiceStatus: View {
         HStack(spacing: Spacing.item) {
             Button { details = true } label: {
                 VStack(alignment: .leading, spacing: Spacing.hair) {
-                    if let request = presentation.request {
+                    if let issue = presentation.issue {
+                        Text(issue.message).font(Typography.body).foregroundStyle(palette.failure)
+                            .lineLimit(2)
+                    } else if let request = presentation.request {
                         Text("当前请求：\(request.status)").font(Typography.bodyStrong)
                             .foregroundStyle(request.delivery.failure != nil ? palette.failure : palette.ink)
                         Text(verbatim: request.text).font(Typography.meta).foregroundStyle(palette.ink2)
-                    } else if let issue = presentation.issue {
-                        Text(issue.message).font(Typography.body).foregroundStyle(palette.failure)
                     }
                 }
                 .lineLimit(1)

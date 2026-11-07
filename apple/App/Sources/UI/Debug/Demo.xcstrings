@@ -6395,6 +6395,22 @@
         }
       }
     },
+    "演示：已重试请求 A" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: retried request A"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：已重试请求 A"
+          }
+        }
+      }
+    },
     "演示：恢复空间" : {
       "localizations" : {
         "en" : {
@@ -8023,6 +8039,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "评审：计费额度\n\n审查 {{分支}} 中计费额度相关改动。"
+          }
+        }
+      }
+    },
+    "请求 A「检查发布事项」未交给 Cue：等待回执超时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request A “Check release items” was not handed to Cue: acknowledgement timed out"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求 A「检查发布事项」未交给 Cue：等待回执超时"
+          }
+        }
+      }
+    },
+    "请求 A：检查发布事项" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request A: Check release items"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求 A：检查发布事项"
+          }
+        }
+      }
+    },
+    "请求 B：整理会议记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request B: Organize meeting notes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求 B：整理会议记录"
           }
         }
       }

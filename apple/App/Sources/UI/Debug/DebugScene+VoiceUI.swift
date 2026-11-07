@@ -9,6 +9,7 @@ import SwiftUI
 /// 点击“播放模拟音频”才走时钟；录屏可显式给 `-CuePadVoiceAutoPlay YES`，留三秒首帧后播放。不连麦克风、不执行任务。
 /// `-CuePadVoiceMuted YES` 可独立组合远端讲话与麦克风静音；合成样本与核心一样每 50ms 更新一次。
 /// `-CuePadVoiceRequestFailed YES` 独立叠加请求失败，可与通话中、结束态组合；重试只清除这份演示失败。
+/// `-CuePadVoiceEarlierFailure YES`：请求 A 失败、最新请求 B 已送达，恢复只重试 A。
 /// `-CuePadVoiceShort YES` 用短请求与回复验首屏阅读边界；`-CuePadVoiceCompact YES` 从收起的通话开始。
 /// `-CuePadReduceMotion YES` 验减弱动态；`-CuePadVoiceHidden YES` 验不可见门禁，不改系统偏好。
 struct DebugVoiceStage: View {
@@ -18,6 +19,7 @@ struct DebugVoiceStage: View {
     @State private var replyReady = !DebugScene.defaults.bool(forKey: "CuePadVoiceSequence")
     @State private var expanded = !DebugScene.defaults.bool(forKey: "CuePadVoiceCompact")
     @State private var muted = DebugScene.defaults.string(forKey: "CuePadVoiceState") == "muted" || DebugScene.defaults.bool(forKey: "CuePadVoiceMuted")
+    @State private var earlierFailure = DebugScene.defaults.bool(forKey: "CuePadVoiceEarlierFailure")
     @State private var requestFailed = DebugScene.defaults.bool(forKey: "CuePadVoiceRequestFailed")
     @State private var lastAction = ""
     @State private var reducedSpace = false
@@ -118,6 +120,9 @@ struct DebugVoiceStage: View {
         let rows = activity == .connecting && !replyReady ? [] : replies.compactMap { row -> CueVoicePresentation.Reply? in
             if !replyReady && row.request == nil { return nil }
             var row = row
+            if earlierFailure, row.id == replies.first?.id, let request = row.request {
+                row.request = .init(text: request.text, delivery: .failed(.reported(String(localized: Self.earlierIssue))))
+            }
             if row.id == latestID, let request = row.request {
                 let delivery: Speech.Trip = if requestFailed { .failed(.reported(String(localized: "未交给 Cue"))) }
                     else if !replyReady { .sending } else { .delivered }
@@ -126,7 +131,8 @@ struct DebugVoiceStage: View {
             return .init(id: row.id, text: row.text, canRequestRepeat: activity.isLive && !row.text.isEmpty,
                          request: row.request, note: row.note)
         }
-        let issue: CueVoicePresentation.Issue? = if requestFailed { .init(message: "未交给 Cue", recovery: "重新交给 Cue") }
+        let issue: CueVoicePresentation.Issue? = if earlierFailure { .init(message: Self.earlierIssue, recovery: "重新交给 Cue") }
+            else if requestFailed { .init(message: "未交给 Cue", recovery: "重新交给 Cue") }
             else if activity == .failed { self.issue } else { nil }
         return CueVoicePresentation(
             name: "Cue", activity: activity, muted: muted, samples: { [audio, simulated] in simulated ? audio.samples : [] },
@@ -134,7 +140,19 @@ struct DebugVoiceStage: View {
             canStopExecution: activity != .connecting, executions: executions)
     }
 
+    private static var earlierIssue: LocalizedStringResource {
+        .init("请求 A「检查发布事项」未交给 Cue：等待回执超时", table: "Demo")
+    }
+
     private static func seedReplies() -> [CueVoicePresentation.Reply] {
+        if DebugScene.defaults.bool(forKey: "CuePadVoiceEarlierFailure") {
+            return [
+                .init(id: UUID(), text: "", canRequestRepeat: false,
+                      request: .init(text: String(localized: "请求 A：检查发布事项", table: "Demo"), delivery: .sending)),
+                .init(id: UUID(), text: "", canRequestRepeat: false,
+                      request: .init(text: String(localized: "请求 B：整理会议记录", table: "Demo"), delivery: .delivered)),
+            ]
+        }
         let long = DebugScene.defaults.bool(forKey: "CuePadVoiceLong")
         return (1...max(1, DebugScene.defaults.integer(forKey: "CuePadVoiceReplies"))).flatMap { [requestRow($0), reply($0, long: long)] }
     }
@@ -223,6 +241,11 @@ struct DebugVoiceStage: View {
         case .stopExecution:
             lastAction = String(localized: "演示：已收到停止执行操作", table: "Demo")
         case .recover:
+            if earlierFailure {
+                earlierFailure = false
+                lastAction = String(localized: "演示：已重试请求 A", table: "Demo")
+                return
+            }
             if requestFailed {
                 requestFailed = false
             } else {
