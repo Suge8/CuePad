@@ -2883,6 +2883,22 @@
         }
       }
     },
+    "ChatGPT 拒绝了这次通话（%lld）：套餐不含语音或额度已用完" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChatGPT declined the call (%lld): your plan doesn't include voice, or you've used up your limit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChatGPT 拒绝了这次通话（%lld）：套餐不含语音或额度已用完"
+          }
+        }
+      }
+    },
     "ChatGPT 暂不提供额度数据" : {
       "localizations" : {
         "en" : {
@@ -3019,6 +3035,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Codex 没有模型 %@"
+          }
+        }
+      }
+    },
+    "Codex 的 ChatGPT 登录不可用或已过期：在 Codex 里重新登录后再通话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex's ChatGPT sign-in is unavailable or expired. Sign in again in Codex, then call."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex 的 ChatGPT 登录不可用或已过期：在 Codex 里重新登录后再通话"
           }
         }
       }
@@ -3265,6 +3297,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cue 记忆里的一条"
+          }
+        }
+      }
+    },
+    "Cue 还没启用，启用后才能通话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on Cue to call it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cue 还没启用，启用后才能通话"
           }
         }
       }
@@ -9523,6 +9571,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "和 Cue 的一条对话"
+          }
+        }
+      }
+    },
+    "和 Cue 通话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call Cue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "和 Cue 通话"
           }
         }
       }
@@ -16855,6 +16919,22 @@
         }
       }
     },
+    "正在接通 Cue…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calling Cue…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在接通 Cue…"
+          }
+        }
+      }
+    },
     "正在改名" : {
       "localizations" : {
         "en" : {
@@ -23651,6 +23731,134 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通知已关闭"
+          }
+        }
+      }
+    },
+    "通话中" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On a call with Cue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话中"
+          }
+        }
+      }
+    },
+    "通话出错：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call error: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话出错：%@"
+          }
+        }
+      }
+    },
+    "通话已结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call ended"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话已结束"
+          }
+        }
+      }
+    },
+    "通话断开了：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call dropped: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话断开了：%@"
+          }
+        }
+      }
+    },
+    "通话没能建立（%lld）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't start the call (%lld)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话没能建立（%lld）"
+          }
+        }
+      }
+    },
+    "通话没能建立：服务器的回应认不出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't start the call: unexpected server response"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话没能建立：服务器的回应认不出"
+          }
+        }
+      }
+    },
+    "通话的声音连接断了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The call's audio connection dropped"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话的声音连接断了"
+          }
+        }
+      }
+    },
+    "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calls use Codex's ChatGPT sign-in, and Codex isn't installed on this Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex"
           }
         }
       }
