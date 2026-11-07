@@ -105,10 +105,15 @@ extension CueStore {
   /// 停止会话正在跑的这一轮；此刻停不了（`PiSessionState.canStop`，与界面的停止按钮同一条）抛 `cannotStop`。
   /// Cue 停的先看此刻在做什么确认过没有（`requireRuntime`）：没确认时说的是那台 Mac 不在线或还没报，不说"没在跑"。
   public func stopSession(_ sessionID: String, host: String, cue: Bool = false) throws -> DeliveryRequest {
+    try write { try requestSessionStop(sessionID, host: host, cue: cue) }
+  }
+
+  /// 在已有写事务中核对并请求停止，范围校验与落请求必须共用一个事务。
+  func requestSessionStop(_ sessionID: String, host: String, cue: Bool = false) throws -> DeliveryRequest {
     let session = try sessionTarget(sessionID, name: "")
     if cue, let state = session.state { try requireRuntime(state) }
     guard session.state?.canStop == true else { throw CueStoreError.cannotStop(session.target.name) }
-    return try requestStop(of: session.target, on: session.host(or: host), cue: cue)
+    return try requestControl(.stop, of: session.target, on: session.host(or: host), cue: cue)
   }
 
   /// Cue 收掉一个会话（done 给 session）：与做完一件事同一条规则（`endUnused`），只是不除外哪件事。做不到的、终端里他自己开的抛 `cannotEnd`，

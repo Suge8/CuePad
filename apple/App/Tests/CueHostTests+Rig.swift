@@ -264,7 +264,7 @@ extension CueHostTests {
             return workPIDs.filter { pid in
                 var path = [CChar](repeating: 0, count: Int(MAXPATHLEN))
                 guard brains.contains(Self.parent(of: pid)), proc_pidpath(pid, &path, UInt32(path.count)) > 0 else { return false }
-                return URL(filePath: String(cString: path)).lastPathComponent == "cuepad"
+                return URL(filePath: String(decoding: path.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)).lastPathComponent == "cuepad"
             }
         }
 

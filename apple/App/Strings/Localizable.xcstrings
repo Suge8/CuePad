@@ -6183,6 +6183,22 @@
         }
       }
     },
+    "会话扩展需升级后才能按原回合停止，没有停止会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update the session extension to stop a specific turn. The session was not stopped."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话扩展需升级后才能按原回合停止，没有停止会话"
+          }
+        }
+      }
+    },
     "会话操作已经开始，结果尚未确认：%@" : {
       "localizations" : {
         "en" : {
@@ -6851,6 +6867,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "做完能撤销；原来的那些进废纸篓"
+          }
+        }
+      }
+    },
+    "停止哪个会话？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Which session should stop?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止哪个会话？"
           }
         }
       }
@@ -8459,6 +8491,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "压缩上下文"
+          }
+        }
+      }
+    },
+    "原回合已结束或更换，停止请求不再适用，没有停止后来的工作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original turn has ended or changed. This stop request no longer applies; later work was not stopped."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原回合已结束或更换，停止请求不再适用，没有停止后来的工作"
           }
         }
       }
@@ -16295,22 +16343,6 @@
         }
       }
     },
-    "未交给 Cue" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not handed to Cue"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未交给 Cue"
-          }
-        }
-      }
-    },
     "未命名的 Mac" : {
       "localizations" : {
         "en" : {
@@ -16935,22 +16967,6 @@
         }
       }
     },
-    "正在交给 Cue…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Handing to Cue…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在交给 Cue…"
-          }
-        }
-      }
-    },
     "正在从 Mac 取对话…" : {
       "localizations" : {
         "en" : {
@@ -17011,6 +17027,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在停止"
+          }
+        }
+      }
+    },
+    "正在停止…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stopping…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在停止…"
           }
         }
       }
@@ -21495,6 +21527,22 @@
         }
       }
     },
+    "请求和结果仍保留在这里" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your requests and results are still here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求和结果仍保留在这里"
+          }
+        }
+      }
+    },
     "请求太频繁，稍后再试" : {
       "localizations" : {
         "en" : {
@@ -22871,6 +22919,22 @@
         }
       }
     },
+    "这个接入不支持按原回合停止，没有停止会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This agent cannot stop a specific turn. The session was not stopped."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个接入不支持按原回合停止，没有停止会话"
+          }
+        }
+      }
+    },
     "这个构建没有 iCloud 权限（本机开发构建），不会同步" : {
       "localizations" : {
         "en" : {
@@ -23107,6 +23171,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这件已经不用整理了"
+          }
+        }
+      }
+    },
+    "这份回复没有可朗读的文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This reply has no text to read aloud."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这份回复没有可朗读的文字"
           }
         }
       }
@@ -23539,6 +23619,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条提问已经结束了"
+          }
+        }
+      }
+    },
+    "这条结果尚未关联到通话请求，可以查看文字或点再说一遍" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This result has not been linked to a call request. Read it here or choose Say Again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这条结果尚未关联到通话请求，可以查看文字或点再说一遍"
           }
         }
       }
@@ -24231,6 +24327,22 @@
         }
       }
     },
+    "通话已结束，朗读尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The call ended. Playback is unconfirmed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话已结束，朗读尚未确认"
+          }
+        }
+      }
+    },
     "通话文字" : {
       "localizations" : {
         "en" : {
@@ -24339,6 +24451,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex"
+          }
+        }
+      }
+    },
+    "通话连接或发送超时，请重新接通；已有请求和回复仍然保留" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The connection or send timed out. Reconnect to continue; your requests and replies are still here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话连接或发送超时，请重新接通；已有请求和回复仍然保留"
           }
         }
       }
@@ -24551,6 +24679,22 @@
         }
       }
     },
+    "重新交给 Cue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send to Cue Again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新交给 Cue"
+          }
+        }
+      }
+    },
     "重新打开" : {
       "localizations" : {
         "en" : {
@@ -24563,6 +24707,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新打开"
+          }
+        }
+      }
+    },
+    "重新接通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新接通"
           }
         }
       }
@@ -25439,6 +25599,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "麦克风已静音"
+          }
+        }
+      }
+    },
+    "麦克风权限未开启：在系统设置中允许 CuePad 使用麦克风后重新接通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow CuePad to use your microphone in System Settings, then reconnect."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "麦克风权限未开启：在系统设置中允许 CuePad 使用麦克风后重新接通"
           }
         }
       }

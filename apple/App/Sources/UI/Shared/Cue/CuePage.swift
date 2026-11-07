@@ -55,6 +55,8 @@ struct CuePage: View {
     #if os(macOS)
     private var page: some View {
         HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                if workspace.voice != nil { CueVoicePanel() }
             FloatingReply {
                 chat
             } reply: {
@@ -62,6 +64,7 @@ struct CuePage: View {
                     .replyTray()
                     .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth)
+            }
             }
             // 原地淡入淡出、对话这一下就让到终点的宽：开合不逐帧排版（docs/layout.md「宽屏开合」）
             if cue.showsRun, let keeper = services.cue.keeper {

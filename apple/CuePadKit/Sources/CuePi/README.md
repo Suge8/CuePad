@@ -67,6 +67,7 @@ CuePad → 扩展（都带 `id`）：
 | `config` | `model{provider, id}`、`thinking`、`fast`、`name`，至少一项 | `bad_request`、`unknown_model`、`no_auth` |
 | `answer` | `promptId`、`value`（`confirm` 为布尔，`select` 为选项原文，`text` 为字符串） | `no_prompt`、`stale_prompt`、`bad_answer` |
 | `abort` | — | — |
+| `abortTurn`（59 起） | `deliveryId`：只停止该投送开启的原回合；同步核对当前真实消息后停止，不清空后续排队工作；旧扩展和未实现此合同的接入明确拒绝 | `bad_request`、`stale_turn` |
 | `retry` | — | `nothing_to_retry` |
 | `end` | — | — |
 | `reload` | — | — |

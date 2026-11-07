@@ -37,7 +37,7 @@ extension CueTools {
   /// 只把明确拒绝标成出错；等待窗口结束不授权 Cue 重说，也不保证之后一定收到结果。
   func spoken(_ request: DeliveryRequest, _ what: String, tail short: String, from host: String) async throws -> Result {
     let latest = try await settled(request)
-    let tail = "（\(short)）"
+    let tail = "（\(short)）\n\(CueToolReceipt(.request, request.id).mark)"
     let moment = Speech.Moment.always(localHost: host)
     switch Speech.trip(latest, at: moment) {
     case .preparing(let reason):
@@ -45,19 +45,10 @@ extension CueTools {
     case .delivered:
       return .ok("\(what)：已送达。\(tail)")
     case .failed(.reported(let reason)):
-      return Result(text: "\(what)：没送到——\(reason)\(tail) \(Self.undeliveredMark(request.id))", isError: true)
+      return Result(text: "\(what)：没送到——\(reason)\(tail)", isError: true)
     case .sending, .sent, .unconfirmed:
       return .ok("\(what)：送达尚未确认，可能已经执行；不要自动重发。若收到后续回执或消息，再据实判断。\(tail)")
     }
-  }
-
-  /// 说的话没送到时写在工具结果末尾的请求标识。工具写出回应不等于 Cue 看到了（大脑可能正在这时没了）：值班的管理器在这一轮
-  /// 好好做完时，从这一轮收到的出错工具结果里认出它们，记下已告诉 Cue（`CueStore.markCueTold`），别的失败照样进下一轮的变化。
-  static func undeliveredMark(_ request: UUID) -> String { "[请求 \(request.uuidString.lowercased())]" }
-
-  /// 一条出错的工具结果里告诉了 Cue 的没送到的请求（`undeliveredMark`）。
-  public static func undeliveredRequests(in result: String) -> [UUID] {
-    result.matches(of: /\[请求 ([0-9a-f-]{36})\]/).compactMap { UUID(uuidString: String($0.1)) }
   }
 
   /// 等请求有结果，至多到写下后 `wait`；到点还没结果返回此刻的记录。等的是别的进程（执行它的 Mac 上的 App）写回的结果：

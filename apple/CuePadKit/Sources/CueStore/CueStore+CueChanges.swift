@@ -175,7 +175,7 @@ extension CueStore {
     switch mode.known {
     case .start: "开工"
     case .config: "换模型"
-    case .stop: "停下"
+    case .stop, .stopTurn: "停下"
     case .end: "结束"
     default: mode.rawValue
     }

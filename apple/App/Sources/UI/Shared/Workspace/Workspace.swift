@@ -121,8 +121,9 @@ final class Workspace {
     var showsSetup = false
     /// 新会话的表单开着（`NewSessionForm`，主窗口弹出；菜单"文件 › 新会话"与看板推进中列头的 ＋ 置起，`newSession(in:)`）。
     var showsNewSession = false
-    /// 和 Cue 的通话（`VoiceCall`，菜单"文件 › 和 Cue 通话"起、挂）：结束或出错后留着终态，下一次换新的。
+    /// 和 Cue 的通话（`VoiceCall`，菜单"文件 › 和 Cue 通话"起、挂）：结束或出错后保留记录，下次只重建连接。
     var voice: VoiceCall?
+    var voiceExpanded = true
     /// 这一次新会话默认开在哪个项目（看板的项目范围；nil 是当前项目）。
     var newSessionProject: UUID?
     /// 这台 Mac 上点"开始"没开成会话的叶子与原因（`handOff`）：任务气泡那一行一直写着、给"重试"，再点开始时清掉。

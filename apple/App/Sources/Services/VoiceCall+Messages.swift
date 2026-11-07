@@ -1,50 +1,146 @@
 #if os(macOS)
 import CueStore
-import CueText
 import Foundation
 
 extension VoiceCall {
     /// delegation 可早于 turn.done；直接交正文，身份在结果返回后也保留，重复事件不会再写请求。
     func submit(_ delegation: VoiceWire.Delegation) {
-        guard !requests.contains(where: { $0.delegation.id == delegation.id }),
+        guard !requestState.contains(where: { $0.id == delegation.id }),
               !delegation.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        requests.append(Request(delegation: delegation))
+        requestState.append(Request(delegation: delegation))
+        delegations.insert(delegation.id)
         mark("handoff \(delegation.id)")
-        writing[delegation.id] = Task { [tell = dependencies.tell, inputs] in
+        recordRequest(delegation.id)
+    }
+
+    /// 写库不归媒体连接所有：挂断不能撤销可能已落库的业务，也不能丢掉晚回来的请求 ID。
+    func recordRequest(_ id: String) {
+        guard let index = requestState.firstIndex(where: { $0.id == id }), writing[id] == nil else { return }
+        let text = requestState[index].text
+        requestState[index].submission = .recording
+        requestState[index].record = nil
+        writing[id] = Task { [self] in
             do {
-                let id = try await tell(delegation.text)
-                inputs.continuation.yield(.recorded(delegation: delegation.id, message: id))
-            } catch { inputs.continuation.yield(.failed(.other(error.localizedDescription))) }
+                let message = try await dependencies.tell(text)
+                if let index = requestState.firstIndex(where: { $0.id == id }) { requestState[index].submission = .recorded(message) }
+                watchRequests()
+            } catch {
+                if let index = requestState.firstIndex(where: { $0.id == id }) { requestState[index].submission = .failed(error.localizedDescription) }
+            }
+            writing[id] = nil
+            readMessages()
+            drain()
         }
     }
 
-    /// 读与发共用一个拥有者、一个消费游标；ready 前只积累库的末尾，ready 后按页补齐。
-    /// 写库回执先回来才能判断回复归属，避免高速 Cue 回复抢在请求 ID 回到通话之前。
-    func drain() {
-        guard let channel, outgoing == nil, writing.isEmpty else { return }
-        guard let entry = pending.first else {
-            guard latest > cursor else { return }
-            outgoing = Task { [store = dependencies.store, inputs, cursor] in
-                do { inputs.continuation.yield(.loaded(try await store.cueMessagePage(after: cursor))) }
-                catch { inputs.continuation.yield(.failed(.other(error.localizedDescription))) }
+    nonisolated struct Read: Equatable, Sendable {
+        let end: Int
+        let requests: [CueMessage]
+        let executions: [PiSessionListItem]
+    }
+
+    /// 写入序号只负责读完整份结果；送达字段另外订阅原记录，不为了界面更新而触发重复播报。
+    func watchRequests() {
+        observing?.cancel()
+        let ids = requestState.compactMap(\.message), store = dependencies.store
+        do {
+            let start = try store.snapshot { Read(end: try $0.lastWrite(), requests: try $0.cueMessages(ids), executions: try $0.voiceExecutions(requests: ids)) }
+            update(start.value)
+            observing = Task { [weak self] in
+                do {
+                    for try await read in store.observe(from: start, { Read(end: try $0.lastWrite(), requests: try $0.cueMessages(ids), executions: try $0.voiceExecutions(requests: ids)) }) {
+                        guard !Task.isCancelled else { return }
+                        self?.update(read)
+                    }
+                } catch { if !Task.isCancelled { self?.storeFailed(error) } }
             }
-            return
+        } catch { storeFailed(error) }
+    }
+
+    private func update(_ read: Read) {
+        storeFailure = nil
+        executionState = read.executions
+        for index in requestState.indices {
+            requestState[index].record = read.requests.first { $0.id == requestState[index].message }
         }
-        let message = entry.message
-        let answered = Set(message.answeredRequests ?? [])
-        let matched = requests.filter { $0.message.map(answered.contains) == true }
-        let text = message.author == .known(.cue) ? CueFormat.parse(message.text).map(\.shownText).joined() : ""
-        let outgoingMessage: VoiceWire.Outgoing? = if text.isEmpty { nil }
-            else if let delegation = matched.last?.delegation.id { .reply(delegation: delegation, text: text) }
-            else { .say(text) }
-        outgoing = Task { [inputs, mark] in
+        latest = max(latest, read.end)
+        readMessages()
+    }
+
+    private func storeFailed(_ error: Error) {
+        storeFailure = error.localizedDescription
+        if isLive { inputs.continuation.yield(.failed(.other(error.localizedDescription))) }
+    }
+
+    private func readMessages() {
+        guard reading == nil, writing.isEmpty, let cursor, latest > cursor else { return }
+        reading = Task { [weak self, store = dependencies.store] in
             do {
-                if let outgoingMessage {
-                    mark("cue-forward \(message.id) delegation=\(matched.last?.delegation.id ?? "session") \(text)")
-                    try await channel.send(outgoingMessage)
-                }
+                let page = try await store.cueMessagePage(after: cursor)
+                guard !Task.isCancelled else { return }
+                self?.received(page)
+            } catch {
+                self?.reading = nil
+                if !Task.isCancelled { self?.storeFailed(error) }
+            }
+        }
+    }
+
+    private func received(_ page: CueMessagePage) {
+        reading = nil
+        guard writing.isEmpty else { return }
+        for entry in page.entries {
+            let message = entry.message
+            let answered = Set(message.answeredRequests ?? [])
+            for index in requestState.indices {
+                if let id = requestState[index].message, answered.contains(id) { requestState[index].submission = .returned(id) }
+            }
+            guard message.author == .known(.cue), !message.text.isEmpty,
+                  answered.isEmpty || requestState.contains(where: { $0.message.map(answered.contains) == true }) else { continue }
+            let proposed = Reply(message: message, delivery: message.answeredRequests == nil ? .awaitingOrigin : .queued)
+            if let index = replyState.firstIndex(where: { $0.id == message.id }) {
+                let previous = replyState[index].delivery
+                replyState[index] = Reply(message: message, delivery: previous == .awaitingOrigin ? proposed.delivery : previous)
+            } else {
+                var reply = proposed
+                if reply.text.isEmpty { reply.delivery = .unconfirmed(String(localized: "这份回复没有可朗读的文字")) }
+                replyState.append(reply)
+            }
+        }
+        cursor = page.through
+        readMessages()
+        drain()
+    }
+
+    /// 同一条结果只在明确操作后重说；正文仍取真实记录，不重新派活，也不把旧交接 ID 带进新连接。
+    func repeatReply(_ id: UUID) {
+        guard canRepeat, let index = replyState.firstIndex(where: { $0.id == id }), replyState[index].delivery != .sending,
+              !replyState[index].text.isEmpty else { return }
+        replyState[index].delivery = .queued
+        drain()
+    }
+
+    /// 可见结果与传输分开推进。send 结束只记本机提交；异步服务端错误仍会使已提交结果变为未确认。
+    func drain() {
+        guard let channel, outgoing == nil, writing.isEmpty,
+              let index = replyState.firstIndex(where: { $0.delivery == .queued }) else { return }
+        let message = replyState[index].message
+        let answered = Set(message.answeredRequests ?? [])
+        let delegation = requestState.last { $0.message.map(answered.contains) == true && delegations.contains($0.id) }?.id
+        let text = replyState[index].text
+        replyState[index].delivery = .sending
+        let outgoingMessage: VoiceWire.Outgoing = delegation.map { .reply(delegation: $0, text: text) } ?? .say(text)
+        outgoing = Task { [inputs, mark] in
+            let timeout = Task {
+                do { try await Task.sleep(for: .seconds(Speech.sendLimit)); inputs.continuation.yield(.failed(.timedOut)) }
+                catch { }
+            }
+            defer { timeout.cancel() }
+            do {
+                mark("cue-forward \(message.id) delegation=\(delegation ?? "session") \(text)")
+                try await channel.send(outgoingMessage)
                 try Task.checkCancellation()
-                inputs.continuation.yield(.sent(sequence: entry.sequence, requests: answered, forwarded: outgoingMessage == nil ? nil : message.id))
+                inputs.continuation.yield(.sent(message.id))
             } catch {
                 if !Task.isCancelled { inputs.continuation.yield(.failed(.closed(error.localizedDescription))) }
             }

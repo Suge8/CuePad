@@ -331,6 +331,17 @@ export class Session {
 		return true;
 	}
 
+	/** 核对投送身份与停止之间没有 await；不清空别人的 pending 或改变 abortEpoch。
+	 * starting / SDK 待处理消息尚未有可证实的当前身份，拒绝而不冒险停止新工作。 */
+	stopDelivery(deliveryId: string): boolean {
+		if (this.starting.length || this.ctx.hasPendingMessages()) return false;
+		const last = this.ctx.sessionManager.buildSessionProjection().messages.findLast((message) => message.role === "user");
+		if ((last as { cuepadDelivery?: unknown } | undefined)?.cuepadDelivery !== deliveryId) return false;
+		if (this.ctx.isIdle()) return false;
+		this.stopRound();
+		return true;
+	}
+
 	/**
 	 * 停下这一轮：Pi 的 `ctx.abort()`，与在 Pi 里按 Esc 同一能力（也停手动压缩），只中止指挥官自己正在跑的回合，会话随后以"被中止"歇下。
 	 * 等你回答的弹窗先取消（否则这一轮会一直卡在等你）。已经空闲就什么都不做；FireCode 的子代理是独立会话，不受影响。

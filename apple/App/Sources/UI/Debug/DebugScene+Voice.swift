@@ -13,6 +13,7 @@ import Foundation
 ///   对方的声音录到 `-CuePadVoiceRecord <wav>`（不外放；无人值守）。
 /// - `-CuePadVoiceLoopback <目录>` 以本进程 tap 做临时麦克风（`VoiceLoopback`），按节点播 first.wav、interrupt.wav、stop.wav；退出前销毁设备。
 ///   单变量音频处理对照与本地电平模式见 `DebugVoice`；原始控制事件（不含音频块）写到 `-CuePadVoiceWireLog <文件>`。
+/// - `-CuePadVoiceReadFixture <原文>` 把原文作为隔离库的主动消息请 GPT Live 朗读，录成后续验收的声源；不使用系统 TTS。
 /// - 到 `-CuePadVoiceSeconds`（默认 60）挂断；配 `-CuePadVoiceHangUpAfterReply YES` 时，结果送出后观察到实际输出、模型回合结束且音轨安静才挂断。
 ///   `-CuePadVoiceReplay YES` 在 Cue 结果送出后重放原 delegation 与用户 turn.done，核对请求没有重复落库。
 /// - 每个节点一行写进 `-CuePadVoiceLog <文件>`：`<距起点秒> <节点>`。`cue-forward` 是落库结果与交接归属，`cue-sent` 是发送完成，
@@ -83,9 +84,17 @@ extension DebugScene {
         var requestCount = 0
         var stage = 0, submittedBeforeInput = 0
         var inputFinished = false, outputLoud = false
+        var fixturePosted = false
         // 模型可把一个音频文件分成多个用户回合，Cue 也可回多条；阶段只按本次声源播完与其后的请求完成推进。
         func advance() {
             guard call.isLive else { return }
+            if !fixturePosted, call.phase == .listening, let text = defaults.string(forKey: "CuePadVoiceReadFixture") {
+                fixturePosted = true
+                Task {
+                    do { try await workspace.services.store.addCueMessage(.cue, text: text) }
+                    catch { note("fixture-error \(error)"); call.hangUp() }
+                }
+            }
             if heardAfterReply, finishedAfterReply, call.phase == .listening, defaults.bool(forKey: "CuePadVoiceHangUpAfterReply") {
                 call.hangUp()
                 return

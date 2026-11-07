@@ -124,6 +124,10 @@ function handleCommand(session: Session, socket: net.Socket, command: Command | 
 		if (command?.t === "reload") return handleReload(session, ack);
 		if (command?.t === "end") return handleEnd(session, ack);
 		if (command?.t === "abort") return handleAbort(session, ack);
+		if (command?.t === "abortTurn") {
+			if (typeof command.deliveryId !== "string" || !command.deliveryId) return reject("bad_request");
+			return session.stopDelivery(command.deliveryId) ? ack({ ok: true }) : reject("stale_turn");
+		}
 		if (command?.t === "retry") return void handleRetry(session, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "config") return void handleConfig(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "quota") return handleQuota(session, ack, reject);

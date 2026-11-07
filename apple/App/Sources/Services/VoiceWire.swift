@@ -126,7 +126,7 @@ enum VoiceWire {
     }
 
     /// 每个 call 只有一个控制连接，reader 与发送都由通话拥有；关闭会取消在等的收发。
-    final class Channel {
+    final class Channel: VoiceControl {
         private let socket: URLSessionWebSocketTask
         private var reader: Task<Void, Never>?
 

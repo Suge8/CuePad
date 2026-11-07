@@ -10,7 +10,7 @@ struct CueVoiceView: View {
     @Environment(\.palette) private var palette
 
     // Cue 栏最窄 320pt 时仍留出约六行可阅读文字；收起只占两排控件，不盖住任务。
-    static let expandedHeight: CGFloat = 408
+    static let expandedHeight: CGFloat = 480
     static let compactHeight: CGFloat = 108
 
     var body: some View {
@@ -29,41 +29,39 @@ struct CueVoiceView: View {
     }
 
     private var heading: some View {
-        HStack(alignment: .top, spacing: Spacing.item) {
+        VStack(spacing: Spacing.tight) {
             if expanded {
-                Spacer(minLength: ControlSize.regular.height)
-                VStack(spacing: Spacing.tight) {
-                    CueAvatar(.resting, size: .card)
-                        .environment(\.pageActive, false)
-                    Text(presentation.title)
-                        .font(Typography.title)
-                        .foregroundStyle(palette.ink)
-                        .lineLimit(1)
-                    CueVoiceSignal(samples: presentation.samples, active: signalActive)
-                }
-                .frame(maxWidth: .infinity)
+                CueVoiceSignal(samples: presentation.samples, activity: presentation.activity, muted: presentation.muted)
+                    .frame(maxWidth: .infinity)
+                    .overlay(alignment: .topTrailing) { expansion }
+                Text(presentation.title)
+                    .font(Typography.title)
+                    .foregroundStyle(palette.ink)
+                    .lineLimit(1)
             } else {
-                CueAvatar(.resting, size: .row).environment(\.pageActive, false)
-                VStack(alignment: .leading, spacing: Spacing.hair) {
-                    Text(verbatim: presentation.name).font(Typography.bodyStrong)
-                    Text(presentation.title).font(Typography.meta).foregroundStyle(palette.ink2)
+                HStack(spacing: Spacing.item) {
+                    CueAvatar(.resting, size: .row).environment(\.pageActive, false)
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
+                        Text(verbatim: presentation.name).font(Typography.bodyStrong)
+                        Text(presentation.title).font(Typography.meta).foregroundStyle(palette.ink2)
+                    }
+                    .lineLimit(1)
+                    Spacer(minLength: 0)
+                    expansion
                 }
-                .lineLimit(1)
-                Spacer(minLength: 0)
             }
-            Button { action(expanded ? .collapse : .expand) } label: {
-                if expanded { Label("收起通话", icon: .collapse) }
-                else { Label("展开通话", icon: .expand) }
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(ControlButtonStyle(kind: .icon))
-            .help(expanded ? Text("收起通话") : Text("展开通话"))
         }
         .padding(.horizontal, Spacing.page)
     }
 
-    private var signalActive: Bool {
-        presentation.activity == .speaking || (presentation.activity == .listening && !presentation.muted)
+    private var expansion: some View {
+        Button { action(expanded ? .collapse : .expand) } label: {
+            if expanded { Label("收起通话", icon: .collapse) }
+            else { Label("展开通话", icon: .expand) }
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(ControlButtonStyle(kind: .icon))
+        .help(expanded ? Text("收起通话") : Text("展开通话"))
     }
 
     private var controls: some View {

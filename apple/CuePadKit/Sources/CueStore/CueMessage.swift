@@ -62,8 +62,8 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 一轮的经过那一行的清单（Cue 那一轮调过的工具，`CueActivity`）：Cue 页读其中碰到的各处（`CueActivity.touches`），每一步的原文只进 Cue 的上下文；别的行没有。
   public var tools: PiChatMessage.Tools?
-  /// 这一轮已回答的请求集合（CueKeeper 实际接走的消息 ID，同步）。非 nil 表示轮已结束；主动通知为 nil。
-  /// 有正文时记在最终回复上；没有正文时记在经过那一行上，不编造一句回复。空集合是 Cue 自己醒来的轮次。
+  /// 回复所对应的真实请求集合（CueKeeper 在调用开始时接走的消息 ID，同步）；空集合是主动消息，nil 是来源还未确认。
+  /// 同一请求可有多条回复；有回复不代表执行完成。整轮没有正文时在经过行记录已处理的集合，不编造一句回复。
   public var answeredRequests: [UUID]? = nil
   /// Cue 自己醒来的那一轮为什么醒（只在它的经过那一行上，起这一轮时写下、不再变）：Cue 页那一节的第一行与叫醒的接力都只读它。
   public var wake: CueWake? = nil

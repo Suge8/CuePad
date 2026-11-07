@@ -209,6 +209,9 @@ nonisolated final class FakeModel: Sendable {
         }
         if sawImage { return say("看到图了") }
         if let path = text.firstMatch(of: /附件：图片\.[a-z0-9]+（([^）]+)）/)?.1 { return say("图在 \(path)") }
+        if let speech = text.matches(of: /请对隔离会话说「([^」]+)」/).last?.1 {
+            return call("task", ["action": "say", "session": "语音停止验收", "text": String(speech)])
+        }
         if text.contains("请对登录页说继续") { return call("task", ["action": "say", "task": "修好登录页 说不出去", "text": "继续"]) }
         if let path = text.firstMatch(of: /请读一下关卡 (\S+)/)?.1 { return call("read", ["path": String(path)]) }
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }

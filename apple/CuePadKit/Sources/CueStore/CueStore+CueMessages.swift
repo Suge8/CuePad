@@ -7,18 +7,18 @@ extension CueStore {
   /// 点名的图不在发到手机的里抛 `shotMissing`，什么都不写。
   @discardableResult
   public func addCueMessage(
-    _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false, task: UUID? = nil
+    _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false, task: UUID? = nil, answeredRequests: [UUID]? = []
   ) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     return try write {
       try checkShots(shots)
       guard let ask else {
-        let message = try insertCueMessage(author, text: text, shots: shots, urgent: urgent, task: task)
+        let message = try insertCueMessage(author, text: text, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests)
         if author == .you { _ = try endQuestions(setAsideBy: message.id, where: "1", []) }
         return message
       }
       let project = try projectID(of: task).flatMap { try find(Project.self, $0) }
-      return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task)
+      return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task, answeredRequests: answeredRequests)
     }
   }
 
@@ -38,14 +38,14 @@ extension CueStore {
   /// Cue 写下的置手机推送标志：要提示你的（`CueMessage.alerts`）且到得了你（`reaches`）出可见通知，其余静默叫醒（`CuePush`）。它提到的那几处此刻的样子一并记下（`CuePlace`）。
   func insertCueMessage(
     _ author: CueAuthor, text: String = "", shown: ShownText? = nil, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil,
-    urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil, answeredRequests: [UUID]? = nil
+    urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil, answeredRequests: [UUID]? = []
   ) throws -> CueMessage {
     let now = Date.stamp
     var message = CueMessage(
       id: UUID(), author: .known(author), text: shown?.text ?? text, shownText: shown, choices: asking?.ask.choices(in: project?.name),
       asked: asking.map { CueAsked($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, shots: shots,
       urgent: urgent, taskID: task,
-      answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, answeredRequests: answeredRequests, wake: wake,
+      answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, answeredRequests: author == .cue ? answeredRequests : nil, wake: wake,
       places: try CuePlace.capture(task: task, wake: wake, project: asking == nil ? nil : project?.id, in: db), notify: nil)
     if author == .cue { message.notify = try message.alerts && reaches(.cue) ? .alert : .wake }
     try insert(message)
@@ -94,11 +94,11 @@ extension CueStore {
   /// 一轮写给你的话（值班的管理器调）：做完时的回复，或回答你的一轮出错。不是在回答你的一轮（`answersYou` 为假）里已经对你说过话
   /// （tell、done 的结果），最后那句只是复述，不写。回答你的一轮要提示你（`urgent`：你说完多半就离开了，在等它），一轮只响一次：
   /// 这一轮已经提示过你（提问卡、急事、出错）就不再提示。
-  public func replyCueRound(startedAt: Date, reply: ShownText, as author: CueAuthor, answersYou: Bool) throws {
-    try write { _ = try putCueReply(startedAt: startedAt, reply: "", shown: reply, as: author, answersYou: answersYou) }
+  public func replyCueRound(startedAt: Date, reply: ShownText, as author: CueAuthor, answersYou: Bool, answeredRequests: [UUID] = []) throws {
+    try write { _ = try putCueReply(startedAt: startedAt, reply: "", shown: reply, as: author, answersYou: answersYou, answeredRequests: answeredRequests) }
   }
 
-  private func putCueReply(startedAt: Date, reply: String, shown: ShownText? = nil, as author: CueAuthor, answersYou: Bool, answeredRequests: [UUID]? = nil) throws -> UUID? {
+  private func putCueReply(startedAt: Date, reply: String, shown: ShownText? = nil, as author: CueAuthor, answersYou: Bool, answeredRequests: [UUID]? = []) throws -> UUID? {
     guard !(shown?.text ?? reply).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
     let said = try select(CueMessage.self, where: "author = 'cue' AND createdAt >= ?", [startedAt])
     guard answersYou || said.isEmpty else { return nil }

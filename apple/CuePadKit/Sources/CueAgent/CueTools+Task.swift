@@ -57,7 +57,7 @@ extension CueTools {
     let evidence = reports ? try Self.evidence(args) : []
     let shots = try CueShot.checked(try await shots(args.raw["show"]))
     if !reports, !shots.isEmpty { throw Failure("show 只跟着做完顶层任务：子任务与已完成的不写结果，没写") }
-    let (report, ends) = try await store.finishTask(card.id, evidence: evidence, shots: shots)
+    let (report, ends) = try await store.finishTask(card.id, evidence: evidence, shots: shots, answeredRequests: nil)
     let ended = ends.isEmpty ? "" : "，已请 \(ends.count) 个会话结束"
     if card.status == .done {
       return .ok("「\(card.heading)」（\(card.id.shortID)）早已完成" + (ends.isEmpty ? "，没有要结束的会话（还在用的、已结束的不动）。" : "\(ended)。"))
@@ -65,7 +65,8 @@ extension CueTools {
     return .ok(
       "「\(card.heading)」（\(card.id.shortID)）完成了" + ended
         + (report.map { "；结果已告诉用户（\($0.id.shortID)）" + (shots.isEmpty ? "，没挂图。" : "，挂着你点名的 \(shots.count) 张。") } ?? "。")
-        + (reports ? try await waiting(beside: card) : ""))
+        + (reports ? try await waiting(beside: card) : "")
+        + (report.map { "\n" + CueToolReceipt(.reply, $0.id).mark } ?? ""))
   }
 
   /// 做完一件顶层任务时，同一个项目里还没开工的几件（至多 `waitingLimit`）：等这件做完再做的事常已建好、没开工（他交代"做完这件再派"），
@@ -210,7 +211,7 @@ extension CueTools {
     let host = launch.host
     let request = try await store.startLeaf(
       leaf.id, agent: launch.agent, fresh: launch.fresh, model: launch.model, thinking: launch.thinking, host: host, cue: true)
-    if request.mode == .known(.start) { return .ok("已请 Mac 为「\(leaf.heading)」开新会话，正文作为第一句。（\(leaf.id.shortID)）") }
+    if request.mode == .known(.start) { return .ok("已请 Mac 为「\(leaf.heading)」开新会话，正文作为第一句。（\(leaf.id.shortID)）\n\(CueToolReceipt(.request, request.id).mark)") }
     return try await spoken(request, "已请求「\(leaf.heading)」沿用上一步的会话，正文作为下一句", tail: leaf.id.shortID, from: host)
   }
 

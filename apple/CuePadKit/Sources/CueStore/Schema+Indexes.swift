@@ -60,12 +60,25 @@ extension Schema {
     \(cueMessageWrites)
     """
 
-  /// 91：轮结束的请求集合随对话同步；到达顺序复用本机计数器，不受对端时钟影响。
-  static let cueMessageUpgrade: Upgrade = """
-    ALTER TABLE cueMessages ADD COLUMN answeredRequests TEXT;
-    ALTER TABLE cueMessages ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;
-    \(cueMessageWrites)
+  /// 主线 90 与未发布语音开发库曾使用同一个版本号：两种布局都补齐期限锚点，已存在的语音字段不重建。
+  static let deliveryServerAnchor = """
+    UPDATE deliveryRequests AS r SET serverAt = createdAt
+      WHERE serverAt IS NULL AND (status = 'preparing' OR (status = 'pending' AND handledBy IS NULL)) AND \(Speech.reachedServerSQL("r"));
     """
+
+  /// 91：轮结束的请求集合随对话同步；到达顺序复用本机计数器，不受对端时钟影响。
+  static let cueMessageUpgrade = Upgrade { db in
+    try db.exec(deliveryServerAnchor)
+    let columns = Set(try db.query("PRAGMA table_info(cueMessages)", []) { $0.text(1) })
+    if !columns.contains("answeredRequests") { try db.exec("ALTER TABLE cueMessages ADD COLUMN answeredRequests TEXT") }
+    if !columns.contains("writeSeq") { try db.exec("ALTER TABLE cueMessages ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0") }
+    try db.exec("""
+      DROP TRIGGER IF EXISTS cueMessages_writeSeq_insert;
+      DROP TRIGGER IF EXISTS cueMessages_writeSeq_update;
+      DROP INDEX IF EXISTS cueMessages_writeSeq;
+      \(cueMessageWrites)
+      """)
+  }
 
   /// 对话正文写下就不再变；轮结束的请求集合可能后补到经过行。送达、推送与工具进度不产生第二次播报。
   static let cueMessageWrites = """

@@ -1,41 +1,56 @@
 #if os(macOS)
 import SwiftUI
 
-/// 真实声音的短历史，不用时间轴或随机数补出声音。不可见、减弱动态和省电时收成静线；状态文字仍保留。
+/// 舞台只画投影：横向收拢是输入、向外展开是输出；等待只呼吸，不生成音频。
+/// Cue 用完整品牌原图悬在声纹中，避免头像底圆把它读成通讯录联系人。
 struct CueVoiceSignal: View {
-    let samples: [CGFloat]
-    let active: Bool
+    let samples: () -> [CGFloat]
+    let activity: CueVoicePresentation.Activity
+    let muted: Bool
     @Environment(\.palette) private var palette
     @LoopsPlay private var motion
 
-    // 只取最近 32 个采样柱，宽度与高度不随声音改变，避免把音频更新传进外层排版。
-    nonisolated private static let count = 32
-    static let width: CGFloat = 176
-    static let height: CGFloat = 32
+    // 声纹的最大外扩也留在 320pt 栏的页面边距内，不参与文字与控件排版。
+    static let size = CGSize(width: 264, height: 208)
+    private static let face: CGFloat = 88
 
-    var body: some View {
-        Signal(samples: active && motion ? Array(samples.suffix(Self.count)) : [])
-            .stroke(active ? palette.signature : palette.ink3, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-            .frame(width: Self.width, height: Self.height)
-            .transaction { $0.animation = nil }
-            .readerHidden(true)
+    private var form: CueVoiceRibbon.Form {
+        return switch activity {
+        case .listening: muted ? .quiet : .inward
+        case .speaking: .outward
+        case .connecting, .processing: .waiting
+        case .failed, .ended: .quiet
+        }
     }
 
-    nonisolated private struct Signal: Shape {
-        let samples: [CGFloat]
+    private var beat: CueBeat {
+        switch activity {
+        case .connecting, .processing: .thinking
+        case .failed: .failed
+        case .ended: .away
+        case .listening, .speaking: .hearing
+        }
+    }
 
-        func path(in rect: CGRect) -> Path {
-            Path { path in
-                let step = rect.width / CGFloat(CueVoiceSignal.count)
-                for index in 0..<CueVoiceSignal.count {
-                    let offset = index - (CueVoiceSignal.count - samples.count)
-                    let level = offset >= 0 ? min(1, max(0, samples[offset])) : 0
-                    let half = max(0.5, level * (rect.height / 2 - 2))
-                    let x = (CGFloat(index) + 0.5) * step
-                    path.move(to: CGPoint(x: x, y: rect.midY - half))
-                    path.addLine(to: CGPoint(x: x, y: rect.midY + half))
-                }
+    var body: some View {
+        ZStack {
+            CueVoiceField(form: form, samples: motion && form.isAudio ? Array(samples().suffix(CueVoiceRibbon.sampleCount)) : [],
+                          moving: motion && form != .quiet, colors: form == .quiet ? [palette.track, palette.track] : [palette.signatureFill, palette.signature, palette.onFill, palette.signature])
+            if form == .waiting && motion {
+                LoopLayer(kind: .pulse, color: palette.signature)
+                    .mask(WaitingEdge().stroke(lineWidth: 1.5))
             }
+            Image(beat.still).resizable().scaledToFit()
+                .frame(width: Self.face, height: Self.face)
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private struct WaitingEdge: Shape {
+        nonisolated func path(in rect: CGRect) -> Path {
+            Path(CueVoiceRibbon.path(form: .waiting, samples: [], strand: CueVoiceRibbon.strands - 1, in: rect))
         }
     }
 }

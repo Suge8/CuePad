@@ -16,7 +16,7 @@ extension CueStore {
   /// 已完成的再做完一次只结束没人再用的会话（说话会恢复已结束的会话，答完就空着），状态与结果不再写。
   /// 证据的条数与长短由调用方（Cue 的工具）把关。返回这条结果（子任务与已完成的为 nil）与结束请求。
   @discardableResult
-  public func finishTask(_ task: UUID, evidence: [String], shots: [CueShot] = []) throws -> (report: CueMessage?, ended: [DeliveryRequest]) {
+  public func finishTask(_ task: UUID, evidence: [String], shots: [CueShot] = [], answeredRequests: [UUID]? = []) throws -> (report: CueMessage?, ended: [DeliveryRequest]) {
     try write {
       try checkStepsDone(task)
       try checkShots(shots)
@@ -25,7 +25,7 @@ extension CueStore {
       _ = try applyStatus(task, .done)
       let ended = try endUnusedSessions(of: task, cue: true).ended
       guard finished, card.parentID == nil else { return (nil, ended) }
-      return (try insertCueMessage(.cue, shown: CueReport.text(task: card.heading, evidence: evidence), shots: shots, task: task), ended)
+      return (try insertCueMessage(.cue, shown: CueReport.text(task: card.heading, evidence: evidence), shots: shots, task: task, answeredRequests: answeredRequests), ended)
     }
   }
 

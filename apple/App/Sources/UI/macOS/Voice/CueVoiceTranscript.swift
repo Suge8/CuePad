@@ -30,7 +30,17 @@ struct CueVoiceTranscript: View {
                 .textSelection(.enabled)
                 .padding(.horizontal, Spacing.page)
             }
+            ForEach(presentation.executions) { execution in
+                HStack(spacing: Spacing.item) {
+                    Text(verbatim: execution.title).lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(verbatim: execution.status)
+                }
+                .font(Typography.meta)
+                .padding(.horizontal, Spacing.page)
+            }
             conversation
+                .padding(.top, Spacing.item)
         }
     }
 
@@ -43,9 +53,9 @@ struct CueVoiceTranscript: View {
             ChatStack(spacing: Spacing.block) {
                 if let request = presentation.request {
                     VStack(alignment: .leading, spacing: Spacing.tight) {
-                        Text(request.delivery.title)
+                        Text(verbatim: request.status)
                             .font(Typography.meta)
-                            .foregroundStyle(request.delivery == .failed ? palette.failure : palette.ink2)
+                            .foregroundStyle(request.delivery.failure != nil ? palette.failure : palette.ink2)
                         Text(verbatim: request.text).font(Typography.body)
                     }
                 }
@@ -62,6 +72,8 @@ struct CueVoiceTranscript: View {
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // 同属 Cue 的桌面底文字区，沿用栏头下 16pt 淡出；不遮恢复按钮和下方控制。
+        .fadesUnderHead()
         // 操作行在阅读区外，不继承宿主回复框给对话预留的空间。
         .environment(\.chatBottomInset, 0)
         .accessibilityElement(children: .contain)
@@ -70,6 +82,13 @@ struct CueVoiceTranscript: View {
 
     private func replyRow(_ reply: CueVoicePresentation.Reply) -> some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
+            if let request = reply.request {
+                Text(verbatim: request.status)
+                    .font(Typography.meta)
+                    .foregroundStyle(request.delivery.failure != nil ? palette.failure : palette.ink2)
+                Text(verbatim: request.text).font(Typography.body)
+            }
+            if !reply.text.isEmpty {
             HStack(spacing: Spacing.item) {
                 Text(verbatim: presentation.name).font(Typography.label)
                 Spacer(minLength: 0)
@@ -82,6 +101,8 @@ struct CueVoiceTranscript: View {
             Text(verbatim: reply.text)
                 .font(Typography.reading)
                 .lineSpacing(Typography.readingLineSpacing)
+            if let note = reply.note { Text(verbatim: note).font(Typography.meta).foregroundStyle(palette.ink2) }
+            }
         }
     }
 }

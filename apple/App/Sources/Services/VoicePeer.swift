@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import AVFoundation
 import WebKit
 
 /// 实时语音的媒体那一头：系统 WebKit 里的一个 WebRTC 连接（`RTCPeerConnection`），声音进出都在这里，信令与控制在 `VoiceCall`。
@@ -12,7 +13,7 @@ import WebKit
 /// 或一段音频文件（`play` 时播进连接，无人值守的验收用）；给了 `recording` 时把对方的声音录成 24 kHz 单声道 WAV（`close` 时写出），这时不外放。
 /// 两头各挂一个电平表（`AnalyserNode`，每 50 毫秒取一次峰值）：过阈值报响起，低于阈值满 300 毫秒报停下并带这一段的峰值（`Event.level`）。
 @MainActor
-final class VoicePeer: NSObject {
+final class VoicePeer: NSObject, VoiceMedia {
     enum Source { case microphone(device: String?), file(URL) }
     enum Side: String { case input, output }
     enum Event: Equatable {
@@ -23,6 +24,8 @@ final class VoicePeer: NSObject {
         case device(String)
         /// 你这边（input）或对方（output）的声音响起、停下；停下时 `peak` 是这一段的峰值（0～1），响起时为当下的
         case level(Side, loud: Bool, peak: Double)
+        /// 电平表当下的峰值，只驱动声音呈现，不证明哪条回复被朗读。
+        case sample(Side, peak: Double)
     }
 
     var onEvent: (Event) -> Void = { _ in }
@@ -56,6 +59,10 @@ final class VoicePeer: NSObject {
 
     /// 起连接、收集完本机候选（不逐个送出：服务器一次收下整份），返回要交给服务器的 SDP。
     func offer() async throws -> String {
+        if case .microphone = source {
+            guard await AVCaptureDevice.requestAccess(for: .audio) else { throw VoicePeerError.microphoneDenied }
+        }
+        try Task.checkCancellation()
         try await load()
         try Task.checkCancellation()
         try await DebugHooks.configureVoice(web, source: source)
@@ -78,6 +85,10 @@ final class VoicePeer: NSObject {
     /// 文件来源：从现在起播进连接，播完报 `inputEnded`。
     func play() async throws {
         _ = try await javascript("return play()")
+    }
+
+    func setMuted(_ muted: Bool) async throws {
+        _ = try await javascript("localTrack.enabled = !muted", arguments: ["muted": muted])
     }
 
     /// 整次通话里你这边声音的最大峰值（0～1）：一次也没响起时看它是没声还是太弱。
@@ -155,6 +166,9 @@ final class VoicePeer: NSObject {
             }
         case "inputEnded": onEvent(.inputEnded)
         case "device": onEvent(.device(body["label"] as? String ?? ""))
+        case "sample":
+            guard let side = Side(rawValue: body["side"] as? String ?? "") else { return }
+            onEvent(.sample(side, peak: body["peak"] as? Double ?? 0))
         case "level":
             guard let side = (body["side"] as? String).flatMap(Side.init) else { return }
             onEvent(.level(side, loud: body["loud"] as? Bool == true, peak: body["peak"] as? Double ?? 0))
@@ -189,6 +203,7 @@ final class VoicePeer: NSObject {
         an.getFloatTimeDomainData(buf);
         let peak = 0; for (const v of buf) peak = Math.max(peak, Math.abs(v));
         if (side === "input") inputMax = Math.max(inputMax, peak);
+        post({ kind: "sample", side, peak });
         if (peak > levelThreshold) {
           quietFor = 0; span = Math.max(span, peak);
           if (!loud) { loud = true; post({ kind: "level", side, loud, peak }); }
@@ -259,7 +274,7 @@ final class VoicePeer: NSObject {
     """
 }
 
-enum VoicePeerError: Error { case noOffer, noRecording }
+enum VoicePeerError: Error { case noOffer, noRecording, microphoneDenied }
 
 extension VoicePeer: WKUIDelegate, WKNavigationDelegate {
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { mediaFailed() }

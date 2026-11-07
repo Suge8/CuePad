@@ -199,7 +199,7 @@ extension CueKeeper {
         let step = CueActivity.step(tool: name, arguments: arguments, named: named)
         updateShift { $0.turn?.round.calls.append(CueToolCall(
             id: id, name: name, arguments: arguments, named: named, step: step,
-            detail: step == nil ? CueActivity.detail(tool: name, arguments: arguments) : nil, startedAt: now)) }
+            detail: step == nil ? CueActivity.detail(tool: name, arguments: arguments) : nil, startedAt: now, requests: turn?.delivered ?? [])) }
         await recordRound()
     }
 
@@ -209,7 +209,18 @@ extension CueKeeper {
             Self.log.error("Cue 的工具服务没了：这一轮做完换个班次")
             updateShift { $0.retiring = true }
         }
-        let item = await CueActivity.item(tool: call.name, arguments: call.arguments, named: call.named, failed: failed, store: store)
+        var item = await CueActivity.item(tool: call.name, arguments: call.arguments, named: call.named, failed: failed, store: store)
+        if !failed, let receipt = CueToolReceipt(result: result) {
+            switch receipt.kind {
+            case .request where call.name == "task" && [.start, .talk, .add].contains(item.kind):
+                item.cueRequests = call.requests.isEmpty ? nil : call.requests
+                item.deliveries = [receipt.id]
+            case .reply where ["task", "tell"].contains(call.name):
+                do { try await store.associateCueReply(receipt.id, answering: call.requests) }
+                catch { Self.log.error("Cue 回复的来源没能写进资料库：\(error.localizedDescription, privacy: .public)") }
+            default: break
+            }
+        }
         updateShift { $0.turn?.round.finish(id, result: result, failed: failed, item: item) }
         await recordRound()
     }
@@ -237,7 +248,10 @@ extension CueKeeper {
     /// 好好做完的一轮里，说话工具当场报给 Cue 的没送到：它已经知道了，不再进变化。只认做完的一轮——
     /// 工具写出了结果、这一轮却断了（大脑被杀、重起），Cue 没看到，下一轮照样报。
     private func markTold(_ round: CueRound) async {
-        let told = round.calls.filter(\.failed).flatMap { CueTools.undeliveredRequests(in: $0.result ?? "") }
+        let told = round.calls.filter(\.failed).compactMap { call -> UUID? in
+            guard let receipt = CueToolReceipt(result: call.result ?? ""), receipt.kind == .request else { return nil }
+            return receipt.id
+        }
         do {
             try await store.markCueTold(told)
         } catch {

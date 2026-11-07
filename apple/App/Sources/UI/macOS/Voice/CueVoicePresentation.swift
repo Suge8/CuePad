@@ -1,9 +1,10 @@
 #if os(macOS)
+import CueStore
 import SwiftUI
 
 /// 通话界面的只读投影，由集成层从唯一的通话与 Cue 执行状态生成；这里不推进状态、不计时、不推断送达。
 /// 音量是当前实际输入或输出的归一化样本（0…1，旧到新）；无样本传空数组。
-/// 请求只有收到 Cue 的持久化确认才标 accepted。结束通话不等于停止执行，两种操作始终分开。
+/// 请求只有收到 Cue 的持久化确认才显示接走。结束通话不等于停止执行，两种操作始终分开。
 struct CueVoicePresentation {
     enum Activity {
         case connecting, listening, processing, speaking, failed, ended
@@ -23,24 +24,26 @@ struct CueVoicePresentation {
     }
 
     struct Request {
-        enum Delivery {
-            case submitting, accepted, failed
-            var title: LocalizedStringResource {
-                switch self {
-                case .submitting: "正在交给 Cue…"
-                case .accepted: "已交给 Cue"
-                case .failed: "未交给 Cue"
-                }
+        let text: String
+        let delivery: Speech.Trip
+
+        var status: String {
+            switch delivery {
+            case .sending: PiDelivery.Transit.sending.label
+            case .sent: PiDelivery.Transit.sent.label
+            case .delivered: String(localized: "已交给 Cue")
+            case .preparing(let reason), .unconfirmed(let reason): reason
+            case .failed(let failure): failure.text
             }
         }
-        let text: String
-        let delivery: Delivery
     }
 
     struct Reply: Identifiable {
         let id: UUID
         let text: String
         let canRequestRepeat: Bool
+        var request: Request? = nil
+        var note: String? = nil
     }
 
     struct Issue {
@@ -51,11 +54,19 @@ struct CueVoicePresentation {
     let name: String
     let activity: Activity
     let muted: Bool
-    let samples: [CGFloat]
+    /// 只在声音叶子读取；构造业务投影不观察高频音轨样本。
+    let samples: () -> [CGFloat]
     let request: Request?
     let replies: [Reply]
     let issue: Issue?
     let canStopExecution: Bool
+    var executions: [Execution] = []
+
+    struct Execution: Identifiable {
+        let id: String
+        let title: String
+        let status: String
+    }
 
     var title: LocalizedStringResource {
         muted && activity == .listening ? "麦克风已静音" : activity.title

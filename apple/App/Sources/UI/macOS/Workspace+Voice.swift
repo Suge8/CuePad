@@ -3,15 +3,26 @@ import CuePi
 import CueStore
 import Foundation
 
-/// 和 Cue 通话的入口（菜单"文件 › 和 Cue 通话"，再点一次挂断）：通话本身在 `VoiceCall`，这里只起、挂与用提示条报它到了哪一步。
+/// 和 Cue 通话的动作入口；通话、真实请求与结果在 VoiceCall，执行控制沿用现有投送链路。
 /// 交出来的话走"对 Cue 说"同一个入口（`speak` 到 `.cue`），所以 Cue 没启用（听不到）时不起通话。
 extension Workspace {
     /// 菜单的动作；无人值守与人工验收（`DebugScene.voiceCallIfAsked`）走同一个，只换声音来源与录音。
     func toggleVoiceCall(source: VoicePeer.Source = .microphone(device: nil), recording: URL? = nil) {
         if let voice, voice.isLive { return voice.hangUp() }
+        startVoiceCall(source: source, recording: recording)
+    }
+
+    func startVoiceCall(
+        source: VoicePeer.Source = .microphone(device: nil), recording: URL? = nil,
+        makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = VoiceCall.init
+    ) {
+        voiceExpanded = true
+        showCue()
+        guard voice?.isLive != true else { return }
         guard cue.canHear else { return say("Cue 还没启用，启用后才能通话", tone: .failure) }
+        if let voice { voice.reconnect(); announceCall(voice); return }
         let services = services
-        let call = VoiceCall(VoiceCall.Dependencies(
+        let call = makeCall(VoiceCall.Dependencies(
             access: DebugHooks.voiceToken.map { file in { try Self.access(reading: file) } }
                 ?? { try await services.agents.integration.codexAccess(executable: services.agents.executable(.codex)) },
             tell: { [weak self] text in
@@ -20,13 +31,38 @@ extension Workspace {
             },
             store: services.store, cueName: cue.name, source: source, recording: recording))
         voice = call
-        Task { await call.run() }
+        call.reconnect()
+        announceCall(call)
+    }
+
+    private func announceCall(_ call: VoiceCall) {
         Task { [weak self] in
             for await phase in Observations({ call.phase }) {
                 self?.announce(phase)
                 if !call.isLive { break }
             }
         }
+    }
+
+    /// 真实会话的既有投影；选择范围后只停那个会话的当前回合，不把 Cue 的话当作执行确认。
+    var voiceExecutions: [PiSessionListItem] { voice?.executions ?? [] }
+
+    func stopVoiceExecution(_ sessionID: String) async throws -> DeliveryRequest {
+        guard let voice else { throw CueStoreError.notFound }
+        return services.uploaded(try await services.store.stopVoiceExecution(
+            sessionID, requests: voice.requests.compactMap(\.message), host: services.hostID))
+    }
+
+    func retryVoiceRequest(_ id: String) async throws {
+        guard let voice, let request = voice.requests.first(where: { $0.id == id }) else { throw CueStoreError.notFound }
+        if let message = request.message {
+            guard request.pending else { throw SendError.alreadyHeard }
+            guard let current = try await services.store.cueMessages([message]).first else { throw CueStoreError.notFound }
+            try await services.withdraw(.cue(current, host: cue.hostID))
+        } else if request.failure == nil { return }
+        voice.recordRequest(id)
+        await voice.writing[id]?.value
+        if let failure = voice.requests.first(where: { $0.id == id })?.failure { throw SendError.notDelivered(failure) }
     }
 
     /// 令牌文件（`DebugHooks.voiceToken`）里的那一个
@@ -57,6 +93,8 @@ extension VoiceCall.Failure {
         case .wire(.notAllowed(let status)): String(localized: "ChatGPT 拒绝了这次通话（\(status)）：套餐不含语音或额度已用完")
         case .wire(.server(let status, _)): String(localized: "通话没能建立（\(status)）")
         case .wire(.malformed): String(localized: "通话没能建立：服务器的回应认不出")
+        case .microphoneDenied: String(localized: "麦克风权限未开启：在系统设置中允许 CuePad 使用麦克风后重新接通")
+        case .timedOut: String(localized: "通话连接或发送超时，请重新接通；已有请求和回复仍然保留")
         case .media: String(localized: "通话的声音连接断了")
         case .closed(let reason): String(localized: "通话断开了：\(reason)")
         case .server(let message): String(localized: "通话出错：\(message)")

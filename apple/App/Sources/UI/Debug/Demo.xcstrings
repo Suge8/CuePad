@@ -4823,6 +4823,22 @@
         }
       }
     },
+    "播放模拟音频" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play simulated audio"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放模拟音频"
+          }
+        }
+      }
+    },
     "操作与调试网页" : {
       "localizations" : {
         "en" : {
@@ -5655,6 +5671,22 @@
         }
       }
     },
+    "检查发布事项" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the release items"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查发布事项"
+          }
+        }
+      }
+    },
     "模型.usdz" : {
       "localizations" : {
         "en" : {
@@ -5687,6 +5719,22 @@
         }
       }
     },
+    "模拟音频 · 未连接麦克风" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Simulated audio · Microphone disconnected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模拟音频 · 未连接麦克风"
+          }
+        }
+      }
+    },
     "横竖屏切换不跳动" : {
       "localizations" : {
         "en" : {
@@ -5715,6 +5763,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "欢迎回来"
+          }
+        }
+      }
+    },
+    "正在检查，需要确认的事项会留在任务里。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I'm checking. Items needing your confirmation will stay in tasks."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查，需要确认的事项会留在任务里。"
           }
         }
       }

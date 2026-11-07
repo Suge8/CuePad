@@ -56,6 +56,7 @@ struct CueToolCall: Identifiable {
     let step: CueActivity.Touch?
     let detail: String?
     let startedAt: Date
+    var requests: [UUID] = []
     var finishedAt: Date?
     var result: String?
     var failed = false
