@@ -121,6 +121,16 @@ enum DebugHooks {
         #endif
     }
 
+    /// 隔离库下和 Cue 通话的令牌从 `-CuePadVoiceToken <文件>` 读（`scripts/voice-token.py` 向本机 Codex 只读地要来）：隔离目录里的 Codex 没登录，
+    /// 实例也不碰真实的 `~/.codex`。nil：向检测到的 Codex 要。
+    static var voiceToken: URL? {
+        #if DEBUG
+        DebugScene.defaults.string(forKey: "CuePadVoiceToken").map { URL(filePath: $0) }
+        #else
+        nil
+        #endif
+    }
+
     /// 隔离库下 Agent 当作装在这个家目录里（`-CuePadAgentHome <目录>`）：只在它的 `.local/bin` 里找，装、登录也按它当 HOME、PATH 只有系统目录，
     /// 像一台什么都没装的 Mac。给一个空目录就是一家都没装；点"安装"真去跑官方脚本，装进这个目录，不碰真实的家目录。
     static var agentHome: URL? {

@@ -6,18 +6,14 @@ import Foundation
 /// 和 Cue 通话的入口（菜单"文件 › 和 Cue 通话"，再点一次挂断）：通话本身在 `VoiceCall`，这里只起、挂与用提示条报它到了哪一步。
 /// 交出来的话走"对 Cue 说"同一个入口（`speak` 到 `.cue`），所以 Cue 没启用（听不到）时不起通话。
 extension Workspace {
-    func toggleVoiceCall() {
+    /// 菜单的动作；无人值守与人工验收（`DebugScene.voiceCallIfAsked`）走同一个，只换声音来源与录音。
+    func toggleVoiceCall(source: VoicePeer.Source = .microphone, recording: URL? = nil) {
         if let voice, voice.isLive { return voice.hangUp() }
         guard cue.canHear else { return say("Cue 还没启用，启用后才能通话", tone: .failure) }
-        startVoiceCall(source: .microphone, recording: nil)
-    }
-
-    /// `access` 换掉向本机 Codex 要令牌（无人值守的验收，`DebugScene.voiceCallIfAsked`）。
-    @discardableResult
-    func startVoiceCall(source: VoicePeer.Source, recording: URL?, access: (() async throws -> CodexAccess)? = nil) -> VoiceCall {
         let services = services
         let call = VoiceCall(VoiceCall.Dependencies(
-            access: access ?? { try await services.agents.integration.codexAccess(executable: services.agents.executable(.codex)) },
+            access: DebugHooks.voiceToken.map { file in { try Self.access(reading: file) } }
+                ?? { try await services.agents.integration.codexAccess(executable: services.agents.executable(.codex)) },
             tell: { [weak self] text in self?.speak(StoredBody.make(text: text, files: []), to: .cue) },
             store: services.store, cueName: cue.name, source: source, recording: recording))
         voice = call
@@ -28,7 +24,14 @@ extension Workspace {
                 if !call.isLive { break }
             }
         }
-        return call
+    }
+
+    /// 令牌文件（`DebugHooks.voiceToken`）里的那一个
+    private static func access(reading file: URL) throws -> CodexAccess {
+        guard let access = CodexAccess(token: try String(contentsOf: file, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            throw CodexAccessError.signedOut
+        }
+        return access
     }
 
     private func announce(_ phase: VoiceCall.Phase) {
