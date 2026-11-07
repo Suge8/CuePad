@@ -101,7 +101,7 @@ extension AppServices {
                     do {
                         let request = try await store.requestQuotaRefresh(on: host)
                         await upload(request.id)
-                        return try await store.outcome(of: request).failure == nil
+                        return try await store.outcome(of: request).status == .known(.succeeded)
                     } catch { return false }
                 }
             }

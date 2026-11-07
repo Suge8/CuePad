@@ -7,17 +7,6 @@ extension CueStore {
       orderBy: "CASE WHEN mode = 'withdraw' THEN 0 ELSE 1 END, createdAt, rowid")
   }
 
-  /// 附件准备也有自己的期限；同一 pending 阶段只写一次。
-  func prepareDelivery(_ id: UUID, until deadline: Date) throws -> DeliveryRequest? {
-    try write {
-      try db.run(
-        "UPDATE deliveryRequests SET deadlineAt = ?, modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status = 'pending' AND handledBy IS NULL AND deadlineAt IS NULL",
-        [deadline, Date.stamp, id])
-      let current = try find(DeliveryRequest.self, id)
-      return current?.isWithdrawable == true ? current : nil
-    }
-  }
-
   /// 起进程等可能有副作用的操作在这里领取；不能退回准备。执行起来就不再是准备时的说明（`failure`）：
   /// 留着的话，执行中断后核对不出结果时会把"准备就绪"这类旧说明当成未确认的原因。
   func claimDelivery(_ id: UUID, host: String, until deadline: Date) throws -> DeliveryRequest? {
@@ -26,21 +15,22 @@ extension CueStore {
         """
         UPDATE deliveryRequests AS r SET status = 'executing', handledBy = ?, deadlineAt = ?, failure = NULL,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
-          AND (deadlineAt IS NULL OR deadlineAt > ?)
+          AND deadlineAt > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [host, deadline, Date.stamp, id, timing.now()])
       return db.changes > 0 ? try find(DeliveryRequest.self, id) : nil
     }
   }
 
-  func reserveDeliveryTarget(_ id: UUID, host: String, until deadline: Date) throws -> DeliveryRequest? {
+  /// 派发期限不变（写下它的一方定的）。
+  func reserveDeliveryTarget(_ id: UUID, host: String) throws -> DeliveryRequest? {
     try write {
       try db.run("""
-        UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = ?, failure = ?, deadlineAt = COALESCE(deadlineAt, ?),
+        UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = ?, failure = ?,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
-          AND (deadlineAt IS NULL OR deadlineAt > ?)
+          AND deadlineAt > ?
           AND NOT (\(Self.abandonedDelivery))
-        """, [host, DeliveryPreparation.ready.stored, deadline, Date.stamp, id, timing.now()])
+        """, [host, DeliveryPreparation.ready.stored, Date.stamp, id, timing.now()])
       return db.changes > 0 ? try find(DeliveryRequest.self, id) : nil
     }
   }
@@ -60,7 +50,7 @@ extension CueStore {
       try db.run("""
         UPDATE deliveryRequests AS r SET status = 'executing', deadlineAt = ?, failure = NULL,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status = 'preparing' AND handledBy = ?
-          AND (deadlineAt IS NULL OR deadlineAt > ?)
+          AND deadlineAt > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [deadline, Date.stamp, id, host, timing.now()])
       return db.changes > 0 ? try find(DeliveryRequest.self, id) : nil
@@ -151,20 +141,19 @@ extension CueStore {
 
   public func mayBeginDelivery(_ id: UUID) throws -> Bool {
     try db.first("""
-      SELECT 1 FROM deliveryRequests AS r WHERE r.id = ? AND r.status = 'executing' AND (r.deadlineAt IS NULL OR r.deadlineAt > ?)
+      SELECT 1 FROM deliveryRequests AS r WHERE r.id = ? AND r.status = 'executing' AND r.deadlineAt > ?
         AND NOT (\(Self.abandonedDelivery))
       """, [id, timing.now()]) { _ in true } ?? false
   }
 
-  /// 只能归还尚未开始的准备权；executing 与任何未知结果不可能从这里退回。
-  func awaitDeliveryTarget(_ request: DeliveryRequest, reason: ShownText, until deadline: Date) throws -> DeliveryRequest? {
+  /// 等现有会话就绪时转准备，写下在等什么；派发期限不变。只能归还尚未开始的准备权；executing 与任何未知结果不可能从这里退回。
+  func awaitDeliveryTarget(_ request: DeliveryRequest, reason: ShownText) throws -> DeliveryRequest? {
     try write {
       try db.run(
         """
-        UPDATE deliveryRequests SET status = 'preparing', handledBy = NULL, failure = ?, deadlineAt = COALESCE(deadlineAt, ?),
-          modifiedAt = MAX(modifiedAt + 1, ?)
-        WHERE id = ? AND status = ? AND status IN ('pending', 'preparing')
-        """, [reason.stored, deadline, Date.stamp, request.id, request.status.rawValue])
+        UPDATE deliveryRequests SET status = 'preparing', handledBy = NULL, failure = ?, modifiedAt = MAX(modifiedAt + 1, ?)
+        WHERE id = ? AND status = ? AND status IN ('pending', 'preparing') AND deadlineAt > ?
+        """, [reason.stored, Date.stamp, request.id, request.status.rawValue, timing.now()])
       let current = try find(DeliveryRequest.self, request.id)
       return current?.status == .known(.preparing) && current?.handledBy == nil ? current : nil
     }

@@ -8,7 +8,7 @@
 ///   引用完整性由写入逻辑维护（同一事务内清理），同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
-/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、serverAt（服务器收下它的时刻）、cueToldAt（Cue 已知道没送到）；
+/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、cueToldAt（Cue 已知道没送到）；
 /// piSessionStates、cards、deliveryRequests 的 writeSeq（本机写入序号，见 `writeSeq`）。
 ///
 /// 本机表（不同步）：`Table.synced` 之外的表，另有 piProcesses、syncRecords、syncState，以及 searchIndex（FTS5，由触发器随同步表维护，可随时重建）；
@@ -37,11 +37,8 @@ enum Schema {
   /// 最低对端版本（CueSync 的 `PeerFloor`）：更早的设备停下收发、提示更新。只在旧版照新写法读写会做错事时抬到那一版——把新写法误读成别的意思、
   /// 写回时盖掉新字段、读不出就卡住同步；新加的表、字段与句式旧版只是不认（照旧字段显示、跳过读不出的），不抬：一抬，旧设备在更新前什么都发不出去。
   /// 抬的那一版先发 iOS、TestFlight 处理完再发 Mac（docs/release.md「发版顺序」）。与 `baseVersion` 分开：本机的库要等用户的库都升过才折进 `create`。
-  /// 78：附件换了地址（`cuepad://file/<键>`）：旧版 Mac 认不出，把链接原文发给 Agent，旧版手机显示不出图与文件。
-  /// 82：旧客户端忽略额度能力与授权分区，会把失败或过期窗口显示成可用余额。
-  /// 87：旧端会忽略配置请求里的 fast，错误地把部分执行报告成成功。
-  /// 89：一台设备可同时开多个会话；旧端只读 sessionID，会把开着的另一页当作无人查看、错误推送。
-  static let peerFloor = 89
+  /// 90：投送请求的派发期限由写下的一方定（`DeliveryRequest.deadlineAt`）；旧端写的没有期限，新的 Mac 按已到期不执行。
+  static let peerFloor = 90
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
@@ -116,7 +113,7 @@ enum Schema {
     Upgrade(shownTexts),
     // 73：他最近一次来到这台设备的时刻（`Viewer.arrivedAt`）：他此刻在哪台设备前只按它判断
     "ALTER TABLE sessionViewers ADD COLUMN arrivedAt INTEGER;",
-    // 74：投送请求记下服务器收下它的时刻（本机列，拉到时由服务器的记录给），执行的 Mac 按它算过期（`DeliveryExecutor.maxAge`）；已有的照写下的时刻算
+    // 74：投送请求记下服务器收下它的时刻（本机列，拉到时由服务器的记录给），执行的 Mac 按它算过期；已有的照写下的时刻算（90 起不用、删掉）
     "ALTER TABLE deliveryRequests ADD COLUMN serverAt INTEGER;",
     // 75：定时（`CueMemoryLine`）：重复规则与挂在哪件任务上
     "ALTER TABLE cueLines ADD COLUMN repeats TEXT; ALTER TABLE cueLines ADD COLUMN taskID TEXT;",
@@ -177,6 +174,12 @@ enum Schema {
     ALTER TABLE sessionViewers ADD COLUMN sessionIDs TEXT;
     UPDATE sessionViewers SET sessionIDs = json_array(sessionID) WHERE sessionID IS NOT NULL;
     ALTER TABLE sessionViewers DROP COLUMN sessionID;
+    """,
+    // 90：派发期限由写下的一方定；补上旧请求的期限，删掉不用的服务器收下时刻。
+    """
+    UPDATE deliveryRequests SET deadlineAt = createdAt + \(Int(DeliveryRequest.phaseLimit * 1000))
+      WHERE deadlineAt IS NULL AND (status = 'preparing' OR (status = 'pending' AND handledBy IS NULL));
+    ALTER TABLE deliveryRequests DROP COLUMN serverAt;
     """,
   ]
 

@@ -7587,38 +7587,6 @@
         }
       }
     },
-    "准备期限已过，派发结果尚未确认" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preparation timed out; delivery is unconfirmed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "准备期限已过，派发结果尚未确认"
-          }
-        }
-      }
-    },
-    "准备超时，尚未派发，不会自动发送" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preparation timed out — not sent and won’t send automatically"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "准备超时，尚未派发，不会自动发送"
-          }
-        }
-      }
-    },
     "几份同名的" : {
       "localizations" : {
         "en" : {
@@ -8059,6 +8027,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "到时候做什么"
+          }
+        }
+      }
+    },
+    "到期仍未派发（%@），没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not sent before the deadline (%@). You can resend it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到期仍未派发（%@），没有发出，可以重发"
+          }
+        }
+      }
+    },
+    "到期仍未派发，没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not sent before the deadline. You can resend it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到期仍未派发，没有发出，可以重发"
           }
         }
       }
@@ -20983,22 +20983,6 @@
         }
       }
     },
-    "请求到 iCloud 后超过 %lld 秒仍未执行，已放弃" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not run within %lld seconds of reaching iCloud, so it was dropped"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请求到 iCloud 后超过 %lld 秒仍未执行，已放弃"
-          }
-        }
-      }
-    },
     "请求太频繁，稍后再试" : {
       "localizations" : {
         "en" : {
@@ -24095,6 +24079,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "附件内容与其哈希不符"
+          }
+        }
+      }
+    },
+    "附件到期还没传到这台 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment did not reach this Mac before the deadline"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件到期还没传到这台 Mac"
+          }
+        }
+      }
+    },
+    "附件到期还没传到这台 Mac，没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment did not reach this Mac before the deadline. Nothing was sent; you can resend it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件到期还没传到这台 Mac，没有发出，可以重发"
           }
         }
       }

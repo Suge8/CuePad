@@ -194,7 +194,7 @@ extension UpgradePreparationTests {
         historical.fields["handledBy"] = .text(TestApp.hostID)
         historical.fields["failure"] = .text(reason.stored)
         #expect(try await app.services.store.applyRemote([.save(historical, systemFields: Data())]).isEmpty)
-        try RawDB(app.databaseURL).exec("ALTER TABLE sessionViewers DROP COLUMN sessionIDs; ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT; PRAGMA user_version = 85")
+        try RawDB(app.databaseURL).exec("ALTER TABLE sessionViewers DROP COLUMN sessionIDs; ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT; ALTER TABLE deliveryRequests ADD COLUMN serverAt INTEGER; PRAGMA user_version = 85")
         app.relaunch()
         #expect(CueStore.schemaVersion(of: app.databaseURL) == CueStore.supportedSchemaVersions.upperBound)
         try await app.services.executor.start()

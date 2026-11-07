@@ -11,7 +11,7 @@ extension SyncCoordinator {
         continue
       }
       if row.table == .deliveryRequests { traceArrival(of: record, row) }
-      changes.append(.save(row, systemFields: RecordMapper.encodeSystemFields(record), serverAt: record.creationDate))
+      changes.append(.save(row, systemFields: RecordMapper.encodeSystemFields(record)))
     }
     for (id, recordType) in deletions {
       guard let table = RecordMapper.table(named: recordType) else {

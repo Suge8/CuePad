@@ -3,7 +3,7 @@ import Foundation
 
 public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing
-  /// 等现有会话就绪，整个操作尚未开始；不能据此恢复目标进程。
+  /// 执行的 Mac 在等现有会话就绪，整个操作尚未开始；不能据此恢复目标进程。
   case preparing
   /// 派发已结束，正在从真实历史核对；不是执行成功的证据。
   case confirming
@@ -73,6 +73,13 @@ public enum DeliveryOrigin: String, Sendable, CaseIterable {
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
+///
+/// 生命周期只有这一个状态机（持久状态 `DeliveryStatus`，各端此刻的样子由 `Speech.trip` 从记录与此刻推出）：
+/// - 写下即 `pending`，带着写它的一方定的派发期限（`deadlineAt` = 写下 + `phaseLimit`）；
+/// - 执行的 Mac 缺附件时仍是 `pending`、在旁边取；现有会话没就绪时转 `preparing`（原因在 `reason`）；两种等待的期限都不变、不续；
+/// - 期限前领取转 `executing`（新的执行期限），之后 `confirming` → `succeeded` / `failed` / `unconfirmed`；
+/// - 期限到了还没领取：执行的 Mac 写回 `failed`（`expiry`），手机收到后允许重发；
+/// - 发送方到期仍没收到结果：只结束等待，显示未确认；旧快照不能证明 Mac 没领取，不能授权安全重发。
 public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var content: String
@@ -87,13 +94,12 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var handledBy: String?
   public var createdAt: Date
   public var completedAt: Date?
-  /// 当前准备、执行或确认阶段的硬截止。只在进入阶段时写，不随同步、绑定或重开续期。
+  /// 当前阶段的硬截止：等派发（`pending`、`preparing`）的由写下它的一方定，领取后换成执行、确认的期限。不随同步、绑定或重开续期；
+  /// 没有期限的（结构 90 之前写下的）按已到期处理。
   public var deadlineAt: Date? = nil
   public var modifiedAt: Date
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
-  /// 服务器收下它的时刻（服务器的时钟，拉到它的那台记下）；只在本机，不同步。本机写的、还没拉到过的为 nil。执行它的 Mac 按它算过期（`DeliveryExecutor.maxAge`）。
-  public internal(set) var serverAt: Date? = nil
   /// 谁写的（见 `DeliveryOrigin`）；nil 是你。
   public var origin: Open<DeliveryOrigin>?
   /// 服务器收下过这条请求（读的时候由同步元数据推出，不存，`Speech.reachedServerSQL`）：说的话"已发出"的依据。
@@ -112,6 +118,16 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     guard status == .known(.failed) else { return nil }
     guard let reason = reason?.text, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
     return reason
+  }
+
+  /// 每个持久阶段（等派发、执行）的期限：写下后这么久还没领取就不再派发，领取后这么久还没结果就是未确认。
+  /// 留足手机传大附件、Mac 等会话就绪的时间。
+  public static let phaseLimit: TimeInterval = 600
+
+  /// 到期仍未派发的原因：执行的 Mac 写回，带着当时在等什么（`reason`）。
+  public var expiry: ShownText {
+    guard status == .known(.preparing), let waiting = reason else { return ShownText("到期仍未派发，没有发出，可以重发") }
+    return ShownText("到期仍未派发（\(waiting.embedded)），没有发出，可以重发")
   }
 
   public static var interruptedReason: ShownText { ShownText("Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发") }
@@ -134,7 +150,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 新会话请求的内容；其他方式为 nil。
   public var launch: PiLaunch? { mode == .known(.start) ? PiLaunch(stored: content) : nil }
 
-  /// 要交出去的话里引用的附件（开工的是开场的话里的）。
+  /// 要交出去的话里引用的附件（开工的是开场的话里的）：写下时登记附件记录（随之上传）、执行的 Mac 取文件、回收附件时算引用，都只读这里。
   public var attachmentKeys: [String] { CueFormat.attachmentKeys(in: launch?.prompt ?? content) }
 
   /// 绑定文件夹请求的内容；其他方式、读不出的为 nil。
@@ -178,11 +194,11 @@ extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
     "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
-    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "serverAt", "deadlineAt",
+    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "deadlineAt",
   ]
-  static let syncedColumns = columns.filter { !["resultReceivedAt", "serverAt"].contains($0) }
+  static let syncedColumns = columns.filter { $0 != "resultReceivedAt" }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, reason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt, deadlineAt]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, reason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, deadlineAt]
   }
   init(row: Row) {
     self.init(
@@ -190,8 +206,8 @@ extension DeliveryRequest: Record {
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
       status: Open(rawValue: row.text(8)), reason: row.textOrNil(9).flatMap(ShownText.init(stored:)), handledBy: row.textOrNil(10),
-      createdAt: row.date(11), completedAt: row.dateOrNil(12), deadlineAt: row.dateOrNil(17), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14), serverAt: row.dateOrNil(16),
-      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(18))
+      createdAt: row.date(11), completedAt: row.dateOrNil(12), deadlineAt: row.dateOrNil(16), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14),
+      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(17))
   }
 }
 

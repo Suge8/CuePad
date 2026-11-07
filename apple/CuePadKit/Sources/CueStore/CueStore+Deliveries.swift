@@ -33,10 +33,10 @@ extension CueStore {
     let now = Date.stamp
     let request = DeliveryRequest(
       id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
-      status: .known(.pending), reason: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
-      resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
+      status: .known(.pending), reason: nil, handledBy: nil, createdAt: now, completedAt: nil,
+      deadlineAt: now.addingTimeInterval(DeliveryRequest.phaseLimit), modifiedAt: now, resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
     try insert(request)
-    try registerAttachments(in: content)
+    for key in Set(request.attachmentKeys) { try registerAttachment(key) }
     if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
       let on = try questionsOn(session)
       _ = try endQuestions(setAsideBy: request.id, where: on.predicate, on.bindings)
@@ -152,8 +152,9 @@ extension CueStore {
   /// 所有投送请求，最近的在前。
   public func deliveryRequests() throws -> [DeliveryRequest] {
     let requests = try select(DeliveryRequest.self, orderBy: "createdAt DESC, rowid DESC")
-    for request in requests where request.isOpen {
-      if let due = request.deadlineAt, due > timing.now() { expire(at: due) }
+    let moment = Speech.Moment.always(at: timing.now())
+    for request in requests {
+      if let due = Speech.deadline(request, at: moment), due > moment.now { expire(at: due) }
     }
     return requests
   }
@@ -179,7 +180,8 @@ extension CueStore {
     ) { CueOpenedSession(session: $0.text(0), card: $0.uuidOrNil(1), at: $0.date(2)) }
   }
 
-  /// 等到投送请求有结果（已送达或没能送达）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到。
+  /// 等到投送请求有结果（已送达、没能送达或未确认）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到；
+  /// 每条请求都带期限，没人领取、没人回执的到点也按 `latest(of:)` 推出的结果返回，不会一直等。
   /// 请求在等待期间被撤回、清理时抛 `CueStoreError.notFound`。
   public nonisolated func outcome(of request: DeliveryRequest) async throws -> DeliveryRequest {
     for try await current in observe({ try $0.latest(of: request) }) {
@@ -193,11 +195,14 @@ extension CueStore {
   /// 都不是（撤回、清理了）为 nil。
   public func latest(of request: DeliveryRequest) throws -> DeliveryRequest? {
     if var current = try deliveryRequest(request.id) {
-      if current.isOpen, current.deadlineAt != nil || current.handledBy != nil || current.status != .known(.pending) {
-        if case .unconfirmed = Speech.trip(current, at: .always(at: timing.now())) {
-          current.status = .known(.unconfirmed)
-          current.reason = Speech.unconfirmedReason
-        } else if let deadline = current.deadlineAt { expire(at: deadline) }
+      guard current.isOpen else { return current }
+      let moment = Speech.Moment.always(at: timing.now())
+      switch Speech.trip(current, at: moment) {
+      case .unconfirmed:
+        current.status = .known(.unconfirmed)
+        current.reason = Speech.unconfirmedReason
+      default:
+        if let due = Speech.deadline(current, at: moment) { expire(at: due) }
       }
       return current
     }

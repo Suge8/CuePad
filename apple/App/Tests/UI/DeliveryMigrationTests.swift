@@ -90,6 +90,7 @@ struct DeliveryMigrationTests {
             ALTER TABLE cueState DROP COLUMN bootID;
             CREATE TRIGGER piSessionStates_writeSeq_update AFTER UPDATE OF state ON piSessionStates BEGIN SELECT 1; END;
             ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
+            ALTER TABLE deliveryRequests ADD COLUMN serverAt INTEGER;
             DROP TABLE activityDestinations;
             ALTER TABLE sessionViewers DROP COLUMN sessionIDs;
             ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT;

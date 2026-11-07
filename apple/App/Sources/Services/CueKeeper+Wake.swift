@@ -115,30 +115,35 @@ extension CueKeeper {
     }
 
     /// 这会儿交得出去的：你的话里的附件都在这台 Mac 上（图交给大脑、文件的路径写进话里，`CueEnvelope.delivered`）。
-    /// 不在的在旁边取（`AppServices.fetchFile`），取到了再对一次账：等文件不挡后面的话。取不来的对你说一声，话照交。
+    /// 不在的在旁边取（`fetchAttachments`，至迟到写下后 `DeliveryRequest.phaseLimit`，同投送请求的派发期限），取到了再对一次账：等文件不挡后面的话。
+    /// 取不来或到点的对你说一声，话照交。
     func ready(_ pending: [CueMessage]) -> [CueMessage] {
         pending.filter { message in
             guard message.author == .known(.you), !unfetchable.contains(message.id) else { return true }
             let missing = CueFormat.attachmentKeys(in: message.text).filter { store.files.fileURL(for: $0) == nil }
             guard !missing.isEmpty else { return true }
-            if fetchingFiles[message.id] == nil { fetchingFiles[message.id] = fetch(missing, for: message.id) }
+            if fetchingFiles[message.id] == nil {
+                fetchingFiles[message.id] = fetch(missing, for: message.id, until: message.createdAt.addingTimeInterval(DeliveryRequest.phaseLimit))
+            }
             return false
         }
     }
 
-    private func fetch(_ keys: [String], for message: UUID) -> Task<Void, Never> {
-        let fetchFile = setup.fetchFile
+    private func fetch(_ keys: [String], for message: UUID, until deadline: Date) -> Task<Void, Never> {
+        let fetchFile = setup.fetchFile, timing = store.timing
         return Task {
+            let failure: ShownText?
             do {
-                try await withThrowingTaskGroup(of: Void.self) { group in
-                    for key in Set(keys) { group.addTask { _ = try await fetchFile(key) } }
-                    try await group.waitForAll()
-                }
+                let arrived = try await fetchAttachments(Set(keys), until: deadline, timing: timing) { _ = try await fetchFile($0) }
+                failure = arrived ? nil : ShownText("附件到期还没传到这台 Mac")
             } catch is CancellationError {
                 return
             } catch {
+                failure = ShownText(error)
+            }
+            if let failure {
                 unfetchable.insert(message)
-                await say(.cue, ShownText("你发的附件没能交给我：\(ShownText(error).embedded)"))
+                await say(.cue, ShownText("你发的附件没能交给我：\(failure.embedded)"))
             }
             fetchingFiles[message] = nil
             input.yield(.kick)

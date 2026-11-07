@@ -6,7 +6,7 @@ import Testing
 /// #43：投送占位防止重复，不是 Agent 当前在跑的证据。
 struct RuntimeHandoffTests {
     @Test(arguments: [DeliveryMode.send, .start], ["unconfirmed", "future_ack", "pending"])
-    func 未确认交接仍在推进中但不算在跑_缓存到等待期限也撤销运行断言(mode: DeliveryMode, status: String) async throws {
+    func 未确认交接仍在推进中但不算在跑(mode: DeliveryMode, status: String) async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing), workspace = Workspace(services: app.services), store = app.services.store
         defer { app.services.cancelBackgroundWork() }
@@ -21,7 +21,7 @@ struct RuntimeHandoffTests {
         let before = try await now()
         #expect(before.tally.moving == 1 && before.advancing == 1)
         if status == "pending" {
-            clock.advance(.seconds(Speech.sendLimit + Speech.receiptLimit + 1))
+            clock.advance(.seconds(DeliveryRequest.phaseLimit + Speech.receiptLimit + 1))
         } else {
             var row = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
             row.fields["status"] = .text(status)
@@ -31,7 +31,7 @@ struct RuntimeHandoffTests {
         let uncertain = try await now()
         #expect(uncertain.advancing == 1 && uncertain.tally.moving == 0 && uncertain.items.first?.kind == .unconfirmed)
         #expect(uncertain.isLive && !uncertain.hasConfirmedActivity)
-        let timedOut = before.shown(at: before.at + Speech.sendLimit + Speech.receiptLimit + 1)
+        let timedOut = before.shown(at: before.at + DeliveryRequest.phaseLimit + Speech.receiptLimit + 1)
         #expect(timedOut.tally.moving == 0 && timedOut.isLive && !timedOut.hasConfirmedActivity)
         #expect(try await store.handoffRequests(for: [task.id])[task.id]?.map(\.id) == [request.id])
     }

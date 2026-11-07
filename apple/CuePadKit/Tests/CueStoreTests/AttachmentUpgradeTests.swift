@@ -49,6 +49,7 @@ import Testing
         UPDATE piSessionStates SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;
       END;
       ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
+            ALTER TABLE deliveryRequests ADD COLUMN serverAt INTEGER;
       ALTER TABLE piSessionStates DROP COLUMN failure;
       ALTER TABLE sessionViewers DROP COLUMN sessionIDs;
       ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT;

@@ -1,9 +1,9 @@
 import Foundation
 
 /// 一句话的送达证据，由记录、服务器收下过没有与此刻推出，不另存。
-/// 发送中与已发出仍在等；超时、领取后缺少结果或本版本不认识的状态只说明未确认，不证明未交出。
-/// 只有接收方明确拒绝才是失败。未确认不自动重发，晚到的正证据可以让它变为已送达。
-/// 未领取的回执窗口只在同步通着时走；准备、执行与确认的持久期限不依赖接收方或同步存活。
+/// 投送请求：发送中、已发出、准备中都在等，到期没收到结果是未确认（本机快照不能证明 Mac 未领取）；
+/// 领取后执行、确认超时或本版本不认识的状态只说明未确认，不证明未交出。未确认不自动重发，晚到的正证据可以让它变为已送达。
+/// 对 Cue 说的话没有领取这一步：回执窗口只在同步通着时走，到点是未确认。
 public enum Speech {
   public enum Trip: Equatable, Sendable {
     case sending
@@ -89,22 +89,25 @@ public enum Speech {
   }
 
   public static func trip(_ request: DeliveryRequest, at moment: Moment) -> Trip {
-    switch request.status.known {
-    case .preparing:
-      if let deadline = request.deadlineAt, moment.now >= deadline {
-        .unconfirmed(ShownText("准备期限已过，派发结果尚未确认").text)
-      } else {
-        .preparing(ShownText("尚未派发：\((request.reason ?? ShownText("等待目标就绪")).embedded)").text)
-      }
-    case .pending:
-      if request.deadlineAt != nil || request.handledBy != nil { phase(request, at: moment) }
-      else { waiting(since: request.createdAt, reachedServer: request.reachedServer, host: request.hostID, at: moment) }
-    case .executing, .confirming: phase(request, at: moment)
-    case .unconfirmed: .unconfirmed(request.reason?.text ?? unconfirmedReason.text)
-    case nil: .unconfirmed(unconfirmedReason.text)
-    case .succeeded: .delivered
-    case .failed: .failed(.reported(request.failure ?? DeliveryRequest.unexplainedFailure))
+    if let expires = expiry(of: request) {
+      if moment.now >= expires { return .unconfirmed(unconfirmedReason.text) }
+      if request.status == .known(.preparing) { return .preparing(ShownText("尚未派发：\((request.reason ?? ShownText("等待目标就绪")).embedded)").text) }
+      return request.reachedServer && !moment.isLocal(request.hostID) ? .sent : .sending
     }
+    switch request.status.known {
+    case .pending, .preparing, .executing, .confirming: return phase(request, at: moment)
+    case .unconfirmed: return .unconfirmed(request.reason?.text ?? unconfirmedReason.text)
+    case nil: return .unconfirmed(unconfirmedReason.text)
+    case .succeeded: return .delivered
+    case .failed: return .failed(.reported(request.failure ?? DeliveryRequest.unexplainedFailure))
+    }
+  }
+
+  /// 等派发快照从什么时候起按未确认显示：派发期限再过一个回执窗口——执行的 Mac 到期就写回失败，这一段等它的结果传回来；
+  /// 已领取或已收尾的为 nil。没有期限的按已到期。
+  static func expiry(of request: DeliveryRequest) -> Date? {
+    guard request.status == .known(.preparing) || (request.status == .known(.pending) && request.handledBy == nil) else { return nil }
+    return request.deadlineAt.map { $0.addingTimeInterval(receiptLimit) } ?? .distantPast
   }
 
   /// 等待到这一刻转为未确认；已有回执、已被领取或此刻同步不通时为 nil。
@@ -113,14 +116,13 @@ public enum Speech {
     return due(said: said, reachedServer: reachedServer, host: host, at: moment)
   }
 
+  /// 投送请求此刻的样子下一次变的时刻（派发、执行或确认等待到期）；已收尾的为 nil。
   public static func deadline(_ request: DeliveryRequest, at moment: Moment) -> Date? {
     guard request.isOpen else { return nil }
-    if let deadline = request.deadlineAt { return deadline }
-    guard request.status == .known(.pending), request.handledBy == nil else { return nil }
-    return deadline(said: request.createdAt, delivered: nil, reachedServer: request.reachedServer, host: request.hostID, at: moment)
+    return expiry(of: request) ?? request.deadlineAt
   }
 
-  /// 明确拒绝的写回时刻；超时和其他未确认不算失败。
+  /// 失败的时刻：执行方写回的完成时刻；其余不算失败。
   public static func failedAt(_ request: DeliveryRequest, at moment: Moment) -> Date? {
     guard case .failed = trip(request, at: moment) else { return nil }
     return request.completedAt ?? request.modifiedAt

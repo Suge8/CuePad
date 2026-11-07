@@ -94,8 +94,9 @@ struct DeliveryRecoveryTests {
         defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("不要再上传一次", to: target, app: app)
         var old = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
-        // App 在交出后、写回前退出，磁盘上只剩领取事实。
-        try RawDB(app.services.location.databaseURL).exec("UPDATE deliveryRequests SET status = 'executing', handledBy = '\(TestApp.hostID)'")
+        // App 在交出后、写回前退出，磁盘上只剩领取事实；重开时执行期限已过。
+        try RawDB(app.services.location.databaseURL).exec(
+            "UPDATE deliveryRequests SET status = 'executing', handledBy = '\(TestApp.hostID)', deadlineAt = createdAt - 1000")
         try await app.services.executor.start()
         #expect(try await outcome(request, in: store).status == .known(.unconfirmed))
         old.fields["modifiedAt"] = .int(Int64(Date.now.addingTimeInterval(60).timeIntervalSince1970 * 1000))

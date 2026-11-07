@@ -14,7 +14,7 @@ final class SpeechClock {
     @ObservationIgnored private let alwaysReachable: Bool
     @ObservationIgnored private let timing: Timing
 
-    /// 仍在等进度的一句：未领取时按通信窗口，已开始准备、执行或确认时按持久期限。
+    /// 仍在等进度的一句：投送请求按它自己的期限（`Speech.deadline`，与同步通不通无关）；对 Cue 说的话按通信窗口。
     nonisolated struct Awaiting: Equatable, Sendable {
         var said: Date
         var reachedServer: Bool
@@ -67,8 +67,9 @@ extension AppServices {
                 let requests = try store.deliveryRequests().filter(\.isOpen)
                 let cueHost = try store.cueProfile()?.hostID
                 let toCue = try store.cueMessagesToDeliver().filter { $0.author == .known(.you) }
-                let waiting = requests.filter { $0.isWithdrawable || $0.deadlineAt != nil }.map {
-                    SpeechClock.Awaiting(said: $0.createdAt, reachedServer: $0.reachedServer, host: $0.hostID, deadline: $0.deadlineAt)
+                let moment = Speech.Moment.always(at: store.timing.now())
+                let waiting = requests.map {
+                    SpeechClock.Awaiting(said: $0.createdAt, reachedServer: $0.reachedServer, host: $0.hostID, deadline: Speech.deadline($0, at: moment))
                 }
                     + toCue.map { SpeechClock.Awaiting(said: $0.createdAt, reachedServer: $0.reachedServer, host: cueHost) }
                 let active = requests.contains { Speech.trip($0, at: .always(at: store.timing.now())).inTransit }
