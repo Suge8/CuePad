@@ -36,7 +36,7 @@ struct DispatchDeadlineTests {
         clock.advance(.seconds(15 * 60))
         let offline = try #require(try await phone.services.store.deliveryRequest(request.id))
         #expect(Said.request(offline).trip(at: .always(at: clock.now)) == .sending)
-        #expect(offline.isWithdrawable && offline.dispatchDeadline(local: false) == nil)
+        #expect(offline.isWithdrawable && offline.dispatchDeadline == nil)
 
         // 连上：传上去、Mac 拉到，照常送到
         phone.services.startSync()
@@ -56,7 +56,7 @@ struct DispatchDeadlineTests {
         let anchor = try #require(sent.serverAt)
         #expect(received.serverAt == anchor)
         #expect(anchor.timeIntervalSince(request.createdAt) > 15 * 60 - 1)
-        #expect(sent.dispatchDeadline(local: false) == anchor.addingTimeInterval(DeliveryRequest.phaseLimit))
+        #expect(sent.dispatchDeadline == anchor.addingTimeInterval(DeliveryRequest.phaseLimit))
         await mac.services.executor.beginStop()()
     }
 }

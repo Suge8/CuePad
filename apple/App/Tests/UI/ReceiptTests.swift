@@ -185,7 +185,7 @@ struct ReceiptTests {
 
         // 一直没人领取：派发期限前是已发出；期限再过一个回执窗口按未确认显示（领取结果可能还没同步回来）
         // 派发期限从服务器收下起算（恢复后传上去的那一刻），不从断网时写下算
-        let expires = try #require(try await store.deliveryRequest(second.id)?.dispatchDeadline(local: false)).addingTimeInterval(Speech.receiptLimit)
+        let expires = try #require(try await store.deliveryRequest(second.id)?.dispatchDeadline).addingTimeInterval(Speech.receiptLimit)
         await advance(to: expires.addingTimeInterval(-1))
         #expect(try await trip(of: second, services) == .sent)
         await advance(to: expires)

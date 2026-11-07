@@ -86,10 +86,13 @@ struct LaunchAttachmentTests {
         }
         let missing = AttachmentKey.make(hash: String(repeating: "a", count: 64), format: "png")
         let draft = ComposerDraft(text: "看这张截图", files: [DraftFile(key: missing, name: "")])
-        // 新会话输入框发出的同一条（`NewSessionInput.Start.launch`）
+        // 新会话输入框发出的同一条（`NewSessionInput.Start.launch`），随即传上去（上传回执带回服务器收下的时刻）
         func launch(replacing previous: SessionLaunch?) async throws -> SessionLaunch {
-            try await phone.services.launchSession(
+            let launched = try await phone.services.launchSession(
                 in: Project.defaultID, prompt: draft.stored, title: "CuePad", on: TestApp.hostID, card: nil, agent: .pi, replacing: previous?.request)
+            let row = try #require(try await phone.services.store.syncRow(recordName: launched.request.uuidString.lowercased()))
+            try await phone.services.store.markPushed([(row, Data(), clock.now)])
+            return launched
         }
         // 输入框读的那份进度，与它据此锁不锁（`NewSessionInput` 的 `inFlight`）
         func progress(_ launch: SessionLaunch) async throws -> LaunchProgress {
@@ -114,7 +117,7 @@ struct LaunchAttachmentTests {
 
         let request = try #require(try await mac.services.store.deliveryRequest(first.request))
         await clock.waitForSleeper()
-        clock.advance(.seconds(try #require(request.dispatchDeadline(local: true)).timeIntervalSince(clock.now)))
+        clock.advance(.seconds(try #require(request.dispatchDeadline).timeIntervalSince(clock.now)))
         let failed = try await mac.services.store.outcome(of: request)
         #expect(failed.failure == "附件到期还没传到这台 Mac，没有发出，可以重发")
         #expect(mac.host.calls.isEmpty)

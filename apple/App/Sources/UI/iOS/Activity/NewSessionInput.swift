@@ -71,7 +71,7 @@ struct NewSessionInput: View {
         return places.first { $0.id == choice } ?? start.place(among: places)
     }
     private var phase: LaunchProgress.Phase { progress?.phase(at: services.speech) ?? .idle }
-    /// 发出且还没失败：输入框锁住，等它开好。
+    /// 发出、还在有期限的等待里：输入框锁住，等它开好（`LaunchProgress.locksInput`）。
     private var inFlight: Bool { LaunchProgress.locksInput(sending: sending, launched: launched, progress: progress, at: services.speech) }
     private var agent: AgentKind? { agents?.preferred(services.settings.lastAgent) }
     private var brain: AgentModelChoice? {
@@ -103,6 +103,9 @@ struct NewSessionInput: View {
         .disabled(inFlight)
         // 浮在 `FloatingInput` 里（与发给 Agent 同一种）；发出后等它开好时不让收起
         .floatingInputLocked(inFlight)
+        .task(id: progress?.openingDeadline(at: services.speech)) {
+            if let due = progress?.openingDeadline(at: services.speech) { await services.speechClock.refresh(at: due) }
+        }
         .onAppear {
             if launched == nil { launched = start.launched }
             if let seed = start.draft, draft.isEmpty(accepting: [.files, .cards]) { draft = seed }

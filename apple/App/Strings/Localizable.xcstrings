@@ -3617,6 +3617,22 @@
         }
       }
     },
+    "Mac 说已经开了，会话一直没连上来，结果没确认；可以再开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Mac says it started the session, but it never connected. Result not confirmed; you can start again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 说已经开了，会话一直没连上来，结果没确认；可以再开"
+          }
+        }
+      }
+    },
     "OpenAI API 按量计费" : {
       "localizations" : {
         "en" : {
@@ -24127,6 +24143,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "附件到期还没传到这台 Mac，没有发出，可以重发"
+          }
+        }
+      }
+    },
+    "附件取过了仍不在这台 Mac 上" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment still isn't on this Mac after fetching it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件取过了仍不在这台 Mac 上"
+          }
+        }
+      }
+    },
+    "附件取过了仍不在这台 Mac 上，没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment still isn't on this Mac after fetching it. Nothing was sent; you can resend it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件取过了仍不在这台 Mac 上，没有发出，可以重发"
           }
         }
       }

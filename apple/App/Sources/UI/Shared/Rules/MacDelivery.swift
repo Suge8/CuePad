@@ -61,7 +61,7 @@ nonisolated enum MacDelivery {
         let command = String(latest.content.prefix { !$0.isWhitespace })
         let trip = Speech.trip(latest, at: moment)
         if trip.failure != nil || trip.unconfirmedReason != nil {
-            let finished = latest.completedAt ?? Speech.deadline(latest, at: moment) ?? latest.modifiedAt
+            let finished = latest.completedAt ?? Speech.deadline(latest) ?? latest.modifiedAt
             if messages.contains(where: { $0.at > finished }) { return nil }
         }
         switch trip {

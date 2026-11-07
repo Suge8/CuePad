@@ -17,7 +17,7 @@ import os
 ///   领取那一版在路上时结果得等它回来才能传（同一条记录一次只一版在路上），回执要多等一个来回。
 public actor DeliveryExecutor {
   let store: CueStore
-  private let hostID: String
+  let hostID: String
   /// 完成的请求保留多久。
   package static let retention: Duration = .seconds(60)
   /// 执行多久还没完就先把领取传出去。说给在线会话的话交给桥几十毫秒就有结果，留足机器忙时的余量；远短于 `Speech.receiptLimit`。
@@ -27,14 +27,14 @@ public actor DeliveryExecutor {
   private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
   private let recover: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   private let preparation: @Sendable (DeliveryRequest) async -> DeliveryAdmission
-  private var waiting = Slots<DeliveryRequest.ID>()
+  var waiting = Slots<DeliveryRequest.ID>()
   private let handler: @Sendable (DeliveryRequest, DeliveryAdmission.Access) async -> DeliveryOutcome
   /// 把一个附件取到本机（App 给的 `AppServices.fetchFile`）：执行器等附件文件只在这里；缺省是这台取不来
-  private let fetchFile: @Sendable (String) async throws -> Void
+  let fetchFile: @Sendable (String) async throws -> Void
   private var uploads = Slots<UUID>()
   private var confirmations = Slots<DeliveryRequest.ID>()
   /// 在旁边取附件的请求
-  private var fetching = Slots<DeliveryRequest.ID>()
+  var fetching = Slots<DeliveryRequest.ID>()
   private static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
   var started = false
   /// 各只有一个的后台任务：`claimUpload` 是正在执行的那一条到 `claimGrace` 才传领取（结果先写下就不传）。
@@ -132,7 +132,7 @@ public actor DeliveryExecutor {
     await drain.value
   }
 
-  private func enqueue() {
+  func enqueue() {
     guard started, !Task.isCancelled else { return }
     if roles.has(.runner) { rerun = true; return }
     roles.put(.runner, .spawn { id in await self.process(id) })
@@ -176,6 +176,7 @@ public actor DeliveryExecutor {
   }
 
   private func nextActionable() async -> Dispatch? {
+    await reporting { try await store.anchorOwnDeliveries(for: hostID) }
     if let abandoned = await reporting({ try await store.abandonPreparedDeliveries(for: hostID) }) {
       for id in abandoned { notifyWritten(id) }
     }
@@ -227,8 +228,8 @@ public actor DeliveryExecutor {
     }
   }
 
-  /// 派发期限到了（`DeliveryRequest.dispatchDeadline`；领到这里的都是发给本机的）。
-  private func isExpired(_ request: DeliveryRequest) -> Bool { request.dispatchDeadline(local: true).map { timing.now() >= $0 } ?? false }
+  /// 派发期限到了（`DeliveryRequest.dispatchDeadline`）。
+  func isExpired(_ request: DeliveryRequest) -> Bool { request.dispatchDeadline.map { timing.now() >= $0 } ?? false }
 
   private struct Dispatch {
     let request: DeliveryRequest
@@ -267,30 +268,7 @@ public actor DeliveryExecutor {
     await finish(request, outcome)
   }
 
-  /// 在旁边把这条请求的附件取齐，至迟到派发期限：取到了再过一遍队列（文件不在库里，库的变化叫不醒执行器），取不来或到期按失败写回。
-  /// 等附件时请求仍是 `pending`：`preparing` 只许等现有会话、不许唤醒（`MacDeliveryPreparation`），等附件不该带上这条限制。
-  private func fetch(_ keys: [String], for request: DeliveryRequest) {
-    guard started, !Task.isCancelled, !fetching.has(request.id), let deadline = request.dispatchDeadline(local: true) else { return }
-    fetching.put(request.id, .spawn { [fetchFile, timing] id in
-      let failure: ShownText?
-      do {
-        let arrived = try await fetchAttachments(Set(keys), until: deadline, timing: timing, using: fetchFile)
-        failure = arrived ? nil : DeliveryPreparation.attachmentExpired
-      } catch {
-        failure = ShownText(error)
-      }
-      await self.fetched(request, id, failure: failure)
-    })
-  }
-
-  private func fetched(_ request: DeliveryRequest, _ id: UUID, failure: ShownText?) async {
-    // 先写回再让位：位置空出来之后期限监视才会接手，不抢着写没有原因的到期
-    if let failure { await finish(request, .failed(failure)) }
-    guard fetching.release(request.id, id) else { return }  // 停下了
-    enqueue()
-  }
-
-  private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, resuming: Bool = false) async {
+  func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, resuming: Bool = false) async {
     guard started, !Task.isCancelled else { return }
     let continuing: Bool = if case .confirming = outcome { resuming } else { false }
     if !continuing {
@@ -311,47 +289,8 @@ public actor DeliveryExecutor {
     if started, !Task.isCancelled { scheduleCleanup() }
   }
 
-  private func prepare(_ request: DeliveryRequest, _ preparation: DeliveryPreparation) async {
-    guard started, !Task.isCancelled, !waiting.has(request.id),
-      let stored = await reporting({ try await store.awaitDeliveryTarget(request, reason: preparation.reason) }),
-      let stored, let deadline = stored.dispatchDeadline(local: true), started, !Task.isCancelled else { return }
-    notifyWritten(stored.id)
-    waiting.put(stored.id, .spawn { [store, timing] id in
-      do {
-        let ready = try await withThrowingTaskGroup(of: Bool.self) { group in
-          group.addTask { try await abandonable { try await preparation.wait() }; return true }
-          group.addTask { try await timing.sleepUntil(deadline); return false }
-          group.addTask {
-            for try await needed in store.observe({ store in
-              let current = try store.deliveryRequest(stored.id)
-              let abandoned = try store.isDeliveryAbandoned(stored.id)
-              return current?.status == .known(.preparing) && current?.handledBy == nil && !abandoned
-            }) {
-              if !needed { return false }
-            }
-            return false
-          }
-          defer { group.cancelAll() }
-          return try await group.next() ?? false
-        }
-        guard !Task.isCancelled else { return }
-        for id in try await store.abandonPreparedDeliveries(for: self.hostID) { self.notifyWritten(id) }
-        if timing.now() >= deadline {
-          await self.finish(stored, .failed(stored.expiry))
-        } else if ready {
-          try await store.deliveryTargetReady(stored.id)
-          self.notifyWritten(stored.id)
-        }
-      } catch {
-        if !Task.isCancelled { await self.finish(stored, .failed(ShownText(error))) }
-      }
-      guard self.waiting.release(stored.id, id) else { return }
-      self.enqueue()
-    })
-  }
-
   /// 上传回执也不占执行通道；同一条的版本顺序由同步发送器负责，这里只持有可取消任务。
-  private func notifyWritten(_ id: UUID) {
+  func notifyWritten(_ id: UUID) {
     guard started, !Task.isCancelled else { return }
     let token = UUID()
     uploads.put(token, .spawn { [onWritten] owner in

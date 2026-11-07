@@ -1,6 +1,17 @@
 import Foundation
 
 extension CueStore {
+  /// 发给本机、还没有派发期限锚点的（这台写给自己、还没传上去的）按写下的时刻锚定（`DeliveryRequest.serverAt`）：
+  /// 执行器读待办之前调用，等待与到期从此只读这一个锚点。拉到的请求入库时就带着服务器收下的时刻，这里碰不到。
+  func anchorOwnDeliveries(for host: String) throws {
+    try write {
+      try db.run("""
+        UPDATE deliveryRequests SET serverAt = createdAt
+        WHERE hostID = ? AND serverAt IS NULL AND status IN ('pending', 'preparing') AND handledBy IS NULL
+        """, [host])
+    }
+  }
+
   func pendingDeliveries(for host: String) throws -> [DeliveryRequest] {
     try select(
       DeliveryRequest.self, where: "status IN ('pending', 'preparing') AND handledBy IS NULL AND hostID = ?", [host],
@@ -167,11 +178,12 @@ extension CueStore {
     }
   }
 
-  /// 派发期限已到、还没领取的；还没到的登记到期重读：期限监视订阅它，到点就叫醒（`DeliveryExecutor`）。
+  /// 派发期限已到、还没领取的（没有锚点的还不算）；还没到的登记到期重读：期限监视订阅它，到点就叫醒（`DeliveryExecutor`）。
   func expiredUnclaimedDeliveries(for host: String) throws -> [DeliveryRequest] {
     let now = timing.now()
     return try pendingDeliveries(for: host).filter { request in
-      guard let due = request.dispatchDeadline(local: true), due > now else { return true }
+      guard let due = request.dispatchDeadline else { return false }
+      guard due > now else { return true }
       expire(at: due)
       return false
     }

@@ -75,8 +75,9 @@ public enum DeliveryOrigin: String, Sendable, CaseIterable {
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
 ///
 /// 生命周期只有这一个状态机（持久状态 `DeliveryStatus`，各端此刻的样子由 `Speech.trip` 从记录与此刻推出）：
-/// - 写下即 `pending`。派发期限只有一个锚点：服务器收下它的时刻（`serverAt`）+ `phaseLimit`（`dispatchDeadline`）。
-///   不按写下时刻算：手机离线时写下、连上才传上去的照常送到，写方与 Mac 的钟差也不混进来。还没到服务器的不算到期，可以撤回；
+/// - 写下即 `pending`。派发期限只有一个锚点 `serverAt`（`dispatchDeadline`，各端、执行器与 SQL 都从它读）：发给别处的是服务器收下它的时刻，
+///   不按写下时刻算——手机离线时写下、连上才传上去的照常送到，写方与 Mac 的钟差也不混进来；还没到服务器的不算到期，可以撤回。
+///   Mac 写给自己的不经服务器，执行器第一次看到它时按写下的时刻锚定（`anchorOwnDeliveries`）；锚点一经写下不再变；
 /// - 执行的 Mac 缺附件时仍是 `pending`、在旁边取；现有会话没就绪时转 `preparing`（原因在 `reason`）；两种等待都守同一个派发期限、不续；
 /// - 期限前领取转 `executing`（新的执行期限），之后 `confirming` → `succeeded` / `failed` / `unconfirmed`；
 /// - 期限到了还没领取：执行的 Mac 写回 `failed`（`expiry`），手机收到后允许重发；
@@ -100,8 +101,8 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
-  /// 服务器收下它的时刻（CloudKit 记录的 creationDate，服务器的钟）：拉到它的一方从拉到的记录记下，写它的一方从上传成功带回的记录记下，
-  /// 两边是同一个值；只在本机，不同步。还没到过服务器的为 nil。
+  /// 派发期限的锚点：服务器收下它的时刻（CloudKit 记录的 creationDate，服务器的钟）——拉到它的一方从拉到的记录记下，写它的一方从上传成功带回的记录记下，
+  /// 两边是同一个值；Mac 写给自己、还没传上去的由执行器按写下的时刻锚定。只在本机，不同步，只填空。还没有的为 nil。
   public internal(set) var serverAt: Date? = nil
   /// 谁写的（见 `DeliveryOrigin`）；nil 是你。
   public var origin: Open<DeliveryOrigin>?
@@ -127,20 +128,17 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 留足手机传大附件、Mac 等会话就绪的时间。
   public static let phaseLimit: TimeInterval = 600
 
-  /// 派发期限：服务器收下后 `phaseLimit`。`local` 是接收的就是读它的这台（写给自己的不经服务器，还没传上去时按写下算，同一台的钟）；
-  /// 发给别处、还没到服务器的为 nil：不算到期。执行的 Mac 读到的请求都是发给它的，传 true；SQL 里同一条是 `dispatchDeadlineSQL`。
-  public func dispatchDeadline(local: Bool) -> Date? {
-    (serverAt ?? (local ? createdAt : nil)).map { $0.addingTimeInterval(Self.phaseLimit) }
-  }
+  /// 派发期限：锚点（`serverAt`）后 `phaseLimit`；还没有锚点的为 nil，不算到期。同一条请求的派发期限只有这一个出处，SQL 里是 `dispatchDeadlineSQL`。
+  public var dispatchDeadline: Date? { serverAt.map { $0.addingTimeInterval(Self.phaseLimit) } }
 
-  /// `dispatchDeadline(local: true)` 的 SQL（毫秒），表别名 `alias`。
+  /// `dispatchDeadline` 的 SQL（毫秒），表别名 `alias`；没有锚点为 NULL（比较都不成立：不领取、不到期）。
   static func dispatchDeadlineSQL(_ alias: String) -> String {
-    "(COALESCE(\(alias).serverAt, \(alias).createdAt) + \(Int(phaseLimit * 1000)))"
+    "(\(alias).serverAt + \(Int(phaseLimit * 1000)))"
   }
 
-  /// 到期仍未派发的原因：执行的 Mac 写回，带着当时在等什么（`reason`）。
+  /// 到期仍未派发的原因：执行的 Mac 写回，带着当时在等什么（`reason`）；准备就绪（`DeliveryPreparation.ready`）不是在等什么。
   public var expiry: ShownText {
-    guard status == .known(.preparing), let waiting = reason else { return ShownText("到期仍未派发，没有发出，可以重发") }
+    guard status == .known(.preparing), let waiting = reason, waiting != DeliveryPreparation.ready else { return ShownText("到期仍未派发，没有发出，可以重发") }
     return ShownText("到期仍未派发（\(waiting.embedded)），没有发出，可以重发")
   }
 

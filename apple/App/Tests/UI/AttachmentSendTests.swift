@@ -44,7 +44,7 @@ struct AttachmentSendTests {
         try await eventually("后一句先送到") { web.messages.map(\.text) == ["先改文案"] }
         #expect(atlas.messages.isEmpty)
         let preparing = try #require(try await services.store.deliveryRequests().first { $0.target.ref == "atlas" })
-        #expect(preparing.status == .known(.pending) && preparing.dispatchDeadline(local: true) != nil)
+        #expect(preparing.status == .known(.pending) && preparing.dispatchDeadline != nil)
         clock.advance(.seconds(61))
         #expect(Speech.trip(preparing, at: .always(at: clock.now, localHost: TestApp.hostID)).inTransit)
 

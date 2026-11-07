@@ -152,9 +152,9 @@ extension CueStore {
   /// 所有投送请求，最近的在前。
   public func deliveryRequests() throws -> [DeliveryRequest] {
     let requests = try select(DeliveryRequest.self, orderBy: "createdAt DESC, rowid DESC")
-    let moment = Speech.Moment.always(at: timing.now())
+    let now = timing.now()
     for request in requests {
-      if let due = Speech.deadline(request, at: moment), due > moment.now { expire(at: due) }
+      if let due = Speech.deadline(request), due > now { expire(at: due) }
     }
     return requests
   }
@@ -202,7 +202,7 @@ extension CueStore {
         current.status = .known(.unconfirmed)
         current.reason = Speech.unconfirmedReason
       default:
-        if let due = Speech.deadline(current, at: moment) { expire(at: due) }
+        if let due = Speech.deadline(current) { expire(at: due) }
       }
       return current
     }

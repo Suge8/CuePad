@@ -91,7 +91,7 @@ public enum Speech {
 
   public static func trip(_ request: DeliveryRequest, at moment: Moment) -> Trip {
     if awaitsDispatch(request) {
-      if let expires = expiry(of: request, at: moment), moment.now >= expires { return .unconfirmed(unconfirmedReason.text) }
+      if let expires = expiry(of: request), moment.now >= expires { return .unconfirmed(unconfirmedReason.text) }
       if request.status == .known(.preparing) { return .preparing(ShownText("尚未派发：\((request.reason ?? ShownText("等待目标就绪")).embedded)").text) }
       return request.reachedServer && !moment.isLocal(request.hostID) ? .sent : .sending
     }
@@ -110,10 +110,10 @@ public enum Speech {
   }
 
   /// 等派发快照从什么时候起按未确认显示：派发期限再过一个回执窗口——执行的 Mac 到期就写回失败，这一段等它的结果传回来；
-  /// 已领取、已收尾或还没到服务器（不到期）的为 nil。
-  static func expiry(of request: DeliveryRequest, at moment: Moment) -> Date? {
+  /// 已领取、已收尾或还没有锚点（不到期）的为 nil。
+  static func expiry(of request: DeliveryRequest) -> Date? {
     guard awaitsDispatch(request) else { return nil }
-    return request.dispatchDeadline(local: moment.isLocal(request.hostID))?.addingTimeInterval(receiptLimit)
+    return request.dispatchDeadline?.addingTimeInterval(receiptLimit)
   }
 
   /// 等待到这一刻转为未确认；已有回执、已被领取或此刻同步不通时为 nil。
@@ -122,10 +122,11 @@ public enum Speech {
     return due(said: said, reachedServer: reachedServer, host: host, at: moment)
   }
 
-  /// 投送请求此刻的样子下一次变的时刻（派发、执行或确认等待到期）；已收尾的为 nil。
-  public static func deadline(_ request: DeliveryRequest, at moment: Moment) -> Date? {
+  /// 投送请求的样子下一次变的时刻（派发、执行或确认等待到期）：只由记录推出，与谁在读、同步通不通无关；已收尾或还没有锚点的为 nil。
+  /// 各端到点重算（`SpeechClock`）只读这里，不另算、不回落到对 Cue 说话的窗口。
+  public static func deadline(_ request: DeliveryRequest) -> Date? {
     guard request.isOpen else { return nil }
-    return awaitsDispatch(request) ? expiry(of: request, at: moment) : request.deadlineAt
+    return awaitsDispatch(request) ? expiry(of: request) : request.deadlineAt
   }
 
   /// 失败的时刻：执行方写回的完成时刻；其余不算失败。

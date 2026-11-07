@@ -161,7 +161,7 @@ extension UpgradePreparationTests {
         let request = try await Workspace(services: app.services).said(ComposerDraft(text: "最后一刻就绪也只送一次"), to: target, mode: .send)
         try await app.services.executor.start()
         let waiting = try await prepared(request, in: app)
-        let due = try #require(waiting.dispatchDeadline(local: true))
+        let due = try #require(waiting.dispatchDeadline)
         clock.advance(.seconds(due.timeIntervalSince(clock.now) - 1))
         old.close(bye: "reload")
         let file = app.directory.appending(path: "near-deadline.jsonl")

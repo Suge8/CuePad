@@ -14,12 +14,10 @@ final class SpeechClock {
     @ObservationIgnored private let alwaysReachable: Bool
     @ObservationIgnored private let timing: Timing
 
-    /// 仍在等进度的一句：投送请求按它自己的期限（`Speech.deadline`，与同步通不通无关）；对 Cue 说的话按通信窗口。
-    nonisolated struct Awaiting: Equatable, Sendable {
-        var said: Date
-        var reachedServer: Bool
-        var host: String?
-        var deadline: Date? = nil
+    /// 仍在等进度的一句：投送请求按它自己的期限（`Speech.deadline`，与同步通不通无关；没有期限就不定闹钟）；对 Cue 说的话按通信窗口。
+    nonisolated enum Awaiting: Equatable, Sendable {
+        case request(deadline: Date?)
+        case cue(said: Date, reachedServer: Bool, host: String?)
     }
 
     init(localHost: String?, reachable: Bool, alwaysReachable: Bool, timing: Timing) {
@@ -37,6 +35,12 @@ final class SpeechClock {
         schedule()
     }
 
+    /// 睡到 `date` 把"此刻"刷一次：不在库里的时限（开好的新会话等连上，`LaunchProgress.openingDeadline`）由看它的界面给，随界面消失取消。
+    func refresh(at date: Date) async {
+        guard (try? await timing.sleepUntil(date)) != nil else { return }
+        moment.now = max(moment.now, timing.now())
+    }
+
     /// 此刻还在等回执的话（库一变就给一次）。
     func track(_ waiting: [Awaiting]) {
         guard waiting != self.waiting else { return }
@@ -47,7 +51,12 @@ final class SpeechClock {
     /// 已经过了的时限立即刷"此刻"，再睡到下一个。
     private func schedule() {
         alarm?.cancel()
-        let deadlines = waiting.compactMap { $0.deadline ?? Speech.deadline(said: $0.said, delivered: nil, reachedServer: $0.reachedServer, host: $0.host, at: moment) }
+        let deadlines = waiting.compactMap { awaiting -> Date? in
+            switch awaiting {
+            case .request(let deadline): deadline
+            case .cue(let said, let reachedServer, let host): Speech.deadline(said: said, delivered: nil, reachedServer: reachedServer, host: host, at: moment)
+            }
+        }
         let now = timing.now()
         if deadlines.contains(where: { $0 > moment.now && $0 <= now }) { moment.now = now }
         guard let next = deadlines.filter({ $0 > now }).min() else { return }
@@ -67,11 +76,8 @@ extension AppServices {
                 let requests = try store.deliveryRequests().filter(\.isOpen)
                 let cueHost = try store.cueProfile()?.hostID
                 let toCue = try store.cueMessagesToDeliver().filter { $0.author == .known(.you) }
-                let moment = Speech.Moment.always(at: store.timing.now())
-                let waiting = requests.map {
-                    SpeechClock.Awaiting(said: $0.createdAt, reachedServer: $0.reachedServer, host: $0.hostID, deadline: Speech.deadline($0, at: moment))
-                }
-                    + toCue.map { SpeechClock.Awaiting(said: $0.createdAt, reachedServer: $0.reachedServer, host: cueHost) }
+                let waiting = requests.map { SpeechClock.Awaiting.request(deadline: Speech.deadline($0)) }
+                    + toCue.map { SpeechClock.Awaiting.cue(said: $0.createdAt, reachedServer: $0.reachedServer, host: cueHost) }
                 let active = requests.contains { Speech.trip($0, at: .always(at: store.timing.now())).inTransit }
                 return OpenSpeech(open: active || !toCue.isEmpty, waiting: waiting)
             }) {

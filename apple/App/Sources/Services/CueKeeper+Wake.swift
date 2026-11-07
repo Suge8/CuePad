@@ -131,12 +131,15 @@ extension CueKeeper {
     }
 
     private func fetch(_ keys: [String], for message: UUID, until deadline: Date) -> Task<Void, Never> {
-        let fetchFile = setup.fetchFile, timing = store.timing
+        let fetchFile = setup.fetchFile, timing = store.timing, files = store.files
         return Task {
             let failure: ShownText?
             do {
-                let arrived = try await fetchAttachments(Set(keys), until: deadline, timing: timing) { _ = try await fetchFile($0) }
-                failure = arrived ? nil : ShownText("附件到期还没传到这台 Mac")
+                switch try await fetchAttachments(Set(keys), into: files, until: { try await timing.sleepUntil(deadline) }, using: { _ = try await fetchFile($0) }) {
+                case .arrived: failure = nil
+                case .expired: failure = ShownText("附件到期还没传到这台 Mac")
+                case .missing: failure = ShownText("附件取过了仍不在这台 Mac 上")
+                }
             } catch is CancellationError {
                 return
             } catch {
