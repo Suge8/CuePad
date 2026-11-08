@@ -4,7 +4,17 @@ import Foundation
 
 typealias JSONObject = [String: any Sendable]
 
-// MARK: 字段约定（改动须同步 `Schema` 的字段说明，测试会比对）
+struct OutputFields<Value>: Sendable {
+  let fields: [(String, @Sendable (Value) -> any Sendable)]
+
+  func json(_ value: Value) -> JSONObject {
+    Dictionary(uniqueKeysWithValues: fields.map { ($0.0, $0.1(value)) })
+  }
+
+  func description(_ name: String) -> String {
+    (name.isEmpty ? "" : name + " ") + "{\(fields.map(\.0).joined(separator: ", "))}"
+  }
+}
 
 private func nullable<T: Sendable>(_ value: T?) -> any Sendable {
   guard let value else { return NSNull() }
@@ -36,13 +46,14 @@ struct ProjectView {
   let cardCount: Int
   let directory: String?
 
-  var json: JSONObject {
-    [
-      "id": uuid(project.id), "name": project.name, "icon": nullable(project.icon), "color": project.color,
-      "pinned": project.isPinned, "intro": nullable(project.intro), "directory": nullable(directory),
-      "cardCount": cardCount, "createdAt": iso(project.createdAt), "modifiedAt": iso(project.modifiedAt),
-    ]
-  }
+  static let fields = OutputFields<ProjectView>(fields: [
+    ("id", { uuid($0.project.id) }), ("name", { $0.project.name }), ("intro", { nullable($0.project.intro) }),
+    ("icon", { nullable($0.project.icon) }), ("color", { $0.project.color }), ("pinned", { $0.project.isPinned }),
+    ("directory", { nullable($0.directory) }), ("cardCount", { $0.cardCount }),
+    ("createdAt", { iso($0.project.createdAt) }), ("modifiedAt", { iso($0.project.modifiedAt) }),
+  ])
+
+  var json: JSONObject { Self.fields.json(self) }
 
   var line: String {
     "\(project.id.shortID)  \(project.isPinned ? "★ " : "")\(project.name)  \(cardCount) 条灵感"
@@ -56,14 +67,16 @@ struct CardView {
 
   private static let mark: [TaskStatus: String] = [.todo: "[ ] ", .inProgress: "[~] ", .done: "[x] "]
 
-  var json: JSONObject {
-    [
-      "id": uuid(card.id), "kind": card.isTask ? "task" : "idea", "status": nullable(card.status?.rawValue),
-      "projectId": uuid(card.projectID), "project": project, "parentId": uuid(card.parentID), "body": card.body,
-      "pinned": card.isPinned, "conflictOf": uuid(card.conflictOf), "startedAt": iso(card.startedAt), "completedAt": iso(card.completedAt),
-      "archivedAt": iso(card.archivedAt), "deletedAt": iso(card.deletedAt), "createdAt": iso(card.createdAt), "modifiedAt": iso(card.modifiedAt),
-    ]
-  }
+  static let fields = OutputFields<CardView>(fields: [
+    ("id", { uuid($0.card.id) }), ("kind", { $0.card.isTask ? "task" : "idea" }), ("status", { nullable($0.card.status?.rawValue) }),
+    ("projectId", { uuid($0.card.projectID) }), ("project", { $0.project }), ("parentId", { uuid($0.card.parentID) }),
+    ("body", { $0.card.body }), ("pinned", { $0.card.isPinned }), ("conflictOf", { uuid($0.card.conflictOf) }),
+    ("startedAt", { iso($0.card.startedAt) }), ("completedAt", { iso($0.card.completedAt) }),
+    ("archivedAt", { iso($0.card.archivedAt) }), ("deletedAt", { iso($0.card.deletedAt) }),
+    ("createdAt", { iso($0.card.createdAt) }), ("modifiedAt", { iso($0.card.modifiedAt) }),
+  ])
+
+  var json: JSONObject { Self.fields.json(self) }
 
   var line: String {
     "\(card.status.flatMap { Self.mark[$0] } ?? "")\(card.id.shortID)  \(project)  \(card.isPinned ? "★ " : "")\(title(card.body))"

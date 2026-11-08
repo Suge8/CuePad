@@ -4,45 +4,48 @@ import Foundation
 
 extension CueTools {
   func task(_ args: Args) async throws -> Result {
-    let action = try args.required("action")
+    let rawAction = try args.required("action")
+    guard let action = TaskAction(rawValue: rawAction) else {
+      throw Failure("task 没有 \(rawAction)：可用 add / edit / start / bind / unbind / say / peek / stop / leave / take / done")
+    }
     let allowed: Set<String>?
     switch action {
-    case "bind": allowed = ["action", "task", "session"]
-    case "unbind": allowed = ["action", "task"]
+    case .bind: allowed = ["action", "task", "session"]
+    case .unbind: allowed = ["action", "task"]
     default: allowed = nil
     }
-    if action == "start", args.string("session") != nil {
+    if action == .start, args.string("session") != nil {
       throw Failure("start 不支持 session：关联已有会话用 bind")
     }
     if let allowed, let unsupported = args.raw.keys.filter({ !allowed.contains($0) }).sorted().first {
-      throw Failure("\(action) 不支持参数 \(unsupported)：关联已有会话用 bind，开工用 start")
+      throw Failure("\(action.rawValue) 不支持参数 \(unsupported)：关联已有会话用 bind，开工用 start")
     }
     switch action {
-    case "add": return try await add(args)
-    case "edit": return try await edit(args)
-    case "start": return try await start(args)
-    case "bind":
+    case .add: return try await add(args)
+    case .edit: return try await edit(args)
+    case .start: return try await start(args)
+    case .bind:
       let card = try await task(args.required("task"))
       let ref = try args.required("session")
       guard case .session(let session) = try await sessionRef(ref) else { throw Failure("bind 的 session 要写会话 id 或会话名") }
       try await store.bindSession(session.sessionID, to: card.id)
       return .ok("已把「\(card.heading)」关联到会话「\(session.title)」。（\(card.id.shortID)）")
-    case "unbind":
+    case .unbind:
       let card = try await task(args.required("task"))
       try await store.unbindSession(from: card.id)
       return .ok("已解除「\(card.heading)」的会话关联。（\(card.id.shortID)）")
-    case "say": return try await say(args)
-    case "peek":
+    case .say: return try await say(args)
+    case .peek:
       switch try await place(args) {
       case .session(let session)?: return try await peek(session)
       case .task(let card)?: return try await peek(card)
       case nil: return try await board()
       }
-    case "stop":
+    case .stop:
       let target = try await speaker(args)
       _ = try await store.stopSession(target.session, host: try await host(), cue: true)
       return .ok("已请\(target.label)停下这一轮。（\(target.short)）")
-    case "leave":
+    case .leave:
       _ = try await host()  // 停用后不再替他判断谁接手
       let target = try await speaker(args)
       // 他在等你里答 Cue 问的那张卡，会话等的是 Cue 转达：再留给他回，同一件事就既在等你、又是待回复
@@ -52,13 +55,12 @@ extension CueTools {
       }
       try await store.leaveToYou(target.session)
       return .ok("已把\(target.label)留给他回：进了等你、推到他手机，他或你再对它说话就作废。（\(target.short)）")
-    case "take":
+    case .take:
       _ = try await host()
       let target = try await speaker(args)
       guard try await store.takeBack(target.session) != nil else { throw Failure("\(target.label)没留给他回（或已作废），不用收回") }
       return .ok("已收回\(target.label)：不再待回复、出了等你。（\(target.short)）")
-    case "done": return try await done(args)
-    case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / bind / unbind / say / peek / stop / leave / take / done")
+    case .done: return try await done(args)
     }
   }
 
