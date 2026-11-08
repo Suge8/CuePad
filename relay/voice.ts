@@ -27,7 +27,7 @@ type Member = { socket: Socket; endpoint: Endpoint; watching: Set<Member>; watch
 export type Peer = {
   room: string; nonce: string; order: number;
   phase: "challenge" | "authenticating" | "ready" | "registering" | "registered" | "closed";
-  timer?: Timer; voice?: Member;
+  timer?: Timer; voice?: Member; registeringDevice?: string;
 };
 
 function shape(value: unknown, keys: string[]): value is Record<string, unknown> {
@@ -60,8 +60,11 @@ function base64(value: unknown): Buffer | undefined {
   if (bytes.toString("base64") === value) return bytes;
 }
 
+// 连接建立顺序决定同设备租约的先后，不用登记帧或异步验签的完成顺序；老门铃第一次登记不会提升连接顺序。
+// 只记当前成员与等待验签的登记；尚未登记的连接可在路由空缺时首次登记，被替换的请求则不能复活。
 export class VoiceRouter {
   private readonly rooms = new Map<string, Map<string, Member>>();
+  private readonly registrations = new Map<string, Map<string, Set<Socket>>>();
 
   constructor(private readonly close: (socket: Socket, code: number, reason: string) => void) {}
 
@@ -90,6 +93,7 @@ export class VoiceRouter {
   }
 
   remove(socket: Socket, reason: Departure): void {
+    this.finishRegistration(socket);
     const member = socket.data.voice;
     socket.data.voice = undefined;
     if (!member) return;
@@ -117,6 +121,12 @@ export class VoiceRouter {
       return this.close(socket, 4401, "bad voice claim");
     }
     socket.data.phase = "registering";
+    socket.data.registeringDevice = claim.device.rawValue;
+    const waitingRoom = this.registrations.get(socket.data.room) ?? new Map<string, Set<Socket>>();
+    const waiting = waitingRoom.get(claim.device.rawValue) ?? new Set<Socket>();
+    waiting.add(socket);
+    waitingRoom.set(claim.device.rawValue, waiting);
+    this.registrations.set(socket.data.room, waitingRoom);
     socket.data.timer = setTimeout(() => this.close(socket, 4401, "voice registration timeout"), REGISTRATION_TIMEOUT_MS);
     // 与 Swift sortedKeys + withoutEscapingSlashes 一致；包含本机新租约，不能由中转重放旧租约。
     const canonical = JSON.stringify({ challenge: claim.challenge, device: claim.device, lease: claim.lease, room: claim.room, version: claim.version });
@@ -131,6 +141,11 @@ export class VoiceRouter {
     if (!previous && (this.rooms.get(socket.data.room)?.size ?? 0) >= MAX_VOICE_PEERS) {
       return this.close(socket, 4408, "voice room full");
     }
+    // 较早连接的验签即使在新连接退出后才返回，也不能重新接管设备路由。
+    for (const pending of waiting) {
+      if (pending.data.order < socket.data.order) this.close(pending, REPLACED, "voice registration superseded");
+    }
+    this.finishRegistration(socket);
     if (previous) this.close(previous.socket, REPLACED, "voice lease replaced");
     if (socket.data.phase !== "registering") return;
     const member: Member = {
@@ -142,6 +157,17 @@ export class VoiceRouter {
     socket.data.voice = member;
     socket.data.phase = "registered";
     this.send(socket, { registered: { endpoint: member.endpoint } });
+  }
+
+  private finishRegistration(socket: Socket): void {
+    const name = socket.data.registeringDevice;
+    if (name === undefined) return;
+    socket.data.registeringDevice = undefined;
+    const room = this.registrations.get(socket.data.room);
+    const waiting = room?.get(name);
+    waiting?.delete(socket);
+    if (waiting?.size === 0) room?.delete(name);
+    if (room?.size === 0) this.registrations.delete(socket.data.room);
   }
 
   private current(socket: Socket): Member | undefined {
