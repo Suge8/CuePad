@@ -122,9 +122,12 @@ extension PhoneVoiceViewState {
                      startUnavailableReason: startUnavailableReason?.phoneMessage)
     }
 
-    private func page(_ page: Page, sessionUnavailable: Bool, action: (VoicePageCursor?) -> PhoneVoiceAction) -> CueVoiceState<PhoneVoiceAction>.Page {
-        .init(first: sessionUnavailable ? nil : action(nil), next: sessionUnavailable ? nil : page.next.map { action($0) },
-              loading: page.loading, error: page.error?.phoneMessage)
+    private func page(_ page: Page, sessionUnavailable: Bool, action: (VoicePageCursor?) -> PhoneVoiceAction) -> CueVoiceState<PhoneVoiceAction>.Page? {
+        let first = !sessionUnavailable && (page.canReturnToHead || page.error != nil) ? action(nil) : nil
+        let next = sessionUnavailable ? nil : page.next.map { action($0) }
+        let error = page.error?.phoneMessage
+        guard first != nil || next != nil || page.loading || error != nil else { return nil }
+        return .init(first: first, next: next, loading: page.loading, error: error)
     }
 }
 

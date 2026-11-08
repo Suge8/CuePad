@@ -90,6 +90,7 @@ struct PhoneVoiceViewState {
 
     struct Page {
         let next: VoicePageCursor?
+        let canReturnToHead: Bool
         let error: VoicePageError?
         let loading: Bool
     }
@@ -116,9 +117,12 @@ struct PhoneVoiceViewState {
         canMute = phone.canMute
         canRepeat = phone.canRepeat
         startUnavailableReason = phone.startUnavailableReason
-        requestPage = Page(next: phone.requestPage.nextCursor, error: phone.requestPageError, loading: phone.loadingRequests)
-        replyPage = Page(next: phone.replyPage.nextCursor, error: phone.replyPageError, loading: phone.loadingReplies)
-        executionPage = Page(next: phone.executionPage.nextCursor, error: phone.executionPageError, loading: phone.loadingExecutions)
+        requestPage = Page(next: phone.requestPage.nextCursor, canReturnToHead: phone.canReturnToRequestsHead,
+                           error: phone.requestPageError, loading: phone.loadingRequests)
+        replyPage = Page(next: phone.replyPage.nextCursor, canReturnToHead: phone.canReturnToRepliesHead,
+                         error: phone.replyPageError, loading: phone.loadingReplies)
+        executionPage = Page(next: phone.executionPage.nextCursor, canReturnToHead: phone.canReturnToExecutionsHead,
+                             error: phone.executionPageError, loading: phone.loadingExecutions)
         samples = phone.samples
         requests = phone.requests.map { request in
             let message: CueMessage?
