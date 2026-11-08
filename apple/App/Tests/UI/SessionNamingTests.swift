@@ -34,8 +34,9 @@ struct SessionNamingTests {
             return try reply.get()
         }
 
-        func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
-            guard let name else { return }
+        func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
+            guard config.fast == nil else { throw PiBridgeError.unsupported }
+            guard let name = config.name else { return }
             renamed.append(name)
             bridge?.update(id) { $0.name = name }
         }

@@ -168,7 +168,9 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
     func end(_ id: PiSession.ID) async throws {}
     func abort(_ id: PiSession.ID) async throws {}
     func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {}
-    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {}
+    func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
+        guard config.fast == nil else { throw PiBridgeError.unsupported }
+    }
 }
 
 extension FakeExtension {
