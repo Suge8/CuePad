@@ -95,18 +95,8 @@ extension VoiceService {
                 }
                 return .recorded(message: message.id)
             case .repeatReply(let id):
-                guard let call, VoiceSessionID(call.session) == mediaSession, call.canRepeat, let index = call.replyState.firstIndex(where: { $0.id == id }),
-                      let original = try await services.store.cueMessages([id]).first, original.author == .known(.cue) else {
-                    return .rejected(reason: .originalMissing)
-                }
-                guard VoiceSessionID(call.session) == mediaSession, call.canRepeat, call.replyState[index].delivery != .sending, call.replyState[index].delivery != .queued else {
-                    return .rejected(reason: .unavailable)
-                }
-                let reply = VoiceCall.Reply(message: original, delivery: call.replyState[index].delivery)
-                guard !reply.text.isEmpty else { return .rejected(reason: .originalMissing) }
-                call.replyState[index] = reply
-                call.repeatReply(id)
-                return .readbackQueued(message: id)
+                guard let call, let mediaSession else { return .rejected(reason: .originalMissing) }
+                return try call.repeatReply(id, mediaSession: mediaSession)
             case .stop(let target):
                 guard services.pi.session(sessionID: target.turn.sessionID)?.turnStartedAt?.stored == target.turn.turnStartedAtMilliseconds else {
                     return .rejected(reason: .turnChanged)
