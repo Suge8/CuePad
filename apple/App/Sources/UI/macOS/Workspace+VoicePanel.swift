@@ -3,17 +3,20 @@ import SwiftUI
 
 /// 通话组件的宿主：开合与选择哪一件是呈现状态，业务动作全部回到 Workspace。
 struct CueVoicePanel: View {
-    /// 宿主给阅读与控制保留的高度；回复区超出其余空间时滚动查看。
-    static let minimumHeight: CGFloat = 342
-    let availableHeight: CGFloat
     @Environment(Workspace.self) private var workspace
     @State private var choosingExecution = false
 
     var body: some View {
         Group {
             if let presentation = workspace.voicePresentation {
-                CueVoiceView(presentation: presentation, expanded: workspace.voiceExpanded,
-                             availableHeight: availableHeight, action: act)
+                if presentation.active {
+                    CueVoiceView(presentation: presentation, action: act)
+                }
+            }
+        }
+        .bubble(isPresented: Bindable(workspace).voiceDetails, width: .fixed(360)) {
+            if let presentation = workspace.voicePresentation {
+                CueVoiceDetails(presentation: presentation, action: act)
             }
         }
         .panel(isPresented: $choosingExecution) {
@@ -35,7 +38,6 @@ struct CueVoicePanel: View {
 
     private func act(_ action: CueVoiceAction) {
         switch action {
-        case .start: workspace.startVoiceCall()
         case .toggleMute:
             if let voice = workspace.voice { voice.setMuted(!voice.isMuted) }
         case .hangUp: workspace.voice?.hangUp()
@@ -48,9 +50,7 @@ struct CueVoicePanel: View {
                 do { try await workspace.recoverVoice(recovery) }
                 catch { workspace.fail(error) }
             }
-        case .requestRepeat(let id): workspace.voice?.repeatReply(id)
-        case .expand: workspace.voiceExpanded = true
-        case .collapse: workspace.voiceExpanded = false
+        case .details: workspace.voiceDetails = true
         }
     }
 
@@ -62,39 +62,4 @@ struct CueVoicePanel: View {
     }
 }
 
-/// 栏头以下的通话与对话：回复区的占用只读 FloatingReply 的实测值。
-/// 回复区在外层独立排版，通话只消耗剩余高度，不回写几何状态；开合始终保留同一个对话视图。
-/// 普通对话的浮层与命中范围限于获分配的区域，不能越过上沿遮挡通话控制。
-struct CueVoiceContent<Chat: View>: View {
-    @ViewBuilder let chat: Chat
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.chatBottomInset) private var replyHeight
-
-    var body: some View {
-        GeometryReader { room in
-            VStack(spacing: 0) {
-                if workspace.voice != nil {
-                    CueVoicePanel(availableHeight: max(0, room.size.height - replyHeight))
-                }
-                chat.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(.rect)
-                    .clipped()
-            }
-        }
-    }
-}
-
-/// 回复区先取自然高度，超出页面预算时只缩视口，卡片与草稿保留原有排版。
-struct CueVoiceReplyBudget: Layout {
-    let maximumHeight: CGFloat?
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let ideal = subviews[0].sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
-        return CGSize(width: ideal.width, height: maximumHeight.map { min(ideal.height, $0) } ?? ideal.height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
-    }
-}
 #endif

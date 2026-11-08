@@ -161,6 +161,22 @@
         }
       }
     },
+    "**演示结果 %lld**\n\n- 核对 Mac 界面\n- 核实手机接入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "**Demo result %lld**\n\n- Check the Mac interface\n- Verify mobile access"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "**演示结果 %lld**\n\n- 核对 Mac 界面\n- 核实手机接入"
+          }
+        }
+      }
+    },
     "- 第 %lld 项：" : {
       "localizations" : {
         "en" : {
@@ -1507,34 +1523,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停下「billing」"
-          }
-        }
-      }
-    },
-    "停止演示任务 %lld" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Stop demo task %lld"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Stop demo task %lld"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "停止演示任务 %lld"
           }
         }
       }
@@ -3827,22 +3815,6 @@
         }
       }
     },
-    "我已经整理好发布检查，正在核对 Mac 上的通话体验。需要你确认的事项会留在任务里。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I've organized the release checks and am reviewing the call experience on Mac. Anything that needs your approval will stay in your tasks."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "我已经整理好发布检查，正在核对 Mac 上的通话体验。需要你确认的事项会留在任务里。"
-          }
-        }
-      }
-    },
     "截图" : {
       "localizations" : {
         "en" : {
@@ -4031,22 +4003,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把三个排序方案的对比做成表格"
-          }
-        }
-      }
-    },
-    "把发布前的检查交给 Cue，保留需要我确认的事项" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hand the release checks to Cue and keep anything that needs my approval"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把发布前的检查交给 Cue，保留需要我确认的事项"
           }
         }
       }
@@ -4847,22 +4803,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤销栈合并连续拖拽\n\n连续拖拽只记一步撤销。"
-          }
-        }
-      }
-    },
-    "播放模拟音频" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Play simulated audio"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放模拟音频"
           }
         }
       }
@@ -5699,18 +5639,18 @@
         }
       }
     },
-    "检查发布事项" : {
+    "检查发布事项 %lld" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Check the release items"
+            "value" : "Check release items %lld"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "检查发布事项"
+            "value" : "检查发布事项 %lld"
           }
         }
       }
@@ -5747,22 +5687,6 @@
         }
       }
     },
-    "模拟音频 · 未连接麦克风" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Simulated audio · Microphone disconnected"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模拟音频 · 未连接麦克风"
-          }
-        }
-      }
-    },
     "横竖屏切换不跳动" : {
       "localizations" : {
         "en" : {
@@ -5791,22 +5715,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "欢迎回来"
-          }
-        }
-      }
-    },
-    "正在检查，需要确认的事项会留在任务里。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I'm checking. Items needing your confirmation will stay in tasks."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在检查，需要确认的事项会留在任务里。"
           }
         }
       }
@@ -6223,254 +6131,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "滑过去，可以 ›"
-          }
-        }
-      }
-    },
-    "演示任务 %lld" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Demo task %lld"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Demo task %lld"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示任务 %lld"
-          }
-        }
-      }
-    },
-    "演示回复 %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo reply %lld"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示回复 %lld"
-          }
-        }
-      }
-    },
-    "演示请求 %lld" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Demo request %lld"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Demo request %lld"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示请求 %lld"
-          }
-        }
-      }
-    },
-    "演示：停止失败，连接中断；执行可能仍在继续，请查看目标任务后重试" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: stop failed because the connection was lost. Work may still be running. Check the task before retrying."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：停止失败，连接中断；执行可能仍在继续，请查看目标任务后重试"
-          }
-        }
-      }
-    },
-    "演示：停止结果未确认，请勿视为已停止" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: stop outcome unconfirmed. Do not assume work has stopped."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：停止结果未确认，请勿视为已停止"
-          }
-        }
-      }
-    },
-    "演示：加长回复" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: extend reply"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：加长回复"
-          }
-        }
-      }
-    },
-    "演示：已收到停止执行操作" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: stop work action received"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：已收到停止执行操作"
-          }
-        }
-      }
-    },
-    "演示：已收到再说一遍请求" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: repeat request received"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：已收到再说一遍请求"
-          }
-        }
-      }
-    },
-    "演示：已收到恢复操作" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: recovery action received"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：已收到恢复操作"
-          }
-        }
-      }
-    },
-    "演示：已重试请求 A" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: retried request A"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：已重试请求 A"
-          }
-        }
-      }
-    },
-    "演示：恢复空间" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "More room"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：恢复空间"
-          }
-        }
-      }
-    },
-    "演示：断线" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: disconnect"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：断线"
-          }
-        }
-      }
-    },
-    "演示：缩小空间" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Less room"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：缩小空间"
-          }
-        }
-      }
-    },
-    "演示：追加回复" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demo: append reply"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示：追加回复"
           }
         }
       }
@@ -8039,54 +7699,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "评审：计费额度\n\n审查 {{分支}} 中计费额度相关改动。"
-          }
-        }
-      }
-    },
-    "请求 A「检查发布事项」未交给 Cue：等待回执超时" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Request A “Check release items” was not handed to Cue: acknowledgement timed out"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请求 A「检查发布事项」未交给 Cue：等待回执超时"
-          }
-        }
-      }
-    },
-    "请求 A：检查发布事项" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Request A: Check release items"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请求 A：检查发布事项"
-          }
-        }
-      }
-    },
-    "请求 B：整理会议记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Request B: Organize meeting notes"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请求 B：整理会议记录"
           }
         }
       }

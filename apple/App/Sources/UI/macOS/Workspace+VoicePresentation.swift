@@ -3,9 +3,7 @@ import CueStore
 import SwiftUI
 
 extension Workspace {
-    private static let voiceRequestExcerptLimit = 24
-    /// 只投影已有事实：每条请求保留自己的位置，回复按持久化的来源归组，合批回复列出全部来源。
-    /// 没有关联来源的是主动消息；不把最后一次请求套到更早的回复上。
+    /// 只投影控制所需事实；已落库的请求与回复由原聊天读取，未落库失败保留各自身份。
     var voicePresentation: CueVoicePresentation? {
         guard let voice else { return nil }
         let activity: CueVoicePresentation.Activity = switch voice.phase {
@@ -18,8 +16,8 @@ extension Workspace {
         case .failed: .failed
         }
         return CueVoicePresentation(
-            name: cue.name, activity: activity, muted: voice.isMuted, samples: { voice.samples.map { CGFloat($0) } }, request: voice.requests.last.map(voiceRequest),
-            replies: voiceRows(voice), issue: voiceIssue(voice), canStopExecution: !stoppableVoiceExecutions.isEmpty,
+            activity: activity, muted: voice.isMuted, samples: { voice.samples.map { CGFloat($0) } }, canMute: voice.canMute,
+            issues: voiceIssues(voice), canStopExecution: !stoppableVoiceExecutions.isEmpty,
             executions: voiceExecutions.map {
                 let shown = shownInHeader($0.state, delivery: nil)
                 let attention: Bool = switch shown.status {
@@ -51,66 +49,19 @@ extension Workspace {
                      status: status, needsAttention: attention)
     }
 
-    var voiceIssueRequest: VoiceCall.Request? {
-        voice?.requests.first { request in
-            if request.failure != nil { return true }
-            guard request.pending, let record = request.record else { return false }
-            return Speech.trip(said: record.createdAt, delivered: record.deliveredAt, reachedServer: record.reachedServer,
-                               host: cue.hostID, at: services.speech).unconfirmedReason != nil
+    private func voiceIssues(_ voice: VoiceCall) -> [CueVoicePresentation.Issue] {
+        var issues: [CueVoicePresentation.Issue] = voice.requests.compactMap { request in
+            guard request.message == nil, let failure = request.failure else { return nil }
+            return .init(id: .request(request.id), summary: "未能交给 Cue", message: "请求「\(request.text)」：\(failure)",
+                         recovery: .retryRequest(request.id))
         }
-    }
-
-    private func voiceIssue(_ voice: VoiceCall) -> CueVoicePresentation.Issue? {
-        if let request = voiceIssueRequest {
-            let reason = request.failure ?? voiceRequest(request).delivery.unconfirmedReason ?? Speech.unconfirmedReason.text
-            let excerpt = String(request.text.prefix(Self.voiceRequestExcerptLimit))
-            let summary: LocalizedStringResource = request.failure != nil ? "未能交给 Cue：\(excerpt)" : "送达未确认：\(excerpt)"
-            return .init(summary: summary, message: "请求「\(request.text)」：\(reason)", recovery: request.failure != nil ? .retryRequest(request.id) : nil)
+        if let failure = voice.storeFailure {
+            issues.append(.init(id: .store, summary: "通话记录暂不可用", message: "\(failure)", recovery: .reconnect))
         }
-        if let failure = voice.storeFailure { return .init(summary: "通话记录暂不可用", message: "\(failure)", recovery: .reconnect) }
-        switch voice.phase {
-        case .failed(let failure): return .init(summary: "通话未连接", message: "\(failure.shown)", recovery: .reconnect)
-        default: return nil
+        if case .failed(let failure) = voice.phase {
+            issues.append(.init(id: .connection, summary: "通话未连接", message: "\(failure.shown)", recovery: .reconnect))
         }
-    }
-
-    private func voiceRows(_ voice: VoiceCall) -> [CueVoicePresentation.Reply] {
-        let order = Dictionary(uniqueKeysWithValues: voice.requests.enumerated().compactMap { index, request in
-            request.message.map { ($0, index) }
-        })
-        var groups: [String: [CueVoicePresentation.Reply]] = [:]
-        var standalone: [CueVoicePresentation.Reply] = []
-        for reply in voice.replies {
-            let sources = (reply.message.answeredRequests ?? []).compactMap { order[$0] }.sorted().map { voice.requests[$0] }
-            var row = voiceReply(reply, call: voice)
-            if sources.count > 1 {
-                let pending = sources.map(voiceRequest).first { $0.delivery != .delivered }
-                row.request = .init(text: sources.map(\.text).joined(separator: "\n\n"), delivery: pending?.delivery ?? .delivered)
-            }
-            if let request = sources.last { groups[request.id, default: []].append(row) }
-            else { standalone.append(row) }
-        }
-        return voice.requests.flatMap { request in
-            [.init(id: request.rowID, text: "", canRequestRepeat: false, request: voiceRequest(request))] + (groups[request.id] ?? [])
-        } + standalone
-    }
-
-    private func voiceRequest(_ request: VoiceCall.Request) -> CueVoicePresentation.Request {
-        let delivery: Speech.Trip
-        if let failure = request.failure { delivery = .failed(.reported(failure)) }
-        else if let record = request.record { delivery = Said.cue(record, host: cue.hostID).trip(at: services.speech) }
-        else { delivery = .sending }
-        return .init(text: request.text, delivery: delivery)
-    }
-
-    private func voiceReply(_ reply: VoiceCall.Reply, call: VoiceCall) -> CueVoicePresentation.Reply {
-        let note: String? = switch reply.delivery {
-        case .awaitingOrigin: String(localized: "这条结果尚未关联到通话请求，可以查看文字或点再说一遍")
-        case .queued, .sending, .submitted: nil
-        case .unconfirmed(let reason): reason
-        }
-        return .init(id: reply.id, text: reply.text,
-                     canRequestRepeat: call.canRepeat && reply.delivery != .sending, note: note)
+        return issues
     }
 }
 #endif

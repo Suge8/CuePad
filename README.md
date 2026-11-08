@@ -58,7 +58,7 @@ A build from source is ad-hoc signed, keeps its own library in `~/Library/Applic
 
 ### Call Cue on your Mac
 
-With Cue enabled, choose **Call Cue** in the Cue reply box. Calls use ChatGPT voice and require Codex to be signed in with your ChatGPT account on this Mac. Cue’s requests and results stay in the conversation, so you can read them during or after the call.
+With Cue enabled, choose **Call Cue** in the Cue reply box. Calls use ChatGPT voice and require Codex to be signed in with your ChatGPT account on this Mac. Cue’s requests and results stay in the conversation, so you can read them during or after the call. A single control bar shows the call status, audio activity, mute, end call, and details. Details holds execution controls and recoverable problems. Ending a call waits for the audio connection to close, then removes the bar; work already handed to Cue continues and can still be stopped from its task.
 
 **End call** ends only the call. To stop work, choose **Stop work** and select a session if prompted. This applies to work handed off during this call that CuePad currently lets you stop.
 

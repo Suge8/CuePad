@@ -14,9 +14,8 @@ extension Workspace {
 
     func startVoiceCall(
         source: VoicePeer.Source = .microphone(device: nil), recording: URL? = nil,
-        makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = VoiceCall.init
+        makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = DebugHooks.makeVoiceCall
     ) {
-        voiceExpanded = true
         showCue()
         guard voice?.isLive != true else { return }
         guard cue.canHear else { return say("Cue 还没启用，启用后才能通话", tone: .failure) }
