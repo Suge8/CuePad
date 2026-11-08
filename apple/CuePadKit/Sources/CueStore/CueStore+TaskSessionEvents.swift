@@ -45,6 +45,19 @@ extension CueStore {
     CREATE TEMP TRIGGER sessionEndChanged AFTER UPDATE OF state, stateSince ON main.piSessionStates
     WHEN NEW.state = 'ended'
     BEGIN INSERT OR IGNORE INTO taskSessionEvents VALUES ('receipt', NEW.sessionID); END;
+    CREATE TEMP TRIGGER sessionUseReleased AFTER UPDATE OF status, mode, targetRef ON main.deliveryRequests
+    WHEN OLD.targetRef IS NOT NULL AND OLD.mode IN (\(sqlList(DeliveryMode.toSession))) AND OLD.status IN (\(DeliveryStatus.openSQL))
+      AND (NEW.status NOT IN (\(DeliveryStatus.openSQL)) OR NEW.mode NOT IN (\(sqlList(DeliveryMode.toSession))) OR OLD.targetRef IS NOT NEW.targetRef)
+    BEGIN
+      INSERT OR IGNORE INTO taskSessionEvents SELECT 'task', createdForTaskID FROM piSessionStates
+        WHERE sessionID = OLD.targetRef AND createdForTaskID IS NOT NULL;
+    END;
+    CREATE TEMP TRIGGER sessionUseRemoved AFTER DELETE ON main.deliveryRequests
+    WHEN OLD.targetRef IS NOT NULL AND OLD.mode IN (\(sqlList(DeliveryMode.toSession))) AND OLD.status IN (\(DeliveryStatus.openSQL))
+    BEGIN
+      INSERT OR IGNORE INTO taskSessionEvents SELECT 'task', createdForTaskID FROM piSessionStates
+        WHERE sessionID = OLD.targetRef AND createdForTaskID IS NOT NULL;
+    END;
     CREATE TEMP TRIGGER endRequestInserted AFTER INSERT ON main.deliveryRequests
     WHEN NEW.mode = 'end' AND NEW.targetRef IS NOT NULL
     BEGIN INSERT OR IGNORE INTO taskSessionEvents VALUES ('receipt', NEW.targetRef); END;
