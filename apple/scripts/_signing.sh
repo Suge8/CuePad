@@ -37,8 +37,7 @@ $([ "$method" = app-store-connect ] && echo '<key>destination</key><string>expor
 PLIST
 }
 
-# 发布版本的 xcodebuild 设置，由同一个时间戳推出：显示版本是日期（2026.10.13），构建号是分钟（2610131639）。
-# TestFlight 与 Sparkle 都按构建号比较新旧，所以它必须递增：发布是串行的，一次要几分钟（公证），分钟精度够；同日多次发布显示版本相同，Sparkle 的更新提示会补上构建号区分。
+# TestFlight 与 Sparkle 按构建号比较新旧；同分钟的尝试可能同号，不能依靠归档或公证耗时保证递增。
 release_versions() {
   local now; now="$(date +%s)"
   echo "MARKETING_VERSION=$(date -r "$now" +%Y.%-m.%-d) CURRENT_PROJECT_VERSION=$(date -r "$now" +%y%m%d%H%M)"

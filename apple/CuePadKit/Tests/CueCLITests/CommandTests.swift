@@ -256,10 +256,9 @@ import Testing
   @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
     let sb = try Fixture()
     let root = await sb.run("--help").out
-    let words = Set(root.unicodeScalars.split { !CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz-").contains($0) }.map(String.init))
-    for command in ["project", "card", "task", "search", "show", "conflicts"] {
-      #expect(words.contains(command), "根帮助没有公开命令 \(command)")
-    }
+    let commands = try #require(root.split(separator: "\n").first { $0.hasPrefix("全部命令：") })
+    let names = commands.dropFirst("全部命令：".count).prefix { $0 != "；" }.split(separator: "、").map(String.init)
+    #expect(Set(names) == ["project", "card", "task", "search", "show", "conflicts"])
     for command in Command.all {
       let noun = command.path[0]
       if command.path.count == 2 {
@@ -280,13 +279,26 @@ import Testing
 
     let projectFields: Set<String> = ["id", "name", "intro", "icon", "color", "pinned", "directory", "cardCount", "createdAt", "modifiedAt"]
     let cardFields: Set<String> = ["id", "kind", "status", "projectId", "project", "parentId", "body", "pinned", "conflictOf", "startedAt", "completedAt", "archivedAt", "deletedAt", "createdAt", "modifiedAt"]
+    let searchFields: Set<String> = ["total", "projects", "cards"]
+    let conflictFields: Set<String> = ["original", "copy"]
+    func documentedFields(_ command: [String], type: String) async throws -> Set<String> {
+      let help = await sb.call(command + ["--help"])
+      #expect(help.code == 0)
+      let start = try #require(help.out.range(of: "\(type) {"))
+      return Set(help.out[start.upperBound...].prefix { $0 != "}" }.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+    }
+    #expect(try await documentedFields(["project", "list"], type: "Project") == projectFields)
+    #expect(try await documentedFields(["card", "show"], type: "Card") == cardFields)
+    #expect(try await documentedFields(["task", "done"], type: "Card") == cardFields)
+    #expect(try await documentedFields(["search"], type: "Search") == searchFields)
+    #expect(try await documentedFields(["conflicts", "list"], type: "Conflict") == conflictFields)
     let projects = try array(try await sb.json("project", "list"))
     #expect(Set(projects[0].keys) == projectFields)
     #expect(Set(try await sb.object("card", "show", card.id.uuidString).keys) == cardFields)
     #expect(Set(try await sb.object("task", "done", task.id.uuidString).keys) == cardFields)
-    #expect(Set(try await sb.object("search", "x").keys) == ["total", "projects", "cards"])
+    #expect(Set(try await sb.object("search", "x").keys) == searchFields)
     let conflicts = try array(try await sb.json("conflicts", "list"))
-    #expect(Set(conflicts[0].keys) == ["original", "copy"])
+    #expect(Set(conflicts[0].keys) == conflictFields)
   }
 
   @Test(arguments: [["nope"], ["card", "nope"], ["card", "show"], ["card", "list", "--bogus"], ["card", "add", "--body"]])
