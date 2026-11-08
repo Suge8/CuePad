@@ -44,7 +44,7 @@ struct ProjectShelf: View {
 
     private func place(_ title: LocalizedStringResource, icon: Icon, route: Route) -> some View {
         Button { workspace.show(route) } label: {
-            LinkRow(title: Text(title)) { IconImage(icon) }
+            LinkRow(title: Text(title)) { Image(icon) }
         }
         .buttonStyle(.row)
     }

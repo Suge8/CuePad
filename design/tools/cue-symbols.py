@@ -1,172 +1,34 @@
-"""CuePad 自家的图标（墨块）：从几何直接生成自定义 SF Symbol（模板 7.0，Ultralight / Regular / Black 三个母版插值），
-整个重写 App 资源目录的 Symbols 下（两端共用，资源名 cue.<名>），小组件与实时活动要的几个另拷一份进小组件自己的资源目录（`WIDGET_SYMBOLS`，扩展里没有 App 的资源）
-与图标总览（`IconSheet`）列的全部符号名（`InkSymbols.swift`，只在 Debug 构建里）。
-Cue 的纯白剪影（App 图标着色、透明外观用的 `AppIcon.icon/Assets/cue-mono.svg`，落地页品牌小标 `mark.svg`）也从这里写：同一份几何，所有层涂白。
-用法：python3 design/tools/cue-symbols.py（只用标准库）。这里只有符号表与写出；几何在 `ink/geometry.py`，各族图标在 `ink/icons_*.py`。
+"""CuePad 图标唯一生成入口：python3 design/tools/cue-symbols.py（仅标准库）。
 
-墨块的规则（每个图标都守）：
-- 主体是实心的体块，细节是刻进去的缝与孔，不描边。外形圆、刀口直：剪影的拐角与自由端是圆的，刻进体块的缝是直的、利的。
-- 体块之间、点睛与它的槽之间都隔一条刻缝（`CARVE`），层与层不重叠：单色下（系统菜单、工具栏里所有层同色）缝还在，认得出。生成时逐个检查，窄了就报错。
-- 最多一块点睛，放在第二层（hierarchical 的 secondary，调色板渲染的第二个颜色）。点睛平时什么颜色、什么时候点亮是 App 代码里的着色规则，符号只管分层。
-  点睛只能是小部件（一处点、一条缝里的块，不超过整个图形墨量的 `ACCENT_SHARE`，按 Regular 量、生成时检查——细的母版里主体墨少，占比自然高）：主体在主层——点睛平时是次一级的颜色，
-  主体放进点睛层的话，没选中时整个图标是灰的，像被禁用。没有合适的小部件就不设点睛。
-- 字重：体块按母版外扩 / 内缩（`GROW`），孔跟着缩 / 扩，缝在粗的母版里收窄一点——重量来自墨，不来自线。
-- 品牌的物件：纸（圆角方纸 + 右上折角）、C 环（做完的圈）、Cue（纸身体 + 斜着的腰带 + 竖着的眼）。Cue 就是 logo：App 图标、菜单栏、图标族里的 Cue 都是这一份几何（`mascot`），菜单栏直接用它。
-
-坐标：24 格，原点在图形中心、y 向下；1 格 = G 个模板单位，半径 12 格的圆 = 系统的 circle。图形中心落在大写字母高度的中线上，所以与文字基线对齐、随字号缩放。
-同一个符号的三个母版轮廓命令序列必须逐条一致才能插值（写出前断言）：几何按字重变的只能是位置，不能是拐角、分段的有无。
+功能图标由 ink/rounded 的等宽中线、圆头与相切圆角生成三字重 SF Symbol；
+提醒问号裸放，失败保留语义实心徽。Cue 品牌几何在 ink/mascot.py，保持原样。
+同时生成 App / Widget 资源、Debug 名录与 Swift 状态中线；不在运行时解析 SVG。
+验证入口：python3 design/tools/verify-symbols.py。
 """
 from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from ink.icons_project import *
+from ink.geometry import *
+from ink.mascot import mascot
+from ink.rounded import BUILDERS, draw
+from ink.state_geometry import swift_geometry
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "apple/App/Sources/Assets.xcassets/Symbols"
 NAMES_SWIFT = ROOT / "apple/App/Sources/UI/Debug/InkSymbols.swift"
 WIDGET_OUT = ROOT / "apple/App/Widget/Symbols.xcassets"
 ICON_MONO = ROOT / "apple/App/Sources/AppIcon.icon/Assets/cue-mono.svg"
+STATE_SWIFT = ROOT / "apple/App/Sources/UI/Shared/Theme/InkStateGeometry.swift"
 LANDING_MARK = ROOT / "landing/static/assets/mark.svg"
 ICON_GRID_PX = 36  # 剪影在 1024 画布上一格多少像素：全身约 810 × 780，四周留足图标蒙版的边
 WIDGET_SYMBOLS = ("waiting", "done", "agent")  # 小组件与实时活动用到的（`WidgetIcon`）
 PREFIX = "cue"
 
 
-SYMBOLS = {
-    "mascot": mascot,
-    "idea": idea,
-    "task": task,
-    "session": session,
-    "search": search,
-    "settings": settings,
-    "archive": archive,
-    "trash": trash,
-    "sidebar": sidebar,
-    "sidebar.right": sidebar_right,
-    "plus": plus,
-    "close": close,
-    "clear": clear,
-    "more": more,
-    "chevron.up": chevron(0),
-    "chevron.right": chevron(90),
-    "chevron.down": chevron(180),
-    "chevron.left": chevron(270),
-    "stop": stop,
-    "done": done(),
-    "done.pre": done("pre"),
-    "waiting": badge(mark_question),
-    "failure": badge(mark_exclaim),
-    "undelivered": badge(mark_uturn),
-    "unknown": badge(mark_question, solid=False),
-    "question": question,
-    "picked": picked,
-    "asking": bubble_question,
-    "ended": ring_slash,
-    "interrupted": broken_line,
-    "relay": relay(),
-    "relay.stalled": relay(stalled=True),
-    "cursor": cursor,
-    "sparkle": sparkle,
-    "agent": sparkles,
-    "reload": lambda m: circle_arrow(m, 1),
-    "renew": lambda m: circle_arrow(m, 2),
-    "cloud": cloud(),
-    "cloud.done": cloud(mark_tick),
-    "cloud.sync": cloud(mark_cycle, 0.6),
-    "cloud.alert": cloud(mark_exclaim),
-    "cloud.pause": cloud(mark_pause, 0.56),
-    "cloud.up": cloud(mark_arrow),
-    "cloud.down": cloud(lambda c, s, w: mark_arrow(c, s, w, down=True)),
-    "cloud.off": cloud_slash,
-    "cloud.lock": cloud_lock,
-    "bell": bell,
-    "bell.on": bell_on,
-    "bell.off": bell_off,
-    "reopen": ring_mark(mark_uturn),
-    "restore": restore,
-    "play": play,
-    "indent": indent(1),
-    "outdent": indent(-1),
-    "link": chain(True),
-    "unlink": chain(False),
-    "folder": folder(),
-    "folder.add": folder(mark_plus),
-    "folder.remove": folder(mark_minus),
-    "books": books,
-    "pin": pin,
-    "unpin": unpin,
-    "copy": sheets(True),
-    "conflict": sheets(False),
-    "deck": deck,
-    "share": tray_arrow(True),
-    "save": tray_arrow(False),
-    "pencil": pencil,
-    "write": write,
-    "choose": choose,
-    "filter": filter_lines,
-    "puzzle": puzzle,
-    "tick": tick,
-    "plane": plane,
-    "plane.done": plane_done,
-    "bolt": bolt,
-    "arrow.up": pointing(0),
-    "arrow.down": pointing(180),
-    "ring.down": ring_mark(lambda c, s, w: mark_arrow(c, s, w, down=True)),
-    "ring.stop": ring_mark(mark_square),
-    "ring.play": ring_mark(mark_play),
-    "ring.plus": ring_mark(mark_plus),
-    "badge.down": badge_arrow,
-    "compact": compact,
-    "hand": hand,
-    "mac": mac,
-    "photo": photo,
-    "clip": paperclip,
-    "photos": photos,
-    "camera": camera,
-    "select": select_text,
-    "keyboard.down": keyboard_down,
-    "braces": braces,
-    "terminal": terminal,
-    "window": window,
-    "doc": paper(paper_lines),
-    "doc.blank": paper(),
-    "skill": skill,
-    "wrench": wrench,
-    "bubble.text": bubble("text"),
-    "bubble.dots": bubble("dots"),
-    "branch": branch,
-    "dot": dot,
-    "flame": flame,
-    "hammer": hammer,
-    "layers": layers3,
-    "brush": brush,
-    "eye": eye,
-    "bookmark": bookmark,
-    "power": power,
-    "bubble": bubble_solid,
-    "alarm": alarm,
-    "mail": mail,
-    "tag": tag,
-    "keyboard": keyboard,
-    "sun": sun,
-    "wave": wave,
-    "cube": cube,
-    "bubbles": bubbles,
-    "globe": globe,
-    "target": target,
-    "briefcase": briefcase,
-    "cart": cart,
-    "megaphone": megaphone,
-    "flag": flag,
-    "leaf": leaf,
-    "house": house,
-    "heart": heart,
-    "star": star5,
-    "music": music,
-    "rocket": rocket,
-}
+SYMBOLS = {"mascot": mascot} | {name: lambda weight, name=name: draw(name, weight) for name in BUILDERS}
 
 
 # ---------- 写出 ----------
@@ -252,33 +114,29 @@ def template(per):
 INFO = '{\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  }\n}\n'
 
 
-def write_symbols():
-    shutil.rmtree(OUT, ignore_errors=True)
-    OUT.mkdir(parents=True)
-    (OUT / "Contents.json").write_text(INFO)
+def symbol_files():
+    files = {OUT / "Contents.json": INFO, WIDGET_OUT / "Contents.json": INFO}
     for name, build in SYMBOLS.items():
         per = {w: build(w) for w in WEIGHTS}
         for w in WEIGHTS: check_gaps(name, per[w], w)
         check_accent(name, per["Regular"])
         full = f"{PREFIX}.{name}"
         folder = OUT / f"{full}.symbolset"
-        folder.mkdir()
-        (folder / f"{full}.svg").write_text(template(per))
-        (folder / "Contents.json").write_text(
+        svg = template(per)
+        info = (
             '{\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  },\n'
             '  "properties" : {\n    "symbol-rendering-intent" : "template"\n  },\n  "symbols" : [\n    {\n'
             f'      "filename" : "{full}.svg",\n      "idiom" : "universal"\n    }}\n  ]\n}}\n')
+        files[folder / f"{full}.svg"] = svg
+        files[folder / "Contents.json"] = info
+        if name in WIDGET_SYMBOLS:
+            widget = WIDGET_OUT / folder.name
+            files[widget / f"{full}.svg"] = svg
+            files[widget / "Contents.json"] = info
+    return files
 
 
-def write_widget_symbols():
-    shutil.rmtree(WIDGET_OUT, ignore_errors=True)
-    WIDGET_OUT.mkdir(parents=True)
-    (WIDGET_OUT / "Contents.json").write_text(INFO)
-    for name in WIDGET_SYMBOLS:
-        shutil.copytree(OUT / f"{PREFIX}.{name}.symbolset", WIDGET_OUT / f"{PREFIX}.{name}.symbolset")
-
-
-def write_silhouettes():
+def silhouette_files():
     """Cue 的纯白剪影（全部层涂白，缝与眼孔保留）：App 图标着色、透明外观用的（居中在 1024 画布上），落地页品牌小标（`.brandmark` 的蒙版）用的（紧贴外框）。"""
     layers = mascot("Regular")
     pts = [sample(sg, k / 32) for L in layers for c in L.contours for sg in c for k in range(33)]
@@ -286,28 +144,48 @@ def write_silhouettes():
     y0, y1 = min(p[1] for p in pts), max(p[1] for p in pts)
     d = " ".join(d_of(c, 0, 0) for L in layers for c in L.contours)
     k = ICON_GRID_PX / G
-    ICON_MONO.write_text(
+    mono = (
         '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">\n'
         f'<path fill="#FFFFFF" transform="translate({512 - (x0 + x1) / 2 * k:.2f} {512 - (y0 + y1) / 2 * k:.2f}) scale({k:.5f})" d="{d}"/>\n</svg>\n')
-    LANDING_MARK.write_text(
+    mark = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{fmt(x0)} {fmt(y0)} {fmt(x1 - x0)} {fmt(y1 - y0)}">\n'
         f'<path fill="#FFFFFF" d="{d}"/>\n</svg>\n')
+    return {ICON_MONO: mono, LANDING_MARK: mark}
 
 
-def write_names():
+def symbol_names():
     names = "\n".join(f'        "{PREFIX}.{name}",' for name in SYMBOLS)
-    NAMES_SWIFT.write_text(
+    return (
         "#if DEBUG\n"
         "// 由 design/tools/cue-symbols.py 生成。\n\n"
-        "/// 全部墨块符号的资源名，按生成器里的顺序：只给图标总览（`IconSheet`）列全；产品代码按意思经 `Icon` 取图。\n"
+        "/// 全部自定义符号的资源名，按生成器里的顺序：只给图标总览（`IconSheet`）列全；产品代码按意思经 `Icon` 取图。\n"
         "enum InkSymbols {\n"
         f"    static let names = [\n{names}\n    ]\n"
         "}\n"
         "#endif\n")
 
 
+
+def generate():
+    """在触碰资源前完成全部几何、模板与跨语言输出；失败保留原来的整套文件。"""
+    return symbol_files() | silhouette_files() | {NAMES_SWIFT: symbol_names(), STATE_SWIFT: swift_geometry()}
+
+
+def write(files):
+    """每个文件原子替换；全部写完后才清掉本生成器不再拥有的符号目录。"""
+    for path, content in files.items():
+        if path.exists() and path.read_text(encoding="utf-8") == content:
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(dir=path.parent) as staging:
+            temporary = Path(staging) / path.name
+            temporary.write_text(content, encoding="utf-8")
+            temporary.replace(path)
+    for directory in (OUT, WIDGET_OUT):
+        for folder in directory.glob(f"{PREFIX}.*.symbolset"):
+            if folder / "Contents.json" not in files:
+                shutil.rmtree(folder)
+
+
 if __name__ == "__main__":
-    write_symbols()
-    write_widget_symbols()
-    write_silhouettes()
-    write_names()
+    write(generate())
