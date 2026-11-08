@@ -7571,6 +7571,22 @@
         }
       }
     },
+    "再说一遍" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Say it again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再说一遍"
+          }
+        }
+      }
+    },
     "写入" : {
       "localizations" : {
         "en" : {
@@ -12383,6 +12399,22 @@
         }
       }
     },
+    "已提交语音，朗读尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submitted for speech; playback unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已提交语音，朗读尚未确认"
+          }
+        }
+      }
+    },
     "已收起" : {
       "localizations" : {
         "en" : {
@@ -16375,6 +16407,22 @@
         }
       }
     },
+    "朗读记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speech history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "朗读记录"
+          }
+        }
+      }
+    },
     "未命名的 Mac" : {
       "localizations" : {
         "en" : {
@@ -17331,6 +17379,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在接通 Cue…"
+          }
+        }
+      }
+    },
+    "正在提交语音…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submitting for speech…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在提交语音…"
           }
         }
       }
@@ -20171,6 +20235,22 @@
         }
       }
     },
+    "等待提交语音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting to submit for speech"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待提交语音"
+          }
+        }
+      }
+    },
     "等待目标就绪" : {
       "localizations" : {
         "en" : {
@@ -20535,6 +20615,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "结果"
+          }
+        }
+      }
+    },
+    "结果来源尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Result source unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结果来源尚未确认"
           }
         }
       }

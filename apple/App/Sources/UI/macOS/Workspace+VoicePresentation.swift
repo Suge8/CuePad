@@ -26,7 +26,8 @@ extension Workspace {
                 }
                 return .init(id: $0.state.sessionID, title: $0.task?.title ?? $0.state.title,
                              status: shown.label, needsAttention: attention)
-            } + voice.stopRequests.map(voiceStopExecution))
+            } + voice.stopRequests.map(voiceStopExecution),
+            readings: voice.replies.map { voiceReading($0, call: voice) })
     }
 
     var stoppableVoiceExecutions: [PiSessionListItem] {
@@ -48,6 +49,22 @@ extension Workspace {
         return .init(id: request.id.uuidString, title: String(localized: "停止「\(request.target.name)」"),
                      status: status, needsAttention: attention)
     }
+
+    private func voiceReading(_ reply: VoiceCall.Reply, call: VoiceCall) -> CueVoicePresentation.Reading {
+        let status: String = switch reply.delivery {
+        case .awaitingOrigin: String(localized: "结果来源尚未确认")
+        case .queued: String(localized: "等待提交语音")
+        case .sending: String(localized: "正在提交语音…")
+        case .submitted: String(localized: "已提交语音，朗读尚未确认")
+        case .unconfirmed(let reason): reason
+        }
+        let repeatable = call.canRepeat && !reply.text.isEmpty && reply.delivery != .sending && reply.delivery != .queued
+        return .init(id: reply.id, excerpt: String((MarkdownBlock.firstPlainLine(reply.text) ?? reply.text).prefix(Self.voiceReadingExcerptLimit)), status: status,
+                     recovery: repeatable ? .repeatReply(reply.id) : nil)
+    }
+
+    /// 详情只保留用于选择结果的一行摘录，避免重建第二份聊天正文。
+    private static let voiceReadingExcerptLimit = 80
 
     private func voiceIssues(_ voice: VoiceCall) -> [CueVoicePresentation.Issue] {
         var issues: [CueVoicePresentation.Issue] = voice.requests.compactMap { request in

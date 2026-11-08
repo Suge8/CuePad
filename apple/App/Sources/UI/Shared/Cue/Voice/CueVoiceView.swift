@@ -55,7 +55,7 @@ struct CueVoiceEntry: View {
         .buttonStyle(PressStyle())
         .accessibilityLabel(active ? "通话详情" : "和 Cue 通话")
         .help(active ? Text("通话详情") : Text("和 Cue 通话"))
-        if !active, let presentation, presentation.needsAttention || !presentation.executions.isEmpty {
+        if !active, let presentation, presentation.needsAttention || !presentation.executions.isEmpty || !presentation.readings.isEmpty {
             Button { workspace.voiceDetails = true } label: {
                 Image(presentation.needsAttention ? .failure : .readFile)
                     .foregroundStyle(presentation.needsAttention ? palette.failure : palette.ink2).chip(size: .inline)

@@ -59,6 +59,7 @@ extension Workspace {
     func recoverVoice(_ recovery: CueVoicePresentation.Recovery) async throws {
         switch recovery {
         case .retryRequest(let id): try await retryVoiceRequest(id)
+        case .repeatReply(let id): voice?.repeatReply(id)
         case .reconnect: startVoiceCall()
         }
     }

@@ -15,9 +15,7 @@ struct CueVoicePanel: View {
             }
         }
         .bubble(isPresented: Bindable(workspace).voiceDetails, width: .fixed(360)) {
-            if let presentation = workspace.voicePresentation {
-                CueVoiceDetails(presentation: presentation, action: act)
-            }
+            CueVoiceDetails(presentation: { workspace.voicePresentation }, action: act)
         }
         .panel(isPresented: $choosingExecution) {
             VStack(alignment: .leading, spacing: Spacing.group) {

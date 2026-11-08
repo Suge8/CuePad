@@ -71,7 +71,7 @@ struct VoiceFlowTests {
             fixture.call.replies.contains { $0.id == marker.id && $0.delivery == .submitted }
         }
         #expect(!fixture.call.replies.contains { $0.id == reply.id })
-        fixture.call.repeatReply(reply.id)
+        try await fixture.workspace.recoverVoice(.repeatReply(reply.id))
         let later = try await store.addCueMessage(.cue, text: "后续主动更新", answeredRequests: [])
         try await eventually("后续发送仍畅通") { fixture.call.replies.contains { $0.id == later.id && $0.delivery == .submitted } }
         #expect(fixture.controls[0].sends.count == 2, "旧结果没有再发送，只有两条真实主动更新")
@@ -97,7 +97,11 @@ struct VoiceFlowTests {
         try await fixture.connect()
         try await eventually("只提交晚到的那条") { fixture.controls[1].sends.count == 1 }
         let first = try #require(fixture.call.replies.first?.id)
-        fixture.call.repeatReply(first)
+        let reading = try #require(fixture.workspace.voicePresentation?.readings.first { $0.id == first })
+        #expect(reading.status == "朗读尚未确认")
+        let recovery = try #require(reading.recovery)
+        #expect(recovery == .repeatReply(first))
+        try await fixture.workspace.recoverVoice(recovery)
         try await eventually("明确再说才再次提交") { fixture.controls[1].sends.count == 2 }
         #expect(try await store.cueMessages().filter { $0.author == .known(.you) }.count == 1)
         #expect(fixture.call.replies.count == 2)
@@ -121,7 +125,9 @@ struct VoiceFlowTests {
             fixture.call.replies.contains { $0.id == marker.id && $0.delivery == .submitted }
         }
         #expect(fixture.controls[1].sends.count == 1)
-        fixture.call.repeatReply(try #require(fixture.call.replies.first?.id))
+        let first = try #require(fixture.call.replies.first?.id)
+        let reading = try #require(fixture.workspace.voicePresentation?.readings.first { $0.id == first })
+        try await fixture.workspace.recoverVoice(try #require(reading.recovery))
         try await eventually("完整回复重新提交") { fixture.call.replies.first?.delivery == .submitted }
         #expect(fixture.controls[1].sends.count == 2)
         #expect(fixture.controls[1].fragments.count > 2)

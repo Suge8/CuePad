@@ -4,6 +4,7 @@ import CueStore
 import Foundation
 
 /// 正式页面的隔离布局验收：-CuePadVoiceLayout listening|ended|failed|idle，-CuePadVoiceHistory 0|1|200。
+/// -CuePadVoiceReadings YES：接通后写入两条真实库结果，等提交后挂断，验收重连后的逐条主动重说。
 /// 只替换声音与网络边界，不连接麦克风；库、聊天、按钮及异步关闭仍走正式宿主。
 /// close 的短延迟模拟设备释放，用来检查关闭中的操作；不代表真实通话或音轨证据。
 extension DebugScene {
@@ -27,6 +28,12 @@ extension DebugScene {
             workspace.startVoiceCall()
             guard let call = workspace.voice else { return }
             for await phase in Observations({ call.phase }) where phase == .listening { break }
+            if defaults.bool(forKey: "CuePadVoiceReadings") {
+                for index in 1...2 {
+                    _ = try await store.addCueMessage(.cue, text: String(localized: "**演示结果 \(index)**\n\n- 核对 Mac 界面\n- 核实手机接入", table: "Demo"), answeredRequests: [])
+                }
+                for await submitted in Observations({ call.replies.count == 2 && call.replies.allSatisfy { $0.delivery == .submitted } }) where submitted { break }
+            }
             if state == "ended" { call.hangUp() }
             if state == "failed" { call.inputs.continuation.yield(.failed(.media)) }
             if state == "ended" || state == "failed" {

@@ -22,11 +22,12 @@ struct CueVoicePresentation {
     }
 
     enum Recovery: Equatable {
-        case retryRequest(String), reconnect
+        case retryRequest(String), repeatReply(UUID), reconnect
 
         var title: LocalizedStringResource {
             switch self {
             case .retryRequest: "重新交给 Cue"
+            case .repeatReply: "再说一遍"
             case .reconnect: "重新接通"
             }
         }
@@ -48,6 +49,15 @@ struct CueVoicePresentation {
     let issues: [Issue]
     let canStopExecution: Bool
     var executions: [Execution] = []
+    var readings: [Reading] = []
+
+    /// 只给辨认结果的短摘录；完整正文仍在原聊天，朗读记录不参与错误灯。
+    struct Reading: Identifiable {
+        let id: UUID
+        let excerpt: String
+        let status: String
+        let recovery: Recovery?
+    }
 
     struct Execution: Identifiable {
         let id: String
