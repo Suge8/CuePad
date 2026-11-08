@@ -1,0 +1,147 @@
+import CueStore
+import Foundation
+import Observation
+
+/// AppServices 持有唯一通话 owner；页面离开不释放媒体，整个 App 进后台才结束手机媒体。
+/// Mac 投影决定业务阶段；本机麦克风、静音确认和电平从不上传，也不据此推断远端正在处理或朗读。
+@Observable final class VoiceService {
+    @ObservationIgnored unowned let services: AppServices
+    @ObservationIgnored let signaling: (any VoiceSignaling)?
+    private(set) var projection: VoiceCallProjection?
+    var issue: VoiceIssue?
+    var availability: VoiceRelayAvailability
+    var session: VoiceSessionID?
+    var commandResults: [VoiceCommand.ID: VoiceCommandResult.Outcome] = [:]
+    @ObservationIgnored var pending: [VoiceCommand.ID: Pending] = [:]
+    struct Pending {
+        let session: VoiceSessionID
+        let peer: VoiceEndpoint
+        let local: VoiceEndpoint
+        let finish: @MainActor @Sendable (Result<VoiceCommandResult.Outcome, Error>) -> Void
+    }
+    #if os(macOS)
+    var call: VoiceCall?
+    @ObservationIgnored var remote: VoiceRemoteMedia?
+    @ObservationIgnored var observing: Task<Void, Never>?
+    @ObservationIgnored var commands: [VoiceCommand.ID: Task<VoiceCommandResult.Outcome, Never>] = [:]
+    #else
+    @ObservationIgnored var phone: VoicePhoneSession?
+    @ObservationIgnored var phoneBinding: (session: VoiceSessionID, local: VoiceEndpoint, peer: VoiceEndpoint)?
+    var muted = false
+    var muting = false
+    var closing = false
+    var inputSamples: [Double] = []
+    var outputSamples: [Double] = []
+    var outputActive = false
+    #endif
+
+    init(services: AppServices, signaling: (any VoiceSignaling)?) {
+        self.services = services
+        self.signaling = signaling
+        availability = signaling?.voiceAvailability ?? .unsupported
+    }
+
+    isolated deinit {
+        #if os(macOS)
+        observing?.cancel()
+        #else
+        phone?.scope.end()
+        #endif
+    }
+
+    func cancel() {
+        #if os(macOS)
+        observing?.cancel()
+        observing = nil
+        call?.hangUp()
+        #else
+        Task { await end(reason: .background) }
+        #endif
+        failPending { _ in true }
+    }
+
+    var phase: VoiceCallProjection.Phase? {
+        if let issue { return .failed(issue) }
+        #if os(iOS)
+        if closing { return .closing }
+        #endif
+        return projection?.phase ?? (session == nil ? nil : .connecting)
+    }
+
+    var startUnavailableReason: VoiceIssue? {
+        guard canStart else { return .busy }
+        #if os(iOS)
+        return switch availability {
+        case .unsupported: .relayUnsupported
+        case .unavailable: .macUnavailable
+        case .ready: nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
+    var canStart: Bool {
+        switch phase {
+        case nil, .failed, .ended: true
+        default: false
+        }
+    }
+
+    var isMuted: Bool {
+        #if os(macOS)
+        call?.isMuted ?? false
+        #else
+        muted
+        #endif
+    }
+
+    var canMute: Bool {
+        #if os(macOS)
+        remote == nil && call?.canMute == true
+        #else
+        phone?.connected == true && !closing && !muting
+        #endif
+    }
+
+    var samples: [Double] {
+        #if os(macOS)
+        call?.samples ?? []
+        #else
+        outputActive ? outputSamples : (muted ? [] : inputSamples)
+        #endif
+    }
+
+    func setProjection(_ value: VoiceCallProjection?) { projection = value }
+
+    func receive(_ event: VoiceRelayEvent) async {
+        switch event {
+        case .received(let received):
+            if case .commandResult(let result) = received.payload,
+               let wait = pending[result.command], wait.session == received.header.session,
+               wait.peer == received.header.sender, wait.local == received.header.recipient {
+                pending[result.command] = nil
+                wait.finish(.success(result.outcome))
+                return
+            }
+            await receiveSignal(received)
+        case .localClosed(let endpoint, let reason):
+            failPending { $0.local == endpoint }
+            await connectionClosed(local: endpoint, peer: nil, reason: reason)
+        case .peerClosed(let endpoint, let departure):
+            failPending { $0.peer == endpoint }
+            await connectionClosed(local: nil, peer: endpoint, reason: departure == .replaced ? .leaseReplaced : .peerLeft)
+        case .rejected(let header, _):
+            failPending { $0.local == header.sender && $0.peer == header.recipient && $0.session == header.session }
+            await connectionClosed(local: header.sender, peer: header.recipient, reason: .protocolRejected)
+        case .availability(let value): availability = value
+        }
+    }
+
+    private func failPending(_ matches: (Pending) -> Bool) {
+        for (id, wait) in pending where matches(wait) {
+            pending[id] = nil
+            wait.finish(.failure(VoiceSignalError.leaseChanged))
+        }
+    }
+}

@@ -9,6 +9,7 @@ import UIKit
 /// 一轮独占一份 WKWebView、权限/JS 等待、音轨和音频上下文；不重开已关闭的实例。
 /// 页面导航不决定通话生死，所有者是 AppServices 的通话服务。关闭先撤销等待、显式停止轨道，再卸载网页。
 final class VoicePeer: NSObject, VoiceMedia {
+    static let sampleCount = 36
     enum Source { case microphone(device: String?), file(URL) }
     enum Side: String { case input, output }
     enum Event: Equatable {

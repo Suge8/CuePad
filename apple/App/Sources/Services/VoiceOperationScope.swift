@@ -38,6 +38,26 @@ final class VoiceOperationScope {
         }
     }
 
+    func perform<Value: Sendable>(within limit: Duration, _ work: @escaping () async throws -> Value) async throws -> Value {
+        let deadline = VoiceOperationScope()
+        defer { deadline.end() }
+        return try await perform {
+            try await deadline.wait { finish in
+                deadline.spawn {
+                    do { finish(.success(try await work())) }
+                    catch { finish(.failure(error)) }
+                }
+                deadline.spawn {
+                    do {
+                        try await Task.sleep(for: limit)
+                        finish(.failure(VoiceSignalError.expired))
+                    } catch is CancellationError { }
+                    catch { finish(.failure(error)) }
+                }
+            }
+        }
+    }
+
     func wait<Value: Sendable>(_ start: (@escaping @MainActor @Sendable (Result<Value, Error>) -> Void) -> Void) async throws -> Value {
         try Task.checkCancellation()
         guard !ended else { throw CancellationError() }

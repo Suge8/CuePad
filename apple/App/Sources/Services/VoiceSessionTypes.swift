@@ -38,6 +38,9 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     let requests: [Request]
     let replies: [Reply]
     let executions: [VoiceExecutionTarget]
+    /// 控制协议的回应进度，与收音、请求写库、后台执行分开；不表示 PCM 已播放到某个位置。
+    enum Response: String, Codable, Sendable { case none, awaitingAssistant, assistantTurn }
+    var response: Response = .none
 
     struct Request: Equatable, Codable, Sendable {
         let reference: VoiceRequestReference
@@ -50,11 +53,11 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
         let readback: Readback
     }
     /// submitted 不证明已读出；挂断不自动将它改成异常。只有未完成的发送或实际错误才是 unconfirmed。
-    enum Readback: String, Codable, Sendable { case notRequested, submitted, unconfirmed }
+    enum Readback: String, Codable, Sendable { case awaitingOrigin, queued, sending, submitted, unconfirmed }
 }
 
 /// 可跨设备呈现的原因与动作，不转发上游错误原文、请求头、服务器 call ID 或授权。
-nonisolated enum VoiceIssue: Equatable, Codable, Sendable {
+nonisolated enum VoiceIssue: Error, Equatable, Codable, Sendable {
     case ended(VoiceEndReason)
     case codexNotInstalled, signedOut, cueUnavailable, macUnavailable, relayUnsupported, busy
     case notAllowed(status: Int)

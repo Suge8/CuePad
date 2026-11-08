@@ -6,7 +6,7 @@ import SwiftUI
 /// 按下发送 → 同步取走草稿、清空输入框（在任何 await 之前）→ 写一条记录（`Listener`）→ 后台立即上传。界面从不等上传或执行结果，
 /// 到哪了只看记录（`Speech`）。只有写库本身失败时草稿放回输入框（期间新打的字接在后面）并提示。附件选好时已存进附件目录，
 /// 写正文不会失败（`saying` 是发出后的那句提示）。
-/// 写"说的话"的底层调用只在这里（源码检查 `lint.sh` 拦别处的）。
+/// 草稿在这里取走；落库与全 App 的发送顺序归 AppServices，语音和多个窗口共用。
 extension Workspace {
     /// 从输入框说出去：`box` 是输入框的草稿，`content` 把取走的草稿写成存储格式正文，
     /// `keeping` 是发出后输入框里留下的（斜杠命令留着批注跟下一句发）。返回写库与上传的那个任务（测试等它）。
@@ -101,14 +101,12 @@ extension Workspace {
         recorded: ((Result<UUID, Error>) -> Void)? = nil
     ) -> Task<Void, Never> {
         let services = services
-        let key = listener.orderKey, before = sendOrder.tails[key]
         // 同一个去处的话按按下的先后落库：前一句在等附件存好时，后一句也等它（只等落库，不等上传）
-        let recording = Task<UUID?, Never> {
-            _ = await before?.value
+        let recording = services.sendOrder.enqueue(listener.orderKey) { [self] in
             let id: UUID
             let (sent, body) = await taking()
             do {
-                id = try await Self.record(body, to: listener, in: services.store)
+                id = try await services.recordSpeech(body, to: listener)
             } catch {
                 recorded?(.failure(error))
                 restore(sent)
@@ -117,35 +115,16 @@ extension Workspace {
                 case .session(let target, let host, _, _): launching.settle(host: host, target: target)
                 }
                 fail(error)
-                return nil
+                throw error
             }
             recorded?(.success(id))
             return id
         }
-        sendOrder.tails[key] = recording
         return Task {
-            if let id = await recording.value { await services.upload(id) }
+            if case .success(let id) = await recording.result { await services.upload(id) }
         }
     }
 
-    private static func record(_ stored: String, to listener: Listener, in store: CueStore) async throws -> UUID {
-        switch listener {
-        case .cue:
-            try await store.addCueMessage(.you, text: stored).id
-        case .session(let target, let host, let mode, let card):
-            // 说的话与 Cue 的 say 同一条规则：会话在等能代答的提问时这句就是答案（`CueStore.speak`）
-            if let session = target.ref, mode == .send {
-                try await store.speak(stored, to: session, name: target.name, card: card, host: host).id
-            } else {
-                try await store.requestDelivery(stored, to: target, on: host, mode: mode, card: card).id
-            }
-        }
-    }
-}
-
-/// 每个去处最近一句话的落库任务（到写进库为止，不含上传）：后一句等前一句（前一句可能在等附件存好），落库的先后就是按下的先后。
-final class SendOrder {
-    var tails: [String: Task<UUID?, Never>] = [:]
 }
 
 extension Listener {

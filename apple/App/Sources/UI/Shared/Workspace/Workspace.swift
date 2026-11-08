@@ -112,6 +112,7 @@ final class Workspace {
     /// 任务行左滑"更多"长出的气泡（`CardMorePanel`）。
     var moreCard: CardMoreRequest?
     #endif
+    var voiceDetails: BubbleSource?
     /// 进展页待办顶上浮出添加那一行（待办列头、行头的 ＋，`LaneAdd`）。
     var addsTask = false
     #if os(macOS)
@@ -122,8 +123,7 @@ final class Workspace {
     /// 新会话的表单开着（`NewSessionForm`，主窗口弹出；菜单"文件 › 新会话"与看板推进中列头的 ＋ 置起，`newSession(in:)`）。
     var showsNewSession = false
     /// 和 Cue 的通话（`VoiceCall`，菜单"文件 › 和 Cue 通话"起、挂）：结束或出错后保留记录，下次只重建连接。
-    var voice: VoiceCall?
-    var voiceDetails: BubbleSource?
+    var voice: VoiceCall? { services.voice.call }
     /// 这一次新会话默认开在哪个项目（看板的项目范围；nil 是当前项目）。
     var newSessionProject: UUID?
     /// 这台 Mac 上点"开始"没开成会话的叶子与原因（`handOff`）：任务气泡那一行一直写着、给"重试"，再点开始时清掉。
@@ -198,7 +198,6 @@ final class Workspace {
     /// 离开时没能写进库的正文（卡片 id → 字）：再打开这条时接回来（`CardEditing`），写成了就清掉。
     var unsavedBodies: [UUID: UnsavedBody] = [:]
     /// 每个去处（一个回复框、Cue）发出的话落库的先后（`SendOrder`）。
-    let sendOrder = SendOrder()
     /// 输入框里在存的附件（`importFiles`）。
     let imports = Imports()
 

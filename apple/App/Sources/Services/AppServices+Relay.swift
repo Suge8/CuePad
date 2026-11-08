@@ -19,6 +19,8 @@ extension AppServices {
 
     func startRelay() {
         guard let relay, let sync = sync as? CloudSync else { return }
+        let voiceEvents = relay.voiceEvents
+        follow { for await event in voiceEvents { await self.voice.receive(event) } }
         let accepted = sync.acceptedUpdates  // 当场订阅：同步一启动就可能有一批被收下，那时跟随者还没跑起来
         follow {
             for await _ in accepted { relay.ring() }

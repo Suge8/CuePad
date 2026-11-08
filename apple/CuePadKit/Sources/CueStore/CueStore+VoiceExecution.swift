@@ -49,8 +49,12 @@ extension CueStore {
   }
 
   /// 入队与来源/回合复核在同一事务；执行器、Agent 接收端还要重验，不能把队列时延当作停止后来工作的许可。
-  public func stopVoiceExecution(_ expected: PiTurnTarget, requests: [UUID]) throws -> DeliveryRequest {
+  public func stopVoiceExecution(_ expected: PiTurnTarget, requests: [UUID], command: UUID? = nil) throws -> DeliveryRequest {
     try write {
+      if let command, let existing = try deliveryRequest(command) {
+        guard existing.stopTurn == expected else { throw CueStoreError.cannotStop(expected.sessionID) }
+        return existing
+      }
       // 回合时间来自 Mac 活连接，不使用可能仍在节流中的同步记录授权；这里复核原请求、投送、所在 Mac 与启动身份。
       // 排队期间是否已换回合，由 MacExecutor 和 Agent 各自面对实时状态核对。
       let origin = try voiceExecutionTarget(expected.sessionID, requests: requests, turnStartedAt: Date(timeIntervalSince1970: Double(expected.turnStartedAtMilliseconds) / 1000))
@@ -58,6 +62,9 @@ extension CueStore {
         throw CueStoreError.cannotStop(expected.sessionID)
       }
       let session = try sessionTarget(expected.sessionID, name: "")
+      if let command {
+        return try insertDelivery(expected.content, to: session.target, on: expected.hostID, mode: .stopTurn, cue: false, id: command)
+      }
       return try requestControl(.stopTurn, of: session.target, on: expected.hostID, cue: false, content: expected.content)
     }
   }

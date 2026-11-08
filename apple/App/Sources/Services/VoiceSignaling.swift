@@ -74,7 +74,6 @@ nonisolated enum VoiceSignalError: Error {
 
 /// 由既有 Relay 实现，不另起 socket/心跳/run/reconnect 状态机。AppServices 是唯一事件消费者；其余读服务投影。
 /// 账号变化、网络失败、源退出、替换租约均终止绑定通话；重连只产生新租约，不复活旧通话或重发业务命令。
-/// 此 checkpoint 只声明接口，没有使现有 Relay 假装支持通话。
 @MainActor protocol VoiceSignaling: AnyObject {
     var voiceAvailability: VoiceRelayAvailability { get }
     /// 在启用 Relay 前由 AppServices 订阅，沿用该连接的有序事件，不丢失 closed/departed。

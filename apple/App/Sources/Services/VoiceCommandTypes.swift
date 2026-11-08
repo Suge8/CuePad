@@ -40,15 +40,30 @@ nonisolated struct VoiceCommandResult: Equatable, Codable, Sendable {
         case recorded(message: UUID)
         /// 现有 stopTurn 投送已入库，不表示执行回合已停止。
         case stopRequested(delivery: UUID)
-        /// 只表示提交朗读；没有播放成功的承诺。
-        case readbackSubmitted(message: UUID)
+        /// 只表示进入朗读队列；没有播放成功的承诺。
+        case readbackQueued(message: UUID)
         case rejected(reason: Rejection)
     }
 
     enum Rejection: String, Codable, Sendable {
-        case originalMissing, alreadyHandled, sourceMismatch, turnChanged, unavailable, failed
+        case originalMissing, alreadyHandled, unconfirmed, sourceMismatch, turnChanged, unavailable, failed
     }
 
     let command: VoiceCommand.ID
     let outcome: Outcome
+}
+
+extension VoiceCommandResult.Outcome {
+    func requireAccepted() throws {
+        guard case .rejected(let reason) = self else { return }
+        let issue: VoiceIssue = switch reason {
+        case .originalMissing, .sourceMismatch: .originalMissing
+        case .alreadyHandled: throw SendError.alreadyHeard
+        case .unconfirmed: throw SendError.alreadyHanded
+        case .turnChanged: .turnChanged
+        case .unavailable: .busy
+        case .failed: .storageUnavailable
+        }
+        throw issue
+    }
 }

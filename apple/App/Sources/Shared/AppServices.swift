@@ -50,6 +50,8 @@ final class AppServices {
     @ObservationIgnored let sync: (any SyncControlling)?
     /// 门铃（实时层，见 `AppServices+Relay`）；不连真的 iCloud（替身、没有 iCloud 权限、隔离库）时没有。
     @ObservationIgnored let relay: Relay?
+    @ObservationIgnored let sendOrder = SendOrder()
+    @ObservationIgnored lazy var voice = VoiceService(services: self, signaling: relay)
     private(set) var syncStatus: SyncStatus
     private(set) var syncIssues: [SyncIssue] = []
     /// 同步在一页页地拉积压（`SyncState.catchingUp`）；界面只经 `isCatchingUp` 读。

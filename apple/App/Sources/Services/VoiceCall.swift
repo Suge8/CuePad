@@ -44,13 +44,12 @@ final class VoiceCall {
 
     private var connection: Connection = .finished(.ended)
     private var outputActive = false
-    private var waitingForResponse = false
-    private var assistantTurn = false
+    private(set) var waitingForResponse = false
+    private(set) var assistantTurns: Set<String> = []
     private(set) var mediaEndReason: VoiceEndReason?
     private var inputSamples: [Double] = []
     private var outputSamples: [Double] = []
     /// 50ms 一点，保留最近 1.8 秒；静音不呈现输入，远端出声时呈现输出。
-    private static let sampleCount = 36
     var samples: [Double] { outputActive ? outputSamples : isMuted ? [] : inputSamples }
     private(set) var userTurn: String?
     var requestState: [Request] = []
@@ -68,7 +67,7 @@ final class VoiceCall {
     private(set) var usedPercent: Double?
     var storeFailure: String?
     @ObservationIgnored var mark: (String) -> Void = { _ in }
-    @ObservationIgnored let dependencies: Dependencies
+    @ObservationIgnored var dependencies: Dependencies
     @ObservationIgnored private var peer: (any VoiceMedia)?
     @ObservationIgnored private(set) var session = UUID()
     @ObservationIgnored var inputs = AsyncStream<Input>.makeStream()
@@ -110,26 +109,28 @@ final class VoiceCall {
         case .finished(let end): return end
         case .ready: break
         }
-        if outputActive || assistantTurn { return .speaking }
-        return waitingForResponse || requests.contains(where: \.isRecording) ? .handingOff : .listening
+        // 助手回合是协议事实，不是播放游标；电平只驱动本机波形，句间静音不能结束回合。
+        // 等待回应与写库另行投影，仍可收音时不把它们冒充媒体 processing。
+        return assistantTurns.isEmpty ? .listening : .speaking
     }
 
     var channel: (any VoiceControl)? {
         if case .ready(let channel) = connection { channel } else { nil }
     }
     var isLive: Bool { if case .finished = connection { false } else { true } }
-    var canMute: Bool { channel != nil && muting == nil }
+    var canMute: Bool { channel != nil && muting == nil && peer?.supportsMute == true }
     var canRepeat: Bool { channel != nil }
     func hangUp() { inputs.continuation.yield(.hangUp) }
 
     /// 重新接通只重建媒体与控制连接；库订阅、请求身份和结果保留，不重新执行业务。
-    func reconnect(session: UUID = UUID()) {
+    func reconnect(session: UUID = UUID(), media: (any VoiceMedia)? = nil) {
         guard !isLive else { return }
+        peer = media
         inputs = AsyncStream<Input>.makeStream()
         connection = .connecting
         self.session = session
         mediaEndReason = nil
-        assistantTurn = false
+        assistantTurns.removeAll()
         waitingForResponse = false
         delegations.removeAll()
         audioMs = 0
@@ -158,7 +159,7 @@ final class VoiceCall {
             catch { await finish(.failed(Self.failure(error))); return }
         }
         watchRequests()
-        let peer = dependencies.media(dependencies.source, dependencies.recording)
+        let peer = self.peer ?? dependencies.media(dependencies.source, dependencies.recording)
         self.peer = peer
         peer.onEvent = { [inputs] in inputs.continuation.yield(.peer($0)) }
         deadline = Task { [inputs] in
@@ -204,8 +205,8 @@ final class VoiceCall {
         case .peer(.device(let label)): mark("device \(label)")
         case .peer(.sample(let side, let peak)):
             let value = min(1, max(0, peak))
-            if side == .input { inputSamples = Array((inputSamples + [value]).suffix(Self.sampleCount)) }
-            else { outputSamples = Array((outputSamples + [value]).suffix(Self.sampleCount)) }
+            if side == .input { inputSamples = Array((inputSamples + [value]).suffix(VoicePeer.sampleCount)) }
+            else { outputSamples = Array((outputSamples + [value]).suffix(VoicePeer.sampleCount)) }
         case .peer(.level(let side, let loud, let peak)):
             if side == .input { inputPeak = max(inputPeak, peak) }
             else { outputActive = loud }
@@ -244,7 +245,7 @@ final class VoiceCall {
                 mark("\(assistant ? "assistant" : "user")-said \(id) \(text)")
             } else if assistant { mark("assistant-turn \(id)") }
             if assistant {
-                assistantTurn = !done
+                if done { assistantTurns.remove(id) } else { assistantTurns.insert(id) }
                 waitingForResponse = false
             } else {
                 waitingForResponse = done
