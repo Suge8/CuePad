@@ -213,13 +213,14 @@ import Testing
         try await app.services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "mac-audit" }
         let voice = VoiceService(services: app.services, signaling: signal); app.services.voice = voice
         media.offerGate = gate
-        let start = Task { try await voice.start { media } }
+        let workspace = Workspace(services: app.services)
+        let start = Task { try await workspace.startVoiceCall { media } }
         try await eventually("permission waiting") { media.offered }
         await app.services.prepareForBackground()
         gate.open(); _ = await start.result
         #expect(media.closed)
         #expect(!signal.sent.contains { if case .media(.offer) = $0 { true } else { false } })
-        #expect(voice.phase == .ended(reason: .background))
+        #expect(workspace.phoneVoice.phase == .ended(reason: .background))
     }
 
     @Test func mediaEndDoesNotCancelPendingBusinessAndDisconnectDoesNotResend() async throws {

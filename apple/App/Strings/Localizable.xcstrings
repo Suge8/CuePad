@@ -11111,22 +11111,6 @@
         }
       }
     },
-    "声音被其他应用打断，请重新接通" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Audio was interrupted by another app. Reconnect to continue"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "声音被其他应用打断，请重新接通"
-          }
-        }
-      }
-    },
     "处理…" : {
       "localizations" : {
         "en" : {
@@ -26191,6 +26175,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "音频"
+          }
+        }
+      }
+    },
+    "音频已中断，请重新接通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio was interrupted. Please reconnect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音频已中断，请重新接通"
           }
         }
       }

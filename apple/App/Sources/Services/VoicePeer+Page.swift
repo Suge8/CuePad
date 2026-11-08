@@ -12,7 +12,9 @@ extension VoicePeer {
         this.aborted=new Promise((_,reject)=>this.abort=()=>reject(new Error('session closed')));
         this.aborted.catch(()=>{});
       }
-      post(kind,fields={}) {if(!this.closed) webkit.messageHandlers.peer.postMessage({kind,session:this.session,...fields});}
+      post(kind,fields={}) {
+        if(!this.closed) webkit.messageHandlers.peer.postMessage({kind,session:this.session,...fields,...(kind==='diagnostic'?{webMs:performance.now()}:{})});
+      }
       async wait(operation) {
         if(this.closed) throw new Error('session closed');
         const value=await Promise.race([operation,this.aborted]);
@@ -24,7 +26,12 @@ extension VoicePeer {
         if(this.closed) throw new Error('session closed');
         return stream;
       }
-      capture(constraints) {return this.wait(navigator.mediaDevices.getUserMedia({audio:constraints}).then(stream=>this.own(stream)));}
+      capture(constraints) {
+        this.post('diagnostic',{stage:'capture-request'});
+        return this.wait(navigator.mediaDevices.getUserMedia({audio:constraints}).then(stream=>{
+          this.post('diagnostic',{stage:'capture-granted'});return this.own(stream);
+        }));
+      }
       async microphone(device) {
         let stream=await this.capture(audio);
         if(!device) return stream;
@@ -50,12 +57,21 @@ extension VoicePeer {
         },sampleMs));
       }
       async start(file,device) {
-        this.ctx=new AudioContext({sampleRate:24000});await this.wait(this.ctx.resume());
+        if(!file) {
+          this.track=(await this.microphone(device)).getAudioTracks()[0];this.post('device',{label:this.track.label});
+          for(const name of ['mute','unmute','ended']) this.track.addEventListener(name,()=>this.post('diagnostic',{stage:'track-'+name}));
+          this.track.addEventListener('ended',()=>this.post('audioInterrupted'));
+        }
+        this.ctx=new AudioContext({sampleRate:24000});
+        this.ctx.onstatechange=()=>{
+          this.post('diagnostic',{stage:'context-'+this.ctx.state});
+          if(this.ctx.state==='interrupted') this.post('audioInterrupted');
+        };
+        this.post('diagnostic',{stage:'context-created-'+this.ctx.state});
+        await this.wait(this.ctx.resume());this.post('diagnostic',{stage:'context-resumed-'+this.ctx.state});
         if(file) {
           this.speech=await this.wait(this.ctx.decodeAudioData(Uint8Array.from(atob(file),c=>c.charCodeAt(0)).buffer));
           this.dest=this.ctx.createMediaStreamDestination();this.track=this.own(this.dest.stream).getAudioTracks()[0];
-        } else {
-          this.track=(await this.microphone(device)).getAudioTracks()[0];this.post('device',{label:this.track.label});
         }
         this.meter(new MediaStream([this.track]),'input');
         this.pc=new RTCPeerConnection();const peer=this.pc;peer.addTrack(this.track);this.channel=peer.createDataChannel('oai-events');

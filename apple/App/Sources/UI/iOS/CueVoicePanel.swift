@@ -27,7 +27,7 @@ extension VoiceIssue {
             case .hungUp: "通话已结束"
             case .background: "App 进入后台，通话已结束"
             case .permissionDenied: "麦克风权限未开启，请在设置中允许 CuePad 使用麦克风"
-            case .audioInterrupted: "声音被其他应用打断，请重新接通"
+            case .audioInterrupted: "音频已中断，请重新接通"
             case .mediaFailed: "通话的声音连接断了，请重新接通"
             case .controlFailed: "通话控制连接断了，请重新接通"
             case .peerLeft: "Mac 已断开连接，请检查 Mac 后重新接通"

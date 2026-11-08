@@ -8,6 +8,7 @@ import UIKit
 
 /// 一轮独占一份 WKWebView、权限/JS 等待、音轨和音频上下文；不重开已关闭的实例。
 /// 页面导航不决定通话生死，所有者是 AppServices 的通话服务。关闭先撤销等待、显式停止轨道，再卸载网页。
+/// iOS 的采集/播放会话由 WebKit 管理，本机不另外激活或停用音频会话。
 final class VoicePeer: NSObject, VoiceMedia {
     static let sampleCount = 36
     enum Source { case microphone(device: String?), file(URL) }
@@ -28,7 +29,9 @@ final class VoicePeer: NSObject, VoiceMedia {
     private let loaded = AsyncStream<Void>.makeStream()
     private var closing: Task<Void, Error>?
     private var documentReady = false
-    private var audioEvents: Task<Void, Never>?
+    #if os(iOS)
+    private var audioObservers: [NSObjectProtocol] = []
+    #endif
     #if os(macOS)
     private let window: NSWindow
     #endif
@@ -54,11 +57,19 @@ final class VoicePeer: NSObject, VoiceMedia {
         web.navigationDelegate = self
     }
 
+    isolated deinit {
+        #if os(iOS)
+        audioObservers.forEach(NotificationCenter.default.removeObserver)
+        #endif
+    }
+
     func offer() async throws -> String {
         try Task.checkCancellation()
         guard !scope.ended else { throw CancellationError() }
+        trace("offer-request")
         try attach()
         if case .microphone = source {
+            trace("permission-request")
             let granted: Bool = try await scope.wait { finish in
                 #if os(macOS)
                 AVCaptureDevice.requestAccess(for: .audio) { granted in Task { @MainActor in finish(.success(granted)) } }
@@ -66,8 +77,12 @@ final class VoicePeer: NSObject, VoiceMedia {
                 AVAudioApplication.requestRecordPermission { granted in Task { @MainActor in finish(.success(granted)) } }
                 #endif
             }
+            trace(granted ? "permission-granted" : "permission-denied")
             guard granted else { throw VoicePeerError.microphoneDenied }
         }
+        #if os(iOS)
+        guard UIApplication.shared.applicationState != .background else { throw VoicePeerError.notForeground }
+        #endif
         web.loadHTMLString(Self.page, baseURL: URL(string: "https://voice.cuepad.invalid/"))
         for await _ in loaded.stream { break }
         try Task.checkCancellation()
@@ -83,6 +98,7 @@ final class VoicePeer: NSObject, VoiceMedia {
         guard let offer = try await javascript("return await start(session, file, device, record)", arguments: [
             "session": session.uuidString, "file": file, "device": device, "record": recording != nil,
         ]) else { throw VoicePeerError.noOffer }
+        trace("offer-ready")
         return offer
     }
 
@@ -92,10 +108,13 @@ final class VoicePeer: NSObject, VoiceMedia {
     func inputMax() async -> Double { (try? await javascript("return String(media.inputMax)")).flatMap(Double.init) ?? 0 }
 
     func cancel() {
+        trace("cancel")
         scope.end()
         loaded.continuation.finish()
-        audioEvents?.cancel()
-        audioEvents = nil
+        #if os(iOS)
+        audioObservers.forEach(NotificationCenter.default.removeObserver)
+        audioObservers = []
+        #endif
     }
 
     func close() async throws {
@@ -104,22 +123,20 @@ final class VoicePeer: NSObject, VoiceMedia {
         let cleanup = Task {
             let work = VoiceOperationScope()
             work.spawn { do { try await Task.sleep(for: Self.cleanupLimit); work.end() } catch { } }
-            defer { work.end(); detach() }
+            trace("close-begin")
+            defer { work.end(); detach(); trace("close-finished") }
             var failures: [String] = []
             if documentReady {
                 do {
                     let result = try await javascript("return await shut()", in: work)
                     guard result == "closed" || result == "not-started" else { throw VoicePeerError.shutdownUnconfirmed }
+                    trace("media-closed")
                     if let recording {
                         guard let pcm = try await javascript("return media.dump()", in: work), let data = Data(base64Encoded: pcm) else { throw VoicePeerError.noRecording }
                         try Self.wav(data).write(to: recording)
                     }
                 } catch { failures.append(error.localizedDescription) }
             }
-            #if os(iOS)
-            do { try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
-            catch { failures.append(error.localizedDescription) }
-            #endif
             if !failures.isEmpty { throw NSError(domain: "VoiceMediaShutdown", code: 1, userInfo: [NSLocalizedDescriptionKey: failures.joined(separator: "; ")]) }
         }
         closing = cleanup
@@ -146,18 +163,31 @@ final class VoicePeer: NSObject, VoiceMedia {
               let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).flatMap(\.windows).first(where: \.isKeyWindow)
         else { throw VoicePeerError.notForeground }
         let audio = AVAudioSession.sharedInstance()
-        try audio.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
-        try audio.setActive(true)
-        web.alpha = 0.01
-        window.addSubview(web)
-        audioEvents = Task {
-            for await _ in NotificationCenter.default.notifications(named: AVAudioSession.interruptionNotification) {
-                guard !Task.isCancelled else { return }
-                onEvent(.ended(.audioInterrupted))
-                cancel()
-                return
+        let names = [AVAudioSession.didBecomeActiveNotification, AVAudioSession.didBecomeInactiveNotification,
+                     AVAudioSession.resumptionRecommendationNotification]
+        audioObservers = names.map { name in
+            NotificationCenter.default.addObserver(forName: name, object: audio, queue: .main) { [weak self] notification in
+                let context = notification.userInfo?[AVAudioSession.deactivationContextKey] as? AVAudioSession.DeactivationContext
+                let resume = notification.userInfo?[AVAudioSession.resumptionContextKey] as? AVAudioSession.ResumptionContext
+                let shared = (notification.object as? AVAudioSession) === AVAudioSession.sharedInstance()
+                MainActor.assumeIsolated {
+                    guard let self, !self.scope.ended else { return }
+                    self.traceAudio(name: name, context: context, resume: resume, shared: shared)
+                    guard name == AVAudioSession.didBecomeInactiveNotification,
+                          let context, context.source == .system, context.interruptionContext != nil else { return }
+                    self.onEvent(.ended(.audioInterrupted))
+                    self.cancel()
+                }
             }
         }
+        audioObservers += [UIApplication.willResignActiveNotification, UIApplication.didBecomeActiveNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: UIApplication.shared, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.trace(name.rawValue) }
+            }
+        }
+        trace("audio-observing")
+        web.alpha = 0.01
+        window.addSubview(web)
         #endif
     }
 
@@ -177,6 +207,8 @@ final class VoicePeer: NSObject, VoiceMedia {
         if kind == "ready" { documentReady = true; loaded.continuation.yield(); loaded.continuation.finish(); return }
         guard (body["session"] as? String).flatMap(UUID.init(uuidString:)) == session else { return }
         switch kind {
+        case "diagnostic": trace("\(body["stage"] as? String ?? "unknown") webMs=\(body["webMs"] as? Double ?? 0)")
+        case "audioInterrupted": onEvent(.ended(.audioInterrupted)); cancel()
         case "connected": onEvent(.connected)
         case "failed": onEvent(.failed)
         case "inputEnded": onEvent(.inputEnded)

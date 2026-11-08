@@ -45,7 +45,9 @@ extension Workspace {
                      omitted: voice.projection?.omitted ?? .init(), commandResults: voice.commandResults)
     }
 
-    func startVoiceCall() async throws { try await services.voice.start() }
+    func startVoiceCall(makeMedia: () -> any VoiceMedia = { VoicePeer(source: .microphone(device: nil), recording: nil) }) async throws {
+        try await services.voice.start(makeMedia: makeMedia)
+    }
     func hangUpVoiceCall() async { await services.voice.end() }
     func setVoiceMuted(_ value: Bool) async throws { try await services.voice.setMuted(value) }
 
