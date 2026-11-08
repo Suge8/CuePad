@@ -30,7 +30,7 @@ extension VoiceService {
         }
         var targets: [VoiceExecutionTarget] = []
         for execution in call.executions where execution.state.canStop {
-            guard let turn = services.pi.session(id: execution.state.sessionID)?.turnStartedAt else { continue }
+            guard let turn = services.pi.session(sessionID: execution.state.sessionID)?.turnStartedAt else { continue }
             for request in call.requests.compactMap(\.message) {
                 do {
                     let snapshot = try services.store.snapshot {

@@ -108,7 +108,7 @@ extension VoiceService {
                 call.repeatReply(id)
                 return .readbackQueued(message: id)
             case .stop(let target):
-                guard services.pi.session(id: target.turn.sessionID)?.turnStartedAt?.stored == target.turn.turnStartedAtMilliseconds else {
+                guard services.pi.session(sessionID: target.turn.sessionID)?.turnStartedAt?.stored == target.turn.turnStartedAtMilliseconds else {
                     return .rejected(reason: .turnChanged)
                 }
                 let stop = try await services.store.stopVoiceExecution(target.turn, requests: [target.request], command: command.id.rawValue)

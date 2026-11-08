@@ -14,15 +14,20 @@ extension VoiceService {
         observeCall(call)
     }
 
-    private func obtainCall(name: String, source: VoicePeer.Source = .microphone(device: nil), recording: URL? = nil,
+    private func obtainCall(name: String, host: String? = nil, source: VoicePeer.Source = .microphone(device: nil), recording: URL? = nil,
                             makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = VoiceCall.init) -> VoiceCall {
+        let services = services
+        let tell: (String) async throws -> UUID = { [weak services] text in
+            guard let services else { throw CancellationError() }
+            return try await services.recordVoiceSpeech(text, host: host)
+        }
         if let call {
+            call.dependencies.tell = tell
             call.dependencies.cueName = name
             call.dependencies.source = source
             call.dependencies.recording = recording
             return call
         }
-        let services = services
         let value = makeCall(.init(
             access: { [weak services] in
                 guard let services else { throw CancellationError() }
@@ -34,10 +39,7 @@ extension VoiceService {
                 }
                 return try await services.agents.integration.codexAccess(executable: services.agents.executable(.codex))
             },
-            tell: { [weak services] text in
-                guard let services else { throw CancellationError() }
-                return try await services.recordVoiceSpeech(text)
-            }, store: services.store, cueName: name, source: source, recording: recording))
+            tell: tell, store: services.store, cueName: name, source: source, recording: recording))
         call = value
         return value
     }
@@ -77,7 +79,7 @@ extension VoiceService {
                 remote = nil
                 return
             }
-            let call = obtainCall(name: profile?.name ?? CueProfile.defaultName)
+            let call = obtainCall(name: profile?.name ?? CueProfile.defaultName, host: services.hostID)
             issue = nil
             session = header.session
             call.reconnect(session: header.session.rawValue, media: media)

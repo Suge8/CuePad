@@ -16,12 +16,12 @@ extension VoiceCall {
     /// 写库不归媒体连接所有：挂断不能撤销可能已落库的业务，也不能丢掉晚回来的请求 ID。
     func recordRequest(_ id: String) {
         guard let index = requestState.firstIndex(where: { $0.id == id }), writing[id] == nil else { return }
-        let text = requestState[index].text
+        let text = requestState[index].text, tell = dependencies.tell
         requestState[index].submission = .recording
         requestState[index].record = nil
         writing[id] = Task { [self] in
             do {
-                let message = try await dependencies.tell(text)
+                let message = try await tell(text)
                 if let index = requestState.firstIndex(where: { $0.id == id }) { requestState[index].submission = .recorded(message) }
                 watchRequests()
             } catch {
