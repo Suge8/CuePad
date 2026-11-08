@@ -263,6 +263,9 @@ struct VoiceFlowTests {
         accessGate.continuation.finish()
         try await fixture.connect()
         oldEvent?(.success(.error("旧连接迟到错误")))
+        oldEvent?(.success(.delegation(.init(id: "late-after-reconnect", turn: nil, text: "旧连接迟到请求"))))
+        fixture.received?(.success(.usage(audioMs: 9876)))
+        try await eventually("新连接已消费旧事件之后的屏障") { fixture.call.audioMs == 9876 || fixture.call.phase.isFailure }
         #expect(fixture.call.phase == .listening)
         #expect(fixture.call.requests.count == requests)
         try await fixture.hangUp()
