@@ -131,7 +131,11 @@ public final class ManualTiming: Sendable {
   private struct State {
     var current: Date
     var sleepers: [UUID: (deadline: Date, continuation: CheckedContinuation<Void, Error>)] = [:]
-    var sleeperWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+    var sleeperWaiters: [UUID: (deadline: Date?, continuation: CheckedContinuation<Void, Never>)] = [:]
+
+    func hasSleeper(until deadline: Date?) -> Bool {
+      sleepers.values.contains { deadline == nil || $0.deadline == deadline }
+    }
   }
   private let state: Mutex<State>
 
@@ -156,21 +160,21 @@ public final class ManualTiming: Sendable {
     for continuation in due { continuation.resume() }
   }
 
-  /// 等到至少有一个任务挂在 `sleep` 上（确保 `advance` 会真的唤醒它）；被取消（如超出测试时限）时立即返回。
-  public func waitForSleeper() async {
-    if sleeperCount > 0 { return }
+  /// 多个计时器共用钟时可指定截止时刻，避免被另一项等待提前放行；取消时立即返回。
+  public func waitForSleeper(until deadline: Date? = nil) async {
+    if state.withLock({ $0.hasSleeper(until: deadline) }) { return }
     let id = UUID()
     await withTaskCancellationHandler {
       await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
         let ready = state.withLock { state in
-          if !state.sleepers.isEmpty || Task.isCancelled { return true }
-          state.sleeperWaiters[id] = continuation
+          if state.hasSleeper(until: deadline) || Task.isCancelled { return true }
+          state.sleeperWaiters[id] = (deadline, continuation)
           return false
         }
         if ready { continuation.resume() }
       }
     } onCancel: {
-      state.withLock { $0.sleeperWaiters.removeValue(forKey: id) }?.resume()
+      state.withLock { $0.sleeperWaiters.removeValue(forKey: id) }?.continuation.resume()
     }
   }
 
@@ -189,8 +193,9 @@ public final class ManualTiming: Sendable {
           let due = deadline(state.current)
           if due <= state.current { return .some(nil) }
           state.sleepers[id] = (due, continuation)
-          defer { state.sleeperWaiters = [:] }
-          return Array(state.sleeperWaiters.values)
+          let ready = state.sleeperWaiters.filter { state.hasSleeper(until: $0.value.deadline) }
+          for waiter in ready.keys { state.sleeperWaiters[waiter] = nil }
+          return ready.values.map(\.continuation)
         }
         guard let registered = waiters else { return continuation.resume(throwing: CancellationError()) }
         guard let waiters = registered else { return continuation.resume() }
