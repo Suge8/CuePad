@@ -5195,6 +5195,22 @@
         }
       }
     },
+    "下一页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一页"
+          }
+        }
+      }
+    },
     "下载中 %@" : {
       "localizations" : {
         "en" : {
@@ -10055,6 +10071,22 @@
         }
       }
     },
+    "回到首页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to first page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回到首页"
+          }
+        }
+      }
+    },
     "回复" : {
       "localizations" : {
         "en" : {
@@ -13951,6 +13983,22 @@
         }
       }
     },
+    "执行记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Execution history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "执行记录"
+          }
+        }
+      }
+    },
     "扩展" : {
       "localizations" : {
         "en" : {
@@ -17747,6 +17795,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在结束…"
+          }
+        }
+      }
+    },
+    "正在读取…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在读取…"
           }
         }
       }
@@ -22131,6 +22195,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请求摘要「%1$@…」：%2$@"
+          }
+        }
+      }
+    },
+    "请求记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求记录"
           }
         }
       }

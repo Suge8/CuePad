@@ -57,8 +57,17 @@ struct CueVoiceState<Operation: CueVoiceOperation> {
     let canStopExecution: Bool
     var executions: [Execution] = []
     var readings: [Reading] = []
-    /// 宿主持有各类分页与加载状态；共享按钮原样回传一次批读意图。
-    var loadMore: Operation? = nil
+    /// 各列表只显示宿主当前页；导航原样回传操作，不累计记录或保存游标。
+    struct Page {
+        let first: Operation?
+        let next: Operation?
+        let loading: Bool
+        let error: LocalizedStringResource?
+    }
+
+    var requestPage: Page? = nil
+    var replyPage: Page? = nil
+    var executionPage: Page? = nil
     /// nil 表示允许发起；宿主提供权限、账号或运行设备的实际阻塞原因，视图不推断可用性。
     var startUnavailableReason: LocalizedStringResource?
 

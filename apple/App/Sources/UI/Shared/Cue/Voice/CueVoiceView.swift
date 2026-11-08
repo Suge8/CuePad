@@ -13,7 +13,8 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
     private var hasDetails: Bool {
         guard let presentation else { return false }
         return active || !presentation.issues.isEmpty || !presentation.readings.isEmpty
-            || !presentation.executions.isEmpty || presentation.canStopExecution || presentation.loadMore != nil
+            || !presentation.executions.isEmpty || presentation.canStopExecution
+            || presentation.requestPage != nil || presentation.replyPage != nil || presentation.executionPage != nil
     }
     private var showsStatus: Bool { active || hasDetails || presentation?.activity == .failed }
 
