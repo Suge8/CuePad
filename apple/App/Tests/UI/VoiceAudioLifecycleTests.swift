@@ -1,6 +1,7 @@
 #if os(iOS)
 import AVFoundation
 import CueStore
+import ObjectiveC
 import Testing
 import UIKit
 @testable import CuePad
@@ -52,6 +53,7 @@ import UIKit
         window.rootViewController = UIViewController()
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
+        try await eventually("App 已可接收接通点击") { UIApplication.shared.applicationState == .active }
         let file = fixture.app.directory.appending(path: "silence.wav")
         try VoicePeer.wav(Data(repeating: 0, count: 48000)).write(to: file)
         var oldCallback: ((VoicePeer.Event) -> Void)?
@@ -76,6 +78,52 @@ import UIKit
             #expect(workspace.phoneVoice.phase == .ended(reason: .hungUp))
             #expect(fixture.voice.canStart)
         }
+        try await fixture.checkLibrary()
+    }
+
+    @Test(arguments: [false, true])
+    func systemInactiveNotificationEndsRealWebAudio(connected: Bool) async throws {
+        let fixture = try await Fixture(), workspace = fixture.workspace
+        defer { fixture.app.services.cancelBackgroundWork() }
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIViewController()
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try await eventually("App 已可接收接通点击") { UIApplication.shared.applicationState == .active }
+        let file = fixture.app.directory.appending(path: "silence.wav")
+        try VoicePeer.wav(Data(repeating: 0, count: 48000)).write(to: file)
+        let media = VoicePeer(source: .file(file), recording: nil)
+        try await workspace.startVoiceCall { media }
+        let session = try #require(fixture.voice.session)
+        if connected {
+            // 远端接通由替身回报；本机网页、中断通知与关闭均走真实实例。
+            media.onEvent(.connected)
+            await fixture.voice.receive(fixture.signal.event(.projection(value: .init(session: session, phase: .listening,
+                                                                                     requests: [], replies: [], executions: [])), session: session))
+            #expect(fixture.voice.canMute)
+        }
+        let audio = AVAudioSession.sharedInstance(), center = NotificationCenter.default
+        let system = try #require(class_createInstance(VoiceSystemDeactivation.self, 0) as? VoiceSystemDeactivation)
+        let app = try #require(class_createInstance(VoiceAppDeactivation.self, 0) as? VoiceAppDeactivation)
+        let idle = try #require(class_createInstance(VoiceIdleDeactivation.self, 0) as? VoiceIdleDeactivation)
+        let phase = workspace.phoneVoice.phase
+        let notifications = [
+            Notification(name: AVAudioSession.didBecomeInactiveNotification, object: NSObject(), userInfo: [AVAudioSession.deactivationContextKey: system]),
+            Notification(name: AVAudioSession.didBecomeInactiveNotification, object: audio, userInfo: [AVAudioSession.deactivationContextKey: app]),
+            Notification(name: AVAudioSession.didBecomeInactiveNotification, object: audio, userInfo: [AVAudioSession.deactivationContextKey: idle]),
+        ]
+        for notification in notifications {
+            center.post(notification)
+            #expect(workspace.phoneVoice.phase == phase)
+        }
+        center.post(name: AVAudioSession.didBecomeInactiveNotification, object: audio,
+                    userInfo: [AVAudioSession.deactivationContextKey: system])
+        #expect(workspace.phoneVoice.phase == .closing)
+        await #expect(throws: VoiceIssue.busy) { try await workspace.startVoiceCall { Media() } }
+        try await eventually("系统中断通知结束网页通话") { fixture.voice.phone == nil }
+        #expect(workspace.phoneVoice.phase == .ended(reason: .audioInterrupted))
+        #expect(fixture.signal.sent.contains { if case .media(.hangup(reason: .audioInterrupted)) = $0 { true } else { false } })
         try await fixture.checkLibrary()
     }
 
