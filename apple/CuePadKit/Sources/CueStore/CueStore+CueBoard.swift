@@ -10,7 +10,7 @@ extension CueStore {
   }
 
   /// 看板：所有没做完的顶层任务（没删除、没归档），按项目顺序，同项目按手动顺序；加上不归没做完的事的活会话（`isLoose`）。
-  /// 在做的（`CueBoard.active`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。信封、变化、peek 与推进中都按它。
+  /// 在做的（`CueBoard.active`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。信封、变化与 peek 按它；用户看到的推进中另按 `CueBoard.inProgress`。
   public func cueBoard() throws -> CueBoard {
     CueBoard(
       tasks: try boardItems(try topTasks(where: Self.onBoard)),
@@ -138,7 +138,7 @@ extension CueStore {
 
 
   /// 一件顶层任务的交付物（唯一的规则）：它与它的子任务用过的会话（正在用的与换下来的，`Card.formerSessionIDs`）
-  /// 在任务开工（`Card.startedSQL`，没开始过按排进待办的时刻）之后发到手机的预览，从早到晚。开工前的不算：会话被另一件事接着用时，前一件的图不会算到这件上。
+  /// 在任务开工（`Card.startedAt`，没开始过按排进待办的时刻）之后发到手机的预览，从早到晚。开工前的不算：会话被另一件事接着用时，前一件的图不会算到这件上。
   /// 不另记"哪些是交付物"：会话发到手机本来就是给人看的。Cue 在 peek 里看这份清单，做完时从中点名要挂在结果上的几张（`finishTask` 的 shots）。
   public func deliverables(of task: UUID) throws -> [PiPreview] {
     try db.query(
@@ -150,7 +150,7 @@ extension CueStore {
         WHERE (c.id = ?1 OR c.parentID = ?1) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.formerSessionIDs IS NOT NULL)
       SELECT DISTINCT \(PiPreview.columns.map { "p.\($0)" }.joined(separator: ", "))
       FROM previews p JOIN used u ON u.session = p.sessionID JOIN cards t ON t.id = ?1
-      WHERE p.createdAt >= COALESCE(\(Card.startedSQL("t")), t.todoAt)
+      WHERE p.createdAt >= COALESCE(t.startedAt, t.todoAt)
       ORDER BY p.createdAt, p.id
       """, [task]
     ) { PiPreview(row: $0) }

@@ -49,6 +49,8 @@ import Testing
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let first = try await store.createTask("修乱序", in: project.id)
     let second = try await store.createTask("改文案", in: project.id)
+    let recorder = PiStateRecorder(store: store, hostID: "mac")
+    for session in ["s1", "s2", "s3"] { try await recorder.update(sessionID: session, state: .settled, projectID: project.id) }
     try await store.bindSession("s1", to: first.id)
     try await store.bindSession("s1", to: second.id)
     #expect(try await store.card(second.id)?.status == .inProgress)
@@ -77,6 +79,7 @@ import Testing
     try await recorder.update(sessionID: "s-new", state: .thinking, title: "修乱序", launchToken: "t-new")
     #expect(try await store.card(task.id)?.piSessionID == "s-new")
 
+    try await recorder.update(sessionID: "s-old", state: .settled, projectID: project.id)
     try await store.bindSession("s-old", to: task.id)
     try await recorder.update(sessionID: "s-new", state: .settled, title: "修乱序", launchToken: "t-new")
 
@@ -90,6 +93,7 @@ import Testing
     let taken = try await store.createTask("已有会话", in: project.id)
     let finished = try await store.createTask("做完了", in: project.id)
     _ = try await store.createTask("别的项目")
+    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, projectID: project.id)
     try await store.bindSession("s1", to: taken.id)
     try await store.setStatus(finished.id, .done)
 

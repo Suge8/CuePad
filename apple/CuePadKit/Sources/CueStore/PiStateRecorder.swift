@@ -93,11 +93,11 @@ public actor PiStateRecorder {
     }
   }
 
-  /// 用户结束会话：记录标为已结束，进历史（不算被打断）。
-  public func end(sessionID: String) async throws {
+  /// 源端确认实际结束：状态与领取时固定的请求集合一并落盘；没有请求身份的状态更新不确认投送。
+  public func end(sessionID: String, confirming requests: Set<UUID> = []) async throws {
     sessions.removeValue(forKey: sessionID)?.pace.timer?.task.cancel()
     let now = timing.now()
-    try await persist { [store, hostID, bootID] in try await store.endPiState(host: hostID, sessionID: sessionID, bootID: bootID, at: now) }
+    try await persist { [store, hostID, bootID] in try await store.endPiState(host: hostID, sessionID: sessionID, bootID: bootID, at: now, confirming: requests) }
   }
 
   /// 启动对账（历史回填完成后）：歇着的托管会话没有会话文件索引的（文件被删的、从没落盘的）删掉记录；此刻在线的（本记录器正在跟的）不动——

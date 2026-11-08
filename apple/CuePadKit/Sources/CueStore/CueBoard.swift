@@ -24,8 +24,10 @@ public struct CueBoard: Equatable, Sendable {
   /// 不归没做完的事的活会话（`CueStore.isLoose`：他直接开的、终端里的，和只有已完成的事绑着的），最近有动静的在前。
   public var sessions: [PiSessionState]
 
-  /// 在做的：在做的事（`CueBoardItem.isActive`）按看板顺序，再是不归没做完的事的活会话。信封与 peek 的"在做"、推进中（`CueTally`）都是它；
-  /// 会话都结束了、没人在做的事不在内，留在你手上的清单里。只问有没有时读 `CueStore.cueBoardActive`（同一条规则，不读整块看板）。
+  /// 用户已开始而未完成的事与单独活会话；与执行集合分离，停机或离线不撤销进度。
+  public var inProgress: [CueWork] { tasks.filter { $0.task.status == .inProgress }.map(CueWork.task) + sessions.map(CueWork.session) }
+
+  /// 执行集合：信封与 peek 的“在做”；没有执行证据的静置任务不在内。值班管理器只问有没有时读 `CueStore.cueBoardActive`。
   public var active: [CueWork] { tasks.filter(\.isActive).map(CueWork.task) + sessions.map(CueWork.session) }
 }
 

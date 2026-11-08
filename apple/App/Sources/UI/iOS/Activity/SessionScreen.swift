@@ -12,6 +12,7 @@ struct SessionScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var digest: SessionDigest?
+    @State private var taskLink: SessionTaskLink?
     /// 最后一次读到的会话记录：记录被删后仍显示它。
     @State private var lastSeen: PiSessionState?
     @State private var follow = ChatFollow()
@@ -55,6 +56,7 @@ struct SessionScreen: View {
                 Menu {
                     // 所在不挤在顶栏里：点"⋯"时写在最上面
                     if let title = PiPlace.menuTitle(of: session, project: digest?.project) { Section { } header: { Text(title) } }
+                    if let taskLink { SessionTaskBindItems(session: session, link: taskLink) }
                     SessionActions(session: session, task: digest?.task, ending: shownEnd?.inTransit == true)
                 } label: {
                     Image(.more)
@@ -65,6 +67,10 @@ struct SessionScreen: View {
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)
+        }
+        .observing(services.store, id: SessionTaskLink.Key(session: session?.sessionID, project: session?.projectID),
+                   into: $taskLink, onError: workspace.fail) { [session] store in
+            try SessionTaskLink.read(sessionID: session?.sessionID ?? "", project: session?.projectID, from: store)
         }
         .onChange(of: digest, initial: true) { _, digest in
             if let session = digest?.session { lastSeen = session }

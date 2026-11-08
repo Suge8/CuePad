@@ -42,11 +42,7 @@ struct BoardWaitCard: View {
     @ViewBuilder private var menu: some View {
         OpenSessionBeside(session: held.session)
         if let item = held.item {
-            #if os(macOS)
             CardActions(card: item.task, leaf: item.steps == nil, opens: true, session: held.session)
-            #else
-            CardActions(card: item.task, opens: true, session: held.session)
-            #endif
         } else {
             SessionActions(session: held.session, board: PiSessionListItem(state: held.session))
         }

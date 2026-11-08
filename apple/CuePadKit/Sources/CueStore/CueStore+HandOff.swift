@@ -83,7 +83,7 @@ extension CueStore {
 
   /// 同一件事别的子任务绑着、没在被请求结束的会话里最近有动静的那个（`agent` 给了就只要这一家的）：下一步接着用它，上下文不丢。
   /// 已结束的也算：执行的 Mac 连上目标会话时先恢复它（`MacExecutor`）。
-  func continuableSession(for leaf: UUID, agent: AgentKind?) throws -> PiSessionState? {
+  func continuableSession(for leaf: UUID, agent: AgentKind?, ignoringEndOf: String? = nil) throws -> PiSessionState? {
     let top = try topTask(of: leaf)
     guard top != leaf, let task = try find(Card.self, top) else { return nil }
     let ending = Set(try db.query(
@@ -91,7 +91,7 @@ extension CueStore {
     ) { $0.text(0) })
     let sessions = try sessionStates(try leaves(of: task).compactMap(\.piSessionID))
     return sessions.values
-      .filter { session in !ending.contains(session.sessionID) && agent.map { session.agent == .known($0) } != false }
+      .filter { session in (session.sessionID == ignoringEndOf || !ending.contains(session.sessionID)) && agent.map { session.agent == .known($0) } != false }
       .max { $0.stateSince < $1.stateSince }
   }
 
@@ -102,7 +102,8 @@ extension CueStore {
     let requests = try select(
       DeliveryRequest.self,
       where: """
-        cardID IN (SELECT value FROM json_each(?)) AND (
+        cardID IN (SELECT value FROM json_each(?))
+          AND sessionBindingRevision IS (SELECT sessionBindingRevision FROM cards WHERE id = deliveryRequests.cardID) AND (
           (mode = '\(DeliveryMode.start.rawValue)' AND status != '\(DeliveryStatus.failed.rawValue)'
             AND \(Self.launchUnclaimed) AND \(Self.latestHandoff("deliveryRequests")))
           OR (mode = '\(DeliveryMode.send.rawValue)' AND status NOT IN ('\(DeliveryStatus.failed.rawValue)', '\(DeliveryStatus.succeeded.rawValue)')))

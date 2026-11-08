@@ -46,13 +46,14 @@ extension CueStore {
       """, [time, now, Self.idList(roots)])
   }
 
-  /// 改任务的状态：进行中在叶子上记开始时间（有子任务的记在此刻该做的那一步 `homeLeaf`，上级从子任务推出；已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务、不再定时（`endCueSchedules`），回到待办连同没完成的下级清掉开始时间
-  /// （做完过的子任务还在时它仍算开始过，见 `TaskStatus`）；
+  /// 改任务的状态：进行中在叶子与祖先上记开始时间（有子任务的记在此刻该做的那一步 `homeLeaf`，祖先同事务推进；已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务、不再定时（`endCueSchedules`），回到待办连同没完成的下级清掉开始时间
+  /// （已完成子任务保留，旧进展不重放）；
   /// 完成的改成别的先经 `reopen`（连同已完成的上级、取回归档）。
   /// 只往下连带：子任务全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算子任务，见 `subtaskProgress`）。
   /// 灵感没有状态，抛 `notATask`。
   public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
-    try write { _ = try applyStatus(id, status) }
+    if status == .done { _ = try completeTask(id) }
+    else { try write { _ = try applyStatus(id, status) } }
   }
 
   /// 把任务改成 `status`（必须在写事务内）；返回改后库里的状态。已经是它时不动。
@@ -65,20 +66,32 @@ extension CueStore {
     if current == .done { try reopen([id]) }
     switch status {
     case .todo:
+      let descendants = try db.query("SELECT id FROM cards WHERE id IN (\(Self.subtree(from: "SELECT ?")))", [id]) { $0.uuid(0) }
+      for task in descendants { _ = try reviseSessionBinding(task, explicit: true) }
       try db.run(
         """
         UPDATE cards SET startedAt = NULL, modifiedAt = ?1
         WHERE startedAt IS NOT NULL AND completedAt IS NULL AND id IN (\(Self.subtree(from: "SELECT ?2")))
         """, [now, id])
-    case .inProgress: try db.run("UPDATE cards SET startedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND startedAt IS NULL", [now, try homeLeaf(id)])
+    case .inProgress: try beginTask(try homeLeaf(id), at: now)
     case .done:
       try db.run(
         """
         UPDATE cards SET completedAt = ?1, modifiedAt = ?1
         WHERE completedAt IS NULL AND todoAt IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?2")))
         """, [now, id])
+      for ancestor in try ancestors(of: id) { try beginTask(ancestor, at: now) }
       try endCueSchedules(onTasksIn: Self.subtree(from: "SELECT ?2"), id, at: now)
     }
     return try find(Card.self, id)?.status ?? status
   }
+
+  /// 子任务的新推进同时推进祖先；读取或同步回放不从已完成的旧子任务重新启动父任务。
+  func beginTask(_ id: UUID, at now: Date) throws {
+    let ids = [id] + (try ancestors(of: id))
+    try db.run(
+      "UPDATE cards SET startedAt = ?1, modifiedAt = ?1 WHERE id IN (SELECT value FROM json_each(?2)) AND todoAt IS NOT NULL AND completedAt IS NULL AND startedAt IS NULL",
+      [now, Self.idList(ids)])
+  }
+
 }

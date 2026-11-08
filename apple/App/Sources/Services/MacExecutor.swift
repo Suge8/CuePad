@@ -89,7 +89,7 @@ final class MacExecutor {
         case .transcript: try await writeTranscript(of: request.content)
         case .bind: try await bindFolder(request)
         case .quota: if let failure = await refreshQuota() { return .failed(failure) }
-        case .end: try await end(request.target)
+        case .end: try await end(request)
         case .stop: try await stop(request.target)
         case .stopTurn: try await stopTurn(request)
         case .retry: try await retry(request.target)

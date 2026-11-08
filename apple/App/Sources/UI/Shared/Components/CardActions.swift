@@ -8,7 +8,7 @@ struct CardActions: View {
     var more = false
     /// 在能批量选择的地方（Mac 项目页的墙与列表）：菜单里多一项"选择"。
     var selectable = false
-    /// 这是 Mac 上的叶子任务（没有子任务）：没做完时多一项"绑定会话"（会话列表在 Mac 上，手机不传）。
+    /// 这是叶子任务（没有子任务）：没做完时多一项"绑定会话"。
     var leaf = false
     /// 点它进的是会话（`Workspace.enter`）：长按菜单第一项"打开任务"。
     var opens = false
@@ -29,9 +29,7 @@ struct CardActions: View {
         switch item {
         case .move: moveMenu
         case .bindSession:
-            #if os(macOS)
             Menu(item.title, icon: item.icon) { SessionBindItems(leaf: card) }
-            #endif
         case .endSession:
             if let session, let end = SessionActions.end(session, ending: false, in: workspace) { RowActionButtons(actions: [end]) }
         default:

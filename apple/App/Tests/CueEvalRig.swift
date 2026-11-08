@@ -14,9 +14,12 @@ extension CueHostTests.Rig {
         let project = try #require(try await store.projects().first { $0.name == "演示" })
         let first = "\(title)\n\(rest)"
         let task = try await store.createTask(first, in: project.id)
-        let id = "s-\(UUID().uuidString.prefix(8).lowercased())", delivery = UUID()
-        try await store.recordSend(first, to: SendTarget(kind: .piSession, name: title, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
-        let session = try await app.host.connect(id, cwd: folder.path, busy: true)
+        let request = try await store.startLeaf(task.id, host: services.hostID, cue: true)
+        #expect(try await store.outcome(of: request).status == .known(.succeeded))
+        let started = try await eventually(store, { try $0.card(task.id) }) { $0?.piSessionID != nil }
+        let id = try #require(started?.piSessionID)
+        let session = try #require(app.host.extensions[id])
+        session.setState(["kind": "thinking"])
         // 像真扩展那样：作答后收起提问、回到工作中（假扩展默认只回 ack）
         let ack = session.onCommand
         session.onCommand = { [weak session] connection, command in
@@ -28,7 +31,6 @@ extension CueHostTests.Rig {
         }
         session.sendInfo(["name": title])
         let file = try #require(app.host.sessionFiles[id])
-        try file.user(first, delivery: delivery.uuidString)
         try await read(first, in: id)
         try await eventually("会话在干活写进库") { try await self.store.sessions(matching: id).first?.state.isWorking == true }
         return Working(task: task, session: session, file: file)

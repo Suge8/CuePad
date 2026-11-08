@@ -19,9 +19,11 @@ extension MCPTests {
     }
     let task = try await store.createTask("重写发布脚本", in: project.id)
     let first = try await store.createTask("调研", under: task.id), second = try await store.createTask("改脚本", under: task.id)
-    try await store.linkCard(first.id, toSession: "s1")
+    let opening = try await store.requestLaunch(PiLaunch(project: project.id, prompt: first.body, token: "first-step"), title: first.heading, on: "mac-a", card: first.id)
     try await store.recordMacPresence(host: "mac-a") { true }  // 会话所在的 Mac 醒着：下一步才能接着用它的会话
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "调研", hosted: true)
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(
+      sessionID: "s1", state: .settled, title: "调研", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
+    try await store.deleteDelivery(opening.id)
     try await Server.run(library: sandbox.directory) { server in
       _ = try await server.call("task", ["action": "done", "task": first.id.uuidString, "evidence": ["看完了"]])
       #expect(try await store.card(first.id)?.status == .done)
@@ -66,7 +68,7 @@ extension MCPTests {
   }
 
   /// 换会话的那一刻与最后一步（"增加系统提示音和提示窗"做完了会话还挂着）：下一步开工用 fresh 开新会话时，上一步留着的会话结束；
-  /// 下一步亲手绑到别的会话也一样；最后一步做完，它的会话结束。
+  /// 下一步纯绑定只改关联；最后一步做完，只收尾本任务创建的旧会话，借用的会话保留。
   @Test func aLeftBehindSessionEnds() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -80,9 +82,11 @@ extension MCPTests {
     let sound = try await store.createTask("增加系统提示音和提示窗", under: task.id)
     let settings = try await store.createTask("设置里加开关", under: task.id)
     let docs = try await store.createTask("写说明", under: task.id)
-    try await store.linkCard(sound.id, toSession: "s1")
+    let opening = try await store.requestLaunch(PiLaunch(project: project.id, prompt: sound.body, token: "first-step"), title: sound.heading, on: "mac-a", card: sound.id)
     let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-    for session in ["s1", "s3"] { try await recorder.update(sessionID: session, state: .settled, title: session, hosted: true) }
+    try await recorder.update(sessionID: "s1", state: .settled, title: "s1", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
+    try await store.deleteDelivery(opening.id)
+    try await recorder.update(sessionID: "s3", state: .settled, title: "s3", projectID: project.id, hosted: true)
     try await store.recordMacAgents(host: "mac-a", name: nil, [MacAgent(kind: .pi, model: nil, models: [])])
     try await Server.run(library: sandbox.directory) { server in
       let ends = { try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref).sorted() }
@@ -105,10 +109,10 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "done", "task": settings.id.uuidString, "evidence": ["开关能用"]])
       #expect(try await ends() == ["s1"])  // 写说明还没开工，默认接着用 s2
       try await store.bindSession("s3", to: docs.id)
-      #expect(try await ends() == ["s1", "s2"])
+      #expect(try await ends() == ["s1"])
 
       _ = try await server.call("task", ["action": "done", "task": docs.id.uuidString, "evidence": ["说明写好了"]])
-      #expect(try await ends() == ["s1", "s2", "s3"])
+      #expect(try await ends() == ["s1", "s2"])
     }
   }
 }

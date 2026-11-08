@@ -115,11 +115,7 @@ struct BoardTaskCard: View {
     @ViewBuilder private var menu: some View {
         let session = item.agent?.state
         if let session { OpenSessionBeside(session: session); HandoffButton(session: session) }
-        #if os(macOS)
         CardActions(card: task, leaf: item.steps == nil, opens: session != nil, session: session)
-        #else
-        CardActions(card: task, opens: session != nil, session: session)
-        #endif
     }
 
     #if os(macOS)
