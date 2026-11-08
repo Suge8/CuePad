@@ -13,13 +13,23 @@ final class SessionGate {
         let continuation: CheckedContinuation<Void, any Error>
     }
 
+    private var generation = 0
     private var busy: Set<PiSession.ID> = []
     private var queue: [PiSession.ID: [Waiter]] = [:]
 
     func run<T>(_ id: PiSession.ID, _ body: () async throws -> T) async throws -> T {
+        let admittedGeneration = generation
         try await enter(id)
         defer { leave(id) }
+        guard admittedGeneration == generation else { throw CancellationError() }
         return try await body()
+    }
+
+    /// 桥停下后，排队与已放行但尚未执行的许可都失效；已交出的话仍取真实结果。
+    /// busy 留给持有许可的调用释放，避免旧调用收尾时放开新调用正在占用的位置。
+    func stop() {
+        generation += 1
+        for id in Array(queue.keys) { abort(id) }
     }
 
     /// 停止：排着的发话不再开轮，以取消结束。

@@ -84,6 +84,7 @@ public final class PiBridge {
     public func offerExtensionUpgrade() { connections.offerExtensionUpgrade() }
 
     public func stop() {
+        turns.stop()
         connections.stop()
         controls = [:]
         for timer in idleTimers.values { timer.cancel() }
