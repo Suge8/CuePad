@@ -213,7 +213,7 @@ case "$cmd" in
     "$0" build-perf "$platform" >"$DERIVED/build.log" || status=$?
     if [ "$status" != 0 ]; then
       {
-        echo "perf 的构建失败（退出码 $status；75 是排队超时，124 是任务超时，其余多半是 xcodebuild 的）。完整输出在 $DERIVED/build.log；排队与入口的报错在上面的终端输出里，不在日志里。"
+        echo "perf 的构建失败（退出码 ${status}；75 是排队超时，124 是任务超时，其余多半是 xcodebuild 的）。完整输出在 $DERIVED/build.log；排队与入口的报错在上面的终端输出里，不在日志里。"
         echo "日志里的 error 行（最多 10 条，早先的错误常在末尾之前）："; grep -a 'error:' "$DERIVED/build.log" | head -10 || true
         echo "日志末尾 30 行（只是末尾，不是全部）："; tail -30 "$DERIVED/build.log"
       } >&2

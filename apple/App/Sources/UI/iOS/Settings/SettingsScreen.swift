@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         SettingsForm {
@@ -14,11 +15,16 @@ struct SettingsScreen: View {
             SyncSection()
             if services.sync != nil || Self.previewsAlerts { AlertSection() }
             Section {
-                LabeledContent {
+                if typeSize.isAccessibilitySize {
                     ThemePicker()
-                } label: {
-                    Label("外观", icon: .appearance)
+                } else {
+                    LabeledContent {
+                        ThemePicker()
+                    } label: {
+                        Label("外观", icon: .appearance)
+                    }
                 }
+                LanguageRow()
             }
             if !services.startupIssues.isEmpty {
                 Section("启动问题") {

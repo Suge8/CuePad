@@ -107,7 +107,7 @@ private struct BodyHint: View {
         let text = editing.text
         if let newline = text.firstIndex(of: "\n"), text.index(after: newline) == text.endIndex {
             Text("写正文：要 Agent 做什么")
-                .font(.custom(CueEditorTheme.taskBodyFace, size: BubbleMetrics.bodySize, relativeTo: .body))
+                .font(Typography.taskBody)
                 .foregroundStyle(palette.ink3)
                 .lineLimit(1)
                 .padding(.bottom, inset)
@@ -118,16 +118,14 @@ private struct BodyHint: View {
 }
 
 extension CueEditorTheme {
-    static let taskBodyFace = "PingFangSC-Regular"
-
     /// 任务气泡：首段是标题（墨、大一档、加粗；做完了是第三档墨），下面的话小一档、第二档墨。字贴着框的左沿，与子任务行同一条竖线。
     static func task(_ palette: Palette, done: Bool) -> CueEditorTheme {
         var theme = editor(palette, horizontalInset: 0)
-        theme.font = Typeface.pingFang(BubbleMetrics.bodySize)
+        theme.font = Typography.taskBodyFont
         theme.textColor = CueColor(palette.ink2)
-        theme.lineSpacing = 5
+        theme.lineSpacing = Typography.taskLineSpacing
         theme.verticalInset = BubbleMetrics.editorInset
-        theme.title = Title(font: Typeface.pingFang(BubbleMetrics.titleSize, weight: .semibold), color: CueColor(done ? palette.ink3 : palette.ink), spacing: Spacing.item)
+        theme.title = Title(font: Typography.taskTitleFont, color: CueColor(done ? palette.ink3 : palette.ink), spacing: Spacing.item)
         return theme
     }
 }

@@ -16,18 +16,23 @@ struct DebugWidgetStage: View {
 
     private static let cue = CueNowSamples.asks
     private static let home = DefaultProjectSnapshot(
-        name: String(localized: "默认", table: "Demo"),
+        name: Project.defaultName,
         cards: [String(localized: "周末带孩子去科技馆", table: "Demo"), String(localized: "重连用例补三个", table: "Demo"), String(localized: "首页标题换成新文案", table: "Demo")].map { DefaultProjectSnapshot.Card(id: UUID(), title: $0, modifiedAt: .now) },
         total: 7)
+
+    private var home: DefaultProjectSnapshot? {
+        guard let location = DebugScene.extensionLibrary else { return Self.home }
+        return Snapshots.read(DefaultProjectSnapshot.self, from: location.snapshotsDirectory)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 24) {
                 tile(Self.small) { WidgetViews.cue(Self.cue, family: .systemSmall) }
-                tile(Self.small) { WidgetViews.defaultProject(Self.home) }
+                tile(Self.small) { WidgetViews.defaultProject(home) }
             }
             tile(Self.medium) { WidgetViews.cue(Self.cue, family: .systemMedium) }
-            tile(Self.medium) { WidgetViews.defaultProject(Self.home) }
+            tile(Self.medium) { WidgetViews.defaultProject(home) }
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -86,10 +91,17 @@ struct DebugShareStage: View {
             .task {
                 let text = NSItemProvider(object: String(localized: "周末带孩子去科技馆，记得提前约票", table: "Demo") as NSString)
                 let link = NSItemProvider(object: URL(string: "https://example.com/museum")! as NSURL)
-                let model = ShareModel(providers: [text, link], location: location)
+                let model = ShareModel(providers: [text, link], location: DebugScene.extensionLibrary ?? location)
                 await model.load()
                 self.model = model
             }
+    }
+}
+
+extension DebugScene {
+    /// `-CuePadExtensionLibrary <隔离目录>`：扩展预览只读这里的快照，不受主 App 同时重写派生缓存影响。
+    static var extensionLibrary: LibraryLocation? {
+        defaults.string(forKey: "CuePadExtensionLibrary").map { .isolated(URL(filePath: $0)) }
     }
 }
 

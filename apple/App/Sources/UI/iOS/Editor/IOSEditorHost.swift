@@ -84,7 +84,7 @@ struct IOSEditorHost: UIViewRepresentable {
         context.coordinator.insertFile = onInsertFile ?? {}
         context.coordinator.variables = onVariables ?? {}
         if view.isEditable != editable { setEditable(view) }
-        if view.theme.textColor != theme.textColor || view.theme.horizontalInset != theme.horizontalInset || view.theme.title?.color != theme.title?.color {
+        if view.theme != theme {
             view.theme = theme
         }
     }

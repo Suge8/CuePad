@@ -157,10 +157,10 @@ extension CueStore {
         let latest = cards.sorted { $0.modifiedAt > $1.modifiedAt }.prefix(Self.widgetCardLimit)
         return WidgetContent(
             projects: ProjectsSnapshot(projects: try projects().map {
-                ProjectsSnapshot.Project(id: $0.id, name: $0.shownName, color: $0.color, icon: $0.icon)
+                ProjectsSnapshot.Entry(id: $0.id, name: $0.name, color: $0.color, icon: $0.icon)
             }),
             home: DefaultProjectSnapshot(
-                name: try project(Project.defaultID)?.shownName ?? "",
+                name: try project(Project.defaultID)?.name ?? "",
                 cards: latest.map {
                     DefaultProjectSnapshot.Card(id: $0.id, title: $0.heading, modifiedAt: $0.modifiedAt)
                 },

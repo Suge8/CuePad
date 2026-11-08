@@ -51,6 +51,7 @@ struct CueSays: View {
     var card = false
     /// 上面紧挨着 Cue 的另一句（`CueBubble.shape`）。
     var joined = false
+    @ScaledMetric(relativeTo: .body) private var readingSpacing = Typography.readingLineSpacing
     @Environment(\.palette) private var palette
     @State private var selecting = false
     /// 提问的原话展开着。
@@ -95,7 +96,7 @@ struct CueSays: View {
         if let title = parts.title {
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 Text(Self.inline(title)).font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink)
-                    .lineSpacing(Typography.readingLineSpacing)
+                    .lineSpacing(readingSpacing)
                     .fixedSize(horizontal: false, vertical: true)
                 if !parts.body.isEmpty { MarkdownText(source: parts.body).equatable() }
             }

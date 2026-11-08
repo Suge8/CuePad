@@ -164,7 +164,7 @@ private struct ShelfLine: View {
 
     var body: some View {
         NavigationLink(value: route) {
-            LinkRow(title: Text(title), alert: alert.map { palette.color($0.tone) }) { IconImage(icon) }
+            LinkRow(title: Text(title), alert: alert.map { palette.color($0.tone) }) { Image(icon) }
         }
         .buttonStyle(.row)
         .accessibilityValue(alert?.title ?? "")

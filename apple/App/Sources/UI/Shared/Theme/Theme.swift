@@ -38,29 +38,16 @@ struct PaletteProvider: ViewModifier {
     }
 }
 
-enum Typeface {
-    /// 中文正文一律苹方（与编辑器默认一致）；系统缺该字重时退回系统字体。
-    static func pingFang(_ size: CGFloat, weight: CueFont.Weight = .regular) -> CueFont {
-        let name = switch weight {
-        case .semibold, .bold, .heavy, .black: "PingFangSC-Semibold"
-        case .medium: "PingFangSC-Medium"
-        default: "PingFangSC-Regular"
-        }
-        return CueFont(name: name, size: size) ?? .systemFont(ofSize: size, weight: weight)
-    }
-}
-
 extension CueEditorTheme {
     /// 编辑页的主题。颜色是固定值而非动态色：外观切换时整体替换主题。
     /// 左右留白随平台：Mac 编辑页铺满、字限在 `maxTextWidth` 一列里居中，iPhone 贴近屏幕边。iOS 上字号是 Dynamic Type 的设计基准。
     /// `verticalInset` 是首行上面与末行下面的留白：宽屏 iPad 的纸四边同宽，其余贴着顶栏，留一点就够。
     static func editor(_ palette: Palette, horizontalInset: CGFloat, verticalInset: CGFloat = 8, maxTextWidth: CGFloat? = nil) -> CueEditorTheme {
-        let size: CGFloat = 15.5
         return CueEditorTheme(
-            font: Typeface.pingFang(size),
-            headingFont: Typeface.pingFang(18, weight: .semibold),
-            codeFont: .monospacedSystemFont(ofSize: size - 2, weight: .regular),
-            captionFont: .systemFont(ofSize: 12),
+            font: Typography.readingFont,
+            headingFont: Typography.editorHeadingFont,
+            codeFont: Typography.editorCodeFont,
+            captionFont: Typography.editorCaptionFont,
             fileGlyphSize: Glyph.largeSize,
             markerColor: CueColor(palette.ink3),
             codeBackground: CueColor(palette.fill),
@@ -73,8 +60,8 @@ extension CueEditorTheme {
             horizontalInset: horizontalInset,
             maxTextWidth: maxTextWidth,
             verticalInset: verticalInset,
-            lineSpacing: 7,
-            headingSpacing: 10,
+            lineSpacing: Typography.readingLineSpacing,
+            headingSpacing: Typography.editorHeadingSpacing,
             imageCornerRadius: Radius.block)
     }
 }

@@ -70,6 +70,12 @@ forbid "圆角只用 Radius 的几档（Theme/Radius.swift，按东西的种类�
 forbid "字号只经 Typography（文字，Theme/Typography.swift）与 Glyph（图标，Theme/Glyph.swift）的几档，Theme 以外不写 .system(size: 数) 与 ofSize:、pointSize: 的数：各处自写的字号是又一套层级，新东西先问它是正文、说明还是哪一档图标；确要新档就在那两处按用途加一个" \
   '(?:\.system\(size:\s*[\d.]|\b(?:ofSize|pointSize):\s*[\d.])' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/IslandType.swift'
+forbid "字体名称只在 Typography 选择：界面与编辑器复用同一角色，让系统按文字选择中英文字形，不在单个组件强制中文字体" \
+  '(?:\b(?:CueFont|NSFont|UIFont)\(name:|\bFont\.custom\(|\.font\(\s*\.custom\()' \
+  '**/Theme/Typography.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
+forbid "额外行距只在 Typography 定义：输入、发送后的气泡、正文与测高复用同一阅读角色；紧凑文字按角色取值，不在组件里另写一套" \
+  '(?:(?:\.lineSpacing\(\s*|\blineSpacing:\s*|\.lineSpacing\s*=\s*)(?:[1-9]|0\.\d*[1-9]))' \
+  '**/Theme/Typography.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
 forbid "投影只经 elevation 的几档（Theme/Surfaces.swift 的 Elevation，按浮多高分：hover、lifted、panel）：各处自写的半径与偏移是又一套手感，颜色随外观由色板给" \
   '\.shadow\(' '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**'
 forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（.caption、.footnote、Font.subheadline…）：它们编进 Mac 是系统的小号（.caption、.footnote 10 点），低于 Mac 的 12 点下限；iOS 缺的角色在 Typography 里按用途加。扩展（Widget）里没有 Typography，例外" \

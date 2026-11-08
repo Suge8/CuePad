@@ -196,7 +196,7 @@ private struct TraceText: View {
             if let label { Text(label).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3) }
             ScrollView {
                 Text(text).font(Typography.codeNote).foregroundStyle(tint ?? palette.ink2)
-                    .lineSpacing(2)
+                    .lineSpacing(Typography.noteLineSpacing)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .selectable()

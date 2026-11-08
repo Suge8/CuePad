@@ -7,18 +7,18 @@ import SwiftUI
 /// 分开排与整串排一样高：段与段之间隔的就是行距；空段（Markdown 的段距行、空行）是一个带着那个换行字体的空格。
 struct Paragraphs: View {
     let text: AttributedString
-    var lineSpacing: CGFloat = 0
+    @ScaledMetric private var lineSpacing: CGFloat
     /// 最多排几行（折起的气泡）。
     var lineLimit: Int?
 
     init(_ text: AttributedString, lineSpacing: CGFloat = 0, lineLimit: Int? = nil) {
         self.text = text
-        self.lineSpacing = lineSpacing
+        _lineSpacing = ScaledMetric(wrappedValue: lineSpacing, relativeTo: .body)
         self.lineLimit = lineLimit
     }
 
-    init(verbatim text: String, lineLimit: Int? = nil) {
-        self.init(AttributedString(text), lineLimit: lineLimit)
+    init(verbatim text: String, lineSpacing: CGFloat = 0, lineLimit: Int? = nil) {
+        self.init(AttributedString(text), lineSpacing: lineSpacing, lineLimit: lineLimit)
     }
 
     var body: some View {

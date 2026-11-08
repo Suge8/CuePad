@@ -208,7 +208,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
 
     private func line(moves: Bool) -> some View {
         BoardLine(pulse: pulse, moves: moves)
-            .padding(.leading, TaskMetrics.cardLead + gap)
+            .padding(.leading, pulse.word == nil ? TaskMetrics.cardLead + gap : 0)
             .padding(.bottom, BoardCardMetrics.waveBottom)
     }
 

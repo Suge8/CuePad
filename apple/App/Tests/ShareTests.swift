@@ -36,7 +36,7 @@ struct ShareTests {
             to: location.snapshotsDirectory)
         let target = try #require(Snapshots.read(ProjectsSnapshot.self, from: location.snapshotsDirectory)?.projects.first)
         let model = ShareModel(providers: [provider(text: "记一下")], location: location)
-        #expect(model.projects.map(\.name) == ["A"])
+        #expect(model.projects?.map(\.name) == ["A"])
         await model.load()
         #expect(model.state == .ready)
         model.selectedProject = target.id

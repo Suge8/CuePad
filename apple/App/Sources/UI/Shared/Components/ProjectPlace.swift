@@ -9,8 +9,15 @@ struct ProjectPlace: Equatable {
     let text: Dotted
     /// 绑着本机的文件夹（只在 Mac 上有）：点了在访达里显示。
     let folder: URL?
-    /// 头一段是本机路径（Mac）：放不下从中间省略，头尾都要紧；手机上是几段"X 上的 Y"，放不下整段整段地从尾部去掉（`ProjectPlaceLabel`）。
+    /// 头一段是本机路径（Mac）：页面显示末级目录；手机上是几段“X 上的 Y”（`ProjectPlaceLabel`）。
     let isPath: Bool
+
+    /// 路径保留末级与待创建说明，完整路径仍在 text。
+    var shortText: Dotted {
+        guard isPath, let path = text.parts.first else { return text }
+        let name = URL(filePath: path, directoryHint: .isDirectory).lastPathComponent
+        return Dotted([name] + text.parts.dropFirst())
+    }
 }
 
 extension Workspace {
@@ -35,7 +42,7 @@ extension Workspace {
     #endif
 }
 
-/// `ProjectPlace` 那一句（`icon` 时前面一枚文件夹图标），一行：本机路径太长从中间省略；几段的放得下几段写几段，去掉的接一个"…"，
+/// `ProjectPlace` 那一句（`icon` 时前面一枚文件夹图标），一行：本机路径只显示末级目录；几段的放得下几段写几段，去掉的接一个"…"，
 /// 不拦腰截断一段（连头一段都放不下才从尾部省略），读屏照读全部。Mac 上绑着本机文件夹的点了在访达里显示。
 struct ProjectPlaceLabel: View {
     let place: ProjectPlace
@@ -45,7 +52,7 @@ struct ProjectPlaceLabel: View {
         let label = HStack(spacing: Spacing.tight) {
             if icon { Image(.folder).imageScale(.small).readerHidden(true) }
             if place.isPath {
-                Text(place.text).lineLimit(1).truncationMode(.middle)
+                Text(place.shortText).lineLimit(1).truncationMode(.middle).accessibilityLabel(place.text.spoken)
             } else {
                 segments
             }
@@ -54,9 +61,9 @@ struct ProjectPlaceLabel: View {
         if let folder = place.folder {
             Button { NSWorkspace.shared.activateFileViewerSelecting([folder]) } label: { label }
                 .buttonStyle(PressStyle(.inline))
-                .help("在访达中显示")
+                .help(place.text.visible)
         } else {
-            label
+            label.help(place.text.visible)
         }
         #else
         label

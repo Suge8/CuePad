@@ -77,16 +77,15 @@ struct RouteView: View {
     @Environment(\.headerHost) private var host
 
     var body: some View {
-        // 沉浸式：内容一直滚到顶栏、回复框的玻璃后面、透到屏幕最顶，玻璃本身就是遮挡，玻璃之间与下面的内容清楚可见——
-        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关；状态栏那一条的模糊是整个窗口一份（`StatusBarBlur`）。
-        // 内容离系统顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面；页顶那一排自己画的页（窄屏的根）
-        // 由那一排让（`FloatingHeader`）。系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数
+        // 页顶由系统滚动边缘效果隔开正文；底部仍透过回复框，状态栏模糊由窗口负责。
+        // 系统分组列表默认顶边清掉，第一行只按栏头安全区与 contentGap 让位。
         page.contentMargins(.top, 0, for: .scrollContent)
             .safeAreaPadding(.top, host == .navigationBar ? Bars.contentGap : 0)
             .containerBackground(background, for: .navigation)
             // 标题在页顶那一排中间的玻璃里或不写（根页），不用系统大标题
             .navigationBarTitleDisplayMode(.inline)
-            .scrollEdgeEffectHidden()
+            .scrollEdgeEffectHidden(true, for: .bottom)
+            .scrollEdgeEffectStyle(.soft, for: .top)
             // 导航栈里的页自己跟着键盘让位（UIKit 给的安全区，不经外层），菜单开着时在这里锁住
             .modifier(KeyboardHold())
     }

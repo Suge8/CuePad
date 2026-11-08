@@ -54,7 +54,7 @@ check_ios_floor() {
     [ "$(schema_floor "$tag")" -ge "$here" ] && return 0
     break
   done
-  echo "这一版的同步下界是 $here，TestFlight 上处理好的 iOS 版还没到：先 xc.sh release ios，等 testflight.py builds 显示 VALID 再发 Mac（docs/release.md「发版顺序」）" >&2
+  echo "这一版的同步下界是 ${here}，TestFlight 上处理好的 iOS 版还没到：先 xc.sh release ios，等 testflight.py builds 显示 VALID 再发 Mac（docs/release.md「发版顺序」）" >&2
   exit 1
 }
 # 上传要 gh 能写这个 Release：打包要几分钟，先确认
@@ -148,4 +148,4 @@ cmp "$check/$ASSET" "$zip"
 tag="mac/${versions[1]#CURRENT_PROJECT_VERSION=}"
 git -C "$APPLE_DIR" tag "$tag"
 git -C "$APPLE_DIR" push -q origin "$tag"
-echo "已发布：$DOWNLOAD/$ASSET（$tag）"
+echo "已发布：$DOWNLOAD/${ASSET}（${tag}）"
