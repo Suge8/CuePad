@@ -35,8 +35,11 @@ SYMBOLS = {"mascot": mascot} | {name: lambda weight, name=name: draw(name, weigh
 def fmt(v): return f"{v:.3f}".rstrip("0").rstrip(".")
 
 
-def d_of(contour, dx, dy):
-    def P(p): return f"{fmt(p[0] + dx)},{fmt(p[1] + dy)}"
+def d_of(contour, dx, dy, *, stable=False):
+    def coordinate(v):
+        # hypot 的跨版本 ULP 差异不能改变 SVG 的千分位舍入；品牌路径保留原始编码。
+        return fmt(round(v, 9) if stable else v)
+    def P(p): return f"{coordinate(p[0] + dx)},{coordinate(p[1] + dy)}"
     out = [f"M{P(contour[0].start())}"]
     for s in contour:
         if isinstance(s, Line):
@@ -77,7 +80,7 @@ def check_accent(name, layers):
     assert accent <= ACCENT_SHARE * sum(ink), f"{name}：点睛占了墨量的 {accent / sum(ink):.0%}（最多 {ACCENT_SHARE:.0%}），主体要在主层"
 
 
-def template(per):
+def template(per, *, stable):
     """per：{母版: [Layer]}。"""
     s = {w: structure(per[w]) for w in WEIGHTS}
     assert len({str(v) for v in s.values()}) == 1, f"三个母版结构不一致：{ {w: len(v) for w, v in s.items()} }"
@@ -95,7 +98,7 @@ def template(per):
         guides.append(f'<line id="left-margin-{w}-S" {line} x1="{left_:.3f}" x2="{left_:.3f}" y1="600.785" y2="720.121"/>'
                       f'<line id="right-margin-{w}-S" {line} x1="{left_ + width:.3f}" x2="{left_ + width:.3f}" y1="600.785" y2="720.121"/>')
         paths = [f'<path class="monochrome-{i} multicolor-{i}:tintColor hierarchical-{i}:{tiers[i]} SFSymbolsPreviewWireframe" '
-                 f'd="{" ".join(d_of(c, dx, -MID) for c in L.contours)}"/>' for i, L in enumerate(per[w])]
+                 f'd="{" ".join(d_of(c, dx, -MID, stable=stable) for c in L.contours)}"/>' for i, L in enumerate(per[w])]
         groups.append(f'<g id="{w}-S" transform="matrix(1 0 0 1 {left_:.3f} {BASELINE})">{"".join(paths)}</g>')
     styles = [".defaults {-sfsymbols-variable-value-mode:color;-sfsymbols-draw-reverses-motion-groups:false}"]
     for i in range(len(tiers)):
@@ -122,7 +125,7 @@ def symbol_files():
         check_accent(name, per["Regular"])
         full = f"{PREFIX}.{name}"
         folder = OUT / f"{full}.symbolset"
-        svg = template(per)
+        svg = template(per, stable=name != "mascot")
         info = (
             '{\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  },\n'
             '  "properties" : {\n    "symbol-rendering-intent" : "template"\n  },\n  "symbols" : [\n    {\n'
