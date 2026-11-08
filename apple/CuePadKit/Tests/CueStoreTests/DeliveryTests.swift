@@ -75,7 +75,8 @@ import Testing
     }
     try await executor.start()
     _ = try await store.requestDelivery("唤醒会话", to: pi, on: "mac-a")
-    await clock.waitForSleeper()
+    // 执行期限也在这只钟上等待，不能把它当成领取回执的计时器。
+    await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.claimGrace.seconds))
     clock.advance(DeliveryExecutor.claimGrace)
     try await eventually("领取交给上传") { await !uploads.statuses.isEmpty }
     #expect(await uploads.statuses == [.executing])

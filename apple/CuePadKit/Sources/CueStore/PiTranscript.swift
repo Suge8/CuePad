@@ -125,7 +125,7 @@ extension CueStore {
   }
 
   /// 真实消息与来源在同一事务收敛；请求原文是发送快照，不拿模型输出冒充投送确认。
-  /// 批量按现有主键与 deliveryID 索引查，不逐条读请求；补历史只记账，不绑定任务。
+  /// 批量按现有主键与 deliveryID 索引查，不逐条读请求；关联只兑现仍有效的请求修订。
   func reconcileDeliveries(in messages: [PiChatMessage], session: String) throws {
     let ids = Set(messages.compactMap { message in
       [.known(.user), .known(.machine)].contains(message.role) ? message.deliveryID : nil
@@ -156,6 +156,7 @@ extension CueStore {
       WHERE status != 'succeeded' AND mode IN ('send', 'start') AND id IN (SELECT value FROM json_each(?2))
         AND (targetRef = ?3 OR mode = 'start')
       """, [Date.stamp, Self.idList(ids), session])
+    try reconcileDeliveredCards(deliveries: ids)
   }
 
   /// 删掉不再需要同步的对话：会话 `window` 内没有活动（按本机会话索引里会话文件的最后活动；索引里没有的按最后一条消息）、

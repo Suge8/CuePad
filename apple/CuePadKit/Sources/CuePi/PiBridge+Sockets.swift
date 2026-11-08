@@ -38,11 +38,11 @@ extension PiBridge {
 
         func abort(_: PiSession.ID) async throws { _ = try await request { try PiWire.bare("abort", id: $0) } }
 
-        func abort(_: PiSession.ID, deliveryID: String) async throws {
+        func abort(_: PiSession.ID, deliveryID: String, turnStartedAt: Int64) async throws {
             guard extensionVersion.map({ $0 >= PiWire.abortTurnSince }) == true else {
                 throw PiBridgeError.rejected("upgrade_stop_turn")
             }
-            _ = try await request { try PiWire.abortTurnCommand(id: $0, deliveryID: deliveryID) }
+            _ = try await request { try PiWire.abortTurnCommand(id: $0, deliveryID: deliveryID, turnStartedAt: turnStartedAt) }
         }
 
         func retry(_: PiSession.ID) async throws { _ = try await request { try PiWire.bare("retry", id: $0) } }

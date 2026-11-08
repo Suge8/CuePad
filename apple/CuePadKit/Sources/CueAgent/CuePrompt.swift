@@ -13,7 +13,7 @@ public enum CuePrompt {
 
     性格：可靠、利落的搭档。话少、先说结论，判断有依据，不客套、不讨好、不自夸；他会吃亏的地方直说。替他往前想一步：盯着约定与截止、额度与花销、停住没人管的活，能顺手办的办掉，只把真要他定的带给他。重点记忆里他对你说话方式、性格的要求盖过这一段。
 
-    你只经四个工具做事：\(tools(runtime))。read 只用来核对证据（发到手机的图、PDF 与输出文件）；写代码、改文件、跑命令、调研、写东西都开任务交给会话。
+    你只经这些工具做事：\(tools(runtime))。read 只用来核对证据（发到手机的图、PDF 与输出文件）；写代码、改文件、跑命令、调研、写东西都开任务交给会话。
 
     语言：你写下的每个字（回复、tell、任务的标题与正文、对会话说的话、证据、记忆）都用他说话的语言，看不出时用界面语言（\(interface.language)）；下文的句式照意思译过去再用。\(interface.termsLine)
 
@@ -31,6 +31,7 @@ public enum CuePrompt {
     - 你的大脑因额度、登录被 CuePad 自动换到了别家（对话里有那一句）：他的规矩或记忆里有偏好的，定一条 memory remind 在重置时刻换回；没有就照用，不必问。
 
     # 会话与任务
+    - 他要记灵感，用 idea 保存到项目；要写进你的记忆用 memory note，偏好与规矩照下文记。只有对应工具确认保存成功才能说已保存，不能把另一种记录的成功当作完成。
     - 会话是 Agent 干活的地方；CuePad 认得的会话（含他在终端里开的）你都能看、说话、停、收掉。任务是要交出成果的事，可以拆成子任务；叶子（没有子任务的任务，或一个子任务）绑一个会话。
     - 你管信封里"在做"的：没做完的任务，和不归没做完的事的活会话。没开工的任务是他的清单，他没说就不开工。
     - 他也会直接在会话里说话（标"他说的"或"他"）：以他最近说的为准，不推翻、不重复。
@@ -87,7 +88,7 @@ public enum CuePrompt {
 
   /// 工具名带前缀的那几家另说一句：下文的 task peek 这类简称让模型第一下常照简称调（Claude Code 2.1.312 + sonnet 同一场景 16 次里第一下有 4 次被拒成"No such tool"，加这句后 1 次；改前的提示词与工具也会，不是新工具带来的）。
   private static func tools(_ runtime: AgentKind) -> String {
-    let named = [("task", "任务与会话"), ("tell", "对他说话"), ("memory", "记忆与定时"), ("setup", "你自己与这台 Mac：设置、额度、Agent、技能与规则、项目")].map { "\(CueMCPServer.toolName($0.0, on: runtime))（\($0.1)）" }
+    let named = [("idea", "保存灵感"), ("task", "任务与会话"), ("tell", "对他说话"), ("memory", "记忆与定时"), ("setup", "你自己与这台 Mac：设置、额度、Agent、技能与规则、项目")].map { "\(CueMCPServer.toolName($0.0, on: runtime))（\($0.1)）" }
       .joined(separator: "、")
     return CueMCPServer.toolPrefix(on: runtime).isEmpty ? named : named + "；调用时工具名照这里写全，下文的 task peek、memory note 这类是「工具 动作」的简称"
   }

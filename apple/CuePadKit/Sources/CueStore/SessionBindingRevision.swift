@@ -31,10 +31,24 @@ extension CueStore {
     return revision
   }
 
+  enum SessionBindingDisposition {
+    case awaitingCard, applicable, settled
+  }
+
+  /// 请求只授权创建时选定的卡片，不能随层级变化重选叶子。缺卡或旧版卡片不证明意图已结束；
+  /// 兑现、新修订、删除与原卡不再是叶子允许窗口内提前清理。无可靠修订的历史不重建意图。
+  func sessionBindingDisposition(_ request: DeliveryRequest) throws -> SessionBindingDisposition {
+    guard let id = request.cardID, let revision = request.sessionBindingRevision else { return .settled }
+    guard let card = try find(Card.self, id) else { return .awaitingCard }
+    guard card.deletedAt == nil else { return .settled }
+    if card.isTask, try homeLeaf(id) != id { return .settled }
+    guard let current = card.sessionBindingRevision else { return .awaitingCard }
+    if current.id == revision.id { return current.fulfilled ? .settled : .applicable }
+    return current > revision ? .settled : .awaitingCard
+  }
+
   func acceptsSessionBinding(_ request: DeliveryRequest) throws -> Bool {
-    guard let id = request.cardID, let card = try find(Card.self, id), card.deletedAt == nil,
-      let revision = request.sessionBindingRevision, card.sessionBindingRevision?.id == revision.id else { return false }
-    return true
+    try sessionBindingDisposition(request) == .applicable
   }
 
   /// 整行的版本仍负责正文等字段；关联意图独立比较，旧 ACK 的晚写入不能覆盖明确解绑。

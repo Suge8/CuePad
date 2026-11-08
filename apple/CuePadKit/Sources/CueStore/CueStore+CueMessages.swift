@@ -7,19 +7,27 @@ extension CueStore {
   /// 点名的图不在发到手机的里抛 `shotMissing`，什么都不写。
   @discardableResult
   public func addCueMessage(
-    _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false, task: UUID? = nil, answeredRequests: [UUID]? = []
+    _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false, task: UUID? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
+  ) throws -> CueMessage {
+    try write {
+      try putCueMessage(author, text: text, ask: ask, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
+    }
+  }
+
+  /// 调用者持有写事务，正文、附件校验及收起旧提问与记录写入不可分开。
+  func putCueMessage(
+    _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false,
+    task: UUID? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
   ) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
-    return try write {
-      try checkShots(shots)
-      guard let ask else {
-        let message = try insertCueMessage(author, text: text, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests)
-        if author == .you { _ = try endQuestions(setAsideBy: message.id, where: "1", []) }
-        return message
-      }
-      let project = try projectID(of: task).flatMap { try find(Project.self, $0) }
-      return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task, answeredRequests: answeredRequests)
+    try checkShots(shots)
+    guard let ask else {
+      let message = try insertCueMessage(author, text: text, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
+      if author == .you { _ = try endQuestions(setAsideBy: message.id, where: "1", []) }
+      return message
     }
+    let project = try projectID(of: task).flatMap { try find(Project.self, $0) }
+    return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
   }
 
   /// CuePad 代 Cue 写下的话（起不来、换不成模型……，`CueMessage.shownText`）。
@@ -38,11 +46,11 @@ extension CueStore {
   /// Cue 写下的置手机推送标志：要提示你的（`CueMessage.alerts`）且到得了你（`reaches`）出可见通知，其余静默叫醒（`CuePush`）。它提到的那几处此刻的样子一并记下（`CuePlace`）。
   func insertCueMessage(
     _ author: CueAuthor, text: String = "", shown: ShownText? = nil, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil,
-    urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil, answeredRequests: [UUID]? = []
+    urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
   ) throws -> CueMessage {
     let now = Date.stamp
     var message = CueMessage(
-      id: UUID(), author: .known(author), text: shown?.text ?? text, shownText: shown, choices: asking?.ask.choices(in: project?.name),
+      id: id, author: .known(author), text: shown?.text ?? text, shownText: shown, choices: asking?.ask.choices(in: project?.name),
       asked: asking.map { CueAsked($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, shots: shots,
       urgent: urgent, taskID: task,
       answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, answeredRequests: author == .cue ? answeredRequests : nil, wake: wake,

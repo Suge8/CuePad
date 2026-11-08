@@ -44,10 +44,12 @@ final class VoiceCall {
 
     private var connection: Connection = .finished(.ended)
     private var outputActive = false
+    private(set) var waitingForResponse = false
+    private(set) var assistantTurns: Set<String> = []
+    private(set) var mediaEndReason: VoiceEndReason?
     private var inputSamples: [Double] = []
     private var outputSamples: [Double] = []
     /// 50ms 一点，保留最近 1.8 秒；静音不呈现输入，远端出声时呈现输出。
-    private static let sampleCount = 36
     var samples: [Double] { outputActive ? outputSamples : isMuted ? [] : inputSamples }
     private(set) var userTurn: String?
     var requestState: [Request] = []
@@ -65,9 +67,9 @@ final class VoiceCall {
     private(set) var usedPercent: Double?
     var storeFailure: String?
     @ObservationIgnored var mark: (String) -> Void = { _ in }
-    @ObservationIgnored let dependencies: Dependencies
+    @ObservationIgnored var dependencies: Dependencies
     @ObservationIgnored private var peer: (any VoiceMedia)?
-    @ObservationIgnored private var session = UUID()
+    @ObservationIgnored private(set) var session = UUID()
     @ObservationIgnored var inputs = AsyncStream<Input>.makeStream()
     @ObservationIgnored private var connecting: Task<Void, Never>?
     @ObservationIgnored var observing: Task<Void, Never>?
@@ -107,24 +109,29 @@ final class VoiceCall {
         case .finished(let end): return end
         case .ready: break
         }
-        if outputActive { return .speaking }
-        return requests.contains(where: \.isRecording) ? .handingOff : .listening
+        // 助手回合是协议事实，不是播放游标；电平只驱动本机波形，句间静音不能结束回合。
+        // 等待回应与写库另行投影，仍可收音时不把它们冒充媒体 processing。
+        return assistantTurns.isEmpty ? .listening : .speaking
     }
 
     var channel: (any VoiceControl)? {
         if case .ready(let channel) = connection { channel } else { nil }
     }
     var isLive: Bool { if case .finished = connection { false } else { true } }
-    var canMute: Bool { channel != nil && muting == nil }
+    var canMute: Bool { channel != nil && muting == nil && peer?.supportsMute == true }
     var canRepeat: Bool { channel != nil }
     func hangUp() { inputs.continuation.yield(.hangUp) }
 
     /// 重新接通只重建媒体与控制连接；库订阅、请求身份和结果保留，不重新执行业务。
-    func reconnect() {
+    func reconnect(session: UUID = UUID(), media: (any VoiceMedia)? = nil) {
         guard !isLive else { return }
+        peer = media
         inputs = AsyncStream<Input>.makeStream()
         connection = .connecting
-        session = UUID()
+        self.session = session
+        mediaEndReason = nil
+        assistantTurns.removeAll()
+        waitingForResponse = false
         delegations.removeAll()
         audioMs = 0
         usedPercent = nil
@@ -152,7 +159,7 @@ final class VoiceCall {
             catch { await finish(.failed(Self.failure(error))); return }
         }
         watchRequests()
-        let peer = dependencies.media(dependencies.source, dependencies.recording)
+        let peer = self.peer ?? dependencies.media(dependencies.source, dependencies.recording)
         self.peer = peer
         peer.onEvent = { [inputs] in inputs.continuation.yield(.peer($0)) }
         deadline = Task { [inputs] in
@@ -179,7 +186,7 @@ final class VoiceCall {
 
     private func handle(_ input: Input) -> Phase? {
         switch input {
-        case .hangUp: return .ended
+        case .hangUp: mediaEndReason = .hungUp; return .ended
         case .failed(let failure): return .failed(failure)
         case .prepared(let call, let access):
             usedPercent = call.usedPercent
@@ -190,13 +197,16 @@ final class VoiceCall {
                 mark("media")
                 connection = .starting(dependencies.control(call.id, access, session) { [inputs] in inputs.continuation.yield(.wire($0)) })
             }
-        case .peer(.failed): return .failed(.media)
+        case .peer(.failed): mediaEndReason = .mediaFailed; return .failed(.media)
+        case .peer(.ended(let reason)):
+            mediaEndReason = reason
+            return [.hungUp, .background].contains(reason) ? .ended : .failed(.media)
         case .peer(.inputEnded): mark("input-ended")
         case .peer(.device(let label)): mark("device \(label)")
         case .peer(.sample(let side, let peak)):
             let value = min(1, max(0, peak))
-            if side == .input { inputSamples = Array((inputSamples + [value]).suffix(Self.sampleCount)) }
-            else { outputSamples = Array((outputSamples + [value]).suffix(Self.sampleCount)) }
+            if side == .input { inputSamples = Array((inputSamples + [value]).suffix(VoicePeer.sampleCount)) }
+            else { outputSamples = Array((outputSamples + [value]).suffix(VoicePeer.sampleCount)) }
         case .peer(.level(let side, let loud, let peak)):
             if side == .input { inputPeak = max(inputPeak, peak) }
             else { outputActive = loud }
@@ -234,7 +244,11 @@ final class VoiceCall {
                 if assistant { said = text } else { heard = text }
                 mark("\(assistant ? "assistant" : "user")-said \(id) \(text)")
             } else if assistant { mark("assistant-turn \(id)") }
-            if !assistant {
+            if assistant {
+                if done { assistantTurns.remove(id) } else { assistantTurns.insert(id) }
+                waitingForResponse = false
+            } else {
+                waitingForResponse = done
                 if !done { userTurn = id }
                 else if userTurn == id { userTurn = nil }
             }
@@ -254,10 +268,10 @@ final class VoiceCall {
         muting?.cancel()
         deadline?.cancel()
         outgoing?.task.cancel()
-        // 没有逐回复的服务端／播放确认；异步错误或挂断后，已提交与半途发送都不能当作未送出自动重投。
+        // 已提交本就不保证播放成功，正常挂断不制造异常；半途取消的发送才需明确请求重说。
         for index in replyState.indices {
             switch replyState[index].delivery {
-            case .sending, .submitted: replyState[index].delivery = .unconfirmed(String(localized: "朗读尚未确认"))
+            case .sending: replyState[index].delivery = .unconfirmed(String(localized: "朗读尚未确认"))
             default: break
             }
         }

@@ -34,7 +34,7 @@ extension CueStore {
   /// 这件事里没人再用的会话随之结束（`endUnusedSessions`）。你对会话说的话（作答、重跑也算）当场收起挂在它上面的提问（`questionsOn`），
   /// 算你在那边答了：不交给 Cue、不叫醒它；待回复不用写，读的时候就不算了（`sessionsAwaitingReply`）。
   func insertDelivery(
-    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode, card: UUID? = nil, cue: Bool
+    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode, card: UUID? = nil, cue: Bool, id: UUID = UUID()
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     if let session = target.ref, target.kind == .known(.piSession), DeliveryMode.requiresReadySession.contains(mode) {
@@ -42,7 +42,7 @@ extension CueStore {
     }
     let now = Date.stamp
     var request = DeliveryRequest(
-      id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
+      id: id, content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
       status: .known(.pending), reason: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
       resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
     if let card, mode == .start || mode == .send || mode == .command {

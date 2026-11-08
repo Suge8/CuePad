@@ -3,6 +3,16 @@ import CuePi
 import CueStore
 
 extension MacExecutor {
+    /// 排队后的真实进程和回合先核对；到 Agent 后再同步核对投送与回合，补上 socket 传输期间的竞态窗口。
+    func stopTurn(_ request: DeliveryRequest) async throws {
+        guard let target = request.stopTurn, target.hostID == hostID, target.bootID == SystemBoot.id,
+              request.target.ref == target.sessionID, let live = pi.session(sessionID: target.sessionID),
+              live.turnStartedAt?.stored == target.turnStartedAtMilliseconds else {
+            throw PiBridgeError.rejected("stale_turn")
+        }
+        try await pi.abort(live.id, deliveryID: target.deliveryID.uuidString, turnStartedAt: target.turnStartedAtMilliseconds)
+    }
+
     /// 结束会话（不写发送记录）：在桥上的先关掉它的进程；不在桥上的（托管着、进程已歇的，或早已结束的）没有进程可关，
     /// 不能为了结束它而恢复它。两种都由这里记为已结束、进历史——托管的会话闲置退出不算结束，只有用户的结束请求才算。
     func end(_ request: DeliveryRequest) async throws {

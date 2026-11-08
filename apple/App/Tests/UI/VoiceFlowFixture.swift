@@ -58,6 +58,12 @@ final class VoiceFlowFixture {
 
     init(_ services: AppServices) { workspace = Workspace(services: services) }
 
+    func trip(_ id: UUID? = nil) -> Speech.Trip? {
+        call.requests.first { id == nil || $0.message == id }?.record.map {
+            Said.cue($0, host: workspace.cue.hostID).trip(at: workspace.services.speech)
+        }
+    }
+
     func start() {
         workspace.startVoiceCall { dependencies in
             var dependencies = dependencies

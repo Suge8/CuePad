@@ -166,19 +166,19 @@ case "$cmd" in
     if [ -n "${device:-}" ]; then phase 开机 sim_boot "$device"; xcrun simctl uninstall "$device" "$CUEPAD_APP_ID"; fi
     # 屏幕上只留编译的警告与错误、失败的用例（带原因）与汇总：编译的每一步、App 与测试宿主的日志、每条用例的开始与通过一次就是几千行，
     # 会把失败挤出 Agent 的输出上限。所以先 -quiet 编（只出警告与错误），再不带 -quiet 跑（-quiet 连失败的原因也吞掉），跑的输出滤掉上面那些；
-    # 完整输出写进 log，查失败前后的日志去那里
-    log="$DERIVED/test.log"; : >"$log"
+    # 完整输出写进 log
+    log="$DERIVED/test.log"; : >"$log"; echo "完整输出（含 App 日志）：$log" >&2
     zwsp="$(printf '\342\200\213')"  # Swift Testing 在部分行首加零宽空格
     noise="^($zwsp)*(◇ |✔ Suite .* passed after|✔ Test ([^ (]+\\(|\").* passed after)|^Test (Case|Suite) .* (started|passed)"  # 留着「✔ Test run with」那行汇总
     noise+='|^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:.]+[+-][0-9]{4} [^ ]+\[[0-9]+:[0-9a-f]+\] |DVTAssertions|^(Details|Object|Method|Thread): |^Please file a bug|^\{ platform:|^--- xcodebuild: WARNING: Using the first'
-    shown() { tee -a "$log" | { grep -avE "$noise" || true; }; }
+    shown() { tee -a "$log" | { grep --line-buffered -avE "$noise" || true; }; }
     # 编译只认收窄参数（只编要跑的测试目标）；-test-iterations 这类只给跑的那一步
     narrowed() { local a; for a in "$@"; do case "$a" in -only-testing:*|-skip-testing:*) printf '%s\0' "$a" ;; esac; done; }
     kit_test() {
       local narrow=(); while IFS= read -r -d '' a; do narrow+=("$a"); done < <(narrowed "$@")
       (cd "$APPLE_DIR/CuePadKit" && built "$DERIVED/kit-$platform/build-key" "$DERIVED/kit-$platform/Build/Products" "${narrow[*]:-all}" xcodebuild -quiet build-for-testing -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" ${narrow[@]+"${narrow[@]}"} 2>&1 \
         && xcodebuild test-without-building -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" "${limits[@]}" "$@" 2>&1) \
-        | { grep -v 'failed with exit code 0 but produced no further output' || true; }
+        | { grep --line-buffered -v 'failed with exit code 0 but produced no further output' || true; }
     }
     # iOS/iPad：同一个入口也在模拟器上跑 CuePadKit 的测试（iOS 编辑器等只在这里跑；macOS 上的 Kit 测试是 test kit）。
     # 带了收窄参数（-only-testing 等）时只跑 App 那部分；两部分都跑完再按其一失败退出。
@@ -196,7 +196,6 @@ case "$cmd" in
       echo "-only-testing 一个测试也没对上：Swift Testing 写 <测试目标>/<Suite 类型名>/<函数名>()，用例所在的类型以源码为准" >&2
       status=1
     fi
-    echo "完整输出（含 App 日志）：$log"
     exit $status ;;
   shot|rec|run)
     # 截图前先查台前调度：开着就拍不对，不白等一次构建

@@ -123,6 +123,7 @@ extension CueStore {
     let bodies = try db.query("SELECT body FROM cards WHERE \(condition)", arguments) { $0.text(0) }
     let referenced = Set(bodies.flatMap(CueFormat.attachmentKeys(in:)))
     try db.run("UPDATE sendRecords SET cardID = NULL, modifiedAt = ? WHERE cardID IN (\(ids))", [Date.stamp] + arguments)
+    try releaseDeliveryBindings(of: db.query(ids, arguments) { $0.uuid(0) })
     try db.run("DELETE FROM cards WHERE \(condition)", arguments)
     return referenced
   }

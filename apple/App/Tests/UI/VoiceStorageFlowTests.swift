@@ -20,15 +20,15 @@ struct VoiceStorageFlowTests {
         defer { voice.call.hangUp(); services.cancelBackgroundWork() }
         try await voice.connect()
         let request = try await voice.handoff("离线先保存，接通后交给另一台 Mac")
-        #expect(voice.workspace.voicePresentation?.replies.first?.request?.delivery == .sending)
+        #expect(voice.trip(request) == .sending)
         await cloud.setDown(false)
         await services.syncNow()
         try await eventually("服务器收下，但 Cue 尚未领取") {
-            await cloud.holds(request) && voice.workspace.voicePresentation?.replies.first?.request?.delivery == .sent
+            await cloud.holds(request) && voice.trip(request) == .sent
         }
         #expect(voice.call.requests.first?.record?.deliveredAt == nil)
         try await store.markCueMessagesDelivered([request])
-        try await eventually("接走回执才显示送达") { voice.workspace.voicePresentation?.replies.first?.request?.delivery == .delivered }
+        try await eventually("接走回执才显示送达") { voice.trip(request) == .delivered }
         try await voice.hangUp()
     }
 
@@ -56,7 +56,7 @@ struct VoiceStorageFlowTests {
         try #require(updates.contains { $0.message.id == reply.id }, "升级后晚到关联必须通知正在看通话的消费者")
         try await eventually("来源补齐后交给语音一次") { voice.controls[0].sends.count == 1 }
         #expect(voice.call.replies.first?.message.answeredRequests == [request])
-        #expect(voice.workspace.voicePresentation?.replies.last?.text == "真实结果先到，来源随后到")
+        #expect(voice.call.replies.last?.text == "真实结果先到，来源随后到")
         try await voice.hangUp()
     }
 }

@@ -12,13 +12,15 @@ import UIKit
 /// 只在真连着 iCloud（同步来源是 `.iCloud`、`makeSync` 建了 `CloudSync`）时有：测试与调试画面的替身云（`.built`、`.custom`）不连中转。
 /// 同步测量的隔离实例连的是 CloudKit 开发环境，密钥（`CloudSync.relaySecret`）从开发容器取，派生的房间与正式用户的不会重合。
 extension AppServices {
-    static func makeRelay(_ source: SyncSource, _ sync: (any SyncControlling)?) -> Relay? {
-        guard case .iCloud = source, !DebugHooks.relayOff, let sync = sync as? CloudSync else { return nil }
-        return Relay(host: relayHost) { try RelayCredentials(secret: try await sync.relaySecret()) }
+    static func makeRelay(_ source: SyncSource, _ sync: (any SyncControlling)?, device: String?) -> Relay? {
+        guard case .iCloud = source, !DebugHooks.relayOff, let sync = sync as? CloudSync, let device else { return nil }
+        return Relay(host: relayHost, device: device) { try RelayCredentials(secret: try await sync.relaySecret()) }
     }
 
     func startRelay() {
         guard let relay, let sync = sync as? CloudSync else { return }
+        let voiceEvents = relay.voiceEvents
+        follow { for await event in voiceEvents { await self.voice.receive(event) } }
         let accepted = sync.acceptedUpdates  // 当场订阅：同步一启动就可能有一批被收下，那时跟随者还没跑起来
         follow {
             for await _ in accepted { relay.ring() }

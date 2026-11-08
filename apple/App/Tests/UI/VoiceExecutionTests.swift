@@ -19,7 +19,7 @@ struct VoiceExecutionTests {
         let request = try await fixture.handoff("请问我一个问题")
         try await eventually("提问与收尾都可见") { fixture.call.replies.count == 2 }
         #expect(fixture.call.replies.allSatisfy { $0.message.answeredRequests == [request] })
-        #expect(fixture.workspace.voicePresentation?.replies.map(\.text) == ["", "要推送吗？", "办好了"])
+        #expect(fixture.call.replies.map(\.text) == ["要推送吗？", "办好了"])
         try await fixture.hangUp()
         await rig.stop()
     }

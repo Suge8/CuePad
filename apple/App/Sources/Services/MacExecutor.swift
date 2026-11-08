@@ -6,10 +6,10 @@ import Foundation
 /// 这台 Mac 上的投送请求执行器：领取发给本机的请求（手机发来的与本机界面写的），按发送方式执行，把结果写回。
 /// 全 App 经桥给 Agent 会话发消息、作答、改配置、停止、重跑出错的一轮、结束，经各 Agent 的接入在后台开会话、接着会话的只有这里；成功送出的话记发送记录。
 final class MacExecutor {
-    private let store: CueStore
+    let store: CueStore
     let pi: PiBridge
     private let runtimes: [AgentKind: any AgentRuntime]
-    private let hostID: String
+    let hostID: String
     private let workspaces: Workspaces
     let recorder: PiStateRecorder
     private let library: AgentLibraryKeeper
@@ -91,12 +91,7 @@ final class MacExecutor {
         case .quota: if let failure = await refreshQuota() { return .failed(failure) }
         case .end: try await end(request)
         case .stop: try await stop(request.target)
-        case .stopTurn:
-            guard let delivery = UUID(uuidString: request.content),
-                  let session = pi.session(sessionID: try sessionID(of: request.target)) else {
-                return .failed(ShownText(PiBridgeError.rejected("stale_turn")))
-            }
-            try await pi.abort(session.id, deliveryID: delivery.uuidString)
+        case .stopTurn: try await stopTurn(request)
         case .retry: try await retry(request.target)
         case .answer: try await answer(request, access: access)
         case .config: try await configure(request, access: access)

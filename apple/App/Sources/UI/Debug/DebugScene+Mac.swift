@@ -122,6 +122,7 @@ extension DebugScene {
         if let pace = defaults.string(forKey: "CuePadRightCycle") { Task { await cycle(#selector(AppDelegate.toggleCueColumn(_:)), fast: pace == "fast") } }
         await reverseWideIfAsked(workspace)
         await presetSpeech(workspace)
+        await voiceLayoutIfAsked(workspace)
         switch defaults.string(forKey: "CuePadBench") {
         case "churn": await benchChurn(workspace)
         case "interact": await InteractionBench.run(workspace)

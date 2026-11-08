@@ -7,7 +7,7 @@ extension VoiceCall {
     func submit(_ delegation: VoiceWire.Delegation) {
         guard !requestState.contains(where: { $0.id == delegation.id }),
               !delegation.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        requestState.append(Request(delegation: delegation))
+        requestState.append(Request(delegation: delegation, origin: VoiceSessionID(session)))
         delegations.insert(delegation.id)
         mark("handoff \(delegation.id)")
         recordRequest(delegation.id)
@@ -16,12 +16,12 @@ extension VoiceCall {
     /// 写库不归媒体连接所有：挂断不能撤销可能已落库的业务，也不能丢掉晚回来的请求 ID。
     func recordRequest(_ id: String) {
         guard let index = requestState.firstIndex(where: { $0.id == id }), writing[id] == nil else { return }
-        let text = requestState[index].text
+        let text = requestState[index].text, tell = dependencies.tell
         requestState[index].submission = .recording
         requestState[index].record = nil
         writing[id] = Task { [self] in
             do {
-                let message = try await dependencies.tell(text)
+                let message = try await tell(text)
                 if let index = requestState.firstIndex(where: { $0.id == id }) { requestState[index].submission = .recorded(message) }
                 watchRequests()
             } catch {
@@ -103,8 +103,7 @@ extension VoiceCall {
             for index in requestState.indices {
                 if let id = requestState[index].message, answered.contains(id) { requestState[index].submission = .returned(id) }
             }
-            guard message.author == .known(.cue), !message.text.isEmpty,
-                  answered.isEmpty || requestState.contains(where: { $0.message.map(answered.contains) == true }) else {
+            guard acceptsReadback(message) else {
                 if outgoing?.message == message.id { outgoing?.task.cancel(); outgoing = nil }
                 replyState.removeAll { $0.id == message.id }
                 continue
@@ -124,12 +123,27 @@ extension VoiceCall {
         drain()
     }
 
-    /// 同一条结果只在明确操作后重说；正文仍取真实记录，不重新派活，也不把旧交接 ID 带进新连接。
-    func repeatReply(_ id: UUID) {
-        guard canRepeat, let index = replyState.firstIndex(where: { $0.id == id }), replyState[index].delivery != .sending,
-              !replyState[index].text.isEmpty else { return }
-        replyState[index].delivery = .queued
+    private func acceptsReadback(_ message: CueMessage) -> Bool {
+        let answered = Set(message.answeredRequests ?? [])
+        return message.author == .known(.cue) && !message.text.isEmpty
+            && (answered.isEmpty || requestState.contains { $0.message.map(answered.contains) == true })
+    }
+
+    /// 明确重说与自动朗读遵循同一来源规则；订阅只负责展示，操作授权必须同步读取权威记录。
+    /// 查询、原媒体身份校验与排队之间没有 await，不能把旧条目的索引用到另一轮通话。
+    func repeatReply(_ id: UUID, mediaSession: VoiceSessionID) throws -> VoiceCommandResult.Outcome {
+        guard VoiceSessionID(session) == mediaSession, canRepeat,
+              let index = replyState.firstIndex(where: { $0.id == id }),
+              let original = try dependencies.store.snapshot({ try $0.cueMessages([id]).first }).value,
+              acceptsReadback(original) else { return .rejected(reason: .originalMissing) }
+        guard replyState[index].delivery != .sending, replyState[index].delivery != .queued else {
+            return .rejected(reason: .unavailable)
+        }
+        let reply = Reply(message: original, delivery: .queued)
+        guard !reply.text.isEmpty else { return .rejected(reason: .originalMissing) }
+        replyState[index] = reply
         drain()
+        return .readbackQueued(message: id)
     }
 
     /// 可见结果与传输分开推进。send 结束只记本机提交；异步服务端错误仍会使已提交结果变为未确认。

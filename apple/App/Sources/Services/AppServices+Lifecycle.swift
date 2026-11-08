@@ -29,6 +29,7 @@ extension AppServices {
     /// 本地落盘后先刷新快照，不让网络占完后台时间；再发完待推送、等门铃按完后断开中转，最后补上上传后的状态。
     /// 回前台的对应入口是 `handleActivation`。
     func prepareForBackground() async {
+        await voice.end(reason: .background)
         stopPolling()
         relay?.pause()
         for flush in backgroundFlushes.values { await flush() }
@@ -42,6 +43,7 @@ extension AppServices {
 
     /// 取消后台任务（快照维护、分享入库、macOS 的 Pi 索引等）。
     func cancelBackgroundWork() {
+        voice.cancel()
         tasks.cancelAll()
         stopPolling()
     }
