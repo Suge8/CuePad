@@ -11,6 +11,8 @@ struct LoopLayer {
     enum Kind: Equatable {
         /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽是直径的 14%。
         case orbit
+        /// 通话的同一组声纹：状态与采样只重定向现有层，不重建主体。
+        case voice(VoiceRibbon)
         /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽使用与静止符号同源的生成比例，淡波形是三成的颜色。
         case heartbeat
         /// 话在路上：一架纸飞机（与发送钮、"已送达"同一架，`Icon.send`）从左下飞进来、在正中停一下、朝机头的右上飞出去，裁在自己的框里，
@@ -76,7 +78,9 @@ struct LoopLayer {
         func show(_ kind: Kind, color: CGColor?, intro: Bool) {
             // 调用方每帧重算时（软糖放着，`JellyFrame`）值没变不碰图层
             guard kind != self.kind || color != self.color else { return }
-            if kind != self.kind {
+            if case .voice = kind, case .voice = self.kind {
+                self.kind = kind
+            } else if kind != self.kind {
                 self.kind = kind
                 root.sublayers?.forEach { $0.removeFromSuperlayer() }
                 root.addSublayer(Self.make(kind, intro: intro))
@@ -91,6 +95,8 @@ struct LoopLayer {
             CATransaction.setDisableActions(true)
             let bounds = root.bounds
             switch kind {
+            case .voice(let ribbon):
+                (loop as? VoiceRibbonLayer)?.show(ribbon, in: bounds, color: color)
             case .orbit:
                 loop.frame = bounds
                 let width = min(bounds.width, bounds.height) * 0.14
@@ -151,6 +157,8 @@ struct LoopLayer {
 
         private static func make(_ kind: Kind, intro: Bool) -> CALayer {
             switch kind {
+            case .voice:
+                return VoiceRibbonLayer()
             case .orbit:
                 let layer = CALayer()
                 let track = CAShapeLayer(), arc = CAShapeLayer()

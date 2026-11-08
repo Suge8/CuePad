@@ -33,6 +33,7 @@ extension DebugScene {
             if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             for await ready in Observations({ workspace.cue.canHear }) where ready { break }
             workspace.showCue()
+            if DebugVoiceMotion.enabled { Task { await DebugVoiceMotion.run(workspace) }; return }
             guard state != "idle" else { return }
             workspace.startVoiceCall()
             guard let call = workspace.voice else { return }
@@ -55,7 +56,10 @@ extension DebugScene {
 
 final class DebugVoiceLayoutMedia: VoiceMedia {
     var onEvent: (VoicePeer.Event) -> Void = { _ in }
-    func offer() async throws -> String { "layout-offer" }
+    func offer() async throws -> String {
+        if DebugVoiceMotion.enabled { try await Task.sleep(for: DebugVoiceMotion.connectionDelay) }
+        return "layout-offer"
+    }
     func accept(answer: String) async throws { onEvent(.connected) }
     func play() async throws {}
     func setMuted(_ value: Bool) async throws {}

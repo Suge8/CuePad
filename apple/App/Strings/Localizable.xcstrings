@@ -17255,6 +17255,22 @@
         }
       }
     },
+    "正在回应" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Responding"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在回应"
+          }
+        }
+      }
+    },
     "正在处理" : {
       "localizations" : {
         "en" : {
@@ -17459,22 +17475,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在结束…"
-          }
-        }
-      }
-    },
-    "正在说" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speaking"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在说"
           }
         }
       }
@@ -25247,22 +25247,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隐藏 CuePad"
-          }
-        }
-      }
-    },
-    "需注意" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Needs attention"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需注意"
           }
         }
       }

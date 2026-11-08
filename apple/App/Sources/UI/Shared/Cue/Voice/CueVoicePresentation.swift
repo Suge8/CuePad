@@ -5,14 +5,15 @@ import SwiftUI
 /// 请求只有收到 Cue 的持久化确认才显示接走。结束通话不等于停止执行，两种操作始终分开。
 struct CueVoicePresentation {
     enum Activity {
-        case connecting, listening, processing, speaking, closing, failed, ended
+        case idle, connecting, listening, processing, speaking, closing, failed, ended
 
         var title: LocalizedStringResource {
             switch self {
+            case .idle: "和 Cue 通话"
             case .connecting: "正在连接…"
             case .listening: "我在听"
             case .processing: "正在处理"
-            case .speaking: "正在说"
+            case .speaking: "正在回应"
             case .failed: "通话未连接"
             case .closing: "正在结束…"
             case .ended: "通话已结束"
@@ -50,6 +51,8 @@ struct CueVoicePresentation {
     let canStopExecution: Bool
     var executions: [Execution] = []
     var readings: [Reading] = []
+    /// nil 表示允许发起；宿主提供权限、账号或运行设备的实际阻塞原因，视图不推断可用性。
+    var startUnavailableReason: LocalizedStringResource?
 
     /// 只给辨认结果的短摘录；完整正文仍在原聊天，朗读记录不参与错误灯。
     struct Reading: Identifiable {
@@ -67,7 +70,7 @@ struct CueVoicePresentation {
         var needsAttention: Bool = false
     }
 
-    var active: Bool { activity != .ended && activity != .failed }
+    var active: Bool { activity != .idle && activity != .ended && activity != .failed }
     var needsAttention: Bool { !issues.isEmpty || executions.contains(where: \.needsAttention) }
 
     var title: LocalizedStringResource {

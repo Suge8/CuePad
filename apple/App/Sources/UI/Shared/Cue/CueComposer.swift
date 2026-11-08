@@ -152,7 +152,7 @@ private struct CueBrainRow: View {
     var body: some View {
         CueConfigControls(choice: brain, opening: $opening) {
             CueHostNote()
-            CueVoiceEntry()
+            CueVoiceComposerEntry()
         }
         .observingCueBrain(into: $brain)
     }

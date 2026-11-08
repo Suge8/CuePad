@@ -7,13 +7,8 @@ struct CueVoicePanel: View {
     @State private var choosingExecution = false
 
     var body: some View {
-        Group {
-            if let presentation = workspace.voicePresentation {
-                if presentation.active {
-                    CueVoiceView(presentation: presentation, detailsSource: Bindable(workspace).voiceDetails, action: act)
-                }
-            }
-        }
+        CueVoiceView(presentation: workspace.voicePresentation, detailsSource: Bindable(workspace).voiceDetails,
+                     start: { workspace.startVoiceCall() }, action: act)
         .panel(isPresented: Binding { workspace.voiceDetails != nil } set: { if !$0 { workspace.voiceDetails = nil } },
                style: .bubble(workspace.voiceDetails ?? .unanchored, width: .fixed(360))) {
             CueVoiceDetails(presentation: { workspace.voicePresentation }, action: act)
@@ -60,4 +55,14 @@ struct CueVoicePanel: View {
     }
 }
 
+/// 输入框只接共享入口，保持与顶部宿主相同的呈现和浮层来源。
+struct CueVoiceComposerEntry: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        CueVoiceEntry(presentation: workspace.voicePresentation, detailsSource: Bindable(workspace).voiceDetails) {
+            workspace.startVoiceCall()
+        }
+    }
+}
 #endif
