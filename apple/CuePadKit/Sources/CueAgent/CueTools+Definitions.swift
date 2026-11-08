@@ -22,6 +22,7 @@ extension CueTools {
 
   private static var definitions: [[String: Any]] {
     [
+      ideaDefinition,
       [
         "name": "task",
         "description": """
