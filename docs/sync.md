@@ -110,7 +110,9 @@ Cue 最多等 `Speech.cueWait`。未交出才安全重发；未知重做须确�
 
 ## 自己的回声不是冲突
 
-本机上传的版本会经拉取回到本机，当成并发编辑就每次留一张冲突副本（2026-10-12 一台 Mac 上 4 分钟 17 张，当时有两路上传）。认法在 `CueStore` 的 `applyVersion`。前提：别的设备的并发编辑晚于本机上次同步的版本（时钟大致对准）。本机同一行的新版本一定比旧的大（`CueStore.guards`），不会和交出去的那一版同号。
+回声不留冲突副本（`CueStore.applyVersion`）。关联按 `SessionBindingRevision` 排序，旧 ACK 与云回声不覆盖明确改绑或解绑；正文仍按记录版本合并。
+
+创建来源 `PiSessionState.createdForTaskID` 从启动请求转存，清理投送历史后仍保留；纯关联不授权自动结束。结构 93 抬最低对端版本，阻止旧端误关联或误收尾。
 
 ## Agent 与 Cue 的通知
 

@@ -105,7 +105,7 @@ struct SessionTaskTests {
         try await enableCue()
         let old = try await store.createTask("修登录", in: project.id)
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
-        try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
+        try await recorder.update(sessionID: "s1", state: .settled, title: "修登录", projectID: project.id)
         let workspace = Workspace(services: services)
         try await store.bindSession("s1", to: old.id)
         let mark = try await store.lastWrite()
@@ -126,7 +126,7 @@ struct SessionTaskTests {
         let stepped = try await store.createTask("加语言参数", in: project.id)
         let first = try await store.createTask("加 --lang", under: stepped.id)
         let second = try await store.createTask("写 README", under: stepped.id)
-        try await recorder.update(sessionID: "s2", state: .settled, title: "加 --lang")
+        try await recorder.update(sessionID: "s2", state: .settled, title: "加 --lang", projectID: project.id)
         try await store.bindSession("s2", to: first.id)
         try await workspace.complete(first.id)
         try await workspace.complete(second.id)
@@ -157,7 +157,11 @@ struct SessionTaskTests {
         for (id, title) in [("s1", "修登录"), ("s2", "随便问问")] {
             try await recorder.update(sessionID: id, state: .settled, title: title, hosted: true, agent: .pi)
         }
-        try await store.bindSession("s1", to: task.id)
+        let workspace = Workspace(services: services)
+        try await rig.offersPi()
+        workspace.startFresh(task)
+        let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
+        try await recorder.update(sessionID: "s1", state: .settled, launchToken: launch.launch?.token)
         let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { request, _ in
             if request.mode == .known(.end), let id = request.target.ref { _ = try? await recorder.update(sessionID: id, state: .ended) }
             return .succeeded
@@ -221,8 +225,8 @@ struct SessionTaskTests {
             _ = try await eventually(store, { try $0.card(leaf.id)?.piSessionID }) { $0 == session }
         }
         // 改绑到另一个会话
+        try await recorder.update(sessionID: "s3", state: .settled, title: "修登录", projectID: project.id)
         try await store.bindSession("s3", to: leaf.id)
-        try await recorder.update(sessionID: "s3", state: .settled, title: "修登录")
 
         #expect(try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).map(\.id) == [leaf.id])
         #expect(try await store.archived().isEmpty)

@@ -4,7 +4,7 @@ import Foundation
 /// 只读几个任务和它们的下级的供本机写入时问"会话该落在哪个叶子"（`home(of:)`）与收敛（`CueStore.settle`）。
 /// 上级不在（没到、在回收站）的按顶层看待。写入时的校验只问需要的几行，见 `CueStore+Tree`。
 ///
-/// 叶子是没有子任务的任务。会话与开始时间只记在叶子上：有子任务的任务的开始从子任务推出（`Card.startedSQL`）。
+/// 叶子是没有子任务的任务。会话只记在叶子上；开始时间属于各任务自己的生命周期。
 struct CardLinks {
   struct Link: Equatable {
     var parent: UUID?
@@ -12,11 +12,10 @@ struct CardLinks {
     var isTask: Bool
     var isDone = false
     var hasSession = false
-    var hasStart = false
   }
 
   private static let columns =
-    "id, parentID, projectID, todoAt IS NOT NULL, completedAt IS NOT NULL, piSessionID IS NOT NULL, startedAt IS NOT NULL"
+    "id, parentID, projectID, todoAt IS NOT NULL, completedAt IS NOT NULL, piSessionID IS NOT NULL"
 
   private(set) var links: [UUID: Link]
   /// 全部卡片按同级顺序（排序键、id）排的 id：选落点的子任务按它。
@@ -42,8 +41,7 @@ struct CardLinks {
     (
       row.uuid(0),
       Link(
-        parent: row.uuidOrNil(1), project: row.uuid(2), isTask: row.bool(3), isDone: row.bool(4), hasSession: row.bool(5),
-        hasStart: row.bool(6))
+        parent: row.uuidOrNil(1), project: row.uuid(2), isTask: row.bool(3), isDone: row.bool(4), hasSession: row.bool(5))
     )
   }
 
@@ -80,14 +78,14 @@ extension CardLinks {
   /// 收敛要改写的东西：卡片的上级与项目，要交接的会话。
   struct Repairs {
     var links: [UUID: Link] = [:]
-    /// 有子任务的任务记着的会话与开始时间 → 接手的叶子（`home(of:)`）；叶子自己已有会话时为 nil（任务的丢弃）。
+    /// 有子任务的任务记着的会话 → 接手的叶子（`home(of:)`）；叶子自己已有会话时为 nil（任务的丢弃）。
     var handoffs: [(task: UUID, step: UUID?)] = []
   }
 
   /// 离线并发的改动合并后可能违反层级规则；按确定的规则收敛，各设备算出同一结果：
   /// 挂在灵感下的（别处取消了要做）提到那个灵感的位置（挂到它的上级下）；环里 id 最小的回到顶层；
   /// 第 `maxTaskDepth + 1` 级的任务改挂到上级的上级；下级跟随上级的项目；
-  /// 有子任务的任务记着的会话与开始时间交给 `home(of:)`。
+  /// 有子任务的任务记着的会话交给 `home(of:)`。
   ///
   /// 只查 `changed`（这次远端变更涉及的卡）、它们的全部子孙，以及它们的上级与上级的全部下级（子任务增减会改变这些下级的归属）：
   /// 层级规则只看一张卡自己、它的上级链和它的下级，这次没动过的卡，上级链上没有动过的就不会新违规（应用之前层级是成立的）。
@@ -124,7 +122,7 @@ extension CardLinks {
     return repairs
   }
 
-  /// 会话与开始时间只在叶子上（见类型注释）：有子任务的任务把它们交给 `home(of:)`。
+  /// 会话只在叶子上（见类型注释）：有子任务的任务把它们交给 `home(of:)`。
   /// `region` 里的任务与它们的上级各查一遍（子任务刚加上或挪走的上级就是这样被查到的）。
   private mutating func settleHandoffs(in region: [UUID], _ repairs: inout Repairs) {
     let tasks = Set(region.flatMap { id in [id, links[id]?.parent].compactMap(\.self) }).filter { links[$0]?.isTask == true }
@@ -132,7 +130,7 @@ extension CardLinks {
     for id in order {
       if let parent = links[id]?.parent, tasks.contains(parent), links[id]?.isTask == true { steps[parent, default: []].append(id) }
     }
-    for task in tasks.sorted(by: { $0.uuidString < $1.uuidString }) where links[task].map({ $0.hasSession || $0.hasStart }) == true {
+    for task in tasks.sorted(by: { $0.uuidString < $1.uuidString }) where links[task].map({ $0.hasSession }) == true {
       guard let home = Self.leaf(among: steps[task] ?? [], links) else { continue }
       repairs.handoffs.append((task, links[home]?.hasSession == true ? nil : home))
     }

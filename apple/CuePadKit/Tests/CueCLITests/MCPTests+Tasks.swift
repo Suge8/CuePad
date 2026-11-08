@@ -52,6 +52,7 @@ extension MCPTests {
       #expect(try await store.deliveryRequests().first?.launch?.project == project.id)
 
       // 你亲手给子任务绑上会话：再开工被拒（叫它用 say），什么请求都不多写
+      try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s9", state: .settled, projectID: project.id)
       try await store.bindSession("s9", to: step.id)
       #expect(try await server.refused("task", ["action": "start", "task": taskID]).contains("say"))
       #expect(try await store.deliveryRequests().count == 1)
@@ -70,8 +71,10 @@ extension MCPTests {
       $0.enabledAt = .now
     }
     let task = try await store.createTask("修好登录页", in: project.id)
-    try await store.linkCard(task.id, toSession: "s1")
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "修好登录页", hosted: true)
+    let launch = try await store.requestLaunch(PiLaunch(project: project.id, prompt: task.body, token: "fix-login"), title: task.heading, on: "mac-a", card: task.id)
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(
+      sessionID: "s1", state: .settled, title: "修好登录页", projectID: project.id, launchToken: launch.launch?.token, hosted: true)
+    try await store.deleteDelivery(launch.id)
     try await Server.run(library: sandbox.directory) { server in
       try await server.refused("task", ["action": "done", "task": task.id.uuidString])
       // 证据多于 3 条或一条太长：退回，什么都不写

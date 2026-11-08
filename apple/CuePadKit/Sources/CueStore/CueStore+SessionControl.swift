@@ -123,8 +123,8 @@ extension CueStore {
       guard let state = try sessionState(sessionID) else { throw CueStoreError.notFound }
       guard state.state != .known(.ended) else { return nil }
       guard state.hosted, state.canEnd else { throw CueStoreError.cannotEnd(state.title) }
-      guard let end = try endUnused([sessionID], outside: nil, cue: true).ended.first else { throw CueStoreError.sessionInUse(state.title) }
-      return end
+      guard try db.first(Self.usedElsewhere, [sessionID, nil as UUID?], { _ in true }) == nil else { throw CueStoreError.sessionInUse(state.title) }
+      return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: true)
     }
   }
 

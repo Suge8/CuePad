@@ -2,8 +2,8 @@ import CueStore
 import Foundation
 
 /// 任务看板（进展页的看板一段）的四列，按流水排：待办 → 推进中 → 等你 → 已完成（今天）。列只是任务状态与等你的投影，不另存状态：
-/// 一件任务只在一列：被会话等你占着的（`CueTally.held`）只在等你，Cue 在做的只在「推进中」，不论它的状态；其余按状态。
-/// - 待办：没做完、Cue 也没在做的顶层任务（没开始的，和开始过而会话都结束了的），项目顺序、同级手动顺序（拖动排序只在同一项目的顶层里挪，`move`）。
+/// 一件任务只在一列：被会话等你占着的（`CueTally.held`）只在等你，已开始未完成的在「推进中」；其余按状态。
+/// - 待办：未开始的顶层任务，项目顺序、同级手动顺序（拖动排序只在同一项目的顶层里挪，`move`）。
 /// - 推进中、等你：出自 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下推进中的数与它相等；没绑没做完的任务的活会话在「推进中」里各一张。
 ///   推进中怎么排在画的时候定（置顶的在前，其余按要你管的先后，`Workspace.byAttention`）。
 ///   等你列只放在等你的会话，一个一张（`held`）、点了进那个会话：会话在问的在前，待回复的在后，各自等得最久的在上；没绑任务的会话也在。
@@ -19,11 +19,15 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
         var id: Self { self }
 
-        /// 一件顶层任务此刻在哪一列：分列的唯一规则，看板（`read`）与任务气泡的列头都按它。被等你占着的只在等你，Cue 在做的只在推进中，其余按状态。
+        /// 一件顶层任务此刻在哪一列：分列的唯一规则，看板（`read`）与任务气泡的列头都按它。被等你占着的只在等你，已开始未完成的只在推进中，其余按状态。
         static func of(_ task: Card, in tally: CueTally) -> Column {
             if tally.held.contains(task.id) { return .waiting }
             if tally.advancing.contains(where: { $0.task?.id == task.id }) { return .advancing }
-            return task.status == .done ? .done : .todo
+            switch task.status {
+            case .done: return .done
+            case .inProgress: return .advancing
+            default: return .todo
+            }
         }
 
         var title: String {

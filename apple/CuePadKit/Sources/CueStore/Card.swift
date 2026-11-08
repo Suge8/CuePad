@@ -26,14 +26,12 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var parentID: UUID?
   /// 建成任务的时间：有值是任务，nil 是灵感。
   public internal(set) var todoAt: Date?
-  /// 自己记下的开始时间（手动置为进行中、或发给 Agent 时；列 `startedAt`）；回到待办时清空。
-  var ownStartedAt: Date?
-  /// 开始的时间：自己记下的，没有时是子任务里最早开始（没开始就做完的算做完那一刻）的时刻——有子任务的任务从子任务推出，
-  /// 不另存（读出时由 `Card.startedSQL` 算，计数、正在推进与排序同一条 SQL）。
+  /// 本任务自己的开始事实；明确开工或投送时记下（投送失败不撤回），子任务推进时同事务推进祖先，明确退回待办清空，旧子任务不会在读取时重新启动它。
   public internal(set) var startedAt: Date?
   public internal(set) var completedAt: Date?
   /// 发给 Agent 的会话（Pi 自己的会话 id），灵感与任务的行据此显示会话此刻的状态。
   public internal(set) var piSessionID: String?
+  public internal(set) var sessionBindingRevision: SessionBindingRevision?
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
   /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
@@ -54,8 +52,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 任务三态。由两个时间推出（唯一事实源）：有完成时间是完成，否则开始过（`Card.startedAt`：自己的，或任一子任务开始过、做完过）是进行中，
-/// 都没有是待办。有子任务的任务不用另记开始：子任务一开工它就是进行中。
+/// 任务三态只由自己的开始、完成时间推出；子任务推进的写入同时推进祖先，读取不重放过去的动作。
 public enum TaskStatus: String, Sendable, CaseIterable {
   case todo, inProgress, done
 }
@@ -150,28 +147,18 @@ extension Card: Record {
   static let table = Table.cards
   static let columns = [
     "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
-    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "formerSessionIDs",
+    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "formerSessionIDs", "sessionBindingRevision",
   ]
   static var selection: String { selection(as: "cards") }
 
-  /// 读卡片的列：存着的列加上推出来的开始时间（`startedSQL`），`init(row:)` 按这个顺序读。
   static func selection(as alias: String) -> String {
-    (columns.map { "\(alias).\($0)" } + [startedSQL(alias)]).joined(separator: ", ")
-  }
-
-  /// 表 `alias` 里任务的开始时间（`Card.startedAt`）：自己记下的，没有时取子任务（没删除的下级任务）里最早的开始或做完时刻；灵感为 NULL。
-  /// 开始过就是进行中只在这里定义：卡片读出、顶层计数、正在推进的筛选与排序都用它。
-  static func startedSQL(_ alias: String) -> String {
-    """
-    CASE WHEN \(alias).todoAt IS NOT NULL THEN COALESCE(\(alias).startedAt, (SELECT MIN(COALESCE(s.startedAt, s.completedAt)) FROM cards s
-      WHERE s.parentID = \(alias).id AND s.todoAt IS NOT NULL AND s.deletedAt IS NULL)) END
-    """
+    columns.map { "\(alias).\($0)" }.joined(separator: ", ")
   }
 
   var bindings: [any SQLBindable] {
     [
       id, projectID, body, isPinned, JSONColumn.encode(variableValues), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
-      parentID, todoAt, ownStartedAt, completedAt, piSessionID, archivedAt, JSONColumn.encodeList(formerSessionIDs),
+      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, JSONColumn.encodeList(formerSessionIDs), sessionBindingRevision?.stored,
     ]
   }
   init(row: Row) {
@@ -179,8 +166,8 @@ extension Card: Record {
       id: row.uuid(0), projectID: row.uuid(1), body: row.text(2), isPinned: row.bool(3),
       variableValues: Self.variables(row.text(4)),
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
-      parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), ownStartedAt: row.dateOrNil(12), startedAt: row.dateOrNil(17),
-      completedAt: row.dateOrNil(13), piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15),
+      parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12),
+      completedAt: row.dateOrNil(13), piSessionID: row.textOrNil(14), sessionBindingRevision: row.textOrNil(17).flatMap(SessionBindingRevision.init(stored:)), archivedAt: row.dateOrNil(15),
       formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(16)))
   }
 

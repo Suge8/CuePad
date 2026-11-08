@@ -239,6 +239,7 @@ struct DeliveryRecoveryTests {
         clock.advance(AgentTimeouts.ack)
         _ = try await outcome(request, in: store)
         let workspace = Workspace(services: app.services), taskID = task.id
+        try await PiStateRecorder(store: store, hostID: host).update(sessionID: "later-session", state: .thinking)
         workspace.perform { try await $0.bindSession("later-session", to: taskID) }
         try await eventually("手动改绑生效") { try await store.leafSession(taskID) == "later-session" }
         try await history(ext.messages, session: target.sessionID, app: app)
