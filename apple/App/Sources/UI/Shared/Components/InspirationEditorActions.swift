@@ -6,17 +6,16 @@ import SwiftUI
 struct InspirationEditorActions: View {
     let card: Card
     let editing: CardEditing
-    @Binding var payload: InspirationPayload?
-    @Binding var request: InspirationShareRequest?
+    let sharing: InspirationSharing
     var body: some View {
         Group {
             Group {
                 Button("排成图片分享") { share(originals: false) }
                 Button("分享原图") { share(originals: true) }
                 Button("分享文字") {
-                    payload = InspirationPayload(files: nil, urls: [], text: CueFormat.plainText(Outgoing.text(body: latestText, values: card.variableValues)))
+                    sharing.present(InspirationPayload(files: nil, urls: [], text: CueFormat.plainText(Outgoing.text(body: latestText, values: card.variableValues))))
                 }
-            }.disabled(editing.text.isEmpty)
+            }.disabled(editing.text.isEmpty || sharing.isBusy)
             Divider()
             CardActions(card: card, more: true).labelStyle(.titleAndIcon)
         }
@@ -25,7 +24,7 @@ struct InspirationEditorActions: View {
     private var latestText: String { editing.handle.text ?? editing.text }
 
     private func share(originals: Bool) {
-        request = InspirationShareRequest(source: CueVariables.fill(latestText, values: card.variableValues), originals: originals)
+        sharing.prepare(source: CueVariables.fill(latestText, values: card.variableValues), originals: originals)
     }
 }
 
@@ -35,25 +34,29 @@ struct InspirationShareRequest: Identifiable {
     let originals: Bool
 }
 
-/// 准备过程与系统分享由页面持有；导航栏里的菜单会重建，不能持有异步结果或弹层生命周期。
+/// 页面持有唯一分享状态；离页取消准备与未选服务的浮层，系统消费继续持有自己的文件。
 struct InspirationSharePresentation: ViewModifier {
-    @Binding var request: InspirationShareRequest?
-    @Binding var payload: InspirationPayload?
+    let sharing: InspirationSharing
     let editing: CardEditing?
 
     func body(content: Content) -> some View {
         content
-            .background(InspirationSystemShare(payload: $payload))
-            .panel(item: $request, style: .bubble(.unanchored)) { snapshot in
-                InspirationExport(source: snapshot.source, originals: snapshot.originals, close: { request = nil }, recover: recover) { result in
-                    request = nil
-                    payload = result
+            .background {
+                if let session = sharing.session {
+                    InspirationSystemShare(session: session).id(session.id)
                 }
             }
+            .panel(item: Binding(get: { sharing.request }, set: { if $0 == nil { sharing.cancelPreparation() } }), style: .bubble(.unanchored)) { snapshot in
+                InspirationExport(source: snapshot.source, originals: snapshot.originals, close: sharing.cancelPreparation, recover: recover) { result in
+                    sharing.prepared(result, for: snapshot)
+                }
+            }
+            .onChange(of: editing?.cardID) { sharing.leave() }
+            .onDisappear { sharing.leave() }
     }
 
     private func recover(_ action: InspirationShare.Recovery) {
-        request = nil
+        sharing.cancelPreparation()
         if action == .edit { editing?.handle.focus() }
     }
 }

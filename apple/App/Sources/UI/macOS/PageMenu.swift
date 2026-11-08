@@ -13,8 +13,7 @@ struct PageMenuSlot: View {
     @Environment(AppServices.self) private var services
     /// 编辑页开着的那张卡（外层 nil 是还没读到；不是编辑页时读出的是 nil）。
     @State private var opened: Card??
-    @State private var inspirationPayload: InspirationPayload?
-    @State private var inspirationRequest: InspirationShareRequest?
+    @State private var inspirationSharing = InspirationSharing()
 
     private enum Content: Equatable {
         /// 会话页；页面还没交来值时是 nil。
@@ -59,7 +58,7 @@ struct PageMenuSlot: View {
         .observing(services.store, id: workspace.openCard, into: $opened, onError: workspace.fail) { [id = workspace.openCard] store in
             try id.flatMap { try store.card($0) }
         }
-        .modifier(InspirationSharePresentation(request: $inspirationRequest, payload: $inspirationPayload, editing: workspace.openCardEditing))
+        .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: workspace.openCardEditing))
     }
 
     private func menuLabel(_ content: Content) -> some View {
@@ -74,7 +73,7 @@ struct PageMenuSlot: View {
         switch content {
         case .card(let card?):
             if let editing = workspace.openCardEditing, editing.cardID == card.id {
-                InspirationEditorActions(card: card, editing: editing, payload: $inspirationPayload, request: $inspirationRequest)
+                InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing)
             } else { CardActions(card: card, more: true) }
         case .project(let id): ProjectMenuItems(projectID: id)
         case .progress:

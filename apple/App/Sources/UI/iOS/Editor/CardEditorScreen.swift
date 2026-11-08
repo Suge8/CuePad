@@ -20,8 +20,7 @@ struct CardEditorScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var data: EditorData?
     @State private var editing: CardEditing?
-    @State private var inspirationPayload: InspirationPayload?
-    @State private var inspirationRequest: InspirationShareRequest?
+    @State private var inspirationSharing = InspirationSharing()
 
     private static let pageWidth: CGFloat = 760
     /// 宽屏的纸四边留白同宽：首行不顶着纸边。
@@ -37,7 +36,7 @@ struct CardEditorScreen: View {
             .clipShape(.rect(cornerRadius: wide ? Radius.sheet : 0))
             .padding(wide ? EdgeInsets(top: Spacing.item, leading: Spacing.sheet, bottom: 0, trailing: Spacing.sheet) : EdgeInsets())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .modifier(InspirationSharePresentation(request: $inspirationRequest, payload: $inspirationPayload, editing: editing))
+            .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: editing))
             .floatingHeader(.verbatim(data?.project?.shownName ?? ""), detail: data.map(detail)) { actions }
             .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
                 guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
@@ -70,7 +69,7 @@ struct CardEditorScreen: View {
     private var actions: some View {
         Menu("更多", icon: .more) {
             if let card = data?.card, let editing {
-                InspirationEditorActions(card: card, editing: editing, payload: $inspirationPayload, request: $inspirationRequest)
+                InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing)
             }
         }
         .disabled(editing == nil)
