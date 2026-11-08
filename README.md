@@ -56,11 +56,11 @@ A build from source is ad-hoc signed, keeps its own library in `~/Library/Applic
 
 **3. Hand off your first job.** Press `Option + Shift + Space` anywhere and tell Cue what you want, e.g. *"Add a dark mode toggle to ~/code/my-app and show me a screenshot."* Or write a task and press **Start**. Cue picks the agent, starts the session, and the result lands back in CuePad.
 
-### Call Cue on your Mac
+### Call Cue
 
-With Cue enabled, choose **Call Cue** in the Cue reply box. Calls use ChatGPT voice and require Codex to be signed in with your ChatGPT account on this Mac. Cue’s requests and results stay in the conversation, so you can read them during or after the call. A single control bar shows the call status, audio activity, mute, end call, and details. Configuration controls stay compact and wrap only when necessary to keep every action clear of Send. Details opens from the button you used and holds execution controls, recoverable problems, and speech status with a short result excerpt. After reconnecting, choose **Say it again** beside a result to request another reading; unconfirmed speech is not shown as an error or as completed playback. Ending a call waits for the audio connection to close, then removes the bar; work already handed to Cue continues and can still be stopped from its task.
+With Cue enabled, choose **Call Cue** beside the reply box. Calls use ChatGPT voice and require Codex to be signed in with your ChatGPT account on the Mac. On iPhone or iPad, use the same iCloud account and keep a Mac with Cue enabled online; your ChatGPT and Codex sign-in stays on the Mac. Keep CuePad in the foreground on your phone or iPad: leaving the app or locking the screen ends the call.
 
-**End call** ends only the call. To stop work, choose **Stop work** and select a session if prompted. This applies to work handed off during this call that CuePad currently lets you stop.
+Requests and results stay in the conversation, so you can read them during or after a call. Open call details to browse records, recover an original request, ask Cue to say a result again, or stop work when those actions are available. Ending the call does not stop work already handed to Cue.
 
 ## `cuepad` for your agents
 
