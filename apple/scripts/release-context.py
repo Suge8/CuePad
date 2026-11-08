@@ -101,24 +101,35 @@ def release_tag(repo, context, version, create=False):
     return tag
 
 
-def prepare(repo, out, platform, submission):
+def prepare(repo, current, platform, submission):
     if git(repo, "status", "--porcelain", "--untracked-files=no"):
         raise ValueError("工作区有没提交的改动，不发布；在干净的检出里发")
+    attempts = current.with_name(f"{platform}-attempts")
+    attempts.mkdir(parents=True, exist_ok=True)
+    if current.exists() and not current.is_symlink():
+        legacy = Path(tempfile.mkdtemp(prefix="legacy-", dir=attempts))
+        legacy.rmdir()
+        current.rename(legacy)
+        current.symlink_to(legacy.relative_to(current.parent))
     if submission:
+        matches = []
+        for candidate in attempts.iterdir():
+            try:
+                if submission_id(candidate) == submission:
+                    matches.append(candidate)
+            except ValueError:
+                continue
+        if len(matches) != 1:
+            raise ValueError("公证结果未知或 ID 不唯一：未找到唯一完整响应；保留全部尝试，不猜 ID、不重新提交")
+        out = matches[0]
         context = load(out)
         if context["platform"] != platform:
             raise ValueError("发布记录的平台不匹配")
         built = verify(out, context, submission)
         release_tag(repo, context, built["CFBundleVersion"])
     else:
+        out = Path(tempfile.mkdtemp(prefix="attempt-", dir=attempts))
         context = {"source": git(repo, "rev-parse", "HEAD"), "platform": platform}
-        if out.exists():
-            previous = load(out)
-            started = previous.get("archive") or any(path.name not in ("context.json", "source") for path in out.iterdir())
-            if not previous.get("completed") and started:
-                raise ValueError("已有未完成的发布，保留原产物；请恢复，或明确将整个产物目录移走后再开始")
-            shutil.rmtree(out)
-        out.mkdir(parents=True)
         save(out, context)
     source = context["source"]
     # 不用现有工作树，未跟踪与被忽略的源码均进不了归档。
@@ -131,7 +142,12 @@ def prepare(repo, out, platform, submission):
         stream.seek(0)
         with tarfile.open(fileobj=stream) as archive:
             archive.extractall(snapshot, filter="data")
-    print(source)
+    with tempfile.TemporaryDirectory(prefix=".current-", dir=current.parent) as directory:
+        pointer = Path(directory) / platform
+        pointer.symlink_to(out.relative_to(current.parent))
+        pointer.replace(current)
+    print(f"发布尝试：{out}", file=sys.stderr)
+    print(out)
 
 
 def seal(out, archive, versions):
@@ -173,10 +189,8 @@ def main():
         prepare(Path(repo), Path(out), platform, submission[0] if submission else None)
         return 0
     out = Path(args[0])
-    if command == "archive":
-        context = load(out)
-        context["archive"] = args[1]
-        save(out, context)
+    if command == "source":
+        print(load(out)["source"])
     elif command == "seal":
         seal(out, Path(args[1]), args[2:])
     elif command == "submission":

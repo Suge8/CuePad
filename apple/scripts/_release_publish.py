@@ -2,6 +2,7 @@
 锁不自动过期：被杀或断网后留下引用，须确认原发布进程已结束才可清除，不能让迟到上传越过新持有者。
 """
 from pathlib import Path
+import os
 import re
 import subprocess
 import tempfile
@@ -13,8 +14,13 @@ import xml.etree.ElementTree as ET
 LOCK = "refs/tags/cuepad-publication-lock"
 
 
-def run(*args):
-    return subprocess.check_output([str(arg) for arg in args], text=True).strip()
+def run(*args, env=None):
+    return subprocess.check_output([str(arg) for arg in args], text=True, env=env).strip()
+
+
+def remote_git(repo):
+    return ["git", "-C", str(repo), "-c", "credential.helper=",
+            "-c", "credential.https://github.com.helper=!gh auth git-credential"]
 
 
 def package_version(name, asset):
@@ -32,7 +38,7 @@ def enclosure(path):
 
 def remote_source(repo, remote, version):
     ref = f"refs/tags/mac/{version}"
-    refs = dict(line.split()[::-1] for line in run("git", "-C", repo, "ls-remote", remote, ref, ref + "^{}").splitlines())
+    refs = dict(line.split()[::-1] for line in run(*remote_git(repo), "ls-remote", remote, ref, ref + "^{}").splitlines())
     return refs.get(ref + "^{}", refs.get(ref))
 
 
@@ -68,10 +74,15 @@ def publish(out, repo, github, release, asset, download, title, notes, *, contex
     version = int(built["CFBundleVersion"])
     # 每次尝试用不同对象；已有 tag 的 push 必定拒绝，不能把 up-to-date 当成拿到了锁。
     token = run("git", "-C", repo, "commit-tree", f"{source}^{{tree}}", "-p", source,
-                "-m", f"CuePad publication {uuid.uuid4()}")
-    acquired = subprocess.run(["git", "-C", str(repo), "push", remote, f"{token}:{LOCK}"])
+                "-m", f"CuePad publication {uuid.uuid4()}",
+                env=dict(os.environ, GIT_AUTHOR_NAME="CuePad Release", GIT_AUTHOR_EMAIL="release@cue-pad.com",
+                         GIT_COMMITTER_NAME="CuePad Release", GIT_COMMITTER_EMAIL="release@cue-pad.com"))
+    with (out / "publication-locks").open("a") as receipt:
+        receipt.write(token + "\n")
+    print(f"准备申请远端发布锁：{token}（记录在 {out / 'publication-locks'}）", flush=True)
+    acquired = subprocess.run([*remote_git(repo), "push", remote, f"{token}:{LOCK}"])
     if acquired.returncode:
-        raise ValueError(f"未取得远端发布锁 {LOCK}；检查连接或已有发布，不能绕过锁上传")
+        raise ValueError(f"远端发布锁申请未确认，可能已取得 {LOCK}；本次对象 {token}，核对远端与保留记录，不能绕过锁上传")
     print(f"已取得公开资产发布锁：{token}（mac/{version}）", flush=True)
     release_lock = True
     try:
@@ -80,7 +91,7 @@ def publish(out, repo, github, release, asset, download, title, notes, *, contex
         release_lock = False
         # 先公开来源标签，之后中断的更新源/包也始终有可核对的来源。
         if not target_source:
-            run("git", "-C", repo, "push", remote, f"{source}:refs/tags/mac/{version}")
+            run(*remote_git(repo), "push", remote, f"{source}:refs/tags/mac/{version}")
         update = out / f"{asset.removesuffix('.zip')}-{built['CFBundleVersion']}.zip"
         feed = out / "appcast.xml"
         for path in (update, feed, out / asset):
@@ -101,6 +112,6 @@ def publish(out, repo, github, release, asset, download, title, notes, *, contex
     finally:
         if release_lock:
             # 删除也带预期对象；清锁绝不能误删另一持有者的引用。
-            run("git", "-C", repo, "push", f"--force-with-lease={LOCK}:{token}", remote, f":{LOCK}")
+            run(*remote_git(repo), "push", f"--force-with-lease={LOCK}:{token}", remote, f":{LOCK}")
         else:
             print(f"公开写入未确认完成，保留发布锁 {token}；确认原请求已结束后再条件清锁恢复", flush=True)

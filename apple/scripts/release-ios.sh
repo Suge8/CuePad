@@ -14,7 +14,7 @@ mode="${1:-}"
 OUT="$APPLE_DIR/.derived/release/ios"
 context() { python3 "$SCRIPTS/release-context.py" "$@"; }
 if [ "$mode" = testflight ]; then
-  context prepare "$REPO_DIR" "$OUT" ios >/dev/null
+  OUT="$(context prepare "$REPO_DIR" "$OUT" ios)"
   APPLE_DIR="$OUT/source/apple"
 fi
 DERIVED="$REPO_DIR/apple/.derived"
@@ -39,8 +39,7 @@ case "$mode" in
     python3 "$provision" all
     # 版本由 release_versions 推出，命令行设置同时作用于 App 与扩展，两者一致
     read -ra versions <<<"$(release_versions)"
-    archive="$(release_archive ios "${versions[@]}")"
-    context archive "$OUT" "$archive"
+    archive="$(release_archive ios "${OUT##*/}" "${versions[@]}")"
     xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=iOS' \
       -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}"
     check_relay "$archive/Products/Applications/CuePad.app/Info.plist"
@@ -57,8 +56,11 @@ case "$mode" in
     tag="$(context tag "$OUT" "$REPO_DIR")"
     git -C "$REPO_DIR" push -q origin "$tag"
     echo "已上传 ${build_version}，App Store Connect 处理完成后出现在 TestFlight"
-    python3 "$APPLE_DIR/scripts/testflight.py" group
     context complete "$OUT"
+    python3 "$APPLE_DIR/scripts/testflight.py" group || {
+      echo "IPA 已上传并标记来源；仅重试 python3 apple/scripts/testflight.py group，不要为分组重新上传 IPA" >&2
+      exit 1
+    }
     ;;
   device)
     # 取第一台已连接的真机；未登记则登记，再刷新 Development 描述文件

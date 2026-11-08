@@ -3,7 +3,7 @@
 # 用法：release-mac.sh [--dry-run] [--resume <提交 id>]
 #   --dry-run  停在本地产物：<产物目录>/release/mac/ 下的 zip 与 appcast.xml（已用 EdDSA 签名校验），不上传
 #   --resume   用本检出保留的发布记录核对公证 id 与原始产物；沿用归档提交，接着等公证并完成上传。
-# 下载位置只有一处：Release $TAG 的三个资产，不新建 Release，每次发布原地替换；回读校验过后在这个提交上打 mac/<构建号> 标签并推到远端（这一版源码的唯一记号）；三个资产各自的用途与上传顺序的理由见 docs/release.md。
+# 下载位置只有一处：Release $TAG 的三个资产，不新建 Release，每次发布原地替换；替换资产前在归档来源提交上打 mac/<构建号> 标签并推到远端（这一版源码的唯一记号）；三个资产各自的用途与上传顺序的理由见 docs/release.md。
 # 更新源 SUFeedURL 直接是这里的 appcast.xml（releases/latest/download/appcast.xml），回读校验从 App 的 Info.plist 读这个地址。
 # 打包前先核对生产环境的 CloudKit 结构（ck-production.sh），缺字段就不发；待部署清单只拦 iOS（release-ios.sh）。
 # 也核对发版顺序（check_ios_floor）：这一版的同步下界不高于 TestFlight 上处理好的最新 iOS 版（docs/release.md「发版顺序」）。门铃中转打包前、导出后各核对一次（check_relay）。
@@ -33,7 +33,8 @@ while [ "$#" -gt 0 ]; do
     *) echo "用法：$0 [--dry-run] [--resume <提交 id>]" >&2; exit 2 ;;
   esac
 done
-source_commit="$(context prepare "$REPO_DIR" "$OUT" mac ${resume:+"$resume"})"
+OUT="$(context prepare "$REPO_DIR" "$OUT" mac ${resume:+"$resume"})"
+source_commit="$(context source "$OUT")"
 APPLE_DIR="$OUT/source/apple"
 DERIVED="$OUT/build"
 # shellcheck source=_signing.sh source-path=SCRIPTDIR
@@ -76,8 +77,7 @@ python3 "$APPLE_DIR/scripts/provision.py" unlock
 python3 "$APPLE_DIR/scripts/provision.py" profiles
 
 read -ra versions <<<"$(release_versions)"
-archive="$(release_archive mac "${versions[@]}")"
-context archive "$OUT" "$archive"
+archive="$(release_archive mac "${OUT##*/}" "${versions[@]}")"
 xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=macOS' \
   -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}" CUEPAD_RELEASE=YES
 

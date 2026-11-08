@@ -44,11 +44,11 @@ release_versions() {
   echo "MARKETING_VERSION=$(date -r "$now" +%Y.%-m.%-d) CURRENT_PROJECT_VERSION=$(date -r "$now" +%y%m%d%H%M)"
 }
 
-# 发布的归档按构建号存进 Xcode 的归档目录，不放产物目录：产物目录每次发布先清空、发布用的干净检出用完就删，
+# 发布归档按构建号与尝试名存进 Xcode 的归档目录，不随检出或尝试目录的清理删除：
 # 真机崩溃（MetricKit、TestFlight）的栈只能靠归档里的 dSYM 还原；Xcode 的 Organizer 列得出它，Spotlight 按 UUID 找得到 dSYM。
-# 用法：release_archive <ios|mac> <release_versions 的输出…>
+# 用法：release_archive <ios|mac> <尝试目录名> <release_versions 的输出…>；同分钟重试也不覆盖旧归档
 release_archive() {
-  echo "$HOME/Library/Developer/Xcode/Archives/$(date +%F)/CuePad $1 ${3#CURRENT_PROJECT_VERSION=}.xcarchive"
+  echo "$HOME/Library/Developer/Xcode/Archives/$(date +%F)/CuePad $1 ${4#CURRENT_PROJECT_VERSION=}-${2}.xcarchive"
 }
 
 # 发布前核对中转：check_relay [打出来的 Info.plist]。门铃 /health 回 ok，实时活动 /v1/activity/health 回 204；
