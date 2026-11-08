@@ -7,6 +7,7 @@ import re, subprocess, sys
 
 EXTENSION = "CuePadKit/Sources/CuePi/Extension/cuepad-bridge"
 ENTRY = f"{EXTENSION}/index.ts"
+# 旧扩展与 Swift/Python 消费者都依赖这个精确声明；声明的排版是兼容接口。
 VERSION = re.compile(r"const EXTENSION_VERSION = (\d+);")
 
 

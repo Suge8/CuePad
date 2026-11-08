@@ -123,6 +123,7 @@ class Load:
 
 def extension_version(checkout):
     source = open(f"{checkout}/apple/CuePadKit/Sources/CuePi/Extension/cuepad-bridge/index.ts").read()
+    # 已安装的旧扩展也解析这个精确声明；它是跨语言版本接口，不能随 TypeScript 排版改写。
     return int(re.search(r"const EXTENSION_VERSION = (\d+);", source).group(1))
 
 
@@ -137,7 +138,7 @@ def fake_extension(directory, checkout):
         path = f"{directory}/{sid}.{os.getpid()}.sock"
         if os.path.exists(path): os.remove(path)
         s = socket.socket(socket.AF_UNIX); s.bind(path); os.chmod(path, 0o600); s.listen(4); s.setblocking(False)
-        sessions.append({"id": sid, "path": path, "server": s, "clients": [], "state": {"kind": "idle", "since": now()},
+        sessions.append({"id": sid, "path": path, "server": s, "clients": {}, "state": {"kind": "idle", "since": now()},
                          "next": time.time() + random.expovariate(1 / FLIP)})
     def send(c, msg):
         try: c.sendall((json.dumps(msg) + "\n").encode())
@@ -154,13 +155,16 @@ def fake_extension(directory, checkout):
         ready, _, _ = select.select(readable, [], [], 0.2)
         for s in sessions:
             if s["server"] in ready:
-                c, _ = s["server"].accept(); s["clients"].append(c); send(c, hello(s))
+                c, _ = s["server"].accept(); s["clients"][c] = b""; send(c, hello(s))
             for c in list(s["clients"]):
                 if c not in ready: continue
                 data = c.recv(65536)
-                if not data: s["clients"].remove(c); continue
-                for line in data.decode(errors="ignore").splitlines():
-                    try: msg = json.loads(line)
+                if not data:
+                    del s["clients"][c]; c.close(); continue
+                lines = (s["clients"][c] + data).split(b"\n")
+                s["clients"][c] = lines.pop()
+                for line in lines:
+                    try: msg = json.loads(line.decode("utf-8"))
                     except ValueError: continue
                     if "id" in msg: send(c, {"t": "ack", "id": msg["id"], "ok": True})
             if time.time() >= s["next"]:

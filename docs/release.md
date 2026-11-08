@@ -1,12 +1,16 @@
 # 签名、发布与 CloudKit 结构
 
-入口是 `xc.sh release mac|ios`、`xc.sh device`、`xc.sh provision`，每步做什么在 `apple/scripts/` 下各脚本的头注释里（`release-mac.sh`、`release-ios.sh`、`provision.py`、`testflight.py`、`sparkle.sh`、`ck-production.sh`）。对外发布只在用户明确要求时做：发出去的包会推给所有用户。发布只在干净检出运行，否则 `xc.sh` 拒绝。
+入口是 `xc.sh release mac|ios`、`xc.sh device`、`xc.sh provision`，每步做什么在 `apple/scripts/` 下各脚本的头注释里（`release-mac.sh`、`release-ios.sh`、`provision.py`、`testflight.py`、`sparkle.sh`、`ck-production.sh`）。对外发布只在用户明确要求时做：发出去的包会推给所有用户。发布拒绝已跟踪文件的未提交改动；归档只读固定提交的源码快照，未跟踪与被忽略的本地源码不进入产物。每个平台在同一检出只允许一次发布。
 
 描述文件全机一份：几个检出同时发版、跑 `device` 或 `provision` 时，从生成描述文件到归档导出这一段全机排队，一次一个（`_lock.sh` 规则 3），公证与上传不排。
 
 ## 发版核对
 
 `release mac` 导出后、公证前由脚本核对，不过就停：门铃中转活着、签名完整、包里的正式版标记 `CuePadRelease` 是 YES（`Signing.xcconfig` 的 `CUEPAD_RELEASE`，只有发版脚本归档时设）、包里的命令行在空家目录下去找正式资料库 `CuePad/Library` 而不是开发库 `CuePad Dev`。少了标记，装上的正式版会开开发库，用户看到的是空库。只核对、不上传用 `xc.sh release mac --dry-run`（照样提交公证）。
+
+Mac 公证中断或上传失败，用脚本打印的 `xc.sh release mac --resume <公证 id>` 继续同一产物；不要重新运行无参数发布（它会开始新归档）。恢复需要完整保留 `apple/.derived/release/mac`，其中原始导出 App 与公证 zip 不修改，装订和分发使用它的副本。缺发布记录、产物摘要不符或公证 id 不符会在读取凭据、访问远端前拒绝；旧流程没有记录的产物须重新归档。`--dry-run` 仍访问签名、云服务与公证，不是离线模式。
+
+正常发布与恢复共用产物核验：版本取导出 App 的 Info.plist，标签指归档来源提交。恢复时即使 HEAD 已移动，也沿用原提交的配置与同步下界；不要手改保留的产物或记录。源码快照可重建，公证 id 在开始等待前写入发布记录；Xcode Archives 仍保留归档和 dSYM 供崩溃符号化。
 
 ## 发版顺序
 
@@ -42,7 +46,7 @@ Sparkle 2：密钥、appcast 与只发完整包见 `sparkle.sh` 头注释，更�
 | `appcast.xml` | 更新源，只含最新这一版 |
 | `CuePad-mac-arm64-<构建号>.zip` | 与官网包同一个文件，appcast 的 enclosure 指向它 |
 
-enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用固定名字时，换包与换 appcast 之间有一段旧签名配新包的窗口，落后的客户端验签失败。所以上传顺序是：带构建号的新包 → `appcast.xml` → 官网包 → 删上一版带构建号的包；中途失败重跑 `release mac` 即可补齐。
+enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用固定名字时，换包与换 appcast 之间有一段旧签名配新包的窗口，落后的客户端验签失败。所以上传顺序是：带构建号的新包 → `appcast.xml` → 官网包 → 删上一版带构建号的包；中途失败用该产物的 `--resume <公证 id>` 补齐。
 
 装更新要重启 CuePad：托管的 Pi 撑得过重启（新版经桥认回），Claude Code、Codex、OpenCode、Grok Build 这类随 App 退出的托管会话还在干活或等你确认时，重启推迟到它们空下来（`UpdateService`）。`-CuePadScene updatewait` 验托管的 Pi 在干活时更新直接装。
 
