@@ -50,7 +50,6 @@ struct TaskOutlineTests {
     }
 
     /// 点掉已完成子任务的圆圈：不再算做完只有一种——它与已完成的上级清掉完成，开始过的回进行中、没开始过的回待办，在归档里的整件取回；
-    /// 上级从子任务推出开始，子任务开始过它就跟着进行中。
     @Test func 点掉已完成子任务的圆圈_上级跟着不再算做完_整件取回归档() async throws {
         let task = try await store.createTask("发布")
         let step = try await store.createTask("跑检查", under: task.id)
