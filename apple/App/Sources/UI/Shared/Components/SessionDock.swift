@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 会话页底下浮着的那一叠（手机的会话页与 Mac 的会话页同一份）：等你确认时的问题卡、出错（`PiFailureDock`）、没能结束的原因（与会话列表同一条规则
-/// `DeliveryRequest.shownEnd`）、回复框（`PiReplyBar`）；回复框的停止中、命令进度、发送中与调回的那一句都从这一页读到的会话摘要推出。
+/// `MacDelivery.endIssue`；已结束记录也保留未解决的结束与明确恢复入口）、回复框（`PiReplyBar`）；回复框的停止中、命令进度、发送中与调回的那一句都从这一页读到的会话摘要推出。
 /// 读到会话记录、确认它不在了（Mac 上的会话文件被删）时，回复框换成一句说明。
 struct SessionDock: View {
     let session: PiSessionState
@@ -12,21 +12,22 @@ struct SessionDock: View {
     var compact = false
     var revealNote: (ReplyNote) -> Void = { _ in }
     let sent: () -> Void
+    @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
         let deliveries = digest?.deliveries ?? [], messages = digest?.messages ?? [], speech = services.speech
-        let ended = session.state == .known(.ended)
+        let endIssue = MacDelivery.endIssue(deliveries, at: speech)
         // 卡与回复框之间的缝在卡里（`DockedCard`）：卡升起、沉回时缝跟着长、跟着收
         VStack(spacing: 0) {
             PiQuestionDock(session: session, deliveries: deliveries)
             PiFailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
-            DockedCard(ended ? nil : deliveries.last { $0.mode == .known(.end) }.flatMap { Speech.trip($0, at: speech).unconfirmedReason }) { reason in
-                Callout(.unknown(), text: String(localized: "结束结果尚未确认：\(reason)"), docked: true)
+            DockedCard(endIssue?.unconfirmedReason) { reason in
+                Callout(.unknown(), text: String(localized: "结束结果尚未确认：\(reason)"), docked: true) { recoverEnd }
             }
-            DockedCard(ended ? nil : DeliveryRequest.shownEnd(in: deliveries, at: speech)?.failure?.text) { failure in
-                Callout(.failed(.other), text: String(localized: "没能结束：\(failure)"), docked: true)
+            DockedCard(endIssue?.failure?.text) { failure in
+                Callout(.failed(.other), text: String(localized: "没能结束：\(failure)"), docked: true) { recoverEnd }
             }
             if let digest, digest.session == nil {
                 Text("这个会话已经不在了，发不到它").font(Typography.meta).foregroundStyle(palette.ink3)
@@ -40,6 +41,14 @@ struct SessionDock: View {
                     previews: digest?.previews ?? [],
                     revealNote: revealNote,
                     sent: sent)
+            }
+        }
+    }
+    private var recoverEnd: some View {
+        Group {
+            if let action = SessionActions.end(session, ending: false, recovering: true, in: workspace) {
+                Button(action.title, icon: action.icon, action: action.run)
+                    .buttonStyle(ControlButtonStyle(kind: .secondary))
             }
         }
     }

@@ -15,8 +15,8 @@ import Testing
     let other = try await store.createTask("写周报")
     let recorder = PiStateRecorder(store: store, hostID: "mac")
     for (step, session) in zip(steps, ["s1", "s2"]) {
-      try await store.linkCard(step.id, toSession: session)
-      try await recorder.update(sessionID: session, state: .settled, title: session, hosted: true)
+      let launch = try await store.requestLaunch(PiLaunch(project: step.projectID, prompt: step.body, token: session), title: step.heading, on: "mac", card: step.id)
+      try await recorder.update(sessionID: session, state: .settled, title: session, launchToken: launch.launch?.token, hosted: true)
     }
     try await store.bindSession("s1", to: other.id)
     try await store.setStatus(steps[0].id, .done)

@@ -77,7 +77,8 @@ struct DeliveryControlTests {
         }
         let second = try #require(try await store.deliveryRequests().first { $0.id != first.id })
         #expect(try await store.outcome(of: second).status == .known(.succeeded))
-        #expect(try await store.deliveryRequest(first.id)?.status == .known(.unconfirmed))
+        #expect(try await store.deliveryRequest(first.id)?.status == .known(mode == .end ? .succeeded : .unconfirmed))
+        if mode == .end { #expect(app.pi.session(sessionID: "atlas") == nil) }
         #expect(ext.received.filter { $0 == mode.rawValue }.count == 2)
         await app.services.executor.beginStop()()
     }

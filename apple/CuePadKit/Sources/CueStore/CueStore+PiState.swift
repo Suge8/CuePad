@@ -27,7 +27,7 @@ extension CueStore {
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       // 最后一轮的开始不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它
       let assignments = PiSessionState.columns.dropFirst()
-        .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }
+        .filter { $0 != "createdAt" && $0 != "createdForTaskID" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }
         .map { $0 == "turnStartedAt" ? "turnStartedAt = COALESCE(excluded.turnStartedAt, piSessionStates.turnStartedAt)" : "\($0) = excluded.\($0)" }
         .joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
@@ -60,13 +60,18 @@ extension CueStore {
     }
   }
 
-  /// 你结束了这个会话：记为已结束、进历史（不算被打断）；已结束、被打断的也改记为已结束。
-  func endPiState(host: String, sessionID: String, bootID: String?, at now: Date) throws {
+  /// 源端实际结束与所覆盖请求同事务确认；集合由领取时固定，不能按写入时的请求、状态快照或时间扩大。
+  func endPiState(host: String, sessionID: String, bootID: String?, at now: Date, confirming requests: Set<UUID>) throws {
     try write {
       try db.run(
         "UPDATE piSessionStates SET state = ?, bootID = ?, \(Self.cleared), stateSince = ?, hosted = NULL, modifiedAt = ? WHERE id = ? AND state != ?",
         [PiWorkState.ended.rawValue, bootID, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID), PiWorkState.ended.rawValue])
       try db.run("DELETE FROM piProcesses WHERE sessionID = ?", [sessionID])
+      try db.run("""
+        UPDATE deliveryRequests SET status = 'succeeded', failure = NULL, completedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1)
+        WHERE id IN (SELECT value FROM json_each(?2)) AND mode = 'end' AND targetRef = ?3 AND hostID = ?4 AND handledBy = ?4
+          AND status IN ('executing', 'confirming', 'unconfirmed', 'pending')
+        """, [Date.stamp, Self.idList(requests), sessionID, host])
       try dropUnusedCatalogs(host: host)
     }
   }

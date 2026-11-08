@@ -41,7 +41,8 @@ struct TaskCountTests {
         let open = [release.id, closed.id, orphan.id]
         #expect(Set(page.tasks.roots) == Set(open))
         #expect(catalog.openTasks[project] == open.count)
-        #expect(Set(board.todo.map(\.id)) == Set(open))  // 没有会话在做：开始过的也在待办
+        #expect(Set(board.todo.map(\.id)) == [closed.id, orphan.id])
+        #expect(board.advancing.compactMap(\.item?.id) == [release.id])
         let done = [fix.id, shipped.id]
         #expect(board.done.map(\.id) == [shipped.id, fix.id] && page.taskCounts.done == done.count)  // 做完按完成时间排，最近的在前
     }
@@ -94,9 +95,8 @@ struct TaskCountTests {
     }
     #endif
 
-    /// 推进中只算 Cue 此刻在做的，与它信封里的"在做"同一份：开过工、会话都结束了的任务（在等你自己去办的事）不算，
-    /// 它没丢也没做完，回到待办；会话恢复了又回到「推进中」。没绑没做完的任务的活会话也在「推进中」。
-    @Test func 会话都结束了的任务不算推进中_回到待办_数同信封() async throws {
+    /// 任务进度独立于执行：结束或离线不会把已开始任务退回待办，Cue 的执行集合仍不包含停止的任务。
+    @Test func 会话结束任务仍推进中_看板计数同口径_执行集合独立() async throws {
         let card = try await store.createTask("开 U 卡")
         let bitget = try await store.createTask("bitget", under: card.id)
         _ = try await store.createTask("KYC", under: card.id)
@@ -111,9 +111,9 @@ struct TaskCountTests {
         func inEnvelope() async throws -> Int { try await store.cueBoard().active.count }  // 信封的"在做 N 件"数的就是它
 
         var board = try await TaskBoard.read(from: store)
-        #expect(board.advancing.map(\.id) == ["task/\(live.id.uuidString)", "session/term"])  // 任务在前，没绑任务的会话在后
-        #expect(board.todo.map(\.id) == [card.id] && board.todo.first?.task.status == .inProgress)
-        #expect(try await CueDigest.read(from: store).advancing == 2)
+        #expect(Set(board.advancing.map(\.id)) == ["task/\(card.id.uuidString)", "task/\(live.id.uuidString)", "session/term"])
+        #expect(board.todo.isEmpty)
+        #expect(try await CueDigest.read(from: store).advancing == 3)
         #expect(try await inEnvelope() == 2)
 
         try await recorder.update(sessionID: "kyc", state: .thinking)

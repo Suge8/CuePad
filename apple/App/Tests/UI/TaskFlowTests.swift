@@ -64,12 +64,17 @@ struct TaskFlowTests {
     // MARK: 会话与任务
 
     #if os(macOS)
-    @Test func 一个会话绑两件事_绑定不发正文_都做完才结束会话() async throws {
+    @Test func 自有会话再借给第二件事_绑定不发正文_都做完才结束会话() async throws {
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await rig.offersPi()
         let first = try await store.createTask("复现乱序\n先复现，别改代码", in: project.id)
         let second = try await store.createTask("补重连用例", in: project.id)
-        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas", hosted: true)
+        workspace.startFresh(first)
+        let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
+        try await PiStateRecorder(store: store, hostID: "mac-other").update(
+            sessionID: "s1", state: .thinking, title: "atlas", projectID: project.id, launchToken: launch.launch?.token, hosted: true)
+        try await store.deleteDelivery(launch.id)
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
 
         try await store.bindSession("s1", to: first.id)
@@ -96,7 +101,11 @@ struct TaskFlowTests {
         let first = try await store.createTask("加 --lang", under: task.id)
         let second = try await store.createTask("写 README", under: task.id)
         let third = try await store.createTask("发版\n打 tag 再发", under: task.id)
-        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
+        workspace.startFresh(first)
+        let opening = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
+        try await PiStateRecorder(store: store, hostID: "mac-other").update(
+            sessionID: "s1", state: .settled, title: "atlas", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
+        try await store.deleteDelivery(opening.id)
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
         try await store.bindSession("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
@@ -138,6 +147,7 @@ struct TaskFlowTests {
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
         await executor.stop()
         #expect(try await next(task) == .start(leaf: task))
+        #expect(try await store.card(task.id)?.status == .inProgress)
         try await eventually("没开成的原因留在任务上") { workspace.launchFailures[task.id] == "没开成会话：这台 Mac 上开不了会话" }
     }
     #endif

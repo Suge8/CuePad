@@ -66,7 +66,7 @@ struct SessionBoardTests {
             #expect(try await names(card.id, card.piSessionID!) == [name, name], "标题为空的写会话名")
         }
         #expect(try await store.deliveryRequests(toSession: "s1").isEmpty, "终端里你开的会话不替你结束")
-        #expect(try await store.deliveryRequests(toSession: "s2").map(\.mode) == [.known(.end)], "托管的照做完的规则结束")
+        #expect(try await store.deliveryRequests(toSession: "s2").isEmpty, "把既有会话变成任务不取得结束权限")
 
         // 收起的会话再有动静才回到看板：与完成同一毫秒的不算，严格晚于完成的才算
         let s1 = try #require(made.first { $0.piSessionID == "s1" }).id

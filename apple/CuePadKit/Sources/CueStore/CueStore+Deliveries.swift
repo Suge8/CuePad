@@ -37,11 +37,20 @@ extension CueStore {
     _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode, card: UUID? = nil, cue: Bool
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
+    if let session = target.ref, target.kind == .known(.piSession), DeliveryMode.requiresReadySession.contains(mode) {
+      try requireSessionAvailable(session)
+    }
     let now = Date.stamp
-    let request = DeliveryRequest(
+    var request = DeliveryRequest(
       id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
       status: .known(.pending), reason: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
       resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
+    if let card, mode == .start || mode == .send || mode == .command {
+      let leaf = try link(of: card)?.isTask == true ? homeLeaf(card) : card
+      request.cardID = leaf
+      request.sessionBindingRevision = try reviseSessionBinding(leaf, explicit: false)
+      try beginTask(leaf, at: now)
+    }
     try insert(request)
     for key in Set(request.attachmentKeys) { try registerAttachment(key) }
     if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
@@ -117,6 +126,7 @@ extension CueStore {
       }
       var launch = launch
       launch.name = try card.flatMap(sessionName(forCard:))
+      if let card, try link(of: card)?.isTask == true { launch.createdForTaskID = try homeLeaf(card) }
       return try insertDelivery(
         launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card, cue: cue)
     }
@@ -150,20 +160,21 @@ extension CueStore {
     "\(alias).createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = \(alias).cardID)"
   }
 
-  /// 认领：最近一次是"开新会话"请求的灵感与任务，等那个会话带着请求里的 `token` 记下（`PiSessionState.launchToken`）时
-  /// 关联到它，任务同时进行中——与发给已有会话后 `recordSend` 的结果一样。会话记录在本机写下（Mac 的记录器）或同步过来时都在这里认领。
-  /// 只认最近一次：带 `cardID` 的请求都是发给 Agent，之后又交给了别处就以那次为准，旧的新会话开好也不抢回（同 `handedSessions`）。
-  /// 绑定、解绑会话也算之后的一次交给：它们把指向这张卡的开新会话请求作废（`bindSession`、`unbindSession`）。
+  /// 会话创建来源与关联同事务认领。来源按启动请求固定；关联沿用请求发起时的修订，明确改绑或解绑后旧请求只登记来源。
   func claimLaunchedCards() throws {
-    try db.run(
-      """
-      UPDATE cards SET \(Self.keepingFormerSession("s.sessionID")), piSessionID = s.sessionID, modifiedAt = ?1,
-        startedAt = CASE WHEN cards.todoAt IS NOT NULL THEN COALESCE(cards.startedAt, ?1) END,
-        completedAt = CASE WHEN cards.todoAt IS NOT NULL THEN NULL END
-      FROM deliveryRequests r JOIN piSessionStates s ON s.launchToken = \(Self.launchToken("r"))
-      WHERE r.cardID = cards.id AND r.mode = '\(DeliveryMode.start.rawValue)' AND \(Self.latestHandoff("r"))
-        AND cards.piSessionID IS NOT s.sessionID
-      """, [Date.stamp])
+    let requests = try select(DeliveryRequest.self, where: """
+      mode = 'start' AND EXISTS (
+        SELECT 1 FROM piSessionStates s LEFT JOIN cards c ON c.id = deliveryRequests.cardID
+        WHERE s.launchToken = \(Self.launchToken("deliveryRequests")) AND (
+          (s.createdForTaskID IS NULL AND json_extract(deliveryRequests.content, '$.createdForTaskID') IS NOT NULL)
+          OR (json_extract(c.sessionBindingRevision, '$.id') = json_extract(deliveryRequests.sessionBindingRevision, '$.id') AND c.piSessionID IS NOT s.sessionID)))
+      """)
+    for request in requests {
+      guard let launch = request.launch,
+        let session = try select(PiSessionState.self, where: "launchToken = ?", [launch.token]).first else { continue }
+      try recordSessionCreationInTransaction(session.sessionID, from: request)
+      try linkDeliveredCardInTransaction(request, toSession: session.sessionID)
+    }
   }
 
   /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除）：手机没有完整路径，由 Mac 解析并写本机的目录绑定。

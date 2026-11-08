@@ -154,6 +154,28 @@ import Testing
     #expect(try array(try await sb.json("task", "list", "--all")).count == 1)
   }
 
+  @Test func bindExistingSessionAndCompleteTask() async throws {
+    let sb = try Fixture()
+    let task = try await sb.store.createTask("关联已有会话")
+    try await sb.store.setStatus(task.id, .inProgress)
+    let started = try #require(try await sb.store.card(task.id)?.startedAt)
+    try await PiStateRecorder(store: sb.store, hostID: "mac-a").update(sessionID: "session-one", state: .thinking, title: "已有会话", hosted: true)
+    let id = task.id.uuidString
+    #expect((await sb.run("task", "bind", id, "session-one")).code == 0)
+    #expect(try await sb.store.card(task.id)?.piSessionID == "session-one")
+    #expect((await sb.run("task", "bind", id, "session-one")).code == 0)
+    #expect(try await sb.store.card(task.id)?.startedAt == started)
+    #expect(try await sb.store.deliveryRequests().isEmpty)
+    #expect((await sb.run("task", "unbind", id)).code == 0)
+    #expect(try await sb.store.card(task.id)?.piSessionID == nil)
+    #expect((await sb.run("task", "bind", id, "session-one")).code == 0)
+    #expect((await sb.run("task", "done", id)).code == 0)
+    let ended = try await sb.store.deliveryRequests().filter { $0.mode == .known(.end) }
+    #expect(ended.isEmpty, "完成借用会话的任务不能结束会话：\(ended.map(\.target.ref))")
+    #expect((await sb.run("task", "unbind", UUID().uuidString)).code != 0)
+    #expect((await sb.run("task", "bind", id, "missing-session")).code != 0)
+  }
+
   @Test func addSubtaskUnderAParent() async throws {
     let sb = try Fixture()
     let alpha = try await sb.project("Alpha")

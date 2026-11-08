@@ -129,7 +129,7 @@ extension CueStore {
     let rows = try db.query(
       """
       SELECT t.projectID, SUM(t.completedAt IS NULL AND began), SUM(t.completedAt IS NULL AND NOT began), SUM(t.completedAt IS NOT NULL)
-      FROM (SELECT t.projectID, t.completedAt, \(Card.startedSQL("t")) IS NOT NULL AS began \(Self.taskWithParent)
+      FROM (SELECT t.projectID, t.completedAt, t.startedAt IS NOT NULL AS began \(Self.taskWithParent)
       WHERE \(Self.visibleTask) AND \(Self.topLevel) \(scope)) t
       GROUP BY +t.projectID
       """, arguments

@@ -6215,6 +6215,22 @@
         }
       }
     },
+    "会话正在结束，确认结束结果后才能关联或发送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This session is ending. Wait until the outcome is confirmed before linking a task or sending a message."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话正在结束，确认结束结果后才能关联或发送"
+          }
+        }
+      }
+    },
     "会话直连 OpenCode 的后台服务，不用另装。" : {
       "localizations" : {
         "en" : {
@@ -13055,22 +13071,6 @@
         }
       }
     },
-    "开新会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New Session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开新会话"
-          }
-        }
-      }
-    },
     "开新会话交给它" : {
       "localizations" : {
         "en" : {
@@ -16815,6 +16815,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "本项目"
+          }
+        }
+      }
+    },
+    "本项目没有可绑定的任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Tasks to Link in This Project"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本项目没有可绑定的任务"
           }
         }
       }

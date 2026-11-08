@@ -95,16 +95,23 @@ extension CueEvalTests {
         try await CueEval.run("h-做完的事的会话答完", expect: "已完成的事的会话被 Cue 的一句恢复、答完歇下：再 done 那件事结束会话，不另开活、不打扰用户") { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
-            try await rig.store.setStatus(work.task.id, .done)  // 早已做完，会话是被下面这句恢复的
-            let asked = "复查一遍：限流有没有绕过的办法？", delivery = UUID()
-            try await rig.store.recordSend(asked, to: SendTarget(kind: .piSession, name: Self.title, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
+            try await rig.store.setStatus(work.task.id, .done)
+            let initialEnd = try #require(try await rig.store.deliveryRequests(toSession: work.id).first { $0.mode == .known(.end) })
+            #expect(try await rig.store.outcome(of: initialEnd).status == .known(.succeeded))
+            try await eventually("第一次完成已结束会话") { rig.services.pi.session(id: work.session.id) == nil }
+            let asked = "复查一遍：限流有没有绕过的办法？"
             try work.file.reply(Self.doneReply, at: .now - 600)
-            try work.file.user(asked, delivery: delivery.uuidString)
+            let request = try await rig.store.requestDelivery(
+                asked, to: SendTarget(kind: .piSession, name: Self.title, ref: work.id), on: rig.services.hostID, mode: .send, card: work.task.id, cue: true)
+            #expect(try await rig.store.outcome(of: request).status == .known(.succeeded))
+            let resumed = try #require(rig.app.host.extensions[work.id])
+            resumed.setState(["kind": "thinking"])
+            try await rig.read(asked, in: work.id)
             try await eval.trigger {
-                work.session.setState(["kind": "idle"])
+                resumed.setState(["kind": "idle"])
                 try await rig.answered(work.id, reply: "复查过了：限流按邮箱哈希计数、存在服务端，换 IP 或改大小写都绕不过去。")
             }
-            let ended = try await rig.store.deliveryRequests(toSession: work.id).contains { $0.mode == .known(.end) }
+            let ended = try await rig.store.deliveryRequests(toSession: work.id).contains { $0.mode == .known(.end) && $0.id != initialEnd.id }
             return [
                 Check(.result, "再 done 了这件事", eval.calls("task", "done").contains { !$0.call.failed }),
                 Check(.result, "请会话结束", ended),

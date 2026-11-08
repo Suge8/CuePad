@@ -57,49 +57,10 @@ struct SessionMenuItems: View {
             ForEach(open) { item in
                 Button(open.count > 1 ? "完成「\(item.task.title)」" : "完成任务", icon: .complete) { workspace.completeTask(item.task.id) }
             }
-            if !link.bindable.isEmpty {
-                Menu("绑定到任务", icon: .link) {
-                    ForEach(link.bindable) { item in
-                        Button(Dotted(item.parent?.title, item.task.title).visible) {
-                            let (sessionID, task) = (session.sessionID, item.task.id)
-                            workspace.perform { try await $0.bindSession(sessionID, to: task) }
-                        }
-                    }
-                }
-            }
-            let using = link.tasks.filter { $0.task.piSessionID == session.sessionID }
-            if !using.isEmpty {
-                Menu("解除绑定", icon: .unlink) {
-                    ForEach(using) { item in
-                        Button(Dotted(item.parent?.title, item.task.title).visible) { unbind(item.task.id) }
-                    }
-                }
-            }
+            SessionTaskBindItems(session: session, link: link)
             Divider()
         }
         SessionActions(session: session, task: state.pin, ending: state.ending)
-    }
-
-    private func unbind(_ task: UUID) { workspace.perform { try await $0.unbindSession(from: task) } }
-}
-/// 会话属于的事（正在用它的与以前用过它的，含做完了的，先开始的在前）与本项目还能绑的。
-nonisolated struct SessionTaskLink: Sendable, Equatable {
-    var tasks: [LeafTask]
-    var bindable: [LeafTask]
-
-    /// 标题里写的那一件：还没做完的第一件，都做完了是第一件。
-    var primary: LeafTask? { tasks.first { $0.task.status != .done } ?? tasks.first }
-
-    /// 会话名下面那一行"任务 · 子任务"（绑着好几件时后面"等 N 件"）：与会话名相同的一段不再写（从任务开的会话以叶子的标题命名），
-    /// 什么都不剩时没有这一行。
-    func path(below title: String) -> Dotted? {
-        guard let primary else { return nil }
-        let named = [primary.parent?.title, primary.task.title].filter { $0 != title }
-        return Dotted(named + [tasks.count > 1 ? String(localized: "等 \(tasks.count) 件") : nil]).nonEmpty
-    }
-
-    static func read(sessionID: String, project: UUID?, from store: isolated CueStore) throws -> SessionTaskLink {
-        SessionTaskLink(tasks: try store.tasks(boundTo: sessionID), bindable: try store.bindableTasks(in: project))
     }
 }
 

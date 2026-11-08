@@ -64,7 +64,7 @@ final class RecordingHost: AgentRuntime {
     func resume(_ session: IndexedSession) async throws -> String {
         calls.append(.resume(sessionFile: session.path, directory: session.cwd))
         if !resumeFailures.isEmpty { throw resumeFailures.removeFirst() }
-        return try await connect(URL(filePath: session.path).deletingPathExtension().lastPathComponent, cwd: session.cwd).id
+        return try await connect(URL(filePath: session.path).deletingPathExtension().lastPathComponent, cwd: session.cwd, hosted: true).id
     }
 
     func open(
@@ -76,7 +76,7 @@ final class RecordingHost: AgentRuntime {
         try Task.checkCancellation()
         if let openFailure { throw PiHostError.exited(openFailure) }
         let id = "new-\(launchToken)"
-        let ext = try await connect(id, cwd: directory.path, sessionFile: sessions.appending(path: "--demo--/\(id).jsonl").path, launchToken: launchToken)
+        let ext = try await connect(id, cwd: directory.path, hosted: true, sessionFile: sessions.appending(path: "--demo--/\(id).jsonl").path, launchToken: launchToken)
         if let openingRejection {
             let previous = ext.onCommand
             ext.onCommand = { connection, command in
