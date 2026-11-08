@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
@@ -60,6 +61,17 @@ def info(path, platform):
         return plistlib.loads(package.read("Payload/CuePad.app/Info.plist"))
 
 
+def submission_id(out):
+    try:
+        response = json.loads((out / "submission.json").read_text())
+        submission = response["id"]
+        if not isinstance(submission, str) or not submission:
+            raise ValueError("missing id")
+        return submission
+    except (OSError, ValueError, KeyError, TypeError):
+        raise ValueError("公证结果未知：响应缺失或不完整；保留产物，核实苹果提交记录后再处理，不能猜测 ID 或重新提交") from None
+
+
 def verify(out, context, submission=None):
     platform = context["platform"]
     path = artifact(out, platform)
@@ -69,7 +81,7 @@ def verify(out, context, submission=None):
         package = out / "notarize.zip"
         if not package.is_file() or digest(package) != context.get("notaryDigest"):
             raise ValueError("公证 zip 与记录不匹配，重新归档")
-        if submission is not None and submission != context.get("submission"):
+        if submission is not None and submission != submission_id(out):
             raise ValueError("公证 ID 与发布记录不匹配")
     return info(path, platform)
 
@@ -101,6 +113,8 @@ def prepare(repo, out, platform, submission):
     else:
         context = {"source": git(repo, "rev-parse", "HEAD"), "platform": platform}
         if out.exists():
+            if not load(out).get("completed"):
+                raise ValueError("已有未完成的发布，保留原产物；请恢复，或明确将整个产物目录移走后再开始")
             shutil.rmtree(out)
         out.mkdir(parents=True)
         save(out, context)
@@ -118,16 +132,21 @@ def prepare(repo, out, platform, submission):
     print(source)
 
 
-def seal(out, archive):
+def seal(out, archive, versions):
     context = load(out)
     platform = context["platform"]
     path = artifact(out, platform)
     built = info(path, platform)
     archived = archive / "Products/Applications/CuePad.app" / ("Contents/Info.plist" if platform == "mac" else "Info.plist")
     original = plistlib.loads(archived.read_bytes())
-    for key in ("CFBundleIdentifier", "CFBundleVersion", "CFBundleShortVersionString"):
-        if not built.get(key) or built[key] != original[key]:
-            raise ValueError(f"导出产物与归档的 {key} 不一致")
+    settings = dict(value.split("=", 1) for value in versions)
+    config = (out / "source/apple/App/Config/Signing.xcconfig").read_text()
+    bundle = re.search(r"^CUEPAD_APP_ID *= *(\S+)", config, re.M)[1]
+    expected = {"CFBundleIdentifier": bundle, "CFBundleVersion": settings["CURRENT_PROJECT_VERSION"],
+                "CFBundleShortVersionString": settings["MARKETING_VERSION"]}
+    for key, value in expected.items():
+        if built.get(key) != value or original.get(key) != value:
+            raise ValueError(f"归档或导出产物的 {key} 与快照身份/本次构建输入不一致")
     context.update(archive=str(archive), artifactDigest=digest(path))
     if platform == "mac":
         context["notaryDigest"] = digest(out / "notarize.zip")
@@ -153,16 +172,24 @@ def main():
         return 0
     out = Path(args[0])
     if command == "seal":
-        seal(out, Path(args[1]))
-    elif command == "submitted":
+        seal(out, Path(args[1]), args[2:])
+    elif command == "submission":
+        verify(out, load(out))
+        print(submission_id(out))
+    elif command == "complete":
         context = load(out)
         verify(out, context)
-        submission = json.loads(Path(args[1]).read_text())["id"]
-        if not isinstance(submission, str) or not submission:
-            raise ValueError("公证提交没有返回 ID")
-        context["submission"] = submission
+        context["completed"] = True
         save(out, context)
-        print(submission)
+    elif command == "publish":
+        from _release_publish import publish
+        context = load(out)
+        built = verify(out, context)
+        release_tag(Path(args[1]), context, built["CFBundleVersion"])
+        publish(out, Path(args[1]), *args[2:], context=context, built=built)
+        release_tag(Path(args[1]), context, built["CFBundleVersion"], create=True)
+        context["completed"] = True
+        save(out, context)
     elif command in ("verify", "tag"):
         context = load(out)
         built = verify(out, context)

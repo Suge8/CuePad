@@ -8,13 +8,13 @@
 
 `release mac` 导出后、公证前由脚本核对，不过就停：门铃中转活着、签名完整、包里的正式版标记 `CuePadRelease` 是 YES（`Signing.xcconfig` 的 `CUEPAD_RELEASE`，只有发版脚本归档时设）、包里的命令行在空家目录下去找正式资料库 `CuePad/Library` 而不是开发库 `CuePad Dev`。少了标记，装上的正式版会开开发库，用户看到的是空库。只核对、不上传用 `xc.sh release mac --dry-run`（照样提交公证）。
 
-Mac 公证中断或上传失败，用脚本打印的 `xc.sh release mac --resume <公证 id>` 继续同一产物；不要重新运行无参数发布（它会开始新归档）。恢复需要完整保留 `apple/.derived/release/mac`，其中原始导出 App 与公证 zip 不修改，装订和分发使用它的副本。缺发布记录、产物摘要不符或公证 id 不符会在读取凭据、访问远端前拒绝；旧流程没有记录的产物须重新归档。`--dry-run` 仍访问签名、云服务与公证，不是离线模式。
+Mac 公证中断或上传失败，用脚本打印的 `xc.sh release mac --resume <公证 id>` 继续同一产物；未完成的产物会阻止无参数新发布；要放弃这次发布，先把整个产物目录移走留存，再开始新归档。恢复需要完整保留 `apple/.derived/release/mac`，其中原始导出 App 与公证 zip 不修改，装订和分发使用它的副本。缺发布记录、产物摘要不符或公证 id 不符会在读取凭据、访问远端前拒绝。原始 `submission.json` 是公证 ID 的唯一来源，完整响应落盘后即使发布进程被杀也能恢复；响应缺失或不完整时结果未知，保留产物并核实苹果提交记录，不猜 ID、不自动重投。旧流程没有记录的产物须重新归档。`--dry-run` 仍访问签名、云服务与公证，不是离线模式。
 
-正常发布与恢复共用产物核验：版本取导出 App 的 Info.plist，标签指归档来源提交。恢复时即使 HEAD 已移动，也沿用原提交的配置与同步下界；不要手改保留的产物或记录。源码快照可重建，公证 id 在开始等待前写入发布记录；Xcode Archives 仍保留归档和 dSYM 供崩溃符号化。
+封存时，archive 与导出 App 都要符合快照里的 bundle 身份和本次构建参数；封存后正常发布与恢复共用产物核验，版本只取导出 App 的 Info.plist，标签指归档来源提交。恢复时即使 HEAD 已移动，也沿用原提交的配置与同步下界；不要手改保留的产物或记录。源码快照可重建，公证响应在开始等待前完整落盘；Xcode Archives 仍保留归档和 dSYM 供崩溃符号化。
 
 ## 发版顺序
 
-同步下界（`Schema.peerFloor`，什么时候抬见它的注释）抬高的那一版先发 iOS，等 TestFlight 处理完（`testflight.py builds` 显示 VALID）再发 Mac：Mac 经 Sparkle 几分钟就装上，iOS 要等苹果处理十几分钟到一小时，反过来发，这段时间里手机停下收发。`release ios` 上传后、`release mac` 回读校验后各在那个提交上打 `ios/<构建号>`、`mac/<构建号>` 标签并推到远端（查某一版的源码只看标签，不另留发版分支），`release mac` 核对 TestFlight 上处理好的最新一版的下界不低于这一版，不够就不发。下界没变的版本通常先后随意；首次启用远程实时活动的这一版先更新负责发布的 Mac，再更新 iPhone：新版手机不再用本地库更新远程活动。
+同步下界（`Schema.peerFloor`，什么时候抬见它的注释）抬高的那一版先发 iOS，等 TestFlight 处理完（`testflight.py builds` 显示 VALID）再发 Mac：Mac 经 Sparkle 几分钟就装上，iOS 要等苹果处理十几分钟到一小时，反过来发，这段时间里手机停下收发。`release ios` 上传后、`release mac` 公开替换资产前各在那个提交上打 `ios/<构建号>`、`mac/<构建号>` 标签并推到远端（查某一版的源码只看标签，不另留发版分支），`release mac` 核对 TestFlight 上处理好的最新一版的下界不低于这一版，不够就不发。下界没变的版本通常先后随意；首次启用远程实时活动的这一版先更新负责发布的 Mac，再更新 iPhone：新版手机不再用本地库更新远程活动。
 
 每次发 Mac 都把这一版装进本机 `~/Applications/CuePad.app` 并重启到新版（导出的包在 `apple/.derived/release/mac/export/CuePad.app`），不等 Sparkle；交回时写装上的 `CFBundleVersion`，没装上就说原因。
 
@@ -47,6 +47,10 @@ Sparkle 2：密钥、appcast 与只发完整包见 `sparkle.sh` 头注释，更�
 | `CuePad-mac-arm64-<构建号>.zip` | 与官网包同一个文件，appcast 的 enclosure 指向它 |
 
 enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用固定名字时，换包与换 appcast 之间有一段旧签名配新包的窗口，落后的客户端验签失败。所以上传顺序是：带构建号的新包 → `appcast.xml` → 官网包 → 删上一版带构建号的包；中途失败用该产物的 `--resume <公证 id>` 补齐。
+
+Mac 真正修改公开资产时，通过目标 GitHub 仓库的 `refs/tags/cuepad-publication-lock` 串行执行，跨检出、跨机器共用；归档和长时间公证等待不占这把锁。拿锁后才读取远端更新源、版本包与来源标签：旧于远端的发布拒绝，同版本仅同来源允许重入。标签先于资产发布，因此标签存在不代表上传或回读已完成。原来跨检出上传互相删包的问题也由这段临界区消除。
+
+这把远端锁不自动过期，公开写入/回读失败、进程被杀或清锁时断网都会留下它；保留原产物，确认原发布进程及其上传子进程全部结束后，核对日志中打印的锁对象与远端引用一致，再按该对象条件删除引用并恢复。不要凭等待时间抢锁。Git 推送使用目标仓库的 HTTPS 地址，需有该仓库的 Git 写权限。正常结束只条件删除自己持有的锁。
 
 装更新要重启 CuePad：托管的 Pi 撑得过重启（新版经桥认回），Claude Code、Codex、OpenCode、Grok Build 这类随 App 退出的托管会话还在干活或等你确认时，重启推迟到它们空下来（`UpdateService`）。`-CuePadScene updatewait` 验托管的 Pi 在干活时更新直接装。
 

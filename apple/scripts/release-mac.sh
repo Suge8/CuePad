@@ -85,7 +85,7 @@ xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/expo
   -exportPath "$OUT/artifact"
 signing_end
 ditto -c -k --keepParent "$OUT/artifact/CuePad.app" "$OUT/notarize.zip"
-context seal "$OUT" "$archive"
+context seal "$OUT" "$archive" "${versions[@]}"
 fi
 build_version="$(context verify "$OUT" "$REPO_DIR")"
 mkdir -p "$OUT/export"
@@ -107,7 +107,7 @@ grep -qF "/Library/Application Support/CuePad/Library/cuepad.db" <<<"$probe" || 
 # 公证：提交 zip，等待结果，通过后把票据装订进 app
 if [ -z "$resume" ]; then
   xcrun notarytool submit "$OUT/notarize.zip" --output-format json "${notary[@]}" >"$OUT/submission.json"
-  resume="$(context submitted "$OUT" "$OUT/submission.json")"
+  resume="$(context submission "$OUT")"
   echo "恢复此产物：xc.sh release mac --resume $resume"
 fi
 submission="$(xcrun notarytool wait "$resume" "${notary[@]}")"
@@ -131,29 +131,5 @@ appcast="$("$APPLE_DIR/scripts/sparkle.sh" appcast "$update" "$DOWNLOAD/")"
 echo "$(plist CFBundleShortVersionString)（$(plist CFBundleVersion)）：$zip $update $appcast"
 if $dry_run; then exit 0; fi
 
-context verify "$OUT" "$REPO_DIR" >/dev/null
-# 顺序的理由见 docs/release.md：带构建号的新包 → appcast → 官网包 → 删上一版带构建号的包
-gh release upload "$TAG" "$update" -R "$REPO" --clobber
-gh release upload "$TAG" "$appcast" -R "$REPO" --clobber
-gh release upload "$TAG" "$zip" -R "$REPO" --clobber
-for old in $(gh release view "$TAG" -R "$REPO" --json assets --jq '.assets[].name'); do
-  case "$old" in
-    "$(basename "$update")") ;;
-    "${ASSET%.zip}-"*.zip) gh release delete-asset "$TAG" "$old" -R "$REPO" -y ;;
-  esac
-done
-gh release edit "$TAG" -R "$REPO" --title "$TITLE" --notes "$NOTES"
-
-# 回读校验：从 App 实际使用的更新源取 appcast，再按它的 enclosure 与官网地址取包，都与本地一致且签名通过
-check="$OUT/check"; mkdir -p "$check"
-curl -fsSL -o "$check/appcast.xml" "$(plist SUFeedURL)"
-cmp "$check/appcast.xml" "$appcast"
-enclosure="$(sed -n 's/.*enclosure url="\([^"]*\)".*/\1/p' "$check/appcast.xml")"
-curl -fsSL -o "$check/update.zip" "$enclosure"
-curl -fsSL -o "$check/$ASSET" "$DOWNLOAD/$ASSET"
-cmp "$check/update.zip" "$update"
-cmp "$check/$ASSET" "$zip"
-"$APPLE_DIR/scripts/sparkle.sh" verify "$check/update.zip" "$check/appcast.xml"
-tag="$(context tag "$OUT" "$REPO_DIR")"
-git -C "$REPO_DIR" push -q origin "$tag"
-echo "已发布：$DOWNLOAD/${ASSET}（${tag}）"
+context publish "$OUT" "$REPO_DIR" "$REPO" "$TAG" "$ASSET" "$DOWNLOAD" "$TITLE" "$NOTES"
+echo "已发布：$DOWNLOAD/${ASSET}（mac/${build_version}）"

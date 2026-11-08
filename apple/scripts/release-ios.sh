@@ -49,7 +49,7 @@ case "$mode" in
     xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" \
       -exportPath "$OUT/export"
     signing_end
-    context seal "$OUT" "$archive"
+    context seal "$OUT" "$archive" "${versions[@]}"
     build_version="$(context verify "$OUT" "$REPO_DIR")"
     # 上传走 altool（xcodebuild 的 destination=upload 用 API 密钥时会报"账号凭据过期"）
     xcrun altool --upload-app -f "$OUT/export/CuePad.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
@@ -57,6 +57,7 @@ case "$mode" in
     git -C "$REPO_DIR" push -q origin "$tag"
     echo "已上传 ${build_version}，App Store Connect 处理完成后出现在 TestFlight"
     python3 "$APPLE_DIR/scripts/testflight.py" group
+    context complete "$OUT"
     ;;
   device)
     # 取第一台已连接的真机；未登记则登记，再刷新 Development 描述文件
