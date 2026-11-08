@@ -86,7 +86,7 @@ struct LaunchAttachmentTests {
         }
         let missing = AttachmentKey.make(hash: String(repeating: "a", count: 64), format: "png")
         let draft = ComposerDraft(text: "看这张截图", files: [DraftFile(key: missing, name: "")])
-        // 新会话输入框发出的同一条（`NewSessionInput.Start.launch`），随即传上去（上传回执带回服务器收下的时刻）
+        // 新会话输入框发出的同一条（`Workspace.launchSession`），随即传上去（上传回执带回服务器收下的时刻）
         func launch(replacing previous: SessionLaunch?) async throws -> SessionLaunch {
             let launched = try await Workspace(services: phone.services).launchSession(
                 in: Project.defaultID, prompt: draft.stored, title: "CuePad", on: TestApp.hostID, card: nil, agent: .pi, intent: previous.map { .replacing($0.request) } ?? .new)

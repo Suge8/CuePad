@@ -143,7 +143,7 @@ final class Workspace {
     /// 发给 Agent 输入框的草稿（换了一件任务就重来）：放在这里而不在输入框里，发出即收起后写库失败还能放回、重新浮起。
     var handOffDraft = ComposerDraft()
     /// 新会话的输入框（`NewSessionInput`）。
-    var newSession: NewSessionInput.Start?
+    var newSession: SessionStart?
     /// 每次 ⌘K（或点搜索钮、项目页与侧栏顶上的搜索框）加一：搜索页据此聚焦搜索框，已在搜索页时同样生效。
     var searchFocusRequests = 0
     #endif

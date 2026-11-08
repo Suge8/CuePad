@@ -26,6 +26,17 @@ extension Workspace {
         outbox = Outbox(content: Outgoing.text(of: leaf), card: leaf.id, project: leaf.projectID)
     }
 
+    func prepareNewSession(_ draft: ComposerDraft, card: UUID?, opening: String?, plan: HandOffPlan?) {
+        let claim = claimImports(draft)
+        guard !claim.isEmpty else { return handOffToNewSession(draft.retelling(card, as: opening), card: card, plan: plan) }
+        Task { handOffToNewSession(await claim.settled().retelling(card, as: opening), card: card, plan: plan) }
+    }
+
+    func claimSession(_ session: UUID) {
+        newSession = nil
+        openSession(session)
+    }
+
     /// 发给 Agent 时选了新会话：收起发给 Agent 的输入框，换成新会话的，草稿带过去。
     /// 在哪开、由哪台 Mac 开、会话名按交到哪的决定（`plan`）；没有决定（读不出来）时用输入框自己的默认。
     func handOffToNewSession(_ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?) {
@@ -42,7 +53,7 @@ extension Workspace {
                 return SessionLaunch(request: request.id, token: token)
             }.value
             outbox = nil
-            newSession = NewSessionInput.Start(project: project, launched: launched, draft: draft, card: card, name: plan?.name, host: host)
+            newSession = SessionStart(project: project, launched: launched, draft: draft, card: card, name: plan?.name, host: host)
         } catch { fail(error) }
     }
 

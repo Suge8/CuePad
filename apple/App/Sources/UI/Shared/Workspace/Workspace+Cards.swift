@@ -4,28 +4,23 @@ import Observation
 import SwiftUI
 
 extension Workspace {
-    /// 新建卡片。项目是否有效由 Store 在写事务里判定：项目已不存在或在回收站（`invalidProject`）时，
-    /// 重新核对当前项目，卡片落到默认项目并提示，不会写进看不见的地方。
+    /// 项目失效时由写事务选择默认项目；界面按实际落点纠正导航并提示。
     func createCard(body: String = "", in project: UUID) async throws -> Card {
-        let store = services.store
-        return try await fallingBack(from: project) { try await store.createCard(in: $0, body: body) }
+        let card = try await services.store.createCard(in: project, body: body, ifProjectMissing: .useDefault)
+        return await created(card, requested: project)
     }
 
-    /// 新建任务；项目失效时同样回落，任务进默认项目并提示。
     func createTask(_ body: String, in project: UUID) async throws -> Card {
-        let store = services.store
-        return try await fallingBack(from: project) { try await store.createTask(body, in: $0) }
+        let card = try await services.store.createTask(body, in: project, ifProjectMissing: .useDefault)
+        return await created(card, requested: project)
     }
 
-    private func fallingBack<T>(from project: UUID, _ write: (UUID) async throws -> T) async throws -> T {
-        do {
-            return try await write(project)
-        } catch CueStoreError.invalidProject where project != Project.defaultID {
+    private func created(_ card: Card, requested project: UUID) async -> Card {
+        if card.projectID != project {
             await reconcileCurrentProject()
-            let result = try await write(Project.defaultID)
             say("原项目已不存在或在回收站，已放到默认项目", tone: .failure)
-            return result
         }
+        return card
     }
 
     /// 把任务设为完成（圆圈、菜单、延迟提交都走它）：已经完成的不动——界面手里的副本可能已过时（别的设备刚做完），再来一次不能把它翻回去（`CueStore.completeTask`）。

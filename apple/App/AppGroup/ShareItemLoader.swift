@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import Foundation
 import UniformTypeIdentifiers
 import os
@@ -53,8 +54,7 @@ nonisolated enum ShareItemLoader {
         return try await withCheckedThrowingContinuation { continuation in
             _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, error in
                 guard let url else { return continuation.resume(throwing: error ?? ShareError.nothingToShare) }
-                let ext = url.pathExtension
-                let name = suggested.map { ext.isEmpty || $0.lowercased().hasSuffix("." + ext.lowercased()) ? $0 : $0 + "." + ext } ?? url.lastPathComponent
+                let name = AttachmentName.suggested(suggested, for: url)
                 continuation.resume(with: Result { ShareContent.File(url: try copy(url), name: name) })
             }
         }

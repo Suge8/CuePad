@@ -236,9 +236,7 @@ struct PiReplyBar: View {
     /// 作答框只收文字：说出去的这句就是答案（`CueStore.speak`），答完文字清空，其余（别处带进草稿的卡片、附件）留着。
     private func answer() {
         guard canSend, answering != nil else { return }
-        workspace.speak(to: .session(session, mode: .send), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
-            draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
+        workspace.answer(session, from: box)
         didSend()
     }
 
@@ -246,11 +244,7 @@ struct PiReplyBar: View {
 
     /// 停止这一轮：写一条停止请求，等 Mac 受理；没受理（不在线、出错）时提示原因。受理之后转圈到这一轮歇下（看状态）。
     private func stop() {
-        let session = session
-        workspace.attempt {
-            let request = try await services.stop(session)
-            if let failure = try await services.store.outcome(of: request).failure { throw SendError.notDelivered(failure) }
-        }
+        Task { await workspace.stop(session) }
     }
 
     private func removeNote(_ note: ReplyNote) { services.settings.removeReplyNote(note.id, in: session.id) }

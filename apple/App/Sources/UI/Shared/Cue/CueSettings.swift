@@ -241,10 +241,7 @@ enum CueGate: Equatable {
 
     /// `running`：它此刻运行的那台（没启用为 nil），`name` 是那台的名字。
     static func of(_ services: AppServices, running: String?, name: String?) -> CueGate {
-        guard services.knowsSyncedFacts else {
-            // 不通的原因只在同步那一组说（`SyncSummary`）
-            return .waiting(services.syncStatus.reachesMac ? String(localized: "正在从 iCloud 同步…") : String(localized: "同步恢复后再启用"))
-        }
+        if let reason = services.cueReadiness.waitingReason { return .waiting(reason) }
         guard let running else { return .open }
         return .runs(id: running, name: name ?? MacAgents.unnamed)
     }

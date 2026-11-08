@@ -51,13 +51,7 @@ extension AppServices {
             capture.urls.map(\.absoluteString).joined(separator: "\n"),
             files.joined(separator: "\n"),
         ].filter { !$0.isEmpty }
-        let project = try await existingProject(capture.project)
-        _ = try await store.createCard(in: project, body: sections.joined(separator: "\n\n"), capture: entry.id)  // 已入库过的返回 nil
-    }
-
-    /// 选的项目此后已被删除（卡片放进已删除的项目会不可见）的，进默认项目。
-    private func existingProject(_ id: UUID) async throws -> UUID {
-        guard let project = try await store.project(id), project.deletedAt == nil else { return Project.defaultID }
-        return id
+        _ = try await store.createCard(
+            in: capture.project, body: sections.joined(separator: "\n\n"), capture: entry.id, ifProjectMissing: .useDefault)
     }
 }

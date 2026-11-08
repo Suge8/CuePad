@@ -6,12 +6,10 @@ import Observation
 /// 对 Cue 说的这一份在 `CueWatch.launching`。
 @Observable
 final class Launching {
-    private var keys: Set<String> = []
+    private var keys: Set<SendingTarget> = []
 
-    func contains(_ session: PiSessionState) -> Bool { keys.contains(Self.key(session.hostID, session.target)) }
-    func begin(_ session: PiSessionState) { keys.insert(Self.key(session.hostID, session.target)) }
-    func settle(_ session: PiSessionState) { keys.remove(Self.key(session.hostID, session.target)) }
-    func settle(host: String, target: SendTarget) { keys.remove(Self.key(host, target)) }
-
-    private static func key(_ host: String, _ target: SendTarget) -> String { "\(host)\n\(target.name)" }
+    func contains(_ session: PiSessionState) -> Bool { keys.contains(SendingTarget(host: session.hostID, target: session.target)) }
+    func begin(_ session: PiSessionState) { keys.insert(SendingTarget(host: session.hostID, target: session.target)) }
+    func settle(_ session: PiSessionState) { keys.remove(SendingTarget(host: session.hostID, target: session.target)) }
+    func settle(host: String, target: SendTarget) { keys.remove(SendingTarget(host: host, target: target)) }
 }

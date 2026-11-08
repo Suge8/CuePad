@@ -24,7 +24,10 @@ struct IOSAlignmentTests {
         h.load("甲乙")
         h.setCaret(1)
         h.textView.insert([.data(makePNG(width: 40, height: 30))])
-        let original = h.stored
+        #expect(await h.wait { CueFormat.hasAttachments(h.stored) })
+        let key = try #require(CueFormat.attachmentKeys(in: h.stored).first)
+        let original = "甲\n![](cuepad://file/\(key))\n乙"
+        #expect(h.stored == original)
         h.textView.selectedRange = NSRange(location: 0, length: h.textView.textStorage.length)
         let range = try #require(h.textView.selectedTextRange)
 
@@ -36,6 +39,15 @@ struct IOSAlignmentTests {
             _ = provider.loadObject(ofClass: NSString.self) { object, _ in continuation.resume(returning: object as? String) }
         }
         #expect(text == original)
+        #expect(CueFormat.attachmentKeys(in: text ?? "") == [key])
+        let destination = EditorHarness()
+        let item = FakePasteItem(provider)
+        destination.textView.pasteDelegate?.textPasteConfigurationSupporting?(destination.textView, transform: item)
+        await item.resolved()
+        let pasted = try #require(item.result)
+        #expect(pasted.string == "甲\n\u{FFFC}\n乙")
+        let image = try #require(pasted.attribute(.attachment, at: 2, effectiveRange: nil) as? CueImageAttachment)
+        #expect(image.key == key)
     }
 }
 #endif
