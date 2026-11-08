@@ -13,6 +13,7 @@ struct PageMenuSlot: View {
     @Environment(AppServices.self) private var services
     /// 编辑页开着的那张卡（外层 nil 是还没读到；不是编辑页时读出的是 nil）。
     @State private var opened: Card??
+    @State private var inspirationSharing = InspirationSharing()
 
     private enum Content: Equatable {
         /// 会话页；页面还没交来值时是 nil。
@@ -46,18 +47,7 @@ struct PageMenuSlot: View {
 
     var body: some View {
         let content = content
-        Menu {
-            Group { items(content) }
-                // macOS 27 起菜单默认藏起菜单项的图片：标明图标与字都画（docs/ui.md）
-                .labelStyle(.titleAndIcon)
-        } label: {
-            // 看板选了项目范围（范围收在这里）：钮角上带这个项目的小图形，一眼看得出只在看一个项目
-            Image(.more).overlay(alignment: .topTrailing) {
-                if content == .progress, let project = workspace.catalog?.project(workspace.scopedProject) {
-                    ProjectGlyph(project: project, size: 10).offset(x: 12, y: -10)
-                }
-            }
-        }
+        Menu { items(content).labelStyle(.titleAndIcon) } label: { menuLabel(content) }
         .menuStyle(.button).menuIndicator(.hidden)
         .buttonStyle(ControlButtonStyle(kind: .circular))
         .fixedSize()
@@ -68,11 +58,23 @@ struct PageMenuSlot: View {
         .observing(services.store, id: workspace.openCard, into: $opened, onError: workspace.fail) { [id = workspace.openCard] store in
             try id.flatMap { try store.card($0) }
         }
+        .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: workspace.openCardEditing))
+    }
+
+    private func menuLabel(_ content: Content) -> some View {
+        Image(.more).overlay(alignment: .topTrailing) {
+            if content == .progress, let project = workspace.catalog?.project(workspace.scopedProject) {
+                ProjectGlyph(project: project, size: 10).offset(x: 12, y: -10)
+            }
+        }
     }
 
     @ViewBuilder private func items(_ content: Content) -> some View {
         switch content {
-        case .card(let card?): CardActions(card: card, more: true)
+        case .card(let card?):
+            if let editing = workspace.openCardEditing, editing.cardID == card.id {
+                InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing)
+            } else { CardActions(card: card, more: true) }
         case .project(let id): ProjectMenuItems(projectID: id)
         case .progress:
             ProjectScopeItems()
@@ -95,7 +97,7 @@ private struct ProjectMenuItems: View {
     var body: some View {
         let ready = workspace.isLibraryReady
         Button("选择灵感", icon: CardMenu.Item.select.icon) { workspace.presses.beginSelecting() }
-            .disabled(!ready || (workspace.catalog?.cardCounts[projectID] ?? 0) == 0)
+            .disabled(!ready || (workspace.catalog?.summaries[projectID]?.cardCount ?? 0) == 0)
         Button("看这个项目的进展", icon: .task) { workspace.showProgress(of: projectID) }
         if let project = workspace.catalog?.project(projectID) {
             Divider()

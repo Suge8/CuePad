@@ -18,12 +18,12 @@ struct DecorationTests {
         let h = EditorHarness()
         h.load("先复现\n# 小节")
         var p = h.displayed()
-        #expect(font(p[0]) == theme.font && font(p[1]) == theme.headingFont)
+        #expect(font(p[0]) == theme.font && font(p[1], at: 2) == theme.headingFont)
 
         h.setCaret(0)
         h.textView.insertText("# ", replacementRange: nowhere)
         p = h.displayed()
-        #expect(font(p[0]) == theme.headingFont && h.stored == "# 先复现\n# 小节")
+        #expect(font(p[0], at: 2) == theme.headingFont && h.stored == "# 先复现\n# 小节")
     }
 
     @Test("增删围栏后，远处未被编辑的段落随之切换代码/正文")

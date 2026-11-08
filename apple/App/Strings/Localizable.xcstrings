@@ -1842,6 +1842,34 @@
         }
       }
     },
+    "%lld 未完成" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld open"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld open"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 未完成"
+          }
+        }
+      }
+    },
     "%lld 条" : {
       "localizations" : {
         "en" : {
@@ -2078,6 +2106,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 毫秒"
+          }
+        }
+      }
+    },
+    "%lld 灵感" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld idea"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ideas"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 灵感"
           }
         }
       }
@@ -7571,6 +7627,22 @@
         }
       }
     },
+    "内容太长，无法排成一张清晰的图片，请分成几条灵感后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is too long for a readable image. Split it into a few ideas and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内容太长，无法排成一张清晰的图片，请分成几条灵感后重试"
+          }
+        }
+      }
+    },
     "内置" : {
       "localizations" : {
         "en" : {
@@ -7971,6 +8043,22 @@
         }
       }
     },
+    "分享原图" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Original Images"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享原图"
+          }
+        }
+      }
+    },
     "分享原始文件…" : {
       "localizations" : {
         "en" : {
@@ -7983,6 +8071,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分享原始文件…"
+          }
+        }
+      }
+    },
+    "分享文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Text"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享文字"
           }
         }
       }
@@ -10375,6 +10479,54 @@
         }
       }
     },
+    "图片还没到这台设备，请在正文中点按图片下载，再重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This image isn’t on this device yet. Tap it in the editor to download it, then try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片还没到这台设备，请在正文中点按图片下载，再重试"
+          }
+        }
+      }
+    },
+    "图片链接无法访问，请检查链接" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The image link couldn't be reached. Check the URL."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片链接无法访问，请检查链接"
+          }
+        }
+      }
+    },
+    "图片链接暂时无法访问，请稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The image link is unavailable. Please try again later."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片链接暂时无法访问，请稍后重试"
+          }
+        }
+      }
+    },
     "在 %@" : {
       "localizations" : {
         "en" : {
@@ -11923,6 +12075,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "尚未收到 Agent 的确认；操作可能已经执行，不会自动重试"
+          }
+        }
+      }
+    },
+    "尚未更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not updated yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未更新"
           }
         }
       }
@@ -14491,6 +14659,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "换模型，看它刚记下的，去记忆与设置"
+          }
+        }
+      }
+    },
+    "排成图片分享" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share as Image"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排成图片分享"
           }
         }
       }
@@ -17111,6 +17295,22 @@
         }
       }
     },
+    "查看图片" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View Image"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看图片"
+          }
+        }
+      }
+    },
     "查看大图" : {
       "localizations" : {
         "en" : {
@@ -17523,6 +17723,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在停止…"
+          }
+        }
+      }
+    },
+    "正在准备图片…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing images…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在准备图片…"
           }
         }
       }
@@ -18823,6 +19039,22 @@
         }
       }
     },
+    "没能生成图片，请检查灵感内容后再分享" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't create the image. Check the idea's content and share again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没能生成图片，请检查灵感内容后再分享"
+          }
+        }
+      }
+    },
     "没能结束" : {
       "localizations" : {
         "en" : {
@@ -20035,6 +20267,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "看门狗：主线程太久没响应，被系统结束"
+          }
+        }
+      }
+    },
+    "知道了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "知道了"
           }
         }
       }
@@ -22995,6 +23243,22 @@
         }
       }
     },
+    "返回编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to Editing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回编辑"
+          }
+        }
+      }
+    },
     "还有 %lld 个" : {
       "localizations" : {
         "en" : {
@@ -24323,6 +24587,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条提问已经结束了"
+          }
+        }
+      }
+    },
+    "这条灵感没有可分享的图片" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This idea has no images to share"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这条灵感没有可分享的图片"
           }
         }
       }
@@ -25715,6 +25995,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重试这一轮"
+          }
+        }
+      }
+    },
+    "链接没有返回可读取的图片，请检查链接后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The link did not return a readable image. Check the link and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接没有返回可读取的图片，请检查链接后重试"
           }
         }
       }

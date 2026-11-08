@@ -7,7 +7,7 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var icon: String?
   public var color: String
   public var isPinned: Bool
-  /// 可选的一句话介绍（项目页顶栏、书架项目卡）。
+  /// 可选的一句话介绍（项目页顶栏）。
   public var intro: String?
   /// 回收站中的项目；其卡片随之进回收站（由项目推导，卡片自身不记）。
   public internal(set) var deletedAt: Date?
@@ -48,10 +48,12 @@ public struct Project: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 项目的灵感数（散放在列表里的，不含任务、挂在任务下的与空白灵感）。
+/// 项目的灵感数（散放在列表里的，不含任务、挂在任务下的与空白灵感）与最近修改时间。
 public struct ProjectSummary: Equatable, Sendable {
   public var projectID: UUID
   public var cardCount: Int
+  /// 项目或有效卡片最近的修改；只读统计，不把会话状态变化当项目内容更新。
+  public var modifiedAt: Date
 }
 
 extension Project: Record {

@@ -40,6 +40,8 @@ struct EditorHost: NSViewRepresentable {
     var onError: (any Error) -> Void = { _ in }
     /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）交出键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
     var editable = true
+    /// 浮在正文上的工具栏只增加滚动余量，不缩短可见编辑区。
+    var bottomInset: CGFloat = 0
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.openPreview) private var openPreview
@@ -67,6 +69,7 @@ struct EditorHost: NSViewRepresentable {
     }
 
     func updateNSView(_ view: CueEditorView, context: Context) {
+        if view.contentInsets.bottom != bottomInset { view.contentInsets.bottom = bottomInset }
         update(view.textView, root: view, workspace: workspace, opener: openPreview)
     }
 

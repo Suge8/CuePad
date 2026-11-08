@@ -40,6 +40,7 @@ struct IOSEditorHost: UIViewRepresentable {
     var onError: (any Error) -> Void = { _ in }
     /// 高贴着字、自己不滚（任务气泡：整张纸一起滚）；否则铺满给的地方、在里面滚（纸页）。
     var fits = false
+    var bottomInset: CGFloat = 0
     /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）收起键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
     var editable = true
     @Environment(AppServices.self) private var services
@@ -71,6 +72,8 @@ struct IOSEditorHost: UIViewRepresentable {
     }
 
     func updateUIView(_ view: CueTextView, context: Context) {
+        // 光标跟随避开的是滚动 inset；只给正文末尾留白，UIKit 输入时仍会把光标推到纸边。
+        if view.contentInset.bottom != bottomInset { view.contentInset.bottom = bottomInset }
         view.onChange = onChange
         view.selectionActions = selectionActions
         view.onError = onError
@@ -112,6 +115,7 @@ struct IOSEditorHost: UIViewRepresentable {
 
 /// 键盘上方的工具栏：插图、插文件、变量取值、收起键盘。格式就是正文里的 Markdown 原文，没有格式按钮。
 final class KeyboardBar: UIToolbar {
+    private static let itemSize: CGFloat = 44
     /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）：插图、插文件与变量由外部弹出选择器与面板。
     /// 也是宿主的协调者：跟着附件传输重画文件牌的那个任务挂在这里，编辑器拆掉时取消（`AttachmentLooks.follow`）。
     final class Actions {
@@ -122,14 +126,18 @@ final class KeyboardBar: UIToolbar {
     }
 
     init(textView: CueTextView, actions: Actions, plain: Bool) {
-        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 44))
+        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: Self.itemSize))
         func item(_ label: String, _ icon: Icon, _ action: @escaping (CueTextView) -> Void) -> UIBarButtonItem {
-            let item = UIBarButtonItem(image: icon.platformImage, primaryAction: UIAction { [weak textView] _ in
+            let button = UIButton(type: .system, primaryAction: UIAction { [weak textView] _ in
                 guard let textView else { return }
                 action(textView)
             })
-            item.accessibilityLabel = label
-            return item
+            button.setImage(icon.platformImage, for: .normal)
+            button.accessibilityLabel = label
+            button.addInteraction(UIToolTipInteraction(defaultToolTip: label))
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.itemSize).isActive = true
+            button.heightAnchor.constraint(equalToConstant: Self.itemSize).isActive = true
+            return UIBarButtonItem(customView: button)
         }
         items = (plain ? [] : [
             item(String(localized: "插入图片"), .photo) { _ in actions.insertImage() },

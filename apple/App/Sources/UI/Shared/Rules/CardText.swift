@@ -20,7 +20,7 @@ nonisolated struct CardText: Equatable, Sendable {
     var linkHost: String?
 
     init(_ body: String) {
-        let summary = CueSummary(body)
+        let summary = CueSummary(body, inline: MarkdownBlock.plainText)
         title = summary.title
         preview = summary.preview
         attachments = CueFormat.attachmentKeys(in: body)
@@ -34,7 +34,7 @@ nonisolated struct CardText: Equatable, Sendable {
 
     /// 只要名字时用它：只读到标题那一行（`CueSummary.title(of:)`），没有标题才数附件，不算摘要与链接。
     static func label(of body: String) -> String {
-        CueSummary.title(of: body).nonEmpty ?? untitled(CueFormat.attachmentKeys(in: body))
+        MarkdownBlock.plainText(CueSummary.title(of: body)).nonEmpty ?? untitled(CueFormat.attachmentKeys(in: body))
     }
 
     private static func untitled(_ attachments: [String]) -> String {

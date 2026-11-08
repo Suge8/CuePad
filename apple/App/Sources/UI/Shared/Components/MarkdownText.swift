@@ -41,23 +41,29 @@ struct MarkdownText: View, Equatable {
                 case .prose(let text):
                     // 中文正文行距放开一点：长回答是会话页的主角，读起来不挤
                     Paragraphs(text, lineSpacing: Typography.readingLineSpacing)
-                case .table(let table):
-                    // 表格带着自己的边框整张滚；阅读栏贴着屏幕边（手机）时滚动可以越过页边距滑到屏幕边，栏两边有空白时收在栏内
-                    // 贴着屏幕边时被屏幕边切开的那一列本身就看得出还有；收在栏内时右缘淡出
-                    ScrollView(.horizontal) { MarkdownTableView(table: table).selectable() }
-                        .scrollIndicatorsFlash(onAppear: true)
-                        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-                        .scrollClipDisabled(columnBleeds)
-                        .modifier(MoreToTheRight(enabled: !columnBleeds))
+                case .table(let block):
+                    if case .table(let table) = block.content {
+                        // 表格带着自己的边框整张滚；阅读栏贴着屏幕边（手机）时滚动可以越过页边距滑到屏幕边，栏两边有空白时收在栏内
+                        // 贴着屏幕边时被屏幕边切开的那一列本身就看得出还有；收在栏内时右缘淡出
+                        ScrollView(.horizontal) { MarkdownBlockFrame(block: block) { MarkdownTableView(table: table).selectable() } }
+                            .scrollIndicatorsFlash(onAppear: true)
+                            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                            .scrollClipDisabled(columnBleeds)
+                            .modifier(MoreToTheRight(enabled: !columnBleeds))
+                    }
                 case .list(let items):
                     ListRows(items: items)
-                case .code(let code):
-                    ScrollView(.horizontal) {
-                        Text(verbatim: code).font(Typography.code).foregroundStyle(palette.ink).fixedSize().textSelection(.enabled)
-                            .padding(ChatBlock.inset)
+                case .code(let block):
+                    if case .code(let code) = block.content {
+                        MarkdownBlockFrame(block: block) {
+                            ScrollView(.horizontal) {
+                                Text(verbatim: code).font(Typography.code).foregroundStyle(palette.ink).fixedSize().textSelection(.enabled)
+                                    .padding(ChatBlock.inset)
+                            }
+                            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                            .background(palette.fill, in: ChatBlock.shape)
+                        }
                     }
-                    .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-                    .background(palette.fill, in: ChatBlock.shape)
                 }
             }
         }
@@ -67,8 +73,8 @@ struct MarkdownText: View, Equatable {
     /// 回答里相邻的非表格块是一段文字，表格自成一块；文稿里代码块也自成一块。
     private enum Run {
         case prose(AttributedString)
-        case table(MarkdownTable)
-        case code(String)
+        case table(MarkdownBlock)
+        case code(MarkdownBlock)
         case list([MarkdownBlock])
 
         static func of(_ source: String, _ palette: Palette, notes: [ReplyNote], style: Style) -> [Run] {
@@ -95,13 +101,13 @@ struct MarkdownText: View, Equatable {
                 flushProse()
             }
             for block in MarkdownBlock.parse(source) {
-                if case .table(let table) = block {
+                if case .table = block.content {
                     flush()
-                    runs.append(.table(table))
-                } else if style == .document, case .code(let code) = block {
+                    runs.append(.table(block))
+                } else if style == .document, case .code = block.content {
                     flush()
-                    runs.append(.code(code))
-                } else if style == .document, case .item = block {
+                    runs.append(.code(block))
+                } else if style == .document, block.isList {
                     flushProse()
                     items.append(block)
                 } else {
@@ -136,22 +142,19 @@ struct MarkdownText: View, Equatable {
         var previous: MarkdownBlock?
         for block in blocks {
             if let previous {
-                switch (previous, block) {
-                case (.item, .item): result += newline()
-                case (_, .heading): result += newline(gap: Spacing.item)
-                default: result += newline(gap: Spacing.hair)
-                }
+                if previous.isList && block.isList { result += newline() }
+                else if case .heading = block.content { result += newline(gap: Spacing.item) }
+                else { result += newline(gap: Spacing.hair) }
             }
             previous = block
-            switch block {
+            var lead = AttributedString(block.textIndent)
+            lead.font = Typography.reading
+            lead.foregroundColor = palette.ink3
+            result += lead
+            switch block.content {
             case .paragraph(let text): result += styled(text, font: Typography.reading, color: palette.ink)
             case .heading(let level, let text):
                 result += styled(text, font: Self.heading(level, style), color: palette.ink)
-            case .item(let marker, let text, let depth):
-                var lead = AttributedString(String(repeating: "\u{2003}\u{2003}", count: depth) + (marker == "•" && depth > 0 ? "◦" : marker) + "\u{2002}")
-                lead.font = Typography.reading
-                lead.foregroundColor = palette.ink3
-                result += lead + styled(text, font: Typography.reading, color: palette.ink)
             case .quote(let text):
                 var bar = AttributedString("▎ ")
                 bar.font = Typography.reading
@@ -159,7 +162,7 @@ struct MarkdownText: View, Equatable {
                 result += bar + styled(text, font: Typography.reading, color: palette.ink2)
             case .code(let code):
                 // 空行也要有一个字，底色才连得上
-                let lines = code.split(separator: "\n", omittingEmptySubsequences: false).map { $0.isEmpty ? " " : String($0) }
+                let lines = code.split(separator: "\n", omittingEmptySubsequences: false).map { ($0.isEmpty ? " " : String($0)) }
                 var block = AttributedString(lines.joined(separator: "\n"))
                 block.font = Typography.code
                 block.foregroundColor = palette.ink
@@ -193,7 +196,11 @@ struct MarkdownText: View, Equatable {
     }
 
     static func inline(_ text: String, _ palette: Palette) -> AttributedString {
-        var string = AttributedString(inlineMarkdown: text)
+        styledInline(AttributedString(inlineMarkdown: text), palette)
+    }
+
+    static func styledInline(_ text: AttributedString, _ palette: Palette) -> AttributedString {
+        var string = text
         for run in string.runs {
             if run.link != nil { string[run.range].underlineStyle = .single }
             if run.inlinePresentationIntent?.contains(.code) == true {
@@ -216,15 +223,16 @@ private struct ListRows: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Typography.readingLineSpacing) {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                if case .item(let mark, let text, let depth) = item {
+                if let list = item.list.last {
                     HStack(alignment: .firstTextBaseline, spacing: 0) {
-                        Text(verbatim: mark == "•" && depth > 0 ? "◦" : mark).font(Typography.reading).foregroundStyle(palette.ink3)
+                        Text(verbatim: list.marker).font(Typography.reading).foregroundStyle(palette.ink3)
                             .frame(width: marker, alignment: .leading)
-                        Text(MarkdownText.attributed([.paragraph(text)], palette, style: .document))
+                            .opacity(item.startsItem ? 1 : 0).readerHidden(!item.startsItem)
+                        Text(MarkdownText.attributed([MarkdownBlock(content: item.content)], palette, style: .document))
                             .lineSpacing(Typography.readingLineSpacing).selectable()
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.leading, CGFloat(depth) * marker)
+                    .padding(.leading, CGFloat(item.depth) * marker)
                 }
             }
         }
@@ -240,8 +248,10 @@ enum ChatBlock {
 }
 
 /// 表格：按列排开，每格最宽 `cellWidth`、超过就换行；列按 Markdown 的对齐（数字列常是右对齐）。
-private struct MarkdownTableView: View {
+struct MarkdownTableView: View {
     let table: MarkdownTable
+    var images: [String: CGImage] = [:]
+    var exporting = false
     @Environment(\.palette) private var palette
 
     private static let cellWidth: CGFloat = 240
@@ -267,7 +277,7 @@ private struct MarkdownTableView: View {
         ForEach(Array(texts.enumerated()), id: \.offset) { column, text in
             let alignment = table.alignments[column]
             CappedWidth(cap: Self.cellWidth) {
-                Text(MarkdownText.inline(text, palette))
+                MarkdownMediaView(source: text, images: images, exporting: exporting)
                     .font(header ? Typography.secondary.weight(.semibold) : Typography.secondary)
                     .foregroundStyle(palette.ink)
                     .multilineTextAlignment(alignment.text)

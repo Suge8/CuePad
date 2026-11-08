@@ -17,18 +17,21 @@ public enum CueLineKind: Equatable, Sendable {
 /// 一行的轻装饰描述。标记字符保留可见，宿主只降低它们的存在感，不做所见即所得。
 public struct CueLineStyle: Equatable, Sendable {
     public var kind: CueLineKind
-    /// 行首标记（缩进 + `##␣`、`-␣`、`1.␣`，或整条围栏行）的 UTF-16 长度；无标记为 0。
+    /// 行首标记（缩进 + `##␣`、`-␣`、`1.␣`、`>␣`，或整条围栏行）的 UTF-16 长度；无标记为 0。
     public var markerLength: Int
     /// 行内 code（含两侧反引号）的范围，相对行首。
     public var inlineCode: [NSRange]
     /// 行内链接 `[文字](地址)`，相对行首：`label` 是方括号里的文字，`syntax` 是其余的标记（方括号、圆括号与地址）。
     public var links: [CueLink]
+    /// 强调符号的范围，不含被强调的正文。
+    public var emphasis: [NSRange]
 
-    public init(kind: CueLineKind, markerLength: Int, inlineCode: [NSRange], links: [CueLink] = []) {
+    public init(kind: CueLineKind, markerLength: Int, inlineCode: [NSRange], links: [CueLink] = [], emphasis: [NSRange] = []) {
         self.kind = kind
         self.markerLength = markerLength
         self.inlineCode = inlineCode
         self.links = links
+        self.emphasis = emphasis
     }
 }
 
@@ -38,7 +41,7 @@ public struct CueLink: Equatable, Sendable {
 }
 
 /// 一份运行时正文的装饰上下文：围栏位置是全文性质，逐行样式据此判定。
-/// 范围：`^#{1,6}\s`、`^\s*-\s`、顶格 ``` 围栏、分割线，另加有序列表、行内 code 与链接。第一行和别的行一样是正文，没有自动标题。
+/// 范围：`^#{1,6}\s`、`^\s*-\s`、顶格 ``` 围栏、分割线，另加有序列表、引用、行内 code、强调与链接。第一行和别的行一样是正文，没有自动标题。
 public struct CueDecorations: Sendable {
     /// 顶格 ``` 围栏行的数量。奇数说明有围栏未闭合，其后的行都是代码。
     public var fenceCount: Int { fences.count }
@@ -63,7 +66,7 @@ public struct CueDecorations: Sendable {
         }
         let (kind, marker) = Self.classify(line)
         let code = Self.inlineCode(in: line)
-        return CueLineStyle(kind: kind, markerLength: marker, inlineCode: code, links: Self.links(in: line, outside: code))
+        return CueLineStyle(kind: kind, markerLength: marker, inlineCode: code, links: Self.links(in: line, outside: code), emphasis: InlineMarkdown.emphasisMarkers(in: line))
     }
 
     // MARK: 全文性质
@@ -107,6 +110,11 @@ public struct CueDecorations: Sendable {
             if hashes <= 6, hashes < chars.count, isBlankUnit(chars[hashes]) {
                 return (.heading, String(chars[...hashes]).utf16.count)
             }
+        }
+        if i < chars.count, chars[i] == ">" {
+            var end = i + 1
+            while end < chars.count, chars[end] == ">" || isBlankUnit(chars[end]) { end += 1 }
+            return (.body, String(chars[..<end]).utf16.count)
         }
         var j = i
         if j < chars.count, chars[j] == "-" {

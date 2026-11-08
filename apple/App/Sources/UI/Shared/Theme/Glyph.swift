@@ -19,6 +19,8 @@ nonisolated enum Glyph {
     /// 大图标：手机底栏的"更多"、选中的角标、菜单栏图标。
     static let largeSize: CGFloat = 20
     static let large = Font.system(size: largeSize)
+    /// 项目卡身份的裸图形，与项目名并排。
+    static let projectIdentity: CGFloat = 24
     /// 没有预览时占位的大图标。
     static let hero = Font.system(size: 56)
 }
