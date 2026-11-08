@@ -115,7 +115,7 @@ extension PhoneVoiceViewState {
                      }, readings: replies.map { reply in
                          .init(id: reply.id, excerpt: reply.message.map { String($0.text.prefix(80)) } ?? String(localized: "回复等待同步"),
                                status: reply.readback.phoneStatus,
-                               recovery: activity != .ended && activity != .failed && reply.message != nil && reply.readback != .sending && reply.readback != .queued
+                               recovery: canRepeat && reply.message != nil && reply.readback != .sending && reply.readback != .queued
                                    ? .repeatReply(reply.id) : nil)
                      }, startUnavailableReason: startUnavailableReason?.phoneMessage)
     }

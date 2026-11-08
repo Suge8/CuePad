@@ -83,6 +83,7 @@ struct PhoneVoiceViewState {
     let response: VoiceCallProjection.Response
     let muted: Bool
     let canMute: Bool
+    let canRepeat: Bool
     let startUnavailableReason: VoiceIssue?
     let samples: () -> [Double]
     let requests: [Request]
@@ -96,6 +97,7 @@ struct PhoneVoiceViewState {
         response = phone.response
         muted = phone.muted
         canMute = phone.canMute
+        canRepeat = phone.canRepeat
         startUnavailableReason = phone.startUnavailableReason
         omitted = phone.omitted
         samples = phone.samples
