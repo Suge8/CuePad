@@ -4,6 +4,29 @@ import Foundation
 import Testing
 
 extension MCPTests {
+  @Test func cueBindsExistingTaskWithoutSending() async throws {
+    let sandbox = try Fixture()
+    let store = sandbox.store
+    let task = try await store.createTask("已有任务")
+    try await store.setStatus(task.id, .inProgress)
+    let started = try #require(try await store.card(task.id)?.startedAt)
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "session-one", state: .settled, title: "已有会话")
+    try await Server.run(library: sandbox.directory) { server in
+      let args = ["action": "bind", "task": task.id.uuidString, "session": "session-one"]
+      _ = try await server.call("task", args)
+      _ = try await server.call("task", args)
+      #expect(try await store.card(task.id)?.piSessionID == "session-one")
+      #expect(try await store.card(task.id)?.startedAt == started)
+      #expect(try await store.deliveryRequests().isEmpty)
+      #expect(try await server.refused("task", ["action": "start", "task": task.id.uuidString, "session": "session-one"]).contains("session"))
+      _ = try await server.refused("task", ["action": "bind", "task": task.id.uuidString, "session": "missing-session"])
+      _ = try await server.refused("task", ["action": "unbind", "task": UUID().uuidString])
+      _ = try await server.call("task", ["action": "unbind", "task": task.id.uuidString])
+      #expect(try await store.card(task.id)?.piSessionID == nil)
+      #expect(try await store.deliveryRequests().isEmpty)
+    }
+  }
+
   /// 没给项目建的任务落在默认项目：Cue 用 edit 的 project 把它连同子任务与草稿挪进别的项目，开工就在那个项目的文件夹。
   @Test func cueMovesATaskFromTheDefaultProjectIntoAnother() async throws {
     let sandbox = try Fixture()

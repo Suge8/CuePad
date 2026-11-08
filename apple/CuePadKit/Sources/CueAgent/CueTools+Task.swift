@@ -4,10 +4,33 @@ import Foundation
 
 extension CueTools {
   func task(_ args: Args) async throws -> Result {
-    switch try args.required("action") {
+    let action = try args.required("action")
+    let allowed: Set<String>?
+    switch action {
+    case "bind": allowed = ["action", "task", "session"]
+    case "unbind": allowed = ["action", "task"]
+    default: allowed = nil
+    }
+    if action == "start", args.string("session") != nil {
+      throw Failure("start 不支持 session：关联已有会话用 bind")
+    }
+    if let allowed, let unsupported = args.raw.keys.filter({ !allowed.contains($0) }).sorted().first {
+      throw Failure("\(action) 不支持参数 \(unsupported)：关联已有会话用 bind，开工用 start")
+    }
+    switch action {
     case "add": return try await add(args)
     case "edit": return try await edit(args)
     case "start": return try await start(args)
+    case "bind":
+      let card = try await task(args.required("task"))
+      let ref = try args.required("session")
+      guard case .session(let session) = try await sessionRef(ref) else { throw Failure("bind 的 session 要写会话 id 或会话名") }
+      try await store.bindSession(session.sessionID, to: card.id)
+      return .ok("已把「\(card.heading)」关联到会话「\(session.title)」。（\(card.id.shortID)）")
+    case "unbind":
+      let card = try await task(args.required("task"))
+      try await store.unbindSession(from: card.id)
+      return .ok("已解除「\(card.heading)」的会话关联。（\(card.id.shortID)）")
     case "say": return try await say(args)
     case "peek":
       switch try await place(args) {
@@ -35,7 +58,7 @@ extension CueTools {
       guard try await store.takeBack(target.session) != nil else { throw Failure("\(target.label)没留给他回（或已作废），不用收回") }
       return .ok("已收回\(target.label)：不再待回复、出了等你。（\(target.short)）")
     case "done": return try await done(args)
-    case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / leave / take / done")
+    case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / bind / unbind / say / peek / stop / leave / take / done")
     }
   }
 
