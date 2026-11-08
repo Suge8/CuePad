@@ -1,6 +1,7 @@
 import CueStore
 import Foundation
 import Observation
+import os
 
 /// AppServices 持有唯一通话 owner；页面离开不释放媒体，整个 App 进后台才结束手机媒体。
 /// Mac 投影决定业务阶段；本机麦克风、静音确认和电平从不上传，也不据此推断远端正在处理或朗读。
@@ -29,7 +30,7 @@ import Observation
     @ObservationIgnored var phoneBinding: (session: VoiceSessionID, local: VoiceEndpoint, peer: VoiceEndpoint)?
     var muted = false
     var muting = false
-    var closing = false
+    var closing: Bool { phone?.cleanup != nil }
     var inputSamples: [Double] = []
     var outputSamples: [Double] = []
     var outputActive = false
@@ -117,11 +118,12 @@ import Observation
     func receive(_ event: VoiceRelayEvent) async {
         switch event {
         case .received(let received):
-            if case .commandResult(let result) = received.payload,
-               let wait = pending[result.command], wait.session == received.header.session,
-               wait.peer == received.header.sender, wait.local == received.header.recipient {
-                pending[result.command] = nil
-                wait.finish(.success(result.outcome))
+            if case .commandResult(let result) = received.payload {
+                if let wait = pending[result.command], wait.session == received.header.session,
+                   wait.peer == received.header.sender, wait.local == received.header.recipient {
+                    pending[result.command] = nil
+                    wait.finish(.success(result.outcome))
+                }
                 return
             }
             await receiveSignal(received)
@@ -131,9 +133,18 @@ import Observation
         case .peerClosed(let endpoint, let departure):
             failPending { $0.peer == endpoint }
             await connectionClosed(local: nil, peer: endpoint, reason: departure == .replaced ? .leaseReplaced : .peerLeft)
-        case .rejected(let header, _):
-            failPending { $0.local == header.sender && $0.peer == header.recipient && $0.session == header.session }
-            await connectionClosed(local: header.sender, peer: header.recipient, reason: .protocolRejected)
+        case .rejected(let header, let reason):
+            switch header.purpose {
+            case .media:
+                guard header.session == session else { return }
+                await connectionClosed(local: header.sender, peer: header.recipient, reason: .protocolRejected)
+            case .command(let id):
+                guard let wait = pending[id], wait.session == header.session, wait.local == header.sender, wait.peer == header.recipient else { return }
+                pending[id] = nil
+                wait.finish(.failure(VoiceSignalError.rejected(reason)))
+            case .commandResult:
+                AppServices.log.error("Voice command result rejected by Relay: \(reason.rawValue)")
+            }
         case .availability(let value): availability = value
         }
     }
