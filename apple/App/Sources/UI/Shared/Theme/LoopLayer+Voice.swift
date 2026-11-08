@@ -4,7 +4,7 @@ import SwiftUI
 /// 声纹的绘制参数，不持有通话生命周期。十三根墨线始终是同一批图层：连接时围拢，听说时展开，静音和结束时收束。
 /// 待连接与处理的光沿环行走只是等待信号；听说的起伏只来自音轨，静置没有假音量循环。
 struct VoiceRibbon: Equatable {
-    let activity: CueVoicePresentation.Activity?
+    let activity: CueVoiceActivity?
     let muted: Bool
     let samples: [CGFloat]
     let playing: Bool
@@ -89,8 +89,10 @@ final class VoiceRibbonLayer: CALayer {
             let move = CABasicAnimation(keyPath: key)
             move.fromValue = shown
             move.toValue = value
-            move.duration = Motion.Glide.duration
-            move.timingFunction = Motion.Glide.timing
+            // 电平每 50ms 到来，缓出让第一帧就跟随；空间展开仍用同一条 glide，不让采样重启位移动画。
+            let followsSample = key == "path" || key == "fillColor"
+            move.duration = followsSample ? Motion.Fade.duration : Motion.Glide.duration
+            move.timingFunction = followsSample ? Motion.Fade.timing : Motion.Glide.timing
             layer.add(move, forKey: key)
         } else {
             layer.removeAnimation(forKey: key)

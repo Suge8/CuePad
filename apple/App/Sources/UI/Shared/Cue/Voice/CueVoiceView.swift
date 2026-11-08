@@ -1,11 +1,11 @@
 import SwiftUI
 
 /// 通话主体与操作位常驻：开始、关闭、失败都不挤动聊天；真实状态立即更新，只有声纹在图层里连续变形。
-struct CueVoiceView: View {
-    let presentation: CueVoicePresentation?
+struct CueVoiceView<Operation: CueVoiceOperation>: View {
+    let presentation: CueVoiceState<Operation>?
     @Binding var detailsSource: BubbleSource?
     let start: () -> Void
-    let action: (CueVoiceAction) -> Void
+    let action: (CueVoiceIntent<Operation>) -> Void
     @Environment(\.palette) private var palette
 
     private var active: Bool { presentation?.active == true }
@@ -80,8 +80,8 @@ private struct CueVoiceDetailButton<Label: View>: View {
 
 /// 配置排只占一个固定入口；问题与朗读记录统一从常驻通话栏的详情进入，结束时不再增高回复框。
 /// 平台宿主提供同一份投影与 BubbleSource；开始动作不捕获、重造请求或媒体身份。
-struct CueVoiceEntry: View {
-    let presentation: CueVoicePresentation?
+struct CueVoiceEntry<Operation: CueVoiceOperation>: View {
+    let presentation: CueVoiceState<Operation>?
     @Binding var detailsSource: BubbleSource?
     let start: () -> Void
 

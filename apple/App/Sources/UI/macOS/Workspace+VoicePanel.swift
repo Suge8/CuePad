@@ -39,7 +39,7 @@ struct CueVoicePanel: View {
             let targets = workspace.stoppableVoiceExecutions
             if targets.count == 1, let target = targets.first { stop(target.state.sessionID) }
             else if !targets.isEmpty { choosingExecution = true }
-        case .recover(let recovery):
+        case .perform(let recovery):
             Task {
                 do { try await workspace.recoverVoice(recovery) }
                 catch { workspace.fail(error) }
