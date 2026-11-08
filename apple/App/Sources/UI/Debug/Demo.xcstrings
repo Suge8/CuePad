@@ -434,7 +434,9 @@
       }
     },
     "MacBook Pro" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "Pi 没能启动" : {

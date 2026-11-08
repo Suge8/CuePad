@@ -2,7 +2,9 @@
   "sourceLanguage" : "zh-Hans",
   "strings" : {
     "" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "\n\n— 插话 —\n\n" : {
@@ -22,19 +24,27 @@
       }
     },
     " " : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "!" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "$ swift test --filter Reconnect\nExecuted 4 tests, with 0 failures (0.90s)" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "%@" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "%@  %@" : {
@@ -1191,7 +1201,9 @@
       }
     },
     "%lld" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "%lld 个任务没做完" : {
@@ -2238,7 +2250,9 @@
       "shouldTranslate" : false
     },
     "+%lld" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "3D 模型" : {
@@ -2258,7 +2272,9 @@
       }
     },
     "9:41" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "<名字>" : {
@@ -2294,7 +2310,9 @@
       }
     },
     "Agent" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "Agent 会话「%@」已经结束，或不在这台 Mac 上" : {
@@ -3190,7 +3208,9 @@
       }
     },
     "Cue" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "Cue 已经收到这句了，撤不回" : {
@@ -3386,11 +3406,15 @@
       }
     },
     "CuePad" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "CuePad %@" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "CuePad 写给 Agent 的技能或扩展没能升级：%@" : {
@@ -4180,7 +4204,9 @@
       }
     },
     "me@example.com" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "opencode serve --stdio 没有报出地址" : {
@@ -4270,7 +4296,9 @@
       }
     },
     "staging-2.roundtable.app" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "tmux 没能切到 %@（会话可能没有附着的客户端）" : {
@@ -4290,27 +4318,39 @@
       }
     },
     "{{%@}}" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "¥0" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "¥198" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "¥68" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "·" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "••••••" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "↩ 打开" : {
@@ -4346,7 +4386,9 @@
       }
     },
     "✓" : {
-      "localizations" : {},
+      "localizations" : {
+
+      },
       "shouldTranslate" : false
     },
     "、" : {
