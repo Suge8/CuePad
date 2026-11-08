@@ -131,7 +131,7 @@ struct BubbleText: View {
     var lineLimit: Int?
     /// 给了时报告文字是否被 `lineLimit` 截掉。
     var truncated: Binding<Bool>?
-    /// 折起着时：最后一行末尾渐隐，接着是"展开"（在气泡里，就在被截断的地方）。
+    /// 折起着时：文字下方的"展开"，大字号下也不覆盖最后一行。
     var expand: (() -> Void)?
     var quote: BubbleQuote?
     @Environment(\.palette) private var palette
@@ -140,10 +140,10 @@ struct BubbleText: View {
         let shape = look.shape
         VStack(alignment: .leading, spacing: Spacing.tight) {
             if let quote { QuoteLine(quote: quote) }
-            Paragraphs(verbatim: text, lineLimit: lineLimit)
+            Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: lineLimit)
                 .font(Typography.reading).foregroundStyle(palette.ink)
-                .background(alignment: .topLeading) { if let truncated, mayTruncate { fullHeight(truncated) } }
-                .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
+                .background(alignment: .topLeading) { if let truncated, let lineLimit { truncationProbe(truncated, lineLimit: lineLimit) } }
+            if let expand { expandButton(expand).frame(maxWidth: .infinity, alignment: .trailing) }
         }
             .padding(look.padding)
             .background(palette.bubble, in: shape)
@@ -153,30 +153,17 @@ struct BubbleText: View {
             .animation(Motion.fade, value: trip)
     }
 
-    /// 折起着、而且长到可能被截：每个气泡多挂一份量全文高的视图（每个几何读数都是一次布局回调），所以短的话（绝大多数）不挂。
-    /// 一行至少放得下 40 个字节（窄到手机上的气泡，拉丁字母约 7pt 宽、汉字三字节），没到 `lineLimit` 行的字节数、又没有那么多换行的话排不满。
-    private var mayTruncate: Bool {
-        guard let lineLimit else { return false }
-        return text.utf8.count > 40 * lineLimit || text.utf8.lazy.filter { $0 == 10 }.count >= lineLimit
-    }
-
     private func expandButton(_ expand: @escaping () -> Void) -> some View {
-        HStack(spacing: 0) {
-            LinearGradient(colors: [palette.bubble.opacity(0), palette.bubble], startPoint: .leading, endPoint: .trailing).frame(width: 36)
-            Button("展开", action: expand)
-                .font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink2)
-                .buttonStyle(PressStyle(.inline))
-                .padding(.leading, Spacing.tight)
-                .background(palette.bubble)
-        }
-        .fixedSize()
+        Button("展开", action: expand)
+            .font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink2)
+            .buttonStyle(PressStyle(.inline))
     }
 
-    /// 同一宽度下排全文要多高，与折起后的高度比，量出有没有被截掉；只读几何、不影响自己的排版（藏起的全文不占位）。
-    private func fullHeight(_ truncated: Binding<Bool>) -> some View {
+    /// 同一宽度和样式多排一行就能判定截断；短气泡只多量自身，长气泡不必排完整篇。
+    private func truncationProbe(_ truncated: Binding<Bool>, lineLimit: Int) -> some View {
         GeometryReader { shown in
             let folded = shown.size.height
-            Paragraphs(verbatim: text).font(Typography.reading).fixedSize(horizontal: false, vertical: true)
+            Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: lineLimit + 1).font(Typography.reading).fixedSize(horizontal: false, vertical: true)
                 .frame(width: shown.size.width, alignment: .leading)
                 .hidden()
                 .onGeometryChange(for: Bool.self) { $0.size.height > folded + 1 } action: { truncated.wrappedValue = $0 }

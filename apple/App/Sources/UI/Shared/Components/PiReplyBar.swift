@@ -224,7 +224,7 @@ struct PiReplyBar: View {
         if let answering { return answering.kind == .known(.select) ? "或写你自己的回答" : "回答上面的问题" }
         if speakBlocked != nil { return Self.blockedPrompt }
         if !draft.attachments.isEmpty || !draft.files.isEmpty { return "补一句（可不填）" }
-        return interrupts ? "插话（会打断这一轮）" : replyPrompt
+        return interrupts ? "打断本轮" : replyPrompt
     }
 
     /// 回给这个会话的那句占位：已结束的会话也能接着说——发出后它所在的 Mac 先在后台把它唤醒再送达，占位写明这一步，

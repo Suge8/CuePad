@@ -119,27 +119,15 @@ public final class CueTextView: UITextView, CueEditorHost {
 
     // MARK: 主题与动态字体
 
-    /// 设计基准字号按系统字号档位缩放；默认档位下原样使用。
-    private func scaledStyle() -> CueEditorTheme {
-        func scaled(_ font: UIFont, _ textStyle: UIFont.TextStyle) -> UIFont {
-            let size = UIFontMetrics(forTextStyle: textStyle).scaledValue(for: font.pointSize, compatibleWith: traitCollection)
-            return size == font.pointSize ? font : font.withSize(size)
-        }
-        var result = theme
-        result.font = scaled(theme.font, .body)
-        result.codeFont = scaled(theme.codeFont, .body)
-        result.headingFont = scaled(theme.headingFont, .title2)
-        result.title?.font = scaled(theme.title?.font ?? theme.font, .title3)
-        return result
-    }
-
     private func applyTheme() {
-        let style = scaledStyle()
+        let style = theme.scaled(for: traitCollection)
         core.style = style
         backgroundColor = style.backgroundColor
         textContainerInset = UIEdgeInsets(top: style.verticalInset, left: style.horizontalInset, bottom: style.verticalInset, right: style.horizontalInset)
         typingAttributes = core.baseAttributes
         core.styleDidChange()
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
     }
 
     // MARK: 编辑通知

@@ -75,7 +75,7 @@ extension DebugScene {
                     + "\n" + pdf.markup,
                 at: first.addingTimeInterval(-50)),
             PiChatMessage(
-                sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: String(localized: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。", table: "Demo"),
+                sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: notesPreviewReply,
                 at: last.addingTimeInterval(2), tools: .init(steps: 2, items: [
                     .init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png"),
                     .init(kind: .read, target: "login-mobile.png", images: looked.map { [$0] }),

@@ -139,7 +139,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if accepts.contains(.files), !draft.files.isEmpty {
                 fileStrip.padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
             }
-            if form == .open, tooled { layered } else { row }
+            // 空间不足时先压缩可滚动的头部，保留编辑区与工具排。
+            Group {
+                if form == .open, tooled { layered } else { row }
+            }
+            .layoutPriority(1)
         }
         // 提交钮只有一颗，浮在右下角留出的位置上：有没有内容都不改它的位置与输入框的宽
         .overlay(alignment: .bottomTrailing) { if !shrunk { sendSlot } }

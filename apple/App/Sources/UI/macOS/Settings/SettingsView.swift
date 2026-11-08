@@ -92,6 +92,7 @@ private struct GeneralSections: View {
         if let alerts = services.alerts { NotificationSection(alerts: alerts) }
         Section {
             SettingRow(title: "外观", icon: Image(.appearance)) { ThemePicker() }
+            LanguageRow()
             ShortcutRow(title: "显示/隐藏", icon: .hotkey, accelerator: services.hotkey.accelerator, apply: services.hotkey.set)
             if let cueBar {
                 ShortcutRow(title: "对 Cue 说", icon: .talkToCue, accelerator: cueBar.hotkey.accelerator, apply: cueBar.hotkey.set)

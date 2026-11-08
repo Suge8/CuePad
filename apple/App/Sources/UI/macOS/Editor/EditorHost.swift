@@ -87,7 +87,7 @@ struct EditorHost: NSViewRepresentable {
             handle.spot.open(DraftFile(key: key, name: name), at: frame, in: workspace, with: opener)
         }
         if textView.isEditable != editable { setEditable(textView) }
-        if !Self.sameLook(textView.theme, theme) { textView.theme = theme }
+        if textView.theme != theme { textView.theme = theme }
     }
 
     private func setEditable(_ textView: CueTextView) {
@@ -100,12 +100,6 @@ struct EditorHost: NSViewRepresentable {
         textView.isSelectable = editable
         textView.setAccessibilityElement(editable)
         if editable, handle.refocus { window?.makeFirstResponder(textView) }
-    }
-
-    /// 主题每次渲染都新建，只在外观相关的值真的变了才替换（替换会重排全文）。
-    private static func sameLook(_ a: CueEditorTheme, _ b: CueEditorTheme) -> Bool {
-        a.textColor == b.textColor && a.backgroundColor == b.backgroundColor && a.font == b.font
-            && a.horizontalInset == b.horizontalInset && a.variableColor == b.variableColor && a.title?.color == b.title?.color
     }
 }
 

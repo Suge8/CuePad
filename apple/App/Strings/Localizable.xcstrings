@@ -3494,7 +3494,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad diagnostics summary: %lld reports, %lld kinds"
+            "value" : "CuePad diagnostics — Reports: %1$lld; Issue types: %2$lld"
           }
         },
         "zh-Hans" : {
@@ -6099,6 +6099,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话名"
+          }
+        }
+      }
+    },
+    "会话回复框的文字与批注会保留；其他未发送内容请先保存或发出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text and annotations in session reply drafts are kept. Save or send other unsent content before reopening"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话回复框的文字与批注会保留；其他未发送内容请先保存或发出"
           }
         }
       }
@@ -10423,6 +10439,22 @@
         }
       }
     },
+    "在「语言与地区」的「应用程序」中添加或选择 CuePad，再选择语言；移除 CuePad 可恢复跟随系统" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Language & Region, add or select CuePad under Applications, then choose a language. Remove CuePad to follow the system language."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「语言与地区」的「应用程序」中添加或选择 CuePad，再选择语言；移除 CuePad 可恢复跟随系统"
+          }
+        }
+      }
+    },
     "在下面说第一句" : {
       "localizations" : {
         "en" : {
@@ -11763,6 +11795,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "尚未观测到额度"
+          }
+        }
+      }
+    },
+    "尚未载入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not loaded yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未载入"
           }
         }
       }
@@ -13599,6 +13647,38 @@
         }
       }
     },
+    "打开 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open CuePad"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 CuePad"
+          }
+        }
+      }
+    },
+    "打开 CuePad 后可选项目；当前存入默认项目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open CuePad to choose a project. Saving to Default for now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 CuePad 后可选项目；当前存入默认项目"
+          }
+        }
+      }
+    },
     "打开任务" : {
       "localizations" : {
         "en" : {
@@ -13695,6 +13775,22 @@
         }
       }
     },
+    "打开语言与地区设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Language & Region settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开语言与地区设置"
+          }
+        }
+      }
+    },
     "打开这件事的 Agent 会话" : {
       "localizations" : {
         "en" : {
@@ -13707,6 +13803,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开这件事的 Agent 会话"
+          }
+        }
+      }
+    },
+    "打断本轮" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interrupt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打断本轮"
           }
         }
       }
@@ -14599,22 +14711,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "插话 %lld"
-          }
-        }
-      }
-    },
-    "插话（会打断这一轮）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interject (interrupts this turn)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "插话（会打断这一轮）"
           }
         }
       }
@@ -16075,6 +16171,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更改"
+          }
+        }
+      }
+    },
+    "更改后需重新打开 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reopen CuePad after changing the language"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更改后需重新打开 CuePad"
           }
         }
       }
@@ -21683,6 +21795,22 @@
         }
       }
     },
+    "语言" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "语言"
+          }
+        }
+      }
+    },
     "说明" : {
       "localizations" : {
         "en" : {
@@ -24067,6 +24195,22 @@
         }
       }
     },
+    "退出不保留草稿中的卡片和图片" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Draft cards and images are lost on quit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出不保留草稿中的卡片和图片"
+          }
+        }
+      }
+    },
     "退出搜索" : {
       "localizations" : {
         "en" : {
@@ -24927,6 +25071,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重复"
+          }
+        }
+      }
+    },
+    "重开后生效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reopen CuePad to apply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重开后生效"
           }
         }
       }

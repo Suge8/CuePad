@@ -25,12 +25,16 @@ private struct ShareForm: View {
                     }
                     .listRowBackground(palette.paper)
                 }
-                // 从没打开过主 App 时没有项目快照：存进默认项目，不给空的选择
-                if !model.projects.isEmpty {
+                if let projects = model.projects, !projects.isEmpty {
                     Picker("存到", selection: $model.selectedProject) {
-                        ForEach(model.projects, id: \.id) { Text($0.name).tag($0.id) }
+                        ForEach(projects, id: \.id) { Text($0.shownName).tag($0.id) }
                     }
                     .listRowBackground(palette.paper)
+                } else if model.projects == nil {
+                    Section {} footer: {
+                        Text("打开 CuePad 后可选项目；当前存入默认项目")
+                            .foregroundStyle(palette.ink2)
+                    }
                 }
             }
             .scrollContentBackground(.hidden)

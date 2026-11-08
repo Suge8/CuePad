@@ -22,7 +22,9 @@ nonisolated struct QuotaMeter: Equatable {
         let spoken: String
 
         var percent: String { Self.percent(left) }
-        private static func percent(_ left: Double) -> String { "\(Int((left * 100).rounded()))%" }
+        private static func percent(_ left: Double) -> String {
+            left.formatted(.percent.precision(.fractionLength(0)).rounded(rule: .toNearestOrAwayFromZero))
+        }
         /// 只算某个模型的（按模型的周额度）
         var isScoped: Bool { id.model != nil }
 

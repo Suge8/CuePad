@@ -264,29 +264,33 @@ struct PiSessionSubtitle: View {
         // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
         ZStack(alignment: .leading) {
             if speaks || undelivered != nil || mark != nil {
-                HStack(spacing: Spacing.tight) {
-                    if mark != nil {
-                        AgentMark(session: session, font: Self.font)
-                        if speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
-                    }
-                    if syncing { SyncingLabel() } else if speaks { PiShownLabel(shown: shown) }
-                    if let undelivered {
-                        if speaks { Dot().foregroundStyle(palette.failure) }
-                        Text(undelivered).foregroundStyle(palette.failure)
-                    }
-                    if !syncing, shown.isRunning, shown.clock != nil {
-                        Dot().foregroundStyle(palette.ink3)
-                        // 整个 App 只有这一个计时到秒：正看着的这个会话
-                        PiElapsed(shown: shown, font: Self.font, style: .header)
-                    }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Spacing.tight) { facts(shown: shown, speaks: speaks, mark: mark, compact: false) }
+                        .fixedSize()
+                    HStack(spacing: Spacing.tight) { facts(shown: shown, speaks: speaks, mark: mark, compact: true) }
                 }
                 .font(Self.font)
-                .fixedSize()
                 .relaySpot(session: session.sessionID)
                 .accessibilityElement(children: .combine)
             }
         }
         .pending(services.isCatchingUp(on: session.hostID), shown: $syncing)
+    }
+
+    @ViewBuilder private func facts(shown: PiShown, speaks: Bool, mark: String?, compact: Bool) -> some View {
+        if mark != nil {
+            AgentMark(session: session, font: Self.font)
+            if !compact, speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
+        }
+        if syncing { SyncingLabel() } else if speaks { PiShownLabel(shown: shown) }
+        if let undelivered {
+            if !compact, speaks { Dot().foregroundStyle(palette.failure) }
+            Text(undelivered).foregroundStyle(palette.failure)
+        }
+        if !syncing, shown.isRunning, shown.clock != nil {
+            if !compact { Dot().foregroundStyle(palette.ink3) }
+            PiElapsed(shown: shown, font: Self.font, style: compact ? .span : .header)
+        }
     }
 
     private static let font = Typography.caption

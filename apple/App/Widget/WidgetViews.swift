@@ -5,7 +5,7 @@ import WidgetKit
 /// 主 App（iOS）也编进这个文件，调试画面用同一份视图按系统尺寸画（`DebugWidgetStage`）：尺寸档由调用方给，
 /// 小组件里从环境读（`widgetFamily` 只能由系统设）。
 enum WidgetViews {
-    static func defaultProject(_ snapshot: DefaultProjectSnapshot) -> some View {
+    static func defaultProject(_ snapshot: DefaultProjectSnapshot?) -> some View {
         DefaultProjectView(snapshot: snapshot)
             .widgetURL(DeepLink.speak.url)
             .modifier(WidgetPaper())
@@ -62,14 +62,19 @@ private struct CueView: View {
 }
 
 private struct DefaultProjectView: View {
-    let snapshot: DefaultProjectSnapshot
+    let snapshot: DefaultProjectSnapshot?
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(Dotted(snapshot.name, "\(snapshot.total)")).font(.caption).foregroundStyle(palette.ink2)
-            ForEach(snapshot.cards.prefix(3), id: \.id) { card in
-                (card.title.isEmpty ? Text("图片") : Text(verbatim: card.title)).font(.footnote).lineLimit(1)
+            if let snapshot {
+                Text(Dotted(snapshot.shownName, "\(snapshot.total)")).font(.caption).foregroundStyle(palette.ink2)
+                ForEach(snapshot.cards.prefix(3), id: \.id) { card in
+                    (card.title.isEmpty ? Text("图片") : Text(verbatim: card.title)).font(.footnote).lineLimit(1)
+                }
+            } else {
+                Text("尚未载入").font(.caption).foregroundStyle(palette.ink2)
+                Text("打开 CuePad").font(.footnote)
             }
             Spacer(minLength: 0)
         }
