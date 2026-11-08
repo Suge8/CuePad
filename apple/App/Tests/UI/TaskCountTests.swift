@@ -81,9 +81,9 @@ struct TaskCountTests {
 
         try await workspace.services.answerCueQuestion(ask.id, CueAsk.once)
         #expect(try await board().advancing.map(\.item?.id) == [task.id])
-        try await workspace.toggle(task.id)
+        try await workspace.complete(task.id)
         columns = try await board()
-        #expect(columns.done.map(\.id) == [task.id] && columns.advancing.map(\.id) == ["session/s1"])
+        #expect(columns.done.map(\.id) == [task.id] && columns.advancing.isEmpty, "会话随做完的事收起")
         try await expectCountsMatchCue(columns)
 
         // 做完了 Cue 还在问它：它仍在已完成

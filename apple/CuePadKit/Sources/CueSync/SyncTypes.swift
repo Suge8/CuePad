@@ -178,6 +178,8 @@ struct SendOutcome: Sendable {
   var zoneMissing = false
   /// 有记录因可重试或要停下的原因被拒：这一轮到此为止，按它定下一次（nil：没有）。
   var fault: SyncFault?
+  /// 协调器停下了（等你决定、要更新）：结果没记账，这一轮到此为止，不定重试时刻（停下不是失败；处理完重新开始时照常重传）。
+  var paused = false
 }
 
 extension CKError.Code {

@@ -3,10 +3,10 @@ import Foundation
 import UniformTypeIdentifiers
 
 /// 能发到手机上看的文件类型（唯一定义）：按文件名的扩展名得出系统类型（UTType），归进第一个它属于的类。
-/// 网页与 Markdown 在 CuePad 自己的页里看（网页只读、不联网），其余交给系统的快速查看。
-public enum PiPreviewKind: String, Sendable, CaseIterable {
-  // 顺序即归类的先后：SVG 也是图片、HTML 与 Markdown 也是文本，先认出来的算数
-  case web, markdown, image, video, audio, pdf, document, spreadsheet, presentation, model, text
+/// 两端怎么显示各自在 App 的 `PreviewPage`：网页只读、不联网；Markdown 按文稿排版；改动（diff、patch）是增删对照；其余用系统的视图。
+public enum PiPreviewKind: String, Codable, Sendable, CaseIterable {
+  // 顺序即归类的先后：SVG 也是图片、HTML、Markdown 与 diff 也是文本，先认出来的算数
+  case web, markdown, image, video, audio, pdf, document, spreadsheet, presentation, model, diff, text
 
   /// 属于这一类的系统类型；具体类型（带扩展名的）会写进"可发什么"。
   private var types: [UTType] {
@@ -21,6 +21,7 @@ public enum PiPreviewKind: String, Sendable, CaseIterable {
     case .spreadsheet: ["org.openxmlformats.spreadsheetml.sheet", "com.microsoft.excel.xls", "com.apple.iwork.numbers.sffnumbers"].compactMap(UTType.init)
     case .presentation: ["org.openxmlformats.presentationml.presentation", "com.microsoft.powerpoint.ppt", "com.apple.iwork.keynote.sffkey"].compactMap(UTType.init)
     case .model: [.usdz, .realityFile]
+    case .diff: [UTType("public.patch-file")].compactMap { $0 }
     case .text: [.text]
     }
   }
@@ -37,6 +38,7 @@ public enum PiPreviewKind: String, Sendable, CaseIterable {
     case .spreadsheet: String(localized: "表格")
     case .presentation: String(localized: "演示文稿")
     case .model: String(localized: "3D 模型")
+    case .diff: String(localized: "改动")
     case .text: String(localized: "文本")
     }
   }
@@ -59,8 +61,10 @@ public enum PiPreviewKind: String, Sendable, CaseIterable {
   }.joined(separator: "、")
 }
 
-/// Agent 发到手机上看的一个文件（同步表 `previews`，Mac 写、各端读）：文件按内容哈希存在附件目录、经附件记录同步，
-/// 这里只记它属于哪个 Agent 会话、叫什么、多大。对话里的位置由创建时间定（`PiChat.entries`）。
+/// 一份预览：Agent 发到手机上要用户看一眼或拍板的一个文件（同步表 `previews`，Mac 写、各端读）。随会话的对话走、随对话过期，不做版本与作品库。
+/// 文件按内容哈希存在附件目录、经附件记录同步，这里只记它属于哪个 Agent 会话、叫什么、多大。对话里的位置由创建时间定（`PiChat.entries`）。
+/// 以后的网页地址类预览（Mac 上运行着的页面，没有文件）是这里另一种内容：引用它（回复框的 `ReplyNote`）与对话里的位置只认 `id`、`title`、
+/// `createdAt`，不假设一定有文件。
 public struct PiPreview: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// Agent 自己的会话 id（同 `PiSessionState.sessionID`）
@@ -78,6 +82,8 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
   public static let maxBytes = 20_000_000
   /// 标题宽不过这么多（`CueName.width`，约 20 个汉字）：缩略图下至多两行写得下。
   public static let titleLimit = 40
+  /// 标题怎么写（接在"每个一句，"或"标题要"后面）：技能、命令的帮助与标题不合时的报错共用这一句。
+  public static let titleRule = "说清这份是什么、看哪里，用和用户对话的语言；一行、宽不过 \(titleLimit)（约 \(titleLimit / 2) 个汉字），同一次发的各不相同"
 
   /// 这台设备不认识的类型（别的版本发来的）为 nil
   public var kind: PiPreviewKind? { PiPreviewKind(fileName: name) }
@@ -114,6 +120,20 @@ extension PiPreview: Record {
   }
 }
 
+/// 一份预览的标题哪里不合 `PiPreview.titleRule`：报错说出这一条，Agent 照着改一处就对。
+public enum PreviewTitleProblem: Equatable, Sendable {
+  case blank, multiline, tooWide(Int), repeated
+
+  var phrase: String {
+    switch self {
+    case .blank: "是空的"
+    case .multiline: "不止一行"
+    case .tooWide(let width): "宽 \(width)，超过 \(PiPreview.titleLimit)"
+    case .repeated: "与同一次发的另一份重复"
+    }
+  }
+}
+
 /// `CueStore.addPreviews` 的结果，一个文件一份：预览，以及 HTML 里引用了、手机上预览时拿不到的外部资源。
 public struct PiPreviewAdded: Equatable, Sendable {
   public var preview: PiPreview
@@ -134,9 +154,11 @@ extension CueStore {
     var titles: [String] = []
     for file in sent {
       let title = file.title.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !title.isEmpty, !title.contains(where: \.isNewline), CueName.width(title) <= PiPreview.titleLimit, !titles.contains(title) else {
-        throw CueStoreError.previewTitle(file.url.lastPathComponent, limit: PiPreview.titleLimit)
-      }
+      let width = CueName.width(title)
+      let problem: PreviewTitleProblem? =
+        if title.isEmpty { .blank } else if title.contains(where: \.isNewline) { .multiline }
+        else if width > PiPreview.titleLimit { .tooWide(width) } else if titles.contains(title) { .repeated } else { nil }
+      if let problem { throw CueStoreError.previewTitle(file.url.lastPathComponent, problem) }
       titles.append(title)
     }
     let urls = sent.map(\.url)
@@ -146,7 +168,7 @@ extension CueStore {
         throw CueStoreError.previewUnreadable(url.path)
       }
       guard let kind = PiPreviewKind(fileName: url.lastPathComponent) else { throw CueStoreError.previewUnsupported(url.pathExtension.lowercased()) }
-      guard size <= PiPreview.maxBytes else { throw CueStoreError.previewTooLarge(url.path, limit: PiPreview.maxBytes) }
+      guard size <= PiPreview.maxBytes else { throw CueStoreError.previewTooLarge(url.path, bytes: size) }
       return (url: url, kind: kind, size: size)
     }
     let hashes = try checked.map { file in

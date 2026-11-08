@@ -54,7 +54,7 @@ extension CueStore {
 
   /// 永久删除：连同随项目进回收站的卡片；更早单独进回收站的卡片留在回收站（归入默认项目）。
   public func purgeProject(_ id: UUID) throws {
-    try reportingFileFailures { try write {
+    try removingFiles { try write {
       let now = Date.stamp
       let orphaned = try purgeCards(where: "projectID = ? AND deletedAt IS NULL", [id])
       try db.run("UPDATE cards SET projectID = ?, modifiedAt = ? WHERE projectID = ?", [Project.defaultID, now, id])

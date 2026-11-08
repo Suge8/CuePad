@@ -8,7 +8,7 @@ enum PiWire {
     /// （`SelfReload`），可能等几个小时，这期间会话照常收话。只加命令、加 CuePad 可以没有的字段不提它（旧扩展不认的命令回 `bad_request`）；
     /// 改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠某个新字段才对时，提到那一版。区间外的 hello 只读身份（`IdentityHello`），
     /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`PiSession.upgrading`）
-    static let oldestExtension = 54
+    static let oldestExtension = 56
 
     /// 这个扩展版本说的格式 CuePad 读得懂（见 `oldestExtension`）
     static func reads(extensionVersion version: Int?) -> Bool { version.map { (oldestExtension...PiExtensionBundle.version).contains($0) } == true }
@@ -205,6 +205,8 @@ enum PiWire {
         var id: String?
         var ok: Bool
         var error: String?
+        /// `title` 的回话：起好的会话名
+        var title: String?
     }
 
     struct Bye: Decodable { var reason: String }
@@ -289,6 +291,10 @@ enum PiWire {
             deliveryId: message.deliveryID, cueTurn: cueTurn))
     }
 
+    static func abortTurnCommand(id: String, deliveryID: String) throws -> Data {
+        try encodeLine(Command(t: "abortTurn", id: id, text: "", deliveryId: deliveryID))
+    }
+
     /// 斜杠命令：`text` 是以 / 开头的整行。
     static func slashCommand(id: String, line: String) throws -> Data {
         try encodeLine(Command(t: "command", id: id, text: line))
@@ -314,6 +320,22 @@ enum PiWire {
     static func configCommand(id: String, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool? = nil, name: String?) throws -> Data {
         try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, fast: fast, name: name))
     }
+
+    /// 认 `title` 的最早的扩展版本：更早的会话换上新扩展前不起名（`PiBridge.Link.canNameItself`）
+    static let abortTurnSince = 59
+    static let titleSince = 58
+
+    private struct TitleCommand: Encodable {
+        var t = "title"
+        var id: String
+        var instructions = SessionNameSuggestion.instructions
+        var limit = SessionNameSuggestion.limit
+        var text: String
+        var timeoutMs = Int(SessionNameSuggestion.budget.seconds * 1000)
+    }
+
+    /// 按第一句话起会话名（`SessionNameSuggestion`）：说明、长度上限与时限随命令给，扩展挑模型、问一次，只回不写。
+    static func titleCommand(id: String, text: String) throws -> Data { try encodeLine(TitleCommand(id: id, text: text)) }
 
     private struct AnswerCommand<Value: Encodable>: Encodable {
         var t = "answer"

@@ -13,6 +13,9 @@ struct PreviewOpening: Identifiable, Equatable {
 
     var id: UUID { preview.id }
 
+    /// 这一批在对话里的那一条（`group` 就是它的 id：会话里是 `PiChatEntry.id`，Cue 页是那条消息）；会话底栏的"回复"用它（`PreviewReplyBar`）。
+    var entry: UUID? { UUID(uuidString: group) }
+
     func index(of current: UUID) -> Int { batch.firstIndex { $0.id == current } ?? 0 }
 
     func title(of preview: PiPreview) -> String { looks[preview.id] ?? preview.title }
@@ -27,7 +30,7 @@ struct PreviewOpening: Identifiable, Equatable {
     func position(at index: Int) -> Dotted { Dotted(batch.count > 1 ? "\(index + 1) / \(batch.count)" : nil, batch[index].kind?.label) }
 }
 
-/// 全屏页底栏：Cue 页上是对 Cue 说，会话页上是对这个会话说，拍板卡点开的是那几个选项。
+/// 全屏页底栏：Cue 页上是对 Cue 说，会话页上是引用这一份回复（`PreviewReplyBar`），拍板卡点开的是那几个选项。
 enum PreviewReply: Equatable {
     case cue
     case session(PiSessionState)
@@ -64,8 +67,11 @@ enum PreviewScale {
     nonisolated static let detailCap = 8192
 }
 
-/// 一个文件的内容：网页与 Markdown 两端一样，其余每类怎么显示在各端的 `PreviewPage`。
+/// 一个文件的内容：网页、Markdown 与改动两端一样，其余每类怎么显示在各端的 `PreviewPage`。
 struct PreviewContent: View {
+    /// Markdown 那一栏最宽（含页边）：一行不宽过它，居中（Mac 飞出的落点按它算，`PreviewFlight`）
+    static let measure: CGFloat = 680
+
     let preview: PiPreview
     let file: URL?
     /// 是不是翻到的这一页（翻页留着的邻页不是）
@@ -78,6 +84,7 @@ struct PreviewContent: View {
                 switch preview.kind {
                 case .web: PreviewWeb(file: file)
                 case .markdown: PreviewMarkdown(file: file)
+                case .diff: PreviewDiff(file: file)
                 default: PreviewPage(preview: preview, file: file, active: active)
                 }
             } else {
@@ -89,13 +96,14 @@ struct PreviewContent: View {
     }
 }
 
+/// Markdown：按文稿排（`MarkdownText.Style.document`：标题分级、代码块横着滚），一行不宽过 `measure`，居中。
 private struct PreviewMarkdown: View {
     let file: URL
     @State private var text: String?
 
     var body: some View {
         ScrollView {
-            MarkdownText(source: text ?? "").padding(Spacing.panel).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
+            MarkdownText(source: text ?? "", style: .document).padding(Spacing.panel).frame(maxWidth: PreviewContent.measure, alignment: .leading).frame(maxWidth: .infinity)
         }
         .task { text = (try? String(contentsOf: file, encoding: .utf8)) ?? "" }
     }

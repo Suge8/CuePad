@@ -40,14 +40,14 @@ struct SessionRailCell: View {
         }
         .relaySpot(session: item.id, row: .rail)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityLabel(item.session.title)
+        .accessibilityLabel(item.name)
         .accessibilityValue(Dotted(item.shown.label, item.session.agentMark, item.pulse.fullContext?.help.spoken).spoken)
         .accessibilityIdentifier("session-rail-\(item.id)")
         .help(help)
     }
 
     /// 悬停说明写全：名字、状态、它要什么（行里截断的那几处）与哪家 Agent。
-    private var help: String { Dotted(item.session.title, item.shown.label, item.ask, item.session.agentMark).visible }
+    private var help: String { Dotted(item.name, item.shown.label, item.ask, item.session.agentMark).visible }
 
     @ViewBuilder private var control: some View {
         #if os(macOS)
@@ -105,7 +105,7 @@ struct SessionRailCell: View {
     }
 
     private var name: some View {
-        Text(verbatim: item.session.title)
+        Text(verbatim: item.name)
             .fontWeight(selected ? .semibold : nil)
             .foregroundStyle(item.resting ? palette.ink2 : palette.ink)
             .lineLimit(1)

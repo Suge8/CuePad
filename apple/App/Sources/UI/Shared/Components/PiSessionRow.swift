@@ -21,6 +21,8 @@ struct PiSessionRow: View {
     var end: Speech.Trip?
     /// 发给它的最近一条改名（`PiSessionListItem.rename`）：名字与"正在改名""没能改名"由它推出（`PiRename`）。
     var rename: DeliveryRequest?
+    /// 绑着它的叶子的标题（`SessionTask.title`）：名字以它为准，空的写会话自己的名字（`PiSessionListItem.name`）。
+    var task: String?
     /// 没能送达的话有几句（`PiSessionListItem.undelivered`）：你看过以后整行不再是"没能送达"，但只要还有，时长前留一个
     /// 胭脂的小折回箭头（读屏念"N 句没送到"），与会话页顶栏同一个数（`PiChat.undeliveredNote`）。
     let undelivered: Int
@@ -134,7 +136,7 @@ struct PiSessionRow: View {
     private func headline(shown: PiShown) -> some View {
         MetaLine(spacing: Spacing.item, gap: 0) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
-                Text(Highlight.matches(PiRename.title(of: session, request: rename, at: services.speech), highlight))
+                Text(Highlight.matches(task?.nonEmpty ?? PiRename.title(of: session, request: rename, at: services.speech), highlight))
                     .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
                     .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
                 // 是哪家 Agent：只放标志，名字优先（`AgentMark`）；名字先截断，标志一直留着
@@ -173,7 +175,7 @@ struct PiSessionRow: View {
 /// 行只随自己的数据重算（调用处挂 .equatable()）：会话列表里一个会话的状态变了，别的行不必再排一遍。
 extension PiSessionRow: Equatable {
     static func == (a: Self, b: Self) -> Bool {
-        a.session == b.session && a.project == b.project && a.delivery == b.delivery && a.end == b.end && a.rename == b.rename
+        a.session == b.session && a.project == b.project && a.delivery == b.delivery && a.end == b.end && a.rename == b.rename && a.task == b.task
             && a.undelivered == b.undelivered && a.style.card == b.style.card && a.style.dot == b.style.dot
     }
 }

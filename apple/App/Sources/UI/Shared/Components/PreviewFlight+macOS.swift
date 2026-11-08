@@ -2,6 +2,7 @@
 import AppKit
 import CueStore
 import SwiftUI
+import WebKit
 
 /// Mac 全屏预览的飞出、飞回（iOS 是系统的 zoom 转场）：打开时点的那张缩略图从原处长到内容落下的地方，关上时翻到的那一份缩回它自己的缩略图
 /// （那张不在屏上时只随浮层淡出）。飞的是缩略图的那张画面，一层 Core Animation 图层浮在整窗最上面，位置、尺寸与圆角都在渲染端走 `Motion.glide`
@@ -9,9 +10,15 @@ import SwiftUI
 /// 关上时从屏上此刻的样子飞回（`PreviewShown`）：放大、拖过的图从露出的那一截连着缩回去。
 /// 飞的这段内容藏着（`landed`），同一张图不会在两处同时出现：不用盖一层幕布——浮层淡入淡出时 SwiftUI 按层各自改透明度，半透明的幕布盖不住半透明的内容。
 /// 内容区上不占地方的 `Stage` 是飞的终点与起点：它知道翻到了哪一份、内容落在哪。浮层本身的淡入淡出在 `PanelLayer`。减弱动态效果时不飞，只淡。
+/// 网页落地不交叉淡：飞的是缩略图那张快照（1024 宽排的首屏），真网页按全屏页的宽排，字的位置不同，两层一淡一显就是重影。
+/// 所以同样大小打开过的网页飞真网页上次画好的那一屏（`PreviewPageShots`），落在它那一处；没有时缩略图按 CSS 像素一比一落在内容区左上
+/// （同真网页的起点与字号，块宽随宽度伸缩的差一点；`PreviewPlace.frame`）。落地后快照停着，等真网页载完、画上第一帧（`pagePainted`）
+/// 才在同一刻露出网页、撤掉快照：全程屏上只有一层字。不让网页按快照的宽排：那样全屏页里的网页就不是它真的样子。
+/// Markdown 与改动同理（缩略图是一页 360 宽的首屏，全屏页按栏宽重排）：快照按一比一落在全屏页正文开头的地方，标题与头几行字对得上，
+/// 落地后同一刻换成内容（`swaps`），不交叉淡。
 /// 缩略图（`previewSource`）在这里登记：画面在它的图层里、几十上百张一屏，只登记一个不占地方的平台视图，飞的那一下才取框，不给每张挂几何读数。
 @MainActor final class PreviewFlight {
-    fileprivate struct Source {
+    struct Source {
         weak var view: NSView?
         let image: () async -> CGImage?
         let aspect: CGFloat?
@@ -20,12 +27,18 @@ import SwiftUI
     }
 
     private var sources: [PreviewZoomKey: Source] = [:]
+    /// 这次打开的网页画上第一帧了（`pagePainted`）；等着它的落地（`painted()`）。
+    private var painted = false
+    private var paintWaiter: CheckedContinuation<Void, Never>?
+    /// 开始关了：还在等网页的那趟飞就不再落地。
+    private var closing = false
     private var shows: [UUID: WeakShowing] = [:]
-    fileprivate weak var stage: Stage.Mark?
+    private let pageShots = PreviewPageShots()
+    weak var stage: Stage.Mark?
 
-    fileprivate func register(_ key: PreviewZoomKey, _ source: Source) { sources[key] = source }
+    func register(_ key: PreviewZoomKey, _ source: Source) { sources[key] = source }
 
-    fileprivate func unregister(_ key: PreviewZoomKey, view: NSView) {
+    func unregister(_ key: PreviewZoomKey, view: NSView) {
         if sources[key]?.view === view { sources[key] = nil }
     }
 
@@ -36,38 +49,74 @@ import SwiftUI
     }
 
     /// 全屏页的内容区第一次排好：从点的那张飞过去，落地时内容淡入。
-    fileprivate func depart(to stage: Stage.Mark) {
+    func depart(to stage: Stage.Mark) {
+        painted = false
+        closing = false
         guard let window = stage.window, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
               let (source, from) = source(stage.key, in: window)
         else { return stage.landed(true) }
+        // 同样大小打开过这一页：飞真网页的那一屏，落在它那一处（`PreviewPageShots`）；没有就飞缩略图
+        let shot = stage.shotKey.flatMap { pageShots.shot($0) }
+        let area = stage.place.area
         Task {
-            guard let image = await source.image(), stage.window === window,
-                  let flight = await Flight(
-                    image, from: source.frame(from, showing: image),
-                    to: Frame(filling: stage.place.rect(aspect: source.aspect ?? Frame.aspect(of: image)), with: image, crop: source.alignment),
-                    in: window)
+            guard let thumbnail = await source.image(), stage.window === window else { return stage.landed(true) }
+            let image: Any = shot?.image ?? thumbnail
+            let to = shot.map { PreviewFrame(rect: $0.rect(in: area)) }
+                ?? stage.place.frame(of: thumbnail, aspect: source.aspect, crop: source.alignment)
+            guard let flight = await Flight(image, from: source.frame(from, showing: image), to: to, in: window)
             else { return stage.landed(true) }
             try? await Task.sleep(for: .seconds(Motion.Glide.duration))
-            // 内容在飞的那张下面露出来，那张再淡掉：两层同时一淡一显，中间会透出底色
+            guard PreviewPlace.swaps(stage.kind) else {
+                // 内容在飞的那张下面露出来，那张再淡掉：两层同时一淡一显，中间会透出底色
+                stage.landed(true)
+                flight.dissolve()
+                return
+            }
+            if stage.page != nil { await painted() }
+            guard !closing else { return flight.remove() }
+            // 快照在最上面：内容露出来的这一帧它还盖着，画上屏之后再撤，中间没有两层同时露出的一帧。
+            // Markdown、改动按栏宽排、比快照宽，快照下面先垫一块桌面色铺满内容区（同此刻它四周的底），露出的那一帧正文不从快照旁边透出来
+            flight.ground(stage.place.area, stage.ground)
             stage.landed(true)
-            flight.dissolve()
+            await NextFrame.drawn()
+            flight.remove()
         }
+    }
+
+    /// 全屏页里的网页载完、画上了第一帧（载不出来、规则装不上也算：那时露出的是读不了的说明）。
+    /// 带着画好的网页 `view` 时把它此刻的那一屏记下，下次同样大小打开时飞它（`PreviewPageShots`）。
+    func pagePainted(_ view: WKWebView? = nil) {
+        painted = true
+        paintWaiter?.resume()
+        paintWaiter = nil
+        guard let view, let stage, let key = stage.shotKey else { return }
+        let area = stage.place.area
+        Task { await pageShots.keep(view, area: area, as: key) }
+    }
+
+    private func painted() async {
+        guard !painted else { return }
+        await withCheckedContinuation { paintWaiter = $0 }
     }
 
     /// 要关上（`previewPresenter` 的关法都经这里）：翻到的那一份从屏上此刻的样子（`PreviewShown`）缩回它的缩略图；
     /// 飞的那层铺上时才藏内容，没得飞（缩略图不在屏上、减弱动态效果）就留着内容随浮层淡出。
     func land() {
+        closing = true
+        pagePainted()
         guard let stage, let window = stage.window, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
               let (source, to) = source(stage.key, in: window) else { return }
         let shown = shows[stage.key.preview]?.value?.shown(in: window) ?? .opened
         let place = stage.place
+        let shot = stage.shotKey.flatMap { pageShots.shot($0) }
         Task {
             let start: (Any, Frame)
             switch shown {
             case .picture(let contents, let frame): start = (contents, frame)
             case .opened:
+                if let shot { start = (shot.image, PreviewFrame(rect: shot.rect(in: place.area))); break }
                 guard let image = await source.image() else { return }
-                start = (image, Frame(filling: place.rect(aspect: source.aspect ?? Frame.aspect(of: image)), with: image, crop: source.alignment))
+                start = (image, place.frame(of: image, aspect: source.aspect, crop: source.alignment))
             }
             guard let flight = await Flight(start.0, from: start.1, to: source.frame(to, showing: start.0), in: window) else { return }
             stage.landed(false)
@@ -98,10 +147,14 @@ extension EnvironmentValues {
 /// 加的是图层不是视图，AppKit 不为它重排窗口、重算指针区域，打开那一帧少十几毫秒，实测），画面从 `from` 飞到 `to`（框与圆角），停在那里，`dissolve` 时淡掉、撤走。
 @MainActor private final class Flight {
     private let layer = CALayer()
+    private weak var root: NSView?
+    /// 落地换内容时垫在快照下面的底（`ground`）
+    private var backdrop: CALayer?
 
     /// `contents` 是 CGImage 或 IOSurface；两端各带着那里画面露出的那一截（`contentsRect`），飞着从一截换成另一截。
     init?(_ contents: Any, from: Frame, to: Frame, in window: NSWindow) {
         guard let root = window.contentView?.superview, let host = root.layer else { return nil }
+        self.root = root
         layer.contents = contents
         // 露出哪一截全由两端的 `shown` 定（缩略图怎么裁、对齐哪边由它登记时交出），图层不再自己居中裁
         layer.contentsGravity = .resize
@@ -122,6 +175,26 @@ extension EnvironmentValues {
         layer.add(Self.move("cornerRadius", from.radius), forKey: "radius")
         layer.add(Self.move("contentsRect", NSValue(rect: from.shown)), forKey: "shown")
         CATransaction.commit()
+    }
+
+    /// 快照下面垫一块 `color` 铺满 `area`（窗口坐标），随 `remove` 一起撤。
+    func ground(_ area: CGRect, _ color: CGColor) {
+        guard let root, let host = root.layer else { return }
+        let backdrop = CALayer()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        backdrop.frame = root.convert(area, from: nil)
+        backdrop.backgroundColor = color
+        backdrop.zPosition = layer.zPosition - 1
+        host.addSublayer(backdrop)
+        CATransaction.commit()
+        self.backdrop = backdrop
+    }
+
+    /// 当场撤走（落地换内容：内容已经画在它下面）。
+    func remove() {
+        layer.removeFromSuperlayer()
+        backdrop?.removeFromSuperlayer()
     }
 
     /// 淡掉（`Motion.fade`）、撤走。
@@ -209,116 +282,9 @@ private typealias Frame = PreviewFrame
 
 /// 全屏页里此刻显示着的那一份在屏上的样子，关上时从它飞回，而不是从刚打开的样子。
 enum PreviewShown {
-    /// 说不清（内容还没出来、不是图片或 PDF）：飞回的起点照落地那一处（`Place`），画面用缩略图
+    /// 说不清（内容还没出来、不是图片或 PDF）：飞回的起点照落地那一处（`PreviewPlace`），画面用缩略图
     case opened
     /// 屏上的就是这张画面（的这一截）
     case picture(Any, PreviewFrame)
-}
-
-extension PreviewFlight {
-    /// 全屏页内容区上飞的终点与起点：铺满内容区（含两条栏下面），`chrome` 是两条栏占的边，`key` 是翻到的那一份（跟着翻页换），
-    /// `kind` 定内容落在哪（`Place`）；`landed` 是内容露没露出来（飞的这段藏着）。
-    struct Stage: NSViewRepresentable {
-        let flight: PreviewFlight
-        let key: PreviewZoomKey
-        let kind: PiPreviewKind?
-        let chrome: EdgeInsets
-        @Binding var landed: Bool
-
-        func makeNSView(context: Context) -> Mark { Mark(flight: flight) }
-
-        func updateNSView(_ mark: Mark, context: Context) {
-            mark.key = key
-            mark.kind = kind
-            mark.chrome = chrome
-            mark.landed = { landed = $0 }
-        }
-    }
-}
-
-extension PreviewFlight.Stage {
-    final class Mark: NSView {
-        fileprivate weak var flight: PreviewFlight?
-        fileprivate var key = PreviewZoomKey(group: "", preview: UUID())
-        fileprivate var kind: PiPreviewKind?
-        fileprivate var chrome = EdgeInsets()
-        fileprivate var landed: (Bool) -> Void = { _ in }
-        private var departed = false
-
-        fileprivate init(flight: PreviewFlight) {
-            self.flight = flight
-            super.init(frame: .zero)
-        }
-
-        required init?(coder: NSCoder) { nil }
-
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            if window != nil { flight?.stage = self }
-        }
-
-        override func layout() {
-            super.layout()
-            guard !departed, window != nil, !bounds.isEmpty else { return }
-            departed = true
-            flight?.depart(to: self)
-        }
-
-        /// 内容落在哪（窗口坐标）：两条栏之间的那一块。
-        fileprivate var place: Place {
-            let area = convert(bounds, to: nil)
-            return Place(kind: kind, area: CGRect(
-                x: area.minX + chrome.leading, y: area.minY + chrome.bottom,
-                width: area.width - chrome.leading - chrome.trailing, height: area.height - chrome.top - chrome.bottom))
-        }
-    }
-}
-
-/// 内容在两条栏之间的那块（`area`，窗口坐标）里落在哪：按画面比例整张放下、居中；PDF 按宽铺满、从上沿排起（`PreviewPDF`）。
-private struct Place {
-    let kind: PiPreviewKind?
-    let area: CGRect
-
-    func rect(aspect: CGFloat) -> CGRect {
-        guard aspect > 0, area.width > 0, area.height > 0 else { return area }
-        if kind == .pdf {
-            let height = area.width / aspect
-            return CGRect(x: area.minX, y: area.maxY - height, width: area.width, height: height)
-        }
-        let width = min(area.width, area.height * aspect)
-        let height = width / aspect
-        return CGRect(x: area.midX - width / 2, y: area.midY - height / 2, width: width, height: height)
-    }
-}
-
-/// 缩略图在 `PreviewFlight` 里登记的那个不占地方的平台视图（`previewSource`）。
-struct PreviewSourceMark: NSViewRepresentable {
-    let flight: PreviewFlight
-    let key: PreviewZoomKey
-    let image: () async -> CGImage?
-    let aspect: CGFloat?
-    let radius: CGFloat
-    let crop: PreviewCrop
-
-    func makeNSView(context: Context) -> Mark { Mark() }
-
-    func updateNSView(_ view: Mark, context: Context) {
-        if let old = view.key, old != key { flight.unregister(old, view: view) }
-        view.key = key
-        view.flight = flight
-        flight.register(key, .init(view: view, image: image, aspect: aspect, radius: radius, crop: crop))
-    }
-
-    static func dismantleNSView(_ view: Mark, coordinator: ()) {
-        if let key = view.key { view.flight?.unregister(key, view: view) }
-    }
-
-    final class Mark: NSView {
-        var key: PreviewZoomKey?
-        weak var flight: PreviewFlight?
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-    }
 }
 #endif

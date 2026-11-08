@@ -3,7 +3,7 @@
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
 //   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（变了的那几项：会话名、首条消息、近况）/ draft（正在说的话）/ quota（订阅额度的一次观测）/ ack / bye
-//   CuePad → 扩展  send（文字+图片，以这句开新一轮，在跑就先打断）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）/ retry（把出错的那一轮原样重跑）/ quota（查一次订阅额度）
+//   CuePad → 扩展  send（文字+图片，以这句开新一轮，在跑就先打断）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）/ retry（把出错的那一轮原样重跑）/ quota（查一次订阅额度）/ title（按第一句话起会话名，只回不写）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 //
 // 这里只接线：会话的状态、轮次与正在说的话在 session，Pi 事件与弹窗在 events，socket 与 CuePad 的命令在 connection，
@@ -15,10 +15,10 @@ import { listen } from "./connection.ts";
 import { captureDialogs, follow } from "./events.ts";
 import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
 import { supportsFast } from "./fast.ts";
-import { trackShows, watchSession } from "./phone.ts";
+import { watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 54;
+const EXTENSION_VERSION = 59;
 
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
  * 与 FireCode 判断"会话进行中"用同一个事实 */
@@ -96,8 +96,6 @@ export default function (pi: ExtensionAPI) {
 		return { ...event.payload, service_tier: "priority" };
 	});
 
-	trackShows(pi);
-
 	pi.on("session_start", async (_event, ctx) => {
 		if (process.env[PROBE_ENV]) {
 			// 没有配好密钥的模型（没登录）时 Pi 仍给出一个占位的当前模型，报成没有模型
@@ -119,7 +117,7 @@ export default function (pi: ExtensionAPI) {
 	/** 服务一个终端或 RPC 会话：开 socket、跟踪状态、托管时空闲自退；返回会话与拆掉它的函数。 */
 	function serve(ctx: ExtensionContext, launchToken: string | null) {
 		const session = new Session(pi, ctx, firecode, { extensionVersion: EXTENSION_VERSION, launchToken });
-		const unsubscribe = [...follow(session), watchSession(pi, ctx)];
+		const unsubscribe = [...follow(session), watchSession(ctx)];
 		session.idleExit.follow(session.phase);
 		captureDialogs(ctx.ui, session);
 		let stop: ((reason: string) => void) | undefined;
@@ -134,7 +132,7 @@ export default function (pi: ExtensionAPI) {
 			session.lifetime.abort();
 			for (const off of unsubscribe) off();
 			session.retrying = null;
-			session.starting = null;
+			session.starting.length = 0;
 			session.pending.length = 0;
 			session.idleExit.cancel();
 			session.reload.close();

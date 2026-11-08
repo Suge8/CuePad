@@ -17,12 +17,19 @@ public protocol SessionLink: AnyObject {
     /// 请会话退出：托管的进程退出（不论这一轮在不在跑），终端里的像在终端里退出那样收尾。受理即返回，下线随后经 `PiBridge.detach` 报告。
     func end(_ id: PiSession.ID) async throws
     func abort(_ id: PiSession.ID) async throws
+    /// 核对真实投送身份和停止必须在接收端的同一同步段；不支持的接入明确拒绝，不能降级为无条件停止。
+    func abort(_ id: PiSession.ID, deliveryID: String) async throws
     /// 把出错的那一轮原样重跑一遍（`AgentCapabilities.retry`）：对话里不多一句话。受理即返回，不等模型。
     func retry(_ id: PiSession.ID) async throws
     func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws
     /// 至少给一项；会话名已去掉首尾空白、不是空的（桥先检查过）。
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws
     func configure(_ config: PiConfig, in id: PiSession.ID) async throws
+    /// 这个会话能不能按第一句话给自己起名（`SessionNameSuggestion`）：Pi（桥扩展认 `title` 的）与 Codex 托管会话能；
+    /// 自带会话名的几家（Claude Code、OpenCode、Grok、dsh）与终端里的 Codex 不起。
+    func canNameItself(_ id: PiSession.ID) -> Bool
+    /// 按第一句话（`firstMessage`）起一个短名，返回整理好的名字（`SessionNameSuggestion.cleaned`）；不写回，写不写由 App 复核后走改名。
+    func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String
 }
 
 /// 做不到的操作缺省拒绝（终端里只读的会话、没有斜杠命令或停止的终端会话）：桥按能力表先拒，实际到不了这里。
@@ -31,6 +38,7 @@ extension SessionLink {
     public func command(_ line: String, deliveryID: String?, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func end(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func abort(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
+    public func abort(_ id: PiSession.ID, deliveryID: String) async throws { throw PiBridgeError.rejected("unsupported_stop_turn") }
     public func retry(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
@@ -40,5 +48,7 @@ extension SessionLink {
     public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
         throw PiBridgeError.unsupported
     }
+    public func canNameItself(_ id: PiSession.ID) -> Bool { false }
+    public func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String { throw PiBridgeError.unsupported }
 }
 #endif

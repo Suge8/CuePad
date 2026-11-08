@@ -9,7 +9,7 @@
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
 /// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、serverAt（服务器收下它的时刻）、cueToldAt（Cue 已知道没送到）；
-/// piSessionStates、cards、deliveryRequests 的 writeSeq（本机写入序号，见 `writeSeq`）。
+/// piSessionStates、cards、deliveryRequests、cueMessages 的 writeSeq（本机写入序号，见 `writeSeq`）。
 ///
 /// 本机表（不同步）：`Table.synced` 之外的表，另有 piProcesses、syncRecords、syncState，以及 searchIndex（FTS5，由触发器随同步表维护，可随时重建）；
 /// cueSummaries 是 Cue 记忆的摘要缓存，可随时丢弃重建。
@@ -18,14 +18,16 @@
 /// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields` / `retiredTypes`，生产环境删不掉）。
 enum Schema {
   /// 一步结构升级：多数是 SQL；要用 Swift 算的（如按正文规则取标题）给一个闭包。都在同一个事务里执行。
-  /// 要动附件文件的（78）拿到这个库的 `AttachmentFiles`。
+  /// 要动附件文件的（78）拿到这个库的 `AttachmentFiles`：事务里只许新增（链接），不可回滚的删除交回 `AfterCommit`，等整个升级提交之后再做——
+  /// 事务回滚时旧文件原样还在，下次重跑读到的与第一次相同。
   struct Upgrade: ExpressibleByStringInterpolation, Sendable {
-    let run: @Sendable (SQLite, AttachmentFiles) throws -> Void
+    typealias AfterCommit = @Sendable () -> Void
+    let run: @Sendable (SQLite, AttachmentFiles) throws -> AfterCommit?
 
-    init(stringLiteral sql: String) { run = { db, _ in try db.exec(sql) } }
+    init(stringLiteral sql: String) { run = { db, _ in try db.exec(sql); return nil } }
     init(stringInterpolation: DefaultStringInterpolation) { self.init(stringLiteral: String(stringInterpolation: stringInterpolation)) }
-    init(_ run: @escaping @Sendable (SQLite) throws -> Void) { self.run = { db, _ in try run(db) } }
-    init(files run: @escaping @Sendable (SQLite, AttachmentFiles) throws -> Void) { self.run = run }
+    init(_ run: @escaping @Sendable (SQLite) throws -> Void) { self.run = { db, _ in try run(db); return nil } }
+    init(files run: @escaping @Sendable (SQLite, AttachmentFiles) throws -> AfterCommit?) { self.run = run }
   }
 
   /// 能打开的最老结构版本（`upgrades` 的起点）：更早的库不升级、不打开（`schemaTooOld`）。发出的版本把用户的库都升过了某一版，就把那一版及以前的步骤折进 `create`、起点挪到那一版：
@@ -39,6 +41,7 @@ enum Schema {
   /// 82：旧客户端忽略额度能力与授权分区，会把失败或过期窗口显示成可用余额。
   /// 87：旧端会忽略配置请求里的 fast，错误地把部分执行报告成成功。
   /// 89：一台设备可同时开多个会话；旧端只读 sessionID，会把开着的另一页当作无人查看、错误推送。
+  /// 不抬的例：派发期限改从服务器收下起算（90）。旧版 Mac 缺附件时不守期限是它原有的缺陷，不是误读新写法；新手机照常登记、上传附件，旧 Mac 取得到。
   static let peerFloor = 89
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
@@ -114,7 +117,7 @@ enum Schema {
     Upgrade(shownTexts),
     // 73：他最近一次来到这台设备的时刻（`Viewer.arrivedAt`）：他此刻在哪台设备前只按它判断
     "ALTER TABLE sessionViewers ADD COLUMN arrivedAt INTEGER;",
-    // 74：投送请求记下服务器收下它的时刻（本机列，拉到时由服务器的记录给），执行的 Mac 按它算过期（`DeliveryExecutor.maxAge`）；已有的照写下的时刻算
+    // 74：投送请求记下服务器收下它的时刻（本机列，拉到时由服务器的记录给），派发期限从它算（`DeliveryRequest.dispatchDeadline`）；已有的照写下的时刻算
     "ALTER TABLE deliveryRequests ADD COLUMN serverAt INTEGER;",
     // 75：定时（`CueMemoryLine`）：重复规则与挂在哪件任务上
     "ALTER TABLE cueLines ADD COLUMN repeats TEXT; ALTER TABLE cueLines ADD COLUMN taskID TEXT;",
@@ -176,8 +179,12 @@ enum Schema {
     UPDATE sessionViewers SET sessionIDs = json_array(sessionID) WHERE sessionID IS NOT NULL;
     ALTER TABLE sessionViewers DROP COLUMN sessionID;
     """,
-    // 90：摘要改为绑定生成输入的完整指纹；旧派生缓存丢弃重建。
+    // 90：派发期限从服务器收下起算（`DeliveryRequest.dispatchDeadline`）；升级前已传上去、还在等派发的，发送方没记下收下时刻，
+    // 不补就永远不到期：按写下的时刻补（只改本机列，不改 modifiedAt、不同步）
+    "\(deliveryServerAnchor)",
+    // 91：摘要改为绑定生成输入的完整指纹；旧派生缓存丢弃重建。
     "DELETE FROM cueSummaries;",
+    cueMessageUpgrade,
   ]
 
   static let activityDestinationsTable = """
@@ -202,28 +209,6 @@ enum Schema {
       agents TEXT, modifiedAt INTEGER NOT NULL
     ) STRICT;
     """
-
-  /// 72 的那一步（见 `upgrades` 里的说明）。
-  private static func shownTexts(_ db: SQLite) throws {
-    try db.exec("ALTER TABLE deliveryRequests RENAME COLUMN resultDetail TO failure; ALTER TABLE cueMessages ADD COLUMN shownText TEXT; ALTER TABLE piMessages ADD COLUMN shownText TEXT;")
-    let failures = try db.query("SELECT id, failure FROM deliveryRequests WHERE failure IS NOT NULL") { ($0.text(0), $0.text(1)) }
-    for (id, reason) in failures {
-      try db.run("UPDATE deliveryRequests SET failure = ? WHERE id = ?", [ShownText.verbatim(reason).stored, id])
-    }
-    let reports = try db.query("SELECT id, text FROM cueMessages WHERE author = 'cue' AND taskID IS NOT NULL AND text LIKE '「%'") { ($0.text(0), $0.text(1)) }
-    for (id, text) in reports {
-      guard let end = text.range(of: "」做完了\n\n") else { continue }
-      let task = String(text[text.index(after: text.startIndex)..<end.lowerBound]), evidence = String(text[end.upperBound...])
-      try db.run("UPDATE cueMessages SET text = '', shownText = ? WHERE id = ?", [ShownText("「\(task)」做完了\n\n\(evidence)").stored, id])
-    }
-    let asked = try db.query("SELECT id, ask, places FROM cueMessages WHERE ask LIKE '%/%'") { ($0.text(0), $0.text(1), $0.textOrNil(2)) }
-    for (id, ask, stored) in asked {
-      guard let project = CueAsked(stored: ask)?.project else { continue }
-      var places = JSONColumn.decode([String: CuePlace].self, from: stored) ?? [:]
-      places.merge(try CuePlace.capture(task: nil, wake: nil, project: project, in: db)) { old, _ in old }
-      try db.run("UPDATE cueMessages SET places = ? WHERE id = ?", [places.isEmpty ? nil : JSONColumn.encode(places), id])
-    }
-  }
 
   /// 升级腾出了大量空页（如 67 把系统字段压小）时整理一遍，把它们还给磁盘：库不开自动整理，空页只等以后的写入复用，文件不会变小。
   /// 别的进程（命令行、扩展）正开着库时整理不了（忙），空页留着照样复用，不挡打开。

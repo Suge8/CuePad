@@ -24,6 +24,9 @@ nonisolated struct LookBox: Hashable, Sendable {
     /// 出画面时就裁成框的比例、取细节最多的那一段（`DeliverableLooks.detailRegion`）：提问的方形缩略图只为认出是哪张，
     /// 截图的中间常是空白，居中裁认不出。裁好的随缩略图存，画的时候居中铺满即可。
     var framed = false
+    /// 自己排出来的那几类（Markdown、改动、文本，`DeliverableLooks.drawn`）按深色画：截图与网页是别人的画面，只能压暗；
+    /// 自己排的页按此刻的外观画，Mac 全屏页落地时换成的正文同色，不在深色里亮出一张白纸。
+    var dark = false
 
     /// 限宽的框里，横图、全景图最多按框的 4 倍解：再宽的那一截反正被裁掉或缩得看不清。不限宽的一排里格子按真实比例给宽，不封顶，否则全景图会被放大。
     private static let longestFactor = 4
@@ -48,8 +51,8 @@ nonisolated struct LookBox: Hashable, Sendable {
 }
 
 /// 交付物缩略图（`DeliverableTile`）全是真内容：图片按框降采样（`LookBox`）；网页是离线 WebKit 渲的一张快照（`PageSnapshots`）；
-/// Markdown 用全屏页同一个 `MarkdownText` 画首屏（不另写一套 Markdown 渲染）；
-/// 音频只有时长；其余（视频、PDF、演示文稿、文稿、表格、3D、文本）交给系统缩略图。解码与系统缩略图不在主线程；网页快照（`WebPage`）与
+/// Markdown 用全屏页同一个 `MarkdownText` 画首屏（不另写一套 Markdown 渲染），改动用全屏页同一种行（`DiffRow`），文本画等宽字的头几行；
+/// 音频只有时长；其余（视频、PDF、演示文稿、文稿、表格、3D）交给系统缩略图。解码与系统缩略图不在主线程；网页快照（`WebPage`）与
 /// Markdown 首屏（`ImageRenderer`）只能在主线程上起，新出一张排在这一帧画上屏之后（`NextFrame.drawn`）：排在这一帧提交之前的话，起网页进程那几十毫秒就压在
 /// 页面出来的这一帧上（第一次打开 Cue 页，结果卡与拍板卡里点名的网页还没有快照）。
 /// 出好的画面按"哈希 + 框"存一份到磁盘（`LookFiles`），也留在内存里（系统内存紧张时自动清）：每次启动后第一次打开 Cue 页不再把几十张原图重新解一遍
@@ -94,6 +97,7 @@ enum DeliverableLooks {
         case .image: await decode(file, box: box)
         case .web: if let snapshot = await PageSnapshots.png(for: preview, file: file, caches: caches) { await decode(snapshot, box: box) } else { nil }
         case .markdown: await markdown(file, box: box)
+        case .diff, .text: await code(file, diff: preview.kind == .diff, box: box)
         case .audio: nil
         default: await systemThumbnail(file, box: box, scale: scale)
         }
@@ -108,9 +112,16 @@ enum DeliverableLooks {
         }
     }
 
+    /// 自己排出来的那几类（`rendered`）的画法变过就换一个 `pageLook`，磁盘上旧画法的那张不再认。
     private static func key(_ preview: PiPreview, _ box: LookBox) -> String {
-        "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")\(box.framed ? "-framed" : "")"
+        let page = drawn(preview.kind) ? "-\(pageLook)\(box.dark ? "-dark" : "")" : ""
+        return "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")\(box.framed ? "-framed" : "")\(page)"
     }
+
+    private static let pageLook = "faded"
+
+    /// 画面是这里按全屏页同一套排出来的（不是截图、网页或系统缩略图）：按外观画（`LookBox.dark`），深色下不再压暗。
+    static func drawn(_ kind: PiPreviewKind?) -> Bool { [.markdown, .diff, .text].contains(kind) }
 
     /// 按宽高比 `aspect` 取一块（像素，原点左上，同 CGImage）：占满短的那一边，沿长的那一边挪到细节最多的地方（`detail`），细节一样多的几处取中间那处，
     /// 内容整段放得下时就居中在框里；整张没有细节时居中。截图与页面上有字、有控件的地方细节多，空白的底没有：
@@ -169,25 +180,59 @@ enum DeliverableLooks {
     }
 
     /// Markdown 的首屏：纸色底上的 `MarkdownText`，4:3（同网页快照）。只读开头一段，首屏之外的字不进排版；
-    /// 按浅色画，深色下由缩略图统一压暗（同网页快照）。
+    /// 按此刻的外观画（`LookBox.dark`）。
     /// 渲染成缩略图的那一页的页边：照纸上文档的页边比例留（缩到卡上看着像一页纸），与界面的间距档无关。
     private static let markdownMargin: CGFloat = 20
 
     private static func markdown(_ file: URL, box: LookBox) async -> CGImage? {
         guard let source = await head(of: file) else { return nil }
-        let palette = Palette(dark: false)
-        let page = MarkdownText(source: source)
-            .padding(Self.markdownMargin)
+        let palette = Palette(dark: box.dark)
+        return rendered(MarkdownText(source: source, style: .document).padding(Self.markdownMargin), palette: palette, box: box)
+    }
+
+    /// 改动与文本的首屏：改动用全屏页同一种行（`DiffRow`），文本是等宽字的头几行。系统给纯文本的缩略图是一页纸上的几粒小字，缩进卡片就是一张白纸。
+    private static func code(_ file: URL, diff: Bool, box: LookBox) async -> CGImage? {
+        guard let source = await head(of: file) else { return nil }
+        let palette = Palette(dark: box.dark)
+        guard diff else {
+            let lines = source.split(separator: "\n", omittingEmptySubsequences: false).prefix(codeLines).joined(separator: "\n")
+            return rendered(Text(verbatim: lines).font(Typography.diff).foregroundStyle(palette.ink).padding(Self.markdownMargin), palette: palette, box: box)
+        }
+        let parsed = await parse(source)
+        let layout = DiffLayout(parsed, viewport: markdownPage.width)
+        let rows = VStack(alignment: .leading, spacing: 0) {
+            ForEach(parsed.lines.prefix(codeLines)) { DiffRow(line: $0, layout: layout) }
+        }
+        return rendered(rows, palette: palette, box: box)
+    }
+
+    /// 首屏几行：缩进卡片后还认得出字
+    private static let codeLines = 18
+
+    @concurrent private static func parse(_ source: String) async -> UnifiedDiff { UnifiedDiff(source) }
+
+    /// 把一页内容按 `markdownPage` 的大小画成图（纸底），缩进卡片的框。页底那一截淡进纸色（`pageFade`）：
+    /// 字号随平台不同，页底常正好切在一行字中间，横切半行读作排坏了；淡出说的是"下面还有"（同会话条多到要滚时的下沿）。
+    private static func rendered(_ content: some View, palette: Palette, box: LookBox) -> CGImage? {
+        let page = content
             .frame(width: markdownPage.width, height: markdownPage.height, alignment: .topLeading)
+            .clipped()
+            .mask {
+                LinearGradient(
+                    stops: [.init(color: .black, location: 1 - pageFade / markdownPage.height), .init(color: .clear, location: 1)],
+                    startPoint: .top, endPoint: .bottom)
+            }
             .background(palette.paper)
-            .environment(\.colorScheme, .light)
+            .environment(\.colorScheme, palette.dark ? .dark : .light)
         let renderer = ImageRenderer(content: page)
         renderer.scale = CGFloat(box.longestSide(of: markdownPage)) / markdownPage.width
         return renderer.cgImage
     }
 
+    /// 页底淡出的那一截：约一行半字高，切在哪一行，被切的那行都已淡到看不出
+    private static let pageFade: CGFloat = 36
     /// 画成多大的一页再缩进卡片：比阅读栏窄，缩进主图、横排时字仍认得出（480 宽时列表只剩七八磅）
-    private static let markdownPage = CGSize(width: 360, height: 270)
+    static let markdownPage = CGSize(width: 360, height: 270)
 
     @concurrent private static func head(of file: URL) async -> String? {
         (try? String(contentsOf: file, encoding: .utf8)).map { String($0.prefix(3000)) }
@@ -220,76 +265,5 @@ enum DeliverableLooks {
         guard seconds.isFinite, seconds > 0 else { return nil }
         let pattern: Duration.TimeFormatStyle.Pattern = seconds >= 3600 ? .hourMinuteSecond : .minuteSecond
         return Duration.seconds(seconds.rounded()).formatted(.time(pattern: pattern))
-    }
-}
-
-/// 网页的缩略图：同全屏预览的拦截规则（`PreviewWebGuard`，脚本照跑、不联网）离线载入，渲首屏一张快照，
-/// 按内容哈希存进 `LookFiles`。一次只渲一张：每张要起一个网页进程，一屏几张同时渲会把内存与 CPU 一起顶上去。
-enum PageSnapshots {
-    /// 渲染时的视口（CSS 像素）与快照宽（像素）：4:3 的一屏，够会话页的主图在 Mac 上铺满。
-    private static let viewport = CGSize(width: 1024, height: 768)
-    private static let snapshotWidth: CGFloat = 1200
-
-    private static var tail: Task<URL?, Never>?
-
-    /// 快照存在 `LookFiles` 里（同缩略图一套），按内容哈希认。
-    static func png(for preview: PiPreview, file: URL, caches: URL) async -> URL? {
-        let target = LookFiles.url("\(preview.hash).page", in: caches)
-        if FileManager.default.fileExists(atPath: target.path) { return target }
-        let previous = tail
-        let task = Task<URL?, Never> {
-            _ = await previous?.value
-            // 排在前面的可能刚渲过同一份
-            if FileManager.default.fileExists(atPath: target.path) { return target }
-            return await render(file, into: target)
-        }
-        tail = task
-        return await task.value
-    }
-
-    private static func render(_ file: URL, into target: URL) async -> URL? {
-        do {
-            let page = try await PreviewWebGuard.page(for: file)
-            // 载入完再等两帧（没有视图时帧可能不来，最多等 300ms）：脚本画的图表、字体落定后才是首屏的样子
-            _ = try await page.callJavaScript("""
-                await new Promise(done => { requestAnimationFrame(() => requestAnimationFrame(done)); setTimeout(done, 300) })
-                """)
-            let data = try await page.exported(as: .image(region: .rect(CGRect(origin: .zero, size: viewport)), snapshotWidth: snapshotWidth))
-            try await LookFiles.write(data, to: target)
-            return target
-        } catch {
-            return nil
-        }
-    }
-}
-
-/// 交付物画面的磁盘缓存（缩略图与网页快照只此一套）：库的缓存目录（`LibraryLocation.caches`）下的 `CuePadLooks/`，一张一个 PNG，
-/// 按键名认（缩略图"哈希@框"、快照"哈希.page"）；系统可随时清，清了下次再出。内容按哈希定，存下就不会过时。
-enum LookFiles {
-    nonisolated static func url(_ key: String, in caches: URL) -> URL {
-        caches.appending(path: "CuePadLooks", directoryHint: .isDirectory).appending(path: "\(key).png")
-    }
-
-    /// 存下的那张（已是要的大小，原样解出来）；没有为 nil。不经 `Thumbnails`：内存里那份由 `DeliverableLooks` 一处留着。
-    /// 先读成数据再解：没存过是常态，`CGImageSourceCreateWithURL` 对不存在的文件每次都往系统日志记一条 ImageIO 错误。
-    @concurrent static func image(_ key: String, in caches: URL) async -> CGImage? {
-        guard let data = try? Data(contentsOf: url(key, in: caches), options: .mappedIfSafe),
-            let source = CGImageSourceCreateWithData(data as CFData, nil)
-        else { return nil }
-        return CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
-    }
-
-    /// 存一张出好的画面；写不成就算了，下次再出。
-    @concurrent static func store(_ image: CGImage, as key: String, in caches: URL) async {
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { return }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else { return }
-        try? await write(data as Data, to: url(key, in: caches))
-    }
-
-    @concurrent static func write(_ data: Data, to target: URL) async throws {
-        try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try data.write(to: target, options: .atomic)
     }
 }

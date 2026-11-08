@@ -24,7 +24,7 @@ extension PiStateRecorder {
     let now = timing.now()
     switch cue.offer(content, at: now, interval: minInterval) {
     case .skip: return
-    case .wait(let wait): cue.timer = after(wait) { await $0.flushCue() }
+    case .wait(let wait): cue.timer = after(wait) { await $0.flushCue(timer: $1) }
     case .now: try await writeCue(cue.commit(content, at: now))
     }
   }
@@ -33,13 +33,13 @@ extension PiStateRecorder {
   /// 记为已写下歇着（`context` 是这个班次的上下文），随后同样的歇着不再写。
   @discardableResult
   public func finishCueRound(
-    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?
+    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?, answeredRequests: [UUID] = []
   ) async throws -> UUID? {
     cue.cancel()
     let settled = cue.commit(CueStateContent(state: .settled, context: context), at: timing.now())
     do {
       return try await persist { [store, hostID, bootID] in
-        try await store.finishCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: tools, reply: reply, as: author, context: context, hostID: hostID, bootID: bootID)
+        try await store.finishCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: tools, reply: reply, as: author, context: context, answeredRequests: answeredRequests, hostID: hostID, bootID: bootID)
       }
     } catch {
       cue.forget(settled)
@@ -47,8 +47,8 @@ extension PiStateRecorder {
     }
   }
 
-  private func flushCue() async {
-    guard let content = cue.due() else { return }
+  private func flushCue(timer: UUID) async {
+    guard let content = cue.due(timer) else { return }
     // 定时写入没有调用方可报告；记为未写入，下一次会重写
     try? await writeCue(cue.commit(content, at: timing.now()))
   }

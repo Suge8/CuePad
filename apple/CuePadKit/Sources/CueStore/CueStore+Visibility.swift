@@ -9,8 +9,13 @@ extension CueStore {
 
   /// 还在看板上的任务（含子任务）：没做完、没归档、没删、项目没进回收站。它绑着的会话才算有人在用（`endUnusedSessions`、`isLoose`）。
   /// 项目还没同步到的照算（不同于 `cardVisible`）：先到的任务的会话不因项目晚到就被当成没人用、结束掉。
-  static let taskOpen = """
-    todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL
+  static let taskOpen = "completedAt IS NULL AND \(taskOnBoard)"
+
+  /// 做完了、还在看板已完成列上的任务（含子任务）：同 `taskOpen` 只是做完了。它绑着的活会话由它代表（`isLoose`）。
+  static let taskDoneOnBoard = "completedAt IS NOT NULL AND \(taskOnBoard)"
+
+  private static let taskOnBoard = """
+    todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL
       AND projectID NOT IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)
     """
 

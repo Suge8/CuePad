@@ -70,14 +70,22 @@ extension ClaudeHostedSession: HostedSession {
 
     func newSession() async throws {
         let stream = try live
-        try await withCheckedThrowingContinuation { continuation in
-            clearing = continuation
-            do {
-                try stream.write(Self.userMessage("/clear"))
-            } catch {
-                clearing = nil
-                continuation.resume(throwing: error)
+        let id = UUID()
+        do {
+            _ = try await clearWaits.request(id) {
+                clearing.append(id)
+                do { try stream.write(Self.userMessage("/clear")) } catch {
+                    clearing.removeAll { $0 == id }
+                    throw error
+                }
             }
+        } catch PiBridgeError.ackTimeout {
+            // `/clear` 的 `result` 没有能对上请求的标识，只能按先后配：一条没回应，之后的回应就都错一位。
+            // 这个大脑进程已不可信，关掉它（之后的清除得到会话已结束），由管理器重起
+            stream.closeInput()
+            closeClears()
+            await stop()()
+            throw PiBridgeError.ackTimeout
         }
     }
 

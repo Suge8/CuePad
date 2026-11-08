@@ -2,6 +2,8 @@ import Foundation
 
 public enum CueStoreError: Error, Equatable {
   case notFound
+  /// 撤销前发现目标在回执之后又被改过：不撤，免得盖掉后来的改动（`CueStore.undo`）。
+  case changedSinceUndo
   case blankTaskContent
   case blankProjectName
   /// 单个文件超过上限（`AttachmentFiles.maxBytes`）。
@@ -16,6 +18,8 @@ public enum CueStoreError: Error, Equatable {
   case attachmentHashMismatch
   /// 附件记录声明的哈希格式不对（不是 SHA-256 十六进制）。
   case invalidAttachmentHash
+  /// 旧请求可能已经交出，不能以安全重试替换。
+  case deliveryAlreadyHanded
   case blankDeliveryContent
   /// 永久删除已完成，但这些键的附件文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
@@ -33,12 +37,12 @@ public enum CueStoreError: Error, Equatable {
   case notATask
   /// 预览的文件不存在、读不了或不是文件（参数是它的路径）。
   case previewUnreadable(String)
-  /// 预览的文件超过 `PiPreview.maxBytes`（参数是它的路径）。
-  case previewTooLarge(String, limit: Int)
+  /// 预览的文件超过 `PiPreview.maxBytes`（参数是它的路径与字节数）。
+  case previewTooLarge(String, bytes: Int)
   /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
   case previewUnsupported(String)
-  /// 发到手机的一份没有标题、标题不止一行、宽过 `limit` 或与同批重复（参数是文件名）。
-  case previewTitle(String, limit: Int)
+  /// 发到手机的一份标题不合 `PiPreview.titleRule`（参数是文件名与哪里不合）。
+  case previewTitle(String, PreviewTitleProblem)
   /// 资料库文件只能读（多半是 Agent 的沙箱挡住了写入）。
   case readOnlyLibrary
   /// 手机上要开新会话，而一台 Mac 都还没打开过 CuePad（没写过 `macAgents`、也没有目录绑定）。
@@ -110,6 +114,7 @@ extension CueStoreError: LocalizedError {
   public var errorDescription: String? {
     switch self {
     case .notFound: String(localized: "找不到这条记录，可能已被删除")
+    case .changedSinceUndo: String(localized: "已改过，无法撤销")
     case .blankTaskContent: String(localized: "任务内容不能为空")
     case .blankProjectName: String(localized: "项目名不能为空")
     case .fileTooLarge(let limit): String(localized: "文件超过 \(limit / 1_000_000) MB，存不进来")
@@ -118,6 +123,7 @@ extension CueStoreError: LocalizedError {
     case .notAConflictCopy: String(localized: "这条不是冲突副本")
     case .attachmentHashMismatch: String(localized: "附件内容与其哈希不符")
     case .invalidAttachmentHash: String(localized: "附件的哈希格式不对")
+    case .deliveryAlreadyHanded: String(localized: "这句可能已经交出，不能安全撤回")
     case .blankDeliveryContent: String(localized: "发送内容不能为空")
     case .attachmentFilesNotRemoved(let keys): String(localized: "已永久删除，但有 \(keys.count) 个附件文件没能删掉")
     case .unsupportedSchemaVersion(let version): String(localized: "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开")
@@ -127,10 +133,10 @@ extension CueStoreError: LocalizedError {
     case .notALeaf: String(localized: "有子任务的任务不直接绑会话，绑到它的某个子任务上")
     case .notATask: String(localized: "这是灵感，没有状态：要做的事另建任务，或把这条灵感接进一条任务")
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
-    case .previewTooLarge(let path, let limit): "文件太大，单个不超过 \(limit / 1_000_000) MB：\(path)"
+    case .previewTooLarge(let path, let bytes):
+      "文件 \((Double(bytes) / 1_000_000).formatted(.number.precision(.fractionLength(1)))) MB，超过单个上限 \(PiPreview.maxBytes / 1_000_000) MB：\(path)。压缩或裁短后再发"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
-    case .previewTitle(let name, let limit):
-      "\(name) 的标题要一句说清这份是什么、看哪里，同一次发的各不相同（一行、宽不过 \(limit)，约 \(limit / 2) 个汉字，用和用户对话的语言），如“改后：会话列表的分组标题”"
+    case .previewTitle(let name, let problem): "\(name) 的标题\(problem.phrase)。标题要\(PiPreview.titleRule)，如“改后：会话列表的分组标题”"
     case .readOnlyLibrary: String(localized: "资料库是只读的，写不进去")
     case .noSession(let title): "「\(title)」还没有会话：先 start 开工，它的正文会作为第一句"
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"

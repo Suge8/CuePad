@@ -10,7 +10,7 @@ import sys
 import threading
 import time
 
-from app_env import APPLE, BUILD, FRONT, FRONT_RETRY, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SOCKETS, WINDOW, die, isolated_env
+from app_env import APPLE, BUILD, FRONT, FRONT_RETRY, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SOCKETS, WINDOW, die, disclaimed, isolated_env
 from app_proc import alive, quit_mac, silence, wait_ready
 from app_shots import batch
 
@@ -92,7 +92,7 @@ class Mac:
         os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
         if os.path.exists(self.ready):
             os.remove(self.ready)
-        self.proc = subprocess.Popen([f"{self.app}/Contents/MacOS/CuePad", *args], env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready, **front_env(args)),
+        self.proc = subprocess.Popen(disclaimed([f"{self.app}/Contents/MacOS/CuePad", *args]), env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready, **front_env(args)),
                                      stdin=subprocess.DEVNULL, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
         front_keeper(self.proc.pid, args)
         write_note(self.slot, holder=os.getpid(), app=self.proc.pid, what=self.what)
@@ -189,6 +189,7 @@ def exec_mac(app, library, args):
     env.setdefault("CUEPAD_SHOT_READY", READY)
     env.update(front_env(args))
     front_keeper(os.getpid(), args)  # exec 不换 PID：看守的就是接下来的 CuePad
+    # 不经 disclaim.py：它多一次 Python 启动，会算进"启动到就绪"；量的这几样不要权限，责任进程是谁不影响读数
     os.execve(exe, [exe, *args], env)
 
 

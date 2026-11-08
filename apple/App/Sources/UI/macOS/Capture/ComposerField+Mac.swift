@@ -96,7 +96,10 @@ struct ComposerField: NSViewRepresentable {
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView scroll: ComposerScrollView, context: Context) -> CGSize? {
         guard let width = proposal.width, let view = scroll.documentView as? GrowingTextView else { return nil }
-        return CGSize(width: width, height: view.fittingHeight(width: width))
+        let ideal = view.fittingHeight(width: width)
+        // 受限视口至少保留一行；让原生文字框负责滚动到光标，外层不裁掉正在编辑的行。
+        let height = proposal.height.map { max(GrowingTextView.lineHeight, min(ideal, $0)) } ?? ideal
+        return CGSize(width: width, height: height)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {

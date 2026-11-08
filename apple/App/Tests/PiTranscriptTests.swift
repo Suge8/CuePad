@@ -108,7 +108,7 @@ struct PiTranscriptTests {
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
-    /// 会话所在的 Mac 没回应：补写请求在页面上超时；再打开会话不写第二条，那台 Mac 醒来领取那一条就够。
+    /// 会话所在的 Mac 没回应：补写请求到派发期限前一直在路上；再打开会话不写第二条，那台 Mac 醒来领取那一条就够。
     @Test func 补写请求还没被领取时再打开会话_不写第二条() async throws {
         _ = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
         await backfill()
@@ -116,7 +116,7 @@ struct PiTranscriptTests {
 
         let first = try await services.requestTranscript(of: session)
         let late = first.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
-        #expect(Speech.trip(first, at: .always(at: late)).unconfirmedReason != nil)  // 页面上已是送达尚未确认（这里没有同步：一直没发出）
+        #expect(Speech.trip(first, at: .always(at: late)).inTransit)  // 没人领取不算未确认：领取只在期限前，到期才是失败
         let again = try await services.requestTranscript(of: session)
 
         #expect(again.id == first.id)

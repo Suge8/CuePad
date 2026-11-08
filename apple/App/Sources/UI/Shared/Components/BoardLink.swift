@@ -8,8 +8,9 @@ struct BoardLink<Label: View>: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
+        // 不在这里挂拖动：卡的拖动由看板挂在外面（`boardDraggable`，宽屏上同时带着会话、能拖进并排的会话格）。里层的拖动先认手势，
+        // 只带会话的那份落不进看板的列。
         control
-            .sessionDraggable(to)
             .accessibilityHint(Text("打开会话"))
     }
 
@@ -44,18 +45,5 @@ struct OpenSessionBeside: View {
         if workspace.layout == .wide {
             Button("在旁边打开") { workspace.openSession(session.id, sessionID: session.sessionID, in: .beside) }
         }
-    }
-}
-
-extension View {
-    func sessionDraggable(_ session: PiSessionState) -> some View { modifier(SessionDraggable(session: session)) }
-}
-
-private struct SessionDraggable: ViewModifier {
-    let session: PiSessionState
-    @Environment(Workspace.self) private var workspace
-
-    func body(content: Content) -> some View {
-        if workspace.layout == .wide { content.draggable(DraggedSession(sessionID: session.sessionID)) } else { content }
     }
 }

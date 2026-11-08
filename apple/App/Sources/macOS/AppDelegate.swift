@@ -88,11 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         menuBarPanel = panel
         // 脚本起的实例（一天上百次）不建：那是用户菜单栏上的位置，每次起停都会闪一下
         statusItem = DebugHooks.scripted ? nil : StatusItemController(
-            togglePanel: {
-                panel.toggle(below: $0)
-                // 面板常驻、内容不重建：弹出时在这里看额度是否陈旧
-                if panel.isVisible { Task { await workspace.refreshQuota() } }
-            },
+            togglePanel: { panel.toggle(below: $0) },
             toggleWindow: { window.toggleFromMenu() })
 
         services.start()
@@ -130,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
     @objc func newCard(_ sender: Any?) { workspace?.newCard() }
     @objc func newSession(_ sender: Any?) { workspace?.newSession() }
+    @objc func toggleVoiceCall(_ sender: Any?) { workspace?.toggleVoiceCall() }
     /// 不叫 `toggleSidebar(_:)`：AppKit 的分栏控制器自己响应那个动作，在响应链上先接走，带着分栏动画开合。
     /// 放不放得下按主窗口此刻的宽（`WideMetrics`，同 `toggleCueColumn`）：放不下时拉出左缘的抽屉。
     @objc func toggleCueSidebar(_ sender: Any?) {

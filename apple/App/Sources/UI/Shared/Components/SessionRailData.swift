@@ -37,6 +37,8 @@ nonisolated struct SessionRailData: Equatable, Sendable {
 struct SessionRailRows {
     struct Item: Identifiable {
         let session: PiSessionState
+        /// 写的名字：绑着的叶子的标题，空的或没绑任务的是会话名（`PiSessionListItem.name`）。
+        let name: String
         let pulse: BoardPulse
         let waiting: PiShown.Status?
         var id: String { session.sessionID }
@@ -49,7 +51,8 @@ struct SessionRailRows {
     init(_ data: SessionRailData, pulse: (PiSessionListItem) -> BoardPulse) {
         func item(_ value: PiSessionListItem, waiting: PiShown.Status?) -> Item {
             let pulse = pulse(value)
-            return Item(session: pulse.session ?? value.state, pulse: pulse, waiting: waiting)
+            let session = pulse.session ?? value.state
+            return Item(session: session, name: value.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: waiting)
         }
         waiting = data.waiting.map { item($0.agent, waiting: $0.deciding ? .asking : .awaitsReply) }
         advancing = data.advancing.map { item($0, waiting: nil) }.enumerated().sorted {

@@ -121,6 +121,16 @@ enum DebugHooks {
         #endif
     }
 
+    /// 隔离库下和 Cue 通话的令牌从 `-CuePadVoiceToken <文件>` 读（`scripts/voice-token.py` 经本机 Codex app-server 获取，续期语义见 CodexAccess）：隔离目录里的 Codex 没登录，
+    /// 实例也不碰真实的 `~/.codex`。nil：向检测到的 Codex 要。
+    static var voiceToken: URL? {
+        #if DEBUG
+        DebugScene.defaults.string(forKey: "CuePadVoiceToken").map { URL(filePath: $0) }
+        #else
+        nil
+        #endif
+    }
+
     /// 隔离库下 Agent 当作装在这个家目录里（`-CuePadAgentHome <目录>`）：只在它的 `.local/bin` 里找，装、登录也按它当 HOME、PATH 只有系统目录，
     /// 像一台什么都没装的 Mac。给一个空目录就是一家都没装；点"安装"真去跑官方脚本，装进这个目录，不碰真实的家目录。
     static var agentHome: URL? {
@@ -231,6 +241,14 @@ enum DebugHooks {
     static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
         #if DEBUG
         await DebugScene.presetComposer(draft, source: source, store: store)
+        #endif
+    }
+
+    /// 输入框里选的附件存进附件目录之前停多久：`-CuePadImportDelay <秒>` 把"附件还在存"拉长到能在界面上看见（配 `-CuePadSpeech press`）。
+    static func importDelay() async {
+        #if DEBUG
+        let seconds = DebugScene.defaults.double(forKey: "CuePadImportDelay")
+        if seconds > 0 { try? await Task.sleep(for: .seconds(seconds)) }
         #endif
     }
 

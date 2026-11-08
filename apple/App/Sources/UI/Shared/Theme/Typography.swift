@@ -106,6 +106,22 @@ enum Typography {
     static let codeUIFont = UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular)
     #endif
 
+    /// 全屏预览里的改动（`PreviewDiff`）与它的缩略图：定宽的等宽字，行底按字数×字宽铺满（横着滚到哪都连得上），所以两端同一号、不随动态字体。
+    nonisolated static let diffSize: CGFloat = 12
+    static let diff = Font.system(size: diffSize, design: .monospaced)
+    static let diffStrong = Font.system(size: diffSize, weight: .semibold, design: .monospaced)
+    /// SF Mono 的字宽是字号的 0.6。
+    nonisolated static let diffCell: CGFloat = diffSize * 0.6
+
+    /// 全屏预览里 Markdown 的文稿排版（`MarkdownText.Style.document`）：标题三级，比对话里的回答拉开层级。
+    #if os(macOS)
+    static let documentTitle = Font.system(size: 26, weight: .bold)
+    static let documentHeading = Font.system(size: 21, weight: .semibold)
+    #else
+    static let documentTitle = Font.title.weight(.bold)
+    static let documentHeading = Font.title2.weight(.semibold)
+    #endif
+
     /// 一个换行撑出的空行：`Text` 不认段距，块与块之间用一个这个字号的换行拉开。
     static func gap(_ height: CGFloat) -> Font { .system(size: height) }
 }

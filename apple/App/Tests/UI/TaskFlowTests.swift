@@ -28,7 +28,7 @@ struct TaskFlowTests {
         #expect(try await next(task) == .start(leaf: task))
 
         // 开始：正文连同标题交出去；话在路上、没送到都看会话那一格，不再给"开始"
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas")
+        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
         let delivers = Mutex(false)
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request, _ in
             guard delivers.withLock({ $0 }) else { return .failed(.verbatim("会话在送达前关掉了")) }
@@ -53,7 +53,7 @@ struct TaskFlowTests {
         #expect(started.status == .inProgress && started.body == "修乱序\n\n日志在 logs/0918.txt")
 
         // 任务不自动完成；用户勾选，提示里给归档
-        try await workspace.toggle(task.id)
+        try await workspace.complete(task.id)
         #expect(workspace.notice?.text.visible == "已完成")
         let archive = try #require(workspace.notice?.action)
         #expect(archive.title == "归档")
@@ -69,7 +69,7 @@ struct TaskFlowTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let first = try await store.createTask("复现乱序\n先复现，别改代码", in: project.id)
         let second = try await store.createTask("补重连用例", in: project.id)
-        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas")
+        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas", hosted: true)
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
 
         try await store.bindSession("s1", to: first.id)
@@ -79,9 +79,9 @@ struct TaskFlowTests {
         #expect(try await Set(store.tasks(boundTo: "s1").map(\.task.id)) == [first.id, second.id])
 
         let ends = { [store] in try await store.deliveryRequests().filter { $0.mode == .known(.end) }.map(\.target.ref) }
-        try await workspace.toggle(first.id)
+        try await workspace.complete(first.id)
         #expect(try await ends().isEmpty)
-        try await workspace.toggle(second.id)
+        try await workspace.complete(second.id)
         #expect(try await ends() == ["s1"])
     }
 
@@ -96,12 +96,12 @@ struct TaskFlowTests {
         let first = try await store.createTask("加 --lang", under: task.id)
         let second = try await store.createTask("写 README", under: task.id)
         let third = try await store.createTask("发版\n打 tag 再发", under: task.id)
-        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas")
+        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
         try await store.bindSession("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
 
-        try await workspace.toggle(first.id)
+        try await workspace.complete(first.id)
         #expect(try await requests(.end).isEmpty)
 
         try await store.bindSession("s1", to: second.id)
@@ -112,9 +112,9 @@ struct TaskFlowTests {
         #expect(launch?.launch?.prompt == "加语言参数\n命令行要能切中英文\n\n发版\n打 tag 再发")
         _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：开新会话的去向核对完即可
 
-        try await workspace.toggle(second.id)
+        try await workspace.complete(second.id)
         #expect(try await requests(.end).isEmpty)  // "发版"还没开工，默认接着用它
-        try await workspace.toggle(third.id)
+        try await workspace.complete(third.id)
         #expect(try await requests(.end).map(\.target.ref) == ["s1"])
     }
 
@@ -143,6 +143,31 @@ struct TaskFlowTests {
     #endif
 
     // MARK: 撤销与批量
+
+    /// 撤销前任务在回执之后又被改过：不撤（免得盖掉后来写的），提示"已改过，无法撤销"；没改过的撤销照常（上一条用例）。
+    @Test func 撤销前任务已改过_不撤并提示() async throws {
+        let workspace = Workspace(services: rig.services)
+        let check = try await store.createTask("上线前检查")
+        let note = try await store.createCard(body: "补一句")
+        try await workspace.mergeIdea(note.id, into: check.id)
+        let mergeUndo = try #require(workspace.notice?.action)
+        try await store.updateCard(check.id) { $0.body += "\n合并后又写的" }
+        workspace.run(mergeUndo)
+        try await eventually("提示已改过") { workspace.notice?.text.visible == "已改过，无法撤销" }
+        #expect(try await store.card(check.id)?.body == "上线前检查\n\n补一句\n合并后又写的")
+        #expect(try await store.trashedCards().map(\.id) == [note.id])
+
+        let idea = try await store.createCard(body: "排查闪退")
+        try await workspace.newTask(fromIdea: idea.id)
+        let spawnUndo = try #require(workspace.notice?.action)
+        let spawned = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.body == "排查闪退" })
+        try await store.updateCard(spawned.id) { $0.body += "\n补充" }
+        workspace.notice = nil
+        workspace.run(spawnUndo)
+        try await eventually("提示已改过") { workspace.notice?.text.visible == "已改过，无法撤销" }
+        #expect(try await store.card(spawned.id)?.deletedAt == nil)
+        #expect(Set(try await store.trashedCards().map(\.id)) == [note.id, idea.id])
+    }
 
     @Test func 灵感接进任务_拖成新任务_删除_都能撤销() async throws {
         let workspace = Workspace(services: rig.services)

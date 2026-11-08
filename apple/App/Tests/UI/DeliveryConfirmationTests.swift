@@ -119,7 +119,7 @@ struct DeliveryConfirmationTests {
         let row = try #require(try await mac.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
         #expect(try await phone.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         phone.services.startSpeechClock()
-        let due = try #require(Speech.deadline(confirming, at: .always(at: clock.now)))
+        let due = try #require(Speech.deadline(confirming))
         await mac.services.executor.beginStop()()
         mac.pi.stop()
         await clock.waitForSleeper()

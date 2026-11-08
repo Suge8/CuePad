@@ -44,6 +44,8 @@ extension ClaudeHostedSession {
     }
 
     func abort(_: PiSession.ID) async throws {
+        // 卡在"等上一轮停下"的发话以取消结束，不再各等到时限
+        stopPhase.cancelAll()
         try await interrupt(restarting: false)
     }
 

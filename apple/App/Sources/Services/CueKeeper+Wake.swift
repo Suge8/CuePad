@@ -115,30 +115,39 @@ extension CueKeeper {
     }
 
     /// 这会儿交得出去的：你的话里的附件都在这台 Mac 上（图交给大脑、文件的路径写进话里，`CueEnvelope.delivered`）。
-    /// 不在的在旁边取（`AppServices.fetchFile`），取到了再对一次账：等文件不挡后面的话。取不来的对你说一声，话照交。
+    /// 不在的在旁边取（`fetchAttachments`，从这台开始等起至多 `DeliveryRequest.phaseLimit`），取到了再对一次账：等文件不挡后面的话。
+    /// 不从写下算：手机离线时写下、连上才到的话照样等得到附件，手机与这台的钟差也不混进来。
+    /// 取不来或到点的对你说一声，话照交。
     func ready(_ pending: [CueMessage]) -> [CueMessage] {
         pending.filter { message in
             guard message.author == .known(.you), !unfetchable.contains(message.id) else { return true }
             let missing = CueFormat.attachmentKeys(in: message.text).filter { store.files.fileURL(for: $0) == nil }
             guard !missing.isEmpty else { return true }
-            if fetchingFiles[message.id] == nil { fetchingFiles[message.id] = fetch(missing, for: message.id) }
+            if fetchingFiles[message.id] == nil {
+                fetchingFiles[message.id] = fetch(missing, for: message.id, until: store.timing.now().addingTimeInterval(DeliveryRequest.phaseLimit))
+            }
             return false
         }
     }
 
-    private func fetch(_ keys: [String], for message: UUID) -> Task<Void, Never> {
-        let fetchFile = setup.fetchFile
+    private func fetch(_ keys: [String], for message: UUID, until deadline: Date) -> Task<Void, Never> {
+        let fetchFile = setup.fetchFile, timing = store.timing, files = store.files
         return Task {
+            let failure: ShownText?
             do {
-                try await withThrowingTaskGroup(of: Void.self) { group in
-                    for key in Set(keys) { group.addTask { _ = try await fetchFile(key) } }
-                    try await group.waitForAll()
+                switch try await fetchAttachments(Set(keys), into: files, until: { try await timing.sleepUntil(deadline) }, using: { _ = try await fetchFile($0) }) {
+                case .arrived: failure = nil
+                case .expired: failure = ShownText("附件到期还没传到这台 Mac")
+                case .missing: failure = ShownText("附件取过了仍不在这台 Mac 上")
                 }
             } catch is CancellationError {
                 return
             } catch {
+                failure = ShownText(error)
+            }
+            if let failure {
                 unfetchable.insert(message)
-                await say(.cue, ShownText("你发的附件没能交给我：\(ShownText(error).embedded)"))
+                await say(.cue, ShownText("你发的附件没能交给我：\(failure.embedded)"))
             }
             fetchingFiles[message] = nil
             input.yield(.kick)
@@ -162,7 +171,7 @@ extension CueKeeper {
     /// 这一轮写给你的话（回复、回答你的一轮出错）：提不提示你、一轮只响一次都在 `CueStore.replyCueRound`。
     func reply(_ text: ShownText, in turn: Turn) async {
         do {
-            try await store.replyCueRound(startedAt: turn.round.startedAt, reply: text, as: turn.author, answersYou: turn.answersYou)
+            try await store.replyCueRound(startedAt: turn.round.startedAt, reply: text, as: turn.author, answersYou: turn.answersYou, answeredRequests: turn.delivered)
         } catch {
             Self.log.error("Cue 这一轮的话没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }

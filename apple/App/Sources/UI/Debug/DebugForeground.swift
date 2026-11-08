@@ -14,8 +14,8 @@ enum DebugForeground {
     private static let request = ProcessInfo.processInfo.environment["CUEPAD_FRONT_REQUEST"]
 
     /// 键鼠静止多久才算用户不在。前台测量独占全机、会移指针与抢键盘，几十秒的"借一下"在用户眼前就是打断；
-    /// 5 分钟排除了读屏、思考与等编译的间隙，也低于锁屏、睡眠等常见的离开。
-    private static let awayAfter: TimeInterval = 300
+    /// 60 秒：坐在 Mac 前打字、看屏幕、点鼠标的间隙很少超过它；用户多半在手机上指挥，人走开后不必再白等几分钟。
+    private static let awayAfter: TimeInterval = 60
 
     /// 启动时：给了 `-CuePadForeground YES` 而用户不够空闲，就报读数、以 2 退出（起实例的 xc.sh 命令随之失败，原因在实例日志末尾）。
     /// 只在启动时查：借着的时候自己发的 HID 事件也会清零空闲时长。

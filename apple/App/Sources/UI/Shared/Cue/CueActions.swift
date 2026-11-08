@@ -27,10 +27,14 @@ extension Workspace {
     @discardableResult
     func note(from box: Binding<ComposerDraft>) -> Task<Void, Never>? {
         let taken = box.wrappedValue
-        let note = CaptureDraft(text: taken.text, files: taken.files)
-        guard !note.isEmpty else { return nil }
+        guard !taken.isEmpty(accepting: .files) else { return nil }
+        let claim = claimImports(taken)
         box.wrappedValue = ComposerDraft()
         return Task {
+            let taken = await claim.settled()
+            let note = CaptureDraft(text: taken.text, files: taken.files)
+            // 附件都没存成（已提示导入失败）又没有字：不建空灵感
+            guard !note.isEmpty else { return }
             do {
                 try await note.save(in: Project.defaultID, workspace: self)
             } catch {

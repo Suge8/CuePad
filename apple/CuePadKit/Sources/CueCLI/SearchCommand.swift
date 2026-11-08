@@ -10,7 +10,7 @@ extension Command {
       .project("限定项目，可重复"), .allProjects,
       Opt("attachments", "只要含附件（图片或文件）的"), Opt("no-attachments", "只要不含附件的"),
       Opt("sent", "只要交给过 Agent 的"), Opt("unsent", "只要从没交给过 Agent 的"),
-      Opt("to", "只要交给过这个 Agent 会话的（会话名）", value: "会话名"),
+      Opt("to", "只要交给过这个 Agent 会话的", value: "会话名"),
       Opt("days", "只要最近 N 天内修改过的", value: "N"),
       Opt("trash", "搜回收站里的内容"),
       Opt("limit", "最多返回几条（默认 \(defaultLimit)）", value: "N"),

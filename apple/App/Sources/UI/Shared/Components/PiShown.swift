@@ -163,6 +163,15 @@ nonisolated enum PiUnread {
 /// Cue 在值班（`CueProfile.onDuty`）时接手的是 Cue，只说"歇着"，它把这次停下留给你回的是"待回复"（`PiSessionState.awaitsReply`）；会话等的回答 CuePad 答得了时等的也是 Cue
 /// （"等 Cue 回答"，中性墨色，`PiSessionState.waitsForCue`），赭黄只留给在等你的（与"等你 N"同一条规则，`PiSessionState.asksYou`、`CueStore.cueTally`）。计时读哪一种（`clock`）也在这里定。
 nonisolated struct PiShown: Hashable, Sendable {
+    /// 会话此刻在做或在等你：完成它绑着的事（或把它拖到已完成）前要先问一句（`agentBusyDialog`）。
+    var agentBusy: Bool {
+        switch status {
+        case .delivery(.preparing): false
+        case .working, .asking, .delivery, .unknown: true
+        default: false
+        }
+    }
+
     enum Status: Hashable, Sendable {
         case delivery(PiDelivery)
         /// 思考、运行工具、等子代理、压缩上下文。

@@ -113,18 +113,18 @@
         }
       }
     },
-    "# 登录页评审结论\n\n改动都在 `login/` 下，**没有动接口**。\n\n## 已处理\n- 错误提示从弹窗改成输入框下方的一行字\n- 密码框加了显示/隐藏\n\n## 要你定\n1. 记住我默认勾选吗？\n2. 第三方登录放在页面底部还是顶部？\n\n| 项 | 之前 | 现在 |\n|:---|---:|---:|\n| 首屏可点元素 | 9 | 5 |\n| 登录成功率（内测） | 91% | 94% |" : {
+    "# 登录页评审结论\n\n改动都在 `login/` 下，**没有动接口**。\n\n## 已处理\n- 错误提示从弹窗改成输入框下方的一行字\n- 密码框加了显示/隐藏\n\n## 要你定\n1. 记住我默认勾选吗？\n2. 第三方登录放在页面底部还是顶部？\n\n| 项 | 之前 | 现在 |\n|:---|---:|---:|\n| 首屏可点元素 | 9 | 5 |\n| 登录成功率（内测） | 91% | 94% |\n\n### 改了哪里\n\n```swift\nerrorLine.text = message  // 不再弹窗\n```" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "# Login Page Review\n\nAll changes are under `login/`; **the API is untouched**.\n\n## Done\n- Error message moved from an alert to a line under the field\n- Password field got a show/hide toggle\n\n## Needs your call\n1. Should “Remember me” be checked by default?\n2. Should third-party sign-in go at the bottom or the top?\n\n| Item | Before | Now |\n|:---|---:|---:|\n| Tappable elements above the fold | 9 | 5 |\n| Sign-in success rate (beta) | 91% | 94% |"
+            "value" : "# Login Page Review\n\nAll changes are under `login/`, **no API changes**.\n\n## Done\n- Errors now show as a line under the field instead of an alert\n- Password field can show/hide\n\n## Your Call\n1. Check \"Remember me\" by default?\n2. Third-party sign-in at the bottom or the top?\n\n| Item | Before | Now |\n|:---|---:|---:|\n| Tappable on first screen | 9 | 5 |\n| Sign-in success (beta) | 91% | 94% |\n\n### What Changed\n\n```swift\nerrorLine.text = message  // no more alert\n```"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "# 登录页评审结论\n\n改动都在 `login/` 下，**没有动接口**。\n\n## 已处理\n- 错误提示从弹窗改成输入框下方的一行字\n- 密码框加了显示/隐藏\n\n## 要你定\n1. 记住我默认勾选吗？\n2. 第三方登录放在页面底部还是顶部？\n\n| 项 | 之前 | 现在 |\n|:---|---:|---:|\n| 首屏可点元素 | 9 | 5 |\n| 登录成功率（内测） | 91% | 94% |"
+            "value" : "# 登录页评审结论\n\n改动都在 `login/` 下，**没有动接口**。\n\n## 已处理\n- 错误提示从弹窗改成输入框下方的一行字\n- 密码框加了显示/隐藏\n\n## 要你定\n1. 记住我默认勾选吗？\n2. 第三方登录放在页面底部还是顶部？\n\n| 项 | 之前 | 现在 |\n|:---|---:|---:|\n| 首屏可点元素 | 9 | 5 |\n| 登录成功率（内测） | 91% | 94% |\n\n### 改了哪里\n\n```swift\nerrorLine.text = message  // 不再弹窗\n```"
           }
         }
       }
@@ -1511,6 +1511,34 @@
         }
       }
     },
+    "停止演示任务 %lld" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Stop demo task %lld"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Stop demo task %lld"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止演示任务 %lld"
+          }
+        }
+      }
+    },
     "先列计划，确认后再动手" : {
       "localizations" : {
         "en" : {
@@ -2807,6 +2835,38 @@
         }
       }
     },
+    "季度复盘.txt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quarterly review.txt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "季度复盘.txt"
+          }
+        }
+      }
+    },
+    "季度复盘的要点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Key points of the quarterly review"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "季度复盘的要点"
+          }
+        }
+      }
+    },
     "完整页面可以直接点按钮试交互" : {
       "localizations" : {
         "en" : {
@@ -3767,6 +3827,22 @@
         }
       }
     },
+    "我已经整理好发布检查，正在核对 Mac 上的通话体验。需要你确认的事项会留在任务里。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I've organized the release checks and am reviewing the call experience on Mac. Anything that needs your approval will stay in your tasks."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我已经整理好发布检查，正在核对 Mac 上的通话体验。需要你确认的事项会留在任务里。"
+          }
+        }
+      }
+    },
     "截图" : {
       "localizations" : {
         "en" : {
@@ -3955,6 +4031,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把三个排序方案的对比做成表格"
+          }
+        }
+      }
+    },
+    "把发布前的检查交给 Cue，保留需要我确认的事项" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hand the release checks to Cue and keep anything that needs my approval"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把发布前的检查交给 Cue，保留需要我确认的事项"
           }
         }
       }
@@ -4759,6 +4851,22 @@
         }
       }
     },
+    "播放模拟音频" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play simulated audio"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放模拟音频"
+          }
+        }
+      }
+    },
     "操作与调试网页" : {
       "localizations" : {
         "en" : {
@@ -4963,6 +5071,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "改动说明.md"
+          }
+        }
+      }
+    },
+    "改动：错误提示改成一行字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diff: error shown as one line"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改动：错误提示改成一行字"
           }
         }
       }
@@ -5575,6 +5699,22 @@
         }
       }
     },
+    "检查发布事项" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the release items"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查发布事项"
+          }
+        }
+      }
+    },
     "模型.usdz" : {
       "localizations" : {
         "en" : {
@@ -5607,6 +5747,22 @@
         }
       }
     },
+    "模拟音频 · 未连接麦克风" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Simulated audio · Microphone disconnected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模拟音频 · 未连接麦克风"
+          }
+        }
+      }
+    },
     "横竖屏切换不跳动" : {
       "localizations" : {
         "en" : {
@@ -5635,6 +5791,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "欢迎回来"
+          }
+        }
+      }
+    },
+    "正在检查，需要确认的事项会留在任务里。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I'm checking. Items needing your confirmation will stay in tasks."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查，需要确认的事项会留在任务里。"
           }
         }
       }
@@ -6055,6 +6227,254 @@
         }
       }
     },
+    "演示任务 %lld" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Demo task %lld"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Demo task %lld"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示任务 %lld"
+          }
+        }
+      }
+    },
+    "演示回复 %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo reply %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示回复 %lld"
+          }
+        }
+      }
+    },
+    "演示请求 %lld" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Demo request %lld"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Demo request %lld"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示请求 %lld"
+          }
+        }
+      }
+    },
+    "演示：停止失败，连接中断；执行可能仍在继续，请查看目标任务后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: stop failed because the connection was lost. Work may still be running. Check the task before retrying."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：停止失败，连接中断；执行可能仍在继续，请查看目标任务后重试"
+          }
+        }
+      }
+    },
+    "演示：停止结果未确认，请勿视为已停止" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: stop outcome unconfirmed. Do not assume work has stopped."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：停止结果未确认，请勿视为已停止"
+          }
+        }
+      }
+    },
+    "演示：加长回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: extend reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：加长回复"
+          }
+        }
+      }
+    },
+    "演示：已收到停止执行操作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: stop work action received"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：已收到停止执行操作"
+          }
+        }
+      }
+    },
+    "演示：已收到再说一遍请求" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: repeat request received"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：已收到再说一遍请求"
+          }
+        }
+      }
+    },
+    "演示：已收到恢复操作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: recovery action received"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：已收到恢复操作"
+          }
+        }
+      }
+    },
+    "演示：已重试请求 A" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: retried request A"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：已重试请求 A"
+          }
+        }
+      }
+    },
+    "演示：恢复空间" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More room"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：恢复空间"
+          }
+        }
+      }
+    },
+    "演示：断线" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: disconnect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：断线"
+          }
+        }
+      }
+    },
+    "演示：缩小空间" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Less room"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：缩小空间"
+          }
+        }
+      }
+    },
+    "演示：追加回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo: append reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示：追加回复"
+          }
+        }
+      }
+    },
     "玻璃按钮重做" : {
       "localizations" : {
         "en" : {
@@ -6291,6 +6711,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登录成功（演示）"
+          }
+        }
+      }
+    },
+    "登录改动.diff" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Login Change.diff"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录改动.diff"
           }
         }
       }
@@ -7479,6 +7915,22 @@
         }
       }
     },
+    "评审结论.md" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review.md"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评审结论.md"
+          }
+        }
+      }
+    },
     "评审结论里有两处要你定" : {
       "localizations" : {
         "en" : {
@@ -7587,6 +8039,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "评审：计费额度\n\n审查 {{分支}} 中计费额度相关改动。"
+          }
+        }
+      }
+    },
+    "请求 A「检查发布事项」未交给 Cue：等待回执超时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request A “Check release items” was not handed to Cue: acknowledgement timed out"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求 A「检查发布事项」未交给 Cue：等待回执超时"
+          }
+        }
+      }
+    },
+    "请求 A：检查发布事项" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request A: Check release items"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求 A：检查发布事项"
+          }
+        }
+      }
+    },
+    "请求 B：整理会议记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request B: Organize meeting notes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求 B：整理会议记录"
           }
         }
       }

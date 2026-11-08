@@ -23,7 +23,7 @@ struct Pace<Content: Paced> {
   private(set) var content: Content?
   private(set) var written: Content?
   private var writtenAt: Date?
-  var timer: Task<Void, Never>?
+  var timer: Owned?
 
   mutating func offer(_ next: Content, at now: Date, interval: Duration) -> Step {
     let previous = content
@@ -50,9 +50,10 @@ struct Pace<Content: Paced> {
     return content
   }
 
-  /// 定时到点：挂起的还在（没被取代、没被取消）就交出要写的。
-  mutating func due() -> Content? {
-    guard timer != nil, let content else { return nil }
+  /// 定时到点（`id` 是到点的那个计时任务的身份）：挂起的还是它（没被取代、没被取消）才交出要写的；
+  /// 旧计时的回调晚到时，位置上已是新装的计时，不能替新的消费。
+  mutating func due(_ id: UUID) -> Content? {
+    guard timer?.id == id, let content else { return nil }
     timer = nil
     return content
   }
@@ -63,7 +64,7 @@ struct Pace<Content: Paced> {
   }
 
   mutating func cancel() {
-    timer?.cancel()
+    timer?.task.cancel()
     timer = nil
   }
 }

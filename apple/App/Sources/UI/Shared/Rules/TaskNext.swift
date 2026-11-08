@@ -26,14 +26,13 @@ nonisolated enum TaskNext: Equatable, Sendable {
         }
     }
 
-    /// 会话此刻在做或在等你：完成前要先问一句（完成会把它的会话一起结束）。
-    var agentBusy: Bool {
-        guard case .agent(let shown, _) = self else { return false }
-        switch shown.status {
-        case .delivery(.preparing): return false
-        case .working, .asking, .delivery, .unknown: return true
-        default: return false
-        }
+    /// 会话此刻在做或在等你：完成前要先问一句（`PiShown.agentBusy`）。
+    var agentBusy: Bool { busySession != nil }
+
+    /// 在做或在等你的那个会话；没有为 nil。
+    var busySession: PiSessionState? {
+        guard case .agent(let shown, let session) = self, shown.agentBusy else { return nil }
+        return session
     }
 
     var speech: String {

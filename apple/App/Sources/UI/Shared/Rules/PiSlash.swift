@@ -58,7 +58,7 @@ nonisolated enum PiSlash {
         guard start.hasPrefix("/") else { return nil }
         let name = start.dropFirst().prefix { !$0.isWhitespace }
         guard commands.contains(where: { $0.name == name && speaks($0, in: session) }) else { return nil }
-        return StoredBody.make(text: invocation(start, then: draft.attachments.map(\.content) + [ReplyNote.message(draft.notes)]), files: draft.files)
+        return StoredBody.make(text: invocation(start, then: draft.attachments.map(\.content) + [ReplyNote.message(draft.notes, said: "")]), files: draft.files)
     }
 
     /// `/名字` 后紧跟一个空格，再接你打的参数与 `more`（各成一段）：Pi 认扩展命令与技能的名字只到第一个空格，

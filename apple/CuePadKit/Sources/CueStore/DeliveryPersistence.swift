@@ -1,21 +1,22 @@
 import Foundation
 
 extension CueStore {
+  /// 发给本机、还没有派发期限锚点的（这台写给自己、还没传上去的）按写下的时刻锚定（`DeliveryRequest.serverAt`）：
+  /// 监听与派发读取共用这个事务（不依赖执行队列），等待与到期从此只读这一个锚点。拉到的请求入库时就带着服务器收下的时刻，这里碰不到。
+  func actionableDeliveries(for host: String) throws -> [DeliveryRequest] {
+    try write {
+      try db.run("""
+        UPDATE deliveryRequests SET serverAt = createdAt
+        WHERE hostID = ? AND serverAt IS NULL AND status IN ('pending', 'preparing') AND handledBy IS NULL
+        """, [host])
+      return try pendingDeliveries(for: host)
+    }
+  }
+
   func pendingDeliveries(for host: String) throws -> [DeliveryRequest] {
     try select(
       DeliveryRequest.self, where: "status IN ('pending', 'preparing') AND handledBy IS NULL AND hostID = ?", [host],
       orderBy: "CASE WHEN mode = 'withdraw' THEN 0 ELSE 1 END, createdAt, rowid")
-  }
-
-  /// 附件准备也有自己的期限；同一 pending 阶段只写一次。
-  func prepareDelivery(_ id: UUID, until deadline: Date) throws -> DeliveryRequest? {
-    try write {
-      try db.run(
-        "UPDATE deliveryRequests SET deadlineAt = ?, modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status = 'pending' AND handledBy IS NULL AND deadlineAt IS NULL",
-        [deadline, Date.stamp, id])
-      let current = try find(DeliveryRequest.self, id)
-      return current?.isWithdrawable == true ? current : nil
-    }
   }
 
   /// 起进程等可能有副作用的操作在这里领取；不能退回准备。执行起来就不再是准备时的说明（`failure`）：
@@ -26,21 +27,22 @@ extension CueStore {
         """
         UPDATE deliveryRequests AS r SET status = 'executing', handledBy = ?, deadlineAt = ?, failure = NULL,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
-          AND (deadlineAt IS NULL OR deadlineAt > ?)
+          AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [host, deadline, Date.stamp, id, timing.now()])
       return db.changes > 0 ? try find(DeliveryRequest.self, id) : nil
     }
   }
 
-  func reserveDeliveryTarget(_ id: UUID, host: String, until deadline: Date) throws -> DeliveryRequest? {
+  /// 派发期限不变（`DeliveryRequest.dispatchDeadline`）。
+  func reserveDeliveryTarget(_ id: UUID, host: String) throws -> DeliveryRequest? {
     try write {
       try db.run("""
-        UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = ?, failure = ?, deadlineAt = COALESCE(deadlineAt, ?),
+        UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = ?, failure = ?,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
-          AND (deadlineAt IS NULL OR deadlineAt > ?)
+          AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
-        """, [host, DeliveryPreparation.ready.stored, deadline, Date.stamp, id, timing.now()])
+        """, [host, DeliveryPreparation.ready.stored, Date.stamp, id, timing.now()])
       return db.changes > 0 ? try find(DeliveryRequest.self, id) : nil
     }
   }
@@ -60,7 +62,7 @@ extension CueStore {
       try db.run("""
         UPDATE deliveryRequests AS r SET status = 'executing', deadlineAt = ?, failure = NULL,
           modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status = 'preparing' AND handledBy = ?
-          AND (deadlineAt IS NULL OR deadlineAt > ?)
+          AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [deadline, Date.stamp, id, host, timing.now()])
       return db.changes > 0 ? try find(DeliveryRequest.self, id) : nil
@@ -151,22 +153,24 @@ extension CueStore {
 
   public func mayBeginDelivery(_ id: UUID) throws -> Bool {
     try db.first("""
-      SELECT 1 FROM deliveryRequests AS r WHERE r.id = ? AND r.status = 'executing' AND (r.deadlineAt IS NULL OR r.deadlineAt > ?)
+      SELECT 1 FROM deliveryRequests AS r WHERE r.id = ? AND r.status = 'executing' AND r.deadlineAt > ?
         AND NOT (\(Self.abandonedDelivery))
       """, [id, timing.now()]) { _ in true } ?? false
   }
 
-  /// 只能归还尚未开始的准备权；executing 与任何未知结果不可能从这里退回。
-  func awaitDeliveryTarget(_ request: DeliveryRequest, reason: ShownText, until deadline: Date) throws -> DeliveryRequest? {
+  /// 等现有会话就绪时转准备，写下在等什么；派发期限不变。归还准备权与到期写失败在同一事务里；executing 与任何未知结果不可能从这里退回。
+  func awaitDeliveryTarget(_ request: DeliveryRequest, reason: ShownText) throws -> DeliveryRequest? {
     try write {
       try db.run(
         """
-        UPDATE deliveryRequests SET status = 'preparing', handledBy = NULL, failure = ?, deadlineAt = COALESCE(deadlineAt, ?),
-          modifiedAt = MAX(modifiedAt + 1, ?)
+        UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = NULL, failure = ?, modifiedAt = MAX(modifiedAt + 1, ?)
         WHERE id = ? AND status = ? AND status IN ('pending', 'preparing')
-        """, [reason.stored, deadline, Date.stamp, request.id, request.status.rawValue])
-      let current = try find(DeliveryRequest.self, request.id)
-      return current?.status == .known(.preparing) && current?.handledBy == nil ? current : nil
+        """, [reason.stored, Date.stamp, request.id, request.status.rawValue])
+      guard db.changes > 0, let current = try find(DeliveryRequest.self, request.id) else { return nil }
+      if let due = current.dispatchDeadline, timing.now() >= due {
+        _ = try applyDeliveryOutcome(current, .failed(current.expiry), at: timing.now())
+      }
+      return try find(DeliveryRequest.self, request.id)
     }
   }
 
@@ -178,6 +182,17 @@ extension CueStore {
     }
   }
 
+  /// 派发期限已到、还没领取的（没有锚点的还不算）；还没到的登记到期重读：期限监视订阅它，到点就叫醒（`DeliveryExecutor`）。
+  func expiredUnclaimedDeliveries(for host: String) throws -> [DeliveryRequest] {
+    let now = timing.now()
+    return try pendingDeliveries(for: host).filter { request in
+      guard let due = request.dispatchDeadline else { return false }
+      guard due > now else { return true }
+      expire(at: due)
+      return false
+    }
+  }
+
   /// 重开只恢复核对，绝不把领取事实退回 pending；旧记录没有期限，也不补造一段新等待。
   func unsettledDeliveries(for host: String) throws -> [DeliveryRequest] {
     try select(
@@ -185,16 +200,16 @@ extension CueStore {
       where: "hostID = ? AND (status IN ('executing', 'confirming', 'unconfirmed') OR (status = 'pending' AND handledBy IS NOT NULL))", [host])
   }
 
-  /// 删除完成时间早于 `cutoff` 的请求；返回是否还剩已完成的（还剩就再排一轮）。
+  /// 删除完成时间早于 `cutoff` 的请求；返回还剩什么：`transient` 是按保留期清的还有（下一轮一个保留期后），`oldestKept` 是下面留到 7 天的里最早完成的那条（下一轮等它到期）。
   /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
   /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
   /// 发出的话（`send`）不按保留期清：送到的等它在对话里的那条消息上了服务器再收走（`markPushed`），气泡才不会在消息到别的设备之前没了；
-  /// 没能送达的留着等用户重发或移除（重发写成后移除它）。Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`）。
+  /// 没能送达的留着等用户重发或移除（重发写成后移除它）；没能开成的开新会话请求同样留着：新会话输入框按它显示原因、解锁，再开时移除它。结果未确认的留着等正证据来对账，之后与它们同样到期清掉。Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`）。
   /// 这几种都至多留到完成早于 `keptCutoff`。
-  func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> Bool {
-    let done = "status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)')"
+  func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> (transient: Bool, oldestKept: Date?) {
+    let done = "status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)', '\(DeliveryStatus.unconfirmed.rawValue)')"
     let kept = """
-      completedAt >= ?3 AND (mode IN ('send', 'withdraw') OR (status = '\(DeliveryStatus.failed.rawValue)' AND origin IS '\(DeliveryOrigin.cue.rawValue)'))
+      completedAt >= ?3 AND (mode IN ('send', 'withdraw') OR (mode = 'start' AND status = '\(DeliveryStatus.failed.rawValue)') OR status = '\(DeliveryStatus.unconfirmed.rawValue)' OR (status = '\(DeliveryStatus.failed.rawValue)' AND origin IS '\(DeliveryOrigin.cue.rawValue)'))
       """
     let awaitingClaim = """
       mode = 'start' AND status = '\(DeliveryStatus.succeeded.rawValue)' AND cardID IS NOT NULL AND completedAt >= ?2
@@ -205,7 +220,9 @@ extension CueStore {
       try db.run(
         "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(kept))",
         arguments)
-      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(kept))", arguments) { _ in true } != nil
+      let transient = try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(kept))", arguments) { _ in true } != nil
+      let oldestKept = try db.first("SELECT MIN(completedAt) FROM deliveryRequests WHERE \(done) AND (\(kept))", arguments) { $0.dateOrNil(0) } ?? nil
+      return (transient, oldestKept)
     }
   }
 }

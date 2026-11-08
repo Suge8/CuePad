@@ -44,7 +44,7 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 
 自定义来源从模型实际 baseUrl 下的 `magpie/quotas` 查询，复用请求认证与配置头，不另存网关地址或密钥。404/405/501 表示不支持，其余请求失败明确报失败。网关账号以 `source`（实际地址与认证的不可逆分区）、完整上游 `route` 与 user 分开；可选 `name` 只作显示。网关来源一级按来源一条记录，几个提供方指向同一网关时同在一条上排先后；成功清单的 `accounts` 用清单的 `requestedAt`，与 `activeScopes` 同事务更新，只移除该来源已经撤销的账号；损坏清单不部分写入。主动查询的成功、失败与不支持结果和回复带回的观测都带 `requestedAt`，CuePad 按账号或网关来源只收不早于已收下的，先结束的操作不会盖过后开始的。原生查询的 `observedAt` 取响应解析完成时刻，回复取收到时刻，网关账号仍保留自己的 `readAt`。在线会话共同保留仍有效的来源；单个旧授权失败不阻止其他来源刷新。
 
-额度面板打开、回前台与连接来源变化时读取账号清单，同时来的查询合并；已有账号的观测新鲜不能阻止发现新账号。手机通过原 `quota` 投送请求询问每台来源 Mac，不增加轮询，也不只选择最近写记录的 Mac。
+额度面板打开、回前台与连接来源变化时读取账号清单，同时来的查询合并；已有账号的观测新鲜不能阻止发现新账号。手机通过原 `quota` 投送请求询问每台连着能查额度的会话（`AgentCapabilities.quota`，即 Pi 会话）的 Mac，没有这样的 Mac 就不问；不增加轮询。没查到不弹提示，原因写在额度明细里并可重试，同一批来源失败后 60 秒内自动触发不再问（`AccountQuotas`）。
 
 magpie 的 `balance` 字符串原样显示，金额与 credits 不作百分比；`plan` 保留提供方名称。窗口仅在名字明确是数字加 `hour(s)`、`day(s)`、`week(s)` 且有百分比和重置时间时计算匀速线与额度环；其他计量、`display` 纯文字、`unlimited` 与数值 `balance` 只显示读数，不推测周期。`readAt` 原样作为账号的 `observedAt`；没有它就是未知，`asOf` 与取缓存的时刻不代替它。明细里账号按产品名、同一产品按账号名排，不随刷新挪位置；刚观测过的账号并成一行原观测时间（取其中最早的），陈旧（标原观测时间）、失败、过期标在各自账号上；零余额照常显示，负余额原样显示并标欠费。
 
@@ -67,15 +67,19 @@ CuePad → 扩展（都带 `id`）：
 | `config` | `model{provider, id}`、`thinking`、`fast`、`name`，至少一项 | `bad_request`、`unknown_model`、`no_auth` |
 | `answer` | `promptId`、`value`（`confirm` 为布尔，`select` 为选项原文，`text` 为字符串） | `no_prompt`、`stale_prompt`、`bad_answer` |
 | `abort` | — | — |
+| `abortTurn`（59 起） | `deliveryId`：只停止该投送开启的原回合；同步核对当前真实消息后停止，不清空后续排队工作；旧扩展和未实现此合同的接入明确拒绝 | `bad_request`、`stale_turn` |
 | `retry` | — | `nothing_to_retry` |
 | `end` | — | — |
 | `reload` | — | — |
 | `quota` | — | — |
+| `title` | `instructions`（给模型的说明）、`limit`（名字的字数上限）、`text`（会话的第一句话）、`timeoutMs`：回 `ack` 的 `title` 是起好的名字，不写回会话（CuePad 核对后用 `config` 改名），v58 起（`SessionNameSuggestion`） | `bad_request`、`no_model`、`failed: <原因>` |
 
 `{"t":"upgrade"}`：请扩展核对磁盘上的扩展版本。不带 `id`，扩展不回 `ack`，CuePad 读不懂的扩展也发。
 **这一行的格式永远不能变**，扩展也要一直认它：要叫醒的也有 CuePad 读不懂的旧扩展，它们只认得出这一行（与 hello 里身份那几项、`bye`）；格式一变，旧会话就再也换不上新扩展（与扩展装在 Pi 扩展目录下的路径必须稳定是同一类约束）。v38 及更早的扩展不认它（回 `bad_request`），它们自己盯着扩展目录；Pi 1.4.0 及更早的二进制会吞掉一次安装里排在后面的目录事件，所以 CuePad 在它们握手时与每次装完，等扩展目录安静后单独碰一下它们盯的名字（`PiExtensionNudge`）。
 
 `send` 缺省是人类发送；`cueTurn` 出现即是 Cue 的发送策略，空对象没有接管忙轮的许可。桥在实际派发前按 Store 权威的 Unix 毫秒表示核对当前 peer 的轮次时间与 `PiSendPolicy.cue`；扩展在停止、提交与推进排队消息前，以 SDK 的忙闲事实及当前投影最后一条用户消息的 `cuepadDelivery` 核对许可标识。SDK 有待处理消息时，即使 `isIdle` 为真也不放行 Cue：公开接口没有队列来源证据，不能用当前轮的许可抢先。缺证据回 `unconfirmed_turn`，标识不同回 `user_turn`，都未提交这句话、也不打断原轮。不按会话名字、目录或是否托管过滤辅助 RPC。
+
+`send` 的新回合请求统一入队，预检中的队首也在队内；预检回来按当下忙闲继续推进，忙时停当前轮并等待歇下，空闲时同步交出。普通 `abort` / `end` 收回所有未交出的消息（含预检中），`abortTurn` 只停止匹配的当前回合，不清空队列。
 
 `send` / `retry` 交出前通过公开 modelRegistry 核对当前模型及授权；明确缺授权回 `no_auth`，不启动或中止模型轮。ACK 只表示观察到对应消息事件，事件早于文件写入；持久化以历史读取到真实消息为准，模型轮次结果另看真实 settled。超时、断线与 `failed: <原因>` 都不证明未执行，不授权自动重投。重试在完成的助手消息上记录结果，到 `agent_settled` 才收尾未落成的等待；全部遗留 retry marker 都从请求及 `turn_end` 投影里移除，原始历史与已完成工具结果保留。
 

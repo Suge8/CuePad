@@ -113,7 +113,7 @@ public struct PiSession: Identifiable, Sendable, Equatable {
 }
 
 /// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致：
-/// `/name` 设的名字 → 会话文件里第一条有文字的用户消息 → 工作目录名。控制字符换成空格并去掉首尾空白，所以是单行。
+/// Agent 的会话名（`/name` 之类你起的，或 Agent 自己按对话起的，见 `PiHistoryCheckpoint.named`）→ 会话文件里第一条有文字的用户消息 → 工作目录名。控制字符换成空格并去掉首尾空白，所以是单行。
 /// 用斜杠技能说的写你发的样子（`PiSkillCall`），不写 Pi 展开后的正文；交给 Agent 的附件行只留文件名（`AttachmentFiles.namingAgentLines`）。
 public enum PiSessionName {
     /// 首条用户消息只用来当单行显示名：只取开头这么多字符（扩展的 `FIRST_MESSAGE_LIMIT` 与之相同）。
@@ -244,6 +244,9 @@ extension PiBridgeError: ShownError {
         case .notEnded: "尚未确认会话已结束"
         case .sessionEnded: "与 Agent 的连接已断开，操作结果尚未确认"
         case .ackTimeout: "尚未收到 Agent 的确认；操作可能已经执行，不会自动重试"
+        case .rejected("unsupported_stop_turn"): "这个接入不支持按原回合停止，没有停止会话"
+        case .rejected("upgrade_stop_turn"): "会话扩展需升级后才能按原回合停止，没有停止会话"
+        case .rejected("stale_turn"): "原回合已结束或更换，停止请求不再适用，没有停止后来的工作"
         case .rejected("user_turn"): "会话已进入另一轮，Cue 没有打断"
         case .rejected("unconfirmed_turn"): "当前轮次的来源尚未确认，Cue 没有打断"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"

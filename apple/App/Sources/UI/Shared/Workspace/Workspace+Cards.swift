@@ -28,16 +28,24 @@ extension Workspace {
         }
     }
 
-    /// 点任务的圆圈：待办与进行中都变完成，完成的不再算做完（开始过的回到进行中）。下一个状态由 Store 在一个事务里按当前值定（`toggleDone`）：
-    /// 界面手里的副本可能已过时（列表还没刷新就又点了一次）。
-    /// 完成就是做完了：它（和它的子任务）绑着的会话里，绑着的事都做完了的一起结束——结束哪些只由 Store 定（`CueStore.toggleDone`，
+    /// 把任务设为完成（圆圈、菜单、延迟提交都走它）：已经完成的不动——界面手里的副本可能已过时（别的设备刚做完），再来一次不能把它翻回去（`CueStore.completeTask`）。
+    /// 点掉已完成的圆圈是 `reopen`。
+    /// 完成就是做完了：它（和它的子任务）绑着的会话里，绑着的事都做完了的一起结束——结束哪些只由 Store 定（`CueStore.completeTask`，
     /// 与 Cue 的 done 同一条规则），结束请求写下就上传。
-    func toggle(_ id: UUID) async throws {
-        let (status, ended) = try await services.store.toggleDone(id)
+    func complete(_ id: UUID) async throws {
+        let (status, ended, terminalKept) = try await services.store.completeTask(id)
         for request in ended { _ = services.uploaded(request) }
         // 做完了就给一个归档（不自动归档）
         guard status == .done else { return }
-        say("已完成", action: NoticeAction(title: String(localized: "归档")) { try await self.archive(id) })
+        let archiving = NoticeAction(title: String(localized: "归档")) { try await self.archive(id) }
+        // 终端里你自己开的会话不替你结束，如实说它还在
+        let text: LocalizedStringResource = terminalKept ? "已完成，终端未结束" : "已完成"
+        say(text, action: archiving)
+    }
+
+    /// 点掉已完成的圆圈：回到没做完（开始过的回到进行中）；没完成的什么都不改。
+    func reopen(_ id: UUID) async throws {
+        try await services.store.reopenTask(id)
     }
 
     /// 灵感拖到一条任务上：接到它的正文后面，灵感进回收站（一次写入）；提示里带"撤销"。灵感变成要做的事只有这一步与 `newTask(fromIdea:)`。
@@ -56,12 +64,23 @@ extension Workspace {
         say("已新建任务「\(task.title.textGlyphs)」", action: .undo(undo))
     }
 
-    /// 离开一条灵感或任务正文的编辑：先写下没保存的字，还是空白（`Card.isBlank`）的灵感就不留下——记一条是先建一条空的再编辑。
-    func leaveEditing(_ id: UUID, flush: Autosave?) {
+    /// 离开一条灵感或任务正文的编辑：先写下没保存的字（等在途的写入落库；写不成就报错、不删，字记在 `unsavedBodies` 里），
+    /// 还是空白（`Card.isBlank`）的灵感就不留下——记一条是先建一条空的再编辑。
+    /// 任务的标题比打开时（`heading`）变了，它绑着的会话跟着改名（`pushName`：任务标题是名字的唯一事实源）。
+    func leaveEditing(_ id: UUID, flush: Autosave?, heading: String) {
         let store = services.store
         attempt {
-            await flush?.flush()
+            do {
+                try await flush?.flush()
+            } catch {
+                // 页面已经走了，待写的字交给 Workspace 带着：再打开这条时接回来、再试着写
+                if let text = flush?.unsaved {
+                    self.unsavedBodies[id] = UnsavedBody(text: text, base: try? await store.card(id)?.body)
+                }
+                throw error
+            }
             try await store.dropIfBlank(id)
+            if let card = try await store.card(id), card.isTask, card.heading != heading { try await self.pushName(of: id) }
         }
     }
 

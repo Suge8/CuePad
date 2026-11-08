@@ -57,6 +57,26 @@ extension Schema {
     \(stamped("piSessionStates", when: sessionChanges))
     \(stamped("cards", when: ["completedAt", "parentID", "todoAt"]))
     \(stamped("deliveryRequests", when: ["status"]))
+    \(cueMessageWrites)
+    """
+
+  /// 90：为升级前已上传、仍待派发的请求补齐期限锚点。
+  static let deliveryServerAnchor = """
+    UPDATE deliveryRequests AS r SET serverAt = createdAt
+      WHERE serverAt IS NULL AND (status = 'preparing' OR (status = 'pending' AND handledBy IS NULL)) AND \(Speech.reachedServerSQL("r"));
+    """
+
+  /// 92：轮结束的请求集合随对话同步；到达顺序复用本机计数器，不受对端时钟影响。
+  static let cueMessageUpgrade: Upgrade = """
+    ALTER TABLE cueMessages ADD COLUMN answeredRequests TEXT;
+    ALTER TABLE cueMessages ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;
+    \(cueMessageWrites)
+    """
+
+  /// 对话正文写下就不再变；轮结束的请求集合可能后补到经过行。送达、推送与工具进度不产生第二次播报。
+  static let cueMessageWrites = """
+    \(stamped("cueMessages", when: ["answeredRequests"]))
+    CREATE INDEX cueMessages_writeSeq ON cueMessages(writeSeq);
     """
 
   /// `table`（已有 `writeSeq` 列）新增的行，或 `when` 里的列改了值的行，盖上计数器的下一个数。

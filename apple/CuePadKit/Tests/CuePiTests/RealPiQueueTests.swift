@@ -1,0 +1,85 @@
+#if os(macOS)
+import CueStore
+import CueTestSupport
+import Darwin
+import Foundation
+import Testing
+@testable import CuePi
+
+/// 按回合停止与后续发送的协议合同。真实 Pi、桥和 Python 工具；模型与异步事件闸是替身，不录制回放进程存活断言。
+@MainActor
+@Suite(.serialized)
+struct RealPiQueueTests {
+    @Test(arguments: ["preflight", "preflight-control", "pending", "starting", "sdk"])
+    func 停止原回合不遗失后续消息(stage: String) async throws {
+        try await withAgent { bridge, session, folder, gate in
+            let delivery = UUID().uuidString
+            try await bridge.send(PiMessage(text: work("A"), deliveryID: delivery), to: session.id)
+            try await eventually("A 的真实工具开始") { exists(folder, "A.pid") }
+            let a = try pid("A", in: folder)
+            let held = stage == "preflight-control" ? "preflight" : stage
+            try Data().write(to: gate.appending(path: "\(held).arm"))
+            if stage == "sdk" {
+                try await eventually("公开 SDK 队列已受理") { exists(gate, "sdk.pending") || exists(gate, "sdk.empty") }
+                try #require(exists(gate, "sdk.pending"))
+                await #expect(throws: PiBridgeError.rejected("stale_turn")) { try await bridge.abort(session.id, deliveryID: delivery) }
+                #expect(kill(a, 0) == 0)
+                #expect(kill(a, SIGUSR1) == 0)
+            } else {
+                let send = Task { try await bridge.send(PiMessage(text: "QUEUE-B " + work("B")), to: session.id) }
+                defer { try? Data().write(to: gate.appending(path: "\(held).release")); send.cancel() }
+                try await eventually("\(held) 处等待") { exists(gate, "\(held).held") }
+                if stage == "starting" {
+                    await #expect(throws: PiBridgeError.rejected("stale_turn")) { try await bridge.abort(session.id, deliveryID: delivery) }
+                } else if stage != "preflight-control" {
+                    try await bridge.abort(session.id, deliveryID: delivery)
+                    if stage == "preflight" { try await eventually("原回合 A 已实际退出") { kill(a, 0) != 0 } }
+                }
+                try Data().write(to: gate.appending(path: "\(held).release"))
+                try await send.value
+                #expect(!exists(gate, "\(held).ceiling"), "不能靠闸超时制造通过")
+            }
+            try await eventually("B 的实际工具开始") { exists(folder, "B.pid") }
+            let b = try pid("B", in: folder)
+            #expect(kill(b, 0) == 0)
+            if stage == "sdk" { #expect(exists(folder, "A.done"), "A 正常结束后才轮到 SDK 队列里的 B") }
+            try await bridge.abort(session.id)
+            try await eventually("B 的真实工具停止，进程清理完毕") { kill(b, 0) != 0 }
+        }
+    }
+
+    private func work(_ name: String) -> String {
+        "[[tool:python3 -c 'import os,signal;signal.signal(signal.SIGUSR1,lambda *_:None);open(\"\(name).pid\",\"w\").write(str(os.getpid()));signal.alarm(30);signal.pause();open(\"\(name).done\",\"w\").write(\"finished\")']]"
+    }
+
+    private func exists(_ folder: URL, _ name: String) -> Bool {
+        FileManager.default.fileExists(atPath: folder.appending(path: name).path)
+    }
+
+    private func pid(_ name: String, in folder: URL) throws -> pid_t {
+        try #require(pid_t(String(contentsOf: folder.appending(path: "\(name).pid"), encoding: .utf8)))
+    }
+
+    private func withAgent(_ body: (PiBridge, PiSession, URL, URL) async throws -> Void) async throws {
+        let root = try makeTempDirectory(), folder = root.appending(path: "work"), agent = root.appending(path: "agent")
+        let paths = PiPaths(agentDirectory: agent, socketDirectory: root.appending(path: "s"), binDirectory: root.appending(path: "bin"))
+        for directory in [folder, agent] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        let environment = ProcessInfo.processInfo.environment.merging(paths.launchEnvironment) { $1 }
+            .merging(["HOME": root.path, "PI_OFFLINE": "1", "CUEPAD_HOSTED": "", "CUEPAD_LAUNCH_TOKEN": ""]) { $1 }
+        let process = try await ChildProcess(realPiURL, ["--mode", "rpc", "--no-extensions", "-e", PiExtensionBundle.url.path,
+            "-e", fixturesDirectory.appending(path: "fake-model.ts").path, "-e", fixturesDirectory.appending(path: "queue-gates.ts").path,
+            "--model", "fake/echo", "--no-skills"], directory: folder, environment: environment, placement: .group, input: .pipe)
+        let bridge = PiBridge(socketDirectory: paths.socketDirectory)
+        do {
+            try bridge.start()
+            try await eventually("真实 Pi 接上桥") { bridge.sessions.contains { $0.pid == process.pid } }
+            let session = try #require(bridge.sessions.first { $0.pid == process.pid })
+            try await body(bridge, session, folder, agent.appending(path: "queue-gates"))
+        } catch {
+            bridge.stop(); process.end(); _ = await process.waitForExit()
+            throw error
+        }
+        bridge.stop(); process.end(); _ = await process.waitForExit()
+    }
+}
+#endif

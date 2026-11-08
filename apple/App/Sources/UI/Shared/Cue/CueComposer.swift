@@ -24,10 +24,6 @@ struct CueComposer: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focused: Bool
     @Environment(\.panelCovered) private var covered
-    /// 刚发出、还没读到这一句：库里那条记录要下一次读库才变成 `CueWatch.sending`，这一小段钮先当帧换成发送中，
-    /// 不先缩没再长出来。读到了这一句（`lastYouSaid` 变了，此时在不在路上都已算进 `sending`）就交还给它。
-    /// 只看这两项不看整个现状：在想、用工具时每一步都变，读它的话整个输入框跟着重算。
-    @State private var launched = false
     /// 光从发送钮的机头起飞、落进 Cue 的头像。
     @State private var launch = RelayLaunch()
     #if os(macOS)
@@ -58,7 +54,6 @@ struct CueComposer: View {
                 if style == .page, takesFocusRequests, top != .cue { focused = false }
             }
             #endif
-            .onChange(of: workspace.cue.lastYouSaid) { launched = false }
             .task { if style == .page { await DebugHooks.pressSendIfAsked(session: false, send) } }
     }
 
@@ -96,13 +91,21 @@ struct CueComposer: View {
 
     @ViewBuilder private var tools: some View {
         #if os(macOS)
-        if tooled { CueBrainRow(opening: $opening) }
+        if tooled {
+            VStack(alignment: .leading, spacing: Spacing.item) {
+                CueBrainRow(opening: $opening)
+                CueVoiceEntry(inCall: workspace.voice != nil) {
+                    if workspace.voice == nil { workspace.startVoiceCall() }
+                    else { workspace.voiceExpanded = true; workspace.showCue() }
+                }
+            }
+        }
         #endif
     }
 
     private var hasDraft: Bool { !workspace.cue.draft.isEmpty(accepting: .files) }
     /// 空着时的发送中：你最近一句还在路上（与气泡、头像同一个事实，`CueWatch.sending`）。
-    private var sending: Bool { workspace.cue.canHear && (launched || workspace.cue.sending) }
+    private var sending: Bool { workspace.cue.canHear && (workspace.cue.launching || workspace.cue.sending) }
 
     private var form: ComposerForm {
         #if os(iOS)
@@ -128,7 +131,6 @@ struct CueComposer: View {
         guard hasDraft else { return }
         let event = CueWatch.Send(at: .now, beat: workspace.cue.beat)
         guard workspace.sayToCue(from: Bindable(workspace.cue).draft) != nil else { return }
-        launched = true
         workspace.cue.sent(event)
         launch.fly(since: event.at, reduceMotion: reduceMotion)
         finish()

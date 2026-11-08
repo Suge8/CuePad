@@ -133,6 +133,7 @@ extension DeliveryConfirmationTests {
         if hasMessage {
             try Self.write([PiMessage(text: request.content, deliveryID: request.id.uuidString)], session: target.sessionID, cwd: app.directory.path, to: file)
         }
+        try RawDB(app.databaseURL).restoreVersion90()
         try RawDB(app.databaseURL).exec("""
             UPDATE deliveryRequests SET status = 'executing', handledBy = '\(TestApp.hostID)';
             ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;

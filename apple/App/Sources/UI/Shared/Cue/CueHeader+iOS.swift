@@ -4,7 +4,8 @@ import SwiftUI
 /// Cue 页页顶那一排的名牌（手机与 iPad 同一个，`floatingHeader` 摆它）：一块实底玻璃，定高，宽只看放在哪（`PlateStyle`）——
 /// 窄屏铺满侧栏钮右边整行，iPad 右侧的 Cue 面板里定宽居中；左边头像占两行高（没有环，Cue 在动时右下一颗靛青的点，`CueAvatar`），
 /// 右边上一行名字、下一行数字账（`CueStatusLine` 的 tally，`CueLedger`），左对齐。
-/// Cue 页这一排只有它：这一页的焦点就是 Cue，不放搜索钮；不随字长短变宽：数字账随时在变，跟着变宽整颗名牌就一直在动。
+/// Cue 页这一排只有它与两颗圆钮：窄屏左边开侧栏，右边"在 Mac 上操作"（`RemoteMacButton`），与侧栏钮对称、同一条中线；iPad 右侧的 Cue 栏里
+/// 名牌居中、只有右端这一颗（侧栏钮在会话条那一排）。这一页的焦点就是 Cue，不放搜索钮；不随字长短变宽：数字账随时在变，跟着变宽整颗名牌就一直在动。
 /// 比圆钮高一截（两行字要的高），对话按它让出（`floatingHeader` 的 `height`）。
 /// 点它从顶部长出面板（`GrowPanel`，同一块玻璃长大）：名牌原地长成名片（头像从左边连续地长大、挪到正中，名字与数字账排在它下面、居中），下面是 Cue 自己的那几样
 /// （`CueNowPanel`：大脑、上下文、记忆、设置），手机上这些只有这一个入口（额度在进展页顶栏的额度环里，在做的会话在会话条上）。
@@ -25,15 +26,21 @@ struct CueHeader: View {
 
     var body: some View {
         let style = host == .page ? PlateStyle.fill : .compact
-        ZStack(alignment: .topLeading) {
-            // 窄屏：开侧栏的圆钮与名牌同一排、同一条中线；名牌长开时盖住它（点面板外先收起）
-            // 长开时面板盖住它、读屏只读面板（模态，`GrowPanel`）：撤掉，不只是变透明——它的玻璃与面板在同一个容器里由容器一起画，透明度管不到钮上的图标
-            if host == .page, !expanded {
-                Button("侧栏", icon: .sidebar) { workspace.toggleSidebar() }
-                    .glassCircle()
-                    .frame(height: Self.height)
-                    .accessibilityIdentifier("narrow-sidebar")
-                    .transition(.opacity)
+        ZStack(alignment: .top) {
+            // 圆钮与名牌同一排、同一条中线；名牌长开时盖住它们（点面板外先收起）
+            // 长开时面板盖住它们、读屏只读面板（模态，`GrowPanel`）：撤掉，不只是变透明——它们的玻璃与面板在同一个容器里由容器一起画，透明度管不到钮上的图标
+            if !expanded {
+                HStack {
+                    if host == .page {
+                        Button("侧栏", icon: .sidebar) { workspace.toggleSidebar() }
+                            .accessibilityIdentifier("narrow-sidebar")
+                    }
+                    Spacer(minLength: 0)
+                    RemoteMacButton()
+                }
+                .glassCircle()
+                .frame(height: Self.height)
+                .transition(.opacity)
             }
             plate(style)
         }
@@ -51,8 +58,8 @@ struct CueHeader: View {
         } panel: {
             CueNowPanel(brain: brain, close: toggle)
         }
-        // 窄屏收着时让出左边的侧栏钮；长开时铺满整排、盖住它（`GrowPanel`）
-        .padding(.leading, style.width == nil && !expanded ? FloatingHeaderLayout.slot : 0)
+        // 窄屏收着时让出两边的圆钮；长开时铺满整排、盖住它们（`GrowPanel`）
+        .padding(.horizontal, style.width == nil && !expanded ? FloatingHeaderLayout.slot : 0)
         .observingCueBrain(into: $brain)
         .debugExposesCuePanel(toggle)
     }

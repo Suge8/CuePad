@@ -37,6 +37,11 @@ def die(message):
 REAL_LIBRARY = os.path.expanduser("~/Library/Application Support/CuePad")
 
 
+def disclaimed(argv):
+    """起 Mac 实例的命令行：经 disclaim.py 让实例成为自己的 TCC 责任进程（不然麦克风等权限记在起它的那个 App 头上，见 disclaim.py）。"""
+    return [sys.executable, "-I", f"{APPLE}/scripts/disclaim.py", *argv]
+
+
 def isolated_env(library, sockets=SOCKETS):
     library = os.path.realpath(library)
     if library == REAL_LIBRARY or library.startswith(REAL_LIBRARY + "/"):

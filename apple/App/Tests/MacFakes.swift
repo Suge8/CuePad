@@ -76,7 +76,7 @@ final class RecordingHost: AgentRuntime {
         try Task.checkCancellation()
         if let openFailure { throw PiHostError.exited(openFailure) }
         let id = "new-\(launchToken)"
-        let ext = try await connect(id, cwd: directory.path, sessionFile: sessions.appending(path: "--demo--/\(id).jsonl").path)
+        let ext = try await connect(id, cwd: directory.path, sessionFile: sessions.appending(path: "--demo--/\(id).jsonl").path, launchToken: launchToken)
         if let openingRejection {
             let previous = ext.onCommand
             ext.onCommand = { connection, command in
@@ -92,9 +92,10 @@ final class RecordingHost: AgentRuntime {
     @discardableResult
     func connect(
         _ sessionID: String, cwd: String, busy: Bool = false, hosted: Bool = false,
-        extensionVersion: Int = PiExtensionBundle.version, sessionFile: String? = nil, seesImages: Bool = true
+        extensionVersion: Int = PiExtensionBundle.version, sessionFile: String? = nil, seesImages: Bool = true, launchToken: String? = nil
     ) async throws -> FakeExtension {
         var options = FakeExtension.Options(extensionVersion: extensionVersion, cwd: cwd, hosted: hosted)
+        options.launchToken = launchToken
         if !seesImages { options.model?.images = false }
         let file = SessionFile(url: sessionFile.map { URL(filePath: $0) } ?? sessions.appending(path: "--demo--/\(sessionID).jsonl"), sessionID: sessionID, cwd: cwd)
         options.sessionFile = file.url.path

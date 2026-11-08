@@ -174,10 +174,15 @@ extension CueStore {
   }
 
   /// 本机已有这个文件、还没有记录时登记附件记录（同步载体）。必须在写事务内调用。
-  /// 记录已有、服务器也收下过的（同一份内容再存了一次）：存入时新留的保底用不着，删掉。
+  /// 记录已有、服务器也收下过的（同一份内容再存了一次）：存入时新留的保底用不着，提交后删掉（事务回滚了，保底还得留着）。
   func registerAttachment(_ key: String) throws {
     guard try !hasAttachment(key) else {
-      if try isUploaded(key) { try files.uploaded(key) }
+      if try isUploaded(key) {
+        afterCommit.append { [files] in
+          // 删不掉只是多留一份硬链接，下次再存同一份时会再试
+          try? files.uploaded(key)
+        }
+      }
       return
     }
     guard let metadata = files.metadata(key) else { return }
@@ -191,7 +196,7 @@ extension CueStore {
   /// 删掉本机上用不着的附件文件（缓存与保底一起），返回删了几个：没有附件记录、库里没有任何正文与文字引用它（`isAttachmentReferenced`），
   /// 也不在 `drafts`（跨启动留着的草稿）里。这些是存进来却没发出去的：回复框选了又没发的、编辑器里插了又删的。
   /// 只看 `before` 之前存入的（按存入时刷的修改时刻）：这次运行里刚存、还没写进正文的（输入框里的、正在入库的分享，含同内容已在本机的）都比它晚，不会被删。
-  /// 在一个写事务里查与删：别的进程（命令行）这期间写不进引用它的记录。
+  /// 在一个写事务里查与删：别的进程（命令行）这期间写不进引用它的记录；事务里只读，删文件不留回滚不了的半截状态，所以不用等提交后。
   public func removeStrayFiles(before: Date, drafts: [String]) throws -> Int {
     let drafted = Set(drafts.flatMap(CueFormat.attachmentKeys(in:)))
     return try write {

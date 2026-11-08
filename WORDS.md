@@ -1,12 +1,12 @@
 # 术语
 
-界面上的名词只用这几个：灵感、任务、子任务、正文、Agent、默认项目、置顶、归档、回收站、批注、技能与规则，以及 Cue 的四个：Cue、推进中、等你、记忆。一条一个叫法或一对易混的概念；业务规则在括号里那个类型的头注释里。
+界面上的名词只用这几个：灵感、任务、子任务、正文、Agent、默认项目、置顶、归档、回收站、批注、预览、技能与规则，以及 Cue 的四个：Cue、推进中、等你、记忆。一条一个叫法或一对易混的概念；业务规则在括号里那个类型的头注释里。
 
 - **灵感**（`Card`，`todoAt` 为空）；避免：卡片、笔记（界面上）
 - **任务** vs **灵感**：同一种记录 `Card`，只看 `todoAt` 有没有值，建成就不再变：同一条记录不互转。灵感要做，就拖到一条任务上接进它的正文（`CueStore.mergeIdea`），或拖到"添加任务"上照它新建一条（`CueStore.createTask(fromIdea:)`），灵感都进回收站；避免：设为任务、改回灵感（已退役）
 - **子任务**（顶层任务下的任务，`subtask*`）；避免：步骤（已退役）
 - **叶子** vs **任务**：叶子是没有子任务的任务，只有叶子开工、绑会话；点开工了的叶子进它的会话，其余进任务气泡（`Workspace.enter`）
-- **会话** vs **任务**：会话是 Agent 干活的地方，自己就是一等对象，不经任务开的不绑任务；任务是要交出成果的事，状态只由明确的动作改，说话不改（`CueStore.reopen`、`Card.startedAt`）。任务离开看板（完成、归档、删除）时，只为它开、别处不再用的会话一起结束（`CueStore.endUnusedSessions`）；避免：Agent 标签
+- **会话** vs **任务**：会话是 Agent 干活的地方，自己就是一等对象，不经任务开的不绑任务；任务是要交出成果的事，状态只由明确的动作改，说话不改（`CueStore.reopen`、`Card.startedAt`）。一件任务可先后用几个会话。看板上没归任何事的活会话与任务同一组操作，第一次拖到已完成、完成、置顶、改名时当场建任务绑上，从没这样用过的不留卡（`CueStore.adoptSession`）。名字只有一个事实源——任务标题：标题为空时显示会话名、随会话改名变，改过后以任务为准，并让做得到的 Agent 跟着改名（`Workspace+Adopt`）。任务离开看板（完成、归档、删除）时，只为它开、别处不再用的 CuePad 托管会话一起结束，终端里你自己开的不结束、随之收起（`CueStore.endUnusedSessions`）：活着就在看板上，一件事只出现一处——收起时它在看板上是那张已完成的任务卡，完成之后它有了新状态（时刻晚于完成）、或那张卡离开了看板（归档、删除），才作为无主会话回到推进中（`CueStore.isLoose`）；避免：Agent 标签
 - **正文**（任务的，`Card.rest`）：标题下面要交代给 Agent 的话，开工时连同标题作为第一句发出（`CueStore.opening`）；避免：提示词、草稿（界面上）
 - **置顶**（`isPinned`；动作"置顶 / 取消置顶"）：灵感的是项目页任务纸下面那几行，不另起组名、行首一枚图钉；顶层任务的是看板推进中与已完成排在最前（标题前一枚图钉，"全部归档"留着它），绑着它的会话在会话列表最上面"已置顶"一组。会话自己没有置顶，会话菜单里的"置顶"置的是它绑着的任务；避免：资料（已退役）、钉住、星标
 - **默认项目**（`Project.defaultID`）：没指定项目记下的都进它；避免：未分类、收件箱（已退役；小组件的 kind `CuePadInbox` 不改）
@@ -23,6 +23,8 @@
 - **并排**（宽屏主区开着两个会话，⌘ 点或右键"在旁边打开"开第二个）；避免：分屏、左栏、右栏（宽屏右边一直是 Cue）
 - **任务气泡**（`TaskBubble`，手机上是贴在底部的纸）：看一条任务只有它；避免：浮窗、详情页
 - **批注**（`ReplyNote`）vs **灵感**：批注是对回答某一段的意见，只在回复框的草稿里随下一句发出，不入库；避免：评论
+- **预览**（`PiPreview`）：Agent 发来要你看一眼或拍板的东西（文件，以后还有本机网址），会话里一张卡、点开全屏；随对话走、随对话过期，不做版本与作品库。长按或全屏里"回复"是引用它说话（回复框上一行"预览「标题」"，同批注一起发出）；避免：交付物、作品、截图（指它时）
+- **在 Mac 上操作**（`MacRemote`，只在手机与 iPad）：用网易 UU 远程控制那台 Mac；避免：远程桌面、投屏
 - **投送请求**（`DeliveryRequest`）vs **发送记录**（`sendRecords`）：请求是待执行的指令及其结果；发送记录是说过的话的快照，命令类请求不写
 - **归档**（`archivedAt`，连同下级，仍可搜）vs **回收站**（`deletedAt`）
 - **正在说的话**（`PiDraft`）vs **回答**：前者还没说完、只在内存，说完落库的才是回答；Mac 上那一行写"输出中"只是显示，不是同步的状态；避免：草稿（那是回复框的）
@@ -47,7 +49,7 @@
 
 英文界面只用这些叫法，没列的名词照 Apple 自家应用的说法。大小写只按字在界面上的位置定：导航与结构用 Title Case——页面与去处名、窗口与弹框标题（问句也是，"Forget This?"）、分段与标签页、列名、分组标题、按钮、菜单项、工具栏项、设置行的名字、空态标题；其余用句首大写——状态词与徽标（"Needs your OK"、"Not delivered"、"Not syncing"、"Running tool"）、说明、副标题、提示、帮助气泡、占位符、读屏标签与提示（同一个键也是按钮名时按按钮）、报错、横幅、通知正文、空态说明、复选框说明、斜杠命令的说明。下面的叫法作标题时 Title Case，嵌在句子与计数里小写（"3 need you"、"9 active"、"the agent session"）；Agent 不是专名，句中写 agent。一句里嵌状态词时状态词在句首（"Not syncing, can't answer now."）。同一个中文键在两种位置要不同大小写时拆键：改一处中文措辞或整句化，不在代码里改大小写。
 
-- 灵感 Idea · 任务 Task · 子任务 Subtask · 正文 Notes · 项目 Project · 默认项目 Default Project · 置顶 Pin / Unpin / Pinned · 归档 Archive · 回收站 Trash · 批注 Comment（不叫 Note，免得和 Notes 混）
+- 灵感 Idea · 任务 Task · 子任务 Subtask · 正文 Notes · 项目 Project · 默认项目 Default Project · 置顶 Pin / Unpin / Pinned · 归档 Archive · 回收站 Trash · 批注 Comment（不叫 Note，免得和 Notes 混）· 预览 Preview · 在 Mac 上操作 Control Mac
 - 进展 Progress · 看板 Board · 会话 Session · 更早 Earlier · 在旁边打开 Open Beside · Agent 会话 Agent Session · 全部项目 All Projects · 工作区 Workspace · 绑定的文件夹 Linked Folder
 - Cue 的四个：Cue · 推进中 Active · 等你 Needs You · 记忆 Memory；重点 Key Points（标为重点 Key Point · 取消重点 Unmark：轻扫按钮下只放得下约 10 个字母）
 - 拍板 Your Call（"等你拍板" Needs Your Call）；数字账（名牌、小组件、灵动岛与锁屏、菜单栏面板）与会话条的计数里数接小写短形：N for you（拍板）· N to reply · N active · N subagent(s) · N need(s) you

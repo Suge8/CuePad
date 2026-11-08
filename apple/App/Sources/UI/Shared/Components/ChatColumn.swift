@@ -17,6 +17,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     let ids: [UUID]
     let paging: ChatPaging
     let holding: Bool
+    let jumpPlacement: ChatJumpPlacement
     /// 最新一条是新到时要撑上去的那种（`ChatScroll.rise`）就是它；会话页没有。
     let arrival: UUID?
     /// 浮在对话底上的那张拍板卡（`ChatScroll.docked`）。
@@ -32,7 +33,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
 
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, marks: [ChatMark], ids: [UUID],
-        paging: ChatPaging, holding: Bool, arrival: UUID? = nil, docked: String? = nil, @ViewBuilder content: @escaping (ChatWindow) -> Content
+        paging: ChatPaging, holding: Bool, jumpPlacement: ChatJumpPlacement = .floating, arrival: UUID? = nil, docked: String? = nil, @ViewBuilder content: @escaping (ChatWindow) -> Content
     ) {
         self.followKey = followKey
         self.readingWidth = readingWidth
@@ -42,6 +43,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         self.ids = ids
         self.paging = paging
         self.holding = holding
+        self.jumpPlacement = jumpPlacement
         self.arrival = arrival
         self.docked = docked
         self.content = content
@@ -68,7 +70,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         GeometryReader { proxy in
             let size = proxy.size, window = self.window(size), first = ids.count - window
             let margin = ChatLayout.margin(size.width, readingWidth: readingWidth, inset: inset)
-            ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding, arrival: arrival, docked: docked) {
+            ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding, jumpPlacement: jumpPlacement, arrival: arrival, docked: docked) {
                 content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
                     .environment(\.chatMargin, margin)
             }

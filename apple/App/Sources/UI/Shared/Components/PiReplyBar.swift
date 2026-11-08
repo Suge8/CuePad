@@ -29,6 +29,8 @@ struct PiReplyBar: View {
     var sending = false
     /// 空着按 ↑ 调回的那一句（`PiChat.lastSaid`）。
     var recall: String?
+    /// 这个会话此刻的预览（`SessionDigest.previews`）：引用预览的那一行按编号取它的缩略图。
+    var previews: [PiPreview] = []
     /// 点批注一叠里的一条：回到原文（会话页给）。
     var revealNote: (ReplyNote) -> Void = { _ in }
     /// 发出之后（会话页回到最新）。
@@ -38,9 +40,6 @@ struct PiReplyBar: View {
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
     @State private var sentCount = 0
-    /// 刚发出、页面还没读到这句：库里那条请求要下一次读库才进 `sending`，这一小段钮先当帧换成发送中，不先缩没再长出来。
-    /// 读到了（在路上，或 Agent 已经接过去开始跑）就交还给页面。
-    @State private var launched = false
     @FocusState private var focused: Bool
     @Environment(\.panelCovered) private var covered
     /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单（Mac）。
@@ -83,7 +82,7 @@ struct PiReplyBar: View {
     /// 这会儿说不了的原因（`PiSessionState.speakBlocked`）：发送钮的说明写全文，占位写短的（手机一行放不下全文），发送钮不可用；作答不是说话，不受它管。
     private var speakBlocked: String? { answering == nil ? session.speakBlocked : nil }
     private var canStop: Bool { session.canStop }
-    private var shownSending: Bool { !hasDraft && !canStop && (launched || sending) }
+    private var shownSending: Bool { !hasDraft && !canStop && (workspace.launching.contains(session) || sending) }
     private var glyph: SendGlyph.Phase { canSend ? .ready : shownSending ? .sending : .idle }
     /// 输入框里是一条命令时要发出的整行（`PiSlash.line`；模板与技能是说的话，不算）。
     private var commandLine: String? { commands.isEmpty ? nil : PiSlash.line(of: draft, in: commands, for: session) }
@@ -110,7 +109,7 @@ struct PiReplyBar: View {
                 cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending, keepsHeader: !draft.notes.isEmpty, tooled: hasTools,
                 commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
-                    if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, reveal: revealNote, remove: removeNote) }
+                    if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, previews: previews, reveal: revealNote, remove: removeNote) }
                 },
                 tools: {
                     if hasTools, let config { SessionConfigControls(session: session, models: models, shown: config, opening: $opening) }
@@ -118,9 +117,16 @@ struct PiReplyBar: View {
                 send: { sendControl }
             )
             .sensoryFeedback(.success, trigger: sentCount)
-            .onChange(of: sending) { launched = false }
-            .onChange(of: canStop) { launched = false }
+            // 读到了（在路上，或 Agent 已经接过去开始跑）就交还给页面；页面走了也不留
+            .onChange(of: sending) { workspace.launching.settle(session) }
+            .onChange(of: canStop) { workspace.launching.settle(session) }
+            .onDisappear { workspace.launching.settle(session) }
             .task { await DebugHooks.pressSendIfAsked(session: true) { shortcuts[.send]?() } }
+            .onChange(of: workspace.replyFocus, initial: true) {
+                guard workspace.replyFocus == session.id else { return }
+                workspace.replyFocus = nil
+                focused = true
+            }
             #if os(macOS)
             .onAppear { focused = active && !covered }
             #endif
@@ -161,7 +167,7 @@ struct PiReplyBar: View {
     /// 发出后焦点去哪，两端只在这里分：手机收起键盘看对话；Mac 焦点留在回复框接着写。
     /// `talked`：发出的是说的话（命令有自己的进度行，钮不转发送中）。
     private func didSend(talked: Bool = true) {
-        launched = talked
+        if talked { workspace.launching.begin(session) } else { workspace.launching.settle(session) }
         #if os(iOS)
         focused = false
         #endif

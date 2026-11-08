@@ -102,14 +102,14 @@ extension CueStore {
     return card.id
   }
 
-  /// 会话归哪件事：绑着它的叶子（`Card.piSessionID`）与叶子的顶层任务，按会话 id；没绑着任务的不在其中。唯一的规则，
-  /// 等你的计数与报给 Cue 的变化（`cueChanges`）都读它：没删除的任务，做完了的也算（它的问题没答就还是在等你）；
-  /// 一个会话绑着几件时只归最近修改的那件。
-  func sessionOwners(_ sessionIDs: [String]) throws -> [String: (task: Card, leaf: Card)] {
+  /// 会话此刻归哪件事：绑着它的叶子（`Card.piSessionID`）与叶子的顶层任务，按会话 id；没绑着任务的不在其中。唯一的规则，
+  /// 等你的计数、报给 Cue 的变化（`cueChanges`）、会话行与会话条写的名字（`PiSessionListItem.task`）、App 的改名都读它：
+  /// 没删除、没归档的任务，做完了的也算（它的问题没答就还是在等你）；绑着几件时归没做完的，再归最近开始的——做完的旧任务不抢正在用它的那件。
+  public func sessionOwners(_ sessionIDs: [String]) throws -> [String: (task: Card, leaf: Card)] {
     guard !sessionIDs.isEmpty else { return [:] }
     let leaves = try select(
-      Card.self, where: "piSessionID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND deletedAt IS NULL",
-      [JSONColumn.encode(sessionIDs)], orderBy: "modifiedAt DESC, id")
+      Card.self, where: "piSessionID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND \(Self.cardActive)",
+      [JSONColumn.encode(sessionIDs)], orderBy: "completedAt IS NULL DESC, startedAt DESC, id")
     var owners: [String: (task: Card, leaf: Card)] = [:]
     for leaf in leaves where owners[leaf.piSessionID!] == nil {
       guard let task = try find(Card.self, try topTask(of: leaf.id)) else { continue }

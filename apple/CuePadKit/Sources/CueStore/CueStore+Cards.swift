@@ -10,6 +10,23 @@ extension CueStore {
     }
   }
 
+  /// 分享队列的一条入库成灵感：建卡与记下"这条已入库"（`capture` 是条目的稳定标识）在同一个事务里，同一条再来返回 nil、不重复建。
+  /// 条目删掉后调 `finishCapture` 忘掉标记；删失败重试时标记还在，只重试删除。
+  public func createCard(in project: UUID = Project.defaultID, body: String, capture: String) throws -> Card? {
+    try write {
+      let key = Self.captureKey(capture)
+      guard try syncState(key) == nil else { return nil }
+      try requireLiveProject(project)
+      let card = try insertCard(body, project: project, parent: nil, todo: false, sortKey: SortKey.before(firstTopKey(in: project)))
+      try db.run("INSERT INTO syncState (key, value) VALUES (?, ?)", [key, Data()])
+      return card
+    }
+  }
+
+  public func finishCapture(_ capture: String) throws { try setSyncState(Self.captureKey(capture), nil) }
+
+  private static func captureKey(_ capture: String) -> String { "capture:\(capture)" }
+
   /// 新任务（要做的卡片）放在所在项目顶层的最前。正文不能为空，否则抛 `blankTaskContent`；第一行是标题，其余是它的正文（`CueLines.split`）。
   public func createTask(_ body: String, in project: UUID = Project.defaultID) throws -> Card {
     try requireContent(body)
@@ -64,7 +81,9 @@ extension CueStore {
         try db.run("UPDATE cards SET body = ?, modifiedAt = ? WHERE id = ?", [kept + "\n\n" + added, now, task])
       }
       try trashRow(card, at: now)
-      return .merge(idea: idea, task: task, body: target.body)
+      // 读回库里的版本：同一毫秒里刚写过这条任务时，`guards` 把它改成旧值 + 1，不等于 `now`
+      let written = try find(Card.self, task)?.modifiedAt ?? target.modifiedAt
+      return .merge(idea: idea, task: task, body: target.body, modifiedAt: written)
     }
   }
 
@@ -76,7 +95,7 @@ extension CueStore {
       try requireContent(body)
       let task = try insertCard(body, project: card.projectID, parent: nil, todo: true, sortKey: SortKey.before(firstTopKey(in: card.projectID)))
       try trashRow(card, at: Date.stamp)
-      return (task, .spawn(idea: idea, task: task.id))
+      return (task, .spawn(idea: idea, task: task.id, modifiedAt: task.modifiedAt))
     }
   }
 
@@ -132,11 +151,11 @@ extension CueStore {
   }
 
   /// 项目顶层（灵感与任务共用一个手动顺序）最前面的排序键。
-  private func firstTopKey(in project: UUID) throws -> String? {
+  func firstTopKey(in project: UUID) throws -> String? {
     try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID = ? AND parentID IS NULL", [project]) { $0.textOrNil(0) } ?? nil
   }
 
-  private func insertCard(_ body: String, project: UUID, parent: UUID?, todo: Bool, sortKey: String) throws -> Card {
+  func insertCard(_ body: String, project: UUID, parent: UUID?, todo: Bool, sortKey: String) throws -> Card {
     let now = Date.stamp
     let card = Card(
       id: UUID(), projectID: project, body: body, isPinned: false, variableValues: [:], conflictOf: nil, sortKey: sortKey,
@@ -186,7 +205,7 @@ extension CueStore {
 
   /// 选定保留的版本并删除副本。原卡已不存在时，副本是唯一的版本：转为普通卡，不删除。
   public func resolveConflict(copy id: UUID, keep choice: ConflictChoice) throws {
-    try reportingFileFailures {
+    try removingFiles {
       try write {
         guard let copy = try find(Card.self, id), let originalID = copy.conflictOf else {
           throw CueStoreError.notAConflictCopy

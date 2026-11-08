@@ -6,7 +6,7 @@ import SwiftUI
 /// 演示里 scratch 没说过话，末尾只有这一句）。
 /// draft 在输入框里写一句、不发；sent 再经发消息的那条路（`Workspace.speak`）发出：输入框已空，末尾一个发送中的气泡（演示里没有接收的 Mac，一直在路上）；
 /// send 先写好、画面就绪 2 秒后再发（录屏看到发出的那一下，配 `-CuePadDemoMac YES` 看到送达）；press 同 send，但在输入框出现 3 秒（`-CuePadPressAfter`）后按的是它的发送钮（看钮与飞光；Mac 上给录屏留出起录的时间）；
-/// 配 `-CuePadFlightLog <路径>` 从按下起量一段（同叫醒的量法，`measureFlight`）；配 `-CuePadFiles YES` 这句带上一张图与一份 PDF（看你的话里的附件）。
+/// 配 `-CuePadFlightLog <路径>` 从按下起量一段（同叫醒的量法，`measureFlight`）；配 `-CuePadFiles YES` 这句带上一张图与一份 PDF（看你的话里的附件）；配 `-CuePadImportDelay <秒>` 这句带一个还在存的附件，按下发送时它还没存好（看附件随这句发出）。
 /// 已送达与没能送达：Cue 页用 `-CuePadCuePresence thinking|asleep`（`DebugScene+Cue.swift`），会话页看 relay（一句已送达、一句没能送达）。
 /// trips（配 `-CuePadSession relay -CuePadSync simulated`，新的隔离库）：再写一句给一台不接手的 Mac（demo-studio），传上替身 iCloud 后是已发出——
 /// 一页里三种状态（已发出、已送达、没能送达）。
@@ -31,7 +31,12 @@ extension DebugScene {
             listener = .cue
         }
         box.wrappedValue.text = String(localized: "把重连用例也跑一遍，结果贴给我", table: "Demo")
-        if defaults.bool(forKey: "CuePadFiles") {
+        if defaults.double(forKey: "CuePadImportDelay") > 0 {
+            // 这句带一个还在存的附件（`DebugHooks.importDelay` 拉长）：按下发送时它还没存好
+            let url = FileManager.default.temporaryDirectory.appending(path: String(localized: "季度复盘.txt", table: "Demo"))
+            try Data(String(localized: "季度复盘的要点", table: "Demo").utf8).write(to: url)
+            workspace.importFiles([.file(url)], into: box)
+        } else if defaults.bool(forKey: "CuePadFiles") {
             let pdf = try demoPDF(services.store)
             let image = try services.store.files.store(swatch(red: 0.85, green: 0.47, blue: 0.29))
             box.wrappedValue.files = [DraftFile(key: image, name: ""), pdf]

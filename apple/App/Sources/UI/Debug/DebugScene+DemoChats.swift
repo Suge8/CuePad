@@ -82,7 +82,49 @@ extension DebugScene {
         |:---|---:|---:|
         | 首屏可点元素 | 9 | 5 |
         | 登录成功率（内测） | 91% | 94% |
+
+        ### 改了哪里
+
+        ```swift
+        errorLine.text = message  // 不再弹窗
+        ```
         """, table: "Demo") }
+
+    /// 演示用的改动（notes 会话最后一批，`seedPreviews`）：两个文件，有增有删。
+    static let loginDiff = """
+        diff --git a/login/LoginView.swift b/login/LoginView.swift
+        index 3f1c2aa..8b0d913 100644
+        --- a/login/LoginView.swift
+        +++ b/login/LoginView.swift
+        @@ -18,11 +18,10 @@ struct LoginView: View {
+             @State private var email = ""
+             @State private var password = ""
+        -    @State private var showsError = false
+        +    @State private var error: String?
+         
+             var body: some View {
+                 VStack(spacing: 12) {
+                     TextField("Email", text: $email)
+        -            SecureField("Password", text: $password)
+        -        }
+        -        .alert("Wrong password", isPresented: $showsError) {}
+        +            PasswordField(text: $password, revealable: true)
+        +            if let error { Text(error).font(.footnote).foregroundStyle(.red) }
+        +        }
+             }
+         }
+        diff --git a/login/PasswordField.swift b/login/PasswordField.swift
+        new file mode 100644
+        --- /dev/null
+        +++ b/login/PasswordField.swift
+        @@ -0,0 +1,6 @@
+        +struct PasswordField: View {
+        +    @Binding var text: String
+        +    var revealable = false
+        +    @State private var revealed = false
+        +    var body: some View { revealed ? AnyView(TextField("", text: $text)) : AnyView(SecureField("", text: $text)) }
+        +}
+        """
 
     /// 演示用的一张图（手机上的登录页）存进附件目录，返回正文里引用它的写法；你的话带图片的演示（对话里的、还在路上的）用它。
     static func screenshotMarkup(_ store: CueStore) throws -> String? {

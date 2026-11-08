@@ -7,6 +7,7 @@ import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_COMMANDS, contextInfo, findModel, INTERNAL_COMMAND, isThinkingLevel, modelInfo, reason, type BuiltinCommand } from "./info.ts";
 import { supportsFast } from "./fast.ts";
 import { retry } from "./retry.ts";
+import { handleTitle } from "./title.ts";
 import type { Ack, Session } from "./session.ts";
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -123,9 +124,14 @@ function handleCommand(session: Session, socket: net.Socket, command: Command | 
 		if (command?.t === "reload") return handleReload(session, ack);
 		if (command?.t === "end") return handleEnd(session, ack);
 		if (command?.t === "abort") return handleAbort(session, ack);
+		if (command?.t === "abortTurn") {
+			if (typeof command.deliveryId !== "string" || !command.deliveryId) return reject("bad_request");
+			return session.stopDelivery(command.deliveryId) ? ack({ ok: true }) : reject("stale_turn");
+		}
 		if (command?.t === "retry") return void handleRetry(session, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "config") return void handleConfig(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "quota") return handleQuota(session, ack, reject);
+		if (command?.t === "title") return void handleTitle(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		reject("bad_request");
 	} catch (error) {
 		reject(`failed: ${reason(error)}`);
@@ -256,8 +262,9 @@ function handleEnd(session: Session, ack: Ack) {
 	session.runInternal("end");
 }
 
-/** 停止这一轮（`stopRound`）；子代理落定后照常把结果投回来开始新的一轮。 */
+/** 停止这一轮（`stopRound`）；子代理落定后照常把结果投回来开始新的一轮。排着、还没交出的话一并作废（停下之后不该又开一轮），它们的确认回未执行。 */
 function handleAbort(session: Session, ack: Ack) {
+	session.abortQueued();
 	session.stopRound();
 	ack({ ok: true });
 }

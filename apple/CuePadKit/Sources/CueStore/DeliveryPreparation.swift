@@ -11,7 +11,8 @@ public struct DeliveryPreparation: Sendable {
   }
 
   public static let upgrading = ShownText("会话扩展正在升级")
-  public static let expired = ShownText("准备超时，尚未派发，不会自动发送")
+  public static let attachmentExpired = ShownText("附件到期还没传到这台 Mac，没有发出，可以重发")
+  public static let attachmentMissing = ShownText("附件取过了仍不在这台 Mac 上，没有发出，可以重发")
   public static let abandoned = ShownText("请求已放弃，尚未派发")
   public static let ready = ShownText("准备就绪，等待派发")
 }

@@ -49,7 +49,8 @@ extension CueStore {
     if let parent = try find(Card.self, id)?.parentID { try settle(around: [parent]) }
   }
 
-  /// 拨回一次改动（`trashCard`、`moveCard`、`mergeIdea`、`createTask(fromIdea:)` 的回执），整个拨回是一个事务：
+  /// 拨回一次改动（`trashCard`、`moveCard`、`mergeIdea`、`createTask(fromIdea:)` 的回执），整个拨回是一个事务；
+  /// 合并与新建的回执带着任务当时的修改时刻，之后又改过就抛 `changedSinceUndo`、什么都不撤。其余：
   /// 删除恢复、提上去的下级回到它下面；挪动放回原来的位置；接进任务的灵感恢复、任务正文改回；照灵感新建的任务进回收站、灵感恢复。
   /// 其间已经不在了的下级跳过，原来的前一个同级不在了就排到最前。
   public func undo(_ change: CardChange) throws { try undo([change]) }
@@ -68,11 +69,15 @@ extension CueStore {
     case .move(let id, let slot, let after):
       let survivor = try after.flatMap { try find(Card.self, $0)?.id }
       try relocate(id, to: slot, after: survivor)
-    case .merge(let idea, let task, let body):
+    case .merge(let idea, let task, let body, let modifiedAt):
+      guard let current = try find(Card.self, task), current.modifiedAt == modifiedAt else { throw CueStoreError.changedSinceUndo }
       try db.run("UPDATE cards SET body = ?, modifiedAt = ? WHERE id = ?", [body, Date.stamp, task])
       try restoreRow(idea)
-    case .spawn(let idea, let task):
-      if let card = try find(Card.self, task), card.deletedAt == nil { _ = try trashRow(card, at: Date.stamp) }
+    case .spawn(let idea, let task, let modifiedAt):
+      if let card = try find(Card.self, task), card.deletedAt == nil {
+        guard card.modifiedAt == modifiedAt else { throw CueStoreError.changedSinceUndo }
+        _ = try trashRow(card, at: Date.stamp)
+      }
       try restoreRow(idea)
     }
   }
@@ -98,12 +103,12 @@ extension CueStore {
 
   /// 永久删除；发送记录保留内容快照。
   public func purgeCard(_ id: UUID) throws {
-    try reportingFileFailures { try write { try reclaimAttachments(purgeCards(where: "id = ?", [id])) } }
+    try removingFiles { try write { try reclaimAttachments(purgeCards(where: "id = ?", [id])) } }
   }
 
   /// 清空回收站：单独删除的卡片，以及回收站项目连同其卡片。
   public func emptyTrash() throws {
-    try reportingFileFailures { try write {
+    try removingFiles { try write {
       let orphaned = try purgeCards(
         where: "deletedAt IS NOT NULL OR projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)")
       try db.run("DELETE FROM projects WHERE deletedAt IS NOT NULL")
@@ -122,42 +127,56 @@ extension CueStore {
     return referenced
   }
 
-  /// 删除候选附件中已无人引用的（`isAttachmentReferenced`）：先删文件，成功后再删记录，
-  /// 所以记录与文件始终配对；删不掉的文件保留记录并返回其键。
+  /// 候选附件中已无人引用的（`isAttachmentReferenced`）：在事务里删记录，返回它们的键，文件由 `removingFiles` 在提交后删——
+  /// 事务中途失败回滚时，记录还在、文件也还在。提交后没删成的文件成了没记录没引用的游离文件，下次启动的 `removeStrayFiles` 会收走。
   /// 只看被删的东西引用过的附件，不做全表扫描：刚粘贴、正文尚未保存的附件不能被顺手回收。
   /// 不处理跨设备竞态：另一台设备可能刚好在引用同一个键。
   func reclaimAttachments(_ candidates: Set<String>) throws -> [String] {
-    var failed: [String] = []
+    var reclaimed: [String] = []
     for key in candidates.sorted() where try !isAttachmentReferenced(key) {
       guard let parts = AttachmentKey.parts(key) else { continue }
-      do { try files.remove(key) } catch {
-        failed.append(key)
-        continue
-      }
       try db.run("DELETE FROM attachments WHERE hash = ? AND format = ?", [parts.hash, parts.format])
+      reclaimed.append(key)
     }
-    return failed
+    return reclaimed
   }
 
   /// 对话里你的消息中带附件的行（只有你的消息引用附件）；`?1` 是某个附件的引用（`CueFormat.reference`）或所有引用都含的 `CueFormat.referencePrefix`。
   static let userAttachments = "role = '\(PiChatRole.user.rawValue)' AND instr(text, ?1) > 0"
 
-  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、对话里你的消息或 Cue 页的对话引用这个附件，或有预览用着这份文件。
+  /// 一轮经过里带图的（`?1` 是 `Tools.imagesField` 或某个键加引号）：工具结果里的图只记在经过上（`PiChatMessage.Tools.Item.images`）。
+  static let toolImages = "tools IS NOT NULL AND instr(tools, ?1) > 0"
+
+  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、还在库里的投送请求（等派发的、等重发的，引用只读 `DeliveryRequest.attachmentKeys`）、
+  /// 对话里你的消息、一轮经过里的工具图（做完的与在跑的）或 Cue 页的对话引用这个附件，或有预览用着这份文件。
   func isAttachmentReferenced(_ key: String) throws -> Bool {
     let referenced = try db.first(
       """
       SELECT 1 FROM cards WHERE instr(body, ?1) > 0
       UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
       UNION ALL SELECT 1 FROM piMessages WHERE \(Self.userAttachments)
+      UNION ALL SELECT 1 FROM piMessages WHERE tools IS NOT NULL AND instr(tools, ?2) > 0
+      UNION ALL SELECT 1 FROM piSessionStates WHERE pendingTools IS NOT NULL AND instr(pendingTools, ?2) > 0
       UNION ALL SELECT 1 FROM cueMessages WHERE instr(text, ?1) > 0
-      """, [CueFormat.reference(key: key)]) { _ in true } != nil
+      """, [CueFormat.reference(key: key), "\"\(key)\""]) { _ in true } != nil
     guard !referenced, let hash = AttachmentKey.parts(key)?.hash else { return referenced }
+    // 开会话请求的开场存在 JSON 里（斜杠被转义），按引用原文找不到：先按键里的哈希粗筛，再按请求自己的规则精判
+    if try select(DeliveryRequest.self, where: "instr(content, ?) > 0", [hash]).contains(where: { $0.attachmentKeys.contains(key) }) { return true }
     return try db.query("SELECT name FROM previews WHERE hash = ?", [hash]) { $0.text(0) }.contains { AttachmentKey.make(hash: hash, name: $0) == key }
   }
 
-  /// 事务已提交后，把删不掉文件的键作为错误报告（永久删除本身已生效）。
-  func reportingFileFailures(_ body: () throws -> [String]) throws {
-    let failed = try body()
+  /// `body`（含它的写事务）提交后，删它返回的键的文件；删不掉的键作为错误报告（永久删除本身已生效）。
+  /// 提交到删文件之间别的进程可能又引用了同一个键（写入引用并登记记录），所以另开一个写事务，持着写锁重新核对
+  /// 没有记录也没有引用再删（同 `removeStrayFiles`：事务里只读，删文件没有回滚不了的半截状态）。
+  func removingFiles(_ body: () throws -> [String]) throws {
+    let keys = try body()
+    guard !keys.isEmpty else { return }
+    let failed = try write {
+      try keys.filter { key in
+        guard try !hasAttachment(key), try !isAttachmentReferenced(key) else { return false }
+        do { try files.remove(key); return false } catch { return true }
+      }
+    }
     if !failed.isEmpty { throw CueStoreError.attachmentFilesNotRemoved(failed) }
   }
 }

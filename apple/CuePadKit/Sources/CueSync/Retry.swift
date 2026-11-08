@@ -53,7 +53,8 @@ func hedged<T: Sendable>(after delay: Duration, _ request: @escaping @Sendable (
 private func race<T: Sendable>(_ legs: [Race<T>.Leg]) async throws -> T {
   let race = Race<T>()
   return try await withTaskCancellationHandler {
-    try await withCheckedThrowingContinuation { race.begin($0, legs) }
+    race.begin(legs)
+    return try await race.answer.value()
   } onCancel: {
     race.finish(.failure(CancellationError()))
   }
@@ -67,16 +68,17 @@ private final class Race<T: Sendable>: Sendable {
   }
 
   private struct State {
-    var continuation: CheckedContinuation<T, any Error>?
+    var over = false
     var tasks: [Task<Void, Never>] = []
     var running = 0
   }
 
   private let state = Mutex(State())
+  let answer = Promise<T>()
 
-  func begin(_ continuation: CheckedContinuation<T, any Error>, _ legs: [Leg]) {
-    guard !Task.isCancelled else { return continuation.resume(throwing: CancellationError()) }
-    state.withLock { $0.continuation = continuation }
+  /// 起各路。比完了（含起之前就被取消）的不起，起的途中比完了的当场取消。
+  func begin(_ legs: [Leg]) {
+    guard !state.withLock({ $0.over }) else { return }
     let tasks = legs.map { leg in
       Task {
         if leg.delay > .zero { try? await Task.sleep(for: leg.delay) }
@@ -85,15 +87,15 @@ private final class Race<T: Sendable>: Sendable {
       }
     }
     let finished = state.withLock { state in
-      if state.continuation != nil { state.tasks = tasks }
-      return state.continuation == nil
+      if !state.over { state.tasks = tasks }
+      return state.over
     }
     if finished { tasks.forEach { $0.cancel() } }
   }
 
   private func enter() -> Bool {
     state.withLock { state in
-      guard state.continuation != nil else { return false }
+      guard !state.over else { return false }
       state.running += 1
       return true
     }
@@ -107,12 +109,15 @@ private final class Race<T: Sendable>: Sendable {
     if ends { finish(.failure(error)) }
   }
 
+  /// 交出结论：只有在锁里把"比完了"翻过来的那一次答复，后到的（被取消的那路抛出的错、调用方的取消）直接返回，不跟胜出的抢答。
   func finish(_ result: Result<T, any Error>) {
-    let (continuation, tasks) = state.withLock { state in
-      defer { (state.continuation, state.tasks) = (nil, []) }
-      return (state.continuation, state.tasks)
+    let tasks = state.withLock { state -> [Task<Void, Never>]? in
+      guard !state.over else { return nil }
+      defer { (state.over, state.tasks) = (true, []) }
+      return state.tasks
     }
+    guard let tasks else { return }
     tasks.forEach { $0.cancel() }
-    continuation?.resume(with: result)
+    answer.resolve(result)
   }
 }

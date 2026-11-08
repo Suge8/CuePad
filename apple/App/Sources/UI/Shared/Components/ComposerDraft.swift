@@ -20,6 +20,8 @@ struct ComposerDraft {
     var files: [DraftFile] = []
     var attachments: [Outbox] = []
     var notes: [ReplyNote] = []
+    /// 在存的附件的编号（`Workspace.importFiles`）：存好前就发出的话，发的人按它们等附件（`Workspace.claimImports`）。
+    var importing: [UUID] = []
 
     /// 一行的草稿预览（会话行"草稿 …"、看历史时收起的回复框）：文字的第一行，没有文字时写带了什么；空的为 nil。
     var preview: String? {
@@ -65,7 +67,7 @@ struct ComposerDraft {
 
     /// 按去处接受的种类，有没有可发的东西（不接受的种类不算）。
     func isEmpty(accepting kinds: ComposerKinds) -> Bool {
-        text.allSatisfy(\.isWhitespace) && (!kinds.contains(.files) || files.isEmpty) && (!kinds.contains(.cards) || attachments.isEmpty)
+        text.allSatisfy(\.isWhitespace) && (!kinds.contains(.files) || files.isEmpty && importing.isEmpty) && (!kinds.contains(.cards) || attachments.isEmpty)
             && (!kinds.contains(.notes) || notes.isEmpty)
     }
 
@@ -75,6 +77,7 @@ struct ComposerDraft {
         guard !kinds.contains(.files) else { return self }
         var draft = self
         draft.files = []
+        draft.importing = []
         draft.attachments = attachments.map { outbox in
             var outbox = outbox
             outbox.content = CueFormat.plainText(outbox.content)
@@ -83,11 +86,9 @@ struct ComposerDraft {
         return draft
     }
 
-    /// 存储格式正文（附件选好时已存进附件目录）。批注（`ReplyNote.message`）排在你写的话前面。
+    /// 存储格式正文（附件选好时已存进附件目录）。批注与引用的预览按 `ReplyNote.message` 接上你写的话。
     var stored: String {
-        StoredBody.make(
-            attachments: attachments.map(\.content), text: [ReplyNote.message(notes), text].filter { !$0.isEmpty }.joined(separator: "\n\n"),
-            files: files)
+        StoredBody.make(attachments: attachments.map(\.content), text: ReplyNote.message(notes, said: text), files: files)
     }
 }
 

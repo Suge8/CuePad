@@ -23,6 +23,7 @@ import Testing
     try png.write(to: old.appending(path: photo))
     try movie.write(to: old.appending(path: clip))
     try unrecorded.write(to: old.appending(path: orphan))  // 被引用、文件在本机，却没有附件记录
+    try db.restoreVersion90()
     try db.exec(
       """
       INSERT INTO cards (id, projectID, body, isPinned, variableValues, sortKey, createdAt, modifiedAt)

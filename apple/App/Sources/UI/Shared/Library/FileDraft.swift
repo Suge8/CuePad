@@ -7,6 +7,8 @@ import Foundation
 /// - `base` 是以为文件此刻的样子（打开时读到的、自己写成的、跟上的那一版）；写入都带它的哈希（`LibraryEdit.base`），
 ///   文件已不是它，那台 Mac 就不写（`AgentLibraryError.changedOnMac`）。
 /// - Mac 自动存（停手一小会儿，同灵感的编辑页，`Autosave`），没有保存钮；手机攒着，点纸飞机"发往 Mac"（`send`）。
+/// - 写入是异步的：每次写入和每次“换了说法”（跟上文件、进入冲突、丢下排着的）都会换一个代次（`epoch`），写完时代次已变就什么都不改——
+///   旧写入不能把后来出现的冲突盖成"已保存"，也不能把后来的编辑记成已保存。
 /// - 这份的正文变了（文件在别处被改了，`follow`）：你没改过就当场跟上；你改着没写成的，留着你的字、说出文件变了，
 ///   由你选换成文件里的（`takeFile`）或留你的盖过它（`keepMine`）；选之前不再自动写。
 @Observable
@@ -30,6 +32,9 @@ final class FileDraft {
     var retire: Set<InstructionSource.Origin> = []
     @ObservationIgnored private let workspace: Workspace
     @ObservationIgnored private var autosave: Autosave?
+    @ObservationIgnored private var epoch = 0
+    /// 正在写的那一版：它的回声（同步来的、等于它的文件）是自己写的，不是别处的改动。
+    @ObservationIgnored private var inflight: String?
 
     enum State: Equatable {
         case idle
@@ -57,7 +62,8 @@ final class FileDraft {
         self.workspace = workspace
         load(base)
         #if os(macOS)
-        autosave = Autosave(save: { [weak self] text in await self?.write(text) }, onError: { _ in })
+        // 写不成的错已在 `write` 里提示，这里不再报
+        autosave = Autosave(save: { [weak self] text in try await self?.write(text) }, onError: { _ in })
         #endif
     }
 
@@ -83,39 +89,66 @@ final class FileDraft {
     }
 
     /// 写进那台 Mac（Mac 的自动存、手机的"发往 Mac"）：带上改之前看到的那一版。
-    func send() async { await write(text) }
+    func send() async { try? await write(text) }
 
-    private func write(_ text: String) async {
+    /// 写不成抛错（已提示、状态已记 `failed`），自动存据此把这一版留在待写里，离开时再试。
+    private func write(_ text: String) async throws {
         // 只写此刻的这一版：换成文件里的之后，早先排着的那一版不算数
         guard let library = workspace.library, text == self.text, text != base else { return }
+        epoch += 1
+        let mine = epoch
         state = .saving
+        inflight = text
+        defer { if inflight == text { inflight = nil } }
         do {
             try await workspace.saveFile(LibraryEdit(file: file, base: LibraryEdit.base(of: base), text: text), in: library)
+            guard epoch == mine else { return }
             base = text
             mark()
-            state = .saved
+            // 写的期间又打了字：这一版写成了，但文件页上的还没写
+            state = dirty ? .idle : .saved
         } catch AgentLibraryError.changedOnMac {
-            autosave?.discard()
+            guard epoch == mine else { return }
+            drop()
             // 文件此刻的样子随它那一条同步来（`follow`）
             state = .conflict(file: nil)
         } catch {
-            state = .failed
             workspace.fail(error)
+            guard epoch == mine else { return }
+            state = .failed
+            throw error
         }
     }
 
+    /// 丢下排着的和在途的：换代次，在途的写完时不再改任何东西。
+    private func drop() {
+        epoch += 1
+        autosave?.discard()
+    }
+
     /// 这份同步来的正文变了（`LibraryFileText`，对上了快照的哈希）：是自己写成的那一版就只记下；你没改过就跟上；改着的留着，说出文件变了。
+    /// 在冲突里：文件变得和我的字一样，就是已保存；文件回到了基准（别处改回去了），没有别处的改动要选了，有没写的字照常自动存。
     func follow(_ file: String?) {
         let file = file ?? ""
-        guard file != base else { return }
-        if file == text {
+        if file == text || file == inflight {
             base = file
             mark()
+            if conflicted, file == text {
+                drop()
+                state = .saved
+            }
+            return
+        }
+        guard file != base else {
+            if conflicted {
+                state = .idle
+                if dirty { autosave?.changed(text) }
+            }
             return
         }
         if dirty {
             // 你选之前不写：还没写的那一版留着，不在背后带着新基准盖过文件
-            autosave?.discard()
+            drop()
             state = .conflict(file: file)
         } else {
             replace(with: file)
@@ -134,11 +167,11 @@ final class FileDraft {
         base = file
         mark()
         state = .idle
-        await write(text)
+        try? await write(text)
     }
 
     private func replace(with file: String) {
-        autosave?.discard()
+        drop()
         base = file
         load(file)
         handle.replace(body)
@@ -202,5 +235,8 @@ final class FileDraft {
     }
 
     /// 离开文件页：Mac 写下没存的字。
-    func leave() async { await autosave?.flush() }
+    func leave() async {
+        // 写不成的错已在 `write` 里提示
+        try? await autosave?.flush()
+    }
 }

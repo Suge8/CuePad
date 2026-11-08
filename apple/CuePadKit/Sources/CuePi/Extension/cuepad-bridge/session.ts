@@ -2,8 +2,9 @@ import { execFile } from "node:child_process";
 import type net from "node:net";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { account } from "./account.ts";
+import { Draft } from "./draft.ts";
 import { phaseOf, StateTracker, type Asking, type Clock, type Phase } from "./events.ts";
-import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, replyText, type Info, type Subagent } from "./info.ts";
+import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, type Info, type Subagent } from "./info.ts";
 import { IdleExit, IS_HOSTED, SelfReload } from "./lifecycle.ts";
 import { preflight } from "./preflight.ts";
 import { QuotaFetcher, type Quota, type QuotaWindow } from "./quota.ts";
@@ -51,8 +52,11 @@ export class Session {
 	/**
 	 * 已交给 Pi、还没观察到对应用户消息事件的那句。message_end 先于文件写入，ACK 不是持久化证明。
 	 * 没有可关联事件时超时或断连都只能表示未知，不能授权自动重投；真实消息由历史读取对账。
+	 * 按交出先后排队：交出到落成之间宿主仍是空闲的，下一句照样交出，各认各的（`landed`）。
 	 */
-	starting: Said | null = null;
+	readonly starting: Said[] = [];
+	/** 同时只预检队首；预检中的消息也属于 pending，停止或结束会话可以一次收回整队。 */
+	private dispatching = false;
 	/** 已交给 Pi、还没落成会话里一条消息的重跑（`retry.ts`）：落成时回它的确认，同 `starting` */
 	retrying: Ack | null = null;
 	asking: Asking | null = null;
@@ -221,26 +225,46 @@ export class Session {
 		};
 	}
 
-	/** 以这句开新一轮（见 `pending`）。 */
-	async startRound(said: Said) {
-		if (this.rejectSend(said)) return;
-		if (this.pending.length === 0 && this.ctx.isIdle()) return this.submit(said);
-		if (!(await this.prepare(said.ack)) || this.rejectSend(said)) return;
+	/** 所有新一轮请求先入同一队列；预检、等待宿主歇下、交出之间不转移到隐形等待队列。 */
+	startRound(said: Said) {
 		this.pending.push(said);
-		this.stopRound();
+		this.submitPending();
 	}
 
-	/**
-	 * 不带 deliverAs：只在歇着时交（见 `pending`），Pi 直接开始这一轮。歇着又没有等着的话时，之前交出、还没落成消息的那句
-	 * 不构成未执行证据；旧等待不阻止宿主空闲时的新意图。
-	 */
-	private async submit(said: Said) {
-		if (this.rejectSend(said) || !(await this.prepare(said.ack)) || this.rejectSend(said)) return;
-		this.starting = said;
+	private async dispatchNext() {
+		if (this.dispatching || this.lifetime.signal.aborted) return;
+		const said = this.pending[0];
+		if (!said) return;
+		this.dispatching = true;
+		try {
+			if (this.rejectSend(said)) { this.pending.shift(); return; }
+			const failure = await preflight(this.ctx);
+			// 等预检时可能已停止、结束或换了会话；被移出的请求已经收尾，不能再确认或交出。
+			if (this.lifetime.signal.aborted || this.pending[0] !== said) return;
+			if (failure) {
+				this.pending.shift();
+				this.reportFailure(failure.detail);
+				said.ack?.({ ok: false, error: failure.code });
+				return;
+			}
+			if (this.rejectSend(said)) { this.pending.shift(); return; }
+			// 预检后的当下状态决定下一步；判断与交出之间没有 await，不依赖过去发过的歇下事件。
+			if (!this.ctx.isIdle()) { this.stopRound(); return; }
+			this.pending.shift();
+			this.submit(said);
+		} finally {
+			this.dispatching = false;
+			if (this.pending[0] !== said) this.submitPending();
+		}
+	}
+
+	/** 只从预检后的空闲分支同步交给 Pi；后续 ACK 仍由真实用户消息事件产生。 */
+	private submit(said: Said) {
+		this.starting.push(said);
 		try {
 			this.pi.sendUserMessage(said.content, said.expand ? { expandPromptTemplates: true } : undefined);
 		} catch (error) {
-			this.starting = null;
+			this.starting.splice(this.starting.indexOf(said), 1);
 			this.reportFailure(reason(error));
 			said.ack?.({ ok: false, error: `failed: ${reason(error)}` });
 		}
@@ -265,22 +289,24 @@ export class Session {
 		this.submitPending();
 	}
 
-	/** 歇下了就交出等着的下一句。下一轮事件循环再看：压缩完成的事件在 Pi 收起压缩标记之前发出。 */
+	/** 新请求和宿主事件都唤醒同一个队列；下一轮事件循环再看，压缩完成事件早于 Pi 收起压缩标记。 */
 	submitPending() {
 		if (this.pending.length === 0) return;
 		this.later("等着的话", () => {
-			if (!this.ctx.isIdle()) return this.stopForPending();
-			const next = this.pending.shift();
-			if (next) void this.submit(next);
+			void this.dispatchNext().catch((error) => this.reportFailure(reason(error)));
 		});
 	}
 
-	/** 宿主可以在排队后开出新的人类轮：每次打断前以当前投影的标识重新核对。 */
-	stopForPending() {
-		for (let at = this.pending.length - 1; at >= 0; at--) {
-			if (this.rejectSend(this.pending[at])) this.pending.splice(at, 1);
-		}
-		if (this.pending.length > 0) this.stopRound();
+	/** 普通停止清空尚未交出的整队，包含正在预检的队首；按回合停止不调用它。 */
+	abortQueued() {
+		for (const said of this.pending.splice(0)) said.ack?.({ ok: false, error: "failed: aborted before it started" });
+	}
+
+	/** 一条用户消息落成了：认出它是交出的哪一句（先交的先认；模板与 skill 展开后认不出原话，取最早的），
+	 * 排在它前面的没认到的就是没落成，不再等。 */
+	landed(text: string): Said | undefined {
+		const at = this.starting.findIndex((said) => said.expand || text.startsWith(said.text));
+		return at < 0 ? undefined : this.starting.splice(0, at + 1)[at];
 	}
 
 	private rejectSend(said: Said) {
@@ -296,6 +322,17 @@ export class Session {
 		const allowed = said.cueTurn.deliveryId;
 		if (typeof current === "string" && allowed && current === allowed) return false;
 		said.ack?.({ ok: false, error: typeof current !== "string" || !allowed ? "unconfirmed_turn" : "user_turn" });
+		return true;
+	}
+
+	/** 核对投送身份与停止之间没有 await；不清空别人的 pending。
+	 * starting / SDK 待处理消息尚未有可证实的当前身份，拒绝而不冒险停止新工作。 */
+	stopDelivery(deliveryId: string): boolean {
+		if (this.starting.length || this.ctx.hasPendingMessages()) return false;
+		const last = this.ctx.sessionManager.buildSessionProjection().messages.findLast((message) => message.role === "user");
+		if ((last as { cuepadDelivery?: unknown } | undefined)?.cuepadDelivery !== deliveryId) return false;
+		if (this.ctx.isIdle()) return false;
+		this.stopRound();
 		return true;
 	}
 
@@ -344,68 +381,3 @@ export class Session {
 }
 
 /** 正在说的话（`draft`）最多每这么久上报一次：增量在这里合并，这条说完时立即补发最后一次 */
-const DRAFT_INTERVAL_MS = 100;
-
-/**
- * 正在说的话（`draft`）：主会话当前这条助手消息到目前为止的正文，给 CuePad 逐字显示；思考与工具参数不算，FireCode 的子代理是别的会话、不经这里。
- * 增量合并到每 `DRAFT_INTERVAL_MS` 一次，这条说完时立即补发全文；它转成工具调用、被停下或出错、下一条助手消息开始时清掉（`text: null`）。
- * 正常说完的不清：CuePad 在对话（读会话文件）里出现这一条后自己换下。`since` 是这条开始出字的时刻。
- */
-class Draft {
-	private draft: { text: string; since: number } | null = null;
-	/** 这条消息已转成工具调用：之后的正文不再算草稿 */
-	private closed = false;
-	private sentAt = 0;
-	private timer: ReturnType<typeof setTimeout> | undefined;
-
-	private readonly broadcast: (message: object) => void;
-
-	constructor(broadcast: (message: object) => void) {
-		this.broadcast = broadcast;
-	}
-
-	/** 一条新的助手消息开始了 */
-	restart() {
-		this.closed = false;
-		this.clear();
-	}
-
-	/** 这条消息转成了工具调用 */
-	close() {
-		this.closed = true;
-		this.clear();
-	}
-
-	/** `now`：这条说完了，不等合并的间隔 */
-	grow(message: object, now = false) {
-		const text = replyText(message);
-		if (this.closed || !text || text === this.draft?.text) {
-			if (now && this.timer) this.send();
-			return;
-		}
-		this.draft = { text, since: this.draft?.since ?? Date.now() };
-		if (now) return this.send();
-		if (this.timer) return;
-		const wait = this.sentAt + DRAFT_INTERVAL_MS - Date.now();
-		if (wait <= 0) this.send();
-		else this.timer = setTimeout(() => this.send(), wait);
-	}
-
-	clear() {
-		if (!this.draft) return;
-		this.draft = null;
-		this.send();
-	}
-
-	/** 会话关闭：不再补发 */
-	cancel() {
-		clearTimeout(this.timer);
-	}
-
-	private send() {
-		clearTimeout(this.timer);
-		this.timer = undefined;
-		this.sentAt = Date.now();
-		this.broadcast({ t: "draft", text: this.draft?.text ?? null, since: this.draft?.since ?? null });
-	}
-}

@@ -47,8 +47,8 @@ struct ScheduleTests {
             ).id)
             switch title {
             case "清理过期分支":
-                try await workspace.toggle(task.id)
-                try await workspace.toggle(task.id)  // 再点一下：重新打开
+                try await workspace.complete(task.id)
+                try await workspace.reopen(task.id)  // 再点一下：重新打开
             case "续费域名":
                 try await workspace.archive(task.id)
                 try await #require(workspace.notice?.action).run()  // 撤销：取回

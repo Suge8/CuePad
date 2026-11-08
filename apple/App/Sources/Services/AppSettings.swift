@@ -149,6 +149,13 @@ final class AppSettings {
         setReplyNotes(notes, for: session)
     }
 
+    /// 回复框引用一份预览（`ReplyNote(quoting:in:)`）：已引用着的不重复，接在已有批注后面。
+    func quote(_ preview: PiPreview, in entry: UUID, for session: UUID) {
+        let notes = replyNotes(for: session)
+        guard !notes.contains(where: { $0.preview == preview.id }) else { return }
+        setReplyNotes(notes + [ReplyNote(quoting: preview, in: entry)], for: session)
+    }
+
     func removeReplyNote(_ id: UUID, in session: UUID) {
         setReplyNotes(replyNotes(for: session).filter { $0.id != id }, for: session)
     }

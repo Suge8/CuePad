@@ -38,17 +38,23 @@ final class ClaudeHostedSession: SessionLink {
     var commands: Set<String> = []
     let deliveries = ClaudeDelivery()
     /// 停下这一轮（停止或发来新的一句）后的 `result` 是被打断的，不算出错
-    private var stopping = false
+    var stopping = false
     /// 为送进一句话停下这一轮：被停下的这一轮的 `result` 不算歇下，接着就是这句开的新一轮（从这一刻算）
-    private var restart = false
-    /// 等着这一轮收尾（`result`）的停下；进程退出时也放行
-    private var closing: [CheckedContinuation<Void, Never>] = []
+    var restart = false
+    /// 等着这一轮收尾（`result`）的停下；进程退出时也放行，对端不发 `result` 时到 `AgentTimeouts.stop` 放弃
+    let closing: PendingReplies<UUID, Void>
+    /// 发话里停下上一轮的那一段（`abort` 整段取消）
+    let stopPhase = StopPhase()
     /// 收尾过的轮数：停下时据此认出它在等回应的工夫里已经收尾
-    private var closed = 0
-    /// 发出的话开了一轮、还没等到它的 `system/init`：等 `init` 的停止挂在这里，这一轮开跑或结束时放行
-    private var starting: [CheckedContinuation<Void, Never>]?
-    /// 大脑的 `/clear` 在做：它的 `result` 回来时结束等待
-    var clearing: CheckedContinuation<Void, any Error>?
+    var closed = 0
+    /// 发出的话开了一轮、还没等到它的 `system/init`
+    var starting = false
+    /// 等 `init` 的停止挂在这里，这一轮开跑或结束时放行；对端不发 `init` 时到 `AgentTimeouts.stop` 放弃
+    let startWaits: PendingReplies<UUID, Void>
+    /// 大脑在做的 `/clear`，先发的在前：每个 `result` 结束最早的那个等待
+    var clearing: [UUID] = []
+    /// `/clear` 的等待（按 `clearing` 里的编号）；到 `AgentTimeouts.stop` 放弃
+    let clearWaits: PendingReplies<UUID, Void>
     /// 这一轮里 Claude Code 合成的出错回答（`ClaudeCode.failure` 的原文）；一轮结束时清掉
     private var apiError: String?
     /// 报过的上下文用量（`TurnEvent.context`）：用量随每条回答来，窗口到这一轮收尾（`result` 的 `modelUsage`）才知道
@@ -58,14 +64,21 @@ final class ClaudeHostedSession: SessionLink {
     private var resolved: [String: String] = [:]
 
     /// 托管会话：`host` 起进程、`connect` 上桥。
-    init(bridge: PiBridge) {
+    init(bridge: PiBridge, timing: Timing = .system) {
         self.bridge = bridge
         brain = nil
+        (closing, startWaits, clearWaits) = Self.waits(timing)
     }
 
     /// Cue 的大脑：`start` 起进程。
-    init() {
+    init(timing: Timing = .system) {
         brain = BrainSession()
+        (closing, startWaits, clearWaits) = Self.waits(timing)
+    }
+
+    private static func waits(_ timing: Timing) -> (PendingReplies<UUID, Void>, PendingReplies<UUID, Void>, PendingReplies<UUID, Void>) {
+        func table() -> PendingReplies<UUID, Void> { PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout) }
+        return (table(), table(), table())
     }
 
     /// 起好的连接；没起或起不来时抛 `sessionEnded`（进程退出后写入同样抛它）
@@ -219,8 +232,8 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     private func result(_ message: JSONValue, at now: Date) {
-        clearing?.resume()
-        clearing = nil
+        // 一轮在跑时的 `result` 是那一轮的；`/clear` 的回应在歇着时来
+        if !facts.running { endClear(.success(())) }
         var window = contextWindow
         for usage in (message["modelUsage"]?.object ?? [:]).values {
             if let reported = usage["contextWindow"]?.int { window = reported }
@@ -239,7 +252,7 @@ final class ClaudeHostedSession: SessionLink {
         if restart {
             restart = false
             startTurn(at: now)
-            starting = []
+            starting = true
         }
         closed += 1
         release()
@@ -300,7 +313,7 @@ final class ClaudeHostedSession: SessionLink {
 
     /// 主会话开始一轮（已在跑的不算新的一轮：发出话、后台任务落定时先算开始，随后它请求模型是同一轮）。
     /// 开始时刻是此刻：发出话的那一刻、收到开它的 `task_notification` 或它开始请求模型的那一刻，都早于这一轮的回答。
-    private func beginTurn() {
+    func beginTurn() {
         if !facts.running { startTurn(at: .now) }
     }
 
@@ -314,63 +327,11 @@ final class ClaudeHostedSession: SessionLink {
         deliveries.close()
         started()
         release()
-        clearing?.resume(throwing: PiBridgeError.sessionEnded)
-        clearing = nil
+        closeClears()
         if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }
         if let brain, let process = stream?.process {
             Task { brain.exited(await process.exited()) }
         }
-    }
-
-    /// 送进一句话（`userMessage`）：`interrupting` 时在跑就先停下这一轮、等它收尾，否则并进这一轮。
-    func say(_ message: JSONValue, interrupting: Bool) async throws {
-        if interrupting { try await interrupt(restarting: true) }
-        try put(message)
-    }
-
-    /// 写进去，从这一刻算这一轮。
-    func put(_ message: JSONValue) throws {
-        try live.write(message)
-        began()
-    }
-
-    /// 一条用户消息；`extra` 是托管会话另带的（`uuid`、`priority`，见 +Control）。
-    static func userMessage(_ content: JSONValue, extra: [String: JSONValue] = [:]) -> JSONValue {
-        .object(["type": "user", "message": ["role": "user", "content": content], "parent_tool_use_id": .null].merging(extra) { $1 })
-    }
-
-    /// 发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子）；为它停下的那一轮收尾时已经开了。
-    private func began() {
-        if !facts.running { starting = [] }
-        beginTurn()
-        publish(at: .now)
-    }
-
-    /// 这一轮开跑了（或没跑就结束了）：放行等着它的停止。
-    private func started() {
-        starting?.forEach { $0.resume() }
-        starting = nil
-    }
-
-    /// 停下在跑的这一轮并等它收尾；还没开跑的（`starting`）先等它开跑。歇着什么都不做。
-    func interrupt(restarting: Bool) async throws {
-        if starting != nil { await withCheckedContinuation { starting?.append($0) } }
-        guard facts.running else { return }
-        stopping = true
-        restart = restarting
-        let turn = closed
-        do {
-            _ = try await live.request(["subtype": "interrupt"])
-        } catch {
-            restart = false
-            throw error
-        }
-        if closed == turn { await withCheckedContinuation { closing.append($0) } }
-    }
-
-    private func release() {
-        closing.forEach { $0.resume() }
-        closing = []
     }
 }
 #endif

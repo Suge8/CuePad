@@ -3,8 +3,12 @@ import CueStore
 import Foundation
 
 extension OpenCodeRuntime {
-    private func live(_ id: PiSession.ID) throws -> (Connection, Tracked, String) {
-        guard let connection, connection.ready, let sessionID = bridge.session(id: id)?.sessionID, let tracked = sessions[sessionID], tracked.online else {
+    /// 在线会话的命令入口：事件流断开期间（`ready` 为假）会话还在线，只是状态不是最新的，命令等重连并拉完快照（至多 `AgentTimeouts.launch`，同开会话），
+    /// 不当成会话已结束。
+    private func live(_ id: PiSession.ID) async throws -> (Connection, Tracked, String) {
+        guard let current = connection else { throw PiBridgeError.sessionEnded }
+        if !current.ready { _ = try await ensureService() }
+        guard let connection, connection === current, let sessionID = bridge.session(id: id)?.sessionID, let tracked = sessions[sessionID], tracked.online else {
             throw PiBridgeError.sessionEnded
         }
         return (connection, tracked, sessionID)
@@ -14,11 +18,17 @@ extension OpenCodeRuntime {
     /// 之后收进来的话在被停下的这一轮收尾时开出新一轮（服务的 `SessionRunCoordinator`），所以不会并进被停下的这一轮。
     /// 原生的 `interrupt?resume=true` 是"先收话再打断"：两次请求之间这一轮到了步骤边界就会把话读进将被停下的这一轮，不用。
     public func send(_ message: PiMessage, in id: PiSession.ID) async throws {
-        let (connection, _, sessionID) = try live(id)
+        var target: (Connection, String)?
+        // 等重连与停下上一轮是可被停止取消的一段；prompt 交出后不取消（话已收下）
+        try await stopPhase(id).run { [self] in
+            let (connection, _, sessionID) = try await live(id)
+            try await interrupt(sessionID, connection)
+            target = (connection, sessionID)
+        }
+        guard let (connection, sessionID) = target else { return }
         struct File: Encodable { var uri: String }
         struct Metadata: Encodable { var cuepadDelivery: String }
         struct Prompt: Encodable { var text: String; var files: [File]; var metadata: Metadata? }
-        try await interrupt(sessionID, connection)
         let prompt = Prompt(
             text: message.text, files: message.images.map { File(uri: "data:\($0.mimeType);base64,\($0.data.base64EncodedString())") },
             metadata: message.deliveryID.map(Metadata.init))
@@ -27,7 +37,7 @@ extension OpenCodeRuntime {
 
     /// `/compact` 不开轮，照它的缺省（下一个步骤边界压缩）；其余命令展开成这一轮的提示词，与 `send` 同一规则。
     public func command(_ line: String, deliveryID _: String?, in id: PiSession.ID) async throws {
-        let (connection, tracked, sessionID) = try live(id)
+        let (connection, tracked, sessionID) = try await live(id)
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let parts = line.dropFirst().split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         let name = parts.first.map(String.init) ?? ""
@@ -50,8 +60,18 @@ extension OpenCodeRuntime {
     }
 
     public func abort(_ id: PiSession.ID) async throws {
-        let (connection, _, sessionID) = try live(id)
-        try await interrupt(sessionID, connection)
+        stopPhase(id).cancelAll()
+        try await stopPhase(id).run(cancellable: false) { [self] in
+            let (connection, _, sessionID) = try await live(id)
+            try await interrupt(sessionID, connection)
+        }
+    }
+
+    private func stopPhase(_ id: PiSession.ID) -> StopPhase {
+        if let phase = stopPhases[id] { return phase }
+        let phase = StopPhase()
+        stopPhases[id] = phase
+        return phase
     }
 
     /// 停下在跑的这一轮（含压缩）。在不在跑由服务判断（歇着时是空操作），不看事件流推出的忙闲。
@@ -60,7 +80,7 @@ extension OpenCodeRuntime {
     }
 
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
-        let (connection, tracked, _) = try live(id)
+        let (connection, tracked, _) = try await live(id)
         guard let question = tracked.facts.questions.first(where: { $0.promptID == promptID }), let target = Self.parse(promptID) else {
             throw PiBridgeError.rejected("stale_prompt")
         }
@@ -93,7 +113,7 @@ extension OpenCodeRuntime {
     }
 
     public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
-        let (connection, tracked, sessionID) = try live(id)
+        let (connection, tracked, sessionID) = try await live(id)
         if let name {
             struct Update: Encodable { var title: String }
             try await connection.client.call("PATCH", "/api/session/\(sessionID)", body: Update(title: name))
@@ -116,7 +136,7 @@ extension OpenCodeRuntime {
 
     /// 结束：停下在跑的一轮，会话下线（它还在服务里，再有活动——终端里接着说、CuePad 接着它——就重新上线）。
     public func end(_ id: PiSession.ID) async throws {
-        let (connection, _, sessionID) = try live(id)
+        let (connection, _, sessionID) = try await live(id)
         try await interrupt(sessionID, connection)
         guard self.connection === connection, sessions[sessionID]?.online == true else { return }
         sessions[sessionID]?.online = false
@@ -186,7 +206,11 @@ extension OpenCodeRuntime {
             self?.waiters.removeValue(forKey: id)?.resume(throwing: AgentRuntimeError.launchTimedOut(.opencode))
         }
         defer { timeout.cancel() }
-        return try await withCheckedThrowingContinuation { waiters[id] = $0 }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { waiters[id] = $0 }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.waiters.removeValue(forKey: id)?.resume(throwing: CancellationError()) }
+        }
     }
 
     /// CuePad 起的服务不读 `.claude/skills`：技能都在 `.agents/skills`（Claude Code 那边是链到它的链接），两处都读就是同一个技能读到两次、报重名。

@@ -70,7 +70,7 @@ extension CueHostTests {
         try await rig.message(.cue, containing: "登录页那边歇下了")
         try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
         let task = try #require(try await rig.store.cueBoard().tasks.first?.task)
-        try await Workspace(services: rig.services).toggle(task.id)
+        try await Workspace(services: rig.services).complete(task.id)
         #expect(try await rig.store.card(task.id)?.status == .done)
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")

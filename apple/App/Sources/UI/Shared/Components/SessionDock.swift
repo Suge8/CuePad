@@ -37,6 +37,7 @@ struct SessionDock: View {
                     commandProgress: MacDelivery.commandProgress(deliveries, messages: messages, at: speech),
                     sending: PiChat.sending(deliveries, messages: messages, at: speech),
                     recall: PiChat.lastSaid(messages),
+                    previews: digest?.previews ?? [],
                     revealNote: revealNote,
                     sent: sent)
             }
