@@ -93,12 +93,15 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
 
     private var hangUpButton: some View {
         Button { action(.hangUp) } label: {
-            Image(.endSession).foregroundStyle(palette.ink2)
+            Text("结束")
+                .chip(size: .inline)
+                .frame(minWidth: ControlSize.target, minHeight: ControlSize.target)
+                .contentShape(.rect)
         }
-        .buttonStyle(ControlButtonStyle(kind: .round, size: .compact))
+        .buttonStyle(PressStyle())
+        .accessibilityLabel("结束通话")
+        .help(Text("结束通话"))
         .voiceSlot(active && !closing)
-        .accessibilityLabel("挂断")
-        .help(Text("挂断"))
     }
 }
 

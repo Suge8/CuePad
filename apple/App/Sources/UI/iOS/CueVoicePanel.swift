@@ -174,7 +174,11 @@ struct CueVoicePanel: View {
                style: .bubble(workspace.voiceDetails ?? .unanchored, width: .fixed(360))) {
             PhoneVoiceHost { state, perform in
                 CueVoiceDetails(presentation: { state.shared(rejection: feedback.rejection) }, action: { intent in
-                    if case .perform(let operation) = intent { run(operation, perform: perform) }
+                    switch intent {
+                    case .hangUp: run(.hangUp, perform: perform)
+                    case .perform(let operation): run(operation, perform: perform)
+                    case .toggleMute, .stopExecution: break
+                    }
                 })
             }
         }

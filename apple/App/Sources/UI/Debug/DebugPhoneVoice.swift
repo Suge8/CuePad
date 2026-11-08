@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// 隔离画面样例只注入远端投影，不创建媒体或冒充命令成功。
+/// 隔离画面样例默认只注入远端投影；可选媒体回放边界见 DebugPhoneVoiceReplay，命令仍走正式服务。
 /// -CuePadPhoneVoice connecting|listening|muted|processing|speaking|closing|failed|failedRequest|ended
 /// -CuePadPhoneVoiceHistory 0|1|200：写入隔离聊天；-CuePadPhoneVoiceEnabled YES：启用隔离 Cue；-CuePadCueDraft 保留输入框草稿。
 /// -CuePadPhoneVoicePages YES：注入带续页的隔离投影，分页仍走正式服务，隔离环境无中转时应显示失败。
@@ -75,6 +75,7 @@ enum DebugPhoneVoice {
                     } catch { workspace.fail(error) }
                 }
             }
+            DebugPhoneVoiceReplay.attach(voice)
         } catch { workspace.fail(error) }
     }
 }

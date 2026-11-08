@@ -20939,6 +20939,22 @@
         }
       }
     },
+    "结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束"
+          }
+        }
+      }
+    },
     "结束会话" : {
       "localizations" : {
         "en" : {
@@ -20999,6 +21015,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "结束这个会话？"
+          }
+        }
+      }
+    },
+    "结束通话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End call"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束通话"
           }
         }
       }

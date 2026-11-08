@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// 有界详情列执行、停止、未落库问题和朗读记录；结果只给辨认摘录，正文沿用原聊天的 SpeechBubble。
+/// 有界详情列执行、停止、未落库问题和朗读记录；标题旁始终可一步结束通话，停止执行仍属于对应的工作。
+/// 结果只给辨认摘录，正文沿用原聊天的 SpeechBubble。
 struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
     /// 浮层持有内容视图；在 body 内读取，保证开着详情时也观察接通与提交状态。
     let presentation: () -> CueVoiceState<Operation>?
@@ -13,7 +14,15 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
 
     private func details(_ presentation: CueVoiceState<Operation>) -> some View {
         VStack(alignment: .leading, spacing: Spacing.group) {
-            Text("通话详情").font(Typography.title)
+            HStack(spacing: Spacing.item) {
+                Text("通话详情").font(Typography.title)
+                Spacer(minLength: Spacing.item)
+                Button { action(.hangUp) } label: { Text("结束通话") }
+                    .buttonStyle(ControlButtonStyle(size: .compact))
+                    .disabled(!presentation.active || presentation.activity == .closing)
+                    .opacity(presentation.active ? 1 : 0)
+                    .readerHidden(!presentation.active)
+            }
             if presentation.activity != .failed {
                 Text(presentation.title).font(Typography.body).foregroundStyle(palette.ink2)
             }
