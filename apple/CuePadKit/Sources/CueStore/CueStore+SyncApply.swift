@@ -22,6 +22,11 @@ extension CueStore {
       let cards = Set(changes.compactMap(\.cardID))
       if !cards.isEmpty { try repairCardTree(touching: cards) }
       if changes.contains(where: \.touchesLaunches) { try claimLaunchedCards() }
+      let deliveries = Set(changes.compactMap { change -> UUID? in
+        guard case .save(let row, _, _) = change, row.table == .deliveryRequests else { return nil }
+        return UUID(uuidString: row.id)
+      })
+      try reconcileDeliveredCards(cards: cards, deliveries: deliveries)
     }
     return failures + (try removeFiles(of: removedKeys))
   }

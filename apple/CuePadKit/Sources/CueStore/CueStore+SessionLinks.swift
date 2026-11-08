@@ -59,6 +59,22 @@ extension CueStore {
     }
   }
 
+  /// 卡片、请求或成功回执晚到时兑现原关联意图；只用仍在库里的请求及其修订，不从发送历史猜测。
+  /// start 的目标由 launchToken 认领；已有会话的内容与命令按成功请求的固定目标补齐。
+  func reconcileDeliveredCards(cards: Set<UUID> = [], deliveries: Set<UUID> = []) throws {
+    guard !cards.isEmpty || !deliveries.isEmpty else { return }
+    let requests = try select(DeliveryRequest.self, where: """
+      status = 'succeeded' AND mode IN ('send', 'command') AND targetKind = 'piSession' AND targetRef IS NOT NULL
+        AND (cardID IN (SELECT value FROM json_each(?1)) OR id IN (SELECT value FROM json_each(?2)))
+        AND EXISTS (SELECT 1 FROM cards c WHERE c.id = deliveryRequests.cardID
+          AND json_extract(c.sessionBindingRevision, '$.id') = json_extract(deliveryRequests.sessionBindingRevision, '$.id')
+          AND json_extract(c.sessionBindingRevision, '$.fulfilled') = 0)
+      """, [Self.idList(cards), Self.idList(deliveries)])
+    for request in requests {
+      if let session = request.target.ref { try linkDeliveredCardInTransaction(request, toSession: session) }
+    }
+  }
+
   /// 统一来源分类里有 Cue 正证据的投送；请求先到、发送记录先到或请求已清理都按同一条规则。
   public func cueSentDeliveries(among deliveries: some Sequence<UUID>) throws -> Set<UUID> {
     Set(try deliverySources(among: deliveries).compactMap { $0.value == .cue ? $0.key : nil })

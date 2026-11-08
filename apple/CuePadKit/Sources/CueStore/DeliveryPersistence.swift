@@ -124,6 +124,7 @@ extension CueStore {
       let current = try find(DeliveryRequest.self, id)
       return current?.status == .known(status) && current?.reason == reason
     }
+    if status == .succeeded { try reconcileDeliveredCards(deliveries: [id]) }
     guard changed, status == .succeeded, let request = try find(DeliveryRequest.self, id), !request.isFromCue,
       let answer = request.answer, let session = request.target.ref
     else { return changed }
