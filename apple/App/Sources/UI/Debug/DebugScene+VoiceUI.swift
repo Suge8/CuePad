@@ -131,8 +131,8 @@ struct DebugVoiceStage: View {
             return .init(id: row.id, text: row.text, canRequestRepeat: activity.isLive && !row.text.isEmpty,
                          request: row.request, note: row.note)
         }
-        let issue: CueVoicePresentation.Issue? = if earlierFailure { .init(message: Self.earlierIssue, recovery: "重新交给 Cue") }
-            else if requestFailed { .init(message: "未交给 Cue", recovery: "重新交给 Cue") }
+        let issue: CueVoicePresentation.Issue? = if earlierFailure { .init(message: Self.earlierIssue, recovery: .retryRequest("earlier")) }
+            else if requestFailed { .init(message: "未交给 Cue", recovery: .retryRequest("latest")) }
             else if activity == .failed { self.issue } else { nil }
         return CueVoicePresentation(
             name: "Cue", activity: activity, muted: muted, samples: { [audio, simulated] in simulated ? audio.samples : [] },
@@ -206,10 +206,10 @@ struct DebugVoiceStage: View {
 
     private var issue: CueVoicePresentation.Issue {
         switch DebugScene.defaults.string(forKey: "CuePadVoiceIssue") {
-        case "microphone": .init(message: "麦克风访问未开启", recovery: "打开麦克风设置")
-        case "login": .init(message: "登录已失效", recovery: "重新登录")
-        case "quota": .init(message: "通话额度已用完", recovery: "查看额度")
-        default: .init(message: "网络连接已断开", recovery: "重新连接")
+        case "microphone": .init(message: "麦克风访问未开启", recovery: .reconnect)
+        case "login": .init(message: "登录已失效", recovery: .reconnect)
+        case "quota": .init(message: "通话额度已用完", recovery: .reconnect)
+        default: .init(message: "网络连接已断开", recovery: .reconnect)
         }
     }
 
@@ -240,20 +240,16 @@ struct DebugVoiceStage: View {
             state = "ended"
         case .stopExecution:
             lastAction = String(localized: "演示：已收到停止执行操作", table: "Demo")
-        case .recover:
-            if earlierFailure {
+        case .recover(.retryRequest(let id)):
+            if id == "earlier", earlierFailure {
                 earlierFailure = false
                 lastAction = String(localized: "演示：已重试请求 A", table: "Demo")
                 return
             }
-            if requestFailed {
-                requestFailed = false
-            } else {
-                interruptSequence()
-                state = "connecting"
-                if simulated { sequencing = true; started = Date() }
-            }
+            if id == "latest" { requestFailed = false }
             lastAction = String(localized: "演示：已收到恢复操作", table: "Demo")
+        case .recover(.reconnect):
+            receive(.start)
         case .requestRepeat:
             lastAction = String(localized: "演示：已收到再说一遍请求", table: "Demo")
         case .expand: expanded = true

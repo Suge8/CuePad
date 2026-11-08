@@ -149,8 +149,8 @@ struct CueVoiceView: View {
                         .keyboardShortcut("m", modifiers: [.command, .shift])
                 }
                 Spacer(minLength: 0)
-                if let issue = presentation.issue, !presentation.activity.isLive {
-                    Button { action(.recover) } label: { Text(issue.recovery).fixedSize() }
+                if presentation.activity == .failed {
+                    Button { action(.recover(.reconnect)) } label: { Text(CueVoicePresentation.Recovery.reconnect.title).fixedSize() }
                         .buttonStyle(ControlButtonStyle(size: .compact))
                 } else if presentation.activity == .ended {
                     Button { action(.start) } label: { Text("再次通话") }

@@ -43,13 +43,11 @@ struct CueVoicePanel: View {
             let targets = workspace.stoppableVoiceExecutions
             if targets.count == 1, let target = targets.first { stop(target.state.sessionID) }
             else if !targets.isEmpty { choosingExecution = true }
-        case .recover:
-            if let request = workspace.voiceRetryRequest {
-                Task {
-                    do { try await workspace.retryVoiceRequest(request.id) }
-                    catch { workspace.fail(error) }
-                }
-            } else { workspace.startVoiceCall() }
+        case .recover(let recovery):
+            Task {
+                do { try await workspace.recoverVoice(recovery) }
+                catch { workspace.fail(error) }
+            }
         case .requestRepeat(let id): workspace.voice?.repeatReply(id)
         case .expand: workspace.voiceExpanded = true
         case .collapse: workspace.voiceExpanded = false

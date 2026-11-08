@@ -52,6 +52,10 @@ struct CueVoiceStatus: View {
                         }
                         if let issue = presentation.issue {
                             Text(issue.message).foregroundStyle(palette.failure)
+                            if let recovery = issue.recovery, case .retryRequest = recovery {
+                                Button { action(.recover(recovery)) } label: { Label(recovery.title, icon: .retry) }
+                                    .buttonStyle(ControlButtonStyle(size: .compact))
+                            }
                         }
                         if compact { CueVoiceExecutionRecords(executions: presentation.executions) }
                     }
@@ -61,11 +65,11 @@ struct CueVoiceStatus: View {
                 }
                 .frame(height: 320)
             }
-            if let issue = presentation.issue, presentation.activity.isLive {
-                Button { action(.recover) } label: { Label(issue.recovery, icon: .retry) }
+            if let recovery = presentation.issue?.recovery, case .retryRequest = recovery {
+                Button { action(.recover(recovery)) } label: { Label(recovery.title, icon: .retry) }
                     .labelStyle(.iconOnly)
                     .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
-                    .help(Text(issue.recovery))
+                    .help(Text(recovery.title))
             }
         }
         .padding(.horizontal, Spacing.page)

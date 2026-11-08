@@ -56,6 +56,14 @@ extension Workspace {
         return services.uploaded(request)
     }
 
+    /// 恢复携带原对象身份；界面投影之后状态可能变化，仍由原重试入口核验，不改选别的请求。
+    func recoverVoice(_ recovery: CueVoicePresentation.Recovery) async throws {
+        switch recovery {
+        case .retryRequest(let id): try await retryVoiceRequest(id)
+        case .reconnect: startVoiceCall()
+        }
+    }
+
     func retryVoiceRequest(_ id: String) async throws {
         guard let voice, let request = voice.requests.first(where: { $0.id == id }) else { throw CueStoreError.notFound }
         if let message = request.message {

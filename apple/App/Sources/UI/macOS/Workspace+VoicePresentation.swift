@@ -49,7 +49,7 @@ extension Workspace {
                      status: status, needsAttention: attention)
     }
 
-    var voiceRetryRequest: VoiceCall.Request? {
+    var voiceIssueRequest: VoiceCall.Request? {
         voice?.requests.first { request in
             if request.failure != nil { return true }
             guard request.pending, let record = request.record else { return false }
@@ -59,13 +59,13 @@ extension Workspace {
     }
 
     private func voiceIssue(_ voice: VoiceCall) -> CueVoicePresentation.Issue? {
-        if let request = voiceRetryRequest {
+        if let request = voiceIssueRequest {
             let reason = request.failure ?? voiceRequest(request).delivery.unconfirmedReason ?? Speech.unconfirmedReason.text
-            return .init(message: "请求「\(request.text)」：\(reason)", recovery: "重新交给 Cue")
+            return .init(message: "请求「\(request.text)」：\(reason)", recovery: request.failure != nil ? .retryRequest(request.id) : nil)
         }
-        if let failure = voice.storeFailure { return .init(message: "\(failure)", recovery: "重新接通") }
+        if let failure = voice.storeFailure { return .init(message: "\(failure)", recovery: .reconnect) }
         switch voice.phase {
-        case .failed(let failure): return .init(message: "\(failure.shown)", recovery: "重新接通")
+        case .failed(let failure): return .init(message: "\(failure.shown)", recovery: .reconnect)
         default: return nil
         }
     }

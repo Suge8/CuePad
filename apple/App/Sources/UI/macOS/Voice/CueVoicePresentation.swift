@@ -46,9 +46,20 @@ struct CueVoicePresentation {
         var note: String? = nil
     }
 
+    enum Recovery: Equatable {
+        case retryRequest(String), reconnect
+
+        var title: LocalizedStringResource {
+            switch self {
+            case .retryRequest: "重新交给 Cue"
+            case .reconnect: "重新接通"
+            }
+        }
+    }
+
     struct Issue {
         let message: LocalizedStringResource
-        let recovery: LocalizedStringResource
+        let recovery: Recovery?
     }
 
     let name: String
@@ -77,6 +88,6 @@ struct CueVoicePresentation {
 
 /// 动作只向宿主发意图；按钮是否可用、静音是否成功、停止执行是否完成均等下一份真实投影。
 enum CueVoiceAction {
-    case start, toggleMute, hangUp, stopExecution, recover, requestRepeat(UUID), expand, collapse
+    case start, toggleMute, hangUp, stopExecution, recover(CueVoicePresentation.Recovery), requestRepeat(UUID), expand, collapse
 }
 #endif
