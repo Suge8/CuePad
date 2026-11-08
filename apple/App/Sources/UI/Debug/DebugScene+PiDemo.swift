@@ -185,8 +185,8 @@ extension DebugScene {
             // 回复框里还挂着两条对最后那轮回答的批注（对话里那两处带高亮）
             let reply = PiChatMessage.recordID(sessionID: "notes", entryID: "p9")
             services.settings.setReplyDraft(ComposerDraft(text: String(localized: "续费域名那条再加上截止日期", table: "Demo"), notes: [
-                ReplyNote(entry: reply, run: 0, location: 5, quote: String(localized: "完整页面可以直接点按钮试交互", table: "Demo"), note: String(localized: "要能离线打开", table: "Demo")),
-                ReplyNote(entry: reply, run: 0, location: 38, quote: String(localized: "评审结论里有两处要你定", table: "Demo"), note: String(localized: "这两处我来定，先列出来", table: "Demo")),
+                demoReplyNote(entry: reply, quote: String(localized: "完整页面可以直接点按钮试交互", table: "Demo"), note: String(localized: "要能离线打开", table: "Demo")),
+                demoReplyNote(entry: reply, quote: String(localized: "评审结论里有两处要你定", table: "Demo"), note: String(localized: "这两处我来定，先列出来", table: "Demo")),
             ]), for: notes.id)
         }
     }

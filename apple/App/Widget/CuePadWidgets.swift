@@ -37,13 +37,13 @@ struct CueActivityWidget: Widget {
 
 struct SnapshotEntry<S: SnapshotFile>: TimelineEntry {
     let date: Date
-    let snapshot: S
+    let snapshot: S?
 }
 
 /// 数据来自主 App 写在共享容器里的快照；主 App 在快照内容变了时刷新时间线，所以这里不自己定时刷新。
 /// 快照里按时刻会变的（`timeline`：Cue 此刻过时、刚做完的那颗收掉）从此刻起排成时间线，到点由系统换，不靠 App 醒来。
 struct SnapshotProvider<S: SnapshotFile>: TimelineProvider {
-    /// 还没有快照（从没打开过主 App）时显示的。
+    /// 系统占位预览使用的内容；真实读取缺失时保留 nil。
     let empty: S
     var timeline: (S, Date) -> [SnapshotEntry<S>] = { [SnapshotEntry(date: $1, snapshot: $0)] }
 
@@ -57,7 +57,10 @@ struct SnapshotProvider<S: SnapshotFile>: TimelineProvider {
 
     private func entries() -> [SnapshotEntry<S>] {
         let directory = (try? LibraryLocation.resolve())?.snapshotsDirectory
-        return timeline(directory.flatMap { Snapshots.read(S.self, from: $0) } ?? empty, .now)
+        guard let snapshot = directory.flatMap({ Snapshots.read(S.self, from: $0) }) else {
+            return [SnapshotEntry(date: .now, snapshot: nil)]
+        }
+        return timeline(snapshot, .now)
     }
 }
 
@@ -73,7 +76,7 @@ struct CueWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: CueNow.empty, timeline: CueNow.timeline)) { entry in
-            WidgetViews.cue(entry.snapshot)
+            WidgetViews.cue(entry.snapshot ?? .empty)
         }
         .configurationDisplayName("Cue")
         .description("它此刻在做什么、手上几件活、几件等你拍板，点一下和它说话。")
@@ -86,7 +89,7 @@ struct DefaultProjectWidget: Widget {
     static let kind = "CuePadInbox"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: DefaultProjectSnapshot(name: String(localized: "默认"), cards: [], total: 0))) { entry in
+        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: DefaultProjectSnapshot(name: Project.defaultName, cards: [], total: 0))) { entry in
             WidgetViews.defaultProject(entry.snapshot)
         }
         .configurationDisplayName("默认")

@@ -19,6 +19,7 @@ struct RoundProcess: View {
     let ending: Ending
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var expanded = DebugHooks.preset.toolsOpen
 
     nonisolated enum Ending: Equatable {
@@ -88,7 +89,8 @@ struct RoundProcess: View {
             case .live(let shown, _, _): PiStateDot(shown: shown, size: 6)
             }
         } label: {
-            Text(line).lineLimit(1).layoutPriority(-1)
+            Text(line).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize).layoutPriority(-1)
             switch ending {
             case .took(let took):
                 Dot()
@@ -133,7 +135,9 @@ struct RoundProcess: View {
         HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
             Image(icon).font(Typography.caption2).foregroundStyle(palette.ink3)
                 .readerHidden(true).noteGlyph()
-            Text(doing).font(Typography.codeNote).lineLimit(2).truncationMode(.middle).shimmering()
+            Text(doing).font(Typography.codeNote)
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 2).truncationMode(.middle)
+                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize).shimmering()
         }
         .padding(.bottom, Spacing.hair)
         .accessibilityElement(children: .combine)
@@ -191,16 +195,25 @@ struct ToolRow<Status: View>: View {
     let truncation: Text.TruncationMode
     @ViewBuilder let status: Status
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: Note.spacing) {
+        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
             Image(icon)
                 .font(Typography.caption2).foregroundStyle(palette.ink3)
                 .readerHidden(true).noteGlyph()
-            target.font(Typography.codeNote).foregroundStyle(palette.ink3)
-                .lineLimit(1).truncationMode(truncation)
-            Spacer(minLength: 4)
-            status
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
+                    target.font(Typography.codeNote).foregroundStyle(palette.ink3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    status
+                }
+            } else {
+                target.font(Typography.codeNote).foregroundStyle(palette.ink3)
+                    .lineLimit(1).truncationMode(truncation)
+                Spacer(minLength: Spacing.tight)
+                status
+            }
         }
         .accessibilityElement(children: .combine)
     }

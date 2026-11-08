@@ -77,8 +77,7 @@ enum BoardCardMetrics {
     /// 卡标题至多几行、上下留多少（三端的列与手机的行同一条，所在的列或行按卡宽与字号算一次交给卡，`boardTitle`）：
     /// 按标题那一截一行放得下几个字定（卡宽去掉左右内边距、开头的圈与项目小图形连同它们与标题之间的缝，`lead`）。
     /// 带着项目小图形一行放不下 `glyphLine` 个字时项目小图形让位（`BoardTitle.glyph`），只留状态圈：项目色在会话条、项目页与悬停提示里都有，窄卡上字要紧。
-    /// 至少两行，一行放不下 `twoLine` 个字时
-    /// （列压到最窄附近：Mac 1280 宽开着 Cue 时）排三行；辅助字号下再多一行。标题多是十到十二个字（大库里九到二十二个），
+    /// 列式卡至少三行，一行放不下 `twoLine` 个字时辅助字号再多一行。标题多是十到十二个字（大库里九到二十二个），
     /// 一行八个字、两行一行五个字都会截成"改走统…"。行数是上限、不预留：一行写得下的卡就一行高（`BoardCardLayout`），不在标题下空一块；
     /// 所以上限不给一行——宽列里二十来个字的标题给一行只会截断（1512 宽等你列的"README 截图换成 Swif…"），不省地方。
     /// 轻的两列（`TaskBoard.Column.light`）是矮卡：上下只留 `lightPadding`。
@@ -89,7 +88,7 @@ enum BoardCardMetrics {
         let room = cardWidth - 2 * TaskMetrics.cardPadding, size = titleSize(typeSize)
         let glyph = (room - lead(glyph: true)) / size >= glyphLine
         let chars = (room - lead(glyph: glyph)) / size
-        let lines = (chars >= twoLine ? 2 : 3) + more
+        let lines = max(3, (chars >= twoLine ? 2 : 3) + more)
         return BoardTitle(lines: lines, padding: column.light ? lightPadding : titlePadding, glyph: glyph)
     }
 

@@ -72,7 +72,7 @@ private struct ReplyNoteLayer: ViewModifier {
 
     /// 半行高（阅读字号的字高加行距）：挂点在一行字中间。
     private static let lineHalf: CGFloat = {
-        let font = NSFont.systemFont(ofSize: Typography.readingSize)
+        let font = Typography.readingFont
         return (font.ascender - font.descender + font.leading + Typography.readingLineSpacing) / 2
     }()
 

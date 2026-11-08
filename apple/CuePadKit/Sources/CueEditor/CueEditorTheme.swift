@@ -11,7 +11,7 @@ public typealias CueFont = UIFont
 #endif
 
 // NSFont/NSColor 未标 Sendable，但主题只保存不可变的样式值。
-public struct CueEditorTheme: @unchecked Sendable {
+public struct CueEditorTheme: Equatable, @unchecked Sendable {
     public var font: CueFont
     /// `# ` `## ` 等标题行的字体（各级同一个）。
     public var headingFont: CueFont
@@ -39,7 +39,7 @@ public struct CueEditorTheme: @unchecked Sendable {
     public var title: Title?
 
     /// 首段的样子：字体（按 `title3` 的档位随系统字号缩放）、颜色，与下一段隔多远。只改展示，存储格式里它就是第一行。
-    public struct Title: @unchecked Sendable {
+    public struct Title: Equatable, @unchecked Sendable {
         public var font: CueFont
         public var color: CueColor
         public var spacing: CGFloat
@@ -77,3 +77,41 @@ public struct CueEditorTheme: @unchecked Sendable {
         self.imageCornerRadius = imageCornerRadius
     }
 }
+
+#if canImport(UIKit)
+extension CueEditorTheme {
+    /// 编辑器与只读预览按同一份系统文字样式缩放，主题本身始终保留默认档位的值。
+    public func scaled(for traits: UITraitCollection) -> Self {
+        func font(_ value: UIFont, fallback: UIFont.TextStyle) -> UIFont {
+            // 固定系统字体的 textStyle 也可能是 CTFontRegularUsage；它不是 UIFontMetrics 接受的文字样式。
+            let styles: [UIFont.TextStyle] = [.body, .callout, .caption1, .caption2, .footnote, .headline, .subheadline, .largeTitle, .title1, .title2, .title3, .extraLargeTitle, .extraLargeTitle2]
+            let rawStyle = value.fontDescriptor.object(forKey: .textStyle) as? String
+            if let style = styles.first(where: { $0.rawValue == rawStyle }) {
+                // 系统文字样式有自己的字号表；Metrics 缩放固定字号不等于目标档位的 preferredFont。
+                guard let fontTraits = value.fontDescriptor.fontAttributes[.traits] else {
+                    return UIFont.preferredFont(forTextStyle: style, compatibleWith: traits)
+                }
+                let descriptor = UIFontDescriptor.preferredFontDescriptor(withTextStyle: style, compatibleWith: traits)
+                    .addingAttributes([.traits: fontTraits])
+                return UIFont(descriptor: descriptor, size: 0)
+            }
+            let scaled = UIFontMetrics(forTextStyle: fallback).scaledFont(for: value, compatibleWith: traits)
+            return scaled.pointSize == value.pointSize ? value : scaled
+        }
+        func spacing(_ value: CGFloat) -> CGFloat {
+            UIFontMetrics(forTextStyle: .body).scaledValue(for: value, compatibleWith: traits)
+        }
+        var result = self
+        result.font = font(self.font, fallback: .body)
+        result.headingFont = font(headingFont, fallback: .title3)
+        result.codeFont = font(codeFont, fallback: .footnote)
+        result.captionFont = font(captionFont, fallback: .caption1)
+        result.lineSpacing = spacing(lineSpacing)
+        result.headingSpacing = spacing(headingSpacing)
+        if let title {
+            result.title = Title(font: font(title.font, fallback: .title3), color: title.color, spacing: spacing(title.spacing))
+        }
+        return result
+    }
+}
+#endif

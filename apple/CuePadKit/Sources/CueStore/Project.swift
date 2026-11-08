@@ -22,7 +22,7 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var isDefault: Bool { id == Self.defaultID }
 
   /// 建库时默认项目的名字（`Schema.defaultProject`）：库里存、同步的都是这一份，各台设备离线建出的才是同一版。
-  static let defaultName = "默认"
+  public static let defaultName = "默认"
 
   /// 给人看的名字（界面上写项目都读它）：没改过名的默认项目按这台设备的语言写，空名写 `untitled`，别的照存的。
   public var shownName: String { Self.shownName(id: id, name: name) }

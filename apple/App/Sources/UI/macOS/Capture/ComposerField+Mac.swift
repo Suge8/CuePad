@@ -162,13 +162,9 @@ final class ComposerScrollView: NSScrollView {
 
 final class GrowingTextView: NSTextView {
     /// 与气泡里的字同一号：写下的这句发出去就是对话里的那颗气泡
-    static let bodyFont = NSFont.systemFont(ofSize: Typography.readingSize)
+    static let bodyFont = Typography.readingFont
     /// 行距也同气泡（`Typography.readingLineSpacing`）：多行时不比对话挤，发出去节奏不突变。量高度用同一份。
-    static let paragraph: NSParagraphStyle = {
-        let style = NSMutableParagraphStyle()
-        style.lineSpacing = Typography.readingLineSpacing
-        return style
-    }()
+    static let paragraph = Typography.readingParagraph
     /// 量高只看字体与段落。
     private static let metrics: [NSAttributedString.Key: Any] = [.font: bodyFont, .paragraphStyle: paragraph]
     static func attributes(_ ink: Color) -> [NSAttributedString.Key: Any] { metrics.merging([.foregroundColor: NSColor(ink)]) { $1 } }

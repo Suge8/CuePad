@@ -148,8 +148,6 @@ enum BubbleMetrics {
     static let padding = EdgeInsets(top: 6, leading: Spacing.item, bottom: Spacing.group, trailing: 6)
     static let laneMark: CGFloat = 16
     static let laneFont = Typography.secondary.weight(.semibold)
-    static let titleSize: CGFloat = 17
-    static let bodySize: CGFloat = 14
     static let editorInset: CGFloat = 6
     /// 标题第一行的中线对着完成圈的中线（截图核对）。
     static let ringTop: CGFloat = 2
@@ -168,8 +166,6 @@ enum BubbleMetrics {
     static let padding = EdgeInsets(top: 6, leading: Spacing.item, bottom: Spacing.group, trailing: Spacing.item)
     static let laneMark: CGFloat = 20
     static let laneFont = Typography.secondary.weight(.semibold)
-    static let titleSize: CGFloat = 20
-    static let bodySize: CGFloat = 16
     static let editorInset = Spacing.item
     static let ringTop: CGFloat = 3
     static let textTrailing = Spacing.group

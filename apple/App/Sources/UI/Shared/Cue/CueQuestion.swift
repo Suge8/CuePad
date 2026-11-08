@@ -13,6 +13,7 @@ struct CueQuestionLine<Below: View>: View {
     let note: String?
     var tone = Tone.card
     @ViewBuilder var below: Below
+    @ScaledMetric(relativeTo: .body) private var readingSpacing = Typography.readingLineSpacing
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -38,7 +39,7 @@ struct CueQuestionLine<Below: View>: View {
         let line = Text(CueQuestionLine<EmptyView>.keepingTail(question))
         switch tone {
         case .card: line.font(Typography.title).foregroundStyle(palette.ink)
-        case .ended: line.font(Typography.reading).foregroundStyle(palette.ink2).lineSpacing(Typography.readingLineSpacing)
+        case .ended: line.font(Typography.reading).foregroundStyle(palette.ink2).lineSpacing(readingSpacing)
         }
     }
 }

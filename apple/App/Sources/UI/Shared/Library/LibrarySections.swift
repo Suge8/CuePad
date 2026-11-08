@@ -225,7 +225,7 @@ private struct GlobalRuleRow: View {
                 }
                 Text(opening)
                     .font(Typography.meta).foregroundStyle(instruction.hash == nil ? palette.ink3 : palette.ink2)
-                    .lineLimit(Self.lines, reservesSpace: true).lineSpacing(2)
+                    .lineLimit(Self.lines, reservesSpace: true).lineSpacing(Typography.noteLineSpacing)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, iconColumn + Spacing.group)
             }

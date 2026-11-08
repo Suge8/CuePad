@@ -172,6 +172,15 @@ struct MergePreview: View {
     let blocks: [(text: String, incoming: Bool)]
     let theme: CueEditorTheme
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var resolvedTheme: CueEditorTheme {
+        #if os(iOS)
+        theme.scaled(for: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(typeSize)))
+        #else
+        theme
+        #endif
+    }
 
     var body: some View {
         ScrollView {
@@ -179,7 +188,7 @@ struct MergePreview: View {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     HStack(alignment: .top, spacing: Self.gap) {
                         Capsule().fill(block.incoming ? palette.ink2 : .clear).frame(width: Self.bar)
-                        text(block.text).foregroundStyle(palette.ink).lineSpacing(3)
+                        text(block.text).foregroundStyle(palette.ink).lineSpacing(resolvedTheme.lineSpacing)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(.vertical, Spacing.tight).padding(.trailing, Spacing.tight).padding(.leading, Self.mark)
@@ -205,10 +214,10 @@ struct MergePreview: View {
     private func text(_ block: String) -> Text {
         let marks = block.prefix { $0 == "#" }
         guard !marks.isEmpty, !block.contains("\n"), block.dropFirst(marks.count).first == " " else {
-            return Text(verbatim: block).font(Font(theme.font as CTFont))
+            return Text(verbatim: block).font(Font(resolvedTheme.font as CTFont))
         }
         return Text("\(Text(verbatim: String(marks) + " ").foregroundStyle(palette.ink3))\(Text(verbatim: String(block.dropFirst(marks.count + 1))))")
-            .font(Font(theme.headingFont as CTFont))
+            .font(Font(resolvedTheme.headingFont as CTFont))
     }
 }
 

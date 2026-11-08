@@ -4,7 +4,7 @@ import SwiftUI
 
 extension View {
     /// 页顶那一排（全 App 只此一种，手机与 iPad、根页与推入页同一个）：左边一颗圆钮，中间一两块玻璃，右边至多一颗圆钮
-    /// （多个操作时调用方给一个"⋯"`Menu`），各是一块玻璃，玻璃之间透出内容；内容一直滚到这一排后面，栏后面不垫模糊或渐变（`Bars`）。
+    /// （多个操作时调用方给一个"⋯"`Menu`），各是一块玻璃，玻璃之间透出内容；内容一直滚到这一排后面，由系统柔和滚动边缘保证导航可读（`Bars`）。
     /// 中间是标题与下面一行要紧信息（推入页），或调用方给的 `center`（根页：这一页的范围，Cue 页是 Cue 的名牌），不写页名大标题：
     /// 窄屏侧栏的项目｜进展已经说了在哪一页（那一排是侧栏的，`HeaderHost.sidebar`）。中间那几块由 `headerPiece` 或 `GrowPanel` 画，提示横幅盖在这一排上时让开。
     /// 画在哪由所在的地方定（`HeaderHost`），调用处不分：
@@ -35,10 +35,11 @@ extension View {
 
     /// 根页：中间放 `center`（进展页是分段、项目范围与额度环合成的一块；Cue 页是它的名牌 `CueHeader`），不写标题。
     /// `height` 是中间那块收着时的高（Cue 的名牌比圆钮高）：内容按它让出，两侧圆钮对着它的中线。
+    /// `hasPanel` 是页头的固定能力：会展开的名牌始终在页面浮层中，开合不改变安全区或实例位置。
     func floatingHeader<Center: View, Trailing: View>(
-        _ title: LocalizedStringResource, height: CGFloat = FloatingHeaderLayout.height, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
+        _ title: LocalizedStringResource, height: CGFloat = FloatingHeaderLayout.height, hasPanel: Bool = false, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        modifier(FloatingHeader(title: title, hidden: false, reveal: nil, height: height, center: center(), trailing: trailing()))
+        modifier(FloatingHeader(title: title, hidden: false, reveal: nil, height: height, hasPanel: hasPanel, center: center(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
@@ -95,6 +96,7 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
     let hidden: Bool
     let reveal: (() -> Void)?
     var height = FloatingHeaderLayout.height
+    var hasPanel = false
     let center: Center
     let trailing: Trailing
     @State private var grown = false
@@ -110,16 +112,22 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
             case .sidebar:
                 content.safeAreaPadding(.top, height + Bars.contentGap)
             case .page, .panel:
-                // 内容让到这一排下面再隔 `Bars.contentGap`；这一排排在让出之前的安全区里，贴着状态栏下沿，同导航栏里的圆钮
-                content
-                    .safeAreaPadding(.top, height + Bars.contentGap)
-                    .readerHidden(covered)
-                    .overlay(alignment: .top) {
-                        PageBar(height: height, trailing: trailing.modifier(Yield(hidden: hidden)).readerHidden(covered)) {
-                            middle.modifier(Yield(hidden: hidden)).readerHidden(covered && !grown).background { revealer(.capsule) }
-                        }
-                        .onPreferenceChange(Grown.self) { grown = $0 }
-                    }
+                let bar = PageBar(height: height, trailing: trailing.modifier(Yield(hidden: hidden)).readerHidden(covered)) {
+                    middle.modifier(Yield(hidden: hidden)).readerHidden(covered && !grown).background { revealer(.capsule) }
+                }
+                .onPreferenceChange(Grown.self) { grown = $0 }
+                if hasPanel {
+                    // 原生栏外的按钮接不到点按；会展开的页头始终留在页面浮层，只让出收起高度。
+                    content
+                        .safeAreaPadding(.top, height + Bars.contentGap)
+                        .readerHidden(covered)
+                        .overlay(alignment: .top) { bar }
+                } else {
+                    content
+                        .safeAreaPadding(.top, Bars.contentGap)
+                        .readerHidden(covered)
+                        .safeAreaBar(edge: .top, spacing: 0) { bar }
+                }
             case .navigationBar:
                 content
                     // 标题只在中间那块玻璃里：不在 `RouteView` 里的页（任务正文的编辑 sheet）也不能让系统在下面再排一个大标题
@@ -303,11 +311,13 @@ private struct Widening: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
         let size = child.sizeThatFits(proposal)
-        return CGSize(width: max(size.width, min(widest.grow(size.width), proposal.width ?? .infinity)), height: size.height)
+        let width = min(widest.grow(size.width), proposal.width ?? .infinity)
+        return CGSize(width: width, height: size.height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center, proposal: proposal)
+        subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center,
+                              proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
     }
 }
 

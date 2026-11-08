@@ -1,16 +1,10 @@
 import SwiftUI
 
-/// 沉浸式的栏（iOS 的状态栏与顶栏、回复框；Mac 的窗口工具栏与页面顶上那一排）与页面内容之间的规矩，只在这里写：
-/// 栏的玻璃（页顶那一排 `floatingHeader` 的圆钮与中间那几块，页里钉住的分段、看板列头与手机看板的行头，Mac 会话页顶上那一排）直接浮在内容上、钉在顶上，
-/// 内容一直滚到它们后面、从玻璃之间与玻璃里透出来——栏后面、栏下面不加任何遮罩、渐变、模糊或底色，滚动区也不从它们的下沿开始，
-/// 系统的滚动边缘效果也关掉（`RouteView`：系统导航栏下它糊满整条栏），玻璃本身就是唯一的遮挡。
-/// 否决过：顶栏后面的整条淡出（为了返回钮与页头之间的窄缝不露半截字）把内容遮住了。
-/// 例外只有宽屏的两栏（右边的 Cue、会话，Mac 与 iPad 同一处 `fadesUnderHead`）：栏头是写着字的一排（Mac 两栏、iPad 的会话），
-/// 或是一块比栏窄、两侧透出内容的名牌（iPad 的 Cue），字滚到字后面、从名牌两侧露出来都读不出——这两栏的内容到栏头下沿就淡进栏的底色（`fade` 那一截），
-/// 不一刀切开，也不从栏头两侧露出来。手机的 Cue 页照沉浸式：名牌铺满整行，两侧没有缝。
-/// 窗口最顶上那一条：Mac（红绿灯与工具栏那一条）什么都不垫，内容透到窗口顶。iOS 的状态栏那一条是一层渐进模糊（`StatusBarBlur`）：
-/// 时间与电量是系统画的、没有玻璃可垫，不糊就和滚过去的字叠成一团。否决过：垫页底色的渐变，底色看得出，淡完的那一处像一刀切开。
-/// 内容离栏多远靠内容边距（`contentGap`）：系统导航栏下的页由 `RouteView` 一处让出（上安全区再加这么多），自己画页顶那一排的页（窄屏与 iPad 的根、iPad 的 Cue 面板，`HeaderHost`；Mac 的会话页）让到那一排下面；Mac 其余页的控件在工具栏里，内容让到工具栏下面再隔这么多。
+/// 浮动玻璃与内容的边界：iOS 导航顶部使用系统滚动边缘效果，静态自绘页头由 `safeAreaBar` 提供真实下沿，
+/// 推入页由系统导航栏提供。状态栏最顶一段仍由 `StatusBarBlur` 负责，不另造遮罩或滚动状态。
+/// 宽屏 Cue 与会话栏继续用 `fadesUnderHead`：内容在文字栏头下淡进底色。
+/// 对话底部的回复框仍浮在内容上；Mac 的托底由 `replyTray` 提供。完整约定见 docs/layout.md。
+/// 首行距栏的留白只有 `contentGap`：系统导航页由 `RouteView` 给，自绘页头由 `FloatingHeader` 给。
 enum Bars {
     static let contentGap: CGFloat = 12
     /// Mac 上文字栏头下沿那一截淡出的高（`fadesUnderHead`）。
@@ -36,6 +30,9 @@ private struct HeadFade: ViewModifier {
             content
                 #if os(macOS)
                 .clipped()
+                #else
+                // 这一栏已有栏头渐隐，不能再叠原生顶部边缘效果。
+                .scrollEdgeEffectHidden(true, for: .top)
                 #endif
                 .overlay {
                     GeometryReader { proxy in
