@@ -78,8 +78,8 @@ extension Workspace {
     }
 }
 
-/// 列头：状态色实心圆里一个白字形（`BoardLaneMark`）、列名，右边是这一列的数。数随列的轻重（`BoardWeight.swift`）：推进中、等你放大、着状态色，
-/// 待办、已完成与列名同字号、列名与数都是 ink3。卡片开头的记号是空心描边，与它分得开。
+/// 列头：状态色字形（`BoardLaneMark`）、列名，右边是这一列的数。数随列的轻重（`BoardWeight.swift`）：推进中、等你放大、着状态色，
+/// 待办、已完成与列名同字号、列名与数都是 ink3。列头只标分组，卡片开头的任务圈表达进度。
 /// 待办与推进中的列头在数右边可带一颗"+"（`LaneAdd`：添加任务、新会话，同手机竖版看板行头的那一颗）。
 /// 四列同一套排法：放不下时先收紧列名与数之间的空，再把列名截成省略号，记号、数与"+"一直在。
 /// 不用按宽挑候选（`ViewThatFits`）：多一颗"+"的列，挑候选时整个列名先没了（1280 宽的 Mac 上只剩「11 ＋」），四列看着不是一套规则。
@@ -130,7 +130,7 @@ struct BoardColumnHeader: View {
     #endif
 }
 
-/// 一列的记号（Mac 与 iPad 的列头、手机的行头、任务气泡顶上的列名）：状态色实心圆 + 白色字形——待办暖灰三横线、推进中靛青波形、等你赭黄问号、已完成石绿对勾。
+/// 一列的记号（Mac 与 iPad 的列头、手机的行头、任务气泡顶上的列名）：不铺圆底，状态色直接上字形；实心圆徽留给失败，不再给等你套圆。
 struct BoardLaneMark: View {
     let column: TaskBoard.Column
     var size: CGFloat = 16
@@ -138,52 +138,51 @@ struct BoardLaneMark: View {
 
     var body: some View {
         LaneGlyph(column: column)
-            .stroke(palette.onFill, style: StrokeStyle(lineWidth: size * 1.5 / LaneGlyph.grid, lineCap: .round, lineJoin: .round))
-            .background(column.mark(palette), in: .circle)
+            .stroke(column.mark(palette), style: StrokeStyle(lineWidth: size * InkStateGeometry.heartbeatStrokeRatio, lineCap: .round, lineJoin: .round))
+            .overlay {
+                if column == .waiting {
+                    let rect = CGRect(x: 0, y: 0, width: size, height: size)
+                    let dot = InkStateGeometry.questionDot(in: rect)
+                    Circle().fill(column.mark(palette)).frame(width: dot.width, height: dot.height)
+                        .position(x: dot.midX, y: dot.midY)
+                }
+            }
             .frame(width: size, height: size)
     }
 }
 
-/// 列头记号里的字形，画在 16 × 16 的格子里（设计稿原样）。
+/// 推进、问号和对勾复用静止符号生成的中线；去掉圆底后不再为圆徽留内缩。
 nonisolated private struct LaneGlyph: Shape {
     let column: TaskBoard.Column
     static let grid: CGFloat = 16
-
     func path(in rect: CGRect) -> Path {
+        switch column {
+        case .advancing: return Path(InkStateGeometry.heartbeat(in: rect))
+        case .waiting: return Path(InkStateGeometry.question(in: rect))
+        case .done: return Path(InkStateGeometry.check(in: rect))
+        case .todo: break
+        }
         var path = Path()
         func line(_ points: [(CGFloat, CGFloat)]) {
             path.move(to: CGPoint(x: points[0].0, y: points[0].1))
             for point in points.dropFirst() { path.addLine(to: CGPoint(x: point.0, y: point.1)) }
         }
-        switch column {
-        case .todo:
-            line([(4.8, 5.4), (11.2, 5.4)])
-            line([(4.8, 8), (11.2, 8)])
-            line([(4.8, 10.6), (8.8, 10.6)])
-        case .advancing:
-            line([(3.4, 8.4), (5.4, 8.4), (6.6, 5.6), (8.2, 10.6), (9.5, 7), (10.3, 8.4), (12.6, 8.4)])
-        case .waiting:
-            path.addArc(center: CGPoint(x: 8.05, y: 6.1), radius: 1.95, startAngle: .degrees(180), endAngle: .degrees(64), clockwise: false)
-            path.addCurve(to: CGPoint(x: 8, y: 9.1), control1: CGPoint(x: 8.3, y: 8.15), control2: CGPoint(x: 8, y: 8.5))
-            path.addLine(to: CGPoint(x: 8, y: 9.3))
-            // 问号下的点：一截极短的圆头线
-            line([(8, 11.4), (8, 11.41)])
-        case .done:
-            line([(5, 8.2), (7, 10.2), (11, 5.9)])
-        }
+        line([(3.2, 4.5), (12.8, 4.5)])
+        line([(3.2, 8), (12.8, 8)])
+        line([(3.2, 11.5), (9.6, 11.5)])
         let scale = min(rect.width, rect.height) / Self.grid
         return path.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: rect.minX / scale, y: rect.minY / scale))
     }
 }
 
 extension TaskBoard.Column {
-    /// 列头那颗实心圆的颜色：各列的状态色（待办没有状态色，是暖灰）。
+    /// 裸字形使用前景状态色，不借用反白圆底的深色令牌；待办用次墨。
     func mark(_ palette: Palette) -> Color {
         switch self {
-        case .todo: palette.quietFill
-        case .advancing: palette.signatureFill
-        case .waiting: palette.waitingFill
-        case .done: palette.repliedFill
+        case .todo: palette.ink2
+        case .advancing: palette.signature
+        case .waiting: palette.waiting
+        case .done: palette.replied
         }
     }
 }

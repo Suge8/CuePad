@@ -43,15 +43,15 @@ extension PiShown {
 
     /// 状态的静止图形（`Icon`），与 `tint` 一起是全 App 状态图形的唯一出处：状态标（`PiStateDot`）、跟着字号的
     /// `PiStateGlyph`（问题卡、出错与没能结束的提示、Cue 的等你、前台横幅、通知设置）都从这里取。在跑、话在路上在状态标里是
-    /// 自绘的循环动效，这里是不放循环动效时与菜单里的样子。要你看的三种是实心圆、记号刻在里面，其余没有实心的圆底；同为圆的几种靠颜色与里面的记号分开。
+    /// 自绘的循环动效，这里是不放循环动效时与菜单里的样子。等你是裸问号，出错与没能送达保留实心圆徽；不靠颜色单独区分。
     var icon: Icon {
         switch status {
         case .asking: .waiting
         // 待回复：墨点，各处同一个（会话条、看板等你列、经过里的"留给你"）
         case .awaitsReply: .awaitsReply
-        // 等 Cue 回答：气泡里的问号，线条墨色（实心赭黄的问号圆只给等你确认的）
+        // 等 Cue 回答：气泡里的问号，线条墨色（赭黄裸问号只给等你确认的）
         case .cueAsking: .cueAsking
-        // 胭脂圆叹号（`Icon.failure`，与操作出错同一个）：与等你确认的赭黄问号圆靠颜色与里面的字分开
+        // 胭脂圆叹号（`Icon.failure`，与操作出错同一个）：与等你确认的裸问号靠轮廓与颜色分开
         case .failed: .failure
         case .delivery(.preparing): .more
         case .delivery(.failed): .undelivered
@@ -63,7 +63,7 @@ extension PiShown {
         case .unread: .replied
         // 输入光标：轮到你打字
         case .idle: .yourTurn
-        // 歇着、轮不到你（Cue 值班时）：省略号，等下一句的不是你。不用圈：带圈的已经够多（等你确认、出错、没能送达、未知、已结束），缩小后分不开
+        // 歇着、轮不到你（Cue 值班时）：省略号，等下一句的不是你。不用圈：带圈的已经够多（出错、没能送达、未知、已结束），缩小后分不开
         case .resting: .more
         case .fresh: .fresh
         // 不用空心圈：待办任务的圆圈就是它
@@ -76,11 +76,11 @@ extension PiShown {
 }
 
 /// 会话状态标（全 App 只此一份：Agent 页卡片、书架、侧栏、Mac 侧栏的项目行与菜单栏、会话页顶栏、任务上的会话状态）：
-/// 颜色 + 不带外框的整体图形（图标与颜色只取 `PiShown.icon`、`tint`）——等你确认赭黄问号圆（外圈一圈波纹慢慢扩开）、出错胭脂圆叹号、没能送达胭脂折回箭头、
+/// 颜色 + 不带外框的整体图形（图标与颜色只取 `PiShown.icon`、`tint`）——等你确认赭黄裸问号、出错胭脂圆叹号、没能送达胭脂折回箭头、
 /// 在跑靛青心电线（一截实色沿波形走）、等子代理交回靛青一大一小两颗点（小的出去又回来贴住，`relay`）、话在路上靛青纸飞机（从左下飞进、朝右上飞出）、有新回复石绿铃铛（变成它时摇一下）、
 /// 待回复墨点、该你了灰色输入光标、新会话灰色星光、被打断灰色断开的线、已结束灰色带斜线圈（不再另淡：灰已在对比度底线上，靠斜线圈的形状分）；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
-/// 心电线、纸飞机、波纹是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
-/// 两个都是静止图标时由系统原地替换。不放循环动效时（`LoopsPlay`）换成同一状态的静止符号、没有波纹；减弱动态效果时不摇铃。
+/// 心电线、纸飞机是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
+/// 两个都是静止图标时由系统原地替换。不放循环动效时（`LoopsPlay`）换成同一状态的静止符号；减弱动态效果时不摇铃。
 /// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
 struct PiStateDot: View {
     let shown: PiShown
@@ -104,7 +104,7 @@ struct PiStateDot: View {
             switch shown.mark {
             case .flight: OnTheWay(size: box, color: tint).transition(Motion.pop(reduceMotion: reduceMotion))
             case .loop(let kind) where loops: LoopLayer(kind: kind, color: tint).transition(Motion.pop(reduceMotion: reduceMotion))
-            case .loop, .icon, .rippled: icon(tint)
+            case .loop, .icon: icon(tint)
             }
         }
         .frame(width: box, height: box)
@@ -125,22 +125,17 @@ struct PiStateDot: View {
             .foregroundStyle(tint)
             .contentTransition(.symbolEffect(.replace))
             .symbolEffect(.wiggle, options: .nonRepeating, value: rings)
-            .background {
-                if shown.mark == .rippled, loops { LoopLayer(kind: .ripple, color: tint).frame(width: box * 0.86, height: box * 0.86) }
-            }
             .transition(Motion.pop(reduceMotion: reduceMotion))
     }
 
 }
 
-/// 会话状态标画什么（`PiStateDot` 只画它、不判断），状态 → 样子只在 `PiShown.mark`：常驻的循环、话在路上那架纸飞机、外带一圈波纹的图标，或静止的图标（`PiShown.icon`）。
+/// 会话状态标画什么（`PiStateDot` 只画它、不判断），状态 → 样子只在 `PiShown.mark`：常驻的循环、话在路上那架纸飞机，或静止的图标（`PiShown.icon`）。
 /// 循环不放时（`LoopsPlay`）退回同一状态的静止图标。
 enum StateMark: Equatable {
     /// 在跑是心电线，等子代理交回是一大一小两颗点（`LoopLayer` 的 `heartbeat`、`relay`）。
     case loop(LoopLayer.Kind)
     case flight
-    /// 等你确认：图标外一圈细线扩开淡去。
-    case rippled
     case icon
 }
 
@@ -151,7 +146,7 @@ extension PiShown {
         case .working: .loop(.heartbeat)
         case .delivery(.preparing), .delivery(.failed), .delivery(.inTransit(.unconfirmed)): .icon
         case .delivery: .flight
-        case .asking: .rippled
+        case .asking: .icon
         case .idle, .resting, .fresh, .ended, .interrupted, .unknown, .cueAsking, .awaitsReply, .failed, .unread: .icon
         }
     }
