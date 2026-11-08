@@ -49,6 +49,7 @@ public actor CueStore {
     try connection.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL")
     if try Self.userVersion(connection) != Schema.version { try Self.migrate(connection, location) }
     try connection.exec(Self.guards)
+    try connection.exec(Self.taskSessionEvents)
     let queue = DispatchSerialQueue(label: "CueStore", qos: .userInitiated)
     let names = ChangeNotification.names(forDatabase: url)
     let listener = ChangeListener(names: names)
@@ -154,7 +155,13 @@ public actor CueStore {
   /// 一个写事务；提交后通知订阅者，并把改动的同步记录交给同步订阅者。
   func write<T>(_ body: () throws -> T) throws -> T {
     let (result, changes): (T, Changes)
-    do { (result, changes) = try db.transaction(body) } catch {
+    do {
+      (result, changes) = try db.transaction {
+        let value = try body()
+        try reconcileTaskSessionEvents()
+        return value
+      }
+    } catch {
       afterCommit = []
       throw error
     }

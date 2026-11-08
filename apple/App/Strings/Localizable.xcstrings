@@ -6215,18 +6215,18 @@
         }
       }
     },
-    "会话的自动结束已受理，暂时不能关联或发送；请等结束结果明确后重试" : {
+    "会话正在结束，确认结束结果后才能关联或发送" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This session is closing automatically. Wait for the result before linking a task or sending a message."
+            "value" : "This session is ending. Wait until the outcome is confirmed before linking a task or sending a message."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "会话的自动结束已受理，暂时不能关联或发送；请等结束结果明确后重试"
+            "value" : "会话正在结束，确认结束结果后才能关联或发送"
           }
         }
       }

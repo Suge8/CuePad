@@ -169,14 +169,12 @@ extension CueStore {
           (s.createdForTaskID IS NULL AND json_extract(deliveryRequests.content, '$.createdForTaskID') IS NOT NULL)
           OR (json_extract(c.sessionBindingRevision, '$.id') = json_extract(deliveryRequests.sessionBindingRevision, '$.id') AND c.piSessionID IS NOT s.sessionID)))
       """)
-    var created: [UUID: Bool] = [:]
     for request in requests {
       guard let launch = request.launch,
         let session = try select(PiSessionState.self, where: "launchToken = ?", [launch.token]).first else { continue }
-      if let owner = try recordSessionCreationInTransaction(session.sessionID, from: request) { created[owner] = request.isFromCue }
+      try recordSessionCreationInTransaction(session.sessionID, from: request)
       try linkDeliveredCardInTransaction(request, toSession: session.sessionID)
     }
-    for (owner, cue) in created { try endUnusedSessions(of: owner, cue: cue) }
   }
 
   /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除）：手机没有完整路径，由 Mac 解析并写本机的目录绑定。

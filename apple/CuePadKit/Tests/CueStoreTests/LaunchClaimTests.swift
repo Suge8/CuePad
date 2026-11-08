@@ -18,6 +18,7 @@ import Testing
     }
     #expect(try await store.launchingLeaves([bound.id, handed.id]) == [bound.id, handed.id])
 
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, projectID: project.id)
     try await store.bindSession("s1", to: bound.id)
     try await store.unbindSession(from: bound.id)
     try await Task.sleep(for: .milliseconds(5))  // 两次交给落在不同的毫秒（请求按 createdAt 排先后）

@@ -7,12 +7,11 @@ struct TaskSessionEnd: StoredJSON {
 
 extension CueStore {
   /// 创建时转存来源，之后不再依赖投送或发送历史；恢复、摘要与纯关联不能改写它。
-  func recordSessionCreationInTransaction(_ sessionID: String, from request: DeliveryRequest) throws -> UUID? {
-    guard request.mode == .known(.start), let launch = request.launch, let owner = launch.createdForTaskID else { return nil }
+  func recordSessionCreationInTransaction(_ sessionID: String, from request: DeliveryRequest) throws {
+    guard request.mode == .known(.start), let launch = request.launch, let owner = launch.createdForTaskID else { return }
     try db.run(
       "UPDATE piSessionStates SET createdForTaskID = ?, modifiedAt = ? WHERE sessionID = ? AND launchToken = ? AND createdForTaskID IS NULL",
       [owner, Date.stamp, sessionID, launch.token])
-    return db.changes > 0 ? owner : nil
   }
 
   /// 与投送转入 executing 同事务复核；受理后新借用与发送由同一投送状态拒绝。明确 end 不受此规则限制。

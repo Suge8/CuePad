@@ -71,7 +71,7 @@ extension CueStore {
     try setArchived(chains.filter { !reopened.isDisjoint(with: $0) }.map { $0.last! }, at: nil)
   }
 
-  /// 会话的去留只在这里定。任务离开看板（做完：你点圆圈 `completeTask`、Cue 做完 `finishTask`；归档 `archive`；删除 `trashCards`；
+  /// 汇总任务涉及的会话，资格统一由 `taskSessionCanEnd` 判断；事务事件入口也复用这里。任务离开看板（做完：你点圆圈 `completeTask`、Cue 做完 `finishTask`；归档 `archive`；删除 `trashCards`；
   /// 所在项目进回收站 `trashProject`），或明确开工换会话时（`insertDelivery`；纯关联不收尾），
   /// 写下改动之后对这件事里绑着的会话各看一遍，没人再用就请它所在的 Mac 结束：
   /// 1. 有还在看板上（`taskOpen`）、也没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去（接着用它时话送到才绑上），留着；
@@ -88,7 +88,7 @@ extension CueStore {
     let sessions = try db.query(
       """
       SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND (id = ?1 OR id IN (\(Self.subtree(from: "SELECT ?2"))))
-      UNION SELECT sessionID FROM piSessionStates WHERE createdForTaskID IN (\(Self.subtree(from: "SELECT ?2")))
+      UNION SELECT sessionID FROM piSessionStates WHERE createdForTaskID IN (\(Self.subtree(from: "SELECT ?2", includingDeleted: true)))
       """, [task, topID]
     ) { $0.text(0) }
     guard !sessions.isEmpty else { return UnusedSessions() }

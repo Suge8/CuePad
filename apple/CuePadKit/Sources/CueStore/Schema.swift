@@ -43,7 +43,7 @@ enum Schema {
   /// 89：一台设备可同时开多个会话；旧端只读 sessionID，会把开着的另一页当作无人查看、错误推送。
   /// 不抬的例：派发期限改从服务器收下起算（90）。旧版 Mac 缺附件时不守期限是它原有的缺陷，不是误读新写法；新手机照常登记、上传附件，旧 Mac 取得到。
   /// 93：旧端会把晚到投送重新关联，也会误结束纯关联的托管会话；自动结束请求须由新端复核创建来源。
-  static let peerFloor = 94
+  static let peerFloor = 93
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
@@ -187,7 +187,6 @@ enum Schema {
     "DELETE FROM cueSummaries;",
     cueMessageUpgrade,
     taskSessionUpgrade,
-    taskSessionFulfillmentUpgrade,
   ]
 
   static let activityDestinationsTable = """

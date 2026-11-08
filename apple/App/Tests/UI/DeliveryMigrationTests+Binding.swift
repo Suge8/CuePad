@@ -25,14 +25,7 @@ extension DeliveryMigrationTests {
             SendTarget(kind: .piSession, name: "投送目标", ref: mode == .start ? nil : "atlas"),
             host: TestApp.hostID, mode: mode, card: card.id)).value
         let pending = try #require(try await app.services.store.deliveryRequests().first)
-        try RawDB(app.databaseURL).exec("""
-            UPDATE deliveryRequests SET content = json_remove(content, '$.createdForTaskID') WHERE mode = 'start';
-            ALTER TABLE cards DROP COLUMN sessionBindingRevision;
-            ALTER TABLE deliveryRequests DROP COLUMN sessionBindingRevision;
-            DROP INDEX piSessionStates_createdForTaskID;
-            ALTER TABLE piSessionStates DROP COLUMN createdForTaskID;
-            PRAGMA user_version = 92;
-            """)
+        try seedSchema92(app)
         let services = app.relaunch(), store = services.store
         if mode != .start { try await app.host.connect("atlas", cwd: app.directory.path, hosted: true) }
         let changes = app.pi.changes()
@@ -54,36 +47,63 @@ extension DeliveryMigrationTests {
         await services.executor.beginStop()()
     }
 
-    @Test func 已送达关联从九十三版升级_旧正文快照不撤销关联() async throws {
+    @Test(arguments: [DeliveryMode.send, .start, .command])
+    func 九十二版已送达关联_升级后正文重放保留关联且不授予结束权限(mode: DeliveryMode) async throws {
         let app = TestApp()
         defer {
             for ext in app.host.extensions.values { ext.close(bye: "quit") }
             app.pi.stop(); app.services.cancelBackgroundWork()
         }
+        #expect(CueStore.schemaVersion(of: app.databaseURL) == 93 && CueStore.peerFloor == 93)
+        try await app.services.store.setDirectory(app.directory.path, for: Project.defaultID)
         let workspace = Workspace(services: app.services), original = app.services.store
-        let ext = try await app.host.connect("atlas", cwd: app.directory.path)
-        try await app.runtimeRecorder(on: TestApp.hostID).update(sessionID: "atlas", state: .settled)
         let card = try await workspace.createTask("准备发布", in: Project.defaultID)
-        await workspace.speak(card.body, to: .session(
-            SendTarget(kind: .piSession, name: "会话", ref: "atlas"), host: TestApp.hostID, mode: .send, card: card.id)).value
-        var stale = try #require(try await original.syncRow(recordName: card.id.uuidString.lowercased()))
+        if mode != .start { try await app.host.connect("atlas", cwd: app.directory.path, hosted: true) }
+        let content = switch mode {
+        case .start: PiLaunch(project: Project.defaultID, prompt: card.body, token: "legacy-settled").stored
+        case .command: "/shout 准备发布"
+        default: card.body
+        }
+        await workspace.speak(content, to: .session(
+            SendTarget(kind: .piSession, name: "会话", ref: mode == .start ? nil : "atlas"), host: TestApp.hostID, mode: mode, card: card.id)).value
         let request = try #require(try await original.deliveryRequests().first)
+        let changes = app.pi.changes()
+        let recording = Task { try await app.services.consumePiChanges(changes) }
         try await app.services.executor.start()
         #expect(try await original.outcome(of: request).status == .known(.succeeded))
-        #expect(try await original.card(card.id)?.piSessionID == "atlas")
+        let sessionID = mode == .start ? "new-legacy-settled" : "atlas"
+        #expect(try await original.card(card.id)?.piSessionID == sessionID)
         await app.services.executor.beginStop()()
-        try RawDB(app.databaseURL).exec("""
-            UPDATE cards SET sessionBindingRevision = json_remove(sessionBindingRevision, '$.fulfilled');
-            UPDATE deliveryRequests SET sessionBindingRevision = json_remove(sessionBindingRevision, '$.fulfilled');
-            PRAGMA user_version = 93;
-            """)
-        let store = app.relaunch().store
-        stale.fields["body"] = .text("准备发布\n手机补充")
-        stale.fields["modifiedAt"] = .int(stale.modifiedAt + 10_000)
-        #expect(try await store.applyRemote([.save(stale, systemFields: Data())]).isEmpty)
+        recording.cancel()
+        do { try await recording.value } catch is CancellationError {}
+        try seedSchema92(app)
+        let services = app.relaunch(), store = services.store
+        #expect(CueStore.schemaVersion(of: app.databaseURL) == 93)
+        var edited = try #require(try await store.syncRow(recordName: card.id.uuidString.lowercased()))
+        let pending = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
+        // 同一旧请求对应的未兑现正文副本；迁移必须保留另一端已经兑现的关联。
+        edited.fields["piSessionID"] = .null
+        edited.fields["sessionBindingRevision"] = pending.fields["sessionBindingRevision"]
+        edited.fields["body"] = .text("准备发布\n手机补充")
+        edited.fields["modifiedAt"] = .int(edited.modifiedAt + 1_000)
+        #expect(try await store.applyRemote([.save(edited, systemFields: Data())]).isEmpty)
         #expect(try await store.card(card.id)?.body == "准备发布\n手机补充")
-        #expect(try await store.card(card.id)?.piSessionID == "atlas")
-        #expect(ext.messages.map(\.text) == ["准备发布"])
+        #expect(try await store.card(card.id)?.piSessionID == sessionID)
+        try await Workspace(services: services).complete(card.id)
+        #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
+        #expect(try await store.piSessions(sessionIDs: [sessionID])[sessionID]?.state.createdForTaskID == nil)
     }
+
+    private func seedSchema92(_ app: TestApp) throws {
+        try RawDB(app.databaseURL).exec("""
+            UPDATE deliveryRequests SET content = json_remove(content, '$.createdForTaskID') WHERE mode = 'start';
+            ALTER TABLE cards DROP COLUMN sessionBindingRevision;
+            ALTER TABLE deliveryRequests DROP COLUMN sessionBindingRevision;
+            DROP INDEX piSessionStates_createdForTaskID;
+            ALTER TABLE piSessionStates DROP COLUMN createdForTaskID;
+            PRAGMA user_version = 92;
+            """)
+    }
+
 }
 #endif

@@ -6,18 +6,11 @@ extension CueStore {
   package func applyRemote(_ changes: [RemoteChange]) throws -> [RemoteFailure] {
     var failures: [RemoteFailure] = []
     var removedKeys: [String] = []
-    var createdOwners = Set<UUID>()
     try write {
       for change in changes {
         try db.exec("SAVEPOINT remote")
         do {
-          let owner: UUID?
-          if case .save(let row, _, _) = change, row.table == .piSessionStates,
-            try readSyncRow(.piSessionStates, row.id)?.text("createdForTaskID") == nil {
-            owner = row.text("createdForTaskID").flatMap(UUID.init(uuidString:))
-          } else { owner = nil }
           if let key = try apply(change) { removedKeys.append(key) }
-          if let owner { createdOwners.insert(owner) }
           try db.exec("RELEASE remote")
         } catch {
           try db.exec("ROLLBACK TO remote")
@@ -29,7 +22,6 @@ extension CueStore {
       let cards = Set(changes.compactMap(\.cardID))
       if !cards.isEmpty { try repairCardTree(touching: cards) }
       if changes.contains(where: \.touchesLaunches) { try claimLaunchedCards() }
-      for owner in createdOwners { try endUnusedSessions(of: owner, cue: false) }
     }
     return failures + (try removeFiles(of: removedKeys))
   }

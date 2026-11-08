@@ -110,9 +110,9 @@ Cue 最多等 `Speech.cueWait`。未交出才安全重发；未知重做须确�
 
 ## 自己的回声不是冲突
 
-回声不留冲突副本（`CueStore.applyVersion`）。`SessionBindingRevision` 给关联排序，旧 ACK 不覆盖明确改绑或解绑；同一意图的 `fulfilled` 只向已兑现前进，不随正文版本倒退。正文仍按记录版本合并。结构 94 迁移兑现事实并抬最低对端版本，阻止旧端覆盖。
+回声不留冲突副本。`SessionBindingRevision` 保证旧 ACK 不覆盖明确改绑/解绑，同一意图的 `fulfilled` 单向兑现；正文仍按记录版本合并。92→93 直接迁移最终格式，最低对端为 93。
 
-`PiSessionState.createdForTaskID` 从启动请求转存，不随历史清理；纯关联不授权结束。来源晚到复核任务与共享。自动结束在领取事务内复核并转入 `executing`：此前新借用可阻止结束，此后借用与发送明确失败，结束结果未知也不放行。沿用投送状态；明确 `end` 不受自动收尾限制。
+`PiSessionState.createdForTaskID` 不随历史清理；纯关联不授权结束。本地/远端收尾与来源落库统一复核（`CueStore+TaskSessionEvents`）。`executing` 是本地受理点：先确认借用可阻止结束，之后拒绝本地关联/发送。跨设备后到关联仍可指向历史会话，不撤回已受理结束，无全局原子拒绝。未知结束由同 host 的结束证据或后续成功 end 收敛，不绕过未知请求。
 
 ## Agent 与 Cue 的通知
 

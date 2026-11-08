@@ -11,10 +11,14 @@ extension Schema {
     ALTER TABLE piSessionStates ADD COLUMN createdForTaskID TEXT;
     \(taskOriginIndex)
     UPDATE deliveryRequests
-    SET sessionBindingRevision = json_object('explicit', json('false'), 'generation', 0, 'id', upper(id)), modifiedAt = modifiedAt + 1
+    SET sessionBindingRevision = json_object('explicit', json('false'), 'fulfilled', json('false'), 'generation', 0, 'id', upper(id)), modifiedAt = modifiedAt + 1
     WHERE cardID IS NOT NULL AND mode IN ('start', 'send', 'command');
     UPDATE cards SET sessionBindingRevision = (
-      SELECT r.sessionBindingRevision FROM deliveryRequests r WHERE r.cardID = cards.id ORDER BY r.createdAt DESC, r.id DESC LIMIT 1),
+      SELECT json_set(r.sessionBindingRevision, '$.fulfilled', json(CASE
+        WHEN cards.piSessionID IS NOT NULL AND (r.targetRef IS cards.piSessionID OR (r.mode = 'start' AND EXISTS (
+          SELECT 1 FROM piSessionStates s WHERE s.sessionID = cards.piSessionID AND s.launchToken = \(CueStore.launchToken("r")))))
+        THEN 'true' ELSE 'false' END)) FROM deliveryRequests r
+      WHERE r.cardID = cards.id AND r.sessionBindingRevision IS NOT NULL ORDER BY r.createdAt DESC, r.id DESC LIMIT 1),
       modifiedAt = modifiedAt + 1
     WHERE EXISTS (SELECT 1 FROM deliveryRequests r WHERE r.cardID = cards.id AND r.sessionBindingRevision IS NOT NULL);
     UPDATE cards SET startedAt = (
@@ -23,18 +27,5 @@ extension Schema {
     WHERE todoAt IS NOT NULL AND startedAt IS NULL AND EXISTS (
       SELECT 1 FROM cards s WHERE s.parentID = cards.id AND s.todoAt IS NOT NULL AND s.deletedAt IS NULL
         AND (s.startedAt IS NOT NULL OR s.completedAt IS NOT NULL));
-    """
-
-  /// 94：只给关联意图增加兑现进展；旧端会忽略它并覆盖 ACK，因此同时抬最低对端版本。
-  static let taskSessionFulfillmentUpgrade: Upgrade = """
-    UPDATE cards SET sessionBindingRevision = json_set(sessionBindingRevision, '$.fulfilled', json(CASE
-      WHEN json_extract(sessionBindingRevision, '$.explicit') = 1 OR (piSessionID IS NOT NULL AND NOT EXISTS (
-        SELECT 1 FROM deliveryRequests r WHERE json_extract(r.sessionBindingRevision, '$.id') = json_extract(cards.sessionBindingRevision, '$.id')
-          AND NOT (r.targetRef IS cards.piSessionID OR (r.mode = 'start' AND EXISTS (
-            SELECT 1 FROM piSessionStates s WHERE s.sessionID = cards.piSessionID AND s.launchToken = \(CueStore.launchToken("r")))))))
-      THEN 'true' ELSE 'false' END)), modifiedAt = modifiedAt + 1
-    WHERE sessionBindingRevision IS NOT NULL;
-    UPDATE deliveryRequests SET sessionBindingRevision = json_set(sessionBindingRevision, '$.fulfilled', json('false')), modifiedAt = modifiedAt + 1
-    WHERE sessionBindingRevision IS NOT NULL;
     """
 }

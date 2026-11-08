@@ -150,12 +150,9 @@ extension CueStore {
   func confirmDeliveries(among ids: Set<UUID>, session: String) throws {
     guard !ids.isEmpty else { return }
     // 消息上服务器之后才收走请求（markPushed）；这之前原气泡由该消息接替。
-    try db.run(
-      """
-      UPDATE deliveryRequests SET status = '\(DeliveryStatus.succeeded.rawValue)', failure = NULL, completedAt = ?2, modifiedAt = MAX(modifiedAt + 1, ?2)
-      WHERE mode IN ('send', 'start') AND status != '\(DeliveryStatus.succeeded.rawValue)' AND id IN (SELECT value FROM json_each(?1))
-        AND (targetRef = ?3 OR mode = 'start')
-      """, [Self.idList(ids), Date.stamp, session])
+    try confirmDeliveryResults(
+      "mode IN ('send', 'start') AND id IN (SELECT value FROM json_each(?2)) AND (targetRef = ?3 OR mode = 'start')",
+      [Self.idList(ids), session])
   }
 
   /// 删掉不再需要同步的对话：会话 `window` 内没有活动（按本机会话索引里会话文件的最后活动；索引里没有的按最后一条消息）、

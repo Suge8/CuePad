@@ -15,16 +15,6 @@ public struct SessionBindingRevision: Equatable, Sendable, StoredJSON, Comparabl
     fulfilled = explicit
   }
 
-  private enum CodingKeys: String, CodingKey { case generation, explicit, id, fulfilled }
-
-  public init(from decoder: any Decoder) throws {
-    let values = try decoder.container(keyedBy: CodingKeys.self)
-    generation = try values.decode(Int.self, forKey: .generation)
-    explicit = try values.decode(Bool.self, forKey: .explicit)
-    id = try values.decode(UUID.self, forKey: .id)
-    fulfilled = try values.decodeIfPresent(Bool.self, forKey: .fulfilled) ?? false
-  }
-
   public static func < (lhs: Self, rhs: Self) -> Bool {
     if lhs.generation != rhs.generation { return lhs.generation < rhs.generation }
     if lhs.explicit != rhs.explicit { return !lhs.explicit }

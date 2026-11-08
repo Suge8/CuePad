@@ -47,6 +47,8 @@ public enum CueStoreError: Error, Equatable {
   case readOnlyLibrary
   /// 手机上要开新会话，而一台 Mac 都还没打开过 CuePad（没写过 `macAgents`、也没有目录绑定）。
   case noMac
+  /// 会话正在结束，结果尚未明确时不能再关联或发送。
+  case sessionEnding
   // 以下除 memoryLineTooLong、questionEnded、notAChoice 外只有 Cue 经 MCP 会碰到：文案直接写给 Cue，说清该怎么办（Cue 的工具原样转给它），不进界面文字的目录；
   // 上面预览那几条同理，只有 Agent 经命令行会碰到。
   /// 叶子还没有会话（参数是叶子标题）。
@@ -68,7 +70,6 @@ public enum CueStoreError: Error, Equatable {
   /// 会话此刻停不了这一轮（参数是会话名）。
   case cannotStop(String)
   /// 会话还在用：没做完的事绑着它，或有话正送进去（参数是会话名）。
-  case sessionEnding
   case sessionInUse(String)
   /// 会话在跑，Cue 这会儿说不了（参数是会话名与原因）：会打断他发起的那一轮，或停不下这一轮（`PiSessionState.speakBlocked`）。
   case cannotSpeakNow(String, String)
@@ -159,7 +160,7 @@ extension CueStoreError: LocalizedError {
       "会话「\(title)」此刻在做什么还没确认（它所在的 Mac 这次开机后还没报过它，或报的状态这个版本不认识）：这次没有发出。等它报了再说；要看它最后在做什么用 task peek"
     case .turnSourceUnconfirmed(let title): "会话「\(title)」正在跑的这一轮查不到是谁开的：现在说会打断它，没说出去。等它歇下（会叫醒你）再说"
     case .terminalOnly(let title): "会话「\(title)」开在终端里，CuePad 只看得到它在做什么、对它说不了话：要它做的 tell 他在终端里说；它退出后再 say 会在后台接着它"
-    case .sessionEnding: String(localized: "会话的自动结束已受理，暂时不能关联或发送；请等结束结果明确后重试")
+    case .sessionEnding: String(localized: "会话正在结束，确认结束结果后才能关联或发送")
     case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束：那件事做完时 done 那件事"
     case .cannotEnd(let title): "会话「\(title)」不能从 CuePad 结束（终端里开的这类）：要收掉就 tell 他在终端里退出"
     case .notStopped(let title): "会话「\(title)」没停着（在跑、被打断或已结束）：留给他回只用在它歇着、在等回答或出错时"
