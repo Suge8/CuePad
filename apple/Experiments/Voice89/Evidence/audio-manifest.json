@@ -1,0 +1,30 @@
+{
+  "localArchive": "apple/.derived/voice89-evidence",
+  "files": [
+    {
+      "file": "voice89-input.aiff",
+      "bytes": 158488,
+      "sha256": "da61bd16597b51bf1277349d9a0141215ce834d25c080fd912ed1c2555bfc0b6"
+    },
+    {
+      "file": "voice89-media-audio.log.0.wav",
+      "bytes": 813100,
+      "sha256": "ff3ba47bfa56f1a64e3a969cd251914bb7c02a210963e7ecfc93d60a2bc76917"
+    },
+    {
+      "file": "voice89-media-audio.log.1.wav",
+      "bytes": 804908,
+      "sha256": "c074b99c5cc6f8eaa7bd9e7b7987db257a7c91a156af752e431a05f0b02ebfdb"
+    },
+    {
+      "file": "voice89-media-audio.log.0.pcm",
+      "bytes": 813056,
+      "sha256": "a76017becc667cac99eaaa2902f7aff60adcef52f72ce5d6fa5d5a4f52d0f0c3"
+    },
+    {
+      "file": "voice89-media-audio.log.1.pcm",
+      "bytes": 804864,
+      "sha256": "4fcf3cf2e44915c4c50839f7d0f9236d25f77facaf38534a93585b003990c54d"
+    }
+  ]
+}

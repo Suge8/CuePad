@@ -80,7 +80,6 @@ extension DebugScene {
             still = pending == 0 && unsettled.isEmpty && !animating ? still + 1 : 0
         }
         FileManager.default.createFile(atPath: path, contents: shotSize.map { Data($0.utf8) })
-        DebugSplitVoice.startIfAsked()
         freezeIfAsked()
     }
 

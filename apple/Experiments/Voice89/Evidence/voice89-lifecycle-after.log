@@ -1,0 +1,5 @@
+PASS saved old ontrack cannot attach to new context; late old track stopped
+PASS normal explicit shutdown stops input/output tracks, peer and audio context
+PASS pending capture rejects on close before permission completes; late capture stopped
+PASS pending WebAudio operation rejects immediately on session close
+PASS exception cleanup explicitly closes acquired resources

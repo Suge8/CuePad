@@ -1,0 +1,31 @@
+1794112613.4555469 media-pid=99800 audioCategory=AVAudioSessionCategoryPlayAndRecord permission=1735552628
+1794112613.45575 route-input=["MicrophoneBuiltIn"] output=["Speaker"]
+1794112613.469761 microphone-permission granted=true
+1794112614.1211162 page-ready firstFrame=true
+1794112614.248877 webkit-permission microphone=true
+1794112614.431215 offer-created bytes=1939 microphone=true
+1794112614.432275 media-event kind=input detail={"state":"live","enabled":true,"muted":false,"sampleRate":44100,"echoCancellation":true}
+1794112615.3459811 answer-accepted bytes=1675
+1794112615.346273 media-event kind=state detail=connecting
+1794112615.348788 media-event kind=output-play detail=muted-recording
+1794112615.9153318 media-connected session=7EEE23F8-5FA4-4BCE-998A-E75E1EDBED26
+1794112616.313867 media-event kind=data-open detail=
+1794112617.002274 control-response session=7EEE23F8-5FA4-4BCE-998A-E75E1EDBED26
+1794112632.095839 media-stats {"connection":"connected","context":"running","track":"live","playback":"resolved","outputPeak":0.3231286108493805,"inbound":[{"packets":748,"bytes":19067,"energy":0.0794756214924663,"samples":743520}],"outbound":[{"packets":831,"bytes":62536}]}
+1794112632.1111841 recorded pcmBytes=802816 format=s16le rate=24000 channels=1
+1794112632.118721 media-closed {"connection":"closed","track":"ended","context":"closed"}
+1794112632.119508 hangup-ack cycle=1
+1794112632.2304668 offer-created bytes=2341 microphone=true
+1794112632.231038 media-event kind=input detail={"state":"live","enabled":true,"muted":false,"sampleRate":44100,"echoCancellation":true}
+1794112633.027425 stale-frame-dropped kind=context
+1794112633.031796 answer-accepted bytes=1675
+1794112633.03192 media-event kind=state detail=connecting
+1794112633.034064 media-event kind=output-play detail=muted-recording
+1794112633.427589 media-connected session=9D96706E-2136-4779-A64B-A6C9AC55962B
+1794112633.770235 media-event kind=data-open detail=
+1794112634.5112739 control-response session=9D96706E-2136-4779-A64B-A6C9AC55962B
+1794112649.594625 media-stats {"connection":"connected","context":"running","track":"live","playback":"resolved","outputPeak":0,"inbound":[{"packets":770,"bytes":2310,"energy":0,"samples":744480}],"outbound":[{"packets":931,"bytes":64472}]}
+1794112649.607398 recorded pcmBytes=794624 format=s16le rate=24000 channels=1
+1794112649.611481 media-closed {"connection":"closed","track":"ended","context":"closed"}
+1794112649.612238 hangup-ack cycle=2
+1794112649.621871 complete

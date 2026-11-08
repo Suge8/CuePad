@@ -16,11 +16,14 @@ enum DebugSplitVoice {
         Task {
             do {
                 #if os(macOS)
-                guard role == "mac" else { throw ProbeError.invalid }
-                try await DebugSplitHost.run()
+                if role == "audit" { try await DebugSplitAudit.run() }
+                else {
+                    guard role == "mac" else { throw ProbeError.invalid }
+                    try await DebugSplitHost.run()
+                }
                 #else
                 guard role == "ios" else { throw ProbeError.invalid }
-                try await DebugSplitMedia.run()
+                try await DebugSplitMediaRun.run()
                 #endif
                 note("complete")
             } catch {
@@ -55,6 +58,7 @@ enum DebugSplitVoice {
         let connection: NWConnection
         let frames = AsyncThrowingStream<Frame, Error>.makeStream()
         private var buffer = Data()
+        private let scope = DebugSplitScope()
         init(_ connection: NWConnection) { self.connection = connection }
 
         func start() {
@@ -75,14 +79,16 @@ enum DebugSplitVoice {
         func send(_ frame: Frame) async throws {
             var data = try JSONEncoder().encode(frame)
             data.append(10)
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let _: Void = try await scope.wait { finish in
                 connection.send(content: data, completion: .contentProcessed { error in
-                    if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+                    Task { @MainActor in
+                        if let error { finish(.failure(error)) } else { finish(.success(())) }
+                    }
                 })
             }
         }
 
-        func close() { connection.cancel(); frames.continuation.finish() }
+        func close() { scope.end(); connection.cancel(); frames.continuation.finish() }
 
         private func receive() {
             connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, ended, error in

@@ -1,0 +1,25 @@
+1794112607.734478 auth-read-only valid=true pid=99458
+1794112607.735507 listener-ready loopback-only=true
+1794112614.432565 offer bytes=1939 session=7EEE23F8-5FA4-4BCE-998A-E75E1EDBED26
+1794112615.338208 created answerBytes=1675
+1794112615.338526 outbound kind=answer credentialMatch=false bytes=1869
+1794112616.6651978 sideband-started session=7EEE23F8-5FA4-4BCE-998A-E75E1EDBED26
+1794112616.665584 control-sent
+1794112617.001708 context-accepted session=7EEE23F8-5FA4-4BCE-998A-E75E1EDBED26
+1794112617.0018559 outbound kind=context credentialMatch=false bytes=67
+1794112620.858519 turn-done assistant=true
+1794112630.4337249 audioMs=14200
+1794112632.119141 control-closed session=7EEE23F8-5FA4-4BCE-998A-E75E1EDBED26
+1794112632.1192288 outbound kind=closed credentialMatch=false bytes=66
+1794112632.2334719 offer bytes=2341 session=9D96706E-2136-4779-A64B-A6C9AC55962B
+1794112633.02685 created answerBytes=1675
+1794112633.026989 outbound kind=context credentialMatch=false bytes=96
+1794112633.027312 outbound kind=answer credentialMatch=false bytes=1869
+1794112634.173862 sideband-started session=9D96706E-2136-4779-A64B-A6C9AC55962B
+1794112634.174131 control-sent
+1794112634.510548 context-accepted session=9D96706E-2136-4779-A64B-A6C9AC55962B
+1794112634.510703 outbound kind=context credentialMatch=false bytes=67
+1794112648.097869 audioMs=14400
+1794112649.6118798 control-closed session=9D96706E-2136-4779-A64B-A6C9AC55962B
+1794112649.61198 outbound kind=closed credentialMatch=false bytes=66
+1794112649.6125898 complete

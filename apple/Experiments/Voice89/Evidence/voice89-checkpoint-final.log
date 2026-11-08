@@ -1,0 +1,6 @@
+排队：这个检出的上一个任务还在跑
+  pid 34248  /Users/sugeh/Project/CuePad-wt/inspiration-project-final  持有 检出 /Users/sugeh/Project/CuePad-wt/inspiration-project-final（13:21:26 拿到，已持有 13 秒）
+    命令：apple/scripts/xc.sh rec mac apple/.derived/final/mac-list-open-first-input.mov -- -CuePadScene project -CuePadProject '默认' -theme light -CuePadClick …（完整命令：/tmp/cuepad-xc-501/holders/34248.json）
+  pid 34442  /Users/sugeh/Project/CuePad-wt/voice-mobile  持有 检出 /Users/sugeh/Project/CuePad-wt/voice-mobile（13:21:39 拿到，已持有 0 秒）
+    命令：apple/scripts/xc.sh test mac -only-testing:CuePadTests/VoiceFlowTests -only-testing:CuePadTests/VoiceStopRaceTests
+用时 1 分 09 秒：排队 25 秒、编译 59 秒、其余 0 秒 · 1 分钟负载 9

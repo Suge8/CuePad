@@ -1,0 +1,4 @@
+1794112735.802833 media-pid=4831 audioCategory=AVAudioSessionCategoryPlayAndRecord permission=1970168948
+1794112735.803031 route-input=["MicrophoneBuiltIn"] output=["Speaker"]
+1794112735.828011 signal-read-failed
+1794112735.837645 failed domain=CuePad.DebugSplitVoice.ProbeError code=1

@@ -1,0 +1,36 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project /Users/sugeh/Project/CuePad-wt/voice-mobile/apple/CuePad.xcodeproj -scheme CuePad -configuration Debug -destination platform=macOS,arch=arm64 -derivedDataPath /Users/sugeh/Project/CuePad-wt/voice-mobile/apple/.derived test-without-building -test-timeouts-enabled YES -maximum-test-execution-time-allowance 120 -testLanguage zh-Hans -testRegion CN "-only-testing:CuePadTests/VoiceFlowTests" "-only-testing:CuePadTests/VoiceStopRaceTests" SDK_EXPLICIT_MODULES_OUTPUT_PATH=/Users/sugeh/Library/Caches/cuepad-xc/SDKExplicitPrecompiledModules MODULE_CACHE_DIR=/Users/sugeh/Library/Caches/cuepad-xc/ModuleCache.noindex SDK_STAT_CACHE_DIR=/Users/sugeh/Library/Caches/cuepad-xc DIAGNOSE_MISSING_TARGET_DEPENDENCIES=NO INFOPLIST_KEY_LSUIElement=YES
+
+Build settings from command line:
+    DIAGNOSE_MISSING_TARGET_DEPENDENCIES = NO
+    INFOPLIST_KEY_LSUIElement = YES
+    MODULE_CACHE_DIR = /Users/sugeh/Library/Caches/cuepad-xc/ModuleCache.noindex
+    SDK_EXPLICIT_MODULES_OUTPUT_PATH = /Users/sugeh/Library/Caches/cuepad-xc/SDKExplicitPrecompiledModules
+    SDK_STAT_CACHE_DIR = /Users/sugeh/Library/Caches/cuepad-xc
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  CuePadKit: /Users/sugeh/Project/CuePad-wt/voice-mobile/apple/CuePadKit
+  SparkleBinary: /Users/sugeh/Project/CuePad-wt/voice-mobile/apple/Vendor/Sparkle @ local
+
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+]
+]
+✔ Test run with 10 tests in 2 suites passed after 2.652 seconds.
+2026-11-08 13:22:04.464 xcodebuild[34673:3095761] [MT] IDETestOperationsObserverDebug: 3.894 elapsed -- Testing started completed.
+2026-11-08 13:22:04.464 xcodebuild[34673:3095761] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-08 13:22:04.464 xcodebuild[34673:3095761] [MT] IDETestOperationsObserverDebug: 3.894 sec, +3.894 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/sugeh/Project/CuePad-wt/voice-mobile/apple/.derived/Logs/Test/Test-CuePad-2026.11.08_13-22-00-+0800.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started
+完整输出（含 App 日志）：/Users/sugeh/Project/CuePad-wt/voice-mobile/apple/.derived/test.log
+用时 25 秒：排队 0 秒、编译 20 秒、其余 5 秒 · 1 分钟负载 9
