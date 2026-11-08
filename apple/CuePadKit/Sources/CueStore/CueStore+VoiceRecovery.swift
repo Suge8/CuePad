@@ -14,14 +14,14 @@ extension CueStore {
   }
 
   /// 尚未落库的原语音请求只保存在 Mac 通话 owner；客户端不能提供正文，只能再次指名原对象。
-  public func recordVoiceRequest(_ text: String, command: UUID, host: String) throws -> CueMessage {
+  public func recordVoiceRequest(_ text: String, command: UUID, host: String?) throws -> CueMessage {
     try write {
-      guard try cueProfile()?.activeHost == host else { throw CueStoreError.deliveryAlreadyHanded }
+      guard let activeHost = try cueProfile()?.activeHost, host == nil || activeHost == host else { throw CueStoreError.deliveryAlreadyHanded }
       if let existing = try find(CueMessage.self, command) {
         guard existing.author == .known(.you), existing.text == text else { throw CueStoreError.deliveryAlreadyHanded }
         return existing
       }
-      return try addCueMessage(.you, text: text, id: command)
+      return try putCueMessage(.you, text: text, id: command)
     }
   }
 }

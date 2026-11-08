@@ -9,17 +9,25 @@ extension CueStore {
   public func addCueMessage(
     _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false, task: UUID? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
   ) throws -> CueMessage {
-    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
-    return try write {
-      try checkShots(shots)
-      guard let ask else {
-        let message = try insertCueMessage(author, text: text, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
-        if author == .you { _ = try endQuestions(setAsideBy: message.id, where: "1", []) }
-        return message
-      }
-      let project = try projectID(of: task).flatMap { try find(Project.self, $0) }
-      return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
+    try write {
+      try putCueMessage(author, text: text, ask: ask, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
     }
+  }
+
+  /// 调用者持有写事务，正文、附件校验及收起旧提问与记录写入不可分开。
+  func putCueMessage(
+    _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false,
+    task: UUID? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
+  ) throws -> CueMessage {
+    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
+    try checkShots(shots)
+    guard let ask else {
+      let message = try insertCueMessage(author, text: text, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
+      if author == .you { _ = try endQuestions(setAsideBy: message.id, where: "1", []) }
+      return message
+    }
+    let project = try projectID(of: task).flatMap { try find(Project.self, $0) }
+    return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
   }
 
   /// CuePad 代 Cue 写下的话（起不来、换不成模型……，`CueMessage.shownText`）。
