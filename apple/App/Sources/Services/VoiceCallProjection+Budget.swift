@@ -64,7 +64,8 @@ extension VoiceCallProjection {
         let ordered = Array(rows.reversed())
         var start = ordered.startIndex
         if let cursor = query.cursor {
-            guard cursor.session == session, cursor.list == query.list else { throw VoicePageError.refreshRequired }
+            guard cursor.session == session else { throw VoicePageError.sessionUnavailable }
+            guard cursor.list == query.list else { throw VoicePageError.refreshRequired }
             if let after = cursor.after {
                 guard let index = ordered.firstIndex(where: { anchor($0) == after }) else { throw VoicePageError.refreshRequired }
                 start = index + 1

@@ -81,7 +81,7 @@ import Observation
                 if ticket == id {
                     loading = false
                     self.error = error as? VoicePageError ?? .unavailable
-                    if self.error == .refreshRequired { page = .init(items: [], nextCursor: nil) }
+                    if self.error == .refreshRequired || self.error == .sessionUnavailable { page = .init(items: [], nextCursor: nil) }
                 }
                 throw error
             }

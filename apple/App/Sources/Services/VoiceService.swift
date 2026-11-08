@@ -34,6 +34,8 @@ import os
     let requestPages = VoicePageView<VoiceCallProjection.Request>()
     let replyPages = VoicePageView<VoiceCallProjection.Reply>()
     let executionPages = VoicePageView<VoiceExecutionTarget>()
+    /// 本机媒体终态不改写 Mac 的业务投影，也不能触发旧首页重新入页。
+    var phoneEnd: VoiceCallProjection.Phase?
     var muted = false
     var muting = false
     var closing: Bool { phone?.cleanup != nil }
@@ -69,7 +71,7 @@ import os
         #if os(iOS)
         requestPages.disconnected(clear: false)
         replyPages.disconnected(clear: false)
-        executionPages.disconnected(clear: true)
+        revokeProjection()
         #endif
     }
 
@@ -77,6 +79,7 @@ import os
         if let issue { return .failed(issue) }
         #if os(iOS)
         if closing { return .closing }
+        if let phoneEnd { return phoneEnd }
         #endif
         return projection?.phase ?? (session == nil ? nil : .connecting)
     }
@@ -125,6 +128,13 @@ import os
         #endif
     }
 
+    var response: VoiceCallProjection.Response {
+        #if os(iOS)
+        if phoneEnd != nil { return .none }
+        #endif
+        return projection?.response ?? .none
+    }
+
     var canRepeat: Bool {
         #if os(macOS)
         call?.canRepeat == true && call.map { VoiceSessionID($0.session) } == session
@@ -168,7 +178,7 @@ import os
             #if os(macOS)
             projectionReaders = projectionReaders.filter { $0.value.recipient != endpoint }
             #else
-            if phoneBinding?.local == endpoint { executionPages.disconnected(clear: true) }
+            revokeProjection(local: endpoint)
             #endif
             await connectionClosed(local: endpoint, peer: nil, reason: reason)
         case .peerClosed(let endpoint, let departure):
@@ -177,7 +187,7 @@ import os
             #if os(macOS)
             projectionReaders = projectionReaders.filter { $0.value.sender != endpoint }
             #else
-            if phoneBinding?.peer == endpoint { executionPages.disconnected(clear: true) }
+            revokeProjection(peer: endpoint)
             #endif
             await connectionClosed(local: nil, peer: endpoint, reason: departure == .replaced ? .leaseReplaced : .peerLeft)
         case .rejected(let header, let reason):
@@ -199,7 +209,7 @@ import os
         case .availability(let value):
             availability = value
             #if os(iOS)
-            if case .ready = value {} else { executionPages.disconnected(clear: true) }
+            if case .ready = value {} else { failPageReads(); revokeProjection() }
             #endif
         }
     }

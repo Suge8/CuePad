@@ -33,6 +33,7 @@ extension VoiceService {
         let owner = VoicePhoneSession(id: VoiceSessionID(UUID()), local: local, media: makeMedia())
         phone = owner
         phoneBinding = nil
+        phoneEnd = nil
         session = owner.id
         issue = nil
         setProjection(nil)
@@ -109,7 +110,7 @@ extension VoiceService {
         phone = nil
         muting = false
         let phase: VoiceCallProjection.Phase = failure.map { .failed($0) } ?? .ended(reason: reason)
-        setProjection(projection?.afterMediaEnded(phase) ?? .init(session: owner.id, phase: phase, requests: [], replies: [], executions: []))
+        phoneEnd = phase
         issue = failure
     }
 
@@ -119,11 +120,13 @@ extension VoiceService {
     }
 
     func receiveSignal(_ received: VoiceReceivedSignal) async {
-        if phone == nil, let binding = phoneBinding, binding.session == session,
-           binding.session == received.header.session, binding.local == received.header.recipient, binding.peer == received.header.sender,
-           case .projection(let value) = received.payload, value.session == binding.session {
+        if case .projection = received.payload {
+            guard let binding = phoneBinding, binding.session == session, binding.session == received.header.session,
+                  binding.local == received.header.recipient, binding.peer == received.header.sender else { return }
+        }
+        if phone == nil, case .projection(let value) = received.payload, value.session == session {
             if case .failed(let reason) = value.phase { issue = reason }
-            setProjection(value.afterMediaEnded(projection?.phase ?? value.phase))
+            setProjection(value)
             return
         }
         guard let owner = phone, owner.id == received.header.session, owner.local == received.header.recipient,

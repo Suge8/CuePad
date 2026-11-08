@@ -46,11 +46,6 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     var pages = VoicePageHeads()
     var canRepeat = false
 
-    func afterMediaEnded(_ phase: Phase) -> Self {
-        Self(session: session, phase: phase, requests: requests, replies: replies, executions: executions,
-             omitted: omitted, pages: pages, canRepeat: false)
-    }
-
     struct Omitted: Equatable, Codable, Sendable {
         var requests = 0
         var replies = 0
