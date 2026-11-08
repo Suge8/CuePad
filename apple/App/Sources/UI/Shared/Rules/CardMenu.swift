@@ -18,7 +18,7 @@ nonisolated enum CardMenu {
         case open
         /// 开始批量选择（Mac 项目页上散放的灵感）。
         case select
-        /// 给没做完的叶子任务绑定、改绑、解除 Agent 会话（Mac 的右键；会话列表在 Mac 上）。
+        /// 给没做完的叶子任务绑定、改绑、解除 Agent 会话（任务菜单）。
         case bindSession
         /// 任务在大纲里缩进、反缩进：缩进在右滑里，两样都在读屏动作里（`taskSpoken`；看得见的反缩进是拖放）。
         case indent, outdent
@@ -45,10 +45,10 @@ nonisolated enum CardMenu {
     }
 
     /// 长按菜单，组间画分隔线。`selectable`：这张卡在能批量选择的地方（Mac 项目页的墙与列表），删除前多一项"选择"。
-    /// `bindsSession`：这是 Mac 上的叶子任务（没有子任务），没做完时多一项"绑定会话"。
+    /// `bindsSession`：这是叶子任务（没有子任务），没做完时多一项"绑定会话"。
     /// `opens`：点它进的是会话（`Workspace.enter`），最前面单独一组"打开任务"；点一下就是打开任务的不重复这一项。
     /// `endsSession`：它此刻在用的会话还能结束，没做完时多一项"结束会话"。
-    /// 任务：完成（或重新打开）、置顶（顶层的）与归档一组，结束会话与绑定会话（Mac 的叶子）一组，删除最后；空组不留。
+    /// 任务：完成（或重新打开）、置顶（顶层的）与归档一组，结束会话与绑定会话（叶子）一组，删除最后；空组不留。
     static func sections(for card: Card, selectable: Bool = false, bindsSession: Bool = false, opens: Bool = false, endsSession: Bool = false) -> [[Item]] {
         let head: [[Item]] = opens ? [[.open]] : []
         return switch card.status {

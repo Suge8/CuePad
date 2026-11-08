@@ -13055,22 +13055,6 @@
         }
       }
     },
-    "开新会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New Session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开新会话"
-          }
-        }
-      }
-    },
     "开新会话交给它" : {
       "localizations" : {
         "en" : {
@@ -16815,6 +16799,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "本项目"
+          }
+        }
+      }
+    },
+    "本项目没有可绑定的任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Tasks to Link in This Project"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本项目没有可绑定的任务"
           }
         }
       }
