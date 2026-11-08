@@ -18,7 +18,8 @@ extension CueTools {
     let text = try args.required("text")
     let project = try await args.string("project").asyncMap(project)
     let projectID = project?.id ?? Project.defaultID
+    let projectName = try await store.project(projectID)?.name ?? ""
     let card = try await store.createCard(in: projectID, body: text)
-    return .ok("已保存灵感（\(card.id.shortID)），在项目「\(try await store.project(projectID)?.name ?? "")」里。")
+    return .ok("已保存灵感（\(card.id.shortID)），在项目「\(projectName)」里。")
   }
 }
