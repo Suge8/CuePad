@@ -17575,22 +17575,6 @@
         }
       }
     },
-    "正在处理" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Processing"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在处理"
-          }
-        }
-      }
-    },
     "正在处理：%@" : {
       "localizations" : {
         "en" : {
@@ -17683,22 +17667,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在执行 %@…"
-          }
-        }
-      }
-    },
-    "正在接通 Cue…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Calling Cue…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在接通 Cue…"
           }
         }
       }
@@ -20551,6 +20519,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等子代理"
+          }
+        }
+      }
+    },
+    "等待回应" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待回应"
           }
         }
       }
@@ -24835,22 +24819,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通知已关闭"
-          }
-        }
-      }
-    },
-    "通话中" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On a call with Cue"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话中"
           }
         }
       }

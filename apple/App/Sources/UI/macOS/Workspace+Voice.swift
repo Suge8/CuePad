@@ -19,24 +19,8 @@ extension Workspace {
         showCue()
         guard voice?.isLive != true else { return }
         guard cue.canHear else { return say("Cue 还没启用，启用后才能通话", tone: .failure) }
+        // 常驻通话栏呈现连接、回应和失败；浮动提示会遮住声纹与挂断入口。
         services.voice.startLocal(source: source, recording: recording, name: cue.name, makeCall: makeCall)
-        if let voice { announceCall(voice) }
-    }
-
-    private func announceCall(_ call: VoiceCall) {
-        let session = call.session
-        Task { [weak self] in
-            var announcedConnection = false
-            for await (phase, connected) in Observations({ (call.phase, call.channel != nil) }) {
-                guard call.session == session else { return }
-                if connected, !announcedConnection {
-                    announcedConnection = true
-                    self?.say("通话中")
-                }
-                self?.announce(phase)
-                if !call.isLive { break }
-            }
-        }
     }
 
     /// 真实会话的既有投影；选择范围后只停那个会话的当前回合，不把 Cue 的话当作执行确认。
@@ -69,15 +53,7 @@ extension Workspace {
         try await services.voice.command(.recover(request: reference)).requireAccepted()
     }
 
-    private func announce(_ phase: VoiceCall.Phase) {
-        switch phase {
-        case .connecting: say("正在接通 Cue…")
-        case .listening: break
-        case .handingOff, .speaking, .closing: break
-        case .ended: say("通话已结束")
-        case .failed(let failure): say(Dotted(failure.shown), tone: .failure)
-        }
-    }
+
 }
 
 extension VoiceCall.Failure {

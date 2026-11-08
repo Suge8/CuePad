@@ -13,9 +13,10 @@ enum DebugVoiceMotion {
     static func run(_ workspace: Workspace) async {
         await DebugScene.running("通话连续转场") {
             let began = ContinuousClock.now
-            func mark(_ label: String) {
+            @MainActor func mark(_ label: String) {
                 let elapsed = began.duration(to: .now)
-                FileHandle.standardError.write(Data("voice-motion \(elapsed) \(label)\n".utf8))
+                let state = "activity=\(String(describing: workspace.voicePresentation?.activity)) waiting=\(workspace.voice?.waitingForResponse == true) turns=\(workspace.voice?.assistantTurns.count ?? 0)"
+                FileHandle.standardError.write(Data("voice-motion \(elapsed) \(label) \(state)\n".utf8))
             }
             try await Task.sleep(for: .seconds(2))
             mark("connect")
@@ -34,7 +35,13 @@ enum DebugVoiceMotion {
             mark("speak")
             call.inputs.continuation.yield(.wire(.success(.turn(id: "motion-assistant", assistant: true, done: false, text: ""))))
             call.inputs.continuation.yield(.peer(.level(.output, loud: true, peak: 0.7)))
-            try await sound(call, side: .output, count: 35)
+            try await sound(call, side: .output, count: 15)
+            call.inputs.continuation.yield(.peer(.level(.output, loud: false, peak: 0)))
+            try await Task.sleep(for: .milliseconds(350))
+            mark("quiet-within-turn")
+            guard workspace.voicePresentation?.activity == .speaking else { throw CocoaError(.coderInvalidValue) }
+            call.inputs.continuation.yield(.peer(.level(.output, loud: true, peak: 0.7)))
+            try await sound(call, side: .output, count: 20)
             mark("interrupt")
             call.inputs.continuation.yield(.wire(.success(.turn(id: "motion-assistant", assistant: true, done: true, text: ""))))
             call.inputs.continuation.yield(.peer(.level(.output, loud: false, peak: 0)))

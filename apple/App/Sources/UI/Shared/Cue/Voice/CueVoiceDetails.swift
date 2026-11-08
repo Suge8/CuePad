@@ -23,6 +23,17 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Spacing.block) {
+                    ForEach(presentation.executions) { execution in
+                        VStack(alignment: .leading, spacing: Spacing.tight) {
+                            Text(verbatim: execution.title).font(Typography.bodyStrong)
+                            Text(verbatim: execution.status).font(Typography.body)
+                                .foregroundStyle(execution.needsAttention ? palette.failure : palette.ink2)
+                            if let stop = execution.stop {
+                                Button { action(.perform(stop)) } label: { Label("停止执行", icon: .stop) }
+                                    .buttonStyle(ControlButtonStyle(size: .compact))
+                            }
+                        }
+                    }
                     ForEach(presentation.issues) { issue in
                         VStack(alignment: .leading, spacing: Spacing.tight) {
                             Text(issue.summary).font(Typography.bodyStrong)
@@ -47,16 +58,9 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
                             }
                         }
                     }
-                    ForEach(presentation.executions) { execution in
-                        VStack(alignment: .leading, spacing: Spacing.tight) {
-                            Text(verbatim: execution.title).font(Typography.bodyStrong)
-                            Text(verbatim: execution.status).font(Typography.body)
-                                .foregroundStyle(execution.needsAttention ? palette.failure : palette.ink2)
-                            if let stop = execution.stop {
-                                Button { action(.perform(stop)) } label: { Label("停止执行", icon: .stop) }
-                                    .buttonStyle(ControlButtonStyle(size: .compact))
-                            }
-                        }
+                    if let loadMore = presentation.loadMore {
+                        Button { action(.perform(loadMore)) } label: { Text(loadMore.title) }
+                            .buttonStyle(ControlButtonStyle(size: .compact))
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

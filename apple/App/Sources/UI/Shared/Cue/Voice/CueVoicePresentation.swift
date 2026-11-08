@@ -13,7 +13,7 @@ enum CueVoiceActivity {
         case .idle: "和 Cue 通话"
         case .connecting: "正在连接…"
         case .listening: "我在听"
-        case .processing: "正在处理"
+        case .processing: "等待回应"
         case .speaking: "正在回应"
         case .failed: "通话未连接"
         case .closing: "正在结束…"
@@ -57,6 +57,8 @@ struct CueVoiceState<Operation: CueVoiceOperation> {
     let canStopExecution: Bool
     var executions: [Execution] = []
     var readings: [Reading] = []
+    /// 宿主持有各类分页与加载状态；共享按钮原样回传一次批读意图。
+    var loadMore: Operation? = nil
     /// nil 表示允许发起；宿主提供权限、账号或运行设备的实际阻塞原因，视图不推断可用性。
     var startUnavailableReason: LocalizedStringResource?
 

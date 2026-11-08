@@ -13,38 +13,48 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
     private var hasDetails: Bool {
         guard let presentation else { return false }
         return active || !presentation.issues.isEmpty || !presentation.readings.isEmpty
-            || !presentation.executions.isEmpty || presentation.canStopExecution
+            || !presentation.executions.isEmpty || presentation.canStopExecution || presentation.loadMore != nil
     }
     private var showsStatus: Bool { active || hasDetails || presentation?.activity == .failed }
 
     var body: some View {
+        content
+            .padding(.vertical, Spacing.tight)
+            .onChange(of: hasDetails) { _, available in
+                if !available { detailsSource = nil }
+            }
+    }
+
+    @ViewBuilder private var content: some View {
+        #if os(iOS)
+        // 手机宿主保留轨道占位，并在 Composer 放 CueVoiceEntry；布局只按平台决定。
+        // 声纹始终处在同一个按钮内，两行文字槽不随听、说、静音切换高度。
         HStack(spacing: Spacing.item) {
-            CueVoiceSignal(presentation: presentation)
-                .voiceSlot(showsStatus)
-            Text(presentation?.title ?? "和 Cue 通话")
-                .font(Typography.meta.weight(.medium))
-                .foregroundStyle(presentation?.activity == .failed ? palette.failure : palette.ink2)
-                .lineLimit(1)
+            CueVoiceDetailButton(source: $detailsSource) {
+                VStack(alignment: .leading, spacing: Spacing.tight) {
+                    CueVoiceSignal(presentation: presentation)
+                    status.lineLimit(2, reservesSpace: true)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, minHeight: ControlSize.target, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .disabled(!hasDetails)
+            .voiceSlot(showsStatus)
+            .accessibilityLabel(Text(presentation?.title ?? "和 Cue 通话"))
+            .accessibilityHint(Text("通话详情"))
+            muteButton
+            hangUpButton
+        }
+        .padding(.horizontal, Spacing.item)
+        #else
+        HStack(spacing: Spacing.item) {
+            CueVoiceSignal(presentation: presentation).voiceSlot(showsStatus)
+            status.lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .voiceSlot(showsStatus)
-            Button { action(.toggleMute) } label: {
-                // 两种字长共用同一槽位，切换不会推走挂断和详情。
-                ZStack {
-                    Text("取消静音").hidden()
-                    Text(presentation?.muted == true ? "取消静音" : "静音")
-                }
-                .transaction { $0.animation = nil }
-                .chip(on: presentation?.muted == true, size: .inline)
-            }
-            .buttonStyle(PressStyle())
-            .voiceSlot(presentation?.canMute == true && !closing)
-            Button { action(.hangUp) } label: {
-                Image(.endSession).foregroundStyle(palette.ink2)
-            }
-            .buttonStyle(ControlButtonStyle(kind: .round, size: .compact))
-            .voiceSlot(active && !closing)
-            .accessibilityLabel("挂断")
-            .help(Text("挂断"))
+            muteButton
+            hangUpButton
             CueVoiceDetailButton(source: $detailsSource) {
                 Image(presentation?.needsAttention == true ? .failure : .more)
                     .foregroundStyle(presentation?.needsAttention == true ? palette.failure : palette.ink2)
@@ -56,10 +66,38 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
             .help(Text("通话详情"))
         }
         .padding(.horizontal, Spacing.page)
-        .padding(.vertical, Spacing.tight)
-        .onChange(of: hasDetails) { _, available in
-            if !available { detailsSource = nil }
+        #endif
+    }
+
+    private var status: some View {
+        Text(presentation?.title ?? "和 Cue 通话")
+            .font(Typography.meta.weight(.medium))
+            .foregroundStyle(presentation?.activity == .failed ? palette.failure : palette.ink2)
+    }
+
+    private var muteButton: some View {
+        Button { action(.toggleMute) } label: {
+            ZStack {
+                Text("取消静音").hidden()
+                Text(presentation?.muted == true ? "取消静音" : "静音")
+            }
+            .transaction { $0.animation = nil }
+            .chip(on: presentation?.muted == true, size: .inline)
+            .frame(minWidth: ControlSize.target, minHeight: ControlSize.target)
+            .contentShape(.rect)
         }
+        .buttonStyle(PressStyle())
+        .voiceSlot(presentation?.canMute == true && !closing)
+    }
+
+    private var hangUpButton: some View {
+        Button { action(.hangUp) } label: {
+            Image(.endSession).foregroundStyle(palette.ink2)
+        }
+        .buttonStyle(ControlButtonStyle(kind: .round, size: .compact))
+        .voiceSlot(active && !closing)
+        .accessibilityLabel("挂断")
+        .help(Text("挂断"))
     }
 }
 
