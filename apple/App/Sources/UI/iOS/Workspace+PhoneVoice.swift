@@ -13,6 +13,7 @@ struct VoicePhonePresentation {
     let requests: [VoiceCallProjection.Request]
     let replies: [VoiceCallProjection.Reply]
     let executions: [VoiceExecutionTarget]
+    let omitted: VoiceCallProjection.Omitted
     let commandResults: [VoiceCommand.ID: VoiceCommandResult.Outcome]
 }
 
@@ -22,7 +23,7 @@ extension Workspace {
         return .init(phase: voice.phase, response: voice.projection?.response ?? .none, muted: voice.isMuted, canMute: voice.canMute,
                      startUnavailableReason: cue.canHear ? voice.startUnavailableReason : .cueUnavailable,
                      samples: { voice.samples }, requests: voice.projection?.requests ?? [], replies: voice.projection?.replies ?? [],
-                     executions: voice.projection?.executions ?? [], commandResults: voice.commandResults)
+                     executions: voice.projection?.executions ?? [], omitted: voice.projection?.omitted ?? .init(), commandResults: voice.commandResults)
     }
 
     func startVoiceCall() async throws { try await services.voice.start() }

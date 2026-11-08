@@ -100,7 +100,7 @@ extension VoiceService {
         muting = false
         let prior = projection
         setProjection(.init(session: owner.id, phase: failure.map { .failed($0) } ?? .ended(reason: reason),
-                            requests: prior?.requests ?? [], replies: prior?.replies ?? [], executions: prior?.executions ?? []))
+                            requests: prior?.requests ?? [], replies: prior?.replies ?? [], executions: prior?.executions ?? [], omitted: prior?.omitted ?? .init()))
         issue = failure
     }
 
@@ -115,7 +115,7 @@ extension VoiceService {
            case .projection(let value) = received.payload, value.session == binding.session {
             if case .failed(let reason) = value.phase { issue = reason }
             setProjection(.init(session: value.session, phase: projection?.phase ?? value.phase,
-                                requests: value.requests, replies: value.replies, executions: value.executions))
+                                requests: value.requests, replies: value.replies, executions: value.executions, omitted: value.omitted))
             return
         }
         guard let owner = phone, owner.id == received.header.session, owner.local == received.header.recipient,
