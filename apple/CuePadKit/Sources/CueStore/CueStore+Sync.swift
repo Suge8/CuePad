@@ -229,7 +229,7 @@ extension CueStore {
   /// 服务器已接受这些记录（上传结果里的那一版，与系统字段归档）：记下系统字段与被推送版本的修改时间，一批一个事务。之后再改才会重新变成待推送。
   /// 上传一次只有一批在路上，结果按发出的先后回来。
   ///
-  /// 你发出的话的那条消息（带请求标识，`PiChatMessage.deliveryID`）上了服务器，同一事务核对关联资格后收走投送请求（`removeUploadedDeliveries`）；原卡未到时保留。
+  /// 你发出的话的那条消息（带请求标识，`PiChatMessage.deliveryID`）上了服务器，同一事务核对关联资格后收走投送请求（`removeUploadedDeliveries`）；窗口内原卡未到时保留。
   /// 不在写对话时收：请求的删除随回执马上传，消息走后台那一路、要等合并窗口与前面的批次，别的设备会先收到删除、气泡就空着。
   /// 服务器上删除排在消息之后，拉到删除时消息已经在了。
   /// `serverAt` 是服务器收下它的时刻（上传回执里那条记录的 creationDate）：投送请求记进本机列 `DeliveryRequest.serverAt`，同拉到时（`RemoteChange.save`）。

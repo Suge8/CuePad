@@ -36,13 +36,10 @@ extension CueStore {
   }
 
   /// 请求只授权创建时选定的卡片，不能随层级变化重选叶子。缺卡或旧版卡片不证明意图已结束；
-  /// 兑现、新修订、删除与原卡不再是叶子才解除保留。无可靠修订的历史不重建意图。
+  /// 兑现、新修订、删除与原卡不再是叶子允许窗口内提前清理。无可靠修订的历史不重建意图。
   func sessionBindingDisposition(_ request: DeliveryRequest) throws -> SessionBindingDisposition {
     guard let id = request.cardID, let revision = request.sessionBindingRevision else { return .settled }
-    guard let card = try find(Card.self, id) else {
-      let deleted = try db.first("SELECT 1 FROM syncRecords WHERE recordName = ? AND recordType = 'cards'", [id]) { _ in true } ?? false
-      return deleted ? .settled : .awaitingCard
-    }
+    guard let card = try find(Card.self, id) else { return .awaitingCard }
     guard card.deletedAt == nil else { return .settled }
     if card.isTask, try homeLeaf(id) != id { return .settled }
     guard let current = card.sessionBindingRevision else { return .awaitingCard }

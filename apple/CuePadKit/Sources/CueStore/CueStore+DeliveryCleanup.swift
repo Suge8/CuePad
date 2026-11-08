@@ -1,15 +1,15 @@
 import Foundation
 
 extension CueStore {
-  /// 消息上云只解除气泡保留；带可靠修订的成功请求还要等原关联意图兑现、被取代或删除。
-  /// 卡片晚到后由定时清理重新核对上传事实，不另存待清理状态。
+  /// 消息上云后，窗口内仍保留未决关联的原请求；七天上限沿用完成时间，不因重启或同步续期。
+  /// 到期只清请求，不把缺卡解释成删除，也不伪造关联兑现。
   func removeUploadedDeliveries(among ids: Set<UUID>) throws {
     guard !ids.isEmpty else { return }
     let requests = try select(DeliveryRequest.self, where: """
       mode = 'send' AND status = 'succeeded' AND id IN (SELECT value FROM json_each(?))
         AND \(Self.deliveryMessageUploaded)
       """, [Self.idList(ids)])
-    try removeSettledDeliveries(requests)
+    try removeDeliveries(requests, completedBefore: timing.now().addingTimeInterval(-DeliveryExecutor.keptRetention))
   }
 
   /// 永久删除原卡同时解除请求的关联引用；删除事实无需另存，后续回执只记送达。
@@ -26,10 +26,11 @@ extension CueStore {
       WHERE m.deliveryID = deliveryRequests.id AND s.pushedModifiedAt IS NOT NULL)
     """
 
-  /// 上传回执与保留期清理共用资格；其他结果仍沿用各自保留期，无修订的旧记录不猜测关联。
-  func removeSettledDeliveries(_ requests: [DeliveryRequest]) throws {
+  /// 展示条件由调用方筛选；关联资格只在窗口内阻止清理，达到原保留上限无条件释放。
+  func removeDeliveries(_ requests: [DeliveryRequest], completedBefore cutoff: Date) throws {
     let removable = try requests.filter { request in
       guard request.status == .known(.succeeded), [.known(.send), .known(.command), .known(.start)].contains(request.mode) else { return true }
+      if let completed = request.completedAt, completed < cutoff { return true }
       return try sessionBindingDisposition(request) == .settled
     }
     guard !removable.isEmpty else { return }
