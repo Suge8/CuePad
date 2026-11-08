@@ -83,7 +83,7 @@ struct LaunchLockTests {
         defer { phone.services.cancelBackgroundWork() }
         let first = try await launch(phone)
         let row = try #require(try await store.syncRow(recordName: first.request.uuidString.lowercased()))
-        #expect(try await store.reserveDeliveryPayload(row.id, modifiedAt: row.modifiedAt))
+        #expect(try await store.reserveForUpload([(row.id, row.table, row.modifiedAt)]).isEmpty)
         await #expect(throws: CueStoreError.deliveryAlreadyHanded) { try await launch(phone, replacing: first) }
         #expect(try await store.deliveryRequests().map(\.id) == [first.request])
     }

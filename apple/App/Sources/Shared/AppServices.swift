@@ -220,7 +220,7 @@ final class AppServices {
         // 隔离运行时移走的不进系统废纸篓，放在库里
         let trash = location.touchesRealWorld ? nil : AgentLibraryFiles.trash(into: location.directory.appending(path: "Trash", directoryHint: .isDirectory))
         library = AgentLibraryKeeper(
-            store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(integration: agents.integration, trash: trash))
+            store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(access: agents.integration.fileAccess, trash: trash))
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.pi, runtimes: runtimes)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)

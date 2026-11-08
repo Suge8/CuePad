@@ -215,10 +215,6 @@ extension CueStore {
     }
   }
 
-  package func reserveDeliveryPayload(_ id: String, modifiedAt: Int64) throws -> Bool {
-    try reserveForUpload([(id, .deliveryRequests, modifiedAt)]).isEmpty
-  }
-
   /// 本机把这几条记录的这一版交给服务器（构造上传批次时）。结果没回到本机就崩溃、或回包在路上丢了，服务器其实收下了它；
   /// 之后它经拉取或重传被拒附的服务器版本回来，按修改时间认出是自己的（`applyVersion`），不当成并发编辑留冲突副本。
   /// 同一时刻只有一批在路上，所以每条记录记一个时间就够：已有一版交出去而服务器还没收下时保留那一版（它最可能先回来），

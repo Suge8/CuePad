@@ -242,9 +242,4 @@ public struct AgentIntegration: Sendable {
     }
 }
 
-extension AgentLibraryFiles {
-    public init(integration: AgentIntegration, trash: (@Sendable (URL) throws -> URL)? = nil) {
-        self.init(access: integration.fileAccess, trash: trash)
-    }
-}
 #endif
