@@ -185,6 +185,43 @@ struct CueVoicePanel: View {
     }
 }
 
+struct CueVoiceComposerEntry: View {
+    @Environment(Workspace.self) private var workspace
+    @State private var frame: CGRect?
+
+    var body: some View {
+        let state = workspace.phoneVoiceViewState.shared()
+        Button {
+            if state.active { workspace.voiceDetails = frame.map(BubbleSource.control) ?? .unanchored }
+            else { start() }
+        } label: {
+            Image(.audio)
+                .chip(on: state.active, size: .inline)
+                .frame(width: ControlSize.target, height: ControlSize.target)
+                .contentShape(.circle)
+        }
+        .buttonStyle(PressStyle())
+        .disabled(!state.active && state.startUnavailableReason != nil)
+        .accessibilityLabel(state.active ? "通话详情" : "和 Cue 通话")
+        .help(Text(state.active ? "通话详情" : state.startUnavailableReason ?? "和 Cue 通话"))
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { next in
+            if let frame, workspace.voiceDetails == .control(frame) { workspace.voiceDetails = .control(next) }
+            frame = next
+        }
+        .onDisappear {
+            if let frame, workspace.voiceDetails == .control(frame) { workspace.voiceDetails = nil }
+        }
+    }
+
+    private func start() {
+        Task {
+            do { try await workspace.startVoiceCall() }
+            catch let issue as VoiceIssue { workspace.say(issue.phoneMessage, tone: .failure) }
+            catch { workspace.fail(error) }
+        }
+    }
+}
+
 @Observable private final class PhoneVoiceFeedback {
     var rejection: VoiceCommandResult.Rejection?
 }

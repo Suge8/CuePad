@@ -179,8 +179,16 @@ struct CuePage: View {
             }
             // 宽屏没启用时不放输入框：主区底部已有记下灵感的那一条（`CaptureSlot`），一屏只留一个；这一栏只剩启用那一张（`CueWelcome`）
             if cue.canHear || workspace.layout == .narrow {
+                #if os(iOS)
+                HStack(alignment: .bottom, spacing: Spacing.item) {
+                    CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
+                        .fixedSize(horizontal: false, vertical: true)
+                    CueVoiceComposerEntry()
+                }
+                #else
                 CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
                     .fixedSize(horizontal: false, vertical: true)
+                #endif
             }
         }
         .animation(Motion.fade, value: cue.canHear)
