@@ -139,7 +139,7 @@ extension CueTools {
       done.append("建好了项目「\(ref)」")
     } else {
       guard title != nil || intro != nil || folder != nil else { throw Failure("project 要给 title、intro 或 folder；新建带 new:true") }
-      project = try await self.project(ref)
+      project = try await self.references.project(ref)
     }
     if title != nil || intro != nil {
       try await store.updateProject(project.id) { edited in

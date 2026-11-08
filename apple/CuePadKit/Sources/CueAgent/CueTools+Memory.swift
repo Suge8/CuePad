@@ -79,7 +79,7 @@ extension CueTools {
         }
         return repeats
       }
-      let task = try await args.string("task").asyncMap { try await self.task($0) }
+      let task = try await args.string("task").asyncMap { try await self.references.task($0) }
       // 回收站里的 `task(_:)` 已不认；完成、归档的挂上去不会再被收掉（`endCueSchedules`）
       if let task, task.completedAt != nil || task.archivedAt != nil {
         throw Failure("「\(task.heading)」已完成或已归档：定时只挂在没完成的任务上")

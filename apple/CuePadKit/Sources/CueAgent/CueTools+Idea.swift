@@ -16,7 +16,7 @@ extension CueTools {
 
   func idea(_ args: Args) async throws -> Result {
     let text = try args.required("text")
-    let project = try await args.string("project").asyncMap(project)
+    let project = try await args.string("project").asyncMap(references.project)
     let projectID = project?.id ?? Project.defaultID
     let projectName = try await store.project(projectID)?.name ?? ""
     let card = try await store.createCard(in: projectID, body: text)

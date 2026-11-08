@@ -4,6 +4,51 @@ import Foundation
 import Testing
 
 extension MCPTests {
+  @Test func taskReferencesRespectProjectsAndDistinguishFinishingFromEnding() async throws {
+    let sandbox = try Fixture()
+    let store = sandbox.store
+    let alpha = try await sandbox.project("甲")
+    let beta = try await sandbox.project("乙")
+    try await store.updateCueProfile { $0.hostID = "mac-a"; $0.enabledAt = .now }
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "free-session", state: .settled, title: "空闲会话", hosted: true)
+    try await Server.run(library: sandbox.directory) { server in
+      let first = try await server.call("task", ["action": "add", "title": "同名任务", "project": "甲"])
+      let second = try await server.call("task", ["action": "add", "title": "同名任务", "project": "乙"])
+      let cards = try await store.tasks(.todo).flatMap(\.tasks).filter { $0.heading == "同名任务" }
+      let a = try #require(cards.first { $0.projectID == alpha.id })
+      let b = try #require(cards.first { $0.projectID == beta.id })
+      #expect(first.contains(a.id.shortID) && second.contains(b.id.shortID) && a.id != b.id)
+      #expect(try await server.call("task", ["action": "add", "title": "同名任务", "project": "甲"]).contains(a.id.shortID))
+      #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.heading == "同名任务" }.count == 2)
+      #expect(try await server.refused("task", ["action": "done", "session": a.id.uuidString]).contains("做完任务给 task"))
+      #expect(try await store.card(a.id)?.status == .todo)
+      #expect(try await server.call("task", ["action": "done", "session": "free-session"]).contains("结束"))
+      #expect(try await store.deliveryRequests().contains { $0.mode == .known(.end) && $0.target.ref == "free-session" })
+      _ = try await server.call("task", ["action": "done", "task": a.id.uuidString, "evidence": ["完成"]])
+      #expect(try await store.card(a.id)?.status == .done)
+      #expect(try await store.card(b.id)?.status == .todo)
+      #expect(try await server.refused("task", ["action": "unknown"]) == "task 没有 unknown：可用 add / edit / start / bind / unbind / say / peek / stop / leave / take / done")
+    }
+  }
+
+  @Test func cueStopsLeavesAndTakesBackASession() async throws {
+    let sandbox = try Fixture()
+    let store = sandbox.store
+    try await store.updateCueProfile { $0.hostID = "mac-a"; $0.enabledAt = .now }
+    let recorder = try await store.runtimeRecorder(on: "mac-a", boot: UUID().uuidString, minInterval: .zero)
+    try await recorder.update(sessionID: "working-session", state: .thinking, title: "工作会话", hosted: true)
+    try await Server.run(library: sandbox.directory) { server in
+      #expect(try await server.call("task", ["action": "stop", "session": "working-session"]).contains("停下这一轮"))
+      #expect(try await store.deliveryRequests().contains { $0.mode == .known(.stop) && $0.target.ref == "working-session" })
+      try await recorder.update(sessionID: "working-session", state: .settled)
+      #expect(try await server.call("task", ["action": "leave", "session": "working-session"]).contains("留给他回"))
+      #expect(try await store.cueState()?.left.contains { $0.sessionID == "working-session" } == true)
+      #expect(try await server.call("task", ["action": "take", "session": "working-session"]).contains("已收回"))
+      #expect(try await store.cueState()?.left.isEmpty == true)
+      #expect(try await server.refused("task", ["action": "take", "session": "working-session"]).contains("不用收回"))
+    }
+  }
+
   @Test func cueBindsExistingTaskWithoutSending() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store

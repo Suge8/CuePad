@@ -6,7 +6,7 @@ extension CueTools {
   func task(_ args: Args) async throws -> Result {
     let rawAction = try args.required("action")
     guard let action = TaskAction(rawValue: rawAction) else {
-      throw Failure("task 没有 \(rawAction)：可用 add / edit / start / bind / unbind / say / peek / stop / leave / take / done")
+      throw Failure("task 没有 \(rawAction)：可用 \(TaskAction.allCases.map(\.rawValue).joined(separator: " / "))")
     }
     let allowed: Set<String>?
     switch action {
@@ -25,18 +25,18 @@ extension CueTools {
     case .edit: return try await edit(args)
     case .start: return try await start(args)
     case .bind:
-      let card = try await task(args.required("task"))
+      let card = try await references.task(args.required("task"))
       let ref = try args.required("session")
-      guard case .session(let session) = try await sessionRef(ref) else { throw Failure("bind 的 session 要写会话 id 或会话名") }
+      guard case .session(let session) = try await references.sessionRef(ref) else { throw Failure("bind 的 session 要写会话 id 或会话名") }
       try await store.bindSession(session.sessionID, to: card.id)
       return .ok("已把「\(card.heading)」关联到会话「\(session.title)」。（\(card.id.shortID)）")
     case .unbind:
-      let card = try await task(args.required("task"))
+      let card = try await references.task(args.required("task"))
       try await store.unbindSession(from: card.id)
       return .ok("已解除「\(card.heading)」的会话关联。（\(card.id.shortID)）")
     case .say: return try await say(args)
     case .peek:
-      switch try await place(args) {
+      switch try await references.place(args) {
       case .session(let session)?: return try await peek(session)
       case .task(let card)?: return try await peek(card)
       case nil: return try await board()
@@ -71,13 +71,13 @@ extension CueTools {
     if args.string("task") == nil, let ref = args.string("session") {
       // 给 session 是收掉会话，给 task 是做完任务：模型把任务编号填进 session 来 done 时，记录里原意都是做完那件任务（多是一个子任务），
       // 照收掉会话办就做错了事，所以这里不像 say、peek 那样认任务的编号
-      guard case .session(let session) = try await sessionRef(ref) else {
+      guard case .session(let session) = try await references.sessionRef(ref) else {
         throw Failure("「\(ref)」是任务的编号：做完任务给 task；收掉会话给 session 写会话的 id（peek 里有）")
       }
       let ended = try await store.endIdleSession(session.sessionID) != nil
       return .ok((ended ? "已请会话「\(session.title)」结束" : "会话「\(session.title)」早已结束") + "。（\(session.shortID)）")
     }
-    let card = try await task(args.required("task"))
+    let card = try await references.task(args.required("task"))
     let reports = card.parentID == nil && card.status != .done
     let evidence = reports ? try Self.evidence(args) : []
     let shots = try CueShot.checked(try await shots(args.raw["show"]))
@@ -130,19 +130,16 @@ extension CueTools {
   private func add(_ args: Args) async throws -> Result {
     let heading = try Self.name(try args.required("title"), "标题")
     let names = try (args.strings("steps") ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "子任务") }
-    let session = try await args.string("session").asyncMap(session)
+    let session = try await args.string("session").asyncMap(references.session)
     if session != nil, args.string("body") != nil { throw Failure("带 session 时不写 body：会话已经在做，话用 say 对它说") }
     let launch = args.bool("start") == true ? try await Launch(args, tools: self) : nil
     if session != nil, launch != nil { throw Failure("带 session 时不写 start：会话已经在做，话用 say 对它说") }
     if let session, let busy = try await store.tasks(boundTo: session.sessionID).first(where: { $0.task.piSessionID == session.sessionID && $0.task.status != .done }) {
       throw Failure("会话「\(session.title)」正在做「\(busy.task.heading)」（\(busy.task.id.shortID)）：同一件事接着做用 say 或给它 edit 加子任务")
     }
-    // 没给 project：带会话的是会话所在的项目，其余进默认项目
-    var project = try await args.string("project").asyncMap(project)
-    if project == nil, let home = session?.projectID { project = try await store.projects().first { $0.id == home } }
-    let projectID = project?.id ?? Project.defaultID
+    let projectID = try await references.addProject(args, session: session)
     // 同一件事建第二份（重试、同一轮里并发发出的两次 add）只会开出第二个会话：返回已有的那件
-    if session == nil, let same = try await openTopTasks(titled: heading).first(where: { $0.projectID == projectID }) {
+    if session == nil, let same = try await references.openTopTask(titled: heading, in: projectID) {
       let dropped = args.string("body") != nil || !names.isEmpty ? "，这次的正文与子任务也没写（要改用 edit）" : ""
       let unstarted = launch == nil ? "" : "，也没开工（它没开工就 start）"
       return .ok("已有没做完的「\(same.heading)」（\(same.id.shortID)），没再建\(dropped)\(unstarted)：同一件事接着用它。")
@@ -167,7 +164,7 @@ extension CueTools {
   }
 
   private func edit(_ args: Args) async throws -> Result {
-    let card = try await task(args.required("task"))
+    let card = try await references.task(args.required("task"))
     // 先查完再写，免得标题、子任务改了一半才报错
     let heading = try args.string("title").map { try Self.name($0, "标题") }
     let steps = try args.strings("steps").map { try $0.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "子任务") } }
@@ -198,7 +195,7 @@ extension CueTools {
       done.append("追加了 \(added) 个子任务")
     }
     if let ref = args.string("project") {
-      let project = try await project(ref)
+      let project = try await references.project(ref)
       let top = try await store.topTask(of: card.id)
       try await store.moveCard(top, to: .top(project: project.id), after: nil)
       done.append("连同子任务挪到了项目「\(project.name)」")
@@ -228,7 +225,7 @@ extension CueTools {
   }
 
   private func start(_ args: Args) async throws -> Result {
-    let leaf = try await workingLeaf(try args.required("task"))
+    let leaf = try await references.workingLeaf(try args.required("task"))
     return try await start(leaf, try await Launch(args, tools: self))
   }
 

@@ -256,7 +256,9 @@ import Testing
   @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
     let sb = try Fixture()
     let root = await sb.run("--help").out
-    #expect(root.contains("cuepad task add"))
+    for command in ["project", "card", "task", "search", "show", "conflicts"] {
+      #expect(root.contains(command), "根帮助没有公开命令 \(command)")
+    }
     for command in Command.all {
       let noun = command.path[0]
       if command.path.count == 2 {

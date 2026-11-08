@@ -87,7 +87,7 @@ extension CueActivity {
         let text = args.line("text") ?? ""
         // 挂在任务上的点了开那件任务（气泡里就是这条定时）；没挂的不能点
         var task: UUID?
-        if !failed, let ref = args.line("task") { task = try? await CueTools(store: store).task(ref).id }
+        if !failed, let ref = args.line("task") { task = try? await CueReferences(store: store).task(ref).id }
         return .init(kind: .schedule, target: "定时：\(text)".clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: task, name: text)
       case "zoom": return item(.read, "翻记忆")
       case "forget": return item(.other, "忘掉一条记忆")
@@ -134,7 +134,7 @@ extension CueActivity {
     /// 开始时认，与工具同一个认法（`CueTools.place`）：add 要建的那件还没有，只照标题叫它（按标题去找会认成同名的旧任务，比如早做完的那件）。
     init(_ args: Parsed, tool: String, store: CueStore) async {
       var task: Card?, found: PiSessionState?
-      switch try? await CueTools(store: store).place(Args(args.raw)) {
+      switch try? await CueReferences(store: store).place(Args(args.raw)) {
       case .session(let state): found = state
       case .task(let card): task = card
       case nil: break
@@ -145,9 +145,13 @@ extension CueActivity {
       name = task?.heading ?? (found == nil ? args.line("task") : nil) ?? args.line("title") ?? found?.title ?? written
     }
 
-    /// add 做成后它建的那件，或认作同一件、没再建的那件（`CueTools.openTopTasks`）：没做完的同名顶层任务里后建的；会话照开始时认的。
+    /// add 做成后它建的那件，或认作同一件、没再建的那件：同项目里没做完的同名顶层任务里后建的；会话照开始时认的。
     func added(_ args: Parsed, store: CueStore) async -> Named {
-      guard let title = args.line("title"), let card = try? await CueTools(store: store).openTopTasks(titled: title).first else { return self }
+      let refs = CueReferences(store: store)
+      guard let title = Args(args.raw).string("title")?.trimmingCharacters(in: .whitespacesAndNewlines),
+        let project = try? await refs.addProject(Args(args.raw)),
+        let card = try? await refs.openTopTask(titled: title, in: project)
+      else { return self }
       return Named(task: card.id, session: session, name: card.heading)
     }
   }

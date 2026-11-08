@@ -26,7 +26,7 @@ extension CueTools {
   /// say、stop、leave、take 对的会话（认法在 `place`）：是任务就是它在做的叶子绑着的会话（带上叶子），是会话就是那个会话。`label` 是工具结果里对它的称呼。
   func speaker(_ args: Args) async throws -> (session: String, card: UUID?, label: String, short: String) {
     let leaf: Card
-    switch try await place(args) {
+    switch try await references.place(args) {
     case .session(let session)?: return (session.sessionID, nil, "会话「\(session.title)」", session.shortID)
     case .task(let card)?: leaf = try await store.workingLeaf(of: card.id)
     case nil: throw Failure("要给 task 或 session")
