@@ -229,7 +229,7 @@ extension CueStore {
   /// 服务器已接受这些记录（上传结果里的那一版，与系统字段归档）：记下系统字段与被推送版本的修改时间，一批一个事务。之后再改才会重新变成待推送。
   /// 上传一次只有一批在路上，结果按发出的先后回来。
   ///
-  /// 你发出的话的那条消息（带请求标识，`PiChatMessage.deliveryID`）上了服务器，同一事务里收走它的投送请求（写对话时已记为送到，`applyTranscript`）。
+  /// 你发出的话的那条消息（带请求标识，`PiChatMessage.deliveryID`）上了服务器，同一事务核对关联资格后收走投送请求（`removeUploadedDeliveries`）；原卡未到时保留。
   /// 不在写对话时收：请求的删除随回执马上传，消息走后台那一路、要等合并窗口与前面的批次，别的设备会先收到删除、气泡就空着。
   /// 服务器上删除排在消息之后，拉到删除时消息已经在了。
   /// `serverAt` 是服务器收下它的时刻（上传回执里那条记录的 creationDate）：投送请求记进本机列 `DeliveryRequest.serverAt`，同拉到时（`RemoteChange.save`）。
@@ -237,12 +237,7 @@ extension CueStore {
     guard !pushed.isEmpty else { return }
     let messages = JSONColumn.encode(pushed.filter { $0.row.table == .piMessages }.map(\.row.id))
     let deletedMeanwhile = try write {
-      try db.run(
-        """
-        DELETE FROM deliveryRequests WHERE mode = '\(DeliveryMode.send.rawValue)'
-          AND id IN (SELECT deliveryID FROM piMessages WHERE id IN (SELECT value FROM json_each(?)) AND deliveryID IS NOT NULL)
-        """, [messages])
-      return try pushed.compactMap { row, systemFields, serverAt -> String? in
+      let deleted = try pushed.compactMap { row, systemFields, serverAt -> String? in
         try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
         if row.table == .deliveryRequests, let serverAt {
           try db.run("UPDATE deliveryRequests SET serverAt = ? WHERE id = ? AND serverAt IS NULL", [serverAt, row.id])
@@ -253,6 +248,10 @@ extension CueStore {
         }
         return try db.first("SELECT 1 FROM \(row.table.rawValue) WHERE id = ?", [row.id]) { _ in true } == nil ? row.id : nil
       }
+      let deliveries = try db.query(
+        "SELECT deliveryID FROM piMessages WHERE id IN (SELECT value FROM json_each(?)) AND deliveryID IS NOT NULL", [messages]) { $0.uuid(0) }
+      try removeUploadedDeliveries(among: Set(deliveries))
+      return deleted
     }
     // 上传途中本机删掉了它：删的那次提交时服务器还没收下、算不上待推送的删除，这次记下元数据才是，提交的却只是元数据表，增量里没有它
     if !deletedMeanwhile.isEmpty { syncChanged(PendingSync(saves: [], deletes: deletedMeanwhile), in: []) }

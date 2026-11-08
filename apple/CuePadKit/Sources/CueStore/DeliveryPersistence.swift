@@ -220,7 +220,7 @@ extension CueStore {
   /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
   /// 发出的话（`send`）不按保留期清：送到的等它在对话里的那条消息上了服务器再收走（`markPushed`），气泡才不会在消息到别的设备之前没了；
   /// 没能送达的留着等用户重发或移除（重发写成后移除它）；没能开成的开新会话请求同样留着：新会话输入框按它显示原因、解锁，再开时移除它。结果未确认的留着等正证据来对账，之后与它们同样到期清掉。Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`）。
-  /// 这几种都至多留到完成早于 `keptCutoff`。
+  /// 这几种通常留到完成早于 `keptCutoff`；成功投送的原关联意图未解决时仍保留，见 `removeSettledDeliveries`。
   func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> (transient: Bool, oldestKept: Date?) {
     let done = "status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)', '\(DeliveryStatus.unconfirmed.rawValue)')"
     let kept = """
@@ -232,9 +232,12 @@ extension CueStore {
       """
     let arguments: [any SQLBindable] = [cutoff, claimCutoff, keptCutoff]
     return try write {
-      try db.run(
-        "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(kept))",
-        arguments)
+      let expired = try select(DeliveryRequest.self,
+        where: """
+          \(done) AND ((completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(kept)))
+            OR (mode = 'send' AND status = 'succeeded' AND \(Self.deliveryMessageUploaded)))
+          """, arguments)
+      try removeSettledDeliveries(expired)
       let transient = try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(kept))", arguments) { _ in true } != nil
       let oldestKept = try db.first("SELECT MIN(completedAt) FROM deliveryRequests WHERE \(done) AND (\(kept))", arguments) { $0.dateOrNil(0) } ?? nil
       return (transient, oldestKept)
