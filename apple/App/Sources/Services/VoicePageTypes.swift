@@ -38,9 +38,13 @@ nonisolated struct VoicePageQuery: Equatable, Codable, Sendable {
     let cursor: VoicePageCursor?
 }
 
-/// 页面失败不进入媒体状态机；失效游标必须由界面明确重新读首页，不能静默跳过一段历史。
+/// 页面失败不进入媒体状态机；原通话不可读与同通话锚点失效必须区分，不能静默改绑另一通话。
 nonisolated enum VoicePageError: String, Error, Codable, Sendable {
-    case refreshRequired, unavailable, tooLarge, storageUnavailable
+    /// 同一通话的锚点失效，明确重新读取首页。
+    case refreshRequired
+    /// 原通话已替换或不存在；首页重试也不能恢复。到 Mac 查看当前通话/恢复保留请求，不自动改绑旧动作。
+    case sessionUnavailable
+    case unavailable, tooLarge, storageUnavailable
 }
 
 nonisolated struct VoicePageResult: Equatable, Codable, Sendable {

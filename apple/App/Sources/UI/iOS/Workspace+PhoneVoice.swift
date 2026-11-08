@@ -30,7 +30,7 @@ struct VoicePhonePresentation {
 extension Workspace {
     var phoneVoice: VoicePhonePresentation {
         let voice = services.voice
-        return .init(phase: voice.phase, response: voice.projection?.response ?? .none, muted: voice.isMuted, canMute: voice.canMute, canRepeat: voice.canRepeat,
+        return .init(phase: voice.phase, response: voice.response, muted: voice.isMuted, canMute: voice.canMute, canRepeat: voice.canRepeat,
                      startUnavailableReason: cue.canHear ? voice.startUnavailableReason : .cueUnavailable,
                      samples: { voice.samples }, requestPage: voice.requestPages.page, replyPage: voice.replyPages.page,
                      executionPage: voice.executionPages.page, requestPageError: voice.requestPages.error,

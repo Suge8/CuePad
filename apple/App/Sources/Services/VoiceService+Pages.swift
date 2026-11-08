@@ -4,7 +4,7 @@ import os
 extension VoiceService {
     /// 读请求没有业务幂等缓存，不重发、不跨租约续等；媒体结束不取消这层等待。
     func readPage(_ list: VoicePageList, cursor: VoicePageCursor?) async throws -> VoicePageResult {
-        guard let session else { throw VoicePageError.refreshRequired }
+        guard let session else { throw VoicePageError.sessionUnavailable }
         let query = VoicePageQuery(id: .init(UUID()), list: list, cursor: cursor)
         #if os(macOS)
         return makePage(query, session: session)
@@ -15,7 +15,8 @@ extension VoiceService {
         return try await scope.perform(within: .seconds(15)) {
             guard let host = try await self.services.store.cueProfile()?.activeHost else { throw VoicePageError.unavailable }
             let peer = try await signaling.resolveVoicePeer(VoiceDeviceID(host))
-            guard signaling.voiceAvailability == .ready(endpoint: local), self.session == session else { throw VoicePageError.refreshRequired }
+            guard self.session == session else { throw VoicePageError.sessionUnavailable }
+            guard signaling.voiceAvailability == .ready(endpoint: local) else { throw VoicePageError.unavailable }
             return try await scope.wait { finish in
                 self.pageReads[query.id] = Pending(session: session, peer: peer, local: local, finish: finish)
                 scope.spawn {
@@ -32,8 +33,11 @@ extension VoiceService {
               wait.peer == header.sender, wait.local == header.recipient else { return }
         pageReads[result.query] = nil
         #if os(iOS)
-        if phone == nil, session == result.session {
-            phoneBinding = (result.session, header.recipient, header.sender)
+        // 只有成功读取原通话，才能恢复该来源的投影订阅；失败结果不授予旧动作的新绑定。
+        switch result.content {
+        case .requests, .replies, .executions:
+            if phone == nil, session == result.session { phoneBinding = (result.session, header.recipient, header.sender) }
+        case .failed: break
         }
         #endif
         wait.finish(.success(result))
@@ -47,10 +51,10 @@ extension VoiceService {
     }
 
     #if os(macOS)
-    /// 只读仍保留的原对象；不依赖 remote 媒体 owner 存活。原通话已被另一轮替换时明确要求刷新。
+    /// 只读仍保留的原对象；不依赖 remote 媒体 owner 存活。原通话被另一轮替换后，首页重试也不能恢复。
     func makePage(_ query: VoicePageQuery, session: VoiceSessionID) -> VoicePageResult {
         do {
-            guard let call, VoiceSessionID(call.session) == session else { throw VoicePageError.refreshRequired }
+            guard let call, VoiceSessionID(call.session) == session else { throw VoicePageError.sessionUnavailable }
             return try fullProjection(call).pageResult(query)
         } catch {
             return .init(query: query.id, session: session, version: Data(), content: .failed(error as? VoicePageError ?? .storageUnavailable))

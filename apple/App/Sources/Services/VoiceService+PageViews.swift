@@ -41,13 +41,20 @@ extension VoiceService {
                                extract: (VoicePageResult.Content) -> VoicePage<Row>?) async throws -> VoicePageSnapshot<Row> {
         let originalSession = session
         let result = try await readPage(list, cursor: cursor)
-        guard session == originalSession, result.session == originalSession else { throw VoicePageError.refreshRequired }
+        guard session == originalSession, result.session == originalSession else { throw VoicePageError.sessionUnavailable }
         if case .failed(let error) = result.content { throw error }
         guard let page = extract(result.content) else { throw VoiceSignalError.invalid }
         return .init(page: page, version: result.version)
     }
 
     #if os(iOS)
+    /// 撤销的是远端投影来源，不是只把一份展示数组清空；旧租约迟到的首页不能重新取得操作入口。
+    func revokeProjection(local: VoiceEndpoint? = nil, peer: VoiceEndpoint? = nil) {
+        guard local == nil || phoneBinding?.local == local, peer == nil || phoneBinding?.peer == peer else { return }
+        phoneBinding = nil
+        executionPages.disconnected(clear: true)
+    }
+
     func updatePages(_ value: VoiceCallProjection?) {
         guard let value else {
             requestPages.reset(); replyPages.reset(); executionPages.reset()
