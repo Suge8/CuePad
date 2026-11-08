@@ -6,11 +6,11 @@ extension Workspace {
     /// 只投影控制所需事实；已落库的请求与回复由原聊天读取，未落库失败保留各自身份。
     var voicePresentation: CueVoicePresentation? {
         guard let voice else { return nil }
+        // 媒体阶段优先；接通后的等待和回应来自协议回合，写库与句间电平不推进显示状态。
         let activity: CueVoicePresentation.Activity = switch voice.phase {
         case .connecting: .connecting
-        case .listening: .listening
-        case .handingOff: .processing
-        case .speaking: .speaking
+        case .listening, .handingOff, .speaking:
+            !voice.assistantTurns.isEmpty ? .speaking : voice.waitingForResponse ? .processing : .listening
         case .closing: .closing
         case .ended: .ended
         case .failed: .failed

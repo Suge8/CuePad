@@ -81,9 +81,14 @@ struct CuePage: View {
         FloatingReply {
             chat.padding(.leading, railInset)
         } reply: {
-            bottom()
-                .padding(.horizontal, Spacing.group)
-                .frame(maxWidth: Self.readingWidth)
+            VStack(spacing: 0) {
+                CueVoicePanel()
+                    .background(palette.desk, in: .rect(cornerRadius: Radius.field))
+                    .padding(.leading, railInset)
+                bottom()
+            }
+            .padding(.horizontal, Spacing.group)
+            .frame(maxWidth: Self.readingWidth)
         }
         .scrollDismissesKeyboard(.interactively)
         // iPad 右边那一栏：名牌比栏窄，对话到名牌下沿淡出，不从名牌两侧露出来（`Bars`）；手机的名牌铺满整行，照沉浸式
@@ -174,8 +179,16 @@ struct CuePage: View {
             }
             // 宽屏没启用时不放输入框：主区底部已有记下灵感的那一条（`CaptureSlot`），一屏只留一个；这一栏只剩启用那一张（`CueWelcome`）
             if cue.canHear || workspace.layout == .narrow {
+                #if os(iOS)
+                HStack(alignment: .bottom, spacing: Spacing.item) {
+                    CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
+                        .fixedSize(horizontal: false, vertical: true)
+                    CueVoiceComposerEntry()
+                }
+                #else
                 CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
                     .fixedSize(horizontal: false, vertical: true)
+                #endif
             }
         }
         .animation(Motion.fade, value: cue.canHear)
