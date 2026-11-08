@@ -8751,6 +8751,22 @@
         }
       }
     },
+    "原通话已被替换或不可用，请在 Mac 的通话详情查看或恢复原请求" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original call was replaced or is unavailable. View or recover the original request in call details on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原通话已被替换或不可用，请在 Mac 的通话详情查看或恢复原请求"
+          }
+        }
+      }
+    },
     "原项目已不存在或在回收站，已放到默认项目" : {
       "localizations" : {
         "en" : {

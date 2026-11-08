@@ -6,6 +6,8 @@ import Foundation
 /// -CuePadPhoneVoice connecting|listening|muted|processing|speaking|closing|failed|failedRequest|ended
 /// -CuePadPhoneVoiceHistory 0|1|200：写入隔离聊天；-CuePadPhoneVoiceEnabled YES：启用隔离 Cue；-CuePadCueDraft 保留输入框草稿。
 /// -CuePadPhoneVoicePages YES：注入带续页的隔离投影，分页仍走正式服务，隔离环境无中转时应显示失败。
+/// -CuePadPhoneVoiceSessionUnavailable YES：模拟原通话已不存在，点击分页走服务的不可用分支。
+/// -CuePadPhoneVoiceRefreshRequired YES：在隔离分页视图注入失效锚点，首页按钮仍调用正式服务。
 enum DebugPhoneVoice {
     static func prepare(_ workspace: Workspace) async {
         guard let name = DebugScene.defaults.string(forKey: "CuePadPhoneVoice") else { return }
@@ -58,6 +60,13 @@ enum DebugPhoneVoice {
                 voice.session = session
                 voice.setProjection(.init(session: session, phase: phase, requests: [request],
                                           replies: [.init(message: reply.id, readback: .submitted)], executions: [target], response: response, pages: heads))
+                if DebugScene.defaults.bool(forKey: "CuePadPhoneVoiceSessionUnavailable") { voice.session = nil }
+                if DebugScene.defaults.bool(forKey: "CuePadPhoneVoiceRefreshRequired") {
+                    do {
+                        _ = try await voice.requestPages.load(after: heads.requests.nextCursor) { _ in throw VoicePageError.refreshRequired }
+                    } catch VoicePageError.refreshRequired {
+                    } catch { workspace.fail(error) }
+                }
             }
         } catch { workspace.fail(error) }
     }
