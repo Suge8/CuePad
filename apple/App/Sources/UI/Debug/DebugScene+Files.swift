@@ -10,6 +10,7 @@ extension DebugScene {
     /// （记录到了、文件没到），配 `-CuePadScene editor -CuePadCard 交接材料` 打开它看文件牌。`-CuePadFileArrives <秒>`：过这么多秒后
     /// 那份压缩包"开始下载"，进度一路走到头、文件落地（看还在路上 → 下载中 → 到了换上缩略图与大小）。没有同步，进度是这里写给界面的。
     static func seedFiles(_ services: AppServices) async {
+        await seedInspiration(services)
         guard defaults.bool(forKey: "CuePadFiles") else { return }
         let store = services.store
         let archive = Data((0..<200_000).map { UInt8(truncatingIfNeeded: $0 &* 2_654_435_761 >> 13) })

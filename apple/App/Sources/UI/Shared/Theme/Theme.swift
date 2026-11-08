@@ -39,6 +39,14 @@ struct PaletteProvider: ViewModifier {
 }
 
 extension CueEditorTheme {
+    /// 灵感直接编辑 Markdown；标题前不叠段距，源码空行仍保留。
+    static func inspiration(_ palette: Palette, horizontalInset: CGFloat, maxTextWidth: CGFloat? = nil) -> CueEditorTheme {
+        var theme = editor(palette, horizontalInset: horizontalInset, verticalInset: Spacing.group, maxTextWidth: maxTextWidth)
+        theme.headingSpacing = 0
+        theme.blankLineHeight = Spacing.tight
+        return theme
+    }
+
     /// 编辑页的主题。颜色是固定值而非动态色：外观切换时整体替换主题。
     /// 左右留白随平台：Mac 编辑页铺满、字限在 `maxTextWidth` 一列里居中，iPhone 贴近屏幕边。iOS 上字号是 Dynamic Type 的设计基准。
     /// `verticalInset` 是首行上面与末行下面的留白：宽屏 iPad 的纸四边同宽，其余贴着顶栏，留一点就够。
@@ -52,7 +60,7 @@ extension CueEditorTheme {
             markerColor: CueColor(palette.ink3),
             codeBackground: CueColor(palette.fill),
             textColor: CueColor(palette.ink),
-            // 底色由宿主画（Mac 是页面底色，iPhone 是纸色）；编辑器不画底，下沿的淡出才透得出宿主的底
+            // 底色由宿主画（Mac 是页面底色，iPhone 是纸色）；编辑器透明
             backgroundColor: .clear,
             variableColor: CueColor(palette.ink),
             variableBackground: CueColor(palette.fill),

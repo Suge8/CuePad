@@ -54,6 +54,31 @@ enum InlineMarkdown {
         return (String(out), padded)
     }
 
+    /// 装饰源文时只淡化系统解析器实际移除的强调符号；转义星号与代码里的符号仍是正文。
+    /// 源位置以 UTF-8 列计数，映回编辑器的 UTF-16 范围时跳过 CJK 适配占位字。
+    static func emphasisMarkers(in text: String) -> [NSRange] {
+        guard text.contains("*") || text.contains("_") else { return [] }
+        let (source, _) = pad(text)
+        guard let parsed = try? AttributedString(markdown: source, options: .init(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace, appliesSourcePositionAttributes: true)) else { return [] }
+        var content = IndexSet()
+        for run in parsed.runs {
+            if let position = run.markdownSourcePosition {
+                content.insert(integersIn: (position.startColumn - 1)..<position.endColumn)
+            }
+        }
+        var ranges: [NSRange] = [], byte = 0, offset = 0
+        for scalar in source.unicodeScalars {
+            defer { byte += scalar.utf8.count }
+            guard scalar != filler else { continue }
+            if (scalar == "*" || scalar == "_"), !content.contains(byte) {
+                ranges.append(NSRange(location: offset, length: 1))
+            }
+            offset += scalar.utf16.count
+        }
+        return ranges
+    }
+
     private enum Side { case before, after }
 
     /// 该在 `*` 串的哪一侧塞占位字：两边都不是空白（行首行尾算空白）、至少一边是 CJK 字、恰好一边是 cmark 认的标点时，塞在标点那侧。

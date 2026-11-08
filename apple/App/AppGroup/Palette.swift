@@ -220,8 +220,15 @@ struct Palette {
 }
 
 private extension Color {
-    init(hex: UInt32) {
+    nonisolated init(hex: UInt32) {
         self.init(red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    }
+}
+
+extension Color {
+    /// 插画色盘是主题的源数据，不是界面语义色；这里只解码，不保存或复制颜料。
+    nonisolated static func illustrationColors(_ pigments: [UInt32]) -> [Color] {
+        pigments.map { Color(hex: $0) }
     }
 }
 

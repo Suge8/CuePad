@@ -129,6 +129,22 @@
         }
       }
     },
+    "# 让灵感，慢慢成形\n\n留一点空白，才看得见真正重要的东西。**重点：**让内容自己说话，把复杂留给工具，把清晰留给人。\n\n## 一张纸的阅读节奏\n\n阅读从一个念头开始，经过 *斟酌*，变成 ***值得留下的想法***。中**「引号里的强调」**文也应自然；转义星号 \\*照原样留下\\*，行内代码 `a * b` 不参与排版。\n\n> 好的设计让人专注于内容，而不是学习如何使用它。\n\n- 把想到的写下来，不急着分类；这一条故意写得足够长，让手机窄屏上的第二行仍然和正文左边对齐。\n- 留下线索\n  - 从细节里找到方向\n- [x] 记下一闪而过的想法\n- [ ] 下次再读，补上新的理解\n\n## A quieter workspace\n\nMake room for **clear thinking**, *small discoveries*, and [a fresh perspective](https://developer.apple.com/design/).\n\n| 内容 | 呈现 | 进度 |\n| :--- | :---: | ---: |\n| 中文与 English | **清晰** | 100% |\n| `a \\| b` | *克制* | 80% |\n\n~~~~swift\nlet thought = \"Keep *literal* symbols\"\n// A shorter fence stays inside code:\n~~~\nprint(thought)\n~~~~\n\n---\n\n读到这里，完整的内容都还在。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Give ideas room to grow\n\nLeave a little space to see what matters. **The point:** let the content speak, let the tools handle complexity, and leave clarity for people.\n\n## The rhythm of a page\n\nReading starts with a thought, moves through *reflection*, and becomes ***an idea worth keeping***. Emphasis beside punctuation stays natural; escaped stars \\*stay literal\\*, and inline code `a * b` keeps its symbols.\n\n> Good design lets people focus on content instead of learning the tools.\n\n- Write down a thought before sorting it. This deliberately long item keeps its wrapped lines aligned with the text on a narrow phone screen.\n- Leave a trail\n  - Find direction in the details\n- [x] Capture a passing thought\n- [ ] Come back later with a new perspective\n\n## A quieter workspace\n\nMake room for **clear thinking**, *small discoveries*, and [a fresh perspective](https://developer.apple.com/design/).\n\n| Content | Style | Progress |\n| :--- | :---: | ---: |\n| Words and ideas | **Clear** | 100% |\n| `a \\| b` | *Quiet* | 80% |\n\n~~~~swift\nlet thought = \"Keep *literal* symbols\"\n// A shorter fence stays inside code:\n~~~\nprint(thought)\n~~~~\n\n---\n\nEverything is still here, right to the end."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# 让灵感，慢慢成形\n\n留一点空白，才看得见真正重要的东西。**重点：**让内容自己说话，把复杂留给工具，把清晰留给人。\n\n## 一张纸的阅读节奏\n\n阅读从一个念头开始，经过 *斟酌*，变成 ***值得留下的想法***。中**「引号里的强调」**文也应自然；转义星号 \\*照原样留下\\*，行内代码 `a * b` 不参与排版。\n\n> 好的设计让人专注于内容，而不是学习如何使用它。\n\n- 把想到的写下来，不急着分类；这一条故意写得足够长，让手机窄屏上的第二行仍然和正文左边对齐。\n- 留下线索\n  - 从细节里找到方向\n- [x] 记下一闪而过的想法\n- [ ] 下次再读，补上新的理解\n\n## A quieter workspace\n\nMake room for **clear thinking**, *small discoveries*, and [a fresh perspective](https://developer.apple.com/design/).\n\n| 内容 | 呈现 | 进度 |\n| :--- | :---: | ---: |\n| 中文与 English | **清晰** | 100% |\n| `a \\| b` | *克制* | 80% |\n\n~~~~swift\nlet thought = \"Keep *literal* symbols\"\n// A shorter fence stays inside code:\n~~~\nprint(thought)\n~~~~\n\n---\n\n读到这里，完整的内容都还在。"
+          }
+        }
+      }
+    },
     "## 对比结果\n\n| 方案 | 延迟 (p95) | 内存 | 说明 |\n|:---|---:|:---:|---|\n| `queue.sort` 按首次加入 | 12 ms | 38 MB | 改动最小，重连的人不会插队 |\n| 按 rejoinAt 排序并去重 | 9 ms | 41 MB | 需要迁移旧数据；**不建议**本周上 |\n| LinkedHashMap + lazy eviction of stale participants | 7 ms | 52 MB | 最快，但最复杂，出错时很难查 |\n\n> 注意：p95 是在 8 人房间里测的，16 人以上还没测。\n\n### 下一步\n1. 先合第一个方案\n   - 补 3 个重连用例\n   - 跑一遍压测\n2. 再评估第三个\n\n详见 [调度设计说明](https://example.com/scheduler)。\n\n```ts\nexport function sortQueue(queue: Participant[]): Participant[] { return [...queue].sort((a, b) => a.firstJoinedAt - b.firstJoinedAt) }\n```" : {
       "localizations" : {
         "en" : {
@@ -157,6 +173,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 加入"
+          }
+        }
+      }
+    },
+    "**把注意力还给内容**\n\n少一点干扰，多一点思考。保留 \\*字面星号\\*，读懂 **真正的强调**。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "**Bring attention back to content**\n\nFewer distractions, more room to think. Keep \\*literal stars\\* and read **real emphasis**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "**把注意力还给内容**\n\n少一点干扰，多一点思考。保留 \\*字面星号\\*，读懂 **真正的强调**。"
           }
         }
       }
@@ -2463,6 +2495,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "团队 · ¥198 · 10 人协作"
+          }
+        }
+      }
+    },
+    "图片正在路上" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An image on its way"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片正在路上"
           }
         }
       }
@@ -7207,6 +7255,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "类型检查"
+          }
+        }
+      }
+    },
+    "纸上的一小片风景\n\n为下一版留下的配色与节奏。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A little landscape on paper\n\nColors and rhythm for the next version."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "纸上的一小片风景\n\n为下一版留下的配色与节奏。"
           }
         }
       }

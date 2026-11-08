@@ -191,6 +191,8 @@ final class Workspace {
 
     #if os(macOS)
     let overlayHeader = OverlayHeader()
+    /// 栏头菜单读取当前编辑器草稿；编辑页持有其生命周期。
+    weak var openCardEditing: CardEditing?
     #endif
 
     /// 刚发给会话、页面还没读到的话（回复框的发送中）。

@@ -2,12 +2,20 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 每个活动项目（按项目顺序）的灵感数：散放在列表里、不是空白的灵感。一次查询，不必读全部卡片。
+  /// 活动项目的散放非空灵感数与最近修改时间，一次聚合，不读正文、附件或会话。
+  /// 时间取项目及有效卡片的最大值：未删、未归档的任务（含已完成与子任务）及非空灵感（含挂在任务下的）；空白草稿不算。
   public func projectSummaries() throws -> [ProjectSummary] {
-    let counts = Dictionary(uniqueKeysWithValues: try db.query(
-      "SELECT projectID, COUNT(*) FROM cards WHERE (\(Self.cardActive)) AND (\(Self.looseIdea)) AND \(Self.notBlank) GROUP BY projectID"
-    ) { ($0.uuid(0), Int($0.int(1))) })
-    return try projects().map { ProjectSummary(projectID: $0.id, cardCount: counts[$0.id] ?? 0) }
+    let summaries = Dictionary(uniqueKeysWithValues: try db.query(
+      """
+      SELECT projectID, SUM(CASE WHEN (\(Self.looseIdea)) AND \(Self.notBlank) THEN 1 ELSE 0 END), MAX(modifiedAt)
+      FROM cards WHERE (\(Self.cardActive)) AND (todoAt IS NOT NULL OR \(Self.notBlank)) GROUP BY projectID
+      """
+    ) { ($0.uuid(0), (count: Int($0.int(1)), modified: $0.date(2))) })
+    return try projects().map { project in
+      let summary = summaries[project.id]
+      return ProjectSummary(projectID: project.id, cardCount: summary?.count ?? 0,
+                            modifiedAt: max(project.modifiedAt, summary?.modified ?? project.modifiedAt))
+    }
   }
 
   /// 卡片搜索：FTS5 索引匹配文字（可选），再按项目、图片、发送目标、修改时间筛选，最后排序分页。

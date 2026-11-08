@@ -33,6 +33,8 @@ public struct CueEditorTheme: Equatable, @unchecked Sendable {
     public var maxTextWidth: CGFloat?
     public var verticalInset: CGFloat
     public var lineSpacing: CGFloat
+    /// 源码空段的显示高度；nil 沿用正文行高，不改存储与撤销。
+    public var blankLineHeight: CGFloat?
     public var headingSpacing: CGFloat
     public var imageCornerRadius: CGFloat
     /// 首段当标题排（任务气泡：标题与下面的话在同一个编辑器里，从第一帧就可编辑，点哪光标落在哪）；nil 时首段同正文。

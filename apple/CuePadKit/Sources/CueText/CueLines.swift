@@ -95,10 +95,11 @@ public struct CueSummary: Equatable, Sendable {
     /// 正文里第一个 http(s) 链接的域名（去掉 www.），卡片上当小标；没有链接为 nil。
     public var linkHost: String?
 
-    public init(_ stored: String) {
+    /// 展示层可在截断之前解释 Markdown 格式，避免把一对强调符号截断后当作字面星号。默认保留原文。
+    public init(_ stored: String, inline: (String) -> String = { $0 }) {
         // 只读到标题之后第一段的末尾为止：长正文的后半段不用解析
         var lines = Lines(rest: Substring(stored))
-        title = Self.title(from: &lines)
+        title = inline(Self.title(from: &lines))
         var paragraph: [String] = []
         while let line = lines.next() {
             if !line.isEmpty {
@@ -107,7 +108,7 @@ public struct CueSummary: Equatable, Sendable {
                 break
             }
         }
-        preview = String(paragraph.joined(separator: " ").prefix(Self.previewLimit))
+        preview = String(inline(paragraph.joined(separator: "\n")).replacingOccurrences(of: "\n", with: " ").prefix(Self.previewLimit))
         linkHost = stored.range(of: "http").flatMap { stored[$0.lowerBound...].firstMatch(of: /https?:\/\/[^\s\/?#)\]]+/) }
             .flatMap { URL(string: String($0.output))?.host() }
             .map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 }

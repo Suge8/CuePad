@@ -30,7 +30,7 @@ struct CardTextField: View {
             onVariables: { editingVariables = true },
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onError: workspace.fail,
-            fits: fits)
+            fits: fits, bottomInset: fits ? 0 : theme.verticalInset)
         .overlay { AttachmentSpotLayer(spot: editing.handle.spot) }
         .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
         .onChange(of: pickedImage) { insertPicked() }
