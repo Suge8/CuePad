@@ -70,6 +70,7 @@ nonisolated enum VoiceRelayEvent: Equatable, Sendable {
 
 nonisolated enum VoiceSignalError: Error {
     case unavailable, unsupported, peerUnavailable, leaseChanged, expired, tooLarge, invalid
+    case rejected(VoiceSignalRejection)
 }
 
 /// 由既有 Relay 实现，不另起 socket/心跳/run/reconnect 状态机。AppServices 是唯一事件消费者；其余读服务投影。

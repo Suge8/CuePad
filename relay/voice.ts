@@ -1,7 +1,8 @@
 import type { ServerWebSocket } from "bun";
 import { verifySignature } from "./auth";
 
-// 与原生 VoiceSignalFormat 的 v1 契约对应；正文仅两端解密，这里不解释业务命令或保存信令历史。
+// 与原生 VoiceSignalFormat 的唯一 v1 契约对应；purpose 是认证路由头的一部分，拒绝原样回显给发送归属。
+// 正文仅两端解密，这里不解释业务命令或保存信令历史。
 export const VOICE_VERSION = 1;
 export const MAX_VOICE_WIRE_BYTES = 64 * 1024;
 const MAX_DEVICE_BYTES = 128;
@@ -15,9 +16,10 @@ const MAX_VOICE_PEERS = 64;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Endpoint = { device: { rawValue: string }; lease: string };
+type Purpose = { media: Record<string, never> } | { command: { id: { rawValue: string } } } | { commandResult: { id: { rawValue: string } } };
 type Header = {
   version: number; sender: Endpoint; recipient: Endpoint; session: { rawValue: string };
-  sequence: number; expiresAtMilliseconds: number;
+  sequence: number; expiresAtMilliseconds: number; purpose: Purpose;
 };
 type Packet = { header: Header; sealed: string };
 type Departure = "disconnected" | "replaced";
@@ -47,9 +49,19 @@ function endpoint(value: unknown): value is Endpoint {
 function equal(a: Endpoint, b: Endpoint): boolean {
   return a.device.rawValue === b.device.rawValue && a.lease.toUpperCase() === b.lease.toUpperCase();
 }
+function purpose(value: unknown): value is Purpose {
+  if (shape(value, ["media"])) return shape(value.media, []);
+  for (const kind of ["command", "commandResult"]) {
+    if (shape(value, [kind]) && shape(value[kind], ["id"])) {
+      const id = value[kind].id;
+      return shape(id, ["rawValue"]) && uuid(id.rawValue);
+    }
+  }
+  return false;
+}
 function header(value: unknown): value is Header {
-  return shape(value, ["version", "sender", "recipient", "session", "sequence", "expiresAtMilliseconds"])
-    && value.version === VOICE_VERSION && endpoint(value.sender) && endpoint(value.recipient)
+  return shape(value, ["version", "sender", "recipient", "session", "sequence", "expiresAtMilliseconds", "purpose"])
+    && value.version === VOICE_VERSION && purpose(value.purpose) && endpoint(value.sender) && endpoint(value.recipient)
     && shape(value.session, ["rawValue"]) && uuid(value.session.rawValue)
     && typeof value.sequence === "number" && Number.isInteger(value.sequence) && value.sequence > 0 && value.sequence <= 0xffffffff
     && typeof value.expiresAtMilliseconds === "number" && Number.isSafeInteger(value.expiresAtMilliseconds);

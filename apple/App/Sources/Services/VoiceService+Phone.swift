@@ -1,8 +1,9 @@
 #if os(iOS)
 import Foundation
+import Observation
 
 /// 本次手机媒体及异步操作的所有权；租约、会话身份固定，结束后不复用。
-final class VoicePhoneSession {
+@Observable final class VoicePhoneSession {
     let id: VoiceSessionID
     let local: VoiceEndpoint
     let media: any VoiceMedia
@@ -10,7 +11,8 @@ final class VoicePhoneSession {
     var peer: VoiceEndpoint?
     var connected = false
     var answered = false
-    var deadline: Task<Void, Never>?
+    @ObservationIgnored var deadline: Task<Void, Never>?
+    var cleanup: Task<Void, Never>?
 
     init(id: VoiceSessionID, local: VoiceEndpoint, media: any VoiceMedia) {
         self.id = id
@@ -78,12 +80,21 @@ extension VoiceService {
     }
 
     func end(reason: VoiceEndReason = .hungUp, notify: Bool = true) async {
-        guard let owner = phone, !closing else { return }
-        closing = true
+        guard let owner = phone else { return }
+        if let cleanup = owner.cleanup { await cleanup.value; return }
+        let cleanup = Task { await self.finish(owner, reason: reason, notify: notify) }
+        owner.cleanup = cleanup
         owner.scope.end()
         owner.media.onEvent = { _ in }
+        await cleanup.value
+    }
+
+    /// 不属于 owner.scope：结束可能正由该作用域的期限或发送失败触发，取消输入不能取消资源回收与挂断通知。
+    private func finish(_ owner: VoicePhoneSession, reason: VoiceEndReason, notify: Bool) async {
+        let closing = VoiceOperationScope()
+        defer { closing.end() }
         var failure: VoiceIssue?
-        do { try await owner.media.close() }
+        do { try await closing.perform(within: .seconds(2)) { try await owner.media.close() } }
         catch { failure = .shutdownUnconfirmed }
         if notify, let peer = owner.peer, let signaling {
             let send = VoiceOperationScope()
@@ -96,7 +107,6 @@ extension VoiceService {
         }
         guard phone === owner else { return }
         phone = nil
-        closing = false
         muting = false
         let prior = projection
         setProjection(.init(session: owner.id, phase: failure.map { .failed($0) } ?? .ended(reason: reason),
