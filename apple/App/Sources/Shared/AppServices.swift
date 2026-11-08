@@ -50,6 +50,8 @@ final class AppServices {
     @ObservationIgnored let sync: (any SyncControlling)?
     /// 门铃（实时层，见 `AppServices+Relay`）；不连真的 iCloud（替身、没有 iCloud 权限、隔离库）时没有。
     @ObservationIgnored let relay: Relay?
+    @ObservationIgnored let sendOrder = SendOrder()
+    @ObservationIgnored lazy var voice = VoiceService(services: self, signaling: relay)
     private(set) var syncStatus: SyncStatus
     private(set) var syncIssues: [SyncIssue] = []
     /// 同步在一页页地拉积压（`SyncState.catchingUp`）；界面只经 `isCatchingUp` 读。
@@ -183,26 +185,6 @@ final class AppServices {
         #endif
     }
 
-    /// 改 Cue 的设置（同步的 `CueProfile`）：两端的写入口——名字、停用、Agent、模型与思考强度；启用另走 `enableCue`（要按那台 Mac 判断）。
-    /// 写库后马上传这一条，别的设备马上看到；Cue 运行的那台 Mac 的管理器读到就按新设置值班。
-    func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
-        try await store.updateCueProfile(edit)
-        await upload(CueProfile.recordID)
-    }
-
-    /// 让 Cue 运行在 `host` 那台 Mac 并启用（规则 `CueStore.enableCue`）：两端所有入口都经这里，界面读的是同一处判断（`CueGate`）。
-    /// 这台的库还没和 iCloud 对过一遍时拒绝（`CueEnableError.unsynced`）：库里没有 Cue 不等于哪台都没设过，启用了会把它从原来那台抢过来；
-    /// 它正在别的 Mac 上运行时，只有 `moving`（你确认了改在这台运行）才改。是这台 Mac 时先重新探测一次本机的 Agent
-    /// （刚启动还没探测完也不会按旧的或空的判断）；别的 Mac 按它同步来的那条。写完马上传。
-    func enableCue(on host: String, moving: Bool) async throws {
-        guard knowsSyncedFacts else { throw CueEnableError.unsynced }
-        #if os(macOS)
-        if host == hostID { try await macAgents.record() }
-        #endif
-        try await store.enableCue(on: host, moving: moving)
-        await upload(CueProfile.recordID)
-    }
-
     // 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
     // （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
     #if os(macOS)
@@ -215,7 +197,7 @@ final class AppServices {
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         (self.sync, syncStatus) = (engine, status)
-        relay = Self.makeRelay(sync, engine)
+        relay = Self.makeRelay(sync, engine, device: mac.hostID)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: false)
@@ -257,7 +239,7 @@ final class AppServices {
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         (self.sync, syncStatus) = (engine, status)
-        relay = Self.makeRelay(sync, engine)
+        relay = Self.makeRelay(sync, engine, device: UIDevice.current.identifierForVendor?.uuidString)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: true)

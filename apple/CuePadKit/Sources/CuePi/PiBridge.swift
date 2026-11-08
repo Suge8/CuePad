@@ -199,8 +199,9 @@ extension PiBridge {
     /// 停止该会话正在跑的这一轮（相当于在 Agent 里按 Esc）：受理即返回，会话随后歇下（`.settled`），能接着说。
     /// 已经空闲时什么也不发生（也成功）；只停它自己这一轮，它派出的子代理照常跑。
     /// 有目标的停止不取消本桥排着的新消息；真实回合身份交给接收端同步核对。
-    public func abort(_ id: PiSession.ID, deliveryID: String) async throws {
-        try await control(id, needs: .abort).abort(id, deliveryID: deliveryID)
+    public func abort(_ id: PiSession.ID, deliveryID: String, turnStartedAt: Int64) async throws {
+        guard session(id: id)?.turnStartedAt?.stored == turnStartedAt else { throw PiBridgeError.rejected("stale_turn") }
+        try await control(id, needs: .abort).abort(id, deliveryID: deliveryID, turnStartedAt: turnStartedAt)
     }
 
     public func abort(_ id: PiSession.ID) async throws {

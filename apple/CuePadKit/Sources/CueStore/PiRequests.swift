@@ -120,6 +120,7 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
   /// nil 是 Agent 的默认名（第一句话）。模型与思考强度可选（nil 用 Agent 的默认）。三者作为启动参数一起生效。
   /// 强度是更新版本的新值时整条读不出，按不认识的请求失败。
   public internal(set) var name: String?
+  public internal(set) var createdForTaskID: UUID?
   public var model: PiModelKey?
   public var thinking: PiThinkingLevel?
   public var fast: Bool
@@ -136,7 +137,7 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
     self.agent = agent
   }
 
-  private enum CodingKeys: String, CodingKey { case project, prompt, token, agent, name, model, thinking, fast }
+  private enum CodingKeys: String, CodingKey { case project, prompt, token, agent, name, model, thinking, fast, createdForTaskID }
 
   public init(from decoder: any Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -145,6 +146,7 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
     token = try c.decode(String.self, forKey: .token)
     agent = try c.decodeIfPresent(AgentKind.self, forKey: .agent)
     name = try c.decodeIfPresent(String.self, forKey: .name)
+    createdForTaskID = try c.decodeIfPresent(UUID.self, forKey: .createdForTaskID)
     model = try c.decodeIfPresent(PiModelKey.self, forKey: .model)
     thinking = try c.decodeIfPresent(PiThinkingLevel.self, forKey: .thinking)
     fast = try c.decodeIfPresent(Bool.self, forKey: .fast) ?? false

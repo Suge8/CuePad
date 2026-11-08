@@ -173,7 +173,7 @@ struct PiConfigControls<Trailing: View>: View {
 /// 5. `secondary`：次要的再收一档——思考强度只剩竖格、上下文只剩圆环（百分比留在读屏与点开的气泡里）、加速只写"加速"（开着靠选中底）、"管理用量"写"用量"；
 /// 6. `model`：剩下的宽都给模型，放不下全名就只留标志（没有标志的模型名字截断）；完整名称悬停、读屏、菜单里看。
 /// 先收字、留标志与操作；不把胶囊收进"⋯"：排版定不了菜单里该有哪几项（`Layout` 不能藏起子视图，藏不掉的照样被读屏读到、点到），一律收短、留在原地。
-/// 每颗都原地放，不挪走、不藏：放得下由字号上限保证（`PiConfigControls.largestType`，按最窄的手机与最长的一排定）。
+/// 所有压缩档用尽仍放不下时才折行；新增的尾部动作不能伸到发送钮下面，也不裁掉操作。
 private struct ConfigRow: Layout {
     enum Give: CaseIterable { case wording, spacing, context, agent, secondary, model }
 
@@ -188,17 +188,31 @@ private struct ConfigRow: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let row = arrange(in: proposal.width, subviews)
-        // 收完仍放不下时只报给的宽：多出的伸出去被输入框裁掉，输入框不跟着撑宽
-        return CGSize(width: min(row.width, proposal.width ?? row.width), height: height(row, subviews))
+        let frames = frames(row, in: proposal.width, subviews)
+        return CGSize(width: min(row.width, proposal.width ?? row.width), height: frames.map(\.maxY).max() ?? 0)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let row = arrange(in: proposal.width, subviews)
-        let height = height(row, subviews)
-        var x = bounds.minX
+        let row = arrange(in: bounds.width, subviews)
+        let frames = frames(row, in: bounds.width, subviews)
         for index in subviews.indices {
-            subviews[index].place(at: CGPoint(x: x, y: bounds.minY + height / 2), anchor: .leading, proposal: ProposedViewSize(width: row.widths[index], height: height))
-            x += row.widths[index] + row.spacing
+            let frame = frames[index]
+            subviews[index].place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.midY), anchor: .leading,
+                                 proposal: ProposedViewSize(frame.size))
+        }
+    }
+
+    private func frames(_ row: Arrangement, in available: CGFloat?, _ subviews: Subviews) -> [CGRect] {
+        let height = height(row, subviews)
+        var x: CGFloat = 0, y: CGFloat = 0
+        return row.widths.map { width in
+            if x > 0, let available, x + width > available {
+                x = 0
+                y += height + Self.tightSpacing
+            }
+            let frame = CGRect(x: x, y: y, width: width, height: height)
+            x += width + row.spacing
+            return frame
         }
     }
 

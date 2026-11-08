@@ -7,12 +7,22 @@ import SwiftUI
 /// 能选的是那台 Mac 上能用、有模型可选的几家；还没选在哪台运行、那台还没报过时一家都没有。
 /// 写不成的原因是窗口的提示（`Workspace.fail`）。
 /// 可选什么、当前是什么由放它的那一处订阅好交进来（`observingCueBrain`）：手机的面板开时才建这一排，名牌一直订阅着，长出的第一帧就是真的。
-struct CueConfigControls: View {
+struct CueConfigControls<Trailing: View>: View {
     let choice: AgentModelChoice?
     var opening: Binding<PiConfigPick?> = .constant(nil)
     var alignment = Alignment.leading
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
+
+    let trailing: Trailing
+
+    init(choice: AgentModelChoice?, opening: Binding<PiConfigPick?> = .constant(nil), alignment: Alignment = .leading,
+         @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
+        self.choice = choice
+        self.opening = opening
+        self.alignment = alignment
+        self.trailing = trailing()
+    }
 
     var body: some View {
         let choice = choice ?? AgentModelChoice(agents: [], agent: nil, model: nil, thinking: nil)
@@ -34,7 +44,7 @@ struct CueConfigControls: View {
             update { $0.effort = .known(level) }
         } chooseFast: { fast in
             update { $0.fast = fast }
-        }
+        } trailing: { trailing }
         .aligned(alignment)
     }
 
@@ -70,6 +80,6 @@ private struct CueBrainReading: ViewModifier {
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
-        content.observing(services.store, into: $choice, onError: workspace.fail) { try CueConfigControls.read(from: $0) }
+        content.observing(services.store, into: $choice, onError: workspace.fail) { try CueConfigControls<EmptyView>.read(from: $0) }
     }
 }

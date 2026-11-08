@@ -23,8 +23,8 @@ struct PiDeliveryConfirmation {
     }
 
     func recover(_ request: DeliveryRequest) async -> DeliveryOutcome {
-        guard request.mode == .known(.send) || request.mode == .known(.start) else { return .unconfirmed(DeliveryRequest.interruptedReason) }
         do {
+            guard request.mode == .known(.send) || request.mode == .known(.start) else { return .unconfirmed(DeliveryRequest.interruptedReason) }
             let sessionID: String?
             if let ref = request.target.ref { sessionID = ref }
             else if let token = request.launch?.token {

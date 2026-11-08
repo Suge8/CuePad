@@ -26,7 +26,7 @@ extension Schema {
       isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
       deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
       parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT, archivedAt INTEGER,
-      formerSessionIDs TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
+      formerSessionIDs TEXT, sessionBindingRevision TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
     CREATE INDEX cards_parentID ON cards(parentID);
@@ -56,10 +56,11 @@ extension Schema {
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
       pendingTools TEXT, model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT, turnStartedAt INTEGER, answeredAt INTEGER,
-      failure TEXT, bootID TEXT, fast INTEGER, stateSince INTEGER NOT NULL,
+      failure TEXT, bootID TEXT, fast INTEGER, createdForTaskID TEXT, stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
+    \(taskOriginIndex)
     CREATE INDEX piSessionStates_sessionID ON piSessionStates(sessionID);
     \(stateIndex)
     \(launchTokenIndex)
@@ -105,7 +106,7 @@ extension Schema {
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
       failure TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
-      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0, serverAt INTEGER, deadlineAt INTEGER
+      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0, serverAt INTEGER, deadlineAt INTEGER, sessionBindingRevision TEXT
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
 

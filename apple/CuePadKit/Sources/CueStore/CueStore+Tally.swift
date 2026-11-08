@@ -8,8 +8,7 @@ import Foundation
 /// - 被等你占着的（`held`）：它的会话在问你或待回复的顶层任务。一件事只在一处：它只算等你，不论状态是待办、进行中还是做完——
 ///   推进中在这里去掉它们；任务看板与实时活动按列分时也先看它（App 里的 `TaskBoard.Column.of`）。
 ///   Cue 落在任务上的提问不占着它：那件事留在原处（Cue 还在管它多半是推进中），提问只在 Cue 页答。
-/// - 推进中：Cue 此刻在做的（`CueBoard.active`，即它信封里的"在做"）里不在等你的：被会话等你占着的事与在问你、待回复的单独会话去掉；先后同看板。
-///   进行中而会话都结束了、没人在做的事不算，它留在你的任务清单里（任务看板的待办）。
+/// - 推进中：已开始未完成的任务与单独活会话（`CueBoard.inProgress`），去掉被真实等待占着的；会话结束、出错或离线不撤销任务进度。
 public struct CueTally: Equatable, Sendable {
   public enum Wait: Identifiable, Equatable, Sendable {
     case message(CueMessage, task: UUID?)
@@ -83,7 +82,7 @@ extension CueStore {
     let replying = try sessionsAwaitingReply()
     let owners = try sessionOwners(replying.map(\.sessionID))
     return CueTally(
-      works: try cueBoard().active, waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) })
+      works: try cueBoard().inProgress, waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) })
   }
 
   /// 只有拍板那一份（`CueTally.waiting`，同一条规则）：Cue 页的拍板卡只读它，不连带推进中的那些读取。

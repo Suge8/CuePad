@@ -42,6 +42,7 @@ struct CuePatrolTests {
         let project = try #require(try await store.projects().first)
         let task = try await store.createTask("在别的 Mac 上开工", in: project.id)
         _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: "elsewhere"), title: task.body, on: "mac-b", card: task.id)
+        let started = try #require(try await store.card(task.id))
         try await Task.sleep(for: .milliseconds(5))  // 这台 Mac 上之后改的卡片：修改时间晚于手机上那次删除
         _ = try await store.createCard(in: project.id, body: "随手记")
 
@@ -52,7 +53,7 @@ struct CuePatrolTests {
 
         #expect(try await store.cueBoardActive())  // 别的 Mac 上正在开会话的那件事还在做
         var deleted = try #require(try await store.syncRow(recordName: task.id.uuidString.lowercased()))
-        let deletedAt = SQLValue.int(Int64((task.modifiedAt.timeIntervalSince1970 * 1000).rounded()) + 1)
+        let deletedAt = SQLValue.int(Int64((started.modifiedAt.timeIntervalSince1970 * 1000).rounded()) + 1)
         deleted.fields["deletedAt"] = deletedAt
         deleted.fields["modifiedAt"] = deletedAt
         let synced = Date.now

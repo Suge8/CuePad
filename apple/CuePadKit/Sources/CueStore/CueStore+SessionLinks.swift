@@ -12,7 +12,11 @@ extension CueStore {
       if let delivery, let existing = try select(SendRecord.self, where: "deliveryID = ?", [delivery]).first { return existing }
       let record = try insertSendRecord(content, to: target, card: card, delivery: delivery, origin: origin)
       if let card, target.kind == .known(.piSession), let session = target.ref {
-        try linkCardInTransaction(card, toSession: session, at: Date.stamp)
+        if let delivery {
+          if let request = try find(DeliveryRequest.self, delivery) { try linkDeliveredCardInTransaction(request, toSession: session) }
+        } else {
+          try linkCardInTransaction(card, toSession: session, at: Date.stamp)
+        }
       }
       return record
     }
@@ -42,12 +46,29 @@ extension CueStore {
 
   /// 执行中的主动关联，不同于历史记账。请求写下后用户已经改绑或解绑的，不能被晚到的 ACK 抢回去。
   public func linkDeliveredCard(_ request: DeliveryRequest, toSession session: String) throws {
-    guard let card = request.cardID else { return }
-    try write {
-      guard try find(DeliveryRequest.self, request.id)?.cardID == card,
-        try db.first("SELECT 1 FROM deliveryRequests r WHERE r.id = ? AND \(Self.latestHandoff("r"))", [request.id], { _ in true }) != nil
-      else { return }
-      try linkCardInTransaction(card, toSession: session, at: Date.stamp)
+    try write { try linkDeliveredCardInTransaction(request, toSession: session) }
+  }
+
+  func linkDeliveredCardInTransaction(_ request: DeliveryRequest, toSession session: String) throws {
+    guard let card = request.cardID, try acceptsSessionBinding(request),
+      try find(DeliveryRequest.self, request.id)?.cardID == card else { return }
+    try linkExactCardInTransaction(card, toSession: session, at: Date.stamp)
+    if var revision = request.sessionBindingRevision, try find(Card.self, card)?.sessionBindingRevision?.fulfilled != true {
+      revision.fulfilled = true
+      try db.run("UPDATE cards SET sessionBindingRevision = ?, modifiedAt = ? WHERE id = ?", [revision.stored, Date.stamp, card])
+    }
+  }
+
+  /// 卡片、请求或成功回执晚到时兑现原关联意图；只用仍在库里的请求及其修订，不从发送历史猜测。
+  /// start 的目标由 launchToken 认领；已有会话的内容与命令按成功请求的固定目标补齐。
+  func reconcileDeliveredCards(cards: Set<UUID> = [], deliveries: Set<UUID> = []) throws {
+    guard !cards.isEmpty || !deliveries.isEmpty else { return }
+    let requests = try select(DeliveryRequest.self, where: """
+      status = 'succeeded' AND mode IN ('send', 'command') AND targetKind = 'piSession' AND targetRef IS NOT NULL
+        AND (cardID IN (SELECT value FROM json_each(?1)) OR id IN (SELECT value FROM json_each(?2)))
+      """, [Self.idList(cards), Self.idList(deliveries)])
+    for request in requests {
+      if let session = request.target.ref { try linkDeliveredCardInTransaction(request, toSession: session) }
     }
   }
 
@@ -65,12 +86,18 @@ extension CueStore {
 
   private func linkCardInTransaction(_ card: UUID, toSession session: String, at now: Date) throws {
     guard let link = try link(of: card) else { return }
+    let leaf = link.isTask ? try homeLeaf(card) : card
+    try linkExactCardInTransaction(leaf, toSession: session, at: now)
+  }
+
+  private func linkExactCardInTransaction(_ id: UUID, toSession session: String, at now: Date) throws {
+    guard let card = try find(Card.self, id), card.piSessionID != session else { return }
     try db.run(
       """
-      UPDATE cards SET \(Self.keepingFormerSession("?1")), piSessionID = ?1, modifiedAt = ?2,
-        startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END
+      UPDATE cards SET \(Self.keepingFormerSession("?1")), piSessionID = ?1, modifiedAt = ?2
       WHERE id = ?3
-      """, [session, now, link.isTask ? try homeLeaf(card) : card])
+      """, [session, now, id])
+    if card.isTask { try beginTask(id, at: now) }
   }
 
   /// 叶子换上会话 `new`（SQL 表达式）的 UPDATE 里与 `piSessionID` 一起写的：换下的会话记进 `formerSessionIDs` 末尾，
@@ -95,24 +122,24 @@ extension CueStore {
       guard let link = try link(of: task) else { throw CueStoreError.notFound }
       guard link.isTask else { throw CueStoreError.notATask }
       guard try homeLeaf(task) == task else { throw CueStoreError.notALeaf }
-      try forgetHandoffs(of: task)
+      guard let session = try sessionState(sessionID) else { throw CueStoreError.notFound }
+      guard link.project == (session.projectID ?? Project.defaultID) else { throw CueStoreError.invalidProject }
+      let current = try find(Card.self, task)
+      guard current?.piSessionID != sessionID || current?.sessionBindingRevision?.explicit != true else { return }
+      try requireSessionAvailable(sessionID)
+      _ = try reviseSessionBinding(task, explicit: true)
       try linkCardInTransaction(task, toSession: sessionID, at: Date.stamp)
-      try endUnusedSessions(of: task, cue: false)
     }
   }
 
   /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常（没有别的任务绑着它就是没绑任务的会话）。
   public func unbindSession(from task: UUID) throws {
     try write {
-      try forgetHandoffs(of: task)
-      try db.run("UPDATE cards SET piSessionID = NULL, modifiedAt = ? WHERE id = ? AND piSessionID IS NOT NULL", [Date.stamp, task])
+      let card = try requireLeaf(task)
+      guard card.piSessionID != nil || card.sessionBindingRevision?.explicit != true else { return }
+      _ = try reviseSessionBinding(task, explicit: true)
+      try db.run("UPDATE cards SET piSessionID = NULL, modifiedAt = ? WHERE id = ?", [Date.stamp, task])
     }
-  }
-
-  /// 用户亲手绑定、解绑后，旧请求不再有主动关联权限；迟到 ACK、会话认领与历史都不能抢回新绑定。
-  /// 不依赖发起设备与执行设备时钟一致。
-  private func forgetHandoffs(of task: UUID) throws {
-    try db.run("UPDATE deliveryRequests SET cardID = NULL, modifiedAt = ? WHERE cardID = ? AND mode IN ('start', 'send', 'command')", [Date.stamp, task])
   }
 
   /// 这个会话属于的叶子任务：正在用它的与以前用过它的（`formerSessionIDs`；没删除、没归档，含完成了的），先开始的在前；子任务带着上级。

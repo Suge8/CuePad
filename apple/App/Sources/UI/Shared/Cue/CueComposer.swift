@@ -92,13 +92,7 @@ struct CueComposer: View {
     @ViewBuilder private var tools: some View {
         #if os(macOS)
         if tooled {
-            VStack(alignment: .leading, spacing: Spacing.item) {
-                CueBrainRow(opening: $opening)
-                CueVoiceEntry(inCall: workspace.voice != nil) {
-                    if workspace.voice == nil { workspace.startVoiceCall() }
-                    else { workspace.voiceExpanded = true; workspace.showCue() }
-                }
-            }
+            CueBrainRow(opening: $opening)
         }
         #endif
     }
@@ -156,9 +150,9 @@ private struct CueBrainRow: View {
     @State private var brain: AgentModelChoice?
 
     var body: some View {
-        HStack(spacing: Spacing.item) {
-            CueConfigControls(choice: brain, opening: $opening)
+        CueConfigControls(choice: brain, opening: $opening) {
             CueHostNote()
+            CueVoiceComposerEntry()
         }
         .observingCueBrain(into: $brain)
     }

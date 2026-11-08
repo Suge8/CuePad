@@ -55,23 +55,16 @@ struct CuePage: View {
     #if os(macOS)
     private var page: some View {
         HStack(spacing: 0) {
-            GeometryReader { room in
-                let replyLimit = workspace.voice == nil ? nil : max(0, room.size.height - CueVoicePanel.minimumHeight - Spacing.replyBottom)
-                FloatingReply {
-                    CueVoiceContent { chat }
-                } reply: {
-                    CueVoiceReplyBudget(maximumHeight: replyLimit) {
-                        ScrollView {
-                            bottom(maximumComposerHeight: replyLimit)
-                                .replyTray()
-                                .padding(.horizontal, Self.inset)
-                                .frame(maxWidth: Self.readingWidth)
-                        }
-                        .defaultScrollAnchor(.bottom)
-                        .scrollBounceBehavior(.basedOnSize)
-                        .accessibilityLabel("拍板与回复")
-                    }
+            FloatingReply {
+                VStack(spacing: 0) {
+                    CueVoicePanel()
+                    chat.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+            } reply: {
+                bottom()
+                    .replyTray()
+                    .padding(.horizontal, Self.inset)
+                    .frame(maxWidth: Self.readingWidth)
             }
             // 原地淡入淡出、对话这一下就让到终点的宽：开合不逐帧排版（docs/layout.md「宽屏开合」）
             if cue.showsRun, let keeper = services.cue.keeper {
@@ -88,9 +81,14 @@ struct CuePage: View {
         FloatingReply {
             chat.padding(.leading, railInset)
         } reply: {
-            bottom()
-                .padding(.horizontal, Spacing.group)
-                .frame(maxWidth: Self.readingWidth)
+            VStack(spacing: 0) {
+                CueVoicePanel()
+                    .background(palette.desk, in: .rect(cornerRadius: Radius.field))
+                    .padding(.leading, railInset)
+                bottom()
+            }
+            .padding(.horizontal, Spacing.group)
+            .frame(maxWidth: Self.readingWidth)
         }
         .scrollDismissesKeyboard(.interactively)
         // iPad 右边那一栏：名牌比栏窄，对话到名牌下沿淡出，不从名牌两侧露出来（`Bars`）；手机的名牌铺满整行，照沉浸式
@@ -110,10 +108,7 @@ struct CuePage: View {
             if let thread, !thread.rows.isEmpty {
                 conversation(thread)
             } else if thread != nil {
-                CueWelcome(intro: true)
-                    .padding(.horizontal, Self.inset)
-                    .frame(maxWidth: Self.readingWidth, maxHeight: .infinity)
-                    .frame(maxWidth: .infinity)
+                CueWelcomeChat()
             } else {
                 Color.clear
             }
@@ -173,8 +168,8 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 拍板卡、停用时的启用与输入框；通话时输入框不高于回复视口，长草稿在原生文字框里滚动。
-    private func bottom(maximumComposerHeight: CGFloat? = nil) -> some View {
+    /// 拍板卡、停用时的启用与原输入框。
+    private func bottom() -> some View {
         VStack(spacing: 0) {
             if let thread {
                 CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, shots: thread.shots, open: { opened = $0 }, moving: $docking)
@@ -184,11 +179,36 @@ struct CuePage: View {
             }
             // 宽屏没启用时不放输入框：主区底部已有记下灵感的那一条（`CaptureSlot`），一屏只留一个；这一栏只剩启用那一张（`CueWelcome`）
             if cue.canHear || workspace.layout == .narrow {
+                #if os(iOS)
+                HStack(alignment: .bottom, spacing: Spacing.item) {
+                    CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
+                        .fixedSize(horizontal: false, vertical: true)
+                    CueVoiceComposerEntry()
+                }
+                #else
                 CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
-                    .fixedSize(horizontal: false, vertical: maximumComposerHeight == nil)
-                    .frame(maxHeight: maximumComposerHeight)
+                    .fixedSize(horizontal: false, vertical: true)
+                #endif
             }
         }
         .animation(Motion.fade, value: cue.canHear)
+    }
+}
+
+/// 在 FloatingReply 的内容里读回复框留白；空态也要能滚到被回复框盖住的建议。
+private struct CueWelcomeChat: View {
+    @Environment(\.chatBottomInset) private var replyInset
+
+    var body: some View {
+        GeometryReader { room in
+            ScrollView {
+                CueWelcome(intro: true)
+                    .padding(.horizontal, CuePage.inset)
+                    .frame(maxWidth: CuePage.readingWidth)
+                    .frame(maxWidth: .infinity, minHeight: max(0, room.size.height - replyInset))
+            }
+            .safeAreaPadding(.bottom, replyInset)
+            .scrollBounceBehavior(.basedOnSize)
+        }
     }
 }

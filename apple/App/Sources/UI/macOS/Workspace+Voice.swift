@@ -14,34 +14,13 @@ extension Workspace {
 
     func startVoiceCall(
         source: VoicePeer.Source = .microphone(device: nil), recording: URL? = nil,
-        makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = VoiceCall.init
+        makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = DebugHooks.makeVoiceCall
     ) {
-        voiceExpanded = true
         showCue()
         guard voice?.isLive != true else { return }
         guard cue.canHear else { return say("Cue 还没启用，启用后才能通话", tone: .failure) }
-        if let voice { voice.reconnect(); announceCall(voice); return }
-        let services = services
-        let call = makeCall(VoiceCall.Dependencies(
-            access: DebugHooks.voiceToken.map { file in { try Self.access(reading: file) } }
-                ?? { try await services.agents.integration.codexAccess(executable: services.agents.executable(.codex)) },
-            tell: { [weak self] text in
-                guard let self else { throw CancellationError() }
-                return try await self.recordSpeech(StoredBody.make(text: text, files: []), to: .cue)
-            },
-            store: services.store, cueName: cue.name, source: source, recording: recording))
-        voice = call
-        call.reconnect()
-        announceCall(call)
-    }
-
-    private func announceCall(_ call: VoiceCall) {
-        Task { [weak self] in
-            for await phase in Observations({ call.phase }) {
-                self?.announce(phase)
-                if !call.isLive { break }
-            }
-        }
+        // 常驻通话栏呈现连接、回应和失败；浮动提示会遮住声纹与挂断入口。
+        services.voice.startLocal(source: source, recording: recording, name: cue.name, makeCall: makeCall)
     }
 
     /// 真实会话的既有投影；选择范围后只停那个会话的当前回合，不把 Cue 的话当作执行确认。
@@ -49,8 +28,10 @@ extension Workspace {
 
     func stopVoiceExecution(_ sessionID: String) async throws -> DeliveryRequest {
         guard let voice else { throw CueStoreError.notFound }
-        let request = try await services.store.stopVoiceExecution(
-            sessionID, requests: voice.requests.compactMap(\.message), host: services.hostID)
+        guard let turn = services.pi.session(sessionID: sessionID)?.turnStartedAt else { throw CueStoreError.cannotStop(sessionID) }
+        let ids = voice.requests.compactMap(\.message)
+        let target = try await services.store.voiceExecutionTarget(sessionID, requests: ids, turnStartedAt: turn)
+        let request = try await services.store.stopVoiceExecution(target, requests: ids)
         if !voice.stopRequests.contains(where: { $0.id == request.id }) { voice.stopRequests.append(request) }
         voice.watchRequests()
         return services.uploaded(request)
@@ -60,39 +41,19 @@ extension Workspace {
     func recoverVoice(_ recovery: CueVoicePresentation.Recovery) async throws {
         switch recovery {
         case .retryRequest(let id): try await retryVoiceRequest(id)
+        case .repeatReply(let id): try await services.voice.command(.repeatReply(message: id)).requireAccepted()
         case .reconnect: startVoiceCall()
         }
     }
 
     func retryVoiceRequest(_ id: String) async throws {
         guard let voice, let request = voice.requests.first(where: { $0.id == id }) else { throw CueStoreError.notFound }
-        if let message = request.message {
-            guard request.pending else { throw SendError.alreadyHeard }
-            guard let current = try await services.store.cueMessages([message]).first else { throw CueStoreError.notFound }
-            try await services.withdraw(.cue(current, host: cue.hostID))
-        } else if request.failure == nil { return }
-        voice.recordRequest(id)
-        await voice.writing[id]?.value
-        if let failure = voice.requests.first(where: { $0.id == id })?.failure { throw SendError.notDelivered(failure) }
+        let reference: VoiceRequestReference = request.message.map { .recorded(message: $0) }
+            ?? .unrecorded(session: request.origin, request: request.rowID)
+        try await services.voice.command(.recover(request: reference)).requireAccepted()
     }
 
-    /// 令牌文件（`DebugHooks.voiceToken`）里的那一个
-    private static func access(reading file: URL) throws -> CodexAccess {
-        guard let access = CodexAccess(token: try String(contentsOf: file, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            throw CodexAccessError.signedOut
-        }
-        return access
-    }
 
-    private func announce(_ phase: VoiceCall.Phase) {
-        switch phase {
-        case .connecting: say("正在接通 Cue…")
-        case .listening: say("通话中")
-        case .handingOff, .speaking, .closing: break
-        case .ended: say("通话已结束")
-        case .failed(let failure): say(Dotted(failure.shown), tone: .failure)
-        }
-    }
 }
 
 extension VoiceCall.Failure {

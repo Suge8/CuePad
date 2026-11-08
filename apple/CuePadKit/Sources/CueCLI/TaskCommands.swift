@@ -28,7 +28,7 @@ extension Command {
         Opt("parent", "作为该任务的子任务（项目随它；任务 → 子任务，最多 \(Card.maxTaskDepth) 级）", value: "任务"),
       ],
       notes: Schema.defaultScope(otherwise: Schema.defaultTarget) + "给了 --parent 时不能再给 --project。\n"
-        + "正文取所有位置参数，以空格连接：第一行是标题，其余几行是它的正文（开始时连同标题发给 Agent）。\n"
+        + "正文取所有位置参数，以空格连接：第一行是标题，其余几行是它的正文（由 Cue 开工时连同标题发给 Agent）。\n"
         + Schema.output("新建的 Card", Schema.card)
     ) { call in
       let args = call.args
@@ -43,8 +43,28 @@ extension Command {
       }
       return reply(try await call.cardViews([task])[0])
     },
-    setStatus("start", "标记进行中", .inProgress),
-    setStatus("done", "标记完成（没完成的子任务一起完成）", .done),
+    setStatus("start", "标记进行中（不启动会话、不发送正文）", .inProgress),
+    Command(path: ["task", "done"], summary: "完成任务（没完成的子任务一起完成）", arguments: "<任务>",
+      notes: Schema.output("更新后的 Card", Schema.card)) { call in
+      try call.args.expect("任务")
+      let task = try await call.task(call.args.positionals[0])
+      _ = try await call.store.completeTask(task.id)
+      return reply(try await call.freshView(task.id))
+    },
+    Command(path: ["task", "bind"], summary: "关联已有任务与会话（不发送正文）", arguments: "<任务> <会话>",
+      notes: "会话写完整 id。\n" + Schema.output("更新后的 Card", Schema.card)) { call in
+      try call.args.expect("任务", "会话")
+      let task = try await call.task(call.args.positionals[0])
+      try await call.store.bindSession(call.args.positionals[1], to: task.id)
+      return reply(try await call.freshView(task.id))
+    },
+    Command(path: ["task", "unbind"], summary: "解除任务与会话的关联", arguments: "<任务>",
+      notes: Schema.output("更新后的 Card", Schema.card)) { call in
+      try call.args.expect("任务")
+      let task = try await call.task(call.args.positionals[0])
+      try await call.store.unbindSession(from: task.id)
+      return reply(try await call.freshView(task.id))
+    },
     setStatus("undo", "回到待办（撤销完成或进行中）", .todo),
   ]
 

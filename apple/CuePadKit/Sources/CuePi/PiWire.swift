@@ -281,6 +281,7 @@ enum PiWire {
         var images: [Image]?
         var deliveryId: String?
         var cueTurn: CueTurn?
+        var turnStartedAt: Int64?
     }
 
     static func sendCommand(id: String, _ message: PiMessage) throws -> Data {
@@ -291,8 +292,8 @@ enum PiWire {
             deliveryId: message.deliveryID, cueTurn: cueTurn))
     }
 
-    static func abortTurnCommand(id: String, deliveryID: String) throws -> Data {
-        try encodeLine(Command(t: "abortTurn", id: id, text: "", deliveryId: deliveryID))
+    static func abortTurnCommand(id: String, deliveryID: String, turnStartedAt: Int64) throws -> Data {
+        try encodeLine(Command(t: "abortTurn", id: id, text: "", deliveryId: deliveryID, turnStartedAt: turnStartedAt))
     }
 
     /// 斜杠命令：`text` 是以 / 开头的整行。
@@ -322,7 +323,7 @@ enum PiWire {
     }
 
     /// 认 `title` 的最早的扩展版本：更早的会话换上新扩展前不起名（`PiBridge.Link.canNameItself`）
-    static let abortTurnSince = 59
+    static let abortTurnSince = 60
     static let titleSince = 58
 
     private struct TitleCommand: Encodable {

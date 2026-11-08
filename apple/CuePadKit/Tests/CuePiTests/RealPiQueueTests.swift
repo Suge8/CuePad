@@ -17,22 +17,30 @@ struct RealPiQueueTests {
             try await bridge.send(PiMessage(text: work("A"), deliveryID: delivery), to: session.id)
             try await eventually("A 的真实工具开始") { exists(folder, "A.pid") }
             let a = try pid("A", in: folder)
+            let originalTurn = try #require(bridge.session(id: session.id)?.turnStartedAt).stored
             let held = stage == "preflight-control" ? "preflight" : stage
             try Data().write(to: gate.appending(path: "\(held).arm"))
             if stage == "sdk" {
                 try await eventually("公开 SDK 队列已受理") { exists(gate, "sdk.pending") || exists(gate, "sdk.empty") }
                 try #require(exists(gate, "sdk.pending"))
-                await #expect(throws: PiBridgeError.rejected("stale_turn")) { try await bridge.abort(session.id, deliveryID: delivery) }
+                await #expect(throws: PiBridgeError.rejected("stale_turn")) { try await bridge.abort(session.id, deliveryID: delivery, turnStartedAt: originalTurn) }
                 #expect(kill(a, 0) == 0)
                 #expect(kill(a, SIGUSR1) == 0)
             } else {
                 let send = Task { try await bridge.send(PiMessage(text: "QUEUE-B " + work("B")), to: session.id) }
                 defer { try? Data().write(to: gate.appending(path: "\(held).release")); send.cancel() }
                 try await eventually("\(held) 处等待") { exists(gate, "\(held).held") }
-                if stage == "starting" {
-                    await #expect(throws: PiBridgeError.rejected("stale_turn")) { try await bridge.abort(session.id, deliveryID: delivery) }
+                if stage == "pending" {
+                    try await eventually("旧停止的实际回合已结束，后续消息仍在闸内") {
+                        bridge.session(id: session.id)?.turnStartedAt?.stored != originalTurn
+                    }
+                    await #expect(throws: PiBridgeError.rejected("stale_turn")) {
+                        try await bridge.abort(session.id, deliveryID: delivery, turnStartedAt: originalTurn)
+                    }
+                } else if stage == "starting" {
+                    await #expect(throws: PiBridgeError.rejected("stale_turn")) { try await bridge.abort(session.id, deliveryID: delivery, turnStartedAt: originalTurn) }
                 } else if stage != "preflight-control" {
-                    try await bridge.abort(session.id, deliveryID: delivery)
+                    try await bridge.abort(session.id, deliveryID: delivery, turnStartedAt: originalTurn)
                     if stage == "preflight" { try await eventually("原回合 A 已实际退出") { kill(a, 0) != 0 } }
                 }
                 try Data().write(to: gate.appending(path: "\(held).release"))

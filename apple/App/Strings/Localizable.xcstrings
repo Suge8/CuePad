@@ -2,9 +2,7 @@
   "sourceLanguage" : "zh-Hans",
   "strings" : {
     "" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "\n\n— 插话 —\n\n" : {
@@ -24,27 +22,19 @@
       }
     },
     " " : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "!" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "$ swift test --filter Reconnect\nExecuted 4 tests, with 0 failures (0.90s)" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "%@" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "%@  %@" : {
@@ -1201,9 +1191,7 @@
       }
     },
     "%lld" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "%lld 个任务没做完" : {
@@ -2250,9 +2238,7 @@
       "shouldTranslate" : false
     },
     "+%lld" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "3D 模型" : {
@@ -2272,9 +2258,7 @@
       }
     },
     "9:41" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "<名字>" : {
@@ -2310,9 +2294,7 @@
       }
     },
     "Agent" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "Agent 会话「%@」已经结束，或不在这台 Mac 上" : {
@@ -2907,6 +2889,22 @@
         }
       }
     },
+    "App 进入后台，通话已结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The call ended when the app entered the background"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App 进入后台，通话已结束"
+          }
+        }
+      }
+    },
     "CPU 异常" : {
       "localizations" : {
         "en" : {
@@ -3192,9 +3190,7 @@
       }
     },
     "Cue" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "Cue 已经收到这句了，撤不回" : {
@@ -3390,15 +3386,11 @@
       }
     },
     "CuePad" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "CuePad %@" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "CuePad 写给 Agent 的技能或扩展没能升级：%@" : {
@@ -3669,6 +3661,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mac 不在线：唤醒它、开着 UU 远程再试"
+          }
+        }
+      }
+    },
+    "Mac 已断开连接，请检查 Mac 后重新接通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Mac disconnected. Check your Mac and reconnect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 已断开连接，请检查 Mac 后重新接通"
           }
         }
       }
@@ -4172,9 +4180,7 @@
       }
     },
     "me@example.com" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "opencode serve --stdio 没有报出地址" : {
@@ -4264,9 +4270,7 @@
       }
     },
     "staging-2.roundtable.app" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "tmux 没能切到 %@（会话可能没有附着的客户端）" : {
@@ -4286,39 +4290,27 @@
       }
     },
     "{{%@}}" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "¥0" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "¥198" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "¥68" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "·" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "••••••" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "↩ 打开" : {
@@ -4354,9 +4346,7 @@
       }
     },
     "✓" : {
-      "localizations" : {
-
-      },
+      "localizations" : {},
       "shouldTranslate" : false
     },
     "、" : {
@@ -5215,6 +5205,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下一次：%@"
+          }
+        }
+      }
+    },
+    "下一页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一页"
           }
         }
       }
@@ -6271,6 +6277,22 @@
         }
       }
     },
+    "会话正在结束，确认结束结果后才能关联或发送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This session is ending. Wait until the outcome is confirmed before linking a task or sending a message."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话正在结束，确认结束结果后才能关联或发送"
+          }
+        }
+      }
+    },
     "会话直连 OpenCode 的后台服务，不用另装。" : {
       "localizations" : {
         "en" : {
@@ -6315,6 +6337,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话移到左边"
+          }
+        }
+      }
+    },
+    "会话等待同步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for session to sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话等待同步"
           }
         }
       }
@@ -6943,22 +6981,6 @@
         }
       }
     },
-    "停止已交给 Cue 的执行" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stop work handed to Cue"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "停止已交给 Cue 的执行"
-          }
-        }
-      }
-    },
     "停止执行" : {
       "localizations" : {
         "en" : {
@@ -6987,6 +7009,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停止请求已受理"
+          }
+        }
+      }
+    },
+    "停止请求已提交" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop request submitted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止请求已提交"
           }
         }
       }
@@ -7467,22 +7505,6 @@
         }
       }
     },
-    "关闭麦克风" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mute microphone"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关闭麦克风"
-          }
-        }
-      }
-    },
     "关闭（Esc）" : {
       "localizations" : {
         "en" : {
@@ -7623,22 +7645,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再查一次额度"
-          }
-        }
-      }
-    },
-    "再次通话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Call again"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "再次通话"
           }
         }
       }
@@ -8743,6 +8749,22 @@
         }
       }
     },
+    "原记录不可用，无法继续此操作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original record is unavailable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原记录不可用，无法继续此操作"
+          }
+        }
+      }
+    },
     "原话" : {
       "localizations" : {
         "en" : {
@@ -8755,6 +8777,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原话"
+          }
+        }
+      }
+    },
+    "原请求已处理，无需再次提交" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original request was already handled"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原请求已处理，无需再次提交"
+          }
+        }
+      }
+    },
+    "原请求来源不匹配，操作未执行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The request origin does not match. No action was taken"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原请求来源不匹配，操作未执行"
+          }
+        }
+      }
+    },
+    "原请求的送达尚未确认，不能重复提交" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivery is unconfirmed. The request cannot be submitted again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原请求的送达尚未确认，不能重复提交"
+          }
+        }
+      }
+    },
+    "原通话已被替换或不可用，请在 Mac 的通话详情查看或恢复原请求" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original call was replaced or is unavailable. View or recover the original request in call details on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原通话已被替换或不可用，请在 Mac 的通话详情查看或恢复原请求"
           }
         }
       }
@@ -9219,6 +9305,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "取消重点"
+          }
+        }
+      }
+    },
+    "取消静音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unmute"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消静音"
           }
         }
       }
@@ -10063,6 +10165,22 @@
         }
       }
     },
+    "回到首页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to first page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回到首页"
+          }
+        }
+      }
+    },
     "回复" : {
       "localizations" : {
         "en" : {
@@ -10107,6 +10225,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "回复框带上这一份的引用"
+          }
+        }
+      }
+    },
+    "回复等待同步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for reply to sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回复等待同步"
           }
         }
       }
@@ -11087,6 +11221,22 @@
         }
       }
     },
+    "声音被其他应用打断，请重新接通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio was interrupted by another app. Reconnect to continue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "声音被其他应用打断，请重新接通"
+          }
+        }
+      }
+    },
     "处理…" : {
       "localizations" : {
         "en" : {
@@ -12031,22 +12181,6 @@
         }
       }
     },
-    "展开通话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Expand call"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "展开通话"
-          }
-        }
-      }
-    },
     "崩溃" : {
       "localizations" : {
         "en" : {
@@ -12191,22 +12325,6 @@
         }
       }
     },
-    "已交给 Cue" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Handed to Cue"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已交给 Cue"
-          }
-        }
-      }
-    },
     "已保存" : {
       "localizations" : {
         "en" : {
@@ -12311,6 +12429,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已删除 %lld 条"
+          }
+        }
+      }
+    },
+    "已加入朗读队列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Added to the reading queue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已加入朗读队列"
           }
         }
       }
@@ -12627,6 +12761,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已接到「%@」的正文后面"
+          }
+        }
+      }
+    },
+    "已提交语音，朗读尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submitted for speech; playback unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已提交语音，朗读尚未确认"
           }
         }
       }
@@ -13095,22 +13245,6 @@
         }
       }
     },
-    "开启麦克风" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unmute microphone"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开启麦克风"
-          }
-        }
-      }
-    },
     "开场的话" : {
       "localizations" : {
         "en" : {
@@ -13223,22 +13357,6 @@
         }
       }
     },
-    "开新会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New Session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开新会话"
-          }
-        }
-      }
-    },
     "开新会话交给它" : {
       "localizations" : {
         "en" : {
@@ -13335,38 +13453,6 @@
         }
       }
     },
-    "当前请求" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Current request"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前请求"
-          }
-        }
-      }
-    },
-    "当前请求：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Current request: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前请求：%@"
-          }
-        }
-      }
-    },
     "当前轮次的来源尚未确认，Cue 没有打断" : {
       "localizations" : {
         "en" : {
@@ -13379,6 +13465,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当前轮次的来源尚未确认，Cue 没有打断"
+          }
+        }
+      }
+    },
+    "当前连接不支持通话，请更新手机和 Mac 上的 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This connection does not support calls. Update CuePad on this device and your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前连接不支持通话，请更新手机和 Mac 上的 CuePad"
           }
         }
       }
@@ -13975,6 +14077,22 @@
         }
       }
     },
+    "打开麦克风设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Microphone Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开麦克风设置"
+          }
+        }
+      }
+    },
     "打断本轮" : {
       "localizations" : {
         "en" : {
@@ -13991,46 +14109,34 @@
         }
       }
     },
-    "执行与停止记录" : {
+    "执行回合已变化，没有停止后来的工作" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Execution and stop records"
+            "value" : "The execution turn changed. Later work was not stopped"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "执行与停止记录"
+            "value" : "执行回合已变化，没有停止后来的工作"
           }
         }
       }
     },
-    "执行详情 %lld" : {
+    "执行记录" : {
       "localizations" : {
         "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Details %lld"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Details %lld"
-                }
-              }
-            }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Execution history"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "执行详情 %lld"
+            "value" : "执行记录"
           }
         }
       }
@@ -14287,22 +14393,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把这次随手记直接说给 %@"
-          }
-        }
-      }
-    },
-    "拍板与回复" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Decisions and reply"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拍板与回复"
           }
         }
       }
@@ -15043,6 +15133,54 @@
         }
       }
     },
+    "操作失败，请检查 Mac 上的资料库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The action failed. Check the library on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作失败，请检查 Mac 上的资料库"
+          }
+        }
+      }
+    },
+    "操作暂不可用，请稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Action unavailable. Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作暂不可用，请稍后再试"
+          }
+        }
+      }
+    },
+    "操作未执行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Action not performed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作未执行"
+          }
+        }
+      }
+    },
     "收到 VoIP 推送后没向系统报来电，被系统结束" : {
       "localizations" : {
         "en" : {
@@ -15215,22 +15353,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "收起右栏（⌃⌘I）"
-          }
-        }
-      }
-    },
-    "收起通话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collapse call"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "收起通话"
           }
         }
       }
@@ -15975,6 +16097,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法访问共享容器 %@：App 没有该 App Group 的权限（真机需要开发者签名）"
+          }
+        }
+      }
+    },
+    "无法读取通话记录，请检查连接后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot read call history. Check your connection and try again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取通话记录，请检查连接后重试"
+          }
+        }
+      }
+    },
+    "无法连接 Mac，请确认 Mac 已开机并联网" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot connect to Mac. Make sure it is on and online"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法连接 Mac，请确认 Mac 已开机并联网"
           }
         }
       }
@@ -16763,18 +16917,18 @@
         }
       }
     },
-    "未交给 Cue" : {
+    "朗读记录" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Not sent to Cue"
+            "value" : "Speech history"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未交给 Cue"
+            "value" : "朗读记录"
           }
         }
       }
@@ -16871,22 +17025,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未能交给 Cue"
-          }
-        }
-      }
-    },
-    "未能交给 Cue：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t send to Cue: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未能交给 Cue：%@"
           }
         }
       }
@@ -17003,6 +17141,22 @@
         }
       }
     },
+    "本项目没有可绑定的任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Tasks to Link in This Project"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本项目没有可绑定的任务"
+          }
+        }
+      }
+    },
     "本项目没有在跑的会话" : {
       "localizations" : {
         "en" : {
@@ -17099,22 +17253,6 @@
         }
       }
     },
-    "查看全部执行与停止记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View all execution and stop records"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看全部执行与停止记录"
-          }
-        }
-      }
-    },
     "查看图片" : {
       "localizations" : {
         "en" : {
@@ -17143,38 +17281,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查看大图"
-          }
-        }
-      }
-    },
-    "查看请求详情" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View request details"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看请求详情"
-          }
-        }
-      }
-    },
-    "查看通话舞台" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show call stage"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看通话舞台"
           }
         }
       }
@@ -17707,18 +17813,18 @@
         }
       }
     },
-    "正在处理" : {
+    "正在回应" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Processing"
+            "value" : "Responding"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在处理"
+            "value" : "正在回应"
           }
         }
       }
@@ -17819,18 +17925,18 @@
         }
       }
     },
-    "正在接通 Cue…" : {
+    "正在提交语音…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Calling Cue…"
+            "value" : "Submitting for speech…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在接通 Cue…"
+            "value" : "正在提交语音…"
           }
         }
       }
@@ -17899,18 +18005,18 @@
         }
       }
     },
-    "正在说" : {
+    "正在读取…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Speaking"
+            "value" : "Loading…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在说"
+            "value" : "正在读取…"
           }
         }
       }
@@ -19451,6 +19557,22 @@
         }
       }
     },
+    "状态等待同步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for status to sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "状态等待同步"
+          }
+        }
+      }
+    },
     "现在" : {
       "localizations" : {
         "en" : {
@@ -19767,22 +19889,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登录失效"
-          }
-        }
-      }
-    },
-    "登录已失效" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your sign-in has expired"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "登录已失效"
           }
         }
       }
@@ -20719,6 +20825,38 @@
         }
       }
     },
+    "等待回应" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待回应"
+          }
+        }
+      }
+    },
+    "等待提交语音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting to submit for speech"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待提交语音"
+          }
+        }
+      }
+    },
     "等待目标就绪" : {
       "localizations" : {
         "en" : {
@@ -21007,6 +21145,22 @@
         }
       }
     },
+    "结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束"
+          }
+        }
+      }
+    },
     "结束会话" : {
       "localizations" : {
         "en" : {
@@ -21071,6 +21225,22 @@
         }
       }
     },
+    "结束通话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End call"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束通话"
+          }
+        }
+      }
+    },
     "结果" : {
       "localizations" : {
         "en" : {
@@ -21083,6 +21253,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "结果"
+          }
+        }
+      }
+    },
+    "结果来源尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Result source unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结果来源尚未确认"
           }
         }
       }
@@ -21231,18 +21417,18 @@
         }
       }
     },
-    "网络连接已断开" : {
+    "网络连接断了，请检查网络后重新接通" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connection lost"
+            "value" : "Network disconnected. Check your connection and reconnect"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "网络连接已断开"
+            "value" : "网络连接断了，请检查网络后重新接通"
           }
         }
       }
@@ -21931,6 +22117,22 @@
         }
       }
     },
+    "记录已变化，请回到首页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Records changed. Return to the first page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记录已变化，请回到首页"
+          }
+        }
+      }
+    },
     "记忆" : {
       "localizations" : {
         "en" : {
@@ -21959,6 +22161,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "设备过热，被系统结束"
+          }
+        }
+      }
+    },
+    "设备连接已更换，请重新接通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The device connection changed. Reconnect to continue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备连接已更换，请重新接通"
           }
         }
       }
@@ -22107,6 +22325,54 @@
         }
       }
     },
+    "请先在 Mac 上启用并配置 Cue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable and configure Cue on your Mac first"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先在 Mac 上启用并配置 Cue"
+          }
+        }
+      }
+    },
+    "请先在 Mac 上安装 Codex" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install Codex on your Mac first"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先在 Mac 上安装 Codex"
+          }
+        }
+      }
+    },
+    "请先在 Mac 上登录 Codex" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in to Codex on your Mac first"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先在 Mac 上登录 Codex"
+          }
+        }
+      }
+    },
     "请按下组合键…" : {
       "localizations" : {
         "en" : {
@@ -22187,18 +22453,50 @@
         }
       }
     },
-    "请求详情" : {
+    "请求已记下" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Request details"
+            "value" : "Request recorded"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请求详情"
+            "value" : "请求已记下"
+          }
+        }
+      }
+    },
+    "请求摘要「%@…」：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request excerpt “%@…”: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求摘要「%1$@…」：%2$@"
+          }
+        }
+      }
+    },
+    "请求记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求记录"
           }
         }
       }
@@ -22391,6 +22689,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "调研三款笔记 App 的优缺点，写一页总结"
+          }
+        }
+      }
+    },
+    "账号已更换，请重新接通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The account changed. Reconnect to continue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账号已更换，请重新接通"
           }
         }
       }
@@ -22899,22 +23213,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "返回编辑"
-          }
-        }
-      }
-    },
-    "返回通话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Return to call"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "返回通话"
           }
         }
       }
@@ -24267,18 +24565,18 @@
         }
       }
     },
-    "这条结果尚未关联到通话请求，可以查看文字或点再说一遍" : {
+    "这条通话记录太大，无法读取" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This result has not been linked to a call request. Read it here or choose Say Again."
+            "value" : "This call record is too large to load"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这条结果尚未关联到通话请求，可以查看文字或点再说一遍"
+            "value" : "这条通话记录太大，无法读取"
           }
         }
       }
@@ -24567,22 +24865,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "送达未确认"
-          }
-        }
-      }
-    },
-    "送达未确认：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delivery unconfirmed: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "送达未确认：%@"
           }
         }
       }
@@ -24955,18 +25237,18 @@
         }
       }
     },
-    "通话中" : {
+    "通话关闭尚未确认，请检查连接" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On a call with Cue"
+            "value" : "Call closure is unconfirmed. Check your connection"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通话中"
+            "value" : "通话关闭尚未确认，请检查连接"
           }
         }
       }
@@ -24987,6 +25269,22 @@
         }
       }
     },
+    "通话协议不兼容，请更新手机和 Mac 上的 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call protocols are incompatible. Update CuePad on this device and your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话协议不兼容，请更新手机和 Mac 上的 CuePad"
+          }
+        }
+      }
+    },
     "通话已结束" : {
       "localizations" : {
         "en" : {
@@ -25003,18 +25301,34 @@
         }
       }
     },
-    "通话文字" : {
+    "通话控制连接断了，请重新接通" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Call transcript"
+            "value" : "Call control disconnected. Reconnect to continue"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通话文字"
+            "value" : "通话控制连接断了，请重新接通"
+          }
+        }
+      }
+    },
+    "通话操作未确认，请检查连接后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call action unconfirmed. Check the connection before trying again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话操作未确认，请检查连接后重试"
           }
         }
       }
@@ -25035,6 +25349,54 @@
         }
       }
     },
+    "通话暂不可用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call unavailable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话暂不可用"
+          }
+        }
+      }
+    },
+    "通话服务出错（%lld），请稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call service error (%lld). Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话服务出错（%lld），请稍后重试"
+          }
+        }
+      }
+    },
+    "通话服务出错，请稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call service error. Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话服务出错，请稍后重试"
+          }
+        }
+      }
+    },
     "通话未连接" : {
       "localizations" : {
         "en" : {
@@ -25047,6 +25409,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通话未连接"
+          }
+        }
+      }
+    },
+    "通话正忙，请稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call is busy. Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话正忙，请稍后再试"
           }
         }
       }
@@ -25099,6 +25477,22 @@
         }
       }
     },
+    "通话的声音连接断了，请重新接通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call audio disconnected. Reconnect to continue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话的声音连接断了，请重新接通"
+          }
+        }
+      }
+    },
     "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex" : {
       "localizations" : {
         "en" : {
@@ -25131,6 +25525,70 @@
         }
       }
     },
+    "通话记录暂不可用，请检查 Mac 上的资料库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call records are unavailable. Check the library on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话记录暂不可用，请检查 Mac 上的资料库"
+          }
+        }
+      }
+    },
+    "通话详情" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话详情"
+          }
+        }
+      }
+    },
+    "通话请求被拒绝（%lld），请在 Mac 上检查账号和语音权限" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call request rejected (%lld). Check your account and voice access on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话请求被拒绝（%lld），请在 Mac 上检查账号和语音权限"
+          }
+        }
+      }
+    },
+    "通话连接已满，请稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call capacity reached. Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话连接已满，请稍后再试"
+          }
+        }
+      }
+    },
     "通话连接或发送超时，请重新接通；已有请求和回复仍然保留" : {
       "localizations" : {
         "en" : {
@@ -25147,18 +25605,18 @@
         }
       }
     },
-    "通话额度已用完" : {
+    "通话连接超时，请重新接通" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Call limit reached"
+            "value" : "Call connection timed out. Reconnect to continue"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通话额度已用完"
+            "value" : "通话连接超时，请重新接通"
           }
         }
       }
@@ -25671,22 +26129,6 @@
         }
       }
     },
-    "阅读通话文字" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read transcript"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "阅读通话文字"
-          }
-        }
-      }
-    },
     "附件" : {
       "localizations" : {
         "en" : {
@@ -25863,22 +26305,6 @@
         }
       }
     },
-    "需注意" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Needs attention"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需注意"
-          }
-        }
-      }
-    },
     "需要 %@ %@ 以上" : {
       "localizations" : {
         "en" : {
@@ -25955,6 +26381,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "青绿"
+          }
+        }
+      }
+    },
+    "静音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mute"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "静音"
           }
         }
       }
@@ -26295,38 +26737,6 @@
         }
       }
     },
-    "麦克风" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Microphone"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "麦克风"
-          }
-        }
-      }
-    },
-    "麦克风已开启" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Microphone on"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "麦克风已开启"
-          }
-        }
-      }
-    },
     "麦克风已静音" : {
       "localizations" : {
         "en" : {
@@ -26343,6 +26753,22 @@
         }
       }
     },
+    "麦克风权限未开启，请在设置中允许 CuePad 使用麦克风" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Microphone access is off. Allow CuePad to use the microphone in Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "麦克风权限未开启，请在设置中允许 CuePad 使用麦克风"
+          }
+        }
+      }
+    },
     "麦克风权限未开启：在系统设置中允许 CuePad 使用麦克风后重新接通" : {
       "localizations" : {
         "en" : {
@@ -26355,22 +26781,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "麦克风权限未开启：在系统设置中允许 CuePad 使用麦克风后重新接通"
-          }
-        }
-      }
-    },
-    "麦克风访问未开启" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Microphone access is off"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "麦克风访问未开启"
           }
         }
       }

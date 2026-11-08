@@ -18,7 +18,7 @@ public protocol SessionLink: AnyObject {
     func end(_ id: PiSession.ID) async throws
     func abort(_ id: PiSession.ID) async throws
     /// 核对真实投送身份和停止必须在接收端的同一同步段；不支持的接入明确拒绝，不能降级为无条件停止。
-    func abort(_ id: PiSession.ID, deliveryID: String) async throws
+    func abort(_ id: PiSession.ID, deliveryID: String, turnStartedAt: Int64) async throws
     /// 把出错的那一轮原样重跑一遍（`AgentCapabilities.retry`）：对话里不多一句话。受理即返回，不等模型。
     func retry(_ id: PiSession.ID) async throws
     func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws
@@ -38,7 +38,7 @@ extension SessionLink {
     public func command(_ line: String, deliveryID: String?, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func end(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func abort(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func abort(_ id: PiSession.ID, deliveryID: String) async throws { throw PiBridgeError.rejected("unsupported_stop_turn") }
+    public func abort(_ id: PiSession.ID, deliveryID: String, turnStartedAt: Int64) async throws { throw PiBridgeError.rejected("unsupported_stop_turn") }
     public func retry(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {

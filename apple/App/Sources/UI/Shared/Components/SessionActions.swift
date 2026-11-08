@@ -50,9 +50,9 @@ struct SessionActions: View {
         #endif
     }
 
-    /// 结束会话：还在线、做得到的（`PiSessionState.canEnd`）。结束不是删除（对话留着，再说话就恢复），用墨色，确认框里再说清后果。
-    static func end(_ session: PiSessionState, ending: Bool, in workspace: Workspace) -> RowAction? {
-        guard session.canEnd else { return nil }
+    /// 结束会话：还在线、做得到的（`PiSessionState.canEnd`），或从未解决的结束提示明确恢复。结束不是删除（对话留着，再说话就恢复），用墨色，确认框里再说清后果。
+    static func end(_ session: PiSessionState, ending: Bool, recovering: Bool = false, in workspace: Workspace) -> RowAction? {
+        guard session.canEnd || recovering else { return nil }
         return RowAction("结束会话", icon: .endSession, enabled: !ending) { workspace.sessionAsk = .end(session) }
     }
 

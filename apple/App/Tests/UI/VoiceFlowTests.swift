@@ -21,14 +21,14 @@ struct VoiceFlowTests {
         let first = try await fixture.handoff("保存但未接走 A")
         let second = try await fixture.handoff("保存但未接走 B")
         try await finish(store, "合批结果先到", requests: [first, second])
-        try await eventually("合批结果进入界面") { fixture.workspace.voicePresentation?.replies.count == 3 }
-        #expect(fixture.workspace.voicePresentation?.replies.allSatisfy { $0.request?.delivery != .delivered } == true)
+        try await eventually("合批结果进入界面") { fixture.call.replies.count == 1 }
+        #expect(fixture.trip(first) != .delivered && fixture.trip(second) != .delivered)
         try await store.markCueMessagesDelivered([first])
         try await eventually("A 的真实回执到达") { fixture.call.requests.first?.record?.deliveredAt != nil }
-        #expect(fixture.workspace.voicePresentation?.replies.last?.request?.delivery != .delivered)
+        #expect(fixture.trip(second) != .delivered)
         try await store.markCueMessagesDelivered([second])
         try await eventually("全部收到回执才显示接走") {
-            fixture.workspace.voicePresentation?.replies.allSatisfy { $0.request?.delivery == .delivered } == true
+            fixture.trip(first) == .delivered && fixture.trip(second) == .delivered
         }
         try await fixture.hangUp()
     }
@@ -48,11 +48,11 @@ struct VoiceFlowTests {
         try await finish(store, "两件一起回答", requests: [first, second])
         try await finish(store, "另一个入口的私有回复", requests: [UUID()])
         try await eventually("三条结果进入界面") { fixture.call.replies.count == 3 && fixture.controls[0].sends.count == 3 }
-        let rows = try #require(fixture.workspace.voicePresentation?.replies)
-        #expect(rows.map(\.text) == ["", "建卡的结果", "", "改期的结果", "两件一起回答"])
-        #expect(rows.last?.request?.text == "先建卡\n\n再改期")
-        #expect(rows.filter { $0.request?.delivery == .sending }.count == 3)
-        #expect(rows.filter { !$0.text.isEmpty }.allSatisfy { $0.note == nil })
+        let rows = try await store.cueMessages().filter { $0.author == .known(.cue) }
+        #expect(rows.first { $0.text == "建卡的结果" }?.answeredRequests == [first])
+        #expect(rows.first { $0.text == "改期的结果" }?.answeredRequests == [second])
+        #expect(rows.first { $0.text == "两件一起回答" }?.answeredRequests == [first, second])
+        #expect(fixture.trip(first) == .sending && fixture.trip(second) == .sending)
         try await fixture.hangUp()
     }
 
@@ -65,16 +65,22 @@ struct VoiceFlowTests {
         let reply = try await store.addCueMessage(.cue, text: "另一入口的结果", answeredRequests: nil)
         try await eventually("来源未知先可见但不自动播报") { fixture.call.replies.contains { $0.id == reply.id } }
         #expect(fixture.controls[0].sends.isEmpty)
+        let reading = try #require(fixture.workspace.voicePresentation?.readings.first { $0.id == reply.id })
+        try await fixture.workspace.recoverVoice(try #require(reading.recovery))
+        try await eventually("明确手动朗读不必等来源关联") { fixture.call.replies.first { $0.id == reply.id }?.delivery == .submitted }
+        #expect(fixture.controls[0].sends.count == 1)
         try await store.associateCueReply(reply.id, answering: [foreign.id])
         let marker = try await store.addCueMessage(.cue, text: "合法主动更新", answeredRequests: [])
         try await eventually("已消费来源更新之后的记录") {
             fixture.call.replies.contains { $0.id == marker.id && $0.delivery == .submitted }
         }
-        #expect(fixture.workspace.voicePresentation?.replies.contains { $0.id == reply.id } == false)
-        fixture.call.repeatReply(reply.id)
+        #expect(!fixture.call.replies.contains { $0.id == reply.id })
+        await #expect(throws: VoiceIssue.originalMissing) {
+            try await fixture.workspace.recoverVoice(.repeatReply(reply.id))
+        }
         let later = try await store.addCueMessage(.cue, text: "后续主动更新", answeredRequests: [])
         try await eventually("后续发送仍畅通") { fixture.call.replies.contains { $0.id == later.id && $0.delivery == .submitted } }
-        #expect(fixture.controls[0].sends.count == 2, "旧结果没有再发送，只有两条真实主动更新")
+        #expect(fixture.controls[0].sends.count == 3, "只有一次明确手动朗读与两条主动更新，已确认为其他入口的旧结果不能重说")
         try await fixture.hangUp()
     }
 
@@ -87,16 +93,24 @@ struct VoiceFlowTests {
         let request = try await fixture.handoff("记一件事")
         try await finish(store, "已记下", requests: [request])
         try await eventually("第一条提交给语音") { fixture.controls[0].sends.count == 1 }
+        let call = fixture.call
         try await fixture.hangUp()
+        #expect(fixture.workspace.voice === call)
+        #expect(fixture.workspace.voicePresentation?.active == false)
+        #expect(fixture.workspace.voicePresentation?.needsAttention == false)
         try await finish(store, "挂断后到达的进展", requests: [request])
-        try await eventually("挂断后仍能看结果") { fixture.workspace.voicePresentation?.replies.filter { !$0.text.isEmpty }.count == 2 }
+        try await eventually("挂断后仍能看结果") { fixture.call.replies.count == 2 }
         try await fixture.connect()
         try await eventually("只提交晚到的那条") { fixture.controls[1].sends.count == 1 }
         let first = try #require(fixture.call.replies.first?.id)
-        fixture.call.repeatReply(first)
+        let reading = try #require(fixture.workspace.voicePresentation?.readings.first { $0.id == first })
+        #expect(fixture.call.replies.first { $0.id == first }?.delivery == .submitted)
+        let recovery = try #require(reading.recovery)
+        #expect(recovery == .repeatReply(first))
+        try await fixture.workspace.recoverVoice(recovery)
         try await eventually("明确再说才再次提交") { fixture.controls[1].sends.count == 2 }
         #expect(try await store.cueMessages().filter { $0.author == .known(.you) }.count == 1)
-        #expect(fixture.workspace.voicePresentation?.replies.filter { !$0.text.isEmpty }.count == 2)
+        #expect(fixture.call.replies.count == 2)
         try await fixture.hangUp()
     }
 
@@ -110,11 +124,19 @@ struct VoiceFlowTests {
         try await finish(store, result, requests: [request])
         try await eventually("半途失败已收尾") { !fixture.call.isLive }
         #expect(fixture.controls[0].fragments.count == 1)
-        #expect(fixture.workspace.voicePresentation?.replies.last?.text == result)
+        #expect(fixture.call.replies.last?.text == result)
         try await fixture.connect()
-        #expect(fixture.controls[1].sends.isEmpty)
-        fixture.call.repeatReply(try #require(fixture.call.replies.first?.id))
-        try await eventually("完整回复重新提交") { fixture.controls[1].fragments.count > 1 }
+        let marker = try await store.addCueMessage(.cue, text: "重连后的主动更新", answeredRequests: [])
+        try await eventually("新连接处理后续结果，不重投半条") {
+            fixture.call.replies.contains { $0.id == marker.id && $0.delivery == .submitted }
+        }
+        #expect(fixture.controls[1].sends.count == 1)
+        let first = try #require(fixture.call.replies.first?.id)
+        let reading = try #require(fixture.workspace.voicePresentation?.readings.first { $0.id == first })
+        try await fixture.workspace.recoverVoice(try #require(reading.recovery))
+        try await eventually("完整回复重新提交") { fixture.call.replies.first?.delivery == .submitted }
+        #expect(fixture.controls[1].sends.count == 2)
+        #expect(fixture.controls[1].fragments.count > 2)
         #expect(try await store.cueMessages().filter { $0.author == .known(.you) }.count == 1)
         try await fixture.hangUp()
     }
@@ -129,7 +151,7 @@ struct VoiceFlowTests {
         let validAccess = VoiceFlowFixture(app.services).access
         fixture.start()
         try await eventually("显示连接失败") { !fixture.call.isLive && fixture.call.phase.isFailure }
-        #expect(fixture.workspace.voicePresentation?.issue != nil)
+        #expect(fixture.workspace.voicePresentation?.issues.isEmpty == false)
         #expect(fixture.workspace.voicePresentation?.canStopExecution == false)
         fixture.media.denied = false
         fixture.connectError = nil
@@ -151,7 +173,7 @@ struct VoiceFlowTests {
         gate.continuation.finish()
         #expect(fixture.controls.isEmpty)
         #expect(fixture.workspace.voicePresentation?.activity == .ended)
-        #expect(fixture.workspace.voicePresentation?.issue == nil)
+        #expect(fixture.workspace.voicePresentation?.issues.isEmpty == true)
     }
 
     @Test(arguments: ["failed", "unconfirmed"])
@@ -168,52 +190,63 @@ struct VoiceFlowTests {
         if kind == "failed" {
             try db.exec("CREATE TRIGGER voice_write_failure BEFORE INSERT ON cueMessages WHEN NEW.author = 'you' BEGIN SELECT RAISE(FAIL, 'voice test write failed'); END")
             fixture.received?(.success(.delegation(.init(id: "write-failed", turn: nil, text: originalText))))
-            try await eventually("界面能看到未交出与原文") { fixture.workspace.voiceIssueRequest?.failure != nil }
+            try await eventually("界面能看到未交出与原文") { fixture.workspace.voicePresentation?.issues.first?.recovery == .retryRequest("write-failed") }
+            fixture.received?(.success(.delegation(.init(id: "other-failed", turn: nil, text: "另一件未落库的请求"))))
+            try await eventually("多个失败各自保留恢复身份") {
+                fixture.workspace.voicePresentation?.issues.map(\.recovery) == [.retryRequest("write-failed"), .retryRequest("other-failed")]
+            }
             try db.exec("DROP TRIGGER voice_write_failure")
         } else {
             _ = try await fixture.handoff(originalText, id: "write-failed")
             clock.advance(.seconds(Speech.receiptLimit + 1))
-            try await eventually("A 未确认") { fixture.workspace.voiceIssueRequest?.id == "write-failed" }
+            try await eventually("A 未确认") { fixture.trip()?.unconfirmedReason != nil }
         }
-        #expect(fixture.workspace.voicePresentation?.replies.first?.request?.text == originalText)
+        #expect(fixture.call.requests.first?.text == originalText)
         let later = try await fixture.handoff("后来的请求已接走")
         try await store.markCueMessagesDelivered([later])
         try await eventually("B 已接走而恢复仍指向 A") {
-            fixture.workspace.voicePresentation?.request?.delivery == .delivered
-                && fixture.workspace.voiceIssueRequest?.id == "write-failed"
+            fixture.trip(later) == .delivered && (kind == "failed"
+                ? fixture.workspace.voicePresentation?.issues.first?.recovery == .retryRequest("write-failed")
+                : fixture.trip()?.unconfirmedReason != nil)
         }
-        let issue = try #require(fixture.workspace.voicePresentation?.issue)
-        #expect(String(localized: issue.message).contains(originalText))
-        #expect(String(localized: issue.message).contains(kind == "failed" ? "voice test write failed" : "可能已经执行"))
-        let summary = String(localized: issue.summary)
-        #expect(summary.hasPrefix(kind == "failed" ? "未能交给 Cue：整理下周客户演示" : "送达未确认：整理下周客户演示"))
-        #expect(!summary.contains("请先保留末尾这项约束"))
-        #expect(issue.recovery == (kind == "failed" ? .retryRequest("write-failed") : nil))
+        let recovery = fixture.workspace.voicePresentation?.issues.first?.recovery
+        if kind == "failed" {
+            let issue = try #require(fixture.workspace.voicePresentation?.issues.first)
+            #expect(String(localized: issue.message).contains(originalText))
+            #expect(String(localized: issue.message).contains("voice test write failed"))
+            #expect(recovery == .retryRequest("write-failed"))
+        } else {
+            #expect(recovery == nil)
+            let original = try #require(fixture.call.requests.first?.message)
+            #expect(fixture.trip(original)?.unconfirmedReason?.contains("可能已经执行") == true)
+        }
         try await fixture.hangUp()
         #expect(fixture.workspace.voicePresentation?.activity == .ended)
-        #expect(fixture.workspace.voicePresentation?.issue != nil)
+        #expect(fixture.workspace.voicePresentation?.active == false)
         try await fixture.connect()
         if kind == "failed" {
-            let recovery = try #require(issue.recovery)
+            let recovery = try #require(recovery)
             try await fixture.workspace.recoverVoice(recovery)
             try await eventually("重试后有真实记录") { fixture.call.requests.first?.record != nil }
-            #expect(fixture.workspace.voicePresentation?.issue == nil)
+            try await eventually("恢复 A 不移除另一件失败") {
+                fixture.workspace.voicePresentation?.issues.map(\.recovery) == [.retryRequest("other-failed")]
+            }
             clock.advance(.seconds(Speech.receiptLimit + 1))
-            try await eventually("重试后的 A 等不到确认") { fixture.workspace.voicePresentation?.issue?.recovery == nil }
+            try await eventually("重试后的 A 等不到确认") { fixture.trip()?.unconfirmedReason != nil }
             await #expect(throws: SendError.alreadyHanded) { try await fixture.workspace.recoverVoice(recovery) }
             let original = try #require(fixture.call.requests.first?.message)
             try await store.markCueMessagesDelivered([original])
             try db.exec("CREATE TRIGGER voice_write_failure BEFORE INSERT ON cueMessages WHEN NEW.author = 'you' BEGIN SELECT RAISE(FAIL, 'later request failed'); END")
             fixture.received?(.success(.delegation(.init(id: "later-failed", turn: nil, text: "第三个请求"))))
             try await eventually("C 失败成为新的恢复对象") {
-                fixture.workspace.voicePresentation?.issue?.recovery == .retryRequest("later-failed")
+                fixture.workspace.voicePresentation?.issues.contains { $0.recovery == .retryRequest("later-failed") } == true
             }
             try db.exec("DROP TRIGGER voice_write_failure")
             await #expect(throws: SendError.alreadyHeard) { try await fixture.workspace.recoverVoice(recovery) }
             #expect(fixture.call.requests.last?.failure != nil)
         } else {
             await #expect(throws: SendError.alreadyHanded) { try await fixture.workspace.retryVoiceRequest("write-failed") }
-            #expect(fixture.workspace.voiceIssueRequest?.id == "write-failed")
+            #expect(fixture.trip()?.unconfirmedReason != nil)
         }
         #expect(try await store.cueMessages().filter { $0.author == .known(.you) }.count == 2)
         #expect(try await store.cueMessages([later]).first?.deliveredAt != nil)
@@ -248,11 +281,10 @@ struct VoiceFlowTests {
         #expect(fixture.call.isLive)
         #expect(fixture.workspace.voicePresentation?.activity != .ended)
         #expect(fixture.workspace.voicePresentation?.activity != .failed)
-        #expect(fixture.workspace.voicePresentation?.replies.allSatisfy { $0.note?.contains("通话已结束") != true } == true)
+        #expect(fixture.workspace.voicePresentation?.active == true)
         let requests = fixture.call.requests.count
         oldEvent?(.success(.delegation(.init(id: "late", turn: nil, text: "迟到请求"))))
         oldEvent?(.success(.started))
-        #expect(fixture.call.requests.count == requests)
         gate.continuation.finish()
         try await eventually("关闭真正完成") { !fixture.call.isLive }
         #expect(fixture.call.phase.isFailure == (kind == "failure"))

@@ -22,6 +22,11 @@ extension CueStore {
       let cards = Set(changes.compactMap(\.cardID))
       if !cards.isEmpty { try repairCardTree(touching: cards) }
       if changes.contains(where: \.touchesLaunches) { try claimLaunchedCards() }
+      let deliveries = Set(changes.compactMap { change -> UUID? in
+        guard case .save(let row, _, _) = change, row.table == .deliveryRequests else { return nil }
+        return UUID(uuidString: row.id)
+      })
+      try reconcileDeliveredCards(cards: cards, deliveries: deliveries)
     }
     return failures + (try removeFiles(of: removedKeys))
   }
@@ -56,6 +61,7 @@ extension CueStore {
       if key.table == .attachments {
         attachment = try db.first("SELECT hash, format FROM attachments WHERE id = ?", [key.id]) { AttachmentKey.make(hash: $0.text(0), format: $0.text(1)) }
       }
+      if key.table == .cards, let id = UUID(uuidString: key.id) { try releaseDeliveryBindings(of: [id]) }
       try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
       if key.table == .projects {
@@ -134,6 +140,32 @@ extension CueStore {
       try overwrite(repaired)
       try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt)
       return
+    }
+
+    if table == .cards {
+      let winner = remote.modifiedAt >= local.modifiedAt || pushed.map({ local.modifiedAt <= $0 }) == true ? remote : local
+      var merged = Self.mergingSessionBinding(local: local, remote: remote, into: winner)
+      if merged != winner {
+        if let localBody = local.text("body"), let remoteBody = remote.text("body"), localBody != remoteBody {
+          try insertConflictCopy(of: winner == remote ? local : remote, keeping: winner)
+        }
+        merged.fields["modifiedAt"] = .int(max(local.modifiedAt, remote.modifiedAt) + 1)
+        try overwrite(merged)
+        try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt)
+        return
+      }
+    }
+    if table == .piSessionStates {
+      let winner = remote.modifiedAt >= local.modifiedAt || pushed.map({ local.modifiedAt <= $0 }) == true ? remote : local
+      let owner = local.text("createdForTaskID") ?? remote.text("createdForTaskID")
+      if let owner, winner.text("createdForTaskID") != owner {
+        var merged = winner
+        merged.fields["createdForTaskID"] = .text(owner)
+        merged.fields["modifiedAt"] = .int(max(local.modifiedAt, remote.modifiedAt) + 1)
+        try overwrite(merged)
+        try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt)
+        return
+      }
     }
 
     let unpushed = pushed.map { local.modifiedAt > $0 } ?? true
@@ -238,7 +270,7 @@ extension CueStore {
     fields["sortKey"] = .text(SortKey.before(first))
     fields["deletedAt"] = .null
     fields["isPinned"] = .int(0)
-    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "formerSessionIDs"] { fields[column] = .null }
+    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "formerSessionIDs", "sessionBindingRevision"] { fields[column] = .null }
     fields["createdAt"] = now.sqlValue
     fields["modifiedAt"] = now.sqlValue
     try overwrite(SyncRow(table: .cards, fields: fields))

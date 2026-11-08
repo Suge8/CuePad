@@ -110,6 +110,10 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var origin: Open<DeliveryOrigin>?
   /// 服务器收下过这条请求（读的时候由同步元数据推出，不存，`Speech.reachedServerSQL`）：说的话"已发出"的依据。
   public internal(set) var reachedServer = false
+  public internal(set) var sessionBindingRevision: SessionBindingRevision?
+
+  /// 仅领取返回的执行上下文携带：本次结束覆盖的请求身份，重启/同步读取不重建，不持久化。
+  public internal(set) var coveredEndRequests: Set<UUID> = []
 
   public var isFromCue: Bool { origin == .known(.cue) }
 
@@ -208,11 +212,11 @@ extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
     "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
-    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "serverAt", "deadlineAt",
+    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "serverAt", "deadlineAt", "sessionBindingRevision",
   ]
   static let syncedColumns = columns.filter { !["resultReceivedAt", "serverAt"].contains($0) }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, reason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt, deadlineAt]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, reason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt, deadlineAt, sessionBindingRevision?.stored]
   }
   init(row: Row) {
     self.init(
@@ -221,7 +225,7 @@ extension DeliveryRequest: Record {
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
       status: Open(rawValue: row.text(8)), reason: row.textOrNil(9).flatMap(ShownText.init(stored:)), handledBy: row.textOrNil(10),
       createdAt: row.date(11), completedAt: row.dateOrNil(12), deadlineAt: row.dateOrNil(17), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14), serverAt: row.dateOrNil(16),
-      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(18))
+      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(19), sessionBindingRevision: row.textOrNil(18).flatMap(SessionBindingRevision.init(stored:)))
   }
 }
 
