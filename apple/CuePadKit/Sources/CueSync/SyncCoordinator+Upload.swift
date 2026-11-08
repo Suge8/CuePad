@@ -90,6 +90,17 @@ extension SyncCoordinator {
     return batch
   }
 
+  /// 临交出前核对需要保留发送权的记录，过时版本仍由发送者沿原调度重读，不视为服务器收下。
+  func reserveForUpload(_ prepared: OutgoingBatch) async throws -> (batch: OutgoingBatch, obsolete: Set<String>) {
+    let obsolete = try await store.reserveForUpload(prepared.saves.compactMap { record in
+      guard let table = RecordMapper.table(named: record.recordType), let stamp = record.modifiedAt else { return nil }
+      return (record.recordID.recordName, table, stamp)
+    })
+    var batch = prepared
+    batch.drop(obsolete)
+    return (batch, obsolete)
+  }
+
   /// 构造要上传的记录：以上次服务器记录的系统字段为底，写入当前行的字段。行已不在、这一版传不上去（`unsendable`）时为 nil；
   /// 附件的文件不在本机的这一版记进 `unsendable` 并报告。读库出错抛出。
   func record(for id: CKRecord.ID) async throws -> CKRecord? {

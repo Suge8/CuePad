@@ -197,14 +197,26 @@ extension CueStore {
     return synced
   }
 
-  /// 发送者读出 payload 后，在同一事务里核对该版仍在并保留发送权；与撤回互斥。
-  /// 若读取后已撤回或改写，旧 payload 不能交出，发送者按新的库事实重新挑选。
-  package func reserveDeliveryPayload(_ id: String, modifiedAt: Int64) throws -> Bool {
-    try write {
-      guard try db.first("SELECT 1 FROM deliveryRequests WHERE id = ? AND modifiedAt = ?", [id, modifiedAt], { _ in true }) != nil else { return false }
-      try noteSentVersions([(id, .deliveryRequests, modifiedAt)])
-      return true
+  /// 临交出前在同一事务里核对投送请求的版本并保留发送权，与撤回互斥；其余记录沿用挑批时的记账。
+  /// 返回已消失或改写的请求，调用方丢弃旧 payload 后重新挑选。
+  package func reserveForUpload(_ versions: [(name: String, table: Table, modifiedAt: Int64)]) throws -> Set<String> {
+    let deliveries = versions.filter { $0.table == .deliveryRequests }
+    guard !deliveries.isEmpty else { return [] }
+    return try write {
+      var obsolete = Set<String>()
+      for version in deliveries {
+        guard try db.first("SELECT 1 FROM deliveryRequests WHERE id = ? AND modifiedAt = ?", [version.name, version.modifiedAt], { _ in true }) != nil else {
+          obsolete.insert(version.name)
+          continue
+        }
+        try noteSentVersions([version])
+      }
+      return obsolete
     }
+  }
+
+  package func reserveDeliveryPayload(_ id: String, modifiedAt: Int64) throws -> Bool {
+    try reserveForUpload([(id, .deliveryRequests, modifiedAt)]).isEmpty
   }
 
   /// 本机把这几条记录的这一版交给服务器（构造上传批次时）。结果没回到本机就崩溃、或回包在路上丢了，服务器其实收下了它；

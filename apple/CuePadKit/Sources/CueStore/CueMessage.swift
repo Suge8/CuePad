@@ -101,7 +101,7 @@ extension CueMessage: Record {
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), answeredRequests: JSONColumn.decode([UUID].self, from: row.textOrNil(21)),
       wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),
-      places: JSONColumn.decode([String: CuePlace].self, from: row.textOrNil(19)) ?? [:], notify: row.textOrNil(11).flatMap(CuePush.init(rawValue:)), reachedServer: row.bool(22))
+      places: JSONColumn.decode([String: CuePlace].self, from: row.textOrNil(19)) ?? [:], notify: row.textOrNil(11).flatMap(CuePush.init(rawValue:)), reachedServer: Self.reachedServer(in: row))
   }
 }
 

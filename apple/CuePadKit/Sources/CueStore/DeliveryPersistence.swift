@@ -7,7 +7,7 @@ extension CueStore {
     try write {
       try db.run("""
         UPDATE deliveryRequests SET serverAt = createdAt
-        WHERE hostID = ? AND serverAt IS NULL AND status IN ('pending', 'preparing') AND handledBy IS NULL
+        WHERE hostID = ? AND serverAt IS NULL AND status IN (\(DeliveryStatus.waitingSQL)) AND handledBy IS NULL
         """, [host])
       return try pendingDeliveries(for: host)
     }
@@ -15,7 +15,7 @@ extension CueStore {
 
   func pendingDeliveries(for host: String) throws -> [DeliveryRequest] {
     try select(
-      DeliveryRequest.self, where: "status IN ('pending', 'preparing') AND handledBy IS NULL AND hostID = ?", [host],
+      DeliveryRequest.self, where: "status IN (\(DeliveryStatus.waitingSQL)) AND handledBy IS NULL AND hostID = ?", [host],
       orderBy: "CASE WHEN mode = 'withdraw' THEN 0 ELSE 1 END, createdAt, rowid")
   }
 
@@ -26,7 +26,7 @@ extension CueStore {
       try db.run(
         """
         UPDATE deliveryRequests AS r SET status = 'executing', handledBy = ?, deadlineAt = ?, failure = NULL,
-          modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
+          modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN (\(DeliveryStatus.waitingSQL)) AND handledBy IS NULL
           AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [host, deadline, Date.stamp, id, timing.now()])
@@ -53,7 +53,7 @@ extension CueStore {
     try write {
       try db.run("""
         UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = ?, failure = ?,
-          modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
+          modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN (\(DeliveryStatus.waitingSQL)) AND handledBy IS NULL
           AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [host, DeliveryPreparation.ready.stored, Date.stamp, id, timing.now()])
@@ -104,16 +104,7 @@ extension CueStore {
 
   private func applyDeliveryOutcome(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws -> Bool {
     let id = request.id
-    let (status, reason): (DeliveryStatus, ShownText?) =
-      switch outcome {
-      case .succeeded: (.succeeded, nil)
-      case .confirming where request.deadlineAt.map({ completed < $0 }) != true:
-        (.unconfirmed, Speech.unconfirmedReason)
-      case .confirming: (.confirming, nil)
-      case .failed(let reason): (.failed, reason)
-      case .unconfirmed(let reason): (.unconfirmed, reason)
-      }
-    let deadline = status == .confirming ? completed.addingTimeInterval(Speech.receiptLimit) : request.deadlineAt
+    let (status, reason, deadline) = request.progress(after: outcome, at: completed)
     try db.run(
       """
       UPDATE deliveryRequests SET status = ?, failure = ?, completedAt = ?, deadlineAt = ?, modifiedAt = MAX(modifiedAt + 1, ?)
@@ -179,7 +170,7 @@ extension CueStore {
       try db.run(
         """
         UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = NULL, failure = ?, modifiedAt = MAX(modifiedAt + 1, ?)
-        WHERE id = ? AND status = ? AND status IN ('pending', 'preparing')
+        WHERE id = ? AND status = ? AND status IN (\(DeliveryStatus.waitingSQL))
         """, [reason.stored, Date.stamp, request.id, request.status.rawValue])
       guard db.changes > 0, let current = try find(DeliveryRequest.self, request.id) else { return nil }
       if let due = current.dispatchDeadline, timing.now() >= due {

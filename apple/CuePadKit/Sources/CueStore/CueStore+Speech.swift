@@ -18,7 +18,9 @@ protocol AwaitsServer: Record {
 }
 
 extension AwaitsServer {
-  static var selection: String { (columns + [Speech.reachedServerSQL(table.rawValue)]).joined(separator: ", ") }
+  static func reachedServer(in row: Row) -> Bool { row.bool(row.index(of: "reachedServer")!) }
+
+  static var selection: String { (columns + ["\(Speech.reachedServerSQL(table.rawValue)) AS reachedServer"]).joined(separator: ", ") }
 }
 
 extension DeliveryRequest: AwaitsServer {

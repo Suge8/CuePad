@@ -14,9 +14,10 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
 }
 
 extension DeliveryStatus {
+  static let waiting: Set<DeliveryStatus> = [.pending, .preparing]
+  static let waitingSQL = sqlList(waiting.sorted { $0.rawValue < $1.rawValue })
   /// 持久记录尚未收尾（等领取、执行、确认）；是否仍在等进度由 Speech 连同期限推出：`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
-  static let open: Set<DeliveryStatus> = [.pending, .preparing, .executing, .confirming]
-  /// `open` 的 SQL `IN (…)` 列表。
+  static let open: Set<DeliveryStatus> = waiting.union([.executing, .confirming])
   static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
 }
 
@@ -121,7 +122,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
   /// 尚未领取只是撤回的必要条件；能否撤回还要由库事务核对已发送事实。
-  public var isWithdrawable: Bool { [.known(.pending), .known(.preparing)].contains(status) && handledBy == nil }
+  public var isWithdrawable: Bool { status.known.map(DeliveryStatus.waiting.contains) == true && handledBy == nil }
 
   /// 明确未交出的原因；未知状态不是未送达。缺少原因的明确失败只在这里兜底。
   public var failure: String? {
@@ -225,7 +226,7 @@ extension DeliveryRequest: Record {
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
       status: Open(rawValue: row.text(8)), reason: row.textOrNil(9).flatMap(ShownText.init(stored:)), handledBy: row.textOrNil(10),
       createdAt: row.date(11), completedAt: row.dateOrNil(12), deadlineAt: row.dateOrNil(17), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14), serverAt: row.dateOrNil(16),
-      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(19), sessionBindingRevision: row.textOrNil(18).flatMap(SessionBindingRevision.init(stored:)))
+      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: Self.reachedServer(in: row), sessionBindingRevision: row.textOrNil(18).flatMap(SessionBindingRevision.init(stored:)))
   }
 }
 

@@ -199,15 +199,7 @@ extension CueStore {
   /// 在一个写事务里查与删：别的进程（命令行）这期间写不进引用它的记录；事务里只读，删文件不留回滚不了的半截状态，所以不用等提交后。
   public func removeStrayFiles(before: Date, drafts: [String]) throws -> Int {
     let drafted = Set(drafts.flatMap(CueFormat.attachmentKeys(in:)))
-    return try write {
-      var removed = 0
-      for key in files.keys(storedBefore: before).sorted() where !drafted.contains(key) {
-        guard try !hasAttachment(key), try !isAttachmentReferenced(key) else { continue }
-        try files.remove(key)
-        removed += 1
-      }
-      return removed
-    }
+    return try reclaimFiles(candidates: { files.keys(storedBefore: before).subtracting(drafted) }) { _, error in throw error }
   }
 
   /// 这个键的附件记录服务器收下过（有一版推送成功）。
