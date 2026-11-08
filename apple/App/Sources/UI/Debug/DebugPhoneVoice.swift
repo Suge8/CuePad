@@ -4,7 +4,7 @@ import Foundation
 
 /// 隔离画面样例只注入远端投影，不创建媒体或冒充命令成功。
 /// -CuePadPhoneVoice connecting|listening|processing|speaking|closing|failed|failedRequest|ended
-/// -CuePadPhoneVoiceHistory 0|1|200：写入隔离聊天；-CuePadCueDraft 保留输入框草稿。
+/// -CuePadPhoneVoiceHistory 0|1|200：写入隔离聊天；-CuePadPhoneVoiceEnabled YES：启用隔离 Cue；-CuePadCueDraft 保留输入框草稿。
 enum DebugPhoneVoice {
     static func prepare(_ workspace: Workspace) async {
         guard let name = DebugScene.defaults.string(forKey: "CuePadPhoneVoice") else { return }
@@ -31,6 +31,9 @@ enum DebugPhoneVoice {
         voice.setProjection(.init(session: session, phase: phase, requests: requests, replies: [], executions: [], response: response))
         do {
             let store = workspace.services.store
+            if DebugScene.defaults.bool(forKey: "CuePadPhoneVoiceEnabled") {
+                try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "voice-layout-demo" }
+            }
             let wanted = DebugScene.defaults.integer(forKey: "CuePadPhoneVoiceHistory")
             let existing = try await store.cueMessages(limit: .max).count
             if wanted > existing {
