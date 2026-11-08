@@ -241,6 +241,7 @@ struct RealHostTests {
         try await eventually("新的桥看到它做完了这一轮") {
             next.sessions.first { $0.pid == opened.pid }.map { $0.hosted && $0.state == .settled } == true
         }
+        #expect(first.sessions.isEmpty)
         let again = try #require(next.sessions.first { $0.pid == opened.pid })
         #expect(recap(of: again)?.lastReply?.contains("跑到一半") == true)
         try await next.send(PiMessage(text: "新的 CuePad 认回之后"), to: again.id)

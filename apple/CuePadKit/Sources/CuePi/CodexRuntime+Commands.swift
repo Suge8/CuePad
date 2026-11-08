@@ -108,10 +108,6 @@ extension CodexRuntime {
     }
 
     /// 改名走 `thread/name/set`；模型与强度走 `thread/settings/update`，强度按新模型支持的范围夹取（`PiThinkingLevel.clamped`）。
-    public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
-        try await configure(PiConfig(model: model, thinking: thinking, name: name), in: id)
-    }
-
     public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
         let model = config.model, thinking = config.thinking, name = config.name
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }

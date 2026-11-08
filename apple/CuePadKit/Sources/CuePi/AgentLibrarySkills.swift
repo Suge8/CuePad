@@ -120,12 +120,12 @@ struct LibrarySkillScan {
                 let skillFile = item.appending(path: AgentSkill.fileName)
                 if FileManager.default.fileExists(atPath: skillFile.path) {
                     // 读不出（不是 UTF-8、没权限）的也是技能，格式不对；同改文件时的读法（`AgentLibraryFiles.write`），哈希才对得上
-                    let text = LibraryInstructionScan.read(skillFile) ?? ""
+                    let text = LibraryFileReading.read(skillFile) ?? ""
                     if inOldDirectory, name == AgentSkill.name, AgentSkill.kinds(in: text) != nil { continue }  // 旧版 CuePad 副本：接入收掉它
                     watched.insert(skillFile.path)
                     found.append(Found(
                         entry: SkillEntry(name: name, scope: scope, path: item.path), group: group.joined(separator: "/"), text: text,
-                        modifiedAt: LibraryInstructionScan.modified(skillFile), problem: SkillDocument(text).problem(directory: name, depth: group.count + 1)))
+                        modifiedAt: LibraryFileReading.modified(skillFile), problem: SkillDocument(text).problem(directory: name, depth: group.count + 1)))
                 } else if Self.entries(item).allSatisfy({ $0 == ".DS_Store" }) {
                     empties.append(item.path)
                 } else if recursive, group.count < Self.walkLimit {

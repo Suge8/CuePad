@@ -112,7 +112,9 @@ extension OpenCodeRuntime {
         try await connection.client.call("POST", "/api/session/\(target.sessionID)/form/\(target.id)/reply", body: Reply(answer: [field.key: value]))
     }
 
-    public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
+    public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
+        guard config.fast == nil else { throw PiBridgeError.unsupported }
+        let model = config.model, thinking = config.thinking, name = config.name
         let (connection, tracked, sessionID) = try await live(id)
         if let name {
             struct Update: Encodable { var title: String }

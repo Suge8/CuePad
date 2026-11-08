@@ -27,6 +27,13 @@ struct RealCueStartTests {
                     && session?.thinking == .known(PiThinkingLevel.medium.clamped(to: session?.model?.thinkingLevels ?? []))
             }
 
+            if agent != .pi && agent != .codex {
+                await #expect(throws: PiBridgeError.unsupported) {
+                    try await bridge.configure(PiConfig(fast: true, name: "不能改名"), in: id)
+                }
+                #expect(bridge.session(id: id)?.displayName == "Cue 开的")
+            }
+
             for line in ["Reply with exactly the word READY.", "Reply with exactly the word AGAIN."] {
                 let log = ChangeLog(bridge)
                 try await bridge.send(PiMessage(text: line), to: id)

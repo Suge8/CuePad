@@ -13,13 +13,12 @@ import Foundation
 /// CuePad 起的 OpenCode 服务不读 `.claude/skills`（`OpenCodeRuntime.serviceEnvironment`），同一个技能不会经两条路读到。
 /// 写入不做事务：哪一样没写上，状态就是 `outdated`，下次启动的静默升级补上。
 public struct AgentIntegration: Sendable {
-    let paths: AgentPaths
+    public let fileAccess: AgentFileAccess
+    var paths: AgentPaths { fileAccess.paths }
     private var pi: PiPaths { paths.pi }
     let locate: @Sendable () async -> ExecutableLocator
     /// App 里的命令行工具（`Contents/Helpers/cuepad`），技能里写它的绝对路径
     private let cuepad: URL
-    /// 不碰真实世界（App 层的 `touchesRealWorld` 为 false）：配置目录是缺省真实位置的那几家只检测、不写
-    private let isolated: Bool
     /// 装一家用的命令（`runInstaller`）：官方的那条，测试换成放替身的
     let installCommand: @Sendable (AgentKind, AgentStatus.Presence) -> String
     /// 还有 Pi 会话开着旧单文件扩展（`PiExtensionBundle.legacyFileName`）：App 里是桥上连着的会话没都报随包版本（`PiBridge.allRun`），缺省没有 Pi 在跑
@@ -33,10 +32,9 @@ public struct AgentIntegration: Sendable {
         legacyPiExtensionInUse: @escaping @Sendable () async -> Bool = { false }, timing: Timing = .system
     ) {
         self.timing = timing
-        self.paths = paths
+        fileAccess = AgentFileAccess(paths: paths, isolated: isolated)
         self.locate = locate
         self.cuepad = cuepad
-        self.isolated = isolated
         self.installCommand = installCommand
         self.legacyPiExtensionInUse = legacyPiExtensionInUse
     }
@@ -47,12 +45,10 @@ public struct AgentIntegration: Sendable {
     public func isWritable(_ kind: AgentKind) -> Bool { touches(kind) && touchesShared }
 
     /// 能碰这家的配置目录（读写技能与规则，`AgentLibraryFiles` 也按它）。
-    public func touches(_ kind: AgentKind) -> Bool { !isolated || home(of: kind).standardizedFileURL != Self.real.home(of: kind).standardizedFileURL }
+    public func touches(_ kind: AgentKind) -> Bool { fileAccess.touches(kind) }
 
     /// 能碰几家共读的 `~/.agents`。
-    public var touchesShared: Bool { !isolated || paths.agentsDirectory.standardizedFileURL != Self.real.agentsDirectory.standardizedFileURL }
-
-    private static let real = AgentPaths(pi: PiPaths(environment: [:]), environment: [:])
+    public var touchesShared: Bool { fileAccess.touchesShared }
 
     /// 这家的上报通道（`AgentFacts.channel`）。`executable` 是写、删时起的那个（检测时挑中的，Codex 写、删信任要它）；只看状态时不用。
     func channel(_ kind: AgentKind, executable: URL? = nil) -> (any AgentHookConfig)? { kind.facts.channel(self, executable) }
@@ -243,6 +239,12 @@ public struct AgentIntegration: Sendable {
         defer { try? FileManager.default.removeItem(at: scratch) }
         let environment = locator.environment(launching: executable, overrides: ["PI_OFFLINE": "1", "XDG_DATA_HOME": scratch.path])
         return await ChildProcess.attempt(executable, arguments, environment: environment, timeout: AgentTimeouts.command, timing: timing)
+    }
+}
+
+extension AgentLibraryFiles {
+    public init(integration: AgentIntegration, trash: (@Sendable (URL) throws -> URL)? = nil) {
+        self.init(access: integration.fileAccess, trash: trash)
     }
 }
 #endif

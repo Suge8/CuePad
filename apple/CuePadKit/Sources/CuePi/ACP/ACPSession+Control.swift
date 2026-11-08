@@ -45,7 +45,9 @@ extension ACPSession: SessionLink {
         }
     }
 
-    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in _: PiSession.ID) async throws {
+    func configure(_ config: PiConfig, in _: PiSession.ID) async throws {
+        guard config.fast == nil else { throw PiBridgeError.unsupported }
+        let model = config.model, thinking = config.thinking, name = config.name
         do {
             try await configure(model: model.map(agent.modelRef), effort: thinking)
         } catch ACPError.server(ACPError.invalidParams, _) where model != nil {
