@@ -15943,6 +15943,22 @@
         }
       }
     },
+    "无法读取通话记录，请检查连接后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot read call history. Check your connection and try again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取通话记录，请检查连接后重试"
+          }
+        }
+      }
+    },
     "无法连接 Mac，请确认 Mac 已开机并联网" : {
       "localizations" : {
         "en" : {
@@ -16579,22 +16595,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "有 %lld 个终端匹配，无法确定是哪一个"
-          }
-        }
-      }
-    },
-    "有 %lld 条请求、%lld 条回复和 %lld 个执行未显示，请在 Mac 上查看" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not shown — requests: %lld, replies: %lld, executions: %lld. View them on your Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有 %1$lld 条请求、%2$lld 条回复和 %3$lld 个执行未显示，请在 Mac 上查看"
           }
         }
       }
@@ -21847,6 +21847,22 @@
         }
       }
     },
+    "记录已变化，请回到首页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Records changed. Return to the first page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记录已变化，请回到首页"
+          }
+        }
+      }
+    },
     "记忆" : {
       "localizations" : {
         "en" : {
@@ -24247,6 +24263,22 @@
         }
       }
     },
+    "这条通话记录太大，无法读取" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This call record is too large to load"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这条通话记录太大，无法读取"
+          }
+        }
+      }
+    },
     "这里还没有灵感" : {
       "localizations" : {
         "en" : {
@@ -25219,22 +25251,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通话详情"
-          }
-        }
-      }
-    },
-    "通话详情不完整" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Call details are incomplete"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话详情不完整"
           }
         }
       }

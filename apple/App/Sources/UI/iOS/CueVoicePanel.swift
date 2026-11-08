@@ -11,6 +11,9 @@ extension PhoneVoiceAction: CueVoiceOperation {
         case .recover: "重新交给 Cue"
         case .repeatReply: "再说一遍"
         case .stop: "停止执行"
+        case .requests: "请求记录"
+        case .replies: "朗读记录"
+        case .executions: "执行记录"
         case .microphoneSettings: "打开麦克风设置"
         }
     }
@@ -97,11 +100,6 @@ extension PhoneVoiceViewState {
         } else if phase == nil, let issue = startUnavailableReason {
             issues.append(.init(id: .connection, summary: "通话暂不可用", message: issue.phoneMessage, recovery: issue.phoneRecovery))
         }
-        if omitted.requests + omitted.replies + omitted.executions > 0 {
-            issues.append(.init(id: .request(AnyHashable("omitted")), summary: "通话详情不完整",
-                                message: "有 \(omitted.requests) 条请求、\(omitted.replies) 条回复和 \(omitted.executions) 个执行未显示，请在 Mac 上查看",
-                                recovery: nil))
-        }
         if let rejection {
             issues.append(.init(id: .store, summary: "操作未执行", message: rejection.phoneMessage, recovery: nil))
         }
@@ -117,7 +115,25 @@ extension PhoneVoiceViewState {
                                status: reply.readback.phoneStatus,
                                recovery: canRepeat && reply.message != nil && reply.readback != .sending && reply.readback != .queued
                                    ? .repeatReply(reply.id) : nil)
-                     }, startUnavailableReason: startUnavailableReason?.phoneMessage)
+                     }, requestPage: phase == nil ? nil : page(requestPage, action: PhoneVoiceAction.requests),
+                     replyPage: phase == nil ? nil : page(replyPage, action: PhoneVoiceAction.replies),
+                     executionPage: phase == nil ? nil : page(executionPage, action: PhoneVoiceAction.executions),
+                     startUnavailableReason: startUnavailableReason?.phoneMessage)
+    }
+
+    private func page(_ page: Page, action: (VoicePageCursor?) -> PhoneVoiceAction) -> CueVoiceState<PhoneVoiceAction>.Page {
+        .init(first: action(nil), next: page.next.map { action($0) }, loading: page.loading, error: page.error?.phoneMessage)
+    }
+}
+
+private extension VoicePageError {
+    var phoneMessage: LocalizedStringResource {
+        switch self {
+        case .refreshRequired: "记录已变化，请回到首页"
+        case .unavailable: "无法读取通话记录，请检查连接后重试"
+        case .tooLarge: "这条通话记录太大，无法读取"
+        case .storageUnavailable: "通话记录暂不可用，请检查 Mac 上的资料库"
+        }
     }
 }
 
@@ -165,6 +181,8 @@ struct CueVoicePanel: View {
                 if let result = try await perform(action) { report(result) }
             } catch let issue as VoiceIssue {
                 workspace.say(issue.phoneMessage, tone: .failure)
+            } catch let error as VoicePageError {
+                workspace.say(error.phoneMessage, tone: .failure)
             } catch is VoiceSignalError {
                 workspace.say("通话操作未确认，请检查连接后重试", tone: .failure)
             } catch {
