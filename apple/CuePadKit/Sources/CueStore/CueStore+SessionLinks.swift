@@ -53,6 +53,10 @@ extension CueStore {
     guard let card = request.cardID, try acceptsSessionBinding(request),
       try find(DeliveryRequest.self, request.id)?.cardID == card else { return }
     try linkCardInTransaction(card, toSession: session, at: Date.stamp)
+    if var revision = request.sessionBindingRevision, try find(Card.self, card)?.sessionBindingRevision?.fulfilled != true {
+      revision.fulfilled = true
+      try db.run("UPDATE cards SET sessionBindingRevision = ?, modifiedAt = ? WHERE id = ?", [revision.stored, Date.stamp, card])
+    }
   }
 
   /// 统一来源分类里有 Cue 正证据的投送；请求先到、发送记录先到或请求已清理都按同一条规则。
@@ -105,6 +109,7 @@ extension CueStore {
       guard link.project == (session.projectID ?? Project.defaultID) else { throw CueStoreError.invalidProject }
       let current = try find(Card.self, task)
       guard current?.piSessionID != sessionID || current?.sessionBindingRevision?.explicit != true else { return }
+      try requireSessionAvailable(sessionID)
       _ = try reviseSessionBinding(task, explicit: true)
       try linkCardInTransaction(task, toSession: sessionID, at: Date.stamp)
     }

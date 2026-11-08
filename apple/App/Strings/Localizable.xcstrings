@@ -6215,6 +6215,22 @@
         }
       }
     },
+    "会话的自动结束已受理，暂时不能关联或发送；请等结束结果明确后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This session is closing automatically. Wait for the result before linking a task or sending a message."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话的自动结束已受理，暂时不能关联或发送；请等结束结果明确后重试"
+          }
+        }
+      }
+    },
     "会话直连 OpenCode 的后台服务，不用另装。" : {
       "localizations" : {
         "en" : {

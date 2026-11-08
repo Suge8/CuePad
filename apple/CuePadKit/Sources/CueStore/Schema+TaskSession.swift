@@ -24,4 +24,17 @@ extension Schema {
       SELECT 1 FROM cards s WHERE s.parentID = cards.id AND s.todoAt IS NOT NULL AND s.deletedAt IS NULL
         AND (s.startedAt IS NOT NULL OR s.completedAt IS NOT NULL));
     """
+
+  /// 94：只给关联意图增加兑现进展；旧端会忽略它并覆盖 ACK，因此同时抬最低对端版本。
+  static let taskSessionFulfillmentUpgrade: Upgrade = """
+    UPDATE cards SET sessionBindingRevision = json_set(sessionBindingRevision, '$.fulfilled', json(CASE
+      WHEN json_extract(sessionBindingRevision, '$.explicit') = 1 OR (piSessionID IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM deliveryRequests r WHERE json_extract(r.sessionBindingRevision, '$.id') = json_extract(cards.sessionBindingRevision, '$.id')
+          AND NOT (r.targetRef IS cards.piSessionID OR (r.mode = 'start' AND EXISTS (
+            SELECT 1 FROM piSessionStates s WHERE s.sessionID = cards.piSessionID AND s.launchToken = \(CueStore.launchToken("r")))))))
+      THEN 'true' ELSE 'false' END)), modifiedAt = modifiedAt + 1
+    WHERE sessionBindingRevision IS NOT NULL;
+    UPDATE deliveryRequests SET sessionBindingRevision = json_set(sessionBindingRevision, '$.fulfilled', json('false')), modifiedAt = modifiedAt + 1
+    WHERE sessionBindingRevision IS NOT NULL;
+    """
 }

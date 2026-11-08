@@ -1,21 +1,34 @@
 import Foundation
 
 /// 只给关联字段排序：回执沿用发起意图的修订，不因晚到获得更高权限。
-/// 并发同代明确关联优先于投送；同类按操作身份确定收敛，不比较设备时钟。
+/// 并发同代明确关联优先于投送；同类按操作身份确定收敛，不比较设备时钟。同一意图只从待兑现前进到已兑现，正文编辑不撤销它。
 public struct SessionBindingRevision: Equatable, Sendable, StoredJSON, Comparable {
   let generation: Int
   let explicit: Bool
   let id: UUID
+  var fulfilled: Bool
 
   init(after previous: Self?, explicit: Bool) {
     generation = (previous?.generation ?? 0) + 1
     self.explicit = explicit
     id = UUID()
+    fulfilled = explicit
+  }
+
+  private enum CodingKeys: String, CodingKey { case generation, explicit, id, fulfilled }
+
+  public init(from decoder: any Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    generation = try values.decode(Int.self, forKey: .generation)
+    explicit = try values.decode(Bool.self, forKey: .explicit)
+    id = try values.decode(UUID.self, forKey: .id)
+    fulfilled = try values.decodeIfPresent(Bool.self, forKey: .fulfilled) ?? false
   }
 
   public static func < (lhs: Self, rhs: Self) -> Bool {
     if lhs.generation != rhs.generation { return lhs.generation < rhs.generation }
     if lhs.explicit != rhs.explicit { return !lhs.explicit }
+    if lhs.id == rhs.id { return !lhs.fulfilled && rhs.fulfilled }
     return lhs.id.uuidString < rhs.id.uuidString
   }
 }
@@ -30,7 +43,7 @@ extension CueStore {
 
   func acceptsSessionBinding(_ request: DeliveryRequest) throws -> Bool {
     guard let id = request.cardID, let card = try find(Card.self, id), card.deletedAt == nil,
-      let revision = request.sessionBindingRevision, card.sessionBindingRevision == revision else { return false }
+      let revision = request.sessionBindingRevision, card.sessionBindingRevision?.id == revision.id else { return false }
     return true
   }
 

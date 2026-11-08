@@ -104,15 +104,15 @@ Cue 最多等 `Speech.cueWait`。未交出才安全重发；未知重做须确�
 
 ## 最低对端版本
 
-跨版本兼容只有一个门槛，规则在 `PeerFloor`，什么时候抬在 `Schema.peerFloor`：旧版照新写法读写会做错事才抬，同一个改动里删掉给更早设备留的兼容；新加的表、字段与句式旧版只是看不到，不抬。门槛一抬，旧设备停下收发（写下的照记、更新后自动发出），所以抬的那一版按 [release.md](release.md)「发版顺序」先发 iOS。它不是本机库的起点 `Schema.baseVersion`：那个要等用户的库都升过才挪。门槛只拦得住认它的版本（2026-10 起），所有设备都升到这之后的版本前，不能凭它删兼容。
+`PeerFloor` 只在旧端会误写时抬 `Schema.peerFloor`，仅看不到新字段不抬。旧端暂停收发但可写，更新后自动发送，故按 [release.md](release.md)「发版顺序」先发 iOS。同次删旧兼容须所有设备已支持门槛（2026-10 起）；库起点 `Schema.baseVersion` 须所有用户升级后才挪。
 
 同步不通（断网、要更新、等你决定）时说的话照样写下：会话与 Cue 一套规则（`Speech`），排在本机、恢复后自动发出；为什么不通只在同步那一处说（`SyncSummary`，手机上带点指过去）。派发期限从服务器收下起算（`DeliveryRequest.dispatchDeadline`），在发出的设备上等的那段不算。
 
 ## 自己的回声不是冲突
 
-回声不留冲突副本（`CueStore.applyVersion`）。关联按 `SessionBindingRevision` 排序，旧 ACK 与云回声不覆盖明确改绑或解绑；正文仍按记录版本合并。
+回声不留冲突副本（`CueStore.applyVersion`）。`SessionBindingRevision` 给关联排序，旧 ACK 不覆盖明确改绑或解绑；同一意图的 `fulfilled` 只向已兑现前进，不随正文版本倒退。正文仍按记录版本合并。结构 94 迁移兑现事实并抬最低对端版本，阻止旧端覆盖。
 
-创建来源 `PiSessionState.createdForTaskID` 从启动请求转存，清理投送历史后仍保留；纯关联不授权自动结束。结构 93 抬最低对端版本，阻止旧端误关联或误收尾。
+`PiSessionState.createdForTaskID` 从启动请求转存，不随历史清理；纯关联不授权结束。来源晚到复核任务与共享。自动结束在领取事务内复核并转入 `executing`：此前新借用可阻止结束，此后借用与发送明确失败，结束结果未知也不放行。沿用投送状态；明确 `end` 不受自动收尾限制。
 
 ## Agent 与 Cue 的通知
 

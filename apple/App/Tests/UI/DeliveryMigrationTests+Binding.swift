@@ -53,5 +53,37 @@ extension DeliveryMigrationTests {
         }
         await services.executor.beginStop()()
     }
+
+    @Test func 已送达关联从九十三版升级_旧正文快照不撤销关联() async throws {
+        let app = TestApp()
+        defer {
+            for ext in app.host.extensions.values { ext.close(bye: "quit") }
+            app.pi.stop(); app.services.cancelBackgroundWork()
+        }
+        let workspace = Workspace(services: app.services), original = app.services.store
+        let ext = try await app.host.connect("atlas", cwd: app.directory.path)
+        try await app.runtimeRecorder(on: TestApp.hostID).update(sessionID: "atlas", state: .settled)
+        let card = try await workspace.createTask("准备发布", in: Project.defaultID)
+        await workspace.speak(card.body, to: .session(
+            SendTarget(kind: .piSession, name: "会话", ref: "atlas"), host: TestApp.hostID, mode: .send, card: card.id)).value
+        var stale = try #require(try await original.syncRow(recordName: card.id.uuidString.lowercased()))
+        let request = try #require(try await original.deliveryRequests().first)
+        try await app.services.executor.start()
+        #expect(try await original.outcome(of: request).status == .known(.succeeded))
+        #expect(try await original.card(card.id)?.piSessionID == "atlas")
+        await app.services.executor.beginStop()()
+        try RawDB(app.databaseURL).exec("""
+            UPDATE cards SET sessionBindingRevision = json_remove(sessionBindingRevision, '$.fulfilled');
+            UPDATE deliveryRequests SET sessionBindingRevision = json_remove(sessionBindingRevision, '$.fulfilled');
+            PRAGMA user_version = 93;
+            """)
+        let store = app.relaunch().store
+        stale.fields["body"] = .text("准备发布\n手机补充")
+        stale.fields["modifiedAt"] = .int(stale.modifiedAt + 10_000)
+        #expect(try await store.applyRemote([.save(stale, systemFields: Data())]).isEmpty)
+        #expect(try await store.card(card.id)?.body == "准备发布\n手机补充")
+        #expect(try await store.card(card.id)?.piSessionID == "atlas")
+        #expect(ext.messages.map(\.text) == ["准备发布"])
+    }
 }
 #endif

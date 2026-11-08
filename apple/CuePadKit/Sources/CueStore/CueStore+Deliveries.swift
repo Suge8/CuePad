@@ -37,6 +37,9 @@ extension CueStore {
     _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode, card: UUID? = nil, cue: Bool
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
+    if let session = target.ref, target.kind == .known(.piSession), DeliveryMode.requiresReadySession.contains(mode) {
+      try requireSessionAvailable(session)
+    }
     let now = Date.stamp
     var request = DeliveryRequest(
       id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
@@ -164,14 +167,16 @@ extension CueStore {
         SELECT 1 FROM piSessionStates s LEFT JOIN cards c ON c.id = deliveryRequests.cardID
         WHERE s.launchToken = \(Self.launchToken("deliveryRequests")) AND (
           (s.createdForTaskID IS NULL AND json_extract(deliveryRequests.content, '$.createdForTaskID') IS NOT NULL)
-          OR (c.sessionBindingRevision = deliveryRequests.sessionBindingRevision AND c.piSessionID IS NOT s.sessionID)))
+          OR (json_extract(c.sessionBindingRevision, '$.id') = json_extract(deliveryRequests.sessionBindingRevision, '$.id') AND c.piSessionID IS NOT s.sessionID)))
       """)
+    var created: [UUID: Bool] = [:]
     for request in requests {
       guard let launch = request.launch,
         let session = try select(PiSessionState.self, where: "launchToken = ?", [launch.token]).first else { continue }
-      try recordSessionCreationInTransaction(session.sessionID, from: request)
+      if let owner = try recordSessionCreationInTransaction(session.sessionID, from: request) { created[owner] = request.isFromCue }
       try linkDeliveredCardInTransaction(request, toSession: session.sessionID)
     }
+    for (owner, cue) in created { try endUnusedSessions(of: owner, cue: cue) }
   }
 
   /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除）：手机没有完整路径，由 Mac 解析并写本机的目录绑定。
