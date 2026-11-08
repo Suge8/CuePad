@@ -149,7 +149,9 @@ struct CueVoiceView: View {
                         .keyboardShortcut("m", modifiers: [.command, .shift])
                 }
                 Spacer(minLength: 0)
-                if presentation.activity == .failed {
+                if presentation.activity == .closing {
+                    Text(presentation.activity.title).foregroundStyle(palette.ink2)
+                } else if presentation.activity == .failed {
                     Button { action(.recover(.reconnect)) } label: { Text(CueVoicePresentation.Recovery.reconnect.title).fixedSize() }
                         .buttonStyle(ControlButtonStyle(size: .compact))
                 } else if presentation.activity == .ended {

@@ -131,8 +131,8 @@ struct DebugVoiceStage: View {
             return .init(id: row.id, text: row.text, canRequestRepeat: activity.isLive && !row.text.isEmpty,
                          request: row.request, note: row.note)
         }
-        let issue: CueVoicePresentation.Issue? = if earlierFailure { .init(message: Self.earlierIssue, recovery: .retryRequest("earlier")) }
-            else if requestFailed { .init(message: "未交给 Cue", recovery: .retryRequest("latest")) }
+        let issue: CueVoicePresentation.Issue? = if earlierFailure { .init(summary: "未能交给 Cue", message: Self.earlierIssue, recovery: .retryRequest("earlier")) }
+            else if requestFailed { .init(summary: "未能交给 Cue", message: "未交给 Cue", recovery: .retryRequest("latest")) }
             else if activity == .failed { self.issue } else { nil }
         return CueVoicePresentation(
             name: "Cue", activity: activity, muted: muted, samples: { [audio, simulated] in simulated ? audio.samples : [] },
@@ -206,10 +206,10 @@ struct DebugVoiceStage: View {
 
     private var issue: CueVoicePresentation.Issue {
         switch DebugScene.defaults.string(forKey: "CuePadVoiceIssue") {
-        case "microphone": .init(message: "麦克风访问未开启", recovery: .reconnect)
-        case "login": .init(message: "登录已失效", recovery: .reconnect)
-        case "quota": .init(message: "通话额度已用完", recovery: .reconnect)
-        default: .init(message: "网络连接已断开", recovery: .reconnect)
+        case "microphone": .init(summary: "通话未连接", message: "麦克风访问未开启", recovery: .reconnect)
+        case "login": .init(summary: "通话未连接", message: "登录已失效", recovery: .reconnect)
+        case "quota": .init(summary: "通话未连接", message: "通话额度已用完", recovery: .reconnect)
+        default: .init(summary: "通话未连接", message: "网络连接已断开", recovery: .reconnect)
         }
     }
 

@@ -19,7 +19,7 @@ struct CueVoiceSignal: View {
         case .listening: muted ? .quiet : .inward
         case .speaking: .outward
         case .connecting, .processing: .waiting
-        case .failed, .ended: .quiet
+        case .closing, .failed, .ended: .quiet
         }
     }
 

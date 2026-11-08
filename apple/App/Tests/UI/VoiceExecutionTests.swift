@@ -24,7 +24,8 @@ struct VoiceExecutionTests {
         await rig.stop()
     }
 
-    @Test func 只停本次语音实际派出的工作_挂断不影响停止与状态回写() async throws {
+    @Test(arguments: [false, true])
+    func 只停本次语音实际派出的工作_挂断不影响停止与状态回写(whileClosing: Bool) async throws {
         let rig = try await CueHostTests.Rig()
         let fixture = VoiceFlowFixture(rig.services)
         defer { fixture.call.hangUp(); rig.services.cancelBackgroundWork(); rig.app.pi.stop(); rig.model.stop() }
@@ -42,7 +43,16 @@ struct VoiceExecutionTests {
             if command["t"] as? String == "abortTurn" { session.setState(["kind": "idle"]) }
             return prior(connection, command)
         }
-        try await fixture.hangUp()
+        let gate = AsyncStream<Void>.makeStream()
+        defer { gate.continuation.finish() }
+        if whileClosing {
+            fixture.media.closeGate = gate.stream
+            fixture.call.hangUp()
+            try await eventually("关闭尚未释放，执行仍可停止") {
+                fixture.workspace.voicePresentation?.activity == .closing
+                    && fixture.workspace.voicePresentation?.canStopExecution == true
+            }
+        } else { try await fixture.hangUp() }
         let stop = try await fixture.workspace.stopVoiceExecution(session.sessionID)
         try await eventually("Agent 收到停止且真实库记下歇下") {
             session.received.contains("abortTurn") && fixture.workspace.voiceExecutions.first?.state.canStop == false
@@ -50,6 +60,8 @@ struct VoiceExecutionTests {
         #expect(try await rig.store.outcome(of: stop).status == .known(.succeeded))
         #expect(!other.received.contains("abortTurn"))
         #expect(fixture.workspace.voicePresentation?.canStopExecution == false)
+        gate.continuation.finish()
+        try await eventually("关闭释放后才到终态") { !fixture.call.isLive }
         await rig.stop()
     }
 

@@ -13711,22 +13711,6 @@
         }
       }
     },
-    "打开麦克风设置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Microphone Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开麦克风设置"
-          }
-        }
-      }
-    },
     "执行与停止记录" : {
       "localizations" : {
         "en" : {
@@ -16467,6 +16451,22 @@
         }
       }
     },
+    "朗读尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "朗读尚未确认"
+          }
+        }
+      }
+    },
     "未交给 Cue" : {
       "localizations" : {
         "en" : {
@@ -16559,6 +16559,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未知错误"
+          }
+        }
+      }
+    },
+    "未能交给 Cue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t send to Cue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能交给 Cue"
+          }
+        }
+      }
+    },
+    "未能交给 Cue：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t send to Cue: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能交给 Cue：%@"
           }
         }
       }
@@ -16831,22 +16863,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查看通话舞台"
-          }
-        }
-      }
-    },
-    "查看额度" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View usage"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看额度"
           }
         }
       }
@@ -21795,6 +21811,22 @@
         }
       }
     },
+    "请求详情" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求详情"
+          }
+        }
+      }
+    },
     "请稍候" : {
       "localizations" : {
         "en" : {
@@ -24115,6 +24147,22 @@
         }
       }
     },
+    "送达未确认：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivery unconfirmed: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "送达未确认：%@"
+          }
+        }
+      }
+    },
     "选一份…" : {
       "localizations" : {
         "en" : {
@@ -24531,22 +24579,6 @@
         }
       }
     },
-    "通话已结束，朗读尚未确认" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The call ended. Playback is unconfirmed."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话已结束，朗读尚未确认"
-          }
-        }
-      }
-    },
     "通话文字" : {
       "localizations" : {
         "en" : {
@@ -24655,6 +24687,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex"
+          }
+        }
+      }
+    },
+    "通话记录暂不可用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call records unavailable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话记录暂不可用"
           }
         }
       }
@@ -24943,22 +24991,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新登录"
-          }
-        }
-      }
-    },
-    "重新连接" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconnect"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重新连接"
           }
         }
       }

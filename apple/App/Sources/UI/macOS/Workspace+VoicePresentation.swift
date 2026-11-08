@@ -3,6 +3,7 @@ import CueStore
 import SwiftUI
 
 extension Workspace {
+    private static let voiceRequestExcerptLimit = 24
     /// 只投影已有事实：每条请求保留自己的位置，回复按持久化的来源归组，合批回复列出全部来源。
     /// 没有关联来源的是主动消息；不把最后一次请求套到更早的回复上。
     var voicePresentation: CueVoicePresentation? {
@@ -12,6 +13,7 @@ extension Workspace {
         case .listening: .listening
         case .handingOff: .processing
         case .speaking: .speaking
+        case .closing: .closing
         case .ended: .ended
         case .failed: .failed
         }
@@ -61,11 +63,13 @@ extension Workspace {
     private func voiceIssue(_ voice: VoiceCall) -> CueVoicePresentation.Issue? {
         if let request = voiceIssueRequest {
             let reason = request.failure ?? voiceRequest(request).delivery.unconfirmedReason ?? Speech.unconfirmedReason.text
-            return .init(message: "请求「\(request.text)」：\(reason)", recovery: request.failure != nil ? .retryRequest(request.id) : nil)
+            let excerpt = String(request.text.prefix(Self.voiceRequestExcerptLimit))
+            let summary: LocalizedStringResource = request.failure != nil ? "未能交给 Cue：\(excerpt)" : "送达未确认：\(excerpt)"
+            return .init(summary: summary, message: "请求「\(request.text)」：\(reason)", recovery: request.failure != nil ? .retryRequest(request.id) : nil)
         }
-        if let failure = voice.storeFailure { return .init(message: "\(failure)", recovery: .reconnect) }
+        if let failure = voice.storeFailure { return .init(summary: "通话记录暂不可用", message: "\(failure)", recovery: .reconnect) }
         switch voice.phase {
-        case .failed(let failure): return .init(message: "\(failure.shown)", recovery: .reconnect)
+        case .failed(let failure): return .init(summary: "通话未连接", message: "\(failure.shown)", recovery: .reconnect)
         default: return nil
         }
     }

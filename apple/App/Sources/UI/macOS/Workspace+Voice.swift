@@ -88,7 +88,7 @@ extension Workspace {
         switch phase {
         case .connecting: say("正在接通 Cue…")
         case .listening: say("通话中")
-        case .handingOff, .speaking: break
+        case .handingOff, .speaking, .closing: break
         case .ended: say("通话已结束")
         case .failed(let failure): say(Dotted(failure.shown), tone: .failure)
         }

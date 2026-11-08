@@ -156,6 +156,7 @@ struct VoiceFlowTests {
 
     @Test(arguments: ["failed", "unconfirmed"])
     func 原请求失败或未确认后新请求已接走_恢复按原对象且不重复投送(kind: String) async throws {
+        let originalText = "整理下周客户演示需要的发布清单，分别核对桌面端、手机端的已完成事项和仍待确认的限制，保留每项的原始依据，完成后先发给我审核，请先保留末尾这项约束"
         let clock = ManualTiming(), app = TestApp(timing: clock.timing)
         let store = app.services.store, host = TestApp.hostID
         try await store.updateCueProfile { $0.enabledAt = clock.now; $0.hostID = host }
@@ -166,15 +167,15 @@ struct VoiceFlowTests {
         let db = RawDB(app.databaseURL)
         if kind == "failed" {
             try db.exec("CREATE TRIGGER voice_write_failure BEFORE INSERT ON cueMessages WHEN NEW.author = 'you' BEGIN SELECT RAISE(FAIL, 'voice test write failed'); END")
-            fixture.received?(.success(.delegation(.init(id: "write-failed", turn: nil, text: "保留这句话"))))
+            fixture.received?(.success(.delegation(.init(id: "write-failed", turn: nil, text: originalText))))
             try await eventually("界面能看到未交出与原文") { fixture.workspace.voiceIssueRequest?.failure != nil }
             try db.exec("DROP TRIGGER voice_write_failure")
         } else {
-            _ = try await fixture.handoff("保留这句话", id: "write-failed")
+            _ = try await fixture.handoff(originalText, id: "write-failed")
             clock.advance(.seconds(Speech.receiptLimit + 1))
             try await eventually("A 未确认") { fixture.workspace.voiceIssueRequest?.id == "write-failed" }
         }
-        #expect(fixture.workspace.voicePresentation?.replies.first?.request?.text == "保留这句话")
+        #expect(fixture.workspace.voicePresentation?.replies.first?.request?.text == originalText)
         let later = try await fixture.handoff("后来的请求已接走")
         try await store.markCueMessagesDelivered([later])
         try await eventually("B 已接走而恢复仍指向 A") {
@@ -182,8 +183,11 @@ struct VoiceFlowTests {
                 && fixture.workspace.voiceIssueRequest?.id == "write-failed"
         }
         let issue = try #require(fixture.workspace.voicePresentation?.issue)
-        #expect(String(localized: issue.message).contains("保留这句话"))
+        #expect(String(localized: issue.message).contains(originalText))
         #expect(String(localized: issue.message).contains(kind == "failed" ? "voice test write failed" : "可能已经执行"))
+        let summary = String(localized: issue.summary)
+        #expect(summary.hasPrefix(kind == "failed" ? "未能交给 Cue：整理下周客户演示" : "送达未确认：整理下周客户演示"))
+        #expect(!summary.contains("请先保留末尾这项约束"))
         #expect(issue.recovery == (kind == "failed" ? .retryRequest("write-failed") : nil))
         try await fixture.hangUp()
         #expect(fixture.workspace.voicePresentation?.activity == .ended)
@@ -214,6 +218,53 @@ struct VoiceFlowTests {
         #expect(try await store.cueMessages().filter { $0.author == .known(.you) }.count == 2)
         #expect(try await store.cueMessages([later]).first?.deliveredAt != nil)
         #expect(fixture.call.requests.first { $0.message == later }?.text == "后来的请求已接走")
+        try await fixture.hangUp()
+    }
+
+    @Test(arguments: ["ready", "connecting", "failure"])
+    func 关闭完成前不呈现终态_释放后可重连且忽略旧事件(kind: String) async throws {
+        let (app, fixture) = try await setup()
+        let gate = AsyncStream<Void>.makeStream(), accessGate = AsyncStream<Void>.makeStream()
+        defer { gate.continuation.finish(); accessGate.continuation.finish(); app.services.cancelBackgroundWork() }
+        let access = fixture.access
+        if kind == "connecting" {
+            fixture.access = {
+                for await _ in accessGate.stream {}
+                return try await access()
+            }
+            fixture.start()
+            try await eventually("等待连接") { fixture.call.phase == .connecting }
+        } else {
+            try await fixture.connect()
+            let request = try await fixture.handoff("整理发布清单")
+            try await finish(app.services.store, "清单已整理", requests: [request])
+            try await eventually("真实结果可见") { fixture.call.replies.count == 1 }
+        }
+        let oldEvent = fixture.received
+        fixture.media.closeGate = gate.stream
+        if kind == "failure" { oldEvent?(.success(.error("连接已中断"))) }
+        else { fixture.call.hangUp() }
+        try await eventually("关闭停在设备边界") { fixture.media.closing }
+        #expect(fixture.call.isLive)
+        #expect(fixture.workspace.voicePresentation?.activity != .ended)
+        #expect(fixture.workspace.voicePresentation?.activity != .failed)
+        #expect(fixture.workspace.voicePresentation?.replies.allSatisfy { $0.note?.contains("通话已结束") != true } == true)
+        let requests = fixture.call.requests.count
+        oldEvent?(.success(.delegation(.init(id: "late", turn: nil, text: "迟到请求"))))
+        oldEvent?(.success(.started))
+        #expect(fixture.call.requests.count == requests)
+        gate.continuation.finish()
+        try await eventually("关闭真正完成") { !fixture.call.isLive }
+        #expect(fixture.call.phase.isFailure == (kind == "failure"))
+        #expect(fixture.call.requests.count == requests)
+        if kind != "connecting" { #expect(fixture.call.replies.first?.text == "清单已整理") }
+        fixture.media.closeGate = nil
+        fixture.access = access
+        accessGate.continuation.finish()
+        try await fixture.connect()
+        oldEvent?(.success(.error("旧连接迟到错误")))
+        #expect(fixture.call.phase == .listening)
+        #expect(fixture.call.requests.count == requests)
         try await fixture.hangUp()
     }
 

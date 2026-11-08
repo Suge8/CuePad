@@ -7,7 +7,7 @@ import SwiftUI
 /// 请求只有收到 Cue 的持久化确认才显示接走。结束通话不等于停止执行，两种操作始终分开。
 struct CueVoicePresentation {
     enum Activity {
-        case connecting, listening, processing, speaking, failed, ended
+        case connecting, listening, processing, speaking, closing, failed, ended
 
         var title: LocalizedStringResource {
             switch self {
@@ -16,11 +16,12 @@ struct CueVoicePresentation {
             case .processing: "正在处理"
             case .speaking: "正在说"
             case .failed: "通话未连接"
+            case .closing: "正在结束…"
             case .ended: "通话已结束"
             }
         }
 
-        var isLive: Bool { self != .failed && self != .ended }
+        var isLive: Bool { self != .failed && self != .ended && self != .closing }
     }
 
     struct Request {
@@ -58,6 +59,7 @@ struct CueVoicePresentation {
     }
 
     struct Issue {
+        let summary: LocalizedStringResource
         let message: LocalizedStringResource
         let recovery: Recovery?
     }

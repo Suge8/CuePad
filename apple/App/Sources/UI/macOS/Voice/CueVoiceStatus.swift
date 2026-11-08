@@ -16,7 +16,7 @@ struct CueVoiceStatus: View {
             Button { details = true } label: {
                 VStack(alignment: .leading, spacing: Spacing.hair) {
                     if let issue = presentation.issue {
-                        Text(issue.message).font(Typography.body).foregroundStyle(palette.failure)
+                        Text(issue.summary).font(Typography.body).foregroundStyle(palette.failure)
                             .lineLimit(compact ? 1 : 2)
                     } else if let request = presentation.request {
                         Text("当前请求：\(request.status)").font(Typography.bodyStrong)
@@ -64,6 +64,7 @@ struct CueVoiceStatus: View {
                     .padding(Spacing.page)
                 }
                 .frame(height: 320)
+                .accessibilityLabel("请求详情")
             }
             if let recovery = presentation.issue?.recovery, case .retryRequest = recovery {
                 Button { action(.recover(recovery)) } label: { Label(recovery.title, icon: .retry) }

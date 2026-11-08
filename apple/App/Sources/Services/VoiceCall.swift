@@ -9,7 +9,7 @@ import Observation
 @Observable
 final class VoiceCall {
     enum Phase: Equatable {
-        case connecting, listening, handingOff, speaking, ended
+        case connecting, listening, handingOff, speaking, closing, ended
         case failed(Failure)
     }
 
@@ -103,7 +103,8 @@ final class VoiceCall {
     var phase: Phase {
         switch connection {
         case .connecting, .media, .starting: return .connecting
-        case .closing(let end), .finished(let end): return end
+        case .closing: return .closing
+        case .finished(let end): return end
         case .ready: break
         }
         if outputActive { return .speaking }
@@ -256,7 +257,7 @@ final class VoiceCall {
         // 没有逐回复的服务端／播放确认；异步错误或挂断后，已提交与半途发送都不能当作未送出自动重投。
         for index in replyState.indices {
             switch replyState[index].delivery {
-            case .sending, .submitted: replyState[index].delivery = .unconfirmed(String(localized: "通话已结束，朗读尚未确认"))
+            case .sending, .submitted: replyState[index].delivery = .unconfirmed(String(localized: "朗读尚未确认"))
             default: break
             }
         }

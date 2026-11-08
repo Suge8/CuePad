@@ -14,6 +14,8 @@ final class VoiceFlowFixture {
         var denied = false
         var muted = false
         var closed = false
+        var closeGate: AsyncStream<Void>?
+        var closing = false
         func offer() async throws -> String {
             if denied { throw VoicePeerError.microphoneDenied }
             return "offer"
@@ -21,7 +23,11 @@ final class VoiceFlowFixture {
         func accept(answer: String) async throws { onEvent(.connected) }
         func play() async throws {}
         func setMuted(_ value: Bool) async throws { muted = value }
-        func close() async throws { closed = true }
+        func close() async throws {
+            closing = true
+            if let closeGate { for await _ in closeGate {} }
+            closed = true
+        }
     }
 
     final class Control: VoiceControl {

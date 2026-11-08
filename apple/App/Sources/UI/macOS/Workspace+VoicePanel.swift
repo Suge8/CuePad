@@ -64,6 +64,7 @@ struct CueVoicePanel: View {
 
 /// 栏头以下的通话与对话：回复区的占用只读 FloatingReply 的实测值。
 /// 回复区在外层独立排版，通话只消耗剩余高度，不回写几何状态；开合始终保留同一个对话视图。
+/// 普通对话的浮层与命中范围限于获分配的区域，不能越过上沿遮挡通话控制。
 struct CueVoiceContent<Chat: View>: View {
     @ViewBuilder let chat: Chat
     @Environment(Workspace.self) private var workspace
@@ -76,6 +77,8 @@ struct CueVoiceContent<Chat: View>: View {
                     CueVoicePanel(availableHeight: max(0, room.size.height - replyHeight))
                 }
                 chat.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(.rect)
+                    .clipped()
             }
         }
     }
