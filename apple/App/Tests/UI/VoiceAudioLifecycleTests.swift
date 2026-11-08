@@ -33,9 +33,9 @@ import UIKit
         let workspace: Workspace
         let saved: CueMessage
         var voice: VoiceService { app.services.voice }
-        init() async throws {
+        init(makeMedia: @escaping () -> any VoiceMedia) async throws {
             try await app.services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "mac-audit" }
-            app.services.voice = VoiceService(services: app.services, signaling: signal)
+            app.services.voice = VoiceService(services: app.services, signaling: signal, makeMedia: makeMedia)
             workspace = Workspace(services: app.services)
             saved = try await app.services.store.addCueMessage(.cue, text: "Keep this reply after the call")
         }
@@ -46,7 +46,8 @@ import UIKit
     }
 
     @Test func realWebAudioSurvivesEndedNotificationsAndReopens() async throws {
-        let fixture = try await Fixture(), workspace = fixture.workspace
+        var nextMedia: any VoiceMedia = Media()
+        let fixture = try await Fixture(makeMedia: { nextMedia }), workspace = fixture.workspace
         defer { fixture.app.services.cancelBackgroundWork() }
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -59,7 +60,8 @@ import UIKit
         var oldCallback: ((VoicePeer.Event) -> Void)?
         for _ in 0..<2 {
             let media = VoicePeer(source: .file(file), recording: nil)
-            try await workspace.startVoiceCall { media }
+            nextMedia = media
+            try await workspace.startVoiceCall()
             let before = fixture.voice.inputSamples.count
             oldCallback?(.ended(.audioInterrupted))
             let center = NotificationCenter.default, audio = AVAudioSession.sharedInstance()
@@ -83,7 +85,8 @@ import UIKit
 
     @Test(arguments: [false, true])
     func systemInactiveNotificationEndsRealWebAudio(connected: Bool) async throws {
-        let fixture = try await Fixture(), workspace = fixture.workspace
+        var nextMedia: any VoiceMedia = Media()
+        let fixture = try await Fixture(makeMedia: { nextMedia }), workspace = fixture.workspace
         defer { fixture.app.services.cancelBackgroundWork() }
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -94,7 +97,8 @@ import UIKit
         let file = fixture.app.directory.appending(path: "silence.wav")
         try VoicePeer.wav(Data(repeating: 0, count: 48000)).write(to: file)
         let media = VoicePeer(source: .file(file), recording: nil)
-        try await workspace.startVoiceCall { media }
+        nextMedia = media
+        try await workspace.startVoiceCall()
         let session = try #require(fixture.voice.session)
         if connected {
             // 远端接通由替身回报；本机网页、中断通知与关闭均走真实实例。
@@ -120,7 +124,7 @@ import UIKit
         center.post(name: AVAudioSession.didBecomeInactiveNotification, object: audio,
                     userInfo: [AVAudioSession.deactivationContextKey: system])
         #expect(workspace.phoneVoice.phase == .closing)
-        await #expect(throws: VoiceIssue.busy) { try await workspace.startVoiceCall { Media() } }
+        await #expect(throws: VoiceIssue.busy) { try await workspace.startVoiceCall() }
         try await eventually("系统中断通知结束网页通话") { fixture.voice.phone == nil }
         #expect(workspace.phoneVoice.phase == .ended(reason: .audioInterrupted))
         #expect(fixture.signal.sent.contains { if case .media(.hangup(reason: .audioInterrupted)) = $0 { true } else { false } })
@@ -129,11 +133,13 @@ import UIKit
 
     @Test(arguments: [false, true])
     func interruptionKeepsItsReasonAndClosingExcludesReconnect(whileStarting: Bool) async throws {
-        let fixture = try await Fixture(), media = Media(), gate = AuditGate(), closeGate = AuditGate()
+        let media = Media(), gate = AuditGate(), closeGate = AuditGate()
+        var nextMedia: any VoiceMedia = media
+        let fixture = try await Fixture(makeMedia: { nextMedia })
         defer { gate.open(); closeGate.open(); fixture.app.services.cancelBackgroundWork() }
         media.closeGate = closeGate
         if whileStarting { media.offerGate = gate; media.failure = CancellationError() }
-        let start = Task { try await fixture.workspace.startVoiceCall { media } }
+        let start = Task { try await fixture.workspace.startVoiceCall() }
         try await eventually("手机正在开始") { media.offered }
         if !whileStarting {
             try await start.value
@@ -143,7 +149,7 @@ import UIKit
         let oldCallback = media.onEvent
         oldCallback(.ended(.audioInterrupted))
         #expect(fixture.workspace.phoneVoice.phase == .closing)
-        await #expect(throws: VoiceIssue.busy) { try await fixture.workspace.startVoiceCall { Media() } }
+        await #expect(throws: VoiceIssue.busy) { try await fixture.workspace.startVoiceCall() }
         gate.open()
         _ = await start.result
         closeGate.open()
@@ -151,7 +157,8 @@ import UIKit
         #expect(fixture.workspace.phoneVoice.phase == .ended(reason: .audioInterrupted))
         #expect(fixture.signal.sent.contains { if case .media(.hangup(reason: .audioInterrupted)) = $0 { true } else { false } })
         let next = Media()
-        try await fixture.workspace.startVoiceCall { next }
+        nextMedia = next
+        try await fixture.workspace.startVoiceCall()
         oldCallback(.ended(.audioInterrupted))
         #expect(fixture.workspace.phoneVoice.phase == .connecting)
         #expect(!next.closed)
@@ -161,16 +168,21 @@ import UIKit
     }
 
     @Test func deniedPermissionCanBeRetriedWithoutChangingTheLibrary() async throws {
-        let fixture = try await Fixture()
+        var denied = true
+        let fixture = try await Fixture(makeMedia: {
+            let media = Media()
+            if denied { media.failure = VoicePeerError.microphoneDenied }
+            return media
+        })
         defer { fixture.app.services.cancelBackgroundWork() }
         for _ in 0..<2 {
-            let denied = Media(); denied.failure = VoicePeerError.microphoneDenied
-            await #expect(throws: VoiceIssue.ended(.permissionDenied)) { try await fixture.workspace.startVoiceCall { denied } }
+            await #expect(throws: VoiceIssue.ended(.permissionDenied)) { try await fixture.workspace.startVoiceCall() }
             #expect(fixture.workspace.phoneVoice.phase == .failed(.ended(.permissionDenied)))
             #expect(fixture.voice.canStart)
         }
         #expect(!fixture.signal.sent.contains { if case .media(.offer) = $0 { true } else { false } })
-        try await fixture.workspace.startVoiceCall { Media() }
+        denied = false
+        try await fixture.workspace.startVoiceCall()
         #expect(fixture.workspace.phoneVoice.phase == .connecting)
         await fixture.workspace.hangUpVoiceCall()
         try await fixture.checkLibrary()

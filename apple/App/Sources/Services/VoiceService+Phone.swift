@@ -22,7 +22,7 @@ import Observation
 }
 
 extension VoiceService {
-    func start(makeMedia: () -> any VoiceMedia = { VoicePeer(source: .microphone(device: nil), recording: nil) }) async throws {
+    func start() async throws {
         guard canStart else { throw VoiceIssue.busy }
         guard let signaling else { issue = .relayUnsupported; throw VoiceIssue.relayUnsupported }
         guard case .ready(let local) = signaling.voiceAvailability else {
