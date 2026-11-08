@@ -13,21 +13,27 @@ import os
     var availability: VoiceRelayAvailability
     var session: VoiceSessionID?
     var commandResults: [VoiceCommand.ID: VoiceCommandResult.Outcome] = [:]
-    @ObservationIgnored var pending: [VoiceCommand.ID: Pending] = [:]
-    struct Pending {
+    @ObservationIgnored var pending: [VoiceCommand.ID: Pending<VoiceCommandResult.Outcome>] = [:]
+    @ObservationIgnored var pageReads: [VoiceCommand.ID: Pending<VoicePageResult>] = [:]
+    struct Pending<Value: Sendable> {
         let session: VoiceSessionID
         let peer: VoiceEndpoint
         let local: VoiceEndpoint
-        let finish: @MainActor @Sendable (Result<VoiceCommandResult.Outcome, Error>) -> Void
+        let finish: @MainActor @Sendable (Result<Value, Error>) -> Void
     }
     #if os(macOS)
     var call: VoiceCall?
+    /// 只登记当前租约的展示接收者，挂断后仍可收更新；不保留服务端页面、游标或业务副本。
+    @ObservationIgnored var projectionReaders: [VoiceDeviceID: VoiceSignalHeader] = [:]
     @ObservationIgnored var remote: VoiceRemoteMedia?
     @ObservationIgnored var observing: Task<Void, Never>?
     @ObservationIgnored var commands: [VoiceCommand.ID: Task<VoiceCommandResult.Outcome, Never>] = [:]
     #else
     @ObservationIgnored var phone: VoicePhoneSession?
     @ObservationIgnored var phoneBinding: (session: VoiceSessionID, local: VoiceEndpoint, peer: VoiceEndpoint)?
+    let requestPages = VoicePageView<VoiceCallProjection.Request>()
+    let replyPages = VoicePageView<VoiceCallProjection.Reply>()
+    let executionPages = VoicePageView<VoiceExecutionTarget>()
     var muted = false
     var muting = false
     var closing: Bool { phone?.cleanup != nil }
@@ -59,6 +65,12 @@ import os
         Task { await end(reason: .background) }
         #endif
         failPending { _ in true }
+        failPageReads()
+        #if os(iOS)
+        requestPages.disconnected(clear: false)
+        replyPages.disconnected(clear: false)
+        executionPages.disconnected(clear: true)
+        #endif
     }
 
     var phase: VoiceCallProjection.Phase? {
@@ -113,11 +125,34 @@ import os
         #endif
     }
 
-    func setProjection(_ value: VoiceCallProjection?) { projection = value }
+    var canRepeat: Bool {
+        #if os(macOS)
+        call?.canRepeat == true && call.map { VoiceSessionID($0.session) } == session
+        #else
+        phone?.connected == true && !closing && phone?.id == projection?.session && projection?.canRepeat == true
+        #endif
+    }
+
+    func setProjection(_ value: VoiceCallProjection?) {
+        projection = value
+        #if os(iOS)
+        updatePages(value)
+        #endif
+    }
 
     func receive(_ event: VoiceRelayEvent) async {
         switch event {
         case .received(let received):
+            if case .pageResult(let result) = received.payload {
+                receivePageResult(result, header: received.header)
+                return
+            }
+            if case .pageQuery(let query) = received.payload {
+                #if os(macOS)
+                receivePageQuery(query, header: received.header)
+                #endif
+                return
+            }
             if case .commandResult(let result) = received.payload {
                 if let wait = pending[result.command], wait.session == received.header.session,
                    wait.peer == received.header.sender, wait.local == received.header.recipient {
@@ -129,9 +164,21 @@ import os
             await receiveSignal(received)
         case .localClosed(let endpoint, let reason):
             failPending { $0.local == endpoint }
+            failPageReads(local: endpoint)
+            #if os(macOS)
+            projectionReaders = projectionReaders.filter { $0.value.recipient != endpoint }
+            #else
+            if phoneBinding?.local == endpoint { executionPages.disconnected(clear: true) }
+            #endif
             await connectionClosed(local: endpoint, peer: nil, reason: reason)
         case .peerClosed(let endpoint, let departure):
             failPending { $0.peer == endpoint }
+            failPageReads(peer: endpoint)
+            #if os(macOS)
+            projectionReaders = projectionReaders.filter { $0.value.sender != endpoint }
+            #else
+            if phoneBinding?.peer == endpoint { executionPages.disconnected(clear: true) }
+            #endif
             await connectionClosed(local: nil, peer: endpoint, reason: departure == .replaced ? .leaseReplaced : .peerLeft)
         case .rejected(let header, let reason):
             switch header.purpose {
@@ -142,14 +189,22 @@ import os
                 guard let wait = pending[id], wait.session == header.session, wait.local == header.sender, wait.peer == header.recipient else { return }
                 pending[id] = nil
                 wait.finish(.failure(VoiceSignalError.rejected(reason)))
-            case .commandResult:
-                AppServices.log.error("Voice command result rejected by Relay: \(reason.rawValue)")
+            case .pageQuery(let id):
+                guard let wait = pageReads[id], wait.session == header.session, wait.local == header.sender, wait.peer == header.recipient else { return }
+                pageReads[id] = nil
+                wait.finish(.failure(VoiceSignalError.rejected(reason)))
+            case .commandResult, .pageResult:
+                AppServices.log.error("Voice result rejected by Relay: \(reason.rawValue)")
             }
-        case .availability(let value): availability = value
+        case .availability(let value):
+            availability = value
+            #if os(iOS)
+            if case .ready = value {} else { executionPages.disconnected(clear: true) }
+            #endif
         }
     }
 
-    private func failPending(_ matches: (Pending) -> Bool) {
+    private func failPending(_ matches: (Pending<VoiceCommandResult.Outcome>) -> Bool) {
         for (id, wait) in pending where matches(wait) {
             pending[id] = nil
             wait.finish(.failure(VoiceSignalError.leaseChanged))

@@ -3,7 +3,9 @@ import CueStore
 import Foundation
 
 extension VoiceService {
-    func macProjection(_ call: VoiceCall) throws -> VoiceCallProjection {
+    func macProjection(_ call: VoiceCall) throws -> VoiceCallProjection { try fullProjection(call).bounded() }
+
+    func fullProjection(_ call: VoiceCall) throws -> VoiceCallProjection {
         let phase: VoiceCallProjection.Phase = switch call.phase {
         case .connecting: .connecting
         case .listening: .listening
@@ -14,7 +16,7 @@ extension VoiceService {
         case .failed(let failure): .failed(Self.issue(for: failure))
         }
         let requests = call.requests.map { request in
-            VoiceCallProjection.Request(
+            VoiceCallProjection.Request(id: request.rowID,
                 reference: request.message.map { .recorded(message: $0) } ?? .unrecorded(session: request.origin, request: request.rowID),
                 recording: request.isRecording, issue: request.failure == nil ? nil : .storageUnavailable,
                 preview: request.message == nil ? .init(original: request.text) : nil)
@@ -42,8 +44,14 @@ extension VoiceService {
                 } catch CueStoreError.cannotStop { continue }
             }
         }
-        return try VoiceCallProjection(session: VoiceSessionID(call.session), phase: phase, requests: requests, replies: replies, executions: targets,
-                     response: !call.assistantTurns.isEmpty ? .assistantTurn : call.waitingForResponse ? .awaitingAssistant : .none).bounded()
+        targets.sort {
+            if $0.turn.turnStartedAtMilliseconds != $1.turn.turnStartedAtMilliseconds {
+                return $0.turn.turnStartedAtMilliseconds < $1.turn.turnStartedAtMilliseconds
+            }
+            return $0.turn.deliveryID.uuidString < $1.turn.deliveryID.uuidString
+        }
+        return VoiceCallProjection(session: VoiceSessionID(call.session), phase: phase, requests: requests, replies: replies, executions: targets,
+                     response: !call.assistantTurns.isEmpty ? .assistantTurn : call.waitingForResponse ? .awaitingAssistant : .none, canRepeat: call.canRepeat)
     }
 
     static func issue(for failure: VoiceCall.Failure) -> VoiceIssue {

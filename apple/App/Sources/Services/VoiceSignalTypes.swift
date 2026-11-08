@@ -6,6 +6,8 @@ nonisolated enum VoiceSignalPayload: Equatable, Codable, Sendable {
     case command(command: VoiceCommand)
     case commandResult(result: VoiceCommandResult)
     case projection(value: VoiceCallProjection)
+    case pageQuery(query: VoicePageQuery)
+    case pageResult(result: VoicePageResult)
 }
 
 /// 拒绝只能结算原发送的归属；结果帧与请求帧分开，回执发送失败不能误伤同 UUID 的本地请求。
@@ -13,6 +15,8 @@ nonisolated enum VoiceSignalPurpose: Equatable, Codable, Sendable {
     case media
     case command(id: VoiceCommand.ID)
     case commandResult(id: VoiceCommand.ID)
+    case pageQuery(id: VoiceCommand.ID)
+    case pageResult(id: VoiceCommand.ID)
 }
 
 extension VoiceSignalPayload {
@@ -21,6 +25,8 @@ extension VoiceSignalPayload {
         case .media, .projection: .media
         case .command(let command): .command(id: command.id)
         case .commandResult(let result): .commandResult(id: result.command)
+        case .pageQuery(let query): .pageQuery(id: query.id)
+        case .pageResult(let result): .pageResult(id: result.query)
         }
     }
 }

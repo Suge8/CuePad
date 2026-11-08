@@ -8,11 +8,21 @@ struct VoicePhonePresentation {
     let response: VoiceCallProjection.Response
     let muted: Bool
     let canMute: Bool
+    let canRepeat: Bool
     let startUnavailableReason: VoiceIssue?
     let samples: () -> [Double]
-    let requests: [VoiceCallProjection.Request]
-    let replies: [VoiceCallProjection.Reply]
-    let executions: [VoiceExecutionTarget]
+    let requestPage: VoicePage<VoiceCallProjection.Request>
+    let replyPage: VoicePage<VoiceCallProjection.Reply>
+    let executionPage: VoicePage<VoiceExecutionTarget>
+    let requestPageError: VoicePageError?
+    let replyPageError: VoicePageError?
+    let executionPageError: VoicePageError?
+    let loadingRequests: Bool
+    let loadingReplies: Bool
+    let loadingExecutions: Bool
+    var requests: [VoiceCallProjection.Request] { requestPage.items }
+    var replies: [VoiceCallProjection.Reply] { replyPage.items }
+    var executions: [VoiceExecutionTarget] { executionPage.items }
     let omitted: VoiceCallProjection.Omitted
     let commandResults: [VoiceCommand.ID: VoiceCommandResult.Outcome]
 }
@@ -20,10 +30,13 @@ struct VoicePhonePresentation {
 extension Workspace {
     var phoneVoice: VoicePhonePresentation {
         let voice = services.voice
-        return .init(phase: voice.phase, response: voice.projection?.response ?? .none, muted: voice.isMuted, canMute: voice.canMute,
+        return .init(phase: voice.phase, response: voice.projection?.response ?? .none, muted: voice.isMuted, canMute: voice.canMute, canRepeat: voice.canRepeat,
                      startUnavailableReason: cue.canHear ? voice.startUnavailableReason : .cueUnavailable,
-                     samples: { voice.samples }, requests: voice.projection?.requests ?? [], replies: voice.projection?.replies ?? [],
-                     executions: voice.projection?.executions ?? [], omitted: voice.projection?.omitted ?? .init(), commandResults: voice.commandResults)
+                     samples: { voice.samples }, requestPage: voice.requestPages.page, replyPage: voice.replyPages.page,
+                     executionPage: voice.executionPages.page, requestPageError: voice.requestPages.error,
+                     replyPageError: voice.replyPages.error, executionPageError: voice.executionPages.error,
+                     loadingRequests: voice.requestPages.loading, loadingReplies: voice.replyPages.loading, loadingExecutions: voice.executionPages.loading,
+                     omitted: voice.projection?.omitted ?? .init(), commandResults: voice.commandResults)
     }
 
     func startVoiceCall() async throws { try await services.voice.start() }
