@@ -1,3 +1,0 @@
-PASS Swift registration canonical JSON and Ed25519 signature verified by Node; tampering rejected
-PASS Swift HKDF/AES-GCM sample opened by Node; modified AAD rejected
-PASS frame samples share explicit envelope and original departing lease; no server/transport execution claimed

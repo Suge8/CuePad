@@ -4,7 +4,8 @@ import Foundation
 /// 带关联值的 enum 使用 Swift Codable 的带名字形状，例如 {"resolve":{"request":"UUID","device":{"rawValue":"..."}}}。
 /// 原 auth/ring/ping 仍走旧协议：服务器在 ready 附加 voiceVersion=1 后，新客户端才可 register；旧 ready 不附加则只保留门铃。
 /// register 仍用现有房间签名密钥：签 UTF-8 registrationContext + LF，再接 VoiceRegistrationClaim 的 sortedKeys/withoutEscapingSlashes JSON。
-/// 服务器验证当前 socket 的 room/challenge，登记设备并签发新租约；同设备替换必须先使旧租约失效并通知观察者。
+/// 服务器验证当前 socket 的 room/challenge 及客户端新 lease 的签名后原样登记；同设备替换必须先使旧租约失效并通知观察者。
+/// registered 必须回显 claim 的 device/lease，客户端不得采用服务器给出的其他值；本机每次连接都生成新 UUID，即使 challenge 被重放。
 /// signature 是 64 字节 Ed25519 签名的标准 base64（Data 的 Codable 编码），room/challenge 沿用旧握手的 base64url。
 /// 同一 socket 只登记一次；拒绝空设备 ID、超长 ID、未知版本/帧形状。被替换的旧 socket 以 replacedCloseCode 关闭。
 nonisolated enum VoiceRelayRequest: Equatable, Codable, Sendable {
@@ -19,6 +20,17 @@ nonisolated struct VoiceRegistrationClaim: Equatable, Codable, Sendable {
     let room: String
     let challenge: String
     let device: VoiceDeviceID
+    let lease: UUID
+
+    init(room: String, challenge: String, device: VoiceDeviceID) {
+        version = VoiceSignalFormat.version
+        self.room = room
+        self.challenge = challenge
+        self.device = device
+        lease = UUID()
+    }
+
+    var endpoint: VoiceEndpoint { VoiceEndpoint(device: device, lease: lease) }
 
     func signatureInput() throws -> Data {
         try Data((VoiceSignalFormat.registrationContext + "\n").utf8) + VoiceSignalFormat.canonicalJSON(self)

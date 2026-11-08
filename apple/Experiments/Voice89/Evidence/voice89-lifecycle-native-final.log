@@ -1,8 +1,0 @@
-1794115010.037324 audit-permission-cancelled-before-callback
-1794115010.037447 audit-javascript-cancelled-before-callback
-1794115010.037524 audit-send-cancelled-before-callback
-1794115010.037637 audit-hangup-during-create no-late-answer=true
-1794115010.037794 audit-late-send-error new-call-untouched=true
-1794115010.039258 wire-fixture-written
-1794115010.0393019 audit-complete
-1794115010.0393329 complete

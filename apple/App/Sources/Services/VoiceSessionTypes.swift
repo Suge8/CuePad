@@ -12,7 +12,8 @@ nonisolated struct VoiceDeviceID: Hashable, Codable, Sendable {
     init(_ rawValue: String) { self.rawValue = rawValue }
 }
 
-/// Relay 在当前已认证 socket 上发的随机租约；重连、替换和账号变化必须换值，不能由客户端恢复旧值。
+/// 本机在每次连接时生成并签名的随机 UUID；服务器只回显，客户端必须与本轮预期值完全匹配。
+/// 同账号房间成员持有同一密钥，彼此不按互不信任设备隔离。Relay 不持有密钥，不能为旧密文改写租约。
 nonisolated struct VoiceEndpoint: Hashable, Codable, Sendable {
     let device: VoiceDeviceID
     let lease: UUID

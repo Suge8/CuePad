@@ -1,4 +1,0 @@
-1794112704.047276 media-pid=3479 audioCategory=AVAudioSessionCategoryPlayAndRecord permission=1684369017
-1794112704.047464 route-input=["MicrophoneBuiltIn"] output=["Speaker"]
-1794112704.06249 microphone-permission granted=false
-1794112704.071845 failed domain=CuePad.DebugSplitVoice.ProbeError code=0
