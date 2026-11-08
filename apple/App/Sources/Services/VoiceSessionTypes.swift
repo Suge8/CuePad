@@ -41,11 +41,25 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     /// 控制协议的回应进度，与收音、请求写库、后台执行分开；不表示 PCM 已播放到某个位置。
     enum Response: String, Codable, Sendable { case none, awaitingAssistant, assistantTurn }
     var response: Response = .none
+    /// 快照装不下的旧条目数量；正文仍在原聊天，不能把省略当作不存在或已经完成。
+    var omitted = Omitted()
+
+    struct Omitted: Equatable, Codable, Sendable {
+        var requests = 0
+        var replies = 0
+        var executions = 0
+    }
 
     struct Request: Equatable, Codable, Sendable {
         let reference: VoiceRequestReference
         let recording: Bool
         let issue: VoiceIssue?
+        /// 仅未保存请求携带临时原话摘要；不参与恢复命令，也不写入消息库。
+        var preview: RequestPreview? = nil
+    }
+    struct RequestPreview: Equatable, Codable, Sendable {
+        let text: String
+        let truncated: Bool
     }
     struct Reply: Equatable, Codable, Sendable {
         /// 现有 CueMessage.id；正文与 answeredRequests 仍由 Store/CloudKit 提供。

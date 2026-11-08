@@ -16,7 +16,8 @@ extension VoiceService {
         let requests = call.requests.map { request in
             VoiceCallProjection.Request(
                 reference: request.message.map { .recorded(message: $0) } ?? .unrecorded(session: request.origin, request: request.rowID),
-                recording: request.isRecording, issue: request.failure == nil ? nil : .storageUnavailable)
+                recording: request.isRecording, issue: request.failure == nil ? nil : .storageUnavailable,
+                preview: request.message == nil ? .init(original: request.text) : nil)
         }
         let replies = call.replies.map { reply in
             let state: VoiceCallProjection.Readback = switch reply.delivery {
@@ -41,8 +42,8 @@ extension VoiceService {
                 } catch CueStoreError.cannotStop { continue }
             }
         }
-        return .init(session: VoiceSessionID(call.session), phase: phase, requests: requests, replies: replies, executions: targets,
-                     response: !call.assistantTurns.isEmpty ? .assistantTurn : call.waitingForResponse ? .awaitingAssistant : .none)
+        return try VoiceCallProjection(session: VoiceSessionID(call.session), phase: phase, requests: requests, replies: replies, executions: targets,
+                     response: !call.assistantTurns.isEmpty ? .assistantTurn : call.waitingForResponse ? .awaitingAssistant : .none).bounded()
     }
 
     static func issue(for failure: VoiceCall.Failure) -> VoiceIssue {
