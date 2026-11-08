@@ -10,7 +10,7 @@ extension MCPTests {
     let task = try await store.createTask("已有任务")
     try await store.setStatus(task.id, .inProgress)
     let started = try #require(try await store.card(task.id)?.startedAt)
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "session-one", state: .settled, title: "已有会话")
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "session-one", state: .thinking, title: "已有会话", hosted: true)
     try await Server.run(library: sandbox.directory) { server in
       let args = ["action": "bind", "task": task.id.uuidString, "session": "session-one"]
       _ = try await server.call("task", args)
