@@ -16,7 +16,6 @@ extension DebugHooks {
             let tell = dependencies.tell
             dependencies.tell = { text in
                 try scenario.beforeRecording()
-                if DebugVoiceMotion.enabled { try await Task.sleep(for: DebugVoiceMotion.recordingDelay) }
                 return try await tell(text)
             }
             dependencies.media = { _, _ in DebugVoiceLayoutMedia() }

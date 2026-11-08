@@ -38,6 +38,7 @@ final class VoiceRibbonLayer: CALayer {
     private static let stroke: CGFloat = 2.4
     private static let orbitRadius: CGFloat = 0.34
     private static let period = 1.8
+    private static let lightSteps = 24
     private var waiting = false
     private var installed = false
 
@@ -102,17 +103,30 @@ final class VoiceRibbonLayer: CALayer {
     private func light(_ shape: CAShapeLayer, index: Int, playing: Bool, animate: Bool) {
         let shown = shape.presentation()?.opacity ?? shape.opacity
         shape.removeAnimation(forKey: "loop")
+        shape.removeAnimation(forKey: "settle")
         shape.opacity = 1
+        var current: Float = 1
         if playing {
             let walk = CAKeyframeAnimation(keyPath: "opacity")
             let phase = Double(index) / Double(Self.count) * .pi * 2
-            walk.values = (0...24).map { step in 0.35 + 0.65 * (1 + sin(Double(step) / 24 * .pi * 2 - phase)) / 2 }
+            let values = (0...Self.lightSteps).map { step in
+                0.35 + 0.65 * (1 + sin(Double(step) / Double(Self.lightSteps) * .pi * 2 - phase)) / 2
+            }
+            walk.isAdditive = true
+            walk.values = values.map { $0 - 1 }
             walk.duration = Self.period
             _ = LoopLayer.Host.loop(walk, on: shape)
-        } else if animate {
+            let elapsed = shape.convertTime(CACurrentMediaTime(), from: nil) - walk.beginTime
+            let sample = elapsed.truncatingRemainder(dividingBy: Self.period) / Self.period * Double(Self.lightSteps)
+            let lower = Int(sample)
+            current = Float(values[lower] + (values[lower + 1] - values[lower]) * (sample - Double(lower)))
+        }
+        if animate {
             let settle = CABasicAnimation(keyPath: "opacity")
-            settle.fromValue = shown
-            settle.toValue = 1
+            // 循环保持全局相位；把当前亮度与该相位的差淡去，避免重入时旧 settle 结束后突然闪亮。
+            settle.isAdditive = playing
+            settle.fromValue = playing ? shown - current : shown
+            settle.toValue = playing ? 0 : 1
             settle.duration = Motion.Fade.duration
             settle.timingFunction = Motion.Fade.timing
             shape.add(settle, forKey: "settle")

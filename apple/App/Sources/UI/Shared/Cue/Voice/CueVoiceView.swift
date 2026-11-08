@@ -10,15 +10,23 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
 
     private var active: Bool { presentation?.active == true }
     private var closing: Bool { presentation?.activity == .closing }
+    private var hasDetails: Bool {
+        guard let presentation else { return false }
+        return active || !presentation.issues.isEmpty || !presentation.readings.isEmpty
+            || !presentation.executions.isEmpty || presentation.canStopExecution
+    }
+    private var showsStatus: Bool { active || hasDetails || presentation?.activity == .failed }
 
     var body: some View {
         HStack(spacing: Spacing.item) {
             CueVoiceSignal(presentation: presentation)
+                .voiceSlot(showsStatus)
             Text(presentation?.title ?? "和 Cue 通话")
                 .font(Typography.meta.weight(.medium))
                 .foregroundStyle(presentation?.activity == .failed ? palette.failure : palette.ink2)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .voiceSlot(showsStatus)
             Button { action(.toggleMute) } label: {
                 // 两种字长共用同一槽位，切换不会推走挂断和详情。
                 ZStack {
@@ -29,29 +37,29 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
                 .chip(on: presentation?.muted == true, size: .inline)
             }
             .buttonStyle(PressStyle())
-            .disabled(presentation?.canMute != true || closing)
-            Button {
-                if active { action(.hangUp) } else { start() }
-            } label: {
-                Image(active ? .endSession : .audio)
-                    .foregroundStyle(active ? palette.ink2 : palette.signature)
+            .voiceSlot(presentation?.canMute == true && !closing)
+            Button { action(.hangUp) } label: {
+                Image(.endSession).foregroundStyle(palette.ink2)
             }
             .buttonStyle(ControlButtonStyle(kind: .round, size: .compact))
-            .disabled(closing || (!active && presentation?.startUnavailableReason != nil))
-            .accessibilityLabel(active ? "挂断" : "和 Cue 通话")
-            .help(Text(active ? "挂断" : presentation?.startUnavailableReason ?? "和 Cue 通话"))
+            .voiceSlot(active && !closing)
+            .accessibilityLabel("挂断")
+            .help(Text("挂断"))
             CueVoiceDetailButton(source: $detailsSource) {
                 Image(presentation?.needsAttention == true ? .failure : .more)
                     .foregroundStyle(presentation?.needsAttention == true ? palette.failure : palette.ink2)
                     .frame(width: ControlSize.target, height: ControlSize.target)
                     .contentShape(.circle)
             }
-            .disabled(presentation == nil)
+            .voiceSlot(hasDetails)
             .accessibilityLabel("通话详情")
             .help(Text("通话详情"))
         }
         .padding(.horizontal, Spacing.page)
         .padding(.vertical, Spacing.tight)
+        .onChange(of: hasDetails) { _, available in
+            if !available { detailsSource = nil }
+        }
     }
 }
 
@@ -93,5 +101,16 @@ struct CueVoiceEntry<Operation: CueVoiceOperation>: View {
         .disabled(!active && presentation?.startUnavailableReason != nil)
         .accessibilityLabel(active ? "通话详情" : "和 Cue 通话")
         .help(Text(active ? "通话详情" : presentation?.startUnavailableReason ?? "和 Cue 通话"))
+    }
+}
+
+private extension View {
+    /// 保留测量与视图身份；退出开始就撤掉点击、键盘与读屏入口，淡去只影响画面。
+    func voiceSlot(_ visible: Bool) -> some View {
+        opacity(visible ? 1 : 0)
+            .animation(Motion.fade, value: visible)
+            .disabled(!visible)
+            .allowsHitTesting(visible)
+            .readerHidden(!visible)
     }
 }

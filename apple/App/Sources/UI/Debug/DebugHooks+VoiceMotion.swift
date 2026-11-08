@@ -2,8 +2,9 @@ import QuartzCore
 
 extension DebugHooks {
     /// 声纹播放门的现场取证；只在显式启动参数下记状态变化，不记音量或每帧日志。
-    static func voiceRibbon(_ ribbon: VoiceRibbon, on layer: CALayer) {
+    static func voiceRibbon(_ ribbon: VoiceRibbon, on layer: VoiceRibbonLayer) {
         #if DEBUG
+        DebugVoiceLightProbe.start(layer)
         guard DebugScene.defaults.bool(forKey: "CuePadVoiceMotionTrace") else { return }
         let loops = (layer.sublayers ?? []).filter { $0.animation(forKey: "loop") != nil }.count
         let line = "voice-ribbon activity=\(String(describing: ribbon.activity)) playing=\(ribbon.playing) reduced=\(ribbon.reduced) loops=\(loops)"
