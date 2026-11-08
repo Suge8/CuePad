@@ -18,11 +18,11 @@ final class LostEndLink: SessionLink {
 
 private final class InterruptedEndLink: SessionLink {
     let bridge: PiBridge
-    var waiting: CheckedContinuation<Void, Never>?
+    var waiting: CheckedContinuation<Void, any Error>?
     init(_ bridge: PiBridge) { self.bridge = bridge }
     func end(_ id: PiSession.ID) async throws {
         bridge.detach(id, reason: .closed(reason: "quit"))
-        await withCheckedContinuation { waiting = $0 }
+        try await withCheckedThrowingContinuation { waiting = $0 }
     }
 }
 
@@ -58,7 +58,8 @@ extension TaskFlowTests {
         try await eventually("结束已交出") { link.waiting != nil }
         #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.executing))
         await services.executor.beginStop()()
-        link.waiting?.resume()
+        // 模拟进程在结束交出后中断：旧处理任务不能正常返回并继续确认结果。
+        link.waiting?.resume(throwing: CancellationError())
         link.waiting = nil
         try await PiStateRecorder(store: store, hostID: TestApp.hostID).end(sessionID: "audit-interrupted", confirming: recovery == "source" ? [automatic.id] : [])
         try await services.executor.start()
