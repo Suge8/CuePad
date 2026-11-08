@@ -256,8 +256,9 @@ import Testing
   @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
     let sb = try Fixture()
     let root = await sb.run("--help").out
+    let words = Set(root.unicodeScalars.split { !CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz-").contains($0) }.map(String.init))
     for command in ["project", "card", "task", "search", "show", "conflicts"] {
-      #expect(root.contains(command), "根帮助没有公开命令 \(command)")
+      #expect(words.contains(command), "根帮助没有公开命令 \(command)")
     }
     for command in Command.all {
       let noun = command.path[0]
