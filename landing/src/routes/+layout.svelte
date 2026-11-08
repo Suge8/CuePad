@@ -9,14 +9,16 @@
 		applyBootLang();
 	});
 
-	/* Language side effects: <html> attrs, title, meta description */
 	$effect(() => {
 		const lang = i18n.lang;
 		document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
 		document.documentElement.setAttribute('data-lang', lang);
-		document.title = t('meta.title');
-		document.querySelector('meta[name="description"]')?.setAttribute('content', t('meta.desc'));
 	});
 </script>
+
+<svelte:head>
+	<title>{t('meta.title')}</title>
+	<meta name="description" content={t('meta.desc')} />
+</svelte:head>
 
 {@render children()}

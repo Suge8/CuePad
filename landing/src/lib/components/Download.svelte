@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { observeVideo } from '$lib/video';
 	import { gsap, REDUCED } from '$lib/gsap';
 	import { t, LINKS } from '$lib/i18n.svelte';
 	import Icon from './Icon.svelte';
@@ -10,24 +11,10 @@
 	let cheer: HTMLVideoElement;
 
 	onMount(() => {
-		/* Ambient loop: pause offscreen; frozen poster with reduced motion */
-		if (REDUCED()) {
-			cheer.removeAttribute('autoplay');
-			return;
-		}
-		const io = new IntersectionObserver(
-			(entries) => {
-				for (const e of entries) {
-					if (e.isIntersecting) cheer.play().catch(() => {});
-					else cheer.pause();
-				}
-			},
-			{ threshold: 0.1 }
-		);
-		io.observe(cheer);
+		const stopVideo = observeVideo(cheer, 0.1, 'static');
+		if (REDUCED()) return stopVideo;
 
 		const ctx = gsap.context(() => {
-			/* One celebration burst when the section enters */
 			gsap.fromTo(
 				burst.children,
 				{ scale: 0, autoAlpha: 1, x: 0, y: 0 },
@@ -45,7 +32,7 @@
 		}, section);
 		return () => {
 			ctx.revert();
-			io.disconnect();
+			stopVideo();
 		};
 	});
 </script>
