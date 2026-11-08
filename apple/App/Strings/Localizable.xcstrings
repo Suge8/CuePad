@@ -16535,6 +16535,22 @@
         }
       }
     },
+    "有 %lld 条请求、%lld 条回复和 %lld 个执行未显示，请在 Mac 上查看" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not shown — requests: %lld, replies: %lld, executions: %lld. View them on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %1$lld 条请求、%2$lld 条回复和 %3$lld 个执行未显示，请在 Mac 上查看"
+          }
+        }
+      }
+    },
     "有一件做完了" : {
       "localizations" : {
         "en" : {
@@ -22119,6 +22135,22 @@
         }
       }
     },
+    "请求摘要「%@…」：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request excerpt “%@…”: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求摘要「%1$@…」：%2$@"
+          }
+        }
+      }
+    },
     "请稍候" : {
       "localizations" : {
         "en" : {
@@ -25139,6 +25171,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通话详情"
+          }
+        }
+      }
+    },
+    "通话详情不完整" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call details are incomplete"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话详情不完整"
           }
         }
       }

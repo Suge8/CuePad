@@ -4,7 +4,7 @@ import SwiftUI
 import UIKit
 
 /// 手机通话的呈现宿主。共享视图只读这份投影并发出带原引用的动作；媒体仍由 VoiceService 持有。
-/// 原聊天按 UUID 订阅，不受聊天页面最近 200 条的限制。未落库请求没有正文，不得用其他消息代替。
+/// 原聊天按 UUID 订阅，不受聊天页面最近 200 条的限制；未落库请求只展示远端提供的临时摘要。
 struct PhoneVoiceHost<Content: View>: View {
     @Environment(Workspace.self) private var workspace
     @State private var records: PhoneVoiceRecords?
@@ -61,6 +61,7 @@ struct PhoneVoiceViewState {
         let message: CueMessage?
         let recording: Bool
         let issue: VoiceIssue?
+        let preview: VoiceCallProjection.RequestPreview?
         var id: VoiceRequestReference { reference }
     }
 
@@ -87,6 +88,7 @@ struct PhoneVoiceViewState {
     let requests: [Request]
     let replies: [Reply]
     let executions: [Execution]
+    let omitted: VoiceCallProjection.Omitted
 
     fileprivate init(phone: VoicePhonePresentation, records: PhoneVoiceRecords?, shown: (PiSessionListItem) -> PiShown) {
         let byID = Dictionary(uniqueKeysWithValues: (records?.messages ?? []).map { ($0.id, $0) })
@@ -95,6 +97,7 @@ struct PhoneVoiceViewState {
         muted = phone.muted
         canMute = phone.canMute
         startUnavailableReason = phone.startUnavailableReason
+        omitted = phone.omitted
         samples = phone.samples
         requests = phone.requests.map { request in
             let message: CueMessage?
@@ -102,7 +105,7 @@ struct PhoneVoiceViewState {
             case .recorded(let id): message = byID[id]
             case .unrecorded: message = nil
             }
-            return Request(reference: request.reference, message: message, recording: request.recording, issue: request.issue)
+            return Request(reference: request.reference, message: message, recording: request.recording, issue: request.issue, preview: request.preview)
         }
         replies = phone.replies.map { Reply(id: $0.message, message: byID[$0.message], readback: $0.readback) }
         executions = phone.executions.map { target in

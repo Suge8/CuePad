@@ -77,8 +77,17 @@ extension PhoneVoiceViewState {
         }
         var issues: [CueVoiceState<PhoneVoiceAction>.Issue] = requests.compactMap { request in
             guard let issue = request.issue else { return nil }
-            return .init(id: .request(AnyHashable(request.reference)), summary: "未能交给 Cue", message: issue.phoneMessage,
-                         recovery: request.message == nil ? nil : .recover(request.reference))
+            let excerpt = request.message?.text ?? request.preview?.text
+            let message: LocalizedStringResource
+            if let excerpt, !excerpt.isEmpty {
+                let reason = String(localized: issue.phoneMessage)
+                if request.preview?.truncated == true { message = "请求摘要「\(excerpt)…」：\(reason)" }
+                else { message = "请求「\(excerpt)」：\(reason)" }
+            } else {
+                message = issue.phoneMessage
+            }
+            return .init(id: .request(AnyHashable(request.reference)), summary: "未能交给 Cue", message: message,
+                         recovery: excerpt?.isEmpty == false ? .recover(request.reference) : nil)
         }
         if case .failed(let issue) = phase {
             issues.append(.init(id: .connection, summary: "通话未连接", message: issue.phoneMessage, recovery: issue.phoneRecovery))
@@ -87,6 +96,11 @@ extension PhoneVoiceViewState {
             issues.append(.init(id: .connection, summary: "通话已结束", message: issue.phoneMessage, recovery: issue.phoneRecovery))
         } else if phase == nil, let issue = startUnavailableReason {
             issues.append(.init(id: .connection, summary: "通话暂不可用", message: issue.phoneMessage, recovery: issue.phoneRecovery))
+        }
+        if omitted.requests + omitted.replies + omitted.executions > 0 {
+            issues.append(.init(id: .request(AnyHashable("omitted")), summary: "通话详情不完整",
+                                message: "有 \(omitted.requests) 条请求、\(omitted.replies) 条回复和 \(omitted.executions) 个执行未显示，请在 Mac 上查看",
+                                recovery: nil))
         }
         if let rejection {
             issues.append(.init(id: .store, summary: "操作未执行", message: rejection.phoneMessage, recovery: nil))

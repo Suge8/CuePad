@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// 隔离画面样例只注入远端投影，不创建媒体或冒充命令成功。
-/// -CuePadPhoneVoice connecting|listening|processing|speaking|closing|failed|ended
+/// -CuePadPhoneVoice connecting|listening|processing|speaking|closing|failed|failedRequest|ended
 /// -CuePadPhoneVoiceHistory 0|1|200：写入隔离聊天；-CuePadCueDraft 保留输入框草稿。
 enum DebugPhoneVoice {
     static func prepare(_ workspace: Workspace) async {
@@ -18,11 +18,17 @@ enum DebugPhoneVoice {
         case "processing": (phase, response) = (.listening, .awaitingAssistant)
         case "speaking": (phase, response) = (.listening, .assistantTurn)
         case "closing": (phase, response) = (.closing, .none)
+        case "failedRequest": (phase, response) = (.listening, .none)
         case "failed": (phase, response) = (.failed(.ended(.permissionDenied)), .none)
         case "ended": (phase, response) = (.ended(reason: .hungUp), .none)
         default: return
         }
-        voice.setProjection(.init(session: VoiceSessionID(UUID()), phase: phase, requests: [], replies: [], executions: [], response: response))
+        let session = VoiceSessionID(UUID())
+        let requests: [VoiceCallProjection.Request] = name == "failedRequest" ? [
+            .init(reference: .unrecorded(session: session, request: UUID()), recording: false, issue: .storageUnavailable,
+                  preview: .init(original: String(localized: "检查发布事项 \(1)", table: "Demo")))
+        ] : []
+        voice.setProjection(.init(session: session, phase: phase, requests: requests, replies: [], executions: [], response: response))
         do {
             let store = workspace.services.store
             let wanted = DebugScene.defaults.integer(forKey: "CuePadPhoneVoiceHistory")
