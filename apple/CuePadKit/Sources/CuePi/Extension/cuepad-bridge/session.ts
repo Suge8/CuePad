@@ -327,7 +327,8 @@ export class Session {
 
 	/** 核对投送身份与停止之间没有 await；不清空别人的 pending。
 	 * starting / SDK 待处理消息尚未有可证实的当前身份，拒绝而不冒险停止新工作。 */
-	stopDelivery(deliveryId: string): boolean {
+	stopDelivery(deliveryId: string, turnStartedAt: number): boolean {
+		if (this.turnSince !== turnStartedAt) return false;
 		if (this.starting.length || this.ctx.hasPendingMessages()) return false;
 		const last = this.ctx.sessionManager.buildSessionProjection().messages.findLast((message) => message.role === "user");
 		if ((last as { cuepadDelivery?: unknown } | undefined)?.cuepadDelivery !== deliveryId) return false;

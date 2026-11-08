@@ -44,6 +44,9 @@ final class VoiceCall {
 
     private var connection: Connection = .finished(.ended)
     private var outputActive = false
+    private var waitingForResponse = false
+    private var assistantTurn = false
+    private(set) var mediaEndReason: VoiceEndReason?
     private var inputSamples: [Double] = []
     private var outputSamples: [Double] = []
     /// 50ms 一点，保留最近 1.8 秒；静音不呈现输入，远端出声时呈现输出。
@@ -67,7 +70,7 @@ final class VoiceCall {
     @ObservationIgnored var mark: (String) -> Void = { _ in }
     @ObservationIgnored let dependencies: Dependencies
     @ObservationIgnored private var peer: (any VoiceMedia)?
-    @ObservationIgnored private var session = UUID()
+    @ObservationIgnored private(set) var session = UUID()
     @ObservationIgnored var inputs = AsyncStream<Input>.makeStream()
     @ObservationIgnored private var connecting: Task<Void, Never>?
     @ObservationIgnored var observing: Task<Void, Never>?
@@ -107,8 +110,8 @@ final class VoiceCall {
         case .finished(let end): return end
         case .ready: break
         }
-        if outputActive { return .speaking }
-        return requests.contains(where: \.isRecording) ? .handingOff : .listening
+        if outputActive || assistantTurn { return .speaking }
+        return waitingForResponse || requests.contains(where: \.isRecording) ? .handingOff : .listening
     }
 
     var channel: (any VoiceControl)? {
@@ -120,11 +123,14 @@ final class VoiceCall {
     func hangUp() { inputs.continuation.yield(.hangUp) }
 
     /// 重新接通只重建媒体与控制连接；库订阅、请求身份和结果保留，不重新执行业务。
-    func reconnect() {
+    func reconnect(session: UUID = UUID()) {
         guard !isLive else { return }
         inputs = AsyncStream<Input>.makeStream()
         connection = .connecting
-        session = UUID()
+        self.session = session
+        mediaEndReason = nil
+        assistantTurn = false
+        waitingForResponse = false
         delegations.removeAll()
         audioMs = 0
         usedPercent = nil
@@ -179,7 +185,7 @@ final class VoiceCall {
 
     private func handle(_ input: Input) -> Phase? {
         switch input {
-        case .hangUp: return .ended
+        case .hangUp: mediaEndReason = .hungUp; return .ended
         case .failed(let failure): return .failed(failure)
         case .prepared(let call, let access):
             usedPercent = call.usedPercent
@@ -190,7 +196,10 @@ final class VoiceCall {
                 mark("media")
                 connection = .starting(dependencies.control(call.id, access, session) { [inputs] in inputs.continuation.yield(.wire($0)) })
             }
-        case .peer(.failed): return .failed(.media)
+        case .peer(.failed): mediaEndReason = .mediaFailed; return .failed(.media)
+        case .peer(.ended(let reason)):
+            mediaEndReason = reason
+            return [.hungUp, .background].contains(reason) ? .ended : .failed(.media)
         case .peer(.inputEnded): mark("input-ended")
         case .peer(.device(let label)): mark("device \(label)")
         case .peer(.sample(let side, let peak)):
@@ -234,7 +243,11 @@ final class VoiceCall {
                 if assistant { said = text } else { heard = text }
                 mark("\(assistant ? "assistant" : "user")-said \(id) \(text)")
             } else if assistant { mark("assistant-turn \(id)") }
-            if !assistant {
+            if assistant {
+                assistantTurn = !done
+                waitingForResponse = false
+            } else {
+                waitingForResponse = done
                 if !done { userTurn = id }
                 else if userTurn == id { userTurn = nil }
             }
@@ -254,10 +267,10 @@ final class VoiceCall {
         muting?.cancel()
         deadline?.cancel()
         outgoing?.task.cancel()
-        // 没有逐回复的服务端／播放确认；异步错误或挂断后，已提交与半途发送都不能当作未送出自动重投。
+        // 已提交本就不保证播放成功，正常挂断不制造异常；半途取消的发送才需明确请求重说。
         for index in replyState.indices {
             switch replyState[index].delivery {
-            case .sending, .submitted: replyState[index].delivery = .unconfirmed(String(localized: "朗读尚未确认"))
+            case .sending: replyState[index].delivery = .unconfirmed(String(localized: "朗读尚未确认"))
             default: break
             }
         }

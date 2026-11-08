@@ -24,6 +24,16 @@ import Synchronization
 final class Relay {
     /// 门铃此刻通着：入了房间，心跳有回应。
     private(set) var isLive = false
+    private(set) var voiceAvailability: VoiceRelayAvailability = .unavailable
+    @ObservationIgnored var voiceConnection: RelayVoiceConnection?
+    @ObservationIgnored private let voiceDevice: VoiceDeviceID
+    @ObservationIgnored private let voiceFeed = AsyncStream<VoiceRelayEvent>.makeStream()
+    var voiceEvents: AsyncStream<VoiceRelayEvent> { voiceFeed.stream }
+
+    private func voiceAvailability(_ value: VoiceRelayAvailability) {
+        voiceAvailability = value
+        voiceFeed.continuation.yield(.availability(value))
+    }
 
     @ObservationIgnored private let endpoint: URL
     @ObservationIgnored private let credentials: @MainActor () async throws -> RelayCredentials
@@ -59,7 +69,8 @@ final class Relay {
     private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "relay")
 
     /// `host` 是中转的主机（可带端口），连 `wss://<host>/v1/<房间号>`。
-    init(host: String, credentials: @escaping @MainActor () async throws -> RelayCredentials) {
+    init(host: String, device: String, credentials: @escaping @MainActor () async throws -> RelayCredentials) {
+        voiceDevice = VoiceDeviceID(device)
         endpoint = URL(string: "wss://\(host)/v1")!
         self.credentials = credentials
         session = URLSession(configuration: .ephemeral)
@@ -112,11 +123,13 @@ final class Relay {
     func settle() async {
         await sending?.value
         guard !wanted else { return }
+        voiceConnection?.close(.background)
         await disconnect(thenConnect: true)
     }
 
     /// 换了 iCloud 账号：连着的那条在旧账号的房间里，断开后按新账号的密钥重连。
     func reconnect() async {
+        voiceConnection?.close(.accountChanged)
         known = nil
         guard connection != nil else { return }
         await disconnect(thenConnect: true)
@@ -191,14 +204,26 @@ final class Relay {
         if let remembered { credentials = remembered } else { credentials = try await self.credentials() }
         known = credentials
         let socket = session.webSocketTask(with: endpoint.appending(path: credentials.room))
+        socket.maximumMessageSize = VoiceSignalFormat.maximumWireBytes
         self.socket = socket
         defer {
+            let reason: VoiceEndReason = switch socket.closeCode.rawValue {
+            case VoiceSignalFormat.replacedCloseCode: .leaseReplaced
+            case 4408: .relayCapacity
+            case 4400, 4401: .protocolRejected
+            default: .networkFailed
+            }
+            voiceConnection?.close(reason)
+            voiceConnection = nil
+            voiceAvailability(.unavailable)
             socket.cancel(with: .goingAway, reason: nil)
             if self.socket === socket { self.socket = nil }
         }
         try await withTaskCancellationHandler {
             socket.resume()
-            try await Self.handshake(socket, credentials)
+            let voice = try await Self.handshake(socket, credentials, device: voiceDevice, emit: { [voiceFeed] in voiceFeed.continuation.yield($0) })
+            voiceConnection = voice
+            voiceAvailability(voice.map { .ready(endpoint: $0.crypto.claim.endpoint) } ?? .unsupported)
             isLive = true
             if let downSince {
                 Self.log.notice("门铃通了，断了 \((ContinuousClock.now - downSince).seconds, format: .fixed(precision: 1), privacy: .public) 秒")
@@ -220,9 +245,16 @@ final class Relay {
                 group.addTask { try await Self.heartbeat(socket) }
                 group.addTask {
                     while true {
-                        guard try await Self.frame(from: socket).t == "ring" else { throw RelayError.unexpectedFrame }
-                        Self.log.info("门铃响了")
-                        await rang()
+                        let frame = try await Self.frame(from: socket)
+                        switch frame.t {
+                        case "ring":
+                            Self.log.info("门铃响了")
+                            await rang()
+                        case "voice":
+                            guard let voice, let body = frame.body else { throw RelayError.unexpectedFrame }
+                            try await voice.receive(body)
+                        default: throw RelayError.unexpectedFrame
+                        }
                     }
                 }
                 defer { socket.cancel(with: .goingAway, reason: nil) }  // 一个先结束，另一个等在这条连接上的也随之结束
@@ -241,7 +273,8 @@ final class Relay {
     }
 
     /// 收中转的随机数、签名回去、等它说入了房间；`handshakeLimit` 内没走完就断开。
-    private static func handshake(_ socket: URLSessionWebSocketTask, _ credentials: RelayCredentials) async throws {
+    private static func handshake(_ socket: URLSessionWebSocketTask, _ credentials: RelayCredentials,
+                                  device: VoiceDeviceID, emit: @escaping (VoiceRelayEvent) -> Void) async throws -> RelayVoiceConnection? {
         let watchdog = Task {
             try await Task.sleep(for: handshakeLimit)
             socket.cancel(with: .goingAway, reason: nil)
@@ -250,8 +283,25 @@ final class Relay {
             let challenge = try await frame(from: socket)
             guard challenge.t == "challenge", let nonce = challenge.n else { throw RelayError.unexpectedFrame }
             try await socket.send(.string(#"{"t":"auth","s":"\#(try credentials.sign(nonce))"}"#))
-            guard try await frame(from: socket).t == "ready" else { throw RelayError.unexpectedFrame }
+            let ready = try await frame(from: socket)
+            guard ready.t == "ready" else { throw RelayError.unexpectedFrame }
+            guard ready.voiceVersion == VoiceSignalFormat.version else { watchdog.cancel(); return nil }
+            let voice = RelayVoiceConnection(socket: socket, credentials: credentials, challenge: nonce, device: device, emit: emit)
+            do {
+                try await voice.register(credentials)
+                while true {
+                    let response = try await frame(from: socket)
+                    if response.t == "ring" { continue } // 入房后会统一拉取，握手期间不丢业务事实。
+                    guard response.t == "voice", case .registered(let endpoint) = response.body else { throw RelayError.unexpectedFrame }
+                    try voice.crypto.acceptRegistration(endpoint)
+                    break
+                }
+            } catch {
+                voice.close(socket.closeCode.rawValue == 4408 ? .relayCapacity : .protocolRejected)
+                throw error
+            }
             watchdog.cancel()
+            return voice
         } catch {
             watchdog.cancel()
             if case .success = await watchdog.result { throw RelayError.handshakeTimeout }  // 是时限到了断的，不是别的错
@@ -274,10 +324,13 @@ final class Relay {
     private struct Frame: Decodable {
         var t: String
         var n: String?
+        var voiceVersion: UInt8?
+        var body: VoiceRelayResponse?
     }
 
     private nonisolated static func frame(from socket: URLSessionWebSocketTask) async throws -> Frame {
         guard case .string(let text) = try await socket.receive() else { throw RelayError.unexpectedFrame }
+        guard text.utf8.count <= VoiceSignalFormat.maximumWireBytes else { throw VoiceSignalError.tooLarge }
         return try JSONDecoder().decode(Frame.self, from: Data(text.utf8))
     }
 }

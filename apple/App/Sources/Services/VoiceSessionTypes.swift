@@ -1,19 +1,20 @@
+import CueStore
 import Foundation
 
-/// 一次媒体连接的客户端 UUID，不是 OpenAI 的 call ID。对象关闭后不得换 ID 复用资源。
+/// 一次媒体连接的客户端 UUID，不是 OpenAI 的 call ID；对象关闭后不得换 ID 复用资源。
 nonisolated struct VoiceSessionID: Hashable, Codable, Sendable {
     let rawValue: UUID
     init(_ rawValue: UUID) { self.rawValue = rawValue }
 }
 
-/// 已有 Viewer.device / Mac hostID 的路由值；同账号成员可证明持有房间密钥，不能证明独立物理设备身份。
+/// 已有 Viewer.device / Mac hostID 的原字符串路由值。
 nonisolated struct VoiceDeviceID: Hashable, Codable, Sendable {
     let rawValue: String
     init(_ rawValue: String) { self.rawValue = rawValue }
 }
 
-/// 本机在每次连接时生成并签名的随机 UUID；服务器只回显，客户端必须与本轮预期值完全匹配。
-/// 同账号房间成员持有同一密钥，彼此不按互不信任设备隔离。Relay 不持有密钥，不能为旧密文改写租约。
+/// 本机每次连接生成并签名的随机 UUID；服务器只能回显，不能替换本机预期值。
+/// 同账号成员共享密钥，彼此不按互不信任设备隔离；Relay 无密钥，不能为旧密文改写租约。
 nonisolated struct VoiceEndpoint: Hashable, Codable, Sendable {
     let device: VoiceDeviceID
     let lease: UUID
@@ -21,31 +22,55 @@ nonisolated struct VoiceEndpoint: Hashable, Codable, Sendable {
 
 nonisolated enum VoiceEndReason: String, Codable, Sendable {
     case hungUp, background, permissionDenied, audioInterrupted, mediaFailed, controlFailed
-    case peerLeft, leaseReplaced, accountChanged, networkFailed, timedOut, protocolRejected
+    case peerLeft, leaseReplaced, accountChanged, networkFailed, timedOut, protocolRejected, relayCapacity
 }
 
-/// 这是 Mac 唯一 VoiceCall 的只读投影，不是手机可推进的业务状态机，不持久化第二份请求或结果。
-/// AppServices 持有服务和投影；Workspace 只发动作。断线不推断任何 Cue 请求已撤销或执行已停止。
+/// Mac 唯一 VoiceCall 的只读投影。处理/说来自 Mac 的控制事件，不用手机音量猜测；结束不推断业务已撤销或执行已停止。
+/// 正文和持久化业务状态仍从 CueMessage/PiSessionState 读取，信令不复制聊天历史。
 nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     enum Phase: Equatable, Codable, Sendable {
-        case connecting, active
+        case connecting, listening, processing, speaking, closing
+        case failed(VoiceIssue)
         case ended(reason: VoiceEndReason)
     }
-
     let session: VoiceSessionID
     let phase: Phase
-    let requests: [VoiceRequestReference]
+    let requests: [Request]
     let replies: [Reply]
     let executions: [VoiceExecutionTarget]
 
+    struct Request: Equatable, Codable, Sendable {
+        let reference: VoiceRequestReference
+        let recording: Bool
+        let issue: VoiceIssue?
+    }
     struct Reply: Equatable, Codable, Sendable {
         /// 现有 CueMessage.id；正文与 answeredRequests 仍由 Store/CloudKit 提供。
         let message: UUID
         let readback: Readback
     }
+    /// submitted 不证明已读出；挂断不自动将它改成异常。只有未完成的发送或实际错误才是 unconfirmed。
+    enum Readback: String, Codable, Sendable { case notRequested, submitted, unconfirmed }
+}
 
-    /// 没有逐回复播放确认；submitted/contextAccepted 都不证明已读出，挂断不自动将它们改成异常。
-    enum Readback: String, Codable, Sendable {
-        case notRequested, submitted, contextAccepted
+/// 可跨设备呈现的原因与动作，不转发上游错误原文、请求头、服务器 call ID 或授权。
+nonisolated enum VoiceIssue: Equatable, Codable, Sendable {
+    case ended(VoiceEndReason)
+    case codexNotInstalled, signedOut, cueUnavailable, macUnavailable, relayUnsupported, busy
+    case notAllowed(status: Int)
+    case server(status: Int?)
+    case storageUnavailable, originalMissing, alreadyHandled, turnChanged, shutdownUnconfirmed
+
+    enum Action: String, Codable, Sendable { case reconnect, microphoneSettings, configureOnMac, signInOnMac, installCodexOnMac, retryLater }
+    var actions: [Action] {
+        switch self {
+        case .ended(.permissionDenied): [.microphoneSettings, .reconnect]
+        case .codexNotInstalled: [.installCodexOnMac]
+        case .signedOut: [.signInOnMac]
+        case .cueUnavailable: [.configureOnMac]
+        case .notAllowed, .relayUnsupported, .busy, .storageUnavailable, .macUnavailable: [.retryLater]
+        case .originalMissing, .alreadyHandled, .turnChanged: []
+        case .ended, .server, .shutdownUnconfirmed: [.reconnect]
+        }
     }
 }

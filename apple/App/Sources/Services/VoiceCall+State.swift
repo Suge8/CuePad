@@ -8,6 +8,7 @@ extension VoiceCall {
         enum Submission { case recording, recorded(UUID), returned(UUID), failed(String) }
         let rowID = UUID()
         let delegation: VoiceWire.Delegation
+        let origin: VoiceSessionID
         var submission: Submission = .recording
         var record: CueMessage?
         var id: String { delegation.id }
@@ -58,16 +59,6 @@ extension VoiceCall {
         - Present everything as \(name) speaking. Never mention a backend, delegation or another system.
         """
     }
-}
-
-/// 媒体与控制连接是通话的外部边界；验收替身在此注入，业务入口、库、投送与状态投影照常运行。
-protocol VoiceMedia: AnyObject {
-    var onEvent: (VoicePeer.Event) -> Void { get set }
-    func offer() async throws -> String
-    func accept(answer: String) async throws
-    func play() async throws
-    func setMuted(_ muted: Bool) async throws
-    func close() async throws
 }
 
 protocol VoiceControl: AnyObject {

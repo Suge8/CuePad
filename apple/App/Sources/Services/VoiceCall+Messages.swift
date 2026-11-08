@@ -7,7 +7,7 @@ extension VoiceCall {
     func submit(_ delegation: VoiceWire.Delegation) {
         guard !requestState.contains(where: { $0.id == delegation.id }),
               !delegation.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        requestState.append(Request(delegation: delegation))
+        requestState.append(Request(delegation: delegation, origin: VoiceSessionID(session)))
         delegations.insert(delegation.id)
         mark("handoff \(delegation.id)")
         recordRequest(delegation.id)
