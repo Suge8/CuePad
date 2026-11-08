@@ -20,6 +20,9 @@ struct VoicePhonePresentation {
     let loadingRequests: Bool
     let loadingReplies: Bool
     let loadingExecutions: Bool
+    let canReturnToRequestsHead: Bool
+    let canReturnToRepliesHead: Bool
+    let canReturnToExecutionsHead: Bool
     var requests: [VoiceCallProjection.Request] { requestPage.items }
     var replies: [VoiceCallProjection.Reply] { replyPage.items }
     var executions: [VoiceExecutionTarget] { executionPage.items }
@@ -36,6 +39,9 @@ extension Workspace {
                      executionPage: voice.executionPages.page, requestPageError: voice.requestPages.error,
                      replyPageError: voice.replyPages.error, executionPageError: voice.executionPages.error,
                      loadingRequests: voice.requestPages.loading, loadingReplies: voice.replyPages.loading, loadingExecutions: voice.executionPages.loading,
+                     canReturnToRequestsHead: voice.requestPages.canReturnToHead,
+                     canReturnToRepliesHead: voice.replyPages.canReturnToHead,
+                     canReturnToExecutionsHead: voice.executionPages.canReturnToHead,
                      omitted: voice.projection?.omitted ?? .init(), commandResults: voice.commandResults)
     }
 

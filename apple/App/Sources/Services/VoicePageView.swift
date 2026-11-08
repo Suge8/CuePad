@@ -15,6 +15,13 @@ import Observation
     @ObservationIgnored private var operation: Task<VoicePage<Row>, Error>?
     @ObservationIgnored private var ticket: UUID?
 
+    var canReturnToHead: Bool {
+        switch selection {
+        case .pushedHead: false
+        case .selected(let cursor): cursor?.after != nil
+        }
+    }
+
     isolated deinit { operation?.cancel() }
 
     func reset() {
