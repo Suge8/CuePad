@@ -62,6 +62,10 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后会自己退�
 - 提示条 4 秒就收（带撤销、归档或出错的 8 秒），指针停在上面时不收：`expect` 写进同一组动作。后台录屏计时：`xc.sh rec mac -- … -CuePadNotice 字 -CuePadHover <提示条上一点> -CuePadHoverSeconds <秒>`（停那么久后移开，应在移开后再满 8 秒才收），读屏开着不收用 `-CuePadReader YES`（同一条路）；真实指针、键盘焦点与真机旁白仍要人工。
 - 任务行右键在后台弹得出菜单；墙上灵感卡的右键被当成点按，它的操作从编辑页走。
 - 让 Cue 真跑：隔离实例里各家的配置目录是空的、没有登录的大脑。起实例前同 `ClaudeTestbed` 把这台 Claude Code 的登录交给它：`export CLAUDE_CODE_OAUTH_TOKEN="$(<ClaudeLogin.tokenCommand 那条命令>)" ANTHROPIC_API_KEY=`（只读钥匙串里的访问令牌，不刷新），启用时选 Claude Code。
+- 和 Cue 通话（Mac）：`run` 起的实例没有菜单栏，用 `-CuePadVoice mic`（或音频文件）调菜单那一项的同一个动作；令牌先 `scripts/voice-token.py <文件>` 经本机 Codex app-server 获取，经 `-CuePadVoiceToken <文件>` 交给实例，Cue 用上一条的真 Claude Code 或 `-CuePadCueBrain` 替身（参数见 `DebugScene+Voice.swift` 头注释）。
+- 语音无人值守回环见 `VoiceLoopback`、`DebugVoice`：合成声源只进入本次创建的临时设备，不改系统默认设备或音量；同机回环被回声消除过滤是预期现象，Debug 关闭它只能验收传输与 Cue 行为，不能算真实麦克风验收。生产仍请求回声消除、降噪和自动增益；实际启用须核对 WebKit 支持列表与轨道设置，不由请求值保证。
+- GPT Live 先筛选、整理，再以 delegation 交接给 Cue；`turn.done` 只是转写。核对交接正文、卡片、用户消息送达与最终回复的 `answeredRequests`；`-CuePadVoiceReplay YES` 在回复后重放交接与转写，库里应仍只有原请求。问候与普通闲聊不应写成 Cue 请求。
+- 朗读验收分开核对 `cue-forward`（Cue 实际结果和交接 ID）、`cue-sent`（发送完成）、`context-accepted`（服务器追加回执）、`assistant-said`（模型转写），最后对照 `output-loud/quiet` 与真实输出录音。只有音轨证据能证明出声，内容仍须回放核实；回执不能当作必播或播完。v3 的 `speakable` 是播报输入，关闭 `ack_filler` 也不保证模型不会自行确认或漏交接。停止请求必须实际交接、由 Cue 确认后再查录音；不能因听到模型说停下就算任务已停止。
 - iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；点按 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 换算；`axe describe-ui` 读不到 SwiftUI 的元素）。`run` 起的实例由后台看守租着那台模拟器（别的检出领不到），到 `CUEPAD_RUN_SECONDS`、实例退出或 `xc.sh stop` 才放；`shot`、`rec` 只在拍的那几秒占着。槽位全机共用（`_lock.sh`），换机型的任务会关掉同槽位上别的机型。模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。
 
 ## 读屏验收

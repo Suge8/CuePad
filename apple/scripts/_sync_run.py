@@ -5,7 +5,7 @@ from collections import defaultdict
 import hashlib, json, os, random, re, select, shutil, socket, subprocess, sys, threading, time
 
 sys.dont_write_bytecode = True
-from app_env import isolated_env  # noqa: E402
+from app_env import disclaimed, isolated_env  # noqa: E402
 
 SESSIONS = int(os.environ.get("SYNC_BENCH_SESSIONS", 3))
 FLIP = float(os.environ.get("SYNC_BENCH_FLIP", 8))
@@ -44,7 +44,7 @@ class Instance:
         if not self.relay: args += ["-CuePadSyncBenchNoRelay", "YES"]
         args += self.cloud
         self.started = time.time()
-        self.proc = subprocess.Popen(args, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        self.proc = subprocess.Popen(disclaimed(args), env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         threading.Thread(target=self._read, args=(self.proc,), daemon=True).start()
         self.raw.write(f"--- start {self.started:.3f} pid={self.proc.pid}\n")
         return self.started

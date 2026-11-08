@@ -67,6 +67,7 @@ CuePad → 扩展（都带 `id`）：
 | `config` | `model{provider, id}`、`thinking`、`fast`、`name`，至少一项 | `bad_request`、`unknown_model`、`no_auth` |
 | `answer` | `promptId`、`value`（`confirm` 为布尔，`select` 为选项原文，`text` 为字符串） | `no_prompt`、`stale_prompt`、`bad_answer` |
 | `abort` | — | — |
+| `abortTurn`（59 起） | `deliveryId`：只停止该投送开启的原回合；同步核对当前真实消息后停止，不清空后续排队工作；旧扩展和未实现此合同的接入明确拒绝 | `bad_request`、`stale_turn` |
 | `retry` | — | `nothing_to_retry` |
 | `end` | — | — |
 | `reload` | — | — |
@@ -77,6 +78,8 @@ CuePad → 扩展（都带 `id`）：
 **这一行的格式永远不能变**，扩展也要一直认它：要叫醒的也有 CuePad 读不懂的旧扩展，它们只认得出这一行（与 hello 里身份那几项、`bye`）；格式一变，旧会话就再也换不上新扩展（与扩展装在 Pi 扩展目录下的路径必须稳定是同一类约束）。v38 及更早的扩展不认它（回 `bad_request`），它们自己盯着扩展目录；Pi 1.4.0 及更早的二进制会吞掉一次安装里排在后面的目录事件，所以 CuePad 在它们握手时与每次装完，等扩展目录安静后单独碰一下它们盯的名字（`PiExtensionNudge`）。
 
 `send` 缺省是人类发送；`cueTurn` 出现即是 Cue 的发送策略，空对象没有接管忙轮的许可。桥在实际派发前按 Store 权威的 Unix 毫秒表示核对当前 peer 的轮次时间与 `PiSendPolicy.cue`；扩展在停止、提交与推进排队消息前，以 SDK 的忙闲事实及当前投影最后一条用户消息的 `cuepadDelivery` 核对许可标识。SDK 有待处理消息时，即使 `isIdle` 为真也不放行 Cue：公开接口没有队列来源证据，不能用当前轮的许可抢先。缺证据回 `unconfirmed_turn`，标识不同回 `user_turn`，都未提交这句话、也不打断原轮。不按会话名字、目录或是否托管过滤辅助 RPC。
+
+`send` 的新回合请求统一入队，预检中的队首也在队内；预检回来按当下忙闲继续推进，忙时停当前轮并等待歇下，空闲时同步交出。普通 `abort` / `end` 收回所有未交出的消息（含预检中），`abortTurn` 只停止匹配的当前回合，不清空队列。
 
 `send` / `retry` 交出前通过公开 modelRegistry 核对当前模型及授权；明确缺授权回 `no_auth`，不启动或中止模型轮。ACK 只表示观察到对应消息事件，事件早于文件写入；持久化以历史读取到真实消息为准，模型轮次结果另看真实 settled。超时、断线与 `failed: <原因>` 都不证明未执行，不授权自动重投。重试在完成的助手消息上记录结果，到 `agent_settled` 才收尾未落成的等待；全部遗留 retry marker 都从请求及 `turn_end` 投影里移除，原始历史与已完成工具结果保留。
 

@@ -57,6 +57,13 @@ extension Workspace {
         return write(stored, to: listener) {}
     }
 
+    /// 语音等调用者取得同一个发送入口已落库的消息 ID；上传照常继续，失败原样交回调用者。
+    func recordSpeech(_ stored: String, to listener: Listener) async throws -> UUID {
+        try await withCheckedThrowingContinuation { continuation in
+            _ = write(to: listener, taking: { (ComposerDraft(), stored) }, restore: { _ in }, recorded: { continuation.resume(with: $0) })
+        }
+    }
+
     /// 重发一句没能送达的话：先撤回它（撤不回——Mac 已领取、Cue 已收到——就不重发，免得说两遍），再用同样的内容写一条新的。
     /// 撤回之后写不进库时，原文放进 `box`（这个去处的输入框），文字不丢。
     @discardableResult
@@ -90,7 +97,8 @@ extension Workspace {
 
     /// `taking` 给出要写的正文和取走的那份草稿（等在存的附件存好之后）；写库失败时 `restore` 拿到那份草稿放回输入框。
     private func write(
-        to listener: Listener, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void
+        to listener: Listener, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void,
+        recorded: ((Result<UUID, Error>) -> Void)? = nil
     ) -> Task<Void, Never> {
         let services = services
         let key = listener.orderKey, before = sendOrder.tails[key]
@@ -102,6 +110,7 @@ extension Workspace {
             do {
                 id = try await Self.record(body, to: listener, in: services.store)
             } catch {
+                recorded?(.failure(error))
                 restore(sent)
                 switch listener {
                 case .cue: cue.launchFailed()
@@ -110,6 +119,7 @@ extension Workspace {
                 fail(error)
                 return nil
             }
+            recorded?(.success(id))
             return id
         }
         sendOrder.tails[key] = recording

@@ -9,7 +9,7 @@
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
 /// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、serverAt（服务器收下它的时刻）、cueToldAt（Cue 已知道没送到）；
-/// piSessionStates、cards、deliveryRequests 的 writeSeq（本机写入序号，见 `writeSeq`）。
+/// piSessionStates、cards、deliveryRequests、cueMessages 的 writeSeq（本机写入序号，见 `writeSeq`）。
 ///
 /// 本机表（不同步）：`Table.synced` 之外的表，另有 piProcesses、syncRecords、syncState，以及 searchIndex（FTS5，由触发器随同步表维护，可随时重建）；
 /// cueSummaries 是 Cue 记忆的摘要缓存，可随时丢弃重建。
@@ -181,12 +181,10 @@ enum Schema {
     """,
     // 90：派发期限从服务器收下起算（`DeliveryRequest.dispatchDeadline`）；升级前已传上去、还在等派发的，发送方没记下收下时刻，
     // 不补就永远不到期：按写下的时刻补（只改本机列，不改 modifiedAt、不同步）
-    """
-    UPDATE deliveryRequests AS r SET serverAt = createdAt
-      WHERE serverAt IS NULL AND (status = 'preparing' OR (status = 'pending' AND handledBy IS NULL)) AND \(Speech.reachedServerSQL("r"));
-    """,
+    "\(deliveryServerAnchor)",
     // 91：摘要改为绑定生成输入的完整指纹；旧派生缓存丢弃重建。
     "DELETE FROM cueSummaries;",
+    cueMessageUpgrade,
   ]
 
   static let activityDestinationsTable = """

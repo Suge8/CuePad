@@ -126,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
     @objc func newCard(_ sender: Any?) { workspace?.newCard() }
     @objc func newSession(_ sender: Any?) { workspace?.newSession() }
+    @objc func toggleVoiceCall(_ sender: Any?) { workspace?.toggleVoiceCall() }
     /// 不叫 `toggleSidebar(_:)`：AppKit 的分栏控制器自己响应那个动作，在响应链上先接走，带着分栏动画开合。
     /// 放不放得下按主窗口此刻的宽（`WideMetrics`，同 `toggleCueColumn`）：放不下时拉出左缘的抽屉。
     @objc func toggleCueSidebar(_ sender: Any?) {

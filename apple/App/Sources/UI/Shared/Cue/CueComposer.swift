@@ -91,7 +91,15 @@ struct CueComposer: View {
 
     @ViewBuilder private var tools: some View {
         #if os(macOS)
-        if tooled { CueBrainRow(opening: $opening) }
+        if tooled {
+            VStack(alignment: .leading, spacing: Spacing.item) {
+                CueBrainRow(opening: $opening)
+                CueVoiceEntry(inCall: workspace.voice != nil) {
+                    if workspace.voice == nil { workspace.startVoiceCall() }
+                    else { workspace.voiceExpanded = true; workspace.showCue() }
+                }
+            }
+        }
         #endif
     }
 

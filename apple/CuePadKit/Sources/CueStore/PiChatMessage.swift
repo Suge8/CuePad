@@ -185,6 +185,10 @@ extension PiChatMessage {
       public var session: UUID?
       /// 这一步的结果里带的图（Agent 截的屏、读进来的图）：附件的键，存的是 Mac 读会话时缩小的那份（`ToolImage`）；没有为 nil
       public var images: [String]?
+      /// Cue 实际接走、触发这次工具调用的用户消息，与工具确实写出的投送身份。普通 Agent 工具没有。
+      /// 可控范围由这条因果链与会话当前轮次共同证明，不按工具参数、标题或时间窗口猜归属。
+      public var cueRequests: [UUID]? = nil
+      public var deliveries: [UUID]? = nil
 
       public init(
         kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil, name: String? = nil,

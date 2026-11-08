@@ -171,7 +171,7 @@ extension CueKeeper {
     /// 这一轮写给你的话（回复、回答你的一轮出错）：提不提示你、一轮只响一次都在 `CueStore.replyCueRound`。
     func reply(_ text: ShownText, in turn: Turn) async {
         do {
-            try await store.replyCueRound(startedAt: turn.round.startedAt, reply: text, as: turn.author, answersYou: turn.answersYou)
+            try await store.replyCueRound(startedAt: turn.round.startedAt, reply: text, as: turn.author, answersYou: turn.answersYou, answeredRequests: turn.delivered)
         } catch {
             Self.log.error("Cue 这一轮的话没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }

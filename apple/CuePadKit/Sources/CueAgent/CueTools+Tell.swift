@@ -33,8 +33,8 @@ extension CueTools {
       guard !done.isEmpty else { throw Failure("要给 text（说什么）、withdraw（撤回哪条提问）或 restore（放回哪条）") }
       return .ok(done.joined())
     }
-    let message = try await store.addCueMessage(.cue, text: text, ask: ask, shots: shots, urgent: args.bool("urgent") ?? false, task: related?.id)
-    return .ok(done.joined() + (message.choices != nil ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）")
+    let message = try await store.addCueMessage(.cue, text: text, ask: ask, shots: shots, urgent: args.bool("urgent") ?? false, task: related?.id, answeredRequests: nil)
+    return .ok(done.joined() + (message.choices != nil ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）\n\(CueToolReceipt(.reply, message.id).mark)")
   }
 
   /// show 点名的图（tell 的提问、done 的结果）：每张的 file 是发到手机的那一份的 id 或前缀（task peek 里列的）。

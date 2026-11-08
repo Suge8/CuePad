@@ -55,13 +55,23 @@ struct CuePage: View {
     #if os(macOS)
     private var page: some View {
         HStack(spacing: 0) {
-            FloatingReply {
-                chat
-            } reply: {
-                bottom
-                    .replyTray()
-                    .padding(.horizontal, Self.inset)
-                    .frame(maxWidth: Self.readingWidth)
+            GeometryReader { room in
+                let replyLimit = workspace.voice == nil ? nil : max(0, room.size.height - CueVoicePanel.minimumHeight - Spacing.replyBottom)
+                FloatingReply {
+                    CueVoiceContent { chat }
+                } reply: {
+                    CueVoiceReplyBudget(maximumHeight: replyLimit) {
+                        ScrollView {
+                            bottom(maximumComposerHeight: replyLimit)
+                                .replyTray()
+                                .padding(.horizontal, Self.inset)
+                                .frame(maxWidth: Self.readingWidth)
+                        }
+                        .defaultScrollAnchor(.bottom)
+                        .scrollBounceBehavior(.basedOnSize)
+                        .accessibilityLabel("拍板与回复")
+                    }
+                }
             }
             // 原地淡入淡出、对话这一下就让到终点的宽：开合不逐帧排版（docs/layout.md「宽屏开合」）
             if cue.showsRun, let keeper = services.cue.keeper {
@@ -78,7 +88,7 @@ struct CuePage: View {
         FloatingReply {
             chat.padding(.leading, railInset)
         } reply: {
-            bottom
+            bottom()
                 .padding(.horizontal, Spacing.group)
                 .frame(maxWidth: Self.readingWidth)
         }
@@ -163,8 +173,8 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 浮在对话底上的一块：拍板卡、停用时的启用与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
-    private var bottom: some View {
+    /// 拍板卡、停用时的启用与输入框；通话时输入框不高于回复视口，长草稿在原生文字框里滚动。
+    private func bottom(maximumComposerHeight: CGFloat? = nil) -> some View {
         VStack(spacing: 0) {
             if let thread {
                 CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, shots: thread.shots, open: { opened = $0 }, moving: $docking)
@@ -174,7 +184,9 @@ struct CuePage: View {
             }
             // 宽屏没启用时不放输入框：主区底部已有记下灵感的那一条（`CaptureSlot`），一屏只留一个；这一栏只剩启用那一张（`CueWelcome`）
             if cue.canHear || workspace.layout == .narrow {
-                CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
+                CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
+                    .fixedSize(horizontal: false, vertical: maximumComposerHeight == nil)
+                    .frame(maxHeight: maximumComposerHeight)
             }
         }
         .animation(Motion.fade, value: cue.canHear)

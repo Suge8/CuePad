@@ -36,6 +36,24 @@
           }
         }
       }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "comment" : "和 Cue 通话时的麦克风授权说明",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad listens to you while you're on a call with Cue."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "和 Cue 通话时，CuePad 要听你说话。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
