@@ -52,7 +52,7 @@ extension VoiceService {
     func revokeProjection(local: VoiceEndpoint? = nil, peer: VoiceEndpoint? = nil) {
         guard local == nil || phoneBinding?.local == local, peer == nil || phoneBinding?.peer == peer else { return }
         phoneBinding = nil
-        executionPages.disconnected(clear: true)
+        executionPages.disconnected()
     }
 
     func updatePages(_ value: VoiceCallProjection?) {
@@ -61,11 +61,11 @@ extension VoiceService {
             return
         }
         requestPages.receive(.init(items: value.requests, nextCursor: value.pages.requests.nextCursor), session: value.session,
-                             version: value.pages.requests.version, clearStale: false, read: requestSnapshot)
+                             version: value.pages.requests.version, read: requestSnapshot)
         replyPages.receive(.init(items: value.replies, nextCursor: value.pages.replies.nextCursor), session: value.session,
-                           version: value.pages.replies.version, clearStale: false, read: replySnapshot)
+                           version: value.pages.replies.version, read: replySnapshot)
         executionPages.receive(.init(items: value.executions, nextCursor: value.pages.executions.nextCursor), session: value.session,
-                               version: value.pages.executions.version, clearStale: true, read: executionSnapshot)
+                               version: value.pages.executions.version, read: executionSnapshot)
     }
     #endif
 }

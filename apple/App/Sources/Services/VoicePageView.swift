@@ -3,7 +3,8 @@ import Foundation
 import Observation
 
 /// 每类只保留当前展示页，不累计历史、不复刻业务状态。按原锚点刷新整页，无追加去重队列。
-/// 首页阶段变化不动历史页；该类内容变更才刷新。停止目标在版本变化或断连时立即撤下。
+/// 首页阶段变化不动历史页；该类内容变更才刷新。停止目标在版本变化、断连或原通话失效时立即撤下。
+/// 原通话失效保留已有请求和朗读摘要，但撤下翻页与回首页入口。
 @Observable final class VoicePageView<Row: Equatable & Codable & Sendable> {
     private(set) var page = VoicePage<Row>(items: [], nextCursor: nil)
     private(set) var loading = false
@@ -15,8 +16,13 @@ import Observation
     @ObservationIgnored private var operation: Task<VoicePage<Row>, Error>?
     @ObservationIgnored private var ticket: UUID?
 
+    @ObservationIgnored private let clearStale: Bool
+
+    init(clearStale: Bool = false) { self.clearStale = clearStale }
+
     var canReturnToHead: Bool {
-        switch selection {
+        guard error != .sessionUnavailable else { return false }
+        return switch selection {
         case .pushedHead: false
         case .selected(let cursor): cursor?.after != nil
         }
@@ -36,16 +42,16 @@ import Observation
         error = nil
     }
 
-    func disconnected(clear: Bool) {
+    func disconnected() {
         operation?.cancel()
         ticket = nil
         version = nil
         loading = false
         error = .unavailable
-        if clear { page = .init(items: [], nextCursor: page.nextCursor) }
+        if clearStale { page = .init(items: [], nextCursor: page.nextCursor) }
     }
 
-    func receive(_ first: VoicePage<Row>, session: VoiceSessionID, version: Data, clearStale: Bool,
+    func receive(_ first: VoicePage<Row>, session: VoiceSessionID, version: Data,
                  read: @escaping (VoicePageCursor?) async throws -> VoicePageSnapshot<Row>) {
         if self.session != session { reset(); self.session = session }
         guard self.version != version else { return }
@@ -88,7 +94,11 @@ import Observation
                 if ticket == id {
                     loading = false
                     self.error = error as? VoicePageError ?? .unavailable
-                    if self.error == .refreshRequired || self.error == .sessionUnavailable { page = .init(items: [], nextCursor: nil) }
+                    if self.error == .sessionUnavailable {
+                        page = .init(items: clearStale ? [] : page.items, nextCursor: nil)
+                    } else if self.error == .refreshRequired {
+                        page = .init(items: [], nextCursor: nil)
+                    }
                 }
                 throw error
             }

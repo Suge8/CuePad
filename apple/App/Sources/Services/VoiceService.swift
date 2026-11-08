@@ -33,7 +33,7 @@ import os
     @ObservationIgnored var phoneBinding: (session: VoiceSessionID, local: VoiceEndpoint, peer: VoiceEndpoint)?
     let requestPages = VoicePageView<VoiceCallProjection.Request>()
     let replyPages = VoicePageView<VoiceCallProjection.Reply>()
-    let executionPages = VoicePageView<VoiceExecutionTarget>()
+    let executionPages = VoicePageView<VoiceExecutionTarget>(clearStale: true)
     /// 本机媒体终态不改写 Mac 的业务投影，也不能触发旧首页重新入页。
     var phoneEnd: VoiceCallProjection.Phase?
     var muted = false
@@ -69,8 +69,8 @@ import os
         failPending { _ in true }
         failPageReads()
         #if os(iOS)
-        requestPages.disconnected(clear: false)
-        replyPages.disconnected(clear: false)
+        requestPages.disconnected()
+        replyPages.disconnected()
         revokeProjection()
         #endif
     }
