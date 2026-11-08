@@ -1,5 +1,10 @@
 import Foundation
 
+/// 创建时所选项目不存在或已在回收站的处理方式；默认严格拒绝。
+public enum MissingProject: Sendable {
+  case reject, useDefault
+}
+
 public struct Project: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// 库里存的名字（Cue、命令行与同步看的都是它）；界面显示读 `shownName`。写入时空名抛 `blankProjectName`，别处（旧版本、同步）可能留下空名。
