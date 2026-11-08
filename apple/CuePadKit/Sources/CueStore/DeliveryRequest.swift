@@ -112,6 +112,9 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public internal(set) var reachedServer = false
   public internal(set) var sessionBindingRevision: SessionBindingRevision?
 
+  /// 仅领取返回的执行上下文携带：本次结束覆盖的请求身份，重启/同步读取不重建，不持久化。
+  public internal(set) var coveredEndRequests: Set<UUID> = []
+
   public var isFromCue: Bool { origin == .known(.cue) }
 
   /// 持久记录还没有收尾，不等于此刻在跑；当前进度与控制去重读 Speech.trip。

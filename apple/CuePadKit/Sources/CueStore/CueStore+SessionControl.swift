@@ -117,12 +117,18 @@ extension CueStore {
   }
 
   /// Cue 收掉一个会话（done 给 session）：与做完一件事同一条规则（`endUnused`），只是不除外哪件事。做不到的、终端里他自己开的抛 `cannotEnd`，
-  /// 在用的抛 `sessionInUse`：Cue 点名要收，得知道为什么没收。已结束的不动、返回 nil，否则返回结束请求。
+  /// 在用的抛 `sessionInUse`：Cue 点名要收，得知道为什么没收。已结束且无待核对结束请求才返回 nil；否则明确投送，不用 ended 快照代替执行结果。
   public func endIdleSession(_ sessionID: String) throws -> DeliveryRequest? {
     try write {
       guard let state = try sessionState(sessionID) else { throw CueStoreError.notFound }
-      guard state.state != .known(.ended) else { return nil }
-      guard state.hosted, state.canEnd else { throw CueStoreError.cannotEnd(state.title) }
+      if state.state == .known(.ended) {
+        let unresolved = try deliveryRequests(toSession: sessionID).contains {
+          $0.mode == .known(.end) && $0.handledBy != nil && ($0.isOpen || $0.status == .known(.unconfirmed))
+        }
+        guard unresolved else { return nil }
+      } else {
+        guard state.hosted, state.canEnd else { throw CueStoreError.cannotEnd(state.title) }
+      }
       guard try db.first(Self.usedElsewhere, [sessionID, nil as UUID?], { _ in true }) == nil else { throw CueStoreError.sessionInUse(state.title) }
       return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: true)
     }

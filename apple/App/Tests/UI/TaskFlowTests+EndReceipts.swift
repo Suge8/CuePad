@@ -1,12 +1,13 @@
 #if os(macOS)
 @testable import CuePi
 import CueTestSupport
+import CueAgent
 import Foundation
 import Testing
 @testable import CuePad
 @testable import CueStore
 
-private final class LostEndLink: SessionLink {
+final class LostEndLink: SessionLink {
     let bridge: PiBridge
     init(_ bridge: PiBridge) { self.bridge = bridge }
     func end(_ id: PiSession.ID) async throws {
@@ -25,7 +26,7 @@ private final class InterruptedEndLink: SessionLink {
     }
 }
 
-private final class InterleavedLink: SessionLink {
+final class InterleavedLink: SessionLink {
     let bridge: PiBridge
     let beforeEnd: () async throws -> Void
     init(_ bridge: PiBridge, beforeEnd: @escaping () async throws -> Void) { self.bridge = bridge; self.beforeEnd = beforeEnd }
@@ -36,7 +37,8 @@ private final class InterleavedLink: SessionLink {
 }
 
 extension TaskFlowTests {
-    @Test func 结束交出后执行器中断_正证据使旧请求成功() async throws {
+    @Test(arguments: ["source", "ui", "cue"])
+    func 结束交出后执行器中断_按源端证据或明确恢复收敛(recovery: String) async throws {
         let services = try #require(rig.services), workspace = Workspace(services: services)
         defer { rig.pi.stop(); services.cancelBackgroundWork() }
         try await rig.offersPi()
@@ -58,8 +60,31 @@ extension TaskFlowTests {
         await services.executor.beginStop()()
         link.waiting?.resume()
         link.waiting = nil
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).end(sessionID: "audit-interrupted")
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID).end(sessionID: "audit-interrupted", confirming: recovery == "source" ? [automatic.id] : [])
         try await services.executor.start()
+        if recovery != "source" {
+            #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.unconfirmed))
+            await #expect(throws: CueStoreError.sessionEnding) { try await store.bindSession("audit-interrupted", to: borrower.id) }
+            let ended = try #require(try await store.piSessions(sessionIDs: ["audit-interrupted"])["audit-interrupted"]?.state)
+            #expect(ended.state == .known(.ended) && !ended.canEnd)
+            if recovery == "ui" {
+                let issue = MacDelivery.endIssue(try await store.deliveryRequests(toSession: ended.sessionID), at: services.speech)
+                #expect(issue?.unconfirmedReason != nil)
+                let action = try #require(SessionActions.end(ended, ending: false, recovering: issue != nil, in: workspace))
+                #expect(action.enabled)
+                action.run()
+                guard case .end(let asked) = workspace.sessionAsk else { Issue.record("恢复按钮必须打开结束确认框"); return }
+                await workspace.end(asked)
+            } else {
+                let host = services.hostID
+                try await store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
+                let result = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "done", "session": ended.sessionID]))
+                #expect(!result.isError, "\(result.text)")
+            }
+            let explicit = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) && $0.content == "end" })
+            #expect(try await store.outcome(of: explicit).status == .known(.succeeded))
+            #expect(MacDelivery.endIssue(try await store.deliveryRequests(toSession: ended.sessionID), at: services.speech) == nil)
+        }
         #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.succeeded))
         #expect(try await store.piSessions(sessionIDs: ["audit-interrupted"])["audit-interrupted"]?.state.state == .known(.ended))
         try await store.bindSession("audit-interrupted", to: borrower.id)
@@ -141,14 +166,14 @@ extension TaskFlowTests {
             explicit = try await services.end(ended)
             #expect(try await store.outcome(of: explicit!).status == .known(.succeeded))
         } else {
-            try await recorder.end(sessionID: "audit-lost")
+            try await recorder.end(sessionID: "audit-lost", confirming: [automatic.id])
         }
         await services.executor.beginStop()()
         try await services.executor.start()
         #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.succeeded))
         let ended = try #require(try await store.piSessions(sessionIDs: ["audit-lost"])["audit-lost"]?.state)
         #expect(ended.state == .known(.ended))
-        for id in [ended.id, borrower.id] + [explicit?.id].compactMap({ $0 }) {
+        for id in [ended.id, borrower.id, automatic.id] + [explicit?.id].compactMap({ $0 }) {
             let row = try #require(try await store.syncRow(recordName: id.uuidString.lowercased()))
             #expect(try await peer.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         }

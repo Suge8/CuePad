@@ -23,6 +23,14 @@ nonisolated enum PiReplyButton: Equatable {
 /// "发到 Mac"的界面规则：回复框的按钮、停止与命令的进度。请求本身经 `Workspace.speak` 写出。
 /// 会话能做什么只看 `AgentCapabilities`：能否停止、结束与作答都经 `PiSessionState` 上同一组规则（Cue 也经它们）。
 nonisolated enum MacDelivery {
+    /// 记录 ended 不确认投送；未知请求逐条保留，不能被别的结束成功掩盖。新的结束在途时先显示它的进度。
+    static func endIssue(_ requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
+        let ends = requests.filter { $0.mode == .known(.end) }.map { Speech.trip($0, at: moment) }
+        guard !ends.contains(where: \.awaitingResult) else { return nil }
+        if let unknown = ends.last(where: { $0.unconfirmedReason != nil }) { return unknown }
+        return ends.last.flatMap { $0.failure != nil ? $0 : nil }
+    }
+
     /// 正在停止：这一轮开始后发过停止请求，它还在路上或 Mac 已受理，而这一轮还没歇下（受理只表示收到，歇下看状态）。
     /// 进度只读投送请求，界面不另存。
     static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {

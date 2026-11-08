@@ -30,10 +30,19 @@ extension CueStore {
           AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [host, deadline, Date.stamp, id, timing.now()])
-      guard db.changes > 0, let claimed = try find(DeliveryRequest.self, id) else { return nil }
+      guard db.changes > 0, var claimed = try find(DeliveryRequest.self, id) else { return nil }
       guard try permitsTaskSessionEnd(claimed) else {
         _ = try applyDeliveryOutcome(claimed, .failed(ShownText(CueStoreError.sessionInUse(claimed.target.name))), at: timing.now())
         return nil
+      }
+      if claimed.mode == .known(.end) {
+        claimed.coveredEndRequests = [claimed.id]
+        if claimed.content == "end", let session = claimed.target.ref {
+          claimed.coveredEndRequests.formUnion(try db.query("""
+            SELECT id FROM deliveryRequests WHERE mode = 'end' AND targetRef = ? AND hostID = ? AND handledBy = ?
+              AND status IN ('executing', 'confirming', 'unconfirmed', 'pending')
+            """, [session, host, host]) { $0.uuid(0) })
+        }
       }
       return claimed
     }

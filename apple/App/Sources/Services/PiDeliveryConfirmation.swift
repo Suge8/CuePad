@@ -24,9 +24,6 @@ struct PiDeliveryConfirmation {
 
     func recover(_ request: DeliveryRequest) async -> DeliveryOutcome {
         do {
-            if request.mode == .known(.end) {
-                return try await store.confirmEndedDelivery(request.id) ? .succeeded : .unconfirmed(DeliveryRequest.interruptedReason)
-            }
             guard request.mode == .known(.send) || request.mode == .known(.start) else { return .unconfirmed(DeliveryRequest.interruptedReason) }
             let sessionID: String?
             if let ref = request.target.ref { sessionID = ref }
