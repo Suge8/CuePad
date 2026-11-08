@@ -43,6 +43,13 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     var response: Response = .none
     /// 快照装不下的旧条目数量；正文仍在原聊天，不能把省略当作不存在或已经完成。
     var omitted = Omitted()
+    var pages = VoicePageHeads()
+    var canRepeat = false
+
+    func afterMediaEnded(_ phase: Phase) -> Self {
+        Self(session: session, phase: phase, requests: requests, replies: replies, executions: executions,
+             omitted: omitted, pages: pages, canRepeat: false)
+    }
 
     struct Omitted: Equatable, Codable, Sendable {
         var requests = 0
@@ -51,6 +58,8 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     }
 
     struct Request: Equatable, Codable, Sendable {
+        /// 原 VoiceCall.Request.rowID，落库前后不变；不是另一条业务记录。
+        var id = UUID()
         let reference: VoiceRequestReference
         let recording: Bool
         let issue: VoiceIssue?

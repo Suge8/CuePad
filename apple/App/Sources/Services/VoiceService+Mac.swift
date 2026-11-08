@@ -9,6 +9,7 @@ extension VoiceService {
         guard call?.isLive != true, remote == nil else { return }
         let call = obtainCall(name: name, source: source, recording: recording, makeCall: makeCall)
         issue = nil
+        projectionReaders.removeAll()
         call.reconnect()
         session = VoiceSessionID(call.session)
         observeCall(call)
@@ -82,6 +83,7 @@ extension VoiceService {
             let call = obtainCall(name: profile?.name ?? CueProfile.defaultName, host: services.hostID)
             issue = nil
             session = header.session
+            projectionReaders = [header.sender.device: header]
             call.reconnect(session: header.session.rawValue, media: media)
             observeCall(call)
         } catch {
@@ -99,7 +101,6 @@ extension VoiceService {
 
     private func observeCall(_ call: VoiceCall) {
         observing?.cancel()
-        let owner = remote
         observing = Task { [weak self] in
             for await result in Observations({ [weak self] in self.map { service in Result { try service.macProjection(call) } } }) {
                 guard let self, let result, !Task.isCancelled else { return }
@@ -111,19 +112,25 @@ extension VoiceService {
                     call.inputs.continuation.yield(.failed(.other("Voice projection storage unavailable")))
                     continue
                 }
+                guard self.call === call, self.session == value.session else { return }
                 self.setProjection(value)
-                if let owner, owner.available {
+                for reader in self.projectionReaders.values where reader.session == value.session {
                     let sending = VoiceOperationScope()
                     do {
                         try await sending.perform(within: .seconds(2)) {
-                            try await owner.signaling.sendVoice(.projection(value: value), session: owner.header.session, to: owner.header.sender)
+                            guard let signaling = self.signaling else { throw VoicePageError.unavailable }
+                            try await signaling.sendVoice(.projection(value: value), session: reader.session, to: reader.sender)
                         }
                     } catch {
-                        if self.remote === owner { owner.departed(.networkFailed) }
+                        guard !Task.isCancelled, self.call === call, self.session == value.session else { return }
+                        if self.projectionReaders[reader.sender.device] == reader { self.projectionReaders[reader.sender.device] = nil }
+                        if let remote = self.remote, remote.header.session == reader.session,
+                           remote.header.sender == reader.sender, remote.header.recipient == reader.recipient { remote.departed(.networkFailed) }
                     }
                     sending.end()
                 }
-                if !call.isLive, self.remote === owner { self.remote = nil }
+                guard !Task.isCancelled, self.call === call, self.session == value.session else { return }
+                if !call.isLive { self.remote = nil }
             }
         }
     }

@@ -16,7 +16,8 @@ const MAX_VOICE_PEERS = 64;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Endpoint = { device: { rawValue: string }; lease: string };
-type Purpose = { media: Record<string, never> } | { command: { id: { rawValue: string } } } | { commandResult: { id: { rawValue: string } } };
+type RoutedPurpose = "command" | "commandResult" | "pageQuery" | "pageResult";
+type Purpose = { media: Record<string, never> } | { [K in RoutedPurpose]: { [P in K]: { id: { rawValue: string } } } }[RoutedPurpose];
 type Header = {
   version: number; sender: Endpoint; recipient: Endpoint; session: { rawValue: string };
   sequence: number; expiresAtMilliseconds: number; purpose: Purpose;
@@ -51,7 +52,7 @@ function equal(a: Endpoint, b: Endpoint): boolean {
 }
 function purpose(value: unknown): value is Purpose {
   if (shape(value, ["media"])) return shape(value.media, []);
-  for (const kind of ["command", "commandResult"]) {
+  for (const kind of ["command", "commandResult", "pageQuery", "pageResult"]) {
     if (shape(value, [kind]) && shape(value[kind], ["id"])) {
       const id = value[kind].id;
       return shape(id, ["rawValue"]) && uuid(id.rawValue);
