@@ -12,11 +12,17 @@ extension DebugHooks {
                 guard let access = CodexAccess(token: "test.\(payload).test") else { throw CodexAccessError.signedOut }
                 return access
             }
+            let scenario = DebugVoiceLayoutScenario()
+            let tell = dependencies.tell
+            dependencies.tell = { text in
+                try scenario.beforeRecording()
+                return try await tell(text)
+            }
             dependencies.media = { _, _ in DebugVoiceLayoutMedia() }
             dependencies.createCall = { _, _, _, _ in .init(id: "layout", answer: "answer", usedPercent: nil) }
             dependencies.control = { _, _, _, received in
                 received(.success(.started))
-                return DebugVoiceLayoutControl()
+                return DebugVoiceLayoutControl(scenario: scenario)
             }
             return VoiceCall(dependencies)
         }

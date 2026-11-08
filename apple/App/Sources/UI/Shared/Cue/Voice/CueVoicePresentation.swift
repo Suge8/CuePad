@@ -77,5 +77,5 @@ struct CueVoicePresentation {
 
 /// 动作只向宿主发意图；按钮是否可用、静音是否成功、停止执行是否完成均等下一份真实投影。
 enum CueVoiceAction {
-    case toggleMute, hangUp, stopExecution, recover(CueVoicePresentation.Recovery), details
+    case toggleMute, hangUp, stopExecution, recover(CueVoicePresentation.Recovery)
 }

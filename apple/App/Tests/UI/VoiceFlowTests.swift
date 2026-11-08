@@ -65,6 +65,10 @@ struct VoiceFlowTests {
         let reply = try await store.addCueMessage(.cue, text: "另一入口的结果", answeredRequests: nil)
         try await eventually("来源未知先可见但不自动播报") { fixture.call.replies.contains { $0.id == reply.id } }
         #expect(fixture.controls[0].sends.isEmpty)
+        let reading = try #require(fixture.workspace.voicePresentation?.readings.first { $0.id == reply.id })
+        try await fixture.workspace.recoverVoice(try #require(reading.recovery))
+        try await eventually("明确手动朗读不必等来源关联") { fixture.call.replies.first { $0.id == reply.id }?.delivery == .submitted }
+        #expect(fixture.controls[0].sends.count == 1)
         try await store.associateCueReply(reply.id, answering: [foreign.id])
         let marker = try await store.addCueMessage(.cue, text: "合法主动更新", answeredRequests: [])
         try await eventually("已消费来源更新之后的记录") {
@@ -74,7 +78,7 @@ struct VoiceFlowTests {
         try await fixture.workspace.recoverVoice(.repeatReply(reply.id))
         let later = try await store.addCueMessage(.cue, text: "后续主动更新", answeredRequests: [])
         try await eventually("后续发送仍畅通") { fixture.call.replies.contains { $0.id == later.id && $0.delivery == .submitted } }
-        #expect(fixture.controls[0].sends.count == 2, "旧结果没有再发送，只有两条真实主动更新")
+        #expect(fixture.controls[0].sends.count == 3, "只有一次明确手动朗读与两条主动更新，已确认为其他入口的旧结果不能重说")
         try await fixture.hangUp()
     }
 

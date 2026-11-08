@@ -12,7 +12,16 @@ extension DebugScene {
         guard let state = defaults.string(forKey: "CuePadVoiceLayout") else { return }
         await running("通话布局") {
             let store = workspace.services.store
-            try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "voice-layout-demo" }
+            let host = "voice-layout-demo"
+            let model = demoModels(for: .codex)
+            _ = try await store.recordMacAgents(host: host, name: "Mac Studio", [AgentKind.codex, .pi].map {
+                let state = demoModels(for: $0)
+                return MacAgent(kind: $0, model: state.model?.key, models: state.models)
+            })
+            try await store.updateCueProfile {
+                $0.enabledAt = .now; $0.hostID = host; $0.runtime = .known(.codex)
+                $0.model = model.model.map { AgentKind.codex.modelRef($0.key) }; $0.effort = .known(.medium); $0.fast = false
+            }
             let count = defaults.integer(forKey: "CuePadVoiceHistory")
             let existing = try await store.cueMessages(limit: .max).filter { $0.author == .known(.you) }.count
             for index in existing..<max(existing, count) {
@@ -28,6 +37,7 @@ extension DebugScene {
             workspace.startVoiceCall()
             guard let call = workspace.voice else { return }
             for await phase in Observations({ call.phase }) where phase == .listening { break }
+            try await DebugVoiceLayoutScenario.seed(call, workspace: workspace)
             if defaults.bool(forKey: "CuePadVoiceReadings") {
                 for index in 1...2 {
                     _ = try await store.addCueMessage(.cue, text: String(localized: "**演示结果 \(index)**\n\n- 核对 Mac 界面\n- 核实手机接入", table: "Demo"), answeredRequests: [])
@@ -49,11 +59,16 @@ final class DebugVoiceLayoutMedia: VoiceMedia {
     func accept(answer: String) async throws { onEvent(.connected) }
     func play() async throws {}
     func setMuted(_ value: Bool) async throws {}
-    func close() async throws { try await Task.sleep(for: .seconds(2)) }
+    func close() async throws {
+        let seconds = DebugScene.defaults.double(forKey: "CuePadVoiceCloseSeconds")
+        try await Task.sleep(for: .seconds(seconds > 0 ? seconds : 2))
+    }
 }
 
 final class DebugVoiceLayoutControl: VoiceControl {
-    func send(_ outgoing: VoiceWire.Outgoing) async throws {}
+    let scenario: DebugVoiceLayoutScenario
+    init(scenario: DebugVoiceLayoutScenario) { self.scenario = scenario }
+    func send(_ outgoing: VoiceWire.Outgoing) async throws { try scenario.send(outgoing) }
     func close() {}
 }
 #endif

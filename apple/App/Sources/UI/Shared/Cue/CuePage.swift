@@ -103,10 +103,7 @@ struct CuePage: View {
             if let thread, !thread.rows.isEmpty {
                 conversation(thread)
             } else if thread != nil {
-                CueWelcome(intro: true)
-                    .padding(.horizontal, Self.inset)
-                    .frame(maxWidth: Self.readingWidth, maxHeight: .infinity)
-                    .frame(maxWidth: .infinity)
+                CueWelcomeChat()
             } else {
                 Color.clear
             }
@@ -182,5 +179,23 @@ struct CuePage: View {
             }
         }
         .animation(Motion.fade, value: cue.canHear)
+    }
+}
+
+/// 在 FloatingReply 的内容里读回复框留白；空态也要能滚到被回复框盖住的建议。
+private struct CueWelcomeChat: View {
+    @Environment(\.chatBottomInset) private var replyInset
+
+    var body: some View {
+        GeometryReader { room in
+            ScrollView {
+                CueWelcome(intro: true)
+                    .padding(.horizontal, CuePage.inset)
+                    .frame(maxWidth: CuePage.readingWidth)
+                    .frame(maxWidth: .infinity, minHeight: max(0, room.size.height - replyInset))
+            }
+            .safeAreaPadding(.bottom, replyInset)
+            .scrollBounceBehavior(.basedOnSize)
+        }
     }
 }

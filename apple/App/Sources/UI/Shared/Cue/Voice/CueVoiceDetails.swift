@@ -14,7 +14,9 @@ struct CueVoiceDetails: View {
     private func details(_ presentation: CueVoicePresentation) -> some View {
         VStack(alignment: .leading, spacing: Spacing.group) {
             Text("通话详情").font(Typography.title)
-            Text(presentation.title).font(Typography.body).foregroundStyle(palette.ink2)
+            if presentation.activity != .failed {
+                Text(presentation.title).font(Typography.body).foregroundStyle(palette.ink2)
+            }
             if presentation.canStopExecution {
                 Button { action(.stopExecution) } label: { Label("停止执行", icon: .stop) }
                     .buttonStyle(ControlButtonStyle(size: .compact))

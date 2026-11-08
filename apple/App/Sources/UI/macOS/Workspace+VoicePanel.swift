@@ -10,11 +10,12 @@ struct CueVoicePanel: View {
         Group {
             if let presentation = workspace.voicePresentation {
                 if presentation.active {
-                    CueVoiceView(presentation: presentation, action: act)
+                    CueVoiceView(presentation: presentation, detailsSource: Bindable(workspace).voiceDetails, action: act)
                 }
             }
         }
-        .bubble(isPresented: Bindable(workspace).voiceDetails, width: .fixed(360)) {
+        .panel(isPresented: Binding { workspace.voiceDetails != nil } set: { if !$0 { workspace.voiceDetails = nil } },
+               style: .bubble(workspace.voiceDetails ?? .unanchored, width: .fixed(360))) {
             CueVoiceDetails(presentation: { workspace.voicePresentation }, action: act)
         }
         .panel(isPresented: $choosingExecution) {
@@ -48,7 +49,6 @@ struct CueVoicePanel: View {
                 do { try await workspace.recoverVoice(recovery) }
                 catch { workspace.fail(error) }
             }
-        case .details: workspace.voiceDetails = true
         }
     }
 
