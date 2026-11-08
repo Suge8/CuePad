@@ -239,7 +239,11 @@ extension CueStore {
             OR (mode = 'send' AND status = 'succeeded' AND \(Self.deliveryMessageUploaded)))
           """, arguments)
       for (mode, requests) in Dictionary(grouping: expired, by: \.mode) {
-        let bindingCutoff = mode == .known(.send) ? keptCutoff : mode == .known(.start) ? claimCutoff : cutoff
+        let bindingCutoff = switch mode {
+        case .known(.send): keptCutoff
+        case .known(.start): claimCutoff
+        default: cutoff
+        }
         try removeDeliveries(requests, completedBefore: bindingCutoff)
       }
       let transient = try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(kept))", arguments) { _ in true } != nil
