@@ -81,9 +81,14 @@ struct CuePage: View {
         FloatingReply {
             chat.padding(.leading, railInset)
         } reply: {
-            bottom()
-                .padding(.horizontal, Spacing.group)
-                .frame(maxWidth: Self.readingWidth)
+            VStack(spacing: 0) {
+                CueVoicePanel()
+                    .background(palette.desk, in: .rect(cornerRadius: Radius.field))
+                    .padding(.leading, railInset)
+                bottom()
+            }
+            .padding(.horizontal, Spacing.group)
+            .frame(maxWidth: Self.readingWidth)
         }
         .scrollDismissesKeyboard(.interactively)
         // iPad 右边那一栏：名牌比栏窄，对话到名牌下沿淡出，不从名牌两侧露出来（`Bars`）；手机的名牌铺满整行，照沉浸式

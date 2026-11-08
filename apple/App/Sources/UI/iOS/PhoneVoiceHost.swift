@@ -1,6 +1,7 @@
 #if os(iOS)
 import CueStore
 import SwiftUI
+import UIKit
 
 /// 手机通话的呈现宿主。共享视图只读这份投影并发出带原引用的动作；媒体仍由 VoiceService 持有。
 /// 原聊天按 UUID 订阅，不受聊天页面最近 200 条的限制。未落库请求没有正文，不得用其他消息代替。
@@ -12,26 +13,34 @@ struct PhoneVoiceHost<Content: View>: View {
     var body: some View {
         let phone = workspace.phoneVoice
         let ids = phone.recordIDs
-        content(PhoneVoiceViewState(phone: phone, records: records, shown: { workspace.shownInHeader($0.state, delivery: nil) }), act)
+        content(PhoneVoiceViewState(phone: phone, records: records, shown: { workspace.shownInHeader($0.state, delivery: nil) }), workspace.performPhoneVoice)
             .observing(workspace.services.store, id: ids, into: $records, onError: workspace.fail) { store in
                 try PhoneVoiceRecords(messages: store.cueMessages(ids.messages), executions: store.piSessions(sessionIDs: ids.sessions))
             }
     }
+}
 
-    private func act(_ action: PhoneVoiceAction) async throws -> VoiceCommandResult.Outcome? {
+extension Workspace {
+    var phoneVoiceViewState: PhoneVoiceViewState {
+        PhoneVoiceViewState(phone: phoneVoice, records: nil, shown: { shownInHeader($0.state, delivery: nil) })
+    }
+
+    func performPhoneVoice(_ action: PhoneVoiceAction) async throws -> VoiceCommandResult.Outcome? {
         switch action {
         case .start:
-            try await workspace.startVoiceCall()
+            try await startVoiceCall()
         case .hangUp:
-            await workspace.hangUpVoiceCall()
+            await hangUpVoiceCall()
         case .setMuted(let muted):
-            try await workspace.setVoiceMuted(muted)
+            try await setVoiceMuted(muted)
         case .recover(let reference):
-            return try await workspace.recoverVoiceRequest(reference, command: UUID())
+            return try await recoverVoiceRequest(reference, command: UUID())
         case .repeatReply(let message):
-            return try await workspace.repeatVoiceReply(message, command: UUID())
+            return try await repeatVoiceReply(message, command: UUID())
         case .stop(let target):
-            return try await workspace.stopVoiceExecution(target, command: UUID())
+            return try await stopVoiceExecution(target, command: UUID())
+        case .microphoneSettings:
+            guard await UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) else { throw VoiceIssue.ended(.permissionDenied) }
         }
         return nil
     }
@@ -39,7 +48,7 @@ struct PhoneVoiceHost<Content: View>: View {
 
 /// 命令结果原样返回，包括拒绝原因；调用方必须展示结果或传输失败，不自动重发。
 enum PhoneVoiceAction {
-    case start, hangUp
+    case start, hangUp, microphoneSettings
     case setMuted(Bool)
     case recover(VoiceRequestReference)
     case repeatReply(UUID)
