@@ -40,6 +40,7 @@ case "$mode" in
     # 版本由 release_versions 推出，命令行设置同时作用于 App 与扩展，两者一致
     read -ra versions <<<"$(release_versions)"
     archive="$(release_archive ios "${versions[@]}")"
+    context archive "$OUT" "$archive"
     xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=iOS' \
       -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}"
     check_relay "$archive/Products/Applications/CuePad.app/Info.plist"

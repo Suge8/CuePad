@@ -77,6 +77,7 @@ python3 "$APPLE_DIR/scripts/provision.py" profiles
 
 read -ra versions <<<"$(release_versions)"
 archive="$(release_archive mac "${versions[@]}")"
+context archive "$OUT" "$archive"
 xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=macOS' \
   -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}" CUEPAD_RELEASE=YES
 

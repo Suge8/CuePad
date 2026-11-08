@@ -113,7 +113,9 @@ def prepare(repo, out, platform, submission):
     else:
         context = {"source": git(repo, "rev-parse", "HEAD"), "platform": platform}
         if out.exists():
-            if not load(out).get("completed"):
+            previous = load(out)
+            started = previous.get("archive") or any(path.name not in ("context.json", "source") for path in out.iterdir())
+            if not previous.get("completed") and started:
                 raise ValueError("已有未完成的发布，保留原产物；请恢复，或明确将整个产物目录移走后再开始")
             shutil.rmtree(out)
         out.mkdir(parents=True)
@@ -171,7 +173,11 @@ def main():
         prepare(Path(repo), Path(out), platform, submission[0] if submission else None)
         return 0
     out = Path(args[0])
-    if command == "seal":
+    if command == "archive":
+        context = load(out)
+        context["archive"] = args[1]
+        save(out, context)
+    elif command == "seal":
         seal(out, Path(args[1]), args[2:])
     elif command == "submission":
         verify(out, load(out))
