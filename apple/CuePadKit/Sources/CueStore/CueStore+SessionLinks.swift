@@ -12,8 +12,8 @@ extension CueStore {
       if let delivery, let existing = try select(SendRecord.self, where: "deliveryID = ?", [delivery]).first { return existing }
       let record = try insertSendRecord(content, to: target, card: card, delivery: delivery, origin: origin)
       if let card, target.kind == .known(.piSession), let session = target.ref {
-        if let delivery, let request = try find(DeliveryRequest.self, delivery) {
-          try linkDeliveredCardInTransaction(request, toSession: session)
+        if let delivery {
+          if let request = try find(DeliveryRequest.self, delivery) { try linkDeliveredCardInTransaction(request, toSession: session) }
         } else {
           try linkCardInTransaction(card, toSession: session, at: Date.stamp)
         }
@@ -52,10 +52,23 @@ extension CueStore {
   func linkDeliveredCardInTransaction(_ request: DeliveryRequest, toSession session: String) throws {
     guard let card = request.cardID, try acceptsSessionBinding(request),
       try find(DeliveryRequest.self, request.id)?.cardID == card else { return }
-    try linkCardInTransaction(card, toSession: session, at: Date.stamp)
+    try linkExactCardInTransaction(card, toSession: session, at: Date.stamp)
     if var revision = request.sessionBindingRevision, try find(Card.self, card)?.sessionBindingRevision?.fulfilled != true {
       revision.fulfilled = true
       try db.run("UPDATE cards SET sessionBindingRevision = ?, modifiedAt = ? WHERE id = ?", [revision.stored, Date.stamp, card])
+    }
+  }
+
+  /// 卡片、请求或成功回执晚到时兑现原关联意图；只用仍在库里的请求及其修订，不从发送历史猜测。
+  /// start 的目标由 launchToken 认领；已有会话的内容与命令按成功请求的固定目标补齐。
+  func reconcileDeliveredCards(cards: Set<UUID> = [], deliveries: Set<UUID> = []) throws {
+    guard !cards.isEmpty || !deliveries.isEmpty else { return }
+    let requests = try select(DeliveryRequest.self, where: """
+      status = 'succeeded' AND mode IN ('send', 'command') AND targetKind = 'piSession' AND targetRef IS NOT NULL
+        AND (cardID IN (SELECT value FROM json_each(?1)) OR id IN (SELECT value FROM json_each(?2)))
+      """, [Self.idList(cards), Self.idList(deliveries)])
+    for request in requests {
+      if let session = request.target.ref { try linkDeliveredCardInTransaction(request, toSession: session) }
     }
   }
 
@@ -74,13 +87,17 @@ extension CueStore {
   private func linkCardInTransaction(_ card: UUID, toSession session: String, at now: Date) throws {
     guard let link = try link(of: card) else { return }
     let leaf = link.isTask ? try homeLeaf(card) : card
-    guard try find(Card.self, leaf)?.piSessionID != session else { return }
+    try linkExactCardInTransaction(leaf, toSession: session, at: now)
+  }
+
+  private func linkExactCardInTransaction(_ id: UUID, toSession session: String, at now: Date) throws {
+    guard let card = try find(Card.self, id), card.piSessionID != session else { return }
     try db.run(
       """
       UPDATE cards SET \(Self.keepingFormerSession("?1")), piSessionID = ?1, modifiedAt = ?2
       WHERE id = ?3
-      """, [session, now, leaf])
-    if link.isTask { try beginTask(leaf, at: now) }
+      """, [session, now, id])
+    if card.isTask { try beginTask(id, at: now) }
   }
 
   /// 叶子换上会话 `new`（SQL 表达式）的 UPDATE 里与 `piSessionID` 一起写的：换下的会话记进 `formerSessionIDs` 末尾，

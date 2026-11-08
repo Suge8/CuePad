@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 有界详情列执行、停止、未落库问题和朗读记录；标题旁始终可一步结束通话，停止执行仍属于对应的工作。
+/// 有界详情列执行、停止、未落库问题和朗读记录；活动通话可从标题旁直接结束，停止执行仍属于对应的工作。
 /// 结果只给辨认摘录，正文沿用原聊天的 SpeechBubble。
 struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
     /// 浮层持有内容视图；在 body 内读取，保证开着详情时也观察接通与提交状态。
