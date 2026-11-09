@@ -6,32 +6,43 @@ import Testing
 @testable import CuePi
 
 extension RealBrainTests {
-    /// 最后一次请求结束之后、这一轮收尾之前插进的话，Grok 1.0.70 把它们搁浅，之后按先后各开一轮：每句由自己那一轮收下、各得到回答
-    /// （本机 20/20 落在这个窗口，三轮各收一句）。第一句的回答停在闸门上，放行后等到 CuePad 收到这次请求的上下文用量（请求已结束）再插话，
-    /// 第一句那一轮因此只收第一句。窗口的另一头定不住：Grok 读到 response.completed 就收尾，挡住连接、扣住它另发的起标题请求都不拖住这一轮
-    /// （实测），机器忙时 BETA 到达前它已收尾，BETA 就开新的一轮、GAMMA 并进那一轮。两种先后都要守住的是：每句只收下一次、按先后，
-    /// 收下它的那一轮照它回答。
-    @Test(.enabled(if: RealAgents.runs(.grok), "没装 Grok"))
+    /// 最后一次请求结束之后、这一轮收尾之前插进的话，Grok 1.0.70 把它们搁浅，之后按先后各开一轮：每句由自己那一轮收下、各得到回答。
+    /// 这段窗口由停止钩子撑开：大脑的 Grok 配置目录是它自己的临时目录，壳在起 Grok 前往那里放一个停止钩子，钩子停在闸门上，
+    /// 两句都插进去了才放行。不撑开时窗口只有 Grok 收尾的几十到一百多毫秒（实测 44–142 ms），忙的 CI 上插话落到窗口外，就并进下一轮。
+    @Test(RealAgents.needs(.grok))
     func interjectionsStrandedAfterTheLastRequestAreReceivedByTheTurnsGrokOpensForThem() async throws {
-        AgentTape.use(.grok)
-        try await withRig(.grok) { rig in
-        let model = try #require(rig.model), hang = model.gate()
-        model.on({ $0.prompt.contains("single word ALPHA") }) { _ in .stream(["ALPHA"], until: hang) }
+        let bench = try makeTempDirectory()
+        let reached = bench.appending(path: "stop-reached"), open = bench.appending(path: "stop-open")
+        let hold = bench.appending(path: "hold.sh"), grok = bench.appending(path: "grok")
+        // 起它的 Grok 退了就不再等：用例没走到放行就失败时不留进程
+        try TestScript.install("""
+            #!/bin/sh
+            . "$0.env"
+            cat >/dev/null
+            touch "$REACHED"
+            while [ ! -e "$OPEN" ] && kill -0 $PPID 2>/dev/null; do sleep 0.01; done
+            """, at: hold, variables: ["REACHED": reached.path, "OPEN": open.path])
+        try TestScript.install("""
+            #!/bin/sh
+            . "$0.env"
+            mkdir -p "$GROK_HOME/hooks"
+            printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"%s","timeout":600}]}]}}' "$HOLD" > "$GROK_HOME/hooks/hold.json"
+            exec "$GROK" "$@"
+            """, at: grok, variables: ["GROK": RealAgents.pinned(.grok).executable.path, "HOLD": hold.path])
+
+        try await withRig(.grok, executable: grok) { rig in
         let first = UUID(), second = UUID(), third = UUID()
-        let words = [first: "ALPHA", second: "BETA", third: "GAMMA"]
         try await rig.brain.send("Reply with only the single word ALPHA.", images: [], id: first)
-        try await hang.reached()
-        hang.openForever()
-        try await eventually("第一句的请求结束") { !rig.contexts.isEmpty }
+        try await eventually("第一轮的停止钩子在跑") { FileManager.default.fileExists(atPath: reached.path) }
         try await rig.brain.send("Reply with only the single word BETA.", images: [], id: second)
         try await rig.brain.send("Reply with only the single word GAMMA.", images: [], id: third)
-        try await eventually("三句都收下、那几轮都做完") { rig.turns.flatMap(\.received).count == 3 && rig.count(.turnStarted) == rig.count(.turnFinished) }
+        try Data().write(to: open)
+        try await rig.finished(3)
 
         #expect(rig.failures == [], "\(rig.events)")
-        let turns = rig.turns
-        #expect(turns.flatMap(\.received) == [first, second, third], "\(rig.events)")
-        #expect(turns.first?.received == [first] && turns.first?.reply == "ALPHA", "\(rig.events)")
-        for turn in turns { #expect(turn.received.last.flatMap { words[$0] } == turn.reply, "\(rig.events)") }
+        let turns = rig.turns.map { ($0.received, $0.reply ?? "") }
+        #expect(turns.map(\.0) == [[first], [second], [third]], "\(rig.events)")
+        #expect(turns.map(\.1) == ["ALPHA", "BETA", "GAMMA"], "\(rig.events)")
         }
     }
 }

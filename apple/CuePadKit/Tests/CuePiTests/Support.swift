@@ -46,7 +46,6 @@ private let temporaryCounter = Atomic(0)
 func makeTempDirectory() throws -> URL {
     let dir = temporaryRoot.appending(path: String(temporaryCounter.add(1, ordering: .relaxed).newValue), directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    AgentTape.current?.register(temporaryDirectory: dir)
     return dir
 }
 
