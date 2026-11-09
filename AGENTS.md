@@ -12,7 +12,7 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 - `xc.sh test` 收尾一页结论（两个框架各自的通过、失败、跳过，首个失败，跳过原因，最慢 5 个，完整日志路径）；先看它，别翻日志。
 - CI（`.github/workflows/swift.yml`）在 GitHub 托管的 macOS runner 上跑 `check`、`test kit`、`test mac` 与 iOS 同步测试，入口就是 `xc.sh`；lint 要完整的 Git 检出（origin/main、发布标签），`git archive` 导出的副本跑不了。
 - `cuepad --help` 是命令行唯一文档。
-- 报"没有这个成员"而代码里明明有，或改了 CuePadKit 公开类型的存储属性后 App 一启动就崩在 Kit 的释放里：检出里还留着旧版 xc.sh 只编 App 时的静态模块（原因见 xc.sh 的 `xcd`），删一次 `apple/.derived/Build/Products/<平台>/Cue*.swiftmodule` 再编。
+- 报"没有这个成员"而代码里明明有，或改了 CuePadKit 公开类型的存储属性后 App 一启动就崩在 Kit 的释放里：检出里还留着旧版 xc.sh 只编 App 时的静态模块（原因见 xc.sh 的 `xcd`），删一次 `apple/.derived/Build/Products/<平台>/Cue*.swiftmodule` 与 `apple/.derived-wmo/Build/Products/<平台>/Cue*.swiftmodule`（`check` 在后者里编）再编。
 
 ## 护栏
 

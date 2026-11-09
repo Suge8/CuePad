@@ -43,10 +43,10 @@ extension ClaudeHostedSession {
             guard facts.running else { return }
             stopping = true
             restart = restarting
-            let turn = closed
+            let seen = closing.count
             do {
                 _ = try await live.request(["subtype": "interrupt"])
-                if closed == turn { try await closing.wait() }
+                try await closing.wait(after: seen)
             } catch {
                 restart = false
                 throw error
@@ -55,7 +55,7 @@ extension ClaudeHostedSession {
     }
 
     func release() {
-        closing.releaseAll()
+        closing.happened()
     }
 }
 #endif

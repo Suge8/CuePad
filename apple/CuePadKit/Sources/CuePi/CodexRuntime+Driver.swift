@@ -18,10 +18,8 @@ final class CodexDriver {
     private(set) var turn: String?
     private var finishedTurn: String?
     private var lastError: String?
-    /// 报过 `turn/started` 的最近一轮：停止的 -32600 回应可能晚于它到，据此不再等一个已经来过的开跑
-    private var startedTurn: String?
-    /// 等这一轮开跑（`turn/started`）或结束，见 `interrupt`
-    private let activations = PendingReplies<UUID, Void>(timeout: AgentTimeouts.stop, timeoutError: PiBridgeError.ackTimeout)
+    /// 一轮开跑（`turn/started`）或结束，见 `interrupt`
+    private let activations = Occurrences(timeout: AgentTimeouts.stop, timeoutError: PiBridgeError.ackTimeout)
     var onEvent: (TurnEvent) -> Void = { _ in }
     var onNotification: (String, JSONValue) -> Void = { _, _ in }
 
@@ -69,13 +67,15 @@ final class CodexDriver {
     /// 停下在跑的这一轮，等它真的结束了才回（回应与它的 `turn/completed` 同时到）。
     /// `turn/start` 已回了这一轮、它还没开跑时，Codex 回 -32600 "no active turn to interrupt"（0.167.0 实测：紧跟发话就停，几毫秒后才有 `turn/started`）：
     /// 等它开跑再停一次；当它已结束的话这次停止就丢了，这一轮照跑。真已结束的，等的是随后到的 `turn/completed`。
+    /// `turn/started` 可能先于这个回应到（问的工夫里它开跑了），所以从发问前算起。
     func interrupt() async throws {
         guard let rpc, let thread, let turn else { return }
         let params: JSONValue = ["threadId": .string(thread), "turnId": .string(turn)]
+        let seen = activations.count
         do {
             try await rpc.call("turn/interrupt", params)
         } catch CodexRPCError.server(-32600, _) where self.turn == turn {
-            if startedTurn != turn { try await activations.wait() }
+            try await activations.wait(after: seen)
             guard self.turn == turn else { return }
             do {
                 try await rpc.call("turn/interrupt", params)
@@ -97,7 +97,7 @@ final class CodexDriver {
     private func finish(failure: String?) {
         finishedTurn = turn
         turn = nil
-        activations.releaseAll()
+        activations.happened()
         lastError = nil
         if let failure { onEvent(.failed(failure)) }
         onEvent(.turnFinished)
@@ -111,11 +111,8 @@ final class CodexDriver {
     private func own(_ method: String, _ params: JSONValue) {
         switch method {
         case "turn/started":
-            if let id = params["turn"]?["id"]?.string {
-                startedTurn = id
-                begin(id)
-            }
-            activations.releaseAll()
+            if let id = params["turn"]?["id"]?.string { begin(id) }
+            activations.happened()
         case "turn/completed":
             let completed = params["turn"]
             guard turn != nil, completed?["id"]?.string == turn else {

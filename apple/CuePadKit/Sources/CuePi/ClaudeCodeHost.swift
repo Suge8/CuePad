@@ -27,11 +27,9 @@ final class ClaudeHostedSession: SessionLink {
     var stopping = false
     /// 为送进一句话停下这一轮：被停下的这一轮的 `result` 不算歇下，接着就是这句开的新一轮（从这一刻算）
     var restart = false
-    /// 等着这一轮收尾（`result`）的停下；进程退出时也放行，对端不发 `result` 时到 `AgentTimeouts.stop` 放弃
-    let closing: PendingReplies<UUID, Void>
+    /// 一轮收尾（`result`）或进程退出；停下的等它，对端不发 `result` 时到 `AgentTimeouts.stop` 放弃
+    let closing: Occurrences
     let stopPhase = StopPhase()
-    /// 收尾过的轮数：停下时据此认出它在等回应的工夫里已经收尾
-    var closed = 0
     /// 大脑在做的 `/clear`，先发的在前：每个 `result` 结束最早的那个等待
     var clearing: [UUID] = []
     let clearWaits: PendingReplies<UUID, Void>
@@ -59,9 +57,9 @@ final class ClaudeHostedSession: SessionLink {
         (closing, clearWaits) = Self.waits(timing)
     }
 
-    private static func waits(_ timing: Timing) -> (PendingReplies<UUID, Void>, PendingReplies<UUID, Void>) {
-        func table() -> PendingReplies<UUID, Void> { PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout) }
-        return (table(), table())
+    private static func waits(_ timing: Timing) -> (Occurrences, PendingReplies<UUID, Void>) {
+        (Occurrences(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout),
+         PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout))
     }
 
     /// 起好的连接；没起或起不来时抛 `sessionEnded`（进程退出后写入同样抛它）
@@ -226,7 +224,6 @@ final class ClaudeHostedSession: SessionLink {
             restart = false
             startTurn(at: now)
         }
-        closed += 1
         release()
     }
 
