@@ -43,7 +43,8 @@ struct RealBrainTests {
         let brain: any HostedSession
         private(set) var events: [TurnEvent] = []
 
-        init(_ runtime: AgentKind) async throws {
+        /// `executable`：换掉钉住的那份（包在 Agent 外面的壳）
+        init(_ runtime: AgentKind, executable: URL? = nil) async throws {
             self.runtime = runtime
             let root = try makeTempDirectory().resolvingSymlinksInPath()
             directory = root.appending(path: marker)
@@ -68,7 +69,7 @@ struct RealBrainTests {
             default: [String: String]()
             }
             let config = CueBrainConfig(
-                runtime: runtime, executable: RealAgents.pinned(runtime).executable,
+                runtime: runtime, executable: executable ?? RealAgents.pinned(runtime).executable,
                 model: environment["CUEPAD_BRAIN_MODEL_\(runtime.rawValue.uppercased())"] ?? cheapModels[runtime], effort: effort,
                 systemPrompt: "You are Cue, a test assistant. Your codename is \(codename). Keep answers to one short sentence. When asked to echo something, call the echo tool.",
                 workingDirectory: directory,
@@ -109,8 +110,8 @@ struct RealBrainTests {
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
     }
 
-    func withRig(_ runtime: AgentKind, _ body: (Rig) async throws -> Void) async throws {
-        let rig = try await Rig(runtime)
+    func withRig(_ runtime: AgentKind, executable: URL? = nil, _ body: (Rig) async throws -> Void) async throws {
+        let rig = try await Rig(runtime, executable: executable)
         let outcome: Result<Void, any Error>
         do { try await body(rig); outcome = .success(()) } catch { outcome = .failure(error) }
         await rig.brain.stop()()
