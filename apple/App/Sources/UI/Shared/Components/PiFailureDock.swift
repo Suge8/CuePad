@@ -1,13 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 会话出错时贴在回复框上方的那块（同问题卡的位置，`SessionDock`）：写原因原文，下面一颗按钮——重跑这一轮有用且做得到时"重试"
-/// （`PiSessionState.canRetry`，`Workspace.retry`）；达到用量限制、登录失效时"换个模型"，ChatGPT 套餐限额时主操作是"管理用量"，点开就是回复框里那份模型菜单（`PiModelMenu.session`），
 /// 会话报不出可换的模型时只写原因。写不写只看顶栏那一个状态（`Workspace.shownInHeader`）：出错之后又说了话、点了重试，话在路上时状态就不是出错，块随之收起。
 /// 贴在这里而不在对话末尾：卡在你这里的事都在回复框上方，滚到哪都看得见、按钮在拇指下。
 struct PiFailureDock: View {
     let session: PiSessionState
-    /// 发给它的最近一条话（`SessionDigest.delivery`）
     let delivery: DeliveryRequest?
     let catalog: AgentCatalog?
     let config: PiConfigShown?
@@ -17,11 +14,9 @@ struct PiFailureDock: View {
     var body: some View {
         let status = workspace.shownInHeader(session, delivery: delivery).status
         let failed: Failed? = if case .failed = status { Failed(session: session, status: status) } else { nil }
-        // 进出照整卡的规矩（`DockedCard`）：沉回去的那一段画的是出错时的样子
         DockedCard(failed) { callout($0) }
     }
 
-    /// 出错时的会话与它的状态（状态词按种类写）。
     private struct Failed: Equatable {
         let session: PiSessionState
         let status: PiShown.Status
@@ -50,7 +45,6 @@ struct PiFailureDock: View {
         }
     }
 
-    /// 额度与登录卡住的才换模型；同回复框有没有模型胶囊（`PiReplyBar.hasTools`）。
     private func modelMenu(_ session: PiSessionState) -> PiModelMenu? {
         guard [.quota, .login].contains(session.failure?.known), let config, session.capabilities.contains(.model),
               let models = catalog?.models, !models.isEmpty else { return nil }

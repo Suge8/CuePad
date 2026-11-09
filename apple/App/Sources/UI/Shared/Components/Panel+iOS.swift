@@ -19,9 +19,7 @@ extension View {
         }
     }
 
-    /// sheet 与全屏是盖在上面的一页新的，不吃挂它那一页的页内环境（呈现的内容照样继承呈现处的环境）：
-    /// 页顶那一排画在它自己的导航栏里（根页、iPad 的 Cue 面板给的 `HeaderHost` 会让它不画标题、改画成根页那一排），
-    /// 底下那页被提示横幅盖着时它不跟着让开、不算长开的面板里，它在前台（看板分段、翻走的根页给的 `pageActive` 不算数）。
+    /// sheet 与全屏是盖在上面的一页新的，不吃挂它那一页的页内环境（呈现的内容照样继承呈现处的环境）。
     fileprivate func modalPage(_ close: ClosePanel) -> some View {
         // sheet 是另一层呈现，窗口那一层的气泡画不到它上面：里面长出的气泡画在它自己的这一层
         panelHost()
@@ -33,20 +31,17 @@ extension View {
             .environment(\.pagePrefetch, false)
     }
 
-    /// 窗口里每一次手指落下都报给 `pressed`（窗口坐标），不拦这一下（任务气泡从这里长出来，`Workspace.pressed`）。
+    /// 不拦这一下（任务气泡从这里长出来，`Workspace.pressed`）。
     func watchesTouches(_ pressed: @escaping (CGPoint) -> Void) -> some View {
         background { TouchWatch { point, _ in pressed(point) } }
     }
 }
 
-/// 窗口里的气泡（`PanelStyle.bubble`）都画在这里，同 Mac 的 `PanelHost`：场景的根挂一次（`panelHost()`，盖住窄屏与宽屏），
-/// sheet 与全屏页里各挂一次（`modalPage`）。挂在页里、控件上的气泡画不出控件那么大的框（输入框还把它裁掉），所以不各画各的。
-/// 一次只开一个：手指落在开着的那个外面就先关它，再点出下一个。内容带着呈现处的环境画（`BubbleSlot`），这一层在 Workspace 之外也画得对。
+/// 挂在页里、控件上的气泡画不出控件那么大的框（输入框还把它裁掉），所以不各画各的。一次只开一个：手指落在开着的那个外面就先关它，再点出下一个。
 @Observable
 final class PanelHost {
     struct Shown {
         let token: UUID
-        /// 换了这个就是另一个气泡（换一条任务）：旧的退场、新的进场。
         let identity: AnyHashable
         let source: BubbleSource
         let width: BubblePlacement.Width
@@ -58,12 +53,10 @@ final class PanelHost {
     /// 这一层（窗口、sheet）的字号：气泡内容按它画，不按呈现处——呈现处可能在一排封了字号的控件里（工具排），气泡里是能放大的说明。
     @ObservationIgnored fileprivate var typeSize = DynamicTypeSize.large
 
-    /// 气泡里字号的上限，同 Cue 面板。
     static let largestType = DynamicTypeSize.accessibility1
 
     func show(_ entry: Shown) { shown = entry }
 
-    /// 把一处气泡的内容交给这一层（`panel(style: .bubble)`）：连同呈现处的环境，字号按这一层的。
     func present(
         token: UUID, key: AnyHashable, source: BubbleSource, width: BubblePlacement.Width, close: ClosePanel, environment: EnvironmentValues, content: some View
     ) {
@@ -83,10 +76,8 @@ final class PanelHost {
 }
 
 extension View {
-    /// 场景的根与 sheet 各挂一次（同 Mac 的 `panelHost`）：这一层的气泡都画在这里。
     func panelHost() -> some View { modifier(PanelHostModifier()) }
 
-    /// 从这个控件（按钮、圆钮、胶囊）长出的气泡，同 Mac：挂在它的框下（放不下挂上面），尾巴指它。宽默认随内容（`BubblePlacement.Width`）。
     func bubble(isPresented: Binding<Bool>, width: BubblePlacement.Width = .fitting, @ViewBuilder content: @escaping () -> some View) -> some View {
         modifier(ControlBubble(isPresented: isPresented, width: width, panel: content))
     }
@@ -111,7 +102,6 @@ private struct PanelHostModifier: ViewModifier {
     }
 }
 
-/// 一处 `panel(style: .bubble)`：开着时把内容交给这一层的 `PanelHost`，连同呈现处的环境（这一层可能在 Workspace 之外）；字号除外，按这一层的（`PanelHost.typeSize`）。
 private struct BubbleSlot<Panel: View>: ViewModifier {
     let key: AnyHashable?
     let source: BubbleSource
@@ -139,7 +129,7 @@ private struct BubbleSlot<Panel: View>: ViewModifier {
     }
 }
 
-/// 从控件长出的气泡（`View.bubble(isPresented:)`）：开着时按 SwiftUI 量的框长出。量的框记在不触发重算的盒子里：控件随滚动、键盘挪动不重算这一层。
+/// 量的框记在不触发重算的盒子里：控件随滚动、键盘挪动不重算这一层。
 /// 系统导航栏里的项用不了它（栏里的项建好之后系统不再跑它上面的 `onChange`）：栏里的问号由钮自己量框交出气泡（`BarHelpButton`）。
 private struct ControlBubble<Panel: View>: ViewModifier {
     @Binding var isPresented: Bool
@@ -158,14 +148,11 @@ private struct ControlBubble<Panel: View>: ViewModifier {
     }
 }
 
-/// 气泡那一层：铺满宿主、一直在，气泡在里面进出（进出场挂在被插入、移除的那一层上）。手指落在气泡外面就关（那一下照常落到下面，
 /// 点另一条任务就是换成它的气泡）。键盘升起时（在气泡里写字）气泡收起尾巴、整块往上挪到键盘上沿之上，只挪不重排；
 /// 放不下才矮下去、在里面滚。这一层不让键盘（`ignoresSafeArea(.keyboard)`）：摆法始终对着整个容器算，键盘只给一条下沿（`BubbleStage.floor`）。
 private struct BubbleLayer: View {
     let shown: PanelHost.Shown?
-    /// 键盘上沿（窗口坐标）；键盘收着为 nil。
     @State private var keyboardTop: CGFloat?
-    /// 贴在底部的纸被往下拖了多远（`BubbleDrag`）。
     @State private var drag: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -206,25 +193,20 @@ private struct BubbleLayer: View {
         .onChange(of: shown == nil) { if shown == nil { keyboardTop = nil } else { drag = 0 } }
     }
 
-    /// 往下跟手；往上拉不动，越拉越沉。
     private func dragged(_ translation: CGFloat) {
         drag = translation > 0 ? translation : -pow(-translation, 0.6)
     }
 
-    /// 松手按去势定去留（`predicted` 是照这股劲滑到哪）：拖得够远或甩得够快就关、从此刻的位置落回底边，否则弹回。
     private func released(_ translation: CGFloat, predicted: CGFloat) {
         if max(translation, predicted) > Self.dismissDrag { shown?.close(); return }
         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { drag = 0 }
     }
 
-    /// 拖过（或照去势会滑过）这么远就关。
     private static var dismissDrag: CGFloat { 140 }
 
-    /// 气泡离安全区的边（状态栏、Home 指示条、键盘）。
     private static var insets: EdgeInsets { EdgeInsets(top: 8, leading: BubblePlacement.margin, bottom: 8, trailing: BubblePlacement.margin) }
 }
 
-/// 贴在底部的纸顶上的把手：整条横着都接拖动（往下关，`BubbleDrag`），只画中间一小截。
 struct SheetGrabber: View {
     @Environment(\.bubbleDrag) private var drag
     @Environment(\.palette) private var palette
@@ -241,7 +223,6 @@ struct SheetGrabber: View {
     }
 }
 
-/// 窗口上挂一个只看不拦的手势：每次手指落下把窗口坐标与自己（量自己占的地方用）交给 `down`。随这个视图进出窗口装卸。
 private struct TouchWatch: UIViewRepresentable {
     let down: (CGPoint, UIView) -> Void
 

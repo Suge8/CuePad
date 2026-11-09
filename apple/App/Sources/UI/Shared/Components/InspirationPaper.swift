@@ -1,9 +1,7 @@
 import SwiftUI
 
-/// 完整长图的排版树；块解析与行内附件识别继续和墙面、会话共用。
-/// 列表用独立的标记列，窄屏折行仍对齐正文。
 struct InspirationPaper: View {
-    /// 约 40 个汉字的阅读行；编辑与长图沿用同一列。
+    /// 编辑与长图沿用同一列。
     static let textWidth: CGFloat = 680
     let source: String
     var images: [String: CGImage] = [:]

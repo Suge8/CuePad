@@ -7,7 +7,6 @@ import SwiftUI
 /// 编辑器是平台的文本视图，牌子不是 SwiftUI 视图：点的那一下由编辑器的宿主记下框（编辑器外层视图的坐标，左上为原点），
 /// 盖在编辑器上的 `AttachmentSpotLayer` 在那里放一块看不见、不接点按的视图当来源。
 @Observable final class AttachmentSpot {
-    /// 正文里的附件在全屏页里属于哪一组（`Workspace.openAttachment`，放大的来源按它认）
     static let group = "note"
 
     private(set) var key: String?
@@ -16,7 +15,7 @@ import SwiftUI
     private(set) var tap = 0
     @ObservationIgnored private var pending: (() -> Void)?
 
-    /// 点了正文里的一个附件：记下它的框，等那块来源上了屏（`AttachmentSpotLayer`）再打开，放大时才找得到它。
+    /// 等那块来源上了屏（`AttachmentSpotLayer`）再打开，放大时才找得到它。
     func open(_ file: DraftFile, at frame: CGRect, in workspace: Workspace, with opener: PreviewOpener?) {
         key = file.key
         self.frame = frame
@@ -30,7 +29,6 @@ import SwiftUI
     }
 }
 
-/// 盖在编辑器上（`AttachmentSpot` 的那一处）。
 struct AttachmentSpotLayer: View {
     let spot: AttachmentSpot
     @Environment(AppServices.self) private var services
@@ -58,13 +56,13 @@ struct AttachmentSpotLayer: View {
 }
 
 extension AttachmentLooks {
-    /// 全屏页放大、缩回时飞的那张画面：图片按原图降采样，别的文件是系统缩略图（PDF 的页、视频的帧）；出不了画面为 nil（不飞，只淡入）。
+    /// 出不了画面为 nil（不飞，只淡入）。
     @concurrent static func picture(_ key: String, in files: AttachmentFiles) async -> CGImage? {
         guard let file = files.fileURL(for: key) else { return nil }
         if AttachmentKey.isImage(key) { return Thumbnails.image(at: file, maxPixel: flightPixels) }
         return await Thumbnails.system(at: file, fitting: CGSize(width: flightPixels, height: flightPixels), scale: 2, icons: false)
     }
 
-    /// 飞的那张最长边：盖得住全屏页落地那一块，不解原图
+    /// 盖得住全屏页落地那一块，不解原图。
     nonisolated private static let flightPixels = 1200
 }

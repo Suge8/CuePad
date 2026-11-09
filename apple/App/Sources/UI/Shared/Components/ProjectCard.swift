@@ -1,9 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目卡只呈现项目身份与目录统计；封面由图标固定映射，改名、计数或时间变化都不换图。
-/// 完整封面下分身份与元信息两层；名称自然折行，置顶在卡内标识，统计与时间按可用宽度换行。
-/// 计数来自 ProjectCatalog，时间只经 LiveText 在文字会变时更新。
+/// 封面由图标固定映射，改名、计数或时间变化都不换图。
 struct ProjectCard: View {
     let project: Project
     let ideaCount: Int
@@ -72,7 +70,6 @@ struct ProjectCard: View {
 }
 
 extension ProjectIcon {
-    /// 穷举图标决定像素插画主题；名称与项目顺序不参与映射。
     var cover: ProjectCoverStyle {
         switch self {
         case .chat, .music: .whale

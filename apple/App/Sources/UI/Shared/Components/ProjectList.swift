@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 项目目录沿用 ProjectCatalog 的置顶优先顺序，同一懒网格连续填充，不为分组重起一行。
-/// 置顶在卡内标识；辅助入口在手机末尾、宽屏网格前，每张卡的身份始终是项目 id。
 struct ProjectList<Places: View>: View {
     let projects: [Project]
     var placesAtEnd = false
@@ -11,7 +9,6 @@ struct ProjectList<Places: View>: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 宽屏保留约 220pt 的完整插画，增宽时增加列数；少量项目也占同样的格子。
     private static var maximumWidth: CGFloat { 1080 }
     private static var columnWidth: CGFloat { 220 }
 
@@ -75,7 +72,6 @@ private struct ProjectListItem: View, Equatable {
     }
 }
 
-/// 项目列表的辅助入口紧靠名字，不把箭头推到整栏的另一端；触屏保留标准行高。
 struct ProjectListPlace: View {
     let title: LocalizedStringResource
     let icon: Icon

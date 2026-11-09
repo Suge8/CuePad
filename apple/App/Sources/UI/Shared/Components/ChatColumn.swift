@@ -1,30 +1,19 @@
 import SwiftUI
 
-/// 对话页的对话区（会话页与 Cue 页、Mac 与 iPhone 同一个）：滚动区（`ChatScroll`）里只排最近几条（多少由 `paging` 按可见区的高定），
-/// 离最早那头不到一屏时（往上翻、或排开的几条铺不满一屏）在上面再排开一批（`paging.step`），排上去、偏移补好了还不到一屏就接着排下一批。排开到哪按那一条记（`shown`），不按条数：新的在下面长出来、
-/// 读的范围丢掉了最早的几条（Cue 页只读最近 `CueThread.limit` 条）时，上面已经排着的不被挤掉——挤掉的话正在看的整段一下往上窜。
-/// 右缘的刻度滑条（`ChatScrubber`）与内容里的 `chatJump` 跳到某一条，跳到后描一圈（`chatHighlight`）；从新消息读起的不描（`ChatFollow.Landing`）。
-/// 先描圈、排开（那条所在的地方排成真的），下一次更新再跳：同一次更新里跳，目标还不在滚动区里。
-/// 内容只管按 `ChatWindow` 排哪几条、它们长什么样；排开、跳转、描圈与刻度都在这里。`holding`：本机正在和 iCloud 对，见 `ChatScroll`。
 struct ChatColumn<Content: View, Key: Equatable>: View {
     let followKey: Key
     let readingWidth: CGFloat
     let inset: CGFloat
     @Binding var follow: ChatFollow
-    /// 刻度：你说的话与换上下文的地方（先后）。
     let marks: [ChatMark]
-    /// 对话里的各条，从最早那条起；`content` 排的是它的最后 `ChatWindow.count` 条。
     let ids: [UUID]
     let paging: ChatPaging
     let holding: Bool
     let jumpPlacement: ChatJumpPlacement
-    /// 最新一条是新到时要撑上去的那种（`ChatScroll.rise`）就是它；会话页没有。
     let arrival: UUID?
-    /// 浮在对话底上的那张拍板卡（`ChatScroll.docked`）。
     let docked: String?
     @ViewBuilder let content: (ChatWindow) -> Content
-    /// 排开到的最早那一条起、记下时对话里的各条；还没排（没有内容）为 nil。连后面的一起记：那一条自己掉出了读的范围（排开到了最早那头，
-    /// 来一句新的它就掉出去），从它后面还在的第一条排（`start`），不缩回一屏——缩回去内容一下矮了几屏，可见区落在内容外、整屏空白。
+    /// 连后面的一起记：那一条自己掉出了读的范围（排开到了最早那头，来一句新的它就掉出去），从它后面还在的第一条排（`start`），不缩回一屏——缩回去内容一下矮了几屏，可见区落在内容外、整屏空白。
     /// 在同一次更新里就接上：等 `onChange` 改记已晚了一帧，那一帧缩回去又长回来，正在看的先被甩到最早那头再滑回来。
     @State private var shown: ArraySlice<UUID>?
     @State private var highlight = ChatHighlight()
@@ -49,15 +38,13 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         self.content = content
     }
 
-    /// 排着几条：从记下的那一条到最新，至少是按可见区此刻的尺寸 `size` 铺满一屏的那么多（`paging.first`）。记下时的可见区可能还不是最终的
-    /// （iPhone 冷启动时第一次排版的窗口只有图标那么大），按那时记的条数排，可见区长大的那一帧上面就空着。
+    /// 记下时的可见区可能还不是最终的（iPhone 冷启动时第一次排版的窗口只有图标那么大），按那时记的条数排，可见区长大的那一帧上面就空着。
     private func window(_ size: CGSize) -> Int {
         let screen = min(ids.count, paging.first(size, ids.count))
         guard let start else { return screen }
         return max(ids.count - start, screen)
     }
 
-    /// 排开到的最早那一条此刻是第几条：它不在了是它后面还在的第一条；都不在了（或还没排）为 nil。
     private var start: Int? {
         guard let shown, let first = shown.first else { return nil }
         if let index = ids.firstIndex(of: first) { return index }
@@ -79,7 +66,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
                     ChatScrubber(marks: marks, scrolling: follow.scrolling, crowded: margin < ChatScrubber.room) { follow.seek($0) }
                 }
             }
-            // 改记成接上的那条，之后不用每次再找
             .onChange(of: ids, initial: true) {
                 let index = start ?? ids.count - self.window(size)
                 if shown?.first != (ids.indices.contains(index) ? ids[index] : nil) { show(from: index) }
@@ -111,7 +97,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         pendingJump = target
     }
 
-    /// 在上面再排开一批，正在读的不动（`ChatFollow.willPrepend`）。都排开了就什么也不做。
     private func showEarlier(_ size: CGSize) {
         let first = ids.count - window(size)
         guard first > 0 else { return }
@@ -125,17 +110,14 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     }
 }
 
-/// 对话排开多少：打开时排开最近几条（`first`），每次往上再排开几条（`step`）。都给出可见区的尺寸与排到的那一条之前有几条
-/// （打开时是全部条数，往上翻时是最早排着的那条的下标），返回从那里往上数的条数。
+/// 都给出可见区的尺寸与排到的那一条之前有几条（打开时是全部条数，往上翻时是最早排着的那条的下标），返回从那里往上数的条数。
 nonisolated struct ChatPaging {
     let first: (_ size: CGSize, _ above: Int) -> Int
     let step: (_ size: CGSize, _ above: Int) -> Int
 
-    /// 固定条数（会话页：段的大小定的）。
     static func fixed(first: Int, step: Int) -> ChatPaging { ChatPaging(first: { _, _ in first }, step: { _, _ in step }) }
 }
 
-/// 对话此刻排开的范围（交给内容）：排着最近 `count` 条；再往上排开一次会多 `earlier` 条（没有更早的为 0），`showEarlier` 排开它们。
 struct ChatWindow {
     let count: Int
     let earlier: Int

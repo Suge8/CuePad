@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 对话还没同步过来时（很久前的会话、刚连上的会话）先放记录上的最近一轮：你说的话与 Agent 的回答。对话到了就被它替换。
 struct RecapPreview: View {
     let session: PiSessionState
     let prompt: String
@@ -17,9 +16,7 @@ struct RecapPreview: View {
     }
 }
 
-/// 还没说过话的会话：全 App 同一种空态（吉祥物加一句怎么开始），叠在对话区上、在回复框以上的可见区居中，不占对话的高。
 /// 你发出第一句（送没送达都算）就淡掉：叠层只改透明度，不靠滚动内容里的移除过渡（滚动区里的移除不播淡出，一帧切掉），也不把新气泡顶在下面。
-/// 与对话同一栏（`ChatLayout.margin`）。
 struct BlankChat: View {
     let shown: Bool
     let readingWidth: CGFloat
@@ -41,14 +38,10 @@ struct BlankChat: View {
 }
 
 
-/// Pi 的一轮回答：上方一块这一轮的经过（`RoundProcess`），下面全宽 Markdown，长也直接全显，批注过的地方带高亮（`notes`）；长按（Mac 右键）是消息菜单（`MessageMenu`），
-/// 手机上菜单里的选择文本与批注打开会话页的可选文本页（`replyText`）。
 /// 新到的淡入；`fadesIn` 为 false 时（它原位换下正在说的话，见 `DraftReply`）直接出现。
 struct ReplyBlock: View {
-    /// 这条回答的消息 id（`ReplyNote.entry`）。
     let id: UUID
     let text: String
-    /// 这一轮做了多久；没有（读不出开始时间）时不画经过那一行
     let took: String?
     let tools: PiChatMessage.Tools?
     let session: PiSessionState
@@ -64,7 +57,6 @@ struct ReplyBlock: View {
             MarkdownText(source: text, notes: notes).equatable()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        // 整块都接长按（只靠字形判定时，按在行距、留白里会落空）
         .contentShape(.rect)
         .contextMenu { menu }
         .transition(fadesIn ? .entry : .identity)
@@ -82,8 +74,6 @@ struct ReplyBlock: View {
 }
 
 
-/// 扩展投进会话的机器消息（`PiEnvelope`），一块信封一行旁注（`NoteLine`，`MachineNote`）：谁发来的与它交回了什么，其余收着、点开在细线下看全文（Markdown）。
-/// 它在对话里落在被读到的位置，与回答同一列；不是谁对你说的话，与经过同一种样子。
 struct MachineCards: View {
     let text: String
 
@@ -126,8 +116,7 @@ private struct MachineCard: View {
 }
 
 
-/// 正在说的那条回答（Mac 会话页；Cue 页的在气泡里，`CueEnding`）：与说完落库后的那条同一套渲染、同一个位置，`header` 占着那条上方经过那一行的位置（同样高，见 `RoundProcess`），
-/// 所以落库时原位换下、正文不动。开始出字时淡入；换下与清掉都是直接拿掉——落库的那条同一帧直接出现（不淡入），两份不会叠着出现。
+/// `header` 占着说完后那条回答上方经过那一行的位置（同样高，见 `RoundProcess`），所以落库时原位换下、正文不动。换下与清掉都是直接拿掉——落库的那条同一帧直接出现（不淡入），两份不会叠着出现。
 struct DraftReply<Header: View>: View {
     let text: String
     @ViewBuilder let header: Header
@@ -143,9 +132,6 @@ struct DraftReply<Header: View>: View {
 }
 
 
-/// Pi 此刻在做什么，接在对话末尾、与回答同一列：这一轮的经过（`RoundProcess`，已做完的几步收成一行，
-/// 正在跑的那一步实时展开；计时已在顶上一行），有子代理时下面是它们的汇总（`PiSubagentList`）。回答到了它就被回答替换；
-/// 怎么出现、怎么拿掉由放它的地方定。Mac 上正在说的话出字时这一块是草稿的标题（`SessionDraft`，`ending(of:speaking:)`）。
 struct LiveStatus: View {
     let session: PiSessionState
 
@@ -160,8 +146,7 @@ struct LiveStatus: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// 经过那一行的结尾。正在说话时总有（占着说完后那条回答上方的位置，状态可能先于草稿落库变成歇着）；
-    /// 其余没在跑一轮时没有。在等子代理时子代理那一行汇总就是进展，没做过步骤就不另写一块"子代理工作中"。
+    /// 正在说话时总有（占着说完后那条回答上方的位置，状态可能先于草稿落库变成歇着）；在等子代理时子代理那一行汇总就是进展，没做过步骤就不另写一块"子代理工作中"。
     static func ending(of session: PiSessionState, speaking: Bool) -> RoundProcess.Ending? {
         if speaking { return .speaking }
         let shown = PiShown(session)
@@ -176,7 +161,6 @@ struct LiveStatus: View {
 
 
 extension View {
-    /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过（`LoopLayer`）；不放循环动效时（`LoopsPlay`）是静止的次要色。
     func shimmering() -> some View { modifier(Shimmer()) }
 }
 

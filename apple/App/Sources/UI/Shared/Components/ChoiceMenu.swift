@@ -3,8 +3,6 @@ import SwiftUI
 import UIKit
 #endif
 
-/// 选择菜单的内容（分组、每项的名字、副标题、标志、打勾、做什么），两端同一份：Mac 弹 AppKit 菜单（`ChoiceMenu.popUp`，回复框的模型与思考强度，
-/// 键盘也弹得出），`MenuButton` 是点开它的按钮。只有一组时不写组名。
 enum ChoiceMenu {
     struct Section {
         var title: LocalizedStringResource? = nil
@@ -19,12 +17,11 @@ enum ChoiceMenu {
         /// nil 是动作（不打勾），否则是选项、当前的打勾。
         var checked: Bool? = nil
         var destructive = false
-        /// 停用项：照常列出（副标题写为什么不能选），点不了，同系统菜单的停用项。
         var disabled = false
         let choose: () -> Void
     }
 
-    /// 菜单项与组名旁的图：App 的图标（`Icon`），或品牌标志（`BrandMark`）。说的是"哪一个"（对象而非动作），两端都要显示出来。
+    /// 说的是"哪一个"（对象而非动作），两端都要显示出来。
     enum Glyph {
         case icon(Icon)
         case brand(BrandMark)
@@ -84,7 +81,6 @@ struct MenuButton<Label: View>: View {
 }
 
 #if os(macOS)
-/// Mac 上 SwiftUI 菜单里的项（`MenuButton` 与右键菜单共用）。
 struct ChoiceMenuItems: View {
     let sections: [ChoiceMenu.Section]
 
@@ -119,7 +115,6 @@ struct ChoiceMenuItems: View {
 #endif
 
 #if os(iOS)
-/// 透明的 UIKit 按钮：盖在样子上接点按，菜单开、关时告诉 SwiftUI（`presented`），按下的样子交回 SwiftUI 画（`pressed`）。
 /// 菜单项在打开的那一刻按最新的内容现建（`UIDeferredMenuElement.uncached`），内容变了不用重设菜单。
 private struct MenuTrigger: UIViewRepresentable {
     let sections: [ChoiceMenu.Section]
@@ -140,7 +135,6 @@ private struct MenuTrigger: UIViewRepresentable {
 
     func updateUIView(_ button: TriggerButton, context: Context) {
         button.sections = sections
-        // 没有可选的（带上的卡片不能拿掉时）就没有菜单：长按什么都不出
         button.menu = sections.allSatisfy(\.choices.isEmpty) ? nil : button.deferred
         button.primary = primary
         button.showsMenuAsPrimaryAction = primary == nil
@@ -218,7 +212,6 @@ struct KeyboardHold: ViewModifier {
     @State private var held: Reading?
     @State private var readings = Readings()
 
-    /// 外面给的这一层：高度与底部安全区（含键盘）。
     nonisolated private struct Reading: Equatable {
         var height: CGFloat = 0
         var bottom: CGFloat = 0
@@ -226,9 +219,7 @@ struct KeyboardHold: ViewModifier {
 
     private final class Readings {
         var now = Reading()
-        /// 没有菜单开着时的最后一次。
         var steady = Reading()
-        /// 菜单开着以来最矮的底部安全区（候选栏收起的那一截）。
         var lowest: CGFloat = 0
     }
 

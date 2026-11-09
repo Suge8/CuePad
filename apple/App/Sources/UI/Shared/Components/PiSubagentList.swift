@@ -1,11 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 会话页对话末尾的子代理：一行旁注（`NoteLine`）汇总"2 个在跑 · 共 8 个 · 1 失败"——在跑的个数是主句、用正文墨色，共几个是次句、退成次要墨色
-/// （有在跑的时前面是转着的状态标；都停了只写"8 个子代理"，整行退成次要墨色，中性的分叉图标，不抢眼）；
-/// 失败是胭脂——赭黄只给等你确认。点它就地在细线下展开每个子代理（`NoteThread`），再点收起。会话在等子代理时这一行就是对话末尾的进展，不再另写一行状态。
-/// 展开的每个子代理：状态点、名字、角色与模型、运行了多久（或用时）；下面是状态词加在做什么的一句话——在跑的一行（当前工具），
-/// 落定的整句写全（FireCode 名册里的结果首句或失败原因；交回的全文在对话里那张 FireCode 卡片）。没有子代理时不画。
+/// 会话在等子代理时这一行就是对话末尾的进展，不再另写一行状态。落定的整句写全（FireCode 名册里的结果首句或失败原因；交回的全文在对话里那张 FireCode 卡片）。
 struct PiSubagentList: View {
     let agents: [PiSubagentState]
     @Environment(\.palette) private var palette
@@ -78,7 +74,6 @@ struct PiSubagentList: View {
         .transition(.opacity)
     }
 
-    /// 在跑的是系统计时文本；落定的是定值。
     private struct Elapsed: View {
         let clock: PiSubagentClock
         @Environment(\.palette) private var palette

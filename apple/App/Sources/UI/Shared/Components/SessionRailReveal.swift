@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 仅保存会话条的排版与交互信息；数据与接力同一快照到达，排版后只滚入当前存在的目标。
 /// 用户触摸、拖动及惯性期间放弃滚入，不排队到松手后抢位置；已经完整可见的目标也不挪。
 final class SessionRailReveal {
     var active = false {

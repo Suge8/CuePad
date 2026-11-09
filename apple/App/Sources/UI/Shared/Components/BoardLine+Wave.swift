@@ -1,11 +1,6 @@
 import QuartzCore
 import SwiftUI
 
-/// 看板线"现在"那一截在跑时的样子（`BoardLine`）：几何、节奏与 Core Animation 的层只在这里，静止时画同一条线（`still`）。坐标 y 朝下，高 `height`，线绕中线走。
-/// - 没派子代理：一条预先画好的周期线（按在干的活挑，`BoardPulse.Gait`），整条匀速横移一个周期；
-/// - 派了子代理：不起伏，从左端圆弧分出每个在跑的子代理一条直轨（地铁图那样分岔、等距平行），轨是淡的底线，
-///   上面一小截亮的匀速往前跑（只动虚线相位，各轨错开），几条轨就是几路在做。
-/// 两种都只交给 Core Animation（`LoopLayer` 的 `wave`）：线不逐帧重画，App 进程不参与。
 nonisolated struct WaveStrip: Equatable, Sendable {
     let gait: BoardPulse.Gait
     let tracks: Int
@@ -15,9 +10,7 @@ nonisolated struct WaveStrip: Equatable, Sendable {
     static let line: CGFloat = 1.5
     static let laneLine: CGFloat = 1.3
     static let laneGap: CGFloat = 4
-    /// 分岔那一截多宽。
     static let fork: CGFloat = 14
-    /// 每条轨上跑的那一小截与它后面的空。
     static let dash: [CGFloat] = [8, 40]
     static let laneSeconds = 1.6
     static let laneOpacity: CGFloat = 0.28
@@ -25,7 +18,6 @@ nonisolated struct WaveStrip: Equatable, Sendable {
     private var mid: CGFloat { Self.height / 2 }
     var lineWidth: CGFloat { tracks > 0 ? Self.laneLine : Self.line }
 
-    /// 横移一个周期要几秒：用工具快，压缩次之，在想慢。
     private var seconds: Double {
         switch gait {
         case .think: 6
@@ -55,7 +47,6 @@ nonisolated struct WaveStrip: Equatable, Sendable {
         }
     }
 
-    /// 第 `index` 条子代理轨：从左端中线圆弧分到自己那一层，再平直到 `width`。
     private func lane(_ index: Int, width: CGFloat) -> Path {
         let y = mid + (CGFloat(index) - CGFloat(tracks - 1) / 2) * Self.laneGap
         return Path { path in
@@ -65,12 +56,10 @@ nonisolated struct WaveStrip: Equatable, Sendable {
         }
     }
 
-    /// 静止时的线（同一条，不动；子代理轨画成实线）。
     var still: some Shape { WaveLine(strip: self) }
 
     // MARK: Core Animation（`LoopLayer.Kind.wave`）
 
-    /// 外层裁掉看不见的部分。周期线：里面一条比可见宽多一个周期的带子；子代理轨：每条一层淡底线、一层跑的短划。
     func make() -> CALayer {
         let layer = CALayer()
         layer.masksToBounds = true
@@ -88,7 +77,6 @@ nonisolated struct WaveStrip: Equatable, Sendable {
         return layer
     }
 
-    /// 要循环的动画与它挂在哪一层：周期线整条横移一个周期，子代理轨各自的短划往前跑（相位错开）。
     func loops(in layer: CALayer) -> [(CAAnimation, CALayer)] {
         guard let band = layer.sublayers?.first, let shapes = band.sublayers else { return [] }
         guard tracks > 0 else {

@@ -1,23 +1,17 @@
 import CueStore
 import SwiftUI
 
-/// 一件拍板怎么答，答法只在这里：Cue 页拍板卡（`CueWaitDock`）与会话页的问题卡（`QuestionCard`）共用（进展页只看不答）。按问题的种类给：
-/// - Cue 的提问：它的选项（`CueChoices`），"可以"是全件唯一的靛青；
-/// - 会话的选择题：每个选项一颗胶囊，靠右、放不下换行（`ChipFlow`），长选项折行写全——选项不写进问句，也不给自由回答框（会话页上允许自己写的，提示在底下回复框里写）；
-/// - 确认题："否 / 是"两颗普通胶囊：确认的常是部署、覆盖这类撤不回的事，不用主色推着人点"是"；
-/// - 文字题：回答框（`WaitReply`，草稿同会话页）；会话页上回复框就在底下（`replyElsewhere`），这里不另给；
-/// - 答不了的（编辑器这类只能在 Agent 里答的，`PiSessionState.answerableQuestion` 为空）：只有"打开会话"；会话页上不给（已经在里面了）。
-/// 会话的答案写成一条作答请求给它所在的 Mac：点下即停用、那颗写"送达中"，送到了写"已答，等 Mac 上的 Agent 继续"，没送到就地写原因、可以再答；
+/// Cue 的提问里"可以"是全件唯一的靛青；进展页只看不答。
+/// 会话的选择题：每个选项一颗胶囊，长选项折行写全——选项不写进问句，也不给自由回答框（会话页上允许自己写的，提示在底下回复框里写）。
+/// 确认题"否 / 是"两颗普通胶囊：确认的常是部署、覆盖这类撤不回的事，不用主色推着人点"是"。
+/// 答不了的（编辑器这类只能在 Agent 里答的）只有"打开会话"；会话页上不给（已经在里面了）。
 /// 到哪了读库里答这道题（`promptID`）的那条请求，不记在视图里：切到别的卡再回来照样在，会话换了下一道题就是新的一题。
 /// 同步到不了 Mac 时照样答：作答写下就排着，恢复后自动发出（同回复框）。Mac 的会话页上选择题按 1–9 直接作答（键帽在胶囊里）。
 struct WaitAnswer: View {
     let wait: CueTally.Wait
-    /// 回复框在页上别处（会话页）
     var replyElsewhere = false
-    /// 发给这个会话的投送请求（会话页给全的）；不给时读在线会话收到的最近一条（`LiveSessions.deliveries`）
     var deliveries: [DeliveryRequest]?
     @Environment(Workspace.self) private var workspace
-    /// Cue 的提问正在答（写成后它从等你里消失，写不成就恢复）
     @State private var ending = false
 
     var body: some View {
@@ -36,7 +30,6 @@ struct WaitAnswer: View {
     }
 }
 
-/// 会话在问的怎么答（`WaitAnswer`）：作答请求到哪了只在这里跟。
 private struct SessionAnswer: View {
     let session: PiSessionState
     let replyElsewhere: Bool
@@ -44,7 +37,6 @@ private struct SessionAnswer: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    /// 点了、请求还没出现在库里读到的那一下（写成前，或写不成的原因）。
     @State private var pending: Pending?
     #if os(macOS)
     @FocusState private var keyboard: Bool
@@ -60,20 +52,17 @@ private struct SessionAnswer: View {
         var error: String?
     }
 
-    /// 答这道题最近的那条请求（先发的在前）。
     private var request: DeliveryRequest? {
         guard let promptID = question?.promptID else { return nil }
         let requests = deliveries ?? services.liveSessions.deliveries[session.sessionID].map { [$0] } ?? []
         return requests.last { $0.answer?.promptID == promptID }
     }
 
-    /// 这道题刚点的、库里还读不到的那一下；读到了就以库里的为准。
     private var unseen: Pending? {
         guard let pending, pending.promptID == question?.promptID, pending.requestID == nil || pending.requestID != request?.id else { return nil }
         return pending
     }
 
-    /// 点了的那个回答：它的胶囊显示送达中。
     private var tapped: PiAnswerValue? { unseen.map(\.value) ?? request?.answer?.value }
     private var writeError: String? { unseen?.error }
     private var sent: Speech.Trip? { unseen == nil ? request.map { Speech.trip($0, at: services.speech) } : nil }
@@ -103,7 +92,6 @@ private struct SessionAnswer: View {
         ChipFlow { content() }.frame(maxWidth: .infinity, alignment: .trailing)
     }
 
-    /// 几颗回答，下面一行此刻到哪了（已答、没送到）。
     private func answers(_ values: [PiAnswerValue], numbered: Bool = false, other: Bool = false) -> some View {
         VStack(alignment: .trailing, spacing: Spacing.tight) {
             chips {
@@ -161,7 +149,6 @@ private struct SessionAnswer: View {
     /// 胶囊至少这么宽："否""是"这类一个字的不缩成一颗圆点。
     private static let minWidth: CGFloat = 32
 
-    /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
     private func answer(_ value: PiAnswerValue) {
         guard let promptID = question?.promptID else { return }
         withAnimation(Motion.fade) { pending = Pending(promptID: promptID, value: value) }
@@ -176,8 +163,7 @@ private struct SessionAnswer: View {
     }
 }
 
-/// 会话在问的文字题怎么答（`WaitAnswer`）：一行回答框，草稿就是会话页回复框那一份（`AppSettings.replyDraft`，两处写的是同一句），发出同会话页的作答
-/// （`Workspace.speak`：会话在等 CuePad 答得了的提问时这句就是答案，选项写原文或序号）；只发文字，草稿里的卡片与图片留给会话页。
+/// 草稿就是会话页回复框那一份（`AppSettings.replyDraft`，两处写的是同一句）；只发文字，草稿里的卡片与图片留给会话页。
 private struct WaitReply: View {
     let session: PiSessionState
     @Environment(Workspace.self) private var workspace

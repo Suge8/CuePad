@@ -15,8 +15,7 @@ extension View {
     }
 }
 
-/// Mac 的确认框：标题、说明、可选的一行输入，右下一排按钮。总有一颗"取消"（Esc 同）；不是取消也不是破坏性的最后一颗是默认按钮（↩），
-/// 破坏性的不当默认、要点按，免得顺手一回车删掉东西；它的字是胭脂色。
+/// 破坏性的不当默认、要点按，免得顺手一回车删掉东西。
 private struct DialogCard: View {
     let title: LocalizedStringResource
     let message: LocalizedStringResource?
@@ -47,7 +46,6 @@ private struct DialogCard: View {
                     if button.id == primary?.id {
                         Button { run(button) } label: { Text(button.title) }.keyboardShortcut(.defaultAction)
                     } else {
-                        // 破坏性的字用胭脂（同系统提示框），一眼看出这颗会删东西
                         Button(role: button.role) { run(button) } label: {
                             Text(button.title).foregroundStyle(button.role == .destructive ? palette.failure : palette.ink)
                         }

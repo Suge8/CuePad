@@ -2,36 +2,27 @@ import CueStore
 import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 
-/// 一个 Pi 会话页一次读取的数据：会话记录、它所在的项目、对话（从早到晚）、发给它的请求（先发的在前）、可换的模型与命令。
 /// 会话记录没了（Mac 上的会话文件被删）时 `session` 为 nil；`sessionID` 由调用方带上，发给它的请求照样读得到。
 nonisolated struct SessionDigest: Sendable, Equatable {
     var session: PiSessionState?
     var project: Project?
     var deliveries: [DeliveryRequest]
     var messages: [PiChatMessage] = []
-    /// 这个会话里 Agent 发到手机上看的文件（对话里按 `.preview` 消息的位置显示，见 `PiChat.entries`）。
     var previews: [PiPreview] = []
-    /// 统一来源分类得到的 Cue 正证据（请求 id）；还在路上的看请求自己的来源。
     var cueSent: Set<UUID> = []
-    /// 可换的模型与能用的斜杠命令（会话记录指向的目录记录；会话结束后也在，从没报过的会话没有）。
     var catalog: AgentCatalog?
-    /// 绑着的顶层任务（会话菜单的"置顶"置的是它，`SessionActions`）。
     var task: SessionTask?
 
-    /// 正在请 Mac 补写对话（很久以前的会话没有对话时）：请求还在路上（`Speech`，超时就不再说正在补写）。
     func fetchingTranscript(at moment: Speech.Moment) -> Bool {
         deliveries.contains { $0.mode == .known(.transcript) && Speech.trip($0, at: moment).inTransit }
     }
 
-    /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条改名）。
     func title(at moment: Speech.Moment) -> String? {
         session.map { PiRename.title(of: $0, request: DeliveryRequest.latestRename(in: deliveries), at: moment) }
     }
 
-    /// 发给它的最近一条话（作答、命令也算，同 `PiSessionListItem.delivery`）：顶栏的状态按它写话到哪了。
     var delivery: DeliveryRequest? { deliveries.last { $0.mode.known.map(DeliveryMode.toSession.contains) == true } }
 
-    /// 此刻没能送达的话有几句（`Speech.undelivered`，会话行同一个数）。
     func undelivered(at moment: Speech.Moment) -> Int { Speech.undelivered(deliveries, at: moment) }
 
     /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值，是你换的、之后还没对它做别的才带上那一句（到哪了按 `Speech`）。
@@ -74,24 +65,17 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     }
 }
 
-/// 会话页回复框上方模型与思考强度的显示值（`SessionDigest.config`）。
 nonisolated struct PiConfigShown: Equatable {
     var model: PiModelOption?
     var thinking: PiThinkingLevel?
     var fast: Bool? = nil
-    /// 上下文余量（会话记录上的，用量条显示；没有模型时为 nil）。
     var context: PiContextUsage?
     var pending: Bool
-    /// 你最近一次换模型、强度明确没换成：那一句（要换成什么与 Mac 报的原因，`SessionDigest.config`）。
     var failure: String?
 }
 
-/// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的状态图形上（`PiStateGlyph`，与状态标同一个样子：问题是赭黄裸问号、出错是胭脂圆叹号），正文中性；
-/// 问题的正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
-/// 对话里的（出错的原因）是平放的纸，属于内容；贴在回复框上方、要你处理的（`docked`：问题卡、出错、没能结束）是浮起的纸，
-/// 与 Cue 页的拍板卡同一个面（`dockedPaper`），进出同它从回复框后面升起、沉回（`DockedCard`）。
+/// 彩色只在行首的状态图形上，正文中性；对话里的（出错的原因）是平放的纸，属于内容；贴在回复框上方、要你处理的（`docked`：问题卡、出错、没能结束）是浮起的纸，与 Cue 页的拍板卡同一个面（`dockedPaper`），进出同它从回复框后面升起、沉回（`DockedCard`）。
 struct Callout<Accessory: View>: View {
-    /// 问题是 `.asking`，出错与没能结束是 `.failed`。
     let status: PiShown.Status
     let text: String
     var docked = false
@@ -129,7 +113,6 @@ extension Callout where Accessory == EmptyView {
     }
 }
 
-/// 提示块的面：对话里是平放的纸，贴在回复框上方是浮起的纸（同拍板卡，与回复框同样的圆角）。
 private struct CalloutSurface: ViewModifier {
     let docked: Bool
 
@@ -142,8 +125,7 @@ private struct CalloutSurface: ViewModifier {
     }
 }
 
-/// 等你确认、能从这里答的问题：问句与怎么答（`WaitAnswer`，同 Cue 页拍板卡：确认框"否 / 是"，选择框每个选项一颗胶囊，
-/// Mac 上按 1–9 直接作答；文字型的在下面的回复框里答）。答出去后停用，等 Mac 那边弹窗收起、问题清空（卡片随之消失）；没送达就地写原因，可以再答。
+/// 答出去后停用，等 Mac 那边弹窗收起、问题清空（卡片随之消失）；没送达就地写原因，可以再答。
 struct QuestionCard: View {
     let session: PiSessionState
     let question: PiQuestion
@@ -156,8 +138,6 @@ struct QuestionCard: View {
     }
 }
 
-/// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："运行了 4 分钟"、"刚刚"（等你确认的第一分钟）、"2 小时前"。
-/// 列表里到分钟；会话页顶栏传 `.header`；会话行只写时长（`.span`）。
 struct PiElapsed: View {
     let shown: PiShown
     var font: Font = Typography.meta

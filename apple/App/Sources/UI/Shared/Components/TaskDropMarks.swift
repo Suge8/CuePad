@@ -1,9 +1,7 @@
 import SwiftUI
 
-/// 任务大纲上落点的底与记号（`TaskOutline` 的拖放）。画在大纲这一层、按行的位置摆（`rowPlate`），不画在行里：手机的行挂着轻扫，
-/// 轻扫把行裁在自己的框里，伸出行框的底会被切成直角。两层：底垫在行后面（`fill`），描边与小签盖在行上（`mark`）。
-/// 拖着灵感时每一行铺一层淡底：一拖起来就看得出哪些接得住。亮起的那一行（`OutlineDrag.target`）铺选中底；拖着灵感时再描一圈签名色、
-/// 行尾一枚小签写松手会怎样。亮起的是同一块，换行时滑过去（无回弹弹簧），不是这行灭、那行亮。
+/// 画在大纲这一层、按行的位置摆（`rowPlate`），不画在行里：手机的行挂着轻扫，轻扫把行裁在自己的框里，伸出行框的底会被切成直角。两层：底垫在行后面（`fill`），描边与小签盖在行上（`mark`）。
+/// 拖着灵感时每一行铺一层淡底，一拖起来就看得出哪些接得住；亮起的是同一块，换行时滑过去，不是这行灭、那行亮。
 struct OutlineTargets: View {
     enum Layer { case fill, mark }
 
@@ -16,7 +14,6 @@ struct OutlineTargets: View {
     @Environment(\.rowSurface) private var surface
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 相邻两行的底之间留的缝：一行一块，不连成一片。
     private static let gap: CGFloat = 2
 
     var body: some View {
@@ -61,7 +58,6 @@ struct OutlineTargets: View {
 
     private func rect(_ id: UUID) -> CGRect? { rows.first { $0.id == id }.flatMap(rect) }
 
-    /// 一行的框：从它的缩进处起，上下各让出一道缝。
     private func rect(_ row: TaskTree.Row) -> CGRect? {
         guard let frame = drag.frames[row.id] else { return nil }
         let inset = CGFloat(row.depth) * indent
@@ -69,7 +65,7 @@ struct OutlineTargets: View {
     }
 }
 
-/// 两行之间的落点：插入线（`InsertionMark`）左边缩到落下后的层级；落点变化时（含拖着灵感换了一行）一下轻触感。
+/// 落点变化时（含拖着灵感换了一行）一下轻触感。
 struct InsertionLine: View {
     let drag: OutlineDrag
     let first: UUID?
@@ -91,7 +87,6 @@ struct InsertionLine: View {
     }
 }
 
-/// 插入线（任务大纲的行间、看板待办的卡前）：一条墨色线，起点是一个小圈。
 struct InsertionMark: View {
     static let ring: CGFloat = 9
     @Environment(\.palette) private var palette
@@ -105,8 +100,7 @@ struct InsertionMark: View {
 }
 
 extension View {
-    /// 纸底"添加任务"那一行：拖着灵感时整行换成一格新建的落点（虚线框，与大纲里每一行的淡底同时出现），停上去亮起，
-    /// 松手照这条灵感新建一条任务（`Workspace.newTask(fromIdea:)`）。挂在整行上（连同右边的开合）：落点大，拖着时开合也用不上。
+    /// 挂在整行上（连同右边的开合）：落点大，拖着时开合也用不上。
     func newTaskDrop() -> some View { modifier(NewTaskDrop()) }
 }
 
@@ -128,7 +122,7 @@ private struct NewTaskDrop: ViewModifier {
     }
 }
 
-/// 新建的落点：虚线框（还空着的一格），停上去换成亮起的行的样子（选中底、签名色实线）。垫纸色，盖住下面的"添加任务"与开合。
+/// 垫纸色，盖住下面的"添加任务"与开合。
 private struct NewTaskSlot: View {
     let over: Bool
     @Environment(\.palette) private var palette

@@ -1,15 +1,11 @@
 import CueStore
 import SwiftUI
 
-/// 全屏预览底部（`PreviewReply`）：会话里是一颗"回复"——收起全屏页，会话的回复框带上这一份的引用（`Workspace.quote`，同缩略图长按的"回复"），
-/// 话在回复框里写；Cue 页是一条对 Cue 说的玻璃栏，说出去的是一句普通的话"关于「标题」：……"（Cue 的输入框没有批注）；拍板卡是那几个选项
-/// （`answerCueQuestion`）。说完、答完就收起全屏页。
+/// Cue 页说出去的是一句普通的话"关于「标题」：……"（Cue 的输入框没有批注）。
 struct PreviewReplyBar: View {
     let reply: PreviewReply
-    /// 当前这一份与它的标题
     let preview: PiPreview
     let about: String
-    /// 这一批在会话对话里的那一条（`PreviewOpening.entry`）
     let entry: UUID?
     let done: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -39,7 +35,6 @@ struct PreviewReplyBar: View {
     private func field(_ prompt: String, to listener: Listener) -> some View {
         let empty = text.isEmpty
         return HStack(spacing: Spacing.item) {
-            // 一行：回车就发（多行的输入框回车是换行），长话照样横着滚
             TextField(prompt, text: $draft.text, palette: palette)
                 .textFieldStyle(.plain).font(Typography.body)
                 .submitLabel(.send)

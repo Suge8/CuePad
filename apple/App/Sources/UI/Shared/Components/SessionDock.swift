@@ -1,14 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 会话页底下浮着的那一叠（手机的会话页与 Mac 的会话页同一份）：等你确认时的问题卡、出错（`PiFailureDock`）、没能结束的原因（与会话列表同一条规则
-/// `MacDelivery.endIssue`；已结束记录也保留未解决的结束与明确恢复入口）、回复框（`PiReplyBar`）；回复框的停止中、命令进度、发送中与调回的那一句都从这一页读到的会话摘要推出。
 /// 读到会话记录、确认它不在了（Mac 上的会话文件被删）时，回复框换成一句说明。
 struct SessionDock: View {
     let session: PiSessionState
-    /// 这一页读到的会话摘要；还没读到为 nil。
     let digest: SessionDigest?
-    /// 在看历史：回复框收成短胶囊（只有手机这样）。
     var compact = false
     var revealNote: (ReplyNote) -> Void = { _ in }
     let sent: () -> Void
@@ -55,8 +51,7 @@ struct SessionDock: View {
 }
 
 extension View {
-    /// 很久以前的会话没有对话：读到这一页后请它所在的 Mac 补写一次（本机的也走同一条路；同步不通时不请；
-    /// 已有没被领取的补写请求时不写第二条，`CueStore.requestTranscript`）。
+    /// 本机的也走同一条路；同步不通时不请；已有没被领取的补写请求时不写第二条（`CueStore.requestTranscript`）。
     func requestsTranscript(_ digest: SessionDigest?) -> some View { modifier(TranscriptRequest(digest: digest)) }
 }
 

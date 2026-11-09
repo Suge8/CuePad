@@ -1,11 +1,7 @@
 import SwiftUI
 
-/// 空态与出错页：吉祥物、一句现状、一句下一步、一个可选动作，自上而下一列居中，全 App 只有这一套布局：
-/// 任何宽度与辅助字号下字都按行折、不和图或按钮并排挤成竖排。那张纸与所在页面的内容同宽（左右边线与标题、其他纸对齐，中轴就是页面的中轴），纸里的字居中、最宽 420。
 /// 那句下一步按全角标点断成几截排（`PhraseLines`，标点黏在前一截末尾）：居中的中文按字折行，行尾常剩一两个孤字。
-/// 吉祥物出场时从下方轻轻弹上来，只这一次；减弱动态效果时只淡入、不挪。
-/// "这里还没有"类的空态（`waitsForSync`）在本机正在和 iCloud 对时（`AppServices.isCatchingUp`）不先说空：对得快就等对完再出，
-/// 久过 `Pending.delay` 换成"正在从 iCloud 同步"——新装的设备上东西一页页地到，说"还没有"是错的。
+/// "这里还没有"类的空态（`waitsForSync`）在本机正在和 iCloud 对时（`AppServices.isCatchingUp`）不先说空：对得快就等对完再出，久过 `Pending.delay` 换成"正在从 iCloud 同步"——新装的设备上东西一页页地到，说"还没有"是错的。
 struct EmptyState<Action: View>: View {
     let mascot: Mascot
     let title: LocalizedStringResource
@@ -73,7 +69,6 @@ struct EmptyState<Action: View>: View {
     }
 }
 
-/// 一段居中的话按标点断成几截（标点留在前一截末尾），一截一截往行里排：这一行放不下下一截就整截换行，一截比一行还宽时它自己折。
 /// 用 `Layout` 一次排，不量了再写回状态。读屏读整句。
 private struct PhraseLines: View {
     let text: String
@@ -124,7 +119,6 @@ private struct PhraseLines: View {
     private struct Flow: Layout {
         private static let lineGap: CGFloat = 2
 
-        /// 按哪个宽分的行：量过的宽摆放时直接用，不再分一遍（子视图一变，系统按 `makeCache` 重建）。
         struct Cache {
             var width: CGFloat?
             var rows: [Row] = []
@@ -191,13 +185,11 @@ extension EmptyState where Action == EmptyView {
         self.init(mascot: mascot, title: title, message: message, waitsForSync: waitsForSync) { EmptyView() }
     }
 
-    /// 没搜到；没有搜索词（只按条件筛）时不复述空词。
     static func noMatch(_ query: String) -> Self {
         EmptyState(mascot: .search, title: query.isEmpty ? "没有符合条件的结果" : "没有找到“\(query)”", message: "换个词或条件试试")
     }
 }
 
-/// 吉祥物的表情，对应 Assets 里的 mascot 图。
 enum Mascot: String {
     case welcome = "mascot-welcome"
     case empty = "mascot-empty"

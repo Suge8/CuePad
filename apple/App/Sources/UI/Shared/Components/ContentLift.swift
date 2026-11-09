@@ -1,11 +1,8 @@
 import QuartzCore
 import SwiftUI
 
-/// 对话内容在渲染端的平移（新到的一条把上面的对话撑上去，`ChatScroll.rise`）：给滚动区里装内容的那一层叠一段相对的竖直平移，
-/// 从让出的高定长地回到 0（`Motion.glide`），全在 Core Animation 的渲染端跑，动画里主线程不重排、不读几何。
 /// 叠加（`additive`）、每次各用各的键：上一段没走完又来一条时两段相加，屏上从当前位置连续接上。
 /// 否决的方案：SwiftUI 的偏移逐帧挪——每帧要主线程更新，Mac 上发出一句到回复与结果卡出来的那几秒主线程指令多近两成。
-/// 挪哪一层由内容里一个不占地方的平台视图往上找（`Anchor`）；顺着它也找到平台的滚动视图，直接挪偏移（`scroll(by:)`）。
 @MainActor final class ContentLift {
     weak var probe: PlatformView?
     private var slides = 0
@@ -22,8 +19,7 @@ import SwiftUI
         layer.add(slide, forKey: "lift.\(slides)")
     }
 
-    /// 可见区沿内容往下挪 `height`：正在读的那一条在内容里挪了这么多时（`ChatAnchor`），它留在原处。直接改平台滚动视图的偏移，
-    /// 在内容变高的这次更新里生效、这一帧就画在原处，正滚着（触控板的惯性、滚轮、手指拖着）也接着从新的位置滚。
+    /// 直接改平台滚动视图的偏移，在内容变高的这次更新里生效、这一帧就画在原处，正滚着（触控板的惯性、滚轮、手指拖着）也接着从新的位置滚。
     /// 否决的方案：SwiftUI 的滚动位置（`ScrollPosition.scrollTo(y:)`）晚一次更新才用上，Mac 上正滚着时常被滚动盖掉：正在读的被推下去一整段，
     /// 离最早那头仍不到一屏、不再排开更早的，停在"更早的 N 条"上；按底边锚定（`defaultScrollAnchor(_:for: .sizeChanges)`）正滚着时系统不管。
     func scroll(by height: CGFloat) {
@@ -40,7 +36,7 @@ import SwiftUI
         #endif
     }
 
-    /// 挪的是滚动区里装内容的那一层，滚动区自己的裁剪与滚动条不动；挂到窗口上时层还没建，到挪的时候再找。
+    /// 挂到窗口上时层还没建，到挪的时候再找。
     #if os(iOS)
     private var downIsPositive: Bool { true }
     private var layer: CALayer? {
@@ -53,7 +49,6 @@ import SwiftUI
     private var layer: CALayer? { probe?.enclosingScrollView?.documentView?.layer }
     #endif
 
-    /// 放在内容里（`background`）认出装内容那一层的平台视图。
     struct Anchor {
         let lift: ContentLift
     }

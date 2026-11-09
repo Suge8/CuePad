@@ -2,16 +2,12 @@
 import AppKit
 import PDFKit
 
-/// 全屏页里的 PDF 能 ⌘F 搜（"编辑"菜单的查找三项，`MainMenu`）：系统的查找条（`NSTextFinder`）挂在 PDF 视图外面这一层，
-/// 条出现在页顶那排玻璃下面、文字往下让出它的高；找到的那处滚到眼前、标黄。PDFKit 在 Mac 上没有自带的查找条，
-/// 文字与位置经 `PDFFindClient` 交给查找条。
+/// PDFKit 在 Mac 上没有自带的查找条，文字与位置经 `PDFFindClient` 交给系统的查找条（`NSTextFinder`）。
 final class PDFFindHost: NSView, NSTextFinderBarContainer, NSMenuItemValidation {
     let pdf = PDFView()
     private let finder = NSTextFinder()
     private let client = PDFFindClient()
-    /// 页顶那排玻璃占的高：查找条排在它下面
     var top: CGFloat = 0 { didSet { if top != oldValue { place() } } }
-    /// 内容让出的上下边（页顶那排、底栏，查找条开着时再加它的高）
     var chrome = NSEdgeInsets() { didSet { place() } }
 
     var findBarView: NSView? {
@@ -59,7 +55,6 @@ final class PDFFindHost: NSView, NSTextFinderBarContainer, NSMenuItemValidation 
         place()
     }
 
-    /// PDF 铺满、查找条贴在页顶那排下面，内容往下让出它的高：查找条开合、页顶变了当场排。
     private func place() {
         pdf.frame = bounds
         var bar: CGFloat = 0
@@ -74,7 +69,6 @@ final class PDFFindHost: NSView, NSTextFinderBarContainer, NSMenuItemValidation 
         scroll.contentInsets = insets
     }
 
-    /// 查找三项经响应链从 PDF 视图走到这里（菜单项的 tag 是 `NSTextFinder.Action`）。
     override func performTextFinderAction(_ sender: Any?) {
         guard let action = (sender as? NSValidatedUserInterfaceItem).flatMap({ NSTextFinder.Action(rawValue: $0.tag) }) else { return }
         client.reload()
@@ -88,15 +82,13 @@ final class PDFFindHost: NSView, NSTextFinderBarContainer, NSMenuItemValidation 
     }
 }
 
-/// PDF 的文字按页接成一串交给查找条：第几个字落在哪一页的哪个字、在屏上哪一块，都按这串的位置换算。
 /// 找到的那处由查找条画系统的黄色提示框，框里的字由这里从页面画（PDF 视图分块画，查找条自己截不到字）。
 final class PDFFindClient: NSObject, NSTextFinderClient {
     weak var pdf: PDFView?
     private(set) var string = ""
-    /// 每页在这串里从哪起（最后多一个总长）
     private var starts: [Int] = [0]
 
-    /// 文档换了或第一次搜前读一遍各页的文字（页与页之间隔一个换行，跨页的词不当一个）。
+    /// 页与页之间隔一个换行，跨页的词不当一个。
     func reload() {
         guard let document = pdf?.document, starts.count - 1 != document.pageCount || string.isEmpty else { return }
         var text = "", starts = [0]
@@ -158,7 +150,6 @@ final class PDFFindClient: NSObject, NSTextFinderClient {
         }
     }
 
-    /// 这串里的一段落在 PDF 的哪些字（可以跨页）。
     private func selection(_ range: NSRange) -> PDFSelection? {
         guard let document = pdf?.document, range.length > 0, let first = page(of: range.location), let last = page(of: NSMaxRange(range) - 1),
               let start = document.page(at: first), let end = document.page(at: last)
