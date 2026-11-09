@@ -1,0 +1,45 @@
+name: Swift
+
+# 与本机同一个入口 apple/scripts/xc.sh；四段各占一台 runner 并行，每段都是干净机器上的冷编译。
+# runner 标签 xcode-27：actions/runner-images 的 macOS 27 镜像（Xcode 27.0 与 iOS 27.0 模拟器 iPhone 17 都在）。
+# CloudKit 真同步、推送、后台与签名只能在设备上验，这里只跑替身。
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: swift-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  xc:
+    name: ${{ matrix.name }}
+    runs-on: xcode-27
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: check, args: check }
+          - { name: test kit, args: test kit }
+          - { name: test mac, args: test mac }
+          - { name: test ios sync, args: test ios -only-testing:CuePadTests/SyncAccountTests -only-testing:CuePadTests/FileSyncTests -only-testing:CuePadTests/NewSessionFlowTests }
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    steps:
+      # lint 要 origin/main 与发布标签：整段历史、全部标签
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - run: brew install ripgrep
+      - run: apple/scripts/xc.sh ${{ matrix.args }}
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: logs-${{ strategy.job-index }}
+          path: apple/.derived/test.log
+          if-no-files-found: ignore
