@@ -1,4 +1,5 @@
 """iOS、iPadOS 模拟器里的实例：装、起、截图、录屏；run 起的实例由看守租着这台模拟器。"""
+import glob
 import json
 import os
 import re
@@ -7,7 +8,7 @@ import subprocess
 import sys
 import time
 
-from app_env import BUNDLE_ID, HOLD, REC_SECONDS, RUN_TTL, RUNTIME, SIM_RUN, die
+from app_env import BUNDLE_ID, HOLD, REC_SECONDS, RUN_ROLE, RUN_TTL, RUNTIME, SIM_RUN_GLOB, die, sim_run
 from app_proc import alive, silence, wait_exit, wait_ready
 from app_shots import batch
 
@@ -167,7 +168,7 @@ def keep(s, pid):
     os.close(report_r)
     os.setsid()
     signal.alarm(RUN_TTL)
-    with open(SIM_RUN, "w") as f:
+    with open(sim_run(), "w") as f:
         json.dump({"holder": os.getpid(), "app": pid, "device": s.device}, f)
     with open(os.environ["CUEPAD_LEASE"], "w") as f:
         f.write(str(os.getpid()))
@@ -178,19 +179,21 @@ def keep(s, pid):
         wait_exit(pid)
     finally:
         s.terminate()
-        os.remove(SIM_RUN)
+        os.remove(sim_run())
     os._exit(0)
 
 
 def stop():
-    """结束本检出 run 起的模拟器实例，等看守收完；返回要报的话，没有就是 None。"""
-    try:
-        with open(SIM_RUN) as f:
-            note = json.load(f)
-    except (OSError, ValueError):
-        return None
-    if not alive(note):
-        return None
-    os.kill(note["holder"], signal.SIGTERM)
-    wait_exit(note["holder"])
-    return f"已结束模拟器 {note['device']} 上的实例 {note['app']}"
+    """结束本检出 run 起的模拟器实例（给了 CUEPAD_RUN_ROLE 只收这个角色的），等看守收完；返回要报的话，没有就是 None。"""
+    done = []
+    for path in [sim_run()] if RUN_ROLE else glob.glob(SIM_RUN_GLOB):
+        try:
+            with open(path) as f:
+                note = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if alive(note):
+            os.kill(note["holder"], signal.SIGTERM)
+            wait_exit(note["holder"])
+            done.append(f"已结束模拟器 {note['device']} 上的实例 {note['app']}")
+    return "\n".join(done) or None

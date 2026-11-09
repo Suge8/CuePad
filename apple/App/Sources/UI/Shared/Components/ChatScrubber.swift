@@ -91,20 +91,15 @@ struct ChatScrubber: View {
             guard (try? await Task.sleep(for: Self.linger)) != nil else { return }
             lingering = false
         }
-        .accessibilityElement()
-        .accessibilityLabel("对话刻度")
-        .accessibilityValue(currentIndex.map { String(localized: "第 \($0 + 1) 处，共 \(marks.count) 处：\(marks[$0].preview)") } ?? String(localized: "共 \(marks.count) 处"))
-        .accessibilityAdjustableAction { direction in
-            let from = currentIndex ?? marks.count
-            switch direction {
-            case .increment: go(to: min(from + 1, marks.count - 1))
-            case .decrement: go(to: max(from - 1, 0))
-            @unknown default: break
-            }
-        }
-        .accessibilityActions {
-            Button("上一处") { go(to: max((currentIndex ?? marks.count) - 1, 0)) }
-            Button("下一处") { go(to: min((currentIndex ?? marks.count) + 1, marks.count - 1)) }
+        // 读屏的数值位要一个真数：只挂可调动作时 SwiftUI 把它读成 NaN。位置是最近跳到的那一处，没跳过就是最新一处（对话停在底）。
+        .accessibilityRepresentation {
+            Slider(value: Binding(get: { Double(currentIndex ?? marks.count - 1) }, set: { go(to: Int($0.rounded())) }),
+                   in: 0...Double(max(marks.count - 1, 1)), step: 1) { Text("对话刻度") }
+                .accessibilityValue(currentIndex.map { String(localized: "第 \($0 + 1) 处，共 \(marks.count) 处：\(marks[$0].preview)") } ?? String(localized: "共 \(marks.count) 处"))
+                .accessibilityActions {
+                    Button("上一处") { go(to: max((currentIndex ?? marks.count) - 1, 0)) }
+                    Button("下一处") { go(to: min((currentIndex ?? marks.count) + 1, marks.count - 1)) }
+                }
         }
         .opacity(keyboard ? 0 : 1)
         .allowsHitTesting(!keyboard)

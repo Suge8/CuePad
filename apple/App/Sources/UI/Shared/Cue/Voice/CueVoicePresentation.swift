@@ -91,6 +91,11 @@ struct CueVoiceState<Operation: CueVoiceOperation> {
 
     var active: Bool { activity != .idle && activity != .ended && activity != .failed }
     var needsAttention: Bool { !issues.isEmpty || executions.contains(where: \.needsAttention) }
+    /// 通话详情里有东西可看：通话中，或留着问题、记录与可停的执行。
+    var hasDetails: Bool {
+        active || !issues.isEmpty || !readings.isEmpty || !executions.isEmpty || canStopExecution
+            || requestPage != nil || replyPage != nil || executionPage != nil
+    }
 
     var title: LocalizedStringResource {
         muted && activity == .listening ? "麦克风已静音" : activity.title

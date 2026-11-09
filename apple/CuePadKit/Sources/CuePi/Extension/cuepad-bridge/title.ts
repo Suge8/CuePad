@@ -1,14 +1,11 @@
-// 按第一句话给会话起短名（CuePad 的 `title` 命令，`SessionNameSuggestion`）：只回不写——CuePad 核对过任务标题与改名请求后，
-// 用 `config` 改名写回（即 Pi 的改名接口）。
-// 用会话所在 provider 里最便宜的可用模型（只在你已登录的这一家里挑，数据不发给别家）：按目录标价取最低，同价的有当前模型就用它——
-// 都没标价（自建、本地的）时就是当前模型。不开思考；说明、长度上限与时限随命令来。
+// 按第一句话给会话起短名（CuePad 的 `title` 命令）：只回不写——CuePad 核对过任务标题与改名请求后，用 `config` 改名写回。
+// 只在会话所在 provider 里挑最便宜的可用模型：数据不发给别家。
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Ack, Session } from "./session.ts";
 
 type Model = NonNullable<ExtensionContext["model"]>;
 
-/** 每百万 token 的输入加输出价 */
 const price = (model: Model) => model.cost.input + model.cost.output;
 
 export function namingModel(ctx: ExtensionContext): Model | undefined {
@@ -35,7 +32,7 @@ export async function handleTitle(session: Session, command: Record<string, unkn
 		{ signal, maxTokens: 64, cacheRetention: "none" },
 	).result();
 	if (reply.stopReason !== "stop") return reject(`failed: ${reply.errorMessage ?? reply.stopReason}`);
-	// 同 `SessionNameSuggestion.cleaned`：第一行、去掉首尾空白、截到上限
+	// 与 Swift 一侧的 `SessionNameSuggestion.cleaned` 各实现一份同一条规则
 	const said = reply.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
 	const title = [...(said.split("\n")[0] ?? "").trim()].slice(0, limit).join("").trim();
 	if (!title) return reject("failed: empty title");

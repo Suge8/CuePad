@@ -87,6 +87,8 @@ enum InkSymbols {
         "cue.wave",
         "cue.bubble.text",
         "cue.bubble.dots",
+        "cue.mic",
+        "cue.mic.off",
         "cue.waiting",
         "cue.failure",
         "cue.undelivered",

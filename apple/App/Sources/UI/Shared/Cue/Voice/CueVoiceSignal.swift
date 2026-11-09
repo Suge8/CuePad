@@ -3,6 +3,8 @@ import SwiftUI
 /// 同一组声纹始终在场；音轨只在此叶子读取，不让聊天随采样重算。待机、静音、关闭不伪造声音。
 struct CueVoiceSignal<Operation: CueVoiceOperation>: View {
     let presentation: CueVoiceState<Operation>?
+    /// 收成正中一点（手机通话还没开始、已经结束时：那一段正淡着，`PhoneCall`），接通时从这一点长开。
+    var seed = false
     @Environment(\.palette) private var palette
     @LoopsPlay private var loopsPlay
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -14,7 +16,7 @@ struct CueVoiceSignal<Operation: CueVoiceOperation>: View {
         let resting = activity == nil || activity == .idle || activity == .ended || (presentation?.muted == true && activity != .speaking)
         let color = activity == .failed ? palette.failure : resting ? palette.ink3 : palette.signature
         LoopLayer(kind: .voice(VoiceRibbon(
-            activity: activity, muted: presentation?.muted == true,
+            activity: activity, muted: presentation?.muted == true, seed: seed,
             samples: loopsPlay && presentation?.active == true ? presentation?.samples() ?? [] : [],
             playing: loopsPlay, reduced: reduceMotion)), color: color)
             .frame(width: Self.width, height: Self.height)

@@ -1,5 +1,3 @@
-// Pi 这一端：事件 → 会话的状态、近况、正在说的话与额度；状态的推导；弹窗的捕获。
-
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
@@ -10,10 +8,8 @@ import { claudeHeaderWindows, codexWindows, record } from "./quota.ts";
 import type { Session } from "./session.ts";
 
 
-/** 等你回答的弹窗文案的字符数上限（含省略号） */
 const QUESTION_LIMIT = 500;
 
-/** 订阅这个会话要跟的 Pi 事件，返回退订的函数。 */
 export function follow(session: Session): (() => void)[] {
 	const { pi, ctx, tracker, draft, pending } = session;
 	const refreshContext = () => session.refreshContext();
@@ -48,8 +44,7 @@ export function follow(session: Session): (() => void)[] {
 			if (event.message.role !== "user") return;
 			// 首条消息与 Pi 会话列表一致，不区分机器消息
 			session.updateInfo({ firstMessage: session.firstMessage ?? preview(messageText(event.message)) });
-			// 交出的那句落成了消息（带图时 Pi 在文字后附上图片说明，所以按开头认）：投送请求 id 写到它上面，再确认送达。
-			// 模板与 skill 落成的是展开后的文字，认不出原话：它们只经 `submit` 在歇着时交出，交出后的第一条你的消息就当是它。
+			// 交出的那句落成了消息：带图时 Pi 在文字后附上图片说明，所以按开头认。
 			// 交出到开轮之间（预检、Pi 查登录）别的扩展抢先开轮会认错：落成的消息不带来源，input 事件的 source 对各扩展都是
 			// extension、又早于展开，Pi 没有能精确区分的字段。
 			// 扩展先收到 message_end、Pi 再把同一个消息对象写进会话文件，所以 id 随消息落盘，对话（读会话文件）据此认出它
@@ -59,9 +54,7 @@ export function follow(session: Session): (() => void)[] {
 			said.ack?.({ ok: true });
 		}),
 
-		// ---- Pi 事件 → 状态 ----
-		// 提交了一条消息（你的提问，或扩展投进来的，如 FireCode 交回子代理结果）：这一轮从这里开始算。
-		// FireCode 交回结果时，在飞数在这之后、agent_start 之前就归零了，从这里接上，连续处理才不会在交接处断开。
+		// FireCode 交回子代理结果时，在飞数在这之后、agent_start 之前就归零了，从这里接上，连续处理才不会在交接处断开。
 		// 自己交出的话从 agent_start 起算：Pi 在 input 之后才查模型与登录，拒收了这里就会一直报工作中
 		pi.on("input", (event) => {
 			if (tracker.active || session.starting.some((said) => said.text === event.text)) return;
@@ -136,7 +129,6 @@ export function follow(session: Session): (() => void)[] {
 	];
 }
 
-/** 工具状态里一句话详情的字符数上限（含省略号） */
 const DETAIL_LIMIT = 120;
 
 type State =
@@ -144,9 +136,7 @@ type State =
 	/** 工作中、没在调工具：正在出字也算（正在说的话另走 `draft`） */
 	| { kind: "thinking" }
 	| { kind: "tool"; tool: string; detail?: string }
-	/** 自己这轮已经歇下，还有子代理在飞：仍在处理 */
 	| { kind: "delegating" }
-	/** 在压缩上下文：手动 /compact、上下文快满时自动压缩、上下文溢出后压缩再重试，都是它 */
 	| { kind: "compacting" }
 	| { kind: "waiting_user"; title?: string }
 	| { kind: "done" }
@@ -159,10 +149,8 @@ export class StateTracker {
 	prompt: { title?: string } | null = null;
 	/** 完成的助手消息记录结果（部分失败没有 agent_end），agent_settled 才生效。 */
 	outcome: State = { kind: "done" };
-	/** 这一轮收到过 CuePad 的停止（`abort` 命令） */
 	stopped = false;
 	settled: State | null = null;
-	/** session_before_compact 到 session_compact / session_compact_failed */
 	compacting = false;
 
 	finish(message: { stopReason: string; errorMessage?: string }, aborted = false) {
@@ -171,7 +159,6 @@ export class StateTracker {
 		else this.outcome = { kind: "done" };
 	}
 
-	/** `inFlight`：在飞子代理数（FireCode 发布） */
 	derive(inFlight: number): State {
 		if (this.prompt) return { kind: "waiting_user", title: this.prompt.title };
 		if (this.compacting) return { kind: "compacting" };
@@ -189,7 +176,6 @@ export class StateTracker {
 
 export type Phase = "working" | "waiting" | "error" | "idle";
 
-/** 某一刻的粗状态与计时（压缩前记下，压完回到同一个粗状态时恢复） */
 export type Clock = { phase: Phase; since: number; busySince: number | null };
 
 /** 粗状态：计时只在它变化时动，思考、工具、等子代理之间切换不算。 */
@@ -202,7 +188,7 @@ export function phaseOf(state: State): Phase {
 	}
 }
 
-/** 只上报一句话摘要，不上报完整参数：命令/搜索模式取首个非空行，文件类工具取文件名，超长截断。 */
+/** 只上报一句话摘要，不上报完整参数。 */
 function toolDetail(args: Record<string, unknown> | undefined): string | undefined {
 	const raw = typeof args?.command === "string" ? args.command
 		: typeof args?.pattern === "string" ? args.pattern
@@ -213,17 +199,15 @@ function toolDetail(args: Record<string, unknown> | undefined): string | undefin
 	return chars.length <= DETAIL_LIMIT ? line : chars.slice(0, DETAIL_LIMIT - 1).join("") + "…";
 }
 
-/** 标记已经包装过的 ui 对象 */
 const CAPTURED = Symbol("cuepad.captured");
 type DialogMethod = (...args: unknown[]) => unknown;
 
-/** 正在弹出的对话框（最外层）。ui_prompt_start 只带标题，说明与选项要在调用时记下；`settle` 从 CuePad 作答 */
+/** 正在弹出的对话框（最外层）。ui_prompt_start 只带标题，说明与选项要在调用时记下 */
 export type Asking = Question & { settle?: (value: unknown) => void; dismiss?: () => void };
 
-/** 包装所有扩展共用的 ui 对象上的对话框方法（Pi 每次绑定界面都换新对象，session_start 前绑定）：记下文案与选项，
- * 并给弹窗接上一个由我们控制的 AbortSignal。从 CuePad 作答时先记下答案再 abort：Pi 的界面随之收起
- * （TUI 隐藏选择器，RPC 删掉待答请求），原调用按"取消"结束，包装把它换成我们的答案交回调用方。
- * `session.asking` 是此刻弹出的那个。 */
+/** 包装所有扩展共用的 ui 对象上的对话框方法（Pi 每次绑定界面都换新对象，session_start 前绑定）。
+ * 从 CuePad 作答时先记下答案再 abort：Pi 的界面随之收起（TUI 隐藏选择器，RPC 删掉待答请求），
+ * 原调用按"取消"结束，包装把它换成我们的答案交回调用方。 */
 export function captureDialogs(context: ExtensionUIContext, session: { asking: Asking | null }) {
 	const ui = context as unknown as Record<string, DialogMethod | undefined> & { [CAPTURED]?: true };
 	if (ui[CAPTURED]) return;
@@ -246,7 +230,6 @@ export function captureDialogs(context: ExtensionUIContext, session: { asking: A
 				session.asking = question;
 				return original.apply(ui, args);
 			}
-			// 调用方自己的 signal 与我们的合在一起：任一触发都收起弹窗
 			const own = new AbortController();
 			const callerOptions = args[optionsAt] as ExtensionUIDialogOptions | undefined;
 			const caller = callerOptions?.signal;

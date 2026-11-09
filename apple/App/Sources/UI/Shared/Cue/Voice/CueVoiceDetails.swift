@@ -23,7 +23,8 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
                     .opacity(presentation.active ? 1 : 0)
                     .readerHidden(!presentation.active)
             }
-            if presentation.activity != .failed {
+            // 只在通话中写此刻的状态：结束了不留"通话已结束"，异常结束由提示条说
+            if presentation.active {
                 Text(presentation.title).font(Typography.body).foregroundStyle(palette.ink2)
             }
             if presentation.canStopExecution {

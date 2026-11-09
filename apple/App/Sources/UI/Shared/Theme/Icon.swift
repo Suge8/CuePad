@@ -41,6 +41,8 @@ nonisolated enum Icon: Hashable, Sendable {
     case declined, mac, yourAnswer, above, floated, earlier
     /// 引用一份预览回话（长按、右键与全屏页的"回复"）；用网易 UU 远程到这台 Mac 上操作
     case reply, remoteMac
+    /// 和 Cue 通话（手机输入框空着时发送钮那一位、Mac 工具排末尾）；通话条上的麦克风开着、已静音
+    case call, microphone, muted
     /// 带着附件（回形针）：只带文件的灵感在列表、卡片与搜索里的标记
     case attachment
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
@@ -183,7 +185,9 @@ nonisolated enum Icon: Hashable, Sendable {
         case .hotkey: .ink("keyboard")
         case .appearance: .ink("sun")
         case .updates: .ink("badge.down")
-        case .audio: .ink("wave")
+        case .audio, .call: .ink("wave")
+        case .microphone: .ink("mic")
+        case .muted: .ink("mic.off")
         case .document: .ink("doc")
         case .downloading: .ink("cloud.down")
         case .file: .ink("doc.blank")
