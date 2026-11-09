@@ -2,8 +2,6 @@
 import AppKit
 import SwiftUI
 
-/// 菜单栏图标下方的弹出面板宿主：承载界面提供的 SwiftUI 视图，自身无边框透明，
-/// 材质与形状由内容决定。不激活应用，失去键盘焦点或按 Esc 即收起。
 ///
 /// 收起时内容从面板上摘下：不在窗口里的托管视图不再跟着它读的状态（Cue 的现状、在做的会话、额度…）更新，看不见的东西不占主线程；
 /// 托管视图本身留着，内容的状态（草稿、展开、焦点）不丢。打开时先挂回去、量尺寸时按此刻的状态排好再上屏，第一帧就是现在的样子
@@ -17,7 +15,6 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
     private let panel: Panel
     private let host = SizingHostingView(rootView: AnyView(EmptyView()))
     private var lastResign = ContinuousClock.now - reopenGuard
-    /// 面板在屏幕上的锚点（图标位置与所在屏幕的可见区域）：内容尺寸变化时据此重新定位。
     private var placement: (anchor: CGRect, visible: CGRect)?
 
     override init() {
@@ -42,7 +39,6 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         host.rootView = AnyView(content)
     }
 
-    /// `anchor` 是菜单栏图标在屏幕坐标里的位置。
     func toggle(below anchor: CGRect) {
         if isVisible {
             hide()
@@ -59,8 +55,7 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
     }
 
-    /// 面板跟随内容尺寸，顶边始终留在图标下方；最高到图标下方到屏幕可见区域底边（留边）那么高，再高的部分由内容自己滚
-    /// （菜单栏面板里是"在做"那一块，`MenuBarPad`）。
+    /// 最高到图标下方到屏幕可见区域底边（留边）那么高，再高的部分由内容自己滚（菜单栏面板里是"在做"那一块，`MenuBarPad`）。
     private func fitToContent() {
         guard let placement else { return }
         var size = host.fittingSize
@@ -79,19 +74,16 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         hide()
     }
 
-    /// 面板最高多高：从图标下方到屏幕可见区域的底边，两头留边。
     static func maxHeight(below anchor: CGRect, in visible: CGRect) -> CGFloat {
         min(anchor.minY, visible.maxY) - anchorGap - (visible.minY + edgeMargin)
     }
 
-    /// 面板在图标正下方居中，顶边贴着图标下方（高度已按 `maxHeight` 收住，不会顶出屏幕上沿），左右留在屏幕可见区域内。
     static func origin(for size: CGSize, below anchor: CGRect, in visible: CGRect) -> CGPoint {
         let x = min(max(anchor.midX - size.width / 2, visible.minX + edgeMargin), visible.maxX - edgeMargin - size.width)
         return CGPoint(x: x, y: min(anchor.minY, visible.maxY) - anchorGap - size.height)
     }
 }
 
-/// 内容的固有尺寸变化（SwiftUI 布局结果）时通知面板调整窗口。
 private final class SizingHostingView: NSHostingView<AnyView> {
     var onIntrinsicSizeChange: (() -> Void)?
 

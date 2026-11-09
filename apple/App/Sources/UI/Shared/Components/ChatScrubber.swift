@@ -1,37 +1,26 @@
 import CueText
 import SwiftUI
 
-/// 对话右缘的刻度滑条（会话页与 Cue 页同一个，`ChatColumn` 放）：你说的话是短线，上下文换了的地方（会话压缩、Cue 换新）是一个签名色的点，
-/// 按先后排在右缘拇指够得着的那一段（可见区三成高处到"回到最新"圆钮上方），只看序号、不看行有多高（更早的那些还没排开）。
-/// 平时淡淡地在那里（一眼看得出能跳），滚动时、手指按到刻度区时、Mac 上指针移到右缘时清楚起来，停手后淡回去；
 /// 阅读栏贴着边、右边距放不下刻度再隔一条缝（`crowded`，iPhone 与窄窗口）时平时不露也不接手指，滚动、指着时出来：常驻的话像一把尺子贴在气泡边上。
-/// 平时最多画 30 个刻度，更多时每个代表按序号均分的一段；拖动时以手指为中心鱼眼放大成逐条刻度、附近的刻度像程序坞那样变长，
-/// 逐条轻触一下，旁边浮出那一条的第一行，松手（或点一下）跳过去。手势只在这一段窄条里，不碰代码块、表格的横向滚动、顶栏与返回手势。
-/// 读屏上是一个可调节的元素：上下轻扫跳到上一处、下一处。不到两处时没有滑条。
-/// 键盘弹着时淡出让开（手机、iPad）：这时在写字，可见区只剩键盘上面一截，刻度挤在输入框旁边只是碍眼；键盘收起再淡回来。
+/// 键盘弹着时淡出让开（手机、iPad）：这时在写字，可见区只剩键盘上面一截，刻度挤在输入框旁边只是碍眼。
+/// 手势只在这一段窄条里，不碰代码块、表格的横向滚动、顶栏与返回手势。
 struct ChatScrubber: View {
     let marks: [ChatMark]
     let scrolling: Bool
-    /// 右边距放不下刻度（`room`）：平时不露
     let crowded: Bool
     let jump: (UUID) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 刻度区的下沿还要让开浮在对话底上的回复框（Mac）。在这里读而不在 `ChatColumn` 读：它一读，回复框一变高矮整段对话都要重排。
     @Environment(\.chatBottomInset) private var bottomInset
-    /// 手指按着时在刻度区里的高度。
     @State private var finger: CGFloat?
-    /// 停手后还留一会儿再淡回去。
     @State private var lingering = false
     /// 上一次跳到的那一处（读屏的上一处、下一处从它算）。记 id 不记序号：刻度随对话换（Cue 页只读最近 200 条，新消息进来最早的那处就掉出去），
     /// 记着的序号会指到别处或越界；那一处掉出去了就当没跳过。
     @State private var current: UUID?
-    /// 指针停在右缘这条上（Mac、iPad 触控板）。
     @State private var hovering = false
-    /// 键盘弹着（从 willShow 到 willHide，跟着键盘一起动）。
     @State private var keyboard = false
 
-    /// 会话的刻度：你发的话与换了上下文的地方（`PiNotice.changesContext`）。不到两处为空（没有滑条）。
     static func marks(_ entries: [PiChatEntry]) -> [ChatMark] {
         ChatMark.enough(entries.compactMap { entry in
             switch entry.role {
@@ -42,26 +31,18 @@ struct ChatScrubber: View {
         })
     }
 
-    /// 平时最多画这么多个刻度；更多时每个刻度代表按序号均分的一段。
     private static let visibleTicks = 30
-    /// 刻度最大间距；条数少时刻度贴着刻度区的下沿（拇指那头）排。
     private static let maxPitch: CGFloat = 14
-    /// 拖动时手指下逐条刻度的间距（鱼眼放大到这么疏）。
     private static let focusPitch: CGFloat = 7
-    /// 画出来的相邻两个刻度至少隔这么远，更密的略过。
     private static let minGap: CGFloat = 3
-    /// 放大波及的范围（离手指多远的刻度还跟着变长）。
     private static let reach: CGFloat = 44
     static let width: CGFloat = 28
-    /// 刻度离右缘：手机上让开系统的滚动指示条，Mac 上不贴着栏边（Mac 的对话不画系统滚动条，`ChatScroll`）。
+    /// 手机上让开系统的滚动指示条，Mac 上不贴着栏边（Mac 的对话不画系统滚动条，`ChatScroll`）。
     private static let edge: CGFloat = 8
-    /// 刻度区在可见区里的上下边：上沿在三成高处（避开顶栏，进拇指够得着的区），下沿让开回复框右上方的"回到最新"圆钮。
+    /// 上沿在三成高处：避开顶栏，进拇指够得着的区。
     private static let bandTop: CGFloat = 0.3
-    /// 平时（没在滚、没按着、指针不在上面）的不透明度：看得见、不抢字。
     private static let restOpacity = 0.35
-    /// 平时的刻度连同离右缘的距离，再加与气泡之间的一条缝：右边距不到这么宽就算挤（`crowded`）。
     static let room: CGFloat = edge + restLength + 8
-    /// 平时一道刻度的长。
     private static let restLength: CGFloat = 7
     private static let linger: Duration = .milliseconds(900)
 
@@ -72,8 +53,7 @@ struct ChatScrubber: View {
             let band = Band(height: proxy.size.height, count: marks.count)
             let pointed = finger.map(band.index(at:))
             let ticks = layout(band, width: proxy.size.width, pointed: pointed)
-            // 刻度画成几条路径（不用 Canvas：第一次进页时它一张画布就要几毫秒）：平时的淡墨、上下文换了的墨点、手指下的签名色；
-            // 离手指近的几道各按远近往墨色加深（`swell`），只在拖动时有
+            // 刻度画成几条路径，不用 Canvas：第一次进页时它一张画布就要几毫秒。
             ZStack {
                 Marks(ticks: ticks.filter { !$0.dot && !$0.pointed && $0.swell == 0 }).fill(palette.ink3)
                 ForEach(Array(ticks.enumerated().filter { !$1.dot && !$1.pointed && $1.swell > 0 }), id: \.offset) { _, tick in
@@ -91,7 +71,6 @@ struct ChatScrubber: View {
                 }
             }
             .animation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion), value: active)
-            // 只有刻度区接手指：上面的顶栏区与下面的回复框附近照常滚对话
             .contentShape(Rectangle().path(in: CGRect(x: 0, y: band.top, width: Self.width, height: band.bottom - band.top)))
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -108,7 +87,6 @@ struct ChatScrubber: View {
         .padding(.bottom, bottomInset)
         .onHover { hovering = $0 }
         .task(id: scrolling || finger != nil) {
-            // 停手后留一会儿再淡回去
             guard !scrolling, finger == nil else { lingering = true; return }
             guard (try? await Task.sleep(for: Self.linger)) != nil else { return }
             lingering = false
@@ -138,7 +116,6 @@ struct ChatScrubber: View {
         #endif
     }
 
-    /// 手指旁浮出的那一条：你的话是它的第一行，换了上下文的地方带一个同样的标。
     private func preview(_ mark: ChatMark) -> some View {
         HStack(spacing: Spacing.glyph) {
             if mark.kind == .boundary {
@@ -160,8 +137,7 @@ struct ChatScrubber: View {
         jump(marks[index].id)
     }
 
-    /// 此刻画哪些刻度、各在多高。平时最多 `visibleTicks` 个、每个代表均分的一段（换了上下文的点都画）；拖动时每条一个刻度，
-    /// 按手指为中心做鱼眼变换（Sarkar–Brown：离手指越远越压紧，手指下的间距放大到 `focusPitch`），太密的由画的时候略过。
+    /// 拖动时按手指为中心做鱼眼变换（Sarkar–Brown：离手指越远越压紧，手指下的间距放大到 `focusPitch`）。
     private func ticks(_ band: Band) -> [(Int, CGFloat)] {
         guard let finger else {
             let shown = min(marks.count, Self.visibleTicks)
@@ -180,17 +156,13 @@ struct ChatScrubber: View {
         }
     }
 
-    /// 画出来的一个刻度：你的话是一道短线，上下文换了的地方是一个点；`pointed` 是手指下的那一个。
     nonisolated fileprivate struct Tick: Sendable {
         let rect: CGRect
         let dot: Bool
         let pointed: Bool
-        /// 离手指多近（0 到 1）。
         let swell: CGFloat
     }
 
-    /// 此刻画的刻度（`ticks`），太密的略过（手指下的与上下文换了的点都画）。离手指越近越长越粗（程序坞那样）：平时 7×1.5 的短线，手指正下方 18×3；
-    /// 刻度贴着右缘（离边 `edge`），离气泡右缘（页边距 16）还有一段。
     private func layout(_ band: Band, width: CGFloat, pointed: Int?) -> [Tick] {
         var last = -CGFloat.infinity
         return ticks(band).compactMap { index, y in
@@ -207,14 +179,11 @@ struct ChatScrubber: View {
         }
     }
 
-    /// 刻度区：上下边、所有刻度不放大时的排布（按序号均匀，条数少时间距不超过 `maxPitch`、贴着下沿）。
     private struct Band {
         let top: CGFloat
         let bottom: CGFloat
         let count: Int
-        /// 相邻两条不放大时的间距。
         let step: CGFloat
-        /// 第一条（最早的）所在的高度。
         let first: CGFloat
 
         init(height: CGFloat, count: Int) {
@@ -237,7 +206,6 @@ struct ChatScrubber: View {
     }
 }
 
-/// 一组刻度合成的一条路径：短线是两头圆的条，点是圆。
 nonisolated private struct Marks: Shape {
     let ticks: [ChatScrubber.Tick]
 
@@ -250,19 +218,16 @@ nonisolated private struct Marks: Shape {
     }
 }
 
-/// 刻度滑条上的一处：你说的一句（短线），或上下文换了的地方（点）。
 nonisolated struct ChatMark: Equatable, Sendable {
     enum Kind: Sendable { case said, boundary }
 
     let id: UUID
     let kind: Kind
-    /// 拖到它时旁边浮出的一行。
     let preview: String
 
-    /// 不到两处没有滑条：只有一处时无处可跳。
+    /// 只有一处时无处可跳。
     static func enough(_ marks: [ChatMark]) -> [ChatMark] { marks.count < 2 ? [] : marks }
 
-    /// 一条话的第一行文字；只有图片时写张数。
     static func firstLine(_ stored: String) -> String {
         if let line = CueFormat.plainText(stored).split(whereSeparator: \.isNewline).first { return line.trimmingCharacters(in: .whitespaces) }
         let images = CueFormat.parse(stored).count { if case .image = $0 { true } else { false } }

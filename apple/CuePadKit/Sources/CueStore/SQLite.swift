@@ -2,7 +2,6 @@ import Foundation
 import OSLog
 import SQLite3
 
-/// 绑定到语句的值，即 SQLite 的四种存储类。
 package enum SQLValue: Codable, Sendable, Equatable {
   case null
   case int(Int64)
@@ -28,7 +27,6 @@ extension Date {
   static var stamp: Date { Date(timeIntervalSince1970: (Date().timeIntervalSince1970 * 1000).rounded() / 1000) }
 }
 
-/// 时间存 Unix 毫秒整数。
 extension Date: SQLBindable {
   var sqlValue: SQLValue { .int(stored) }
 
@@ -52,11 +50,9 @@ struct SQLiteError: LocalizedError, CustomStringConvertible {
   var errorDescription: String? { String(localized: "资料库读写出错：\(message)") }
 }
 
-/// 一行结果，按列序号读取。只在 `query` 的回调里有效。
 struct Row {
   fileprivate let statement: OpaquePointer
 
-  /// 结果集中某列的序号；没有该列返回 nil。
   func index(of name: String) -> Int32? {
     (0..<sqlite3_column_count(statement)).first { String(cString: sqlite3_column_name(statement, $0)) == name }
   }
@@ -93,16 +89,13 @@ struct Row {
 
 /// 一个写事务改动的行：每张表插入或更新过的 rowid，以及删过行的表。由 SQLite 的 update hook 记下（含触发器引起的改动）。
 struct Changes {
-  /// 插入或改动的行（rowid），按表。
   var rows: [String: Set<Int64>] = [:]
-  /// 删掉的行（rowid），按表。
   var deleted: [String: Set<Int64>] = [:]
 
   var deletedFrom: Set<String> { Set(deleted.keys) }
   var tables: Set<String> { deletedFrom.union(rows.keys) }
 }
 
-/// 系统 SQLite3 的最薄封装：一个连接、语句、绑定、事务。线程安全由持有它的 actor 保证。
 final class SQLite {
   private var handle: OpaquePointer?
   private let changeLog = ChangeLog()
@@ -110,7 +103,6 @@ final class SQLite {
   private var statements: [String: Compiled] = [:]
   private static let statementLimit = 128
   private static let log = Logger(subsystem: AppIdentity.id, category: "sqlite")
-  /// `tracking` 期间读到的表。
   private var tracked: Set<Table>?
 
   private struct Compiled {
@@ -139,20 +131,6 @@ final class SQLite {
 
   func exec(_ sql: String) throws {
     guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else { throw error(sql) }
-  }
-
-  /// 定义一个参数的 BLOB → BLOB SQL 函数（NULL 原样返回），给按行改写整张表的升级步骤用：一条 INSERT … SELECT 做完，行不进出 Swift。
-  func define(_ name: String, _ transform: @escaping (UnsafeRawBufferPointer) -> [UInt8]) throws {
-    let status = sqlite3_create_function_v2(
-      handle, name, 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC, Unmanaged.passRetained(BlobFunction(transform)).toOpaque(),
-      { context, _, values in
-        guard let value = values?[0], sqlite3_value_type(value) != SQLITE_NULL else { return sqlite3_result_null(context) }
-        let blob = sqlite3_value_blob(value)
-        let result = Unmanaged<BlobFunction>.fromOpaque(sqlite3_user_data(context)!).takeUnretainedValue()
-          .transform(UnsafeRawBufferPointer(start: blob, count: Int(sqlite3_value_bytes(value))))
-        result.withUnsafeBytes { sqlite3_result_blob(context, $0.baseAddress, Int32($0.count), SQLITE_TRANSIENT) }
-      }, nil, nil, { Unmanaged<BlobFunction>.fromOpaque($0!).release() })
-    guard status == SQLITE_OK else { throw error("define \(name)") }
   }
 
   func run(_ sql: String, _ arguments: [any SQLBindable] = []) throws {
@@ -256,12 +234,6 @@ final class SQLite {
     Self.log.error("\(error.description, privacy: .public)")
     return error
   }
-}
-
-/// 注册成 SQL 函数的闭包：经 C 回调的 user data 带进去。
-private final class BlobFunction {
-  let transform: (UnsafeRawBufferPointer) -> [UInt8]
-  init(_ transform: @escaping (UnsafeRawBufferPointer) -> [UInt8]) { self.transform = transform }
 }
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)

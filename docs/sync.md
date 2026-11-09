@@ -4,7 +4,7 @@
 
 别的设备的改动入库都经拉取：门铃、通知或按节奏触发。门铃在别的设备的一批改动被 iCloud 收下时经自建中转通知这台，只带"有新东西"；实时活动另经同一中转发往 APNs，不写入手机资料库。规则在 `Relay`（连接、重连、心跳、欠一次、进后台前断开、后台短连）、`RelaySecret`（密钥，经 `CloudSync.relaySecret` 取）、`RelayCredentials`（房间号与签名）、`AppServices+Relay`（何时连、按与听），中转与协议在 `relay/`；节奏在 `SyncPoller.Cadence`，等待理由只在 `AppServices.pollingCadence` 加。
 
-**门铃不通时（连不上中转、心跳判断断了），Mac 的 2 秒拉取是别的设备写来的请求与对 Cue 说的话到达 Mac 的唯一通路，别放慢、别删。** 门铃通着时按节奏的拉取降为 15 秒一次的兜底（理由在 `Relay.silenceLimit`）；门铃断了当场换回快档、立即拉一次。
+**门铃不通时 Mac 按节奏的拉取是别的设备的请求与对 Cue 说的话到达 Mac 的唯一通路，别放慢、别删**（档位与降档规则在 `SyncPoller.Cadence`，兜底间隔的理由在 `Relay.silenceLimit`）。
 
 中转只有一台：`Signing.xcconfig` 的 `CUEPAD_RELAY_HOST`（正式版是 `relay.cue-pad.com`，部署在 hk-relay，见 `relay/README.md`），经 Info.plist 给 App，发布脚本打包前核对它活着（`check_relay`）。连真 iCloud 的实例都连它，测试与调试画面的替身云不连；同步测量的隔离实例走 CloudKit 开发环境，密钥从开发容器取，房间与正式用户的不会重合。
 
@@ -50,9 +50,7 @@
 
 ## 发送
 
-- 发给 Agent 与 Cue 的话经 `Workspace.speak` 入库，界面不等上传或结果。
-- 终端里的 Claude Code 在跑时说不了，规则只在 `AgentCapabilities.speakBlocked`。
-- Pi 的 ACK 不证明已落入对话。受理后后台核对真实历史，期间保持正常发送进度；只有无法核实或阶段期限耗尽才显示未确认，不重投探测。来源与轮次在派发前复核。
+发给 Agent 与 Cue 的话经 `Workspace.speak` 入库，界面不等上传或结果；说不了的情况在 `AgentCapabilities.speakBlocked`，Pi 的受理与历史核对在 `PiDeliveryConfirmation`。
 
 ## 附件的文件
 
@@ -76,16 +74,16 @@
 
 ## 说的话的链路
 
-状态转换见 `DeliveryRequest` 头注释，显示与等待期限由 `Speech` 推出。排查按以下链路定位：
+状态见 `DeliveryStatus`，显示与等待期限由 `Speech` 推出。排查按以下链路定位：
 
 1. 按发送 → 本机库：写下请求，显示发送中；没到服务器不到期、可撤回。
 2. 本机 → 服务器：`CloudSync.send` 马上传；同步元数据证实收下才显示已发出。
 3. 服务器 → Mac：门铃或拉取（节奏与实测见「拉取节奏与门铃」）。
 4. Mac → Agent：`DeliveryRequest.attachmentKeys` 统一解析附件，登记上传、取文件与回收都用它。缺附件或会话没就绪时在旁边等，不挡其他会话；到期 Mac 写回失败，手机可重发。
-5. Mac → 发出方：领取与结果立即上传。派发期限从服务器收下起算，各阶段期限不续长；没回执只显示未确认，旧快照不授权重发。
-6. 关联只兑现原卡修订。完成后最多保留：send 七天、command 60 秒、start 600 秒；超窗清请求，不伪造兑现，不保证补关联。
+5. Mac → 发出方：领取与结果立即上传。派发期限（`DeliveryRequest.dispatchDeadline`）在 `DeliveryExecutor` 头注释，没回执时的显示在 `Speech`。
+6. 关联与请求的保留期在 `CueStore.deleteCompletedDeliveries`。
 
-Cue 最多等 `Speech.cueWait`。未交出才安全重发；未知重做须确认并保留请求，新失败不消除旧风险。新会话可关可改，重开恢复请求；原子替换，撤不回不新增。未读失败见 `cueChanges`。
+Cue 等结果的窗口是 `Speech.cueWait`；Cue 看失败见 `cueChanges`。
 
 ## Mac 在线
 
@@ -104,22 +102,20 @@ Cue 最多等 `Speech.cueWait`。未交出才安全重发；未知重做须确�
 
 ## 最低对端版本
 
-`PeerFloor` 只在旧端会误写时抬 `Schema.peerFloor`，仅看不到新字段不抬。旧端暂停收发但可写，更新后自动发送，故按 [release.md](release.md)「发版顺序」先发 iOS。同次删旧兼容须所有设备已支持门槛（2026-10 起）；库起点 `Schema.baseVersion` 须所有用户升级后才挪。
+门槛怎么抬、旧端怎么表现在 `PeerFloor` 头注释；旧端暂停收发但可写，故按 [release.md](release.md)「发版顺序」先发 iOS。库起点 `Schema.baseVersion` 怎么定见它的注释。
 
-同步不通（断网、要更新、等你决定）时说的话照样写下：会话与 Cue 一套规则（`Speech`），排在本机、恢复后自动发出；为什么不通只在同步那一处说（`SyncSummary`，手机上带点指过去）。派发期限从服务器收下起算（`DeliveryRequest.dispatchDeadline`），在发出的设备上等的那段不算。
+同步不通（断网、要更新、等你决定）时说的话照样写下：会话与 Cue 一套规则（`Speech`），排在本机、恢复后自动发出；为什么不通只在同步那一处说（`SyncSummary`，手机上带点指过去）。
 
 ## 自己的回声不是冲突
 
-回声不留冲突副本。`SessionBindingRevision` 保证旧 ACK 不覆盖明确改绑/解绑，同一意图的 `fulfilled` 单向兑现；正文仍按记录版本合并。92→93 直接迁移最终格式，最低对端为 93。
+回声不留冲突副本；关联字段怎么排序见 `SessionBindingRevision` 头注释，正文仍按记录版本合并。
 
-`createdForTaskID` 持久保存来源，纯关联不授权结束。`executing` 拒绝本地借用；跨端后到关联不撤回结束，可指向历史。领取固定请求 ID 集合，源端实际结束与其结果同事务写回；同步只合并同一请求，不凭时间或 ended 回声确认其他请求。重启无证据保留未知，会话页与 Cue 可明确结束，覆盖受理时已知的旧未知，不扩到未来请求。
+结束请求、来源与重启后“未知”的规则在 `UnusedSessions` 头注释。
 
 ## Agent 与 Cue 的通知
 
 到不到你只有 `CueStore.reaches` 一处，他此刻在哪台设备前只按最近一次来到哪台（`Viewer`）；进了等你的事手机总会被叫醒，到不到你只定出不出通知（`CuePush`、`PiPush`）。手机锁屏通知怎么由服务端生成在 `AlertSubscriptions`，两端怎么发在 `AlertCenter`。代码里没写的取舍：
 
-- Mac 不注册远程通知、签名里没有推送权限（aps-environment），通知都是本机发的本地通知；同步到达本来也不靠推送（见「拉取节奏与门铃」）。
-- `notify` 是一次性事件标志，通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的写入取代就不送出。要保证每个事件都送达得另建追加式的通知事件记录，那是另一种设计。
 - 实时活动、小组件与 App 使用同一份运行投影，Mac 发布者直接订阅 Store，不依赖界面订阅。快照过期只撤销运行证据；未知只保留已有活动，不授权新建，也不冒充完成。各 host 到期后的计数由 `CueNow.nextShownChange` 安排系统重画。
 - 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒；手机不拿本地旧库覆盖。令牌私有 iCloud 加密同步，中转内容不留存，密钥只在服务端。APNs 收下不证明已上屏，岛更新不证明手机资料库已同步。[部署与隐私边界](../relay/README.md)。
 - ActivityKit 推送仍受网络、优先级与系统预算限制，不保证秒到；活动最多八小时，本次不远程开启。`stale-date` 只标过时，不会取得新事实。依据：[ActivityKit](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications)、[后台通知](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app)。

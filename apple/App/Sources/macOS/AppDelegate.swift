@@ -13,9 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var settingsWindow: SettingsWindowController?
     private var mainFrameKeeper: WindowFrameKeeper?
     private var terminationSources: [any DispatchSourceProtocol] = []
-    /// 资料库打不开时的失败页；重试成功即关掉。
     private var failureWindow: NSWindow?
-    /// 主窗口的工作区（主菜单"显示"里的开关作用在它上面；主窗口本身是 `services.windowShell`）。
     private var workspace: Workspace?
     /// 系统通知：在启动完成前设为代理，冷启动时点开的通知才不会丢。
     private let alerts = AlertCenter()
@@ -29,8 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         launch()
     }
 
-    /// 解析资料库位置、打开资料库、建出主窗口并显示，画完第一帧再起其余的（`startShell`）。位置有误时说明原因后退出（不能带着错误的位置去读写）；
-    /// 资料库打不开时不终止：显示失败页，"重试"重新走这里。
+    /// 位置有误时说明原因后退出（不能带着错误的位置去读写）；资料库打不开时不终止：显示失败页，"重试"重新走这里。
     private func launch() {
         let location: LibraryLocation
         do {
@@ -74,7 +71,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
-    /// 主窗口第一帧画完之后：工作区与服务开始跟着库，建菜单栏图标与面板，起后台服务。
     private func startShell(_ services: AppServices, workspace: Workspace, window: MainShellWindow) {
         Task { await workspace.follow() }
         Task { await alerts.refresh() }
@@ -114,10 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services?.updates.installNow()
     }
 
-    /// 主菜单里写"等 N 个 Agent 做完再装"的那一行（停用，只是说明）。
     static let updateNoteTag = 1
 
-    /// 主菜单"显示"里的搜索（⌘K）、进展（⌘⇧T）、侧栏（⌃⌘S）与右栏（⌃⌘I）：搜索与两栏是开关，开着时同一条命令把它关掉；进展是去进展页（收起开着的搜索）。
     /// 放在主菜单而不是窗口里的快捷键：模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
     @objc func showProgress(_ sender: Any?) {
@@ -128,7 +122,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func newSession(_ sender: Any?) { workspace?.newSession() }
     @objc func toggleVoiceCall(_ sender: Any?) { workspace?.toggleVoiceCall() }
     /// 不叫 `toggleSidebar(_:)`：AppKit 的分栏控制器自己响应那个动作，在响应链上先接走，带着分栏动画开合。
-    /// 放不放得下按主窗口此刻的宽（`WideMetrics`，同 `toggleCueColumn`）：放不下时拉出左缘的抽屉。
     @objc func toggleCueSidebar(_ sender: Any?) {
         guard let workspace, let window = services?.windowShell else { return }
         workspace.toggleRail(WideMetrics(width: window.frame.width, workspace: workspace))
@@ -151,7 +144,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
-    /// 更新在等后台会话做完时才显示这两行；说明那一行跟着等几个改字、一直停用。
     private func showsUpdateWait(_ item: NSMenuItem) -> Bool {
         let note = services?.updates.waitingNote
         item.isHidden = note == nil
@@ -166,7 +158,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        // 通知权限可能在系统设置里改过
         Task { await alerts.refresh() }
         Task { await services?.handleActivation() }
     }
@@ -221,7 +212,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         DebugHooks.present(window, activating: true)
     }
 
-    /// 配置有误时不能带着错误的位置去读写数据：说明原因后退出。
     private func abortLaunch(_ error: any Error) {
         Logger(subsystem: AppIdentity.id, category: "launch").error("\(error.localizedDescription, privacy: .public)")
         FileHandle.standardError.write(Data("CuePad 无法启动：\(error.localizedDescription)\n".utf8))

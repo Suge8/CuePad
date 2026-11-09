@@ -16,11 +16,11 @@ const QUOTA_PROVIDERS: Record<string, { url: string; headers: (token: string) =>
 	},
 };
 
-/** 一个额度窗口：长度（秒）、已用比例（0..1）、重置时刻（Unix 秒）、只算某个模型时的模型显示名；
+/** `used` 是 0..1 的比例，`resetsAt` 是 Unix 秒，`model` 是只算某个模型时的模型显示名；
  * `binding` 是提供方说此刻卡着的就是它（Claude 响应头的 representative-claim），提供方没说的不带 */
 export type QuotaWindow = { seconds: number; used: number; resetsAt: number; model: string | null; binding?: true };
-/** 一个提供方的一次观测；`complete` 是全部窗口（查用量接口得到的），回复里带回的只有一部分 */
 export type QuotaDetails = { kind: string; plan?: string; balance?: string; values: { name: string; display?: string; used?: number; unlimited?: boolean; balance?: number; unit?: string; resetsAt?: number }[] };
+/** 一个提供方的一次观测；`complete` 为真是全部窗口（查用量接口得到的），回复里带回的只有一部分 */
 export type Quota = { provider: string; account: Account; status: "observed" | "unsupported" | "unobserved" | "failed"; windows: QuotaWindow[]; complete: boolean; observedAt?: number; activeScopes?: string[]; details?: QuotaDetails; accounts?: Quota[]; requestedAt?: number; owners?: Record<string, number> };
 
 export function record(value: unknown): Record<string, unknown> {
@@ -36,14 +36,12 @@ function quotaWindow(seconds: number | null, used: number | null, resetsAt: numb
 	return seconds !== null && seconds > 0 && used !== null && used >= 0 && resetsAt !== null ? [{ seconds, used, resetsAt, model }] : [];
 }
 
-/** Claude 响应头里的窗口：头里的名字、representative-claim 里的名字、长度。 */
 const CLAUDE_HEADER_WINDOWS = [
 	{ header: "5h", claim: "five_hour", seconds: FIVE_HOURS },
 	{ header: "7d", claim: "seven_day", seconds: WEEK },
 ] as const;
 
-/** Claude 每次回复的响应头：5 小时与本周两个窗口（比例 0..1、重置 Unix 秒），没有按模型的周额度；representative-claim 指的那个标为卡着的。
- * API 密钥的回复没有这些头。 */
+/** Claude 每次回复的响应头只有 5 小时与本周两个窗口，没有按模型的周额度；API 密钥的回复没有这些头。 */
 export function claudeHeaderWindows(headers: Record<string, string>): QuotaWindow[] {
 	const header = (window: string, field: string) => finite(headers[`anthropic-ratelimit-unified-${window}-${field}`]);
 	const claim = headers["anthropic-ratelimit-unified-representative-claim"];
@@ -52,7 +50,7 @@ export function claudeHeaderWindows(headers: Record<string, string>): QuotaWindo
 			.map((window): QuotaWindow => w.claim === claim ? { ...window, binding: true } : window));
 }
 
-/** Claude 的用量接口：`limits[]` 里的 5 小时、本周与按模型的周额度（百分比、ISO 时刻）。 */
+/** Claude 的用量接口：`percent` 是百分比，`resets_at` 是 ISO 时刻。 */
 function claudeUsage(body: unknown): QuotaWindow[] {
 	const limits = record(body).limits;
 	if (!Array.isArray(limits)) return [];
@@ -93,7 +91,6 @@ function codexAccount(token: string): string {
  * 账号与来源一级的报告（能力、失败、网关清单）的 `provider` 是模型在 Pi 里的提供方，网关清单里各账号的是上游。
  * 时间：带结果的报告都带 `requestedAt`，取结果所属操作期间的一个时刻（主动查询取开始，回复取收到），CuePad 据此只让后开始的覆盖先结束的。 */
 export class QuotaFetcher {
-	/** 正在查的额度：几个客户端同时要时共用这一次 */
 	private inFlight: Promise<string[]> | null = null;
 
 	private readonly ctx: ExtensionContext;

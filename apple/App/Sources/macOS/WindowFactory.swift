@@ -5,8 +5,7 @@ import SwiftUI
 /// CuePad 的窗口外框都在这里创建时定好，界面不再在运行时改窗口样式：内容铺到透明标题栏下，
 /// 页面的底色一直连到窗口上沿（侧栏通顶；设置等窗口不留一条系统色的标题栏和分隔线）。
 enum WindowFactory {
-    /// 主窗口：可缩放，标题隐藏。窗口工具栏是一条空的（`toolbarStyle` 统一），只为给最顶那一排定高（`Chrome.band`）、把红绿灯放在它中线上；
-    /// 那一排里的东西全是三栏自己的栏头（`MainWindow`）。`place` 在挂上内容之前摆好位置与大小（记下的、居中或屏幕外）：
+    /// 窗口工具栏是一条空的（`toolbarStyle` 统一），只为给最顶那一排定高（`Chrome.band`）、把红绿灯放在它中线上。`place` 在挂上内容之前摆好位置与大小（记下的、居中或屏幕外）：
     /// 整窗的 SwiftUI 布局是冷启动的大头，挂上内容后再改大小就按新大小从头再排一遍。
     /// 窗口大小只由人定（`contentMinSize` 是下限），托管控制器不按内容改它（`sizingOptions` 为空），也就不在每次更新时算整窗的理想大小。
     static func main(content: some View, place: (NSWindow) -> Void) -> MainShellWindow {
@@ -27,7 +26,7 @@ enum WindowFactory {
         return dress(window, controller: controller)
     }
 
-    /// 资料库读不出这类辅助窗口：有标题、可关闭，尺寸由内容定。内容自己让开标题栏（安全区）。
+    /// 内容自己让开标题栏（安全区）。
     static func utility(title: String, content: some View) -> NSWindow {
         let window = dress(NSWindow(
             contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false),
@@ -36,7 +35,7 @@ enum WindowFactory {
         return window
     }
 
-    /// 设置窗口：系统设置窗口的工具栏标签（`tabs` 的样式是 toolbar），标题"设置"只给读屏与"窗口"菜单、不显示（选中的标签就是这一页的名字），尺寸随选中那一页。
+    /// 标题"设置"只给读屏与"窗口"菜单、不显示（选中的标签就是这一页的名字）。
     static func settings(_ tabs: NSTabViewController) -> NSWindow {
         tabs.canPropagateSelectedChildViewControllerTitle = false
         let window = dress(NSWindow(

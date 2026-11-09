@@ -34,44 +34,40 @@ struct RealPiTests {
         }
     }
 
-    /// 换模型与思考强度走真实 Pi 的扩展接口：会话上报的模型、强度与可选列表随之更新；模型不支持的强度被 Pi 夹取，找不到的模型被拒绝。
     @Test func configureSwitchesTheRealSessionsModelAndThinking() async throws {
         try await withRig { _, bridge, s in
             #expect(s.availableModels.map(\.key.id).sorted() == ["echo", "echo-b", "echo-think"])
             #expect(s.availableModels.first { $0.key.id == "echo" }?.thinkingLevels == [.off])
             #expect(s.availableModels.first { $0.key.id == "echo-think" }?.thinkingLevels == [.off, .minimal, .low, .medium, .high])
 
-            try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo-think"), thinking: .high, in: s.id)
+            try await bridge.configure(PiConfig(model: PiModelKey(provider: "fake", id: "echo-think"), thinking: .high), in: s.id)
             try await eventually("上报跟上") { bridge.sessions.first?.model?.key.id == "echo-think" && bridge.sessions.first?.thinking == .known(.high) }
 
-            try await bridge.configure(thinking: .low, in: s.id)
+            try await bridge.configure(PiConfig(thinking: .low), in: s.id)
             try await eventually("只改强度") { bridge.sessions.first?.thinking == .known(.low) }
 
-            try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo"), thinking: .high, in: s.id)
+            try await bridge.configure(PiConfig(model: PiModelKey(provider: "fake", id: "echo"), thinking: .high), in: s.id)
             try await eventually("不支持思考的模型把强度夹到 off") { bridge.sessions.first?.model?.key.id == "echo" && bridge.sessions.first?.thinking == .known(.off) }
 
             await #expect(throws: PiBridgeError.unknownModel(.pi)) {
-                try await bridge.configure(model: PiModelKey(provider: "fake", id: "nope"), in: s.id)
+                try await bridge.configure(PiConfig(model: PiModelKey(provider: "fake", id: "nope")), in: s.id)
             }
 
-            // 换到不能看图的模型：不能再发图片（界面的"图片文件…"跟着能力表收起），换回来又能
             #expect(bridge.sessions.first?.capabilities.contains(.images) == true)
-            try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo-b"), in: s.id)
+            try await bridge.configure(PiConfig(model: PiModelKey(provider: "fake", id: "echo-b")), in: s.id)
             try await eventually("不能看图") { bridge.sessions.first?.capabilities.contains(.images) == false }
             await #expect(throws: PiBridgeError.unsupported) {
                 try await bridge.send(PiMessage(text: "看图", images: [PiImage(mimeType: "image/png", data: Data([0x89]))]), to: s.id)
             }
-            try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo"), in: s.id)
+            try await bridge.configure(PiConfig(model: PiModelKey(provider: "fake", id: "echo")), in: s.id)
             try await eventually("又能看图") { bridge.sessions.first?.capabilities.contains(.images) == true }
 
-            // 改名同一条路（Pi 设置会话名的接口），会话名随即上报；空名拒绝
-            try await bridge.configure(name: "登录修复", in: s.id)
+            try await bridge.configure(PiConfig(name: "登录修复"), in: s.id)
             try await eventually("改名") { bridge.sessions.first?.displayName == "登录修复" }
-            await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.configure(name: "  ", in: s.id) }
+            await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.configure(PiConfig(name: "  "), in: s.id) }
         }
     }
 
-    /// 配了模型范围（`--models`）时，手机可选的就是范围内的（与 Pi 的 /model 一致）；当前模型总在其中。
     @Test func choicesFollowPisModelScopeAndAlwaysIncludeTheCurrentModel() async throws {
         let pi = try await PiProcess(extraArguments: ["--model", "fake/echo", "--models", "fake/echo-think"])
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
@@ -81,7 +77,6 @@ struct RealPiTests {
         #expect(bridge.sessions[0].availableModels.map(\.key.id).sorted() == ["echo", "echo-think"])  // echo 是当前模型，不在范围内也列出
     }
 
-    /// 显示名与 Pi 自己的会话列表同一规则：`/name` 设的名字 → 首条用户消息（单行）→ 工作目录名。
     @Test func displayNameFollowsPisSessionListAndUpdatesOnRename() async throws {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)
@@ -98,8 +93,7 @@ struct RealPiTests {
         }
     }
 
-    /// 刚用完的会话要立即进历史，不等下次启动扫描（会话目录可能在开始监听后才由 Pi 建出，见 HistoryIndexerTests）。
-    /// 结束的会话仍可按 id 查到（界面据此显示"已结束"）。
+    /// 会话目录可能在开始监听后才由 Pi 建出（见 HistoryIndexerTests），所以刚用完的会话要立即进历史，不等下次启动扫描。
     @Test func endedSessionIsInHistoryRightAwayAndTheEndEventCarriesItsName() async throws {
         try await withRig { pi, bridge, s in
             let ended = ChangeLog(bridge)
@@ -118,7 +112,6 @@ struct RealPiTests {
         }
     }
 
-    /// 一段连续处理的计时：思考与工具来回切换时 `stateSince`、`busySince` 都不变（都是开始那一刻），歇下来后 `busySince` 为 nil。
     @Test func aWorkingStretchKeepsOneClockAcrossThinkingAndToolsAndClearsWhenIdle() async throws {
         try await withRig { pi, bridge, _ in
             let log = ChangeLog(bridge)
@@ -139,7 +132,6 @@ struct RealPiTests {
         }
     }
 
-    /// 工具状态只带一句话摘要：bash 取命令首行，超长截到 120 字符（含省略号），不上报完整参数。
     @Test(arguments: [
         ("echo first\\necho second", "echo first"),
         (longCommand, String(longCommand.prefix(119)) + "…"),
@@ -166,7 +158,6 @@ struct RealPiTests {
         }
     }
 
-    /// Pi 退出：被强杀是断开，正常退出是告别（quit）；两种都结束会话、删掉它的 socket。
     @Test(arguments: [SIGKILL, SIGTERM]) func anExitedPiEndsTheSessionAndItsSocketIsRemoved(_ signal: Int32) async throws {
         AgentTape.variant(signal == SIGKILL ? "kill" : "term")
         try await withRig { pi, bridge, s in
@@ -189,7 +180,6 @@ struct RealPiTests {
         #expect(sockets.isEmpty)
     }
 
-    /// `pi -p` 是脚本、其他工具的一次性调用：没有界面，不开 socket、不出现在会话列表里。
     @Test func oneShotPrintRunsDoNotOpenASocket() async throws {
         let socketDirectory = try makeTempDirectory()
         let pi = try await PiProcess(socketDirectory: socketDirectory, oneShotPrompt: "[[slow]] hello")

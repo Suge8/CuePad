@@ -4,9 +4,7 @@ import CueStore
 import SwiftUI
 
 extension PiSessionState {
-    /// 桥上的实时会话写成同步记录的形状（会话行与近况共用；状态记录按节流写，会落后几秒，界面读这个）。
-    /// 摘要（问与答、这一轮已做完的步骤）不在桥上：取同步记录里的（`recap`，对话的投影，文件一变就写）。
-    /// 正自己换上新扩展的（`upgrading`）桥上读不到状态，为 nil：界面照同步记录里最后一次读到的样子。
+    /// 状态记录按节流写，会落后几秒，界面读这个。摘要（问与答、这一轮已做完的步骤）不在桥上，取同步记录里的。正自己换上新扩展的（`upgrading`）桥上读不到状态，为 nil：界面照同步记录里最后一次读到的样子。
     static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?, recap: PiRecap?) -> PiSessionState? {
         guard !session.upgrading else { return nil }
         return PiSessionState(
@@ -21,17 +19,15 @@ extension PiSessionState {
 }
 
 extension CuePi.PiSession {
-    /// 能跳到它所在的终端：开在终端里、知道是哪个终端应用（跳转至少要激活它）。后台托管的与没报终端的（OpenCode 的服务）没有。
+    /// 跳转至少要激活终端应用，所以后台托管的与没报终端的（OpenCode 的服务）没有。
     var canJump: Bool { !hosted && terminal.bundleID != nil }
 }
 
 extension SessionDigest {
-    /// Mac 端按会话 id 读：同步记录（在线与已结束是同一条记录）。在线会话再经 `live(_:hostID:project:)` 换上桥上的实时值。
     static func read(sessionID: String, from store: isolated CueStore) throws -> SessionDigest {
         try read(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
     }
 
-    /// 会话在线时，状态、详情、名字、可换的模型与命令取桥上的实时值。
     func live(_ session: CuePi.PiSession?, hostID: String, project: Project?) -> SessionDigest {
         guard let session,
               let state = PiSessionState.live(
@@ -45,8 +41,6 @@ extension SessionDigest {
     }
 }
 
-/// 一栏里的 Agent 会话。页头只显示标题与关闭，任务与会话操作在标题右键菜单里。
-/// 对话与回复框绑定 sessionID；左右换栏时草稿从会话偏好恢复。
 struct SessionPage: View {
     let sessionID: String
     let column: Workspace.Column
@@ -64,7 +58,6 @@ struct SessionPage: View {
         let slot = services.pi.slot(sessionID: sessionID)
         let live = slot?.session
         let project = live.flatMap { workspace.catalog?.project(workspace.sendState.projects[$0.id]) }
-        // 在线会话不等资料库读完就能显示
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
         VStack(spacing: 0) {
             if let session = digest.session {
@@ -93,7 +86,6 @@ struct SessionPage: View {
                     .frame(maxWidth: Spacing.reading)
                     .animation(Motion.fade, value: session.question)
                 }
-                // 对话到栏头下沿淡出：栏头是写着字的一排、不是玻璃，滚过去的字会叠在会话名上
                 .fadesUnderHead()
             } else if stored != nil {
                 EmptyState(mascot: .empty, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
@@ -116,11 +108,9 @@ struct SessionPage: View {
             try SessionTaskLink.read(sessionID: sessionID, project: project, from: store)
         }
         .requestsTranscript(stored)
-        // 开着这页就算看过：侧栏与菜单栏里的"有新回复"据此消失
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
-    /// 标题右键菜单的数据随本栏会话读取。
     private func headerState(_ digest: SessionDigest, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
@@ -129,7 +119,6 @@ struct SessionPage: View {
             pin: digest.task, showsHeader: follow.showsHeader, showsMenu: menu, task: task)
     }
 
-    /// 绑着的任务按会话读，还能绑的按所在项目读。
     private struct TaskKey: Equatable {
         var session: String
         var project: UUID?
@@ -137,7 +126,7 @@ struct SessionPage: View {
 }
 
 extension View {
-    /// 点按在内容区打开这个会话的整页。不给 `press` 是侧栏里的一行（`RowStyle`，正打开着的那个是选中底），给了是卡片或圆钮的按压。
+    /// 不给 `press` 是侧栏里的一行，给了是卡片或圆钮的按压。
     func sessionLink(_ sessionID: String, press: Press? = nil) -> some View { modifier(SessionLink(sessionID: sessionID, press: press)) }
 }
 
@@ -175,27 +164,6 @@ extension Workspace {
         var item = item
         item.state = withLiveState(item.state)
         return item
-    }
-
-    /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
-    /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
-    /// `host`：由哪台 Mac 开，默认这台。`card`：从这条灵感或任务开的，开好后它关联到新会话，会话名也按它定（`CueStore.requestLaunch`）。
-    /// `agent`：用哪个 Agent 开；`model`、`thinking` 为 nil 是这家的默认。
-    func startSession(
-        in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false, progressed: @escaping (LaunchProgress) -> Void
-    ) async throws -> String {
-        let launch = try await services.launchSession(
-            in: project, prompt: prompt, title: title, on: host ?? services.hostID, card: card, agent: agent, model: model, thinking: thinking, fast: fast)
-        var seen = false
-        for try await progress in services.store.observe({ try launch.progress(from: $0) }) {
-            if let claimed = progress.claimed { return claimed.sessionID }
-            // 请求开成了、会话却一直没带着认领标识连上来：等认领的请求到期清掉（`DeliveryExecutor`），不再静静地等下去
-            if progress.request != nil { seen = true } else if seen { throw SendError.notLaunched(String(localized: "会话一直没连上 CuePad")) }
-            progressed(progress)
-            if case .failed(let failure) = progress.phase(at: services.speech) { throw SendError.notLaunched(failure.text) }
-        }
-        throw CancellationError()
     }
 
     /// 跳到会话所在的终端；只能大致定位或失败时说一句。

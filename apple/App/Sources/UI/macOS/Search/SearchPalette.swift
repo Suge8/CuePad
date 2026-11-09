@@ -3,7 +3,6 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 两端同一份的结果，加上只有右侧预览要写的：最近发去哪里、任务的上级标题与子任务进度。
 nonisolated private struct PaletteData: Sendable, Equatable {
     var matches: CardMatches
     var lastSends: [UUID: LastSend]
@@ -25,12 +24,8 @@ nonisolated private struct PaletteData: Sendable, Equatable {
     }
 }
 
-/// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含附件、发送目标、时间），结果按项目分组，右侧纸面预览；
-/// ↑↓ 选择，↩ 打开，⌘⇧C 复制。会话——上面是在线的，下面是已结束的、按结束时间分段（分页，下一页只接在末尾），
-/// 右侧是它的近况与回复。
 struct SearchPalette: View {
     @Binding var scope: SearchScope
-    /// 范围那组分段（`SearchScopePanes`）的高：同过滤胶囊。
     private static let scopeHeight: CGFloat = 28
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -46,7 +41,6 @@ struct SearchPalette: View {
     private static let maxWidth: CGFloat = 840
     private static let height: CGFloat = 500
     private static let listWidth: CGFloat = 380
-    /// 列表 380 + 预览至少 300。
     private static let sideBySide: CGFloat = 680
 
     var body: some View {
@@ -77,7 +71,7 @@ struct SearchPalette: View {
             .modifier(sessionObservation)
     }
 
-    /// 会话范围的数据（会话列表查询，分页；第一页很轻，卡片范围里也读着，切过去不闪空），选中项跟着结果走。
+    /// 卡片范围里也读着会话的列表（第一页很轻），切过去不闪空。
     /// 收着时不读会话的实时状态：面板常驻，读了的话每个会话每变一次，收着看不见的它也整个重算、重排。
     private var sessionObservation: SessionObservation {
         SessionObservation(
@@ -134,7 +128,6 @@ struct SearchPalette: View {
         .clipped()
     }
 
-    /// 会话范围：只有列表，方向键选、↩ 或点一下在内容区打开那个会话的整页（与侧栏、Agent 页同一处）。
     @ViewBuilder private var sessionsContent: some View {
         Divider()
         SessionResultList(
@@ -151,7 +144,6 @@ struct SearchPalette: View {
 
     private var selected: CardEntry? { data?.matches.entries.first { $0.id == selection } }
 
-    /// 结果从上到下的顺序：方向键照它走，结果一变就选中第一张（原来选的还在就不动）。
     private var cardIDs: [UUID] { data?.matches.entries.map(\.id) ?? [] }
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）。
@@ -187,7 +179,6 @@ struct SearchPalette: View {
                         }
                     }
                 }
-                // 行的底向两边让出一截，留在滚动区里
                 .padding(.vertical, Spacing.item).padding(.horizontal, Spacing.block)
             }
             .onChange(of: selection) { if let selection { proxy.scrollTo(selection) } }
@@ -220,7 +211,6 @@ struct SearchPalette: View {
         .simultaneousGesture(TapGesture(count: 2).onEnded { open(card) })
     }
 
-    /// 右侧预览：标题、项目与时间、任务的上级与进度、首图、标题之后的全文（搜着词时从命中处起、命中标色）；按内容高度收起，快捷键提示紧跟在下面。
     @ViewBuilder private var preview: some View {
         if let entry = selected, let data {
             let card = entry.card, text = entry.text
@@ -272,7 +262,6 @@ struct SearchPalette: View {
         }
     }
 
-    /// 任务预览的一行："上级：修乱序 · 子任务 1/2"；什么都没有时不写。
     private static func taskFacts(parent: String?, subtasks: TaskProgress?) -> Dotted? {
         Dotted(parent.map { String(localized: "上级：\($0)") }, subtasks.map(TaskCopy.progress)).nonEmpty
     }
@@ -331,8 +320,6 @@ private struct SessionObservation: ViewModifier {
     }
 }
 
-/// 搜索面板的内容区：宽度够（minimumWidth）就列表定宽在左、预览占余下；不够就只摆列表，预览不占位置。
-/// 纯排版，宽高都取拿到的尺寸，不按内容长高。
 private struct ListWithPreview: Layout {
     let listWidth: CGFloat
     let minimumWidth: CGFloat

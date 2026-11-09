@@ -5,7 +5,6 @@ import Testing
 
 @testable import CueSync
 
-/// 两台设备经假云互相可见：Pi 会话状态（Mac 写、手机读）与投送请求（手机写、Mac 执行并写回结果）。
 @Suite struct DeviceFlowTests {
   let clock = ManualTiming()
   let mac: Rig
@@ -34,7 +33,6 @@ import Testing
     #expect(seen.folder == "cuepad")  // 手机没有工作目录，副行靠它写出文件夹名
     #expect(seen.lastPrompt == recap.lastPrompt && seen.lastReply == recap.lastReply && seen.question == question)
     #expect(seen.pendingPrompt == recap.pendingPrompt)
-    // 对话经同步到手机，按先后排、带着送进来的投送请求 id
     #expect(try await phone.store.piMessages(of: "s1").map { [$0.text, $0.deliveryID?.uuidString] } == [[said.text, said.deliveryID?.uuidString]])
     #expect(seen.stateSince == times.stateSince && seen.busySince == times.busySince)
 
@@ -48,8 +46,7 @@ import Testing
     #expect(ended.state == .known(.ended) && ended.lastReply == recap.lastReply)  // 跑完的结论在手机上还看得到
   }
 
-  /// 两台设备离线时各自建了默认项目（同一个固定 id），各往里记了东西，Mac 上还改了名：同步后两边只有一个默认项目，
-  /// 名字是改过的那个（新装设备的那一版修改时间是 0，盖不回"默认"），两条灵感都在里面。
+  /// 新装设备的那一版修改时间是 0，盖不回"默认"。
   @Test func defaultProjectsCreatedOfflineOnTwoDevicesMergeIntoOne() async throws {
     try await mac.store.updateProject(Project.defaultID) { $0.name = "收件" }
     let fromMac = try await mac.store.createCard(body: "Mac 上记的")
@@ -64,7 +61,6 @@ import Testing
     }
   }
 
-  /// Agent 发到手机的预览：Mac 写预览记录与文件，手机拿到记录和一模一样的文件；Mac 过期清理后手机的记录与文件也没了。
   @Test func aPreviewAndItsFileTravelToThePhoneAndGoWhenTheMacDropsIt() async throws {
     let source = mac.fixture.directory.appending(path: "demo.html")
     try Data("<h1>登录页</h1>".utf8).write(to: source)
@@ -80,7 +76,6 @@ import Testing
     #expect(try await phone.store.previews(of: "s1").isEmpty && phone.store.files.fileURL(for: seen.key) == nil)
   }
 
-  /// 会话的模型、思考强度（Mac 写）与它所在目录可换的模型、命令经同步到手机；手机的配置请求（手机写）到 Mac，读出同一个配置。
   @Test func modelChoicesTravelToThePhoneAndTheConfigRequestTravelsBackToTheMac() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
     let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low, .medium])
@@ -107,8 +102,6 @@ import Testing
     #expect(try await mac.store.cueProfile()?.fast == true)
   }
 
-  /// 发出的话：手机写、Mac 执行，结果回到手机；这句进了对话、消息上了服务器，Mac 才收走请求，气泡由对话里那条接替。
-  /// 回执马上传、消息排在后面时（同步区里正传着大附件），手机上的请求不先没了：气泡一直在。
   @Test
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
     let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
@@ -136,8 +129,7 @@ import Testing
     await executor.stop()
   }
 
-  /// 手机上答了会话的提问：Mac 作答成功时把你答了什么写进那个会话的对话（带着当时的问题），经同步回到手机；
-  /// 作答请求清理掉以后这一句还在（排在哪、Cue 替你答的不写见 App 的 `AnswerLineTests`）。
+  /// 排在哪、Cue 替你答的不写，见 App 的 `AnswerLineTests`。
   @Test
   func anAnswerLineOutlivesItsRequestOnThePhone() async throws {
     let executor = DeliveryExecutor(
@@ -160,9 +152,6 @@ import Testing
     await executor.stop()
   }
 
-  /// 断网时手机说的话（发给会话、对 Cue 说）：马上传失败，同步状态是连不上 iCloud，Mac 那边还没有；
-  /// 记录不丢，恢复后的同步（发送者把待推送发出去、拉取）把它们传到 Mac；Mac 执行、交给 Cue 后的回执经同步回到手机，
-  /// 两句都是已送达，同步状态回到空闲。
   @Test
   func wordsSaidOfflineReachTheMacAfterRecoveryAndTheReceiptsComeBack() async throws {
     let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
@@ -199,8 +188,6 @@ import Testing
     func saveZone() async throws { throw CKError(.networkUnavailable) }
   }
 
-  /// 三百个模型的清单：报的一样的会话共用一份，状态变化不再带着它上传；同一目录里报的不一样的（如 `--models` 限定了范围）各看各的；
-  /// 会话结束了还留着（已结束的也能换模型），会话记录都没了才删掉。
   @Test func sessionsReportingTheSameModelListShareOneThatStateChangesDoNotResend() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
     let options = (0..<300).map { PiModelOption(key: PiModelKey(provider: "p", id: "model-\($0)-with-a-long-identifier"), name: "Model \($0)", thinkingLevels: [.off, .high]) }

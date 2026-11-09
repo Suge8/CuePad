@@ -3,10 +3,6 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 点交付物后的全屏页：窗口内浮层（`panel`），从点的那张缩略图飞出、关上时飞回翻到的那一份（`PreviewFlight`）；
-    /// 同一组的几份用 ←→、右上的前后箭头、触控板横扫翻；每类怎么显示见 `PreviewPage`。
-    /// `reply` 是这一页的底栏对谁说（`PreviewOpening.reply` 另给的除外），nil 时没有底栏（窗口根上那一个，看正文、输入框里的附件）。
-    /// 一个页面只在这里挂一次，不在每张缩略图上各挂一个。
     func previewPresenter(_ opened: Binding<PreviewOpening?>, reply: PreviewReply?) -> some View {
         modifier(PreviewPresenter(opened: opened, reply: reply))
     }
@@ -33,28 +29,22 @@ private struct PreviewPresenter: ViewModifier {
 }
 
 extension PanelStyle {
-    /// 全屏预览的浮层至多这么大（窗口小时让出四周）。
     static let previewSize = CGSize(width: 960, height: 760)
 }
 
-/// 全屏页：一次显示翻到的那一份（`current`），翻页原地交叉淡（同快速查看与"预览"：Mac 上换一张不滑，滑动要逐帧挪整页）；
-/// 顶栏与底栏浮在内容上、栏后不垫底：顶上中间是这一份的标题，右上是前后箭头夹着"第几份 · 类型"、分享与关闭，各是一块玻璃；
-/// 有去处时底部是回复栏（`PreviewReplyBar`）。图片与 PDF 铺到两条栏下面，其余在两条栏之间（`previewInsets`）。
-/// 翻页：←→、右上的箭头、触控板横扫（`PageInput`）。
+/// 翻页原地交叉淡（同快速查看与"预览"）：Mac 上换一张不滑，滑动要逐帧挪整页。
 private struct PreviewPager: View {
     let opening: PreviewOpening
     let reply: PreviewReply?
     let flight: PreviewFlight
     @State var current: UUID
     @State private var barHeight: CGFloat = 0
-    /// 内容露出来了：从缩略图飞过来的这段藏着（`PreviewFlight`）
     @State private var landed = false
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.closePanel) private var close
 
     private var batch: [PiPreview] { opening.batch }
-    /// 这一批不止一份：有前后箭头。
     private var paged: Bool { batch.count > 1 }
     private var index: Int { opening.index(of: current) }
     private var preview: PiPreview { batch[index] }
@@ -89,7 +79,6 @@ private struct PreviewPager: View {
         .background { PageInput { step($0) } }
     }
 
-    /// 浮在内容上的顶栏：标题居中，右上各一块玻璃。
     private var header: some View {
         Text(title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
             .padding(.horizontal, Spacing.block).frame(height: ControlMetrics.height)
@@ -113,7 +102,6 @@ private struct PreviewPager: View {
             .padding(.horizontal, Self.edge).padding(.top, Self.edge)
     }
 
-    /// 前后箭头夹着"第几份 · 类型"（←→ 同）。
     private var stepper: some View {
         HStack(spacing: Spacing.tight) {
             if paged {
@@ -140,9 +128,7 @@ private struct PreviewPager: View {
     }
 
     private static let edge = Spacing.group
-    /// 顶栏占的高：内容让出它（`previewInsets`）
     private static let headerHeight = edge + ControlMetrics.height + 8
-    /// 标题两边让出右上那几块的宽
     private static let titleRoom: CGFloat = 200
 }
 
@@ -159,7 +145,6 @@ private struct PageInput: NSViewRepresentable {
     final class Watch: NSView {
         var step: ((Int) -> Void)?
         private var monitor: Any?
-        /// 这次横扫：nil 还没定（手指刚落下），归翻页时记着扫了多远（翻过就是 nil 距离），归内容时不记。
         private var swipe: Swipe?
 
         fileprivate enum Swipe {
@@ -199,7 +184,6 @@ private struct PageInput: NSViewRepresentable {
         }
 
         private func scroll(_ event: NSEvent, in window: NSWindow) -> Bool {
-            // 滚轮（没有阶段）一格一次，不翻页
             if !event.phase.isDisjoint(with: [.mayBegin, .began]) { swipe = .undecided }
             if event.phase.isEmpty, event.momentumPhase.isEmpty { swipe = nil }
             switch swipe {
@@ -224,7 +208,6 @@ private struct PageInput: NSViewRepresentable {
             }
         }
 
-        /// 指针下的内容往这边还滑得动（`dx` > 0 是手指往右、看左边）：从指针下的视图往外找第一个滚动视图。
         private static func scrolls(at point: NSPoint, in window: NSWindow, toward dx: CGFloat) -> Bool {
             var view = window.contentView?.superview?.hitTest(point)
             while let current = view, !(current is NSScrollView) { view = current.superview }
@@ -233,7 +216,6 @@ private struct PageInput: NSViewRepresentable {
             return dx > 0 ? visible.minX > frame.minX + 0.5 : visible.maxX < frame.maxX - 0.5
         }
 
-        /// 扫过这么多点翻一页
         private static let distance: CGFloat = 40
         private static let left: UInt16 = 123
         private static let right: UInt16 = 124

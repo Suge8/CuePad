@@ -65,7 +65,7 @@ enum InteractionBench {
 
     private static let turns = TurnLog()
     /// 记下行的位置（`benchSpot`）：只在单次交互的测量里。
-    static let locatesRows = DebugScene.defaults.string(forKey: "CuePadBench") == "interact"
+    static let locatesRows = DebugScene.args.driveOpts.bench == "interact"
     /// 报了位置的行在窗口里的位置（左上为原点，`benchSpot`）：任务行按任务，看板卡、对话里的一条按各自的身份。
     static var rows: [AnyHashable: CGRect] = [:]
 
@@ -76,10 +76,10 @@ enum InteractionBench {
     private static func measureAll(_ workspace: Workspace) async throws {
         waitForTracer()
         if PerfProbe.firstSeen["content"] == nil { await PerfProbe.wait(for: "content") }
-        if UserDefaults.standard.bool(forKey: "CuePadDemo") { await DebugScene.seedRemote(workspace.services) }
+        if DebugScene.args.demo { await DebugScene.seedRemote(workspace.services) }
         // `-CuePadInteractOnly 会话页,开编辑页`：只量这几项，前后对比时省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）
         // Cue 页的对话在等之前写好（库里没有时）：用户点开 Cue 页时对话早在库里
-        let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
+        let only = DebugScene.args.driveOpts.interactOnly.map { Set($0.split(separator: ",").map(String.init)) }
         let measuresCue = only.map { $0.contains("发送·Cue 页") } ?? true
         if measuresCue { await DebugScene.seedCue(workspace.services) }
         await Task.wait(for: .seconds(3))

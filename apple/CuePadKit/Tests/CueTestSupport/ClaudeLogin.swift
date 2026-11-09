@@ -6,7 +6,6 @@ import Foundation
 /// （`CLAUDE_CODE_OAUTH_TOKEN`），不落盘、不进录像带；不在这里刷新：refresh token 只能用一次，测试先刷新就把用户的登录挤掉了，
 /// 过期了等 Claude Code 下次用时自己续。
 public enum ClaudeLogin {
-  /// 打印此刻访问令牌的命令（外壳脚本里起 claude 时与 `token` 同用这一条）。
   public static let tokenCommand =
     "/usr/bin/security find-generic-password -s 'Claude Code-credentials' -w | /usr/bin/plutil -extract claudeAiOauth.accessToken raw -o - -"
 

@@ -29,16 +29,13 @@ final class PiProcess: @unchecked Sendable {
     private let process = Process()
     private let stdin = Pipe()
     private let errPipe = Pipe()
-    /// 两条读线程写、测试读的输出。
     private struct Output {
         var events: [PiEvent] = []
         var pending = Data()
         var stderr = Data()
     }
     private let output = Mutex(Output())
-    /// 进程退出时结束（`terminationHandler`）：等退出就等它，不轮询。
     private let exited: Task<Void, Never>
-    /// Pi 的 stderr（诊断用）
     var stderr: String { output.withLock { String(decoding: $0.stderr, as: UTF8.self) } }
 
     var pid: Int32 { process.processIdentifier }
@@ -91,7 +88,6 @@ final class PiProcess: @unchecked Sendable {
         environment["TMUX_PANE"] = "%9"
         environment["TMUX"] = "/tmp/tmux-test/default,1,0"
         environment.merge(env) { _, new in new }
-        // 测试只读标准输出里的这几类事件（弹窗与提示、工具结束、一轮结束）
         environment[AgentTape.stdoutTypesVariable] = "extension_ui_request,tool_execution_end,agent_end"
 
         process.executableURL = tape.executable("pi")
@@ -109,7 +105,6 @@ final class PiProcess: @unchecked Sendable {
         Self.drain(errPipe.fileHandleForReading) { [weak self] data in self?.output.withLock { $0.stderr.append(data) } }
     }
 
-    /// 与测试包同一个产物目录里构建好的 `cuepad` 命令行（`swift test` 会把它一起构建）。
     private final class Anchor {}
     static var cuepad: URL { Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent().appending(path: "cuepad") }
 
@@ -150,7 +145,6 @@ final class PiProcess: @unchecked Sendable {
         let description: String
     }
 
-    /// 指挥官的 `subagents` 工具调用报了错：FireCode 没把指挥官加载起来（配置被它拒绝、开关或字段名跟不上它的版本……）。
     /// 只看 Pi 事件的结构化字段，与 FireCode 的文案和语言无关。
     var subagentsToolFailed: Bool {
         events.contains { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "subagents" && $0["isError"] as? Bool == true }
@@ -214,7 +208,6 @@ final class PiProcess: @unchecked Sendable {
         ((try? FileManager.default.contentsOfDirectory(atPath: gate.path)) ?? []).filter { $0.hasPrefix("held-") }.count
     }
 
-    /// 等到假模型又停住了一次（扩展已加载、请求已到模型）。
     func waitUntilHeld() async throws {
         let wanted = heldSeen.withLock { $0 += 1; return $0 }
         try await eventually("假模型停住") { self.heldCount() >= wanted }
@@ -230,7 +223,6 @@ final class PiProcess: @unchecked Sendable {
         }
     }
 
-    /// 放行一次停住（先放后停也算）。
     func release() throws {
         let tape = AgentTape.active
         if tape.mode == .record {
@@ -240,7 +232,6 @@ final class PiProcess: @unchecked Sendable {
         tape.mark("release")
     }
 
-    /// 等到某条 Pi 事件（stdout 上的 JSON 行）出现
     func waitForEvent(_ what: String, _ match: @escaping @Sendable (PiEvent) -> Bool) async throws -> PiEvent {
         var found: PiEvent?
         try await eventually(what) {
@@ -251,6 +242,5 @@ final class PiProcess: @unchecked Sendable {
     }
 }
 
-// 1×1 红色 PNG
 let tinyPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
 #endif

@@ -3,10 +3,7 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 卡片墙（手机项目页与 Mac 项目页同一个）：列数随宽度（列不窄于 `minColumnWidth`，最多 `maxColumns` 列），
-/// 卡按顺序依次放进当前最短的一列（并列取左边），高度是实测的：多少张、多宽，都是从左往右填、墙底边尽量齐，不留空列。
-/// 不记"哪张在哪列"：位置只由顺序与宽度推出。墙上的顺序本身是稳定的（`WallArrangement`：同一次打开里编辑过的卡原地不动），
-/// 记分列的话删卡、改成任务留下的空列会一直空着。
+/// 位置只由顺序与宽度推出，不记"哪张在哪列"：墙上的顺序本身是稳定的（`WallArrangement`：同一次打开里编辑过的卡原地不动），记分列的话删卡、改成任务留下的空列会一直空着。
 struct MasonryLayout: Layout {
     var minColumnWidth: CGFloat = 220
     var maxColumns = 4
@@ -14,8 +11,7 @@ struct MasonryLayout: Layout {
 
     private static let idealWidth: CGFloat = 900
 
-    /// 排版结果按宽度记一份：同一轮排版里 SwiftUI 先量（`sizeThatFits`）再摆（`placeSubviews`），每张卡只量一遍；
-    /// 子视图变了 SwiftUI 换一份新的缓存。
+    /// 同一轮排版里 SwiftUI 先量（`sizeThatFits`）再摆（`placeSubviews`），每张卡只量一遍。
     final class Memo {
         var width: CGFloat?
         var frames: [CGRect] = []
@@ -64,7 +60,6 @@ struct MasonryLayout: Layout {
     }
 }
 
-/// 卡片上的元信息：时间、发送目标，以及任务、浮回、置顶标记。Mac 用固定小字，iOS 随动态字体。
 struct CardMeta: View {
     let card: Card
     let text: CardText
@@ -98,7 +93,6 @@ struct CardMeta: View {
     }
 }
 
-/// 带着的附件：一个时只有回形针，两个以上回形针加个数（同别处的"图标 + 字"）；读屏都读"带 N 个附件"。
 /// 图片在预览里看得见的地方只数文件（`CardText.files`），没有预览的行数全部附件。
 struct AttachmentMark: View {
     let count: Int
@@ -116,20 +110,16 @@ struct AttachmentMark: View {
     }
 }
 
-/// 发过的卡的标记：浅灰小纸飞机 + 目标名。没发过是默认状态，什么都不显示。卡片与列表共用这一种。
 struct SentMark: View {
     let target: String
 
     var body: some View {
         Label(target, icon: .handOff).labelStyle(.titleAndIcon).lineLimit(1)
-            // 纸飞机是装饰：整体读作一句"已发给 …"；同项目时的"已发过"已经是完整文案。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(target == SendCopy.sameProject ? Text(target) : Text("已发给 \(target)"))
     }
 }
 
-/// 附件缩略图：按内容哈希从附件目录降采样读取，读不到时显示占位底色。默认铺满给的框（裁掉多的）；给了 `fitWidth` 时
-/// 高度不变、宽度随图片比例（读到之前是方的，不超过 `fitWidth`），更宽的整张缩进去、两边留底色，不裁。
 struct Thumbnail: View {
     let hash: String
     var height: CGFloat
@@ -169,8 +159,7 @@ struct Thumbnail: View {
             }
     }
 
-    /// 这张图按 `height` 高的格子解的整张（最长边至多高的三倍、不裁，`Thumbnails` 有缓存）：全屏页飞出与占位用的也是它
-    /// （你的话里带的图、点名图），同一份不另解。不在本机为 nil。
+    /// 全屏页飞出与占位用的也是它（你的话里带的图、点名图），同一份不另解。不在本机为 nil。
     static func picture(_ hash: String, height: CGFloat, scale: CGFloat, in files: AttachmentFiles) async -> CGImage? {
         guard let url = files.fileURL(for: hash) else { return nil }
         return await decode(url, pixels: Int(height * 3 * scale))
@@ -185,7 +174,6 @@ struct Thumbnail: View {
     }
 }
 
-/// 预览文字里的 `{{变量}}`：墨色字垫深一级的底（`Palette.variable`）。
 enum VariableText {
     static func styled(_ text: String, _ palette: Palette) -> AttributedString {
         var result = AttributedString(text)
@@ -199,7 +187,7 @@ enum VariableText {
     }
 }
 
-/// 搜索命中的标法（灵感搜索、⌘K、Agent 页的会话搜索同一条）：搜索词按空格分开，每个词命中处加底色（大小写不敏感）。
+/// 灵感搜索、⌘K、Agent 页的会话搜索同一条。
 enum Highlight {
     static func matches(_ text: String, _ query: String, base: AttributedString? = nil) -> AttributedString {
         var result = base ?? AttributedString(text)
@@ -216,22 +204,18 @@ enum Highlight {
 }
 
 extension EnvironmentValues {
-    /// 此刻的搜索词：列表里的会话行据此标出命中（`Highlight`）。
     @Entry var searchHighlight = ""
 }
 
-/// "更早"分组的标题：周是日期区间，月是"9月"（跨年写"2025年12月"），按系统格式跟随界面语言。
 enum OlderGroupTitle {
     static func text(_ period: OlderGroup.Period, now: Date = .now, calendar: Calendar = .current) -> String {
         switch period {
         case .all:
             return String(localized: "更早")
         case .week(let start):
-            // 两端都写成"月/日"，与卡片行上的日期同一种写法
             let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
             return "\(start.formatted(DateLabel.monthDay)) – \(end.formatted(DateLabel.monthDay))"
         case .sparseMonth(let start), .month(let start):
-            // 同一年里只写月，跨年才带年份
             let sameYear = calendar.isDate(start, equalTo: now, toGranularity: .year)
             return start.formatted(sameYear ? Date.FormatStyle.dateTime.month(.abbreviated) : Date.FormatStyle.dateTime.year().month(.abbreviated))
         }

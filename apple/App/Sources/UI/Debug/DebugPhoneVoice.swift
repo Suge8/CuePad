@@ -13,7 +13,7 @@ import Foundation
 /// -CuePadPhoneVoiceDetails YES：摆好后打开通话详情（没有落点、居中）。
 enum DebugPhoneVoice {
     static func prepare(_ workspace: Workspace) async {
-        guard let name = DebugScene.defaults.string(forKey: "CuePadPhoneVoice") else { return }
+        guard let name = DebugScene.args.phoneVoice else { return }
         let voice = workspace.services.voice
         guard voice.projection == nil else { return }
         let phase: VoiceCallProjection.Phase?
@@ -44,18 +44,18 @@ enum DebugPhoneVoice {
         }
         do {
             let store = workspace.services.store
-            if DebugScene.defaults.bool(forKey: "CuePadPhoneVoiceEnabled") {
+            if DebugScene.args.phoneVoiceOpts.enabled {
                 try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "voice-layout-demo" }
             }
-            let wanted = DebugScene.defaults.integer(forKey: "CuePadPhoneVoiceHistory")
+            let wanted = DebugScene.args.phoneVoiceOpts.history
             let existing = try await store.cueMessages(limit: .max).count
             if wanted > existing {
                 for index in existing..<wanted {
                     _ = try await store.addCueMessage(.you, text: String(localized: "检查发布事项 \(index + 1)", table: "Demo"))
                 }
             }
-            if let draft = DebugScene.defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
-            if DebugScene.defaults.bool(forKey: "CuePadPhoneVoicePages") {
+            if let draft = DebugScene.args.cueOpts.draft { workspace.cue.draft.text = draft }
+            if DebugScene.args.phoneVoiceOpts.pages {
                 let reply = try await store.addCueMessage(.cue, text: String(localized: "检查发布事项 \(1)", table: "Demo"))
                 let request = VoiceCallProjection.Request(reference: .unrecorded(session: session, request: UUID()), recording: false,
                                                           issue: .storageUnavailable,
@@ -69,21 +69,21 @@ enum DebugPhoneVoice {
                 voice.session = session
                 voice.setProjection(.init(session: session, phase: phase ?? .listening, requests: [request],
                                           replies: [.init(message: reply.id, readback: .submitted)], executions: [target], response: response, pages: heads))
-                if DebugScene.defaults.bool(forKey: "CuePadPhoneVoiceSessionUnavailable") { voice.session = nil }
-                if DebugScene.defaults.bool(forKey: "CuePadPhoneVoiceLastPage") {
+                if DebugScene.args.phoneVoiceOpts.sessionUnavailable { voice.session = nil }
+                if DebugScene.args.phoneVoiceOpts.lastPage {
                     let cursor = VoicePageCursor(session: session, list: .requests, after: .request(UUID()))
                     _ = try await voice.requestPages.load(after: cursor) { _ in
                         .init(page: .init(items: [request], nextCursor: nil), version: Data([1]))
                     }
                 }
-                if DebugScene.defaults.bool(forKey: "CuePadPhoneVoiceRefreshRequired") {
+                if DebugScene.args.phoneVoiceOpts.refreshRequired {
                     do {
                         _ = try await voice.requestPages.load(after: heads.requests.nextCursor) { _ in throw VoicePageError.refreshRequired }
                     } catch VoicePageError.refreshRequired {
                     } catch { workspace.fail(error) }
                 }
             }
-            if DebugScene.defaults.bool(forKey: "CuePadPhoneVoiceDetails") { workspace.voiceDetails = .unanchored }
+            if DebugScene.args.phoneVoiceOpts.details { workspace.voiceDetails = .unanchored }
         } catch { workspace.fail(error) }
     }
 }

@@ -14,7 +14,7 @@ struct HistoryTests {
         try PiHistory.index(file: file.url, from: checkpoint)
     }
 
-    // MARK: 会话标题：与活动会话、Pi 会话列表同一规则（名字 → 文件里首条用户消息 → 工作目录名）
+    // MARK: 会话标题
 
     @Test func titleIsTheFirstUserMessageInFileOrderLikePisSessionList() throws {
         var f = SessionFile(directory: dir)
@@ -34,8 +34,7 @@ struct HistoryTests {
 
     // MARK: 命令在会话文件里留下的
 
-    /// 对话只来自会话文件，与终端一致：压缩留下一条 compaction（终端里是压缩摘要那一行），对话里是一行系统行；
-    /// 换模型、改强度、改名只是设置条目，终端的对话里没有它们，这里也没有；模板与 skill 展开成一条普通的用户消息（没有投送请求 id）。
+    /// 对话只来自会话文件，与终端一致：终端里没有的条目这里也没有。
     @Test func compactionIsASystemLineAndSettingEntriesAreNotConversation() throws {
         var f = SessionFile(directory: dir)
         try f.append(

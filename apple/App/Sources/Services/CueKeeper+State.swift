@@ -76,7 +76,7 @@ extension CueKeeper {
         var detour: Detour?
     }
 
-    /// 额度、登录卡住后的绕行（规则在 `CueKeeper+Recover` 的头注释）：你设定的那家与它的模型、强度、fast（绕行前的设置），与这次卡住的几家。
+    /// 额度、登录卡住后的绕行：你设定的那家与它的模型、强度、fast（绕行前的设置），与这次卡住的几家。
     nonisolated struct Detour: Codable, Equatable, Sendable {
         struct Stuck: Codable, Equatable, Sendable {
             /// 卡住的时刻：轮流从最近卡住的那家后面数

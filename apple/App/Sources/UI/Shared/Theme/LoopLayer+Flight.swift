@@ -1,9 +1,7 @@
 import QuartzCore
 import SwiftUI
 
-/// 话在路上那架纸飞机（`LoopLayer.Kind.flight`）的一趟与剪影。
 extension LoopLayer.Host {
-    /// 纸飞机的一趟：飞进来（缓出）、在正中停一下、飞出去（缓入），飞的方向顺着机头（右上），距离是框边的六成。
     enum Flight {
         static let period = 1.3
         static let keyTimes: [NSNumber] = [0, 0.32, 0.62, 1]

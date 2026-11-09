@@ -2,7 +2,6 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 在一个写事务里应用一批远端变更；提交后一次通知订阅者。单条记录失败（如字段非法）只回滚该条并报告，不影响其余。
   package func applyRemote(_ changes: [RemoteChange]) throws -> [RemoteFailure] {
     var failures: [RemoteFailure] = []
     var removedKeys: [String] = []
@@ -53,7 +52,6 @@ extension CueStore {
     try copyingRemote { try db.run(Self.upsertSQL(row.table, columns), columns.map { row.fields[$0] ?? .null }) }
   }
 
-  /// 返回被删附件的键（提交后回收文件）。
   private func apply(_ change: RemoteChange) throws -> String? {
     switch change {
     case .delete(let key):
@@ -78,48 +76,23 @@ extension CueStore {
     }
   }
 
-  /// 冲突规则：
-  /// - 本机没有该记录：若有元数据（本机已删除、删除待推送）则忽略远端；否则插入。
-  /// - 本机自上次推送后没改过：直接采用远端。
-  /// - 本机有未推送的改动：`modifiedAt` 较新的整条记录留下，同刻以服务器为准（服务器是唯一裁决者，各设备因此收敛）；
-  ///   卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。
-  /// 本机自己上传的版本回来（回声）不是并发编辑：由交出去与服务器收下的修改时间认出（`applyVersion`）。
-  /// 排序键相同不在这里处理：读取时按 id 打平，移动时重排。
+  /// 冲突：本机有未推送的改动时 `modifiedAt` 较新的整条记录留下，同刻以服务器为准（服务器是唯一裁决者，各设备因此收敛）；卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。本机自己上传的版本回来（回声）不是并发编辑：由交出去与服务器收下的修改时间认出（`applyVersion`）。排序键相同不在这里处理：读取时按 id 打平，移动时重排。
   private func applySave(_ remote: SyncRow, _ systemFields: Data, serverAt: Date?) throws {
-    let awaitingResult = try remote.table == .deliveryRequests && isAwaitingResult(remote.id)
-    var canonical = remote
-    let legacy = remote.table == .deliveryRequests && remote.text("status") == Schema.legacyDeliveryFailure
-    if legacy {
-      canonical.fields["status"] = try db.first(
-        "SELECT \(Schema.deliveryFailureStatus) FROM (SELECT ? AS handledBy)", [remote.fields["handledBy"] ?? .null]) { $0.value(0) }
-    }
-    try applyVersion(canonical, systemFields)
-    if legacy {
-      // 服务器确认的是旧字节，正规化后的版本必须重新上传；原原因和领取事实原样保留。
-      try db.run("UPDATE deliveryRequests SET modifiedAt = MAX(modifiedAt, ?2) + 1 WHERE id = ?1", [remote.id, remote.modifiedAt])
-    }
     if remote.table == .deliveryRequests {
-      if let serverAt { try db.run("UPDATE deliveryRequests SET serverAt = ? WHERE id = ? AND serverAt IS NULL", [serverAt, remote.id]) }
-      // 旧同步快照仍带着领取事实，却把状态退回 pending：入库时就收口为未知，不只在执行器里跳过。
-      try db.run(
-        """
-        UPDATE deliveryRequests SET status = '\(DeliveryStatus.unconfirmed.rawValue)', failure = ?2, completedAt = COALESCE(completedAt, ?3), modifiedAt = MAX(modifiedAt + 1, ?3)
-        WHERE id = ?1 AND status = '\(DeliveryStatus.pending.rawValue)' AND handledBy IS NOT NULL
-        """, [remote.id, DeliveryRequest.interruptedReason.stored, Date.stamp])
-    }
-    if awaitingResult {
-      try db.run(
-        "UPDATE deliveryRequests SET resultReceivedAt = ? WHERE id = ? AND status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)')",
-        [Date.stamp, remote.id])
+      try applyIncomingDelivery(remote, systemFields: systemFields, serverAt: serverAt)
+    } else {
+      try applyVersion(remote, systemFields)
     }
   }
 
-  private func applyVersion(_ remote: SyncRow, _ systemFields: Data) throws {
+  func applyVersion(_ remote: SyncRow, _ systemFields: Data) throws {
     var remote = remote
     // 通知标志只由置位的那台 Mac 上传、上传即清：远端带回来的（含自己上传的回声）不能再让本机的下一次改动带上它
     if Table.notifyFlagged.contains(remote.table) { remote.fields["notify"] = .null }
     // 默认项目之前的版本写的未分类卡片不带项目：就是默认项目里的（同 `Schema` 升级的那一步）；不补上，读卡片层级时当场崩溃
     if remote.table == .cards, (remote.fields["projectID"] ?? .null) == .null { remote.fields["projectID"] = .text(Project.defaultID.uuidString.lowercased()) }
+    // 早于多家接入的会话记录不带来源：是 Pi（同 `Schema` 升级的 94）
+    if remote.table == .piSessionStates, (remote.fields["agent"] ?? .null) == .null { remote.fields["agent"] = .text(AgentKind.pi.rawValue) }
     let table = remote.table
     let (pushed, sent) = try db.first("SELECT pushedModifiedAt, sentModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) {
       ($0.intOrNil(0), $0.intOrNil(1))
@@ -136,7 +109,7 @@ extension CueStore {
       return
     }
 
-    if table == .deliveryRequests, let repaired = Self.mergingDeliveryProgress(local: local, remote: remote) {
+    if table == .deliveryRequests, let repaired = DeliveryRequest.mergingProgress(local: local, remote: remote) {
       try overwrite(repaired)
       try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt)
       return
@@ -192,7 +165,6 @@ extension CueStore {
     }
   }
 
-  /// 按变更涉及的消息主键、会话索引批量找正证据，不为每条请求全表找消息。
   private func reconcileDeliveryReceipts(_ changes: [RemoteChange]) throws {
     var messageIDs: [String] = [], requestIDs: [String] = [], sessions = Set<String>()
     for change in changes {
@@ -215,45 +187,6 @@ extension CueStore {
     }
   }
 
-  /// 旧 pending 或迟到的错误不能把已交出的意图退回可执行。正证据成功优先于未知，未知优先于失败。
-  private static func mergingDeliveryProgress(local: SyncRow, remote: SyncRow) -> SyncRow? {
-    func progress(_ row: SyncRow) -> Int {
-      switch row.text("status").flatMap(DeliveryStatus.init(rawValue:)) {
-      case .succeeded: 6
-      case .unconfirmed: 5
-      case .failed: 4
-      case .confirming: 3
-      case .executing: 2
-      case .preparing: 1
-      case .pending: row.text("handledBy") == nil ? 0 : 2
-      case nil: 5
-      }
-    }
-    let localProgress = progress(local), remoteProgress = progress(remote)
-    let samePhase = local.text("status") == remote.text("status")
-    func deadline(_ row: SyncRow) -> Int64? {
-      if case .int(let value) = row.fields["deadlineAt"] { value } else { nil }
-    }
-    let due = [deadline(local), deadline(remote)].compactMap { $0 }.min()
-    let preservesDeadline = samePhase && due != deadline(remote)
-    let preservesProgress = localProgress != remoteProgress && (localProgress > remoteProgress || local.modifiedAt > remote.modifiedAt)
-    guard preservesDeadline || preservesProgress else { return nil }
-    var repaired = local.modifiedAt > remote.modifiedAt ? local : remote
-    let resolved = localProgress > remoteProgress ? local : remote
-    for column in ["status", "failure", "handledBy", "completedAt", "deadlineAt"] { repaired.fields[column] = resolved.fields[column] }
-    if samePhase { repaired.fields["deadlineAt"] = due.map(SQLValue.int) ?? .null }
-    repaired.fields["modifiedAt"] = .int(max(local.modifiedAt, remote.modifiedAt) + 1)
-    return repaired
-  }
-
-  /// 投送请求在本机还在等结果：远端版本把它变成完成时，记下本机时刻（往返时间的终点）。
-  /// 执行方在本机写结果，不走远端应用；第一次就收到已完成请求的设备从没等过它，也不记。
-  private func isAwaitingResult(_ id: String) throws -> Bool {
-    try db.first(
-      "SELECT 1 FROM deliveryRequests WHERE id = ? AND (status IN (\(DeliveryStatus.openSQL)) OR status = '\(DeliveryStatus.unconfirmed.rawValue)')", [id]) { _ in true } != nil
-  }
-
-  /// 卡片层级在远端变更之后仍要成立（见 `CardLinks.repairs`）；改写的卡片会再推送，让各设备收敛。
   private func repairCardTree(touching changed: Set<UUID>) throws {
     try apply(try CardLinks(db).repairs(touching: changed))
   }
@@ -276,20 +209,18 @@ extension CueStore {
     try overwrite(SyncRow(table: .cards, fields: fields))
   }
 
-  /// 远端删除附件记录后回收文件；仍被引用的保留（`isAttachmentReferenced`）（引用它的记录也许马上就到）。删不掉的作为失败报告。
+  /// 仍被引用的保留：引用它的记录也许马上就到。删不掉的作为失败报告。
   private func removeFiles(of keys: [String]) throws -> [RemoteFailure] {
+    guard !keys.isEmpty else { return [] }
     var failures: [RemoteFailure] = []
-    for key in Set(keys).sorted() where try !isAttachmentReferenced(key) {
-      do { try files.remove(key) } catch {
-        failures.append(RemoteFailure(recordName: key, message: String(localized: "附件文件没能删除：\(String(describing: error))")))
-      }
+    _ = try reclaimFiles(candidates: { Set(keys) }) { key, error in
+      failures.append(RemoteFailure(recordName: key, message: String(localized: "附件文件没能删除：\(String(describing: error))")))
     }
     return failures
   }
 }
 
 extension RemoteChange {
-  /// 可能让一次"开新会话"被认领：会话记录、投送请求或卡片到了（同步乱序，哪个先到都要认）。
   fileprivate var touchesLaunches: Bool {
     switch self {
     case .save(let row, _, _): [.piSessionStates, .deliveryRequests, .cards].contains(row.table)
@@ -297,7 +228,6 @@ extension RemoteChange {
     }
   }
 
-  /// 这条变更涉及的卡片 id；不是卡片的变更为 nil。
   fileprivate var cardID: UUID? {
     switch self {
     case .save(let row, _, _): row.table == .cards ? UUID(uuidString: row.id) : nil

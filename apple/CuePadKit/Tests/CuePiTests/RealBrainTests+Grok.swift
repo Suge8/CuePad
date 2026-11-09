@@ -6,9 +6,7 @@ import Testing
 @testable import CuePi
 
 extension RealBrainTests {
-    /// Grok 这一轮已不再请求模型（停止钩子在跑）时插进的两句都搁浅：收尾后它按先后每句各开一轮，后一句那一轮要等前一轮做完才报。
-    /// 两句各记在回答它的那一轮里，不记到只回答了第一句的那一轮。大脑关了 Grok 的钩子，这段时序录不出来：录像带照
-    /// 1.0.70 带停止钩子实测的事件先后整理（头一段是 aMessageGetsAReplyContextAndAFinishedTurn 录下的起大脑），只回放。
+    /// 大脑关了 Grok 的钩子，这段时序录不出来：录像带照 1.0.70 带停止钩子实测的事件先后整理（头一段是 aMessageGetsAReplyContextAndAFinishedTurn 录下的起大脑），只回放。
     @Test(.enabled(if: RealAgents.mode(of: .grok) == .replay, "录像带是整理出来的，只回放"))
     func interjectionsStrandedAfterTheLastRequestAreReceivedByTheTurnsGrokOpensForThem() async throws {
         AgentTape.use(.grok)

@@ -9,9 +9,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// 带附件的那句话一定走到终态：手机开新会话、第一句带新选的截图，图随请求传上去、Mac 开会话时交给 Agent 的就是这张图；
-/// 附件到派发期限还没传到 Mac，Mac 写回明确失败（说明在等什么），手机的新会话输入框按失败显示、可以安全重试。
-/// "手机"是第二个 Mac 进程（同 `AgentLibraryTests` 的经云同步），成功路径走 `Workspace.startSession`，附件失败与重试走手机输入框的 `Workspace.launchSession`。
+/// "手机"是第二个 Mac 进程（同 `AgentLibraryTests` 的经云同步），成功路径走新会话表单的 `Workspace.submitSession`，附件失败与重试走它写请求的 `AppServices.launchSession`。
 @MainActor
 struct LaunchAttachmentTests {
     @Test func 手机新会话第一句带新选截图_图传上去_Mac开会话时Agent收到这张图() async throws {
@@ -32,16 +30,14 @@ struct LaunchAttachmentTests {
         let recording = Task { try await mac.services.consumePiChanges(changes) }
         defer { recording.cancel() }
 
-        // 新选的截图：存进手机的附件目录，草稿里只有它的引用（`DraftFile`）
         let shot = pngData(width: 12, height: 9)
         let key = try phone.services.store.files.store(shot)
         let draft = ComposerDraft(text: "看这张截图", files: [DraftFile(key: key, name: "")])
         let workspace = Workspace(services: phone.services)
-        let opening = Task {
-            try await workspace.startSession(
-                in: Project.defaultID, prompt: draft.stored, title: "CuePad", on: TestApp.hostID, agent: .pi) { _ in }
-        }
-        defer { opening.cancel() }
+        let project = try #require(try await phone.services.store.project(Project.defaultID))
+        let place = ProjectFolders.launchPlaces(projects: [project], bindings: [], host: nil, workMac: TestApp.hostID).first
+        var claimed: LaunchProgress.Claimed?
+        workspace.submitSession(in: place, draft: draft, choice: AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)) { claimed = $0 }
 
         let requests = try await eventually(phone.services.store, { try $0.deliveryRequests() }) { !$0.isEmpty }
         let request = try #require(requests.first)
@@ -55,7 +51,8 @@ struct LaunchAttachmentTests {
         await mac.services.upload(request.id)
         await mac.services.syncNow()
         await phone.services.syncNow()
-        let session = try await opening.value
+        try await eventually("认领到新会话") { claimed != nil }
+        let session = try #require(claimed).sessionID
         #expect(try await phone.services.store.hasAttachment(key))
         #expect(try Data(contentsOf: #require(mac.services.store.files.fileURL(for: key))) == shot)
         let first = try #require(mac.host.extensions[session]?.messages.first)
@@ -64,8 +61,6 @@ struct LaunchAttachmentTests {
         await mac.services.executor.beginStop()()
     }
 
-    /// 手机开新会话、第一句带的附件到派发期限还没传到 Mac：Mac 写回明确失败，手机的新会话输入框按失败显示原因、允许安全重试；
-    /// 失败的请求过了 Mac 的保留期仍留着（原因还在），再开时新请求替换它；被替换、库里已找不到的那一次不再允许安全替换。
     @Test func 新会话附件到期还没传到Mac_写回失败_手机解锁可再开() async throws {
         let clock = ManualTiming()
         let mac = TestApp(timing: clock.timing)
@@ -86,15 +81,13 @@ struct LaunchAttachmentTests {
         }
         let missing = AttachmentKey.make(hash: String(repeating: "a", count: 64), format: "png")
         let draft = ComposerDraft(text: "看这张截图", files: [DraftFile(key: missing, name: "")])
-        // 新会话输入框发出的同一条（`NewSessionInput.Start.launch`），随即传上去（上传回执带回服务器收下的时刻）
         func launch(replacing previous: SessionLaunch?) async throws -> SessionLaunch {
-            let launched = try await Workspace(services: phone.services).launchSession(
+            let launched = try await phone.services.launchSession(
                 in: Project.defaultID, prompt: draft.stored, title: "CuePad", on: TestApp.hostID, card: nil, agent: .pi, intent: previous.map { .replacing($0.request) } ?? .new)
             let row = try #require(try await phone.services.store.syncRow(recordName: launched.request.uuidString.lowercased()))
             try await phone.services.store.markPushed([(row, Data(), clock.now)])
             return launched
         }
-        // 输入框读的那份进度与提交动作
         func progress(_ launch: SessionLaunch) async throws -> LaunchProgress {
             for try await progress in phone.services.store.observe({ try launch.progress(from: $0) }) { return progress }
             throw CancellationError()
@@ -119,7 +112,6 @@ struct LaunchAttachmentTests {
         #expect(failed.failure == "附件到期还没传到这台 Mac，没有发出，可以重发")
         #expect(mac.host.calls.isEmpty)
 
-        // 过了 Mac 的保留期再清一轮：失败的开会话请求仍留着
         clock.advance(.seconds(DeliveryExecutor.retention.seconds + 1))
         let now = clock.now
         _ = try await mac.services.store.deleteCompletedDeliveries(
@@ -134,7 +126,6 @@ struct LaunchAttachmentTests {
         #expect(after.map(\.id) == [second.request])
         #expect(after.first?.launch?.prompt == draft.stored)
         #expect(try await phase(second).submission == .waiting, "再次发出后不重复提交")
-        // 被替换的那一次库里已没有：说不出结果，另开须确认
         #expect(try await phase(first) == .missing)
         #expect(try await phase(first).submission == .confirm, "查不到结果不能冒充可安全重试")
         await mac.services.executor.beginStop()()

@@ -2,7 +2,6 @@
 import CueStore
 import Testing
 
-/// Pi 上报的模型调用错误是一段原文（常见是"状态码 + 提供方 JSON"）。界面要一句人话，原文留着悬停看。
 /// 样本取自各提供方 SDK 经 Pi 格式化后的真实报错。
 struct PiErrorSummaryTests {
     @Test(arguments: [

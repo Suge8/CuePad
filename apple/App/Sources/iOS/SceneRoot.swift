@@ -2,7 +2,6 @@
 import Synchronization
 import SwiftUI
 
-/// 每个窗口的壳：注入通知、处理深链接、进入后台前落盘、定场景的外观（`SceneAppearance`）；有同步时开启 Pi 通知。
 /// 这里的 body 不随什么重算（前后台在 `ScenePhaseWork` 里看）：窗口的根视图只建一次，建工作区时当场读库（`Workspace.init`）不白读。
 struct SceneRoot: View {
     let services: AppServices
@@ -39,7 +38,7 @@ private struct ScenePhaseWork: ViewModifier {
     }
 }
 
-/// 让后台里的工作有时间跑完（系统随后才挂起进程）：进入后台后的收尾，后台里短连门铃（`Relay`）。
+/// 让后台里的工作有时间跑完（系统随后才挂起进程）。
 enum BackgroundWork {
     static func run(_ work: @MainActor () async -> Void) async {
         let end = begin()

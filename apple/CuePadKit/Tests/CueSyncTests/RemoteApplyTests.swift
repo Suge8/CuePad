@@ -13,7 +13,6 @@ import Testing
     try await rig.coordinator.pulled(records, [])
   }
 
-  /// 本机记录已推送过（服务器有），随后本机再改：返回该卡。
   private func pushedCard(body: String = "base") async throws -> Card {
     let card = try await store.createCard(body: body)
     try await rig.simulatePush()
@@ -57,7 +56,6 @@ import Testing
     #expect(delta.saves.isEmpty && delta.deletes.isEmpty)  // 刚收到的不会被当成本机改动推回去
   }
 
-  /// 别处删掉的记录：行、元数据与搜索索引一起清掉，不再向服务器发删除；本机没推送的编辑也挡不住删除。
   @Test(arguments: [false, true])
   func remoteDeletionRemovesTheRowItsMetadataAndIndexEntry(editedLocally: Bool) async throws {
     let card = try await pushedCard(body: "findme")
@@ -79,7 +77,6 @@ import Testing
     #expect(try await rig.reconcileDelta().deletes == [rig.id(card.id)])
   }
 
-  /// 手机上从灵感开的新会话：Mac 开好后同步来的会话记录带着认领标识，手机这边同一处认领，灵感关联到那个会话。
   @Test func 同步来的会话记录带认领标识_手机上发起的灵感关联到它() async throws {
     let idea = try await store.createCard(body: "看一下重连")
     let project = try await store.createProject(name: "圆桌", color: "#111")
@@ -98,7 +95,6 @@ import Testing
 
   // MARK: 冲突
 
-  /// 正文以外的字段按修改时间取新的，同刻归服务器；本机胜出的仍待推送。
   @Test(arguments: [(-1_000, "local edit", true), (1_000, "remote", false), (0, "remote", false)] as [(Int64, String, Bool)])
   func newerEditWinsNonBodyFieldsAndTiesGoToTheServer(remoteOffset: Int64, kept: String, stillPending: Bool) async throws {
     let project = try await store.createProject(name: "local", color: "#111")
@@ -111,7 +107,6 @@ import Testing
     #expect(try await rig.reconcileDelta().saves == (stillPending ? [rig.id(project.id)] : []))
   }
 
-  /// 两边都改了正文：较新的留在原卡，另一版成为一张普通可见的冲突副本，副本与仍待推送的原卡都同步给其他设备。
   @Test(arguments: [true, false])
   func concurrentBodyEditsKeepBothVersionsAsAConflictCopy(remoteIsNewer: Bool) async throws {
     let card = try await pushedCard(body: "base")
@@ -139,7 +134,7 @@ import Testing
     #expect(try await store.cards(in: Project.defaultID).count == 1)
   }
 
-  /// 留原卡见 App 的 SyncWiringTests；留副本时原卡换成副本的正文，副本消失。
+  /// 留原卡见 App 的 `SyncWiringTests`。
   @Test func keepingTheCopyPutsItsBodyOnTheOriginalAndDropsTheCopy() async throws {
     let card = try await pushedCard(body: "base")
     let local = try await editCard(card, body: "local")
@@ -155,7 +150,6 @@ import Testing
 
   // MARK: 发送结果
 
-  /// 上传被拒（服务器上有别的版本）：同拉取一样按修改时间合并；服务器的较新就覆盖本机，本机较新就留下、仍待推送。
   @Test(arguments: [true, false])
   func serverRecordChangedIsMergedLikeAnyRemoteChange(serverIsNewer: Bool) async throws {
     let card = try await pushedCard(body: "base")

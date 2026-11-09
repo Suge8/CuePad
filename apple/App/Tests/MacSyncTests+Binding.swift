@@ -16,7 +16,6 @@ extension MacSyncTests {
         return try await awaitFinished(request.id)
     }
 
-    /// 绑定取某个会话的工作目录，或另一个项目已绑的目录（换绑覆盖旧的），没有文件夹就是解除；都写成本机的目录绑定，不写发送记录。
     @Test func 绑定_取会话的工作目录或别的项目的目录_换绑覆盖_没有文件夹就是解除() async throws {
         let app = try folder("app"), second = try folder("second")
         _ = try await indexed("s1", cwd: app)
@@ -38,7 +37,6 @@ extension MacSyncTests {
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
-    /// 项目记录可能还没同步到这台 Mac（手机刚新建项目就带着文件夹）：绑定按项目 id 记，记录晚到也对得上，不因此失败。
     @Test func 绑定_项目记录还没到本机也成功() async throws {
         let app = try folder("app")
         _ = try await indexed("s1", cwd: app)
@@ -68,7 +66,6 @@ extension MacSyncTests {
         #expect(try await services.store.directory(of: project.id) == existing.path)
     }
 
-    /// 目录被删或改名了：不启动 Pi，按失败写回，原因写目录末段名。
     @Test func 目录不存在时不启动_按失败写回() async throws {
         _ = try await indexed("s1", cwd: rig.directory.appending(path: "work/gone", directoryHint: .isDirectory))
         let project = try await services.store.createProject(name: "App", color: "#000000")
@@ -85,7 +82,6 @@ extension MacSyncTests {
         #expect(rig.host.calls.isEmpty)
     }
 
-    /// 项目在哪台 Mac 上绑定了目录（只带目录末段名）同步给手机：Mac 绑定、解绑后随之写、删。
     @Test
     func 目录绑定随绑定与解绑同步() async throws {
         let project = try await services.store.createProject(name: "App", color: "#000000")

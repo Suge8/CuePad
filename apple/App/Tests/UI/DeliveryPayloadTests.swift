@@ -6,7 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43：另一进程在同步读出 payload 后撤回，内存中的旧 payload 不能越过撤回继续派发。
 @MainActor
 struct DeliveryPayloadTests {
     @Test func 同步已读出的旧payload被撤回后不再交出_下一句仍正常送达() async throws {
@@ -23,8 +22,8 @@ struct DeliveryPayloadTests {
         let session = try #require(try await mac.services.store.allPiSessionStates().first)
         phone.services.startSync(); mac.services.startSync()
         try await eventually("两端同步就绪") {
-            phone.services.syncStatus == .idle && phone.services.syncReconciled
-                && mac.services.syncStatus == .idle && mac.services.syncReconciled
+            phone.services.syncState.status == .idle && phone.services.syncState.reconciled
+                && mac.services.syncState.status == .idle && mac.services.syncState.reconciled
         }
         try await mac.services.executor.start()
         // 用独立 SQLite 写者精确落在第一次发送登记之前，等价于尚未交出的 pending 被原子撤回。

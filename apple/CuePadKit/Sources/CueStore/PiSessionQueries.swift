@@ -2,7 +2,6 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 会话列表的一页（Mac 与手机共用的唯一查询）。顺序见 `PiSessionPage`。
   public func piSessionPage(_ query: PiSessionQuery) throws -> PiSessionPage {
     let (condition, arguments) = try Self.condition(query)
     // 只有一种状态的范围里"已结束的排后面"是常量，留着它 SQLite 就不走按状态的索引、把整个范围排一遍（真实库已结束的一页 17 万步对 3 千步）
@@ -103,7 +102,6 @@ extension CueStore {
     FROM cards WHERE piSessionID IS NOT NULL AND todoAt IS NOT NULL AND \(cardActive)
     """
 
-  /// 绑在置顶任务上的会话：会话列表的置顶在最前（`PiSessionQuery.pinned`）。
   private static let pinnedSessions = "SELECT sessionID FROM (\(sessionTaskRows)) WHERE pinned = 1"
 
   /// 在问你的会话："等你"里会话那一半（规则在 `PiSessionState.asksYou`，汇总在 `cueTally`）。只读在等回答的那几条，订阅也只依赖它们（`narrow`）：
@@ -187,7 +185,6 @@ extension CueStore {
       orderBy: "stateSince DESC, id", limit: limit)
   }
 
-  /// 一个会话记录里最后的模型（在 CuePad 里看到、选的那个；会话结束后仍留着）。
   public func lastModel(ofSession sessionID: String) throws -> PiModelKey? {
     try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))?.model?.key
   }

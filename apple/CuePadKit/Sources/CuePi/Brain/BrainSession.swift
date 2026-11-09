@@ -2,8 +2,6 @@
 import CueStore
 import Foundation
 
-/// 各家大脑共用的部分：事件流、本次运行的临时目录（系统提示等）、给运行时的环境。进程与协议各家用接入里的那一份
-/// （`ChildProcess`、`CodexRPC`、`ClaudeStream`、`OpenCodeClient`）。
 @MainActor
 final class BrainSession {
     let events: AsyncStream<TurnEvent>
@@ -19,7 +17,7 @@ final class BrainSession {
         emitter.yield(event)
     }
 
-    /// 本次运行的临时目录（只有自己能读）。
+    /// 只有自己能读。
     func makeDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cue-brain-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -27,7 +25,7 @@ final class BrainSession {
         return directory
     }
 
-    /// 进程退出（`reason` 为 nil 是 `stop()` 让它退的）：删掉临时目录，发 `exited` 并结束事件流。只算第一次。
+    /// `reason` 为 nil 是 `stop()` 让它退的；只算第一次。
     func exited(_ reason: ShownText?) {
         guard !ended else { return }
         ended = true
@@ -43,7 +41,6 @@ final class BrainSession {
     }
 }
 
-/// 工具结果里的文字：字符串原样，内容块（`[{"type": "text", "text": …}]`，MCP 与 Pi 同形）只取文字块拼起来。
 func brainText(_ content: JSONValue?) -> String {
     if let text = content?.string { return text }
     return (content?.array ?? []).filter { $0["type"]?.string == "text" }.compactMap { $0["text"]?.string }.joined(separator: "\n")

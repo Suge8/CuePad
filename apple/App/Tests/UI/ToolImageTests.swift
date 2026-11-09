@@ -7,8 +7,6 @@ import ImageIO
 import Testing
 @testable import CuePad
 
-/// 工具结果里的图（Agent 截的屏、读进来的图）：Mac 读会话时缩小存进附件、记在那一步上，会话页那一轮的经过下面是它的缩略图（`RoundProcess` 读
-/// `Tools.images`），点开在全屏页里看、几张左右翻。大的缩到长边 1600，小的原样；同一张反复读只存一份。
 /// 各家同一条路（`PiHistory.Transcript.toolImages`）：会话文件的形状照各家真机读图时写下的（Codex 0.166 的 view_image、Grok 1.0.70 的 read_file）。
 @MainActor
 struct ToolImageTests {
@@ -34,7 +32,6 @@ struct ToolImageTests {
         #expect(images.count == 2)
         #expect(round.tools?.steps == 33)  // 31 条命令 + 读两个文件（同一个文件读两次只算一次）
 
-        // 升级前按旧规则读过的会话：检查点作废、从头重读，窗口内已有的轮次也补上图
         let stored = try JSONEncoder().encode(update.checkpoint)
         var old = try #require(try JSONSerialization.jsonObject(with: stored) as? [String: Any])
         old["rules"] = 1

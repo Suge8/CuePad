@@ -6,14 +6,10 @@ import UserNotifications
 import UIKit
 #endif
 
-/// 系统通知，两端一份：通知代理、通知权限、点开的通知去哪。点开时按种类路由（`AlertRoute`），交给链接同一个入口（`AppServices.pendingDeepLink`，
-/// 工作区取走，`Workspace.openLinks`）：Agent 的打开那个会话，Cue 的打开 Cue 页，周额度提醒只打开 App。进程只有一个，由 App 代理持有并在启动完成前设为代理，
-/// 冷启动时点开的通知才不会丢。
-/// 提示到不到你只有一条规则（`CueStore.reaches`：该不该你接、你在不在哪台在线的 Mac 上开着那一页，他去了别的设备的 Mac 不算开着，见 `Viewer`）；
-/// 手机自己前台收到推送时再按本机此刻开着哪一页定弹不弹。
-/// - iOS：通知都是 CloudKit 订阅在服务端生成的锁屏通知；这里另管远程通知注册，设置页据此显示一行状态（`PiAlertStatus`）。
-///   前台收到的 Agent 通知不展示（前台的提示是 App 内横幅，`SessionAlertTracker`）；Cue 的在 Cue 页不在屏上时照常弹。
-/// - Mac：不收推送，通知都是这里发的本地通知（`post`）；你在哪台 Mac 上开着那一页时什么都不发，其余前台后台一样是系统通知。
+/// 点开的通知按种类路由（`AlertRoute`），交给链接同一个入口（`AppServices.pendingDeepLink`）。进程只有一个，由 App 代理持有并在启动完成前设为代理，冷启动时点开的通知才不会丢。
+/// 提示到不到你只有一条规则（`CueStore.reaches`）；手机自己前台收到推送时再按本机此刻开着哪一页定弹不弹。
+/// - iOS：通知都是 CloudKit 订阅在服务端生成的锁屏通知，这里另管远程通知注册（`PiAlertStatus`）。
+/// - Mac：不收推送，通知都是这里发的本地通知（`post`）。
 /// - 周额度提醒（`remind`）两端都经 `post` 排成定时本地通知：到点时 App 不必在跑，手机上也不靠推送。
 @Observable
 final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
@@ -22,12 +18,10 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     /// 点开的通知交给它（`pendingDeepLink`）；资料库打开后接上（早于系统交来点开的通知）。
     @ObservationIgnored weak var services: AppServices?
     #if os(macOS)
-    /// 主窗口：前台怎么呈现、你在不在看（`Workspace.presentation`）。
     @ObservationIgnored weak var workspace: Workspace?
     @ObservationIgnored let sounds = AlertSounds()
     #endif
-    /// App 图标角标该显示的数（`CueNow.needsYou`：拍板加待回复；Mac 由 `AppDelegate` 接主窗口那一份，iPhone 由推出 Cue 此刻的那一处 `AppServices.present` 给）；
-    /// 没有权限时记着，开了之后补上。
+    /// App 图标角标该显示的数（`CueNow.needsYou`），由 Mac 的 `AppDelegate`、iPhone 的 `AppServices.present` 给；没有权限时记着，开了之后补上。
     @ObservationIgnored private var badge = 0
 
     var isAuthorized: Bool { authorization == .authorized || authorization == .provisional }
@@ -42,7 +36,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         await showBadge()
     }
 
-    /// App 图标的角标（iPhone 的主屏、Mac 的 Dock）：经通知中心设，受系统"标记"开关控制，没有通知权限时不设。
+    /// 经通知中心设，受系统"标记"开关控制，没有通知权限时不设。
     func showBadge(_ count: Int) async {
         badge = count
         guard delivers else { return }
@@ -64,7 +58,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// 尚未决定时弹一次系统提示；已决定过的直接返回。
     func requestAuthorization() async {
         guard delivers else { return }
         do {
@@ -94,8 +87,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         receive(response.notification.request.content.userInfo)
     }
 
-    /// 本机发通知的唯一出口（Mac 的 Agent 与 Cue 提示、两端的周额度提醒）：Mac 上到不到你不成立时、这份库不发时（`delivers`）什么都不做
-    /// （不要权限、不装提示音）；第一次真要发时才征求权限，没有权限就不发。给了 `date` 是定时的：到点由系统弹，App 不必在跑；
+    /// 本机发通知的唯一出口：Mac 上到不到你不成立时、这份库不发时（`delivers`）什么都不做（不要权限、不装提示音）；第一次真要发时才征求权限，没有权限就不发。给了 `date` 是定时的：到点由系统弹，App 不必在跑；
     /// 同一 `id` 的待发通知原地换掉，已送达的还在通知中心里时系统只换内容、不再响（所以即时的每条标识都不同）。
     func post(_ alert: AlertMessage, id: String = UUID().uuidString, at date: Date? = nil) async {
         #if os(macOS)
@@ -124,7 +116,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// 按最新的额度观测重排周额度提醒（`QuotaReminder`）：撤掉不再要响的待发提醒，要响的经 `post` 按同一标识排上（待发的原地换成最新的剩余）。
     func remind(_ quotas: [AccountQuota]) async {
         guard delivers else { return }
         let center = UNUserNotificationCenter.current()
@@ -206,7 +197,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     #endif
 }
 
-/// 一条本机发的通知（`AlertCenter.post`）：说的是什么（开关、提示音、点开去哪都看它）、归在哪一组（同一会话的在通知中心里叠在一起）与文案。
 struct AlertMessage {
     var route: AlertRoute
     var thread: String
@@ -233,14 +223,13 @@ struct AlertMessage {
     }
 }
 
-/// 一条通知说的是什么：Agent 会话的提示（"等你"、"待回复"或"做完了"），Cue 的消息（带选项来问、urgent 的，都算"等你"），或周额度提醒。
-/// 手机的 CloudKit 推送与本地通知（`userInfo` 由这里写）都从 userInfo 认出。
+/// Cue 的消息带选项来问、urgent 的，都算"等你"。手机的 CloudKit 推送与本地通知（`userInfo` 由这里写）都从 userInfo 认出。
 nonisolated enum AlertRoute: Equatable {
     case session(PiAlertTap)
     case cue
     case quota
 
-    /// 用哪种提示的开关与提示音；周额度提醒没有开关（nil）。
+    /// 周额度提醒没有开关（nil）。
     var kind: PiAlert? {
         switch self {
         case .session(let tap): tap.kind
@@ -249,12 +238,11 @@ nonisolated enum AlertRoute: Equatable {
         }
     }
 
-    /// 说的是哪个会话（会话记录 id）；Cue 的为 nil。
     var session: UUID? {
         if case .session(let tap) = self { tap.sessionState } else { nil }
     }
 
-    /// 到不到你问 `CueStore.reaches` 时说的是什么；周额度提醒不看你在哪页（nil）。
+    /// 周额度提醒不看你在哪页（nil）。
     var subject: AlertSubject? {
         switch self {
         case .session(let tap): .session(tap.sessionState, tap.kind)

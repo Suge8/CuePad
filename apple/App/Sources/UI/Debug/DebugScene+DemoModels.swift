@@ -8,10 +8,7 @@ extension DebugScene {
         PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels, supportsFast: supportsFast)
     }
 
-    /// 演示会话的模型配置，按哪家 Agent：Pi 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，菜单里不带标志）；
-    /// OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）；
-    /// Codex、Claude Code 与 Grok Build 是它们自己报的清单，照录像带里 Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）、
-    /// Claude Code 的 `initialize`（Claude 系）与 Grok Build 握手报的模型，提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。
+    /// Codex、Claude Code 与 Grok Build 是它们自己报的清单，照录像带里 Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）、Claude Code 的 `initialize`（Claude 系）与 Grok Build 握手报的模型，提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）。
     static func demoModels(for agent: AgentKind?, fast: Bool? = nil) -> PiModelState {
         func listed(_ models: [PiModelOption], current: Int, thinking: PiThinkingLevel) -> PiModelState {
             PiModelState(model: models[current], thinking: .known(thinking), fast: fast, models: models)
@@ -65,7 +62,6 @@ extension DebugScene {
         ])
     }()
 
-    /// 演示会话的斜杠命令清单：内置、扩展、提示词模板、技能各有几条（回复框输入 "/" 弹出的面板）。
     static let demoCommands = [
         PiSlashCommand(name: "compact", summary: String(localized: "压缩当前上下文，可附上说明", table: "Demo"), source: .known(.builtin), hint: String(localized: "[说明]", table: "Demo")),
         PiSlashCommand(name: "name", summary: String(localized: "设置会话名", table: "Demo"), source: .known(.builtin), hint: String(localized: "<名字>", table: "Demo")),
@@ -81,8 +77,7 @@ extension DebugScene {
         PiSlashCommand(name: "skill:frontend-design", summary: String(localized: "做界面时先定视觉方向与密度", table: "Demo"), source: .known(.skill)),
     ]
 
-    /// 演示会话报的斜杠命令，按哪家 Agent（从 `demoCommands` 里挑，同真会话报的那几类）：Codex 是能从 CuePad 执行的几个内置命令加 skill（`CodexRuntime.builtinCommands`），
-    /// OpenCode 是压缩加提示词模板，Pi 与其余是整份。几家各报各的，手机发给 Agent 时换选会话才看得出命令跟着换。
+    /// 几家各报各的：手机发给 Agent 时换选会话才看得出命令跟着换。
     static func demoCommands(for agent: AgentKind?) -> [PiSlashCommand] {
         let names: Set<String>? = switch agent {
         case .codex: ["compact", "name", "model", "skill:deploy", "skill:frontend-design"]
@@ -93,8 +88,6 @@ extension DebugScene {
         return names.map { names in demoCommands.filter { names.contains($0.name) } } ?? demoCommands
     }
 
-    /// 演示会话的上下文用量（窗口 20 万 token）：多数宽裕，atlas 用到八成多（百分比加粗转墨色、说明里建议压缩），
-    /// rename 用到九成多（胭脂那一档），billing 刚压缩过。
     static let demoContexts: [String: PiContextUsage] = [
         "atlas": PiContextUsage(tokens: 172_000, window: 200_000),
         "homepage": PiContextUsage(tokens: 31_000, window: 200_000),
@@ -103,11 +96,7 @@ extension DebugScene {
         "billing": PiContextUsage(tokens: nil, window: 200_000),
     ]
 
-    /// 演示的几台 Mac 上的 Agent（`MacAgents`，配 `-CuePadDemo YES`）：工作室的 Mac Studio（demo-mac，Cue 运行在这台）与 Mac 上的这台本机
-    /// 有 Pi、Claude Code、Codex（OpenCode 没装：新会话里不列它），demo-mini 有 Claude Code 与 Codex；
-    /// MacBook Air（demo-air，只绑了 CuePad）一家都不能用，各有原因（新会话里选"CuePad · MacBook Air"看为什么）。
     /// Mac 上给 `-CuePadHost bare` 时本机是一家都不能用的那台（看 + 的悬停与表单里的原因）；本机的记录会被它自己的探测改写成隔离目录里真实的样子。
-    /// 各家的模型与不指定时用的那个照演示会话报的（`demoModels(for:)`）。
     static func seedMacAgents(_ services: AppServices) async throws {
         func agent(_ kind: AgentKind) -> MacAgent {
             let state = demoModels(for: kind)
@@ -126,8 +115,6 @@ extension DebugScene {
         #endif
     }
 
-    /// 演示会话里 scratch 是后台托管的 Codex；其余非 Pi 会话在终端里——cuepad 是 Claude Code（回复框只有文字、没有停止与模型），
-    /// homepage 是 Codex（能作答、换模型，斜杠命令只有几个内置与 skill），billing 是 OpenCode，历史里的 weekly 是 Claude Code。
     static let demoAgents: [String: AgentKind] = ["scratch": .codex, "cuepad": .claudeCode, "homepage": .codex, "billing": .opencode, "weekly": .claudeCode]
 }
 #endif

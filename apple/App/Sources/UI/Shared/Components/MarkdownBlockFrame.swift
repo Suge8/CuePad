@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 所有块共用列表栏：首块显示标记，其余块保留同样的标记宽度；子项每层只加一档缩进。
 struct MarkdownBlockFrame<Content: View>: View {
     let block: MarkdownBlock
     @ViewBuilder let content: () -> Content

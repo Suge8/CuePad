@@ -1,8 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 从对话数据推出来的东西：对话里的每一条（`PiChat.entries`，连同还没进对话的你的话）与刻度滑条的刻度。滚动开始与结束、"回到最新"圆钮出现与消失都会让 `SessionChat` 重算 body，
-/// 而这时对话数据没变：几百条的条目不用每次都推一遍。
+/// 滚动开始与结束、"回到最新"圆钮出现与消失都会让 `SessionChat` 重算 body，而这时对话数据没变：几百条的条目不用每次都推一遍。
 final class ChatDerived {
     private struct Key: Equatable {
         let messages: [PiChatMessage]

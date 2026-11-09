@@ -41,11 +41,9 @@ extension AgentTape {
     }
 
     private static let home = FileManager.default.homeDirectoryForCurrentUser.path
-    /// 测试进程的工作目录（检出的位置因人而异）
     private static let workingDirectory = FileManager.default.currentDirectoryPath
     private static let scratch = (NSTemporaryDirectory() as NSString).standardizingPath
     private static let build = PiProcess.cuepad.deletingLastPathComponent().path
-    /// 认得出这台机器与这个人的：主机名、电脑名、git 与 Codex 登录里的邮箱
     static let identity: [(String, String)] = {
         // 主机名大小写因来源而异（ProcessInfo 给小写，gethostname 原样）：两种都换，先长后短
         var buffer = [CChar](repeating: 0, count: 256)
@@ -71,7 +69,6 @@ extension AgentTape {
     private static let bundledVersion = #""extensionVersion":\#(PiExtensionBundle.version)"#
     private static let window = 2 * 86_400_000.0
 
-    /// 录下前：密钥、路径、pid、时间换成占位符。
     static func normalize(_ text: String, _ state: inout State) -> String {
         var text = text.replacing("\\/", with: "/")
         for secret in state.secrets where text.contains(secret) { text = text.replacing(secret, with: "{secret}") }
@@ -165,7 +162,6 @@ extension AgentTape {
         }
     }
 
-    /// 时间占位符录下的时刻，相对 `t0` 的毫秒（`{s:…}` 相对 `t0` 所在的那一秒）；不是时间占位符为 nil。
     private static func recordedDelta(_ kind: String, _ value: String, t0: Double) -> Double? {
         switch kind {
         case "ms": return Double(value)
@@ -175,7 +171,6 @@ extension AgentTape {
         }
     }
 
-    /// 全部匹配的各组（没匹配上的组为 nil）。
     private static func matches(_ pattern: String, in text: String) -> [[String?]] {
         let regex = try! NSRegularExpression(pattern: pattern)
         let source = text as NSString

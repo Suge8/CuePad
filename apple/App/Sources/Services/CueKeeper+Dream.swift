@@ -5,11 +5,9 @@ import CueStore
 import Foundation
 
 extension CueKeeper {
-    /// 后台整理记忆（做梦）：记忆变了（订阅记忆的版本，与对账同一份判定：别的设备迟到同步来的钉上、取消、忘掉也算；摘要不在内，写摘要不会再叫醒它）、
-    /// Cue 又没在跑一轮，就看有没有待合并的块
-    /// （`CueMemoryView.merges`），有就另起一个一次性的大脑合，跑完收掉。重点只归 Cue 整理：做梦只写摘要，和 Cue 的一轮重叠也不改规矩。Cue 一轮里接连记下的几条等这一轮做完一起合，也不和回你的那一轮抢模型。
-    /// 一个个按序处理：同一时刻只跑一个，跑时又变了，跑完由排着的那次变化再看一遍；合不成的（出错、没写全）不另记，等下一次记忆变化自然再看。
-    /// 值班到 `run` 结束。
+    /// 记忆变了（与对账同一份判定；摘要不在内，写摘要不会再叫醒它）且 Cue 没在跑一轮时，才看有没有待合并的块。
+    /// 同一时刻只跑一个，跑时又变了，跑完由排着的那次变化再看一遍；合不成的（出错、没写全）不另记，等下一次记忆变化自然再看。
+    /// 做梦只写摘要，和 Cue 的一轮重叠也不改规矩；Cue 一轮里接连记下的几条等这一轮做完一起合，不和回你的那一轮抢模型。
     func dreams() async {
         var seen: CueMemoryVersion?
         do {
@@ -23,14 +21,12 @@ extension CueKeeper {
         }
     }
 
-    /// 做梦看的读数：记忆的版本与 Cue 在不在跑一轮（库里它此刻的状态）。
     private nonisolated struct DreamMoment: Equatable, Sendable {
         var memory: CueMemoryVersion
         var busy: Bool
     }
 
-    /// 合一次：Cue 的那家与模型、强度用低档（一行行的摘要用不着深想，模型照用户给 Cue 选的，各家都起得来、不另猜模型名），
-    /// 系统提示只讲怎么合（`CuePrompt.dream`），工具只有 merge（`cuepad mcp --dream`），不带 Cue 的会话。一轮做完或进程退出就停。
+    /// 强度用低档：一行行的摘要用不着深想；模型照用户给 Cue 选的，各家都起得来、不另猜模型名。
     private func dream() async {
         var brain: (any HostedSession)?
         do {

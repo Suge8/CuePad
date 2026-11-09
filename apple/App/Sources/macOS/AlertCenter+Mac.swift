@@ -4,14 +4,14 @@ import CueSync
 import UserNotifications
 import os
 
-/// Mac 的通知都是本机发的：Mac 不注册远程通知、不收 CloudKit 推送（docs/sync.md「Agent 与 Cue 的通知」），
+/// Mac 的通知都是本机发的：Mac 不注册远程通知、不收 CloudKit 推送（签名里没有推送权限 aps-environment；同步到达本来也不靠推送），
 /// 所以设置里的开关与提示音管得到每一条，免打扰只认系统的专注模式。
 extension AlertCenter: CueNotifying {
     func post(title: String, body: String) async {
         await post(AlertMessage(title: title, body: body))
     }
 
-    /// 提示音（`post` 问）：这种提示选的那段（先装进去，见 `AlertSounds`），选了无声为 nil；没有开关的周额度提醒用系统默认音。
+    /// 选了无声为 nil；没有开关的周额度提醒用系统默认音。
     func sound(for route: AlertRoute) async -> UNNotificationSound? {
         guard let kind = route.kind else { return .default }
         guard let sound = services?.settings.alerts[kind].sound else { return nil }
@@ -24,14 +24,13 @@ extension AlertCenter: CueNotifying {
         await reaches(route) ? [.banner, .sound, .list] : []
     }
 
-    /// 这条提示此刻到不到你（`post` 问）：这种提示开着，且 `AppServices.reaches`（这台 Mac 开着哪页也记在那里）；周额度提醒总是到。
     func reaches(_ route: AlertRoute) async -> Bool {
         guard let kind = route.kind, let subject = route.subject else { return true }
         guard let services = workspace?.services, services.settings.alerts[kind].isOn else { return false }
         return await services.reaches(subject)
     }
 
-    /// 打开了这个会话：撤掉它那一组已送达的通知（每条标识不同，按路由认）。
+    /// 每条标识不同，按路由认。
     func dismiss(session: UUID) async {
         guard delivers else { return }
         let center = UNUserNotificationCenter.current()

@@ -31,7 +31,6 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 只有一个状态标时它说的是什么（读屏标签、悬停提示、项目长按菜单的标题、任务上的会话状态）。
     var presence: String {
         switch status {
         case .delivery(.preparing(let reason)): reason
@@ -56,13 +55,10 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 名字与状态词加粗：做完了你还没看。
     var isUnread: Bool { status == .unread }
 
-    /// 此刻显示为没能送达时的原因（会话行、项目"此刻"、任务浮窗写它）。
     var undelivered: Speech.Failure? { if case .delivery(.failed(let failure)) = status { failure } else { nil } }
 
-    /// 在跑：工作中，或话在路上、已送达而会话还没跟上（没能送达的不算）——状态色、动效、排序与区头"N 个在跑"同一档。
     var isRunning: Bool {
         switch status {
         case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): false
@@ -71,8 +67,7 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 会话列表的档：等你确认 → 待回复 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。拍板在前同看板的等你列（在问的会话卡着 Agent），
-    /// 待回复紧随。
+    /// 拍板在前同看板的等你列（在问的会话卡着 Agent），待回复紧随。
     var rank: Int {
         switch status {
         case .asking: 0
@@ -85,7 +80,6 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 选会话时排在前面的（发给 Agent 的会话选单）：等你确认与待回复 → 出错 → 有新回复 → 工作中 → 停下的 → 已结束。
     var urgency: Int {
         switch status {
         case .asking, .awaitsReply: 6
@@ -100,7 +94,6 @@ nonisolated extension PiShown {
 }
 
 nonisolated extension PiShown {
-    /// 要你动手：等你确认、待回复、出错、没能送达。只有它们带彩色。
     var needsYou: Bool {
         switch status {
         case .asking, .awaitsReply, .failed, .delivery(.failed): true

@@ -1,37 +1,27 @@
 import QuartzCore
 import SwiftUI
 
-/// 接力的一头：会话 id 与它的任务（请求带着的那张卡）；`opens` 是这次交给开出了这个会话（start）。
 nonisolated struct RelayEnd: Equatable, Sendable {
     var session: String
     var task: UUID?
     var opens = false
 }
 
-/// Cue 那一头：宽屏常驻条的入口优先，其次是 Cue 页头；菜单栏与输入条在自己的窗口内取锚。
 enum CueSpot: Int {
     case entry
     case header
 }
 
-/// 会话那一头落在哪：屏上有它的几处时取最具体的（`rank` 小的）。只有此刻在接力的会话与任务挂锚。
 enum EndSpot: Equatable {
-    /// 会话的状态标，按它所在的那一行分级（`Row`）。
     case session(String, Row)
-    /// 任务圈与正在开会话的空心点：带着这件任务、或交给的会话就是它绑着的那个时算。
     case task(UUID, session: String?)
 
-    /// 状态标所在的行，越具体越前。
     enum Row: Int {
-        /// 常驻会话条：交活先落在这一格，不能被另一栏里离 Cue 更近的会话页头抢走。
         case rail = 0
-        /// 会话自己那一行：会话列表、菜单栏面板、会话页的页头卡片。
         case own = 1
-        /// 它的任务行（任务行、任务卡、看板上代表它的那一格）。
         case task
     }
 
-    /// 对 `end` 来说有多具体；不是它的为 nil。
     func rank(for end: RelayEnd) -> Int? {
         switch self {
         case .session(let session, let row): session == end.session ? row.rawValue : nil
@@ -41,22 +31,17 @@ enum EndSpot: Equatable {
 }
 
 extension View {
-    /// 会话的状态标：接力的会话那一头，`row` 是它在哪种行里。只有此刻在接力的会话挂锚，平时什么都不加。
     /// 这次交给刚开出这个会话时，状态标先透明着，光落下时才亮出来（同 `relayArrival`）。
     func relaySpot(session: String?, row: EndSpot.Row = .own) -> some View { modifier(SessionSpot(session: session, row: row)) }
 
-    /// 任务行（任务圈、正在开会话的那个空心点）：任务交给的会话在接力、或这件任务就是接力带着的那件时，接力落在这里。
     func relaySpot(task: UUID) -> some View { modifier(TaskSpot(task: task)) }
 
-    /// Cue 的头像：接力的 Cue 那一头，光落进、发自头像右下那颗点（`RelayFlight.Scene.land`）。
     func relaySpot(cue spot: CueSpot) -> some View { background { RelayAnchor(role: .cue(spot)) } }
 
-    /// 会话自己那一行：这次交给刚开出这个会话时，行先占着位置、透明，光落下时淡出来（`Stage.arriving`）。
     func relayArrival(session: String) -> some View { modifier(Arrival(session: session)) }
 }
 
 extension EnvironmentValues {
-    /// 本窗口的接力舞台（`CueRelayStage` 放进来，引用不变）；不在主窗口里的（菜单栏面板、输入条）没有。
     @Entry var relayStage: CueRelayStage.Stage?
 }
 
@@ -75,7 +60,6 @@ private struct SessionSpot: ViewModifier {
     }
 }
 
-/// 任务交给的会话从窗口那一份里取（`cardAgents`，行本来就读它）：会话在接力、或这张卡就是接力的那件任务时挂锚。
 private struct TaskSpot: ViewModifier {
     let task: UUID
     @Environment(Workspace.self) private var workspace
@@ -90,7 +74,7 @@ private struct TaskSpot: ViewModifier {
     }
 }
 
-/// 新开出的会话那一行或它的状态标：舞台说它还在等光（`Stage.arriving`）时透明，光落下那一刻淡出来；藏起来是当场的，不淡出。
+/// 藏起来是当场的，不淡出。
 private struct Arrival: ViewModifier {
     let session: String?
     @Environment(\.relayStage) private var stage

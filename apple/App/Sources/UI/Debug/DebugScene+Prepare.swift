@@ -3,17 +3,16 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
-    /// 宽屏两栏的开合偏好每次按参数摆（隔离实例的偏好域在几次截图之间留着）：会话条默认开着，`-CuePadSidebar hidden` 藏起；Cue 默认开着，`-CuePadCue shut` 收起。
+    /// 宽屏两栏的开合偏好每次按参数摆：隔离实例的偏好域在几次截图之间留着。
     static func presetColumns(_ settings: AppSettings) {
-        settings.railExpanded = defaults.string(forKey: "CuePadSidebar") != "hidden"
-        settings.cueOpen = defaults.string(forKey: "CuePadCue") != "shut"
+        settings.railExpanded = args.layoutOpts.sidebar != "hidden"
+        settings.cueOpen = args.cue != "shut"
     }
 
-    /// `-CuePadSidebar drawer`、`-CuePadCue drawer`：摆好画面后拉出会话条的左缘抽屉、Cue 的右缘抽屉（窗口放不下它们时才看得见，`Workspace.railDrawer`、`showCue`）。
     /// 画面摆完再置：换主区会关抽屉。
     static func presetDrawers(_ workspace: Workspace) {
-        if defaults.string(forKey: "CuePadSidebar") == "drawer" { workspace.railDrawer = true }
-        if defaults.string(forKey: "CuePadCue") == "drawer" { workspace.showCue() }
+        if args.layoutOpts.sidebar == "drawer" { workspace.railDrawer = true }
+        if args.cue == "drawer" { workspace.showCue() }
     }
 
     static func prepareLibrary(_ workspace: Workspace) async -> UUID? {
@@ -24,18 +23,17 @@ extension DebugScene {
 
     private static func prepare(_ workspace: Workspace) async throws -> UUID? {
         let store = workspace.services.store
-        // -CuePadSampleCrash YES：存几份样例诊断，设置里出现"上次崩溃"（配 -CuePadCrashSheet YES 直接打开摘要）；导出的摘要另写进存档旁的 summary.txt
-        if defaults.bool(forKey: "CuePadSampleCrash") {
+        if args.sampleCrash {
             let diagnostics = workspace.services.diagnostics
             try diagnostics.archive.store(sampleFreeze)
             diagnostics.record(sampleDiagnostics)
             try Data(DiagnosticSummary.text(diagnostics.reports).utf8).write(to: diagnostics.archive.directory.deletingLastPathComponent().appending(path: "summary.txt"))
         }
         #if os(macOS)
-        if defaults.string(forKey: "CuePadSeed") == "perf" { try await seedIfFresh(store, PerfLibrary.seed) }
+        if args.seed == "perf" { try await seedIfFresh(store, PerfLibrary.seed) }
         try await isolateBoundFolders(store)
         #endif
-        if defaults.bool(forKey: "CuePadDemo") {
+        if args.demo {
             try await seedIfFresh(store, DemoLibrary.seed)
             try await seedMacAgents(workspace.services)
             try await seedAgentLibrary(workspace.services)
@@ -44,14 +42,14 @@ extension DebugScene {
         try await seedOneMac(store)
         await seedFiles(workspace.services)
         await presetSync(workspace.services)
-        guard let name = defaults.string(forKey: "CuePadProject"),
+        guard let name = args.project,
               let project = try await store.projects().first(where: { $0.name == name })
         else { return nil }
-        let many = defaults.integer(forKey: "CuePadManyTasks")
+        let many = args.manyTasks
         if many > 0, try await store.taskCounts(in: project.id).open < many {
             for index in 1...many { _ = try await store.createTask(String(localized: "压力任务 \(index)：画布与节点的一段说明", table: "Demo"), in: project.id) }
         }
-        if defaults.bool(forKey: "CuePadNoIdeas") {
+        if args.noIdeas {
             for card in try await store.cards(in: project.id) { _ = try await store.trashCard(card.id) }
         }
         #if os(macOS)
@@ -60,10 +58,8 @@ extension DebugScene {
         return project.id
     }
 
-    /// `-CuePadMac agents|bare`：库里写下一台 Mac「MacBook Pro」，接了 Claude Code 与 Codex，或一家都没接（bare），
-    /// 看手机上启用 Cue 前那三步（`CueMacSteps`）走到哪一步。
     private static func seedOneMac(_ store: CueStore) async throws {
-        guard let mac = defaults.string(forKey: "CuePadMac") else { return }
+        guard let mac = args.mac else { return }
         let bare = mac == "bare"
         let agents = bare ? [] : [AgentKind.claudeCode, .codex].map { MacAgent(kind: $0, model: nil, models: []) }
         let problems = bare ? AgentKind.allCases.map { MacAgentProblem(kind: $0, reason: .notInstalled) } : []
@@ -80,7 +76,7 @@ extension DebugScene {
         guard let library = ProcessInfo.processInfo.environment[LibraryLocation.environmentKey] else { return }
         let directories = try await store.projectDirectories()
         let real = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
-        let home = DemoLibrary.demoHome, asked = defaults.string(forKey: "CuePadFolder")
+        let home = DemoLibrary.demoHome, asked = args.folder
         for (project, path) in directories where path.hasPrefix(real) && !path.hasPrefix(library + "/") && path != asked {
             try await store.setDirectory(home + path.dropFirst(real.count), for: project)
         }
@@ -92,7 +88,6 @@ extension DebugScene {
         if try await store.projects().allSatisfy(\.isDefault) { try await seed(store) }
     }
 
-    /// `-CuePadComposer <cards|attachments|lines|slash>`（配 session、newsession 画面，iOS 与 Mac）：输入框出现时 cards 打开选卡片面板，slash 写进 "/re" 弹出斜杠命令面板，
     /// attachments 带上一张卡片（`-CuePadCard` 挑哪张）并放进两张演示图片与一份 PDF，lines 写进 9 行文字（看文字区长到 6 行后在里面滚）。
     /// ＋ 菜单是系统菜单、不能代为展开：截图时按一下 ＋（iPhone 17 Pro 回复框：`axe touch -x 37 -y 810 --down --up --delay 0.15`；axe 的 tap 太快，菜单不开）。
     static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
@@ -100,12 +95,11 @@ extension DebugScene {
     }
 
     private static func presetComposerBody(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async throws {
-        switch defaults.string(forKey: "CuePadComposer") {
+        switch args.composer {
         case "cards":
             // 等推入页面的转场走完再弹，转场中弹出的面板会被系统丢掉；弹出前不算就绪
             later(.seconds(1)) { source.wrappedValue = .cards }
         case "attachments":
-            // 先挑默认项目里的，没有再挑第一个项目里的
             var id = try await card(in: Project.defaultID, store: store)
             if id == nil, let project = try await store.projects().first { id = try await card(in: project.id, store: store) }
             if let id, let card = try await store.card(id) {
@@ -122,7 +116,6 @@ extension DebugScene {
         }
     }
 
-    /// 演示用的一份 PDF（一页 A4、几行字）存进附件目录：附件条、正文里的文件牌、你的话里的文件拍照用。
     static func demoPDF(_ store: CueStore) throws -> DraftFile {
         let name = String(localized: "季度复盘.pdf", table: "Demo")
         let url = FileManager.default.temporaryDirectory.appending(path: name)
@@ -150,10 +143,9 @@ extension DebugScene {
         return DemoLibrary.encode(context.makeImage()!)
     }
 
-    /// `-CuePadCard` 指定（或最近修改）的一张散放的灵感。
     static func card(in project: UUID, store: CueStore) async throws -> UUID? {
         let cards = try await store.cards(in: project)
-        let prefix = defaults.string(forKey: "CuePadCard") ?? ""
+        let prefix = args.card ?? ""
         return cards.filter { $0.body.hasPrefix(prefix) }.max { $0.modifiedAt < $1.modifiedAt }?.id
     }
 
@@ -162,11 +154,10 @@ extension DebugScene {
         later(.milliseconds(300)) { proxy.scrollTo(ScrollAnchor.older, anchor: UnitPoint(x: 0.5, y: 0.35)) }
     }
 
-    /// task 画面：打开 `-CuePadTask <标题开头>` 那一条任务的气泡，没给是 `preferred` 挑中的，再没有是第一条（推进中、待办）。
     static func openTask(_ workspace: Workspace, preferred: (Card) -> Bool) async {
         await running("打开任务气泡") {
             let tasks = try await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)
-            let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
+            let named = args.task.flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
             if let task = named ?? tasks.first(where: preferred) ?? tasks.first { workspace.openTask(task) }
         }
     }

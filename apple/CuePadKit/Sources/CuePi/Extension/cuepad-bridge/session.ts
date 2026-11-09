@@ -9,17 +9,14 @@ import { IdleExit, IS_HOSTED, SelfReload } from "./lifecycle.ts";
 import { preflight } from "./preflight.ts";
 import { QuotaFetcher, type Quota, type QuotaWindow } from "./quota.ts";
 
-/** 交给 CuePad 用来定位终端的环境变量 */
+/** CuePad 用它们定位终端 */
 const TERMINAL_ENV_KEYS = ["TERM_PROGRAM", "__CFBundleIdentifier", "TMUX", "TMUX_PANE"];
 
 type UserContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
 export type Ack = (fields: object) => void;
-/** 一句要开新一轮的话：交给 Pi 的内容、斜杠开头的要不要由 Pi 展开，与认它的文字（会话里落成的那条用户消息的文字）。
- * CuePad 发来的话（`send`）另带投送请求 id 与它的确认。 */
+/** 一句要开新一轮的话。`text` 是认它的文字：会话里落成的那条用户消息据此认出（`landed`）。 */
 type Said = { content: UserContent; expand: boolean; text: string; id?: string; ack?: Ack; cueTurn?: { deliveryId?: string | null } };
-/** FireCode 在本扩展实例的事件总线上发布的最新事实 */
 export type Firecode = { inFlight: number; subagents: Subagent[] };
-/** 一个扩展实例的身份：版本与 CuePad 交给它的认领标识 */
 type Identity = { extensionVersion: number; launchToken: string | null };
 
 function readTTY(): Promise<string | null> {
@@ -31,19 +28,17 @@ function readTTY(): Promise<string | null> {
 	});
 }
 
-/** 一个终端或 RPC 会话的状态、计时、近况与轮次：事件（`events`）与 CuePad 的命令（`commands`）都改它，变了经 `commit`、`updateInfo` 发给客户端。 */
 export class Session {
 	readonly tracker = new StateTracker();
 	readonly lifetime = new AbortController();
 	fast: boolean;
 	readonly clients = new Set<net.Socket>();
-	/** 主会话最后一次模型回合开始的时间（`turn_start` 的时刻）：早于这一回合写进会话文件的回答，CuePad 据此认出歇下时这一轮的回答读到没有。
+	/** 主会话最后一次模型回合开始的时间（`turn_start` 的时刻）：CuePad 据此认出歇下时这一轮的回答读到没有。
 	 * 取每个回合而不取 agent_start：一次运行里接着处理排队的话，最后的回答出自最后一个回合 */
 	turnSince: number | null = null;
 	private lastKey: string;
 	phase: Phase;
 	since: number;
-	/** 这段连续处理（离开空闲到彻底歇下，中间等你确认也算）开始的时间；空闲、出错时为 null */
 	busySince: number | null;
 	private readonly tty = readTTY();
 	/** 会话载入时的条目数：之后多出来的是这个进程自己写的 */
@@ -57,15 +52,13 @@ export class Session {
 	readonly starting: Said[] = [];
 	/** 同时只预检队首；预检中的消息也属于 pending，停止或结束会话可以一次收回整队。 */
 	private dispatching = false;
-	/** 已交给 Pi、还没落成会话里一条消息的重跑（`retry.ts`）：落成时回它的确认，同 `starting` */
 	retrying: Ack | null = null;
 	asking: Asking | null = null;
 	/** 压缩开始时的粗状态与计时：压缩完（或失败、取消）回到同一个粗状态时，计时也回到那时的起点——
 	 * 歇着时的手动压缩不是新的一轮，压完还是原来那次"做完了"，CuePad 不因此提示、也不算有新回复。 */
 	beforeCompaction: Clock | null = null;
 	/**
-	 * 等着开新一轮的话（CuePad 送来的、会开一轮的命令），按到达先后。发给会话的话只有一条路：歇着就开新一轮，
-	 * 在跑（含压缩、等你确认）就先停下这一轮，等真正歇下（`agent_settled`、压缩结束）再交给 Pi。不用 Pi 的队列：
+	 * 等着开新一轮的话（CuePad 送来的、会开一轮的命令），按到达先后。不用 Pi 的队列：
 	 * followUp 只在一轮正常做完时读出、steer 等在跑的工具做完才读，停止既不清也不读它们，排着的话会一直卡住。
 	 * 一次交一句：等着的还有下一句时，刚开始的这一轮（`agent_start`）照样先停下，每句都是新的一轮。
 	 * 停下到真正歇下之间（通常不到一秒）会话被关掉（退出、重新载入、换会话）时，等着的话随扩展实例丢掉，`bye` 不报它们。
@@ -135,7 +128,7 @@ export class Session {
 		for (const client of this.clients) this.write(client, message);
 	}
 
-	/** 状态没变就不发；没有客户端时只维护状态与计时，不做任何 I/O。 */
+	/** 没有客户端时只维护状态与计时，不做任何 I/O。 */
 	commit(resume?: Clock) {
 		const current = this.state();
 		const key = JSON.stringify([current, this.turnSince]);
@@ -154,12 +147,11 @@ export class Session {
 		this.broadcast({ t: "state", state: { ...current, since: this.since, busySince: this.busySince, turnSince: this.turnSince } });
 	}
 
-	/** 歇着、没有弹窗或 SDK 待处理消息：可以重新载入扩展。 */
 	private canReload() {
 		return !this.lifetime.signal.aborted && (this.phase === "idle" || this.phase === "error") && !this.asking && !this.ctx.hasPendingMessages();
 	}
 
-	/** 变了的项才发，而且只发变了的那几项：模型表（几百个）与命令清单很大，上下文用量每轮都变，不能每次带上整份。
+	/** 只发变了的那几项：模型表（几百个）与命令清单很大，上下文用量每轮都变，不能每次带上整份。
 	 * 没出现的键表示不变，null 是新值；hello 带全部。 */
 	updateInfo(changes: Partial<Info>) {
 		const changed: Partial<Info> = {};
@@ -172,18 +164,17 @@ export class Session {
 		if (changed.models || changed.model) this.quota.capabilities(this.info.models, this.info.model?.provider);
 	}
 
-	/** 上下文用量随每一轮、压缩、换模型、换分支变化。 */
 	refreshContext() {
 		this.updateInfo(contextInfo(this.ctx));
 	}
 
-	/** 命令清单只会在会话载入（`session_start`，含重载）和资源扩展后变——扩展注册的命令、提示词模板、skill；后者发生在 `session_start`
+	/** 命令清单只会在会话载入（`session_start`，含重载）和资源扩展后变；后者发生在 `session_start`
 	 * 之后且没有事件，所以每次提交消息前（`before_agent_start`）取一次，而不是每一轮（`turn_end`）。 */
 	async refreshCommands() {
 		this.updateInfo({ ...commandInfo(this.pi), ...await modelInfo(this.pi, this.ctx) });
 	}
 
-	/** 额度不属于会话、属于账号：每次观测都发给所有客户端（一行，随每次回复），由 CuePad 记到账号上。
+	/** 额度不属于会话、属于账号：每次观测都发给所有客户端，由 CuePad 记到账号上。
 	 * 不在这里去重：值没变的观测也说明刚观测过，"更新于"要跟上；写不写库只由 CuePad 定（`CueStore.recordQuota`）。
 	 * 回复实际用的授权扩展拿不到：回合前已报告的分区与收到回复后重新解析的一致才归到它；两次之间换了账号或令牌就丢掉这次并重报模型身份，
 	 * 不把新账号的用量记到旧账号上，也不把旧回复归到新授权。解析不挡回复流。 */
@@ -258,7 +249,6 @@ export class Session {
 		}
 	}
 
-	/** 只从预检后的空闲分支同步交给 Pi；后续 ACK 仍由真实用户消息事件产生。 */
 	private submit(said: Said) {
 		this.starting.push(said);
 		try {
@@ -289,7 +279,7 @@ export class Session {
 		this.submitPending();
 	}
 
-	/** 新请求和宿主事件都唤醒同一个队列；下一轮事件循环再看，压缩完成事件早于 Pi 收起压缩标记。 */
+	/** 下一轮事件循环再看：压缩完成事件早于 Pi 收起压缩标记。 */
 	submitPending() {
 		if (this.pending.length === 0) return;
 		this.later("等着的话", () => {
@@ -302,7 +292,7 @@ export class Session {
 		for (const said of this.pending.splice(0)) said.ack?.({ ok: false, error: "failed: aborted before it started" });
 	}
 
-	/** 一条用户消息落成了：认出它是交出的哪一句（先交的先认；模板与 skill 展开后认不出原话，取最早的），
+	/** 先交的先认。模板与 skill 落成的是展开后的文字，认不出原话，取最早的：它们只经 `submit` 在歇着时交出，交出后的第一条你的消息就当是它。
 	 * 排在它前面的没认到的就是没落成，不再等。 */
 	landed(text: string): Said | undefined {
 		const at = this.starting.findIndex((said) => said.expand || text.startsWith(said.text));
@@ -338,8 +328,8 @@ export class Session {
 	}
 
 	/**
-	 * 停下这一轮：Pi 的 `ctx.abort()`，与在 Pi 里按 Esc 同一能力（也停手动压缩），只中止指挥官自己正在跑的回合，会话随后以"被中止"歇下。
-	 * 等你回答的弹窗先取消（否则这一轮会一直卡在等你）。已经空闲就什么都不做；FireCode 的子代理是独立会话，不受影响。
+	 * Pi 的 `ctx.abort()`，与在 Pi 里按 Esc 同一能力（也停手动压缩），只中止指挥官自己正在跑的回合，会话随后以"被中止"歇下；FireCode 的子代理是独立会话，不受影响。
+	 * 等你回答的弹窗先取消，否则这一轮会一直卡在等你。
 	 */
 	stopRound() {
 		this.asking?.dismiss?.();
@@ -367,7 +357,7 @@ export class Session {
 		return this.later("会话操作", () => this.pi.sendUserMessage(`/${INTERNAL_COMMAND} ${action}`, { expandPromptTemplates: true }));
 	}
 
-	/** 下一轮事件循环再交给 Pi（返回排好的这一次，可撤）。`sendUserMessage` 不返回结果：异步的失败 Pi 报在它自己的界面里；同步抛出的（本扩展实例已被换掉等）
+	/** `sendUserMessage` 不返回结果：异步的失败 Pi 报在它自己的界面里；同步抛出的（本扩展实例已被换掉等）
 	 * 在这里报，不让它在事件循环里成为未捕获的异常。 */
 	private later(what: string, action: () => void) {
 		return setImmediate(() => {
@@ -380,5 +370,3 @@ export class Session {
 		});
 	}
 }
-
-/** 正在说的话（`draft`）最多每这么久上报一次：增量在这里合并，这条说完时立即补发最后一次 */

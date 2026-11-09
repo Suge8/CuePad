@@ -9,11 +9,9 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 
 public struct SendRecord: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// 发送时的内容快照；卡片之后改动或删除都不影响。
   public var content: String
   public var targetKind: Open<SendTargetKind>
   public var targetName: String
-  /// Pi 会话 id 或应用 bundle id。
   public var targetRef: String?
   public var cardID: UUID?
   public var sentAt: Date
@@ -39,7 +37,6 @@ public struct SendTarget: Equatable, Sendable {
   }
 }
 
-/// 一张卡最近一次发送：何时、发给谁。
 public struct LastSend: Equatable, Sendable {
   public var sentAt: Date
   public var target: SendTarget

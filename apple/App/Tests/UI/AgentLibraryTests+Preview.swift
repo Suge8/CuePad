@@ -8,8 +8,6 @@ import Testing
 @testable import CuePad
 
 extension AgentLibraryTests {
-    /// 全局规则的文件页（真窗口里挂着 Mac 的文件页）：点"合并进来"标出会并进来的段时（`FileDraft.previewing`，按钮做的就是这一下），
-    /// 正文交出键盘、读屏跳过，这时打的字不进正文、也不写进文件；"取消"回到正文，键盘回来，接着打的字照常存进文件。
     @Test func 标出合并时打字不改正文_取消后键盘回到正文接着存() async throws {
         let shared = agents.appending(path: "AGENTS.md")
         try write("共用的\n", shared)

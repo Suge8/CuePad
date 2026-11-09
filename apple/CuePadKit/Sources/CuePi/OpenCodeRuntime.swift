@@ -3,55 +3,34 @@ import CueStore
 import Foundation
 import OSLog
 
-/// OpenCode 的接入：直连它的后台服务（事件流 + 接口），零安装。终端里的会话（OpenCode 的终端界面默认就连这个服务）与 CuePad 开的会话都在服务里；
-/// 它的会话不在文件里，会话索引与对话由这里写进资料库（`agent` 为 `opencode`，路径是 `opencode:<会话 id>`）。
-///
-/// - 发现：读服务的登记文件（`AgentPaths.openCodeService`，校验属主与 0600），盯着它（`FileFollower`）出现、改写与消失，服务进程退出也算消失。
-/// - 跟随：长连事件流；服务不续传，所以每次连上（含断线重连）都重拉一遍快照：会话列表、在跑的执行、在线会话待答的权限与表单。
-/// - 在线：服务活着期间有过活动（建立、发话、执行、提问）的顶层会话在线——连上时按"最后修改晚于服务启动"认，之后按事件认；
-///   没在跑就是歇着。服务停了、会话被删了下线；在 CuePad 里结束的会话也下线，直到它再有活动。子代理（子会话）不单独上线，
-///   记在父会话的 `subagents` 里。一个服务承载全部会话，会话的 `pid` 是服务进程；服务端不知道终端的 tty，所以跳不到终端。
-/// - 托管：服务没开时 `opencode service start` 把它拉起（常驻的后台进程，终端里的 OpenCode 也用它）；CuePad 拉起的那个在停止接入
-///   （App 退出、关掉开关）时由 CuePad `opencode service stop`，本来就在跑的不动。
-///   新会话显式带上工作目录建，接着已结束的会话就是对库里的会话接着说（同一个服务谁都能续）。
-/// - Cue 的大脑（`OpenCodeBrain`）开的会话也在用户的库里，按标记（`OpenCodeSessionInfo.isCueBrain`）跳过：不上桥、不进会话索引与历史。
-///   它们由大脑自己的服务跑，事件不经后台服务的事件流，接入只会在会话列表与按 id 取会话时碰到。
-/// - 一轮：每个会话的事件交给它的 `OpenCodeTurn`（与大脑同一份），翻出的一轮落到会话的事实（`SessionFacts`）与桥上，正在说的话交给桥
-///   （终端里开的会话也一样，都在同一个服务里）；子代理的一轮只落到名册上，说的话不要。权限、表单、压缩、改名、选模型与对话的读入在这里。
-/// - 从没取过模型表的第一次启动，它先用随包的旧表、同时联网取新表（约 1～2 秒）；这期间配置的默认模型不在旧表里就改用旧表第一个
-///   （它自己的终端界面也一样）。CuePad 不补，会话页显示实际用的模型。
+/// 服务不续传，所以每次连上（含断线重连）都重拉一遍快照。
+/// 在线：服务活着期间有过活动（建立、发话、执行、提问）的顶层会话在线——连上时按“最后修改晚于服务启动”认，之后按事件认；在 CuePad 里结束的会话也下线，直到它再有活动。服务端不知道终端的 tty，所以跳不到终端。
+/// Cue 的大脑（`OpenCodeBrain`）开的会话也在用户的库里，按标记（`OpenCodeSessionInfo.isCueBrain`）跳过：它们由大脑自己的服务跑，事件不经后台服务的事件流，接入只会在会话列表与按 id 取会话时碰到。
+/// 从没取过模型表的第一次启动，它先用随包的旧表、同时联网取新表（约 1～2 秒）；这期间配置的默认模型不在旧表里就改用旧表第一个（它自己的终端界面也一样）。CuePad 不补，会话页显示实际用的模型。
 @MainActor
 public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     static let log = Logger(subsystem: AppIdentity.id, category: "opencode")
-    /// 权限请求的三个选项（作答时按原文认）
     static let allowOnce = String(localized: "允许"), allowAlways = String(localized: "总是允许"), reject = String(localized: "拒绝")
 
     let bridge: PiBridge
     let paths: AgentPaths
     let store: CueStore
     let hostID: String
-    /// 这家的可执行文件（检测时挑中的那个，`AgentStatus.executable`）；没有为 nil
     let opencode: @Sendable () async -> URL?
     let locate: @Sendable () async -> ExecutableLocator
     let transcriptWindow: TimeInterval
-    /// 量起服务、停服务这些等待的时限的钟
     let timing: Timing
 
     private var watcher: FileFollower?
     private var watching: Task<Void, Never>?
     var connection: Connection?
-    /// 每个会话发话里"等重连、停下上一轮"那一段（`abort` 整段取消）
     var stopPhases: [PiSession.ID: StopPhase] = [:]
     var waiters: [UUID: CheckedContinuation<Connection, any Error>] = [:]
 
     var sessions: [String: Tracked] = [:]
-    /// 子会话 → 父会话
     var parents: [String: String] = [:]
-    /// 子代理（子会话）的一轮
     var childTurns: [String: OpenCodeTurn] = [:]
-    /// 在 CuePad 里结束的会话与结束时刻：再有活动才重新上线
     var ended: [String: Date] = [:]
-    /// 每个工作目录可选的模型与命令
     var catalogs: [String: Catalog] = [:]
     /// 服务里全部顶层会话（会话索引对账用）；还没拉到完整列表时为 nil
     var listed: Set<String>?
@@ -80,7 +59,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         var commands: [PiSlashCommand]
     }
 
-    /// 一个顶层会话此刻的样子（由快照与事件推出），发布时换成桥上的 `PiSession`。
     struct Tracked {
         var info: OpenCodeSessionInfo
         var online = false
@@ -108,8 +86,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         self.locate = locate
         self.transcriptWindow = transcriptWindow
     }
-
-    // MARK: 发现
 
     public func start() throws {
         let watcher = FileFollower()
@@ -149,7 +125,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         return { _ = await ChildProcess.run(service.executable, ["service", "stop"], environment: service.environment, timeout: AgentTimeouts.end, timing: timing) }
     }
 
-    /// 登记文件变了：换了服务就断开旧的、连上新的，没了就断开。
     func refresh() {
         let info = OpenCodeServiceInfo.read(paths.openCodeService)
         guard info != connection?.client.service else { return }
@@ -168,7 +143,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         connection.exitWatcher?.cancel()
     }
 
-    /// 服务停了：它的会话全部下线。
     private func disconnect() {
         guard let connection else { return }
         close(connection)
@@ -183,8 +157,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         ingestQueue = []
     }
 
-    /// 跟着事件流，直到服务停了（进程退出、登记文件没了或换了，任务随连接一起取消）：每次连上都重拉快照；断了、连不上或快照失败就隔一会儿重连。
-    /// 服务"又能连了"没有事件可等，所以按退避重试：间隔从 1 秒翻倍到 30 秒，连上并拉完快照后复位。
+    /// 服务“又能连了”没有事件可等，所以按退避重试：间隔从 1 秒翻倍到 30 秒，连上并拉完快照后复位。
     private func follow(_ connection: Connection) async {
         var delay = Self.retryFloor
         while !Task.isCancelled, self.connection === connection {

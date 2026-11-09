@@ -1,13 +1,10 @@
 import SwiftUI
 
-/// 一条提示（`Workspace.notice`）本身，两端同一个：一块实底玻璃胶囊（盖住的名牌、搜索框与正文不能透出来叠字），带去处的点它过去，
-/// 右边可有一个动作（撤销、归档；Mac 上撤销另有 ⌘Z）。高是一排控件那一档（`ControlSize.regular`）：一行放得下就一行；放不下时小一号折两行
-/// （"这是灵感，没有状态：要做的事另建任务…"截在一行里正好截掉要你做的那一步）；两行也放不下（辅助字号）就一行截断——读屏照样读全文，点它照样去那里。
+/// 放不下一行时小一号折两行（"这是灵感，没有状态：要做的事另建任务…"截在一行里正好截掉要你做的那一步）；两行也放不下（辅助字号）就一行截断——读屏照样读全文，点它照样去那里。
 /// 字号上限同页顶那一排（`FloatingHeaderLayout.largestType`），再大一行也高过这一排。
 /// 摆在哪、多宽、怎么进出场由宿主给（Mac `NoticeView`、手机 `NoticeBanner`）。停多久在 `Workspace+Notice`：这里只报指针、键盘焦点在不在它上面、读屏开没开（`holdNotice`）。
 struct NoticeCapsule: View {
     let notice: Workspace.Notice
-    /// 铺满宿主给的宽（手机盖在页顶那一排中间那块的位置）；否则随字长。
     var fills = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

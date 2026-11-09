@@ -4,26 +4,18 @@ import Foundation
 
 public struct PiJumpResult: Sendable, Equatable {
     public enum Precision: Sendable, Equatable {
-        /// 精确到标签页（或分屏）并已聚焦
         case tab
-        /// 只激活了终端应用，没能定位到具体标签页
         case application
         case failed
     }
 
     public var precision: Precision
-    /// 精度降级/失败的原因，给界面提示用
     public var note: String?
 }
 
-/// "跳到该会话所在终端"。用 hello 里的终端信息，按能做到的最高精度定位：
-/// - tmux：先把 tmux 切到该 pane，并用承载它的 tmux 客户端的 tty 去找标签页；
-/// - Terminal.app：按 tty 选中标签页并前置窗口；
-/// - Ghostty：按工作目录找终端，唯一匹配才聚焦（Ghostty 不暴露 tty，也没有传给子进程的终端 ID）；
-/// - 其他终端：只能激活应用。iTerm2/kitty/WezTerm 各有自己的脚本接口，尚未接入。
-///
+/// Ghostty 不暴露 tty，也没有传给子进程的终端 ID，所以按工作目录找终端，唯一匹配才聚焦。iTerm2/kitty/WezTerm 各有自己的脚本接口，尚未接入，只能激活应用。
 /// `tmux` 按 `ExecutableLocator.standard` 的 PATH 找（GUI 应用的 PATH 很短）、AppleScript 在主线程执行、应用激活走 `NSRunningApplication`。
-/// 首次控制某个应用时系统会弹"自动化"授权，App 需要在 Info.plist 里写 `NSAppleEventsUsageDescription`。
+/// 首次控制某个应用时系统会弹“自动化”授权，App 需要在 Info.plist 里写 `NSAppleEventsUsageDescription`。
 public struct PiTerminalJumper: Sendable {
     private static let appleTerminal = "com.apple.Terminal"
     private static let ghostty = "com.mitchellh.ghostty"
@@ -90,8 +82,6 @@ public struct PiTerminalJumper: Sendable {
         return String(localized: "没有工作目录或 tty 匹配的终端/标签页")
     }
 
-    // MARK: AppleScript
-
     private static func quoted(_ text: String) -> String {
         "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
@@ -129,14 +119,12 @@ public struct PiTerminalJumper: Sendable {
         """
     }
 
-    // MARK: 系统
-
     private func run(_ executable: String, _ arguments: [String]) async -> (status: Int32, output: String) {
         let env = URL(filePath: "/usr/bin/env")
         return await ChildProcess.run(env, [executable] + arguments, environment: ExecutableLocator.standard.environment(launching: env)) ?? (-1, "")
     }
 
-    /// 执行 AppleScript，返回结果文字；未授权自动化等失败时抛错
+    /// 未授权自动化等失败时抛错。
     private func appleScript(_ source: String) async throws -> String {
         try await MainActor.run {
             var error: NSDictionary?
@@ -147,7 +135,6 @@ public struct PiTerminalJumper: Sendable {
         }
     }
 
-    /// 激活应用；应用没在运行返回 false
     private func activate(bundleID: String) async -> Bool {
         await MainActor.run {
             NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.activate() ?? false

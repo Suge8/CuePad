@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 看板上点了进会话的一张卡（推进中的会话卡、等你列的卡）：整张是按钮（`PressStyle(.card)`，悬停亮一档）。
 struct BoardLink<Label: View>: View {
     let to: PiSessionState
     @ViewBuilder let label: Label
@@ -30,13 +29,11 @@ struct BoardLink<Label: View>: View {
         #endif
     }
 
-    /// 宽屏开在主区；⌘ 点（iPad 是按住 ⌘ 轻点）的开在右半并排。
     private func open(_ beside: Bool) {
         workspace.openSession(to.id, sessionID: to.sessionID, in: beside ? .beside : .main)
     }
 }
 
-/// 右键菜单里的"在旁边打开"（宽屏）：开在主区右半、与此刻的会话并排（同 ⌘ 点）。
 struct OpenSessionBeside: View {
     let session: PiSessionState
     @Environment(Workspace.self) private var workspace

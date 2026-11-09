@@ -18,7 +18,6 @@ struct AgentIntegrationTests {
     }
     var extensionFile: URL { paths.extensionsDirectory.appending(path: "cuepad-bridge/index.ts") }
 
-    /// 几家共读的那一份（Pi、Codex、OpenCode 原生读 `~/.agents/skills`）
     var skillFile: URL { root.appending(path: "agents/skills/cuepad/SKILL.md") }
     /// Claude Code 读技能的位置（它不读 `.agents`）；也是旧版各家副本所在的位置
     func agentSkill(_ kind: AgentKind) -> URL {
@@ -63,7 +62,6 @@ struct AgentIntegrationTests {
 
     // MARK: 检测
 
-    /// 版本够不够由各家 `--version` 的原话定（版本写法见设置里那一行的测试）：太旧的界面说要升级，OpenCode 只认 v2；问不到版本的是没找到。
     @Test(arguments: [
         (AgentKind.pi, "0.84.3", AgentStatus.Presence.tooOld(AgentVersion(0, 84, 3))),
         (.pi, "command not found: hello", .notFound),
@@ -76,7 +74,7 @@ struct AgentIntegrationTests {
         #expect(await integration().status(of: kind).presence == presence)
     }
 
-    /// 找到了程序、问版本却没回应（机器很忙、程序卡住）不是没装：说「没有回应」，不让人以为没装。时限用手动钟，命令真被问到之后才推进。
+    /// 时限用手动钟，命令真被问到之后才推进。
     @Test func anAgentThatDoesNotAnswerTheVersionIsUnresponsiveNotMissing() async throws {
         let asked = root.appending(path: "asked")
         try TestScript.install("#!/bin/sh\n. \"$0.env\"\ntouch \"$ASKED\"\nexec sleep 300\n", at: bin.appending(path: "pi"), variables: ["ASKED": asked.path])
@@ -91,7 +89,7 @@ struct AgentIntegrationTests {
         #expect(await status.presence == .unresponsive)
     }
 
-    /// 装 Pi 前查 Node.js 只看安装脚本会用的那个（PATH 里第一个）：前面是旧的、后面有新的也不算有，免得点了安装才被脚本拒。
+    /// 只看安装脚本会用的 Node（PATH 里第一个）：免得点了安装才被脚本拒。
     @Test func installPrerequisiteCountsOnlyTheNodeTheInstallerWillUse() async throws {
         let later = root.appending(path: "later-bin")
         try FileManager.default.createDirectory(at: later, withIntermediateDirectories: true)
@@ -105,8 +103,6 @@ struct AgentIntegrationTests {
 
     // MARK: 接入与删除
 
-    /// 技能正文写着 App 里 cuepad 的绝对路径与手机预览（show），沙箱的提醒各家通用。
-    /// 关掉时 CuePad 写的文件与因此空出来的目录都删掉，配置目录里别的东西不动。技能只有共读的一份，Claude Code 读的是链到它的链接。
     /// Codex 的钩子要真 codex 来信任，它的接入与删除见 `CodexHooksTests`。
     @Test(arguments: AgentKind.allCases.filter { $0 != .codex })
     func installWritesTheSkillWhereTheAgentReadsItAndUninstallLeavesNoTrace(kind: AgentKind) async throws {
@@ -145,7 +141,6 @@ struct AgentIntegrationTests {
         #expect(!RelativeLink.isLink(agentSkill(.claudeCode)))
     }
 
-    /// 几家各自接入，共用一份技能：关掉一家，别家照旧接着。
     @Test func agentsShareOneSkillAndUninstallingOneKeepsTheOthers() async throws {
         try installAll()
         try await integration().install(.pi)
@@ -156,28 +151,7 @@ struct AgentIntegrationTests {
         #expect(FileManager.default.fileExists(atPath: skillFile.path))
     }
 
-    /// 旧版写在各家自己目录里的副本：那几家算接入了、待升级；装任何一家都把副本收掉、记进共用的那一份，钩子的足迹搬过去。
-    @Test func legacyCopiesInEachAgentsDirectoryAreFoldedIntoTheSharedSkill() async throws {
-        try installAll()
-        let legacy = "---\nname: cuepad\n---\n旧的\n<!-- 由 CuePad 写入，升级时整文件覆盖 -->\n"
-        for kind in [AgentKind.claudeCode, .opencode] {
-            try FileManager.default.createDirectory(at: agentSkill(kind), withIntermediateDirectories: true)
-            try legacy.write(to: agentSkill(kind).appending(path: "SKILL.md"), atomically: true, encoding: .utf8)
-        }
-        try "{}".write(to: agentSkill(.claudeCode).appending(path: "claude-hooks.json"), atomically: true, encoding: .utf8)
-        #expect(await integration().status(of: .opencode).files == .outdated)
-
-        try await integration().install(.opencode)
-
-        #expect(await integration().status(of: .opencode).files == .current)
-        #expect(!FileManager.default.fileExists(atPath: agentSkill(.opencode).path))
-        #expect(RelativeLink.points(agentSkill(.claudeCode), to: skillFile.deletingLastPathComponent()))
-        #expect(FileManager.default.fileExists(atPath: skillFile.deletingLastPathComponent().appending(path: "claude-hooks.json").path))
-        #expect(AgentSkill.kinds(in: try String(contentsOf: skillFile, encoding: .utf8)) == [.claudeCode, .opencode])
-    }
-
-    /// 问版本不在 Agent 自己的数据目录里留东西：OpenCode 每次运行（`--version` 也是）都往 `$XDG_DATA_HOME/opencode/log` 写日志，
-    /// 检测时它的数据目录是一个用完即删的临时目录。替身照 OpenCode 的样子写日志，并记下给它的数据目录（没给时只记不写，不碰真实目录）。
+    /// OpenCode 每次运行（`--version` 也是）都往 `$XDG_DATA_HOME/opencode/log` 写日志，检测时它的数据目录是一个用完即删的临时目录。替身照 OpenCode 的样子写日志，并记下给它的数据目录（没给时只记不写，不碰真实目录）。
     @Test func askingTheVersionLeavesNothingInTheAgentsDataDirectory() async throws {
         let record = root.appending(path: "data-home.txt")
         try TestScript.install("""
@@ -194,7 +168,6 @@ struct AgentIntegrationTests {
         #expect(!FileManager.default.fileExists(atPath: dataHome), "临时数据目录用完删掉")
     }
 
-    /// 用户自己的同名技能或扩展不覆盖、不删除（共读的那一份、Claude Code 读的位置上）；Pi 的两样一起拒绝。
     @Test(arguments: [(AgentKind.pi, false), (.claudeCode, true)])
     func foreignFilesWithTheSameNameAreNeverTouched(kind: AgentKind, inAgentDirectory: Bool) async throws {
         try installAll()
@@ -212,7 +185,6 @@ struct AgentIntegrationTests {
 
     // MARK: 升级
 
-    /// App 更新或被移动后（cuepad 的路径变了），装过的就是旧版：重装即升级到这个版本。
     @Test func aMovedAppMakesInstalledFilesOutdatedAndInstallRewritesThem() async throws {
         try installAll()
         try await integration().install(.pi)

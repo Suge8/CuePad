@@ -6,8 +6,7 @@ import Testing
 @testable import CuePi
 
 extension RealClaudeHostTests {
-    /// #58：没登录的托管 Claude Code 也先报收下（`command_lifecycle` 的 started）再取消：自定义命令与说的话都以它的原话报没送达，
-    /// 不报已送达；不用模型的本地命令（改名）照常做完、报已送达。
+    /// #58：没登录的托管 Claude Code 也先报收下（`command_lifecycle` 的 started）再取消。
     @Test func aSignedOutHostedSessionRefusesWithItsOwnReason() async throws {
         try await ClaudeTestbed.run(signedIn: false) { testbed in
             let commands = testbed.work.appending(path: ".claude/commands", directoryHint: .isDirectory)

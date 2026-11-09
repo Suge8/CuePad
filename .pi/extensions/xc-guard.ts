@@ -1,7 +1,7 @@
-// CuePad 的编译、测试、截图、测量与模拟器开关只经 apple/scripts/xc.sh，调试实例只经它起停（见 xc.sh、app.py 的头注释）。
+// CuePad 的编译、测试、截图、测量与模拟器开关只经 apple/scripts/xc.sh，调试实例只经它起停。
 // 绕开它：多一份冷编译、多一台反复冷启动的模拟器；自己起的 CuePad 不隔离、不受"每个检出一份"管；
 // 按名字或 bundle id 起停会碰到用户正在用的正式版（它与调试构建同一个 bundle id）；osascript 激活应用、点按会抢用户的前台。这里拦下 Agent 直接这样做的命令。
-// 只看每段命令的第一个词（跳过变量赋值与 env、xcrun 这类前缀），grep、日志里出现这些词不算；只读的查询（pgrep、xcodebuild -version、读窗口信息的 osascript）放行。
+// 判断程序只看每段命令的第一个词，grep、日志里出现这些词不算；只读的查询（pgrep、xcodebuild -version、读窗口信息的 osascript）放行。
 import { existsSync, readFileSync, statSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -9,7 +9,6 @@ const PREFIXES = new Set(["env", "command", "exec", "time", "nohup", "nice", "ca
 const SWIFT_BLOCKED = new Set(["build", "test", "run"]);
 // io、launch、terminate、spawn、list 等照常可用：xc.sh run 之后在开着的模拟器上点按、起画面（docs/verify.md）
 const SIMCTL_BLOCKED = new Set(["boot", "shutdown", "create", "clone", "erase", "delete", "rename", "install", "uninstall", "upgrade"]);
-// 只读的 xcodebuild 查询：不编译、不动产物目录
 const XCODEBUILD_READONLY = new Set(["-version", "-showsdks", "-help", "-usage"]);
 const BUILD =
 	"CuePad 的编译、测试、截图与模拟器开关只经 apple/scripts/xc.sh（产物目录与模拟器固定，用法见它的头注释）：" +
@@ -63,12 +62,11 @@ function structure(command: string): { text: string; heredocs: string } {
 	return { text: out, heredocs: bodies.join("\n") };
 }
 
-/** 这些词（引号、等号两侧拆开）里有没有指向 CuePad 本身的。 */
 function namesCuePad(words: string): boolean {
 	return words.split(/[\s="']+/).some((word) => CUEPAD.test(word));
 }
 
-/** 按名字或 bundle id 找到 PID 再结束：找 PID 的结果流进 kill——命令替换在 kill 的参数里、管道给 xargs kill、或先存进变量再 kill（只读的 pgrep 不算）。 */
+/** 找 PID 的结果流进 kill 才算（只读的 pgrep 不算）。 */
 function killsByName(text: string): boolean {
 	const lookup = String.raw`(?:pgrep|pidof|lsappinfo)\b[^)\`|;&\n]*`;
 	const substitution = String.raw`(?:\$\(|\`)\s*(${lookup})`;
@@ -81,7 +79,6 @@ function killsByName(text: string): boolean {
 	return false;
 }
 
-/** 还原 shell 交给程序的字面文本：单引号内原样，双引号内 \" \\ \$ \` 还原，引号外的反斜杠转义还原。 */
 function unshell(text: string): string {
 	let out = "";
 	for (let i = 0; i < text.length; i++) {
@@ -97,8 +94,7 @@ function unshell(text: string): string {
 	return out;
 }
 
-/** osascript 要执行的脚本文本（字符串字面量去掉：窗口名里写 click 不是点按）：自己这一段里的（-e，先还原 shell 引号）、heredoc 正文、点名的脚本文件；
- * 没有 -e 与文件时脚本来自标准输入（管道、heredoc），看整条命令。 */
+/** osascript 要执行的脚本文本，字符串字面量去掉（窗口名里写 click 不是点按）。没有 -e 与文件时脚本来自标准输入（管道、heredoc），看整条命令。 */
 function scriptText(segment: string, command: string, heredocs: string, args: string[]): string {
 	const files = args.filter((a) => !a.startsWith("-") && existsSync(a) && statSync(a).isFile() && statSync(a).size < 1e5);
 	const fromStdin = !args.includes("-e") && files.length === 0;

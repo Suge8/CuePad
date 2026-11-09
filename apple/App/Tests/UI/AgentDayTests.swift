@@ -7,8 +7,6 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// Agent 页上看到的会话，按它一天里的样子写：新会话、做完一轮没看、看过、有草稿；发话后发送中、没能送达（留到看过为止）、
-/// 唤醒已结束的会话；改名与结束会话（手机请 Mac 做，Mac 写回结果）；列表的先后与筛选。行的文字与图形怎么拼不单独测，从这些状态里读。
 struct AgentDayTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -21,7 +19,6 @@ struct AgentDayTests {
 
     private func label(_ sessionID: String) async throws -> String { workspace.shown(try await item(sessionID)).label }
 
-    /// 行上状态词后面的短词（"有草稿""没能改名"……）。
     private func note(_ item: PiSessionListItem) -> PiRowFacts.Note? {
         settings.facts(item.state, shown: workspace.shown(item), end: nil, rename: item.rename, at: .always()).note
     }
@@ -32,7 +29,6 @@ struct AgentDayTests {
         return try await store.requestDelivery(text, to: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID)
     }
 
-    /// 那台 Mac 的执行器领到请求后按 `outcome` 写回，等到这条请求有结果。
     private func macAnswers(_ request: DeliveryRequest, host: String, _ outcome: DeliveryOutcome) async throws {
         let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { Issue.record("执行器意外上报：\($0)") }) { _, _ in outcome }
         try await executor.start()
@@ -40,7 +36,6 @@ struct AgentDayTests {
         await executor.stop()
     }
 
-    /// 在等你时按它问的是什么说：要你填一段文字是"等你回答"，是或否、从选项里选是"等你确认"。
     @Test func 文字题等你回答_确认与选择题等你确认() async throws {
         let recorder = try await app.runtimeRecorder(on: "mac-a")
         let questions: [(String, PiQuestionKind)] = [("words", .text), ("yesno", .confirm), ("pick", .select)]
@@ -67,13 +62,11 @@ struct AgentDayTests {
         #expect(try await label("atlas") == "该你了")
         #expect(!app.relaunch().settings.isUnread(done.state))  // 看过记在本机偏好，退出再回来还算看过
 
-        // 回复框里没发的草稿：行上写"有草稿"；只剩空白不算
         settings.setReplyDraft(ComposerDraft(text: "改完再跑一遍\n顺便看看覆盖率"), for: done.state.id)
         #expect(note(done) == .draft)
         settings.setReplyDraft(ComposerDraft(text: "  \n"), for: done.state.id)
         #expect(note(done) == nil)
 
-        // 发话：当场是"发送中"，会话进入处理中后让位给它自己的状态；它在跑时还在路上的话只是个小标记
         try await say("看看 scheduler", to: "atlas")
         #expect(try await label("atlas") == "发送中")
         try await recorder.update(sessionID: "atlas", state: .thinking, title: "atlas")
@@ -86,7 +79,6 @@ struct AgentDayTests {
     }
 
     #if os(macOS)
-    /// 这台 Mac 上它正在出字：会话行与会话页顶栏同一个说法"输出中"，说完（正在说的话清掉）回到"思考中"。
     @Test func 正在出字时列表与顶栏都写输出中() async throws {
         let ext = try await app.host.connect("atlas", cwd: "/work/atlas", busy: true)
         try await (app.runtimeRecorder(on: TestApp.hostID)).update(sessionID: "atlas", state: .thinking, title: "atlas")
@@ -116,7 +108,6 @@ struct AgentDayTests {
         try await (app.runtimeRecorder(on: "mac-c")).update(sessionID: "gone", state: .ended, title: "gone")
         try await say("接着做", to: "gone")
         #expect(try await label("gone") == "正在唤醒")
-        // 唤醒中就列在"现在"（侧栏的在做、Agent 页），不在历史
         app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
         #expect(workspace.liveWork.contains { $0.sessionID == "gone" })
         let list = try await PiSessionList.read(text: "", project: Project.defaultID, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
@@ -163,7 +154,6 @@ struct AgentDayTests {
 
         let all = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(all.now.map(\.state.sessionID) == ["ask", "broken", "busy", "idle"])
-        // 没有项目的会话归默认项目
         let home = try await PiSessionList.read(text: "", project: Project.defaultID, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(home.now.map(\.state.sessionID) == ["ask", "broken", "idle"] && home.ended.map(\.state.sessionID) == ["done"])
         let inTable = try await PiSessionList.read(text: "", project: table.id, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
@@ -173,7 +163,6 @@ struct AgentDayTests {
     }
 
     #if os(iOS)
-    /// 结束会话：进度只来自发给会话的结束请求；还在路上时再点不发第二条；没能结束写 Mac 给的原因；结束了进历史、不留进度。
     @Test func 结束会话_在路上不重复_没结束写原因_结束了进历史() async throws {
         try await (app.runtimeRecorder(on: "mac-a")).update(sessionID: "deploy", state: .waitingForUser, title: "deploy")
         let session = try await item("deploy").state

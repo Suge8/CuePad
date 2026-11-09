@@ -10,12 +10,9 @@ import CuePi
 import UIKit
 #endif
 
-/// 组合根与界面动作的唯一入口：持有各模块的唯一实例。
-/// 界面读数据直接 `store.observe(...)`；一切副作用（发给 Agent、复制、Pi 命令、终端跳转、导入、扩展安装）只经这里，
-/// 发送记录也只在这里写。
+/// 界面读数据直接 `store.observe(...)`；一切副作用只经这里，发送记录也只在这里写。
 @Observable
 final class AppServices {
-    /// 给人看的版本："0.1.0（1）"。
     static let version: String = {
         let info = Bundle.main.infoDictionary
         return "\(info?["CFBundleShortVersionString"] as? String ?? "?")（\(info?["CFBundleVersion"] as? String ?? "?")）"
@@ -25,117 +22,83 @@ final class AppServices {
     let store: CueStore
     #if os(macOS)
     let pi: PiBridge
-    /// 总控 Agent Cue（只在 Mac 上值班）。
     let cue: CueService
     #endif
 
     let settings: AppSettings
-    /// 启动期间没能完成的事；界面据此提示，不静默。
     private(set) var startupIssues: [StartupIssue] = []
 
     @ObservationIgnored let location: LibraryLocation
-    /// 崩溃诊断（MetricKit）：设置页的"上次崩溃"。
     let diagnostics: Diagnostics
 
-    /// iCloud 同步从哪来：正式启动按位置与本构建的 iCloud 权限决定（`makeSync`），测试注入替身。
     /// 没有默认值：入口必须写明，不能悄悄没有同步。
     enum SyncSource {
         case iCloud
         case custom(any SyncControlling)
-        /// 用本机的库建的同步：真实的同步代码连替身 iCloud（`CloudSync` 的替身连接），给测试与调试画面。
+        /// 用本机的库建同步：真实的同步代码连替身 iCloud，给测试与调试画面。
         case built((CueStore) -> any SyncControlling)
     }
 
-    /// iCloud 同步；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
     @ObservationIgnored let sync: (any SyncControlling)?
-    /// 门铃（实时层，见 `AppServices+Relay`）；不连真的 iCloud（替身、没有 iCloud 权限、隔离库）时没有。
     @ObservationIgnored let relay: Relay?
     @ObservationIgnored let sendOrder = SendOrder()
     @ObservationIgnored lazy var voice = VoiceService(services: self, signaling: relay)
-    private(set) var syncStatus: SyncStatus
-    private(set) var syncIssues: [SyncIssue] = []
-    /// 同步在一页页地拉积压（`SyncState.catchingUp`）；界面只经 `isCatchingUp` 读。
-    private(set) var syncCatchingUp = false
-    /// 这台的库和 iCloud 对过至少一遍（`SyncState.reconciled`）；界面只经 `knowsSyncedFacts` 读。
-    private(set) var syncReconciled = false
-    /// iCloud 空间不足，附件文件停在本机不往上传（`SyncState.filesOverQuota`）；别的记录照常同步，`syncStatus` 不因它变。
-    private(set) var syncFilesOverQuota = false
-    /// 附件文件此刻在路上的，按 key（`CloudSync.fileTransfers`）：附件那一格据此画进度；key 离开就是那一趟结束了，文件在不在本机看附件目录。
+    private(set) var syncState: SyncState
+    /// key 离开就是那一趟结束了；文件在不在本机看附件目录。
     private(set) var fileTransfers: [String: FileTransfer] = [:]
-    /// Pi 锁屏通知的服务端订阅（只有 iOS 建立）；设置页与权限、注册状态一起显示。
-    private(set) var alertSubscription: PiAlertSubscriptionStatus = .off
     #if os(iOS)
-    /// 最近一次要在前台提示的会话转换（见 `startSessionAlerts`）；每个窗口自己决定弹不弹。
+    /// 每个窗口自己决定弹不弹。
     private(set) var sessionAlert: SessionAlert?
     #endif
-    /// 说的话到哪了的"此刻"与同步通着的起点，整个 App 一份（`start()` 开始跟着库）。
     let speechClock: SpeechClock
-    /// App 的钟：资料库里随时间变的读（`CueStore.timing`）、说的话到点翻状态（`SpeechClock`）与主动拉取的节奏（`SyncPoller`）共用一个。
+    /// 资料库里随时间变的读、说的话到点翻状态、主动拉取的节奏共用这一个钟。
     @ObservationIgnored let timing: Timing
-    /// 此刻有事的 Pi 会话，整个 App 一份（打开资料库时当场读到第一份，`start()` 接着跟随）：界面与服务都从这里取，不各自订阅。
+    /// 界面与服务都从这里取，不各自订阅。
     let liveSessions: LiveSessions
-    /// Cue 的现状，整个 App 一份：Cue 那一行与 iPhone 的小组件快照都从这里取（`cueUpdates`）。
     let cueFeed: CueFeed
-    /// 订阅账号的额度，整个 App 一份（`start()` 开始跟随）。
     let accountQuotas = AccountQuotas()
-    /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
     private(set) var conflicts: [CardConflict] = []
 
-    /// 小组件、分享扩展、实时活动的链接与点开的通知要打开的页（`handle(url:)`、`AlertCenter.receive`），工作区取走（`Workspace.openLinks`）。
+    /// 待打开的页：写入后由工作区取走（`Workspace.openLinks`）。
     var pendingDeepLink: DeepLink?
 
-    /// 常驻的跟随者（`follow`），一起取消（`cancelBackgroundWork`）。
     @ObservationIgnored let tasks = Followers()
-    /// 有理由等就拉的任务（见 `startPolling`）；iOS 整个进后台时取消、回前台再开。
+    /// iOS 整个进后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
-    /// 有在等回执的话：还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的），或对 Cue 说了还没交给它的话
-    /// （`startSpeechClock` 跟着资料库更新），只给 `pollingCadence` 用。
     var hasOpenDeliveries = false
-    /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
-    /// 有人在看的 Cue 页数（`CueViewing`；各平台、各窗口同一个数）：这台设备开着 Cue 页（`ViewerKeeper.showCue`）、iOS 前台的系统横幅弹不弹；
-    /// 手机上大于 0 时按节奏拉（`pollingCadence`）。
+    /// 只由 `CueViewing` 增减；算不算在看的规则在它那里。
     var cueViewers = 0
     #if os(macOS)
-    /// 主窗口露在屏上（没缩进程序坞、没被别的窗口整个盖住、App 没隐藏），有没有焦点都算（`ViewerKeeper.follow` 写）。
+    /// 按窗口是否露在屏上定，有没有焦点都算。
     var mainWindowExposed = true
-    /// 人不在跟前：睡眠、屏幕睡了、锁屏、`SessionPresence.window` 没动键盘鼠标、他去了别的设备（`ViewerKeeper.Away` 有没有，它写）。
     var away = false
-    /// 这台 Mac 上的人看得到主窗口：开着的页算在看（会话页、Cue 页的在场、读过与提示都只认它）。
+    /// 会话页、Cue 页的在场、读过与提示都只认它。
     var seesMainWindow: Bool { mainWindowExposed && !away }
     #endif
-    /// 还没返回的那一次立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）：期间再要立即同步的等它。
-    /// 拉取（`CloudSync.syncNow`）只合并还没开拉的那一拉，立即同步要的是"这一次还没返回的"，所以另记。
+    /// 拉取（`CloudSync.syncNow`）只合并还没开拉的那一拉，立即同步要的是“这一次还没返回的”，所以另记：期间再要立即同步的等它。
     var syncing: Task<Void, Never>?
-    /// 已经开始认账号与第一拉（`connectSync`，只做一次）。
     @ObservationIgnored var syncConnected = false
-    /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。
     var isSyncingNow: Bool { syncing != nil }
     @ObservationIgnored let flights = Flights()
-    /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
-    /// 这台设备开着哪一页的唯一写入口；手机拿不到 identifierForVendor 时没有。
+    /// 这台设备开着哪一页的唯一写入口。
     @ObservationIgnored let viewer: ViewerKeeper?
-    /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
     @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
 
-    /// 系统通知（App 代理持有的那一个，`start()` 前接上）；测试没有，不发真实通知。
+    /// App 代理持有的那一个，`start()` 前接上；测试没有，不发真实通知。
     @ObservationIgnored weak var alerts: AlertCenter?
 
     #if os(iOS)
     @ObservationIgnored let pasteboard: UIPasteboard
-    /// 手机实时活动：本地负责开启与身份失效时撤销，远程内容由 Mac 发布。
     /// 隔离实例默认不开，避免遗留活动唤醒测试宿主；验收用 `-CuePadLiveActivity YES`。
     @ObservationIgnored private(set) var cueActivity: CueLiveActivity?
     #endif
 
     #if os(macOS)
-    /// 接入各个 Agent（技能，Pi 另有扩展）的检测、安装与卸载。
     let agents: AgentIntegrations
-    /// 命令行工具 `cuepad` 的安装（链接到 ~/.local/bin）。
     let commandLineTool: CommandLineToolInstaller
     let updates: UpdateService
-    /// 主窗口（显隐规则在它身上）；全局快捷键经它。测试没有窗口。
     @ObservationIgnored var windowShell: MainShellWindow?
 
     @ObservationIgnored let paths: AgentPaths
@@ -145,19 +108,15 @@ final class AppServices {
     @ObservationIgnored let pasteboard: NSPasteboard
     @ObservationIgnored let historyStore: PiHistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
-    /// 这台 Mac 的稳定标识：Pi 状态记录与投送请求都靠它区分是哪台 Mac。
     @ObservationIgnored let hostID: String
-    /// 项目的工作区放在哪（`Workspaces`）：没绑文件夹的项目在这台 Mac 开工时建在这里。
     @ObservationIgnored let workspaces: Workspaces
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let piStateRecorder: PiStateRecorder
-    /// 这台 Mac 的在线记录；`start()` 时开始续期，退出时写成离线。
     @ObservationIgnored let presence: MacPresenceKeeper
-    /// 这台 Mac 上的 Agent 能不能用（同步表 macAgents）的唯一写入口；`start()` 时开始跟着接入状态与唤醒问，Cue 启用前也经它问。
+    /// 同步表 `macAgents` 的唯一写入口；Cue 启用前也经它问。
     @ObservationIgnored let macAgents: MacAgentsRecorder
-    /// 这台 Mac 的技能与规则（同步表 agentLibraries）的唯一写入口，整理与改规则也经它。
+    /// 同步表 `agentLibraries` 的唯一写入口，整理与改规则也经它。
     @ObservationIgnored let library: AgentLibraryKeeper
-    /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, pi: pi, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: piStateRecorder, library: library,
         upload: { [weak self] id in await self?.upload(id) },
@@ -175,7 +134,7 @@ final class AppServices {
         case globalShortcutUnavailable(String)
         /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
         case captureImportFailed(String)
-        /// 跟着库常驻、经同步与别的设备往来的本机功能没能启动或停了：是哪一项写在原因里（各处 `follow(reporting:)`）。
+        /// 跟着库常驻的本机功能没能启动或停了：是哪一项写在原因里。
         case syncUnavailable(String)
         case widgetDataUnavailable(String)
         #if os(macOS)
@@ -185,8 +144,7 @@ final class AppServices {
         #endif
     }
 
-    // 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
-    // （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
+    // 打不开资料库时不能悄悄换一个空库，也不能带着它往下走：错误交给调用方，启动入口显示失败页（`UnreadableLibraryView`），不终止进程。
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
         let store = try CueStore(location: location, timing: mac.timing)
@@ -196,7 +154,7 @@ final class AppServices {
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
-        (self.sync, syncStatus) = (engine, status)
+        (self.sync, syncState) = (engine, SyncState(status: status, issues: []))
         relay = Self.makeRelay(sync, engine, device: mac.hostID)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
@@ -220,7 +178,7 @@ final class AppServices {
         // 隔离运行时移走的不进系统废纸篓，放在库里
         let trash = location.touchesRealWorld ? nil : AgentLibraryFiles.trash(into: location.directory.appending(path: "Trash", directoryHint: .isDirectory))
         library = AgentLibraryKeeper(
-            store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(integration: agents.integration, trash: trash))
+            store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(access: agents.integration.fileAccess, trash: trash))
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.pi, runtimes: runtimes)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
@@ -238,7 +196,7 @@ final class AppServices {
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
-        (self.sync, syncStatus) = (engine, status)
+        (self.sync, syncState) = (engine, SyncState(status: status, issues: []))
         relay = Self.makeRelay(sync, engine, device: UIDevice.current.identifierForVendor?.uuidString)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
@@ -261,7 +219,7 @@ final class AppServices {
     func post(_ alert: SessionAlert) { sessionAlert = alert }
     #endif
 
-    /// 这条提示此刻到不到你（`CueStore.reaches`）；读不出就照常提示，宁可多响一次也不悄悄吞掉。
+    /// 读不出就照常提示，宁可多响一次也不悄悄吞掉。
     func reaches(_ subject: AlertSubject) async -> Bool {
         do {
             return try await store.reaches(subject)
@@ -276,20 +234,18 @@ final class AppServices {
         #if os(iOS)
         await cueActivity?.invalidate(reason: "resolveSync").value
         #endif
-        syncReconciled = false
+        syncState.reconciled = false
         try await sync?.resolve(resolution)
     }
 
-    /// 同步从不通变通时立即同步一次（`syncNow`）：断网时没传上去的记录（留在库里待推送）当场传出、在等的回执当场拉回，
-    /// 不等发送者的退避；按节奏的拉取也随之重开一个窗口（`pollingCondition`）。
-    /// Mac 停下同步等更新时当场查一次更新（`UpdateService.checkInBackground`）。
+    /// 同步从不通变通时立即同步一次：断网时没传上去的记录当场传出、在等的回执当场拉回，不等发送者的退避。
     func setSyncState(_ state: SyncState) {
         let recovered = state.status.reachesMac && speech.reachableSince == nil
         #if os(macOS)
-        if state.status == .outdated, syncStatus != .outdated { updates.checkInBackground() }
+        if state.status == .outdated, syncState.status != .outdated { updates.checkInBackground() }
         #endif
         #if os(iOS)
-        if syncStatus != state.status {
+        if syncState.status != state.status {
             switch state.status {
             case .noAccount: cueActivity?.invalidate(reason: "syncNoAccount")
             case .needsDecision: cueActivity?.invalidate(reason: "syncNeedsDecision")
@@ -297,14 +253,9 @@ final class AppServices {
             }
         }
         #endif
-        syncStatus = state.status
+        syncState = state
         speechClock.setReachable(state.status.reachesMac)
         if recovered { Task { await syncNow() } }
-        syncIssues = state.issues
-        syncCatchingUp = state.catchingUp
-        syncReconciled = state.reconciled
-        syncFilesOverQuota = state.filesOverQuota
-        alertSubscription = state.alerts
     }
 
     func setFileTransfers(_ transfers: [String: FileTransfer]) {

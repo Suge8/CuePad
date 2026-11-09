@@ -3,8 +3,7 @@ import CuePi
 import CueStore
 import Foundation
 
-/// 这台 Mac 上的投送请求执行器：领取发给本机的请求（手机发来的与本机界面写的），按发送方式执行，把结果写回。
-/// 全 App 经桥给 Agent 会话发消息、作答、改配置、停止、重跑出错的一轮、结束，经各 Agent 的接入在后台开会话、接着会话的只有这里；成功送出的话记发送记录。
+/// 全 App 经桥给 Agent 会话发消息，经各 Agent 的接入在后台开会话、接着会话的只有这里；成功送出的话记发送记录。
 final class MacExecutor {
     let store: CueStore
     let pi: PiBridge
@@ -60,7 +59,7 @@ final class MacExecutor {
         catch { running = nil; throw error }
     }
 
-    /// 立即不再领取新请求；返回的等待不在主线程上，退出收尾里与别的组件一起限时等（见 `AppServices.beginShutdown`）。
+    /// 立即不再领取新请求；返回的等待不在主线程上，退出收尾里限时等。
     func beginStop() -> @Sendable () async -> Void {
         let executor = running
         running = nil
@@ -79,7 +78,7 @@ final class MacExecutor {
         }
     }
 
-    /// 每种发送方式一个分支。不认识的方式 `DeliveryExecutor` 已按失败写回，走到这里的都是已知方式。
+    /// 不认识的方式 `DeliveryExecutor` 已按失败写回，走到这里的都是已知方式。
     private func perform(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws -> DeliveryOutcome {
         guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
         switch mode {
@@ -108,10 +107,9 @@ final class MacExecutor {
         return .succeeded
     }
 
-    // MARK: 发给 Agent 会话
 
-    /// 发出的话：会话在跑就由桥先打断这一轮（忙不忙以此刻为准，写请求时看到的"歇着"可能已过时），以这句开新一轮。
-    /// 会话已结束时先在后台恢复；送出后记发送记录（带上请求 id，扩展写进会话文件的那条消息据此与请求气泡对上）。
+    /// 会话在跑就由桥先打断这一轮（忙不忙以此刻为准，写请求时看到的"歇着"可能已过时）。
+    /// 送出后记发送记录，带上请求 id，扩展写进会话文件的那条消息据此与请求气泡对上。
     private func deliver(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws -> DeliveryOutcome {
         let (_, id, resumed) = try await connect(request.target, access: access)
         guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
@@ -152,6 +150,7 @@ final class MacExecutor {
 
     /// 记发送记录。话已经送达，记不下也照样按成功写回（手机才不会重发）：没记下是这台 Mac 的资料库问题，在这里报。
     private func record(_ content: String, of request: DeliveryRequest, to target: SendTarget) async {
+        guard request.mode.known?.landsAsMessage == true else { return }
         do {
             try await store.recordDelivery(request, content: content, to: target)
         } catch {
@@ -159,7 +158,7 @@ final class MacExecutor {
         }
     }
 
-    /// 作答、改会话设置（会话名、模型、思考强度）与斜杠命令交给扩展，不是发出去的内容，不记发送记录。
+    /// 作答、改会话设置与斜杠命令交给扩展，不是发出去的内容，不记发送记录。
     /// 会话已结束时与发消息一样先在后台恢复：改名对已结束的会话也要能做，Pi 只在活着的进程里写会话名。
     private func answer(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws {
         guard let answer = request.answer else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新答案
@@ -184,7 +183,6 @@ final class MacExecutor {
         }
     }
 
-    /// 目标会话连着这台 Mac 的桥就用它，已结束的在后台恢复（会话索引里的会话文件与工作目录）。
     private func connect(_ target: SendTarget, access: DeliveryAdmission.Access) async throws -> (sessionID: String, id: CuePi.PiSession.ID, resumed: Bool) {
         let ref = try sessionID(of: target)
         if let live = pi.session(sessionID: ref) { return (ref, live.id, false) }
@@ -195,7 +193,7 @@ final class MacExecutor {
         return (ref, try await runtime(indexed.agent).resume(indexed), true)
     }
 
-    /// 这个 Agent 在这台 Mac 上的接入；本版本不认识的 Agent 当作没装。
+    /// 本版本不认识的 Agent 当作没装。
     private func runtime(_ agent: AgentKind) throws -> any AgentRuntime {
         guard let runtime = runtimes[agent] else { throw AgentRuntimeError.notInstalled(agent) }
         return runtime
@@ -203,10 +201,9 @@ final class MacExecutor {
 
     // MARK: 不指向某个会话的请求（除开新会话的开场白外不写发送记录）
 
-    /// 开新会话：在后台托管（各家的 `AgentRuntime`），目录由本机按项目绑定的文件夹解析（新会话的目录只由项目绑定推出；
-    /// 这台 Mac 上还没绑的，先建好它的工作区并绑定，`workspace(of:)`）；
-    /// 带上发起方的认领标识与会话名、模型、思考强度（Pi 的启动参数，一步生效：模型无效时 Pi 起不来，请求整体失败、不留会话），
-    /// 连上后把开场的话作为第一条消息送进去（带着这条请求的 id，对话据此认出它），并记发送记录（同 `deliver`：请求清理后对话仍认得出是谁说的）。
+    /// 目录由本机按项目绑定的文件夹解析；这台 Mac 上还没绑的，先建好工作区并绑定（`workspace(of:)`）。
+    /// 模型、思考强度是 Pi 的启动参数，一步生效：模型无效时 Pi 起不来，请求整体失败、不留会话。
+    /// 开场的话带着这条请求的 id（对话据此认出它），并记发送记录（同 `deliver`：请求清理后对话仍认得出是谁说的）。
     private func startSession(_ request: DeliveryRequest) async throws -> DeliveryOutcome {
         guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
         let directory = try await workspace(of: launch.project)
@@ -225,7 +222,6 @@ final class MacExecutor {
                 "开新会话（\(launch.opening.rawValue, privacy: .public)）：起进程上桥 \(began.duration(to: opened), privacy: .public)，送开场 \(opened.duration(to: clock.now), privacy: .public)")
         }
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
-            // 开场的话是存储格式（可带卡片里的图片与文件）
             guard let session = pi.session(id: id) else {
                 return .unconfirmed(ShownText("会话已经启动，但连接已断开，不会自动再开一个"))
             }
@@ -240,14 +236,12 @@ final class MacExecutor {
         return .succeeded
     }
 
-    /// 补写一个会话的对话：从头读出（会话文件，OpenCode 的经它的服务），与摘要一起写。
     private func writeTranscript(of sessionID: String) async throws {
         guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
         try await store.writePiTranscript(try await runtime(indexed.agent).transcript(of: indexed, files: store.files))
     }
 
-    /// 绑定文件夹：手机只指名从哪里取，路径在这台 Mac 上解析，写进本机的目录绑定——绑定的唯一写入；
-    /// 目录绑定记录随之同步给手机。没有文件夹是解除。按项目 id 记：项目记录晚到这台 Mac 也对得上。
+    /// 手机只指名从哪里取，路径在这台 Mac 上解析，写进本机的目录绑定——绑定的唯一写入。按项目 id 记：项目记录晚到这台 Mac 也对得上。
     private func bindFolder(_ request: DeliveryRequest) async throws {
         guard let bind = request.bind else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
         guard let folder = bind.folder else { return try await store.setDirectory(nil, for: bind.project) }
@@ -256,8 +250,7 @@ final class MacExecutor {
         try await store.setDirectory(directory.path, for: bind.project)
     }
 
-    /// 项目在这台 Mac 上的文件夹：绑着的就是它；没绑的建好工作区（`Workspaces.directory`，已存在同名的直接用）并绑定——
-    /// 绑定照常发布给别的设备（`startDirectoryBindings`），之后与自己选的文件夹没有分别。
+    /// 没绑的建好工作区（已存在同名的直接用）并绑定；绑定照常发布给别的设备（`startDirectoryBindings`），之后与自己选的文件夹没有分别。
     private func workspace(of project: UUID) async throws -> URL {
         if let path = try await store.directory(of: project) { return URL(filePath: path, directoryHint: .isDirectory) }
         guard let name = try await store.project(project)?.name else { throw SendError.projectNotHere }

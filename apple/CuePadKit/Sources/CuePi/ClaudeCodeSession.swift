@@ -4,10 +4,8 @@ import CueText
 import Darwin
 import Foundation
 
-// 终端会话（钩子）与托管会话（stream-json）共用的：模型与强度、会话文件、权限确认与提问怎么问怎么答。
 
 extension PiSession {
-    /// Claude Code 的会话：`<会话 id>.<进程 pid>`。
     static func claudeID(sessionID: String, pid: Int32) -> String { "\(sessionID).\(pid)" }
 }
 
@@ -26,7 +24,6 @@ enum ClaudeCode {
         PiModelOption(key: PiModelKey(provider: provider, id: id), name: name ?? id, thinkingLevels: levels)
     }
 
-    /// 控制请求 `initialize` 回应里的模型清单（`value` 是别名或完整 id，`resolvedModel` 是它此刻解析到的完整 id）。
     /// 去掉 `default` 那项（"Default (recommended)"）：它解析到的是推荐的模型，不一定是配置的，名字也不说是哪个模型；
     /// 按解析出的 id 认回模型时（探测的默认、托管会话报的模型）落到同一个模型的别名上（`sonnet` 排在完整 id 前面）。
     static func models(in info: JSONValue) -> [(option: PiModelOption, resolved: String?)] {
@@ -42,7 +39,6 @@ enum ClaudeCode {
 
     static func effort(_ level: PiThinkingLevel) -> String { level.clamped(to: efforts).rawValue }
 
-    /// 会话文件：`<配置目录>/projects/<工作目录的真实路径，非字母数字换成 ->/<会话 id>.jsonl`。
     static func sessionFile(home: URL, cwd: URL, sessionID: String) -> URL {
         let encoded = String(decoding: realPath(cwd).utf16.map { unit -> UInt16 in
             (0x30...0x39).contains(unit) || (0x41...0x5A).contains(unit) || (0x61...0x7A).contains(unit) ? unit : 0x2D
@@ -60,7 +56,6 @@ enum ClaudeCode {
 
 /// 一次等你回答：Claude Code 要用一个工具（钩子的 `PermissionRequest`、托管进程的 `can_use_tool`），或问你一个问题（`AskUserQuestion`：
 /// 终端会话经 `PreToolUse` 钩子答，托管进程经 `can_use_tool`；答案就是放行时改写的输入里的 `answers`）。
-/// 提问只有一个单选问题时能从 CuePad 作答，多个问题或多选只能在终端里答（问题照样显示）。
 struct ClaudePermission {
     let promptID = UUID().uuidString
     let tool: String
@@ -105,7 +100,6 @@ struct ClaudePermission {
         }
     }
 
-    /// 提问的作答：原样的输入加上 `answers`（问题 → 选中的选项）。
     func answered(_ answer: PiAnswerValue, to id: String) throws -> JSONValue {
         guard id == promptID, answerable else { throw PiBridgeError.rejected("stale_prompt") }
         guard let asked, case .object(var updated) = input else { throw PiBridgeError.rejected("bad_answer") }

@@ -29,7 +29,6 @@ struct Command: Sendable {
   var name: String { path.joined(separator: " ") }
 
   static let all: [Command] = project + card + task + [search, show] + conflicts
-  /// 顶层的命令名（名词或单词命令），按 `all` 的先后。
   static let nouns: [String] = all.map(\.path[0]).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
 }
 
@@ -39,7 +38,6 @@ struct Reply {
   var json: any Sendable
 }
 
-/// 命令运行时拿到的一切：解析好的参数、资料库、stdin。
 struct Call {
   let args: Arguments
   let store: CueStore

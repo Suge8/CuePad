@@ -1,14 +1,8 @@
 import SwiftUI
 
-/// 普通聊天浮在正文上；内嵌阅读区独占一行，出现与消失不改变滚动视口。
 nonisolated enum ChatJumpPlacement { case floating, separate }
 
-/// 聊天式的滚动区（会话页与 Cue 页、Mac 与 iPhone 共用，经 `ChatColumn`）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，
-/// 用户滚走后这些都不再挪动正在读的内容；离最新处超过一屏时可见区右下角（回复框右上方）浮出圆形"回到最新"，
-/// 离开后来过新内容时带一个点，点它回到最新（`ChatFollow`）。离开最新处之后 `followKey` 变了就算来过新内容（`unseen`）：
 /// 按离开那一刻的它推出来，不在它每变一次时写状态——内容一帧里连着到几条（同步带回积压、Cue 连说几句）时，每变一次都写的话一帧里更新好几遍。
-/// 贴着最新时新内容插进来的那一帧就排在终位（内容变高矮时底锚，`pinned`），从说话那一边的角长出来，不先排在回复框的玻璃后面再滑上来；
-/// 发出一句时回复框让出的地方先留着，那句到了一起收（`bottomPadding`），收起回复框与新的一条出现在同一帧。减弱动态效果下滚动不做动画。
 /// 本机正在和 iCloud 对（`holding`，回到前台、刚打开时拉到的积压一页页地到）时，贴着最新也先不跟：新的长在可见区下面、看着的不动，
 /// 对完再一次滑上来——一页一滑的话整段对话一路往下闪。自己发出一句、点"回到最新"照常立刻去。
 ///
@@ -16,10 +10,8 @@ nonisolated enum ChatJumpPlacement { case floating, separate }
 /// 底部锚定会落在内容外、整页空白（WWDC26「Dive into lazy stacks」也说绝对偏移不可靠）；整段排开位置是确定的，
 /// 打开时的底部锚点就是最新处。没贴着最新时，正在读的那一条在内容里挪了（往上翻快到头时上面再排开一段、空白段换成真的、改宽重排）就当场把可见区跟过去，
 /// 正在读的不动（`ChatAnchor`、`ContentLift.scroll`）。
-/// 滚动区铺到顶栏、状态栏与回复框后面（iOS 的栏与键盘是安全区，滚动区把它当内容边距），内容在玻璃后面清楚可见。
 ///
-/// 对话排在阅读栏里：最宽 `readingWidth`（含左右 `inset`），在滚动区里居中，上下各留 `edge`。栏的边距只能是滚动区自己的边
-/// （`safeAreaPadding`），不能是内容外面的 padding 或居中的框：按条跳（`scrollTo`）时滚动区把那一条对回可见区，
+/// 栏的边距只能是滚动区自己的边（`safeAreaPadding`），不能是内容外面的 padding 或居中的框：按条跳（`scrollTo`）时滚动区把那一条对回可见区，
 /// 行若离内容原点有一段边距，整段对话就被横着推出那一段。
 /// 不用 `contentMargins` 的原因在 docs/layout.md（这里犯过：Cue 页拍板卡那一排件的边被写到对话上，整段左移、上移 16）。
 /// `.scrollView` 坐标空间两种边一样不含，对话里按它量的（`CueEndProbe`）不变。
@@ -29,32 +21,23 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     let followKey: Key
     let readingWidth: CGFloat
     let inset: CGFloat
-    /// 贴底与否、请求跳到哪：由放它的页面持有（页面据它收起顶栏、输入框）。
     let follow: Binding<ChatFollow>
     let holding: Bool
     let jumpPlacement: ChatJumpPlacement
-    /// 最新一条是新到时要撑上去的那种就是它（`rise`）。
     let arrival: UUID?
-    /// 浮在对话底上的那张拍板卡（`CueWaitDock`）；没有为 nil。它走的那次更新里对话同时长出的不跟（`dockLeft`）。
     let docked: String?
     private let content: Content
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.chatBottomInset) var bottomInset
-    /// 对话各条排在哪、正在读的那一条（`ChatAnchor`）与据它算出的在屏上的段。
     @State var anchor = ChatAnchor()
     @State var onScreen: Set<UUID> = []
     @State var offset = ScrollOffset()
-    /// 发出那一刻浮着的回复框的高（`toNewest`、`bottomPadding`），发出的话到了（内容在下面长高）就放掉。
     @State var held: CGFloat?
-    /// `holding` 期间内容在下面长了、还没滑上去。
     @State var deferred = false
-    /// `holding` 期间自己要回到最新（发出一句、点圆钮）：这一次对完之前照常跟着。
     @State var unheld = false
-    /// 排到下一帧的那一次上滑（`slide`）：还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
+    /// 还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
     @State var sliding: Task<Void, Never>?
-    /// 内容在渲染端的平移（`rise`）。
     @State var lift = ContentLift()
-    /// 离开最新处那一刻的 `followKey`；在最新处为 nil。
     @State var leftAt: Key?
 
     init(
@@ -96,7 +79,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         GeometryReader { proxy in
             ScrollViewReader { reader in
                 let padding = bottomPadding
-                // 跟着正在读的那一条（`ChatAnchor`）：贴着最新时底锚管、跳去了某一条时对准那一条
                 let keeping = !pinned && follow.wrappedValue.target == nil
                 ScrollView {
                     // 显式竖排正文与末尾锚点：宿主的隐式布局可能把零高锚点放在正文中部。
@@ -104,7 +86,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         content.padding(.bottom, padding).background { ContentLift.Anchor(lift: lift) }
                             .environment(\.chatAnchor, anchor)
                             .environment(\.chatOnScreen, onScreen)
-                        // 最新处（`toEnd`）
                         Color.clear.frame(height: 0).id(Self.end)
                     }
                 }
@@ -113,14 +94,12 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     // 贴着最新时内容一变高矮就在同一次排版里停在新的最新处（`pinned`）：新来的一条插进来的那一帧就排在终位、从说话那一边的角长出来，
                     // 不先排在回复框的玻璃后面（被折射成怪字）再滑上来。滚走了、正在和 iCloud 对（`holding`）时不锚，正在读的不动
                     .defaultScrollAnchor(pinned ? .bottom : nil, for: .sizeChanges)
-                    // 栏贴着滚动区两边（手机、窄窗口）时，横向滚动的表格可以越过页边距滑到边上（`readingColumnBleeds`）
                     .environment(\.readingColumnBleeds, proxy.size.width <= readingWidth)
                     .safeAreaPadding(.horizontal, margin(proxy.size.width))
                     .safeAreaPadding(.vertical, ChatLayout.edge)
                     #if os(macOS)
                     .scrollIndicators(.hidden)
                     #else
-                    // 滚动条不随栏的边缩进：仍贴滚动区的左右边，上下只让开栏与回复框
                     .contentMargins(.horizontal, -margin(proxy.size.width), for: .scrollIndicators)
                     .contentMargins(.top, -ChatLayout.edge, for: .scrollIndicators)
                     .contentMargins(.bottom, bottomInset - ChatLayout.edge, for: .scrollIndicators)
@@ -148,10 +127,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         offset.dock = docked
                         let last = delivered.reading ?? previous
                         let grown = reading.height - last.height
-                        // 新到的那一条带来的长高（它插进来的那次排版）：在对、滚走了时它照常长在下面
                         let rising = offset.arrived(arrival) && grown > 0
                         if reading.anchor.onScreen != onScreen { onScreen = reading.anchor.onScreen }
-                        // 正在读的那一条挪了：可见区跟过去（在上面排开一段时贴着最新的停回最新处、跳去了某一条的对准那一条，见下）
                         let shift = anchor.take()
                         if shift != 0 { lift.scroll(by: shift) }
                         if follow.wrappedValue.prepending, grown > 0 {
@@ -196,7 +173,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         // 按"越过了"补回的话对话先掉下去再滑上来
                         let shrank = grown < 0 || reading.floating < last.floating
                         if grown > 0, reading.nearNewest {
-                            // 底锚当帧已排在新的最新处（`pinned`），不再滚；新到的那一条把上面的对话撑上去
                             if rising { rise(by: grown) }
                         } else if Self.followsKeyboard, delivered.viewShrank, grown == 0 {
                             // 可见区从底下变矮、内容没变：键盘升起来了（系统先把它算进内容边距，键盘才开始升）。整段滑上去，

@@ -13,17 +13,13 @@ public struct SkillDocument: Equatable, Sendable {
   /// 收尾那条 `---` 之后的正文，不含紧跟着的空行（文件页的正文从第一行字起，不空出一行）；没有 frontmatter 时是全文
   public let body: String
   private let text: String
-  /// frontmatter 在原文里的位置；没有为 nil
   private let header: Header?
 
   enum Key: String { case name, description }
 
   private struct Header: Equatable, Sendable {
-    /// frontmatter 第一行的起点（开头那条 `---` 之后）：新加的键写在这里
     let start: String.Index
-    /// 正文的起点（收尾 `---` 与其后空行之后）
     let bodyStart: String.Index
-    /// 收尾那条 `---` 后面还有换行（没有时正文要先补一个）
     let closed: Bool
     let fields: [Key: Field]
   }
@@ -32,7 +28,6 @@ public struct SkillDocument: Equatable, Sendable {
   private struct Field: Equatable, Sendable {
     /// 换成新的 `键: 值` 的那段：键那行到值的末尾（值写在下一行时只到冒号），行尾的注释不在其中
     let key: Range<String.Index>
-    /// 写在下一行起的值占的几行，连同它前面那个换行：写回时删掉
     let value: Range<String.Index>?
     let quote: Character?
     /// 这个键下面还留着注释行：换成块写法会把它们读进值里

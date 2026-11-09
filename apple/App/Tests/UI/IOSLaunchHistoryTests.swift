@@ -4,7 +4,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 确认另开不是抹掉旧结果：后一次失败，旧的未知请求仍要求重复确认。
 struct IOSLaunchHistoryTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -23,7 +22,7 @@ struct IOSLaunchHistoryTests {
         let task = try await store.createTask("修乱序", in: Project.defaultID)
         let workspace = Workspace(services: app.services)
         func launch(_ intent: SessionLaunchIntent) async throws -> SessionLaunch {
-            try await workspace.launchSession(in: task.projectID, prompt: task.body, title: task.heading,
+            try await app.services.launchSession(in: task.projectID, prompt: task.body, title: task.heading,
                                               on: "mac", card: task.id, agent: .pi, intent: intent)
         }
         let first = try await launch(.new)

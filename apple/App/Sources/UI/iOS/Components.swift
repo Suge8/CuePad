@@ -4,10 +4,9 @@ import SwiftUI
 import UIKit
 
 extension View {
-    /// 列表与表单铺在桌面色上，与书架、项目页同一底色。
     func deskBackground() -> some View { modifier(DeskBackground()) }
 
-    /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作。项目还没同步到（nil）时没有菜单。
+    /// `project` 为 nil（还没同步到）时没有菜单。
     func projectActions(_ project: Project?, cornerRadius: CGFloat) -> some View {
         modifier(ProjectContextMenu(project: project, cornerRadius: cornerRadius))
     }

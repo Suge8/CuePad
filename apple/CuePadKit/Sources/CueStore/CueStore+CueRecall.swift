@@ -1,20 +1,17 @@
 import CueText
 import Foundation
 
-/// `CueStore.recallCue` 的结果：命中的记忆（UUID 身份）、对话、灵感任务，与 Cue 管过的会话里 Agent 的回复；每类另有多少条命中没列出（`unlisted`）。
 public struct CueRecall: Equatable, Sendable {
   public var lines: [CueMemoryLine] = []
   public var messages: [CueMessage] = []
   public var cards: [Card] = []
   public var replies: [Reply] = []
-  /// 每类命中却超出 `limit` 没列出的条数，顺序同上四类
   public var unlisted = Unlisted()
 
   public struct Unlisted: Equatable, Sendable {
     public var lines = 0, messages = 0, cards = 0, replies = 0
   }
 
-  /// 会话里的一条回复与它所在的会话（记录已清掉的为 nil，只剩会话 id）。
   public struct Reply: Equatable, Sendable {
     public var message: PiChatMessage
     public var session: PiSessionState?
@@ -22,16 +19,12 @@ public struct CueRecall: Equatable, Sendable {
 }
 
 extension CueStore {
-  /// Cue 管过的会话（唯一定义）：绑过任务的（正在用的与换下来的），或 Cue 对它说过话的（发送记录是 Cue 的）。
   static let cueSessions = """
     SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL
     UNION SELECT f.value FROM cards c, json_each(c.formerSessionIDs) f
     UNION SELECT targetRef FROM sendRecords WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND targetKind = '\(SendTargetKind.piSession.rawValue)'
     """
 
-  /// 全文找：记忆（含忘掉的，标着）、对话、灵感与任务（没删的，含归档的，同 `search` 的索引），与 Cue 管过的会话（`cueSessions`）里 Agent 的回复原话
-  /// （同步来的那份对话，`PiChatMessage`）。词之间空格隔开，不分大小写，命中任一个就算；每类在库里按 `recallQuery` 的分排好，取前 `limit` 条，
-  /// 并数出命中却没列出的条数。
   public func recallCue(_ query: String, limit: Int = 20) throws -> CueRecall {
     let patterns = Self.recallPatterns(query)
     guard !patterns.isEmpty else { return CueRecall() }
@@ -71,14 +64,12 @@ extension CueStore {
 
   private static let recallText = "(text LIKE ? ESCAPE '\\')"
 
-  /// 查询里的词各一个 LIKE 模式（转义 \\、%、_）。
   private static func recallPatterns(_ query: String) -> [any SQLBindable] {
     recallWords(query).map {
       "%" + $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_") + "%"
     }
   }
 
-  /// 一类里命中却超出 `limit` 的条数。
   private func unlisted(_ table: String, _ query: RecallQuery, _ limit: Int) throws -> Int {
     let total = try db.first("SELECT count(*) FROM \(table) WHERE \(query.condition)", query.countArguments) { Int($0.int(0)) } ?? 0
     return max(0, total - limit)
@@ -89,7 +80,6 @@ extension CueStore {
     var arguments: [any SQLBindable], countArguments: [any SQLBindable]
   }
 
-  /// recall 一类的条件与排序：`from` 里满足 `scope`、命中 `hit`（一个 `?` 绑一个词的 LIKE 模式）的，按分排，同分按 `then`。
   /// 分 = 命中的词各自的少见程度 ln((N + 1) / (n + 0.5)) 相加（N 是这一类的条数，n 是其中含这个词的），再除以 1 + 长度 / 2000：
   /// 少见的词定位得准，长回复靠篇幅顺带命中的不该压过短而准的那条。这一类里两成以上都含的词不算命中（"the""测试"这类定位不到东西，也不该算进没列出的条数），
   /// 词全都这么常见时才照算。比按命中词数排准：问句与多词查询里常见词凑出的命中数会把真正的那条挤下去（LongMemEval 的离线检索，证据进前三从 77% 到 88%）。
@@ -114,12 +104,9 @@ extension CueStore {
     return RecallQuery(condition: condition, orderBy: "\(normalized) DESC, \(then)", arguments: patterns + patterns, countArguments: patterns)
   }
 
-  /// 这一类里含它的超过这个比例，这个词就太常见、不算命中
   static let recallCommon = 0.2
-  /// 长度折算：这么长的一条分数打对折
   static let recallLength = 2000.0
 
-  /// 查询里的词：空格隔开、去重，保持先后。
   public static func recallWords(_ query: String) -> [String] {
     var seen = Set<String>()
     return query.split(whereSeparator: \.isWhitespace).map(String.init).filter { seen.insert($0.lowercased()).inserted }

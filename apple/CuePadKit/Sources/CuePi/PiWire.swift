@@ -10,7 +10,6 @@ enum PiWire {
     /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`PiSession.upgrading`）
     static let oldestExtension = 56
 
-    /// 这个扩展版本说的格式 CuePad 读得懂（见 `oldestExtension`）
     static func reads(extensionVersion version: Int?) -> Bool { version.map { (oldestExtension...PiExtensionBundle.version).contains($0) } == true }
 
     struct State: Decodable {
@@ -19,20 +18,16 @@ enum PiWire {
         var detail: String?
         var title: String?
         var error: String?
-        /// 进入当前粗状态的时间（毫秒）
         var since: Double
-        /// 这段连续处理开始的时间（毫秒），空闲、出错时为 nil
         var busySince: Double?
-        /// 主会话最后一次模型回合开始的时间（毫秒）；还没开过为 nil
         var turnSince: Double?
 
-        /// 同步记录的状态与一句话说明（`PiSession.detail`）；不认识的种类为 nil。
         var work: (state: PiWorkState, detail: String?)? {
             switch kind {
             case "idle", "done": (.settled, nil)
             case "thinking": (.thinking, nil)
             case "tool": (.tool, detail.map { "\(tool ?? "?")\(PiSessionState.detailSeparator)\($0)" } ?? tool ?? "?")
-            case "delegating": (.delegating, nil)  // 子代理在 `subagents` 里
+            case "delegating": (.delegating, nil)
             case "compacting": (.compacting, nil)
             case "waiting_user": (.waitingForUser, title)
             case "error": (.error, PiErrorSummary(error ?? "").line)  // 手机上没有悬停看原文
@@ -56,10 +51,8 @@ enum PiWire {
         var tty: String?
         var term: [String: String]
         var state: State
-        /// CuePad 开的新会话：启动时经环境变量交给扩展的认领标识（其余会话没有）
         var launchToken: String?
         var hosted: Bool?
-        /// 与 `info` 消息同样的字段，平铺在 hello 里
         var info: Info
 
         enum CodingKeys: String, CodingKey {
@@ -112,9 +105,7 @@ enum PiWire {
         }
     }
 
-    /// 会话名、首条用户消息、等你回答的弹窗、子代理、模型配置、上下文余量与命令清单。hello 带全部；`info` 消息只带变了的几项：
-    /// 键出现就是新值（null 是"没有"），没出现就是不变（模型表和命令清单很大，上下文用量每轮都变，不整份重发）。
-    /// 模型与上下文的线上格式就是同步字段的格式（直接解码成 CueStore 的类型）；弹窗、子代理、命令的键名或时刻单位不同，经下面三个线上形状转成。
+    /// `info` 消息只带变了的几项：键出现就是新值（null 是“没有”），没出现就是不变（模型表和命令清单很大，上下文用量每轮都变，不整份重发）。hello 带全部。
     /// 问答近况不走这里：对话与摘要只来自会话文件（`PiHistory`）。
     struct Info: Decodable {
         private var updates: [@Sendable (inout PiSession) -> Void] = []
@@ -151,8 +142,7 @@ enum PiWire {
             for update in updates { update(&session) }
         }
 
-        /// 名册不带进展时刻，Mac 收到时记（`PiSubagentState.progressAt`）：一项（按名字对上上一份）有任何变化——状态、动作文字、起止——就是此刻有进展，
-        /// 没变的沿用上一份的时刻，新出现的是此刻。FireCode 的名字在一个指挥官下唯一。
+        /// 名册不带进展时刻，Mac 收到时记（`PiSubagentState.progressAt`）。FireCode 的名字在一个指挥官下唯一，所以按名字对上上一份。
         private static func stamped(_ roster: [PiSubagentState], since previous: [PiSubagentState], at now: Date) -> [PiSubagentState] {
             roster.map { agent in
                 var agent = agent
@@ -179,7 +169,6 @@ enum PiWire {
         var role: String
         var state: String
         var action: String
-        /// 毫秒
         var startedAt: Double?
         var settledAt: Double?
         var model: String?
@@ -205,7 +194,6 @@ enum PiWire {
         var id: String?
         var ok: Bool
         var error: String?
-        /// `title` 的回话：起好的会话名
         var title: String?
     }
 
@@ -223,7 +211,7 @@ enum PiWire {
     }
     struct StateMessage: Decodable { var state: State }
 
-    /// 正在说的话：到目前为止的全文与开始出字的时刻（毫秒）；`text` 为 null 是清掉。
+    /// `text` 为 null 是清掉。
     struct Draft: Decodable {
         var text: String?
         var since: Double?
@@ -236,15 +224,12 @@ enum PiWire {
 
     enum Message {
         case hello(Hello)
-        /// 读不懂的扩展（`reads`）：只有身份
         case upgrading(IdentityHello)
         case state(State)
         case info(Info)
         case ack(Ack)
         case bye(Bye)
-        /// 正在说的话（`PiDraft`），nil 是清掉
         case draft(PiDraft?)
-        /// 订阅额度的一次观测（属于账号，不属于会话）
         case quota(QuotaReport)
     }
 
@@ -270,8 +255,6 @@ enum PiWire {
         }
     }
 
-    // MARK: CuePad → 扩展
-
     private struct Command: Encodable {
         struct CueTurn: Encodable { var deliveryId: String? }
         struct Image: Encodable { var mimeType: String; var data: String }
@@ -296,7 +279,6 @@ enum PiWire {
         try encodeLine(Command(t: "abortTurn", id: id, text: "", deliveryId: deliveryID, turnStartedAt: turnStartedAt))
     }
 
-    /// 斜杠命令：`text` 是以 / 开头的整行。
     static func slashCommand(id: String, line: String) throws -> Data {
         try encodeLine(Command(t: "command", id: id, text: line))
     }
@@ -306,7 +288,6 @@ enum PiWire {
         var id: String
     }
 
-    /// 只有种类的命令：`reload`、`end`、`abort`、`retry`、`quota`。
     static func bare(_ t: String, id: String) throws -> Data { try encodeLine(Bare(t: t, id: id)) }
 
     private struct ConfigCommand: Encodable {
@@ -322,7 +303,7 @@ enum PiWire {
         try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, fast: fast, name: name))
     }
 
-    /// 认 `title` 的最早的扩展版本：更早的会话换上新扩展前不起名（`PiBridge.Link.canNameItself`）
+    /// 带回合身份的停止（`abortTurnSince`）与起名（`titleSince`）认得的最早扩展版本：更早的会话换上新扩展前，前者拒绝（`upgrade_stop_turn`），后者不起名（`PiConnection.canNameItself`）。
     static let abortTurnSince = 60
     static let titleSince = 58
 
@@ -335,7 +316,7 @@ enum PiWire {
         var timeoutMs = Int(SessionNameSuggestion.budget.seconds * 1000)
     }
 
-    /// 按第一句话起会话名（`SessionNameSuggestion`）：说明、长度上限与时限随命令给，扩展挑模型、问一次，只回不写。
+    /// 扩展挑模型、问一次，只回不写。
     static func titleCommand(id: String, text: String) throws -> Data { try encodeLine(TitleCommand(id: id, text: text)) }
 
     private struct AnswerCommand<Value: Encodable>: Encodable {

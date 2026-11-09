@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// `setup look`：Cue 读自己与它运行的那台 Mac。总览每块几行；`part` 给那一块的全部。只读库与本机的健康文件（`CueHealth`），不碰别的。
+/// 总览每块几行；`part` 给那一块的全部。只读库与本机的健康文件（`CueHealth`），不碰别的。
 extension CueTools {
   func look(_ part: LookPart?) async throws -> String {
     let now = Date()
@@ -24,8 +24,6 @@ extension CueTools {
     }
     return lines.joined(separator: "\n")
   }
-
-  // MARK: 大脑
 
   private func brain(_ profile: CueProfile, mac: MacAgents, now: Date, detail: Bool) -> [String] {
     let agent = profile.runtime.known.flatMap(mac.agent)
@@ -50,8 +48,6 @@ extension CueTools {
       return "出了问题\(retry)（连续失败 \(health.failures) 次）"
     }
   }
-
-  // MARK: Agent
 
   private func agents(_ mac: MacAgents, profile: CueProfile, quotas: [AccountQuota], now: Date, detail: Bool) -> [String] {
     guard mac.modifiedAt != .distantPast else { return ["Agent：\(mac.whyNone)"] }
@@ -98,8 +94,6 @@ extension CueTools {
     (.answer, "回答它的提问"), (.end, "收掉"), (.retry, "重跑出错的一轮"),
   ]
 
-  // MARK: 额度
-
   private func quota(_ quotas: [AccountQuota], mac: MacAgents, now: Date, detail: Bool) -> [String] {
     guard !quotas.isEmpty else { return ["额度：这台 Mac 没有订阅额度的记录（按量计费的不报，订阅的要等用过一次才观测到）"] }
     return ["额度："] + quotas.flatMap { quota in
@@ -111,8 +105,6 @@ extension CueTools {
       return lines
     }
   }
-
-  // MARK: 记忆、技能、项目
 
   private func memory() async throws -> String {
     let kept = try await store.cueMemory().lines.filter { $0.deletedAt == nil && $0.remindAt == nil }
@@ -172,7 +164,6 @@ extension CueTools {
 
   private struct ProjectFacts {
     let projects: [Project]
-    /// 这台 Mac 上绑的文件夹
     let local: [UUID: String]
     let elsewhere: [DirectoryBinding]
     let here: String
@@ -185,7 +176,6 @@ extension CueTools {
       elsewhere: try await store.directoryBindings().filter { $0.hostID != host }, here: host)
   }
 
-  /// 总览列这么多个项目，多的只报个数。
   private static let projectsListed = 20
 
   private func projects(_ facts: ProjectFacts, detail: Bool) -> [String] {

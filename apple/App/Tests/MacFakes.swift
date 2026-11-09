@@ -6,7 +6,6 @@ import Foundation
 
 // MARK: 替身
 
-/// 内存热键：同一组合只能注册一次，与系统行为一致。
 final class InMemoryHotkeys: HotkeyBackend {
     private var handles: [HotkeyHandle: Shortcut] = [:]
     private var next: HotkeyHandle = 1
@@ -35,15 +34,12 @@ final class RecordingHost: AgentRuntime {
     private(set) var extensions: [String: FakeExtension] = [:]
     /// 连上桥的会话报的会话文件，按 Pi 会话 id：收到的话（`writesMessages`）与剧本写的会话说的都追加在这里，Mac 读它（第一条写下前还不存在）
     private(set) var sessionFiles: [String: SessionFile] = [:]
-    /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
     var openFailure: String?
-    /// 宿主已创建后，开场消息被扩展明确拒绝。
     var openingRejection: String?
     var openingGate: AsyncStream<Void>?
     var writesMessages = true
     /// 按 Pi 会话 id 装到它每个假扩展上的行为：开出的与结束后被话唤醒重新连上的（`resume`，新进程）都装，会话换了进程照样那样回话
     var behaviors: [String: (FakeExtension) -> Void] = [:]
-    /// 接下来的几次唤醒依次以这些错误失败（如会话起得慢、没及时连上桥），用完照常唤醒
     var resumeFailures: [any Error] = []
     private let bridge: PiBridge
     private let socketDirectory: URL
@@ -58,7 +54,6 @@ final class RecordingHost: AgentRuntime {
 
     func start() {}
     func stop() -> @concurrent @Sendable () async -> Void { {} }
-    /// 与 Pi 一样：托管的进程撑得过 App 重启
     var hostedSessionsOutliveApp: Bool { true }
 
     func resume(_ session: IndexedSession) async throws -> String {
@@ -144,7 +139,6 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
     func resume(_ session: IndexedSession) async throws -> String { throw AgentRuntimeError.notInstalled(agent) }
     func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript { throw AgentRuntimeError.notInstalled(agent) }
 
-    /// 一个托管的会话上桥，返回桥上的 id。
     @discardableResult
     func host(_ sessionID: String, state: PiWorkState) -> PiSession.ID {
         var session = PiSession(
@@ -168,13 +162,14 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
     func end(_ id: PiSession.ID) async throws {}
     func abort(_ id: PiSession.ID) async throws {}
     func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {}
-    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {}
+    func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
+        guard config.fast == nil else { throw PiBridgeError.unsupported }
+    }
 }
 
 extension FakeExtension {
     var received: [String] { commands.compactMap { $0.json["t"] as? String } }
 
-    /// 收到的 `send` 命令，还原成交给桥的消息。
     var messages: [PiMessage] {
         commands.map(\.json).filter { $0["t"] as? String == "send" }.map { json in
             let images = (json["images"] as? [[String: String]] ?? []).map {
@@ -201,7 +196,6 @@ final class FakeUpdater: AppUpdater {
     func checkForUpdatesInBackground() { checkForUpdates() }
 }
 
-/// 记下 Cue 推了哪些通知，不碰系统通知中心。
 final class RecordingCueNotifier: CueNotifying {
     private(set) var posted: [(title: String, body: String)] = []
 
@@ -209,7 +203,6 @@ final class RecordingCueNotifier: CueNotifying {
 }
 
 extension AppServices {
-    /// 演 App 重开：库与桥都留着，只把启动时那一步（对账、写下在线，`AppServices.launch`）再走一遍。
     func reconcileLaunch() throws { try Self.launch(store, on: hostID, bridge: pi) }
 }
 #endif

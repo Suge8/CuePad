@@ -1,6 +1,5 @@
 import Foundation
 
-/// 一次出事的要点：类型、时间、版本与设备、异常与终止原因（看门狗那类附人话）、崩溃线程（卡死是主线程）的帧。
 /// 一个 MetricKit 包里每种诊断都是数组，同一个包可以带好几次（崩溃加卡死、两次卡死）：每一次各是一份（`reports(file:json:)`）。
 /// MetricKit 的 JSON 里时间是交来时这台设备本地时区的 "yyyy-MM-dd HH:mm:ss"、不带时区（实测，文档没写）：按本地时区读。
 nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
@@ -18,7 +17,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
             }
         }
 
-        /// 导出的摘要里的叫法
         var name: String {
             switch self {
             case .crash: String(localized: "崩溃")
@@ -29,7 +27,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
             }
         }
 
-        /// 设置里那一行的名字
         var label: LocalizedStringResource {
             switch self {
             case .crash: "上次崩溃"
@@ -41,7 +38,7 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// 栈里的一帧：二进制名（MetricKit 没给名字时按 UUID 在这台设备已载入的库里认）与它里面的偏移（未符号化，靠 dSYM 还原）。
+    /// 二进制名在 MetricKit 没给名字时按 UUID 在这台设备已载入的库里认；偏移未符号化，靠 dSYM 还原。
     struct Frame: Equatable, Sendable {
         let binary: String
         let offset: Int?
@@ -54,7 +51,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// 存档里的文件名与它在包里排第几份。
     let id: String
     let file: String
     let kind: Kind
@@ -65,19 +61,16 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
     let reason: String?
     /// 并成同一种时比的原因：异常与终止码（有终止码时只认码与看门狗事件；没有时是原文，数字抹掉：CPU 用时、地址每次都不同）。
     let cause: String
-    /// 终止原因的人话（看门狗、过热这类有名的终止码）。
     let explanation: String?
     /// "版本（构建）· 设备 · 系统"。
     let app: Dotted?
     /// 崩溃线程（没有标记就取第一条）自顶向下的前 `topFrames` 帧；更深处 CuePad 自己的帧再补至多 `ownFrames` 个（顶上常全是系统库）。
     let frames: [Frame]
-    /// 主线程卡住时在哪一页、之前做了什么（本机记下的才有）。
     let trail: [String]
 
     static let topFrames = 8
     static let ownFrames = 4
 
-    /// 存档里一个文件的每一份；读不出、没有诊断内容的是空的。
     static func reports(file: String, json data: Data) -> [CrashReport] {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return [] }
         if root[FreezeNote.File.key] != nil {
@@ -129,7 +122,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         trail = [String(localized: "所在页：\(note.page)")] + note.actions
     }
 
-    /// 给人看的时间：本地时区，带时差（"2026-11-06 12:02:47+08:00"）。
     var shownDate: String { date.formatted(Self.metricKitTime.timeZone(separator: .colon)) }
 
     private static var metricKitTime: Date.ISO8601FormatStyle {
@@ -167,7 +159,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
 /// 系统结束进程时终止原因里的终止码与看门狗事件（"code:0x8BADF00D … WatchdogEvent: process-exit"）的人话。
 /// 码见 Apple 的 "Understanding the exception types in a crash report"。
 nonisolated enum Termination {
-    /// 同一种终止的认法：终止码与看门狗事件；没有终止码时是原文抹掉数字。
     static func key(_ reason: String) -> String {
         guard let code = code(reason) else { return reason.replacing(/\d+/, with: "#") }
         return [code, event(reason) ?? ""].joined(separator: " ")

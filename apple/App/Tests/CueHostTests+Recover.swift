@@ -8,10 +8,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 出了问题 Cue 自己接着干：起不来不停在终态、挂住的一轮被看门狗重起、额度用完换一家 Agent、缓存还热时趁热巡视。
 extension CueHostTests {
-    /// 大脑没了又起不来（这台 Mac 上找不到 Pi）：快的几次重试用完，告诉你一次起不来，此刻是出错；之后隔一阵自己再试，
-    /// Pi 回来了就起好；之后第一轮好好做完（答你的话）才说一句又能干活了。
     @Test func 起不来后隔一阵自己再试_起好了说又能干活了() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(60)] })
         let first = try #require(rig.brainPIDs.first)
@@ -40,7 +37,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 起不来、下一次自己再试还要很久：你发一条消息就马上再试，起好了答你。
     @Test func 起不来时你发消息_马上再试() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
         let first = try #require(rig.brainPIDs.first)
@@ -53,7 +49,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 一轮里模型一直不回、大脑也没有任何动静：看门狗到点停掉它、重起一个，你的话重新交给新的大脑答。
     @Test func 一轮挂住没动静_看门狗重起_你的话重新交出() async throws {
         let rig = try await Rig(timing: { $0.silence = .seconds(60) })
         let first = try #require(rig.brainPIDs.first)
@@ -64,7 +59,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// Mac 睡着正赶上一轮在跑：睡着的那段不算没动静，醒来不把大脑当成卡住、不重起；醒着又那么久没动静，看门狗才重起、你的话重新交。
     @Test func Mac睡着时一轮在跑_醒来不当成卡住() async throws {
         let rig = try await Rig(timing: { $0.silence = .seconds(60) })
         let first = try #require(rig.brainPIDs.first)
@@ -79,7 +73,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 醒着过了看门狗的时长、挂住的那个大脑被停掉。
     private func stalled(_ rig: Rig, _ brain: pid_t) async throws {
         try await eventually("看门狗停掉挂住的大脑") {
             guard rig.brainPIDs.contains(brain) else { return true }
@@ -88,7 +81,6 @@ extension CueHostTests {
         }
     }
 
-    /// Cue 的工具服务没了（进程退出）：这一轮里工具报错照常做完，做完换个班次（新的大脑带着新的工具服务），之后工具照常能用。
     @Test func 工具服务没了_这一轮做完换个班次() async throws {
         let rig = try await Rig()
         let brain = try #require(rig.brainPIDs.first), tools = try #require(rig.toolServerPIDs.first)
@@ -100,7 +92,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 额度用完、这台 Mac 上没有别的 Agent 可换：那个错只说一次，你的这一轮按慢速周期一直重来（信封带上那个错），额度回来了就接着做完。
     @Test func 额度用完又没得换_慢速周期重来直到做完() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(60)] })
         rig.model.blockQuota(times: 3)
@@ -111,8 +102,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 定时那一轮额度用完、又没得换：卡着时新来的会话变化不催它重来（重来只会再失败），定时也不丢；
-    /// 你的话照常答，答好了说明额度回来了，卡着的定时马上接着做完，不等慢速周期。
     @Test func 额度卡住时新变化不催重来_你的一轮做完就接着做定时() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
         let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
@@ -155,7 +144,6 @@ extension CueHostTests {
         try await eventually("A 失败后等待重试") { waiting(first.id) }
         let second = try await rig.store.noteCueLine("核对发布结果 B", source: .you, remindAt: .now)
         rig.model.blockQuota(times: 1, containing: "醒来：定时到点\n- \(second.id.uuidString.lowercased()) 核对发布结果 B")
-        // B 已到期、对过账；A 的慢速重试还没到点。
         try await rig.reconciled()
         #expect(try await rig.store.cueLine(second.id)?.deletedAt == nil)
         #expect(try await rig.store.dueCueSchedules(at: rig.clock.now).contains { $0.id == second.id })
@@ -174,7 +162,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 你说完话之后不久（缓存还热）没再说话：Cue 趁热巡视一次，不等冷巡视的空闲时长；这段空闲里只热巡视这一次。
     @Test func 缓存还热时趁热巡视一次() async throws {
         let warm = Duration.seconds(60)
         let rig = try await Rig(

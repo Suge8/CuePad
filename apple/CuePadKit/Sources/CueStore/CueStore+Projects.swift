@@ -15,7 +15,7 @@ extension CueStore {
     }
   }
 
-  /// 改名称、介绍、颜色、图标、置顶。删除状态对调用方只读，有专门的方法（编译期保证）。改了名的不能改成空名（别处留下的空名不改名照样能改别的）。
+  /// 删除状态对调用方只读，有专门的方法（编译期保证）。改了名的不能改成空名（别处留下的空名不改名照样能改别的）。
   public func updateProject(_ id: UUID, _ edit: @Sendable (inout Project) -> Void) throws {
     try write {
       guard var project = try find(Project.self, id) else { throw CueStoreError.notFound }
@@ -31,8 +31,7 @@ extension CueStore {
     guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankProjectName }
   }
 
-  /// 进回收站；它的卡片随之隐藏（由项目推导），卡片行不动，它的任务上的定时不再定时（`endCueSchedules`），
-  /// 没做完的任务离开看板、没人再用的会话随之结束（`endUnusedSessions`）。默认项目不能删（`defaultProjectUndeletable`）。
+  /// 卡片随之隐藏（由项目推导），卡片行不动，它的任务上的定时不再定时，没做完的任务离开看板、没人再用的会话随之结束。默认项目不能删（`defaultProjectUndeletable`）。
   public func trashProject(_ id: UUID) throws {
     guard id != Project.defaultID else { throw CueStoreError.defaultProjectUndeletable }
     try write {
@@ -64,8 +63,7 @@ extension CueStore {
     } }
   }
 
-  /// 绑定项目的文件夹（nil = 解除）。目录因设备而异，不同步。会话归哪个项目写在会话记录上（写入时按绑定定），
-  /// 所以绑定变了、同一个事务里把本机已有的会话（含历史）按新的绑定重新归：只改归属变了的，没变的不重写。
+  /// 目录因设备而异，不同步。会话归哪个项目写在会话记录上，所以绑定变了、同一个事务里把本机已有的会话（含历史）按新的绑定重新归：只改归属变了的，没变的不重写。
   public func setDirectory(_ directory: String?, for project: UUID) throws {
     try write {
       if let directory {
@@ -81,7 +79,6 @@ extension CueStore {
     }
   }
 
-  /// 本机会话索引里的会话各按它的工作目录重新归项目（同一目录只算一次）。必须在写事务内调用。
   private func reassignSessions() throws {
     let directories = try db.query("SELECT DISTINCT cwd FROM piSessions") { $0.text(0) }
     let now = Date.stamp
@@ -100,7 +97,6 @@ extension CueStore {
     try db.first("SELECT directory FROM projectDirectories WHERE projectID = ?", [project]) { $0.text(0) }
   }
 
-  /// 本机所有项目的目录绑定。
   public func projectDirectories() throws -> [UUID: String] {
     Dictionary(
       uniqueKeysWithValues: try db.query("SELECT projectID, directory FROM projectDirectories") {
@@ -108,12 +104,10 @@ extension CueStore {
       })
   }
 
-  /// 全部目录绑定（各台 Mac 的），按项目、Mac 名（`MacAgents.name`）排。
   public func directoryBindings() throws -> [DirectoryBinding] {
     try select(DirectoryBinding.self, orderBy: "projectID, \(DirectoryBinding.macNameSQL), hostID")
   }
 
-  /// 把这台 Mac 本机的目录绑定写成同步的目录绑定记录：有绑定的写（目录末段名变了才改），没了的删；别的 Mac 的不动。
   public func publishDirectoryBindings(host: String) throws {
     try write {
       let local = try projectDirectories()
@@ -137,9 +131,14 @@ extension CueStore {
   }
 
   /// 卡片只能归属存在且未在回收站的项目。必须在写事务内调用，
-  /// 与随后的写入之间没有别的写入可以插进来。失效时报错，不静默改去别处。
-  func requireLiveProject(_ project: UUID) throws {
+  /// 与随后的写入之间没有别的写入可以插进来。仅显式允许时回落，返回实际归属。
+  @discardableResult
+  func requireLiveProject(_ project: UUID, ifMissing: MissingProject = .reject) throws -> UUID {
     let live = try db.first("SELECT 1 FROM projects WHERE id = ? AND deletedAt IS NULL", [project]) { _ in true }
-    guard live != nil else { throw CueStoreError.invalidProject }
+    if live != nil { return project }
+    switch ifMissing {
+    case .reject: throw CueStoreError.invalidProject
+    case .useDefault: return Project.defaultID
+    }
   }
 }

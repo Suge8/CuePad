@@ -3,8 +3,6 @@ import CueStore
 import Foundation
 
 extension ClaudeCodeRuntime {
-    /// 会话文件是 `projects/<项目目录>/<会话 id>.jsonl`。上报通道是钩子（`HookFile.claudeCode`）；托管的进程是 CuePad 起的。
-    /// 不读 `~/.agents/skills`（技能逐个链过去），自己往 `skills/synced` 写 claude.ai 同步的技能；全局规则是 `CLAUDE.md`。
     /// 最低 2.1.169：从这版起 stream-json 报带标识的话被哪一轮收下（`command_lifecycle` 的 `command_uuid`），大脑据此报 `received`（2.1.168 没有）；
     /// 钩子环境里的 `CLAUDE_CODE_SESSION_ID`（2.1.145 起）也就有了，钩子入口靠它认出是 Claude Code 发的（`ClaudeCodeRuntime.received`）。
     nonisolated public static let facts = AgentFacts(

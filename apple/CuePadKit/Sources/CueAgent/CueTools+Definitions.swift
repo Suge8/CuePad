@@ -3,7 +3,6 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// 给这一组用的工具（`Toolset`）。
   static func definitions(_ toolset: Toolset) -> [[String: Any]] {
     switch toolset {
     case .cue: definitions
@@ -41,7 +40,7 @@ extension CueTools {
           """,
         "inputSchema": schema(
           [
-            "action": ["type": "string", "enum": ["add", "edit", "start", "bind", "unbind", "say", "peek", "stop", "leave", "take", "done"]],
+            "action": ["type": "string", "enum": TaskAction.allCases.map(\.rawValue)],
             "task": string, "session": string, "title": name, "project": string, "steps": ["type": "array", "items": name], "body": string,
             "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": ["type": "string", "description": "provider/id"],
             "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,
@@ -79,7 +78,6 @@ extension CueTools {
   }
   static var name: [String: Any] { ["type": "string", "description": "宽不过 \(CueName.limit)（汉字算 2）"] }
 
-  /// done 的证据：至多这么多条，每条宽不过 `evidenceLimit`（`CueName.width`）。结果消息由 Store 拼（`CueReport.text`）。
   static let evidenceCount = 3
   static let evidenceLimit = 40
   /// 证据的示例（工具说明与证据超长的报错共用）：一句行为上的结论。

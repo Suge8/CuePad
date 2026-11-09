@@ -3,8 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话页里换模型与思考强度：经模型胶囊同一个入口（`AppServices.configure`）写请求，显示只由会话记录与发给它的投送请求推出（不另存界面状态）。
-/// 换了之后胶囊立即显示新值并标着在路上；没换成回到会话当前的值并写要换成什么、为什么，直到对这个会话做下一件事。
 struct SessionControlsTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -20,12 +18,10 @@ struct SessionControlsTests {
         return try #require(try await store.piSessionPage(PiSessionQuery()).items.first?.state)
     }
 
-    /// 会话页读到的模型与思考强度（与页面同一次读取）。
     private func shown(_ session: PiSessionState) async throws -> PiConfigShown {
         try await SessionDigest.read(session.id, sessionID: session.sessionID, from: store).config(at: .always())
     }
 
-    /// Mac 执行器按给定结果写回，等到这条有结果。
     private func execute(_ request: DeliveryRequest, failing reason: String) async throws -> DeliveryRequest {
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _, _ in .failed(.verbatim(reason)) }
         try await executor.start()
@@ -36,7 +32,6 @@ struct SessionControlsTests {
         throw CancellationError()
     }
 
-    /// 选择题：Agent 本身允许自己填的（经同步记录到手机也还认得），回复框也能答，答案是文字；不允许的回复框收成"先在上面作答"。
     @Test(arguments: [true, false])
     func 允许自己填的选择题_回复框也能作答(allowsOther: Bool) async throws {
         let question = PiQuestion(promptID: "p-1", kind: .select, text: "喝什么？", options: ["茶", "咖啡"], allowsOther: allowsOther)
@@ -54,7 +49,6 @@ struct SessionControlsTests {
 
         _ = try await execute(request, failing: "Pi 没在运行")
         #expect(try await shown(atlas) == PiConfigShown(model: opus, thinking: .low, pending: false, failure: "没换成 Luna：Pi 没在运行"))
-        // 之后对这个会话做了别的（这里是停下这一轮）：那一句过时了，不再挂在输入框上
         _ = try await app.services.stop(atlas)
         #expect(try await shown(atlas).failure == nil)
 

@@ -10,7 +10,6 @@ public struct MacAgents: Equatable, Sendable {
   public var name: String?
   /// 能用的，按 `AgentKind` 的顺序；更新的版本写的、不认识的那家读出时丢掉（下同）。
   public var agents: [MacAgent]
-  /// 不能用的与原因（没装、没接入、没登录、问不出），按 `AgentKind` 的顺序。
   public var problems: [MacAgentProblem]
   public var modifiedAt: Date
 
@@ -22,7 +21,6 @@ public struct MacAgents: Equatable, Sendable {
     self.modifiedAt = modifiedAt
   }
 
-  /// 给人看的名字（各处写某台 Mac 都用它）：没报过名字的（更旧的版本写的记录、还没有这台的记录）写 `unnamed`。
   public var shownName: String { Self.shownName(name) }
   public static let unnamed = String(localized: "未命名的 Mac")
   static func shownName(_ name: String?) -> String { name ?? unnamed }
@@ -31,7 +29,6 @@ public struct MacAgents: Equatable, Sendable {
 
   public func agent(_ kind: AgentKind) -> MacAgent? { agents.first { $0.kind == kind } }
 
-  /// 这一家为什么不能用；能用或没写过为 nil。
   public func problem(_ kind: AgentKind) -> MacAgentProblem.Reason? { problems.first { $0.kind == kind }?.reason }
 
   public var kinds: [AgentKind] { agents.map(\.kind) }
@@ -70,7 +67,6 @@ public struct MacAgent: Codable, Equatable, Sendable, Identifiable {
   public var defaultModel: PiModelOption? { model.flatMap { key in models.first { $0.key == key } } }
 }
 
-/// 一家不能用的原因（`AgentProbe` 写下）。
 public struct MacAgentProblem: Codable, Equatable, Sendable {
   public let kind: AgentKind
   public let reason: Reason
@@ -128,7 +124,6 @@ extension CueStore {
     }
   }
 
-  /// 各台 Mac 写下的（Cue 能运行的就是这几台），按名字排。
   public func allMacAgents() throws -> [MacAgents] {
     try select(MacAgents.self, orderBy: "name, hostID")
   }

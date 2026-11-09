@@ -3,9 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Cue 此刻（`CueNow`）：名牌、小组件与 iPhone 的实时活动读同一份——数字账、一件一行（等你、推进中、刚做完）、第一件等你；
-/// 在实时活动上"允许一次"走 Cue 页回答的同一个方法，下一件等你接上来（会话在问的只能打开）；Cue 问到的那件会话还在跑就一直在推进中；没活了实时活动就该结束；
-/// 刚做完的不压住在跑的，到点自己收掉。
 struct CueActivityTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
@@ -20,9 +17,9 @@ struct CueActivityTests {
         try await workspace.complete(readme.id)
         let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4 到 TestFlight"), task: step.id)
         let recorder = try await rig.runtimeRecorder(on: "mac-a")
-        try await recorder.update(sessionID: "testflight", state: .thinking, title: "testflight")
+        try await recorder.update(sessionID: "testflight", state: .thinking, title: "testflight", projectID: project.id)
         try await store.bindSession("testflight", to: step.id)
-        try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom")
+        try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom", projectID: project.id)
         try await store.bindSession("zoom", to: canvas.id)
         try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "改锚点？\n会动到缩放"))
 
@@ -30,7 +27,6 @@ struct CueActivityTests {
         func now() async throws -> CueNow { CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil)) }
         func kinds(_ now: CueNow) -> [CueNow.Item.Kind] { now.items.map(\.kind) }
 
-        // 两件等你：Cue 问发布、画布的会话在问；发布的会话在跑，Cue 问它不占着它，仍在推进中；加刚做完的那件。第一件是 Cue 的提问，能"允许一次"
         var cue = try await now()
         #expect(kinds(cue) == [.asks, .asks, .running, .done] && cue.advancing == 1 && cue.isLive)
         let first = try #require(cue.first)
@@ -38,7 +34,6 @@ struct CueActivityTests {
         let allow = try #require(first.allow)
         #expect(allow.message == push.id && allow.choice == CueAsk.once)
 
-        // 允许一次（实时活动在 App 进程里调的就是它）：会话在问的接上来，只能打开
         try await rig.services.answerCueQuestion(allow.message, allow.choice)
         cue = try await now()
         #expect(kinds(cue) == [.asks, .running, .done] && cue.advancing == 1)
@@ -46,12 +41,10 @@ struct CueActivityTests {
         #expect(cue.first == CueNow.Wait(
             title: "canvas-zoom", detail: "改锚点？", open: DeepLink.session(PiSessionState.recordID(sessionID: "zoom")).url, allow: nil))
 
-        // 答完会话的提问：两件都在跑
         try await recorder.update(sessionID: "zoom", state: .thinking)
         cue = try await now()
         #expect(kinds(cue) == [.running, .running, .done])
 
-        // 两件都做完、会话都结束：只剩刚做完的，没活了，实时活动该结束；刚做完的那件过了一阵自己收掉
         try await workspace.complete(canvas.id)
         try await workspace.complete(release.id)
         try await recorder.update(sessionID: "zoom", state: .ended)
@@ -60,7 +53,6 @@ struct CueActivityTests {
         #expect(kinds(cue) == [.done, .done, .done] && !cue.isLive && cue.first == nil)
         #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).items.isEmpty)
 
-        // 启用 Cue（运行在 mac-cue，那台醒着）：歇着时那一句说刚做完的那件，到点收掉后是静着
         _ = try await store.updateCueProfile { profile in
             profile.hostID = "mac-cue"
             profile.enabledAt = .now
@@ -70,15 +62,13 @@ struct CueActivityTests {
         #expect(cue.ledger.isEmpty && cue.quietLine == "刚做完「发布 v1.4」" && cue.quietWord == "做完")
         #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).quietLine == CueNow.quiet)
 
-        // Cue 自己开始想：手上没活也算有活，岛开着；过时之后只信慢的事实
         try await cueRecorder.updateCue(.thinking)
         cue = try await now()
         #expect(cue.isLive && cue.isBusy && cue.quietWord == "在想" && cue.staleAfter == CueNow.fastStale)
         #expect(cue.settled.unconfirmed && cue.settled.isLive && !cue.settled.hasConfirmedActivity)
 
-        // 刚做完一件又派出一件在跑，Cue 歇下：数字账写推进中那件，不停在"做完"
         let ship = try await store.createTask("推送并发新版", in: project.id)
-        try await recorder.update(sessionID: "ship", state: .thinking, title: "ship")
+        try await recorder.update(sessionID: "ship", state: .thinking, title: "ship", projectID: project.id)
         try await store.bindSession("ship", to: ship.id)
         try await cueRecorder.updateCue(.settled)
         cue = try await now()

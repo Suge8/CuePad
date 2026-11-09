@@ -4,45 +4,12 @@ import Foundation
 
 /// 认 Cue 的一次工具调用（两种说法给谁看见 `CueActivity` 头注释）：正在用时碰到的那一处（`step`，界面按按钮动词表写）或没碰哪一处时那一句（`detail`），
 /// 与做完后经过清单里那一条（`item`：给 Cue 自己看的说法写在 `target`，碰到的那一处另记在 `name`、`task`、`session`，与 `step` 同一对）。
-/// 读文件类照会话里的写法（`read · 文件名`，动词由界面翻）。
 extension CueActivity {
-  /// 任务那个工具的动作是哪一种；认不出的动作为 nil。
-  static func kind(_ action: String?) -> PiChatMessage.Tools.Kind? {
-    switch action {
-    case "add": .add
-    case "edit": .edit
-    case "start": .start
-    case "say": .talk
-    case "peek": .read
-    case "stop": .stop
-    case "leave": .leave
-    case "done": .done
-    default: nil
-    }
-  }
-
-  /// Cue 自己的说法（`Tools.Item.target`，只进它的上下文 `CueView`）：跟它的工具名走，不跟按钮。`named` 是认出的对象（`Named.quoted`），
-  /// `board`：看的是看板（没指哪件活）；`starts`：add 带了 start:true（建好就开工）。
-  static func cueWords(_ action: String?, _ named: String, board: Bool, starts: Bool) -> String? {
-    switch action {
-    case "add": starts ? "建任务并开工\(named)" : "建任务\(named)"
-    case "edit": "改\(named)"
-    case "start": "开工\(named)"
-    case "say": "对\(named)说"
-    case "peek": board ? "看板" : "看\(named)的近况"
-    case "stop": "停下\(named)"
-    case "leave": "\(named)留给你回"
-    case "take": "收回\(named)（不用他回）"
-    case "done": "做完\(named)"
-    default: nil
-    }
-  }
-
   /// 这次调用给了会话一个去处：对它说话、留给他回、收回、做完（含收掉会话）或就它问他。`CueKeeper.leaveUnattended` 据此认一轮里谁已经有去处。
   public static func settlesStop(tool: String, arguments: String) -> Bool {
     let args = Parsed(arguments)
     switch tool {
-    case "task": return ["say", "leave", "take", "done"].contains(args.line("action"))
+    case "task": return args.action?.settlesStop ?? false
     case "tell": return args.raw["ask"] != nil
     default: return false
     }
@@ -53,14 +20,14 @@ extension CueActivity {
     await Named(Parsed(arguments), tool: tool, store: store)
   }
 
-  /// 正在用时碰到的那一处：任务那个工具指了哪一处时有（与做完后那一条的 `name`、`task`、`session` 同一对）；看板（没指哪一处）、认不出的动作为 nil。
+  /// 任务那个工具指了哪一处时有；看板（没指哪一处）、认不出的动作为 nil。
   public static func step(tool: String, arguments: String, named: Named) -> Touch? {
     let args = Parsed(arguments)
-    guard tool == "task", let kind = kind(args.line("action")), let name = named.name else { return nil }
+    guard tool == "task", let kind = args.action?.kind, let name = named.name else { return nil }
     return Touch(kind: kind, name: name, task: named.task, session: named.session)
   }
 
-  /// 正在用时没碰哪一处（`step` 为 nil）的那一句：看板、记忆、设置、对你说，读文件类照会话里的写法"工具 · 目标"。
+  /// 正在用时没碰哪一处（`step` 为 nil）的那一句。
   /// `tool`、`arguments` 是大脑报的（`TurnEvent.tool`：去掉前缀的小写名字与 JSON 原文）。
   public static func detail(tool: String, arguments: String) -> String {
     let args = Parsed(arguments)
@@ -99,12 +66,12 @@ extension CueActivity {
     }
     switch tool {
     case "task":
-      let action = args.line("action")
+      let action = args.action
       // 收回不上经过：没有与之同名的按钮（`CueActivity.verb`），只进 Cue 自己的上下文
-      guard let words = cueWords(action, named.quoted, board: args.board, starts: args.raw["start"] as? Bool == true) else { return item(.other, "task") }
-      guard let kind = kind(action) else { return item(.other, words) }
-      let place = action == "add" && !failed ? await named.added(args, store: store) : named
-      return item(kind, action == "say" ? "\(words)：\(args.line("text") ?? "")" : words, at: place)
+      guard let words = action?.words(named.quoted, board: args.board, starts: args.raw["start"] as? Bool == true) else { return item(.other, "task") }
+      guard let kind = action?.kind else { return item(.other, words) }
+      let place = action == .add && !failed ? await named.added(args, store: store) : named
+      return item(kind, action == .say ? "\(words)：\(args.line("text") ?? "")" : words, at: place)
     case "tell":
       guard let line = args.line("text") else { return item(.other, "撤回一条提问") }
       return item(args.raw["ask"] == nil ? .said : .ask, line)
@@ -119,7 +86,7 @@ extension CueActivity {
         let text = args.line("text") ?? ""
         // 挂在任务上的点了开那件任务（气泡里就是这条定时）；没挂的不能点
         var task: UUID?
-        if !failed, let ref = args.line("task") { task = try? await CueTools(store: store).task(ref).id }
+        if !failed, let ref = args.line("task") { task = try? await CueReferences(store: store).task(ref).id }
         return .init(kind: .schedule, target: "定时：\(text)".clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: task, name: text)
       case "zoom": return item(.read, "翻记忆")
       case "forget": return item(.other, "忘掉一条记忆")
@@ -166,7 +133,7 @@ extension CueActivity {
     /// 开始时认，与工具同一个认法（`CueTools.place`）：add 要建的那件还没有，只照标题叫它（按标题去找会认成同名的旧任务，比如早做完的那件）。
     init(_ args: Parsed, tool: String, store: CueStore) async {
       var task: Card?, found: PiSessionState?
-      switch try? await CueTools(store: store).place(Args(args.raw)) {
+      switch try? await CueReferences(store: store).place(Args(args.raw)) {
       case .session(let state): found = state
       case .task(let card): task = card
       case nil: break
@@ -177,9 +144,13 @@ extension CueActivity {
       name = task?.heading ?? (found == nil ? args.line("task") : nil) ?? args.line("title") ?? found?.title ?? written
     }
 
-    /// add 做成后它建的那件，或认作同一件、没再建的那件（`CueTools.openTopTasks`）：没做完的同名顶层任务里后建的；会话照开始时认的。
+    /// add 做成后它建的那件，或认作同一件、没再建的那件：同项目里没做完的同名顶层任务里后建的；会话照开始时认的。
     func added(_ args: Parsed, store: CueStore) async -> Named {
-      guard let title = args.line("title"), let card = try? await CueTools(store: store).openTopTasks(titled: title).first else { return self }
+      let refs = CueReferences(store: store)
+      guard let title = Args(args.raw).string("title")?.trimmingCharacters(in: .whitespacesAndNewlines),
+        let project = try? await refs.addProject(Args(args.raw)),
+        let card = try? await refs.openTopTask(titled: title, in: project)
+      else { return self }
       return Named(task: card.id, session: session, name: card.heading)
     }
   }
@@ -195,6 +166,8 @@ extension CueActivity {
     func line(_ key: String) -> String? {
       (raw[key] as? String)?.split(whereSeparator: \.isNewline).first.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
     }
+
+    var action: TaskAction? { line("action").flatMap(TaskAction.init(rawValue:)) }
 
     var path: String? { line("path") ?? line("file_path") }
     /// 看的是看板：没指哪件活、哪个会话。

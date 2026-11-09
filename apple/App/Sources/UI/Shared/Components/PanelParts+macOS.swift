@@ -1,11 +1,9 @@
 #if os(macOS)
 import SwiftUI
 
-/// Mac 浮层顶上一行：标题居中，右上一颗关闭（Esc 同）；`trailing` 在关闭钮左边（如"展开编辑"）。
 struct PanelHeader<Trailing: View>: View {
     let title: String
     @ViewBuilder var trailing: Trailing
-    /// 标题两侧各让出右上那一组钮（"展开编辑"与关闭）的宽：标题仍在正中，长了截断、不压到钮下面。
     private static var buttonRoom: CGFloat { 96 }
     @Environment(\.palette) private var palette
 
@@ -24,7 +22,6 @@ struct PanelHeader<Trailing: View>: View {
     }
 }
 
-/// Mac 浮层右上的关闭钮（Esc 同）。
 struct PanelCloseButton: View {
     @Environment(\.closePanel) private var close
 
@@ -52,7 +49,6 @@ private struct PanelFieldSurface: ViewModifier {
     }
 }
 
-/// Mac 浮层里占满一行的搜索框，弹出即聚焦。
 struct PanelSearchField: View {
     let prompt: String
     @Binding var text: String

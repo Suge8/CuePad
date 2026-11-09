@@ -2,13 +2,11 @@ import CueStore
 import Foundation
 import Testing
 
-/// 不变量：卡片（灵感与任务）的 projectID 只能指向存在且未在回收站的项目，或 nil。
-/// 由 Store 在写事务里校验，失效时报错而不是悄悄挪进默认项目（回落策略属于界面）。
+/// 失效时报错而不是悄悄挪进默认项目：回落策略属于界面。
 @Suite struct ProjectReferenceTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  /// 回收站里的项目、已永久删除的项目、从未存在的项目。
   private func deadProjects() async throws -> [UUID] {
     let trashed = try await store.createProject(name: "trashed", color: "#111")
     let purged = try await store.createProject(name: "purged", color: "#222")

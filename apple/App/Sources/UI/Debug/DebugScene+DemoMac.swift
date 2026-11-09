@@ -5,9 +5,8 @@ import Foundation
 import Observation
 
 extension DebugScene {
-    /// `-CuePadQuotaFails YES`（配 `-CuePadDemoMac YES`）：各台演示 Mac 对额度刷新请求按"没有在线的 Pi 会话"写回（同 Mac 上会话还没连好时），
-    /// 画面等到明细里没查到那一行出来才算就绪（截图看它的样子，`QuotaRefreshNote`）。
-    private static let quotaFails = defaults.bool(forKey: "CuePadQuotaFails")
+    /// 各台演示 Mac 对额度刷新请求按"没有在线的 Pi 会话"写回（同 Mac 上会话还没连好时），画面等到明细里没查到那一行出来才算就绪。
+    private static let quotaFails = args.quotaOpts.fails
 
     static func runDemoMac(_ services: AppServices) async {
         let store = services.store, host = "demo-mac"
@@ -24,7 +23,7 @@ extension DebugScene {
             }
         }
         func reachable() async {
-            for await offline in Observations({ services.syncStatus == .offline }) where !offline { return }
+            for await offline in Observations({ services.syncState.status == .offline }) where !offline { return }
         }
         Task {
             await running("演示 Mac 交给 Cue") {
@@ -69,7 +68,6 @@ extension DebugScene {
         }
     }
 
-    /// 演示 Mac 上的 Cue 接到你的话：思考几秒再回一句（同值班的 Mac 写下的样子，上下文照旧），看发出后的"思考中"与回答落下。
     static func demoCueAnswers(_ store: CueStore) async throws {
         let context = try await store.cueState()?.context
         try await store.setDemoCueState(.thinking, context: context)
@@ -84,12 +82,10 @@ extension DebugScene {
         return try store.cueMessagesToDeliver().filter { $0.author == .known(.you) }.map(\.id)
     }
 
-    /// `-CuePadCycle YES`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：scratch 一个会话依次走过各种状态，录状态切换的动效用（`xc.sh rec`）——
-    /// 发出一句（发送中，演示 Mac 接手，见 `runDemoMac`）→ 思考中 → 做完（有新回复）→ 等你确认 → 出错，再从发出一句开始。
     /// 会话换状态就换位置（按要你注意的先后排）：配 iOS 的 agent 与 `-CuePadProject CuePad`，列表只剩这个项目的几张卡，它不会出屏。
     static func cycleIfAsked(_ services: AppServices) async {
-        guard defaults.bool(forKey: "CuePadCycle") else { return }
-        if !defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(services) } }
+        guard args.driveOpts.cycle else { return }
+        if !args.demoMac { Task { await runDemoMac(services) } }
         await running("状态轮播") { try await cycle(services) }
     }
 
@@ -107,7 +103,6 @@ extension DebugScene {
         while !Task.isCancelled {
             guard let session = try await store.piSessionPage(query).items.first?.state else { return }
             _ = try await store.requestDelivery(String(localized: "再跑一遍测试", table: "Demo"), to: session.target, on: session.hostID, mode: .send)
-            // 等演示 Mac 走完这一轮：干过活、又歇下
             var worked = false
             for try await state in store.observe({ try $0.piSessionPage(query).items.first?.state.state }) {
                 if state?.isWorking == true { worked = true } else if worked, state == .known(.settled) { break }
@@ -121,7 +116,6 @@ extension DebugScene {
         }
     }
 
-    /// 会话状态晚于送达结果同步过来：先进入思考，过一会儿做完。
     private static func playRound(for request: UUID, store: CueStore, host: String) async throws {
         guard let ref = try await store.deliveryRequest(request)?.target.ref,
               let session = try await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: ref))).items.first?.state

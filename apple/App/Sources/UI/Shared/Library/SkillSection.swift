@@ -1,9 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 技能：全局的一张纸按分类分组（分类名是纸里的一行淡字；只有一组且不在分类里时不写），各项目一张纸、纸上头写项目（图形与名字），
-/// 最后各家自己管的只写个数（CuePad 不碰它们）。组名都与行首的字对齐。
-/// 点一行在 CuePad 里打开它的文件页（Mac 的"在访达中显示"在右键菜单里）。
 struct SkillSection: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
@@ -79,8 +76,6 @@ private enum SkillLine: Identifiable {
     }
 }
 
-/// 一个技能：名字（后面定位置一格：格式不对是出错的记号，同名的是两份的记号）、说明、行末读不到它的那几家。
-/// Mac 一行排开；手机两行，名字一行、说明一行。
 private struct SkillRow: View {
     let skill: LibrarySkill
     let library: AgentLibrary
@@ -129,7 +124,6 @@ private struct SkillRow: View {
         Text(verbatim: skill.description).font(Self.descriptionFont).foregroundStyle(palette.ink2).lineLimit(1)
     }
 
-    /// 名字后那一格：格式不对、同名，都不是时空着（Mac 上占着位置）。
     @ViewBuilder private var mark: some View {
         Group {
             if skill.problem != nil {

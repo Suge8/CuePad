@@ -7,7 +7,6 @@ import SQLite3
 import Testing
 @testable import CuePad
 
-/// Pi 历史索引读写 Store 失败：报告问题，并停止该文件的写回（库异常时反复重写只会放大问题）。
 struct PiHistoryFailureTests {
     let app = TestApp()
     var services: AppServices { app.services }
@@ -28,7 +27,6 @@ struct PiHistoryFailureTests {
         }
     }
 
-    /// 让资料库里的 Pi 会话表消失：之后 Store 对它的读写都真实地失败。
     private func breakPiSessionTable() throws {
         var handle: OpaquePointer?
         defer { sqlite3_close(handle) }
@@ -44,7 +42,6 @@ struct PiHistoryFailureTests {
         let healthy = try sessionFile("healthy")
         try breakPiSessionTable()
 
-        // 读失败：当作从头重读，但必须可见
         #expect(await services.loadHistoryStart(for: broken) == nil)
         guard case .piHistoryUnavailable(let message)? = services.startupIssues.first else {
             Issue.record("读检查点失败没有进入 startupIssues：\(services.startupIssues)")
@@ -59,7 +56,6 @@ struct PiHistoryFailureTests {
         #expect(second.contains(healthy.path))
     }
 
-    /// 首次回填按批写：一批里一个文件写不进去，同批其余的照常写进去，只挡住写不进去的那个，问题只报它。
     @Test func 一批里一个文件写失败_其余照常写入_只挡住失败的那个() async throws {
         let bad = try sessionFile("bad")
         let good = try sessionFile("good")

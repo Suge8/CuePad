@@ -1,6 +1,5 @@
 import Foundation
 
-/// 小组件、分享扩展与实时活动打开主 App 的链接：`cuepad://speak`、`cuepad://project/<id>`、`cuepad://card/<id>`、`cuepad://cue`、`cuepad://session/<id>`。
 nonisolated enum DeepLink: Equatable, Sendable {
     static let scheme = "cuepad"
 
@@ -70,7 +69,6 @@ nonisolated enum DeepLink: Equatable, Sendable {
 }
 
 nonisolated private extension URL {
-    /// 只接有值的参数。
     func appending(present items: [(String, String?)]) -> URL {
         appending(queryItems: items.compactMap { name, value in value.map { URLQueryItem(name: name, value: $0) } })
     }

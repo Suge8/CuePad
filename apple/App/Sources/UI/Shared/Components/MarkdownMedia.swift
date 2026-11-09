@@ -1,7 +1,6 @@
 import CueText
 import SwiftUI
 
-/// 块内原生附件沿用 CueFormat，远程图片按系统 imageURL 属性识别。
 /// 调用方先解析整篇块结构，附件切分不能重启列表或围栏。
 nonisolated enum MarkdownMedia {
     enum Part { case text(AttributedString), image(String, String), file(key: String, name: String) }

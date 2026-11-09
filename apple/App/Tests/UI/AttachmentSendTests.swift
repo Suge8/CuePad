@@ -8,8 +8,6 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 回复框带着还没到这台 Mac 的大附件发出的那句不挡后面的话：文件在旁边现取（`AppServices.fetchFile`），发给另一个会话的话照常先送到；
-/// 文件到了，那句照常送到，会话收到的是本机那份的路径。
 struct AttachmentSendTests {
     @Test func 带着还没到的大附件的那句不挡后面的话_文件到了照常送到() async throws {
         let clock = ManualTiming()

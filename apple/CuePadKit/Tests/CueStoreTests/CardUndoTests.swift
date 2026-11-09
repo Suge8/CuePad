@@ -2,15 +2,12 @@ import CueStore
 import Foundation
 import Testing
 
-/// 会留下"撤销"的卡片改动（删除、挪动）：回执在改动的同一个事务里读到、改动之后原样拨回，
-/// 中间没有别的写入能插进来；点任务的圆圈也是读、改在一个事务里。
 @Suite struct CardUndoTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
   private func card(_ id: UUID) async throws -> Card { try #require(try await store.card(id)) }
 
-  /// 项目顶层（灵感与任务共用一个手动顺序）按顺序的 id。
   private func topOrder(_ project: UUID) async throws -> [UUID] {
     let all = try await store.cards(in: project) + store.tasks(in: project, .todo, .inProgress, .done).filter { $0.parentID == nil }
     return all.sorted { ($0.sortKey, $0.id.uuidString) < ($1.sortKey, $1.id.uuidString) }.map(\.id)
@@ -30,7 +27,6 @@ import Testing
     #expect(try await topOrder(project.id) == order)
   }
 
-  /// 删除把下级提到它的位置；拨回后下级（含归档的）按原顺序回到它下面。
   @Test func 删除拨回_下级含归档的按原顺序回到它下面() async throws {
     let task = try await store.createTask("上线")
     let note = try await store.createCard(body: "回滚方案")

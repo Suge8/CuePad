@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 项目操作（Mac 右键、iOS 长按与项目页"更多"共用）：置顶、编辑名称与图标、文件夹一组（组头写文件夹在哪，`ProjectPlace`；下面更换与解除绑定，规则 `ProjectFolders.menu`）、移到回收站。
 /// 编辑表单由调用方弹出（菜单收起后它所在的视图就没了）；平台专有的操作放进 `extra`，排在移到回收站之前。
 struct ProjectActions<Extra: View>: View {
     let project: Project
@@ -41,7 +40,6 @@ struct ProjectActions<Extra: View>: View {
             Divider()
             Button("移到回收站", icon: .trash, role: .destructive) {
                 #if os(macOS)
-                // 正看着它：回项目列表（iOS 上项目页自己发现项目不在了就退回，见 `ProjectScreen`）
                 if workspace.currentProject == id { workspace.show(.shelf) }
                 #endif
                 workspace.perform { try await $0.trashProject(id) }

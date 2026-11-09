@@ -1,18 +1,12 @@
 import Foundation
 
-/// 把 Pi 会话的状态变化（每个会话一条）与 Cue 此刻的样子（`updateCue`）写成同步记录，节拍同一套（`Pace`，间隔 `minInterval`）：
-/// - 开始工作、等你确认、完成、出错，以及会话的标题或项目变化：立即写；
-/// - 工作中的细节变化（输出、调用哪个工具）：合并，两次写入之间至少隔 `minInterval`（默认 `detailInterval`），期间只保留最新的一次；
-/// - 近况（`PiRecap`）变化：立即写；
-/// - 与已写入内容相同的更新不再写；会话的进程退出时按 `exited` 处理记录（历史、歇着、删除）并丢弃挂起的更新；用户结束会话时
-///   标为已结束（近况留给手机看，记录与会话文件同存亡，见 `CueStore.retainPiSessions`）。
+/// 把 Pi 会话的状态变化（每个会话一条）与 Cue 此刻的样子（`updateCue`）写成同步记录，节拍同一套（`Pace`）：状态转换与近况（`PiRecap`）变化立即写；工作中的细节合并，两次写入之间至少隔 `minInterval`（默认 `detailInterval`），期间只保留最新的一次；与已写入内容相同的不再写。
 ///
 /// actor 在 await 处可重入：状态只在 await 之前改完，不跨 await 持有副本；会话与 Cue 的落盘按决定的先后串成同一条任务链，
 /// 后决定的写入（含删除）不会被先决定的覆盖。
 public actor PiStateRecorder {
   private struct Session {
-    var pace = Pace<PiStateContent>()
-    /// 已写入内容的目录记录（模型与命令没变时沿用，不重算内容的 id）
+    var pace = Pace<PiSessionSnapshot>()
     var catalog: AgentCatalog?
   }
 
@@ -27,7 +21,6 @@ public actor PiStateRecorder {
   let minInterval: Duration
   let timing: Timing
   private var sessions: [String: Session] = [:]
-  /// Cue 此刻的样子（`PiStateRecorder+Cue.swift`）
   var cue = Pace<CueStateContent>()
   private var tail: Task<Void, Never>?
 
@@ -39,40 +32,20 @@ public actor PiStateRecorder {
     self.timing = timing
   }
 
-  /// 没给的字段（nil）沿用上一次的值；`question`、`detail` 与 `failure` 每次整体替换。
+  /// 写一个会话此刻的样子（桥上的会话产出的 `PiSessionSnapshot`，`PiSessionMirror` 交来）：会话记录只经这里写。
+  /// 快照上说不上来的几项沿用上一次写下的（`PiSessionSnapshot.keepingUnknown`）。
   /// 返回这次写入置位的通知标志（没有置位为 nil）：调用方据此立即上传这一条，通知不排在其余待推送后面。
   @discardableResult
-  public func update(
-    sessionID: String, state: PiWorkState, detail: String? = nil, failure: PiFailure? = nil, title: String? = nil, directory: String? = nil,
-    projectID: UUID? = nil, question: PiQuestion? = nil, times: PiTimes? = nil, turnStartedAt: Date? = nil, launchToken: String? = nil, hosted: Bool? = nil,
-    subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil, context: PiContextUsage? = nil, commands: [PiSlashCommand]? = nil,
-    agent: AgentKind? = nil, process: PiProcess? = nil
-  ) async throws -> PiAlert? {
+  public func update(_ snapshot: PiSessionSnapshot) async throws -> PiAlert? {
+    let sessionID = snapshot.sessionID
     var session = sessions[sessionID] ?? Session()
     let now = timing.now()
-    let previous = session.pace.content.map { (state: $0.state, since: $0.times.stateSince) }
-    // 调用方给的计时基准；没给过时（测试、演示）用第一次写入的时间，之后不变
-    var content = session.pace.content ?? PiStateContent(state: state, times: PiTimes(stateSince: now, busySince: nil))
-    content.state = state
-    content.detail = detail
-    content.failure = failure
-    content.question = question
-    if let title { content.title = title }
-    if let directory { content.directory = directory }
-    if let projectID { content.projectID = projectID }
-    if let times { content.times = times }
-    if let turnStartedAt { content.turnStartedAt = turnStartedAt }
-    if let launchToken { content.launchToken = launchToken }
-    if let hosted { content.hosted = hosted }
-    if let subagents { content.subagents = subagents }
-    if let modelState { content.modelState = modelState }
-    if let context { content.context = context }
-    if let commands { content.commands = commands }
-    if let agent { content.agent = agent }
-    if let process { content.process = process }
+    let previous = session.pace.content
+    var content = snapshot
+    if let previous { content.keepingUnknown(from: previous) }
     // 工作中总有这段连续处理的起点（界面的"已运行"、停止的进度都从它算）：桥上的会话由扩展给，
     // 不带时间的调用方（演示、测试）从进入工作算
-    if state.isWorking, content.times.busySince == nil { content.times.busySince = content.times.stateSince }
+    if content.state.isWorking, content.times.busySince == nil { content.times.busySince = content.times.stateSince }
     switch session.pace.offer(content, at: now, interval: minInterval) {
     case .skip:
       sessions[sessionID] = session
@@ -82,7 +55,7 @@ public actor PiStateRecorder {
       sessions[sessionID] = session
       return nil
     case .now:
-      let alert = PiAlert.entering(state, since: content.times.stateSince, from: previous)
+      let alert = PiAlert.entering(content.state, since: content.times.stateSince, from: previous.map { ($0.state, $0.times.stateSince) })
       let write = commit(sessionID, &session, content, notify: alert, at: now)
       sessions[sessionID] = session
       do { try await persist(write) } catch {
@@ -91,6 +64,36 @@ public actor PiStateRecorder {
       }
       return alert
     }
+  }
+
+  /// 演示与测试只写关心的几项：在上一次写下的样子上改给了的（nil 沿用），`question`、`detail` 与 `failure` 每次整体替换；
+  /// 第一次写、没给计时的从此刻算。落盘同 `update(_:)`。
+  @discardableResult
+  public func update(
+    sessionID: String, state: PiWorkState, detail: String? = nil, failure: PiFailure? = nil, title: String? = nil, directory: String? = nil,
+    projectID: UUID? = nil, question: PiQuestion? = nil, times: PiTimes? = nil, turnStartedAt: Date? = nil, launchToken: String? = nil, hosted: Bool? = nil,
+    subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil, context: PiContextUsage? = nil, commands: [PiSlashCommand]? = nil,
+    agent: AgentKind? = nil, process: PiProcess? = nil
+  ) async throws -> PiAlert? {
+    var snapshot = sessions[sessionID]?.pace.content ?? PiSessionSnapshot(sessionID: sessionID, state: state, times: PiTimes(stateSince: timing.now(), busySince: nil))
+    snapshot.state = state
+    snapshot.detail = detail
+    snapshot.failure = failure
+    snapshot.question = question
+    if let title { snapshot.title = title }
+    if let directory { snapshot.directory = directory }
+    if let projectID { snapshot.projectID = projectID }
+    if let times { snapshot.times = times }
+    if let turnStartedAt { snapshot.turnStartedAt = turnStartedAt }
+    if let launchToken { snapshot.launchToken = launchToken }
+    if let hosted { snapshot.hosted = hosted }
+    if let subagents { snapshot.subagents = subagents }
+    if let modelState { snapshot.modelState = modelState }
+    if let context { snapshot.context = context }
+    if let commands { snapshot.commands = commands }
+    if let agent { snapshot.agent = agent }
+    if let process { snapshot.process = process }
+    return try await update(snapshot)
   }
 
   /// 源端确认实际结束：状态与领取时固定的请求集合一并落盘；没有请求身份的状态更新不确认投送。
@@ -147,7 +150,7 @@ public actor PiStateRecorder {
   /// 等待重复通知。状态一旦前进（如用户答完回到思考中），未上传的标志随之作废——已恢复工作的会话不该再提示"等你确认"。
   /// 会话结束（`end`）清掉标志，未上传的也不再通知。
   private func commit(
-    _ sessionID: String, _ session: inout Session, _ content: PiStateContent, notify: PiAlert? = nil, at now: Date
+    _ sessionID: String, _ session: inout Session, _ content: PiSessionSnapshot, notify: PiAlert? = nil, at now: Date
   ) -> @Sendable () async throws -> Void {
     let writesCatalog = content.catalogDiffers(from: session.pace.written)
     if writesCatalog { session.catalog = content.catalog(host: hostID, at: now) }
@@ -158,7 +161,6 @@ public actor PiStateRecorder {
     }
   }
 
-  /// 按决定的先后落盘：排在此前所有写入之后。
   func persist<T: Sendable>(_ write: @escaping @Sendable () async throws -> T) async throws -> T {
     let previous = tail
     let task = Task {

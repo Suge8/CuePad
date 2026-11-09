@@ -1,7 +1,6 @@
 import CueStore
 import Testing
 
-/// 空白灵感离开编辑就不留下、不计数（真实库里留着过正文为空的灵感）。
 @Suite struct BlankContentTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }

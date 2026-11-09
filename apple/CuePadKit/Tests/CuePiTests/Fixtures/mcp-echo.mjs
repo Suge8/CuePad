@@ -1,6 +1,4 @@
-// 最小的 stdio MCP 替身：握手（2025-11-25 / 2025-06-18）、tools/list、一个 echo 工具与一个 pick 工具。
-// 每次 echo 调用把参数追加到环境变量 MCP_ECHO_LOG 指向的文件（一行一条），作为"运行时确实调到了它"的证据。
-// pick 向客户端要一个选择（elicitation/create，表单只有一个枚举字段 drink），把收到的答复作为结果返回。
+// 最小的 stdio MCP 替身。每次 echo 调用把参数追加到环境变量 MCP_ECHO_LOG 指向的文件（一行一条），作为"运行时确实调到了它"的证据。
 import { appendFileSync } from "node:fs";
 
 const versions = ["2025-11-25", "2025-06-18"];
@@ -24,8 +22,8 @@ const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.
 const fail = (id, code, message) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } }) + "\n");
 
 function handle({ id, method, params, result }) {
-  if (method === undefined) return waiting.get(id)?.(result ?? { action: "error" }); // 客户端对我们请求的答复
-  if (id === undefined) return; // 通知（notifications/initialized 等）不回
+  if (method === undefined) return waiting.get(id)?.(result ?? { action: "error" });
+  if (id === undefined) return;
   switch (method) {
     case "initialize": {
       const asked = params?.protocolVersion;

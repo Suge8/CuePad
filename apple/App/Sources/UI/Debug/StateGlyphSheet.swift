@@ -2,10 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 状态图形总览（`-CuePadScene stateicons`，iPhone、iPad、Mac 都排得下，一列往下滚）：会话状态（`PiShown.Status` 全部）、Cue 页经过那一行
-/// （`CueChange.Kind` 全部，平时灰、还没处理时着色）、Cue 自己的各拍（`CueBeat` 全部，四档头像）。
-/// `-CuePadSheetEnd YES` 一打开停在底，一屏放不下时与停在顶的那张拼成整份。
-/// 每行画的就是 App 里的那个视图（`PiStateDot`、`CueAvatar`），不另画一份；放不放循环随 `LoopsPlay`。改状态图形、头像各拍后用它对一遍（docs/verify.md）。
+/// 每行画的就是 App 里的那个视图（`PiStateDot`、`CueAvatar`），不另画一份；放不放循环随 `LoopsPlay`。
 struct StateGlyphSheet: View {
     @Environment(\.palette) private var palette
 
@@ -41,8 +38,7 @@ struct StateGlyphSheet: View {
             }
             .padding(.horizontal, 16).padding(.vertical, 24)
         }
-        // 一屏放不下时截两张：`-CuePadSheetEnd YES` 停在底
-        .defaultScrollAnchor(DebugScene.defaults.bool(forKey: "CuePadSheetEnd") ? .bottom : .top)
+        .defaultScrollAnchor(DebugScene.args.layoutOpts.sheetEnd ? .bottom : .top)
         .background(palette.desk)
         .foregroundStyle(palette.ink)
     }

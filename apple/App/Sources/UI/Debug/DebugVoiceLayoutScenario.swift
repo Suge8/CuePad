@@ -6,7 +6,7 @@ import Foundation
 /// -CuePadVoiceScenario recovery|partial|stop：失败只注入外部边界，恢复、结果来源与停止权限仍由正式通话和库判断。
 /// partial 只失败第一次传输的首片；其后连接不补发，只有实际按重说才会再次提交。
 final class DebugVoiceLayoutScenario {
-    private let kind = DebugScene.defaults.string(forKey: "CuePadVoiceScenario")
+    private let kind = DebugScene.args.voiceOpts.scenario
     private var recorded = false
     private var sent = false
     /// 跨过真实控制通道的分片上限，首片失败必须留下未发送的后续片。
@@ -29,7 +29,7 @@ final class DebugVoiceLayoutScenario {
     }
 
     static func seed(_ call: VoiceCall, workspace: Workspace) async throws {
-        guard let kind = DebugScene.defaults.string(forKey: "CuePadVoiceScenario") else { return }
+        guard let kind = DebugScene.args.voiceOpts.scenario else { return }
         let store = workspace.services.store
         let text = String(localized: "检查发布事项 \(1)", table: "Demo")
         call.inputs.continuation.yield(.wire(.success(.delegation(.init(id: "layout-request", turn: nil, text: text)))))

@@ -1,9 +1,6 @@
 import Foundation
 
-/// 会话只在叶子上（`CardLinks` 的类型注释）：这条规则被打破后怎么收敛，本机写入与远端变更共用这一处。
 extension CueStore {
-  /// 任务 `tasks` 的子任务刚变过：按 `CardLinks.repairs` 把它们记着的会话放回该在的叶子上
-  /// （叶子加了第一个子任务时把会话交给它，上级自己的开始事实保留）。
   func settle(around tasks: [UUID]) throws {
     guard !tasks.isEmpty else { return }
     try apply(try CardLinks(db, around: tasks).repairs(touching: Set(tasks)))

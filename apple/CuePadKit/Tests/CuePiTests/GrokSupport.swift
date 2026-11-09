@@ -6,7 +6,7 @@ import Network
 import Synchronization
 @testable import CuePi
 
-/// 本机的 Grok Build（录制时用）：`CUEPAD_GROK` 指定另一个（如新版本）。
+/// `CUEPAD_GROK` 指定另一个（如新版本）。
 let realGrokURL = ProcessInfo.processInfo.environment["CUEPAD_GROK"].map { URL(filePath: $0) } ?? ExecutableLocator.standard.candidates("grok").first
 
 /// 录制时 Grok 用的模型：环境里给了真凭据就连真的 xAI，否则连本进程里的假模型（`FakeResponses`）。真凭据只经测试进程的环境给、不写进任何文件：
@@ -14,7 +14,6 @@ let realGrokURL = ProcessInfo.processInfo.environment["CUEPAD_GROK"].map { URL(f
 /// 录像带起 grok 时把这里的环境补进去（`AgentTape.recordProcess`，CuePad 自己给了的不覆盖）：假模型的地址与假密钥，或真凭据——
 /// 测试台的配置目录是临时的，托管会话的 grok 要经它找到登录。都不经 CuePad，录像带里也就没有。
 enum GrokModel {
-    /// 测试进程环境里的真凭据
     static let credentials = ProcessInfo.processInfo.environment.filter { ["XAI_API_KEY", "GROK_AUTH_PATH"].contains($0.key) && !$0.value.isEmpty }
 
     /// 连真模型时托管会话开在 `CUEPAD_GROK_MODEL` 给的模型上（不给是账号的默认模型；Grok 的新会话不认 `GROK_DEFAULT_MODEL`）；假模型与回放为 nil。
@@ -24,15 +23,13 @@ enum GrokModel {
     /// 测试进程里共用一个，录制时头一次起 grok 时才开（回放不起：Grok 的输出都在录像带里）；连真模型时为 nil。
     static let fake: FakeResponses? = credentials.isEmpty ? try? FakeResponses() : nil
 
-    /// 录制时补给 grok 进程的环境：假模型（本机地址不走代理）或真凭据，不自动更新。
     static var environment: [String: String] {
         let model = fake.map { ["GROK_XAI_API_BASE_URL": $0.baseURL, "XAI_API_KEY": "fake-xai-key", "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"] } ?? credentials
         return ["GROK_DISABLE_AUTOUPDATER": "1"].merging(model) { $1 }
     }
 }
 
-/// 测试用的假 xAI 模型服务：HTTP/1.1 上的 `POST /v1/responses`（SSE，事件同 OpenAI Responses），零网络、结果确定。
-/// 回答只看请求里的对话，按最近一句 `<user_query>` 里的话（规则见 `plan`），对得上测试问的那几句；问会话标题、每轮摘要这类旁路请求随便答一句。
+/// 假 xAI 模型服务：HTTP/1.1 上的 `POST /v1/responses`（SSE，事件同 OpenAI Responses），零网络、结果确定。
 /// 停住：一串 echo 调用的第二次请求停住，等测试放行（`release`，先放后停也算）——插话在下一次请求才进对话，测试在插话交出去之后放行；
 /// 数数那一句只说开头几个数就停住，直到 Grok 断开（停下这一轮）。都有 30 秒的上限，测试异常退出时不让 Grok 一直等。
 final class FakeResponses: Sendable {
@@ -64,7 +61,6 @@ final class FakeResponses: Sendable {
         }
     }
 
-    /// 放行一次停住。
     func release() {
         let waiter = gate.withLock { state -> CheckedContinuation<Void, Never>? in
             guard state.waiting.isEmpty else { return state.waiting.removeFirst().continuation }
@@ -136,16 +132,13 @@ final class FakeResponses: Sendable {
     enum Plan {
         case say(String)
         case call(String, [String: Any])
-        /// 停住，放行后照它答
         indirect case held(Plan)
-        /// 说出这几段就停住，直到对方断开
         case endless([String])
 
         /// 调 MCP 工具：Grok 只把它经 `use_tool` 交给模型（见 `GrokDialect`）
         static func mcp(_ name: String, _ input: [String: Any]) -> Plan { .call("use_tool", ["tool_name": name, "tool_input": input]) }
     }
 
-    /// 最近一句你的话决定怎么答（测试问的那几句）；其余回 "ECHO <原话>"。
     static func plan(_ body: [String: Any]) -> Plan {
         let input = body["input"] as? [[String: Any]] ?? []
         let system = (body["instructions"] as? String) ?? input.first { $0["role"] as? String == "system" }.map(text) ?? ""
@@ -188,13 +181,11 @@ final class FakeResponses: Sendable {
         if let command = query.firstMatch(of: /run exactly: (.+?)  Then/)?.output.1 {
             return calls.isEmpty ? .call("run_terminal_command", ["command": String(command), "description": "run it"]) : .say("DONE")
         }
-        // 这一轮里插进来的话（你那句之后的用户消息）也算：照最近说的那个词
         let said = input[queryIndex...].filter { $0["role"] as? String == "user" }.map(text)
         if let word = said.reversed().lazy.compactMap({ $0.firstMatch(of: /single word ([A-Za-z]+)/)?.output.1 }).first { return .say(String(word)) }
         return .say("ECHO \(query)")
     }
 
-    /// 一条消息的文字：字符串，或内容块里的文字拼起来。
     private static func text(_ item: [String: Any]) -> String {
         if let text = item["content"] as? String { return text }
         return (item["content"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: "\n")

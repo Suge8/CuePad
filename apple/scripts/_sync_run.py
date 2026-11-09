@@ -2,9 +2,10 @@
 打点是实例标准输出里的 `SYNCBENCH {json}` 行（DebugScene+SyncBench.swift），读线程按行收进 `Instance.events`，场景按事件等、不按时间猜。
 """
 from collections import defaultdict
-import hashlib, json, os, random, re, select, shutil, socket, subprocess, sys, threading, time
+import hashlib, json, os, random, select, shutil, socket, subprocess, sys, threading, time
 
 sys.dont_write_bytecode = True
+from _pi_extension import ENTRY, extension_version  # noqa: E402
 from app_env import disclaimed, isolated_env  # noqa: E402
 
 SESSIONS = int(os.environ.get("SYNC_BENCH_SESSIONS", 3))
@@ -121,14 +122,9 @@ class Load:
         return {"mean": round(sum(s) / len(s), 1), "max": round(max(s), 1), "cpus": os.cpu_count()}
 
 
-def extension_version(checkout):
-    source = open(f"{checkout}/apple/CuePadKit/Sources/CuePi/Extension/cuepad-bridge/index.ts").read()
-    return int(re.search(r"const EXTENSION_VERSION = (\d+);", source).group(1))
-
-
 def fake_extension(directory, checkout):
     """假扩展（子进程里跑）：SESSIONS 个会话，各自按指数分布的间隔切状态；任何带 id 的命令都回 ack ok。"""
-    version = extension_version(checkout)
+    version = extension_version(open(f"{checkout}/apple/{ENTRY}", encoding="utf-8").read())
     os.makedirs(directory, mode=0o700, exist_ok=True); os.chmod(directory, 0o700)
     now = lambda: time.time() * 1000
     sessions = []
@@ -137,7 +133,7 @@ def fake_extension(directory, checkout):
         path = f"{directory}/{sid}.{os.getpid()}.sock"
         if os.path.exists(path): os.remove(path)
         s = socket.socket(socket.AF_UNIX); s.bind(path); os.chmod(path, 0o600); s.listen(4); s.setblocking(False)
-        sessions.append({"id": sid, "path": path, "server": s, "clients": [], "state": {"kind": "idle", "since": now()},
+        sessions.append({"id": sid, "path": path, "server": s, "clients": {}, "state": {"kind": "idle", "since": now()},
                          "next": time.time() + random.expovariate(1 / FLIP)})
     def send(c, msg):
         try: c.sendall((json.dumps(msg) + "\n").encode())
@@ -149,29 +145,35 @@ def fake_extension(directory, checkout):
     def stop(*_):
         nonlocal running; running = False
     import signal; signal.signal(signal.SIGTERM, stop)
-    while running and os.getppid() == parent:  # 起它的脚本没了（被杀、崩了）就跟着收尾
-        readable = [s["server"] for s in sessions] + [c for s in sessions for c in s["clients"]]
-        ready, _, _ = select.select(readable, [], [], 0.2)
-        for s in sessions:
-            if s["server"] in ready:
-                c, _ = s["server"].accept(); s["clients"].append(c); send(c, hello(s))
-            for c in list(s["clients"]):
-                if c not in ready: continue
-                data = c.recv(65536)
-                if not data: s["clients"].remove(c); continue
-                for line in data.decode(errors="ignore").splitlines():
-                    try: msg = json.loads(line)
-                    except ValueError: continue
-                    if "id" in msg: send(c, {"t": "ack", "id": msg["id"], "ok": True})
-            if time.time() >= s["next"]:
-                state = dict(random.choice(STATES)); state["since"] = now()
-                busy = state["kind"] not in ("idle", "done")
-                state["busySince"] = s["state"].get("busySince") or now() if busy else None
-                s["state"] = state; s["next"] = time.time() + random.expovariate(1 / FLIP)
-                for c in s["clients"]: send(c, {"t": "state", "state": state})
-    for s in sessions:  # 正常收尾：会话以"结束"同步出去，下次跑不会被当成在线的会话
-        for c in s["clients"]: send(c, {"t": "bye", "reason": "quit"}); c.close()
-        s["server"].close(); os.remove(s["path"])
+    try:
+        while running and os.getppid() == parent:  # 起它的脚本没了（被杀、崩了）就跟着收尾
+            readable = [s["server"] for s in sessions] + [c for s in sessions for c in s["clients"]]
+            ready, _, _ = select.select(readable, [], [], 0.2)
+            for s in sessions:
+                if s["server"] in ready:
+                    c, _ = s["server"].accept(); s["clients"][c] = b""; send(c, hello(s))
+                for c in list(s["clients"]):
+                    if c not in ready: continue
+                    data = c.recv(65536)
+                    if not data:
+                        del s["clients"][c]; c.close(); continue
+                    lines = (s["clients"][c] + data).split(b"\n")
+                    s["clients"][c] = lines.pop()
+                    for line in lines:
+                        try: msg = json.loads(line.decode("utf-8"))
+                        except ValueError: continue
+                        if "id" in msg: send(c, {"t": "ack", "id": msg["id"], "ok": True})
+                if time.time() >= s["next"]:
+                    state = dict(random.choice(STATES)); state["since"] = now()
+                    busy = state["kind"] not in ("idle", "done")
+                    state["busySince"] = s["state"].get("busySince") or now() if busy else None
+                    s["state"] = state; s["next"] = time.time() + random.expovariate(1 / FLIP)
+                    for c in s["clients"]: send(c, {"t": "state", "state": state})
+    finally:
+        for s in sessions:  # 会话以"结束"同步出去，下次跑不会被当成在线的会话
+            for c in s["clients"]: send(c, {"t": "bye", "reason": "quit"}); c.close()
+            s["server"].close(); os.remove(s["path"])
+
 
 
 class Run:

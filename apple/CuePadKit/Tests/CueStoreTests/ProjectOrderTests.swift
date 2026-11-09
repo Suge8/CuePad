@@ -2,8 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 项目只有一种顺序（`CueStore.projectOrder`）：置顶在前，其余按最近的进展——灵感的新建与编辑、任务开始与做完、会话一轮开始或答完。
-/// 归档、取回、删除、恢复不动顺序；会话只变状态也不动。
 @Suite struct ProjectOrderTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -29,7 +27,6 @@ import Testing
         sessionID: "s1", state: state, title: "s", projectID: talk.id, turnStartedAt: newTurn ? .now : nil)
     }
     try await session(.thinking, newTurn: true)
-    // 起点：都在很久以前，收拾的那个项目最早
     try at("UPDATE projects SET createdAt = 1000, modifiedAt = 1000")
     try at("UPDATE cards SET todoAt = 1000, startedAt = NULL, completedAt = 1000, modifiedAt = 1000 WHERE id = '\(done.id.uuidString.lowercased())'")
     try at("UPDATE cards SET modifiedAt = 3000 WHERE id = '\(note.id.uuidString.lowercased())'")

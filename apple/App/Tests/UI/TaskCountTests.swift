@@ -3,7 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 各处写的任务数是同一批：任务页、看板各列与 Cue 摘要、信封里的数从同一批顶层任务数出来。
 struct TaskCountTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
@@ -48,9 +47,6 @@ struct TaskCountTests {
     }
 
     #if os(macOS)
-    /// 任务页的流水看板（Mac 侧栏"任务"与手机任务页同一份）：拖到「推进中」就是开始（同"开始"，`Workspace.handOff`），会话开好它就推进中；
-    /// Cue 问到它，它不挪列（提问只在 Cue 页答，不上看板）；推进中的数就是 Cue 摘要里的数，等你列头是摘要的"等你"去掉 Cue 的提问；
-    /// 拖到做完就是做完（同点完成圈，`Workspace.toggle`），落在今天做完的那一列，它还活着的会话留在「推进中」；做完了 Cue 还在问它，它仍在已完成。
     @Test func 看板_拖到推进中就是开始_Cue问它不挪列_拖到做完就是做完() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
@@ -87,7 +83,6 @@ struct TaskCountTests {
         #expect(columns.done.map(\.id) == [task.id] && columns.advancing.isEmpty, "会话随做完的事收起")
         try await expectCountsMatchCue(columns)
 
-        // 做完了 Cue 还在问它：它仍在已完成
         _ = try await store.addCueMessage(.cue, text: "要删分支吗？", ask: try CueAsking(.delete, action: "删掉修发言乱序的分支"), task: task.id)
         columns = try await board()
         #expect(columns.done.map(\.id) == [task.id])
@@ -95,7 +90,6 @@ struct TaskCountTests {
     }
     #endif
 
-    /// 任务进度独立于执行：结束或离线不会把已开始任务退回待办，Cue 的执行集合仍不包含停止的任务。
     @Test func 会话结束任务仍推进中_看板计数同口径_执行集合独立() async throws {
         let card = try await store.createTask("开 U 卡")
         let bitget = try await store.createTask("bitget", under: card.id)

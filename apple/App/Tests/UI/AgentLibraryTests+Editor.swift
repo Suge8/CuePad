@@ -6,8 +6,6 @@ import Testing
 @testable import CuePad
 
 extension AgentLibraryTests {
-    /// 规则的文件页（`FileDraft`，Mac 与手机的文件页同一份）：文件还没有时停手就建出它，之后停手就存进文件；别处改了而你没在改，当场跟上；
-    /// 你改着时别处也改了，你的字留着、不再自动写，等你选——换成文件里的（排着没存的那一版也不再写），或留你的盖过它。
     @Test func 规则的文件页自动存_跟上别处的改动_两边都改时由你选() async throws {
         let file = agents.appending(path: "AGENTS.md")
         let keeping = keep()
@@ -42,7 +40,6 @@ extension AgentLibraryTests {
         draft.takeFile()
         #expect(draft.body == "别处又改\n" && !draft.dirty)
 
-        // 停手前（自动存还排着）别处改了、换成文件里的、马上离开：排着的那一版不再写
         // 不等快照：照编辑页收到快照那一下直接跟，整段在自动存的停顿之内做完
         draft.changed(body: "排着没存的\n")
         try write("别处再改\n", file)
@@ -60,8 +57,6 @@ extension AgentLibraryTests {
         #expect(read(file) == "还是我的\n" && draft.state == .saved && !draft.dirty)
     }
 
-    /// 技能的文件页：name、description 两个输入框与正文分开改，写回 SKILL.md 时别的 frontmatter 键原样留着；
-    /// name 改得和文件夹名不一样，重扫后这个技能带上哪里不对（标在 name 那个框下）。
     @Test func 技能的文件页改name与description与正文_写回文件_其余键留着() async throws {
         let directory = agents.appending(path: "skills/pr")
         let file = directory.appending(path: "SKILL.md")
@@ -93,7 +88,6 @@ extension AgentLibraryTests {
         #expect(workspace.library?.skill(at: directory.path)?.problem?.field == .name)
     }
 
-    /// 写入在途时文件在别处改了：冲突提示要留着，旧写入完成不能把它盖成"已保存"。
     @Test func 写入途中别处改了_冲突提示保持() async throws {
         let file = agents.appending(path: "AGENTS.md")
         try write("# a\n", file)
@@ -125,7 +119,6 @@ extension AgentLibraryTests {
         return (FileDraft(.instruction(.global), text: text, workspace: workspace), keeping, following)
     }
 
-    /// 自己那次写入在途时又打了字，自己写入的回声先到：不是别处的改动，不报冲突，后来打的字照常写。
     @Test func 自己写入的回声先到_期间又打了字_不报冲突() async throws {
         let (draft, keeping, following) = try await ready("# a\n")
         defer { keeping.cancel(); following.cancel() }
@@ -140,7 +133,6 @@ extension AgentLibraryTests {
         #expect(read(agents.appending(path: "AGENTS.md")) == "v2\n" && draft.state == .saved)
     }
 
-    /// 冲突后文件被改回打开时的样子、或改成和我的字一样：冲突自动解除，不留冲突条。
     @Test func 冲突后文件改回基准或变得和我的一样_冲突自动解除() async throws {
         let (draft, keeping, following) = try await ready("# a\n")
         defer { keeping.cancel(); following.cancel() }

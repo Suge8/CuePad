@@ -23,7 +23,6 @@ enum Chrome {
     /// 主区栏头左边让多少：会话条藏起时开合钮在主区那一段的最顶一排上，栏头让到它右沿再隔一档；开着时就是栏边（`Spacing.page`）。
     static func headLead(rail: CGFloat) -> CGFloat { rail > 0 ? Spacing.page : toggle + ControlSize.compact.height + Spacing.item }
     #else
-    /// iPad 窗口最顶那一排的高（主区的栏头）。
     static let band: CGFloat = 44
     /// iPad 没有红绿灯：行首那一列离窗边同字离纸边。
     static let lead: CGFloat = Spacing.inset
@@ -32,11 +31,9 @@ enum Chrome {
     #endif
     /// 一排控件的高：圆钮、图标钮、玻璃列头（`ControlSize.regular`：Mac 36 同系统工具栏的玻璃钮，iPad 44）。
     static var control: CGFloat { ControlSize.regular.height }
-    /// 开着的会话条。
     static let rail: CGFloat = 256
     /// 带字的行行首的图标那一列（会话条、`LinkRow`、技能与规则的行）。
     static let icon: CGFloat = 20
-    /// 会话条上一行的高：同系统侧栏、列表的行（`RowMetrics.height`，Mac 32、iPad 44）。
     static var row: CGFloat { RowMetrics.height }
     /// 等你组的会话行：名字下面一行写它要什么，比一行高一档；这一组每行同高，不随状态跳。
     static var tallRow: CGFloat { row + Spacing.group }
@@ -46,9 +43,7 @@ enum Chrome {
     static let railMark: CGFloat = 10
     /// 容器的内边：选中、悬停的底离容器边这么多（底的四角与容器同心，`Rows.swift`）。
     static let pad = Spacing.tight
-    /// 手机竖条一组里相邻两格之间。
     static let cellGap = Spacing.tight
-    /// 会话条上组与组之间（去处、等你、推进中、底部那一行）。
     static let groupGap = Spacing.group
     /// 一组会话多到要滚时下沿淡出的那一截（ui-craft：可滚动的区域给出可见的提示）；不满一屏时不淡，最后一行不被盖。
     static let scrollFade = Spacing.block

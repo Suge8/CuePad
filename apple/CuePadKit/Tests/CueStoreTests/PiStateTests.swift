@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// Pi 会话状态记录（Mac 写，按会话一条）：等你确认、完成、出错与开始工作立即写，不受细节节流；同一个会话只有一条记录；手机通知标志。
 /// 各字段写进同步记录、结束后保留、启动对账只动本机的见 App 的 MacSyncTests。
 @Suite struct PiStateTests {
   let fixture = try! Fixture()
@@ -15,8 +14,7 @@ import Testing
     Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0) })
   }
 
-  /// 合并定时器到点的同时来了一次立即写入（完成）：挂起的旧细节不能在更新的状态之后落盘，
-  /// 否则手机上的会话会一直显示"工作中"。
+  /// 挂起的旧细节不能在更新的状态之后落盘，否则手机上的会话会一直显示"工作中"。
   @Test
   func pendingDetailFiringAlongsideANewerStateNeverOverwritesIt() async throws {
     let recorder = recorder()
@@ -32,7 +30,6 @@ import Testing
     }
   }
 
-  /// 工作中的细节按 `detailInterval` 节流：等你、出错、做完与再开始工作都不等它，立即写，并取代挂起的细节。
   @Test func stateTransitionsAreWrittenImmediatelyDespiteTheDetailInterval() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .thinking)
@@ -58,7 +55,6 @@ import Testing
     IndexedSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd, title: title, lastActivityAt: Date(timeIntervalSince1970: seconds))
   }
 
-  /// 同一个会话（Pi 重启、恢复后会话 id 不变）始终是同一条记录：在线时由状态写入方负责，索引不覆盖；结束后仍是它。
   @Test func aSessionIsOneRecordAcrossHistoryRestartAndEnd() async throws {
     let recorder = recorder()
     try await store.upsertPiSession(indexed("s1"), host: "mac-a")
@@ -71,7 +67,6 @@ import Testing
     #expect(try await states()["s1"]?.state == .known(.ended))
   }
 
-  /// App 重开：进程随上次退出了的托管会话原本出错的，仍是出错、原因与起点留着。
   @Test func aHostedErrorStaysAcrossARestart() async throws {
     let before = clock.now
     try await recorder().update(
@@ -85,13 +80,13 @@ import Testing
     #expect(failed?.state == .known(.error) && failed?.detail == "额度用完" && failed?.stateSince == before)
   }
 
-  // MARK: 手机通知标志：只在"进入等你确认"和"从工作中进入完成"的那一次写入置位
+  // MARK: 手机通知标志
 
   private func alert(_ sessionID: String = "s1") async throws -> PiPush? {
     try await states()[sessionID]?.notify
   }
 
-  /// 第一次看到的会话不置位：App 重开后不把旧的等你、做完再报一遍。
+  /// App 重开后不把旧的等你、做完再报一遍。
   @Test func enteringWaitingForUserFlagsTheWriteThatEntersItAndSurvivesSameStateUpdatesUntilUploaded() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "first-seen", state: .waitingForUser)

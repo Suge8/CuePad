@@ -2,23 +2,15 @@
 import CueStore
 import Foundation
 
-/// `-CuePadCueFlow YES`（配 `-CuePadScene cue -CuePadDemo YES`，iOS 与 Mac）：画面就绪后按固定节奏（`FlowBeat`，约 17 秒；给了记录文件再多量 4 秒）走一遍完整的一轮，
-/// 录 Cue 页各处流转的动效用。每一步走真用户与值班的 Mac 走的那条路，写的都是同一份库：
-/// 1. 往输入框逐字写一句，按它的发送钮（`pressSendIfAsked` 交来的就是点按发送钮做的事：飞光、话在路上；说的话按同步一直通着算，`alwaysReachable`），过一会儿记下送达；
-/// 2. Cue 在想，再用工具（建任务、开工两步进展，同值班的管理器写下的经过与此刻的状态）；
-/// 3. Cue 回复：直接落库。逐字长出的正在说的话（`CueKeeper.speech`）只在 Cue 于这台 Mac 值班时有，演示库里 Cue 运行在演示 Mac 上；
-///    让它在这台值班就会真起大脑，管理器每次对账还把此刻的状态写回它自己的（歇着、起不来），盖掉这里写的在想与用工具，所以不喂；
-/// 4. 第 2 步建的任务交来一张截图后做完、点名这张（结果卡，同演示库的 `seedEvidence` 加 `finishTask`），再来一条"等你"，停 2 秒替你选"可以"（同点卡上的选项）；
-///    演示库原有的那条"等你"写入时就答掉（`seedCue`），这张卡是"等你"里唯一的一张，出现与消失都看得到；
-/// 5. 离开再回来（`select(.progress)` 再 `select(.cue)`）：窄屏开侧栏的进展段再点头像回 Cue；宽屏 Cue 一直在右边，主区换到进展。
-/// `-CuePadCueFlowLog <路径>`：同 `measureFlight` 的量法，量"发送"（send：从按下起）与"静止"（idle：走完之后 Cue 歇着、页面不动）各一段，一段一行 JSON 追加进这个文件。
+/// 走的是真用户与值班的 Mac 走的那条路，写的都是同一份库。
+/// 逐字长出的正在说的话（`CueKeeper.speech`）只在 Cue 于这台 Mac 值班时有；让它在这台值班就会真起大脑，管理器每次对账还把此刻的状态写回它自己的（歇着、起不来），盖掉这里写的在想与用工具，所以回复直接落库、不喂。
+/// 演示库原有的那条"等你"写入时就答掉（`seedCue`），这张卡是"等你"里唯一的一张，出现与消失都看得到。
+/// `-CuePadCueFlowLog <路径>`：量"发送"（send：从按下起）与"静止"（idle：走完之后 Cue 歇着、页面不动）各一段，一段一行 JSON 追加进这个文件。
 /// 静止放在最后量：刚就绪的几秒里进程还在后台忙（iOS 模拟器上 4 秒能有上百亿条指令，主线程却几乎不动），量不出页面歇着的样子。
 extension DebugScene {
     /// 演示节奏（秒）：节奏本身就是要录的内容，不是在等别的事。
     private enum FlowBeat {
-        /// 开头空着的一段：Mac 录屏在就绪后才起录
         static let lead = 2.0
-        /// 量的一段（发送、静止同长）
         static let probe = 4.0
         static let keystroke = 0.05
         static let beforeSend = 0.6
@@ -27,7 +19,6 @@ extension DebugScene {
         static let toolStep = 1.0
         static let reply = 1.2
         static let result = 1.5
-        /// "等你"停着的时长
         static let asking = 2.0
         static let answered = 1.2
         static let away = 1.5
@@ -42,7 +33,7 @@ extension DebugScene {
     }
 
     private static func runCueFlow(_ workspace: Workspace, leave: (_ away: Bool) -> Void) async {
-        guard defaults.bool(forKey: "CuePadCueFlow") else { return }
+        guard args.driveOpts.cueFlow else { return }
         await running("Cue 流程") { try await cueFlow(workspace, leave: leave) }
     }
 
@@ -73,7 +64,6 @@ extension DebugScene {
         let context = try await store.cueState()?.context
         try await store.setDemoCueState(.thinking, context: context)
         try await beat(FlowBeat.thinking)
-        // 同值班的管理器（`CueKeeper.handle`）：调用开始时写此刻碰到的那一处（`CueState.step`），做完一步整份经过写回那一行
         let roundtable = try await store.projects().first { $0.name == String(localized: "圆桌", table: "Demo") }?.id
         let name = String(localized: "登录回调超时", table: "Demo")
         var tools = PiChatMessage.Tools()
@@ -114,22 +104,20 @@ extension DebugScene {
         if let log = cueFlowLog { try await measureFlight("idle", seconds: FlowBeat.probe, into: log) }
     }
 
-    private static var cueFlowLog: URL? { defaults.string(forKey: "CuePadCueFlowLog").map { URL(fileURLWithPath: $0) } }
+    private static var cueFlowLog: URL? { args.driveOpts.cueFlowLog.map { URL(fileURLWithPath: $0) } }
 
     private static func beat(_ seconds: Double) async throws { try await Task.sleep(for: .seconds(seconds)) }
 
-    /// Cue 页输入框交来的按发送钮（点按做的事只在按下的那一刻借得到）：流程到第 1 步时放行。
     private static var flowPress: CheckedContinuation<Void, Never>?
     /// 已经按过：之后又出现的输入框（iPhone 切回来）不再等。
     private static var flowPressed = false
 
-    /// 在 `pressSendIfAsked` 里等流程放行，按下。
     static func pressForCueFlow(_ press: () -> Void) async {
         guard !flowPressed, flowPress == nil else { return }
         await withCheckedContinuation { flowPress = $0 }
         press()
     }
 
-    static var cueFlows: Bool { defaults.bool(forKey: "CuePadCueFlow") }
+    static var cueFlows: Bool { args.driveOpts.cueFlow }
 }
 #endif

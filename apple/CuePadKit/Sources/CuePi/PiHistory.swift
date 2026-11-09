@@ -4,22 +4,19 @@ import CueText
 import Foundation
 import ImageIO
 
-/// 会话列表要的摘要：会话 id、工作目录、名字、首条用户消息、最后活动时间。原文留在会话文件里，这里不复制。
+/// 原文留在会话文件里，这里不复制。
 public struct PiSessionHistory: Sendable, Equatable {
     public var sessionID: String?
     public var cwd: String?
     public var name: String?
-    /// 第一条有文字的你的话（`PiSessionName.firstMessage`）。
     public var firstMessage: String?
     public var lastActivity: Date?
 
-    /// 会话的显示名，规则见 `PiSessionName`（与活动会话、Pi 会话列表一致）。
     public var displayName: String {
         PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.map { URL(filePath: $0).lastPathComponent } ?? "")
     }
 }
 
-/// 索引一个会话文件从哪接着读：上次的检查点（没有或解不开为 nil），与本机是否已存着它的对话
 /// （范围内的会话要有全部消息：没有就从头读一遍补齐；范围外的存着对话的也整份重读，已存的消息跟着读文件的规则更新）。
 public struct PiHistoryStart: Sendable {
     public var checkpoint: PiHistoryCheckpoint?
@@ -36,7 +33,6 @@ public struct PiHistoryUpdate: Sendable {
     public var agent: AgentKind
     public var checkpoint: PiHistoryCheckpoint
     public var history: PiSessionHistory
-    /// 这次新读到的对话（从头读时是全部）；`includesTranscript` 为 false 时（只读了摘要）为空
     public var messages: [PiChatMessage]
     /// 这次读的时候要不要对话（调用方——索引器——的判定）：写不写对话以它为准
     public var includesTranscript: Bool
@@ -45,15 +41,12 @@ public struct PiHistoryUpdate: Sendable {
     /// 会话 id：会话文件头里的；还没读到文件头时是路径里的（只有文件名就是会话 id 的才会这样发出）。
     public var sessionID: String { history.sessionID ?? agent.facts.sessionFiles?.sessionID(of: file) ?? file.deletingPathExtension().lastPathComponent }
     public var recap: PiRecap { checkpoint.projectedRecap }
-    /// 这次读到的对话与摘要，交给 `CueStore.writePiTranscript`
     public var transcript: PiTranscript { PiTranscript(sessionID: sessionID, messages: messages, recap: recap) }
-    /// 这次新消费的字节数（半行不算）
     public var bytesRead: Int
 }
 
 public enum PiHistoryEvent: Sendable {
     case updated(PiHistoryUpdate)
-    /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`。
     /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除的）可以丢掉；只回填了一部分（`PiHistoryScope.sessions`）为 nil，
     /// 不能据此丢
     case backfillFinished(sessionFiles: [URL]?)
@@ -73,16 +66,12 @@ public enum PiHistoryScope: Sendable, Equatable {
     }
 }
 
-/// Agent 会话文件（JSONL）的增量解析：读取、检查点、轮次与摘要的规则各家共用（检查点上的 `said`、`answered`、`interrupted`、
-/// `compacted` 与工具活动），逐行的解码按 Agent 分（`SessionFileFormat`；Pi 的在这里，Claude Code、Codex 的在 `ClaudeHistory`、
-/// `CodexHistory`；OpenCode 的会话在它的数据库里，`OpenCodeHistory` 经它的接口逐条读进同样的检查点）。
 /// Pi 的会话文件是 v3 树结构：当前分支 = 从文件最后一个条目沿 `parentId` 回溯到根，与 Pi 加载会话时确定叶子的规则一致。
 public enum PiHistory {
     private static let fingerprintPrefix = 256
     private static let blockSize = 8 * 1024 * 1024
 
-    /// 从检查点继续索引 `file`（没有检查点或检查点已失效则从头）。文件不存在时抛错——
-    /// 会话文件在第一条消息落盘前并不存在，调用方等文件出现再来。
+    /// 文件不存在时抛错——会话文件在第一条消息落盘前并不存在，调用方等文件出现再来。
     ///
     /// 你的消息里的图片当场存进 `files`（按内容哈希，已有的不重写），对话里只留 `![](cuepad://file/<键>)`：会话文件是图片唯一的来源，
     /// 终端里贴的图片附件目录里原本没有。不是图片的块跳过；存不下（磁盘错误）时抛错，不留一条缺图的消息。
@@ -159,8 +148,6 @@ public enum PiHistory {
         return consumed
     }
 
-    // MARK: 检查点有效性
-
     /// 文件被 Pi 改写（版本迁移）或替换后，旧偏移指向的可能是半行：检查文件没变短、开头没变、偏移落在换行之后。
     private static func isResumable(_ cp: PiHistoryCheckpoint, handle: FileHandle, size: UInt64) throws -> Bool {
         guard cp.offset <= size else { return false }
@@ -175,7 +162,6 @@ public enum PiHistory {
         cp.fingerprint = try fingerprint(handle, length: cp.fingerprintLength)
     }
 
-    /// FNV-1a 64
     private static func fingerprint(_ handle: FileHandle, length: Int) throws -> UInt64 {
         try handle.seek(toOffset: 0)
         var hash: UInt64 = 0xcbf29ce484222325
@@ -183,17 +169,13 @@ public enum PiHistory {
         return hash
     }
 
-    // MARK: 对话与轮次（各家共用）
-
-    /// 一条消息在会话里的位置：条目 id（没有时用行号）、行号（`seq`）、时间。
     struct Entry {
         var id: String
         var seq: Int64
         var at: Date
     }
 
-    /// 这次新读到的对话消息；会话 id 取文件头的，没读到文件头就用文件名。`files` 是你的消息里的图片要存进的附件目录；
-    /// nil 是只为推出检查点状态而重放的行（消息丢弃，不存图片）。
+    /// `files` 是你的消息里的图片要存进的附件目录；nil 是只为推出检查点状态而重放的行（消息丢弃，不存图片）。
     struct Transcript {
         let fallbackID: String
         let files: AttachmentFiles?
@@ -212,14 +194,12 @@ public enum PiHistory {
 
         func said() -> Said { Said(files: files) }
 
-        /// 工具结果里的图存成缩小的那份（`ToolImage`），返回附件的键；不存图片（`files` 为 nil）、不是图片的不算。
         func toolImages(_ images: [Data?]) throws -> [String] {
             guard let files else { return [] }
             return try images.compactMap { data in try data.flatMap { try ToolImage.store($0, in: files) } }
         }
     }
 
-    /// 你说的一句：文字块去掉 Pi 附给模型的图片说明行（`PiSessionName.withoutImageNotes`），图片存进附件目录。
     /// `text` 是文字块用换行连接（标题、摘要、机器消息判断都用它），`stored` 是文字与图片按块的原顺序拼成的正文格式（`CueFormat`，
     /// 与投送请求的 content 同一种；不存图片时等同 `text`）。
     struct Said {
@@ -237,13 +217,11 @@ public enum PiHistory {
             if let files { pieces.append(files.restoringAgentLines(in: text)) }
         }
 
-        /// 先前读到、存在检查点里的那一句（图片已存好，`stored` 里是它的标记，见 `PiHistoryCheckpoint.held`）。
         mutating func restore(text: String, stored: String) {
             texts = text.isEmpty ? [] : [text]
             pieces = stored.isEmpty ? [] : [stored]
         }
 
-        /// 图片原字节；不是图片的跳过（不存进附件）。
         mutating func image(_ data: Data?) throws {
             guard let files, let data, let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0 else { return }
             pieces.append(CueFormat.imageMarkup(key: try files.store(data)))
@@ -253,14 +231,12 @@ public enum PiHistory {
         var stored: String { files == nil ? text : pieces.joined(separator: "\n") }
     }
 
-    /// 去掉首尾空白后截到 `limit` 个字符（超出的以省略号结尾）；空文字为 nil。
     static func clip(_ text: String, _ limit: Int) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return trimmed.clipped(limit)
     }
 
-    /// 单行：空白与控制字符折成一个空格。
     static func collapsed(_ text: String) -> String {
         text.split(whereSeparator: { $0.isWhitespace || $0.unicodeScalars.allSatisfy { CharacterSet.controlCharacters.contains($0) } })
             .joined(separator: " ")

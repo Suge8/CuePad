@@ -4,10 +4,8 @@ import CueStore
 import Foundation
 import os
 
-/// 历史索引的落盘：会话行与检查点都存在 Store（本机表）；同一次读出的对话与摘要在同一事务里写
-/// （要不要对话由索引器定：最近 `PiChat.transcriptWindow` 内活跃过的、或本机已存着对话的会话，见 `PiHistoryStart`）。
+/// 会话行与检查点都存在 Store（本机表）；同一次读出的对话与摘要在同一事务里写。
 /// 首次回填按批写（`AppServices.backfillBatch`），之后文件一变化就写，不节流：Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
-/// 索引器按文件要"从哪接着读"：启动后第一次要时一次读出全部（`CueStore.piIndexStarts`），之后随写入更新。
 ///
 /// Store 读写失败时，该文件的索引不再写回：库异常时反复重写只会放大问题。失败作为错误抛给调用方报告。
 /// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：当作没有检查点，有这种文件时回填完成汇总记一行。
@@ -16,7 +14,6 @@ actor PiHistoryPersistence {
     private let storage: CueStore
     /// 这台 Mac：会话文件索引也写成这台 Mac 的会话同步记录（见 `CueStore.upsertPiSession`）。
     private let host: String
-    /// 会话文件路径 → 它的索引从哪接着读
     private var starts: [String: IndexedSessionStart]?
     private var blocked: Set<String> = []
     /// 回填期间检查点格式已过期（CuePi 升级）、从头重读的文件数与回填开始的时刻：不为 0 时回填完成汇总记一行
@@ -28,12 +25,12 @@ actor PiHistoryPersistence {
         self.host = host
     }
 
-    /// 回填开始（列目录、取修改时间之前）：汇总日志的用时从这里算。已经开始的不重设。
+    /// 回填开始（列目录、取修改时间之前）：汇总日志的用时从这里算。
     func beginBackfill() {
         if backfillStarted == nil { backfillStarted = .now }
     }
 
-    /// 这个文件的索引从哪接着读；没索引过为 nil。Store 读取失败时抛错，并停止该文件的写回。
+    /// Store 读取失败时抛错，并停止该文件的写回。
     func start(for file: URL) async throws -> PiHistoryStart? {
         let known: IndexedSessionStart?
         do {
@@ -96,7 +93,7 @@ actor PiHistoryPersistence {
         }
     }
 
-    /// 清理安静了的会话的对话：现在一次，之后每天一次，直到任务取消。清理失败记日志，下次再来。
+    /// 清理失败记日志，下次再来。
     func keepPruned(timing: Timing = .system) async {
         repeat {
             do {
@@ -130,14 +127,12 @@ actor PiHistoryPersistence {
         return true
     }
 
-    /// 一家 Agent 断开了接入：删掉它的本机会话索引（同步记录不动；这台 Mac 托管过的会话留着，见 `CueStore.deletePiSessions`），
-    /// 下次接入从头回填。
+    /// 同步记录不动；这台 Mac 托管过的会话留着（`CueStore.deletePiSessions`），下次接入从头回填。
     func forget(_ agent: AgentKind) async throws {
         try await storage.deletePiSessions(of: agent, keepingHostedOn: host)
         starts = nil
     }
 
-    /// 没接入的 Agent 回填的范围：这台 Mac 托管过的会话。
     func hostedScope(of agent: AgentKind) async throws -> PiHistoryScope {
         .sessions(try await storage.hostedPiSessionIDs(of: agent, host: host))
     }

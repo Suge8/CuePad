@@ -28,7 +28,6 @@ enum ControlSize {
     static let target: CGFloat = 28
     #endif
 
-    /// 控件上的字（字重由控件给）。
     var font: Font {
         switch self {
         case .inline: Typography.meta
@@ -51,7 +50,6 @@ enum ControlSize {
         #endif
     }
 
-    /// 带字的控件里字离两头。
     var padding: CGFloat {
         switch self {
         case .inline: 8
@@ -61,7 +59,6 @@ enum ControlSize {
     }
 }
 
-/// 圆钮、胶囊与行尾动作的几何：可见尺寸按平台，iPhone 的命中高度始终至少 44。
 enum ControlMetrics {
     static var height: CGFloat { ControlSize.regular.height }
     static let stroke: CGFloat = 1
@@ -69,8 +66,7 @@ enum ControlMetrics {
     static let disabledOpacity = 0.45
 }
 
-/// 控件只有一套外形与按压实现，空态、绑定引导和搜索栏共用；签名色只给主动作，其余是墨色。高按 `size`（`ControlSize`）。
-/// 外形单拆成 `ControlSurface`：点开菜单的按钮（`MenuButton`）不是 `Button`，要同一个样子时直接挂它。
+/// 控件只有一套外形与按压实现；签名色只给主动作，其余是墨色。外形单拆成 `ControlSurface`：点开菜单的按钮（`MenuButton`）不是 `Button`，要同一个样子时直接挂它。
 /// `glass`：浮在内容上的玻璃胶囊（Mac 工具栏与页顶那一排的项目范围、新任务、收起、清空回收站），与 `circular` 的玻璃圆钮同高；
 /// `round`：纸与面板上的淡底圆钮（浮层的关闭、问号）——玻璃不叠玻璃，纸上不用 `circular`。毁掉东西的（`role: .destructive`）字是出错色。
 /// `icon`：窗口最顶那一排不浮在内容上的图标钮（收起右栏、会话条开合）：同系统工具栏里不带玻璃的项，平时只有图标，悬停浮一层圆的淡底（`PressFeedback`），圆多大按 `size`。
@@ -121,7 +117,6 @@ private struct GlassIconLabel: LabelStyle {
 }
 #endif
 
-/// 控件的外形（`ControlButtonStyle` 的样子，不含按压）；停用时整体变淡，挂在菜单按钮上的同样。
 /// `selected`：开着的筛选、选中的那一颗（全 App 一套选中：选中底、墨字半粗，docs/ui.md「选中」），只对带字的胶囊有意义；胶囊的外形经 `chip`。
 /// `level`：胶囊自己当读数用（上下文用量）——底下从左铺一层到比例，高就是胶囊实际的高（随字号长），不含触屏补出来的点按区。
 struct ControlSurface: ViewModifier {

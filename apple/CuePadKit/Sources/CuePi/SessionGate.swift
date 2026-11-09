@@ -1,7 +1,6 @@
 #if os(macOS)
 import Foundation
 
-/// 同一会话的发话一次一句：`PiBridge.send` 先在这里排队，前一句交出（含它停下在跑那一轮的等待）有了结果才轮到下一句。
 /// 各家的发话是"先停下这一轮、等它收尾、再开新一轮"，两句并发会都等同一次收尾、放行后各开一轮，所以串行放在所有接入共过的这一处，
 /// 不在各家各写一套。停止（`abort`）与斜杠命令不排队（命令可以很久才确认，如 `/compact`，发话要能在它进行中打断它；带话的命令各家自己照旧）：卡住的那句靠各家等待自己的时限（`AgentTimeouts.stop`）放弃，停止本身也走同一套。
 /// 排队的调用方被取消时离队、以取消结束。
@@ -13,16 +12,25 @@ final class SessionGate {
         let continuation: CheckedContinuation<Void, any Error>
     }
 
+    private var generation = 0
     private var busy: Set<PiSession.ID> = []
     private var queue: [PiSession.ID: [Waiter]] = [:]
 
     func run<T>(_ id: PiSession.ID, _ body: () async throws -> T) async throws -> T {
+        let admittedGeneration = generation
         try await enter(id)
         defer { leave(id) }
+        guard admittedGeneration == generation else { throw CancellationError() }
         return try await body()
     }
 
-    /// 停止：排着的发话不再开轮，以取消结束。
+    /// 桥停下后，排队与已放行但尚未执行的许可都失效；已交出的话仍取真实结果。
+    /// busy 留给持有许可的调用释放，避免旧调用收尾时放开新调用正在占用的位置。
+    func stop() {
+        generation += 1
+        for id in Array(queue.keys) { abort(id) }
+    }
+
     func abort(_ id: PiSession.ID) {
         for waiter in queue.removeValue(forKey: id) ?? [] { waiter.continuation.resume(throwing: CancellationError()) }
     }
@@ -40,7 +48,6 @@ final class SessionGate {
         }
     }
 
-    /// 把位置交给队首（`busy` 不放开），没有人排队才放开。
     private func leave(_ id: PiSession.ID) {
         guard var waiting = queue[id], !waiting.isEmpty else { return _ = busy.remove(id) }
         let next = waiting.removeFirst()

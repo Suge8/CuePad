@@ -15,7 +15,6 @@ extension InteractionBench {
     /// 跨阈值与侧栏开合是同一种变化（会话条或 Cue 换宽、主区按新宽排一次、叠一段滑动），用同一份预算。
     private static var wideBudget: (clickMs: Double, hitches: Int) { budgets["侧栏收起"]! }
 
-    /// 三种主区：进展的看板，开着一个会话，并排两个会话；右边都是 Cue。
     struct WideCase {
         let name: String
         let sessions: Int
@@ -27,7 +26,6 @@ extension InteractionBench {
         WideCase(name: "双会话+Cue", sessions: 2),
     ]
 
-    /// 摆成这种组合：主区回进展的看板、会话条选宽版、Cue 开着，再按组合把 `sessions` 的前一两份开在主区（第二份并排）。
     static func arrange(_ item: WideCase, in workspace: Workspace, sessions: [String]) {
         let ids = sessions.prefix(2).map { PiSessionState.recordID(sessionID: $0) }
         workspace.services.settings.navigationPane = .progress
@@ -140,7 +138,6 @@ extension InteractionBench {
         ["宽屏收窄", "宽屏展开", "宽屏反向", "Cue 收钮", "Cue 露出"].map { "\($0)·\(item.name)" }
     }
 
-    /// 改窗口宽不该动的东西：偏好、主区去处与草稿。
     private struct Snapshot: Equatable {
         let rail: Bool
         let cue: Bool
@@ -176,7 +173,6 @@ private final class SlideSampler: NSObject {
     private var link: CADisplayLink?
     private var offsets: [(time: CFTimeInterval, x: CGFloat)] = []
     private var refresh: CFTimeInterval = 1.0 / 60
-    /// 取到的最左位置（没取到时是无穷大）。
     var minimum: CGFloat { offsets.map(\.x).min() ?? .infinity }
 
     init(_ columns: (main: WideColumnView?, cue: WideColumnView?)) { column = columns.main }

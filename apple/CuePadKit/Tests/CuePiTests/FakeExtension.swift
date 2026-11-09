@@ -3,17 +3,15 @@ import Foundation
 import Synchronization
 @testable import CuePi
 
-/// 扮演 Pi 里的桥扩展，让客户端测试不依赖 Pi。字节协议见 CuePi 的 README 与 `PiWire`。
+/// 字节协议见 CuePi 的 README 与 `PiWire`。
 /// 连接与收到的命令在 socket 队列上写、测试里读，放在锁里；`onCommand` 这类配置由测试在启动前设好。
 /// CuePadKit 的桥测试与 App 测试共用这一份：App 工程不同步这个目录，是直接引用这个文件，改名或挪位置要同时改工程文件。
 nonisolated final class FakeExtension: @unchecked Sendable {
-    /// 线上的模型对象（`provider`、`id`、`name`、支持的思考强度 `thinking`）
     struct WireModel: Sendable {
         var provider = "test"
         var id: String
         var name = "Test"
         var thinking: [String] = ["off"]
-        /// 看不看得了图；nil 是没报
         var images: Bool?
         var json: [String: Any] {
             var json: [String: Any] = ["provider": provider, "id": id, "name": name, "thinking": thinking]
@@ -44,7 +42,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var commands: [WireCommand] = []
         var sessionFile: String? = "/work/session.jsonl"
         var tty: String? = "ttys009"
-        /// CuePad 在后台托管的进程（hello 里带 `hosted`）
         var hosted = false
         var launchToken: String?
         var env: [String: String] = ["TERM_PROGRAM": "ghostty", "__CFBundleIdentifier": "com.mitchellh.ghostty",
@@ -61,7 +58,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         /// 收到的命令与此刻的状态存原样的 JSON 字节：字典里是 Any，不能交给锁，读的时候再解。
         var commands: [(connection: Int, line: Data)] = []
         var state = Data(#"{"kind":"idle"}"#.utf8)
-        /// 最后一轮开始的时刻（毫秒，扩展的 `turnSince`）
         var turnSince: Int?
     }
     private let shared = Mutex(Shared())
@@ -150,7 +146,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         source = src
     }
 
-    /// 只 bind 不 listen 后关闭：留下一个无人监听的 socket 文件（进程被强杀后的残留）。
     static func makeStaleSocket(at url: URL) throws {
         let fd = try boundSocket(at: url)
         chmod(url.path, 0o600) // 真实扩展总会 chmod，残留的也是 0600
@@ -242,12 +237,11 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         for conn in shared.withLock({ $0.connections }) { write(object, to: conn) }
     }
 
-    /// 发只带 `fields` 的 `info`（只带变了的几项，没带的不变；hello 才带全部）。
+    /// 只带变了的几项，没带的不变；hello 才带全部。
     func sendInfo(_ fields: [String: Any]) {
         broadcast(["t": "info"].merging(fields) { $1 })
     }
 
-    /// 发 `quota`：订阅额度的一次观测（`windows` 按线上格式：`seconds`、`used`、`resetsAt` 秒、可选 `model`、`binding`）。
     func sendQuota(provider: String, windows: [[String: Any]], complete: Bool, scope: String? = nil, status: String = "observed") {
         broadcast(["t": "quota", "provider": provider, "account": ["kind": "oauth", "scope": scope ?? "test-\(provider)"],
                    "status": status, "windows": windows, "complete": complete])
@@ -269,7 +263,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         broadcast(["t": "state", "state": s])
     }
 
-    /// 发 bye 后关闭全部连接并删除 socket 文件（扩展正常退出）。
     func close(bye reason: String) {
         broadcast(["t": "bye", "reason": reason])
         crash()
@@ -293,7 +286,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         for conn in open { conn.close() }
     }
 
-    /// 直接写任意一行到所有连接（协议损坏测试）
     func sendRaw(_ line: String) {
         for conn in shared.withLock({ $0.connections }) { conn.write(Data((line + "\n").utf8)) }
     }

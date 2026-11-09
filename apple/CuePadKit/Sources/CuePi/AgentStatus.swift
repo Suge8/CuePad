@@ -2,10 +2,9 @@
 import CueStore
 import Foundation
 
-/// Agent 报的版本（`--version` 输出里的第一个 `x.y.z`）。
 public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvertible {
     public var major: Int, minor: Int, patch: Int
-    /// 预发布标记（`0.2.1-rc.2` 的 `rc.2`；dsh 只发预发布版）：按 semver 排在同号正式版之前
+    /// dsh 只发预发布版，按 semver 排在同号正式版之前
     public var prerelease: String?
     public init(_ major: Int, _ minor: Int, _ patch: Int, prerelease: String? = nil) {
         self.major = major
@@ -14,7 +13,6 @@ public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvert
         self.prerelease = prerelease
     }
 
-    /// 从 `--version` 的输出里取第一个 `x.y.z[-预发布]`（容忍前缀 `v`）
     init?(parsing output: String) {
         guard let m = output.firstMatch(of: /(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/),
               let major = Int(m.1), let minor = Int(m.2), let patch = Int(m.3) else { return nil }
@@ -32,7 +30,6 @@ public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvert
         }
     }
 
-    /// semver 的预发布比较：逐段比，都是数字按数值、否则按字符；数字段排在字母段前，前段都相同时段少的在前。
     private static func precedes(_ a: [Substring], _ b: [Substring]) -> Bool {
         for (x, y) in zip(a, b) where x != y {
             switch (Int(x), Int(y)) {
@@ -46,32 +43,28 @@ public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvert
     }
 }
 
-/// 一个 Agent 在这台 Mac 上的情况，与 CuePad 写给它的文件——唯一的一份状态。
+/// 状态只有这一份。
 public struct AgentStatus: Sendable, Equatable {
     public enum Presence: Sendable, Equatable {
         case notFound
         /// 找到了它的程序，问版本时没有回应（机器很忙、程序卡住）：不知道装没装好，不当成没装
         case unresponsive
         case tooOld(AgentVersion)
-        /// 有版本要求的报出版本，其余为 nil
         case found(AgentVersion?)
     }
 
-    /// CuePad 写给它的文件（技能，加 Pi 的扩展或钩子配置，合起来算）。
     public enum Files: Sendable, Equatable {
         case missing
         case current
-        /// 是 CuePad 写的，但与这个版本的 App 要写的不同（旧版、缺一样、App 移动后路径变了）
         case outdated
-        /// 同名文件不是 CuePad 写的，不碰（参数是它的位置，`~` 缩写）
+        /// 参数是它的位置，`~` 缩写
         case foreign(String)
     }
 
     public var presence: Presence
     public var files: Files
-    /// 检测时挑中的可执行文件（`found` 时；只有配置目录、比如只装了桌面版时为 nil）：开会话、起大脑、问模型都用这一个，不另找。
+    /// 开会话、起大脑、问模型都用这一个，不另找。
     public var executable: URL?
-    /// 没装、而装它要先有的这台还没有（`AgentFacts.installPrerequisite`）：先装这个，官方脚本才跑得成。
     public var lacking: InstallPrerequisite?
 
     public init(presence: Presence, files: Files, executable: URL? = nil, lacking: InstallPrerequisite? = nil) {
@@ -82,7 +75,6 @@ public struct AgentStatus: Sendable, Equatable {
     }
 
     public var isAvailable: Bool { if case .found = presence { true } else { false } }
-    /// CuePad 的文件在（最新或待升级）：接入了。
     public var isConnected: Bool { files == .current || files == .outdated }
 }
 

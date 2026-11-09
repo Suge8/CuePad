@@ -11,11 +11,11 @@ import Foundation
 /// 量不到：推送到达本身、后台叫醒（模拟器上本机构建不带推送权限，系统不在后台叫起它）、拉取（Mac 上的替身手机量）、岛画到屏幕上。
 enum IslandBench {
     static func run(_ services: AppServices) async {
-        let defaults = DebugScene.defaults
-        guard defaults.string(forKey: "CuePadSyncBench") == "island",
+        let args = DebugScene.args
+        guard args.syncBench == "island",
               let library = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
         let marks = Marks(URL(filePath: library).appending(path: "bench-marks.jsonl"))
-        let rounds = defaults.integer(forKey: "CuePadSyncBenchRounds") > 0 ? defaults.integer(forKey: "CuePadSyncBenchRounds") : 10
+        let rounds = args.syncBenchOpts.rounds > 0 ? args.syncBenchOpts.rounds : 10
         let watcher = Task {
             for await activity in Activity<CueActivityAttributes>.activityUpdates {
                 marks.add("island-open")

@@ -6,9 +6,7 @@ import SQLite3
 import Synchronization
 import UniformTypeIdentifiers
 
-// Kit 与 App 的测试共用的支撑：临时库、独立 sqlite3 连接、测试图片、手动时钟、等待。
 
-/// 临时目录里的真实库文件（目录的清理见 `TestLibraries`）。
 public final class Fixture: @unchecked Sendable {
   public let directory = TestLibraries.makeDirectory()
   public var url: URL { directory.appending(path: "cuepad.db") }
@@ -30,7 +28,6 @@ public enum TestLibraries {
     return root.appending(path: "\(getpid())", directoryHint: .isDirectory)
   }()
 
-  /// 本次运行里一个新的空目录。
   public static func makeDirectory() -> URL {
     let directory = run.appending(path: UUID().uuidString, directoryHint: .isDirectory)
     try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -49,7 +46,6 @@ public enum TestLibraries {
 }
 
 
-/// 用独立的 sqlite3 连接直接读写库文件：构造并发场景、检查落盘格式。
 public struct RawDB {
   /// 升级验收从已发布的 90 布局起步；更早的用例再在其上还原各自的旧字段，不能只把新库的版本号拨低。
   public func restoreVersion90() throws {
@@ -63,6 +59,7 @@ public struct RawDB {
       ALTER TABLE deliveryRequests DROP COLUMN sessionBindingRevision;
       DROP INDEX piSessionStates_createdForTaskID;
       ALTER TABLE piSessionStates DROP COLUMN createdForTaskID;
+      ALTER TABLE attachments DROP COLUMN registeredHere;
       PRAGMA user_version = 90;
       """)
   }
@@ -81,7 +78,6 @@ public struct RawDB {
     }
   }
 
-  /// 每行每列按文本读出（NULL 为 "NULL"）。
   public func rows(_ sql: String) throws -> [[String]] {
     var handle: OpaquePointer?
     defer { sqlite3_close(handle) }
@@ -108,7 +104,6 @@ public struct RawDB {
   public func count(_ table: String) throws -> Int { Int(try rows("SELECT count(*) FROM \(table)")[0][0])! }
 }
 
-/// 纯色 PNG；`shade` 不同则字节不同。
 public func pngData(width: Int = 4, height: Int = 4, shade: CGFloat = 0.5) -> Data {
   let context = CGContext(
     data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
@@ -126,7 +121,6 @@ public func pngData(width: Int = 4, height: Int = 4, shade: CGFloat = 0.5) -> Da
 /// 这些等待取决于系统此刻多忙（机器很忙时一个进程起来要几十秒），用真钟就是和墙钟赛跑；真挂住由每个测试的统一时限报。
 public let noDeadline = ManualTiming().timing
 
-/// 手动推进的时钟：`now` 只在 `advance` 时前进，`sleep` 挂起到 `advance` 越过截止时间。
 public final class ManualTiming: Sendable {
   private struct State {
     var current: Date
@@ -182,7 +176,6 @@ public final class ManualTiming: Sendable {
     try await sleep(until: { $0.addingTimeInterval(duration.seconds) })
   }
 
-  /// 登记一个睡眠者，截止时刻由登记那一刻的 `current` 算出（按时长睡）或直接给定（睡到某一刻）。
   private func sleep(until deadline: @escaping @Sendable (Date) -> Date) async throws {
     let id = UUID()
     try await withTaskCancellationHandler {
@@ -244,7 +237,6 @@ public func quietPeriod(_ duration: Duration) async {
   try? await Task.sleep(for: duration)
 }
 
-/// 订阅读取直到条件成立（事件驱动，不轮询），到了上限抛 `TimedOut`。
 public func eventually<T: Sendable & Equatable>(
   _ store: CueStore, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
   until predicate: @escaping @Sendable (T) -> Bool

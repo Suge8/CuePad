@@ -1,7 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 回收站：删除的项目（连同其卡片）与单独删除的卡。左滑永久删除，右滑恢复。
 struct TrashScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -24,7 +23,6 @@ struct TrashScreen: View {
             }
         }
         .scrollContentBackground(.hidden)
-        // 空的时不写那一行：下面的空态已经说了
         .floatingHeader("回收站", detail: data.map { $0.isEmpty ? nil : Dotted(String(localized: "\($0.count) 项")) } ?? Dotted()) {
             // 圆钮一直在、没东西时置灰：顶栏的控件不随数据出现消失
             Button("清空", icon: .trash, role: .destructive) { confirmEmpty = true }

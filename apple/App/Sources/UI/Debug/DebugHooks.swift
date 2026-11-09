@@ -7,31 +7,23 @@ import AppKit
 /// 产品代码通往调试画面的唯一入口：截图验收的启动预设、性能打点与几处测量钩子都经这里，产品视图不认识 `DebugScene`、
 /// 也不写 `#if DEBUG`。Release 构建里预设全是空、钩子什么都不做（这个文件两种构建都编译，调试画面本身只在 Debug 里）。
 enum DebugHooks {
-    /// 截图验收的启动预设（`-CuePad…` 启动参数，见 `DebugScene`）：页面出现时按它摆好要拍的样子。
     struct Preset {
-        /// 搜索框预填的字（`-CuePadSearch`）。
         var searchText = ""
-        /// 编辑器载入后选中的一段（`-CuePadSelect`）。
         var editorSelection: NSRange?
-        /// 每一轮的经过、子代理名册与 Cue 页折起的动态一开始就展开（`-CuePadToolsOpen`）。
         var toolsOpen = false
-        /// 设置里的崩溃报告直接弹出（`-CuePadCrashSheet`）。
         var crashSheet = false
-        /// 演示 Mac 在本机库里接手发到 Mac 的话（`-CuePadDemoMac`）：隔离模式没有同步也送得到。
+        /// 演示 Mac 在本机库里接手发到 Mac 的话：隔离模式没有同步也送得到。
         var demoMac = false
         /// 说的话按同步一直通着算（`SpeechClock`）：演示 Mac 在本机库里接手、走 Cue 流程演示（`-CuePadCueFlow`）或摆 Cue 的话在路上（`-CuePadCuePresence sending`），又没装同步替身时（替身自己报通断，`-CuePadSync`）。
         var alwaysReachable = false
-        /// 回复框的模型菜单一出现就弹出（`-CuePadModelMenu`，Mac；菜单是独立窗口，截图另拍它）。
         var modelMenu = false
-        /// Cue 页的输入框一出现就聚焦（`-CuePadCueFocus`）。
         var cueFocus = false
-        /// 项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开（`-CuePadTasksOpen`）。
         var taskFold = TaskFold()
-        /// 整个窗口按"减弱动态效果"画（`-CuePadReduceMotion`，`PaletteProvider`）：验收时不碰系统设置。
+        /// 整个窗口按"减弱动态效果"画（`PaletteProvider`）：验收时不碰系统设置。
         var reducesMotion = false
-        /// 整个窗口按最大的辅助字号画（`-CuePadLargestType`，`PaletteProvider`）：同上，不碰系统设置。
+        /// 整个窗口按最大的辅助字号画，同上不碰系统设置。
         var largestType = false
-        /// 整个窗口按"增强对比度"画（`-CuePadHighContrast`，`PaletteProvider`）：同上，不碰系统设置。
+        /// 整个窗口按"增强对比度"画，同上不碰系统设置。
         var highContrast = false
         /// 当作读屏开着（`-CuePadReader YES`）：只给提示条，与真开着旁白同一条路（`NoticeCapsule`），模拟器的旁白没有设置开关、Mac 上那是用户的全局设置。
         var readerOn = false
@@ -42,28 +34,18 @@ enum DebugHooks {
         /// 指针停这么久后移开（`-CuePadHoverSeconds <秒>`，从那一块出现起算）：录悬停停表、移开重新计满。不给是一直停着。
         var hoverSeconds: Double?
         #endif
-        /// 进展页已完成列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false
-        /// Cue 此刻钉成这一份样例（`-CuePadCueNow <样例>`，`CueNowSamples`）：页头、侧栏、小组件与实时活动都按它画，截各态用。
         var cueNow: CueNow?
-        /// 额度环一出现就展开明细（`-CuePadQuotaOpen YES`：手机进展页顶栏、Mac 侧栏）。
         var quotaOpen = false
-        /// 问号的说明一出现就点开（`-CuePadHelpOpen YES`：页顶与导航栏里的问号，`HelpButton`、`BarHelpButton`）。
         var helpOpen = false
-        /// 定时一出现就原地展开改（`-CuePadScheduleOpen YES`）：任务气泡里那一条、定时页新定时的几点。
         var scheduleOpen = false
-        /// 规则的文件页一打开就是合并前标出会并进来的段（`-CuePadMergePreview YES`）。
         var mergePreview = false
-        /// 技能与规则页一打开在哪一段（`-CuePadLibraryTab skills`，两端的 library 场景设给 `Workspace.libraryPane`）。
         var libraryPane = LibraryPane.rules
         #if os(iOS)
-        /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
+        /// 设置页通知那一行显示的状态：演示模式没有同步，真实状态出不来。
         var alertStatus: PiAlertStatus?
-        /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
         var searchScope = SearchScope.cards
-        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`）。
         var cuePanelOpen = false
-        /// 不弹演示会话的前台横幅（`-CuePadQuiet YES`）。
         var quietAlerts = false
         #endif
     }
@@ -97,7 +79,7 @@ enum DebugHooks {
     /// 同步测量里代替手机的实例按手机开着 Agent 页的节奏拉（`-CuePadSyncBench remote`，见 `SyncBench`）。
     static var pollsLikePhone: Bool {
         #if DEBUG && os(macOS)
-        DebugScene.defaults.string(forKey: "CuePadSyncBench") == "remote"
+        DebugScene.args.syncBench == "remote"
         #else
         false
         #endif
@@ -106,7 +88,7 @@ enum DebugHooks {
     /// 隔离库下这台 Mac 的标识换成 `-CuePadHost <名>`：同一台机器上开两个隔离实例当两台 Mac（同步测量）。nil：用硬件标识。
     static var hostID: String? {
         #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadHost").map { "mac-\($0)" }
+        DebugScene.args.host.map { "mac-\($0)" }
         #else
         nil
         #endif
@@ -115,7 +97,7 @@ enum DebugHooks {
     /// 隔离库下 Cue 的大脑换成 `-CuePadCueBrain <可执行文件>`：隔离目录里没有登录的运行时，真的大脑起不来。nil：用检测挑中的。
     static var cueBrain: URL? {
         #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadCueBrain").map { URL(filePath: $0) }
+        DebugScene.args.driveOpts.cueBrain.map { URL(filePath: $0) }
         #else
         nil
         #endif
@@ -125,7 +107,7 @@ enum DebugHooks {
     /// 实例也不碰真实的 `~/.codex`。nil：向检测到的 Codex 要。
     static var voiceToken: URL? {
         #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadVoiceToken").map { URL(filePath: $0) }
+        DebugScene.args.voiceOpts.token.map { URL(filePath: $0) }
         #else
         nil
         #endif
@@ -135,7 +117,7 @@ enum DebugHooks {
     /// 像一台什么都没装的 Mac。给一个空目录就是一家都没装；点"安装"真去跑官方脚本，装进这个目录，不碰真实的家目录。
     static var agentHome: URL? {
         #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadAgentHome").map { URL(filePath: $0, directoryHint: .isDirectory) }
+        DebugScene.args.agentHome.map { URL(filePath: $0, directoryHint: .isDirectory) }
         #else
         nil
         #endif
@@ -144,7 +126,7 @@ enum DebugHooks {
     /// 脚本起的实例也像正式版那样首次打开时请工作区决定弹不弹接入面板（`-CuePadOfferSetup YES`，同一个 `Workspace.offerSetup`）：验收第一次打开与老用户升级后自动弹的那一次。
     static var offersSetup: Bool {
         #if DEBUG
-        DebugScene.defaults.bool(forKey: "CuePadOfferSetup")
+        DebugScene.args.offerSetup
         #else
         false
         #endif
@@ -156,7 +138,7 @@ enum DebugHooks {
     enum ActsAs: String { case development, stranger }
     static var actsAs: ActsAs? {
         #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadActsAs").flatMap(ActsAs.init)
+        DebugScene.args.actsAs.flatMap(ActsAs.init)
         #else
         nil
         #endif
@@ -227,7 +209,6 @@ enum DebugHooks {
         #endif
     }
 
-    /// 性能打点：某件事出现了（`interact` 等它、量到它用了多久，见 `PerfProbe`）。
     static func mark(_ event: String) {
         #if DEBUG
         PerfProbe.mark(event)
@@ -247,10 +228,14 @@ enum DebugHooks {
     /// 输入框里选的附件存进附件目录之前停多久：`-CuePadImportDelay <秒>` 把"附件还在存"拉长到能在界面上看见（配 `-CuePadSpeech press`）。
     static func importDelay() async {
         #if DEBUG
-        let seconds = DebugScene.defaults.double(forKey: "CuePadImportDelay")
-        if seconds > 0 { try? await Task.sleep(for: .seconds(seconds)) }
+        if importDelaySeconds > 0 { try? await Task.sleep(for: .seconds(importDelaySeconds)) }
         #endif
     }
+
+    #if DEBUG
+    /// `importDelay` 停的秒数：启动时取 `-CuePadImportDelay`；测试在进程里改它（不碰偏好域）。
+    static var importDelaySeconds = DebugScene.args.driveOpts.importDelay
+    #endif
 
     /// "对 Cue 说"的输入框或会话回复框（`session`）出现时：`-CuePadSpeech press` 在它出现 3 秒后按一下它的发送钮
     /// （`press` 就是点按发送钮做的事），录屏看发出的那一下。
@@ -276,11 +261,10 @@ enum DebugHooks {
     }
     #endif
 
-    /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
     /// 隔离库下也要通知权限、发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
     static var deliversNotifications: Bool {
         #if DEBUG
-        DebugScene.defaults.bool(forKey: "CuePadNotifications")
+        DebugScene.args.notifications
         #else
         false
         #endif
@@ -289,7 +273,7 @@ enum DebugHooks {
     /// 隔离库下也开实时活动（`-CuePadLiveActivity YES`，见 `AppServices.cueActivity`）：验收锁屏与灵动岛时用，用完结束掉。
     static var opensLiveActivity: Bool {
         #if DEBUG
-        DebugScene.defaults.bool(forKey: "CuePadLiveActivity")
+        DebugScene.args.liveActivity
         #else
         false
         #endif
@@ -305,7 +289,7 @@ enum DebugHooks {
     /// 量的时候（`-CuePadBench`）报 `BENCH-ERR` 一行，其余脚本实例同 `DebugScene.abandon`，都以 1 退出。
     static func libraryFailed(_ failure: LibraryFailure) {
         #if DEBUG
-        if DebugScene.defaults.string(forKey: "CuePadBench") != nil {
+        if DebugScene.args.driveOpts.bench != nil {
             print("BENCH-ERR 资料库没能打开：\(failure.reason)")
             fflush(stdout)
             exit(1)
@@ -330,7 +314,6 @@ enum DebugHooks {
         #endif
     }
 
-    /// 退出前把借走的前台与指针还回去（`DebugForeground`）。
     static func willTerminate() {
         #if DEBUG
         DebugForeground.giveBack()

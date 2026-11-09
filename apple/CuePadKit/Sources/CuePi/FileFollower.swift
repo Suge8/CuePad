@@ -14,8 +14,7 @@ extension URL {
     }
 }
 
-/// 盯一组文件（kqueue，当场）：每次写入、追加时流里出现它的路径。还没建出来的（Pi 第一条回答落盘前不建会话文件，连所在目录也可能还没有）
-/// 盯最近的已存在上层目录，一级级往下，建出来时切过去并报一次；被删或换掉后盯同一路径上的新文件。
+/// 还没建出来的（Pi 第一条回答落盘前不建会话文件，连所在目录也可能还没有）盯最近的已存在上层目录，一级级往下，建出来时切过去并报一次；被删或换掉后盯同一路径上的新文件。
 /// 不用 FSEvents：fseventsd 转发的事件实测中位晚 3 秒、负载高时晚到 5 分多钟，几次写并成一次，开着写的文件只在关闭时报。
 /// 一个文件一个文件描述符（App 启动时放宽了上限）。
 final class FileFollower: Sendable {
@@ -43,7 +42,6 @@ final class FileFollower: Sendable {
     private final class Core: @unchecked Sendable {
         let continuation: AsyncStream<String>.Continuation
         let queue = DispatchQueue(label: "cuepi.follow")
-        /// 每个要盯的文件一个源：文件在时盯文件本身，还没建出来时盯最近的已存在上层目录
         private var files: [String: DispatchSourceFileSystemObject] = [:]
         private var stopped = false
 
@@ -67,13 +65,11 @@ final class FileFollower: Sendable {
             continuation.finish()
         }
 
-        /// 先报告当前路径，之后只随文件事件报告。
         private func descend(_ path: String) {
             _ = arm(path)
             continuation.yield(path)
         }
 
-        /// 盯上一个文件，返回盯上的是不是文件本身。
         private func arm(_ path: String) -> Bool {
             files.removeValue(forKey: path)?.cancel()
             guard !stopped else { return false }

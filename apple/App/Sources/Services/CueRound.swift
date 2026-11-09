@@ -3,8 +3,7 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// Cue 的一轮经过：为什么醒、交给大脑的话、调了哪些工具（参数、结果、耗时）、出没出错、做完时上下文用了多少。
-/// 只来自大脑的事件，只在值班这台 Mac 的内存里（`CueKeeper.rounds`）：大脑不落会话，这是唯一的事实源。Mac 的"运行情况"读它的全部；
+/// 只来自大脑的事件，只在值班这台 Mac 的内存里（`CueKeeper.rounds`）：大脑不落会话，这是唯一的事实源。
 /// 给人看的那一份由它推出（`process`），写在对话里这一轮开始的位置那一行上（`row`），随库同步到各端。
 struct CueRound: Identifiable {
     let id: Int
@@ -17,7 +16,6 @@ struct CueRound: Identifiable {
     var finishedAt: Date?
     /// 这一轮报的错（原文）；大脑中途退出也记在这里
     var failure: String?
-    /// 做完时上下文用了多少 token
     var context: Int?
     /// 这一轮的经过在对话里的那一行（`CueStore.recordCueRound`）：Cue 自己醒来的一轮醒来就有，你发起的还没调过工具时没有
     var row: UUID?
@@ -45,7 +43,6 @@ struct CueRound: Identifiable {
     }
 }
 
-/// 一轮里的一次工具调用：名字与参数是大脑报的原样（`TurnEvent.tool`）。
 struct CueToolCall: Identifiable {
     let id: String
     let name: String
@@ -60,7 +57,6 @@ struct CueToolCall: Identifiable {
     var finishedAt: Date?
     var result: String?
     var failed = false
-    /// 做完后在经过清单里的那一条（`CueActivity.item`）
     var item: PiChatMessage.Tools.Item?
 }
 #endif

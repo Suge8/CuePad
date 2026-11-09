@@ -50,8 +50,6 @@ struct CuePage: View {
             }
     }
 
-    // MARK: 平台
-
     #if os(macOS)
     private var page: some View {
         HStack(spacing: 0) {
@@ -94,8 +92,6 @@ struct CuePage: View {
 
     private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.chatInset : 0 }
 
-    // MARK: 对话
-
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/layout.md）。
     /// 还没说过话时正中是首次见面（`CueWelcome`：自我介绍，没启用时连同启用那一步，启用了接几句能直接说的话）。
     @ViewBuilder private var chat: some View {
@@ -120,7 +116,7 @@ struct CuePage: View {
             followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
             holding: catchingUp || docking,
-            arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueSwapsInPlace) ? $0.id : nil },
+            arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueOnDutyHere) ? $0.id : nil },
             docked: CueWaitDock.current(in: thread.waiting, asking: workspace.cueAsking)?.id
         ) { window in
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
@@ -160,8 +156,6 @@ struct CuePage: View {
             self.live = live
         }
     }
-
-    // MARK: 底部
 
     /// 拍板卡、停用时的启用与原输入框。
     private func bottom() -> some View {

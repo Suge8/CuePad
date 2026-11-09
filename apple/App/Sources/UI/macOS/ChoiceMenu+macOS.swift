@@ -1,11 +1,8 @@
 #if os(macOS)
 import AppKit
 
-/// 回复框的选择菜单（内容见 `ChoiceMenu`）：点模型胶囊与 ⌘⇧M 弹模型、⌘⇧E 弹思考强度。系统菜单弹在控件下沿，方向键选、↩ 确认、Esc 关。
 /// 用 AppKit 的菜单：SwiftUI 的 `Menu` 没有从代码打开的接口，在 Mac 上还会丢掉菜单项里的图片。
-/// 分组标题与选项可带标志（提供方的产品、模型的家族）：符号是模板图，菜单按文字的颜色画，高亮时随文字反白。
 extension ChoiceMenu {
-    /// 弹在 `anchor`（控件背景里的空视图，`PopUpAnchor`）下沿。
     static func popUp(_ sections: [Section], below anchor: NSView) {
         let menu = NSMenu()
         for (index, section) in sections.enumerated() {

@@ -1,7 +1,6 @@
 #if os(macOS)
 import SwiftUI
 
-/// 会话条「项目」的去处：共用项目目录，新建在主区栏头，归档与回收站紧邻列表组头。
 struct ProjectShelf: View {
     @Environment(Workspace.self) private var workspace
 

@@ -3,8 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话页对话的规则（iOS 会话页、Mac 会话详情共用）：消息怎么排、每轮回答上方的经过怎么写、发出的话什么时候是气泡、
-/// 什么时候请 Mac 补写对话。
 struct PiChatTests {
     let start = Date(timeIntervalSince1970: 1_000_000)
 
@@ -26,8 +24,7 @@ struct PiChatTests {
         #expect(entries.map(\.role) == [.user, .notice(.stopped), .user, .notice(.declined), .notice(.compacted)])
     }
 
-    /// 发出的话在对话里出现之前是气泡，出现之后不再显示。对话只来自会话文件：作答与斜杠命令不是"你发出的话"，不挂气泡
-    /// （/compact、/name、/reload 在会话文件里没有带请求 id 的用户消息，挂了就永远换不掉）。
+    /// /compact、/name、/reload 在会话文件里没有带请求 id 的用户消息，作答与斜杠命令挂了气泡就永远换不掉。
     @Test func 发出的话在对话里出现之前是气泡_出现之后不再显示_作答与斜杠命令不是气泡() async throws {
         let app = TestApp()
         let store = app.services.store
@@ -43,8 +40,6 @@ struct PiChatTests {
         #expect(shown.map(\.id) == [waiting.id])
     }
 
-    /// 没送到的话在列表行与会话页是同一个数（会话列表查询带出的 `undelivered`）：列表那一行先是"没能送达"的出错状态，
-    /// 看过以后不再整行出错，但只要那几句还没重发或移除，行上留一个小标记；会话页顶栏一直写"N 句没送到"。
     @Test func 没送到的话_看过以后行上仍留标记_与会话页同一个数() async throws {
         let app = TestApp()
         let store = app.services.store

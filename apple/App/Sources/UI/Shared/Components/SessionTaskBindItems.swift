@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 会话页的纯关联菜单，三端共用同一份 Store 候选与当前关联；历史用过的任务不显示为当前关联。
 struct SessionTaskBindItems: View {
     let session: PiSessionState
     let link: SessionTaskLink

@@ -5,7 +5,7 @@ import CuePi
 extension DebugHooks {
     static func makeVoiceCall(_ dependencies: VoiceCall.Dependencies) -> VoiceCall {
         #if DEBUG
-        if DebugScene.defaults.string(forKey: "CuePadVoiceLayout") != nil {
+        if DebugScene.args.voiceOpts.layout != nil {
             var dependencies = dependencies
             dependencies.access = {
                 let payload = Data(#"{"exp":4102444800,"https://api.openai.com/auth":{"chatgpt_account_id":"isolated-layout"}}"#.utf8).base64EncodedString()

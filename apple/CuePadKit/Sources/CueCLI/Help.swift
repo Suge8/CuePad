@@ -48,14 +48,12 @@ enum Help {
   }
 }
 
-/// 各命令 --help 里的输出说明：字段名的唯一定义处（测试比对它与实际 JSON 的键）。
 enum Schema {
-  static let project = "Project {id, name, intro, icon, color, pinned, directory, cardCount, createdAt, modifiedAt}（cardCount 是顶层灵感数）"
-  static let card = "Card {id, kind, status, projectId, project, parentId, body, pinned, conflictOf, startedAt, completedAt, archivedAt, deletedAt, createdAt, modifiedAt}（kind：idea 灵感、task 任务；status 只有任务有：todo 待办、inProgress 进行中（startedAt 有值；子任务推进时上级也开始，回到待办后，已完成的子任务不会让上级重新变为进行中）、done 完成；parentId 是上级任务，顶层为 null，挂在任务下的任务是子任务；pinned 为 true 是项目里置顶的灵感）"
-  static let search = "Search {total, projects, cards}"
-  static let conflict = "Conflict {original, copy}"
+  static let project = ProjectView.fields.description("Project") + "（cardCount 是顶层灵感数）"
+  static let card = CardView.fields.description("Card") + "（kind：idea 灵感、task 任务；status 只有任务有：todo 待办、inProgress 进行中（startedAt 有值；子任务推进时上级也开始，回到待办后，已完成的子任务不会让上级重新变为进行中）、done 完成；parentId 是上级任务，顶层为 null，挂在任务下的任务是子任务；pinned 为 true 是项目里置顶的灵感）"
+  static let search = SearchOutput.fields.description("Search")
+  static let conflict = ConflictOutput.fields.description("Conflict")
 
-  /// `shape` 是顶层形状，`types` 是它用到的对象定义。
   static func output(_ shape: String, _ types: String...) -> String {
     "输出（--json）：\(shape)\n" + types.map { "  \($0)" }.joined(separator: "\n")
       + "\n  id 是小写 UUID；时间是 UTC ISO 8601 含毫秒；没有值是 null。"
@@ -65,7 +63,6 @@ enum Schema {
     "默认范围：省略时用绑定了当前目录（或其上层目录）的项目；没有则\(fallback)。"
   }
 
-  /// 新建时没有项目可用的落点。
   static let defaultTarget = "进默认项目（id 固定，名字可改）"
 }
 

@@ -9,7 +9,7 @@ import Foundation
 enum DebugPhoneVoiceReplay {
     /// 在写投影之前换上媒体所有者（同正式的 start）：所有者不在观察里，先写投影的话读能否静音的视图不会按它重算。
     static func attach(_ voice: VoiceService, workspace: Workspace, session: VoiceSessionID) {
-        guard let mode = DebugScene.defaults.string(forKey: "CuePadPhoneVoiceReplay") else { return }
+        guard let mode = DebugScene.args.phoneVoiceOpts.replay else { return }
         if mode == "cycle" || mode == "reverse" {
             Task {
                 do { try await mode == "cycle" ? cycle(voice, workspace: workspace) : reverse(voice, workspace: workspace) }

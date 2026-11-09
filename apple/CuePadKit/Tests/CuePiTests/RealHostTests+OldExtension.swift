@@ -3,7 +3,6 @@ import Foundation
 @testable import CuePi
 
 extension RealHostTests {
-    /// 读不懂托管约定的旧扩展：旧到 CuePad 读不懂的（`PiWire.oldestExtension` 之前），与把 `CUEPAD_HOSTED` 当作 "1" 来认的（CuePad 读得懂）。
     enum OldExtension: CaseIterable, Sendable {
         case unreadable, oldHostedValue
 

@@ -5,7 +5,6 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 回复框选了附件、还在存（大文件要读一遍算哈希）时就发送：附件随这句发出，不丢，也不落进下一条草稿。
 struct AttachmentImportTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -61,11 +60,10 @@ struct AttachmentImportTests {
         #expect(CueFormat.attachmentKeys(in: said.text).count == 1 && draft.files.isEmpty)
     }
 
-    /// 先发带慢附件的 A、紧接着发 B：库里的先后仍是 A、B。
     @Test func 带慢附件的先发_后发的不抢在前面落库() async throws {
         let workspace = Workspace(services: app.services)
-        DebugScene.defaults.set(1.0, forKey: "CuePadImportDelay")
-        defer { DebugScene.defaults.removeObject(forKey: "CuePadImportDelay") }
+        DebugHooks.importDelaySeconds = 1
+        defer { DebugHooks.importDelaySeconds = 0 }
         let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).txt")
         try Data(repeating: 2, count: 1000).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
@@ -83,7 +81,6 @@ struct AttachmentImportTests {
         #expect(said == ["A", "B"], "落库顺序：\(said)")
     }
 
-    /// 只选了存不进去的附件就记下：不建空灵感。
     @Test func 附件都没存成_随手记不建空灵感() async throws {
         let workspace = Workspace(services: app.services)
         let before = try await store.cards(in: Project.defaultID).count

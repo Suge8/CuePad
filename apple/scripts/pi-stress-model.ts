@@ -1,5 +1,5 @@
 // 布局压力场景用的离线假模型（scripts/pi-real-churn.py 加载）：零网络、结果确定。
-// 最后一条用户消息里的标记决定行为：[[slow]] 先等 1.5 秒（制造"思考中"窗口），[[fail]] 以出错结束，其余回一句 OK。
+// 最后一条用户消息里的 [[slow]] 先等 1.5 秒，制造"思考中"窗口。
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };

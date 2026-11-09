@@ -4,7 +4,6 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// peek 一件事：每个叶子最新的那条回答给全文（至多 4000 字，超了留开头的结论与结尾的证据、截掉中间并注明），更早的截短。
   @Test func peekGivesTheLatestReplyInFull() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -30,7 +29,6 @@ extension MCPTests {
     }
   }
 
-  /// 几步接着用同一个会话：peek 只在最后用它的那一步下面列会话与问答，前面的步骤写"会话同后面的一步"，同一段问答不重复。
   @Test func stepsSharingASessionListItOnce() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -53,7 +51,6 @@ extension MCPTests {
     }
   }
 
-  /// 不带 task 的 peek 是看板：所有没做完的事，按项目分组，做完的不列；太多时只列 60 行，说还有几件。
   @Test func cueSeesEveryOpenTaskGroupedByProject() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -76,7 +73,6 @@ extension MCPTests {
     }
   }
 
-  /// 看板上一件事的近况取在做的那一步；子任务都做完、整件事还没收尾时取最后做完的那一步（它的会话是最新的进展），不落回第一步。
   @Test func theBoardShowsTheStepLastWorkedOn() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store

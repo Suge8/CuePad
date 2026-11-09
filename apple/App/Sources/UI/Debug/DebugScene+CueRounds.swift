@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 
 extension DebugScene {
-    // 每一轮的经过（同值班的管理器写下的样子，`CueActivity.item`）：碰到的任务与会话带着名字与 id，点它去那里
     static func step(
         _ kind: PiChatMessage.Tools.Kind, _ target: String, _ task: Card? = nil, session: String? = nil
     ) -> PiChatMessage.Tools.Item {
@@ -18,12 +17,12 @@ extension DebugScene {
     }
     static func stirred(_ kind: CueChange.Kind, _ session: String) -> CueWake { .sessionActivity([CueStir(kind: kind, session: session)]) }
 
-    /// `-CuePadCuePresence` 各档在公共对话之上再写的那一段。
     static func seedPresence(
         _ presence: String?, store: CueStore, asked: CueMessage, order: Card?, panel: Card?, importing: Card?, context: CueContext,
         you: (String) async throws -> Void
     ) async throws {
         switch presence {
+        // 你答了"等你"后又说了一句、Cue 跑了一轮回了两句
         case "answered":
             _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once))
             try await you(String(localized: "顺便看看登录回调那个超时", table: "Demo"))
@@ -46,8 +45,8 @@ extension DebugScene {
                 step(.read, String(localized: "看板", table: "Demo")), step(.search, String(localized: "登录回调 超时", table: "Demo")), step(.add, String(localized: "建任务「登录回调超时」", table: "Demo"), login), step(.start, String(localized: "开工「登录回调超时」", table: "Demo"), login),
                 step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing), step(.leave, String(localized: "「notes」留给你回", table: "Demo"), session: "notes")))
             try await store.setDemoCueState(.tool, step: .init(kind: .talk, name: login.heading, task: login.id), round: row, context: context)
+        // Cue 自己醒来的一轮还在跑
         case "woke":
-            // Cue 自己醒来的一轮还在跑：叫醒它的那一行下面挂这一轮的经过（碰到 4 处，连同在跑那一行至多 4 行），末行是此刻在做的
             let row = try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: process(
                 step(.read, String(localized: "看「发言轮次乱序」的近况", table: "Demo"), order), step(.talk, String(localized: "对「发言轮次乱序」说：重连用例补完把测试全跑一遍", table: "Demo"), order),
                 step(.edit, String(localized: "改「导入旧数据」", table: "Demo"), importing), step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing),
@@ -56,12 +55,13 @@ extension DebugScene {
             try await store.setDemoCueState(.tool, step: .init(kind: .stop, name: "billing", session: PiSessionState.recordID(sessionID: "billing")), round: row, context: context)
         case "sending":
             _ = try await store.addCueMessage(.you, text: String(localized: "顺便看看登录回调那个超时", table: "Demo"))
+        // 你说去睡了，一夜里 Cue 陆续说了几句
         case "away":
             _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once))
             try await you(goingAway)
             try await seedAway(store)
+        // 演示 Mac 不在线、两分钟前说的话一直没交出去
         case "asleep":
-            // 两分钟前说的、一直没交出去（之前的对话挪得更早）
             try await store.seedAgeCueMessages(by: 480)
             _ = try await store.addCueMessage(.you, text: String(localized: "顺便看看登录回调那个超时", table: "Demo"))
             try await store.seedAgeCueMessages(by: 120)

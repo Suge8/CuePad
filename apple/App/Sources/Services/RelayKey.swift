@@ -28,11 +28,8 @@ struct RelayCredentials: Sendable {
 }
 
 enum RelayError: LocalizedError {
-    /// 中转没按协议回（握手的帧不对）。
     case unexpectedFrame
-    /// `Relay.handshakeLimit` 内没连上、入房。
     case handshakeTimeout
-    /// 心跳没有回应。
     case silent
 
     var errorDescription: String? {

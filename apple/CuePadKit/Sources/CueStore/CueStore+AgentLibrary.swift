@@ -1,8 +1,7 @@
 import Foundation
 
 extension CueStore {
-  /// 这台 Mac 写下自己的技能与规则：快照（`modifiedAt` 不看，和库里的一样就不写）与各份文件的正文（`texts`，路径 → 正文；
-  /// 只写内容变了的，这台的、不在 `texts` 里的删掉），同一个事务。返回写了与删了的记录 id（立即上传用）。
+  /// 快照和库里的一样就不写；各份文件的正文只写内容变了的，这台的、不在 `texts` 里的删掉，同一个事务。返回写了与删了的记录 id（立即上传用）。
   @discardableResult
   public func recordAgentLibrary(_ library: AgentLibrary, texts: [String: String]) throws -> [UUID] {
     try write {
@@ -37,7 +36,6 @@ extension CueStore {
     return try select(AgentLibrary.self, orderBy: "modifiedAt DESC").first
   }
 
-  /// `host` 那台 Mac 上这几份文件此刻同步来的正文（路径 → 正文）；还没到的不在里面。
   public func agentLibraryTexts(host: String, paths: [String]) throws -> [String: String] {
     let ids = JSONColumn.encode(paths.map { LibraryFileText.recordID(host: host, path: $0).uuidString.lowercased() })
     let rows = try select(LibraryFileText.self, where: "id IN (SELECT value FROM json_each(?))", [ids])

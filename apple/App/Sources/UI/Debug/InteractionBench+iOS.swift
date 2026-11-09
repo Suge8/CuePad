@@ -63,7 +63,7 @@ enum IOSInteractionBench {
             write("FAIL " + reason)
             exit(1)
         }
-        let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
+        let only = DebugScene.args.driveOpts.interactOnly.map { Set($0.split(separator: ",").map(String.init)) }
         func wants(_ name: String) -> Bool { only?.contains(name) ?? true }
         func row(_ row: [String: Any]) { write(jsonLine("INTERACT", row)) }
         /// `finger`：请测量脚本真按或真滑（`Finger`），从手指按下起量；不给时从 `action` 发出起量。
@@ -162,7 +162,7 @@ enum IOSInteractionBench {
 
     /// 粘贴进来的一大段：仿诊断 JSON（嵌套的调用栈帧，约 850 行、66 KB），或 `-CuePadPasteFile <路径>` 那个文件。
     private static var pasted: String {
-        if let path = UserDefaults.standard.string(forKey: "CuePadPasteFile") {
+        if let path = DebugScene.args.pasteFile {
             do {
                 return try String(contentsOfFile: path, encoding: .utf8)
             } catch {

@@ -3,7 +3,6 @@ import AppKit
 import SwiftUI
 
 extension PiConfigControls {
-    /// 弹出选择菜单（点模型胶囊与键盘共用）：模型菜单（`PiModelMenu`）；思考强度是可选的档。
     func open(_ pick: PiConfigPick) {
         guard let anchor = anchors[pick]?.view else { return }
         switch pick {
@@ -17,7 +16,6 @@ extension PiConfigControls {
     }
 }
 
-/// 键盘弹出的菜单贴着的控件：控件背景里一个空的 AppKit 视图，菜单按它的位置弹出。
 final class PopUpAnchor {
     weak var view: NSView?
 }

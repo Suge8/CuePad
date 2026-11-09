@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43 复审：从回复框提交命令，明确拒绝与结果未确认分别展示；后来有对话或新请求时收起。
 @MainActor
 struct CommandProgressTests {
     let app = TestApp()

@@ -3,8 +3,6 @@ import AppKit
 import CueStore
 import SwiftUI
 
-/// 设置窗口的两页，工具栏上一排标签切换（同系统各应用的设置窗口），按要紧排：
-/// 通用（Cue 的名字与在哪台运行、iCloud、通知、外观与快捷键、登录时打开与更新）、Agent（接入哪几家与 cuepad 命令，接好就很少再来）。
 enum SettingsPane: String, CaseIterable {
     case general, agents
 
@@ -22,14 +20,11 @@ enum SettingsPane: String, CaseIterable {
         }
     }
 
-    /// 打开设置窗口；给了 `pane` 就翻到那一页，否则停在上次那一页。
     static func open(_ pane: SettingsPane? = nil) {
         NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: pane)
     }
 }
 
-/// 设置窗口的一页：只放会主动去改的与几样连接各一行状态。每一行都是 `SettingRow`；有事时那一行变色、状态后面给解决链接，
-/// 细节在链接弹出的框里（`SettingPopover`），窗口本身不长出段落。窗口高度随这一页的内容、不滚动；回复框的快捷键在主菜单"回复"里，这里不重复。
 struct SettingsView: View {
     let pane: SettingsPane
     @Environment(\.palette) private var palette
@@ -39,7 +34,6 @@ struct SettingsView: View {
             form
         }
         .frame(width: 520)
-        // 与主窗口同一种桌面色，不用系统的白底
         .background(palette.desk)
     }
 
@@ -73,7 +67,6 @@ private struct WholePointHeight: Layout {
     }
 }
 
-/// 通用那一页：Cue（`CueSettingsSection`）、iCloud 同步（与冲突）、通知、外观与两个全局快捷键、登录时打开与更新（与上次崩溃）。
 private struct GeneralSections: View {
     @Environment(AppServices.self) private var services
     /// "对 Cue 说"的快捷键（调试画面里没有）。
@@ -84,7 +77,7 @@ private struct GeneralSections: View {
         Section {
             SyncRow()
             // 空间满只停附件，不进同步那一行的状态
-            if services.syncFilesOverQuota {
+            if services.syncState.filesOverQuota {
                 SettingRow(title: "附件", icon: Image(.syncPaused), tone: .notice, status: Dotted(FileStatus.overQuota)) { EmptyView() } fix: { EmptyView() }
             }
             if !services.conflicts.isEmpty { ConflictsRow() }
@@ -100,15 +93,13 @@ private struct GeneralSections: View {
         }
         Section {
             if let report = services.diagnostics.latest { CrashRow(report: report) }
-            // 登录项按 bundle id 记、与正式版共用：不碰真实世界的实例（xc.sh 起的、装着正式版时的本机构建）不给开关
             if services.location.touchesRealWorld { LoginItemRow() }
             UpdateRow()
         }
     }
 }
 
-/// 一个全局快捷键（显示/隐藏 CuePad、对 Cue 说）：点键帽后按下新的组合键，Esc 取消；注册失败时保留原快捷键，原因写在名称下面。
-/// 快捷键那一格：指针停在上面（`buttonHovered`）时左边露出"更改"（占着位置、只是透明，露出时键帽不挪）。
+/// 指针停在上面（`buttonHovered`）时左边露出"更改"：占着位置、只是透明，露出时键帽不挪。
 private struct ShortcutKey: View {
     let text: String
     let recording: Bool
@@ -185,8 +176,7 @@ private struct ShortcutRow: View {
     }
 }
 
-/// 通知：系统权限没开时先一行（没决定过给"开启"，拒绝了给"打开系统设置"；开着就不占一行，横幅样式本来就在系统设置里），
-/// 再是三种提示（`AlertRoute.kind`）各一行：开关与提示音（选中即试听一次）。关掉一种 = 它的横幅与声音都没有。
+/// 系统权限开着就不占一行：横幅样式本来就在系统设置里。
 private struct NotificationSection: View {
     let alerts: AlertCenter
     @Environment(AppServices.self) private var services
@@ -245,7 +235,6 @@ private struct NotificationSection: View {
 enum ShortcutText {
     private static let symbols = ["Control": "⌃", "Alt": "⌥", "Shift": "⇧", "Super": "⌘"]
 
-    /// `Alt+Space` → `⌥ Space`，`Super+KeyK` → `⌘K`。
     static func display(_ accelerator: String) -> String {
         let parts = accelerator.split(separator: "+").map(String.init)
         guard let key = parts.last else { return accelerator }
@@ -255,7 +244,6 @@ enum ShortcutText {
     }
 }
 
-/// 上次崩溃：要你注意的一行，"查看"弹出摘要与导出（启动参数 `-CuePadCrashSheet` 时一打开就弹）。
 private struct CrashRow: View {
     let report: CrashReport
     @State private var showing = DebugHooks.preset.crashSheet
@@ -274,8 +262,7 @@ private struct CrashRow: View {
     }
 }
 
-/// 冲突副本：同一张卡在两台设备上离线改过。行里只说有几条，"选一份…"弹出两个版本上下并排，选一份保留、另一份删除
-/// （不叫"处理…"：同步要你决定时 iCloud 那一行也有"处理…"，同一屏两个同名链接分不清）。
+/// 不叫"处理…"：同步要你决定时 iCloud 那一行也有"处理…"，同一屏两个同名链接分不清。
 private struct ConflictsRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette

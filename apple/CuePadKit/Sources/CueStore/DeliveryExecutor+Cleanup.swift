@@ -1,6 +1,5 @@
 import Foundation
 
-/// 完成请求的定时清理（保留期规则见 `DeliveryExecutor` 头注释与 `CueStore.deleteCompletedDeliveries`）。
 extension DeliveryExecutor {
   /// 发出的话与 Cue 的失败请求最多留多久（与对话的保留期一样是 7 天）。
   static let keptRetention: TimeInterval = 7 * 86_400

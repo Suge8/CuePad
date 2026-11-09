@@ -2,10 +2,8 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 给输入框选一张卡片带上（作为这次消息的附件，卡片不动）：可搜；所属项目置顶的灵感在最前（长期参考，发给 Agent 时常要带上），
-/// 再是本项目的其余卡片，其余按最近修改。点一张即选中并收起。
+/// 所属项目置顶的灵感排在最前：长期参考，发给 Agent 时常要带上。
 struct CardPicker: View {
-    /// 排在前面的项目；nil 不分组。
     let project: UUID?
     let pick: (Card) -> Void
     @Environment(Workspace.self) private var workspace
@@ -13,7 +11,6 @@ struct CardPicker: View {
     @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
     @State private var text = ""
-    /// 拿去搜的词：输入法组字（拼音还没上屏）时不跟着变，上屏后再搜。
     @State private var settled = ""
     @State private var pages = 1
     @State private var data: Page?
@@ -112,7 +109,6 @@ struct CardPicker: View {
         var pages: Int
     }
 
-    /// 一次读到的结果：所属项目置顶的最前、本项目其余卡片其次（项目只在不分组时为 nil），其余在后；每张卡只出现一次。
     nonisolated struct Page: Sendable, Equatable {
         var pins: [CardEntry] = []
         var own: [CardEntry]
@@ -132,7 +128,7 @@ struct CardPicker: View {
     }
 }
 
-/// 卡片与它的摘要。摘要在读数据时算好（Store 的执行体上），渲染与滚动时不在主线程解析正文。
+/// 摘要在读数据时算好（Store 的执行体上），渲染与滚动时不在主线程解析正文。
 nonisolated struct CardEntry: Identifiable, Sendable, Equatable {
     let card: Card
     let text: CardText
@@ -147,12 +143,10 @@ nonisolated struct CardEntry: Identifiable, Sendable, Equatable {
     }
 }
 
-/// 一张卡的纸面行（搜索结果与输入框的卡片选择共用）：可选的项目与时间、标题、摘要，右侧首图。
 struct CardRow: View {
     let entry: CardEntry
     /// 标出所属项目（卡片选择里不属于本项目的那组）；nil 不标（搜索已按项目分组）。
     var project: Project??
-    /// 命中的词（空格分隔），每个都标底色。
     var highlight = ""
     /// 点一下选中这张卡（卡片选择）；nil 时点开卡片（任务是从这一行长出的气泡），长按是卡片操作。
     var pick: ((Card) -> Void)?
@@ -161,7 +155,6 @@ struct CardRow: View {
     @Environment(\.zoomNamespace) private var zoom
     @Environment(Workspace.self) private var workspace
     #endif
-    /// 任务圈与标题同高。
     private static let ring: CGFloat = 18
 
     var body: some View {
@@ -187,10 +180,8 @@ struct CardRow: View {
         let card = entry.card, text = entry.text
         return HStack(alignment: .top, spacing: Spacing.group) {
             VStack(alignment: .leading, spacing: Spacing.tight) {
-                // 标题在前、时间靠右，与其余列表同一种读法
                 MetaLine(spacing: Spacing.item, gap: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                        // 任务用全 App 同一个任务圈打头，一眼分得出任务与灵感
                         if card.isTask { TaskRingView(status: card.status, done: false, size: Self.ring).frame(width: Self.ring) }
                         Text(marked(text.label)).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(2)
                     }
@@ -201,7 +192,6 @@ struct CardRow: View {
                     }
                     .font(Typography.caption).foregroundStyle(palette.ink3)
                 }
-                // 搜索时摘要从命中处截起（`CueSummary.snippet`），看得出为什么搜到它
                 let preview = highlight.isEmpty ? text.preview : CueSummary.snippet(card.body, matching: terms).textGlyphs
                 if !preview.isEmpty {
                     Text(marked(preview)).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2)
@@ -228,7 +218,6 @@ struct CardRow: View {
 
     private var terms: [String] { highlight.split(whereSeparator: \.isWhitespace).map(String.init) }
 
-    /// 变量照常标色，搜索词再叠一层命中底色。
     private func marked(_ string: String) -> AttributedString {
         Highlight.matches(string, highlight, base: VariableText.styled(string, palette))
     }
@@ -245,7 +234,7 @@ nonisolated extension String {
 }
 
 #if os(iOS)
-/// 当前输入框是否在输入法组字中（有未上屏的拼音等）。SwiftUI 的搜索框不报告这一点，问第一响应者。
+/// SwiftUI 的搜索框不报告输入法是否在组字，问第一响应者。
 enum TextComposition {
     static var isComposing: Bool {
         let probe = FirstResponderProbe()

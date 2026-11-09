@@ -8,18 +8,13 @@ import Foundation
 /// 来到一台是一次真人操作：手机是 App 回到前台；Mac 是他在别的设备上之后，回到这台的第一下键盘鼠标。Mac 读到别的设备比自己来得晚，就算人不在跟前
 /// （`ViewerKeeper.Away.elsewhere`），与走开、锁屏一样不算开着任何页：Mac 窗口露着、十分钟内动过，也挡不住他拿起手机之后的推送。
 ///
-/// 开着哪些页只在变了时写一次（打开、离开、换一个），没有心跳：开着是那一页在屏上、有人在用。Mac 上是人看得到主窗口：窗口露着（有没有焦点都一样）、
-/// 屏幕亮着、没锁、`SessionPresence.window` 内动过键盘鼠标、他没去别的设备（App 的 `AppServices.seesMainWindow`，Cue 页读没读过也是它）；手机是 App 前台活跃。
-/// 不再开着时写空（离开那一页、切到后台、锁屏或屏幕睡了、人走开、去了别的设备、将睡眠、退出）。写的时机在 App 的 `ViewerKeeper`。
+/// 开着哪些页只在变了时写一次，没有心跳：开着是那一页在屏上、有人在用，不再开着时写空。具体判断（Mac 上是人看得到主窗口，手机是 App 前台活跃）与写的时机在 App 的 `ViewerKeeper`、`AppServices.seesMainWindow`。
 /// 没打招呼就消失的那一下（崩溃、断电）只有 Mac 兜得住：Mac 的这条只在那台 Mac 在线（`MacPresence`）时算数，在线记录到期就不算了；
 /// 手机崩在前台、进后台时没网传不出去的那条会停在"开着"，留到它下次打开时改写。所以提示只认 Mac 开着的页：手机那条一停住，
 /// 所有推送都会被它挡掉；手机的那条只用来说明他来过手机（让 Mac 让位，只会多推、不会少推），手机自己前台收到推送时按本机当场开着哪些页定弹不弹（`AlertCenter`）。
 public struct Viewer: Equatable, Sendable {
-  /// 写它的设备（Mac 的 hostID，手机的 identifierForVendor）
   public var device: String
-  /// 开着的会话页（Pi 的会话 id），不区分顺序；没开着为空集
   public var sessionIDs: Set<String>
-  /// 开着 Cue 页（iPad 上可以和会话页同时在屏上）
   public var cue: Bool
   public var modifiedAt: Date
   /// 他最近一次来到这台的时刻（`CueStore.arrive`）；还没来过为 nil。只往后挪，开着的页变了、人走开都不动它。
@@ -38,7 +33,6 @@ extension Viewer: Record {
 }
 
 extension CueStore {
-  /// 此刻开着页、且算数的那几条（`Viewer` 的规则：Mac 的要那台在线，在线时登记到期重读，订阅它的到点自己变）。
   public func viewers() throws -> [Viewer] {
     try viewing().filter { viewer in
       try find(MacPresence.self, MacPresence.recordID(host: viewer.device)) == nil || macOnline(viewer.device)
@@ -87,6 +81,5 @@ extension CueStore {
       """, [device]) { _ in true } ?? false
   }
 
-  /// 开着页的那几条（还没按在线筛）。
   private func viewing() throws -> [Viewer] { try select(Viewer.self, where: "json_array_length(sessionIDs) > 0 OR cue", [], orderBy: "id") }
 }

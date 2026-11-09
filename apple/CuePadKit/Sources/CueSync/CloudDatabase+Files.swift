@@ -66,7 +66,6 @@ extension CloudDatabase {
     return configuration
   }
 
-  /// 这个进程加进库的上传操作。
   private static let ownOperations = Mutex<Set<CKOperation.ID>>([])
 
   /// 加进库、等结果：逐条的结果收成 `SentRecords`（同 `upload`），整个操作的失败抛出。不随任务取消：

@@ -2,15 +2,11 @@ import CueEditor
 import CueStore
 import SwiftUI
 
-/// 一个文件（不是图片）的牌子，同正文里的文件牌（`CueFileAttachment`）：左边缩略图（系统快速查看的，文件不在本机或出不来时是类型记号），
-/// 右边文件名与一行说明（`FileStatus`：类型与大小、传了几成、怎么取），在传时底下一条进度。
-/// 点它：在本机就在全屏页里看（同组 `among` 里已到的几份左右翻，`Workspace.openAttachment`），还没到就去 iCloud 取，到了自己换上。
-/// 输入框的附件条、带上的卡片全文、你的话里的文件都是它。
 struct FileChip: View {
     let key: String
     let name: String
     var height: CGFloat = 56
-    /// 和它一组的几份（附件条、一句话、一张卡里的），空的是只有它自己；`group` 认这一组。
+    /// 空的是只有它自己。
     var among: [DraftFile] = []
     var group = "file"
     @Environment(AppServices.self) private var services
@@ -41,7 +37,6 @@ struct FileChip: View {
             .background(palette.fill, in: .rect(cornerRadius: Radius.block))
             .overlay(alignment: .bottom) {
                 if let progress = status.progress {
-                    // 传了几成：一条细线，靠左长到那一成
                     Capsule().fill(palette.hair)
                         .overlay { Capsule().fill(palette.ink2).scaleEffect(x: progress, anchor: .leading) }
                         .frame(height: 3)
@@ -71,7 +66,6 @@ struct FileChip: View {
             }
         }
         .frame(width: thumbSide, height: thumbSide)
-        // 全屏页从这块放大出来、缩回这里
         .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), cornerRadius: Radius.chip) { [files = services.store.files, key] in
             await AttachmentLooks.picture(key, in: files)
         }
@@ -82,7 +76,6 @@ struct FileChip: View {
     }
 }
 
-/// 附件条里的一张图：方块缩略图，点它在全屏页里看（同 `FileChip`）；还没到这台时点它去取。
 struct ImageTile: View {
     let key: String
     var side: CGFloat = 64

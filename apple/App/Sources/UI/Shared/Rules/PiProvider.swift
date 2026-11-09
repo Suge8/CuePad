@@ -1,16 +1,11 @@
 import CueStore
 import SwiftUI
 
-/// 模型的提供方：Pi 的提供方 id（Claude Code、Codex 上报的是 `AgentKind.modelProvider`）→ 显示名与产品标志（`BrandMark`），
-/// 全 App 只有这一张表。标志是这家的产品（Anthropic 是 Claude），模型菜单的分组标题与订阅额度的账号共用它；有订阅额度的另有账号名。
-/// 没见过的提供方（用户自定义的）没有标志、名字首字母大写。
+/// 全 App 只有这一张表；模型菜单的分组标题与订阅额度的账号共用它。
 nonisolated struct PiProvider: Equatable, Identifiable {
-    /// Pi 的提供方 id（`PiModelKey.provider`）。
     let id: String
     let name: String
-    /// 这家的产品标志；没见过的为 nil。
     let mark: BrandMark?
-    /// 订阅账号的产品名（Claude、Codex）：额度按账号显示时用它（`QuotaMeter`）；不是订阅登录的提供方为提供方名。
     let account: String
 
     init(id: String) {
@@ -24,7 +19,6 @@ nonisolated struct PiProvider: Equatable, Identifiable {
         account = known.account ?? known.name
     }
 
-    /// 提供方 id → 显示名、产品标志与订阅账号名。同一家的几个入口共用一个标志。
     private static let known: [String: (name: String, mark: BrandMark, account: String?)] = [
         "anthropic": ("Anthropic", .claude, "Claude"),
         "openai": ("OpenAI", .openai, nil),
@@ -53,7 +47,6 @@ nonisolated struct PiProvider: Equatable, Identifiable {
 
 nonisolated extension BrandMark {
     /// 模型的标志：按模型家族，从模型 id 与显示名认（经 OpenRouter、OpenCode 转发的 `anthropic/claude-…`、`google/gemini-…` 也认得）；
-    /// 认不出家族时退到提供方的标志，再认不出为 nil（不带标志）。
     static func model(id: String, name: String = "", provider: String?) -> BrandMark? {
         let words = "\(id) \(name)".lowercased().split { !$0.isLetter && !$0.isNumber }
         for family in families where words.contains(where: { word in family.prefixes.contains { word.hasPrefix($0) } }) { return family.mark }
@@ -66,7 +59,6 @@ nonisolated extension BrandMark {
         model(id: option.key.id, name: option.name, provider: option.key.provider)
     }
 
-    /// `provider/model` 写法（子代理名册）；没写提供方时只按家族认。
     static func model(reference: String) -> BrandMark? {
         let slash = reference.firstIndex(of: "/")
         return model(id: reference, provider: slash.map { String(reference[..<$0]) })
@@ -85,8 +77,6 @@ nonisolated extension BrandMark {
     ]
 }
 
-/// 模型的短名（回复框下的模型胶囊、会话行、子代理）：去掉提供方前缀、Anthropic 模型名开头的 Claude、末尾的日期戳，
-/// "anthropic/claude-opus-5-5-20260901" 写成 "opus-5-5"，"Claude Opus 5.5" 写成 "Opus 5.5"。
 nonisolated enum PiModelName {
     static func short(_ model: String) -> String {
         let id = model.split(separator: "/").last.map(String.init) ?? model

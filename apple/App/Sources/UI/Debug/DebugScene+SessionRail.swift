@@ -2,16 +2,15 @@
 import CueStore
 import SwiftUI
 
-/// `-CuePadScene rail -CuePadRailForm phone|wide`：正式会话条的隔离验收场景，默认 phone。
-/// 写 15 个真实会话：两拍板、一待回复、一出错、各步态与子代理；不是 UI 假状态。不要配 CuePadDemo，使用新的隔离库。
-/// 右侧只记组件发出的打开意图与系统拖放收到的会话 id；不调用 Workspace 导航。`-CuePadRailEmpty YES` 验空列占位。
+/// 不要配 `-CuePadDemo`，使用新的隔离库：写的是 15 个真实会话，不是 UI 假状态。
+/// 右侧只记组件发出的打开意图与系统拖放收到的会话 id，不调用 Workspace 导航。
 struct DebugSessionRail: View {
     let workspace: Workspace
     @State private var event = "—"
     @Environment(\.palette) private var palette
 
     private var form: SessionRail.Form {
-        switch DebugScene.defaults.string(forKey: "CuePadRailForm") {
+        switch DebugScene.args.railForm {
         case "wide": .wide
         default: .phone
         }
@@ -44,7 +43,7 @@ struct DebugSessionRail: View {
 
 extension DebugScene {
     static func seedRailIfAsked(_ services: AppServices) async {
-        guard scene == "rail", !defaults.bool(forKey: "CuePadRailEmpty") else { return }
+        guard scene == "rail", !args.railEmpty else { return }
         await running("会话条验收数据") {
             let store = services.store, host = "rail-mac", boot = "rail-boot"
             try await store.recordMacPresence(host: host, bootID: boot) { true }

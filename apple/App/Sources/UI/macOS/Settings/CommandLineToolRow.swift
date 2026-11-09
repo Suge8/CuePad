@@ -1,8 +1,6 @@
 #if os(macOS)
 import SwiftUI
 
-/// 设置里"cuepad 命令"那一行：把命令行工具链接进 PATH（Agent 在终端里直接调用）。开着时状态写链接的位置；
-/// 链接失效给"修复"，链接目录不在 PATH 里给"复制命令"（加进 shell 配置的那一行），位置被别的文件占着时说明、不覆盖。
 struct CommandLineToolRow: View {
     @Environment(AppServices.self) private var services
     @State private var error: String?

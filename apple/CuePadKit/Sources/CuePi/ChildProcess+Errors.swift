@@ -4,7 +4,6 @@ import Foundation
 import Synchronization
 
 extension ChildProcess {
-    /// 子进程标准错误的末尾（至多 `limit`），给退出原因用：读事件读到 EOF 或 `stop()`。
     /// 退出事件可能先于最后几块输出被读到：报退出前 `flush()` 在读的那条队列上把管道里已有的读完（`FIONREAD` 量出多少读多少，
     /// 不阻塞、不改描述符的阻塞属性——脱离 App 的进程的看守与它共用这根管道的读端，见 `ChildProcess+Plumbing` 的 `relay`）。
     final class ErrorTail: Sendable {
@@ -31,7 +30,6 @@ extension ChildProcess {
             source.resume()
         }
 
-        /// 读完管道里此刻已有的输出（进程已退出时就是它写过的全部）。
         func flush() {
             queue.sync {
                 guard !source.isCancelled else { return }
@@ -46,10 +44,9 @@ extension ChildProcess {
             }
         }
 
-        /// 不再读（关掉本进程这端）；之后的输出由别的读者接走或进程收到 EPIPE。
+        /// 之后的输出由别的读者接走或进程收到 EPIPE。
         func stop() { source.cancel() }
 
-        /// 去掉首尾空白的末尾。
         var text: String {
             String(decoding: tail.withLock { $0 }, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         }

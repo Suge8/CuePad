@@ -3,7 +3,7 @@ import path from "node:path";
 import http from "node:http";
 import chatgpt from "./chatgpt.ts";
 
-// Claude 授权服务由测试放行失败；事件门不依赖机器速度，也不访问真实服务。
+// 事件门不依赖机器速度，也不访问真实服务。
 export default async function (pi: any) {
 	chatgpt(pi);
 	const agent = process.env.PI_CODING_AGENT_DIR!;

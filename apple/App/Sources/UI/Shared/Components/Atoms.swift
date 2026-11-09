@@ -4,23 +4,16 @@ import SwiftUI
 import UIKit
 #endif
 
-// MARK: 订阅 Store
-
 extension EnvironmentValues {
-    /// 这一页此刻在前台。Mac 的内容区把去过的页都挂着（`Workspace.mountedPages`），不在前台的页暂停订阅（`observing`）、
-    /// 不读实时状态；其余地方没有"挂着不看"的页，默认 true。
+    /// Mac 的内容区把去过的页都挂着（`Workspace.mountedPages`），不在前台的页暂停订阅、不读实时状态；其余地方没有"挂着不看"的页，默认 true。
     @Entry var pageActive = true
-    /// 不在前台、但要先读一份数据的页：空闲时先挂上、还没去过的（`Workspace.premount`），收着的常驻浮层（⌘K）。只读第一份，不跟着变。
+    /// 不在前台、但要先读一份数据的页（空闲时先挂上的 `Workspace.premount`、收着的 ⌘K）：只读第一份，不跟着变。
     @Entry var pagePrefetch = false
 }
 
 extension View {
-    /// 订阅 Store：`id` 变化时重新订阅；每次变更重读后写入 `value`。读失败交给 `onError`。页不在前台时暂停（见 `pageActive`），回到前台重新订阅；
-    /// 空闲时先挂上、还没去过的页（`pagePrefetch`）照样先读一份，第一次点开时内容已经建好。
-    /// 依赖哪些表由读取本身定（`CueStore.observe(_:)`），这里不另写；读到的和上一次一样就不写——在 Store 一侧比一次，
-    /// 重新订阅后手里已有的值当作"上一次"，没变的数据不送到主线程、界面也不重算。
-    /// 在前台、手里还没有值时（出现、换了 `id` 或回到前台的那一刻）当场读（`CueStore.snapshot`，`onAppear` 在第一帧之前做完）再从它接着订阅：
-    /// 本机库里的东西第一帧就排好，页面没有"还没读到"这一态。读失败时留给订阅报告，不报两次。
+    /// 读到的和上一次一样就不写：在 Store 一侧比一次，重新订阅后手里已有的值当作"上一次"，没变的数据不送到主线程、界面也不重算。
+    /// 在前台、手里还没有值时当场读（`CueStore.snapshot`，`onAppear` 在第一帧之前做完）再从它接着订阅：本机库里的东西第一帧就排好，页面没有"还没读到"这一态。读失败时留给订阅报告，不报两次。
     /// `immediately: false`：长列表里每行各自的小读（附件到没到本机，要看文件在不在），行在滚动中一个个出现，不在主线程上读，没读到时按到了画。
     func observing<T: Sendable & Equatable>(
         _ store: CueStore, id: some Equatable = 0, into value: Binding<T?>, immediately: Bool = true,
@@ -32,7 +25,7 @@ extension View {
 }
 
 extension View {
-    /// 过了零点（"今天"按读的那一刻分的页面要重排、重读）。系统在它自己的线程上发这个通知：按主线程上的任务等，`action` 改的界面状态不跨线程。
+    /// 系统在它自己的线程上发这个通知：按主线程上的任务等，`action` 改的界面状态不跨线程。
     func onDayChange(_ action: @escaping () -> Void) -> some View {
         task { for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) { action() } }
     }
@@ -47,7 +40,6 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     let read: @Sendable (isolated CueStore) throws -> T
     @Environment(\.pageActive) private var active
     @Environment(\.pagePrefetch) private var prefetch
-    /// 当场读到、还没交给订阅的那份。
     @State private var start: Snapshot<T>?
 
     private struct Run: Equatable {
@@ -92,14 +84,10 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     }
 }
 
-// MARK: 分隔点
-
-/// 一行元信息里隔开两段的"·"：只是版面，读屏不念（行要读的话由行自己的标签给）。颜色跟随外层，要淡一档的调用处自己加。
+/// 读屏不念（行要读的话由行自己的标签给）；颜色跟随外层，要淡一档的调用处自己加。
 struct Dot: View {
     var body: some View { Text("·").readerHidden(true) }
 }
-
-// MARK: 项目图标
 
 struct ProjectGlyph: View {
     let project: Project?
@@ -115,11 +103,9 @@ struct ProjectGlyph: View {
             .readerHidden(true)
     }
 
-    /// 项目的图标；项目还没同步到时是文件夹。
     static func icon(_ project: Project?) -> Icon { .project(ProjectIcon(stored: project?.icon)) }
 }
 
-/// 项目图标的闭合表：项目表单只给这 24 种（Mac 表单一行 8 个，三行排满），写库写 `rawValue`；图在 `Icon.project`。
 /// 库里存的值不迁移：表外的名字认不出，是文件夹（含没存图标的）。
 nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
     // rawValue 就是库里已存的名字（早先表单存的系统符号名，更早版本存的 lucide 名 rocket）：已有项目直接认得，不用映射
@@ -131,7 +117,6 @@ nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
         self = stored.flatMap(Self.init(rawValue:)) ?? .folder
     }
 
-    /// 读屏与提示用的含义。
     var name: LocalizedStringResource {
         switch self {
         case .folder: "文件夹"
@@ -162,21 +147,17 @@ nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
     }
 }
 
-// MARK: 小件
 extension LocalizedStringResource {
     /// 收界面字的参数拿到的是已经算好或用户写的字（项目名、会话标题、Agent 说的）：原样显示，不查目录。
     static func verbatim(_ text: String) -> Self { "\(text)" }
 }
 
 extension View {
-    /// 菜单（`Menu`）的标签：里面的几样（图标、字、箭头）合成一个无障碍元素，读作 `spoken`。分开时 Mac 的菜单按钮按子视图拆成几颗，
-    /// 菜单项只挂在第一颗下，读屏落在别的那颗上打开的是空壳。标签只有一个图标时不用它，给菜单本身 `accessibilityLabel` 就够。
+    /// 分开时 Mac 的菜单按钮按子视图拆成几颗，菜单项只挂在第一颗下，读屏落在别的那颗上打开的是空壳。标签只有一个图标时不用它，给菜单本身 `accessibilityLabel` 就够。
     func menuLabel(_ spoken: LocalizedStringResource) -> some View { accessibilityElement(children: .ignore).accessibilityLabel(spoken) }
 }
 
-/// 全 App 唯一的"什么时候"写法（灵感、任务、回收站、Agent 会话、对话里的时间标记都用它）：一分钟内"刚刚"，一天内"N 分钟前""N 小时前"；
-/// 再往前按日历（`day`）：昨天、一周内写星期、今年写月日、更早带年份。粗到小时为止，几小时前的事不写到分钟。都用系统格式，跟随界面语言。
-/// 会话的计时会随时间刷新（`PiElapsed`）；灵感卡、回收站这些不加定时器，写的是打开时的值。
+/// 全 App 唯一的"什么时候"写法。会话的计时会随时间刷新（`PiElapsed`）；灵感卡、回收站这些不加定时器，写的是打开时的值。
 nonisolated enum DateLabel {
     static func short(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
         let elapsed = Int(now.timeIntervalSince(date))
@@ -186,7 +167,6 @@ nonisolated enum DateLabel {
         return day(date, now: now, calendar: calendar)
     }
 
-    /// 不是今天的那一天：昨天、一周内写星期、今年写月日、更早带年份。
     static func day(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
             return relative(DateComponents(day: -1), style: .full)
@@ -197,10 +177,8 @@ nonisolated enum DateLabel {
         return date.formatted(.dateTime.year().month(.defaultDigits).day())
     }
 
-    /// "月/日"（今年里的日期、"更早"分组的周区间）。
     static let monthDay = Date.FormatStyle.dateTime.month(.defaultDigits).day()
 
-    /// 系统的相对时间（"5 分钟前""昨天"），独立成一项时首字母大写。
     private static func relative(_ offset: DateComponents, style: RelativeDateTimeFormatter.UnitsStyle) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = style
@@ -210,9 +188,7 @@ nonisolated enum DateLabel {
     }
 }
 
-/// 一节的头，全 App 只这一种：`page` 是页内大段（最近、更早、现在、历史），与行里的字一样重、可带计数；
-/// `group` 是组头（按时间分的段、重点），小号半粗淡墨，可带一个图标。左右缩进与上下留白由所在列表给；能折的组由调用处在旁边放 `Chevron`。
-/// 读屏作为一个标题，图标是装饰不读。
+/// 左右缩进与上下留白由所在列表给；能折的组由调用处在旁边放 `Chevron`。
 struct SectionHeader: View {
     enum Level { case page, group }
 

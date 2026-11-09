@@ -11,8 +11,7 @@ import os
 /// 没有等待理由时门铃照样连着、不持有活动：中转空闲时自己发 ping、URLSession 自动回，本机心跳晚醒不让中转断开；
 /// 整段拿不到 CPU 久到中转断开的，醒来重连、入房先拉一次。
 ///
-/// 持有期间每秒量一次拉取要经过的两条串行通道（主线程、资料库队列）的排队与进程自己有没有被调度，超过 `stallLimit` 记一条
-/// （类别 stall，notice 级别落盘）：下次停摆从日志就看得出卡在哪，不用旁听推断。
+/// 持有期间每秒量一次主线程与资料库队列的排队，超过 `stallLimit` 记一条（类别 stall，notice 级别落盘）：下次停摆从日志就看得出卡在哪，不用旁听推断。
 extension AppServices {
     func holdActivityWhilePolling() {
         follow { [store] in

@@ -1,5 +1,3 @@
-// CuePad 这一端：会话的 socket，与 CuePad 发来的命令（协议见 CuePi README：每条回一个 `ack`，拒绝时带原因）。
-
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -55,7 +53,6 @@ async function onConnection(session: Session, socket: net.Socket) {
 	});
 }
 
-/** 会话的 socket：`<目录>/<sessionId>.<pid>.sock`（目录 0700、socket 0600）；返回关闭它的函数（向每个客户端告别、删掉 socket 文件）。 */
 export function listen(session: Session, directory: string): (reason: string) => void {
 	ensureSecureDirectory(directory);
 	const name = path.join(directory, `${session.ctx.sessionManager.getSessionId()}.${process.pid}`);
@@ -74,7 +71,7 @@ export function listen(session: Session, directory: string): (reason: string) =>
 		fs.chmodSync(pending, 0o600);
 		fs.renameSync(pending, file);
 	});
-	/** 删掉本会话的 socket 文件；也挂在进程退出上（进程被 SIGTERM 之外的方式结束时，Pi 不发 session_shutdown） */
+	/** 也挂在进程退出上：进程被 SIGTERM 之外的方式结束时，Pi 不发 session_shutdown */
 	const removeSocket = () => {
 		fs.rmSync(file, { force: true });
 		fs.rmSync(pending, { force: true });
@@ -152,16 +149,12 @@ async function handleSend(session: Session, command: Command, ack: Ack, reject: 
 	const cueTurn = command.cueTurn;
 	if (cueTurn !== undefined && (typeof cueTurn !== "object" || cueTurn === null || Array.isArray(cueTurn)
 		|| ("deliveryId" in cueTurn && cueTurn.deliveryId !== null && typeof cueTurn.deliveryId !== "string"))) return reject("bad_request");
-	// 以提示词模板或 skill 开头的话由 Pi 展开，与在 Pi 里打出来一样；展开后落成的那条消息带着投送请求 id（`startRound`）
 	const found = slashCommand(session, text);
 	const expand = found !== undefined && "source" in found && (found.source === "prompt" || found.source === "skill");
 	await session.startRound({ content, expand, text, id, ack, cueTurn: cueTurn as { deliveryId?: string | null } | undefined });
 }
 
-/**
- * 一行以哪条斜杠命令开头，与 Pi 派发同一先后：本扩展执行的内置命令（`BUILTIN_COMMANDS`，返回它）先于 Pi 清单里的扩展命令、提示词模板与 skill
- * （返回清单里的那条，同名时扩展命令在前，Pi 也先执行它）；不以清单里的名字开头为 undefined。
- */
+/** 一行以哪条斜杠命令开头，与 Pi 派发同一先后：本扩展执行的内置命令先于 Pi 清单里的扩展命令、提示词模板与 skill，同名时扩展命令在前（Pi 也先执行它）。 */
 function slashCommand(session: Session, text: string): BuiltinCommand | SlashCommandInfo | undefined {
 	if (!text.startsWith("/")) return undefined;
 	const space = text.search(/\s/);
@@ -189,11 +182,10 @@ function handleReload(session: Session, ack: Ack) {
 }
 
 /**
- * 斜杠命令：内置的（能在非 TUI 下执行的）由本扩展调 Pi 的接口做，其余（扩展命令、提示词模板、skill）经
- * `sendUserMessage(…, { expandPromptTemplates: true })` 交给 Pi 派发；不带这个选项的 `sendUserMessage` 只把它当普通文字。清单里没有的名字拒绝，不当文字发出去。
+ * 斜杠命令。不带 `expandPromptTemplates` 的 `sendUserMessage` 只把它当普通文字，所以清单里没有的名字拒绝，不当文字发出去。
  * 扩展命令交出即确认：Pi 在任何检查之前同步调起它的处理函数（`AgentSession.prompt`，1.4.0 起；只有正在发 agent_settled 时推到发完再调），
  * 会话正忙也立即执行、不开轮，没有拒收的路。处理函数的完成与出错没有公开回执（出错 Pi 报在它自己的界面），ACK 只证明 Pi 执行了它。
- * 模板与 skill 是你说的话，CuePad 经 `send` 交出（落成的消息带投送请求 id）；经这里来的照样展开开轮，同 `startRound` 的确认。
+ * 模板与 skill 是你说的话，CuePad 经 `send` 交出（落成的消息带投送请求 id）；经这里来的照样展开开轮。
  */
 async function handleSlash(session: Session, command: Command, ack: Ack, reject: Reject) {
 	const text = command.text;
@@ -263,20 +255,19 @@ function handleEnd(session: Session, ack: Ack) {
 	session.runInternal("end");
 }
 
-/** 停止这一轮（`stopRound`）；子代理落定后照常把结果投回来开始新的一轮。排着、还没交出的话一并作废（停下之后不该又开一轮），它们的确认回未执行。 */
+/** 子代理落定后照常把结果投回来开始新的一轮。排着、还没交出的话一并作废（停下之后不该又开一轮），它们的确认回未执行。 */
 function handleAbort(session: Session, ack: Ack) {
 	session.abortQueued();
 	session.stopRound();
 	ack({ ok: true });
 }
 
-/** 把出错的那一轮原样重跑一遍（`retry.ts`）；确认等重跑的那一轮开始（隐藏消息落成会话里的一条消息）。 */
 async function handleRetry(session: Session, ack: Ack, reject: Reject) {
 	const error = await retry(session, ack);
 	if (error) reject(error);
 }
 
-/** 会话设置：会话名（Pi 设置会话名的接口，同 `/name`）、模型、思考强度——先换模型（需要该提供方已配好密钥）再设强度，强度由 Pi 按新模型支持的范围夹取。 */
+/** 先换模型（需要该提供方已配好密钥）再设强度，强度由 Pi 按新模型支持的范围夹取。 */
 async function handleConfig(session: Session, command: Command, ack: Ack, reject: Reject) {
 	const { pi, ctx } = session;
 	const { model, thinking, fast } = command;
@@ -298,7 +289,6 @@ async function handleConfig(session: Session, command: Command, ack: Ack, reject
 	ack({ ok: true });
 }
 
-/** 回答当前弹窗：标识必须是正在等的那个（答过或换了弹窗就拒绝），答案的类型与选项要对得上。 */
 function handleAnswer(session: Session, command: Command, ack: Ack, reject: Reject) {
 	const pending = session.asking;
 	if (!pending?.settle) return reject("no_prompt");
@@ -313,7 +303,7 @@ function handleAnswer(session: Session, command: Command, ack: Ack, reject: Reje
 	ack({ ok: true });
 }
 
-/** 每个订阅授权都报能力或结果；没有授权与查询失败带上原因，不把空查询当成功。 */
+/** 没有授权与查询失败带上原因，不把空查询当成功。 */
 function handleQuota(session: Session, ack: Ack, reject: Reject) {
 	void session.quota.fetchAll().then(async (failures) => {
 		session.updateInfo(await modelInfo(session.pi, session.ctx));

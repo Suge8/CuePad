@@ -2,20 +2,18 @@
 import CueStore
 import Foundation
 
-/// 一家的上报通道（`AgentFacts.channel`）写下的文件。Claude Code、Codex 的是钩子配置：CuePad 的条目合并进用户自己的配置文件
-/// （别人的条目原样留着），卸载只删 CuePad 的条目，认 CuePad 的条目只看命令（`<cuepad> hook <agent>`，路径可能是旧位置）；
+/// CuePad 的条目合并进用户自己的配置文件（别人的条目原样留着），卸载只删 CuePad 的条目，认 CuePad 的条目只看命令（`<cuepad> hook <agent>`，路径可能是旧位置）；
 /// Pi 的是整个桥扩展目录（`PiExtensionFiles`，不看命令）。
 protocol AgentHookConfig: Sendable {
-    /// CuePad 写的文件（不含 `files(command:)` 判定用的记录）：卸载删它们里 CuePad 的条目，界面据此说明会写哪里。
+    /// 不含 `files(command:)` 判定用的记录。
     var writtenFiles: [URL] { get }
-    /// 没有 CuePad 的条目为 `.missing`；条目齐全、命令就是 `command` 为 `.current`；其余（缺事件、旧路径、没被信任）为 `.outdated`。
     func files(command: String) -> AgentStatus.Files
     func install(command: String) async throws
     func uninstall() async throws
 }
 
-/// 一份 JSON 钩子配置文件里 CuePad 的条目（Claude Code 的 `settings.json`、Codex 的 `hooks.json`，两家同一种结构：
-/// `{"hooks": {"<事件>": [{"matcher"?, "hooks": [{"type": "command", "command", "timeout", …}]}]}}`）。
+/// Claude Code 的 `settings.json`、Codex 的 `hooks.json` 两家同一种结构：
+/// `{"hooks": {"<事件>": [{"matcher"?, "hooks": [{"type": "command", "command", "timeout", …}]}]}}`。
 ///
 /// - 每个事件一组，追加在用户已有的组之后；文件按原文就地插入、删除（`JSONSourceTree`），用户的格式、键序与未知键一字不动。
 /// - 卸载后与装之前逐字节一致：CuePad 建的结构（文件、`hooks`、事件数组）空了一并删掉，用户原有的空结构留着。哪些是 CuePad 建的
@@ -29,7 +27,6 @@ struct HookFile: AgentHookConfig {
         var matcher: String? = nil
         /// 秒：放行的事件 CuePad 收到就回，CuePad 卡住时也不让 Agent 等太久；要等人作答的给足一天
         var timeout: Int
-        /// Agent 在等这个钩子时终端里那一行显示的话
         var statusMessage: String? = nil
     }
 
@@ -45,7 +42,7 @@ struct HookFile: AgentHookConfig {
         self.events = events
     }
 
-    /// Claude Code：用户级的 `<配置目录>/settings.json`（Claude Code 把各层配置的钩子合并着跑）。
+    /// Claude Code 把各层配置的钩子合并着跑，所以写用户级的 `<配置目录>/settings.json`。
     /// 上报状态的事件同步跑（保持先后），CuePad 当场放行；要人作答的挡住等 CuePad 答复：权限确认（终端里同时照常弹出，哪边先答算哪边）、
     /// AskUserQuestion（官方的作答路径是它的 PreToolUse：返回 allow 与带答案的 `updatedInput`；PermissionRequest 会不会为它触发文档没写）、MCP 服务要你填的表单（Elicitation）。
     /// 一次工具调用只触发一组：其余工具的 PreToolUse 用排除 AskUserQuestion 的正则（Claude Code 的 matcher 是 JavaScript 正则）。
@@ -63,11 +60,8 @@ struct HookFile: AgentHookConfig {
 
     var writtenFiles: [URL] { [file] }
 
-    /// 第一次装之前有什么、哪些结构是 CuePad 建的。
     struct Footprint: Codable, Equatable {
-        /// 装之前文件在不在
         var file: Bool
-        /// CuePad 建的 `hooks` 对象与事件数组
         var hooksObject = false
         var events: [String] = []
         /// Codex 的信任写在另一个文件（`config.toml`）里，它装之前的样子（`CodexHooks`）
@@ -85,7 +79,6 @@ struct HookFile: AgentHookConfig {
         try JSONEncoder().encode(footprint).write(to: footprintFile, options: .atomic)
     }
 
-    /// CuePad 的一组：只有一条命令。
     func group(_ event: Event, command: String) -> [String: Any] {
         var handler: [String: Any] = ["type": "command", "command": command, "timeout": event.timeout]
         if let message = event.statusMessage { handler["statusMessage"] = message }
@@ -94,9 +87,6 @@ struct HookFile: AgentHookConfig {
         return group
     }
 
-    // MARK: 状态
-
-    /// 只看文件：CuePad 的组与这个版本要写的逐组一致（事件、先后、内容）为 `.current`。
     func files(command: String) -> AgentStatus.Files {
         guard let text = try? Data(contentsOf: file), let tree = try? JSONSourceTree(text) else { return .missing }
         let ours = ourGroups(in: tree)
@@ -106,16 +96,13 @@ struct HookFile: AgentHookConfig {
         return found == expected ? .current : .outdated
     }
 
-    /// CuePad 的组：所在事件、在该事件数组里的下标（Codex 信任的键要它），按文件里的先后。
+    /// 下标是 Codex 信任的键要用的。
     func ourGroups(in tree: JSONSourceTree) -> [(event: String, index: Int, node: JSONSourceTree.Node)] {
         (tree.root.member("hooks")?.members ?? []).flatMap { member in
             (member.value.elements ?? []).enumerated().filter { isOurs($0.element, in: tree.text) }.map { (member.key, $0.offset, $0.element) }
         }
     }
 
-    // MARK: 安装与卸载
-
-    /// 换成这个版本的条目：先删掉旧的组（结构留着），再按事件表追加；第一次装时记下装之前有什么。
     func install(command: String) throws {
         let original = try? Data(contentsOf: file)
         guard original.map({ (try? JSONSourceTree($0)) != nil }) ?? true else { throw HookFileError.malformed(file.path) }
@@ -129,7 +116,6 @@ struct HookFile: AgentHookConfig {
         if appended.text != original { try appended.text.write(to: file, options: .atomic) }
     }
 
-    /// 删掉 CuePad 的组与它建的结构；装之前没有这个文件、删完只剩空对象的，删掉文件。最后删掉记录。
     func uninstall() throws {
         let footprint = footprint() ?? .unknown
         if let original = try? Data(contentsOf: file) {
@@ -144,9 +130,7 @@ struct HookFile: AgentHookConfig {
         if FileManager.default.fileExists(atPath: footprintFile.path) { try FileManager.default.removeItem(at: footprintFile) }
     }
 
-    // MARK: 条目
-
-    /// `<…/cuepad> hook <agent>`：路径可能是 App 的旧位置，可能带引号。
+    /// 路径可能是 App 的旧位置，可能带引号。
     private func isOurCommand(_ command: String) -> Bool {
         let suffix = " hook \(agent.rawValue)"
         guard command.hasSuffix(suffix) else { return false }
@@ -162,10 +146,7 @@ struct HookFile: AgentHookConfig {
         ((Self.json(node, in: text)?["hooks"] as? [[String: Any]]) ?? []).contains { ($0["command"] as? String).map(isOurCommand) ?? false }
     }
 
-    // MARK: 就地改写
-
-    /// 删掉 CuePad 的组；`dropping` 里记着的 CuePad 建的事件数组与 `hooks` 因此空了也删掉（nil：结构都留着，升级时用）。
-    /// 一次删一处、重新扫描，删法是插入的逆操作。
+    /// `dropping` 为 nil 时结构都留着（升级时用）。一次删一处、重新扫描，删法是插入的逆操作。
     private func removingOurs(from text: Data, dropping footprint: Footprint?) throws -> Data {
         var text = text
         while true {
@@ -186,7 +167,6 @@ struct HookFile: AgentHookConfig {
         }
     }
 
-    /// 把组追加到各事件的数组末尾（没有这个事件、没有 `hooks` 就建上），插入紧凑的 JSON；一并给出新建了哪些结构。
     private func appending(
         _ groups: [(event: String, group: [String: Any])], to text: Data
     ) throws -> (text: Data, createdHooks: Bool, createdEvents: [String]) {
@@ -224,9 +204,7 @@ struct HookFile: AgentHookConfig {
 }
 
 enum HookFileError: Error, Equatable, LocalizedError {
-    /// 文件不是 JSON 对象（写坏了）：不覆盖它
     case malformed(String)
-    /// `hooks` 或其中某个事件不是对象、数组
     case unexpectedShape(String)
 
     var errorDescription: String? {

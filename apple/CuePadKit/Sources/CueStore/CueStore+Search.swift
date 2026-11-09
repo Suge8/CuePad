@@ -2,8 +2,7 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 活动项目的散放非空灵感数与最近修改时间，一次聚合，不读正文、附件或会话。
-  /// 时间取项目及有效卡片的最大值：未删、未归档的任务（含已完成与子任务）及非空灵感（含挂在任务下的）；空白草稿不算。
+  /// 一次聚合，不读正文、附件或会话。
   public func projectSummaries() throws -> [ProjectSummary] {
     let summaries = Dictionary(uniqueKeysWithValues: try db.query(
       """
@@ -18,10 +17,7 @@ extension CueStore {
     }
   }
 
-  /// 卡片搜索：FTS5 索引匹配文字（可选），再按项目、图片、发送目标、修改时间筛选，最后排序分页。
-  /// 文字按空白拆成多个词，全部命中才算命中，每个词是子串。卡片只按正文命中；项目名只用于
-  /// `projects` 里单列的项目（每个词都在名字里，`Project.nameMatch`）。按项目缩小卡片范围用 `projects` 筛选。
-  /// 卡片按最近修改倒序（同刻按 id）；`totalCards` 是全部命中数。
+  /// 文字按空白拆成多个词，全部命中才算命中，每个词是子串。卡片只按正文命中；项目名只用于 `projects` 里单列的项目（`Project.nameMatch`）。按项目缩小卡片范围用 `projects` 筛选。
   public func search(_ query: SearchQuery, limit: Int = 20, offset: Int = 0) throws -> SearchResults {
     let terms = query.text.split(whereSeparator: \.isWhitespace).map(String.init)
     let (condition, arguments) = cardCondition(query, terms: terms)

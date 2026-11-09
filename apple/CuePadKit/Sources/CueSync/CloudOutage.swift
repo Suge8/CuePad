@@ -6,8 +6,7 @@ import Synchronization
 /// 同步测量连的云（`sync-bench.py`，只经 `DebugHooks.cloudSync` 用；Release 里没人调）：默认是几个进程共用的模拟云（`SharedCloud`），
 /// 确认时才连真的 iCloud 开发环境，这时请求数有上限（`budget`：用满就当断网，不再打 iCloud，脚本据此收场）。
 /// 断网开关（`sync-bench.py offline`）：只让这个进程的请求失败，不碰机器的网络、别的进程与正式版。
-/// 断着时每个请求当场像断网那样失败（底层 -1009，见 `Cut`），恢复后照常。网络路径监视器（`NetworkReturns`）不知道这次断开：
-/// 恢复时 `set(false, pathReturns: true)` 替它报一次网络回来（真断网的恢复），`false` 是路径一直可用、只是 iCloud 连不上的那种恢复。
+/// 网络路径监视器（`NetworkReturns`）不知道这次断开：恢复时 `set(false, pathReturns: true)` 替它报一次网络回来（真断网的恢复），`false` 是路径一直可用、只是 iCloud 连不上的那种恢复。
 public enum CloudOutage {
   private static let down = Atomic<Bool>(false)
   private static let spent = Atomic<Int>(0)
@@ -27,14 +26,10 @@ public enum CloudOutage {
     }
   }
 
-  /// 已经发出的请求数（连真的 iCloud 时对着 `budget` 数）。
   public static var requests: Int { spent.load(ordering: .relaxed) }
-  /// 每种请求（upload、fetch、records、other、file-upload、file-download）在 App 里从发起到返回的每次用时（秒）。
   public static var requestTimings: [String: [Double]] { timings.withLock { $0 } }
 
-  /// 断着时每个请求都交给断了网的替身（`UnreachableCloud`：拉取、订阅是包着的 -1009，上传是逐条 -1009 的 `partialFailure`），
-  /// 认账号也失败（替身认得出账号，真断网认不出）。
-  /// 请求数用满（`budget`）也走这里：当断网。
+  /// 认账号也失败（替身认得出账号，真断网认不出）。请求数用满（`budget`）也走这里：当断网。
   private struct Cut: SyncCloud {
     let base: any SyncCloud
     let budget: Int?
@@ -73,7 +68,7 @@ public enum CloudOutage {
     func save(_ subscription: CKSubscription) async throws { try await timed("other") { try await now.save(subscription) } }
     func delete(_ id: CKSubscription.ID) async throws { try await timed("other") { try await now.delete(id) } }
 
-    /// 记下这一请求在 App 里从发起到返回的用时（含 CloudKit 进程间的开销与排队）：模拟云的延迟模型按它标定。
+    /// 含 CloudKit 进程间的开销与排队：模拟云的延迟模型按它标定。
     private func timed<T>(_ kind: String, _ body: () async throws -> T) async throws -> T {
       let began = ContinuousClock.now
       defer {

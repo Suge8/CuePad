@@ -77,13 +77,11 @@ extension OpenCodeRuntime {
         if Self.transcriptChanges.contains(event.type) { enqueueIngest(sessionID, urgent: true) }
     }
 
-    /// 对话里多了东西（一步、一轮、一次压缩做完）：读进资料库
     private static let transcriptChanges: Set = [
         "session.step.ended", "session.compaction.ended", "session.compaction.failed",
         "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted",
     ]
 
-    /// 这条事件交给会话的 `OpenCodeTurn`，翻出的一轮落到会话的事实与桥上。开始一轮是一次活动（会话不在线就上线）。
     private func turn(_ event: OpenCodeEvent, of sessionID: String, _ connection: Connection) async {
         if event.type == "session.execution.started" { await change(sessionID, connection, active: true, publishing: false) { _ in } }
         guard var tracked = sessions[sessionID] else { return }
@@ -137,7 +135,6 @@ extension OpenCodeRuntime {
         if publishing { publish(sessionID) }
     }
 
-    /// 子会话的事件落到父会话的子代理名册上：一轮由它自己的 `OpenCodeTurn` 翻出，名册只看开始、在调的工具与怎么结束的。
     func child(_ sessionID: String, of parent: String, _ event: OpenCodeEvent) {
         parents[sessionID] = parent
         guard !event.type.hasPrefix("session.text.") else { return }  // 子代理说的话不要，逐字增量也不白拼
@@ -179,14 +176,12 @@ extension OpenCodeRuntime {
         let now = Date()
         if !tracked.facts.subagents.contains(where: { $0.id == id }) { tracked.facts.startSubagent(id, name: "", role: "", at: now) }
         tracked.facts.updateSubagent(id, at: now, body)
-        // 执行中的子会话就是在飞的
         tracked.facts.inFlight = Set(tracked.facts.subagents.filter { $0.state.phase == .known(.running) }.map(\.id))
         sessions[parent] = tracked
     }
 
     func topLevel(_ sessionID: String) -> String { parents[sessionID] ?? sessionID }
 
-    /// 弹窗的标识：种类、提问的会话（可能是子代理）、它的请求 id。
     enum PromptKind: String { case permission, form }
 
     static func prompt(_ kind: PromptKind, _ sessionID: String, _ id: String) -> String { "\(kind.rawValue):\(sessionID)/\(id)" }

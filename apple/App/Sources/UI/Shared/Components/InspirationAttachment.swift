@@ -19,7 +19,7 @@ struct InspirationImage: View {
                 .buttonStyle(PressStyle(.card))
                 .accessibilityLabel("查看图片")
             } else {
-                Button { workspace.fetchFile(key) } label: { Label(services.awayLine(key), icon: .attachment) }
+                Button { workspace.fetchFile(key) } label: { Label(AttachmentLooks.awayLine(key, services), icon: .attachment) }
                     .buttonStyle(PressStyle())
             }
         }
@@ -39,7 +39,7 @@ struct InspirationFile: View {
         Button { workspace.openAttachment(file, group: file.key, with: openPreview) } label: {
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 Label(file.name, icon: .attachment)
-                if place.isAway { Text(services.awayLine(file.key)).font(Typography.caption) }
+                if place.isAway { Text(AttachmentLooks.awayLine(file.key, services)).font(Typography.caption) }
             }
         }
         .buttonStyle(PressStyle())

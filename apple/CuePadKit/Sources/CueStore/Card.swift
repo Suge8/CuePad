@@ -1,77 +1,64 @@
 import CueText
 import Foundation
 
-/// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（建成任务时写上，之后不变：同一条记录不在灵感与任务之间互转，灵感要做就接进一条任务（`mergeIdea`）或照它新建一条（`createTask(fromIdea:)`），灵感进回收站）。
-/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（顶层任务下的任务，勾选清单里的一条）与挂在下面的灵感。
-/// 任务的正文第一行是标题，其余是要交代给 Agent 的话（`CueLines.split`）：开工时整段作为第一句发出，发出后留在任务上。
-/// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setStatus`、`moveCard`、`createTask`、`mergeIdea`。
+/// 灵感与任务是同一种记录，差别只是 `todoAt`（建成任务时写上，之后不变：不互转，灵感要做就接进一条任务或照它新建一条，灵感进回收站）。
+/// 任务的正文第一行是标题，其余是要交代给 Agent 的话：开工时整段作为第一句发出，发出后留在任务上。
+/// 结构（上级、要做、状态）对调用方只读，各有专门的方法。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// 所在的项目；没指定的在默认项目（`Project.defaultID`）。
   public internal(set) var projectID: UUID
-  /// 正文：一段 Markdown（`CueFormat`），附件为 `![](cuepad://file/<键>)`、`[文件名](cuepad://file/<键>)`。
   public var body: String
-  /// 置顶：项目里长期参考的灵感（项目页任务纸下面那几行，行首一枚图钉）。字段名沿用同步记录里的 isPinned。
+  /// 字段名沿用同步记录里的 isPinned。
   public var isPinned: Bool
   public var variableValues: [String: String]
-  /// 冲突副本指向的原卡：同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡，
-  /// 由用户用 `resolveConflict` 选择保留哪一个。普通卡为 nil。
+  /// 同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡。
   public internal(set) var conflictOf: UUID?
   public internal(set) var sortKey: String
-  /// 单独删除进回收站的时间；随项目删除的卡为 nil。
+  /// 随项目删除的卡为 nil。
   public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-  /// 上级任务；nil 是顶层。只有任务能当上级，任务最多 `maxTaskDepth` 级；上级不在库里或不可见时按顶层看待。
+  /// 上级不在库里或不可见时按顶层看待。
   public internal(set) var parentID: UUID?
-  /// 建成任务的时间：有值是任务，nil 是灵感。
   public internal(set) var todoAt: Date?
   /// 本任务自己的开始事实；明确开工或投送时记下（投送失败不撤回），子任务推进时同事务推进祖先，明确退回待办清空，旧子任务不会在读取时重新启动它。
   public internal(set) var startedAt: Date?
   public internal(set) var completedAt: Date?
-  /// 发给 Agent 的会话（Pi 自己的会话 id），灵感与任务的行据此显示会话此刻的状态。
   public internal(set) var piSessionID: String?
   public internal(set) var sessionBindingRevision: SessionBindingRevision?
-  /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
+  /// 连同下级一起归档、一起取回。
   public internal(set) var archivedAt: Date?
   /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
   /// 它仍属于这个叶子（`CueStore.isLoose`）。正在用的只在 `piSessionID`，不在这里。
   public internal(set) var formerSessionIDs: [String] = []
 
-  /// 任务最多两级：任务 → 子任务。任务下的灵感不算一级。
+  /// 任务下的灵感不算一级。
   public static let maxTaskDepth = 2
 
   public var isTask: Bool { todoAt != nil }
-  /// 空白：正文只有空白（没有文字也没有图片）。空白灵感离开编辑就不留下（`CueStore.dropIfBlank`），也不计数、不当摘要。
   public var isBlank: Bool { body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-  /// 任务的三态（`TaskStatus`）；灵感为 nil。
   public var status: TaskStatus? {
     guard isTask else { return nil }
     return completedAt != nil ? .done : startedAt != nil ? .inProgress : .todo
   }
 }
 
-/// 任务三态只由自己的开始、完成时间推出；子任务推进的写入同时推进祖先，读取不重放过去的动作。
 public enum TaskStatus: String, Sendable, CaseIterable {
   case todo, inProgress, done
 }
 
-/// 同一项目里某一状态的任务（`CueStore.tasks(_:)`）。
 public struct TaskGroup: Equatable, Sendable {
   public let projectID: UUID
   public internal(set) var tasks: [Card]
 }
 
-/// 叶子任务，子任务带着它的上级（能绑会话的 `CueStore.bindableTasks`、绑着会话的 `CueStore.tasks(boundTo:)`）：界面写"上级 · 子任务"。
 public struct LeafTask: Identifiable, Equatable, Sendable {
   public let task: Card
-  /// 子任务的上级任务；顶层任务为 nil。
   public let parent: Card?
   public var id: UUID { task.id }
 }
 
-/// 一组顶层任务按状态的个数（`CueStore.taskCounts`）：给用户看的任务数与完成数都是它。
 public struct TaskCounts: Equatable, Sendable {
   public var inProgress: Int
   public var todo: Int
@@ -88,11 +75,10 @@ public struct TaskCounts: Equatable, Sendable {
   public var open: Int { inProgress + todo }
 }
 
-/// 子任务完成了几个、一共几个（任务的直接子任务，见 `CueStore.subtaskProgress`），与做完的子任务平均每步用了多久（任务行估还要多久，`TaskPace`）。
 public struct TaskProgress: Equatable, Sendable {
   public let done: Int
   public let total: Int
-  /// 做完的子任务里记着自己开始时刻的，从开始到做完的平均秒数；一步都没有时为 nil（直接勾掉、没开过工的子任务量不出用时）。
+  /// 一步都没有时为 nil（直接勾掉、没开过工的子任务量不出用时）。
   public let stepTime: TimeInterval?
 
   public init(done: Int, total: Int, stepTime: TimeInterval? = nil) {
@@ -102,14 +88,11 @@ public struct TaskProgress: Equatable, Sendable {
   }
 }
 
-/// 灵感或任务交给了 Agent 的哪里：一个会话（Pi 会话 id），或正在开的新会话（还没开好、没认领到）。见 `CueStore.handedSessions`。
 public enum AgentHandoff: Hashable, Sendable {
   case session(String)
-  /// 正在用这家开新会话
   case launching(AgentKind)
 }
 
-/// 卡片挂在哪：某项目的顶层，或某条任务下面（项目随它）。
 public enum CardSlot: Hashable, Sendable {
   case top(project: UUID)
   case under(UUID)
@@ -117,21 +100,19 @@ public enum CardSlot: Hashable, Sendable {
 
 /// 一次卡片改动的回执：足够原样拨回去的快照，在改动的同一个事务里读到，所以不会和库里的实际写入对不上（`CueStore.undo`）。
 public enum CardChange: Sendable, Equatable {
-  /// 删除：提上去的下级。
   case trash(id: UUID, lifted: [UUID])
-  /// 挪动：原来的位置与原来的前一个同级。
   case move(id: UUID, from: CardSlot, after: UUID?)
   /// 灵感接进任务：任务原来的正文，与接完那一刻任务的修改时刻（撤销时核对，变了就是之后又改过，不撤）。
   case merge(idea: UUID, task: UUID, body: String, modifiedAt: Date)
-  /// 照灵感新建任务：新建的那条任务与它此刻的修改时刻（同上）。
+  /// 新建的那条任务与它此刻的修改时刻（撤销时核对）。
   case spawn(idea: UUID, task: UUID, modifiedAt: Date)
 }
 
 extension Card {
-  /// 标题（`CueSummary` 的规则，唯一一处）：Cue 的工具、信封与界面都用它。空白的卡是空串（App 的 `title` 另给占位说法）。
+  /// Cue 的工具、信封与界面都用这一个标题规则。空白的卡是空串（App 的 `title` 另给占位说法）。
   public var heading: String { CueSummary.title(of: body) }
 
-  /// 任务正文里标题下面的话（`CueLines.split`）：开工时连同标题一起发出。没有为 nil；写它只换这部分，标题那一行不动。
+  /// 写它只换这部分，标题那一行不动。
   public var rest: String? {
     get { CueLines.split(body).rest }
     set { body = CueLines.joined(title: CueLines.split(body).title, rest: newValue) }
@@ -139,7 +120,7 @@ extension Card {
 }
 
 extension UUID {
-  /// 给 Cue 与人看的短 id：小写的前 8 位（Cue 的工具接受至少 4 位的前缀）。
+  /// Cue 的工具接受至少 4 位的前缀。
   public var shortID: String { String(uuidString.lowercased().prefix(8)) }
 }
 
@@ -177,15 +158,12 @@ extension Card: Record {
   }
 }
 
-/// 一张卡的冲突：原卡（较新的版本）与冲突副本（较旧的正文）。
 public struct CardConflict: Equatable, Sendable {
   public var original: Card
   public var copy: Card
 }
 
 public enum ConflictChoice: Sendable {
-  /// 保留原卡的正文，删除副本。
   case original
-  /// 用副本的正文替换原卡的正文，删除副本。
   case copy
 }

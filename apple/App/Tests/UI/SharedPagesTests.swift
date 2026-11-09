@@ -3,14 +3,12 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 两端共用的页面状态：回收站的内容与操作、新会话从发出到认领的进度。
 struct SharedPagesTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
     // MARK: 回收站
 
-    /// 永久删除走界面同一个入口（`Workspace.purge`）：项目连同它的卡一起没了，单独删的卡还在回收站。恢复见下一条。
     @Test func 回收站列出删除的项目与卡片_永久删除项目连同它的卡() async throws {
         let project = try await store.createProject(name: "旧项目", color: "#000000")
         _ = try await store.createCard(in: project.id, body: "项目里的一条")
@@ -30,7 +28,6 @@ struct SharedPagesTests {
         #expect(try await store.cards(in: project.id).isEmpty)
     }
 
-    /// 恢复后给一句提示写明落点、点它过去（与删除时的"已删除 · 撤销"对称）；卡片所在的项目还在回收站时落到默认项目。
     @Test func 回收站恢复后提示落点_点它过去() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let card = try await store.createCard(in: project.id, body: "项目里的一条")
@@ -92,8 +89,8 @@ struct SharedPagesTests {
             #expect(Set(rows.map(\.state.sessionID)).isSuperset(of: ["future", "today", "past"]))
             #expect(rows.filter { $0.state.sessionID == "new" }.count == 1)
         }
-        let launch = try await NewSessionInput.Start(project: project.id).launch(
-            in: project, on: "mac-a", draft: ComposerDraft(text: "检查重连"), agent: .pi, model: nil, thinking: nil, intent: .new, workspace: Workspace(services: app.services))
+        let launch = try await app.services.launchSession(
+            in: project.id, prompt: "检查重连", title: project.shownName, on: "mac-a", card: nil, agent: .pi)
         try await recorder.update(sessionID: "new", state: .thinking, title: "新会话", launchToken: launch.token)
         #expect(try await launch.progress(from: store).claimed?.sessionID == "new")
         try await checkList()

@@ -39,7 +39,6 @@ extension CodexRuntime {
             return
         // 以下只有开出这个线程的连接（托管的进程）收得到
         case "serverRequest/resolved":
-            // 服务端请求被别处答了或收回了
             guard case .request = session.reply else { return }
             session.reply = nil
             session.facts.questions = []
@@ -83,17 +82,13 @@ extension CodexRuntime {
         }
     }
 
-    /// 这一轮结束：挂着的钩子收回；CuePad 正以一句话开新一轮时只记下（见 `deliver`），不歇下。
     func endTurn(_ session: Tracked, failure: String? = nil) {
         release(session)
         guard session.restarting == nil else { session.restarting = .stopped; return }
         session.facts.endTurn(failure: failure)
     }
 
-    // MARK: 子代理
-
-    /// 开始新的一轮（`start` 是这一轮开始的时刻，早于它可能的结束：Codex 给的 `Turn.startedAt`，CuePad 补开的是发出的时刻，
-    /// 钩子没有时刻用收到的时刻）：歇着时落定的子代理的结果随这一轮交给模型，不再在飞。开始一轮只经这里。
+    /// `start` 是这一轮开始的时刻，早于它可能的结束：Codex 给的 `Turn.startedAt`，CuePad 补开的是发出的时刻，钩子没有时刻用收到的时刻。开始一轮只经这里。
     func startTurn(_ session: Tracked, at start: Date) {
         session.lastError = nil
         session.facts.startTurn(at: start)
@@ -101,10 +96,8 @@ extension CodexRuntime {
         session.unread = [:]
     }
 
-    /// 子线程的推送里管生命周期与进展的
     private static let childMethods: Set = ["turn/started", "turn/completed", "thread/status/changed", "item/started", "item/completed"]
 
-    /// 不是会话的线程的推送：子代理的交给它的会话；第一次见的先问 Codex 它是谁的（`register`），问的时候攒着之后的推送。
     func child(_ method: String, _ params: JSONValue, thread: String, pid: Int32) {
         guard Self.childMethods.contains(method) else { return }
         let key = "\(thread).\(pid)"
@@ -131,8 +124,6 @@ extension CodexRuntime {
         await register(info, on: rpc)
     }
 
-    /// 认下一个线程（`thread/read` 读到的，推送先攒着）：是子代理就补进会话的名册——最近一轮还在跑的算在飞（没赶上它这一轮开始：CuePad 晚启动），
-    /// 歇着的按它最近一轮的结果落定（还没跑过的等它开始）；再按先后补上攒着的推送。
     func register(_ thread: JSONValue, on rpc: CodexRPC) async {
         guard let child = thread["id"]?.string else { return }
         let key = "\(child).\(rpc.pid)"
@@ -157,7 +148,6 @@ extension CodexRuntime {
         for (method, params) in queued { self.child(method, params, thread: child, pid: rpc.pid) }
     }
 
-    /// 线程（`thread/read` 读到的）属于哪个会话：顺着 `parentThreadId` 往上找到接着的会话或已认得的子代理（孙代理算进同一个会话）。
     /// 名字是派它时给的任务名（v2 的 `agent_path` 末段），没有就用 Codex 起的昵称。
     private func owner(of thread: JSONValue, on rpc: CodexRPC) async -> Owner {
         let spawn = thread["source"]?["subAgent"]?["thread_spawn"]
@@ -213,7 +203,6 @@ extension CodexRuntime {
         try await rpc.call("thread/turns/list", ["threadId": .string(thread), "limit": 1])["data"]?.array?.first
     }
 
-    /// 一轮的结束状态（`Turn.status`）→ 子代理落定的样子
     private static func phase(of turn: JSONValue?) -> PiSubagentPhase {
         switch turn?["status"]?.string {
         case "completed": .done
@@ -222,7 +211,6 @@ extension CodexRuntime {
         }
     }
 
-    /// 子代理落定：父线程这一轮在跑，结果并进这一轮；歇着就等这一批都落定再补一轮。已经落定的（一轮结束后又卸载）不再算。
     private func settle(_ child: String, _ phase: PiSubagentPhase, summary: String?, in session: Tracked) {
         guard session.facts.inFlight.contains(child), session.unread[child] == nil else { return }
         session.facts.settleSubagent(child, phase, summary: summary, at: .now)
@@ -235,12 +223,10 @@ extension CodexRuntime {
         }
     }
 
-    /// 最后一个在跑的子代理落定、父线程歇着：补一轮空输入，它做完才歇下。终端会话这一轮发出就算开始（常驻服务不报开始）；托管的照常等驱动报开始
-    /// （这一批的结果随 `startTurn` 交出），期间仍是等子代理。空输入的一轮先把子代理的结果取进来再请求模型；
-    /// 带文字的一轮先请求模型，v2 的结果要到之后才取出，模型会答"还没收到"。
+    /// 终端会话这一轮发出就算开始（常驻服务不报开始）。空输入的一轮先把子代理的结果取进来再请求模型；带文字的一轮先请求模型，v2 的结果要到之后才取出，模型会答“还没收到”。
     /// 同 Codex 的 `wake_on_agent_messages`（openai/codex#54961，未发布、默认关、不管 v1，发布并默认开启后改用它），边界也照它：
-    /// 父线程上一轮被停下、在 Plan 模式、这一批没有交回结果（都被停下）的不补，直接歇下。补的这一轮在跑时你说话，照常先停下它再开你那一轮（`deliver`）。
-/// 终端里这一轮显示为一段没有提问的回答；它不触发 `UserPromptSubmit`，输入框里打了一半的话不受影响（实测）。
+    /// 父线程上一轮被停下、在 Plan 模式、这一批没有交回结果（都被停下）的不补，直接歇下。
+    /// 终端里这一轮显示为一段没有提问的回答；它不触发 `UserPromptSubmit`，输入框里打了一半的话不受影响（实测）。
     private func wake(_ session: Tracked) {
         let batch = session.facts.inFlight
         guard !session.facts.running, batch == Set(session.unread.keys) else { return }

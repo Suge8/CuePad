@@ -3,13 +3,11 @@ import CueStore
 import SwiftUI
 import WidgetKit
 
-/// `-CuePadScene widgets`：两种小组件（Cue、默认项目）的小号与中号，用小组件自己的视图（`WidgetViews`，主 App 也编进了它）
-/// 按 iPhone 桌面的尺寸与圆角画在桌面色的底上——模拟器桌面上放小组件要点按 SpringBoard，脚本不做。
+/// 用小组件自己的视图（`WidgetViews`，主 App 也编进了它）按 iPhone 桌面的尺寸与圆角画在桌面色的底上：模拟器桌面上放小组件要点按 SpringBoard，脚本不做。
 /// 小组件的容器底（`containerBackground`）只在小组件里生效，这里按同一个令牌（`desk`）画出那块底与系统的内边距。
 struct DebugWidgetStage: View {
     @Environment(\.palette) private var palette
 
-    /// iPhone 6.1～6.3 英寸屏上的桌面小组件：小号 170 × 170、中号 364 × 170，内容内边距 16（系统的 contentMargins）。
     private static let small = CGSize(width: 170, height: 170)
     private static let medium = CGSize(width: 364, height: 170)
     private static let margin: CGFloat = 16
@@ -52,7 +50,7 @@ struct DebugWidgetStage: View {
 struct DebugActivityStage: View {
     let workspace: Workspace
     @Environment(\.palette) private var palette
-    private let stale = UserDefaults.standard.bool(forKey: "CuePadCueStale")
+    private let stale = DebugScene.args.cueOpts.stale
 
     var body: some View {
         let state = CueActivityState(now: workspace.cue.now)
@@ -75,8 +73,7 @@ struct DebugActivityStage: View {
     }
 }
 
-/// `-CuePadScene share`：分享扩展的界面（`ShareViews`，主 App 也编进了它）像在分享面板里那样以表单弹出，
-/// 内容是一段文字与一个链接（扩展从系统拿到的 `NSItemProvider` 同样的两种）。保存不会被点：只看长相。
+/// 分享扩展的界面（`ShareViews`，主 App 也编进了它）像在分享面板里那样以表单弹出；保存不会被点，只看长相。
 struct DebugShareStage: View {
     let location: LibraryLocation
     @State private var model: ShareModel?
@@ -99,9 +96,8 @@ struct DebugShareStage: View {
 }
 
 extension DebugScene {
-    /// `-CuePadExtensionLibrary <隔离目录>`：扩展预览只读这里的快照，不受主 App 同时重写派生缓存影响。
     static var extensionLibrary: LibraryLocation? {
-        defaults.string(forKey: "CuePadExtensionLibrary").map { .isolated(URL(filePath: $0)) }
+        args.extensionLibrary.map { .isolated(URL(filePath: $0)) }
     }
 }
 

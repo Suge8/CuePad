@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 
 nonisolated enum SendError: Error, Equatable {
-    /// 正文里的附件（图片或文件）不在这台 Mac 上、也没取到。
     case attachmentUnavailable(String)
     /// 手机指定的 Pi 会话已结束，或不在这台 Mac 上。
     case sessionNotOnThisMac(String)
@@ -12,8 +11,6 @@ nonisolated enum SendError: Error, Equatable {
     case unsupportedMode(String)
     /// 发给 Pi 的投送请求没能送达（附执行器写回的原因）。
     case notDelivered(String)
-    /// 开新会话没开成（附原因）。
-    case notLaunched(String)
     /// 这台（`here`）或那台 Mac 上一家能开会话的 Agent 都没有（附原因，`MacAgents.whyNone`）。
     case noAgent(here: Bool, String)
     /// 问题只能在 Pi 里回答（多行编辑、自定义界面）。
@@ -22,13 +19,11 @@ nonisolated enum SendError: Error, Equatable {
     case piSessionNotOnThisMac
     /// 手机请这台 Mac 绑成另一个项目的目录，而那个项目还没有绑定文件夹。
     case noCodeDirectory(String)
-    /// 要开会话的项目还没同步到这台 Mac（不知道工作区叫什么）。
     case projectNotHere
     /// 要在里面启动 Pi 的目录不在了（被删或改名），附目录末段名。
     case directoryMissing(String)
     /// 已领取、已进入同步发送，或本机快照不足以证明尚未交出，不能安全撤回。
     case alreadyHanded
-    /// 对 Cue 说的话已交给了它，撤不回。
     case alreadyHeard
 }
 
@@ -40,7 +35,6 @@ extension SendError: ShownError {
         case .unsupportedTarget(let name): "这台 Mac 不支持发送到「\(name)」"
         case .unsupportedMode(let raw): "这台 Mac 上的 CuePad 不认识这种发送方式（\(raw)），请更新"
         case .notDelivered(let reason): "没能送达：\(reason)"
-        case .notLaunched(let reason): "没开成会话：\(reason)"
         case .noAgent(true, let why): "这台 Mac 上开不了会话：\(why)"
         case .noAgent(false, let why): "那台 Mac 上开不了会话：\(why)"
         case .unanswerable: "这个问题只能在 Mac 终端里的 Agent 那边回答"

@@ -4,9 +4,6 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// Cue 派活时选哪家 Agent 开会话：请求带着这家与模型（写法同给大脑的清单：Claude Code、Codex 只写 id，提供方补成这家；
-  /// Pi、OpenCode 要写 provider/id）。不写 agent 用那台 Mac 的默认（能用的第一家）；写了那台 Mac 记着不能用的那家，当场退回并说原因。
-  /// 那台 Mac 开不了这家时，失败是这件事的一条变化（还没开成会话也报），写着"开工：原因"，Cue 下次醒来看得到。
   @Test func cueStartsASessionWithTheAgentItChose() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -38,7 +35,6 @@ extension MCPTests {
       #expect(launch.isFromCue && launch.mode == .known(.start))
       #expect(launch.launch?.agent == .codex && launch.launch?.model == PiModelKey(provider: "codex", id: "gpt-5.1") && launch.launch?.thinking == .high)
 
-      // 那台 Mac 上没有 Codex：执行器把失败写回
       let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { request, _ in
         request.launch?.agent == .codex ? .failed(.verbatim("这台 Mac 上没有找到 Codex")) : .succeeded
       }
@@ -50,8 +46,6 @@ extension MCPTests {
     }
   }
 
-  /// 会话因为模型出错，你让换个模型：Cue 的 say 带 model、effort，先请会话换模型（与界面换模型同一种请求），再说这句；
-  /// 换不了模型的会话（终端里的 Claude Code）直接报错，什么都不写，告诉 Cue 可以 fresh 开新会话。
   @Test func cueSwitchesTheSessionModelBeforeSpeaking() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -85,7 +79,6 @@ extension MCPTests {
       #expect(reason.contains("换不了模型") && reason.contains("fresh"))
       #expect(try await store.deliveryRequests().count == 2)
 
-      // 会话在等提问时说的话就是答案：同样先换模型再答；答案无效时什么都不写，换不了模型的会话报错
       let question = PiQuestion(promptID: "p", kind: .confirm, text: "继续？")
       try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
       try await recorder.update(sessionID: "c1", state: .waitingForUser, question: question, agent: .claudeCode)
@@ -99,7 +92,6 @@ extension MCPTests {
       #expect(answered.map(\.mode) == [.known(.config), .known(.answer)] && answered.allSatisfy(\.isFromCue))
       #expect(answered.first?.config == PiConfig(model: PiModelKey(provider: "openai", id: "gpt-6-sol"), thinking: .low))
 
-      // 照提示 fresh 开新会话：绑着会话的叶子也开新的
       _ = try await server.call("task", ["action": "start", "task": claude.id.uuidString, "agent": "claude", "model": "opus", "fresh": true])
       let launch = try #require(try await store.deliveryRequests().first { $0.mode == .known(.start) })
       #expect(launch.launch?.agent == .claudeCode && launch.launch?.model == PiModelKey(provider: "claude", id: "opus"))

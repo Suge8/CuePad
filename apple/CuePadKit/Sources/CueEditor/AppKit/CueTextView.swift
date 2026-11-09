@@ -11,23 +11,19 @@ public final class CueTextView: NSTextView, CueEditorHost {
     public var theme: CueEditorTheme { didSet { applyTheme() } }
     /// 用户编辑后的新正文；程序设置 `storedText` 不触发。
     public var onChange: ((String) -> Void)?
-    /// 有没有选中文字变了（编辑器外的"发送选中""转为任务"据此出现）。
+    /// 有没有选中文字变了。
     public var onSelectionChange: ((Bool) -> Void)?
-    /// 选中部分的存储格式；没选中为 nil。
     public var selectedStoredText: String? { core.stored(in: selectedRange()) }
-    /// 选中文字时右键菜单里排在系统项前面的动作。
     public var selectionActions: [CueSelectionAction] = []
     /// 附件入库失败（磁盘满、文件不可读、太大）。失败的附件不会插入。
     public var onError: ((any Error) -> Void)?
     /// 点了文件牌或还没到这台的图片（键、文件名；图片没有名字）：宿主在本机就打开看，还没到就去 iCloud 取，到了调 `refreshAttachments`。
     /// `picture` 是它的画面在文本视图坐标里的框（文件牌是左边那块缩略图，图片是整张）：全屏页从这里放大出来、缩回这里。
     public var onOpenAttachment: ((_ key: String, _ name: String, _ picture: CGRect) -> Void)?
-    /// 附件此刻的样子（见 `CueFileStatus`）：参数是键、文件名与本机那份（不在本机为 nil）。
     public var fileStatus: (_ key: String, _ name: String, _ file: URL?) -> CueFileStatus {
         get { core.fileStatus }
         set { core.fileStatus = newValue }
     }
-    /// 文件牌上没有缩略图时的记号，按文件名（宿主给）。
     public var fileIcon: (String) -> CueImage? {
         get { core.fileIcon }
         set { core.fileIcon = newValue }
@@ -79,8 +75,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
         maxSize = NSSize(width: 10_000_000, height: 10_000_000)
     }
 
-    // MARK: 正文
-
     /// 存储格式正文。读取时序列化当前内容；设置时整体替换、清空撤销栈，不触发 `onChange`。
     public var storedText: String {
         get { core.stored() }
@@ -93,10 +87,7 @@ public final class CueTextView: NSTextView, CueEditorHost {
         }
     }
 
-    /// 附件的文件到了、传的进度变了：还没到的图片换上真图，文件牌重画。
     public func refreshAttachments() { core.refreshAttachments() }
-
-    // MARK: 主题
 
     private func applyTheme() {
         core.style = theme
@@ -107,8 +98,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
         core.styleDidChange()
     }
 
-    // MARK: 编辑通知
-
     public override func didChangeText() {
         super.didChangeText()
         core.flushHighlight()
@@ -118,7 +107,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
         if !isLoading, !hasMarkedText() { onChange?(storedText) }
     }
 
-    /// 换到缩放比例不同的屏：附件的缩略图按新比例重画（见 `ThumbnailLoader`）。
     public override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         core?.redraw(key: nil)
@@ -146,8 +134,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
         return ceil(layout.usageBoundsForTextContainer.height + textContainerInset.height * 2)
     }
 
-    // MARK: CueEditorHost
-
     func resolvedColor(_ color: CueColor) -> CueColor { color }  // 底色在绘制时按当时的外观解析
     func layoutDidAdvance() { needsLayout = true }
     /// 重排之外还要把画字的子视图标脏：TextKit 2 的 NSTextView 重排后不重画布局片段，附件的新样子要等别的事（打字、滚动）触发才出来。
@@ -172,7 +158,6 @@ extension CueTextView {
         return super.performKeyEquivalent(with: event)
     }
 
-    /// 右键菜单最上面：选中文字时的选区动作（外部提供），再是"插入文件…"，与后面隔一条线。
     public override func menu(for event: NSEvent) -> NSMenu? {
         guard let menu = super.menu(for: event) else { return nil }
         var head: [NSMenuItem] = []
@@ -193,7 +178,6 @@ extension CueTextView {
         return menu
     }
 
-    /// 所有选区变化（键盘、鼠标、程序）都经这里：有没有选区变了就报告。
     public override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
         super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
         let selecting = selectedRange().length > 0

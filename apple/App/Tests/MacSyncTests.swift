@@ -8,7 +8,6 @@ import Synchronization
 @testable import CuePad
 @testable import CuePi
 
-/// Mac 端的同步职责：唤醒时同步；把 Pi 会话状态写成同步记录；执行手机发来的投送请求。
 struct MacSyncTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
@@ -58,7 +57,6 @@ struct MacSyncTests {
         #expect(rig.sync.stopped == 1)
     }
 
-    /// 退出时这台 Mac 当场离线：排在前面的组件卡住、耗尽了收尾的上限，离线这一条也已写下并上传。
     @Test
     func 退出时这台Mac离线_前面的组件卡住也不漏() async throws {
         // Cue 的大脑起不来、也取消不了，直到断言后放行：停 Cue 这一步卡住（等的是不随取消结束的任务）
@@ -89,7 +87,6 @@ struct MacSyncTests {
     @Test func 系统唤醒时立即同步() async throws {
         services.startSync()
         defer { services.cancelBackgroundWork() }
-        // 启动后的第一次拉也走立即同步
         // 等那一次立即同步返回：还没返回时再要立即同步的等它，不另拉
         try await eventually("启动后拉一次") { rig.sync.started == 1 && rig.sync.syncNows == 1 && !services.isSyncingNow }
 
@@ -99,8 +96,6 @@ struct MacSyncTests {
         #expect(rig.sync.syncNows == 2)
     }
 
-    /// 这台 Mac 的在线记录（别的设备判断它在不在、Cue 在不在值班只看它）：启动即在线，醒着每 5 分钟续期，每次都立即上传；
-    /// 将睡眠的通知返回时离线已经写下并传出；睡着时到点不续；醒来立即又在线。
     @Test
     func 在线记录_启动即在线_醒着定期续期_将睡眠当场离线_醒来又在线() async throws {
         let clock = ManualTiming()
@@ -134,7 +129,6 @@ struct MacSyncTests {
 
     // MARK: Pi 状态记录
 
-    /// 更新版本的扩展报来本版本不认识的取值（思考强度、子代理阶段）：原样写进同步记录，认得它的设备照常读。
     @Test func 桥报来不认识的取值原样写进同步记录() async throws {
         var live = session("s1")
         live.thinking = .unknown("ultra")
@@ -167,7 +161,6 @@ struct MacSyncTests {
         #expect(states == ["old": .known(.ended), "theirs": .known(.thinking)])
     }
 
-    /// App 重开：接回的会话"多久前"与"有新回复"仍从原来的起点算（看过的不又亮"有新回复"，排序不乱）；状态种类变了才从接回时算。
     /// 各家接入上桥时都报"现在"（这里的假扩展也是），起点只在桥上定一次，界面与同步记录读的是同一个。
     @Test func 重开后接回的会话沿用原来的起点_看过的不又成有新回复() async throws {
         let past = Date.now.addingTimeInterval(-3600)
@@ -188,7 +181,6 @@ struct MacSyncTests {
         #expect(try #require(services.pi.session(id: changed.id)).stateSince > past)
     }
 
-    /// 本机标识写在每条同步记录上：派生方式一变，这台 Mac 写过的记录就都不认了；也不带出硬件 UUID 原值。
     @Test func 本机标识由硬件UUID稳定派生_不含原值() {
         #expect(HostIdentity.hostID(platformUUID: "A1B2C3D4-0000-4000-8000-000000000001") == "mac-8644cc63caf7fc7a")
     }

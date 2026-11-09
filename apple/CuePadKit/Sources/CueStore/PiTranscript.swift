@@ -6,9 +6,7 @@ import Foundation
 /// 不在对话里，来自 Pi 桥，由状态记录器写。`lastPrompt` 与 `lastReply` 是最近一轮做完的问答，在这一轮结束时一起更新；
 /// 机器消息触发的轮没有新的提问，回答照常更新、提问沿用。
 public struct PiRecap: Sendable, Equatable, Codable {
-  /// 最近一轮已做完的问答里你说的那句（单行，空白与控制字符折成一个空格，至多 `promptLimit` 字符）。
   public var lastPrompt: String?
-  /// 最近一轮已做完的问答里助手的最终回答文字（不含思考与工具调用），保留换行，至多 `replyLimit` 字符。
   public var lastReply: String?
   /// 进行中的提问：你说了、这一轮还没做完（单行，至多 `promptLimit` 字符）；这一轮做完时移进 `lastPrompt`，没有时为 nil。
   /// 界面据此写"你说：… · Pi 正在处理"，上一轮的问答另行折叠，不把新提问和旧回答配在一起。
@@ -37,9 +35,7 @@ public struct PiRecap: Sendable, Equatable, Codable {
 /// Mac 从一个会话文件读出的一段对话，与会话记录上的摘要一起写（`CueStore.writePiTranscript`）。
 public struct PiTranscript: Equatable, Sendable {
   public var sessionID: String
-  /// 新读到的消息（已写过的重写也无妨：id 相同、只追加不覆盖）
   public var messages: [PiChatMessage]
-  /// 会话记录上的摘要，是对话的投影：最近一轮做完的问与答、进行中的提问（见 `PiRecap`）
   public var recap: PiRecap
 
   public init(sessionID: String, messages: [PiChatMessage], recap: PiRecap) {
@@ -50,7 +46,6 @@ public struct PiTranscript: Equatable, Sendable {
 }
 
 extension CueStore {
-  /// 一个会话的完整对话，从早到晚。
   public func piMessages(of sessionID: String) throws -> [PiChatMessage] {
     try select(PiChatMessage.self, where: "sessionID = ?", [sessionID], orderBy: "seq, role, id")
   }
@@ -134,7 +129,7 @@ extension CueStore {
     let list = Self.idList(ids)
     let requests = try select(
       DeliveryRequest.self,
-      where: "id IN (SELECT value FROM json_each(?)) AND mode IN ('send', 'start')", [list])
+      where: "id IN (SELECT value FROM json_each(?)) AND mode IN (\(DeliveryMode.landsAsMessageSQL))", [list])
     let recorded = Set(try db.query(
       "SELECT deliveryID FROM sendRecords WHERE deliveryID IN (SELECT value FROM json_each(?))", [list]) { $0.uuid(0) })
     for request in requests where !recorded.contains(request.id) {
@@ -144,19 +139,6 @@ extension CueStore {
       try insertSendRecord(content, to: target, card: request.cardID, delivery: request.id, origin: request.origin)
     }
     try confirmDeliveries(among: ids, session: session)
-  }
-
-  /// 本机读历史或同步读到真实消息后，投送只向已送达收敛。先落消息，再在同一事务认账，不受请求／消息到达顺序影响。
-  func confirmDeliveries(among ids: Set<UUID>, session: String) throws {
-    guard !ids.isEmpty else { return }
-    // 消息上服务器之后才收走请求（markPushed）；这之前原气泡由该消息接替。
-    try db.run("""
-      UPDATE deliveryRequests SET status = 'succeeded', failure = NULL,
-        completedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1)
-      WHERE status != 'succeeded' AND mode IN ('send', 'start') AND id IN (SELECT value FROM json_each(?2))
-        AND (targetRef = ?3 OR mode = 'start')
-      """, [Date.stamp, Self.idList(ids), session])
-    try reconcileDeliveredCards(deliveries: ids)
   }
 
   /// 删掉不再需要同步的对话：会话 `window` 内没有活动（按本机会话索引里会话文件的最后活动；索引里没有的按最后一条消息）、

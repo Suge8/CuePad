@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 投送请求：手机写内容与目标；Mac 执行（经回调交给 App 层）后写回结果；完成后清理。
 @Suite struct DeliveryTests {
   let fixture = try! Fixture()
   let clock = ManualTiming()
@@ -10,7 +9,6 @@ import Testing
 
   private let pi = SendTarget(kind: .piSession, name: "fix bug", ref: "s1")
 
-  /// 记录被调用的请求；可控制何时返回。
   actor Handler {
     private(set) var seen: [DeliveryRequest] = []
     private(set) var concurrent = 0
@@ -47,7 +45,7 @@ import Testing
       onWritten: { [store] id in await uploads.add(try? await store.deliveryRequest(id)?.status.known) }, handler: { request, _ in await handler(request) })
   }
 
-  /// 当场执行完的只交出结果那一版：领取那一版在路上时结果得等它回来才能传，手机的回执要多等一个来回。
+  /// 领取那一版在路上时结果得等它回来才能传，手机的回执要多等一个来回，所以当场执行完的只交出结果那一版。
   @Test
   func aRequestFinishedRightAwayHandsOnlyTheResultToUpload() async throws {
     let uploads = Uploads()
@@ -64,7 +62,6 @@ import Testing
     await executor.stop()
   }
 
-  /// 执行得久的（唤醒已结束的会话）到 `claimGrace` 先交出领取那一版：手机据它知道 Mac 接手了，不会报成没送到。
   @Test
   func aLongRunningRequestHandsOverTheClaimFirstThenTheResult() async throws {
     let uploads = Uploads()
@@ -103,7 +100,6 @@ import Testing
     await executor.stop()
   }
 
-  /// 发出的话到期清理不带走：没能送达的等用户重发或移除，送到的等它的消息上了服务器再收走（见 `DeviceFlowTests`），别的完成请求照常清理。
   @Test
   func sentMessagesOutliveTheRetention() async throws {
     let handler = Handler()
@@ -128,7 +124,6 @@ import Testing
   func requestsOlderThanTheMaximumAgeAreAbandonedInsteadOfSurprisingTheUser() async throws {
     let handler = Handler()
     let stale = try await store.requestDelivery("old prompt", to: pi, on: "mac-a")
-    // 一天前写下的请求：比任何最长等待都旧
     try RawDB(fixture.url).exec("UPDATE deliveryRequests SET createdAt = createdAt - 86400000")
 
     let executor = executor(handler)

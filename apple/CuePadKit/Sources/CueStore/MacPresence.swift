@@ -2,8 +2,7 @@ import Foundation
 
 /// 一台 Mac 在不在线（同步表 `macPresence`，每台 Mac 一条，只由它自己写；手机与别的 Mac 只读）：Mac 在不在、Cue 在不在值班
 /// （`CueProfile.onDuty`、Cue 页的"在睡觉"）都只从这里推出。记录只有一个期限：此刻早于 `onlineUntil` 就在线，没有记录是不在线。
-/// 醒着的 Mac 每 `renewal` 续一次，把期限推到此刻加 `lifetime`；将睡眠、退出时写成此刻（当场离线）；启动时画第一帧之前写下在线（`launchMac`），
-/// 醒来立即续期（其余写的时机在 App 的 `MacPresenceKeeper`）。到期由订阅重读（`expire(at:)`），不轮询；期限是那台 Mac 的时钟写的，各端时钟大致对准即可。
+/// 醒着的 Mac 每 `renewal` 续一次；将睡眠、退出时写成此刻（当场离线）。到期由订阅重读（`expire(at:)`），不轮询；期限是那台 Mac 的时钟写的，各端时钟大致对准即可。
 public struct MacPresence: Equatable, Sendable {
   public var hostID: String
   public var onlineUntil: Date

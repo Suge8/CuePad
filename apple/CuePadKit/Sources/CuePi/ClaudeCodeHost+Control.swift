@@ -4,7 +4,6 @@ import CueText
 import Foundation
 
 extension ClaudeHostedSession {
-    /// 托管会话起进程：权限确认经标准输入问 CuePad，模式 auto（见类注释）。
     func host(executable: URL, arguments: [String], directory: URL, environment: [String: String]) async throws -> ChildProcess {
         let process = try await launch(
             executable, ["--permission-prompt-tool", "stdio", "--permission-mode", "auto"] + arguments, directory: directory, environment: environment)
@@ -17,7 +16,7 @@ extension ClaudeHostedSession {
             throw PiBridgeError.rejected("empty")
         }
         try await deliver(hosted(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID))
-        // 托管进程自己的钩子不登记（见类注释），首条消息由这里记，与终端会话的 UserPromptSubmit 同一规则
+        // 托管进程自己的钩子不登记，首条消息由这里记，与终端会话的 `UserPromptSubmit` 同一规则
         if !message.text.isEmpty, let id {
             bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(PiSessionName.firstMessageLimit)) } }
         }
@@ -31,7 +30,6 @@ extension ClaudeHostedSession {
         try await deliver(hosted(.string(line), uuid: deliveryID))
     }
 
-    /// 先停下在跑的这一轮，再交出、等它定下送没送达（`ClaudeDelivery`）。
     private func deliver(_ message: JSONValue) async throws {
         try await interrupt(restarting: true)
         try await deliveries.deliver(message["uuid"]?.string ?? "") { try put(message) }
@@ -49,7 +47,9 @@ extension ClaudeHostedSession {
         try await interrupt(restarting: false)
     }
 
-    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in _: PiSession.ID) async throws {
+    func configure(_ config: PiConfig, in _: PiSession.ID) async throws {
+        guard config.fast == nil else { throw PiBridgeError.unsupported }
+        let model = config.model, thinking = config.thinking, name = config.name
         guard let id else { throw PiBridgeError.sessionEnded }
         let stream = try live
         if let model {

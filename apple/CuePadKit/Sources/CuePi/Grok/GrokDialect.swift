@@ -12,10 +12,7 @@ import Foundation
 ///   这一轮已经不再请求模型（如停止钩子在跑）时插话搁浅，收尾后它以搁浅的原话自己开一轮（`runningPromptId` 是 `interject-fallback-…`，
 ///   `runningText` 是原话，先于这一轮 `session/prompt` 的回应到；1.0.70 实测）。收下插话的那一刻不报（`_x.ai/session/interjection` 在受理时就发），
 ///   所以只按搁浅认（`ACPSteer` 不带标识）；
-/// - 改名：`_x.ai/session/rename`；工具名在 `_meta["x.ai/tool"].name`（标准的 `title` 随后会换成给人看的说法），MCP 工具的结果在 `rawOutput`；
-/// - 提问：`_x.ai/ask_user_question`（+Ask）；
 /// - 图：握手不报能收图，实际收（`image_normalize`，太小的丢掉、太大的压缩）；
-/// - MCP 服务在会话开好之后才连，连上报 `_x.ai/mcp/server_status`。
 ///
 /// 当大脑（`brain`）：
 /// - 配置目录（`GROK_HOME`）换成本次运行的临时目录：会话不落进用户的历史，用户的配置、钩子、技能、记忆、MCP 服务都不读；
@@ -37,9 +34,7 @@ struct GrokDialect: ACPDialect {
     /// 排着的 `session/prompt` 还没跑起来时插话，它先以插话补开一轮、再跑那一句（1.0.70 实测）
     var queuesPrompts: Bool { true }
 
-    /// 读文件的三样（Grok 的内置工具名）
     static let readingTools = ["read_file", "grep", "list_dir"]
-    /// 关掉的环境开关（值写成 Grok 认的样子）
     static let brainSwitches: [String: String] = Dictionary(uniqueKeysWithValues:
         ["CLAUDE", "CURSOR"].flatMap { vendor in ["HOOKS", "MCPS", "SKILLS", "RULES", "AGENTS"].map { ("GROK_\(vendor)_\($0)_ENABLED", "false") } }
         + [("GROK_MANAGED_MCPS_ENABLED", "false"), ("GROK_WORKFLOWS", "0"), ("GROK_TURN_SUMMARY", "0"), ("GROK_TITLE_REFRESH", "0"),

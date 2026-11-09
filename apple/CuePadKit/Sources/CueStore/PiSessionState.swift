@@ -1,10 +1,8 @@
 import Foundation
 
-/// 一个 Pi 会话的同步记录，Mac 写、手机与 Mac 的界面都只读它：每个 Pi 会话一条，记录 id 由 Pi 自己的会话 id 算出
-/// （会话文件头里的 id，Pi 重启、恢复会话后不变），所以在线与历史是同一条记录的不同状态（历史即 `ended`）。
-/// 说过话（有会话文件）的会话才进历史；托管的会话闲置退出不进历史。
-/// Mac 上在线会话的状态来自 Pi 桥，历史来自本机的会话文件索引；会话文件被删时才删记录。完整路径不同步，只有文件夹名与项目。
-/// 会话是一等对象：不经任务开的（终端里的、"新会话"）不绑任务，要为它的结果负责时再绑（`CueStore.bindSession`）。
+/// Mac 写，手机与 Mac 的界面都只读它。记录 id 由 Pi 自己的会话 id 算出（Pi 重启、恢复会话后不变），所以在线与历史是同一条记录的不同状态。
+/// 说过话（有会话文件）的会话才进历史；会话文件被删时才删记录。
+/// 不经任务开的会话（终端里的、“新会话”）不绑任务，要为它的结果负责时再绑（`CueStore.bindSession`）。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
@@ -18,28 +16,26 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var title: String
   public var projectID: UUID?
   public var state: Open<PiWorkState>
-  /// 工具名、等待确认的问题、错误信息等。
   private var storedDetail: String?
   public var detail: String? {
     get { failure?.known == .truncated ? PiNotice.truncated.label : storedDetail }
     set { storedDetail = newValue }
   }
-  /// 出错的种类（只在出错时有，`PiFailure`）：出错块与看板上写的原因只读它。旧版本写的记录没有，按其余处理。
+  /// 出错块与看板上写的原因只读它。旧版本写的记录没有，按其余处理。
   public var failure: Open<PiFailure>?
 
   public var usageURL: URL? { failure?.known == .quota ? model?.account?.usageURL(provider: model?.key.provider ?? "") : nil }
-  /// 工作目录的最后一段（文件夹名），不含完整路径；手机据此在没有绑定项目时写出会话"在哪"。旧版本写的记录没有。
+  /// 工作目录的最后一段（文件夹名），不含完整路径。旧版本写的记录没有。
   public var folder: String?
-  /// 摘要，见 `PiRecap`（同名字段）；`question` 是 Pi 此刻弹出、等你回答的对话框。旧版本写的记录没有。
+  /// 旧版本写的记录没有。
   public var lastPrompt: String?
   public var lastReply: String?
   public var pendingPrompt: String?
   public var pendingTools: PiChatMessage.Tools?
   public var answeredAt: Date?
   public var question: PiQuestion?
-  /// 这次写入怎么推到手机（`PiPush`）；随那一次上传送出后清掉，远端带回来的不留。
+  /// 随那一次上传送出后清掉，远端带回来的不留。
   public var notify: PiPush?
-  /// 计时基准，见 `PiTimes`（同名字段）。界面：工作中"已运行"自 `busySince`，等你确认"已等"自 `stateSince`，其余"多久前"自 `stateSince`。
   public var stateSince: Date
   /// 旧版本写的记录没有。
   public var busySince: Date?
@@ -48,25 +44,22 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var turnStartedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-  /// 由 CuePad 发起的新会话（投送方式 `start`）带着发起方生成的标识（`PiLaunch.start` 的 `token`），
-  /// 发起方据此等到并打开"自己开的那个"会话。其余会话为 nil。
+  /// 发起方生成的标识（`PiLaunch` 的 `token`），发起方据此等到并打开“自己开的那个”会话；其余会话为 nil。
   public var launchToken: String?
-  /// Mac 在后台替你托管着它（没有终端界面；给已结束的会话发消息、开新会话时由 Mac 自动启动）。这样的会话没有终端可跳。
-  /// 托管的进程闲置退出后记录留着（歇着，`hosted` 仍为真）：它仍在"现在"，发话时 Mac 把它唤醒——"托管且进程不在"就是这样表达的。
+  /// 没有终端界面，没有终端可跳。托管的进程闲置退出后记录留着（歇着，`hosted` 仍为真）：它仍在“现在”，发话时 Mac 把它唤醒——“托管且进程不在”就是这样表达的。
   public var hosted: Bool
   /// 创建此会话的任务；唯一生命周期来源，纯关联与后来的发送不改变它。未知来源不授权自动结束。
   public internal(set) var createdForTaskID: UUID?
-  /// 会话里的子代理（FireCode 等在同一进程里开的子会话），一行一个。
+  /// FireCode 等在同一进程里开的子会话。
   public var subagents: [PiSubagentState]
-  /// 会话当前的模型与思考强度（Pi 桥上报；已结束的会话留着最后的值）。旧版本写的记录没有。
+  /// 已结束的会话留着最后的值。旧版本写的记录没有。
   public var model: PiModelOption?
   public var thinking: Open<PiThinkingLevel>?
   public var fast: Bool?
-  /// 上下文余量（Pi 桥上报；已结束的会话留着最后一次的值）。旧版本写的记录没有。
+  /// 已结束的会话留着最后一次的值。旧版本写的记录没有。
   public var context: PiContextUsage?
-  /// 哪个 Agent 的会话。旧版本写的记录没有，是 Pi。
   public var agent: Open<AgentKind>
-  /// 可以换成的模型与此刻能用的斜杠命令所在的目录记录（`AgentCatalog`，同一目录里的会话共用）；会话结束后也留着。
+  /// 同一目录里的会话共用；会话结束后也留着。
   public var catalogID: UUID?
 
   /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。
@@ -113,53 +106,49 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.failure = failure
   }
 
-  /// 从 CuePad 能对它做什么（规则见 `AgentCapabilities.of`）；本版本不认识的 Agent 只能发文字。
+  /// 本版本不认识的 Agent 只能发文字。
   public var capabilities: AgentCapabilities { agent.known.map { .of($0, hosted: hosted, model: model) } ?? [] }
 
   // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
 
-  /// 它绑着的事完成时 CuePad 替你结束它：只结束为任务创建、CuePad 托管且做得到结束的（`CueStore.endUnused`）。终端里你自己开的会话不结束
-  /// （结束它就是关掉你的终端进程），只随那件事收起；完成前的确认照这个说（App 的 `agentBusyDialog`）。
+  /// 只结束为任务创建、CuePad 托管且做得到结束的。终端里你自己开的会话不结束（结束它就是关掉你的终端进程），只随那件事收起；
+  /// 完成前的确认照这个说（App 的 `agentBusyDialog`）。
   public var endsWithTask: Bool { createdForTaskID != nil && hosted && canEnd }
 
   public var canEnd: Bool {
     capabilities.contains(.end) && state != .known(.ended)
   }
 
-  /// 能停止这一轮：做得到，且指挥官自己在跑一轮、没在等你时；等你确认时它在等你答（停止会让人以为把问题也撤了），
-  /// 等子代理时这一轮已经歇下，都没有可停的。
+  /// 等你确认时不算：它在等你答，停止会让人以为把问题也撤了；等子代理时这一轮已经歇下，没有可停的。
   public var canStop: Bool {
     capabilities.contains(.abort) && runtimeState.known?.isTurnRunning == true && state != .known(.waitingForUser)
   }
 
-  /// 能把出错的那一轮原样重跑一遍（`Workspace.retry`，不在对话里多一句话）：出错、这一类错重跑有用（`PiFailure.retries`，没记种类的按其余），且做得到。
+  /// 原样重跑出错的那一轮，不在对话里多一句话；这一类错重跑有用才行（`PiFailure.retries`，没记种类的按其余）。
   public var canRetry: Bool {
     state == .known(.error) && capabilities.contains(.retry) && failure?.known?.retries != false
   }
 
-  /// 现在说不了话的原因（nil 是能说，规则见 `AgentCapabilities.speakBlocked`）：回复框与 Cue 说话认它。
+  /// nil 是能说。回复框与 Cue 说话都认它。
   public var speakBlocked: String? { capabilities.speakBlocked(in: runtimeState.known, agent: agent.known) }
 
-  /// 等你确认、且能从 CuePad 作答的问题（问题本身可答，这个会话也做得到）；其余只能在 Agent 那边答。
   public var answerableQuestion: PiQuestion? {
     guard runtimeState == .known(.waitingForUser), capabilities.contains(.answer), let question, question.isAnswerable else { return nil }
     return question
   }
 
-  /// 记录上的摘要（对话的投影）。
   public var recap: PiRecap {
     PiRecap(lastPrompt: lastPrompt, lastReply: lastReply, pendingPrompt: pendingPrompt, pendingTools: pendingTools, answeredAt: answeredAt)
   }
 
-  /// 最后一轮的回答已经读到：这一轮在会话文件里的收尾不早于它的开始。状态由 Agent 报、问答由读会话文件写，两路先后不定；
-  /// 歇下只在这之后才是 Cue 的变化（`CueStore.cueChanges`），你开的、Agent 自己开的（子代理交回、补开的空输入）同一条规则。
-  /// 一轮都没开过（刚开出来就歇着）没有开始时刻，不算。
+  /// 状态由 Agent 报、问答由读会话文件写，两路先后不定：歇下要等这里为真才是 Cue 的变化（`CueStore.cueChanges`），你开的、Agent 自己开的（子代理交回、补开的空输入）同一条规则。
+  /// 一轮都没开过（刚开出来就歇着）不算。
   public var answered: Bool {
     guard let turnStartedAt, let answeredAt else { return false }
     return answeredAt >= turnStartedAt
   }
 
-  /// 已收到发出这句话之后开始的一轮的回答；ACK 的落库可能比回答更晚，不能因此继续遮住终态。
+  /// ACK 的落库可能比回答更晚，不能因此继续遮住终态。
   public func answered(since requestedAt: Date) -> Bool {
     guard let turnStartedAt else { return false }
     return turnStartedAt > requestedAt && answered
@@ -168,19 +157,17 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
 
-  /// 等的是 Cue：在等回答，Cue 在值班（`cue`，`CueStore.cueDuty`）且没把它留给你（`CueDuty.leftToYou`），这个问题 CuePad 也答得了
-  /// （`answerableQuestion`）——Cue 去答或转问你。
+  /// 等的是 Cue：它去答或转问你。
   public func waitsForCue(_ cue: CueDuty?) -> Bool { cue.map { !$0.leftToYou(self) } == true && answerableQuestion != nil }
 
-  /// 拍板里会话那一半的唯一规则：在等回答且等的不是 Cue（`waitsForCue`）。拍板卡、"等你确认"的提示
-  /// （Mac 的通知、手机的前台横幅与锁屏推送标志，`CueStore.reaches`）都只认它。歇着的不算，留给你回的是待回复（`awaitsReply`），两种合起来是等你（`CueTally`）。
+  /// 拍板里会话那一半的唯一规则。拍板卡、“等你确认”的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`CueStore.reaches`）都只认它。
+  /// 歇着的不算，留给你回的是待回复（`awaitsReply`），两种合起来是等你（`CueTally`）。
   public func asksYou(_ cue: CueDuty?) -> Bool { runtimeState == .known(.waitingForUser) && !waitsForCue(cue) }
 
-  /// 待回复的唯一规则：停着没在问（歇着或出错），Cue 值班时这次停下留给了你回（`CueDuty.leftToYou`：你发起的一轮当场就是，Cue 发起的由它定）。
-  /// 会话行的"待回复"（出错的照样显示出错）、会话条、名牌、看板等你列里的待回复与待回复的提示（`CueStore.sessionsAwaitingReply`、`reaches`）都只认它。
+  /// 待回复的唯一规则。会话行的“待回复”（出错的照样显示出错）、会话条、名牌、看板等你列里的待回复与待回复的提示（`CueStore.sessionsAwaitingReply`、`reaches`）都只认它。
   public func awaitsReply(_ cue: CueDuty?) -> Bool { runtimeState != .unknown("unconfirmed") && state != .known(.waitingForUser) && cue?.leftToYou(self) == true }
 
-  /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
+  /// 任何设备上算出来都一样。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
 }
 
@@ -191,7 +178,7 @@ extension PiSessionState {
 
 extension PiSessionState: Record {
   static let table = Table.piSessionStates
-  /// 对话的投影（见 `PiRecap`），只由 `writePiTranscript` 写
+  /// 只由 `writePiTranscript` 写
   static let recapColumns: Set<String> = ["lastPrompt", "lastReply", "pendingPrompt", "pendingTools", "answeredAt"]
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
@@ -218,13 +205,12 @@ extension PiSessionState: Record {
       pendingTools: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(25).flatMap(PiChatMessage.Tools.init(stored:)),
       model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)), fast: row.intOrNil(30).map { $0 == 1 },
       context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(22)),
-      agent: row.textOrNil(23).map(Open.init(rawValue:)) ?? .known(.pi), catalogID: row.uuidOrNil(24), turnStartedAt: row.dateOrNil(26),
+      agent: Open(rawValue: row.text(23)), catalogID: row.uuidOrNil(24), turnStartedAt: row.dateOrNil(26),
       answeredAt: row.dateOrNil(27), failure: row.textOrNil(28).map(Open.init(rawValue:)), bootID: row.textOrNil(29), createdForTaskID: row.uuidOrNil(31))
   }
 }
 
 extension PiSubagentState {
-  /// 在跑（只此一个定义：会话卡片的"2/8"、"在做"区头的子代理数、名册的排序与颜色、等子代理停住的兜底都读它）：状态是在跑。
-  /// 在被审查的不算：审查期间它自己是闲的，等的是审查它的那位。
+  /// 只此一个定义，各处都读它。在被审查的不算：审查期间它自己是闲的，等的是审查它的那位。
   public var isRunning: Bool { phase == .known(.running) }
 }

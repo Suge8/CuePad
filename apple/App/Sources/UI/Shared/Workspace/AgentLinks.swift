@@ -1,11 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 灵感与任务交给了哪个 Agent 会话、那个会话此刻怎样（含发送中、有新回复）：行与卡上的状态点读它。
-/// 会话来自 `CueStore.handedSessions`（执行过的记在卡上，手机发出还没执行的读投送请求）。
 nonisolated struct AgentLinks: Sendable, Equatable {
     var items: [UUID: PiSessionListItem]
-    /// 从这条开了新会话、还没开好（"正在开会话"）：用哪家开。
     var launching: [UUID: AgentKind]
 
     static func read(from store: isolated CueStore) throws -> AgentLinks {
@@ -18,8 +15,7 @@ nonisolated struct AgentLinks: Sendable, Equatable {
 }
 
 extension EnvironmentValues {
-    /// 灵感与任务交给的会话（`AgentLinks.items`）：整个窗口一份（`Workspace.agentLinks`），由 `WindowCardAgents` 放进环境，
-    /// 页面、卡与行各取自己的，不自己订阅。
+    /// 整个窗口一份（`Workspace.agentLinks`），由 `WindowCardAgents` 放进环境；页面、卡与行各取自己的，不自己订阅。
     @Entry var cardAgents = AgentLinks(items: [:], launching: [:])
 }
 
@@ -32,8 +28,6 @@ struct WindowCardAgents: ViewModifier {
     func body(content: Content) -> some View { content.environment(\.cardAgents, workspace.agentLinks) }
 }
 
-/// 灵感或任务上的会话状态点（发送中、工作中、等你确认、有新回复……，同 `PiStateDot`）：点它看那个会话；
-/// 开新会话还没开好时是一圈石绿空心点（"正在开会话"，在动的状态同 `PiShown.tint`）。没交给过 Agent 时不画。
 struct AgentDot: View {
     let card: UUID
     /// 点按格比挂着它的那一行字高（手机 44 见方）：挂在行里时上下各伸出这么多，不把行撑高。

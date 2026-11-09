@@ -9,7 +9,7 @@ import Foundation
 /// close 的短延迟模拟设备释放，用来检查关闭中的操作；不代表真实通话或音轨证据。
 extension DebugScene {
     static func voiceLayoutIfAsked(_ workspace: Workspace) async {
-        guard let state = defaults.string(forKey: "CuePadVoiceLayout") else { return }
+        guard let state = args.voiceOpts.layout else { return }
         await running("通话布局") {
             let store = workspace.services.store
             let host = "voice-layout-demo"
@@ -22,15 +22,15 @@ extension DebugScene {
                 $0.enabledAt = .now; $0.hostID = host; $0.runtime = .known(.codex)
                 $0.model = model.model.map { AgentKind.codex.modelRef($0.key) }; $0.effort = .known(.medium); $0.fast = false
             }
-            let count = defaults.integer(forKey: "CuePadVoiceHistory")
+            let count = args.voiceOpts.history
             let existing = try await store.cueMessages(limit: .max).filter { $0.author == .known(.you) }.count
             for index in existing..<max(existing, count) {
                 let request = try await store.addCueMessage(.you, text: String(localized: "检查发布事项 \(index + 1)", table: "Demo"))
                 try await store.markCueMessagesDelivered([request.id])
                 _ = try await store.addCueMessage(.cue, text: String(localized: "**演示结果 \(index + 1)**\n\n- 核对 Mac 界面\n- 核实手机接入", table: "Demo"), answeredRequests: [request.id])
             }
-            if let ask = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(ask, store: store, task: nil) }
-            if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
+            if let ask = args.cueOpts.ask { try await seedAsk(ask, store: store, task: nil) }
+            if let draft = args.cueOpts.draft { workspace.cue.draft.text = draft }
             for await ready in Observations({ workspace.cue.canHear }) where ready { break }
             workspace.showCue()
             if DebugVoiceMotion.enabled { Task { await DebugVoiceMotion.run(workspace) }; return }
@@ -39,7 +39,7 @@ extension DebugScene {
             guard let call = workspace.voice else { return }
             for await phase in Observations({ call.phase }) where phase == .listening { break }
             try await DebugVoiceLayoutScenario.seed(call, workspace: workspace)
-            if defaults.bool(forKey: "CuePadVoiceReadings") {
+            if args.voiceOpts.readings {
                 for index in 1...2 {
                     _ = try await store.addCueMessage(.cue, text: String(localized: "**演示结果 \(index)**\n\n- 核对 Mac 界面\n- 核实手机接入", table: "Demo"), answeredRequests: [])
                 }
@@ -64,7 +64,7 @@ final class DebugVoiceLayoutMedia: VoiceMedia {
     func play() async throws {}
     func setMuted(_ value: Bool) async throws {}
     func close() async throws {
-        let seconds = DebugScene.defaults.double(forKey: "CuePadVoiceCloseSeconds")
+        let seconds = DebugScene.args.voiceOpts.closeSeconds
         try await Task.sleep(for: .seconds(seconds > 0 ? seconds : 2))
     }
 }

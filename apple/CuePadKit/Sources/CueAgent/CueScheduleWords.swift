@@ -9,14 +9,12 @@ enum CueScheduleWords {
     switch rule.cycle {
     case .daily: return "每天 \(clock)"
     case .weekly(let days):
-      // 周一在前、周日在后
       let names = days.sorted { ($0 + 5) % 7 < ($1 + 5) % 7 }.map { ["日", "一", "二", "三", "四", "五", "六"][$0 - 1] }
       return "每周\(names.joined(separator: "、")) \(clock)"
     case .monthly(let day): return "每月 \(day) 号 \(clock)"
     }
   }
 
-  /// 某个时刻：今天的只写时刻，别的天带上日期（"10-26 9:00"）。
   static func time(_ date: Date, now: Date) -> String {
     let parts = Calendar.current.dateComponents([.month, .day, .hour, .minute], from: date)
     let clock = String(format: "%d:%02d", parts.hour ?? 0, parts.minute ?? 0)

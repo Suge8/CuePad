@@ -1,27 +1,21 @@
 import SwiftUI
 
-/// 输入框的尺寸：单行时高 `slot`（字行 + 上下各 `textTop`；字号大了是 `lineSlot`），圆角取一半成胶囊；圆钮一格 `slot`（`CircleGlyph` 的圆 + 四周的边距）、
-/// 离边 `inset`，与外框同心。一直展开时文字区下面只留 `textBottomOpen`，再下面是一格高的那一排；会展开收起的工具排在文字下面，
-/// 至少圆钮的圆高（`slot - 2 * inset`，字号大了工具排折行时随它长高），离底 `inset`，与两颗圆钮同一条中线。
 enum ComposerMetrics {
     static let inset: CGFloat = 8
     static let slot: CGFloat = 56
     static let textTop: CGFloat = 17
     static let textBottomOpen: CGFloat = 4
-    /// 输入框里的圆钮（`CircleGlyph`）：看得见的直径与点得到的边长。
     static let glyph: CGFloat = 40
     static let glyphTarget: CGFloat = 44
     static let noticeSpacing: CGFloat = 4
     static let noticePadding: CGFloat = 8
-    /// 两行说明的字（`Typography.meta` 一行约 16）连同两行之间的空；会话页对话末尾按动态字号缩放它（`PiConversation`），外边距不缩放。
+    /// 会话页对话末尾按动态字号缩放它（`PiConversation`），外边距不缩放。
     static let noticeTextHeight: CGFloat = 2 * 16 + noticeSpacing
 
-    /// 两行说明连同离输入框的间隔占多高（字高 `textHeight`）。
     static func noticeClearance(textHeight: CGFloat) -> CGFloat {
         textHeight + 2 * noticePadding + Spacing.item
     }
 
-    /// 一行字与上下边距合起来的高，至少 `slot`：没露出工具排时圆钮占这么高、居中，与最后一行字同一条中线。
     static func lineSlot(line: CGFloat) -> CGFloat { max(slot, ceil(line + 2 * textTop)) }
 }
 
@@ -35,24 +29,21 @@ enum ComposerMetrics {
 /// 输入框被切掉下半截），也比打下第一个字后矮。
 struct ComposerHeight {
     private var fits: [Key: Fit] = [:]
-    /// 文字第几版（`textChanged` 加一）：同一版里量过的直接用。
     private var version = 0
 
     private struct Key: Hashable { var width, em, limit: CGFloat }
     private struct Fit {
         var height: CGFloat
-        /// 撑满上限的那段开头；没撑满是 nil。
         var filled: NSString?
         var version: Int
     }
 
-    /// 文字变了（打字、外部写入）：只留这一版里问过、撑满过上限的，别的作废（动画里一帧一个宽度，不留着越攒越多）。
+    /// 只留这一版里问过、撑满过上限的，别的作废：动画里一帧一个宽度，不留着越攒越多。
     mutating func textChanged() {
         fits = fits.filter { $0.value.version == version && $0.value.filled != nil }
         version += 1
     }
 
-    /// `measure` 是平台的排版：按这个宽度排这段字有多高。
     mutating func height(of text: NSString, width: CGFloat, em: CGFloat, limit: CGFloat, measure: (String) -> CGFloat) -> CGFloat {
         let text = text.length == 0 ? "国" : text
         let key = Key(width: width, em: em, limit: limit)
@@ -95,7 +86,7 @@ extension String {
     }
 }
 
-/// 输入框的形态，几时一行、几时两层只在这里定（一个输入框一个值，调用方按场景给）。
+/// 一个输入框一个值，调用方按场景给。
 enum ComposerForm: Equatable {
     /// 一直是两层、工具排一直在：浮起的输入框（新会话、交给 Agent）、Mac 菜单栏面板、Mac 会话回复框。
     case open
@@ -116,17 +107,14 @@ enum ComposerForm: Equatable {
 }
 
 extension View {
-    /// 叠在这一块上沿之上（隔 `Spacing.item`，同输入框上面叠着的卡）、底边对着上沿往上长，不进排版：挂在上沿一条零高的线上，叠放的东西多高都不改这一块的高。
-    /// 排进来的话它一出一收这一块就当帧变高变矮，浮在它上面的对话跟着跳；对话页上盖住的是对话末尾常驻那一行的位置（`ChatLiveSlot` 按它的高让出），不是内容。
-    /// 输入框上方的说明（`composerNotice`）。
+    /// 不进排版：挂在上沿一条零高的线上，叠放的东西多高都不改这一块的高。排进来的话它一出一收这一块就当帧变高变矮，浮在它上面的对话跟着跳；对话页上盖住的是对话末尾常驻那一行的位置（`ChatLiveSlot` 按它的高让出），不是内容。
     func floatingAbove(@ViewBuilder _ content: () -> some View) -> some View {
         overlay(alignment: .top) {
             Color.clear.frame(height: 0).overlay(alignment: .bottomLeading) { content().padding(.bottom, Spacing.item) }
         }
     }
 
-    /// 输入框上方的几行说明（同步到不了 Mac、命令的进度、没换成的原因、新会话开到哪了）：一块垫实底的玻璃叠在输入框上方（`floatingAbove`）。
-    /// 只是说明、不接点按：后面的对话照常滚、照常点。`shown` 为 false 时什么都不画。
+    /// 只是说明、不接点按：后面的对话照常滚、照常点。
     func composerNotice(_ shown: Bool, @ViewBuilder _ notice: () -> some View) -> some View {
         floatingAbove {
             if shown {

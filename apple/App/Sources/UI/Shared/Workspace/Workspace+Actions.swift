@@ -1,6 +1,13 @@
 import CueStore
 
 extension Workspace {
+    func stop(_ session: PiSessionState) async {
+        do {
+            let request = try await services.stop(session)
+            if let failure = try await services.store.outcome(of: request).failure { throw SendError.notDelivered(failure) }
+        } catch { fail(error) }
+    }
+
     /// 请会话所在的 Mac 结束它。进度（正在结束、没能结束的原因）只来自这条结束请求，界面按 `DeliveryRequest.shownEnd` 读；
     /// 还在路上时再点不会再发一条（Store 去重）。写不进请求时提示。
     func end(_ session: PiSessionState) async {

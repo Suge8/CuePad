@@ -8,8 +8,7 @@ import Foundation
 /// - `user_message_chunk` 是你的话（文字与图片各一行；`hideFromScrollback` 的是 Grok 自己垫进去的，不算），一到就算这一轮开始。
 ///   发它的请求 id 只写在它之后的行上（`_meta.promptId`、`turn_completed` 的 `prompt_id`）：这一句先存在检查点里（`held`），
 ///   读到下一行再记下；CuePad 发的请求 id 是 `cuepad-<投送请求 id>`（`GrokDialect.promptMeta`）。
-/// - `agent_message_chunk` 是说的一段，`tool_call`、`tool_call_update` 是工具活动；做完那条的 `content` 里 ACP 的图片块
-///   （`{type: content, content: {type: image, data}}`，grok 1.0.70 读图实测）是工具结果里的图，缩小后记在那一步上（`ToolImage`）；
+/// 做完那条工具活动的 `content` 里 ACP 的图片块（`{type: content, content: {type: image, data}}`，grok 1.0.70 读图实测）是工具结果里的图，缩小后记在那一步上（`ToolImage`）；
 /// - `turn_completed`（方法 `_x.ai/session/update`）结束这一轮：`cancelled` 是被停下，其余是做完（出错的原话不在记录里）。
 /// 工作目录在路径里（`SessionFileFormat.cwd`）；会话名不在这个文件里，在同目录的 `summary.json`（`name`）。
 enum GrokHistory {
@@ -74,7 +73,6 @@ enum GrokHistory {
         }
     }
 
-    /// 你的话的一行（文字或图片）：并进存着的那一句。第一行开始这一轮。
     private static func hold(_ content: JSONValue?, _ entry: PiHistory.Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
         var said = transcript.said()
         if let held = cp.held {
@@ -91,7 +89,6 @@ enum GrokHistory {
         cp.held = PiHistoryCheckpoint.Held(text: said.text, stored: said.stored, id: first.id, seq: first.seq, at: first.at)
     }
 
-    /// 存着的那一句等到了发它的请求 id（`prompt`）：照常记下。
     private static func release(_ prompt: String?, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) {
         guard let held = cp.held else { return }
         cp.held = nil

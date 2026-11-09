@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import CueText
 import UIKit
 import UniformTypeIdentifiers
 
@@ -11,7 +12,6 @@ public struct PastedItem: @unchecked Sendable {
 
     public init(_ provider: NSItemProvider) { self.provider = provider }
 
-    /// 这些种类（一个条目的，或整个剪贴板的）当附件收。
     public static func isFile(_ types: [UTType]) -> Bool {
         if types.contains(where: { $0.conforms(to: .image) || $0.conforms(to: .fileURL) }) { return true }
         return !types.contains { $0.conforms(to: .text) || $0.conforms(to: .url) } && types.contains { $0.conforms(to: .data) }
@@ -19,7 +19,6 @@ public struct PastedItem: @unchecked Sendable {
 
     public var isFile: Bool { Self.isFile(provider.registeredContentTypes) }
 
-    /// 剪贴板里当附件收的条目。
     public static func files(on pasteboard: UIPasteboard) -> [IncomingFile] {
         pasteboard.itemProviders.map(PastedItem.init).filter(\.isFile).map(IncomingFile.pasted)
     }
@@ -36,9 +35,8 @@ public struct PastedItem: @unchecked Sendable {
             let item = self, suggested = provider.suggestedName
             _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, fileError in
                 if let url {
-                    let ext = url.pathExtension
-                    let name = suggested.map { ext.isEmpty || $0.lowercased().hasSuffix("." + ext.lowercased()) ? $0 : $0 + "." + ext }
-                    continuation.resume(with: Result { (try files.store(fileAt: url), name ?? url.lastPathComponent) })
+                    let name = AttachmentName.suggested(suggested, for: url)
+                    continuation.resume(with: Result { (try files.store(fileAt: url), name) })
                 } else if item.provider.canLoadObject(ofClass: UIImage.self) {
                     _ = item.provider.loadObject(ofClass: UIImage.self) { object, objectError in
                         guard let png = (object as? UIImage)?.pngData() else {

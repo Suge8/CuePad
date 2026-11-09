@@ -2,9 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 点开编辑页的卡（墙上卡片、"更早"的行）的按压：样子同 `PressStyle(.card)`（`PressFeedback`，Mac 是按下即压暗、松开即复原），
-/// 只是按下与否看这张卡的按下状态（`cardHeld`：鼠标按着——AppKit 分发按下事件时就记下，早于按钮识别——或已打开、编辑页还在准备），
-/// 按钮自己识别出的按下兜底：打开后编辑页还在准备的那几帧保持按下，编辑页淡入时松开；松开没打开（拖走、取消）就复原。
 struct CardOpenStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         Pressed(configuration: configuration)
@@ -21,7 +18,7 @@ struct CardOpenStyle: ButtonStyle {
     }
 }
 
-/// 卡面：首图、标题、摘要、元信息（时间、发送目标、浮回、任务与置顶标记）。单独一个视图：悬停只改卡的外框，卡面不随之重算。
+/// 单独一个视图：悬停只改卡的外框，卡面不随之重算。
 private struct CardFace: View {
     let card: Card
     let lastTarget: String?
@@ -77,7 +74,6 @@ struct CardTile: View {
             }
         }
         .cardPresence(card.id, in: workspace)
-        // 灵感要做就拖到上面任务纸的一行上接进那条任务（`TaskOutline`），或拖到纸底"添加任务"上照它新建一条（`newTaskDrop`）
         .cardDraggable(.idea(card.id), shape: .rect(cornerRadius: Radius.card))
         .onHover { hovering = $0 }
         .presetHover($hovering)
@@ -92,8 +88,6 @@ struct CardTile: View {
     }
 }
 
-/// 悬停在墙上一张卡、"更早"一行时露出的删除：进回收站，提示里可撤销（`Workspace.trash`，与右键菜单、⌘⌫ 同一处）。
-/// 批量选择时不出现（删除在底部的操作栏里）。
 struct DeleteCardButton: View {
     let card: UUID
     @Environment(Workspace.self) private var workspace
@@ -111,8 +105,6 @@ struct DeleteCardButton: View {
     }
 }
 
-/// 删除钮的样子：看得见的圆是 `inline` 那一档（浮在卡角、行尾，不压字），点得到的是 `ControlSize.target` 见方；
-/// 指针停在钮上（`buttonHovered`）时垃圾桶变成出错色。
 private struct DeleteGlyph: View {
     @Environment(\.buttonHovered) private var lit
     @Environment(\.palette) private var palette
@@ -130,7 +122,7 @@ private struct DeleteGlyph: View {
     }
 }
 
-/// 批量选择里选上的卡：纸上铺一层选中底，右上角一个墨色对勾（全 App 一套选中，docs/ui.md「选中」，不着靛青）。
+/// 全 App 一套选中（docs/ui.md「选中」），不着靛青。
 /// 挂在卡面外、纸里面：底垫在字下，卡面不随选中重算。
 private struct SelectedCard: ViewModifier {
     @Environment(\.cardSelected) private var selected
@@ -149,7 +141,7 @@ private struct SelectedCard: ViewModifier {
     }
 }
 
-/// 批量选择里选上的记号：墨色圆里一个纸色对勾（深色下墨是浅的，勾跟着取纸色才看得见）。墙上的卡与"更早"的行同一个。
+/// 墨色圆里一个纸色对勾：深色下墨是浅的，勾跟着取纸色才看得见。
 struct PickedMark: View {
     @Environment(\.palette) private var palette
 

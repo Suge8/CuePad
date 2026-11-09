@@ -14,9 +14,8 @@ extension OpenCodeRuntime {
         return (connection, tracked, sessionID)
     }
 
-    /// 以这句开新一轮：先 `interrupt`（歇着时是空操作），再按缺省的 `steer` 收进收件箱。`interrupt` 受理即回、清掉这一轮已记下的唤醒，
-    /// 之后收进来的话在被停下的这一轮收尾时开出新一轮（服务的 `SessionRunCoordinator`），所以不会并进被停下的这一轮。
-    /// 原生的 `interrupt?resume=true` 是"先收话再打断"：两次请求之间这一轮到了步骤边界就会把话读进将被停下的这一轮，不用。
+    /// `interrupt` 受理即回、清掉这一轮已记下的唤醒，之后收进来的话在被停下的这一轮收尾时开出新一轮（服务的 `SessionRunCoordinator`），所以不会并进被停下的这一轮。
+    /// 原生的 `interrupt?resume=true` 是“先收话再打断”：两次请求之间这一轮到了步骤边界就会把话读进将被停下的这一轮，不用。
     public func send(_ message: PiMessage, in id: PiSession.ID) async throws {
         var target: (Connection, String)?
         // 等重连与停下上一轮是可被停止取消的一段；prompt 交出后不取消（话已收下）
@@ -74,7 +73,7 @@ extension OpenCodeRuntime {
         return phase
     }
 
-    /// 停下在跑的这一轮（含压缩）。在不在跑由服务判断（歇着时是空操作），不看事件流推出的忙闲。
+    /// 在不在跑由服务判断（歇着时是空操作），不看事件流推出的忙闲。
     private func interrupt(_ sessionID: String, _ connection: Connection) async throws {
         try await connection.client.call("POST", "/api/session/\(sessionID)/interrupt")
     }
@@ -112,7 +111,9 @@ extension OpenCodeRuntime {
         try await connection.client.call("POST", "/api/session/\(target.sessionID)/form/\(target.id)/reply", body: Reply(answer: [field.key: value]))
     }
 
-    public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
+    public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
+        guard config.fast == nil else { throw PiBridgeError.unsupported }
+        let model = config.model, thinking = config.thinking, name = config.name
         let (connection, tracked, sessionID) = try await live(id)
         if let name {
             struct Update: Encodable { var title: String }
@@ -192,7 +193,6 @@ extension OpenCodeRuntime {
         return bridgeID(info.id, connection)
     }
 
-    /// 连着的服务；没开就把它拉起来，等连上、拉完快照。
     func ensureService() async throws -> Connection {
         if connection == nil {
             try await launchService()

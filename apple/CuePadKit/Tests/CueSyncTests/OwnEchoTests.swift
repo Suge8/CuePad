@@ -4,14 +4,11 @@ import Testing
 
 @testable import CueSync
 
-/// 用户在一台 Mac 上连续编辑同一条提示词：本机上传过的版本经拉取回到本机时，本机往往已有更新的编辑。
-/// 回声不是别的设备的并发编辑，不能留下冲突副本。从同步入口（`CloudSync`）走，App 中途重启过。
 struct OwnEchoTests {
   let fixture = try! Fixture()
   let cloud = EchoCloud()
   var store: CueStore { fixture.store }
 
-  /// 上传已落账，本机又改了（还没传上去）、App 也重启过，之后拉取才带回那一版。
   @Test func anUploadedVersionPulledBackAfterALaterEditIsNotAConflict() async throws {
     let (sync, card) = try await syncedCard()
     try await edit(card, "第一版")
@@ -20,7 +17,6 @@ struct OwnEchoTests {
     try await expectEchoIgnored(card, after: sync)
   }
 
-  /// 交出去的那一版服务器收下了、结果却没回到本机（回包丢失），App 重启、本机又改过，那一版经拉取回来。
   @Test func anUploadWhoseResultNeverArrivedIsNotAConflict() async throws {
     let (sync, card) = try await syncedCard()
     await cloud.loseNextResult()
@@ -30,7 +26,6 @@ struct OwnEchoTests {
     try await expectEchoIgnored(card, after: sync)
   }
 
-  /// 同步过一遍（有了令牌）、传上去了的一张卡。
   private func syncedCard() async throws -> (CloudSync, Card) {
     let sync = CloudSync(store: store) { cloud }
     await sync.start()
@@ -40,7 +35,6 @@ struct OwnEchoTests {
     return (sync, card)
   }
 
-  /// 服务器上留着本机交出去的"第一版"；App 重启，本机改成"第二版"（上传挂住，服务器上还是第一版），拉回第一版。
   private func expectEchoIgnored(_ card: Card, after sync: CloudSync) async throws {
     await sync.stop()
     await cloud.hold()
@@ -64,7 +58,6 @@ struct OwnEchoTests {
   private func name(_ card: Card) -> String { card.id.uuidString.lowercased() }
 }
 
-/// 内存里的 iCloud（`SimulatedCloud`），上传能挂住（`hold`），也能收下后丢掉结果、报断网（`loseNextResult`）。
 actor EchoCloud: SyncCloud {
   private let inner: SimulatedCloud
   private var holding = false
