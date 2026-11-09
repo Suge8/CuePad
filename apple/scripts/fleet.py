@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """一个检出里同时开 Mac、iPhone 模拟器、iPad 模拟器三个隔离实例，共用一朵模拟云（SharedCloud，不连 iCloud）。xc.sh fleet 调它。
-  fleet up [--keep] [mac] [iphone] [ipad]   起实例（缺省三个）：云与各端的库先清空，--keep 沿用上次的；每个实例经 xc.sh run 起，
+  fleet up [--keep] [mac] [iphone] [ipad] [-- 启动参数…]   起实例（缺省三个）：云与各端的库先清空，--keep 沿用上次的；-- 之后的启动参数给这次起的每一端
+                                            （如 -CuePadSampleCrash YES 各端存几份样例诊断，docs/diagnose.md 的送达验收）；每个实例经 xc.sh run 起，
                                             存活 CUEPAD_RUN_SECONDS 秒（缺省 30 分钟）；打印每一端的 PID 或 UDID，写进 .derived/fleet/fleet.json（ui.py 按角色名认）
   fleet status                              各端还在不在
   fleet down                                结束本检出 run 起的全部实例（同 xc.sh stop）
@@ -32,9 +33,10 @@ CLOUD = f"{DIR}/cloud"
 REAL_LIBRARIES = f"{APPLE}/.derived/fleet-real"
 CLOUD_SIMS = {"iphone": ("CuePad Cloud iPhone", os.environ.get("CUEPAD_IOS_DEVICE", "iPhone 17")),
               "ipad": ("CuePad Cloud iPad", os.environ.get("CUEPAD_IPAD_DEVICE", "iPad Pro 11-inch (M5)"))}
-# 角色 → (xc.sh 的平台, 启动参数)：iPhone 停在 Cue 页（建灵感的一端），Mac 与 iPad 打开默认项目页（新灵感出现的地方）
+# 角色 → (xc.sh 的平台, 启动参数)：iPhone 停在 Cue 页（建灵感的一端），Mac 与 iPad 打开默认项目页（新灵感出现的地方）；
+# Mac 每 5 秒收一次各端送来的诊断，落在 <Mac 的库>/Logs（CUEPAD_DIAG_DIR 指给 xc.sh diag）
 ROLES = {
-    "mac": ("mac", ["-CuePadScene", "project", "-CuePadProject", "默认"]),
+    "mac": ("mac", ["-CuePadScene", "project", "-CuePadProject", "默认", "-CuePadDiagnosticsEvery", "5"]),
     "iphone": ("ios", ["-CuePadScene", "cue"]),
     "ipad": ("ipad", ["-CuePadScene", "project", "-CuePadProject", "默认"]),
 }
@@ -68,7 +70,7 @@ def cloud_sims():
     return found
 
 
-def up(xc, roles, keep, real=False):
+def up(xc, roles, keep, real=False, extra=()):
     if real and "mac" in roles:
         raise SystemExit("--real 只起 iphone、ipad：Mac 的真云在虚拟机里跑")
     if not keep:
@@ -85,7 +87,7 @@ def up(xc, roles, keep, real=False):
         if real:
             env["CUEPAD_PIN_SIM"] = pins[role]
         cloud = ["-CuePadCloudKit", "YES"] if real else ["-CuePadSharedCloud", CLOUD]
-        p = subprocess.run([xc, "run", platform, "--", *cloud, *args], env=env, stdout=subprocess.PIPE, text=True)
+        p = subprocess.run([xc, "run", platform, "--", *cloud, *args, *extra], env=env, stdout=subprocess.PIPE, text=True)
         if p.returncode:
             raise SystemExit(f"{role} 起不来（xc.sh run {platform} 退出 {p.returncode}），已起的用 fleet down 收")
         m = re.search(r"^(\d+)(?: ([0-9A-F-]{36}))?$", p.stdout, re.M)
@@ -144,9 +146,10 @@ def main(argv):
     xc = argv[0]
     cmd, rest = (argv[1], argv[2:]) if len(argv) > 1 else ("", [])
     if cmd == "up":
+        rest, extra = (rest[:rest.index("--")], rest[rest.index("--") + 1:]) if "--" in rest else (rest, [])
         real = "--real" in rest
         roles = [a for a in rest if a in ROLES] or (["iphone", "ipad"] if real else list(ROLES))
-        up(xc, roles, "--keep" in rest, real)
+        up(xc, roles, "--keep" in rest, real, extra)
     elif cmd == "cloud-sims":
         for role, udid in cloud_sims().items():
             print(f"{role}\t{CLOUD_SIMS[role][0]}\t{udid}")

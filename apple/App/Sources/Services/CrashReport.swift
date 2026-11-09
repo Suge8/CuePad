@@ -157,7 +157,7 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
 }
 
 /// 系统结束进程时终止原因里的终止码与看门狗事件（"code:0x8BADF00D … WatchdogEvent: process-exit"）的人话。
-/// 码见 Apple 的 "Understanding the exception types in a crash report"。
+/// 码见 Apple 的 "Understanding the exception types in a crash report"。xc.sh diag 解析系统的崩溃报告时照抄这几句人话（device_diag.py 开头的表）：改这里就改那里。
 nonisolated enum Termination {
     static func key(_ reason: String) -> String {
         guard let code = code(reason) else { return reason.replacing(/\d+/, with: "#") }

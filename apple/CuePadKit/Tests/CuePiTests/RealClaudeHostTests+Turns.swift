@@ -73,6 +73,7 @@ extension RealClaudeHostTests {
             let after = Date()
             try await testbed.bridge.send(PiMessage(text: "只回复 AFTER"), to: id)
             try await testbed.waitForTurn(id, since: after)
+            try await testbed.waitForDraftLanded(id)
             #expect(try testbed.transcript(testbed.bridge.session(id: id)?.sessionFile).recap.lastReply == "AFTER")
             #expect(!FileManager.default.fileExists(atPath: never.path))
         }

@@ -51,7 +51,7 @@ extension RealClaudeTerminalTests {
             #expect(question.kind == .known(.select) && question.options == ["茶", "咖啡"])
             try await testbed.bridge.answer(.option("咖啡"), to: try #require(question.promptID), in: session.id)
             try await testbed.waitForTurn(session.id, since: chose)
-            #expect(await terminal.screen.contains("→ 咖啡"))
+            try await testbed.waitOnScreen("终端里画出答案", on: terminal, in: session.id) { await terminal.screen.contains("→ 咖啡") }
             #expect(testbed.model.requests.last { $0.prompt.contains("ASK-DRINK") && $0.step == 1 }?.results.last?.contains("咖啡") == true)
 
             let typed = Date()
@@ -60,7 +60,7 @@ extension RealClaudeTerminalTests {
             #expect(again.allowsOther)
             try await testbed.bridge.answer(.text("果汁"), to: try #require(again.promptID), in: session.id)
             try await testbed.waitForTurn(session.id, since: typed)
-            #expect(await terminal.screen.contains("→ 果汁"))
+            try await testbed.waitOnScreen("终端里画出答案", on: terminal, in: session.id) { await terminal.screen.contains("→ 果汁") }
         }
     }
 
@@ -110,7 +110,7 @@ extension RealClaudeTerminalTests {
             #expect(form.kind == .known(.select) && form.options == ["茶", "咖啡"])
             try await testbed.bridge.answer(.option("咖啡"), to: try #require(form.promptID), in: session.id)
             try await testbed.waitForTurn(session.id, since: asked)
-            #expect(await terminal.screen.contains(#""drink":"咖啡""#))
+            try await testbed.waitOnScreen("终端里画出答案", on: terminal, in: session.id) { await terminal.screen.contains(#""drink":"咖啡""#) }
 
             testbed.presence.isPresent = true
             try await terminal.type("MCP-PICK")

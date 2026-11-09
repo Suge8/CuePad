@@ -149,7 +149,7 @@ extension CueStore {
     return [(task, leaf)]
   }
 
-  func sessionState(_ sessionID: String) throws -> PiSessionState? {
+  public func sessionState(_ sessionID: String) throws -> PiSessionState? {
     try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
   }
 

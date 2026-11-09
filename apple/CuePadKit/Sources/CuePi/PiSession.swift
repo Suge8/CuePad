@@ -77,6 +77,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var subagents: [PiSubagentState] = []
     /// CuePad 在后台托管的 Pi（RPC 模式，没有终端界面）：启动时经环境变量 `CUEPAD_HOSTED` 告诉扩展，扩展在 hello 里带回
     public internal(set) var hosted = false
+    /// 见 `AgentKind.confirmsFromHistory`
+    public var confirmsFromHistory: Bool { agent.confirmsFromHistory(hosted: hosted) }
     /// 未选模型时 `model` 与 `thinking` 为 nil
     public internal(set) var model: PiModelOption? = nil
     public internal(set) var thinking: Open<PiThinkingLevel>? = nil
@@ -255,6 +257,7 @@ extension PiBridgeError: ShownError {
         case .rejected("user_turn"): "会话已进入另一轮，Cue 没有打断"
         case .rejected("unconfirmed_turn"): "当前轮次的来源尚未确认，Cue 没有打断"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
+        case .rejected("not_ready"): "终端里的会话还没起好，没有发出，可以重发"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
         case .unknownModel(let agent): "\(agent.name) 里没有这个模型"
         case .refused(let reason): ShownText.verbatim(reason).value

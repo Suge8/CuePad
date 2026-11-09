@@ -12,12 +12,16 @@ public enum AgentTimeouts {
     public static let end: Duration = .seconds(10)
     public static let command: Duration = .seconds(10)
     public static let shell: Duration = .seconds(5)
+    /// Codex 一轮要歇下前，同一进程上认不出主人的线程一起再问的总时限：这段时间卡片仍显示在跑，到点没回的等它下一条推送再问
+    public static let settleAsk: Duration = .seconds(5)
     public static let list: Duration = .seconds(15)
     /// CuePad 自有子进程的强制收尾宽限；已认领的 Pi 经桥走宿主退出，不用强杀兜底。
     public static let endGrace: Duration = .seconds(5)
     /// 停下在跑的一轮后等它收尾（ACP 的取消回应、Claude Code 的 `result`、等发出的话开跑）与 `/clear` 的结果：对端接了请求却不收尾时到点放弃，免得停止与随后的发话永远等下去
     public static let stop: Duration = .seconds(30)
     public static let hostedIdle: Duration = .seconds(30 * 60)
+    /// 终端里刚起的 Claude Code 起好（能收话）：本机上桥后约 0.5 秒，留给慢机器
+    public static let terminalReady: Duration = .seconds(15)
 }
 
 /// 至多等 `limit`（按 `timing` 量）：到点取消 `operation` 并抛 `timeout`。`operation` 要响应取消（到点后要等它返回）。

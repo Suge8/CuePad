@@ -44,6 +44,8 @@ nonisolated struct DebugArgs: Decodable {
     let demo: Bool
     /// `-CuePadDemoMac YES`：演示库里一台会回话的"demo-mac"
     let demoMac: Bool
+    /// `-CuePadDiagnosticsEvery <秒>`（Mac）：隔多久收一次各设备经 iCloud 送来的诊断（默认 `DiagnosticInbox.interval`；xc.sh fleet 验收时调短）
+    let diagnosticsEvery: Double?
     /// `-CuePadExtensionLibrary <隔离目录>`：扩展预览只读这里的快照，不受主 App 同时重写派生缓存影响
     let extensionLibrary: String?
     /// `-CuePadFileArrives <秒>`（配 `-CuePadFiles YES`）：过这么久那份还在 iCloud 的文件下载、落地

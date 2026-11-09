@@ -7,7 +7,6 @@ export const VOICE_VERSION = 1;
 export const MAX_VOICE_WIRE_BYTES = 64 * 1024;
 const MAX_DEVICE_BYTES = 128;
 const MAX_SEALED_BYTES = 32 * 1024 + 28; // AES.GCM 的 nonce 与 tag
-const LIFETIME_MS = 30_000;
 const REGISTRATION_CONTEXT = "cuepad-relay-voice-v1";
 const REGISTRATION_TIMEOUT_MS = 10_000;
 const REPLACED = 4409;
@@ -24,7 +23,7 @@ type Header = {
 };
 type Packet = { header: Header; sealed: string };
 type Departure = "disconnected" | "replaced";
-type Rejection = "expired" | "leaseMismatch" | "unavailable" | "tooLarge" | "invalid";
+type Rejection = "leaseMismatch" | "unavailable" | "tooLarge" | "invalid";
 type Socket = ServerWebSocket<Peer>;
 type Member = { socket: Socket; endpoint: Endpoint; watching: Set<Member>; watchers: Set<Member> };
 export type Peer = {
@@ -204,10 +203,7 @@ export class VoiceRouter {
   private forward(source: Member, packet: Packet): void {
     const { header: route } = packet;
     if (!equal(route.sender, source.endpoint)) return this.reject(source, route, "leaseMismatch");
-    const now = Date.now();
-    if (route.expiresAtMilliseconds <= now || route.expiresAtMilliseconds > now + LIFETIME_MS) {
-      return this.reject(source, route, "expired");
-    }
+    // 不查期限：这里当场转发、不排队，期限只由收端带时钟容差判定（原生 VoiceSignalConnection.open）；中转再查只多一台会偏的时钟。
     const target = this.target(source, route.recipient.device.rawValue);
     if (!target) return this.reject(source, route, "unavailable");
     if (!equal(target.endpoint, route.recipient)) return this.reject(source, route, "leaseMismatch");

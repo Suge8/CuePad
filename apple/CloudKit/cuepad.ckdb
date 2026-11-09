@@ -377,6 +377,14 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE deviceDiagnostics (
+        "___recordID" REFERENCE QUERYABLE,
+        content       ENCRYPTED BYTES,
+        deviceName    ENCRYPTED STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE tags (
         "___recordID" REFERENCE QUERYABLE,
         color         STRING,

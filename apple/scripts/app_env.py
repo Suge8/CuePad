@@ -63,11 +63,12 @@ def isolated_env(library, sockets=SOCKETS):
         home = os.path.realpath(fake_home)
         if home == os.path.realpath(os.path.expanduser("~")):
             die("CUEPAD_FAKE_HOME 不能是真的家目录")
-        for key in ("CUEPAD_BIN_DIR", "CUEPAD_WORKSPACE_DIR", *AGENT_HOMES, "XDG_CONFIG_HOME"):
+        for key in ("CUEPAD_BIN_DIR", "CUEPAD_WORKSPACE_DIR", "CUEPAD_DEVICE_LOGS_DIR", *AGENT_HOMES, "XDG_CONFIG_HOME"):
             env.pop(key, None)
         # Foundation 的家目录看 CFFIXED_USER_HOME；没给 CLAUDE_CONFIG_DIR 的 Claude Code 从钥匙串读真实的登录
         return dict(env, HOME=home, CFFIXED_USER_HOME=home, CLAUDE_CONFIG_DIR=f"{home}/.claude")
-    return dict(env, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_WORKSPACE_DIR=f"{library}/CuePad",
+    # 各台设备经 iCloud 送来的诊断（LibraryLocation.deviceLogs），xc.sh diag 用 CUEPAD_DIAG_DIR 指过来读
+    return dict(env, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_WORKSPACE_DIR=f"{library}/CuePad", CUEPAD_DEVICE_LOGS_DIR=f"{library}/Logs",
                 **{key: f"{agents}/{name}" for key, name in AGENT_HOMES.items()})
 
 

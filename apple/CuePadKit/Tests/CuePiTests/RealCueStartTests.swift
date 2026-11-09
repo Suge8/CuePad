@@ -5,16 +5,14 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi、Claude Code 与 Grok Build 是假模型，Codex 用复制的登录（不刷新），OpenCode 见 `OpenCodeSandbox`，
+/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi、Codex、Claude Code 与 Grok Build 是假模型，OpenCode 见 `OpenCodeSandbox`，
 /// dsh 的家目录在临时目录里、登录只经环境里的 DeepSeek key。
-/// 默认回放录像带（OpenCode 没有录像带，总连真 OpenCode），见 `RealAgents`。
-private let agents = AgentKind.allCases.filter(RealAgents.runs)
 
 @MainActor
-@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode, .grok, .dsh), RealAgents.timeLimit(.minutes(6)))
+@Suite
 struct RealCueStartTests {
-    @Test(arguments: agents) func cueStartsASessionTalksAndItSettles(_ agent: AgentKind) async throws {
-        AgentTape.use(agent)
+    @Test(arguments: AgentKind.allCases) func cueStartsASessionTalksAndItSettles(_ agent: AgentKind) async throws {
+        try RealAgents.require(agent)
         try await withAgent(agent) { runtime, bridge, work, model in
             // 强度给的不是测试台配置里的 low：生效了才看得出来
             let id = try await runtime.open(in: work, launchToken: "cue-1", name: "Cue 开的", model: model, thinking: .medium)
