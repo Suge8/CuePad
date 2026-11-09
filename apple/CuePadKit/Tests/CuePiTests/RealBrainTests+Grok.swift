@@ -14,7 +14,7 @@ extension RealBrainTests {
         AgentTape.use(.grok)
         try await withRig(.grok) { rig in
         let model = try #require(rig.model), hang = model.gate()
-        model.on({ $0.prompt.contains("single word ALPHA") }) { _ in .streamUntil(["ALPHA"], hang) }
+        model.on({ $0.prompt.contains("single word ALPHA") }) { _ in .stream(["ALPHA"], until: hang) }
         let first = UUID(), second = UUID(), third = UUID()
         try await rig.brain.send("Reply with only the single word ALPHA.", images: [], id: first)
         try await hang.reached()

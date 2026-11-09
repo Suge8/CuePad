@@ -145,10 +145,9 @@ public indirect enum FakeReply: Sendable {
   case call(String, [String: any Sendable])
   /// 回 HTTP 错误（默认 400），`message` 是错误原文
   case fail(String, status: Int = 400)
-  /// 先说这几段，然后不说完也不结束，直到 Agent 断开（停下这一轮）
-  case stream([String])
-  /// 先说这几段，停在闸门上（请求不结束）；放行后收尾。只有 Responses 协议实现（Grok 的搁浅插话用）；Agent 先断开就不收尾
-  case streamUntil([String], FakeGate)
+  /// 先说这几段，请求不结束：没给闸门就一直不说完，直到 Agent 断开（停下这一轮）；给了就停在闸门上，放行后照说完的一句收尾
+  /// （回答就是这几段连起来）。Agent 先断开就不收尾，也不占用放行
+  case stream([String], until: FakeGate? = nil)
   /// 停在闸门上：放行一次后照 `then` 答；Agent 先断开（停下这一轮）就不答，也不占用放行
   case held(FakeGate, then: FakeReply)
 
