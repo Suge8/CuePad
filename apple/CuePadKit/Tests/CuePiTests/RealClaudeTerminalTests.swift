@@ -35,8 +35,11 @@ struct RealClaudeTerminalTests {
             try testbed.startConnected()
 
             let terminal = try await testbed.terminal()
-            let session = try await testbed.waitForSession(pid: terminal.pid)
-            #expect(!session.hosted && session.terminal.tmuxPane != nil && session.terminal.tty != nil)
+            let opened = try await testbed.waitForSession(pid: terminal.pid)
+            // 先上桥的可能是启动时那次列表扫描补上的（只有 tty）：tmux 窗格与模型随钩子来
+            try await eventually("钩子带来了终端") { testbed.bridge.session(id: opened.id)?.terminal.tmuxPane != nil }
+            let session = try #require(testbed.bridge.session(id: opened.id))
+            #expect(!session.hosted && session.terminal.tty != nil && session.model != nil)
 
             let delivery = UUID().uuidString
             let start = Date()
