@@ -113,7 +113,7 @@ struct Encoder {
       await wire.json(status: status, jsonText(error))
     case .held(_, let next):
       await send(next)
-    case .say, .call, .stream, .search, .custom:
+    case .say, .call, .stream, .search, .custom, .commentary:
       guard streaming else {
         if case .stream(_, let gate?) = reply { guard await gate.pass(unless: wire.disconnected) else { return } }
         return await wire.json(status: 200, jsonText(whole(reply)))
@@ -172,56 +172,67 @@ struct Encoder {
     }
     let base: [String: Any] = ["id": "resp_\(id)", "object": "response", "created_at": 0, "model": request.model, "tools": [], "metadata": [:]]
     guard await event("response.created", ["response": base.merging(["status": "in_progress", "output": []]) { $1 }]) else { return }
-    let item: [String: Any]
-    switch reply {
-    case .call(let name, let input):
-      let json = arguments(input)
-      let resolved = request.tool(name)
-      item = ["type": "function_call", "id": "fc_\(id)", "call_id": "call_\(id)", "name": resolved, "arguments": json, "status": "completed"]
-        .merging(request.found[resolved].map { ["namespace": $0] } ?? [:]) { $1 }
-      guard await event("response.output_item.added", ["output_index": 0, "item": item.merging(["arguments": "", "status": "in_progress"]) { $1 }]),
-            await event("response.function_call_arguments.delta", ["output_index": 0, "item_id": "fc_\(id)", "delta": json]),
-            await event("response.function_call_arguments.done", ["output_index": 0, "item_id": "fc_\(id)", "arguments": json])
-      else { return }
-    case .say(let text):
-      let message = "msg_\(id)"
-      item = ["type": "message", "id": message, "role": "assistant", "status": "completed", "content": [["type": "output_text", "text": text, "annotations": []]]]
-      guard await event("response.output_item.added", ["output_index": 0, "item": ["type": "message", "id": message, "role": "assistant", "status": "in_progress", "content": []]]),
-            await event("response.content_part.added", ["output_index": 0, "item_id": message, "content_index": 0, "part": ["type": "output_text", "text": "", "annotations": []]]),
-            await event("response.output_text.delta", ["output_index": 0, "item_id": message, "content_index": 0, "delta": text, "logprobs": []]),
-            await event("response.output_text.done", ["output_index": 0, "item_id": message, "content_index": 0, "text": text, "logprobs": []]),
-            await event("response.content_part.done", ["output_index": 0, "item_id": message, "content_index": 0, "part": ["type": "output_text", "text": text, "annotations": []]])
-      else { return }
-    case .custom(let name, let input):
-      let resolved = request.tool(name)
-      item = ["type": "custom_tool_call", "id": "ctc_\(id)", "call_id": "call_\(id)", "name": resolved, "input": input, "status": "completed"]
-        .merging(request.found[resolved].map { ["namespace": $0] } ?? [:]) { $1 }
-      guard await event("response.output_item.added", ["output_index": 0, "item": item.merging(["input": "", "status": "in_progress"]) { $1 }]),
-            await event("response.custom_tool_call_input.delta", ["output_index": 0, "item_id": "ctc_\(id)", "delta": input]),
-            await event("response.custom_tool_call_input.done", ["output_index": 0, "item_id": "ctc_\(id)", "input": input])
-      else { return }
-    case .search(let query):
-      item = ["type": "tool_search_call", "id": "ts_\(id)", "call_id": "call_\(id)", "execution": "client", "arguments": ["query": query], "status": "completed"]
-      guard await event("response.output_item.added", ["output_index": 0, "item": item.merging(["status": "in_progress"]) { $1 }]) else { return }
-    case .stream(let parts, let gate):
-      let message = "msg_\(id)", text = parts.joined()
-      guard await event("response.output_item.added", ["output_index": 0, "item": ["type": "message", "id": message, "role": "assistant", "status": "in_progress", "content": []]]),
-            await event("response.content_part.added", ["output_index": 0, "item_id": message, "content_index": 0, "part": ["type": "output_text", "text": "", "annotations": []]])
-      else { return }
+    /// 说一条消息：`parts` 逐段出字，`gate` 同 `FakeReply.stream`
+    func message(_ message: String, _ parts: [String], phase: String?, index: Int, gate: FakeGate? = nil, waits: Bool = false) async -> [String: Any]? {
+      let text = parts.joined()
+      let phased: [String: Any] = phase.map { ["phase": $0] } ?? [:]
+      guard await event("response.output_item.added", ["output_index": index, "item": ["type": "message", "id": message, "role": "assistant", "status": "in_progress", "content": []].merging(phased) { $1 }]),
+            await event("response.content_part.added", ["output_index": index, "item_id": message, "content_index": 0, "part": ["type": "output_text", "text": "", "annotations": []]])
+      else { return nil }
       for part in parts {
-        guard await event("response.output_text.delta", ["output_index": 0, "item_id": message, "content_index": 0, "delta": part, "logprobs": []]) else { return }
+        guard await event("response.output_text.delta", ["output_index": index, "item_id": message, "content_index": 0, "delta": part, "logprobs": []]) else { return nil }
       }
-      guard await finishes(after: gate) else { return }
-      item = ["type": "message", "id": message, "role": "assistant", "status": "completed", "content": [["type": "output_text", "text": text, "annotations": []]]]
-      guard await event("response.output_text.done", ["output_index": 0, "item_id": message, "content_index": 0, "text": text, "logprobs": []]),
-            await event("response.content_part.done", ["output_index": 0, "item_id": message, "content_index": 0, "part": ["type": "output_text", "text": text, "annotations": []]])
-      else { return }
-    default: return
+      if waits { guard await finishes(after: gate) else { return nil } }
+      guard await event("response.output_text.done", ["output_index": index, "item_id": message, "content_index": 0, "text": text, "logprobs": []]),
+            await event("response.content_part.done", ["output_index": index, "item_id": message, "content_index": 0, "part": ["type": "output_text", "text": text, "annotations": []]])
+      else { return nil }
+      return ["type": "message", "id": message, "role": "assistant", "status": "completed", "content": [["type": "output_text", "text": text, "annotations": []]]]
+        .merging(phased) { $1 }
     }
-    guard await event("response.output_item.done", ["output_index": 0, "item": item]) else { return }
+    func output(_ reply: FakeReply, index: Int, phase: String?) async -> [[String: Any]]? {
+      let item: [String: Any]
+      switch reply {
+      case .call(let name, let input):
+        let json = arguments(input)
+        let resolved = request.tool(name)
+        item = ["type": "function_call", "id": "fc_\(id)", "call_id": "call_\(id)", "name": resolved, "arguments": json, "status": "completed"]
+          .merging(request.found[resolved].map { ["namespace": $0] } ?? [:]) { $1 }
+        guard await event("response.output_item.added", ["output_index": index, "item": item.merging(["arguments": "", "status": "in_progress"]) { $1 }]),
+              await event("response.function_call_arguments.delta", ["output_index": index, "item_id": "fc_\(id)", "delta": json]),
+              await event("response.function_call_arguments.done", ["output_index": index, "item_id": "fc_\(id)", "arguments": json])
+        else { return nil }
+      case .say(let text):
+        guard let said = await message("msg_\(id)", [text], phase: phase, index: index) else { return nil }
+        item = said
+      case .custom(let name, let input):
+        let resolved = request.tool(name)
+        item = ["type": "custom_tool_call", "id": "ctc_\(id)", "call_id": "call_\(id)", "name": resolved, "input": input, "status": "completed"]
+          .merging(request.found[resolved].map { ["namespace": $0] } ?? [:]) { $1 }
+        guard await event("response.output_item.added", ["output_index": index, "item": item.merging(["input": "", "status": "in_progress"]) { $1 }]),
+              await event("response.custom_tool_call_input.delta", ["output_index": index, "item_id": "ctc_\(id)", "delta": input]),
+              await event("response.custom_tool_call_input.done", ["output_index": index, "item_id": "ctc_\(id)", "input": input])
+        else { return nil }
+      case .search(let query):
+        item = ["type": "tool_search_call", "id": "ts_\(id)", "call_id": "call_\(id)", "execution": "client", "arguments": ["query": query], "status": "completed"]
+        guard await event("response.output_item.added", ["output_index": index, "item": item.merging(["status": "in_progress"]) { $1 }]) else { return nil }
+      case .stream(let parts, let gate):
+        guard let said = await message("msg_\(id)", parts, phase: phase, index: index, gate: gate, waits: true) else { return nil }
+        item = said
+      case .commentary(let text, let next):
+        guard let said = await message("msg_\(id)_commentary", [text], phase: "commentary", index: index),
+              await event("response.output_item.done", ["output_index": index, "item": said]),
+              let rest = await output(next, index: index + 1, phase: "final_answer")
+        else { return nil }
+        return [said] + rest
+      default: return nil
+      }
+      guard await event("response.output_item.done", ["output_index": index, "item": item]) else { return nil }
+      return [item]
+    }
+    guard let items = await output(reply, index: 0, phase: nil) else { return }
     let usage: [String: Any] = ["input_tokens": usage, "output_tokens": 5, "total_tokens": usage + 5,
                                 "input_tokens_details": ["cached_tokens": 0], "output_tokens_details": ["reasoning_tokens": 0]]
-    _ = await event("response.completed", ["response": base.merging(["status": "completed", "output": [item], "usage": usage]) { $1 }])
+    _ = await event("response.completed", ["response": base.merging(["status": "completed", "output": items, "usage": usage]) { $1 }])
   }
 
   // MARK: Anthropic Messages
