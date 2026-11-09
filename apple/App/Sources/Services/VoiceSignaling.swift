@@ -37,7 +37,7 @@ nonisolated struct VoiceRegistrationClaim: Equatable, Codable, Sendable {
     }
 }
 
-/// 服务器只校验已认证来源、双方当前租约、大小与期限并定向转发 opaque packet；不解密、不留历史、不重试。
+/// 服务器只校验已认证来源、双方当前租约与大小并定向转发 opaque packet；不解密、不留历史、不重试。
 /// 每次成功投递都使双方观察对端租约；源退出/被替换必须发 departed，不能只关闭源 socket 后让目的端继续通话。
 /// signal.header.sender 必须等于该 socket 的已登记 endpoint；recipient 必须仍在同房间且租约匹配，绝不广播或改投新租约。
 nonisolated enum VoiceRelayResponse: Equatable, Codable, Sendable {
@@ -51,7 +51,7 @@ nonisolated enum VoiceRelayResponse: Equatable, Codable, Sendable {
 }
 
 nonisolated enum VoicePeerDeparture: String, Codable, Sendable { case disconnected, replaced }
-nonisolated enum VoiceSignalRejection: String, Codable, Sendable { case expired, leaseMismatch, unavailable, tooLarge, invalid }
+nonisolated enum VoiceSignalRejection: String, Codable, Sendable { case leaseMismatch, unavailable, tooLarge, invalid }
 
 nonisolated enum VoiceRelayAvailability: Equatable, Sendable {
     case unavailable
