@@ -113,7 +113,7 @@ struct Encoder {
       await wire.json(status: status, jsonText(error))
     case .held(_, let next):
       await send(next)
-    case .say, .call, .stream:
+    case .say, .call, .stream, .streamUntil:
       guard streaming else { return await wire.json(status: 200, jsonText(whole(reply))) }
       guard await wire.events() else { return }
       switch api {
@@ -190,6 +190,19 @@ struct Encoder {
         guard await event("response.output_text.delta", ["output_index": 0, "item_id": message, "content_index": 0, "delta": part, "logprobs": []]) else { return }
       }
       return await wire.disconnected()
+    case .streamUntil(let parts, let gate):
+      let message = "msg_\(id)", text = parts.joined()
+      guard await event("response.output_item.added", ["output_index": 0, "item": ["type": "message", "id": message, "role": "assistant", "status": "in_progress", "content": []]]),
+            await event("response.content_part.added", ["output_index": 0, "item_id": message, "content_index": 0, "part": ["type": "output_text", "text": "", "annotations": []]])
+      else { return }
+      for part in parts {
+        guard await event("response.output_text.delta", ["output_index": 0, "item_id": message, "content_index": 0, "delta": part, "logprobs": []]) else { return }
+      }
+      guard await gate.pass(unless: wire.disconnected) else { return }
+      item = ["type": "message", "id": message, "role": "assistant", "status": "completed", "content": [["type": "output_text", "text": text, "annotations": []]]]
+      guard await event("response.output_text.done", ["output_index": 0, "item_id": message, "content_index": 0, "text": text, "logprobs": []]),
+            await event("response.content_part.done", ["output_index": 0, "item_id": message, "content_index": 0, "part": ["type": "output_text", "text": text, "annotations": []]])
+      else { return }
     default: return
     }
     guard await event("response.output_item.done", ["output_index": 0, "item": item]) else { return }

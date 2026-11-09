@@ -5,17 +5,18 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 录制时连假模型，见 `GrokModel`。
+/// 端到端：钉住版本的真 Grok（ACP）+ 假模型（Responses，`FakeModel`）+ `GrokRuntime` 与 `PiBridge`。零网络、不用任何登录。
 @MainActor
-@Suite(RealAgents.taped(.grok), .agentTape(.grok), RealAgents.timeLimit(.minutes(3)), RealAgents.serialWhenRecording(.grok))
+@Suite(RealAgents.taped(.grok))
 struct RealGrokTests {
-    @Test func aHostedSessionTakesAMessageWithAnImageIsConfiguredEndedAndResumed() async throws {
+    @Test func aHostedSessionTakesAMessageWithAnImageAndIsConfigured() async throws {
         try await withGrokRig { rig in
             let log = ChangeLog(rig.bridge)
             let id = try await rig.open("token-1")
 
             let opened = try #require(rig.bridge.session(id: id))
             #expect(opened.hosted && opened.agent == .grok && opened.launchToken == "token-1")
+            #expect(rig.runsPinnedGrok(id))
             let delivery = UUID()
             let message = PiMessage(text: "What color is this image? Answer with one lowercase word.", images: [PiImage(mimeType: "image/png", data: redPNG)], deliveryID: delivery.uuidString)
             try await rig.bridge.send(message, to: id)
@@ -25,6 +26,8 @@ struct RealGrokTests {
                 } == true
             }
 
+            let request = try #require(rig.asked("What color is this image?").last)
+            #expect(request.api == .responses && request.images.first?.hasPrefix("image/png:") == true, "\(request.images)")
             let session = try #require(rig.bridge.session(id: id))
             let mine = try #require(try rig.transcript(session).messages.first { $0.role == .known(.user) })
             #expect(mine.deliveryID == delivery)
@@ -39,20 +42,11 @@ struct RealGrokTests {
                 try await rig.bridge.configure(PiConfig(model: PiModelKey(provider: AgentKind.grok.rawValue, id: "no-such-model")), in: id)
             }
             #expect(unknown?.localizedDescription == "Grok Build 里没有这个模型")
-
-            try await rig.bridge.end(id)
-            try await eventually("下线") { rig.bridge.session(id: id) == nil }
-
-            let file = try #require(session.sessionFile)
-            let resumed = try await rig.runtime.resume(IndexedSession(id: session.sessionID, path: file.path, cwd: rig.work.path, lastActivityAt: .now, agent: .grok))
-            #expect(rig.bridge.session(id: resumed)?.hosted == true && rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
-            try await rig.bridge.send(PiMessage(text: "Reply with the single word AGAIN."), to: resumed)
-            try await eventually("接着回答了") { rig.replied("AGAIN", in: resumed) }
         }
     }
 
-    /// 用例的话是真模型也照做的明确指令，断言只看你看得到的（假模型的剧本认这几句原话，`FakeResponses.plan`）。
-    @Test func aPermissionRequestIsAnsweredFromCuePad() async throws {
+    /// 允许：命令真执行（文件在）；拒绝：命令没执行（文件不在），Grok 把拒绝作为工具结果交给模型，这一轮照常做完。
+    @Test(arguments: [true, false]) func aPermissionRequestIsAnsweredFromCuePad(_ allow: Bool) async throws {
         try await withGrokRig { rig in
             let id = try await rig.open("token-2")
             let marker = rig.work.appending(path: "marker.txt")
@@ -62,11 +56,20 @@ struct RealGrokTests {
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
             #expect(question.kind == .known(.confirm) && question.text.contains("echo ok > marker.txt"), "\(question.text)")
+            #expect(!FileManager.default.fileExists(atPath: marker.path), "确认之前命令不该执行")
 
-            try await rig.bridge.answer(.confirmed(true), to: try #require(question.promptID), in: id)
+            try await rig.bridge.answer(.confirmed(allow), to: try #require(question.promptID), in: id)
 
-            try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled && rig.replied("DONE", in: id) }
-            #expect(FileManager.default.fileExists(atPath: marker.path))
+            try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled }
+            #expect(FileManager.default.fileExists(atPath: marker.path) == allow)
+            let results = rig.asked("run exactly").filter { $0.step == 1 }
+            if allow {
+                #expect(rig.replied("DONE", in: id) && results.last?.results.last?.contains("exit: 0") == true, "\(results.map(\.results))")
+            } else {
+                #expect(results.isEmpty, "拒绝后 Grok 不再请求模型：\(results.map(\.results))")
+                try await rig.bridge.send(PiMessage(text: "Reply with the single word NEXT."), to: id)
+                try await eventually("拒绝之后还能接着说") { rig.replied("NEXT", in: id) }
+            }
         }
     }
 
@@ -110,68 +113,25 @@ struct RealGrokTests {
         }
     }
 
+    /// 结束后另起一个 Grok 进程接着这个会话：对话保留（答案只在之前说的话里），新的话得到回答。
+    @Test func anEndedSessionIsResumedByANewProcessWithItsConversation() async throws {
+        try await withGrokRig { rig in
+            let id = try await rig.open("token-4")
+            try await rig.bridge.send(PiMessage(text: "Remember the word PAPAYA. Reply with only OK."), to: id)
+            try await eventually("记下了") { rig.replied("OK", in: id) && rig.bridge.session(id: id)?.state == .settled }
+            let session = try #require(rig.bridge.session(id: id))
+            let pid = try #require(session.pid)
 
-}
+            try await rig.bridge.end(id)
+            try await eventually("下线") { rig.bridge.session(id: id) == nil }
 
-/// 一个临时的 Grok 配置目录与工作目录，起的 grok 与家目录都指到这里，不读写真实的 ~/.grok 与资料库。
-@MainActor
-final class GrokRig {
-    let root: URL
-    let bridge: PiBridge
-    let runtime: GrokRuntime
-    var home: URL { root.appending(path: "grok", directoryHint: .isDirectory) }
-    var work: URL { root.appending(path: "work", directoryHint: .isDirectory) }
-
-    init() throws {
-        root = try makeTempDirectory().resolvingSymlinksInPath()
-        for directory in [root.appending(path: "grok"), root.appending(path: "work"), root.appending(path: "user")] {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let file = try #require(session.sessionFile)
+            let resumed = try await rig.runtime.resume(IndexedSession(id: session.sessionID, path: file.path, cwd: rig.work.path, lastActivityAt: .now, agent: .grok))
+            let back = try #require(rig.bridge.session(id: resumed))
+            #expect(back.hosted && back.sessionID == session.sessionID && back.pid != pid && rig.runsPinnedGrok(resumed))
+            try await rig.bridge.send(PiMessage(text: "What word did I ask you to remember? Reply with only the word."), to: resumed)
+            try await eventually("接着回答了") { rig.replied("PAPAYA", in: resumed) }
         }
-        let sockets = root.appending(path: "s", directoryHint: .isDirectory)
-        let isolated = ["CUEPAD_", "GROK_", "XDG_", "CLAUDE_", "PI_"]
-        let environment = ProcessInfo.processInfo.environment.filter { key, _ in !isolated.contains { key.hasPrefix($0) } }.merging([
-            "HOME": root.appending(path: "user").path, "GROK_HOME": root.appending(path: "grok").path, "CUEPAD_PI_SOCKET_DIR": sockets.path,
-            "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path,
-        ]) { $1 }
-        let paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
-        bridge = PiBridge(socketDirectory: sockets)
-        runtime = GrokRuntime(
-            bridge: bridge, paths: paths, files: scratchFiles, grok: { AgentTape.executable("grok") }, locate: { AgentTape.locator("grok") }, timing: noDeadline)
-        // 会话目录里 CuePad 只读会话记录（`updates.jsonl`），别的（工具定义、检索库）不录
-        AgentTape.current?.watch(root.appending(path: "grok/sessions"), named: "updates.jsonl")
-        AgentTape.current?.watch(root.appending(path: "work"))
-        try bridge.start()
-        try runtime.start()
     }
-
-    func open(_ launchToken: String) async throws -> PiSession.ID {
-        try await runtime.open(in: work, launchToken: launchToken, name: nil, model: GrokModel.hosted, thinking: nil)
-    }
-
-    func stop() async {
-        await runtime.stop()()
-        bridge.stop()
-        try? FileManager.default.removeItem(at: root)
-    }
-
-    func transcript(_ session: PiSession) throws -> PiHistoryUpdate {
-        try PiHistory.index(file: try #require(session.sessionFile), agent: .grok, from: nil, files: scratchFiles)
-    }
-
-    func replies(_ session: PiSession) -> [String] {
-        ((try? transcript(session))?.messages ?? []).filter { $0.role == .known(.pi) }.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
-    }
-
-    /// 最近一条回答里有这个词（真模型的措辞不定，不要求刚好是它）
-    func replied(_ word: String, in id: PiSession.ID) -> Bool {
-        bridge.session(id: id).flatMap { replies($0).last?.contains(word) } == true
-    }
-}
-
-@MainActor
-func withGrokRig(_ body: (GrokRig) async throws -> Void) async throws {
-    let rig = try GrokRig()
-    do { try await body(rig) } catch { await rig.stop(); throw error }
-    await rig.stop()
 }
 #endif
