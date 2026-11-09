@@ -77,5 +77,40 @@ struct ClaudeInboxConfirmationTests {
             #expect(try await rig.store.deliveryRequest(request.id)?.status == .known(.unconfirmed))
         }
     }
+
+    /// 它在跑一轮时送到的话排到这一轮做完才收。钩子不通，桥上还写着歇着，所以 CuePad 照常交出；到期时它还在跑（看它的登记文件）就接着等，
+    /// 这一轮做完、它收下了就是送达，中间不报没收下。
+    @Test func 忙时送到的话等这一轮做完_收下了算送达() async throws {
+        let clock = ManualTiming()
+        var terminal: ClaudeRig.Terminal?
+        try await ClaudeRig.run(settings: #"{"skipDangerousModePermissionPrompt": true}"#, timing: clock.timing, before: {
+            terminal = try await $0.terminal(["--permission-mode", "default"])
+        }) { rig in
+            let terminal = try #require(terminal)
+            let gate = FakeGate()
+            rig.model.on({ !$0.tools.isEmpty && $0.prompt.contains("BUSY-TURN") }) { _ in .held(gate, then: .say("BUSY-DONE")) }
+            try await eventually("CuePad 补上这个终端会话") { rig.bridge.sessions.contains { $0.pid == terminal.pid } }
+            let session = try #require(rig.bridge.sessions.first { $0.pid == terminal.pid })
+            let file = try #require(session.sessionFile)
+            let registry = rig.root.appending(path: "config/sessions/\(terminal.pid).json")
+            try await terminal.type("BUSY-TURN 慢慢答")
+            try await gate.reached()
+            #expect((try? Data(contentsOf: registry)).flatMap(JSONValue.parse)?["status"]?.string == "busy")
+            #expect(session.state.isTurnRunning == false, "桥上不知道它在跑")
+
+            await Workspace(services: rig.services).send("INBOX-PROBE 只回复 OK", to: AgentTarget(session: session.sessionID)).value
+            let request = try #require(try await rig.store.deliveryRequests(toSession: session.sessionID).last)
+            try await eventually("交出了，在等会话文件") { try await rig.store.deliveryRequest(request.id)?.status == .known(.confirming) }
+            let first = try #require(try await rig.store.deliveryRequest(request.id)?.deadlineAt)
+            await clock.waitForSleeper(until: first)
+            clock.advance(.seconds(Speech.receiptLimit + 1))
+            await clock.waitForSleeper(until: clock.now.addingTimeInterval(Speech.receiptLimit))
+            #expect(try await rig.store.deliveryRequest(request.id)?.status == .known(.confirming), "到期时它还在跑：接着等，不报没收下")
+
+            gate.open()
+            try await eventually("这一轮做完它收下了，送达") { try await rig.store.deliveryRequest(request.id)?.status == .known(.succeeded) }
+            #expect(ClaudeRig.texts(in: file, role: "user").contains { $0.contains("INBOX-PROBE") })
+        }
+    }
 }
 #endif

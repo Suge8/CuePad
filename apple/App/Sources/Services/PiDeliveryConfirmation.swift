@@ -112,10 +112,10 @@ struct PiDeliveryConfirmation {
                 var due = deadline
                 while true {
                     try await store.timing.sleepUntil(due)
-                    // 在跑这一轮时送到的话，Claude Code 排到这一轮结束才收：到期时还在跑就顺延，不当成没收下
-                    guard let connection, await pi.session(id: connection)?.state.isTurnRunning == true else { return .unconfirmed(uncertain) }
+                    // 在跑这一轮时送到的话，Claude Code 排到这一轮结束才收：到期时还在跑就接着等，不当成没收下。
+                    // 只在这里等、不改库里的期限：同步不让核对期限往后挪（`DeliveryRequest.mergingProgress`），各端到期先显示送达未确认，收下了再变送达
+                    guard let connection, await pi.isTurnRunning(connection) else { return .unconfirmed(uncertain) }
                     due = store.timing.now().addingTimeInterval(Speech.receiptLimit)
-                    try await store.extendDeliveryConfirmation(request.id, until: due)
                 }
             }
             if let connection {

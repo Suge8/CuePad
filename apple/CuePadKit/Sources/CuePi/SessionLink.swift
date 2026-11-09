@@ -24,6 +24,8 @@ public protocol SessionLink: AnyObject {
     /// 至少给一项；会话名已去掉首尾空白、不是空的（桥先检查过）。
     func configure(_ config: PiConfig, in id: PiSession.ID) async throws
     func canNameItself(_ id: PiSession.ID) -> Bool
+    /// 此刻在不在跑一轮，接入自己知道得比桥上的状态准时才给（缺省 nil：看桥上的状态，`PiBridge.isTurnRunning`）。
+    func takingTurn(_ id: PiSession.ID) -> Bool?
     /// 按第一句话（`firstMessage`）起一个短名，返回整理好的名字（`SessionNameSuggestion.cleaned`）；不写回，写不写由 App 复核后走改名。
     func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String
 }
@@ -39,6 +41,7 @@ extension SessionLink {
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func configure(_ config: PiConfig, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func canNameItself(_ id: PiSession.ID) -> Bool { false }
+    public func takingTurn(_ id: PiSession.ID) -> Bool? { nil }
     public func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String { throw PiBridgeError.unsupported }
 }
 #endif

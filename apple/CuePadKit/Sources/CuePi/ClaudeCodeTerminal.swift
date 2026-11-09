@@ -266,6 +266,12 @@ final class ClaudeTerminalSession: SessionLink {
         }
     }
 
+    /// 登记文件里的 `status` 随它自己的轮次变，钩子不通（没装、CuePad 之后才起来）时桥上的状态是旧的。只认 `busy`（在跑一轮或等后台任务）：
+    /// `waiting` 也可能是收件箱的话被挂起、在等你批准（2.1.318 源码：对话框一律记成 `waiting`，看不出是哪种），算它在跑就会一直等下去。
+    func takingTurn(_: PiSession.ID) -> Bool? {
+        (try? Data(contentsOf: registry)).flatMap(JSONValue.parse)?["status"]?.string.map { $0 == "busy" }
+    }
+
     func end(_: PiSession.ID) async throws {
         guard kill(pid, SIGINT) == 0 else { throw PiBridgeError.sessionEnded }
     }
