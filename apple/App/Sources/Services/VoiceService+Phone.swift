@@ -22,7 +22,7 @@ import Observation
 }
 
 extension VoiceService {
-    func start(makeMedia: () -> any VoiceMedia = { VoicePeer(source: .microphone(device: nil), recording: nil) }) async throws {
+    func start() async throws {
         guard canStart else { throw VoiceIssue.busy }
         guard let signaling else { issue = .relayUnsupported; throw VoiceIssue.relayUnsupported }
         guard case .ready(let local) = signaling.voiceAvailability else {
@@ -82,12 +82,16 @@ extension VoiceService {
 
     func end(reason: VoiceEndReason = .hungUp, notify: Bool = true) async {
         guard let owner = phone else { return }
-        if let cleanup = owner.cleanup { await cleanup.value; return }
+        await beginEnd(owner, reason: reason, notify: notify).value
+    }
+
+    private func beginEnd(_ owner: VoicePhoneSession, reason: VoiceEndReason, notify: Bool = true) -> Task<Void, Never> {
+        if let cleanup = owner.cleanup { return cleanup }
         let cleanup = Task { await self.finish(owner, reason: reason, notify: notify) }
         owner.cleanup = cleanup
         owner.scope.end()
         owner.media.onEvent = { _ in }
-        await cleanup.value
+        return cleanup
     }
 
     /// 不属于 owner.scope：结束可能正由该作用域的期限或发送失败触发，取消输入不能取消资源回收与挂断通知。
@@ -160,8 +164,8 @@ extension VoiceService {
                 do { try await signaling.sendVoice(.media(signal: .event(value: .connected)), session: owner.id, to: peer) }
                 catch { if self.phone === owner { await self.end(reason: .networkFailed) } }
             }
-        case .ended(let reason): Task { if phone === owner { await end(reason: reason) } }
-        case .failed: Task { if phone === owner { await end(reason: .mediaFailed) } }
+        case .ended(let reason): _ = beginEnd(owner, reason: reason)
+        case .failed: _ = beginEnd(owner, reason: .mediaFailed)
         case .sample(let side, let peak):
             if side == .input { inputSamples = Array((inputSamples + [peak]).suffix(VoicePeer.sampleCount)) }
             else { outputSamples = Array((outputSamples + [peak]).suffix(VoicePeer.sampleCount)) }

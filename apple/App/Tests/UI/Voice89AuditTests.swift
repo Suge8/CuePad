@@ -98,16 +98,21 @@ import Testing
     #endif
 
     #if os(iOS)
-    func phone() async throws -> (TestApp, VoiceService, AuditSignaling, AuditMedia) {
-        let app = TestApp(), signal = AuditSignaling(), media = AuditMedia()
+    func phone(makeMedia: @escaping () -> AuditMedia = { AuditMedia() }) async throws -> (TestApp, VoiceService, AuditSignaling, AuditMedia) {
+        let app = TestApp(), signal = AuditSignaling()
+        var media: AuditMedia?
         try await app.services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "mac-audit" }
-        let voice = VoiceService(services: app.services, signaling: signal)
+        let voice = VoiceService(services: app.services, signaling: signal, makeMedia: {
+            let next = makeMedia()
+            media = next
+            return next
+        })
         app.services.voice = voice
-        try await voice.start { media }
+        try await voice.start()
         let id = try #require(voice.session)
         await voice.receive(signal.event(.media(signal: .answer(value: .init(sdp: "isolated-answer"))), session: id))
         await voice.receive(signal.event(.projection(value: .init(session: id, phase: .listening, requests: [], replies: [], executions: [])), session: id))
-        return (app, voice, signal, media)
+        return (app, voice, signal, try #require(media))
     }
 
     @Test func cancelledCommandLateAckMustNotHangUp() async throws {
@@ -150,9 +155,9 @@ import Testing
         let app = TestApp(), signal = AuditSignaling(), media = AuditMedia()
         defer { app.services.cancelBackgroundWork() }
         try await app.services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "mac-audit" }
-        let voice = VoiceService(services: app.services, signaling: signal)
+        let voice = VoiceService(services: app.services, signaling: signal, makeMedia: { media })
         app.services.voice = voice
-        try await voice.start { media }
+        try await voice.start()
         signal.failConnected = true
         let session = try #require(voice.session)
         await voice.receive(signal.event(.media(signal: .answer(value: .init(sdp: "isolated-answer"))), session: session))
@@ -163,13 +168,15 @@ import Testing
     }
 
     @Test func oldRejectedPacketMustNotCloseNewMediaSession() async throws {
-        let (app, voice, signal, _) = try await phone()
+        var nextMedia = AuditMedia()
+        let (app, voice, signal, _) = try await phone(makeMedia: { nextMedia })
         defer { app.services.cancelBackgroundWork() }
         let old = try #require(voice.session)
         let header = VoiceSignalHeader(version: 1, sender: signal.local, recipient: signal.peer, session: old, sequence: 1, expiresAtMilliseconds: 1, purpose: .media)
         await voice.end(notify: false)
         let next = AuditMedia()
-        try await voice.start { next }
+        nextMedia = next
+        try await voice.start()
         #expect(voice.session != old)
         await voice.receive(.rejected(header: header, reason: .expired))
         #expect(!next.closed, "A rejected packet for the ended session must not terminate the new session")
@@ -181,24 +188,25 @@ import Testing
         let app = TestApp(), signal = AuditSignaling(), media = AuditMedia()
         defer { app.services.cancelBackgroundWork() }
         try await app.services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "mac-audit" }
-        let voice = VoiceService(services: app.services, signaling: signal); app.services.voice = voice
-        try await voice.start { media }
+        let voice = VoiceService(services: app.services, signaling: signal, makeMedia: { media }); app.services.voice = voice
+        try await voice.start()
         try await eventually("real connection deadline") { media.closed && voice.phone == nil }
         #expect(signal.sent.contains { if case .media(.hangup(reason: .timedOut)) = $0 { true } else { false } }, "Successful transport must receive the timeout hangup")
         #expect(voice.phase == .ended(reason: .timedOut), "Self cancellation must not invent networkFailed")
     }
 
     @Test func closingExclusiveAndOldCallbacksCannotCloseNew() async throws {
-        let (app, voice, signal, media) = try await phone()
+        var nextMedia = AuditMedia()
+        let (app, voice, signal, media) = try await phone(makeMedia: { nextMedia })
         defer { app.services.cancelBackgroundWork() }
         let old = try #require(voice.session), callback = media.onEvent, gate = AuditGate()
         media.closeGate = gate
         let end = Task { await voice.end(notify: false) }
         try await eventually("closing") { media.closing }
         #expect(!voice.canStart)
-        await #expect(throws: VoiceIssue.busy) { try await voice.start { AuditMedia() } }
+        await #expect(throws: VoiceIssue.busy) { try await voice.start() }
         gate.open(); await end.value
-        let next = AuditMedia(); try await voice.start { next }
+        let next = AuditMedia(); nextMedia = next; try await voice.start()
         let current = try #require(voice.session)
         #expect(old != current)
         callback(.failed)
@@ -211,15 +219,16 @@ import Testing
         let app = TestApp(), signal = AuditSignaling(), media = AuditMedia(), gate = AuditGate()
         defer { app.services.cancelBackgroundWork(); gate.open() }
         try await app.services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "mac-audit" }
-        let voice = VoiceService(services: app.services, signaling: signal); app.services.voice = voice
+        let voice = VoiceService(services: app.services, signaling: signal, makeMedia: { media }); app.services.voice = voice
         media.offerGate = gate
-        let start = Task { try await voice.start { media } }
+        let workspace = Workspace(services: app.services)
+        let start = Task { try await workspace.startVoiceCall() }
         try await eventually("permission waiting") { media.offered }
         await app.services.prepareForBackground()
         gate.open(); _ = await start.result
         #expect(media.closed)
         #expect(!signal.sent.contains { if case .media(.offer) = $0 { true } else { false } })
-        #expect(voice.phase == .ended(reason: .background))
+        #expect(workspace.phoneVoice.phase == .ended(reason: .background))
     }
 
     @Test func mediaEndDoesNotCancelPendingBusinessAndDisconnectDoesNotResend() async throws {

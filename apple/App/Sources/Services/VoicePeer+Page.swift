@@ -1,6 +1,7 @@
 import Foundation
 
 extension VoicePeer {
+    /// 先采集再建音频上下文：WebKit 先以 AmbientSound 启动上下文、采集后才切 PlayAndRecord，先采集省掉这次重配置。
     static let page = """
     <!doctype html><html><body><script>
     const audio={echoCancellation:true,noiseSuppression:true,autoGainControl:true};
@@ -50,12 +51,16 @@ extension VoicePeer {
         },sampleMs));
       }
       async start(file,device) {
-        this.ctx=new AudioContext({sampleRate:24000});await this.wait(this.ctx.resume());
+        if(!file) {
+          this.track=(await this.microphone(device)).getAudioTracks()[0];this.post('device',{label:this.track.label});
+          this.track.addEventListener('ended',()=>this.post('audioInterrupted'));
+        }
+        this.ctx=new AudioContext({sampleRate:24000});
+        this.ctx.onstatechange=()=>{if(this.ctx.state==='interrupted') this.post('audioInterrupted');};
+        await this.wait(this.ctx.resume());
         if(file) {
           this.speech=await this.wait(this.ctx.decodeAudioData(Uint8Array.from(atob(file),c=>c.charCodeAt(0)).buffer));
           this.dest=this.ctx.createMediaStreamDestination();this.track=this.own(this.dest.stream).getAudioTracks()[0];
-        } else {
-          this.track=(await this.microphone(device)).getAudioTracks()[0];this.post('device',{label:this.track.label});
         }
         this.meter(new MediaStream([this.track]),'input');
         this.pc=new RTCPeerConnection();const peer=this.pc;peer.addTrack(this.track);this.channel=peer.createDataChannel('oai-events');
