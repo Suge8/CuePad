@@ -12,17 +12,11 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
   }
 
   public enum Kind: Codable, Equatable, Sendable {
-    /// 旧目录里的技能（各家自己的技能目录、项目里 .claude/.pi/.codex/.opencode 下的，不是 CuePad 写的、不是各家自管的）：搬进同范围的 `.agents/skills`
     case stray([SkillMove])
-    /// 这一家读不到（Claude Code 不读 `.agents`，dsh 不读分类里的）：缺逐个技能的相对链接，补上；每家一件
     case unlinked(agent: AgentKind, skills: [SkillEntry])
-    /// 同名（全局与项目之间、同一范围内都不许）：去重，留一份，其余进废纸篓；各份都列在技能里（`AgentLibrary.skills`）
     case duplicate(name: String, copies: [SkillEntry])
     case empty([String])
-    /// 各家的全局规则各写一份：内容不同的合并成一份全局规则（`merges`），各家换成链到它的链接；同内容的直接换链接
     case globalInstructions([InstructionSource])
-    /// Claude Code 读不到项目的 AGENTS.md（同层另有 CLAUDE.md、`.claude/CLAUDE.md` 或个人的 CLAUDE.local.md）：内容不同的合并进 AGENTS.md，
-    /// 那两份移走、CLAUDE.md 换成链到 AGENTS.md 的链接（同全局）；只是个人那份挡着、或内容一样时只换链接
     case projectClaude(project: UUID, sources: [InstructionSource])
   }
 
@@ -113,15 +107,11 @@ public struct SkillMove: Codable, Hashable, Sendable {
 }
 
 public enum SkillProblem: Codable, Equatable, Sendable, CustomStringConvertible {
-  /// SKILL.md 读不出（不是 UTF-8 文本、没有权限）或开头没有 `---` 包着的名字与说明
   case unreadable
-  /// `name` 与目录名不同
   case nameMismatch(String)
-  /// 名字只能是小写字母、数字与连字符，最多 64 个字
   case badName
-  /// 没有 description，或超过 1024 个字
   case badDescription
-  /// 嵌套超过 6 层（Codex 读不到、不报错）
+  /// Codex 读不到这么深的技能，且不报错
   case tooDeep
 
   /// 写在文件页哪个输入框下面（`tooDeep` 说的是放在哪，不在哪个框上）。
