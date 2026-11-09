@@ -98,7 +98,8 @@ public struct AttachmentFiles: Sendable {
     return (parts.hash, size, parts.format)
   }
 
-  /// 先写到目录内的临时名再改名：别的进程或线程永远看不到写了一半的文件。缓存被清了而保底或哪个运行还留着同一份时先链回，不另写一份。
+  /// 先写到这次运行持有目录里的临时名再改名进缓存：别的进程或线程永远看不到写了一半的文件，崩在中间留下的随运行目录被启动清理收走。
+  /// 缓存被清了而保底或哪个运行还留着同一份时先链回，不另写一份。
   /// 存入的（不是从 iCloud 取来的）不论新写还是同一份已在，都先在这次运行里持有（`AttachmentRun`）才返回，持有不了就什么都没存；
   /// 已在的那份正好被回收删掉、链不上时，当新文件重写。
   private func place(_ key: String, held: Bool = true, write: (URL) throws -> Void) throws {
@@ -107,11 +108,11 @@ public struct AttachmentFiles: Sendable {
       guard held else { return }
       if (try? hold(existing, as: key)) != nil { return }
     }
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let partial = directory.appending(path: ".\(key).\(UUID().uuidString)")
+    let partial = try run.folder().appending(path: ".\(key).\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: partial) }
     try write(partial)
     if held { try hold(partial, as: key) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     do { try FileManager.default.moveItem(at: partial, to: url) } catch {
       guard FileManager.default.fileExists(atPath: url.path) else { throw error }  // 同时存入同一份：已有即可
     }

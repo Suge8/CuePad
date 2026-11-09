@@ -103,10 +103,14 @@ extension AttachmentFiles {
     return failures
   }
 
+  /// 各运行持有着的键。
+  func heldKeys() -> Set<String> {
+    Set(AttachmentRun.folders(in: run.holds).flatMap(Self.names(in:)).filter(AttachmentKey.isValid))
+  }
+
   /// 缓存与保底里没有哪个运行持有的键：启动清理的候选。
   func unheldKeys() -> Set<String> {
-    let held = Set(AttachmentRun.folders(in: run.holds).flatMap(Self.names(in:)))
-    return Set([directory, backups].flatMap(Self.names(in:)).filter(AttachmentKey.isValid)).subtracting(held)
+    Set([directory, backups].flatMap(Self.names(in:)).filter(AttachmentKey.isValid)).subtracting(heldKeys())
   }
 
   static func names(in folder: URL) -> [String] { (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [] }

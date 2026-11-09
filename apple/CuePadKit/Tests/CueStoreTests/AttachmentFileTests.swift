@@ -106,19 +106,25 @@ import Testing
     #expect(try records().count == 3)
   }
 
-  /// 启动时的清理：上次运行（已退出）存下、没有记录、没被正文或草稿引用的才删（缓存与保底一起）；被引用的、草稿里的留着，
-  /// 草稿里的从此由这次运行持有，缓存再被清也补得回。还开着的别的进程（命令行）存好、还没提交的不受影响，提交后图在、照常登记。
+  /// 启动时的清理：上次运行（已退出）存下、没被正文或草稿引用的删掉（缓存与保底一起，有附件记录的连记录：编辑时删掉了图、再永久删卡的）；
+  /// 被引用的、草稿里的留着，草稿里的从此由这次运行持有，缓存再被清也补得回。还开着的别的进程（命令行）存好、还没提交的不受影响，提交后图在、照常登记。
   @Test func strayFilesGoButReferencedDraftedAndPendingOnesStay() async throws {
-    let (stray, used, drafted) = try await inEndedRun { earlier in
-      let keys = try [0.1, 0.3, 0.5].map { try earlier.files.store(pngData(width: 2, height: 2, shade: $0)) }
+    let (stray, used, drafted, edited) = try await inEndedRun { earlier in
+      let keys = try [0.1, 0.3, 0.5, 0.9].map { try earlier.files.store(pngData(width: 2, height: 2, shade: $0)) }
       _ = try await earlier.createCard(body: "![](cuepad://file/\(keys[1]))")
-      return (keys[0], keys[1], keys[2])
+      let card = try await earlier.createCard(body: "![](cuepad://file/\(keys[3]))")
+      try await earlier.updateCard(card.id) { $0.body = "图删了" }
+      try await earlier.purgeCard(card.id)
+      return (keys[0], keys[1], keys[2], keys[3])
     }
     let cli = try CueStore(location: .isolated(fixture.directory))
     let pending = try cli.files.store(pngData(width: 2, height: 2, shade: 0.7))
 
-    #expect(try await store.removeStrayFiles(drafts: ["看 ![](cuepad://file/\(drafted))"]) == 1)
-    #expect(store.files.fileURL(for: stray) == nil && !FileManager.default.fileExists(atPath: backups.appending(path: stray).path))
+    #expect(try await store.removeStrayFiles(drafts: ["看 ![](cuepad://file/\(drafted))"]) == 2)
+    for gone in [stray, edited] {
+      #expect(store.files.fileURL(for: gone) == nil && !FileManager.default.fileExists(atPath: backups.appending(path: gone).path))
+    }
+    #expect(try await !store.hasAttachment(edited))
     try FileManager.default.removeItem(at: cached)
     for kept in [used, drafted] { #expect(store.files.fileURL(for: kept) != nil) }
     _ = try await cli.createCard(body: "![](cuepad://file/\(pending))")
