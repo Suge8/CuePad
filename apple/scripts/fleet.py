@@ -4,7 +4,10 @@
                                             存活 CUEPAD_RUN_SECONDS 秒（缺省 30 分钟）；打印每一端的 PID 或 UDID，写进 .derived/fleet/fleet.json（ui.py 按角色名认）
   fleet status                              各端还在不在
   fleet down                                结束本检出 run 起的全部实例（同 xc.sh stop）
-  fleet accept [秒=60]                      验收：iPhone 上 ⌘N 建一条灵感、粘进一句话 → Mac 与 iPad 的屏上读到它（ui.py 读界面，不查库）；打印各端看到的时刻，没读到以 1 退出
+  fleet accept [秒=60]                      验收：iPhone 上 ⌘N 建一条灵感、粘进一句话 → 在跑的其余端（Mac、iPad）的屏上读到它（ui.py 读界面，不查库）；打印各端看到的时刻，没读到以 1 退出
+  fleet cloud-sims                          建（已有就复用）两台专用模拟器 "CuePad Cloud iPhone"、"CuePad Cloud iPad"，打印 UDID：不在槽位池里，真云验收时在里面登测试账号
+  fleet up --real [iphone] [ipad]           真云：两台专用模拟器连 CloudKit 开发环境（-CuePadCloudKit YES），用模拟器里登着的测试账号，两台登同一个账号才互相同步；
+                                            库在 .derived/fleet-real（down 不删，免得每次从头拉）。没登账号时 App 照常起、不同步。Mac 的真云在虚拟机里跑，不在这里起
 隔离：每端一份库（.derived/fleet/<角色>/library）与连接目录，共用 .derived/fleet/cloud；本检出的 Mac 实例最多一个（app.py 规则 2），
 iPhone、iPad 各占一个槽位（_lock.sh）、各有角色名（CUEPAD_RUN_ROLE，app.py 的 sim_run），同一个检出里互不收掉。
 云没有延迟模型（不睡）：时刻反映的是同步代码与界面刷新，不是真网络；门铃照常连正式中转（房间按这朵云自己的密钥）。
@@ -26,6 +29,9 @@ from app_env import APPLE, sim_run  # noqa: E402
 DIR = f"{APPLE}/.derived/fleet"
 STATE = f"{DIR}/fleet.json"
 CLOUD = f"{DIR}/cloud"
+REAL_LIBRARIES = f"{APPLE}/.derived/fleet-real"
+CLOUD_SIMS = {"iphone": ("CuePad Cloud iPhone", os.environ.get("CUEPAD_IOS_DEVICE", "iPhone 17")),
+              "ipad": ("CuePad Cloud iPad", os.environ.get("CUEPAD_IPAD_DEVICE", "iPad Pro 11-inch (M5)"))}
 # 角色 → (xc.sh 的平台, 启动参数)：iPhone 停在 Cue 页（建灵感的一端），Mac 与 iPad 打开默认项目页（新灵感出现的地方）
 ROLES = {
     "mac": ("mac", ["-CuePadScene", "project", "-CuePadProject", "默认"]),
@@ -52,22 +58,38 @@ def alive(role, note):
         return False
 
 
-def up(xc, roles, keep):
+def cloud_sims():
+    """专用模拟器的 UDID（没有就建，只建不开机）。"""
+    found = {}
+    listing = json.loads(subprocess.run(["xcrun", "simctl", "list", "devices", "-j"], capture_output=True, text=True, check=True).stdout)["devices"]
+    for role, (name, model) in CLOUD_SIMS.items():
+        udid = next((d["udid"] for ds in listing.values() for d in ds if d["name"] == name and d["isAvailable"]), None)
+        found[role] = udid or subprocess.run(["xcrun", "simctl", "create", name, model], capture_output=True, text=True, check=True).stdout.strip()
+    return found
+
+
+def up(xc, roles, keep, real=False):
+    if real and "mac" in roles:
+        raise SystemExit("--real 只起 iphone、ipad：Mac 的真云在虚拟机里跑")
     if not keep:
         subprocess.run([xc, "stop"], check=True)
         shutil.rmtree(DIR, ignore_errors=True)
-    os.makedirs(CLOUD, exist_ok=True)
+    os.makedirs(CLOUD if not real else DIR, exist_ok=True)
     state = load() if keep else {}
+    pins = cloud_sims() if real else {}
     for role in roles:
         platform, args = ROLES[role]
         began = time.time()
-        env = dict(os.environ, CUEPAD_SHOT_LIBRARY=f"{DIR}/{role}/library", CUEPAD_RUN_ROLE=role,
+        env = dict(os.environ, CUEPAD_SHOT_LIBRARY=f"{REAL_LIBRARIES if real else DIR}/{role}/library", CUEPAD_RUN_ROLE=role,
                    CUEPAD_RUN_SECONDS=os.environ.get("CUEPAD_RUN_SECONDS", "1800"))
-        p = subprocess.run([xc, "run", platform, "--", "-CuePadSharedCloud", CLOUD, *args], env=env, stdout=subprocess.PIPE, text=True)
+        if real:
+            env["CUEPAD_PIN_SIM"] = pins[role]
+        cloud = ["-CuePadCloudKit", "YES"] if real else ["-CuePadSharedCloud", CLOUD]
+        p = subprocess.run([xc, "run", platform, "--", *cloud, *args], env=env, stdout=subprocess.PIPE, text=True)
         if p.returncode:
             raise SystemExit(f"{role} 起不来（xc.sh run {platform} 退出 {p.returncode}），已起的用 fleet down 收")
         m = re.search(r"^(\d+)(?: ([0-9A-F-]{36}))?$", p.stdout, re.M)
-        state[role] = {"platform": platform, "pid": int(m[1]), "udid": m[2], "up_s": round(time.time() - began, 1)}
+        state[role] = {"platform": platform, "pid": int(m[1]), "udid": m[2], "up_s": round(time.time() - began, 1), "dedicated": real}
         with open(STATE, "w") as f:
             json.dump(state, f)
         print(f"{role}\t{m[2] or 'pid ' + m[1]}\t起了 {state[role]['up_s']} 秒", flush=True)
@@ -75,9 +97,8 @@ def up(xc, roles, keep):
 
 def accept(timeout):
     state = load()
-    missing = [r for r in ROLES if r not in state]
-    if missing:
-        raise SystemExit(f"缺 {'、'.join(missing)}：先 xc.sh fleet up")
+    if "iphone" not in state or len(state) < 2:
+        raise SystemExit("至少要 iphone 和另一端在跑：先 xc.sh fleet up")
     phone = state["iphone"]["udid"]
     stamp = f"灵感{time.strftime('%H%M%S')}验收"
     line = []
@@ -100,7 +121,7 @@ def accept(timeout):
             errors[role] = True
 
     # 先开始轮询再粘贴：每一轮"读完时有没有"都记着，看到的时刻才不被手机这边的确认拖后
-    threads = [threading.Thread(target=watch, args=(r,)) for r in ("mac", "ipad")]
+    threads = [threading.Thread(target=watch, args=(r,)) for r in state if r != "iphone"]
     [t.start() for t in threads]
     t_paste = time.time()
     ui.paste(phone, stamp)
@@ -123,13 +144,20 @@ def main(argv):
     xc = argv[0]
     cmd, rest = (argv[1], argv[2:]) if len(argv) > 1 else ("", [])
     if cmd == "up":
-        roles = [a for a in rest if a in ROLES] or list(ROLES)
-        up(xc, roles, "--keep" in rest)
+        real = "--real" in rest
+        roles = [a for a in rest if a in ROLES] or (["iphone", "ipad"] if real else list(ROLES))
+        up(xc, roles, "--keep" in rest, real)
+    elif cmd == "cloud-sims":
+        for role, udid in cloud_sims().items():
+            print(f"{role}\t{CLOUD_SIMS[role][0]}\t{udid}")
     elif cmd == "status":
         for role, note in load().items():
             print(f"{role}\t{'在' if alive(role, note) else '不在'}\t{note['udid'] or 'pid ' + str(note['pid'])}")
     elif cmd == "down":
         subprocess.run([xc, "stop"], check=True)
+        for note in load().values():  # 专用模拟器没人复用，不像槽位里的一直开着
+            if note.get("dedicated"):
+                subprocess.run(["xcrun", "simctl", "shutdown", note["udid"]], capture_output=True)
         shutil.rmtree(DIR, ignore_errors=True)
     elif cmd == "accept":
         accept(float(rest[0]) if rest else 60)

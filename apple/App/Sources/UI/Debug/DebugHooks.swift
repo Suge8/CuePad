@@ -76,10 +76,13 @@ enum DebugHooks {
         #endif
     }
 
-    /// 隔离库也同步：模拟云（任何平台），或同步测量连的 CloudKit 开发环境（docs/perf.md「同步测量」，只在 Mac，见 `DebugScene.syncsIsolatedLibrary`）。
+    /// 隔离库也同步：模拟云（任何平台），或连 CloudKit 开发环境（`-CuePadCloudKit YES`：Mac 是同步测量，docs/perf.md「同步测量」，见 `DebugScene.syncsIsolatedLibrary`；
+    /// 模拟器是真云验收，用模拟器里登着的测试账号，没登就是没有账号、不同步）。
     static var syncsIsolatedLibrary: Bool {
         #if DEBUG && os(macOS)
         sharedCloud != nil || DebugScene.syncsIsolatedLibrary
+        #elseif DEBUG && targetEnvironment(simulator)
+        sharedCloud != nil || DebugScene.args.cloudKit
         #else
         sharedCloud != nil
         #endif

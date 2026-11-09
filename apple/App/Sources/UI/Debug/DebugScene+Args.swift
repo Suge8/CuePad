@@ -27,7 +27,7 @@ nonisolated struct DebugArgs: Decodable {
     let card: String?
     /// `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面
     let catalogFailure: String?
-    /// `-CuePadCloudKit YES`：隔离库也连 iCloud（同步测量）
+    /// `-CuePadCloudKit YES`：隔离库也连 iCloud 开发环境（Mac：同步测量，要开发环境签名；iOS 模拟器：真云验收，`xc.sh fleet up --real`）
     let cloudKit: Bool
     /// `-CuePadComposer <cards|attachments|lines|slash>`（配 session、newsession 画面，iOS 与 Mac）：输入框出现时 cards 打开选卡片面板，slash 写进 "/re" 弹出斜杠命令面板
     let composer: String?
