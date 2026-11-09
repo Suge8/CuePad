@@ -24,7 +24,6 @@ public enum PiChatRole: String, Sendable, CaseIterable {
 /// （界面写"跑了 12 步 · 改了 3 个文件 · 2 分钟"）。还在跑的这一轮到目前为止的经过在会话记录上（`PiRecap.pendingTools`）。
 public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// Pi 自己的会话 id（同 `PiSessionState.sessionID`）
   public var sessionID: String
   /// 在会话里的先后：会话文件里那一条的序号（文件只追加，重读不变）。对话按它升序排；同一条里出的两行（被停下时说了一半的话与"已停止"）
   /// 序号相同，按说话人排：Agent 说的在系统行前

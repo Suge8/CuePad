@@ -52,7 +52,6 @@ public enum PiWorkState: String, Sendable, CaseIterable {
 extension PiWorkState {
   /// 还有事没做完的状态（`hasPendingWork`），SQL `IN (…)` 里的列表。
   static let pendingWorkSQL = sqlList(allCases.filter(\.hasPendingWork))
-  /// 收尾了的状态（已结束、被打断）。
   static let closed: [PiWorkState] = [.ended, .interrupted]
   /// `column`（会话记录的 state 列）不是 `states` 里任何一个的 SQL 条件。写成这几个值隔开的几段范围而不是 `NOT IN`、`!=`：
   /// 后者用不上 (state, stateSince) 索引，库里的会话绝大多数已结束，会整表读一遍带问答长文的行（真实库四千多条、冷读 50～65ms，

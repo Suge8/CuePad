@@ -12,7 +12,6 @@ public struct CueHandoff: Equatable, Sendable {
   public let kind: PiChatMessage.Tools.Kind
   /// 那一处：会话记录 id 或任务 id（`task`），点了去它
   public let place: UUID
-  /// 那一处此刻叫什么（会话名或任务标题）
   public let name: String
   /// 交给的是一件任务，否则是另一个会话：不点名的那句按它写
   public let task: Bool
@@ -23,7 +22,6 @@ extension CueStore {
   /// 之后又有这么多轮没再碰它，那件事也早不是近况了。
   static let handoffWindow = 60
 
-  /// 把事交出去的动作
   private static let handing: Set<PiChatMessage.Tools.Kind> = [.talk, .start, .add]
 
   /// 这些会话里停着（`settled`）、这次停下 Cue 交出去的那一处还没做完的，按 Pi 的会话 id。

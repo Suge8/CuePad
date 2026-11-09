@@ -117,7 +117,6 @@ public actor CueStore {
 
   /// 这个版本能打开的库结构版本范围（`PRAGMA user_version`）；失败页据此区分"库是更新版本建的""库是更早版本建的"与别的失败。
   public static var supportedSchemaVersions: ClosedRange<Int> { Schema.baseVersion...Schema.version }
-  /// 这台要求别的设备至少是哪一版结构才一起同步（`Schema.peerFloor`）。
   public static var peerFloor: Int { Schema.peerFloor }
 
   /// 库文件现在的结构版本，不改库；文件不存在或读不出来为 nil。
@@ -245,7 +244,6 @@ public actor CueStore {
     """
   }
 
-  /// 按主键覆盖除主键外的所有列。
   func update<R: Record>(_ record: R) throws {
     let assignments = R.columns.dropFirst().map { "\($0) = ?" }.joined(separator: ", ")
     try db.run(

@@ -67,7 +67,6 @@ public enum PiPreviewKind: String, Codable, Sendable, CaseIterable {
 /// `createdAt`，不假设一定有文件。
 public struct PiPreview: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// Agent 自己的会话 id（同 `PiSessionState.sessionID`）
   public var sessionID: String
   public var hash: String
   /// 原文件名（含扩展名，类型由它定）

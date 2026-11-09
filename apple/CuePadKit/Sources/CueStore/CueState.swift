@@ -90,7 +90,6 @@ public struct CueFire: Codable, Equatable, Sendable {
     self.due = due
   }
 
-  /// 本该 `due` 的一次在 `at` 才叫醒，算不算错过了、醒来才补上
   public static func late(_ due: Date, at: Date) -> Bool { at.timeIntervalSince(due) > lateAfter }
 
   /// 晚这么久算错过：准点时只差对账的那一下，Cue 正忙一轮时也就等几分钟
@@ -129,7 +128,6 @@ public struct CueLeft: StoredJSON, Hashable, Sendable {
     self.since = since
   }
 
-  /// 这一条说的就是会话此刻的这次停下。
   public func holds(for session: PiSessionState) -> Bool {
     session.sessionID == sessionID && session.stateSince.stored == since.stored && session.runtimeState.known?.isStopped == true
   }
