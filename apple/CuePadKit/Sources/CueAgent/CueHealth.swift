@@ -5,9 +5,7 @@ import Foundation
 /// Cue 的工具服务（另一个进程）读给 Cue 看（`setup look`），只有它读。唯一的写者是管理器，事实源是它的内存状态，这里只是投影。
 public struct CueHealth: Codable, Equatable, Sendable {
   public enum Phase: String, Codable, Sendable {
-    /// 正在起大脑
     case starting
-    /// 值班中
     case running
     /// 出了问题，等着自动重起（`nextRetry`）
     case restarting

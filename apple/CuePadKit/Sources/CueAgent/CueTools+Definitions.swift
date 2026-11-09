@@ -3,7 +3,6 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// 给这一组用的工具（`Toolset`）。
   static func definitions(_ toolset: Toolset) -> [[String: Any]] {
     switch toolset {
     case .cue: definitions
