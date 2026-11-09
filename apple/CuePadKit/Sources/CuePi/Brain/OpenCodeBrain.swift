@@ -121,7 +121,7 @@ final class OpenCodeBrain: HostedSession {
         }
     }
 
-    /// 删掉这个工作目录里崩溃留下的大脑会话：带标记、起它的服务已不在。
+    /// 删掉这个工作目录里崩溃留下的大脑会话：带标记、起它的服务已不在；同时在跑的另一个大脑的不动。
     private func sweep(_ client: OpenCodeClient) async throws {
         for info in try await client.sessions("&directory=" + OpenCodeClient.escaped(directory)) {
             guard let pid = info.metadata?.cuepadBrain, PiProcess.running(pid: pid) == nil else { continue }

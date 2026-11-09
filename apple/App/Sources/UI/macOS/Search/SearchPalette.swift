@@ -71,6 +71,7 @@ struct SearchPalette: View {
             .modifier(sessionObservation)
     }
 
+    /// 卡片范围里也读着会话的列表（第一页很轻），切过去不闪空。
     /// 收着时不读会话的实时状态：面板常驻，读了的话每个会话每变一次，收着看不见的它也整个重算、重排。
     private var sessionObservation: SessionObservation {
         SessionObservation(
@@ -119,6 +120,7 @@ struct SearchPalette: View {
         FilterBar(query: $query, targets: data?.matches.targets ?? [], total: data?.matches.total)
              .padding(.horizontal, Spacing.inset).padding(.bottom, Spacing.item)
         Divider()
+        // 放得下就列表 + 预览并排，否则只留列表（最小窗口下详情区不到 500 宽）
         ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
             results
             preview

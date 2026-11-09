@@ -10,6 +10,7 @@ public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
   /// 提供方说此刻卡着的就是这个窗口（Claude 响应头的 representative-claim）；提供方没说的（用量接口、Codex）为 false
   public var isBinding: Bool
 
+  /// 报不出有限值的已用比例（NaN、无穷）按 0 记：界面按它换算百分比与弧长，非有限值在整数转换处会崩溃。
   public init(seconds: Int, used: Double, resetsAt: Date, model: String? = nil, isBinding: Bool = false) {
     self.seconds = seconds
     self.used = used.isFinite ? used : 0

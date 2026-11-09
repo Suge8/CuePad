@@ -183,6 +183,7 @@ extension CueStore {
       })
   }
 
+  /// 只含关联了卡片的发送：只有这些目标才可能筛出卡片。
   /// `ref` 靠 SQLite 对单个 MAX 聚合的裸列语义取自最近一行。
   public func sendTargets() throws -> [SendTarget] {
     try db.query(

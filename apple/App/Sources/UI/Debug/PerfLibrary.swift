@@ -150,6 +150,7 @@ enum PerfLibrary {
         return text.prefix(1).uppercased() + text.dropFirst() + "."
     }
 
+    /// 内容各不相同：存储按内容去重，相同的图只算一张。
     nonisolated private static func storeImages(_ store: CueStore) throws -> [String] {
         let hashes = Mutex([String?](repeating: nil, count: imageCount))
         let failure = Mutex<(any Error)?>(nil)

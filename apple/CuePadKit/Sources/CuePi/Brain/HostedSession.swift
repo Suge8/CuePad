@@ -13,6 +13,7 @@ public struct CueBrainConfig: Sendable {
     /// 思考强度：各家共用 Pi 的档位，各实现映射到自己的写法、夹到模型支持的档位
     public let effort: PiThinkingLevel?
     public let fast: Bool
+    /// 整份替换运行时内置的系统提示，不是追加。
     public let systemPrompt: String
     public let workingDirectory: URL
     public let mcp: [String]

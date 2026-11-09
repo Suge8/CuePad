@@ -3,6 +3,7 @@ import CueAgent
 import CueStore
 import Foundation
 
+/// 系统提示、工具白名单与不落会话这些标准没有的配法在各家（`ACPDialect.brain`）。
 /// CuePad 的 MCP 服务连上之后才算起好（`ACPDialect.connectsMCPLater` 的那几家等它报），之前说的话模型用不了它的工具。
 /// 正忙时说的话经各家并进这一轮（`ACPDialect.steer`，只并进 CuePad 开的那一轮；排进 Agent 队列的那一轮等它报跑起来再并进，`ACPDialect.queuesPrompts`），
 /// 做不到的等这一轮做完再开新的一轮；他的话以 `/` 开头时前面垫一个空格，不被当成斜杠命令。
