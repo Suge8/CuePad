@@ -6,6 +6,7 @@ import Foundation
 /// 三种请求各演各的。话本身只是触发剧本的暗语。
 extension ClaudeTestbed {
     static let backgroundWork = "BACKGROUND-WORK now"
+    static let earlyReport = "EARLY-REPORT now"
     static let longSubagent = "LONG-SUBAGENT now"
     static let stopSubagent = "Stop the background subagent now with the TaskStop tool"
 
@@ -20,6 +21,32 @@ extension ClaudeTestbed {
         }
         on("SUBTASK-TICKER") { $0.step == 0 ? .call("Bash", ["command": python(sleeping: 3, then: "SUB_DONE"), "description": "sub"]) : handback("SUB_DONE") }
         on("<task-notification>") { .say($0.prompt.contains("Background command") ? "BG_DONE" : "SUB_DONE") }
+    }
+
+    /// 子代理先交回 WAITING，名下的后台命令做完时它被叫醒再跑一次、再报 NESTED_DONE。2.1.318 的 SubagentHandback 只收一份报告，
+    /// 叫醒后的这一份走 SendMessage（`to: main`；它是按需加载的工具，先 ToolSearch 取来）。叫醒它的通知和工具结果同在你的一条话里。
+    /// 子代理的报告以 `<agent-message>` 作为你的话进主线程。
+    func playEarlyReport() {
+        let nested = python(sleeping: 5, then: "NESTED")
+        on("EARLY-REPORT") { $0.step == 0 ? launch("nested", task: "SUBTASK-NESTED") : .say("launched") }
+        // 叫醒后的工具结果与 "Tool loaded." 同在一条：最近一句话不再是交给它的任务，按整段对话认这个子代理
+        model.on({ $0.tools.contains("SubagentHandback") && String(decoding: $0.body, as: UTF8.self).contains("SUBTASK-NESTED") }) { request in
+            let last = request.lastUserMessage
+            if last.contains(#""tool_reference""#) { return .call("SendMessage", ["to": "main", "summary": "nested done", "message": "NESTED_DONE"]) }
+            if last.contains("<task-notification>") && last.contains(#"Background command \"nested\""#) {
+                return .call("ToolSearch", ["query": "select:SendMessage", "max_results": 1])
+            }
+            return switch request.step {
+            case 0: .call("Bash", ["command": nested, "run_in_background": true, "description": "nested"])
+            case 1: handback("WAITING")
+            default: .say("waiting")
+            }
+        }
+        let report: @Sendable (FakeRequest) -> FakeReply = { request in
+            request.tools.contains("SubagentHandback") ? .say("waiting") : .say(String(decoding: request.body, as: UTF8.self).contains("NESTED_DONE") ? "NESTED_DONE" : "WAITING")
+        }
+        on("<agent-message", reply: report)
+        on("<task-notification>", reply: report)
     }
 
     func playLongSubagent() {
@@ -42,4 +69,12 @@ private func launch(_ description: String, task: String) -> FakeReply {
 }
 
 private func handback(_ message: String) -> FakeReply { .call("SubagentHandback", ["message": message]) }
+
+private extension FakeRequest {
+    /// 对话里最后一条你的话的原文（JSON；之后可能还跟着 system 消息）
+    var lastUserMessage: String {
+        let last = (json["messages"] as? [[String: Any]])?.last { $0["role"] as? String == "user" }
+        return last.flatMap { try? JSONSerialization.data(withJSONObject: $0) }.map { String(decoding: $0, as: UTF8.self) } ?? ""
+    }
+}
 #endif

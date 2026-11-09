@@ -38,6 +38,15 @@ extension ClaudeTestbed {
         return bridge.session(id: id)!.question!
     }
 
+    /// 同 `eventually`，等不到时带上会话与终端画面（终端里按键后的事看画面才分得清是谁没动）。
+    func waitOnScreen(_ what: String, on terminal: ClaudeTerminal, in id: PiSession.ID, _ condition: () async throws -> Bool) async throws {
+        do {
+            try await eventually(what, condition)
+        } catch {
+            throw Stuck(description: "等不到：\(what)；会话：\(String(describing: bridge.session(id: id)?.state)) \(String(describing: bridge.session(id: id)?.detail)) \(String(describing: bridge.session(id: id)?.question))；终端：\n\(await terminal.screen)")
+        }
+    }
+
     static let passThrough = #""$REAL" "$@""#
     static let backgroundSettings = #"{"permissions": {"allow": ["Bash", "TaskStop"]}}"#
 

@@ -119,7 +119,7 @@ extension RealClaudeTerminalTests {
             try await eventually("终端里弹表单") { await terminal.screen.contains("饮料") }
             let cancelled = Date()
             try await terminal.keys("Escape")  // 在终端里取消这个表单
-            try await eventually("CuePad 上收起") { testbed.bridge.session(id: session.id)?.question == nil }
+            try await testbed.waitOnScreen("CuePad 上收起", on: terminal, in: session.id) { testbed.bridge.session(id: session.id)?.question == nil }
 
             testbed.presence.isPresent = false
             try await testbed.waitForTurn(session.id, since: cancelled)
@@ -143,7 +143,7 @@ extension RealClaudeTerminalTests {
             try await eventually("终端里弹出确认") { await terminal.screen.contains("Do you want to proceed?") }
             try await terminal.keys("Enter")
 
-            try await eventually("CuePad 上的这一问收起") { testbed.bridge.session(id: session.id)?.question == nil }
+            try await testbed.waitOnScreen("CuePad 上的这一问收起", on: terminal, in: session.id) { testbed.bridge.session(id: session.id)?.question == nil }
             #expect(FileManager.default.fileExists(atPath: touched.path))
             await #expect(throws: PiBridgeError.rejected("no_prompt")) {
                 try await testbed.bridge.answer(.confirmed(false), to: try #require(permission.promptID), in: session.id)
