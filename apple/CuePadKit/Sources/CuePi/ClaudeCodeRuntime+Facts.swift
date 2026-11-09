@@ -7,7 +7,7 @@ extension ClaudeCodeRuntime {
     /// 钩子环境里的 `CLAUDE_CODE_SESSION_ID`（2.1.145 起）也就有了，钩子入口靠它认出是 Claude Code 发的（`ClaudeCodeRuntime.received`）。
     /// 全局规则读配置目录里的 `CLAUDE.md` 与 `rules/` 下每一份（2.1.318 实测，配置目录换了位置、链接都照读），共享的那份链成 `rules/AGENTS.md`。
     /// 不链成 `CLAUDE.md`：它往上找项目规则时把 `~/.claude/CLAUDE.md` 当成 ~ 这一层的 CLAUDE.md，有它在 ~ 下各项目的 AGENTS.md 就都不读了（实测）。
-    /// 配置目录里的 `AGENTS.md` 它不当全局规则读，只在 ~ 下干活、一路没有 CLAUDE.md 时当 ~ 的项目规则读（`AgentLibraryPlaces.claudeAgents`）。
+    /// 配置目录里的 `AGENTS.md` 它不当全局规则读，只在 ~ 下干活、一路没有 CLAUDE.md 时当 ~ 的项目规则读（`AgentLibraryPlaces.globalFiles`）。
     nonisolated public static let facts = AgentFacts(
         command: "claude", homeVariable: "CLAUDE_CONFIG_DIR", minimumVersion: AgentVersion(2, 1, 169),
         installScript: "curl -fsSL https://claude.ai/install.sh | bash",

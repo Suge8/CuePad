@@ -18,9 +18,11 @@ struct AgentLibraryPlaces: Sendable {
     let paths: AgentPaths
     let installed: [AgentKind]
     let projects: [UUID: URL]
+    let grokClaude: URL?
 
-    init(paths: AgentPaths, touches: (AgentKind) -> Bool, projects: [UUID: String]) {
+    init(paths: AgentPaths, touches: (AgentKind) -> Bool, grokClaude: URL?, projects: [UUID: String]) {
         self.paths = paths
+        self.grokClaude = grokClaude
         installed = AgentKind.allCases.filter { touches($0) && FileManager.default.fileExists(atPath: paths.home(of: $0).path) }
         self.projects = projects.mapValues { URL(filePath: $0, directoryHint: .isDirectory) }
     }
@@ -81,15 +83,61 @@ struct AgentLibraryPlaces: Sendable {
         return kind.facts.readsFirstOnly ? Array(present.prefix(1)) : present
     }
 
-    func globalCandidates(_ kind: AgentKind) -> [URL] { kind.facts.globalReads.map { paths.home(of: kind).appending(path: $0) } }
+    /// 一家原生读的一份全局规则（链到共享那份的链接位置除外）。`retires` 的整理时并进共享那份、进废纸篓：
+    /// 留着它们，链接被挡住（覆盖文件、Pi 只有 CLAUDE.md 时那份）、或各家在共享那份之外还读一份旧的。
+    /// 不 `retires` 的是另加的、不挡也不重复的（Claude Code `rules/` 下自己写的那几份）：照列，整理不碰。
+    struct GlobalFile {
+        let owner: AgentKind
+        /// 页面上的名字、文件页认它的键（`LibraryInstruction.Kind.agent`）：配置目录里的相对路径，Grok 读的 ~/.claude 那几份写成 `~/.claude/…`
+        let name: String
+        let url: URL
+        let readers: [AgentKind]
+        let retires: Bool
+    }
 
-    /// Claude Code 配置目录里的 `AGENTS.md`：Grok 在哪都读；Claude Code 只在 ~ 下干活、一路没有 CLAUDE.md 时当 ~ 的项目规则读（2.1.318 实测），
-    /// 链好共享那份后有了 CLAUDE.md 一类就不读了。所以算 Claude Code 的一份全局规则，整理时并进去、进废纸篓。
-    var claudeAgents: URL { paths.home(of: .claudeCode).appending(path: "AGENTS.md") }
+    /// 页面、比对、整理、文件页只认这一份清单。
+    var globalFiles: [GlobalFile] {
+        let shared = globalInstructions
+        var found: [GlobalFile] = []
+        let claudeHome = paths.home(of: .claudeCode)
+        let grokSeesClaude = uses(.grok) && uses(.claudeCode) && grokClaude?.standardizedFileURL == claudeHome.standardizedFileURL
+        func add(_ owner: AgentKind, _ name: String, _ url: URL, readers: [AgentKind], retires: Bool) {
+            guard !RelativeLink.points(url, to: shared) || url != globalFile(owner) else { return }
+            found.append(GlobalFile(owner: owner, name: name, url: url, readers: readers, retires: retires))
+        }
+        for kind in installed {
+            let also: [AgentKind] = kind == .claudeCode && grokSeesClaude ? [.grok] : []
+            for url in globalReads(kind) {
+                add(kind, String(url.path.dropFirst(paths.home(of: kind).path.count + 1)), url, readers: [kind] + also, retires: true)
+            }
+        }
+        if uses(.claudeCode) {
+            let also: [AgentKind] = grokSeesClaude ? [.grok] : []
+            // 配置目录里的 AGENTS.md：在 ~ 下干活、项目里一路没有 CLAUDE.md 时它当 ~ 这一层的项目规则读（2.1.318 实测），
+            // ~ 下的项目就都读到；Grok 在哪都读。共享那份之外再读一份旧的，所以并进去
+            let agents = claudeHome.appending(path: "AGENTS.md")
+            if LibraryFileReading.exists(agents) { add(.claudeCode, "AGENTS.md", agents, readers: [.claudeCode] + also, retires: true) }
+            for url in Self.markdown(in: claudeHome.appending(path: "rules", directoryHint: .isDirectory)) where url != globalFile(.claudeCode) {
+                add(.claudeCode, String(url.path.dropFirst(claudeHome.path.count + 1)), url, readers: [.claudeCode] + also, retires: false)
+            }
+        }
+        if uses(.grok), !grokSeesClaude, let directory = grokClaude {
+            for name in ["CLAUDE.md", "AGENTS.md"] where LibraryFileReading.exists(directory.appending(path: name)) {
+                add(.grok, "~/.claude/" + name, directory.appending(path: name), readers: [.grok], retires: true)
+            }
+            for url in Self.markdown(in: directory.appending(path: "rules", directoryHint: .isDirectory)) where !RelativeLink.points(url, to: shared) {
+                add(.grok, "~/.claude/" + url.path.dropFirst(directory.path.count + 1), url, readers: [.grok], retires: false)
+            }
+        }
+        return found
+    }
 
-    /// 读这一份的几家：Grok 连带读 Claude Code 目录里的（按 Claude Code 的配置目录算，缺省两者一致）。
-    func readers(owner: AgentKind) -> [AgentKind] {
-        [owner] + (owner == .claudeCode && uses(.grok) ? [.grok] : [])
+    /// `rules/` 下（含子目录）每一份 .md，按路径排。
+    private static func markdown(in directory: URL) -> [URL] {
+        guard let walk = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil) else { return [] }
+        return walk.compactMap { $0 as? URL }.filter { $0.pathExtension.lowercased() == "md" && LibraryFileReading.exists($0) }
+            .map { directory.appending(path: String($0.standardizedFileURL.path.dropFirst(directory.standardizedFileURL.path.count + 1))) }
+            .sorted { $0.path < $1.path }
     }
 
     /// 这个目录往上（不含它自己）有 Claude Code 当作 CLAUDE.md 的文件：它就不读这个目录的 AGENTS.md（2.1.318 实测）。
@@ -117,9 +165,8 @@ struct AgentLibraryPlaces: Sendable {
         case .global: return globalInstructions
         case .piSystem: return piSystem
         case .agent(let agent, let name):
-            let file = paths.home(of: agent).appending(path: name)
-            guard agent.facts.globalReads.contains(name) || file == claudeAgents else { throw AgentLibraryError.gone }
-            return file
+            guard let file = globalFiles.first(where: { $0.owner == agent && $0.name == name }) else { throw AgentLibraryError.gone }
+            return file.url
         case .project(let id):
             guard let file = projectInstructions(id) else { throw AgentLibraryError.noFolder }
             return file

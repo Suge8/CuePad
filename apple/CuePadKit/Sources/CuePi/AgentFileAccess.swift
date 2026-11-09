@@ -17,6 +17,13 @@ public struct AgentFileAccess: Sendable {
         !isolated || paths.home(of: kind).standardizedFileURL != Self.real.home(of: kind).standardizedFileURL
     }
 
+    /// Grok 认字面的 `~/.claude`（不看 CLAUDE_CONFIG_DIR）。环境里没给 HOME（测试只给各家的目录）、或隔离运行时它仍是真实位置，就不碰，返回 nil。
+    var grokClaude: URL? {
+        guard let home = paths.directory("HOME") else { return nil }
+        let directory = home.appending(path: ".claude", directoryHint: .isDirectory)
+        return !isolated || directory.standardizedFileURL != Self.real.user(".claude").standardizedFileURL ? directory : nil
+    }
+
     public var touchesShared: Bool {
         !isolated || paths.agentsDirectory.standardizedFileURL != Self.real.agentsDirectory.standardizedFileURL
             && paths.agentsConfigDirectory.standardizedFileURL != Self.real.agentsConfigDirectory.standardizedFileURL

@@ -44,13 +44,19 @@ extension AgentLibraryTests {
         _ = try await library("登记成项目文件夹后才是它的项目规则") { $0.instruction(.project(folder.id))?.path == map.path && $0.instruction(.project(folder.id))?.hash == hash(mapText) }
     }
 
-    /// Claude Code 目录里的 AGENTS.md：Grok 在哪都读，Claude Code 在 ~ 下干活时也读；链好以后它就不读了，所以要并进来，不悄悄丢。
-    /// 往上一层有 CLAUDE.md 时 Claude Code 不读项目的 AGENTS.md。
-    @Test func Claude目录里只有AGENTS_内容不同就提议合并_整理后都在共享那份里() async throws {
-        let grok = home("grok")
-        for directory in [claude, grok] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+    /// 整理会挡住或替换的各家真读的那几份都进比对、并进共享那份，不悄悄丢：Claude Code 目录里的 AGENTS.md（Claude Code 在 ~ 下干活时读）、
+    /// Grok 认的字面 ~/.claude 里那份（测试里 Claude Code 的配置目录另在别处）、链到别处的那份（只挪链接，它指的文件不动）。
+    /// Claude Code `rules/` 下自己写的照列、不碰。往上一层有 CLAUDE.md 时 Claude Code 不读项目的 AGENTS.md。
+    @Test func 各家真读的都进比对_内容不同就提议合并_整理后都在共享那份里() async throws {
+        let grok = home("grok"), literal = home("home/.claude")
+        for directory in [claude, grok, codex] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
         try write("# Pi 的\n", pi.appending(path: "AGENTS.md"))
         try write("# Claude 目录里的\n", claude.appending(path: "AGENTS.md"))
+        try write("# 安全\n", claude.appending(path: "rules/security.md"))
+        try write("# Grok 读的\n", literal.appending(path: "CLAUDE.md"))
+        let mine = home("mine.md")
+        try write("# Codex 链的\n", mine)
+        try RelativeLink.make(at: codex.appending(path: "AGENTS.md"), to: mine)
         let site = home("nest/site")
         try write("# Site\n", site.appending(path: "AGENTS.md"))
         try write("# 上一层的\n", home("nest").appending(path: "CLAUDE.md"))
@@ -61,8 +67,11 @@ extension AgentLibraryTests {
 
         let found = try await library("扫出要合并的") { $0.merge(into: .global) != nil && $0.instruction(.project(project.id)) != nil }
         let merge = try #require(found.merge(into: .global))
-        #expect(Set(merge.writers) == [.pi, .claudeCode] && !found.automaticOrders.map(\.tidy).contains(merge.id), "内容不同：要看过再合并")
-        #expect(found.instruction(.agent(.claudeCode, file: "AGENTS.md"))?.readers == [.claudeCode, .grok])
+        #expect(Set(merge.writers) == [.pi, .claudeCode, .grok, .codex] && !found.automaticOrders.map(\.tidy).contains(merge.id), "内容不同：要看过再合并")
+        #expect(found.instruction(.agent(.claudeCode, file: "AGENTS.md"))?.readers == [.claudeCode])
+        #expect(found.instruction(.agent(.grok, file: "~/.claude/CLAUDE.md"))?.readers == [.grok])
+        #expect(found.instruction(.agent(.codex, file: "AGENTS.md"))?.hash == hash("# Codex 链的\n"), "链到别处的照列它读到的")
+        #expect(found.instruction(.agent(.claudeCode, file: "rules/security.md"))?.readers == [.claudeCode])
         #expect(found.instruction(.project(project.id))?.readers.contains(.claudeCode) == false, "上一层的 CLAUDE.md 挡着")
         #expect(found.tidies.contains { $0.id == "project-claude/\(project.id.uuidString)" })
 
@@ -70,14 +79,21 @@ extension AgentLibraryTests {
         await workspace.tidy([TidyOrder(tidy: merge.id, base: merge.base)], in: found)
 
         #expect(workspace.notice?.text.visible == "合并好了")
-        #expect(read(rules) == "# Pi 的\n\n# Claude 目录里的\n")
-        #expect(!exists(claude.appending(path: "AGENTS.md")) && !exists(claude.appending(path: "CLAUDE.md")))
-        #expect(RelativeLink.points(claude.appending(path: "rules/AGENTS.md"), to: rules) && RelativeLink.points(grok.appending(path: "AGENTS.md"), to: rules))
-        _ = try await library("合并完全局规则没有要整理的") { $0.merge(into: .global) == nil && !$0.tidies.contains { $0.id == "global-instructions" } }
+        let merged = read(rules) ?? ""
+        for part in ["# Pi 的", "# Claude 目录里的", "# Grok 读的", "# Codex 链的"] { #expect(merged.contains(part), "\(part) 并进来了") }
+        #expect(!merged.contains("# 安全") && read(claude.appending(path: "rules/security.md")) == "# 安全\n")
+        #expect(!exists(claude.appending(path: "AGENTS.md")) && !exists(claude.appending(path: "CLAUDE.md")) && !exists(literal.appending(path: "CLAUDE.md")))
+        #expect(read(mine) == "# Codex 链的\n")
+        for link in [claude.appending(path: "rules/AGENTS.md"), grok.appending(path: "AGENTS.md"), codex.appending(path: "AGENTS.md")] {
+            #expect(RelativeLink.points(link, to: rules), "\(link.path) 链到共享那份")
+        }
+        let tidied = try await library("合并完全局规则没有要整理的") { $0.merge(into: .global) == nil && !$0.tidies.contains { $0.id == "global-instructions" } }
+        #expect(tidied.instruction(.agent(.claudeCode, file: "rules/security.md")) != nil, "整理后照列 Claude Code 另读的")
 
         try await #require(workspace.notice?.action).run()
 
-        #expect(read(claude.appending(path: "AGENTS.md")) == "# Claude 目录里的\n" && !exists(rules))
+        #expect(read(claude.appending(path: "AGENTS.md")) == "# Claude 目录里的\n" && read(literal.appending(path: "CLAUDE.md")) == "# Grok 读的\n" && !exists(rules))
+        #expect(RelativeLink.points(codex.appending(path: "AGENTS.md"), to: mine))
     }
 }
 #endif

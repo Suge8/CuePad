@@ -38,7 +38,7 @@ public struct AgentLibraryFiles: Sendable {
     public var isAvailable: Bool { access.touchesShared }
 
     private func places(_ projects: [UUID: String]) -> AgentLibraryPlaces {
-        AgentLibraryPlaces(paths: access.paths, touches: access.touches, projects: projects)
+        AgentLibraryPlaces(paths: access.paths, touches: access.touches, grokClaude: access.grokClaude, projects: projects)
     }
 
     public struct Scan: Sendable {

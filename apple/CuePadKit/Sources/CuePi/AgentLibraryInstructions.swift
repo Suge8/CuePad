@@ -7,6 +7,8 @@ struct LibraryInstructionScan {
     var texts: [String: String] = [:]
     var tidies: [LibraryTidy] = []
     var watched: Set<String> = []
+    /// 全局规则那件整理在：它会把 Claude Code 自己的全局 CLAUDE.md 并掉、移走（项目那边据此不另建链接）
+    private var globalTidy = false
 
     init(_ places: AgentLibraryPlaces) {
         scanGlobal(places)
@@ -16,44 +18,35 @@ struct LibraryInstructionScan {
         }
     }
 
-    /// 列出各家此刻真读的：链到共享那份的算它的读者，没链过去的那几份各列一行（`.agent`），也是合并的来源。
+    /// 列出各家此刻真读的：链到共享那份的算它的读者，别的各列一行（`.agent`）；会被整理并掉的那几份也是合并的来源。
     private mutating func scanGlobal(_ places: AgentLibraryPlaces) {
         let shared = places.globalInstructions
         let sharedText = LibraryFileReading.content(shared)
         var sources: [InstructionSource] = sharedText.map { [source(.shared, shared, $0)] } ?? []
         var readers: [AgentKind] = [], links: [String] = [], unlinked = false
         watch(shared)
-        func own(_ owner: AgentKind, _ file: URL) {
-            guard let text = LibraryFileReading.content(file) else { return }
-            sources.append(source(.agent(owner), file, text))
-            let name = String(file.path.dropFirst(places.paths.home(of: owner).path.count + 1))
-            add(.agent(owner, file: name), file, text, readers: places.readers(owner: owner))
-        }
         for kind in places.installed {
+            kind.facts.globalReads.forEach { watch(places.paths.home(of: kind).appending(path: $0)) }
             let link = places.globalFile(kind)
-            places.globalCandidates(kind).forEach { watch($0) }
-            if RelativeLink.isLink(link), !RelativeLink.points(link, to: shared) { continue }
-            let reads = places.globalReads(kind)
-            if reads.contains(link), RelativeLink.points(link, to: shared) {
+            if places.globalReads(kind).contains(link), RelativeLink.points(link, to: shared) {
                 if sharedText != nil { readers.append(kind) }
                 links.append(link.path)
             } else {
                 unlinked = true
             }
-            for file in reads where file != link || !RelativeLink.points(file, to: shared) {
-                unlinked = true
-                if !RelativeLink.points(file, to: shared) { own(kind, file) }
-            }
         }
-        if places.uses(.claudeCode) {
-            watch(places.claudeAgents)
-            if LibraryFileReading.content(places.claudeAgents) != nil {
-                unlinked = true
-                own(.claudeCode, places.claudeAgents)
-            }
+        if places.uses(.claudeCode) { watch(places.paths.home(of: .claudeCode).appending(path: "AGENTS.md")) }
+        if let claude = places.grokClaude, places.uses(.grok) { ["CLAUDE.md", "AGENTS.md", "rules/AGENTS.md"].forEach { watch(claude.appending(path: $0)) } }
+        for file in places.globalFiles {
+            watch(file.url)
+            if file.retires { unlinked = true }
+            guard !RelativeLink.points(file.url, to: shared), let text = LibraryFileReading.content(file.url) else { continue }
+            if file.retires { sources.append(source(.agent(file.owner), file.url, text)) }
+            add(.agent(file.owner, file: file.name), file.url, text, readers: file.readers)
         }
         let replacements = replacements(places)
         if unlinked, !sources.isEmpty {
+            globalTidy = true
             tidies.append(LibraryTidy(id: "global-instructions", kind: .globalInstructions(sources + replacements)))
         }
         add(.global, shared, sharedText, readers: readers, links: links)
@@ -84,13 +77,13 @@ struct LibraryInstructionScan {
         let text = LibraryFileReading.content(file)
         let linked = RelativeLink.points(claude.main, to: file)
         let others = (linked ? [claude.nested] : [claude.main, claude.nested]).filter(LibraryFileReading.exists)
-        // 自己目录里没有 CLAUDE.md 一类时它读 AGENTS.md，但往上哪一层有就不读了。挡着的只是它自己的全局 CLAUDE.md（~/.claude 在 ~ 下）时，
-        // 全局规则那件整理把它并进共享那份、移走，这里不另在项目里建链接
+        // 自己目录里没有 CLAUDE.md 一类时它读 AGENTS.md，但往上哪一层有就不读了；项目里有 CLAUDE.md（链到 AGENTS.md 也算）时两份都读（2.1.318 实测）。
+        // 挡着的只是它自己的全局 CLAUDE.md（~/.claude 在 ~ 下）、又有全局规则那件整理时，那件把它并进共享那份、移走，这里不另在项目里建链接
         let local = LibraryFileReading.exists(claude.local)
         let above = others.isEmpty ? places.claudeAbove(file.deletingLastPathComponent()) : []
         let claudeReads = linked || (!local && above.isEmpty && others.allSatisfy { LibraryFileReading.content($0) == text })
         let ownGlobal = places.paths.home(of: .claudeCode).appending(path: "CLAUDE.md").standardizedFileURL
-        let globalFixes = !local && !above.isEmpty && above.allSatisfy { $0.standardizedFileURL == ownGlobal }
+        let globalFixes = globalTidy && !local && !above.isEmpty && above.allSatisfy { $0.standardizedFileURL == ownGlobal }
         if !claudeReads, !globalFixes {
             let differing = others.compactMap { other in LibraryFileReading.content(other).flatMap { $0 == text ? nil : (other, $0) } }
             let sources = (text.map { [source(.shared, file, $0)] } ?? []) + differing.map { source(.agent(.claudeCode), $0.0, $0.1) }
