@@ -172,7 +172,7 @@ final class VoiceCall {
                 try Task.checkCancellation()
                 let offer = try await peer.offer()
                 try Task.checkCancellation()
-                let call = try await dependencies.createCall(offer, Self.instructions(name: dependencies.cueName), access, session)
+                let call = try await dependencies.createCall(offer, Self.identity(name: dependencies.cueName), access, session)
                 try Task.checkCancellation()
                 inputs.continuation.yield(.prepared(call, access))
                 try await peer.accept(answer: call.answer)
