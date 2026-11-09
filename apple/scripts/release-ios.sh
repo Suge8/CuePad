@@ -5,20 +5,20 @@
 # testflight 打包前确认部署完成：docs/release.md「待部署到生产」没有条目、CloudKit 生产结构不缺字段（ck-production.sh，Mac 发版也跑）；
 # 门铃与实时活动中转打包前、归档后各核对一次（check_relay）。
 # 上传后在这个提交上打 ios/<构建号> 标签并推到远端：release-mac.sh 据它核对发版顺序（docs/release.md「发版顺序」），也是这一版源码的唯一记号。
+# testflight 只经 xc.sh release ios 运行：release-context.py 拿全机发布锁、给这次尝试一个新目录（CUEPAD_RELEASE_OUT），源码取自固定提交的快照。
 # 前提：docs/release.md。
 set -euo pipefail
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPTS/../.." && pwd)"
 APPLE_DIR="$REPO_DIR/apple"
+DERIVED="$APPLE_DIR/.derived"
 mode="${1:-}"
-OUT="$APPLE_DIR/.derived/release/ios"
-context() { python3 "$SCRIPTS/release-context.py" "$@"; }
 if [ "$mode" = testflight ]; then
-  OUT="$(context prepare "$REPO_DIR" "$OUT" ios)"
+  OUT="${CUEPAD_RELEASE_OUT:?只经 xc.sh release ios 运行}"
+  source_commit="$(cat "$OUT/commit")"
   APPLE_DIR="$OUT/source/apple"
+  DERIVED="$OUT/build"
 fi
-DERIVED="$REPO_DIR/apple/.derived"
-[ "$mode" != testflight ] || DERIVED="$OUT/build"
 # shellcheck source=_signing.sh source-path=SCRIPTDIR
 . "$SCRIPTS/_signing.sh"
 # shellcheck source=_lock.sh source-path=SCRIPTDIR
@@ -49,14 +49,11 @@ case "$mode" in
     xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" \
       -exportPath "$OUT/export"
     signing_end
-    context seal "$OUT" "$archive" "${versions[@]}"
-    build_version="$(context verify "$OUT" "$REPO_DIR")"
+    build_version="$(python3 "$SCRIPTS/release-context.py" seal "$OUT" "$archive" "${versions[@]}")"
     # 上传走 altool（xcodebuild 的 destination=upload 用 API 密钥时会报"账号凭据过期"）
     xcrun altool --upload-app -f "$OUT/export/CuePad.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
-    tag="$(context tag "$OUT" "$REPO_DIR")"
-    git -C "$REPO_DIR" push -q origin "$tag"
+    release_tag ios "$build_version" "$source_commit"
     echo "已上传 ${build_version}，App Store Connect 处理完成后出现在 TestFlight"
-    context complete "$OUT"
     python3 "$APPLE_DIR/scripts/testflight.py" group || {
       echo "IPA 已上传并标记来源；仅重试 python3 apple/scripts/testflight.py group，不要为分组重新上传 IPA" >&2
       exit 1

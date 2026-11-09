@@ -37,13 +37,7 @@
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-if [ "${1:-}" = release ]; then
-  case "${2:-}" in
-    mac) exec python3 "$APPLE_DIR/scripts/release-context.py" run "$APPLE_DIR/.." mac "$APPLE_DIR/scripts/release-mac.sh" "${@:3}" ;;
-    ios) exec python3 "$APPLE_DIR/scripts/release-context.py" run "$APPLE_DIR/.." ios "$APPLE_DIR/scripts/release-ios.sh" testflight ;;
-    *) echo "用法：$0 release <mac|ios>" >&2; exit 2 ;;
-  esac
-fi
+[ "${1:-}" != release ] || exec python3 "$APPLE_DIR/scripts/release-context.py" run "${@:2}"
 # shellcheck source=_signing.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_signing.sh"
 # shellcheck source=_sim.sh source-path=SCRIPTDIR
