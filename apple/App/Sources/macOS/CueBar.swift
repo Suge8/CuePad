@@ -8,10 +8,8 @@ import SwiftUI
 /// 快捷键存在设备偏好里；注册失败记成启动问题，设置里换一个。
 @Observable
 final class CueBar {
-    /// 唤出处离屏幕顶边的比例。
     private static let anchorFraction: CGFloat = 0.28
 
-    /// 唤出的次数：输入条看它变了就聚焦。
     private(set) var opens = 0
     @ObservationIgnored private let panel = MenuBarPanel()
     @ObservationIgnored private let services: AppServices

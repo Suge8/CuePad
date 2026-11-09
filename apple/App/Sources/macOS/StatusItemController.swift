@@ -9,7 +9,6 @@ final class StatusItemController: NSObject {
     private let togglePanel: @MainActor (CGRect) -> Void
     private let toggleWindow: @MainActor () -> Void
 
-    /// `togglePanel` 收到图标在屏幕坐标里的位置。
     init(togglePanel: @escaping @MainActor (CGRect) -> Void, toggleWindow: @escaping @MainActor () -> Void) {
         self.togglePanel = togglePanel
         self.toggleWindow = toggleWindow

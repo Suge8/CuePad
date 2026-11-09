@@ -51,7 +51,6 @@ class MainShellWindow: NSWindow, NSWindowDelegate {
         self.parked = nil
     }
 
-    /// 全局热键：窗口在前台才隐藏；可见但被遮挡时先拉到前台。
     func toggleFromHotkey() {
         if isVisible && isKeyWindow { hide() } else { show() }
     }
