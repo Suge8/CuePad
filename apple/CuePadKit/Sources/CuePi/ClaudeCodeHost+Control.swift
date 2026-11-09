@@ -86,7 +86,14 @@ extension ClaudeHostedSession {
         publish(at: .now)
     }
 
-    /// 关标准输入：它收完手上的就退出（在等确认时也立即退出）。
-    func end(_: PiSession.ID) async throws { try live.closeInput() }
+    /// 结束、空闲满时限、让出（桥决定）都经这里：这一刻就下桥，下一句话接着它（`ClaudeCodeRuntime.resume` 等这个进程收完再起），
+    /// 不撞上正在退出的它。进程按 `ChildProcess.stop()` 收：关标准输入（它收完手上的就退出，在等确认时也立即退出），
+    /// 宽限后 SIGTERM、再宽限后 SIGKILL。
+    func end(_: PiSession.ID) async throws {
+        let stream = try live
+        stream.closeInput()
+        if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }
+        Task { await stream.process.stop() }
+    }
 }
 #endif

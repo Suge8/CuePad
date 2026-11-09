@@ -77,6 +77,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var subagents: [PiSubagentState] = []
     /// CuePad 在后台托管的 Pi（RPC 模式，没有终端界面）：启动时经环境变量 `CUEPAD_HOSTED` 告诉扩展，扩展在 hello 里带回
     public internal(set) var hosted = false
+    /// 见 `AgentKind.confirmsFromHistory`
+    public var confirmsFromHistory: Bool { agent.confirmsFromHistory(hosted: hosted) }
     /// 未选模型时 `model` 与 `thinking` 为 nil
     public internal(set) var model: PiModelOption? = nil
     public internal(set) var thinking: Open<PiThinkingLevel>? = nil

@@ -3063,6 +3063,22 @@
         }
       }
     },
+    "Claude Code 没有收下这句话：可能在它的终端里等你批准，或被它的设置（crossSessionInbound）挡下了。去终端里看一眼，CuePad 不会自动重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code didn’t take this message. It may be waiting for your approval in its terminal, or its crossSessionInbound setting blocked it. Check the terminal; CuePad won’t resend it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code 没有收下这句话：可能在它的终端里等你批准，或被它的设置（crossSessionInbound）挡下了。去终端里看一眼，CuePad 不会自动重发"
+          }
+        }
+      }
+    },
     "Claude Code 读不到「%@」的项目规则" : {
       "localizations" : {
         "en" : {

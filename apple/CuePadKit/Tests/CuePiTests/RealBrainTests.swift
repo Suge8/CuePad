@@ -62,7 +62,7 @@ struct RealBrainTests {
             // Pi 的 agent 目录也在这里，不读用户的 ~/.pi（设置、提供方各人不同）
             let agentHome = switch runtime {
             case .pi: ["PI_CODING_AGENT_DIR": root.appending(path: "pi-agent").path]
-            case .claudeCode: try ClaudeTestbed.isolatedEnvironment(model: #require(model), root: root)
+            case .claudeCode: try ClaudeSandbox.environment(model: #require(model), root: root)
             case .grok: grokEnvironment(model: try #require(model), home: root.appending(path: "grok-home"), grokHome: root.appending(path: "grok-user"))
             case .dsh: try DshRig.environment(try #require(model), in: root)
             case .codex: ["HOME": root.appending(path: "user").path, "CODEX_HOME": root.appending(path: "codex").path, CodexHome.keyVariable: "fake"]

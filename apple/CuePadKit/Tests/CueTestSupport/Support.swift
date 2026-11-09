@@ -143,6 +143,7 @@ public final class ManualTiming: Sendable {
     Timing(now: { self.now }, sleep: { try await self.sleep(for: $0) }, sleepUntil: { date in try await self.sleep(until: { _ in date }) })
   }
   public var sleeperCount: Int { state.withLock { $0.sleepers.count } }
+  public func hasSleeper(until deadline: Date) -> Bool { state.withLock { $0.hasSleeper(until: deadline) } }
 
   public func advance(_ duration: Duration) {
     let due: [CheckedContinuation<Void, Error>] = state.withLock { state in
