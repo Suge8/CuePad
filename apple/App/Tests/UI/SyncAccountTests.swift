@@ -116,6 +116,30 @@ struct SyncAccountTests {
         await services.upload(pending.id)
         #expect(await !cloud.saved.contains(name(pending)))
     }
+
+    /// 挂起前起的那次认账号还没认完、挂起期间换了账号：回到前台另认一次、认出新账号，不沿用挂起前那一次，旧数据不传。
+    @Test
+    func 挂起前的认账号还在路上_回到前台另认一次() async throws {
+        let app = start()
+        let (services, workspace) = (app.services!, Workspace(services: app.services))
+        defer { services.cancelBackgroundWork() }
+        let synced = try await workspace.createCard(body: "同步过的", in: Project.defaultID)
+        try await eventually("传上去") { await cloud.saved.contains(name(synced)) }
+
+        await cloud.setAccount(nil)
+        accountChanges.post(name: .CKAccountChanged, object: nil)
+        try await eventually("挂起前那次在认") { await cloud.accountChecks >= 2 }
+        let pending = try await workspace.createCard(body: "认清之前记的", in: Project.defaultID)
+        await cloud.signIn("另一个账号")
+        await cloud.setAccount(.available)
+
+        let began = ContinuousClock.now
+        await services.handleActivation()
+        #expect(ContinuousClock.now - began < .seconds(5))  // 沿用挂起前那次的，要等它到请求时限（15 秒）
+        try await eventually("要你决定") { services.syncState.status == .needsDecision(.accountSwitched) }
+        await services.upload(pending.id)
+        #expect(await !cloud.saved.contains(name(pending)))
+    }
     #endif
 
     /// 认账号一直没有回音时停下同步（Mac 退出收尾的最后一步）：当场返回，在等的立即同步、取文件、门铃的密钥都得到"没在同步"。

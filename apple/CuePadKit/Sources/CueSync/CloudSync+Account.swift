@@ -51,7 +51,8 @@ extension CloudSync {
     spawn(generation) { _ = try? await puller.pull() }
   }
 
-  /// 回到前台（App 的唯一入口）：等着按退避再认的当场再认。iOS 上没登录、受限的，与已连上的也再认（连着的同账号变化一样先关闸门）：
+  /// 回到前台（App 的唯一入口）：等着按退避再认的当场再认。iOS 上没登录、受限的，已连上的，与在认的也再认（连着的同账号变化一样先关闸门；
+  /// 在认的那次可能是挂起前发出的，答复是挂起前的账号，作废另认）：
   /// App 被挂起期间换的账号，回来时不保证还收得到 `CKAccountChanged`（Apple 只说 App 在跑时用它察觉变化），连着的不认就会把挂起前没传出去的
   /// 传进新账号。代价是每次回前台两个认账号的请求、首拉晚一个来回。
   public func activated() {
@@ -71,9 +72,9 @@ extension CloudSync {
     guard let run = running, run.generation === generation else { return }
     switch (run.account, trigger) {
     case (.waiting(.retry), _): recheck(generation)
-    case (.waiting(.accountChange), .activated), (.idle, .activated):
+    case (.waiting(.accountChange), .activated), (.idle, .activated), (.checking, .activated):
       if Self.missesAccountChangesWhileInBackground { recheck(generation) }
-    case (.waiting(.accountChange), .networkReturned), (.waiting(.paused), _), (.idle, .networkReturned), (.checking, _): break
+    case (.waiting(.accountChange), .networkReturned), (.waiting(.paused), _), (.idle, .networkReturned), (.checking, .networkReturned): break
     }
   }
 
