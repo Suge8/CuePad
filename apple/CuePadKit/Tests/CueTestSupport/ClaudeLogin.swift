@@ -1,7 +1,7 @@
 #if os(macOS)
 import Foundation
 
-/// 真 Claude Code 的用例（Kit 的 `ClaudeTestbed`、App 的 Cue 评测）用的登录：Claude Code 自己存在钥匙串里的那条
+/// 连真模型的 Claude Code（App 的 Cue 评测；Kit 的用例连假模型、不用它）用的登录：Claude Code 自己存在钥匙串里的那条
 /// （它自己也经 `security` 读写，读时不弹授权框），不读别家（Pi）的凭据，也不要人动手。只取访问令牌交给隔离测试台起的进程
 /// （`CLAUDE_CODE_OAUTH_TOKEN`），不落盘、不进录像带；不在这里刷新：refresh token 只能用一次，测试先刷新就把用户的登录挤掉了，
 /// 过期了等 Claude Code 下次用时自己续。
