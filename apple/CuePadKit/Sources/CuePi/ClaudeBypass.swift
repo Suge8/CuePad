@@ -8,33 +8,48 @@ import Foundation
 /// 令牌只在钩子的环境里，别处拿不到（2.1.318 实测）：它起好收件箱后才放进自己的环境，`KERN_PROCARGS2` 里是启动时的那份；
 /// 会话登记目录里发布的 `<pid>.<hash>.key` 是给同伴会话的另一种令牌，带上它照样扣下；话里自报的权限模式（`from_mode`）它不认。
 /// 它此刻在哪个模式，外面也看不到（Shift-Tab 随时换，会话文件与登记文件都不记）。所以只看它进不进得了这个模式：
-/// 启动时就在跳过权限确认（命令行，或命令行没指定模式时设置里的 `permissions.defaultMode`），或带了 `--allow-dangerously-skip-permissions`
-/// （它的 `isBypassPermissionsModeAvailable`）；不带这些接着的会话不会回到跳过权限确认（实测）。
+/// 启动时就在跳过权限确认，或带了 `--allow-dangerously-skip-permissions`（它的 `isBypassPermissionsModeAvailable`）。
+/// 启动时的模式按它的先后取（2.1.318 的 `vpo`）：命令行、agent 定义的 `permissionMode`、设置的 `permissions.defaultMode`、
+/// `--inherit-permission-mode`。agent 定义给的跳过权限确认它不认（实测起来是 auto，Shift-Tab 也轮不到），不带这些接着的会话也回不去（实测）。
 enum ClaudeBypass {
     /// 读不到它的命令行（进程没了）也算进得了：宁可不发。
-    /// 设置按它自己的配置目录（环境里的 `CLAUDE_CONFIG_DIR`，没有时是 `home`）、工作目录及其上级的 `.claude`、托管设置与 `--settings` 找，
-    /// 不分先后：哪份说了都算。
+    /// 设置不分先后，哪份说了都算：它自己的配置目录（环境里的 `CLAUDE_CONFIG_DIR`，没有时是 `home`）里的用户设置与服务端下发的
+    /// `remote-settings.json`、托管设置（`managed-settings.json`、`managed-settings.d/`、MDM 的描述文件）、`--settings`，
+    /// 以及工作目录及其上级的 `.claude` 里的（它不让这两份给跳过权限确认，多看不会漏）。
     static func reachable(pid: Int32, cwd: URL, home: URL) -> Bool {
         guard let process = launch(of: pid) else { return true }
         let arguments = process.arguments
         if arguments.contains(where: ["--dangerously-skip-permissions", "--allow-dangerously-skip-permissions"].contains) { return true }
         if let mode = value(of: "--permission-mode", in: arguments) { return mode == bypass }
+        if value(of: "--inherit-permission-mode", in: arguments) == bypass { return true }
         let config = process.environment["CLAUDE_CONFIG_DIR"].map { URL(filePath: $0, directoryHint: .isDirectory) } ?? home
-        var settings = [config.appending(path: "settings.json"), URL(filePath: "/Library/Application Support/ClaudeCode/managed-settings.json")]
-            .compactMap { try? Data(contentsOf: $0) }
+        let managed = URL(filePath: "/Library/Application Support/ClaudeCode", directoryHint: .isDirectory)
+        var files = [config.appending(path: "settings.json"), config.appending(path: "remote-settings.json"), managed.appending(path: "managed-settings.json")]
+        files += ((try? FileManager.default.contentsOfDirectory(at: managed.appending(path: "managed-settings.d"), includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "json" }
         var directory = cwd.standardizedFileURL
         while true {
-            for name in ["settings.json", "settings.local.json"] {
-                if let data = try? Data(contentsOf: directory.appending(path: ".claude/\(name)")) { settings.append(data) }
-            }
+            files += ["settings.json", "settings.local.json"].map { directory.appending(path: ".claude/\($0)") }
             let parent = directory.deletingLastPathComponent()
             if parent.path == directory.path { break }
             directory = parent
         }
+        var settings = files.compactMap { try? Data(contentsOf: $0) }
+        settings += ["/Library/Managed Preferences/\(NSUserName())", "/Library/Managed Preferences"].compactMap { folder in
+            (try? Data(contentsOf: URL(filePath: "\(folder)/com.anthropic.claudecode.plist")))
+                .flatMap { try? PropertyListSerialization.propertyList(from: $0, format: nil) }
+                .flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+        }
         if let flag = value(of: "--settings", in: arguments) {
             settings.append(flag.hasPrefix("{") ? Data(flag.utf8) : (try? Data(contentsOf: URL(filePath: flag, relativeTo: cwd))) ?? Data())
         }
-        return settings.contains { JSONValue.parse($0)?["permissions"]?["defaultMode"]?.string == bypass }
+        return settings.compactMap(JSONValue.parse).contains(where: grantsBypass)
+    }
+
+    /// 服务端下发的那份外面包着什么没核实：哪一层写了都算。
+    private static func grantsBypass(_ value: JSONValue) -> Bool {
+        if value["permissions"]?["defaultMode"]?.string == bypass { return true }
+        return (value.object.map { Array($0.values) } ?? value.array ?? []).contains(where: grantsBypass)
     }
 
     private static let bypass = "bypassPermissions"
