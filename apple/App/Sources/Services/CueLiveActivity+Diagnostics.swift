@@ -63,8 +63,9 @@ extension CueLiveActivity {
     func watchDiagnosticPhases() {
         guard diagnostic != nil else { return }
         for name in [UIApplication.didBecomeActiveNotification, UIApplication.didEnterBackgroundNotification, UIApplication.willResignActiveNotification] {
+            let phases = NotificationCenter.default.notifications(named: name)
             diagnosticTasks.append(Task { [weak self] in
-                for await _ in NotificationCenter.default.notifications(named: name) {
+                for await _ in phases {
                     self?.trace(.appPhase, reason: name.rawValue)
                 }
             })

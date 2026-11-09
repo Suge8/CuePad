@@ -263,11 +263,13 @@ extension LoopLayer: NSViewRepresentable {
 
 @Observable private final class LowPowerMode {
     static let shared = LowPowerMode()
-    private(set) var isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
+    private(set) var isOn: Bool
 
     private init() {
+        let changes = NotificationCenter.default.notifications(named: .NSProcessInfoPowerStateDidChange)
+        isOn = ProcessInfo.processInfo.isLowPowerModeEnabled  // 订上之后再读：其间的切换不漏
         Task {
-            for await _ in NotificationCenter.default.notifications(named: .NSProcessInfoPowerStateDidChange) {
+            for await _ in changes {
                 isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
             }
         }

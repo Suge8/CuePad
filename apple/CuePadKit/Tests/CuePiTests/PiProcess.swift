@@ -69,7 +69,7 @@ final class PiProcess: @unchecked Sendable {
             if let model { self.model = model } else { self.model = try await FakeModel() }
             try Self.writeModels(self.model, into: paths.agentDirectory)
             try Self.writeSettings(settings ?? [:], discoverSkills: discoverSkills, into: paths.agentDirectory)
-            self.model.on({ $0.system.contains("single-line task title") }) { .say("\($0.model)：\($0.prompt)") }
+            self.model.onTitle { .say("\($0.model)：\($0.prompt)") }
             if installBridge {
                 let agents = AgentIntegration(paths: AgentPaths(pi: paths, environment: ["CUEPAD_AGENTS_DIR": home.appending(path: ".agents").path]), locate: { pinnedPi.locator }, cuepad: Self.cuepad, timing: noDeadline)
                 try await agents.install(.pi)
