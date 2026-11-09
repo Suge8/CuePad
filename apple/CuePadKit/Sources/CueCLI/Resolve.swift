@@ -54,7 +54,6 @@ extension Call {
   }
 }
 
-/// `--project 项目` 给的范围，或不限。
 enum Scope {
   case any, project(Project)
 

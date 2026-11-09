@@ -98,7 +98,6 @@ extension CueStore {
   /// 托管着的或 CuePad 开的会话记录（唯一定义，也是它的部分索引的条件）。
   static let hostedOrLaunched = "(hosted = 1 OR launchToken IS NOT NULL)"
 
-  /// 本机索引里的一个会话（会话文件路径与工作目录）。
   public func piSession(_ id: String) throws -> IndexedSession? { try find(IndexedSession.self, id) }
 
   /// 会话文件索引写成同步记录：没有记录时插入一条已结束的；已结束的记录更新名字、所在与最后活动时间（没变不写，

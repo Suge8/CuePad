@@ -134,7 +134,6 @@ extension CueStore {
     }
   }
 
-  /// 发给叶子会话的目标与会话此刻的记录。
   struct SessionTarget {
     var target: SendTarget
     var state: PiSessionState?

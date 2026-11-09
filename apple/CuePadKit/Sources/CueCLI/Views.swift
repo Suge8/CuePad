@@ -34,7 +34,6 @@ private func minutes(_ date: Date) -> String {
       timeZone: .current, calendar: .current))
 }
 
-/// 卡片标题（`CueSummary`），过长截断。
 private func title(_ body: String) -> String {
   let title = CueSummary.title(of: body)
   guard !title.isEmpty else { return "（空）" }
@@ -95,8 +94,6 @@ struct CardView {
     return rows.joined(separator: "\n") + "\n\n" + card.body
   }
 }
-
-// MARK: 从资料库取视图
 
 extension Call {
   func projectNames() async throws -> [UUID: String] {

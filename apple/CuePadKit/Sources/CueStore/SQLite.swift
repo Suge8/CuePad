@@ -110,7 +110,6 @@ final class SQLite {
   private var statements: [String: Compiled] = [:]
   private static let statementLimit = 128
   private static let log = Logger(subsystem: AppIdentity.id, category: "sqlite")
-  /// `tracking` 期间读到的表。
   private var tracked: Set<Table>?
 
   private struct Compiled {

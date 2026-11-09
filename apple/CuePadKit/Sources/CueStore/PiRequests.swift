@@ -109,7 +109,6 @@ public enum PiFolder: Sendable, Equatable {
 /// `token` 由发起方生成，带到新会话的同步记录上（`PiSessionState.launchToken`），发起方据此认领。
 public struct PiLaunch: Sendable, Equatable, StoredJSON {
   public var project: UUID
-  /// 开场的话（可空）。
   public var prompt: String?
   public var token: String
   /// 用哪个 Agent 开；旧版本写的没有，是 Pi（`opening`）

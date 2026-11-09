@@ -79,8 +79,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
         maxSize = NSSize(width: 10_000_000, height: 10_000_000)
     }
 
-    // MARK: 正文
-
     /// 存储格式正文。读取时序列化当前内容；设置时整体替换、清空撤销栈，不触发 `onChange`。
     public var storedText: String {
         get { core.stored() }
@@ -96,8 +94,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
     /// 附件的文件到了、传的进度变了：还没到的图片换上真图，文件牌重画。
     public func refreshAttachments() { core.refreshAttachments() }
 
-    // MARK: 主题
-
     private func applyTheme() {
         core.style = theme
         backgroundColor = theme.backgroundColor
@@ -106,8 +102,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
         typingAttributes = core.baseAttributes
         core.styleDidChange()
     }
-
-    // MARK: 编辑通知
 
     public override func didChangeText() {
         super.didChangeText()
@@ -145,8 +139,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
         layout.ensureLayout(for: layout.documentRange)
         return ceil(layout.usageBoundsForTextContainer.height + textContainerInset.height * 2)
     }
-
-    // MARK: CueEditorHost
 
     func resolvedColor(_ color: CueColor) -> CueColor { color }  // 底色在绘制时按当时的外观解析
     func layoutDidAdvance() { needsLayout = true }

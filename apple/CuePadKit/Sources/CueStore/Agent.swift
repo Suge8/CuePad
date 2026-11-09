@@ -74,7 +74,6 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   public init(rawValue: Int) { self.rawValue = rawValue }
 
   public static let images = AgentCapabilities(rawValue: 1 << 0)
-  /// 停止这一轮
   public static let abort = AgentCapabilities(rawValue: 1 << 1)
   public static let model = AgentCapabilities(rawValue: 1 << 2)
   public static let rename = AgentCapabilities(rawValue: 1 << 3)

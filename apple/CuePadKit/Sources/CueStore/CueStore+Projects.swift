@@ -100,7 +100,6 @@ extension CueStore {
     try db.first("SELECT directory FROM projectDirectories WHERE projectID = ?", [project]) { $0.text(0) }
   }
 
-  /// 本机所有项目的目录绑定。
   public func projectDirectories() throws -> [UUID: String] {
     Dictionary(
       uniqueKeysWithValues: try db.query("SELECT projectID, directory FROM projectDirectories") {

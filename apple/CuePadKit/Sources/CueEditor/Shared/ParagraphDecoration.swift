@@ -134,7 +134,6 @@ extension EditorCore {
         return paragraph
     }
 
-    // MARK: 刷新已排版的段落
     // TextKit 不会因为装饰上下文变了就重新询问未被编辑的段落，必须发一次"仅属性"的编辑通知；
     // 通知不改文本、不进撤销栈，`storageDidProcessEditing` 对它直接忽略。
 

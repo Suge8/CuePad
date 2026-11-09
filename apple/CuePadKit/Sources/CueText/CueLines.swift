@@ -5,7 +5,6 @@ public enum CueLines {
     // 有文字的行只有一条规则，实现在私有的 `text(of:)`：不是分割线（`---`），且除图片引用
     // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字；文件链接算它的文件名。
 
-    /// 这一行是不是卡片名字所在的那种行（有文字的行）。
     static func isTitleLine(_ line: String) -> Bool { !text(of: line).isEmpty }
 
     /// 正文里全部有文字的行（图片引用去掉、文件留文件名，空白折成单个空格），按出现顺序。
@@ -60,7 +59,6 @@ public enum CueName {
         text.reduce(0) { sum, character in sum + (character.unicodeScalars.contains(where: isWide) ? 2 : 1) }
     }
 
-    /// 超过 `limit` 时截到放得下末尾的"…"为止。
     public static func clipped(_ text: String) -> String {
         guard width(text) > limit else { return text }
         var kept = "", used = 1
@@ -87,7 +85,6 @@ public enum CueName {
 /// 一张卡只露出开头那一段，卡与卡之间才看得出差别。
 public struct CueSummary: Equatable, Sendable {
     static let previewLimit = 240
-    /// 搜索摘要里命中处之前留的字数。
     public static let snippetLead = 12
 
     public var title: String
@@ -166,7 +163,6 @@ extension String {
         count <= limit ? self : String(prefix(limit - 1)) + "…"
     }
 
-    /// 第一个非空行，去掉首尾空格；没有为 nil。
     public var firstLine: String? {
         split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
     }
