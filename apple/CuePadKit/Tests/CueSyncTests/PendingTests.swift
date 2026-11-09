@@ -4,12 +4,10 @@ import Testing
 
 @testable import CueSync
 
-/// 待推送由数据库状态推导（新记录、编辑后的记录、已删除但服务器还有的记录），发送者跟着本机提交把它们传上去。
 @Suite struct PendingTests {
   let rig = try! Rig()
   var store: CueStore { rig.store }
 
-  /// 本机与另一个进程（命令行）的写入、删除，开始同步后都自己传上去。
   @Test
   func localAndOtherProcessWritesAreUploadedAutomaticallyOnceStarted() async throws {
     let server = FakeUploader()
@@ -24,7 +22,6 @@ import Testing
     await sender.stop()
   }
 
-  /// 上一版还在上传时记录又改了：上一版的结果回来后，新的这一版接着传上去，不丢。
   @Test
   func anEditMadeWhileThePreviousVersionWasUploadingIsUploadedAfterIt() async throws {
     let server = FakeUploader(holding: true)

@@ -5,8 +5,6 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode / Grok Build / dsh 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型（Pi 用本机 Codex 的登录，
-/// Grok Build 缺省用假模型，见 `GrokModel`），
 /// MCP 是 Fixtures/mcp-echo.mjs 替身。
 /// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，总在隔离的 `OpenCodeSandbox` 里连真 OpenCode 跑（模型见它）。
 private let environment = ProcessInfo.processInfo.environment
@@ -37,7 +35,6 @@ private func executable(_ name: String) -> URL? {
 @MainActor
 @Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode, .grok, .dsh), RealAgents.timeLimit(.minutes(5)))
 struct RealBrainTests {
-    /// 一个大脑与它的现场：独立的工作目录（名字里有随机标记，用来在各家的历史里找它）、MCP 替身的调用记录、收到的事件。
     @MainActor
     final class Rig {
         let runtime: AgentKind
@@ -89,7 +86,6 @@ struct RealBrainTests {
             try await eventually("第 \(n) 轮做完") { self.count(.turnFinished) >= n }
         }
 
-        /// 做完的每一轮：收下的话（`received`；没在跑时报的归接下来开始的那一轮）与回答（做完时还留着的正在说的话）
         var turns: [(received: [UUID], reply: String?)] {
             var turns: [(received: [UUID], reply: String?)] = [], open: (received: [UUID], reply: String?)?, early: [UUID] = []
             for event in events {
@@ -113,7 +109,6 @@ struct RealBrainTests {
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
     }
 
-    /// 起一个大脑跑完测试体，不论成败都等它退出、收掉 OpenCode 的隔离环境。
     func withRig(_ runtime: AgentKind, _ body: (Rig) async throws -> Void) async throws {
         let rig = try await Rig(runtime)
         let outcome: Result<Void, any Error>
@@ -123,7 +118,6 @@ struct RealBrainTests {
         try outcome.get()
     }
 
-    /// 发一句话：这一轮开始、报上下文用量（带窗口）、回答、做完；回答出自我们给的系统提示。
     @Test(arguments: runtimes) func aMessageGetsAReplyContextAndAFinishedTurn(_ runtime: AgentKind) async throws {
         AgentTape.use(runtime)
         try await withRig(runtime) { rig in
@@ -139,7 +133,6 @@ struct RealBrainTests {
         }
     }
 
-    /// 带一张图问颜色：图按这家原生的图片输入交给模型，它看得见（红色）。
     @Test(arguments: runtimes) func anImageIsSeen(_ runtime: AgentKind) async throws {
         AgentTape.use(runtime)
         try await withRig(runtime) { rig in
@@ -152,8 +145,6 @@ struct RealBrainTests {
         }
     }
 
-    /// 一轮进行中再说的话并进这一轮，在下一次请求模型前就起作用，而不是等这一轮做完：一串前后相依的 MCP 调用中途叫停，
-    /// 它停在半路、照新的话回答，没有另起一轮。
     @Test(arguments: runtimes) func aMessageDuringATurnJoinsThatTurn(_ runtime: AgentKind) async throws {
         AgentTape.use(runtime)
         try await withRig(runtime) { rig in
@@ -194,8 +185,6 @@ struct RealBrainTests {
         }
     }
 
-    /// 就地换模型与强度：同一个进程接着说，前面的话还记得，下一轮用的是新模型；
-    /// 运行时不认的模型抛错，在用的不变。
     @Test(arguments: runtimes) func configureSwitchesModelInPlace(_ runtime: AgentKind) async throws {
         AgentTape.use(runtime)
         try await withRig(runtime) { rig in

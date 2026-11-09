@@ -35,7 +35,6 @@ extension AgentTape {
         }
     }
 
-    /// 录下的 `--version` 回答低于这家现在的最低版本：CuePad 会拒掉它，后面的断言都没意义。
     private static func staleVersion(of agent: AgentKind, in events: [TapeEvent]) -> (found: AgentVersion, minimum: AgentVersion)? {
         guard let minimum = agent.facts.minimumVersion,
               let channel = events.first(where: { $0.k == "spawn" && $0.a == ["--version"] })?.c,
@@ -44,7 +43,6 @@ extension AgentTape {
         return (found, minimum)
     }
 
-    /// 一条输入到了：认领录像带里这条通道上最早没认领的同类输入，比对内容，再接着做出后面的输出。返回认领到的通道。
     @discardableResult
     func input(_ kind: String, channel: String, data: String? = nil) -> String? {
         claim(kind, where: { $0.c == channel }, data: data, recorded: { [$0.d ?? ""] }).map { found in
@@ -94,7 +92,6 @@ extension AgentTape {
         }
     }
 
-    /// 做出光标处起、前面输入都已到的输出（一条任务按录下的先后做）。
     func advance() {
         wakes.continuation.yield()
     }
@@ -178,7 +175,6 @@ extension AgentTape {
             }
             state.withLock { $0.listeners[channel] = (source, path) }
         case "unlisten":
-            // 录下的 unlisten 就是 socket 文件没了（扩展正常退出时自己删）
             guard let listener = state.withLock({ $0.listeners.removeValue(forKey: channel) }) else { return }
             listener.source.cancel()
             unlink(listener.path)
@@ -208,7 +204,6 @@ extension AgentTape {
         }
     }
 
-    /// 回放时 CuePad 那一端的一条连接：它写来的一行一条当作输入，关了也是。
     private func serve(_ connection: Connection, as channel: String) {
         state.withLock { $0.connections[channel] = connection }
         advance()

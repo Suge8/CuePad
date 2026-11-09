@@ -5,7 +5,6 @@ import Testing
 
 @testable import CueSync
 
-/// 远端变更下的数据不变量。
 /// - 项目引用：同步表没有外键，记录乱序到达是常态，所以远端记录里的 projectID 不校验也不改写
 ///   （否则先到的卡片会被误判为悬空）；卡片与其所属项目分别到达即可。用户入口（创建、移动）的校验在 Store 的本地写路径。
 @Suite struct RemoteInvariantTests {

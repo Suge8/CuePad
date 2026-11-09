@@ -6,8 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Mac 上复制带附件的灵感：富文本（RTFD）按原顺序带上图片与文件附件，粘进备忘录、邮件里能拿到文件；
-/// 纯文本那份写文件名；本机没有的附件（图片或文件）只写名字，照样复制成功。复制不是发送，不记发送记录。
 @MainActor
 struct CopyFileTests {
     let app = TestApp()

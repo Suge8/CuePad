@@ -3,20 +3,17 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// "现在在哪个项目"与往哪存：Mac 的首屏（项目段总是项目列表）、⌘1–9、新建落点，手机的导航路径；项目失效（不存在、进了回收站、写入时被删）时回落并提示，不吞错。
 #if os(macOS)
 struct ProjectsTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
     var store: CueStore { services.store }
 
-    /// 跟着工作区的订阅（App 启动时同一条路），项目目录在其中。
     private func observing(_ workspace: Workspace) -> Task<Void, Never> {
         Task { await workspace.follow() }
     }
 
     @Test func 启动是项目列表_失效设置清掉_数字键按当下顺序取() async throws {
-        // 保存的项目不存在：清掉失效的设置，首屏是项目列表
         _ = try await store.createProject(name: "A", color: "#000000")
         let pinned = try await store.createProject(name: "B", color: "#000000")
         try await store.updateProject(pinned.id) { $0.isPinned = true }
@@ -28,7 +25,6 @@ struct ProjectsTests {
         try await eventually("目录读到三个项目，失效设置清掉") { workspace.catalog?.projects.count == 3 && services.settings.currentProject == nil }
         #expect(workspace.mainRoute == .shelf)
 
-        // 打开过的项目只决定新记灵感进哪：下次打开仍是项目列表，「项目」那一行选中
         services.settings.currentProject = pinned.id
         let fresh = Workspace(services: services)
         let freshCatalog = observing(fresh)
@@ -38,7 +34,6 @@ struct ProjectsTests {
         try await store.updateProject(last.id) { $0.isPinned = true }
         try await eventually("fresh.catalog?.projects.first?.id == last.id") { fresh.catalog?.projects.first?.id == last.id }
 
-        // ⌘N 打开侧栏里此刻的第 N 个：顺序变了不能还绑在旧顺序上；没有那么多个就不动
         fresh.showProject(number: 1)
         #expect(fresh.mainRoute == .project(last.id) && fresh.shownPane == .projects && services.settings.currentProject == last.id)
         fresh.showProject(number: 3)
@@ -46,11 +41,9 @@ struct ProjectsTests {
         #expect(fresh.mainRoute == .project(third) && third != last.id)
         fresh.showProject(number: 9)
         #expect(fresh.mainRoute == .project(third))
-        // 项目页栏头的「项目」与会话条的「项目」都回到列表；上次看的项目还记着
         fresh.select(.shelf)
         #expect(fresh.mainRoute == .shelf && services.settings.currentProject == third)
 
-        // 当前项目进了回收站：回到项目书架；默认项目删不掉
         services.settings.currentProject = third
         for project in try await store.projects() where !project.isDefault { try await store.trashProject(project.id) }
         await #expect(throws: CueStoreError.defaultProjectUndeletable) { try await store.trashProject(Project.defaultID) }
@@ -86,7 +79,6 @@ struct ProjectsTests {
 #endif
 
 #if os(iOS)
-/// iPhone/iPad 上"现在在哪个项目"只有一份：从导航路径推出（`Workspace.currentProject`）。
 struct ProjectsNavigationTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

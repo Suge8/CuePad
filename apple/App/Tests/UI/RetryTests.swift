@@ -5,8 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 出错后点"重试"（`Workspace.retry`）：投送请求交给会话所在的 Mac，会话行当场显示话在路上；Mac 让会话的扩展重跑出错的那一轮，
-/// 不写发送记录；连点只发一次。重跑出新回答、对话与状态的结果由真实 Pi 的 `HistoryRulesTests` 证明。
 struct RetryTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

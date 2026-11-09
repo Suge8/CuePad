@@ -3,7 +3,7 @@ import CueEditor
 import Foundation
 import Synchronization
 
-/// 目录里放真实文件的内存附件库：CueEditor 只经 `CueFileStore` 协议读写附件。
+/// CueEditor 只经 `CueFileStore` 协议读写附件。
 final class DirectoryFileStore: CueFileStore, Sendable {
     private struct Stored {
         var files: [String: URL] = [:]
@@ -18,7 +18,6 @@ final class DirectoryFileStore: CueFileStore, Sendable {
 
     func store(_ data: Data) throws -> String { try store(data, format: "png") }
 
-    /// 键与附件的键同形（`AttachmentKey`）：哈希接扩展名。
     private func store(_ data: Data, format: String) throws -> String {
         let id = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() + "." + format
         let url = directory.appendingPathComponent(id)

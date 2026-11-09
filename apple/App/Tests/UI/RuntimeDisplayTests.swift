@@ -6,7 +6,6 @@ import Testing
 import CuePi
 #endif
 
-/// #43：关机与重启撤销运行断言，但不能把工作、历史或活动伪造成已完成。
 struct RuntimeDisplayTests {
     @Test func 离线与系统重启不沿用旧报告_同boot重开仍保留确认_回填不续命() async throws {
         let clock = ManualTiming()
@@ -42,7 +41,6 @@ struct RuntimeDisplayTests {
         #expect(offline.agentCount == 0)
         #expect(offline.subagents == 0 && offline.tally.moving == 0 && offline.advancing == 3)
         #expect(offline.isLive && !offline.hasConfirmedActivity)
-        // 那台 Mac 没开：会话行、小组件与实时活动的每件一行都说哪台没开，不各说一遍状态未确认；在线期限到期推出来的那一份同样
         let macOff = "「\(MacAgents.unnamed)」没开"
         #expect(offline.items.count == 3 && offline.items.allSatisfy { $0.label == macOff }, "\(offline.items.map(\.label))")
         #expect(snapshot.shown(at: snapshot.at + 601).items.allSatisfy { $0.label == macOff }, "\(snapshot.shown(at: snapshot.at + 601).items.map(\.label))")

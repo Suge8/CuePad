@@ -3,7 +3,6 @@ import CueText
 import Foundation
 import Testing
 
-/// 任务 → 子任务 → 会话：叶子（没有子任务的任务）才有会话；一个叶子最多一个会话，一个会话可以绑好几个叶子。
 @Suite struct LeafTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -17,14 +16,11 @@ import Testing
     let upper = try #require(try await store.card(task.id))
     #expect(upper.piSessionID == nil)
 
-    // 再加一个子任务不动：会话已经在第一个子任务上
     let next = try await store.createTask("改排序", under: task.id)
     #expect(try await store.card(step.id)?.piSessionID == "s1")
     #expect(next.piSessionID == nil)
   }
 
-  /// 终端里开的 Claude Code、Codex 会话不是什么都做得到（`AgentCapabilities`）：Cue 对它们的开工、停止、收尾与界面同一组规则——
-  /// 收不了图片的正文照原样写（图片由 Mac 交出时写成路径），停不了这一轮就报停不了，结束不了的会话事做完了也留着。
   @Test func 交给其他Agent的会话_只做它做得到的() async throws {
     let recorder = PiStateRecorder(store: store, hostID: "mac")
     let claude = try await store.createTask("修乱序")
@@ -70,7 +66,6 @@ import Testing
     #expect(try await store.tasks(boundTo: "s3").map { [$0.task.id, $0.parent?.id] } == [[step.id, second.id]])
   }
 
-  /// 从任务开了新会话、又亲手改绑：以后一次为准，那个新会话的记录再写（或同步过来）也不把任务抢回去。
   @Test func 开新会话后又改绑_不被新会话抢回() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let task = try await store.createTask("修乱序", in: project.id)

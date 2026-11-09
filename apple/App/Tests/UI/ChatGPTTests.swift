@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #41：从用户的刷新与发送入口，经真实隔离 Pi/bridge 入库；仅模型服务是替身。
+/// 经真实隔离的 Pi 与桥入库，仅模型服务是替身。
 struct ChatGPTTests {
     private func rig(oauth: Bool = true) async throws -> HistoryRulesTests.Rig {
         try await HistoryRulesTests.Rig(providerFixture: URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/chatgpt.ts"), oauth: oauth)

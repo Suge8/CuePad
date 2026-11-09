@@ -4,16 +4,12 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话进看板：不归没做完的事的活会话与任务支持同一组操作，第一次拖到已完成、置顶、改名时当场建任务绑上，从没这样用过的不留卡；
-/// 名字只有一个事实源——任务标题，标题为空时随会话名变；只读跟读的会话能拖状态，不能发话与改名。
 struct SessionBoardTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
     var store: CueStore { services.store }
-    /// 会话所在的那台 Mac（手机上跑也一样：投送请求写给它）。
     static let mac = "mac-a"
 
-    /// 一个歇着的会话（默认终端里的 Pi，只记了一次状态）。
     private func session(
         _ id: String, title: String, agent: AgentKind = .pi, hosted: Bool = false
     ) async throws -> PiSessionState {
@@ -33,7 +29,6 @@ struct SessionBoardTests {
 
     private func tasks() async throws -> [Card] { try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks) }
 
-    /// 看板上这件任务写的名字与会话行写的名字（同各自的视图：`BoardTaskCard`、`PiSessionRow`）。
     private func names(_ task: UUID, _ sessionID: String) async throws -> [String] {
         let board = try await TaskBoard.read(from: store)
         let item = try #require(board.item(task))
@@ -68,7 +63,6 @@ struct SessionBoardTests {
         #expect(try await store.deliveryRequests(toSession: "s1").isEmpty, "终端里你开的会话不替你结束")
         #expect(try await store.deliveryRequests(toSession: "s2").isEmpty, "把既有会话变成任务不取得结束权限")
 
-        // 收起的会话再有动静才回到看板：与完成同一毫秒的不算，严格晚于完成的才算
         let s1 = try #require(made.first { $0.piSessionID == "s1" }).id
         try await moves("s1", after: s1, by: 0)
         #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "同一毫秒分不出先后，按没动过算")
@@ -103,7 +97,6 @@ struct SessionBoardTests {
         let held = try #require(board.held.first { $0.session.sessionID == "q1" })
         #expect(held.item == nil && board.advancing.isEmpty)
 
-        // 菜单里的完成与拖到已完成同一条路（`finish`）：在等你的会话先问，不先建卡
         let workspace = Workspace(services: services)
         try await workspace.finish(PiSessionListItem(state: held.session))
         #expect(workspace.sessionAsk == .complete(held.session))
@@ -136,7 +129,6 @@ struct SessionBoardTests {
         #expect(try await names(task.id, "s1") == ["登录页白屏", "登录页白屏"])
         #expect(try await store.deliveryRequests(toSession: "s1").compactMap(\.config?.name) == ["登录页白屏"])
 
-        // 在任务正文里改标题：离开编辑时会话跟着改名
         try await store.updateCard(task.id) { $0.body = "登录页白屏（Safari）\n先查缓存" }
         workspace.leaveEditing(task.id, flush: nil, heading: "登录页白屏")
         try await eventually("改名请求发出") {
@@ -144,7 +136,6 @@ struct SessionBoardTests {
         }
         #expect(try await names(task.id, "s1") == ["登录页白屏（Safari）", "登录页白屏（Safari）"])
 
-        // 没绑任务的会话在看板外改名：只让 Agent 改，不建卡
         let other = try await session("s2", title: "随便问问")
         try await workspace.rename(other, to: "问问部署", adopts: false)
         #expect(try await tasks().count == 1)
@@ -194,7 +185,6 @@ struct SessionBoardTests {
         try await workspace.finish(PiSessionListItem(state: grok))
         let task = try #require(try await tasks().first)
         #expect(task.status == .done && task.piSessionID == "g1")
-        // 改任务标题只改 CuePad 里的名字，不向它发改名
         try await store.updateCard(task.id) { $0.body = "查崩溃日志" }
         try await workspace.pushName(of: task.id)
         #expect(try await store.deliveryRequests(toSession: "g1").isEmpty)

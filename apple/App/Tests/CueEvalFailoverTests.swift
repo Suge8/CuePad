@@ -7,8 +7,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 自动换大脑之后换上的那家真能接着干：Cue 用假模型的 Pi 值班、这一轮报额度用完，这台 Mac 上另记着一家真的 Agent（`EvalBrain.current`，
-/// 用 `CUEPAD_CUE_EVAL_RUNTIME` 选，不能是 Pi）。他发一条消息 → 管理器换过去、只说一次 → 真的大脑起来、调 Cue 的工具办了这件事并回他。
+/// 自动换大脑之后换上的那家真能接着干：Cue 用假模型的 Pi 值班、这一轮报额度用完，这台 Mac 上另记着一家真的 Agent（`EvalBrain.current`，用 `CUEPAD_CUE_EVAL_RUNTIME` 选，不能是 Pi）。
 /// 只在 `CUEPAD_CUE_EVAL=1` 时跑，跑法见 docs/cue-eval.md「换大脑」。
 @Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(10)))
 struct CueEvalFailoverTests {
@@ -26,7 +25,6 @@ struct CueEvalFailoverTests {
             let woke = try #require(try await eval.settle { try await rig.say(said) }, "Cue 没醒")
             let rounds = eval.rounds.filter { woke.contains($0.startedAt) }
             let failed = rounds.first?.failure.map(PiErrorSummary.init)
-            // 新的大脑好好做完、答他这句的那一轮：回复是这一轮里写下的、他看得到的一句话（不是卡、不挂任务），说到这件事、不是出错的话
             let answered: CueRound? = rounds.last { (round: CueRound) -> Bool in round.wake == .message && round.finishedAt != nil && round.failure == nil }
             let added = CueEval.calls(in: answered.map { [$0] } ?? [], "task", ["add"]).filter { CueEval.built($0.call) }
             var reply: CueMessage?

@@ -6,8 +6,6 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// 会话对话：Mac 从会话文件写出——近 7 天活跃的会话自动写全部消息，更早的按需补写；会话记录上的摘要是同一次写入的投影；
-/// 文件一变就写（不经状态记录器的节流）。
 struct PiTranscriptTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
@@ -39,7 +37,6 @@ struct PiTranscriptTests {
         return url
     }
 
-    /// 像 App 启动时那样回填一次会话目录：索引器定要不要对话（最近 7 天修改过的、本机已存着对话的），落盘照 App 的路子走。
     private func backfill() async {
         let indexer = PiHistoryIndexer(
             agent: .pi, paths: AgentPaths(pi: rig.piPaths), transcriptWindow: PiChat.transcriptWindow, files: store.files
@@ -58,7 +55,6 @@ struct PiTranscriptTests {
         await services.consumePiHistory(events, agent: .pi)
     }
 
-    /// 桥上看到这个会话在线（状态记录器写出未结束的记录；不结束）。
     private func live(_ sessionID: String, file: URL) async throws -> CuePi.PiSession {
         let session = CuePi.PiSession(
             id: "\(sessionID).100", sessionID: sessionID, agent: .pi, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
@@ -108,7 +104,6 @@ struct PiTranscriptTests {
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
-    /// 会话所在的 Mac 没回应：补写请求到派发期限前一直在路上；再打开会话不写第二条，那台 Mac 醒来领取那一条就够。
     @Test func 补写请求还没被领取时再打开会话_不写第二条() async throws {
         _ = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
         await backfill()
@@ -123,7 +118,6 @@ struct PiTranscriptTests {
         #expect(try await store.deliveryRequests(toSession: "old").filter { $0.mode == .known(.transcript) }.count == 1)
     }
 
-    /// 工具计数口径变了、会话文件检查点作废后从头重读：七天外却还存着对话的会话（仍被提示词引用而没清掉）也要把已存的消息重写成新口径，
     /// 不能只有近七天的会话更新、同一界面留着两种口径。
     @Test func 检查点作废后从头重读_七天外存着对话的会话也更新已存消息的工具计数() async throws {
         let at = Date.now.addingTimeInterval(-10 * 86_400)
@@ -140,12 +134,10 @@ struct PiTranscriptTests {
         ]
         try (lines.joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.modificationDate: at.addingTimeInterval(3)], ofItemAtPath: file.path)
-        // 旧口径存下的回答：失败的命令不在各类计数里
         let stale = PiChatMessage(
             sessionID: "old", entryID: "a1", seq: 2, role: .pi, text: "没通过", at: at.addingTimeInterval(3),
             tools: .init(items: [.init(kind: .command, target: "false", failed: true)]), roundStartedAt: at)
         try await store.writePiTranscript(PiTranscript(sessionID: "old", messages: [stale], recap: PiRecap()))
-        // 旧口径时索引过它：会话行在（索引器认的是真实路径），检查点格式已作废
         let real = realpath(file.path, nil)!
         defer { free(real) }
         try await store.upsertPiSession(
@@ -158,7 +150,6 @@ struct PiTranscriptTests {
         #expect(reply.tools?.steps == 1 && reply.tools?.steps == reply.tools?.items.count)
     }
 
-    /// 摘要只有对话这一个写者：Pi 桥上的状态变化不改它。
     @Test func 状态变化不改摘要_会话结束后没有进行中的提问() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         try FileManager.default.removeItem(at: file)
@@ -182,7 +173,6 @@ struct PiTranscriptTests {
         })
         #expect(try await record("s1").pendingPrompt == nil)
 
-        // 文件从头再读一遍：已结束的会话不会重新有进行中的提问
         await services.consumePiHistory(AsyncStream { continuation in
             continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: store.files)))
             continuation.finish()
@@ -210,7 +200,6 @@ struct PiTranscriptTests {
         }) { $0 }
     }
 
-    /// Mac 重启：启动对账之后会话重新连上，正在处理的提问照样在——不必等文件再追加。
     @Test func 重启后会话重新连上_正在处理的提问仍在() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         let handle = try FileHandle(forWritingTo: file)
@@ -227,7 +216,6 @@ struct PiTranscriptTests {
         #expect(try await record("s1").pendingPrompt == "第三问")
     }
 
-    /// 一直开着的 Mac 也按天清理安静了的会话的对话，不只在启动时。
     @Test func 一直开着的Mac每天清理一次对话() async throws {
         let old = try sessionFile("old", at: .now.addingTimeInterval(-30 * 86_400))
         await backfill()

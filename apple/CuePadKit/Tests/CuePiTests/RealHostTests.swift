@@ -5,12 +5,9 @@ import Testing
 import CueStore
 @testable import CuePi
 
-/// 端到端：CuePad 在后台托管 Pi（RPC 模式，没有终端界面）——恢复已结束的会话、开新会话、空闲退出、用户在别处打开同一会话时交出、
-/// 不随 CuePad 结束、扩展协议变了的托管进程被换掉。
 @MainActor
 @Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(2)))
 struct RealHostTests {
-    /// 先用一个普通 Pi 进程（假模型装在 agent 目录里，托管进程也加载得到）跑一轮、落盘，再结束它，留下一个已结束的会话文件。
     private func endedSession(_ pi: PiProcess, _ bridge: PiBridge) async throws -> (file: URL, sessionID: String) {
         try await eventually("桥发现会话") { !bridge.sessions.isEmpty }
         let session = bridge.sessions[0]
@@ -48,8 +45,6 @@ struct RealHostTests {
         try await eventually("后台进程回答了") { fileTexts("assistant", in: file).last == "ECHO 后台接着说 IMAGES[]" }
     }
 
-    /// 托管的标记只属于托管的那个 Pi：它起的子进程（Agent 的命令、里面再起的 pi）看不到 CUEPAD_HOSTED，不会也自认托管、空闲到点自己退出；
-    /// 它自己 /reload 后仍是托管的。
     @Test func theHostedMarkStaysWithTheHostedProcessAndIsNotInheritedByItsChildren() async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
@@ -72,7 +67,6 @@ struct RealHostTests {
         #expect(bridge.sessions.first { $0.sessionID == sessionID }?.hosted == true)
     }
 
-    /// 结束会话：托管的进程被关掉（空闲时与正在跑一轮时一样），会话从桥上消失，是正常退出（bye quit）。
     @Test(arguments: ["", "[[slow]] 正在跑的一轮"])
     func endingAHostedSessionClosesItsProcessEvenMidTurn(prompt: String) async throws {
         AgentTape.variant(prompt.isEmpty ? "idle" : "busy")
@@ -132,7 +126,6 @@ struct RealHostTests {
         try await eventually("空闲到点后退出") { bridge.session(id: id) == nil }
     }
 
-    /// 后台托管着时，用户在自己的终端里打开同一个会话（同一会话 id 的新进程连上）：后台进程收尾退出，只剩用户那个。
     @Test func theHostedProcessGivesWayWhenTheSameSessionIsOpenedElsewhere() async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
@@ -155,8 +148,6 @@ struct RealHostTests {
 
     private func busy(_ state: PiWorkState?) -> Bool { state?.isWorking == true }
 
-    /// 后台进程正在跑一轮时用户打开了同一会话：后台做完这一轮再退；用户那个进程这期间没写过，就把会话重新载入到最新——
-    /// 接着说的话接在后台那一轮的回答后面，不分支。
     @Test func aBusyHandoffReloadsTheUsersProcessSoTheSessionDoesNotBranch() async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
@@ -177,7 +168,6 @@ struct RealHostTests {
         try await eventually("用户的进程连上") { bridge.sessions.contains { $0.pid == mine.pid } }
         try pi.release()  // 后台这一轮这才做完（它停在假模型里，由测试放行）
 
-        // 重新载入时用户那个进程的会话先结束再出现：第二次出现就是读到了后台那一轮
         try await eventually("后台做完退出、用户的进程重新载入") {
             bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [mine.pid]
                 && log.changes.count { if case .appeared(let s) = $0 { s.pid == mine.pid } else { false } } >= 2
@@ -190,7 +180,6 @@ struct RealHostTests {
         #expect(mineEntry.parent == backgroundReply.id)
     }
 
-    /// 同上，但用户那个进程在后台做完之前已经说了话（会话已分出支线）：不重新载入，在用户的会话里提示一句。
     @Test func aBusyHandoffLeavesTheUsersProcessAloneOnceItHasWrittenAndSaysSo() async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
@@ -217,8 +206,6 @@ struct RealHostTests {
         #expect(bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [mine.pid])
     }
 
-    /// 托管的进程不随 CuePad 结束：发出一轮后 CuePad 这一侧整个没了（桥与托管服务都停掉，相当于 App 退出、更新），这一轮照常跑完；
-    /// 新起的一套桥重新连上，看到同一个进程、标着托管、状态是做完了，接着发话照常送达、有回答。
     @Test func aHostedSessionOutlivesCuePadAndIsSeenAgainByTheNextOne() async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let first = PiBridge(socketDirectory: pi.paths.socketDirectory)
@@ -249,8 +236,6 @@ struct RealHostTests {
         try await eventually("认回的进程接着收话、有回答") { fileTexts("assistant", in: file).last == "ECHO 新的 CuePad 认回之后 IMAGES[]" }
     }
 
-    /// App 更新后读不懂上一版扩展了（`PiWire.oldestExtension` 提过），上一版 App 托管的进程还在跑旧扩展：新 App 装上新扩展、请它核对后它空闲时换上、重新连上，
-    /// 同一个进程接着收话，话送达、有回答。
     /// 只连真 Pi 跑：两个 Pi 进程交替上桥、中途热换扩展文件，回放排不稳先后（三次两次等不到旧扩展上桥）。
     @Test(RealAgents.live(.pi, "两个进程交替与热换扩展，回放排不稳先后"))
     func anOldHostedProcessComesBackOnTheNewExtension() async throws {
@@ -283,8 +268,6 @@ struct RealHostTests {
         try await eventually("话送达、有回答") { fileTexts("assistant", in: file).last == "ECHO 换上新扩展之后 IMAGES[]" }
     }
 
-    /// 磁盘上的扩展不是随包版本（接入没修好）：托管启动起出的进程读不懂托管约定，既不会空闲自退、CuePad 也不认它——
-    /// 启动报错，进程退出，不留孤儿。
     @Test(arguments: OldExtension.allCases)
     func aHostedLaunchOnAnExtensionThatCannotHonorHostingIsStoppedAndReported(_ old: OldExtension) async throws {
         AgentTape.variant("\(old)")

@@ -7,10 +7,8 @@ import Foundation
 extension Duty {
     // MARK: 判定
 
-    /// 判定要看的那几步
     struct Points {
         let go, progress, readmeStatus, provider, tabs, e2e, tripSaid, trip, bounce, certified, wrap: Step
-        /// 忘记密码的收尾：做完交回那一步，与 Cue 没收、会话补上版本号的那一步（有的话）
         let wrapUp: [Step]
         let cert: ScriptedSession
     }
@@ -36,19 +34,15 @@ extension Duty {
         let afterRejection = try await eval.said(since: key.go.window?.upperBound ?? .distantFuture).map(\.text)
             + says(steps.filter { ($0.window?.lowerBound ?? .distantPast) > (key.go.window?.upperBound ?? .distantFuture) }, to: settings)
         let tabsAnswers = answers([key.tabs], to: settings), e2eAnswers = answers([key.e2e], to: site), providerAnswers = answers([key.provider], to: digest)
-        // 升版本号：收尾跨做完交回与补上版本号两步，按先后看 Cue 的 task 调用：第一次 done 掉这件之前交代过它（交回没提时 say 让它补，或 edit、add、
-        // 开工写着它的步骤），或它还排在没做完的步骤里（Cue 早先把它加成了步骤）。交回没提就 done 的不过；这件一直没 done 的不计
         let bump = /2\.3\.1|CHANGELOG|changelog/
         let wrapCalls = CueEval.calls(in: key.wrapUp.flatMap { rounds($0) }, "task")
         let closing = wrapCalls.firstIndex { $0.args["action"] as? String == "done" && !$0.call.failed && target($0.args) === login }
-        // 只认成了的、对着这件的交代：失败的、给别的任务的不算补办
         let beforeClose = wrapCalls[..<(closing ?? wrapCalls.endIndex)].filter { call in
             ["say", "edit", "add", "start"].contains(call.args["action"] as? String ?? "") && !call.call.failed && target(call.args) === login
         }.map { call in
             guard call.args["action"] as? String == "start" else { return Self.texts(call.args) }
             return login.cards.first { card in (call.args["task"] as? String).map { card.id.uuidString.lowercased().hasPrefix($0.lowercased()) } == true }?.body ?? ""
         }
-        // 他要的：证书查完时告诉他签发方（会话交回里写着 Sectigo）
         let certDone = calls(key.certified, "task", ["done", "leave"]).contains { !$0.call.failed && target($0.args) === key.cert }
         let certSaid = try await told(key.certified)
         let loginDone = closing != nil
@@ -86,7 +80,6 @@ extension Duty {
 
     // MARK: 统计
 
-    /// 写进 .md 的长程统计
     func summarize() async {
         let rounds = eval.rounds.filter { $0.wake != .enabled }
         let renewals = eval.renewals

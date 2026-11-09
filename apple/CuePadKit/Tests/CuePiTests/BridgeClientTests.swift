@@ -6,7 +6,6 @@ import Testing
 import CueStore
 @testable import CuePi
 
-/// 客户端 ↔ 桥扩展的 socket 协议接缝：用假扩展（说同一字节协议）驱动 `PiBridge`。
 @MainActor
 struct BridgeClientTests {
     let dir: URL
@@ -24,7 +23,6 @@ struct BridgeClientTests {
     private let sonnet = FakeExtension.WireModel(provider: "anthropic", id: "sonnet", name: "Sonnet", thinking: ["off", "low", "medium"])
     private let opus = FakeExtension.WireModel(provider: "anthropic", id: "opus", name: "Opus", thinking: ["off", "high", "max"])
 
-    /// `info` 只带变了的几项：没带的项（模型表、命令清单、会话名……）保持原样，带了 null 的才清空。
     @Test func infoCarriesOnlyWhatChangedAndLeavesTheRest() async throws {
         let compactCommand = FakeExtension.WireCommand(name: "compact", description: "压缩", source: "builtin", hint: nil)
         let ext = FakeExtension(directory: dir, options: .init(model: sonnet, thinking: "low", models: [sonnet, opus], context: (tokens: 1, window: 100), commands: [compactCommand]))
@@ -48,8 +46,7 @@ struct BridgeClientTests {
 
     // MARK: 结束与残留清理
 
-    /// /reload：同一进程的扩展先告别再在同一路径重新 listen。新 socket 的目录事件可能先于旧连接断开被处理（负载高时常见），
-    /// 那次扫描看到的是还挂着的旧连接；旧连接断开后不会再有目录事件，会话也得重新连上。
+    /// 新 socket 的目录事件可能先于旧连接断开被处理（负载高时常见），那次扫描看到的是还挂着的旧连接；旧连接断开后不会再有目录事件，会话也得重新连上。
     @Test func reloadWhoseNewSocketIsSeenBeforeTheOldConnectionDropsStillReconnects() async throws {
         let old = FakeExtension(directory: dir)
         try old.start()
@@ -70,7 +67,7 @@ struct BridgeClientTests {
         try await eventually("同一会话重新连上") { session(old.id) != nil && reloaded.connectionCount == 1 }
     }
 
-    /// 启动扫描：属主已死的残留 socket 删掉、不成会话；属主活着但还没 listen（刚 bind）的不能删，否则会破坏正在启动的会话。
+    /// 属主活着但还没 listen（刚 bind）的不能删，否则会破坏正在启动的会话。
     @Test func staleSocketsOfDeadProcessesAreRemovedWhileUnlistenedOnesOfLiveProcessesAreKept() async throws {
         let pending = dir.appending(path: "\(UUID().uuidString.lowercased()).\(getpid()).sock")
         let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try await deadPid()).sock")
@@ -84,7 +81,6 @@ struct BridgeClientTests {
 
     // MARK: 安全
 
-    /// socket 目录只属于本人：缺了建成 0700，别人能写的目录拒绝启动。
     @Test func theSocketDirectoryIsOwnerOnlyAndAnInsecureOneIsRefused() throws {
         let fresh = dir.appending(path: "sub")
         try PiBridge(socketDirectory: fresh).start()
@@ -95,7 +91,7 @@ struct BridgeClientTests {
         #expect(throws: PiBridgeError.self) { try bridge.start() }
     }
 
-    /// 别人能写的 socket 不连。启动时同步扫一遍目录，要连的话 `start()` 返回时连接已排进对端的 backlog：此刻监听端不可读就是没连。
+    /// 启动时同步扫一遍目录，要连的话 `start()` 返回时连接已排进对端的 backlog：此刻监听端不可读就是没连。
     @Test func doesNotConnectToASocketOthersCouldWriteTo() throws {
         let path = dir.appending(path: "\(UUID().uuidString.lowercased()).\(getpid()).sock").path
         let listener = try UnixSocket.listen(path)
@@ -108,7 +104,6 @@ struct BridgeClientTests {
 
     // MARK: 协议兼容
 
-    /// 读不懂的消息：连接判为不兼容并断开；之后在终端里 /reload，扩展在同一路径重新 listen，新 socket 不再被当成那个坏掉的旧连接跳过。
     @Test func aCorruptedMessageDropsTheConnectionAsIncompatibleAndAReloadConnectsAgain() async throws {
         let ext = FakeExtension(directory: dir)
         try ext.start()
@@ -142,7 +137,7 @@ struct BridgeClientTests {
 
     // MARK: 分格观察
 
-    /// 查某个会话只随这一个会话的变化通知：别的会话状态一变，读它的视图就要重算的话，Agent 多起来时每秒几十次整页重算。
+    /// 别的会话状态一变，读它的视图就要重算的话，Agent 多起来时每秒几十次整页重算。
     @Test func lookingUpOneSessionIsNotNotifiedByAnotherSessionsChanges() async throws {
         let first = FakeExtension(directory: dir)
         try first.start()

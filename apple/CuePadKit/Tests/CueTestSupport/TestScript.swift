@@ -11,7 +11,6 @@ import Foundation
 public enum TestScript {
   private static let cache = FileManager.default.temporaryDirectory.appending(path: "cuepad-test-scripts", directoryHint: .isDirectory)
 
-  /// 在 `url` 放内容是 `script`（带 `#!` 行）的可执行脚本，已有的同名文件换掉。
   public static func install(_ script: String, at url: URL, variables: [String: String] = [:]) throws {
     let file = try cached(script)
     let manager = FileManager.default

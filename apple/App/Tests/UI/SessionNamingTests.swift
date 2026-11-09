@@ -6,9 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 没有自带会话名的会话（Pi、Codex 托管）有了第一句话，承载它的 Mac 请它那一家按这句话起个短名、核对后写回成会话名；
-/// 你起过名（绑着的任务有标题、发过改名，起名途中才有的也算）就不写，这家此刻起不了（还没换上新扩展）的等能起了再起，起名失败保持原名、不再试。
-/// 起名的那一家是替身（`NamingLink`）：真实的 Pi 扩展与 Codex 起名、写回见 CuePiTests 的 `RealPiTests`、`RealCodexHostedTests`。
 @MainActor
 struct SessionNamingTests {
     let app = TestApp()
@@ -47,7 +44,6 @@ struct SessionNamingTests {
         }
     }
 
-    /// 接上桥、开始记录会话变化，挂上一个只说了第一句话、还没名字的终端 Pi 会话。
     private func live(_ link: NamingLink, until stop: () async throws -> Void) async throws {
         let events = app.pi.changes()
         let consume = Task { try await app.services.consumePiChanges(events) }
@@ -122,7 +118,6 @@ struct SessionNamingTests {
         }
     }
 
-    /// 还没换上新扩展的 Pi 会话起不了：不算试过，换上之后（会话再有变化）照常起。
     @Test func 这家此刻起不了_能起了再起() async throws {
         let link = NamingLink()
         link.able = false

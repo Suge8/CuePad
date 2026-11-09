@@ -6,7 +6,6 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 你的消息里的图片：会话文件是唯一来源，读出来存进附件目录，对话里只留引用；终端里贴的图片也一样。
 struct HistoryImageTests {
     let fixture = try! Fixture()
     let dir = try! makeTempDirectory()
@@ -38,8 +37,6 @@ struct HistoryImageTests {
         }
     }
 
-    /// 交给 Agent 的附件行（"附件：文件名（路径）"）在会话名与摘要里只留文件名：本机那份在对话里认回文件；别的 Mac 的路径、
-    /// 扩展报的首条消息被截断在路径中间的，也不把路径带进标题。
     @Test func 附件行在会话名与摘要里只留文件名() throws {
         let key = try store.files.store(fileAt: try {
             let url = dir.appending(path: "handoff-brief.pdf")
@@ -63,7 +60,6 @@ struct HistoryImageTests {
         #expect(PiSessionName.display(name: nil, firstMessage: String(("看这份\n\n" + local).prefix(60)), folder: "x") == "看这份  handoff-brief.pdf")
     }
 
-    /// 活动会话的首条消息来自扩展（原文，可能被截断在说明行中间）：显示名同样不带说明行。
     @Test func 说明行不进会话名() {
         let note = "[Image: original 3000x2000, displayed at 1500x1000. Multiply coordinates by 2.00 to map to original image.]"
         #expect(PiSessionName.display(name: nil, firstMessage: "看这张\n\n" + note, folder: "x") == "看这张")

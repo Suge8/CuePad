@@ -3,7 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 项目与文件夹（iOS 与 Mac 共用的规则）：新会话列哪些去处、各由哪台 Mac 开。
 struct ProjectFoldersTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -31,8 +30,6 @@ struct ProjectFoldersTests {
     }
     #endif
 
-    /// 手机上（不认哪台是本机）：按项目顺序，没绑文件夹的交给干活的 Mac，绑在几台 Mac 上的每台一项，只有这种才写 Mac 名；
-    /// Mac 上只认本机的绑定，只绑在别的 Mac 上的项目在本机建工作区。
     @Test func 新会话只列项目_手机上每台绑定的Mac一项_Mac上只认本机() async throws {
         let a = try await project("A"), b = try await project("B"), c = try await project("C")
         let bindings = [

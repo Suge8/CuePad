@@ -2,8 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 会话工作目录属于哪个项目：项目绑定的目录是该目录本身或其祖先，按路径分段比较（`/a/proj` 不误配 `/a/project`），
-/// 多个命中取绑定目录最深的；只看未删除的项目。
 @Suite struct ProjectMatchTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -41,7 +39,6 @@ import Testing
 
   // MARK: 同一个目录的不同写法
 
-  /// 磁盘上真实存在的一棵目录：`Repo/Sub`，旁边一个指向 `Repo` 的符号链接 `link`。
   private func disk() throws -> (repo: URL, link: URL) {
     let root = fixture.directory.appending(path: "disk", directoryHint: .isDirectory)
     let repo = root.appending(path: "Repo", directoryHint: .isDirectory)

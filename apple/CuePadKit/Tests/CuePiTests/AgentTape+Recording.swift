@@ -96,7 +96,6 @@ extension AgentTape {
         pipe(from: LineReader(fd: cuepad), to: agentSide, channel: channel, kind: "hangup", agentToCuePad: false)
     }
 
-    /// 一个方向的转发：一行一条录下再转过去；读到头时录下这一端关了，并关掉另一端的写。
     private func pipe(from reader: LineReader, to fd: Int32, channel: String, kind endKind: String, agentToCuePad: Bool) {
         Thread.detachNewThread { [self] in
             while let line = reader.next(partial: true) {

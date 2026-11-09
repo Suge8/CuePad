@@ -2,26 +2,14 @@ import CloudKit
 import Foundation
 import os
 
-/// iCloud 同步入口：私有数据库里一个自定义同步区，自己的同步循环——一个拉取器（`ZonePuller`）、一个发送者（`RecordSender`），
-/// 附件的文件另走一路（传 `FileSender`、取 `FileFetcher`），逻辑在协调器（`SyncCoordinator`）。
-///
-/// 用法：`let sync = CloudSync(store: store)`；`await sync.start()` 认账号（认不了由这里自己按退避再认）、开始上传，第一次拉由 App 发起
-/// （`syncNow`，它等得到拉完）；界面订阅 `stateUpdates`，状态为 `.needsDecision` 时让用户选择后调用 `resolve(_:)`。冲突副本由 `CueStore.conflicts()` 提供。
-/// 实时层订阅 `acceptedUpdates`（服务器收下了本机的一批改动），要立刻拉一次就调 `syncNow`，门铃的密钥经 `relaySecret` 取。
-/// 附件文件的进度订阅 `fileTransfers`，用到本机还没有的文件调 `fetchFile`。
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
+/// `start()` 认账号并开始上传，第一次拉由 App 发起（`syncNow`，它等得到拉完）；状态为 `.needsDecision` 时让用户选择后调用 `resolve(_:)`。
 ///
-/// 一次 `start()` 到 `stop()` 是一代（`SyncGeneration`），本代的一切在 `Run`：拉取器、发送者、文件两路、认账号的进度与这里起的任务。
-/// `stop` 一开始就结束这一代、摘下 `Run`，再取消并等它们收尾。
-/// `start` 等上一次 `stop` 收尾完才建新一代：新旧两代的发送者不并存。`resolve` 先停、再处理、再开始：处理（清库、重置元数据）时旧代已不再写；
-/// 处理期间有人 `stop`（Mac 退出收尾）就不再开始。
-///
-/// 冷启动：认过账号就能拉，第一拉不等别的；最低对端版本（`PeerFloor`）由发送者在第一次上传前对（上传等它，拉取不等：拉到的页里有门槛就当场看，
-/// `SyncCoordinator.meet`）；通知订阅在后台另建，彼此独立。状态在第一次请求成功前一直是正在连接。
+/// 冷启动：认过账号就能拉，第一拉不等别的；最低对端版本（`PeerFloor`）由发送者在第一次上传前对，拉取不等它（拉到的页里有门槛就当场看，`SyncCoordinator.meet`）。
 ///
 /// 不用 CKSyncEngine：它的手动拉取只在收到过推送、知道哪个区有变化时才真的发请求（macOS 27.2 实测：全新状态的第一次之后，
 /// 没收到推送就原地返回，有没有推送权限、限定区、带旧状态重启都一样），而 Mac 不收推送；它的待办队列又是库里推导的待推送之外的第二份事实。
-/// 拉：令牌只有库里一份，什么时候拉由 App 定（有等待理由时按节奏、回到前台、立即同步、手机收到推送）。
+/// 拉：令牌只有库里一份，什么时候拉由 App 定。
 /// 推：库里推导的待推送是唯一队列，同一条记录同一时刻只在一批里。
 public actor CloudSync {
   private static let containerIdentifier = AppIdentity.iCloudContainer
@@ -34,7 +22,6 @@ public actor CloudSync {
   enum Phase {
     case idle
     case running(Run)
-    /// `resolve` 停下了这一代、正在处理：处理完重新开始，除非这期间有人 `stop`（变成 `stopped`）。
     case resolving
     case stopped
   }
@@ -42,14 +29,12 @@ public actor CloudSync {
   private let transfers = TransferBoard()
   /// 还没收尾的停止：`start` 等它收尾才建新一代（新旧发送者不并存，`RecordSender`）。
   private var stopping: Task<Void, Never>?
-  /// `start()` 之前就要拉的（冷启动时先到的推送）：开始了再拉（true）；等的时候被取消、或停下了（false）。
   private var startWaiters: [Promise<Bool>] = []
   /// 每认完一次账号、每次停下给一个：等账号认好的（`relaySecret`）据此再看能不能同步。
   let accountChecks = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
   static let alertRetryInterval = Duration.seconds(60)
   static let log = Logger(subsystem: AppIdentity.id, category: "sync")
 
-  /// 是否在私有数据库建立服务端订阅（`AlertSubscriptions`：要紧的变化把 App 叫到后台拉一次，"Pi 等你确认 / 完成"与 Cue 消息的可见通知）。
   /// 只有 iOS 建立：Mac 不注册推送，靠等待理由驱动的拉取。App 需要请求通知权限并注册远程通知。
   #if os(iOS)
   static let subscribesToAlerts = true
@@ -70,7 +55,7 @@ public actor CloudSync {
   /// 先给出当前快照，之后状态或问题列表每次变化给出新快照。
   public nonisolated var stateUpdates: AsyncStream<SyncState> { coordinator.stateUpdates }
 
-  /// 之后每次服务器收下本机的一批改动给出一个（不补之前的；实时层据此按门铃）。
+  /// 每次服务器收下本机的一批改动给出一个，不补之前的。
   public nonisolated var acceptedUpdates: AsyncStream<Void> { coordinator.acceptances.stream() }
 
   /// 附件文件此刻在路上的（按 key，见 `FileTransfer`）：先给当前快照，之后每次变化给新快照。一个 key 离开快照就是那一趟结束了，
@@ -79,7 +64,6 @@ public actor CloudSync {
 
   /// 这个附件文件在本机的位置：没有就现在从 iCloud 取（不看手机自动取的条件），附件记录还没到就等它到（发出的设备还在传），
   /// 服务器要求等就等到点；没开始同步的等开始。这台不同步（没认过账号、停下了）抛 `FileFetchFailure.notSyncing`，文件坏了抛 `.damaged`，网络与 iCloud 的失败原样抛出；被取消就抛出。
-  /// Mac 把带附件的话交给会话前用它确保文件在本机。
   public func fetchFile(_ key: String) async throws -> URL {
     guard await started() else {
       try Task.checkCancellation()
@@ -150,7 +134,7 @@ public actor CloudSync {
     update(generation) { $0.background[id] = task }
   }
 
-  /// 连上 iCloud 并开始认账号。第一个调用方返回时认完（认不了的这里自己按退避再认）；认的途中再调的当场返回。
+  /// 第一个调用方返回时认完（认不了的这里自己按退避再认）；认的途中再调的当场返回。
   public func start() async {
     await stopping?.value
     if case .running = phase { return }
@@ -208,9 +192,8 @@ public actor CloudSync {
     await teardown.value
   }
 
-  /// 立即同步：拉一次（返回时拉完），顺带让发送者发一轮（不等，守着它的重试时刻）。下拉刷新、立即同步按钮、回到前台、按节奏的拉取（`SyncPoller`）、
-  /// 手机收到推送、实时层的门铃都只调它；`start()` 之前来的等开始了再拉，本代还没认过账号的先认（等再认的不另认，见 `Wait`）。
-  /// 通知订阅没建成的话顺带在后台重试（见 `Run.alertsAttemptedAt`）。
+  /// 立即同步：拉一次（返回时拉完），顺带让发送者发一轮（不等，守着它的重试时刻）；`start()` 之前来的等开始了再拉，本代还没认过账号的先认。
+  /// 通知订阅没建成的话顺带在后台重试。
   /// 返回本次拉取的结果；账号、暂停与退避导致的未拉取不是成功，不能从全局同步状态反推。
   @discardableResult
   public func syncNow() async throws -> SyncPullResult {
@@ -241,7 +224,7 @@ public actor CloudSync {
     return await sender.send(recordNames)
   }
 
-  /// 把待推送全部发出去，返回时这一轮结束（iOS 进入后台前）。
+  /// 把待推送全部发出去，返回时这一轮结束。
   public func push() async {
     await parts?.sender.flush()
   }

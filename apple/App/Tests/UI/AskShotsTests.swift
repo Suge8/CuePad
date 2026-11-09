@@ -3,8 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Cue 的话只带它点名的图，每张一句看什么（存在消息上，卡片、对话与全屏预览只读它）：提问卡带回答它必须看的，做完的结果卡带证明结论的最终成果；
-/// 关联任务发过的别的文件哪儿都不挂（在会话里）。没点名的提问、结果没有图。提到的任务按写下那一刻画，之后改名、重开都不变。
 @MainActor
 struct AskShotsTests {
     let app = TestApp()
@@ -49,14 +47,12 @@ struct AskShotsTests {
         _ = try await store.addCueMessage(.cue, text: "好，按方案 1 做。", task: task.id)
 
         let after = try await thread()
-        // 提问回到对话里只带它点名的两张；Cue 之后那句没点名，不挂图
         guard let asked = after.rows.first(where: { $0.id == question.id }), case .cue = asked else {
             Issue.record("答完的提问回到对话里是 Cue 的一句：\(after.rows.map(\.id))"); return
         }
         #expect(after.shots[question.id]?.count == 2)
         #expect(!after.rows.contains { if case .result = $0 { true } else { false } } && after.shots.count == 1)
 
-        // 做完：结果卡只挂点名的那张最终成果；没点名的做完是平常的一句
         let final = try await send(["final-light.png", "final-dark.png"], title: "最终版")
         let (report, _) = try await store.finishTask(task.id, evidence: ["按方案 1 改完了"], shots: [CueShot(preview: final[1].id, look: "深色：按钮对比度够")])
         let done = try await thread()
@@ -66,7 +62,6 @@ struct AskShotsTests {
         #expect(card.id == report?.id && id == task.id && done.shots[card.id]?.map(\.preview.id) == [final[1].id])
         #expect(done.shots[card.id]?.map(\.look) == ["深色：按钮对比度够"])
 
-        // 任务之后改名、重开：对话里提到它的那几句（气泡下的任务行、结果卡）仍是写下那一刻的名字与状态
         func written(_ thread: CueThread) -> [CuePlace?] { thread.messages.filter { $0.taskID == task.id }.map { $0.place(task: task.id) } }
         let frozen = written(done)
         #expect(frozen.allSatisfy { $0?.name == "重做提问卡" } && frozen.last??.status == .known(.done), "\(frozen)")

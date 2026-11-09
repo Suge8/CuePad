@@ -37,7 +37,6 @@ extension Fixture {
     try await store.createProject(name: name, color: "blue")
   }
 
-  /// 绕过 Store 造出同步才会产生的冲突副本。
   func markConflict(copy: UUID, of original: UUID) throws {
     try RawDB(url).exec("UPDATE cards SET conflictOf = '\(original.uuidString.lowercased())' WHERE id = '\(copy.uuidString.lowercased())'")
   }

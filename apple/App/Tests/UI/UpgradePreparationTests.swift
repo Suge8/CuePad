@@ -6,7 +6,6 @@ import Testing
 @testable import CuePad
 @testable import CuePi
 
-/// #43 真机追加：升级是尚未派发的准备，不是投送失败，也不授权重做已开始的操作。
 @MainActor
 struct UpgradePreparationTests {
     func oldSession(_ app: TestApp) async throws -> (PiSessionState, FakeExtension) {

@@ -25,7 +25,6 @@ private let temporaryRoot: URL = {
 }()
 private let temporaryPrefix = "cpt-"
 
-/// 主人已不在的临时根：目录还在的，与目录删了、进程还指着它的。
 private func abandonedRoots(in parent: URL) -> [URL] {
     let marker = "/tmp/\(temporaryPrefix)"
     let listed = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
@@ -59,7 +58,6 @@ func makeTempDirectory() throws -> URL {
 
 func fileGone(_ url: URL) -> Bool { !FileManager.default.fileExists(atPath: url.path) }
 
-/// 已经退出的进程 pid（用于"残留 socket 的属主已死"）。
 func deadPid() async throws -> Int32 {
     let p = Process()
     p.executableURL = URL(filePath: "/usr/bin/true")
@@ -84,7 +82,6 @@ extension PiHistoryIndexer {
     }
 }
 
-/// 会话文件此刻的摘要（对话的投影，见 `PiHistory`）；文件还没落盘时为 nil。
 func recap(of session: PiSession?) -> PiRecap? {
     session?.sessionFile.flatMap { try? PiHistory.index(file: $0, from: nil).checkpoint.recap }
 }
@@ -111,7 +108,6 @@ func fileMessages(in file: URL?) -> [FileMessage] {
 
 func fileTexts(_ role: String, in file: URL?) -> [String] { fileMessages(in: file).filter { $0.role == role }.map(\.text) }
 
-/// 订阅 `changes()` 并记录，供测试断言事件顺序。
 @MainActor
 final class ChangeLog {
     private(set) var changes: [PiSessionChange] = []
@@ -138,7 +134,6 @@ final class ChangeLog {
         changes.compactMap { if case .stateChanged(let s, _) = $0 { s.state } else { nil } }
     }
 
-    /// 歇下了几次（连着的同一状态算一次）
     var settles: Int {
         zip(states, [nil] + states.map(Optional.some)).filter { $0 == .settled && $1 != .settled }.count
     }

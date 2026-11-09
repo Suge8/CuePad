@@ -6,9 +6,6 @@ import Testing
 @testable import CuePi
 @testable import CueStore
 
-/// #58：从回复框发斜杠命令，送达各家一条规则。模板与技能是你说的话：带着请求 id 交给 Agent，对话里挂着气泡，
-/// 落成的那条消息出现才算送达、气泡由它换下；Agent 拒收写原因。扩展命令是命令：Agent 执行了它就已送达，不挂气泡、进度收起。
-/// Agent 这一端（Pi 展开模板、执行扩展命令后确认）的真实行为在 CuePiTests 的 `RealSlashTests`。
 @MainActor
 struct SlashDeliveryTests {
     static let commands = [
@@ -59,7 +56,6 @@ struct SlashDeliveryTests {
         await app.services.executor.beginStop()()
     }
 
-    /// 带着卡片（与批注）发：Agent 只认开头的 `/名字`，交出去的那句以你打的命令开头、名字后一个空格，卡片与批注接在后面当参数。
     @Test(arguments: ["/greet", "/skill:careful", "/shout"])
     func 带卡片与批注发命令_交出的仍以命令开头(line: String) async throws {
         let app = TestApp(), store = app.services.store
@@ -83,8 +79,6 @@ struct SlashDeliveryTests {
         await app.services.executor.beginStop()()
     }
 
-    /// 托管的 Claude Code 报的命令都是它自己执行的（自定义命令与技能也在其中）：它真做了才是已送达；没登录、模型不可用、额度用完时
-    /// 它取消这一条，回复框上方写它的原话，不报已送达，也不只写"尚未确认"。Claude Code 这一端的真实行为在 CuePiTests 的 `RealClaudeHostTests`。
     @Test(arguments: [nil, "Not logged in · Please run /login"])
     func 托管ClaudeCode执行了命令才算送达_拒收写它的原话(refusal: String?) async throws {
         let app = TestApp(), store = app.services.store

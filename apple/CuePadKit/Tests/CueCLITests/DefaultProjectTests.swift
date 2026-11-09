@@ -5,7 +5,6 @@ import Testing
 
 @testable import CueCLI
 
-/// 不给 --project 时，默认范围是绑定了当前目录（或其祖先目录）的项目；不在这样的目录里新建的进默认项目。
 @Suite struct DefaultProjectTests {
   private struct World {
     let sb: Fixture
@@ -68,7 +67,6 @@ import Testing
 
     let beta = try await w.sb.object("card", "add", "--project", "Beta", "--body", "y", cwd: World.inside)
     #expect(beta.string("projectId") == w.beta.id.uuidString.lowercased())
-    // 不在绑定了目录的项目里：新建的进默认项目
     let home = Project.defaultID.uuidString.lowercased()
     #expect(try await w.sb.object("card", "add", "--body", "x", cwd: nil).string("projectId") == home)
     #expect(try await w.sb.object("task", "add", "g", cwd: nil).string("projectId") == home)

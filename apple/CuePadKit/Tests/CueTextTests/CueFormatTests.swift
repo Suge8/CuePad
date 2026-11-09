@@ -2,7 +2,6 @@ import Foundation
 import Testing
 import CueText
 
-/// 两个合法的键：64 位哈希接扩展名
 private let pic = String(repeating: "a", count: 64) + ".png", doc = String(repeating: "c", count: 64) + ".pdf"
 
 @Suite("存储格式")
@@ -15,7 +14,6 @@ struct CueFormatTests {
         #expect(CueFormat.serialize(tokens) == stored)
         #expect(CueFormat.plainText(stored) == "前文  后文\n---\n见 季度 报告.pdf")
 
-        // 残缺的引用都是普通文字：键不是 64 位小写十六进制（可接 . 与小写扩展名）、没有右括号、链接文字跨行或为空
         let lookalikes = "![](cuepad://file/)\n![](cuepad://file/abc)\n![](cuepad://file/\(pic.uppercased()))\n[a\nb](cuepad://file/\(doc))\n[](cuepad://file/\(doc))\n![](cuepad://file/\(pic)"
         #expect(CueFormat.parse(lookalikes) == [.text(lookalikes)])
     }
@@ -38,7 +36,6 @@ struct CueSummaryTests {
         ("C# 入门\n不是标题前缀", "C# 入门", "不是标题前缀"),
         ("---\n![](cuepad://file/\(pic))", "", ""),
         ("", "", ""),
-        // 有文字的行只有一条规则：空白行、分割线、只有图片（存储格式或编辑器里的 U+FFFC）的行都不算
         ("   \n  周报  ", "周报", ""),
         ("![](cuepad://file/\(pic)) ![](cuepad://file/\(pic))\n![](cuepad://file/\(pic)) 说明", "说明", ""),
         ("\u{FFFC}\n\u{FFFC} 说明\n正文", "说明", "正文"),

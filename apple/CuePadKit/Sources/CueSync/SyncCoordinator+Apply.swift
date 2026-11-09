@@ -25,7 +25,6 @@ extension SyncCoordinator {
     }
   }
 
-  /// 投送请求（及其结果）到达的时间线：创建 → 服务器（对端上传用了多久）→ 本机（拉取用了多久）。
   private func traceArrival(of record: CKRecord, _ row: SyncRow) {
     guard case .int(let created)? = row.fields["createdAt"], case .text(let status)? = row.fields["status"],
       let stored = record.modificationDate

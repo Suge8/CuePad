@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Master 终审批准：Claude 授权失效不挡 GPT 发话与模型选择；只替换两个外部服务，Pi、桥、投送与存储照常运行。
+/// 只替换两个外部服务，Pi、桥、投送与存储照常运行。
 struct AuthIsolationTests {
     @Test func Claude授权未返回或已失效_GPT仍能发话换模型_主动查额度明确失败() async throws {
         let fixture = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/auth-isolation.ts")
@@ -46,7 +46,6 @@ struct AuthIsolationTests {
         #expect(!PiModelLabel.title(claude, quotas: quotas, at: .now).contains("%"))
         #expect(try #require(quotas.first { $0.provider == "anthropic" && $0.hostID == TestApp.hostID }).status == .unobserved)
 
-        // 只有主动查询才进入 Claude 授权服务；即使它正在等待，GPT 的发话、设置仍独立。
         let quota = Task { await rig.services.refreshQuota(.manual) }
         defer { quota.cancel() }
         try await Self.control("entered", at: endpoint)

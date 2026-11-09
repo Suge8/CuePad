@@ -7,8 +7,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// "什么算历史"的两条规则，端到端用真实 Pi：一句话没说过的会话关掉后不进历史；CuePad 后台托管的会话闲置退出不算结束，
-/// 仍在"现在"、歇着（不是状态未确认），Cue、Mac 本机与手机三条路发话都会唤醒它，只有用户结束它才进历史。
 /// 真实 Pi 与真实后台托管（测闲置退出的用例闲置 2 秒就退），全部状态落在临时目录，假模型零网络；不碰真实资料库与 ~/.pi。
 nonisolated private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appending(path: "CuePadKit/Tests/CuePiTests/Fixtures")
@@ -135,11 +133,9 @@ struct HistoryRulesTests {
         _ = try await rig.bridge.send(PiMessage(text: "开场"), to: id)
         try await eventually("回答落盘、索引跟上") { try await rig.replies(of: sessionID).last == "ECHO 开场 IMAGES[]" }
 
-        // 闲置退出：进程不在了，会话仍在"现在"，歇着，不进历史
         try await eventually("闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         let rested = try await expectResting(rig, sessionID)
 
-        // Cue 对它说话：照常收下，后台唤醒它
         let host = TestApp.hostID
         _ = try await rig.store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
         let said = try #require(await CueTools(store: rig.store).call("task", ["action": "say", "session": rested.shortID, "text": "Cue 来的话"]))
@@ -154,7 +150,6 @@ struct HistoryRulesTests {
         try await eventually("再次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         let resting = try await expectResting(rig, sessionID)
 
-        // 手机发话（投送请求写给这台 Mac）
         let request = try await rig.store.requestDelivery("手机来的话", to: resting.target, on: resting.hostID, mode: .send)
         let result = try await rig.services.store.outcome(of: request)
         #expect(result.failure == nil)
@@ -162,14 +157,12 @@ struct HistoryRulesTests {
         try await eventually("又一次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         let again = try await expectResting(rig, sessionID)
 
-        // 用户在 CuePad 里结束它：这时才进历史
         let end = try await rig.services.end(again)
         #expect(try await rig.services.store.outcome(of: end).failure == nil)
         try await eventually("结束后进历史") { try await rig.records(.ended).map(\.sessionID) == [sessionID] }
         #expect(try await rig.records(.live).isEmpty)
     }
 
-    /// 进程不在了、记录仍在"现在"（未结束）、不在历史里、是托管的、此刻确认歇着：界面写停着的说法（Cue 值班时是歇着或待回复），不写状态未确认。
     @discardableResult
     private func expectResting(_ rig: Rig, _ sessionID: String) async throws -> PiSessionState {
         let current = try await rig.store.piSessionPage(.current).items.map(\.state)
@@ -182,7 +175,6 @@ struct HistoryRulesTests {
     }
 }
 
-/// 托管开新会话：参数不对时 Pi 起来就退出，带着 Pi 的原话报错，桥上不留会话。
 @Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
 struct HostedLaunchTests {
     @Test func 开新会话模型无效时整体失败() async throws {

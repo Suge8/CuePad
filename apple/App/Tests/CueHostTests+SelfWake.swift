@@ -8,7 +8,6 @@ import Testing
 @testable import CuePad
 
 extension CueHostTests {
-    /// Cue 请你允许推送；你选"以后推送代码都不用问"后 Cue 被唤醒，回答写成 Cue 说的，记忆里多一条你说的、标为重点的原话
     /// （不用先问的例外只在记忆里）。回答你的一轮只响一次：问你的那一轮响的是"等你"（正文是要你定什么），那一轮的回复不再响；
     /// 你选完它回的那一轮照常响它的原话（你说完多半已离开 App）。
     @Test func 等你被回答_Cue被唤醒_以后都不用问记成重点记忆() async throws {
@@ -27,8 +26,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 自己醒来的一轮出错（多是网络偶发）：先不告诉你，基线不前移；隔一会儿再醒一次，成了就照常。
-    /// 刚启用那一轮出错，重试后照常看一眼；会话有动静那一轮出错，重试时看到的还是同一处变化，成了照常。
     @Test func 自己醒来出错后隔一会儿重试() async throws {
         let rig = try await Rig(failingOnce: ["醒来：刚启用"], prepare: Rig.handOverWork)
         try await rig.message(.cue, containing: "我看了一眼", skippingBackoff: true)
@@ -40,7 +37,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 重试也出错：这时才写一条 Cue 的消息告诉你，只说一次。
     @Test func 自己醒来重试也出错才告诉你() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 先出两次错")
@@ -50,8 +46,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 会话交了结果，Cue 自己醒来做完（task done）：Cue 自己按证据确认，顶层任务直接完成，不请你确认，给你写一条结果（不是"等你"）；
-    /// 这就是对你说过话了。
     @Test func 自己醒来做完_告诉你结果() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 请收一下")  // 假模型据此 done
@@ -63,7 +57,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 你自己点了完成整件任务：没人再用的会话随之结束，Cue 没有要接着做的，不叫醒它；之后你跟它说话，变化里也没有这件。
     @Test func 你点完成整件任务_Cue不醒() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页")
@@ -81,8 +74,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 你在别处记下的记忆多到要合并（超过视图预算）：后台另起的大脑把待合并的块写成摘要（假模型合第一块）；Cue 不为它醒，换新的第一轮
-    /// （这里每次醒来都到了换新线）也不带待合并的块，回你的话照常。
     @Test func 记忆待合并_后台合并_Cue的轮里没有合并() async throws {
         let rig = try await Rig(usage: CueContext.renewAt + 10_000)
         for index in 0..<(CueMemoryView.budget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
@@ -91,7 +82,6 @@ extension CueHostTests {
         try await rig.message(.cue, containing: "收到：你好")
         let keeper = try #require(rig.services.cue.keeper)
         #expect(keeper.rounds.map(\.wake) == [.message])  // 空库启用不醒，记忆待合并也不叫醒 Cue
-        // 后台整理的输入不混进 Cue 的轮。
         #expect(!keeper.rounds.contains { $0.sent.contains { $0.contains("<merge>") } })
         await rig.stop()
     }

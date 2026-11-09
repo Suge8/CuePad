@@ -7,9 +7,7 @@ import Testing
 @testable import CuePad
 @testable import CuePi
 
-/// #41：用户打开额度后，失败、过期与换授权不能伪装成新额度；只替换外部 bridge。
 struct QuotaFlowTests {
-    /// 菜单栏真实宿主摘下、挂回同一个视图：每次打开由额度视图自己查询，无须 AppDelegate 再发一次。
     @Test func 菜单栏面板每次打开都刷新额度() async throws {
         let app = TestApp(), services = app.services!
         let workspace = Workspace(services: services)

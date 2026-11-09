@@ -4,7 +4,6 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// "发给手机看"的端到端：真实 Pi + 安装器装进临时目录的扩展与 skill + 假模型 + 真实的 `cuepad` 命令行。
 /// 模型在 bash 里一次 `cuepad show` 两个文件：这条命令带着会话的环境变量（扩展设的 `CUEPAD_SESSION_ID` 在先，Pi 自己的 `PI_SESSION_ID`），
 /// 命令行据此认出会话、把预览写进（隔离的）资料库。
 @MainActor
@@ -25,7 +24,6 @@ struct RealPreviewTests {
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
         let session = bridge.sessions[0]
-        // Pi 从它的 skills 目录发现了安装器写的 skill
         let skill = try #require(session.commands.first { $0.name == "skill:cuepad" })
         #expect(skill.source == .known(.skill) && skill.summary?.contains("CuePad") == true)
         try "<h1>登录页</h1>".write(to: pi.cwd.appending(path: "demo.html"), atomically: true, encoding: .utf8)

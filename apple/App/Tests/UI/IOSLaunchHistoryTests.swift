@@ -4,7 +4,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 确认另开不是抹掉旧结果：后一次失败，旧的未知请求仍要求重复确认。
 struct IOSLaunchHistoryTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

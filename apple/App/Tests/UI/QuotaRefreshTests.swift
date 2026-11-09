@@ -8,8 +8,6 @@ import Testing
 @testable import CueStore
 @testable import CueSync
 
-/// 手机上的额度刷新（`AccountQuotas`）：进展页与额度钮出现、打开明细时自动问（`refreshesQuota` 调的就是 `refreshQuota(.automatic)`），明细里的重试是手动。
-/// 只问连着能答额度的会话的 Mac；没查到不弹提示，原因进明细，自动刷新冷却内不再问，重试照问。
 @MainActor
 struct QuotaRefreshTests {
     let app = TestApp(sync: .built { CloudSync.simulated(store: $0, peerFloor: CueStore.peerFloor) })
@@ -20,7 +18,6 @@ struct QuotaRefreshTests {
         try await (app ?? self.app).services.store.deliveryRequests().filter { $0.mode == .known(.quota) }
     }
 
-    /// 那台 Mac（mac-x）写过额度、上面有一个 `agent` 的在线会话。
     private func macWithQuota(_ agent: AgentKind, in app: TestApp? = nil) async throws {
         let app = app ?? self.app, services = app.services!, store = services.store
         try await store.recordQuota(
@@ -65,11 +62,9 @@ struct QuotaRefreshTests {
         }
         #expect(reason.text == "这台 Mac 上没有在线的 Pi 会话")
 
-        // 再进进展页、再打开明细：冷却内不再问
         #expect(await services.refreshQuota(.automatic) == nil)
         #expect(try await quotaRequests().count == 1)
 
-        // 明细里点重试
         #expect(await services.refreshQuota(.manual) == nil)
         #expect(try await quotaRequests().count == 2)
         #expect(services.accountQuotas.phase == .idle)
@@ -111,7 +106,6 @@ struct QuotaRefreshTests {
         #expect(await services.refreshQuota(.automatic) == nil)
         #expect(try await quotaRequests().count == 1)
 
-        // 新 Mac 连上后立即自动查；旧来源的失败冷却不能拦住这批新来源。
         try await app.runtimeRecorder(on: "mac-y").update(sessionID: "new-pi", state: .thinking, title: "new", agent: .pi)
         try await eventually("来源变为两台 Mac") { services.quotaRefreshKey == ["mac-x", "mac-y"] }
         let other = DeliveryExecutor(store: store, hostID: "mac-y", onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
@@ -123,7 +117,6 @@ struct QuotaRefreshTests {
         await other.stop()
     }
 
-    /// 查询还没结束时，页面的来源又变了；保留的等待者查最新批次，离开的页面不留下下一轮自动查询。
     @Test(arguments: [false, true]) func 查询途中来源变化_取消等待页不启动新查询_冷却对应实际来源(cancelPage: Bool) async throws {
         defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
         try await macWithQuota(.pi)
@@ -154,7 +147,6 @@ struct QuotaRefreshTests {
         }
         try await eventually("来源改变的页面已开始等待") { entered }
         if cancelPage { waiting.cancel() }
-        // 等待期间又出现一台 Mac：实际开始查询时必须重新取整批来源。
         try await app.runtimeRecorder(on: "mac-z").update(sessionID: "last-pi", state: .thinking, title: "last", agent: .pi)
         try await eventually("最后一台 Mac 到达界面") { services.quotaRefreshKey == ["mac-x", "mac-y", "mac-z"] }
         gate.continuation.finish()
@@ -207,7 +199,6 @@ struct QuotaRefreshTests {
         #expect(try await quotaRequests(in: app).map(\.id) == [request.id])
     }
 
-    /// Mac 一直不领取：请求到期后手机按未确认收尾，明细写没查到的原因、不弹提示；重试再发一条，这次 Mac 领了、查到。
     @Test func Mac不领取_请求到期后明细显示没查到_可重试() async throws {
         let clock = ManualTiming()
         let cloud = SimulatedCloud(now: { clock.now })
@@ -229,7 +220,6 @@ struct QuotaRefreshTests {
         }
         #expect(reason == Speech.unconfirmedReason)
 
-        // 明细里点重试：不受冷却限制，再发一条；这次 Mac 领了、查到
         let retry = Task { await services.refreshQuota(.manual) }
         let next = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.quota) && $0.id != request.id } }) { $0 != nil })
         _ = try await eventually(store, { try $0.deliveryRequest(next.id)?.serverAt }) { $0 != nil }

@@ -6,7 +6,6 @@ import Testing
 
 @testable import CueSync
 
-/// 认账号的先后：真实的同步代码连能编排认账号答复的替身 iCloud，账号变化走 `CKAccountChanged`（这一套自己的通知中心）。
 /// 串行：网络回来是全进程的，同一套里并行会互相叫醒。
 @Suite(.serialized) struct AccountCheckTests {
   let fixture = try! Fixture()
@@ -14,7 +13,6 @@ import Testing
   let accountChanges = NotificationCenter()
   var store: CueStore { fixture.store }
 
-  /// 连着时账号变了：认清之前马上传的不传；认的途中账号又变了就另认一次，变化之前发出的那次答复作废，认出是另一个账号就等你决定。
   @Test func 账号变了认清之前不传_途中又变就另认_旧答复不算() async throws {
     let sync = try await connected()
     let stale = Promise<Void>()
@@ -37,7 +35,6 @@ import Testing
     await sync.stop()
   }
 
-  /// 连着时先后认了两次：后发出的那次认不清，先发出、晚回来的那次成功不放开拉传。
   @Test func 后一次认不清时_先发出的那次晚到的成功不放开() async throws {
     let sync = try await connected()
     let late = Promise<Void>()
@@ -59,7 +56,6 @@ import Testing
     await sync.stop()
   }
 
-  /// 认出另一个账号的那次正在比对本地记下的账号时，账号又变回原来的：按后一次认的，照常同步，不因前一次晚到的结论停下等你决定。
   @Test func 比对本地账号时又变回原账号_按后一次的结论() async throws {
     let sync = try await connected()
     let answered = Promise<Void>()
@@ -88,7 +84,6 @@ import Testing
     await sync.stop()
   }
 
-  /// 按退避到点的再认还在路上时停下：停下取消并等那一次收尾，它挂着的请求随之取消（改前停下看不到它，请求一直挂着）；再开始当场认、连上。
   @Test func 定时再认在路上时停下_等它收尾_再开始照常连上() async throws {
     let sync = try await connected()
     await cloud.script(status: { _ in .temporarilyUnavailable })
@@ -111,7 +106,7 @@ import Testing
     await sync.stop()
   }
 
-  /// 认不了账号（离线）时网络回来：当场再认、能拉，不等账号那条的退避（离线久了它长到几分钟）。
+  /// 不等账号那条的退避：离线久了它长到几分钟。
   @Test func 认不了账号时网络回来_当场再认() async throws {
     await cloud.script(status: { _ in throw URLError(.notConnectedToInternet) })
     let sync = make()
@@ -124,7 +119,6 @@ import Testing
     await sync.stop()
   }
 
-  /// 停在要你决定时，立即同步（按节奏的拉取、门铃都走它）不再每次都认账号。
   @Test func 停在要你决定时_立即同步不再认账号() async throws {
     await rememberAccount()
     await cloud.script(name: { _ in "B" })
@@ -136,7 +130,7 @@ import Testing
     await sync.stop()
   }
 
-  /// 认账号没有回音时被取消的立即同步当场返回，不等请求到时限（`RequestLimits.request`，iOS 后台刷新到期就取消它）。
+  /// 不等请求到时限（`RequestLimits.request`）：iOS 后台刷新到期就取消它。
   @Test func 认账号没有回音时取消立即同步_当场返回() async throws {
     await cloud.script(status: { _ in
       try await Task.sleep(for: .seconds(3600))
@@ -155,7 +149,6 @@ import Testing
     await starting.value
   }
 
-  /// 认过账号 "simulated"（上次同步的那个）、连上了的一代。
   private func connected() async throws -> CloudSync {
     await rememberAccount()
     let sync = make()
@@ -179,7 +172,6 @@ import Testing
 }
 
 extension CloudSync {
-  /// 当场再认一次，等它认完。
   fileprivate func recheckNow() async {
     guard let generation = running?.generation else { return }
     recheck(generation)
@@ -199,7 +191,6 @@ extension CueStore {
   }
 }
 
-/// 认账号的答复按次编排（第几次认状态、认名字），其余请求交给内存里的替身；数着认了几次、几个还在路上。
 actor ScriptedCloud: SyncCloud {
   let inner: SimulatedCloud
   private(set) var statusCalls = 0

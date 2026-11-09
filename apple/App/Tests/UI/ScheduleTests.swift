@@ -4,11 +4,8 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 定时（#38）：Cue 的提醒可重复、可挂在任务上，到点开工。按用户走的路写：任务气泡与定时页里原地改、不再定时；任务完成、归档、删掉就不再定时；
-/// 对 Cue 说一句就建；Mac 没开时错过的，启动后只补一次、排到下一次，那句事实记在叫醒原因上。
 @MainActor
 struct ScheduleTests {
-    /// 任务气泡里点"改"：改成每周一 9:00，改的就是记忆里那一条，下一次是之后最近的周一 9:00；点"不再定时"就从定时里撤掉。
     @Test func 原地改成每周一九点_不再定时就撤掉() async throws {
         let rig = TestApp()
         let store = rig.services.store
@@ -34,7 +31,6 @@ struct ScheduleTests {
         _ = try await eventually(store, { try $0.cueSchedules(task: task.id) }) { $0.isEmpty }
     }
 
-    /// 勾掉、归档或删掉挂着定时的任务：这件事不用再定时做了，就不再定时；从归档取回、撤销删除也不回来。
     @Test func 任务完成_归档_删掉就不再定时_取回也不回来() async throws {
         let rig = TestApp()
         let store = rig.services.store
@@ -62,7 +58,6 @@ struct ScheduleTests {
     }
 
     #if os(macOS)
-    /// 你对 Cue 说"每周一 9 点清理分支"：它建成挂在那件任务上的每周定时，Cue 页这一轮的经过里一行"新建 定时"。
     @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
     func 对Cue说一句_建成挂在任务上的定时() async throws {
         let rig = try await CueHostTests.Rig()
@@ -77,7 +72,6 @@ struct ScheduleTests {
         await rig.stop()
     }
 
-    /// 你要的重复写不成定时（隔天一次）：Cue 收到退回，不悄悄定成每天。
     @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
     func 写不成的重复_退回不定() async throws {
         let rig = try await CueHostTests.Rig()
@@ -88,11 +82,8 @@ struct ScheduleTests {
         await rig.stop()
     }
 
-    /// Mac 关着时错过了三次每天的定时：启动、启用 Cue 后只叫醒一次（定时到点），记的是最近错过的那一次，之后排到下一次；
-    /// 那一次错过了、刚补上，任务气泡与定时页读得到这句事实。
     @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
     func 错过的每天定时_启动后只补一次_排到下一次() async throws {
-        // 三天前起每天这个时刻，最近错过的一次在 23 小时前
         let start = Date.now.addingTimeInterval(-3 * 86_400 + 3600)
         let missed = Date(timeIntervalSince1970: (start.timeIntervalSince1970 / 60).rounded(.down) * 60)
         let clock = Calendar.current.dateComponents([.hour, .minute], from: missed)

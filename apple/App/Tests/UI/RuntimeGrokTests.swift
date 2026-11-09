@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43：Grok 的磁盘登记不是当前进程的会话身份证明；复用 PID 不能让旧历史重新获得运行确认。
 struct RuntimeGrokTests {
     @Test func 旧登记与旧轮次不签运行证明_当前进程关联与新报告才接入() async throws {
         let app = TestApp(), store = app.services.store, workspace = Workspace(services: app.services)

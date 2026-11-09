@@ -3,10 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 等你分拍板与待回复（WORDS.md）：Cue 留给你回、此刻歇着的会话是待回复——Cue 页不进拍板卡、在会话条的等你组里，等得最久的在前；
-/// 进展页的等你列放在问与待回复的会话（在问的在前），绑着的任务从推进中挪进等你，Cue 的提问只在 Cue 页、不多出卡；"等你 N"两种一起数；名牌的数字账拍板与待回复各数各的（数全部，不只列得下的那几行），
-/// "等你 N"与 App 图标角标是两者之和（`CueNow.needsYou`）。
-/// 会话列表里待回复紧随等你确认、等得最久的在前；对其中一个说了话，它就不再待回复。
 @MainActor
 struct AwaitingReplyTests {
     let rig = TestApp()
@@ -49,13 +45,11 @@ struct AwaitingReplyTests {
         #expect(board.count(.waiting) == 3 && cue.needsYou == 3)  // "等你 N"两种一起数，看板等你列同数
         #expect(cue.items.prefix(3).map(\.kind) == [.asks, .reply, .reply])
 
-        // Cue 在底栏那件任务上也问一句：只在 Cue 页答，看板不多出卡，那件仍是待回复那一张
         let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "把底栏改动推送到 origin/main"), task: dock.id)
         #expect(try await TaskBoard.read(from: store).held == board.held)
         #expect(try await thread().waiting.map(\.id) == ["session/deploy", "message/\(push.id.uuidString)"])
         try await rig.services.answerCueQuestion(push.id, CueAsk.once)
 
-        // 答了拍板：名牌只剩待回复
         try await recorder.update(sessionID: "deploy", state: .thinking)
         cue = try await now()
         #expect(cue.yours == [CueNow.Entry(kind: .reply, count: 2)])
@@ -63,12 +57,10 @@ struct AwaitingReplyTests {
         let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(list.now.prefix(2).map(\.state.sessionID) == ["glass", "header"])  // 等得最久的在前
 
-        // 对其中一个说了话、它动起来：不再待回复
         try await recorder.update(sessionID: "header", state: .thinking)
         #expect(try await store.sessionsAwaitingReply().map(\.sessionID) == ["glass"])
         #expect(try await now().yours == [CueNow.Entry(kind: .reply, count: 1)])
 
-        // 多过列得下的行：数字账与角标数的是全部
         for index in 1...8 {
             try await settle("more-\(index)", "会话 \(index)", minutesAgo: Double(index))
             _ = try await store.leaveToYou("more-\(index)")
@@ -77,8 +69,6 @@ struct AwaitingReplyTests {
         #expect(cue.items.count == CueNow.itemLimit && cue.yours == [CueNow.Entry(kind: .reply, count: 9)] && cue.needsYou == 9)
     }
 
-    /// 出错的会话留给你回后，对它再说一句：话一发出它就不再待回复——看板上它绑着的任务当场从等你回到推进中、写话到哪了（在跑），
-    /// 不等 Mac 送到；会话动起来后写它自己的状态。点卡进卡上写的那个会话，有子任务的任务也一样（此刻干活那一步的会话）；没有会话的打开任务。
     @Test func 出错留给你回后再说一句_看板当场回到推进中_点卡进卡上的会话() async throws {
         let workspace = Workspace(services: rig.services)
         _ = try await store.updateCueProfile {
@@ -99,7 +89,6 @@ struct AwaitingReplyTests {
 
         var board = try await TaskBoard.read(from: store)
         #expect(board.held.map(\.session.sessionID) == ["billing"] && board.held.first?.item?.id == parent.id)
-        // 卡写的是此刻有会话的那一步（第二步），不是第一个没做完的
         #expect(board.held.first?.item?.agent?.state.sessionID == "billing")
 
         let session = try #require(board.held.first?.item?.agent?.state)
@@ -118,7 +107,6 @@ struct AwaitingReplyTests {
         pulse = workspace.pulse(of: try #require(board.advancing.first { $0.item?.id == parent.id }).agent)
         #expect(pulse.shown?.status == .working(.thinking))
 
-        // 点卡：有会话的进那个会话（有子任务也是），没有会话的打开任务
         let item = try #require(board.advancing.first { $0.item?.id == parent.id }?.item)
         workspace.enter(item.task, session: item.agent?.state)
         #expect(workspace.shownSessions.map(\.sessionID) == ["billing"] && workspace.openTask == nil)

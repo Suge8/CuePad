@@ -5,13 +5,10 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：CuePad 在后台托管 dsh（`dsh --profile acp` 叠上随包插件），录制时连真的 DeepSeek（key 只经环境给，见 `RealAgents`）。
 /// 托管会话的开工、说话、歇下在 `RealCueStartTests`，这里是 dsh 才有的。
 @MainActor
 @Suite(RealAgents.taped(.dsh), .agentTape(.dsh), RealAgents.timeLimit(.minutes(3)), RealAgents.serialWhenRecording(.dsh))
 struct RealDshTests {
-    /// dsh 问你（`ask_user_question`，一次两问）：会话停在"等你回答"，逐问带着选项、也能自己填；在 CuePad 里答完第一问才出第二问，
-    /// 两问都答了它拿着答案接着说，这一轮做完。
     @Test func aQuestionIsAnsweredFromCuePadOneByOne() async throws {
         try await withDshRig { rig in
             let id = try await rig.runtime.open(in: rig.work, launchToken: "token-ask", name: nil, model: rig.model, thinking: nil)

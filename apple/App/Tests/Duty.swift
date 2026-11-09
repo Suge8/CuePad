@@ -14,7 +14,6 @@ final class Duty: EvalScript, Playable {
         逐页查死链接着下一页不重查
         """
 
-    /// 换新线：场景前段就跨过，后段还能再跨一次
     static let renewAt = 42_000
     /// 提示缓存的时长缩短：他走开（`away`）比它长，回来就是冷换新；剧本平常两步之间远比它短
     static let cacheLifetime = Duration.seconds(30)
@@ -26,7 +25,6 @@ final class Duty: EvalScript, Playable {
         try FileManager.default.createDirectory(at: siteFolder, withIntermediateDirectories: true)
         try await rig.store.setDirectory(siteFolder.path, for: site.id)
 
-        // 前段：派活、口头交代、早先的事实、他否掉的方案；长回复与长消息把上下文撑过换新线
         let reset = try await say("他：登录页加忘记密码", CueEvalTests.request)
         let login = try await adopt(/忘记密码|重置密码/, after: reset, title: "登录页加忘记密码", in: "演示")
         try await say("他：做完后升版本号（口头、不记规矩）", "对了，忘记密码那件做完以后，让它顺手把演示项目的版本号从 2.3.0 升到 2.3.1，CHANGELOG 里记一笔。就这一次，不用记成规矩。")
@@ -79,7 +77,6 @@ final class Duty: EvalScript, Playable {
         let layout = try await event("设置页：布局改完一版（长）", on: settings) { try await settings.settle(LongScript.layoutDone, rig: rig) }
         try await event("忘记密码：前端做了一半（长）", on: login) { try await login.settle(LongScript.frontendHalf, rig: rig) }
 
-        // 中后段：判定点（放在换新线之后）
         let readmeAsk = try await say("他：README 截图重截", "演示项目 README 里的截图过时了，现在就让会话按现在的界面重截一遍换上；登录页和设置页改完后的样子以后再补。")
         let readme = try await adopt(/README/, after: readmeAsk, title: "重截 README 截图", in: "演示")
         try await event("README：问截图放哪", on: readme) {
@@ -102,7 +99,6 @@ final class Duty: EvalScript, Playable {
                 question: "设置项太多、页面太长，要不要拆成「通用 / 账号 / 通知」三个标签页？", options: ["拆成标签页", "保持一页长列表"], rig: rig)
         }
 
-        // 他走开一阵：回来时缓存已过期，冷换新
         try await Task.sleep(for: Self.away)
         let page3 = try await event("死链：博客查完（冷）", on: links) { try await links.settle(LongScript.linksBlog, rig: rig) }
         let widgetAgain = try await event("官网：问要不要换成 B", on: website) {

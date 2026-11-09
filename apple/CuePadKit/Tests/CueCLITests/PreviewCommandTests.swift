@@ -5,8 +5,6 @@ import Testing
 
 @testable import CueCLI
 
-/// `cuepad show`：把文件作为预览放进 Agent 会话的对话。会话从 Agent 给每条命令带的环境变量认出（如 Pi 的 `PI_SESSION_ID`），
-/// 认不出就报错、不猜。
 @Suite struct PreviewCommandTests {
   private func page(_ sb: Fixture, _ name: String = "demo.html", _ text: String = "<h1>登录页</h1>") throws -> String {
     let url = sb.directory.appending(path: name)
@@ -14,7 +12,6 @@ import Testing
     return url.path
   }
 
-  /// 一次给几个文件：按给的顺序存成同一次（对话里一张卡），每个文件一个 --title（按先后），每个文件一项报告。
   @Test func showStoresTheFilesTogetherForTheSessionFromTheEnvironmentAndReportsEach() async throws {
     let sb = try Fixture()
     // .ts 是 TypeScript（系统认作视频流）：按文本发
@@ -42,7 +39,6 @@ import Testing
   @Test func showRefusesWhatCannotBePreviewedWithAReasonAndExitCode() async throws {
     let sb = try Fixture()
     let env = ["PI_SESSION_ID": "s1"]
-    // 每个文件都要一句标题：少了不收
     let untitled = await sb.run("show", try page(sb), try page(sb, "b.html"), "--title", "登录页", environment: env)
     #expect(untitled.code != 0 && untitled.err.contains("--title"))
     let repeated = await sb.run("show", try page(sb), try page(sb, "b.html"), "--title", "登录页", "--title", "登录页", environment: env)
@@ -51,7 +47,6 @@ import Testing
     #expect(missing.code != 0 && missing.err.contains("nope.html"))
     let archive = await sb.run("show", try page(sb, "a.zip", "zip"), "--title", "x", environment: env)
     #expect(archive.code != 0 && archive.err.contains("zip"))
-    // 压缩的 SVG 预览里显示不了：不收，可发列表里也不列
     let compressed = await sb.run("show", try page(sb, "a.svgz", "svgz"), "--title", "x", environment: env)
     #expect(compressed.code != 0 && compressed.err.contains(".svgz") && !compressed.err.contains("、svgz"))
     #expect(try await sb.store.previews(of: "s1").isEmpty)

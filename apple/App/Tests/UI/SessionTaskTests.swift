@@ -7,10 +7,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话是一等对象：不经任务开的会话（终端里的 Pi）不长任务，Cue 照样看得到、管得到它；要为它的结果负责时再给它建任务。
-/// 说的话与 Cue 的 say 同一条规则：会话在等能代答的提问时说的话就是答案；说话不改任务的状态。
-/// 已完成的事用过、还活着的会话算在做，Cue 在它上面做别的事是另建任务绑上它。
-/// Cue 值班时管这些会话：CuePad 答得了的提问等 Cue，不算等你。
 struct SessionTaskTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
@@ -52,8 +48,6 @@ struct SessionTaskTests {
         #expect(try await store.cueBoard().sessions.isEmpty)
     }
 
-    /// 说话不改任务的状态：对已完成的事的会话说的话、作的答送到了，任务仍是完成。状态只由明确的动作改：
-    /// Cue 的 edit reopen 同你点掉圆圈（没完成的不让改回），加子任务回到进行中。
     @Test func 对已完成任务的会话说话_任务仍是完成_改回或加子任务才变() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录")
@@ -97,8 +91,6 @@ struct SessionTaskTests {
         #expect(try await store.card(task.id)?.status == .inProgress)
     }
 
-    /// 已完成的事用过、还活着的会话不归没做完的事：完成时它随那件事收起（终端里的不结束），再有动静就回来，不带参数的 peek 里有它，它的动静只报一次；
-    /// peek 末尾列着最近完成的事和它的会话。Cue 在它上面做别的事：add 带 session 另建任务绑上它，旧任务照旧完成、照旧绑着；会话正被没做完的事用着时不让再绑。
     @Test func 已完成的事的会话还活着_算在做_Cue在它上面另建任务() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
@@ -122,7 +114,6 @@ struct SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: later.addingTimeInterval(1), busySince: nil))
         let board = try await store.cueBoard()
         #expect(board.sessions.map(\.sessionID) == ["s1"])
-        // 分步做完的事：会话在前一步上，最后一步是手点完成的、没绑会话，列的仍是它用过的会话
         let stepped = try await store.createTask("加语言参数", in: project.id)
         let first = try await store.createTask("加 --lang", under: stepped.id)
         let second = try await store.createTask("写 README", under: stepped.id)
@@ -148,8 +139,6 @@ struct SessionTaskTests {
         #expect(taken.isError && taken.text.contains("正在做「补注册页」"))
     }
 
-    /// Cue 收得掉不再用的会话，"在做"里不再有它们：做完的事的会话被 say 恢复、答完空着，再 done 那件事就照做完时的规则结束它（结果只告诉一次）；
-    /// 没绑任务的会话（他开的）done 给 session 结束；没做完的事还在用的会话不收，报出原因。
     @Test func 不再用的会话_Cue收得掉_在用的不收() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录")
@@ -169,7 +158,6 @@ struct SessionTaskTests {
         try await executor.start()
         defer { Task { await executor.stop() } }
         let cue = CueTools(store: store, wait: 5)
-        /// 最近那条结束请求执行完（执行器先把会话记成已结束再报成功）后会话是不是已结束。
         func ended(_ id: String) async throws -> Bool {
             let end = try #require(try await store.deliveryRequests(toSession: id).last { $0.mode == .known(.end) })
             #expect(try await store.outcome(of: end).status == .known(.succeeded))
@@ -212,7 +200,6 @@ struct SessionTaskTests {
         let workspace = Workspace(services: services)
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
 
-        // 开新会话两次：Mac 开好的会话带着认领标识记下
         var used: Set<String> = []
         for session in ["s1", "s2"] {
             workspace.startFresh(leaf)
@@ -224,7 +211,6 @@ struct SessionTaskTests {
             try await recorder.update(sessionID: session, state: .settled, title: "修登录", launchToken: token)
             _ = try await eventually(store, { try $0.card(leaf.id)?.piSessionID }) { $0 == session }
         }
-        // 改绑到另一个会话
         try await recorder.update(sessionID: "s3", state: .settled, title: "修登录", projectID: project.id)
         try await store.bindSession("s3", to: leaf.id)
 
@@ -236,7 +222,6 @@ struct SessionTaskTests {
         }
     }
 
-    /// 在会话页的回复框里写下 `text` 发出（与界面的发送按钮同一条路）。
     func reply(_ text: String, to sessionID: String, in workspace: Workspace) async throws {
         let session = try #require(try await store.piSessions(sessionIDs: [sessionID])[sessionID]?.state)
         let box = services.settings.replyDraftBinding(for: session.id)

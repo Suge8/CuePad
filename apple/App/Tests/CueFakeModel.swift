@@ -11,8 +11,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// 本进程里的假 OpenAI chat completions 端点（流式）：按最后一条消息照剧本回，用量固定为 `usage` 个输入 token。
-/// 剧本里有的只演第一次（`once`）：第一次出错、第一次不回（连接挂着，等大脑被杀）。
+/// 剧本里有的只演第一次（`once`）：第一次出错、第一次不回（连接挂着，等大脑被杀）。用量固定为 `usage` 个输入 token。
 nonisolated final class FakeModel: Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "fake-model")
@@ -22,9 +21,7 @@ nonisolated final class FakeModel: Sendable {
     var errors: Int { errorCount.withLock { $0 } }
     private let failingOnce: [String]
     private let asksOnEnable: Bool
-    /// 回过最后一句的工具结果（工具调用之后这一轮就结束）
     private let finishedAfter = Mutex<[String]>([])
-    /// 接下来几次请求（你的话与信封）报额度用完
     private let quotaBlocked = Mutex((left: 0, containing: String?.none))
     func blockQuota(times: Int, containing: String? = nil) { quotaBlocked.withLock { $0 = (times, containing) } }
     /// 不回的请求的连接：留着，免得释放时断开
@@ -70,7 +67,6 @@ nonisolated final class FakeModel: Sendable {
 
     func stop() { listener.cancel() }
 
-    /// 有挂着不回的请求（"请慢慢想"那一轮已经到了模型这里）
     var hanging: Bool { hung.withLock { !$0.isEmpty } }
 
     private func serve(_ connection: NWConnection) {
@@ -98,7 +94,6 @@ nonisolated final class FakeModel: Sendable {
         return body.count >= length ? Data(body.prefix(length)) : nil
     }
 
-    /// 收到的每个请求用的模型与思考强度（没带强度为 nil），先后有序
     private let requested = Mutex<[(model: String, effort: String?)]>([])
     var requests: [(model: String, effort: String?)] { requested.withLock { $0 } }
 
@@ -130,13 +125,10 @@ nonisolated final class FakeModel: Sendable {
         connection.send(content: Data(out.utf8), completion: .contentProcessed { _ in connection.cancel() })
     }
 
-    /// 剧本：看最后一条消息。工具的结果——建好了任务就开工，否则说"办好了"；你的话与信封——按关键词调工具或回一句。
     /// 已就结果含 `fragment` 的工具调用回了这一轮最后一句。
     func answered(_ fragment: String) -> Bool { answers(fragment) > 0 }
-    /// 收到过几次含 `fragment` 的工具结果。
     func answers(_ fragment: String) -> Int { finishedAfter.withLock { $0.count { $0.contains(fragment) } } }
 
-    /// 这一出还没演满 `times` 次：记一次，返回 true。
     private func once(_ key: String, times: Int = 1) -> Bool {
         played.withLock { played in
             guard played[key, default: 0] < times else { return false }
@@ -168,7 +160,6 @@ nonisolated final class FakeModel: Sendable {
         default: ""
         }
         let sawImage = (last["content"] as? [[String: Any]] ?? []).contains { $0["type"] as? String == "image_url" }
-        // 问暗号：从这次请求带着的整段上下文里找你说过的暗号，找不到就是忘了
         if text.contains("暗号是什么") {
             let earlier = (request["messages"] as? [[String: Any]] ?? []).dropLast().map { message -> String in
                 switch message["content"] {
@@ -183,13 +174,11 @@ nonisolated final class FakeModel: Sendable {
             return say("不记得暗号")
         }
         if last["role"] as? String == "user", text.contains("请等我放行") { return .hold("先这样") }
-        // 问规矩：照这次请求的系统提示里重点那一节答（在系统提示末尾）
         if text.contains("重点有哪些") {
             let messages = request["messages"] as? [[String: Any]] ?? []
             let system = messages.first { $0["role"] as? String == "system" }?["content"] as? String ?? ""
             return say("重点：" + (system.components(separatedBy: "# 重点\n").last ?? ""))
         }
-        // 问额度：照信封里吃紧的那几行答
         if text.contains("额度吃紧吗") { return say(text.firstMatch(of: /额度吃紧：\n(- [^\n]*\n)+/).map { String($0.0) } ?? "额度不吃紧") }
         if last["role"] as? String == "tool" {
             if text.contains("建好了"), let id = text.firstMatch(of: /（([0-9a-f]{8})）/)?.1 {
@@ -224,7 +213,6 @@ nonisolated final class FakeModel: Sendable {
             return .error("You have hit your usage limit.")
         }
         if text.contains("请慢慢想"), once("hang") { return .hang }
-        // 后台整理记忆的大脑：合第一块
         if let block = text.firstMatch(of: /<merge>\n#\d+-\d+ range=([^\n]+)\n/) {
             return call("merge", ["range": String(block.1), "text": "合起来的偏好"])
         }
@@ -261,7 +249,6 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("醒来：刚启用") {
             return asksOnEnable ? call("tell", ["text": "要交给我跟进吗？"]) : say("我看了一眼")
         }
-        // 出错后重来、信封后面没接你的话（重来的就是上一轮）
         if text.contains("上一轮出错重试"), text.hasSuffix("</cue>") { return say("接着做上一轮没做完的") }
         return say("收到：" + (text.split(separator: "\n").last.map(String.init) ?? ""))
     }

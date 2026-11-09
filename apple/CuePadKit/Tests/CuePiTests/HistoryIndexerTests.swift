@@ -46,18 +46,15 @@ struct HistoryIndexerTests {
         try makeSession("p1", "a.jsonl", prompt: "old", modified: now.addingTimeInterval(-300))
         let upToDate = try makeSession("p2", "b.jsonl", prompt: "known", modified: now.addingTimeInterval(-200))
         try makeSession("p2", "c.jsonl", prompt: "new", modified: now.addingTimeInterval(-100))
-        // 上次读完时记下的修改时间与文件现在的一样：回填认得出它没动过
         let modified = try upToDate.url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
         let known = try PiHistory.index(file: upToDate.url, agent: .pi, from: nil, modified: modified, files: scratchFiles).checkpoint
 
         let log = HistoryEventLog(PiHistoryIndexer(sessions: root) { url in url.lastPathComponent == "b.jsonl" ? PiHistoryStart(checkpoint: known, hasTranscript: true) : nil })
         try await eventually("回填完成") { log.finishedBackfill }
         #expect(log.updates.map { $0.file.lastPathComponent } == ["c.jsonl", "a.jsonl"])
-        // 完成信号在全部回填更新之后
         if case .backfillFinished = log.events.last! {} else { Issue.record("backfillFinished 应是最后一个事件") }
     }
 
-    /// 与 Pi 的会话列表一致：只认 `<root>/<项目目录>/*.jsonl`。子代理会话（FireCode 写在 `<项目目录>/subagents/`）不是历史会话。
     @Test func subagentSessionsAreNotHistoryLikePisSessionList() async throws {
         let top = try makeSession("p1", "a.jsonl", prompt: "top", modified: Date())
         try makeSession("p1/subagents", "w.jsonl", prompt: "worker", modified: Date())
@@ -79,8 +76,7 @@ struct HistoryIndexerTests {
         Data((SessionFile.line(["timestamp": SessionFile.stamp(second), "type": type, "payload": payload]) + "\n").utf8)
     }
 
-    /// Codex 的常驻服务整段会话都开着会话文件写，文件先建出来、文件头（`session_meta`）随后才写：回填读到空文件不记成会话，
-    /// 文件头与之后的每次追加都当场读到（歇下要等回答读到才算），只记成文件头里的那个会话，不按文件名多记一个。
+    /// Codex 的常驻服务整段会话都开着会话文件写，文件先建出来、文件头（`session_meta`）随后才写。
     @Test
     func anOpenCodexSessionIsReadAsItIsWrittenAndOnlyUnderItsRealID() async throws {
         let day = root.appending(path: "2026/10/14")
@@ -104,7 +100,6 @@ struct HistoryIndexerTests {
     }
 
     /// 新用户常见顺序是先开 CuePad、后装 Pi：桥报出会话时它的文件连同会话目录都还不存在（Pi 第一条回答落盘前不建文件）。
-    /// 之后建出目录、写入会话（会话还没结束），历史要当场跟上；目录被删掉再建也要恢复。
     @Test
     func aLiveSessionsFileIsReadOnceItAppearsUnderADirectoryCreatedLater() async throws {
         let sessions = root.appending(path: "agent/sessions")  // 连上层目录也还不存在

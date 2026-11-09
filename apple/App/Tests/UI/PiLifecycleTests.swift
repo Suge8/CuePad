@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43：结束必须等待真实退出，同一历史的多个宿主全部退出后才进历史；ACK、断线与重载都不是完成。
 struct PiLifecycleTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -61,7 +60,6 @@ struct PiLifecycleTests {
     }
 }
 
-/// 实际非 Pi 接入的亚毫秒轮次经 Store 往返后，Cue 仍能接管自己获准的轮；下一毫秒的新轮仍拒绝。
 struct PiSendPrecisionTests {
     private final class Peer: SessionLink {
         var messages: [PiMessage] = []

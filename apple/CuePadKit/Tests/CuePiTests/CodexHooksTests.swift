@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 接入 Codex 的钩子，用真 codex 判定（它自己的 `hooks/list` 说信任了才算装好）。
 @MainActor
 @Suite(RealAgents.taped(.codex), .agentTape(.codex), RealAgents.timeLimit(.minutes(2)))
 struct CodexHooksTests {
@@ -22,8 +21,6 @@ struct CodexHooksTests {
         AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: cuepad ?? self.cuepad, timing: noDeadline)
     }
 
-    /// 用户自己的钩子（格式随手写）已被信任；接入后 CuePad 的 10 个事件都被 Codex 信任、用户的照旧；
-    /// App 挪了位置是旧版、重装又是新的；关掉后 hooks.json 与 config.toml 和接入之前逐字节一致。
     @Test func installIsTrustedByCodexAndUninstallRestoresTheUsersFilesExactly() async throws {
         try await codex.using {
             let userHooks = """

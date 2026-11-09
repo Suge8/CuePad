@@ -13,7 +13,6 @@ extension AgentTape {
         }
     }
 
-    /// 一个替身连上来：读它的命令行与环境，录制时起真 Agent 接上，回放时认领录像带里的这次启动。
     private func serveStub(_ fd: Int32) {
         let reader = LineReader(fd: fd)
         var name = "", pid: Int32 = 0, cwd = "", arguments: [String] = [], environment: [String: String] = [:]
