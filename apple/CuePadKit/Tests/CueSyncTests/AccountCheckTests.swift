@@ -1,6 +1,7 @@
 import CloudKit
 import CueStore
 import Foundation
+import Synchronization
 import Testing
 
 @testable import CueSync
@@ -55,6 +56,35 @@ import Testing
     let card = try await store.createCard(body: "认不清时记的")
     #expect(await !sync.send(recordNames: [name(card)]))
     #expect(await sync.coordinator.state.status == .accountUnavailable)
+    await sync.stop()
+  }
+
+  /// 认出另一个账号的那次正在比对本地记下的账号时，账号又变回原来的：按后一次认的，照常同步，不因前一次晚到的结论停下等你决定。
+  @Test func 比对本地账号时又变回原账号_按后一次的结论() async throws {
+    let sync = try await connected()
+    let answered = Promise<Void>()
+    await cloud.script(name: { n in
+      guard n == 1 else { return "simulated" }
+      try await answered.value()
+      return "B"
+    })
+    changeAccount()
+    try await eventually("第一次在认名字") { await cloud.nameCalls == 1 }
+    let hold = StoreHold()
+    let blocker = Task.detached { [store] in await store.occupy(hold) }  // 占住资料库：第一次停在读本地记下的账号
+    try await eventually("资料库被占住") { hold.holding.load(ordering: .relaxed) }
+    answered.resolve(.success(()))
+    await quietPeriod(.milliseconds(200))
+    changeAccount()
+    try await eventually("第二次认完名字") { await cloud.nameCalls == 2 }
+    await quietPeriod(.milliseconds(200))
+    hold.busy.store(false, ordering: .relaxed)
+    await blocker.value
+
+    try await eventually("放开") { await sync.coordinator.canSync }
+    let card = try await store.createCard(body: "变回原账号之后记的")
+    #expect(await sync.send(recordNames: [name(card)]))
+    #expect(await sync.coordinator.status != .needsDecision(.accountSwitched))
     await sync.stop()
   }
 
@@ -154,6 +184,18 @@ extension CloudSync {
     guard let generation = running?.generation else { return }
     recheck(generation)
     _ = await running?.checking?.value
+  }
+}
+
+final class StoreHold: Sendable {
+  let busy = Atomic(true), holding = Atomic(false)
+}
+
+extension CueStore {
+  /// 在资料库自己的队列上等到放开：排在它后面的读写都等着。
+  fileprivate func occupy(_ hold: StoreHold) {
+    hold.holding.store(true, ordering: .relaxed)
+    while hold.busy.load(ordering: .relaxed) { usleep(1000) }
   }
 }
 

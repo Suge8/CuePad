@@ -171,8 +171,9 @@ actor SyncCoordinator {
   }
 
   /// 认到的账号状态。可用时仍是正在连接，第一次请求成功（`succeeded`）才算已同步：认了账号不等于连得上、对过门槛。
-  func accountStatus(_ account: CKAccountStatus) {
-    guard !stopped else { return }
+  /// 认账号的结论（这个、`account`、`accountFailed`）都要带那一次的凭据：不是最新在认的那次就不写（`AccountGate.Check`）。
+  func accountStatus(_ account: CKAccountStatus, from check: AccountGate.Check) {
+    guard !stopped, gate.admits(check) else { return }
     switch account {
     case .available:
       if [.noAccount, .accountRestricted, .accountUnavailable].contains(status) { facts.status = .starting }
@@ -184,15 +185,24 @@ actor SyncCoordinator {
   }
 
   /// 此刻登录的 iCloud 账号（用户记录名）。第一次同步记下；和上次同步的不是同一个时，本机数据属于上一个账号，停下来等你决定。
-  func account(_ name: String) async {
-    guard !stopped else { return }
+  func account(_ name: String, from check: AccountGate.Check) async {
+    guard !stopped, gate.admits(check) else { return }
     let current = Data(name.utf8)
     do {
-      guard let last = try await store.syncState(Self.accountKey) else { return try await store.setSyncState(Self.accountKey, current) }
+      let last = try await store.syncState(Self.accountKey)
+      guard !stopped, gate.admits(check) else { return }  // 读的途中又起了一次认：这次的名字可能已经过时
+      guard let last else { return try await store.setSyncState(Self.accountKey, current) }
       if last != current { facts.status = .needsDecision(.accountSwitched) }
     } catch {
+      guard gate.admits(check) else { return }
       failed(error)
     }
+  }
+
+  /// 没连上时认账号失败：连不上的按段记（`noteWaiting`），其余显示账号暂不可用。
+  func accountFailed(_ error: any Error, from check: AccountGate.Check) {
+    guard gate.admits(check) else { return }
+    if SyncFault(error).isOffline { failed(error) } else { accountStatus(.couldNotDetermine, from: check) }
   }
 
   /// 同步区不在了（`deletedByUser`：你在 iCloud 设置里删了 CuePad 的数据）：同步过的（有令牌或推送过的记录）是云端数据被删除或重置，

@@ -7,12 +7,10 @@ extension CloudSync {
   struct Run: Sendable {
     let generation: SyncGeneration
     let cloud: any SyncCloud
-    /// 协调器放行拉传时读的那一份（`AccountGate`），与 `account` 在同一步改。
+    /// 协调器放行拉传时读的那一份，也发每一次认的凭据（`AccountGate`），与 `account` 在同一步改。
     let gate = AccountGate()
     var link = Link.unconfirmed
     var account = Account.idle
-    /// 本代认了几次：只有最新的那一次能写协调器、改连接（`isLatest`）。
-    var checks = 0
     var backoff = Backoff()
     /// 账号变化、网络回来、重试的等待结束：本代一直跟着的。
     var watchers: [Task<Void, Never>] = []
@@ -32,7 +30,9 @@ extension CloudSync {
       return watchers + Array(background.values) + [timer]
     }
 
-    var checking: Task<Bool, Never>? { if case .checking(_, let task) = account { task } else { nil } }
+    var isConnected: Bool { if case .connected = link { true } else { false } }
+
+    var checking: Task<Bool, Never>? { if case .checking(let task) = account { task } else { nil } }
   }
 
   /// 认过账号（可用、是上次同步的那个）才连上，拉取器、发送者与文件两路这时才建：认不了（离线、没登录）时不拉也不传，
@@ -53,8 +53,8 @@ extension CloudSync {
   enum Account: Sendable {
     /// 没在认、也不用等：本代还没认过，或连上之后最近一次认清了。
     case idle
-    /// 正在认本代第 `seq` 次。之后来的账号变化另起一次：这次的答复可能是变化之前的，作废。
-    case checking(seq: Int, Task<Bool, Never>)
+    /// 正在认（哪一次是最新的只看闸门，`AccountGate.Check`）。之后来的账号变化另起一次：这次的答复可能是变化之前的，作废。
+    case checking(Task<Bool, Never>)
     /// 最近一次没认清，等 `Wait` 再认。
     case waiting(Wait)
   }
@@ -72,7 +72,15 @@ extension CloudSync {
 
 /// 这一代此刻认清账号没有，协调器放行拉传与显示状态时读（`SyncCoordinator.canSync`、`state`）。由 `CloudSync` 在改 `Run.account`
 /// 的同一步写：写在本 actor 里同步完成，先后就是改的先后，晚到的旧答复不会盖掉新的。协调器只拿着当前这一代的（`use`）。
+///
+/// 也是认账号结论的唯一入口：每一次认从这里领凭据（`begin`），协调器写账号的结论都要带上它，不是这扇门最新在认的那一次就不写（`admits`）。
+/// 凭据只有这里造得出，旧一次、旧一代的晚到答复因此在任何一个 await 之后都写不进去，以后加的入口也绕不过。
 final class AccountGate: Sendable {
+  struct Check: Sendable {
+    fileprivate let gate: AccountGate
+    fileprivate let seq: Int
+  }
+
   enum Verdict: Sendable {
     /// 没连上（拉传本来就还没开始），或连上之后最近一次认清了。
     case open
@@ -82,9 +90,37 @@ final class AccountGate: Sendable {
     case unconfirmed
   }
 
-  private let verdict = Mutex(Verdict.open)
+  private struct State {
+    var verdict = Verdict.open
+    var issued = 0
+    /// 最新在认的那一次；认完（`end`）就没有了。
+    var latest: Int?
+  }
 
-  var current: Verdict { verdict.withLock { $0 } }
+  private let state = Mutex(State())
 
-  func set(_ next: Verdict) { verdict.withLock { $0 = next } }
+  var current: Verdict { state.withLock { $0.verdict } }
+
+  /// 起新的一次认，之前的作废。`closing`：连着的当场关闸门（已是认不清的照旧）。
+  func begin(closing: Bool) -> Check {
+    state.withLock { state in
+      state.issued += 1
+      state.latest = state.issued
+      if closing, state.verdict == .open { state.verdict = .checking }
+      return Check(gate: self, seq: state.issued)
+    }
+  }
+
+  func admits(_ check: Check) -> Bool { check.gate === self && state.withLock { $0.latest == check.seq } }
+
+  /// 最新的这一次认完：之后它的凭据作废；`verdict` 不是 nil 时改闸门。不是最新的返回 false、什么都不改。
+  func end(_ check: Check, verdict: Verdict?) -> Bool {
+    guard check.gate === self else { return false }
+    return state.withLock { state in
+      guard state.latest == check.seq else { return false }
+      state.latest = nil
+      if let verdict { state.verdict = verdict }
+      return true
+    }
+  }
 }

@@ -89,10 +89,12 @@ import Testing
 
   /// 拉到的一页没能应用（这里是期间换了账号、停下来等你决定）：令牌不前移，之后从同一处再拉。
   @Test func aPageThatWasNotAppliedDoesNotMoveTheToken() async throws {
-    await rig.coordinator.account("user-a")
+    let gate = AccountGate()
+    await rig.coordinator.use(gate)
+    await rig.coordinator.account("user-a", from: gate.begin(closing: false))
     try await store.setSyncState(ZonePuller.tokenKey, Data("t0".utf8))
     let fresh = remoteRecord(.cards, cardFields(body: "别处新建", modifiedAt: 2_000))
-    let zone = SwitchingZone(page: ZoneChangeBatch(modifications: [fresh], deletions: [], token: Data("t1".utf8), moreComing: false), coordinator: rig.coordinator)
+    let zone = SwitchingZone(page: ZoneChangeBatch(modifications: [fresh], deletions: [], token: Data("t1".utf8), moreComing: false), coordinator: rig.coordinator, gate: gate)
 
     await #expect(throws: (any Error).self) { try await ZonePuller(source: zone, coordinator: rig.coordinator).pull() }
 
@@ -119,12 +121,14 @@ import Testing
   actor SwitchingZone: ZoneChangeSource {
     let page: ZoneChangeBatch
     let coordinator: SyncCoordinator
-    init(page: ZoneChangeBatch, coordinator: SyncCoordinator) {
+    let gate: AccountGate
+    init(page: ZoneChangeBatch, coordinator: SyncCoordinator, gate: AccountGate) {
       self.page = page
       self.coordinator = coordinator
+      self.gate = gate
     }
     func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch {
-      await coordinator.account("user-b")
+      await coordinator.account("user-b", from: gate.begin(closing: false))
       return page
     }
     func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { [] }
