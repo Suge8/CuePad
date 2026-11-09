@@ -12,7 +12,7 @@ RPC 扩展对自身发 SIGTERM 是这版运行时的已验证收尾路径，不�
 Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同名目录）与 `PiWire` 之间的线上约定。字段的语义与上报时机见扩展源码的注释；这里只列消息与字段。
 
 - 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，所以不用 `$TMPDIR`）。目录 0700、socket 0600；客户端还校验 socket 属主与对端 uid。扩展在 `.tmp` 名上 listen、收紧权限后才改名成 `.sock`。
-- 版本声明的精确格式 `const EXTENSION_VERSION = <数字>;` 是兼容接口：旧扩展重载、Swift 的随包版本读取、Python 的 lint 与同步测量都按它解析。数字只在入口声明一份，旧单文件存根由它生成；不再增加 JSON 清单或第二份配置。
+- 版本声明的精确格式 `const EXTENSION_VERSION = <数字>;` 是兼容接口：在跑的扩展核对磁盘、Swift 的随包版本读取、Python 的 lint 与同步测量（共用 `apple/scripts/_pi_extension.py`）都按它解析。数字只在入口声明一份；不再增加 JSON 清单或第二份配置。
 - 版本：`EXTENSION_VERSION`（入口 `index.ts` 里）是唯一的版本号（`PiExtensionBundle.version` 从文件解析），扩展改了就升。会话握手时报的版本与随包版本不同，或 CuePad 装完新版扩展后，CuePad 发 `upgrade`；扩展读磁盘上的版本，不同就等会话连同子代理都歇下时重新载入（重新载入会中断进程内子代理在飞的回合，所以可能等几个小时）。
 - 兼容：CuePad 读得懂从 `PiWire.oldestExtension` 到随包版本的扩展，等换新扩展的这段照常收发。只加命令、加 CuePad 可以没有的字段不提它，旧扩展不认的命令回 `bad_request`；改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠新字段才对时提到那一版。区间外的会话只读出身份、不发命令，等它换上新扩展（`PiSession.upgrading`）。
 - 连接断开只表示下线。显式结束要等 `bye quit` 后断开；重载、切换与未告别断线不报结束成功。同一 Pi 会话的全部已知承载进程都收尾后才完成。
@@ -76,7 +76,7 @@ CuePad → 扩展（都带 `id`）：
 | `title` | `instructions`（给模型的说明）、`limit`（名字的字数上限）、`text`（会话的第一句话）、`timeoutMs`：回 `ack` 的 `title` 是起好的名字，不写回会话（CuePad 核对后用 `config` 改名），v58 起（`SessionNameSuggestion`） | `bad_request`、`no_model`、`failed: <原因>` |
 
 `{"t":"upgrade"}`：请扩展核对磁盘上的扩展版本。不带 `id`，扩展不回 `ack`，CuePad 读不懂的扩展也发。
-**这一行的格式永远不能变**，扩展也要一直认它：要叫醒的也有 CuePad 读不懂的旧扩展，它们只认得出这一行（与 hello 里身份那几项、`bye`）；格式一变，旧会话就再也换不上新扩展（与扩展装在 Pi 扩展目录下的路径必须稳定是同一类约束）。v38 及更早的扩展不认它（回 `bad_request`），它们自己盯着扩展目录；Pi 1.4.0 及更早的二进制会吞掉一次安装里排在后面的目录事件，所以 CuePad 在它们握手时与每次装完，等扩展目录安静后单独碰一下它们盯的名字（`PiExtensionNudge`）。
+**这一行的格式永远不能变**，扩展也要一直认它：要叫醒的也有 CuePad 读不懂的旧扩展，它们只认得出这一行（与 hello 里身份那几项、`bye`）；格式一变，旧会话就再也换不上新扩展（与扩展装在 Pi 扩展目录下的路径必须稳定是同一类约束）。
 
 `send` 缺省是人类发送；`cueTurn` 出现即是 Cue 的发送策略，空对象没有接管忙轮的许可。桥在实际派发前按 Store 权威的 Unix 毫秒表示核对当前 peer 的轮次时间与 `PiSendPolicy.cue`；扩展在停止、提交与推进排队消息前，以 SDK 的忙闲事实及当前投影最后一条用户消息的 `cuepadDelivery` 核对许可标识。SDK 有待处理消息时，即使 `isIdle` 为真也不放行 Cue：公开接口没有队列来源证据，不能用当前轮的许可抢先。缺证据回 `unconfirmed_turn`，标识不同回 `user_turn`，都未提交这句话、也不打断原轮。不按会话名字、目录或是否托管过滤辅助 RPC。
 

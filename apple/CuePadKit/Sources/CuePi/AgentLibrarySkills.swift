@@ -6,7 +6,7 @@ import Foundation
 /// - 有 `SKILL.md` 的目录是技能，不再往里找；没有的非空目录是分类（Claude Code、dsh 的目录只看一层），空的（只算 `.DS_Store` 也空）进"空目录"。
 /// - 格式取各家最严（`SkillProblem`）：格式不对的照列成技能、带上哪里不对，不搬、不链、不算同名。
 /// - 列出的技能：`.agents/skills` 里的全部，加旧目录里一键整理搬不走的（同名、格式不对的）；旧目录里的只有那一家读得到。
-/// - 旧目录里的：不是 CuePad 的（旧版副本由接入收掉）、不是各家自管的（Claude Code 的 `skills/synced/<账号>/…`、Codex 的 `skills/.system`，只计数）；
+/// - 旧目录里的：不是各家自管的（Claude Code 的 `skills/synced/<账号>/…`、Codex 的 `skills/.system`，只计数）；
 ///   链接不碰（Claude Code、dsh 目录里指到 `.agents` 的是它们的技能链接）。搬到同层 `.agents/skills` 下的同一分类。
 /// - 同名：全局与项目之间、同一层里（旧目录里的按搬过去之后算）；两个项目各有一个不算。
 /// - 读不到 `.agents` 里这一个的那家（`SharedSkills`）看不见：它用着、链接的位置还空着（那里已有别的东西不碰），每家一件。
@@ -121,7 +121,6 @@ struct LibrarySkillScan {
                 if FileManager.default.fileExists(atPath: skillFile.path) {
                     // 读不出（不是 UTF-8、没权限）的也是技能，格式不对；同改文件时的读法（`AgentLibraryFiles.write`），哈希才对得上
                     let text = LibraryFileReading.read(skillFile) ?? ""
-                    if inOldDirectory, name == AgentSkill.name, AgentSkill.kinds(in: text) != nil { continue }  // 旧版 CuePad 副本：接入收掉它
                     watched.insert(skillFile.path)
                     found.append(Found(
                         entry: SkillEntry(name: name, scope: scope, path: item.path), group: group.joined(separator: "/"), text: text,

@@ -33,7 +33,7 @@ final class SessionNamer {
             guard try await store.wantsSuggestedName(sessionID) else { return }
             let name = try await bridge.suggestName(for: id)
             guard bridge.session(id: id)?.name == nil, try await store.wantsSuggestedName(sessionID) else { return }
-            try await bridge.configure(name: name, in: id)
+            try await bridge.configure(PiConfig(name: name), in: id)
         } catch {
             Self.log.notice("没给会话起名：\(String(describing: error))")
         }

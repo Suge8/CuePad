@@ -40,12 +40,7 @@ extension SessionLink {
     public func abort(_ id: PiSession.ID, deliveryID: String, turnStartedAt: Int64) async throws { throw PiBridgeError.rejected("unsupported_stop_turn") }
     public func retry(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
-        throw PiBridgeError.unsupported
-    }
-    public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
-        try await configure(PiConfig(model: model, thinking: thinking, name: name), in: id)
-    }
+    public func configure(_ config: PiConfig, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func canNameItself(_ id: PiSession.ID) -> Bool { false }
     public func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String { throw PiBridgeError.unsupported }
 }

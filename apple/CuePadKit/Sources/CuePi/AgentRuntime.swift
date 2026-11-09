@@ -171,7 +171,7 @@ extension AgentRuntime {
         let name = name.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
         guard name != nil || model != nil || thinking != nil else { return id }
         do {
-            try await bridge.configure(model: model, thinking: thinking, name: name, in: id)
+            try await bridge.configure(PiConfig(model: model, thinking: thinking, name: name), in: id)
         } catch {
             try? await bridge.end(id)
             throw error

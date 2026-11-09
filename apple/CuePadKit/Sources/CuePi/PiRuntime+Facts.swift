@@ -12,9 +12,7 @@ extension PiRuntime {
         installPrerequisite: InstallPrerequisite(name: "Node.js", command: "node", minimum: AgentVersion(22, 19, 0), site: URL(string: "https://nodejs.org")!),
         homeMeansInstalled: false,
         sessionFiles: SessionFileFormat(ingest: PiHistory.ingest, depth: 2, naming: .idSuffix) { $0.pi.sessionsDirectory },
-        channel: { integration, _ in
-            PiExtensionFiles(extensionsDirectory: integration.paths.pi.extensionsDirectory, legacyInUse: integration.legacyPiExtensionInUse)
-        },
+        channel: { integration, _ in PiExtensionFiles(extensionsDirectory: integration.paths.pi.extensionsDirectory) },
         hostingNeedsChannel: true, probe: askPi, brain: { PiBrain() }, projectFolder: ".pi")
 
     /// RPC 模式、不存会话，只加载随包的桥扩展（不加载装好的那份与其他扩展，也就不连 CuePad）并开探测模式（扩展的 `CUEPAD_PROBE`）：
