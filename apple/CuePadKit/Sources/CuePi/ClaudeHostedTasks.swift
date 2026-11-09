@@ -11,7 +11,6 @@ import Foundation
 ///   这中间它仍算在飞。被停下的不会再跑。
 struct ClaudeHostedTasks {
     private var listed: Set<String> = []
-    /// 清单里出现过的顶层任务（没有 `parent_task_id`）
     private var topLevel: Set<String> = []
     private var owner: [String: String] = [:]
     /// 交回过中途结果、名下任务做完时会再跑的子代理

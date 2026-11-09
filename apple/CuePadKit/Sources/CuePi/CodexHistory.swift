@@ -3,15 +3,8 @@ import CueStore
 import CueText
 import Foundation
 
-/// Codex 会话文件（`<CODEX_HOME>/sessions/YYYY/MM/DD/rollout-<时间>-<会话 id>.jsonl`）的逐行解码。
-///
-/// 一行是 `{timestamp, type, payload}`。只认 `session_meta`（会话 id、工作目录）与 `event_msg`：
-/// `task_started` 开始一轮；`item_completed` 里 `UserMessage` 是你的话（`client_id` 是 CuePad 发的那条的投送请求，见 `clientID`）、
-/// `AgentMessage` 是说的一段（中途的 `commentary`；`final_answer` 是最后一段，结束这一轮：Codex 先报歇下、钩子返回后才写 `task_complete`，
-/// 等它的话歇下时对话里还没有回答；没有回答就结束的轮由 `task_complete` 结束）、`CommandExecution`/`FileChange`/`McpToolCall`/`WebSearch` 记工具活动、
-/// `ContextCompaction` 是压缩；`turn_aborted` 是这一轮被停下（没有回答）。工具结果里的图：`ImageView`（view_image 看的那个本机文件，条目只带路径，
-/// 读的时候从文件取）与 `McpToolCall` 结果里的图片块，缩小后记在那一步上（`ToolImage`）。`response_item` 里同一条你的话没有 `client_id`，不读。
-/// 会话名不在会话文件里，在 `<CODEX_HOME>/session_index.jsonl`（`name`）。
+/// `final_answer` 是最后一段，结束这一轮：Codex 先报歇下、钩子返回后才写 `task_complete`，等它的话歇下时对话里还没有回答；没有回答就结束的轮由 `task_complete` 结束。
+/// `ImageView` 的条目只带路径（view_image 看的那个本机文件），读的时候从文件取。`response_item` 里同一条你的话没有 `client_id`，不读。
 enum CodexHistory {
     /// CuePad 发出的话写进 `clientUserMessageId` 的前缀，后接投送请求的 UUID：终端里打的话 Codex 也给一个随机 UUID，靠前缀分开。
     static let clientIDPrefix = "cuepad-"
@@ -20,8 +13,7 @@ enum CodexHistory {
         deliveryID.map { clientIDPrefix + $0 } ?? UUID().uuidString
     }
 
-    /// `<CODEX_HOME>/session_index.jsonl`（会话文件在 `<CODEX_HOME>/sessions/YYYY/MM/DD/` 下，全部会话共用一个）：Codex 改名（`/rename`、
-    /// `thread/name/set`）与终端界面自动起名都追加一行 `{id, thread_name}`，同一会话最后一行为准。
+    /// 全部会话共用一个：Codex 改名（`/rename`、`thread/name/set`）与终端界面自动起名都追加一行 `{id, thread_name}`，同一会话最后一行为准。
     static let sidecar = SessionFileFormat.Sidecar(file: { file in
         var home = file
         for _ in 0..<5 { home.deleteLastPathComponent() }
@@ -118,7 +110,6 @@ enum CodexHistory {
         var images: [Data?] = []
     }
 
-    /// 一个完成的工具条目换成工具活动：命令按命令行、改文件按每个文件（新增、删除行数从补丁里数）、其余按工具名。
     private static func toolCalls(_ item: Item) -> [ToolCall] {
         let id = item.id ?? UUID().uuidString
         switch item.type {
@@ -148,14 +139,13 @@ enum CodexHistory {
         }
     }
 
-    /// 会话文件里最后一轮的样子：在不在 Plan 模式（`task_started` 的 `collaboration_mode_kind`）、是不是被停下的
-    /// （`turn_aborted` 的 `reason` 为 interrupted）。终端里的 Plan 模式归终端界面管，app-server 不报，只有会话文件里有。
+    /// 终端里的 Plan 模式归终端界面管，app-server 不报，只有会话文件里有。
     struct LastTurn {
         var plan: Bool
         var interrupted: Bool
     }
 
-    /// 从文件尾往前一块一块读到最后一个 `task_started`（一行可能很长：带图的工具结果）；读不了或没有为 nil。
+    /// 一行可能很长（带图的工具结果），所以从文件尾往前一块一块读；读不了或没有为 nil。
     @concurrent static func lastTurn(in file: URL) async -> LastTurn? {
         guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
         defer { try? handle.close() }
@@ -167,7 +157,6 @@ enum CodexHistory {
             let start = end > block ? end - block : 0
             guard (try? handle.seek(toOffset: start)) != nil, let chunk = try? handle.read(upToCount: Int(end - start)) else { return nil }
             var lines = (chunk + head).split(separator: 0x0A)
-            // 这一块的第一行可能不完整：留着拼上前一块
             head = start > 0 && !lines.isEmpty ? Data(lines.removeFirst()) : Data()
             for line in lines.reversed() {
                 guard line.firstRange(of: Data("task_".utf8)) != nil || line.firstRange(of: Data("turn_aborted".utf8)) != nil,
@@ -233,11 +222,8 @@ enum CodexHistory {
         var changes: [String: Change]?
         var tool: String?
         var query: String?
-        /// `AgentMessage`：`commentary` / `final_answer`
         var phase: String?
-        /// `ImageView`：看的那个文件（`file://` 地址）
         var path: String?
-        /// `McpToolCall`：工具交回的结果
         var result: ToolResult?
 
         private enum CodingKeys: String, CodingKey {
@@ -251,7 +237,6 @@ enum CodexHistory {
         var type: String
         var text: String?
         var imageURL: String?
-        /// `skill`：技能名
         var name: String?
 
         private enum CodingKeys: String, CodingKey {
@@ -260,7 +245,7 @@ enum CodexHistory {
         }
     }
 
-    /// MCP 工具的结果（`CallToolResult`）：只读内容块里的图片（`{type: image, data: base64}`）。形状不认得时当没有，不连累整条。
+    /// 形状不认得时当没有，不连累整条。
     private struct ToolResult: Decodable {
         var images: [Data?] = []
 
@@ -277,7 +262,6 @@ enum CodexHistory {
         }
     }
 
-    /// 一个文件的改动：新建、删除带全文，修改带统一格式的补丁。
     private struct Change: Decodable {
         var type: String?
         var content: String?

@@ -3,9 +3,8 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// Cue 的大脑：CuePad 起的一个 Agent 运行时子进程（用户已登录哪家用哪家）。
 /// Cue 不写代码：系统提示整份由 CuePad 给，原生工具只有读文件类，外加 CuePad 的 MCP 服务；对话由 CuePad 自己记，
-/// 运行时不留会话（各家用自己不落盘的方式；OpenCode 落进它的库、用完删掉，见各实现的头注释），也不改用户的配置文件，只用参数、环境变量与临时文件。
+/// 运行时不留会话（各家用自己不落盘的方式；OpenCode 落进它的库、用完删掉），也不改用户的配置文件，只用参数、环境变量与临时文件。
 public struct CueBrainConfig: Sendable {
     public let runtime: AgentKind
     public let executable: URL
@@ -14,14 +13,10 @@ public struct CueBrainConfig: Sendable {
     /// 思考强度：各家共用 Pi 的档位，各实现映射到自己的写法、夹到模型支持的档位
     public let effort: PiThinkingLevel?
     public let fast: Bool
-    /// 整份替换运行时内置的系统提示
     public let systemPrompt: String
     public let workingDirectory: URL
-    /// CuePad 的 MCP 服务（stdio）的命令行：`[<cuepad 绝对路径>, "mcp"]`
     public let mcp: [String]
-    /// 加给运行时与 MCP 服务的环境变量（在 CuePad 自己的环境之上）
     public let environment: [String: String]
-    /// 量运行时进程收尾宽限的钟（`ChildProcess` 的 `stop`、`end`）
     public let timing: Timing
 
     public init(
@@ -41,17 +36,14 @@ public struct CueBrainConfig: Sendable {
     }
 }
 
-/// 各家同形的事件。一轮：`turnStarted` →（`received`、`speaking`、`context`、`tool` / `toolDone`…）→ `failed`（出错时）→ `turnFinished`；
 /// 一轮进行中再 `send` 的话多半并进这一轮，赶上这一轮收尾就另起一轮：哪一轮接走了它只看 `received`。
 /// 子代理与嵌套的工具调用、子代理说的话不报。
 public enum TurnEvent: Sendable, Equatable {
     case turnStarted
     /// 交给 `send` 的那一句（参数是发送时给的标识）进了这一轮：各家按运行时报的那一刻报，报在接走它的那一轮里（插进去时在跑的那一轮
-    /// 可能正好收尾，接走它的是下一轮）；没有在跑的一轮时报的，是接下来开始的那一轮接走的。各家认的是哪个事件见各实现的头注释
+    /// 可能正好收尾，接走它的是下一轮）；没有在跑的一轮时报的，是接下来开始的那一轮接走的。
     case received(UUID)
-    /// 正在说的话（`PiDraft`，规则同它）：这一轮此刻正在说的这条回答到目前为止的全文，随增量报（不节流），nil 是清掉。
-    /// 转成工具调用、这一轮出错（都在 `turnFinished` 之前）、下一轮开始时清掉；正常说完的留着——
-    /// `turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。各家都在协议层得出（逐字增量累积，每段说完时换成运行时给的定稿，不发增量也有），回答不另取一份
+    /// 规则同 `PiDraft`，随增量报（不节流），nil 是清掉；`turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。各家都在协议层得出（逐字增量累积，每段说完时换成运行时给的定稿，不发增量也有），回答不另取一份
     case speaking(PiDraft?)
     /// 上下文用量，各家同一口径：`used` 是最近一次模型请求的输入 token 合计（含缓存的读与写，不含输出）；`window` 是在用模型的上下文窗口，
     /// 运行时没报时为 nil。托管会话在桥上显示的（`PiSession.context`）也是这一份
@@ -59,10 +51,8 @@ public enum TurnEvent: Sendable, Equatable {
     /// 开始调一个工具：`id` 是运行时给这次调用的编号（做完时对上）；名字去掉 CuePad 的 MCP 前缀并小写（`task`、`read`；
     /// Codex 跑的命令记作 `bash`，参数是 `{"command": …}`），参数是 JSON 原文
     case tool(id: String, name: String, arguments: String)
-    /// 这次调用做完了：结果里的文字（几段拼起来；命令是它的输出）与成败
     case toolDone(id: String, result: String, failed: Bool)
     case turnFinished
-    /// 这一轮出错（提供方报错、额度、认证……），原文
     case failed(String)
     /// 进程退出，之后不再有事件。`stop()` 让它退出的为 nil，否则是退出原因（退出码与标准错误的末尾）
     case exited(ShownText?)
@@ -92,7 +82,6 @@ public protocol HostedSession: AnyObject {
 }
 
 public enum HostedSessionError: Error, Equatable {
-    /// 还没启动、已经停了或进程已退出
     case notRunning
     case rejected(String)
 }

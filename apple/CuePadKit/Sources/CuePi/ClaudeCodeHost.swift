@@ -4,36 +4,21 @@ import CueStore
 import CueText
 import Foundation
 
-/// CuePad 起的一个 `claude` 进程，以 stream-json 收发（与 Agent SDK 同一套线协议，`ClaudeStream`），没有终端界面。两种开法，同一套一轮的状态：
-/// - 托管会话（`init(bridge:)` → `host` → `connect`）：上桥、进会话列表，发话（带图）、斜杠命令、停止、换模型与强度、改名、作答、结束（+Control）；
-/// - Cue 的大脑（`init()` → `start`，`HostedSession`，见 +Brain）：不上桥，只产出事件流，启动参数与发话语义见那里。
-///
-/// 一轮的起止、工具、上下文、正在说的话都在这里判一次，从同一处交给两边：事件（`emit`，大脑的事件流）与桥上的事实（`facts`、草稿、上下文）。
-/// - 一轮从发出话、它收下带标识的话（`command_lifecycle` 的 `started`，报 `received`）或它开始请求模型（`ClaudeStream.requestsModel`）起，
-///   到 `result` 止，被停下的照常结束、不算出错；
-///   没在跑时来的 `result`（大脑的 `/clear`、子代理交回时的空转）不报成一轮。在飞的工作见 `ClaudeHostedTasks`，正在说的话由 `ClaudeStream` 得出。
-/// - 上下文用量：最近一次调模型（模型回答带的 `usage`）的输入合计——`input_tokens` 加缓存的读与写，不含输出（同 `TurnEvent.context`）；
-///   为 0 的是 Claude Code 合成的回答（报错等），不算。`result` 的用量是整轮累加的、停在模型回话之前时全是 0，不用；窗口从它的模型用量里来，只给桥。
-/// - 停下（`interrupt`）：在跑就发 `interrupt` 控制请求（连同在跑的工具）并等它收尾（`result`）；发出的话还没等到 `system/init` 时
-///   中断不起作用（实测 2.1.299），先等它开跑。托管会话的发话与斜杠命令是先停下再送进去开新一轮，被停下的那一轮不算歇下；
-///   不用 `priority: "now"`：前台工具跑着时它不中止，等工具跑完并进这一轮（实测 2.1.299，各权限模式）。
-/// - 它问的事：托管会话的 `can_use_tool` 成为 CuePad 里的确认；大脑（不挂桥）与其余控制请求一律回错误，免得这一轮卡住。
-/// - 托管会话的权限模式固定 auto（同终端里 Claude Code 的内置默认）：由它的分类器放行或拦下（拦下的告诉模型原因，不问人）；
-///   仍要人点头的（用户的 ask 规则、连续被拦到阈值、auto 用不了时整场退回 Manual）经 `can_use_tool` 问。用户的 allow / deny / ask 规则照旧生效，
-///   所以不另设模式开关。它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
-/// - 退出靠关标准输入（读到 EOF 正常收尾）；结束、空闲满时限、让出（桥决定）都这样退，后两者不算结束。
+/// 没在跑时来的 `result`（大脑的 `/clear`、子代理交回时的空转）不报成一轮。
+/// 上下文用量取模型回答带的 `usage`：为 0 的是 Claude Code 合成的回答（报错等），不算；`result` 的用量是整轮累加的、停在模型回话之前时全是 0，不用。
+/// 停下（`interrupt`）：发出的话还没等到 `system/init` 时中断不起作用（实测 2.1.299），先等它开跑。托管会话的发话与斜杠命令是先停下再送进去开新一轮，被停下的那一轮不算歇下；
+/// 不用 `priority: "now"`：前台工具跑着时它不中止，等工具跑完并进这一轮（实测 2.1.299，各权限模式）。
+/// 大脑（不挂桥）与其余控制请求一律回错误，免得这一轮卡住。
+/// 托管会话的权限模式固定 auto（同终端里 Claude Code 的内置默认），所以不另设模式开关：用户的 allow / deny / ask 规则照旧生效。它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
+/// 退出靠关标准输入（读到 EOF 正常收尾）；结束、空闲满时限、让出（桥决定）都这样退，后两者不算结束。
 @MainActor
 final class ClaudeHostedSession: SessionLink {
-    /// 托管会话挂的桥；大脑没有
     private(set) weak var bridge: PiBridge?
-    /// 大脑的事件流与临时目录；托管会话没有（没人订阅）
     let brain: BrainSession?
     private(set) var stream: ClaudeStream?
-    /// 上了桥之后的 id（`initialize` 回来之前、大脑为 nil）
     private(set) var id: PiSession.ID?
     var facts = SessionFacts()
     var tasks = ClaudeHostedTasks()
-    /// 在等的 `can_use_tool`（请求 id 与问题）
     var permission: (request: String, permission: ClaudePermission)?
     var commands: Set<String> = []
     let deliveries = ClaudeDelivery()
@@ -43,19 +28,15 @@ final class ClaudeHostedSession: SessionLink {
     var restart = false
     /// 等着这一轮收尾（`result`）的停下；进程退出时也放行，对端不发 `result` 时到 `AgentTimeouts.stop` 放弃
     let closing: PendingReplies<UUID, Void>
-    /// 发话里停下上一轮的那一段（`abort` 整段取消）
     let stopPhase = StopPhase()
     /// 收尾过的轮数：停下时据此认出它在等回应的工夫里已经收尾
     var closed = 0
-    /// 发出的话开了一轮、还没等到它的 `system/init`
     var starting = false
     /// 等 `init` 的停止挂在这里，这一轮开跑或结束时放行；对端不发 `init` 时到 `AgentTimeouts.stop` 放弃
     let startWaits: PendingReplies<UUID, Void>
     /// 大脑在做的 `/clear`，先发的在前：每个 `result` 结束最早的那个等待
     var clearing: [UUID] = []
-    /// `/clear` 的等待（按 `clearing` 里的编号）；到 `AgentTimeouts.stop` 放弃
     let clearWaits: PendingReplies<UUID, Void>
-    /// 这一轮里 Claude Code 合成的出错回答（`ClaudeCode.failure` 的原文）；一轮结束时清掉
     private var apiError: String?
     /// 报过的上下文用量（`TurnEvent.context`）：用量随每条回答来，窗口到这一轮收尾（`result` 的 `modelUsage`）才知道
     private var contextUsed: Int?
@@ -63,14 +44,12 @@ final class ClaudeHostedSession: SessionLink {
     /// 模型目录里每项（别名，如 `haiku`）解析到的 id（`claude-haiku-5-5`）：每轮报的是后者，界面认前者
     private var resolved: [String: String] = [:]
 
-    /// 托管会话：`host` 起进程、`connect` 上桥。
     init(bridge: PiBridge, timing: Timing = .system) {
         self.bridge = bridge
         brain = nil
         (closing, startWaits, clearWaits) = Self.waits(timing)
     }
 
-    /// Cue 的大脑：`start` 起进程。
     init(timing: Timing = .system) {
         brain = BrainSession()
         (closing, startWaits, clearWaits) = Self.waits(timing)
@@ -89,7 +68,6 @@ final class ClaudeHostedSession: SessionLink {
         }
     }
 
-    /// 起进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。`timing` 交给进程（`ChildProcess`）。
     func launch(
         _ executable: URL, _ arguments: [String], directory: URL, environment: [String: String], timing: Timing = .system
     ) async throws -> ChildProcess {
@@ -101,8 +79,7 @@ final class ClaudeHostedSession: SessionLink {
         return stream.process
     }
 
-    /// 握手（`initialize` 拿到可换的模型与命令）并上桥；接着已结束的会话时 `known` 是索引里记下的名字与首条消息，
-    /// `model` 是起进程时指定的模型（几个别名解析到同一个 id 时，之后报的 id 认回它）。
+    /// 接着已结束的会话时 `known` 是索引里记下的名字与首条消息，`model` 是起进程时指定的模型（几个别名解析到同一个 id 时，之后报的 id 认回它）。
     func connect(
         sessionID: String, cwd: URL, sessionFile: URL, model: PiModelKey?, launchToken: String?, known: (name: String?, firstMessage: String?)?
     ) async throws -> PiSession {
@@ -134,7 +111,6 @@ final class ClaudeHostedSession: SessionLink {
         return session
     }
 
-    /// 交给事件流（大脑）与桥（托管会话）。
     private func emit(_ event: TurnEvent) {
         brain?.emit(event)
         if let id { bridge?.show(event, in: id) }
@@ -145,7 +121,6 @@ final class ClaudeHostedSession: SessionLink {
         emit(.turnStarted)
     }
 
-    /// 这一轮结束；没在跑时（见类注释）只记下出错，不报成一轮。
     private func finishTurn(failure: String?) {
         let ran = facts.running
         facts.endTurn(failure: failure)
@@ -203,7 +178,6 @@ final class ClaudeHostedSession: SessionLink {
         facts.questions = [ask.question()]
     }
 
-    /// 主会话的一条模型回答（一行一块）：用量、合成的出错、工具调用与思考。
     private func answered(_ message: JSONValue) {
         if let usage = message["message"]?["usage"] {
             let used = ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"].compactMap { usage[$0]?.int }.reduce(0, +)
@@ -254,7 +228,6 @@ final class ClaudeHostedSession: SessionLink {
         release()
     }
 
-    /// 这一轮出错的原文：合成的出错回答优先，再是 `result` 的原话、它列的错误；没出错为 nil。
     private func failure(of result: JSONValue) -> String? {
         guard result["is_error"]?.bool == true || apiError != nil else { return nil }
         let errors = (result["errors"]?.array?.compactMap(\.string) ?? []).joined(separator: "\n")
@@ -262,7 +235,7 @@ final class ClaudeHostedSession: SessionLink {
             ?? result["subtype"]?.string ?? String(localized: "未知错误")
     }
 
-    /// 这一轮报的模型 id 对应的目录项：先认当前选的那项（几个别名可能解析到同一个 id），再按别名、按解析后的 id 找；都对不上才显示原始 id。
+    /// 几个别名可能解析到同一个 id，所以先认当前选的那项；都对不上才显示原始 id。
     private func option(_ model: String, current: PiModelOption?, in catalog: [PiModelOption]) -> PiModelOption {
         let matches = { (option: PiModelOption) in option.key.id == model || self.resolved[option.key.id] == model }
         if let current, matches(current) { return current }
@@ -307,7 +280,6 @@ final class ClaudeHostedSession: SessionLink {
         }
     }
 
-    /// 主会话开始一轮（已在跑的不算新的一轮：发出话、后台任务落定时先算开始，随后它请求模型是同一轮）。
     /// 开始时刻是此刻：发出话的那一刻、收到开它的 `task_notification` 或它开始请求模型的那一刻，都早于这一轮的回答。
     func beginTurn() {
         if !facts.running { startTurn(at: .now) }
@@ -318,7 +290,6 @@ final class ClaudeHostedSession: SessionLink {
         bridge?.update(id) { facts.publish(to: &$0, at: now) }
     }
 
-    /// 输出读完了（进程退出）：没答的请求 `ClaudeStream` 已以会话结束收尾；托管会话下桥，大脑报退出。
     private func ended() {
         deliveries.close()
         started()

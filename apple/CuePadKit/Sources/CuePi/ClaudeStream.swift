@@ -2,18 +2,13 @@
 import CueStore
 import Foundation
 
-/// 到一个 `claude` 子进程的 stream-json 连接（`--input-format/--output-format stream-json`，与 Agent SDK 同一套线协议）：
-/// `ClaudeHostedSession`（托管会话与 Cue 的大脑）与探测（`AgentProbe`）用。
-/// 控制请求（`control_request`）按 `request_id` 配上回应（`PendingReplies`）；正在说的话在这里得出交给 `onDraft`
-/// （逐字增量是 `--include-partial-messages` 的 `stream_event`，定稿是每个内容块说完时那一行完整的 `assistant`）；除增量外每行交给 `onMessage`。
 /// 退出靠关标准输入（读到 EOF 正常收尾）；进程退出时等着的请求以 `sessionEnded` 失败，再调 `onClose`。
 @MainActor
 final class ClaudeStream {
     let process: ChildProcess
     var onMessage: ((JSONValue) -> Void)?
-    /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`PiDraft`，拼法见 `DraftParts`）：文字块是段，块号是段号，`text_delta` 追加，
-    /// 块说完时那一行完整的 `assistant`（一行一块）是定稿。新的一条消息开始（`message_start` 或换了消息 id）、转成工具调用（`tool_use` 块）、
-    /// 下一轮开始（`system/init`）、这一轮停下或出错（`result` 的 `is_error`）时清掉，正常说完的留着。起点是第一段定稿那一行的 `timestamp`，定稿之前是收到 `message_start` 的时刻（`PiDraft.since`）
+    /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`PiDraft`，拼法见 `DraftParts`）；正常说完的留着，不清。
+    /// 起点是第一段定稿那一行的 `timestamp`，定稿之前是收到 `message_start` 的时刻（`PiDraft.since`）。
     var onDraft: ((PiDraft?) -> Void)?
     private var speech = DraftParts()
     /// 正在说的文字块的块号（`content_block_start` 给的）；不发增量时没有，定稿接在最后一段后面
@@ -25,7 +20,6 @@ final class ClaudeStream {
     private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: PiBridgeError.ackTimeout)
     private var inputClosed = false
 
-    /// 启动进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。`timing` 交给进程（`ChildProcess`）。
     init(executable: URL, arguments: [String], directory: URL, environment: [String: String], timing: Timing = .system) async throws {
         process = try await ChildProcess(
             executable, ["--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages"] + arguments,
@@ -37,7 +31,6 @@ final class ClaudeStream {
         }
     }
 
-    /// 输出读完了（进程退出）：之后的请求不再等
     var isClosed: Bool { replies.isClosed }
 
     /// 它开始请求模型（`system/status` 的 `requesting`）：主会话的一轮从这里算起，到 `result` 止。不从 `system/init` 算：
@@ -47,7 +40,6 @@ final class ClaudeStream {
         message["type"]?.string == "system" && message["subtype"]?.string == "status" && message["status"]?.string == "requesting"
     }
 
-    /// 一条用户消息的内容：文字在前、图片块在后（空文字不带）。
     static func content(text: String, images: [PiImage]) -> JSONValue {
         var content: [JSONValue] = text.isEmpty ? [] : [["type": "text", "text": .string(text)]]
         for image in images {
@@ -83,7 +75,6 @@ final class ClaudeStream {
         return effort
     }
 
-    /// 关标准输入：它收完手上的就退出（在等确认时也立即退出）。
     func closeInput() {
         guard !inputClosed else { return }
         inputClosed = true
@@ -133,7 +124,7 @@ final class ClaudeStream {
         }
     }
 
-    /// 一个内容块说完了（完整的 `assistant` 行，它的 `timestamp` 与会话文件里那一行相同）：文字块的定稿换下它的增量，工具调用清掉这条。
+    /// 完整的 `assistant` 行的 `timestamp` 与会话文件里那一行相同。
     private func finished(_ line: JSONValue) {
         let message = line["message"]
         let written = line["timestamp"]?.string.flatMap { try? Date($0, strategy: Self.timestampStyle) }
@@ -153,7 +144,6 @@ final class ClaudeStream {
 
     private static let timestampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
-    /// 重新开始一条（`message` 为它的 id，`since` 是它开始的时刻）：清掉正在说的话。
     private func restart(_ message: String?, since: Date? = nil) {
         speech = DraftParts(message: message, since: since)
         openBlock = nil

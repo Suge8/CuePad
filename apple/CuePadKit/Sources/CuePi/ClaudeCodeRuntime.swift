@@ -4,32 +4,21 @@ import Darwin
 import Foundation
 import OSLog
 
-/// Claude Code 的接入：终端里的会话经钩子（`AgentHookServer`）上报、经它的收件箱 socket 说话、经挡着的钩子作答（`ClaudeTerminalSession`）；
-/// 后台托管的会话是 CuePad 起的 stream-json 进程（`ClaudeHostedSession`）。
-///
-/// - 终端会话：第一次钩子调用时上桥，id 是 `<会话 id>.<进程 pid>`；同一进程里 /clear、/resume 换了会话，旧的下桥、新的上桥；
-///   进程退出（kqueue）时下桥。CuePad 启动时已经在跑的会话（还没触发钩子）从 `claude agents --json` 补上。
-///   只接归 CuePad 管的（`follow` 给的范围，没接入时只有托管过的会话）：钩子与补上都按它，出了范围的下桥。
-///   会话名与首条消息随钩子来（`session_title`、`UserPromptSubmit`），只落在会话文件里的名字（`ai-title`）经历史索引补上（`PiBridge.read`）；重新上桥（托管接着、CuePad 重开后补上、钩子先到）时先取会话索引里记下的
-///   （`remembered`，不在这里读会话文件），钩子带来新的再换。
-/// - 托管会话：开新会话（`--session-id`）与接着已结束的会话（`--resume`，带上 CuePad 记下的这个会话最后的模型）；接着之前先确认它没开在别处（终端里开着时两边会各写各的）。
-///   让出与空闲退出由桥决定（`PiBridge` 的托管会话一节）。
+/// 重新上桥（托管接着、CuePad 重开后补上、钩子先到）时先取会话索引里记下的名字与首条消息（`remembered`，不在这里读会话文件），钩子带来新的再换。
+/// 托管会话的让出与空闲退出由桥决定（`PiBridge` 的托管会话一节）。
 @MainActor
 public final class ClaudeCodeRuntime: AgentRuntime {
     private static let log = Logger(subsystem: AppIdentity.id, category: "claude")
     private let bridge: PiBridge
     private let paths: AgentPaths
     private let hooks: AgentHookServer
-    /// 这家的可执行文件（检测时挑中的那个，`AgentStatus.executable`）；没有为 nil
     private let claude: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     private let gate: PresenceGate
     private let store: CueStore
     private var terminals: [PiSession.ID: ClaudeTerminalSession] = [:]
-    /// 每个终端进程一个退出监视；进程里此刻的会话见 `terminals`
     private var exitWatchers: [Int32: ProcessExitWatcher] = [:]
-    private var hosted: [String: ClaudeHostedSession] = [:]  // 会话 id → 托管进程
-    /// 终端会话哪些接上桥（`follow`）；给之前一个都不接
+    private var hosted: [String: ClaudeHostedSession] = [:]
     private var scope = PiHistoryScope.sessions([])
     private let timing: Timing
 
@@ -48,19 +37,16 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         gate = PresenceGate(presence: presence)
     }
 
-    /// 索引器读会话文件存下的检查点；没索引过为 nil。
     private func checkpoint(of sessionID: String) async -> PiHistoryCheckpoint? {
         guard let data = try? await store.piCheckpoint(of: sessionID) else { return nil }
         return try? JSONDecoder().decode(PiHistoryCheckpoint.self, from: data)
     }
 
-    /// 会话索引里记下的会话名与首条消息；没索引过为 nil。
     private func remembered(_ sessionID: String) async -> (name: String?, firstMessage: String?)? {
         await checkpoint(of: sessionID).map { ($0.name, $0.firstMessage) }
     }
 
-    /// 上桥后补上索引里记下的名字与首条消息：首条消息以索引为准（钩子先到时记下的可能是重新接上后说的第一句），
-    /// 名字钩子已带来的更新、不动。
+    /// 首条消息以索引为准（钩子先到时记下的可能是重新接上后说的第一句），名字钩子已带来的更新、不动。
     private func recall(_ id: PiSession.ID, sessionID: String) {
         Task { [weak self] in
             guard let known = await self?.remembered(sessionID) else { return }
@@ -83,7 +69,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         if scope != .sessions([]) { Task { await discover() } }
     }
 
-    /// 托管的进程关了输入还不走就 SIGTERM、再不走 SIGKILL（`ChildProcess.stop`）；终端会话挂着的钩子放掉。
     public func stop() -> @concurrent @Sendable () async -> Void {
         for terminal in terminals.values { terminal.close() }
         for watcher in exitWatchers.values { watcher.cancel() }
@@ -122,15 +107,14 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             in: directory, launchToken: nil, known: await remembered(session.id))
     }
 
-    /// `claude` 与给它的环境：`paths` 里指定的（隔离的配置目录等）盖在本进程的环境上。不自己补 `CLAUDE_CONFIG_DIR`：
-    /// 设了它 Claude Code 就到那个目录里找 `.claude.json`，与没设时的 `~/.claude.json` 不是一份。
+    /// 不自己补 `CLAUDE_CONFIG_DIR`：设了它 Claude Code 就到那个目录里找 `.claude.json`，与没设时的 `~/.claude.json` 不是一份。
     private func executable() async throws -> (url: URL, environment: [String: String]) {
         guard let claude = await claude() else { throw AgentRuntimeError.notInstalled(.claudeCode) }
         let locator = await locate()
         return (claude, locator.environment(launching: claude, overrides: paths.environment))
     }
 
-    /// 起托管进程、握手、上桥；进程先退出或握手超时（这时让它退出）都抛错。
+    /// 进程先退出或握手超时（这时让它退出）都抛错。
     private func launch(
         sessionID: String, arguments: [String], model: PiModelKey? = nil, in directory: URL, launchToken: String?,
         known: (name: String?, firstMessage: String?)? = nil
@@ -159,12 +143,11 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         }
     }
 
-    /// 一次钩子调用。原样放行、不登记的两种：
+    /// 原样放行、不登记的两种：
     /// - 不是 Claude Code 发的：Claude Code 按每次钩子的输入设环境里的 `CLAUDE_CODE_SESSION_ID`，与输入里的 `session_id` 相同；
     ///   照读 `~/.claude/settings.json` 跑这些钩子的别家（Grok Build、Cursor、OpenCode 的兼容插件）没有它，或是从 Claude Code
     ///   里起时继承来的别的会话；
     /// - 托管会话自己的（状态来自 stream-json）：环境里的 `HostMark`（值是会话 id）对上一个托管会话（从托管会话里开的终端继承了标记，会话不同）。
-    /// 其余交给它所在的终端会话（第一次见到就上桥）。
     private func received(_ call: AgentHookCall) {
         let envelope = call.envelope
         guard let input = JSONValue.parse(envelope.input), let event = input["hook_event_name"]?.string,
@@ -217,7 +200,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         return terminal
     }
 
-    /// 会话结束（`SessionEnd`：退出、/clear、/resume 换走）：下桥。进程可能还在（换了会话），退出监视留着。
+    /// 进程可能还在（换了会话），退出监视留着。
     private func settle(_ id: PiSession.ID, reason: String?) {
         guard let terminal = terminals.removeValue(forKey: id) else { return }
         terminal.close()
@@ -255,7 +238,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         return try JSONDecoder().decode([Running].self, from: Data(result.output.utf8))
     }
 
-    /// CuePad 启动前就在跑的会话：补上桥。之后的变化靠钩子；钩子先到的已经上桥，不重复。
     private func discover() async {
         let list: [Running]
         let listed = Date.now  // 会话文件里读不到一轮时的开始：列表里在跑的那一轮此刻之后才收尾
@@ -284,8 +266,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         }
     }
 
-    /// 会话文件里最后一轮的开始（`PiHistoryCheckpoint.lastTurnStart`）：从索引器存下的检查点接着读（会话文件可能有几百 MB），
-    /// 没有或已失效从头读；文件还没落盘或读不了为 nil。
+    /// 从索引器存下的检查点接着读（会话文件可能有几百 MB），没有或已失效从头读；文件还没落盘或读不了为 nil。
     @concurrent private static func lastTurnStart(in file: URL, from checkpoint: PiHistoryCheckpoint?, files: AttachmentFiles) async -> Date? {
         try? PiHistory.index(file: file, agent: .claudeCode, from: checkpoint, transcript: false, files: files).checkpoint.lastTurnStart
     }
@@ -298,9 +279,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 }
 
 public enum ClaudeCodeError: Error, Equatable, ShownError {
-    /// 后台启动的 Claude Code 没握上手就退出了（附它的退出原因；`stop()` 让它退的没有）
+    /// 附它的退出原因；`stop()` 让它退的没有
     case exited(ShownText?)
-    /// `claude agents --json` 没有正常给出在跑的会话
     case listingFailed
 
     public var shown: String.LocalizationValue {

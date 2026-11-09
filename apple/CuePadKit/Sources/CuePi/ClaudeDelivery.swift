@@ -41,7 +41,6 @@ final class ClaudeDelivery {
         }
     }
 
-    /// 模型开始回话（或开始压缩）：started 了的那一条送达了。
     func replying() {
         if let running { settle(running, .success(())) }
     }
@@ -54,7 +53,6 @@ final class ClaudeDelivery {
         self.failure = said.isEmpty ? self.failure ?? failure : said
     }
 
-    /// 进程退出：等着的以会话结束收尾（结果未知）。
     func close() { verdicts.closeAll(PiBridgeError.sessionEnded) }
 
     private func settle(_ id: String, _ result: Result<Void, any Error>) {

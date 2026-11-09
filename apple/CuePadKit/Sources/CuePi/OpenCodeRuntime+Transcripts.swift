@@ -12,7 +12,6 @@ extension OpenCodeRuntime {
         return try await OpenCodeHistory.read(connection.client, info, from: nil, files: files).transcript
     }
 
-    /// 连上后对一遍索引：变了的会话里，`transcriptWindow` 内活动过的读对话，更早的只写摘要；服务里没有了的删掉。
     func backfill(_ infos: [OpenCodeSessionInfo], _ connection: Connection) async {
         do {
             let stored = Dictionary(
@@ -43,7 +42,6 @@ extension OpenCodeRuntime {
             lastActivityAt: info.updatedAt, agent: .opencode)
     }
 
-    /// 只留服务里还有的会话的索引（只在拉到过完整列表之后）。
     func retainIndex() async {
         guard let listed else { return }
         do {
@@ -53,7 +51,6 @@ extension OpenCodeRuntime {
         }
     }
 
-    /// 排队读一个会话的新消息（同一会话不并发读；在线会话的排到前面）。
     func enqueueIngest(_ sessionID: String, urgent: Bool) {
         guard sessions[sessionID] != nil || !urgent else { return }
         if let index = ingestQueue.firstIndex(of: sessionID) {
@@ -71,7 +68,6 @@ extension OpenCodeRuntime {
         }
     }
 
-    /// 读到哪了（含首条消息）：这次连上读过的在内存里，之前的在资料库里。
     func checkpoint(of sessionID: String) async throws -> OpenCodeHistory.Checkpoint? {
         if let checkpoint = checkpoints[sessionID] { return checkpoint }
         return try await store.piCheckpoint(of: sessionID).flatMap { try? JSONDecoder().decode(OpenCodeHistory.Checkpoint.self, from: $0) }

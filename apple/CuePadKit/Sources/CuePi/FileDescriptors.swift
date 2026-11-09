@@ -2,7 +2,7 @@
 import Darwin
 import Foundation
 
-/// 写完整份（被信号打断就接着写）；对端已关或出错返回 false。
+/// 对端已关或出错返回 false。
 @discardableResult
 func writeAll(_ fd: Int32, _ data: Data) -> Bool {
     data.withUnsafeBytes { bytes in
@@ -17,7 +17,7 @@ func writeAll(_ fd: Int32, _ data: Data) -> Bool {
     }
 }
 
-/// 一次读事件读出可读的字节；只在一条串行队列上用（读缓冲复用，不是每次读都分配 256 KB）。EOF 或读失败返回 nil。
+/// 只在一条串行队列上用（读缓冲复用，不是每次读都分配 256 KB）。EOF 或读失败返回 nil。
 final class ReadBuffer: @unchecked Sendable {
     private var scratch = [UInt8](repeating: 0, count: 256 * 1024)
 
@@ -30,7 +30,7 @@ final class ReadBuffer: @unchecked Sendable {
     }
 }
 
-/// 把读出的块切成完整的行（不含换行与行尾的 `\r`，不含空行）；余下的半行留到下一块，每块只丢弃一次已切出的部分。只在一条串行队列上用。
+/// 不含换行与行尾的 `\r`、不含空行；每块只丢弃一次已切出的部分。只在一条串行队列上用。
 final class LineReader: @unchecked Sendable {
     private var pending = Data()
 
@@ -53,7 +53,6 @@ final class LineReader: @unchecked Sendable {
     }
 }
 
-/// 本机 Unix socket 的连接与监听（Pi 会话、钩子、Claude Code 的收件箱、Codex 的控制 socket 都经这里）。
 enum UnixSocket {
     enum Failure: Error, Equatable { case pathTooLong, socket(Int32), connect(Int32), peerNotOwner }
 

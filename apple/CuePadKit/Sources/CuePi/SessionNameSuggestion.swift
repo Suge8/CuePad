@@ -4,8 +4,6 @@ import Foundation
 
 /// 没有自带语义会话名的会话（Pi 默认取首句、Codex 托管会话）按第一句话起的短名：由会话自己那一家起（数据只发给你本就在用的那家），只回不写；
 /// 要不要起、起好后写不写由 App 定（`SessionNamer`：起名前与写回前各核对一次），写回走改名（Pi 扩展里即 Pi 的改名接口），名字照各家会话名回来。
-/// - Pi：桥扩展用会话所在 provider 里最便宜的可用模型（`title.ts`）；
-/// - Codex 托管：同 Codex 终端界面自动起名——在它自己的 app-server 里开用完不留的临时线程，模型 `gpt-5.6-luna`（`CodexRuntime+Naming`）。
 public enum SessionNameSuggestion {
     /// 名字的长度上限（字符），同 Codex 终端界面起名（`THREAD_TITLE_MAX_CHARS`）。模型的回话取第一行、去掉首尾空白、截到这么长
     /// （Pi 扩展里同一条，上限随命令给）
@@ -21,7 +19,6 @@ public enum SessionNameSuggestion {
         Do not use quotes, markdown, or trailing punctuation. Do not answer the request.
         """
 
-    /// 模型的回话整理成会话名；空的为 nil。
     static func cleaned(_ reply: String) -> String? {
         let line = reply.split(whereSeparator: \.isNewline).first.map { String($0.trimmingCharacters(in: .whitespaces).prefix(limit)) } ?? ""
         return line.isEmpty ? nil : line
@@ -29,7 +26,6 @@ public enum SessionNameSuggestion {
 }
 
 extension PiBridge {
-    /// 这个会话能不能给自己起名（`SessionLink.canNameItself`）。
     public func canNameItself(_ id: PiSession.ID) -> Bool { controls[id]?.canNameItself(id) ?? false }
 
     /// 请会话那一家按它的第一句话起个短名（`SessionNameSuggestion`），不写回：还没有第一句话、这家起不了（抛 `unsupported`）、

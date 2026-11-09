@@ -4,7 +4,7 @@ import Darwin
 import Foundation
 import Synchronization
 
-/// 目录与 socket 文件的属主/权限校验（扩展端做同样的检查）。
+/// 扩展端做同样的检查。
 enum PiSocketDirectory {
     /// `sun_path` 上限 104 字节；文件名 `<uuid>.<pid>.sock` 最长约 52 字节，目录路径再留出余量
     static let maxDirectoryPathLength = 50
@@ -23,7 +23,7 @@ enum PiSocketDirectory {
         }
     }
 
-    /// 是 socket、属于当前用户、且只有属主可读写（扩展收紧成 0600 后才把它改名进来）。
+    /// 扩展收紧成 0600 后才把它改名进来。
     static func isOwnSocket(_ path: String) -> Bool {
         var st = stat()
         return lstat(path, &st) == 0 && st.st_mode & S_IFMT == S_IFSOCK && st.st_uid == getuid() && st.st_mode & 0o077 == 0
@@ -65,7 +65,7 @@ final class PiSocketConnection: Sendable {
         try self.init(peer: try UnixSocket.connect(path))
     }
 
-    /// 接管一个已连上的描述符（connect 得到的，或监听端 accept 得到的）。对端必须是当前用户的进程，否则关掉它并抛错。
+    /// 对端必须是当前用户的进程，否则关掉它并抛错。
     init(peer fd: Int32) throws {
         var one: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
@@ -107,7 +107,6 @@ final class PiSocketConnection: Sendable {
 }
 
 extension PiProcess {
-    /// 此刻用这个 pid 的进程（带启动时刻）；没有为 nil。
     public static func running(pid: Int32) -> PiProcess? {
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride

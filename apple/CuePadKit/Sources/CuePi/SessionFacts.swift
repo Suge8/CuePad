@@ -3,33 +3,23 @@ import CueStore
 import CueText
 import Foundation
 
-/// 一个会话此刻的事实：各家把自己的事件（钩子、stream-json、app-server 通知、服务事件）翻译成对它的修改，桥上的状态、那句说明、
-/// 要你回答的、子代理与出错原文都由它推出（`publish`）。状态的规则只在这一处：
-/// 要你回答的优先；在压缩；自己这一轮在跑就看在做什么；歇下了还有在飞的工作（`inFlight`）是等子代理；上一轮出错是出错；否则空闲。
-/// 计时与 Pi 扩展同一规则（`PiSession.enter`）；歇着时压缩上下文不算新的一轮，压完计时回到压缩前。
+/// 状态的规则只在这一处，各家把自己的事件翻译成对它的修改。歇着时压缩上下文不算新的一轮，压完计时回到压缩前。
 struct SessionFacts {
-    /// 自己这一轮在跑（子代理不算）
     var running = false
-    /// 在跑时在做什么（思考、输出、调工具）与那句说明
     var activity: PiWorkState = .thinking
     var activityDetail: String?
-    /// 要你回答的，按到达先后；显示第一个。这一轮结束时作废
     var questions: [PiQuestion] = []
     /// 不挡着这一轮的提问（Codex 的 `request_user_input_async`）：Agent 问完照常做事或歇下，你说了下一句（答案就是这句话）才收起，
     /// 这一轮结束不作废；在等它时也算等你回答
     var standingQuestion: PiQuestion?
     var compacting = false
-    /// 上一轮出错的原文；开始新的一轮时清掉
     var failure: String?
     /// 在飞的后台工作（按 Agent 给的 id）：还没把结果交回主会话的子代理（Claude Code 还有后台命令）。等子代理只看它，名册只给人看。
     /// 各家只按自己的权威来源写（Claude Code 的后台任务清单、Codex 子线程的推送、OpenCode 子会话的执行状态）。
     /// 做完了的在主会话为它开始新的一轮（Agent 自己开，或接入补开）之前仍在飞：歇下只在那一轮做完之后，一件事只歇下一次。
     var inFlight: Set<String> = []
-    /// 主会话最后一轮开始的时刻（`PiSessionState.turnStartedAt`）
     private(set) var turnStartedAt: Date?
-    /// 子代理名册（按 Agent 给的 id），按出现先后
     private(set) var subagents: [(id: String, state: PiSubagentState)] = []
-    /// 歇着时开始压缩那一刻的计时：压完回到它
     private var beforeCompaction: (since: Date, busySince: Date?)?
 
     /// 开始新的一轮。`start` 要早于这一轮在会话文件里可能的收尾（歇下就绪看收尾不早于它，`PiSessionState.answered`）：
@@ -43,7 +33,6 @@ struct SessionFacts {
         failure = nil
     }
 
-    /// 这一轮结束（`failure` 是出错的原文）：要你回答的随之作废。
     mutating func endTurn(failure: String? = nil) {
         running = false
         work(.thinking)
@@ -69,7 +58,7 @@ struct SessionFacts {
         }
     }
 
-    /// 改一个子代理（不在名册里的不管：如压缩上下文也会报一个没有开始的子代理）；改出了变化就是它在 `now` 有进展。
+    /// 不在名册里的不管（如压缩上下文也会报一个没有开始的子代理）；改出了变化就是它在 `now` 有进展。
     mutating func updateSubagent(_ id: String, at now: Date, _ change: (inout PiSubagentState) -> Void) {
         guard let index = subagents.lastIndex(where: { $0.id == id }) else { return }
         let before = subagents[index].state
@@ -77,7 +66,6 @@ struct SessionFacts {
         if subagents[index].state != before { subagents[index].state.progressAt = now }
     }
 
-    /// 子代理歇下：那句说明是它最后的话的首行。
     mutating func settleSubagent(_ id: String, _ phase: PiSubagentPhase, summary: String?, at now: Date) {
         updateSubagent(id, at: now) { agent in
             agent.phase = .known(phase)
@@ -119,8 +107,7 @@ struct SessionFacts {
 }
 
 extension PiSession {
-    /// 进入 `next`：粗状态（`PiWorkState.phase`）变了才换 `stateSince`；离开空闲起记 `busySince`，
-    /// 中间等你确认不断，歇下、出错时清掉。与 Pi 扩展的计时同一规则。
+    /// 与 Pi 扩展的计时同一规则。
     mutating func enter(_ next: PiWorkState, detail: String? = nil, at now: Date = .now) {
         if next.phase != state.phase { stateSince = now }
         busySince = next.isWorking || next == .waitingForUser ? busySince ?? now : nil
@@ -130,7 +117,7 @@ extension PiSession {
     }
 }
 
-/// 正在做的事写成一句话（同 Pi 扩展）："工具名 · 目标"：命令、搜索、网址取首个非空行，文件取文件名，至多 120 字。各家共用。
+/// 同 Pi 扩展，各家共用。
 enum ToolDetail {
     static let limit = 120
 
@@ -150,7 +137,6 @@ enum ToolDetail {
         return "\(rest[..<split.lowerBound]) - \(rest[split.upperBound...]) (MCP)"
     }
 
-    /// Codex 命名空间下的内置工具（它的 `ExtensionItem` 种类）：拼起来的名字 → Codex 的写法
     private static let codexNamespaced = Dictionary(uniqueKeysWithValues: ["clock.sleep", "image_gen.generation", "web.search"].map {
         ($0.replacingOccurrences(of: ".", with: ""), $0)
     })
@@ -165,14 +151,12 @@ enum ToolDetail {
         })
     }
 
-    /// 调用的目标：命令、搜索、网址、说明取首个非空行，文件取文件名。
     static func target(_ input: JSONValue?) -> String? {
         let line = ["command", "pattern", "query", "url", "description"].lazy.compactMap { input?[$0]?.string }.first.flatMap(\.firstLine)
         let file = (input?["file_path"]?.string ?? input?["path"]?.string ?? input?["notebook_path"]?.string).map { URL(filePath: $0).lastPathComponent }
         return line ?? file
     }
 
-    /// 多行并成一行（行之间用说明的分隔符）。
     static func singleLine(_ text: String) -> String {
         text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             .joined(separator: PiSessionState.detailSeparator)
@@ -219,8 +203,7 @@ final class PresenceGate {
     }
 }
 
-/// 权限确认的说法，各家同一句式：标题"允许 <Agent> <动作>？"，下面一行一件要做的事（去掉空的与重复的）；
-/// 作答时回给模型的原因说明是用户在 CuePad 里答的（不说成 CuePad 自己拦的）。
+/// 作答时回给模型的原因说明是用户在 CuePad 里答的（不说成 CuePad 自己拦的）。各家同一句式。
 enum PermissionWording {
     static let allowed = "用户在 CuePad 里允许了", denied = "用户在 CuePad 里拒绝了"
 

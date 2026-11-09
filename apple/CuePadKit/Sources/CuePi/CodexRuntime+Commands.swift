@@ -9,8 +9,7 @@ extension CodexRuntime {
         try await deliver(Self.input(message.text, images: message.images, skills: session.skills), clientID: CodexHistory.clientID(for: message.deliveryID), to: session)
     }
 
-    /// 你的一句话交给 Codex 的输入：以这个会话的 `/skill:名字` 开头的是用这个技能说的——技能条目在前、其余的话在后（同在 Codex 里选了技能再打字），
-    /// 投送请求 id 照样随这条消息进会话文件；名字不是它的技能的照原文。
+    /// 以这个会话的 `/skill:名字` 开头的是用这个技能说的——技能条目在前、其余的话在后（同在 Codex 里选了技能再打字），投送请求 id 照样随这条消息进会话文件；名字不是它的技能的照原文。
     static func input(_ text: String, images: [PiImage], skills: [(name: String, path: String)]) -> [JSONValue] {
         let head = text.prefix { !$0.isWhitespace }
         guard head.hasPrefix("/skill:"), let skill = skills.first(where: { "/skill:\($0.name)" == head }) else {
@@ -73,7 +72,7 @@ extension CodexRuntime {
         }
     }
 
-    /// 之后的轮次用的协作模式（实验接口）：模型与强度照会话此刻的，说明用这个模式内置的。
+    /// 实验接口。模型与强度照会话此刻的，说明用这个模式内置的。
     private func collaborate(_ mode: String, in session: Tracked) async throws {
         let current = bridge.session(id: session.id)
         guard let model = current?.model?.key.id else { throw PiBridgeError.rejected("failed: " + String(localized: "不知道这个会话用的模型")) }
@@ -90,8 +89,7 @@ extension CodexRuntime {
         try await interrupt(session)
     }
 
-    /// 停下 Codex 此刻在跑的那一轮（含压缩那一轮）；歇着什么都不做。托管的问它的驱动；终端的只问 Codex（最近一轮），不另记这一轮的 id：
-    /// 钩子推出的忙闲只给界面看，不拿来判断要不要停。
+    /// 终端的只问 Codex（最近一轮），不另记这一轮的 id：钩子推出的忙闲只给界面看，不拿来判断要不要停。
     private func interrupt(_ session: Tracked) async throws {
         let thread = JSONValue.string(session.threadID)
         do {
@@ -133,13 +131,12 @@ extension CodexRuntime {
         }
     }
 
-    /// 托管的会话关掉进程（app-server 读到 EOF 收尾退出）；终端里的会话 Codex 没有让终端退出的接口（能力表里没有，桥先拒绝）。
+    /// 终端里的会话 Codex 没有让终端退出的接口（能力表里没有，桥先拒绝）。
     public func end(_ id: PiSession.ID) throws {
         guard let session = tracked[id], let rpc = hosted[session.pid]?.rpc else { throw PiBridgeError.unsupported }
         rpc.close()
     }
 
-    /// 开一轮：托管的经它的驱动（一轮从回应或通知起算），终端的经常驻服务（一轮的起止看钩子）。
     func turnStart(_ session: Tracked, _ input: [JSONValue], options: [String: JSONValue] = [:]) async throws {
         do {
             if let driver = hosted[session.pid] { return try await driver.startTurn(input, options: options) }

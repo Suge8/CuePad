@@ -2,18 +2,14 @@
 import CueStore
 import Foundation
 
-/// dsh（DeepSeek Harness，`@deepseek-ai/dsh`）的接入：会话只有 CuePad 托管的，托管会话与 Cue 的大脑都是通用 ACP 驱动（`ACPSession`）
-/// 起的 `dsh --profile acp`（`DshLaunch`），与标准不同的只在 `DshDialect`；dsh-acp 缺的标准部分由随包插件补上（`dsh-cuepad.mjs` 头注释）。
-///
+/// dsh-acp 缺的标准部分由随包插件补上（`dsh-cuepad.mjs` 头注释）。
 /// - 会话放哪：用户自己的 DSH_HOME（登录、`acp` profile 里的设置与缺省模型照用），存储根却是 CuePad 在它下面的 `cuepad/sessions`，明文。
 ///   dsh 的存储是内部格式——按代际迁移、默认每批追加一个 zstd 帧、一个根只认一种编码（混进别的编码它整根拒读），同一根里的明文与压缩
 ///   不能并存。CuePad 跟读、补写对话要逐行读，所以托管会话进自己的明文根，代价是它们不出现在 dsh 的 web、桌面版的历史里；
 ///   在 CuePad 的历史里照常接着说。
 /// - 不跟读用户在 web、桌面版里的会话：zstd 要另加解压依赖，旧会话还停在 v0–v3 各代的格式（每代各一份解码），读出来也只能看不能控
 ///   （那些会话的进程不是 CuePad 起的，没有通道）。为只读的历史不值。
-/// - 托管的进程是 CuePad 起的，一个进程一个会话（歇满 `PiBridge.hostedIdle` 由桥请它退出），撑不过 App 退出。
 /// - 开会话时要的模型在起进程时就给（插件的 `CUEPAD_MODEL`）：dsh-acp 握手时按它判定收不收图，之后换到能看图的模型也一样。
-/// - 托管会话插上 dsh 的 `ask_user_question` 工具，它的提问在 CuePad 里答（`DshDialect+Ask`）；大脑没人可问，不插。
 @MainActor
 public final class DshRuntime: AgentRuntime {
     private let bridge: PiBridge
@@ -71,7 +67,6 @@ public final class DshRuntime: AgentRuntime {
     }
 }
 
-/// dsh 与 ACP 标准不同的地方（`ACPDialect`）：插话与改名经插件的扩展方法，投送请求 id 放在 `session/prompt` 的 `_meta` 里；
 /// 大脑的系统提示、只读工具与临时存储都在启动参数指的补丁与环境里（`DshLaunch`），`session/new` 照标准。
 struct DshDialect: ACPDialect {
     var patch: DshLaunch.Patch = .brain

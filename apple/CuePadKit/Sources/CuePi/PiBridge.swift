@@ -3,8 +3,7 @@ import CueStore
 import Foundation
 import Observation
 
-/// 本机在线 Agent 会话的快照与控制入口。各家经 attach/update/detach 发布，会话命令交给 SessionLink。
-/// Pi 的 socket 生命周期由 PiConnections 持有；桥保留统一的订阅、状态续接与托管空闲策略。
+/// 各家经 attach/update/detach 发布，会话命令交给 `SessionLink`；Pi 的 socket 生命周期由 `PiConnections` 持有。
 @MainActor @Observable
 public final class PiBridge {
     /// 一个在线会话一格。状态变化只改这一格，只有读这一格的视图重算；读 `slots` 的只在会话出现、消失时重算。
@@ -15,9 +14,9 @@ public final class PiBridge {
         public nonisolated let sessionID: String
         public nonisolated let cwd: URL
         public internal(set) var session: PiSession
-        /// 此刻正在说的这条回答（见 `PiDraft`，刷新节奏见 `PiDraftFeed`）：出字时只有读它的视图重算
+        /// 出字时只有读它的视图重算
         public var draft: PiDraft? { feed.draft }
-        /// 有正在说的话（`draft != nil`），只在有无变化时通知：会话行读它不随每个增量重算
+        /// 只在有无变化时通知：会话行读它不随每个增量重算
         public var speaking: Bool { feed.speaking }
         private let feed = PiDraftFeed()
 
@@ -31,39 +30,35 @@ public final class PiBridge {
         func offer(_ next: PiDraft?) { feed.offer(next) }
     }
 
-    /// 在线会话的格子，按出现先后。界面读会话用这个（列表读 `slots`，每一行读自己那格的 `session`）或 `session(sessionID:)`。
+    /// 界面读会话用这个（列表读 `slots`，每一行读自己那格的 `session`）或 `session(sessionID:)`。
     public internal(set) var slots: [Slot] = []
 
     /// 在线会话的快照（读了每一格，任何一格变化都会通知读它的视图）：非界面代码与测试用，视图别读。
     public var sessions: [PiSession] { slots.map(\.session) }
 
-    /// 在线会话的文件，会话上线、下线（或换了文件）时给新的一份：历史索引另盯它们（`PiHistoryIndexer.events(following:)`）。
     public var sessionFiles: Observations<Set<URL>, Never> { Observations { Set(self.slots.compactMap(\.session.sessionFile)) } }
 
-    /// 这个 Pi 会话（`sessionID`）在线的那个进程；同一会话开在两个进程里时取先出现的。只随这一个会话的变化通知。
+    /// 同一会话开在两个进程里时取先出现的。只随这一个会话的变化通知。
     public func session(sessionID: String) -> PiSession? { slot(sessionID: sessionID)?.session }
 
-    /// 这个会话（`sessionID`）在线的那一格，规则同 `session(sessionID:)`；只随会话出现、消失通知。
+    /// 规则同 `session(sessionID:)`；只随会话出现、消失通知。
     public func slot(sessionID: String) -> Slot? { slots.first { $0.sessionID == sessionID } }
 
     public func session(id: PiSession.ID) -> PiSession? { slots.first { $0.id == id }?.session }
 
     @ObservationIgnored private let connections: PiConnections
     @ObservationIgnored let hostedIdle: Duration
-    /// 桥的钟：回执（`AgentTimeouts.ack`）、结束（`AgentTimeouts.end`）的时限与托管会话歇着的计时（`hostedIdle`）；App 给的是它自己的那一个（`MacDependencies.timing`）。
+    /// App 给的是它自己的那一个（`MacDependencies.timing`）。
     @ObservationIgnored let timing: Timing
     /// 显式结束正在等待的承载进程；让出后的接手重载不能干扰同一个结束请求。
     @ObservationIgnored private(set) var ending: Set<PiSession.ID> = []
-    /// 在线会话的控制通道（Pi 的是 `PiConnection`）
     @ObservationIgnored var controls: [PiSession.ID: any SessionLink] = [:]
     /// 重开前（`carryOver`）与重新载入扩展前（`detach` 的 `.reload`）各会话的状态与计时：重新上桥时用一次。
     /// 读不懂的扩展读不到状态，不留也不用：接回时沿用的是它之前读到的
     @ObservationIgnored var carried: [String: (state: PiWorkState, times: PiTimes)] = [:]
-    /// 托管的会话歇着的计时（见 `reviewHosted`）
     @ObservationIgnored var idleTimers: [PiSession.ID: Task<Void, Never>] = [:]
     /// 已经请它退出的托管会话：同一个只请一次（Pi 收尾中再收到一次 SIGTERM 会跳过收尾直接退出）
     @ObservationIgnored var releasing: Set<PiSession.ID> = []
-    /// 同一会话的发话一次一句（`SessionGate`）
     @ObservationIgnored let turns = SessionGate()
     @ObservationIgnored private var subscribers: [UUID: AsyncStream<PiSessionChange>.Continuation] = [:]
 
@@ -90,7 +85,6 @@ public final class PiBridge {
         subscribers = [:]
     }
 
-    /// 会话出现/状态切换/结束的事件流（每次调用得到独立的流）。
     public func changes() -> AsyncStream<PiSessionChange> {
         let id = UUID()
         return AsyncStream { continuation in
@@ -108,8 +102,7 @@ public final class PiBridge {
 }
 
 extension PiBridge {
-    /// 发消息（文字 + 图片），以这句开新一轮：会话歇着就直接开始，在跑就先打断这一轮；打断不了的（`AgentCapabilities.speakBlocked`）
-    /// 拒收、带上原因，不排队。受理即返回，不代表模型成功。
+    /// 打断不了的（`AgentCapabilities.speakBlocked`）拒收、带上原因，不排队。受理即返回，不代表模型成功。
     /// 同一会话的 `send` 一次一句（`SessionGate`）；`abort` 不排队、还取消排着的发话；斜杠命令不排队（`/compact` 要等压完才确认，发话得能在它进行中打断它）。
     public func send(_ message: PiMessage, to id: PiSession.ID) async throws {
         try await turns.run(id) { try await deliver(message, to: id) }
@@ -136,18 +129,18 @@ extension PiBridge {
         }
     }
 
-    /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令由 Pi 派发，Pi 执行了它就确认（处理函数的结果没有公开回执）；
+    /// 整行以 / 开头。Pi 执行了它就确认（处理函数的结果没有公开回执）；模板与 skill 是说的话，经 `send` 交出。
     /// 模板与 skill 是说的话，经 `send` 交出。清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
     public func command(_ line: String, deliveryID: String? = nil, in id: PiSession.ID) async throws {
         try await control(id, needs: .commands).command(line, deliveryID: deliveryID, in: id)
     }
 
-    /// 让该会话从会话文件重新载入到最新（同一会话的另一个进程刚写过文件后）；扩展判断能否安全重载，不能就提示用户。只有 Pi 有。
+    /// 同一会话的另一个进程刚写过文件后用；扩展判断能否安全重载，不能就提示用户。只有 Pi 有。
     public func reload(_ id: PiSession.ID) async throws {
         try await pi(id).reload()
     }
 
-    /// 结束该会话并等它下线；`AgentTimeouts.end` 内没下线抛 `notEnded`。
+    /// `AgentTimeouts.end` 内没下线抛 `notEnded`。
     public func end(_ id: PiSession.ID) async throws {
         guard let target = session(id: id) else { throw PiBridgeError.sessionEnded }
         let ids = target.agent == .pi

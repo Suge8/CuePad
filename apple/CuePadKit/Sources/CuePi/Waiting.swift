@@ -6,24 +6,17 @@ import Foundation
 public enum AgentTimeouts {
     /// Pi 扩展回 ack：多数命令受理就回，`send` 等这句落成会话里的消息（停下在跑的一轮再开也在内）
     public static let ack: Duration = .seconds(10)
-    /// Claude Code 的控制请求、Codex 的 RPC 请求（含握手）
     public static let reply: Duration = .seconds(60)
-    /// 问一家 Agent 能不能用、有哪些模型（`AgentIntegration.probe`），连同起进程
     public static let probe: Duration = .seconds(20)
-    /// 起进程到上桥、拉起后台服务
     public static let launch: Duration = .seconds(30)
     public static let end: Duration = .seconds(10)
-    /// 问版本、读列表这类一次性的小命令（连同起进程）
     public static let command: Duration = .seconds(10)
-    /// 取用户登录 shell 的 PATH
     public static let shell: Duration = .seconds(5)
-    /// 列出在跑的 Claude Code 会话
     public static let list: Duration = .seconds(15)
     /// CuePad 自有子进程的强制收尾宽限；已认领的 Pi 经桥走宿主退出，不用强杀兜底。
     public static let endGrace: Duration = .seconds(5)
     /// 停下在跑的一轮后等它收尾（ACP 的取消回应、Claude Code 的 `result`、等发出的话开跑）与 `/clear` 的结果：对端接了请求却不收尾时到点放弃，免得停止与随后的发话永远等下去
     public static let stop: Duration = .seconds(30)
-    /// 托管的会话歇着满这么久就退出（不算结束，发话时再接着）
     public static let hostedIdle: Duration = .seconds(30 * 60)
 }
 
@@ -67,8 +60,7 @@ final class StopPhase {
     }
 }
 
-/// 一条连接上等回应的请求（Pi 扩展的 ack、Claude Code 的控制请求、Codex、ACP 与 Pi 大脑的 RPC）：按 id 配上回应，至多等 `timeout`（按 `timing` 量；nil 不限时）；
-/// 调用方取消时立即以取消结束（请求已发出，对端照常处理）；连接断了等着的全部失败，之后的请求不再发。
+/// 按 id 配上回应，至多等 `timeout`（按 `timing` 量；nil 不限时）；调用方取消时立即以取消结束（请求已发出，对端照常处理）；连接断了等着的全部失败，之后的请求不再发。
 @MainActor
 final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
     private var waiting: [ID: CheckedContinuation<Reply, any Error>] = [:]
@@ -125,14 +117,12 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
         _ = try await request(UUID()) {}
     }
 
-    /// 等的那件事到了：放行全部等待者。
     func releaseAll() where Reply == Void {
         let all = waiting.values
         waiting = [:]
         for continuation in all { continuation.resume() }
     }
 
-    /// 连接断了：等着的全部以 `error` 失败，之后的请求直接抛它。
     func closeAll(_ error: any Error) {
         closed = error
         let all = waiting.values

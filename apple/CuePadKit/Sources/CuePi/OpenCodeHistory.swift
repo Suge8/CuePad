@@ -13,11 +13,9 @@ struct OpenCodeMessage: Decodable, Sendable {
     var content: [Content]?
     var finish: String?
     var model: OpenCodeModelRef?
-    /// 压缩：`running` / `completed` / `failed`
     var status: String?
     var tokens: OpenCodeTokens?
     var error: OpenCodeFailure?
-    /// `idle` 的：这一轮怎么结束的（`succeeded` / `interrupted` / `failed`）
     var outcome: String?
     var time: Time
 
@@ -26,7 +24,6 @@ struct OpenCodeMessage: Decodable, Sendable {
         var completed: Double?
     }
 
-    /// 你的消息带的文件：图片是原图的 base64
     struct File: Decodable, Sendable {
         var data: String?
         var mime: String?
@@ -56,7 +53,7 @@ struct OpenCodeMessage: Decodable, Sendable {
         var status: String
         var input: OpenCodeToolInput?
         var error: OpenCodeFailure?
-        /// 工具结果里的图：内容块里 `file` 的图片（`uri` 是 data: 或 file:// 地址），取不出的为 nil
+        /// `uri` 是 data: 或 file:// 地址，取不出的为 nil。
         var images: [Data?] = []
 
         private struct Block: Decodable {
@@ -91,31 +88,27 @@ struct OpenCodeMessage: Decodable, Sendable {
     }
 }
 
-/// OpenCode 会话的对话与摘要：消息逐条解码进与 Pi 会话文件同一个检查点与对话模型（`PiHistoryCheckpoint`、`PiHistory.Transcript`），
-/// 轮次、摘要与工具活动的规则与各家同一处（`PiHistoryCheckpoint` 的 `said`、`answered`……）。这里与 Pi 不同的只有：
-/// - 你的消息是 `user`，文字在前、图片（`files` 里的原图）随后各占一行；CuePad 发的那条在 `metadata.cuepadDelivery` 里带着投送请求 id。
-/// - 助手的一步是一条 `assistant`：`finish` 为 `tool-calls` 的只累计工具，其余结束一轮；工具的成败就在同一条里（`state.status`），
-///   结果里的图是 `state.content` 里的图片文件块（缩小后记在那一步上，`ToolImage`）。
-/// - 压缩完成是一条 `compaction`（系统行）；`idle` 标记一轮彻底结束（被停止、出错时没有最后的回答）；被停下的那一步带 `aborted` 错误。
+/// 规则与各家同一处（`PiHistoryCheckpoint` 的 `said`、`answered`……），这里与 Pi 不同的只有：
+/// - CuePad 发的那条在 `metadata.cuepadDelivery` 里带着投送请求 id。
+/// - 助手的一步是一条 `assistant`：`finish` 为 `tool-calls` 的只累计工具，其余结束一轮；工具的成败就在同一条里（`state.status`），结果里的图是 `state.content` 里的图片文件块。
+/// - `idle` 标记一轮彻底结束（被停止、出错时没有最后的回答）；被停下的那一步带 `aborted` 错误。
 /// - 你在终端里直接跑的命令（`shell`）、系统与合成消息、切模型与切 agent 的记录不进对话（终端的对话里它们不是谁说的话）。
 enum OpenCodeHistory {
     /// 你拒绝了权限确认时工具的出错原因（2.0.29；那一步随之带着 `aborted` 的错误停下）
     static let declinedTool = "The user declined this tool call"
 
-    /// 检查点：Pi 的那份，加读到哪。先后只认消息在对话里的位置：排队的话入队时就拿到了消息 id，送进对话却在后面
-    /// （插的话、它前面那轮的回答都排在它前头），所以既不按 id 比"读过没有"，也不拿 id 当 seq。
+    /// 先后只认消息在对话里的位置：排队的话入队时就拿到了消息 id，送进对话却在后面
+    /// （插的话、它前面那轮的回答都排在它前头），所以既不按 id 比“读过没有”，也不拿 id 当 seq。
     struct Checkpoint: Codable, Sendable {
-        /// 接口给的游标（不透明），指向读过的最后一条之后；从头读为 nil
         var cursor: String?
-        /// 读过几条：下一条消息的位置，也就是它的 seq
+        /// 下一条消息的位置，也就是它的 seq
         var position: Int64 = 0
         var history = PiHistoryCheckpoint()
     }
 
     private static let pageSize = 100
 
-    /// 从 `checkpoint` 往后读完这个会话现有的消息（按对话里的先后，从早到晚）；`files` 是你的消息里的图片存进的附件目录。
-    /// 读到还没写完的一条就停：游标停在它前一条之后，下次从它重读。
+    /// `files` 是你的消息里的图片存进的附件目录。读到还没写完的一条就停：游标停在它前一条之后，下次从它重读。
     @concurrent static func read(
         _ client: OpenCodeClient, _ info: OpenCodeSessionInfo, from checkpoint: Checkpoint?, files: AttachmentFiles
     ) async throws -> (checkpoint: Checkpoint, transcript: PiTranscript) {
@@ -137,7 +130,6 @@ enum OpenCodeHistory {
         return (next, PiTranscript(sessionID: info.id, messages: transcript.messages, recap: next.history.projectedRecap))
     }
 
-    /// `cursor` 之后的一页（从头读时是最早的一页），从早到晚。
     @concurrent private static func page(
         _ client: OpenCodeClient, session: String, from cursor: String?, limit: Int
     ) async throws -> OpenCodePage<OpenCodeMessage> {

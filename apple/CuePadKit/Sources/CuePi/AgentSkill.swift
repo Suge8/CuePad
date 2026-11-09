@@ -2,15 +2,14 @@
 import CueStore
 import Foundation
 
-/// 写给 Agent 的技能：CuePad 是什么、什么时候发预览、发什么、做 HTML 页给手机看的约定（只写在这里），怎么发只给命令的样子与标题写法
-/// （`PiPreview.titleRule`，与 show 的帮助、报错同一句：标题写错是最常见的返工，不让 Agent 先查帮助），其余让 Agent 看 `--help`（命令行唯一的文档）。
-/// 只写一份，在几家共读的 `~/.agents/skills/cuepad`（Claude Code 另有一个链到它的链接，`AgentIntegration`），正文各家通用。
+/// 做 HTML 页给手机看的约定只写在这里；怎么发只给命令的样子与标题写法（`PiPreview.titleRule`，与 show 的帮助、报错同一句：标题写错是最常见的返工，不让 Agent 先查帮助），
+/// 其余让 Agent 看 `--help`（命令行唯一的文档）。
 /// 正文写 App 里 `cuepad` 的绝对路径，不用先把命令装进 PATH；App 被移动后路径变了，它就成了旧版，启动时重写。
 /// 末尾的标记行写着为哪几家接入的（`kinds(in:)`）：几家共读一份文件，各家接没接入只记在这里。
 enum AgentSkill {
     static let name = "cuepad"
     static let fileName = "SKILL.md"
-    /// 标记行的开头；用它区分"CuePad 写的"与同名的用户文件（旧版写在各家目录里的副本也以它开头，只是不带接入的几家）
+    /// 用它区分“CuePad 写的”与同名的用户文件（旧版写在各家目录里的副本也以它开头，只是不带接入的几家）
     static let ownershipMarker = "<!-- 由 CuePad 写入"
     private static let kindsPrefix = "（接入："
 
@@ -40,7 +39,6 @@ enum AgentSkill {
         return (["---", "name: \(name)"] + lines + ["\(ownershipMarker)\(kindsPrefix)\(listed)），升级时整文件覆盖 -->", ""]).joined(separator: "\n")
     }
 
-    /// 是 CuePad 写的就给出标记行里接入的几家（旧版的副本没有这一段，是空的）；不是为 nil。
     static func kinds(in text: String) -> Set<AgentKind>? {
         guard let marker = text.range(of: ownershipMarker) else { return nil }
         let rest = text[marker.upperBound...]

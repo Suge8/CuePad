@@ -1,14 +1,12 @@
 #if os(macOS)
 import Foundation
 
-/// JSON 原文里每个值的位置（字节区间），用来就地插入、删除而不重写整份文件。
 struct JSONSourceTree {
     let text: Data
     let root: Node
 
     struct Node {
         var range: Range<Int>
-        /// 对象的成员（键与键的起点）；不是对象为 nil
         var memberList: [(key: String, keyStart: Int, value: Node)]?
         var elements: [Node]?
 
@@ -16,7 +14,6 @@ struct JSONSourceTree {
 
         func member(_ key: String) -> Node? { memberList?.last { $0.key == key }?.value }
 
-        /// 删一个元素：有前一个就连同它之后的逗号一起删到这个元素末尾（插入的逆操作），否则删到下一个元素开头。
         func removing(element index: Int, in text: Data) -> Data {
             let items = elements ?? []
             let range = index > 0 ? items[index - 1].range.upperBound..<items[index].range.upperBound
@@ -34,7 +31,6 @@ struct JSONSourceTree {
             return Self.removing(range, from: text)
         }
 
-        /// 在最后一个元素之后插（`,<元素>`），空数组插在 `[` 之后。
         func insertion(element: String) -> (at: Int, text: String) {
             guard let last = elements?.last else { return (range.lowerBound + 1, element) }
             return (last.range.upperBound, "," + element)

@@ -3,12 +3,9 @@ import CueStore
 import Foundation
 import Synchronization
 
-/// 技能与规则的文件（事实源）：读成快照（`AgentLibrary`，判定规则在 `LibrarySkillScan`、`LibraryInstructionScan`）与各份文件的正文、
-/// 跟着文件变化重读（`keep`）、整理与撤销、改一份文件。写入只在用户动作时（整理、文件页），后台只读。
-/// 碰得了哪些目录同接入（`AgentFileAccess.touches`）：隔离运行而几家共读的 `~/.agents` 是真实位置时什么都不读（`isAvailable`）。
+/// 写入只在用户动作时（整理、文件页），后台只读。
 public struct AgentLibraryFiles: Sendable {
     private let access: AgentFileAccess
-    /// 移走的放到哪、返回放下的位置：缺省是系统废纸篓，隔离运行与测试给库里的一个目录
     private let trash: @Sendable (URL) throws -> URL
 
     public init(access: AgentFileAccess, trash: (@Sendable (URL) throws -> URL)? = nil) {
@@ -20,7 +17,7 @@ public struct AgentLibraryFiles: Sendable {
         }
     }
 
-    /// 放进 `directory` 的废纸篓（隔离运行与测试用）：同名的加序号。
+    /// 隔离运行与测试用。
     public static func trash(into directory: URL) -> @Sendable (URL) throws -> URL {
         { item in
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -41,13 +38,11 @@ public struct AgentLibraryFiles: Sendable {
         AgentLibraryPlaces(paths: access.paths, touches: access.touches, projects: projects)
     }
 
-    /// 读一次：快照与它列出的各份文件的正文（路径 → 正文，`LibraryFileText`）。
     public struct Scan: Sendable {
         public let library: AgentLibrary
         public let texts: [String: String]
     }
 
-    /// `projects` 是这台绑了文件夹的项目（`CueStore.projectDirectories`）。
     private func read(host: String, projects: [UUID: String]) -> (scan: Scan, watched: Set<String>) {
         let places = places(projects)
         let skills = LibrarySkillScan(places), instructions = LibraryInstructionScan(places)
@@ -61,7 +56,6 @@ public struct AgentLibraryFiles: Sendable {
         return (Scan(library: library, texts: texts), skills.watched.union(instructions.watched).union(homes + [access.paths.agentsDirectory.path]))
     }
 
-    /// 该整理的按 `LibraryTidy.Kind` 的先后。
     private static func ordered(_ tidies: [LibraryTidy]) -> [LibraryTidy] {
         func rank(_ kind: LibraryTidy.Kind) -> Int {
             switch kind {
@@ -76,7 +70,7 @@ public struct AgentLibraryFiles: Sendable {
         return tidies.enumerated().sorted { (rank($0.element.kind), $0.offset) < (rank($1.element.kind), $1.offset) }.map(\.element)
     }
 
-    /// 照此刻的文件做这几件（那件已不在的不做，一件都不在抛 `tidyGone`）：返回做了几件与撤销。中途出错先把做了的放回再抛。
+    /// 那件已不在的不做，一件都不在抛 `tidyGone`；中途出错先把做了的放回再抛。
     @concurrent public func tidy(_ orders: [TidyOrder], projects: [UUID: String]) async throws -> (count: Int, undo: LibraryUndo) {
         let places = places(projects)
         let scan = read(host: "", projects: projects).scan, current = scan.library.tidies
@@ -99,7 +93,7 @@ public struct AgentLibraryFiles: Sendable {
 
     @concurrent public func undo(_ undo: LibraryUndo) async throws { try LibraryTidying.revert(undo) }
 
-    /// 改一份文件：文件此刻的内容（同快照里的读法）不是 `edit.base` 就不写，抛 `changedOnMac`。链接写进它指的文件；
+    /// 文件此刻的内容（同快照里的读法）不是 `edit.base` 就不写，抛 `changedOnMac`。链接写进它指的文件；
     /// 还没有的规则建出来，已经不在的技能抛 `gone`。
     @concurrent public func write(_ edit: LibraryEdit, projects: [UUID: String]) async throws {
         let file: URL, current: String?
@@ -117,8 +111,7 @@ public struct AgentLibraryFiles: Sendable {
         try Data(edit.text.utf8).write(to: file, options: .atomic)
     }
 
-    /// 跟着文件与绑定的文件夹（`projects`，每次变了给一次全部）重读，每读一次交给 `record`（内容没变不写由它管）。
-    /// 盯读到的每个目录与文件（`FileFollower`，当场）；读的时候又变了的并成下一次。直到所在任务取消或 `projects` 结束。
+    /// `projects` 每次变了给一次全部；每读一次交给 `record`（内容没变不写由它管）；读的时候又变了的并成下一次，直到所在任务取消或 `projects` 结束。
     public func keep(
         host: String, projects: some AsyncSequence<[UUID: String], any Error> & Sendable, record: @escaping @Sendable (Scan) async throws -> Void
     ) async throws {

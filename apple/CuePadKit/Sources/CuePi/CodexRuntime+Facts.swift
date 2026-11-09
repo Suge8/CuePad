@@ -3,8 +3,6 @@ import CueStore
 import Foundation
 
 extension CodexRuntime {
-    /// 会话文件是 `sessions/YYYY/MM/DD/rollout-*.jsonl`。上报通道是钩子与信任（`CodexHooks`，写、删信任要起检测时挑中的那个 codex）；
-    /// 托管的进程是 CuePad 起的。自己管 `skills/.system` 里的技能。
     nonisolated public static let facts = AgentFacts(
         command: "codex", homeVariable: "CODEX_HOME", installScript: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
         loginArguments: ["login"],

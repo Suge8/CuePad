@@ -2,11 +2,10 @@
 import CoreGraphics
 import Foundation
 
-/// 人在不在这台 Mac 前。接入据此决定确认在哪里答：人在就在 Agent 自己的界面里答，人不在才交给 CuePad（手机通知、远程作答）。
 @MainActor
 public protocol UserPresence: AnyObject, Sendable {
     var isPresent: Bool { get }
-    /// 等到人在（已经在就立刻返回）；任务取消时也返回。
+    /// 任务取消时也返回。
     func untilPresent() async
 }
 
