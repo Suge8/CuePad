@@ -9,7 +9,7 @@
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
 /// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、serverAt（服务器收下它的时刻）、cueToldAt（Cue 已知道没送到）；
-/// piSessionStates、cards、deliveryRequests、cueMessages 的 writeSeq（本机写入序号，见 `writeSeq`）。
+/// piSessionStates、cards、deliveryRequests、cueMessages 的 writeSeq（本机写入序号，见 `writeSeq`）；attachments.registeredHere（这台设备登记的，见 `registerAttachment`）。
 ///
 /// 本机表（不同步）：`Table.synced` 之外的表，另有 piProcesses、syncRecords、syncState，以及 searchIndex（FTS5，由触发器随同步表维护，可随时重建）；
 /// cueSummaries 是 Cue 记忆的摘要缓存，可随时丢弃重建。
@@ -132,6 +132,9 @@ enum Schema {
     UPDATE piSessionStates SET agent = '\(AgentKind.pi.rawValue)' WHERE agent IS NULL;
     DROP INDEX piSessions_agent; \(agentIndex)
     """,
+    // 95：附件记录是不是这台设备登记的（本机列，不同步、不改 modifiedAt），启动清理只收这种（`removeStrayFiles`）。
+    // 升级前已有的一律留空、当作别处来的：其中编辑删图后再永久删卡漏下的记录与文件照旧留着，宁可不释放，也不误删别的设备上的图
+    "ALTER TABLE attachments ADD COLUMN registeredHere INTEGER;",
   ]
 
   static let activityDestinationsTable = """
