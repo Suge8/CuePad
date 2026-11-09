@@ -58,10 +58,10 @@ struct RealPiQueueTests {
 
     private func work(_ name: String) -> String { "WORK-\(name)" }
 
-    /// 每句话的工具是一个真进程：写下自己的 pid，等信号（SIGUSR1 不退）或 30 秒，正常结束时留下 `<名>.done`
+    /// 每句话的工具是一个真进程：写下自己的 pid（先写别名再改名：测试见到文件就读，直接写会读到空的），等信号（SIGUSR1 不退）或 30 秒，正常结束时留下 `<名>.done`
     private func script(_ model: FakeModel) {
         for name in ["A", "B"] {
-            let command = "python3 -c 'import os,signal;signal.signal(signal.SIGUSR1,lambda *_:None);open(\"\(name).pid\",\"w\").write(str(os.getpid()));signal.alarm(30);signal.pause();open(\"\(name).done\",\"w\").write(\"finished\")'"
+            let command = "python3 -c 'import os,signal;signal.signal(signal.SIGUSR1,lambda *_:None);open(\"\(name).tmp\",\"w\").write(str(os.getpid()));os.rename(\"\(name).tmp\",\"\(name).pid\");signal.alarm(30);signal.pause();open(\"\(name).done\",\"w\").write(\"finished\")'"
             model.on(work(name), .call("bash", ["command": command]), .say("TOOL_DONE"))
         }
     }
