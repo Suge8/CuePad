@@ -194,7 +194,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private func attach(_ session: PiSession, inbox: String?, runningSince: Date?, waiting: Bool) -> ClaudeTerminalSession {
         let terminal = ClaudeTerminalSession(
             id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, registry: registry(of: session.pid),
-            runningSince: runningSince, waiting: waiting)
+            timing: timing, runningSince: runningSince, waiting: waiting)
         terminals[session.id] = terminal
         let pid = session.pid
         if exitWatchers[pid] == nil {
