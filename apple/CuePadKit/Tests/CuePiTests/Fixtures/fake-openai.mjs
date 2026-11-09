@@ -1,17 +1,6 @@
 // 测试用假模型：OpenAI 兼容的提供方（`POST /v1/chat/completions`，流式），给真 OpenCode 用，零网络、结果确定。
 // 起法：node fake-openai.mjs；在 127.0.0.1 的空闲端口上听，标准输出第一行写 {"port": N}，标准输入关了就退出。
-// 测试的话写成真模型也照做的英文；这里只认下面这些说法（按先后匹配最后一条用户消息），其余回 "ECHO <原话>"：
-//   Call the echo tool with the text "T" … until you have made N calls   调 *_echo（参数 T），每拿到结果隔 1 秒拿上一次的结果再调，满 N 次回最后的结果
-//   Use the shell tool to run exactly: CMD . Then reply W                  调 shell 跑 CMD，拿到结果后回 W
-//   Use the subagent tool with agent A and description D, prompt: P. … reply W   调 subagent 派子代理，拿到结果后回 W
-//   Use the question tool … header H, question Q with options X and Y. … reply with exactly the color …   调 question，拿到答案后回答案原文
-//   Create a file named F                                                  调 write 写 F（大脑没有这个工具，OpenCode 回错），拿到结果后回一句话
-//   Write the numbers …                                                    吐一行后停住，直到请求被中止（OpenCode 停下这一轮）；至多 30 秒
-//   What is your codename?                                                 回系统提示里 "codename is X." 的 X
-//   What color is this image?                                              回图（PNG）左上角像素最接近的颜色名
-//   What word did I ask you to remember?                                   回更早的用户消息里 "Remember the word X" 的 X
-//   reply with [exactly|only] [the [single] word] WORD（WORD 全大写）        回 WORD
-// 不带工具的请求（起标题、压缩上下文的摘要）回一句固定的话。用量：输入按请求的消息估（每 4 个字符一个 token），缓存读 100。
+// 测试的话写成真模型也照做的英文；`decide` 按先后匹配最后一条用户消息认说法，其余回 "ECHO <原话>"。
 import { createServer } from "node:http";
 import { inflateSync } from "node:zlib";
 
@@ -44,6 +33,7 @@ function colorOf(url) {
 async function decide(body, signal) {
   const messages = body.messages ?? [];
   const tools = (body.tools ?? []).map((t) => t.function.name);
+  // 不带工具的请求（起标题、压缩上下文的摘要）回一句固定的话
   if (tools.length === 0) return { say: "Fake summary" };
   const last = messages.findLastIndex((m) => m.role === "user");
   const said = text(messages[last]?.content);
@@ -70,6 +60,7 @@ async function decide(body, signal) {
     }
     return { say: /="([^"]*)"/.exec(results.at(-1))?.[1] ?? results.at(-1) };
   }
+  // 大脑没有 write 工具，OpenCode 会回错
   if ((m = /create a file named (\S+?)\.?\s/i.exec(said))) {
     return results.length ? { say: "I could not create it." } : { call: [tool("write"), { path: m[1], content: "x" }] };
   }

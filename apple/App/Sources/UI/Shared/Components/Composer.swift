@@ -24,6 +24,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var submitsEmpty = false
     /// 空着时钮位也露出钮（只是看的，不能提交）："对 Cue 说"发出后的发送中（话在路上）。
     var showsSendEmpty = false
+    /// 让出文字那一栏：字（连同工具排）先淡走，不接点按、读屏与焦点，玻璃、高度与两角的圆钮留着，调用方把别的东西摆在两颗圆钮之间
+    /// （手机通话时的声纹与状态，`PhoneCall`）。草稿与文字区都还在，让回来时等摆上去的先淡走再淡回来，同一处不叠两层字。
+    var yielded = false
+    /// 左下那一颗此刻不是"＋"（手机通话时的静音，`CueComposer`）：同一颗圆钮原地换字形与底，不另起一颗叠在上面。
+    var lead: ComposerLead?
     /// 收成一行时头部也留着（会话回复框：批注在这块玻璃的上部）；平时头部只在展开时出现。
     var keepsHeader = false
     /// 有工具排（`tools`：会话的模型与思考强度）。一直展开的有工具时才分两层（文字在上、＋工具提交钮一排在下），没有工具的照旧一排；
@@ -150,7 +155,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         // 整块玻璃都是输入框：点在文字区以外（边距、两个圆钮之间的空处）也聚焦，不落空（文字区只占中间一条，
         // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与提交钮在它上面，照旧自己接
         .background {
-            if !focused {
+            if !focused, !yielded {
                 Color.clear.contentShape(.rect(cornerRadius: Radius.field))
                     .onTapGesture { focus.wrappedValue = true }
                     .readerHidden(true)
@@ -170,6 +175,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var layered: some View {
         VStack(alignment: .leading, spacing: 0) {
             text.padding(.horizontal, Spacing.block).padding(.top, ComposerMetrics.textTop).padding(.bottom, ComposerMetrics.textBottomOpen)
+                .modifier(Yield(yielded: yielded))
             HStack(spacing: 0) {
                 if !accepts.isEmpty { plus }
                 tools().environment(\.singleLineConfig, workspace.layout == .wide)
@@ -196,6 +202,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                         .transition(Motion.pop(reduceMotion: reduceMotion))
                 }
             }
+            .modifier(Yield(yielded: yielded))
             if !shrunk { slotSpace }
         }
     }
@@ -230,5 +237,31 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .frame(width: ComposerMetrics.slot, height: buttonHeight)
         // 只管钮自己进出：打第一个字时钮出现与一行变两层是同一次更新，挂在整块上的话"＋"的挪位也跟着它动画（减弱动态效果时也滑）
         .animation(Motion.fade, value: sendVisible)
+    }
+}
+
+/// 左下那一颗换成别的单一动作（`Composer.lead`）：什么字形、开没开（开着底深一档，同选中的胶囊）、此刻能不能点。
+struct ComposerLead: Equatable {
+    let icon: Icon
+    let label: LocalizedStringResource
+    var on = false
+    var enabled = true
+    let act: () -> Void
+
+    static func == (a: Self, b: Self) -> Bool {
+        a.icon == b.icon && a.label.key == b.label.key && a.on == b.on && a.enabled == b.enabled
+    }
+}
+
+/// 让出的那一栏：让出时先走（`yield`），让回来时等摆在上面的淡完（`Fade.yield`）再淡回。
+private struct Yield: ViewModifier {
+    let yielded: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(yielded ? 0 : 1)
+            .allowsHitTesting(!yielded)
+            .readerHidden(yielded)
+            .animation(yielded ? Motion.yield : Motion.fade.delay(Motion.Fade.yield), value: yielded)
     }
 }
