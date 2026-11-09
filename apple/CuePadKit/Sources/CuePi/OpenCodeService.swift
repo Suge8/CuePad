@@ -3,10 +3,8 @@ import CueStore
 import Darwin
 import Foundation
 
-/// 一台 OpenCode v2 服务（接口地址、进程、密码），两种来源：
-/// - 后台服务的登记文件（`AgentPaths.openCodeService`，不在官方文档里）：服务起来时写、停了删。密码明文，所以只认属于当前用户、
-///   只有属主可读写（0600）的普通文件，与 Pi 的 socket 同一条校验；
-/// - CuePad 自己起的 `opencode serve --stdio`（`OpenCodeClient.serve`）：标准输出的第一行是握手（`{"url": …}`），密码是起它时给的。
+/// 服务的两种来源：后台服务的登记文件（`AgentPaths.openCodeService`，不在官方文档里）里密码明文，所以只认属于当前用户、只有属主可读写（0600）的普通文件，与 Pi 的 socket 同一条校验；
+/// CuePad 自己起的 `opencode serve --stdio`（`OpenCodeClient.serve`）标准输出的第一行是握手（`{"url": …}`），密码是起它时给的。
 struct OpenCodeServiceInfo: Equatable, Sendable {
     var url: URL
     var pid: Int32
@@ -22,7 +20,6 @@ struct OpenCodeServiceInfo: Equatable, Sendable {
         return OpenCodeServiceInfo(url: registration.url, pid: registration.pid, password: registration.password)
     }
 
-    /// `serve --stdio` 的握手那一行；读不懂为 nil。
     static func stdio(_ handshake: Data, pid: Int32, password: String) -> OpenCodeServiceInfo? {
         struct Handshake: Decodable { var url: URL }
         return (try? JSONDecoder().decode(Handshake.self, from: handshake)).map { OpenCodeServiceInfo(url: $0.url, pid: pid, password: password) }
@@ -32,7 +29,6 @@ struct OpenCodeServiceInfo: Equatable, Sendable {
     var startedAt: Date? { PiProcess.running(pid: pid)?.startDate }
 }
 
-/// 服务接口的报错：`tag` 是它的错误类型（`SessionNotFoundError`、`CommandNotFoundError`……）。
 struct OpenCodeAPIError: Error, Equatable {
     var status: Int
     var tag: String?
@@ -88,7 +84,6 @@ struct OpenCodeClient: Sendable {
 
     private static let sessionPage = 200
 
-    /// 全部会话（`GET /api/session` 按页取完）；`filter` 是另加的查询条件（如 `&directory=…`）。
     func sessions(_ filter: String = "") async throws -> [OpenCodeSessionInfo] {
         var all: [OpenCodeSessionInfo] = []
         var cursor: String?
@@ -103,8 +98,7 @@ struct OpenCodeClient: Sendable {
 
     static func escaped(_ value: String) -> String { value.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? value }
 
-    /// 事件流（`GET /api/event`，SSE）：连上后第一条是 `server.connected`；只给出接入用得到的事件（`isRelevant`），
-    /// 解码在后台。服务不续传：断开期间的事件就丢了，重连后要重拉快照。连接断开或出错时流结束（抛错）。
+    /// 连上后第一条是 `server.connected`；服务不续传：断开期间的事件就丢了，重连后要重拉快照。连接断开或出错时流结束（抛错）。
     func events() -> AsyncThrowingStream<OpenCodeEvent, any Error> {
         let (stream, continuation) = AsyncThrowingStream<OpenCodeEvent, any Error>.makeStream()
         let reader = Task { @concurrent in
@@ -128,10 +122,8 @@ struct OpenCodeClient: Sendable {
     }
 }
 
-/// 事件流里的一条（`{type, location, data}`）。各类事件的字段并成一个宽结构，用到的才解。
 struct OpenCodeEvent: Decodable, Sendable {
     var type: String
-    /// 与工作目录有关的事件（模型、命令清单变了）在哪个目录
     var location: OpenCodeLocation?
     var data: Payload
 
@@ -154,9 +146,7 @@ struct OpenCodeEvent: Decodable, Sendable {
         /// 收件箱里的一句（`session.inbox.*`）：`enqueued` 带着它（`item`），之后送进会话（`delivered`）、撤掉（`cancelled`）只带编号
         var inboxID: String?
         var item: Item?
-        /// 工具的结果（`session.tool.success`）：内容块
         var content: JSONValue?
-        /// 正文的增量（`session.text.delta`）与说完的全文（`session.text.ended`）属于哪条回答的第几段
         var assistantMessageID: String?
         var ordinal: Int?
         var delta: String?
@@ -167,8 +157,6 @@ struct OpenCodeEvent: Decodable, Sendable {
         struct Item: Decodable, Sendable { var payload: OpenCodePrompt? }
     }
 
-    /// 接入与大脑用得到的事件：会话、执行、步骤、工具、权限、表单、压缩，工作目录里模型与命令清单变了，MCP 服务的状态变了。
-    /// 逐字增量只要正文的（`session.text.delta`，正在说的话），思考、工具参数与压缩的不要。
     var isRelevant: Bool {
         if type.hasSuffix(".delta") { return type == "session.text.delta" }
         return type == "server.connected" || type == "model.updated" || type == "command.updated" || type == "mcp.status.changed"
@@ -242,7 +230,6 @@ struct OpenCodeForm: Decodable, Sendable {
         var title: String?
         var description: String?
         var options: [Option]?
-        /// 有选项时还能自己填
         var custom: Bool?
     }
 
@@ -259,7 +246,6 @@ struct OpenCodePermission: Decodable, Sendable {
     var resources: [String]
 }
 
-/// 服务里的一个会话（`GET /api/session` 的一项）。
 struct OpenCodeSessionInfo: Decodable, Sendable {
     var id: String
     var parentID: String?
@@ -267,7 +253,6 @@ struct OpenCodeSessionInfo: Decodable, Sendable {
     var agent: String?
     var model: OpenCodeModelRef?
     var location: OpenCodeLocation
-    /// 最近一次执行的结果：`succeeded` / `failed` / `interrupted`
     var outcome: String?
     var time: Time
     var metadata: Metadata?
@@ -277,7 +262,6 @@ struct OpenCodeSessionInfo: Decodable, Sendable {
         var updated: Double
     }
 
-    /// `cuepadBrain`：Cue 的大脑开的会话（`OpenCodeBrain`），值是起它的那台服务的 pid
     struct Metadata: Codable, Sendable { var cuepadBrain: Int32? }
 
     /// Cue 的大脑开的会话：它的服务与接入连的后台服务共用用户的库，接入照这个标记跳过（不上桥、不进会话索引与历史）。
@@ -287,7 +271,6 @@ struct OpenCodeSessionInfo: Decodable, Sendable {
     var createdAt: Date { Date(timeIntervalSince1970: time.created / 1000) }
 }
 
-/// 一页列表：`data` 加游标。
 struct OpenCodePage<Item: Decodable & Sendable>: Decodable, Sendable {
     var data: [Item]
     var cursor: Cursor?
@@ -334,14 +317,12 @@ struct OpenCodeModel: Decodable, Sendable {
     func ref(_ variant: String?) -> OpenCodeModelRef { OpenCodeModelRef(id: id, providerID: providerID, variant: variant) }
 }
 
-/// MCP 服务（`GET /api/mcp`）：`status.status` 是 `connected` / `pending` / `failed` / `needs_auth` / `disabled`。
 struct OpenCodeMCPServer: Decodable, Sendable {
     var name: String
     var status: Status
     struct Status: Decodable, Sendable { var status: String; var error: String? }
 }
 
-/// 斜杠命令（`GET /api/command`）。
 struct OpenCodeCommand: Decodable, Sendable {
     var name: String
     var description: String?

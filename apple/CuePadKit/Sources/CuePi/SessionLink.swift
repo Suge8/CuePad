@@ -2,7 +2,6 @@
 import CueStore
 import Foundation
 
-/// 在线会话的控制通道：Pi 经扩展的 socket，其他 Agent 经各自的适配（钩子与收件箱、控制接口、托管进程、后台服务）。
 /// 一个会话一条的（Pi、Claude Code）不看 `id`；一个接入承载多个会话的（Codex、OpenCode）由接入自己遵守、按 `id` 找会话。
 /// 桥（`PiBridge`）按会话找到它转交命令；这个 Agent 的这类会话做不到的（`AgentCapabilities`）桥先拒绝，到不了这里。
 @MainActor
@@ -19,13 +18,11 @@ public protocol SessionLink: AnyObject {
     func abort(_ id: PiSession.ID) async throws
     /// 核对真实投送身份和停止必须在接收端的同一同步段；不支持的接入明确拒绝，不能降级为无条件停止。
     func abort(_ id: PiSession.ID, deliveryID: String, turnStartedAt: Int64) async throws
-    /// 把出错的那一轮原样重跑一遍（`AgentCapabilities.retry`）：对话里不多一句话。受理即返回，不等模型。
+    /// 对话里不多一句话。受理即返回，不等模型。
     func retry(_ id: PiSession.ID) async throws
     func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws
     /// 至少给一项；会话名已去掉首尾空白、不是空的（桥先检查过）。
     func configure(_ config: PiConfig, in id: PiSession.ID) async throws
-    /// 这个会话能不能按第一句话给自己起名（`SessionNameSuggestion`）：Pi（桥扩展认 `title` 的）与 Codex 托管会话能；
-    /// 自带会话名的几家（Claude Code、OpenCode、Grok、dsh）与终端里的 Codex 不起。
     func canNameItself(_ id: PiSession.ID) -> Bool
     /// 按第一句话（`firstMessage`）起一个短名，返回整理好的名字（`SessionNameSuggestion.cleaned`）；不写回，写不写由 App 复核后走改名。
     func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String

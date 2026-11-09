@@ -4,10 +4,10 @@ import Darwin
 import Foundation
 
 extension PiBridge {
-    /// CuePad 重开前各会话记下的状态与计时（启动对账时从同步记录里取，`CueStore.launchMac`）。
+    /// 启动对账时从同步记录里取（`CueStore.launchMac`）。
     public func carryOver(_ before: [String: (state: PiWorkState, times: PiTimes)]) { carried = before }
 
-    /// 一个会话上线（发现了它，或 CuePad 刚开了它）：之后的命令交给 `link`。同一 id 已在线时只换通道与快照，不重报出现。
+    /// 同一 id 已在线时只换通道与快照，不重报出现。
     /// 状态的起点只有这一处定：重新上桥（同一 id 换了快照、重新载入扩展、CuePad 重开后接回）时粗状态（`PiWorkState.phase`）没变就沿用原来的起点，
     /// 各家接入上桥时给的"现在"不算——界面的"多久前""有新回复"与同步记录都读它。
     public func attach(_ session: PiSession, via link: any SessionLink) {
@@ -35,7 +35,6 @@ extension PiBridge {
         }
     }
 
-    /// 改一个在线会话的快照：状态或那句说明变了报 `stateChanged`，否则报 `infoChanged`；没有变化不报。不在线时什么也不做。
     public func update(_ id: PiSession.ID, _ change: (inout PiSession) -> Void) {
         guard let slot = slots.first(where: { $0.id == id }) else { return }
         var session = slot.session
@@ -56,7 +55,7 @@ extension PiBridge {
         slots.first { $0.id == id }?.offer(draft)
     }
 
-    /// 一轮里报的话与上下文用量（`TurnEvent`）放到这个会话上：托管会话的各家接入都经这里，别的事件与桥无关。
+    /// 托管会话的各家接入都经这里，别的事件与桥无关。
     public func show(_ event: TurnEvent, in id: PiSession.ID) {
         switch event {
         case .speaking(let draft): setDraft(id, draft)
@@ -75,8 +74,7 @@ extension PiBridge {
         emit(.ended(session, reason: reason))
     }
 
-    /// 托管的会话什么时候请它退出（不算结束，发话时再接着）：同一会话在别处（终端里）也开着、自己又空闲的（两边会各写各的；正在跑一轮的等它做完、状态变化时再看）；
-    /// 歇着满 `hostedIdle` 的（CuePad 为它起了进程的几家，`AgentFacts.releasesIdleHosted`）。
+    /// 请它退出（不算结束，发话时再接着）：同一会话在别处（终端里）也开着、自己又空闲时（两边会各写各的），或歇着满 `hostedIdle` 时（`AgentFacts.releasesIdleHosted`）。
     func reviewHosted() {
         for slot in slots where slot.session.hosted && !releasing.contains(slot.id) {
             let session = slot.session

@@ -3,23 +3,12 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// Cue 的大脑这样开：
-/// - 线程是临时的（`thread/start` 的 `ephemeral`）：不写会话文件，不进 Codex 的历史；开新会话就是另开一个这样的线程；
-/// - 系统提示经 `baseInstructions` 整份替换内置提示（与配置里的 `model_instructions_file` 同一处，参数优先）；
-/// - 沙箱只读、从不请求批准：Codex 读文件靠 shell，写入被沙箱拒绝；
-/// - MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`，它的工具一律放行
-///   （`default_tools_approval_mode`）：新版 Codex 的 MCP 工具默认要批准，在"从不请求批准"下就是直接拒掉；
-/// - 关掉会在 Cue 身上留下痕迹或替它动手的功能（见 `disabledFeatures`），回合结束不跑用户的 `notify`、不联网搜索；
-/// - 模型看到的输入只有系统提示与环境（工作目录、日期）。Codex 自己的权限说明（`include_permissions_instructions`："只读沙箱、
-///   从不请求批准、不许提权"）关掉：它说的是大脑自己的沙箱，Cue 回答会话的权限确认时会当成会话的规矩、照它拒掉会话写工作区。
-///   用户的 skill 清单（`skills.include_instructions`）、
-///   工作目录里的 AGENTS.md（`project_doc_max_bytes` 为 0）、子代理的角色说明与工具（`agents.enabled`；只停用 `multi_agent` 功能不够，
-///   模型表声明了 v2 的模型照样开着）、协作模式说明（`include_collaboration_mode_instructions`）也都关掉，见 `overrides`；
-///   `<CODEX_HOME>/AGENTS.md` 没有开关（只换配置目录才挡得住，换了会丢登录），用户写了就会进来；
-/// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
-/// - 模型与思考强度每轮随 `turn/start` 给（就地换就是改下一轮给的）；fast 随线程的 `serviceTier` 给，强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`）；
-/// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮。发话都带发送标识（`clientUserMessageId`），
-///   哪一轮收下看它进对话时的 `userMessage` 项（`CodexDriver`）。
+/// 系统提示经 `baseInstructions` 整份替换内置提示（与配置里的 `model_instructions_file` 同一处，参数优先）。
+/// 沙箱只读、从不请求批准：Codex 读文件靠 shell，写入被沙箱拒绝。
+/// MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`，它的工具一律放行（`default_tools_approval_mode`）：新版 Codex 的 MCP 工具默认要批准，在“从不请求批准”下就是直接拒掉。
+/// 模型看到的输入只有系统提示与环境（工作目录、日期）。Codex 自己的权限说明（`include_permissions_instructions`：“只读沙箱、从不请求批准、不许提权”）关掉：它说的是大脑自己的沙箱，Cue 回答会话的权限确认时会当成会话的规矩、照它拒掉会话写工作区。
+/// 用户的 skill 清单（`skills.include_instructions`）、工作目录里的 AGENTS.md（`project_doc_max_bytes` 为 0）、子代理的角色说明与工具（`agents.enabled`；只停用 `multi_agent` 功能不够，模型表声明了 v2 的模型照样开着）、协作模式说明（`include_collaboration_mode_instructions`）也都关掉，见 `overrides`。
+/// `<CODEX_HOME>/AGENTS.md` 没有开关（只换配置目录才挡得住，换了会丢登录），用户写了就会进来。
 @MainActor
 final class CodexBrain: HostedSession {
     /// 停用的功能：会写 Codex 自己的记忆与时间线（memories、chronicle），会跑用户配置的钩子（hooks，也就不会报给 CuePad 成一个会话），
@@ -33,7 +22,6 @@ final class CodexBrain: HostedSession {
 
     private let outlet = BrainSession()
     private let driver = CodexDriver()
-    /// 开线程的参数：开新会话时原样再开一个
     private var threadParams: JSONValue = [:]
     /// `model/list` 里的模型（连隐藏的）：就地换模型时认模型、取它支持的强度
     private var models: [CodexModel] = []
@@ -104,7 +92,6 @@ final class CodexBrain: HostedSession {
                 _ = try await rpc.call("turn/steer", steer)
                 return
             } catch CodexRPCError.server {
-                // 这一轮刚好结束：下面开新的一轮
             }
         }
         var options: [String: JSONValue] = ["clientUserMessageId": client]

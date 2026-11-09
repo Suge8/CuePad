@@ -3,15 +3,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// Claude Code 会话文件（`<配置目录>/projects/<编码后的工作目录>/<会话 id>.jsonl`）的逐行解码，规则与 Pi 的对话、摘要一致（见 `PiHistory`）。
-///
-/// - 一次模型回答按内容块拆成好几行（同一个 `message.id`）；`stop_reason` 不是 `tool_use` 的那行带着文字时，这一轮做完，
-///   它的文字就是 Claude Code 这一轮的回答。没有文字就做完的一轮（只调了工具）在 `stop_hook_summary` / `turn_duration` 收尾。
-/// - 你的话：`type: user` 的文字与图片（图片内嵌 base64，存进附件目录）；一轮正在跑时插进去的话不是 user 行，是
-///   `queued_command` 附件。工具结果（带的图缩小后记在那一步上，`ToolImage`）、斜杠命令的回显（`<command-name>`、`<local-command-…>`）、`isMeta` 的提醒不算。
-/// - CuePad 送进去的话：托管进程的 stream-json 与收件箱 socket 都把投送请求 id 当作这条消息的 `uuid`（插进去的是 `source_uuid`）；
-///   收件箱送来的会被包上"另一个 Claude 会话发来的"英文说明，这里剥掉。终端里直接打的（`origin.kind` 为 `human`）没有投送请求。
-/// - 会话名：`/rename`（及 CuePad 的改名）写下的 `custom-title` 是你起的；Claude Code 按对话起的 `ai-title` 在你没起过时算（`PiHistoryCheckpoint.named`）。
+/// CuePad 送进去的话：托管进程的 stream-json 与收件箱 socket 都把投送请求 id 当作这条消息的 `uuid`（插进去的是 `source_uuid`）。
 enum ClaudeHistory {
     static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
         cp.seq += 1
@@ -48,7 +40,6 @@ enum ClaudeHistory {
                 cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.input ?? PiToolArguments())
             }
             let text = blocks.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
-            // 一次回答拆成好几行：带文字、不是停下来调工具的那行结束这一轮，其余带文字的是中途说的一段
             if let stop = message.stopReason, stop != "tool_use", !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 cp.answered(text, entry, into: &transcript)
             } else {
@@ -75,7 +66,6 @@ enum ClaudeHistory {
         try said(content, peer: peer, entry, deliveryID: delivery, into: &cp, transcript: &transcript)
     }
 
-    /// 你说的一句。命令回显不是你说的话；中断标记结束这一轮（没有回答，问答不变）。
     private static func said(
         _ content: Content, peer: Bool, _ entry: PiHistory.Entry, deliveryID: String?, into cp: inout PiHistoryCheckpoint,
         transcript: inout PiHistory.Transcript
@@ -107,7 +97,6 @@ enum ClaudeHistory {
     /// Claude Code 自己补写的助手消息的模型（不是模型说的）：接着被停下的那一轮时补的"No response requested."等不算回答，
     /// 只留出错的（`isApiErrorMessage`，"API Error: …"、额度用完）
     private static let syntheticModel = "<synthetic>"
-    /// 斜杠命令与 `!` 命令留下的回显：终端的对话里是命令本身与它的输出，不是你对模型说的话
     private static let commandEchoPrefixes = ["<command-name>", "<command-message>", "<local-command-", "<bash-input>", "<bash-stdout>", "<bash-stderr>"]
 
     private static let decoder = JSONDecoder()
@@ -185,7 +174,6 @@ enum ClaudeHistory {
             if let s = try? c.decode(String.self) { self = .text(s) } else { self = .blocks(try c.decode([Block].self)) }
         }
 
-        /// 图片块的原字节（工具结果里的）
         var images: [Data?] {
             guard case .blocks(let blocks) = self else { return [] }
             return blocks.filter { $0.type == "image" }.map { $0.source?.data.flatMap { Data(base64Encoded: $0) } }
@@ -198,7 +186,6 @@ enum ClaudeHistory {
             }
         }
 
-        /// 你说的一句；收件箱送来的（`peer`）剥掉 Claude Code 包的说明。
         func said(into said: inout PiHistory.Said, peer: Bool) throws {
             func text(_ s: String?) { said.text(peer ? s.map(ClaudeHistory.withoutPeerWrapper) : s) }
             switch self {

@@ -20,7 +20,6 @@ extension CodexRuntime {
         let now = Date.now
         switch event {
         case "PermissionRequest":
-            // 子代理要的确认也挂在这个会话上问
             return ask(session, call: call, input)
         case _ where agent != nil:
             // 子代理自己线程里的事件（session_id 是同一棵树的根，agent_id 是它自己）：只更新它在做什么
@@ -69,7 +68,6 @@ extension CodexRuntime {
         return tracked["\(thread).\(pid)"] != nil || !tracked.values.contains(where: { $0.pid == pid }) ? pid : nil
     }
 
-    /// 钩子先于其他途径报出的会话（终端里刚开、或 CuePad 晚启动）：接上桥，名字与模型随后从 Codex 读。
     /// 子代理的钩子（`transcript` 为 false）带的会话文件是子代理自己的，不用。
     private func adoptFromHook(_ threadID: String, pid: Int32, _ input: JSONValue, transcript: Bool) -> Tracked {
         let session = PiSession(
@@ -81,8 +79,6 @@ extension CodexRuntime {
         return tracked[session.id]!
     }
 
-    /// 权限确认：托管的会话总是挂住等 CuePad 作答；终端会话按人在不在（`PresenceGate`）：人在就放行、终端弹框，CuePad 只显示。
-    /// 钩子先走了（终端里停下了这一轮）就收起问题。
     private func ask(_ session: Tracked, call: AgentHookCall, _ input: JSONValue) {
         let arguments = input["tool_input"] ?? .object([:])
         let command = arguments["command"]?.string
@@ -113,7 +109,6 @@ extension CodexRuntime {
         publish(session)
     }
 
-    /// 人回来了：挂住的放行，终端补弹；CuePad 里还显示，只能在终端里答。
     private func handBack(_ session: Tracked) {
         guard case .hook(let call, _) = session.reply else { return }
         session.reply = nil
@@ -122,7 +117,7 @@ extension CodexRuntime {
         publish(session)
     }
 
-    /// 放掉在等的（挂住的钩子放行；托管线程的提问不再等），问题由调用方收起。
+    /// 问题由调用方收起。
     func release(_ session: Tracked) {
         if case .hook(let call, let hold) = session.reply {
             call.finish()
@@ -131,7 +126,6 @@ extension CodexRuntime {
         session.reply = nil
     }
 
-    /// 托管线程的 Plan 模式提问（`item/tool/requestUserInput`）：只有一个问题时能从 CuePad 答（有选项是单选，否则填文字；保密的不答）。
     func userInput(_ params: JSONValue, id: JSONValue, on rpc: CodexRPC) -> Bool {
         guard let threadID = params["threadId"]?.string, let session = tracked["\(threadID).\(rpc.pid)"] else { return false }
         let questions = params["questions"]?.array ?? []
@@ -144,8 +138,6 @@ extension CodexRuntime {
         return answerable
     }
 
-    /// Plan 模式的提问（`request_user_input` 的参数，一次可能几个，显示第一个）：有选项是单选（`isOther` 的还能自己填），否则填文字；
-    /// 标题与问题换行连接。
     static func userInput(_ arguments: JSONValue, promptID: String?) -> PiQuestion {
         let first = arguments["questions"]?.array?.first ?? .object([:])
         let text = [first["header"]?.string, first["question"]?.string].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
@@ -157,8 +149,7 @@ extension CodexRuntime {
 
     static let asyncQuestionTool = "request_user_input_async"
 
-    /// 不挡着这一轮的提问（`request_user_input_async` 的参数，一次可以几个，标题就是完整的问题）：只有一个时照它的选项单选，
-    /// 也能自己填（Codex 的界面总给自由作答）；几个时合成一道文字题，一行一问、选项写在后面。
+    /// `request_user_input_async` 的参数一次可以几个，标题就是完整的问题；Codex 的界面总给自由作答，所以只有一个时也能自己填。
     static func asyncQuestion(_ arguments: JSONValue?) -> PiQuestion? {
         let questions = (arguments?["questions"]?.array ?? []).compactMap { question -> (title: String, options: [String])? in
             guard let title = question["title"]?.string, !title.isEmpty else { return nil }
@@ -174,8 +165,6 @@ extension CodexRuntime {
         return PiQuestion(promptID: UUID().uuidString, kind: .text, text: String(text.prefix(500)))
     }
 
-    /// 作答：权限确认写回钩子（允许或拒绝，附一句给模型看的原因），托管线程挡着这一轮的提问回给服务端请求，
-    /// 不挡着的提问把答案当你的下一句话说给它（与发话同一规则）。
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
         guard let session = tracked[id], let question = session.facts.question else { throw PiBridgeError.rejected("no_prompt") }
         guard question.promptID == promptID else { throw PiBridgeError.rejected("stale_prompt") }

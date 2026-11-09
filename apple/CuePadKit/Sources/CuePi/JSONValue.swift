@@ -1,8 +1,7 @@
 #if os(macOS)
 import Foundation
 
-/// 线上的任意 JSON（钩子输入、Claude Code stream-json 的一行、Codex app-server 的一条、settings.json 里的条目）：字段多、形状随版本变，
-/// 只取用得到的几项，其余原样带着（如 `AskUserQuestion` 的 `tool_input` 作答时要整份交回）。
+/// 字段多、形状随版本变，只取用得到的几项，其余原样带着（如 `AskUserQuestion` 的 `tool_input` 作答时要整份交回）。
 enum JSONValue: Codable, Sendable, Equatable {
     case null
     case bool(Bool)
@@ -33,7 +32,7 @@ enum JSONValue: Codable, Sendable, Equatable {
         }
     }
 
-    /// 一段 JSON 文本；读不出为 nil。经 `JSONSerialization` 一次解完再转成枚举（Codable 逐节点试类型要抛错再接住，大行里很慢）。
+    /// 经 `JSONSerialization` 一次解完再转成枚举：Codable 逐节点试类型要抛错再接住，大行里很慢。
     static func parse(_ data: Data) -> JSONValue? {
         (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)).map(JSONValue.init(any:))
     }
@@ -60,7 +59,6 @@ enum JSONValue: Codable, Sendable, Equatable {
         }
     }
 
-    /// 一行 JSON（不带换行）；键排序，输出稳定。
     var data: Data {
         (try? JSONSerialization.data(withJSONObject: any, options: [.sortedKeys, .withoutEscapingSlashes, .fragmentsAllowed])) ?? Data("null".utf8)
     }

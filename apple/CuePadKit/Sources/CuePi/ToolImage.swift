@@ -27,7 +27,6 @@ enum ToolImage {
         return try? Data(contentsOf: url)
     }
 
-    /// 存进附件，返回键；不是图片、解不出图为 nil。
     static func store(_ data: Data, in files: AttachmentFiles) throws -> String? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0,
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],

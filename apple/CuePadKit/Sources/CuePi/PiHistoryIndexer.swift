@@ -3,17 +3,11 @@ import CueStore
 import Foundation
 import Synchronization
 
-/// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex、Grok Build 的会话文件，怎么认、怎么读见 `SessionFileFormat`）：先按修改时间倒序回填
-/// `scope` 里的会话文件（最近的会话最先可用），发出 `backfillFinished` 后只跟着在线会话的文件（桥上的，`PiBridge.sessionFiles`；
-/// `FileFollower` 当场报），只读新增字节。会话的对话只从这里来：托管的会话没接入也开得出，所以没接入的 Agent 也要回填它托管过的那些。
-/// 整棵目录只在回填时列一次，没经接入的会话（如 Pi 关了扩展）下次启动时进历史。会话从开始到结束都在桥上（各家的接入上报），
-/// 下桥时最后读一次。会话名另存在旁边的（`SessionFileFormat.Sidecar`）也盯着那个文件，它变了就重读用它的在线会话。歇下要等这一轮的回答从文件里读到才算（`PiSessionState.answered`），读晚一步 Cue 就晚一步被叫醒。
+/// 会话的对话只从这里来：托管的会话没接入也开得出，所以没接入的 Agent 也要回填它托管过的那些。整棵目录只在回填时列一次，没经接入的会话（如 Pi 关了扩展）下次启动时进历史。
+/// 歇下要等这一轮的回答从文件里读到才算（`PiSessionState.answered`），读晚一步 Cue 就晚一步被叫醒。
 ///
 /// 不持有全部检查点：从哪接着读由调用方通过 `start` 提供（App 层从 Store 读），每个 `updated` 里带回新检查点由调用方持久化。
 /// 索引器只对最近修改/最近被触碰的若干文件在内存里保留，这样调用方持久化滞后时增量也不会退化成重读。
-///
-/// 要不要对话：首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话；本机已存着对话的也要
-/// （从头读时整份重写，规则升级后已存的跟着变）。要对话而本机还没有的（刚进入范围），从头读一遍补齐全部消息。
 public struct PiHistoryIndexer: Sendable {
     private let agent: AgentKind
     private let format: SessionFileFormat
@@ -38,7 +32,7 @@ public struct PiHistoryIndexer: Sendable {
         self.start = start
     }
 
-    /// 结束（取消订阅）时停止后台任务。会话目录可以还不存在（先装 CuePad、后装 Agent），见 `FileFollower`。
+    /// 会话目录可以还不存在（先装 CuePad、后装 Agent），见 `FileFollower`。
     /// `liveFiles` 是此刻在线会话的文件（各家的都行，不在这家会话目录里的不管），每次变了给一份。
     public func events(
         following liveFiles: some AsyncSequence<Set<URL>, Never> & Sendable, scope: PiHistoryScope
@@ -57,11 +51,10 @@ public struct PiHistoryIndexer: Sendable {
         let root = self.root.realPath
         let follower = FileFollower() // 先开始盯：回填期间的写入不会丢
         defer { follower.stop() }
-        /// 盯着的另存会话名的文件 → 用它的在线会话文件
         let sidecars = Mutex<[String: [URL]]>([:])
         let following = Task { [format] in
             var last: Set<URL>?
-            for await files in liveFiles where files != last {  // 会话的每次状态变化都会再给一份
+            for await files in liveFiles where files != last {
                 last = files
                 let mine = files.map(\.realPath).filter { Self.isSessionFile($0.path, under: root, format: format) }
                 let named = format.sidecar.map { sidecar in Dictionary(grouping: mine) { sidecar.file($0).realPath.path } } ?? [:]
@@ -134,7 +127,6 @@ public struct PiHistoryIndexer: Sendable {
         try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 
-    /// 全部会话文件与修改时间、大小，最近修改的在前。
     private static func sessionFiles(under root: URL, format: SessionFileFormat) -> [(url: URL, modified: Date, size: UInt64?)] {
         let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey, .fileSizeKey]
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return [] }
@@ -150,7 +142,6 @@ public struct PiHistoryIndexer: Sendable {
         return files.sorted { $0.modified > $1.modified }
     }
 
-    /// 最近使用的若干文件从哪接着读。
     private struct LiveCache {
         let limit: Int
         private var values: [URL: PiHistoryStart] = [:]

@@ -5,12 +5,11 @@ import Foundation
 
 extension DshRuntime {
     /// 最低 0.2.1-rc.2（npm 上 `latest` 标的那版，往前没有实测）：要有 `--profile acp` 的多会话、模型与强度选项、插件的 `agent.steer`。
-    /// 只在 npm 上发（`@deepseek-ai/dsh`，全是预发布版），要 Node.js（下限取它依赖里最高的 `engines`）；太旧也是重跑安装命令。
+    /// 只在 npm 上发（`@deepseek-ai/dsh`，全是预发布版），要 Node.js（下限取它依赖里最高的 `engines`）。
     /// 没有命令行登录：`dsh web` 打开它的网页，在设置里填 DeepSeek 的 API key 或登录 DeepSeek 账号（都存进 `$DSH_HOME/.credentials.yaml`），
     /// 环境里的 `DEEPSEEK_API_KEY` 它也认。只有桌面版时配置目录在、命令行程序不在：算装着（技能与规则照写），开不出会话。
     /// 没有上报通道：会话只有 CuePad 托管的，插件随每次启动经 `--patch` 叠上（`DshLaunch`），不装进它的目录。
-    /// 技能读 `<DSH_HOME>/skills` 与 `~/.agents/skills` 的一层（`<名>/SKILL.md`，分类目录里的看不到）；全局规则读 `<DSH_HOME>/AGENTS.md`
-    /// 再读 `~/.agents/AGENTS.md`（内容相同只算一份），所以照多数家链过去。
+    /// 全局规则读 `<DSH_HOME>/AGENTS.md` 再读 `~/.agents/AGENTS.md`（内容相同只算一份），所以照多数家链过去。
     nonisolated public static let facts = AgentFacts(
         command: "dsh", homeVariable: "DSH_HOME", minimumVersion: AgentVersion(0, 2, 1, prerelease: "rc.2"),
         installScript: "npm install -g @deepseek-ai/dsh",
@@ -62,7 +61,6 @@ enum DshLaunch {
 
     static func arguments(_ patch: Patch) -> [String] { ["--profile", "acp", "--patch", file(patch).path] }
 
-    /// 写好这份补丁（内容变了才重写）。
     static func prepare(_ patch: Patch) throws {
         let text = patch == .hosted ? hosted : brain
         guard (try? String(contentsOf: file(patch), encoding: .utf8)) != text else { return }
@@ -70,12 +68,10 @@ enum DshLaunch {
         try Data(text.utf8).write(to: file(patch), options: .atomic)
     }
 
-    /// 托管会话与探测的环境：此刻的环境加上配置目录（`DSH_HOME`）与新会话的模型（`提供方/模型`，插件的 `CUEPAD_MODEL`）。
     static func environment(_ paths: AgentPaths, model: String?) -> [String: String] {
         paths.launchEnvironment(of: .dsh).merging(["CUEPAD_MODEL": model].compactMapValues(\.self)) { $1 }
     }
 
-    /// 大脑的环境：本次运行的临时目录（会话、附件、存储都在里面）与写在里面的系统提示。
     static func brainEnvironment(in run: URL, prompt: String, model: String?) throws -> [String: String] {
         let promptFile = run.appending(path: "prompt.md")
         try Data(prompt.utf8).write(to: promptFile)
@@ -89,7 +85,6 @@ enum DshLaunch {
         common(prompt: false, storage: "dshHomePath('\(DshRuntime.storage)')", insert: "    - id: tool-ask-user\n      name: '@deepseek-ai/dsh-tool-ask-user'\n")
     }
 
-    /// 大脑不写代码：只留读文件与搜索，技能、规则、子代理、计划、网页这些都关掉；附件也进临时目录。
     private static var brain: String {
         let off = [
             "tool-bash", "tool-pwsh", "tool-jobs", "tool-skill", "skill", "skill-filesystem", "agent-instructions", "plan-mode", "goal",
@@ -108,7 +103,6 @@ enum DshLaunch {
             """ + off.map { "- { id: \($0), disabled: true }\n" }.joined()
     }
 
-    /// 两份都有的：插件接管传输、关掉上传与写用户的 profile、会话存进 `storage` 下的明文根（JS 表达式）；`insert` 是另插的插件。
     private static func common(prompt: Bool, storage: String, insert: String) -> String {
         """
         - insert:
@@ -132,7 +126,6 @@ enum DshLaunch {
         """
     }
 
-    /// YAML 的单引号字符串：里面的单引号写两遍。
     private static func quoted(_ text: String) -> String { "'" + text.replacingOccurrences(of: "'", with: "''") + "'" }
 }
 #endif

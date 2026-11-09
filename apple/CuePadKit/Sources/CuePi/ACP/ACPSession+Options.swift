@@ -2,12 +2,10 @@
 import CueStore
 import Foundation
 
-/// 会话的配置项（`configOptions`）：模型与思考强度两项读成 CuePad 的写法，换用 `session/set_config_option`（规则见 `ACPSession` 头注释）。
+/// 模型与思考强度两项读成 CuePad 的写法，换用 `session/set_config_option`；强度的值照 `PiThinkingLevel` 的写法对上，夹到这一项有的档位。
 extension ACPSession {
-    /// 配置项里某一类的那一项（`model`、`thought_level`）
     func option(_ category: String) -> JSONValue? { options.first { $0["category"]?.string == category } }
 
-    /// 一项的可选值：平铺的，或分组的（每组的 `options`）
     private func values(_ option: JSONValue?) -> [JSONValue] {
         (option?["options"]?.array ?? []).flatMap { $0["options"]?.array ?? [$0] }
     }
@@ -16,7 +14,6 @@ extension ACPSession {
     var currentLevel: PiThinkingLevel? { option("thought_level")?["currentValue"]?.string.flatMap(PiThinkingLevel.init(rawValue:)) }
     var levels: [PiThinkingLevel] { values(option("thought_level")).compactMap { $0["value"]?.string.flatMap(PiThinkingLevel.init(rawValue:)) } }
 
-    /// 可选的模型（强度是在用模型的那几档）
     var models: [PiModelOption] {
         values(option("model")).compactMap { value in
             value["value"]?.string.map { PiModelOption(key: key($0), name: value["name"]?.string ?? $0, thinkingLevels: levels) }

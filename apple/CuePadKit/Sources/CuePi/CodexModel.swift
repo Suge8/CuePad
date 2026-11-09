@@ -9,10 +9,8 @@ struct CodexModel {
     let id: String
     let name: String
     let efforts: [PiThinkingLevel]
-    /// 能看图（`inputModalities` 里有 image）
     let seesImages: Bool
     let supportsFast: Bool
-    /// 用户没配模型时 Codex 用的那个
     let isDefault: Bool
 
     /// 模型的提供方写成 Codex 自己（`AgentKind.modelProvider`），不用线程上的 `modelProvider`（openai 等）：Codex 的模型 id 在它自己的命名空间里。
@@ -25,7 +23,6 @@ struct CodexModel {
     static func thinking(_ effort: String) -> Open<PiThinkingLevel> { Open(rawValue: effort == "none" ? "off" : effort) }
     static func effort(_ level: PiThinkingLevel) -> String { level == .off ? "none" : level.rawValue }
 
-    /// 失败的一轮（`turn/completed` 的 `status` 为 failed）的原因：`turn.error` 的说明，带上补充细节。
     static func failure(of turn: JSONValue?) -> String {
         let message = [turn?["error"]?["message"]?.string, turn?["error"]?["additionalDetails"]?.string].compactMap { $0 }.filter { !$0.isEmpty }
         return message.isEmpty ? String(localized: "Codex 这一轮失败了") : message.joined(separator: "\n")

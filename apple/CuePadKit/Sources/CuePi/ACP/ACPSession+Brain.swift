@@ -3,13 +3,10 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// 当 Cue 的大脑开（`init(dialect:)` 再 `start`）：不挂桥、不进会话列表，一轮的状态与托管会话同一套，经 `events` 交出。
-/// 系统提示、工具白名单与不落会话这些标准没有的配法在各家（`ACPDialect.brain`）；CuePad 的 MCP 服务照标准随 `session/new` 交（stdio）。
-/// - 会话开好、CuePad 的 MCP 服务连上之后才算起好（`ACPDialect.connectsMCPLater` 的那几家等它报），之前说的话模型用不了它的工具；
-/// - 正忙时说的话经各家并进这一轮（`ACPDialect.steer`，只并进 CuePad 开的那一轮；排进 Agent 队列的那一轮等它报跑起来再并进，`ACPDialect.queuesPrompts`），
-///   做不到的等这一轮做完再开新的一轮；他的话以 `/` 开头时前面垫一个空格，
-///   不被当成斜杠命令。哪一轮收下：以它开的那一轮（`session/prompt` 就是这一轮）；并进的按各家报的（`ACPSteers`）；
-/// - 开新会话是另开一个 `session/new`（进程与 MCP 服务的配置不变），就地换过的模型与强度随后再交一次。
+/// CuePad 的 MCP 服务连上之后才算起好（`ACPDialect.connectsMCPLater` 的那几家等它报），之前说的话模型用不了它的工具。
+/// 正忙时说的话经各家并进这一轮（`ACPDialect.steer`，只并进 CuePad 开的那一轮；排进 Agent 队列的那一轮等它报跑起来再并进，`ACPDialect.queuesPrompts`），
+/// 做不到的等这一轮做完再开新的一轮；他的话以 `/` 开头时前面垫一个空格，不被当成斜杠命令。
+/// 哪一轮收下：以它开的那一轮（`session/prompt` 就是这一轮）；并进的按各家报的（`ACPSteers`）。
 extension ACPSession: HostedSession {
     var events: AsyncStream<TurnEvent> { brain?.events ?? AsyncStream { $0.finish() } }
 
@@ -28,7 +25,6 @@ extension ACPSession: HostedSession {
         }
     }
 
-    /// 开大脑的会话，等 CuePad 的 MCP 服务连上。
     private func openBrain() async throws {
         guard let (config, setup) = brainSetup else { throw HostedSessionError.notRunning }
         let server: JSONValue = [
@@ -76,21 +72,16 @@ extension ACPSession: HostedSession {
 struct ACPSteers {
     private typealias Steer = (id: UUID, text: String, claim: String?)
     private var waiting: [Steer] = []
-    /// 先于插话的回应报来的收下
     private var claimedEarly: Set<String> = []
-    /// 已搁浅、它那一轮还没报的（按插进的先后）
     private var strandedLater: [Steer] = []
-    /// 报了搁浅、下一个 Agent 自己开的一轮收下的
     private var stranded: [UUID] = []
 
-    /// 插进了一句；它的收下已先报来就返回它。
     mutating func add(_ id: UUID, text: String, claim: String?) -> UUID? {
         if let claim, claimedEarly.remove(claim) != nil { return id }
         waiting.append((id, text, claim))
         return nil
     }
 
-    /// 报来收下（`ACPSignal.claimed`）：是插进的哪一句；它的回应还没到为 nil。
     mutating func claimed(_ claim: String) -> UUID? {
         guard let index = waiting.firstIndex(where: { $0.claim == claim }) else {
             claimedEarly.insert(claim)
@@ -113,7 +104,6 @@ struct ACPSteers {
         waiting.removeAll { steer in later.contains { $0.id == steer.id } }
     }
 
-    /// 插进的那一轮结束：还等着、这家不报收下的是它收下的；报收下的还没报的留着等报告。
     mutating func ended() -> [UUID] {
         defer { waiting.removeAll { $0.claim == nil } }
         return waiting.filter { $0.claim == nil }.map(\.id)

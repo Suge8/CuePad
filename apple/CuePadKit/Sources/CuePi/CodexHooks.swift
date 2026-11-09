@@ -3,20 +3,15 @@ import CryptoKit
 import CueStore
 import Foundation
 
-/// Codex 的钩子：条目写在 `<CODEX_HOME>/hooks.json`（`HookFile`），信任记在 `config.toml` 的 `[hooks.state]`（经 `codex app-server` 的 `config/batchWrite` 写）。
-///
-/// - Codex 只执行被信任的钩子：信任条目的键是"hooks.json 的真实路径:事件:组号:条目号"，值是条目内容的哈希。装时向 Codex 要
-///   （`hooks/list` 给出键与哈希，`config/batchWrite` 写入，和 `/hooks` 里点信任同一条路）；查状态不起进程，按 Codex 的规则自己算
-///   （`hook_hash`：事件名与只含这一条的组，转成键排好序的紧凑 JSON 取 SHA-256），与 `config.toml` 里的比——对不上（没信任、
-///   用户删了排在前面的组使组号变了、Codex 改了算法）就是旧版，重装时重新信任。
-/// - 卸载删掉 CuePad 的信任条目（`config/batchWrite` 对带引号的键写 null）；CuePad 建的 `[hooks]`、`[hooks.state]` 空了一并删掉，
-///   装之前没有 `config.toml`、删完只剩空白的删掉文件（装之前的样子记在 `HookFile.Footprint.config`）。
+/// Codex 只执行被信任的钩子：信任条目的键是“hooks.json 的真实路径:事件:组号:条目号”，值是条目内容的哈希。装时向 Codex 要
+/// （`hooks/list` 给出键与哈希，`config/batchWrite` 写入，和 `/hooks` 里点信任同一条路）；查状态不起进程，按 Codex 的规则自己算
+/// （`hook_hash`：事件名与只含这一条的组，转成键排好序的紧凑 JSON 取 SHA-256），与 `config.toml` 里的比——对不上（没信任、
+/// 用户删了排在前面的组使组号变了、Codex 改了算法）就是旧版，重装时重新信任。
 struct CodexHooks: AgentHookConfig {
     let home: URL
     /// 写、删信任时起的 `codex`（检测时挑中的那个）；没有时要写、删信任就报没找到
     let codex: URL?
     let locate: @Sendable () async -> ExecutableLocator
-    /// 起 codex 时的基础环境（`AgentPaths.environment`），在它之上换掉配置目录与查找路径
     let environment: [String: String]
     let hooks: HookFile
 
@@ -29,7 +24,6 @@ struct CodexHooks: AgentHookConfig {
         .init(name: "Interrupt", timeout: 3), .init(name: "SessionEnd", timeout: 3),
     ]
 
-    /// 权限确认的钩子挂住等 CuePad 时（人不在这台 Mac 前），Codex 终端里那一行显示它（钩子拿着这次确认，终端里不弹框）。
     static let waitingMessage = "等你在 CuePad 里确认"
 
     init(
@@ -45,7 +39,7 @@ struct CodexHooks: AgentHookConfig {
     private var configFile: URL { home.appending(path: "config.toml") }
     var writtenFiles: [URL] { [hooks.file, configFile] }
 
-    /// `config.toml` 装之前的样子：文件在不在；`[hooks]`、`[hooks.state]` 在不在（第一次写信任时才知道）。
+    /// 第一次写信任时才知道。
     struct ConfigFootprint: Codable, Equatable {
         var file: Bool
         var hooksTable: Bool?
@@ -86,7 +80,6 @@ struct CodexHooks: AgentHookConfig {
         try hooks.uninstall()
     }
 
-    /// hooks.json 里 CuePad 的、事件合 `include` 的组在 `config.toml` 里已被信任的键。
     private func trustedKeys(_ include: (String) -> Bool) -> [String] {
         guard let original = try? Data(contentsOf: hooks.file), let tree = try? JSONSourceTree(original) else { return [] }
         let path = hooks.file.realPath.path
@@ -95,7 +88,6 @@ struct CodexHooks: AgentHookConfig {
             .filter { Self.trustedHash(of: $0, in: config) != nil }
     }
 
-    /// 让 Codex 信任 CuePad 的条目：它列出的键与哈希原样写回。第一次写之前记下 `[hooks]`、`[hooks.state]` 原来在不在。
     private func trust(command: String) async throws {
         try await withCodex { rpc in
             let list = try await rpc.call("hooks/list", ["cwds": [.string(home.path)]])
@@ -120,7 +112,7 @@ struct CodexHooks: AgentHookConfig {
         }
     }
 
-    /// 删掉这些信任条目；CuePad 建的 `[hooks.state]` 因此空了就删掉它，CuePad 建的 `[hooks]` 也只剩它就一并删掉。
+    /// 删掉这些信任条目（`config/batchWrite` 对带引号的键写 null）；CuePad 建的 `[hooks.state]` 因此空了就删掉它，CuePad 建的 `[hooks]` 也只剩它就一并删掉。
     /// 装之前没有 `config.toml`、删完只剩空白的，删掉文件。
     private func untrust(_ keys: [String], footprint: ConfigFootprint?) async throws {
         try await withCodex { rpc in
@@ -140,14 +132,12 @@ struct CodexHooks: AgentHookConfig {
         }
     }
 
-    /// 用户层 `config.toml` 里的 `[hooks]`（不含别的层与缺省值）；没有为 nil。
     @MainActor private func userHooks(_ rpc: CodexRPC) async throws -> [String: JSONValue]? {
         let read = try await rpc.call("config/read", ["includeLayers": true])
         let user = read["layers"]?.array?.first { $0["name"]?["type"]?.string == "user" }
         return user?["config"]?["hooks"]?.object
     }
 
-    /// 起一个指向这个配置目录的 `codex app-server`，用完关掉并等它退出。
     private func withCodex(_ body: @MainActor (CodexRPC) async throws -> Void) async throws {
         guard let codex else { throw CodexHooksError.codexNotFound }
         let locator = await locate()
@@ -164,7 +154,7 @@ struct CodexHooks: AgentHookConfig {
         try await withStopped(rpc, stop: { await $0.shutdown() }, body)
     }
 
-    /// Codex 的信任哈希（`hook_hash`）：条目按 Codex 读进来的样子补全（`async` 缺省 false）。
+    /// 条目按 Codex 读进来的样子补全（`async` 缺省 false）。
     static func hash(_ event: HookFile.Event, command: String, hooks: HookFile) -> String? {
         guard var handler = (hooks.group(event, command: command)["hooks"] as? [[String: Any]])?.first else { return nil }
         handler["async"] = false
@@ -173,7 +163,6 @@ struct CodexHooks: AgentHookConfig {
         return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Codex 内部的事件名：`PreToolUse` → `pre_tool_use`。
     static func label(_ event: String) -> String {
         event.reduce(into: "") { result, character in
             if character.isUppercase, !result.isEmpty { result.append("_") }
@@ -207,7 +196,6 @@ struct CodexHooks: AgentHookConfig {
 enum CodexHooksError: Error, Equatable {
     case codexNotFound
     case notTrusted
-    /// Codex 读不进 hooks.json（它的原话）
     case rejected(String)
 }
 
