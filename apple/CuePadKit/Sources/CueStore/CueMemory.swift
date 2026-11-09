@@ -16,10 +16,8 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   /// 重点：记忆视图里总是全文列出。
   public var pinned: Bool
   public var source: Open<CueLineSource>
-  /// 定时的下一次：到点叫醒 Cue
   public var remindAt: Date?
   public var repeats: CueRepeat?
-  /// 定时挂在哪件任务上
   public var task: UUID?
   public var createdAt: Date
   public var modifiedAt: Date

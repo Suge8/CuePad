@@ -69,8 +69,6 @@ public struct CueDecorations: Sendable {
         return CueLineStyle(kind: kind, markerLength: marker, inlineCode: code, links: Self.links(in: line, outside: code), emphasis: InlineMarkdown.emphasisMarkers(in: line))
     }
 
-    // MARK: 全文性质
-
     private static func fenceLocations(in text: NSString) -> [Int] {
         var result: [Int] = []
         if text.hasPrefix(fence) { result.append(0) }
@@ -94,8 +92,6 @@ public struct CueDecorations: Sendable {
         return low
     }
 
-    // MARK: 行内
-
     private static func isBlankUnit(_ unit: Character) -> Bool { unit == " " || unit == "\t" }
 
     private static func classify(_ line: String) -> (CueLineKind, Int) {
@@ -103,7 +99,6 @@ public struct CueDecorations: Sendable {
         var i = 0
         while i < chars.count, isBlankUnit(chars[i]) { i += 1 }
         let indent = i
-        // 标题只允许顶格
         if indent == 0, i < chars.count, chars[i] == "#" {
             var hashes = 0
             while hashes < chars.count, chars[hashes] == "#" { hashes += 1 }

@@ -25,7 +25,6 @@ extension Workspace {
         }
     }
 
-    /// 会话条此刻露着：在左边，或抽屉开着。
     func railShown(_ sizes: WideMetrics) -> Bool { sizes.rail > 0 || !sizes.railFits && railDrawer }
 
     /// 去 Cue（深链、通知、对 Cue 说、收着时点 Cue 钮、⌃⌘I）：放回右边（用户的选择），此刻放不下再拉出抽屉。
@@ -57,7 +56,6 @@ extension Workspace {
         if fits { services.settings.cueOpen = false }
     }
 
-    /// Cue 此刻露着：在右边，或抽屉开着。
     func cueShown(_ sizes: WideMetrics) -> Bool { sizes.cue > 0 || !sizes.cueFits && cueDrawer }
 
     /// ⌃⌘I（"显示 › 右栏"）：按这个窗口此刻的尺寸（`WideMetrics`）收起或放回。

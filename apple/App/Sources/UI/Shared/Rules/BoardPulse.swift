@@ -55,7 +55,6 @@ struct BoardPulse: Equatable {
         return fullContext.map(Word.context)
     }
 
-    /// 线右端写状态词。
     var speaks: Bool { word != nil }
 
     var tier: Tier {

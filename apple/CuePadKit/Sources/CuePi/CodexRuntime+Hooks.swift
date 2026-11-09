@@ -81,8 +81,6 @@ extension CodexRuntime {
         return tracked[session.id]!
     }
 
-    // MARK: 等你回答
-
     /// 权限确认：托管的会话总是挂住等 CuePad 作答；终端会话按人在不在（`PresenceGate`）：人在就放行、终端弹框，CuePad 只显示。
     /// 钩子先走了（终端里停下了这一轮）就收起问题。
     private func ask(_ session: Tracked, call: AgentHookCall, _ input: JSONValue) {

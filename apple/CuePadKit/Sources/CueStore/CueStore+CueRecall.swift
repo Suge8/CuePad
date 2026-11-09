@@ -78,7 +78,6 @@ extension CueStore {
     }
   }
 
-  /// 一类里命中却超出 `limit` 的条数。
   private func unlisted(_ table: String, _ query: RecallQuery, _ limit: Int) throws -> Int {
     let total = try db.first("SELECT count(*) FROM \(table) WHERE \(query.condition)", query.countArguments) { Int($0.int(0)) } ?? 0
     return max(0, total - limit)

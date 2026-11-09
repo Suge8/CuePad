@@ -22,7 +22,6 @@ public enum Thumbnails {
         source(url).flatMap { downsample($0, longestSide: longestSide) }
     }
 
-    /// 同上，读内存里的图。
     public static func decoded(_ data: Data, longestSide: (CGSize) -> Int) -> CGImage? {
         CGImageSourceCreateWithData(data as CFData, options).flatMap { downsample($0, longestSide: longestSide) }
     }

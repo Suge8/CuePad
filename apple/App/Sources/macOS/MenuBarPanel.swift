@@ -17,7 +17,6 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
     private let panel: Panel
     private let host = SizingHostingView(rootView: AnyView(EmptyView()))
     private var lastResign = ContinuousClock.now - reopenGuard
-    /// 面板在屏幕上的锚点（图标位置与所在屏幕的可见区域）：内容尺寸变化时据此重新定位。
     private var placement: (anchor: CGRect, visible: CGRect)?
 
     override init() {
@@ -42,7 +41,6 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         host.rootView = AnyView(content)
     }
 
-    /// `anchor` 是菜单栏图标在屏幕坐标里的位置。
     func toggle(below anchor: CGRect) {
         if isVisible {
             hide()
@@ -79,7 +77,6 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         hide()
     }
 
-    /// 面板最高多高：从图标下方到屏幕可见区域的底边，两头留边。
     static func maxHeight(below anchor: CGRect, in visible: CGRect) -> CGFloat {
         min(anchor.minY, visible.maxY) - anchorGap - (visible.minY + edgeMargin)
     }
@@ -91,7 +88,6 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
     }
 }
 
-/// 内容的固有尺寸变化（SwiftUI 布局结果）时通知面板调整窗口。
 private final class SizingHostingView: NSHostingView<AnyView> {
     var onIntrinsicSizeChange: (() -> Void)?
 

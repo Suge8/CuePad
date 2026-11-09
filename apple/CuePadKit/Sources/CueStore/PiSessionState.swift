@@ -64,7 +64,6 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var fast: Bool?
   /// 上下文余量（Pi 桥上报；已结束的会话留着最后一次的值）。旧版本写的记录没有。
   public var context: PiContextUsage?
-  /// 哪个 Agent 的会话。
   public var agent: Open<AgentKind>
   /// 可以换成的模型与此刻能用的斜杠命令所在的目录记录（`AgentCatalog`，同一目录里的会话共用）；会话结束后也留着。
   public var catalogID: UUID?

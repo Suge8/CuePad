@@ -4,7 +4,6 @@ import Foundation
 /// 一件事里没人再用的会话的去留（`CueStore.endUnused`）。
 struct UnusedSessions {
   var ended: [DeliveryRequest] = []
-  /// 终端里你自己开的会话没被结束。
   var terminalKept = false
 }
 

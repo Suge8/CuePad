@@ -20,7 +20,6 @@ struct OpenCodeTurn {
     private var draft: DraftParts?
     /// 最近开始的一步：哪条回答、它的时刻、用的模型
     private var step: (message: String?, at: Date?, model: OpenCodeModelRef?)?
-    /// 在跑的工具调用 → 名字
     private var toolNames: [String: String] = [:]
     /// 收件箱里还没送进会话、带发送标识的：收件箱编号 → 标识
     private var inbox: [String: UUID] = [:]

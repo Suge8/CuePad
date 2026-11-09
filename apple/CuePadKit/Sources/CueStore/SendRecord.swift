@@ -39,7 +39,6 @@ public struct SendTarget: Equatable, Sendable {
   }
 }
 
-/// 一张卡最近一次发送：何时、发给谁。
 public struct LastSend: Equatable, Sendable {
   public var sentAt: Date
   public var target: SendTarget

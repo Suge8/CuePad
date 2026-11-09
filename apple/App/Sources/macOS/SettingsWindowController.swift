@@ -17,7 +17,6 @@ final class SettingsWindowController {
         }
     }
 
-    /// `pane` 为 nil 时停在上次那一页。
     func show(_ pane: SettingsPane? = nil) {
         let (window, tabs) = built ?? build(showing: pane ?? .general)
         if let pane { tabs.selectedTabViewItemIndex = Self.index(pane) }
@@ -29,7 +28,6 @@ final class SettingsWindowController {
 
     private static func index(_ pane: SettingsPane) -> Int { SettingsPane.allCases.firstIndex(of: pane)! }
 
-    /// 第一次打开：先选好要看的那一页再建窗口（窗口按它的高度建，不从第一页动画过去）。
     private func build(showing pane: SettingsPane) -> (window: NSWindow, tabs: NSTabViewController) {
         let tabs = NSTabViewController()
         tabs.tabStyle = .toolbar

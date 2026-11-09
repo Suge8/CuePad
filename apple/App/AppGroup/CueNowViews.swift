@@ -109,9 +109,7 @@ struct CueFaceMarks: ViewModifier {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 不在时的不透明度。
     static let awayOpacity = 0.5
-    /// 点的直径（含外那一圈 rim）。
     static func dotSide(_ size: CGFloat) -> CGFloat { max(size * 0.26, 6) }
 
     /// 点的圆心往右、往下各离头像圆心多远：落在圆边的右下 45° 处；小到点会越出头像的框时（16pt，点有 6pt 下限）往里收到贴着框。
@@ -146,12 +144,10 @@ struct CueFaceMarks: ViewModifier {
 }
 
 extension View {
-    /// 头像的框与淡底的圆。
     func cueDisc(size: CGFloat) -> some View {
         modifier(CueDisc(size: size))
     }
 
-    /// 头像上的点、变淡与角标（`CueFaceMarks`），挂在 `size` 见方的头像上。
     func cueMarks(size: CGFloat, beat: CueBeat, badge: Int? = nil, rim: Color? = nil) -> some View {
         modifier(CueFaceMarks(size: size, beat: beat, badge: badge, rim: rim))
     }

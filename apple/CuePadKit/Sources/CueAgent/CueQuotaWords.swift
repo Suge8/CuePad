@@ -7,7 +7,6 @@ import Foundation
 /// 账号里有的窗口过了重置时间（`AccountQuota.reading` 整个算 `.expired`）时，没重置的窗口照常读（`live`）：
 /// 5 小时窗口刚重置、本周已用到九成的账号照样吃紧。
 enum CueQuotaWords {
-  /// 卡着的窗口用到这么多算吃紧。
   static let tightUse = 0.8
 
   /// 吃紧：卡着的窗口用到 `tightUse`，或有窗口照此刻的速度在重置前用完。

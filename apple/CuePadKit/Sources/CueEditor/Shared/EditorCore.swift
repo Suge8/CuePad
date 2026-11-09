@@ -81,8 +81,6 @@ final class EditorCore {
         layout.delegate = delegate
     }
 
-    // MARK: 存储格式 <-> 运行时
-
     func stored() -> String {
         CueFormat.serialize(tokens(in: NSRange(location: 0, length: storage.length)))
     }
@@ -202,7 +200,6 @@ final class EditorCore {
         }
     }
 
-    /// 还没到这台的图片的占位上写什么（宿主给的那一行）。
     func missingImageLabel(_ key: String) -> String { fileStatus(key, "", nil).detail }
 
     /// 这个字符位置上的附件，连同它的键与本机有没有（点按据此打开或去取）；不是附件为 nil。
@@ -225,7 +222,6 @@ final class EditorCore {
         settler.restart()
     }
 
-    /// 主题或字号档位变了：重刷基础属性、高亮、装饰并重新预布局。
     func styleDidChange() {
         if storage.length > 0 {
             storage.addAttributes(baseAttributes, range: NSRange(location: 0, length: storage.length))
@@ -234,8 +230,6 @@ final class EditorCore {
         restyle(NSRange(location: 0, length: storage.length))
         settler.restart()
     }
-
-    // MARK: 编辑记账
 
     /// storage 的 didProcessEditing：此刻 TextKit 的内容管理器还没同步新文本，位置换算要等下一个同步点。
     func storageDidProcessEditing() {
@@ -260,8 +254,6 @@ final class EditorCore {
     func layoutDidAdvance() { host?.layoutDidAdvance() }
     func needsRelayout() { host?.needsRelayout() }
 
-    // MARK: 变量高亮
-
     func textRange(_ range: NSRange) -> NSTextRange? {
         guard let start = content.location(content.documentRange.location, offsetBy: range.location),
               let end = content.location(start, offsetBy: range.length)
@@ -285,8 +277,6 @@ final class EditorCore {
             layout.addRenderingAttribute(.backgroundColor, value: style.variableBackground, for: target)
         }
     }
-
-    // MARK: 附件重绘
 
     /// 缩略图出好后重画引用它的附件（`key` 为 nil 时全部，例如换到缩放比例不同的屏）：TextKit 缓存了片段的渲染结果，必须让对应片段失效重排。
     func redraw(key: String?) {

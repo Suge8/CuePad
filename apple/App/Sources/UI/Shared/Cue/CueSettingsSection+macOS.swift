@@ -13,7 +13,6 @@ struct CueSettingsSection: View {
         let settings = model.settings ?? .empty
         Section {
             CueSwitchRow(model: model, here: services.hostID, blocked: settings.gate(services).waitingReason)
-                // 读设置与改 Mac 前的确认挂在一直在的这一行上
                 .cueSettings(model)
             if let running = settings.profile.activeHost, model.isOn {
                 SettingRow(title: .verbatim(CueSettings.hostTitle), icon: Image(.mac), busy: model.enabling != nil) {

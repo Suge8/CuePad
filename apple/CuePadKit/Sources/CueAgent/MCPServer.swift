@@ -8,7 +8,6 @@ public struct CueMCPServer: Sendable {
 
   /// 接受的协议版本：回客户端请求的那个；别的版本回最新的，由客户端决定是否继续（MCP 的版本协商）。
   static let protocolVersions = ["2025-11-25", "2025-06-18"]
-  /// 大脑登记这个服务用的名字。
   public static let name = "cuepad"
   /// 模型在这家看到的 CuePad 工具名的前缀，唯一的一处（系统提示照它写工具名，大脑的事件照它去掉）：
   /// Pi 是原名（随包的扩展 cue-tools.ts 照原名登记，不走 Pi 内置 MCP 的 `mcp__` 命名）；Codex 也是原名（MCP 工具放在命名空间
@@ -22,7 +21,6 @@ public struct CueMCPServer: Sendable {
     }
   }
 
-  /// 模型在这家看到的工具名。
   public static func toolName(_ tool: String, on runtime: AgentKind) -> String { toolPrefix(on: runtime) + tool }
 
   /// 大脑事件里的工具名（`TurnEvent.tool`）：去掉 CuePad 的前缀并小写（Claude Code 的 `Read`）。

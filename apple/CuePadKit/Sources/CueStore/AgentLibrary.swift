@@ -41,7 +41,6 @@ public struct AgentLibrary: Equatable, Sendable {
     self.modifiedAt = modifiedAt
   }
 
-  /// 给人看的路径：家目录下的缩成 `~`。
   public func shown(_ path: String) -> String {
     path == home ? "~" : path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
   }
@@ -74,7 +73,6 @@ public struct AgentLibrary: Equatable, Sendable {
   /// 要并进这份规则的那件（`LibraryTidy.merges`）。
   public func merge(into kind: LibraryInstruction.Kind) -> LibraryTidy? { tidies.first { $0.merges && $0.instruction == kind } }
 
-  /// 一键整理做的那几件（不用你选的，`LibraryTidy.isAutomatic`）。
   public var automaticTidies: [LibraryTidy] { tidies.filter(\.isAutomatic) }
   public var automaticOrders: [TidyOrder] { automaticTidies.map { TidyOrder(tidy: $0.id) } }
 
@@ -96,7 +94,6 @@ public enum LibraryScope: Codable, Hashable, Sendable {
 
 /// 一个技能（有 `SKILL.md` 的目录）：`.agents/skills` 里的，与旧目录里一键整理搬不走的（同名、格式不对的）。
 public struct LibrarySkill: Codable, Equatable, Sendable, Identifiable {
-  /// 目录名
   public let name: String
   public let scope: LibraryScope
   /// 技能根目录下到它所在目录的分类（"development"、"a/b"）；直接在根下为空（"不在分类里"）
@@ -115,7 +112,6 @@ public struct LibrarySkill: Codable, Equatable, Sendable, Identifiable {
 
   public var id: String { path }
 
-  /// 正文那一条的路径：它的 SKILL.md。
   public var textPath: String { path + "/SKILL.md" }
 
   public init(

@@ -34,7 +34,6 @@ nonisolated struct WaveStrip: Equatable, Sendable {
         }
     }
 
-    /// 周期线在一个周期里 x 处的高度。
     private func y(_ x: CGFloat) -> CGFloat {
         let turn = 2 * CGFloat.pi * x / Self.period
         switch gait {
@@ -47,7 +46,6 @@ nonisolated struct WaveStrip: Equatable, Sendable {
         }
     }
 
-    /// 周期线从 0 画到 `width`，周期接周期地铺。
     private func main(width: CGFloat) -> Path {
         Path { path in
             path.move(to: CGPoint(x: 0, y: y(0)))

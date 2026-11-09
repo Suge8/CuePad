@@ -82,7 +82,6 @@ public struct AgentStatus: Sendable, Equatable {
     }
 
     public var isAvailable: Bool { if case .found = presence { true } else { false } }
-    /// CuePad 的文件在（最新或待升级）：接入了。
     public var isConnected: Bool { files == .current || files == .outdated }
 }
 

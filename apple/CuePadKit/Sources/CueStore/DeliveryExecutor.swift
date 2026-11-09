@@ -18,7 +18,6 @@ import os
 public actor DeliveryExecutor {
   let store: CueStore
   let hostID: String
-  /// 完成的请求保留多久。
   package static let retention: Duration = .seconds(60)
   /// 执行多久还没完就先把领取传出去。说给在线会话的话交给桥几十毫秒就有结果，留足机器忙时的余量；远短于 `Speech.receiptLimit`。
   package static let claimGrace: Duration = .milliseconds(500)
@@ -86,7 +85,6 @@ public actor DeliveryExecutor {
     }
   }
 
-  /// 启动恢复：收回领取、对账上次没结的请求、清一轮、开始监听。
   private func boot() async {
     do {
       try await store.releaseDeliveryReservations(for: hostID)
@@ -231,7 +229,6 @@ public actor DeliveryExecutor {
     }
   }
 
-  /// 派发期限到了（`DeliveryRequest.dispatchDeadline`）。
   func isExpired(_ request: DeliveryRequest) -> Bool { request.dispatchDeadline.map { timing.now() >= $0 } ?? false }
 
   private struct Dispatch {

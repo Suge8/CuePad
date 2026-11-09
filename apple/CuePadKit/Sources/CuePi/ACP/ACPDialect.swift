@@ -36,7 +36,6 @@ protocol ACPDialect: Sendable {
     func ask(_ method: String, _ params: JSONValue) -> ACPAsk?
 }
 
-/// 大脑的配法（`ACPDialect.brain`）
 struct ACPBrainSetup {
     var environment: [String: String]
     var meta: JSONValue?
@@ -87,7 +86,6 @@ extension ACPDialect {
     func ask(_ method: String, _ params: JSONValue) -> ACPAsk? { nil }
 }
 
-/// ACP 的内容块。
 enum ACPContent {
     /// 一句话的内容：文字在前（空文字不带）、图片以 base64 在后。
     static func prompt(text: String, images: [PiImage]) -> [JSONValue] {

@@ -89,15 +89,12 @@ enum DshHistory {
         return try? Data(contentsOf: home.appending(path: "attachments/v1/objects/\(hash.prefix(2))/\(hash)"))
     }
 
-    // MARK: 解码
-
     private static let decoder = JSONDecoder()
 
     private struct Line: Decodable {
         var type: String
         var time: Double?
         var data: Payload?
-        // 会话头
         var id: String?
         var cwd: String?
         var createdAt: Double?

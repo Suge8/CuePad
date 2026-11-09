@@ -123,8 +123,6 @@ extension CodexRuntime {
         return id
     }
 
-    // MARK: 会话
-
     func makeSession(_ thread: JSONValue, pid: Int32) -> PiSession {
         let threadID = thread["id"]?.string ?? ""
         var session = PiSession(

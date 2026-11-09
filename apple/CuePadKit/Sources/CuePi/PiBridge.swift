@@ -75,8 +75,6 @@ public final class PiBridge {
         connections.bridge = self
     }
 
-    // MARK: 生命周期
-
     public func start() throws { try connections.start() }
 
     public func offerExtensionUpgrade() { connections.offerExtensionUpgrade() }

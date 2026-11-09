@@ -20,7 +20,6 @@ extension DebugScene {
     /// 全屏预览的翻页先看一下这次滚动（`PageInput`，开着时才有）：接下了为 true。
     static var scrollGate: ((NSEvent) -> Bool)?
 
-    /// 认得这一步就做完、返回 true。
     static func gesture(_ step: String, in window: NSWindow) async -> Bool {
         let (name, rest) = step.contains(":") ? (String(step.prefix { $0 != ":" }), step.drop { $0 != ":" }.dropFirst()) : (step, Substring())
         let n = rest.split(separator: ",").compactMap { Double($0) }

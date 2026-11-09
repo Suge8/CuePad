@@ -30,7 +30,6 @@ struct BoardLine: View {
 
     static let maxMoving = 8
     static let maxTracks = 3
-    /// 过去那段至多几颗点。
     nonisolated static let maxSaid = 6
     private static let nowShare: CGFloat = 0.42
     nonisolated fileprivate static let stroke: CGFloat = 1.5

@@ -27,7 +27,6 @@ public actor PiStateRecorder {
   let minInterval: Duration
   let timing: Timing
   private var sessions: [String: Session] = [:]
-  /// Cue 此刻的样子（`PiStateRecorder+Cue.swift`）
   var cue = Pace<CueStateContent>()
   private var tail: Task<Void, Never>?
 

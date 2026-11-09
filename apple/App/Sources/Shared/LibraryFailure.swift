@@ -7,7 +7,6 @@ struct LibraryFailure: Equatable, Sendable {
     let reason: String
     /// 库文件；位置本身解析不出来（如没有 App Group 权限）时为 nil。
     let path: String?
-    /// 库文件的结构版本；读不出来为 nil。
     let version: Int?
 
     init(reason: String, location: LibraryLocation?) {

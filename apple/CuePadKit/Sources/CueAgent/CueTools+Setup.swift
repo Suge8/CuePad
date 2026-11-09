@@ -44,8 +44,6 @@ extension CueTools {
     }
   }
 
-  // MARK: set
-
   /// 写 `model` 时回到这家默认的写法。
   static let defaultModel = "default"
 
@@ -119,8 +117,6 @@ extension CueTools {
     return "\(profile.runtime.known?.name ?? profile.runtime.rawValue) · \(model) · 强度 \(effort) · fast \(profile.fast ? "开" : "关") · 名字 \(profile.name)"
   }
 
-  // MARK: project
-
   /// Cue 新建的项目用的颜色：同新建项目表单的第一种（App 的 `Palette.projectColors`）。
   static let newProjectColor = "#D9774B"
 
@@ -170,8 +166,6 @@ extension CueTools {
     let path = url.path(percentEncoded: false)
     return path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
   }
-
-  // MARK: tidy
 
   /// 请这台 Mac 做一键整理（`AgentLibrary.automaticOrders`），等结果同说话（`spoken`）。
   private func tidy() async throws -> Result {

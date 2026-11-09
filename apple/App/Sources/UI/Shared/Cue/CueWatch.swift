@@ -39,9 +39,7 @@ final class CueWatch {
     #endif
     /// Cue 页的输入（离开再回来还在）。
     var draft = ComposerDraft()
-    /// "Cue 记得什么"开着。
     var showsMemory = false
-    /// 定时开着（`CueSchedulePage`）。
     var showsSchedules = false
     #if os(macOS)
     /// Cue 页右侧开着"运行情况"（`CueRunPanel`）。

@@ -25,7 +25,6 @@ struct Palette {
         self.init(dark: scheme == .dark, highContrast: contrast == .increased)
     }
 
-    // MARK: 层（由后到前：侧栏 → 桌面 → 纸）
 
     var sidebar: Color { dark ? Color(hex: 0x141210) : Color(hex: 0xE6E2DB) }
     /// 页面底，也是小组件与分享扩展的底。iOS 启动屏的底色（资源目录的 LaunchBackground）与它同值：启动屏只认资源目录里的颜色，不同的话冷启动先白后米一闪。
@@ -42,7 +41,6 @@ struct Palette {
     /// 不描边：长对话滚动时每颗多一层，逐帧都要更新。
     var bubbleEdge: Color? { highContrast ? ink.opacity(0.22) : nil }
 
-    // MARK: 玻璃上的字（`GlassInk`）
 
     /// 写着字的玻璃（`GlassInk.solid`）的着色：深色压一层暗色调，浅色垫一层淡纸色，与垫的底色一起定玻璃的明暗。
     var glassTint: Color { dark ? Color.black.opacity(0.4) : paper.opacity(0.45) }
@@ -52,7 +50,6 @@ struct Palette {
     /// 深色墨浅，背后最亮（截图）要垫近八成（实测名字 14.8:1、次要字 8:1）。
     var inkWell: Color { desk.opacity(dark ? 0.78 : 0.3) }
 
-    // MARK: 墨
 
     /// 正文、标题、图标、系统控件的 tint、链接（加下划线）。对比度 13.3，深色 10。
     var ink: Color { dark ? Color(hex: 0xEEE9E1) : Color(hex: 0x1C1B19) }
@@ -76,7 +73,6 @@ struct Palette {
     /// 窗口内浮层的投影：比 `shadow` 重，浮层要从整窗里浮出来。
     var panelShadow: Color { Color.black.opacity(dark ? 0.45 : 0.18) }
 
-    // MARK: 照片与视频上
 
     /// 压在照片、视频上的图标（播放、移除）：照片的明暗不随外观变，固定白。
     var onMedia: Color { .white }
@@ -96,7 +92,6 @@ struct Palette {
     /// 深色下给附图压暗一层，亮图不刺眼；浅色不压。
     var mediaDim: Color { dark ? Color.black.opacity(0.14) : .clear }
 
-    // MARK: 签名色
 
     /// 靛青：焦点与正在发生（主按钮、焦点环、Agent 在跑、拖放的落点、图标点睛点亮）。对比度 6.3，深色 5.1，增强对比度 ≥ 8。
     var signature: Color {
@@ -128,7 +123,6 @@ struct Palette {
     /// 靛青、胭脂、赭黄实底上的字与图标：暖白。
     var onFill: Color { Color(hex: 0xFFFDF8) }
 
-    // MARK: 状态（只上状态图形与紧挨着的那个词，不给整段字上色）
 
     /// 等你确认：赭黄，全 App 只有等你与拍板用它。对比度 4.7，深色 6.9。"等你"（WORDS.md）的现成样子只有这几样：Cue 此刻数字账里的"N 拍板"与"N 待回复"（`CueLedger`）、
     /// 去 Cue 的入口角上的点（`CueDot`）、状态图形 `Icon.waiting` 与会话的状态字（经 `PiShown`）；待回复的记号是墨点（`Icon.awaitsReply`，经 `PiShown`）。
@@ -153,7 +147,6 @@ struct Palette {
     /// 石绿的实底（看板已完成列头那颗圆）：浅色就是石绿，深色压到中等明度，上面的白字形 4.6。
     var repliedFill: Color { dark ? Color(hex: 0x2B7A55) : replied }
 
-    // MARK: 要你看的会话卡片的底（`PiShown.wash`，代替纸色）
 
     // 是这种状态色相的浅调，不是字色叠透明：状态色为了写成字压得很深（赭黄近棕），薄薄叠一层出来的是灰米、灰粉、灰绿，认不出是哪种。
     // 卡上的字（状态词、次要墨色）照纸上的对比度核过，下面写的是状态词的对比度；与纸、桌面靠色相分开。
@@ -167,7 +160,6 @@ struct Palette {
     var diffAdded: Color { repliedWash }
     var diffRemoved: Color { failureWash }
 
-    // MARK: 看板四列的纸（`TaskBoard.Column.paper`；推进中是纸本身）
 
     // 同上一组是色相的浅调；轻的两列（待办、已完成）比重的等你淡，深色下轻的两列比纸暗、重的比纸亮——深色里亮读作重。
     // 三档墨与四种状态词（靛青、胭脂、赭黄、石绿）在三种纸上都 ≥ 4.5:1，最差的是浅色待办上的 ink3 4.9、深色等你上的 ink3 5.1。
@@ -179,13 +171,11 @@ struct Palette {
     /// 已完成：淡石绿；深色压到比纸暗，读起来比推进中轻。
     var donePaper: Color { dark ? Color(hex: 0x222723) : Color(hex: 0xF0F6F1) }
 
-    // MARK: 轻扫露出的其余动作（删除是 `failureFill`、主动作是 `signatureFill`）
 
     var neutralFill: Color { dark ? Color(hex: 0x6E685F) : Color(hex: 0x3A3733) }
     /// 安静的一档，比 `neutralFill` 浅；也是看板待办列头那颗暖灰圆（待办没有状态色）。
     var quietFill: Color { dark ? Color(hex: 0x57524B) : Color(hex: 0x6E685F) }
 
-    // MARK: 项目色
 
     /// 项目可选的颜色。`stored` 是库里存的值（不迁移），显示时按深浅取一档：浅色对三层 ≥ 3.2，深色 ≥ 5.3。
     /// 没有靛蓝一路：与签名色色相太近，项目会被读成焦点。黄偏橄榄（芥黄），和等你的赭黄分开。

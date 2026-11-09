@@ -19,7 +19,6 @@ final class MacAgentsRecorder {
     private let host: String
     private let agents: AgentIntegrations
     private var latest: Task<MacAgents, any Error>?
-    /// 最近一次问用的接入状态
     private var probed: [AgentKind: AgentStatus]?
 
     init(store: CueStore, sync: (any SyncControlling)?, host: String, agents: AgentIntegrations) {

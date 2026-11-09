@@ -184,7 +184,6 @@ extension CueStore {
     return children
   }
 
-  /// 同级的范围：同一上级下，或同一项目的顶层。
   private static func siblingScope(_ link: CardLinks.Link) -> String {
     link.parent == nil ? "parentID IS NULL AND projectID = ?" : "parentID = ?"
   }

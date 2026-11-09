@@ -35,13 +35,11 @@ final class LiveSessions {
     private(set) var flight: CueFlight?
     /// 与接力事实同一次读到，界面不另起订阅等待目标进入会话条。
     private(set) var rail = SessionRailData(waiting: [], advancing: [])
-    /// 已经算过的最新时刻（叫醒与交给同一条时间线）。
     @ObservationIgnored private var seen: Date?
     private let launchedAt = Date()
     /// 结束会话的那台 Mac（本机，见 `Page`）；iOS 为 nil。
     private let host: String?
     @ObservationIgnored private let start: Snapshot<Page>
-    /// 最近读到的一页：此刻变了按它重推（`follow`）。
     @ObservationIgnored private var page: Page
     private nonisolated static let endedWindow = 20
 
@@ -56,7 +54,6 @@ final class LiveSessions {
     /// `session` 在最近一次接力里：它的状态标挂锚（`relaySpot`）。
     func relays(session: String) -> Bool { flight?.ends.contains { $0.session == session } == true }
 
-    /// 最近一次接力带着这件任务（开新会话、带着它说话）。
     func relays(task: UUID) -> Bool { flight?.ends.contains { $0.task == task } == true }
 
     /// 一次读到的：`current` 一页与会话总数；给了 `host`（Mac）时再加上那台 Mac 上 `since` 之后结束的会话。
@@ -114,7 +111,6 @@ final class LiveSessions {
 }
 
 extension AppServices {
-    /// 开始跟随在线会话（`start()` 调用）；读失败时报告并停止。
     func startLiveSessions() {
         follow(reporting: { .syncUnavailable(String(localized: "读取在线会话失败，会话状态不再更新：\(String(describing: $0))")) }) {
             try await self.liveSessions.follow(self)

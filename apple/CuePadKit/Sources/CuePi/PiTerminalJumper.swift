@@ -90,8 +90,6 @@ public struct PiTerminalJumper: Sendable {
         return String(localized: "没有工作目录或 tty 匹配的终端/标签页")
     }
 
-    // MARK: AppleScript
-
     private static func quoted(_ text: String) -> String {
         "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
@@ -128,8 +126,6 @@ public struct PiTerminalJumper: Sendable {
         end tell
         """
     }
-
-    // MARK: 系统
 
     private func run(_ executable: String, _ arguments: [String]) async -> (status: Int32, output: String) {
         let env = URL(filePath: "/usr/bin/env")

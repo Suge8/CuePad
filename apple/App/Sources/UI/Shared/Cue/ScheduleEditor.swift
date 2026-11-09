@@ -56,7 +56,6 @@ struct ScheduleDraft: Equatable {
         }
     }
 
-    /// 下一次（存进 `remindAt`）。
     func next(after now: Date = .now) -> Date { repeats?.next(after: now) ?? date }
 
     /// 定得成：一次的要在以后，每周的至少选一天。

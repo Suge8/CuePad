@@ -5,7 +5,6 @@ public struct CueProfile: Equatable, Sendable {
   public var name: String
   /// 运行在哪台 Mac（`PiSessionState.hostID` 同一种标识）；没选为 nil。
   public var hostID: String?
-  /// 大脑跑在哪家 Agent 里
   public var runtime: Open<AgentKind>
   /// 大脑用的模型，按 `runtime` 那家的写法（`AgentKind.modelRef`）；nil 是用这家自己的默认。
   public var model: String?

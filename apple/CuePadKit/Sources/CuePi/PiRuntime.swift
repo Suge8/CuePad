@@ -78,8 +78,6 @@ public final class PiRuntime: AgentRuntime {
         try await launch(["--session", session.path], in: URL(filePath: session.cwd, directoryHint: .isDirectory), environment: [:]).id
     }
 
-    // MARK: 进程
-
     /// 扩展读这个环境变量判断自己是被 CuePad 托管的，值是空闲多少秒后退出。
     static let hostedVariable = "CUEPAD_HOSTED"
 

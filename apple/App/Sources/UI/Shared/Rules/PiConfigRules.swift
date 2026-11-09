@@ -32,7 +32,6 @@ nonisolated struct PiThinkingMeter: Equatable {
     let levels: [PiThinkingLevel]
     private(set) var current: PiThinkingLevel?
 
-    /// 那把尺：一格一档。
     static let scale = PiThinkingLevel.allCases.filter { $0 != .off }
 
     /// 模型不报档位时没有这个条：拖动换算档位要从档位里取。

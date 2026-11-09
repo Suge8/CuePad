@@ -13,7 +13,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var settingsWindow: SettingsWindowController?
     private var mainFrameKeeper: WindowFrameKeeper?
     private var terminationSources: [any DispatchSourceProtocol] = []
-    /// 资料库打不开时的失败页；重试成功即关掉。
     private var failureWindow: NSWindow?
     /// 主窗口的工作区（主菜单"显示"里的开关作用在它上面；主窗口本身是 `services.windowShell`）。
     private var workspace: Workspace?
@@ -74,7 +73,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
-    /// 主窗口第一帧画完之后：工作区与服务开始跟着库，建菜单栏图标与面板，起后台服务。
     private func startShell(_ services: AppServices, workspace: Workspace, window: MainShellWindow) {
         Task { await workspace.follow() }
         Task { await alerts.refresh() }
@@ -114,7 +112,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services?.updates.installNow()
     }
 
-    /// 主菜单里写"等 N 个 Agent 做完再装"的那一行（停用，只是说明）。
     static let updateNoteTag = 1
 
     /// 主菜单"显示"里的搜索（⌘K）、进展（⌘⇧T）、侧栏（⌃⌘S）与右栏（⌃⌘I）：搜索与两栏是开关，开着时同一条命令把它关掉；进展是去进展页（收起开着的搜索）。
@@ -166,7 +163,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        // 通知权限可能在系统设置里改过
         Task { await alerts.refresh() }
         Task { await services?.handleActivation() }
     }

@@ -185,7 +185,6 @@ final class TurnLog {
         recording = true
     }
 
-    /// 这一次从哪一刻起量（`begin` 给的时刻）。
     var began: CFTimeInterval { since }
 
     func finish() -> (log: [Turn], changedAt: Int?, start: CFTimeInterval) {

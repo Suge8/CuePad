@@ -34,7 +34,6 @@ final class PiBrain: HostedSession {
     private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: HostedSessionError.rejected(String(localized: "没有及时回应")))
     private var nextID = 0
     private(set) var seesImages = false
-    /// 在用模型的上下文窗口
     private var window: Int?
     static let subscription = Bundle.module.url(forResource: "claude-subscription", withExtension: "ts")!
     static let tools = Bundle.module.url(forResource: "cue-tools", withExtension: "ts")!

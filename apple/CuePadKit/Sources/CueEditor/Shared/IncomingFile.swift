@@ -7,7 +7,6 @@ public enum IncomingFile: Sendable {
     case file(URL)
     case data(Data)
     #if canImport(UIKit)
-    /// 手机上粘贴、拖入的一个条目（`PastedItem.isFile` 认出是附件的）
     case pasted(PastedItem)
     #endif
 

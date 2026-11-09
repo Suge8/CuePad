@@ -3,9 +3,7 @@ import CuePi
 import CueStore
 import Foundation
 
-/// Mac 端的远程职责：把 Pi 会话的状态写成同步记录（手机据此显示 Pi 在干什么）与目录绑定。
 extension AppServices {
-    // MARK: Pi 状态记录
 
     /// 这台 Mac 启动（`init` 里，第一次读库之前）：对账上次留下的会话记录（别的 Mac 的不动）并写下在线（`CueStore.launchMac`）——
     /// 进程确实没了的收尾，还在的留给桥重新连上；对账之前还没收尾的会话交给桥：重新接上时状态种类没变就沿用原来的起点（`PiBridge.attach`）。
@@ -30,7 +28,6 @@ extension AppServices {
         }
     }
 
-    // MARK: 目录绑定
 
     /// 本机的目录绑定写成同步的目录绑定记录（手机据此知道哪些项目能在哪台 Mac 上开新会话）：先对一次，
     /// 之后本机绑定每次变化时跟上，直到后台任务取消。

@@ -7,7 +7,6 @@ import UIKit
 import AppKit
 #endif
 
-/// 设备本地偏好，存 UserDefaults，不进同步库。
 @Observable
 final class AppSettings {
     enum Theme: String, CaseIterable, Sendable {
@@ -45,7 +44,6 @@ final class AppSettings {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
     #if os(macOS)
-    /// 通知两种提示（等你、做完了）各自的开关与提示音（`AlertPreferences`）。
     var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
     #endif
 
@@ -53,7 +51,6 @@ final class AppSettings {
     /// 新会话上次选的 Agent（两端的新会话在 Agent 胶囊上一选就记）：新会话默认用它（那台 Mac 上它不能用时退到第一个能用的，`MacAgents.preferred`）。
     var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
 
-    /// 窄屏侧栏与宽屏主区共用的项目｜进展选择。
     var navigationPane: NavigationPane { didSet { defaults.set(navigationPane.rawValue, forKey: Key.navigationPane) } }
     /// 宽屏会话条的用户选择（只有这一份，不随主区放着什么页变）；窗口不够宽时只改变呈现，不写这个值。
     var railExpanded: Bool { didSet { defaults.set(railExpanded, forKey: Key.railExpanded) } }

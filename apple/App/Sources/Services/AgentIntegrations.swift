@@ -17,12 +17,9 @@ final class AgentIntegrations {
     /// 在等你在浏览器里登录完的进程：再点一次登录先结束旧的（Codex 的登录占着固定端口）。
     @ObservationIgnored private var logins: [AgentKind: ChildProcess] = [:]
 
-    /// 每一家都检测过了（之前的"有哪些"还说不准，界面写检测中）。
     var detected: Bool { statuses.count == AgentKind.allCases.count }
     @ObservationIgnored let integration: AgentIntegration
-    /// 移除成功之后（关掉开关，`AgentRuntime.integrationRemoved`）
     @ObservationIgnored var uninstalled: (AgentKind) async -> Void = { _ in }
-    /// 新装或升级成功之后（`AgentRuntime.integrationInstalled`）
     @ObservationIgnored var installed: (AgentKind) -> Void = { _ in }
 
     init(_ integration: AgentIntegration) {
@@ -40,7 +37,6 @@ final class AgentIntegrations {
         integration.writtenFiles(of: kind).map { ($0.path as NSString).abbreviatingWithTildeInPath }
     }
 
-    /// 重新检测一个 Agent（设置里它那一行出现时：用户可能刚装了它）。不写任何文件。
     func detect(_ kind: AgentKind) async {
         statuses[kind] = await integration.status(of: kind)
     }
@@ -51,7 +47,6 @@ final class AgentIntegrations {
         return statuses[kind]?.executable
     }
 
-    /// 重新检测全部 Agent，测完一次换上（状态只变一次）。不写任何文件。
     func redetect() async {
         let integration = integration
         statuses = await withTaskGroup(of: (AgentKind, AgentStatus).self) { group in
@@ -62,7 +57,6 @@ final class AgentIntegrations {
         }
     }
 
-    /// 接入面板列出的几家：这台 Mac 上检测到、CuePad 能写、还没接入的（按 `AgentKind` 的顺序）。
     var connectable: [AgentKind] {
         AgentKind.allCases.filter { kind in
             guard let status = statuses[kind] else { return false }
@@ -122,7 +116,6 @@ final class AgentIntegrations {
         NSWorkspace.shared.open(script)
     }
 
-    /// 输出里最后一句话（去掉终端的颜色控制符）：失败时给人看的原因。
     private static func lastLine(_ output: String) -> String? {
         output.replacing(/\u{1B}\[[0-9;?]*[A-Za-z]/, with: "").split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }.last { !$0.isEmpty }
@@ -176,7 +169,6 @@ extension AppServices {
     }
 }
 
-/// 在后台装、登录一家的进度（`AgentIntegrations.jobs`）。
 enum AgentJob: Equatable {
     case installing
     case loggingIn

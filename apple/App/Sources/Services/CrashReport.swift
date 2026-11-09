@@ -18,7 +18,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
             }
         }
 
-        /// 导出的摘要里的叫法
         var name: String {
             switch self {
             case .crash: String(localized: "崩溃")
@@ -29,7 +28,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
             }
         }
 
-        /// 设置里那一行的名字
         var label: LocalizedStringResource {
             switch self {
             case .crash: "上次崩溃"
@@ -65,19 +63,16 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
     let reason: String?
     /// 并成同一种时比的原因：异常与终止码（有终止码时只认码与看门狗事件；没有时是原文，数字抹掉：CPU 用时、地址每次都不同）。
     let cause: String
-    /// 终止原因的人话（看门狗、过热这类有名的终止码）。
     let explanation: String?
     /// "版本（构建）· 设备 · 系统"。
     let app: Dotted?
     /// 崩溃线程（没有标记就取第一条）自顶向下的前 `topFrames` 帧；更深处 CuePad 自己的帧再补至多 `ownFrames` 个（顶上常全是系统库）。
     let frames: [Frame]
-    /// 主线程卡住时在哪一页、之前做了什么（本机记下的才有）。
     let trail: [String]
 
     static let topFrames = 8
     static let ownFrames = 4
 
-    /// 存档里一个文件的每一份；读不出、没有诊断内容的是空的。
     static func reports(file: String, json data: Data) -> [CrashReport] {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return [] }
         if root[FreezeNote.File.key] != nil {

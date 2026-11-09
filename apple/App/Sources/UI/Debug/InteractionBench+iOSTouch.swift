@@ -112,7 +112,6 @@ extension IOSInteractionBench {
         return board.convert(board.bounds, to: window).midY
     }
 
-    /// 看板那一行横着滚到了哪（点）。
     private static func boardOffset(in window: UIWindow?) -> Int? {
         board(in: window).map { Int($0.contentOffset.x + $0.adjustedContentInset.left) }
     }

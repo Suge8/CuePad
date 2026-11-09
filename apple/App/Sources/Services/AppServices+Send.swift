@@ -37,7 +37,6 @@ extension AppServices {
 
 #if os(macOS)
 extension CuePi.PiSession {
-    /// 发送记录与投送请求里指这个会话的目标（`ref` 是 Pi 自己的会话 id）。
     var sendTarget: SendTarget { SendTarget(kind: .piSession, name: displayName, ref: sessionID) }
 }
 #endif

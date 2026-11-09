@@ -112,12 +112,10 @@ extension AppServices {
         uploaded(try await store.requestBind(bind, title: title, on: host))
     }
 
-    /// 请 `host` 那台 Mac 整理技能与规则（`Workspace.tidy`）。
     func requestTidy(_ orders: [TidyOrder], on host: String) async throws -> DeliveryRequest {
         uploaded(try await store.requestTidy(orders, on: host))
     }
 
-    /// 请 `host` 那台 Mac 改一份技能或规则文件（`Workspace.saveFile`）。
     func requestLibraryEdit(_ edit: LibraryEdit, title: String, on host: String) async throws -> DeliveryRequest {
         uploaded(try await store.requestLibraryEdit(edit, title: title, on: host))
     }
@@ -129,6 +127,5 @@ extension AppServices {
 }
 
 nonisolated extension PiSessionState {
-    /// 投送请求里指这个会话的目标（`ref` 是 Pi 自己的会话 id）。
     var target: SendTarget { SendTarget(kind: .piSession, name: title, ref: sessionID) }
 }

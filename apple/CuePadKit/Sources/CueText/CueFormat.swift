@@ -3,7 +3,6 @@ import Foundation
 /// 正文里的文字与附件（发送、预览时按原顺序切开用）。附件的值是键（`AttachmentKey`）。
 public enum CueToken: Equatable, Sendable {
     case text(String)
-    /// 内联图片
     case image(String)
     /// 别的文件：键与显示的文件名（`CueFormat.fileName` 洗过）
     case file(key: String, name: String)
@@ -22,13 +21,11 @@ public enum CueToken: Equatable, Sendable {
 /// 图片嵌入写 `![](cuepad://file/<键>)`，别的文件是链接 `[文件名](cuepad://file/<键>)`；分割线就是 `---`。
 /// 编辑器里附件显示成 U+FFFC，其余照原文编辑。
 public enum CueFormat {
-    /// 编辑器运行时正文里附件占的一个占位字符（NSTextAttachment 用的 U+FFFC）。
     static let objectCharacter: UniChar = 0xFFFC
 
     static let scheme = "cuepad://file/"
     /// 每个附件引用都含的一截（链接文字之后、键之前）：判断有没有附件、在库里按 SQL 找带附件的行都按它。
     public static let referencePrefix = "](" + scheme
-    /// 图片引用的开头（其后是键与 `)`）。
     static let imagePrefix = "![" + referencePrefix
 
     public static func imageMarkup(key: String) -> String { imagePrefix + key + ")" }

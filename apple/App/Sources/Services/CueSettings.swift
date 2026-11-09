@@ -13,7 +13,6 @@ nonisolated struct CueSettings: Equatable, Sendable {
         CueSettings(profile: try store.cueProfile() ?? CueProfile(), macs: try store.allMacAgents())
     }
 
-    /// 开着：在哪台 Mac 上启用着。
     var isOn: Bool { profile.activeHost != nil }
 
     /// 能运行 Cue 的一台：名字（那台自报的，`MacAgents.shownName`；是这台（`isHere`）时写"这台 Mac"）、能用的几家与一家都不能用时为什么。
@@ -50,7 +49,6 @@ nonisolated struct CueSettings: Equatable, Sendable {
         return hosts.first { $0.id == profile.hostID && $0.selectable } ?? hosts.first(where: \.selectable) ?? hosts.first
     }
 
-    /// 能不能在哪台启用（`CueGate`）：按库里它此刻运行在哪台、那台自报的名字。
     @MainActor func gate(_ services: AppServices) -> CueGate {
         let running = profile.activeHost
         return CueGate.of(services, running: running, name: running.map { id in macs.first { $0.hostID == id }?.shownName ?? MacAgents.unnamed })
@@ -66,7 +64,6 @@ enum CueGate: Equatable {
     case waiting(String)
     /// 正在 `id` 那台 Mac 上运行（`name` 是它自报的名字）：改到别的 Mac 要你确认（`CueMove`）
     case runs(id: String, name: String)
-    /// 没启用：哪台都能直接启用
     case open
 
     /// `running`：它此刻运行的那台（没启用为 nil），`name` 是那台的名字。
