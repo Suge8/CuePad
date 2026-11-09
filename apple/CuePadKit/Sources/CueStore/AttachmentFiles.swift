@@ -175,10 +175,16 @@ extension CueStore {
     }
   }
 
-  /// 本机已有这个文件、还没有记录时登记附件记录（同步载体），连同保底（`AttachmentFiles.keepUntilUploaded`）。必须在写事务内调用。
-  /// 记录已有的（服务器收下过的同一份内容再存了一次也是）不留保底。记下是这台设备登记的（本机列 `registeredHere`）：启动清理只收这种。
+  /// 本机已有这个文件、还没有这台登记的记录时登记一条（同步载体），连同保底（`AttachmentFiles.keepUntilUploaded`）。必须在写事务内调用。
+  /// 记下是这台登记的（本机列 `registeredHere`）：启动清理只收这种，所以这台的引用都由自己那条撑着，不沿用别的设备登记的——
+  /// 那台不再引用、清理收走它那条时，删除同步过来也不会让这里的引用没了记录。这台已登记过的（服务器收下过的同一份内容再存了一次也是）不再登记、不留保底。
+  /// 代价：同一份内容每台引用过的各一条记录，各自经文件那一路上传一次（CloudKit 对同内容的资产去重，实测另一条只传约 0.1MB，见 `Schema.keyedAttachments`）；
+  /// 结构 95 之前登记的不算这台的，升级后再引用时补登记一条。文件不在本机时登记不了（记录要带文件），这样的引用仍只靠别处那条。
   func registerAttachment(_ key: String) throws {
-    guard try !hasAttachment(key), let metadata = try files.keepUntilUploaded(key) else { return }
+    guard let parts = AttachmentKey.parts(key),
+      try db.first("SELECT 1 FROM attachments WHERE hash = ? AND format = ? AND registeredHere = 1", [parts.hash, parts.format], { _ in true }) == nil,
+      let metadata = try files.keepUntilUploaded(key)
+    else { return }
     let now = Date.stamp
     let attachment = Attachment(id: UUID(), hash: metadata.hash, byteCount: metadata.byteCount, format: metadata.format, createdAt: now, modifiedAt: now)
     try insert(attachment)

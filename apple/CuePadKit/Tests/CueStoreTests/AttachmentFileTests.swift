@@ -172,6 +172,37 @@ import Testing
     #expect(try await store.hasAttachment(key) && store.files.fileURL(for: key) != nil)
   }
 
+  /// 这台（B）收到 A 登记的记录、取来文件，再用同一份内容建卡：B 登记自己的一行，不沿用 A 的。A 随后不再引用它、启动清理收走自己那行，
+  /// 删除同步到 B；B 的卡片之后才到 A。B 的那行撑着两边：都有记录、有图。
+  @Test func referencingContentRegisteredElsewhereRegistersOwnRecord() async throws {
+    let a = try Fixture()
+    let png = pngData(width: 13, height: 13, shade: 0.27)
+    let (key, theirs, theirCard) = try await {
+      let writer = try CueStore(location: .isolated(a.directory))  // A 上存图建卡的那次运行，随后结束
+      let key = try writer.files.store(png)
+      let card = try await writer.createCard(body: "![](cuepad://file/\(key))")
+      return (key, try #require(try RawDB(a.url).rows("SELECT id FROM attachments").first?[0]), card.id)
+    }()
+    let aCache = a.directory.appending(path: "Caches/CuePadAttachments/\(key)")
+    _ = try await store.applyRemote([.save(try #require(try await a.store.syncRow(recordName: theirs)), systemFields: Data())])
+    try store.files.adopt(fileAt: aCache, key: key)  // 文件那一路取来
+    let card = try await store.createCard(body: "也用 ![](cuepad://file/\(key))")
+
+    try await a.store.updateCard(theirCard) { $0.body = "图删了" }
+    try await a.store.purgeCard(theirCard)
+    _ = try await a.store.removeStrayFiles(drafts: [])
+    #expect(try await !a.store.hasAttachment(key))
+    _ = try await store.applyRemote([.delete(SyncKey(table: .attachments, id: theirs))])
+    #expect(try await store.hasAttachment(key) && store.files.fileURL(for: key) != nil)
+
+    let mine = try #require(try RawDB(fixture.url).rows("SELECT id FROM attachments").first?[0])
+    for name in [mine, card.id.uuidString.lowercased()] {
+      _ = try await a.store.applyRemote([.save(try #require(try await store.syncRow(recordName: name)), systemFields: Data())])
+    }
+    try a.store.files.adopt(fileAt: cached.appending(path: key), key: key)
+    #expect(try await a.store.hasAttachment(key) && a.store.files.fileURL(for: key) != nil)
+  }
+
   /// 键来自同步记录：拼不出附件目录外的路径。
   @Test(arguments: ["../cuepad.db", "deadbeef", String(repeating: "0", count: 64), String(repeating: "0", count: 64) + "./x"])
   func unknownOrMalformedKeyIsNotFound(key: String) throws {
