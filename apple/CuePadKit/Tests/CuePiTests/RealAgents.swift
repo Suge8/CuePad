@@ -29,12 +29,11 @@ import Testing
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
 ///
-/// OpenCode 没有录像带（它的 HTTP/SSE 边界没接进来），总是连真 OpenCode 跑：本机找得到 v2（官方脚本、Homebrew 或 npm 的 `@opencode/cli`，
-/// `CUEPAD_OPENCODE` 可指定）就在隔离的 `OpenCodeSandbox` 里跑，找不到就跳过。缺省用假模型 `Fixtures/fake-openai.mjs`，零网络、结果确定；
-/// 列出 `opencode` 只是改连真提供方，模型用 `CUEPAD_OPENCODE_MODEL`（`提供方/模型`，必给），密钥只经环境给。
+/// OpenCode 没有录像带，总连钉住的真 OpenCode v2（`PinnedAgent.opencode`，`xc.sh agents install opencode`；没装时跳过、列为未覆盖），
+/// 在隔离的 `OpenCodeSandbox` 里连本用例的假模型（`FakeModel`，Chat Completions），零网络。
 ///
 /// 没有录像带、只在列出这家时连真 Agent 跑的（`live(_:_:)`）：终端里的 Codex 与 Claude Code（断言的是伪终端、tmux 里真终端界面的
-/// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录；OpenCode 的总跑），
+/// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录；Pi、OpenCode、dsh 的总跑），
 /// 旧扩展托管进程换上新扩展（两个 Pi 进程交替上桥、热换扩展文件，回放排不稳先后）。
 enum RealAgents {
     static let recording: Set<AgentKind> = Set((ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS"] ?? "").split(separator: ",")
@@ -52,10 +51,7 @@ enum RealAgents {
         case .pi: pinnedPi.uncovered
         case .codex: realCodexURL != nil && FileManager.default.fileExists(atPath: realCodexAuth.path) ? nil : "本机没装或没登录 codex"
         case .claudeCode: claudeURL != nil && ClaudeLogin.token != nil ? nil : "本机没装或没登录 claude"
-        case .opencode:
-            if realOpenCodeURL == nil { "本机找不到 opencode v2（CUEPAD_OPENCODE 可指定）" }
-            else if recording.contains(.opencode), openCodeRealModel == nil { "列出 opencode 连真提供方要给 CUEPAD_OPENCODE_MODEL（提供方/模型）" }
-            else { nil }
+        case .opencode: OpenCodeSandbox.pinned.uncovered
         case .grok: realGrokURL == nil ? "本机找不到 grok（CUEPAD_GROK 可指定）" : nil
         case .dsh: PinnedAgent.dsh.uncovered
         }

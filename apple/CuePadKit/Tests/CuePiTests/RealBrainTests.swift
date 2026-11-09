@@ -6,10 +6,10 @@ import Testing
 @testable import CuePi
 
 /// MCP 是 Fixtures/mcp-echo.mjs 替身。
-/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；Pi、dsh 没有录像带，总连钉住的真 Agent 与本用例的假模型；OpenCode 没有录像带，总在隔离的 `OpenCodeSandbox` 里连真 OpenCode 跑（模型见它）。
+/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；Pi、OpenCode、dsh 没有录像带，总连钉住的真 Agent 与本用例的假模型。
 private let environment = ProcessInfo.processInfo.environment
 private let runtimes = AgentKind.allCases.filter(RealAgents.runs)
-/// Pi、dsh 连本用例的假模型（`FakeModel`，剧本 `playBrain`）
+/// Pi、OpenCode、dsh 连本用例的假模型（`FakeModel`，剧本 `playBrain`）
 private let cheapModels: [AgentKind: String] = [
     .pi: "fake/echo", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
     .grok: "grok-4.6", .dsh: "deepseek-official/deepseek-flash",
@@ -42,7 +42,7 @@ struct RealBrainTests {
         let echoLog: URL
         let sessions: URL
         let codename = "ZEBRA-4821"
-        /// OpenCode 的隔离家目录、库与假模型：每个大脑一台（并行的几台 OpenCode 头一次同起一个库会撞上建表）
+        /// OpenCode 的隔离家目录与库：每个大脑一台（并行的几台 OpenCode 头一次同起一个库会撞上建表）
         let sandbox: OpenCodeSandbox?
         /// 连本进程假模型的家（`playBrain`）；一串 echo 调用的第二次请求停在 `chain` 上
         let model: FakeModel?
@@ -57,9 +57,9 @@ struct RealBrainTests {
             sessions = root.appending(path: "pi-sessions")
             echoLog = root.appending(path: "echo.log")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            sandbox = runtime == .opencode ? try await OpenCodeSandbox() : nil
-            model = [.pi, .dsh].contains(runtime) ? try await FakeModel() : nil
+            model = [.pi, .opencode, .dsh].contains(runtime) ? try await FakeModel() : nil
             model?.playBrain(chain: chain)
+            sandbox = runtime == .opencode ? try await OpenCodeSandbox(model: model) : nil
             if runtime == .pi, let model { try PiProcess.writeModels(model, into: root.appending(path: "pi-agent")) }
             // Grok 的大脑另起临时配置目录，登录取用户配置目录里的：用户配置目录指到这里，不碰真实的 ~/.grok；dsh 的家目录也在这里（模型地址与假 key 见 `DshRig.environment`）；
             // Pi 的 agent 目录也在这里，不读用户的 ~/.pi（设置、提供方各人不同）
@@ -70,7 +70,7 @@ struct RealBrainTests {
             default: [String: String]()
             }
             let config = CueBrainConfig(
-                runtime: runtime, executable: runtime == .opencode ? try #require(realOpenCodeURL) : AgentTape.executable(runtime.facts.command),
+                runtime: runtime, executable: runtime == .opencode ? OpenCodeSandbox.pinned.executable : AgentTape.executable(runtime.facts.command),
                 model: environment["CUEPAD_BRAIN_MODEL_\(runtime.rawValue.uppercased())"] ?? cheapModels[runtime], effort: effort,
                 systemPrompt: "You are Cue, a test assistant. Your codename is \(codename). Keep answers to one short sentence. When asked to echo something, call the echo tool.",
                 workingDirectory: directory,
