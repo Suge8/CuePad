@@ -46,7 +46,7 @@ extension DebugScene {
                 for await submitted in Observations({ call.replies.count == 2 && call.replies.allSatisfy { $0.delivery == .submitted } }) where submitted { break }
             }
             if state == "ended" { call.hangUp() }
-            if state == "failed" { call.inputs.continuation.yield(.failed(.media)) }
+            if state == "failed" { call.inputs.continuation.yield(.failed(.media(.mediaFailed))) }
             if state == "ended" || state == "failed" {
                 for await live in Observations({ call.isLive }) where !live { break }
             }

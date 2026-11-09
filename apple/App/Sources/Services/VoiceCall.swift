@@ -16,7 +16,9 @@ final class VoiceCall {
     enum Failure: Error, Equatable {
         case codex(CodexAccessError)
         case wire(VoiceWire.Failure)
-        case microphoneDenied, media, timedOut
+        case microphoneDenied, timedOut
+        /// 媒体那端带着原因结束（本机的声音断了、手机那端被来电收走声音、没给麦克风……），原因原样投影给手机
+        case media(VoiceEndReason)
         case closed(String), server(String), other(String)
     }
 
@@ -45,7 +47,6 @@ final class VoiceCall {
     private var outputActive = false
     private(set) var waitingForResponse = false
     private(set) var assistantTurns: Set<String> = []
-    private(set) var mediaEndReason: VoiceEndReason?
     private var inputSamples: [Double] = []
     private var outputSamples: [Double] = []
     /// 50ms 一点，保留最近 1.8 秒；静音不呈现输入，远端出声时呈现输出。
@@ -127,7 +128,6 @@ final class VoiceCall {
         inputs = AsyncStream<Input>.makeStream()
         connection = .connecting
         self.session = session
-        mediaEndReason = nil
         assistantTurns.removeAll()
         waitingForResponse = false
         delegations.removeAll()
@@ -184,7 +184,7 @@ final class VoiceCall {
 
     private func handle(_ input: Input) -> Phase? {
         switch input {
-        case .hangUp: mediaEndReason = .hungUp; return .ended
+        case .hangUp: return .ended
         case .failed(let failure): return .failed(failure)
         case .prepared(let call, let access):
             usedPercent = call.usedPercent
@@ -195,9 +195,7 @@ final class VoiceCall {
                 mark("media")
                 connection = .starting(dependencies.control(call.id, access, session) { [inputs] in inputs.continuation.yield(.wire($0)) })
             }
-        case .peer(.ended(let reason)):
-            mediaEndReason = reason
-            return reason == .hungUp ? .ended : .failed(.media)
+        case .peer(.ended(let reason)): return reason == .hungUp ? .ended : .failed(.media(reason))
         case .peer(.sample(let side, let peak)):
             let value = min(1, max(0, peak))
             if side == .input { inputSamples = Array((inputSamples + [value]).suffix(VoicePeer.sampleCount)) }

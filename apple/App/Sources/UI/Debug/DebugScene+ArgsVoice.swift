@@ -10,6 +10,8 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     let hangUpAfterReply: Bool
     /// `-CuePadVoiceHistory <条数>`：通话面板预置的历史条数
     let history: Int
+    /// `-CuePadVoiceInterruptAfter <秒>`（手机）：在听后这么久发一条"会话被停用"的系统通知（来电、Siri 收走声音时系统发的那条）
+    let interruptAfter: Double
     /// `-CuePadVoiceKeepOpen YES`：首轮挂断后保留窗口，供真实按钮重连与结果阅读验收
     let keepOpen: Bool
     /// `-CuePadVoiceLayout <布局>`：语音面板布局样例
@@ -24,6 +26,8 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     let motion: String?
     /// `-CuePadVoiceMotionTrace YES`：语音面板动效逐帧打点
     let motionTrace: Bool
+    /// `-CuePadVoicePlayInBackground YES`（手机）：在听后等 App 进了后台再送声源文件；下行走真的扬声器（静音），不录
+    let playInBackground: Bool
     /// `-CuePadVoiceReadFixture <原文>`：把原文作为隔离库的主动消息请 GPT Live 朗读，录成后续验收的声源
     let readFixture: String?
     /// `-CuePadVoiceReadings YES`：通话读数打点

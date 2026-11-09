@@ -2,7 +2,8 @@ import AVFoundation
 import CueStore
 import os
 
-/// 一通电话的声音，经 `VoiceAudioDevice` 接到 WebRTC；主线程开关，停了不复用。声源是 `VoiceFixture` 时由它自己收发，这里只出电平。
+/// 一通电话的声音，经 `VoiceAudioDevice` 接到 WebRTC；主线程开关，停了不复用。声源是 `VoiceFixture` 时上行由它送，下行看它的 `downlink`；
+/// iOS 的音频会话与中断照常（中断与后台因此能在模拟器上验，`DebugScene+PhoneVoiceCall`）。
 /// 麦克风走 AVAudioEngine，打开系统的语音处理（回声消除、降噪、自动增益），WebRTC 自己的那套关掉（`VoicePeer`）。
 /// iOS 的音频会话归这里：playAndRecord + voiceChat，默认扬声器、可走蓝牙；会话被打断（来电、Siri、闹钟）或媒体服务重置即结束（`audioInterrupted`），
 /// 不假装还在通。换路由（蓝牙、耳机）或 Mac 换设备时引擎自己停下并发配置变化：按新硬件格式重建再开，开不起来才结束。
@@ -24,6 +25,11 @@ final class VoiceAudio {
     func start(_ events: @escaping (VoicePeer.Event) -> Void) throws {
         self.events = events
         guard let link = device.link else { throw VoicePeerError.unavailable }
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try session.setActive(true)
+        #endif
         watching = [
             Task { [levels] in
                 var input = VoiceLevels.Gate(), output = VoiceLevels.Gate()
@@ -33,26 +39,6 @@ final class VoiceAudio {
                     events(.sample(.output, peak: said))
                     if let change = input.update(heard) { events(.level(.input, loud: change.loud, peak: change.peak)) }
                     if let change = output.update(said) { events(.level(.output, loud: change.loud, peak: change.peak)) }
-                }
-            },
-        ]
-        if let fixture {
-            device.reconfigured(inputRate: VoiceAudioDevice.rate)
-            return fixture.start(link: link, levels: levels)
-        }
-        #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
-        try session.setActive(true)
-        #endif
-        try build(link)
-        watching += [
-            Task {
-                for await _ in NotificationCenter.default.notifications(named: .AVAudioEngineConfigurationChange) {
-                    // 引擎停下才发；还在跑的（开语音处理时自己发的那一下）不用重建
-                    guard let engine, !engine.isRunning else { continue }
-                    do { try build(link) }
-                    catch { fail("rebuild", error); return }
                 }
             },
         ]
@@ -71,15 +57,28 @@ final class VoiceAudio {
             },
         ]
         #endif
+        if let fixture, fixture.downlink != .speaker {
+            device.reconfigured(inputRate: VoiceAudioDevice.rate)
+            return fixture.start(link: link, levels: levels)
+        }
+        try build(link)
+        fixture?.start(link: link, levels: levels)
+        watching.append(Task {
+            for await _ in NotificationCenter.default.notifications(named: .AVAudioEngineConfigurationChange) {
+                // 引擎停下才发；还在跑的（开语音处理时自己发的那一下）不用重建
+                guard let engine, !engine.isRunning else { continue }
+                do { try build(link) }
+                catch { fail("rebuild", error); return }
+            }
+        })
     }
 
     func stop() {
         watching.forEach { $0.cancel() }
         watching = []
         fixture?.stop()
-        guard let engine else { return }
-        engine.stop()
-        self.engine = nil
+        engine?.stop()
+        engine = nil
         #if os(iOS)
         do { try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
         catch { Self.log.error("Voice audio session stayed active: \(error.localizedDescription, privacy: .public)") }
@@ -92,21 +91,28 @@ final class VoiceAudio {
     }
 
     /// 每次按此刻的硬件格式建一台新引擎：AVAudioEngine 换格式后旧连接的格式不再成立。
+    /// 声源是文件时只建扬声器这一半，且不外放（无人值守）。
     private func build(_ link: VoiceAudioDevice.Link) throws {
         engine?.stop()
         let engine = AVAudioEngine()
-        let input = engine.inputNode
-        try input.setVoiceProcessingEnabled(true)
-        input.voiceProcessingOtherAudioDuckingConfiguration = .init(enableAdvancedDucking: false, duckingLevel: .min)
-        let format = input.outputFormat(forBus: 0)
-        let sink = Self.microphone(format: format, link: link, levels: levels)
-        engine.attach(sink)
-        try engine.link(input, to: sink, format: format)
+        var inputRate = VoiceAudioDevice.rate
+        if fixture == nil {
+            let input = engine.inputNode
+            try input.setVoiceProcessingEnabled(true)
+            input.voiceProcessingOtherAudioDuckingConfiguration = .init(enableAdvancedDucking: false, duckingLevel: .min)
+            let format = input.outputFormat(forBus: 0)
+            inputRate = format.sampleRate
+            let sink = Self.microphone(format: format, link: link, levels: levels)
+            engine.attach(sink)
+            try engine.link(input, to: sink, format: format)
+        } else {
+            engine.mainMixerNode.outputVolume = 0
+        }
         let output = Self.speaker(link: link, levels: levels)
         engine.attach(output)
         try engine.link(output, to: engine.mainMixerNode, format: Self.format)
         self.engine = engine
-        device.reconfigured(inputRate: format.sampleRate)
+        device.reconfigured(inputRate: inputRate)
         engine.prepare()
         try engine.start()
     }

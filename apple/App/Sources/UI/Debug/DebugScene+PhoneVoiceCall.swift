@@ -1,12 +1,19 @@
 #if os(iOS) && DEBUG
+import AVFoundation
 import UIKit
 
 /// 手机发起的真实通话（媒体在这台，会话与鉴权在 Mac）：`-CuePadVoice <音频文件>` 在中转连上、Cue 能听后照通话钮拨出（`Workspace.startVoiceCall`），
 /// Mac 投影到"在听"时把文件当你说的话送进上行（`DebugHooks.phoneVoiceSource`）；`-CuePadVoiceSeconds`（默认 60）后挂断。
 /// Mac 那端起一个带 `-CuePadVoiceToken`、不带 `-CuePadVoice` 的实例，两端用同一朵模拟云（`-CuePadSharedCloud`，同一个中转房间）。
 /// 对方的声音录到 `-CuePadVoiceRecord <wav>`，节点写进 `-CuePadVoiceLog <文件>`（`DebugVoiceLog`）：阶段、回应、下行响停、进出后台。
+/// 后台：`-CuePadVoicePlayInBackground YES` 在听后记 `waiting-background`、等 App 进后台（外面 `xcrun simctl launch <UDID> com.apple.Preferences` 把它压下去）1 秒再送文件，
+/// 核对上下行、委派与挂断都在后台照常；下行这时走真的扬声器（静音、不录，`VoiceFixture.Downlink.speaker`），回应看 `output-loud` 与 Mac 的转写。中断：`-CuePadVoiceInterruptAfter <秒>` 在听后发系统收走声音时的那条通知，核对通话带"音频已中断"结束、Mac 收到挂断。
+/// 音频会话与真机同一种（录音类）：没授权过麦克风的模拟器一接通就弹授权、停在那里，先 `xcrun simctl privacy <UDID> grant microphone <bundle id>`。
+/// 负载很高时模拟器初始化扬声器会 RPC 超时、App 被系统中止（崩溃报告停在 `AURemoteIO::Initialize`），不是这里的问题，重跑。
 extension DebugScene {
-    static let phoneVoiceFixture: VoiceFixture? = args.voice.flatMap { $0 == "mic" ? nil : VoiceFixture(recording: args.voiceOpts.record != nil) }
+    static let phoneVoiceFixture: VoiceFixture? = args.voice.flatMap {
+        $0 == "mic" ? nil : VoiceFixture(downlink: args.voiceOpts.playInBackground ? .speaker : args.voiceOpts.record != nil ? .record : .discard)
+    }
 
     static func phoneVoiceCallIfAsked(_ workspace: Workspace) async {
         guard let input = args.voice else { return }
@@ -32,13 +39,29 @@ extension DebugScene {
             await Task.wait(for: .seconds(args.voiceOpts.seconds ?? 60))
             await workspace.hangUpVoiceCall()
         })
-        var played = false
+        var listened = false
         for await phase in Observations({ voice.phase }) {
             note("phase \(phase.map { "\($0)" } ?? "none")")
-            if !played, phase == .listening, let fixture = phoneVoiceFixture {
-                played = true
-                note("play \(input)")
-                try fixture.play(URL(filePath: input))
+            if !listened, phase == .listening {
+                listened = true
+                if args.voiceOpts.interruptAfter > 0 {
+                    watching.append(Task {
+                        guard await Task.wait(for: .seconds(args.voiceOpts.interruptAfter)) else { return }
+                        note("interrupt")
+                        NotificationCenter.default.post(name: AVAudioSession.didBecomeInactiveNotification, object: AVAudioSession.sharedInstance())
+                    })
+                }
+                if let fixture = phoneVoiceFixture {
+                    watching.append(Task {
+                        if args.voiceOpts.playInBackground {
+                            note("waiting-background")
+                            for await _ in NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification) { break }
+                            guard await Task.wait(for: .seconds(1)) else { return }
+                        }
+                        note("play \(input)")
+                        do { try fixture.play(URL(filePath: input)) } catch { abandon("声源文件没能送出", error) }
+                    })
+                }
             }
             if case .ended = phase { break }
             if case .failed = phase { break }

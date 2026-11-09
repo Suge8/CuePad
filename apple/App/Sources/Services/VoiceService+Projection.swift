@@ -12,7 +12,7 @@ extension VoiceService {
         case .handingOff: .processing
         case .speaking: .speaking
         case .closing: .closing
-        case .ended: .ended(reason: call.mediaEndReason ?? .hungUp)
+        case .ended: .ended(reason: .hungUp)
         case .failed(let failure): .failed(Self.issue(for: failure))
         }
         let requests = call.requests.map { request in
@@ -62,7 +62,7 @@ extension VoiceService {
         case .wire(.server(let status, _)): .server(status: status)
         case .microphoneDenied: .ended(.permissionDenied)
         case .timedOut: .ended(.timedOut)
-        case .media: .ended(.mediaFailed)
+        case .media(let reason): .ended(reason)
         case .wire(.malformed): .ended(.protocolRejected)
         case .closed, .server, .other: .ended(.controlFailed)
         }

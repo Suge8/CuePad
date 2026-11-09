@@ -73,7 +73,7 @@ enum DebugVoiceMotion {
             for await phase in Observations({ call.phase }) where phase == .listening { break }
             try await sound(call, side: .input, count: 20)
             mark("failure")
-            call.inputs.continuation.yield(.failed(.media))
+            call.inputs.continuation.yield(.failed(.media(.mediaFailed)))
             for await live in Observations({ call.isLive }) where !live { break }
             try await Task.sleep(for: .seconds(1))
             mark("recover")

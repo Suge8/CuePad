@@ -1,18 +1,24 @@
 import AVFoundation
 import Synchronization
 
-/// 无人值守的声源（`-CuePadVoice <音频文件|目录>`，`DebugScene.voiceCallIfAsked`）：不碰音频硬件，自己按 10 ms 的节拍代替声卡，
-/// 从 WebRTC 取一片下行、交回等长的上行。`play` 把一个文件实时送进上行，送完调 `finished`；没在播时上行是静音。
-/// `recording` 时录下下行（`write`），否则下行丢掉。只给一通电话的 `VoiceAudio` 用。
-/// 不借 AVAudioEngine 的输出节拍：模拟器的音频服务在负载高时初始化输出单元会 RPC 超时、整个 App 被中止（实测），CI 的 runner 也没有声卡。
+/// 无人值守的声源（`-CuePadVoice <音频文件|目录>`，`DebugScene.voiceCallIfAsked`）：自己按 10 ms 的节拍代替麦克风，`play` 把一个文件实时送进上行，
+/// 送完调 `finished`；没在播时上行是静音。只给一通电话的 `VoiceAudio` 用。
+/// 下行默认也由这个节拍从 WebRTC 取走、不碰音频硬件：模拟器的音频服务在负载高时初始化输出单元会 RPC 超时、整个 App 被中止（实测），CI 的 runner 也没有声卡。
 final class VoiceFixture {
-    let recording: Bool
+    nonisolated enum Downlink: Sendable {
+        /// 录下（`write`），不出声
+        case record
+        case discard
+        /// 照常走 `VoiceAudio` 的扬声器（静音）：只有真的在出声，iOS 才按后台音频让 App 在后台接着跑（模拟器实测：不出声的进后台即被挂起）。后台验收用
+        case speaker
+    }
+    let downlink: Downlink
     var finished: (String) -> Void = { _ in }
     private let feed = Feed()
     private var clock: (any DispatchSourceTimer)?
     private var watching: Task<Void, Never>?
 
-    init(recording: Bool) { self.recording = recording }
+    init(downlink: Downlink) { self.downlink = downlink }
 
     isolated deinit {
         watching?.cancel()
@@ -20,7 +26,7 @@ final class VoiceFixture {
     }
 
     func start(link: VoiceAudioDevice.Link, levels: VoiceLevels) {
-        clock = feed.clock(link: link, levels: levels, recording: recording)
+        clock = feed.clock(link: link, levels: levels, downlink: downlink)
     }
 
     func stop() {
@@ -40,7 +46,7 @@ final class VoiceFixture {
         }
     }
 
-    /// 录下的下行，24 kHz 单声道 16 位。
+    /// 录下的下行（`.record`），24 kHz 单声道 16 位。
     func write(to url: URL) throws {
         let pcm = feed.recorded()
         func le<T: FixedWidthInteger>(_ value: T) -> Data { withUnsafeBytes(of: value.littleEndian) { Data($0) } }
@@ -96,28 +102,30 @@ final class VoiceFixture {
 
         func recorded() -> [Int16] { state.withLock { $0.recorded } }
 
-        func clock(link: VoiceAudioDevice.Link, levels: VoiceLevels, recording: Bool) -> any DispatchSourceTimer {
+        func clock(link: VoiceAudioDevice.Link, levels: VoiceLevels, downlink: Downlink) -> any DispatchSourceTimer {
             let clock = DispatchSource.makeTimerSource(flags: .strict, queue: DispatchQueue(label: "voice-fixture", qos: .userInteractive))
             clock.setEventHandler { [weak clock] in
                 // 被耽搁时一次补上错过的几拍，上下行都不慢于实时
-                for _ in 0..<max(1, Int(clock?.data ?? 1)) { self.tick(link: link, levels: levels, recording: recording) }
+                for _ in 0..<max(1, Int(clock?.data ?? 1)) { self.tick(link: link, levels: levels, downlink: downlink) }
             }
             clock.schedule(deadline: .now(), repeating: .milliseconds(10), leeway: .milliseconds(1))
             clock.resume()
             return clock
         }
 
-        private func tick(link: VoiceAudioDevice.Link, levels: VoiceLevels, recording: Bool) {
+        private func tick(link: VoiceAudioDevice.Link, levels: VoiceLevels, downlink: Downlink) {
             let frames = UInt32(Self.frames)
             time.mSampleTime += Double(frames)
             time.mHostTime = mach_absolute_time()
             time.mFlags = [.sampleTimeValid, .hostTimeValid]
             var flags = AudioUnitRenderActionFlags()
             var list = Self.list(output)
-            _ = link.playout(&flags, &time, 0, frames, &list)
-            levels.output.record(UnsafeBufferPointer(output))
+            if downlink != .speaker {
+                _ = link.playout(&flags, &time, 0, frames, &list)
+                levels.output.record(UnsafeBufferPointer(output))
+            }
             state.withLock { state in
-                if recording {
+                if downlink == .record {
                     // 两点并一点降到 24 kHz
                     for index in stride(from: 0, to: output.count, by: 2) {
                         state.recorded.append(Int16((Int32(output[index]) + Int32(output[index + 1])) / 2))

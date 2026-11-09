@@ -59,7 +59,8 @@ final class VoiceSignalConnection {
         let data = try VoiceSignalFormat.canonicalJSON(payload)
         guard data.count <= VoiceSignalFormat.maximumPlaintextBytes else { throw VoiceSignalError.tooLarge }
         let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: claim.endpoint, recipient: recipient,
-                                       session: session, sequence: peer.sent + 1, expiresAtMilliseconds: now + VoiceSignalFormat.lifetimeMilliseconds, purpose: payload.purpose)
+                                       session: session, sequence: peer.sent + 1, expiresAtMilliseconds: now + VoiceSignalFormat.lifetimeMilliseconds - VoiceSignalFormat.clockSkewMilliseconds,
+                                       purpose: payload.purpose)
         let sealed = try AES.GCM.seal(data, using: key, authenticating: header.authenticationData())
         guard let combined = sealed.combined else { throw VoiceSignalError.invalid }
         peer.sent = header.sequence
