@@ -32,6 +32,7 @@
 		E10000000000000000000012 /* CueAgent in Frameworks */ = {isa = PBXBuildFile; productRef = E10000000000000000000011 /* CueAgent */; };
 		E10000000000000000000014 /* CueAgent in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = E10000000000000000000013 /* CueAgent */; };
 		F1000000000000000000A003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = F1000000000000000000A002 /* Sparkle */; };
+		F2000000000000000000A003 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = F2000000000000000000A002 /* WebRTC */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -193,6 +194,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F1000000000000000000A003 /* Sparkle in Frameworks */,
+				F2000000000000000000A003 /* WebRTC in Frameworks */,
 				D1000000000000000000A00B /* CueSync in Frameworks */,
 				B10000000000000000000003 /* CueText in Frameworks */,
 				B10000000000000000000007 /* CueStore in Frameworks */,
@@ -349,6 +351,7 @@
 			name = CuePad;
 			packageProductDependencies = (
 				F1000000000000000000A002 /* Sparkle */,
+				F2000000000000000000A002 /* WebRTC */,
 				D1000000000000000000A001 /* CueSync */,
 				B10000000000000000000002 /* CueText */,
 				B10000000000000000000006 /* CueStore */,
@@ -485,6 +488,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				F1000000000000000000A001 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */,
+				F2000000000000000000A001 /* XCLocalSwiftPackageReference "Vendor/WebRTC" */,
 				B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */,
 			);
 			productRefGroup = A10000000000000000000008 /* Products */;
@@ -1048,6 +1052,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Vendor/Sparkle;
 		};
+		F2000000000000000000A001 /* XCLocalSwiftPackageReference "Vendor/WebRTC" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Vendor/WebRTC;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1150,6 +1158,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F1000000000000000000A001 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */;
 			productName = Sparkle;
+		};
+		F2000000000000000000A002 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F2000000000000000000A001 /* XCLocalSwiftPackageReference "Vendor/WebRTC" */;
+			productName = WebRTC;
 		};
 /* End XCSwiftPackageProductDependency section */
 

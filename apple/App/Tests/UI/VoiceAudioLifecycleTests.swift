@@ -19,9 +19,8 @@ import Testing
             return "isolated-offer"
         }
         func accept(answer: String) async throws { onEvent(.connected) }
-        func play() async throws {}
         func setMuted(_ value: Bool) async throws {}
-        func close() async throws { await closeGate?.wait(); closed = true }
+        func close() async { await closeGate?.wait(); closed = true }
     }
 
     final class Fixture {
@@ -66,6 +65,10 @@ import Testing
         closeGate.open()
         try await eventually("中断清理完成") { fixture.voice.phone == nil }
         #expect(fixture.workspace.phoneVoice.phase == .ended(reason: .audioInterrupted))
+        let ended = try #require(fixture.voice.session)
+        await fixture.voice.receive(fixture.signal.event(.projection(value: .init(
+            session: ended, phase: .failed(.ended(.mediaFailed)), requests: [], replies: [], executions: [])), session: ended))
+        #expect(fixture.workspace.phoneVoice.phase == .ended(reason: .audioInterrupted), "Mac 收到挂断后的回声不改本机先落定的原因")
         #expect(fixture.signal.sent.contains { if case .media(.hangup(reason: .audioInterrupted)) = $0 { true } else { false } })
         let next = Media()
         nextMedia = next

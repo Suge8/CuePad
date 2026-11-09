@@ -26,7 +26,6 @@ extension VoiceIssue {
         case .ended(let reason):
             switch reason {
             case .hungUp: "通话已结束"
-            case .background: "App 进入后台，通话已结束"
             case .permissionDenied: "麦克风权限未开启"
             case .audioInterrupted: "音频已中断"
             case .mediaFailed: "通话的声音连接断了"
@@ -53,7 +52,6 @@ extension VoiceIssue {
         case .originalMissing: "原记录不可用，无法继续此操作"
         case .alreadyHandled: "原请求已处理，无需再次提交"
         case .turnChanged: "执行回合已变化，没有停止后来的工作"
-        case .shutdownUnconfirmed: "通话关闭尚未确认，请检查连接"
         }
     }
 
@@ -96,7 +94,7 @@ extension PhoneVoiceViewState {
         }
         if case .failed(let issue) = phase {
             issues.append(.init(id: .connection, summary: "通话未连接", message: issue.phoneMessage, recovery: issue.phoneRecovery))
-        } else if case .ended(let reason) = phase, reason != .hungUp, reason != .background {
+        } else if case .ended(let reason) = phase, reason != .hungUp {
             let issue = VoiceIssue.ended(reason)
             issues.append(.init(id: .connection, summary: "通话已结束", message: issue.phoneMessage, recovery: issue.phoneRecovery))
         } else if phase == nil, let issue = startUnavailableReason {
@@ -268,12 +266,12 @@ extension Workspace {
         }
     }
 
-    /// 通话结束得要你知道的那一种；正常挂断、进后台、还在通话都是 nil。只由阶段与请求推出，不另存。
+    /// 通话结束得要你知道的那一种；正常挂断、还在通话都是 nil。只由阶段与请求推出，不另存。
     var phoneVoiceEnding: PhoneVoiceEnding? {
         let voice = services.voice
         return switch voice.phase {
         case .failed(let issue): .failed(issue)
-        case .ended(let reason) where reason != .hungUp && reason != .background: .failed(.ended(reason))
+        case .ended(let reason) where reason != .hungUp: .failed(.ended(reason))
         case .ended: voice.requestPages.page.items.contains { $0.issue != nil } ? .unsent : nil
         default: nil
         }

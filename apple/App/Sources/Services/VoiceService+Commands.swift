@@ -33,19 +33,28 @@ extension VoiceService {
 
     #if os(macOS)
     func receiveCommand(_ command: VoiceCommand, header: VoiceSignalHeader) {
+        // 来源按到达这一刻核对：执行前链路才断的，仍是这一通发来的
+        let fromCall = remote?.session == header.session && remote?.link == .bound(local: header.recipient, peer: header.sender)
         Task {
             let outcome: VoiceCommandResult.Outcome
-            if case .repeatReply = command.action,
-               remote?.header.session != header.session || remote?.header.sender != header.sender || remote?.header.recipient != header.recipient {
+            if case .repeatReply = command.action, !fromCall {
                 outcome = .rejected(reason: .sourceMismatch)
             } else {
                 outcome = await execute(command, mediaSession: header.session)
             }
-            do {
-                try await signaling?.sendVoice(.commandResult(result: .init(command: command.id, outcome: outcome)),
-                                               session: header.session, to: header.sender)
-            } catch { AppServices.log.error("Voice command result could not be delivered: \(String(describing: error))") }
+            var target: VoiceEndpoint? = header.sender
+            if let remote, remote.session == header.session {
+                remote.results[command.id] = outcome
+                if case .bound(_, let phone) = remote.link { target = phone } else { target = nil }
+            }
+            guard let target else { return }
+            await sendResult(.init(command: command.id, outcome: outcome), session: header.session, to: target)
         }
+    }
+
+    func sendResult(_ result: VoiceCommandResult, session: VoiceSessionID, to phone: VoiceEndpoint) async {
+        do { try await signaling?.sendVoice(.commandResult(result: result), session: session, to: phone) }
+        catch { AppServices.log.error("Voice command result could not be delivered: \(String(describing: error))") }
     }
 
     func execute(_ command: VoiceCommand, mediaSession: VoiceSessionID?) async -> VoiceCommandResult.Outcome {

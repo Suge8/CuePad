@@ -46,7 +46,7 @@ extension DebugScene {
                 for await submitted in Observations({ call.replies.count == 2 && call.replies.allSatisfy { $0.delivery == .submitted } }) where submitted { break }
             }
             if state == "ended" { call.hangUp() }
-            if state == "failed" { call.inputs.continuation.yield(.failed(.media)) }
+            if state == "failed" { call.inputs.continuation.yield(.failed(.media(.mediaFailed))) }
             if state == "ended" || state == "failed" {
                 for await live in Observations({ call.isLive }) where !live { break }
             }
@@ -61,11 +61,10 @@ final class DebugVoiceLayoutMedia: VoiceMedia {
         return "layout-offer"
     }
     func accept(answer: String) async throws { onEvent(.connected) }
-    func play() async throws {}
     func setMuted(_ value: Bool) async throws {}
-    func close() async throws {
+    func close() async {
         let seconds = DebugScene.args.voiceOpts.closeSeconds
-        try await Task.sleep(for: .seconds(seconds > 0 ? seconds : 2))
+        await Task.wait(for: .seconds(seconds > 0 ? seconds : 2))
     }
 }
 

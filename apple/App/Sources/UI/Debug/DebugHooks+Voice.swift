@@ -1,6 +1,6 @@
 #if os(macOS)
-import WebKit
 import CuePi
+import Foundation
 
 extension DebugHooks {
     static func makeVoiceCall(_ dependencies: VoiceCall.Dependencies) -> VoiceCall {
@@ -18,7 +18,7 @@ extension DebugHooks {
                 try scenario.beforeRecording()
                 return try await tell(text)
             }
-            dependencies.media = { _, _ in DebugVoiceLayoutMedia() }
+            dependencies.media = { _ in DebugVoiceLayoutMedia() }
             dependencies.createCall = { _, _, _, _ in .init(id: "layout", answer: "answer", usedPercent: nil) }
             dependencies.control = { _, _, _, received in
                 received(.success(.started))
@@ -30,15 +30,16 @@ extension DebugHooks {
         return VoiceCall(dependencies)
     }
 
-    static func configureVoice(_ web: WKWebView, source: VoicePeer.Source) async throws {
+    static func voiceWire(_ text: String) {
         #if DEBUG
-        try await DebugVoice.configure(web, source: source)
+        DebugVoiceLog.wire(text)
         #endif
     }
 
-    static func voiceWire(_ text: String, type: String) {
+    /// `-CuePadVoiceFailProjection` 的那段时间里，Mac 发给手机的投影当发送失败（像中转慢、发不出去），手机的链路照常。
+    static func voiceProjectionSend() throws {
         #if DEBUG
-        if type != "session.input_audio.append", type != "session.output_audio.delta" { DebugVoice.wire(text) }
+        if let until = DebugScene.projectionFailsUntil, ContinuousClock.now < until { throw URLError(.timedOut) }
         #endif
     }
 }

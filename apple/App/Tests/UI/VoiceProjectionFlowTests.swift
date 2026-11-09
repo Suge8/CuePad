@@ -35,5 +35,17 @@ import Testing
         #expect(recorded.preview == nil)
         try await fixture.hangUp()
     }
+
+    /// 手机那端被来电收走声音而挂断（手机的媒体在 Mac 这边就是一个带原因结束的媒体）：投影给手机的是同一个原因，手机显示"音频已中断"而不是"声音连接断了"。
+    @Test func 媒体那端带原因结束_投影原样给手机() async throws {
+        let app = TestApp(), services = app.services!, host = TestApp.hostID
+        try await services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
+        let fixture = VoiceFlowFixture(services)
+        defer { services.cancelBackgroundWork() }
+        try await fixture.connect()
+        fixture.media.onEvent(.ended(.audioInterrupted))
+        try await eventually("通话按媒体给的原因结束") { !fixture.call.isLive }
+        #expect(try services.voice.macProjection(fixture.call).phase == .failed(.ended(.audioInterrupted)))
+    }
 }
 #endif

@@ -21,9 +21,8 @@ final class VoiceFlowFixture {
             return "offer"
         }
         func accept(answer: String) async throws { onEvent(.connected) }
-        func play() async throws {}
         func setMuted(_ value: Bool) async throws { muted = value }
-        func close() async throws {
+        func close() async {
             closing = true
             if let closeGate { for await _ in closeGate {} }
             closed = true
@@ -68,7 +67,7 @@ final class VoiceFlowFixture {
         workspace.startVoiceCall { dependencies in
             var dependencies = dependencies
             dependencies.access = { try await self.access() }
-            dependencies.media = { _, _ in self.media }
+            dependencies.media = { _ in self.media }
             dependencies.createCall = { _, _, _, _ in
                 if let error = self.connectError { throw error }
                 return VoiceWire.Call(id: "rtc_isolated", answer: "answer", usedPercent: nil)

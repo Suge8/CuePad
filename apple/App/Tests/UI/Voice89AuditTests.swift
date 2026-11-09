@@ -23,22 +23,28 @@ import Testing
     var closed = false
     func offer() async throws -> String { offered = true; await offerGate?.wait(); return "isolated-offer" }
     func accept(answer: String) async throws { onEvent(.connected) }
-    func play() async throws {}
     func setMuted(_ value: Bool) async throws {}
-    func close() async throws { closing = true; await closeGate?.wait(); closed = true }
+    func close() async { closing = true; await closeGate?.wait(); closed = true }
 }
 
 @MainActor final class AuditSignaling: VoiceSignaling {
     let local = VoiceEndpoint(device: .init("phone-audit"), lease: UUID())
-    let peer = VoiceEndpoint(device: .init("mac-audit"), lease: UUID())
+    var peer = VoiceEndpoint(device: .init("mac-audit"), lease: UUID())
     var voiceAvailability: VoiceRelayAvailability { .ready(endpoint: local) }
     var voiceEvents: AsyncStream<VoiceRelayEvent> { AsyncStream { _ in } }
     var sent: [VoiceSignalPayload] = []
+    var recipients: [VoiceEndpoint] = []
     var failConnected = false
-    func resolveVoicePeer(_ device: VoiceDeviceID) async throws -> VoiceEndpoint { peer }
+    /// 给了就让解析挂在它上面（中转连着却不回解析）
+    var resolveGate: AuditGate?
+    func resolveVoicePeer(_ device: VoiceDeviceID) async throws -> VoiceEndpoint {
+        await resolveGate?.wait()
+        return peer
+    }
     func sendVoice(_ payload: VoiceSignalPayload, session: VoiceSessionID, to recipient: VoiceEndpoint) async throws {
         if failConnected, case .media(.event(.connected)) = payload { throw URLError(.networkConnectionLost) }
         sent.append(payload)
+        recipients.append(recipient)
     }
     func event(_ payload: VoiceSignalPayload, session: VoiceSessionID) -> VoiceRelayEvent {
         .received(.init(header: .init(version: 1, sender: peer, recipient: local, session: session, sequence: 1, expiresAtMilliseconds: Int64(Date.now.timeIntervalSince1970 * 1000) + 30000, purpose: payload.purpose), payload: payload))
@@ -209,26 +215,25 @@ import Testing
         let next = AuditMedia(); nextMedia = next; try await voice.start()
         let current = try #require(voice.session)
         #expect(old != current)
-        callback(.failed)
+        callback(.ended(.mediaFailed))
         await voice.receive(signal.event(.projection(value: .init(session: old, phase: .failed(.storageUnavailable), requests: [], replies: [], executions: [])), session: old))
         #expect(!next.closed); #expect(voice.session == current)
         await voice.end(notify: false)
     }
 
-    @Test func backgroundDuringPermissionCannotReviveMedia() async throws {
-        let app = TestApp(), signal = AuditSignaling(), media = AuditMedia(), gate = AuditGate()
-        defer { app.services.cancelBackgroundWork(); gate.open() }
-        try await app.services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "mac-audit" }
-        let voice = VoiceService(services: app.services, signaling: signal, makeMedia: { media }); app.services.voice = voice
-        media.offerGate = gate
+    /// iPhone 进后台、锁屏不结束通话：媒体与 Mac 的信令都留着，之后照常挂断。
+    @Test func backgroundKeepsTheCall() async throws {
+        let (app, voice, signal, media) = try await phone()
+        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
-        let start = Task { try await workspace.startVoiceCall() }
-        try await eventually("permission waiting") { media.offered }
         await app.services.prepareForBackground()
-        gate.open(); _ = await start.result
+        #expect(!media.closing)
+        #expect(voice.isLive)
+        #expect(!signal.sent.contains { if case .media(.hangup) = $0 { true } else { false } })
+        await workspace.hangUpVoiceCall()
         #expect(media.closed)
-        #expect(!signal.sent.contains { if case .media(.offer) = $0 { true } else { false } })
-        #expect(workspace.phoneVoice.phase == .ended(reason: .background))
+        #expect(workspace.phoneVoice.phase == .ended(reason: .hungUp))
+        #expect(signal.sent.contains { if case .media(.hangup(reason: .hungUp)) = $0 { true } else { false } })
     }
 
     @Test func mediaEndDoesNotCancelPendingBusinessAndDisconnectDoesNotResend() async throws {

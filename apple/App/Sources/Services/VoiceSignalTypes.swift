@@ -36,10 +36,16 @@ nonisolated enum VoiceMediaSignal: Equatable, Codable, Sendable {
     case answer(value: VoiceAnswer)
     case event(value: VoiceMediaEvent)
     case hangup(reason: VoiceEndReason)
+    /// 同一通（header.session）"我在 header.sender 这个租约上"（`VoiceLink`、`VoiceSignalFormat.relinkGrace`）。
+    /// 正在等对端的一方每秒发 ask=true；另一方收到就回 ask=false，回的丢了下一秒的问会再问；
+    /// Mac 换绑时（不论哪种帧引起）另补发当前投影。
+    /// 两端各凭收到对方的一帧确认对方还在（换绑只认 `VoiceService.rebind` 一处），不靠自己发没发出去推断。
+    case resume(ask: Bool)
 }
 
 /// 每帧的 AEAD 认证头。session 对媒体指当前通话，对业务命令指原通话来源，不限制命令必须在原通话存活时执行。
 /// sequence 由唯一 Relay 发送者按双方租约对从 1 单调分配，跨通话和命令共用，不能按 session 重置；耗尽前换连接。
+/// 序号与防重放记在本机这一条中转连接上（`VoiceSignalConnection`）：通话接到新租约后从 1 重新数，旧租约的帧因收件租约不符、发件租约已退役一律不认。
 /// 期限使用发端时钟的 Unix 毫秒，只由收端判定（容差见 `clockSkewMilliseconds`），中转不判；不续期、不排队。
 nonisolated struct VoiceSignalHeader: Equatable, Codable, Sendable {
     let version: UInt8
@@ -78,6 +84,10 @@ nonisolated enum VoiceSignalFormat {
     /// 期限由发端时钟写、收端时钟查，两台设备的时钟并不一致；零容差时发端快几十毫秒就整帧被拒。
     /// 取 JWT 校验常用的 60 秒（RFC 7519 §4.1.4 允许"几分钟以内"的余量），收端在两侧都放宽这么多。
     static let clockSkewMilliseconds: Int64 = 60_000
+    /// 通话中信令断了（本机中转断、对端租约离开、发到对端被拒）等多久对端以新租约回来（`VoiceMediaSignal.resume`）。
+    /// 断的只是协调：媒体直连 OpenAI、Mac 的控制连接都不经中转，这段时间通话照常；中转自己 1 秒起重连（`Relay.retry`），网络回来即连。
+    /// 到期没回来才算离开，按断开时的原因结束；两端同一个值。
+    static let relinkGrace: Duration = .seconds(15)
     /// 从现有 RelaySecret 经 HKDF-SHA256（空 salt、此 UTF-8 info、32 字节输出）派生 AES-256-GCM 密钥。
     static let keyContext = "cuepad-voice-signal-v1"
     static let registrationContext = "cuepad-relay-voice-v1"

@@ -73,8 +73,29 @@ nonisolated enum VoiceSignalError: Error {
     case rejected(VoiceSignalRejection)
 }
 
+/// 一通电话在中转上的绑定，是通话 owner（手机 `VoicePhoneSession`、Mac `VoiceRemoteMedia`）唯一的链路状态。
+/// 中转只承担协调（挂断、业务投影、命令），媒体直连 OpenAI、Mac 的控制连接也不经它：信令断了通话照常，
+/// 已接通的转入 relinking 等对端以新租约回来，"已离开"只在 until 到了还没回来时成立，按 reason（断开时的原因）结束。
+/// 身份是同一设备 + 同一通话（header.session）：这样的一帧从新租约到达即换绑，序号随新租约对从 1 数，旧租约已退役、残帧不认。
+nonisolated enum VoiceLink: Equatable, Sendable {
+    case bound(local: VoiceEndpoint, peer: VoiceEndpoint)
+    case relinking(peer: VoiceDeviceID, until: ContinuousClock.Instant, reason: VoiceEndReason)
+
+    var peerDevice: VoiceDeviceID {
+        switch self {
+        case .bound(_, let peer): peer.device
+        case .relinking(let peer, _, _): peer
+        }
+    }
+
+    var isBound: Bool { if case .bound = self { true } else { false } }
+
+    /// 换账号、协议被拒、中转满员不是一时断开，等也回不来。
+    static func canRelink(after reason: VoiceEndReason) -> Bool { [.networkFailed, .peerLeft, .leaseReplaced].contains(reason) }
+}
+
 /// 由既有 Relay 实现，不另起 socket/心跳/run/reconnect 状态机。AppServices 是唯一事件消费者；其余读服务投影。
-/// 账号变化、网络失败、源退出、替换租约均终止绑定通话；重连只产生新租约，不复活旧通话或重发业务命令。
+/// 账号变化、网络失败、源退出、替换租约都关掉旧租约上的一切等待；已接通的通话按 `VoiceLink` 等对端回来，未确认的业务命令不重发。
 @MainActor protocol VoiceSignaling: AnyObject {
     var voiceAvailability: VoiceRelayAvailability { get }
     /// 在启用 Relay 前由 AppServices 订阅，沿用该连接的有序事件，不丢失 closed/departed。

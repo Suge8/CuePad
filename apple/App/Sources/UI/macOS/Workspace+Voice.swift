@@ -6,21 +6,18 @@ import Foundation
 /// 和 Cue 通话的动作入口；通话、真实请求与结果在 VoiceCall，执行控制沿用现有投送链路。
 /// 交出来的话走"对 Cue 说"同一个入口（`speak` 到 `.cue`），所以 Cue 没启用（听不到）时不起通话。
 extension Workspace {
-    /// 菜单的动作；无人值守与人工验收（`DebugScene.voiceCallIfAsked`）走同一个，只换声音来源与录音。
-    func toggleVoiceCall(source: VoicePeer.Source = .microphone(device: nil), recording: URL? = nil) {
+    /// 菜单的动作；无人值守与人工验收（`DebugScene.voiceCallIfAsked`）走同一个，只换声源。
+    func toggleVoiceCall(source: VoicePeer.Source = .microphone) {
         if let voice, voice.isLive { return voice.hangUp() }
-        startVoiceCall(source: source, recording: recording)
+        startVoiceCall(source: source)
     }
 
-    func startVoiceCall(
-        source: VoicePeer.Source = .microphone(device: nil), recording: URL? = nil,
-        makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = DebugHooks.makeVoiceCall
-    ) {
+    func startVoiceCall(source: VoicePeer.Source = .microphone, makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = DebugHooks.makeVoiceCall) {
         showCue()
         guard voice?.isLive != true else { return }
         guard cue.canHear else { return say("Cue 还没启用，启用后才能通话", tone: .failure) }
         // 常驻通话栏呈现连接、回应和失败；浮动提示会遮住声纹与挂断入口。
-        services.voice.startLocal(source: source, recording: recording, name: cue.name, makeCall: makeCall)
+        services.voice.startLocal(source: source, name: cue.name, makeCall: makeCall)
     }
 
     /// 真实会话的既有投影；选择范围后只停那个会话的当前回合，不把 Cue 的话当作执行确认。

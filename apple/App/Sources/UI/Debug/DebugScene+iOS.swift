@@ -37,6 +37,7 @@ extension DebugScene {
             if !["cue", "cuememory", "cueschedules"].contains(scene ?? "") { await seedCue(workspace.services) }
         }
         if args.demoMac { Task { await runDemoMac(workspace.services) } }
+        Task { await phoneVoiceCallIfAsked(workspace) }
         if args.noAsks { await settleAsks(workspace.services.store) }
         await IslandBench.run(workspace.services)  // 跑完才报就绪：xc.sh run 一直持有这台模拟器，别的任务换不掉它
         if args.driveOpts.bench == "interact" {

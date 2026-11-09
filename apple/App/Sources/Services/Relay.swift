@@ -115,7 +115,6 @@ final class Relay {
     func settle() async {
         await sending?.value
         guard !wanted else { return }
-        voiceConnection?.close(.background)
         await disconnect(thenConnect: true)
     }
 
@@ -158,6 +157,7 @@ final class Relay {
     private func stayConnected(_ rang: @escaping @MainActor () async -> Void) async {
         var retry = Self.retry
         while !Task.isCancelled, wanted || owesRing {
+            await DebugHooks.relayHold()
             let began = ContinuousClock.now
             do {
                 try await session(rang)
@@ -196,6 +196,7 @@ final class Relay {
         let socket = session.webSocketTask(with: endpoint.appending(path: credentials.room))
         socket.maximumMessageSize = VoiceSignalFormat.maximumWireBytes
         self.socket = socket
+        DebugHooks.relaySocket(socket)
         defer {
             let reason: VoiceEndReason = switch socket.closeCode.rawValue {
             case VoiceSignalFormat.replacedCloseCode: .leaseReplaced

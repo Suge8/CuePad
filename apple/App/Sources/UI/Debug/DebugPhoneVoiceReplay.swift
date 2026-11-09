@@ -171,10 +171,9 @@ enum DebugPhoneVoiceReplay {
         var onEvent: (VoicePeer.Event) -> Void = { _ in }
         func offer() async throws -> String { throw VoiceSignalError.unsupported }
         func accept(answer: String) async throws { throw VoiceSignalError.unsupported }
-        func play() async throws { }
         func setMuted(_ muted: Bool) async throws { }
-        func close() async throws {
-            try await Task.sleep(for: .milliseconds(500))
+        func close() async {
+            await Task.wait(for: .milliseconds(500))
             FileHandle.standardError.write(Data("phone-voice-replay media-closed\n".utf8))
         }
     }

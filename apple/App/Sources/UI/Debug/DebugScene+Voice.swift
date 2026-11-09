@@ -8,17 +8,19 @@ import Foundation
 ///   配了 `-CuePadCueBrain apple/scripts/cue-brain-stub.py` 时运行时是 Pi、大脑是替身（回 `CUE_STUB_REPLY` 那句）；没配时是真的 Claude Code，
 ///   `-CuePadVoiceRuntime <pi|codex|claude>`、`-CuePadVoiceModel <模型>` 可指定其他已在隔离目录登录的运行时。
 ///   登录照 docs/verify.md「让 Cue 真跑」在起实例前交给它（`CLAUDE_CODE_OAUTH_TOKEN`）。
-/// - `-CuePadVoice mic`：Cue 能听了就开始通话，声音走麦克风与扬声器（人工验收）；`-CuePadVoice <音频文件>`：接通后播一次这个文件当你说的话，
-///   `-CuePadVoiceDevice <设备名片段>` 指定麦克风设备（不改变系统默认输入）；不指定时使用默认输入。
+/// - `-CuePadVoice mic`：Cue 能听了就开始通话，声音走麦克风与扬声器（人工验收）。
+///   `-CuePadVoice <音频文件>`：接通后把这个文件当你说的话送进上行（`VoiceFixture`，不碰麦克风）；
+///   `-CuePadVoice <目录>`：按节点送 first.wav（接通后）、interrupt.wav（Cue 的结果送出、模型开口时）、stop.wav（这一轮落库且说完后），再说完就挂断。
 ///   对方的声音录到 `-CuePadVoiceRecord <wav>`（不外放；无人值守）。
-/// - `-CuePadVoiceLoopback <目录>` 以本进程 tap 做临时麦克风（`VoiceLoopback`），按节点播 first.wav、interrupt.wav、stop.wav；退出前销毁设备。
-///   单变量音频处理对照与本地电平模式见 `DebugVoice`；原始控制事件（不含音频块）写到 `-CuePadVoiceWireLog <文件>`。
+/// - 没给 `-CuePadVoice` 时，手机发起、这台持有的通话照样记节点（手机那端见 `DebugScene+PhoneVoiceCall`）。
 /// - `-CuePadVoiceReadFixture <原文>` 把原文作为隔离库的主动消息请 GPT Live 朗读，录成后续验收的声源；不使用系统 TTS。
-/// - 到 `-CuePadVoiceSeconds`（默认 60）挂断；配 `-CuePadVoiceHangUpAfterReply YES` 时，结果送出后观察到实际输出、模型回合结束且音轨安静才挂断。
+/// - 到 `-CuePadVoiceSeconds`（默认 60）挂断；配 `-CuePadVoiceHangUpAfterReply YES` 时，结果送出后观察到实际输出、模型回合结束且下行安静才挂断。
 ///   `-CuePadVoiceKeepOpen YES` 在首轮挂断后保留窗口，供真实按钮重连与结果阅读验收；不延长通话时限。
 ///   `-CuePadVoiceReplay YES` 在 Cue 结果送出后重放原 delegation 与用户 turn.done，核对请求没有重复落库。
-/// - 每个节点一行写进 `-CuePadVoiceLog <文件>`：`<距起点秒> <节点>`。`cue-forward` 是落库结果与交接归属，`cue-sent` 是发送完成，
-///   `context-accepted` 是服务端追加回执，`assistant-said` 只是模型转写；真正出声要核对 `output-loud/quiet` 与输出录音。最后一行是终态与音频用量。
+/// - 节点写进 `-CuePadVoiceLog <文件>`（`DebugVoiceLog`）。`input-ended` 是文件送完，`output-loud/quiet` 是下行实际的声音；
+///   `cue-forward` 是落库结果与交接归属，`cue-sent` 是发送完成，`context-accepted` 是服务端追加回执，`assistant-said` 只是模型转写。
+///   最后一行是终态与音频用量；原始控制事件写到 `-CuePadVoiceWireLog <文件>`，连同服务端在控制连接上回传的音频块
+///   （`session.input_audio.append`、`session.output_audio.delta`）：与本机的 `input-loud`、`output-loud` 对齐即上下行各自的媒体时延。
 extension DebugScene {
     static func voiceCallIfAsked(_ workspace: Workspace) async {
         guard args.voiceOpts.token != nil else { return }
@@ -36,33 +38,8 @@ extension DebugScene {
             $0.runtime = .known(runtime)
             $0.model = model
         }
-        guard let input = args.voice else { return }
-        for await canHear in Observations({ workspace.cue.canHear }) where canHear { break }
-        let log = args.voiceOpts.log.map { URL(filePath: $0) }
-        let started = Date.now
-        var lines: [String] = []
-        func note(_ line: String) {
-            lines.append(String(format: "%.3f ", Date.now.timeIntervalSince(started)) + line)
-            if let log { try? lines.joined(separator: "\n").appending("\n").write(to: log, atomically: true, encoding: .utf8) }
-        }
-        let loopback: VoiceLoopback?
-        if let directory = args.voiceOpts.loopback {
-            loopback = try VoiceLoopback(directory: URL(filePath: directory))
-            try await loopback?.start()
-        } else { loopback = nil }
-        defer {
-            if let loopback {
-                note("tap-peak \(loopback.peak)")
-                do { try loopback.close(); note("loopback-removed") }
-                catch { note("loopback-cleanup-error \(error)") }
-            }
-        }
-        if let loopback, args.voiceOpts.meter {
-            try await DebugVoice.meter(loopback, note: note)
-            // 先执行 defer 销毁公开设备，再退出实例。
-            Task { NSApp.terminate(nil) }
-            return
-        }
+        let log = DebugVoiceLog()
+        let note = log.note
         note("runtime \(runtime.rawValue) model=\(model ?? "default")")
         let messages = Task {
             var seen: [UUID: CueMessage] = [:]
@@ -76,8 +53,16 @@ extension DebugScene {
             } catch { note("cue-store-error \(error)") }
         }
         defer { messages.cancel() }
-        let source: VoicePeer.Source = input == "mic" ? .microphone(device: loopback?.name ?? args.voiceOpts.device) : .file(URL(filePath: input))
-        workspace.toggleVoiceCall(source: source, recording: args.voiceOpts.record.map { URL(filePath: $0) })
+        guard let input = args.voice else { return await logPhoneCalls(workspace.services, note: note) }
+        for await canHear in Observations({ workspace.cue.canHear }) where canHear { break }
+        var files: [URL] = []
+        let fixture: VoiceFixture?
+        if input == "mic" { fixture = nil } else {
+            let url = URL(filePath: input)
+            files = url.hasDirectoryPath ? ["first.wav", "interrupt.wav", "stop.wav"].map { url.appending(path: $0) } : [url]
+            fixture = VoiceFixture(downlink: args.voiceOpts.record != nil ? .record : .discard)
+        }
+        workspace.toggleVoiceCall(source: fixture.map { .fixture($0) } ?? .microphone)
         guard let call = workspace.voice else { return }
         var replied = false, heardAfterReply = false, finishedAfterReply = false
         var assistantTurn: String?
@@ -86,7 +71,7 @@ extension DebugScene {
         var stage = 0, submittedBeforeInput = 0
         var inputFinished = false, outputLoud = false
         var fixturePosted = false
-        // 模型可把一个音频文件分成多个用户回合，Cue 也可回多条；阶段只按本次声源播完与其后的请求完成推进。
+        // 模型可把一个音频文件分成多个用户回合，Cue 也可回多条；阶段只按本次声源送完与其后的请求完成推进。
         func advance() {
             guard call.isLive else { return }
             if !fixturePosted, call.phase == .listening, let text = args.voiceOpts.readFixture {
@@ -100,28 +85,26 @@ extension DebugScene {
                 call.hangUp()
                 return
             }
-            guard let loopback else { return }
-            let file: String
-            if stage == 0, call.phase == .listening { file = "first.wav" }
-            else if stage == 1, inputFinished, replied, outputLoud, call.phase == .speaking { file = "interrupt.wav" }
-            else if stage >= 2, inputFinished, requestCount > submittedBeforeInput, heardAfterReply, finishedAfterReply,
-                    call.phase == .listening, call.userTurn == nil {
-                if stage == 3 { call.hangUp(); return }
-                file = "stop.wav"
+            guard let fixture, stage < files.count + 1 else { return }
+            if stage == 0, call.phase == .listening {
+            } else if stage == 1, files.count > 1, inputFinished, replied, outputLoud, call.phase == .speaking {
+            } else if stage >= 2, inputFinished, requestCount > submittedBeforeInput, heardAfterReply, finishedAfterReply,
+                      call.phase == .listening, call.userTurn == nil {
+                if stage == files.count { call.hangUp(); return }
             } else { return }
+            let file = files[stage]
             stage += 1
             inputFinished = false
             replied = false
             heardAfterReply = false
             finishedAfterReply = false
             submittedBeforeInput = requestCount
-            note("play \(file)")
-            do { try loopback.play(file) }
-            catch { note("loopback-error \(error)"); call.hangUp() }
+            note("play \(file.lastPathComponent)")
+            do { try fixture.play(file) }
+            catch { note("fixture-error \(error)"); call.hangUp() }
         }
-        loopback?.onFinished = { file, succeeded in
-            note("input-finished \(file) success=\(succeeded)")
-            guard succeeded else { call.hangUp(); return }
+        fixture?.finished = { file in
+            note("input-ended \(file)")
             inputFinished = true
             advance()
         }
@@ -149,7 +132,7 @@ extension DebugScene {
             if mark.hasPrefix("output-quiet") { outputLoud = false }
             advance()
         }
-        defer { call.mark = { _ in }; loopback?.onFinished = { _, _ in } }
+        defer { call.mark = { _ in } }
         let limit = Task {
             await Task.wait(for: .seconds(args.voiceOpts.seconds ?? 60))
             if call.isLive { workspace.toggleVoiceCall() }
@@ -160,8 +143,37 @@ extension DebugScene {
             if !call.isLive { break }
         }
         limit.cancel()
+        if let fixture, let record = args.voiceOpts.record {
+            do { try fixture.write(to: URL(filePath: record)); note("recorded \(record)") }
+            catch { note("record-error \(error)") }
+        }
         note("end \(call.phase) audioMs=\(call.audioMs) usedPercent=\(call.usedPercent.map { "\($0)" } ?? "-")")
         if !args.voiceOpts.keepOpen { Task { NSApp.terminate(nil) } }
+    }
+
+    /// 手机发起的通话由这台的 VoiceCall 持有（媒体在手机）：照样记节点与阶段，直到实例退出。
+    private static func logPhoneCalls(_ services: AppServices, note: @escaping (String) -> Void) async {
+        for await call in Observations({ services.voice.call }) {
+            guard let call else { continue }
+            call.mark = note
+            var timers: [Task<Void, Never>] = []
+            for await phase in Observations({ call.phase }) {
+                note("phase \(phase)")
+                if phase == .listening, timers.isEmpty {
+                    if let drop = dropRelay(note: note) { timers.append(drop) }
+                    if let fail = failProjection(note: note) { timers.append(fail) }
+                    if let seconds = args.voiceOpts.seconds {
+                        timers.append(Task {
+                            guard await Task.wait(for: .seconds(seconds)) else { return }
+                            note("hang-up")
+                            await services.voice.end()
+                        })
+                    }
+                }
+                if phase == .ended || phase.isFailure { note("end \(phase) audioMs=\(call.audioMs)") }
+            }
+            timers.forEach { $0.cancel() }
+        }
     }
 }
 #endif
