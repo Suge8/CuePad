@@ -176,7 +176,6 @@ private final class SlideSampler: NSObject {
     private var link: CADisplayLink?
     private var offsets: [(time: CFTimeInterval, x: CGFloat)] = []
     private var refresh: CFTimeInterval = 1.0 / 60
-    /// 取到的最左位置（没取到时是无穷大）。
     var minimum: CGFloat { offsets.map(\.x).min() ?? .infinity }
 
     init(_ columns: (main: WideColumnView?, cue: WideColumnView?)) { column = columns.main }

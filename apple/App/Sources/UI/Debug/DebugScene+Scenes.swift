@@ -48,7 +48,6 @@ extension DebugScene {
         return Dictionary(all.flatMap { entry in entry.names.map { ($0, entry) } }, uniquingKeysWith: { _, _ in fatalError("画面名登记了两次") })
     }()
 
-    /// 此刻 `-CuePadScene` 对应的登记项。
     static var entry: DebugSceneEntry? { scene.flatMap { entries[$0] } }
 }
 #endif

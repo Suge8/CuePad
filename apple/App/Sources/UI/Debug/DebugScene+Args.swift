@@ -10,7 +10,6 @@ nonisolated struct DebugArgs: Decodable {
     let agentHome: String?
     /// `-CuePadAgentLibrary clean`：技能与规则的演示文件摆成整理好的样子（默认是该整理的样子）
     let agentLibrary: String?
-    /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页通知那一行按这个状态显示
     let alertStatus: String?
     /// `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批（`seedAllKinds`）
     let allKinds: String?
