@@ -292,8 +292,8 @@ final class CodexRig {
     func draftLanded(_ id: PiSession.ID) -> Bool {
         guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return true }
         let session = bridge.session(id: id)
-        let newest = session.flatMap { try? transcript($0) }?.messages.last { $0.role == .known(.pi) }?.at
-        return draft.landed(newestReply: newest)
+        let newest = session.flatMap { try? transcript($0) }?.messages.last { $0.role == .known(.pi) }
+        return draft.landed(newestReply: newest?.at, record: newest?.id)
     }
 }
 
