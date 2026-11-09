@@ -9,7 +9,8 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 - 构建、测试、截图、录屏、测量、发布只经 `apple/scripts/xc.sh`（用法见头注释），共用包是 `xc.sh test kit`，提交前跑 `xc.sh check`。它在前台跑到结束（排队、时限、失败退出都在里面，结束打一行各段用时），不放后台再 sleep 轮询。绕开它的构建命令和按名字或 bundle id 起停 CuePad（与正式版同一个 bundle id）会被 Pi 扩展拦下。
 - 提交钩子拦下超过 5000 令牌（字节数 ÷ 4，约 20KB）的新文件与变大的超标文件，拆法在它的报错里：新代码按职责分文件写，不往超标文件里加。
 - 调试实例只用 `xc.sh shot|rec|run` 起（隔离、用完自己退出，`run` 起的用 `xc.sh stop` 收）；多张图在一次调用里拍（用 `,` 隔开，见 xc.sh 头注释），不一张一次、不另写批拍脚本。别的进程只按自己拿到的 PID 结束。排队等过上限以 75 退出并列出持有者（`_lock.sh` 头注释）。
-- 测试摘要里的 "Executed N tests" 只数 XCTest，Swift Testing 的用例不在内。
+- `xc.sh test` 收尾一页结论（两个框架各自的通过、失败、跳过，首个失败，跳过原因，最慢 5 个，完整日志路径）；先看它，别翻日志。
+- CI（`.github/workflows/swift.yml`）在 GitHub 托管的 macOS runner 上跑 `check`、`test kit`、`test mac` 与 iOS 同步测试，入口就是 `xc.sh`；lint 要完整的 Git 检出（origin/main、发布标签），`git archive` 导出的副本跑不了。
 - `cuepad --help` 是命令行唯一文档。
 - 报"没有这个成员"而代码里明明有，或改了 CuePadKit 公开类型的存储属性后 App 一启动就崩在 Kit 的释放里：检出里还留着旧版 xc.sh 只编 App 时的静态模块（原因见 xc.sh 的 `xcd`），删一次 `apple/.derived/Build/Products/<平台>/Cue*.swiftmodule` 再编。
 
@@ -28,7 +29,8 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 - 页面结构、导航与栏、浮层、开合、布局稳定 → [docs/layout.md](docs/layout.md)
 - 加、改界面上的字，英文版 → [docs/i18n.md](docs/i18n.md)
 - 同步、投送请求、CloudKit 订阅、通知、同步排查 → [docs/sync.md](docs/sync.md)
-- 截图验收、交互验收、通知验收、崩溃诊断、要占前台（截系统菜单、在前台量帧） → [docs/verify.md](docs/verify.md)
+- 截图验收、交互验收、通知验收、要占前台（截系统菜单、在前台量帧） → [docs/verify.md](docs/verify.md)
+- 真机上的崩溃、卡住与日志（各台经 iCloud 送到 Mac、`xc.sh diag` 读）→ [docs/diagnose.md](docs/diagnose.md)
 - 性能测量、交互预算、同步测量 → [docs/perf.md](docs/perf.md)
 - 改 Cue 的提示词、工具说明、信封或记忆的前后评测，记忆基准 → [docs/cue-eval.md](docs/cue-eval.md)
 - 签名、发布、Sparkle、CloudKit 结构部署 → [docs/release.md](docs/release.md)

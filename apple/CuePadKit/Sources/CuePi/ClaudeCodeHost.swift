@@ -48,7 +48,7 @@ final class ClaudeHostedSession: SessionLink {
     /// 等收尾的时限与进程收尾的宽限（`ChildProcess.stop()`）都按 `timing` 量
     let timing: Timing
 
-    init(bridge: PiBridge, processes: HostedProcesses, timing: Timing = .system) {
+    init(bridge: PiBridge, processes: HostedProcesses, timing: Timing) {
         self.bridge = bridge
         self.processes = processes
         self.timing = timing
@@ -56,7 +56,7 @@ final class ClaudeHostedSession: SessionLink {
         (closing, startWaits, clearWaits) = Self.waits(timing)
     }
 
-    init(timing: Timing = .system) {
+    init(timing: Timing) {
         self.timing = timing
         brain = BrainSession()
         (closing, startWaits, clearWaits) = Self.waits(timing)
@@ -76,7 +76,7 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     func launch(
-        _ executable: URL, _ arguments: [String], directory: URL, environment: [String: String], timing: Timing = .system
+        _ executable: URL, _ arguments: [String], directory: URL, environment: [String: String], timing: Timing
     ) async throws -> ChildProcess {
         let stream = try await ClaudeStream(executable: executable, arguments: arguments, directory: directory, environment: environment, timing: timing)
         self.stream = stream

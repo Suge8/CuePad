@@ -7,7 +7,7 @@ import Testing
 
 /// 列表请求途中可能换轮或收尾：外壳把列表扣住，期间写好会话文件，再交出"在跑"。外壳把 `agents` 拦下，不用模型。
 @MainActor
-@Suite(RealAgents.taped(.claudeCode))
+@Suite(RealAgents.needs(.claudeCode))
 struct ClaudeDiscoveryTests {
     @Test func aRoundThatChangesOrEndsWhileCuePadIsListingItIsReadFromTheSessionFile() async throws {
         let wrapper = #"if [ "$1" = agents ]; then touch "${0%/*}/listed"; cat "${0%/*}/release" >/dev/null; cat "${0%/*}/listing.json"; else "$REAL" "$@"; fi"#

@@ -6,9 +6,9 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 按回合停止与后续发送的协议合同。真实 Pi、桥和 Python 工具；模型与异步事件闸是替身，不录制回放进程存活断言。
+/// 按回合停止与后续发送的协议合同。真实 Pi、桥和 Python 工具；模型与异步事件闸是替身。
 @MainActor
-@Suite(RealAgents.taped(.pi), .serialized)
+@Suite(RealAgents.needs(.pi), .serialized)
 struct RealPiQueueTests {
     @Test(arguments: ["preflight", "preflight-control", "pending", "starting", "sdk"])
     func 停止原回合不遗失后续消息(stage: String) async throws {
@@ -58,10 +58,11 @@ struct RealPiQueueTests {
 
     private func work(_ name: String) -> String { "WORK-\(name)" }
 
-    /// 每句话的工具是一个真进程：写下自己的 pid，等信号（SIGUSR1 不退）或 30 秒，正常结束时留下 `<名>.done`
+    /// 每句话的工具是一个真进程：写下自己的 pid（先写别名再改名：测试见到文件就读，直接写会读到空的），等 SIGUSR1 至多 30 秒，等到了才留下 `<名>.done`。
+    /// 写 pid 之前先屏蔽 SIGUSR1 与到点的 SIGALRM 再用 sigwait 收（macOS 的 Python 没有 sigtimedwait）：测试见到 pid 就可能发信号，`signal.pause()` 之前到的会被处理掉，pause 就一直等到上限（负载下实测）
     private func script(_ model: FakeModel) {
         for name in ["A", "B"] {
-            let command = "python3 -c 'import os,signal;signal.signal(signal.SIGUSR1,lambda *_:None);open(\"\(name).pid\",\"w\").write(str(os.getpid()));signal.alarm(30);signal.pause();open(\"\(name).done\",\"w\").write(\"finished\")'"
+            let command = "python3 -c 'import os,signal;signal.pthread_sigmask(signal.SIG_BLOCK,{signal.SIGUSR1,signal.SIGALRM});open(\"\(name).tmp\",\"w\").write(str(os.getpid()));os.rename(\"\(name).tmp\",\"\(name).pid\");signal.alarm(30);signal.sigwait({signal.SIGUSR1,signal.SIGALRM})==signal.SIGUSR1 and open(\"\(name).done\",\"w\").write(\"finished\")'"
             model.on(work(name), .call("bash", ["command": command]), .say("TOOL_DONE"))
         }
     }

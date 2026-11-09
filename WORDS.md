@@ -41,11 +41,12 @@
 - **持有** vs **保底**（`AttachmentFiles`）：都是附件文件旁多留的硬链接。持有是运行为自己存过的附件留的，管"引用还没提交"，活着的运行的持有谁也不删；保底是引用提交、登记了附件记录后留的，管"服务器还没收下"，收下就删；只在代码里
 - **新消息**（Cue 页，`CueStore.cueUnread`）vs **有新回复**（会话的，`PiUnread`）：前者各端同步，后者只记在本机；避免：未读消息（界面上）
 - **记忆**（`cueLines`）vs **置顶**（项目里的灵感）；长期生效的叫**重点**（`CueMemoryLine.pinned`），动作"标为重点""取消重点"；不用先问的例外也是记忆（`CueStore.endCueQuestion`）；避免：笔记、规矩（界面上）、允许清单（已退役）、一直记着（已改名）
-- **技能与规则**（`AgentLibrary`）；**规则**是 AGENTS.md 那几份（全局规则、项目规则、Pi 的系统提示）；**文件页**是点开一份技能或规则、在 CuePad 里改它的那一页；避免：说明、指令、提示词、CLAUDE.md（界面上统称时）
+- **技能与规则**（`AgentLibrary`）；**规则**是 AGENTS.md 那几份（全局规则、项目规则、Pi 的系统提示）；**全局规则**是各家在任何目录都读的那份，CuePad 把各家自己那份链到共享的 `~/.config/agents/AGENTS.md`，共享那份还没有时列各家真读的那几份；`~/.agents/AGENTS.md` 不是全局规则，只在 `~/.agents` 登记成项目文件夹时作那个项目的项目规则；**文件页**是点开一份技能或规则、在 CuePad 里改它的那一页；避免：说明、指令、提示词、CLAUDE.md（界面上统称时）
 - 整理只有三个动作词（`LibraryTidy`）：**一键整理**（不用你选的那几件）、**去重**（同名的技能，按钮"只留这份"）、**合并**（内容不同的规则，按钮"合并进来"）；避免：修复、清理、同步（指整理时）
 - **发往 Mac**（手机上改技能与规则的纸飞机，`LibraryEdit`）：手机只攒着改，由那台 Mac 写进文件；避免：保存、上传
 - **定时** vs **记忆**：同存一张表（有下一次的那几条，`CueMemoryLine.remindAt`），界面上是两处，各有一页、一个入口（`CueSchedulePage`、`CueMemoryPage`），定时不进记忆页；到点叫醒 Cue 照它做，一次的做完就没了。叫醒原因写"定时到点"，错过后补上只写一句事实（"9:00 那次错过，9:41 补上"）；动作"不再定时"；避免：提醒、计划任务、闹钟、到点（作钮名或标签）
 - **班次**（`CueKeeper` 起的一个大脑进程）vs **换新**（同一个班次里开新会话，用记忆视图与对话视图接上）：班次与 token 数只在代码、文档与 Mac 的"运行情况"里；换新这个词不上界面，上下文那一行（`CueContextLine`，只在 Mac 的"运行情况"）只写用到换新线的几成；避免：交接备忘（已退役）
+- **诊断**（`DiagnosticArchive`：崩溃、卡死、主线程卡住）vs **最近日志**（`RecentLogs`：用户在手机、iPad 上点"把最近日志发到 Mac"时存的一段 CuePad 自己的日志，卡住恢复后自动附一段）：都经用户自己的 iCloud 送到他的 Mac（`DiagnosticOutbox`、`DiagnosticInbox`）；"导出诊断"是发给别人的那条路；避免：上传、上报、反馈（指它们时）
 
 ## 英文界面
 
@@ -59,4 +60,5 @@
 - 经过的动作词：查看 View · 发给 Message · 新建 New · 修改 Edit · 开始 Start · 停止 Stop · 完成 Complete · 留给你 Left for You
 - 技能与规则 Skills & Rules · 规则 Rules（全局规则 Global Rules · 项目规则 Project Rules）· 一键整理 Tidy Up · 去重（按钮"只留这份"）Keep This One · 合并（按钮"合并进来"）Merge In · 发往 Mac Send to Mac
 - 定时 Schedule · 定时到点 Schedule Due · 不再定时 Stop Schedule
+- 诊断 Diagnostics · 把最近日志发到 Mac Send Recent Logs to Mac · 导出诊断 Export Diagnostics
 - 只记下 Just Save · 对 Cue 说 Tell Cue · 运行情况 Status · 额度 Usage · 技能 Skill · 斜杠命令 Slash Command · 思考强度 Thinking · 灵动岛与锁屏 Live Activity

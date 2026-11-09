@@ -36,13 +36,16 @@ struct PiDeliveryConfirmation {
             } else { sessionID = nil }
             guard let sessionID else { return .unconfirmed(DeliveryRequest.interruptedReason) }
             if let session = pi.session(sessionID: sessionID) {
-                guard session.agent == .pi else { return .unconfirmed(DeliveryRequest.interruptedReason) }
+                guard session.confirmsFromHistory else { return .unconfirmed(DeliveryRequest.interruptedReason) }
                 return pending(in: session, reason: request.reason)
             }
-            let indexed = try await store.piSession(sessionID)
-            guard indexed?.agent == .pi else { return .unconfirmed(DeliveryRequest.interruptedReason) }
+            // 重开时会话多半还没回到桥上：按索引里的会话文件接着核对
+            let hosted = try await store.sessionState(sessionID)?.hosted ?? false
+            guard let indexed = try await store.piSession(sessionID), indexed.agent.confirmsFromHistory(hosted: hosted) else {
+                return .unconfirmed(DeliveryRequest.interruptedReason)
+            }
             return .confirming { current in
-                await verify(current, agent: .pi, connection: nil, file: indexed.map { URL(filePath: $0.path) }, reason: request.reason)
+                await verify(current, agent: indexed.agent, connection: nil, file: URL(filePath: indexed.path), reason: request.reason)
             }
         } catch { return unresolved(error) }
     }
@@ -50,7 +53,7 @@ struct PiDeliveryConfirmation {
     private func verify(
         _ request: DeliveryRequest, agent: AgentKind, connection: CuePi.PiSession.ID?, file: URL?, reason: ShownText?
     ) async -> DeliveryOutcome {
-        let uncertain = reason ?? Speech.unconfirmedReason
+        let uncertain = reason ?? (agent == .pi ? Speech.unconfirmedReason : Self.notTaken)
         guard let file else { return .unconfirmed(uncertain) }
         let following = PiHistory.following(file: file, agent: agent, files: store.files)
         let result: DeliveryOutcome
@@ -81,7 +84,7 @@ struct PiDeliveryConfirmation {
         if try await received(request) { return .succeeded }
         try Task.checkCancellation()
         guard let deadline = request.deadlineAt, store.timing.now() < deadline else { return .unconfirmed(uncertain) }
-        if let connection, pi.session(id: connection) == nil { return .unconfirmed(uncertain) }
+        if let connection, pi.session(id: connection) == nil { return try await lastLook(request, file: file, agent: agent, uncertain: uncertain) }
         return try await wait(request, agent: agent, history: history, connection: connection, file: file, until: deadline, uncertain: uncertain)
     }
 
@@ -112,10 +115,10 @@ struct PiDeliveryConfirmation {
                 var due = deadline
                 while true {
                     try await store.timing.sleepUntil(due)
-                    // 在跑这一轮时送到的话，Claude Code 排到这一轮结束才收：到期时还在跑就顺延，不当成没收下
-                    guard let connection, await pi.session(id: connection)?.state.isTurnRunning == true else { return .unconfirmed(uncertain) }
+                    // 在跑这一轮时送到的话，Claude Code 排到这一轮结束才收：到期时还在跑就接着等，不当成没收下。
+                    // 只在这里等、不改库里的期限：同步不让核对期限往后挪（`DeliveryRequest.mergingProgress`），各端到期先显示送达未确认，收下了再变送达
+                    guard let connection, await pi.isTurnRunning(connection) else { return .unconfirmed(uncertain) }
                     due = store.timing.now().addingTimeInterval(Speech.receiptLimit)
-                    try await store.extendDeliveryConfirmation(request.id, until: due)
                 }
             }
             if let connection {
@@ -123,9 +126,7 @@ struct PiDeliveryConfirmation {
                 group.addTask {
                     for await _ in changes {
                         if await pi.session(id: connection) != nil { continue }
-                        // 断线时最后核对一次：文件可能已写好，只是常规摄取尚未提交。
-                        try await readLast(file, agent: agent)
-                        return try await received(request) ? .succeeded : .unconfirmed(uncertain)
+                        return try await lastLook(request, file: file, agent: agent, uncertain: uncertain)
                     }
                     throw CancellationError()
                 }
@@ -133,6 +134,12 @@ struct PiDeliveryConfirmation {
             defer { group.cancelAll() }
             return try await group.next()!
         }
+    }
+
+    /// 断线时最后核对一次：文件可能已写好，只是常规摄取尚未提交。首读之后、等待之前就断了的同样要读，不能直接按没收下收尾。
+    private func lastLook(_ request: DeliveryRequest, file: URL, agent: AgentKind, uncertain: ShownText) async throws -> DeliveryOutcome {
+        try await readLast(file, agent: agent)
+        return try await received(request) ? .succeeded : .unconfirmed(uncertain)
     }
 
     @concurrent private func readLast(_ file: URL, agent: AgentKind) async throws {

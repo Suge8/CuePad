@@ -50,7 +50,7 @@ struct PiExtensionFiles: AgentHookConfig {
     /// 目录在而入口不是 CuePad 写的：别人的同名目录（参数是它的位置，`~` 缩写）
     var foreign: String? {
         guard FileManager.default.fileExists(atPath: directory.path), !Self.isOurs(entry) else { return nil }
-        return (directory.path as NSString).abbreviatingWithTildeInPath
+        return UserHome.shown(directory.path)
     }
 
     var writtenFiles: [URL] { [directory] }

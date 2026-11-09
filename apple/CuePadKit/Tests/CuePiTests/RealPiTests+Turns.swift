@@ -37,6 +37,25 @@ extension RealPiTests {
         }
     }
 
+    /// 说到一半停住的回答（假模型的 `stream(_:until:)`）：说出的半句先作为草稿上报、这一轮还在跑，放行后同一条回答说完、这一轮做完
+    @Test func aReplyHeldMidStreamShowsItsDraftAndFinishesOnceReleased() async throws {
+        try await withRig { pi, bridge, s in
+            let gate = pi.model.gate()
+            pi.model.on("说一半", .stream(["前半句，", "后半句"], until: gate))
+            try pi.prompt("说一半")
+            try await gate.reached()
+            try await eventually("半句是草稿，这一轮还在跑") {
+                bridge.sessions.first?.state == .thinking && bridge.slots.first { $0.id == s.id }?.draft?.text == "前半句，后半句"
+            }
+            #expect(recap(of: bridge.sessions.first)?.lastReply == nil)
+
+            gate.open()
+            try await eventually("说完，这一轮做完") {
+                bridge.sessions.first?.state == .settled && recap(of: bridge.sessions.first)?.lastReply == "前半句，后半句"
+            }
+        }
+    }
+
     @Test func abortDuringAToolIsAStop() async throws {
         try await withRig { pi, bridge, s in
             pi.model.on("跑个慢命令", .call("bash", ["command": "sleep 30"]), .say("TOOL_DONE"))

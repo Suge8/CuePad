@@ -7,7 +7,7 @@ import CueStore
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.taped(.pi))
+@Suite(RealAgents.needs(.pi))
 struct RealHostTests {
     private func endedSession(_ pi: PiProcess, _ bridge: PiBridge) async throws -> (file: URL, sessionID: String) {
         try await eventually("桥发现会话") { !bridge.sessions.isEmpty }
@@ -79,7 +79,8 @@ struct RealHostTests {
 
         pi.model.on("看环境", .call("bash", ["command": "printf '%s' \"${CUEPAD_HOSTED-unset}\" > '\(seen.path)'"]), .say("TOOL_DONE"))
         try await bridge.send(PiMessage(text: "看环境"), to: resumed.id)
-        try await eventually("子进程写下了它看到的") { (try? String(contentsOf: seen, encoding: .utf8)) != nil }
+        // `>` 先建出空文件、printf 才写进去：等到有内容
+        try await eventually("子进程写下了它看到的") { (try? String(contentsOf: seen, encoding: .utf8))?.isEmpty == false }
         #expect(try String(contentsOf: seen, encoding: .utf8) == "unset")
 
         let log = ChangeLog(bridge)
@@ -163,7 +164,7 @@ struct RealHostTests {
         host.start()
         defer { stopHostedProcesses(bridge) }
 
-        // 上了桥才返回；空闲时限只有 1 秒，返回时它可能已经退了（回放时空闲的那一秒不占时间），所以不再查它在不在
+        // 上了桥才返回；空闲时限只有 1 秒，返回时它可能已经退了，所以不再查它在不在
         let id = try await host.resume(IndexedSession(id: "", path: file.path, cwd: pi.cwd.path, lastActivityAt: .now))
 
         try await eventually("空闲到点后退出") { bridge.session(id: id) == nil }

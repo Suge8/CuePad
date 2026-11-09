@@ -138,7 +138,7 @@ public enum SkillProblem: Codable, Equatable, Sendable, CustomStringConvertible 
 
 public struct InstructionSource: Codable, Equatable, Sendable {
   public enum Origin: Codable, Hashable, Sendable {
-    /// 大家共读的那份：全局的 `~/.agents/AGENTS.md`、项目的 `AGENTS.md`
+    /// 大家共读的那份：全局的 `~/.config/agents/AGENTS.md`（各家的链到它）、项目的 `AGENTS.md`
     case shared
     /// 这家自己的那份：全局的 `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`……，项目的 `CLAUDE.md`
     case agent(AgentKind)

@@ -64,5 +64,28 @@ struct BrainLifecycleTests {
         for await event in brain.events { last = event }
         #expect(last == .exited(nil))
     }
+
+    /// Grok 的 MCP 服务迟迟不报连上时取消启动：很快返回，不等 `mcpReady` 自己的 30 秒时限。
+    @Test func cancellingAGrokStartWaitingForMCPReturnsPromptly() async throws {
+        let (config, _) = try fakeRuntime(.grok, #"""
+            while read line; do
+              id=$(printf '%s' "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+              printf '{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"s1"}}\n' "$id"
+              case "$line" in *session/new*) touch "$PID_FILE.opened" ;; esac
+            done
+            """#, timing: ManualTiming().timing)
+        let opened = URL(filePath: config.environment["PID_FILE"]! + ".opened")
+        let start = Task { _ = try await config.startBrain() }
+        try await eventually("session/new 已答") { FileManager.default.fileExists(atPath: opened.path) }
+        try await Task.sleep(for: .milliseconds(200))
+        start.cancel()
+        let (outcomes, first) = AsyncStream.makeStream(of: Bool.self)
+        let waiter = Task { _ = await start.result; first.yield(true) }
+        let timer = Task { try? await Task.sleep(for: .seconds(5)); first.yield(false) }
+        defer { waiter.cancel(); timer.cancel() }
+        var returned = false
+        for await done in outcomes { returned = done; break }
+        #expect(returned)
+    }
 }
 #endif

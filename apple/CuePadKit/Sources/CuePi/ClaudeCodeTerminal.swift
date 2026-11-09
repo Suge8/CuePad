@@ -29,6 +29,9 @@ final class ClaudeTerminalSession: SessionLink {
     private let registry: URL
     private let timing: Timing
     private var ready = false
+    /// 在等起好的投送（`waitUntilReady`）各盯着一份登记文件；会话下桥（`close`）时停掉它们，等待随即以会话结束收场
+    private var readyWaits: [UUID: FileFollower] = [:]
+    private var closed = false
     private var facts = SessionFacts()
     /// 要你回答的（同一时刻可能有好几个：子代理并行时各自要确认），按到达先后；会话的 `question` 是第一个
     private var pending: [Pending] = []
@@ -190,12 +193,16 @@ final class ClaudeTerminalSession: SessionLink {
         show(at: .now)
     }
 
+    /// 会话下桥（进程退出、`SessionEnd`、出了范围）时运行时调用：挂着的钩子放行，在等起好的投送结束（话没写进收件箱）。
     func close() {
         for item in pending {
             item.call?.finish()
             gate.drop(item.hold)
         }
         pending = []
+        closed = true
+        for follower in readyWaits.values { follower.stop() }
+        readyWaits = [:]
     }
 
     private func show(at now: Date) {
@@ -266,6 +273,12 @@ final class ClaudeTerminalSession: SessionLink {
         }
     }
 
+    /// 登记文件里的 `status` 随它自己的轮次变，钩子不通（没装、CuePad 之后才起来）时桥上的状态是旧的。只认 `busy`（在跑一轮或等后台任务）：
+    /// `waiting` 也可能是收件箱的话被挂起、在等你批准（2.1.318 源码：对话框一律记成 `waiting`，看不出是哪种），算它在跑就会一直等下去。
+    func takingTurn(_: PiSession.ID) -> Bool? {
+        (try? Data(contentsOf: registry)).flatMap(JSONValue.parse)?["status"]?.string.map { $0 == "busy" }
+    }
+
     func end(_: PiSession.ID) async throws {
         guard kill(pid, SIGINT) == 0 else { throw PiBridgeError.sessionEnded }
     }
@@ -285,17 +298,27 @@ final class ClaudeTerminalSession: SessionLink {
     /// 会话一起来（`SessionStart` 钩子）就上桥，这时收件箱已在听，但登记文件里还没有 `status`（起好时写 `idle`）：这之前送到的话
     /// 即使带着令牌也按来路不明挂起，跳过权限确认的会话不交给模型、等你在终端里批准（2.1.318 实测：上桥就发，12 次挂起 7 次；
     /// 等到 `status` 再发，24 次都送到）。有收件箱的各版（2.1.224 起；实跑 224、250、280、300、317、318）起好时都写 `status`。
-    /// 盯文件变化等（`FileFollower`），不轮询；正常退出时它删掉登记文件，那一下就报会话结束，被强杀留下文件的等到期限。
+    /// 盯文件变化等（`FileFollower`），不轮询。进程存亡只认运行时的退出监视：它让会话下桥（`close`），这里随即报会话已结束——
+    /// 话确定没写进收件箱，所以是 `unknownSession`（确定没发出），不是表示"写了之后断开、结果未知"的 `sessionEnded`。
     private func waitUntilReady() async throws {
+        guard !closed else { throw PiBridgeError.unknownSession(id) }
         let follower = FileFollower()
-        defer { follower.stop() }
+        let key = UUID()
+        readyWaits[key] = follower
+        defer {
+            readyWaits[key] = nil
+            follower.stop()
+        }
         follower.follow(only: [registry.realPath.path])
-        try await withDeadline(AgentTimeouts.terminalReady, timing: timing, orThrow: PiBridgeError.rejected("not_ready")) { [registry, pid] in
-            for await _ in follower.paths {
-                if (try? Data(contentsOf: registry)).flatMap(JSONValue.parse)?["status"]?.string != nil { return }
-                guard kill(pid, 0) == 0 else { throw PiBridgeError.sessionEnded }
+        do {
+            try await withDeadline(AgentTimeouts.terminalReady, timing: timing, orThrow: PiBridgeError.rejected("not_ready")) { [registry] in
+                for await _ in follower.paths {
+                    if (try? Data(contentsOf: registry)).flatMap(JSONValue.parse)?["status"]?.string != nil { return }
+                }
+                throw CancellationError()
             }
-            throw CancellationError()
+        } catch is CancellationError where closed {
+            throw PiBridgeError.unknownSession(id)
         }
     }
 }

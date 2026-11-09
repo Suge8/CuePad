@@ -161,10 +161,13 @@ struct InstructionSection: View {
 
     var body: some View {
         let projects = library.instructions.filter { if case .project = $0.kind { true } else { false } }
+        let own = library.instructions.filter { if case .agent = $0.kind { true } else { false } }
         VStack(alignment: .leading, spacing: LibraryLayout.gap) {
             TidySlot(library: library, rules: true)
             LibraryPaper {
-                if let global = library.instruction(.global) { GlobalRuleRow(library: library, instruction: global) }
+                // 共享那份还没有时列各家真读的那几份，不写"还没有"
+                if let global = library.instruction(.global), global.hash != nil || own.isEmpty { GlobalRuleRow(library: library, instruction: global) }
+                ForEach(own) { GlobalRuleRow(library: library, instruction: $0) }
                 if let pi = library.instruction(.piSystem) { row(pi) }
             }
             if !projects.isEmpty {
@@ -185,7 +188,7 @@ struct InstructionSection: View {
     }
 }
 
-/// 正文读同步来的那一条（`LibraryFileText`），不另存一份预览。
+/// 正文读同步来的那一条（`LibraryFileText`），不另存一份预览。共享那份写谁链着它，各家自己那份写谁读它。
 private struct GlobalRuleRow: View {
     let library: AgentLibrary
     let instruction: LibraryInstruction
@@ -195,14 +198,19 @@ private struct GlobalRuleRow: View {
     @State private var texts: [String: String]?
 
     var body: some View {
-        Button { workspace.openLibrary(.instruction(.global)) } label: {
+        Button { workspace.openLibrary(.instruction(instruction.kind)) } label: {
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 HStack(spacing: Spacing.group) {
-                    InstructionIcon(kind: .global).frame(width: iconColumn)
-                    Text(verbatim: workspace.instructionName(.global)).font(Typography.body).foregroundStyle(palette.ink)
+                    InstructionIcon(kind: instruction.kind).frame(width: iconColumn)
+                    Text(verbatim: workspace.instructionName(instruction.kind)).font(Typography.body).foregroundStyle(palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     InstructionTrailing(library: library, instruction: instruction)
                     if LibraryLayout.chevron { Chevron(.forward).foregroundStyle(palette.ink3) }
+                }
+                if let who {
+                    Text(who).font(Typography.meta).foregroundStyle(palette.ink2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, iconColumn + Spacing.group)
                 }
                 Text(opening)
                     .font(Typography.meta).foregroundStyle(instruction.hash == nil ? palette.ink3 : palette.ink2)
@@ -219,6 +227,12 @@ private struct GlobalRuleRow: View {
     }
 
     private static let lines = 4
+
+    private var who: String? {
+        let names = AgentKind.allCases.filter(instruction.readers.contains).map(\.name).formatted(.list(type: .and))
+        guard instruction.hash != nil, !instruction.readers.isEmpty else { return nil }
+        return instruction.kind == .global ? String(localized: "\(names) 链着这份") : String(localized: "\(names) 读这份")
+    }
 
     private var opening: AttributedString {
         guard let arrived = AgentLibrary.arrived(instruction.path, hash: instruction.hash, in: texts) else { return "" }
@@ -255,6 +269,7 @@ private struct InstructionIcon: View {
         switch kind {
         case .global: Image(.instruction).foregroundStyle(palette.ink)
         case .piSystem: AgentKind.pi.mark.image.foregroundStyle(palette.ink)
+        case .agent(let agent, _): agent.mark.image.foregroundStyle(palette.ink)
         case .project(let id): ProjectGlyph(project: workspace.catalog?.project(id), size: Self.glyph)
         }
     }

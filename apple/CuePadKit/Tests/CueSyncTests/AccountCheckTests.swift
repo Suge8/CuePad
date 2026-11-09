@@ -225,6 +225,10 @@ actor ScriptedCloud: SyncCloud {
   }
 
   func relaySecret() async throws -> Data { await inner.relaySecret() }
+  func diagnosticChanges(since token: Data?) async throws -> ZoneChangeBatch { try await inner.diagnosticChanges(since: token) }
+  func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
+    await inner.uploadDiagnostics(saving: saving, deleting: deleting)
+  }
   func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch { await inner.changes(since: token, keys: keys) }
   func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { await inner.records(ids) }
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords { await inner.upload(saving: saving, deleting: deleting) }

@@ -121,7 +121,7 @@ private extension PiToolLog.Call {
     /// 相对工作目录；工作目录之外的家目录路径写成 ~/…（完整路径不同步）。
     private static func relative(_ path: String, to cwd: String?) -> String {
         if let cwd, path.hasPrefix(cwd + "/") { return String(path.dropFirst(cwd.count + 1)) }
-        let home = NSHomeDirectory()
+        let home = UserHome.directory.path
         return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
     }
 }

@@ -93,15 +93,6 @@ extension CueStore {
     }
   }
 
-  /// 核对中的期限往后挪到 `deadline`：会话还在跑这一轮，话可能排到这一轮之后才收（`PiDeliveryConfirmation`）。只挪还在核对的。
-  public func extendDeliveryConfirmation(_ id: UUID, until deadline: Date) throws {
-    try write {
-      try db.run(
-        "UPDATE deliveryRequests SET deadlineAt = ?, modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status = '\(DeliveryStatus.confirming.rawValue)'",
-        [deadline, Date.stamp, id])
-    }
-  }
-
   /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败。
   /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果。
   /// 任务的状态与正文都不因说话而变：发出的正文留在任务上，"发过没有"看投送请求。

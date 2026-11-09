@@ -64,7 +64,7 @@ struct PiConversation: View {
     @ViewBuilder private var ending: some View {
         #if os(macOS)
         if let slot {
-            SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }?.at, floating: floating)
+            SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }, floating: floating)
         } else {
             ChatLiveSlot(spacing: Self.spacing, floating: floating) { liveStatus }
         }
@@ -86,12 +86,12 @@ struct PiConversation: View {
 struct SessionDraft: View {
     let slot: PiBridge.Slot
     let session: PiSessionState
-    let newestReply: Date?
+    let newestReply: PiChatMessage?
     let floating: CGFloat
 
     var body: some View {
         let draft = slot.draft
-        let landed = draft?.landed(newestReply: newestReply) ?? false
+        let landed = draft?.landed(newestReply: newestReply?.at, record: newestReply?.id) ?? false
         let speaking = draft != nil && !landed
         VStack(alignment: .leading, spacing: PiConversation.spacing) {
             if let draft, speaking {

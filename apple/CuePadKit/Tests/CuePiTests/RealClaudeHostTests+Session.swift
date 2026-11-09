@@ -26,14 +26,20 @@ extension RealClaudeHostTests {
                 try await testbed.bridge.configure(PiConfig(model: PiModelKey(provider: ClaudeCode.provider, id: "no-such-model")), in: id)
             }
             try await testbed.bridge.command("/rename 命令改名", in: id)
-            try await eventually("斜杠命令改了名、歇下") {
-                testbed.bridge.session(id: id)?.displayName == "命令改名" && testbed.bridge.session(id: id)?.state == .settled
+            do {
+                try await eventually("斜杠命令改了名、歇下") {
+                    testbed.bridge.session(id: id)?.displayName == "命令改名" && testbed.bridge.session(id: id)?.state == .settled
+                }
+            } catch {
+                let session = testbed.bridge.session(id: id)
+                throw Stuck(description: "等不到：斜杠命令改了名、歇下；名字 \(String(describing: session?.displayName))，状态 \(String(describing: session?.state))")
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await testbed.bridge.command("/no-such-command", in: id) }
 
             let start = Date()
             try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
             try await testbed.waitForTurn(id, since: start)
+            try await testbed.waitForDraftLanded(id)
             let answered = try #require(lastAnswer(in: file))
             #expect(answered.model?.contains(claudeOtherModel) == true, "\(String(describing: answered.model))")
             #expect(answered.effort == "low")
@@ -91,6 +97,7 @@ extension RealClaudeHostTests {
             let asked = Date()
             try await testbed.bridge.send(PiMessage(text: "刚才的暗号是什么？只回复暗号"), to: resumed)
             try await testbed.waitForTurn(resumed, since: asked)
+            try await testbed.waitForDraftLanded(resumed)
             #expect(testbed.bridge.session(id: resumed)?.model?.key == other, "\(String(describing: testbed.bridge.session(id: resumed)?.model))")
             #expect(testbed.bridge.session(id: resumed)?.firstMessage == "记住暗号 BANANA42，只回复 OK")
             let transcript = try testbed.transcript(first.sessionFile)

@@ -144,7 +144,10 @@ public actor CloudSync {
     await coordinator.use(run.gate)
     await coordinator.loadToken()
     guard !generation.isOver else { return }  // 读令牌期间停下了
+    // 先在这里订上、再起任务：任务真正跑起来可能晚过第一次认完账号（机器忙时线程被抢占），订阅放在任务里，其间换的账号就收不到，
+    // 按认到的旧账号一直往新账号里传
     let due = coordinator.retryDue.stream(), network = NetworkReturns.stream()
+    let accountChanged = accountChanges.notifications(named: .CKAccountChanged)
     run.watchers = [
       Task { [coordinator] in
         for await _ in network {
@@ -153,10 +156,8 @@ public actor CloudSync {
         }
       },
       Task { for await _ in due { await self.parts?.puller.due() } },  // 没连上就没拉过，没有欠着的
-      Task { [weak self, accountChanges] in
-        for await _ in accountChanges.notifications(named: .CKAccountChanged) {
-          await self?.recheck(generation)
-        }
+      Task { [weak self] in
+        for await _ in accountChanged { await self?.recheck(generation) }
       },
     ]
     update(generation) { $0.watchers = run.watchers }

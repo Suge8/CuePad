@@ -82,7 +82,7 @@ struct CrashReportView: View {
         return facts
     }
 
-    private static let note: LocalizedStringResource = "只存在这台设备上，不会自动上传。导出诊断复制每次出事的要点，发给开发者；开发者要完整原文时，再分享原始文件。"
+    private static let note: LocalizedStringResource = "存在这台设备上，连着 iCloud 时经你自己的 iCloud 送到你的 Mac，不经别人。要发给别人时，导出诊断复制每次出事的要点；要完整原文时，再分享原始文件。"
     private static let share: LocalizedStringResource = "分享原始文件…"
 
     #if os(iOS)

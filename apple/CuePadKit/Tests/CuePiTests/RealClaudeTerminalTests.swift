@@ -6,7 +6,7 @@ import Testing
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.taped(.claudeCode), .enabled(if: tmuxURL != nil, "要 tmux（断言的是 tmux 里真终端界面的输出与按键）"))
+@Suite(RealAgents.needs(.claudeCode), .enabled(if: tmuxURL != nil, "要 tmux（断言的是 tmux 里真终端界面的输出与按键）"))
 struct RealClaudeTerminalTests {
     nonisolated static let userSettings = """
         {
@@ -59,9 +59,9 @@ struct RealClaudeTerminalTests {
             let terminal = try await testbed.terminal(["--model", "claude-nosuch-9"])
             let session = try await testbed.waitForSession(pid: terminal.pid)
             try await testbed.bridge.send(PiMessage(text: "say hi"), to: session.id)
-            @MainActor func reply() throws -> String? { try testbed.transcript(session.sessionFile).messages.last { $0.role == .known(.pi) }?.text }
+            @MainActor func reply() -> String? { (try? testbed.transcript(session.sessionFile))?.messages.last { $0.role == .known(.pi) }?.text }
             try await eventually("这一轮出错、那句原话进了对话") {
-                try testbed.bridge.session(id: session.id)?.state == .error && reply() != nil
+                testbed.bridge.session(id: session.id)?.state == .error && reply() != nil
             }
             let detail = try #require(testbed.bridge.session(id: session.id)?.detail)
             #expect(detail.hasPrefix("模型不存在或没有权限"), "\(detail)")
@@ -109,6 +109,8 @@ struct RealClaudeTerminalTests {
             await #expect(throws: PiBridgeError.rejected("failed: 终端里的 Claude Code 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说")) {
                 try await testbed.bridge.send(PiMessage(text: "只回复 MANGO"), to: session.id)
             }
+            // 钩子报"在跑"时，会话文件可能还没写到盘上（Claude Code 的写队列每 100 毫秒才刷一次）：先等这一轮的话落盘再看
+            try await eventually("SLEEP-RUN 落盘") { (try? testbed.transcript(session.sessionFile))?.messages.contains { $0.text.contains("SLEEP-RUN") } == true }
             #expect(try !testbed.transcript(session.sessionFile).messages.contains { $0.text.contains("MANGO") })
 
             try await terminal.keys("Escape")

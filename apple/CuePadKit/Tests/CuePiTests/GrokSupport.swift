@@ -2,255 +2,143 @@
 import CueStore
 import CueTestSupport
 import Foundation
-import Network
-import Synchronization
+import Testing
 @testable import CuePi
 
-/// `CUEPAD_GROK` 指定另一个（如新版本）。
-let realGrokURL = ProcessInfo.processInfo.environment["CUEPAD_GROK"].map { URL(filePath: $0) } ?? ExecutableLocator.standard.candidates("grok").first
+let pinnedGrok = PinnedAgent.grok
 
-/// 录制时 Grok 用的模型：环境里给了真凭据就连真的 xAI，否则连本进程里的假模型（`FakeResponses`）。真凭据只经测试进程的环境给、不写进任何文件：
-/// API 密钥（`XAI_API_KEY`），或已登录的凭据文件的位置（`GROK_AUTH_PATH`，如 `~/.grok/auth.json`：grok 自己读、自己刷新，测试不碰它的内容）。
-/// 录像带起 grok 时把这里的环境补进去（`AgentTape.recordProcess`，CuePad 自己给了的不覆盖）：假模型的地址与假密钥，或真凭据——
-/// 测试台的配置目录是临时的，托管会话的 grok 要经它找到登录。都不经 CuePad，录像带里也就没有。
-enum GrokModel {
-    static let credentials = ProcessInfo.processInfo.environment.filter { ["XAI_API_KEY", "GROK_AUTH_PATH"].contains($0.key) && !$0.value.isEmpty }
+/// Grok 起来用的环境：HOME 与配置目录是给的临时目录，模型地址指到本用例的假模型（Responses），密钥是假的。
+/// 产品起 Grok 时把它盖在测试进程的环境上，所以每一项都要给：空串会顶掉假密钥（Grok 报 "no auth method id provided"）。
+func grokEnvironment(model: FakeModel, home: URL, grokHome: URL) -> [String: String] {
+    ["HOME": home.path, "GROK_HOME": grokHome.path, "GROK_XAI_API_BASE_URL": "\(model.baseURL)/v1", "XAI_API_KEY": "fake-xai-key",
+     "GROK_AUTH_PATH": grokHome.appending(path: "no-login.json").path, "GROK_DISABLE_AUTOUPDATER": "1", "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"]
+}
 
-    /// 连真模型时托管会话开在 `CUEPAD_GROK_MODEL` 给的模型上（不给是账号的默认模型；Grok 的新会话不认 `GROK_DEFAULT_MODEL`）；假模型与回放为 nil。
-    static let hosted: PiModelKey? = credentials.isEmpty ? nil
-        : ProcessInfo.processInfo.environment["CUEPAD_GROK_MODEL"].map { PiModelKey(provider: AgentKind.grok.rawValue, id: $0) }
+/// 用例的话写成真模型也照做的英文；假模型照这几句演。Grok 把你的话包在 `<user_query>` 里，工具的名字是它自己的（`run_terminal_command`、
+/// `ask_user_question`），MCP 工具只经 `use_tool` 交给模型。
+extension FakeModel {
+    func playGrok() {
+        on({ $0.prompt.contains("<user_query>") }) { request in
+            let images = request.images.isEmpty ? "" : " IMAGES[\(request.images.joined(separator: ","))]"
+            return .say("ECHO \(Self.query(request.prompt))\(images)")
+        }
+        on({ $0.system.hasPrefix("You are tasked with generating the session title") }) { _ in .say("Probe session") }
+        on({ $0.system.hasPrefix("Write an ultra-short dashboard") }) { _ in .say("Probe summary") }
+        on({ Self.query($0.prompt).contains("What color is this image") }) { .say($0.images.isEmpty ? "I see no image" : "red") }
+        on({ Self.query($0.prompt).contains("Remember the word") }) { _ in .say("OK") }
+        on({ Self.query($0.prompt).contains("What word did I ask you to remember") }) { request in
+            .say(request.said.lazy.compactMap { $0.firstMatch(of: /Remember the word (\w+)/)?.1 }.first.map(String.init) ?? "UNKNOWN")
+        }
+        on({ Self.query($0.prompt).contains("numbers from 1 to 400") }) { _ in .stream(["1\n", "2\n", "3\n"]) }
+        on({ Self.query($0.prompt).contains("ask_user_question") }) { request in
+            let questions: [[String: any Sendable]] = [
+                ["question": "Which drink?", "header": "Drink", "multiSelect": false,
+                 "options": [["label": "Tea", "description": "hot"], ["label": "Coffee", "description": "strong"]]],
+                ["question": "Which size?", "header": "Size", "multiSelect": false,
+                 "options": [["label": "Small", "description": "small cup"], ["label": "Large", "description": "large cup"]]],
+            ]
+            return request.step == 0 ? .call("ask_user_question", ["questions": questions]) : .say(request.results.last ?? "")
+        }
+        on({ Self.query($0.prompt).contains("run exactly:") }) { request in
+            let command = Self.query(request.prompt).firstMatch(of: /run exactly: (.+?)  Then/)?.1 ?? "true"
+            return request.step == 0 ? .call("run_terminal_command", ["command": String(command), "description": "run it"]) : .say("DONE")
+        }
+    }
 
-    /// 测试进程里共用一个，录制时头一次起 grok 时才开（回放不起：Grok 的输出都在录像带里）；连真模型时为 nil。
-    static let fake: FakeResponses? = credentials.isEmpty ? try? FakeResponses() : nil
+    /// 大脑用例（`playBrain`）在 Grok 上的写法：MCP 的 echo 经 `use_tool`，写文件只有终端命令。
+    func playGrokBrain(chain: FakeGate) {
+        playGrok()
+        playBrain(chain: chain)
+        on({ $0.prompt.contains("Create a file named") }) { request in
+            request.step == 0 ? .call("run_terminal_command", ["command": "echo x > hack.txt", "description": "write the file"]) : .say("I could not create it.")
+        }
+        on({ $0.prompt.contains("Call the echo tool") }) { request in
+            let next = FakeReply.call("use_tool", ["tool_name": "cuepad__echo", "tool_input": ["text": request.results.last ?? "x"]])
+            return switch request.step {
+            case 0: .call("use_tool", ["tool_name": "cuepad__echo", "tool_input": ["text": "x"]])
+            case 1: .held(chain, then: next)
+            case 8...: .say(request.results.last ?? "")
+            default: next
+            }
+        }
+    }
 
-    static var environment: [String: String] {
-        let model = fake.map { ["GROK_XAI_API_BASE_URL": $0.baseURL, "XAI_API_KEY": "fake-xai-key", "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"] } ?? credentials
-        return ["GROK_DISABLE_AUTOUPDATER": "1"].merging(model) { $1 }
+    private static func query(_ prompt: String) -> String {
+        prompt.components(separatedBy: "<user_query>").last?.components(separatedBy: "</user_query>").first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? prompt
     }
 }
 
-/// 假 xAI 模型服务：HTTP/1.1 上的 `POST /v1/responses`（SSE，事件同 OpenAI Responses），零网络、结果确定。
-/// 停住：一串 echo 调用的第二次请求停住，等测试放行（`release`，先放后停也算）——插话在下一次请求才进对话，测试在插话交出去之后放行；
-/// 数数那一句只说开头几个数就停住，直到 Grok 断开（停下这一轮）。都有 30 秒的上限，测试异常退出时不让 Grok 一直等。
-final class FakeResponses: Sendable {
-    private let listener: NWListener
-    let port: UInt16
-    private let gate = Mutex<(released: Int, waiting: [(id: UUID, continuation: CheckedContinuation<Void, Never>)])>((0, []))
-    private static let ceiling = Duration.seconds(30)
+/// 临时的 Grok 配置目录、家目录与工作目录：钉住的真 Grok（`pinnedGrok`）起在这里，连本用例的假模型，不读写真实的 ~/.grok 与资料库。
+@MainActor
+final class GrokRig {
+    let root: URL
+    let model: FakeModel
+    let bridge: PiBridge
+    let runtime: GrokRuntime
+    var home: URL { root.appending(path: "grok", directoryHint: .isDirectory) }
+    var work: URL { root.appending(path: "work", directoryHint: .isDirectory) }
 
-    var baseURL: String { "http://127.0.0.1:\(port)/v1" }
-
-    /// 同步等到端口开好（只在录制时头一次起 grok 时，不在主线程上）。连接的处理要在开始监听前给（`NWListener` 的要求），
-    /// 那时还没有 self：先进一个流，开好后再接。
-    init() throws {
-        listener = try NWListener(using: .tcp, on: .any)
-        let ready = DispatchSemaphore(value: 0)
-        let connections = AsyncStream<NWConnection>.makeStream()
-        listener.newConnectionHandler = { connections.continuation.yield($0) }
-        listener.stateUpdateHandler = { state in
-            if case .ready = state { ready.signal() }
+    init() async throws {
+        try pinnedGrok.require()
+        root = try makeTempDirectory().resolvingSymlinksInPath()
+        let model = try await FakeModel()
+        model.playGrok()
+        self.model = model
+        for directory in [root.appending(path: "grok"), root.appending(path: "work"), root.appending(path: "user")] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
-        listener.start(queue: .global())
-        ready.wait()
-        port = listener.port?.rawValue ?? 0
-        Task { [weak self] in
-            for await connection in connections.stream {
-                connection.start(queue: .global())
-                Task { await self?.serve(connection) }
-            }
-        }
+        let sockets = root.appending(path: "s", directoryHint: .isDirectory)
+        let environment = grokEnvironment(model: model, home: root.appending(path: "user"), grokHome: root.appending(path: "grok"))
+            .merging(["CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path]) { $1 }
+        let paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
+        bridge = PiBridge(socketDirectory: sockets)
+        runtime = GrokRuntime(bridge: bridge, paths: paths, files: scratchFiles, grok: { pinnedGrok.executable }, locate: { pinnedGrok.locator }, timing: noDeadline)
+        try bridge.start()
+        try runtime.start()
     }
 
-    func release() {
-        let waiter = gate.withLock { state -> CheckedContinuation<Void, Never>? in
-            guard state.waiting.isEmpty else { return state.waiting.removeFirst().continuation }
-            state.released += 1
-            return nil
-        }
-        waiter?.resume()
+    func open(_ launchToken: String) async throws -> PiSession.ID {
+        try await runtime.open(in: work, launchToken: launchToken, name: nil, model: nil, thinking: nil)
     }
 
-    /// 停住，直到放行或到了上限（到上限时从等待里摘掉自己再放行，之后的放行不会落到它身上）。
-    private func hold() async {
-        let id = UUID()
-        await withCheckedContinuation { continuation in
-            let ready = gate.withLock { state in
-                guard state.released == 0 else { state.released -= 1; return true }
-                state.waiting.append((id, continuation))
-                return false
-            }
-            if ready { return continuation.resume() }
-            Task {
-                try? await Task.sleep(for: Self.ceiling)
-                let expired = self.gate.withLock { state in state.waiting.firstIndex { $0.id == id }.map { state.waiting.remove(at: $0).continuation } }
-                expired?.resume()
-            }
-        }
+    func stop() async {
+        await runtime.stop()()
+        bridge.stop()
+        model.stop()
+        try? FileManager.default.removeItem(at: root)
     }
 
-    // MARK: HTTP
-
-    private func serve(_ connection: NWConnection) async {
-        defer { connection.cancel() }
-        var data = Data()
-        while true {
-            guard let chunk = await Self.receive(connection) else { return }
-            data.append(chunk)
-            guard let end = data.range(of: Data("\r\n\r\n".utf8)) else { continue }
-            let head = String(decoding: data[..<end.lowerBound], as: UTF8.self)
-            let length = head.split(separator: "\r\n").first { $0.lowercased().hasPrefix("content-length:") }
-                .flatMap { Int($0.split(separator: ":")[1].trimmingCharacters(in: .whitespaces)) } ?? 0
-            guard data.count - end.upperBound >= length else { continue }
-            guard head.hasPrefix("POST"), head.contains("/responses"),
-                  let body = try? JSONSerialization.jsonObject(with: data[end.upperBound...]) as? [String: Any]
-            else {
-                await Self.send(connection, "HTTP/1.1 404 Not Found\r\ncontent-type: application/json\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}")
-                return
-            }
-            await respond(Self.plan(body), model: body["model"] as? String ?? "grok", input: body["input"], on: connection)
-            return
-        }
+    func transcript(_ session: PiSession) throws -> PiHistoryUpdate {
+        try PiHistory.index(file: try #require(session.sessionFile), agent: .grok, from: nil, files: scratchFiles)
     }
 
-    private static func receive(_ connection: NWConnection) async -> Data? {
-        await withCheckedContinuation { continuation in
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { data, _, done, error in
-                continuation.resume(returning: error != nil || (done && data == nil) ? nil : data ?? Data())
-            }
-        }
+    func replies(_ session: PiSession) -> [String] {
+        ((try? transcript(session))?.messages ?? []).filter { $0.role == .known(.pi) }.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 
-    @discardableResult
-    private static func send(_ connection: NWConnection, _ text: String) async -> Bool {
-        await withCheckedContinuation { continuation in
-            connection.send(content: Data(text.utf8), completion: .contentProcessed { continuation.resume(returning: $0 == nil) })
-        }
+    /// 最近一条回答里有这个词
+    func replied(_ word: String, in id: PiSession.ID) -> Bool {
+        bridge.session(id: id).flatMap { replies($0).last?.contains(word) } == true
     }
 
-    // MARK: 回答
-
-    enum Plan {
-        case say(String)
-        case call(String, [String: Any])
-        indirect case held(Plan)
-        case endless([String])
-
-        /// 调 MCP 工具：Grok 只把它经 `use_tool` 交给模型（见 `GrokDialect`）
-        static func mcp(_ name: String, _ input: [String: Any]) -> Plan { .call("use_tool", ["tool_name": name, "tool_input": input]) }
+    /// 交给模型主对话的请求里，最近一条你的话含这句的（Grok 另有起标题、写摘要的请求，它们的系统提示不同）
+    func asked(_ text: String) -> [FakeRequest] {
+        model.requests.filter { $0.system.hasPrefix("You are Grok") && $0.prompt.contains(text) }
     }
 
-    static func plan(_ body: [String: Any]) -> Plan {
-        let input = body["input"] as? [[String: Any]] ?? []
-        let system = (body["instructions"] as? String) ?? input.first { $0["role"] as? String == "system" }.map(text) ?? ""
-        if system.hasPrefix("You are tasked with generating the session title") { return .say("Probe session") }
-        if system.hasPrefix("Write an ultra-short dashboard") { return .say("Probe summary") }
-        let users = input.filter { $0["role"] as? String == "user" }.map(text)
-        guard let queryIndex = input.lastIndex(where: { $0["role"] as? String == "user" && text($0).contains("<user_query>") }) else { return .say("ECHO") }
-        let query = text(input[queryIndex]).components(separatedBy: "<user_query>").last?.components(separatedBy: "</user_query>").first?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let after = input[(queryIndex + 1)...]
-        let calls = after.filter { $0["type"] as? String == "function_call" }
-        let outputs = after.compactMap { $0["type"] as? String == "function_call_output" ? $0["output"] as? String : nil }
-        if users.contains(where: { $0.contains("Stop now") }) { return .say("STOPPED") }
-        if query.contains("Call the echo tool") {
-            if calls.isEmpty { return .mcp("cuepad__echo", ["text": "x"]) }
-            let next: Plan = calls.count < 8 ? .mcp("cuepad__echo", ["text": outputs.last ?? "x"]) : .say(outputs.last ?? "")
-            return calls.count == 1 ? .held(next) : next
-        }
-        if let codename = system.firstMatch(of: /codename is ([A-Z0-9-]+)/)?.output.1, query.contains("codename") { return .say(String(codename)) }
-        if query.contains("color") {
-            let seen = input.contains { ($0["content"] as? [[String: Any]])?.contains { $0["type"] as? String == "input_image" } == true }
-            return .say(seen ? "red" : "I see no image")
-        }
-        if query.contains("ask_user_question") {
-            let questions: [[String: Any]] = [
-                ["question": "Which drink?", "header": "Drink", "multiSelect": false,
-                 "options": [["label": "Tea", "description": "hot"], ["label": "Coffee", "description": "strong"]]],
-                ["question": "Which size?", "header": "Size", "multiSelect": false, "options": [["label": "Small", "description": "small cup"], ["label": "Large", "description": "large cup"]]],
-            ]
-            return calls.isEmpty ? .call("ask_user_question", ["questions": questions]) : .say(outputs.last ?? "")
-        }
-        if query.contains("Remember the word") { return .say("OK") }
-        if query.contains("What word did I ask you to remember") {
-            return .say(users.lazy.compactMap { $0.firstMatch(of: /Remember the word (\w+)/)?.output.1 }.first.map(String.init) ?? "?")
-        }
-        if query.contains("numbers from 1 to 400") { return .endless(["1\n", "2\n", "3\n"]) }
-        if query.contains("hack.txt") {
-            return calls.isEmpty ? .call("run_terminal_command", ["command": "echo x > hack.txt", "description": "write the file"]) : .say("I cannot write files here.")
-        }
-        if let command = query.firstMatch(of: /run exactly: (.+?)  Then/)?.output.1 {
-            return calls.isEmpty ? .call("run_terminal_command", ["command": String(command), "description": "run it"]) : .say("DONE")
-        }
-        let said = input[queryIndex...].filter { $0["role"] as? String == "user" }.map(text)
-        if let word = said.reversed().lazy.compactMap({ $0.firstMatch(of: /single word ([A-Za-z]+)/)?.output.1 }).first { return .say(String(word)) }
-        return .say("ECHO \(query)")
+    /// 会话的进程是钉住的那份 Grok（不是别处的另一个），并且在跑
+    func runsPinnedGrok(_ id: PiSession.ID) -> Bool {
+        guard let pid = bridge.session(id: id)?.pid else { return false }
+        var path = [CChar](repeating: 0, count: 4096)
+        guard proc_pidpath(pid, &path, UInt32(path.count)) > 0 else { return false }
+        return URL(filePath: String(cString: path)).resolvingSymlinksInPath().path == pinnedGrok.executable.resolvingSymlinksInPath().path
     }
+}
 
-    private static func text(_ item: [String: Any]) -> String {
-        if let text = item["content"] as? String { return text }
-        return (item["content"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: "\n")
-    }
-
-    private func respond(_ plan: Plan, model: String, input: Any?, on connection: NWConnection) async {
-        if case .held(let next) = plan {
-            await hold()
-            return await respond(next, model: model, input: input, on: connection)
-        }
-        guard await Self.send(connection, "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: close\r\n\r\n") else { return }
-        var sequence = 0
-        func event(_ type: String, _ fields: [String: Any]) async -> Bool {
-            var object = fields
-            object["type"] = type
-            object["sequence_number"] = sequence
-            sequence += 1
-            let json = String(decoding: (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data(), as: UTF8.self)
-            return await Self.send(connection, "event: \(type)\ndata: \(json)\n\n")
-        }
-        let id = "resp_\(UUID().uuidString.prefix(8))"
-        let base: [String: Any] = ["id": id, "object": "response", "created_at": Int(Date().timeIntervalSince1970), "model": model, "tools": [], "metadata": [:]]
-        guard await event("response.created", ["response": base.merging(["status": "in_progress", "output": []]) { $1 }]) else { return }
-        var item: [String: Any]
-        switch plan {
-        case .call(let name, let arguments):
-            let json = String(decoding: (try? JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys])) ?? Data(), as: UTF8.self)
-            item = ["type": "function_call", "id": "fc_\(id)", "call_id": "call_\(id)", "name": name, "arguments": json, "status": "completed"]
-            guard await event("response.output_item.added", ["output_index": 0, "item": item.merging(["arguments": ""]) { $1 }]),
-                  await event("response.function_call_arguments.delta", ["output_index": 0, "item_id": "fc_\(id)", "delta": json]),
-                  await event("response.function_call_arguments.done", ["output_index": 0, "item_id": "fc_\(id)", "arguments": json])
-            else { return }
-        case .say(let text):
-            item = await message(id: "msg_\(id)", text: text, event: event)
-        case .endless(let parts):
-            _ = await event("response.output_item.added", ["output_index": 0, "item": ["type": "message", "id": "msg_\(id)", "role": "assistant", "status": "in_progress", "content": []]])
-            for part in parts {
-                guard await event("response.output_text.delta", ["output_index": 0, "item_id": "msg_\(id)", "content_index": 0, "delta": part, "logprobs": []]) else { return }
-            }
-            // 说到一半停住：直到 Grok 断开（停下这一轮），至多到上限（断开这条连接，等着的收也就结束）
-            let limit = Task {
-                try await Task.sleep(for: Self.ceiling)
-                connection.cancel()
-            }
-            _ = await Self.receive(connection)
-            limit.cancel()
-            return
-        case .held:
-            return
-        }
-        guard await event("response.output_item.done", ["output_index": 0, "item": item]) else { return }
-        let used = String(describing: input ?? "").utf8.count / 4 + 1
-        let usage: [String: Any] = [
-            "input_tokens": used, "output_tokens": 7, "total_tokens": used + 7,
-            "input_tokens_details": ["cached_tokens": 0], "output_tokens_details": ["reasoning_tokens": 0],
-        ]
-        _ = await event("response.completed", ["response": base.merging(["status": "completed", "output": [item], "usage": usage]) { $1 }])
-    }
-
-    private func message(id: String, text: String, event: (String, [String: Any]) async -> Bool) async -> [String: Any] {
-        _ = await event("response.output_item.added", ["output_index": 0, "item": ["type": "message", "id": id, "role": "assistant", "status": "in_progress", "content": []]])
-        _ = await event("response.content_part.added", ["output_index": 0, "item_id": id, "content_index": 0, "part": ["type": "output_text", "text": "", "annotations": []]])
-        _ = await event("response.output_text.delta", ["output_index": 0, "item_id": id, "content_index": 0, "delta": text, "logprobs": []])
-        _ = await event("response.output_text.done", ["output_index": 0, "item_id": id, "content_index": 0, "text": text, "logprobs": []])
-        return ["type": "message", "id": id, "role": "assistant", "status": "completed", "content": [["type": "output_text", "text": text, "annotations": []]]]
-    }
+@MainActor
+func withGrokRig(_ body: (GrokRig) async throws -> Void) async throws {
+    let rig = try await GrokRig()
+    do { try await body(rig) } catch { await rig.stop(); throw error }
+    await rig.stop()
 }
 #endif

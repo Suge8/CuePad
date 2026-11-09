@@ -176,7 +176,9 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             id: id, sessionID: sessionID, agent: .claudeCode, sessionFile: file, pid: envelope.pid, cwd: cwd,
             terminal: PiTerminal(tty: envelope.tty, environment: envelope.environment), state: .settled, stateSince: .now)
         session.model = input["model"]?.string.map { ClaudeCode.model($0) }
-        let terminal = attach(session, inbox: envelope.environment["CLAUDE_CODE_MESSAGING_SOCKET"], runningSince: nil, waiting: false)
+        let terminal = attach(
+            session, inbox: envelope.environment["CLAUDE_CODE_MESSAGING_SOCKET"], registry: registry(of: envelope.pid, in: home(of: envelope)),
+            runningSince: nil, waiting: false)
         recall(id, sessionID: sessionID)
         return terminal
     }
@@ -189,9 +191,10 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         bridge.update(terminal.id) { $0.terminal = fresh }
     }
 
-    private func attach(_ session: PiSession, inbox: String?, runningSince: Date?, waiting: Bool) -> ClaudeTerminalSession {
+    /// - Parameter registry: 会话登记文件，在会话自己的配置目录里（钩子来的见 `home(of:)`，列表补上的就是 `home`）
+    private func attach(_ session: PiSession, inbox: String?, registry: URL, runningSince: Date?, waiting: Bool) -> ClaudeTerminalSession {
         let terminal = ClaudeTerminalSession(
-            id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, registry: registry(of: session.pid),
+            id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, registry: registry,
             timing: timing, runningSince: runningSince, waiting: waiting)
         terminals[session.id] = terminal
         let pid = session.pid
@@ -265,7 +268,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
                 id: id, sessionID: entry.sessionID, agent: .claudeCode, sessionFile: file,
                 pid: entry.pid, cwd: cwd, terminal: PiTerminal(tty: PiTerminal.controllingTerminal(of: entry.pid)),
                 state: .settled, stateSince: .now)
-            _ = attach(session, inbox: inbox(of: entry.pid), runningSince: running, waiting: waiting)
+            _ = attach(session, inbox: inbox(of: entry.pid), registry: registry(of: entry.pid, in: home), runningSince: running, waiting: waiting)
             recall(id, sessionID: entry.sessionID)
         }
     }
@@ -277,10 +280,18 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     /// 会话的收件箱：Claude Code 的会话登记文件（`<配置目录>/sessions/<pid>.json`，官方没有写）里记着；`claude agents --json` 不给。
     private func inbox(of pid: Int32) -> String? {
-        (try? Data(contentsOf: registry(of: pid))).flatMap(JSONValue.parse)?["messagingSocketPath"]?.string
+        (try? Data(contentsOf: registry(of: pid, in: home))).flatMap(JSONValue.parse)?["messagingSocketPath"]?.string
     }
 
-    private func registry(of pid: Int32) -> URL { home.appending(path: "sessions/\(pid).json") }
+    private func registry(of pid: Int32, in home: URL) -> URL { home.appending(path: "sessions/\(pid).json") }
+
+    /// 终端会话自己的配置目录：用户可以给它另设 `CLAUDE_CONFIG_DIR`（钩子环境带着），没设就是默认的那个，不一定是 CuePad 读的 `home`
+    private func home(of envelope: AgentHookEnvelope) -> URL {
+        let variable = AgentKind.claudeCode.facts.homeVariable
+        var environment = paths.environment
+        environment[variable] = envelope.environment[variable]
+        return AgentPaths(pi: paths.pi, environment: environment).home(of: .claudeCode)
+    }
 }
 
 public enum ClaudeCodeError: Error, Equatable, ShownError {

@@ -3,6 +3,7 @@ import CueStore
 import Foundation
 
 extension CodexRuntime {
+    /// 全局规则读 `AGENTS.override.md`，没有时读 `AGENTS.md`（官方文档 agents-md，0.167 的 codex-home instructions）。
     nonisolated public static let facts = AgentFacts(
         command: "codex", homeVariable: "CODEX_HOME", installScript: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
         loginArguments: ["login"],
@@ -14,7 +15,8 @@ extension CodexRuntime {
                 home: integration.home(of: .codex), skillDirectory: integration.skillDirectory, codex: codex, locate: integration.locate,
                 environment: integration.paths.environment)
         },
-        releasesIdleHosted: true, probe: askCodex, brain: { CodexBrain() }, projectFolder: ".codex", selfManagedSkills: ".system")
+        releasesIdleHosted: true, probe: askCodex, brain: { CodexBrain() }, projectFolder: ".codex", selfManagedSkills: ".system",
+        globalReads: ["AGENTS.override.md", "AGENTS.md"])
 
     /// `codex app-server` 不开线程（不落会话、不跑钩子）：`getAuthStatus` 没有登录方式且要 OpenAI 登录是没登录（只读本机的登录；
     /// 否决 `account/read`：它要联网查工作区，断网或刚醒时超时就成了没登录）；默认是用户配置的模型（`config/read` 的 `model`），

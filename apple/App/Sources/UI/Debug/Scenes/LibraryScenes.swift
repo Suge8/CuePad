@@ -11,6 +11,9 @@ extension DebugSceneEntry {
         workspace.select(.library)
         #endif
         workspace.libraryPane = DebugHooks.preset.libraryPane
+        #if os(macOS)
+        if DebugScene.args.tidy { await DebugScene.tidyLibrary(workspace) }
+        #endif
         if let file = DemoAgentLibrary.file(scene: scene, project: project) { workspace.openLibrary(file) }
     }
 }

@@ -5,7 +5,8 @@ import Foundation
 extension GrokRuntime {
     /// 官方脚本装进 `~/.grok/bin`，自带 `grok update` 升级。要的版本是验过 ACP 用法（`_meta.agentProfile`、`_x.ai/interject`）的最旧一版。
     /// 技能：除了自己的 `skills`，也递归读几家共读的 `~/.agents/skills`（`SharedSkills.recursive`）与 Claude Code 的 `~/.claude/skills`（按名字去重，见它的文档 08-skills）；
-    /// 全局规则是自己目录下的 `AGENTS.md`（文档 12-project-rules），链到共读的那份。
+    /// 全局规则是自己目录下的 `AGENTS.md`（文档 12-project-rules），链到共享的那份；另在哪都读 `~/.claude` 里的 `CLAUDE.md`、`AGENTS.md` 与 `rules/`
+    /// （1.0.70 实测，认字面的 ~/.claude、不看 CLAUDE_CONFIG_DIR；同一份内容只放一次）。
     nonisolated public static let facts = AgentFacts(
         command: "grok", homeVariable: "GROK_HOME", minimumVersion: AgentVersion(1, 0, 52),
         installScript: "curl -fsSL https://x.ai/cli/install.sh | bash", upgradeCommand: "grok update", loginArguments: ["login"],

@@ -1,0 +1,62 @@
+name: Swift
+
+# 与本机同一个入口 apple/scripts/xc.sh；四段各占一台 runner 并行，每段都是干净机器上的冷编译。
+# runner 标签 xcode-27：actions/runner-images 的 macOS 27 镜像（Xcode 27.0 与 iOS 27.0 模拟器 iPhone 17 都在）。
+# CloudKit 真同步、推送、后台与签名只能在设备上验，这里只跑替身。
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: swift-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  xc:
+    name: ${{ matrix.name }}
+    runs-on: xcode-27
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: check, args: check }
+          - { name: test kit, args: test kit }
+          - { name: test mac, args: test mac }
+          - { name: test ios sync, args: test ios -only-testing:CuePadTests/SyncAccountTests -only-testing:CuePadTests/FileSyncTests -only-testing:CuePadTests/NewSessionFlowTests }
+    env:
+      # xcodebuild 只把 TEST_RUNNER_ 开头的变量交给测试进程：测试自己起的 node 脚本（MCP 替身等）要找得到 /opt/homebrew/bin 里的 node。
+      # 真 Agent 不走这个 PATH：它们装在专用缓存里、旁边带着 node（PinnedAgent）
+      TEST_RUNNER_PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      # 钉住的 Agent 缺一家就红，不跳过（PinnedAgent.fullMatrix）
+      TEST_RUNNER_CUEPAD_AGENT_MATRIX: full
+    steps:
+      # lint 要 origin/main 与发布标签：整段历史、全部标签
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      # 镜像默认 27.1；本项目按 27.0（27A266a）开发。选中靠 xcode-select 而不是 DEVELOPER_DIR：测试里起的 cc、python3 走系统的选择，不认环境变量
+      - run: |
+          sudo xcode-select -s /Applications/Xcode_27.0.app
+          xcodebuild -version; xcrun --show-sdk-path; xcrun simctl list runtimes; env | grep -iE 'sdkroot|developer_dir' || true
+      - run: brew install ripgrep tmux  # tmux：终端里的 Claude Code 用例（RealClaudeTerminalTests）
+      # 测试连的真 Agent：版本只在 apple/CuePadKit/Tests/agents.json，装进专用缓存（agents.py）；缓存随清单变
+      - if: matrix.name == 'test kit' || matrix.name == 'test mac'
+        uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/cuepad-agents
+          key: cuepad-agents-${{ hashFiles('apple/CuePadKit/Tests/agents.json', 'apple/scripts/agents.py') }}
+      - if: matrix.name == 'test kit' || matrix.name == 'test mac'
+        run: apple/scripts/xc.sh agents install
+      - run: apple/scripts/xc.sh ${{ matrix.args }}
+        timeout-minutes: 30
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: logs-${{ strategy.job-index }}
+          path: apple/.derived/test.log
+          if-no-files-found: ignore

@@ -44,7 +44,7 @@ final class ACPSession {
     private var loading = false
     /// CuePad 的 MCP 服务连上没有（`ACPDialect.connectsMCPLater`）：nil 是这个会话还没报
     private var mcp: Result<Void, HostedSessionError>?
-    private var mcpWaiters: [CheckedContinuation<Void, Never>] = []
+    private var mcpWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     private var contextUsed: Int?
     var contextWindow: Int?
     var brainSetup: (config: CueBrainConfig, setup: ACPBrainSetup)?
@@ -124,16 +124,22 @@ final class ACPSession {
                 guard (try? await Task.sleep(for: limit)) != nil, let self, self.mcp == nil else { return }
                 self.settleMCP(.failure(.rejected(String(localized: "CuePad 的 MCP 服务没有及时连上"))))
             }
-            await withCheckedContinuation { mcpWaiters.append($0) }
-            timer.cancel()
+            defer { timer.cancel() }
+            let id = UUID()
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { mcpWaiters[id] = $0 }
+            } onCancel: {
+                Task { @MainActor [weak self] in self?.mcpWaiters.removeValue(forKey: id)?.resume() }
+            }
+            try Task.checkCancellation()
         }
         try mcp?.get()
     }
 
     private func settleMCP(_ outcome: Result<Void, HostedSessionError>) {
         mcp = outcome
-        mcpWaiters.forEach { $0.resume() }
-        mcpWaiters = []
+        mcpWaiters.values.forEach { $0.resume() }
+        mcpWaiters = [:]
     }
 
     /// 读到回应的那一刻这一轮结束，之后读到的通知归下一轮。

@@ -13,7 +13,13 @@ import Synchronization
 final class AttachmentRun: Sendable {
   let holds: URL
   let id = UUID().uuidString
-  private let descriptor = Mutex<Int32?>(nil)
+  private let lockState = Mutex<Lock>(.notTaken)
+
+  private enum Lock {
+    case notTaken
+    case held(Int32)
+    case released
+  }
 
   init(holds: URL) { self.holds = holds }
 
@@ -22,20 +28,34 @@ final class AttachmentRun: Sendable {
   /// 建好并返回这次运行的持有目录。先拿锁再建目录：看得到目录时锁一定拿着；崩在两步之间只留一个锁文件，清理照样收。
   /// 锁的描述符不传给子进程：比 App 活得久的 Agent 进程不能替它占着锁。
   func folder() throws -> URL {
-    try descriptor.withLock { held in
-      guard held == nil else { return }
+    try lockState.withLock { state in
+      switch state {
+      case .held: return
+      case .released: preconditionFailure("运行已结束，不能再存入")
+      case .notTaken: break
+      }
       try FileManager.default.createDirectory(at: holds, withIntermediateDirectories: true)
       let opened = try Self.takeLock(Self.lock(id, in: holds))
       do { try FileManager.default.createDirectory(at: location, withIntermediateDirectories: true) } catch {
         close(opened)
         throw error
       }
-      held = opened
+      state = .held(opened)
     }
     return location
   }
 
-  deinit { descriptor.withLock { if let held = $0 { close(held) } } }
+  /// 当场放掉锁，这次运行从此算结束：别的运行的启动清理可以收走它的持有。之后不能再存入。
+  /// 进程退出时内核放锁、释放时 deinit 放锁都不必调它；释放的时刻不由调用方定（跨进程通知的处理还握着 `CueStore`，实测晚十几到几十毫秒），
+  /// 要在同一进程里紧接着认定它结束的（测试里模拟结束了的进程）用这个。
+  func end() {
+    lockState.withLock { state in
+      if case .held(let opened) = state { close(opened) }
+      state = .released
+    }
+  }
+
+  deinit { end() }
 
   static func folders(in holds: URL) -> [URL] {
     AttachmentFiles.names(in: holds).filter { !$0.hasSuffix(".lock") }.map { holds.appending(path: $0, directoryHint: .isDirectory) }
@@ -78,6 +98,9 @@ final class AttachmentRun: Sendable {
 }
 
 extension AttachmentFiles {
+  /// 当场结束这次运行（`AttachmentRun.end`）：同一进程里模拟“存过这些文件的进程已经退出”。
+  package func endRun() { run.end() }
+
   func hold(_ file: URL, as key: String) throws {
     try link(file, to: run.folder().appending(path: key))
   }

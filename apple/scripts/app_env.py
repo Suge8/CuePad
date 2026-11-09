@@ -63,15 +63,18 @@ def isolated_env(library, sockets=SOCKETS):
         home = os.path.realpath(fake_home)
         if home == os.path.realpath(os.path.expanduser("~")):
             die("CUEPAD_FAKE_HOME 不能是真的家目录")
-        for key in ("CUEPAD_BIN_DIR", "CUEPAD_WORKSPACE_DIR", *AGENT_HOMES, "XDG_CONFIG_HOME"):
+        for key in ("CUEPAD_BIN_DIR", "CUEPAD_WORKSPACE_DIR", "CUEPAD_DEVICE_LOGS_DIR", *AGENT_HOMES, "XDG_CONFIG_HOME"):
             env.pop(key, None)
         # Foundation 的家目录看 CFFIXED_USER_HOME；没给 CLAUDE_CONFIG_DIR 的 Claude Code 从钥匙串读真实的登录
         return dict(env, HOME=home, CFFIXED_USER_HOME=home, CLAUDE_CONFIG_DIR=f"{home}/.claude")
-    return dict(env, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_WORKSPACE_DIR=f"{library}/CuePad",
+    # 各台设备经 iCloud 送来的诊断（LibraryLocation.deviceLogs），xc.sh diag 用 CUEPAD_DIAG_DIR 指过来读
+    return dict(env, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_WORKSPACE_DIR=f"{library}/CuePad", CUEPAD_DEVICE_LOGS_DIR=f"{library}/Logs",
                 **{key: f"{agents}/{name}" for key, name in AGENT_HOMES.items()})
 
 
 # 各家配置目录的变量 → 隔离库里的目录名；XDG 两项是 OpenCode 的服务登记（XDG_STATE_HOME）与会话数据（XDG_DATA_HOME），
-# 不换的话隔离实例会连上用户在跑的 OpenCode 服务、或把拉起的服务落在真实目录；CUEPAD_AGENTS_DIR 是几家共读的 ~/.agents（技能与规则）
+# 不换的话隔离实例会连上用户在跑的 OpenCode 服务、或把拉起的服务落在真实目录；CUEPAD_AGENTS_DIR 是几家共读的 ~/.agents（技能），
+# CUEPAD_AGENTS_CONFIG_DIR 是全局规则共享那份所在的 ~/.config/agents（不换 XDG_CONFIG_HOME：实例里起的 git、gh 还要读真实的配置）
 AGENT_HOMES = {"PI_CODING_AGENT_DIR": "pi", "CLAUDE_CONFIG_DIR": "claude", "CODEX_HOME": "codex", "OPENCODE_CONFIG_DIR": "opencode",
-               "GROK_HOME": "grok", "XDG_STATE_HOME": "state", "XDG_DATA_HOME": "data", "CUEPAD_AGENTS_DIR": "shared"}
+               "GROK_HOME": "grok", "XDG_STATE_HOME": "state", "XDG_DATA_HOME": "data", "CUEPAD_AGENTS_DIR": "shared",
+               "CUEPAD_AGENTS_CONFIG_DIR": "agents-config"}
