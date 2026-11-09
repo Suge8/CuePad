@@ -19,7 +19,7 @@ enum RecordMapper {
     .accountQuotas: ["windows", "account", "details"],
     .cueMessages: ["text", "choices", "answer", "tools", "askAction", "askRule", "askShots", "places", "shownText"],
     .cueLines: ["text"],
-    .cueProfile: ["name", "model", "effort", "fast"],
+    .cueProfile: ["name", "model", "effort", "fast", "voice"],
     .cueState: ["detail", "step"],
     .macAgents: ["agents", "problems", "name"],
     .agentLibraries: ["home", "skills", "instructions", "tidies", "selfManaged", "agents"],

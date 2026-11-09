@@ -1,12 +1,12 @@
 #if os(macOS)
 import CuePi
+import CueStore
 import Foundation
 
 /// Codex v3 的 WebRTC 建连与单一控制连接；delegation 正文是派活入口，turn 只是转写。
 /// speakable 上下文是请模型播报的输入；发送成功或追加回执都不是播放确认。
 enum VoiceWire {
     static let model = "gpt-live-1-codex"
-    static let voice = "cove"
     private static let callURL = URL(string: "https://chatgpt.com/backend-api/codex/realtime/calls?intent=quicksilver&architecture=avas")!
     private static let sidebandBase = "wss://api.openai.com/v1/live/"
     private static let appendLimit = 500
@@ -34,17 +34,15 @@ enum VoiceWire {
         ]
     }
 
-    static func createCall(offer: String, developer: String, access: CodexAccess, session: UUID) async throws -> Call {
+    static func createCall(offer: String, developer: String, voice: CueVoice, access: CodexAccess, session: UUID) async throws -> Call {
         var request = URLRequest(url: callURL)
         request.httpMethod = "POST"
         for (key, value) in headers(access, session: session) { request.setValue(value, forHTTPHeaderField: key) }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: Any] = [
-            "sdp": offer,
-            "session": ["model": model, "audio": ["output": ["voice": voice]], "delegation": ["type": "client", "ack_filler": false],
-                        "initial_items": [["type": "message", "role": "developer", "content": [["type": "input_text", "text": developer]]]]],
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        var session: [String: Any] = ["model": model, "audio": ["output": ["voice": voice.rawValue]], "delegation": ["type": "client", "ack_filler": false]]
+        DebugHooks.voiceWire(String(decoding: try JSONSerialization.data(withJSONObject: ["type": "call.create", "session": session], options: .sortedKeys), as: UTF8.self))
+        session["initial_items"] = [["type": "message", "role": "developer", "content": [["type": "input_text", "text": developer]]]]
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["sdp": offer, "session": session])
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw Failure.malformed }
         switch http.statusCode {

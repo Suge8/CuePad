@@ -60,6 +60,7 @@ public struct RawDB {
       DROP INDEX piSessionStates_createdForTaskID;
       ALTER TABLE piSessionStates DROP COLUMN createdForTaskID;
       ALTER TABLE attachments DROP COLUMN registeredHere;
+      ALTER TABLE cueProfile DROP COLUMN voice;
       PRAGMA user_version = 90;
       """)
   }

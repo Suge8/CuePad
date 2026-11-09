@@ -150,7 +150,7 @@ extension Schema {
     CREATE INDEX cueLines_remindAt ON cueLines(remindAt) WHERE remindAt IS NOT NULL;
     CREATE TABLE cueProfile (
       id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, hostID TEXT, runtime TEXT NOT NULL, model TEXT, effort TEXT, fast INTEGER,
-      enabledAt INTEGER, modifiedAt INTEGER NOT NULL
+      enabledAt INTEGER, modifiedAt INTEGER NOT NULL, voice TEXT
     ) STRICT;
     -- lineIDs：生成摘要时有序输入的完整指纹；事实或行序变了，摘要随之作废
     CREATE TABLE cueSummaries (

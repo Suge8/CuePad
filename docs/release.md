@@ -89,4 +89,5 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 这一节还有条目时 `release ios` 拒绝发版；部署完成并回读核对后删除对应条目。字段由 `ck-production.sh` 另行核对。
 
-- 记录类型 `deviceDiagnostics`（`content` ENCRYPTED BYTES、`deviceName` ENCRYPTED STRING，在自建区 `Diagnostics`）：各台设备的诊断与最近日志经 iCloud 到 Mac（docs/diagnose.md）。还没导入开发环境。
+- 记录类型 `deviceDiagnostics`（`content` ENCRYPTED BYTES、`deviceName` ENCRYPTED STRING，在自建区 `Diagnostics`）：各台设备的诊断与最近日志经 iCloud 到 Mac（docs/diagnose.md）。已导入开发环境。
+- `cueProfile` 的字段 `voice`（ENCRYPTED STRING）：Cue 通话的音色（`CueVoice`）。已导入开发环境。
