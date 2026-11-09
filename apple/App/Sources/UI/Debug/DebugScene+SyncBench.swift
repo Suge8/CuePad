@@ -6,8 +6,7 @@ import Foundation
 import os
 
 extension DebugScene {
-    /// `-CuePadCloudKit YES`：隔离库也连 iCloud（同步测量）。签名的 CloudKit 环境必须是 Development：
-    /// 测量只写开发环境，开发构建的 ad-hoc 或生产签名带着它也不连。
+    /// 签名的 CloudKit 环境必须是 Development：测量只写开发环境，开发构建的 ad-hoc 或生产签名带着它也不连。
     static var syncsIsolatedLibrary: Bool {
         guard args.cloudKit else { return false }
         guard Entitlements.cloudKitEnvironment == "Development" else {
@@ -29,8 +28,7 @@ enum SyncBench {
     static let log = Logger(subsystem: AppIdentity.id, category: "bench")
     static var role: String? { args.syncBench }
     static var relayOff: Bool { role != nil && args.syncBenchOpts.noRelay }
-    /// `-CuePadSyncBenchCloud <目录>`：两个实例共用的模拟云（`SharedCloud`，延迟模型在目录里）；没给就连真的 iCloud 开发环境，
-    /// 这时 `-CuePadSyncBenchBudget <个>` 是这个进程的请求上限。
+    /// 没给 `-CuePadSyncBenchCloud` 就连真的 iCloud 开发环境，这时 `-CuePadSyncBenchBudget <个>` 是这个进程的请求上限。
     static var sharedCloud: URL? { args.syncBenchOpts.cloud.map { URL(filePath: $0, directoryHint: .isDirectory) } }
     static var budget: Int? { args.syncBenchOpts.budget }
     private static var args: DebugArgs { DebugScene.args }
@@ -65,7 +63,6 @@ enum SyncBench {
         }
     }
 
-    /// Cue 在这台值班：设置写成运行在这台、运行时 Pi（大脑由 `-CuePadCueBrain` 换成替身）。
     private static func enableCue(_ services: AppServices) async {
         let host = services.hostID
         do {
@@ -158,7 +155,6 @@ enum SyncBench {
 
     private static var churning: Task<Int, Never>?
 
-    /// 紧循环改同一张卡的正文，直到取消；返回写了几次（撞版本探针：命令行同时逐条改它）。
     private static func churn(_ card: UUID, _ store: CueStore) async -> Int {
         var writes = 0
         while !Task.isCancelled {
@@ -169,7 +165,6 @@ enum SyncBench {
         return writes
     }
 
-    /// `host` 那台 Mac 上的一个在线会话（与手机的发送目标同一批：同步来的会话状态）。
     private static func onlineSession(on host: String, _ services: AppServices) async -> PiSessionState? {
         let page: PiSessionPage
         do {

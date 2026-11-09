@@ -2,24 +2,17 @@
 import CueStore
 import SwiftUI
 
-/// 发给 Agent：浮在键盘上方的输入框（与随手记、新会话同一种），任务的正文已经带在里面，可以补一句；头部一颗胶囊选交给哪个会话。
-/// 默认交到哪与 Mac 的发给 Agent、Cue 的开工同一份规则（`CueStore.handOffPlan`）：叶子绑着会话就是那个会话（已结束的也列上，Mac 收到后唤醒它），没绑而上一步的会话
-/// 还开着就接着用它，否则是新会话；选"新会话…"就不接着用（同 Cue 的 fresh）。
-/// 发出即收起，任务那一行随即出现那个会话的状态；开新会话时先是"正在开会话"，开好后同样关联。
 struct HandOffInput: View {
     let outbox: Outbox
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    /// 选中的在线会话的模型显示值与可换的模型、命令。
     @State private var digest: SessionDigest?
     @State private var choice: UUID?
     @State private var planned: Planned?
     @FocusState private var focused: Bool
 
-    /// 交到哪的规则读出的：决定本身（不是从任务来的为 nil）、决定交给的会话的会话行（默认目标；没有为 nil，即新会话），
-    /// 与选"新会话…"时的决定（`handOffPlan(fresh:)`，与 Cue 开工带 fresh 同一条规则），以及开新会话时任务的第一句（`CueStore.opening`）。
-    /// 还没有哪台 Mac 写下过自己时没有决定（`noMac`）：这是新用户的常态、不是出错，原因叠在输入框上方（`composerNotice`），同新会话的输入框。
+    /// 还没有哪台 Mac 写下过自己时没有决定（`noMac`）：新用户的常态、不是出错，原因叠在输入框上方。
     nonisolated private struct Planned: Equatable, Sendable {
         var plan: HandOffPlan?
         var bound: PiSessionListItem?
@@ -28,7 +21,6 @@ struct HandOffInput: View {
         var noMac = false
     }
 
-    /// 能交给的会话：在线的（Mac 的发送目标共用同一份规则），叶子绑着的会话已结束时它排最前。
     private var sessions: [PiSessionListItem] {
         let live = HandOffTargets.sessions(services.liveSessions.live, project: outbox.project, at: services.speech)
         guard let bound = planned?.bound, !live.contains(where: { $0.state.sessionID == bound.state.sessionID }) else { return live }
@@ -50,22 +42,18 @@ struct HandOffInput: View {
             if workspace.outbox == nil, !draft.isEmpty(accepting: [.files, .cards]) { workspace.outbox = outbox }
         }
     }
-    /// 选中的会话在线时是它（模型与命令只给在线的换，已结束的绑定会话没有）。
     private var chosenLive: PiSessionState? {
         guard let chosen = chosen?.state else { return nil }
         return services.liveSessions.live.contains { $0.state.id == chosen.id } ? chosen : nil
     }
-    /// 读到的是选中的那个的（刚换选、新的一份还没读回来时没有）。
     private var chosenDigest: SessionDigest? {
         guard let digest, let id = chosenLive?.id, digest.session?.id == id else { return nil }
         return digest
     }
-    /// 选中会话的模型与思考强度的显示值（`SessionDigest.config`）。
     private var config: PiConfigShown? { chosenDigest?.config(at: services.speech) }
     private var catalog: AgentCatalog? { chosenDigest?.catalog }
     private var commands: [PiSlashCommand] { chosen?.state.usableCommands(in: catalog) ?? [] }
 
-    /// 选中的会话能换模型时，工具排上的那几样。
     private var tools: (session: PiSessionState, models: [PiModelOption], config: PiConfigShown)? {
         guard let session = chosen?.state, let config, let models = catalog?.models, session.capabilities.contains(.model), !models.isEmpty else { return nil }
         return (session, models, config)
@@ -111,10 +99,8 @@ struct HandOffInput: View {
         }
     }
 
-    /// 头部：交给谁的胶囊（菜单里是在线会话与"新会话"）；没选到 Mac、没换成的原因叠在输入框上方（`composerNotice`）。
     private var header: some View {
         HStack(spacing: Spacing.item) {
-            // 新会话放最上面：会话多了也不用往下翻
             MenuButton(sections: [
                 ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话…", image: .icon(.add), choose: newSession)]),
                 ChoiceMenu.Section(choices: sessions.map { item in
@@ -145,7 +131,6 @@ struct HandOffInput: View {
         workspace.outbox = nil
     }
 
-    /// 开新会话交给它：换成新会话的输入框，正文与补的话带过去。
     private func newSession() {
         workspace.prepareNewSession(draft, card: outbox.card, opening: planned?.opening, plan: planned?.fresh)
     }

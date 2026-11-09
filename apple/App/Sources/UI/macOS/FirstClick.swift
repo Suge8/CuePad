@@ -7,7 +7,6 @@ import SwiftUI
 enum FirstClick {
     private static var keyAt: TimeInterval = 0
 
-    /// 启动时装一次：之后每次有窗口成为主窗口都记下时刻。
     /// 投到主队列的回调就在主线程上跑（`assumeIsolated` 是这条保证）；主线程版的通知消息（`NSWindow.DidBecomeKeyMessage`）要 macOS 27。
     static func install() {
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { _ in
@@ -21,15 +20,12 @@ enum FirstClick {
     }
 }
 
-/// 不用 Button 的按钮（列表行里成百上千的小点按目标）：省掉每颗 Button 的焦点、按键与读屏机器，其余照按钮——
-/// 按下的样子同 `PressStyle(.button)`，抬起时才算点、拖出 `slop` 再松手不算；首击（`FirstClick`）不算点、交给 `firstClick`；
-/// 读屏是一颗按钮（标签由外面给）；全键盘访问打开时能 Tab 到、空格按下。
+/// 不用 Button 的按钮（列表行里成百上千的小点按目标）：省掉每颗 Button 的焦点、按键与读屏机器，其余照按钮。首击（`FirstClick`）不算点、交给 `firstClick`。
 struct ListPress: ViewModifier {
     let slop: CGFloat
     let action: () -> Void
     var firstClick: () -> Void = {}
     @GestureState private var pressed = false
-    /// 这次按下是不是首击（按下时定，抬起时用）。
     @State private var first: Bool?
 
     func body(content: Content) -> some View {

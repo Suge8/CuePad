@@ -25,13 +25,11 @@ extension SyncBench {
             }
         }
 
-        /// 一条说的话此刻的样子里记录方关心的几样。
         struct Seen {
             let id: UUID
             let created: Date
             let reachedServer: Bool
             let done: Date?
-            /// Cue 消息是谁说的（you、cue）；请求没有。
             var author: String?
 
             init(_ message: CueMessage) {

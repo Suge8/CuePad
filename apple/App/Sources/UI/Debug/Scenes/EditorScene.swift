@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 
 extension DebugSceneEntry {
-    /// editor：`-CuePadCard <正文开头>` 那张散放的灵感进编辑页（`-CuePadSelect <起点:长度>` 载入后选中一段）。
     static let editor = DebugSceneEntry("editor") { workspace, project in
         try await DebugScene.openEditor(workspace, project: project)
     }

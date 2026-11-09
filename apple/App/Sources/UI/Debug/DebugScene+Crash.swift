@@ -39,7 +39,6 @@ extension DebugScene {
         """.utf8)
     }
 
-    /// 同一个包里的一次卡死：主线程停在 SwiftUI 的更新里，往下是 CuePad 自己的帧。
     private static var sampleHang: String {
         """
         "hangDiagnostics": [{

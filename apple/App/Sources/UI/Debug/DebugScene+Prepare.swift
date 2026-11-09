@@ -3,13 +3,12 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
-    /// 宽屏两栏的开合偏好每次按参数摆（隔离实例的偏好域在几次截图之间留着）：会话条默认开着，`-CuePadSidebar hidden` 藏起；Cue 默认开着，`-CuePadCue shut` 收起。
+    /// 宽屏两栏的开合偏好每次按参数摆：隔离实例的偏好域在几次截图之间留着。
     static func presetColumns(_ settings: AppSettings) {
         settings.railExpanded = args.layoutOpts.sidebar != "hidden"
         settings.cueOpen = args.cue != "shut"
     }
 
-    /// `-CuePadSidebar drawer`、`-CuePadCue drawer`：摆好画面后拉出会话条的左缘抽屉、Cue 的右缘抽屉（窗口放不下它们时才看得见，`Workspace.railDrawer`、`showCue`）。
     /// 画面摆完再置：换主区会关抽屉。
     static func presetDrawers(_ workspace: Workspace) {
         if args.layoutOpts.sidebar == "drawer" { workspace.railDrawer = true }
@@ -24,7 +23,6 @@ extension DebugScene {
 
     private static func prepare(_ workspace: Workspace) async throws -> UUID? {
         let store = workspace.services.store
-        // -CuePadSampleCrash YES：存几份样例诊断，设置里出现"上次崩溃"（配 -CuePadCrashSheet YES 直接打开摘要）；导出的摘要另写进存档旁的 summary.txt
         if args.sampleCrash {
             let diagnostics = workspace.services.diagnostics
             try diagnostics.archive.store(sampleFreeze)
@@ -60,8 +58,6 @@ extension DebugScene {
         return project.id
     }
 
-    /// `-CuePadMac agents|bare`：库里写下一台 Mac「MacBook Pro」，接了 Claude Code 与 Codex，或一家都没接（bare），
-    /// 看手机上启用 Cue 前那三步（`CueMacSteps`）走到哪一步。
     private static func seedOneMac(_ store: CueStore) async throws {
         guard let mac = args.mac else { return }
         let bare = mac == "bare"
@@ -92,7 +88,6 @@ extension DebugScene {
         if try await store.projects().allSatisfy(\.isDefault) { try await seed(store) }
     }
 
-    /// `-CuePadComposer <cards|attachments|lines|slash>`（配 session、newsession 画面，iOS 与 Mac）：输入框出现时 cards 打开选卡片面板，slash 写进 "/re" 弹出斜杠命令面板，
     /// attachments 带上一张卡片（`-CuePadCard` 挑哪张）并放进两张演示图片与一份 PDF，lines 写进 9 行文字（看文字区长到 6 行后在里面滚）。
     /// ＋ 菜单是系统菜单、不能代为展开：截图时按一下 ＋（iPhone 17 Pro 回复框：`axe touch -x 37 -y 810 --down --up --delay 0.15`；axe 的 tap 太快，菜单不开）。
     static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
@@ -105,7 +100,6 @@ extension DebugScene {
             // 等推入页面的转场走完再弹，转场中弹出的面板会被系统丢掉；弹出前不算就绪
             later(.seconds(1)) { source.wrappedValue = .cards }
         case "attachments":
-            // 先挑默认项目里的，没有再挑第一个项目里的
             var id = try await card(in: Project.defaultID, store: store)
             if id == nil, let project = try await store.projects().first { id = try await card(in: project.id, store: store) }
             if let id, let card = try await store.card(id) {
@@ -122,7 +116,6 @@ extension DebugScene {
         }
     }
 
-    /// 演示用的一份 PDF（一页 A4、几行字）存进附件目录：附件条、正文里的文件牌、你的话里的文件拍照用。
     static func demoPDF(_ store: CueStore) throws -> DraftFile {
         let name = String(localized: "季度复盘.pdf", table: "Demo")
         let url = FileManager.default.temporaryDirectory.appending(path: name)
@@ -150,7 +143,6 @@ extension DebugScene {
         return DemoLibrary.encode(context.makeImage()!)
     }
 
-    /// `-CuePadCard` 指定（或最近修改）的一张散放的灵感。
     static func card(in project: UUID, store: CueStore) async throws -> UUID? {
         let cards = try await store.cards(in: project)
         let prefix = args.card ?? ""
@@ -162,7 +154,6 @@ extension DebugScene {
         later(.milliseconds(300)) { proxy.scrollTo(ScrollAnchor.older, anchor: UnitPoint(x: 0.5, y: 0.35)) }
     }
 
-    /// task 画面：打开 `-CuePadTask <标题开头>` 那一条任务的气泡，没给是 `preferred` 挑中的，再没有是第一条（推进中、待办）。
     static func openTask(_ workspace: Workspace, preferred: (Card) -> Bool) async {
         await running("打开任务气泡") {
             let tasks = try await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)

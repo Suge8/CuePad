@@ -5,7 +5,7 @@ import SwiftUI
 struct Keycap: View {
     let text: String
     @Environment(\.palette) private var palette
-    /// 字外只留一圈细边，同系统菜单里快捷键的样子：键帽贴着字、比任何一档控件都小，不随间距档。
+    /// 键帽贴着字、比任何一档控件都小，不随间距档。
     private static let padding = EdgeInsets(top: 1, leading: 5, bottom: 1, trailing: 5)
 
     var body: some View {

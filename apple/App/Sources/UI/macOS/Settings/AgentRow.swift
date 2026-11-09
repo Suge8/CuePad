@@ -3,17 +3,13 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 设置里的 Agent 那几行（`AgentRow`）。
 struct AgentRows: View {
     var body: some View {
         ForEach(AgentKind.allCases) { AgentRow(kind: $0) }
     }
 }
 
-/// 一个 Agent 一行：开关即接入（写技能；Pi 另写扩展，Claude Code、Codex 另写钩子，OpenCode 直连它的后台服务，Grok Build 跟读它的会话记录）或删除（CuePad 写的文件与因此空出的目录）。状态写它在不在、接没接（`AgentLine`）；
-/// 没装、太旧的给"安装""升级"：同接入面板，在后台跑官方安装脚本（`AppServices.installAgent`，进度与没装上的原因在 `AgentIntegrations.jobs`，
-/// 两处读同一份），缺前提的（Pi 要 Node.js）给官网。正常的行是安静的，只有要你动手的（别人的同名文件、Pi 太旧）变色。
-/// 怎么用、会写在哪、何时生效、安装跑的命令放在悬停提示里。出现时重新检测它（用户可能刚在终端里装好）。
+/// 出现时重新检测它：用户可能刚在终端里装好。
 struct AgentRow: View {
     let kind: AgentKind
     @Environment(AppServices.self) private var services
@@ -29,7 +25,7 @@ struct AgentRow: View {
         let (tone, line) = describe(status)
 
         SettingRow(title: .verbatim(kind.name), icon: kind.mark.image, tone: tone, busy: working || installing, status: line, help: help) {
-            // 开关常驻：检测中与开不了也关不了的（没装、版本不对、开发构建没指定目录、别人的同名文件）置灰，检测完只换状态那一行字
+            // 开关常驻，检测完只换状态那一行字。
             Toggle(kind.name, isOn: Binding(get: { status?.isConnected ?? false }, set: apply))
                 .labelsHidden()
                 .toggleStyle(.switch)
@@ -46,7 +42,7 @@ struct AgentRow: View {
         .task { await services.agents.detect(kind) }
     }
 
-    /// 别人的同名文件不碰；开发构建不写真实配置目录；没装的 Agent 不接，但它卸掉后留下的 CuePad 技能能关掉删除。
+    /// 开发构建不写真实配置目录；没装的 Agent 不接，但它卸掉后留下的 CuePad 技能能关掉删除。
     private func canToggle(_ status: AgentStatus) -> Bool {
         guard services.agents.isWritable(kind) else { return false }
         if case .foreign = status.files { return false }
@@ -64,7 +60,6 @@ struct AgentRow: View {
 
     private var installing: Bool { services.agents.jobs[kind] == .installing }
 
-    /// 装的进度与没装上的原因在前（同接入面板那一行），缺前提的写缺什么。
     private func describe(_ status: AgentStatus?) -> (StatusTone, Dotted?) {
         if case .failed(let message) = outcome { return (.failure, Dotted(message)) }
         if installing { return (.calm, Dotted(AgentLine.installing)) }
@@ -118,7 +113,7 @@ struct AgentRow: View {
         }
     }
 
-    /// 没装上的原因在 `jobs` 里（状态那一行读它）；这里接住的是装完重新检测、写进库时抛的错，同开关一样写在这一行。
+    /// 没装上的原因在 `jobs` 里；这里接住的是装完重新检测、写进库时抛的错。
     private func install() {
         outcome = nil
         let services = services, kind = kind
@@ -128,8 +123,6 @@ struct AgentRow: View {
     }
 }
 
-/// 设置与接入面板里一个 Agent 那一行的状态（`AgentRow`、`SetupPanel`）：接入了的各家同一种写法"已接入 · 名字 版本"，报不出版本的（桌面版）只写"已接入"。
-/// 在装、没装上、缺前提的那几句两处同一份。
 enum AgentLine {
     static var installing: String { String(localized: "安装中，可能要几分钟") }
     /// 原因是安装脚本的最后一句原话
@@ -158,7 +151,6 @@ enum AgentLine {
 }
 
 extension AgentKind {
-    /// 接入会写什么（没接入时那一行的状态；能做什么写在接入面板的说明与悬停提示里）
     var writes: String {
         switch self {
         case .pi: String(localized: "写入扩展与技能")
@@ -169,7 +161,7 @@ extension AgentKind {
         }
     }
 
-    /// 悬停提示里的一句：终端里开的会话从 CuePad 做不到的（由 `AgentCapabilities.of` 推出；CuePad 在后台开的什么都能做）
+    /// 由 `AgentCapabilities.of` 推出；CuePad 在后台开的什么都能做。
     var limits: String? {
         let missing = AgentCapabilities.all.subtracting(.of(self, hosted: false, model: nil))
         let names: [(AgentCapabilities, String)] = [

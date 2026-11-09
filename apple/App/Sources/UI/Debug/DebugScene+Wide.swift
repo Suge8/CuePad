@@ -3,8 +3,7 @@ import AppKit
 import CueStore
 
 extension DebugScene {
-    /// `-CuePadWideReverse <组合>`（仅 Mac，录屏用；组合是 `InteractionBench.wideCases` 的名字，如 `双会话+Cue`）：就绪前摆好这种主区组合（会话取库里前两份），
-    /// 就绪后每 2 秒在会话条自动收窄的临界宽度上反向一次：窄 1 点，50ms 后（滑动刚起头）拉回；`-CuePadWideHold <毫秒>` 改停多久（如 1500：收窄、展开各滑完一整段）。
+    /// 组合是 `InteractionBench.wideCases` 的名字（如 `双会话+Cue`），会话取库里前两份。
     /// 窗口用 `-CuePadWindowSize <临界宽>x<高>` 起在临界宽度上（`WideMetrics.railThreshold`，Cue 开着时 1436），不在就以失败退出。
     /// 录出来的每一帧是屏上的样子、不经主线程：`InteractionBench+Wide` 在主线程取样，主线程忙的那几帧取不到，跳没跳要看这里。
     static func reverseWideIfAsked(_ workspace: Workspace) async {
@@ -20,8 +19,7 @@ extension DebugScene {
         Task { await cycleWideReverse(workspace) }
     }
 
-    /// `-CuePadDrawerCross rail|cue`（仅 Mac，录屏用）：窗口用 `-CuePadWindowSize` 起在那个抽屉的临界宽少 1 点（会话条 `railThreshold`，Cue `cueThreshold`），
-    /// 就绪后拉出那个抽屉，再反复拉宽 1 点（跨过临界宽、放得下）又拖回来：抽屉跨过那一下就关了，拖回窄时不再自己出来（`Workspace.fit`）。只拉出一次。
+    /// 抽屉跨过那一下就关了，拖回窄时不再自己出来（`Workspace.fit`）。只拉出一次。
     static func crossWithDrawerIfAsked(_ workspace: Workspace) {
         guard let which = args.layoutOpts.drawerCross else { return }
         Task {

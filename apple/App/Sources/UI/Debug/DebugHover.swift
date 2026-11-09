@@ -2,7 +2,6 @@
 import Foundation
 
 extension DebugScene {
-    /// `-CuePadHover` 给的几点（窗口里，左上为原点，同 `-CuePadClick`）：盖住它们的按钮、行与卡画成指针停着的样子（`presetHover`）。
     static var hoverPoints: [CGPoint] {
         (args.driveOpts.hover ?? "").split(separator: ";").compactMap { spot in
             let parts = spot.split(separator: ",").compactMap { Double($0) }

@@ -2,13 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 窄屏进展页的竖版看板：Mac 看板转 90°——待办、推进中、等你、已完成四行竖着排，每行一条（`BoardRowLane`），
-/// 行头竖在左端，卡在行里横着排、放不下就在这一行里横划。
-/// 四行竖着铺满顶栏以下的整段（`BoardRows`）：行高只由这段高定，卡多卡少、有没有都不改，下面不空出一块，整页拖不动；
-/// 只有辅助字号下四行连各自的最矮都叠不下，才整页竖着滚。高按各行的理想高分（`TaskBoard.Column.rowTiers`）：推进中、等你各三排卡，
-/// 待办、已完成各一排矮卡，矮屏与大一两档的字下重的两行先回到两排。
-/// 卡换行时从原处飞到新处（`boardFlight`），四行共用量飞行位置的坐标系与正被拖着的那件（`boardStage`）。
-/// 点"+"添加任务时整页先回到待办那一行。
 struct PhoneBoard: View {
     let board: TaskBoard
     @Binding var adding: Bool
@@ -19,7 +12,6 @@ struct PhoneBoard: View {
         ScrollViewReader { proxy in
             ScrollView {
                 BoardRows(gap: Self.gap) {
-                    // 量这一屏多高的尺：滚动区看得见的那段（让开顶栏）
                     Color.clear.containerRelativeFrame(.vertical)
                     ForEach(TaskBoard.Column.allCases) { column in
                         BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject, row: true)
@@ -36,14 +28,10 @@ struct PhoneBoard: View {
         }
     }
 
-    /// 行与行之间：行没有底，靠这段留白分开。
     static let gap: CGFloat = 12
 }
 
-/// 四行竖着铺满一屏：第一个子视图是尺（`containerRelativeFrame` 量出滚动区看得见的高，不占位置），其余是行。
-/// 每行答两个高（`BoardRowLane`）：理想高（不给高时）与最矮（给零高时）。放得下理想高时多出来的按理想高的比例分给各行；
-/// 放不下时各行从理想高往最矮收，按各自能收的那截分摊，总高仍正好一屏——超出一点点整页就能上下拖（矮屏、大一两档的字）。
-/// 连最矮都叠不下（辅助字号）才取最矮、滚动区竖着滚。一次排版里算完，不经几何读数写回状态（docs/layout.md）。
+/// 一次排版里算完，不经几何读数写回状态（docs/layout.md）。
 private struct BoardRows: Layout {
     let gap: CGFloat
 

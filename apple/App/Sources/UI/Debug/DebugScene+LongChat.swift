@@ -2,12 +2,6 @@
 import CueStore
 import Foundation
 
-/// 长对话与追加中的对话（验收会话页的滚动，iOS 与 Mac 共用）：
-/// - `-CuePadLongChat YES`（配 `-CuePadDemo YES`）：演示库多一个 300 轮的会话 marathon（CuePad 项目），回答高矮悬殊——
-///   一句话、整页长段落、40 行代码块、宽表、长列表轮换，每 25 轮你贴进来一段长文；看打开即最新、往上翻、回到最新。
-/// - `-CuePadStream YES`（配 session 画面）：打开会话后像真的 Agent 那样一轮一轮追加（`stream`）：看新内容到达时跟随最新，
-///   也查会话在跑时才有的界面（经过、子代理、回复框的停止钮）。
-/// - `-CuePadBench chatscroll`（仅 Mac，配 session 画面打开 marathon，或 cue 画面量 Cue 页的长对话）：在进程内投递滚轮与触控板事件滚对话，量每圈主线程 CPU 与指令数（`ChatScrollBench`）。
 extension DebugScene {
     static let longChat = "marathon"
     private static let longChatRounds = 300
@@ -23,8 +17,6 @@ extension DebugScene {
         try await writeChat(longChat, turns, store: store)
     }
 
-    /// 给 `sessionID` 像真的 Agent 那样一轮一轮追加，共 `rounds` 轮：你的话 → 每 200ms 做完一步（经过清单变长、状态在思考与跑工具之间换、
-    /// 子代理名册变）→ 第 15 步落回答（高矮轮换）→ 等子代理时它交回一张机器消息卡片 → 歇下。
     static func stream(_ sessionID: String, rounds: Int = 100, store: CueStore) async {
         await running("追加对话") { try await appendRounds(sessionID, rounds: rounds, store: store) }
     }

@@ -1,10 +1,8 @@
 #if DEBUG
 import SwiftUI
 
-/// 演示库里会话发来、Cue 点名给你看的截图与报告：每张都画的是它说明里那件事（预发上的发言顺序就是 6 个人的顺序、测试报告就是那几条用例），
 /// 内容铺满整张、要看的在上半截（缩略图怎么裁都看得到），不留像截坏了的空白与灰条。
 extension DebugScene {
-    /// 圆桌预发环境上一场 6 人房间的发言顺序（`deployShots`：推送那条"等你"）：按首次加入时间排，重连过的人还在原位。
     static func stagingOrderPNG() -> Data {
         let people: [(name: String, note: String?, joined: String, tint: Color)] = [
             (String(localized: "小林", table: "Demo"), String(localized: "主持人", table: "Demo"), "20:01", .orange), (String(localized: "阿杰", table: "Demo"), nil, "20:02", .teal), ("Mia", nil, "20:02", .pink),
@@ -46,7 +44,6 @@ extension DebugScene {
         return render(view)
     }
 
-    /// 重连用例的测试报告（PDF，一页）：与"等你"正文里那段输出同样四条，都过了。
     static func reconnectReportPDF() -> Data {
         let cases = [(String(localized: "重连后保留首次加入时间", table: "Demo"), "0.21s"), (String(localized: "6 人同时重连顺序不变", table: "Demo"), "0.48s"), (String(localized: "断线超过 5 分钟按新人排", table: "Demo"), "0.12s"), (String(localized: "主持人重连仍在第一位", table: "Demo"), "0.09s")]
         let page = VStack(alignment: .leading, spacing: 0) {
@@ -77,7 +74,6 @@ extension DebugScene {
         return pdf(page)
     }
 
-    /// 三档价格对比表（PDF，两页）：定价区那件的会话发来的一份。
     static func pricingPDF() -> Data {
         let page = VStack(alignment: .leading, spacing: 12) {
             Text("定价对比", tableName: "Demo").font(.system(size: 28, weight: .bold))
@@ -91,10 +87,8 @@ extension DebugScene {
         return pdf(page, pages: 2)
     }
 
-    /// 新版 App 的样子（一扇窗：侧栏、Cue 的对话），你交给 Cue 换 README 截图时贴的参考图。
     static func appShotPNG() -> Data { render(appWindow.padding(24).frame(width: 640, height: 420).background(Color(red: 0.86, green: 0.88, blue: 0.93))) }
 
-    /// 换好的 README（浅色）：项目名、一句话、徽章，下面是新截图（与参考图同一扇窗）。方的：缩略图裁成方的也是整张。
     static func readmePNG() -> Data {
         let view = VStack(spacing: 10) {
             Text("CuePad").font(.system(size: 30, weight: .bold))
@@ -111,7 +105,6 @@ extension DebugScene {
         return render(view)
     }
 
-    /// 截图里的那扇窗：左边侧栏（Cue 与几个项目），右边一段对话。
     private static var appWindow: some View {
         let paper = Color(red: 0.99, green: 0.985, blue: 0.97), desk = Color(red: 0.93, green: 0.92, blue: 0.9)
         return HStack(spacing: 0) {
@@ -142,7 +135,6 @@ extension DebugScene {
         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
     }
 
-    /// 登录回调超时修好后的样子（流程演示里做完的那件）：等授权超过 10 秒，回到登录页并说明原因。
     static func loginTimeoutPNG() -> Data {
         let view = VStack(alignment: .leading, spacing: 14) {
             Text("登录", tableName: "Demo").font(.system(size: 30, weight: .bold)).padding(.top, 60)
@@ -162,7 +154,6 @@ extension DebugScene {
         return render(view)
     }
 
-    /// 手机登录页的截图：`covered` 时键盘挡住了登录钮。
     static func phonePNG(covered: Bool) -> Data {
         let view = ZStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 14) {
@@ -189,7 +180,6 @@ extension DebugScene {
         }
     }
 
-    /// 系统键盘的样子（三排字母键与空格），一眼看得出是键盘而不是截坏的灰条。
     private static var keyboard: some View {
         VStack(spacing: 10) {
             ForEach(["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"], id: \.self) { row in

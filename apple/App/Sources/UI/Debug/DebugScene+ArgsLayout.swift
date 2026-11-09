@@ -1,7 +1,5 @@
 #if DEBUG
 
-/// 窗口尺寸、侧栏与右栏、窄屏宽屏、辅助功能与折叠展开这类"把界面摆成什么样"的参数。
-/// 键 = `-CuePad` + 前缀（无） + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。
 nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     static let prefix = ""
     /// `-CuePadBeside <会话>`（仅 Mac）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）
@@ -10,15 +8,15 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let compact: Double?
     /// `-CuePadCuePanel YES`（iOS，配 cue 画面）：页头一出现就展开成面板
     let cuePanel: Bool
-    /// `-CuePadDrawerCross rail|cue`（仅 Mac）：拉出那个抽屉后反复跨过临界宽来回拖（`DebugScene+Wide.swift`）
+    /// `-CuePadDrawerCross rail|cue`（仅 Mac）：拉出那个抽屉后反复跨过临界宽来回拖
     let drawerCross: String?
     /// `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检
     let geometryLoop: Bool
     /// `-CuePadHeaderCycle YES`（配录屏）就绪后来回走：滑去看历史（让开）→ 点顶上唤出 → 再滑（让开）→ 回到最新（回来），每步 1.5 秒
     let headerCycle: Bool
-    /// `-CuePadHeaderHidden YES`、`-CuePadHeaderCycle YES`（iOS，配 session）：会话页顶那一排让开、来回让开与回来（`debugDrivesHeader`）
+    /// `-CuePadHeaderHidden YES`、`-CuePadHeaderCycle YES`（iOS，配 session）：会话页顶那一排让开、来回让开与回来
     let headerHidden: Bool
-    /// `-CuePadHelpOpen YES`：页顶与导航栏里的问号一出现就点开说明（`debugOpensHelp`）
+    /// `-CuePadHelpOpen YES`：页顶与导航栏里的问号一出现就点开说明
     let helpOpen: Bool
     /// `-CuePadHighContrast YES`：整个窗口按增强对比度画
     let highContrast: Bool
@@ -26,7 +24,7 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let largestType: Bool
     /// `-CuePadMergePreview YES`（配 instruction 画面）：已点过一下"合并进来"、标出会并进来的段
     let mergePreview: Bool
-    /// `-CuePadLandscape YES`（iOS、iPad）：由 `xc.sh` 在起实例前把模拟器横过来（`app_sim.py`），App 自己不读；登记在这里是为了不被当成拼错的参数
+    /// `-CuePadLandscape YES`（iOS、iPad）：由 `xc.sh` 在起实例前把模拟器横过来，App 自己不读；登记在这里是为了不被当成拼错的参数
     let landscape: Bool
     /// `-CuePadModelMenu YES`（Mac）：模型菜单一出现就打开；菜单是独立窗口，截图另拍它
     let modelMenu: Bool
@@ -42,13 +40,13 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let panelCycle: Bool
     /// `-CuePadQuiet YES`（iOS）：不弹演示会话的前台横幅
     let quiet: Bool
-    /// `-CuePadQuotaCycle YES`（iOS，配 progress 录屏）：反复点额度钮开浮窗、走点外面那条路关（`cycleQuota`）
+    /// `-CuePadQuotaCycle YES`（iOS，配 progress 录屏）：反复点额度钮开浮窗、走点外面那条路关
     let quotaCycle: Bool
     /// `-CuePadQuotaOpen YES`：额度明细一出现就长开（手机进展页顶栏、Mac 侧栏）
     let quotaOpen: Bool
-    /// `-CuePadReader YES`：提示条当作读屏开着（`NoticeCapsule`），录读屏下不自动收
+    /// `-CuePadReader YES`：提示条当作读屏开着，录读屏下不自动收
     let reader: Bool
-    /// `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境）
+    /// `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画
     let reduceMotion: Bool
     /// `-CuePadRightCycle YES|fast`：同样开合右栏（Cue）
     let rightCycle: String?
@@ -66,7 +64,7 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let softKeyboard: Bool
     /// `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开
     let tasksOpen: Bool
-    /// `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的醒来记录与经过一开始就全部展开（`RoundProcess`、`PiSubagentList`、`CueNoteLog`、`CueTrace`）
+    /// `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的醒来记录与经过一开始就全部展开
     let toolsOpen: Bool
     /// `-CuePadTurnCycle YES`（配录屏）：就绪后把这一处的切页来回翻几遍（"更多"里的移到项目、任务气泡的子任务、搜索的范围）
     let turnCycle: Bool

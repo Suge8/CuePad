@@ -3,9 +3,7 @@ import CueStore
 import Foundation
 
 extension DebugScene {
-    /// 演示的技能与规则（配 `-CuePadDemo YES`）：手机上看的是演示的 Mac Studio 报来的快照（各家都接了，`seedMacAgents`），这里替它写一份；
-    /// Mac 上看的是本机照文件扫出的（`AgentLibraryKeeper`），这里把同一套内容写成隔离目录里的文件（`seedAgentFiles`）。
-    /// 默认是该整理的样子（散落的、Claude Code 读不到的、空目录、同名的、格式不对的、另写了一份的全局规则）；`-CuePadAgentLibrary clean` 是整理好了的样子。
+    /// 手机上看的是演示的 Mac Studio 报来的快照，这里替它写一份；Mac 上看的是本机照文件扫出的，这里把同一套内容写成隔离目录里的文件（`seedAgentFiles`）。
     static func seedAgentLibrary(_ services: AppServices) async throws {
         #if os(macOS)
         try seedAgentFiles()
@@ -41,7 +39,6 @@ struct DemoAgentLibrary {
             agents: [.pi, .claudeCode, .codex], modifiedAt: .now)
     }
 
-    /// 各份文件的正文（`LibraryFileText`）：列出的技能与规则，加合并要比的各家那几份。
     var texts: [String: String] {
         var texts: [String: String] = [:]
         for (skill, text) in skills { texts[skill.textPath] = text }
@@ -125,7 +122,6 @@ struct DemoAgentLibrary {
         return .succeeded
     }
 
-    /// 画面直接打开的那份文件（`-CuePadScene instruction|skill|duplicate`）：全局规则（给了项目是它的规则）、write-swift、同名的全局 release。
     static func file(scene: String, project: UUID?) -> LibraryFile? {
         #if os(macOS)
         let root = (ProcessInfo.processInfo.environment["CUEPAD_AGENTS_DIR"] ?? "") + "/skills"
@@ -158,7 +154,6 @@ struct DemoAgentLibrary {
         ("", "web-search", String(localized: "联网搜索与取正文", table: "Demo")),
     ]
 
-    /// SKILL.md 的样子（同 `seedAgentFiles` 写出的）。
     static func skillText(_ name: String, _ description: String) -> String {
         "---\nname: \(name)\ndescription: \(description)\n---\n\n\(description)\n"
     }

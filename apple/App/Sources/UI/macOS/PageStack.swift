@@ -2,10 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 主区：当前页与最近去过的几页都挂着（`Workspace.mountedPages`），切页只是换哪一页看得见，回访不重建、不重排、滚动位置还在。
-/// 不在前台的页：不可见、点不到、屏读跳过，暂停订阅与实时状态（`pageActive`），尺寸停在离开时的值（`PageStackLayout`）。
 /// 读页面的只有这里，主窗口的视图体不读它，切页时不重算整个窗口。会话页不留，只在当前页时挂上。
-/// 页从窗口最顶那一排下面开始、内容滚到它后面（让出 `Chrome.band`）；进展页的列头与会话页的栏头就在那一排里，不让。
 struct PageStack: View {
     @Environment(Workspace.self) private var workspace
 
@@ -50,7 +47,6 @@ struct PageStack: View {
 }
 
 private extension Route {
-    /// 页自己排进窗口最顶那一排：看板的列头、会话的栏头。
     var fillsBand: Bool {
         switch self {
         case .progress, .session: true

@@ -4,7 +4,6 @@ import CueText
 import SwiftUI
 
 extension DebugScene {
-    /// 演示记忆：长短不一（一句话到接近一条的上限）、钉住的与其他、你说的与 Cue 记的，时间从刚刚到几个月前。
     static var demoMemory: [SeedCueLine] {
         let hour: TimeInterval = 3600, day = 24 * hour
         func ago(_ seconds: TimeInterval) -> Date { .now.addingTimeInterval(-seconds) }
@@ -32,7 +31,6 @@ extension DebugScene {
         ]
     }
 
-    /// 推送那条"等你"点名要看的两份：部署会话发来的预发截图与测试报告（`seedDeliveries`）。
     static func deployShots(_ store: CueStore) async throws -> [CueShot] {
         let sent = try await store.previews(of: "deploy")
         return [(String(localized: "预发上的发言顺序", table: "Demo"), String(localized: "预发上 6 人的发言顺序", table: "Demo")), (String(localized: "重连测试报告", table: "Demo"), String(localized: "重连用例 4 个都过了", table: "Demo"))].compactMap { title, look in
@@ -40,8 +38,6 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadLongChat YES`：演示对话前面多 110 轮更早的来回（比 Cue 页读得到的 `CueThread.limit` 条多：来一句新的，最早那条就掉出去，同真实库）（看 Cue 页往上翻与刻度滑条）。
-    /// Cue 的回答高矮悬殊：一句话与会话页长对话同一套长段落、40 行代码块、宽表、长列表轮换（`longChatReply`）；你每 25 轮贴进来一段长文，每 15 轮带一张图。
     /// 量 Cue 页的长对话滚动（`-CuePadBench chatscroll`）就用这一段。
     static func seedLongCueChat(you: (String) async throws -> Void, store: CueStore) async throws {
         let asks = [String(localized: "今天先看哪件？", table: "Demo"), String(localized: "把计费那个会话的进展说一下", table: "Demo"), String(localized: "圆桌的预发什么时候能好？", table: "Demo"), String(localized: "帮我记一下：周五不发版", table: "Demo"), String(localized: "README 截图换完了吗？", table: "Demo"), String(localized: "重连用例加了几个？", table: "Demo")]
@@ -55,10 +51,6 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadScene cuerows`（不配演示库）：Cue 在值班，五个会话——Pi、Codex、Claude Code 各一，标题长短都有，
-    /// 停着的、在跑的、等回答的都有（Claude Code 那个是 CuePad 答得了的确认，等 Cue 回答；Codex 那个只是一句话，等你确认）；各绑一件任务。
-    /// 停着的两个里 faq 是 Cue 留给你回的（"待回复"），README 那个归 Cue 接手（"歇着"），两相对照。上下文 50%（行上不写）、75%（加粗）、94%（胭脂）三档都有；
-    /// 两个带模型（Agent 页卡片多一层读数），其余没有（卡片只有两层）。
     /// 看窄处名字优先、Agent 只留标志，状态标与第二层对齐，上下文落在时长下面。
     static func seedCueRows(_ services: AppServices) async {
         await running("Cue 行的演示数据") { try await seedCueRows(services.store) }
@@ -93,7 +85,6 @@ extension DebugScene {
         try await store.leaveToYou("cue-claude-short")
     }
 
-    /// 会话发来一张截图（`png`）：卡片与"等你"上的证据。
     @discardableResult
     static func seedEvidence(_ store: CueStore, session: String, title: String, png: Data) async throws -> PiPreview {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
@@ -105,8 +96,6 @@ extension DebugScene {
 
 #if DEBUG
 extension DebugScene {
-    /// 定时（定时页、手机 Cue 面板的定时那一行、任务气泡里那一条）：每天 8:00 的汇总；挂在 `task` 上的每月 1 号 9:00，
-    /// 上一次那次错过了、41 分钟后补上（那一轮写在对话里它补上的时刻）；明天 15:00 只这一次的。
     static func seedSchedules(_ store: CueStore, task: Card?) async throws {
         let daily = CueRepeat(.daily, hour: 8, minute: 0)!
         try await store.noteCueLine(

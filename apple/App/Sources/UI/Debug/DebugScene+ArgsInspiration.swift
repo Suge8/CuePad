@@ -1,7 +1,5 @@
 #if DEBUG
 
-/// 灵感导入与审计的参数。
-/// 键 = `-CuePad` + 前缀「Inspiration」 + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。
 nonisolated struct InspirationArgs: Decodable, DebugArgGroup {
     static let prefix = "Inspiration"
     /// `-CuePadInspirationArrival <秒>`：先只有图片记录，再模拟下载完成

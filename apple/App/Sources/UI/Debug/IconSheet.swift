@@ -1,15 +1,12 @@
 #if os(iOS) && DEBUG
 import SwiftUI
 
-/// 图标总览（`-CuePadScene icons`，iPad 竖屏一屏）：生成器写出的全部墨块符号（`InkSymbols`），每个画两遍——左边是 App 里的样子
-/// （层级渲染，点睛是次一级），右边是单色（系统菜单、工具栏里的样子，所有层同色，靠刻缝分开）；下面是项目表单的全部项目图标 × 8 种项目色。
 struct IconSheet: View {
     @Environment(\.palette) private var palette
 
     private static let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 10)
     private static let symbolSize: CGFloat = 22
     private static let projectSize: CGFloat = 18
-    /// 项目图标一组几列（同 Mac 项目表单一行）。
     private static let perGroup = 8
 
     var body: some View {

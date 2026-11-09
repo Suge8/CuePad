@@ -8,7 +8,6 @@ import UIKit.UIGestureRecognizerSubclass
 extension IOSInteractionBench {
     enum Finger {
         case press(CGPoint)
-        /// 快滑（axe swipe）：开合侧栏、返回、快甩。
         case swipe(from: CGPoint, to: CGPoint, seconds: Double = 0.25)
         /// 慢拖（axe drag，逐点移动）：行的轻扫只认开始那一刻横向慢于 600pt/s 的拖。
         case drag(from: CGPoint, to: CGPoint, seconds: Double)
@@ -19,7 +18,6 @@ extension IOSInteractionBench {
     /// 滑动的几项量 1 秒：滑 0.25 秒、松手后转场还要走半秒，800ms 时常停在半路上。
     static let swipeWindow = Duration.milliseconds(1000)
 
-    /// 手势开合侧栏与返回（每项两遍），再在任务看板上横滑核对没被侧栏的横拖抢走（`NarrowPan`：手指下还能横滚的先滚）。
     static func gestures(
         _ workspace: Workspace, session: UUID, wants: (String) -> Bool, fail: (String) -> Never, step: Step
     ) async {
@@ -71,7 +69,6 @@ extension IOSInteractionBench {
         return text
     }
 
-    /// 请测量脚本按或滑，等手指按下那一刻再返回：量从按下起算。
     static func touch(_ write: @escaping (String) -> Void, _ name: String, _ finger: Finger) async {
         func xy(_ point: CGPoint) -> String { "\(Int(point.x)) \(Int(point.y))" }
         let args = switch finger {
@@ -99,7 +96,6 @@ extension IOSInteractionBench {
     }
 
 
-    /// 任务看板（竖排四行，每行一条横滚区）：屏上最靠上、横着放不下的那一行。
     private static func board(in window: UIWindow?) -> UIScrollView? {
         guard let window else { return nil }
         return all(in: window).compactMap { $0 as? UIScrollView }
@@ -122,7 +118,6 @@ extension IOSInteractionBench {
         return here + view.subviews.flatMap { menuInteractions(in: $0) }
     }
 
-    /// 收起开着的长按菜单：系统的菜单交互收起，SwiftUI 的点按呈现交互取消。
     static func dismissMenus() {
         let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
         for interaction in windows.flatMap({ menuInteractions(in: $0) }) {
@@ -133,7 +128,6 @@ extension IOSInteractionBench {
         }
     }
 
-    /// 书架上带长按菜单的项目卡（SwiftUI 的长按菜单在视图上挂着点按呈现交互）的中心点，屏幕坐标。
     static func longPressTarget(in view: UIView?) -> CGPoint? {
         guard let view, !view.isHidden, view.alpha > 0, let window = view.window ?? (view as? UIWindow) else { return nil }
         let menu = view.interactions.contains { String(describing: type(of: $0)).contains("ClickPresentation") }

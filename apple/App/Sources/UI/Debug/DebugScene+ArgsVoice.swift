@@ -1,6 +1,6 @@
 #if DEBUG
 
-/// Mac 端与 Cue 通话的参数（`DebugScene+Voice.swift`）。
+/// Mac 端与 Cue 通话的参数。
 /// 键 = `-CuePad` + 前缀「Voice」 + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。
 nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     static let prefix = "Voice"
@@ -20,7 +20,7 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     let lightProbe: Bool
     /// `-CuePadVoiceLog <文件>`：`<距起点秒> <节点>`
     let log: String?
-    /// `-CuePadVoiceLoopback <目录>`：以本进程 tap 做临时麦克风（`VoiceLoopback`），按节点播 first.wav、interrupt.wav、stop.wav
+    /// `-CuePadVoiceLoopback <目录>`：以本进程 tap 做临时麦克风，按节点播 first.wav、interrupt.wav、stop.wav
     let loopback: String?
     /// `-CuePadVoiceMeter YES`：只测本地 getUserMedia，不建实时通话、不调用 Cue
     let meter: Bool
@@ -42,7 +42,7 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     let replay: Bool
     /// `-CuePadVoiceRuntime <pi|codex|claude>`：指定其他已在隔离目录登录的运行时
     let runtime: String?
-    /// `-CuePadVoiceScenario <名称>`：通话布局场景（`DebugVoiceLayoutScenario`）
+    /// `-CuePadVoiceScenario <名称>`：通话布局场景
     let scenario: String?
     /// `-CuePadVoiceSeconds <秒>`（默认 60）：通话这么久后挂断
     let seconds: Double?
