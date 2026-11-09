@@ -35,7 +35,6 @@ final class SpeechClock {
         schedule()
     }
 
-    /// 此刻还在等回执的话（库一变就给一次）。
     func track(_ waiting: [Awaiting]) {
         guard waiting != self.waiting else { return }
         self.waiting = waiting
@@ -81,12 +80,10 @@ extension AppServices {
         }
     }
 
-    /// 等在路上的那些话（`startSpeechClock` 一次读到的）。
     private nonisolated struct OpenSpeech: Equatable, Sendable {
         var open: Bool
         var waiting: [SpeechClock.Awaiting]
     }
 
-    /// 此刻（`SpeechClock.moment`）：读它的视图到点、同步通断时随之重算。
     var speech: Speech.Moment { speechClock.moment }
 }

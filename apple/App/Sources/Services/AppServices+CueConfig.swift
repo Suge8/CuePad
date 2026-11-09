@@ -30,7 +30,6 @@ extension AppServices {
         try await enableCue(on: host.id, moving: false)
     }
 
-    /// Cue 在这台设备上值班（只有 Mac 会）：它的话原位换下正在说的那句（`CueRow.arrives`）。
     var cueOnDutyHere: Bool {
         #if os(macOS)
         cue.onDuty

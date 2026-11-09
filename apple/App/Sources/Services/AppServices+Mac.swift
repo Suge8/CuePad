@@ -5,7 +5,6 @@ import CueStore
 import Foundation
 import os
 
-/// macOS 壳层与后台服务的生命周期：启动、停止、全局快捷键、Agent 会话历史索引、终端跳转。
 extension AppServices {
     /// 幂等。窗口与 `windowShell` 就绪后调用。
     func start() {
@@ -128,13 +127,11 @@ extension AppServices {
         }
     }
 
-    /// Cue：本机能用的运行时、按设置值班、通知（点开去哪见 `AlertCenter`）。
     private func startCue() {
         follow(reporting: { .piBridgeUnavailable(String(localized: "Cue 没能值班：\(String(describing: $0))")) }) { try await self.cue.follow() }
         follow(reporting: { .piBridgeUnavailable(String(localized: "Cue 的通知没能开始：\(String(describing: $0))")) }) { try await self.cue.followNotifications() }
     }
 
-    // MARK: 全局快捷键
 
     /// 启动时注册存着的快捷键；没注册上记成启动问题，设置里换一个。
     /// 脚本起的实例不注册：全局快捷键全机只有一份，会和用户在用的 CuePad 抢同一个键。
@@ -147,7 +144,6 @@ extension AppServices {
         }
     }
 
-    // MARK: Agent 会话历史
 
     /// 索引器取检查点：Store 读失败要报告（该文件不再写回）并从头读；没有或失效的检查点也是从头读。
     /// 不经主线程：回填时每个文件都来取一次，主线程同时在画界面。

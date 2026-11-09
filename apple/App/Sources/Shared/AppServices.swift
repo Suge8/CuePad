@@ -15,7 +15,6 @@ import UIKit
 /// 发送记录也只在这里写。
 @Observable
 final class AppServices {
-    /// 给人看的版本："0.1.0（1）"。
     static let version: String = {
         let info = Bundle.main.infoDictionary
         return "\(info?["CFBundleShortVersionString"] as? String ?? "?")（\(info?["CFBundleVersion"] as? String ?? "?")）"
@@ -25,7 +24,6 @@ final class AppServices {
     let store: CueStore
     #if os(macOS)
     let pi: PiBridge
-    /// 总控 Agent Cue（只在 Mac 上值班）。
     let cue: CueService
     #endif
 
@@ -34,7 +32,6 @@ final class AppServices {
     private(set) var startupIssues: [StartupIssue] = []
 
     @ObservationIgnored let location: LibraryLocation
-    /// 崩溃诊断（MetricKit）：设置页的"上次崩溃"。
     let diagnostics: Diagnostics
 
     /// iCloud 同步从哪来：正式启动按位置与本构建的 iCloud 权限决定（`makeSync`），测试注入替身。
@@ -46,7 +43,7 @@ final class AppServices {
         case built((CueStore) -> any SyncControlling)
     }
 
-    /// iCloud 同步；没有时同步状态是写明原因的 `.unavailable`。动作见 `AppServices+Sync`。
+    /// iCloud 同步；没有时同步状态是写明原因的 `.unavailable`。
     @ObservationIgnored let sync: (any SyncControlling)?
     /// 门铃（实时层，见 `AppServices+Relay`）；不连真的 iCloud（替身、没有 iCloud 权限、隔离库）时没有。
     @ObservationIgnored let relay: Relay?
@@ -57,7 +54,7 @@ final class AppServices {
     /// 附件文件此刻在路上的，按 key（`CloudSync.fileTransfers`）：附件那一格据此画进度；key 离开就是那一趟结束了，文件在不在本机看附件目录。
     private(set) var fileTransfers: [String: FileTransfer] = [:]
     #if os(iOS)
-    /// 最近一次要在前台提示的会话转换（见 `startSessionAlerts`）；每个窗口自己决定弹不弹。
+    /// 最近一次要在前台提示的会话转换；每个窗口自己决定弹不弹。
     private(set) var sessionAlert: SessionAlert?
     #endif
     /// 说的话到哪了的"此刻"与同步通着的起点，整个 App 一份（`start()` 开始跟着库）。
@@ -68,7 +65,6 @@ final class AppServices {
     let liveSessions: LiveSessions
     /// Cue 的现状，整个 App 一份：Cue 那一行与 iPhone 的小组件快照都从这里取（`cueUpdates`）。
     let cueFeed: CueFeed
-    /// 订阅账号的额度，整个 App 一份（`start()` 开始跟随）。
     let accountQuotas = AccountQuotas()
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
     private(set) var conflicts: [CardConflict] = []
@@ -76,7 +72,6 @@ final class AppServices {
     /// 小组件、分享扩展、实时活动的链接与点开的通知要打开的页（`handle(url:)`、`AlertCenter.receive`），工作区取走（`Workspace.openLinks`）。
     var pendingDeepLink: DeepLink?
 
-    /// 常驻的跟随者（`follow`），一起取消（`cancelBackgroundWork`）。
     @ObservationIgnored let tasks = Followers()
     /// 有理由等就拉的任务（见 `startPolling`）；iOS 整个进后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
@@ -99,16 +94,14 @@ final class AppServices {
     /// 还没返回的那一次立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）：期间再要立即同步的等它。
     /// 拉取（`CloudSync.syncNow`）只合并还没开拉的那一拉，立即同步要的是"这一次还没返回的"，所以另记。
     var syncing: Task<Void, Never>?
-    /// 已经开始认账号与第一拉（`connectSync`，只做一次）。
     @ObservationIgnored var syncConnected = false
-    /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。
     var isSyncingNow: Bool { syncing != nil }
     @ObservationIgnored let flights = Flights()
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 这台设备开着哪一页的唯一写入口；手机拿不到 identifierForVendor 时没有。
     @ObservationIgnored let viewer: ViewerKeeper?
-    /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
+    /// 进入后台前要落盘的界面状态（如编辑中的草稿）。
     @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
 
     /// 系统通知（App 代理持有的那一个，`start()` 前接上）；测试没有，不发真实通知。
@@ -122,7 +115,6 @@ final class AppServices {
     #endif
 
     #if os(macOS)
-    /// 接入各个 Agent（技能，Pi 另有扩展）的检测、安装与卸载。
     let agents: AgentIntegrations
     /// 命令行工具 `cuepad` 的安装（链接到 ~/.local/bin）。
     let commandLineTool: CommandLineToolInstaller
@@ -149,7 +141,6 @@ final class AppServices {
     @ObservationIgnored let macAgents: MacAgentsRecorder
     /// 这台 Mac 的技能与规则（同步表 agentLibraries）的唯一写入口，整理与改规则也经它。
     @ObservationIgnored let library: AgentLibraryKeeper
-    /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, pi: pi, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: piStateRecorder, library: library,
         upload: { [weak self] id in await self?.upload(id) },

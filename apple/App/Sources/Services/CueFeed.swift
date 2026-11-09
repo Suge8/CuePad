@@ -18,7 +18,6 @@ final class CueFeed {
         var local: CueNow.Local
     }
 
-    /// 订阅读到的最近一份；还没读到为 nil。
     private(set) var read: Read?
     fileprivate(set) var failure: (any Error)?
     @ObservationIgnored fileprivate var following = false
@@ -39,7 +38,6 @@ final class CueFeed {
         return start?.value
     }
 
-    /// 跟随资料库，直到任务取消或读失败。
     fileprivate func follow() async {
         defer { following = false }
         let read: @Sendable (isolated CueStore) throws -> Read = { [widget] in try Read.read(from: $0, widget: widget) }

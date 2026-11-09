@@ -18,7 +18,6 @@ import Foundation
 /// 不论换没换家，好好做完卡着的那件的一轮说一句恢复了、用的哪家（`recovered`）。
 /// 取舍：换回只认读得到的重置时刻，不为探你设定的那家好没好而反复换大脑（每换一次丢一次会话与提示缓存）；读不到的（登录）留在能用的那家，换回由你或 Cue 定。
 extension CueKeeper {
-    // MARK: 重起与看门狗
 
     /// 大脑这时该有人管的那一下（对账的定时器排它，`reconcile`）：等着重起的到点时刻，或在跑的一轮还差多久没动静满 `CueTiming.silence`（看门狗）。
     /// 定时器照墙钟睡，睡着的 Mac 醒来时它先到点：看门狗按醒着的时长再算一次（`revive`），没满就按剩下的重排。
@@ -52,7 +51,6 @@ extension CueKeeper {
     /// 工具结果说 Cue 的工具服务（`cuepad mcp`）没了（Pi 的接入 `cue-tools.ts` 报的）：这个班次的工具用不了了，做完这一轮就换。
     static func toolsDown(_ result: String) -> Bool { result.contains(/CuePad 的工具服务.*(退出了|没有回应)/) }
 
-    // MARK: 绕行
 
     /// 额度、登录卡住（`PiFailure.retries` 为假）：这家记进绕行（头注释）；有该能用的另一家就把设置换过去，返回告诉你的那句
     /// （从哪换到哪、为什么、额度读得到就带重置时刻）。没有为 nil：照常报错，慢速周期到点再换着试（`steer`）。
@@ -138,7 +136,6 @@ extension CueKeeper {
         return quota.binding(at: now, model: option.key.id).map(\.resetsAt).flatMap { $0 > now ? $0 : nil }
     }
 
-    // MARK: 起不来与恢复
 
     /// 快的重试用完、要转慢的了：这次故障里说一次起不来（提示你），之后不再说，恢复时说一句（`recovered`）。绕行换过去的那家起不来也算卡住（`markDown`）。
     func tellDown(_ reason: ShownText) async {
@@ -166,7 +163,6 @@ extension CueKeeper {
         await say(.cue, ShownText("又能干活了，用的是 \(kind.name)。"))
     }
 
-    // MARK: 健康
 
     /// 此刻的健康（`CueHealth`）：由 `phase` 与最近的出错、换大脑直接得出。
     var health: CueHealth {

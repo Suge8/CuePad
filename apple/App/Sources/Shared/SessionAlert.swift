@@ -5,13 +5,11 @@ import Foundation
 /// 一件可能要提示的会话动静："等你"、"待回复"或"做完了"（到不到你由 `CueStore.reaches` 定）。文案与手机锁屏通知同一处（`PiAlertText`）。
 struct SessionAlert: Equatable, Identifiable {
     let id = UUID()
-    /// 会话记录 id（`PiSessionState.id`）。
     let session: UUID
     let kind: PiAlert
     let title: String
     let question: String?
     let reply: String?
-    /// 出错时的原因（待回复的正文用它）
     let failure: String?
 
     init(_ state: PiSessionState, _ kind: PiAlert) {
