@@ -11,8 +11,9 @@ import Testing
 /// 忙时点结束先停下这一轮（Agent 自己把被中断的这一轮写进会话记录），再关输入、有宽限地收进程，结束报成功；
 /// 请它退出（结束、闲置到点、让出）的那一刻就下桥，之后的话走恢复，恢复等旧进程收完再起，同一会话同一时刻只有一个进程；
 /// 旧进程不肯退也只等到 SIGKILL 为止。
+/// 一次只跑一个用例：每个都起真 Agent，全部一起起会把同一测试进程里别的用例挤过它们的时限（Pi 的 1 秒空闲、应答时限）。
 @MainActor
-@Suite(.enabled(if: Hosting.uncovered == nil || PinnedAgent.fullMatrix, Comment(rawValue: Hosting.uncovered ?? "")))
+@Suite(.serialized, .enabled(if: Hosting.uncovered == nil || PinnedAgent.fullMatrix, Comment(rawValue: Hosting.uncovered ?? "")))
 struct RealHostedEndTests {
     /// 收尾用真钟：宽限与升级照用户的样子走，停下这一轮之前就被 SIGTERM 收掉的话，会话记录里没有被停下的这一轮。
     @Test(arguments: Hosting.allCases)
@@ -37,12 +38,13 @@ struct RealHostedEndTests {
     /// 紧接着的话（`MacExecutor` 的接法）接着同一会话、等旧进程走了才起新的，话送到。
     @Test(arguments: Hosting.allCases)
     func aMessageRightAfterTheSessionIsAskedToQuitResumesIt(_ hosting: Hosting) async throws {
-        try await EndRig.run(hosting, idleLimit: .seconds(2), timing: noDeadline) { rig in
+        try await EndRig.run(hosting, timing: noDeadline) { rig in
             try rig.mark("slow", true)
             let id = try await rig.open()
             try rig.mark("slow", false)
             let first = try await rig.converse("PING-ONE", in: id)
 
+            try await rig.idleOut(id)
             try await eventually("闲置到点，请它退出了") { rig.has("eof.\(first.pid)") }
             #expect(rig.bridge.session(id: id) == nil, "请它退出了还在桥上")
             let resumed = try await rig.connect(rig.indexed(first))
@@ -61,13 +63,14 @@ struct RealHostedEndTests {
     @Test(arguments: Hosting.allCases)
     func aSessionWhoseProcessIgnoresSIGTERMIsResumedOnceItIsKilled(_ hosting: Hosting) async throws {
         let clock = ManualTiming()
-        try await EndRig.run(hosting, idleLimit: .seconds(2), timing: clock.timing) { rig in
+        try await EndRig.run(hosting, timing: clock.timing) { rig in
             try rig.mark("stubborn", true)
             let id = try await rig.open()
             try rig.mark("stubborn", false)
             let first = try await rig.converse("PING-ONE", in: id)
             let old = first.pid
 
+            try await rig.idleOut(id)
             try await eventually("闲置到点，请它退出了") { rig.has("eof.\(old)") }
             try #require(rig.bridge.session(id: id) == nil, "请它退出了还在桥上")
             let resuming = Task { try await rig.connect(rig.indexed(first)) }

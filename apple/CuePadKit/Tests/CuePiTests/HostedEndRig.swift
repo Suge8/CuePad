@@ -40,6 +40,9 @@ enum Hosting: String, CaseIterable, Sendable, CustomTestStringConvertible {
 @MainActor
 final class EndRig {
     let hosting: Hosting
+    /// 桥的钟：闲置到点只在 `idleOut` 拨它时（真钟上的短时限会在发话之后、Agent 报忙之前到点，负载高时就碰上）
+    private let idle: ManualTiming
+    private static let idleLimit: Duration = .seconds(60)
     let model: FakeModel
     let bridge: PiBridge
     let runtime: any AgentRuntime
@@ -51,9 +54,9 @@ final class EndRig {
     private let hooks: AgentHookServer?
 
     static func run(
-        _ hosting: Hosting, idleLimit: Duration = .seconds(1800), timing: Timing, _ body: (EndRig) async throws -> Void
+        _ hosting: Hosting, timing: Timing, _ body: (EndRig) async throws -> Void
     ) async throws {
-        let rig = try await EndRig(hosting, idleLimit: idleLimit, timing: timing)
+        let rig = try await EndRig(hosting, timing: timing)
         do { try await body(rig) } catch {
             await rig.stop()
             throw error
@@ -61,8 +64,10 @@ final class EndRig {
         await rig.stop()
     }
 
-    private init(_ hosting: Hosting, idleLimit: Duration, timing: Timing) async throws {
+    private init(_ hosting: Hosting, timing: Timing) async throws {
         self.hosting = hosting
+        let idle = ManualTiming()
+        self.idle = idle
         try hosting.pinned.require()
         let script = """
             dir=${0%/*}
@@ -74,7 +79,7 @@ final class EndRig {
             exec "$REAL" "$@"
             """
         if hosting == .claude {
-            let testbed = try await ClaudeTestbed(idleLimit: idleLimit, wrapper: script, timing: timing)
+            let testbed = try await ClaudeTestbed(idleLimit: Self.idleLimit, wrapper: script, timing: timing, bridgeTiming: idle.timing)
             try testbed.startConnected()
             (claude, root, model, bridge, runtime, work, wrapper, hooks, modelKey) =
                 (testbed, testbed.root, testbed.model, testbed.bridge, testbed.runtime, testbed.work, testbed.wrapperDirectory, nil, nil)
@@ -95,7 +100,7 @@ final class EndRig {
         let pi = PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets)
         let executable = wrapper.appending(path: hosting.pinned.command)
         let locator = ExecutableLocator(searchDirectories: [wrapper, hosting.pinned.bin])
-        bridge = PiBridge(socketDirectory: sockets, hostedIdle: idleLimit)
+        bridge = PiBridge(socketDirectory: sockets, hostedIdle: Self.idleLimit, timing: idle.timing)
         try bridge.start()
         var hooks: AgentHookServer?
         switch hosting {
@@ -188,6 +193,13 @@ final class EndRig {
         model.stop()
         await TestProcesses.stop(under: [root])
         try? FileManager.default.removeItem(at: root)
+    }
+
+    /// 这个会话歇下、闲置计时起了，拨到点：桥请它退出（`idleOut` 之后外壳写下 `eof.<进程号>`）。
+    func idleOut(_ id: PiSession.ID) async throws {
+        let due = idle.now.addingTimeInterval(Self.idleLimit.seconds)
+        try await eventually("歇下、闲置计时起了") { bridge.session(id: id)?.state == .settled && idle.hasSleeper(until: due) }
+        idle.advance(Self.idleLimit)
     }
 
     func open() async throws -> PiSession.ID {

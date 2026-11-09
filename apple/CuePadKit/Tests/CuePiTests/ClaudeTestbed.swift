@@ -64,9 +64,10 @@ final class ClaudeTestbed {
     ///   它要用的文件放在 `wrapperDirectory`，脚本里写 `${0%/*}`。
     /// - Parameter signedIn: false 时不给密钥，Claude Code 照常起来、上桥，要用模型的都被它拒收。
     /// - Parameter timing: runtime 的钟（默认不前进：期限都不到点）；要量宽限的用例给 `ManualTiming`。
+    /// - Parameter bridgeTiming: 桥的钟（闲置到点按它）
     init(
         installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true,
-        timing: Timing = noDeadline
+        timing: Timing = noDeadline, bridgeTiming: Timing = .system
     ) async throws {
         try pinnedClaude.require()
         model = try await FakeModel()
@@ -89,7 +90,7 @@ final class ClaudeTestbed {
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
         store = try CueStore(location: .isolated(root.appending(path: "store", directoryHint: .isDirectory)))
         files = store.files
-        bridge = PiBridge(socketDirectory: sockets, hostedIdle: idleLimit)
+        bridge = PiBridge(socketDirectory: sockets, hostedIdle: idleLimit, timing: bridgeTiming)
         log = ChangeLog(bridge)
         try bridge.start()
         hooks = AgentHookServer(path: paths.pi.hookSocket)
