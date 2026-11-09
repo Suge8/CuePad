@@ -65,7 +65,6 @@ enum Schema {
     "默认范围：省略时用绑定了当前目录（或其上层目录）的项目；没有则\(fallback)。"
   }
 
-  /// 新建时没有项目可用的落点。
   static let defaultTarget = "进默认项目（id 固定，名字可改）"
 }
 
