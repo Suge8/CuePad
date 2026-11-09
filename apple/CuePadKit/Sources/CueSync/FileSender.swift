@@ -21,6 +21,7 @@ actor FileSender {
   private let cloud: any FileCloud & RecordUploader
   private let coordinator: SyncCoordinator
   private let board: TransferBoard
+  /// 对过最低对端版本（`RecordSender.ready`）之后文件才传，同别的记录。
   private let ready: @Sendable () async -> Bool
   private let generation: SyncGeneration
   private var stopped: Bool { generation.isOver }

@@ -34,6 +34,7 @@ struct HistoryTests {
 
     // MARK: 命令在会话文件里留下的
 
+    /// 对话只来自会话文件，与终端一致：终端里没有的条目这里也没有。
     @Test func compactionIsASystemLineAndSettingEntriesAreNotConversation() throws {
         var f = SessionFile(directory: dir)
         try f.append(

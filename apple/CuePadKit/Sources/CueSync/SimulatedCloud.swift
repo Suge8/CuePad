@@ -143,6 +143,7 @@ extension CKRecord {
     return stamped
   }
 
+  /// 同 CloudKit：拉取与按 ID 取只要列，不带文件。
   var withoutFile: CKRecord {
     guard self[RecordMapper.fileKey] != nil, let copy = copy() as? CKRecord else { return self }
     copy[RecordMapper.fileKey] = nil

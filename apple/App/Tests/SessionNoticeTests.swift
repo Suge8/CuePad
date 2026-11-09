@@ -35,6 +35,7 @@ struct SessionNoticeTests {
         #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 等你拍板：要覆盖 feed.xml 吗？")
     }
 
+    /// 不在前台时的转换那一下系统推送已经提示过了，所以不补报。
     @Test func 回到前台之前就发生的转换不补报_之后的照常提示() async throws {
         let recorder = recorder()
         var tracker = SessionAlertTracker()

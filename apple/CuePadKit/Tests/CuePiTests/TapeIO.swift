@@ -182,6 +182,7 @@ enum UnixSocket {
     }
 }
 
+/// 自成进程组，收尾时整组结束。
 final class RealProcess: Sendable {
     let pid: pid_t
     let stdin: Int32

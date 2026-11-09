@@ -66,6 +66,7 @@ enum SyncFault: Equatable, Sendable {
     }
   }
 
+  /// 连不上压过其余（整批都会这样），其次账号、要等，最后才是单条的问题。
   static func merge(_ merged: SyncFault?, _ next: SyncFault) -> SyncFault {
     guard let merged else { return next }
     let given = [merged.retryAfter, next.retryAfter].compactMap { $0 }.max()

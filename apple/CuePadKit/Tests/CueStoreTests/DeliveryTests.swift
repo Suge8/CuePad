@@ -45,6 +45,7 @@ import Testing
       onWritten: { [store] id in await uploads.add(try? await store.deliveryRequest(id)?.status.known) }, handler: { request, _ in await handler(request) })
   }
 
+  /// 领取那一版在路上时结果得等它回来才能传，手机的回执要多等一个来回，所以当场执行完的只交出结果那一版。
   @Test
   func aRequestFinishedRightAwayHandsOnlyTheResultToUpload() async throws {
     let uploads = Uploads()

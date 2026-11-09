@@ -150,6 +150,7 @@ struct TaskFlowTests {
 
     // MARK: 撤销与批量
 
+    /// 撤了会盖掉回执之后写的改动，所以不撤。
     @Test func 撤销前任务已改过_不撤并提示() async throws {
         let workspace = Workspace(services: rig.services)
         let check = try await store.createTask("上线前检查")

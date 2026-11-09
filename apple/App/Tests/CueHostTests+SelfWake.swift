@@ -26,6 +26,7 @@ extension CueHostTests {
         await rig.stop()
     }
 
+    /// 醒来出错多是网络偶发：先不告诉你、基线不前移，隔一会儿再醒。
     @Test func 自己醒来出错后隔一会儿重试() async throws {
         let rig = try await Rig(failingOnce: ["醒来：刚启用"], prepare: Rig.handOverWork)
         try await rig.message(.cue, containing: "我看了一眼", skippingBackoff: true)

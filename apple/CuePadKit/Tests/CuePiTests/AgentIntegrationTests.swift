@@ -89,6 +89,7 @@ struct AgentIntegrationTests {
         #expect(await status.presence == .unresponsive)
     }
 
+    /// 只看安装脚本会用的 Node（PATH 里第一个）：免得点了安装才被脚本拒。
     @Test func installPrerequisiteCountsOnlyTheNodeTheInstallerWillUse() async throws {
         let later = root.appending(path: "later-bin")
         try FileManager.default.createDirectory(at: later, withIntermediateDirectories: true)
