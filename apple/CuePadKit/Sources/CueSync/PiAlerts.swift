@@ -120,16 +120,12 @@ struct AlertSubscriptions {
 
   let zoneID: CKRecordZone.ID
 
-  /// 谓词用到的字段（按表）：字段名只写在谓词里这一处。另留着旧版手机还在建的订阅要查的（`legacyQueried`）。
-  static let queriedColumns: [Table: Set<String>] = AlertSubscriptions(zoneID: CloudSync.zoneID).desired().reduce(into: legacyQueried) { columns, subscription in
+  /// 谓词用到的字段（按表）：字段名只写在谓词里这一处。
+  static let queriedColumns: [Table: Set<String>] = AlertSubscriptions(zoneID: CloudSync.zoneID).desired().reduce(into: [:]) { columns, subscription in
     guard let table = subscription.recordType.flatMap(Table.init(rawValue:)), let field = (subscription.predicate as? NSComparisonPredicate)?.leftExpression.keyPath
     else { preconditionFailure("订阅谓词只用一个字段的比较：\(subscription.predicate)") }
     columns[table, default: []].insert(field)
   }
-
-  /// 2026-10 之前的版本按 `author == cue` 建 `cuepad.cue.said`（带提示的 Cue 消息因此同时命中它与 `cuepad.cue`，推两次）：
-  /// 这些手机还在时生产里的这个可查询索引要留着，不然它们建不成订阅。所有手机都升到按 `CuePush` 分的版本后删掉。
-  private static let legacyQueried: [Table: Set<String>] = [.cueMessages: ["author"]]
 
   func desired() -> [CKQuerySubscription] {
     [

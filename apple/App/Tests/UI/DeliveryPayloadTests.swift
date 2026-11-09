@@ -23,8 +23,8 @@ struct DeliveryPayloadTests {
         let session = try #require(try await mac.services.store.allPiSessionStates().first)
         phone.services.startSync(); mac.services.startSync()
         try await eventually("两端同步就绪") {
-            phone.services.syncStatus == .idle && phone.services.syncReconciled
-                && mac.services.syncStatus == .idle && mac.services.syncReconciled
+            phone.services.syncState.status == .idle && phone.services.syncState.reconciled
+                && mac.services.syncState.status == .idle && mac.services.syncState.reconciled
         }
         try await mac.services.executor.start()
         // 用独立 SQLite 写者精确落在第一次发送登记之前，等价于尚未交出的 pending 被原子撤回。

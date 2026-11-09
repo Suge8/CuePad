@@ -50,6 +50,16 @@ release_archive() {
   echo "$HOME/Library/Developer/Xcode/Archives/$(date +%F)/CuePad $1 ${4#CURRENT_PROJECT_VERSION=}-${2}.xcarchive"
 }
 
+# 在归档来源提交上打 <ios|mac>/<构建号> 标签并推到 origin（这一版源码的唯一记号）：release_tag <平台> <构建号> <提交>。
+# 已有同名标签只认同一提交（恢复时重入）；远端同名标签指向别的提交时推送被拒，发布停下
+release_tag() {
+  local tag="$1/$2" found
+  found="$(git -C "$REPO_DIR" rev-parse -q --verify "refs/tags/$tag^{commit}" || true)"
+  [ -n "$found" ] || { git -C "$REPO_DIR" tag "$tag" "$3"; found="$3"; }
+  [ "$found" = "$3" ] || { echo "标签 $tag 已指向另一提交 $found" >&2; exit 1; }
+  git -C "$REPO_DIR" push -q origin "refs/tags/$tag"
+}
+
 # 发布前核对中转：check_relay [打出来的 Info.plist]。门铃 /health 回 ok，实时活动 /v1/activity/health 回 204；
 # 给了 Info.plist 就再核对包里的 CuePadRelayHost 就是 CUEPAD_RELAY_HOST（App 读不到会当场停下）。
 check_relay() {

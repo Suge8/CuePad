@@ -97,7 +97,7 @@ enum DebugHooks {
     /// 同步测量里代替手机的实例按手机开着 Agent 页的节奏拉（`-CuePadSyncBench remote`，见 `SyncBench`）。
     static var pollsLikePhone: Bool {
         #if DEBUG && os(macOS)
-        DebugScene.defaults.string(forKey: "CuePadSyncBench") == "remote"
+        DebugScene.args.syncBench == "remote"
         #else
         false
         #endif
@@ -106,7 +106,7 @@ enum DebugHooks {
     /// 隔离库下这台 Mac 的标识换成 `-CuePadHost <名>`：同一台机器上开两个隔离实例当两台 Mac（同步测量）。nil：用硬件标识。
     static var hostID: String? {
         #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadHost").map { "mac-\($0)" }
+        DebugScene.args.host.map { "mac-\($0)" }
         #else
         nil
         #endif
@@ -115,7 +115,7 @@ enum DebugHooks {
     /// 隔离库下 Cue 的大脑换成 `-CuePadCueBrain <可执行文件>`：隔离目录里没有登录的运行时，真的大脑起不来。nil：用检测挑中的。
     static var cueBrain: URL? {
         #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadCueBrain").map { URL(filePath: $0) }
+        DebugScene.args.driveOpts.cueBrain.map { URL(filePath: $0) }
         #else
         nil
         #endif
@@ -125,7 +125,7 @@ enum DebugHooks {
     /// 实例也不碰真实的 `~/.codex`。nil：向检测到的 Codex 要。
     static var voiceToken: URL? {
         #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadVoiceToken").map { URL(filePath: $0) }
+        DebugScene.args.voiceOpts.token.map { URL(filePath: $0) }
         #else
         nil
         #endif
@@ -135,7 +135,7 @@ enum DebugHooks {
     /// 像一台什么都没装的 Mac。给一个空目录就是一家都没装；点"安装"真去跑官方脚本，装进这个目录，不碰真实的家目录。
     static var agentHome: URL? {
         #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadAgentHome").map { URL(filePath: $0, directoryHint: .isDirectory) }
+        DebugScene.args.agentHome.map { URL(filePath: $0, directoryHint: .isDirectory) }
         #else
         nil
         #endif
@@ -144,7 +144,7 @@ enum DebugHooks {
     /// 脚本起的实例也像正式版那样首次打开时请工作区决定弹不弹接入面板（`-CuePadOfferSetup YES`，同一个 `Workspace.offerSetup`）：验收第一次打开与老用户升级后自动弹的那一次。
     static var offersSetup: Bool {
         #if DEBUG
-        DebugScene.defaults.bool(forKey: "CuePadOfferSetup")
+        DebugScene.args.offerSetup
         #else
         false
         #endif
@@ -156,7 +156,7 @@ enum DebugHooks {
     enum ActsAs: String { case development, stranger }
     static var actsAs: ActsAs? {
         #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadActsAs").flatMap(ActsAs.init)
+        DebugScene.args.actsAs.flatMap(ActsAs.init)
         #else
         nil
         #endif
@@ -247,10 +247,14 @@ enum DebugHooks {
     /// 输入框里选的附件存进附件目录之前停多久：`-CuePadImportDelay <秒>` 把"附件还在存"拉长到能在界面上看见（配 `-CuePadSpeech press`）。
     static func importDelay() async {
         #if DEBUG
-        let seconds = DebugScene.defaults.double(forKey: "CuePadImportDelay")
-        if seconds > 0 { try? await Task.sleep(for: .seconds(seconds)) }
+        if importDelaySeconds > 0 { try? await Task.sleep(for: .seconds(importDelaySeconds)) }
         #endif
     }
+
+    #if DEBUG
+    /// `importDelay` 停的秒数：启动时取 `-CuePadImportDelay`；测试在进程里改它（不碰偏好域）。
+    static var importDelaySeconds = DebugScene.args.driveOpts.importDelay
+    #endif
 
     /// "对 Cue 说"的输入框或会话回复框（`session`）出现时：`-CuePadSpeech press` 在它出现 3 秒后按一下它的发送钮
     /// （`press` 就是点按发送钮做的事），录屏看发出的那一下。
@@ -280,7 +284,7 @@ enum DebugHooks {
     /// 隔离库下也要通知权限、发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
     static var deliversNotifications: Bool {
         #if DEBUG
-        DebugScene.defaults.bool(forKey: "CuePadNotifications")
+        DebugScene.args.notifications
         #else
         false
         #endif
@@ -289,7 +293,7 @@ enum DebugHooks {
     /// 隔离库下也开实时活动（`-CuePadLiveActivity YES`，见 `AppServices.cueActivity`）：验收锁屏与灵动岛时用，用完结束掉。
     static var opensLiveActivity: Bool {
         #if DEBUG
-        DebugScene.defaults.bool(forKey: "CuePadLiveActivity")
+        DebugScene.args.liveActivity
         #else
         false
         #endif
@@ -305,7 +309,7 @@ enum DebugHooks {
     /// 量的时候（`-CuePadBench`）报 `BENCH-ERR` 一行，其余脚本实例同 `DebugScene.abandon`，都以 1 退出。
     static func libraryFailed(_ failure: LibraryFailure) {
         #if DEBUG
-        if DebugScene.defaults.string(forKey: "CuePadBench") != nil {
+        if DebugScene.args.driveOpts.bench != nil {
             print("BENCH-ERR 资料库没能打开：\(failure.reason)")
             fflush(stdout)
             exit(1)

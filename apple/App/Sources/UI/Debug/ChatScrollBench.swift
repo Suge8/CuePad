@@ -37,9 +37,9 @@ enum ChatScrollBench {
     private enum Driver: String { case direct, process, hid }
 
     static func run() async {
-        let defaults = DebugScene.defaults
-        let driver = Driver(rawValue: defaults.string(forKey: "CuePadScrollDriver") ?? "") ?? .direct
-        let pointer = defaults.string(forKey: "CuePadScrollPointer")
+        let args = DebugScene.args
+        let driver = Driver(rawValue: args.driveOpts.scrollDriver ?? "") ?? .direct
+        let pointer = args.driveOpts.scrollPointer
         var found: (NSWindow, NSScrollView)?
         for _ in 0..<90 {
             await Task.wait(for: .seconds(1))

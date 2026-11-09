@@ -44,7 +44,7 @@ extension CueStore {
     let unsettled = "r.hostID = ?1 AND r.status NOT IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)')"
     return Set(try db.query(
       """
-      SELECT path FROM piSessions p WHERE COALESCE(p.agent, 'pi') = 'pi' AND p.id IN (
+      SELECT path FROM piSessions p WHERE p.agent = '\(AgentKind.pi.rawValue)' AND p.id IN (
         SELECT r.targetRef FROM deliveryRequests r WHERE \(unsettled) AND r.mode = 'send'
         UNION
         SELECT s.sessionID FROM deliveryRequests r JOIN piSessionStates s ON s.launchToken = \(Self.launchToken("r"))
@@ -60,13 +60,13 @@ extension CueStore {
   @discardableResult
   public func retainPiSessions(paths: Set<String>, agent: AgentKind, host: String) throws -> Int {
     try write {
-      let indexed = try db.query("SELECT id, path FROM piSessions WHERE \(Self.agentOf) = ?", [agent.rawValue]) { ($0.text(0), $0.text(1)) }
+      let indexed = try db.query("SELECT id, path FROM piSessions WHERE agent = ?", [agent.rawValue]) { ($0.text(0), $0.text(1)) }
       let retained = agent == .pi ? Set(try deliveryHistoryFiles(on: host).map(\.path)) : []
       let stale = indexed.filter { !paths.contains($0.1) && !retained.contains($0.1) }
       for (id, _) in stale { try db.run("DELETE FROM piSessions WHERE id = ?", [id]) }
       try db.run(
         """
-          DELETE FROM piSessionStates WHERE hostID = ? AND (state = ? OR state = ? AND hosted IS NULL) AND \(Self.agentOf) = ? AND sessionID NOT IN (SELECT id FROM piSessions)
+          DELETE FROM piSessionStates WHERE hostID = ? AND (state = ? OR state = ? AND hosted IS NULL) AND agent = ? AND sessionID NOT IN (SELECT id FROM piSessions)
           """,
         [host, PiWorkState.ended.rawValue, PiWorkState.interrupted.rawValue, agent.rawValue])
       // 反过来，有会话文件却没有记录的补写：换 iCloud 账号丢掉同步数据（`eraseSyncedData`，本机索引留着）、记录在别处被删之后
@@ -78,15 +78,12 @@ extension CueStore {
     }
   }
 
-  /// 一行是哪家 Agent 的（会话索引与会话记录都是）：早于多家接入的行没写，是 Pi。也是 Agent 索引（`Schema.agentIndex`）的表达式。
-  static let agentOf = "COALESCE(agent, '\(AgentKind.pi.rawValue)')"
-
   /// 删掉一家 Agent 的本机会话索引（断开接入时）：会话同步记录与对话不动。`host` 这台 Mac 托管过的会话（`hostedPiSessionIDs`）留着：
   /// 没接入也照样开、照样读对话，闲置退出或结束后再发话要靠索引接着它（`MacExecutor`）。
   public func deletePiSessions(of agent: AgentKind, keepingHostedOn host: String) throws {
     try write {
       try db.run(
-        "DELETE FROM piSessions WHERE \(Self.agentOf) = ? AND id NOT IN (\(Self.hostedSessionsSQL))", [agent.rawValue, host, agent.rawValue])
+        "DELETE FROM piSessions WHERE agent = ? AND id NOT IN (\(Self.hostedSessionsSQL))", [agent.rawValue, host, agent.rawValue])
     }
   }
 
@@ -96,7 +93,7 @@ extension CueStore {
     Set(try db.query(Self.hostedSessionsSQL, [host, agent.rawValue]) { $0.text(0) })
   }
 
-  private static let hostedSessionsSQL = "SELECT sessionID FROM piSessionStates WHERE hostID = ? AND \(agentOf) = ? AND \(hostedOrLaunched)"
+  private static let hostedSessionsSQL = "SELECT sessionID FROM piSessionStates WHERE hostID = ? AND agent = ? AND \(hostedOrLaunched)"
 
   /// 托管着的或 CuePad 开的会话记录（唯一定义，也是它的部分索引的条件）。
   static let hostedOrLaunched = "(hosted = 1 OR launchToken IS NOT NULL)"

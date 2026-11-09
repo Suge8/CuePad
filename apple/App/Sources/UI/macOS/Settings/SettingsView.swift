@@ -84,7 +84,7 @@ private struct GeneralSections: View {
         Section {
             SyncRow()
             // 空间满只停附件，不进同步那一行的状态
-            if services.syncFilesOverQuota {
+            if services.syncState.filesOverQuota {
                 SettingRow(title: "附件", icon: Image(.syncPaused), tone: .notice, status: Dotted(FileStatus.overQuota)) { EmptyView() } fix: { EmptyView() }
             }
             if !services.conflicts.isEmpty { ConflictsRow() }

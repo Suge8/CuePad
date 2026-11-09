@@ -42,7 +42,7 @@ extension DebugScene {
     }
 
     private static func runCueFlow(_ workspace: Workspace, leave: (_ away: Bool) -> Void) async {
-        guard defaults.bool(forKey: "CuePadCueFlow") else { return }
+        guard args.driveOpts.cueFlow else { return }
         await running("Cue 流程") { try await cueFlow(workspace, leave: leave) }
     }
 
@@ -114,7 +114,7 @@ extension DebugScene {
         if let log = cueFlowLog { try await measureFlight("idle", seconds: FlowBeat.probe, into: log) }
     }
 
-    private static var cueFlowLog: URL? { defaults.string(forKey: "CuePadCueFlowLog").map { URL(fileURLWithPath: $0) } }
+    private static var cueFlowLog: URL? { args.driveOpts.cueFlowLog.map { URL(fileURLWithPath: $0) } }
 
     private static func beat(_ seconds: Double) async throws { try await Task.sleep(for: .seconds(seconds)) }
 
@@ -130,6 +130,6 @@ extension DebugScene {
         press()
     }
 
-    static var cueFlows: Bool { defaults.bool(forKey: "CuePadCueFlow") }
+    static var cueFlows: Bool { args.driveOpts.cueFlow }
 }
 #endif

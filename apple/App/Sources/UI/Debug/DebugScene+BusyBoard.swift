@@ -7,7 +7,7 @@ import Foundation
 /// 每个会话之前还说过几句（`earlier`，几分钟前），卡下沿那条线的过去一句一颗点；这一轮的那句在 `busy` 分钟前。
 extension DebugScene {
     static func seedBusyBoard(_ store: CueStore) async {
-        guard defaults.bool(forKey: "CuePadBusyBoard") else { return }
+        guard args.busyBoard else { return }
         await running("推进中的演示任务") { try await busyBoard(store) }
     }
 
@@ -54,7 +54,7 @@ extension DebugScene {
     /// `-CuePadCanvasSteps YES`（配 tasks 画面，两端）：待办里"画布缩放锚点跟随指针"写上正文与三个子任务（第一个做完），
     /// 进展页的看板上点它的卡看任务气泡的正文与子任务（演示库里另一件有子任务的"发言轮次乱序"在等你那一列，点它是去 Cue 页那一问、不开气泡）。
     static func seedCanvasSteps(_ store: CueStore) async {
-        guard defaults.bool(forKey: "CuePadCanvasSteps") else { return }
+        guard args.canvasSteps else { return }
         await running("画布任务的子任务") { try await canvasSteps(store) }
     }
 

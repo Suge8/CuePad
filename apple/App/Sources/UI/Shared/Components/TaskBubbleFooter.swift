@@ -19,11 +19,23 @@ struct BubbleFooter: View {
             }
         } else if agents.items[focus.id] != nil {
             AgentStrip(leaf: focus)
-        } else if let kind = agents.launching[focus.id] {
+        } else if let kind = agents.launching[focus.id], !unsettled(focus.id) {
             LaunchStrip(kind: kind)
         } else if focus.status != .done {
             StartBar(leaf: focus, caption: nil, editing: editing)
         }
+    }
+
+    /// 这台 Mac 上开的这一次说不准开没开（未确认、查不到）：不再写正在开，给原因与"重试"（先确认），同手机的输入框。
+    private func unsettled(_ leaf: UUID) -> Bool {
+        #if os(macOS)
+        switch workspace.sessionLaunching(.card(leaf)).phase(at: workspace.services.speech) {
+        case .unconfirmed, .missing: true
+        default: false
+        }
+        #else
+        false
+        #endif
     }
 }
 
@@ -117,7 +129,7 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
 
 /// 还没交出去的叶子："开始"——正文连同标题作为第一句交给 Agent（先写下正文里没保存的字）。Mac 左边另有"绑定会话"
 /// （点开是会话列表的菜单，`SessionBindItems`；紧凑的次按钮，与"开始"同一排、同高，看得出能点）；
-/// 这台 Mac 上上次没开成（`Workspace.launchFailures`）时左边换成原因、按钮写"重试"。
+/// 这台 Mac 上上一次没开成或说不出结果（`SessionLaunching.outcome`）时左边换成原因、按钮写"重试"，可能已开过时先确认。
 private struct StartBar: View {
     let leaf: Card
     /// 有子任务的任务开的是哪一步。
@@ -127,10 +139,16 @@ private struct StartBar: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        #if os(macOS)
+        let launching = workspace.sessionLaunching(.card(leaf.id))
+        let outcome = launching.outcome(at: workspace.services.speech)
+        #else
+        let outcome: (text: String, failed: Bool)? = nil
+        #endif
         HStack(spacing: BubbleMetrics.gap) {
             #if os(macOS)
-            if let failure {
-                Text(failure).font(BubbleMetrics.meta).foregroundStyle(palette.failure).lineLimit(2)
+            if let outcome {
+                Text(verbatim: outcome.text).font(BubbleMetrics.meta).foregroundStyle(outcome.failed ? palette.failure : palette.ink2).lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             } else if caption == nil {
                 Menu { SessionBindItems(leaf: leaf) } label: { Text("绑定会话") }
@@ -140,18 +158,13 @@ private struct StartBar: View {
             if let caption { Text(caption).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(1) }
             Spacer(minLength: 0)
             Button(action: start) {
-                Label(failure != nil ? "重试" : caption == nil ? "开始" : "开始这一步", icon: .start)
+                Label(outcome != nil ? "重试" : caption == nil ? "开始" : "开始这一步", icon: .start)
             }
             .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
             .accessibilityHint("把任务的正文交给 Agent，开始做")
         }
-    }
-
-    private var failure: String? {
         #if os(macOS)
-        workspace.launchFailures[leaf.id]
-        #else
-        nil
+        .confirmsLaunchAgain(launching)
         #endif
     }
 

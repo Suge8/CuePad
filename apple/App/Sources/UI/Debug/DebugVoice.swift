@@ -7,7 +7,7 @@ import WebKit
 /// `-CuePadVoiceMeter YES` 只测本地 getUserMedia，不建实时通话、不调用 Cue。
 enum DebugVoice {
     static func wire(_ text: String) {
-        guard let path = DebugScene.defaults.string(forKey: "CuePadVoiceWireLog") else { return }
+        guard let path = DebugScene.args.voiceOpts.wireLog else { return }
         do {
             let url = URL(filePath: path)
             if !FileManager.default.fileExists(atPath: path) { try Data().write(to: url) }
@@ -21,8 +21,8 @@ enum DebugVoice {
     static func configure(_ web: WKWebView, source: VoicePeer.Source) async throws {
         guard case .microphone(let device) = source,
               device == "CuePad Voice \(getpid())",
-              DebugScene.defaults.string(forKey: "CuePadVoiceLoopback") != nil,
-              let mode = DebugScene.defaults.string(forKey: "CuePadVoiceProcessing") else { return }
+              DebugScene.args.voiceOpts.loopback != nil,
+              let mode = DebugScene.args.voiceOpts.processing else { return }
         let keys: [String]
         switch mode {
         case "echo": keys = ["echoCancellation"]

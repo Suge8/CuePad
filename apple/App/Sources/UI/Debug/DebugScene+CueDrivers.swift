@@ -19,9 +19,9 @@ extension DebugScene {
     static func wakeIfAsked(_ workspace: Workspace) async {
         let store = workspace.services.store
         var round = 0
-        await everyIfAsked("CuePadWake") {
+        await everyIfAsked("CuePadWake", every: args.driveOpts.wake) {
             // 演示会话的 sessionID 与会话名相同
-            let opened = defaults.string(forKey: "CuePadSession")
+            let opened = args.session
             let live = Array(workspace.liveWork.filter { $0.state != .known(.ended) && $0.sessionID != opened }.prefix(3).map(\.sessionID))
             let count = round % 2 + 1
             var woke = (0..<min(count, live.count)).map { live[(round + $0) % live.count] }
@@ -53,7 +53,7 @@ extension DebugScene {
         func set(_ state: PiWorkState) async throws {
             _ = try await recorder.update(sessionID: "blink", state: state, title: title, directory: "CuePad", agent: .claudeCode)
         }
-        await everyIfAsked("CuePadReplyBlink") {
+        await everyIfAsked("CuePadReplyBlink", every: args.driveOpts.replyBlink) {
             try await set(.settled)
             _ = try await store.leaveToYou("blink")
             return ("reply", { try await set(.thinking) })
@@ -75,13 +75,13 @@ extension DebugScene {
     /// 看你切到别的 App 或别的页时来了新话、回到 Cue 页的样子。之前的都先算读过，开始时没有新消息。
     /// `-CuePadVisitCue <秒>`：说完这么久去 Cue 页（`visit`），停够读到它再回原来那页（`back`），录"别处时有提示、读过就没了"。
     static func saysIfAsked(_ services: AppServices, visit: @MainActor () -> Void = {}, back: @MainActor () -> Void = {}) async {
-        let delay = defaults.double(forKey: "CuePadCueSays")
+        let delay = args.driveOpts.cueSays
         guard delay > 0 else { return }
         await running("Cue 自己说一句") {
             try await services.store.markCueRead(through: .now)
             await Task.wait(for: .seconds(delay))
             _ = try await services.store.addCueMessage(.cue, text: String(localized: "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。", table: "Demo"))
-            let visitAfter = defaults.double(forKey: "CuePadVisitCue")
+            let visitAfter = args.driveOpts.visitCue
             guard visitAfter > 0 else { return }
             await Task.wait(for: .seconds(visitAfter))
             visit()
@@ -121,7 +121,7 @@ extension DebugScene {
     /// 手机录"离开很久后回来"的定位；Mac 在两台设备同步读到哪时当写下新消息的那台（停在设置画面，不回来）。
     /// 不挪早：连着 iCloud 时挪早会挪进别的设备写过的对话中间；等这么久是先把 iCloud 里已有的拉完，之前的都在你这一句之前，不算新的。
     static func awayIfAsked(_ store: CueStore, leave: @MainActor () -> Void = {}, back: @MainActor () -> Void = {}) async {
-        let delay = defaults.double(forKey: "CuePadAwayAfter")
+        let delay = args.awayAfter
         guard delay > 0 else { return }
         await Task.wait(for: .seconds(delay))
         leave()
@@ -139,10 +139,10 @@ extension DebugScene {
     /// 隔离库里没有执行器，请求停在待领取；1.5 秒后删掉，开出的会话结束。录"交给"的动效用（`CueRelayStage`），`-CuePadFlightLog` 同叫醒。
     static func relayIfAsked(_ workspace: Workspace) async {
         let store = workspace.services.store
-        let kind = defaults.string(forKey: "CuePadRelayKind")
+        let kind = args.driveOpts.relayKind
         let launcher = demoRecorder(store)
         var round = 0
-        await everyIfAsked("CuePadRelay") {
+        await everyIfAsked("CuePadRelay", every: args.driveOpts.relay) {
             if kind == "mixed" {
                 let requests = try await relayMixed(store, on: launcher)
                 return ("mixed", {
@@ -166,7 +166,7 @@ extension DebugScene {
 
     private static func relaySay(_ workspace: Workspace) async throws -> DeliveryRequest? {
         let rows = workspace.liveWork.filter { $0.state != .known(.ended) }
-        guard let session = rows.first(where: { $0.sessionID == defaults.string(forKey: "CuePadSession") }) ?? rows.first else { return nil }
+        guard let session = rows.first(where: { $0.sessionID == args.session }) ?? rows.first else { return nil }
         return try await workspace.services.store.requestDelivery(
             String(localized: "看一下测试跑完没有，跑完把结果贴给我", table: "Demo"), to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: true)
     }
@@ -187,10 +187,9 @@ extension DebugScene {
     }
 
     /// `key` 给了秒数时每隔这么久做一次 `act`（返回量的那段叫什么与 1.5 秒后怎么收回；做不成返回 nil，跳过这一次），配 `-CuePadFlightLog` 前后各量一段。
-    private static func everyIfAsked(_ key: String, _ act: () async throws -> (kind: String, undo: () async throws -> Void)?) async {
-        let every = defaults.double(forKey: key)
+    private static func everyIfAsked(_ key: String, every: Double, _ act: () async throws -> (kind: String, undo: () async throws -> Void)?) async {
         guard every > 0 else { return }
-        let log = defaults.string(forKey: "CuePadFlightLog").map { URL(fileURLWithPath: $0) }
+        let log = args.driveOpts.flightLog.map { URL(fileURLWithPath: $0) }
         let probe = log == nil ? 0 : flightProbe
         await running(key) {
             while !Task.isCancelled {
@@ -210,11 +209,11 @@ extension DebugScene {
     /// 一次叫醒的开销；`-CuePadReopen <秒>`：关上这么久后再打开（真的显示，会到前台），关着的这段中途把 Cue 此刻的状态写成用工具
     /// "读看板 · 关窗时写下"，看重新打开的第一眼是不是关窗期间变过的样子。
     static func closeIfAsked(_ workspace: Workspace) async {
-        let after = defaults.double(forKey: "CuePadClosed")
+        let after = args.driveOpts.closed
         guard after > 0, let shell = workspace.services.windowShell else { return }
         await Task.wait(for: .seconds(after))
         shell.hide()
-        let reopen = defaults.double(forKey: "CuePadReopen")
+        let reopen = args.driveOpts.reopen
         guard reopen > 0 else { return }
         await Task.wait(for: .seconds(reopen / 2))
         await running("关窗时写下 Cue 的状态") { try await workspace.services.store.setDemoCueState(.tool, detail: String(localized: "读看板 · 关窗时写下", table: "Demo")) }
@@ -230,10 +229,10 @@ extension DebugScene {
     /// （`CueNowSamples.tour`），页头、侧栏与实时活动预览同一份一起变。配 `-CuePadLiveActivity YES` 时也更新系统活动，
     /// 用持续有活的样例录换态，避免后台无法重开；这是演示节奏，不是生产发布频率。
     static func cueNowTourIfAsked(_ workspace: Workspace) async {
-        guard defaults.bool(forKey: "CuePadCueCycle") else { return }
-        let live = defaults.bool(forKey: "CuePadLiveActivity")
+        guard args.cueOpts.cycle else { return }
+        let live = args.liveActivity
         let samples = live ? CueActivitySamples.tour : CueNowSamples.tour
-        let step = defaults.object(forKey: "CuePadCueCycleSeconds") == nil ? cueCycleStep : defaults.double(forKey: "CuePadCueCycleSeconds")
+        let step = args.cueOpts.cycleSeconds ?? cueCycleStep
         for index in 0... {
             var now = samples[index % samples.count]
             now.at = .now

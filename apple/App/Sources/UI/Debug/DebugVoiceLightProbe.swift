@@ -3,7 +3,7 @@ import QuartzCore
 
 /// -CuePadVoiceLightProbe YES：直接驱动已挂载声纹的等待/退出/90ms 重入，只验图层连续性，不代表通话业务路径。
 enum DebugVoiceLightProbe {
-    private static let requested = DebugScene.defaults.bool(forKey: "CuePadVoiceLightProbe")
+    private static let requested = DebugScene.args.voiceOpts.lightProbe
     private static var started = false
 
     static func start(_ layer: VoiceRibbonLayer) {

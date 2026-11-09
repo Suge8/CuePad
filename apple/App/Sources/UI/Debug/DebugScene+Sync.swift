@@ -31,7 +31,7 @@ extension DebugScene {
                 detail: String(localized: "未能完成操作。（CKErrorDomain错误15。）（<CKError 0x6000: \"Server Rejected Request\" (15/2000); server message = \"Internal server error\">）", table: "Demo")),
             SyncIssue(kind: .request, problem: .local, detail: String(localized: "资料库读写出错：database is locked（SQLite: database is locked [UPDATE syncState SET value = ?]）", table: "Demo")),
         ]
-        return switch defaults.string(forKey: "CuePadSync") {
+        return switch args.sync {
         case "stalled": .custom(StandInSync(stalls: true))
         case "conflicts": .custom(StandInSync())
         case "noAccount": .custom(StandInSync(.noAccount))
@@ -42,12 +42,12 @@ extension DebugScene {
         case "failed": .custom(StandInSync(.failed, issues: issues))
         case "restricted": .custom(StandInSync(.accountRestricted))
         case "fullquota": .custom(StandInSync(filesOverQuota: true))
-        case "offline": .custom(OfflineSync(seconds: seconds("CuePadOfflineSeconds", default: 6)))
+        case "offline": .custom(OfflineSync(seconds: args.offlineSeconds ?? 6))
         case "arrive": .custom(ArrivingSync())
         case "blips": .custom(BlipSync(.upload))
         case "catchup": .custom(BlipSync(.catchup))
         case "flaky": .custom(BlipSync(.offline))
-        case "newmac": .custom(NewMacSync(seconds: seconds("CuePadReconcileSeconds", default: 8)))
+        case "newmac": .custom(NewMacSync(seconds: args.reconcileSeconds ?? 8))
         default: .iCloud
         }
     }
@@ -204,7 +204,7 @@ extension DebugScene {
 
     /// 摆画面时交给同步替身的：`arrive`、`newmac` 的资料库，`conflicts` 的冲突副本（冲突那一行由有同步时的订阅读出，`AppServices.startSync`）。
     static func presetSync(_ services: AppServices) async {
-        switch defaults.string(forKey: "CuePadSync") {
+        switch args.sync {
         case "arrive", "newmac": library.continuation.yield(services.store)
         case "conflicts": await seedConflict(services)
         default: break

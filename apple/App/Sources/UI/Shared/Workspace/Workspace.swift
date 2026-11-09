@@ -121,14 +121,13 @@ final class Workspace {
     /// 接入 Agent 并启用 Cue 的面板（`SetupPanel`；首次打开由 `offerSetup` 置起，Cue 页的启用钮（`CueWelcome`）与会话页的"接入"也打开它，主窗口弹出）。
     var showsSetup = false
     /// 新会话的表单开着（`NewSessionForm`，主窗口弹出；菜单"文件 › 新会话"与看板推进中列头的 ＋ 置起，`newSession(in:)`）。
-    var showsNewSession = false
+    var showsNewSession = false {
+        didSet { if oldValue, !showsNewSession { settleLaunch(.form) } }
+    }
     /// 和 Cue 的通话（`VoiceCall`，菜单"文件 › 和 Cue 通话"起、挂）：结束或出错后保留记录，下次只重建连接。
     var voice: VoiceCall? { services.voice.call }
     /// 这一次新会话默认开在哪个项目（看板的项目范围；nil 是当前项目）。
     var newSessionProject: UUID?
-    /// 这台 Mac 上点"开始"没开成会话的叶子与原因（`handOff`）：任务气泡那一行一直写着、给"重试"，再点开始时清掉。
-    /// 只记在这台：没开成的开新会话请求过一会儿就清掉（`DeliveryExecutor.retention`），提示条两秒多就收，原因就只剩这里。
-    var launchFailures: [UUID: String] = [:]
     /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
     var confirmsEmptyTrash = false
     /// 指针此刻停在哪个项目上（侧栏的项目行、看板卡上的项目小图形）：看板上别的项目的卡淡下去（`boardDim`）。侧栏与看板读写这一份。
@@ -143,7 +142,9 @@ final class Workspace {
     /// 发给 Agent 输入框的草稿（换了一件任务就重来）：放在这里而不在输入框里，发出即收起后写库失败还能放回、重新浮起。
     var handOffDraft = ComposerDraft()
     /// 新会话的输入框（`NewSessionInput`）。
-    var newSession: SessionStart?
+    var newSession: SessionStart? {
+        didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(oldValue.launchKey) } }
+    }
     /// 每次 ⌘K（或点搜索钮、项目页与侧栏顶上的搜索框）加一：搜索页据此聚焦搜索框，已在搜索页时同样生效。
     var searchFocusRequests = 0
     #endif
@@ -197,6 +198,8 @@ final class Workspace {
 
     /// 刚发给会话、页面还没读到的话（回复框的发送中）。
     let launching = Launching()
+    /// 开新会话的那几次（`sessionLaunching(_:)`）。
+    @ObservationIgnored var launches: [SessionLaunching.Key: SessionLaunching] = [:]
     /// 离开时没能写进库的正文（卡片 id → 字）：再打开这条时接回来（`CardEditing`），写成了就清掉。
     var unsavedBodies: [UUID: UnsavedBody] = [:]
     /// 每个去处（一个回复框、Cue）发出的话落库的先后（`SendOrder`）。
@@ -252,10 +255,10 @@ final class Workspace {
         _ = await (catalog, links, cue, opens, library, quota)
     }
 
-    /// iCloud 空间满了、附件停在这台（`AppServices.syncFilesOverQuota`）：变满的那一下说一次，不进同步状态（别的记录照常同步，说的话不变红）。
+    /// iCloud 空间满了、附件停在这台（`AppServices.syncState.filesOverQuota`）：变满的那一下说一次，不进同步状态（别的记录照常同步，说的话不变红）。
     private func followFilesQuota() async {
         var was = false
-        for await over in Observations({ self.services.syncFilesOverQuota }) {
+        for await over in Observations({ self.services.syncState.filesOverQuota }) {
             if over, !was { say(Dotted(FileStatus.overQuota), tone: .paused) }
             was = over
         }

@@ -49,43 +49,46 @@ struct SubmissionFlowTests {
         #expect(workspace.notice?.isError == true)
         #expect(workspace.notice?.text.visible.contains("Agent 拒绝停止") == true)
     }
-    @Test func 新会话等附件_离线安全替换_未知结果须确认才另开() async throws {
+    @Test func 新会话等附件_离线安全替换_查不到结果须确认才另开() async throws {
         let workspace = Workspace(services: app.services)
         let project = try #require(try await store.project(Project.defaultID))
         let place = try #require(ProjectFolders.launchPlaces(projects: [project], bindings: [], host: nil, workMac: "mac-a").first)
         let choice = AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)
         let start = SessionStart(project: project.id)
-        let submission = SessionSubmission()
+        let launching = workspace.sessionLaunching(start.launchKey)
+        func submit(_ draft: ComposerDraft) -> Task<Void, Never>? {
+            workspace.submitSession(start, in: place, draft: draft, choice: choice, opened: { _ in })
+        }
         let url = app.directory.appending(path: "截图.png")
         try pngData().write(to: url)
         var draft = ComposerDraft(text: "看图复现")
         let box = Binding(get: { draft }, set: { draft = $0 })
         workspace.importFiles([.file(url)], into: box)
         #expect(!draft.importing.isEmpty)
-        let sending = try #require(workspace.submitSession(submission, start: start, in: place, draft: draft, choice: choice))
-        #expect(submission.sending)
-        #expect(workspace.submitSession(submission, start: start, in: place, draft: draft, choice: choice) == nil)
+        let sending = try #require(submit(draft))
+        #expect(launching.sending)
+        #expect(submit(draft) == nil)
         await sending.value
-        let first = try #require(submission.launched)
+        let first = try #require(launching.launch)
         let request = try #require(try await store.deliveryRequest(first.request))
         let keys = CueFormat.attachmentKeys(in: request.launch?.prompt ?? "")
         let key = try #require(keys.first)
         #expect(store.files.fileURL(for: key) != nil)
         #expect(request.launch?.prompt?.hasPrefix("看图复现") == true)
 
-        submission.progress = try await first.progress(from: store)
-        await workspace.submitSession(submission, start: start, in: place, draft: ComposerDraft(text: "改过的开场"), choice: choice)?.value
-        let replacement = try #require(submission.launched)
+        try await eventually("读到这一次的进度") { launching.progress?.launch == first.request }
+        await submit(ComposerDraft(text: "改过的开场"))?.value
+        let replacement = try #require(launching.launch)
         #expect(replacement.request != first.request)
         #expect(try await store.deliveryRequests().map(\.id) == [replacement.request])
         #expect(try await store.deliveryRequest(replacement.request)?.launch?.prompt == "改过的开场")
 
         try await store.deleteDelivery(replacement.request)
-        submission.progress = try await replacement.progress(from: store)
-        #expect(workspace.submitSession(submission, start: start, in: place, draft: ComposerDraft(text: "再开"), choice: choice) == nil)
-        #expect(submission.confirmingAgain)
+        try await eventually("查不到这一次") { launching.progress?.launch == replacement.request && launching.phase(at: app.services.speech) == .missing }
+        #expect(submit(ComposerDraft(text: "再开")) == nil)
+        #expect(launching.confirmingAgain)
         #expect(try await store.deliveryRequests().isEmpty)
-        await workspace.submitSession(submission, start: start, in: place, draft: ComposerDraft(text: "再开"), choice: choice, confirmedAgain: true)?.value
+        await launching.launchAgain()?.value
         #expect(try await store.deliveryRequests().map { $0.launch?.prompt } == ["再开"])
     }
 

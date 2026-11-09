@@ -22,13 +22,12 @@ struct IOSWorkflowTests {
         let places = ProjectFolders.launchPlaces(
             projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil, workMac: try await store.workMac())
         let place = try #require(start.place(among: places))
-        let submission = SessionSubmission()
         let preparedDraft = try #require(start.draft)
         let sending = try #require(workspace.submitSession(
-            submission, start: start, in: place, draft: preparedDraft,
-            choice: AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)))
+            start, in: place, draft: preparedDraft, choice: AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil),
+            opened: workspace.entering(start)))
         await sending.value
-        #expect(submission.launched != nil)
+        #expect(workspace.sessionLaunching(start.launchKey).launch != nil)
         return (task, try #require(try await store.deliveryRequests().first))
     }
 
@@ -76,8 +75,8 @@ struct IOSWorkflowTests {
         workspace.handOffToNewSession(draft, card: task.id, plan: plan)
         let start = try #require(workspace.newSession)
         await #expect(throws: CueStoreError.deliveryAlreadyHanded) {
-            try await workspace.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
-                                             on: "mac-z", card: task.id, agent: .pi)
+            try await app.services.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
+                                                on: "mac-z", card: task.id, agent: .pi)
         }
         #expect(try await store.deliveryRequests().map(\.id) == [first.id])
         let resumed = try #require(start.launched)
@@ -86,14 +85,14 @@ struct IOSWorkflowTests {
         switch state {
         case "offline":
             #expect(progress.phase(at: app.services.speech).submission == .safe)
-            _ = try await workspace.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
+            _ = try await app.services.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
                                                  on: "mac-z", card: task.id, agent: .pi, intent: .replacing(resumed.request))
             #expect(try await store.deliveryRequests().count == 1)
         case "sent":
             #expect(progress.phase(at: app.services.speech).submission == .waiting)
         default:
             #expect(progress.phase(at: app.services.speech).submission == .confirm)
-            _ = try await workspace.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
+            _ = try await app.services.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
                                                  on: "mac-z", card: task.id, agent: .pi, intent: .repeatingConfirmed)
             #expect(try await store.deliveryRequests().count == 2)
             #expect(try await store.deliveryRequest(first.id)?.status == .known(.unconfirmed))

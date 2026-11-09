@@ -23,7 +23,7 @@ struct IOSLaunchHistoryTests {
         let task = try await store.createTask("修乱序", in: Project.defaultID)
         let workspace = Workspace(services: app.services)
         func launch(_ intent: SessionLaunchIntent) async throws -> SessionLaunch {
-            try await workspace.launchSession(in: task.projectID, prompt: task.body, title: task.heading,
+            try await app.services.launchSession(in: task.projectID, prompt: task.body, title: task.heading,
                                               on: "mac", card: task.id, agent: .pi, intent: intent)
         }
         let first = try await launch(.new)

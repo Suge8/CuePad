@@ -113,6 +113,8 @@ FORBID_IN=CuePadKit/Sources/CueSync forbid "同步里登记等待者、以后再
   '\bwith(?:Checked|Unsafe)(?:Throwing)?Continuation\b' \
   'CuePadKit/Sources/CueSync/SyncGeneration.swift' 'CuePadKit/Sources/CueSync/CloudDatabase+Files.swift'
 
+FORBID_IN="CuePadKit/Sources/CueStore App/Sources/Services/AppServices+StrayFiles.swift" forbid "附件文件与资料库不按文件时刻定去留：拷贝、还原、同步会改写或带走时刻，按时刻猜「刚存的」曾删掉写者还没提交引用的文件（#102）。谁还要它只看库里的记录与引用、运行的持有（AttachmentRun 的锁）与草稿" \
+  '\b(?:(?:(?:content|attribute)ModificationDate|contentAccessDate|creationDate|modificationDate|addedToDirectoryDate)(?:Key)?|st_[acmb]tim(?:e|espec)\w*|storedBefore)\b'
 # 长按菜单带预览要跨行认（菜单闭包在中间），单独一条多行规则
 hits="$(rg -U --pcre2 --line-number --no-heading --type swift --glob '!App/Sources/UI/iOS/Components.swift' \
   -e '\.contextMenu\s*(?:\(menuItems:|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}\s*preview:)' -- App CuePadKit)" && rc=0 || rc=$?

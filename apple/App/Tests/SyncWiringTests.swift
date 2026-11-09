@@ -17,14 +17,14 @@ struct SyncWiringTests {
         let services = app.services!
         guard hasEngine else {
             #expect(services.sync == nil)
-            guard case .unavailable(let reason) = services.syncStatus else {
-                Issue.record("没有引擎却不是 unavailable：\(services.syncStatus)")
+            guard case .unavailable(let reason) = services.syncState.status else {
+                Issue.record("没有引擎却不是 unavailable：\(services.syncState.status)")
                 return
             }
             #expect(!reason.isEmpty)
             return
         }
-        #expect(services.syncStatus == .starting)
+        #expect(services.syncState.status == .starting)
         services.startSync()
         defer { services.cancelBackgroundWork() }
         try await eventually("app.sync.started == 1") { app.sync.started == 1 }
@@ -40,7 +40,7 @@ struct SyncWiringTests {
         services.startSync()
         defer { services.cancelBackgroundWork() }
 
-        try await eventually("提示更新") { services.syncStatus == .outdated }
+        try await eventually("提示更新") { services.syncState.status == .outdated }
         #expect(!services.canSyncNow)
 
         let card = try await Workspace(services: services).createCard(body: "要更新时照记", in: Project.defaultID)
@@ -70,7 +70,7 @@ struct SyncWiringTests {
         try await eventually("启动那次立即同步做完") { !services.isSyncingNow }
         await cloud.put(CKRecord.peerFloor(CueStore.supportedSchemaVersions.upperBound + 1))
         await services.syncNow()
-        try await eventually("拉到就停下") { services.syncStatus == .outdated }
+        try await eventually("拉到就停下") { services.syncState.status == .outdated }
         let after = try await workspace.createCard(body: "停下之后写的", in: Project.defaultID)
         await services.upload(after.id)
         #expect(await cloud.saved == saved)
@@ -93,7 +93,7 @@ struct SyncWiringTests {
 
         await cloud.signIn("另一个账号")
         NotificationCenter.default.post(name: .CKAccountChanged, object: nil)
-        try await eventually("要你决定") { services.syncStatus == .needsDecision(.accountSwitched) }
+        try await eventually("要你决定") { services.syncState.status == .needsDecision(.accountSwitched) }
         let waiting = try await workspace.createCard(body: "决定之前记的", in: Project.defaultID)
         await services.upload(waiting.id)
         #expect(await !cloud.saved.contains(waiting.id.uuidString.lowercased()))

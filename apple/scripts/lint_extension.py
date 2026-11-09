@@ -3,22 +3,14 @@
 （CuePi/README.md「协议」：扩展改了就升）。版本相同的会话 CuePad 不发 upgrade，跑着的旧扩展就一直不换，按新含义发的命令它照旧含义答。
 是否改了按与 origin/main 的分叉点比（含未提交、未跟踪的文件），不把主线后来的改动算成本分支的；版本要高过分叉点与 origin/main 两边：
 主线在这期间也升过的，同号的两版就是两个扩展。"""
-import re, subprocess, sys
+import subprocess, sys
 
-EXTENSION = "CuePadKit/Sources/CuePi/Extension/cuepad-bridge"
-ENTRY = f"{EXTENSION}/index.ts"
-# 旧扩展与 Swift/Python 消费者都依赖这个精确声明；声明的排版是兼容接口。
-VERSION = re.compile(r"const EXTENSION_VERSION = (\d+);")
+sys.dont_write_bytecode = True
+from _pi_extension import ENTRY, EXTENSION, extension_version as version  # noqa: E402
 
 
 def git(*args):
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
-
-
-def version(source):
-    found = VERSION.search(source)
-    if not found: sys.exit(f"{ENTRY}：没有 const EXTENSION_VERSION = <数>;")
-    return int(found[1])
 
 
 try:

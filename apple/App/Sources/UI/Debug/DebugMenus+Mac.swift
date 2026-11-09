@@ -12,14 +12,13 @@ import AppKit
 /// 系统菜单在后台 App 里整份画成停用的灰：右键点必须占前台（`-CuePadForeground YES`，`DebugForeground`，退出时还回去），左键点开的是系统菜单时也加它。坐标是主窗口里的点，左上为原点。只给本进程的窗口发合成事件，不碰别的应用。菜单开着时主线程在菜单的事件循环里，截完由外面结束实例。
 extension DebugScene {
     static func openMenuIfAsked() async {
-        let clicks: [(String, NSEvent.EventType, NSEvent.EventType)] = [
-            ("CuePadClick", .leftMouseDown, .leftMouseUp), ("CuePadRightClick", .rightMouseDown, .rightMouseUp),
-        ]
-        guard let (key, down, up) = clicks.first(where: { defaults.string(forKey: $0.0) != nil }),
+        let drive = args.driveOpts
+        guard let (key, script, down, up) = drive.click.map({ ("CuePadClick", $0, NSEvent.EventType.leftMouseDown, NSEvent.EventType.leftMouseUp) })
+                ?? drive.rightClick.map({ ("CuePadRightClick", $0, .rightMouseDown, .rightMouseUp) }),
               let window = NSApp.windows.first(where: { $0.isVisible && $0.level == .normal && $0.styleMask.contains(.resizable) })
         else { return }
-        let steps = defaults.string(forKey: key)!.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
-        let gap = seconds("CuePadClickGap", default: 1.5)
+        let steps = script.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
+        let gap = drive.clickGap ?? 1.5
         if down == .rightMouseDown { DebugForeground.require(window, for: key) } else { _ = DebugForeground.borrow(window) }
         await Task.wait(for: .milliseconds(500))
         for (index, step) in steps.enumerated() {

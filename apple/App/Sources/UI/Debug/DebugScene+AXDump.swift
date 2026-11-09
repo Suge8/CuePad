@@ -8,7 +8,7 @@ import UIKit
 /// 在模拟器里开旁白（`defaults write com.apple.Accessibility VoiceOverTouchEnabled`，验完关掉）、`axe swipe` 单指右扫一下走一格。
 extension DebugScene {
     static func logAccessibilityFocusIfAsked() {
-        guard defaults.bool(forKey: "CuePadAXFocus"), let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
+        guard args.driveOpts.axFocus, let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
         Task {
             var lines: [String] = []
             for await note in NotificationCenter.default.notifications(named: UIAccessibility.elementFocusedNotification) {
@@ -21,7 +21,7 @@ extension DebugScene {
     }
 
     static func dumpAccessibilityIfAsked() {
-        guard defaults.bool(forKey: "CuePadAXDump"), let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
+        guard args.driveOpts.axDump, let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
         // 和 XCTest 一样打开"自动化"无障碍：SwiftUI 只在有辅助技术时才建出元素树
         if let handle = dlopen("/usr/lib/libAccessibility.dylib", RTLD_NOW), let symbol = dlsym(handle, "_AXSSetAutomationEnabled") {
             unsafeBitCast(symbol, to: (@convention(c) (Int32) -> Void).self)(1)

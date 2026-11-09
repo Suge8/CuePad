@@ -7,7 +7,7 @@ import Observation
 extension DebugScene {
     /// `-CuePadQuotaFails YES`（配 `-CuePadDemoMac YES`）：各台演示 Mac 对额度刷新请求按"没有在线的 Pi 会话"写回（同 Mac 上会话还没连好时），
     /// 画面等到明细里没查到那一行出来才算就绪（截图看它的样子，`QuotaRefreshNote`）。
-    private static let quotaFails = defaults.bool(forKey: "CuePadQuotaFails")
+    private static let quotaFails = args.quotaOpts.fails
 
     static func runDemoMac(_ services: AppServices) async {
         let store = services.store, host = "demo-mac"
@@ -24,7 +24,7 @@ extension DebugScene {
             }
         }
         func reachable() async {
-            for await offline in Observations({ services.syncStatus == .offline }) where !offline { return }
+            for await offline in Observations({ services.syncState.status == .offline }) where !offline { return }
         }
         Task {
             await running("演示 Mac 交给 Cue") {
@@ -88,8 +88,8 @@ extension DebugScene {
     /// 发出一句（发送中，演示 Mac 接手，见 `runDemoMac`）→ 思考中 → 做完（有新回复）→ 等你确认 → 出错，再从发出一句开始。
     /// 会话换状态就换位置（按要你注意的先后排）：配 iOS 的 agent 与 `-CuePadProject CuePad`，列表只剩这个项目的几张卡，它不会出屏。
     static func cycleIfAsked(_ services: AppServices) async {
-        guard defaults.bool(forKey: "CuePadCycle") else { return }
-        if !defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(services) } }
+        guard args.driveOpts.cycle else { return }
+        if !args.demoMac { Task { await runDemoMac(services) } }
         await running("状态轮播") { try await cycle(services) }
     }
 

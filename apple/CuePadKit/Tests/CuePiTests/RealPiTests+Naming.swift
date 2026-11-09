@@ -16,7 +16,7 @@ extension RealPiTests {
             let name = try await bridge.suggestName(for: s.id)
             #expect(name == "echo-b：帮我看看登录页为什么白屏")
             #expect(bridge.sessions.first?.name == nil, "只起名，不写回")
-            try await bridge.configure(name: name, in: s.id)
+            try await bridge.configure(PiConfig(name: name), in: s.id)
             try await eventually("写回成会话名") { bridge.sessions.first?.name == name }
         }
     }

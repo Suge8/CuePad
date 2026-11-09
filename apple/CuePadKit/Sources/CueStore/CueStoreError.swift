@@ -23,6 +23,8 @@ public enum CueStoreError: Error, Equatable {
   case blankDeliveryContent
   /// 永久删除已完成，但这些键的附件文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
+  /// 启动清理做完了能做的（删掉 `removed` 个附件文件），`failed` 里的运行目录与附件文件没能删（各带原因）。只进日志，不进界面文字的目录。
+  case strayFilesNotRemoved(removed: Int, failed: [String])
   /// 库文件是更新版本建的，不打开。
   case unsupportedSchemaVersion(Int)
   /// 库文件是更早版本建的，这个版本不再升级旧结构，不打开。
@@ -128,6 +130,7 @@ extension CueStoreError: LocalizedError {
     case .deliveryAlreadyHanded: String(localized: "这句可能已经交出，不能安全撤回")
     case .blankDeliveryContent: String(localized: "发送内容不能为空")
     case .attachmentFilesNotRemoved(let keys): String(localized: "已永久删除，但有 \(keys.count) 个附件文件没能删掉")
+    case .strayFilesNotRemoved(let removed, let failed): "启动清理删掉了 \(removed) 个附件文件，\(failed.count) 处没能删：\(failed.joined(separator: "；"))"
     case .unsupportedSchemaVersion(let version): String(localized: "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开")
     case .schemaTooOld(let version): String(localized: "资料库由更早版本的 CuePad 建立（结构版本 \(version)），这个版本不再升级它")
     case .invalidParent: String(localized: "只能挂到任务下，不能挂到自己或自己的下级下")

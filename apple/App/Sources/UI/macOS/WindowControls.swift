@@ -36,7 +36,7 @@ struct CloseButton: View {
 struct SyncAlertSlot: View {
     /// 同步此刻要你关注（不在平静态）：看板那一排不常驻这一格，只在要关注时露出（`TaskBoardPage` 跟着让出）。
     static func needed(_ services: AppServices) -> Bool {
-        services.sync != nil && SyncSummary(services.syncStatus).tone != .calm
+        services.sync != nil && SyncSummary(services.syncState.status).tone != .calm
     }
 
     @Environment(AppServices.self) private var services
@@ -44,7 +44,7 @@ struct SyncAlertSlot: View {
 
     var body: some View {
         if services.sync != nil {
-            let summary = SyncSummary(services.syncStatus)
+            let summary = SyncSummary(services.syncState.status)
             Button { SettingsPane.open(.general) } label: {
                 Image(summary.icon).foregroundStyle(palette.color(summary.tone))
             }

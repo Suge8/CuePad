@@ -46,7 +46,7 @@ extension Schema {
 
     CREATE TABLE attachments (
       id TEXT PRIMARY KEY NOT NULL, hash TEXT NOT NULL, byteCount INTEGER NOT NULL, format TEXT NOT NULL,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, registeredHere INTEGER
     ) STRICT;
     CREATE INDEX attachments_hash ON attachments(hash);
 

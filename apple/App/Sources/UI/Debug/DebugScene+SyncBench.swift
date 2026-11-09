@@ -9,7 +9,7 @@ extension DebugScene {
     /// `-CuePadCloudKit YES`：隔离库也连 iCloud（同步测量）。签名的 CloudKit 环境必须是 Development：
     /// 测量只写开发环境，开发构建的 ad-hoc 或生产签名带着它也不连。
     static var syncsIsolatedLibrary: Bool {
-        guard defaults.bool(forKey: "CuePadCloudKit") else { return false }
+        guard args.cloudKit else { return false }
         guard Entitlements.cloudKitEnvironment == "Development" else {
             SyncBench.log.error("-CuePadCloudKit 要开发环境签名（CUEPAD_SIGN=development xc.sh build mac），这个构建是 \(Entitlements.cloudKitEnvironment ?? "无", privacy: .public)，不连")
             return false
@@ -27,13 +27,13 @@ extension DebugScene {
 /// `-CuePadSyncBenchNoRelay YES`：不连门铃，只靠按节奏的拉取（门铃不通的那条路）。
 enum SyncBench {
     static let log = Logger(subsystem: AppIdentity.id, category: "bench")
-    static var role: String? { defaults.string(forKey: "CuePadSyncBench") }
-    static var relayOff: Bool { role != nil && defaults.bool(forKey: "CuePadSyncBenchNoRelay") }
+    static var role: String? { args.syncBench }
+    static var relayOff: Bool { role != nil && args.syncBenchOpts.noRelay }
     /// `-CuePadSyncBenchCloud <目录>`：两个实例共用的模拟云（`SharedCloud`，延迟模型在目录里）；没给就连真的 iCloud 开发环境，
     /// 这时 `-CuePadSyncBenchBudget <个>` 是这个进程的请求上限。
-    static var sharedCloud: URL? { defaults.string(forKey: "CuePadSyncBenchCloud").map { URL(filePath: $0, directoryHint: .isDirectory) } }
-    static var budget: Int? { defaults.object(forKey: "CuePadSyncBenchBudget") == nil ? nil : defaults.integer(forKey: "CuePadSyncBenchBudget") }
-    private static var defaults: UserDefaults { DebugScene.defaults }
+    static var sharedCloud: URL? { args.syncBenchOpts.cloud.map { URL(filePath: $0, directoryHint: .isDirectory) } }
+    static var budget: Int? { args.syncBenchOpts.budget }
+    private static var args: DebugArgs { DebugScene.args }
 
     static func run(_ workspace: Workspace) async {
         guard let role else { return }

@@ -60,19 +60,19 @@ struct RealOpenCodeTests {
                 return messages.contains { $0.deliveryID == delivery } && messages.last { $0.role == .known(.pi) }?.text.contains("AGAIN") == true
             }
 
-            try await bridge.configure(name: "改过的名字", in: live.id)
+            try await bridge.configure(PiConfig(name: "改过的名字"), in: live.id)
             try await eventually("改名到了") { session(bridge)?.displayName == "改过的名字" }
             let thinker = openCodeOtherModel
-            try await bridge.configure(model: thinker, thinking: .high, in: live.id)
+            try await bridge.configure(PiConfig(model: thinker, thinking: .high), in: live.id)
             try await eventually("模型与强度换了") { session(bridge)?.model?.key == thinker && session(bridge)?.thinking == .known(.high) }
             let stored = try await sandbox.api("GET", "/api/session/\(live.sessionID)")["data"] as? [String: Any]
             let model = stored?["model"] as? [String: Any]
             #expect(model?["id"] as? String == thinker.id && model?["variant"] as? String == "high" && stored?["title"] as? String == "改过的名字")
             await #expect(throws: PiBridgeError.unknownModel(.opencode)) {
-                try await bridge.configure(model: PiModelKey(provider: openCodeTestModel.provider, id: "no-such-model"), in: live.id)
+                try await bridge.configure(PiConfig(model: PiModelKey(provider: openCodeTestModel.provider, id: "no-such-model")), in: live.id)
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/no-such-command", in: live.id) }
-            try await bridge.configure(model: openCodeTestModel, in: live.id)
+            try await bridge.configure(PiConfig(model: openCodeTestModel), in: live.id)
 
             // 用户给这个会话定了规矩：跑命令要先问
             try await sandbox.api("PATCH", "/api/session/\(live.sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])

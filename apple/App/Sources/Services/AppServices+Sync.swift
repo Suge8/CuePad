@@ -23,7 +23,7 @@ extension AppServices {
         return (nil, .unavailable(reason))
     }
 
-    /// 启动同步，并让 `syncStatus`、`syncIssues`、`conflicts`、`fileTransfers` 跟随，直到任务取消。没有同步（隔离模式）什么都不做。
+    /// 启动同步，并让 `syncState`、`conflicts`、`fileTransfers` 跟随，直到任务取消。没有同步（隔离模式）什么都不做。
     /// 启动后的第一次拉走立即同步（`CloudSync.start` 自己不拉；拉取等得到同步开始）：算在 `isCatchingUp` 里，打开的页面知道手里的可能不是最新。
     func startSync() {
         guard let sync else { return }
@@ -160,14 +160,14 @@ extension AppServices {
     /// 本机的数据此刻可能不是最新——"同步中"只有这一个来源：正在和 iCloud 对一遍（启动、回到前台、下拉刷新、立即同步的那一拉还没回来，
     /// 至多 `syncWaitLimit`），或在一页页地拉积压（第一次同步、离线久了，`SyncState.catchingUp`）。上传不算：那是本机的改动在往外走。
     /// 按节奏的拉取与收到推送的拉取也不算：它们一拉就完，算上的话页头每几秒闪一次。
-    var isCatchingUp: Bool { isSyncingNow || syncCatchingUp }
+    var isCatchingUp: Bool { isSyncingNow || syncState.catchingUp }
 
     /// 别的设备写下的事实（Cue 在哪台启用）本机库里已经有了：和 iCloud 对过至少一遍，或没有可对的（没有同步、没登录 iCloud、账号受限）。
     /// 换新 Mac、还没对完时为 false：这时库里没有 Cue 不等于哪台都没设过。
     var knowsSyncedFacts: Bool {
-        switch syncStatus {
+        switch syncState.status {
         case .unavailable, .noAccount, .accountRestricted: true
-        default: syncReconciled
+        default: syncState.reconciled
         }
     }
 
@@ -180,10 +180,28 @@ extension AppServices {
         #endif
     }
 
+    /// 要当场生效的请求（停止、改名、补对话）此刻送得到执行它的 Mac：手机靠同步；Mac 上就是本机执行，总送得到。
+    /// 说的话（回复、作答、开会话、交给 Agent、重发）不看它：写下就排着，恢复后自动发出，同对 Cue 说的话。
+    var reachesPiHost: Bool {
+        #if os(iOS)
+        speech.reachableSince != nil  // 演示 Mac 在本机库里接手时一直算通（`SpeechClock`）
+        #else
+        true
+        #endif
+    }
+
+    #if os(iOS)
+    /// 同步到不了 Mac 时（`SyncStatus.reachesMac`）给人看的那一句；送得到时为 nil。手机与 iPad 上设置那一行（侧栏、项目页末尾）、
+    /// iPhone 底部项目那一格带的点（颜色按它的 `tone`）与 Cue 没有 Mac 时那句（`CueSettings.noHost`）都只读它。
+    var macAlert: SyncSummary? {
+        syncState.status.reachesMac ? nil : SyncSummary(syncState.status)
+    }
+    #endif
+
     /// 同步那一行转不转圈（Mac 设置与手机设置共用）：正在连接、正在上传或对账，或立即同步还没返回。
     var isSyncBusy: Bool {
         if isSyncingNow { return true }
-        switch syncStatus {
+        switch syncState.status {
         case .starting, .syncing: return true
         default: return false
         }
@@ -193,7 +211,7 @@ extension AppServices {
     /// iCloud 也开着（没登录、受限时按了什么都不会发生）。上一次立即同步还没返回时照给、只停用（`isSyncingNow`），一按一松不让一行出现又消失。
     var canSyncNow: Bool {
         guard sync != nil else { return false }
-        switch syncStatus {
+        switch syncState.status {
         case .needsDecision, .outdated, .noAccount, .accountRestricted: return false
         default: return true
         }
@@ -204,5 +222,16 @@ extension AppServices {
 
     func resolveConflict(copy id: UUID, keep choice: ConflictChoice) async throws {
         try await store.resolveConflict(copy: id, keep: choice)
+    }
+}
+
+nonisolated extension SyncStatus {
+    /// 此刻同步能把请求送到 Mac、把 Mac 上的 Pi 状态带回来：已连上或正在连接。
+    /// 其余状态（没开 iCloud、不可用、暂停、出错、空间不足）都到不了，界面写明原因。
+    var reachesMac: Bool {
+        switch self {
+        case .starting, .idle, .syncing: true
+        default: false
+        }
     }
 }

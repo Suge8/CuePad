@@ -143,7 +143,7 @@ struct RealClaudeTerminalTests {
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let log = ChangeLog(testbed.bridge)
 
-            try await testbed.bridge.configure(name: "CuePad 改的名", in: session.id)
+            try await testbed.bridge.configure(PiConfig(name: "CuePad 改的名"), in: session.id)
             try await eventually("终端里显示新名字") { await terminal.screen.contains("CuePad 改的名") }
             #expect(testbed.bridge.session(id: session.id)?.displayName == "CuePad 改的名")
             await #expect(throws: PiBridgeError.unsupported) { try await testbed.bridge.abort(session.id) }

@@ -11,7 +11,7 @@ struct DebugSessionRail: View {
     @Environment(\.palette) private var palette
 
     private var form: SessionRail.Form {
-        switch DebugScene.defaults.string(forKey: "CuePadRailForm") {
+        switch DebugScene.args.railForm {
         case "wide": .wide
         default: .phone
         }
@@ -44,7 +44,7 @@ struct DebugSessionRail: View {
 
 extension DebugScene {
     static func seedRailIfAsked(_ services: AppServices) async {
-        guard scene == "rail", !defaults.bool(forKey: "CuePadRailEmpty") else { return }
+        guard scene == "rail", !args.railEmpty else { return }
         await running("会话条验收数据") {
             let store = services.store, host = "rail-mac", boot = "rail-boot"
             try await store.recordMacPresence(host: host, bootID: boot) { true }

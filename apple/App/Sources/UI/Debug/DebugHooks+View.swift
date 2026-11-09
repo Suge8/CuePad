@@ -50,8 +50,8 @@ extension View {
         #if DEBUG
         onAppear {
             let away: @MainActor () -> Void = { follow.wrappedValue.scrolled(atNewest: false, beyondScreen: false, nearOldest: false, byUser: true) }
-            if DebugScene.defaults.bool(forKey: "CuePadHeaderHidden") { DebugScene.later(.seconds(1), away) }
-            guard DebugScene.defaults.bool(forKey: "CuePadHeaderCycle") else { return }
+            if DebugScene.args.layoutOpts.headerHidden { DebugScene.later(.seconds(1), away) }
+            guard DebugScene.args.layoutOpts.headerCycle else { return }
             Task {
                 await Task.wait(for: .seconds(3))
                 let steps: [@MainActor () -> Void] = [away, { follow.wrappedValue.reveal() }, away, { follow.wrappedValue.jumpToNewest() }, away, { follow.wrappedValue.jumpToNewest() }]
@@ -72,7 +72,7 @@ extension View {
     func debugCyclesTurn(_ turn: @escaping @MainActor () -> Void) -> some View {
         #if DEBUG
         task {
-            guard DebugScene.defaults.bool(forKey: "CuePadTurnCycle") else { return }
+            guard DebugScene.args.layoutOpts.turnCycle else { return }
             // 每步之前停多久是录屏的节奏
             for pause in [3.0, 1.5, 1.5, 0.1, 1.5, 1.5] {
                 guard await Task.wait(for: .seconds(pause)) else { return }
@@ -107,7 +107,7 @@ extension View {
         #if DEBUG
         task(id: items.count) {
             let openings = items.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString) } }
-            let quoting = DebugScene.defaults.string(forKey: "CuePadQuotePreview"), opening = DebugScene.defaults.string(forKey: "CuePadOpenPreview")
+            let quoting = DebugScene.args.quotePreview, opening = DebugScene.args.openPreview
             if let quoted = openings.first(where: { $0.preview.title == quoting || $0.preview.name == quoting }), let entry = quoted.entry { quote(quoted.preview, entry) }
             if let shown = openings.first(where: { $0.preview.title == opening || $0.preview.name == opening }) { opened.wrappedValue = shown }
         }
@@ -121,7 +121,7 @@ extension View {
     /// 不用场景的尺寸限制（`sizeRestrictions`）摆真窗口：模拟器是全屏应用模式，系统不理它（实测宽一直是整屏）。
     @ViewBuilder func debugCompact() -> some View {
         #if DEBUG
-        let width = DebugScene.defaults.double(forKey: "CuePadCompact")
+        let width = (DebugScene.args.layoutOpts.compact ?? 0)
         if width > 0 {
             environment(\.horizontalSizeClass, .compact).frame(width: width).frame(maxWidth: .infinity, alignment: .leading)
         } else if let size = DebugScene.windowSize {
@@ -157,10 +157,7 @@ extension View {
     /// 主窗口根上：按启动参数摆好调试画面（状态图形总览盖在最上层）、挂上自检用的布局环，摆好后报"首帧就绪"（`xc.sh shot` 等它再截图）。
     func debugScene(_ workspace: Workspace) -> some View {
         #if DEBUG
-        overlay {
-            if DebugScene.scene == "stateicons" { StateGlyphSheet().withPalette() }
-            if DebugScene.scene == "rail" { DebugSessionRail(workspace: workspace).modifier(PaletteProvider()) }
-        }
+        overlay { DebugScene.entry?.overlay?(workspace) }
         .task {
             await DebugScene.prepare(workspace)
             await DebugScene.seedRailIfAsked(workspace.services)
@@ -196,19 +193,7 @@ extension View {
         #if DEBUG
         overlay {
             // 盖在根上（在着色的那层外面），自己给系统控件着色
-            Group {
-                switch DebugScene.scene {
-                case "style": StyleBoard()
-                case "icons": IconSheet()
-                case "stateicons": StateGlyphSheet()
-                case "rail": DebugSessionRail(workspace: workspace).modifier(PaletteProvider())
-                case "widgets": DebugWidgetStage()
-                case "activity": DebugActivityStage(workspace: workspace)
-                case "share": DebugShareStage(location: workspace.services.location)
-                default: EmptyView()
-                }
-            }
-            .withPalette()
+            if let sheet = DebugScene.entry?.overlay?(workspace) { sheet.withPalette() }
         }
             .task {
                 await DebugScene.prepare(workspace)
@@ -261,12 +246,7 @@ struct DebugStage<Main: View>: View {
 
     var body: some View {
         #if DEBUG
-        switch DebugScene.scene {
-        case "menubar": DebugMenuBarStage().environment(workspace)
-        case "cuebar": DebugMenuBarStage(cueBar: true).environment(workspace)
-        case "newsession": DebugNewSessionForm().environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
-        default: main()
-        }
+        if let stage = DebugScene.entry?.stage { stage(workspace) } else { main() }
         #else
         main()
         #endif
@@ -281,7 +261,7 @@ private extension DebugScene {
         guard scene == "projectform" else { return }
         await running("项目表单") {
             // 主区开着哪个项目不算（启动就停在上次的项目页），只认参数打开的（`prepareLibrary` 已打开它）
-            let asked = defaults.string(forKey: "CuePadProject") == nil ? nil : workspace.currentProject
+            let asked = args.project == nil ? nil : workspace.currentProject
             let existing = if let asked { try await workspace.services.store.project(asked) } else { Project?.none }
             workspace.projectForm = .init(project: existing)
         }

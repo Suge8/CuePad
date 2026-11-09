@@ -34,7 +34,7 @@ extension DebugScene {
 
     /// 两台演示 Mac 的在线记录写到此刻加 `MacPresence.lifetime`；`-CuePadCuePresence asleep` 时演示 Mac 记成此刻不在线（它在睡觉）。
     private static func refreshDemoPresence(_ store: CueStore) async throws {
-        let asleep = defaults.string(forKey: "CuePadCuePresence") == "asleep"
+        let asleep = args.cueOpts.presence == "asleep"
         for host in demoHosts {
             let awake = !(asleep && host == "demo-mac")
             try await store.recordMacPresence(host: host, bootID: demoBoot) { awake }

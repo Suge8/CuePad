@@ -6,7 +6,7 @@ import Foundation
 /// normal 留足阅读时间；rapid 每 90ms 反向一次，短于 Motion.glide，用来检查中途改向。
 /// 日志 voice-motion <秒> <事件> 是录像与 A/B 的事件指针；音量为隔离合成采样，不能证明真实音轨。
 enum DebugVoiceMotion {
-    static var enabled: Bool { DebugScene.defaults.string(forKey: "CuePadVoiceMotion") != nil }
+    static var enabled: Bool { DebugScene.args.voiceOpts.motion != nil }
     static let connectionDelay = Duration.milliseconds(700)
     private static let responseDelay = Duration.milliseconds(850)
 
@@ -46,7 +46,7 @@ enum DebugVoiceMotion {
             call.inputs.continuation.yield(.wire(.success(.turn(id: "motion-assistant", assistant: true, done: true, text: ""))))
             call.inputs.continuation.yield(.peer(.level(.output, loud: false, peak: 0)))
             try await sound(call, side: .input, count: 20)
-            if DebugScene.defaults.string(forKey: "CuePadVoiceMotion") == "rapid" {
+            if DebugScene.args.voiceOpts.motion == "rapid" {
                 for index in 0..<12 {
                     mark("reverse-\(index)")
                     call.inputs.continuation.yield(.wire(.success(.turn(
