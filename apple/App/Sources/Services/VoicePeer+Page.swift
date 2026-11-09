@@ -1,6 +1,7 @@
 import Foundation
 
 extension VoicePeer {
+    /// 先采集再建音频上下文：WebKit 先以 AmbientSound 启动上下文、采集后才切 PlayAndRecord，先采集省掉这次重配置。
     static let page = """
     <!doctype html><html><body><script>
     const audio={echoCancellation:true,noiseSuppression:true,autoGainControl:true};
@@ -12,9 +13,7 @@ extension VoicePeer {
         this.aborted=new Promise((_,reject)=>this.abort=()=>reject(new Error('session closed')));
         this.aborted.catch(()=>{});
       }
-      post(kind,fields={}) {
-        if(!this.closed) webkit.messageHandlers.peer.postMessage({kind,session:this.session,...fields,...(kind==='diagnostic'?{webMs:performance.now()}:{})});
-      }
+      post(kind,fields={}) {if(!this.closed) webkit.messageHandlers.peer.postMessage({kind,session:this.session,...fields});}
       async wait(operation) {
         if(this.closed) throw new Error('session closed');
         const value=await Promise.race([operation,this.aborted]);
@@ -26,12 +25,7 @@ extension VoicePeer {
         if(this.closed) throw new Error('session closed');
         return stream;
       }
-      capture(constraints) {
-        this.post('diagnostic',{stage:'capture-request'});
-        return this.wait(navigator.mediaDevices.getUserMedia({audio:constraints}).then(stream=>{
-          this.post('diagnostic',{stage:'capture-granted'});return this.own(stream);
-        }));
-      }
+      capture(constraints) {return this.wait(navigator.mediaDevices.getUserMedia({audio:constraints}).then(stream=>this.own(stream)));}
       async microphone(device) {
         let stream=await this.capture(audio);
         if(!device) return stream;
@@ -59,16 +53,11 @@ extension VoicePeer {
       async start(file,device) {
         if(!file) {
           this.track=(await this.microphone(device)).getAudioTracks()[0];this.post('device',{label:this.track.label});
-          for(const name of ['mute','unmute','ended']) this.track.addEventListener(name,()=>this.post('diagnostic',{stage:'track-'+name}));
           this.track.addEventListener('ended',()=>this.post('audioInterrupted'));
         }
         this.ctx=new AudioContext({sampleRate:24000});
-        this.ctx.onstatechange=()=>{
-          this.post('diagnostic',{stage:'context-'+this.ctx.state});
-          if(this.ctx.state==='interrupted') this.post('audioInterrupted');
-        };
-        this.post('diagnostic',{stage:'context-created-'+this.ctx.state});
-        await this.wait(this.ctx.resume());this.post('diagnostic',{stage:'context-resumed-'+this.ctx.state});
+        this.ctx.onstatechange=()=>{if(this.ctx.state==='interrupted') this.post('audioInterrupted');};
+        await this.wait(this.ctx.resume());
         if(file) {
           this.speech=await this.wait(this.ctx.decodeAudioData(Uint8Array.from(atob(file),c=>c.charCodeAt(0)).buffer));
           this.dest=this.ctx.createMediaStreamDestination();this.track=this.own(this.dest.stream).getAudioTracks()[0];
