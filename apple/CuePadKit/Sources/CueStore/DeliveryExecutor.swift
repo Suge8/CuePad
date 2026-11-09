@@ -1,17 +1,12 @@
 import Foundation
 import os
 
-/// Mac 端的投送执行器：只领取发给本机（`hostID` 等于本机）的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，
-/// 把结果写回请求；完成的请求保留 `retention` 后清理（发出的话等它进对话、等认领的开新会话请求等认领，见 `deleteCompletedDeliveries`）。
-/// - 派发期限从服务器收下它起算（`DeliveryRequest.dispatchDeadline`）：到期还没领取的按失败写回（`DeliveryRequest.expiry`），
-///   Mac 离线太久后不再突然发出旧内容；领取只在期限前；
-/// - 缺前提时在旁边等，与派发期限赛跑，不占执行队列，后面的话照常先执行：引用的附件不在本机就取（`fetchAttachments`，一条请求一个任务，
-///   请求仍是 pending）；现有会话没就绪就转准备（`preparing`，写下在等什么）等它（`preparation`）；取不来、到期都按失败写回；
-///   执行另有自己的期限（`DeliveryRequest.phaseLimit`）；
+/// Mac 端的投送执行器：只领取发给本机的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，把结果写回请求。完成的请求保留 `retention` 后清理，保留规则见 `deleteCompletedDeliveries`。
+/// - 派发期限从服务器收下它起算（`DeliveryRequest.dispatchDeadline`）：到期还没领取的按失败写回，Mac 离线太久后不再突然发出旧内容；
+/// - 缺前提时在旁边等，与派发期限赛跑，不占执行队列：引用的附件不在本机就取，现有会话没就绪就转准备（`preparing`）等它；取不来、到期都按失败写回；
 /// - 每次领取只交给 handler 一次；任何执行后未知都留待正证据对账，不在领取内重试；
-/// - 启动时只恢复上次请求的核对，不重派、不续期；确认任务独立于执行通道，由 stop 取消并收齐；
-/// - 完成的请求里，发出的话、Cue 的失败请求和结果未确认（`unconfirmed`）的至多留 7 天（等真实消息的正证据来对账，之后清掉）；
-/// - 读写 Store 失败交给 `onIssue`；持久阶段的期限仍使发送方有界收敛；
+/// - 启动时只恢复上次请求的核对，不重派、不续期；
+/// - 读写 Store 失败交给 `onIssue`；
 /// - 写回结果后调用一次 `onWritten`（App 用它立即上传这一条，排在其余待推送前面）；执行超过 `claimGrace` 的，领取那一版先传一次：
 ///   发起的设备据领取知道 Mac 接手了，但不能据此断言已交给 Agent。多数执行几十毫秒就完，只传结果那一版：
 ///   领取那一版在路上时结果得等它回来才能传（同一条记录一次只一版在路上），回执要多等一个来回。
@@ -32,7 +27,6 @@ public actor DeliveryExecutor {
   let fetchFile: @Sendable (String) async throws -> Void
   private var uploads = Slots<UUID>()
   private var confirmations = Slots<DeliveryRequest.ID>()
-  /// 在旁边取附件的请求
   var fetching = Slots<DeliveryRequest.ID>()
   private static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
   var started = false
@@ -43,10 +37,8 @@ public actor DeliveryExecutor {
   /// 上一次 `stop` 等旧任务收尾的那一段：`start` 等它过去才开新一轮，旧 handler 不会与新循环同时在跑。
   private var draining: Task<Void, Never>?
   private var rerun = false
-  /// 最近一次交给 handler 或 recover 的执行（`perform`）。
   private var handling: Task<DeliveryOutcome, Never>?
   var cleanupWake: Date?
-  /// 启动恢复段失败的原因（`start` 取走后抛出）。
   private var startFailure: (any Error)?
 
   public init(
@@ -169,7 +161,6 @@ public actor DeliveryExecutor {
     return outcome
   }
 
-  /// 上一条的 handler 或 recover 还没结束就等它（可被取消：停止时不等，返回 false）。
   private func settleHandler() async -> Bool {
     guard let prior = handling else { return true }
     guard (try? await abandonable({ _ = await prior.value })) != nil else { return false }

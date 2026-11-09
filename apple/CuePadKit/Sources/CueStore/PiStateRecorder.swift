@@ -1,18 +1,12 @@
 import Foundation
 
-/// 把 Pi 会话的状态变化（每个会话一条）与 Cue 此刻的样子（`updateCue`）写成同步记录，节拍同一套（`Pace`，间隔 `minInterval`）：
-/// - 开始工作、等你确认、完成、出错，以及会话的标题或项目变化：立即写；
-/// - 工作中的细节变化（输出、调用哪个工具）：合并，两次写入之间至少隔 `minInterval`（默认 `detailInterval`），期间只保留最新的一次；
-/// - 近况（`PiRecap`）变化：立即写；
-/// - 与已写入内容相同的更新不再写；会话的进程退出时按 `exited` 处理记录（历史、歇着、删除）并丢弃挂起的更新；用户结束会话时
-///   标为已结束（近况留给手机看，记录与会话文件同存亡，见 `CueStore.retainPiSessions`）。
+/// 把 Pi 会话的状态变化（每个会话一条）与 Cue 此刻的样子（`updateCue`）写成同步记录，节拍同一套（`Pace`）：状态转换与近况（`PiRecap`）变化立即写；工作中的细节合并，两次写入之间至少隔 `minInterval`（默认 `detailInterval`），期间只保留最新的一次；与已写入内容相同的不再写。
 ///
 /// actor 在 await 处可重入：状态只在 await 之前改完，不跨 await 持有副本；会话与 Cue 的落盘按决定的先后串成同一条任务链，
 /// 后决定的写入（含删除）不会被先决定的覆盖。
 public actor PiStateRecorder {
   private struct Session {
     var pace = Pace<PiSessionSnapshot>()
-    /// 已写入内容的目录记录（模型与命令没变时沿用，不重算内容的 id）
     var catalog: AgentCatalog?
   }
 
@@ -167,7 +161,6 @@ public actor PiStateRecorder {
     }
   }
 
-  /// 按决定的先后落盘：排在此前所有写入之后。
   func persist<T: Sendable>(_ write: @escaping @Sendable () async throws -> T) async throws -> T {
     let previous = tail
     let task = Task {

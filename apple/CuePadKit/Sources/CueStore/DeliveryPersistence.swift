@@ -48,7 +48,6 @@ extension CueStore {
     }
   }
 
-  /// 派发期限不变（`DeliveryRequest.dispatchDeadline`）。
   func reserveDeliveryTarget(_ id: UUID, host: String) throws -> DeliveryRequest? {
     try write {
       try db.run("""
@@ -206,13 +205,9 @@ extension CueStore {
       where: "hostID = ? AND (status IN ('executing', 'confirming', 'unconfirmed') OR (status = 'pending' AND handledBy IS NOT NULL))", [host])
   }
 
-  /// 删除完成时间早于 `cutoff` 的请求；返回还剩什么：`transient` 是按保留期清的还有（下一轮一个保留期后），`oldestKept` 是下面留到 7 天的里最早完成的那条（下一轮等它到期）。
-  /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
-  /// 有可靠修订的原关联未决（会话或卡片晚到）同样等到 `claimCutoff`；已兑现、被取代或删除则沿用普通保留期。
-  /// 发出的话（`send`）不按普通保留期清：消息上云且原关联已解决才提前收走（`markPushed`），否则等到 `keptCutoff`；
-  /// 没能送达的留着等用户重发或移除（重发写成后移除它）；没能开成的开新会话请求同样留着：新会话输入框按它显示原因、解锁，再开时移除它。结果未确认的留着等正证据来对账，之后与它们同样到期清掉。Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`）。
-  /// 成功请求的关联等待有界：send 七天、command 六十秒、start 六百秒，均从完成时间算，不续期。
-  /// 超窗只删除请求，不改关联修订；之后才到的卡片不保证自动补关联。
+  /// 删除完成时间早于 `cutoff` 的请求；返回还剩什么：`transient` 是按保留期清的还有（下一轮一个保留期后），`oldestKept` 是留到 7 天的里最早完成的那条（下一轮等它到期）。
+  /// 认领靠请求留着：带着灵感或任务、已成功的开新会话请求在被认领前留着（`claimLaunchedCards`），有可靠修订的原关联未决同样等到 `claimCutoff`。发出的话不按普通保留期清：消息上云且原关联已解决才提前收走（`markPushed`），否则等到 `keptCutoff`；没能送达、没能开成的留着等用户重发或移除；结果未确认的留着等正证据对账；Cue 发起的失败请求留着给 Cue 看（`cueChanges`）。
+  /// 成功请求的关联等待有界：send 七天、command 六十秒、start 六百秒，均从完成时间算，不续期；超窗只删除请求，不改关联修订。
   func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> (transient: Bool, oldestKept: Date?) {
     let done = "status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)', '\(DeliveryStatus.unconfirmed.rawValue)')"
     let kept = """

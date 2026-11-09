@@ -1,20 +1,15 @@
 import Foundation
 
-/// 订阅账号的一个用量窗口（Pi 用的 OAuth 订阅：Claude、Codex；按量计费的 API 密钥没有）。
-/// 一个账号有几个窗口：Claude 是 5 小时、本周与按模型的周额度，Codex 按套餐有一到两个。
 public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
-  /// 窗口长度（秒）
   public var seconds: Int
   public static let week = 7 * 86_400
   /// 这个窗口已用的比例，0 到 1（到顶后提供方可能报得略超 1）
   public var used: Double
   public var resetsAt: Date
-  /// 只算某个模型的窗口（Claude 按模型的周额度，提供方给的显示名，如 "Fable"）；算整个账号的为 nil
   public var model: String?
   /// 提供方说此刻卡着的就是这个窗口（Claude 响应头的 representative-claim）；提供方没说的（用量接口、Codex）为 false
   public var isBinding: Bool
 
-  /// 报不出有限值的已用比例（NaN、无穷）按 0 记：界面按它换算百分比与弧长，非有限值在整数转换处会崩溃。
   public init(seconds: Int, used: Double, resetsAt: Date, model: String? = nil, isBinding: Bool = false) {
     self.seconds = seconds
     self.used = used.isFinite ? used : 0
@@ -45,24 +40,21 @@ public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
     if isBinding { try c.encode(true, forKey: .isBinding) }
   }
 
-  /// 哪一个窗口：长度与模型（名字是给人看的，不同长度可能写成同一个"N 小时"）。同一个窗口的几次观测按它并成一条。
+  /// 名字是给人看的，不同长度可能写成同一个“N 小时”，所以按长度与模型认同一个窗口。
   public struct Slot: Hashable, Sendable {
     public let seconds: Int
     public let model: String?
   }
   public var id: Slot { Slot(seconds: seconds, model: model) }
 
-  /// 最近观测的比例；重置不代表已观测到恢复。
+  /// 重置不代表已观测到恢复。
   public func used(at now: Date) -> Double { min(max(used, 0), 1) }
 
-  /// 匀速刻度：窗口已过去的时间占多少，即按匀速此刻该用到多少（0 到 1）；过了重置时间是 0。
   public func pace(at now: Date) -> Double {
     guard now < resetsAt, seconds > 0 else { return 0 }
     return min(max(1 - resetsAt.timeIntervalSince(now) / Double(seconds), 0), 1)
   }
 
-  /// 照这个窗口里到此刻的速度，什么时候用完；没超过匀速刻度（重置前用不完）、已经到顶或已重置为 nil。
-  /// 超过刻度时，用完一定早于重置（已用 > 已过的时间比例，剩下的按同一速度用得比时间走得快）。
   public func exhaustion(at now: Date) -> Date? {
     let used = used(at: now), pace = pace(at: now)
     guard used < 1, pace > 0, used > pace else { return nil }
@@ -71,29 +63,26 @@ public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
   }
 }
 
-/// 一个账号最近一次观测到的用量（同步表 `accountQuotas`，Mac 写、各端读）：每台 Mac 的每个授权分区一条，不跨账号、来源合并。
+/// 每台 Mac 的每个授权分区一条，不跨账号、来源合并。
 /// 观测来自 Pi 会话里的扩展；读取网关清单只发现账号，不保证提供方的原观测已更新。
-/// "更新于"读 `observedAt`；`modifiedAt` 表示能力、结果或当前授权发生变化。
+/// “更新于”读 `observedAt`；`modifiedAt` 表示能力、结果或当前授权发生变化。
 public struct AccountQuota: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// 原生提供方 id，或网关完整上游 provider（可含远端前缀）
   public var provider: String
-  /// 写下这次观测的 Mac：手机请 Mac 刷新时发给它
   public var hostID: String
-  /// 读取时关联 MacAgents 的名字，不随额度另存。
   public var macName: String
   public var account: PiAccount?
   public var status: QuotaStatus
   public var observedAt: Date?
   /// 已收下的最晚排序时刻（`QuotaReport.requestedAt`），只用于拒绝晚到的结果，不代替原观测时间。
   public var requestedAt: Date?
-  /// 按窗口从短到长（同长的整个账号在前，按模型的在后）
   public var windows: [QuotaWindow]
   public var details: QuotaDetails?
   public var createdAt: Date
   public var modifiedAt: Date
 
-  /// 原观测超过这么久标为陈旧；它不决定账号清单是否需要读取。
+  /// 它不决定账号清单是否需要读取。
   public static let staleAfter: TimeInterval = 10 * 60
   /// 用量没有有意义的变化时，观测时间最多拖这么久才写一次（只为"更新于"不过时）；有变化随时写。
   static let touchAfter: TimeInterval = staleAfter / 2
@@ -142,8 +131,6 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
     }
   }
 
-  /// 卡着的窗口：提供方说了是哪个（`QuotaWindow.isBinding`，Claude）且还没过重置时间就是它；没说（Codex、用量接口刚替换过）
-  /// 或它已重置时，是此刻用得最多的那个。`model` 给了时按模型的周额度也参与比较（只算名字出现在模型 id 或名字里的，如 Fable 之于 claude-fable-5）。
   public func binding(at now: Date, model: String? = nil) -> QuotaWindow? {
     guard reading(at: now) == .observed else { return nil }
     if let claimed = windows.first(where: { $0.isBinding && now < $0.resetsAt }) { return claimed }
@@ -160,7 +147,6 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
     return DeterministicID.uuid("account-quota/\(host)/\(owner)/\(account?.kind.rawValue ?? "unknown")/\(account?.scope ?? "unknown")")
   }
 
-  /// 这条记录最近一次结果的时刻：带排序时刻的取它，只有能力声明的取收下的时刻。
   var evidencedAt: Date { requestedAt ?? createdAt }
 }
 
@@ -170,13 +156,13 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
   public var account: PiAccount
   public var status: QuotaStatus
   public var windows: [QuotaWindow]
-  /// 是这个账号的全部窗口（查用量接口得到的）：替换已存的；回复里带回的只有一部分（Claude 的响应头没有按模型的周额度），按窗口并进已存的
+  /// 是这个账号的全部窗口（查用量接口得到的）时替换已存的；回复里带回的只有一部分（Claude 的响应头没有按模型的周额度），按窗口并进已存的
   public var complete: Bool
   /// 网关的原始 readAt（Unix 秒）；不以取缓存的时刻替换。
   public var observedAt: Date?
   /// 同一网关成功返回的账号清单；仅用于移除该来源已撤销的账号。
   public var activeScopes: [String]?
-  /// 网关来源一级的报告：这次解析到这个来源的每个 Pi 提供方与各自开始解析的时刻（几个提供方指向同一网关时查询只做一次）。
+  /// 几个提供方指向同一网关时查询只做一次。
   public var owners: [String: Date]?
   public var accounts: [QuotaReport]?
   /// 排序时刻：这份结果所属操作期间的一个时刻——主动查询（成功、失败、不支持、网关清单）取请求开始，回复带回的观测取收到回复。
@@ -198,9 +184,7 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
     self.details = details
   }
 
-  /// 并进已存的窗口，排成 `AccountQuota.windows` 的顺序。这次观测没说哪个卡着（用量接口、Codex）时，沿用已存的那个说法：
-  /// 提供方的判定只来自 Claude 的响应头，下一次回复会更新它。
-  /// 同一个窗口报了几次的只留第一次：存下的窗口一个窗口一条（界面按窗口认总览的行）。
+  /// 这次观测没说哪个卡着（用量接口、Codex）时沿用已存的说法：提供方的判定只来自 Claude 的响应头，下一次回复会更新它。
   func merged(into stored: [QuotaWindow]) -> [QuotaWindow] {
     var reported: [QuotaWindow] = []
     for window in windows where !reported.contains(where: { $0.id == window.id }) { reported.append(window) }
@@ -213,7 +197,6 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
     return (reported + kept).sorted(by: Self.order)
   }
 
-  /// 短的在前；同长的整个账号在前、按模型的按名字在后。
   private static func order(_ a: QuotaWindow, _ b: QuotaWindow) -> Bool {
     if a.seconds != b.seconds { return a.seconds < b.seconds }
     switch (a.model, b.model) {

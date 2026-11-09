@@ -47,7 +47,6 @@ public struct PiSkillCall: Equatable, Sendable {
   public var arguments: String
   public var body: String
 
-  /// 你发的样子
   public var line: String { arguments.isEmpty ? "/skill:\(name)" : "/skill:\(name) \(arguments)" }
 
   public static func parse(_ text: String) -> PiSkillCall? {
@@ -60,7 +59,6 @@ public struct PiSkillCall: Equatable, Sendable {
     return PiSkillCall(name: String(head.1), arguments: arguments, body: body.trimmingCharacters(in: .whitespacesAndNewlines))
   }
 
-  /// 技能展开的写回你发的样子，其余原样。
   public static func shown(_ text: String) -> String { parse(text)?.line ?? text }
 }
 

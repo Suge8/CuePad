@@ -1,8 +1,7 @@
 import Foundation
 
 extension CueStore {
-  /// 归档：连同下级一起（已归档的保留原时刻）。没做完的任务就此离开看板，没人再用的会话随之结束（`endUnusedSessions`）；
-  /// 做完了的在完成时已经结束过，之后又说话恢复的不动。
+  /// 连同下级一起（已归档的保留原时刻）。没做完的任务就此离开看板，没人再用的会话随之结束；做完了的在完成时已经结束过，之后又说话恢复的不动。
   public func archive(_ id: UUID) throws {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
@@ -11,7 +10,6 @@ extension CueStore {
     }
   }
 
-  /// 从归档取回：连同下级一起回到原处。
   public func unarchive(_ id: UUID) throws {
     try write {
       guard try find(Card.self, id) != nil else { throw CueStoreError.notFound }
@@ -19,8 +17,7 @@ extension CueStore {
     }
   }
 
-  /// 进展页看板"已完成"的一键归档：已完成的顶层任务（及其下级）全部归档，置顶的留着，返回归档了几条任务。
-  /// 没做完的任务下已完成的子任务算在上级的进度里，不单独归档。
+  /// 已完成的顶层任务（及其下级）全部归档，置顶的留着，返回归档了几条。没做完的任务下已完成的子任务算在上级的进度里，不单独归档。
   public func archiveCompletedTasks() throws -> Int {
     try write {
       let done = try db.query(
@@ -35,7 +32,6 @@ extension CueStore {
     }
   }
 
-  /// 这些卡片连同各自的下级一起归档或取回；归档的不再定时（`endCueSchedules`）。
   func setArchived(_ roots: [UUID], at time: Date?) throws {
     let now = Date.stamp
     if time != nil { try endCueSchedules(onTasksIn: Self.subtree(from: "SELECT value FROM json_each(?2)"), Self.idList(roots), at: now) }
@@ -46,11 +42,7 @@ extension CueStore {
       """, [time, now, Self.idList(roots)])
   }
 
-  /// 改任务的状态：进行中在叶子与祖先上记开始时间（有子任务的记在此刻该做的那一步 `homeLeaf`，祖先同事务推进；已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务、不再定时（`endCueSchedules`），回到待办连同没完成的下级清掉开始时间
-  /// （已完成子任务保留，旧进展不重放）；
-  /// 完成的改成别的先经 `reopen`（连同已完成的上级、取回归档）。
-  /// 只往下连带：子任务全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算子任务，见 `subtaskProgress`）。
-  /// 灵感没有状态，抛 `notATask`。
+  /// 进行中在叶子与祖先上记开始时间（已有的保留）；完成记完成时间并连带没完成的下级、不再定时；回到待办连同没完成的下级清掉开始时间（已完成子任务保留，旧进展不重放）。完成的改成别的先经 `reopen`。只往下连带：子任务全做完，上级也不自动完成，完成一件事由用户说了算。灵感没有状态，抛 `notATask`。
   public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
     if status == .done { _ = try completeTask(id) }
     else { try write { _ = try applyStatus(id, status) } }

@@ -145,7 +145,6 @@ enum Schema {
     ) STRICT;
     """
 
-  /// 技能与规则里每份文件的正文：那台 Mac 每份一条、各端读（`LibraryFileText`）。
   static let agentLibraryFilesTable = """
     CREATE TABLE agentLibraryFiles (
       id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, path TEXT NOT NULL, hash TEXT NOT NULL, text TEXT NOT NULL, modifiedAt INTEGER NOT NULL
@@ -153,7 +152,6 @@ enum Schema {
     CREATE INDEX agentLibraryFiles_host ON agentLibraryFiles(hostID);
     """
 
-  /// 技能与规则的快照：每台 Mac 自己写一条、各端读（`AgentLibrary`）。
   static let agentLibrariesTable = """
     CREATE TABLE agentLibraries (
       id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, home TEXT NOT NULL, skills TEXT, instructions TEXT, tidies TEXT, selfManaged TEXT,

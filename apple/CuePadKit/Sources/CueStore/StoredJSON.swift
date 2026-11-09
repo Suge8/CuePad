@@ -21,7 +21,6 @@ enum JSONColumn {
     return String(decoding: try! encoder.encode(value), as: UTF8.self)
   }
 
-  /// 数组列：空的存为 NULL。
   static func encodeList(_ list: [some Encodable]) -> String? { list.isEmpty ? nil : encode(list) }
 
   static func decode<T: Decodable>(_ type: T.Type, from text: String?) -> T? {

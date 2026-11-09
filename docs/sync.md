@@ -80,7 +80,7 @@
 2. 本机 → 服务器：`CloudSync.send` 马上传；同步元数据证实收下才显示已发出。
 3. 服务器 → Mac：门铃或拉取（节奏与实测见「拉取节奏与门铃」）。
 4. Mac → Agent：`DeliveryRequest.attachmentKeys` 统一解析附件，登记上传、取文件与回收都用它。缺附件或会话没就绪时在旁边等，不挡其他会话；到期 Mac 写回失败，手机可重发。
-5. Mac → 发出方：领取与结果立即上传。派发期限（`DeliveryRequest.dispatchDeadline`）与没回执时的显示在 `DeliveryExecutor` 头注释。
+5. Mac → 发出方：领取与结果立即上传。派发期限（`DeliveryRequest.dispatchDeadline`）在 `DeliveryExecutor` 头注释，没回执时的显示在 `Speech`。
 6. 关联与请求的保留期在 `CueStore.deleteCompletedDeliveries`。
 
 Cue 等结果的窗口是 `Speech.cueWait`；Cue 看失败见 `cueChanges`。

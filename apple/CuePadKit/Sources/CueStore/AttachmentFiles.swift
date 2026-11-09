@@ -4,28 +4,18 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-/// 附件文件（图片与任意文件）的唯一入口：按键（`AttachmentKey`）存取，本机只有一份数据，在库的缓存目录 `CuePadAttachments/<键>`；
-/// 快速查看、交给 Agent 与 Cue 的都是这条路径。iCloud 是事实源，缓存可被系统清掉，要用时再从 iCloud 取（`CueSync`）。
-/// 丢了就找不回的时候，库旁另留一个硬链接（同一份数据，不多占空间），缓存那份被清掉、被回收删掉时由它补回：
-/// - 持有 `Attachments/holds/<运行>/<键>`：存入的进程还在、引用可能还没提交（`AttachmentRun`）；
-/// - 保底 `Attachments/<键>`：引用提交、登记了附件记录之后，到服务器收下为止（`uploaded`；没登录 iCloud 就一直留着）。
-///
-/// 读写都不经过 `CueStore` actor，编辑器可在主线程同步调用。附件记录（同步用）不在这里写：
-/// 引用附件的写入（卡片正文、投送请求、发送记录、对话里的消息、预览）在同一事务里为本机已有文件的键登记，
-/// 所以没被引用的文件不上传，被引用的本机文件一定有记录。
+/// 本机只有一份数据，在库的缓存目录 `CuePadAttachments/<键>`；iCloud 是事实源，缓存可被系统清掉，要用时再从 iCloud 取（`CueSync`）。
+/// 丢了就找不回的时候，库旁另留一个硬链接（同一份数据，不多占空间），缓存那份被清掉、被回收删掉时由它补回：持有 `Attachments/holds/<运行>/<键>`（存入的进程还在、引用可能还没提交，`AttachmentRun`）与保底 `Attachments/<键>`（引用提交、登记了附件记录之后，到服务器收下为止；没登录 iCloud 就一直留着）。
+/// 读写都不经过 `CueStore` actor，编辑器可在主线程同步调用。附件记录不在这里写：引用附件的写入在同一事务里为本机已有文件的键登记，所以没被引用的文件不上传，被引用的本机文件一定有记录。
 public struct AttachmentFiles: Sendable {
-  /// 保底的硬链接所在（库旁的 `Attachments/`）
   let backups: URL
-  /// 本机那份所在（缓存目录的 `CuePadAttachments/`；Mac 上没有沙盒，缓存目录是各家共用的 `~/Library/Caches`，所以带前缀）。
-  /// 交给 Agent 的路径都在这里面：托管的 Claude Code 起进程时加进可读目录、OpenCode 的服务放行它。
+  /// Mac 上没有沙盒，缓存目录是各家共用的 `~/Library/Caches`，所以带前缀。交给 Agent 的路径都在这里面：托管的 Claude Code 起进程时加进可读目录、OpenCode 的服务放行它。
   public let directory: URL
-  /// 这个库的缓存目录（`LibraryLocation.caches`）：附件、界面的缩略图与快照都放这里。
   public let caches: URL
   /// 单个文件上限：经 iCloud 同步，手机上也要取得下来。
   public static let maxBytes = 500_000_000
   private static let chunkSize = 1 << 20
 
-  /// 这次运行的持有
   let run: AttachmentRun
 
   init(library: URL, caches: URL) {
@@ -35,7 +25,7 @@ public struct AttachmentFiles: Sendable {
     run = AttachmentRun(holds: backups.appending(path: "holds", directoryHint: .isDirectory))
   }
 
-  /// 存入数据（粘贴的图片等），返回键：扩展名按 ImageIO 认出的类型，认不出没有扩展名。超过 `maxBytes` 抛 `fileTooLarge`。
+  /// 扩展名按 ImageIO 认出的类型，认不出没有扩展名。超过 `maxBytes` 抛 `fileTooLarge`。
   public func store(_ data: Data) throws -> String {
     guard data.count <= Self.maxBytes else { throw CueStoreError.fileTooLarge(limit: Self.maxBytes) }
     let key = AttachmentKey.make(hash: SHA256.hash(data: data).hex, format: Self.imageFormat(CGImageSourceCreateWithData(data as CFData, nil)))
@@ -43,8 +33,7 @@ public struct AttachmentFiles: Sendable {
     return key
   }
 
-  /// 存入文件（拖入、分享、Agent 发来的），返回键：边读边算哈希再拷贝，整个文件不进内存。扩展名取文件名的，
-  /// 文件名没有扩展名时按 ImageIO 认出的类型。超过 `maxBytes` 抛 `fileTooLarge`。
+  /// 边读边算哈希再拷贝，整个文件不进内存。扩展名取文件名的，没有时按 ImageIO 认出的类型。超过 `maxBytes` 抛 `fileTooLarge`。
   public func store(fileAt source: URL) throws -> String {
     let size = try FileManager.default.attributesOfItem(atPath: source.path)[.size] as? Int ?? 0
     guard size <= Self.maxBytes else { throw CueStoreError.fileTooLarge(limit: Self.maxBytes) }
@@ -56,41 +45,35 @@ public struct AttachmentFiles: Sendable {
     return key
   }
 
-  /// 本机那份的位置；键不合法或本机没有（还没从 iCloud 取来、缓存被清掉）为 nil。缓存里没有而保底或这次运行的持有还在时先补回：
-  /// 界面在主线程按它画图，查找只看这两处，不随运行目录的多少变慢。
+  /// 键不合法或本机没有为 nil。缓存里没有而保底或这次运行的持有还在时先补回：界面在主线程按它画图，查找只看这两处，不随运行目录的多少变慢。
   public func fileURL(for key: String) -> URL? {
     guard AttachmentKey.isValid(key) else { return nil }
     return restored(key, from: [backups, run.location])
   }
 
-  /// 同步下载的附件文件：内容哈希必须与键一致，才放进本机；已有同键文件则不重写。
-  /// 记录本身坏了抛 `invalidAttachmentHash`、`attachmentHashMismatch`；其余（读下载的文件、建目录、拷贝、改名）是本机的失败，原样抛出。
+  /// 内容哈希必须与键一致才放进本机。记录本身坏了抛 `invalidAttachmentHash`、`attachmentHashMismatch`；其余是本机的失败，原样抛出。
   package func adopt(fileAt source: URL, key: String) throws {
     guard let hash = AttachmentKey.parts(key)?.hash else { throw CueStoreError.invalidAttachmentHash }
     guard try Self.hash(of: source) == hash else { throw CueStoreError.attachmentHashMismatch }
     try place(key, held: false) { try FileManager.default.copyItem(at: source, to: $0) }
   }
 
-  /// 服务器收下了这个键现在的附件记录（由 `CueStore.attachmentUploaded` 核对过）：删保底。本来就没有不算失败。
   func uploaded(_ key: String) throws {
     try Self.removeIfPresent(backups.appending(path: key))
   }
 
-  /// 删除本机那份与保底；本来就不存在不算失败。
   package func remove(_ key: String) throws {
     try Self.removeIfPresent(directory.appending(path: key))
     try Self.removeIfPresent(backups.appending(path: key))
   }
 
-  /// 清空本机的附件与保底（账号切换后丢弃本机数据时用，在清库的写事务里）。持有照 `AttachmentRun` 的规则不动：
-  /// 还活着的运行可能还要把存好的提交进新账号，这次运行存过的仍读得到；别的运行的读不到，磁盘等它们结束后的启动清理释放。不是隐私边界。
+  /// 持有照 `AttachmentRun` 的规则不动：还活着的运行可能还要把存好的提交进新账号。别的运行的读不到，磁盘等它们结束后的启动清理释放。不是隐私边界。
   func removeAll() throws {
     try Self.removeIfPresent(directory)
     for name in Self.names(in: backups) where name != run.holds.lastPathComponent { try Self.removeIfPresent(backups.appending(path: name)) }
   }
 
-  /// 引用提交时（写事务内）登记附件记录要的元数据（`format` 就是键的扩展名），并留好保底；文件不在本机返回 nil。
-  /// 回滚了只多一个没有记录的保底：持有它的运行结束后，启动清理收走。
+  /// 文件不在本机返回 nil。回滚了只多一个没有记录的保底：持有它的运行结束后，启动清理收走。
   func keepUntilUploaded(_ key: String) throws -> (hash: String, byteCount: Int, format: String)? {
     guard let parts = AttachmentKey.parts(key), let url = fileURL(for: key) else { return nil }
     let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int ?? 0
@@ -99,7 +82,6 @@ public struct AttachmentFiles: Sendable {
   }
 
   /// 先写到这次运行持有目录里的临时名再改名进缓存：别的进程或线程永远看不到写了一半的文件，崩在中间留下的随运行目录被启动清理收走。
-  /// 缓存被清了而保底或哪个运行还留着同一份时先链回，不另写一份。
   /// 存入的（不是从 iCloud 取来的）不论新写还是同一份已在，都先在这次运行里持有（`AttachmentRun`）才返回，持有不了就什么都没存；
   /// 已在的那份正好被回收删掉、链不上时，当新文件重写。
   private func place(_ key: String, held: Bool = true, write: (URL) throws -> Void) throws {
@@ -118,7 +100,6 @@ public struct AttachmentFiles: Sendable {
     }
   }
 
-  /// 缓存里那份；不在就从 `sources` 里第一个留着这个键的目录链回。
   func restored(_ key: String, from sources: [URL]) -> URL? {
     let url = directory.appending(path: key)
     if FileManager.default.fileExists(atPath: url.path) { return url }
@@ -129,7 +110,6 @@ public struct AttachmentFiles: Sendable {
     return nil
   }
 
-  /// 给 `file` 在 `target` 多留一个目录项（保底、持有、补回缓存）；已有不算失败。
   func link(_ file: URL, to target: URL) throws {
     try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
     do { try FileManager.default.linkItem(at: file, to: target) } catch let error as CocoaError where error.code == .fileWriteFileExists {}
@@ -139,7 +119,6 @@ public struct AttachmentFiles: Sendable {
     if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
   }
 
-  /// ImageIO 认出的图片类型的扩展名；不是图片为空。
   static func imageFormat(_ source: CGImageSource?) -> String {
     guard let source, CGImageSourceGetCount(source) > 0, let type = CGImageSourceGetType(source) else { return "" }
     return UTType(type as String)?.preferredFilenameExtension ?? ""
@@ -175,7 +154,7 @@ extension CueStore {
     }
   }
 
-  /// 本机已有这个文件、还没有这台登记的记录时登记一条（同步载体），连同保底（`AttachmentFiles.keepUntilUploaded`）。必须在写事务内调用。
+  /// 必须在写事务内调用。
   /// 记下是这台登记的（本机列 `registeredHere`）：启动清理只收这种，所以这台的引用都由自己那条撑着，不沿用别的设备登记的——
   /// 那台不再引用、清理收走它那条时，删除同步过来也不会让这里的引用没了记录。这台已登记过的（服务器收下过的同一份内容再存了一次也是）不再登记、不留保底。
   /// 代价：同一份内容每台引用过的各一条记录，各自经文件那一路上传一次（CloudKit 对同内容的资产去重，实测另一条只传约 0.1MB，见 `Schema.keyedAttachments`）；
@@ -194,12 +173,10 @@ extension CueStore {
   }
 }
 
-/// 附件记录（同步表 `attachments`）：键 = `hash` + `format`（`AttachmentKey`），文件经它的资产字段同步；缩略图是派生缓存不入库。
 public struct Attachment: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var hash: String
   public var byteCount: Int
-  /// 键的扩展名，没有为空
   public var format: String
   public var createdAt: Date
   public var modifiedAt: Date

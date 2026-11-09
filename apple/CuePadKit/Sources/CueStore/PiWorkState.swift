@@ -25,7 +25,6 @@ public enum PiWorkState: String, Sendable, CaseIterable {
     }
   }
 
-  /// 正在干活（思考、调用工具、等子代理、压缩）。
   public var isWorking: Bool {
     switch self {
     case .thinking, .tool, .delegating, .compacting: true
@@ -50,7 +49,6 @@ public enum PiWorkState: String, Sendable, CaseIterable {
 }
 
 extension PiWorkState {
-  /// 还有事没做完的状态（`hasPendingWork`），SQL `IN (…)` 里的列表。
   static let pendingWorkSQL = sqlList(allCases.filter(\.hasPendingWork))
   static let closed: [PiWorkState] = [.ended, .interrupted]
   /// `column`（会话记录的 state 列）不是 `states` 里任何一个的 SQL 条件。写成这几个值隔开的几段范围而不是 `NOT IN`、`!=`：
@@ -64,7 +62,6 @@ extension PiWorkState {
 }
 
 extension Open<PiWorkState> {
-  /// 不认识的状态不算在干活。
   public var isWorking: Bool { known?.isWorking == true }
 }
 
@@ -100,7 +97,6 @@ extension PiSessionState {
   public var leftAlert: PiAlert { state == .known(.waitingForUser) ? .waitingForUser : .awaitsReply }
 }
 
-/// 会话的计时基准（扩展给出，原样写入）。
 public struct PiTimes: Sendable, Equatable {
   /// 进入当前粗状态（工作中、等你确认、出错、空闲、已结束）的时间；细状态（思考、工具、等子代理）之间切换不变。
   public var stateSince: Date

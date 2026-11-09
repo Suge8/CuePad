@@ -79,7 +79,6 @@ extension Schema {
     CREATE INDEX cueMessages_writeSeq ON cueMessages(writeSeq);
     """
 
-  /// `table`（已有 `writeSeq` 列）新增的行，或 `when` 里的列改了值的行，盖上计数器的下一个数。
   private static func stamped(_ table: String, when columns: [String]) -> String {
     """
       CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp(table)) END;

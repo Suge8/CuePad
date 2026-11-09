@@ -90,7 +90,6 @@ enum SystemFields {
 
   private static func slot(_ key: UInt32) -> Int { Int((key &* 2_654_435_761) >> 20) }
 
-  /// 字典里每个 4 字节片段第一次出现的位置（加 1，0 是没有），按片段的散列放。
   private static let starts: [UInt16] = {
     var starts = [UInt16](repeating: 0, count: 1 << 12)
     dictionary.withUnsafeBytes { dictionary in

@@ -3,24 +3,18 @@ import Foundation
 
 /// Pi 上报的模型调用错误（`error` 状态的原文）的人话摘要。Pi 只给出一段文字——常见是
 /// "状态码 + 提供方的 JSON 错误体"，也可能是网络库的报错——这里提取状态码与提供方的错误类型、消息并归类。
-/// `title` 是一句中文，`providerMessage` 是提供方给的原句（可作补充说明），`raw` 是完整原文（悬停显示）。
 public struct PiErrorSummary: Sendable, Equatable {
     public enum Kind: Sendable, Equatable {
         /// 401 或明确的认证错误：密钥无效、登录过期；权限与策略拒绝不据此要求重登
         case authentication
         /// 额度、余额、订阅用量用完（按消息内容识别，不论状态码：Anthropic 的用量上限与余额不足都是 400）
         case quota
-        /// 429 等限流
         case rateLimited
         /// 400 等：请求被模型拒绝（内容太大、参数不合法……）
         case rejected
-        /// 5xx 与过载
         case server
-        /// 连不上、断开、超时（没有 HTTP 状态）
         case network
-        /// 模型不存在或这个账号用不了
         case modelUnavailable
-        /// 回答超出了输出长度上限
         case outputTooLong
         case other
     }
@@ -40,10 +34,8 @@ public struct PiErrorSummary: Sendable, Equatable {
         kind = Self.kind(status: status, type: error.type, text: raw.lowercased())
     }
 
-    /// 摘要，这台设备的语言。
     public var title: String { shownTitle.text }
 
-    /// 摘要的句式（写进同步记录、各端按自己的语言显示的用它）。
     public var shownTitle: ShownText {
         func coded(_ text: ShownText) -> ShownText { status.map { ShownText("\(text.embedded)（\($0)）") } ?? text }
         return switch kind {
@@ -59,8 +51,7 @@ public struct PiErrorSummary: Sendable, Equatable {
         }
     }
 
-    /// 会话出错的种类（`PiSessionState.failure`）：出错块的按钮与各处的状态词按它分。限流、服务出错与连不上一样是 Agent 重试用尽的暂时性错；
-    /// 回答超长归未完成；请求被拒、模型不可用与其余归其余。
+    /// 限流、服务出错与连不上一样是 Agent 重试用尽的暂时性错；回答超长归未完成。
     public var failure: PiFailure {
         switch kind {
         case .authentication: .login
@@ -83,7 +74,6 @@ public struct PiErrorSummary: Sendable, Equatable {
         return match.flatMap { Int($0.1) }.flatMap { (100...599).contains($0) ? $0 : nil }
     }
 
-    /// 原文里第一个 JSON 对象的错误类型与消息：`{"error":{"type"|"code","message"}}` 或顶层的同名字段。
     private static func providerError(in raw: String) -> (type: String?, message: String?) {
         guard let start = raw.firstIndex(of: "{"),
               let object = try? JSONSerialization.jsonObject(with: Data(raw[start...].utf8)) as? [String: Any]
@@ -125,7 +115,6 @@ public struct PiErrorSummary: Sendable, Equatable {
         return .other
     }
 
-    /// 识别不了时：原文首行，去掉 JSON 部分，过长截断。
     private static func firstLine(of raw: String) -> String {
         let line = raw.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         let text = (line.firstIndex(of: "{").map { String(line[..<$0]) } ?? line).trimmingCharacters(in: .whitespaces)

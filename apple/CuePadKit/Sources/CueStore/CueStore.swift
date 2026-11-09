@@ -15,17 +15,13 @@ public actor CueStore {
   nonisolated let queue: DispatchSerialQueue?
   private nonisolated let executor: UnownedSerialExecutor
   public nonisolated var unownedExecutor: UnownedSerialExecutor { executor }
-  /// 主线程当场读用的只读连接（`snapshot`）；只读连接自己的是 nil。
   nonisolated let reader: CueStore?
-  /// 订阅重读用的只读连接（`observe`），在自己的队列上；只读连接自己的是 nil。
   nonisolated let rereader: CueStore?
-  /// 订阅者与提交序号：提交在本队列上登记，重读在 `rereader` 上收窄。
   nonisolated let subscriptions = Subscriptions()
   /// 附件文件的读写（`AttachmentFiles`）；不经过 actor，界面可并发调用。
   public nonisolated let files: AttachmentFiles
   /// 随时间变的读（`expire(at:)` 的到点重读、Mac 在不在线）用的时钟（你的话等没等过时限归 App 的 `SpeechClock`）；测试换成手动推进的。写下的时刻仍盖真实时间（`Date.stamp`）。
   public nonisolated let timing: Timing
-  /// 这次读的结果到什么时候会随时间变（`expire(at:)`）：订阅到点重读。
   var readExpiry: Date?
   /// 订阅的这次读只依赖其中一部分行的表（`narrow`，同一张表可收窄几次）；不在订阅的一次读里为 nil，什么都不记。
   var readScopes: [Table: [RowScope]]?
@@ -38,7 +34,6 @@ public actor CueStore {
   private static let syncDeltaLimit = 256
   private let notificationNames: [Table: String]
   private let changeListener: ChangeListener?
-  /// 每张表上次收到通知时本连接的 `PRAGMA data_version`（`externalChangeNotified`）。
   private var seenVersions: [Table: Int64]
 
   public init(location: LibraryLocation, timing: Timing = .system) throws {
@@ -119,7 +114,6 @@ public actor CueStore {
   public static var supportedSchemaVersions: ClosedRange<Int> { Schema.baseVersion...Schema.version }
   public static var peerFloor: Int { Schema.peerFloor }
 
-  /// 库文件现在的结构版本，不改库；文件不存在或读不出来为 nil。
   public static func schemaVersion(of url: URL) -> Int? {
     guard FileManager.default.fileExists(atPath: url.path), let connection = try? SQLite(path: url.path) else { return nil }
     return (try? connection.first("PRAGMA user_version") { Int($0.int(0)) }) ?? nil
@@ -139,7 +133,6 @@ public actor CueStore {
     if !changed.isDisjoint(with: Table.synced) { syncChanged(nil, in: changed) }
   }
 
-  /// 资料库队列此刻要排多久：投一件空活，到它开始执行（停摆打点，App 的 `holdActivityWhilePolling`）。
   public nonisolated func queueDelay() async -> Duration {
     await waited(since: .now)
   }
@@ -180,7 +173,6 @@ public actor CueStore {
     return result
   }
 
-  /// `tables`：这次提交碰过的表（发送者据此认出 Cue 说了话，`pendingSpeech`）。
   func syncChanged(_ delta: PendingSync?, in tables: Set<Table>) {
     syncGeneration += 1
     syncDeltas.append((syncGeneration, delta))
@@ -232,7 +224,6 @@ public actor CueStore {
     return db.changes > 0
   }
 
-  /// 有这一行就按主键改 `updating` 这几列（nil 是除主键外的全部），没有就插入。
   func upsert<R: Record>(_ record: R, updating: [String]? = nil) throws {
     try db.run(Self.upsertSQL(R.table, R.columns, updating: updating), record.bindings)
   }

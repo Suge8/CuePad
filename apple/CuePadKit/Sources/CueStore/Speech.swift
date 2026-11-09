@@ -41,7 +41,6 @@ public enum Speech {
   }
 
   public enum Failure: Hashable, Sendable {
-    /// 接收方说没送到（`DeliveryRequest.failure`）
     case reported(String)
   }
 
@@ -75,7 +74,6 @@ public enum Speech {
       Moment(now: now, reachableSince: .distantPast, localHost: localHost)
     }
 
-    /// 接收的就是这台 Mac：话不经服务器。
     public func isLocal(_ host: String?) -> Bool { host != nil && host == localHost }
 
     /// 到 `host` 那台 Mac 的同步从什么时候起通着；nil 是此刻不通。
@@ -102,7 +100,6 @@ public enum Speech {
     }
   }
 
-  /// 还在等派发（没领取、还没开始执行）。
   private static func awaitsDispatch(_ request: DeliveryRequest) -> Bool {
     request.status == .known(.preparing) || (request.status == .known(.pending) && request.handledBy == nil)
   }
