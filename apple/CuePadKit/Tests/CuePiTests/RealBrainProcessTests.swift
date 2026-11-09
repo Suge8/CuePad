@@ -43,8 +43,8 @@ struct RealBrainProcessTests {
             try await sandbox.stop()
             #expect(left.isEmpty, "\(left)")
         case .grok:
-            // 大脑的配置目录是它自己的临时目录（停下时删掉）：用户的会话目录里没有这个工作目录（只读）
-            let sessions = home.appending(path: ".grok/sessions")
+            // 大脑的配置目录是它自己的临时目录（`RealBrainTests.Rig`），会话不落进真实的 ~/.grok
+            let sessions = rig.directory.deletingLastPathComponent().appending(path: "grok-user/sessions")
             #expect(((try? FileManager.default.contentsOfDirectory(atPath: sessions.path)) ?? []).filter { $0.contains(rig.marker) } == [])
         case .dsh:
             // 会话、附件、存储都在本次运行的临时目录里，随它删掉；dsh 的家目录里没有会话

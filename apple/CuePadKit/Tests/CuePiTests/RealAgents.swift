@@ -21,10 +21,10 @@ import Testing
 ///   （`FakeModel`，Chat Completions），零网络；FireCode 随 Pi 钉住（`CUEPAD_FIRECODE_SOURCE` 可换成另一份检出）；
 /// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
 /// - claude：本机的 claude 与它自己的登录（钥匙串里的那条，见 `ClaudeLogin`），模型 haiku（`ClaudeTestbed`）；
-/// - grok：本机的 grok（`CUEPAD_GROK` 可换），假模型（`FakeResponses`），零网络；环境里给了 `XAI_API_KEY` 或 `GROK_AUTH_PATH`（已登录的
-///   凭据文件，如 `~/.grok/auth.json`）时连真的 xAI（`GrokModel`），托管会话的模型用 `CUEPAD_GROK_MODEL` 换；
+/// - grok：没有录像带，总连钉住的真 Grok（`PinnedAgent.grok`，`xc.sh agents install grok`；没装时跳过、列为未覆盖），模型是本用例的假模型
+///   （`FakeModel`，Responses），零网络、不用任何登录；
 /// - dsh：`CUEPAD_DSH` 指的 dsh（0.2.1-rc.2 以上；没给按 PATH 找），DeepSeek 的 key 只经 `DEEPSEEK_API_KEY` 给（录完 grep 录像带确认没有它）；
-/// - 大脑（`RealBrainTests`）除 Pi（假模型，剧本 `playBrain`）外用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
+/// - 大脑（`RealBrainTests`）除 Pi、Grok（假模型，剧本 `playBrain`、`playGrokBrain`）外用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
 ///
@@ -40,7 +40,7 @@ enum RealAgents {
         .compactMap { AgentKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) })
 
     static func mode(of agent: AgentKind) -> TapeMode {
-        if agent == .opencode || agent == .pi { return .live }
+        if agent == .opencode || agent == .pi || agent == .grok { return .live }
         return recording.contains(agent) ? .record : .replay
     }
 
@@ -54,7 +54,7 @@ enum RealAgents {
             if realOpenCodeURL == nil { "本机找不到 opencode v2（CUEPAD_OPENCODE 可指定）" }
             else if recording.contains(.opencode), openCodeRealModel == nil { "列出 opencode 连真提供方要给 CUEPAD_OPENCODE_MODEL（提供方/模型）" }
             else { nil }
-        case .grok: realGrokURL == nil ? "本机找不到 grok（CUEPAD_GROK 可指定）" : nil
+        case .grok: pinnedGrok.uncovered
         case .dsh:
             if realDshURL == nil { "本机找不到 dsh（CUEPAD_DSH 可指定）" }
             else if ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"] == nil { "没给 DEEPSEEK_API_KEY" }
