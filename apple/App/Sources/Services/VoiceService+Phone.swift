@@ -1,6 +1,7 @@
 #if os(iOS)
 import Foundation
 import Observation
+import UIKit
 
 /// 本次手机媒体及异步操作的所有权；租约、会话身份固定，结束后不复用。
 @Observable final class VoicePhoneSession {
@@ -96,11 +97,8 @@ extension VoiceService {
 
     /// 不属于 owner.scope：结束可能正由该作用域的期限或发送失败触发，取消输入不能取消资源回收与挂断通知。
     private func finish(_ owner: VoicePhoneSession, reason: VoiceEndReason, notify: Bool) async {
-        let closing = VoiceOperationScope()
-        defer { closing.end() }
+        await owner.media.close()
         var failure: VoiceIssue?
-        do { try await closing.perform(within: .seconds(2)) { try await owner.media.close() } }
-        catch { failure = .shutdownUnconfirmed }
         if notify, let peer = owner.peer, let signaling {
             let send = VoiceOperationScope()
             defer { send.end() }
@@ -108,14 +106,17 @@ extension VoiceService {
                 try await send.perform(within: .seconds(2)) {
                     try await signaling.sendVoice(.media(signal: .hangup(reason: reason)), session: owner.id, to: peer)
                 }
-            } catch { failure = failure ?? .ended(.networkFailed) }
+            } catch { failure = .ended(.networkFailed) }
         }
         guard phone === owner else { return }
         phone = nil
         muting = false
-        let phase: VoiceCallProjection.Phase = failure.map { .failed($0) } ?? .ended(reason: reason)
-        phoneEnd = phase
+        phoneEnd = failure.map { .failed($0) } ?? .ended(reason: reason)
         issue = failure
+        // 在后台结束的：补上进后台时为通话留着的那段收尾（断开中转等）
+        if UIApplication.shared.applicationState == .background {
+            Task { await BackgroundWork.run { await self.services.prepareForBackground() } }
+        }
     }
 
     func connectionClosed(local: VoiceEndpoint?, peer: VoiceEndpoint?, reason: VoiceEndReason) async {
@@ -165,12 +166,10 @@ extension VoiceService {
                 catch { if self.phone === owner { await self.end(reason: .networkFailed) } }
             }
         case .ended(let reason): _ = beginEnd(owner, reason: reason)
-        case .failed: _ = beginEnd(owner, reason: .mediaFailed)
         case .sample(let side, let peak):
             if side == .input { inputSamples = Array((inputSamples + [peak]).suffix(VoicePeer.sampleCount)) }
             else { outputSamples = Array((outputSamples + [peak]).suffix(VoicePeer.sampleCount)) }
         case .level(let side, let loud, _): if side == .output { outputActive = loud }
-        case .inputEnded, .device: break
         }
     }
 

@@ -58,7 +58,7 @@ A build from source is ad-hoc signed, keeps its own library in `~/Library/Applic
 
 ### Call Cue
 
-With Cue enabled, choose **Call Cue** in the reply box: on the Mac it sits with the reply box's tools; on iPhone and iPad it takes the send button's place while the box is empty, and during a call the box turns into the call bar with mute and end. Calls use ChatGPT voice and require Codex to be signed in with your ChatGPT account on the Mac. On iPhone or iPad, use the same iCloud account and keep a Mac with Cue enabled online; your ChatGPT and Codex sign-in stays on the Mac. Keep CuePad in the foreground on your phone or iPad: leaving the app or locking the screen ends the call.
+With Cue enabled, choose **Call Cue** in the reply box: on the Mac it sits with the reply box's tools; on iPhone and iPad it takes the send button's place while the box is empty, and during a call the box turns into the call bar with mute and end. Calls use ChatGPT voice and require Codex to be signed in with your ChatGPT account on the Mac. On iPhone or iPad, use the same iCloud account and keep a Mac with Cue enabled online; your ChatGPT and Codex sign-in stays on the Mac. The call keeps going when you switch apps or lock your phone or iPad; a phone call or Siri taking over the audio ends it.
 
 Requests and results stay in the conversation, so you can read them during or after a call. Open call details (on iPhone and iPad, tap the call bar) to browse records, recover an original request, ask Cue to say a result again, or stop work when those actions are available. Ending the call does not stop work already handed to Cue.
 

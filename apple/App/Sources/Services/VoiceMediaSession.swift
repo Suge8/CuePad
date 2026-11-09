@@ -9,16 +9,15 @@ nonisolated enum VoiceMediaEvent: Equatable, Codable, Sendable {
     case ended(reason: VoiceEndReason)
 }
 
-/// 一次连接一个媒体实例，关闭先同步撤销权限/JS/发送等待，再有界地清理轨道与上下文，不靠卸载网页冒充成功。
-/// 本机使用系统 WebKit，Mac 的远端媒体适配器使用同一边界；媒体永远拿不到 Codex 授权与控制通道。
+/// 一次连接一个媒体实例，关闭后不复用。本机是原生 WebRTC（`VoicePeer`），Mac 的远端媒体适配器用同一边界；媒体永远拿不到 Codex 授权与控制通道。
 protocol VoiceMedia: AnyObject {
     var supportsMute: Bool { get }
     var onEvent: (VoicePeer.Event) -> Void { get set }
     func offer() async throws -> String
     func accept(answer: String) async throws
-    func play() async throws
     func setMuted(_ muted: Bool) async throws
-    func close() async throws
+    /// 返回时声音与连接都已停下。
+    func close() async
 }
 
 extension VoiceMedia { var supportsMute: Bool { true } }

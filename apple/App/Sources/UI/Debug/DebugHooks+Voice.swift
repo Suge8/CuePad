@@ -1,6 +1,6 @@
 #if os(macOS)
-import WebKit
 import CuePi
+import Foundation
 
 extension DebugHooks {
     static func makeVoiceCall(_ dependencies: VoiceCall.Dependencies) -> VoiceCall {
@@ -18,7 +18,7 @@ extension DebugHooks {
                 try scenario.beforeRecording()
                 return try await tell(text)
             }
-            dependencies.media = { _, _ in DebugVoiceLayoutMedia() }
+            dependencies.media = { _ in DebugVoiceLayoutMedia() }
             dependencies.createCall = { _, _, _, _ in .init(id: "layout", answer: "answer", usedPercent: nil) }
             dependencies.control = { _, _, _, received in
                 received(.success(.started))
@@ -30,15 +30,9 @@ extension DebugHooks {
         return VoiceCall(dependencies)
     }
 
-    static func configureVoice(_ web: WKWebView, source: VoicePeer.Source) async throws {
+    static func voiceWire(_ text: String) {
         #if DEBUG
-        try await DebugVoice.configure(web, source: source)
-        #endif
-    }
-
-    static func voiceWire(_ text: String, type: String) {
-        #if DEBUG
-        if type != "session.input_audio.append", type != "session.output_audio.delta" { DebugVoice.wire(text) }
+        DebugVoiceLog.wire(text)
         #endif
     }
 }

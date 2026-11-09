@@ -25,9 +25,8 @@ final class VoiceCall {
         var tell: (String) async throws -> UUID
         var store: CueStore
         var cueName: String
-        var source: VoicePeer.Source = .microphone(device: nil)
-        var recording: URL?
-        var media: (VoicePeer.Source, URL?) -> any VoiceMedia = { VoicePeer(source: $0, recording: $1) }
+        var source: VoicePeer.Source = .microphone
+        var media: (VoicePeer.Source) -> any VoiceMedia = { VoicePeer(source: $0) }
         var createCall = VoiceWire.createCall
         var control: (String, CodexAccess, UUID, @escaping (Result<VoiceWire.Event, VoiceWire.SidebandClosed>) -> Void) -> any VoiceControl = {
             VoiceWire.Channel(call: $0, access: $1, session: $2, received: $3)
@@ -74,7 +73,6 @@ final class VoiceCall {
     @ObservationIgnored private var connecting: Task<Void, Never>?
     @ObservationIgnored var observing: Task<Void, Never>?
     @ObservationIgnored var reading: Task<Void, Never>?
-    @ObservationIgnored private var fileInput: Task<Void, Never>?
     @ObservationIgnored private var muting: Task<Void, Never>?
     @ObservationIgnored private var deadline: Task<Void, Never>?
     @ObservationIgnored var writing: [String: Task<Void, Never>] = [:]
@@ -151,7 +149,7 @@ final class VoiceCall {
         }
     }
 
-    /// 输入从起点就有人消费；连接时限包含凭证、权限、ICE 和控制连接，挂断不等它们返回。
+    /// 输入从起点就有人消费；连接时限包含凭证、权限、建连和控制连接，挂断不等它们返回。
     private func run() async {
         guard connecting == nil else { return }
         if cursor == nil {
@@ -159,7 +157,7 @@ final class VoiceCall {
             catch { await finish(.failed(Self.failure(error))); return }
         }
         watchRequests()
-        let peer = self.peer ?? dependencies.media(dependencies.source, dependencies.recording)
+        let peer = self.peer ?? dependencies.media(dependencies.source)
         self.peer = peer
         peer.onEvent = { [inputs] in inputs.continuation.yield(.peer($0)) }
         deadline = Task { [inputs] in
@@ -197,12 +195,9 @@ final class VoiceCall {
                 mark("media")
                 connection = .starting(dependencies.control(call.id, access, session) { [inputs] in inputs.continuation.yield(.wire($0)) })
             }
-        case .peer(.failed): mediaEndReason = .mediaFailed; return .failed(.media)
         case .peer(.ended(let reason)):
             mediaEndReason = reason
-            return [.hungUp, .background].contains(reason) ? .ended : .failed(.media)
-        case .peer(.inputEnded): mark("input-ended")
-        case .peer(.device(let label)): mark("device \(label)")
+            return reason == .hungUp ? .ended : .failed(.media)
         case .peer(.sample(let side, let peak)):
             let value = min(1, max(0, peak))
             if side == .input { inputSamples = Array((inputSamples + [value]).suffix(VoicePeer.sampleCount)) }
@@ -231,12 +226,6 @@ final class VoiceCall {
                 connection = .ready(channel)
                 deadline?.cancel(); deadline = nil
                 mark("listening")
-                if case .file = dependencies.source, let peer {
-                    fileInput = Task { [inputs] in
-                        do { try await peer.play() }
-                        catch { if !Task.isCancelled { inputs.continuation.yield(.failed(.media)) } }
-                    }
-                }
             }
         case .delegation(let delegation): submit(delegation)
         case .turn(let id, let assistant, let done, let text):
@@ -264,7 +253,6 @@ final class VoiceCall {
         connection = .closing(end)
         inputs.continuation.finish()
         connecting?.cancel()
-        fileInput?.cancel()
         muting?.cancel()
         deadline?.cancel()
         outgoing?.task.cancel()
@@ -279,11 +267,10 @@ final class VoiceCall {
         case .starting(let channel), .ready(let channel): channel.close()
         default: break
         }
-        do { try await peer?.close(); connection = .finished(end) }
-        catch { connection = .finished(.failed(Self.failure(error))) }
+        await peer?.close()
+        connection = .finished(end)
         peer = nil
         connecting = nil
-        fileInput = nil
         muting = nil
         deadline = nil
         outgoing = nil

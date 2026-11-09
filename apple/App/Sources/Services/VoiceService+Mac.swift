@@ -4,10 +4,9 @@ import CueStore
 import Foundation
 
 extension VoiceService {
-    func startLocal(source: VoicePeer.Source, recording: URL?, name: String,
-                    makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall) {
+    func startLocal(source: VoicePeer.Source, name: String, makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall) {
         guard call?.isLive != true, remote == nil else { return }
-        let call = obtainCall(name: name, source: source, recording: recording, makeCall: makeCall)
+        let call = obtainCall(name: name, source: source, makeCall: makeCall)
         issue = nil
         projectionReaders.removeAll()
         call.reconnect()
@@ -15,7 +14,7 @@ extension VoiceService {
         observeCall(call)
     }
 
-    private func obtainCall(name: String, host: String? = nil, source: VoicePeer.Source = .microphone(device: nil), recording: URL? = nil,
+    private func obtainCall(name: String, host: String? = nil, source: VoicePeer.Source = .microphone,
                             makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = VoiceCall.init) -> VoiceCall {
         let services = services
         let tell: (String) async throws -> UUID = { [weak services] text in
@@ -26,7 +25,6 @@ extension VoiceService {
             call.dependencies.tell = tell
             call.dependencies.cueName = name
             call.dependencies.source = source
-            call.dependencies.recording = recording
             return call
         }
         let value = makeCall(.init(
@@ -40,7 +38,7 @@ extension VoiceService {
                 }
                 return try await services.agents.integration.codexAccess(executable: services.agents.executable(.codex))
             },
-            tell: tell, store: services.store, cueName: name, source: source, recording: recording))
+            tell: tell, store: services.store, cueName: name, source: source))
         call = value
         return value
     }

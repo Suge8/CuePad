@@ -115,7 +115,6 @@ final class Relay {
     func settle() async {
         await sending?.value
         guard !wanted else { return }
-        voiceConnection?.close(.background)
         await disconnect(thenConnect: true)
     }
 

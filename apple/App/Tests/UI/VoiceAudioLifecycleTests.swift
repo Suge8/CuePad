@@ -19,9 +19,8 @@ import Testing
             return "isolated-offer"
         }
         func accept(answer: String) async throws { onEvent(.connected) }
-        func play() async throws {}
         func setMuted(_ value: Bool) async throws {}
-        func close() async throws { await closeGate?.wait(); closed = true }
+        func close() async { await closeGate?.wait(); closed = true }
     }
 
     final class Fixture {

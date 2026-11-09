@@ -21,7 +21,7 @@ nonisolated struct VoiceEndpoint: Hashable, Codable, Sendable {
 }
 
 nonisolated enum VoiceEndReason: String, Codable, Sendable {
-    case hungUp, background, permissionDenied, audioInterrupted, mediaFailed, controlFailed
+    case hungUp, permissionDenied, audioInterrupted, mediaFailed, controlFailed
     case peerLeft, leaseReplaced, accountChanged, networkFailed, timedOut, protocolRejected, relayCapacity
 }
 
@@ -80,7 +80,7 @@ nonisolated enum VoiceIssue: Error, Equatable, Codable, Sendable {
     case codexNotInstalled, signedOut, cueUnavailable, macUnavailable, relayUnsupported, busy
     case notAllowed(status: Int)
     case server(status: Int?)
-    case storageUnavailable, originalMissing, alreadyHandled, turnChanged, shutdownUnconfirmed
+    case storageUnavailable, originalMissing, alreadyHandled, turnChanged
 
     enum Action: String, Codable, Sendable { case reconnect, microphoneSettings, configureOnMac, signInOnMac, installCodexOnMac, retryLater }
     var actions: [Action] {
@@ -91,7 +91,7 @@ nonisolated enum VoiceIssue: Error, Equatable, Codable, Sendable {
         case .cueUnavailable: [.configureOnMac]
         case .notAllowed, .relayUnsupported, .busy, .storageUnavailable, .macUnavailable: [.retryLater]
         case .originalMissing, .alreadyHandled, .turnChanged: []
-        case .ended, .server, .shutdownUnconfirmed: [.reconnect]
+        case .ended, .server: [.reconnect]
         }
     }
 }

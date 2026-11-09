@@ -3,7 +3,7 @@ import Foundation
 import Observation
 import os
 
-/// AppServices 持有唯一通话 owner；页面离开不释放媒体，整个 App 进后台才结束手机媒体。
+/// AppServices 持有唯一通话 owner；页面离开、App 进后台与锁屏都不结束通话（iOS 声明了后台音频），只有挂断、中断或连接断了才结束。
 /// Mac 投影决定业务阶段；本机麦克风、静音确认和电平从不上传，也不据此推断远端正在处理或朗读。
 @Observable final class VoiceService {
     @ObservationIgnored unowned let services: AppServices
@@ -47,7 +47,7 @@ import os
 
     #if os(iOS)
     init(services: AppServices, signaling: (any VoiceSignaling)?,
-         makeMedia: @escaping () -> any VoiceMedia = { VoicePeer(source: .microphone(device: nil), recording: nil) }) {
+         makeMedia: @escaping () -> any VoiceMedia = { VoicePeer(source: DebugHooks.phoneVoiceSource) }) {
         self.services = services
         self.signaling = signaling
         self.makeMedia = makeMedia
@@ -75,7 +75,7 @@ import os
         observing = nil
         call?.hangUp()
         #else
-        Task { await end(reason: .background) }
+        Task { await end() }
         #endif
         failPending { _ in true }
         failPageReads()
@@ -107,6 +107,15 @@ import os
         }
         #else
         return nil
+        #endif
+    }
+
+    /// 通话还在（连接中、通着或正在关）：中转为它留着，进后台不断开（`AppServices.prepareForBackground`）。
+    var isLive: Bool {
+        #if os(macOS)
+        call?.isLive == true
+        #else
+        phone != nil
         #endif
     }
 

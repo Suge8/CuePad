@@ -2955,22 +2955,6 @@
         }
       }
     },
-    "App 进入后台，通话已结束" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The call ended when the app entered the background"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App 进入后台，通话已结束"
-          }
-        }
-      }
-    },
     "CPU 异常" : {
       "localizations" : {
         "en" : {
@@ -14135,22 +14119,6 @@
         }
       }
     },
-    "打开麦克风设置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Microphone Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开麦克风设置"
-          }
-        }
-      }
-    },
     "打断本轮" : {
       "localizations" : {
         "en" : {
@@ -25291,22 +25259,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通知已关闭"
-          }
-        }
-      }
-    },
-    "通话关闭尚未确认，请检查连接" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Call closure is unconfirmed. Check your connection"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话关闭尚未确认，请检查连接"
           }
         }
       }

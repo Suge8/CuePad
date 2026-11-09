@@ -24,12 +24,9 @@ final class VoiceRemoteMedia: VoiceMedia {
                                                session: self.header.session, to: self.header.sender)
         }
     }
-    func play() async throws { throw VoiceIssue.busy }
     func setMuted(_ muted: Bool) async throws { throw VoiceIssue.busy }
 
-    func close() async throws {
-        scope.end()
-    }
+    func close() async { scope.end() }
 
     func departed(_ reason: VoiceEndReason) {
         available = false

@@ -131,7 +131,7 @@ nonisolated struct DebugArgs: Decodable {
     let taskLines: String?
     /// `-CuePadTidy YES`（配 library 画面，仅 Mac）：画面出来后点一下一键整理，拍整理后的样子
     let tidy: Bool
-    /// `-CuePadVoice mic`：Cue 能听了就开始通话，声音走麦克风与扬声器（人工验收）
+    /// `-CuePadVoice mic|<音频文件>|<目录>`：Cue 能听了就开始通话；mic 走麦克风与扬声器（人工验收），文件、目录当你说的话送进上行（无人值守）
     let voice: String?
     /// `-CuePadWebSnapshot <PNG 路径>`：预览网页打开时，用同一套拦截规则另载入一份、把快照存成 PNG
     let webSnapshot: String?

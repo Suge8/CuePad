@@ -61,11 +61,10 @@ final class DebugVoiceLayoutMedia: VoiceMedia {
         return "layout-offer"
     }
     func accept(answer: String) async throws { onEvent(.connected) }
-    func play() async throws {}
     func setMuted(_ value: Bool) async throws {}
-    func close() async throws {
+    func close() async {
         let seconds = DebugScene.args.voiceOpts.closeSeconds
-        try await Task.sleep(for: .seconds(seconds > 0 ? seconds : 2))
+        await Task.wait(for: .seconds(seconds > 0 ? seconds : 2))
     }
 }
 

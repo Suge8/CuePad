@@ -92,7 +92,7 @@ enum VoiceWire {
 
     static func event(_ text: String) -> Event? {
         guard let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any], let type = json["type"] as? String else { return nil }
-        DebugHooks.voiceWire(text, type: type)
+        DebugHooks.voiceWire(text)
         switch type {
         case "session.started": return .started
         case "turn.created", "turn.done":
