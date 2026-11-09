@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 import os
 
-/// 内存里的 iCloud 替身：账号总是可用，同步区是一组按写入先后编号的记录，令牌就是编号；收下的上传照单记下（`saved`）。
+/// 内存里的 iCloud 替身：账号默认可用（`setAccount` 改），同步区是一组按写入先后编号的记录，令牌就是编号；收下的上传照单记下（`saved`）。
 /// 同真服务器，收下的记录带着第一次收下的时刻（`creationDate`，按 `now` 的钟），上传的回执与之后的拉取都是这一份：投送请求的派发期限从它算。
 /// 删掉的记录留一个同样编号的墓碑，拉取时作为删除交给拉到它之后的设备（同 CloudKit 的变更令牌）。
 /// 测试与调试画面用它跑真实的同步代码（`CloudSync`），只换掉网络那一头。
@@ -12,6 +12,9 @@ actor SimulatedCloud: SyncCloud {
   private var tombstones: [CKRecord.ID: (seq: Int, recordType: String)] = [:]
   private var seq = 0
   private var account = "simulated"
+  /// nil：认账号一直没有回音。
+  private var status: CKAccountStatus? = .available
+  private(set) var accountChecks = 0
   /// 收下的上传（记录名），按先后。
   private(set) var saved: [String] = []
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
@@ -39,7 +42,16 @@ actor SimulatedCloud: SyncCloud {
     tombstones = [:]
   }
 
-  func accountStatus() -> CKAccountStatus { .available }
+  func setAccount(_ status: CKAccountStatus?) { self.status = status }
+
+  func accountStatus() async -> CKAccountStatus {
+    accountChecks += 1
+    guard let status else {
+      try? await Task.sleep(for: .seconds(3600))  // 被取消时认账号的一方已当场抛出（`withDeadline`），这里的结果不用
+      return .couldNotDetermine
+    }
+    return status
+  }
   func accountName() -> String { account }
   func relaySecret() -> Data { Data(repeating: 7, count: RelaySecret.length) }
 

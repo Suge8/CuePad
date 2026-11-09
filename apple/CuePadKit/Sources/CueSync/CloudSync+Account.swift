@@ -46,12 +46,14 @@ extension CloudSync {
     accountBackoff.reset()
     defer { accountChecks.yield(()) }
     guard !connected else { return true }
-    guard await coordinator.canSync, !generation.isOver, let sender, let fileSender, let fileFetcher else { return false }
-    connected = true
-    await sender.start()
+    guard await coordinator.canSync, !generation.isOver else { return false }
+    let parts = makeParts(cloud, generation)
+    setLink(.connected(parts), of: generation)  // 先于下面的 await：其间停下的由 `stop` 停这些部件
+    await parts.sender.start()
+    guard !generation.isOver else { return false }
     spawn {  // 文件那一路（接上一个进程交给系统的上传、看哪些文件要取）：第一拉不等它
-      await fileFetcher.start()
-      await fileSender.start()
+      await parts.fileFetcher.start()
+      await parts.fileSender.start()
     }
     alertsAttemptedAt = .now  // 立即同步不另起一遍
     spawn { await self.ensureAlertSubscriptions(cloud, generation) }  // 第一拉不等订阅
@@ -74,11 +76,12 @@ extension CloudSync {
   /// 账号变了（或到点再认）：再认一次（换了账号就停下等你决定）；能同步的在新账号的数据库里建订阅（里面还没有），再拉一次。
   /// 那一拉在本代后台起、不等：账号变化按到达先后处理，下一次不排在一拉（可能挂到请求超时）后面。
   func accountChanged() async {
-    guard case .running(let generation) = phase, let cloud else { return }
+    guard let running else { return }
+    let (generation, cloud) = (running.generation, running.cloud)
     let wasConnected = connected
     accountRetryAt = nil  // 账号变了是新情况，不等上次失败的退避
     guard wasConnected ? await checkAccount(cloud, generation) : await connectNow() else { return }
-    guard !generation.isOver, let puller else { return }
+    guard !generation.isOver, let puller = parts?.puller else { return }
     if wasConnected { spawn { await self.ensureAlertSubscriptions(cloud, generation) } }  // 刚开始的已在建
     spawn { _ = try? await puller.pull() }
   }
@@ -93,7 +96,7 @@ extension CloudSync {
       }
     }
     try Task.checkCancellation()
-    guard case .running = phase, let cloud else { throw CancellationError() }
+    guard let cloud = running?.cloud else { throw CancellationError() }
     guard await coordinator.admits(.pull) else { throw RetryHeld() }  // 被限流时不另发请求：门铃按自己的退避再来
     return try await cloud.relaySecret()
   }

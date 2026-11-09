@@ -30,21 +30,32 @@ public actor CloudSync {
   private let connect: @Sendable () -> any SyncCloud
   enum Phase {
     case idle
-    case running(SyncGeneration)
+    case running(Run)
     case stopped
   }
+  /// 一代与它连上的 iCloud。
+  struct Run {
+    let generation: SyncGeneration
+    let cloud: any SyncCloud
+    var link = Link.unconfirmed
+  }
+  /// 认账号的进度。认过账号（可用、是上次同步的那个）才连上，拉取器、发送者与文件两路这时才建：认不了（离线、没登录）时不拉也不传，
+  /// 本机的同步元数据可能属于上一个账号。连上之后认不清了（账号变了、取不到账号名）由协调器挡住拉传（`SyncCoordinator.accountUnconfirmed`），
+  /// 这里仍是连上：部件不重建。
+  enum Link {
+    case unconfirmed
+    /// 同时要认的都等这一次。
+    case connecting(Task<Bool, Never>)
+    case connected(Parts)
+  }
+  struct Parts {
+    let puller: ZonePuller
+    let sender: RecordSender
+    let fileSender: FileSender
+    let fileFetcher: FileFetcher
+  }
   var phase = Phase.idle
-  var cloud: (any SyncCloud)?
-  var puller: ZonePuller?
-  var sender: RecordSender?
-  var fileSender: FileSender?
-  var fileFetcher: FileFetcher?
   private let transfers = TransferBoard()
-  /// 认过账号（可用、是上次同步的那个）：拉取与上传都开始了。认不了（离线、没登录）时不拉也不传：本机的同步元数据可能属于上一个账号。
-  /// 开始之后认不清了（账号变了、取不到账号名）由协调器挡住拉传（`SyncCoordinator.accountUnconfirmed`），这里仍为 true：组件不重开。
-  var connected = false
-  /// 正在认的那一次：同时要认的都等它。
-  private var connecting: Task<Bool, Never>?
   var accountBackoff = Backoff()
   /// 认不了时下次再认的时刻：之前来的立即同步（按节奏的拉取、门铃都可能很密）不另认，账号变化不等它。
   var accountRetryAt: ContinuousClock.Instant?
@@ -100,7 +111,7 @@ public actor CloudSync {
       try Task.checkCancellation()
       throw FileFetchFailure.notSyncing
     }
-    guard await connectNow(), let fileFetcher else { throw FileFetchFailure.notSyncing }
+    guard await connectNow(), let fileFetcher = parts?.fileFetcher else { throw FileFetchFailure.notSyncing }
     return try await fileFetcher.fetch(key)
   }
 
@@ -120,6 +131,29 @@ public actor CloudSync {
   private func answerStartWaiters(_ started: Bool) { startWaiters.forEach { $0.resolve(.success(started)) } }
 
   var stopped: Bool { if case .stopped = phase { true } else { false } }
+  var running: Run? { if case .running(let run) = phase { run } else { nil } }
+  var parts: Parts? { if case .connected(let parts) = running?.link { parts } else { nil } }
+  var connected: Bool { parts != nil }
+
+  /// 换掉 `generation` 那一代的连接；那一代已经结束的不动。
+  func setLink(_ link: Link, of generation: SyncGeneration) {
+    guard case .running(var run) = phase, run.generation === generation else { return }
+    run.link = link
+    phase = .running(run)
+  }
+
+  func makeParts(_ cloud: any SyncCloud, _ generation: SyncGeneration) -> Parts {
+    let sender = RecordSender(uploader: cloud, coordinator: coordinator, generation: generation) { [coordinator] in
+      try await PeerFloor(zoneID: Self.zoneID).settle(cloud, coordinator: coordinator)
+      await coordinator.succeeded()
+    }
+    return Parts(
+      puller: ZonePuller(source: cloud, coordinator: coordinator, generation: generation),
+      sender: sender,
+      fileSender: FileSender(cloud: cloud, coordinator: coordinator, board: transfers, generation: generation) { await sender.ready() },
+      fileFetcher: FileFetcher(cloud: cloud, coordinator: coordinator, board: transfers, generation: generation)
+    )
+  }
 
   /// 本代的后台任务：结束时自己从登记里去掉。
   func spawn(_ body: @escaping @Sendable () async -> Void) {
@@ -135,24 +169,13 @@ public actor CloudSync {
     await stopping?.value
     if case .running = phase { return }
     let generation = SyncGeneration()
-    phase = .running(generation)
-    let cloud = connect()
-    self.cloud = cloud
-    let puller = ZonePuller(source: cloud, coordinator: coordinator, generation: generation)
-    self.puller = puller
-    let sender = RecordSender(uploader: cloud, coordinator: coordinator, generation: generation) { [coordinator] in
-      try await PeerFloor(zoneID: Self.zoneID).settle(cloud, coordinator: coordinator)
-      await coordinator.succeeded()
-    }
-    self.sender = sender
-    fileSender = FileSender(cloud: cloud, coordinator: coordinator, board: transfers, generation: generation) { await sender.ready() }
-    fileFetcher = FileFetcher(cloud: cloud, coordinator: coordinator, board: transfers, generation: generation)
+    phase = .running(Run(generation: generation, cloud: connect()))
     await coordinator.loadToken()
     guard !generation.isOver else { return }  // 读令牌期间停下了
     let due = coordinator.retryDue.stream(), network = NetworkReturns.stream()
     retryWatchers = [
       Task { [coordinator] in for await _ in network { await coordinator.connected() } },
-      Task { for await _ in due { await puller.due() } },
+      Task { for await _ in due { await self.parts?.puller.due() } },  // 没连上就没拉过，没有欠着的
     ]
     accountWatcher = Task { [weak self] in
       for await _ in NotificationCenter.default.notifications(named: .CKAccountChanged) {
@@ -166,20 +189,23 @@ public actor CloudSync {
   /// 停下这一代：当场结束它，取消并等本代的认账号、重试、订阅、文件启动收尾，再停拉取器、发送者与文件两路；等开始的调用方得到"没在同步"，
   /// 等账号认好的（`relaySecret`）抛出。
   public func stop() async {
-    if case .running(let generation) = phase { generation.end() }
+    let link = running?.link
+    running?.generation.end()
     phase = .stopped
     answerStartWaiters(false)
     accountChecks.yield(())
-    let running = Array(background.values) + retryWatchers + [accountWatcher, accountRetry].compactMap { $0 }
-    let authenticating = connecting
-    // 本代的组件当场摘下：收尾期间别的调用 start 起的新一代用的是新的，这里只停摘下的这几个
-    let senders = (sender: sender, fileSender: fileSender, fileFetcher: fileFetcher, puller: puller)
-    (sender, fileSender, fileFetcher, puller, cloud, connected) = (nil, nil, nil, nil, nil, false)
+    let tasks = Array(background.values) + retryWatchers + [accountWatcher, accountRetry].compactMap { $0 }
+    // 本代的连接当场摘下：收尾期间别的调用 start 起的新一代用的是新的，这里只停摘下的这些
+    let (authenticating, parts): (Task<Bool, Never>?, Parts?) =
+      switch link {
+      case .connecting(let task): (task, nil)
+      case .connected(let parts): (nil, parts)
+      case .unconfirmed, nil: (nil, nil)
+      }
     background = [:]
     retryWatchers = []
     accountWatcher = nil
     accountRetry = nil
-    connecting = nil
     accountRetryAt = nil
     accountBackoff.reset()
     alertsAttemptedAt = nil
@@ -187,13 +213,13 @@ public actor CloudSync {
     let teardown = Task {
       await previous?.value
       authenticating?.cancel()
-      running.forEach { $0.cancel() }
-      for task in running { await task.value }
+      tasks.forEach { $0.cancel() }
+      for task in tasks { await task.value }
       _ = await authenticating?.value
-      await senders.puller?.stop()
-      await senders.sender?.stop()
-      await senders.fileSender?.stop()
-      await senders.fileFetcher?.stop()
+      await parts?.puller.stop()
+      await parts?.sender.stop()
+      await parts?.fileSender.stop()
+      await parts?.fileFetcher.stop()
     }
     stopping = teardown
     await teardown.value
@@ -202,14 +228,18 @@ public actor CloudSync {
   /// 认过就是 true；没认过的认一次（同时要认的等同一次）。
   @discardableResult
   func connectNow() async -> Bool {
-    if connected { return true }
-    if let connecting { return await connecting.value }
+    guard let running else { return false }
+    switch running.link {
+    case .connected: return true
+    case .connecting(let task): return await task.value
+    case .unconfirmed: break
+    }
     if let accountRetryAt, ContinuousClock.now < accountRetryAt { return false }
-    guard case .running(let generation) = phase, let cloud else { return false }
-    let task = Task { await self.checkAccount(cloud, generation) }
-    connecting = task
+    let generation = running.generation
+    let task = Task { await self.checkAccount(running.cloud, generation) }
+    setLink(.connecting(task), of: generation)
     let result = await task.value
-    if !generation.isOver { connecting = nil }
+    if case .connecting = self.running?.link { setLink(.unconfirmed, of: generation) }
     return result
   }
 
@@ -222,29 +252,29 @@ public actor CloudSync {
       try Task.checkCancellation()
       return .incomplete
     }
-    guard await connectNow(), case .running(let generation) = phase, let cloud, let puller, let sender else { return .incomplete }
+    guard await connectNow(), let running, let parts else { return .incomplete }
+    let generation = running.generation
     if Self.subscribesToAlerts, await coordinator.alertSubscription != .active, !generation.isOver,
       alertsAttemptedAt.map({ ContinuousClock.now - $0 >= Self.alertRetryInterval }) ?? true
     {
       alertsAttemptedAt = .now  // 任务起来之前再来的不另起
-      spawn { await self.ensureAlertSubscriptions(cloud, generation) }
+      spawn { await self.ensureAlertSubscriptions(running.cloud, generation) }
     }
-    await sender.kick()
-    return try await puller.pull()
+    await parts.sender.kick()
+    return try await parts.puller.pull()
   }
 
   /// 马上传这几条（同一次写入写出的一起，一个请求）：不进攒批窗口、不等后台那批；返回时它们都有了结果
   /// （全被服务器收下为 true，离线等没传成的为 false，之后优先重试）。要传什么（保存还是删除）由库推导：本机删掉的就是删除。
   @discardableResult
   public func send(recordNames: Set<String>) async -> Bool {
-    guard connected, let sender else { return false }
+    guard let sender = parts?.sender else { return false }
     return await sender.send(recordNames)
   }
 
   /// 把待推送全部发出去，返回时这一轮结束（iOS 进入后台前）。
   public func push() async {
-    guard connected else { return }
-    await sender?.flush()
+    await parts?.sender.flush()
   }
 
   /// 处理 `.needsDecision`：先停下这一代（旧代的拉取、上传不会在清库、重置之后写进来），处理完重新开始同步。处理失败也重新开始（仍停在要你决定）。
