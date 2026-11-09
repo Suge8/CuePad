@@ -1,6 +1,6 @@
 # 界面约定
 
-跨界面的原则与理由。具体界面的样子与规则在各视图类型的头注释里，页面结构、导航与栏、浮层与开合在 [layout.md](layout.md)；颜色令牌在 `Palette`，字号、间距、圆角、动效与表面在 `UI/Shared/Theme/`。能写成检查的规则在 `apple/scripts/lint.sh`，原因写在它的报错里。
+跨界面的原则与理由。具体界面的样子与规则以视图代码为准，页面结构、导航与栏、浮层与开合在 [layout.md](layout.md)；颜色令牌在 `Palette`，字号、间距、圆角、动效与表面在 `UI/Shared/Theme/`。能写成检查的规则在 `apple/scripts/lint.sh`，原因写在它的报错里。
 
 做新界面或视觉改动时，先读 ui-craft 与 ui-picks 两个 skill，先出原型或截图给用户看，再出文字方案。
 

@@ -21,7 +21,7 @@ extension DeliveryStatus {
   static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
 }
 
-/// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。哪些方式写发送记录见 `CueStore.recordSend`。
+/// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 你说的话（唯一一种）：会话歇着就以它开新一轮，在跑就先打断这一轮再开（忙不忙以 Mac 执行时的会话为准，写请求时看到的状态可能已经过时）。没有排队；未确认不自动重发。
   /// 用提示词模板或技能说的（`/名字 …`，回复框按 `PiSlash.speaks` 认）也是它：由 Agent 展开，展开后的那条消息带着请求 id
