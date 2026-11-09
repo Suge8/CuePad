@@ -5,12 +5,10 @@ import Synchronization
 
 // MARK: - 底层 I/O
 
-/// 替身那一头：写一行给它（串行，线程安全）。
 final class Stub: @unchecked Sendable {
     let fd: Int32
     let pid: Int32
     private let lock = Mutex(())
-    /// 已经让它退出（之后它断开不算被强杀）
     var told: Bool {
         get { toldFlag.load(ordering: .relaxed) }
         set { toldFlag.store(newValue, ordering: .relaxed) }
@@ -25,7 +23,6 @@ final class Stub: @unchecked Sendable {
         lock.withLock { _ in _ = UnixSocket.writeAll(fd, Data((line + "\n").utf8)) }
     }
 
-    /// 等它写进标准输出的都被 CuePad 读走（替身回 "f"；替身没了也算）。
     func drained() async {
         await withCheckedContinuation { continuation in
             let gone = waiting.withLock { waiting in
@@ -36,7 +33,6 @@ final class Stub: @unchecked Sendable {
         }
     }
 
-    /// 回了 "f"；`gone`：替身断开了，之后的等待都不等。
     func acknowledged(gone: Bool = false) {
         let list = waiting.withLock { waiting in
             defer { waiting.list = [] }
@@ -66,7 +62,6 @@ final class Connection: @unchecked Sendable {
     }
 }
 
-/// 阻塞地一行一行读一个描述符（读到头为 nil）。
 final class LineReader: @unchecked Sendable {
     let fd: Int32
     private var lines = LineSplitter()
@@ -75,7 +70,6 @@ final class LineReader: @unchecked Sendable {
 
     init(fd: Int32) { self.fd = fd }
 
-    /// - Parameter partial: 读到头时最后没有换行的那一段也算一行。
     func next(partial: Bool = false) -> Data? {
         var buffer = [UInt8](repeating: 0, count: 65536)
         while ready.isEmpty && !done {
@@ -139,7 +133,6 @@ enum UnixSocket {
         return fd
     }
 
-    /// 在监听的描述符上收连接，每个交给 `handle`（不在主线程）；取消返回的事件源即停止并关掉它。
     static func accept(_ fd: Int32, _ handle: @escaping @Sendable (Int32) -> Void) -> DispatchSourceRead {
         _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .global())
@@ -189,7 +182,7 @@ enum UnixSocket {
     }
 }
 
-/// 录制时替身背后的真 Agent：自成进程组（收尾时整组结束），三个标准描述符接到这里。
+/// 自成进程组，收尾时整组结束。
 final class RealProcess: Sendable {
     let pid: pid_t
     let stdin: Int32
@@ -235,7 +228,6 @@ final class RealProcess: Sendable {
 
     func closeInput() { close(stdin) }
 
-    /// 阻塞到退出，返回 waitpid 的状态。
     func wait() -> Int32 {
         var status: Int32 = 0
         while waitpid(pid, &status, 0) == -1 && errno == EINTR {}

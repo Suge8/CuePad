@@ -7,8 +7,6 @@ import Testing
 @testable import CuePad
 
 extension AgentLibraryPhoneTests {
-    /// 手机上全局规则的文件页（真窗口里挂着 `LibraryFileScreen`）：Claude Code 另写了一份，点"合并进来"标出会并进来的段时
-    /// （`FileDraft.previewing`，按钮做的就是这一下），键盘收起、正文点不进去、读屏跳过，攒着的改动一个字没多；"取消"回到正文，键盘回来，接着打的字攒进去。
     @Test func 标出合并时键盘收起_点不进正文_取消后键盘回来接着改() async throws {
         let claude = "/Users/a/.claude/CLAUDE.md"
         let shared = "共用的\n", own = "全局规则\n"

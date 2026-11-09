@@ -1,14 +1,12 @@
 import CueStore
 import Foundation
 
-/// 回收站里的一行：删除的项目（连同其卡片）或单独删除的卡片。两端的回收站页列同一批行、做同一件事（恢复、永久删除）。
 nonisolated struct TrashItem: Identifiable, Sendable, Equatable {
     let id: UUID
     let title: String
-    /// 项目写带进来的卡片数，卡片写摘要。
     let detail: String
     let deletedAt: Date?
-    /// 项目行才有（Mac 的行画项目图标）；有它就是项目行，恢复与永久删除按它分项目与卡片。
+    /// 有它就是项目行，恢复与永久删除按它分项目与卡片。
     let project: Project?
 
     init(_ project: Project, cards: Int) {
@@ -44,7 +42,6 @@ nonisolated struct TrashItem: Identifiable, Sendable, Equatable {
     }
 }
 
-/// 回收站此刻的内容（iOS 与 Mac 的回收站页同一份读取）。
 nonisolated struct TrashSummary: Sendable, Equatable {
     var projects: [TrashItem]
     var cards: [TrashItem]
@@ -61,7 +58,6 @@ nonisolated struct TrashSummary: Sendable, Equatable {
 }
 
 extension Workspace {
-    /// 恢复并提示落点，点提示过去（与删除时的"已删除 · 撤销"对称）。
     func restore(_ item: TrashItem) {
         let store = services.store
         attempt {

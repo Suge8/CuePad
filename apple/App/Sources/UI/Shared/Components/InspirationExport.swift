@@ -41,7 +41,6 @@ struct InspirationExport: View {
                 try Task.checkCancellation()
                 ready(payload)
             } catch is CancellationError {
-                // 浮层已关闭，旧结果不再交给分享入口。
             } catch { if !Task.isCancelled { phase = .failed(InspirationShare.Problem(error)) } }
         }
     }

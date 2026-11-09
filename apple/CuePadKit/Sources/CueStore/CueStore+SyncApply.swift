@@ -2,7 +2,6 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 在一个写事务里应用一批远端变更；提交后一次通知订阅者。单条记录失败（如字段非法）只回滚该条并报告，不影响其余。
   package func applyRemote(_ changes: [RemoteChange]) throws -> [RemoteFailure] {
     var failures: [RemoteFailure] = []
     var removedKeys: [String] = []
@@ -53,7 +52,6 @@ extension CueStore {
     try copyingRemote { try db.run(Self.upsertSQL(row.table, columns), columns.map { row.fields[$0] ?? .null }) }
   }
 
-  /// 返回被删附件的键（提交后回收文件）。
   private func apply(_ change: RemoteChange) throws -> String? {
     switch change {
     case .delete(let key):
@@ -78,13 +76,7 @@ extension CueStore {
     }
   }
 
-  /// 冲突规则：
-  /// - 本机没有该记录：若有元数据（本机已删除、删除待推送）则忽略远端；否则插入。
-  /// - 本机自上次推送后没改过：直接采用远端。
-  /// - 本机有未推送的改动：`modifiedAt` 较新的整条记录留下，同刻以服务器为准（服务器是唯一裁决者，各设备因此收敛）；
-  ///   卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。
-  /// 本机自己上传的版本回来（回声）不是并发编辑：由交出去与服务器收下的修改时间认出（`applyVersion`）。
-  /// 排序键相同不在这里处理：读取时按 id 打平，移动时重排。
+  /// 冲突：本机有未推送的改动时 `modifiedAt` 较新的整条记录留下，同刻以服务器为准（服务器是唯一裁决者，各设备因此收敛）；卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。本机自己上传的版本回来（回声）不是并发编辑：由交出去与服务器收下的修改时间认出（`applyVersion`）。排序键相同不在这里处理：读取时按 id 打平，移动时重排。
   private func applySave(_ remote: SyncRow, _ systemFields: Data, serverAt: Date?) throws {
     if remote.table == .deliveryRequests {
       try applyIncomingDelivery(remote, systemFields: systemFields, serverAt: serverAt)
@@ -173,7 +165,6 @@ extension CueStore {
     }
   }
 
-  /// 按变更涉及的消息主键、会话索引批量找正证据，不为每条请求全表找消息。
   private func reconcileDeliveryReceipts(_ changes: [RemoteChange]) throws {
     var messageIDs: [String] = [], requestIDs: [String] = [], sessions = Set<String>()
     for change in changes {
@@ -196,7 +187,6 @@ extension CueStore {
     }
   }
 
-  /// 卡片层级在远端变更之后仍要成立（见 `CardLinks.repairs`）；改写的卡片会再推送，让各设备收敛。
   private func repairCardTree(touching changed: Set<UUID>) throws {
     try apply(try CardLinks(db).repairs(touching: changed))
   }
@@ -219,7 +209,7 @@ extension CueStore {
     try overwrite(SyncRow(table: .cards, fields: fields))
   }
 
-  /// 远端删除附件记录后回收文件；仍被引用的保留（`isAttachmentReferenced`）（引用它的记录也许马上就到）。删不掉的作为失败报告。
+  /// 仍被引用的保留：引用它的记录也许马上就到。删不掉的作为失败报告。
   private func removeFiles(of keys: [String]) throws -> [RemoteFailure] {
     guard !keys.isEmpty else { return [] }
     var failures: [RemoteFailure] = []
@@ -231,7 +221,6 @@ extension CueStore {
 }
 
 extension RemoteChange {
-  /// 可能让一次"开新会话"被认领：会话记录、投送请求或卡片到了（同步乱序，哪个先到都要认）。
   fileprivate var touchesLaunches: Bool {
     switch self {
     case .save(let row, _, _): [.piSessionStates, .deliveryRequests, .cards].contains(row.table)
@@ -239,7 +228,6 @@ extension RemoteChange {
     }
   }
 
-  /// 这条变更涉及的卡片 id；不是卡片的变更为 nil。
   fileprivate var cardID: UUID? {
     switch self {
     case .save(let row, _, _): row.table == .cards ? UUID(uuidString: row.id) : nil

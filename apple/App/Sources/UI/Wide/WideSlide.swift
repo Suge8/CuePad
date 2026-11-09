@@ -22,18 +22,15 @@ import UIKit
 /// 主区按新宽排一次大库仍要 8.5～11ms、放不进一帧（量法在 docs/perf.md「主区换宽一次」）；
 /// 页内一个 SwiftUI 布局动画——每帧照样重摆懒加载列表、按插值的尺寸重画文字，开头几帧被终点那一次排版堵住，SwiftUI 画的部分一帧跳完。
 enum WideSlide {
-    /// 叠一段从 `distance` 回到 0 的平移。
     static func translate(_ layer: CALayer, by distance: CGFloat, key: String) {
         slide(layer, "transform.translation.x", by: distance, key: key)
     }
 
-    /// 在 `keyPath` 上叠一段从 `distance` 回到 0 的偏移（同 `translate` 的曲线；栏的右缘用 `bounds.size.width`）。
     static func slide(_ layer: CALayer, _ keyPath: String, by distance: CGFloat, key: String) {
         guard !reduceMotion, abs(distance) >= SlideCurve.rest else { return }
         layer.add(SlideCurve(distance: distance).offset(keyPath), forKey: key)
     }
 
-    /// 排完才有的层：先不显，同一次滑动快落定时淡入。
     static func appear(_ layer: CALayer, key: String) {
         guard !reduceMotion, layer.opacity > 0 else { return }
         layer.add(SlideCurve(distance: -CGFloat(layer.opacity)).appear("opacity"), forKey: key)
@@ -47,16 +44,13 @@ enum WideSlide {
         #endif
     }
 
-    /// 块里各层离块左缘多远（模型值，排版前记、排完比，`follow`）。藏起与全透明的不记：看不见，排不排都一样。
     /// 握着层本身：这一圈里它们不会被释放、地址不会给了新层而认错。
     /// 页不一定一次排齐（`WideColumnSlide.layoutPasses`）：补第二遍时只补这一遍新挪的那一截，每层自己已叠上多少记在 `own`，收放宽度、遮罩与淡入每层只做一次。
     struct Positions {
         private var lefts: [ObjectIdentifier: (layer: CALayer, x: CGFloat, width: CGFloat)] = [:]
-        /// 各层自己已叠上的平移（不含上一层的）。
         private var own: [ObjectIdentifier: CGFloat] = [:]
         private var resized: Set<ObjectIdentifier> = []
         private var appeared: Set<ObjectIdentifier> = []
-        /// 第几遍：每遍的动画用自己的键，不顶掉前几遍叠上的。
         private var pass = 0
 
         init(_ root: CALayer) { visit(root, at: 0) }
@@ -71,7 +65,6 @@ enum WideSlide {
 
         static func shown(_ layer: CALayer) -> Bool { !layer.isHidden && layer.opacity > 0 }
 
-        /// 收放宽度看起来不变形：没有位图内容、不是按固定路径画的。
         private static func stretches(_ layer: CALayer) -> Bool {
             layer.contents == nil && !(layer is CAShapeLayer) && !(layer is CATextLayer)
         }
@@ -139,14 +132,10 @@ final class WideColumnSlide {
     private let apply: (_ hidden: Bool) -> Void
     private var previous: (origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape)?
     private var sequence = 0
-    /// 正在滑的那一次（`sequence`）；滑完是 nil。
     private var sliding: Int?
     private var hidden = false
-    /// 滑完再藏起。
     private var hidesWhenLanded = false
-    /// 页里各层排版前的位置与还要补几遍（`laidOut`）。
     private var pending: (positions: WideSlide.Positions, key: String, passes: Int)?
-    /// 页里各层还等着页排完来补：页排完要报（`laidOut`）。
     var awaitsLayout: Bool { pending != nil }
     /// 页排几次才齐：Mac 的页在一个托管视图里，排一次就齐；iPad 的会话页在导航栈里另有一个托管视图，下一次提交才摆到层上（`WideColumnController.lastLayout`）。
     /// 不一直补到滑完：有的页滑动期间每帧排两次，每次都走一遍整页的层，主线程在动画里有了活（实测 Mac 大库上宽屏阈值测量随之读不出 Cue 栏的中段）。
@@ -156,13 +145,11 @@ final class WideColumnSlide {
     private static let layoutPasses = 2
     #endif
 
-    /// `apply`：真的藏起或露出这一块（看不见、点不到、⌃Tab 跳过）。
     init(slot: WideSlot, apply: @escaping (_ hidden: Bool) -> Void) {
         self.slot = slot
         self.apply = apply
     }
 
-    /// 在页按新宽排之前调（换根视图之前）：块里各层的旧位置这时记下。
     func move(_ layer: CALayer, page: CALayer, origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape) {
         defer { previous = (origin, width, shape) }
         guard let previous, previous.shape != shape else { return }
@@ -194,7 +181,6 @@ final class WideColumnSlide {
         self.pending = pending.passes > 0 ? pending : nil
     }
 
-    /// 藏起或露出（收起的 Cue 仍挂着，只是藏起）。正在滑走时等滑完再藏，露出当即露出。
     func park(_ hidden: Bool) {
         hidesWhenLanded = hidden && sliding != nil && !self.hidden
         guard !hidesWhenLanded, hidden != self.hidden else { return }
@@ -219,7 +205,6 @@ final class WideColumnSlide {
 private struct SlideCurve {
     let distance: CGFloat
 
-    /// 不到这么远的不滑：看不出来。
     static let rest: CGFloat = 0.5
     /// 一次换宽里最远的一段（会话条与 Cue 一起变）离终点不到半点要多久：到这时就算滑完。
     /// 弹簧按比例收敛到 `settlingDuration` 要多等 0.1 秒左右，那时早已看不出在动。
@@ -229,7 +214,6 @@ private struct SlideCurve {
     /// 关键帧每秒取样多少次：比 144Hz 密，帧之间按直线插值看不出折线。
     private static let samplesPerSecond = 240.0
 
-    /// 临界阻尼弹簧离终点的比例是 (1 + ωt)·e^(−ωt)。
     private static func remaining(_ time: Double) -> Double { (1 + omega * time) * exp(-omega * time) }
 
     private static func settles(over distance: CGFloat) -> TimeInterval {
@@ -238,10 +222,8 @@ private struct SlideCurve {
         return time
     }
 
-    /// 离终点还剩这么多时才开始淡入（`appear`）：前面那截别的东西还在大步挪。
     private static let appearsAt = 0.15
 
-    /// 同 `offset`，但离终点剩 `appearsAt` 之前一直停在 `distance`（不透明度叠上 -1 就是不显），之后随曲线回到 0。
     func appear(_ keyPath: String) -> CAKeyframeAnimation {
         let animation = offset(keyPath)
         animation.values = animation.values?.map { value in

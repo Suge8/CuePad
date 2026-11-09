@@ -6,7 +6,6 @@ import Testing
 @testable import CuePi
 @testable import CueStore
 
-/// #43：ACK 后由程序核对真实历史；发送端有界等待，不借重投探测。
 @MainActor
 struct DeliveryConfirmationTests {
     func session(_ app: TestApp) async throws -> (PiSessionState, FakeExtension, URL) {
@@ -27,7 +26,6 @@ struct DeliveryConfirmationTests {
         return try #require(try await app.services.store.deliveryRequests().first { $0.content == text })
     }
 
-    /// 会话文件换成只有这几句你的话（`SessionFile`）。
     nonisolated static func write(_ messages: [PiMessage], session: String, cwd: String, to file: URL) throws {
         let log = SessionFile(url: file, sessionID: session, cwd: cwd)
         try log.reset()

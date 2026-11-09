@@ -30,7 +30,6 @@ nonisolated final class ViewerKeeper: Sendable {
     }
 
     private struct State {
-        /// 各窗口此刻开着的会话页。
         var shown: [UUID: Set<Page>] = [:]
         var cue = false
         var away: Set<Away> = []
@@ -48,7 +47,6 @@ nonisolated final class ViewerKeeper: Sendable {
     private let state = Mutex(State())
     private let changes: AsyncStream<Void>
     private let changed: AsyncStream<Void>.Continuation
-    /// 人在不在跟前变了（Mac：`Away` 有没有），界面据此算在不在看（`AppServices.seesMainWindow`）。
     private let aways: AsyncStream<Bool>
     private let awayChanged: AsyncStream<Bool>.Continuation
     private static let log = Logger(subsystem: AppIdentity.id, category: "services")
@@ -68,12 +66,10 @@ nonisolated final class ViewerKeeper: Sendable {
         }
     }
 
-    /// 这台设备开没开着 Cue 页（`CueViewing` 数的在看的有没有）。
     func showCue(_ shown: Bool) {
         update { $0.cue = shown }
     }
 
-    /// 写下界面报来的变化，直到任务取消；Mac 另跟系统的睡眠、屏幕与锁屏，与他去没去别的设备。
     func keep(notifications center: NotificationCenter = .default) async throws {
         try await withThrowingDiscardingTaskGroup { group in
             group.addTask { for await _ in self.changes { try await self.publish() } }
@@ -142,8 +138,8 @@ nonisolated final class ViewerKeeper: Sendable {
 
 #if os(macOS)
 nonisolated extension ViewerKeeper {
-    /// 人走开了：键盘鼠标 `SessionPresence.window` 没动（与"在场"同一个口径）就算不在跟前，回来的第一下输入就回来。
-    /// 只认真人的输入（`hidSystemState`，别的程序合成的事件不算）。没到点就睡到会到点的那一刻再查一次，走开期间等系统的输入事件，不轮询。
+    /// 键盘鼠标 `SessionPresence.window` 没动（与"在场"同一个口径）就算不在跟前，回来的第一下输入就回来。
+    /// 只认真人的输入（`hidSystemState`，别的程序合成的事件不算）；走开期间等系统的输入事件，不轮询。
     private func followIdle() async {
         let limit = SessionPresence.window, anyInput = CGEventType(rawValue: ~0)!
         while !Task.isCancelled {
@@ -191,8 +187,6 @@ nonisolated extension ViewerKeeper {
         return await sync?.upload(Viewer.recordID(device: device)) ?? true
     }
 
-    /// 跟着主窗口，直到任务取消：把这台 Mac 上的人看不看得到主窗口交给界面（`AppServices.seesMainWindow` 的两半：窗口露没露在屏上、
-    /// 人在不在跟前），再报开着的会话页（`Workspace.shownSessions`，页一换或看得到与否一变就重算）。
     @MainActor func follow(_ workspace: Workspace) async {
         let services = workspace.services, window = UUID()
         let away = Task { for await away in aways { services.away = away } }
@@ -215,7 +209,6 @@ nonisolated extension ViewerKeeper {
 
 }
 #else
-/// 这个窗口在前台活跃时导航最上面的会话页，报给 `ViewerKeeper`；窗口关掉时收回。
 struct SessionViewing: ViewModifier {
     let keeper: ViewerKeeper?
     let workspace: Workspace

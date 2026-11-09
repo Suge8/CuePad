@@ -2,30 +2,19 @@
 import CueStore
 import Foundation
 
-/// 照文件读出技能与技能那几种该整理的（位置见 `AgentLibraryPlaces`）。规则：
-/// - 有 `SKILL.md` 的目录是技能，不再往里找；没有的非空目录是分类（Claude Code、dsh 的目录只看一层），空的（只算 `.DS_Store` 也空）进"空目录"。
-/// - 格式取各家最严（`SkillProblem`）：格式不对的照列成技能、带上哪里不对，不搬、不链、不算同名。
-/// - 列出的技能：`.agents/skills` 里的全部，加旧目录里一键整理搬不走的（同名、格式不对的）；旧目录里的只有那一家读得到。
-/// - 旧目录里的：不是各家自管的（Claude Code 的 `skills/synced/<账号>/…`、Codex 的 `skills/.system`，只计数）；
-///   链接不碰（Claude Code、dsh 目录里指到 `.agents` 的是它们的技能链接）。搬到同层 `.agents/skills` 下的同一分类。
-/// - 同名：全局与项目之间、同一层里（旧目录里的按搬过去之后算）；两个项目各有一个不算。
-/// - 读不到 `.agents` 里这一个的那家（`SharedSkills`）看不见：它用着、链接的位置还空着（那里已有别的东西不碰），每家一件。
 struct LibrarySkillScan {
     var skills: [LibrarySkill] = []
-    /// 列出的技能的 SKILL.md 全文（`LibrarySkill.textPath` → 正文）
     var texts: [String: String] = [:]
     var tidies: [LibraryTidy] = []
     var selfManaged: [SelfManagedSkills] = []
     var watched: Set<String> = []
 
-    /// 一个技能目录（格式对不对都在）。
     struct Found {
         let entry: SkillEntry
         let group: String
         let text: String
         let modifiedAt: Date?
         let problem: SkillProblem?
-        /// 在旧目录里：哪家的、搬到这里
         var owner: AgentKind?
         var moveTo: URL?
     }
@@ -87,7 +76,6 @@ struct LibrarySkillScan {
         for agent in AgentKind.allCases {
             if let entries = unlinked[agent] { tidies.append(LibraryTidy(id: "unlinked/\(agent.rawValue)", kind: .unlinked(agent: agent, skills: entries))) }
         }
-        // 先全局、后各项目（同 `places.scopes`），每层按分类（不在分类里的最后）、名字、路径
         let scopes = places.scopes
         skills.sort { a, b in
             let order = { (skill: LibrarySkill) in (scopes.firstIndex(of: skill.scope) ?? 0, skill.group.isEmpty ? 1 : 0, skill.group, skill.name, skill.path) }
@@ -105,7 +93,7 @@ struct LibrarySkillScan {
         texts[skill.textPath] = found.text
     }
 
-    /// 走一个技能目录：读出技能与空目录，记下要盯的目录与文件。旧目录里的链接不碰（Claude Code 的技能链接、指到别处的）。
+    /// 旧目录里的链接不碰（Claude Code 的技能链接、指到别处的）。
     private mutating func walk(_ root: URL, scope: LibraryScope, recursive: Bool, inOldDirectory: Bool) -> (found: [Found], empties: [String]) {
         var found: [Found] = [], empties: [String] = []
         watched.insert(root.path)
@@ -136,20 +124,18 @@ struct LibrarySkillScan {
         return (found, empties)
     }
 
-    /// 往下找的层数上限：超过 6 层的技能也要找到、报出来（`SkillProblem.tooDeep`），再深的不找。
+    /// 超过 6 层的技能也要找到、报出来（`SkillProblem.tooDeep`），再深的不找。
     private static let walkLimit = 8
 
     private static func entries(_ directory: URL) -> [String] {
         ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).sorted()
     }
 
-    /// 各家自管、不碰的目录（只在它自己的全局技能目录下一层）。
     private static func isManaged(_ name: String, in root: URL) -> Bool {
         AgentKind.allCases.contains { $0.facts.selfManagedSkills == name && root.lastPathComponent == "skills" }
     }
 
-    /// 各家自管目录里有几个技能：有 SKILL.md 的目录算一个，没有的往下找（Claude Code 的 `synced` 下先按账号分一层）。
-    /// 找过的目录都盯着，没有技能时也盯着（Codex 的 `.system` 走不到 `walk`）：多了少了，计数跟着变。
+    /// Claude Code 的 `synced` 下先按账号分一层。找过的目录都盯着，没有技能时也盯着（Codex 的 `.system` 走不到 `walk`）：多了少了，计数跟着变。
     private mutating func managedCount(in directory: URL) -> Int {
         var count = 0
         func visit(_ directory: URL, depth: Int) {
@@ -169,8 +155,6 @@ struct LibrarySkillScan {
         return count
     }
 
-    /// 同名的几组（每组先全局、后各项目，按路径）：有全局的，连同各项目里同名的一组（留下哪份只移走和它撞名的，`LibraryTidying`）；
-    /// 没有全局的，同一个项目里两个以上才算，每个项目一组——两个项目各有一个不撞名。
     private static func duplicates(_ skills: [Found]) -> [[Found]] {
         Dictionary(grouping: skills, by: \.entry.name).sorted { $0.key < $1.key }.flatMap { _, copies -> [[Found]] in
             let sorted = copies.sorted { ($0.entry.scope == .global ? 0 : 1, $0.entry.path) < ($1.entry.scope == .global ? 0 : 1, $1.entry.path) }
@@ -190,7 +174,7 @@ struct LibrarySkillScan {
 }
 
 extension SkillDocument {
-    /// 各家最严的那条：名字 = 目录名、只用 `[a-z0-9-]`、不超过 64；说明 1–1024；嵌套不超过 6 层。对的为 nil。
+    /// 取各家最严的那条。
     func problem(directory: String, depth: Int) -> SkillProblem? {
         guard let name, !name.isEmpty else { return .unreadable }
         if directory.count > 64 || !directory.allSatisfy({ $0.isASCII && ($0.isLowercase || $0.isNumber || $0 == "-") }) { return .badName }

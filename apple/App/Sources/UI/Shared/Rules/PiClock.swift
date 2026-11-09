@@ -2,19 +2,13 @@ import CueStore
 import Foundation
 import SwiftUI
 
-/// 会话计时怎么读（Mac 与手机同一条）：工作中"运行了 4 分钟"从这段连续处理开始算（思考、工具、等子代理之间切换不重置），
-/// 等你确认"等了 4 分钟"从进入等待算，话还在路上（会话没在跑时）"4 分钟前发出"从发出算，空闲、出错、已结束是"多久前"（`DateLabel`）。哪一种由 `PiShown` 定。
-/// 怎么写只在这里：列表里（Agent 页、侧栏、项目"此刻"、书架）只到分钟、第一分钟写"刚开始 / 刚刚 / 刚发出"，不每秒换字；
-/// 只有会话页顶栏那一个计时到秒，会话行只写时长（`Style`）。界面里经 `LiveText`（`live`）：只在文字会变的时刻重画。
+/// 怎么写只在这里。界面里经 `LiveText`（`live`）：只在文字会变的时刻重画。
 nonisolated enum PiClock: Hashable, Sendable, Codable {
     case running(since: Date)
     case waiting(since: Date)
     case sent(since: Date)
     case ago(Date)
 
-    /// 怎么写：`list` 按计时的种类带说法、走字到分钟（"运行了 4 分钟""刚开始""2 小时前"），任务行、书架、子代理用；
-    /// `header` 同样的说法、走字的第一分钟到秒，只有会话页顶栏；`span` 只写在这个状态里待了多久（"刚刚""4 分钟""3 天"），
-    /// 会话行用——一列卡片里只有一种写法，状态由状态词说。
     enum Style: Hashable, Codable, Sendable { case list, header, span }
 
     /// 工作中的记录总带着这段处理的起点（`busySince`，Mac 的状态记录器写入时保证）；万一没有就不写计时，不拿别的时刻冒充。
@@ -24,8 +18,7 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
         return .ago(stateSince)
     }
 
-    /// 全 App 唯一的时长写法：只取最大的一个单位，"42 秒"、"4 分钟"、"3 小时"、"2 天"（处理中的活跃感交给动效）。
-    /// 数字与单位之间空一格，与"24 条灵感""11 分钟前"同一种排法；
+    /// 全 App 唯一的时长写法。
     /// 不用系统的单位格式：中文的宽格式把秒写成"秒钟"、数字与单位之间不空。
     static func duration(_ seconds: TimeInterval) -> String {
         let whole = max(Int(seconds), 1)
@@ -35,7 +28,6 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
         return String(localized: "\(whole / 86_400) 天")
     }
 
-    /// 走字的计时（不是"多久前"）。
     private var isRunningClock: Bool { if case .ago = self { false } else { true } }
 
     var since: Date {
@@ -44,7 +36,6 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
         }
     }
 
-    /// 此刻的文字（读屏、不走字的地方，以及 `live` 的每一次更新）：列表里（`.list`）不到一分钟写"刚开始"这类，不每秒换字。
     func text(now: Date, style: Style = .list, calendar: Calendar = .current) -> String {
         let elapsed = now.timeIntervalSince(since)
         if style == .span { return elapsed < 60 ? String(localized: "刚刚") : Self.duration(elapsed) }
@@ -64,12 +55,9 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
         }
     }
 
-    /// 界面里的计时文字：`LiveText(style: clock.live(.list))`。
     func live(_ style: Style) -> Live { Live(clock: self, style: style) }
 
-    /// 计时的格式：文字就是 `text(now:style:)`，并告诉系统下一次在什么时刻会变——顶栏走字的第一分钟每秒，
-    /// 之后（以及列表里的）一小时内每整分钟、再往后每整小时；"多久前"一小时内每整分钟、一天内每整小时、再往前每天零点；
-    /// 只写时长的（`span`）一小时内每整分钟、一天内每整小时、再往后每整天（从起点算）。
+    /// 文字就是 `text(now:style:)`，并告诉系统下一次在什么时刻会变。
     struct Live: DiscreteFormatStyle {
         let clock: PiClock
         let style: Style
@@ -80,7 +68,6 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
 
         func discreteInput(before now: Date) -> Date? { segment(around: now).start.addingTimeInterval(-0.001) }
 
-        /// `now` 所在那一段文字的起点与下一段的起点（严格晚于 `now`，`Date.tick`）。
         private func segment(around now: Date) -> (start: Date, next: Date) {
             let since = clock.since
             let elapsed = max(now.timeIntervalSince(since), 0)
@@ -102,8 +89,6 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
 }
 
 nonisolated extension PiClock {
-    /// 只写过了多久（"42 秒""12 分钟"，不写"刚刚"、不带前缀）：任务行的用时（`TaskPace`）、推进中会话行的时长、拍板等了多久。
-    /// 换字的时刻同走字的会话计时（`Style.header`：第一分钟每秒、一小时内每整分钟、再往后每整小时），字跟着时长写法走到哪一档。
     struct Elapsed: DiscreteFormatStyle {
         let since: Date
 
@@ -118,7 +103,6 @@ nonisolated extension PiClock {
 }
 
 nonisolated extension PiClock {
-    /// 等了多久（Cue 页拍板卡的眉题、看板等你列卡的悬停提示）：不到一分钟写"刚刚"，之后"已等 12 分钟"；第一分钟不走秒，之后换字同 `Elapsed`。
     struct Waited: DiscreteFormatStyle {
         let since: Date
 

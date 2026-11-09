@@ -2,19 +2,15 @@ import Foundation
 
 public enum CueLineKind: Equatable, Sendable {
     case body
-    /// `# 标题`、`## 标题`…（各级同一个样式）
     case heading
-    /// `- ` 或 `1. ` 列表项
     case list
-    /// ``` 围栏行本身
     case fence
     /// 分割线 `---`（`CueFormat.isRule`）：整行是标记
     case rule
-    /// 围栏之内的行
     case code
 }
 
-/// 一行的轻装饰描述。标记字符保留可见，宿主只降低它们的存在感，不做所见即所得。
+/// 标记字符保留可见，宿主只降低它们的存在感，不做所见即所得。
 public struct CueLineStyle: Equatable, Sendable {
     public var kind: CueLineKind
     /// 行首标记（缩进 + `##␣`、`-␣`、`1.␣`、`>␣`，或整条围栏行）的 UTF-16 长度；无标记为 0。
@@ -69,8 +65,6 @@ public struct CueDecorations: Sendable {
         return CueLineStyle(kind: kind, markerLength: marker, inlineCode: code, links: Self.links(in: line, outside: code), emphasis: InlineMarkdown.emphasisMarkers(in: line))
     }
 
-    // MARK: 全文性质
-
     private static func fenceLocations(in text: NSString) -> [Int] {
         var result: [Int] = []
         if text.hasPrefix(fence) { result.append(0) }
@@ -94,8 +88,6 @@ public struct CueDecorations: Sendable {
         return low
     }
 
-    // MARK: 行内
-
     private static func isBlankUnit(_ unit: Character) -> Bool { unit == " " || unit == "\t" }
 
     private static func classify(_ line: String) -> (CueLineKind, Int) {
@@ -103,7 +95,6 @@ public struct CueDecorations: Sendable {
         var i = 0
         while i < chars.count, isBlankUnit(chars[i]) { i += 1 }
         let indent = i
-        // 标题只允许顶格
         if indent == 0, i < chars.count, chars[i] == "#" {
             var hashes = 0
             while hashes < chars.count, chars[hashes] == "#" { hashes += 1 }

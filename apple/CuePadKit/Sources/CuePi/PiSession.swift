@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// 终端信息，来自扩展 hello 里的环境变量；供"跳到该会话所在终端"使用。
+/// 来自扩展 hello 里的环境变量。
 public struct PiTerminal: Sendable, Equatable {
     public var tty: String?
     public var program: String?
@@ -19,7 +19,6 @@ public struct PiTerminal: Sendable, Equatable {
         self.tmuxSocketPath = tmuxSocketPath
     }
 
-    /// 进程的控制终端名（如 `ttys012`）；没有终端为 nil。
     static func controllingTerminal(of pid: Int32) -> String? {
         var info = proc_bsdinfo()
         let size = Int32(MemoryLayout<proc_bsdinfo>.size)
@@ -41,13 +40,13 @@ public struct PiTerminal: Sendable, Equatable {
     }
 }
 
-/// 一个活着的 Agent 会话（一个进程里的一个会话）。状态与随会话同步的各块值直接用 CueStore 的类型：桥解码出来什么样，记录器就原样写什么样。
+/// 状态与随会话同步的各块值直接用 CueStore 的类型：桥解码出来什么样，记录器就原样写什么样。
 public struct PiSession: Identifiable, Sendable, Equatable {
     /// `<sessionId>.<pid>`：同一会话被两个进程同时打开时也唯一；Pi 的等于 socket 文件名去掉 `.sock`
     public let id: String
     public let sessionID: String
     public let agent: AgentKind
-    /// 首条消息落盘前该文件还不存在；`--no-session` 时为 nil，OpenCode 的会话在它的数据库里，也为 nil。下线时据它判断说没说过话（`spoke`）
+    /// 首条消息落盘前该文件还不存在；`--no-session` 时为 nil，OpenCode 的会话在它的数据库里，也为 nil。
     public let sessionFile: URL?
     /// 承载这个会话的进程：Pi、Claude Code 是会话自己的进程；Codex 是承载终端会话的常驻服务，OpenCode 是它的后台服务（同一进程承载多个会话）
     public let pid: Int32
@@ -55,39 +54,35 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     /// 启动时从会话列表补上的会话没有终端的环境变量，第一次钩子才带来
     public internal(set) var terminal: PiTerminal
     public internal(set) var state: PiWorkState
-    /// CuePad 读不懂这一版扩展（`PiWire.reads`）：CuePad 请它核对磁盘（`PiWire.upgrade`），磁盘上换了新版本它就在歇下时重新载入、以新扩展连回。这段时间读不到它在做什么（`state` 只是填的歇着）、
-    /// 也发不进命令；同步记录不写、界面不换上桥上的状态，都照它最后一次读到的样子。
+    /// CuePad 读不懂这一版扩展（`PiWire.reads`）。这段时间读不到它在做什么（`state` 只是填的歇着）、也发不进命令；
+    /// 同步记录不写、界面不换上桥上的状态，都照它最后一次读到的样子。
     public internal(set) var upgrading = false
     /// 一句话说明（同步记录的 `detail`）：工具名与调用目标、等你回答的弹窗标题、出错的摘要；其余状态为 nil
     public internal(set) var detail: String? = nil
-    /// 出错时 Pi 上报的原文（会话行悬停看）；`detail` 里是摘要
+    /// 出错时 Pi 上报的原文；`detail` 里是摘要
     public internal(set) var errorMessage: String? = nil
     /// 出错的种类（同步记录的 `PiSessionState.failure`）：只按原文归一次类（`PiErrorSummary.failure`）
     public var failure: PiFailure? { state == .error ? PiErrorSummary(errorMessage ?? "").failure : nil }
-    /// 进入当前粗状态（工作中、等你确认、出错、空闲）的时间：思考、工具、等子代理之间切换不变
     public internal(set) var stateSince: Date
-    /// 这段连续处理开始的时间：离开空闲起，到彻底歇下（自己歇下且没有子代理在飞）为止，中间等你确认也不断；空闲、出错时为 nil
     public internal(set) var busySince: Date? = nil
-    /// 主会话最后一轮开始的时刻（同步记录的 `PiSessionState.turnStartedAt`）：Pi 由扩展报（每次模型回合开始），其余由接入记（`SessionFacts.startTurn(at:)`）
+    /// Pi 由扩展报（每次模型回合开始），其余由接入记（`SessionFacts.startTurn(at:)`）
     public internal(set) var turnStartedAt: Date? = nil
     /// `/name` 设的会话名
     public internal(set) var name: String? = nil
-    /// 首条用户消息的开头
     public internal(set) var firstMessage: String? = nil
-    /// 正在等你回答的弹窗；不在等待时为 nil
     public internal(set) var question: PiQuestion? = nil
-    /// CuePad 开的新会话带着发起方的认领标识（`PiLaunch.token`，经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展）；其余会话为 nil
+    /// 经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展（`PiLaunch.token`）；其余会话为 nil
     public internal(set) var launchToken: String? = nil
-    /// 本会话在同一进程里开的子代理（FireCode 的子代理是进程内子会话，不作为独立会话出现）
+    /// FireCode 的子代理是进程内子会话，不作为独立会话出现
     public internal(set) var subagents: [PiSubagentState] = []
     /// CuePad 在后台托管的 Pi（RPC 模式，没有终端界面）：启动时经环境变量 `CUEPAD_HOSTED` 告诉扩展，扩展在 hello 里带回
     public internal(set) var hosted = false
-    /// 当前模型、思考强度与可以换成的模型；未选模型时 `model` 与 `thinking` 为 nil
+    /// 未选模型时 `model` 与 `thinking` 为 nil
     public internal(set) var model: PiModelOption? = nil
     public internal(set) var thinking: Open<PiThinkingLevel>? = nil
     public internal(set) var fast: Bool? = nil
     public internal(set) var availableModels: [PiModelOption] = []
-    /// 这个会话证明过的授权（`PiProof`）：只用来决定保留哪些额度记录，不存不同步
+    /// 只用来决定保留哪些额度记录，不存不同步
     public internal(set) var proofs: [PiProof] = []
     /// 上下文余量：没有模型时为 nil
     public internal(set) var context: PiContextUsage? = nil
@@ -95,18 +90,16 @@ public struct PiSession: Identifiable, Sendable, Equatable {
 
     public var modelState: PiModelState { PiModelState(model: model, thinking: thinking, fast: fast, models: availableModels) }
 
-    /// 从 CuePad 能对它做什么（与同步记录上的 `PiSessionState.capabilities` 同一条规则）。
     public var capabilities: AgentCapabilities { .of(agent, hosted: hosted, model: model) }
 
-    /// 重新上桥时沿用的状态与计时（`PiBridge.attach`）
     var carried: (state: PiWorkState, times: PiTimes) { (state, PiTimes(stateSince: stateSince, busySince: busySince)) }
 
-    /// 留下了对话：会话文件已经落盘（第一条消息之前不建文件）；会话不在文件里的（OpenCode）一建就在它的数据库里。下线时据此决定进不进历史。
+    /// 第一条消息之前不建会话文件；不用会话文件的（OpenCode）一建就算。
     public var spoke: Bool {
         agent.facts.sessionFiles == nil || sessionFile.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false
     }
 
-    /// 此刻要写进同步记录的样子（`PiStateRecorder.update`）。标题与项目要查库，由 `PiSessionMirror` 定好交进来。
+    /// 标题与项目要查库，由 `PiSessionMirror` 定好交进来。
     func snapshot(title: String, projectID: UUID?) -> PiSessionSnapshot {
         var snapshot = PiSessionSnapshot(sessionID: sessionID, state: state, times: PiTimes(stateSince: stateSince, busySince: busySince))
         snapshot.detail = detail
@@ -127,15 +120,12 @@ public struct PiSession: Identifiable, Sendable, Equatable {
         return snapshot
     }
 
-    /// 会话的显示名，规则见 `PiSessionName`。
     public var displayName: String {
         PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
     }
 }
 
-/// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致：
-/// Agent 的会话名（`/name` 之类你起的，或 Agent 自己按对话起的，见 `PiHistoryCheckpoint.named`）→ 会话文件里第一条有文字的用户消息 → 工作目录名。控制字符换成空格并去掉首尾空白，所以是单行。
-/// 用斜杠技能说的写你发的样子（`PiSkillCall`），不写 Pi 展开后的正文；交给 Agent 的附件行只留文件名（`AttachmentFiles.namingAgentLines`）。
+/// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致。
 public enum PiSessionName {
     /// 首条用户消息只用来当单行显示名：只取开头这么多字符（扩展的 `FIRST_MESSAGE_LIMIT` 与之相同）。
     public static let firstMessageLimit = 200
@@ -145,8 +135,7 @@ public enum PiSessionName {
             .compactMap { $0.map { singleLine(AttachmentFiles.namingAgentLines(in: $0)) } }.first { !$0.isEmpty } ?? folder
     }
 
-    /// 你的一句话当首条消息记下的样子：去掉首尾空白后的开头 `firstMessageLimit` 个字符；没有文字为 nil（接着看下一条）。
-    /// 与 Pi 自己的会话列表一致，扩展投进来的机器消息也算。
+    /// 没有文字为 nil（接着看下一条）。与 Pi 自己的会话列表一致，扩展投进来的机器消息也算。
     public static func firstMessage(_ text: String) -> String? {
         let trimmed = PiSkillCall.shown(text).trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : String(trimmed.prefix(firstMessageLimit))
@@ -154,7 +143,7 @@ public enum PiSessionName {
 
 
     /// Pi 把图片缩小或转格式后，在你的话末尾加给模型看的说明行（`[Image: original …]`、`[Image converted from …]`）：CuePad 里一律不显示，
-    /// 会话名、对话、摘要都经这里去掉。按行首认（扩展给的首条消息被截断时说明行可能不完整），只去末尾连续的说明行（说明行后面的空行不挡），其余原样。
+    /// 会话名、对话、摘要都经这里去掉。按行首认：扩展给的首条消息被截断时说明行可能不完整。
     public static func withoutImageNotes(_ text: String) -> String {
         var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
@@ -186,12 +175,11 @@ public enum PiSessionEndReason: Sendable, Equatable {
 public enum PiSessionChange: Sendable, Equatable {
     case appeared(PiSession)
     case stateChanged(PiSession, from: PiWorkState)
-    /// 会话名、首条消息或近况变了（`displayName` 可能随之改变）
     case infoChanged(PiSession)
     case ended(PiSession, reason: PiSessionEndReason)
-    /// 消息损坏（读不出会话或之后的消息格式不对）；连接已关闭，不会出现在 `sessions` 里。读不懂的扩展不在此列（`PiSession.upgrading`）
+    /// 消息损坏；连接已关闭，不会出现在 `sessions` 里。读不懂的扩展不在此列（`PiSession.upgrading`）
     case incompatible(id: String, detail: String)
-    /// 某个会话的扩展观测到订阅额度（回复里带回的，或 `PiBridge.refreshQuota` 查到的）：属于账号，记到 `AccountQuota` 上
+    /// 属于账号，记到 `AccountQuota` 上
     case quota(QuotaReport)
 }
 
@@ -225,7 +213,6 @@ public struct PiMessage: Sendable, Equatable {
 }
 
 public enum PiBridgeError: Error, Equatable {
-    /// socket 目录不是"属于当前用户、权限 0700 的目录"
     case insecureSocketDirectory(String)
     case socketDirectoryTooLong
     case unknownSession(String)
@@ -234,10 +221,8 @@ public enum PiBridgeError: Error, Equatable {
     /// 未及时观察到确认，可能已经执行；不能据此自动重投。
     case ackTimeout
     /// `unconfirmed_turn` / `user_turn` 是提交前的 Cue 保护拒绝；`failed: …` 仍可能已执行，不承诺未接受。
-    /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；斜杠命令还有 `unknown_command`（清单里没有的名字）、`missing_argument`（必填参数没给）；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
-    /// `bad_answer`（答案类型或选项不对）；配置时还有 `no_auth`（该提供方没配好密钥）；重跑时还有 `nothing_to_retry`（会话在跑，或最后一轮不是出错结束的）
     case rejected(String)
-    /// 这个 Agent 的模型表里没有要换的模型（Pi 扩展回 `unknown_model`，其余几家的接入自己判断）
+    /// Pi 扩展回 `unknown_model`，其余几家的接入自己判断
     case unknownModel(AgentKind)
     /// Agent 明确没做这件事（托管的 Claude Code 没登录、模型不可用、额度用完时取消了这条命令或这句话）：原因是它自己的原话；确定没送达，可以重发
     case refused(String)
@@ -245,7 +230,6 @@ public enum PiBridgeError: Error, Equatable {
     case upgradingExtension
     /// 已进入接入的复合操作，不能再把其中的升级错误用作准备证明。
     case operationStarted(ShownText)
-    /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
     case unsupported
     /// 请求结束后未能确认真正退出；不据断线或重载推断结束成功。
     case notEnded

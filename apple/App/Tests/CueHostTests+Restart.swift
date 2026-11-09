@@ -22,8 +22,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 一件事分三步同时做、各开着会话：Cue 的信封里三步都在（不只当前那一步）；其中一步的会话做到一半断开（进程没了，
-    /// 重启、更新、崩溃都是这样），Cue 醒来看到的是它被打断了，不是歇着。
     @Test func 并行的三步都在信封里_做到一半断开的显示被打断() async throws {
         let rig = try await Rig()
         let store = rig.store
@@ -54,7 +52,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 重启 CuePad 时托管的会话还在跑（它不随 App 退出）：启动对账不把它记为被打断，Cue 看到的仍是工作中。
     /// 刚升级、还没记下进程的会话（升级前写的记录）不知道还在不在，原样不动：仍是工作中，说明与子代理都在，不写成歇着或被打断。
     @Test func 重启时还活着的托管会话不算被打断() async throws {
         let rig = try await Rig()
@@ -66,7 +63,6 @@ extension CueHostTests {
         try Data("{}\n".utf8).write(to: file)
         _ = try await rig.app.host.connect("h0", cwd: rig.folder.path, busy: true, hosted: true, sessionFile: file.path)
         try await store.linkCard(running.id, toSession: "h0")
-        // 升级前写的记录：在跑、托管的，本机没有它的进程
         let helper = PiSubagentState(name: "helper", role: "工程师", phase: .known(.running))
         try await PiStateRecorder(store: store, hostID: TestApp.hostID)
             .update(sessionID: "h1", state: .tool, detail: "bash · swift test", hosted: true, subagents: [helper])
@@ -85,7 +81,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 上下文到了换新线（每一轮都用到了）：每次醒来先开新会话，第一条输入带着对话视图，前面说的话照样接得上；大脑还是同一个进程。
     @Test func 到了换新线_开新会话_对话视图接上前面说的() async throws {
         let rig = try await Rig(usage: CueContext.renewAt + 10_000)
         let first = try #require(rig.brainPIDs.first)

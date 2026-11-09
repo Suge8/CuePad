@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// 侧栏进展那一行行尾（Mac、iPad）："N 推进中 · M 等你"，数读 Cue 那一份计数（`CueNow.advancing`、`needsYou`，同名牌与看板列头）；
-/// 等你是赭黄、加粗一档，都是零时不写。行里放不下（英文比中文宽）时让给去处名：只写数"N · M"，颜色仍分得出哪个是等你，读屏照念全句。
+/// 行里放不下（英文比中文宽）时让给去处名：只写数"N · M"，颜色仍分得出哪个是等你，读屏照念全句。
 struct ProgressTally: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

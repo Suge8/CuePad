@@ -7,7 +7,6 @@ import Testing
 @testable import CuePi
 
 /// 真 Claude Code 的端到端测试台：配置目录、HOME、XDG 目录、CuePad 的连接目录与资料库全部指到临时目录，绝不碰 ~/.claude 与真实资料库。
-/// 模型走本机 Claude Code 自己的登录（`ClaudeLogin`，模型 `haiku` 省额度），录制与直连时现取。
 /// 终端会话跑在私有 tmux 服务器里（`tmux -L`），结束时按确切 pid 停掉 Claude Code 与那个 tmux 服务器。
 let claudeURL = ExecutableLocator.standard.candidates("claude").first
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
@@ -19,7 +18,6 @@ let redPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAA
 @MainActor
 final class ClaudeTestbed {
     let root: URL
-    /// 外壳（`wrapper`）所在的目录
     let wrapperDirectory: URL
     let config: URL
     /// 工作目录（真实路径：Claude Code 记的就是它）
@@ -30,16 +28,13 @@ final class ClaudeTestbed {
     let bridge: PiBridge
     let hooks: AgentHookServer
     let runtime: ClaudeCodeRuntime
-    /// 人在不在这台 Mac 前：默认不在（提问交给 CuePad）
     let presence: TestPresence
     let files: AttachmentFiles
     let store: CueStore
     let log: ChangeLog
     private var terminals: [ClaudeTerminal] = []
-    /// 终端会话的会话文件跟读（同 App：历史索引读到的交给接入，`AgentRuntime.read`）；开第一个终端时起
     private var reading: Task<Void, Never>?
 
-    /// 起接入并接终端里的会话：测试台装了钩子，同 App 检测出接入了（`follow(.all)`）。
     func startConnected() throws {
         try runtime.start()
         runtime.follow(.all)
@@ -118,7 +113,6 @@ final class ClaudeTestbed {
         await testbed.stop()
     }
 
-    /// 在私有 tmux 里开一个终端里的 Claude Code（权限模式默认 default：要用工具就问）。
     func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
         if reading == nil, let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) {
             reading = Task { [runtime, bridge] in
@@ -132,7 +126,6 @@ final class ClaudeTestbed {
 
     func session(pid: Int32) -> PiSession? { bridge.sessions.first { $0.pid == pid && $0.agent == .claudeCode } }
 
-    /// 像 App 的记录器那样记下桥上这个会话此刻的样子（状态与模型）。
     func record(_ id: PiSession.ID) async throws {
         let session = try #require(bridge.session(id: id))
         try await PiStateRecorder(store: store, hostID: "mac").update(
@@ -160,7 +153,6 @@ struct TmuxFailed: Error { let command: String }
 struct NoQuestion: Error, CustomStringConvertible { let description: String }
 struct Stuck: Error, CustomStringConvertible { let description: String }
 
-/// 私有 tmux 服务器里的一个 Claude Code（`exec claude`：pane 的进程就是 Claude Code）。
 @MainActor
 final class ClaudeTerminal {
     let pid: Int32

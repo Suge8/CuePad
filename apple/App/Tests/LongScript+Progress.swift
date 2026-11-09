@@ -76,7 +76,6 @@ extension LongScript {
         后端那 21 个测试也重跑了一遍，都还是绿的。接下来做 /reset 页。
         """
 
-    /// 补上版本号的交回：CHANGELOG 记的是评测当天（写死的日期 Cue 会照实要它改，剧本就走不到 done）；证据给全（改动、测试、lint、类型检查）。
     /// 提交了没有照 Cue 这一遍对它交代的（`EvalReading.asksToCommit`）：Cue 每遍交代的不一样，写死哪一种都有几遍收不了尾
     static func bumpDone(committed: Bool) -> String {
         let today = Date.now.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())

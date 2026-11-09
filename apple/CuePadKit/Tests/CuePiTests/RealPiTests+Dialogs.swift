@@ -6,7 +6,6 @@ import Testing
 @testable import CuePi
 
 extension RealPiTests {
-    /// 等待用户时 `question` 是弹窗：种类、文案（确认框的标题与说明，换行分隔）、选项与这次弹窗的标识；在 Pi 里回答后清空。
     @Test func extensionDialogShowsWaitingUserWithTheQuestionThenResumes() async throws {
         try await withRig { pi, bridge, _ in
             try pi.prompt("/ask")
@@ -29,7 +28,6 @@ extension RealPiTests {
         }
     }
 
-    /// 从 CuePad 作答：选择框选中第二项、确认框答"是"，Pi 那边的调用拿到这个答案，弹窗收起、问题清空。
     @Test func answeringThroughTheBridgeResolvesThePiDialog() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("/pick")

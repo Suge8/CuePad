@@ -1,7 +1,6 @@
 import CueStore
 import Testing
 
-/// 文件页写回 SKILL.md：只换改了的那一项，其余 frontmatter 与正文一个字节不动；读出的名字与说明是 YAML 的值。
 /// 样例是各家真实技能里出现过的写法，合成的最小版。
 @Suite struct SkillDocumentTests {
   struct Write: CustomTestStringConvertible, Sendable {

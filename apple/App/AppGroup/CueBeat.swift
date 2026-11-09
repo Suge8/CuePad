@@ -23,7 +23,6 @@ nonisolated enum CueBeat: String, Codable, Sendable, CaseIterable {
     /// 不在：没启用、它运行的 Mac 没开、还没和 iCloud 对过。睡脸、整只变淡，不用管。
     case away
 
-    /// 右下那颗点：在动是靛青，起不来是胭脂，其余没有。
     enum Dot: Sendable { case moving, failed }
 
     var dot: Dot? {

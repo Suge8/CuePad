@@ -6,7 +6,6 @@ import Testing
 @testable import CuePi
 
 extension RealClaudeTerminalTests {
-    /// 权限确认与 AskUserQuestion 都弹在终端里，同时出现在 CuePad；从 CuePad 答了，终端里的这一问随之收起，工具照答案执行。
     @Test func cuePadAnswersThePermissionPromptAndTheQuestionOfATerminalSession() async throws {
         try await ClaudeTestbed.run() { testbed in
             try testbed.startConnected()
@@ -31,7 +30,6 @@ extension RealClaudeTerminalTests {
             try await testbed.waitForTurn(session.id, since: chose)
             #expect(await terminal.screen.contains("→ 咖啡"))
 
-            // 终端里每道选择题都能自己填：从 CuePad 写一个不在选项里的
             let typed = Date()
             try await terminal.type("再用 AskUserQuestion 工具问我一次喝什么（一个单选问题，选项是 茶、咖啡），然后只回复我给的回答")
             let again = try await testbed.waitForQuestion(session.id, on: terminal)
@@ -42,8 +40,6 @@ extension RealClaudeTerminalTests {
         }
     }
 
-    /// 提问按人在不在分：人不在时挂住等 CuePad 答（终端里不弹）；挂着时人回来了就放行，终端里问、CuePad 只显示；
-    /// 人在时直接在终端里问，CuePad 上只显示、不能答。
     @Test func aQuestionGoesToTheTerminalWhenTheUserIsAtTheMac() async throws {
         try await ClaudeTestbed.run() { testbed in
             try testbed.startConnected()
@@ -71,8 +67,7 @@ extension RealClaudeTerminalTests {
         }
     }
 
-    /// MCP 服务要你填的只有一个字段的表单（Elicitation）：人不在时从 CuePad 答，答案交给 MCP 服务；
-    /// 人在时终端里弹表单、CuePad 只显示，终端里答了（这里是取消）它就收起。没放行的 MCP 工具问权限，标题与终端一样写"服务 - 工具 (MCP)"。
+    /// 没放行的 MCP 工具问权限，标题与终端一样写"服务 - 工具 (MCP)"。
     @Test func cuePadAnswersAnMCPFormWhileTheUserIsAway() async throws {
         try await ClaudeTestbed.run() { testbed in
             try testbed.startConnected()
@@ -108,7 +103,6 @@ extension RealClaudeTerminalTests {
         }
     }
 
-    /// 在终端里先答了：CuePad 上的这一问随之消失，之后再从 CuePad 答是"已经答过了"。
     @Test func answeringInTheTerminalFirstWithdrawsTheQuestionFromCuePad() async throws {
         try await ClaudeTestbed.run() { testbed in
             try testbed.startConnected()

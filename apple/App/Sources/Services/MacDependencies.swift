@@ -4,29 +4,23 @@ import CuePi
 import CueStore
 import Foundation
 
-/// macOS 专属依赖；`live` 是生产装配，测试换成隔离目录、内存热键、记录型接入与私有剪贴板。
 struct MacDependencies {
     var pi: PiBridge
     var hotkeys: any HotkeyBackend
     var paths: AgentPaths
-    /// 各家的接入状态（检测出的可执行文件也在里面：各家的接入、Cue 的大脑都从这里取）。
     var agents: AgentIntegrations
     var terminal: PiTerminalJumper
     var hostID: String
-    /// 项目工作区的根目录（`Workspaces`）：不碰真实世界时与测试放进隔离目录。
     var workspaces: Workspaces
-    /// 系统睡眠与唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
+    /// 生产用 `NSWorkspace` 自己的通知中心。
     var wakeNotifications: NotificationCenter
-    /// App 的钟：资料库里随时间变的读与在线记录续期（`CueStore.timing`），桥的时限与托管会话的闲置计时（`PiBridge.timing`，`pi` 用同一个建）；测试换成手动推进的。
+    /// `pi` 必须用同一个钟建（`PiBridge.timing`）；测试换成手动推进的。
     var timing: Timing = .system
-    /// 命令行工具 `cuepad` 的链接（设置里的开关；Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖它）。
+    /// Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖这个链接。
     var commandLineTool: CommandLineToolInstaller
-    /// 自动更新器；只有正式版签名的有，本机构建与测试为 nil。
     var updater: (any AppUpdater)?
-    /// Agent 钩子转发到 CuePad 的监听端（Claude Code、Codex 的接入用它）。
     var hooks: AgentHookServer
-    /// 各 Agent 的接入：发现会话、后台开新会话与接着已结束的会话、结束会话。OpenCode 的会话索引由它的接入直接写进资料库，
-    /// 所以等资料库打开后再建（参数就是它）。
+    /// OpenCode 的会话索引由它的接入直接写进资料库，所以等资料库打开后再建（参数就是它）。
     var runtimes: @MainActor (CueStore) -> [AgentKind: any AgentRuntime]
     var pasteboard: NSPasteboard
     var cue: CueDependencies
@@ -34,7 +28,7 @@ struct MacDependencies {
     /// 隔离实例这台 Mac 的标识（没给 `-CuePadHost` 时）：不是任何真实的 Mac，库里记给真实 Mac 的东西在它看来都是别台的。
     static let isolatedHostID = "mac-isolated"
 
-    /// 碰不碰真实世界（各家的配置、命令行链接、连接目录、工作区、主机标识）只看 `LibraryLocation.touchesRealWorld`；
+    /// 碰不碰真实世界只看 `LibraryLocation.touchesRealWorld`；
     /// 自动更新只看是不是正式版签名：本机构建装不了 Sparkle 发来的正式版，也不去读真实的更新源与偏好。
     static func live(location: LibraryLocation, alerts: AlertCenter) -> MacDependencies {
         let environment = ProcessInfo.processInfo.environment

@@ -13,7 +13,6 @@ private final class FailingStore: CueFileStore {
     func fileURL(for id: String) -> URL? { nil }
 }
 
-/// 把一个条目交给粘贴/拖入委托，等它给出结果（UIKit 的粘贴与拖入都走这条路）。
 @MainActor
 private func transform(_ provider: NSItemProvider, in h: EditorHarness) async -> FakePasteItem {
     let item = FakePasteItem(provider)

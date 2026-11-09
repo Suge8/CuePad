@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 附件文件经 `files` 同步写入（不经 actor），按键存在缓存目录、上传前在库旁留保底；附件记录（同步用）在引用它的写入里登记。
 @Suite struct AttachmentFileTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -54,8 +53,6 @@ import Testing
     try await body(CueStore(location: .isolated(fixture.directory)))
   }
 
-  /// 缓存可被系统清掉：引用了、服务器还没收下的，存它的进程退出、下次启动清理过之后也由库旁的保底补回；
-  /// 收下之后保底删掉，本机没有了就是没有（再从 iCloud 取）。
   @Test func backupCoversClearedCacheUntilUploaded() async throws {
     let key = try await inEndedRun { earlier in
       let key = try earlier.files.store(pngData(width: 6, height: 6))
@@ -72,7 +69,6 @@ import Testing
     #expect(store.files.fileURL(for: key) == nil)
   }
 
-  /// 服务器早已收下的内容再存一次（缓存被清后又粘贴了同一张）：引用它时认出记录已在，不再留保底。
   @Test func storingUploadedContentAgainKeepsNoBackupOnceReferenced() async throws {
     let key = try store.files.store(pngData(width: 7, height: 7))
     _ = try await store.createCard(body: "![](cuepad://file/\(key))")
@@ -106,8 +102,6 @@ import Testing
     #expect(try records().count == 3)
   }
 
-  /// 启动时的清理：上次运行（已退出）存下、没被正文或草稿引用的删掉（缓存与保底一起，有附件记录的连记录：编辑时删掉了图、再永久删卡的）；
-  /// 被引用的、草稿里的留着，草稿里的从此由这次运行持有，缓存再被清也补得回。还开着的别的进程（命令行）存好、还没提交的不受影响，提交后图在、照常登记。
   @Test func strayFilesGoButReferencedDraftedAndPendingOnesStay() async throws {
     let (stray, used, drafted, edited) = try await inEndedRun { earlier in
       let keys = try [0.1, 0.3, 0.5, 0.9].map { try earlier.files.store(pngData(width: 2, height: 2, shade: $0)) }
@@ -131,8 +125,7 @@ import Testing
     #expect(try await cli.hasAttachment(pending) && cli.files.fileURL(for: pending) != nil)
   }
 
-  /// 同步乱序：别的设备的附件记录先到、引用它的卡片后到，中间启动清理一次。别处来的记录不收（收了会把删除同步出去，那台的图就没了）：
-  /// 卡片到了照常有图。
+  /// 别处来的记录不收：收了会把删除同步出去，那台的图就没了。
   @Test func recordFromElsewhereArrivingBeforeItsCardSurvivesCleanup() async throws {
     let other = try Fixture()
     let key = try other.store.files.store(pngData(width: 9, height: 9, shade: 0.42))
@@ -148,8 +141,6 @@ import Testing
     #expect(try await store.pendingSync().deletes.isEmpty)
   }
 
-  /// 同一份内容两台各自登记过：这台编辑删图、再永久删卡后不再引用它，另一台的卡片还没到。启动清理只收这台登记的那条，
-  /// 另一台的记录与本机文件都留着，卡片到了有图。
   @Test func cleanupKeepsAnotherDevicesRecordOfTheSameContent() async throws {
     let png = pngData(width: 11, height: 11, shade: 0.33)
     let key = try await inEndedRun { earlier in
@@ -172,8 +163,6 @@ import Testing
     #expect(try await store.hasAttachment(key) && store.files.fileURL(for: key) != nil)
   }
 
-  /// 这台（B）收到 A 登记的记录、取来文件，再用同一份内容建卡：B 登记自己的一行，不沿用 A 的。A 随后不再引用它、启动清理收走自己那行，
-  /// 删除同步到 B；B 的卡片之后才到 A。B 的那行撑着两边：都有记录、有图。
   @Test func referencingContentRegisteredElsewhereRegistersOwnRecord() async throws {
     let a = try Fixture()
     let png = pngData(width: 13, height: 13, shade: 0.27)
@@ -203,7 +192,6 @@ import Testing
     #expect(try await a.store.hasAttachment(key) && a.store.files.fileURL(for: key) != nil)
   }
 
-  /// 键来自同步记录：拼不出附件目录外的路径。
   @Test(arguments: ["../cuepad.db", "deadbeef", String(repeating: "0", count: 64), String(repeating: "0", count: 64) + "./x"])
   func unknownOrMalformedKeyIsNotFound(key: String) throws {
     _ = try store.files.store(pngData(width: 4, height: 4))

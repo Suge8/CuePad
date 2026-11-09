@@ -11,29 +11,21 @@ enum ScrollAnchor {
 enum DebugScene {
     nonisolated static let args = DebugArgs.launch
     static var scene: String? { args.scene }
-    /// `-CuePadWindowSize <宽>x<高>`：主窗口尺寸（Mac `resizeWindow`、iPad `debugCompact`）；没给或写错为 nil。
     static var windowSize: CGSize? {
         let parts = args.layoutOpts.windowSize?.split(separator: "x").compactMap { Double($0) } ?? []
         return parts.count == 2 ? CGSize(width: parts[0], height: parts[1]) : nil
     }
     static var searchText: String { args.search ?? "" }
-    /// Mac session 画面要打开的会话（演示会话的 sessionID 与会话名相同）。
     static var sessionToOpen: String? { scene == "session" ? args.session : nil }
-    /// 截图演示：编辑器载入后选中这一段（`起点:长度`，UTF-16）。
     static var editorSelection: NSRange? {
         guard let parts = args.select?.split(separator: ":").compactMap({ Int($0) }), parts.count == 2 else { return nil }
         return NSRange(location: parts[0], length: parts[1])
     }
-    /// 挂上刻意的几何回写环（只给布局压力场景的检测器自检用）。
     static var injectsGeometryLoop: Bool { args.layoutOpts.geometryLoop }
-    /// 项目页任务纸点"还有 N 条"的那条路（`debugExposesTaskFold`，看得见的那一页上的纸）。
     static var toggleTaskFold: () -> Void = {}
-    /// 点 Cue 页头（Mac 是 Cue 栏头）开合面板的那条路（`debugExposesCuePanel`）。
     static var toggleCuePanel: () -> Void = {}
     #if os(iOS)
-    /// 点窄屏侧栏额度钮的那条路（`debugExposesQuota`）。
     static var toggleQuota: () -> Void = {}
-    /// 窗口那一层的模态浮出（`debugExposesModals`）：点外面关调的是开着那一个的 `close`。
     static weak var modals: ModalHost?
     #endif
 

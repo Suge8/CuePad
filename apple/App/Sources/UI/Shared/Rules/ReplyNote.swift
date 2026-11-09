@@ -1,12 +1,8 @@
 import CueStore
 import Foundation
 
-/// 一条批注，随回复框里的下一句一起发出（`ComposerDraft.notes`，发出时排成 `message(_:said:)`），两种：
-/// - 对回答的：你在 Agent 某条回答里选中的一段（`quote`）和你对它说的话（`note`，一定有字）。
-///   位置记在渲染后的文字里：哪条回答（`entry`，消息 id）、第几段可选文字（`run`，`MarkdownText.proseTexts` 的下标）、段内 UTF-16 偏移。
-///   回答写完后文字不再变，偏移是确切的，同一句话出现两次也不会挂错；那一处已不是 `quote` 时（渲染规则改了）只是不画高亮，发出时照样带摘录。
-/// - 引用一份预览（`preview`，像聊天里的引用回复）：只记它是哪份、标题（`quote`）与在对话里的那一批（`entry`，点回复框上那一行回到那里），
-///   不碰文件，网页地址那类预览也一样引用；话就是回复框里你写的那句，自己没有字（`note` 空）。
+/// 位置记在渲染后的文字里：回答写完后文字不再变，偏移是确切的，同一句话出现两次也不会挂错；那一处已不是 `quote` 时（渲染规则改了）只是不画高亮，发出时照样带摘录。
+/// 引用一份预览时不碰文件，网页地址那类预览也一样引用；话就是回复框里你写的那句，自己没有字（`note` 空）。
 nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
     var id = UUID()
     let entry: UUID
@@ -14,10 +10,8 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
     let location: Int
     let quote: String
     var note = ""
-    /// 引用的那份预览（`PiPreview.id`）；对回答的批注为 nil。
     var preview: UUID?
-    /// 引用时那份预览的类型：预览随对话过期删掉、按编号取不到后，那一行照它写类型图标。
-    /// 可选字段，没有它的旧草稿照常解出来（只是过期后是一张纸）。
+    /// 没有它的旧草稿照常解出来（只是过期后是一张纸）。
     var kind: PiPreviewKind?
 
     init(entry: UUID, run: Int, location: Int, quote: String, note: String = "") {
@@ -28,7 +22,6 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
         self.note = note
     }
 
-    /// 引用 `preview`，它在对话里的那一批是 `entry`（`PiChatEntry.id`）。
     init(quoting preview: PiPreview, in entry: UUID) {
         self.init(entry: entry, run: 0, location: 0, quote: preview.title)
         self.preview = preview.id
@@ -43,19 +36,16 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
 
     var range: NSRange { NSRange(location: location, length: quote.utf16.count) }
 
-    /// 正在写的一条（`AppSettings.editReplyNote`）：`fresh` 是还没进草稿的新的一条，记下时才排进去。
     struct Edit: Equatable, Identifiable, Sendable {
         var note: ReplyNote
         let fresh: Bool
         var id: UUID { note.id }
     }
 
-    /// 同一处（同一条回答、同一段、同样的选区；或同一份预览）。
     func marksSamePlace(as other: ReplyNote) -> Bool {
         entry == other.entry && run == other.run && location == other.location && quote == other.quote && preview == other.preview
     }
 
-    /// 高亮上挂的链接：点高亮打开这条批注（`id(of:)` 认回来）。
     var url: URL { URL(string: "\(Self.scheme):\(id.uuidString)")! }
 
     static func id(of url: URL) -> UUID? {
@@ -91,7 +81,6 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
         return ([String(localized: "对你回答的批注（「」里是原话摘录）：")] + lines).joined(separator: "\n")
     }
 
-    /// 摘录：去掉渲染时加的列表符、引用竖条与缩进，空白收成一个空格；超过 `excerptLimit` 个字只留头尾各 `excerptEnd` 个字。
     static func excerpt(_ quote: String) -> String {
         let flat = quote.split { $0.isWhitespace || renderedMarks.contains($0) }.joined(separator: " ")
         guard flat.count > excerptLimit else { return flat }

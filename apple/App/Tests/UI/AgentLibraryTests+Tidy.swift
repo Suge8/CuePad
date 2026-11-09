@@ -7,7 +7,6 @@ import Testing
 @testable import CuePi
 
 extension AgentLibraryTests {
-    /// 同名的各份都列在技能里，带着同名的那件；在其中一份的文件页上"只留这份"，只移走和它撞名的，别的项目里的不动。格式不对的照列，带着哪里不对。
     @Test func 去重只留一份_格式不对的照列出来_都能撤销() async throws {
         for directory in [claude, codex] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
         let folder = home("work/app"), other = home("work/blog")
@@ -18,7 +17,6 @@ extension AgentLibraryTests {
         try skill("pr", in: agents.appending(path: "skills"))
         try skill("pr", in: folder.appending(path: ".agents/skills"))
         try skill("pr", in: other.appending(path: ".agents/skills"))
-        // 两个项目各自撞名（一份在旧目录里）：各是一件
         for root in [folder, other] {
             try skill("lint", in: root.appending(path: ".agents/skills"))
             try skill("lint", in: root.appending(path: ".codex/skills"))
@@ -42,7 +40,6 @@ extension AgentLibraryTests {
         await workspace.tidy([TidyOrder(tidy: "duplicate/pr", keep: projectCopy)], in: found)
 
         #expect(workspace.notice?.text.visible == "只留了这份，其余进了废纸篓")
-        // 留项目里的那份：移走的只是和它撞名的全局那份，另一个项目的不动
         #expect(!exists(agents.appending(path: "skills/pr")) && exists(URL(filePath: projectCopy)) && exists(other.appending(path: ".agents/skills/pr")))
         let kept = try await library("pr 不再同名") { $0.duplicate(of: projectCopy) == nil }
         #expect(kept.skills.filter { $0.name == "pr" }.map(\.path) == [projectCopy, other.appending(path: ".agents/skills/pr").path])
@@ -53,7 +50,6 @@ extension AgentLibraryTests {
         _ = try await library("撤销后 pr 又同名") { $0.duplicate(of: projectCopy) != nil }
     }
 
-    /// 内容不同的全局规则：行末是另写了一份的那家，合并前先标出会并进来的段；替换基础提示的两份勾了才并进来并撤掉（Pi 的进废纸篓、Codex 的撤掉配置键）。
     @Test func 合并进来_撤掉选中的替换基础提示_能撤销() async throws {
         for directory in [claude, codex, pi] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
         try write("共用的\n", agents.appending(path: "AGENTS.md"))
@@ -77,7 +73,6 @@ extension AgentLibraryTests {
         #expect(merge.preview(retiring: [.piSystem], texts: texts.filter { !$0.key.hasSuffix("CLAUDE.md") }) == nil, "有一份正文还没到：标不出来，按不了合并")
         #expect(try await text(.instruction(.piSystem), in: found) == "你是 Pi\n")
 
-        // 看过合并稿之后 Mac 上又改了一份：不照新文件合并，退回"Mac 上刚改过"
         let workspace = Workspace(services: services)
         try write("全局规则\n\n后来加的\n", claude.appending(path: "CLAUDE.md"))
         await workspace.tidy([TidyOrder(tidy: merge.id, retire: [.piSystem, .codexPrompt], base: merge.base)], in: found)

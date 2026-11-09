@@ -5,7 +5,6 @@ import Testing
 import CueStore
 @testable import CuePi
 
-/// 端到端：会话的对话从 Pi 的会话文件读出——一轮一条 Pi 消息（只取最后的回答，工具只成摘要）；会话记录上的摘要是对话的投影。
 @MainActor
 @Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(2)))
 struct RealTranscriptTests {
@@ -29,7 +28,6 @@ struct RealTranscriptTests {
         try await eventually("第一轮落盘") { try roundsDone(file, 1) }
         try pi.prompt("[[tool:echo TOOL-OUTPUT-42]]")
         try await eventually("工具轮落盘") { try roundsDone(file, 2) }
-        // 机器消息（扩展投进来的信封）原样进对话但不算你说的；它触发的那轮回答照常是一条 Pi 消息
         try pi.prompt("<some_event>\n子任务完成\n</some_event>")
         try await eventually("机器消息那轮落盘") { try roundsDone(file, 3) }
 
@@ -41,11 +39,9 @@ struct RealTranscriptTests {
         #expect(messages.map { $0.tools?.steps } == [nil, nil, nil, 1, nil, nil])
         #expect(messages[3].roundStartedAt.map { $0 <= messages[3].at } == true)
         #expect(messages.map(\.seq) == messages.map(\.seq).sorted() && Set(messages.map(\.seq)).count == 6)
-        // 摘要：最近一轮做完的问答（机器消息那轮沿用你说的那句），没有进行中的提问
         #expect(update.recap.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]" && update.recap.lastReply?.contains("子任务完成") == true)
         #expect(update.recap.pendingPrompt == nil)
 
-        // 增量读：从检查点继续只给出新消息
         try pi.prompt("第三问")
         try await eventually("第三轮落盘") { try roundsDone(file, 4) }
         let next = try PiHistory.index(file: file, from: update.checkpoint)
@@ -53,7 +49,6 @@ struct RealTranscriptTests {
         #expect(next.recap.lastPrompt == "第三问")
     }
 
-    /// 真实 Pi 写出的工具结果行（键序、isError）决定摘要读不读得到失败：跑一条成功的命令、写一个文件、再跑一条退出码非 0 的命令。
     @Test func realToolResultsDecideWhichCallsFailed() async throws {
         let (pi, bridge, file) = try await rig()
         defer { bridge.stop(); pi.stop() }

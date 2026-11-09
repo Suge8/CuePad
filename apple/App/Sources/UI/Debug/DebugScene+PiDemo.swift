@@ -3,9 +3,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// 演示库里的 Pi：Mac 同步来的会话状态（含历史）、几段对话与发到 Mac 的请求（iOS 与 Mac 的 session 画面共用）。
 extension DebugScene {
-    /// 演示会话的摘要与弹窗：摘要写成对话的投影，弹窗交给状态记录器（与真实来源一致）。
     private struct DemoRecap {
         var lastPrompt: String?
         var lastReply: String?
@@ -16,7 +14,6 @@ extension DebugScene {
     /// 演示对话的另一台 Mac 的执行器（留住它，结果写回后照常显示）。
     private static var relayExecutor: DeliveryExecutor?
 
-    /// 演示用的 Mac 端状态：各种状态、各家 Agent 的会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         await running("演示 Pi 会话") {
             try await keepDemoPresence(services.store)
@@ -34,7 +31,6 @@ extension DebugScene {
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let recorder = demoRecorder(store)
         let sessions: [(String, PiWorkState, String?, String?, DemoRecap)] = [
-            // 在跑的会话：新的话在 pendingPrompt，上一轮问答成对
             ("atlas", .tool, "bash · pnpm test -- scheduler", String(localized: "圆桌", table: "Demo"), DemoRecap(
                 lastPrompt: String(localized: "跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", table: "Demo"),
                 lastReply: String(localized: "上一轮 12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位的顺序被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n第二个需要把回调地址换成统一网关。\n\n另外顺手看了一眼覆盖率：scheduler 目录是 71%，主要缺重连和超时两条路径。两个失败修好后，我可以补上这两条的用例，大概再加 6 个测试。\n\n要我先改第一个吗？", table: "Demo"),
@@ -56,21 +52,17 @@ extension DebugScene {
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: String(localized: "部署到生产吗？\n会替换当前线上的 1.4.2", table: "Demo")))),
             ("review", .delegating, nil, nil, DemoRecap(lastPrompt: String(localized: "让子代理分头审查这两个分支", table: "Demo"))),
             ("migrate", .compacting, nil, "Flow", DemoRecap(lastPrompt: String(localized: "把迁移脚本拆成三步", table: "Demo"), lastReply: String(localized: "拆好了，三步各自能回滚。", table: "Demo"))),
-            // 出错的一个：给的是 Agent 报的原文，同桥上一样归类、写摘要（`PiErrorSummary`，额度用完、换个模型）
             ("billing", .error, #"429 {"error":{"type":"billing_error","message":"Monthly usage limit reached. Your limit resets Thursday 9:00."}}"#, String(localized: "闲鱼", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把整个 billing 目录读一遍，总结计费规则", table: "Demo"))),
             ("gateway", .tool, "bash · pnpm test -- auth", String(localized: "圆桌", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把登录回调改走统一网关，改完跑一遍集成测试", table: "Demo"))),
             ("keychain", .thinking, nil, "CuePad", DemoRecap(lastPrompt: String(localized: "查一下钥匙串读不到令牌的原因", table: "Demo"))),
             ("notes", .settled, nil, "Career", DemoRecap(
                 lastPrompt: String(localized: "整理一下这周的会议记录", table: "Demo"), lastReply: String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。", table: "Demo"))),
-            // 歇着、Cue 已接手这次停下（转给了 cuepad，`seedCue`）：会话行与看板卡写 Cue 对它做的那件事
             ("docs", .settled, nil, "Career", DemoRecap(
                 lastPrompt: String(localized: "把简历里的项目经历按时间重排", table: "Demo"), lastReply: String(localized: "排好了，最近的在前。投送队列那段的数据要等补丁合进去再填。", table: "Demo"))),
-            // CuePad 在后台新开的会话，还没说过话
             ("scratch", .settled, nil, "CuePad", DemoRecap()),
             ("piwork", .settled, nil, nil, DemoRecap(
                 lastPrompt: String(localized: "列出 piwork 目录下的文件", table: "Demo"), lastReply: String(localized: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md", table: "Demo"))),
         ]
-        // 历史里再加几个带近况的：一个正在请 Mac 继续，一个不在项目里；pricing 是 Cue 核对过的那批四份的会话（`seedDeliveries`），会话页里那批横着滑
         let history: [(String, String?, PiRecap)] = [
             ("landing-copy", String(localized: "旅行", table: "Demo"), PiRecap(lastPrompt: String(localized: "把首页标题换成新文案", table: "Demo"), lastReply: String(localized: "改好了，首页标题现在是「把想法写成卡片」。", table: "Demo"))),
             ("weekly", nil, PiRecap(lastPrompt: String(localized: "汇总这周的提交", table: "Demo"), lastReply: String(localized: "这周 23 个提交，主要是同步和 Agent 页。", table: "Demo"))),
@@ -88,11 +80,9 @@ extension DebugScene {
             try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
             try await recorder.end(sessionID: id)
         }
-        // 各会话状态开始的时间距今几分钟
         let since: [String: TimeInterval] = [
             "deploy": 21, "rename": 14, "homepage": 9, "notes-edit": 4, "atlas": 3, "cuepad": 5, "review": 4.5, "migrate": 9, "billing": 19, "gateway": 7, "keychain": 26, "scratch": 2, "docs": 6,
         ]
-        // 你这边之前说过的几句在几分钟前（看板推进中卡下沿那条线的过去一句一颗点）；有演示对话的会话（`seedChats`）用对话里的
         let said: [String: [TimeInterval]] = [
             "billing": [82, 51, 19], "gateway": [33, 7], "keychain": [26], "rename": [120, 42, 14], "review": [95, 24, 4.5], "cuepad": [76, 28, 5], "migrate": [63, 9],
         ]
@@ -116,11 +106,9 @@ extension DebugScene {
                 recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))
         }
         try await recorder.end(sessionID: "piwork")
-        // 没指定项目的想法：进默认项目
         for body in [String(localized: "周末读完《设计心理学》第三章", table: "Demo"), String(localized: "菜单栏面板能不能直接拖图进来？", table: "Demo"), String(localized: "给落地页换一张首图", table: "Demo")] {
             _ = try await store.createCard(body: body)
         }
-        // 后台托管、带八个子代理的会话（两个在跑、一个失败、其余已交回或空闲：名册一行要让在跑的先被看到）
         let started = Date.now.addingTimeInterval(-260)
         func settled(_ name: String, _ role: String, _ phase: PiSubagentPhase, _ action: String, after seconds: TimeInterval) -> PiSubagentState {
             PiSubagentState(name: name, role: role, phase: .known(phase), action: action, startedAt: started, settledAt: started.addingTimeInterval(seconds),
@@ -138,12 +126,10 @@ extension DebugScene {
             PiSubagentState(name: String(localized: "性能", table: "Demo"), role: String(localized: "工程师", table: "Demo"), phase: .known(.idle), action: ""),
         ])
         try await seedBindings(store, projects: projects)
-        // 另一台 Mac 上的会话（演示发过去的话送达与失败）
         _ = try await demoRecorder(store, host: "demo-mini").update(
             sessionID: "relay", state: .settled, title: "relay", directory: "relay", times: PiTimes(stateSince: .now.addingTimeInterval(-32 * 60), busySince: nil))
         try await seedChats(store)
         if args.longChat { try await seedLongChat(store, project: project("CuePad")) }
-        // 会话文件里的压缩记录：对话里的一行系统行（notes 最后一轮回答之后）
         try await store.writePiTranscript(PiTranscript(
             sessionID: "notes",
             messages: [PiChatMessage(sessionID: "notes", entryID: "compaction-demo", seq: 99, role: .system, text: PiNotice.compacted.rawValue, at: .now.addingTimeInterval(-1_800))],
@@ -155,11 +141,9 @@ extension DebugScene {
         }
         try await seedTaskStates(store, projects: projects)
         if let relay = states.first(where: { $0.sessionID == "relay" }) {
-            // 一条没能送达（重发的照常送达）、之后又问了一轮，再一条已送达还没进对话：由一个只认这台演示 Mac 的执行器给出结果
             _ = try await services.store.requestDelivery(String(localized: "顺便备份一下线上数据库", table: "Demo"), to: relay.target, on: relay.hostID, mode: .send)
             try await relayLaterTurn(store)
             _ = try await services.store.requestDelivery(String(localized: "先把迁移脚本在测试库上跑一遍，报错长这样", table: "Demo") + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay.target, on: relay.hostID, mode: .send)
-            // 发给那台 Mac 上已结束的会话、没能送达：装修项目的"此刻"写这条的原因
             let mini = demoRecorder(store, host: relay.hostID)
             _ = try await mini.update(sessionID: "quote", state: .settled, title: "quote", directory: "quote", projectID: project(String(localized: "装修", table: "Demo")))
             try await mini.end(sessionID: "quote")
@@ -178,11 +162,9 @@ extension DebugScene {
             _ = try await services.store.requestDelivery(String(localized: "改完再看看登录回调那个超时", table: "Demo"), to: atlas.target, on: atlas.hostID)
         }
         if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
-            // 发给已结束的会话：Mac 先在后台唤醒它
             _ = try await services.store.requestDelivery(String(localized: "标题再短一点", table: "Demo"), to: landing.target, on: landing.hostID, mode: .send)
         }
         if let notes = states.first(where: { $0.sessionID == "notes" }) {
-            // 回复框里还挂着两条对最后那轮回答的批注（对话里那两处带高亮）
             let reply = PiChatMessage.recordID(sessionID: "notes", entryID: "p9")
             services.settings.setReplyDraft(ComposerDraft(text: String(localized: "续费域名那条再加上截止日期", table: "Demo"), notes: [
                 demoReplyNote(entry: reply, quote: String(localized: "完整页面可以直接点按钮试交互", table: "Demo"), note: String(localized: "要能离线打开", table: "Demo")),

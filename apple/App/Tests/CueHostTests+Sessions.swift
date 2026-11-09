@@ -9,7 +9,6 @@ import Testing
 @testable import CuePad
 
 extension CueHostTests {
-    /// Cue 经工具建任务并开工：执行器在项目文件夹开出会话，会话名是任务标题、模型与思考强度是 Cue 指定的（启动参数，一步生效），再送进草稿。
     @Test func 建任务开工_会话名模型强度照Cue指定的开() async throws {
         let rig = try await Rig()
         try await rig.say("请建个任务并开工")
@@ -27,8 +26,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 会话的动静叫醒 Cue，它看了看、什么都没做（没有落了结果的一步）：CuePad 替它把会话留给你回，Cue 页那一行写叫醒它的会话停下了、去处是留给你，
-    /// 点它去的就是那个会话。紧接着又这样看了同一个会话：同一格里再一行。会话之后改了名，这两行仍写当时的名字。
     @Test func 会话歇下后Cue什么都没做_写明谁叫醒的() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 只看看")
@@ -64,8 +61,7 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 会话交回时，Cue 几轮之前托付给它的事已不在最近几轮问答里：叫醒 Cue 的信封在近况里照列它更早对会话说过的（重发的同一句只列一次），
-    /// 他自己在会话里说的不列；Cue 说的每一句原文照列不截，长话末尾的要求也在，他在最近几轮里照抄的同一句（截短列着）挤不掉它。Cue 拿它对照交回，没做到的不 done（照不照办看评测：长程的"做完顺手升 2.3.1"）。
+    /// 照不照办看评测：长程的"做完顺手升 2.3.1"。
     @Test func 会话交回时_信封列着Cue更早托付的() async throws {
         let rig = try await Rig()
         try await rig.say("请建个任务并开工")
@@ -102,7 +98,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 用工具时，值班的 Mac 把它在做什么写进库（同步出去，各设备 Cue 页的头像与进展一行读这一处），这一轮说完回到歇着。
     /// 工具是读一个命名管道：没人往里写，读就停在那里，"工具进行中"一直在库里，断言完再写一行放行。
     @Test func Cue用工具时库里写下动作_说完回到歇着() async throws {
         let rig = try await Rig()
@@ -123,7 +118,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 在做的会话在等回答（如"允许使用 Bash？"）：马上叫醒 Cue 去作答。
     @Test func 会话等回答时Cue马上醒来() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 要作答")
@@ -133,7 +127,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 开工，Mac 开不了会话（这里是 Pi 起来就退出）：这次失败是这件事的一条变化，叫醒 Cue，信封里写着动作与 Mac 报的原因。
     @Test func 开工失败_Cue醒来看到原因() async throws {
         let rig = try await Rig()
         rig.app.host.openFailure = #"Error: Model "fake/nope" not found"#

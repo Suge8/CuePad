@@ -5,9 +5,6 @@ import Testing
 import CueStore
 @testable import CuePi
 
-/// 压缩上下文是会话状态里的一档"工作中"（`.compacting`）：真实 Pi + 安装器装进临时目录的真实扩展 + 假模型 + `PiBridge`。
-/// 手动 /compact、上下文快满时自动压缩、上下文溢出后压缩再重试，三种都先报"在压缩"；
-/// 歇着时开始的压缩（手动）结束或被停止后回到原来的状态和原来的计时起点——不是新的一轮；失败了是一次出错。
 /// 摘要请求的停住与成败由对话里的标记控制（`[[slow-compact]]`、`[[fail-compact]]`、`[[overflow]]`，见 Fixtures/fake-model.ts）：
 /// 压缩停住多久由测试决定（`PiProcess.release`），不按时长——机器负载高时测试自己的步骤会慢过任何固定窗口。
 @MainActor
@@ -27,7 +24,6 @@ struct RealCompactTests {
         try PiHistory.index(file: #require(session.sessionFile), from: nil).messages.filter { $0.role == .known(.system) }.count
     }
 
-    /// 摘要请求每次停住，都等桥上看到"在压缩"再放行（压缩会发一到两次摘要请求）；不再需要时取消。
     private func releaseWhileCompacting(_ pi: PiProcess, _ bridge: PiBridge) -> Task<Void, any Error> {
         Task { @MainActor in
             while true {
@@ -46,7 +42,6 @@ struct RealCompactTests {
         }
     }
 
-    /// 手动压缩期间说话与别的时候一样：先停下压缩（回到压缩前的歇下与计时，没压成），再以这句开新一轮。
     @Test func 手动压缩期间说话_停下压缩_以这句开新一轮() async throws {
         try await withRig { pi, bridge, s in
             try await reply(pi, bridge, "第一轮 [[slow-compact]]")
@@ -76,7 +71,6 @@ struct RealCompactTests {
         }
     }
 
-    /// 停下的压缩回到原来的歇下与计时，命令以"取消"回；失败的压缩是一次出错（与自动压缩同一条收尾），命令以失败回。
     @Test func 手动压缩被停止回到原来的状态与计时_失败报错() async throws {
         try await withRig { pi, bridge, s in
             try await reply(pi, bridge, "第一轮 [[slow-compact]] [[fail-compact]]")
@@ -100,7 +94,6 @@ struct RealCompactTests {
         }
     }
 
-    /// 自动压缩发生在一轮里（回答之后、彻底歇下之前）：同一段工作中的一档，计时不断；压完歇下是这一轮做完。
     @Test func 上下文快满时自动压缩_是这一轮里的一档工作中() async throws {
         try await withRig(reserveTokens: 99_000) { pi, bridge, s in
             try await reply(pi, bridge, "热身 [[slow-compact]]")
@@ -119,7 +112,6 @@ struct RealCompactTests {
         }
     }
 
-    /// 上下文溢出：模型报错后 Pi 压缩再重试这一轮，重试成功就是正常做完，不是出错。
     @Test func 上下文溢出后压缩再重试_报在压缩_重试成功正常做完() async throws {
         try await withRig { pi, bridge, s in
             try await reply(pi, bridge, "热身 [[slow-compact]]")

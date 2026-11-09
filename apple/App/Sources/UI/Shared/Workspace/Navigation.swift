@@ -1,4 +1,3 @@
-/// 项目｜进展的持久选择。
 enum NavigationPane: String, CaseIterable {
     case projects, progress
 }
@@ -9,7 +8,6 @@ struct NarrowNavigation {
     var sidebarOpen = false
 }
 
-/// 宽屏只有主区的去处：浏览落点（项目列表或进展，从偏好推出）、别的页（项目页也是从列表进去的一页）、一个会话，或并排两个会话（⌘ 点开的第二个在右半边，`beside`）。
 /// 右边一直是 Cue，不进导航：它收没收起是用户的选择（`AppSettings.cueOpen`），放不下时住进右缘抽屉、开没开是这一刻的呈现（`Workspace.cueDrawer`）。
 /// 同一个会话最多在一边，回复草稿仍按会话 id 由 AppSettings 持有。
 struct WideNavigation {
@@ -51,7 +49,7 @@ extension Workspace {
         }
     }
 
-    /// 单栈的路径绑定；宽屏没有导航历史。尺寸切换时旧视图的绑定写回不改新布局。
+    /// 尺寸切换时旧视图的绑定写回不改新布局。
     var path: [Route] {
         get { if case .narrow(let state) = navigation { state.path } else { [] } }
         set {
@@ -82,7 +80,6 @@ extension Workspace {
         sidebarOpen.toggle()
     }
 
-    /// 主区当前去处；窄屏指栈顶或根侧栏，侧栏内容读 sidebarRoute。
     var mainRoute: Route {
         switch navigation {
         case .narrow(let state): state.path.last ?? (state.sidebarOpen ? sidebarRoute : .cue)
@@ -95,7 +92,6 @@ extension Workspace {
         }
     }
 
-    /// 主区此刻放的是项目｜进展的哪一段（会话条那两行的选中）：项目列表与从它进去的项目页都算"项目"，别的页与会话不算。
     var shownPane: NavigationPane? {
         switch mainRoute {
         case .shelf, .project: .projects
@@ -120,7 +116,6 @@ extension Workspace {
         }
     }
 
-    /// 选项目｜进展：窄屏保持侧栏展开，宽屏替换主区；会话、Cue 不改这个选择。
     func selectPane(_ pane: NavigationPane) {
         openTask = nil
         services.settings.navigationPane = pane
@@ -130,7 +125,6 @@ extension Workspace {
         }
     }
 
-    /// 记下浏览分段，与新记灵感默认进的项目（看过的最后一个项目）。
     func remember(_ route: Route) {
         switch route {
         case .project(let id):
@@ -166,7 +160,6 @@ extension Workspace {
 }
 
 extension Workspace.Navigation {
-    /// 诊断里记的所在页：窄屏是栈（根是 Cue）加侧栏开没开，宽屏是主区。
     var trail: String {
         switch self {
         case .narrow(let state): (["cue"] + state.path.map(\.trail)).joined(separator: " > ") + (state.sidebarOpen ? " + sidebar" : "")

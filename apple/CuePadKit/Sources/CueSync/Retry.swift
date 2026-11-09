@@ -1,10 +1,8 @@
 import Foundation
 import Synchronization
 
-/// 退避：从 `first` 起每次失败翻倍到 `cap`，再一半固定、一半随机（同一阵子失败的设备不在同一刻一起重来）。
-/// 同步层的重试（发送者、认账号）用默认档；有人在等结果的重试上限压到 `waitingCap`。
+/// 一半固定、一半随机：同一阵子失败的设备不在同一刻一起重来。
 public struct Backoff: Sendable {
-  /// 有人在等结果时的重试上限：有话在等（马上传了还没收下）时的发送者、门铃重连（`Relay.retry`）。
   /// 断了久了恢复后至多再晚这么久（连通的证据另会当场叫醒），每台设备约 15 秒试一次，代价可以忽略。
   public static let waitingCap = Duration.seconds(15)
   private let first: Duration
@@ -16,7 +14,6 @@ public struct Backoff: Sendable {
     self.cap = cap
   }
 
-  /// 又失败了一次，下次隔多久；`cap` 临时压低上限。
   public mutating func next(cap: Duration? = nil) -> Duration {
     failures += 1
     let base = min(first * (1 << min(failures - 1, 16)), cap ?? self.cap)
@@ -24,13 +21,12 @@ public struct Backoff: Sendable {
   }
 
   public mutating func reset() { failures = 0 }
+
+  var isFresh: Bool { failures == 0 }
 }
 
-/// 同步自己给请求定的时限。
 enum RequestLimits {
-  /// 不带数据的请求（认账号）至多等这么久，到点算连不上；也是数据库每个请求的空闲超时（`CloudDatabase.database`）。
   static let request = Duration.seconds(15)
-  /// 一次拉变化（不带附件的文件，见 `ZonePuller`）这么久没回音就同样的再发一次，先回来的算（`hedged`）：一拉挂住，后面的拉不跟着等。
   static let hedge = Duration.seconds(3)
 }
 
@@ -76,7 +72,6 @@ private final class Race<T: Sendable>: Sendable {
   private let state = Mutex(State())
   let answer = Promise<T>()
 
-  /// 起各路。比完了（含起之前就被取消）的不起，起的途中比完了的当场取消。
   func begin(_ legs: [Leg]) {
     guard !state.withLock({ $0.over }) else { return }
     let tasks = legs.map { leg in

@@ -16,7 +16,6 @@ let openCodeRealModel = environment["CUEPAD_OPENCODE_MODEL"].flatMap(AgentKind.o
 /// 列出 opencode 却没给（或写错）真提供方的模型时套件跳过（`RealAgents.missing`），用不到这里
 let openCodeTestModel = RealAgents.recording.contains(.opencode) ? openCodeRealModel! : PiModelKey(provider: OpenCodeSandbox.fake, id: "echo")
 
-/// `opencode --version` 报的版本；跑不起来或读不懂为 nil
 private func version(of executable: URL) -> AgentVersion? {
     let process = Process()
     process.executableURL = executable
@@ -74,7 +73,6 @@ final class OpenCodeSandbox: Sendable {
         return try await ChildProcess(node, [script.path], placement: .group, input: .pipe, output: .lines)
     }
 
-    /// 假模型的提供方配置（OpenCode v2 的 `providers`）：地址是它报出的端口
     private static func provider(_ model: ChildProcess) async throws -> [String: Any] {
         struct Ready: Decodable { var port: Int }
         let line = try #require(await model.output.first { _ in true }, "假模型没报端口")
@@ -89,12 +87,10 @@ final class OpenCodeSandbox: Sendable {
         ]
     }
 
-    /// 连这台服务的接入
     @MainActor func runtime(_ bridge: PiBridge, _ store: CueStore) -> OpenCodeRuntime {
         OpenCodeRuntime(bridge: bridge, paths: paths, store: store, hostID: "mac", opencode: { realOpenCodeURL })
     }
 
-    /// 跑一条 opencode 命令（在 `directory` 里），要它成功。
     @discardableResult
     func run(_ arguments: [String], in directory: URL? = nil) async throws -> String {
         let opencode = try #require(realOpenCodeURL)
@@ -111,7 +107,6 @@ final class OpenCodeSandbox: Sendable {
         (try? Data(contentsOf: paths.openCodeService)).flatMap { try? JSONDecoder().decode(Service.self, from: $0) }
     }
 
-    /// 像终端里的另一个客户端那样直接调服务的接口。
     @discardableResult
     func api(_ method: String, _ path: String, _ body: [String: Any]? = nil) async throws -> [String: Any] {
         let service = try #require(service)
@@ -138,7 +133,6 @@ final class OpenCodeSandbox: Sendable {
         Issue.record("OpenCode 现场：\(file.path)")
     }
 
-    /// 停掉这台的后台服务（按登记文件里的确切 pid）与假模型，删掉临时目录。
     func stop() async throws {
         if let pid = service?.pid {
             kill(pid, SIGTERM)

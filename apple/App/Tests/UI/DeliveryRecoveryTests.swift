@@ -8,7 +8,6 @@ import Testing
 @testable import CuePi
 @testable import CueStore
 
-/// #43：回执丢失不是未执行，历史是投送与来源的正证据，回填不能重放绑定。
 @MainActor
 struct DeliveryRecoveryTests {
     let clock = ManualTiming()
@@ -94,14 +93,12 @@ struct DeliveryRecoveryTests {
         defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("不要再上传一次", to: target, app: app)
         var old = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
-        // App 在交出后、写回前退出，磁盘上只剩领取事实；重开时执行期限已过。
         try RawDB(app.services.location.databaseURL).exec(
             "UPDATE deliveryRequests SET status = 'executing', handledBy = '\(TestApp.hostID)', deadlineAt = createdAt - 1000")
         try await app.services.executor.start()
         #expect(try await outcome(request, in: store).status == .known(.unconfirmed))
         old.fields["modifiedAt"] = .int(Int64(Date.now.addingTimeInterval(60).timeIntervalSince1970 * 1000))
         #expect(try await store.applyRemote([.save(old, systemFields: Data())]).isEmpty)
-        // 下一句正常处理完之后，旧意图也不得偷偷再次派发。
         let next = try await say("只检查结果", to: target, app: app)
         _ = try await outcome(next, in: store)
         #expect(ext.messages.map(\.text) == ["只检查结果"])

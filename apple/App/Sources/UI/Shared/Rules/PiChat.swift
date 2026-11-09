@@ -1,10 +1,6 @@
 import CueStore
 import Foundation
 
-/// 会话页对话里的一条：你说的（右侧气泡），你在 CuePad 里答了它的提问（右侧气泡，带一行答的是哪个问题），
-/// Pi 的一轮回答（左侧全宽，上面一块这一轮的经过），会话文件里的一行系统记录（压缩，居中一行小字），
-/// 扩展投进来的机器消息（FireCode 交回子代理结果、审查结论……，一块信封一张卡片），Agent 一次发到手机上看的几个文件（一张预览卡），
-/// 或你发出、还没进对话的一句（右侧气泡，写送达情况，`PiChat.outgoing`）。
 nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     enum Role: Equatable, Sendable {
         case user, answer, pi, notice(PiNotice), machine, preview
@@ -17,15 +13,10 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     let role: Role
     /// 你的话是存储格式正文（`CueFormat`，可带图片），其余是纯文字或 Markdown
     let text: String
-    /// Pi 回答：这一轮做了多久（`PiChat.took`）；你的话与系统行为 nil。
     let took: String?
-    /// Pi 回答：这一轮的工具活动（`RoundProcess` 排成上方那一块）
     var tools: PiChatMessage.Tools?
-    /// 预览卡：一次发来的几个文件，按发的先后
     var previews: [PiPreview] = []
-    /// 你的作答：答的是哪个问题（问题原文；更旧的版本写的没有）
     var question: String?
-    /// 用户一方的这句是 Cue 发进会话的（`PiChatMessage.saidByCue`，Cue 的 peek 同一条）：气泡上标出 Cue。
     var fromCue = false
 }
 
@@ -36,7 +27,6 @@ private nonisolated extension PiChatEntry {
 }
 
 private nonisolated extension PiChatEntry.Role {
-    /// 认不出的（别的版本写的系统行）为 nil。
     init?(_ message: PiChatMessage) {
         switch message.role.known {
         case .user: self = .user
@@ -49,7 +39,6 @@ private nonisolated extension PiChatEntry.Role {
     }
 }
 
-/// 按时刻插进对话的一条（`PiChat.entries`）。
 private nonisolated enum Timed {
     case answer(PiChatMessage)
     case preview(PiPreview)
@@ -64,24 +53,16 @@ private nonisolated enum Timed {
     }
 }
 
-/// 会话页对话的规则（iOS 会话页、Mac 会话页共用）。
 nonisolated enum PiChat {
-    /// 对话按先后（消息已按 seq 升序）：你的话与 Pi 的回答各成一条，回答带这一轮的经过。认不出说话人的不显示。
-    /// 对话来自 Pi 的会话文件，与终端里看到的一致；只有你在 CuePad 里的作答不在文件里，由作答的 Mac 写进对话（`PiChatRole.answer`）。
-    /// 不在会话文件里的两种按时刻插进对话：预览卡（文件在 Agent 的命令行里发出，不留对话条）按创建时间，你的作答（`PiChatRole.answer`）按答的那一刻。
-    /// 排在那一刻之前最近的那条之后：一轮里发的、答的在你的话之后、这一轮的回答之前，比最后一条还晚的接在末尾（所有来源同一条规则）。
-    /// 一批预览的创建时间相同（`CueStore.addPreviews`），是一张卡。
-    /// 你发出、还没进对话的话（`outgoing`）排在它会落下的地方，与 Cue 页你的话同一条规则：还在路上的（含 Agent 已收下、对话还没跟上的）
-    /// 接在最末——Agent 读到时它就进对话的末尾，换下时不挪位；没能送达的不会再进对话，留在你说它的那一刻（同作答，按时刻插进），
-    /// 之后说的话与回答照常排在它后面；还没进对话的几句之间始终照发出的先后，比在路上的那句晚说、没送到的跟在它后面。
-    /// 重发是撤回再写一条新的，于是作为新的一句接在最末。到哪了按 `moment`（`Speech`）。
-    /// `cueSent` 是 Cue 说的那几条的请求 id（`SessionDigest.cueSent`，按发送记录认）：带着其中之一的用户消息标成 Cue 说的。
+    /// 对话来自 Pi 的会话文件，与终端里看到的一致；不在文件里的两种按时刻插进对话：预览卡（文件在 Agent 的命令行里发出，不留对话条）按创建时间，
+    /// 你的作答（`PiChatRole.answer`，由作答的 Mac 写进对话）按答的那一刻。
+    /// 你发出、还没进对话的话（`outgoing`）与 Cue 页你的话同一条规则：还在路上的接在最末——Agent 读到时它就进对话的末尾，换下时不挪位；没能送达的不会再进对话，留在你说它的那一刻。
+    /// `cueSent`：Cue 说的那几条的请求 id（`SessionDigest.cueSent`，按发送记录认）。
     static func entries(
         _ messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest] = [], cueSent: Set<UUID> = [],
         at moment: Speech.Moment = .always()
     ) -> [PiChatEntry] {
         let outgoing = Self.outgoing(deliveries, messages: messages)
-        // 还没进对话的话之间照发出的先后：最早一句还在路上的起都接在最末，它之前没送到的才插回对话
         let tail = outgoing.firstIndex { Speech.trip($0, at: moment).failure == nil } ?? outgoing.endIndex
         let answers = messages.filter { $0.role == .known(.answer) }.map { (at: $0.at, key: $0.id.uuidString, item: Timed.answer($0)) }
         let batches = previews.map { (at: $0.createdAt, key: $0.id.uuidString, item: Timed.preview($0)) }
@@ -116,46 +97,37 @@ nonisolated enum PiChat {
         return entries + outgoing[tail...].map(PiChatEntry.outgoing)
     }
 
-    /// Pi 回答这一轮做了多久（时长写法见 `PiClock.duration`）；你的话与系统行没有。
     static func took(_ message: PiChatMessage) -> String? {
         guard message.role == .known(.pi), let started = message.roundStartedAt else { return nil }
         return PiClock.duration(message.at.timeIntervalSince(started))
     }
 
-    /// 一轮经过的一句（`RoundProcess` 的标题行；做完的与在跑的同一种写法）："跑了 12 步 · 改了 3 个文件"。
-    /// 步数是调用数（读、改同一个文件只算一步，与清单的行同一口径）；后面写改成了几个文件（没改不写）。不写出错几处：中途出的错它多半自己解决了，
-    /// 没解决的回答里会说；哪步出错展开清单在原位标着。没调过工具的一轮没有这一句。
+    /// 步数是调用数（读、改同一个文件只算一步，与清单的行同一口径）。不写出错几处：中途出的错它多半自己解决了，没解决的回答里会说；哪步出错展开清单在原位标着。
     static func processLine(_ tools: PiChatMessage.Tools?) -> Dotted? {
         guard let tools, tools.steps > 0 else { return nil }
         let edits = tools.items.count { $0.kind == .edit && !$0.failed }
         return Dotted([String(localized: "跑了 \(tools.steps) 步"), edits > 0 ? String(localized: "改了 \(edits) 个文件") : nil])
     }
 
-    /// 改文件的行数："+12 −3"；没有增或没有删的那一半不写，算不出的也不写。
     static func diffLabel(added: Int?, removed: Int?) -> String {
         [added.flatMap { $0 > 0 ? "+\($0)" : nil }, removed.flatMap { $0 > 0 ? "−\($0)" : nil }].compactMap { $0 }.joined(separator: " ")
     }
 
-    /// 你发出、Agent 还没读到的话：作为你的气泡排进对话（排在哪见 `entries`），写送达情况——还在路上、Agent 已经接过去而对话还没跟上的，
-    /// 与没能送达的（在那里重发或移除）。Agent 读到的那一刻对话里出现这句（`deliveryID`），气泡换成对话里的那条。
-    /// 作答、斜杠命令、设置、开新会话、补写对话这些不是你说的话，不算（命令在会话文件里没有带请求 id 的用户消息，挂了永远换不掉）。
+    /// 作答、斜杠命令、设置这些不是你说的话，不算：命令在会话文件里没有带请求 id 的用户消息，挂了永远换不掉。
     static func outgoing(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {
         let arrived = Set(messages.compactMap(\.deliveryID))
         return deliveries.filter { $0.mode == .known(.send) && !arrived.contains($0.id) }
     }
 
-    /// 回复框空着时的发送中：还没进对话的你的话里还有在路上的（与那个气泡同一个事实）。
     static func sending(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> Bool {
         outgoing(deliveries, messages: messages).contains { Speech.trip($0, at: moment).inTransit }
     }
 
-    /// 你在这个会话里说过的最近一句（对话里最后一条你的消息，存储格式，文字与图片；斜杠技能是你发的样子）：空回复框按 ↑ 调回它。
     static func lastSaid(_ messages: [PiChatMessage]) -> String? {
         messages.last { $0.role == .known(.user) }.map { PiSkillCall.shown($0.text) }?.nonEmpty
     }
 
-    /// 有几句没能送达时的说法（它们留在对话里说出的那一刻，等你重发或移除）："1 句没送到"；数来自会话列表查询（`PiSessionListItem.undelivered`）。
-    /// 会话页顶栏状态后写它，会话行在你看过以后（不再整行写"没能送达"）留一个小标记、读屏念它：两处同一个数。没有时是 nil。
+    /// 会话页顶栏状态后与会话行（你看过以后）的小标记两处同一个数，来自 `PiSessionListItem.undelivered`。
     static func undeliveredNote(_ count: Int) -> String? { count > 0 ? String(localized: "\(count) 句没送到") : nil }
 
     /// 对话只同步最近这么久内活跃过的会话（Mac 的历史索引按它决定读不读对话），对话也在会话安静这么久之后清理；

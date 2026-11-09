@@ -2,9 +2,7 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 一条任务给读屏的样子（任务行 `TaskLine`、看板的任务卡 `BoardTaskCard` 同一份）：一行一个元素——"任务内容，子任务 1/4，下一步"，
-    /// 值是状态（文案见 `TaskSpeech`），默认动作勾选（与圈同一个动作）；另有打开、开始或看 Agent 的近况，缩进与反缩进（手机上缩进在右滑里）。
-    /// `aside`：标签末尾再念的一句（看板卡上歇着的会话在等谁）；`more`：调用处多给的动作（看板已完成卡的"看成果"、去等着的那一处）。
+    /// 值是状态（文案见 `TaskSpeech`），默认动作勾选（与圈同一个动作）。`aside`：标签末尾再念的一句；`more`：调用处多给的动作。
     func taskSpoken(
         _ task: Card, title: String, subtasks: TaskProgress?, next: TaskNext?, aside: String? = nil, check: Binding<TaskCheck>, open: @escaping () -> Void, follow: @escaping () -> Void,
         @ViewBuilder more: () -> some View = { EmptyView() }

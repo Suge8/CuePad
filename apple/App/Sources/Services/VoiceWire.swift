@@ -9,7 +9,6 @@ enum VoiceWire {
     static let voice = "cove"
     private static let callURL = URL(string: "https://chatgpt.com/backend-api/codex/realtime/calls?intent=quicksilver&architecture=avas")!
     private static let sidebandBase = "wss://api.openai.com/v1/live/"
-    /// 一条 context.append 的上限（按 UTF-8 字节，不拆字）
     private static let appendLimit = 500
 
     struct Call {
@@ -60,7 +59,6 @@ enum VoiceWire {
         return Call(id: id, answer: String(decoding: data, as: UTF8.self), usedPercent: http.value(forHTTPHeaderField: "x-codex-primary-used-percent").flatMap(Double.init))
     }
 
-    // MARK: 控制通道
 
     struct Delegation: Equatable {
         let id: String
@@ -79,9 +77,7 @@ enum VoiceWire {
     }
 
     enum Outgoing {
-        /// 交接的回话：念给用户（channel speakable）
         case reply(delegation: String, text: String)
-        /// 没有在等的交接时 Cue 说的话
         case say(String)
 
         var messages: [[String: Any]] {

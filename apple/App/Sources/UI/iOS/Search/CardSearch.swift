@@ -1,8 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 卡片搜索的结果（搜索页"灵感与任务"一栏）：筛选胶囊（前面是调用方给的 `leading`，右边写命中"N 条"）+ 按项目分组的卡片（多个词都要命中，最近修改在前）；
-/// 没有搜索词与条件时列全部，库里还没有灵感与任务时是空态。
 struct CardSearchResults<Leading: View>: View {
     @Binding var query: PaletteQuery
     @ViewBuilder let leading: Leading

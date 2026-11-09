@@ -2,16 +2,8 @@
 import CueStore
 import Foundation
 
-/// 照文件读出规则与规则那两种该整理的（位置见 `AgentLibraryPlaces`）：
-/// - 空文件等同没有（`content`）。
-/// - 全局：链到 `~/.agents/AGENTS.md` 的几家读它；哪家还有自己的一份（或缺链接），就是"各写一份"——各家自己的那份、
-///   共读的那份，连同替换基础提示的两份（Pi 的 SYSTEM.md、Codex 的 `model_instructions_file`）一起比；替换基础提示的两份自己不算问题。
-///   指到别处的链接不碰。
-/// - 项目：Claude Code 读不到 AGENTS.md 的内容就是问题——`CLAUDE.md` 不是链到它的，而 `CLAUDE.md`、`.claude/CLAUDE.md` 有一份内容不同
-///   （空的也算，它照样挡住 AGENTS.md），或有个人的 `CLAUDE.local.md`；内容不同的那几份进合并。
 struct LibraryInstructionScan {
     var instructions: [LibraryInstruction] = []
-    /// 列出的规则与要比的各份的正文（路径 → 正文）
     var texts: [String: String] = [:]
     var tidies: [LibraryTidy] = []
     var watched: Set<String> = []
@@ -97,20 +89,17 @@ struct LibraryInstructionScan {
         add(.project(id), file, text, readers: readers, links: linked ? [claude.main.path] : [])
     }
 
-    /// 列出一份规则：快照里是它的哈希，正文记进 `texts`。
     private mutating func add(_ kind: LibraryInstruction.Kind, _ file: URL, _ text: String?, readers: [AgentKind], links: [String] = []) {
         if let text { texts[file.path] = text }
         instructions.append(LibraryInstruction(
             kind: kind, path: file.path, hash: text.map(LibraryEdit.base), modifiedAt: LibraryFileReading.modified(file), readers: readers, links: links))
     }
 
-    /// 要比的一份：快照里是它的哈希，正文记进 `texts`（合并稿照它算）。
     private mutating func source(_ origin: InstructionSource.Origin, _ file: URL, _ text: String) -> InstructionSource {
         texts[file.path] = text
         return InstructionSource(origin: origin, path: file.path, hash: LibraryEdit.base(of: text), modifiedAt: LibraryFileReading.modified(file))
     }
 
-    /// 盯文件与它所在的目录（文件换成链接、被删时目录里会变）。
     private mutating func watch(_ file: URL) {
         watched.insert(file.path)
         watched.insert(file.deletingLastPathComponent().path)
@@ -122,7 +111,6 @@ struct LibraryInstructionScan {
 struct CodexPromptKey {
     let config: URL
     let file: URL
-    /// 那一行在配置里的范围（撤掉这个键就是删掉这一行）
     let line: Range<String.Index>
     let text: String
 

@@ -4,25 +4,24 @@
 /// 键 = `-CuePad` + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。字段注释就是登记表；加参数只在这里（或分组）加一个字段。
 /// 设置项可在参数域覆盖：`-theme dark`（不在这里）。
 nonisolated struct DebugArgs: Decodable {
-    /// `-CuePadActsAs development|stranger`（仅 Mac）：隔离库当作本机构建的开发库来定碰不碰真实世界（`DebugHooks.actsAs`）：development 照真的找这台装没装正式版
+    /// `-CuePadActsAs development|stranger`（仅 Mac）：隔离库当作本机构建的开发库来定碰不碰真实世界：development 照真的找这台装没装正式版
     let actsAs: String?
-    /// `-CuePadAgentHome <目录>`（仅 Mac）：Agent 当作装在这个家目录里，给空目录是一家都没装，点安装真跑官方脚本装进它（`DebugHooks.agentHome`）
+    /// `-CuePadAgentHome <目录>`（仅 Mac）：Agent 当作装在这个家目录里，给空目录是一家都没装，点安装真跑官方脚本装进它
     let agentHome: String?
     /// `-CuePadAgentLibrary clean`：技能与规则的演示文件摆成整理好的样子（默认是该整理的样子）
     let agentLibrary: String?
-    /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页通知那一行按这个状态显示
     let alertStatus: String?
-    /// `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批（`seedAllKinds`）
+    /// `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批
     let allKinds: String?
-    /// `-CuePadAtlas <PiWorkState>`：atlas 会话此刻的状态（`DebugScene+CueSessions.swift`）
+    /// `-CuePadAtlas <PiWorkState>`：atlas 会话此刻的状态
     let atlas: String?
-    /// `-CuePadAtlasTitle <名>`：atlas 会话的名字（`DebugScene+CueSessions.swift`）
+    /// `-CuePadAtlasTitle <名>`：atlas 会话的名字
     let atlasTitle: String?
-    /// `-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页（`leave`），你说一句去睡了、Cue 接着说一夜的那几句，再回来（`back`）
+    /// `-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页，你说一句去睡了、Cue 接着说一夜的那几句，再回来
     let awayAfter: Double
-    /// `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中里再放几件 Agent 正在多步推进的任务（`seedBusyBoard`）
+    /// `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中里再放几件 Agent 正在多步推进的任务
     let busyBoard: Bool
-    /// `-CuePadCanvasSteps YES`（配 tasks 画面）：待办里一件写了正文、有三个子任务的任务，看任务气泡的正文与子任务（`seedCanvasSteps`）
+    /// `-CuePadCanvasSteps YES`（配 tasks 画面）：待办里一件写了正文、有三个子任务的任务，看任务气泡的正文与子任务
     let canvasSteps: Bool
     /// `-CuePadCard <正文开头>`：editor 画面打开哪张卡
     let card: String?
@@ -46,9 +45,9 @@ nonisolated struct DebugArgs: Decodable {
     let demoMac: Bool
     /// `-CuePadExtensionLibrary <隔离目录>`：扩展预览只读这里的快照，不受主 App 同时重写派生缓存影响
     let extensionLibrary: String?
-    /// `-CuePadFileArrives <秒>`（配 `-CuePadFiles YES`）：过这么久那份还在 iCloud 的文件下载、落地（`seedFiles`）
+    /// `-CuePadFileArrives <秒>`（配 `-CuePadFiles YES`）：过这么久那份还在 iCloud 的文件下载、落地
     let fileArrives: Double
-    /// `-CuePadFiles YES`：默认项目里写一条带附件的灵感「交接材料」，`-CuePadFileArrives <秒>` 演示那份还在 iCloud 的文件下载、落地（`seedFiles`）
+    /// `-CuePadFiles YES`：默认项目里写一条带附件的灵感「交接材料」，`-CuePadFileArrives <秒>` 演示那份还在 iCloud 的文件下载、落地
     let files: Bool
     /// `-CuePadFolder <路径>`：建一个以文件夹命名、绑着它的项目（已有同名的不再建）
     let folder: String?
@@ -76,7 +75,7 @@ nonisolated struct DebugArgs: Decodable {
     let notifications: Bool
     /// `-CuePadNotify YES`：走点锁屏通知的那条路进去
     let notify: Bool
-    /// `-CuePadOfferSetup YES`（仅 Mac）：脚本起的实例也像正式版与从 Xcode 直接打开的那样首次打开时决定弹不弹接入面板（`Workspace.offerSetup`，只弹一次记在隔离库的偏好里），核对第一次打开与老用户升级后自动弹的那一次
+    /// `-CuePadOfferSetup YES`（仅 Mac）：脚本起的实例也像正式版与从 Xcode 直接打开的那样首次打开时决定弹不弹接入面板（只弹一次，记在隔离库的偏好里），核对第一次打开与老用户升级后自动弹的那一次
     let offerSetup: Bool
     /// `-CuePadOfflineSeconds <秒>`（默认 6，配 `-CuePadSync offline`）：一开始连不上 iCloud，这么久后恢复
     let offlineSeconds: Double?
@@ -86,11 +85,11 @@ nonisolated struct DebugArgs: Decodable {
     let pasteFile: String?
     /// `-CuePadPhoneVoice <样例>`：手机通话面板样例
     let phoneVoice: String?
-    /// `-CuePadPreviewMedia <目录>`（同样配 scratch 会话）：目录里的真文件（大图、视频、多页 PDF）作为一批发进去（`seedPreviewMedia`）
+    /// `-CuePadPreviewMedia <目录>`（同样配 scratch 会话）：目录里的真文件（大图、视频、多页 PDF）作为一批发进去
     let previewMedia: String?
     /// `-CuePadProject <名称>`：打开该项目
     let project: String?
-    /// `-CuePadQuotePreview <标题或文件名>`：回复那张预览（`Workspace.quote`）
+    /// `-CuePadQuotePreview <标题或文件名>`：回复那张预览
     let quotePreview: String?
     /// `-CuePadRailEmpty YES`（配 rail 画面）：验空列占位
     let railEmpty: Bool
@@ -100,7 +99,7 @@ nonisolated struct DebugArgs: Decodable {
     let reconcileSeconds: Double?
     /// `-CuePadReplies <N>`：Cue 把歇着的会话留给你回（待回复：会话条与看板的等你组，`seedReplies`）
     let replies: Int
-    /// `-CuePadSampleCrash YES`：存几份样例诊断，设置里出现"上次崩溃"（`DebugScene+Crash.swift`）
+    /// `-CuePadSampleCrash YES`：存几份样例诊断，设置里出现"上次崩溃"
     let sampleCrash: Bool
     /// `-CuePadSampleCue <秒>`（仅 Mac）：过这么久写一条 Cue 请你允许推送的消息，经 Cue 的通知出口发出（隔离库里 Cue 不值班，不会自己推）
     let sampleCue: Double
@@ -110,7 +109,7 @@ nonisolated struct DebugArgs: Decodable {
     let search: String?
     /// `-CuePadSearchScope sessions`（iOS）：搜索页打开在会话那一栏
     let searchScope: String?
-    /// `-CuePadSeed perf`（仅 Mac）：库为空（只有默认项目）时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`
+    /// `-CuePadSeed perf`（仅 Mac）：库为空（只有默认项目）时写入性能测量用的大资料库，配合 `-CuePadBench interact`
     let seed: String?
     /// `-CuePadSelect <起点:长度>`：编辑器载入后选中这一段（看选区操作）
     let select: String?
@@ -118,7 +117,7 @@ nonisolated struct DebugArgs: Decodable {
     let session: String?
     /// `-CuePadSettingsPane general|agents`（配 settings 画面）：设置窗口翻到那一页
     let settingsPane: String?
-    /// `-CuePadSync <noAccount|decide|failed|restricted|conflicts|fullquota>`（fullquota：已同步、iCloud 空间满附件停着）：装上报这个状态的同步替身，设置里 iCloud 同步与 Mac 工具栏的同步提示按它显示（`DebugScene+Sync.swift`）
+    /// `-CuePadSync <noAccount|decide|failed|restricted|conflicts|fullquota>`（fullquota：已同步、iCloud 空间满附件停着）：装上报这个状态的同步替身，设置里 iCloud 同步与 Mac 工具栏的同步提示按它显示
     let sync: String?
     /// `-CuePadSyncBench <host|remote>`（配 `-CuePadCloudKit YES` 与各自的 `-CuePadHost`）：同一台 Mac 上两个隔离实例经 CloudKit 开发环境同步
     let syncBench: String?

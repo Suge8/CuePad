@@ -54,7 +54,6 @@ enum ChatScrollBench {
         }
         let primaryHeight = NSScreen.screens[0].frame.height
         let center = window.convertToScreen(scroll.convert(scroll.bounds, to: nil))
-        // in：对话区中央；out：窗口外的屏幕角落（取离窗口最远的那一角）
         let corners = [CGPoint(x: 20, y: 60), CGPoint(x: NSScreen.screens[0].frame.width - 20, y: 60)]
         let spot = pointer == "out"
             ? corners.max { abs($0.x - center.midX) < abs($1.x - center.midX) } ?? .zero
@@ -111,7 +110,6 @@ enum ChatScrollBench {
             await Task.wait(for: .milliseconds(200))
         }
 
-        // 热身（指针还没动）：往上翻几趟排开更早的对话、量过各段的高度，再回来一点
         let warm = Gesture(name: "warm", speed: 2400, wheel: false)
         for _ in 0..<7 { await play(up: true, warm) }
         for _ in 0..<2 { await play(up: false, warm) }
@@ -121,8 +119,8 @@ enum ChatScrollBench {
             DebugForeground.movePointer(to: spot)
             await Task.wait(for: .milliseconds(500))
         }
+        // 窗口得在指针下的最上层才发得出事件：等一会儿，等不到就不量
         if driver == .hid {
-            // 窗口得在指针下的最上层才发得出事件：等一会儿，等不到就不量（也不让指针白占着）
             var ready = false
             for _ in 0..<20 {
                 ready = NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber
@@ -166,7 +164,6 @@ enum ChatScrollBench {
             row["over16"] = cpu.filter { $0 > 16 }.count
             row["movedPx"] = moved.rounded()
             row["wallS"] = ((CACurrentMediaTime() - started) * 10).rounded() / 10
-            // 窗口不在指针下时 hid 会丢事件：投递数与应投数不等，这一组的滚动工作量就和别组不同，数字作废
             row["events"] = attempted
             row["delivered"] = delivered
             row["driver"] = driver.rawValue
@@ -179,7 +176,6 @@ enum ChatScrollBench {
         finish(0)
     }
 
-    /// 对话的滚动视图：窗口里文档比可见区高两倍以上的最大那个（代码块、表格的横向滚动区不满足）。
     private static func chatScroll(in root: NSView) -> NSScrollView? {
         var best: NSScrollView?
         func visit(_ view: NSView) {

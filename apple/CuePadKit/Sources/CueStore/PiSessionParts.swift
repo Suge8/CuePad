@@ -4,11 +4,8 @@ import Foundation
 // 记录器原样写入同步记录；这里的 Codable 形状就是同步字段里 JSON 的格式（线上格式不能改）。
 
 public enum PiQuestionKind: String, Sendable, CaseIterable, Codable {
-  /// 是或否
   case confirm
-  /// 从选项里选一个
   case select
-  /// 填一段文字
   case text
 }
 
@@ -38,7 +35,6 @@ public struct PiQuestion: Sendable, Equatable, StoredJSON {
     self.init(promptID: promptID, kind: .known(kind), text: text, options: options, allowsOther: allowsOther)
   }
 
-  /// 能从 CuePad 作答：有标识，种类认识。
   public var isAnswerable: Bool { promptID != nil && kind.known != nil }
 
   /// 能用文字答（回复框作答，答案是 `PiAnswerValue.text`）：文字题，或允许自己填的选择题。
@@ -51,7 +47,6 @@ public struct PiQuestion: Sendable, Equatable, StoredJSON {
   }
 }
 
-/// Pi 的思考强度（Pi 的 `ThinkingLevel`，含关闭）。
 public enum PiThinkingLevel: String, Sendable, CaseIterable, Codable {
   case off, minimal, low, medium, high, xhigh, max
 
@@ -64,7 +59,6 @@ public enum PiThinkingLevel: String, Sendable, CaseIterable, Codable {
   }
 }
 
-/// 一个模型的标识：提供方加模型 id（同一个 id 可以出自不同提供方）。
 public struct PiModelKey: Sendable, Hashable, Codable {
   public var provider: String
   public var id: String
@@ -174,7 +168,6 @@ public struct PiContextUsage: Sendable, Equatable, Codable {
     self.window = window
   }
 
-  /// 已用比例（0 到 1，超出窗口夹到 1）；未知为 nil。
   public var fraction: Double? {
     guard let tokens, window > 0 else { return nil }
     return min(1, Double(tokens) / Double(window))

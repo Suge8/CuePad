@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Testing
 
-/// 搜索的匹配与分页（按名字、短的中文词与多个词的过滤见 CueCLITests 的 `searchMatchesAllTermsAndAppliesFilters`）。
+/// 按名字、短的中文词与多个词的过滤见 CueCLITests 的 `searchMatchesAllTermsAndAppliesFilters`。
 @Suite struct SearchTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }

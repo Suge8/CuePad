@@ -5,7 +5,6 @@ import Foundation
 /// 等你同看板：会话拍板在前、待回复在后，各自等得最久的在前；Cue 自己的提问不列。因此名牌的「拍板」= 会话拍板 + Cue 提问，
 /// 会话条只数会话拍板；「推进中」数会话，不是名牌与看板的工作项数。一项工作有多个会话、一个会话参与多项工作时不能拿两处数字相减。
 /// 从 works 而不是 advancing 展开：一个会话等你会让整项任务被 held 占着，其余并行会话仍要留在推进中。歇着也是 active，不按图形的 rank 偷删。
-/// 组件不订阅、不碰导航；`LiveSessions` 与接力事实同次读一份给三种尺寸，状态呈现交给现有的 `Workspace.pulse`（包括本机实时状态、投送与未读）。
 nonisolated struct SessionRailData: Equatable, Sendable {
     struct Waiting: Equatable, Sendable {
         let agent: PiSessionListItem
@@ -33,11 +32,9 @@ nonisolated struct SessionRailData: Equatable, Sendable {
     }
 }
 
-/// 只保存本次绘制的投影，不另立会话状态。排序按看板的注意档，再按 PiShown 的先后；同档保持数据源的近况顺序。
 struct SessionRailRows {
     struct Item: Identifiable {
         let session: PiSessionState
-        /// 写的名字：绑着的叶子的标题，空的或没绑任务的是会话名（`PiSessionListItem.name`）。
         let name: String
         let pulse: BoardPulse
         let waiting: PiShown.Status?

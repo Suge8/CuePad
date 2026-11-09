@@ -2,29 +2,20 @@ import CloudKit
 import CueStore
 import Foundation
 
-/// 拉：从同步区的令牌起拉变化，交给协调器应用（`SyncCoordinator.pulled`）。令牌只有一份，存在库里（`syncState` 的 `zoneToken`，经协调器读写），
-/// 每页应用完才前移：应用失败（库写不进去、停下来等你决定）、网络中断或退出，下次从上一页接着拉，不会跨过没应用的变化。
+/// 令牌每页应用完才前移：应用失败（库写不进去、停下来等你决定）、网络中断或退出，下次从上一页接着拉，不会跨过没应用的变化。
 /// 单条记录本身不合法（字段非法）只报告、不挡令牌：它不会自己变好，挡住就永远拉不动了。
 ///
-/// 没有令牌（新装、令牌过期、换账号后）按版本对一遍账，不把整个同步区的正文下载一遍：
-/// 先只带 `modifiedAt` 翻完同步区，再按 ID 分批取本机没有或服务器较新的整条；翻完时本机推送过、服务器上却已没有的
-/// （没出现、翻的途中被删、补取时已不在），按在别处删掉处理（翻的那段时间里本机又推送过的不算，它们的推送时间变了）。
-/// 之后每次只从令牌增量拉。
+/// 没有令牌（新装、令牌过期、换账号后）按版本对一遍账，不把整个同步区的正文下载一遍。翻完时本机推送过、服务器上却已没有的（没出现、翻的途中被删、补取时已不在）按在别处删掉处理；翻的那段时间里本机又推送过的不算，它们的推送时间变了。
 ///
 /// 一次只跑一个拉取：在跑时再来的排在它后面（排着的只有一个，后来的都等它），不会用同一个令牌拉两遍、旧令牌也不会盖掉新的。
 /// 拉变化的请求 `RequestLimits.hedge` 没回音就同样的再发一次、先回来的算（`hedged`）：一拉挂住，排在后面的拉不跟着等。
-/// 拉取不带附件的文件（`fieldsWithoutFiles`）：附件记录与别的记录一起先入库，文件另走一路下载（`FileFetcher`），大文件不挡同一页的别的记录。
-/// 对账时按 ID 补取的整条记录同样不带文件、不赛跑。
-/// 拉完是一次成功（`SyncCoordinator.succeeded`），失败交给协调器归类（`failed`）；连不上与服务器要求等的，下次最早什么时候再拉由同步层唯一的重试调度定
-/// （`SyncCoordinator.hold`，与上传共用，拉取守哪些见 `SyncCoordinator.Request.pull`）：每个请求发出前都问它（一拉翻页、补取的途中上传那一路被要求等了也停），
-/// 等待期间来的拉取（门铃、立即同步、按节奏的拉取）与因此失败的那一拉都记成欠一拉，等待结束时（`due`）补上，不靠下一次触发。
-/// 欠一拉在问调度之前就记下（`admitted`）：问的途中等待恰好结束、`due` 先到，也看得到这笔欠账。
-/// 属于一代（`SyncGeneration`）：`stop` 取消并等在跑与排着的那一拉收尾，之后本代不再写令牌、不再应用页；调用方被取消或这一代结束就不再等。
+/// 拉取不带附件的文件（`fieldsWithoutFiles`），文件另走一路下载（`FileFetcher`），大文件不挡同一页的别的记录；对账时按 ID 补取的整条记录同样不带文件、不赛跑。
+/// 等待期间来的拉取与因此失败的那一拉都记成欠一拉，等待结束时（`due`）补上，不靠下一次触发。
+/// `stop` 之后本代不再写令牌、不再应用页；调用方被取消或这一代结束就不再等。
 actor ZonePuller {
   static let tokenKey = "zoneToken"
   /// 对账那一遍带回的字段（门槛记录的版本在这一遍就看，`SyncCoordinator.meet`）。
   static let versionKeys = ["modifiedAt", PeerFloor.field]
-  /// 增量拉取带回的字段：同步表的全部列与门槛，不含附件的文件（资产字段 `file` 不是列）。
   static let fieldsWithoutFiles = Array(Set(Table.synced.flatMap(\.columns)).subtracting(["id"]).union([PeerFloor.field])).sorted()
 
   private let source: any ZoneChangeSource
@@ -32,7 +23,6 @@ actor ZonePuller {
   private let generation: SyncGeneration
   private var running: (id: UUID, task: Task<SyncPullResult, any Error>)?
   private var queued: (id: UUID, task: Task<SyncPullResult, any Error>)?
-  /// 等待期间被挡下过：等待结束时补拉一次。
   private var owed = false
 
   init(source: any ZoneChangeSource, coordinator: SyncCoordinator, generation: SyncGeneration = SyncGeneration()) {
@@ -41,7 +31,7 @@ actor ZonePuller {
     self.generation = generation
   }
 
-  /// 结束这一代的拉取：取消在跑与排着的那一拉并等它们收尾（请求挂住也不等：`hedged` 被取消当场返回）。
+  /// 请求挂住也不等：`hedged` 被取消当场返回。
   func stop() async {
     generation.end()
     let tasks = [running?.task, queued?.task].compactMap { $0 }
@@ -51,7 +41,6 @@ actor ZonePuller {
 
   private var store: CueStore { coordinator.store }
 
-  /// 拉到没有更多为止；在跑的那次结束后才开始（见类型注释）。同步区不在（被删、被重置）交给协调器判断要不要请你决定。
   @discardableResult
   func pull() async throws -> SyncPullResult {
     guard !generation.isOver else { return .incomplete }
@@ -114,7 +103,6 @@ actor ZonePuller {
     return changed ? .newData : .noData
   }
 
-  /// 重试的等待结束了（`SyncCoordinator.retryDue`）：期间被挡下过的拉取补一次。
   func due() async {
     guard owed else { return }
     owed = false
@@ -129,7 +117,6 @@ actor ZonePuller {
     owed = false
   }
 
-  /// 写协调器与库之前：这一代结束了就不写。
   private func live() throws {
     if generation.isOver { throw CancellationError() }
   }
@@ -146,7 +133,6 @@ actor ZonePuller {
     return changed
   }
 
-  /// 一页变化，只带 `keys` 这几个字段。
   private func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch {
     try await hedged(after: RequestLimits.hedge) { [source] in
       try await self.admitted()
@@ -179,7 +165,7 @@ actor ZonePuller {
     return changed
   }
 
-  /// 按版本对账（见类型注释），返回翻完时的令牌与是否处理了变化；补取、删除都应用完才返回。
+  /// 补取、删除都应用完才返回。
   private func catchUp() async throws -> (token: Data, changed: Bool) {
     let before = try await store.syncedRecords()
     var seen: [CKRecord.ID: Int64] = [:]
@@ -219,7 +205,6 @@ actor ZonePuller {
     return (batch.token, changed || !gone.isEmpty)
   }
 
-  /// 本机没有（也没推送过）或服务器上较新的记录。
   private func newerOnServer(_ seen: [CKRecord.ID: Int64], synced: [String: (table: Table, pushed: Int64)]) async throws -> [CKRecord.ID] {
     var local: [String: Int64] = [:]
     for table in Table.synced { local.merge(try await store.modifiedAts(in: table)) { $1 } }

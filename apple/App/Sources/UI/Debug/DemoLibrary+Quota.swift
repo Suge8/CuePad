@@ -2,9 +2,6 @@
 import CueStore
 import Foundation
 
-/// `-CuePadQuotaSample <样例>`：演示额度换成一处网关报来的账号，形状同 magpie 的真实清单（截图看额度明细的长相，不连真网关）。
-/// `magpie`：Claude（max，5 小时用得比匀速快、本周宽松）、DeepSeek 负余额、Codex（pro，credits 与本周）、Grok 本周，都刚观测过。
-/// `stress`：同上，另加同一提供方的第二个 Claude 账号查询失败，第一个 Claude 账号的观测已陈旧。
 extension DemoLibrary {
     static func seedQuotaSample(_ sample: String, _ store: CueStore) async throws {
         let now = Date.now

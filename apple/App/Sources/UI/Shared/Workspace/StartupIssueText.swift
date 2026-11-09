@@ -1,4 +1,3 @@
-/// 启动时没完成的事给人看的一句话（Mac 侧栏与 iOS 设置共用）：说清哪件事没成、会不会自己重试或怎么处理，后面附原因。
 extension AppServices.StartupIssue {
     var text: String {
         switch self {

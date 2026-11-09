@@ -1,15 +1,11 @@
 #if os(macOS)
 import AppKit
 
-/// 菜单栏图标（`Icon.cue`：logo 就是 Cue 本人）。图标是模板图，随菜单栏明暗自动着色，形一直不变；
-/// 有要你管的（拍板加待回复，`CueNow.needsYou`，同 Dock 角标与名牌）时图标右边写几件，没有不写（`show(badge:)`，`AppDelegate` 接的）。
-/// 左键弹出面板；右键（或 Control 点击）弹出菜单。
 final class StatusItemController: NSObject {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let togglePanel: @MainActor (CGRect) -> Void
     private let toggleWindow: @MainActor () -> Void
 
-    /// `togglePanel` 收到图标在屏幕坐标里的位置。
     init(togglePanel: @escaping @MainActor (CGRect) -> Void, toggleWindow: @escaping @MainActor () -> Void) {
         self.togglePanel = togglePanel
         self.toggleWindow = toggleWindow

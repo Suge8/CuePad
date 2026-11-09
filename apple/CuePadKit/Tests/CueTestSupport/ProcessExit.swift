@@ -12,7 +12,6 @@ public final class ProcessExit: Sendable {
   }
   private let state = Mutex(State())
 
-  /// 装好退出回调再起 `process`。
   public init(launching process: Process) throws {
     process.terminationHandler = { [self] process in
       let status = process.terminationStatus
@@ -55,7 +54,6 @@ public final class ProcessExit: Sendable {
   /// 信号量前后各写一次、读一次，不会同时访问
   private final class StatusBox: @unchecked Sendable { var status: Int32 = -1 }
 
-  /// 退出时调 `waiter`；已经退出就马上调。返回登记的 id（马上调了为 nil）。
   private func when(_ waiter: @escaping @Sendable (Int32?) -> Void) -> UUID? {
     let id = UUID()
     let status = state.withLock { state in

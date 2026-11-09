@@ -1,7 +1,7 @@
 #if os(macOS)
 import Sparkle
 
-/// Sparkle 标准更新流程：EdDSA 校验、后台定期检查。更新源与公钥在 Info.plist（SUFeedURL、SUPublicEDKey）。
+/// 更新源与公钥在 Info.plist（SUFeedURL、SUPublicEDKey）。
 final class SparkleUpdater: NSObject, AppUpdater, SPUUpdaterDelegate {
     private var controller: SPUStandardUpdaterController!
     var postponeRelaunch: ((_ install: @escaping () -> Void) -> Bool)?

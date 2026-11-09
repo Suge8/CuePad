@@ -2,8 +2,6 @@
 import CueSync
 import SwiftUI
 
-/// 设置（项目页末尾、宽屏侧栏底部与 Cue 面板推入），按要紧排，分组与说法同 Mac 设置窗口的通用页：Cue（名字与在哪台 Mac 上运行，`CueSettingsSection`）、
-/// iCloud 同步、通知、外观、启动问题、上次崩溃、版本；启动问题与上次崩溃有才出现。
 struct SettingsScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -47,7 +45,6 @@ struct SettingsScreen: View {
     private static var previewsAlerts: Bool { DebugHooks.preset.alertStatus != nil }
 }
 
-/// 设置页的表单：分组是纸色的行、底是页面色，宽屏上限宽居中（分段控件与说明不被拉成一长条）。
 struct SettingsForm<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.palette) private var palette
@@ -85,7 +82,6 @@ private struct StatusText: View {
     }
 }
 
-/// 通知：一行状态（权限、推送注册、服务端订阅哪一步不通就写哪一步），能在这里解决的给按钮。
 private struct AlertSection: View {
     @Environment(AppServices.self) private var services
     @Environment(AlertCenter.self) private var alerts
@@ -129,7 +125,6 @@ private struct AlertSection: View {
     }
 }
 
-/// iCloud 同步：一行状态，需要决定时给出两个选择，没开 iCloud 时打开设置，按了有用时是立即同步（`AppServices.canSyncNow`）；有两个版本的灵感或任务时一行推入处理，没能同步的记录可展开。
 private struct SyncSection: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -149,7 +144,6 @@ private struct SyncSection: View {
                     Image(summary.icon).foregroundStyle(palette.color(summary.tone))
                 }
             }
-            // 要你决定、冲突与没能同步的记录都只在有同步时出现，按状态排；立即同步要有同步才点得动
             if case .needsDecision = services.syncState.status {
                 Group {
                     Button(SyncChoices.upload.title, icon: .uploadLocal) { choices.resolve(.uploadLocal, services) }

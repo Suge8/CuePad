@@ -1,14 +1,10 @@
 import CueStore
 import Testing
 
-/// 从灵感或任务"新会话"发给 Agent：开会话的请求带着这条灵感或任务，Mac 开好、会话记录带回认领标识（launchToken）时，
-/// 它就关联到那个会话（piSessionID），与发给已有会话同一个结果；开好前状态点显示"正在开会话"。
 @Suite struct LaunchClaimTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  /// 正在开会话只认会被认领的那一次：亲手绑定、解绑作废了它，或之后又交给了别的会话，就不再算正在开（Cue 的看板与开工同读这一条）；
-  /// 被盖过的那个新会话后来开好，也不把它抢回去（行上的点跟最后一次交给的走）。
   @Test func 作废或被后来的交给盖过的开会话请求_不算正在开_开好时也不抢回() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     try await store.setDirectory("/work", for: project.id)
@@ -30,8 +26,6 @@ import Testing
     #expect(try await store.handedSessions()[handed.id] == .session("s2"))
   }
 
-  /// Mac 上的会话记录晚到（Pi 120 秒后才连上、记下）：开新会话的请求早已完成、过了保留期，
-  /// 但它在被认领前不清理，记录到了照样关联；同一轮里别的已完成请求照常清理；认领后下一轮清理带走它。
   @Test
   func 会话记录120秒后才到_开新会话的请求留着_仍能关联() async throws {
     let clock = ManualTiming()

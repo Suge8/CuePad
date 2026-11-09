@@ -1,11 +1,7 @@
 import CueStore
 import Foundation
 
-/// Cue 此刻（`CueNow`）从库里怎么推：只从 Cue 的摘要来（`CueDigest`，推进中与等你只读 `CueStore.cueTally`），按此刻（`moment`）推 Cue 在不在、
-/// 话在不在路上与刚做完的那几件，再配上库里没有的本机事实（`Local`）：还没和 iCloud 对过时不说没启用、写在等什么；
-/// Mac 上它运行在别的 Mac 时静着那句写在哪台。Cue 那一行（`CueWatch.now`）、小组件快照与 iPhone 的实时活动（`AppServices.startSnapshots`）都经这里。
 nonisolated extension CueNow {
-    /// 本机知道、库里没有的（`AppServices.cueLocal`）：还没和 iCloud 对过时为什么等（`CueGate.waiting`，对过为 nil），这台 Mac 是哪台（手机为 nil）。
     struct Local: Equatable, Sendable {
         var waiting: String?
         var here: String?
@@ -48,7 +44,6 @@ nonisolated extension CueNow {
         }
     }
 
-    /// 拍板的每一件、待回复的每个会话、推进中的每一件、刚做完的每一件，按这个先后（同一种里照摘要的先后）。
     private static func items(_ digest: CueDigest, works: [Item], at now: Date) -> [Item] {
         let asks = digest.tally.waiting.map { wait in
             switch wait {
@@ -75,8 +70,6 @@ nonisolated extension CueNow {
 
     private static func title(_ state: PiSessionState) -> String { state.title.isEmpty ? String(localized: "会话") : state.title }
 
-    /// Cue 的提问：问句与下面那一句（同卡片与通知，`CueMessage.headline`、`CueAsking.why`），打开是 Cue 页，带选项的能"允许一次"（选第一项）；
-    /// 会话在问：会话名与问题的第一行，打开是那个会话。
     static func wait(_ wait: CueTally.Wait, name: String) -> Wait {
         switch wait {
         case .message(let message, _):

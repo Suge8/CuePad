@@ -18,7 +18,6 @@ enum SortKey {
 
   static func before(_ key: String?) -> String { between(nil, key)! }
 
-  /// 初始化 count 个等宽、递增的键（导入、重排用）。
   static func sequence(count: Int) -> [String] {
     var width = 1
     var capacity = base

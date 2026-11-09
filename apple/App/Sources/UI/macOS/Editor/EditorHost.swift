@@ -3,21 +3,17 @@ import AppKit
 import CueEditor
 import SwiftUI
 
-/// 对编辑器的操作口：底部操作栏经它取当前正文与选中部分。
 final class EditorHandle {
     fileprivate weak var textView: CueTextView?
-    /// 点的那个附件在哪（全屏页从那里放大，`AttachmentSpotLayer` 盖在编辑器上）
     let spot = AttachmentSpot()
-    /// 停用时编辑器拿着键盘：再启用时还给它
     fileprivate var refocus = false
 
     var text: String? { textView?.storedText }
-    /// 选中部分的存储格式；没选中为 nil。
     var selection: String? { textView?.selectedStoredText }
     func focus() {
         if let textView { textView.window?.makeFirstResponder(textView) }
     }
-    /// 换掉整篇正文（文件在别处被改了，文件页跟上）：光标留在原来的位置附近，撤销栈清空（之前的撤销对不上新正文）。
+    /// 光标留在原来的位置附近，撤销栈清空：之前的撤销对不上新正文。
     func replace(_ text: String) {
         guard let textView else { return }
         let location = textView.selectedRange().location
@@ -26,8 +22,7 @@ final class EditorHandle {
     }
 }
 
-/// CueEditorView 的 SwiftUI 宿主。正文只在创建时载入一次：之后编辑器是这张卡正文的唯一写者，
-/// Store 回传的自身保存不再灌回编辑器（会打断光标与撤销栈）。
+/// 正文只在创建时载入一次：之后编辑器是这张卡正文的唯一写者，Store 回传的自身保存不再灌回编辑器（会打断光标与撤销栈）。
 struct EditorHost: NSViewRepresentable {
     let initialText: String
     let theme: CueEditorTheme
@@ -35,12 +30,10 @@ struct EditorHost: NSViewRepresentable {
     let onChange: (String) -> Void
     var onSelectionChange: (Bool) -> Void = { _ in }
     var selectionActions: [CueSelectionAction] = []
-    /// ⌘↩ 的主动作（见 `CueTextView.onSubmit`）。
     var onSubmit: (() -> Void)?
     var onError: (any Error) -> Void = { _ in }
     /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）交出键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
     var editable = true
-    /// 浮在正文上的工具栏只增加滚动余量，不缩短可见编辑区。
     var bottomInset: CGFloat = 0
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
@@ -48,7 +41,6 @@ struct EditorHost: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    /// 跟着附件传输重画文件牌的任务（`AttachmentLooks.follow`），编辑器拆掉时取消。
     final class Coordinator {
         var watching: Task<Void, Never>?
     }
@@ -76,7 +68,6 @@ struct EditorHost: NSViewRepresentable {
     static func dismantleNSView(_ view: CueEditorView, coordinator: Coordinator) { coordinator.watching?.cancel() }
 
     /// 环境里的由真正上屏的那个宿主给（`FittedEditorHost` 里的 `host` 不上屏，读不到环境）。
-    /// `root` 是上屏的那个视图（盖在上面的 `AttachmentSpotLayer` 按它的坐标摆）。
     fileprivate func update(_ textView: CueTextView, root: NSView, workspace: Workspace, opener: PreviewOpener?) {
         textView.onChange = onChange
         textView.onSelectionChange = onSelectionChange
@@ -106,7 +97,6 @@ struct EditorHost: NSViewRepresentable {
     }
 }
 
-/// 不带滚动视图、高贴着字的编辑器（任务气泡：整张纸一起滚，滚轮落在字上也是纸在滚）。其余同 `EditorHost`。
 struct FittedEditorHost: NSViewRepresentable {
     let host: EditorHost
     @Environment(AppServices.self) private var services

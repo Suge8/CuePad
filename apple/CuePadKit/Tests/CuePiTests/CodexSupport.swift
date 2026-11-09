@@ -13,7 +13,6 @@ import Testing
 let realCodexURL = ExecutableLocator.standard.candidates("codex").first
 let realCodexAuth = ProcessInfo.processInfo.environment["CUEPAD_CODEX_AUTH"].map { URL(filePath: $0) }
     ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
-/// 账号里最便宜的模型
 let codexTestModel = "gpt-6-luna"
 
 /// 把 ~/.codex/auth.json 复制到 `file`，副本永远不去刷新登录：refresh_token 换成假值、last_refresh 改成现在。
@@ -94,7 +93,6 @@ struct CodexHome {
         AgentTape.current?.watch(home.appending(path: "sessions"), home.appending(path: "config.toml"), work)
     }
 
-    /// 能跑模型的配置：复制凭据、最便宜的模型、不检查更新、常驻服务不自动升级、工作目录受信任。
     func signIn(approvals: String = "never") throws {
         if AgentTape.current?.mode != .replay { try copyCodexAuth(to: home.appending(path: "auth.json")) }
         let config = """
@@ -114,7 +112,6 @@ struct CodexHome {
         try #"{"autoUpdateEnabled":false}"#.write(to: daemon.appending(path: "settings.json"), atomically: true, encoding: .utf8)
     }
 
-    /// 模型改走本机的假提供方（`RejectingProvider`）。
     func use(_ provider: RejectingProvider) throws {
         let config = home.appending(path: "config.toml")
         let text = try String(contentsOf: config, encoding: .utf8)
@@ -128,7 +125,6 @@ struct CodexHome {
             """).write(to: config, atomically: true, encoding: .utf8)
     }
 
-    /// 停掉在里面跑的进程（终端界面拉起的常驻服务与它的升级进程、它们起的 git，见 `TestProcesses`），再删掉临时目录（含复制的凭据）。
     @concurrent func remove() async {
         await TestProcesses.stop(under: [root])
         try? FileManager.default.removeItem(at: root)
@@ -144,12 +140,10 @@ struct CodexHome {
         await remove()
     }
 
-    /// 经 Codex 自己的 app-server 读它此刻看到的钩子（命令 → 信任状态）。
     @MainActor func hookTrust() async throws -> [(command: String, event: String, trust: String)] {
         try await listedHooks().map { ($0["command"]?.string ?? "", $0["eventName"]?.string ?? "", $0["trustStatus"]?.string ?? "") }
     }
 
-    /// 像用户在 Codex 的 /hooks 里点了信任：把 Codex 列出的条目全部信任。
     @MainActor func trustEverything() async throws {
         var state: [String: JSONValue] = [:]
         for entry in try await listedHooks() { state[entry["key"]!.string!] = ["trusted_hash": entry["currentHash"]!] }
@@ -165,7 +159,6 @@ struct CodexHome {
         return entries
     }
 
-    /// 起一个指向这个配置目录的 app-server，用完（失败也一样）等它退出。
     @MainActor private func withCodex(_ body: (CodexRPC) async throws -> Void) async throws {
         let rpc = try await CodexRPC.launch(AgentTape.executable("codex"), environment: environment)
         do {
@@ -178,7 +171,6 @@ struct CodexHome {
     }
 }
 
-/// 起一整套接入交给 `body`，结束后（失败也一样）停掉它起的进程、删掉临时目录。
 @MainActor
 func withCodexRig(approvals: String = "never", wrapped: Bool = false, _ body: (CodexRig) async throws -> Void) async throws {
     let rig = try await CodexRig(approvals: approvals, wrapped: wrapped)
@@ -191,14 +183,12 @@ func withCodexRig(approvals: String = "never", wrapped: Bool = false, _ body: (C
     await rig.stop()
 }
 
-/// 一整套接入：临时 Codex 配置目录（装好 CuePad 的钩子与技能）、钩子 socket、桥与 Codex 的接入。
 @MainActor
 final class CodexRig {
     let codex: CodexHome
     let hooks: AgentHookServer
     let bridge: PiBridge
     let runtime: CodexRuntime
-    /// 人在不在这台 Mac 前：默认不在（确认交给 CuePad）
     let presence: TestPresence
 
     /// 钩子命令里的 cuepad。Codex 的信任哈希按命令算，录下的哈希回放时要对得上，所以路径不能带检出位置：
@@ -213,7 +203,6 @@ final class CodexRig {
         return link
     }()
 
-    /// 中途失败时停掉已经起来的、删掉临时目录（含复制的凭据）再抛错。
     /// - Parameter wrapped: CuePad 起的 `codex` 是一层外壳、真 codex 是它的子进程（npm 装的 `codex` 就是 node 外壳），钩子的父进程不是 CuePad 起的那个。
     init(approvals: String = "never", wrapped: Bool = false) async throws {
         let codex = try CodexHome()
@@ -258,7 +247,6 @@ final class CodexRig {
 
     var session: PiSession? { bridge.sessions.first { $0.agent == .codex } }
 
-    /// 会话文件此刻的对话（你的话里的图片存进临时附件目录）。
     func transcript(_ session: PiSession) throws -> PiHistoryUpdate {
         try PiHistory.index(file: try #require(session.sessionFile), agent: .codex, from: nil, files: scratchFiles)
     }
@@ -267,7 +255,6 @@ final class CodexRig {
         ((try? transcript(session))?.messages ?? []).filter { $0.role == .known(.pi) }.map(\.text)
     }
 
-    /// 正在说的话已换下：没有，或会话页认得出它已在对话里（`PiDraft.landed`，对着会话文件里最近一条回答）。
     func draftLanded(_ id: PiSession.ID) -> Bool {
         guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return true }
         let session = bridge.session(id: id)
@@ -276,7 +263,6 @@ final class CodexRig {
     }
 }
 
-/// 测试里说了算的人在不在：变成在时叫醒等着的。
 @MainActor
 final class TestPresence: UserPresence {
     var isPresent = false {
@@ -328,10 +314,8 @@ final class CodexTerminal: @unchecked Sendable {
         screen.withLock { $0.range(of: Data(text.utf8), in: min(offset, $0.count)..<$0.count) != nil }
     }
 
-    /// 到此刻输出了多少字节（配合 `printed(_:since:)` 只看之后的）。
     var printedCount: Int { screen.withLock { $0.count } }
 
-    /// 按一个键（不当粘贴）。
     func press(_ key: String) throws { try input.fileHandleForWriting.write(contentsOf: Data(key.utf8)) }
 
     /// 粘贴一段话（括号粘贴，界面不会把紧跟着的回车当成粘贴里的换行）再回车。
@@ -340,7 +324,6 @@ final class CodexTerminal: @unchecked Sendable {
         try input.fileHandleForWriting.write(contentsOf: Data("\r".utf8))
     }
 
-    /// 停掉终端里的 codex 与包着它的 `script`（按确切的进程号）。
     func stop() {
         var children = [pid_t](repeating: 0, count: 16)
         let count = proc_listchildpids(process.processIdentifier, &children, Int32(children.count * MemoryLayout<pid_t>.size))
@@ -348,7 +331,6 @@ final class CodexTerminal: @unchecked Sendable {
         if process.isRunning { process.terminate() }
     }
 }
-/// 本机的假模型提供方：每个请求都回 400 和一句固定的原因。
 final class RejectingProvider: Sendable {
     static let reason = "bad things happened"
     private let listener: NWListener
@@ -358,7 +340,6 @@ final class RejectingProvider: Sendable {
         listener = try NWListener(using: .tcp, on: .any)
         listener.newConnectionHandler = { connection in
             connection.start(queue: .global())
-            // 请求读一块就够了：不论问什么都拒绝
             connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { _, _, _, _ in
                 let body = #"{"error":{"message":"\#(Self.reason)","type":"invalid_request_error","code":"bad"}}"#
                 let reply = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n" + body

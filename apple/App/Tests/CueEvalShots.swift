@@ -6,8 +6,7 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 会话发来的一张效果图：按文件名画出那个方案的提问卡（决定单、对话里问、郑重放行；original 是现在的提问卡，作对比），手机或 Mac、浅色或深色；
-/// 侧栏改版的几张（plan-、wip-、final- 开头）是一列项目行，在跑的带会话数与一颗状态点；别的改动的截图是一页设置。Cue 用读文件工具打开看得出是哪个方案、哪一种样子。
+/// Cue 用读文件工具打开看得出是哪个方案、哪一种样子。
 @MainActor
 func mockShot(_ name: String) throws -> Data {
     let dark = name.contains("dark"), mac = name.contains("mac")
@@ -20,7 +19,6 @@ func mockShot(_ name: String) throws -> Data {
     let why = Text("推上去别人就拉得到，撤不回来。").font(.caption).foregroundStyle(.secondary)
     @ViewBuilder var card: some View {
         if name.contains("original") {
-            // 改动前的原样：现在的提问卡，一行小字的问题与两个小选项
             VStack(alignment: .leading, spacing: 8) {
                 Text("现在的样子").font(.caption2).foregroundStyle(.secondary)
                 Text("可以推送 scheduler 的重连修复吗？").font(.footnote)
@@ -88,7 +86,6 @@ func mockShot(_ name: String) throws -> Data {
     return try png(shot)
 }
 
-/// 画成 2 倍的 PNG：假会话发到手机的图都经这里
 @MainActor
 func png(_ view: some View) throws -> Data {
     let renderer = ImageRenderer(content: view)
@@ -97,7 +94,6 @@ func png(_ view: some View) throws -> Data {
     return try #require(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
 }
 
-/// 会话发到手机的那张截图：改前、改后的登录页与点了忘记密码之后的页面（Cue 用读文件工具打开看）。
 @MainActor
 func loginShot() throws -> Data {
     func field(_ text: String) -> some View {
@@ -133,7 +129,6 @@ func loginShot() throws -> Data {
     return try png(shot)
 }
 
-/// 一张写着字的页面截图（README 新截图、Lighthouse 报告）：Cue 用读文件工具打开看。
 @MainActor
 func pageShot(_ title: String, _ lines: [String]) throws -> Data {
     let page = VStack(alignment: .leading, spacing: 10) {

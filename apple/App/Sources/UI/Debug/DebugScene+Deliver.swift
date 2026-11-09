@@ -2,11 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 演示库里 Cue 页的结果卡（`seedCue` 里调）：会话发来的不止最终成果，结果卡只挂 Cue 做完时点名的那几张——
-/// "落地页深浅两版"会话发了方案稿与最终版浅深两份网页，结果卡只挂最终版两份（左右翻）；
-/// "修好登录页的键盘遮挡"发了修复前、中途一版与修复后，结果卡只挂修复前与修复后；
-/// "重做定价区"中途 Cue 核对过一批（网页、PDF、横图与 Markdown 四份），那句话不挂图，四份在会话页里。README 那件做完没点名图（`seedCue`），
-/// "等你"里的推送点名了部署会话发来的截图与测试报告（`seedCue`）。
 extension DebugScene {
     static func seedDeliveries(_ store: CueStore) async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-deliver", directoryHint: .isDirectory)
@@ -49,7 +44,6 @@ extension DebugScene {
             .cue, text: String(localized: "定价区的会话发来了一批，我核对过：三档价格在窄屏下不再挤成两行，年付的折扣标在卡片右上角。还差深色模式，让它接着做。", table: "Demo"),
             task: pricing.id)
 
-        // "等你"里推送的那件：部署会话发来预发上的截图与测试报告
         _ = try await store.addPreviews([(try file(String(localized: "预发.png", table: "Demo"), stagingOrderPNG()), String(localized: "预发上的发言顺序", table: "Demo"))], sessionID: "deploy")
         _ = try await store.addPreviews([(try file(String(localized: "测试报告.pdf", table: "Demo"), reconnectReportPDF()), String(localized: "重连测试报告", table: "Demo"))], sessionID: "deploy")
     }
@@ -60,9 +54,7 @@ extension DebugScene {
         if let media = args.previewMedia { try await seedPreviewMedia(store, from: media) }
     }
 
-    /// `-CuePadAllKinds YES|<n>`：scratch 会话里发七批，每批两份并排：3D 模型与一张还没到本机的（附件文件删掉，卡片写"下载中"；
-    /// 标题同文件名），之后每种能发的类型各一份（最后一批是改动与 Markdown）；`-CuePadOpenPreview <文件名>` 打开其中一份的预览页。给数字只发前 n 批：
-    /// 会话页停在最新处，一屏看到的是最后两三批，换着 n 拍几张就每种都拍到了。
+    /// 给数字只发前 n 批：会话页停在最新处，一屏看到的是最后两三批，换着 n 拍几张就每种都拍到了。
     /// 视频、音频、Office 与 3D 只要扩展名对，内容是占位的字节：系统给不出缩略图、时长时显示的正是类型图标。
     private static func seedAllKinds(_ store: CueStore, upTo count: Int?) async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-kinds", directoryHint: .isDirectory)
@@ -92,8 +84,7 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadPreviewMedia <目录>`：目录里的文件按文件名顺序作为一批发进 scratch 会话（标题同文件名）。录预览页的缩放、切图、播放与翻页用真内容：
-    /// 大图、真视频、多页 PDF（演示数据里的视频只是占位的字节）。
+    /// 录预览页的缩放、切图、播放与翻页用真内容：大图、真视频、多页 PDF（演示数据里的视频只是占位的字节）。
     private static func seedPreviewMedia(_ store: CueStore, from directory: String) async throws {
         let files = try FileManager.default.contentsOfDirectory(at: URL(filePath: directory), includingPropertiesForKeys: nil)
         let named = files.filter { !$0.lastPathComponent.hasPrefix(".") }.sorted { $0.lastPathComponent < $1.lastPathComponent }

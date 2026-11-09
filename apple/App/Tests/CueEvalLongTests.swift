@@ -12,7 +12,6 @@ import Testing
 /// 只经库与假会话驱动、只读库与工具调用判定，不碰 Cue 的内部状态（换新次数从大脑的输出里数）。跑法见 docs/cue-eval.md。
 @Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(60)))
 struct CueEvalLongTests {
-    /// 同时跑几遍（`CUEPAD_CUE_EVAL_RUNS`，缺省 1）：多遍时第 n 遍写到"输出目录-n"
     nonisolated static let runs = max(1, Int(evalEnvironment["CUEPAD_CUE_EVAL_RUNS"] ?? "") ?? 1)
 
     @Test(arguments: 1...runs) func 长程值班(_ run: Int) async throws {

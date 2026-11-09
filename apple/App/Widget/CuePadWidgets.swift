@@ -12,7 +12,7 @@ struct CuePadWidgets: WidgetBundle {
     }
 }
 
-/// Cue 的实时活动：App 前台开启，远程内容由 Mac 发布（`CueLiveActivity`）；各态在 `CueActivityViews`，点卡片空白处进 Cue 页。
+/// App 前台开启，远程内容由 Mac 发布（`CueLiveActivity`）。
 struct CueActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CueActivityAttributes.self) { context in
@@ -65,7 +65,6 @@ struct SnapshotProvider<S: SnapshotFile>: TimelineProvider {
 }
 
 extension CueNow {
-    /// 小组件的时间线：此刻起一条，之后每到 `shown(at:)` 变的那一刻一条。
     static func timeline(_ now: CueNow, from date: Date) -> [SnapshotEntry<CueNow>] {
         sequence(first: date) { now.nextShownChange(after: $0) }.map { SnapshotEntry(date: $0, snapshot: now.shown(at: $0)) }
     }

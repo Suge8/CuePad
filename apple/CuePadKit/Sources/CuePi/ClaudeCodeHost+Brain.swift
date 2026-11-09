@@ -16,7 +16,6 @@ import Foundation
 /// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；就地换模型与强度走控制请求（`ClaudeStream`）。
 extension ClaudeHostedSession: HostedSession {
     var events: AsyncStream<TurnEvent> { brain?.events ?? AsyncStream { $0.finish() } }
-    /// Claude 的模型都能看图
     var seesImages: Bool { true }
 
     func start(_ config: CueBrainConfig) async throws {

@@ -5,7 +5,6 @@ import Foundation
 import OSLog
 
 extension CodexRuntime {
-    /// 常驻服务的控制 socket：`codex app-server daemon version` 在服务跑着时给出它；没跑为 nil（之后再问）。
     private func daemonSocket() async -> String? {
         if let controlSocket { return controlSocket }
         guard let codex = try? await executable(),
@@ -16,7 +15,7 @@ extension CodexRuntime {
         return path
     }
 
-    /// 连上常驻服务（已连着就用那条，正在连的大家等同一次）；服务没跑为 nil。`stop` 取消正在连的那次，连上后核对没被取消才装上。
+    /// 服务没跑为 nil。`stop` 取消正在连的那次，连上后核对没被取消才装上。
     private func daemonConnection() async throws -> CodexRPC? {
         guard !stopped else { return nil }
         if let daemon, !daemon.isClosed { return daemon }
@@ -46,7 +45,6 @@ extension CodexRuntime {
         return rpc
     }
 
-    /// 启动时把常驻服务里已经载入的线程接上（CuePad 晚于终端里的会话启动）：会话先接上，子代理的线程再补进它们的名册。
     /// 同一时刻只有一次在做，做的时候又来的并进再做一遍（范围到那时才读）；`stop` 取消它。
     func discover() async {
         guard !stopped else { return }
@@ -105,7 +103,6 @@ extension CodexRuntime {
         return try await adopt(thread, on: rpc)
     }
 
-    /// 接上一个线程（`thread/read` 读到的，不是子代理）。
     @discardableResult
     private func adopt(_ thread: JSONValue, on rpc: CodexRPC) async throws -> PiSession.ID {
         let threadID = thread["id"]?.string ?? ""
@@ -123,8 +120,6 @@ extension CodexRuntime {
         return id
     }
 
-    // MARK: 会话
-
     func makeSession(_ thread: JSONValue, pid: Int32) -> PiSession {
         let threadID = thread["id"]?.string ?? ""
         var session = PiSession(
@@ -135,7 +130,6 @@ extension CodexRuntime {
         return session
     }
 
-    /// 线程的名字、首条消息、模型与强度写进快照（`thread/read`、`thread/start`、`thread/resume` 给的都是这个形状）。
     func apply(_ thread: JSONValue, to session: inout PiSession) {
         session.name = thread["name"]?.string
         if let preview = thread["preview"]?.string, !preview.isEmpty { session.firstMessage = String(preview.prefix(PiSessionName.firstMessageLimit)) }
@@ -163,7 +157,6 @@ extension CodexRuntime {
         exitWatchers[pid] = ProcessExitWatcher(pid: pid) { [weak self] in self?.processGone(pid) }
     }
 
-    /// 承载进程退出了：它上面的会话都下线。
     func processGone(_ pid: Int32) {
         exitWatchers.removeValue(forKey: pid)?.cancel()
         hosted[pid] = nil
@@ -179,7 +172,6 @@ extension CodexRuntime {
         bridge.detach(id, reason: .closed(reason: "quit"))
     }
 
-    /// 从 Codex 重新读名字、模型与强度（`thread/read`），可换的模型（`model/list`）与 skill（`skills/list`，斜杠命令）。
     func refresh(_ id: PiSession.ID, skills: Bool = false) {
         Task {
             do {

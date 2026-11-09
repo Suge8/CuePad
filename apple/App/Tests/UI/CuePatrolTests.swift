@@ -6,13 +6,9 @@ import Testing
 @testable import CuePad
 @testable import CueStore
 
-/// 值班的 Cue 在没有在做的事之后照常巡视（真 Pi 当大脑，同 `CueHostTests`）；手上还有一件没开工的事（`Rig.handOverWork`），
-/// 什么都没有时不巡视。
 @Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
 @MainActor
 struct CuePatrolTests {
-    /// 终端里开着的会话一句话没说就退出了（没有会话文件：记录删掉，不算会话的动静）。它原是唯一在做的事，在做的就没了：
-    /// 你跟 Cue 说过话之后空闲够久，Cue 巡视一次。
     @Test func 唯一在做的会话没说话就退出_Cue随后巡视() async throws {
         let rig = try await CueHostTests.Rig(patrolAfter: Self.patrolAfter, prepare: CueHostTests.Rig.handOverWork)
         let store = rig.store
@@ -34,8 +30,7 @@ struct CuePatrolTests {
         await rig.stop()
     }
 
-    /// 唯一在做的事是一件正在别的 Mac 上开会话的任务；你在手机上删了它，经同步到这台 Mac（软删除带着手机上更早的修改时间，
-    /// 早于这台 Mac 上之后改过的卡片）。在做的没了：你跟 Cue 说过话之后空闲够久，Cue 巡视一次。
+    /// 手机上的软删除带着更早的修改时间，早于这台 Mac 上之后改过的卡片。
     @Test func 唯一在做的任务经同步删掉_Cue随后巡视() async throws {
         let rig = try await CueHostTests.Rig(patrolAfter: Self.patrolAfter, prepare: CueHostTests.Rig.handOverWork)
         let store = rig.store

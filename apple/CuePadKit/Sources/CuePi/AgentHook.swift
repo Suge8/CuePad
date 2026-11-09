@@ -3,8 +3,7 @@ import CueStore
 import Darwin
 import Foundation
 
-/// CuePad 这一端：一次钩子调用。适配读 `envelope`，需要 Agent 等答复的事件（权限确认、提问）留着它、稍后 `reply`；
-/// 其余当场 `finish`。钩子进程先走了（用户在终端里答了，Agent 收回了这次调用）时 `onClose` 被调用一次。
+/// 需要 Agent 等答复的事件（权限确认、提问）留着它、稍后 `reply`，其余当场 `finish`；钩子进程先走了（用户在终端里答了，Agent 收回了这次调用）时 `onClose` 被调用一次。
 @MainActor
 public final class AgentHookCall {
     public let envelope: AgentHookEnvelope
@@ -17,14 +16,12 @@ public final class AgentHookCall {
         self.connection = connection
     }
 
-    /// 回给 Agent 的输出（钩子写到标准输出），并结束这次调用。
     public func reply(_ output: Data) {
         guard !done else { return }
         done = true
         connection.write(output, thenClose: true)
     }
 
-    /// 不给输出，Agent 照常往下走。
     public func finish() {
         guard !done else { return }
         done = true
@@ -39,14 +36,12 @@ public final class AgentHookCall {
     }
 }
 
-/// 钩子 socket 的监听端：收下每次调用，按 Agent 交给它的适配。没有适配认领的直接结束（Agent 照常往下走）。
 @MainActor
 public final class AgentHookServer {
     private let path: URL
     private var listener: Int32 = -1
     private var source: DispatchSourceRead?
     private var handlers: [AgentKind: @MainActor (AgentHookCall) -> Void] = [:]
-    /// 接进来还没结束的连接：停的时候一并关掉（挂着的钩子随即放行）
     private var open: [ObjectIdentifier: PiSocketConnection] = [:]
 
     public init(path: URL = PiPaths().hookSocket) {
@@ -57,7 +52,7 @@ public final class AgentHookServer {
         handlers[agent] = handler
     }
 
-    /// 开始监听（所在目录由 `PiSocketDirectory.prepare` 建好、校验过）。上次没删掉的 socket 文件先删。
+    /// 所在目录要先经 `PiSocketDirectory.prepare` 建好、校验过。
     public func start() throws {
         guard listener < 0 else { return }
         try PiSocketDirectory.prepare(path.deletingLastPathComponent())

@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 主题首次使用时栅格化几何蒙版，以 Bayer 决定颜料归属，再合并为每色一条静态路径。
 /// 临时灰度缓冲与色号网格在生成后释放；保留的只有底色与批量路径，不保留位图。
 nonisolated struct ProjectPixelPattern: Sendable {
     static let columns = 220
@@ -68,7 +67,6 @@ nonisolated struct ProjectPixelPattern: Sendable {
         mask.withUnsafeMutableBytes { bytes in
             let context = CGContext(data: bytes.baseAddress, width: columns, height: rows, bitsPerComponent: 8,
                                     bytesPerRow: columns, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: 0)!
-            // 蒙版的内存行从顶部读，翻转 CGContext 的 y 轴以兑现主题的左上原点。
             context.translateBy(x: 0, y: CGFloat(rows))
             context.scaleBy(x: 1, y: -1)
             context.setShouldAntialias(false)
@@ -85,7 +83,6 @@ nonisolated struct ProjectPixelPattern: Sendable {
         return inks
     }
 
-    /// 8×8 Bayer 阈值只在首次采样时使用，所有主题共享同一顺序。
     private static func threshold(x: Int, y: Int) -> Double {
         let order = [0, 2, 3, 1]
         let low = order[(x & 1) + ((y & 1) << 1)]

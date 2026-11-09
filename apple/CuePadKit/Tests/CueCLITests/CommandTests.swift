@@ -43,7 +43,6 @@ import Testing
     #expect(try await sb.store.card(UUID(uuidString: id)!)?.body == "- 新正文")
   }
 
-  /// 引用写 id 或至少 4 位的唯一前缀：不分大小写，回收站里的也找得到，同前缀多条时列出来让人写长一点。
   @Test func cardReferencesResolveByUniquePrefix() async throws {
     let sb = try Fixture()
     let first = try await sb.store.createCard(body: "一号")
@@ -132,7 +131,6 @@ import Testing
 
     #expect(try array(try await sb.json("task", "list")).count == 2)
 
-    // 进行中仍算未完成
     let started = try await sb.object("task", "start", id)
     #expect(started.string("status") == "inProgress" && started.string("startedAt") != nil)
     #expect(try array(try await sb.json("task", "list")).count == 2)
@@ -148,7 +146,6 @@ import Testing
     let undone = try await sb.object("task", "undo", id)
     #expect(undone.string("status") == "todo" && undone["completedAt"] is NSNull && undone["startedAt"] is NSNull)
 
-    // 正文、换项目、回收站与灵感共用 card 命令
     let trashed = try await sb.object("card", "trash", id)
     #expect(trashed.string("id") == id && trashed["deletedAt"] != nil)
     #expect(try array(try await sb.json("task", "list", "--all")).count == 1)
@@ -252,7 +249,6 @@ import Testing
 }
 
 @Suite struct HelpTests {
-  /// 帮助是唯一文档：手写的根帮助提到每个名词，名词的帮助列出它的动词，每个命令有自己的帮助。
   @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
     let sb = try Fixture()
     let root = await sb.run("--help").out

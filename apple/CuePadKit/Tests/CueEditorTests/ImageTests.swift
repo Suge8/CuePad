@@ -77,7 +77,6 @@ struct ImageTests {
         try makePNG(width: 400, height: 200).write(to: file)
         let pasteboard = h.privatePasteboard()
         pasteboard.writeObjects([file as NSURL])
-        // 第二行行首附近（位置从布局里取）
         var secondLine = CGRect.zero
         h.textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
             if (fragment.textElement as? NSTextParagraph)?.attributedString.string == "第二行文字" {
@@ -94,7 +93,6 @@ struct ImageTests {
 
         let tokens = CueFormat.parse(h.stored)
         let imageIndex = try #require(tokens.firstIndex { if case .image = $0 { true } else { false } })
-        // 图片落在第二行行首附近，而不是文末
         let before = CueFormat.serialize(Array(tokens[..<imageIndex]))
         #expect(before.hasPrefix("第一行文字\n"))
         #expect(!before.contains("第二行文字"))
@@ -117,7 +115,6 @@ struct ImageTests {
         h.textView.undoManager?.redo()
         #expect(h.stored == pasted)
 
-        // 图片后继续键入：新字符是普通文字，不带附件
         h.textView.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
         #expect(h.stored.contains(")\nx"))
         #expect(CueFormat.parse(h.stored).filter { if case .image = $0 { true } else { false } }.count == 1)

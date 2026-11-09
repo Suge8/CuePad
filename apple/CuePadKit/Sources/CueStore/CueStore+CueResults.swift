@@ -1,7 +1,6 @@
 import Foundation
 
 extension CueStore {
-  /// 这几件做完的任务这一次做完时 Cue 点名的成果图（`finishTask` 写的那条结果的 `shots`），按任务。
   /// 结果与完成写在同一个事务里、不早于完成的时刻（`completedAt`），所以只认这一次完成之后的：改回没做完再做完、这次没点名的，
   /// 不拿上一次的图冒充；你自己点圈做完的没有结果，也就没有图。每件取最近的一条，没点名的不在其中。
   public func cueResultShots(of tasks: [Card]) throws -> [UUID: [CueShot]] {

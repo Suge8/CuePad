@@ -23,7 +23,7 @@ extension CueTools {
     return Int(value) == nil && value.caseInsensitiveCompare(option) != .orderedSame
   }
 
-  /// say、stop、leave、take 对的会话（认法在 `place`）：是任务就是它在做的叶子绑着的会话（带上叶子），是会话就是那个会话。`label` 是工具结果里对它的称呼。
+  /// 认法在 `place`；`label` 是工具结果里对它的称呼。
   func speaker(_ args: Args) async throws -> (session: String, card: UUID?, label: String, short: String) {
     let leaf: Card
     switch try await references.place(args) {

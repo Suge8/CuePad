@@ -1,9 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 改会话名（`SessionActions` 的"重命名"，窗口上那一格弹出，`sessionAsks`）：一张小表单，输入框预填现在写的名字、弹出即聚焦，
-/// 确定后经 `Workspace.rename`：绑着任务的改任务标题（名字的唯一事实源）再让 Agent 跟着改，没绑的让 Agent 改。没改动或空着时"改名"停用——用系统工具栏按钮而不是提示框：
-/// iOS 的提示框不画按钮的停用态，点不了也看不出来。
+/// "改名"停用时用系统工具栏按钮而不是提示框：iOS 的提示框不画按钮的停用态，点不了也看不出来。
 private struct RenameSheet: View {
     let target: PiSessionState
     let shown: String
@@ -54,7 +52,6 @@ private struct RenameSheet: View {
         .presentationDetents([.height(180)])
     }
     #else
-    /// 同项目表单：标题、输入框、右下取消与改名（↩ 改名，Esc 由弹层接）。
     private var content: some View {
         VStack(alignment: .leading, spacing: Spacing.block) {
             Text("重命名会话").font(Typography.bodyStrong)
@@ -79,7 +76,6 @@ private struct RenameSheet: View {
 }
 
 extension View {
-    /// 窗口上弹会话确认的那一格（`Workspace.sessionAsk`）：改名弹表单；结束先问一句，确认后经 `Workspace.end` 发给它所在的 Mac，对话留着。
     /// 手机上结束的确认是居中的提示框：从菜单里点出来的，没有那颗钮可以指（iPad 上动作表要指向一处）。
     func sessionAsks(_ workspace: Workspace) -> some View { modifier(SessionAsks(workspace: workspace)) }
 }
@@ -92,7 +88,6 @@ private struct SessionAsks: ViewModifier {
             .panel(item: renaming) { RenameSheet(target: $0.session, shown: $0.shown, adopts: $0.adopts) }
             .agentBusyDialog(completing, isPresented: Binding { completing != nil } set: { if !$0, completing != nil { workspace.sessionAsk = nil } }) {
                 [workspace, completing] in
-                // 按下后框自己关、问的那一格随之清空：会话在问的时候就记下
                 guard let completing else { return }
                 workspace.attempt { try await workspace.confirmFinish(completing) }
             }
@@ -113,7 +108,6 @@ private struct SessionAsks: ViewModifier {
     private static let title: LocalizedStringResource = "结束这个会话？"
     private static let message: LocalizedStringResource = "对话会保留，再给它发消息会在后台恢复"
 
-    /// 在问的改名：会话、预填的名字、要不要先建任务。
     private struct Renaming: Identifiable {
         let session: PiSessionState
         let shown: String
@@ -141,6 +135,5 @@ private struct SessionAsks: ViewModifier {
 }
 
 extension MacDelivery {
-    /// 能改名：做得到（`AgentCapabilities.rename`）；已结束的也能改，Mac 先在后台恢复它。
     static func canRename(_ session: PiSessionState) -> Bool { session.capabilities.contains(.rename) }
 }

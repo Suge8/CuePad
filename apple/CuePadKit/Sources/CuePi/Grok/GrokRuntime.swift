@@ -2,27 +2,20 @@
 import CueStore
 import Foundation
 
-/// Grok Build（xAI）的接入，经 ACP：驱动是通用的 `ACPSession`，Grok 自己的扩展在 `GrokDialect`。
-/// - 托管会话：CuePad 起 `grok agent --no-leader stdio`，用用户的配置目录（会话落在 `<GROK_HOME>/sessions`，`grok --resume` 里也有）；
-///   开新会话是 `session/new`，接着已结束的是 `session/load`。歇满 `PiBridge.hostedIdle` 由桥请它退出。发出的话带着投送请求 id
-///   （`GrokDialect.promptMeta`），会话记录里认得回（`GrokHistory`）。
-/// - 终端里的会话（TUI）只读跟读：开着的登记在 `<GROK_HOME>/active_sessions.json`（会话 id、pid、工作目录；正常退出时注销，
-///   崩溃留下的由下一个登记的清掉），盯着它所在的目录，范围里（`follow`）、登记的进程起点与 PID 吻合、本进程有新报告的上桥，注销或进程退出就下桥。
-///   在做什么从它的会话记录推出（历史索引增量跟读，`read`）：你说了一句到这一轮结束是在跑；等你确认、出错的原话不进会话记录，看不到。
-///   CuePad 碰不到它的输入，说话、停止、作答、结束都只能在终端里（能力表里终端的 Grok 什么都没有）。
-///   用户开了 leader（`grok --leader`）时终端界面是 leader 的客户端，连上 leader 能完全接管：不做——leader 的协议没有文档，
-///   CuePad 也不常连用户的 leader 进程。不装 Grok 自己的钩子（`~/.grok/hooks`）：会话记录已给出一轮的起止与工具，钩子多给的只有等你确认。
-///   Grok 也跑 Claude Code 格式的钩子，CuePad 写给 Claude Code 的钩子在终端的 Grok 里也会被调起，钩子入口只认 Claude Code 发的。
+/// 托管会话用用户的配置目录（会话落在 `<GROK_HOME>/sessions`，`grok --resume` 里也有）。
+/// 终端里的会话（TUI）只读跟读：开着的登记在 `<GROK_HOME>/active_sessions.json`（会话 id、pid、工作目录；正常退出时注销，崩溃留下的由下一个登记的清掉）。
+/// 在做什么从它的会话记录推出（历史索引增量跟读，`read`）：你说了一句到这一轮结束是在跑；等你确认、出错的原话不进会话记录，看不到。
+/// CuePad 碰不到它的输入，说话、停止、作答、结束都只能在终端里（能力表里终端的 Grok 什么都没有）。
+/// 用户开了 leader（`grok --leader`）时终端界面是 leader 的客户端，连上 leader 能完全接管：不做——leader 的协议没有文档，CuePad 也不常连用户的 leader 进程。
+/// 不装 Grok 自己的钩子（`~/.grok/hooks`）：会话记录已给出一轮的起止与工具，钩子多给的只有等你确认。Grok 也跑 Claude Code 格式的钩子，CuePad 写给 Claude Code 的钩子在终端的 Grok 里也会被调起，钩子入口只认 Claude Code 发的。
 @MainActor
 public final class GrokRuntime: AgentRuntime {
     private let bridge: PiBridge
     private let paths: AgentPaths
     private let files: AttachmentFiles
     private let host: ACPHost
-    /// 在桥上的终端会话
     private var terminals: [PiSession.ID: Terminal] = [:]
     private var watcher: DirectoryWatcher?
-    /// 终端会话哪些接上桥（`follow`）；给之前一个都不接
     private var scope = PiHistoryScope.sessions([])
     private var stopped = true
 
@@ -52,8 +45,6 @@ public final class GrokRuntime: AgentRuntime {
     }
 
     private var home: URL { paths.home(of: .grok) }
-
-    // MARK: AgentRuntime
 
     public func start() throws {
         stopped = false
@@ -88,9 +79,7 @@ public final class GrokRuntime: AgentRuntime {
         bridge.update(id) { terminal.facts.publish(to: &$0) }
     }
 
-    // MARK: 终端
-
-    /// 对一遍开着的终端会话：新登记的上桥，注销了的下桥。目录在之前还没有（后装的 Grok）时这时开始盯。
+    /// 目录在之前还没有（后装的 Grok）时这时开始盯。
     private func refresh() {
         guard !stopped else { return }
         if watcher == nil { watcher = try? DirectoryWatcher(home) { [weak self] in self?.refresh() } }
@@ -175,7 +164,7 @@ public final class GrokRuntime: AgentRuntime {
         (try? Data(contentsOf: home.appending(path: "active_sessions.json"))).flatMap { try? JSONDecoder().decode([ActiveSession].self, from: $0) } ?? []
     }
 
-    /// 会话记录：`<GROK_HOME>/sessions/<工作目录>/<会话 id>/updates.jsonl`，工作目录照 URL 的写法编码（只留字母、数字与 `-._~`，同 Grok 用的 urlencoding）。
+    /// 工作目录照 URL 的写法编码（只留字母、数字与 `-._~`，同 Grok 用的 urlencoding）。
     static func sessionFile(in home: URL, cwd: String, id: String) -> URL {
         let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
         return home.appending(path: "sessions", directoryHint: .isDirectory)

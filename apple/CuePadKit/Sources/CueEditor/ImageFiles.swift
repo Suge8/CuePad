@@ -14,7 +14,6 @@ public nonisolated enum ImageFiles {
         return UTType(identifier as String)?.preferredMIMEType
     }
 
-    /// 已是 PNG 则原样返回，否则重新编码。
     public static func png(from data: Data) -> Data? {
         data.starts(with: pngSignature) ? data : encode(data, as: .png)
     }

@@ -6,7 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43：另一进程在同步读出 payload 后撤回，内存中的旧 payload 不能越过撤回继续派发。
 @MainActor
 struct DeliveryPayloadTests {
     @Test func 同步已读出的旧payload被撤回后不再交出_下一句仍正常送达() async throws {

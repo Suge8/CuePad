@@ -4,7 +4,7 @@ import Observation
 
 /// 说的话到哪了（`Speech`）的外部输入，全 App 一份：此刻与本机同步从什么时候起通着（`moment`）。
 /// 到点翻状态只靠这里：资料库里还在等的话（`track`，`AppServices.startSpeechClock` 跟着库给，服务器收下时也重给）最早到时限的那一刻把"此刻"刷一次
-/// （一个可取消的睡眠，不轮询），同步断开、恢复时也刷。气泡、会话行与"N 句没送到"、提示词、Cue 在不在与值班都读 `moment`，不各自计时。
+/// （一个可取消的睡眠，不轮询），同步断开、恢复时也刷。气泡、会话行、提示词、Cue 在不在与值班都读 `moment`，不各自计时。
 @Observable
 final class SpeechClock {
     private(set) var moment: Speech.Moment
@@ -35,14 +35,12 @@ final class SpeechClock {
         schedule()
     }
 
-    /// 此刻还在等回执的话（库一变就给一次）。
     func track(_ waiting: [Awaiting]) {
         guard waiting != self.waiting else { return }
         self.waiting = waiting
         schedule()
     }
 
-    /// 已经过了的时限立即刷"此刻"，再睡到下一个。
     private func schedule() {
         alarm?.cancel()
         let deadlines = waiting.compactMap { awaiting -> Date? in
@@ -62,8 +60,7 @@ final class SpeechClock {
 }
 
 extension AppServices {
-    /// 跟着资料库给出还在等回执的话（`SpeechClock.track`）与有没有还没结果的请求（`hasOpenDeliveries`，主动拉取的条件）：
-    /// 还没收尾的投送请求，与你对 Cue 说了、还没交给它的话。一个订阅读一次。读失败时报告并停止（到点不再翻、不再主动拉）。
+    /// 一个订阅读一次。读失败时报告并停止（到点不再翻、不再主动拉）。
     func startSpeechClock() {
         follow(reporting: { .syncUnavailable(String(localized: "读取在等回执的话失败，到点不再翻状态、不再主动拉取：\(String(describing: $0))")) }) {
             for try await open in self.store.observe({ store in
@@ -81,12 +78,10 @@ extension AppServices {
         }
     }
 
-    /// 等在路上的那些话（`startSpeechClock` 一次读到的）。
     private nonisolated struct OpenSpeech: Equatable, Sendable {
         var open: Bool
         var waiting: [SpeechClock.Awaiting]
     }
 
-    /// 此刻（`SpeechClock.moment`）：读它的视图到点、同步通断时随之重算。
     var speech: Speech.Moment { speechClock.moment }
 }

@@ -1,8 +1,7 @@
 #if os(macOS)
 import AppKit
 
-/// 窗口位置与大小的记忆：存进 `AppSettings` 的偏好存储，而不是系统的窗口自动保存（它总是写标准偏好域，
-/// 隔离模式下会串到真实设置里）。建好就把窗口摆回上次的位置，没存过就居中；之后移动、缩放都记下。
+/// 窗口位置与大小存进 `AppSettings` 的偏好存储，而不是系统的窗口自动保存（它总是写标准偏好域，隔离模式下会串到真实设置里）。
 final class WindowFrameKeeper {
     private let window: NSWindow
     private let name: String

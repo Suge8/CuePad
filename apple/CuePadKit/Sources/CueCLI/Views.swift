@@ -34,7 +34,6 @@ private func minutes(_ date: Date) -> String {
       timeZone: .current, calendar: .current))
 }
 
-/// 卡片标题（`CueSummary`），过长截断。
 private func title(_ body: String) -> String {
   let title = CueSummary.title(of: body)
   guard !title.isEmpty else { return "（空）" }
@@ -83,7 +82,6 @@ struct CardView {
       + (card.parentID.map { "  ↳ \($0.shortID)" } ?? "")
   }
 
-  /// `card show` 的文本：元信息，空行，正文原样。
   var detail: String {
     var rows = ["id: \(card.id.uuidString.lowercased())", "项目: \(project)"]
     if let status = card.status { rows.append("任务: \(status.rawValue)") }
@@ -95,8 +93,6 @@ struct CardView {
     return rows.joined(separator: "\n") + "\n\n" + card.body
   }
 }
-
-// MARK: 从资料库取视图
 
 extension Call {
   func projectNames() async throws -> [UUID: String] {

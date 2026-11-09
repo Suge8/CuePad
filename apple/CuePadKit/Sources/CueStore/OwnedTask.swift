@@ -8,14 +8,12 @@ struct Owned: Sendable {
   let id: UUID
   let task: Task<Void, Never>
 
-  /// 起任务；`body` 拿到自己的身份，收尾时交回登记处核对。
   static func spawn(@_inheritActorContext _ body: @escaping @Sendable (UUID) async -> Void) -> Owned {
     let id = UUID()
     return Owned(id: id, task: Task { await body(id) })
   }
 }
 
-/// actor 里按键登记的任务。
 struct Slots<Key: Hashable> {
   private var owned: [Key: Owned] = [:]
 
@@ -31,7 +29,6 @@ struct Slots<Key: Hashable> {
     return true
   }
 
-  /// 取消并清掉这个位置（不等它）。
   mutating func cancel(_ key: Key) { owned.removeValue(forKey: key)?.task.cancel() }
 
   /// 取消全部并清空，返回它们的任务让调用方等收尾。

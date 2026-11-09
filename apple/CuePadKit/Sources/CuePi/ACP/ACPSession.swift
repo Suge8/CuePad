@@ -3,43 +3,23 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// CuePad 起的一个 ACP Agent 进程（`ACPConnection`）与它上面的一个会话：ACP 的驱动，这个会话的一轮只在这里判，同一处交给两边——
-/// 事件（`emit`，大脑的事件流）与桥上的事实（`facts`、草稿、上下文）。两种开法：
-/// - 托管会话（`init(dialect:bridge:)` → `launch` → `open` 或 `load` → `attach`）：上桥、进会话列表，控制见 +Control；
-/// - Cue 的大脑（`init(dialect:)` → `start`，`HostedSession`，见 +Brain）。
-/// 各家与标准不同的地方只经 `ACPDialect`。
-///
-/// - 一轮：CuePad 发出 `session/prompt` 起，到它的回应止（回应只结束它自己开的那一轮）；Agent 自己开、自己结束的一轮由各家报（`ACPSignal`）。
-///   各家报 CuePad 开的那一轮结束时只记下出错的原文，等回应再结束：回应之前各家还会报这一轮之后的事（Grok 把搁浅的插话转成它自己开的一轮，
-///   1.0.70 实测先于回应到），要排在这一轮结束之后。被停下（`session/cancel`）照常结束、不算出错；回错误的是出错（各家报的原文，没有就是 `ACPError` 的原话）。
-/// - 正在说的话：`agent_message_chunk` 逐字累积（ACP 不分条：工具调用前后各是一条），开出工具调用、停下、出错、下一轮开始时清掉。
-/// - 工具：`tool_call` 开始，`tool_call_update`（或 `tool_call` 本身）的 `completed`、`failed` 结束；名字与结果的文字经各家（`ACPDialect`）。
-/// - 上下文：标准的 `usage_update`（`used`、`size`），或各家报的输入合计（`ACPSignal.context`，窗口取各家给的模型窗口）。
-/// - 模型与强度：会话的配置项（`configOptions` 里 `category` 为 `model`、`thought_level` 的两项，`config_option_update` 随时换掉），
-///   换用 `session/set_config_option`；强度的值照 `PiThinkingLevel` 的写法对上，夹到这一项有的档位。
-/// - Agent 要你回答的（`ACPAsk`：标准的权限确认，各家的提问请求经 `ACPDialect.ask`）：托管会话成为 CuePad 里的提问（+Control），
-///   一次只等一问，又来一问、停下或结束这一轮时没答的作废；大脑没人可问：权限一律允许（它只有读文件与 CuePad 的工具），提问作废。
-/// - 载入旧会话（`session/load`）时 Agent 把历史重放成通知：不算。
+/// 各家与标准不同的地方只经 `ACPDialect`。一轮的状态在这里判一次，同一处交给两边——事件（`emit`，大脑的事件流）与桥上的事实（`facts`、草稿、上下文）。
+/// 各家报 CuePad 开的那一轮结束时只记下出错的原文，等回应再结束：回应之前各家还会报这一轮之后的事（Grok 把搁浅的插话转成它自己开的一轮，
+/// 1.0.70 实测先于回应到），要排在这一轮结束之后。回应只结束它自己开的那一轮；被停下（`session/cancel`）照常结束、不算出错；回错误的是出错（各家报的原文，没有就是 `ACPError` 的原话）。
+/// 正在说的话：`agent_message_chunk` 逐字累积（ACP 不分条：工具调用前后各是一条）。
+/// 载入旧会话（`session/load`）时 Agent 把历史重放成通知：不算。
 @MainActor
 final class ACPSession {
     let dialect: any ACPDialect
-    /// 托管会话挂的桥；大脑没有
     private(set) weak var bridge: PiBridge?
-    /// 大脑的事件流与临时目录；托管会话没有
     let brain: BrainSession?
     private(set) var connection: ACPConnection?
-    /// Agent 给的会话 id
     private(set) var sessionID: String?
-    /// 会话的工作目录
     private(set) var cwd: URL?
-    /// 上了桥之后的 id
     private(set) var id: PiSession.ID?
     var facts = SessionFacts()
-    /// 开会话的结果（各家的模型清单在里面，`ACPDialect.window`）
     private(set) var opened: JSONValue = [:]
-    /// 会话的配置项（`configOptions`）
     var options: [JSONValue] = []
-    /// 在等你回答的（Agent 的请求 id 与这一问）
     var pending: (request: JSONValue, ask: ACPAsk)?
     /// 一轮一个编号：`session/prompt` 的回应只结束它自己开的那一轮
     private var turn = 0
@@ -51,7 +31,6 @@ final class ACPSession {
     private var reported: String?
     /// 回应之前各家已报它自己接着开了一轮（`ACPSignal.stranded`）：这一轮结束后接着开
     private var agentTurnNext = false
-    /// 大脑插进这一轮的话（+Brain）
     var steers = ACPSteers()
     private var draft: DraftParts?
     /// 停下这一轮后它的结束不算出错
@@ -60,7 +39,6 @@ final class ACPSession {
     private let changes = PendingReplies<UUID, Void>(timeout: nil, timeoutError: PiBridgeError.ackTimeout)
     /// 停下这一轮后等它结束的：取消的回应不来（Agent 收下取消却不回也不断线）时到 `AgentTimeouts.stop` 放弃
     private let stops: PendingReplies<UUID, Void>
-    /// 发话里停下上一轮的那一段（`abort` 整段取消）
     let stopPhase = StopPhase()
     private var loading = false
     /// CuePad 的 MCP 服务连上没有（`ACPDialect.connectsMCPLater`）：nil 是这个会话还没报
@@ -68,12 +46,9 @@ final class ACPSession {
     private var mcpWaiters: [CheckedContinuation<Void, Never>] = []
     private var contextUsed: Int?
     var contextWindow: Int?
-    /// 大脑的配置与各家的配法（开新会话时照它再开）
     var brainSetup: (config: CueBrainConfig, setup: ACPBrainSetup)?
-    /// 就地换过的模型与强度
     var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
 
-    /// 托管会话：`launch`、`open`/`load` 后 `attach` 上桥。
     init(dialect: any ACPDialect, bridge: PiBridge, timing: Timing = .system) {
         self.dialect = dialect
         self.bridge = bridge
@@ -81,7 +56,6 @@ final class ACPSession {
         stops = PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout)
     }
 
-    /// Cue 的大脑：`start` 起进程。
     init(dialect: any ACPDialect) {
         self.dialect = dialect
         brain = BrainSession()
@@ -99,9 +73,6 @@ final class ACPSession {
     var agent: AgentKind { dialect.agent }
     var seesImages: Bool { connection.map { dialect.acceptsImages($0.agent) } ?? false }
 
-    // MARK: 起与开
-
-    /// 起 Agent 的 ACP 服务并握手，接上它的通知与请求。`timing` 交给进程（`ChildProcess`）。
     func launch(_ executable: URL, environment: [String: String], directory: URL, timing: Timing = .system) async throws {
         let connection = try await ACPConnection.launch(executable, dialect.arguments, environment: environment, directory: directory, timing: timing)
         connection.onNotification = { [weak self] in self?.notified($0, $1) }
@@ -110,7 +81,6 @@ final class ACPSession {
         self.connection = connection
     }
 
-    /// 开一个新会话（`session/new`）。
     func open(in directory: URL, mcpServers: [JSONValue] = [], meta: JSONValue? = nil) async throws {
         var params: [String: JSONValue] = ["cwd": .string(directory.path), "mcpServers": .array(mcpServers)]
         if let meta { params["_meta"] = meta }
@@ -120,7 +90,6 @@ final class ACPSession {
         adopt(id, in: directory, result)
     }
 
-    /// 接着一个已结束的会话（`session/load`）：Agent 重放的历史不算。
     func load(_ sessionID: String, in directory: URL) async throws {
         loading = true
         defer { loading = false }
@@ -136,7 +105,6 @@ final class ACPSession {
         contextWindow = currentModel.flatMap { dialect.window(of: $0, in: opened) }
     }
 
-    /// 上桥（托管会话）。
     func attach(_ session: PiSession) {
         id = session.id
         var session = session
@@ -144,7 +112,6 @@ final class ACPSession {
         bridge?.attach(session, via: self)
     }
 
-    /// 等 CuePad 的 MCP 服务连上（`ACPDialect.connectsMCPLater`）。
     func mcpReady(within limit: Duration) async throws {
         guard dialect.connectsMCPLater else { return }
         if mcp == nil {
@@ -164,9 +131,7 @@ final class ACPSession {
         mcpWaiters = []
     }
 
-    // MARK: 一轮
-
-    /// 以这句开一轮（不等模型）：读到回应的那一刻这一轮结束，之后读到的通知归下一轮。
+    /// 读到回应的那一刻这一轮结束，之后读到的通知归下一轮。
     func prompt(_ blocks: [JSONValue], deliveryID: String? = nil) throws {
         let connection = try live
         guard let sessionID else { throw HostedSessionError.notRunning }
@@ -184,7 +149,6 @@ final class ACPSession {
         }
     }
 
-    /// 停下在跑的这一轮，等它结束；歇着什么都不做。
     func interrupt(cancellable: Bool = true) async throws {
         try await stopPhase.run(cancellable: cancellable) { [self] in
             guard facts.running, let sessionID else { return }
@@ -242,7 +206,6 @@ final class ACPSession {
         }
     }
 
-    /// Agent 以搁浅的插话自己开的一轮：那几句是它收下的。
     private func beginStranded() {
         _ = begin()
         for id in steers.takeStranded() { emit(.received(id)) }
@@ -253,7 +216,6 @@ final class ACPSession {
         stops.releaseAll()
     }
 
-    /// 没答的作废（`ACPAsk.withdrawn`）。
     private func decline() {
         guard let pending else { return }
         self.pending = nil
@@ -261,7 +223,6 @@ final class ACPSession {
         connection?.respond(to: pending.request, result: pending.ask.withdrawn)
     }
 
-    /// 等你回答这一问（同一请求的下一问也经这里）。
     func present(_ ask: ACPAsk, request: JSONValue) {
         var ask = ask
         ask.question.promptID = UUID().uuidString
@@ -270,9 +231,6 @@ final class ACPSession {
         publish()
     }
 
-    // MARK: 一处产出
-
-    /// 交给事件流（大脑）与桥（托管会话）。
     func emit(_ event: TurnEvent) {
         brain?.emit(event)
         if let id { bridge?.show(event, in: id) }
@@ -295,8 +253,6 @@ final class ACPSession {
         contextWindow = window
         emit(.context(used: used, window: window))
     }
-
-    // MARK: 收
 
     /// 这个会话的通知。MCP 服务连上的通知不论哪个会话都认：它可能先于 `session/new` 的回应到，进程里也只有这一个会话在开。
     private func notified(_ method: String, _ params: JSONValue) {
@@ -393,7 +349,6 @@ final class ACPSession {
         return true
     }
 
-    /// 进程退出：在等的全部放行；托管会话下桥，大脑报退出。
     private func ended() {
         release()
         if mcp == nil { settleMCP(.failure(.notRunning)) }

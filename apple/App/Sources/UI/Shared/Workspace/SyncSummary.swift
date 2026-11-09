@@ -2,14 +2,12 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// 同步状态给人看的一句话、补充说明、图标与要不要你注意（`StatusTone`，颜色由它定）；Mac 与 iOS 共用。
 nonisolated struct SyncSummary: Equatable {
     let title: String
     let detail: String?
     let icon: Icon
     let tone: StatusTone
 
-    /// 一行写完：标题，有说明时接在冒号后（手机上到不了 Mac 时 Cue 的欢迎卡）。
     var line: String { detail.map { String(localized: "\(title)：\($0)") } ?? title }
 
     init(_ status: SyncStatus) {
@@ -31,7 +29,6 @@ nonisolated struct SyncSummary: Equatable {
         case .needsDecision(let decision):
             (title, detail, icon, tone) = (String(localized: "同步已暂停，需要你决定"), Self.describe(decision), .syncPaused, .notice)
         case .outdated: (title, detail, icon, tone) = (String(localized: "这台的 CuePad 要更新"), Self.updateToSync, .syncPaused, .notice)
-        // 是哪些、为什么在设置的「没能同步」明细里逐条说（`SyncIssue.text`），原话折在详情里
         case .failed: (title, detail, icon, tone) = (String(localized: "同步出错"), Self.failedDetail, .failure, .failure)
         }
     }
@@ -42,7 +39,7 @@ nonisolated struct SyncSummary: Equatable {
     static let failedDetail = String(localized: "有改动没能同步，本机的内容都在；每一条为什么、会不会自动重试，见下面的明细")
     #endif
 
-    /// 别的设备用着这台跟不上的新版时（`SyncStatus.outdated`）：只在同步那一行说，后面给去更新的钮（`updateTitle`）；会话与 Cue 页不再各说一遍。
+    /// 只在同步那一行说，后面给去更新的钮（`updateTitle`）；会话与 Cue 页不再各说一遍。
     static let updateToSync = String(localized: "别的设备已用新版，这台更新后接着同步；这期间写下的都在，更新后自动发出")
     #if os(macOS)
     static let updateTitle = String(localized: "检查更新…")
@@ -52,7 +49,6 @@ nonisolated struct SyncSummary: Equatable {
     static let update = URL(string: "itms-beta://")!
     #endif
 
-    /// 没开 iCloud（`SyncStatus.noAccount`）时给的出路：打开系统设置。Mac 直达 Apple 账户那一页；iOS 只能打开设置里这个 App 的那一页，再照 `turnOnICloud` 走。
     #if os(macOS)
     static let settingsTitle = String(localized: "打开系统设置")
     static let settings = URL(string: "x-apple.systempreferences:com.apple.systempreferences.AppleIDSettings")!
@@ -61,7 +57,6 @@ nonisolated struct SyncSummary: Equatable {
     static let settings = URL(string: UIApplication.openSettingsURLString)!
     #endif
 
-    /// 没登录 iCloud 或关掉了本 App 的 iCloud 时，去哪开。
     #if os(macOS)
     static let turnOnICloud = String(localized: "在「系统设置 › Apple 账户 › iCloud」里登录，并在使用 iCloud 的 App 里打开 CuePad；打开后自动开始同步，本机数据不受影响")
     #else
@@ -78,7 +73,6 @@ nonisolated struct SyncSummary: Equatable {
 }
 
 extension SyncIssue {
-    /// "没能同步"明细里一条的人话，只由归类（`problem`）推出：哪一样、出了什么事、会自己好还是要你做什么。原话（`detail`）折在它下面的详情里。
     var text: String {
         switch problem {
         case .refused where kind == .request: String(localized: "iCloud 没接受这次同步，会自动重试")
@@ -122,14 +116,12 @@ extension SyncIssue {
     }
 }
 
-/// Mac 设置里同步那一行（`SyncRow`）此刻怎么说：说哪种状态、图标位置转不转圈。
 struct ShownSync: Equatable {
     let status: SyncStatus
     let busy: Bool
     var summary: SyncSummary { SyncSummary(status) }
 
-    /// `lasting`：这一轮同步中（`.syncing`，一批上传或拉积压）已久过 `Pending.delay`（经 `pending` 给）。没久过的照旧说已同步：
-    /// 每传一句都要零点几秒，一闪一下"正在同步…"比稍等更扰人（同 `Pending`）。正在连接从第一帧就是它，照说；立即同步是你按的，当场转圈。
+    /// `lasting`：这一轮同步中已久过 `Pending.delay`。没久过的照旧说已同步：每传一句都要零点几秒，一闪一下"正在同步…"比稍等更扰人。
     init(_ services: AppServices, lasting: Bool) {
         let status = services.syncState.status
         (self.status, busy) = status == .syncing && !lasting ? (.idle, services.isSyncingNow) : (status, services.isSyncBusy)

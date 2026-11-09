@@ -4,7 +4,6 @@ import Foundation
 
 extension GrokRuntime {
     /// 官方脚本装进 `~/.grok/bin`，自带 `grok update` 升级。要的版本是验过 ACP 用法（`_meta.agentProfile`、`_x.ai/interject`）的最旧一版。
-    /// 会话记录是每个会话目录里的 `updates.jsonl`（`GrokHistory`）；不装上报通道（终端会话只读跟读它，见 `GrokRuntime`）。
     /// 技能：除了自己的 `skills`，也递归读几家共读的 `~/.agents/skills`（`SharedSkills.recursive`）与 Claude Code 的 `~/.claude/skills`（按名字去重，见它的文档 08-skills）；
     /// 全局规则是自己目录下的 `AGENTS.md`（文档 12-project-rules），链到共读的那份。
     nonisolated public static let facts = AgentFacts(

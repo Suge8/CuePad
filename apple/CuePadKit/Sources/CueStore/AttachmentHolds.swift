@@ -11,14 +11,12 @@ import Synchronization
 /// 代价：这次运行存过、又被永久删除或随账号清空的附件，要等进程结束后的下一次启动清理才释放磁盘，上限是这次运行存过又删掉的附件总量；
 /// 命令行这类不跑启动清理的进程留下的，等 App 下次启动。
 final class AttachmentRun: Sendable {
-  /// 各运行的持有目录与锁文件所在
   let holds: URL
   let id = UUID().uuidString
   private let descriptor = Mutex<Int32?>(nil)
 
   init(holds: URL) { self.holds = holds }
 
-  /// 这次运行的持有目录所在，建没建都是这个位置。
   var location: URL { holds.appending(path: id, directoryHint: .isDirectory) }
 
   /// 建好并返回这次运行的持有目录。先拿锁再建目录：看得到目录时锁一定拿着；崩在两步之间只留一个锁文件，清理照样收。
@@ -39,17 +37,15 @@ final class AttachmentRun: Sendable {
 
   deinit { descriptor.withLock { if let held = $0 { close(held) } } }
 
-  /// 各运行（活着的与结束了还没清的）的持有目录。
   static func folders(in holds: URL) -> [URL] {
     AttachmentFiles.names(in: holds).filter { !$0.hasSuffix(".lock") }.map { holds.appending(path: $0, directoryHint: .isDirectory) }
   }
 
-  /// 各运行的 id：有目录的，和只剩锁文件的（崩在建锁与建目录之间、删目录与删锁之间）。
+  /// 有目录的，和只剩锁文件的（崩在建锁与建目录之间、删目录与删锁之间）。
   static func ids(in holds: URL) -> Set<String> {
     Set(AttachmentFiles.names(in: holds).map { $0.hasSuffix(".lock") ? String($0.dropLast(5)) : $0 })
   }
 
-  /// 这个运行已经结束（锁拿得到）就拿着锁删掉它的持有目录与锁文件，目录先删。锁文件已经不在的，是别的清理收完了。
   static func removeIfEnded(_ id: String, in holds: URL) throws {
     let lock = lock(id, in: holds)
     let opened = open(lock.path, O_RDWR | O_CLOEXEC)
@@ -82,7 +78,6 @@ final class AttachmentRun: Sendable {
 }
 
 extension AttachmentFiles {
-  /// 在这次运行里持有 `file`（`key` 的那一份）。
   func hold(_ file: URL, as key: String) throws {
     try link(file, to: run.folder().appending(path: key))
   }
@@ -92,7 +87,6 @@ extension AttachmentFiles {
     restored(key, from: [backups] + AttachmentRun.folders(in: run.holds))
   }
 
-  /// 启动清理的头一步：`drafted` 里本机有的键挪进这次运行，再删结束了的运行留下的持有。
   /// 删不掉的运行（权限、文件被锁）不挡别的，连同错误交回；草稿的键挪不进来就整个停下：不然它唯一的那份会随结束的运行删掉。
   func endFinishedRuns(keeping drafted: Set<String>) throws -> [(run: String, error: any Error)] {
     for key in drafted { if let file = restoredFromAnyRun(key) { try hold(file, as: key) } }
@@ -103,12 +97,10 @@ extension AttachmentFiles {
     return failures
   }
 
-  /// 各运行持有着的键。
   func heldKeys() -> Set<String> {
     Set(AttachmentRun.folders(in: run.holds).flatMap(Self.names(in:)).filter(AttachmentKey.isValid))
   }
 
-  /// 缓存与保底里没有哪个运行持有的键：启动清理的候选。
   func unheldKeys() -> Set<String> {
     Set([directory, backups].flatMap(Self.names(in:)).filter(AttachmentKey.isValid)).subtracting(heldKeys())
   }

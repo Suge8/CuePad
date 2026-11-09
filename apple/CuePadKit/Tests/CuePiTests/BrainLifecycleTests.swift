@@ -25,8 +25,7 @@ struct BrainLifecycleTests {
         try #require(pid_t(String(contentsOf: file, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
     }
 
-    /// 运行时一开口（初始化）就拒绝、之后也不退出、还忽略 SIGTERM：启动照样返回、抛出它的拒绝原文，起了的进程不留下
-    /// （调用方拿不到大脑，没人能收拾）。
+    /// 调用方拿不到大脑，没人能收拾，所以起了的进程不能留下。
     @Test func aRuntimeThatRejectsTheHandshakeIsNotLeftRunning() async throws {
         let clock = ManualTiming()
         let (config, file) = try fakeRuntime(.codex, #"""
@@ -43,7 +42,6 @@ struct BrainLifecycleTests {
         #expect(kill(try pid(in: file), 0) != 0)
     }
 
-    /// 运行时不理会输入关闭、也忽略 SIGTERM：stop() 在两个宽限期后结束整个进程组，报告退出。
     @Test func stopEndsARuntimeThatIgnoresEOFAndSIGTERM() async throws {
         let clock = ManualTiming()
         // 起好要等 CuePad 的工具服务连上（`mcp_status`）：答一句连上了，之后谁也不理。pid 与 trap 都在答之前，起好时已就位

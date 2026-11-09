@@ -13,21 +13,19 @@ nonisolated struct FreezeNote: Codable, Equatable, Sendable {
     var device: String
     var os: String
 
-    /// 存档里的文件：外面包一层键，与 MetricKit 的包区分（`CrashReport.Kind`）。
+    /// 与 MetricKit 的包区分（`CrashReport.Kind`）。
     struct File: Codable {
         static let key = "cuepadFreeze"
         let cuepadFreeze: FreezeNote
     }
 }
 
-/// 看着主线程的事件循环：每轮醒来记下时刻、回去等事件时清掉；在忙时另一条队列每 `interval` 看一眼，同一轮忙过 `threshold`（1 秒）就记一条 `FreezeNote`。
-/// 主线程闲着时看守停着（不为它唤醒），醒来的那一轮再开。所在页与最近的动作由界面在变时报来（`page`、`action`），卡住时看守直接读，不经主线程。
+/// 同一轮忙过 `threshold`（1 秒）才记。主线程闲着时看守停着（不为它唤醒）；所在页与最近的动作由界面在变时报来，卡住时看守直接读，不经主线程。
 /// 处处都开（调试实例也记：`xc.sh explore` 靠它发现卡住后取样）；只有 MetricKit 订阅限在用户的设备上（`Diagnostics.start`）。
 nonisolated final class MainThreadWatch: Sendable {
     static let shared = MainThreadWatch()
     static let threshold: UInt64 = 1_000_000_000
     static let interval = DispatchTimeInterval.milliseconds(500)
-    /// 留下最近这么多个动作。
     static let recent = 8
 
     private struct State {
@@ -36,7 +34,6 @@ nonisolated final class MainThreadWatch: Sendable {
         var watching = false
         var page = "?"
         var actions: [String] = []
-        /// 正在记的那一次卡住：哪一轮、写下的那条。
         var open: (entered: UInt64, note: FreezeNote)?
         var archive: DiagnosticArchive?
         var meta = (version: "", device: "", os: "")
@@ -53,7 +50,7 @@ nonisolated final class MainThreadWatch: Sendable {
         timer.setEventHandler { [unowned self] in check() }
     }
 
-    /// 开始看（幂等）。记下的条目存进 `archive`，存下后在主线程调 `recorded`。
+    /// 幂等。记下的条目存进 `archive`，存下后在主线程调 `recorded`。
     @MainActor
     func start(archive: DiagnosticArchive, version: String, recorded: @escaping @MainActor @Sendable () -> Void) {
         let started = state.withLock { state in
@@ -70,10 +67,8 @@ nonisolated final class MainThreadWatch: Sendable {
         turn(awake: true)
     }
 
-    /// 界面换了页（`Workspace.navigation`）。
     func page(_ page: String) { state.withLock { $0.page = page } }
 
-    /// 一个动作（开合面板、浮窗，前后台）。
     func action(_ action: String) {
         let stamp = Date.now.formatted(Date.ISO8601FormatStyle(timeZone: .current).time(includingFractionalSeconds: false))
         state.withLock { state in
@@ -92,7 +87,6 @@ nonisolated final class MainThreadWatch: Sendable {
         }
     }
 
-    /// 看守那一下：主线程在等事件就停下；同一轮忙过阈值记一条，换了一轮（恢复了）补上时长。
     private func check() {
         let (write, archive, recorded) = state.withLock { state -> (FreezeNote?, DiagnosticArchive?, (@Sendable () -> Void)?) in
             // 在锁里取时刻：锁外取的话主线程可能在取完之后才记下这一轮的醒来，醒来比"此刻"还晚

@@ -7,8 +7,6 @@ import Testing
 @testable import CuePi
 
 extension RealOpenCodeTests {
-    /// 重新接上（App 重开）：没有标题的会话（模型不存在，这一轮出错，OpenCode 不起标题）仍以首条消息作名字。
-    /// 停止接入时只停 CuePad 拉起的服务：终端拉起的不动，CuePad 拉起的停掉。
     @Test func reconnectingKeepsTheFirstMessageAndOnlyTheServiceCuePadStartedIsStopped() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let opencode = try #require(realOpenCodeURL)
@@ -54,7 +52,6 @@ extension RealOpenCodeTests {
         }
     }
 
-    /// 服务没开：CuePad 自己拉起后台服务开新会话、带图发话、派子代理、远程作答它的提问；停止一轮、结束会话，再接着这个已结束的会话说。
     @Test func cuePadStartsTheServiceAndHostsSessionsFromOpenToResume() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             #expect(sandbox.service == nil)

@@ -12,20 +12,18 @@ struct ComposerField: UIViewRepresentable {
     let label: String
     let maxLines: Int
     let ink: Color
-    /// 焦点由调用方的 `.focused` 管（UIKit 文字区接得住 SwiftUI 的焦点）；Mac 的那份还要把 AppKit 侧的变化报回来。
     let focus: FocusState<Bool>.Binding
-    /// 外接键盘的方向键、↩/Tab、Esc 先交给调用方（斜杠命令面板打开时用）；返回 true 表示已处理。
+    /// 外接键盘的方向键、↩/Tab、Esc 先交给调用方；返回 true 表示已处理。
     var keys: (ComposerKey) -> Bool = { _ in false }
-    /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了。外接键盘上是文字区的按键命令（按住 ⌘ 看得到）。
+    /// nil 是此刻用不了。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
-    /// 收下粘贴进来的附件（放进附件条）；nil 是这个输入框不收附件，剪贴板里的照常当文字粘。
+    /// nil 是不收附件，剪贴板里的照常当文字粘。
     var files: (([IncomingFile]) -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    /// 这个字号下文字区一行中文的高（`ComposerMetrics.lineSlot`）。
     static func lineHeight(_ size: DynamicTypeSize) -> CGFloat {
         let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
         return GrowingTextView.rulerHeight(font: Typography.readingFont(for: traits), paragraph: Typography.readingParagraph(for: traits), lines: 1)
@@ -116,9 +114,8 @@ final class GrowingTextView: UITextView {
     var keys: (ComposerKey) -> Bool = { _ in false }
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     var files: (([IncomingFile]) -> Void)?
-    /// 粘贴从哪个剪贴板取：与复制写进的是同一个（`AppServices.pasteboard`）
+    /// 与复制写进的是同一个剪贴板（`AppServices.pasteboard`）。
     let pasteboard: UIPasteboard
-    /// 外部刚写进文字：之后的排版里滚到末尾，直到高度不再变。
     var revealsEnd = false { didSet { revealedHeight = nil } }
     private var revealedHeight: CGFloat?
 
@@ -154,8 +151,7 @@ final class GrowingTextView: UITextView {
         placeholder.sizeThatFits(CGSize(width: max(0, width - placeholderInset), height: .greatestFiniteMagnitude))
     }
 
-    /// 最大高度：同一字体下排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），
-    /// 撑满时最后一行不被切一半；字号大到放不下时少排几行。
+    /// 排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），撑满时最后一行不被切一半；字号大到放不下时少排几行。
     var maxHeight: CGFloat {
         let rulerHeight = Self.rulerHeight(font: font!, paragraph: paragraph, lines: maxLines)
         // 大字号档位下 6 行会高过键盘上方放得下的空间（头部叠到文字上、最后一行被玻璃边切掉）：按整行数收到窗口高度的 3 成以内
@@ -191,7 +187,6 @@ final class GrowingTextView: UITextView {
         return height
     }
 
-    /// 文字区在这个宽度下要多高：排出来的高度，最高 `maxHeight`（只排够上限的开头，量过的记着，见 `ComposerHeight`）。
     func fittingHeight(width: CGFloat) -> CGFloat {
         if text.isEmpty {
             return max(Self.rulerHeight(font: font!, paragraph: paragraph, lines: 1), promptSize(width: width).height)
@@ -202,7 +197,6 @@ final class GrowingTextView: UITextView {
     }
     private var heights = ComposerHeight()
 
-    /// 文字变了（打字、外部写入）。宽度变过（形态动画、转屏）之后头一次打字时整篇重排一遍（见 `layOutAll`）。
     func textChanged() {
         heights.textChanged()
         if laidOutWidth != bounds.width { layOutAll() }
@@ -217,8 +211,6 @@ final class GrowingTextView: UITextView {
         setNeedsLayout()
     }
 
-    /// 剪贴板里有附件时"粘贴"收的是附件（交给 `files`，放进附件条），认法与卡片编辑器同一条（`PastedItem`）：
-    /// 纯文字的文字区本来不收文件，只有文件时连"粘贴"都不给。
     private var pastesFiles: Bool { files != nil && PastedItem.isFile(pasteboard.types.compactMap(UTType.init)) }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {

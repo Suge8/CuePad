@@ -1,10 +1,7 @@
 import SwiftUI
 
-/// 图标的一次性形变（墨块的"软糖"那一下）：压扁、拉长、落地抖两下，以底边为锚；换表情（或换符号）在压得最扁的那一刻，形变把这一下盖住。
 /// 只在事件发生的那一拍放一次（放完就停，不常驻）；减弱动态效果时不形变：样子（`look`）变了的旧的先淡完、新的再淡入（`handOff`，两张不同的脸交叉淡会叠出重影），
 /// 样子没变的（只多了一颗点）不换身份，里面变了的自己淡入淡出。
-/// 用法：`Jelly(value:look:move:) { shown, phase in … }`，`value` 每变一次按 `move(旧, 新)` 挑动作（nil 是不形变、直接换）；
-/// `shown` 是此刻该画的值，`phase` 说此刻在这一下的哪一段：换之前（画旧值，可换成过渡的样子，如做完的勾先是一颗点）、刚换上（直到这一下放完）、平时。
 /// 一下只有一个时钟：一个从 0 到 1 的线性进度（一次 `withAnimation`），每帧按它在关键帧时间线上取形变（预建的时间线），
 /// 进度过了第一步（压得最扁）那一帧画新值——换与形变同一帧，没有回调、关键姿势之间速度连着、总时长就是各步之和。
 /// 否决过：每步一次 `withAnimation` 接完成回调——每个关键姿势处速度归零、回调再晚一截，停 50～90ms、总时长长三四成；
@@ -12,7 +9,6 @@ import SwiftUI
 /// 还没放完又来一个新值：从此刻画的那个接着换；此刻的形变（`carry`）在新的一下开头 `JellyPose.recover` 秒内平滑地收掉，不弹回一帧。
 struct Jelly<Value: Equatable, Content: View>: View {
     let value: Value
-    /// 看得出的样子：减弱动态效果时它变了才整只先淡出再淡入。
     let look: (Value) -> AnyHashable
     let move: (Value, Value) -> JellyMove?
     @ViewBuilder let content: (Value, JellyPhase) -> Content
@@ -53,10 +49,8 @@ struct Jelly<Value: Equatable, Content: View>: View {
     }
 }
 
-/// 此刻在一下软糖的哪一段：换之前、刚换上（到这一下放完）、平时。刚换上给只在进来时放一次的东西用（做完的欢呼，`CueAvatar`）。
 enum JellyPhase { case leaving, entering, steady }
 
-/// 一下软糖：从哪个值换到哪个值、放哪个动作、开头要收掉的形变、第几下，以及最后求值的那一刻（`drawn`）。
 /// 不嵌在 `Jelly` 里：嵌着就带上 `Value: Equatable`、`Content: View` 两份协议实现，`@State` 在非隔离处用它们会报可能被隔离。
 private struct JellyRun<Value> {
     let from: Value
@@ -95,7 +89,6 @@ private struct JellyRun<Value> {
         time < swapAt ? .leaving : time < motionDuration ? .entering : .steady
     }
 
-    /// 动作在这一刻的形变，加上开头那段还没收完的 `carry`。
     func pose(at time: Double) -> JellyPose {
         let base = time < motionDuration ? sample(time) : JellyPose()
         let fade = min(max(time / JellyPose.recover, 0), 1)
@@ -103,13 +96,11 @@ private struct JellyRun<Value> {
     }
 }
 
-/// 最后求值的那一刻（`JellyFrame` 每帧写，`Jelly.start` 读）。
 private final class JellyDrawn {
     var time = Double.infinity
     var progress = 0.0
 }
 
-/// 进度插值时每帧重算：这一刻的形变、画旧值还是新值、在哪一段。里面的东西不再随这一下的动画插值（点、变淡与姿势同一帧换）。
 private struct JellyFrame<Value: Equatable, Content: View>: View, Animatable {
     var progress: Double
     let run: JellyRun<Value>
@@ -145,14 +136,11 @@ nonisolated private struct JellyEffect: GeometryEffect {
     }
 }
 
-/// 形变的一帧：横竖缩放、绕底边转（度）、竖直位移（按高度的比例，向上为负）。
 nonisolated struct JellyPose: Equatable, Sendable {
     var sx = 1.0, sy = 1.0, rot = 0.0, y = 0.0
 
-    /// 被打断时此刻的形变在新的一下开头多久内收掉。
     static let recover = 0.12
 
-    /// 叠上另一个形变（相对静止的偏移）的 `weight` 倍。
     func adding(_ other: JellyPose, weight: Double) -> JellyPose {
         JellyPose(sx: sx + (other.sx - 1) * weight, sy: sy + (other.sy - 1) * weight, rot: rot + other.rot * weight, y: y + other.y * weight)
     }
@@ -160,17 +148,11 @@ nonisolated struct JellyPose: Equatable, Sendable {
 
 /// 几种一次性形变（借 lab 的软糖关键帧）。Cue 头像的几种拉长不超过 6%、上跳不超过身高的 5%：再多脑袋就顶出头像那块圆，40pt 的名牌里贴着玻璃上沿。
 enum JellyMove {
-    /// 被叫醒：缩一下蓄力，弹起拉长，落地压扁，抖一下；眼睛在蓄力压到最扁时睁开。
     case wake
-    /// 做完、开心：左右各蹦一下。
     case happy
-    /// 做完的勾：按下去，勾顶出来时拉长弹起，落回抖一下（任务圈）。
     case pop
-    /// 起不来：左右摇两下头，越摇越轻。
     case shake
-    /// 换成等子代理、等你：轻轻一弹。
     case nudge
-    /// 从一个姿势退出（其余换了样子的都是它）：轻压一下回弹，0.3s。
     case settle
 
     var timeline: KeyframeTimeline<JellyPose> {
@@ -183,7 +165,6 @@ enum JellyMove {
         }
     }
 
-    /// 每一步用多久走到这个姿势，最后一步回到静止。
     var steps: [(time: Double, pose: JellyPose)] {
         switch self {
         case .wake: [
@@ -211,8 +192,7 @@ enum JellyMove {
         }
     }
 
-    /// Cue 换拍子时做哪个动作：醒来（从不在、起不来回来，或变成在想）是叫醒，变成做完是开心，起不来摇头，等子代理、等你轻轻一弹；
-    /// 其余只要样子变了（换了静止图，或从在听的倾里出来）就轻压回弹——姿势一变必有一个动作，不硬切。点与变淡跟着同一刻换（都在 `Jelly` 画的那个值里，`CueAvatar`）。
+    /// 其余只要样子变了（换了静止图，或从在听的倾里出来）就轻压回弹：姿势一变必有一个动作，不硬切。
     static func cue(_ old: CueBeat, _ new: CueBeat) -> JellyMove? {
         guard old != new else { return nil }
         let asleep: Set<CueBeat> = [.away, .failed]

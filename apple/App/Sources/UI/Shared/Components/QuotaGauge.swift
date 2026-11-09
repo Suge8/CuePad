@@ -1,18 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 订阅额度的明细（读数规则在 `QuotaMeter`）：点额度环（`QuotaRings`）才展开——手机会话页顶栏那颗胶囊长出的面板、Mac 侧栏那一行额度长出的气泡、
-/// 菜单栏面板里就地展开的那一块；还没有额度记录时那里写还没有额度、怎么才会有（`QuotaEmpty`）。
-///
-/// 每个账号一块（`QuotaAccount`）：头一行是图标列里的产品标志、产品名与套餐，要单独标出的状态（陈旧写"x 分钟前"、失败、过期…）靠右；
-/// 下面的读数一样排法，左边是名字、右边是大号等宽的数，窗口再多一条剩余条（`MarkedBar`，刻线是匀速线）。同类条目行数固定：
-/// 一个窗口两行，余额与没有周期的计量一行。刚观测过的账号不各写时间，并成底下一行"x 前更新"（取它们里最早的那次），
-/// 陈旧与失败仍标在那个账号上。这就是最后一层，不再有点开的：不是按钮、没有按压。宽处排成两栏（`QuotaColumns`）。
-/// 最近一次刷新没查到时最底下一行写原因、旁边给重试（`QuotaRefreshNote`）；打开明细本身就会刷新，不另放刷新钮。
-///
-/// 配色只用墨：余量足是次要墨色，用过七成是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）；胭脂时数字一起变色，欠费的余额同样。
-/// 读数在新观测到达、变陈旧与每个窗口的重置时刻变化（`Moments` 睡到 `nextReset(after:)`：等到重置是业务语义，不是周期刷新）：
-/// 条与匀速线用无回弹弹簧过去、数字滚动换字，减弱动态效果时直接到终态；没有常驻动画与周期定时器。
+/// 这就是最后一层，不再有点开的：不是按钮、没有按压。打开明细本身就会刷新，不另放刷新钮。
+/// 配色只用墨：余量足是次要墨色，用过七成是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）。
+/// 读数在新观测到达、变陈旧与每个窗口的重置时刻变化时才变（`Moments` 睡到 `nextReset(after:)`）；没有常驻动画与周期定时器。
 struct QuotaDetail: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -58,7 +49,6 @@ extension QuotaDetail {
 }
 #endif
 
-/// 还没有额度记录时明细那里的两行：没有，与怎么才会有；铺满所在那一块（Mac 的气泡、菜单栏面板、手机长出的面板）。
 private struct QuotaEmpty: View {
     @Environment(\.palette) private var palette
 
@@ -76,8 +66,6 @@ private struct QuotaEmpty: View {
 /// 账号放得下就排成两栏：按顺序（`QuotaMeter.ordered`）一块块放进当时较矮的那一栏，一样高放左栏（块高矮不一，按行对齐会留空洞）。
 /// 每块落在当时最矮那栏的底下，所以各块上沿随顺序只增不减：从上往下扫就是定好的顺序，读屏同序。
 /// 位置只由顺序与各块形状定，刷新不挪；账号失败、少了窗口这类形状变了才可能换栏。
-/// 只有一个账号或放不下两栏（手机、菜单栏面板）时一块接一块往下排。
-/// 没给宽（Mac 侧栏的气泡）时取两栏的宽；只有一个账号或放不下两栏（手机、菜单栏面板）时一块接一块往下排。
 struct QuotaColumns: Layout {
     static let column: CGFloat = 248
     static let gap: CGFloat = 32
@@ -117,7 +105,7 @@ private struct QuotaAccount: View {
     let meter: QuotaMeter
     @Environment(\.palette) private var palette
 
-    /// 图标列宽（随动态字体放大：图标跟着字放大，定宽的列在大字号下放不下，压到账号名上）与它到字的距离，同面板里的列表行。
+    /// 随动态字体放大：图标跟着字放大，定宽的列在大字号下放不下，压到账号名上。
     @ScaledMetric(relativeTo: .subheadline) private var iconColumn: CGFloat = 20
     private static let iconGap: CGFloat = 8
 
@@ -144,7 +132,6 @@ private struct QuotaAccount: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// 产品名，后面是要区分时的账号名与多处网关时的来源、再后面是套餐；放不下时先省套餐，再省账号名的中间，产品名不省。
     private var title: some View {
         let who = Dotted([meter.shownIdentity, meter.source].compactMap { $0 })
         return HStack(alignment: .firstTextBaseline, spacing: 0) {
@@ -171,7 +158,6 @@ private struct QuotaAccount: View {
         }
     }
 
-    /// 余额与窗口同一种排法：左边名字、右边大号的数；欠费时名字写欠费、数用胭脂，原串不改。
     private func balanceRow(_ balance: String) -> some View {
         MetaLine(gap: Spacing.item) {
             Text(meter.owes ? "欠费" : "余额").font(Typography.meta).fontWeight(.medium).foregroundStyle(meter.owes ? palette.failure : palette.ink)
@@ -181,7 +167,6 @@ private struct QuotaAccount: View {
     }
 }
 
-/// 一个窗口两行：窗口名与多久后重置（照这速度会在重置前用完时，改写多久后用完）、右边还剩多少；下面一条剩余条。
 private struct QuotaWindowRow: View {
     let window: QuotaMeter.Window
     @Environment(\.palette) private var palette
@@ -197,7 +182,6 @@ private struct QuotaWindowRow: View {
                     .font(Typography.meta).foregroundStyle(palette.ink3)
                     .contentTransition(.numericText(value: window.left))
             }
-            // 剩余条：剩的少于匀速线就是用快了
             MarkedBar(fill: window.left, mark: window.even, level: window.level)
         }
         .help(Text(window.spoken))
@@ -217,8 +201,6 @@ private struct QuotaWindowRow: View {
     }
 }
 
-/// 回复框模型胶囊上标志外的一圈细环：卡着的那个窗口还剩多少，从 12 点顺时针铺（`ModelBadge`）。
-/// 还剩随动画插值，档位的颜色直接换。
 struct QuotaRing: View, Animatable {
     private var left: Double
     private let level: UsageLevel
@@ -250,13 +232,9 @@ struct QuotaRing: View, Animatable {
     }
 }
 
-/// 每个账号一颗小额度环（产品标志在环里，同回复框模型胶囊上那颗 `ModelBadge`）：环是卡着的那个窗口还剩多少，只用颜色说余量、不写数。
-/// 整排是一颗按钮，点它展开明细（`QuotaDetail`，展开在哪由所在的地方定）；`open` 只给读屏说展开没有。
-/// 手机会话页顶栏那颗胶囊的右半、菜单栏面板的 Cue 那一行、Mac 侧栏的一行（`SidebarQuota`）。账号多时只放前 `limit` 颗；
+/// 整排是一颗按钮，点它展开明细（展开在哪由所在的地方定）；`open` 只给读屏说展开没有。
 /// 还没有可画的环时（还没有额度记录）环的位置写"额度"二字，照样能点，点开明细那里说怎么才会有（`QuotaDetail`）：一颗空环读不出是什么。
 /// 两个字与一颗环差不多宽，菜单栏面板不变宽；手机那块玻璃第一次有额度时窄几点，只变这一次。
-/// `row`：铺满宽的一行：左边一直写"额度"（字号随所在处）、环靠右，按下与展开着是行的底（`RowStyle`）。
-/// `cell`：会话条最底下那一行（`SidebarQuota`）：只有环，同那一行的图标钮一种底（格，`RowStyle(cell: true)`），接在技能与规则、设置两格右边。
 struct QuotaRings: View {
     let open: Bool
     let height: CGFloat

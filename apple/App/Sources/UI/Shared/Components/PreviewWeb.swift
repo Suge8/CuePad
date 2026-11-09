@@ -4,8 +4,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
 
-/// 网页的只读离线渲染（手机上还有文稿、表格、演示文稿：WebKit 按文件类型把它们转成页面）：脚本可以跑（演示页常带图表与交互），
-/// 但一切联网与读别的文件的请求都被拦掉（`PreviewWebGuard`），页内链接不跳转。拦截规则没能装上时不打开页面，不退回到不设防。
+/// 脚本可以跑（演示页常带图表与交互），但一切联网与读别的文件的请求都被拦掉（`PreviewWebGuard`），页内链接不跳转。拦截规则没能装上时不打开页面，不退回到不设防。
 /// 每个视图自己建一个 WKWebView 载入：全屏页的翻页会给同一页重建视图，SwiftUI 的 `WebView` 不许两个视图共用一个 `WebPage`
 /// （同一组两份网页左右翻时曾因此崩溃）。WebKit 载不出来（文稿坏了、这台转不了）时同文件不在本机一样写读不了，不留一张白页或 WebKit 的报错码。
 struct PreviewWeb: View {
@@ -27,7 +26,6 @@ struct PreviewWeb: View {
                 EmptyState(mascot: .error, title: "没法安全地打开这个页面", message: .verbatim(failure)).padding(Spacing.page).frame(maxHeight: .infinity)
             } else {
                 #if os(iOS)
-                // 规则还在装时就铺缩略图的画面，与载入时盖在页面上的那张同一处（`OfflineWebView`）
                 PreviewCoverView().ignoresSafeArea(.container, edges: OfflineWebView.edges)
                 #else
                 Spinner(.regular)
@@ -48,7 +46,6 @@ struct PreviewWeb: View {
     }
 }
 
-/// 网页预览的防护（全屏页与缩略图快照共用）：脚本照跑，联网与读别的文件一律拦掉，页内链接不跳转。
 /// 放行的只有页内的 data:、blob:、about:，文稿按文件打开时的那一个文件（读权限也只给它），与 WebKit 把文稿转成页面时生成的页内资源（x-apple-ql-id:）。
 enum PreviewWebGuard {
     private static let blockEverythingButInline = """
@@ -70,7 +67,6 @@ enum PreviewWebGuard {
         return rules
     }
 
-    /// 只放行我们自己装载的那一次；点链接（含跳到别的页面）一律不动，页内锚点除外。
     static func allows(_ type: WKNavigationType, to url: URL?) -> Bool {
         type == .other || url?.fragment != nil && url?.scheme == "about"
     }
@@ -80,8 +76,7 @@ enum PreviewWebGuard {
 
     static func mimeType(of file: URL) -> String { AttachmentKey.type(ofName: file.lastPathComponent)?.preferredMIMEType ?? "text/html" }
 
-    /// 不显示的网页（缩略图快照 `PageSnapshots` 与调试快照）：装好规则、载入这个文件，载入完才返回。不上屏的渲染用 `WebPage`
-    /// （没有视图也能导出画面）；上屏的是 `OfflineWebView`。
+    /// 不上屏的渲染用 `WebPage`（没有视图也能导出画面）；上屏的是 `OfflineWebView`。
     static func page(for file: URL) async throws -> WebPage {
         var configuration = WebPage.Configuration()
         configuration.websiteDataStore = .nonPersistent()
@@ -102,7 +97,6 @@ enum PreviewWebGuard {
     }
 }
 
-/// 全屏页里的那个 WKWebView：装好规则、非持久的数据、只放行自己装载的那一次（`PreviewWebGuard`）。
 private struct OfflineWebView {
     let file: URL
     let rules: WKContentRuleList
@@ -140,7 +134,6 @@ private struct OfflineWebView {
     final class Coordinator: NSObject, WKNavigationDelegate {
         var loading: Task<Void, Never>?
         private let unreadable: Binding<Bool>
-        /// 自己装载的那一次载完了：之后的失败是页里点的链接被拦下（`allows`），不算读不了
         private var finished = false
 
         init(unreadable: Binding<Bool>) { self.unreadable = unreadable }
@@ -181,7 +174,6 @@ private struct OfflineWebView {
         var painting: Task<Void, Never>?
 
         #if os(iOS)
-        /// 画上第一帧（或载不了）之前盖在页面上的缩略图画面（`PreviewCover`）；拦截规则装好不算载完
         var cover: UIView?
 
         private func painted() {
@@ -189,7 +181,6 @@ private struct OfflineWebView {
             cover = nil
         }
         #else
-        /// 落地等这一页画上第一帧（`PreviewFlight.pagePainted`）
         weak var flight: PreviewFlight?
         /// 画上第一帧之前透明（`makeNSView`）：翻页翻到网页时 WebKit 先铺一整页白底，深色下是一下白闪
         weak var view: WKWebView?
@@ -218,10 +209,8 @@ private enum DocumentLayout {
         }
     }
 
-    /// 重排后字号放大的倍数：转出来的正文多是 11～12px，放大到约 15px
     private static let zoom = 1.3
 
-    /// 页面载完（文档末尾）时换掉视口；重排还要压掉纸面的版心宽度、最小高度与页边距。
     var script: String {
         let setViewport = """
             document.querySelectorAll('meta[name=viewport]').forEach(meta => meta.remove());
@@ -257,8 +246,7 @@ extension OfflineWebView: NSViewRepresentable {
     func updateNSView(_ view: WKWebView, context: Context) {}
 }
 #else
-/// 手机的全屏页里铺满整屏、滚到两条栏后面，内容边按 `previewInsets` 让出栏；载完之前盖着缩略图的画面（`previewLook`），
-/// 从缩略图飞出来的第一帧就有图（网页的是桌面宽的首屏、文稿的是纸面，与重排后的页不一样，只当占位）。
+/// 载完之前盖着缩略图的画面（`previewLook`），从缩略图飞出来的第一帧就有图（网页的是桌面宽的首屏、文稿的是纸面，与重排后的页不一样，只当占位）。
 extension OfflineWebView: UIViewRepresentable {
     static let edges = Edge.Set.all
     func makeUIView(context: Context) -> WKWebView {

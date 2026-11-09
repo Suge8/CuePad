@@ -8,9 +8,6 @@ nonisolated private struct EditorData: Sendable, Equatable {
     var project: Project?
 }
 
-/// 打开的灵感：一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），正文编辑（`CardTextField`）与自动保存（`CardEditing`）在这里；
-/// 顶栏是共用的悬浮顶栏——中间写所属项目与"时间 · 置顶"，右边"⋯"里是 `CardMenu.more`；分享两端共用 `InspirationEditorActions`。任务不进这里，在任务气泡里看（`TaskBubble`）。
-/// 灵感离开时什么都没写就不留下（`Workspace.leaveEditing`）。
 struct CardEditorScreen: View {
     let cardID: UUID
     @Environment(Workspace.self) private var workspace
@@ -23,7 +20,6 @@ struct CardEditorScreen: View {
     @State private var inspirationSharing = InspirationSharing()
 
     private static let pageWidth: CGFloat = 760
-    /// 宽屏的纸四边留白同宽：首行不顶着纸边。
     private static let paperInset: CGFloat = 44
 
     var body: some View {
@@ -60,12 +56,11 @@ struct CardEditorScreen: View {
         }
     }
 
-    /// 顶栏的一行："改于 03:36 · 置顶"。
     private func detail(_ data: EditorData) -> Dotted {
         Dotted(String(localized: "改于 \(DateLabel.short(data.card.modifiedAt))"), data.card.isPinned ? String(localized: "已置顶") : nil)
     }
 
-    /// 顶栏右边的"⋯"：从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
+    /// 从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
     private var actions: some View {
         Menu("更多", icon: .more) {
             if let card = data?.card, let editing {

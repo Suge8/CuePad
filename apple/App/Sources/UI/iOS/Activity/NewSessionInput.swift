@@ -2,13 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 新会话：一个浮在键盘上方的输入框，写的就是给 Pi 的第一句话；头部落点胶囊选在哪开（只列项目，默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时写上 Mac 名）。
-/// 工具排与 Mac 的新会话表单、Cue 同一排（`PiConfigControls.init(choice:)`）：Agent 只列那台 Mac 上能用的（`MacAgents`），默认上次选的（`MacAgents.preferred`，选了就记作下次的默认）；
-/// 模型与思考强度默认跟着这家的默认，换了 Agent 或 Mac 回到默认。一家都不能用时输入框上方写那台为什么（`whyNone`）、开不了。
-/// 发送钮就是开始：Mac 开好、带着这次标识的会话同步过来时自动收起并进入它（输入框关了就不进，`SessionLaunching` 照样等）；等待时仍可编辑或关闭；
-/// 明确失败可安全重试，未知或查不到结果时再开须确认重复风险。
-/// 新会话的目录只由项目绑定的文件夹推出；还没绑的项目也直接开：发给 Cue 运行的那台 Mac（没启用 Cue 时按名字排第一台，`CueStore.workMac`），
-/// 它开工时建好工作区并绑定。
 struct NewSessionInput: View {
     let start: SessionStart
     @Environment(Workspace.self) private var workspace
@@ -16,15 +9,12 @@ struct NewSessionInput: View {
     @Environment(\.palette) private var palette
     @State private var choice: ProjectFolders.LaunchPlace.ID?
     @State private var draft = ComposerDraft()
-    /// 由哪台 Mac 开（`LaunchPlace.host`）、那台上能用的几家；还没读到为 nil。
     @State private var agents: MacAgents?
-    /// 这次指定的模型与思考强度（nil 是这家的默认）。
     @State private var model: PiModelKey?
     @State private var thinking: PiThinkingLevel?
     @State private var fast = false
     @FocusState private var focused: Bool
 
-    /// 只列项目，按所有项目选择器的同一个顺序（`ProjectCatalog.projects`，最近活跃的在前）。
     private var places: [ProjectFolders.LaunchPlace] {
         ProjectFolders.launchPlaces(
             projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: nil, workMac: workspace.catalog?.workMac?.hostID)
@@ -77,7 +67,6 @@ struct NewSessionInput: View {
         .onChange(of: chosen?.host) { model = nil }
     }
 
-    /// 头部：落点胶囊；进度或原因叠在输入框上方（`status`）。Agent 与模型在工具排里。
     private var header: some View {
         HStack(spacing: Spacing.item) {
             MenuButton(sections: [ChoiceMenu.Section(choices: places.map { place in
@@ -94,7 +83,6 @@ struct NewSessionInput: View {
         }
     }
 
-    /// 输入框上方叠着的那一行（`composerNotice`）：发出后的进度，上一次没能打开的原因，或开不了的原因；都没有为 nil。
     private enum Status {
         case noMac, phase(LaunchProgress.Phase), noAgents(MacAgents)
     }
@@ -102,7 +90,7 @@ struct NewSessionInput: View {
     private var status: Status? {
         if chosen != nil, chosen?.host == nil { return .noMac }
         if phase != .idle { return .phase(phase) }
-        // 那台一家都不能用时先说它：同步通了也开不了
+        // 那台一家都不能用：同步通了也开不了，所以要写原因
         if let agents, agents.agents.isEmpty { return .noAgents(agents) }
         return nil
     }

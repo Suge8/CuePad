@@ -1,20 +1,19 @@
 #if os(macOS)
 import Foundation
 
-/// Mac 专属的偏好：窗口位置、首次打开的接入面板出现过没有。
 extension AppSettings.Key {
     static let setupOffered = "setupOffered"
     fileprivate static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置
 }
 
 extension AppSettings {
-    /// 首次打开的接入面板自己弹过没有（`Workspace.offerSetup`）：看过不接的不再弹，之后从 Cue 页的启用钮（`CueWelcome`）或设置里来。
+    /// 看过不接的不再弹。
     var setupOffered: Bool {
         get { defaults.bool(forKey: Key.setupOffered) }
         set { defaults.set(newValue, forKey: Key.setupOffered) }
     }
 
-    /// 窗口位置（`NSWindow.frameDescriptor` 字符串）：设备本地偏好，与其他偏好同处一个存储。
+    /// `NSWindow.frameDescriptor` 字符串。
     func windowFrame(for name: String) -> String? {
         defaults.string(forKey: Key.frameKeyPrefix + name)
     }

@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 项目图标与颜色的选择（Mac 与 iOS 的项目表单共用）。`cell` 是每个格子的边长：Mac 30，触屏 44。
-/// 两组都按拿到的宽度换行排：列数取放得下的最多，列宽均分整行、格子在列里居中，任何宽度下两侧对称。
 struct ProjectStylePicker: View {
     @Binding var icon: ProjectIcon
     @Binding var color: String
@@ -10,7 +8,6 @@ struct ProjectStylePicker: View {
     @Environment(\.palette) private var palette
 
     private static let spacing: CGFloat = 6
-    /// 图标字号占格子边长的比例：Mac 约 17、触屏约 24。
     private static let glyph: CGFloat = 0.56
 
     private var columns: [GridItem] {
@@ -51,7 +48,6 @@ struct ProjectStylePicker: View {
     }
 }
 
-/// 图标格与颜色格选中同一个样子：用中性选中底区分。
 private struct Picked: ViewModifier {
     let selected: Bool
     @Environment(\.palette) private var palette

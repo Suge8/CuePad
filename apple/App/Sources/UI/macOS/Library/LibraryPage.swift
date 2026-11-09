@@ -2,9 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// Mac 的技能与规则页（`Route.library`，在主区）：读这台 Mac 写下的快照（`Workspace.library`），文件改了它就跟着变。
-/// 页里不另起一排：规则｜技能两段在主栏栏头（`LibraryPanesSlot`），说明的问号在它右边（`LibraryHelpSlot`）；
-/// 两段（`LibraryDeck`）各一列居中。这台还没写下快照时（刚升级、第一次扫还没完）只写一句在读。
 struct LibraryPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

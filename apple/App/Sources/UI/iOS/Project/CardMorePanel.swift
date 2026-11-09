@@ -2,16 +2,13 @@
 import CueStore
 import SwiftUI
 
-/// 任务行左滑"⋯ 更多"长出的气泡：从按下的那一下长出来（同任务气泡，`PanelStyle.bubble`）。
 nonisolated struct CardMoreRequest: Identifiable, Equatable {
     let card: Card
-    /// 点这一行进的是会话（`Workspace.enter`）：气泡里先是"打开任务"。
     let opens: Bool
     let source: BubbleSource
     var id: UUID { card.id }
 }
 
-/// 挂在窗口上的那一格（同 `TaskBubbleSlot`）：只有它读 `Workspace.moreCard`。
 struct CardMoreSlot: View {
     @Environment(Workspace.self) private var workspace
 
@@ -22,11 +19,7 @@ struct CardMoreSlot: View {
     }
 }
 
-/// 气泡里两页，原地翻（同任务气泡翻到子任务：叠两层气泡读不出哪个是当前的，点外面也不知道关哪层）：
-/// - 第一页：头一行是这条任务的标题；下面是 `CardMenu.swipeMore` 那几项（做法同菜单，`CardMenu.Item.run`），末行"移到项目 当前项目 ›"。
-///   删除在轻扫的最外侧，这里不放；子任务跟着上级走，没有末行。
-/// - 第二页：左上"‹"返回第一页，标题"移到项目"；项目一行一个点选，当前所在的那个打勾、点不了。项目多时在里面滚。
-/// 往里翻从右边进、返回从左边进（同推入与返回，全 App 的切页 `Motion.turn`）。
+/// 气泡里两页，原地翻而不叠两层：叠两层读不出哪个是当前的，点外面也不知道关哪层。
 private struct CardMorePanel: View {
     let card: Card
     let opens: Bool

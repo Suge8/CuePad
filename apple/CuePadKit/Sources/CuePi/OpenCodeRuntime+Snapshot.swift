@@ -70,7 +70,6 @@ extension OpenCodeRuntime {
         Task { await backfill(topLevel, connection) }
     }
 
-    /// 在线会话此刻要的另几样：待答的权限与表单、上下文用量、工作目录的模型与命令。
     private func refreshLive(_ id: String, _ tracked: Tracked, _ client: OpenCodeClient) async throws {
         var permissions: [OpenCodePermission] = [], forms: [OpenCodeForm] = []
         let running = tracked.facts.subagents.filter { $0.state.phase == .known(.running) }.map(\.id)
@@ -90,7 +89,6 @@ extension OpenCodeRuntime {
         if tracked.facts.failure != nil, let error = last?.error?.message { sessions[id]?.facts.failure = error }
     }
 
-    /// 工作目录的模型与命令（没取过才取）。
     @discardableResult
     func catalog(_ directory: String, _ client: OpenCodeClient, reload: Bool = false) async throws -> Catalog {
         if !reload, let catalog = catalogs[directory] { return catalog }
@@ -108,7 +106,6 @@ extension OpenCodeRuntime {
 
     func bridgeID(_ sessionID: String, _ connection: Connection) -> PiSession.ID { "\(sessionID).\(connection.pid)" }
 
-    /// 把一个会话此刻的样子交给桥：在线的上桥或更新，不在线的不动（下线由调用方 `detach`）。
     func publish(_ sessionID: String) {
         guard let connection, connection.ready, var tracked = sessions[sessionID], tracked.online else { return }
         let id = bridgeID(sessionID, connection)

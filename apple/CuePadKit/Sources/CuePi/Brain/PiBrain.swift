@@ -3,18 +3,16 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// Pi 当大脑：RPC 模式（`pi --mode rpc`，协议见 Pi 的 docs/rpc.md），一行一条 JSON（`ChildProcess`）。
-/// - 不落会话（`--no-session`）；不发现扩展（`-ne`，CuePad 的桥扩展也不加载，所以它不在 Agent 会话列表里），
+/// 协议见 Pi 的 docs/rpc.md。
+/// - 不发现扩展（`-ne`，CuePad 的桥扩展也不加载，所以它不在 Agent 会话列表里），
 ///   只加载随包的 cue-tools.ts：它当 CuePad 的 MCP 服务的客户端，把工具照原名（task、tell、memory、setup）登记给模型，不走 Pi 内置 MCP 的
-///   `mcp__cuepad__` 命名（见它的头注释）；服务的命令行经环境变量 `CUEPAD_CUE_MCP` 交给它；
+///   `mcp__cuepad__` 命名（原因见 `cue-tools.ts` 文件开头的注释）；服务的命令行经环境变量 `CUEPAD_CUE_MCP` 交给它；
 ///   不读工作目录里的项目文件（`-na`：项目的 `.pi/` 设置、扩展与 MCP 配置都不信任），也不加载 skill、上下文文件、提示词模板；
-/// - 系统提示整份替换（`--system-prompt` 盖过 `SYSTEM.md`）；Pi 只在没给 `--append-system-prompt` 时才去找 `APPEND_SYSTEM.md`
+/// - 系统提示整份替换（`--system-prompt` 盖过 `SYSTEM.md`）：Pi 只在没给 `--append-system-prompt` 时才去找 `APPEND_SYSTEM.md`
 ///   追加上去，所以给一个空的追加项挡掉它（空串不追加任何东西）；
 /// - 工具只有扩展登记的与内置的 `read`（`-nbt` 关掉内置工具、留着扩展的，`+read` 再加回它）：Cue 只读文件核对证据，搜代码交给会话；
-/// - 图随 `prompt` 的 `images` 交；模型能不能看图看 `get_state` 里模型的 `input`；
-/// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；就地换走 `set_model`（`提供方/模型` 拆开）再 `set_thinking_level`
-///   （换模型时 Pi 会按新模型重取强度，所以强度在后）；都只改这个进程，不写 Pi 的设置；
-/// - 用 Claude 订阅时把请求标成 Claude Code 的（随包的扩展 claude-subscription.ts，见它的头注释）：`-ne` 下用户自己装的同类扩展不加载，
+/// - 就地换走 `set_model`（`提供方/模型` 拆开）再 `set_thinking_level`（换模型时 Pi 会按新模型重取强度，所以强度在后）；都只改这个进程，不写 Pi 的设置；
+/// - 用 Claude 订阅时把请求标成 Claude Code 的（随包的扩展 claude-subscription.ts，做法见它文件开头的注释）：`-ne` 下用户自己装的同类扩展不加载，
 ///   不带这些标识的订阅请求会扣额外用量；
 /// - OpenAI Responses 与 Codex Responses 的 fast 由随包扩展在请求前写 `service_tier=priority`；配置改变后重启大脑；
 /// - 提示缓存用长的一档（`PI_CACHE_RETENTION=long`：Anthropic 1 小时，OpenAI 24 小时，提供方不支持的照常）；
@@ -24,8 +22,7 @@ import Foundation
 ///   （0.87 起的 `_deferredSettledActions`），新一轮的 `agent_start` 不会先于上一轮的 `agent_settled`；
 /// - 哪一轮接走了交来的话（`TurnEvent.received`）：Pi 把它放进上下文时报那条用户消息（`message_start`），一条对一句、按交来的先后。
 ///   正忙时交来的多半并进这一轮，赶上这一轮收尾就由下一轮接走；交话的一方以为在跑的那一轮可能已经收尾，只按这里认；
-/// - 正在说的话（拼法见 `DraftParts`）：段号是 `contentIndex`，`message_update` 的 `text_delta` 追加（RPC 只发增量，见 Pi 的 docs/json.md
-///   「Reconstruct streaming messages」），`text_end` 与 `message_end` 给定稿；开出工具调用、停下或出错后这条不再算。
+/// - 正在说的话：RPC 只发增量（见 Pi 的 docs/json.md「Reconstruct streaming messages」），`text_end` 与 `message_end` 给定稿。
 @MainActor
 final class PiBrain: HostedSession {
     private let session = BrainSession()
@@ -34,7 +31,6 @@ final class PiBrain: HostedSession {
     private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: HostedSessionError.rejected(String(localized: "没有及时回应")))
     private var nextID = 0
     private(set) var seesImages = false
-    /// 在用模型的上下文窗口
     private var window: Int?
     static let subscription = Bundle.module.url(forResource: "claude-subscription", withExtension: "ts")!
     static let tools = Bundle.module.url(forResource: "cue-tools", withExtension: "ts")!
@@ -45,16 +41,12 @@ final class PiBrain: HostedSession {
         let locator = ExecutableLocator(searchDirectories: path + ExecutableLocator.standard.searchDirectories)
         return locator.candidates(ClaudeCodeRuntime.facts.command).first?.path ?? ClaudeCodeRuntime.facts.command
     }
-    /// 就地换过的模型与强度（`configure`）：开新会话后 Pi 回到启动参数，要再交一次
     private var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
-    /// 这一轮里的状况（`agent_start` 到 `agent_settled`）
     private var turn: Turn?
-    /// 交给 Pi、它还没报出那条用户消息的话（`send` 的标识），先交的在前
     private var unreceived: [UUID] = []
     private struct Turn {
         var error: String?
     }
-    /// 正在说的这条助手消息（段号是 `contentIndex`）；开出工具调用、停下或出错后为 nil，直到下一条消息
     private var speech: DraftParts?
 
     func start(_ config: CueBrainConfig) async throws {
@@ -123,7 +115,6 @@ final class PiBrain: HostedSession {
         if let effort { _ = try await command(["type": "set_thinking_level", "level": .string(effort.rawValue)]) }
     }
 
-    /// 在用的模型（Pi 的 Model 对象）：能不能看图。
     private func adopt(_ model: JSONValue?) {
         seesImages = model?["input"]?.array?.contains("image") == true
         window = model?["contextWindow"]?.int
@@ -134,7 +125,7 @@ final class PiBrain: HostedSession {
         return { await process?.stop() }
     }
 
-    /// 发一条命令、等它的回应；回应 `success: false` 抛 `rejected`。
+    /// 回应 `success: false` 抛 `rejected`。
     private func command(_ command: [String: JSONValue]) async throws -> JSONValue {
         guard let process else { throw HostedSessionError.notRunning }
         nextID += 1
@@ -144,7 +135,6 @@ final class PiBrain: HostedSession {
         return reply
     }
 
-    /// 进程退出：等着的命令以 `notRunning` 失败，报退出。
     private func ended(_ reason: ShownText?) {
         replies.closeAll(HostedSessionError.notRunning)
         session.exited(reason)

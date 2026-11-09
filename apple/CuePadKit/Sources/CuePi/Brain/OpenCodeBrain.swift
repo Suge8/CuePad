@@ -3,22 +3,16 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// OpenCode 当大脑：自己起一台 `opencode serve --stdio`（`OpenCodeClient.serve`，生命随标准输入，不复用用户的后台服务），
-/// 接口、事件流与一轮的解读都与接入同一份（`OpenCodeClient`、`OpenCodeEvent`、`OpenCodeTurn`，翻出的原样发出）。配置只经环境变量与内联配置，不改用户的文件：
+/// 不复用用户的后台服务（`OpenCodeClient.serve`，生命随标准输入）。接口、事件流与一轮的解读都与接入同一份（`OpenCodeClient`、`OpenCodeEvent`、`OpenCodeTurn`，翻出的原样发出）。配置只经环境变量与内联配置，不改用户的文件：
 /// - 内联配置（`OPENCODE_CONFIG_CONTENT`，见 `inlineConfig`）定义智能体 `cue`：`system` 整份替换系统提示；权限先全部拒绝，再放行读文件
 ///   （`read`，连同工作目录外的路径；Cue 只读文件核对证据，搜代码交给会话）与 CuePad 的 MCP 工具；MCP 只开 CuePad 的 `cuepad`（策略拒绝 `mcp:*`、只放 `mcp:cuepad`，
 ///   用户配置里的 MCP 服务不起），不走 codemode（工具直接给模型）；不留快照；
 /// - 不读工作目录的项目配置（`OPENCODE_DISABLE_PROJECT_CONFIG`）。用户全局的 AGENTS.md（OpenCode 配置目录里的）没有开关（只换配置目录
 ///   才挡得住，换了会丢用户配的提供方），写了就会进来——同 Codex 大脑对 `<CODEX_HOME>/AGENTS.md` 的取舍；
-/// - 会话落在用户真实的库里（订阅登录、提供方凭据都在那里）：开会话时带标题（省掉起标题的那次模型调用），metadata 里标上
-///   `cuepadBrain`（值是这台服务的 pid）；接入认这个标记跳过它们（`OpenCodeSessionInfo.isCueBrain`）。开新会话与停下时删掉旧会话；
-///   起大脑时先删掉这个工作目录里服务已不在的带标记会话（崩溃留下的；同时在跑的另一个大脑的不动）；
+/// - 会话落在用户真实的库里（订阅登录、提供方凭据都在那里）：开会话时带标题（省掉起标题的那次模型调用），metadata 里标上 `cuepadBrain`（值是这台服务的 pid）；接入认这个标记跳过它们（`OpenCodeSessionInfo.isCueBrain`）；
 /// - MCP 是起服务后异步连上的：起大脑时等 `/api/mcp` 报 `cuepad` 已连上（`mcp.status.changed` 时再看）、再等它的工具进了工具表
 ///   （没有信号可等，见 `mcpToolsSettle`），之前说的话模型看不到它的工具；
-/// - 说的话以 `steer` 交：空闲时开一轮，正忙时在下一个步骤边界并进这一轮；带上发送标识（`metadata.cuepadDelivery`），哪一轮收下看它送进会话的那一刻（`OpenCodeTurn`）；
-/// - 模型写成 `提供方/模型`，换模型与强度（模型的 `variant`，按 `OpenCodeModel.variant(for:)` 夹取）先在 `/api/model` 里认：
-///   服务对不存在的模型也回 204；能不能看图看模型的 `capabilities.input`；
-/// - 事件流断了（服务卡住）就结束进程，报成退出。
+/// - 换模型与强度先在 `/api/model` 里认：服务对不存在的模型也回 204。
 @MainActor
 final class OpenCodeBrain: HostedSession {
     private let session = BrainSession()
@@ -26,7 +20,6 @@ final class OpenCodeBrain: HostedSession {
     private var process: ChildProcess?
     private var client: OpenCodeClient?
     private var directory = ""
-    /// 开会话的请求体：开新会话时换上在用的模型再开
     private var create: Create?
     private var sessionID: String?
     private var models: [OpenCodeModel] = []
@@ -34,7 +27,6 @@ final class OpenCodeBrain: HostedSession {
     private var level: PiThinkingLevel?
     var seesImages: Bool { model?.seesImages == true }
     private var turn = OpenCodeTurn()
-    /// MCP 服务的状态变了：等它连上的那一处醒来再看
     private let mcpChanges = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
 
     nonisolated static let agent = "cue"
@@ -91,7 +83,6 @@ final class OpenCodeBrain: HostedSession {
         }
     }
 
-    /// 内联配置，键名见 OpenCode v2 的 config.schema.json。
     private static func inlineConfig(_ config: CueBrainConfig) -> [String: Any] {
         let allowed = ["read", "external_directory", "\(CueMCPServer.toolPrefix(on: .opencode))*"]
         let permissions = [["action": "*", "resource": "*", "effect": "deny"]] + allowed.map { ["action": $0, "resource": "*", "effect": "allow"] }
@@ -106,7 +97,7 @@ final class OpenCodeBrain: HostedSession {
         ]
     }
 
-    /// 连上事件流（等到 `server.connected`），之后的事件交给 `received`。流断了而服务还在（不是 `stop()` 停的）就结束服务。
+    /// 流断了而服务还在（不是 `stop()` 停的）就结束服务。
     private func follow(_ client: OpenCodeClient) async throws {
         let stream = client.events()
         try await withCheckedThrowingContinuation { (connected: CheckedContinuation<Void, any Error>) in
@@ -130,7 +121,7 @@ final class OpenCodeBrain: HostedSession {
         }
     }
 
-    /// 删掉这个工作目录里崩溃留下的大脑会话：带标记、起它的服务已不在。
+    /// 删掉这个工作目录里崩溃留下的大脑会话：带标记、起它的服务已不在；同时在跑的另一个大脑的不动。
     private func sweep(_ client: OpenCodeClient) async throws {
         for info in try await client.sessions("&directory=" + OpenCodeClient.escaped(directory)) {
             guard let pid = info.metadata?.cuepadBrain, PiProcess.running(pid: pid) == nil else { continue }

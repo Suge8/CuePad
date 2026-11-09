@@ -40,7 +40,6 @@ extension AppServices {
         tasks.add(body)
     }
 
-    /// 同上；出错时报告 `issue` 一次，被取消不算出错。
     func follow(reporting issue: @escaping @Sendable (any Error) -> StartupIssue, _ body: @escaping @MainActor () async throws -> Void) {
         follow {
             do {

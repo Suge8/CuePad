@@ -19,7 +19,6 @@ enum LaunchBench {
     static let active = DebugScene.args.driveOpts.bench == "launch"
     private static let longTurn: UInt64 = 50_000_000
     private static let quiet: UInt64 = 1_000_000_000
-    /// 到这么久还没量完就照报（没量到的几项为空）并以 1 退出：脚本按失败处理。
     private static let limit: Duration = .seconds(30)
 
     private struct Stamp {
@@ -34,9 +33,7 @@ enum LaunchBench {
     private static var presented = false
     private static var marked = false
     private static var long: [[UInt64]] = []
-    /// entry、window、content 与最后一圈长任务结束时（busy）。
     private static var stamps: [String: Stamp] = [:]
-    /// `settle` 在等内容出来。
     private static var contentShown: CheckedContinuation<Void, Never>?
 
     private static var now: UInt64 { clock_gettime_nsec_np(CLOCK_UPTIME_RAW) }
@@ -65,7 +62,6 @@ enum LaunchBench {
         }
     }
 
-    /// 主窗口排上屏（`DebugHooks.present`）。
     static func present(_ window: NSWindow) {
         if active, window is MainShellWindow { presented = true }
     }

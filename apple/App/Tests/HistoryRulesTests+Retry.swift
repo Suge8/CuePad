@@ -6,7 +6,6 @@ import Testing
 @testable import CuePad
 
 extension HistoryRulesTests {
-    /// 出错后从 `Workspace.retry` 重跑，端到端用真实 Pi：会话回到在跑、歇下；对话里不多一句话、不写发送记录，只多出新的回答。
     @Test func 出错后重试_对话只多出新的回答_会话歇下() async throws {
         let rig = try await Rig()
         defer { rig.shutdown() }

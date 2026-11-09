@@ -4,14 +4,11 @@ import CueText
 import Darwin
 import Foundation
 
-/// 终端里跑的一个 Claude Code 会话：状态由钩子推出（`ClaudeCodeRuntime` 把这个会话的每次钩子调用交给 `handle`），
-/// 一轮从 `UserPromptSubmit` 起到 `Stop` 止。在飞的工作只认 `Stop` 带的后台任务清单（`background_tasks`：后台子代理与后台命令，
-/// 做完了还没交回的也在）：后台任务做完时 Claude Code 自己开一轮交回结果（`UserPromptSubmit` 的正文是 `<task-notification>`），
+/// 在飞的工作只认 `Stop` 带的后台任务清单（`background_tasks`：后台子代理与后台命令，做完了还没交回的也在）：后台任务做完时 Claude Code 自己开一轮交回结果（`UserPromptSubmit` 的正文是 `<task-notification>`），
 /// 所以清单只在一轮结束时换，其间等子代理照旧，直到交回结果的那一轮做完。`SubagentStart`/`SubagentStop` 只改名册：
 /// 被停下的子代理没有 `SubagentStop`，下一个 `Stop` 的清单里没有它就记成被停下。
-/// 说话经它的收件箱 socket，结束是给进程发 SIGINT（与在终端里按 Ctrl-C 退出同一条路：跑 `SessionEnd` 钩子、恢复终端），
-/// 改名经收件箱的 `rename`。做不到的（图片、停止这一轮、换模型与强度、斜杠命令）见 `AgentCapabilities`，桥先拒绝。
-/// 收件箱送到的话 Claude Code 一律当作"另一个会话发来的"（包上同伴消息的说明；行里没有能改这一点的字段，实测 2.1.299），
+/// 结束是给进程发 SIGINT（与在终端里按 Ctrl-C 退出同一条路：跑 `SessionEnd` 钩子、恢复终端）。
+/// 收件箱送到的话 Claude Code 一律当作“另一个会话发来的”（包上同伴消息的说明；行里没有能改这一点的字段，实测 2.1.299），
 /// 所以正文前带一句 `ClaudeInbox.userNote`：是用户本人从 CuePad 发的，直接回答、不必回传。模型仍可能把它当同伴请求看待。
 ///
 /// 要你回答的：
@@ -39,13 +36,11 @@ final class ClaudeTerminalSession: SessionLink {
         var call: AgentHookCall?
         /// 主会话为 nil，子代理是它的 `agent_id`
         var agent: String?
-        /// 人不在而挂住（`PresenceGate`）
         var hold: UUID?
 
         enum Kind {
             case permission(ClaudePermission)
             case ask(ClaudePermission)
-            /// 只有一个字段的表单（字段名、类型、可选值）
             case elicitation(field: String, type: String, values: [String]?)
         }
     }
@@ -63,9 +58,6 @@ final class ClaudeTerminalSession: SessionLink {
 
     func publish(_ session: inout PiSession) { facts.publish(to: &session) }
 
-    // MARK: 钩子
-
-    /// 一次钩子调用：更新会话；要等答复的留着，其余当场放行。
     func handle(_ event: String, _ input: JSONValue, call: AgentHookCall) {
         let agent = input["agent_id"]?.string
         let now = Date.now
@@ -96,7 +88,7 @@ final class ClaudeTerminalSession: SessionLink {
         case "PostToolUse", "PostToolUseFailure":
             if agent == nil { facts.work(.thinking) }
         case "PermissionRequest" where tool == "AskUserQuestion":
-            break  // 提问在 PreToolUse 里答
+            break
         case "PermissionRequest":
             let permission = ClaudePermission(tool: tool, input: input["tool_input"] ?? .object([:]))
             pending.append(Pending(question: permission.question(), kind: .permission(permission), call: call, agent: agent))
@@ -127,7 +119,7 @@ final class ClaudeTerminalSession: SessionLink {
         show(at: now)
     }
 
-    /// 一轮结束时的后台任务清单就是在飞的工作；名册里还在跑却不在清单里的是被停下了。没带清单的（`StopFailure` 文档里没有这一项）不动。
+    /// 没带清单的（`StopFailure` 文档里没有这一项）不动。
     private func inFlight(_ tasks: JSONValue?, at now: Date) {
         guard let tasks = tasks?.array else { return }
         facts.inFlight = Set(tasks.compactMap { $0["id"]?.string })
@@ -136,7 +128,6 @@ final class ClaudeTerminalSession: SessionLink {
         }
     }
 
-    /// MCP 服务请求输入（`Elicitation`）：只有一个字段的表单（文字、选项、是否）能从 CuePad 答，其余（多个字段、要打开网址）只显示。
     private func elicit(_ input: JSONValue, call: AgentHookCall, agent: String?, at now: Date) {
         let message = input["message"]?.string ?? ""
         let text = [input["mcp_server_name"]?.string, message].compactMap { $0 }.joined(separator: "\n").clipped(500)
@@ -153,7 +144,6 @@ final class ClaudeTerminalSession: SessionLink {
         hold(Pending(question: question, kind: .elicitation(field: field, type: type, values: values), call: call, agent: agent), answerable: true, at: now)
     }
 
-    /// 挂住钩子会让终端不问：人不在才挂住等 CuePad 答，人在（或 CuePad 答不了）就放行，终端里问，CuePad 只显示。
     private func hold(_ item: Pending, answerable: Bool, at now: Date) {
         var item = item
         let promptID = item.question.promptID
@@ -169,7 +159,6 @@ final class ClaudeTerminalSession: SessionLink {
         show(at: now)
     }
 
-    /// 人回来了：放行，终端里问，CuePad 里只显示。
     private func handBack(_ promptID: String) {
         guard let index = pending.firstIndex(where: { $0.question.promptID == promptID }) else { return }
         pending[index].call?.finish()
@@ -179,7 +168,6 @@ final class ClaudeTerminalSession: SessionLink {
         show(at: .now)
     }
 
-    /// 钩子进程先走了（超时、Claude Code 收回）：问题不再等。
     private func watch(_ call: AgentHookCall?, promptID: String) {
         call?.onClose = { [weak self] in self?.withdraw(promptID) }
     }
@@ -193,7 +181,6 @@ final class ClaudeTerminalSession: SessionLink {
         show(at: .now)
     }
 
-    /// 进程退出或会话结束：还挂着的钩子放掉（进程走了它们也就没了）。
     func close() {
         for item in pending {
             item.call?.finish()
@@ -207,7 +194,6 @@ final class ClaudeTerminalSession: SessionLink {
         bridge?.update(id) { facts.publish(to: &$0, at: now) }
     }
 
-    /// 终端里先答了：同一个代理之后的任一事件说明它已不在等；这一轮结束时全部作废。
     private func settlePending(agent: String?, when event: String) {
         let ending = event == "Stop" || event == "StopFailure"
         let stale = pending.filter { $0.agent == agent || ending }
@@ -224,8 +210,6 @@ final class ClaudeTerminalSession: SessionLink {
         gate.drop(pending.remove(at: index).hold)
         show(at: .now)
     }
-
-    // MARK: SessionLink
 
     /// 只在歇着时送到（在跑时桥先拒收，见 `AgentCapabilities.speakBlocked`）：`next` 让它马上开这一轮。
     func send(_ message: PiMessage, in _: PiSession.ID) async throws {
@@ -264,7 +248,6 @@ final class ClaudeTerminalSession: SessionLink {
         show(at: .now)
     }
 
-    /// 表单字段的值：选项按显示的原文认。
     private static func value(_ answer: PiAnswerValue, _ type: String, _ values: [String]?) throws -> JSONValue {
         switch (answer, type) {
         case (.confirmed(let yes), "boolean"): return .bool(yes)
@@ -291,7 +274,6 @@ final class ClaudeTerminalSession: SessionLink {
 /// 第一行可以是认证行 `{"type": "auth", "token": …}`（官方给"脚本往自己会话里投递"的路）：macOS 上不要求，但带上了，
 /// 跳过权限确认的会话才直接收下，不挂起等你批准。消息体的格式（`{"type": "user" | "control", …}`）官方没有写，来自实测。
 enum ClaudeInbox {
-    /// 发给终端会话的话前面那句说明（会话历史里去掉它，见 `ClaudeHistory`）
     static let userNote = "（这句是用户本人在 CuePad 里发给你的，不是别的会话：直接在本会话里回答，不需要回传。）\n"
 
     @concurrent static func post(_ lines: Data, to path: String) async throws {

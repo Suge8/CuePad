@@ -1,13 +1,7 @@
 import Synchronization
 import SwiftUI
 
-/// 正在读的那一条（`ChatScroll` 持有，经 `chatAnchor` 交给对话）：对话那一列（`ChatStack`，滚动区里的整列内容，列里的各段与别的行同一层）里各段排在哪、
-/// 段里各条排在哪（`ChatRows`）都在排版里写下。滚动区每次读数（`track`）按它认出可见区顶边落在哪一条、读到那一条的哪一处；之后排版把那一处挪了（它上面的空白段换成真的、
-/// 改宽重排、上面排开了一批、最早的掉出去），就报出挪了多少，滚动区当场把可见区跟过去，正在读的不动。那一条自己因改宽变了高时按比例对回读到的那一处；
-/// 宽没变时它变高矮是里面的内容变了（正在说的话长出来、展开了经过），读到的那一处离它顶边照旧。整屏都在空白里时按段对。
-/// 同一份记录也给出哪几段在屏上、量过的段多高（`ChatSegments` 据此决定哪几段排真的、空白排多高），不给每段挂几何读数。
-/// 位置都从列的上沿算，列就是滚动区的整个内容，可见区顶边按内容里的位置认：列里不是段的行（最上面的"更早的 N 条"、会话页"正在从 Mac 取对话"、
-/// 末尾的发出中与经过）只占位置，它们出没时段跟着上下挪，照样补。
+/// 正在读的那一条：排版把读到的那一处挪了，就报出挪了多少，滚动区当场把可见区跟过去，正在读的不动。
 /// 只按挪了多少补，不按记下时可见区在哪：读数常常把用户这一下滚动与排版的变化一起报上来，按位置补就把用户的滚动也退回去了。
 /// 否决的方案：滚动位置按滚动目标认（`scrollPosition` 加 `scrollTargetLayout`）只保证那一段"还看得见"，段有几屏高，改宽时正在读的照样被推走；
 /// 懒加载栈会保持最上面那条可见的视图，但它的总高与偏移按估计推，底部锚定会落在内容外（`ChatScroll` 头注释）；
@@ -15,14 +9,12 @@ import SwiftUI
 /// 记录在排版里写、在读数闭包（主线程）里读；排版不保证在主线程（动画由 SwiftUI 的渲染线程推进时，排版就在那条线程上跑），
 /// 所以带锁，排版的回调也只捕获能跨线程的值；它不是状态，写它不触发更新。
 nonisolated final class ChatAnchor: Sendable {
-    /// 一段或一条：相对上一层上沿的位置。
     struct Span: Equatable {
         let id: UUID
         let top: CGFloat
         let height: CGFloat
     }
 
-    /// 一次读数交给滚动区的：可见区还要跟过去的距离（含已经挪了、读数里还没反映出来的，滚动区按它算离两头多远、据它跑 action，`take` 取走还没挪的）与在屏上的段。
     struct Tracked: Equatable {
         var shift: CGFloat = 0
         /// 挪动来自第几次排版（连着两次挪同样多也各报一次）；没挪为 0。
@@ -30,7 +22,6 @@ nonisolated final class ChatAnchor: Sendable {
         var onScreen: Set<UUID> = []
     }
 
-    /// 读到哪：那一段与段里那一条（段是空白时为 nil）当时的位置与高，读到的那一处在段顶边下多少（认的是下面那段时为负），当时列的宽。
     private struct Mark {
         let run: Span
         let row: Span?
@@ -38,7 +29,6 @@ nonisolated final class ChatAnchor: Sendable {
         let width: CGFloat
     }
 
-    /// 一段排成真的时记下的（按段首那一条记，段离屏换成空白后留着）：段里是哪几条、各条的位置（`ChatRows`）与整段的高（`ChatStack`，空白沿用它）。
     private struct Segment {
         var ids: [UUID] = []
         var rows: [Span] = []
@@ -46,12 +36,10 @@ nonisolated final class ChatAnchor: Sendable {
     }
 
     private struct State {
-        /// 列里的各段此刻排在哪、哪几段是真的（`ChatStack`），列的宽。
         var runs: [Span] = []
         var real: Set<UUID> = []
         var segments: [UUID: Segment] = [:]
         var width: CGFloat = 0
-        /// 排版每变一次加一；`seen` 是正在读的那一处按第几次认的。
         var layout = 0
         var seen = 0
         var mark: Mark?
@@ -65,7 +53,6 @@ nonisolated final class ChatAnchor: Sendable {
 
     private let state = Mutex(State())
 
-    /// 列按宽 `width` 排好了（`ChatStack`）：各段的位置、哪几段是真的。
     func laid(runs: [Span], real: Set<UUID>, width: CGFloat) {
         state.withLock { state in
             for run in runs where real.contains(run.id) { state.segments[run.id, default: Segment()].height = run.height }
@@ -77,7 +64,6 @@ nonisolated final class ChatAnchor: Sendable {
         }
     }
 
-    /// 一段里的各条排好了（`ChatRows`）：这一段是 `ids` 这几条，排出来是 `rows`。
     func laid(rows: [Span], of ids: [UUID]) {
         guard let run = ids.first else { return }
         state.withLock { state in
@@ -88,7 +74,6 @@ nonisolated final class ChatAnchor: Sendable {
         }
     }
 
-    /// 段首为 `run`、是 `ids` 这几条的一段量过的高（换成空白时排这么高）；没量过或量过之后条目变了为 nil。
     func height(of run: UUID, ids: [UUID]) -> CGFloat? {
         state.withLock { state in state.segments[run].flatMap { $0.ids == ids ? $0.height : nil } }
     }
@@ -104,7 +89,6 @@ nonisolated final class ChatAnchor: Sendable {
         }
     }
 
-    /// 滚动区的一次读数：可见区顶边在内容里的 `read`、可见区高 `height`。排版变过就报出读到的那一处挪了多少，再按跟过去之后的位置重新认。
     /// `keeping` 为 false（贴着最新由底锚管、跳去了某一条由滚动区对准）时不攒挪动，只认此刻读到哪。
     func track(read: CGFloat, height: CGFloat, keeping: Bool) -> Tracked {
         state.withLock { state in
@@ -127,8 +111,7 @@ nonisolated final class ChatAnchor: Sendable {
         Set(state.runs.lazy.filter { $0.top < top + height && $0.top + $0.height > top }.map(\.id))
     }
 
-    /// 可见区顶边 `top` 落在的那一段、那一条（落在缝里取下面那个）。那一段还是空白（刚滚进来，下一次更新才排成真的）时改认可见区里它下面第一段真的：
-    /// 空白换成真的之后段里各条怎么分布不知道，按空白对会差出它估高的那点出入。
+    /// 那一段还是空白（刚滚进来，下一次更新才排成真的）时改认可见区里它下面第一段真的：空白换成真的之后段里各条怎么分布不知道，按空白对会差出它估高的那点出入。
     private static func mark(at top: CGFloat, height: CGFloat, in state: State) -> Mark? {
         guard let index = state.runs.firstIndex(where: { $0.top + $0.height > top }) else { return nil }
         let run = state.real.contains(state.runs[index].id)
@@ -138,8 +121,7 @@ nonisolated final class ChatAnchor: Sendable {
         return Mark(run: run, row: row, point: inside, width: state.width)
     }
 
-    /// 读到的那一处此刻在列里的位置：按那一条（它可能换了段：上面排开一批时最上面那段从更早的一条起、段首变了）；认不出那一条就按原来那一段；都不在了不补。
-    /// 改了宽时读到的那一处在它里面的按它的高缩放，在它上面（认的是下面那段）照原样。那一段此刻是空白也照记下的各条认：空白的高就是各条那次排出来的。
+    /// 按那一条认而不是按段：它可能换了段（上面排开一批时最上面那段从更早的一条起、段首变了）。那一段此刻是空白也照记下的各条认：空白的高就是各条那次排出来的。
     private static func locate(_ mark: Mark, in state: State) -> CGFloat? {
         func scaled(_ offset: CGFloat, from old: CGFloat, to new: CGFloat) -> CGFloat {
             state.width != mark.width && offset > 0 && old > 0 ? offset * new / old : offset
@@ -152,8 +134,7 @@ nonisolated final class ChatAnchor: Sendable {
     }
 }
 
-/// 对话那一列（会话页 `PiConversation`、Cue 页，滚动区里的整列内容，同 `VStack(alignment: .leading, spacing:)`）：排的时候把各段的位置记进 `ChatAnchor`。
-/// 各段（`ChatSegments` 交出来的）与列里别的行同一层，每段一个子视图、带着所在段的标签（`ChatRun`）；不带标签的行只占位置。
+/// 排版同 `VStack(alignment: .leading, spacing:)`，排的时候把各段的位置记进 `ChatAnchor`。
 struct ChatStack<Content: View>: View {
     let spacing: CGFloat
     @ViewBuilder let content: Content
@@ -174,7 +155,7 @@ struct ChatStack<Content: View>: View {
     }
 }
 
-/// 一段里的各条（段的视图体用它排，同 `VStack(alignment: .leading, spacing:)`）：一条一个子视图，按顺序对上 `ids`，排的时候把各条在段里的位置记进 `ChatAnchor`。
+/// 一条一个子视图，按顺序对上 `ids`；排版同 `VStack(alignment: .leading, spacing:)`。
 struct ChatRows<Content: View>: View {
     let ids: [UUID]
     let spacing: CGFloat
@@ -190,12 +171,10 @@ struct ChatRows<Content: View>: View {
     }
 }
 
-/// 竖排（同 `VStack(alignment: .leading, spacing:)`），摆完把各子视图相对自己上沿的位置与高、排的宽交给 `laid`。
 private struct RecordingStack: Layout {
     let spacing: CGFloat
     let laid: @Sendable (_ placed: [(subview: LayoutSubview, top: CGFloat, height: CGFloat)], _ width: CGFloat) -> Void
 
-    /// 量过的各子视图的高与量时的宽：同一次排版里量高与摆放共用一次。
     typealias Measured = (width: CGFloat?, heights: [CGFloat])
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Measured) -> CGSize {
@@ -218,7 +197,6 @@ private struct RecordingStack: Layout {
 
     func updateCache(_ cache: inout Measured, subviews: Subviews) { cache = (nil, []) }
 
-    /// 各子视图在宽 `width` 下的高。
     private func heights(_ width: CGFloat?, _ subviews: Subviews, _ cache: inout Measured) -> [CGFloat] {
         if cache.heights.count != subviews.count || cache.width != width {
             cache = (width, subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height })
@@ -227,7 +205,6 @@ private struct RecordingStack: Layout {
     }
 }
 
-/// 子视图是哪一段（段首那一条）、排的是不是真的（`ChatStack`）。
 nonisolated struct ChatRun: LayoutValueKey, Equatable {
     let id: UUID
     let real: Bool
@@ -236,8 +213,6 @@ nonisolated struct ChatRun: LayoutValueKey, Equatable {
 }
 
 extension EnvironmentValues {
-    /// 对话的排版记录与正在读的那一条（`ChatScroll` 给）。
     @Entry var chatAnchor: ChatAnchor?
-    /// 在屏上的段（段首那一条，`ChatScroll` 按 `ChatAnchor` 的读数给）。
     @Entry var chatOnScreen: Set<UUID> = []
 }

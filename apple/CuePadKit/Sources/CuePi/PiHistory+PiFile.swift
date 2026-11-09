@@ -12,7 +12,6 @@ extension PiHistory {
         var cwd: String?
         var name: String?
         var message: Message?
-        /// 扩展投进会话的消息（type 为 custom_message）：正文与它在 Pi 的界面上显不显示
         var content: Content?
         var display: Bool?
 
@@ -25,7 +24,6 @@ extension PiHistory {
         var stopReason: String?
         var errorMessage: String?
         var cuepadDelivery: String?
-        /// 工具结果（role 为 toolResult）：快速路径认不出键序时由完整解码取这两项
         var toolCallId: String?
         var isError: Bool?
     }
@@ -39,7 +37,6 @@ extension PiHistory {
             var text: String?
             /// 图片（type 为 image）：base64 原字节。不解码成 Data：别的块里若有同名字段，整行就解不开了
             var data: String?
-            /// 工具调用（type 为 toolCall）
             var id: String?
             var name: String?
             var arguments: PiToolArguments?
@@ -50,7 +47,6 @@ extension PiHistory {
             if let s = try? c.decode(String.self) { self = .text(s) } else { self = .blocks(try c.decode([Block].self)) }
         }
 
-        /// 回答：文字块用换行连接
         var reply: String {
             switch self {
             case .text(let s): s
@@ -58,7 +54,6 @@ extension PiHistory {
             }
         }
 
-        /// 图片块的原字节（工具结果里的）
         var images: [Data?] {
             guard case .blocks(let b) = self else { return [] }
             return b.filter { $0.type == "image" }.map { $0.data.flatMap { Data(base64Encoded: $0) } }
@@ -69,7 +64,6 @@ extension PiHistory {
             return b.filter { $0.type == "toolCall" }
         }
 
-        /// 你说的一句（`files` 为 nil 时不存图片）。
         func said(into said: inout Said) throws {
             switch self {
             case .text(let s): said.text(s)
@@ -107,7 +101,6 @@ extension PiHistory {
         }
         guard let line = decode(raw) else { return } // 损坏行跳过
         let time = line.time
-        // 最后活动：最后一行的时间（Pi 按时间追加）
         if let time { cp.lastActivity = time }
         let entry = Entry(id: line.id ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
         switch line.type {

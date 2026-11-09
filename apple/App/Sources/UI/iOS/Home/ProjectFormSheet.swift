@@ -2,13 +2,11 @@
 import CueStore
 import SwiftUI
 
-/// 新建或编辑项目：名称、一句话介绍、图标、颜色；新建时还可以从 Mac 上已知的文件夹里选一个（可不选，之后在项目菜单里绑也行）。
 struct ProjectFormSheet: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var draft: ProjectDraft
-    /// 新建时选的文件夹；项目建好后请那台 Mac 绑。编辑项目不在这里改绑定，项目菜单里改。
     @State private var folder: ProjectFolders.Candidate?
 
     init(_ request: ProjectFormRequest) {

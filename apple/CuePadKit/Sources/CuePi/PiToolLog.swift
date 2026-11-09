@@ -5,9 +5,7 @@ import Foundation
 
 typealias Tools = PiChatMessage.Tools
 
-/// 一轮里还在累计的经过（检查点里跨读文件带着）：调用在助手消息里，成败在后面的工具结果行里，所以调用先挂起，
-/// 结果到了再落进 `PiChatMessage.Tools`（只记是什么，不记工具输出）；助手说的每段话说出时就落进去。一轮结束时没等到结果的（被中止）按成功算，
-/// 最后那段话是回答，从经过里拿掉。
+/// 调用在助手消息里，成败在后面的工具结果行里，所以调用先挂起，结果到了再落进 `PiChatMessage.Tools`（只记是什么，不记工具输出）。一轮结束时没等到结果的（被中止）按成功算。
 struct PiToolLog: Codable, Equatable {
     private var activity = Tools()
     private var pending: [String: Call] = [:]
@@ -29,21 +27,17 @@ struct PiToolLog: Codable, Equatable {
     /// 发预览的命令行：`cuepad show …`，cuepad 可以带路径（技能里写的是 App 内的绝对路径，含空格时整段加单引号）。
     private static var preview: Regex<Substring> { /(?:'[^']*\/|[^\s']*\/)?cuepad'?\s+show(?:\s|$)/ }
 
-    /// 调用做完：`images` 是结果里带的图（附件的键，`ToolImage`）。
     mutating func finish(id: String, failed: Bool, images: [String] = []) {
         guard let call = pending.removeValue(forKey: id) else { return }
         settle(call, failed: failed, images: images)
     }
 
-    /// 助手说了一段话（空白的不来）。
     mutating func say(_ text: String) {
         activity.record(.init(kind: .said, target: text.clipped(Tools.saidLimit)))
     }
 
-    /// 到目前为止做完的调用与说过的话（还在跑的调用不算）；什么都还没有为 nil。进行中这一轮的实时清单读它（`PiRecap.pendingTools`）。
     var settled: Tools? { activity == Tools() ? nil : activity }
 
-    /// 这一轮做完时的经过：最后那段话是回答，不在经过里；什么都没有为 nil。
     func summary() -> Tools? {
         var log = self
         for (_, call) in log.pending.sorted(by: { $0.key < $1.key }) { log.settle(call, failed: false) }
@@ -51,7 +45,6 @@ struct PiToolLog: Codable, Equatable {
         return log.activity == Tools() ? nil : log.activity
     }
 
-    /// 失败的调用与成功的一样计数、各占清单里一行（只是行上标着失败）；同一个文件成功地读或改多次合成一行、只算一次。
     private mutating func settle(_ call: Call, failed: Bool, images: [String] = []) {
         if !failed, call.kind == .edit || call.kind == .read,
            let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
@@ -67,7 +60,6 @@ struct PiToolLog: Codable, Equatable {
     }
 }
 
-/// 工具调用参数里摘要要用的几项；Pi 自带工具和常见别名的写法都认，别的字段不读。
 struct PiToolArguments: Decodable {
     var path: String?
     var command: String?
@@ -110,7 +102,6 @@ struct PiToolArguments: Decodable {
 }
 
 private extension PiToolLog.Call {
-    /// Pi 自带的 read / edit / write / bash / grep / find / ls，加别的提供方里同类工具的常见名字。
     init(name: String, arguments: PiToolArguments, cwd: String?) {
         let file = arguments.path.map { Self.relative($0, to: cwd) }
         let (kind, target): (Tools.Kind, String) = switch name.lowercased() {

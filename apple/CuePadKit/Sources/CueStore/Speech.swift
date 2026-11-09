@@ -41,13 +41,12 @@ public enum Speech {
   }
 
   public enum Failure: Hashable, Sendable {
-    /// 接收方说没送到（`DeliveryRequest.failure`）
     case reported(String)
   }
 
   public static let unconfirmedReason = ShownText("送达尚未确认，可能已经执行，不会自动重发")
 
-  // MARK: 时限（说的话的各段等待只在这里定）
+  // 说的话的各段等待时限只在这里定
 
   /// 等服务器回执的窗口；到点只表示缺少确认，不证明服务器未收到。
   public static let sendLimit: TimeInterval = 15
@@ -57,8 +56,6 @@ public enum Speech {
 
   /// Cue 工具等结果的窗口；到点如实返回未确认，不保证未来一定有结果。
   public static let cueWait: TimeInterval = 20
-
-  // MARK: 规则
 
   /// 推出到哪了的外部输入：此刻，与本机同步从什么时候起通着（nil：此刻不通）。接收方就是本机（`localHost`）时不经同步；
   /// Cue 的说话工具与 Cue 在同一台 Mac 上：按一直通着算（`always`）、那台就是本机（`CueTools.spoken`）。
@@ -77,7 +74,6 @@ public enum Speech {
       Moment(now: now, reachableSince: .distantPast, localHost: localHost)
     }
 
-    /// 接收的就是这台 Mac：话不经服务器。
     public func isLocal(_ host: String?) -> Bool { host != nil && host == localHost }
 
     /// 到 `host` 那台 Mac 的同步从什么时候起通着；nil 是此刻不通。
@@ -104,7 +100,6 @@ public enum Speech {
     }
   }
 
-  /// 还在等派发（没领取、还没开始执行）。
   private static func awaitsDispatch(_ request: DeliveryRequest) -> Bool {
     request.status == .known(.preparing) || (request.status == .known(.pending) && request.handledBy == nil)
   }

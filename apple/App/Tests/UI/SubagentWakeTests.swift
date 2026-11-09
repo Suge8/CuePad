@@ -7,15 +7,9 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 会话派了子代理、自己这一轮歇下：值班的 Cue 等子代理时不被叫醒，结果交回、会话为它跑完那一轮歇下才叫醒一次；
-/// 在跑的子代理太久没进展（`PiSessionState.stallAfter`）叫醒一次（真 Pi 当大脑，同 `CueHostTests`）。
-/// 叫醒看的是 Mac 运行情况里的那几轮（`CueKeeper.rounds`：为什么醒、交给大脑的信封）。
 @Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized)
 @MainActor
 struct SubagentWakeTests {
-    /// 你请 Cue 开工；会话派出子代理、自己这一轮答完（等子代理）：Cue 不醒，你这时跟它说话，它看到的变化里也没有这个会话。
-    /// 子代理交回结果、会话为它跑完一轮：歇下先到、这一轮的回答随后才写进会话文件（回答晚到）——Cue 只醒一次，信封里是那一轮的回答；
-    /// 你在手机上开着这个会话看着它停下也一样：这件事是 Cue 开的。
     /// 会话文件由 Mac 照常读（不经测试代写摘要）：会话是 FireCode 的指挥官，交回结果是一条机器消息开的轮。
     @Test func 等子代理不叫醒_结果交回那一轮回答晚到也只叫醒一次() async throws {
         let rig = try await CueHostTests.Rig()
@@ -28,7 +22,6 @@ struct SubagentWakeTests {
         let task = try #require(try await store.cueBoard().tasks.first?.task)
         try await store.linkCard(task.id, toSession: session.sessionID)  // 认领（假扩展不带开会话的标识）
         try await store.updateCard(task.id) { $0.body = "修好登录页 派子代理" }
-        // 开工的第一句由假扩展收下时记进会话文件，带着投送请求 id：会话认得出是 Cue 发的，不算他在场
         try await eventually("开工的第一句发进会话") { !session.messages.isEmpty }
         let file = try #require(rig.app.host.sessionFiles[session.sessionID])
         session.setState(["kind": "thinking"])
@@ -50,7 +43,6 @@ struct SubagentWakeTests {
         #expect(hello.sent.first?.contains("变化（上次醒来之后）：无") == true, "\(hello.sent)")
         #expect(!keeper.rounds.contains { $0.wake.isSessionActivity })
 
-        // 子代理交回（在主会话为它跑完那一轮之前仍在飞）；FireCode 投回结果、指挥官再跑一轮：歇下先写进库，回答随后才落盘
         try await store.recordViewing(device: "phone", sessionIDs: [session.sessionID], cue: false)
         session.sendInfo(["subagents": [Self.ui("done", action: "测试全过")]])
         try file.user("<firecode_master_event>\nui 交回：测试全过\n</firecode_master_event>")
@@ -66,8 +58,6 @@ struct SubagentWakeTests {
         await rig.stop()
     }
 
-    /// 另一台（在线的）Mac 上的会话在等子代理，在跑的子代理最后一次进展快满 `stallAfter`：到点 Cue 醒来一次，变化写"等子代理 20 分钟没动静"；
-    /// 之后你跟 Cue 说话，同一段停滞不再出现在变化里。他自己发起的那一轮里停住的不报：Cue 对它说不进去（他那一轮不插嘴）。
     @Test func 在跑的子代理太久没进展_叫醒一次_他那一轮的不报() async throws {
         let rig = try await CueHostTests.Rig()
         let store = rig.store
@@ -84,7 +74,6 @@ struct SubagentWakeTests {
         // 会话在跑只认宿主在线时报的（`runtimeUntil`）：mac-b 像醒着的 Mac 那样先报在线
         try await store.recordMacPresence(host: "mac-b") { true }
         let remote = PiStateRecorder(store: store, hostID: "mac-b")
-        // 他在终端里说的那句开了这一轮（Mac 读会话文件写下，没有投送请求）
         try await store.writePiTranscript(PiTranscript(
             sessionID: "remote-his", messages: [PiChatMessage(sessionID: "remote-his", entryID: "u1", seq: 1, role: .user, text: "做到底", at: due - 3600)],
             recap: PiRecap(lastPrompt: "做到底")))
@@ -111,8 +100,6 @@ struct SubagentWakeTests {
         await rig.stop()
     }
 
-    /// 子代理停住叫醒的那一轮出错、隔一会儿重试也错（才告诉你）：之后会话处理交回又回到等子代理，同一段停滞不是新变化，不再叫醒；
-    /// 下一件真的事（这里是到点的定时）照常叫醒。
     @Test func 停住那一轮出错重试也错_会话来回写不再叫醒() async throws {
         let rig = try await CueHostTests.Rig()
         let store = rig.store
@@ -129,7 +116,6 @@ struct SubagentWakeTests {
         try await rig.message(.cue, containing: "bad things happened", skippingBackoff: true)
         #expect(rig.model.errors == 2)
 
-        // 会话为别的事动了一下（如处理交回的结果）又回到等子代理：会话记录盖上新序号，停住的时刻不变
         try await remote.update(sessionID: "remote-2", state: .thinking, title: "修好登录页", subagents: [ui])
         try await remote.update(sessionID: "remote-2", state: .delegating, title: "修好登录页", subagents: [ui])
         let line = try await store.noteCueLine("核对发布结果", source: .you, remindAt: rig.clock.now.addingTimeInterval(60))

@@ -3,8 +3,7 @@ import CueStore
 import Darwin
 import Foundation
 
-/// Pi socket 的发现、握手、命令回执与重载收尾。会话快照只经桥的 attach/update/detach 发布。
-/// 多个桥可连接同一扩展；ack 只回发送方，命令按扩展收到的顺序执行。
+/// 会话快照只经桥的 attach/update/detach 发布。多个桥可连接同一扩展；ack 只回发送方，命令按扩展收到的顺序执行。
 @MainActor
 final class PiConnections {
     private let directory: URL
@@ -40,7 +39,7 @@ final class PiConnections {
         orphanExitWatchers = [:]
     }
 
-    /// 装完新版扩展后：请连着的旧版会话换上（握手时版本不同的已在握手时请过，那时磁盘上可能还是旧的）。
+    /// 握手时版本不同的已请过换上，但那时磁盘上可能还是旧的，所以装完新版扩展后再请一遍。
     func offerExtensionUpgrade() { for link in links.values where link.id != nil { link.offerUpgrade() } }
 
     private func scan() {
@@ -70,20 +69,17 @@ final class PiConnections {
         }
     }
 
-    /// 连不上（ECONNREFUSED，没人在 listen）的 socket：属主 pid 已死是强杀残留，删；还活着就不删、不重试——扩展 listen 好才把 socket
-    /// 改名进来，活着的进程留下的没人 listen 的只有 /reload 时还没删的旧文件，新文件改名进来时目录会再变一次。
+    /// 还活着的不删、不重试：扩展 listen 好才把 socket 改名进来，活着的进程留下的没人 listen 的只有 /reload 时还没删的旧文件，新文件改名进来时目录会再变一次。
     @discardableResult
     private func removeIfStale(_ name: String) -> Bool {
         guard let pid = PiSocketDirectory.pid(fromSocketName: name + ".sock"), PiSocketDirectory.processIsDead(pid) else { return false }
         return unlink(socketPath(name)) == 0
     }
 
-    // MARK: 读循环
-
     private func consume(_ link: PiConnection, name: String) async {
         for await line in link.connection.lines {
             guard links[name] === link else { return }
-            // 读不懂的扩展：之后的消息格式不可知，只认告别（同 hello 只读认得出的一项：重载的告别要认得出，`PiSessionEndReason.reload`），等连接断开
+            // 读不懂的扩展：之后的消息格式不可知，只认告别（重载的告别要认得出，`PiSessionEndReason.reload`），等连接断开
             if link.session?.upgrading == true {
                 link.bye = PiWire.identityBye(line) ?? link.bye
                 continue
@@ -166,7 +162,7 @@ final class PiConnections {
         bridge?.attach(session, via: link)
     }
 
-    /// 不兼容/损坏：报告并断开。会话若已出现，随后走正常的结束路径。
+    /// 会话若已出现，随后走正常的结束路径。
     private func reject(_ link: PiConnection, name: String, detail: String) {
         link.rejected = true
         incompatible[name] = link.file
@@ -174,7 +170,7 @@ final class PiConnections {
         link.connection.close()
     }
 
-    /// 进程已退出：它的 socket 文件若还在（强杀）就删掉。正常退出时扩展自己已删。
+    /// 正常退出时扩展自己已删。
     private func processExited(_ name: String) {
         let path = socketPath(name)
         if PiSocketDirectory.isOwnSocket(path) { unlink(path) }

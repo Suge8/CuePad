@@ -6,9 +6,7 @@ import Foundation
 /// 不在对话里，来自 Pi 桥，由状态记录器写。`lastPrompt` 与 `lastReply` 是最近一轮做完的问答，在这一轮结束时一起更新；
 /// 机器消息触发的轮没有新的提问，回答照常更新、提问沿用。
 public struct PiRecap: Sendable, Equatable, Codable {
-  /// 最近一轮已做完的问答里你说的那句（单行，空白与控制字符折成一个空格，至多 `promptLimit` 字符）。
   public var lastPrompt: String?
-  /// 最近一轮已做完的问答里助手的最终回答文字（不含思考与工具调用），保留换行，至多 `replyLimit` 字符。
   public var lastReply: String?
   /// 进行中的提问：你说了、这一轮还没做完（单行，至多 `promptLimit` 字符）；这一轮做完时移进 `lastPrompt`，没有时为 nil。
   /// 界面据此写"你说：… · Pi 正在处理"，上一轮的问答另行折叠，不把新提问和旧回答配在一起。
@@ -37,9 +35,7 @@ public struct PiRecap: Sendable, Equatable, Codable {
 /// Mac 从一个会话文件读出的一段对话，与会话记录上的摘要一起写（`CueStore.writePiTranscript`）。
 public struct PiTranscript: Equatable, Sendable {
   public var sessionID: String
-  /// 新读到的消息（已写过的重写也无妨：id 相同、只追加不覆盖）
   public var messages: [PiChatMessage]
-  /// 会话记录上的摘要，是对话的投影：最近一轮做完的问与答、进行中的提问（见 `PiRecap`）
   public var recap: PiRecap
 
   public init(sessionID: String, messages: [PiChatMessage], recap: PiRecap) {
@@ -50,7 +46,6 @@ public struct PiTranscript: Equatable, Sendable {
 }
 
 extension CueStore {
-  /// 一个会话的完整对话，从早到晚。
   public func piMessages(of sessionID: String) throws -> [PiChatMessage] {
     try select(PiChatMessage.self, where: "sessionID = ?", [sessionID], orderBy: "seq, role, id")
   }

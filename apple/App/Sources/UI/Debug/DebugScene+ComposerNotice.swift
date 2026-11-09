@@ -4,7 +4,6 @@ import CueText
 import Foundation
 
 extension DebugScene {
-    /// `-CuePadComposerNotice YES`（配 session、atlas）：每隔三秒显示一条命令进度与一条配置失败，1.5 秒后撤回，循环验收两行说明进出时的贴底布局。
     /// 失败由隔离执行器写回；不修改对话正文，也不接真实 Agent。
     static func composerNoticeIfAsked(_ services: AppServices) async {
         guard args.composerNotice else { return }

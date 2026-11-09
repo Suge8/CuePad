@@ -1,37 +1,32 @@
 import Foundation
 
-/// 任务交到哪（`CueStore.handOffPlan`）：界面（Mac 的"开始"、手机发给 Agent 的默认目标）与 Cue 的 `startLeaf` 共用这一份规则。
+/// 界面（Mac 的“开始”、手机发给 Agent 的默认目标）与 Cue 的 `startLeaf` 共用这一份规则。
 public struct HandOffPlan: Equatable, Sendable {
   public enum Destination: Equatable, Sendable {
-    /// 叶子绑着的会话：Pi 的会话 id、显示名、由哪台 Mac 执行（会话所在的那台；记录还没到时是发起的这台，手机上为 nil）。
+    /// 执行的 Mac 是会话所在的那台；记录还没到时是发起的这台，手机上为 nil。
     case session(id: String, title: String, host: String?)
-    /// 在项目的文件夹开新会话，由 `CueStore.launchHost` 定的那台 Mac 执行（那台没绑文件夹时它先建工作区）。
+    /// 那台没绑文件夹时它先建工作区。
     case launch(project: UUID, host: String)
   }
 
-  /// 交给会话的叶子。
   public var leaf: UUID
   public var destination: Destination
-  /// 要开新会话（不是接着用已有的）：开工的第一句据此带不带顶层任务作背景（`CueStore.opening`）。
   public var opensSession: Bool { if case .session = destination { false } else { true } }
-  /// 从这件事开的会话叫什么（`CueStore.sessionName(forCard:)`，`requestLaunch` 起名用的同一条规则）：叶子的标题；没有标题为 nil。
   public var name: String?
 }
 
-/// 看板（`CueStore.cueBoard`）：没做完的事，加上不归没做完的事的活会话。在做的（`active`）归值班的 Cue 管，其余是你手上的清单。
+/// 在做的（`active`）归值班的 Cue 管，其余是你手上的清单。
 public struct CueBoard: Equatable, Sendable {
   public var tasks: [CueBoardItem]
-  /// 不归没做完的事的活会话（`CueStore.isLoose`：他直接开的、终端里的，和只有已完成的事绑着的），最近有动静的在前。
   public var sessions: [PiSessionState]
 
-  /// 用户已开始而未完成的事与单独活会话；与执行集合分离，停机或离线不撤销进度。
+  /// 与执行集合分离，停机或离线不撤销进度。
   public var inProgress: [CueWork] { tasks.filter { $0.task.status == .inProgress }.map(CueWork.task) + sessions.map(CueWork.session) }
 
   /// 执行集合：信封与 peek 的“在做”；没有执行证据的静置任务不在内。值班管理器只问有没有时读 `CueStore.cueBoardActive`。
   public var active: [CueWork] { tasks.filter(\.isActive).map(CueWork.task) + sessions.map(CueWork.session) }
 }
 
-/// 在做的一件（`CueBoard.active`）：在做的事，或不归没做完的事的活会话。
 public enum CueWork: Identifiable, Equatable, Sendable {
   case task(CueBoardItem)
   case session(PiSessionState)
@@ -43,33 +38,25 @@ public enum CueWork: Identifiable, Equatable, Sendable {
     }
   }
 
-  /// 在做的事的顶层任务；会话为 nil。
   public var task: Card? { if case .task(let item) = self { item.task } else { nil } }
 
-  /// 这件事用着的未结束会话：几片叶子共用的会话只出现一次。
   public var sessions: [PiSessionState] { CueAgents.sessions(in: [self]) }
 }
 
-/// 看板上的一件事：一个没做完的顶层任务。在做的（`isActive`）归值班的 Cue 管，其余是你手上的清单。
 public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var task: Card
-  /// 子任务完成了几个；没有子任务为 nil。
   public var progress: TaskProgress?
-  /// 在做的叶子，至少一个（按子任务顺序）：没做完、开着会话（会话没结束，或做到一半被打断）、正在开会话或话正送进会话的每一个——
-  /// 并行做的几步都在。一个都没有时是此刻该做的那一个：没有子任务是任务自己，否则第一个没完成的子任务；
-  /// 子任务都做完了是最后做完的那一步（近况取它的会话，不落回第一步）。
+  /// 至少一个：没有在做的就是此刻该做的那一个（无子任务是任务自己，否则第一个没完成的子任务）。
+  /// 子任务都做完了时取最后做完的那一步（近况取它的会话，不落回第一步）。
   public var leaves: [CueBoardLeaf]
   public var id: UUID { task.id }
   public var isActive: Bool { leaves.contains(where: \.isActive) }
-  /// 这件事此刻看的会话：叶子里第一个有会话记录的（并行的几步按子任务顺序）。任务看板的卡写它的状态、点卡进它（`TaskBoard.Item.agent`）。
   public var session: PiSessionState? { leaves.lazy.compactMap(\.session).first }
-  /// 会话还在路上：正为它开会话，或话正送进上一步的会话，还没有会话可看。
   public var reaching: Bool { leaves.contains { $0.launching || $0.sending } }
 }
 
 public struct CueBoardLeaf: Equatable, Sendable {
   public var leaf: Card
-  /// 叶子的会话记录；还没开会话（或记录还没到）为 nil。
   public var session: PiSessionState?
   /// 唯一占位入口 `handoffRequests` 的原记录；防重复，不代表此刻在跑。
   public let handoffs: [DeliveryRequest]
@@ -84,14 +71,11 @@ public struct CueBoardLeaf: Equatable, Sendable {
     self.since = since
     activity = Set(handoffs.filter { Speech.activity($0, at: moment) != nil }.compactMap(\.mode.known))
   }
-  /// 停在当前状态的起点：会话进入当前状态的时刻，没有会话时是开始做或建成任务的时刻。
   public var since: Date
 
-  /// 在做：会话没结束，或正在开会话、话正送进会话。
   public var isActive: Bool { launching || sending || session.map { $0.state != .known(.ended) } ?? false }
 }
 
-/// 一件事的细节（Cue 的 peek）：叶子与各自的会话。
 public struct CueTaskDetail: Equatable, Sendable {
   public var task: Card
   public var progress: TaskProgress?
@@ -100,18 +84,13 @@ public struct CueTaskDetail: Equatable, Sendable {
 
 public struct CueLeafDetail: Equatable, Sendable {
   public var leaf: Card
-  /// 叶子的会话；还没开会话（或记录还没到）为 nil。
   public var session: CueSessionDetail?
-  /// 未绑定会话的原始交接意图；准备、在路上与未知按 Speech 区分。
   public var handoffs: [DeliveryRequest]
 }
 
-/// 一个会话的细节（Cue 的 peek）：记录与最近几轮问答。
 public struct CueSessionDetail: Equatable, Sendable {
   public var session: PiSessionState
-  /// 最近几轮问答（会话里用户一方说的与 Agent 的回答），从早到晚。
   public var recent: [PiChatMessage]
-  /// `recent` 与 `earlier` 里 Cue 说的那几条的请求 id（`cueSentDeliveries`，与会话页同一条规则，见 `PiChatMessage.saidByCue`）。
   public var cueSent: Set<UUID>
   /// 比 `recent` 更早、Cue 对这个会话说的话（开工那句与之后托付的），从早到晚：交回时逐件核对它们做到没有，
   /// 不另记"托付了什么"，会话里 Cue 说过的话就是那一份。

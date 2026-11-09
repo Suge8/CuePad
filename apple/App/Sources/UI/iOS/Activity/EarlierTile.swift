@@ -2,9 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 窄屏的"更早"（WORDS.md）：已结束的会话。Cue 页会话条最底下一格写"更早"与个数，点它推入"更早"那一页（`Route.earlier`）；
-/// 宽屏是会话条上的"更早"那一行（`RailEarlier`），点开同一页（`EarlierPage`）。个数与那一页读同一个查询（`PiSessionList.earlier`：置顶任务上的也在里面，正在唤醒的不在），两边对得上。
-/// 没有已结束的会话时这一格不画：没有可去的地方。
+/// 个数与"更早"那一页读同一个查询（`PiSessionList.earlier`），两边才对得上。
 struct EarlierTile: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -40,7 +38,6 @@ struct EarlierTile: View {
         }
     }
 
-    /// 同会话条一格那么高：两行小字，手指点得到。
     private static let height: CGFloat = 44
 }
 #endif

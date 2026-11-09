@@ -14,7 +14,6 @@ public struct ShownText: Equatable, Sendable, StoredJSON {
     self = (error as? any ShownError).map { ShownText($0.shown) } ?? .verbatim(error.localizedDescription)
   }
 
-  /// 原文（不进目录、各端照写下的显示）。
   public static func verbatim(_ text: String) -> ShownText {
     var words = String.LocalizationValue.StringInterpolation(literalCapacity: 0, interpolationCount: 1)
     words.appendInterpolation(text)
@@ -38,7 +37,6 @@ public struct ShownText: Equatable, Sendable, StoredJSON {
   /// 读的时候（`text`）认出来，按读的设备的语言取字。只用作 `ShownText` 句式里的参数，不直接显示。
   public var embedded: String { Self.embeddedMark + stored }
 
-  /// 嵌着的那句的记号：对象替换符开头，不会出现在原文的开头。
   private static let embeddedMark = "\u{FFFC}shown:"
 
   /// 句式的一个参数（`String.LocalizationValue` 的 JSON 形状：字是 `{"string": {"_0": …}}`）若是嵌着的一句，取出来。

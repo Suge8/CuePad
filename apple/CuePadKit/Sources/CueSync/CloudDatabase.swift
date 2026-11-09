@@ -1,7 +1,7 @@
 import CloudKit
 import Foundation
 
-/// 同步区里自某个令牌以来的一批变化。令牌是 `CKServerChangeToken` 的归档，测试可换成任意字节。
+/// 令牌是 `CKServerChangeToken` 的归档，测试可换成任意字节。
 struct ZoneChangeBatch: Sendable {
   var modifications: [CKRecord]
   var deletions: [(id: CKRecord.ID, recordType: String)]
@@ -9,20 +9,18 @@ struct ZoneChangeBatch: Sendable {
   var moreComing: Bool
 }
 
-/// 拉：同步区的变化与按 ID 取整条记录（真实实现见 `CloudDatabase`）。`keys` 是要带回的字段。都不带附件的文件：文件另走一路（`FileCloud`）。
+/// 都不带附件的文件：文件另走一路（`FileCloud`）。
 protocol ZoneChangeSource: Sendable {
   func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch
   /// 按 ID 取整条记录、不带文件（取不到的略过）。一次不超过 `CloudKitLimits.recordsPerRequest` 条，由调用方分批。
   func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord]
 }
 
-/// 推：存进（或从中删除）同步区，以及建同步区（真实实现见 `CloudDatabase`）。
 protocol RecordUploader: Sendable {
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords
   func saveZone() async throws
 }
 
-/// 一次上传的结果，交给协调器的 `.sent` 入口。
 struct SentRecords: Sendable {
   var saved: [CKRecord] = []
   var failedSaves: [(record: CKRecord, error: CKError)] = []
@@ -35,7 +33,6 @@ enum CloudKitLimits {
   static let recordsPerRequest = 400
 }
 
-/// 文件那一路（`FileSender`、`FileFetcher`）：带文件的附件记录单独传、文件单独取，都带进度（0–1）。
 protocol FileCloud: Sendable {
   /// 传一条带文件的附件记录。CloudKit 里是长期操作：进程退出后系统接着传，下次启动由 `resumedFileUploads` 接上。
   func uploadFile(_ record: CKRecord, progress: @escaping @Sendable (Double) -> Void) async throws -> SentRecords
@@ -45,16 +42,13 @@ protocol FileCloud: Sendable {
   func downloadFile(_ id: CKRecord.ID, progress: @escaping @Sendable (Double) -> Void) async throws -> CKRecord?
 }
 
-/// 接上的一个文件上传：带的记录，与等它的结果（进度照常回报）。
 struct ResumedUpload: Sendable {
   var records: [CKRecord]
   var result: @Sendable (_ progress: @escaping @Sendable (Double) -> Void) async throws -> SentRecords
 }
 
-/// 同步连着的 iCloud：账号、同步区、订阅与文件。正式的是 `CloudDatabase`；`SimulatedCloud` 是内存里的替身，测试与调试画面用它跑真实的同步代码。
 protocol SyncCloud: ZoneChangeSource, RecordUploader, SubscriptionStore, FileCloud {
   func accountStatus() async throws -> CKAccountStatus
-  /// 此刻登录的账号（用户记录名）。
   func accountName() async throws -> String
   /// 门铃的密钥（`RelaySecret`），没有就生成一把存进去。
   func relaySecret() async throws -> Data

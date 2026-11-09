@@ -25,8 +25,7 @@ class MainShellWindow: NSWindow, NSWindowDelegate {
         park()
     }
 
-    /// 窗口开着而没人看得到它——不露在屏上（锁屏、屏幕睡着、被整个盖住），人也不在跟前（`AppServices.away`）——时摘下内容，
-    /// 有人看得到之前挂回。只盖住而人在用别的 App 时不摘：挪开盖着的窗口那一刻要立刻有内容，挂回后的第一次排版会晚一帧露出空窗。
+    /// 只盖住而人在用别的 App 时不摘：挪开盖着的窗口那一刻要立刻有内容，挂回后的第一次排版会晚一帧露出空窗。
     /// 人回来的第一下输入（或解锁）就挂回，那时窗口多半还在锁屏或别的窗口后面。脚本起的实例窗口排在最后，不摘（同 `CueViewing`）。
     func parkWhileUnseen(_ services: AppServices) async {
         guard !DebugHooks.scripted else { return }
@@ -51,7 +50,6 @@ class MainShellWindow: NSWindow, NSWindowDelegate {
         self.parked = nil
     }
 
-    /// 全局热键：窗口在前台才隐藏；可见但被遮挡时先拉到前台。
     func toggleFromHotkey() {
         if isVisible && isKeyWindow { hide() } else { show() }
     }

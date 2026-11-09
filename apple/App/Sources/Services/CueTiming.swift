@@ -2,7 +2,6 @@
 import CueStore
 import Foundation
 
-/// 管理器的时间规则；测试缩短它们。
 nonisolated struct CueTiming: Sendable {
     /// 你这么久没说话、又没有在做的事，才巡视（冷巡视：缓存多半已过期，醒来就换新）。
     var patrolAfter: Duration = .seconds(2 * 3600)
@@ -34,7 +33,6 @@ nonisolated struct CueTiming: Sendable {
     /// 信封第一行写的此刻（记忆基准评测把它定在题目的提问时刻）；别的时间规则都照真实时钟。
     var clock: @Sendable () -> Date = { .now }
 
-    /// 连续第 `failures` 次失败后等多久再起。
     func restartDelay(after failures: Int) -> Duration {
         failures <= restarts.count ? restarts[failures - 1] : slowDelay(after: failures - restarts.count)
     }
@@ -42,7 +40,6 @@ nonisolated struct CueTiming: Sendable {
     /// 慢的那组里第 n 次（从 1 起）等多久：起不来转慢之后，与额度、登录卡住又换不了 Agent 时一轮轮重来，都按它。
     func slowDelay(after n: Int) -> Duration { slowRestarts[min(n, slowRestarts.count) - 1] }
 
-    /// 快的重试用完了：这时才算起不来（告诉你一次，此刻的状态是出错）。
     func isDown(after failures: Int) -> Bool { failures > restarts.count }
 
     func isQuiet(_ date: Date) -> Bool { quietHours.contains(Calendar.current.component(.hour, from: date)) }

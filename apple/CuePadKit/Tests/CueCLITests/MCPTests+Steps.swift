@@ -4,10 +4,6 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// 分步做一件事（常规的"完成 → 开工下一步"）：上一步收尾时下一步还没开工，会话留着；下一步开工接着用它——草稿作为下一句发进去，不开新会话；
-  /// 话送到时这一步才绑上那个会话（同界面、同开新会话"开成了才绑"），送到前看板写"发送中"、peek 写送达尚未确认，不能再开工或说话；
-  /// 最后一步做完，会话结束（界面点圆圈同一条规则，见 App 的 `TaskFlowTests`）。
-  /// 开工的工具等送达结果时，另一个 `cuepad mcp`（Cue 的下一次调用）看到的是送到前的样子；Mac 送到后工具说已送达。
   @Test func stepsOfATaskContinueInTheSameSession() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -34,7 +30,6 @@ extension MCPTests {
       let sent = try await eventually(store, { try $0.deliveryRequests() }) { !$0.isEmpty }
       #expect(sent.map(\.mode) == [.known(.send)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
       #expect(sent.first?.content == "\(second.heading)\n照调研结论改 release.sh")
-      // 送到前：还没绑上，看板写发送中，不能再开工或说话
       #expect(try await store.card(second.id)?.piSessionID == nil)
       try await Server.run(library: sandbox.directory) { cue in
         let board = try await cue.call("task", ["action": "peek"])
@@ -46,7 +41,6 @@ extension MCPTests {
         #expect(peek.contains("尚未确认") && start.contains("尚未确认") && say.contains("尚未确认"), "\(peek)\n\(start)\n\(say)")
       }
 
-      // Mac 送到：记下这次发送，这一步绑上会话
       let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store] request, _ in
         _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
         return .succeeded
@@ -57,7 +51,6 @@ extension MCPTests {
       _ = try await eventually(store, { try $0.card(second.id)?.piSessionID }) { $0 == "s1" }
       await executor.stop()
 
-      // 最后一步做完：没有下一步了，会话结束；整件事收尾时不再请它结束第二次
       let ends = { try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref) }
       _ = try await server.call("task", ["action": "done", "task": second.id.uuidString, "evidence": ["改好了"]])
       #expect(try await ends() == ["s1"])
@@ -67,8 +60,6 @@ extension MCPTests {
     }
   }
 
-  /// 换会话的那一刻与最后一步（"增加系统提示音和提示窗"做完了会话还挂着）：下一步开工用 fresh 开新会话时，上一步留着的会话结束；
-  /// 下一步纯绑定只改关联；最后一步做完，只收尾本任务创建的旧会话，借用的会话保留。
   @Test func aLeftBehindSessionEnds() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -97,7 +88,6 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "start", "task": settings.id.uuidString, "fresh": true])
       let launch = try #require(try await store.deliveryRequests().first { $0.mode == .known(.start) })
       #expect(try await ends() == ["s1"])
-      // Mac 开好新会话：会话记录带着请求里的 token 到了，这一步绑上它
       let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
       try await executor.start()
       _ = try await eventually(store, { try $0.deliveryRequest(launch.id)?.status }) { $0 == .known(.succeeded) }

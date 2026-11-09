@@ -53,7 +53,6 @@ extension SkillDocument {
     }
   }
 
-  /// 只占键那一行的值后面那段 ` # 注释` 从哪起；没有为 nil
   static func trailingComment(_ value: Substring) -> Substring.Index? {
     let head = value.drop { $0 == " " || $0 == "\t" }
     let from: Substring.Index
@@ -67,7 +66,6 @@ extension SkillDocument {
     return value[from...].firstRange(of: /[ \t]+#/)?.lowerBound
   }
 
-  /// 引号写法的收尾引号在第几行、它之后的位置；没有收尾为 nil
   private static func closingQuote(_ first: Substring, rest: ArraySlice<Substring>) -> (line: Int, end: Substring.Index)? {
     guard let open = first.firstIndex(where: { $0 != " " && $0 != "\t" }) else { return nil }
     let quote = first[open]

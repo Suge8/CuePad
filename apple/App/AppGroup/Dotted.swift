@@ -11,7 +11,6 @@ nonisolated struct Dotted: Hashable, Sendable {
     /// 分段处的写法（唯一一处字面量）；`PiProgress.action` 解析的同步数据另用 `PiSessionState.detailSeparator`。
     static let separator = " · "
 
-    /// 各段；空段与 nil 不留。
     let parts: [String]
 
     init(_ parts: [String?]) { self.parts = parts.compactMap { $0 }.filter { !$0.isEmpty } }
@@ -27,7 +26,6 @@ nonisolated struct Dotted: Hashable, Sendable {
 }
 
 extension Text {
-    /// 屏幕上是"a · b"，读屏读"a，b"。
     init(_ dotted: Dotted) { self = Text(verbatim: dotted.visible).accessibilityLabel(dotted.spoken) }
 }
 

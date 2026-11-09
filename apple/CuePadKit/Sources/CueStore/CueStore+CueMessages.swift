@@ -2,9 +2,7 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 写一条对话。正文不能为空。你说的一句同时收起还开着的提问（`CueQuestionEnd`）。带 `ask` 的是 Cue 请你允许的提问（"等你"）：问的是什么（类别、动作、规矩，`CueAsking`）、
-  /// 与按范围（关联任务此刻所在的项目）写出的选项（`CueAsk.choices`）一起存下；点名要你看的图（`shots`，`CueShot.checked` 过的）跟着写下。
-  /// 点名的图不在发到手机的里抛 `shotMissing`，什么都不写。
+  /// 你说的一句同时收起还开着的提问（`CueQuestionEnd`）。点名的图不在发到手机的里抛 `shotMissing`，什么都不写。
   @discardableResult
   public func addCueMessage(
     _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false, task: UUID? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
@@ -30,7 +28,6 @@ extension CueStore {
     return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
   }
 
-  /// CuePad 代 Cue 写下的话（起不来、换不成模型……，`CueMessage.shownText`）。
   @discardableResult
   public func addCueMessage(_ author: CueAuthor, shown: ShownText, urgent: Bool = false) throws -> CueMessage {
     try write { try insertCueMessage(author, shown: shown, urgent: urgent) }
@@ -41,8 +38,6 @@ extension CueStore {
     for shot in shots where try find(PiPreview.self, shot.preview) == nil { throw CueStoreError.shotMissing(shot.preview.uuidString.lowercased()) }
   }
 
-  /// 写一条对话（在写事务内调用）：原话是 `text`，CuePad 代写的是 `shown`（各端按自己的语言显示）。`asking` 是提问问的什么，`project` 是它的范围，
-  /// `shots` 是点名要你看的图；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
   /// Cue 写下的置手机推送标志：要提示你的（`CueMessage.alerts`）且到得了你（`reaches`）出可见通知，其余静默叫醒（`CuePush`）。它提到的那几处此刻的样子一并记下（`CuePlace`）。
   func insertCueMessage(
     _ author: CueAuthor, text: String = "", shown: ShownText? = nil, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil,
@@ -61,9 +56,7 @@ extension CueStore {
     return message
   }
 
-  /// 一轮的经过那一行（值班的管理器写，`CueMessage.tools`）：在这一轮开始的位置写下（`id` 为 nil，返回新行的 id；Cue 自己醒来的一轮醒来时就写，
-  /// 带着为什么醒 `wake`，你发起的第一次调工具时写），之后每做完一步、以及这一轮做完时改它的清单与是谁的那一轮（你中途插话，Cue 自己醒来的一轮就成了回答你的）。
-  /// 这一轮说的话与结果都在它之后。你发起的写成 `round`；Cue 自己醒来的写成没有正文的 `note`，Cue 页里是那一节的第一行。
+  /// 值班的管理器写，在这一轮开始的位置写下，之后每做完一步、以及这一轮做完时改它的清单与是谁的那一轮（你中途插话，Cue 自己醒来的一轮就成了回答你的）。你发起的写成 `round`；Cue 自己醒来的写成没有正文的 `note`。
   @discardableResult
   public func recordCueRound(
     _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, wake: CueWake? = nil
@@ -80,9 +73,7 @@ extension CueStore {
     return id
   }
 
-  /// 一轮做完：清单、最终回复和歇着在同一事务写下，避免界面先看到歇着、后看到回答。
-  /// 已接走且不再重交的请求集合随最终回复保存（`CueMessage.answeredRequests`）；没有正文时保存到经过行，返回该行 ID。
-  /// CueKeeper 准备换大脑重跑的一轮只结束本轮，不把待重交请求记成已回答。
+  /// 清单、最终回复和歇着在同一事务写下，避免界面先看到歇着、后看到回答。没有正文时已接走的请求集合保存到经过行，返回该行 ID。CueKeeper 准备换大脑重跑的一轮只结束本轮，不把待重交请求记成已回答。
   @discardableResult
   public func finishCueRound(
     _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?, answeredRequests: [UUID] = [], hostID: String? = nil, bootID: String? = nil
@@ -99,9 +90,7 @@ extension CueStore {
     }
   }
 
-  /// 一轮写给你的话（值班的管理器调）：做完时的回复，或回答你的一轮出错。不是在回答你的一轮（`answersYou` 为假）里已经对你说过话
-  /// （tell、done 的结果），最后那句只是复述，不写。回答你的一轮要提示你（`urgent`：你说完多半就离开了，在等它），一轮只响一次：
-  /// 这一轮已经提示过你（提问卡、急事、出错）就不再提示。
+  /// 不是在回答你的一轮（`answersYou` 为假）里已经对你说过话（tell、done 的结果），最后那句只是复述，不写。回答你的一轮要提示你（`urgent`：你说完多半就离开了，在等它），一轮只响一次：这一轮已经提示过你（提问卡、急事、出错）就不再提示。
   public func replyCueRound(startedAt: Date, reply: ShownText, as author: CueAuthor, answersYou: Bool, answeredRequests: [UUID] = []) throws {
     try write { _ = try putCueReply(startedAt: startedAt, reply: "", shown: reply, as: author, answersYou: answersYou, answeredRequests: answeredRequests) }
   }
@@ -119,12 +108,11 @@ extension CueStore {
       OR (author = 'cue' AND answer IS NOT NULL AND (deliveredAt IS NULL OR deliveredAt < answeredAt)))
     """
 
-  /// 待交给 Cue 的大脑的你的消息与回答（`toDeliver`），从早到晚。
   public func cueMessagesToDeliver() throws -> [CueMessage] {
     try select(CueMessage.self, where: Self.toDeliver, orderBy: "createdAt, rowid")
   }
 
-  /// 这些你的消息、"等你"上的回答已交给 Cue 的大脑（Cue 运行的那台 Mac 写）。只记还待交的（`toDeliver`）：已记过的不改，回答在那之后改过的再记一次。
+  /// 只记还待交的：已记过的不改，回答在那之后改过的再记一次。
   public func markCueMessagesDelivered(_ ids: [UUID], at time: Date = .now) throws {
     guard !ids.isEmpty else { return }
     try write {
@@ -155,7 +143,6 @@ extension CueStore {
     }
   }
 
-  /// 最近的 `limit` 条对话，从早到晚。
   public func cueMessages(limit: Int = 200) throws -> [CueMessage] {
     try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: limit).reversed()
   }

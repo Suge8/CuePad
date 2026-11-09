@@ -7,7 +7,6 @@ import Foundation
 /// 没给时放进隔离库目录，不在真实的家目录下建东西。
 public struct Workspaces: Equatable, Sendable {
   public static let environmentKey = "CUEPAD_WORKSPACE_DIR"
-  /// 根目录的名字：家目录下的 `~/CuePad`，不碰真实世界时隔离库里的 `CuePad`。
   private static let rootName = "CuePad"
 
   public let root: URL
@@ -22,7 +21,6 @@ public struct Workspaces: Equatable, Sendable {
     return Workspaces(root: (isolatedLibrary ?? URL.homeDirectory).appending(path: rootName, directoryHint: .isDirectory))
   }
 
-  /// 项目的工作区：根目录下以项目名命名的文件夹（`folderName`）；同名的两个项目共用一个（已存在就直接用）。
   public func directory(for projectName: String) -> URL {
     root.appending(path: Self.folderName(for: projectName), directoryHint: .isDirectory)
   }

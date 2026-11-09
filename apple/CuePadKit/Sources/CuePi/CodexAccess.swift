@@ -1,7 +1,6 @@
 #if os(macOS)
 import Foundation
 
-/// 本机 Codex 此刻的 ChatGPT 访问令牌（`AgentIntegration.codexAccess`），给要用同一个 ChatGPT 订阅的地方（实时语音）。
 /// 通过 app-server 的 getAuthStatus（includeToken=true、refreshToken=false）获取；本客户端不直接读写 Codex 凭证文件，也不自行使用续期令牌。
 /// refreshToken=false 不强制续期，但令牌临近过期时 Codex 自身仍可能续期并写回凭证；不是整个调用链只读、不续期的保证。
 public struct CodexAccess: Sendable {
@@ -12,14 +11,12 @@ public struct CodexAccess: Sendable {
 }
 
 public enum CodexAccessError: Error, Equatable {
-    /// 没装 Codex
     case notInstalled
     /// Codex 没登录，或登的不是 ChatGPT 账号（API Key 用不了订阅的语音）
     case signedOut
 }
 
 extension AgentIntegration {
-    /// 起一个一次性的 `codex app-server`（同探测，不开线程）问令牌，问完就停。
     @MainActor public func codexAccess(executable: URL?) async throws -> CodexAccess {
         guard let executable else { throw CodexAccessError.notInstalled }
         let locator = await locate()
@@ -33,7 +30,6 @@ extension AgentIntegration {
 }
 
 extension CodexAccess {
-    /// 账号与到期从令牌（JWT）的声明里读：`https://api.openai.com/auth` 下的 `chatgpt_account_id` 与 `exp`。
     public init?(token: String) {
         let parts = token.split(separator: ".")
         guard parts.count == 3 else { return nil }

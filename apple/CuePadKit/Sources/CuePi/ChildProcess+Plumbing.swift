@@ -3,11 +3,10 @@ import Darwin
 import Foundation
 import Synchronization
 
-/// 起进程的底层：经中转挂到 launchd 下、登记退出事件、读描述符。
 extension ChildProcess {
-    /// 经中转起进程，返回它的 PID：`registered` 在它 exec 之前调（登记退出事件：已被 launchd 回收的进程登记不上，退出码就丢了）。
+    /// `registered` 在它 exec 之前调（登记退出事件：已被 launchd 回收的进程登记不上，退出码就丢了）。
     /// `actions` 里放好了标准输入输出与 3 号（`drainsErrors` 时还有 `errorsFD`），中转用的 `goFD`、`reportFD` 在这里放；
-    /// `newSession` 时连同它在新会话里，并留一个看守（`Placement.detached`），返回看守那根管道的写端。
+    /// `newSession` 时留一个看守（`Placement.detached`），返回看守那根管道的写端。
     static func spawn(
         _ executable: URL, _ arguments: [String], environment: [String: String], actions: inout posix_spawn_file_actions_t?,
         newSession: Bool, drainsErrors: Bool, registered: (pid_t) -> Void
@@ -44,7 +43,6 @@ extension ChildProcess {
             if let hold { close(hold.write) }
             throw POSIXError(.init(rawValue: code) ?? .EIO)
         }
-        // 中转报完 PID 就退出（报告管道读到 EOF）；它是本进程的子进程，这里回收
         let report = await readToEnd(reported.read)
         var status: Int32 = 0
         waitpid(relayPID, &status, 0)
@@ -57,7 +55,6 @@ extension ChildProcess {
     }
 
     private static let shell = "/bin/sh"
-    /// 脱离 App 的进程的标准错误管道读端，给看守认领后接着读（`relay`）
     static let errorsFD: Int32 = 6
     private static let holdFD: Int32 = 7
     private static let goFD: Int32 = 8
@@ -82,14 +79,12 @@ extension ChildProcess {
         return start + guardian + "echo $p >&\(reportFD)"
     }
 
-    /// 一根管道，两端都挪到 `lifted` 的号上。
     static func pipe() throws -> (read: Int32, write: Int32) {
         var fds: [Int32] = [0, 0]
         guard Darwin.pipe(&fds) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
         return (try lifted(fds[0]), try lifted(fds[1]))
     }
 
-    /// 进程退出事件（带退出码）到了就记下、唤醒等着的，自成进程组的再结束组里剩下的。
     /// 事件源在进程退出前一直握着自己，与这个对象的生死无关（脱离 App 的 Pi 也由它记下退出）。
     static func watchExit(_ pid: pid_t, group: Bool, shared: Shared, errors: ErrorTail?) {
         let finish: @Sendable (Int32) -> Void = { status in
@@ -131,7 +126,6 @@ extension ChildProcess {
         return collected.data.withLock { $0 }
     }
 
-    /// 读到 EOF：每次读事件读出的块交给 `chunk`，结束时关描述符、调 `done`。
     static func read(_ fd: Int32, chunk: @escaping @Sendable (Data) -> Void, done: @escaping @Sendable () -> Void) {
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "cuepad.child.read"))
         let buffer = ReadBuffer()

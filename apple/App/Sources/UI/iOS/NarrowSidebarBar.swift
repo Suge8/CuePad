@@ -2,13 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 窄屏侧栏顶上那一排（侧栏只有这一排，项目、进展两段不再自己画页顶，`HeaderHost.sidebar`）：正中是项目｜进展，两侧各两颗只画图标的圆钮、贴页边——
-/// 左边搜索与这一段的低频操作（项目段新建项目，进展段项目范围），右边额度与回 Cue 的头像。换段时只有选中块滑过去、左边第二颗换成这一段的那一颗，
-/// 其余不动。圆钮的名字在读屏与悬停提示里。
-/// 项目｜进展放不下带字的（英文、iPad 窄窗口、大字）时整组只画图标，不截字（`PaneSegment`）。
-/// 额度明细是从额度钮长出、落在屏幕正中的浮窗（`popup`）。
-/// 两侧的圆钮都是系统的玻璃圆钮（`glassCircle`），四颗与项目｜进展同在一个玻璃容器里（`GlassEffectContainer`）：换段时左边第二颗原地化成另一颗。
-/// 提示横幅盖在这一排上（从左页边到 Cue 头像前，`NoticeBanner`）时左边、正中与额度钮让开，Cue 头像留着。
 struct NarrowSidebarBar: View {
     @Environment(Workspace.self) private var workspace
     @Namespace private var glass
@@ -67,7 +60,6 @@ struct NarrowSidebarBar: View {
     }
 }
 
-/// 项目范围（`Workspace.projectScope`）的圆钮：看全部时是筛选图标，选了是那个项目的图标；点开是项目菜单（同 `ProjectScope` 那一份）。
 private struct ScopeButton: View {
     @Environment(Workspace.self) private var workspace
 
@@ -97,8 +89,6 @@ private struct ScopeButton: View {
     private static let glyph: CGFloat = 15
 }
 
-/// 额度钮：一颗环，是余量最紧的那个账号（还没有额度记录时写"额度"二字）；点它从这颗钮长出居中的明细浮窗（`QuotaDetail`，`popup`）。
-/// 读屏念全部账号的读数（同 `QuotaRings`）。
 private struct QuotaButton: View {
     @State private var open = DebugHooks.preset.quotaOpen
     @Environment(AppServices.self) private var services
@@ -132,7 +122,6 @@ private struct QuotaButton: View {
     }
 }
 
-/// 让开（提示横幅盖上来）：淡到透明、不可点、读屏跳过（同页顶那一排的让开）。
 private struct GiveWay: ViewModifier {
     let hidden: Bool
 
@@ -141,8 +130,6 @@ private struct GiveWay: ViewModifier {
     }
 }
 
-/// 这一排的排法，子视图依次是左边那组、正中的分段、额度、Cue 头像：左边那组贴左页边，Cue 头像贴右页边，额度在 Cue 头像左边隔 `gap`；
-/// 两侧一样宽（两颗圆钮加一道缝），分段在两侧之间、对着整排的正中。按给的宽一次排定，不读几何。
 private struct SidebarRow: Layout {
     static let gap: CGFloat = 6
 

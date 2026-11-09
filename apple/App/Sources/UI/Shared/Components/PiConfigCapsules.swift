@@ -1,10 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 模型胶囊：模型的标志（`BrandMark.model`）+ 模型短名（没有当前模型时写 `unnamed`）。iOS 点开是系统菜单（`MenuButton`）；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
-/// SwiftUI 在 Mac 上把菜单项里的图片丢掉）：分组标题带这一组的标志（提供方或 Agent 的产品标志），每个模型带它自己的标志。
-/// 有订阅额度的提供方：标志外一圈细环是卡着的那个窗口还剩多少（`ModelBadge`），没给组名的分组标题写各窗口还剩多少
-/// （`PiModelLabel.title`，Mac 的 AppKit 菜单同一份，见 `PiConfigControls.open`）；到了重置时刻无新观测就收起数值环（`Moments`）。
+/// Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`）：SwiftUI 在 Mac 上把菜单项里的图片丢掉。到了重置时刻无新观测就收起数值环（`Moments`）。
 struct PiModelCapsule: View {
     let models: PiModelMenu
     let current: PiModelOption?
@@ -12,7 +9,6 @@ struct PiModelCapsule: View {
     let pending: Bool
     let quotas: [AccountQuota]
     #if os(macOS)
-    /// 弹出 AppKit 的模型菜单。
     let pick: () -> Void
     #endif
 
@@ -50,7 +46,6 @@ struct PiModelCapsule: View {
                     Color.clear.frame(width: 0, height: 0)
                 }
             } else {
-                // 没有标志可留：名字截断
                 name.truncationMode(.tail)
             }
         }
@@ -66,7 +61,6 @@ struct PiModelCapsule: View {
         Dotted(current?.displayName ?? String(localized: unnamed), current.flatMap { $0.account?.label(provider: $0.key.provider) }, binding(at: now).map { String(localized: "\($0.name)额度剩 \($0.percent)") }).spoken
     }
 
-    /// 当前模型的提供方卡着的那个窗口（按模型的周额度只算这个模型的）。
     private func binding(at now: Date) -> QuotaMeter.Window? {
         guard let current, let quota = current.quota(in: quotas) else { return nil }
         return quota.binding(at: now, model: current.key.id).map { QuotaMeter.Window($0, at: now) }
@@ -74,7 +68,6 @@ struct PiModelCapsule: View {
 }
 
 
-/// Agent 胶囊：产品标志 + 名字，与模型胶囊同一种胶囊（`PiConfigControls`）。能换（`PiAgentPick.choosable`）时点开选哪家：
 /// iOS 是系统菜单（`MenuButton`），Mac 同模型胶囊弹 AppKit 菜单（`ChoiceMenu`，SwiftUI 在 Mac 上丢掉菜单项里的产品标志）。
 struct PiAgentCapsule: View {
     let pick: PiAgentPick
@@ -114,7 +107,6 @@ struct PiAgentCapsule: View {
 }
 
 
-/// 胶囊上的模型标志（次要墨色）；它的提供方有订阅额度时外面一圈细环：卡着的那个窗口还剩多少（`QuotaRing`），
 /// 没有额度的只有标志、占同样大，换模型时不跳。认不出的模型（`BrandMark`）只有环；两样都没有时胶囊上不放它。
 struct ModelBadge: View {
     let mark: BrandMark?
@@ -145,13 +137,9 @@ struct PiThinkingDial: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @LoopsPlay private var loops
-    /// 手指（或鼠标）按着时指到的档：先在条上预览，松手才发出去。
     @State private var touched: PiThinkingLevel?
-    /// 气泡里写的档：按下就有，松手后停 `linger` 再淡出。
     @State private var bubble: PiThinkingLevel?
-    /// 每松手一次加一：重新计停留的时间。
     @State private var released = 0
-    /// 竖格在这一枚胶囊里的位置：横向位置按它换算成档。
     @State private var track: CGRect = .zero
 
     private var barWidth: CGFloat { compact ? 3 : 4 }
@@ -162,7 +150,6 @@ struct PiThinkingDial: View {
     private static let linger: Duration = .seconds(1.2)
     private nonisolated static let space = "thinking-dial"
 
-    /// 此刻画的样子：按着时是指到的那档。
     private var drawn: PiThinkingMeter { touched.map(meter.pointing(at:)) ?? meter }
 
     var body: some View {
@@ -245,7 +232,6 @@ struct PiThinkingDial: View {
             .fixedSize()
     }
 
-    /// 按下与拖动：在竖格上就调到指着的档；按在"思考 中"那几个字上（还没拖动）只浮出现在的档。
     private func press(_ value: DragGesture.Value) {
         let onIcon = value.location.x < track.minX && touched == nil && abs(value.translation.width) < 4
         if onIcon {
@@ -258,19 +244,16 @@ struct PiThinkingDial: View {
     }
 
     private func meterBars(_ drawn: PiThinkingMeter) -> some View {
-        // 不知道此刻的档（"默认"）：空格画深一点，不像停用
         bars { index in
             index < drawn.filled ? palette.ink : drawn.current == nil ? palette.ink3 : palette.track
         }
             .overlay {
                 if drawn.isMax, loops {
-                    // 最高档：一道亮光从左往右扫过填满的格
                     LoopLayer(kind: .sheen, color: palette.onFill).mask { bars { _ in .black } }.allowsHitTesting(false)
                 }
             }
             .overlay {
                 if drawn.isOff {
-                    // 关着：一道斜线压过空格
                     Capsule().fill(palette.ink3).frame(width: 1.5)
                         .frame(height: Self.tallest + 4).rotationEffect(.degrees(42))
                         .transition(.opacity)
@@ -289,15 +272,13 @@ struct PiThinkingDial: View {
         .frame(height: Self.tallest, alignment: .bottom)
     }
 
-    /// 一格比一格高：从 `lowest` 均匀长到 `tallest`。
     private func height(_ index: Int, of count: Int) -> CGFloat {
         count > 1 ? Self.lowest + (Self.tallest - Self.lowest) * CGFloat(index) / CGFloat(count - 1) : Self.tallest
     }
 }
 
 
-/// 发出后还没送达：轻轻呼吸（只在这一小会儿）。一层胶囊底色盖在内容上一明一暗（`LoopLayer` 的 `pulse`，交给渲染服务）：
-/// SwiftUI 的 repeatForever 每帧在 App 进程里重算，一直没送达时会话页静止也占约 9% CPU。不放循环动效时（`LoopsPlay`）不呼吸。
+/// SwiftUI 的 repeatForever 每帧在 App 进程里重算，一直没送达时会话页静止也占约 9% CPU，所以一层胶囊底色盖在内容上一明一暗，交给渲染服务（`LoopLayer` 的 `pulse`）。
 struct Breathing: ViewModifier {
     let active: Bool
     @Environment(\.palette) private var palette

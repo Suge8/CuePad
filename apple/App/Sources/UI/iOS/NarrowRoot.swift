@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// Cue 为根的唯一导航栈；侧栏只是根上的覆盖层。推入页和系统返回都绑定 Workspace.path，不另存返回来源。
+/// 推入页和系统返回都绑定 `Workspace.path`，不另存返回来源。
 struct NarrowRoot: View {
     @Environment(Workspace.self) private var workspace
 
@@ -43,7 +43,6 @@ private struct NarrowHome: View {
     }
 }
 
-/// Cue 页与左边常驻的会话条（最底下是"更早"那一格）；名牌长开 Cue 的面板时会话条让开（面板盖住这一屏，模态浮出 `ModalHost`）。
 private struct NarrowCue: View {
     @Environment(Workspace.self) private var workspace
     @Environment(ModalHost.self) private var host: ModalHost?
@@ -58,7 +57,6 @@ private struct NarrowCue: View {
                 SessionRail(data: workspace.services.liveSessions.rail, form: .phone, pulse: workspace.pulse) { session, _ in
                     workspace.openSession(session.id, sessionID: session.sessionID)
                 }
-                // 已结束的会话：会话条最底下一格（`EarlierTile`）
                 .safeAreaInset(edge: .bottom, spacing: Spacing.item) { EarlierTile() }
                 .padding(.top, CueHeader.height + Bars.contentGap)
                 .padding(.bottom, ComposerMetrics.slot + Spacing.block)
@@ -70,7 +68,6 @@ private struct NarrowCue: View {
     }
 }
 
-/// 侧栏：项目、进展两段叠着、只换看得见的那段；顶上一排是侧栏的（`NarrowSidebarBar`），两段只让出一排的高（`HeaderHost.sidebar`）。
 private struct NarrowSidebar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -91,7 +88,6 @@ private struct NarrowSidebar: View {
         .onChange(of: pane, initial: true) { mounted.insert(pane) }
     }
 
-    /// 换段同全 App 的切页（`paneTurn`）：进展在右，从右边进；项目在左，从左边进。
     private func page(_ route: Route, pane: NavigationPane) -> some View {
         let shown = workspace.navigationPane == pane
         return RouteView(route: route)

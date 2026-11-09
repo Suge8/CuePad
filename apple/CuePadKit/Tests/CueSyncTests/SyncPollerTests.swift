@@ -3,7 +3,6 @@ import Synchronization
 import Testing
 @testable import CueSync
 
-/// "有理由等就拉"：按档位隔着拉，节奏变了先立即拉一次，档位走完或不再等即停。
 @Suite
 struct SyncPollerTests {
   let time = ManualTiming()

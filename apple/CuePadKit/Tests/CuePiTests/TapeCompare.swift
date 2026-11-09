@@ -5,12 +5,10 @@ import Darwin
 import Foundation
 @testable import CuePi
 
-/// 输入与录下的比对：UUID 不同记成替换（之后的输出里换成这次的），时间与 JSON-RPC 的请求号不同不算；其余不同返回说明。
 enum TapeCompare {
     nonisolated(unsafe) static let uuid = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/
 
     static func compare(expected: String, actual: String, into replay: inout AgentTape.Replay) -> String? {
-        // 启动的工作目录与参数逐项比（参数里可能有键序随机的 JSON）
         if expected.contains("\u{1}") || actual.contains("\u{1}") {
             let e = expected.split(separator: "\u{1}", omittingEmptySubsequences: false), a = actual.split(separator: "\u{1}", omittingEmptySubsequences: false)
             guard e.count == a.count else { return "参数个数不同：\(a.count) 而不是 \(e.count)" }
@@ -59,7 +57,6 @@ enum TapeCompare {
         return "「…\(around(a))」而不是「…\(around(e))」"
     }
 
-    /// 此刻前后两天内的时间（ISO、毫秒、秒）换成同一个记号；别的数字照比
     private static func timeless(_ text: String) -> String {
         var text = AgentTape.replacing(AgentTape.isoPattern, in: text) { _ in "{time}" }
         for pattern in [AgentTape.millisecondsPattern, AgentTape.secondsPattern] {

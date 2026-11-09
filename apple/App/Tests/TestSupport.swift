@@ -16,7 +16,6 @@ import UIKit
 #endif
 
 
-/// 临时目录里的独立偏好存储，释放时连目录一起删除。
 final class TempDefaults {
     let directory = FileManager.default.temporaryDirectory
         .appending(path: "cuepad-defaults-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -27,7 +26,6 @@ final class TempDefaults {
         defaults = Self.open(directory)
     }
 
-    /// 同一份存储再开一次（模拟退出后重开）。
     func reopened() -> UserDefaults { Self.open(directory) }
 
     private static func open(_ directory: URL) -> UserDefaults { UserDefaults(suiteName: directory.appending(path: "preferences").path)! }
@@ -35,7 +33,6 @@ final class TempDefaults {
     deinit { try? FileManager.default.removeItem(at: directory) }
 }
 
-/// 记录调用的同步替身；`emit` 推一个状态快照给订阅者。
 nonisolated final class FakeSync: SyncControlling, Sendable {
     private struct State {
         var started = 0
@@ -64,7 +61,6 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     func stop() async {
         state.withLock { $0.stopped += 1 }
     }
-    /// 为 true 时 `syncNow()` 永不返回（像网络一直没有回音）。
     let syncNowHangs = Mutex(false)
 
     @discardableResult func syncNow() async throws -> SyncPullResult {
@@ -81,10 +77,10 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         return sendsSucceed.withLock { $0 }
     }
     func push() async {}
+    func activated() async {}
 
     func resolve(_ resolution: SyncResolution) async throws {}
     var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }
-    /// `fetchFile` 怎么取（像从 iCloud 取来）；没给是这台不同步
     let fetching = Mutex<(@Sendable (String) async throws -> URL)?>(nil)
     func fetchFile(_ key: String) async throws -> URL {
         guard let fetch = fetching.withLock({ $0 }) else { throw FileFetchFailure.notSyncing }
@@ -92,8 +88,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     }
 }
 
-/// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键；iOS 的私有命名剪贴板，
-/// 模拟器的通用剪贴板会与 Mac 同步）。`relaunch()` 用同一批目录与偏好再起一个实例。
+/// iOS 用私有命名剪贴板：模拟器的通用剪贴板会与 Mac 同步。`relaunch()` 用同一批目录与偏好再起一个实例。
 final class TestApp {
     let directory = TestLibraries.makeDirectory()
     let preferences = TempDefaults()
@@ -107,22 +102,17 @@ final class TestApp {
     let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
     lazy var pi = PiBridge(socketDirectory: socketDirectory, timing: timing)
     lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory, sessions: piPaths.sessionsDirectory)
-    /// 托管的 Claude Code 会话（撑不过 App 重启的那一类）
     lazy var claude = PipedHostedAgent(bridge: pi, agent: .claudeCode)
     #else
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
     #endif
     private(set) var services: AppServices!
 
-    /// 同步的来源；默认用记录型替身 `sync`。
     private let syncSource: AppServices.SyncSource?
-    /// App 的钟（资料库、在线记录续期、说的话到点翻状态、主动拉取）；要推进时间的测试给 `ManualTiming` 的。
     private let timing: Timing
 
     #if os(macOS)
-    /// Cue 的依赖；默认本机没有能用的运行时（Cue 一直睡着）。
     private let cue: CueDependencies?
-    /// 自动更新器；默认没有（同隔离模式）。
     private let updater: (any AppUpdater)?
     /// 这台的标识：两台设备连同一个云替身时，另一台给别的（演手机：它看的是那台 Mac 写下的，经投送请求让那台做）。
     let hostID: String
@@ -146,6 +136,7 @@ final class TestApp {
     #endif
 
     isolated deinit {
+        endSync(of: services)
         #if os(macOS)
         pasteboard.releaseGlobally()
         try? FileManager.default.removeItem(at: socketDirectory)
@@ -157,23 +148,28 @@ final class TestApp {
     @discardableResult
     func relaunch() -> AppServices {
         services.cancelBackgroundWork()
+        endSync(of: services)
         services = makeServices()
         return services
     }
 
-    /// 那台 Mac 醒着、这次开机报的会话状态（`CueStore.runtimeRecorder`），写入不合并、走这个 App 的时钟。
+    /// 同真的进程退出：这个实例的同步不再跑。不停的话，换账号的通知是全进程的，测试结束后它还会跟着并行的测试去认账号、拉取。
+    /// deinit 里等不了，停下在后台做完。
+    private func endSync(of services: AppServices?) {
+        guard let sync = services?.sync else { return }
+        Task.detached { await sync.stop() }
+    }
+
     func runtimeRecorder(on host: String, boot: String = TestBoot.id) async throws -> PiStateRecorder {
         try await services.store.runtimeRecorder(on: host, boot: boot, minInterval: .zero, timing: timing)
     }
 
-    /// 同步报来这台的库和 iCloud 对没对过一遍（`SyncState.reconciled`，启用 Cue 的前提），等服务读到。同步要已经起着
     /// （`services.start()` 或 `startSync()`）：替身只有一条状态流，起两遍就是两处在读。
     func syncs(reconciled: Bool = true) async throws {
         sync.emit(SyncState(status: .idle, issues: [], reconciled: reconciled))
         try await eventually("对过一遍：\(reconciled)") { services.knowsSyncedFacts == reconciled }
     }
 
-    /// 隔离库的文件（直接改库里的时刻，演"很久以前"）。
     var databaseURL: URL { isolatedLocation.databaseURL }
 
     private var isolatedLocation: LibraryLocation {
@@ -186,7 +182,6 @@ final class TestApp {
     }
     /// App 里的命令行工具在哪（技能与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
     lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
-    /// 项目工作区的根目录（没绑文件夹的项目开工时建在这里）：在临时目录里。
     var workspaces: Workspaces { Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)) }
 
     /// 这台 Mac 写下自己能用 Pi（开新会话只从 macAgents 选 Agent）：探测本身起真 Agent，只在 Kit 的 Real* 测试里验，这里直接写下它的结果。
@@ -205,19 +200,16 @@ final class TestApp {
         #expect(services.agents.status(kind)?.files == .current)
     }
 
-    /// 这台 Mac 上装了这家 Agent（还没接入）：放一个只报版本的假可执行文件，Pi 的还能报出模型（`signedIn` 为 false 时没有模型，是没登录）。
     func install(_ kind: AgentKind, version: String = "2.1.299", signedIn: Bool = true) throws {
         let line = signedIn ? Self.piProbeLine : #"{"cuepadProbe":{"model":null,"models":[]}}"#
         let probe = kind == .pi ? "[ -n \"$CUEPAD_PROBE\" ] && { echo '\(line)'; exit 0; }\n" : ""
         try executable(kind.facts.command, "#!/bin/sh\n\(probe)echo '\(version)'\n", in: bin)
     }
 
-    /// 装了 Claude Code、还没登录（同 `offersClaudeInstaller` 备的那个，探测问得出没登录）。
     func installClaude() throws {
         try executable(AgentKind.claudeCode.facts.command, Self.fakeClaude(loginFails: false), in: bin)
     }
 
-    /// 这台 Mac 上的 Node.js（找 Agent 的同一组目录里）：只报版本。
     func installNode(_ version: String) throws {
         try executable("node", "#!/bin/sh\necho '\(version)'\n", in: bin)
     }
@@ -230,7 +222,6 @@ final class TestApp {
 
     private static let piProbeLine = #"{"cuepadProbe":{"model":{"provider":"fake","id":"m","name":"M","thinking":["off"]},"models":[{"provider":"fake","id":"m","name":"M","thinking":["off"]}]}}"#
 
-    /// CuePad 写技能与钩子，信任写成 Codex 记下的样子（`[hooks.state."<键>"]` 下一行 `trusted_hash`）。
     private func installCodexTrustedLikeCodex() throws {
         let integration = agentIntegration
         let hooks = try #require(integration.channel(.codex) as? CodexHooks).hooks
@@ -255,10 +246,8 @@ final class TestApp {
             cuepad: helper, installCommand: { kind, _ in "mkdir -p '\(bin.path)' && cp '\(installers)/\(kind.facts.command)' '\(bin.path)/'" })
     }
 
-    /// "官方安装脚本"的替身（`AgentIntegration.installCommand`）拷的东西：备好了的那家装得上，没备好的 cp 报错、装不上。
     private var installers: URL { directory.appending(path: "installers") }
 
-    /// 备好一个装得上的 Claude Code：报版本；`auth login` 记下已登录（`loginFails` 时退出码 1、没登录上）；
     /// 探测时（stream-json 的 initialize）按登录了没有回答账号，同真的 Claude Code。
     func offersClaudeInstaller(loginFails: Bool = false) throws {
         try executable(AgentKind.claudeCode.facts.command, Self.fakeClaude(loginFails: loginFails), in: installers)
@@ -290,7 +279,6 @@ final class TestApp {
         """
     }
 
-    /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
     var agentHomes: [String: String] {
         ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
          "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "GROK_HOME": directory.appending(path: "grok").path,
@@ -327,7 +315,6 @@ final class TestApp {
 }
 
 extension Workspace {
-    /// 像回复框那样从一份草稿发给会话（`speak`，关联带上的第一张卡），等写库与上传走完，返回写下的那条请求。
     func said(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil) async throws -> DeliveryRequest {
         var box = draft
         let binding = Binding(get: { box }, set: { box = $0 })
@@ -337,14 +324,12 @@ extension Workspace {
 }
 
 extension CueStore {
-    /// 全部会话记录（测试核对用；界面按范围与页读，见 `piSessionPage`）。
     func allPiSessionStates() throws -> [PiSessionState] {
         try piSessionPage(PiSessionQuery(limit: .max)).items.map(\.state)
     }
 }
 
 extension CKRecord {
-    /// 云端最低对端版本那条记录（门槛）。
     nonisolated static func peerFloor(_ version: Int) -> CKRecord {
         let record = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
         record[PeerFloor.field] = version as NSNumber

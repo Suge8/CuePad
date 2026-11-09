@@ -17,7 +17,7 @@ func makePNG(width: Int = 1600, height: Int = 1000, seed: Int = 0, color: NSColo
 }
 
 extension CueEditorTheme {
-    /// 测试用的最小主题：系统字体、固定色。App 的纸页主题在 App 里，不在这个包。
+    /// App 的纸页主题在 App 里，不在这个包。
     static let test = CueEditorTheme(
         font: .systemFont(ofSize: 15),
         headingFont: .systemFont(ofSize: 18, weight: .semibold), codeFont: .monospacedSystemFont(ofSize: 13, weight: .regular),
@@ -55,7 +55,6 @@ final class EditorHarness {
         try? await Task.sleep(for: .seconds(seconds))
     }
 
-    /// 只含一张图片的行的布局矩形（文本视图坐标）。
     func imageLineFrames() -> [CGRect] {
         var frames: [CGRect] = []
         let origin = textView.textContainerOrigin

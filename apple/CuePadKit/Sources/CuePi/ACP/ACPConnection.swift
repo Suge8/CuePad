@@ -2,18 +2,13 @@
 import CueStore
 import Foundation
 
-/// 一条到 ACP Agent 的连接（Agent Client Protocol v1，https://agentclientprotocol.com/protocol/overview ）：JSON-RPC 2.0，
-/// 标准输入输出上一行一条。CuePad 是客户端：起 Agent 的 ACP 服务（`<可执行文件> <各家的参数>`，`ACPDialect.arguments`），握手后发请求、
-/// 收通知与 Agent 发来的请求（权限确认等）。客户端能力一项不报：文件与终端都由 Agent 自己做。
-/// 回应按 id 配给请求（`PendingReplies`）：一般的至多等 `AgentTimeouts.reply`；一轮（`session/prompt`）这一轮结束它才回，不限时，
-/// 回应在读到它的那一行当场交出（`request(_:_:reply:)`），与前后的通知同一先后。
-/// Agent 发来的请求交给 `onRequest`，它不接（返回 false）的回"没有这个方法"，不让对方干等。
+/// Agent Client Protocol v1（https://agentclientprotocol.com/protocol/overview ）：JSON-RPC 2.0。客户端能力一项不报：文件与终端都由 Agent 自己做。
+/// 一轮（`session/prompt`）这一轮结束它才回，不限时，回应在读到它的那一行当场交出（`request(_:_:reply:)`），与前后的通知同一先后。
+/// Agent 发来的请求交给 `onRequest`，它不接（返回 false）的回“没有这个方法”，不让对方干等。
 @MainActor
 final class ACPConnection {
     let process: ChildProcess
-    /// 握手的回应：`agentCapabilities`、`authMethods` 与各家放在 `_meta` 里的扩展信息
     private(set) var agent: JSONValue = [:]
-    /// 通知（方法、参数）
     var onNotification: ((String, JSONValue) -> Void)?
     /// Agent 发来的请求（方法、参数、请求 id）：接了返回 true，之后用 `respond` 回它
     var onRequest: ((String, JSONValue, JSONValue) -> Bool)?
@@ -21,7 +16,6 @@ final class ACPConnection {
     var onClose: (() -> Void)?
     private var nextID = 0
     private let replies = PendingReplies<Int, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: ACPError.timedOut)
-    /// `request(_:_:reply:)` 发出、等回应的
     private var inOrder: [Int: (Result<JSONValue, ACPError>) -> Void] = [:]
     private var reader: Task<Void, Never>?
 
@@ -33,7 +27,7 @@ final class ACPConnection {
         }
     }
 
-    /// 起 Agent 的 ACP 服务并握手（`initialize`，协议版本 1）；起不来、握手失败或超时时停掉进程再抛错。`timing` 交给进程（`ChildProcess`）。
+    /// 起不来、握手失败或超时时停掉进程再抛错。
     static func launch(
         _ executable: URL, _ arguments: [String], environment: [String: String], directory: URL? = nil, timing: Timing = .system
     ) async throws -> ACPConnection {
@@ -54,7 +48,7 @@ final class ACPConnection {
 
     var isClosed: Bool { replies.isClosed }
 
-    /// 发一个请求，等它的结果；Agent 回错误抛 `server`，连接先断了抛 `closed`，没有及时回应抛 `timedOut`。
+    /// Agent 回错误抛 `server`，连接先断了抛 `closed`，没有及时回应抛 `timedOut`。
     @discardableResult
     func call(_ method: String, _ params: JSONValue) async throws -> JSONValue {
         nextID += 1
@@ -83,7 +77,6 @@ final class ACPConnection {
         send(["jsonrpc": "2.0", "id": id, "result": result])
     }
 
-    /// 停掉进程并等它走完：先关标准输入请它收尾，不走再 SIGTERM，还不走结束整个进程组（`ChildProcess.stop`）。
     func shutdown() async {
         await process.stop()
         await reader?.value
@@ -134,10 +127,9 @@ final class ACPConnection {
 enum ACPError: Error {
     case server(code: Int, message: String)
     case closed
-    /// Agent 没有及时回应（握手时已停掉它）
     case timedOut
 
-    /// JSON-RPC 的"参数不对"（ACP 里换到不存在的模型、强度时回它）
+    /// ACP 里换到不存在的模型、强度时回它。
     static let invalidParams = -32602
 }
 

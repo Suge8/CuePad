@@ -1,8 +1,6 @@
 #if DEBUG
 import SwiftUI
 
-/// 一个调试画面（`-CuePadScene <名>`）：名字与摆法。每个画面（一族）在 `Scenes/` 里自己一个文件，登记在 `DebugScene.entries`。
-/// 摆法随平台不同时，同一个文件里按 `#if os` 各写一份。
 struct DebugSceneEntry {
     let names: [String]
     /// 数据就绪、主窗口出来之后摆画面；第二个参数是 `-CuePadProject` 打开的项目。
@@ -48,7 +46,6 @@ extension DebugScene {
         return Dictionary(all.flatMap { entry in entry.names.map { ($0, entry) } }, uniquingKeysWith: { _, _ in fatalError("画面名登记了两次") })
     }()
 
-    /// 此刻 `-CuePadScene` 对应的登记项。
     static var entry: DebugSceneEntry? { scene.flatMap { entries[$0] } }
 }
 #endif

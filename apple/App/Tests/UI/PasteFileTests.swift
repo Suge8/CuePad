@@ -6,8 +6,6 @@ import Testing
 import UIKit
 @testable import CuePad
 
-/// 手机回复框粘贴：剪贴板里只有文件（文件 App 里复制的 PDF）时"粘贴"收的是附件，交给附件条，不当文字插；
-/// 认法与卡片编辑器同一条（`PastedItem`）。
 @MainActor
 struct PasteFileTests {
     let app = TestApp()

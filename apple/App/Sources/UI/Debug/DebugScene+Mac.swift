@@ -17,7 +17,6 @@ extension DebugScene {
         Task { await cueNowTourIfAsked(workspace) }
         presetColumns(workspace.services.settings)
         if let prepare = entry?.prepare { await running("摆画面") { try await prepare(workspace, opened) } }
-        // 宽屏验收：-CuePadBeside <sessionID> 在主区右半并排打开演示会话（左半是 session 场景的 -CuePadSession）
         if let beside = args.layoutOpts.beside {
             workspace.openSession(PiSessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
         }
@@ -37,15 +36,12 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadDemo YES` 时补上演示 Mac 的在线会话与 Cue 的对话（各自已写过就不再写）。
     static func seedDemo(_ services: AppServices) async {
         guard args.demo else { return }
         await seedRemote(services)
         await seedCue(services)
     }
 
-    /// `-CuePadSidebarCycle YES`（配录屏）：画面就绪后每 1.5 秒开合一次侧栏，走 ⌃⌘S 那条路（主菜单动作经响应链），看开合的动效；
-    /// `-CuePadRightCycle YES` 同样开合右栏（Cue，⌃⌘I）。`fast`：动画中途反向——按下后 0.1 秒再按、0.06 秒连按三次，各停 1.5 秒，看打断时是否连续、停下时是否回到终点。
     private static func cycle(_ action: Selector, fast: Bool) async {
         // 两次之间停多久是录屏的节奏，不是在等别的事
         let gaps: [Double] = fast ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
@@ -58,7 +54,7 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadSampleCue`：Cue 请你允许一件事（算进"等你"）。隔离库里 Cue 不值班，替 `CueService.followNotifications` 交给同一个出口。
+    /// 隔离库里 Cue 不值班，替 `CueService.followNotifications` 交给同一个出口。
     private static func askSample(after delay: Duration, services: AppServices) async {
         await Task.wait(for: delay)
         await running("Cue 请你允许一件事") {
@@ -69,8 +65,6 @@ extension DebugScene {
         }
     }
 
-    /// 演示用的更新器（`-CuePadScene updatewait`）：检查就当找到了更新、你点了安装，像 Sparkle 一样先问要不要推迟重启；装的那一刻只打一个点
-    /// （`update-installed`），不真装。
     final class DemoUpdater: AppUpdater {
         var automaticallyChecksForUpdates = true
         var canCheckForUpdates = true
@@ -84,8 +78,7 @@ extension DebugScene {
         func checkForUpdatesInBackground() { checkForUpdates() }
     }
 
-    /// `-CuePadFolder <路径>`：建一个以文件夹命名、绑着它的项目（已有同名的不再建）。隔离实例里真跑 Cue 派活要有绑了文件夹的项目，
-    /// 而系统的选文件夹面板读写正式版的偏好域（同一个 bundle id），在后台也点不动。
+    /// 隔离实例里真跑 Cue 派活要有绑了文件夹的项目，而系统的选文件夹面板读写正式版的偏好域（同一个 bundle id），在后台也点不动。
     static func bindFolderIfAsked(_ store: CueStore) async {
         guard let path = args.folder else { return }
         let name = URL(filePath: path).lastPathComponent
@@ -96,8 +89,7 @@ extension DebugScene {
         }
     }
 
-    /// connected：把几家 Agent 接进截图用的隔离目录（`xc.sh shot` 把各家的配置目录指到产物目录下），看接入后的侧栏、设置与 + 的新会话（选 Agent）。
-    /// 配置目录建出来就算装着（没有命令时按目录认）。
+    /// 把几家 Agent 接进截图用的隔离目录（`xc.sh shot` 把各家的配置目录指到产物目录下）。配置目录建出来就算装着（没有命令时按目录认）。
     static func connectAgents(_ services: AppServices) async {
         await running("接入各家 Agent") {
             for kind in AgentKind.allCases {
@@ -132,7 +124,6 @@ extension DebugScene {
         NSApp.terminate(nil)
     }
 
-    /// 主窗口（Debug 里是 `DebugWindow`）。
     static var mainWindow: NSWindow? { NSApp.windows.first { $0 is DebugWindow } }
 
     /// 只调整主窗口尺寸，外框样式由壳层创建窗口时决定，这里不碰。
@@ -142,7 +133,6 @@ extension DebugScene {
         if offscreen { placeOffscreen(window) } else { window.center() }
     }
 
-    /// `-CuePadOffscreen YES`：主窗口放在所有屏幕之外，复现窗口不可见时的布局，测量时也不挡、不露在桌面上。
     static var offscreen: Bool { args.layoutOpts.offscreen }
 
     /// 放到所有屏幕的左下方之外。要在窗口第一次显示之前调用，否则会先在屏幕中央闪一下。
@@ -159,8 +149,7 @@ final class DebugWindow: MainShellWindow {
     }
 }
 
-/// `newsession` 画面：新会话表单（平时从 + 弹出，+ 读这台 Mac 的 Agent 交给它）。配 `-CuePadDemo YES` 时读演示 Mac（demo-mac）的 Agent：
-/// 隔离实例里这台一家都不能用，看不到选 Agent 与模型的那一排。
+/// 配 `-CuePadDemo YES` 时读演示 Mac（demo-mac）的 Agent：隔离实例里这台一家都不能用，看不到选 Agent 与模型的那一排。
 struct DebugNewSessionForm: View {
     @Environment(Workspace.self) private var workspace
     @State private var agents: MacAgents?
@@ -174,7 +163,6 @@ struct DebugNewSessionForm: View {
 
 /// `menubar` 画面：截图只截普通层级的窗口，菜单栏面板拍不到，所以把它放在桌面图上拍（`cuebar` 是"对 Cue 说"的输入条）。
 struct DebugMenuBarStage: View {
-    /// `cuebar` 画面：放"对 Cue 说"的输入条。
     var cueBar = false
 
     var body: some View {

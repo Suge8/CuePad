@@ -3,8 +3,7 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// 看板：所有没做完的顶层任务，按项目分组，再是不归没做完的事的活会话，至多 `overviewLimit` 行；在做的归 Cue 管，其余是用户手上的清单。
-  /// 末尾是最近完成的 `recentlyDone` 件，各带会话与它此刻的状态：他接着交代其中一件的下一步时在原任务上加一步（同系统提示"接着用"），
+  /// 在做的归 Cue 管，其余是用户手上的清单。末尾最近完成的各带会话与它此刻的状态：他接着交代其中一件的下一步时在原任务上加一步（同系统提示"接着用"），
   /// 在旧会话上做别的事才 add 带 session（只写后一种时，做完的调研他接着说"先升第一档"，长程评测里另建了一件）。
   func board() async throws -> Result {
     let board = try await store.cueBoard()
@@ -68,7 +67,6 @@ extension CueTools {
   /// 合起来约 1 万 token，是换新线（`CueContext.renewAt`）的一成：一次很多变化也不会把一轮的上下文撑到要换新。
   static let recapBudget = 12_000
 
-  /// 不带参数的 peek 末尾列几件最近完成的。
   static let recentlyDone = 5
 
   /// peek 里每个叶子最新的那条回答最多给这么多字：超了留开头 `latestReplyHead` 字与结尾，截掉中间。结论多在开头，证据、没做完的多在结尾
@@ -76,7 +74,6 @@ extension CueTools {
   static let latestReplyLimit = 4000
   static let latestReplyHead = 1000
 
-  /// 不带 task 的 peek 的文字最多这么多行（含开头一行、项目名与"还有 N 件"）。
   static let overviewLimit = 60
 
   /// 会话是哪家 Agent 的（本版本不认识的写 Agent）。
@@ -139,12 +136,10 @@ extension CueTools {
     }
   }
 
-  /// 发来的时刻写成"10-17 15:34"（同信封的 24 小时制）。
   private static func clock(_ date: Date) -> String {
     date.formatted(.verbatim("\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)", timeZone: .current, calendar: .current))
   }
 
-  /// 会话那一段：哪家、名字、状态与多久、在等的提问。
   private static func sessionHead(_ session: PiSessionState, now: Date, left: [CueLeft]) -> String {
     var head = "\(agentName(session))会话「\(session.title)」\(CueEnvelope.state(session.state)) \(CueEnvelope.duration(now.timeIntervalSince(session.stateSince)))"
     if left.contains(where: { $0.holds(for: session) }) { head += " · " + CueEnvelope.leftNote }

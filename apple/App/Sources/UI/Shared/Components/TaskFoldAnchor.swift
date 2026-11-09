@@ -13,12 +13,9 @@ final class TaskFoldAnchor {
     fileprivate var height: CGFloat = 0
     /// 页面停在顶上：收起时不用滚（收走的都在那一行上面，留不住也不会被夹到别处），也就不多一次整页更新。
     fileprivate var atTop = true
-    /// 纸底那一行在滚动区里的位置。
     fileprivate var bar: CGRect?
-    /// 收起后等着发的滚动。
     private var pending: (() -> Void)?
 
-    /// 收起其余任务：一步到位，版面一排好就把纸底那一行滚回收起前的位置。
     func collapse(_ fold: Binding<TaskFold>, scrolling position: Binding<ScrollPosition>) {
         guard let bar, !atTop else { return withTransaction(\.disablesAnimations, true) { fold.wrappedValue.showsAll = false } }
         // 锚点 u：那一行上沿 + u × 行高 对齐滚动区上沿 + u × 滚动区高，解出让上沿留在原处的 u
@@ -37,13 +34,11 @@ final class TaskFoldAnchor {
 }
 
 extension View {
-    /// 页面的滚动区：把它的高度、停没停在顶上记进 `anchor`（两样都不随滚动每帧变）。
     func taskFoldScroll(_ anchor: TaskFoldAnchor) -> some View {
         onScrollGeometryChange(for: CGFloat.self) { $0.containerSize.height } action: { _, height in anchor.height = height }
             .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y <= -$0.contentInsets.top } action: { _, top in anchor.atTop = top }
     }
 
-    /// 纸底"还有 N 条 / 收起"那一行：滚回去的目标，把它在滚动区里的位置记进 `anchor`。
     func taskFoldBar(_ anchor: TaskFoldAnchor) -> some View {
         id(TaskFoldAnchor.barID)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .scrollView) } action: { anchor.moved($0) }

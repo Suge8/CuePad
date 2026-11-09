@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 要不要提示（"等你确认"、"做完了"）只有一条规则：Mac 写同步记录时据它置位通知标志，手机在前台读同步来的记录做 App 内提示也用它。
 @Suite struct PiAlertRuleTests {
   let fixture = try! Fixture()
   let clock = ManualTiming()
@@ -15,8 +14,6 @@ import Testing
 
   private func current() async throws -> PiSessionState { try #require(try await store.allPiSessionStates().first) }
 
-  /// 歇着时的手动压缩：扩展先报"在压缩"，压完（或失败、被停止）回到原来的"做完了"与原来的起点——这不是又做完了一轮，
-  /// Mac 不置位通知标志，手机不论读没读到"在压缩"那一版都不提示；压缩发生在一轮里时，压完歇下照常是"做完了"。
   @Test func compactingWhileSettledAndFallingBackIsNotANewRound() async throws {
     let recorder = PiStateRecorder(store: store, hostID: "mac", timing: clock.timing)
     try await write(recorder, .thinking)
@@ -37,8 +34,6 @@ import Testing
     #expect(try await current().alert(since: back) == .settled)
   }
 
-  /// 手机读到的是同步合并后的版本：上一轮的"完成"之后直接是下一轮的"完成"，中间的"工作中"没读到——
-  /// 状态没变而状态起点往后走了，就是又做完了一轮。
   @Test func aRoundFinishedBetweenTwoReadsIsStillRecognised() async throws {
     let recorder = PiStateRecorder(store: store, hostID: "mac", timing: clock.timing)
     try await write(recorder, .thinking)

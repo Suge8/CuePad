@@ -3,11 +3,8 @@ import Foundation
 // 手机发给 Mac 的请求正文（投送请求 `content` 里的 JSON）。
 
 public enum PiAnswerValue: Sendable, Equatable {
-  /// 选择框选中的选项原文
   case option(String)
-  /// 确认框的是或否
   case confirmed(Bool)
-  /// 输入框填的文字
   case text(String)
 
   /// 写进对话的正文（`PiChatRole.answer`）：选项与填的字照原文；确认框是作答那台的语言，各端照 `shown` 按自己的语言写。
@@ -24,7 +21,6 @@ public enum PiAnswerValue: Sendable, Equatable {
     return yes ? ShownText("是") : ShownText("否")
   }
 
-  /// 答了什么，这台设备的语言。
   public var label: String { shown?.text ?? said }
 }
 
@@ -41,7 +37,6 @@ public struct PiAnswer: Sendable, Equatable, StoredJSON {
     self.question = question
   }
 
-  /// 作答请求的正文（App 的回复框作答经发消息的那条路写出）。
   public var stored: String { JSONColumn.encode(self) }
 
   private enum CodingKeys: String, CodingKey { case promptID, option, confirmed, text, question }
@@ -109,12 +104,10 @@ public enum PiFolder: Sendable, Equatable {
 /// `token` 由发起方生成，带到新会话的同步记录上（`PiSessionState.launchToken`），发起方据此认领。
 public struct PiLaunch: Sendable, Equatable, StoredJSON {
   public var project: UUID
-  /// 开场的话（可空）。
   public var prompt: String?
   public var token: String
   /// 用哪个 Agent 开；旧版本写的没有，是 Pi（`opening`）
   public var agent: AgentKind?
-  /// 实际用哪家开（Mac 执行、界面写"正在开 X 会话"都读它）。
   public var opening: AgentKind { agent ?? .pi }
   /// 会话名：从任务开的会话叫那个叶子的标题，由 `CueStore.requestLaunch` 按带着的卡定（`CueStore.sessionName(forCard:)`），调用方不传；
   /// nil 是 Agent 的默认名（第一句话）。模型与思考强度可选（nil 用 Agent 的默认）。三者作为启动参数一起生效。

@@ -5,14 +5,11 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 在 Cue 页输入框的选择器里给值班的 Cue 换脑子，按用户看得到的写：换模型、思考强度，Cue 下一轮就用新的，同一个会话里前面说的话它还记得；
-/// 换名字（在系统提示里）要换大脑，新大脑的第一条输入带着对话视图，前面说的话照样接得上。
 /// 选择器写设置走 `AppServices.updateCue`，写法照它的菜单项（`CueConfigControls`）；说话走 `Workspace.speak`。
 /// 大脑是真的 Pi，模型是 `CueHostTests` 的假端点（看得到每一轮用的模型与强度）。
 @MainActor
 @Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized)
 struct CueBrainSwitchTests {
-    /// 在 Cue 页对它说一句，等它回一句含 `reply` 的话。
     private func say(_ text: String, to rig: CueHostTests.Rig, expecting reply: String) async throws {
         let workspace = Workspace(services: rig.services)
         workspace.cue.draft = ComposerDraft(text: text)

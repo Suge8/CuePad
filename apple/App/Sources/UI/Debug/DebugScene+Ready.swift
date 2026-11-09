@@ -3,9 +3,7 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
-    /// 还没做完的摆画面的事（`later`）。
     private static var pending = 0
-    /// 正在过渡的视图（`debugSettling`）。
     private static var unsettled: Set<UUID> = []
 
     static func settling(_ id: UUID, _ busy: Bool) {
@@ -21,7 +19,6 @@ extension DebugScene {
         }
     }
 
-    /// 画面要等这件事做完才算摆好（同 `later`，等的是一件事而不是一段时间）。
     static func holdingReady(_ work: @escaping @MainActor () async -> Void) {
         pending += 1
         Task {
@@ -30,7 +27,6 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadNotice <文字>`：就绪后 5 秒弹一条带去处（点它去进展页）与撤销（什么都不做）的提示，按真实时长收：
     /// 录屏都在就绪后才开录（Mac 实测晚 3 秒多），等这么久才录得到进场、停留与收起；`CUEPAD_REC_SECONDS` 给到 18。
     static func noticeIfAsked(_ workspace: Workspace) async {
         guard let text = args.driveOpts.notice else { return }
@@ -58,7 +54,6 @@ extension DebugScene {
         }
     }
 
-    /// 摆好的画面不成立（演示数据缺了东西）：同 `abandon` 的失败退出。
     struct Unmet: Error, CustomStringConvertible {
         let description: String
         init(_ description: String) { self.description = description }
@@ -108,7 +103,6 @@ extension DebugScene {
 
     private static let longestOneShot: CFTimeInterval = 5
 
-    /// 屏上的窗口里有没有一次性的动画在跑（推入、弹出浮窗这类）；一直循环的（转圈、流光）不算。
     private static var animating: Bool {
         func busy(_ layer: CALayer) -> Bool {
             // 看不见的不算（没在刷新的下拉刷新圈也一直在转）

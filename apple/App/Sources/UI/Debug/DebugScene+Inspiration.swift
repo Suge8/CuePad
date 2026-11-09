@@ -7,10 +7,7 @@ import Foundation
 import SwiftUI
 
 extension DebugScene {
-    /// `-CuePadInspiration YES`：默认项目的混排样张，配 `-CuePadCard #` 打开；墙、编辑与分享用同一份正文。
-    /// `-CuePadInspirationExport <路径>` 把同一分享服务的完整长图写到该路径，供检查屏外内容；加 `-CuePadInspirationOriginals YES` 则取原图副本，核对字节不变。
     /// 配 `-CuePadDemo YES` 沿用正常任务、会话与已启用 Cue 的既有种子；不配则保留初始未启用场景。
-    /// `-CuePadInspirationSource <路径>` 用指定 Markdown 正文复现编辑、墙面摘要和导出。
     static func seedInspiration(_ services: AppServices) async {
         await seedArrivingInspiration(services)
         guard args.inspiration else { return }
@@ -74,7 +71,6 @@ extension DebugScene {
         } catch { abandon("阅读样张没写下", error) }
     }
 
-    /// `-CuePadInspirationArrival <秒>`：先只有图片记录，再模拟下载完成；用于墙图和编辑器图片的到达验收。
     private static func seedArrivingInspiration(_ services: AppServices) async {
         let delay = args.inspirationOpts.arrival
         guard delay > 0 else { return }

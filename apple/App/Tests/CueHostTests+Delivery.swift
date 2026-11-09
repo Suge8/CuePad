@@ -10,8 +10,6 @@ import Testing
 @testable import CuePad
 
 extension CueHostTests {
-    /// Cue 对开着的会话说话，过了说话工具等结果的时限（`CueTiming.sayWait`）Mac 才回报没送达（会话已关闭）：工具如实说送达尚未确认、不要重发；
-    /// 失败一到就叫醒 Cue，信封里是"[发送失败] 任务 · 原因"；会话页那句话的气泡写着同一个原因。
     /// 会话开在另一台 Mac 上：说话请求由那台执行，本机的执行器不碰它；时限过后由替身当那台 Mac 写回失败。
     /// 要的是等过时限，与时长无关：时限缩短（等结果在 `cuepad mcp` 子进程里，只能真等）。
     @Test func 说话过了时限才没送达_Cue马上醒来看到原因() async throws {
@@ -37,7 +35,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 说话工具在等结果的时限内拿到没送到、当场报给 Cue（标成出错、带原因），这一轮好好做完：Cue 已经知道了，这次失败不再进变化。
     @Test func 工具当场报了没送到_这一轮做完后不再报第二遍() async throws {
         let rig = try await Rig()
         let project = try #require(try await rig.store.projects().first)
@@ -57,8 +54,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 说话的工具还在等结果时这一轮断了（大脑被杀；重启、更新、崩溃都是这样）：工具的回应没交到 Cue 手上，
-    /// 随后的失败哪怕落在等结果的时限内，也写进下一轮的变化，Cue 醒来看到 [发送失败]。
     @Test func 说话工具等结果时断了_随后的失败下一轮看到() async throws {
         let rig = try await Rig()
         let project = try #require(try await rig.store.projects().first)
@@ -81,8 +76,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 会话歇下的事件比它写进库早（这台机器忙、或从另一台 Mac 同步过来）：写进库时 Cue 已经做完了一轮、基线已经越过这个时刻，
-    /// Cue 仍然要醒来看到它，不能因为事件时刻早于基线就漏掉。
     @Test func 歇下晚到_事件时刻早于上一轮_Cue仍然醒来() async throws {
         let rig = try await Rig()
         let project = try #require(try await rig.store.projects().first)
@@ -100,7 +93,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 的请求失败晚到（从执行它的那台 Mac 同步过来时，完成时刻早于这台已经知道的另一次失败）：仍是新变化，Cue 醒来看到它。
     /// 每次都等说话工具过了时限才回报：时限缩短，同上一条。
     @Test func 请求失败晚到_完成时刻更早_Cue仍然醒来() async throws {
         let rig = try await Rig(timing: { $0.sayWait = 0.5 })
@@ -113,7 +105,6 @@ extension CueHostTests {
         try await rig.answered("remote-1")
         try await rig.message(.cue, containing: "登录页那边歇下了")
 
-        /// 你请 Cue 对会话说一句，这一轮做完后由替身当那台 Mac 按 `clock` 的时刻回报没送达，Cue 醒来看到 `reason`。
         func sayFails(_ reason: String, at clock: Timing) async throws {
             try await rig.say("请对登录页说继续")
             // 说话工具等结果至多 `CueTiming.sayWait`：等它交回"送达尚未确认"再替那台 Mac 回报。只看歇着不够——这一轮刚开始时库里还是歇着，

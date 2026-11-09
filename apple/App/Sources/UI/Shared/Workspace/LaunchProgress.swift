@@ -1,15 +1,12 @@
 import CueStore
 import Foundation
 
-/// 发出的新会话请求此刻的结果，以及认领到的会话（同步记录带着同一个标识）。新会话的三个入口都按它判断（`SessionLaunching`）。
 nonisolated struct LaunchProgress: Sendable, Equatable {
-    /// 读的是哪一次（`SessionLaunch.request`）；还没读过为 nil。
     var launch: UUID?
     var request: DeliveryRequest?
     var claimed: Claimed?
     var otherRequests: [DeliveryRequest] = []
 
-    /// 认领到的会话：记录 id 与 Pi 的会话 id。
     struct Claimed: Sendable, Equatable {
         var id: UUID
         var sessionID: String
@@ -19,12 +16,9 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
 
     enum Phase: Equatable {
         case idle
-        /// 请求在路上，或 Mac 还没执行完：发出没有、Mac 接没接手（`PiDelivery.Transit`）。
         case sending(PiDelivery.Transit)
-        /// Mac 已启动 Pi，等它连上来。
         case opening
         case unconfirmed(String)
-        /// 明确没能开成：Mac 报的原因。
         case failed(Speech.Failure)
         /// 这一次的请求库里已经没有了（清理掉了），说不出结果。
         case missing
@@ -61,8 +55,7 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
     }
 }
 
-/// 请一台 Mac 在后台开新会话的那一次（`AppServices.launchSession`）：
-/// 投送请求与这次生成的认领标识；会话连上时带着这个标识，进度按它读。
+/// 认领标识：会话连上时带着它，进度按它读。
 nonisolated struct SessionLaunch: Equatable, Sendable {
     let request: UUID
     let token: String

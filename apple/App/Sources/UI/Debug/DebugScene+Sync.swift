@@ -52,10 +52,8 @@ extension DebugScene {
         }
     }
 
-    /// 只报状态的同步替身：拉取、上传、解决都什么都不做，要做点什么的自己再写那一项。
     protocol StandInSyncing: SyncControlling {}
 
-    /// 先报连不上 iCloud，过一会儿报已同步；拉取与上传什么都不做。
     nonisolated final class OfflineSync: StandInSyncing {
         let seconds: Double
         init(seconds: Double) { self.seconds = seconds }
@@ -71,9 +69,6 @@ extension DebugScene {
         }
     }
 
-    /// 已同步，然后依次报一段段别的状态（`blips` 各段时长，段间隔 `gap` 的已同步），走完一遍再来。
-    /// `upload`：上传那种（`.syncing`），短的像一句话 0.3 秒传上去、长的像传一批；`catchup`：对一遍那种（`catchingUp`，同回前台时那一拉），页头写"正在同步"；
-    /// `offline`：连不上 iCloud（像网络一时断开又回来），同步到不了 Mac 的提醒点、拍板卡的"现在答不了"一出一收。
     nonisolated final class BlipSync: StandInSyncing {
         enum Kind { case upload, catchup, offline }
         let blips: [Duration]
@@ -113,8 +108,7 @@ extension DebugScene {
         }
     }
 
-    /// 第一次拉取（启动后同步一通就拉的那一次，`AppServices.setSyncState`）带回 `pages` 页别的设备写下的 Cue 的话，每页 `perPage` 条、
-    /// 隔 `pageGap` 到一页（同 `ZonePuller` 一页页应用），拉完才返回；之后的拉什么都不做。话直接写进本机库：界面看到的与应用远端变更是同一种变化。
+    /// 话直接写进本机库：界面看到的与应用远端变更是同一种变化。
     nonisolated final class ArrivingSync: StandInSyncing {
         static let pages = 3
         static let perPage = 6
@@ -163,8 +157,7 @@ extension DebugScene {
         return await stores.next()
     }
 
-    /// 换新 Mac：先报还没和 iCloud 对过，过 `seconds` 秒把第一遍拉回的写进库（Cue 在 Mac Studio 上运行、那台醒着、能用 Pi），再报对过，
-    /// 同真实的第一遍同步先应用记录、再报对过。拉取与上传什么都不做。
+    /// 同真实的第一遍同步先应用记录、再报对过。
     nonisolated final class NewMacSync: StandInSyncing {
         let seconds: Double
         init(seconds: Double) { self.seconds = seconds }
@@ -188,7 +181,6 @@ extension DebugScene {
         }
     }
 
-    /// 报 `state`（默认已同步），其余什么都不做；`stalls` 时立即同步不返回（像网络一直没有回音）。
     nonisolated final class StandInSync: StandInSyncing {
         let state: SyncState
         let stalls: Bool
@@ -202,7 +194,6 @@ extension DebugScene {
         }
     }
 
-    /// 摆画面时交给同步替身的：`arrive`、`newmac` 的资料库，`conflicts` 的冲突副本（冲突那一行由有同步时的订阅读出，`AppServices.startSync`）。
     static func presetSync(_ services: AppServices) async {
         switch args.sync {
         case "arrive", "newmac": library.continuation.yield(services.store)
@@ -211,7 +202,6 @@ extension DebugScene {
         }
     }
 
-    /// 拿演示库里的一张灵感，复制一份改过的正文，标成它的冲突副本。
     private static func seedConflict(_ services: AppServices) async {
         await running("冲突副本") {
             let store = services.store
@@ -241,6 +231,7 @@ nonisolated extension DebugScene.StandInSyncing {
     @discardableResult func syncNow() async throws -> SyncPullResult { .incomplete }
     func send(recordNames: Set<String>) async -> Bool { true }
     func push() async {}
+    func activated() async {}
     func resolve(_ resolution: SyncResolution) async throws {}
     var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }
     func fetchFile(_ key: String) async throws -> URL { throw FileFetchFailure.notSyncing }

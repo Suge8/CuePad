@@ -5,12 +5,9 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：终端里的 Claude Code（真 `claude`，tmux 里跑）接进 CuePad——经钩子出现在桥上、经收件箱收到 CuePad 发的话、
-/// 等你确认时从 CuePad 作答、后台工作交回后才歇下、改名、结束。
 @MainActor
 @Suite(RealAgents.live(.claudeCode, "断言的是 tmux 里真终端界面的输出与按键"), .enabled(if: tmuxURL != nil, "要 tmux"), .serialized, .timeLimit(.minutes(8)))
 struct RealClaudeTerminalTests {
-    /// 用户自己的 settings.json：别的设置、自己的一个 Stop 钩子
     nonisolated static let userSettings = """
         {
           "theme": "dark",
@@ -54,7 +51,6 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// 一轮出错：按 Claude Code 报的错误类型归类成一句人话与出错的种类。
     @Test func aFailedTurnIsClassified() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.startConnected()
@@ -97,8 +93,7 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// 在跑时从 CuePad 说话：CuePad 打断不了终端里的 Claude Code（`AgentCapabilities.speakBlocked`），拒收并说明原因，话不进会话。
-    /// 照原因在终端里按 Esc：Claude Code 不跑钩子，会话照会话文件里的中断标记歇下（已停止），之后从 CuePad 说的话送得到。
+    /// 照原因在终端里按 Esc：Claude Code 不跑钩子，会话照会话文件里的中断标记歇下（已停止）。
     @Test func aMessageWhileBusyIsRefusedWithTheReason() async throws {
         try await ClaudeTestbed.run(settings: #"{"skipDangerousModePermissionPrompt": true}"#) { testbed in
             try testbed.startConnected()
@@ -123,7 +118,6 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// 终端会话同一规则：在飞的只认 Stop 钩子带的后台任务清单，交回结果的那一轮做完才歇下一次。
     @Test func backgroundWorkKeepsATerminalSessionBusyUntilItsResultIsReportedBack() async throws {
         try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
             try testbed.startConnected()
@@ -135,7 +129,6 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// 改名经收件箱改到 Claude Code 自己（终端标题与会话列表里都是新名字）；结束是让它像在终端里按 Ctrl-C 那样退出。
     @Test func cuePadRenamesAndEndsATerminalSession() async throws {
         try await ClaudeTestbed.run() { testbed in
             try testbed.startConnected()
@@ -156,7 +149,6 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// 用户在终端里打开了 CuePad 正托管着的会话：托管的进程让出（空闲就退），桥上换成终端里的那个。
     @Test func aHostedSessionYieldsWhenTheUserOpensItInTheTerminal() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.startConnected()
@@ -175,7 +167,6 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// CuePad 启动前就开着的会话（还没触发过钩子，钩子也没装）：启动时补上桥，照样能收到 CuePad 发的话；它开着时不能在后台再接着它。
     @Test func aSessionAlreadyRunningBeforeCuePadStartsIsDiscoveredAndCannotBeResumedElsewhere() async throws {
         try await ClaudeTestbed.run(installHooks: false) { testbed in
             let terminal = try await testbed.terminal()
