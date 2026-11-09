@@ -7,16 +7,24 @@
 # 上传后在这个提交上打 ios/<构建号> 标签并推到远端：release-mac.sh 据它核对发版顺序（docs/release.md「发版顺序」），也是这一版源码的唯一记号。
 # 前提：docs/release.md。
 set -euo pipefail
-APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPTS/../.." && pwd)"
+APPLE_DIR="$REPO_DIR/apple"
+mode="${1:-}"
+OUT="$APPLE_DIR/.derived/release/ios"
+context() { python3 "$SCRIPTS/release-context.py" "$@"; }
+if [ "$mode" = testflight ]; then
+  OUT="$(context prepare "$REPO_DIR" "$OUT" ios)"
+  APPLE_DIR="$OUT/source/apple"
+fi
+DERIVED="$REPO_DIR/apple/.derived"
+[ "$mode" != testflight ] || DERIVED="$OUT/build"
 # shellcheck source=_signing.sh source-path=SCRIPTDIR
-. "$APPLE_DIR/scripts/_signing.sh"
+. "$SCRIPTS/_signing.sh"
 # shellcheck source=_lock.sh source-path=SCRIPTDIR
-. "$APPLE_DIR/scripts/_lock.sh"
+. "$SCRIPTS/_lock.sh"
 require_asc
 
-mode="${1:-}"
-DERIVED="$APPLE_DIR/.derived"
-OUT="$DERIVED/release/ios"
 provision="$APPLE_DIR/scripts/provision.py"
 
 case "$mode" in
@@ -27,28 +35,32 @@ case "$mode" in
     [ -z "$pending" ] || { printf 'docs/release.md「待部署到生产」还有没部署的，部署完删掉条目再发 iOS 版：\n%s\n' "$pending" >&2; exit 1; }
     "$APPLE_DIR/scripts/ck-production.sh"
     check_relay
-    rm -rf "$OUT"; mkdir -p "$OUT"
     signing_begin
     python3 "$provision" all
     # 版本由 release_versions 推出，命令行设置同时作用于 App 与扩展，两者一致
     read -ra versions <<<"$(release_versions)"
-    archive="$(release_archive ios "${versions[@]}")"
+    archive="$(release_archive ios "${OUT##*/}" "${versions[@]}")"
     xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=iOS' \
       -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}"
     check_relay "$archive/Products/Applications/CuePad.app/Info.plist"
     export_options "$OUT/export.plist" app-store-connect "Apple Distribution" \
-      "$CUEPAD_APP_ID"="CuePad iOS AppStore" "$CUEPAD_APP_ID".share="CuePad Share iOS AppStore" \
-      "$CUEPAD_APP_ID".widget="CuePad Widget iOS AppStore" "$CUEPAD_APP_ID".notify="CuePad Notify iOS AppStore"
+      "$CUEPAD_APP_ID=CuePad iOS AppStore" "$CUEPAD_APP_ID.share=CuePad Share iOS AppStore" \
+      "$CUEPAD_APP_ID.widget=CuePad Widget iOS AppStore" "$CUEPAD_APP_ID.notify=CuePad Notify iOS AppStore"
     xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" \
       -exportPath "$OUT/export"
     signing_end
+    context seal "$OUT" "$archive" "${versions[@]}"
+    build_version="$(context verify "$OUT" "$REPO_DIR")"
     # 上传走 altool（xcodebuild 的 destination=upload 用 API 密钥时会报"账号凭据过期"）
     xcrun altool --upload-app -f "$OUT/export/CuePad.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
-    tag="ios/${versions[1]#CURRENT_PROJECT_VERSION=}"
-    git -C "$APPLE_DIR" tag "$tag"
-    git -C "$APPLE_DIR" push -q origin "$tag"
-    echo "已上传 ${versions[*]}，App Store Connect 处理完成后出现在 TestFlight"
-    python3 "$APPLE_DIR/scripts/testflight.py" group
+    tag="$(context tag "$OUT" "$REPO_DIR")"
+    git -C "$REPO_DIR" push -q origin "$tag"
+    echo "已上传 ${build_version}，App Store Connect 处理完成后出现在 TestFlight"
+    context complete "$OUT"
+    python3 "$APPLE_DIR/scripts/testflight.py" group || {
+      echo "IPA 已上传并标记来源；仅重试 python3 apple/scripts/testflight.py group，不要为分组重新上传 IPA" >&2
+      exit 1
+    }
     ;;
   device)
     # 取第一台已连接的真机；未登记则登记，再刷新 Development 描述文件

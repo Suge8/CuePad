@@ -177,27 +177,6 @@ extension Workspace {
         return item
     }
 
-    /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
-    /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
-    /// `host`：由哪台 Mac 开，默认这台。`card`：从这条灵感或任务开的，开好后它关联到新会话，会话名也按它定（`CueStore.requestLaunch`）。
-    /// `agent`：用哪个 Agent 开；`model`、`thinking` 为 nil 是这家的默认。
-    func startSession(
-        in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false, progressed: @escaping (LaunchProgress) -> Void
-    ) async throws -> String {
-        let launch = try await services.launchSession(
-            in: project, prompt: prompt, title: title, on: host ?? services.hostID, card: card, agent: agent, model: model, thinking: thinking, fast: fast)
-        var seen = false
-        for try await progress in services.store.observe({ try launch.progress(from: $0) }) {
-            if let claimed = progress.claimed { return claimed.sessionID }
-            // 请求开成了、会话却一直没带着认领标识连上来：等认领的请求到期清掉（`DeliveryExecutor`），不再静静地等下去
-            if progress.request != nil { seen = true } else if seen { throw SendError.notLaunched(String(localized: "会话一直没连上 CuePad")) }
-            progressed(progress)
-            if case .failed(let failure) = progress.phase(at: services.speech) { throw SendError.notLaunched(failure.text) }
-        }
-        throw CancellationError()
-    }
-
     /// 跳到会话所在的终端；只能大致定位或失败时说一句。
     func jumpToTerminal(_ id: CuePi.PiSession.ID) {
         Task {

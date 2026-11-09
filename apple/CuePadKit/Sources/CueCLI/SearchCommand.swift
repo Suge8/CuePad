@@ -3,6 +3,15 @@ import Foundation
 
 private let defaultLimit = 20
 
+struct SearchOutput {
+  let total: Int
+  let projects: [ProjectView]
+  let cards: [CardView]
+  static let fields = OutputFields<SearchOutput>(fields: [
+    ("total", { $0.total }), ("projects", { $0.projects.map(\.json) }), ("cards", { $0.cards.map(\.json) }),
+  ])
+}
+
 extension Command {
   static let search = Command(
     path: ["search"], summary: "搜索灵感与任务（多个词都要命中，子串，不分大小写；命中正文）", arguments: "[词...]",
@@ -41,9 +50,7 @@ extension Command {
     if results.totalCards > offset + cards.count {
       lines.append("共 \(results.totalCards) 条，已显示 \(offset + 1)–\(offset + cards.count)（--offset 翻页）")
     }
-    let json: JSONObject = [
-      "total": results.totalCards, "projects": projects.map(\.json), "cards": cards.map(\.json),
-    ]
+    let json = SearchOutput.fields.json(SearchOutput(total: results.totalCards, projects: projects, cards: cards))
     return Reply(text: lines.joined(separator: "\n") + "\n", json: json)
   }
 

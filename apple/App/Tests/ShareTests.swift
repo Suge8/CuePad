@@ -1,3 +1,4 @@
+import CueEditor
 import CueStore
 import Foundation
 import Testing
@@ -60,4 +61,30 @@ struct ShareTests {
         guard case .failed = model.state else { Issue.record("状态应为失败：\(model.state)"); return }
         #expect(CaptureQueue.pending(in: app.services.location.captureDirectory).isEmpty)
     }
+    @Test func 分享与粘贴临时副本_保留原名并只补缺少的扩展名() async throws {
+        let app = TestApp()
+        let cases: [(String?, String, String)] = [
+            ("中文报告", "system.pdf", "中文报告.pdf"),
+            ("报告.PDF", "system.pdf", "报告.PDF"),
+            (nil, "system.pdf", "system.pdf"),
+            ("无扩展名", "system", "无扩展名"),
+        ]
+        for (suggested, filename, expected) in cases {
+            let url = app.directory.appending(path: filename)
+            try Data("文件正文".utf8).write(to: url)
+            let provider = NSItemProvider()
+            provider.suggestedName = suggested
+            provider.registerFileRepresentation(forTypeIdentifier: (url.pathExtension.isEmpty ? UTType.data : .pdf).identifier, fileOptions: [], visibility: .all) { completion in
+                completion(url, false, nil)
+                return nil
+            }
+            let content = try await ShareItemLoader.load(from: [provider])
+            #expect(content.files.map(\.name) == [expected])
+            #if os(iOS)
+            let pasted = try await IncomingFile.pasted(PastedItem(provider)).store(in: app.services.store.files)
+            #expect(pasted.name == expected)
+            #endif
+        }
+    }
+
 }

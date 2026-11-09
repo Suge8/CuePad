@@ -322,7 +322,7 @@ enum PiWire {
         try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, fast: fast, name: name))
     }
 
-    /// 认 `title` 的最早的扩展版本：更早的会话换上新扩展前不起名（`PiBridge.Link.canNameItself`）
+    /// 认 `title` 的最早的扩展版本：更早的会话换上新扩展前不起名（`PiConnection.canNameItself`）
     static let abortTurnSince = 60
     static let titleSince = 58
 

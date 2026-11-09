@@ -137,7 +137,7 @@ struct HandOffInput: View {
         guard canSend else { return }
         guard let session = chosen?.state else {
             guard choice == nil else { return newSession() }
-            return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, opening: planned?.opening, workspace: workspace)
+            return workspace.prepareNewSession(draft, card: outbox.card, opening: planned?.opening, plan: planned?.plan)
         }
         workspace.reply(
             to: session, commands: commands, from: box, accepting: .reply, card: outbox.card, saying: Dotted(String(localized: "已交给 \(session.title)")))
@@ -145,24 +145,9 @@ struct HandOffInput: View {
         workspace.outbox = nil
     }
 
-    /// 默认目标是新会话时点发送，按交到哪的决定：换成新会话的输入框，项目、由哪台 Mac 开、会话名都取自决定。要在别的项目开，从菜单选"新会话…"。
-    /// 开新会话时任务带的是 `opening`（子任务带着顶层任务作背景）；交给已有会话的只是这一步自己的。
-    static func startDefault(
-        _ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?, opening: String?, workspace: Workspace
-    ) {
-        handOff(draft, card: card, opening: opening, plan: plan, workspace: workspace)
-    }
-
-    /// 草稿里还有在存的附件时，存好再换页，一并带过去（`Workspace.claimImports`）；没有就当场换。
-    private static func handOff(_ draft: ComposerDraft, card: UUID?, opening: String?, plan: HandOffPlan?, workspace: Workspace) {
-        let claim = workspace.claimImports(draft)
-        guard !claim.isEmpty else { return workspace.handOffToNewSession(draft.retelling(card, as: opening), card: card, plan: plan) }
-        Task { workspace.handOffToNewSession(await claim.settled().retelling(card, as: opening), card: card, plan: plan) }
-    }
-
     /// 开新会话交给它：换成新会话的输入框，正文与补的话带过去。
     private func newSession() {
-        Self.handOff(draft, card: outbox.card, opening: planned?.opening, plan: planned?.fresh, workspace: workspace)
+        workspace.prepareNewSession(draft, card: outbox.card, opening: planned?.opening, plan: planned?.fresh)
     }
 }
 #endif

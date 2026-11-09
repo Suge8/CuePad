@@ -2,21 +2,22 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 新灵感放在所在项目的最前（没指定的进默认项目）。项目必须存在且未在回收站，否则抛 `invalidProject`。
-  public func createCard(in project: UUID = Project.defaultID, body: String = "") throws -> Card {
+  /// 新灵感放在所在项目的最前（没指定的进默认项目）。项目不存在或已在回收站时默认抛 `invalidProject`；显式 `.useDefault` 才回落到默认项目。
+  public func createCard(in project: UUID = Project.defaultID, body: String = "", ifProjectMissing: MissingProject = .reject) throws -> Card {
     try write {
-      try requireLiveProject(project)
+      let project = try requireLiveProject(project, ifMissing: ifProjectMissing)
       return try insertCard(body, project: project, parent: nil, todo: false, sortKey: SortKey.before(firstTopKey(in: project)))
     }
   }
 
   /// 分享队列的一条入库成灵感：建卡与记下"这条已入库"（`capture` 是条目的稳定标识）在同一个事务里，同一条再来返回 nil、不重复建。
+  /// 项目失效策略同普通建卡；已入库条目先去重，不重新选择项目。
   /// 条目删掉后调 `finishCapture` 忘掉标记；删失败重试时标记还在，只重试删除。
-  public func createCard(in project: UUID = Project.defaultID, body: String, capture: String) throws -> Card? {
+  public func createCard(in project: UUID = Project.defaultID, body: String, capture: String, ifProjectMissing: MissingProject = .reject) throws -> Card? {
     try write {
       let key = Self.captureKey(capture)
       guard try syncState(key) == nil else { return nil }
-      try requireLiveProject(project)
+      let project = try requireLiveProject(project, ifMissing: ifProjectMissing)
       let card = try insertCard(body, project: project, parent: nil, todo: false, sortKey: SortKey.before(firstTopKey(in: project)))
       try db.run("INSERT INTO syncState (key, value) VALUES (?, ?)", [key, Data()])
       return card
@@ -27,11 +28,11 @@ extension CueStore {
 
   private static func captureKey(_ capture: String) -> String { "capture:\(capture)" }
 
-  /// 新任务（要做的卡片）放在所在项目顶层的最前。正文不能为空，否则抛 `blankTaskContent`；第一行是标题，其余是它的正文（`CueLines.split`）。
-  public func createTask(_ body: String, in project: UUID = Project.defaultID) throws -> Card {
+  /// 新任务（要做的卡片）放在所在项目顶层的最前，项目失效策略同普通建卡。正文不能为空，否则抛 `blankTaskContent`；第一行是标题，其余是它的正文（`CueLines.split`）。
+  public func createTask(_ body: String, in project: UUID = Project.defaultID, ifProjectMissing: MissingProject = .reject) throws -> Card {
     try requireContent(body)
     return try write {
-      try requireLiveProject(project)
+      let project = try requireLiveProject(project, ifMissing: ifProjectMissing)
       return try insertCard(body, project: project, parent: nil, todo: true, sortKey: SortKey.before(firstTopKey(in: project)))
     }
   }

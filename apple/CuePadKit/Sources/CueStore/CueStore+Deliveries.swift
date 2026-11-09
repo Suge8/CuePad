@@ -292,7 +292,7 @@ extension CueStore {
   func removeUnstartedDelivery(_ id: UUID, locallyOn host: String?) throws -> Bool {
     try db.run(
       """
-      DELETE FROM deliveryRequests WHERE id = ?1 AND status IN ('pending', 'preparing') AND handledBy IS NULL
+      DELETE FROM deliveryRequests WHERE id = ?1 AND status IN (\(DeliveryStatus.waitingSQL)) AND handledBy IS NULL
         AND (hostID = ?2 OR NOT EXISTS (
           SELECT 1 FROM syncRecords WHERE recordName = ?1 AND (sentModifiedAt IS NOT NULL OR pushedModifiedAt IS NOT NULL)))
       """, [id, host])

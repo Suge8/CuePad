@@ -146,19 +146,6 @@ extension CueStore {
     try confirmDeliveries(among: ids, session: session)
   }
 
-  /// 本机读历史或同步读到真实消息后，投送只向已送达收敛。先落消息，再在同一事务认账，不受请求／消息到达顺序影响。
-  func confirmDeliveries(among ids: Set<UUID>, session: String) throws {
-    guard !ids.isEmpty else { return }
-    // 消息上服务器之后才收走请求（markPushed）；这之前原气泡由该消息接替。
-    try db.run("""
-      UPDATE deliveryRequests SET status = 'succeeded', failure = NULL,
-        completedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1)
-      WHERE status != 'succeeded' AND mode IN ('send', 'start') AND id IN (SELECT value FROM json_each(?2))
-        AND (targetRef = ?3 OR mode = 'start')
-      """, [Date.stamp, Self.idList(ids), session])
-    try reconcileDeliveredCards(deliveries: ids)
-  }
-
   /// 删掉不再需要同步的对话：会话 `window` 内没有活动（按本机会话索引里会话文件的最后活动；索引里没有的按最后一条消息）、
   /// 对话也是 `window` 之前写出的（按需补写的留够 `window`）。在写对话的那台 Mac 上调用。
   /// 对话没了的会话的预览（`window` 之前发的）一起删，文件没有别的预览或图片用着时随之删掉；对话里的图片（你的话里的、工具结果里的）同样，

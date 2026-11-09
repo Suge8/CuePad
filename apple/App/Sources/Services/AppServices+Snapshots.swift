@@ -41,14 +41,14 @@ extension AppServices {
         return DebugHooks.preset.cueNow ?? CueNow(digest, at: moment, local: local)
     }
 
-    /// Cue 此刻要的本机事实：还没和 iCloud 对过时为什么等（与启用入口同一处判断 `CueGate`），这台 Mac 是哪台。
+    /// Cue 此刻要的本机事实：还没和 iCloud 对过时为什么等（与启用入口同一处判断 `AppServices.cueReadiness`），这台 Mac 是哪台。
     var cueLocal: CueNow.Local {
         #if os(macOS)
         let here: String? = hostID
         #else
         let here: String? = nil
         #endif
-        return CueNow.Local(waiting: CueGate.of(self, running: nil, name: nil).waitingReason, here: here)
+        return CueNow.Local(waiting: cueReadiness.waitingReason, here: here)
     }
 
     /// 按当前库内容更新快照，也是观察的落点：进入后台前（`resend`：岛按此刻重发一次，过时时刻从这时算）、

@@ -23,7 +23,6 @@ public protocol SessionLink: AnyObject {
     func retry(_ id: PiSession.ID) async throws
     func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws
     /// 至少给一项；会话名已去掉首尾空白、不是空的（桥先检查过）。
-    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws
     func configure(_ config: PiConfig, in id: PiSession.ID) async throws
     /// 这个会话能不能按第一句话给自己起名（`SessionNameSuggestion`）：Pi（桥扩展认 `title` 的）与 Codex 托管会话能；
     /// 自带会话名的几家（Claude Code、OpenCode、Grok、dsh）与终端里的 Codex 不起。
@@ -42,11 +41,10 @@ extension SessionLink {
     public func retry(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
     public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
-        guard config.fast == nil else { throw PiBridgeError.unsupported }
-        try await configure(model: config.model, thinking: config.thinking, name: config.name, in: id)
+        throw PiBridgeError.unsupported
     }
     public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
-        throw PiBridgeError.unsupported
+        try await configure(PiConfig(model: model, thinking: thinking, name: name), in: id)
     }
     public func canNameItself(_ id: PiSession.ID) -> Bool { false }
     public func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String { throw PiBridgeError.unsupported }

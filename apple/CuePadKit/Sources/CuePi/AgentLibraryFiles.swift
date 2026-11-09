@@ -5,14 +5,14 @@ import Synchronization
 
 /// 技能与规则的文件（事实源）：读成快照（`AgentLibrary`，判定规则在 `LibrarySkillScan`、`LibraryInstructionScan`）与各份文件的正文、
 /// 跟着文件变化重读（`keep`）、整理与撤销、改一份文件。写入只在用户动作时（整理、文件页），后台只读。
-/// 碰得了哪些目录同接入（`AgentIntegration.touches`）：隔离运行而几家共读的 `~/.agents` 是真实位置时什么都不读（`isAvailable`）。
+/// 碰得了哪些目录同接入（`AgentFileAccess.touches`）：隔离运行而几家共读的 `~/.agents` 是真实位置时什么都不读（`isAvailable`）。
 public struct AgentLibraryFiles: Sendable {
-    private let integration: AgentIntegration
+    private let access: AgentFileAccess
     /// 移走的放到哪、返回放下的位置：缺省是系统废纸篓，隔离运行与测试给库里的一个目录
     private let trash: @Sendable (URL) throws -> URL
 
-    public init(integration: AgentIntegration, trash: (@Sendable (URL) throws -> URL)? = nil) {
-        self.integration = integration
+    public init(access: AgentFileAccess, trash: (@Sendable (URL) throws -> URL)? = nil) {
+        self.access = access
         self.trash = trash ?? { item in
             var placed: NSURL?
             try FileManager.default.trashItem(at: item, resultingItemURL: &placed)
@@ -35,10 +35,10 @@ public struct AgentLibraryFiles: Sendable {
         }
     }
 
-    public var isAvailable: Bool { integration.touchesShared }
+    public var isAvailable: Bool { access.touchesShared }
 
     private func places(_ projects: [UUID: String]) -> AgentLibraryPlaces {
-        AgentLibraryPlaces(paths: integration.paths, touches: integration.touches, projects: projects)
+        AgentLibraryPlaces(paths: access.paths, touches: access.touches, projects: projects)
     }
 
     /// 读一次：快照与它列出的各份文件的正文（路径 → 正文，`LibraryFileText`）。
@@ -52,13 +52,13 @@ public struct AgentLibraryFiles: Sendable {
         let places = places(projects)
         let skills = LibrarySkillScan(places), instructions = LibraryInstructionScan(places)
         let library = AgentLibrary(
-            hostID: host, home: integration.paths.userHome.path, skills: skills.skills, instructions: instructions.instructions,
+            hostID: host, home: access.paths.userHome.path, skills: skills.skills, instructions: instructions.instructions,
             tidies: Self.ordered(skills.tidies + instructions.tidies), selfManaged: skills.selfManaged, agents: places.installed,
             modifiedAt: Date())
         // 各家的目录也盯着：装上一家（建出它的目录）就多一家要链接、要比的规则
-        let homes = AgentKind.allCases.filter(integration.touches).map { integration.paths.home(of: $0).path }
+        let homes = AgentKind.allCases.filter(access.touches).map { access.paths.home(of: $0).path }
         let texts = skills.texts.merging(instructions.texts) { a, _ in a }
-        return (Scan(library: library, texts: texts), skills.watched.union(instructions.watched).union(homes + [integration.paths.agentsDirectory.path]))
+        return (Scan(library: library, texts: texts), skills.watched.union(instructions.watched).union(homes + [access.paths.agentsDirectory.path]))
     }
 
     /// 该整理的按 `LibraryTidy.Kind` 的先后。
@@ -106,11 +106,11 @@ public struct AgentLibraryFiles: Sendable {
         switch edit.file {
         case .instruction(let kind):
             file = try places(projects).file(kind).realPath
-            current = LibraryInstructionScan.content(file)
+            current = LibraryFileReading.content(file)
         case .skill(let path):
             file = URL(filePath: path, directoryHint: .isDirectory).appending(path: AgentSkill.fileName).realPath
             guard FileManager.default.fileExists(atPath: file.path) else { throw AgentLibraryError.gone }
-            current = LibraryInstructionScan.read(file) ?? ""
+            current = LibraryFileReading.read(file) ?? ""
         }
         guard LibraryEdit.base(of: current) == edit.base else { throw AgentLibraryError.changedOnMac }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)

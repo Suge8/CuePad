@@ -37,6 +37,13 @@
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [ "${1:-}" = release ]; then
+  case "${2:-}" in
+    mac) exec python3 "$APPLE_DIR/scripts/release-context.py" run "$APPLE_DIR/.." mac "$APPLE_DIR/scripts/release-mac.sh" "${@:3}" ;;
+    ios) exec python3 "$APPLE_DIR/scripts/release-context.py" run "$APPLE_DIR/.." ios "$APPLE_DIR/scripts/release-ios.sh" testflight ;;
+    *) echo "用法：$0 release <mac|ios>" >&2; exit 2 ;;
+  esac
+fi
 # shellcheck source=_signing.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_signing.sh"
 # shellcheck source=_sim.sh source-path=SCRIPTDIR
@@ -53,16 +60,6 @@ USAGE="用法：$0 <check|build|strings|test|shot|rec|run|stop|explore|perf|rele
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
-  release)
-    # 发布的产物必须对应一个提交：工作区里别人或自己没提交的改动会被一起打进包
-    if [ -n "$(git -C "$APPLE_DIR" status --porcelain --untracked-files=no)" ]; then
-      echo "工作区有没提交的改动，不发布；在干净的检出里发" >&2; exit 1
-    fi
-    case "$platform" in
-      mac) exec "$APPLE_DIR/scripts/release-mac.sh" "${@:3}" ;;
-      ios) exec "$APPLE_DIR/scripts/release-ios.sh" testflight ;;
-      *) echo "用法：$0 release <mac|ios>" >&2; exit 2 ;;
-    esac ;;
   device) exec "$APPLE_DIR/scripts/release-ios.sh" device ;;
   strings) "$0" build mac; "$0" build ios; exec python3 "$APPLE_DIR/scripts/strings.py" sync ;;
   provision) signing_begin; exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;  # 签名锁见 _lock.sh 规则 3

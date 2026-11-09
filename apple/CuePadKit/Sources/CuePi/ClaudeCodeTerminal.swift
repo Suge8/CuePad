@@ -237,7 +237,9 @@ final class ClaudeTerminalSession: SessionLink {
         try await post(.object(line))
     }
 
-    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in _: PiSession.ID) async throws {
+    func configure(_ config: PiConfig, in _: PiSession.ID) async throws {
+        guard config.fast == nil else { throw PiBridgeError.unsupported }
+        let name = config.name
         guard let name else { throw PiBridgeError.unsupported }
         try await post(["type": "control", "action": "rename", "name": .string(name)])
         bridge?.update(id) { $0.name = name }

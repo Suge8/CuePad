@@ -216,6 +216,11 @@ struct TaskFlowTests {
         workspace.convertToTasks("- 写发布说明\n\n- 更新截图", in: project.id)
         try await eventually("转好任务") { workspace.notice?.text.visible == "已转为 2 个任务" }
         #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.map(\.body) == ["写发布说明", "更新截图"])
+        try await store.trashProject(project.id)
+        workspace.notice = nil
+        workspace.convertToTasks("不能落到默认项目", in: project.id)
+        try await eventually("选区目标已删除时显示错误") { workspace.notice?.isError == true }
+        #expect(try await store.tasks(.todo).flatMap(\.tasks).allSatisfy { $0.body != "不能落到默认项目" })
     }
 
     // MARK: 共用的小件

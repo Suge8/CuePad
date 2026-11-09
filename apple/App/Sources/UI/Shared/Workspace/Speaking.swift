@@ -44,6 +44,13 @@ extension Workspace {
         }
     }
 
+    @discardableResult
+    func answer(_ session: PiSessionState, from box: Binding<ComposerDraft>) -> Task<Void, Never> {
+        speak(to: .session(session, mode: .send), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) {
+            $0.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
     /// 回复某份预览（缩略图长按、右键或全屏页的"回复"）：会话的回复框带上它的引用并聚焦，话就在回复框里写，随下一句发出（`ReplyNote`）。
     func quote(_ preview: PiPreview, in entry: UUID, of session: PiSessionState) {
         services.settings.quote(preview, in: entry, for: session.id)
@@ -55,13 +62,6 @@ extension Workspace {
     func speak(_ stored: String, to listener: Listener, saying: Dotted? = nil) -> Task<Void, Never> {
         if let saying { say(saying) }
         return write(stored, to: listener) {}
-    }
-
-    /// 语音等调用者取得同一个发送入口已落库的消息 ID；上传照常继续，失败原样交回调用者。
-    func recordSpeech(_ stored: String, to listener: Listener) async throws -> UUID {
-        try await withCheckedThrowingContinuation { continuation in
-            _ = write(to: listener, taking: { (ComposerDraft(), stored) }, restore: { _ in }, recorded: { continuation.resume(with: $0) })
-        }
     }
 
     /// 重发一句没能送达的话：先撤回它（撤不回——Mac 已领取、Cue 已收到——就不重发，免得说两遍），再用同样的内容写一条新的。
@@ -97,8 +97,7 @@ extension Workspace {
 
     /// `taking` 给出要写的正文和取走的那份草稿（等在存的附件存好之后）；写库失败时 `restore` 拿到那份草稿放回输入框。
     private func write(
-        to listener: Listener, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void,
-        recorded: ((Result<UUID, Error>) -> Void)? = nil
+        to listener: Listener, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void
     ) -> Task<Void, Never> {
         let services = services
         // 同一个去处的话按按下的先后落库：前一句在等附件存好时，后一句也等它（只等落库，不等上传）
@@ -108,7 +107,6 @@ extension Workspace {
             do {
                 id = try await services.recordSpeech(body, to: listener)
             } catch {
-                recorded?(.failure(error))
                 restore(sent)
                 switch listener {
                 case .cue: cue.launchFailed()
@@ -117,7 +115,6 @@ extension Workspace {
                 fail(error)
                 throw error
             }
-            recorded?(.success(id))
             return id
         }
         return Task {
@@ -129,10 +126,10 @@ extension Workspace {
 
 extension Listener {
     /// 同一个回复框（同一个对话）、Cue 各一条队。
-    var orderKey: String {
+    var orderKey: SendingTarget {
         switch self {
-        case .cue: "cue"
-        case .session(let target, let host, _, _): "\(host)\n\(target.name)"
+        case .cue: .cue
+        case .session(let target, let host, _, _): SendingTarget(host: host, target: target)
         }
     }
 }

@@ -1,6 +1,20 @@
 import CueStore
 import Foundation
 
+private struct PreviewOutput {
+  let id: String
+  let session: String
+  let title: String
+  let name: String
+  let kind: String
+  let bytes: Int
+  let outsideReferences: [String]
+  static let fields = OutputFields<PreviewOutput>(fields: [
+    ("id", { $0.id }), ("session", { $0.session }), ("title", { $0.title }), ("name", { $0.name }),
+    ("kind", { $0.kind }), ("bytes", { $0.bytes }), ("outsideReferences", { $0.outsideReferences }),
+  ])
+}
+
 extension Command {
   private static let sessionVariables = [AgentKind.watchedSessionVariable] + AgentKind.allCases.map(\.sessionVariable)
 
@@ -12,7 +26,7 @@ extension Command {
       一次给几个文件是同一张卡，点开后左右切换；用户看到的是标题，不是文件名。
       可发：\(PiPreviewKind.supportedList)；单个不超过 \(PiPreview.maxBytes / 1_000_000) MB。Markdown 排成文稿，diff、patch 是增删对照。
       网页只读、不联网、读不到别的文件；outsideReferences 是页面引用了、手机上因此缺失的地址。经 iCloud 同步，CuePad.app 需要在运行。
-      \(Schema.output("[Preview {id, session, title, name, kind, bytes, outsideReferences}]", "kind：\(PiPreviewKind.allCases.map(\.rawValue).joined(separator: "、"))"))
+      \(Schema.output("[\(PreviewOutput.fields.description("Preview"))]", "kind：\(PiPreviewKind.allCases.map(\.rawValue).joined(separator: "、"))"))
       """
   ) { call in
     let paths = call.args.positionals
@@ -33,10 +47,9 @@ extension Command {
     }
     let json: [JSONObject] = added.map { item in
       let preview = item.preview
-      return [
-        "id": preview.id.uuidString.lowercased(), "session": session, "title": preview.title, "name": preview.name,
-        "kind": preview.kind?.rawValue ?? "", "bytes": preview.byteCount, "outsideReferences": item.outsideReferences,
-      ]
+      return PreviewOutput.fields.json(PreviewOutput(
+        id: preview.id.uuidString.lowercased(), session: session, title: preview.title, name: preview.name,
+        kind: preview.kind?.rawValue ?? "", bytes: preview.byteCount, outsideReferences: item.outsideReferences))
     }
     return Reply(text: text, json: json)
   }

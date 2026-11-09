@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import CueText
 import UIKit
 import UniformTypeIdentifiers
 
@@ -36,9 +37,8 @@ public struct PastedItem: @unchecked Sendable {
             let item = self, suggested = provider.suggestedName
             _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, fileError in
                 if let url {
-                    let ext = url.pathExtension
-                    let name = suggested.map { ext.isEmpty || $0.lowercased().hasSuffix("." + ext.lowercased()) ? $0 : $0 + "." + ext }
-                    continuation.resume(with: Result { (try files.store(fileAt: url), name ?? url.lastPathComponent) })
+                    let name = AttachmentName.suggested(suggested, for: url)
+                    continuation.resume(with: Result { (try files.store(fileAt: url), name) })
                 } else if item.provider.canLoadObject(ofClass: UIImage.self) {
                     _ = item.provider.loadObject(ofClass: UIImage.self) { object, objectError in
                         guard let png = (object as? UIImage)?.pngData() else {

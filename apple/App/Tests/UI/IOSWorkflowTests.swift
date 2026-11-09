@@ -16,13 +16,19 @@ struct IOSWorkflowTests {
         let plan = try await store.handOffPlan(task.id, host: nil)
         let workspace = Workspace(services: app.services)
 
-        HandOffInput.startDefault(draft, card: task.id, plan: plan, opening: try await store.opening(of: task.id, true), workspace: workspace)
+        workspace.prepareNewSession(draft, card: task.id, opening: try await store.opening(of: task.id, true), plan: plan)
 
         let start = try #require(workspace.newSession)
         let places = ProjectFolders.launchPlaces(
             projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil, workMac: try await store.workMac())
-        let place = try #require(start.place(among: places)), host = try #require(place.host)
-        _ = try await start.launch(in: place.project, on: host, draft: try #require(start.draft), agent: .pi, model: nil, thinking: nil, intent: .new, workspace: Workspace(services: app.services))
+        let place = try #require(start.place(among: places))
+        let submission = SessionSubmission()
+        let preparedDraft = try #require(start.draft)
+        let sending = try #require(workspace.submitSession(
+            submission, start: start, in: place, draft: preparedDraft,
+            choice: AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)))
+        await sending.value
+        #expect(submission.launched != nil)
         return (task, try #require(try await store.deliveryRequests().first))
     }
 

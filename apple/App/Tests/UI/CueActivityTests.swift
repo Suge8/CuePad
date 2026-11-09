@@ -20,9 +20,9 @@ struct CueActivityTests {
         try await workspace.complete(readme.id)
         let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4 到 TestFlight"), task: step.id)
         let recorder = try await rig.runtimeRecorder(on: "mac-a")
-        try await recorder.update(sessionID: "testflight", state: .thinking, title: "testflight")
+        try await recorder.update(sessionID: "testflight", state: .thinking, title: "testflight", projectID: project.id)
         try await store.bindSession("testflight", to: step.id)
-        try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom")
+        try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom", projectID: project.id)
         try await store.bindSession("zoom", to: canvas.id)
         try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "改锚点？\n会动到缩放"))
 
@@ -78,7 +78,7 @@ struct CueActivityTests {
 
         // 刚做完一件又派出一件在跑，Cue 歇下：数字账写推进中那件，不停在"做完"
         let ship = try await store.createTask("推送并发新版", in: project.id)
-        try await recorder.update(sessionID: "ship", state: .thinking, title: "ship")
+        try await recorder.update(sessionID: "ship", state: .thinking, title: "ship", projectID: project.id)
         try await store.bindSession("ship", to: ship.id)
         try await cueRecorder.updateCue(.settled)
         cue = try await now()

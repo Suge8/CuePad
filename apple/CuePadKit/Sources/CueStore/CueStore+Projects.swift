@@ -137,9 +137,14 @@ extension CueStore {
   }
 
   /// 卡片只能归属存在且未在回收站的项目。必须在写事务内调用，
-  /// 与随后的写入之间没有别的写入可以插进来。失效时报错，不静默改去别处。
-  func requireLiveProject(_ project: UUID) throws {
+  /// 与随后的写入之间没有别的写入可以插进来。仅显式允许时回落，返回实际归属。
+  @discardableResult
+  func requireLiveProject(_ project: UUID, ifMissing: MissingProject = .reject) throws -> UUID {
     let live = try db.first("SELECT 1 FROM projects WHERE id = ? AND deletedAt IS NULL", [project]) { _ in true }
-    guard live != nil else { throw CueStoreError.invalidProject }
+    if live != nil { return project }
+    switch ifMissing {
+    case .reject: throw CueStoreError.invalidProject
+    case .useDefault: return Project.defaultID
+    }
   }
 }

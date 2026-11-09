@@ -31,7 +31,6 @@ struct LibraryTidying {
         self.trash = trash
     }
 
-    /// 做一件。
     mutating func run(_ tidy: LibraryTidy, _ order: TidyOrder) throws {
         switch tidy.kind {
         case .stray(let moves):
@@ -95,7 +94,7 @@ struct LibraryTidying {
     /// 合进项目的 AGENTS.md，Claude Code 读的两份移走、`CLAUDE.md` 换成链到 AGENTS.md 的链接（同全局）；个人的 `CLAUDE.local.md` 不碰。
     private mutating func mergeProject(_ tidy: LibraryTidy, into file: URL, claude: (main: URL, nested: URL, local: URL)) throws {
         try write(tidy.merged(texts: texts) ?? "", to: file)
-        for other in [claude.main, claude.nested] where LibraryInstructionScan.exists(other) && !RelativeLink.points(other, to: file) { try moveToTrash(other) }
+        for other in [claude.main, claude.nested] where LibraryFileReading.exists(other) && !RelativeLink.points(other, to: file) { try moveToTrash(other) }
         guard !RelativeLink.points(claude.main, to: file) else { return }
         try RelativeLink.make(at: claude.main, to: file)
         undo.steps.append(.linked(claude.main, to: file))

@@ -37,15 +37,7 @@ struct NewSessionForm: View {
     @State private var thinking: PiThinkingLevel?
     @State private var fast = false
     @State private var prompt = ""
-    @State private var stage = Stage.idle
-
-    private enum Stage: Equatable {
-        case idle
-        case launching(LaunchProgress?)
-        case failed(String)
-    }
-
-    private var launching: Bool { if case .launching = stage { true } else { false } }
+    @State private var opening = SessionOpening()
 
     private static let width: CGFloat = 340
     private static let listHeight: CGFloat = 240
@@ -64,7 +56,7 @@ struct NewSessionForm: View {
             .frame(maxHeight: Self.listHeight).fixedSize(horizontal: false, vertical: true)
             TextField(String(localized: "开场的话（可不填）"), text: $prompt, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain).lineLimit(2...5)
-                .onSubmit { if let place, let agents, let agent, !launching { start(place, choice(agents, agent)) } }
+                .onSubmit { if let place, let agents, let agent, !opening.launching { start(place, choice(agents, agent)) } }
                 .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.item)
                 .paper(cornerRadius: Radius.block)
                 .accessibilityLabel("开场的话")
@@ -73,10 +65,10 @@ struct NewSessionForm: View {
                     services.settings.lastAgent = $0
                     model = nil
                 } chooseModel: { model = $0 } chooseThinking: { thinking = $0 } chooseFast: { fast = $0 }
-                .disabled(launching)
+                .disabled(opening.launching)
             }
             HStack(spacing: Spacing.item) {
-                switch stage {
+                switch opening.stage {
                 case .idle:
                     if let agents, agents.agents.isEmpty {
                         Text(agents.whyNone).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
@@ -92,7 +84,7 @@ struct NewSessionForm: View {
                 Button("开始") { if let place, let agents, let agent { start(place, choice(agents, agent)) } }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(place == nil || agent == nil || launching)
+                    .disabled(place == nil || agent == nil || opening.launching)
             }
             .controlSize(.small)
         }
@@ -132,22 +124,7 @@ struct NewSessionForm: View {
     }
 
     private func start(_ place: ProjectFolders.LaunchPlace, _ choice: AgentModelChoice) {
-        guard let agent = choice.agent else { return }
-        guard !launching else { return }
-        stage = .launching(nil)
-        let words = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        Task {
-            do {
-                let id = try await workspace.startSession(
-                    in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.shownName, agent: agent,
-                    model: choice.model, thinking: choice.shownThinking, fast: choice.launchFast
-                ) { stage = .launching($0) }
-                stage = .idle
-                opened(id)
-            } catch {
-                stage = .failed(error.localizedDescription)
-            }
-        }
+        workspace.submitSession(in: place, prompt: prompt, choice: choice, opening: opening, opened: opened)
     }
 }
 #endif

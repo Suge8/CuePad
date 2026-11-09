@@ -70,7 +70,7 @@ struct ProjectsTests {
         let live = try await store.createProject(name: "B", color: "#000000")
         #expect(try await workspace.createCard(body: "想法", in: live.id).projectID == live.id)
 
-        // 竞态：选中项目之后、写入之前项目被删——Store 在写事务里拒绝，入口回落并提示
+        // 竞态：选中项目之后、写入之前项目被删——Store 在写事务里回落，入口按实际落点提示
         workspace.show(.project(live.id))
         let target = workspace.currentProject
         try await store.trashProject(live.id)

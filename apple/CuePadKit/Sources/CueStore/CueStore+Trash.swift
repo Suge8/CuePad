@@ -166,18 +166,12 @@ extension CueStore {
     return try db.query("SELECT name FROM previews WHERE hash = ?", [hash]) { $0.text(0) }.contains { AttachmentKey.make(hash: hash, name: $0) == key }
   }
 
-  /// `body`（含它的写事务）提交后，删它返回的键的文件；删不掉的键作为错误报告（永久删除本身已生效）。
-  /// 提交到删文件之间别的进程可能又引用了同一个键（写入引用并登记记录），所以另开一个写事务，持着写锁重新核对
-  /// 没有记录也没有引用再删（同 `removeStrayFiles`：事务里只读，删文件没有回滚不了的半截状态）。
+  /// 先提交记录删除，再在统一回收边界复核；回滚时不碰文件。
   func removingFiles(_ body: () throws -> [String]) throws {
     let keys = try body()
     guard !keys.isEmpty else { return }
-    let failed = try write {
-      try keys.filter { key in
-        guard try !hasAttachment(key), try !isAttachmentReferenced(key) else { return false }
-        do { try files.remove(key); return false } catch { return true }
-      }
-    }
+    var failed: [String] = []
+    _ = try reclaimFiles(candidates: { Set(keys) }) { key, _ in failed.append(key) }
     if !failed.isEmpty { throw CueStoreError.attachmentFilesNotRemoved(failed) }
   }
 }
