@@ -9,15 +9,15 @@ import Testing
 /// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；Pi、OpenCode、dsh 没有录像带，总连钉住的真 Agent 与本用例的假模型。
 private let environment = ProcessInfo.processInfo.environment
 private let runtimes = AgentKind.allCases.filter(RealAgents.runs)
-/// Pi、OpenCode、dsh、Claude Code 连本用例的假模型（`FakeModel`，剧本 `playBrain`），Grok 同（`playGrokBrain`）
+/// Pi、Codex、OpenCode、dsh、Claude Code 连本用例的假模型（`FakeModel`，剧本 `playBrain`），Grok 同（`playGrokBrain`）
 private let cheapModels: [AgentKind: String] = [
-    .pi: "fake/echo", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
+    .pi: "fake/echo", .codex: codexTestModel, .claudeCode: "haiku", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
     .grok: "grok-4.6", .dsh: "deepseek-official/deepseek-flash",
 ]
 /// 就地换到的模型：Pi 的上下文窗口与上面的不同，换没换看得出来（Codex 里两个窗口一样，Claude Code 报的是用过的模型里最大的窗口）。
 /// 用 `CUEPAD_BRAIN_OTHER_MODEL_<家>` 换
 private let otherModels: [AgentKind: String] = [
-    .pi: "fake/echo-think", .codex: "gpt-6-luna", .claudeCode: "sonnet", .opencode: AgentKind.opencode.modelRef(openCodeOtherModel),
+    .pi: "fake/echo-think", .codex: "gpt-5.6-luna", .claudeCode: "sonnet", .opencode: AgentKind.opencode.modelRef(openCodeOtherModel),
     .grok: "grok-4.5", .dsh: "deepseek-official/deepseek-v4-pro",
 ]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
@@ -44,7 +44,7 @@ struct RealBrainTests {
         let codename = "ZEBRA-4821"
         /// OpenCode 的隔离家目录与库：每个大脑一台（并行的几台 OpenCode 头一次同起一个库会撞上建表）
         let sandbox: OpenCodeSandbox?
-        /// 连本进程假模型的家（`playBrain`）；一串 echo 调用的第二次请求停在 `chain` 上
+        /// 连本进程假模型的家（Pi、Codex，`playBrain`）；一串 echo 调用的第二次请求停在 `chain` 上
         let model: FakeModel?
         let chain = FakeGate()
         let brain: any HostedSession
@@ -57,12 +57,13 @@ struct RealBrainTests {
             sessions = root.appending(path: "pi-sessions")
             echoLog = root.appending(path: "echo.log")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            model = [.pi, .opencode, .dsh, .grok, .claudeCode].contains(runtime) ? try await FakeModel() : nil
+            model = [.pi, .codex, .opencode, .dsh, .grok, .claudeCode].contains(runtime) ? try await FakeModel() : nil
             if runtime == .grok { model?.playGrokBrain(chain: chain) } else { model?.playBrain(chain: chain) }
             // Claude Code 换模型前问一次服务端：没有这个模型的答 404
             if runtime == .claudeCode { model?.on({ $0.model == "no-such-model" }) { _ in .fail("model: no-such-model", status: 404) } }
             sandbox = runtime == .opencode ? try await OpenCodeSandbox(model: model) : nil
             if runtime == .pi, let model { try PiProcess.writeModels(model, into: root.appending(path: "pi-agent")) }
+            if runtime == .codex, let model { try CodexHome.write(provider: model, into: root.appending(path: "codex")) }
             // Grok 的家目录与配置目录在这里，不碰真实的 ~/.grok，模型指到假模型；dsh 的家目录也在这里（模型地址与假 key 见 `DshRig.environment`）；
             // Pi 的 agent 目录也在这里，不读用户的 ~/.pi（设置、提供方各人不同）
             let agentHome = switch runtime {
@@ -70,6 +71,7 @@ struct RealBrainTests {
             case .claudeCode: try ClaudeTestbed.isolatedEnvironment(model: #require(model), root: root)
             case .grok: grokEnvironment(model: try #require(model), home: root.appending(path: "grok-home"), grokHome: root.appending(path: "grok-user"))
             case .dsh: try DshRig.environment(try #require(model), in: root)
+            case .codex: ["HOME": root.appending(path: "user").path, "CODEX_HOME": root.appending(path: "codex").path, CodexHome.keyVariable: "fake"]
             default: [String: String]()
             }
             let config = CueBrainConfig(

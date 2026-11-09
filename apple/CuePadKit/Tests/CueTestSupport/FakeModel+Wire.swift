@@ -113,7 +113,7 @@ struct Encoder {
       await wire.json(status: status, jsonText(error))
     case .held(_, let next):
       await send(next)
-    case .say, .call, .stream:
+    case .say, .call, .stream, .search, .custom:
       guard streaming else {
         if case .stream(_, let gate?) = reply { guard await gate.pass(unless: wire.disconnected) else { return } }
         return await wire.json(status: 200, jsonText(whole(reply)))
@@ -176,7 +176,9 @@ struct Encoder {
     switch reply {
     case .call(let name, let input):
       let json = arguments(input)
-      item = ["type": "function_call", "id": "fc_\(id)", "call_id": "call_\(id)", "name": request.tool(name), "arguments": json, "status": "completed"]
+      let resolved = request.tool(name)
+      item = ["type": "function_call", "id": "fc_\(id)", "call_id": "call_\(id)", "name": resolved, "arguments": json, "status": "completed"]
+        .merging(request.found[resolved].map { ["namespace": $0] } ?? [:]) { $1 }
       guard await event("response.output_item.added", ["output_index": 0, "item": item.merging(["arguments": "", "status": "in_progress"]) { $1 }]),
             await event("response.function_call_arguments.delta", ["output_index": 0, "item_id": "fc_\(id)", "delta": json]),
             await event("response.function_call_arguments.done", ["output_index": 0, "item_id": "fc_\(id)", "arguments": json])
@@ -190,6 +192,17 @@ struct Encoder {
             await event("response.output_text.done", ["output_index": 0, "item_id": message, "content_index": 0, "text": text, "logprobs": []]),
             await event("response.content_part.done", ["output_index": 0, "item_id": message, "content_index": 0, "part": ["type": "output_text", "text": text, "annotations": []]])
       else { return }
+    case .custom(let name, let input):
+      let resolved = request.tool(name)
+      item = ["type": "custom_tool_call", "id": "ctc_\(id)", "call_id": "call_\(id)", "name": resolved, "input": input, "status": "completed"]
+        .merging(request.found[resolved].map { ["namespace": $0] } ?? [:]) { $1 }
+      guard await event("response.output_item.added", ["output_index": 0, "item": item.merging(["input": "", "status": "in_progress"]) { $1 }]),
+            await event("response.custom_tool_call_input.delta", ["output_index": 0, "item_id": "ctc_\(id)", "delta": input]),
+            await event("response.custom_tool_call_input.done", ["output_index": 0, "item_id": "ctc_\(id)", "input": input])
+      else { return }
+    case .search(let query):
+      item = ["type": "tool_search_call", "id": "ts_\(id)", "call_id": "call_\(id)", "execution": "client", "arguments": ["query": query], "status": "completed"]
+      guard await event("response.output_item.added", ["output_index": 0, "item": item.merging(["status": "in_progress"]) { $1 }]) else { return }
     case .stream(let parts, let gate):
       let message = "msg_\(id)", text = parts.joined()
       guard await event("response.output_item.added", ["output_index": 0, "item": ["type": "message", "id": message, "role": "assistant", "status": "in_progress", "content": []]]),
