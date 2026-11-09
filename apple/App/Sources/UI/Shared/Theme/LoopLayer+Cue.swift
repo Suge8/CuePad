@@ -1,16 +1,13 @@
 import QuartzCore
 import SwiftUI
 
-/// 头像的帧序列（`LoopLayer.Kind.sprite`）与等子代理交回的两颗点（`relay`）：都交给渲染服务，App 进程只在换拍子时建一次。
 /// 宿主层的坐标两端都是 y 朝下（Mac 的宿主翻过来，`LoopLayer.Host.isFlipped`），这里不分平台。
 extension LoopLayer {
-    /// 头像的帧序列：颜色对它没有意义；`intro` 见 `LoopLayer.intro`。
     init(sprite: CueSprite, sheet: CueAtlas.Sheet, intro: Bool) { self.init(kind: .sprite(sprite, sheet), color: .clear, intro: intro) }
 }
 
 extension LoopLayer.Host {
     /// 小人：一层，`contents` 是整张拼图（`CueAtlas`），帧序列只按 `contentsRect` 离散地换（`CAKeyframeAnimation`，`discrete`）：两下之间值不变，
-    /// 渲染服务与 App 都没有活；换进做完的那一下先放一遍 `intro`，在听的倾在同一层上以脚底为轴。
     static func makeSprite(_ sprite: CueSprite, on sheet: CueAtlas.Sheet, intro: Bool) -> CALayer {
         let layer = CALayer()
         layer.contentsGravity = .resizeAspect
@@ -41,7 +38,6 @@ extension LoopLayer.Host {
         return layer
     }
 
-    /// 一串帧的 `contentsRect` 离散关键帧（离散模式的时刻比值多一个：每帧从哪一刻起，最后一个是 1）；不到两帧为 nil。
     private static func flip(_ frames: [CueSprite.Frame], in sheet: CueAtlas.Sheet) -> CAKeyframeAnimation? {
         let rects = frames.compactMap { sheet.rects[$0.asset] }
         guard rects.count > 1, rects.count == frames.count else { return nil }
@@ -55,14 +51,12 @@ extension LoopLayer.Host {
         return flip
     }
 
-    /// 摆在框里、以脚底为轴（在听的倾绕脚底转）。
     static func layoutSprite(_ layer: CALayer, in bounds: CGRect) {
         layer.anchorPoint = CGPoint(x: 0.5, y: 1)
         layer.bounds = CGRect(origin: .zero, size: bounds.size)
         layer.position = CGPoint(x: bounds.midX, y: bounds.maxY)
     }
 
-    /// 等子代理交回：一颗大点（会话）在正中，一颗小点（子代理）任何时刻都在：出去、停一下、回来贴住大点，大点接住时鼓一下，再出去。
     /// 不并进去（并进去那几成时间里只剩一颗，读成待回复的墨点），也不绕着转（绕圈读成加载），不是线（线是在跑）。
     static func makeRelay() -> CALayer {
         let layer = CALayer()
@@ -106,14 +100,11 @@ extension LoopLayer.Host {
 
 /// 等子代理交回那两颗点的几何与节拍（`LoopLayer` 的 `relay`）：静止时画同比例的符号 `Icon.relay`（design/tools/cue-symbols.py 的 `relay`）。
 nonisolated enum RelayMark {
-    /// 大点、小点的直径，小点心离正中多远（横竖各一份），都是边长的比例。
     static let big: CGFloat = 0.44
     static let small: CGFloat = 0.26
     static let reach: CGFloat = 0.34
     static let period = 2.4
-    /// 小点：在外面停着 → 回来（缓入缓出）→ 贴住 → 出去，各段的起点。
     static let tripTimes: [Double] = [0, 0.4, 0.62, 0.86, 1]
-    /// 大点在小点贴上的那一下鼓到 `bulge` 倍。
     static let bulge = 1.18
     static let catchTimes: [Double] = [0, 0.6, 0.68, 0.8, 1]
 }

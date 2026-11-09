@@ -1,12 +1,10 @@
 import Foundation
 
-/// 窗口里最近按下的那一下（窗口坐标与时刻；Mac 的鼠标、手机的手指，由窗口的按下监听报来，`Workspace.pressed`）：任务气泡从这里长出来。
 nonisolated struct PressPoint {
     private var last: (point: CGPoint, at: ContinuousClock.Instant)?
 
     mutating func record(_ point: CGPoint) { last = (point, .now) }
 
-    /// 刚按下的那一下；不是刚点的（键盘、⌘K 里按 ↩、链接）没有来源，气泡在窗口上方居中。
     var source: BubbleSource {
         guard let last, Self.isFresh(last.at) else { return .unanchored }
         return .press(last.point)

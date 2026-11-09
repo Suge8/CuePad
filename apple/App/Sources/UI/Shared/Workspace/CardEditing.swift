@@ -2,17 +2,13 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 一条灵感或任务正文此刻的编辑：编辑器的操作口、打字中的正文、自动保存与保存状态。整页编辑（Mac 编辑页、手机纸页）与
-/// 任务气泡（标题是首段、同一个编辑器写，`titled`）共用这一份，各自只管怎么摆。编辑器是这段正文的唯一写者；
-/// 离开时 `leave` 写下没保存的字，什么都没写的灵感不留下（新记的一条先建一条空的再编辑）。
+/// 整页编辑与任务气泡（标题是首段、同一个编辑器写，`titled`）共用这一份，各自只管怎么摆。编辑器是这段正文的唯一写者。
 /// 手机进入后台时由壳层等它落盘（之后 App 可能被系统结束，离开页面的 onDisappear 不会再来）。
 @Observable
 final class CardEditing {
     let cardID: UUID
-    /// 打开那一刻的正文：编辑器只在创建时载入一次。
     let initialText: String
     @ObservationIgnored let handle = Handle()
-    /// 打字中的正文（底栏据此认出变量）。
     private(set) var text: String
     private(set) var saveState = SaveState.idle
     @ObservationIgnored let workspace: Workspace
@@ -27,10 +23,8 @@ final class CardEditing {
     typealias Handle = IOSEditorHandle
     #endif
 
-    /// `titled`：任务下面还没写话时多载入一个空段，提示写在那里，点那里光标落在第二行。
     init(_ card: Card, titled: Bool = false, workspace: Workspace) {
         cardID = card.id
-        // 离开时没写成的字：库里的正文之后没被别处改过就接回；改过的不盖过去，接在新正文后面（提示一句）
         let unsaved = workspace.unsavedBodies[card.id]
         var restored = unsaved?.text
         if let found = unsaved, let base = found.base, card.body != base {
@@ -72,7 +66,6 @@ final class CardEditing {
 
     func settleSaved() { if saveState == .saved { saveState = .idle } }
 
-    /// 写下没保存的字，再读库里此刻的这条（任务气泡的"开始"、编辑器里的 ⌘↩ 交给 Agent 的就是它）。
     func flushed() async throws -> Card? {
         try await autosave?.flush()
         return try await workspace.services.store.card(cardID)
@@ -87,20 +80,18 @@ final class CardEditing {
     }
 }
 
-/// 保存状态：平时不显示；保存中显示，保存完显示"已保存"一会儿，失败一直显示直到下次保存成功。
 enum SaveState: Equatable {
     case idle, saving, saved, failed
 
     private static let savedDisplay: Duration = .seconds(1.5)
 
-    /// "已保存"这类亮一会儿就收的状态：页面在 `.task(id: 状态)` 里等它，等够返回 true；等的时候状态又变了（任务取消）返回 false，这次计时作废。
+    /// 等够返回 true；等的时候状态又变了（任务取消）返回 false。
     /// `awaitsMac`：手机"发往 Mac"是等那台回话，结果晚到，多亮一倍的时间让人看见；Mac 自动存立刻有结果。
     static func linger(awaitsMac: Bool = false) async -> Bool {
         try? await Task.sleep(for: savedDisplay * (awaitsMac ? 2 : 1))
         return !Task.isCancelled
     }
 
-    /// 最长的那个（页顶按它留宽，换字时不伸缩）。
     static var longestText: String { [saving, saved, failed].compactMap(\.text).max { $0.count < $1.count } ?? "" }
 
     var text: String? {

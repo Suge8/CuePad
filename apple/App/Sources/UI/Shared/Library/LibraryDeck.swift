@@ -1,10 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 技能与规则页的两段（`Workspace.libraryPane`）：规则（`InstructionSection`）与技能（`SkillSection`），各在自己的滚动区里，一列居中（`LibraryLayout`）。
 /// 两段一开页就都挂着，换段只换哪一段看得见：不重建，各自的滚动位置留着。第一次换过去也不现建——两段加起来几十行，
 /// 开页时一起建，比按段现建（同进展页的 `mounted`）在第一次换段时卡一下、也滑不起来（还没有层可挪）划算。
-/// 换段同全 App 的切页（`paneTurn`）：进来的一段从它在分段里的那一侧滑进来、出去的滑向另一侧。
 struct LibraryDeck: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace

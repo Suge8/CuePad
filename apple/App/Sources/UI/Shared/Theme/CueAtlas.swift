@@ -12,10 +12,8 @@ import Synchronization
 
     struct Sheet: Equatable, @unchecked Sendable {
         let image: CGImage
-        /// 每张图在横条里的单位矩形（`contentsRect`）。
         let rects: [String: CGRect]
 
-        /// 一个进程只拼一张：同一张图就是同一份。
         static func == (lhs: Sheet, rhs: Sheet) -> Bool { lhs.image === rhs.image }
     }
 
@@ -102,7 +100,6 @@ import Synchronization
         #endif
     }
 
-    /// 日志里的空间名：显示器的 ICC 配置没有名字，写成"无名 ICC（字节数）"，不回落到源图的名字。
     nonisolated private static func describe(_ space: CGColorSpace?) -> String {
         guard let space else { return "无" }
         if let name = space.name { return name as String }

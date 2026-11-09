@@ -1,15 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 两端设置里 Cue 那一组的第一行（`CueSettingsSection`）：头像、名字（就地改，`CueNameField`）、开关（`CueSwitch`）。组名不另写，这一行就是它。
-/// 头像跟着开关醒着或睡着（`CueBeat.resting`、`.away`），按下开的那一刻到写成之间是在听的那一拍（带在动的点）：不另放转圈，
-/// 关着时这一行不写别的——停用是平常的一态，不是出错。名字下面那一行只在有话要说时出：没写成的原因（胭脂）、为什么此刻开不了（`blocked`）；
-/// 有没有那一行都不改这一行的高（按头像与两行字里高的那个定）。
+/// 按下开的那一刻到写成之间头像是在听的那一拍（带在动的点），不另放转圈。关着时这一行不写别的：停用是平常的一态，不是出错。
 struct CueSwitchRow: View {
     let model: CueSettingsModel
-    /// 这台 Mac（手机为 nil）。
     let here: String?
-    /// 此刻开不了的原因（还没和 iCloud 对过、手机上还没有哪台 Mac）：开关停用，原因写在名字下面。开着时照样能关。
     let blocked: String?
     @Environment(\.palette) private var palette
 
@@ -43,7 +38,6 @@ struct CueSwitchRow: View {
     private static var height: CGFloat { 36 }
 }
 
-/// Cue 的开关本身（设置里那一行、手机 Cue 面板），读写各入口同一份 `CueSettingsModel.turn`。
 struct CueSwitch: View {
     let model: CueSettingsModel
     let here: String?

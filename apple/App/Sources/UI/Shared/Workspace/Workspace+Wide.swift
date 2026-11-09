@@ -44,7 +44,6 @@ extension Workspace {
         if fits.cue || previous.map({ $0.cue != fits.cue }) == true { cueDrawer = false }
     }
 
-    /// 宽屏会话条开着（用户的选择，只有一份）。
     var railExpanded: Bool {
         get { services.settings.railExpanded }
         set { services.settings.railExpanded = newValue }

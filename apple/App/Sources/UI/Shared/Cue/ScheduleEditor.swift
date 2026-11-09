@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 改一条定时时手上的那一份（`ScheduleEditor`）：一次（哪天几点）、每天、每周几、每月几号，与几点。改的就是记忆里那一条（`CueMemoryLine`）。
 struct ScheduleDraft: Equatable {
     enum Cycle: CaseIterable, Hashable {
         case once, daily, weekly, monthly
@@ -17,13 +16,10 @@ struct ScheduleDraft: Equatable {
     }
 
     var cycle: Cycle
-    /// 一次的哪天几点；重复的只取几点
     var date: Date
-    /// 每周的哪几天（`Calendar` 的 weekday：1 是周日）
     var weekdays: Set<Int>
     var monthDay: Int
 
-    /// 照一条定时摆好；新建的从下一个整点起、只这一次。
     init(_ line: CueMemoryLine? = nil, now: Date = .now) {
         let calendar = Calendar.current
         let hourLater = now.addingTimeInterval(3600)
@@ -58,7 +54,6 @@ struct ScheduleDraft: Equatable {
 
     func next(after now: Date = .now) -> Date { repeats?.next(after: now) ?? date }
 
-    /// 定得成：一次的要在以后，每周的至少选一天。
     func valid(now: Date = .now) -> Bool {
         switch cycle {
         case .once: date > now
@@ -68,9 +63,6 @@ struct ScheduleDraft: Equatable {
     }
 }
 
-/// 原地改一条定时（任务气泡里点"改"、定时页里改一条或点新定时的几点）：同一块原地展开，不另开一页。
-/// 从上到下：标题"定时"与取消、好（主按钮）；改的是哪一条；一次｜每天｜每周｜每月（`PaneSegment`）；按它选哪天（每周几一排胶囊、每月几号、一次的日期）；几点；
-/// 最下面一行写改完的下一次在哪台 Mac 上（定时到点由那台 Mac 上的 Cue 开工），已有的定时右边是"不再定时"。
 struct ScheduleEditor: View {
     let text: String
     /// 手上的那一份归调用方：点"好"与调用方自己的提交（"记一条"按回车）存的是同一份
@@ -124,7 +116,6 @@ struct ScheduleEditor: View {
         .background(palette.fill, in: Radius.nested)
     }
 
-    /// 选哪天：每周几一排胶囊（周一在前），每月几号一个菜单，一次的是日期；每天的没有这一行。
     @ViewBuilder private var day: some View {
         switch draft.cycle {
         case .daily: EmptyView()
@@ -143,12 +134,10 @@ struct ScheduleEditor: View {
     }
 
     #if os(iOS)
-    /// 时刻的滚轮露几行：够看清上下各两格
     private static let wheelHeight: CGFloat = 150
     #endif
 }
 
-/// 每周几的一颗胶囊（`chip`，七颗等宽铺满一排）：选中的是选中底、墨字半粗，读屏念全名与选没选。
 private struct WeekdayChip: View {
     let weekday: Int
     @Binding var days: Set<Int>
@@ -168,11 +157,8 @@ private struct WeekdayChip: View {
     }
 }
 
-/// 任务气泡里的一条定时：几点怎么重复，下一次在哪台 Mac 上，上一次错过后补上的那句事实；右边"改"原地展开成 `ScheduleEditor`。
-/// 与下面会话那一条（`AgentStrip`）同一种底、同一种圆角。
 struct ScheduleStrip: View {
     let scheduled: CueScheduled
-    /// 在改时手上的那一份；nil 是没在改
     @State private var draft: ScheduleDraft?
     @State private var ending: CueMemoryLine?
     @Environment(Workspace.self) private var workspace
@@ -217,7 +203,6 @@ struct ScheduleStrip: View {
         }
     }
 
-    /// "下一次：周一 9:00 · 在 Mac Studio"；一次性的写"只这一次"。
     private var next: Dotted {
         let host = String(localized: "在 \(workspace.cue.hostName ?? MacAgents.unnamed)")
         guard scheduled.line.repeats != nil, let at = scheduled.line.remindAt else { return Dotted(String(localized: "只这一次"), host) }

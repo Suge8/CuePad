@@ -10,7 +10,6 @@ extension Workspace {
         if case .session = route { pushNarrow(route) } else { selectNarrow(route) }
     }
 
-    /// 项目与进展是根上的侧栏；项目详情等页推在根上，返回仍落到侧栏。
     func selectNarrow(_ route: Route) {
         remember(route)
         switch route {

@@ -2,51 +2,39 @@ import CueStore
 import Foundation
 import Observation
 
-/// 一个窗口里 Cue 的现状和 Cue 页的输入草稿：侧栏、菜单栏面板与 Cue 页都读这一份，不各自订阅。
-/// 事实只有库里那一页摘要（`CueDigest`）、此刻（`SpeechClock`）与本机事实（`AppServices.cueLocal`）；这里按读的人要的粒度把它拆成一项项存下——
+/// 侧栏、菜单栏面板与 Cue 页都读这一份，不各自订阅：第一份是整个 App 手里最新的那份（`CueFeed.latest`），之后跟着 `CueFeed`。
+/// 事实只有库里那一页摘要（`CueDigest`）、此刻（`SpeechClock`）与本机事实（`AppServices.cueLocal`）；这里按读的人要的粒度把它拆成一项项存下：
 /// Observation 按存储属性追踪（值没变的写不通知），存整份摘要时任何一项变（在想→用工具、Cue 此刻……），书架与侧栏都要跟着重算。
-/// 在不在、话在不在路上随库与此刻重算：它那台 Mac 的在线期限由订阅到点重读（`CueStore.macOnline`），你最近一句的时限与同步通断由
-/// 此刻给，这里不另计时。
-/// 第一份是整个 App 手里最新的那份（`CueFeed.latest`），之后跟着整个 App 那一份（`CueFeed`），不自己订阅：没有"还没读到"时的默认现状。
+/// 它那台 Mac 的在线期限由订阅到点重读（`CueStore.macOnline`），你最近一句的时限与同步通断由此刻给，这里不另计时。
 @Observable
 final class CueWatch {
     private(set) var name = CueDigest.empty.name
     private(set) var presence = CuePresence.derive(.empty, at: .always())
     /// 能对它说话：启用了（运行的那台 Mac 不在线也能说，开机后它会读到）。单列一项：输入框只看它，不随在想、用工具重算。
     private(set) var canHear = false
-    /// 你最近一句还在路上（`CuePresence.sending`）：输入框的发送钮只看它，不随在想、用工具重算。
     private(set) var sending = false
     /// 刚发出、还没读到这一句：库里那条记录要下一次读库才变成 `sending`，这一小段发送钮先当帧换成发送中，不先缩没再长出来。
     /// 读到了这一句（`lastYouSaid` 变了，此时在不在路上都已算进 `sending`）或这句没写进库（`launchFailed`）就交还。
     private(set) var launching = false
     /// 你最近一句写下的时刻（`CueDigest.lastYou`）：刚发出的那句读到了没有只看它。
     private(set) var lastYouSaid: Date?
-    /// Cue 此刻（`CueNow`）：头像那一拍、数字账、拍板几件（会话条的等你、入口的点）、推进中几件、
     /// 角标的数都只读它，不另存一份；内容变了才换（推出的时刻不算）。刚做完的那件到点在这里收掉（`show`），头像与数字账同一刻换。
     private(set) var now = CueNow.empty
-    /// 这一次会话叫醒的接力（`Wake`）：接力层（`CueRelayStage`）照它画光，头像照它醒。
     private(set) var wake: Wake?
-    /// 有光正飞向头像（叫醒、发出）时头像停在光起飞那一刻的那一拍（`beat`），到点才换；没有光在飞为 nil。
     private var transition: Transition?
-    /// 新消息有几条（`CueDigest.unread`）。
     private(set) var unread = 0
-    /// 它运行的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
     private(set) var hostID: String?
     private(set) var hostName: String?
     #if os(macOS)
-    /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：Mac"运行情况"里上下文那一行（`CueContextLine`）只读它。
     private(set) var context: CueContext?
     #endif
-    /// Cue 页的输入（离开再回来还在）。
     var draft = ComposerDraft()
     var showsMemory = false
     var showsSchedules = false
     #if os(macOS)
-    /// Cue 页右侧开着"运行情况"（`CueRunPanel`）。
     var showsRun = false
     #endif
 
-    /// `digest` 读不出来时为 nil（失败页盖住页面，空摘要不会露面）。
     init(_ digest: CueDigest?, at moment: Speech.Moment, local: CueNow.Local) {
         if let digest { apply(digest, at: moment, local: local) }
     }
@@ -68,7 +56,6 @@ final class CueWatch {
         let beat: CueBeat
     }
 
-    /// 一次会话叫醒：叫醒记录的时刻（`at`）、本机第一次看到它的时刻（`seen`）、光从哪几个会话飞来。
     /// `seen` 是这次接力唯一的起点：光的起飞、到点点亮（接力层照它画）与小人醒（`seen` 加 `RelayFlight.wakeLanding`）都由它推出，
     /// 接力层不回报——它不在（Mac 主窗口关着、只剩输入条）时头像照样到点醒。
     struct Wake: Equatable {
@@ -86,7 +73,6 @@ final class CueWatch {
     /// 这一句没能写进库（`Workspace.speak` 放回了草稿）：没有"读到这一句"那一刻了，发送中不能留着。
     func launchFailed() { launching = false }
 
-    /// 跟随整个 App 那一份直到任务取消。
     func follow(_ services: AppServices) async throws {
         for try await seen in services.cueUpdates() {
             apply(seen.read.digest, at: seen.moment, local: seen.local, catchingUp: services.isCatchingUp(on: seen.read.digest.hostID))

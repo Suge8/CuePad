@@ -1,7 +1,5 @@
 import Foundation
 
-/// 统一格式的改动（`git diff`、`diff -u` 的输出，.diff 与 .patch 预览，`PreviewDiff` 画它）拆成一行一行：每个文件一行抬头（路径与增删数）、
-/// 每段一行段头（`@@ -a,b +c,d @@` 后面的上下文），其余是不变、增加、删去的行，带旧、新两边的行号。
 /// 认不出文件抬头的（只贴了几段 `@@`）整份算一个没有路径的文件；`diff --git` 之后、第一段之前的 index、mode 等行不画。
 /// 一对 `--- `/`+++ ` 只在段外才是文件抬头（`diff --git` 之后第一段之前、第一个文件之前，或上一段按 `@@` 的行数已经走完——
 /// 不带 `diff --git` 的多文件 `diff -u`）：段里删去的一行以 "-- " 开头、接着加的一行以 "++ " 开头时，带上前缀也是这样一对，仍是改动。
@@ -16,13 +14,11 @@ nonisolated struct UnifiedDiff: Sendable {
     }
 
     let lines: [Line]
-    /// 最长一行有多少格（汉字等全角字算两格）：行底铺到这么宽，横着滚到哪都连得上。
     let widest: Int
 
     init(_ source: String) {
         var lines: [Line] = []
         var file: Int?, added = 0, removed = 0, old = 0, new = 0
-        // 这一段还剩几行旧、新两边的行没走完（`@@` 里的行数）
         var oldLeft = 0, newLeft = 0
         func add(_ kind: Line.Kind, _ text: String, old: Int? = nil, new: Int? = nil) {
             lines.append(Line(id: lines.count, kind: kind, text: text, old: old, new: new))
@@ -42,7 +38,6 @@ nonisolated struct UnifiedDiff: Sendable {
         while index < rows.count {
             let line = rows[index]
             index += 1
-            // 还在文件抬头里（文件那一行之后、第一段之前）
             let inHeader = file.map { $0 == lines.count - 1 } ?? false
             if line.hasPrefix("diff --git ") {
                 startFile(Self.path(fromGit: line))
@@ -91,7 +86,6 @@ nonisolated struct UnifiedDiff: Sendable {
         return String(line[b.upperBound...])
     }
 
-    /// `--- a/x	时间` 去掉 a/、b/ 前缀与制表符后的时间。
     private static func path(_ text: Substring) -> String {
         let name = text.split(separator: "\t").first.map(String.init) ?? String(text)
         return name.hasPrefix("a/") || name.hasPrefix("b/") ? String(name.dropFirst(2)) : name

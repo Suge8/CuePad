@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Cue 的两张清单弹层（记忆 `CueMemoryPage`、定时 `CueSchedulePage`）共用的壳：Mac 是 480 宽的窗口内浮层，手机是整屏 sheet。
-/// 顶上不写标题（`title` 只给读屏与多任务），右上一颗问号，点开一句说明的气泡；底部浮着玻璃输入胶囊，列表从它后面透过；空时正中是空态。
-/// Mac 的问号是浮层右上与关闭并排的淡底圆钮（`HelpButton`）；手机的在 sheet 的系统导航栏里（`BarHelpButton`，气泡画在 sheet 自己那一层）。
 struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
     let title: String
     let help: String
@@ -70,7 +67,6 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
     #endif
 }
 
-/// 问号点开的那一句说明。
 private struct CueListHelp: View {
     let text: String
     @Environment(\.palette) private var palette
@@ -86,15 +82,11 @@ private struct CueListHelp: View {
     private static let width: CGFloat = 260
 }
 
-/// 清单里的一行：内容占满宽度；两个动作手机上在右滑、左滑，菜单与读屏另有复制；菜单抬头与读屏另说 `meta`（什么时候、谁说的）。
-/// Mac 右键出菜单，指针停在行上时铺行的淡底（`RowStyle`）、右下角露出两颗小钮。
 struct CueListRow<Content: View>: View {
     let label: String
     var meta: Dotted
     let copy: RowAction
-    /// 手机上右滑的那个
     let leading: RowAction
-    /// 删的那个：手机上左滑
     let trailing: RowAction
     @ViewBuilder let content: Content
     @Environment(\.palette) private var palette
@@ -130,7 +122,6 @@ struct CueListRow<Content: View>: View {
 }
 
 #if os(macOS)
-/// 指针停在行上时右下角浮出的两个动作（`hoverReveal`）。
 private struct CueListHoverActions: View {
     let actions: [RowAction]
     @Environment(\.palette) private var palette
@@ -153,7 +144,6 @@ private struct CueListHoverActions: View {
 }
 #endif
 
-/// 页边距（Mac 的行底向两边伸出 `RowMetrics.bleed`，边距要盖住它）、行的内边距、输入胶囊的高与离底。
 enum CueListMetrics {
     #if os(macOS)
     static let top: CGFloat = 48

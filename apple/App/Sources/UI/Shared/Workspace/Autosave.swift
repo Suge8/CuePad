@@ -1,9 +1,7 @@
 import Foundation
 
-/// 编辑中的正文自动保存：停手一小会儿后写入，离开页面、交给 Agent、进后台时 `flush`——返回即已落库。
-/// 同一时刻只有一次写入在途；`flush` 先等它，再写停手后又打的部分，所以它返回时调用方读库读到的是最新的字。
-/// 写不成的正文放回待写（期间有更新的就不放回），`flush` 把错误抛给调用方（离开时据此不删"空白"的新灵感）；
-/// 停手计时触发的那次没有调用方，错误交给 `onError`。
+/// 编辑中的正文自动保存：停手一小会儿后写入；离开页面、交给 Agent、进后台时 `flush`，返回即已落库。
+/// 写不成的正文放回待写，`flush` 把错误抛给调用方（离开时据此不删"空白"的新灵感）；停手计时触发的那次没有调用方，错误交给 `onError`。
 final class Autosave {
     private static let delay: Duration = .milliseconds(400)
 
@@ -18,7 +16,6 @@ final class Autosave {
         self.onError = onError
     }
 
-    /// 还没写进库的正文（待写的；写失败放回的也在这里）。
     var unsaved: String? { pending }
 
     func changed(_ text: String) {
@@ -33,7 +30,7 @@ final class Autosave {
         }
     }
 
-    /// 丢下还没写的（编辑器换成了别处的正文）：之后的 `flush` 不再写它，在途的那次也取消（能取消的写入会停；已经交出去的由调用方核对它写完时还算不算数）。
+    /// 在途的那次也取消：能取消的写入会停，已经交出去的由调用方核对它写完时还算不算数。
     func discard() {
         pending = nil
         timer?.cancel()

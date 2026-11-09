@@ -1,10 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 技能与规则里给人看的写法（两端同一份）：一键整理那块纸上的几条事实、去重的几份叫什么、技能分几组、读不到的那几家怎么画。
 /// 规则（哪些该整理、谁读得到）在 `AgentLibrary`、`LibraryTidy` 与 Mac 端的扫描里，这里只把快照写成字。
 extension Workspace {
-    /// 一键整理那块纸上的一条：结果的事实（多少个、谁读不到），不写要做什么。
     func fact(of tidy: LibraryTidy, in library: AgentLibrary) -> String {
         switch tidy.kind {
         case .stray(let moves): return String(localized: "\(moves.count) 个技能在旧目录里")
@@ -19,7 +17,6 @@ extension Workspace {
         }
     }
 
-    /// 文件页页顶写的那一份：技能写它在哪（全局或项目名，名字在下面的名字框里，不重复），规则写它的名字。
     func fileTitle(_ file: LibraryFile, in library: AgentLibrary?) -> String {
         switch file {
         case .skill(let path): library?.skill(at: path).map { scopeName($0.scope) } ?? ""
@@ -27,7 +24,6 @@ extension Workspace {
         }
     }
 
-    /// 全局，或项目名（项目在本端的目录里找不到时写"项目"）。
     func scopeName(_ scope: LibraryScope) -> String {
         switch scope {
         case .global: String(localized: "全局")
@@ -37,7 +33,6 @@ extension Workspace {
 
     func projectName(_ id: UUID) -> String { catalog?.project(id)?.shownName ?? String(localized: "项目") }
 
-    /// 去重时一份叫什么：范围名；同一范围有几份时带上它所在的目录（旧目录里的，如 `.codex`）。
     func copyName(_ copy: SkillEntry, among copies: [SkillEntry]) -> String {
         let scope = scopeName(copy.scope)
         guard copies.filter({ $0.scope == copy.scope }).count > 1 else { return scope }
@@ -46,14 +41,12 @@ extension Workspace {
         return Dotted(scope, String(parts[skills - 1])).visible
     }
 
-    /// 替换基础提示的那两份叫什么（合并时可选一并撤掉）。
     func replacementName(_ origin: InstructionSource.Origin) -> String {
         origin == .piSystem ? String(localized: "Pi 的系统提示") : String(localized: "Codex 的自定提示词")
     }
 }
 
 extension LibraryTidy {
-    /// 一键整理那块纸上这一条行首的图。
     var icon: Icon {
         switch kind {
         case .stray: .folder
@@ -65,13 +58,11 @@ extension LibraryTidy {
 }
 
 extension SelfManagedSkills {
-    /// "Claude Code 从 claude.ai 同步的 13 个"、"Codex 自带的 5 个"。
     var title: String {
         agent == .claudeCode ? String(localized: "Claude Code 从 claude.ai 同步的 \(count) 个") : String(localized: "\(agent.name) 自带的 \(count) 个")
     }
 }
 
-/// 技能清单的几组：全局一组（按分类排，"不在分类里"的最后），各项目各一组（按项目目录的先后）。
 nonisolated struct SkillGroups {
     struct Category {
         let name: String
@@ -99,7 +90,6 @@ nonisolated struct SkillGroups {
     }
 }
 
-/// 一行右端读不到这一份的那几家：只画那几家压了斜杠的标志（`StruckBrandMark`，淡墨），不点问号也读得懂是"这家读不到"；全读得到什么都不画。
 /// Mac 悬停一个写"<那家> 读不到"，读屏整组念同一句。槽位定宽（这台装着几家就几格，`AgentLibrary.agents`），标志靠右排，各行的名字与说明不随它挪。
 struct UnseenMarks: View {
     let agents: [AgentKind]
