@@ -29,7 +29,6 @@ struct PreviewPage: View {
     }
 }
 
-/// 图片：`PreviewZoom`。
 private struct PreviewImage: NSViewRepresentable {
     let preview: UUID
     let file: URL

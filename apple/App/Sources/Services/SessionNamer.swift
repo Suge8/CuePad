@@ -21,7 +21,6 @@ final class SessionNamer {
         self.store = store
     }
 
-    /// 会话出现或变了（`PiSessionChange`）。
     func consider(_ session: CuePi.PiSession) {
         guard session.name == nil, session.firstMessage != nil, !session.upgrading, bridge.canNameItself(session.id),
               tried.insert(session.sessionID).inserted else { return }

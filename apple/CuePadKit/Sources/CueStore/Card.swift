@@ -57,7 +57,6 @@ public enum TaskStatus: String, Sendable, CaseIterable {
   case todo, inProgress, done
 }
 
-/// 同一项目里某一状态的任务（`CueStore.tasks(_:)`）。
 public struct TaskGroup: Equatable, Sendable {
   public let projectID: UUID
   public internal(set) var tasks: [Card]

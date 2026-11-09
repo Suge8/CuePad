@@ -78,8 +78,6 @@ final class PiConnections {
         return unlink(socketPath(name)) == 0
     }
 
-    // MARK: 读循环
-
     private func consume(_ link: PiConnection, name: String) async {
         for await line in link.connection.lines {
             guard links[name] === link else { return }

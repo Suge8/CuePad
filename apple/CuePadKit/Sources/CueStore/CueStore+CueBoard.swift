@@ -83,7 +83,6 @@ extension CueStore {
     return Dictionary(steps.compactMap { step in step.parentID.map { ($0, step) } }, uniquingKeysWith: { _, later in later })
   }
 
-  /// 看板上的：没做完、没归档。
   private static let onBoard = "t.completedAt IS NULL AND t.archivedAt IS NULL"
 
   /// 顶层任务 `t` 自己或它的子任务绑着会话。

@@ -34,7 +34,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     let opencode: @Sendable () async -> URL?
     let locate: @Sendable () async -> ExecutableLocator
     let transcriptWindow: TimeInterval
-    /// 量起服务、停服务这些等待的时限的钟
     let timing: Timing
 
     private var watcher: FileFollower?
@@ -45,13 +44,10 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     var waiters: [UUID: CheckedContinuation<Connection, any Error>] = [:]
 
     var sessions: [String: Tracked] = [:]
-    /// 子会话 → 父会话
     var parents: [String: String] = [:]
-    /// 子代理（子会话）的一轮
     var childTurns: [String: OpenCodeTurn] = [:]
     /// 在 CuePad 里结束的会话与结束时刻：再有活动才重新上线
     var ended: [String: Date] = [:]
-    /// 每个工作目录可选的模型与命令
     var catalogs: [String: Catalog] = [:]
     /// 服务里全部顶层会话（会话索引对账用）；还没拉到完整列表时为 nil
     var listed: Set<String>?
@@ -108,8 +104,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         self.locate = locate
         self.transcriptWindow = transcriptWindow
     }
-
-    // MARK: 发现
 
     public func start() throws {
         let watcher = FileFollower()
@@ -168,7 +162,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         connection.exitWatcher?.cancel()
     }
 
-    /// 服务停了：它的会话全部下线。
     private func disconnect() {
         guard let connection else { return }
         close(connection)

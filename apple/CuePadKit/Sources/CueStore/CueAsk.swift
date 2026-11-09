@@ -53,7 +53,6 @@ public enum CueAsk: String, CaseIterable, Sendable {
     return project.map { CueMemoryLine.fitting($0) { String(localized: "以后「\($0)」里\(name)不用问") } } ?? String(localized: "以后\(name)都不用问")
   }
 
-  /// 所有项目里都不用问那一项；不能放行的没有。
   public var always: String? { always(in: nil) }
 
   /// 提问的选项（写入时定下、照存，之前写下的照旧显示当时的字）：可以，与"以后……不用问"（范围同上）。
@@ -69,7 +68,6 @@ public struct CueAsking: Equatable, Sendable {
   /// 规矩那一类依据的规矩（"改数据库结构前先问我"）；别的类没有。
   public let rule: String?
 
-  /// 动作与规矩各至多这么多字。
   public static let phraseLimit = 30
 
   /// Cue 提问时给的：动作必填，规矩那一类还要写规矩；都是一行、不超过 `phraseLimit` 字，不合要求抛 `phrase`。
@@ -125,7 +123,6 @@ public struct CueShot: Codable, Hashable, Sendable {
 
   /// 一条消息至多这么多张：只挑回答问题必须看的、证明结论的。
   public static let limit = 4
-  /// 看什么至多这么多字。
   public static let lookLimit = 20
 
   public init(preview: UUID, look: String) {

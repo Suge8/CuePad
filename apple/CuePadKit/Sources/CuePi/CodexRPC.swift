@@ -41,8 +41,6 @@ final class CodexRPC {
 
     var isClosed: Bool { replies.isClosed }
 
-    // MARK: 建立
-
     /// 一条用户输入（`UserInput`）：文字在前（空文字不带）、图片以 data URL 在后。
     static func input(text: String, images: [PiImage]) -> [JSONValue] {
         let text: [JSONValue] = text.isEmpty ? [] : [["type": "text", "text": .string(text), "text_elements": []]]
@@ -91,8 +89,6 @@ final class CodexRPC {
         }
         send(["method": "initialized"])
     }
-
-    // MARK: 收发
 
     /// 发一个请求，等它的回应（结果的 `result`）；服务端回错误抛 `server`，连接先断了抛 `closed`，没有及时回应抛 `timedOut`。
     @discardableResult
@@ -197,8 +193,6 @@ final class CodexRPC {
         replies.closeAll(CodexRPCError.closed)
         onClose?()
     }
-
-    // MARK: 传输
 
     private enum Transport {
         case stdio(ChildProcess)

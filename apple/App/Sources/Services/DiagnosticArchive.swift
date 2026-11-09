@@ -21,12 +21,10 @@ nonisolated struct DiagnosticArchive: Sendable {
         try write(data, as: Self.name(date: note.start, kind: .freeze))
     }
 
-    /// 存档里的每一份（一个包里几份就是几份），新的在前；读不出来的文件跳过。
     func reports() -> [CrashReport] {
         files().flatMap(\.reports).sorted { ($0.date, $0.id) > ($1.date, $1.id) }
     }
 
-    /// 每个文件与它里面的几份，按排第一的那份的时间新的在前。
     private func files() -> [(name: String, reports: [CrashReport])] {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
         return names.filter { $0.hasSuffix(".json") }

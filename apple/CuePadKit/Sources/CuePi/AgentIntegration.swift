@@ -42,7 +42,6 @@ public struct AgentIntegration: Sendable {
     /// 能碰这家的配置目录（读写技能与规则，`AgentLibraryFiles` 也按它）。
     public func touches(_ kind: AgentKind) -> Bool { fileAccess.touches(kind) }
 
-    /// 能碰几家共读的 `~/.agents`。
     public var touchesShared: Bool { fileAccess.touchesShared }
 
     /// 这家的上报通道（`AgentFacts.channel`）。`executable` 是写、删时起的那个（检测时挑中的，Codex 写、删信任要它）；只看状态时不用。

@@ -13,7 +13,6 @@ final class ACPConnection {
     let process: ChildProcess
     /// 握手的回应：`agentCapabilities`、`authMethods` 与各家放在 `_meta` 里的扩展信息
     private(set) var agent: JSONValue = [:]
-    /// 通知（方法、参数）
     var onNotification: ((String, JSONValue) -> Void)?
     /// Agent 发来的请求（方法、参数、请求 id）：接了返回 true，之后用 `respond` 回它
     var onRequest: ((String, JSONValue, JSONValue) -> Bool)?

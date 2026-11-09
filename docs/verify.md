@@ -10,6 +10,7 @@ Debug 认的启动参数只在 `DebugScene+Args*.swift` 的字段注释里（拼
 - Mac 的 shot、rec、run 期间自动让显示器醒着（`caffeinate -d -u`），不用自己 `caffeinate -u`。
 - Mac 按窗口拍，图的像素是窗口在屏上的像素（1x 屏上与点数相同，Retina 屏上翻倍）。报窗口被缩小显示时是调度中心或台前调度开着：请用户收起，不发系统按键。
 - 后台窗口里的网页过几秒就成空白，截图不可信：用 `-CuePadWebSnapshot`。
+- `xc.sh shot` 截的是点击之前的画面：要看点击后的结果，用 `rec` 录屏取最后一帧。
 - Mac 浮层与气泡（点开后的样子、摆在哪）：`xc.sh rec mac -- … -CuePadClick x,y` 在后台点开，取录屏末帧，不占前台。
 - Mac 菜单快捷键（如全屏页里 PDF 的 ⌘F 查找条）：`-CuePadClick "wait:1;cmd:f;type:词"`，`cmd:键` 从窗口焦点沿响应链发主菜单那一项的动作（后台窗口收不到菜单快捷键），同样取录屏末帧。
 - Mac 系统菜单：`xc.sh run mac -- … -CuePadForeground YES -CuePadClick x,y` 让实例自己点开，再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 的菜单没有从代码打开的接口：`xc.sh run` 后用 axe 点开。
@@ -66,7 +67,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后会自己退�
 - 语音无人值守回环见 `VoiceLoopback`、`DebugVoice`：合成声源只进入本次创建的临时设备，不改系统默认设备或音量；同机回环被回声消除过滤是预期现象，Debug 关闭它只能验收传输与 Cue 行为，不能算真实麦克风验收。生产仍请求回声消除、降噪和自动增益；实际启用须核对 WebKit 支持列表与轨道设置，不由请求值保证。
 - GPT Live 先筛选、整理，再以 delegation 交接给 Cue；`turn.done` 只是转写。核对交接正文、卡片、用户消息送达与最终回复的 `answeredRequests`；`-CuePadVoiceReplay YES` 在回复后重放交接与转写，库里应仍只有原请求。问候与普通闲聊不应写成 Cue 请求。
 - 朗读验收分开核对 `cue-forward`（Cue 实际结果和交接 ID）、`cue-sent`（发送完成）、`context-accepted`（服务器追加回执）、`assistant-said`（模型转写），最后对照 `output-loud/quiet` 与真实输出录音。只有音轨证据能证明出声，内容仍须回放核实；回执不能当作必播或播完。v3 的 `speakable` 是播报输入，关闭 `ack_filler` 也不保证模型不会自行确认或漏交接。停止请求必须实际交接、由 Cue 确认后再查录音；不能因听到模型说停下就算任务已停止。
-- iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；点按 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 换算；`axe describe-ui` 读不到 SwiftUI 的元素）。`run` 起的实例由后台看守租着那台模拟器（别的检出领不到），到 `CUEPAD_RUN_SECONDS`、实例退出或 `xc.sh stop` 才放；`shot`、`rec` 只在拍的那几秒占着。槽位全机共用（`_lock.sh`），换机型的任务会关掉同槽位上别的机型。模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。
+- iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；点按 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 换算；`axe describe-ui` 读不到 SwiftUI 的元素）。`run` 起的实例由后台看守租着那台模拟器（别的检出领不到），到 `CUEPAD_RUN_SECONDS`、实例退出或 `xc.sh stop` 才放；`shot`、`rec` 只在拍的那几秒占着。槽位全机共用（`_lock.sh`），换机型的任务会关掉同槽位上别的机型。模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。模拟器里的系统开关（设置里的开关、权限弹窗）普通 `axe tap` 点不动，要 `axe tap --tap-style physical`。
 
 ## 读屏验收
 

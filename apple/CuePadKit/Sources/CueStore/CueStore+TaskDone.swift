@@ -2,9 +2,11 @@ import CueText
 import Foundation
 
 /// 一件事里没人再用的会话的去留（`CueStore.endUnused`）。
+/// `createdForTaskID` 持久保存会话的创建来源，纯关联（没有任务创建来源）不授权结束；`executing` 的会话拒绝本地借用；跨端后到的关联不撤回已发出的结束，可以指向历史。
+/// 结束请求领取时固定一个请求 ID 集合，源端实际结束与这些请求的结果在同一个事务里写回；同步只合并同一条请求，不凭时间或 ended 的回声确认别的请求。
+/// 重启后没有证据的会话保持“未知”；会话页与 Cue 可以明确结束它，这只覆盖受理那一刻已知的旧未知，不扩到之后的新请求。
 struct UnusedSessions {
   var ended: [DeliveryRequest] = []
-  /// 终端里你自己开的会话没被结束。
   var terminalKept = false
 }
 

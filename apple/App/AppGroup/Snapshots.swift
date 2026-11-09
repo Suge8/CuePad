@@ -19,7 +19,6 @@ nonisolated struct ProjectsSnapshot: Codable, Equatable, Sendable {
 nonisolated struct DefaultProjectSnapshot: Codable, Equatable, Sendable {
     struct Card: Codable, Equatable, Sendable {
         var id: UUID
-        /// 第一行文字；没有文字（只有图片）为空。
         var title: String
         var modifiedAt: Date
     }
@@ -48,7 +47,6 @@ nonisolated enum Snapshots {
         try encoder.encode(snapshot).write(to: directory.appending(path: S.fileName), options: .atomic)
     }
 
-    /// 没写过或读不出来为 nil。
     static func read<S: SnapshotFile>(_: S.Type, from directory: URL) -> S? {
         guard let data = try? Data(contentsOf: directory.appending(path: S.fileName)) else { return nil }
         let decoder = JSONDecoder()

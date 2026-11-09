@@ -36,7 +36,6 @@ let package = Package(
         // `cuepad` 命令行：供人和 agent 读写本机资料库（经 CueStore，零第三方依赖）。
         .executableTarget(name: "CueCLI", dependencies: ["CueStore", "CueText", "CueAgent"]),
         .testTarget(name: "CueCLITests", dependencies: ["CueCLI", "CueTestSupport"]),
-        .testTarget(name: "CueAgentTests", dependencies: ["CueAgent", "CueTestSupport"]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
         .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor", "CueTestSupport"]),

@@ -2,7 +2,6 @@ import CueStore
 import CueSync
 import Foundation
 
-/// iCloud 同步的 App 层接入：启动同步、把状态与冲突交给界面、激活时立即同步。
 extension AppServices {
     /// 同步与它启动前的状态。没有同步时状态是写明原因的 `.unavailable`，界面不会显示成已同步。
     /// `.iCloud` 不创建同步的两种情况：隔离模式（`CUEPAD_LIBRARY_DIR`，开发与验收用，不能碰真实账号的云端数据；
@@ -120,7 +119,6 @@ extension AppServices {
         var since: Date?
     }
 
-    /// iOS 进入后台：停掉按节奏的拉取（回前台由 `handleActivation` 再开）。
     func stopPolling() {
         polling?.cancel()
         polling = nil

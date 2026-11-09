@@ -4,7 +4,6 @@ import CueStore
 import Foundation
 import Observation
 
-/// 自动更新器（生产是 `SparkleUpdater`）。
 protocol AppUpdater: AnyObject {
     var automaticallyChecksForUpdates: Bool { get set }
     var canCheckForUpdates: Bool { get }
@@ -25,7 +24,6 @@ final class UpdateService {
     @ObservationIgnored private let updater: (any AppUpdater)?
     @ObservationIgnored private let bridge: PiBridge
     @ObservationIgnored private let runtimes: [AgentKind: any AgentRuntime]
-    /// 推迟中的更新接着装下去的办法（更新器交来的）；没在等时为 nil。
     @ObservationIgnored private var install: (() -> Void)?
     @ObservationIgnored private var watcher: Task<Void, Never>?
     /// 推迟中的更新还在等几个后台会话做完；没在等时为 nil。
@@ -62,7 +60,6 @@ final class UpdateService {
         updater?.checkForUpdatesInBackground()
     }
 
-    /// 不等了，现在就装（会结束还在跑的后台会话）。
     func installNow() {
         guard let install else { return }
         self.install = nil

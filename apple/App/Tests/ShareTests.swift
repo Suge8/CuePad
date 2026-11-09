@@ -29,11 +29,12 @@ struct ShareTests {
         #expect(try content.files.map { try Data(contentsOf: $0.url) } == [png])
     }
 
-    @Test func 选项目保存后进待入库目录并可被主App读到() async throws {
+    @Test func 选项目保存后主App入库成所选项目里的卡片() async throws {
         let app = TestApp()
         let location = app.services.location
+        let project = try await app.services.store.createProject(name: "A", color: "#111111")
         try Snapshots.write(
-            ProjectsSnapshot(projects: [.init(id: UUID(), name: "A", color: "#111111", icon: nil)]),
+            ProjectsSnapshot(projects: [.init(id: project.id, name: "A", color: "#111111", icon: nil)]),
             to: location.snapshotsDirectory)
         let target = try #require(Snapshots.read(ProjectsSnapshot.self, from: location.snapshotsDirectory)?.projects.first)
         let model = ShareModel(providers: [provider(text: "记一下")], location: location)
@@ -45,9 +46,8 @@ struct ShareTests {
         let saved = await model.save()
 
         #expect(saved)
-        let entry = try #require(CaptureQueue.pending(in: location.captureDirectory).first)
-        #expect(entry.capture.text == "记一下")
-        #expect(entry.capture.project == target.id)
+        await app.services.drainCaptures()
+        #expect(try await app.services.store.cards(in: target.id).map(\.body) == ["记一下"])
     }
 
     @Test func 没有可保存的内容时进入失败状态_不写任何东西() async throws {

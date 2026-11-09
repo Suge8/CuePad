@@ -202,7 +202,6 @@ public struct PiSessionSnapshot: Paced {
   /// 出错的种类（`PiSessionState.failure`，桥按原文归类）
   public var failure: PiFailure?
   public var times: PiTimes
-  /// 最后一轮开始的时刻（`PiSessionState.turnStartedAt`）
   public var turnStartedAt: Date?
   public var launchToken: String?
   public var hosted = false

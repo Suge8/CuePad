@@ -20,7 +20,6 @@ public struct PastedItem: @unchecked Sendable {
 
     public var isFile: Bool { Self.isFile(provider.registeredContentTypes) }
 
-    /// 剪贴板里当附件收的条目。
     public static func files(on pasteboard: UIPasteboard) -> [IncomingFile] {
         pasteboard.itemProviders.map(PastedItem.init).filter(\.isFile).map(IncomingFile.pasted)
     }

@@ -5,8 +5,6 @@ import SwiftUI
 extension View {
     /// 点交付物后的全屏页：窗口内浮层（`panel`），从点的那张缩略图飞出、关上时飞回翻到的那一份（`PreviewFlight`）；
     /// 同一组的几份用 ←→、右上的前后箭头、触控板横扫翻；每类怎么显示见 `PreviewPage`。
-    /// `reply` 是这一页的底栏对谁说（`PreviewOpening.reply` 另给的除外），nil 时没有底栏（窗口根上那一个，看正文、输入框里的附件）。
-    /// 一个页面只在这里挂一次，不在每张缩略图上各挂一个。
     func previewPresenter(_ opened: Binding<PreviewOpening?>, reply: PreviewReply?) -> some View {
         modifier(PreviewPresenter(opened: opened, reply: reply))
     }
@@ -54,7 +52,6 @@ private struct PreviewPager: View {
     @Environment(\.closePanel) private var close
 
     private var batch: [PiPreview] { opening.batch }
-    /// 这一批不止一份：有前后箭头。
     private var paged: Bool { batch.count > 1 }
     private var index: Int { opening.index(of: current) }
     private var preview: PiPreview { batch[index] }

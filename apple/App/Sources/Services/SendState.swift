@@ -52,7 +52,6 @@ final class SendState {
         HandOffTargets.sessions(services.liveSessions.live, project: project, at: services.speech).filter { isReachable($0.state) }
     }
 
-    /// `host`：会话记录所在的 Mac，nil 为本机。
     func route(of sessionID: String, host: String? = nil) -> Route {
         if let live = liveSession(sessionID) { return .local(live) }
         if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == sessionID && $0.state.hostID != services.hostID }) {
@@ -61,14 +60,12 @@ final class SendState {
         return .ended(host: host)
     }
 
-    /// Pi 会话的显示名：本机在线的取桥上的，别的 Mac 上的与刚结束的取同步记录里的。
     private func sessionName(_ sessionID: String) -> String {
         liveSession(sessionID)?.displayName
             ?? services.liveSessions.items.first { $0.state.sessionID == sessionID }?.state.title
             ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    /// 这个 Pi 会话此刻连着桥的那个进程；没有就是已结束。
     private func liveSession(_ sessionID: String) -> CuePi.PiSession? {
         services.pi.session(sessionID: sessionID)
     }

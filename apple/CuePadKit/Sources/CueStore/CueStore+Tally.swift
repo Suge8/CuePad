@@ -21,7 +21,6 @@ public struct CueTally: Equatable, Sendable {
       }
     }
 
-    /// 落在哪件顶层任务上。
     public var task: UUID? {
       switch self {
       case .message(_, let task), .session(_, let task): task
@@ -54,7 +53,6 @@ public struct CueTally: Equatable, Sendable {
       }
     }
   }
-  /// 拍板。
   public var waiting: [Wait]
   public var replies: [Reply]
   /// 参与工作的 Agent 总数（`CueAgents`），在按等你分列之前算：任务的一处在问你，不会漏掉同任务的其它工作会话。

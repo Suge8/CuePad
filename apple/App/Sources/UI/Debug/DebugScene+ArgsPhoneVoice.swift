@@ -14,7 +14,6 @@ nonisolated struct PhoneVoiceArgs: Decodable, DebugArgGroup {
     let pages: Bool
     /// `-CuePadPhoneVoiceRefreshRequired YES`：通话要求刷新
     let refreshRequired: Bool
-    /// `-CuePadVoiceReplay YES`：Cue 结果送出后重放原 delegation 与用户 turn.done，核对请求没有重复落库
     let replay: String?
     /// `-CuePadPhoneVoiceSessionUnavailable YES`：通话会话不可用
     let sessionUnavailable: Bool

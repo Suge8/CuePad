@@ -52,7 +52,6 @@ nonisolated struct PiSubagentSummary: Equatable {
     /// 次句：除了在跑的还有别的，补上总数"共 8 个"；全在跑或都停了没有。
     var tail: String? { running > 0 && total > running ? String(localized: "共 \(total) 个") : nil }
 
-    /// 失败的个数写在末尾；没有失败时为 nil。
     var failure: String? { failed > 0 ? String(localized: "\(failed) 失败") : nil }
 
     init?(_ agents: [PiSubagentState]) {

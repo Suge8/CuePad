@@ -90,8 +90,6 @@ extension CodexRuntime {
         session.facts.endTurn(failure: failure)
     }
 
-    // MARK: 子代理
-
     /// 开始新的一轮（`start` 是这一轮开始的时刻，早于它可能的结束：Codex 给的 `Turn.startedAt`，CuePad 补开的是发出的时刻，
     /// 钩子没有时刻用收到的时刻）：歇着时落定的子代理的结果随这一轮交给模型，不再在飞。开始一轮只经这里。
     func startTurn(_ session: Tracked, at start: Date) {

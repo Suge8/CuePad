@@ -35,15 +35,6 @@ nonisolated enum PiRename {
     }
 }
 
-extension AppServices {
-    /// 让 Pi 把会话改名（写一条发给它所在 Mac 的配置请求，立即上传）。新名为空时不写。
-    @discardableResult
-    func rename(_ session: PiSessionState, to name: String) async throws -> DeliveryRequest {
-        guard let name = PiRename.clean(name) else { throw CueStoreError.blankDeliveryContent }
-        return try await configure(PiConfig(name: name), for: session)
-    }
-}
-
 extension PiSessionListItem {
     /// 会话自己此刻的名字（改名在路上时是新名，`PiRename.title`）。
     func shownTitle(at moment: Speech.Moment) -> String { PiRename.title(of: state, request: rename, at: moment) }

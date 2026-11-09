@@ -19,7 +19,6 @@ public final class GrokRuntime: AgentRuntime {
     private let paths: AgentPaths
     private let files: AttachmentFiles
     private let host: ACPHost
-    /// 在桥上的终端会话
     private var terminals: [PiSession.ID: Terminal] = [:]
     private var watcher: DirectoryWatcher?
     /// 终端会话哪些接上桥（`follow`）；给之前一个都不接
@@ -53,8 +52,6 @@ public final class GrokRuntime: AgentRuntime {
 
     private var home: URL { paths.home(of: .grok) }
 
-    // MARK: AgentRuntime
-
     public func start() throws {
         stopped = false
     }
@@ -87,8 +84,6 @@ public final class GrokRuntime: AgentRuntime {
         follow(terminal, update.checkpoint)
         bridge.update(id) { terminal.facts.publish(to: &$0) }
     }
-
-    // MARK: 终端
 
     /// 对一遍开着的终端会话：新登记的上桥，注销了的下桥。目录在之前还没有（后装的 Grok）时这时开始盯。
     private func refresh() {

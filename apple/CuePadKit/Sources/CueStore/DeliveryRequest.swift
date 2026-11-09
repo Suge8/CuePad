@@ -166,25 +166,20 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     }
   }
 
-  /// 新会话请求的内容；其他方式为 nil。
+  /// `launch`、`bind`、`tidyOrders`、`libraryEdit`、`answer`、`config` 按 `mode` 取请求的内容；其他方式、读不出的为 nil。
   public var launch: PiLaunch? { mode == .known(.start) ? PiLaunch(stored: content) : nil }
 
   /// 要交出去的话里引用的附件（开工的是开场的话里的）：写下时登记附件记录（随之上传）、执行的 Mac 取文件、回收附件时算引用，都只读这里。
   public var attachmentKeys: [String] { CueFormat.attachmentKeys(in: launch?.prompt ?? content) }
 
-  /// 绑定文件夹请求的内容；其他方式、读不出的为 nil。
   public var bind: PiBind? { mode == .known(.bind) ? PiBind(stored: content) : nil }
 
-  /// 整理请求的那几件；其他方式、读不出的为 nil。
   public var tidyOrders: [TidyOrder]? { mode == .known(.tidy) ? JSONColumn.decode([TidyOrder].self, from: content) : nil }
 
-  /// 改文件请求的内容；其他方式、读不出的为 nil。
   public var libraryEdit: LibraryEdit? { mode == .known(.libraryEdit) ? LibraryEdit(stored: content) : nil }
 
-  /// 作答请求的答案；其他方式为 nil。
   public var answer: PiAnswer? { mode == .known(.answer) ? PiAnswer(stored: content) : nil }
 
-  /// 配置请求的内容；其他方式为 nil。
   public var config: PiConfig? { mode == .known(.config) ? PiConfig(stored: content) : nil }
 
   /// 改名请求：带名字的配置请求。

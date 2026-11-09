@@ -103,7 +103,6 @@ final class CueKeeper {
     let input: AsyncStream<Input>.Continuation
     var progress: Progress
     var phase = Phase.starting(failures: 0)
-    /// 此刻（或上一次试起）的大脑用的设置
     var brainSettings: BrainSettings?
     var shifts = 0
     /// 最近告诉过你的那个错（`PiErrorSummary.line`）：同一个错一轮轮重复（如额度）只说一次
@@ -132,7 +131,6 @@ final class CueKeeper {
     @ObservationIgnored var owed: Set<UUID> = []
     /// 他发起的一轮停下已对到的写入序号（`CueStore.leaveHisStops`）；nil 是这次上班还没对过，从变化的基线算起
     @ObservationIgnored var handedOver: Int?
-    /// 做完的几轮，旧的在前，至多 `roundsKept`
     private var history: [CueRound] = []
     @ObservationIgnored private var roundCount = 0
     /// 你的话里的附件正在旁边取的（`ready(_:)`）与取不来、照交的

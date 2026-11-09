@@ -6,6 +6,11 @@ import SwiftUI
 /// 文件到了换上缩略图与大小、在传时进度往前走。点了附件经 `Workspace.openAttachment`（还没到的去取，到了也是经这里重画）。
 @MainActor
 enum AttachmentLooks {
+    /// 文件还没到这台时画面上写的那一行：传了几成，还没开始取的写怎么取。
+    static func awayLine(_ key: String, _ services: AppServices) -> String {
+        FileStatus.line(name: "", file: nil, transfer: services.fileTransfers[key]).detail
+    }
+
     /// 接上编辑器；返回跟着传输重画的任务，编辑器拆掉时由宿主取消。
     static func follow(_ services: AppServices, in view: CueTextView) -> Task<Void, Never> {
         view.fileIcon = { Icon.file(named: $0).platformImage }
@@ -14,11 +19,6 @@ enum AttachmentLooks {
             for await _ in Observations({ services.fileTransfers }) { view?.refreshAttachments() }
         }
     }
-}
-
-extension AppServices {
-    /// 文件还没到这台时画面上写的那一行：传了几成，还没开始取的写怎么取。
-    func awayLine(_ key: String) -> String { FileStatus.line(name: "", file: nil, transfer: fileTransfers[key]).detail }
 }
 
 extension Workspace {

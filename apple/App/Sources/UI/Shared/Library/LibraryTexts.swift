@@ -45,7 +45,6 @@ extension AgentLibrary {
         if case .skill(let path) = file { duplicate(of: path) } else { nil }
     }
 
-    /// 文件名（文件页顶次要一行的头）。
     func fileName(_ file: LibraryFile) -> String? { self.file(file).map { URL(filePath: $0.textPath).lastPathComponent } }
 
     /// 文件页顶次要一行：文件名、存着没有（还没有这个文件时写还没有：写了就建出来）。

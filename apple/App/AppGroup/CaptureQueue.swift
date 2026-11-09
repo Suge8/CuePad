@@ -44,7 +44,6 @@ nonisolated enum CaptureQueue {
         let capture: PendingCapture
         var id: String { directory.lastPathComponent }
 
-        /// 这条带的文件：条目目录里的那份与显示的文件名。
         func files() -> [(url: URL, name: String)] { capture.files.map { (directory.appending(path: $0.stored), $0.name) } }
     }
 

@@ -2,7 +2,6 @@
 import AppKit
 import SwiftUI
 
-/// 主窗口根：按设置切换明暗（连同窗口外框），系统控件按墨着色。
 struct MainRoot: View {
     let workspace: Workspace
     @Environment(AppServices.self) private var services

@@ -9,7 +9,6 @@ struct BoardColumns: View {
     let board: TaskBoard
     @Binding var adding: Bool
     let newTaskProject: UUID?
-    /// 两侧页边。
     let margin: CGFloat
     /// 已完成列末尾"更早做完的"展开着。
     @State private var showsEarlier = DebugHooks.preset.showsDone

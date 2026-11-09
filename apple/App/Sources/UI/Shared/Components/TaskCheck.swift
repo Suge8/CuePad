@@ -15,7 +15,6 @@ struct TaskCheck: Equatable {
     /// 完成后停留多久再写入：够看清对勾、来得及反悔。
     static let linger: Duration = .milliseconds(800)
 
-    /// 界面上这一条显示为完成（勾了还没写入也算）。
     func done(_ task: Card) -> Bool { task.status == .done || phase != .idle }
 }
 

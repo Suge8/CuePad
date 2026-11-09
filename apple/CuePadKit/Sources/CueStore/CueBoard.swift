@@ -9,7 +9,6 @@ public struct HandOffPlan: Equatable, Sendable {
     case launch(project: UUID, host: String)
   }
 
-  /// 交给会话的叶子。
   public var leaf: UUID
   public var destination: Destination
   /// 要开新会话（不是接着用已有的）：开工的第一句据此带不带顶层任务作背景（`CueStore.opening`）。
@@ -31,7 +30,6 @@ public struct CueBoard: Equatable, Sendable {
   public var active: [CueWork] { tasks.filter(\.isActive).map(CueWork.task) + sessions.map(CueWork.session) }
 }
 
-/// 在做的一件（`CueBoard.active`）：在做的事，或不归没做完的事的活会话。
 public enum CueWork: Identifiable, Equatable, Sendable {
   case task(CueBoardItem)
   case session(PiSessionState)
@@ -91,7 +89,6 @@ public struct CueBoardLeaf: Equatable, Sendable {
   public var isActive: Bool { launching || sending || session.map { $0.state != .known(.ended) } ?? false }
 }
 
-/// 一件事的细节（Cue 的 peek）：叶子与各自的会话。
 public struct CueTaskDetail: Equatable, Sendable {
   public var task: Card
   public var progress: TaskProgress?
@@ -106,7 +103,6 @@ public struct CueLeafDetail: Equatable, Sendable {
   public var handoffs: [DeliveryRequest]
 }
 
-/// 一个会话的细节（Cue 的 peek）：记录与最近几轮问答。
 public struct CueSessionDetail: Equatable, Sendable {
   public var session: PiSessionState
   /// 最近几轮问答（会话里用户一方说的与 Agent 的回答），从早到晚。

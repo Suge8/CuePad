@@ -23,7 +23,6 @@ nonisolated enum Route: Hashable {
     /// 更早：已结束的会话，按结束时间分段（`EarlierPage`，三端同一页：窄屏从 Cue 页会话条底下"更早"那一格推入，宽屏点会话条上的"更早"在主区打开）。
     case earlier
     case card(UUID)
-    /// 一个 Pi 会话的整页（近况与回复）。
     case session(SessionRoute)
 
     /// 会话页；`seed` 是去之前读好的这一页（`Workspace.openSession`，iOS 推入的第一帧用它）。

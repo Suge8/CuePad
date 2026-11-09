@@ -53,8 +53,6 @@ struct CueRunPanel: View {
     }
 }
 
-// MARK: 一轮
-
 /// 一轮：一行为什么醒、几点、用时、工具次数；在跑的一轮转圈，出错的写胭脂"出错"。点开是交给大脑的话、工具清单、错误与做完时的上下文。
 private struct CueRoundRow: View {
     let round: CueRound
@@ -179,8 +177,6 @@ private struct CueCallRow: View {
         }
     }
 }
-
-// MARK: 零件
 
 /// 全文：等宽小字垫代码块同一种底（`ChatBlock`），可选；太长在里面滚。
 private struct TraceText: View {

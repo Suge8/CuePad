@@ -40,7 +40,6 @@ public struct LibraryLocation: Equatable, Sendable {
     }
   }
 
-  /// 库是怎么定下来的。
   public enum Origin: Sendable {
     /// 正式版的真实库（Mac 上正式版的进程，iOS 上 App Group 里的）
     case release

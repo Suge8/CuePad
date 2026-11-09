@@ -18,7 +18,6 @@ struct WidePage {
     private struct Reading {
         let column: WideSlot
         let scroll: ObjectIdentifier
-        /// 可视区正中那一条与它离正中多远。
         let anchor: (id: AnyHashable, offset: CGFloat)
         let top: CGFloat
         let bottom: CGFloat

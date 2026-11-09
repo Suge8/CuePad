@@ -66,6 +66,13 @@ extension AppServices {
         uploaded(try await store.requestConfig(config, to: session.target, on: session.hostID))
     }
 
+    /// 让 Pi 把会话改名（写一条发给它所在 Mac 的配置请求，立即上传）。新名为空时不写。
+    @discardableResult
+    func rename(_ session: PiSessionState, to name: String) async throws -> DeliveryRequest {
+        guard let name = PiRename.clean(name) else { throw CueStoreError.blankDeliveryContent }
+        return try await configure(PiConfig(name: name), for: session)
+    }
+
     /// 结束会话：请会话所在的 Mac 让它的 Pi 进程正常退出。会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。
     func end(_ session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestEnd(of: session.target, on: session.hostID))
@@ -105,12 +112,10 @@ extension AppServices {
         uploaded(try await store.requestBind(bind, title: title, on: host))
     }
 
-    /// 请 `host` 那台 Mac 整理技能与规则（`Workspace.tidy`）。
     func requestTidy(_ orders: [TidyOrder], on host: String) async throws -> DeliveryRequest {
         uploaded(try await store.requestTidy(orders, on: host))
     }
 
-    /// 请 `host` 那台 Mac 改一份技能或规则文件（`Workspace.saveFile`）。
     func requestLibraryEdit(_ edit: LibraryEdit, title: String, on host: String) async throws -> DeliveryRequest {
         uploaded(try await store.requestLibraryEdit(edit, title: title, on: host))
     }
@@ -122,6 +127,5 @@ extension AppServices {
 }
 
 nonisolated extension PiSessionState {
-    /// 投送请求里指这个会话的目标（`ref` 是 Pi 自己的会话 id）。
     var target: SendTarget { SendTarget(kind: .piSession, name: title, ref: sessionID) }
 }

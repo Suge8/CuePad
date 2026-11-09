@@ -12,7 +12,6 @@ extension CueKeeper {
 
     var turn: Turn? { shift?.turn }
 
-    /// 改在跑的班次（不在值班时什么都不做）。
     func updateShift(_ edit: (inout Shift) -> Void) {
         guard case .running(var shift) = phase else { return }
         edit(&shift)
@@ -193,7 +192,6 @@ extension CueKeeper {
         }
     }
 
-    /// 一次工具调用开始 / 做完：记进这一轮的经过（大脑报的，与 `leaveUnattended` 代留的同一条路）。
     func began(_ id: String, _ name: String, _ arguments: String) async {
         let named = await CueActivity.named(tool: name, arguments: arguments, store: store)
         let step = CueActivity.step(tool: name, arguments: arguments, named: named)
