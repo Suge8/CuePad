@@ -49,11 +49,9 @@ export async function apply(ctx, config = {}) {
 
   const { appendPluginRecord } = await ctx.loader.internal.import("@deepseek-ai/dsh-session", ctx.baseUrl, {});
   const record = (session, message, delivery) => appendPluginRecord(session, "plugin:cuepad/delivery", { message, delivery });
-  /** 每个会话：已作为增量发出、还没等到整段的话；等着进收件箱的投送请求 id */
   const streamed = new Map(), deliveries = new Map();
   /** 发出去的请求里认会话开好的回应：请求 id → 会话 id（`session/load` 的请求里就有） */
   const opening = new Map();
-  /** 发给 CuePad、等着回应的提问：请求 id → 那次提问的 resolve、reject */
   const asking = new Map();
   ctx.on("user-questions/request", (request, next) => {
     if (request.agent === undefined) return next();
@@ -101,7 +99,6 @@ export async function apply(ctx, config = {}) {
     record(agent.session, message.id, delivery);
   });
 
-  /** 经 `_cuepad/steer` 插进去、还没被收下的消息 id */
   const steered = new Set();
   const methods = extensions(ctx, steered);
   const toAgent = (message) => {
@@ -221,7 +218,6 @@ const modelValue = (ref) => {
   return slash < 0 ? ref : JSON.stringify([ref.slice(0, slash), ref.slice(slash + 1)]);
 };
 
-/** 出去的配置项里模型那一项的值改成 `提供方/模型`。 */
 function rewriteModels(options) {
   const values = (list) => list?.map((o) => (o.options ? { ...o, options: values(o.options) } : { ...o, value: modelRef(o.value) }));
   return options.map((o) => (o.category === "model" ? { ...o, currentValue: modelRef(o.currentValue), options: values(o.options) } : o));

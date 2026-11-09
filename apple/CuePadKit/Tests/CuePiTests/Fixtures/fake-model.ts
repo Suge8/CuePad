@@ -1,23 +1,7 @@
-// 测试用假模型：真实 Pi + 真实桥扩展，零网络、结果确定。
-// 最后一条 user 文字里的标记决定行为（请求被中止时以 aborted 结束）：
-//   [[slow]]      流式输出前停住，直到测试放行（制造"正忙"窗口；见下"停住与放行"）
-//   [[fail]]      以 error 结束
-//   [[fail-once]] 同一句话第一次请求以 error 结束（"fake model failure"），之后的请求照常回复（重跑出错的那一轮）
-//   [[roles]]     回复 "ROLES <请求里每条消息的角色，逗号连接>"（证明请求里没有多出的消息）
-//   [[abort-as-error]] 请求被中止时以 error（"The operation was aborted."）结束，像 Pi 1.2 的 openai-codex 在工具被中止后的那次请求
-//   [[tool:CMD]]  先发起 bash 工具调用（CMD 里的字面 \n 会变成换行），收到工具结果后回复 TOOL_DONE
-//   [[write:PATH]] 先发起 write 工具调用（写 PATH），收到工具结果后回复 TOOL_DONE
-//   [[subagent:NAME]] 先调用 FireCode 的 subagents 工具开一个子代理（任务"[[slow]] 子任务"），收到工具结果后回复 TOOL_DONE
-//   [[kill:NAME]] 先调用 FireCode 的 subagents 工具移除这个子代理（在跑的也移除），收到工具结果后回复 TOOL_DONE
-//   [[overflow]]  上下文里还没有压缩摘要时以"上下文溢出"的错误结束（Pi 随即压缩再重试），有了摘要照常回复
-// 压缩摘要的请求（Pi 把要压缩的对话写成 <conversation> 或 # Conversation 开头的一条消息）里，对话带着：
-//   [[slow-compact]] 给摘要前停住，直到测试放行（制造"正在压缩"的窗口，期间被中止以 aborted 结束）
-//   [[fail-compact]] 以 error 结束（压缩失败）
+// 测试用假模型：真实 Pi + 真实桥扩展，零网络、结果确定。最后一条 user 文字里的 `[[...]]` 标记决定行为（请求被中止时以 aborted 结束）。
 // 停住与放行：不按时长等（机器负载高时测试自己的步骤会慢过任何固定窗口），由测试决定窗口多长。停住时在 <agent 目录>/fake-model-gate/ 下写
 //   held-<pid>-<序号>；测试往同目录写 release-<任意名> 放行一次（一个文件放行一次停住，先放后停也算）；请求被中止时立即结束停住，不消耗放行。
-// 起会话名的请求（系统提示是 CuePad 的起名说明，`SessionNameSuggestion`）：回复 "<模型 id>：<那句话>"，证明用了哪个模型、交的是哪句话。
 // 标价 echo-b 最低、echo（缺省的当前模型）其次：起名挑同一 provider 里最便宜的。
-// 其余：回复 "ECHO <文字> IMAGES[<mime>:<base64长度>,…]"，证明文字与图片都进了模型上下文。
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import { mkdirSync, readdirSync, unlinkSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -80,6 +64,7 @@ export default function (pi: any) {
 				const text = parts.filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n");
 				const images = parts.filter((p: any) => p.type === "image").map((p: any) => `${p.mimeType}:${p.data.length}`);
 
+				// 起会话名的请求（系统提示是 CuePad 的起名说明，`SessionNameSuggestion`）：回复 "<模型 id>：<那句话>"，证明用了哪个模型、交的是哪句话
 				const naming = context.messages.some((m: any) => m.role === "system" && JSON.stringify(m.content).includes("single-line task title"));
 				if (naming) {
 					const title = `${model.id}：${text}`;
@@ -90,12 +75,14 @@ export default function (pi: any) {
 					return;
 				}
 
+				// 压缩摘要的请求：Pi 把要压缩的对话写成 <conversation> 或 # Conversation 开头的一条消息，[[slow-compact]]、[[fail-compact]] 写在这段对话里
 				const summarizing = text.startsWith("<conversation>\n") || text.startsWith("# Conversation\n");
 				if (text.includes("[[slow]]") || (summarizing && text.includes("[[slow-compact]]"))) await hold(options?.signal);
 				stream.push({ type: "start", partial: msg });
 
 				// 与真实提供方一样：被中止（Esc、CuePad 的停止）就以 aborted 结束这次请求
 				if (options?.signal?.aborted) {
+					// 像 Pi 1.2 的 openai-codex 在工具被中止后的那次请求：以 error 而不是 aborted 结束
 					const asError = text.includes("[[abort-as-error]]");
 					msg.stopReason = asError ? "error" : "aborted";
 					msg.errorMessage = asError ? "The operation was aborted." : "Request was aborted";
