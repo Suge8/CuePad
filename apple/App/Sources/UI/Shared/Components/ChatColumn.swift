@@ -66,6 +66,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
                     ChatScrubber(marks: marks, scrolling: follow.scrolling, crowded: margin < ChatScrubber.room) { follow.seek($0) }
                 }
             }
+            // 改记成接上的那条，之后不用每次再找
             .onChange(of: ids, initial: true) {
                 let index = start ?? ids.count - self.window(size)
                 if shown?.first != (ids.indices.contains(index) ? ids[index] : nil) { show(from: index) }

@@ -105,6 +105,7 @@ enum DeliverableLooks {
 
     private static let pageLook = "faded"
 
+    /// 按外观画（`LookBox.dark`），深色下不再压暗。
     static func drawn(_ kind: PiPreviewKind?) -> Bool { [.markdown, .diff, .text].contains(kind) }
 
     /// 沿长的那一边挪到细节最多的地方：截图与页面上有字、有控件的地方细节多，空白的底没有，页面的标题与表单、几张方案图各自不同的那一块都落在框里。

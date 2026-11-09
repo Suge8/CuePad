@@ -24,6 +24,7 @@ extension View {
         // sheet 是另一层呈现，窗口那一层的气泡画不到它上面：里面长出的气泡画在它自己的这一层
         panelHost()
             .environment(\.closePanel, close)
+            // 页顶那一排画在它自己的导航栏里，不吃根页给的让开、长开面板与前台状态
             .environment(\.headerHost, .navigationBar)
             .environment(\.headerGivesWay, false)
             .environment(\.headerGrown, false)

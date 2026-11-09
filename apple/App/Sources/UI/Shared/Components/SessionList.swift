@@ -22,6 +22,7 @@ struct SessionList<Top: View>: View {
         }
         // 每个会话一张卡片（`sessionCard`）：平铺列表，分组标题是普通的行（平铺列表的分组标题会吸顶）
         .listStyle(.plain)
+        // 分组标题这类矮行不占系统给行的最小高度
         .environment(\.defaultMinListRowHeight, 0)
         .scrollContentBackground(.hidden)
         .safeAreaPadding(.horizontal, Self.margin)

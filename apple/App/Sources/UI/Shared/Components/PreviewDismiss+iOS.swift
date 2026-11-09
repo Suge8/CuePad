@@ -11,6 +11,7 @@ struct PreviewDismissGuard: UIViewRepresentable {
     func makeUIView(context: Context) -> Anchor { Anchor() }
     func updateUIView(_ view: Anchor, context: Context) {}
 
+    /// 系统的关闭手势在呈现转场里才装上：每次排版看一眼，配齐、分页找到了就不再找。
     final class Anchor: UIView {
         private var gated = 0
         private var pagerFound = false

@@ -38,6 +38,7 @@ struct ComposerHeight {
         var version: Int
     }
 
+    /// 只留这一版里问过、撑满过上限的，别的作废：动画里一帧一个宽度，不留着越攒越多。
     mutating func textChanged() {
         fits = fits.filter { $0.value.version == version && $0.value.filled != nil }
         version += 1

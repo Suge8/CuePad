@@ -2,6 +2,7 @@ import SwiftUI
 
 /// 回到前台的那一拉多在一秒以内：这期间什么都不出，免得一闪；过了 `delay` 还没好才淡入，好了就撤下。
 enum Pending {
+    /// 比这快的拉取不出指示：一闪而过的转圈比稍等一下更扰人。
     static let delay = Duration.milliseconds(400)
 }
 

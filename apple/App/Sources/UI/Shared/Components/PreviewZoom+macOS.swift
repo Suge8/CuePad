@@ -198,6 +198,7 @@ private final class Canvas: NSView {
 
     override var isFlipped: Bool { true }
     override var wantsUpdateLayer: Bool { true }
+    // 窗口不在前台时第一下也算：双击放大不用先点一下激活
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {

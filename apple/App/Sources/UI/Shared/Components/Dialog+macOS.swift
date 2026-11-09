@@ -46,6 +46,7 @@ private struct DialogCard: View {
                     if button.id == primary?.id {
                         Button { run(button) } label: { Text(button.title) }.keyboardShortcut(.defaultAction)
                     } else {
+                        // 破坏性的字用胭脂（同系统提示框），一眼看出这颗会删东西
                         Button(role: button.role) { run(button) } label: {
                             Text(button.title).foregroundStyle(button.role == .destructive ? palette.failure : palette.ink)
                         }

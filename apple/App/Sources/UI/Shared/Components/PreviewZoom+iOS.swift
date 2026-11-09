@@ -34,6 +34,7 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
     private var pending: UIImage?
     private var aspect: CGFloat?
     private var decoded: UIImage?
+    // 重算只看框与比例：换清晰度不算
     private var fitted: CGSize = .zero
     private var fittedFor: (area: CGSize, aspect: CGFloat)?
 
