@@ -77,10 +77,7 @@ struct TaskOutlineTests {
         #expect(tree.indent(second.id) == nil)
         let rows = tree.rows()
         let frames = rowFrames(of: rows)
-        if let move = tree.drop(second.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)?.move {
-            try await store.moveCard(second.id, to: move.slot, after: move.after)
-        }
-        #expect(try await store.card(second.id)?.parentID == nil)
+        #expect(tree.drop(second.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0) == nil)
 
         let site = try await store.createProject(name: "网站", color: "#000000")
         let loose = try await store.createTask("续费域名")
