@@ -50,7 +50,6 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
         }
     }
 
-    /// 时间快用完：交出手里已有的（改写过就是改写后的，否则是通用句）。
     override func serviceExtensionTimeWillExpire() {
         finish()
     }
