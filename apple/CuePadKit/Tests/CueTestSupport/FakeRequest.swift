@@ -74,9 +74,10 @@ public struct FakeRequest: Sendable {
     effort = json["reasoning_effort"] as? String ?? (json["reasoning"] as? [String: Any])?["effort"] as? String
   }
 
+  /// 命名空间里的工具（工具名 → 命名空间）：工具搜索的结果，和 `additional_tools`（新模型把工具放在对话开头的一条里）
   private static func searched(_ json: [String: Any]) -> [String: String] {
     var found: [String: String] = [:]
-    for item in json["input"] as? [[String: Any]] ?? [] where item["type"] as? String == "tool_search_output" {
+    for item in json["input"] as? [[String: Any]] ?? [] where ["tool_search_output", "additional_tools"].contains(item["type"] as? String) {
       for space in item["tools"] as? [[String: Any]] ?? [] {
         for tool in space["tools"] as? [[String: Any]] ?? [] {
           if let name = tool["name"] as? String, let namespace = space["name"] as? String { found[name] = namespace }
@@ -128,6 +129,11 @@ public struct FakeRequest: Sendable {
         case "user": messages.append(Message(role: .user, text: text, images: images, calls: []))
         default: messages.append(Message(role: .assistant, text: text, images: [], calls: []))
         }
+      case "agent_message":
+        // 代理之间的消息（子代理收到的任务、主代理收到的子代理结果）：对收到的一方是一句“你的话”；正文可能在 encrypted_content 里（Codex 的测试里是明文）
+        let parts = item["content"] as? [[String: Any]] ?? []
+        let text = parts.compactMap { $0["text"] as? String ?? $0["encrypted_content"] as? String }.joined(separator: "\n")
+        messages.append(Message(role: .user, text: text, images: [], calls: []))
       case "function_call", "custom_tool_call", "local_shell_call":
         messages.append(Message(role: .assistant, text: "", images: [], calls: [item["name"] as? String ?? "shell"]))
       case "function_call_output", "custom_tool_call_output", "local_shell_call_output":

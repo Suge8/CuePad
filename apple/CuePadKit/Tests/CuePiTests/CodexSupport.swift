@@ -33,6 +33,8 @@ func solidPNG(red: CGFloat, green: CGFloat, blue: CGFloat) throws -> Data {
 struct CodexHome {
     let root: URL
     let model: FakeModel
+    /// 会话用的模型：缺省 gpt-5.5（工具是普通的函数 `exec_command`），gpt-6-luna 一档走代码模式的 `exec`
+    let modelName: String
     var home: URL { root.appending(path: "codex", directoryHint: .isDirectory) }
     var work: URL { root.appending(path: "work", directoryHint: .isDirectory) }
     var sockets: URL { root.appending(path: "s", directoryHint: .isDirectory) }
@@ -51,10 +53,11 @@ struct CodexHome {
     }
     static let keyVariable = "CUEPAD_FAKE_MODEL_KEY"
 
-    init(model: FakeModel) throws {
+    init(model: FakeModel, modelName: String = codexTestModel) throws {
         try pinnedCodex.require()
         root = try makeTempDirectory()
         self.model = model
+        self.modelName = modelName
         for directory in [home, work, root.appending(path: "user")] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
@@ -63,7 +66,7 @@ struct CodexHome {
     /// 配置：假模型当提供方，最便宜的思考强度，信任工作目录（没人回答信任提问），关掉更新检查与遥测。
     func signIn(approvals: String = "never") throws {
         let config = """
-            model = "\(codexTestModel)"
+            model = "\(modelName)"
             model_reasoning_effort = "low"
             approval_policy = "\(approvals)"
             sandbox_mode = "workspace-write"
@@ -146,8 +149,8 @@ struct CodexHome {
 }
 
 @MainActor
-func withCodexRig(approvals: String = "never", _ body: (CodexRig) async throws -> Void) async throws {
-    let rig = try await CodexRig(approvals: approvals)
+func withCodexRig(approvals: String = "never", model: String = codexTestModel, _ body: (CodexRig) async throws -> Void) async throws {
+    let rig = try await CodexRig(approvals: approvals, model: model)
     do {
         try await body(rig)
     } catch {
@@ -166,8 +169,8 @@ final class CodexRig {
     let presence: TestPresence
     var model: FakeModel { codex.model }
 
-    init(approvals: String = "never") async throws {
-        let codex = try CodexHome(model: try await FakeModel())
+    init(approvals: String = "never", model: String = codexTestModel) async throws {
+        let codex = try CodexHome(model: try await FakeModel(), modelName: model)
         let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
         let bridge = PiBridge(socketDirectory: codex.sockets)
