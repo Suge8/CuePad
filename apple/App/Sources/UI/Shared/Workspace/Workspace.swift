@@ -92,7 +92,6 @@ final class Workspace {
     }
     var openCard: UUID? { if case .card(let id)? = overlay { id } else { nil } }
     var openLibraryFile: LibraryFile? { if case .library(let file)? = overlay { file } else { nil } }
-    /// 收起这一页；已换成别的就不动。
     func close(_ page: Overlay) { if overlay == page { overlay = nil } }
     #endif
     /// 改着的技能与规则（`fileDraft(_:text:on:)`），按哪台 Mac 的哪一份分开：离开文件页也留着。
@@ -235,8 +234,6 @@ final class Workspace {
         presses.dismiss()
     }
     #endif
-
-    // MARK: 项目目录、当前项目与新建位置
 
     /// 工作区的全部订阅，直到所在任务取消：项目目录（读不出来时按"重试"重新订阅）、交给了会话的卡、文件夹引导、Cue 的现状、
     /// 待打开的链接与点开的通知（`openLinks`），Mac 上还有会话归属的项目；会话摘要由 App 级的 `LiveSessions` 跟。页面只读这里存下的那几项，不各自订阅。

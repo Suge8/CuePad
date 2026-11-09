@@ -106,7 +106,6 @@ nonisolated extension CueMessage {
 }
 
 nonisolated extension CuePlace {
-    /// 任务圈按它分段（`TaskRingView`）
     var progress: TaskProgress? { steps.map { TaskProgress(done: $0.done, total: $0.total) } }
 }
 

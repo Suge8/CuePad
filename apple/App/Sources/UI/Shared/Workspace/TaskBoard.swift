@@ -132,7 +132,6 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         Set(columns.keys).symmetricDifference(before.columns.keys)
     }
 
-    /// 每张卡在哪一列。
     private var columns: [String: Column] {
         Dictionary(Column.allCases.flatMap { column in flights(column).map { ($0, column) } }) { first, _ in first }
     }
@@ -156,7 +155,6 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
     }
 
-    /// 只看一个项目的（nil 是全部）。
     func only(_ project: UUID?) -> TaskBoard {
         guard let project else { return self }
         let mine = { (item: Item) in item.task.projectID == project }

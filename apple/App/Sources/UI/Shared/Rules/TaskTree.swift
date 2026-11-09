@@ -77,8 +77,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return rows
     }
 
-    // MARK: 缩进与反缩进
-
     /// 成为上一个同级的最后一个子任务；没有上一个同级、或整棵子树会超过最深一级时为 nil。
     func indent(_ id: UUID) -> TaskMove? {
         let siblings = parents[id].map(children(of:)) ?? roots
@@ -93,8 +91,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         guard let parent = parents[id] else { return nil }
         return TaskMove(slot: slot(under: parents[parent], project: project(of: parent)), after: parent)
     }
-
-    // MARK: 拖放
 
     /// 拖着 `dragged` 停在 `point`（与 `frames` 同一坐标系）时的落点。`rows` 是可见的行，`depthShift` 是手指横向挪了几级
     /// （右正左负）。停在一行中部是成为它的子任务（排在最后）；在两行之间时，层级取原层级加横移、夹在这个位置可取的范围内。

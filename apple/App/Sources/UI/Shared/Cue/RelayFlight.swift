@@ -7,9 +7,7 @@ struct RelayFlight {
     let color: CGColor
     let reduceMotion: Bool
 
-    /// 一次最多飞几道。
     static let most = 3
-    /// 相邻两道起飞的间隔。
     private static let stagger = 0.09
     /// 起飞那圈环外扩之后多久光离开状态标（叫醒）。
     private static let liftoff = 0.08
