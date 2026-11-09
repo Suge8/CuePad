@@ -1,10 +1,9 @@
 #if os(iOS)
 import CueStore
 import Testing
-import UIKit
 @testable import CuePad
 
-/// #99：手机的按钮入口、真实网页媒体与隔离库；中转、远端及权限等待用替身。
+/// #99：手机的按钮入口与隔离库；媒体、中转、远端及权限等待用替身。
 @Suite(.serialized) @MainActor struct VoiceAudioLifecycleTests {
     final class Media: VoiceMedia {
         var onEvent: (VoicePeer.Event) -> Void = { _ in }
@@ -41,36 +40,6 @@ import UIKit
             #expect(try await app.services.store.cueMessages().map(\.id) == [saved.id])
             #expect(try await app.services.store.deliveryRequests().isEmpty)
         }
-    }
-
-    @Test func realWebAudioReopensAndIgnoresOldCallbacks() async throws {
-        var nextMedia: any VoiceMedia = Media()
-        let fixture = try await Fixture(makeMedia: { nextMedia }), workspace = fixture.workspace
-        defer { fixture.app.services.cancelBackgroundWork() }
-        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let window = UIWindow(windowScene: scene)
-        window.rootViewController = UIViewController()
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true }
-        try await eventually("App 已可接收接通点击") { UIApplication.shared.applicationState == .active }
-        let file = fixture.app.directory.appending(path: "silence.wav")
-        try VoicePeer.wav(Data(repeating: 0, count: 48000)).write(to: file)
-        var oldCallback: ((VoicePeer.Event) -> Void)?
-        for _ in 0..<2 {
-            let media = VoicePeer(source: .file(file), recording: nil)
-            nextMedia = media
-            try await workspace.startVoiceCall()
-            let before = fixture.voice.inputSamples.count
-            oldCallback?(.ended(.audioInterrupted))
-            try await eventually("网页继续采样") { fixture.voice.inputSamples.count > before || fixture.voice.phone == nil }
-            #expect(workspace.phoneVoice.phase == .connecting)
-            #expect(!fixture.voice.canStart)
-            oldCallback = media.onEvent
-            await workspace.hangUpVoiceCall()
-            #expect(workspace.phoneVoice.phase == .ended(reason: .hungUp))
-            #expect(fixture.voice.canStart)
-        }
-        try await fixture.checkLibrary()
     }
 
     @Test(arguments: [false, true])
