@@ -4,7 +4,7 @@ import Foundation
 
 extension AppServices {
     /// `.iCloud` 不创建同步的两种情况：隔离模式（`CUEPAD_LIBRARY_DIR`，开发与验收用，不能碰真实账号的云端数据；
-    /// 例外只有同步测量：Debug 构建、开发环境签名、给了 `-CuePadCloudKit YES`，见 `DebugHooks.syncsIsolatedLibrary`）；
+    /// 例外只有 Debug 构建的模拟云（`-CuePadSharedCloud`）与同步测量连开发环境（开发环境签名、`-CuePadCloudKit YES`），见 `DebugHooks.syncsIsolatedLibrary`）；
     /// 本机 ad-hoc 构建没有 iCloud 权限（CloudKit 缺权限时会直接抛 ObjC 异常使进程崩溃，只有签名构建才有）。
     static func makeSync(
         _ source: SyncSource, store: CueStore, location: LibraryLocation
@@ -14,7 +14,7 @@ extension AppServices {
         case .custom(let sync): return (sync, .starting)
         case .built(let make): return (make(store), .starting)
         case .iCloud where location.isIsolated && !DebugHooks.syncsIsolatedLibrary: reason = String(localized: "开发用的隔离资料库，不连 iCloud")
-        case .iCloud where !Entitlements.hasCloudKit: reason = String(localized: "这个构建没有 iCloud 权限（本机开发构建），不会同步")
+        case .iCloud where !Entitlements.hasCloudKit && DebugHooks.sharedCloud == nil: reason = String(localized: "这个构建没有 iCloud 权限（本机开发构建），不会同步")
         case .iCloud: return (DebugHooks.cloudSync(store), .starting)
         }
         log.notice("同步未启用：\(reason, privacy: .public)")

@@ -113,6 +113,9 @@ nonisolated struct DebugArgs: Decodable {
     let seed: String?
     /// `-CuePadSelect <起点:长度>`：编辑器载入后选中这一段（看选区操作）
     let select: String?
+    /// `-CuePadSharedCloud <目录>`（Mac、iPhone、iPad 模拟器都认）：几个隔离实例共用目录里的模拟云（`SharedCloud`：一个 SQLite 文件，延迟模型在 latency.json）当 iCloud，
+    /// 同步代码照真的跑，不连 iCloud、不要 iCloud 权限；同步测量（`sync-bench.py`）与多设备验收（`xc.sh fleet`）用
+    let sharedCloud: String?
     /// `-CuePadSession <会话名>`：session 画面整页打开这个演示会话（演示会话的 sessionID 与会话名相同），send 画面与接力、叫醒等驱动也认
     let session: String?
     /// `-CuePadSettingsPane general|agents`（配 settings 画面）：设置窗口翻到那一页

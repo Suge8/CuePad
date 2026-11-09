@@ -67,7 +67,23 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后会自己退�
 - 语音无人值守回环见 `VoiceLoopback`、`DebugVoice`：合成声源只进入本次创建的临时设备，不改系统默认设备或音量；同机回环被回声消除过滤是预期现象，Debug 关闭它只能验收传输与 Cue 行为，不能算真实麦克风验收。生产仍请求回声消除、降噪和自动增益；实际启用须核对 WebKit 支持列表与轨道设置，不由请求值保证。
 - GPT Live 先筛选、整理，再以 delegation 交接给 Cue；`turn.done` 只是转写。核对交接正文、卡片、用户消息送达与最终回复的 `answeredRequests`；`-CuePadVoiceReplay YES` 在回复后重放交接与转写，库里应仍只有原请求。问候与普通闲聊不应写成 Cue 请求。
 - 朗读验收分开核对 `cue-forward`（Cue 实际结果和交接 ID）、`cue-sent`（发送完成）、`context-accepted`（服务器追加回执）、`assistant-said`（模型转写），最后对照 `output-loud/quiet` 与真实输出录音。只有音轨证据能证明出声，内容仍须回放核实；回执不能当作必播或播完。v3 的 `speakable` 是播报输入，关闭 `ack_filler` 也不保证模型不会自行确认或漏交接。停止请求必须实际交接、由 Cue 确认后再查录音；不能因听到模型说停下就算任务已停止。
-- iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；点按 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 换算；`axe describe-ui` 读不到 SwiftUI 的元素）。`run` 起的实例由后台看守租着那台模拟器（别的检出领不到），到 `CUEPAD_RUN_SECONDS`、实例退出或 `xc.sh stop` 才放；`shot`、`rec` 只在拍的那几秒占着。槽位全机共用（`_lock.sh`），换机型的任务会关掉同槽位上别的机型。模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。模拟器里的系统开关（设置里的开关、权限弹窗）普通 `axe tap` 点不动，要 `axe tap --tap-style physical`。
+- iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；读、点、输入用 `apple/scripts/ui.py <UDID|iphone|ipad> read|tap|paste|key|wait|shot`（AXe 的薄封装，用法在它的头注释），不直接调 `axe tap --label`。
+  `run` 起的实例由后台看守租着那台模拟器（别的检出领不到），到 `CUEPAD_RUN_SECONDS`、实例退出或 `xc.sh stop` 才放；`shot`、`rec` 只在拍的那几秒占着。槽位全机共用（`_lock.sh`），换机型的任务会关掉同槽位上别的机型。
+  模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。模拟器里的系统开关（设置里的开关、权限弹窗）普通点按点不动，要 `ui.py … tap … --physical`。
+- AXe 的树（iOS 27.0 模拟器、AXe 1.8.0 实测）读得出 SwiftUI 的按钮、输入框、文字，带标签、值与框（Cue 页约 100、看板约 150 个有标签的，读一次 1～3 秒，截图 0.2 秒），三个主画面在 iPhone 与 iPad 上都读得出。四处要知道：
+  树里连着屏外的页与零尺寸的重名分身，`axe tap --label` 遇重名直接拒绝（iPad 上六次全拒），`ui.py tap` 只数屏上的、按框的中心点；
+  系统菜单与弹出层（项目页"更多"菜单）不在树里，用快捷键（`ui.py … key cmd+n` 记一条灵感）或按截图的坐标点；
+  中文用 `ui.py … paste`（剪贴板加 ⌘V，不弹粘贴许可，输入框的值读得回来），`axe type` 只认美式键盘；
+  多数元素没有 `AXUniqueId`，按标签找。
+- Mac 读界面用 bcu：`observe-ui` 把大多数节点折起来，找字用 `bcu search-ui --pid <PID> --text …`（找不到时退出码也是 0，看输出里 "N of M matches"）。
+
+## 多设备同时验收
+
+`xc.sh fleet up` 在本检出同时起 Mac、iPhone 模拟器、iPad 模拟器三个隔离实例，共用一朵模拟云（`-CuePadSharedCloud <目录>`，`SharedCloud`：一个 SQLite 文件，同步代码照真的跑，不连 iCloud，没有延迟模型）。
+每端一份库，在 `apple/.derived/fleet/`；本检出的 Mac 实例最多一个，iPhone、iPad 各占一个槽位、各有角色名（`CUEPAD_RUN_ROLE`），互不收掉；`fleet down` 收，30 分钟后自己退出（`CUEPAD_RUN_SECONDS`）。
+起完用 `ui.py iphone|ipad|mac …` 各自操作（Mac 只有读与等）。`xc.sh fleet accept` 是现成的一条验收：iPhone ⌘N 建一条灵感、粘进一句话 → Mac 与 iPad 的屏上读到它，打印各端看到的时刻，没读到以 1 退出。
+时刻是各端读完那一刻，分辨率是一轮读界面的时长（iPad 约 1～3 秒，Mac 不到 1 秒），不是同步本身的时延；时延用 `sync-bench.py`（[perf.md](perf.md)）。
+门铃照常连正式中转（房间按这朵云自己的密钥）。验不了：真 iCloud 与 CloudKit 订阅、推送、真网络、两个账号；那些只能真机、真账号验收。
 
 ## 读屏验收
 
