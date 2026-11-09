@@ -143,6 +143,9 @@ enum CodexHistory {
     struct LastTurn {
         var plan: Bool
         var interrupted: Bool
+        /// 会话文件里已有这一轮的结束记录（`task_complete`、`turn_aborted`）；出错的一轮，`failure` 是记录里的错误原文
+        var finished: Bool
+        var failure: String?
     }
 
     /// 一行可能很长（带图的工具结果），所以从文件尾往前一块一块读；读不了或没有为 nil。
@@ -153,6 +156,7 @@ enum CodexHistory {
         guard var end = try? handle.seekToEnd() else { return nil }
         var head = Data()
         var ended: Bool?
+        var failure: String?
         while end > 0 {
             let start = end > block ? end - block : 0
             guard (try? handle.seek(toOffset: start)) != nil, let chunk = try? handle.read(upToCount: Int(end - start)) else { return nil }
@@ -162,8 +166,10 @@ enum CodexHistory {
                 guard line.firstRange(of: Data("task_".utf8)) != nil || line.firstRange(of: Data("turn_aborted".utf8)) != nil,
                       let event = try? decoder.decode(Lifecycle.self, from: Data(line)), event.type == "event_msg" else { continue }
                 switch event.payload.type {
-                case "task_started": return LastTurn(plan: event.payload.mode == "plan", interrupted: ended ?? false)
-                case "task_complete": ended = ended ?? false
+                case "task_started": return LastTurn(plan: event.payload.mode == "plan", interrupted: ended ?? false, finished: ended != nil, failure: failure)
+                case "task_complete":
+                    if ended == nil { failure = event.payload.error?.message }
+                    ended = ended ?? false
                 case "turn_aborted": ended = ended ?? (event.payload.reason == "interrupted")
                 default: break
                 }
@@ -181,9 +187,14 @@ enum CodexHistory {
             var type: String?
             var reason: String?
             var mode: String?
+            var error: Failure?
+
+            struct Failure: Decodable {
+                var message: String?
+            }
 
             private enum CodingKeys: String, CodingKey {
-                case type, reason
+                case type, reason, error
                 case mode = "collaboration_mode_kind"
             }
         }
