@@ -5,12 +5,10 @@
 xc_test() {
   # 用例断言的是中文界面：不随跑测试那台机器的系统语言变
   limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT" -testLanguage zh-Hans -testRegion CN)
-  # 开好领到的模拟器（并瘦身，见 _sim.sh），xcodebuild 就用开着的这台。与编译并行：干净机器上第一次开模拟器要好几分钟（GitHub 托管 runner 实测 8 分半），
-  # 编译也要几分钟，先开机再编译就是两段相加；跑测试前（下面 wait）开好即可。
-  # 开好后卸掉上一次装的 App：它开着的实时活动在重装时被系统结束，系统随即把 App 叫到后台（不带测试的环境），
+  # 先开好领到的模拟器（并瘦身，见 _sim.sh），xcodebuild 就用开着的这台。
+  # 再卸掉上一次装的 App：它开着的实时活动在重装时被系统结束，系统随即把 App 叫到后台（不带测试的环境），
   # 正撞上测试宿主的启动，测试进程就连不上（"The test runner hung before establishing connection"）。卸掉时活动一起没了，没有这一下
-  booting=""
-  if [ -n "${device:-}" ]; then { phase 开机 sim_boot "$device" && xcrun simctl uninstall "$device" "$CUEPAD_APP_ID"; } & booting=$!; fi
+  if [ -n "${device:-}" ]; then phase 开机 sim_boot "$device"; xcrun simctl uninstall "$device" "$CUEPAD_APP_ID"; fi
   # 屏幕上只留编译的警告与错误、失败的用例（带原因）与汇总：编译的每一步、App 与测试宿主的日志、每条用例的开始与通过一次就是几千行，
   # 会把失败挤出 Agent 的输出上限。所以先 -quiet 编（只出警告与错误），再不带 -quiet 跑（-quiet 连失败的原因也吞掉），跑的输出滤掉上面那些；
   # 完整输出写进 log
@@ -49,9 +47,7 @@ xc_test() {
     kit_test "${@:3}" | shown || status=$?
   else
     narrow=(); while IFS= read -r -d '' a; do narrow+=("$a"); done < <(narrowed "${@:3}")
-    xcd "${narrow[*]:-all}" ${narrow[@]+"${narrow[@]}"} 2>&1 | shown || status=$?
-    if [ -n "$booting" ]; then wait "$booting" || status=$?; fi
-    if [ "$status" = 0 ]; then xcb test-without-building "${limits[@]}" "${@:3}" | shown || status=$?; fi
+    { xcd "${narrow[*]:-all}" ${narrow[@]+"${narrow[@]}"} && xcb test-without-building "${limits[@]}" "${@:3}"; } | shown || status=$?
     if [ "$platform" != mac ] && [ "$#" -le 2 ]; then kit_test | shown || status=$?; fi
   fi
   # 点名的测试一个也没对上（名字或所在的 Suite 写错）时 xcodebuild 照样报成功。并行跑（-parallel-testing-enabled YES）时没有那两行汇总，

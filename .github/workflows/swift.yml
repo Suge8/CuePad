@@ -38,9 +38,6 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_27.0.app
           xcodebuild -version; xcrun --show-sdk-path; xcrun simctl list runtimes; env | grep -iE 'sdkroot|developer_dir' || true
       - run: brew install ripgrep
-      # 测试默认从 ~/.local/bin/pi 找真 Pi（CueHostTests、VoiceStopRaceTests、RealPiQueueTests 等）；版本是 CuePi/README.md 写的「官方 npm 原包」验证过的那版
-      - if: startsWith(matrix.args, 'test')
-        run: npm install -g --prefix "$HOME/.local" @earendil-works/pi-coding-agent@1.4.0
       - run: apple/scripts/xc.sh ${{ matrix.args }}
       - uses: actions/upload-artifact@v7
         if: failure()
