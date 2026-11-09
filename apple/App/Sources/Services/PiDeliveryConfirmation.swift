@@ -84,7 +84,7 @@ struct PiDeliveryConfirmation {
         if try await received(request) { return .succeeded }
         try Task.checkCancellation()
         guard let deadline = request.deadlineAt, store.timing.now() < deadline else { return .unconfirmed(uncertain) }
-        if let connection, pi.session(id: connection) == nil { return .unconfirmed(uncertain) }
+        if let connection, pi.session(id: connection) == nil { return try await lastLook(request, file: file, agent: agent, uncertain: uncertain) }
         return try await wait(request, agent: agent, history: history, connection: connection, file: file, until: deadline, uncertain: uncertain)
     }
 
@@ -126,9 +126,7 @@ struct PiDeliveryConfirmation {
                 group.addTask {
                     for await _ in changes {
                         if await pi.session(id: connection) != nil { continue }
-                        // 断线时最后核对一次：文件可能已写好，只是常规摄取尚未提交。
-                        try await readLast(file, agent: agent)
-                        return try await received(request) ? .succeeded : .unconfirmed(uncertain)
+                        return try await lastLook(request, file: file, agent: agent, uncertain: uncertain)
                     }
                     throw CancellationError()
                 }
@@ -136,6 +134,12 @@ struct PiDeliveryConfirmation {
             defer { group.cancelAll() }
             return try await group.next()!
         }
+    }
+
+    /// 断线时最后核对一次：文件可能已写好，只是常规摄取尚未提交。首读之后、等待之前就断了的同样要读，不能直接按没收下收尾。
+    private func lastLook(_ request: DeliveryRequest, file: URL, agent: AgentKind, uncertain: ShownText) async throws -> DeliveryOutcome {
+        try await readLast(file, agent: agent)
+        return try await received(request) ? .succeeded : .unconfirmed(uncertain)
     }
 
     @concurrent private func readLast(_ file: URL, agent: AgentKind) async throws {
