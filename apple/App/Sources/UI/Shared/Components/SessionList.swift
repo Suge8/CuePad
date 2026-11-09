@@ -152,7 +152,8 @@ private extension View {
 
 /// "更早"那一页（`Route.earlier`，WORDS.md）：已结束的会话按结束时间分段（`AgentListModel.endedOnly`），滑到底再读一页。三端同一页：
 /// 手机从 Cue 页会话条底下"更早"那一格推入（`EarlierTile`，左边是系统返回）；Mac 与 iPad 宽屏点会话条上的"更早"在主区打开（`RailEarlier`）。
-/// 在跑、等你的会话不在这里，它们在会话条上。
+/// 在跑、等你的会话不在这里，它们在会话条上。已结束的会话只在这一页与搜索里找（手机搜索页的会话一栏、Mac 的 ⌘K）；
+/// 项目页的“更早”是另一样（没在墙上的旧灵感），两处不混。
 struct EarlierPage: View {
     @State private var model = AgentListModel(endedOnly: true)
 
