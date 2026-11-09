@@ -140,9 +140,9 @@ final class MacExecutor {
         } catch {
             reportIssue(String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)"))
         }
-        // Pi 的 message_end 先于会话文件写入；其他接入沿用各自的受理合同，不抹掉已有能力。
-        guard session.agent != .pi else {
-            return PiDeliveryConfirmation(store: store, pi: pi).pending(in: session)
+        // 其余接入沿用各自的受理合同，不抹掉已有能力。
+        guard !session.confirmsFromHistory else {
+            return PiDeliveryConfirmation(store: store, pi: pi).pending(in: session, reason: session.agent == .pi ? nil : PiDeliveryConfirmation.notTaken)
         }
         await record(content, of: request, to: session.sendTarget)
         return .succeeded

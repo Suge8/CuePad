@@ -199,11 +199,11 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     }
 
     private func attach(_ session: PiSession, inbox: String?, runningSince: Date?, waiting: Bool) -> ClaudeTerminalSession {
-        let pid = session.pid, cwd = session.cwd, home = home
         let terminal = ClaudeTerminalSession(
-            id: session.id, pid: pid, bridge: bridge, gate: gate, inbox: inbox, registry: registry(of: pid),
-            timing: timing, runningSince: runningSince, waiting: waiting) { ClaudeBypass.reachable(pid: pid, cwd: cwd, home: home) }
+            id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, registry: registry(of: session.pid),
+            timing: timing, runningSince: runningSince, waiting: waiting)
         terminals[session.id] = terminal
+        let pid = session.pid
         if exitWatchers[pid] == nil {
             exitWatchers[pid] = ProcessExitWatcher(pid: pid) { [weak self] in self?.processExited(pid) }
         }

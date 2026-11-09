@@ -50,7 +50,7 @@
 
 ## 发送
 
-发给 Agent 与 Cue 的话经 `Workspace.speak` 入库，界面不等上传或结果；说不了的情况在 `AgentCapabilities.speakBlocked`，Pi 的受理与历史核对在 `PiDeliveryConfirmation`。
+发给 Agent 与 Cue 的话经 `Workspace.speak` 入库，界面不等上传或结果；说不了的情况在 `AgentCapabilities.speakBlocked`，Pi 与终端里 Claude Code 的话按会话文件核对送达，在 `PiDeliveryConfirmation`。
 
 ## 附件的文件
 

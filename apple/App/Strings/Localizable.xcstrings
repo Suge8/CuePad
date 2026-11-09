@@ -3015,6 +3015,22 @@
         }
       }
     },
+    "Claude Code 没有收下这句话：可能在它的终端里等你批准，或被它的设置（crossSessionInbound）挡下了。去终端里看一眼，CuePad 不会自动重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code didn’t take this message. It may be waiting for your approval in its terminal, or its crossSessionInbound setting blocked it. Check the terminal; CuePad won’t resend it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code 没有收下这句话：可能在它的终端里等你批准，或被它的设置（crossSessionInbound）挡下了。去终端里看一眼，CuePad 不会自动重发"
+          }
+        }
+      }
+    },
     "Claude Code 读不到「%@」的项目规则" : {
       "localizations" : {
         "en" : {
@@ -21103,22 +21119,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "终端里的会话还没起好，没有发出，可以重发"
-          }
-        }
-      }
-    },
-    "终端里的这个会话跳过了权限确认，CuePad 还没收到它的钩子、没有它的收件凭证，送去会被扣在终端里等你批准，所以没有发出：在终端里对它说一句话后再发" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This terminal session skips permission prompts and CuePad hasn’t received a hook from it yet, so the message would be held in the terminal for your approval. Nothing was sent; say something to it in the terminal, then send again."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端里的这个会话跳过了权限确认，CuePad 还没收到它的钩子、没有它的收件凭证，送去会被扣在终端里等你批准，所以没有发出：在终端里对它说一句话后再发"
           }
         }
       }

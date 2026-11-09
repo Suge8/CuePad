@@ -25,8 +25,6 @@ final class ClaudeTerminalSession: SessionLink {
     var inbox: String?
     /// 收件箱令牌（钩子环境里的 `CLAUDE_CODE_MESSAGING_TOKEN`）：没有它，跳过权限确认的会话把送来的话挂起等你批准
     var inboxToken: String?
-    /// 没有令牌时送去的话会不会被挂起（`ClaudeBypass`）
-    private let holdsWithoutToken: () -> Bool
     /// 会话登记文件（`<配置目录>/sessions/<pid>.json`）：它写下 `status` 之后收件箱才收话（`waitUntilReady`）
     private let registry: URL
     private let timing: Timing
@@ -54,10 +52,9 @@ final class ClaudeTerminalSession: SessionLink {
     /// - Parameter runningSince: 接上时已在跑（在忙或在等你）这一轮的开始（取法见 `SessionFacts.startTurn(at:)`）
     init(
         id: PiSession.ID, pid: Int32, bridge: PiBridge, gate: PresenceGate, inbox: String?, registry: URL, timing: Timing,
-        runningSince: Date?, waiting: Bool, holdsWithoutToken: @escaping () -> Bool
+        runningSince: Date?, waiting: Bool
     ) {
         self.id = id
-        self.holdsWithoutToken = holdsWithoutToken
         self.pid = pid
         self.registry = registry
         self.timing = timing
@@ -224,10 +221,8 @@ final class ClaudeTerminalSession: SessionLink {
     }
 
     /// 只在歇着时送到（在跑时桥先拒收，见 `AgentCapabilities.speakBlocked`）：`next` 让它马上开这一轮。
-    /// 还没有令牌（CuePad 起来后它还没跑过钩子）、送去会被挂起的不发，抛 `rejected("unattested")`。
     func send(_ message: PiMessage, in _: PiSession.ID) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw PiBridgeError.rejected("empty") }
-        if inbox != nil, inboxToken == nil, holdsWithoutToken() { throw PiBridgeError.rejected("unattested") }
         var line: [String: JSONValue] = [
             "type": "user", "message": ["role": "user", "content": .string(ClaudeInbox.userNote + message.text)], "priority": "next",
         ]

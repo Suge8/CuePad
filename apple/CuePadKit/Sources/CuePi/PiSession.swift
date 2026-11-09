@@ -77,6 +77,10 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var subagents: [PiSubagentState] = []
     /// CuePad 在后台托管的 Pi（RPC 模式，没有终端界面）：启动时经环境变量 `CUEPAD_HOSTED` 告诉扩展，扩展在 hello 里带回
     public internal(set) var hosted = false
+    /// `send` 返回不等于会话收下了这句话，收没收下只看会话文件里有没有它（`PiDeliveryConfirmation`）：
+    /// Pi 的回执先于写会话文件；终端里的 Claude Code 收件箱不回话，收下之前还按它的设置决定挂起等你批准、丢掉，或排到这一轮之后
+    /// （`crossSessionInbound`、跳过权限确认、没带收件箱令牌，2.1.318 源码与实测），外面看不全，所以不预判，只认会话文件。
+    public var confirmsFromHistory: Bool { agent == .pi || (agent == .claudeCode && !hosted) }
     /// 未选模型时 `model` 与 `thinking` 为 nil
     public internal(set) var model: PiModelOption? = nil
     public internal(set) var thinking: Open<PiThinkingLevel>? = nil
@@ -256,7 +260,6 @@ extension PiBridgeError: ShownError {
         case .rejected("unconfirmed_turn"): "当前轮次的来源尚未确认，Cue 没有打断"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("not_ready"): "终端里的会话还没起好，没有发出，可以重发"
-        case .rejected("unattested"): "终端里的这个会话跳过了权限确认，CuePad 还没收到它的钩子、没有它的收件凭证，送去会被扣在终端里等你批准，所以没有发出：在终端里对它说一句话后再发"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
         case .unknownModel(let agent): "\(agent.name) 里没有这个模型"
         case .refused(let reason): ShownText.verbatim(reason).value

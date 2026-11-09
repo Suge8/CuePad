@@ -125,14 +125,13 @@ final class ClaudeTestbed {
         await testbed.stop()
     }
 
-    /// - Parameter mode: 命令行的 `--permission-mode`；nil 不带（启动时的模式取设置里的 `permissions.defaultMode`）。
-    func terminal(_ arguments: [String] = [], mode: String? = "default") async throws -> ClaudeTerminal {
+    func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
         if reading == nil, let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) {
             reading = Task { [runtime, bridge] in
                 for await case .updated(let update) in indexer.events(following: bridge.sessionFiles, scope: .all) { runtime.read(update) }
             }
         }
-        let terminal = try await ClaudeTerminal(testbed: self, arguments: (mode.map { ["--permission-mode", $0] } ?? []) + arguments)
+        let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
         terminals.append(terminal)
         return terminal
     }
