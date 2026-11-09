@@ -141,9 +141,10 @@ actor FileSender {
       let outcome = await coordinator.sent(sent, for: OutgoingBatch(saves: records, deletes: []))
       guard !outcome.paused else { return await release(records) }
       for record in sent.saved {
-        guard let key = RecordMapper.row(from: record)?.attachmentKey else { continue }
         // 删不掉的保底只多占一个硬链接，下次收下同一个文件时再删
-        do { try coordinator.store.files.uploaded(key) } catch { Self.log.error("附件的保底没能删：\(error.brief, privacy: .public)") }
+        do { try await coordinator.store.attachmentUploaded(record.recordID.recordName) } catch {
+          Self.log.error("附件的保底没能删：\(error.brief, privacy: .public)")
+        }
       }
       if !sent.saved.isEmpty { await coordinator.filesAccepted() }
       if outcome.zoneMissing { try? await cloud.saveZone() }

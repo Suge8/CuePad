@@ -24,8 +24,11 @@ extension CueStore {
   /// App 启动时清一次，返回删了几个文件：结束了的运行留下的持有删掉，`drafts`（跨启动留着的草稿，库里看不到）引用的键先挪进这次运行；
   /// 再删缓存与保底里没有哪个运行持有、没有附件记录、库里也没人引用的（`isAttachmentReferenced`）：
   /// 存进来却没发出去的、编辑器里插了又删的、回收时没删成的。
+  /// 某个运行目录或文件删不掉不挡别的：都清过一遍后，连同删掉的个数一起抛 `strayFilesNotRemoved`。
   public func removeStrayFiles(drafts: [String]) throws -> Int {
-    try files.endFinishedRuns(keeping: Set(drafts.flatMap(CueFormat.attachmentKeys(in:))))
-    return try reclaimFiles(candidates: files.unheldKeys) { _, error in throw error }
+    var failed = try files.endFinishedRuns(keeping: Set(drafts.flatMap(CueFormat.attachmentKeys(in:)))).map { "运行 \($0.run)：\($0.error)" }
+    let removed = try reclaimFiles(candidates: files.unheldKeys) { key, error in failed.append("附件 \(key)：\(error)") }
+    guard failed.isEmpty else { throw CueStoreError.strayFilesNotRemoved(removed: removed, failed: failed) }
+    return removed
   }
 }

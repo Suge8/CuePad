@@ -298,13 +298,14 @@ extension CueStore {
   }
 
   /// 丢弃本机的全部同步数据（含附件文件与项目目录绑定）；Pi 会话索引等本机表不动。
+  /// 文件在同一个写事务里删（同 `reclaimFiles`）：别的连接不能在清库之后、删文件之前提交引用，不然它刚留的保底跟着被删，记录却在。
   package func eraseSyncedData() throws {
     try write {
       for table in Table.synced { try db.run("DELETE FROM \(table.rawValue)") }
       try db.run("DELETE FROM projectDirectories")
       try db.run("DELETE FROM syncRecords")
       try db.run("DELETE FROM syncState")
+      try files.removeAll()
     }
-    try files.removeAll()
   }
 }

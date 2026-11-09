@@ -67,7 +67,7 @@ import Testing
     #expect(store.files.fileURL(for: key) != nil)
     #expect(FileManager.default.fileExists(atPath: cached.appending(path: key).path))
 
-    try store.files.uploaded(key)
+    try await store.attachmentUploaded(try #require(try RawDB(fixture.url).rows("SELECT id FROM attachments").first?[0]))
     try FileManager.default.removeItem(at: cached)
     #expect(store.files.fileURL(for: key) == nil)
   }
@@ -78,7 +78,7 @@ import Testing
     _ = try await store.createCard(body: "![](cuepad://file/\(key))")
     let id = try #require(try RawDB(fixture.url).rows("SELECT id FROM attachments").first?[0])
     try RawDB(fixture.url).exec("INSERT INTO syncRecords (recordName, recordType, pushedModifiedAt) VALUES ('\(id)', 'attachments', 1)")
-    try store.files.uploaded(key)
+    try await store.attachmentUploaded(id)
     try FileManager.default.removeItem(at: cached)
 
     _ = try store.files.store(pngData(width: 7, height: 7))
