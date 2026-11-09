@@ -71,6 +71,28 @@ struct SyncAccountTests {
         #expect(services.syncState.status == .idle)
     }
 
+    /// App 没开着时换了 iCloud 账号：再打开，第一次认账号就停下等你决定，决定之前记的不传；选上传本机后传给新账号。
+    @Test
+    func 关着时换了账号_再打开就等你决定_决定前不传() async throws {
+        let app = start()
+        let before = try await Workspace(services: app.services).createCard(body: "换账号前记的", in: Project.defaultID)
+        try await eventually("传上去") { await cloud.saved.contains(name(before)) }
+        await app.services.sync?.stop()
+
+        await cloud.signIn("另一个账号")
+        let services = app.relaunch()
+        services.startSync()
+        defer { services.cancelBackgroundWork() }
+        try await eventually("要你决定") { services.syncState.status == .needsDecision(.accountSwitched) }
+        let waiting = try await Workspace(services: services).createCard(body: "决定之前记的", in: Project.defaultID)
+        await services.upload(waiting.id)
+        await services.syncNow()
+        #expect(await !cloud.saved.contains(name(waiting)))
+
+        try await services.resolveSync(.uploadLocal)
+        try await eventually("传给新账号") { await cloud.saved.contains(name(waiting)) }
+    }
+
     /// 认账号一直没有回音时停下同步（Mac 退出收尾的最后一步）：当场返回，在等的立即同步、取文件、门铃的密钥都得到"没在同步"。
     @Test
     func 认账号没有回音时停下_在等的都当场返回() async throws {
