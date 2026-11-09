@@ -85,7 +85,7 @@ extension AgentLibraryTests {
         #expect(workspace.notice?.text.visible == "合并好了")
         #expect(read(rules) == "共用的\n\n全局规则\n\n你是 Pi\n\n你是 Codex\n")
         #expect(RelativeLink.points(codex.appending(path: "AGENTS.md"), to: rules), "空的那份换成链接")
-        #expect(RelativeLink.points(claude.appending(path: "CLAUDE.md"), to: rules))
+        #expect(RelativeLink.points(claude.appending(path: "rules/AGENTS.md"), to: rules) && !exists(claude.appending(path: "CLAUDE.md")), "Claude Code 经 rules 读，不留挡项目规则的 CLAUDE.md")
         #expect(!exists(pi.appending(path: "SYSTEM.md")))
         #expect(read(codex.appending(path: "config.toml")) == "model = \"gpt\"\n\n[tools]\nweb = true\n")
         let merged = try await library("合并完没有该整理的") { $0.tidies.isEmpty }

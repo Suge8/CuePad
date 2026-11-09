@@ -60,7 +60,7 @@ extension DebugScene {
         for file in [pi.appending(path: "AGENTS.md"), codex.appending(path: "AGENTS.md")] { try link(file, to: rules) }
         try write(DemoAgentLibrary.piSystem, pi.appending(path: "SYSTEM.md"))
         if clean {
-            try link(claude.appending(path: "CLAUDE.md"), to: rules)
+            try link(claude.appending(path: "rules/AGENTS.md"), to: rules)
             try link(homepage.appending(path: "CLAUDE.md"), to: homepage.appending(path: "AGENTS.md"))
             return
         }

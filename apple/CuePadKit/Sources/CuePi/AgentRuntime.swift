@@ -84,7 +84,10 @@ public struct AgentFacts: Sendable {
     var skillFolders = ["skills"]
     let projectFolder: String
     var selfManagedSkills: String?
+    /// 全局规则：CuePad 链到共享那份的位置（相对配置目录），与它原生读的几份（`globalReads`，按先后；`readsFirstOnly` 时只读第一份在的）。
     var instructionsFile = "AGENTS.md"
+    var globalReads = ["AGENTS.md"]
+    var readsFirstOnly = true
 }
 
 /// 读不到的技能 CuePad 逐个链到它自己的技能目录（`<配置目录>/skills/<名>`、项目里的 `<projectFolder>/skills/<名>`），整个目录链不行：

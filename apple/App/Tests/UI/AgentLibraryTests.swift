@@ -159,7 +159,7 @@ struct AgentLibraryTests {
         await #expect(throws: AgentLibraryError.changedSinceTidy) { try await undo.run() }
 
         #expect(read(rules) == "规则一\n\n规则二\n\n后来加的\n")
-        #expect(RelativeLink.points(claude.appending(path: "CLAUDE.md"), to: rules))
+        #expect(RelativeLink.points(claude.appending(path: "rules/AGENTS.md"), to: rules))
         _ = try await library("读到后来加的") { $0.instruction(.global)?.hash == hash("规则一\n\n规则二\n\n后来加的\n") }
         await quietPeriod(.milliseconds(300))  // 前面那些改动的跟随都过去了：下面这次只能由盯着 SYSTEM.md 读到
         try Data("你是 Pi，改过\n".utf8).write(to: pi.appending(path: "SYSTEM.md"))  // 原地写，不换文件，所在目录不变

@@ -67,17 +67,21 @@ struct LibraryTidying {
         undo.steps.append(.linked(link, to: skill))
     }
 
+    /// 各家原生读的那几份（链接位置之外的、链接位置上不是链接的）并进来以后进废纸篓，链接位置换成链到共享那份的链接。
     private mutating func mergeGlobal(_ tidy: LibraryTidy, retiring: Set<InstructionSource.Origin>) throws {
         let shared = places.globalInstructions
         try write(tidy.merged(retiring: retiring, texts: texts) ?? "", to: shared)
         for kind in places.installed {
-            let file = places.globalFile(kind)
-            guard !RelativeLink.points(file, to: shared) else { continue }
-            if RelativeLink.isLink(file) { continue }
-            if FileManager.default.fileExists(atPath: file.path) { try moveToTrash(file) }
-            try RelativeLink.make(at: file, to: shared)
-            undo.steps.append(.linked(file, to: shared))
+            let link = places.globalFile(kind)
+            if RelativeLink.isLink(link), !RelativeLink.points(link, to: shared) { continue }
+            for file in places.globalReads(kind) where file != link { try moveToTrash(file) }
+            guard !RelativeLink.points(link, to: shared) else { continue }
+            if LibraryFileReading.exists(link) { try moveToTrash(link) }
+            try ensureDirectory(link.deletingLastPathComponent())
+            try RelativeLink.make(at: link, to: shared)
+            undo.steps.append(.linked(link, to: shared))
         }
+        if places.uses(.claudeCode), LibraryFileReading.content(places.claudeAgents) != nil { try moveToTrash(places.claudeAgents) }
         if retiring.contains(.piSystem), FileManager.default.fileExists(atPath: places.piSystem.path) { try moveToTrash(places.piSystem) }
         if retiring.contains(.codexPrompt), let key = CodexPromptKey(places) { try write(key.removed, to: key.config) }
     }

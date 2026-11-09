@@ -140,6 +140,7 @@ extension CueTools {
         case .global: "全局规则"
         case .piSystem: "Pi 的系统提示"
         case .project(let id): "\(scope(.project(id)))的规则"
+        case .agent(let agent, _): "\(agent.name) 自己的全局规则（还没换成共享那份）"
         }
       let unseen = library.unseen(instruction)
       let note = instruction.hash == nil ? "（还没有这个文件）" : unseen.isEmpty ? "" : "（\(unseen.map(\.name).joined(separator: "、")) 读不到）"

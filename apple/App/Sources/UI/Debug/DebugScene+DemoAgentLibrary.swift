@@ -20,6 +20,22 @@ extension DebugScene {
         )
         _ = try await store.recordAgentLibrary(library.library(host: host), texts: library.texts)
     }
+
+    #if os(macOS)
+    /// 本机扫出该一键整理的就点一下，直到 3 秒里不再冒出新的（隔离实例起来后各家的目录陆续建出来，又有一家要链），最多 20 秒。
+    static func tidyLibrary(_ workspace: Workspace) async {
+        var quiet = 0
+        for _ in 0..<200 where quiet < 30 {
+            if let library = workspace.library, !library.automaticTidies.isEmpty {
+                await workspace.tidy(library.automaticOrders, in: library)
+                quiet = 0
+            } else if workspace.library != nil {
+                quiet += 1
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+    #endif
 }
 
 struct DemoAgentLibrary {
@@ -247,9 +263,12 @@ struct DemoAgentLibrary {
         var list = [
             instruction(
                 .global, home + "/.config/agents/AGENTS.md", text: Self.sharedRules, hours: 26, readers: clean ? agents : [.pi, .codex],
-                links: [home + "/.pi/agent/AGENTS.md", home + "/.codex/AGENTS.md"] + (clean ? [home + "/.claude/CLAUDE.md"] : [])),
+                links: [home + "/.pi/agent/AGENTS.md", home + "/.codex/AGENTS.md"] + (clean ? [home + "/.claude/rules/AGENTS.md"] : [])),
             instruction(.piSystem, home + "/.pi/agent/SYSTEM.md", text: Self.piSystem, hours: 24 * 9, readers: [.pi]),
         ]
+        if !clean {
+            list.insert(instruction(.agent(.claudeCode, file: "CLAUDE.md"), home + "/.claude/CLAUDE.md", text: Self.claudeRules, hours: 24 * 2, readers: [.claudeCode]), at: 1)
+        }
         if let cuepad {
             list.append(instruction(
                 .project(cuepad), home + "/Project/cuepad/AGENTS.md", text: Self.cuepadRules, hours: 3, readers: agents,
