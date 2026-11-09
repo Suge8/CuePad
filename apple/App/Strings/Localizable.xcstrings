@@ -21139,6 +21139,22 @@
         }
       }
     },
+    "终端里的会话还没起好，没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The terminal session isn’t ready yet. Nothing was sent; you can send it again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "终端里的会话还没起好，没有发出，可以重发"
+          }
+        }
+      }
+    },
     "绑定会话" : {
       "localizations" : {
         "en" : {

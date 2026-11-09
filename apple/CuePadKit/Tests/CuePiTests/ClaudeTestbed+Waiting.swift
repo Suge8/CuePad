@@ -39,6 +39,8 @@ extension ClaudeTestbed {
     }
 
     /// 同 `eventually`，等不到时带上会话与终端画面（终端里按键后的事看画面才分得清是谁没动）。
+    /// 终端画面比钩子慢：一轮的 `Stop` 已到、CuePad 已报歇下时，终端可能还没画出这一轮的回答（12 个空转核加压实测晚约 20 毫秒），
+    /// 画面上的东西都等它画出来再断言
     func waitOnScreen(_ what: String, on terminal: ClaudeTerminal, in id: PiSession.ID, _ condition: () async throws -> Bool) async throws {
         do {
             try await eventually(what, condition)

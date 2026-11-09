@@ -6,7 +6,8 @@ import Foundation
 extension ClaudeHostedSession {
     func host(executable: URL, arguments: [String], directory: URL, environment: [String: String]) async throws -> ChildProcess {
         let process = try await launch(
-            executable, ["--permission-prompt-tool", "stdio", "--permission-mode", "auto"] + arguments, directory: directory, environment: environment)
+            executable, ["--permission-prompt-tool", "stdio", "--permission-mode", "auto"] + arguments, directory: directory, environment: environment,
+            timing: timing)
         stream?.onReply = { [deliveries] in deliveries.replying() }
         return process
     }
