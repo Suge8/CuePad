@@ -6,14 +6,14 @@ import Testing
 @testable import CuePad
 
 /// 新会话安全替换与主动重复：编辑、关闭不等回执；第二次副作用须由可撤回事实或用户明确确认授权。
-/// "手机"开新会话走新会话输入框调的同一条 `launchSession`；那台 Mac 写回什么由服务器的回声给。
+/// "手机"开新会话走新会话输入框调的同一条 `AppServices.launchSession`；那台 Mac 写回什么由服务器的回声给。
 @MainActor
 struct LaunchLockTests {
     let clock = ManualTiming()
     private let month = Duration.seconds(30 * 86_400)
 
     private func launch(_ phone: TestApp, replacing previous: SessionLaunch? = nil) async throws -> SessionLaunch {
-        try await Workspace(services: phone.services).launchSession(
+        try await phone.services.launchSession(
             in: Project.defaultID, prompt: "hi", title: "CuePad", on: "mac-gone", card: nil, agent: .pi, intent: previous.map { .replacing($0.request) } ?? .new)
     }
 
@@ -72,7 +72,7 @@ struct LaunchLockTests {
         await #expect(throws: CueStoreError.deliveryAlreadyHanded) { try await launch(phone, replacing: first) }
         let before = try await phone.services.store.deliveryRequests().map(\.id)
         #expect(before == (status == "missing" ? [] : [first.request]))
-        let second = try await Workspace(services: phone.services).launchSession(
+        let second = try await phone.services.launchSession(
             in: Project.defaultID, prompt: "hi", title: "CuePad", on: "mac-gone", card: nil, agent: .pi,
             intent: .repeatingConfirmed)
         #expect(Set(try await phone.services.store.deliveryRequests().map(\.id)) == Set(before + [second.request]))

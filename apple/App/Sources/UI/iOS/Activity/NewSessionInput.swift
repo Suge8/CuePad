@@ -5,7 +5,8 @@ import SwiftUI
 /// 新会话：一个浮在键盘上方的输入框，写的就是给 Pi 的第一句话；头部落点胶囊选在哪开（只列项目，默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时写上 Mac 名）。
 /// 工具排与 Mac 的新会话表单、Cue 同一排（`PiConfigControls.init(choice:)`）：Agent 只列那台 Mac 上能用的（`MacAgents`），默认上次选的（`MacAgents.preferred`，选了就记作下次的默认）；
 /// 模型与思考强度默认跟着这家的默认，换了 Agent 或 Mac 回到默认。一家都不能用时输入框上方写那台为什么（`whyNone`）、开不了。
-/// 发送钮就是开始：Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；等待时仍可编辑或关闭；明确失败可安全重试，未知或查不到结果时再开须确认重复风险。
+/// 发送钮就是开始：Mac 开好、带着这次标识的会话同步过来时自动收起并进入它（输入框关了就不进，`SessionLaunching` 照样等）；等待时仍可编辑或关闭；
+/// 明确失败可安全重试，未知或查不到结果时再开须确认重复风险。
 /// 新会话的目录只由项目绑定的文件夹推出；还没绑的项目也直接开：发给 Cue 运行的那台 Mac（没启用 Cue 时按名字排第一台，`CueStore.workMac`），
 /// 它开工时建好工作区并绑定。
 struct NewSessionInput: View {
@@ -15,7 +16,6 @@ struct NewSessionInput: View {
     @Environment(\.palette) private var palette
     @State private var choice: ProjectFolders.LaunchPlace.ID?
     @State private var draft = ComposerDraft()
-    @State private var submission = SessionSubmission()
     /// 由哪台 Mac 开（`LaunchPlace.host`）、那台上能用的几家；还没读到为 nil。
     @State private var agents: MacAgents?
     /// 这次指定的模型与思考强度（nil 是这家的默认）。
@@ -33,13 +33,14 @@ struct NewSessionInput: View {
         let places = places
         return places.first { $0.id == choice } ?? start.place(among: places)
     }
-    private var phase: LaunchProgress.Phase { submission.progress?.phase(at: services.speech) ?? .idle }
+    private var launching: SessionLaunching { workspace.sessionLaunching(start.launchKey) }
+    private var phase: LaunchProgress.Phase { launching.phase(at: services.speech) }
     private var agent: AgentKind? { agents?.preferred(services.settings.lastAgent) }
     private var brain: AgentModelChoice? {
         guard chosen?.host != nil, let agents, let agent else { return nil }
         return AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking, fast: fast)
     }
-    private var canStart: Bool { submission.canSubmit(on: chosen?.host, agent: agent, at: services.speech) }
+    private var canStart: Bool { chosen?.host != nil && agent != nil && launching.canSubmit(at: services.speech) }
 
     var body: some View {
         Composer(
@@ -53,26 +54,19 @@ struct NewSessionInput: View {
                         services.settings.lastAgent = agent
                         model = nil
                     } chooseModel: { model = $0 } chooseThinking: { thinking = $0 } chooseFast: { fast = $0 }
-                    .disabled(submission.sending)
+                    .disabled(launching.sending)
                 }
             },
             send: {
-                Button(action: { launch() }) { SendGlyph(canStart ? .ready : .idle) }
+                Button(action: launch) { SendGlyph(canStart ? .ready : .idle) }
                     .buttonStyle(PressStyle(.button)).disabled(!canStart).accessibilityLabel("开始")
             })
         .composerNotice(status != nil) { if let status { statusLine(status).font(Typography.caption) } }
-        .dialog("再开一个会话？", isPresented: $submission.confirmingAgain, message: "上一次可能已经开了会话，再开可能让 Agent 重复操作。原请求会保留。", buttons: [
-            DialogButton(title: "仍然再开") { launch(confirmedAgain: true) },
-        ])
+        .confirmsLaunchAgain(launching)
         .onAppear {
-            if submission.launched == nil { submission.launched = start.launched }
+            workspace.resume(start, opened: workspace.entering(start))
             if let seed = start.draft, draft.isEmpty(accepting: [.files, .cards]) { draft = seed }
             focused = true
-        }
-        .observing(services.store, id: submission.launched, into: $submission.progress, onError: workspace.fail) {
-            [launched = submission.launched] store in
-            guard let launched else { return LaunchProgress() }
-            return try launched.progress(from: store)
         }
         .observing(services.store, id: chosen?.host, into: $agents, onError: workspace.fail) {
             [host = chosen?.host] store in
@@ -81,10 +75,6 @@ struct NewSessionInput: View {
         }
         // 换了 Mac：模型清单是另一份，回到默认
         .onChange(of: chosen?.host) { model = nil }
-        .onChange(of: submission.progress?.claimed?.id) { _, session in
-            guard let session else { return }
-            workspace.claimSession(session)
-        }
     }
 
     /// 头部：落点胶囊；进度或原因叠在输入框上方（`status`）。Agent 与模型在工具排里。
@@ -99,7 +89,7 @@ struct NewSessionInput: View {
                     if let project = chosen?.project { ProjectGlyph(project: project, size: 13) }
                 }
             }
-            .disabled(submission.sending)
+            .disabled(launching.sending)
             Spacer(minLength: 0)
         }
     }
@@ -130,8 +120,8 @@ struct NewSessionInput: View {
         }
     }
 
-    private func launch(confirmedAgain: Bool = false) {
-        workspace.submitSession(submission, start: start, in: chosen, draft: draft, choice: brain, confirmedAgain: confirmedAgain)
+    private func launch() {
+        workspace.submitSession(start, in: chosen, draft: draft, choice: brain, opened: workspace.entering(start))
     }
 }
 #endif
