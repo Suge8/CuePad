@@ -20,7 +20,7 @@ enum DebugForeground {
     /// 启动时：给了 `-CuePadForeground YES` 而用户不够空闲，就报读数、以 2 退出（起实例的 xc.sh 命令随之失败，原因在实例日志末尾）。
     /// 只在启动时查：借着的时候自己发的 HID 事件也会清零空闲时长。
     static func requireUserAway() {
-        guard DebugScene.defaults.bool(forKey: "CuePadForeground") else { return }
+        guard DebugScene.args.driveOpts.foreground else { return }
         let idle = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: CGEventType(rawValue: ~0)!)
         guard idle < awayAfter else { return }
         FileHandle.standardError.write(Data("用户 \(Int(idle)) 秒前还在操作（键鼠空闲不足 \(Int(awayAfter)) 秒），不借前台：等用户离开，或改用后台量（去掉 -CuePadForeground YES）\n".utf8))
@@ -29,7 +29,7 @@ enum DebugForeground {
 
     /// 本 App 到前台、`window` 到最前并接过键盘；没给 `-CuePadForeground YES` 时什么都不做，返回 false。可重复调（把窗口再拉到最前）。
     static func borrow(_ window: NSWindow) -> Bool {
-        guard DebugScene.defaults.bool(forKey: "CuePadForeground") else { return false }
+        guard DebugScene.args.driveOpts.foreground else { return false }
         if lender == nil, let front = NSWorkspace.shared.frontmostApplication, front != .current { lender = front }
         holding = true
         _ = watching

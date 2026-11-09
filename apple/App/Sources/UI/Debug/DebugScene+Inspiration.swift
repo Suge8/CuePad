@@ -13,14 +13,14 @@ extension DebugScene {
     /// `-CuePadInspirationSource <路径>` 用指定 Markdown 正文复现编辑、墙面摘要和导出。
     static func seedInspiration(_ services: AppServices) async {
         await seedArrivingInspiration(services)
-        guard defaults.bool(forKey: "CuePadInspiration") else { return }
-        if defaults.bool(forKey: "CuePadDemo") {
+        guard args.inspiration else { return }
+        if args.demo {
             await seedRemote(services)
             await seedCue(services)
         }
         do {
             let store = services.store
-            let body = try defaults.string(forKey: "CuePadInspirationSource").map { try String(contentsOfFile: $0, encoding: .utf8) } ?? String(localized: """
+            let body = try args.inspirationOpts.source.map { try String(contentsOfFile: $0, encoding: .utf8) } ?? String(localized: """
             # 让灵感，慢慢成形
 
             留一点空白，才看得见真正重要的东西。**重点：**让内容自己说话，把复杂留给工具，把清晰留给人。
@@ -64,9 +64,9 @@ extension DebugScene {
                 _ = try await store.createCard(in: Project.defaultID, body: String(localized: "**把注意力还给内容**\n\n少一点干扰，多一点思考。保留 \\*字面星号\\*，读懂 **真正的强调**。", table: "Demo"))
                 _ = try await store.createCard(in: Project.defaultID, body: String(localized: "纸上的一小片风景\n\n为下一版留下的配色与节奏。", table: "Demo") + "\n" + CueFormat.imageMarkup(key: image))
             }
-            if let path = defaults.string(forKey: "CuePadInspirationExport"),
+            if let path = args.inspirationOpts.export,
                let card = try await store.cards(in: Project.defaultID).first(where: { $0.body.hasPrefix(body.prefix(20)) }) {
-                let payload = try await InspirationShare.prepare(card.body, originals: defaults.bool(forKey: "CuePadInspirationOriginals"), files: store.files, colorScheme: defaults.string(forKey: "theme") == "dark" ? .dark : .light)
+                let payload = try await InspirationShare.prepare(card.body, originals: args.inspirationOpts.originals, files: store.files, colorScheme: UserDefaults.standard.string(forKey: "theme") == "dark" ? .dark : .light)
                 let target = URL(filePath: path)
                 if FileManager.default.fileExists(atPath: target.path) { try FileManager.default.removeItem(at: target) }
                 try FileManager.default.copyItem(at: payload.urls[0], to: target)
@@ -76,7 +76,7 @@ extension DebugScene {
 
     /// `-CuePadInspirationArrival <秒>`：先只有图片记录，再模拟下载完成；用于墙图和编辑器图片的到达验收。
     private static func seedArrivingInspiration(_ services: AppServices) async {
-        let delay = defaults.double(forKey: "CuePadInspirationArrival")
+        let delay = args.inspirationOpts.arrival
         guard delay > 0 else { return }
         var bytes = widePNG()
         bytes.append(Data(UUID().uuidString.utf8))

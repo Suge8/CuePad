@@ -21,24 +21,24 @@ import Foundation
 ///   `context-accepted` 是服务端追加回执，`assistant-said` 只是模型转写；真正出声要核对 `output-loud/quiet` 与输出录音。最后一行是终态与音频用量。
 extension DebugScene {
     static func voiceCallIfAsked(_ workspace: Workspace) async {
-        guard defaults.string(forKey: "CuePadVoiceToken") != nil else { return }
+        guard args.voiceOpts.token != nil else { return }
         await running("语音通话") { try await voiceCall(workspace) }
     }
 
     private static func voiceCall(_ workspace: Workspace) async throws {
         let host = workspace.services.hostID
-        let runtime = defaults.string(forKey: "CuePadVoiceRuntime").flatMap(AgentKind.init(rawValue:))
+        let runtime = args.voiceOpts.runtime.flatMap(AgentKind.init(rawValue:))
             ?? (DebugHooks.cueBrain == nil ? .claudeCode : .pi)
-        let model = defaults.string(forKey: "CuePadVoiceModel")
+        let model = args.voiceOpts.model
         try await workspace.services.store.updateCueProfile {
             $0.hostID = host
             $0.enabledAt = .now
             $0.runtime = .known(runtime)
             $0.model = model
         }
-        guard let input = defaults.string(forKey: "CuePadVoice") else { return }
+        guard let input = args.voice else { return }
         for await canHear in Observations({ workspace.cue.canHear }) where canHear { break }
-        let log = defaults.string(forKey: "CuePadVoiceLog").map { URL(filePath: $0) }
+        let log = args.voiceOpts.log.map { URL(filePath: $0) }
         let started = Date.now
         var lines: [String] = []
         func note(_ line: String) {
@@ -46,7 +46,7 @@ extension DebugScene {
             if let log { try? lines.joined(separator: "\n").appending("\n").write(to: log, atomically: true, encoding: .utf8) }
         }
         let loopback: VoiceLoopback?
-        if let directory = defaults.string(forKey: "CuePadVoiceLoopback") {
+        if let directory = args.voiceOpts.loopback {
             loopback = try VoiceLoopback(directory: URL(filePath: directory))
             try await loopback?.start()
         } else { loopback = nil }
@@ -57,7 +57,7 @@ extension DebugScene {
                 catch { note("loopback-cleanup-error \(error)") }
             }
         }
-        if let loopback, defaults.bool(forKey: "CuePadVoiceMeter") {
+        if let loopback, args.voiceOpts.meter {
             try await DebugVoice.meter(loopback, note: note)
             // 先执行 defer 销毁公开设备，再退出实例。
             Task { NSApp.terminate(nil) }
@@ -76,8 +76,8 @@ extension DebugScene {
             } catch { note("cue-store-error \(error)") }
         }
         defer { messages.cancel() }
-        let source: VoicePeer.Source = input == "mic" ? .microphone(device: loopback?.name ?? defaults.string(forKey: "CuePadVoiceDevice")) : .file(URL(filePath: input))
-        workspace.toggleVoiceCall(source: source, recording: defaults.string(forKey: "CuePadVoiceRecord").map { URL(filePath: $0) })
+        let source: VoicePeer.Source = input == "mic" ? .microphone(device: loopback?.name ?? args.voiceOpts.device) : .file(URL(filePath: input))
+        workspace.toggleVoiceCall(source: source, recording: args.voiceOpts.record.map { URL(filePath: $0) })
         guard let call = workspace.voice else { return }
         var replied = false, heardAfterReply = false, finishedAfterReply = false
         var assistantTurn: String?
@@ -89,14 +89,14 @@ extension DebugScene {
         // 模型可把一个音频文件分成多个用户回合，Cue 也可回多条；阶段只按本次声源播完与其后的请求完成推进。
         func advance() {
             guard call.isLive else { return }
-            if !fixturePosted, call.phase == .listening, let text = defaults.string(forKey: "CuePadVoiceReadFixture") {
+            if !fixturePosted, call.phase == .listening, let text = args.voiceOpts.readFixture {
                 fixturePosted = true
                 Task {
                     do { try await workspace.services.store.addCueMessage(.cue, text: text, answeredRequests: []) }
                     catch { note("fixture-error \(error)"); call.hangUp() }
                 }
             }
-            if heardAfterReply, finishedAfterReply, call.phase == .listening, defaults.bool(forKey: "CuePadVoiceHangUpAfterReply") {
+            if heardAfterReply, finishedAfterReply, call.phase == .listening, args.voiceOpts.hangUpAfterReply {
                 call.hangUp()
                 return
             }
@@ -131,7 +131,7 @@ extension DebugScene {
                 replied = true
                 heardAfterReply = false
                 finishedAfterReply = false
-                if defaults.bool(forKey: "CuePadVoiceReplay") {
+                if args.voiceOpts.replay {
                     for request in call.requests where !request.pending && replayed.insert(request.delegation.id).inserted {
                         let delegation = request.delegation
                         note("replay-after-result \(delegation.id)")
@@ -151,7 +151,7 @@ extension DebugScene {
         }
         defer { call.mark = { _ in }; loopback?.onFinished = { _, _ in } }
         let limit = Task {
-            await Task.wait(for: .seconds(seconds("CuePadVoiceSeconds", default: 60)))
+            await Task.wait(for: .seconds(args.voiceOpts.seconds ?? 60))
             if call.isLive { workspace.toggleVoiceCall() }
         }
         for await phase in Observations({ call.phase }) {
@@ -161,7 +161,7 @@ extension DebugScene {
         }
         limit.cancel()
         note("end \(call.phase) audioMs=\(call.audioMs) usedPercent=\(call.usedPercent.map { "\($0)" } ?? "-")")
-        if !defaults.bool(forKey: "CuePadVoiceKeepOpen") { Task { NSApp.terminate(nil) } }
+        if !args.voiceOpts.keepOpen { Task { NSApp.terminate(nil) } }
     }
 }
 #endif

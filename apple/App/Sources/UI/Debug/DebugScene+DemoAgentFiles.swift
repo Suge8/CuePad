@@ -22,7 +22,7 @@ extension DebugScene {
         let claude = URL(filePath: claudePath, directoryHint: .isDirectory)
         let pi = URL(filePath: piPath, directoryHint: .isDirectory)
         let codex = URL(filePath: codexPath, directoryHint: .isDirectory)
-        let clean = defaults.string(forKey: "CuePadAgentLibrary") == "clean"
+        let clean = args.agentLibrary == "clean"
         let skills = shared.appending(path: "skills")
 
         func write(_ text: String, _ file: URL) throws {

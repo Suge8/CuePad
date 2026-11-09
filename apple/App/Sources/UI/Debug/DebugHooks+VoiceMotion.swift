@@ -5,7 +5,7 @@ extension DebugHooks {
     static func voiceRibbon(_ ribbon: VoiceRibbon, on layer: VoiceRibbonLayer) {
         #if DEBUG
         DebugVoiceLightProbe.start(layer)
-        guard DebugScene.defaults.bool(forKey: "CuePadVoiceMotionTrace") else { return }
+        guard DebugScene.args.voiceOpts.motionTrace else { return }
         let loops = (layer.sublayers ?? []).filter { $0.animation(forKey: "loop") != nil }.count
         let line = "voice-ribbon activity=\(String(describing: ribbon.activity)) playing=\(ribbon.playing) reduced=\(ribbon.reduced) loops=\(loops)"
         let id = ObjectIdentifier(layer)

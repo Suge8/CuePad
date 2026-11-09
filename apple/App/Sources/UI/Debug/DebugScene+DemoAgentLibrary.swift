@@ -14,7 +14,7 @@ extension DebugScene {
         let projects = try await store.projects()
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let host = "demo-mac"
-        let clean = defaults.string(forKey: "CuePadAgentLibrary") == "clean"
+        let clean = args.agentLibrary == "clean"
         let library = DemoAgentLibrary(
             home: String(DemoLibrary.demoHome.dropLast()), clean: clean,
             cuepad: project("CuePad"), atlas: project(String(localized: "圆桌", table: "Demo")),

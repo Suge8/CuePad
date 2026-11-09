@@ -142,7 +142,7 @@ extension DebugScene {
         _ = try await demoRecorder(store, host: "demo-mini").update(
             sessionID: "relay", state: .settled, title: "relay", directory: "relay", times: PiTimes(stateSince: .now.addingTimeInterval(-32 * 60), busySince: nil))
         try await seedChats(store)
-        if defaults.bool(forKey: "CuePadLongChat") { try await seedLongChat(store, project: project("CuePad")) }
+        if args.longChat { try await seedLongChat(store, project: project("CuePad")) }
         // 会话文件里的压缩记录：对话里的一行系统行（notes 最后一轮回答之后）
         try await store.writePiTranscript(PiTranscript(
             sessionID: "notes",
@@ -150,7 +150,7 @@ extension DebugScene {
             recap: PiRecap(lastPrompt: String(localized: "整理一下这周的会议记录", table: "Demo"), lastReply: String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。", table: "Demo"))))
         let states = try await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)
         // -CuePadCommand YES：atlas 的会话页回复框上方有一条在路上的命令（看进度行；没有执行它的 Mac，一直在路上）
-        if defaults.bool(forKey: "CuePadCommand"), let atlas = states.first(where: { $0.sessionID == "atlas" }) {
+        if args.driveOpts.command, let atlas = states.first(where: { $0.sessionID == "atlas" }) {
             _ = try await services.store.requestDelivery("/compact", to: atlas.target, on: atlas.hostID, mode: .command)
         }
         try await seedTaskStates(store, projects: projects)

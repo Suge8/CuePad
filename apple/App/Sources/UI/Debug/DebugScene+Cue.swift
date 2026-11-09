@@ -20,7 +20,7 @@ import Foundation
 extension DebugScene {
     static func seedCue(_ services: AppServices) async {
         let store = services.store
-        let presence = defaults.string(forKey: "CuePadCuePresence")
+        let presence = args.cueOpts.presence
         if presence == "unchosen" { return }
         // "运行情况"只在 Cue 值班的这台 Mac 上有：cuerun 让它运行在这台（大脑在隔离目录里起不来，几轮是空的或出错）
         #if os(macOS)
@@ -36,7 +36,7 @@ extension DebugScene {
             }
             if presence != "asleep" { try await store.recordMacPresence(host: host, bootID: boot(of: host)) { true } }
             if presence == "fresh" {
-                let replies = defaults.integer(forKey: "CuePadReplies")
+                let replies = args.replies
                 if replies > 0 { try await demoRecorder(store).end(sessionID: "notes-edit") }
                 return try await seedReplies(replies, store: store)
             }
@@ -59,7 +59,7 @@ extension DebugScene {
             }
             // 记忆先写：定时到点的那一轮指着其中一条
             try await store.seed(cueLines: demoMemory)
-            if defaults.bool(forKey: "CuePadLongChat") { try await seedLongCueChat(you: you, store: store) }
+            if args.longChat { try await seedLongCueChat(you: you, store: store) }
             try await you(String(localized: "圆桌那个 5 人以上乱序的 bug 交给你，修好之后部署到预发", table: "Demo"))
             // 每一轮的经过（同值班的管理器写下的样子，`CueActivity.item`）：排在这一轮开始的位置，碰到的任务与会话带着名字与 id，点它去那里
             try await store.recordCueRound(nil, startedAt: .now, answersYou: true, tools: process(
@@ -120,12 +120,12 @@ extension DebugScene {
                     要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
                     """, table: "Demo"), ask: try CueAsking(.push, action: String(localized: "把发言顺序的修复推送到 origin/main", table: "Demo")), shots: try await deployShots(store), task: order?.id)
             // 第二张"等你"（答完第一张接着露出来）只在要各种等你时写：默认的演示里拍板是这一张与 notes-edit 在编辑器里问的那个，共两个
-            if !cueFlows, defaults.bool(forKey: "CuePadWaitKinds"), let billing = task(String(localized: "清理旧的计费脚本", table: "Demo")) {
+            if !cueFlows, args.driveOpts.waitKinds, let billing = task(String(localized: "清理旧的计费脚本", table: "Demo")) {
                 _ = try await store.addCueMessage(
                     .cue, text: String(localized: "旧的计费脚本目录 `scripts/billing-legacy` 已经没有调用方了，CI 里也不再跑。要删掉吗？", table: "Demo"),
                     ask: try CueAsking(.delete, action: String(localized: "删掉 scripts/billing-legacy 目录", table: "Demo")), task: billing.id)
             }
-            if let variant = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(variant, store: store, task: order?.id) }
+            if let variant = args.cueOpts.ask { try await seedAsk(variant, store: store, task: order?.id) }
             let forgotten = try await store.noteCueLine(String(localized: "旧的计费脚本还在用", table: "Demo"), source: .cue)
             try await store.forgetCueLine(forgotten.id)
             // 对话末尾 Cue 自己又醒了几轮（隔几分钟一轮，Cue 页每轮一行，去处只从动作推出）：空闲巡视（只看了看）、billing 出错（留给你）、atlas 停下了（让它继续，此刻又在跑）、
@@ -160,11 +160,11 @@ extension DebugScene {
             // 待回复的一个：notes 交了截图停下、Cue 留给你回（在它最后一次写状态之后记：留给你的是这一次停下）
             _ = try await store.leaveToYou("notes")
             // 等你里各种问题都有：Cue 把选择题、确认题、文字题留给你答（值班时它们本来归 Cue 答），都看过了（页停在最新处）
-            if defaults.bool(forKey: "CuePadWaitKinds") {
+            if args.driveOpts.waitKinds {
                 for id in ["homepage", "deploy", "rename"] { _ = try await store.leaveToYou(id) }
                 try await store.markCueRead(through: .now)
             }
-            try await seedReplies(defaults.integer(forKey: "CuePadReplies"), store: store)
+            try await seedReplies(args.replies, store: store)
             try await atlasIfAsked(store)
             try await taskLinesIfAsked(store)
             // 流程演示里"等你"只有它自己出的那一条：演示的这条先答掉，看得到那张卡出现与消失（`DebugScene+CueFlow.swift`）

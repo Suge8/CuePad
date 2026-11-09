@@ -5,7 +5,7 @@ import Foundation
 /// 配合 -CuePadPhoneVoice listening 和隔离库；没有信令或真实音频，不用于发起、跨设备与音画同步验收。
 enum DebugPhoneVoiceReplay {
     static func attach(_ voice: VoiceService) {
-        guard let mode = DebugScene.defaults.string(forKey: "CuePadPhoneVoiceReplay"), let initial = voice.projection else { return }
+        guard let mode = DebugScene.args.phoneVoiceOpts.replay, let initial = voice.projection else { return }
         let local = VoiceEndpoint(device: VoiceDeviceID("voice-ui-replay"), lease: UUID())
         let owner = VoicePhoneSession(id: initial.session, local: local, media: Media())
         owner.connected = true

@@ -56,8 +56,8 @@ extension DebugScene {
 
     /// 每次启动都往 scratch 会话追加的交付物：库已有数据时 `seedIfFresh` 不再写，不能挂在它下面；要从空起配新的 `CUEPAD_SHOT_LIBRARY`。
     static func seedScratchFiles(_ store: CueStore) async throws {
-        if let kinds = defaults.string(forKey: "CuePadAllKinds") { try await seedAllKinds(store, upTo: Int(kinds)) }
-        if let media = defaults.string(forKey: "CuePadPreviewMedia") { try await seedPreviewMedia(store, from: media) }
+        if let kinds = args.allKinds { try await seedAllKinds(store, upTo: Int(kinds)) }
+        if let media = args.previewMedia { try await seedPreviewMedia(store, from: media) }
     }
 
     /// `-CuePadAllKinds YES|<n>`：scratch 会话里发七批，每批两份并排：3D 模型与一张还没到本机的（附件文件删掉，卡片写"下载中"；

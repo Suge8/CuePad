@@ -11,7 +11,7 @@ extension DebugScene {
     /// 那份压缩包"开始下载"，进度一路走到头、文件落地（看还在路上 → 下载中 → 到了换上缩略图与大小）。没有同步，进度是这里写给界面的。
     static func seedFiles(_ services: AppServices) async {
         await seedInspiration(services)
-        guard defaults.bool(forKey: "CuePadFiles") else { return }
+        guard args.files else { return }
         let store = services.store
         let archive = Data((0..<200_000).map { UInt8(truncatingIfNeeded: $0 &* 2_654_435_761 >> 13) })
         let away = SHA256.hash(data: archive).map { String(format: "%02x", $0) }.joined() + ".zip"
@@ -33,7 +33,7 @@ extension DebugScene {
         } catch {
             abandon("带附件的灵感没写下", error)
         }
-        let delay = defaults.double(forKey: "CuePadFileArrives")
+        let delay = args.fileArrives
         guard delay > 0, store.files.fileURL(for: away) == nil else { return }
         Task {
             await Task.wait(for: .seconds(delay))

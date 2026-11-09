@@ -52,7 +52,7 @@ struct DebugWidgetStage: View {
 struct DebugActivityStage: View {
     let workspace: Workspace
     @Environment(\.palette) private var palette
-    private let stale = UserDefaults.standard.bool(forKey: "CuePadCueStale")
+    private let stale = DebugScene.args.cueOpts.stale
 
     var body: some View {
         let state = CueActivityState(now: workspace.cue.now)
@@ -101,7 +101,7 @@ struct DebugShareStage: View {
 extension DebugScene {
     /// `-CuePadExtensionLibrary <隔离目录>`：扩展预览只读这里的快照，不受主 App 同时重写派生缓存影响。
     static var extensionLibrary: LibraryLocation? {
-        defaults.string(forKey: "CuePadExtensionLibrary").map { .isolated(URL(filePath: $0)) }
+        args.extensionLibrary.map { .isolated(URL(filePath: $0)) }
     }
 }
 
