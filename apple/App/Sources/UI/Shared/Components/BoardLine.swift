@@ -2,24 +2,13 @@ import CueStore
 import SwiftUI
 
 extension EnvironmentValues {
-    /// 推进中这一列各会话你这边最近说的几句的时刻（`CueStore.recentSaid`）：列读一次交给卡上的线（`BoardLine`），卡不各自读库。
     @Entry var boardSaid: [String: [Date]] = [:]
 }
 
-/// 看板推进中卡下沿那条线：整行一条线，状态与颜色只按 `BoardPulse`。
-/// - 左段是过去：一条从左端淡入的淡线，你这边最近说的每句一颗点（你、Cue 不分，列读好交给它，`boardSaid`），点在线上挖空；
-///   相邻两颗按两句隔了多久开方排开、至少隔 `PastDots.spacing`，第一颗前那段从会话开始算，最后一句落在两段交界；
-/// - 右段固定占 `nowShare` 是现在（`BoardPulse.Trace`）：在跑是从最后一颗（靛青）点长出的波浪或子代理直轨（`WaveStrip`）；
-///   停住是淡线接到右端、末端一颗与状态词同色的点，被打断是断线；歇着是淡线、不带点。每张卡的现在在同一位置、同一长度，一列读起来整齐；
-/// - 歇着、这次停下 Cue 已交给别处时整条线换成在等哪一处做完（`HandoffLine`），同高、不挪卡；
-/// - 右端只写一个时长：会话在此刻这个状态里待了多久（同会话行那一格，`PiClock.Style.span`；数字加粗、单位小一号淡色），要你管的状态词紧跟；
-///   卡窄时怎么让、绝不越出卡边，在 `BoardLineRow`。
-/// 动只经 `LoopLayer`，只有看得见的在动：卡在懒加载栈里，出屏就不存在；不放循环动效时（`LoopsPlay`）静止；
-/// 一列里排在第 `maxMoving` 条以后的静止（`moves` 由列按先后给）——"同屏最多几条"要逐行读几何才判得出，每行一个几何读数的开销比省下的动画还大，
-/// 按列里的先后数是最轻的等价做法：列从上往下读，排在前面的就是一屏里先看到的。读屏不念：卡的读屏标签已说了状态。
+/// 右段固定占 `nowShare`：每张卡的现在在同一位置、同一长度，一列读起来整齐。
+/// 一列里排在第 `maxMoving` 条以后的静止（`moves` 由列按先后给）："同屏最多几条"要逐行读几何才判得出，每行一个几何读数的开销比省下的动画还大，按列里的先后数是最轻的等价做法：列从上往下读，排在前面的就是一屏里先看到的。
 struct BoardLine: View {
     let pulse: BoardPulse
-    /// 列里允许它动（排在前 `maxMoving` 条在跑的里）。
     var moves = true
     /// 会话条只画「现在」，与卡片共用绘线、状态色与循环预算，不复制一份波形实现。
     var detail: Detail = .history
@@ -86,7 +75,6 @@ struct BoardLine: View {
             .overlay { PastDots(marks: marks, pick: .last).fill(pulse.lastSaidTint(palette)) }
     }
 
-    /// `joint`：两段交界处有最后一颗点，停住与歇着的线从它挖的空后面接上。
     @ViewBuilder private func now(joint: Bool) -> some View {
         switch pulse.trace {
         case .running(let gait, let subagents):
@@ -99,7 +87,6 @@ struct BoardLine: View {
                 }
             }
             .clipped()
-            // 波浪从最后一颗点里渐显、到右端淡出；子代理轨从那颗点直接分岔出去，不淡入
             .mask {
                 LinearGradient(stops: [.init(color: strip.tracks > 0 ? .black : .clear, location: 0), .init(color: .black, location: 0.25),
                                        .init(color: .black, location: 0.85), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing)
@@ -115,7 +102,6 @@ struct BoardLine: View {
         Tail(joint: joint).stroke(palette.track, style: StrokeStyle(lineWidth: Self.stroke, lineCap: .round, dash: dashed ? [4, 4] : []))
     }
 
-    /// 时长：数字加粗、单位小一号淡色（"12 分钟""42 sec"；不到一分钟是"刚刚"，整段淡色），一段字里分两种样子；经 `LiveText` 只在字会变的那一刻重画。
     private struct TimeSpent: View {
         let clock: PiClock
         @Environment(\.palette) private var palette
@@ -137,10 +123,7 @@ struct BoardLine: View {
     }
 }
 
-/// 卡下沿那一行（推进中的任务卡、会话卡，与从推进中飞出时还带着线的卡同这一处）：左边是线（或在等谁），右端是读数——时长、状态词（`Part`）。
-/// 卡变窄时按这个顺序让（`plans`），整行绝不比卡给的宽：照常排（线与读数隔 `gap`、时长与词隔 `pair`）→ 收两道缝（`tight`）→ 丢时长、让位给状态词 →
-/// 线拿不到最小可读的宽（`BoardCardMetrics.lineMin`：过去两颗点、现在一截波）就整条不画，读数占整行（时长与词都放得下就都留，否则只留词）→
-/// 收字距（`allowsTightening`）→ 状态词截断。读数总靠右，同一列各卡的读数一条竖线对齐。没有状态词时时长就是那一项，只截断不丢。
+/// 整行绝不比卡给的宽；读数总靠右，同一列各卡的读数一条竖线对齐。
 /// 1280 宽的推进中列里线这一行约 97 宽："达到用量限制""上下文 94%"丢了时长、线也不画，只留词；英文的"Usage limit reached"截断。
 /// 否决过：线压到十几点也留着——只剩一颗点挤在词前面，读不出是线，像个标点。
 /// 每次排版各量一次理想宽，不按 `ViewThatFits` 把几种排法都建出来；丢掉的排成 0 宽裁掉（`fact()`），读屏仍由卡的标签说状态。
@@ -151,12 +134,10 @@ struct BoardLineRow: Layout {
         static let defaultValue = Part.word
     }
 
-    /// 线与读数之间、时长与状态词之间：照常与收紧两档。
     private static let gap: CGFloat = 8
     private static let pair: CGFloat = 4
     private static let tight: (gap: CGFloat, pair: CGFloat) = (4, 2)
 
-    /// 一种排法：线与读数隔多少（nil 是不画线）、时长与词隔多少、留不留时长。
     private struct Plan {
         let line: CGFloat?
         let pair: CGFloat
@@ -176,18 +157,15 @@ struct BoardLineRow: Layout {
         let line = subviews.first { $0[Part.self] == .line }
         let time = subviews.first { $0[Part.self] == .time }
         let word = subviews.first { $0[Part.self] == .word }
-        // 必留的那一项（状态词，没有时是时长）与可丢的那一项（有状态词时的时长）
         let (keep, spare) = word.map { ($0, time) } ?? (time, nil)
         let keepWidth = keep?.sizeThatFits(.unspecified).width ?? 0
         let spareWidth = spare?.sizeThatFits(.unspecified).width ?? 0
-        // 线占的那一截：要画就至少 `lineMin`，读数之外还剩多少都给它
         func room(_ plan: Plan) -> CGFloat { bounds.width - (plan.line.map { BoardCardMetrics.lineMin + (keep == nil ? 0 : $0) } ?? 0) }
         let plan = Self.plans.first { plan in
             keepWidth + (plan.spare && spare != nil ? spareWidth + plan.pair : 0) <= room(plan) + 0.5
         } ?? Self.plans[Self.plans.count - 1]
         let shownKeep = min(keepWidth, max(0, room(plan)))
         let shownSpare = plan.spare ? spareWidth : 0
-        // 从右往左摆：先必留的、再可丢的（时长在词左边），线占剩下的
         var x = bounds.maxX
         let height = bounds.height
         if let keep {
@@ -204,7 +182,6 @@ struct BoardLineRow: Layout {
     }
 }
 
-/// 两段按比例分：后一段占 `share`。一次排完，不读几何。
 private struct LineSplit: Layout {
     let share: CGFloat
 
@@ -220,14 +197,12 @@ private struct LineSplit: Layout {
     }
 }
 
-/// 过去那段的每颗点：位置（0…1）乘宽，挨得太近的往左推开、至少隔 `spacing`，最后一颗钉在右端；推出左端的不画（卡窄、线让给读数时，`BoardLineRow`），不叠成一团。
 nonisolated private struct PastDots: Shape {
     enum Pick { case earlier, last }
     let marks: [CGFloat]
     let pick: Pick
 
     static let spacing: CGFloat = 9
-    /// 点在线上挖出的空的半径，比最大的点大一圈。
     static let hole: CGFloat = 4.5
 
     func path(in rect: CGRect) -> Path {
@@ -246,8 +221,7 @@ nonisolated private struct PastDots: Shape {
         return xs.indices.compactMap { index in index == xs.count - 1 ? max(xs[index], spacing) : xs[index] >= spacing ? xs[index] : nil }
     }
 
-    /// 说过的每句在过去那段里的位置（0…1），最后一句落在 1：从会话开始起，相邻两个时刻隔多久开方当间距（至少一分钟那么宽），
-    /// 久的拉开、密的不挤成一团；会话记录晚于第一句才建的，第一句前也留一分钟那么宽。
+    /// 会话记录晚于第一句才建的，第一句前也留一分钟那么宽。
     static func marks(said: [Date], origin: Date?) -> [CGFloat] {
         guard let first = said.first else { return [] }
         let times = [min(origin ?? first, first)] + said
@@ -261,7 +235,6 @@ nonisolated private struct PastDots: Shape {
     }
 }
 
-/// 过去那段的线：竖直居中、细细一条（填充，淡入用渐变填色），每颗点处断开 `PastDots.hole`，线不穿过点。
 nonisolated private struct PastLine: Shape {
     let marks: [CGFloat]
 
@@ -278,7 +251,6 @@ nonisolated private struct PastLine: Shape {
     }
 }
 
-/// 停住与歇着那一截的线：竖直居中，左端让出交界那颗点挖的空（有的话），右端让出末端那颗点的半边。
 nonisolated private struct Tail: Shape {
     let joint: Bool
 

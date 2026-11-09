@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 仅打开系统语言设置，不退出 CuePad；当前语言以进程的 Bundle 为准，重开后才更新。
+/// 当前语言以进程的 Bundle 为准，重开后才更新。
 struct LanguageRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.openURL) private var openURL

@@ -1,10 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 会话列表（手机搜索页的会话一栏、三端"更早"那一页同一个，数据是两端共用的 `PiSessionList`）：最上面"已置顶"（绑在置顶任务上的），
-/// 接着"现在"（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），"历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。
-/// "更早"那一页（`AgentListModel.endedOnly`）只有历史，不写"历史"两字：页名就是"更早"。
-/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。长按（Mac 右键）是会话的菜单（`OpenSessionBeside` 与 `SessionActions`），手机上慢慢左滑可结束、重命名。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
+/// `top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
 struct SessionList<Top: View>: View {
     @Bindable var model: AgentListModel
     @ViewBuilder var top: Top
@@ -30,7 +27,6 @@ struct SessionList<Top: View>: View {
         .scrollContentBackground(.hidden)
         .safeAreaPadding(.horizontal, Self.margin)
         .safeAreaPadding(.top, Bars.contentGap)
-        // 滚动条仍贴屏幕边与顶栏下沿，不随内容的边缩进
         .contentMargins(.horizontal, -Self.margin, for: .scrollIndicators)
         .contentMargins(.top, -Bars.contentGap, for: .scrollIndicators)
         #if os(iOS)
@@ -40,7 +36,7 @@ struct SessionList<Top: View>: View {
         .agentList(model)
     }
 
-    /// 会话列表。换搜索词时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）；同一筛选下会话进出、换状态才有动画。
+    /// 换搜索词时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）；同一筛选下会话进出、换状态才有动画。
     @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {
         if list.isEmpty {
             empty
@@ -78,14 +74,13 @@ struct SessionList<Top: View>: View {
         }
     }
 
-    /// 分组标题：与卡片左缘对齐，上面多留一段把分组分开。
     private func header(@ViewBuilder _ title: () -> some View) -> some View {
         title()
             .frame(maxWidth: .infinity, alignment: .leading)
             .listRowInsets(EdgeInsets(top: Spacing.block, leading: 0, bottom: Spacing.tight, trailing: 0))
     }
 
-    /// 一张卡片：长按是会话的菜单，手机上慢慢左滑露出其中的结束与重命名。会话记录没有删除（会话文件在 Mac 上，归 Pi 管）。
+    /// 会话记录没有删除（会话文件在 Mac 上，归 Pi 管）。
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let ending = end?.inTransit == true
         let row = SessionRow(item: item, showsPlace: list.showsPlace, end: end)
@@ -123,11 +118,9 @@ extension SessionList where Top == EmptyView {
     init(model: AgentListModel) { self.init(model: model) { EmptyView() } }
 }
 
-/// 一个会话（`PiSessionRow`）点开它的会话页；已结束的整行更淡。
 private struct SessionRow: View {
     let item: PiSessionListItem
     let showsPlace: Bool
-    /// 此刻要显示的结束请求（`DeliveryRequest.shownEnd`）。
     var end: Speech.Trip?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -144,16 +137,12 @@ private struct SessionRow: View {
 }
 
 private extension View {
-    /// 会话卡片在列表里的一行：卡片之间留 8 点。
     func cardRow() -> some View {
         listRowInsets(EdgeInsets(top: Spacing.tight, leading: 0, bottom: Spacing.tight, trailing: 0))
     }
 }
 
-/// "更早"那一页（`Route.earlier`，WORDS.md）：已结束的会话按结束时间分段（`AgentListModel.endedOnly`），滑到底再读一页。三端同一页：
-/// 手机从 Cue 页会话条底下"更早"那一格推入（`EarlierTile`，左边是系统返回）；Mac 与 iPad 宽屏点会话条上的"更早"在主区打开（`RailEarlier`）。
-/// 在跑、等你的会话不在这里，它们在会话条上。已结束的会话只在这一页与搜索里找（手机搜索页的会话一栏、Mac 的 ⌘K）；
-/// 项目页的“更早”是另一样（没在墙上的旧灵感），两处不混。
+/// 项目页的"更早"是另一样（没在墙上的旧灵感），两处不混。
 struct EarlierPage: View {
     @State private var model = AgentListModel(endedOnly: true)
 
@@ -161,7 +150,6 @@ struct EarlierPage: View {
         #if os(iOS)
         SessionList(model: model).floatingHeader("更早")
         #else
-        // 页名在窗口最顶那一排（主区的栏头）
         SessionList(model: model)
         #endif
     }

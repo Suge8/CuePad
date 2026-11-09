@@ -1,7 +1,6 @@
 import SwiftUI
 
 #if os(iOS)
-/// iOS 设置里的一行"上次崩溃 · 时间"（没有诊断就不显示）：点开看摘要（异常类型、崩溃线程顶部的帧），可导出给开发者。Mac 的那一行见设置窗口的 `CrashRow`。
 struct LastCrashRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -25,7 +24,7 @@ struct LastCrashRow: View {
 }
 #endif
 
-/// 一份诊断的要点，与整份存档的导出：复制的是每种只留要点的摘要（`DiagnosticSummary`），完整原文作文件分享，不进剪贴板。
+/// 复制的是每种只留要点的摘要（`DiagnosticSummary`），完整原文作文件分享，不进剪贴板。
 struct CrashReportView: View {
     let report: CrashReport
     @Environment(AppServices.self) private var services
@@ -47,7 +46,6 @@ struct CrashReportView: View {
         }
     }
     #else
-    /// Mac：挂在设置那一行"查看"上的弹出框，与设置里其余弹出框同一种外观（`SettingPopover`）。
     var body: some View {
         SettingPopover(title: report.kind.label, width: 420) {
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Spacing.group, verticalSpacing: 6) {

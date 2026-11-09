@@ -5,23 +5,15 @@ import CuePi
 #endif
 
 
-/// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧一颗四角同圆的气泡（`BubbleLook.session`；对话气泡只在 Cue 页），Pi 的回答左侧全宽 Markdown（一直展开），
-/// 每轮回答上方一块这一轮的经过（`RoundProcess`）；你发出、Agent 还没读到的话是同一列里的气泡（排在哪见 `PiChat.entries`），下面写送达情况，失败的可重发；Pi 在处理时末尾是这一轮到目前为止的经过与正在跑的那一步（`LiveStatus`；计时在顶上一行），
-/// 有子代理时下面逐个列出它们此刻的状态。滚动与输入框由平台放。
 /// Mac 上本机在线的会话（`slot`）在末尾逐字长出正在说的话（`SessionDraft`），说完落库时原位换下：这时对话里的回答都不淡入。
-/// 减弱动态效果下也只有淡入淡出。
 struct PiConversation: View {
     let session: PiSessionState
-    /// 对话里的每一条（`ChatDerived` 按对话数据推好的，含还没进对话的你的话）。
     let items: [PiChatEntry]
-    /// 正在说的话落库时要对着最近一条回答认（`SessionDraft`）。
     let messages: [PiChatMessage]
-    /// 排开最近几条（不用懒加载栈，见 `ChatScroll`），更早的由它再排开一段。
     let window: ChatWindow
-    /// 正在请会话所在的 Mac 补写对话（`SessionDigest.fetchingTranscript`）：最上面一行说明。排在对话那一列里，它收起时正在读的不动（`ChatAnchor`）。
+    /// 排在对话那一列里，它收起时正在读的不动（`ChatAnchor`）。
     var fetching = false
     #if os(macOS)
-    /// 这个会话在本机桥上的那一格（在线时）：正在说的话从这里读。
     var slot: PiBridge.Slot?
     #endif
     @Environment(\.chatHighlight) private var highlight
@@ -56,11 +48,9 @@ struct PiConversation: View {
     }
 
     static var spacing: CGFloat { Spacing.block }
-    /// 最初至少排开几条；一段约几条（`ChatSegments`），每次再排开这么多条。
     static let firstWindow = 4, segment = 5
     static let paging = ChatPaging.fixed(first: firstWindow, step: segment)
 
-    /// 回答原位换下正在说的话（Mac 上本机在线的会话），不淡入。
     private var swapsInPlace: Bool {
         #if os(macOS)
         slot != nil
@@ -69,7 +59,6 @@ struct PiConversation: View {
         #endif
     }
 
-    /// 对话末尾：正在说的话或处理中的进展（带子代理）；出错不在这里，贴在回复框上方（`PiFailureDock`）。
     /// 进展的第一行一直占着位置（`ChatLiveSlot`，没有时留白）：一轮开始、结束时对话不跟着跳；进展往下长出的几步是内容。
     /// 它排在最后：回复框上方的说明（`composerNotice`）落在这段留白里，盖不到上面的内容。
     @ViewBuilder private var ending: some View {
@@ -84,7 +73,6 @@ struct PiConversation: View {
         #endif
     }
 
-    /// 回复框上方的说明最高多高（两行，`composerNotice`）：末尾那一行给它让出这么多（`ChatLiveSlot`）。
     private var floating: CGFloat { ComposerMetrics.noticeClearance(textHeight: noticeText) }
 
     @ViewBuilder private var liveStatus: some View {
@@ -94,16 +82,11 @@ struct PiConversation: View {
 
 
 #if os(macOS)
-/// 会话页对话的末尾（Mac，本机在线的会话）：正在说的话（`PiBridge.Slot.draft`）出字时逐字长出来（`DraftReply`，上方是这一轮的经过，标题行末写"输出中"），
-/// 下面是进展的位置（`ChatLiveSlot`）：没有草稿时写进展（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
-/// 草稿落库了（`PiDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展（正文已经说完），只列子代理；
-/// 状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展被草稿换下时直接拿掉，不叠着淡出。
+/// 草稿落库了（`PiDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展（正文已经说完），只列子代理；状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展被草稿换下时直接拿掉，不叠着淡出。中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
 struct SessionDraft: View {
     let slot: PiBridge.Slot
     let session: PiSessionState
-    /// 对话里最近一条 Agent 回答的时刻
     let newestReply: Date?
-    /// 回复框上方的说明最高多高（`PiConversation.floating`）。
     let floating: CGFloat
 
     var body: some View {
@@ -131,7 +114,7 @@ struct SessionDraft: View {
 #endif
 
 
-/// 对话里的一段（约 `PiConversation.segment` 条，`ChatSegments`）。只按内容比较：同样的几条、描圈的那条与批注（只看本段里的）、同一个会话就不重算。
+/// 只按内容比较：同样的几条、描圈的那条与批注（只看本段里的）、同一个会话就不重算。
 private struct ChatSegment: View, Equatable {
     let items: [PiChatEntry]
     let session: PiSessionState
@@ -170,7 +153,6 @@ private struct ChatSegment: View, Equatable {
             UserBubble(stored: entry.text, look: .session, highlighted: entry.id == highlight, fromCue: entry.fromCue) {
                 MessageActions(text: PiSkillCall.shown(entry.text), kind: .mine, session: session)
             }
-                // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)
         case .outgoing(let request):
             outgoing(request).padding(.top, Self.turnGap)
@@ -183,7 +165,6 @@ private struct ChatSegment: View, Equatable {
             ReplyBlock(
                 id: entry.id, text: entry.text, took: entry.took, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
         case .notice(let notice) where notice.changesContext:
-            // 压缩：上下文从这里起换了，与 Cue 换新同一条分隔
             ContextBoundary(title: notice.label, highlighted: entry.id == highlight)
         case .notice(let notice):
             RoundEndNote(notice: notice)
@@ -199,7 +180,6 @@ private struct ChatSegment: View, Equatable {
 
 
 extension ChatSegment {
-    /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（发送中、已发出、送达中；已结束的会话先唤醒）。
     private func outgoing(_ request: DeliveryRequest) -> some View {
         let session = session, said = Said.request(request), box = services.settings.replyDraftBinding(for: session.id)
         return SpeechBubble(said: said, box: box, session: session, fromCue: request.isFromCue, look: .session) { trip in
@@ -214,7 +194,7 @@ extension ChatSegment {
     }
 }
 
-/// 这一轮怎么结束的（被停下、被你拒绝）：回答下面一行旁注，不是分隔（上下文没换），刻度滑条上也没有它。
+/// 不是分隔（上下文没换），刻度滑条上也没有它。
 private struct RoundEndNote: View {
     let notice: PiNotice
 
@@ -227,7 +207,6 @@ private struct RoundEndNote: View {
 }
 
 extension PiConversation {
-    /// 对话里"有新内容"的标志（滚动跟随用，见 `ChatScroll`）：多了消息、发出的话或它的送达情况变了、开始或结束处理、出错。
     struct FollowKey: Equatable {
         var messages: Int
         var previews: Int
@@ -243,12 +222,9 @@ extension PiConversation {
 }
 
 
-/// 手机会话页顶栏标题下那一行的状态，只在在跑或要你注意时出现：在跑（工作中、话在路上）是状态标、状态词与到秒的计时；
-/// 等你确认、出错、没能送达、已结束只有状态标与状态词（带色）；有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`）。Mac 的会话栏头只写名字（`WideSessionTitle`）。
-/// 最前面写是哪家 Agent（`AgentMark`），歇着时也写；歇着（该你了、新会话、有新回复）时只有它。所在不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
+/// 所在不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。Mac 的会话栏头只写名字（`WideSessionTitle`）。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
-    /// 发给它的最近一条话（`PiSessionListItem.delivery` 的取法）：停着时状态写它到哪了。
     let delivery: DeliveryRequest?
     var undelivered: String?
     @Environment(Workspace.self) private var workspace
@@ -296,7 +272,6 @@ struct PiSessionSubtitle: View {
     private static let font = Typography.caption
 }
 
-/// 顶栏里的状态（会话页与 Cue 页同一个样子）：着色的状态词，手机上前面加状态标（Mac 的标题玻璃里不画圆）。
 struct PiShownLabel: View {
     let shown: PiShown
     @Environment(\.palette) private var palette
@@ -314,7 +289,6 @@ struct PiShownLabel: View {
 }
 
 
-/// 等你确认时固定在输入框上方的问题：能从这里答的是问题卡（选项一点即答，答完随问题清空而消失），
 /// 只能在 Agent 那边答的（问题本身答不了，或这个会话做不到，`PiSessionState.answerableQuestion`）写明原文与去处。
 struct PiQuestionDock: View {
     let session: PiSessionState

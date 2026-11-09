@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// 任务行的标题与行尾一次排（`TaskLine`；不用 `ViewThatFits`：它把每个候选都建一遍）：第一格是标题，其后是行尾各格。
-/// 标题至少留 `minTitle`（比它短的留它整行）；放不下时行尾按让位的先后收起（`yields`：先是时间，再是没写状态词的标），
-/// 写了状态词的（要你管的那件）不让。收起的那格量成零大小、裁掉不画。`trailing`：行尾贴右（手机一列）；否则紧跟标题（iPad 宽栏、Mac）。
+/// 不用 `ViewThatFits`：它把每个候选都建一遍。标题至少留 `minTitle`；放不下时行尾按 `yields` 收起，写了状态词的（要你管的那件）不让。收起的那格量成零大小、裁掉不画。
 /// 行尾各格的首行基线对着标题首行；整块的首行基线就是标题的，外面的圈对着它。
 struct TaskLineLayout: Layout {
     let trailing: Bool
@@ -14,7 +12,6 @@ struct TaskLineLayout: Layout {
     static let minTitle: CGFloat = 110
     #endif
 
-    /// 行尾一格让位的先后：数大的先让，0 不让。
     struct Yield: LayoutValueKey { static let defaultValue = 0 }
 
     private struct Plan {
@@ -23,7 +20,6 @@ struct TaskLineLayout: Layout {
         var sizes: [CGSize]
         var side: CGFloat
         var titleWidth: CGFloat
-        /// 各格顶边相对整块顶边的位置（第一格是标题）。
         var tops: [CGFloat]
         var height: CGFloat
     }
@@ -87,7 +83,6 @@ struct TaskLineLayout: Layout {
 }
 
 extension View {
-    /// 任务行行尾的一格（`TaskLineLayout`）：放不下时让位，`first` 的先让；`ever` 为假的不让。
     /// 量自己时是本来的大小，让掉时给零大小、裁掉不画；不让的不裁（等你确认的波纹画在标外面）。
     @ViewBuilder func yields(first: Bool, ever: Bool = true) -> some View {
         if ever {

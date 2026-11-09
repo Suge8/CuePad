@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 归档：做完或不再需要的灵感与任务，留着可搜、不占列表；最近归档的在前，一条一行（任务连同它的下级一起归档，只列它自己）。
-/// 点一条打开它；"取回"连同下级回到原处，"删除"进回收站。iOS 与 Mac 同一份内容，外框各自。
 struct ArchiveList: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -68,7 +66,6 @@ struct ArchiveList: View {
         }
     }
 
-    /// 右滑取回，左滑删除（可撤销）；长按菜单是同样两项。
     private func swipes(_ card: Card) -> RowSwipes {
         let id = card.id
         return RowSwipes(

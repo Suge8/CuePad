@@ -1,8 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 三端任务菜单与 Mac 任务气泡共用的纯关联入口：列本项目未结束的会话，当前关联打勾，末尾可解绑。
-/// 候选只读共享的会话列表；关联与解绑交给 Store，不发送正文、不启动或结束会话。
+/// 关联与解绑交给 Store，不发送正文、不启动或结束会话。
 struct SessionBindItems: View {
     let leaf: Card
     @Environment(Workspace.self) private var workspace

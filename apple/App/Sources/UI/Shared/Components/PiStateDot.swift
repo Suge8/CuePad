@@ -2,12 +2,9 @@ import CueStore
 import SwiftUI
 
 extension PiShown {
-    /// 状态色：等你确认赭黄、出错与没能送达胭脂、有新回复石绿三种各管一件事；在跑（工作中、话在路上）是正在发生，用签名色靛青；
-    /// 待回复是墨色（赭黄只给要你拍板的）；停着的（该你了、新会话、未知）与已结束灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
         case .asking: palette.waiting
-        // 等 Cue 回答：不是要你管的，中性的墨色（赭黄只给等你确认的）
         case .cueAsking, .awaitsReply: palette.ink
         case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): palette.ink3
         case .failed, .delivery(.failed): palette.failure
@@ -17,7 +14,6 @@ extension PiShown {
         }
     }
 
-    /// 带色的状态（状态词与状态标同色）：要你管的、在跑的、有新回复。
     var isColored: Bool {
         switch status {
         case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): false
@@ -26,12 +22,10 @@ extension PiShown {
         }
     }
 
-    /// 状态词的颜色：带色的状态与状态标同色，等 Cue 回答是墨色，已结束是灰，其余次要墨色。
     func labelTint(_ palette: Palette) -> Color {
         isColored || status == .cueAsking ? tint(palette) : status == .ended ? palette.ink3 : palette.ink2
     }
 
-    /// Agent 页卡片的底色：出错与没能送达、有新回复是这种状态的淡底令牌，其余是纸（nil）。
     /// 等你确认与待回复不铺：大块的底色压眼，图标与状态字的赭黄已经够醒目；在跑的也不铺：会动的心电线与靛青字已经够醒目。
     func wash(_ palette: Palette) -> Color? {
         switch status {
@@ -41,27 +35,21 @@ extension PiShown {
         }
     }
 
-    /// 状态的静止图形（`Icon`），与 `tint` 一起是全 App 状态图形的唯一出处：状态标（`PiStateDot`）、跟着字号的
-    /// `PiStateGlyph`（问题卡、出错与没能结束的提示、Cue 的等你、前台横幅、通知设置）都从这里取。在跑、话在路上在状态标里是
-    /// 自绘的循环动效，这里是不放循环动效时与菜单里的样子。等你是裸问号，出错与没能送达保留实心圆徽；不靠颜色单独区分。
+    /// 与 `tint` 一起是全 App 状态图形的唯一出处。在跑、话在路上在状态标里是自绘的循环动效，这里是不放循环动效时与菜单里的样子。等你是裸问号，出错与没能送达保留实心圆徽；不靠颜色单独区分。
     var icon: Icon {
         switch status {
         case .asking: .waiting
-        // 待回复：墨点，各处同一个（会话条、看板等你列、经过里的"留给你"）
         case .awaitsReply: .awaitsReply
-        // 等 Cue 回答：气泡里的问号，线条墨色（赭黄裸问号只给等你确认的）
         case .cueAsking: .cueAsking
         // 胭脂圆叹号（`Icon.failure`，与操作出错同一个）：与等你确认的裸问号靠轮廓与颜色分开
         case .failed: .failure
         case .delivery(.preparing): .more
         case .delivery(.failed): .undelivered
         case .delivery: .onTheWay
-        // 等子代理交回：一大一小两颗点（同状态标会动的那两颗、看板卡下沿那一端），不借在跑的心电线
         case .working(.delegating): .relay
         case .working: .session
         // 铃铛：它回你了，像来了一条通知。不用对勾——对勾只表示完成与记下，任务行旁挨着会话状态时会读成任务做完了
         case .unread: .replied
-        // 输入光标：轮到你打字
         case .idle: .yourTurn
         // 歇着、轮不到你（Cue 值班时）：省略号，等下一句的不是你。不用圈：带圈的已经够多（出错、没能送达、未知、已结束），缩小后分不开
         case .resting: .more
@@ -75,13 +63,7 @@ extension PiShown {
     }
 }
 
-/// 会话状态标（全 App 只此一份：Agent 页卡片、书架、侧栏、Mac 侧栏的项目行与菜单栏、会话页顶栏、任务上的会话状态）：
-/// 颜色 + 不带外框的整体图形（图标与颜色只取 `PiShown.icon`、`tint`）——等你确认赭黄裸问号、出错胭脂圆叹号、没能送达胭脂折回箭头、
-/// 在跑靛青心电线（一截实色沿波形走）、等子代理交回靛青一大一小两颗点（小的出去又回来贴住，`relay`）、话在路上靛青纸飞机（从左下飞进、朝右上飞出）、有新回复石绿铃铛（变成它时摇一下）、
-/// 待回复墨点、该你了灰色输入光标、新会话灰色星光、被打断灰色断开的线、已结束灰色带斜线圈（不再另淡：灰已在对比度底线上，靠斜线圈的形状分）；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
-/// 心电线、纸飞机是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
-/// 两个都是静止图标时由系统原地替换。不放循环动效时（`LoopsPlay`）换成同一状态的静止符号；减弱动态效果时不摇铃。
-/// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
+/// 会话状态标全 App 只此一份，图标与颜色只取 `PiShown.icon`、`tint`。已结束不再另淡：灰已在对比度底线上，靠斜线圈的形状分。旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
 struct PiStateDot: View {
     let shown: PiShown
     var size: CGFloat = 8
@@ -90,17 +72,14 @@ struct PiStateDot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @LoopsPlay private var loops
     @ScaledMetric private var scale: CGFloat = 1
-    /// 每变成一次有新回复加一：铃铛摇一下。
     @State private var rings = 0
 
     private var box: CGFloat { size * 1.8 * scale }
-    /// 字的中线在基线以上多高，按标的外框算（外框约等于旁边的字号）。
     private nonisolated static let midline = 0.36
 
     var body: some View {
         let tint = shown.tint(palette)
         let mark = ZStack {
-            // 不放循环动效时画同一状态的静止图标（纸飞机的静止那一架由它自己换，`OnTheWay`）
             switch shown.mark {
             case .flight: OnTheWay(size: box, color: tint).transition(Motion.pop(reduceMotion: reduceMotion))
             case .loop(let kind) where loops: LoopLayer(kind: kind, color: tint).transition(Motion.pop(reduceMotion: reduceMotion))
@@ -130,10 +109,7 @@ struct PiStateDot: View {
 
 }
 
-/// 会话状态标画什么（`PiStateDot` 只画它、不判断），状态 → 样子只在 `PiShown.mark`：常驻的循环、话在路上那架纸飞机，或静止的图标（`PiShown.icon`）。
-/// 循环不放时（`LoopsPlay`）退回同一状态的静止图标。
 enum StateMark: Equatable {
-    /// 在跑是心电线，等子代理交回是一大一小两颗点（`LoopLayer` 的 `heartbeat`、`relay`）。
     case loop(LoopLayer.Kind)
     case flight
     case icon
@@ -152,8 +128,6 @@ extension PiShown {
     }
 }
 
-/// 状态的静止图形，大小跟着旁边的字（问题卡、出错与没能结束的提示、Cue 的等你、待回复的提示与看板卡、前台横幅、气泡上的没能送达）：
-/// 与状态标同一份图标与颜色（`PiShown.icon`、`tint`），不带动效。读屏跳过，意思由旁边的字说。
 struct PiStateGlyph: View {
     let status: PiShown.Status
     @Environment(\.palette) private var palette
@@ -163,6 +137,5 @@ struct PiStateGlyph: View {
         Image(shown.icon).foregroundStyle(shown.tint(palette))
     }
 
-    /// 没能送达（会话行的"有话没送到"、气泡上的标记）：样子不随原因变，这里不带原因。
     static let undelivered = PiStateGlyph(status: .delivery(.failed(.reported(DeliveryRequest.unexplainedFailure))))
 }

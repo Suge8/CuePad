@@ -1,25 +1,16 @@
 import CueStore
 import SwiftUI
 
-/// 任务气泡：看一条任务只有它（看板的卡、项目页的任务行、Cue 页里提到与做完的任务、⌘K 与选择器、归档、小组件链接，都经 `Workspace.openTask`；
-/// 任务行与看板卡点开工了的叶子直接进会话，其余开它，`Workspace.enter`），
-/// 内容两端同一份（`TaskBubblePage`、挂在这一页上的定时 `ScheduleStrip`，加最下面的"下一步" `BubbleFooter`），只有摆法分端（`TaskBubbleSlot`）。不换页、不压暗；点外面或 Esc 关。
-/// 翻到一个子任务（点子任务行）原地换页、左上出返回（往里翻从右边进、返回从左边进，全 App 的切页 `Motion.turn`）；别处删掉、归档了它，气泡收起。
-/// "下一步"：交给了会话是它此刻的样子（这家 Agent 的标志、状态与一句话），点了去会话；还没开始的叶子是"开始"（正文连同标题交给 Agent）；
-/// 有子任务的看最该你看的那一步（`Workspace.lead`）。
+/// 看一条任务只有它，各处都经 `Workspace.openTask`；任务行与看板卡点开工了的叶子直接进会话，其余开它（`Workspace.enter`）。
 struct TaskBubble: View {
-    /// 一次打开：`id` 每次打开都不同（同一件事再点一次也从新的那一下长出来）；`step` 是翻到的子任务，翻页不换 `id`。
     struct Request: Identifiable, Equatable {
         let id = UUID()
         let task: UUID
-        /// 翻到的子任务；nil 是这件事本身（有子任务时是子任务一览）。
         var step: UUID?
-        /// 从哪长出来：点的那一下，或没有来源（`Workspace.openTask`）。
         let source: BubbleSource
     }
 
     let request: Request
-    /// 摆成贴在底部的纸（手机）：顶上多一条把手（拖它往下关），下面让出 Home 指示条那一截。
     var sheet = false
     /// 翻到的那一步：跟着工作区里开着的这一次（翻页只改它）；这一次关了就停在最后一页，收起的那一下不跳回打开时的页。
     @State private var step: UUID?
@@ -71,7 +62,6 @@ struct TaskBubble: View {
         .onDisappear { editing?.leave() }
     }
 
-    /// 工作区里开着的正是这一次时的它。
     private var live: Request? { workspace.openTask?.id == request.id ? workspace.openTask : nil }
 
     private func edit(_ card: Card?) {
@@ -81,9 +71,7 @@ struct TaskBubble: View {
     }
 }
 
-/// 任务气泡挂在窗口上的那一格（Mac 主窗口、手机与 iPad 的根视图各挂一次）：只有它读 `Workspace.openTask`，开合、翻页时只重算它，不连带根视图。
-/// 摆法分端：Mac 与宽屏 iPad 从点的那一下长出带尾巴的气泡；手机（窄屏）是贴在底部的纸（`BubbleSource.bottom`，拇指够得着"下一步"，拖把手往下关）。
-/// 都画在气泡那一层（`PanelStyle.bubble`）：开合只挪图层；键盘升起时整块挪到键盘之上，字不重排（`BubbleStage.floor`）。
+/// 只有它读 `Workspace.openTask`，开合、翻页时只重算它，不连带根视图。
 /// 手机不用系统 sheet（实测）：iOS 26 的纸在矮的那几档整张缩小约 3.5%、键盘一起就放回原大，字跟着缩放；开一次的指令数是自绘的近 3 倍、关一次十几倍。
 struct TaskBubbleSlot: View {
     @Environment(Workspace.self) private var workspace
@@ -93,7 +81,6 @@ struct TaskBubbleSlot: View {
 
     var body: some View {
         @Bindable var workspace = workspace
-        // 画在窗口的浮层那一层（`panelHost`）
         let source = source
         Color.clear.panel(item: $workspace.openTask, style: .bubble(source, width: .fixed(BubblePlacement.maxWidth))) { TaskBubble(request: $0, sheet: source == .bottom) }
     }
@@ -106,13 +93,10 @@ struct TaskBubbleSlot: View {
     }
 }
 
-/// 气泡一次读出的东西：顶层任务、它的子任务、它在看板的哪一列、挂在它们上面的定时。
 nonisolated struct BubbleData: Sendable, Equatable {
     var goal: Card
     var steps: [Card]
-    /// 子任务完成了几个（`CueStore.subtaskProgress`）；没有子任务为 nil。
     var progress: TaskProgress?
-    /// 在看板的哪一列（`TaskBoard.Column.of`，与看板同一条规则、同一份 `cueTally`）。
     var column: TaskBoard.Column
     var schedules: [CueScheduled]
     var gone: Bool { goal.deletedAt != nil || goal.archivedAt != nil }
@@ -128,16 +112,10 @@ nonisolated struct BubbleData: Sendable, Equatable {
     }
 }
 
-/// 气泡里的字号、间距与尺寸：Mac 按指针，手机按手指（行高 44）。
-/// 左边一列（`lead`，完成圈的点按区那么宽）里居中放列记号、完成圈、子任务的圈；字都从同一条竖线（`textLeading`）起。
 enum BubbleMetrics {
-    /// 子任务行的圈那一列比左边一列窄多少的一半：子任务行往右挪这么多，圈与完成圈同一条中线。
     static let stepLead: CGFloat = (TaskMetrics.chipTarget - TaskMetrics.ringColumn) / 2
-    /// 字的竖线：子任务行的圈列加它与字的空（`TaskLine`），标题、列名、下一步都对着它。
     static let textLeading: CGFloat = stepLead + TaskMetrics.ringColumn + TaskMetrics.columnGap
-    /// 完成圈（点按区 `chipTarget` 宽）与标题之间：让标题的字落在 `textLeading`。
     static let titleGap: CGFloat = textLeading - TaskMetrics.chipTarget
-    /// 贴在底部的纸（手机）下面让出的那一截（Home 指示条）。
     static let sheetBottom = Spacing.group
     #if os(macOS)
     static let strong = Typography.secondary.weight(.semibold)
@@ -146,12 +124,10 @@ enum BubbleMetrics {
     static let laneMark: CGFloat = 16
     static let laneFont = Typography.secondary.weight(.semibold)
     static let editorInset: CGFloat = 6
-    /// 标题第一行的中线对着完成圈的中线（截图核对）。
     static let ringTop: CGFloat = 2
     static let textTrailing = Spacing.group
     static let footerGap = Spacing.item
     static let gap = Spacing.item
-    /// "下一步"那一条开头这家 Agent 的标志、它占的那一列，与标题前的状态标（`PiStateDot` 的尺寸）。
     static let brand: CGFloat = 20
     static let markSlot: CGFloat = 26
     static let dot: CGFloat = 8

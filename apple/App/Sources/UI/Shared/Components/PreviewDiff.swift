@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// 全屏页里的改动（diff、patch，两端同一个）：每个文件一行抬头（路径、增删数），每段一行段头，下面是旧、新两列行号与一行一行的改动——
-/// 增加的垫淡石绿、删去的垫淡胭脂，不变的不垫。行不折、整块横着滚（代码折了行就认不出缩进），行底铺到最长那一行（`UnifiedDiff.widest`），
-/// 滚到哪颜色都连得上；只排看得见的那些行，几万行的改动也照样打开。
+/// 行不折、整块横着滚（代码折了行就认不出缩进），行底铺到最长那一行（`UnifiedDiff.widest`），滚到哪颜色都连得上；只排看得见的那些行，几万行的改动也照样打开。
 struct PreviewDiff: View {
     let file: URL
     @State private var diff: UnifiedDiff?
@@ -27,7 +25,6 @@ struct PreviewDiff: View {
     }
 }
 
-/// 一份改动的版面：行号那两列多宽（最大的行号几位），一行铺多宽（至少看得见的宽，最长一行更宽时按它）。
 struct DiffLayout {
     let number: CGFloat
     let width: CGFloat
@@ -40,7 +37,6 @@ struct DiffLayout {
     }
 }
 
-/// 改动的一行（全屏页与缩略图同一个）。
 struct DiffRow: View {
     let line: UnifiedDiff.Line
     let layout: DiffLayout

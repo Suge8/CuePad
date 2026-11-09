@@ -18,8 +18,6 @@ extension View {
             close: ClosePanel { isPresented.wrappedValue = false }, panel: content))
     }
 
-    /// 从这个控件（按钮、圆钮、胶囊）长出的气泡：挂在它的框下（放不下挂上面），尾巴指它的中线；点、键盘、读屏打开都一样。
-    /// 开合的状态用 `BubbleSwitch`：按在开关上收起的那一下，松开时不再打开。
     func bubble(isPresented: Binding<Bool>, width: BubblePlacement.Width = .fitting, @ViewBuilder content: @escaping () -> some View) -> some View {
         modifier(ControlBubble(isPresented: isPresented, width: width, panel: content))
     }
@@ -42,7 +40,6 @@ extension View {
     func panelHost() -> some View { modifier(PanelHostModifier()) }
 }
 
-/// 本窗口此刻的浮层，后开的在上。
 @Observable
 final class PanelHost {
     struct Shown: Identifiable {
@@ -50,22 +47,17 @@ final class PanelHost {
         let style: PanelStyle
         let content: AnyView
         let close: ClosePanel
-        /// 常驻的浮层收起时仍在 `shown` 里（`open` 为 false）。
         var open = true
         var modal: Bool { style.modal }
     }
 
     private(set) var shown: [Shown] = []
-    /// 本窗口（`PanelHostModifier` 挂上时报来）。
     @ObservationIgnored fileprivate weak var window: NSWindow?
     /// 模态浮层弹出前的焦点，收起后交还（同系统 sheet）；弹出时先让窗口交出焦点，打字不会落进下面的编辑器。
     @ObservationIgnored private var responders: [UUID: Weak<NSResponder>] = [:]
-    /// 各浮层占的地方（`takes`）。
     @ObservationIgnored fileprivate var areas: [UUID: Weak<NSView>] = [:]
-    /// 有浮层时本窗口的按键与点按先经这里（`takes`）。
     @ObservationIgnored private var monitor: Any?
 
-    /// `open` 为 false：只把内容挂着（常驻浮层收起的样子）；已开着的变成收起。
     func show(_ id: UUID, style: PanelStyle, content: AnyView, close: ClosePanel, open: Bool = true) {
         var entry = Shown(id: id, style: style, content: content, close: close)
         entry.open = open
@@ -108,7 +100,6 @@ final class PanelHost {
         released(id)
     }
 
-    /// 浮层收起后：焦点交还，没有开着的浮层了就撤掉按键监听。
     private func released(_ id: UUID) {
         // 弹出前焦点在输入框里才交还；不在输入框时（点了按钮弹出的）让窗口自己当第一响应者，同弹出前——交还给 SwiftUI 的宿主视图
         // 会让它挑页面上第一个输入框接焦点，按空格就打进了那个输入框
@@ -142,7 +133,6 @@ final class PanelHost {
 
     private static let escape: UInt16 = 53
 
-    /// 在 `layer` 这一层（nil 是窗口本身的界面）上面有开着的模态浮层。
     func covers(_ layer: UUID?) -> Bool {
         let floor = layer.flatMap { id in shown.firstIndex { $0.id == id } } ?? -1
         return shown.indices.contains { $0 > floor && shown[$0].modal && shown[$0].open }
@@ -168,8 +158,6 @@ private struct YieldsFocusWhenCovered: ViewModifier {
 }
 
 private extension PanelStyle {
-    /// 开、关的动画：全屏预览整块淡入淡出（里面的画面从缩略图飞出、飞回，`PreviewFlight`），其余模态浮层原地出现、消失；
-    /// 气泡跟着自己的进出场走。
     var motion: Animation? {
         switch self {
         case .fullScreen: Motion.fade
@@ -190,7 +178,6 @@ extension Weak<NSView> {
     }
 }
 
-/// 垫在一块界面下面、量它占的地方的空视图（不接点按）；建好时交给 `mark` 登记。
 private struct AreaMark: NSViewRepresentable {
     let mark: (NSView) -> Void
 
@@ -208,9 +195,7 @@ private struct AreaMark: NSViewRepresentable {
 }
 
 private struct WindowPanel<Panel: View>: ViewModifier {
-    /// 浮层的身份；nil 是收起。换了身份（另一项）就换内容。
     let key: AnyHashable?
-    /// 收起后内容仍挂着（`keptPanel`）。
     let retained: Bool
     let style: PanelStyle
     let close: ClosePanel
@@ -238,7 +223,7 @@ private struct Mode: Equatable {
     let style: PanelStyle
 }
 
-/// 从控件长出的气泡（`View.bubble(isPresented:)`）：只这一个视图读几何（自己的框），开销可忽略；行里的气泡不走这里（`BubbleSource.press`）。
+/// 只这一个视图读几何（自己的框），开销可忽略；行里的气泡不走这里（`BubbleSource.press`）。
 private struct ControlBubble<Panel: View>: ViewModifier {
     @Binding var isPresented: Bool
     let width: BubblePlacement.Width
@@ -289,8 +274,7 @@ private struct WindowReader: NSViewRepresentable {
     }
 }
 
-/// 浮层那一层。模态的：压暗整窗的底（挡住下面的悬停与滚动），居中一块圆角面板，内容自己定大小、太大时让出窗口四周 24。
-/// 弹层底由容器统一铺桌面色，内容里的行和卡是纸；弹层内容不自己铺底。气泡（不压暗）摆法在 `BubbleFrame`。
+/// 弹层底由容器统一铺桌面色，内容里的行和卡是纸；弹层内容不自己铺底。
 private struct PanelLayer: View {
     @Environment(PanelHost.self) private var host
     @Environment(\.palette) private var palette
@@ -321,7 +305,6 @@ private struct PanelLayer: View {
                 .elevation(.panel)
                 .accessibilityAddTraits(.isModal)
                 .padding(Self.margin)
-                // 常驻的浮层收起时：透明、点不到、读屏与按键快捷键都停用，订阅暂停，还没读过的先读一份
                 .opacity(shown.open ? 1 : 0)
                 .allowsHitTesting(shown.open)
                 .disabled(!shown.open)
@@ -333,7 +316,6 @@ private struct PanelLayer: View {
         .transition(.opacity)
     }
 
-    /// 气泡：量窗口的那一层一直在，气泡在它里面进出（进出场要挂在被插入、移除的那一层上）；顶上让出工具栏那一条。
     private var bubbles: some View {
         GeometryReader { proxy in
             BubbleStage {
@@ -350,7 +332,6 @@ private struct PanelLayer: View {
         .ignoresSafeArea()
     }
 
-    /// 顶上让出工具栏那一条。
     private static let bubbleInsets = EdgeInsets(
         top: 52, leading: BubblePlacement.margin, bottom: BubblePlacement.margin, trailing: BubblePlacement.margin)
 

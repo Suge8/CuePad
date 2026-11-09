@@ -8,12 +8,9 @@ extension AnyTransition {
     static let entry = AnyTransition.opacity.animation(Motion.fade)
 }
 
-/// 你的话那颗气泡长什么样，两处各一种，只在这里分：
-/// - 会话页（`session`）：四角同圆的一颗，新到的淡入。会话页是 Agent 干活的记录，回答全宽、不成泡，你的话只标出哪句是你说的，不画两边对说的样子。
-/// - Cue 页（`cue`）：两边对说的对话气泡，说话那一边下角收成小角、连着说的收成一串（`CueBubble`），由回复框那头的发出动画接上。
+/// 会话页是 Agent 干活的记录，回答全宽、不成泡，你的话只标出哪句是你说的，不画两边对说的样子（`session`）；Cue 页（`cue`）才是两边对说的对话气泡。
 enum BubbleLook: Equatable {
     case session
-    /// `joined`：上面紧挨着你的另一句。
     case cue(joined: Bool)
 
     var shape: UnevenRoundedRectangle {
@@ -30,14 +27,11 @@ enum BubbleLook: Equatable {
         }
     }
 
-    /// 没能送达时气泡下那一行（"未送达 · 重发"）离气泡多远、离右缘多远：Cue 页的对着气泡里的字。
     var statusSpacing: CGFloat { self == .session ? 6 : 2 }
     var statusInset: CGFloat { self == .session ? 0 : CueBubble.padding.trailing }
 }
 
-/// 你的一句话：右侧气泡（样子见 `BubbleLook`），最宽到所在一栏的 `widthFraction`；到哪了画在气泡左下角外（`BubbleTrip`）。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
 /// `stored` 是存储格式正文（`CueFormat`）：文字在气泡里，带的图片是气泡下面的缩略图（`ChatImages`），文件是再下面的文件牌（`ChatFiles`）；送达前后同一个样子。
-/// 用斜杠技能说的（`PiSkillCall`）气泡里是你发的样子，技能正文收在气泡下，点开看（`SkillBody`）。
 struct UserBubble<Menu: View>: View {
     /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
     static var foldedLines: Int { 6 }
@@ -47,13 +41,10 @@ struct UserBubble<Menu: View>: View {
     let look: BubbleLook
     var trip = BubbleTrip.arrived
     var highlighted = false
-    /// Cue 发进会话的话：气泡上面一行 Cue 的小头像与名字（`CueByline`）。
     var fromCue = false
-    /// 这句是你对一个提问的回答：气泡里字上面一行答的是哪个问题（`BubbleQuote`）。
     var quote: BubbleQuote?
     @ViewBuilder var menu: Menu
     @State private var expanded = false
-    /// 折起时文字确实被截掉了（按同一宽度量全文的高度比较）。
     @State private var truncated = false
 
     var body: some View {
@@ -61,7 +52,6 @@ struct UserBubble<Menu: View>: View {
         BubbleWidth(fraction: Self.widthFraction, edge: .trailing) {
             VStack(alignment: .trailing, spacing: Spacing.tight) {
                 if fromCue { CueByline() }
-                // 到哪了的记号挂在最下面那一块（文字气泡，带图时是图）的左边
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
                         text: skill?.line ?? text, look: look, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
@@ -81,7 +71,6 @@ struct UserBubble<Menu: View>: View {
     }
 }
 
-/// 你的一句话拆成气泡里的字、下面的图片与文件（存储格式按原顺序切开，`CueFormat.parse`）。
 nonisolated struct BubbleParts {
     let text: String
     let images: [String]
@@ -94,7 +83,6 @@ nonisolated struct BubbleParts {
         }
         let tokens = CueFormat.parse(stored)
         text = CueFormat.plainText(tokens.map { if case .text(let text) = $0 { text } else { "" } }.joined())
-        // 同一份附件在一句话里引用两次只画一个（`DraftFile` 按键认）
         var seen = Set<DraftFile>()
         let attached = tokens.compactMap(DraftFile.init).filter { seen.insert($0).inserted }
         images = attached.filter(\.isImage).map(\.key)
@@ -102,7 +90,6 @@ nonisolated struct BubbleParts {
     }
 }
 
-/// 技能正文：气泡下一行旁注"技能 名字 的正文"，点开在细线下看全文（与机器消息的卡片同一种收放），占满气泡这一栏的宽。
 private struct SkillBody: View {
     let skill: PiSkillCall
     @Environment(\.palette) private var palette
@@ -122,16 +109,13 @@ private struct SkillBody: View {
     }
 }
 
-/// 气泡本身（颜色是 `Palette.bubble`）。Mac 上可以直接拖选文字。
 struct BubbleText: View {
     let text: String
     let look: BubbleLook
     var highlighted = false
     var trip = BubbleTrip.arrived
     var lineLimit: Int?
-    /// 给了时报告文字是否被 `lineLimit` 截掉。
     var truncated: Binding<Bool>?
-    /// 折起着时：文字下方的"展开"，大字号下也不覆盖最后一行。
     var expand: (() -> Void)?
     var quote: BubbleQuote?
     @Environment(\.palette) private var palette
@@ -179,8 +163,7 @@ struct BubbleText: View {
     }
 }
 
-/// 你对一个提问的回答（Cue 的提问与会话里的提问同一个组件）：你那一边的一颗气泡（`UserBubble`），字上面一行答的是哪个问题（`BubbleQuote`），
-/// 下面是选的那一项（会话里自己写的答案是全文）。各自只从自己的事实推出：Cue 的是那条提问（`CueThread.Row.answer`），会话的是对话里的作答（`PiChatRole.answer`）。
+/// Cue 的提问与会话里的提问同一个组件，各自只从自己的事实推出：Cue 的是那条提问（`CueThread.Row.answer`），会话的是对话里的作答（`PiChatRole.answer`）。
 struct AnswerBubble<Menu: View>: View {
     let answer: String
     let quote: BubbleQuote?
@@ -193,7 +176,6 @@ struct AnswerBubble<Menu: View>: View {
     }
 }
 
-/// 你的一句答的是哪个问题：气泡里字上面一行，回复的箭头接问题。
 /// `target` 是对话里那个问题所在的一格，点引用跳回去（`chatJump`）；问题已不在对话里（会话的问题答完就没了）为 nil，不能点。
 nonisolated struct BubbleQuote: Equatable, Sendable {
     let text: String

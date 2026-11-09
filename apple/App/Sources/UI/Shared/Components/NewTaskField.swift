@@ -1,14 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`choosesProject` 时右边一颗落点胶囊（`DestinationChip`）可换落到哪个项目（进展页跨项目）；手机上经 `MenuButton`，菜单开着键盘不跳。
-/// 失焦且没写字时收回：点出来的那一行（`writing`）变回入口，`autofocus` 浮出的那一行交给 `dismiss`；写了字的留着字。Mac 上点这一行外面就算失焦（`resignsFocusOnOutsideClick`）。
 struct NewTaskField: View {
     let project: UUID?
     var choosesProject = false
-    /// 出现时光标就在这一行（进展页：点"新任务"后直接写）。
     var autofocus = false
-    /// `autofocus` 浮出的那一行失焦且没写字时收回（进展页：收起添加那一行）。
     var dismiss: (() -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -18,7 +14,6 @@ struct NewTaskField: View {
     @State private var chosen: UUID?
     @FocusState private var focused: Bool
 
-    /// 落到哪个项目：换过的，没换过是给的项目，都没有（不在项目页）是默认项目。
     private var target: UUID { chosen ?? project ?? Project.defaultID }
     private let prompt = String(localized: "添加任务")
 
