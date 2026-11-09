@@ -28,8 +28,11 @@ jobs:
           - { name: test mac, args: test mac }
           - { name: test ios sync, args: test ios -only-testing:CuePadTests/SyncAccountTests -only-testing:CuePadTests/FileSyncTests -only-testing:CuePadTests/NewSessionFlowTests }
     env:
-      # xcodebuild 只把 TEST_RUNNER_ 开头的变量交给测试进程：不给，测试里起的 pi（#!/usr/bin/env node）找不到 /opt/homebrew/bin 里的 node
+      # xcodebuild 只把 TEST_RUNNER_ 开头的变量交给测试进程：测试自己起的 node 脚本（MCP 替身等）要找得到 /opt/homebrew/bin 里的 node。
+      # 真 Agent 不走这个 PATH：它们装在专用缓存里、旁边带着 node（PinnedAgent）
       TEST_RUNNER_PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      # 钉住的 Agent 缺一家就红，不跳过（PinnedAgent.fullMatrix）
+      TEST_RUNNER_CUEPAD_AGENT_MATRIX: full
     steps:
       # lint 要 origin/main 与发布标签：整段历史、全部标签
       - uses: actions/checkout@v7
@@ -41,12 +44,14 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_27.0.app
           xcodebuild -version; xcrun --show-sdk-path; xcrun simctl list runtimes; env | grep -iE 'sdkroot|developer_dir' || true
       - run: brew install ripgrep
-      # 测试默认从 ~/.local/bin/pi 找真 Pi（CueHostTests、VoiceStopRaceTests、RealPiQueueTests 等）；版本是 CuePi/README.md 写的「官方 npm 原包」验证过的那版
-      - if: startsWith(matrix.args, 'test')
-        run: |
-          npm install -g --prefix "$HOME/.local" @earendil-works/pi-coding-agent@1.4.0
-          # CueHostTests 给 Pi 的 PATH 只有它所在目录加 /usr/bin:/bin：pi 是 node 脚本，node 要装在一起
-          ln -s "$(command -v node)" "$HOME/.local/bin/node"
+      # 测试连的真 Agent：版本只在 apple/CuePadKit/Tests/agents.json，装进专用缓存（agents.py）；缓存随清单变
+      - if: matrix.name == 'test kit' || matrix.name == 'test mac'
+        uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/cuepad-agents
+          key: cuepad-agents-${{ hashFiles('apple/CuePadKit/Tests/agents.json', 'apple/scripts/agents.py') }}
+      - if: matrix.name == 'test kit' || matrix.name == 'test mac'
+        run: apple/scripts/xc.sh agents install
       - run: apple/scripts/xc.sh ${{ matrix.args }}
         timeout-minutes: 30
       - uses: actions/upload-artifact@v7
