@@ -84,9 +84,7 @@ extension CodexRuntime {
             for await _ in follower.paths {
                 guard tracked[session.id] === session, !Task.isCancelled else { return }
                 guard let turn = await CodexHistory.lastTurn(in: file), turn.finished else { continue }
-                if let failure = turn.failure, session.ending != nil {
-                    session.endingFailure = failure
-                } else if let failure = turn.failure, session.facts.failure != nil {
+                if let failure = turn.failure, session.facts.failure != nil {
                     session.facts.failure = failure
                     publish(session)
                 }
@@ -97,19 +95,16 @@ extension CodexRuntime {
 
     /// 同一进程上还有认不出主人的线程（推送先到、还在问或第一次没读到）时先不歇下：它可能就是这一轮派出的子代理，
     /// 不等就会先报歇下、认出后再进“等子代理”。由这次结束触发一起再问一遍，至多 `AgentTimeouts.settleAsk`：认出的进名册，
-    /// 仍读不到、没及时回的等它下一条推送再问（`resolve`）；问完歇下。推迟期间同一轮又来的结束信号（终端的 idle、Stop）
-    /// 不带原因，不清掉已记下的。这一轮的提问此刻就收起：推迟期间作答会被当成一句新话。
+    /// 仍读不到、没及时回的等它下一条推送再问（`resolve`）；问完歇下。
+    /// 这一轮出错的原因只记在 `facts.failure`，只有新一轮开始（`startTurn`）清空：同一轮后到的结束信号（终端的 idle、Stop、Interrupt）
+    /// 不带原因，推迟中、歇下后都不动它。
     func endTurn(_ session: Tracked, failure: String? = nil) {
         release(session)
         guard session.restarting == nil else { session.restarting = .stopped; return }
-        guard session.ending == nil else {
-            session.endingFailure = failure ?? session.endingFailure
-            return
-        }
+        if let failure { session.facts.failure = failure }
+        guard session.ending == nil else { return }
         let unknown = unresolvedThreads(on: session.pid)
-        guard !unknown.isEmpty else { return session.facts.endTurn(failure: failure) }
-        session.endingFailure = failure
-        session.facts.questions = []
+        guard !unknown.isEmpty else { return session.facts.endTurn(failure: session.facts.failure) }
         let pid = session.pid
         session.ending = Task {
             try? await withDeadline(AgentTimeouts.settleAsk, timing: timing, orThrow: CancellationError()) { @MainActor in
@@ -120,7 +115,7 @@ extension CodexRuntime {
             guard !Task.isCancelled, tracked[session.id] === session else { return }
             session.ending = nil
             guard session.restarting == nil else { session.restarting = .stopped; return }
-            session.facts.endTurn(failure: session.endingFailure)
+            session.facts.endTurn(failure: session.facts.failure)
             if !session.unread.isEmpty { wake(session) }
             publish(session)
         }
