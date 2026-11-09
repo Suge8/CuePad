@@ -175,6 +175,8 @@ import os
     func receive(_ event: VoiceRelayEvent) async {
         switch event {
         case .received(let received):
+            // 换绑只认这一处：同一设备、同一通话从新租约来的任何一帧（命令、页、结果、媒体）都说明对端回来了
+            rebind(received.header)
             if case .pageResult(let result) = received.payload {
                 receivePageResult(result, header: received.header)
                 return
@@ -239,12 +241,15 @@ import os
 
     /// `VoiceLink.relinking` 期间每秒试一次，直到 `done()` 或 until：本机中转在线就解析对端设备的当前租约，把这一帧发过去。
     /// 对端还没连回来时解析、发送都会失败，这是等待的常态；结果只看对端有没有以新租约回帧（`done`）和期满。
+    /// 每次尝试至多用到 until：中转连着却迟迟不回解析（它自己的时限也是 15 秒）时，不能把通话拖过截止点。
     func reach(_ device: VoiceDeviceID, until: ContinuousClock.Instant, done: () -> Bool,
-               send: (any VoiceSignaling, VoiceEndpoint) async throws -> Void) async {
+               send: @escaping (any VoiceSignaling, VoiceEndpoint) async throws -> Void) async {
         while !done(), !Task.isCancelled, ContinuousClock.now < until {
             if let signaling, case .ready = signaling.voiceAvailability {
-                do { try await send(signaling, try await signaling.resolveVoicePeer(device)) }
+                let attempt = VoiceOperationScope()
+                do { try await attempt.perform(within: until - .now) { try await send(signaling, try await signaling.resolveVoicePeer(device)) } }
                 catch { AppServices.log.info("Voice relink attempt: \(String(describing: error), privacy: .public)") }
+                attempt.end()
             }
             guard !done() else { return }
             try? await Task.sleep(until: min(.now + .seconds(1), until), clock: .continuous)

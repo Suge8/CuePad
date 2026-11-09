@@ -161,8 +161,8 @@ extension VoiceService {
     }
 
     /// 同一 Mac、同一通话从新租约来的一帧：换绑并回一个 resume，Mac 收到才知道手机的新租约（`VoiceMediaSignal.resume`）。
-    private func rebind(_ owner: VoicePhoneSession, to header: VoiceSignalHeader) {
-        guard let link = owner.link, header.session == owner.id, header.sender.device == link.peerDevice,
+    func rebind(_ header: VoiceSignalHeader) {
+        guard let owner = phone, !owner.scope.ended, let link = owner.link, header.session == owner.id, header.sender.device == link.peerDevice,
               link != .bound(local: header.recipient, peer: header.sender) else { return }
         owner.link = .bound(local: header.recipient, peer: header.sender)
         phoneBinding = (owner.id, header.recipient, header.sender)
@@ -174,7 +174,6 @@ extension VoiceService {
     }
 
     func receiveSignal(_ received: VoiceReceivedSignal) async {
-        if let owner = phone, !owner.scope.ended { rebind(owner, to: received.header) }
         if case .projection = received.payload {
             guard let binding = phoneBinding, binding.session == session, binding.session == received.header.session,
                   binding.local == received.header.recipient, binding.peer == received.header.sender else { return }

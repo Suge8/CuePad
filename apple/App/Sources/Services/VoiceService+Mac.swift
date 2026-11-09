@@ -53,11 +53,6 @@ extension VoiceService {
             return
         }
         let header = received.header
-        if let remote, remote.session == header.session, remote.link.peerDevice == header.sender.device,
-           remote.link != .bound(local: header.recipient, peer: header.sender) {
-            remote.link = .bound(local: header.recipient, peer: header.sender)
-            call?.mark("relinked")
-        }
         if case .media(.resume) = received.payload { return resume(header) }
         guard let remote, remote.session == header.session, remote.link == .bound(local: header.recipient, peer: header.sender) else { return }
         switch received.payload {
@@ -67,6 +62,14 @@ extension VoiceService {
         case .media(.event(.ended(let reason))), .media(.hangup(let reason)): remote.departed(reason)
         default: remote.departed(.protocolRejected)
         }
+    }
+
+    /// 同一手机、同一通话从新租约来的一帧：媒体桥换绑到它，之后的命令来源核对、挂断与媒体事件都按新租约认。
+    func rebind(_ header: VoiceSignalHeader) {
+        guard let remote, remote.session == header.session, remote.link.peerDevice == header.sender.device,
+              remote.link != .bound(local: header.recipient, peer: header.sender) else { return }
+        remote.link = .bound(local: header.recipient, peer: header.sender)
+        call?.mark("relinked")
     }
 
     /// 手机以新租约回到这一通：重新登记投影接收者并回当前投影，宽限期里错过的更新由这份快照补齐（投影是整份状态，不是增量）。
