@@ -92,4 +92,33 @@ struct DiagnosticDeliveryTests {
             return try folders.flatMap { try FileManager.default.contentsOfDirectory(atPath: $0.path) }.contains { $0.hasPrefix("2026-01-05") }
         }
     }
+
+    @Test func 没登录时发最近日志_到时限告诉你已存下_登上后送到Mac() async throws {
+        let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
+        let accountChanges = NotificationCenter()
+        let clock = ManualTiming()
+        let sync = { AppServices.SyncSource.built { [accountChanges] in CloudSync(store: $0, accountChanges: accountChanges) { cloud } } }
+        await cloud.setAccount(.noAccount)
+        let phone = TestApp(sync: sync(), timing: clock.timing)
+        let mac = TestApp(sync: sync())
+        let services = phone.services!
+        for side in [phone, mac] { side.services.startSync() }
+        defer { for side in [phone, mac] { side.services.cancelBackgroundWork() } }
+        services.startDiagnostics()
+
+        let limit = clock.now.addingTimeInterval(Diagnostics.sendLimit.seconds)
+        let sending = Task { try await services.diagnostics.sendRecentLogs() }
+        await clock.waitForSleeper(until: limit)
+        clock.advance(Diagnostics.sendLimit)
+        await #expect(throws: Diagnostics.Queued.self) { try await sending.value }
+
+        await cloud.setAccount(.available)
+        accountChanges.post(name: .CKAccountChanged, object: nil)
+        let inbox = DiagnosticInbox(directory: mac.directory.appending(path: "DeviceLogs"), sync: try #require(mac.services.sync as? CloudSync))
+        try await eventually("登上后那份日志送到了 Mac") {
+            try await inbox.check()
+            let folders = try FileManager.default.contentsOfDirectory(at: inbox.directory, includingPropertiesForKeys: nil).filter { !$0.lastPathComponent.hasPrefix(".") }
+            return try folders.flatMap { try FileManager.default.contentsOfDirectory(atPath: $0.path) }.contains { $0.hasSuffix("-log.log") }
+        }
+    }
 }

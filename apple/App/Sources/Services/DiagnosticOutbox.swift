@@ -43,6 +43,27 @@ actor DiagnosticOutbox {
         }
     }
 
+    /// 等这一遍对完，至多 `limit`（按注入的钟）：对成返回 true，没对成或到点还没对完返回 false。到点不取消送件：
+    /// 送件是共用的那一遍（自动送也在等它），账号认好、连上后它自己送完；在任务组里比快会等被取消的一方真结束，等账号时永远等不完。
+    func reconcile(within limit: Duration) async -> Bool {
+        let (outcomes, first) = AsyncStream.makeStream(of: Bool.self)
+        Task {
+            do {
+                try await reconcile()
+                first.yield(true)
+            } catch {
+                first.yield(false)
+            }
+        }
+        let timer = Task { [timing] in
+            guard (try? await timing.sleep(limit)) != nil else { return }
+            first.yield(false)
+        }
+        defer { timer.cancel() }
+        for await sent in outcomes { return sent }
+        return false
+    }
+
     private func retryLater() {
         guard retry == nil else { return }
         retry = Task {

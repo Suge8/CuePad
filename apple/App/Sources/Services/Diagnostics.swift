@@ -54,19 +54,7 @@ final class Diagnostics {
         let text = try await Self.capture(from: end.addingTimeInterval(-RecentLogs.window), to: end, title: "最近日志 | CuePad \(AppServices.version)")
         try archive.store(log: text, at: end, kind: "log")
         reload(pushing: false)
-        do {
-            try await withThrowingTaskGroup(of: Void.self) { group in
-                group.addTask { try await outbox.reconcile() }
-                group.addTask {
-                    try await Task.sleep(for: Self.sendLimit)
-                    throw CancellationError()
-                }
-                try await group.next()
-                group.cancelAll()
-            }
-        } catch {
-            throw Queued()
-        }
+        guard await outbox.reconcile(within: Self.sendLimit) else { throw Queued() }
     }
 
     static let sendLimit = Duration.seconds(30)
