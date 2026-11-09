@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CuePad 的构建、测试、截图、测量、发布只走这里（Agent 绕开它直接调 xcodebuild、swift build/test、simctl 开关机，
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
-#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 的整模块编译；
+#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 连测试目标的整模块编译（只在 Mac 编的测试，如 #if os(macOS) 的，警告也在这里拦）；
 #                                                   自己的 Swift 源文件（App、CuePadKit）有一条编译警告就失败，第三方与生成的代码不算（_build.sh 的 own_warnings）
 #   xc.sh build <mac|ios|ipad>
 #   xc.sh activity-log [输出.json]                  生产 iCloud 活动取证只读导出：签隔离副本、不启动应用服务，不打开真实库、不重启正式版
@@ -9,8 +9,9 @@
 #   xc.sh test <mac|ios|ipad> [xcodebuild 参数…]     如 -only-testing:CuePadTests/SuiteName；ios、ipad 不带参数时连 CuePadKit 也在模拟器上跑
 #   xc.sh test kit [xcodebuild 参数…]               CuePadKit 在 macOS 上的测试，如 -only-testing:CueSyncTests/PendingTests
 #   xc.sh agents <status|install> [家…]              测试连的真 Agent：按 CuePadKit/Tests/agents.json 钉住的版本装进专用缓存（agents.py 头注释）。
-#                                                   没装的家，它的用例跳过并在汇总后列为「未覆盖」；TEST_RUNNER_CUEPAD_AGENT_MATRIX=full 时缺一家就失败
-#     test 只打印编译的警告与错误、失败的用例与汇总；完整输出（App 日志、每条用例）在 apple/.derived/test.log
+#                                                   没装的家，它的用例跳过，test 的结论页单列为「没跑、不算通过的」；TEST_RUNNER_CUEPAD_AGENT_MATRIX=full 时缺一家就失败
+#     test 只打印编译的警告与错误、失败的用例；收尾一页结论（test_summary.py）：Swift Testing 与 XCTest 各自的通过、失败、跳过数，首个失败（用例、断言原文、文件行），
+#       跳过的套件与原因，最慢 5 个，完整日志路径（App 日志、每条用例都在里面：apple/.derived/test.log）。退出码是 xcodebuild 的
 #   xc.sh shot <mac|ios|ipad> [图.png] [-- 启动参数…] [, [图.png] [-- 启动参数…]]…
 #                                                   构建 → 逐张起隔离实例 → 画面就绪后截窗口 → 退出。一次调用拍一批：一次进锁、一次构建（iOS 还一次装包），
 #                                                   张与张之间用单独的 , 隔开；一张失败记下继续，最后列出失败的并非零退出。没写图路径的放 apple/.derived/shot-<平台>/<启动参数的值连起来>.png。例：
@@ -138,11 +139,11 @@ case "$cmd" in
     # Kit 的 macOS 构建（CuePi、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
     kit_build & kit=$!
     # 归档（Release）是整模块编译，Debug 是按文件分批的增量编译：同一份源码，有些诊断（如 nonisolated 类型里静态存非 Sendable 值）只有整模块才报，
-    # 整模块编译与优化档位无关（-Onone 同样报），所以 Mac App 用 Debug 加整模块编一遍（只编 App，不签名）。Mac 独有的代码也只在这里编到。产物与 Debug 增量构建分开，免得交替时互相作废
+    # 整模块编译与优化档位无关（-Onone 同样报），所以 Mac App 用 Debug 加整模块编一遍（不签名）。Mac 独有的代码也只在这里编到，连测试目标（iOS 那份编不到 #if os(macOS) 的测试，它们的警告只在这里报）。产物与 Debug 增量构建分开，免得交替时互相作废
     (
       platform=mac; DERIVED="$APPLE_DIR/.derived-wmo"; destination='platform=macOS,arch=arm64'; app="$DERIVED/Build/Products/Debug/CuePad.app"
       build_settings=(SWIFT_COMPILATION_MODE=wholemodule CODE_SIGNING_ALLOWED=NO)
-      mkdir -p "$DERIVED"; built "$DERIVED/build-key" "$app" all xcb -quiet build
+      mkdir -p "$DERIVED"; built "$DERIVED/build-key" "$app" all xcb -quiet build-for-testing
     ) & wmo=$!
     status=0
     if xcd all; then python3 "$APPLE_DIR/scripts/strings.py" check || status=$?; else status=$?; fi
@@ -157,7 +158,7 @@ case "$cmd" in
     python3 "$APPLE_DIR/scripts/activity-log.py" "$app" "${2:-$DERIVED/activity-diagnostics.json}" ;;
   build) xcd all; sign_development ;;
   build-perf) built "$DERIVED/build-key-$platform" "$app" all xcb -quiet build ;;
-  test) xc_test "$@" ;;  # 失败时 set -e 带着它的退出码退出
+  test) xc_test "$@" ;;
   shot|rec|run)
     # 截图前先查台前调度：开着就拍不对，不白等一次构建
     if [ "$platform" = mac ]; then python3 "$APPLE_DIR/scripts/app.py" preflight; fi
