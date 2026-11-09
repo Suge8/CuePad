@@ -92,7 +92,7 @@ struct SharedPagesTests {
             #expect(Set(rows.map(\.state.sessionID)).isSuperset(of: ["future", "today", "past"]))
             #expect(rows.filter { $0.state.sessionID == "new" }.count == 1)
         }
-        let launch = try await Workspace(services: app.services).launchSession(
+        let launch = try await app.services.launchSession(
             in: project.id, prompt: "检查重连", title: project.shownName, on: "mac-a", card: nil, agent: .pi)
         try await recorder.update(sessionID: "new", state: .thinking, title: "新会话", launchToken: launch.token)
         #expect(try await launch.progress(from: store).claimed?.sessionID == "new")

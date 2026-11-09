@@ -16,6 +16,8 @@ struct SessionStart: Identifiable {
     /// 默认由哪台 Mac 开（`CueStore.handOffPlan` 定下的）；nil 是按项目的第一处绑定。
     var host: String?
 
+    var launchKey: SessionLaunching.Key { card.map { .card($0) } ?? .form }
+
     /// 默认在哪开：先选中的项目（有 `host` 时是它在那台 Mac 上的绑定），没有就是第一处。
     func place(among places: [ProjectFolders.LaunchPlace]) -> ProjectFolders.LaunchPlace? {
         project.flatMap { project in
@@ -23,5 +25,4 @@ struct SessionStart: Identifiable {
             return own.first { host != nil && $0.host == host } ?? own.first
         } ?? places.first
     }
-
 }
