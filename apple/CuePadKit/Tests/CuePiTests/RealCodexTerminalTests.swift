@@ -8,7 +8,7 @@ import Testing
 @MainActor
 /// 断言的是伪终端里真终端界面的输出与按键、真常驻服务（`CodexTerminal`）。常驻服务的目录是共用的 /tmp/codex-daemon-<uid>，一次只跑一个（`.serialized`），
 /// 收尾时检查那个目录只剩跑之前的样子（`DaemonDirectory`）。模型是假模型，剧本在 `play`。
-@Suite(RealAgents.taped(.codex), .serialized, .timeLimit(.minutes(6)))
+@Suite(RealAgents.needs(.codex), .serialized, .timeLimit(.minutes(6)))
 struct RealCodexTerminalTests {
     /// 用到的话（写成真模型也照做的英文）：回答一个词、跑一个慢命令再回答、要一个需要批准的命令、没有的模型报错。
     private func play(_ model: FakeModel) {
