@@ -17,7 +17,11 @@ extension CodexRuntime {
         switch method {
         case "thread/settings/updated":
             if let settings = params["threadSettings"] {
-                bridge.update(session.id) { $0.fast = settings["serviceTier"]?.string == "priority" }
+                bridge.update(session.id) { s in
+                    s.fast = settings["serviceTier"]?.string == "priority"
+                    if let model = settings["model"]?.string { s.model = self.option(model) }
+                    s.thinking = settings["effort"]?.string.map(CodexModel.thinking)
+                }
             }
             return
         case "thread/name/updated":

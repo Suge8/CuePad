@@ -130,15 +130,26 @@ extension CodexRuntime {
         return session
     }
 
-    func apply(_ thread: JSONValue, to session: inout PiSession) {
+    /// `settings` 为 false 时不取线程上的模型与强度，只按模型清单重认此刻的模型：托管会话订阅着线程，它的模型与强度只认开线程时的回应、
+    /// `thread/settings/updated` 与 Codex 接受了的改动（`configure`）——`thread/settings/update` 只回“已排队”，紧接着读线程可能读到改之前的。
+    /// 终端里的会话收不到那条通知（只发给订阅了线程的连接），终端界面里换的模型只能读线程得知。
+    func apply(_ thread: JSONValue, to session: inout PiSession, settings: Bool = true) {
         session.name = thread["name"]?.string
         if let preview = thread["preview"]?.string, !preview.isEmpty { session.firstMessage = String(preview.prefix(PiSessionName.firstMessageLimit)) }
+        guard settings else {
+            if let model = session.model?.key.id { session.model = option(model) }
+            session.availableModels = (models ?? []).map(\.option)
+            return
+        }
         if let model = thread["model"]?.string {
-            session.model = models?.first { $0.id == model }?.option
-                ?? PiModelOption(key: PiModelKey(provider: CodexModel.provider, id: model), name: model, thinkingLevels: [])
+            session.model = option(model)
             session.availableModels = (models ?? []).map(\.option)
         }
         session.thinking = thread["reasoningEffort"]?.string.map(CodexModel.thinking)
+    }
+
+    func option(_ model: String) -> PiModelOption {
+        models?.first { $0.id == model }?.option ?? PiModelOption(key: PiModelKey(provider: CodexModel.provider, id: model), name: model, thinkingLevels: [])
     }
 
     func attach(_ session: PiSession, prepare: (Tracked) -> Void = { _ in }) {
@@ -192,7 +203,8 @@ extension CodexRuntime {
                 }
                 let read = try await rpc.call("thread/read", ["threadId": .string(session.threadID)])
                 guard let thread = read["thread"] else { return }
-                bridge.update(id) { self.apply(thread, to: &$0) }
+                let hosted = hosted[session.pid] != nil
+                bridge.update(id) { self.apply(thread, to: &$0, settings: !hosted) }
             } catch {
                 Self.log.notice("没能读出 Codex 会话的设置：\(String(describing: error))")
             }

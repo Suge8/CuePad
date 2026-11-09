@@ -82,6 +82,8 @@ final class ClaudeTerminalSession: SessionLink {
             if session.firstMessage == nil, event == "UserPromptSubmit", let prompt = input["prompt"]?.string.map(ClaudeHistory.withoutPeerWrapper), !prompt.isEmpty {
                 session.firstMessage = String(prompt.prefix(PiSessionName.firstMessageLimit))
             }
+            // 模型随 SessionStart 来：会话可能已由启动时的列表扫描先补上了（`discover`），钩子晚到也要取
+            if let model = input["model"]?.string { session.model = ClaudeCode.model(model) }
             if event == "PostModelSwitch", let model = input["to_model"]?.string { session.model = ClaudeCode.model(model) }
         }
         let tool = input["tool_name"]?.string ?? "?"
