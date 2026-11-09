@@ -7,7 +7,7 @@ import CueStore
 
 /// 提示词模板与 skill 用 Pi 的显式路径参数加载，扩展命令来自测试夹具。
 @MainActor
-@Suite(RealAgents.taped(.pi))
+@Suite(RealAgents.needs(.pi))
 struct RealSlashTests {
     private func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
         let resources = try makeTempDirectory()

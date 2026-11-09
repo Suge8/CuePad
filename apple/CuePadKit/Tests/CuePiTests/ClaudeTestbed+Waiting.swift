@@ -39,6 +39,8 @@ extension ClaudeTestbed {
     }
 
     /// 同 `eventually`，等不到时带上会话与终端画面（终端里按键后的事看画面才分得清是谁没动）。
+    /// 终端画面比钩子慢：一轮的 `Stop` 已到、CuePad 已报歇下时，终端可能还没画出这一轮的回答（12 个空转核加压实测晚约 20 毫秒），
+    /// 画面上的东西都等它画出来再断言
     func waitOnScreen(_ what: String, on terminal: ClaudeTerminal, in id: PiSession.ID, _ condition: () async throws -> Bool) async throws {
         do {
             try await eventually(what, condition)
@@ -85,13 +87,13 @@ extension ClaudeTestbed {
     /// 回答写进会话文件可能晚于这一轮歇下，等它落盘。
     func waitForDraftLanded(_ id: PiSession.ID) async throws {
         let file = bridge.session(id: id)?.sessionFile
-        var newest: Date?
+        var newest: PiChatMessage?
         try await eventually("回答落盘") {
-            newest = (try? transcript(file))?.messages.last { $0.role == .known(.pi) }?.at
-            return newest.map { $0 >= start(of: id) } ?? false
+            newest = (try? transcript(file))?.messages.last { $0.role == .known(.pi) }
+            return newest.map { $0.at >= start(of: id) } ?? false
         }
         guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return }
-        #expect(draft.landed(newestReply: newest), "正在说的话起点 \(draft.since.timeIntervalSince1970)，最近一条回答 \(String(describing: newest?.timeIntervalSince1970))")
+        #expect(draft.landed(newestReply: newest?.at, record: newest?.id), "正在说的话起点 \(draft.since.timeIntervalSince1970)，最近一条回答 \(String(describing: newest?.at.timeIntervalSince1970))")
     }
 
     private func start(of id: PiSession.ID) -> Date {

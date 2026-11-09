@@ -52,7 +52,7 @@ enum DshLaunch {
     }
 
     static let plugin = Bundle.module.url(forResource: "dsh-cuepad", withExtension: "mjs")!
-    /// 按插件的位置分开：同时开着的两份 App（本机构建与正式版）各用各的。写成 UUID 的样子：录像带比对启动参数时不算它
+    /// 按插件的位置分开：同时开着的两份 App（本机构建与正式版）各用各的
     private static let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-dsh-" + uuid(plugin.path), directoryHint: .isDirectory)
 
     private static func uuid(_ text: String) -> String {

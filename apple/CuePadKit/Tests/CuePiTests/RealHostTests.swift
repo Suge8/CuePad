@@ -6,7 +6,7 @@ import CueStore
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.taped(.pi))
+@Suite(RealAgents.needs(.pi))
 struct RealHostTests {
     private func endedSession(_ pi: PiProcess, _ bridge: PiBridge) async throws -> (file: URL, sessionID: String) {
         try await eventually("桥发现会话") { !bridge.sessions.isEmpty }
@@ -122,7 +122,7 @@ struct RealHostTests {
         host.start()
         defer { stopHostedProcesses(bridge) }
 
-        // 上了桥才返回；空闲时限只有 1 秒，返回时它可能已经退了（回放时空闲的那一秒不占时间），所以不再查它在不在
+        // 上了桥才返回；空闲时限只有 1 秒，返回时它可能已经退了，所以不再查它在不在
         let id = try await host.resume(IndexedSession(id: "", path: file.path, cwd: pi.cwd.path, lastActivityAt: .now))
 
         try await eventually("空闲到点后退出") { bridge.session(id: id) == nil }

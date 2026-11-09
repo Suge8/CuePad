@@ -7,7 +7,7 @@ import Testing
 
 /// 不用模型，只要 Claude Code 的测试台与它报的版本。
 @MainActor
-@Suite(RealAgents.taped(.claudeCode))
+@Suite(RealAgents.needs(.claudeCode))
 struct ClaudeSettingsTests {
     @Test(arguments: [nil, RealClaudeTerminalTests.userSettings, #"{"hooks":{"Stop":[]},"theme":"dark"}"#])
     func connectingAndDisconnectingLeavesTheUsersSettingsByteForByte(settings: String?) async throws {

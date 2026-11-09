@@ -14,7 +14,7 @@ final class CodexRPC {
     var onNotification: ((String, JSONValue) -> Void)?
     /// 服务端请求（方法、请求 id、参数）：接了返回 true，之后用 `respond` 回它
     var onRequest: ((String, JSONValue, JSONValue) -> Bool)?
-    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文，拼法见 `DraftParts`）；起点是这一项开始（`item/started`）时 Codex 自己的时刻（通知的 `emittedAtMs`，与会话文件同一时钟）；正常说完的留着。
+    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文，拼法见 `DraftParts`）；起点是这一项开始（`item/started`）时 Codex 自己的时刻（通知的 `emittedAtMs`，与会话文件同一时钟），落库按这一项的 id 认（`PiDraft.record`）；正常说完的留着。
     /// 过程中的说明（`phase` 为 commentary）说完就清，不等工具那一项开始：两者之间 Codex 先跑 PreToolUse 钩子，状态已切到工具，草稿再留着就和工具那一行叠着；
     /// 说明也不进对话（`CodexHistory` 只收 final_answer），留着换不下。只有订阅了线程的连接（自己起的进程）收得到增量
     var onDraft: ((_ threadID: String, PiDraft?) -> Void)?
@@ -143,7 +143,7 @@ final class CodexRPC {
         case "item/started":
             clearDraft(thread)
             if let item = params["item"], item["type"]?.string == "agentMessage", let id = item["id"]?.string {
-                drafts[thread] = DraftParts(message: id, since: emitted)
+                drafts[thread] = Self.parts(thread, item: id, since: emitted)
             }
         case "turn/started":
             clearDraft(thread)
@@ -163,10 +163,14 @@ final class CodexRPC {
     }
 
     private func update(_ thread: String, item: String, _ edit: (inout DraftParts) -> Void) {
-        var parts = drafts[thread].flatMap { $0.message == item ? $0 : nil } ?? DraftParts(message: item)
+        var parts = drafts[thread].flatMap { $0.message == item ? $0 : nil } ?? Self.parts(thread, item: item)
         edit(&parts)
         drafts[thread] = parts
         onDraft?(thread, parts.draft)
+    }
+
+    private static func parts(_ thread: String, item: String, since: Date? = nil) -> DraftParts {
+        DraftParts(message: item, since: since, record: PiChatMessage.recordID(sessionID: thread, entryID: item))
     }
 
     private func clearDraft(_ thread: String) {

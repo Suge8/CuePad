@@ -3,33 +3,13 @@ import CueStore
 import CueTestSupport
 import Foundation
 import ImageIO
-import Network
 import Synchronization
 import Testing
 @testable import CuePi
 
-/// 本机装的 Codex（录制时用）；它自己的登录复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉，真实的 ~/.codex 只读这一个文件。
-/// `CUEPAD_CODEX_AUTH` 指向另一份 auth.json 时读它（不碰 ~/.codex）。
-let realCodexURL = ExecutableLocator.standard.candidates("codex").first
-let realCodexAuth = ProcessInfo.processInfo.environment["CUEPAD_CODEX_AUTH"].map { URL(filePath: $0) }
-    ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
-let codexTestModel = "gpt-6-luna"
-
-/// 把 ~/.codex/auth.json 复制到 `file`，副本永远不去刷新登录：refresh_token 换成假值、last_refresh 改成现在。
-/// 原样复制的话两份都会刷新，refresh token 只能用一次，副本先刷新就把用户的登录挤掉了。access token 过期时副本会失败，不碰用户那份。
-func copyCodexAuth(to file: URL) throws {
-    var auth = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: realCodexAuth)) as? [String: Any])
-    if var tokens = auth["tokens"] as? [String: Any] {
-        tokens["refresh_token"] = "cuepad-test-no-refresh"
-        auth["tokens"] = tokens
-    }
-    let format = ISO8601DateFormatter()
-    format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    auth["last_refresh"] = format.string(from: .now)
-    AgentTape.current?.secret(tokens: auth)
-    try JSONSerialization.data(withJSONObject: auth).write(to: file, options: .atomic)
-    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
-}
+/// 测试连的 Codex：钉住的版本（`PinnedAgent.codex`），模型是本用例的假模型（`FakeModel`，Responses），零网络、不用任何登录。
+let pinnedCodex = PinnedAgent.codex
+let codexTestModel = "gpt-5.5"
 
 /// 一张 64×64 的 sRGB 纯色 PNG（1×1 的图、设备色彩空间里的纯红，模型有时说成别的颜色）。
 func solidPNG(red: CGFloat, green: CGFloat, blue: CGFloat) throws -> Data {
@@ -49,38 +29,55 @@ func solidPNG(red: CGFloat, green: CGFloat, blue: CGFloat) throws -> Data {
 
 /// 一个临时的 Codex 配置目录，与它配套的 CuePad 钩子 socket 目录与工作目录。起的 codex 与接入用的环境把家目录、各家的配置目录、
 /// XDG 目录、CuePad 的资料库与 socket 目录都指到这里，不读写真实的配置与资料库。
+/// 模型提供方写在这个目录的 `config.toml` 里（Codex 只认 Responses；项目目录下的提供方配置会被忽略）。
 struct CodexHome {
     let root: URL
+    let model: FakeModel
+    /// 会话用的模型：缺省 gpt-5.5（工具是普通的函数 `exec_command`），gpt-6-luna 一档走代码模式的 `exec`
+    let modelName: String
     var home: URL { root.appending(path: "codex", directoryHint: .isDirectory) }
     var work: URL { root.appending(path: "work", directoryHint: .isDirectory) }
     var sockets: URL { root.appending(path: "s", directoryHint: .isDirectory) }
     var paths: AgentPaths {
         AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
     }
-    var locator: ExecutableLocator { AgentTape.locator("codex") }
+    var locator: ExecutableLocator { pinnedCodex.locator }
     var environment: [String: String] {
-        let isolated = ["CUEPAD_", "HERDR", "TMUX", "XDG_", "CLAUDE_", "OPENCODE_", "CODEX_", "PI_"]
         func path(_ name: String) -> String { root.appending(path: name).path }
-        return ProcessInfo.processInfo.environment.filter { key, _ in !isolated.contains { key.hasPrefix($0) } }.merging([
-            "HOME": path("user"), "XDG_CONFIG_HOME": path("xdg/config"), "XDG_DATA_HOME": path("xdg/data"),
+        return pinnedCodex.environment(home: root.appending(path: "user"), [
+            "XDG_CONFIG_HOME": path("xdg/config"), "XDG_DATA_HOME": path("xdg/data"),
             "XDG_STATE_HOME": path("xdg/state"), "XDG_CACHE_HOME": path("xdg/cache"), "CLAUDE_CONFIG_DIR": path("claude"),
             "OPENCODE_CONFIG_DIR": path("opencode"), "PI_CODING_AGENT_DIR": path("pi"), "CUEPAD_LIBRARY_DIR": path("library"),
-            "CODEX_HOME": home.path, "CUEPAD_PI_SOCKET_DIR": sockets.path,
-        ]) { $1 }
+            "CODEX_HOME": home.path, "CUEPAD_PI_SOCKET_DIR": sockets.path, Self.keyVariable: "fake",
+        ].merging(Self.deadProxy) { $1 })
     }
+    /// Codex 0.167.0 的终端界面启动时会取公告（`raw.githubusercontent.com/openai/codex/main/announcement_tip.toml`），没有开关能关：
+    /// 测试用指向本机没人监听的端口的代理挡住它，取不到就退回本地提示（实测不卡、不重试）。假模型在 127.0.0.1，由 NO_PROXY 放行。
+    static let deadProxy: [String: String] = {
+        var proxy = ["NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"]
+        for name in ["https_proxy", "http_proxy", "all_proxy"] {
+            proxy[name] = "http://127.0.0.1:1"
+            proxy[name.uppercased()] = "http://127.0.0.1:1"
+        }
+        return proxy
+    }()
+    static let keyVariable = "CUEPAD_FAKE_MODEL_KEY"
 
-    init() throws {
+    init(model: FakeModel, modelName: String = codexTestModel) throws {
+        try pinnedCodex.require()
         root = try makeTempDirectory()
+        self.model = model
+        self.modelName = modelName
         for directory in [home, work, root.appending(path: "user")] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
-        AgentTape.current?.watch(home.appending(path: "sessions"), home.appending(path: "config.toml"), work)
     }
 
+    /// 配置：假模型当提供方，最便宜的思考强度，信任工作目录（没人回答信任提问），关掉更新检查与遥测。
+    /// 终端界面启动时会弹新模型介绍（“Meet GPT-6 Sol”，升级提示）挡住输入：`notice.model_migrations` 记下这对模型就不弹（实测；`tui.model_availability_nux` 的写法无效）。
     func signIn(approvals: String = "never") throws {
-        if AgentTape.current?.mode != .replay { try copyCodexAuth(to: home.appending(path: "auth.json")) }
         let config = """
-            model = "\(codexTestModel)"
+            model = "\(modelName)"
             model_reasoning_effort = "low"
             approval_policy = "\(approvals)"
             sandbox_mode = "workspace-write"
@@ -89,27 +86,50 @@ struct CodexHome {
             [projects."\(work.realPath.path)"]
             trust_level = "trusted"
 
+            [tui]
+            show_tooltips = false
+
+            [notice.model_migrations]
+            "\(codexTestModel)" = "gpt-6-sol"
+
             """
-        try config.write(to: home.appending(path: "config.toml"), atomically: true, encoding: .utf8)
+        try Self.write(provider: model, config: config, into: home)
+    }
+
+    /// 把假模型写成这个配置目录的提供方（`model_providers` 只认这里，项目目录下同名的会被忽略），并关掉常驻服务的自动更新。
+    /// 插件三项必须关：常驻服务启动时会把官方插件仓库 git 克隆进 `$CODEX_HOME/.tmp/plugins-clone-*`，即联网（关了之后实测不再出现）；
+    /// apps 等三项也关：终端界面启动要等应用连接器（联网）就绪，不关就一直停在 “Waiting for startup”。
+    static func write(provider model: FakeModel, config: String = "", into home: URL) throws {
+        let text = """
+            model_provider = "fake"
+            \(config)
+            [analytics]
+            enabled = false
+
+            [features]
+            plugins = false
+            apps = false
+            browser_use = false
+            computer_use = false
+            remote_plugin = false
+            plugin_discovery_prefetch = false
+
+            [model_providers.fake]
+            name = "fake"
+            base_url = "\(model.baseURL)/v1"
+            env_key = "\(keyVariable)"
+            wire_api = "responses"
+
+            """
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try text.write(to: home.appending(path: "config.toml"), atomically: true, encoding: .utf8)
         let daemon = home.appending(path: "app-server-daemon", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: daemon, withIntermediateDirectories: true)
         try #"{"autoUpdateEnabled":false}"#.write(to: daemon.appending(path: "settings.json"), atomically: true, encoding: .utf8)
     }
 
-    func use(_ provider: RejectingProvider) throws {
-        let config = home.appending(path: "config.toml")
-        let text = try String(contentsOf: config, encoding: .utf8)
-        try ("model_provider = \"rejecting\"\n" + text + """
-
-            [model_providers.rejecting]
-            name = "rejecting"
-            base_url = "http://127.0.0.1:\(provider.port)/v1"
-            wire_api = "responses"
-
-            """).write(to: config, atomically: true, encoding: .utf8)
-    }
-
     @concurrent func remove() async {
+        model.stop()
         await TestProcesses.stop(under: [root])
         try? FileManager.default.removeItem(at: root)
     }
@@ -144,7 +164,7 @@ struct CodexHome {
     }
 
     @MainActor private func withCodex(_ body: (CodexRPC) async throws -> Void) async throws {
-        let rpc = try await CodexRPC.launch(AgentTape.executable("codex"), environment: environment)
+        let rpc = try await CodexRPC.launch(pinnedCodex.executable, environment: environment)
         do {
             try await body(rpc)
         } catch {
@@ -156,8 +176,10 @@ struct CodexHome {
 }
 
 @MainActor
-func withCodexRig(approvals: String = "never", wrapped: Bool = false, _ body: (CodexRig) async throws -> Void) async throws {
-    let rig = try await CodexRig(approvals: approvals, wrapped: wrapped)
+func withCodexRig(
+    approvals: String = "never", model: String = codexTestModel, daemon: Bool = false, childUnreadableWhileParentRuns: Bool = false, _ body: (CodexRig) async throws -> Void
+) async throws {
+    let rig = try await CodexRig(approvals: approvals, model: model, daemon: daemon, childUnreadableWhileParentRuns: childUnreadableWhileParentRuns)
     do {
         try await body(rig)
     } catch {
@@ -167,6 +189,38 @@ func withCodexRig(approvals: String = "never", wrapped: Bool = false, _ body: (C
     await rig.stop()
 }
 
+/// 要批准才能跑的命令。两档模型的命令工具不同：gpt-5.5 的函数 `exec_command`，gpt-6-luna 一档的代码模式 `exec`（一段 JS，里面调 `tools.exec_command`）；
+/// CuePad 看到的一样（app-server 报同样的 `commandExecution` 项与审批请求）。
+func codexEscalated(_ command: String, model: String = codexTestModel) -> FakeReply {
+    let arguments: [String: any Sendable] = ["cmd": command, "sandbox_permissions": "require_escalated", "justification": "test"]
+    let json = String(decoding: (try? JSONSerialization.data(withJSONObject: arguments)) ?? Data(), as: UTF8.self)
+    return model == codexTestModel
+        ? .call("exec_command", arguments)
+        : .custom("exec", "const r = await tools.exec_command(\(json)); text(JSON.stringify(r));")
+}
+
+/// Codex 常驻服务的目录是 Codex 写死的 `/tmp/codex-daemon-<uid>`（不跟 TMPDIR、CODEX_HOME 走），里面每个常驻服务一个以 CODEX_HOME 的哈希命名的 socket 与锁文件，
+/// 同机真实的 Codex 的也在这里，别的检出同时在跑的测试也往这里建、删它们自己的。测试只建、只删自己的那一项；跑前跑后各列一次（名字与修改时刻）：
+/// 跑之前就在的别人的条目修改时刻不能变（别人自己删掉的不算），自己的不能留下。
+struct DaemonDirectory: Equatable, CustomStringConvertible {
+    private(set) var entries: [String: Double] = [:]
+
+    init() {
+        let directory = "/tmp/codex-daemon-\(getuid())"
+        for name in (try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? [] {
+            var info = stat()
+            if lstat("\(directory)/\(name)", &info) == 0 { entries[name] = Double(info.st_mtimespec.tv_sec) + Double(info.st_mtimespec.tv_nsec) / 1e9 }
+        }
+    }
+
+    func disturbed(since before: DaemonDirectory, ours: Set<String>) -> [String] {
+        let changed = before.entries.filter { name, time in !ours.contains(name) && entries[name].map { $0 != time } == true }.keys
+        return (Array(changed) + ours.filter { entries[$0] != nil }).sorted()
+    }
+
+    var description: String { entries.sorted { $0.key < $1.key }.map { "\($0.key.prefix(8))@\($0.value)" }.joined(separator: ",") }
+}
+
 @MainActor
 final class CodexRig {
     let codex: CodexHome
@@ -174,35 +228,25 @@ final class CodexRig {
     let bridge: PiBridge
     let runtime: CodexRuntime
     let presence: TestPresence
+    var model: FakeModel { codex.model }
+    private let sharedBefore: DaemonDirectory?
 
-    /// 钩子命令里的 cuepad。Codex 的信任哈希按命令算，录下的哈希回放时要对得上，所以路径不能带检出位置：
-    /// 固定的 /tmp 链接，指向本次构建的 cuepad（录制时真钩子经它跑）。
-    static let hookHelper: URL = {
-        let link = URL(filePath: "/tmp/cuepad-test-helper/cuepad")
-        try! FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if (try? link.checkResourceIsReachable()) != nil || (try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) != nil {
-            try! FileManager.default.removeItem(at: link)
-        }
-        try! FileManager.default.createSymbolicLink(at: link, withDestinationURL: PiProcess.cuepad)
-        return link
-    }()
-
-    /// - Parameter wrapped: CuePad 起的 `codex` 是一层外壳、真 codex 是它的子进程（npm 装的 `codex` 就是 node 外壳），钩子的父进程不是 CuePad 起的那个。
-    init(approvals: String = "never", wrapped: Bool = false) async throws {
-        let codex = try CodexHome()
+    /// - Parameter daemon: 会起常驻服务（终端里的 Codex）：收尾时断言没动共用目录里别人的条目、自己的已清掉，见 `DaemonDirectory`。
+    /// - Parameter childUnreadableWhileParentRuns: 托管的 Codex 经 `CodexReadFault` 起：主会话一轮在跑时子线程的 `thread/read` 都读不到。
+    init(approvals: String = "never", model: String = codexTestModel, daemon: Bool = false, childUnreadableWhileParentRuns: Bool = false) async throws {
+        sharedBefore = daemon ? DaemonDirectory() : nil
+        let codex = try CodexHome(model: try await FakeModel(), modelName: model)
         let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
         let bridge = PiBridge(socketDirectory: codex.sockets)
-        var locator = codex.locator
-        if wrapped {
-            let bin = codex.root.appending(path: "wrapper", directoryHint: .isDirectory)
-            try TestScript.install("#!/bin/sh\n. \"$0.env\"\n\"$REAL\" \"$@\"\n", at: bin.appending(path: "codex"), variables: ["REAL": AgentTape.executable("codex").path])
-            locator = ExecutableLocator(searchDirectories: [bin])
-        }
-        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in locator.candidates("codex").first }, locate: { [locator] in locator }, presence: presence, timing: noDeadline)
+        let locator = codex.locator
+        let launch = childUnreadableWhileParentRuns ? try CodexReadFault.wrapper(around: pinnedCodex.executable, in: codex.root) : nil
+        let runtime = CodexRuntime(
+            bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in launch ?? locator.candidates("codex").first }, locate: { [locator] in locator },
+            presence: presence, timing: noDeadline)
         do {
             try codex.signIn(approvals: approvals)
-            try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: Self.hookHelper, timing: noDeadline).install(.codex)
+            try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: PiProcess.cuepad, timing: noDeadline).install(.codex)
             try hooks.start()
             try bridge.start()
             try runtime.start()
@@ -226,7 +270,13 @@ final class CodexRig {
         let control = codex.home.appending(path: "app-server-control/app-server-control.sock").path
         let shared = try? FileManager.default.destinationOfSymbolicLink(atPath: control)
         await codex.remove()
-        for leftover in shared.map({ [$0, $0 + ".lock"] }) ?? [] { try? FileManager.default.removeItem(atPath: leftover) }
+        let leftovers = shared.map { [$0, $0 + ".lock"] } ?? []
+        for leftover in leftovers { try? FileManager.default.removeItem(atPath: leftover) }
+        if let sharedBefore {
+            let now = DaemonDirectory()
+            let moved = now.disturbed(since: sharedBefore, ours: Set(leftovers.map { URL(filePath: $0).lastPathComponent }))
+            #expect(moved.isEmpty, "共用目录里别人的条目被动过，或自己的没清干净：\(moved)")
+        }
     }
 
     var session: PiSession? { bridge.sessions.first { $0.agent == .codex } }
@@ -242,8 +292,8 @@ final class CodexRig {
     func draftLanded(_ id: PiSession.ID) -> Bool {
         guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return true }
         let session = bridge.session(id: id)
-        let newest = session.flatMap { try? transcript($0) }?.messages.last { $0.role == .known(.pi) }?.at
-        return draft.landed(newestReply: newest)
+        let newest = session.flatMap { try? transcript($0) }?.messages.last { $0.role == .known(.pi) }
+        return draft.landed(newestReply: newest?.at, record: newest?.id)
     }
 }
 
@@ -273,7 +323,7 @@ final class CodexTerminal: @unchecked Sendable {
 
     init(_ codex: CodexHome, arguments: [String] = []) throws {
         process.executableURL = URL(filePath: "/usr/bin/script")
-        process.arguments = ["-q", "/dev/null", "/bin/sh", "-c", "stty cols 140 rows 45; exec \"$0\" \"$@\"", realCodexURL!.path] + arguments
+        process.arguments = ["-q", "/dev/null", "/bin/sh", "-c", "stty cols 140 rows 45; exec \"$0\" \"$@\"", pinnedCodex.executable.path] + arguments
         process.environment = codex.environment.merging(["TERM": "xterm-256color"]) { $1 }
         process.currentDirectoryURL = codex.work
         process.standardInput = input
@@ -314,31 +364,5 @@ final class CodexTerminal: @unchecked Sendable {
         for child in children.prefix(Int(max(count, 0))) where child > 0 { kill(child, SIGTERM) }
         if process.isRunning { process.terminate() }
     }
-}
-final class RejectingProvider: Sendable {
-    static let reason = "bad things happened"
-    private let listener: NWListener
-    let port: UInt16
-
-    init() async throws {
-        listener = try NWListener(using: .tcp, on: .any)
-        listener.newConnectionHandler = { connection in
-            connection.start(queue: .global())
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { _, _, _, _ in
-                let body = #"{"error":{"message":"\#(Self.reason)","type":"invalid_request_error","code":"bad"}}"#
-                let reply = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n" + body
-                connection.send(content: Data(reply.utf8), completion: .contentProcessed { _ in connection.cancel() })
-            }
-        }
-        let ready = AsyncStream<UInt16>.makeStream()
-        listener.stateUpdateHandler = { [listener] state in
-            if case .ready = state, let port = listener.port?.rawValue { ready.continuation.yield(port) }
-        }
-        listener.start(queue: .global())
-        var iterator = ready.stream.makeAsyncIterator()
-        port = try #require(await iterator.next())
-    }
-
-    func stop() { listener.cancel() }
 }
 #endif

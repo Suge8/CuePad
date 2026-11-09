@@ -1,6 +1,6 @@
 # 验收
 
-Debug 认的启动参数只在 `DebugScene+Args*.swift` 的字段注释里（拼错的参数启动即报错退出），画面登记在 `DebugScene+Scenes.swift` 的 `DebugScene.entries`、各画面在 `UI/Debug/Scenes/`，`xc.sh` 的用法在它的头注释里；这里只记代码里查不到的做法与坑。性能与同步的测量见 [perf.md](perf.md)，Cue 的提示词评测见 [cue-eval.md](cue-eval.md)。
+Debug 认的启动参数只在 `DebugScene+Args*.swift` 的字段注释里（拼错的参数启动即报错退出），画面登记在 `DebugScene+Scenes.swift` 的 `DebugScene.entries`、各画面在 `UI/Debug/Scenes/`，`xc.sh` 的用法在它的头注释里；这里只记代码里查不到的做法与坑。性能与同步的测量见 [perf.md](perf.md)，Cue 的提示词评测见 [cue-eval.md](cue-eval.md)，崩溃与真机日志见 [diagnose.md](diagnose.md)。
 
 ## 视觉验收
 
@@ -114,10 +114,3 @@ CUEPAD_FAKE_HOME=$PWD/apple/.derived/fakehome apple/scripts/xc.sh run mac -- -Cu
 - 触发会话状态：在 `CUEPAD_PI_SOCKET_DIR` 里放一个说桥协议的假扩展（协议见 CuePi README）。
 - 系统要等自己的通知处理（含 Apple 智能摘要）走完才呈现，实测有时 20 秒；横幅 5 秒就收，边等边找（`bcu find-roots --app NotificationCenter` 里的 dialog）。
 - 实际播了哪个文件看 `systemsoundserverd` 日志的 `mAudioToken`（通知中心那行 `Playing notification sound` 找不到文件时也照打，实际播的是兜底音）；Dock 角标读 Dock 里这一项的 `AXStatusLabel`。
-
-## 崩溃诊断
-
-- 真机崩溃拿不到栈时，请用户从设置的"上次崩溃"里"导出诊断"发来：复制的是存档里每份的要点（本地时间、版本、设备、异常与终止原因的人话、崩溃线程前几帧，CuePad 自己的帧标 `← CuePad`），同一种并成一条计次数；要完整 JSON 再请用户点"分享原始文件…"。帧未符号化，靠 dSYM 还原，每次发布的归档在 `~/Library/Developer/Xcode/Archives/<日期>/CuePad <ios|mac> <构建号>.xcarchive`（`dwarfdump --uuid` 对上 UUID；系统库要那台设备系统版本的符号）。
-- 0x8BADF00D 加 `WatchdogEvent: process-exit` 多半是主线程先卡住、用户再从后台划掉：看同一份摘要里的"主线程卡住"（App 内的看守记下的：卡住时在哪一页、之前开合过什么）。
-- 偶发的卡死用 `xc.sh explore [种子] [秒]` 找：随机点滑三页，看守一记下卡住就停手连取样本，记录可按种子回放（`explore.py` 头注释）。验看守本身用 `-CuePadFreeze <秒>`。
-- 模拟器里 `xc.sh shot`/`rec` 报"App 在画面就绪前退出了"就是崩了，报告在 `~/Library/Logs/DiagnosticReports/CuePad-*.ips`。只在会话跑着时崩的，用 `-CuePadStream YES` 让它一轮一轮跑起来。

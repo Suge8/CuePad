@@ -9487,18 +9487,18 @@
         }
       }
     },
-    "只存在这台设备上，不会自动上传。导出诊断复制每次出事的要点，发给开发者；开发者要完整原文时，再分享原始文件。" : {
+    "只有 CuePad 最近 15 分钟的日志，标成私密的内容系统已打码。经你自己的 iCloud 送到你的 Mac（~/Library/Logs/CuePad），不经别人。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stays on this device and is never uploaded. Export Diagnostics copies the key facts of each incident to send to the developer; share the raw files only if the developer asks for them."
+            "value" : "Only CuePad's logs from the last 15 minutes, with private values redacted by the system. They go to your Mac (~/Library/Logs/CuePad) through your own iCloud, never through anyone else."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只存在这台设备上，不会自动上传。导出诊断复制每次出事的要点，发给开发者；开发者要完整原文时，再分享原始文件。"
+            "value" : "只有 CuePad 最近 15 分钟的日志，标成私密的内容系统已打码。经你自己的 iCloud 送到你的 Mac（~/Library/Logs/CuePad），不经别人。"
           }
         }
       }
@@ -11599,6 +11599,22 @@
         }
       }
     },
+    "存在这台设备上，连着 iCloud 时经你自己的 iCloud 送到你的 Mac，不经别人。要发给别人时，导出诊断复制每次出事的要点；要完整原文时，再分享原始文件。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kept on this device and, when iCloud is connected, sent to your Mac through your own iCloud, never through anyone else. To send them to someone, Export Diagnostics copies the key facts of each incident; share the raw files only if they need the full text."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存在这台设备上，连着 iCloud 时经你自己的 iCloud 送到你的 Mac，不经别人。要发给别人时，导出诊断复制每次出事的要点；要完整原文时，再分享原始文件。"
+          }
+        }
+      }
+    },
     "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。" : {
       "localizations" : {
         "en" : {
@@ -12555,6 +12571,22 @@
         }
       }
     },
+    "已发出 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sent at %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已发出 %@"
+          }
+        }
+      }
+    },
     "已发给 %@" : {
       "localizations" : {
         "en" : {
@@ -12615,6 +12647,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已复制"
+          }
+        }
+      }
+    },
+    "已存下，连上 iCloud 后自动发出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved, will send when iCloud connects"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已存下，连上 iCloud 后自动发出"
           }
         }
       }
@@ -14135,22 +14183,6 @@
         }
       }
     },
-    "打开麦克风设置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Microphone Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开麦克风设置"
-          }
-        }
-      }
-    },
     "打断本轮" : {
       "localizations" : {
         "en" : {
@@ -14419,6 +14451,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把技能与规则收到一处"
+          }
+        }
+      }
+    },
+    "把最近日志发到 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Recent Logs to Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把最近日志发到 Mac"
           }
         }
       }
@@ -17807,6 +17855,22 @@
         }
       }
     },
+    "正在发送…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在发送…"
+          }
+        }
+      }
+    },
     "正在同步" : {
       "localizations" : {
         "en" : {
@@ -18443,6 +18507,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没发出去"
+          }
+        }
+      }
+    },
+    "没发出去：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没发出去：%@"
           }
         }
       }
@@ -21135,6 +21215,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "终端里的 %@ 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说"
+          }
+        }
+      }
+    },
+    "终端里的会话还没起好，没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The terminal session isn’t ready yet. Nothing was sent; you can send it again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "终端里的会话还没起好，没有发出，可以重发"
           }
         }
       }

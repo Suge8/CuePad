@@ -6,16 +6,16 @@ import Testing
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.taped(.codex), .agentTape(.codex), RealAgents.timeLimit(.minutes(2)))
+@Suite(RealAgents.needs(.codex))
 struct CodexHooksTests {
     let codex: CodexHome
-    /// 钩子命令里的 cuepad 只是字符串（这里不跑钩子）。用固定路径：Codex 的信任哈希按命令算，录下的哈希回放时要对得上
+    /// 钩子命令里的 cuepad 只是字符串（这里不跑钩子）
     let cuepad = URL(filePath: "/Applications/CuePad.app/Contents/Helpers/cuepad")
     var command: String { "\(cuepad.path) hook codex" }
     var hooksFile: URL { codex.home.appending(path: "hooks.json") }
     var configFile: URL { codex.home.appending(path: "config.toml") }
 
-    init() throws { codex = try CodexHome() }
+    init() async throws { codex = try CodexHome(model: try await FakeModel()) }
 
     private func integration(cuepad: URL? = nil) -> AgentIntegration {
         AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: cuepad ?? self.cuepad, timing: noDeadline)

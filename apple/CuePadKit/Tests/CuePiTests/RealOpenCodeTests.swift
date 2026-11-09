@@ -6,7 +6,7 @@ import Testing
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.taped(.opencode), .serialized, .timeLimit(.minutes(10)))
+@Suite(RealAgents.needs(.opencode), .serialized, .timeLimit(.minutes(10)))
 struct RealOpenCodeTests {
     func session(_ bridge: PiBridge) -> PiSession? { bridge.sessions.first { $0.agent == .opencode } }
 

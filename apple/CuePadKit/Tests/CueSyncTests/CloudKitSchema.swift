@@ -71,6 +71,9 @@ enum CloudKitSchema {
     types.append(recordType(
       ActivityDiagnosticCloud.recordType,
       [("\"___recordID\"", "REFERENCE QUERYABLE"), (ActivityDiagnosticCloud.field, "ENCRYPTED BYTES")]))
+    types.append(recordType(
+      DiagnosticZone.recordType,
+      [("\"___recordID\"", "REFERENCE QUERYABLE"), (DiagnosticZone.contentField, "ENCRYPTED BYTES"), (DiagnosticZone.nameField, "ENCRYPTED STRING")]))
     for retired in retiredTypes {
       types.append(recordType(retired.name, [("\"___recordID\"", "REFERENCE QUERYABLE")] + retired.fields))
     }
