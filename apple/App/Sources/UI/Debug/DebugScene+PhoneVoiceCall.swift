@@ -34,13 +34,15 @@ extension DebugScene {
         let log = DebugVoiceLog()
         let note = log.note
         for await ready in Observations({ workspace.cue.canHear && voice.startUnavailableReason == nil }) where ready { break }
+        let background = NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification)
+        let foreground = NotificationCenter.default.notifications(named: UIApplication.willEnterForegroundNotification)
         var watching = [
             Task { for await response in Observations({ voice.response }) { note("response \(response)") } },
             Task { for await loud in Observations({ voice.outputActive }) { note(loud ? "output-loud" : "output-quiet") } },
             Task { for await link in Observations({ voice.phone?.link }) { note("link \(link.map { "\($0)" } ?? "none")") } },
             Task { for await value in Observations({ voice.projection.map { "\($0.requests.count) \($0.phase)" } }) { note("projection \(value ?? "none")") } },
-            Task { for await _ in NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification) { note("app-background") } },
-            Task { for await _ in NotificationCenter.default.notifications(named: UIApplication.willEnterForegroundNotification) { note("app-foreground") } },
+            Task { for await _ in background { note("app-background") } },
+            Task { for await _ in foreground { note("app-foreground") } },
         ]
         defer { watching.forEach { $0.cancel() } }
         phoneVoiceFixture?.finished = { note("input-ended \($0)") }
@@ -75,10 +77,11 @@ extension DebugScene {
                     })
                 }
                 if let fixture = phoneVoiceFixture {
+                    let backgrounded = NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification)
                     watching.append(Task {
                         if args.voiceOpts.playInBackground {
                             note("waiting-background")
-                            for await _ in NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification) { break }
+                            for await _ in backgrounded { break }
                             guard await Task.wait(for: .seconds(1)) else { return }
                         }
                         note("play \(input)")

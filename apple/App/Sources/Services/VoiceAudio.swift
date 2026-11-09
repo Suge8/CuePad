@@ -73,8 +73,9 @@ final class VoiceAudio {
         }
         try build(link)
         fixture?.start(link: link, levels: levels)
+        let changes = NotificationCenter.default.notifications(named: .AVAudioEngineConfigurationChange)
         watching.append(Task {
-            for await _ in NotificationCenter.default.notifications(named: .AVAudioEngineConfigurationChange) {
+            for await _ in changes {
                 // 引擎停下才发；还在跑的（开语音处理时自己发的那一下）不用重建
                 guard let engine, !engine.isRunning else { continue }
                 do { try build(link) }
