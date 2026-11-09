@@ -19,7 +19,7 @@ extension DebugHooks {
                 return try await tell(text)
             }
             dependencies.media = { _, _ in DebugVoiceLayoutMedia() }
-            dependencies.createCall = { _, _, _, _, _ in .init(id: "layout", answer: "answer", usedPercent: nil) }
+            dependencies.createCall = { _, _, _, _ in .init(id: "layout", answer: "answer", usedPercent: nil) }
             dependencies.control = { _, _, _, received in
                 received(.success(.started))
                 return DebugVoiceLayoutControl(scenario: scenario)
