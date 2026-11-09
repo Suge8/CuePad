@@ -8,6 +8,8 @@ import UIKit
 
 /// 一轮独占一份 WKWebView、权限/JS 等待、音轨和音频上下文；不重开已关闭的实例。
 /// 页面导航不决定通话生死，所有者是 AppServices 的通话服务。关闭先撤销等待、显式停止轨道，再卸载网页。
+/// iOS 的采集/播放会话由 WebKit 管理，本机不另外激活或停用音频会话：原生激活会被 WebKit 媒体会话打断。
+/// 中断只看网页：采集轨道结束或音频上下文进入 interrupted 即结束通话；本机共享会话从不激活，收不到它的中断通知。
 final class VoicePeer: NSObject, VoiceMedia {
     static let sampleCount = 36
     enum Source { case microphone(device: String?), file(URL) }
@@ -28,7 +30,6 @@ final class VoicePeer: NSObject, VoiceMedia {
     private let loaded = AsyncStream<Void>.makeStream()
     private var closing: Task<Void, Error>?
     private var documentReady = false
-    private var audioEvents: Task<Void, Never>?
     #if os(macOS)
     private let window: NSWindow
     #endif
@@ -68,6 +69,9 @@ final class VoicePeer: NSObject, VoiceMedia {
             }
             guard granted else { throw VoicePeerError.microphoneDenied }
         }
+        #if os(iOS)
+        guard UIApplication.shared.applicationState != .background else { throw VoicePeerError.notForeground }
+        #endif
         web.loadHTMLString(Self.page, baseURL: URL(string: "https://voice.cuepad.invalid/"))
         for await _ in loaded.stream { break }
         try Task.checkCancellation()
@@ -94,8 +98,6 @@ final class VoicePeer: NSObject, VoiceMedia {
     func cancel() {
         scope.end()
         loaded.continuation.finish()
-        audioEvents?.cancel()
-        audioEvents = nil
     }
 
     func close() async throws {
@@ -116,10 +118,6 @@ final class VoicePeer: NSObject, VoiceMedia {
                     }
                 } catch { failures.append(error.localizedDescription) }
             }
-            #if os(iOS)
-            do { try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
-            catch { failures.append(error.localizedDescription) }
-            #endif
             if !failures.isEmpty { throw NSError(domain: "VoiceMediaShutdown", code: 1, userInfo: [NSLocalizedDescriptionKey: failures.joined(separator: "; ")]) }
         }
         closing = cleanup
@@ -145,19 +143,8 @@ final class VoicePeer: NSObject, VoiceMedia {
         guard UIApplication.shared.applicationState == .active,
               let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).flatMap(\.windows).first(where: \.isKeyWindow)
         else { throw VoicePeerError.notForeground }
-        let audio = AVAudioSession.sharedInstance()
-        try audio.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
-        try audio.setActive(true)
         web.alpha = 0.01
         window.addSubview(web)
-        audioEvents = Task {
-            for await _ in NotificationCenter.default.notifications(named: AVAudioSession.interruptionNotification) {
-                guard !Task.isCancelled else { return }
-                onEvent(.ended(.audioInterrupted))
-                cancel()
-                return
-            }
-        }
         #endif
     }
 
@@ -177,6 +164,7 @@ final class VoicePeer: NSObject, VoiceMedia {
         if kind == "ready" { documentReady = true; loaded.continuation.yield(); loaded.continuation.finish(); return }
         guard (body["session"] as? String).flatMap(UUID.init(uuidString:)) == session else { return }
         switch kind {
+        case "audioInterrupted": onEvent(.ended(.audioInterrupted)); cancel()
         case "connected": onEvent(.connected)
         case "failed": onEvent(.failed)
         case "inputEnded": onEvent(.inputEnded)

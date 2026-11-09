@@ -29,6 +29,7 @@ import os
     @ObservationIgnored var observing: Task<Void, Never>?
     @ObservationIgnored var commands: [VoiceCommand.ID: Task<VoiceCommandResult.Outcome, Never>] = [:]
     #else
+    @ObservationIgnored let makeMedia: () -> any VoiceMedia
     @ObservationIgnored var phone: VoicePhoneSession?
     @ObservationIgnored var phoneBinding: (session: VoiceSessionID, local: VoiceEndpoint, peer: VoiceEndpoint)?
     let requestPages = VoicePageView<VoiceCallProjection.Request>()
@@ -44,11 +45,21 @@ import os
     var outputActive = false
     #endif
 
+    #if os(iOS)
+    init(services: AppServices, signaling: (any VoiceSignaling)?,
+         makeMedia: @escaping () -> any VoiceMedia = { VoicePeer(source: .microphone(device: nil), recording: nil) }) {
+        self.services = services
+        self.signaling = signaling
+        self.makeMedia = makeMedia
+        availability = signaling?.voiceAvailability ?? .unsupported
+    }
+    #else
     init(services: AppServices, signaling: (any VoiceSignaling)?) {
         self.services = services
         self.signaling = signaling
         availability = signaling?.voiceAvailability ?? .unsupported
     }
+    #endif
 
     isolated deinit {
         #if os(macOS)
