@@ -52,8 +52,9 @@ extension RealClaudeHostTests {
 
     /// 结束前停下的那一轮，Claude Code 接着时补写的助手消息（"No response requested."）不算它的回答。
     /// 暗号只在历史里：答得出就是重新起的进程把整段对话又交给了模型。
+    /// 结束后马上接着：外壳关掉输出后再过一秒才退出，拉开"流断了、进程还没收"的那一段（机器忙时它自己就有这么长）。
     @Test func anEndedHostedSessionIsResumedWithItsHistory() async throws {
-        try await ClaudeTestbed.run { testbed in
+        try await ClaudeTestbed.run(wrapper: #""$REAL" "$@"; status=$?; exec >&- 2>&- <&-; sleep 1; exit $status"#) { testbed in
             try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let first = try #require(testbed.bridge.session(id: id))
