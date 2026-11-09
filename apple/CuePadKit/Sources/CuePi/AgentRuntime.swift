@@ -115,8 +115,6 @@ public protocol AgentRuntime: AnyObject {
     func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID
-    /// 同一会话不并发调：上一次（含被取消的）返回前不再调。取消后还在收自己起的进程，这时再起一个就是两个进程同写会话文件。
-    /// 投送执行器一次只跑一条，下一条先等被放弃的上一条做完（`DeliveryExecutor.settleHandler`）。
     func resume(_ session: IndexedSession) async throws -> PiSession.ID
     func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript
     func read(_ update: PiHistoryUpdate)

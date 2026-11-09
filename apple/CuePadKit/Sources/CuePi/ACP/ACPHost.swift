@@ -35,7 +35,9 @@ final class ACPHost {
     var sessionIDs: Set<String> { processes.sessionIDs }
 
     func open(in directory: URL, launchToken: String, model: String? = nil) async throws -> PiSession.ID {
-        try await host(in: directory, model: model, launchToken: launchToken) { try await $0.open(in: directory) }
+        try await host(in: directory, model: model, launchToken: launchToken, sessionID: nil, admission: try processes.admission()) {
+            try await $0.open(in: directory)
+        }
     }
 
     func resume(_ session: IndexedSession) async throws -> PiSession.ID {
@@ -43,9 +45,16 @@ final class ACPHost {
             guard live.hosted else { throw AgentRuntimeError.openElsewhere }
             return live.id
         }
-        await processes.vacate(session.id)
         let directory = URL(filePath: session.cwd, directoryHint: .isDirectory)
-        return try await host(in: directory, model: nil, launchToken: nil) { try await $0.load(session.id, in: directory) }
+        return try await processes.resume(session.id) { [self] admission in
+            try await host(in: directory, model: nil, launchToken: nil, sessionID: session.id, admission: admission) {
+                try await $0.load(session.id, in: directory)
+            }
+        }
+    }
+
+    func start() {
+        processes.start()
     }
 
     func stop() -> @concurrent @Sendable () async -> Void {
@@ -53,13 +62,16 @@ final class ACPHost {
     }
 
     private func host(
-        in directory: URL, model: String?, launchToken: String?, open: @escaping @MainActor (ACPSession) async throws -> Void
+        in directory: URL, model: String?, launchToken: String?, sessionID known: String?, admission: HostedProcesses.Admission,
+        open: @escaping @MainActor (ACPSession) async throws -> Void
     ) async throws -> PiSession.ID {
         let launch = try await launching(model)
         let session = ACPSession(dialect: launch.dialect, bridge: bridge, processes: processes)
         do {
             try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: AgentRuntimeError.launchTimedOut(agent)) {
-                try await session.launch(launch.executable, environment: launch.environment, directory: directory)
+                try await session.launch(launch.executable, environment: launch.environment, directory: directory) { [processes = self.processes] process in
+                    try await processes.admit(process, for: known, admission)
+                }
                 try await open(session)
             }
         } catch {
@@ -72,7 +84,7 @@ final class ACPHost {
             cwd: directory, terminal: PiTerminal(), state: .settled, stateSince: .now)
         state.hosted = true
         state.launchToken = launchToken
-        processes.adopt(process, for: sessionID)
+        processes.adopt(process, as: sessionID)
         session.attach(state)
         return state.id
     }

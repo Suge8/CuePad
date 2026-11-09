@@ -206,7 +206,7 @@ final class EndRig {
         try await bridge.send(PiMessage(text: token), to: id)
         let session = try #require(bridge.session(id: id))
         try await replied(token, in: session)
-        return try #require(bridge.session(id: id) ?? session)
+        return bridge.session(id: id) ?? session
     }
 
     func replied(_ token: String, in session: PiSession) async throws {

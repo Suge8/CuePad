@@ -62,6 +62,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     public func start() throws {
         hooks.handle(.claudeCode) { [weak self] call in self?.received(call) }
+        hosted.start()
     }
 
     public func follow(_ scope: PiHistoryScope) {
@@ -81,7 +82,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
         let sessionID = UUID().uuidString.lowercased()
-        let id = try await launch(sessionID: sessionID, arguments: ["--session-id", sessionID], in: directory, launchToken: launchToken)
+        let id = try await launch(
+            sessionID: sessionID, arguments: ["--session-id", sessionID], in: directory, launchToken: launchToken, admission: try hosted.admission())
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
     }
 
@@ -94,18 +96,19 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
         if let live = bridge.sessions.first(where: { $0.agent == .claudeCode && $0.sessionID == session.id && $0.hosted }) { return live.id }
-        await hosted.vacate(session.id)
-        if bridge.sessions.contains(where: { $0.agent == .claudeCode && $0.sessionID == session.id && !$0.hosted }) {
-            throw AgentRuntimeError.openElsewhere
+        return try await hosted.resume(session.id) { [self] admission in
+            if bridge.sessions.contains(where: { $0.agent == .claudeCode && $0.sessionID == session.id && !$0.hosted }) {
+                throw AgentRuntimeError.openElsewhere
+            }
+            // 还没触发过钩子的终端会话（钩子没装、或 CuePad 之后才启动）桥上没有，问 Claude Code 自己
+            if try await running().contains(where: { $0.sessionID == session.id }) { throw AgentRuntimeError.openElsewhere }
+            let directory = URL(filePath: session.cwd, directoryHint: .isDirectory)
+            // Claude Code 接着会话时用配置里的模型，不记得这个会话里换过的：带上 CuePad 记下的
+            let model = try? await store.lastModel(ofSession: session.id)
+            return try await launch(
+                sessionID: session.id, arguments: ["--resume", session.id] + (model.map { ["--model", $0.id] } ?? []), model: model,
+                in: directory, launchToken: nil, known: await remembered(session.id), admission: admission)
         }
-        // 还没触发过钩子的终端会话（钩子没装、或 CuePad 之后才启动）桥上没有，问 Claude Code 自己
-        if try await running().contains(where: { $0.sessionID == session.id }) { throw AgentRuntimeError.openElsewhere }
-        let directory = URL(filePath: session.cwd, directoryHint: .isDirectory)
-        // Claude Code 接着会话时用配置里的模型，不记得这个会话里换过的：带上 CuePad 记下的
-        let model = try? await store.lastModel(ofSession: session.id)
-        return try await launch(
-            sessionID: session.id, arguments: ["--resume", session.id] + (model.map { ["--model", $0.id] } ?? []), model: model,
-            in: directory, launchToken: nil, known: await remembered(session.id))
     }
 
     /// 不自己补 `CLAUDE_CONFIG_DIR`：设了它 Claude Code 就到那个目录里找 `.claude.json`，与没设时的 `~/.claude.json` 不是一份。
@@ -115,11 +118,11 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         return (claude, locator.environment(launching: claude, overrides: paths.environment))
     }
 
-    /// 没连上就抛错：进程先退出、握手超时，或调用方取消（投送到了截止时刻）。没连上的都收掉自己起的进程、拿掉条目，
-    /// 不留一个不在桥上的进程占着这个会话（之后接着它时被当成在别处开着，或再起一个同写会话文件）。
+    /// 没连上就抛错：进程先退出、握手超时，或调用方取消（投送到了截止时刻）。没连上的都收掉自己起的进程（只收它：
+    /// 按会话收会收到别人的），不留一个不在桥上的进程占着这个会话（之后接着它时被当成在别处开着，或再起一个同写会话文件）。
     private func launch(
         sessionID: String, arguments: [String], model: PiModelKey? = nil, in directory: URL, launchToken: String?,
-        known: (name: String?, firstMessage: String?)? = nil
+        known: (name: String?, firstMessage: String?)? = nil, admission: HostedProcesses.Admission
     ) async throws -> PiSession.ID {
         let claude = try await executable()
         let session = ClaudeHostedSession(bridge: bridge, processes: hosted, timing: timing)
@@ -127,7 +130,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         let process = try await session.host(
             executable: claude.url, arguments: arguments + ["--add-dir", store.files.directory.path(percentEncoded: false)], directory: directory,
             environment: claude.environment.merging([HostMark.variable: sessionID]) { $1 })
-        hosted.adopt(process, for: sessionID)
+        try await hosted.admit(process, for: sessionID, admission)
         let cwd = URL(filePath: ClaudeCode.realPath(directory), directoryHint: .isDirectory)
         do {
             return try await session.connect(
@@ -135,10 +138,9 @@ public final class ClaudeCodeRuntime: AgentRuntime {
                 known: known).id
         } catch PiBridgeError.sessionEnded {
             let reason = await process.exited()
-            await hosted.vacate(sessionID)
             throw ClaudeCodeError.exited(reason)
         } catch {
-            await hosted.vacate(sessionID)
+            await process.stop()
             if error as? PiBridgeError == .ackTimeout { throw AgentRuntimeError.launchTimedOut(.claudeCode) }
             throw error
         }

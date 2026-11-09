@@ -46,6 +46,25 @@ struct RealHostTests {
         try await eventually("后台进程回答了") { fileTexts("assistant", in: file).last == "ECHO 后台接着说" }
     }
 
+    /// 同 `RealHostedEndTests` 的并发恢复：同一会话同时来两次恢复，只起一个 Pi，两边拿到同一个 id。
+    @Test func twoResumesOfTheSameSessionAtOnceStartOneProcess() async throws {
+        let pi = try await PiProcess()
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let (file, sessionID) = try await endedSession(pi, bridge)
+        let host = host(pi, bridge)
+        host.start()
+        defer { stopHostedProcesses(bridge) }
+
+        async let one = resume(host, file, in: pi, on: bridge)
+        async let two = resume(host, file, in: pi, on: bridge)
+        let (a, b) = try await (one, two)
+
+        #expect(a.id == b.id)
+        #expect(bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [a.pid])
+    }
+
     @Test func theHostedMarkStaysWithTheHostedProcessAndIsNotInheritedByItsChildren() async throws {
         let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)

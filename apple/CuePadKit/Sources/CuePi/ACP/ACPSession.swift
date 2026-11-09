@@ -75,8 +75,11 @@ final class ACPSession {
     var agent: AgentKind { dialect.agent }
     var seesImages: Bool { connection.map { dialect.acceptsImages($0.agent) } ?? false }
 
-    func launch(_ executable: URL, environment: [String: String], directory: URL, timing: Timing = .system) async throws {
-        let connection = try await ACPConnection.launch(executable, dialect.arguments, environment: environment, directory: directory, timing: timing)
+    func launch(
+        _ executable: URL, environment: [String: String], directory: URL, timing: Timing = .system, spawned: (ChildProcess) async throws -> Void = { _ in }
+    ) async throws {
+        let connection = try await ACPConnection.launch(
+            executable, dialect.arguments, environment: environment, directory: directory, timing: timing, spawned: spawned)
         connection.onNotification = { [weak self] in self?.notified($0, $1) }
         connection.onRequest = { [weak self] method, params, request in self?.asked(method, params, request: request) ?? false }
         connection.onClose = { [weak self] in self?.ended() }

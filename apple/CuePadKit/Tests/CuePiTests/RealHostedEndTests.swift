@@ -3,6 +3,7 @@ import CueStore
 import CueTestSupport
 import Darwin
 import Foundation
+import OSLog
 import Testing
 @testable import CuePi
 
@@ -83,5 +84,40 @@ struct RealHostedEndTests {
             #expect(rig.overlaps.isEmpty, "同一会话同时有两个进程：\(rig.overlaps)")
         }
     }
+
+    /// 停这一轮没成（Agent 被冻住、不回）：结束照样当场报成功、下桥，到点照样收进程，失败原因记进日志（不报给用户）。
+    @Test(arguments: Hosting.allCases)
+    func aTurnThatCannotBeStoppedIsLoggedAndTheProcessIsStillCollected(_ hosting: Hosting) async throws {
+        let clock = ManualTiming()
+        try await EndRig.run(hosting, timing: clock.timing) { rig in
+            rig.hang("BUSY-HANG")
+            let id = try await rig.open()
+            try await rig.bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: id)
+            try await eventually("这一轮在跑、停在模型里") { rig.asked("BUSY-HANG") && rig.bridge.session(id: id)?.state.isWorking == true }
+            let session = try #require(rig.bridge.session(id: id))
+            let since = Date()
+            kill(session.pid, SIGSTOP)
+
+            try await rig.bridge.end(id)
+            #expect(rig.bridge.session(id: id) == nil)
+            let due = clock.now.addingTimeInterval(AgentTimeouts.stop.seconds)
+            try await eventually("在等这一轮停下") { clock.hasSleeper(until: due) }
+            clock.advance(AgentTimeouts.stop)
+            try await eventually("日志里记下没能停下这一轮") { try hostedLog(since: since).contains { $0.contains(session.sessionID) } }
+            for _ in 0..<2 {
+                let due = clock.now.addingTimeInterval(AgentTimeouts.endGrace.seconds)
+                try await eventually("在等宽限") { kill(session.pid, 0) != 0 || clock.hasSleeper(until: due) }
+                clock.advance(AgentTimeouts.endGrace)
+            }
+            try await eventually("进程照样收掉") { kill(session.pid, 0) != 0 }
+        }
+    }
+}
+
+/// 本进程里 `HostedProcesses` 记下的日志
+private func hostedLog(since: Date) throws -> [String] {
+    let store = try OSLogStore(scope: .currentProcessIdentifier)
+    return try store.getEntries(at: store.position(date: since), matching: NSPredicate(format: "subsystem == %@ AND category == 'hosted'", AppIdentity.id))
+        .map(\.composedMessage)
 }
 #endif

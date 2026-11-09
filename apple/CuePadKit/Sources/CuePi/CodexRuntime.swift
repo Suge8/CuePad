@@ -105,6 +105,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     public func start() throws {
         guard stopped else { return }
         stopped = false
+        processes.start()
         hooks.handle(.codex) { [weak self] call in
             guard let self, !self.stopped else { return call.finish() }
             self.hook(call)
@@ -130,7 +131,9 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         self.connecting = nil
         scanning = nil
         let waits = hosted.values.compactMap(\.rpc).map { rpc in Task { await rpc.shutdown() } }
+        let launching = processes.stop()
         return {
+            await launching()
             _ = try? await connecting?.value
             await scan?.value
             for wait in waits { await wait.value }
@@ -140,7 +143,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
-        let id = try await launch { driver, rpc in
+        let id = try await launch(sessionID: nil, admission: try processes.admission()) { driver, rpc in
             let started = try await driver.open("thread/start", .object(try await self.sandbox(in: directory.path, on: rpc).merging(["cwd": .string(directory.path)]) { $1 }))
             return self.attachHosted(started, rpc: rpc, launchToken: launchToken)
         }
@@ -150,17 +153,18 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     /// 恢复时它被别处拿着写（终端里刚开）也改走控制 socket；常驻服务里也没有它才报错。
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
         if let live = bridge.session(sessionID: session.id) { return live.id }
-        await processes.vacate(session.id)
-        if let id = try await adoptFromDaemon(session.id) { return id }
-        do {
-            return try await launch { driver, rpc in
-                let params: [String: JSONValue] = ["threadId": .string(session.id), "path": .string(session.path), "excludeTurns": true]
-                let resumed = try await driver.open("thread/resume", .object(try await self.sandbox(in: session.cwd, on: rpc).merging(params) { $1 }))
-                return self.attachHosted(resumed, rpc: rpc, launchToken: nil)
-            }
-        } catch CodexRPCError.server(_, let message) where message.contains("active writer") {
+        return try await processes.resume(session.id) { [self] admission in
             if let id = try await adoptFromDaemon(session.id) { return id }
-            throw AgentRuntimeError.openElsewhere
+            do {
+                return try await launch(sessionID: session.id, admission: admission) { driver, rpc in
+                    let params: [String: JSONValue] = ["threadId": .string(session.id), "path": .string(session.path), "excludeTurns": true]
+                    let resumed = try await driver.open("thread/resume", .object(try await self.sandbox(in: session.cwd, on: rpc).merging(params) { $1 }))
+                    return self.attachHosted(resumed, rpc: rpc, launchToken: nil)
+                }
+            } catch CodexRPCError.server(_, let message) where message.contains("active writer") {
+                if let id = try await adoptFromDaemon(session.id) { return id }
+                throw AgentRuntimeError.openElsewhere
+            }
         }
     }
 
@@ -180,11 +184,15 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     }
 
     /// 连同握手至多 `AgentTimeouts.launch`，超时或出错时停掉进程。
-    private func launch(_ body: @escaping @MainActor (CodexDriver, CodexRPC) async throws -> PiSession.ID) async throws -> PiSession.ID {
+    private func launch(
+        sessionID: String?, admission: HostedProcesses.Admission, _ body: @escaping @MainActor (CodexDriver, CodexRPC) async throws -> PiSession.ID
+    ) async throws -> PiSession.ID {
         let codex = try await executable()
         let mark = UUID().uuidString
         let driver = CodexDriver()
-        let rpc = try await driver.launch(codex.url, environment: codex.environment.merging([HostMark.variable: mark]) { $1 })
+        let rpc = try await driver.launch(codex.url, environment: codex.environment.merging([HostMark.variable: mark]) { $1 }) { [processes] process in
+            try await processes.admit(process, for: sessionID, admission)
+        }
         host(driver, rpc, mark: mark)
         do {
             return try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: AgentRuntimeError.launchTimedOut(.codex)) { try await body(driver, rpc) }
@@ -211,7 +219,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         session.hosted = true
         session.fast = result["serviceTier"]?.string == "priority"
         session.launchToken = launchToken
-        if let process = rpc.process { processes.adopt(process, for: session.sessionID) }
+        if let process = rpc.process { processes.adopt(process, as: session.sessionID) }
         attach(session)
         return session.id
     }

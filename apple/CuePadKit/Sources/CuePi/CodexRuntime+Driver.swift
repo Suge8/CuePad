@@ -24,9 +24,11 @@ final class CodexDriver {
     /// 进程退出报 `exited`（`stop` 让它退的为 nil）。
     @discardableResult
     func launch(
-        _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil, timing: Timing = .system
+        _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil, timing: Timing = .system,
+        spawned: (ChildProcess) async throws -> Void = { _ in }
     ) async throws -> CodexRPC {
-        let rpc = try await CodexRPC.launch(executable, arguments: arguments, environment: environment, directory: directory, timing: timing)
+        let rpc = try await CodexRPC.launch(
+            executable, arguments: arguments, environment: environment, directory: directory, timing: timing, spawned: spawned)
         self.rpc = rpc
         rpc.onNotification = { [weak self] in self?.notification($0, $1) }
         rpc.onDraft = { [weak self] thread, draft in

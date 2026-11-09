@@ -26,7 +26,8 @@ extension RealClaudeHostTests {
             try await eventually("进程起了") { pids().count == 2 }
             cancelled.cancel()
             await #expect(throws: CancellationError.self) { try await cancelled.value }
-            #expect(kill(pids()[1], 0) != 0, "被取消的那次起的进程还在")
+            // 被取消的调用方当场走（`Resumptions`），这次恢复随后收掉自己起的进程；下一次恢复等它收完才起
+            try await eventually("被取消的那次起的进程收掉") { kill(pids()[1], 0) != 0 }
 
             try FileManager.default.removeItem(at: testbed.wrapperDirectory.appending(path: "slow"))
             let resumed = try await testbed.connect(indexed)
