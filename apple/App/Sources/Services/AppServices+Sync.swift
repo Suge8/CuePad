@@ -117,10 +117,11 @@ extension AppServices {
     }
 
     /// 最多等 `syncWaitLimit` 就返回，下拉刷新的圈、"立即同步"按钮不跟着网络一直转；没做完的在后台接着做。
-    /// 再要立即同步的（启动时与回到前台的那一次常常叠在一起）等这一次，不另拉一遍。
+    /// 每一次都要自己的一拉，不等还没返回的那次：那一拉可能开拉在这次之前，其间到服务器的改动就漏了，之后只剩按节奏的拉取
+    /// （恢复连通时自动的那次还没收尾、你就下拉刷新，回执就这样没回来）。叠在一起的由拉取层合成在途那一拉之后的一拉（`CloudSync.syncNow`）。
     func syncNow() async {
         guard sync != nil else { return }
-        await (syncing ?? beginSyncNow()).value
+        await beginSyncNow().value
     }
 
     /// 拉取当场在主线程之外开始，不排在主线程的队列后面。
@@ -135,13 +136,12 @@ extension AppServices {
             try? await timing.sleep(Self.syncWaitLimit)
             settle.finish()
         }
-        let waiting = Task {
+        syncNowWaits += 1
+        return Task {
             for await _ in settled {}
             deadline.cancel()
-            syncing = nil
+            syncNowWaits -= 1
         }
-        syncing = waiting
-        return waiting
     }
 
     static let syncWaitLimit = Duration.seconds(5)

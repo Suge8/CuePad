@@ -45,9 +45,10 @@ final class MacAgentsRecorder {
 
     func keep(notifications center: NotificationCenter) async throws {
         let statuses = Observations { [agents] in agents.statuses }
+        let wakes = center.notifications(named: NSWorkspace.didWakeNotification)
         try await withThrowingDiscardingTaskGroup { group in
             group.addTask {
-                for await _ in center.notifications(named: NSWorkspace.didWakeNotification) { try await self.record(redetecting: true) }
+                for await _ in wakes { try await self.record(redetecting: true) }
             }
             group.addTask {
                 for await now in statuses where now.count == AgentKind.allCases.count {

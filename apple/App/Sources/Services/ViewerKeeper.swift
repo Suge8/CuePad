@@ -71,20 +71,23 @@ nonisolated final class ViewerKeeper: Sendable {
     }
 
     func keep(notifications center: NotificationCenter = .default) async throws {
+        #if os(macOS)
+        let distributed = DistributedNotificationCenter.default()
+        let sources: [(NotificationCenter, Notification.Name, Away, Bool)] = [
+            (center, NSWorkspace.willSleepNotification, .asleep, true),
+            (center, NSWorkspace.didWakeNotification, .asleep, false),
+            (center, NSWorkspace.screensDidSleepNotification, .screenOff, true),
+            (center, NSWorkspace.screensDidWakeNotification, .screenOff, false),
+            (distributed, Notification.Name("com.apple.screenIsLocked"), .locked, true),
+            (distributed, Notification.Name("com.apple.screenIsUnlocked"), .locked, false),
+        ]
+        let events = sources.map { source, name, reason, gone in (source.notifications(named: name), reason, gone) }  // 在第一次写下之前订上
+        #endif
         try await withThrowingDiscardingTaskGroup { group in
             group.addTask { for await _ in self.changes { try await self.publish() } }
             #if os(macOS)
-            let distributed = DistributedNotificationCenter.default()
-            let events: [(NotificationCenter, Notification.Name, Away, Bool)] = [
-                (center, NSWorkspace.willSleepNotification, .asleep, true),
-                (center, NSWorkspace.didWakeNotification, .asleep, false),
-                (center, NSWorkspace.screensDidSleepNotification, .screenOff, true),
-                (center, NSWorkspace.screensDidWakeNotification, .screenOff, false),
-                (distributed, Notification.Name("com.apple.screenIsLocked"), .locked, true),
-                (distributed, Notification.Name("com.apple.screenIsUnlocked"), .locked, false),
-            ]
-            for (source, name, reason, gone) in events {
-                group.addTask { for await _ in source.notifications(named: name) { self.mark(reason, gone) } }
+            for (marks, reason, gone) in events {
+                group.addTask { for await _ in marks { self.mark(reason, gone) } }
             }
             group.addTask { await self.followIdle() }
             group.addTask { try await self.followElsewhere() }
@@ -201,8 +204,9 @@ nonisolated extension ViewerKeeper {
 
     @MainActor private static func followExposure(_ services: AppServices) async {
         guard let shell = services.windowShell else { return }
+        let changes = NotificationCenter.default.notifications(named: NSWindow.didChangeOcclusionStateNotification, object: shell)
         services.mainWindowExposed = shell.occlusionState.contains(.visible)
-        for await _ in NotificationCenter.default.notifications(named: NSWindow.didChangeOcclusionStateNotification, object: shell) {
+        for await _ in changes {
             services.mainWindowExposed = shell.occlusionState.contains(.visible)
         }
     }
