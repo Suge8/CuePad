@@ -9,7 +9,7 @@ import Testing
 /// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，总在隔离的 `OpenCodeSandbox` 里连真 OpenCode 跑（模型见它）。
 private let environment = ProcessInfo.processInfo.environment
 private let runtimes = AgentKind.allCases.filter(RealAgents.runs)
-/// Pi 连本用例的假模型（`FakeModel`，剧本 `playBrain`）
+/// Pi 与 Claude Code 连本用例的假模型（`FakeModel`，剧本 `playBrain`）
 private let cheapModels: [AgentKind: String] = [
     .pi: "fake/echo", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
     .grok: "grok-4.6", .dsh: "deepseek-official/deepseek-flash",
@@ -60,13 +60,14 @@ struct RealBrainTests {
             echoLog = root.appending(path: "echo.log")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             sandbox = runtime == .opencode ? try await OpenCodeSandbox() : nil
-            model = runtime == .pi ? try await FakeModel() : nil
+            model = runtime == .pi || runtime == .claudeCode ? try await FakeModel() : nil
             model?.playBrain(chain: chain)
             if runtime == .pi, let model { try PiProcess.writeModels(model, into: root.appending(path: "pi-agent")) }
             // Grok 的大脑另起临时配置目录，登录取用户配置目录里的：用户配置目录指到这里，不碰真实的 ~/.grok；dsh 的家目录也在这里（登录只经环境里的 key）；
             // Pi 的 agent 目录也在这里，不读用户的 ~/.pi（设置、提供方各人不同）
             let agentHome = switch runtime {
             case .pi: ["PI_CODING_AGENT_DIR": root.appending(path: "pi-agent").path]
+            case .claudeCode: try ClaudeTestbed.isolatedEnvironment(model: #require(model), root: root)
             case .grok: ["GROK_HOME": root.appending(path: "grok-user").path]
             case .dsh: ["DSH_HOME": root.appending(path: "dsh").path]
             default: [String: String]()

@@ -6,7 +6,7 @@ import Testing
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.live(.claudeCode, "断言的是 tmux 里真终端界面的输出与按键"), .enabled(if: tmuxURL != nil, "要 tmux"), .serialized, .timeLimit(.minutes(8)))
+@Suite(RealAgents.taped(.claudeCode), .enabled(if: tmuxURL != nil, "要 tmux（断言的是 tmux 里真终端界面的输出与按键）"))
 struct RealClaudeTerminalTests {
     nonisolated static let userSettings = """
         {
@@ -54,6 +54,7 @@ struct RealClaudeTerminalTests {
     @Test func aFailedTurnIsClassified() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.startConnected()
+            testbed.model.on({ $0.model == "claude-nosuch-9" }) { _ in .fail("model: claude-nosuch-9", status: 404) }
             let terminal = try await testbed.terminal(["--model", "claude-nosuch-9"])
             let session = try await testbed.waitForSession(pid: terminal.pid)
             try await testbed.bridge.send(PiMessage(text: "say hi"), to: session.id)
@@ -100,8 +101,14 @@ struct RealClaudeTerminalTests {
             let terminal = try await testbed.terminal(mode: "bypassPermissions")
             let session = try await testbed.waitForSession(pid: terminal.pid)
 
-            try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 `ping -c 120 127.0.0.1`，然后只回复 ZEBRA"), to: session.id)
-            try await eventually("在跑命令") { testbed.bridge.session(id: session.id)?.detail?.contains("ping -c 120") == true }
+            testbed.on("SLEEP-RUN") { $0.step == 0 ? .call("Bash", ["command": #"python3 -c "import time; time.sleep(100)""#, "description": "slow"]) : .say("ZEBRA") }
+            testbed.on("只回复 MANGO", .say("MANGO"))
+            try await testbed.bridge.send(PiMessage(text: "SLEEP-RUN"), to: session.id)
+            do {
+                try await eventually("在跑命令") { testbed.bridge.session(id: session.id)?.detail?.contains("time.sleep(100)") == true }
+            } catch {
+                throw Stuck(description: "\(String(describing: testbed.bridge.session(id: session.id)?.detail))\n\(await terminal.screen)")
+            }
             await #expect(throws: PiBridgeError.rejected("failed: 终端里的 Claude Code 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说")) {
                 try await testbed.bridge.send(PiMessage(text: "只回复 MANGO"), to: session.id)
             }
@@ -123,6 +130,7 @@ struct RealClaudeTerminalTests {
             try testbed.startConnected()
             let terminal = try await testbed.terminal()
             let session = try await testbed.waitForSession(pid: terminal.pid)
+            testbed.playBackgroundWork()
             let start = Date()
             try await terminal.type(ClaudeTestbed.backgroundWork)
             try await testbed.expectSettledOnce(session.id, since: start, reply: "BG_DONE", roster: .done)

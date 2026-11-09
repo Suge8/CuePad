@@ -121,9 +121,10 @@ public struct FakeRequest: Sendable {
     return (system.joined(separator: "\n"), messages)
   }
 
-  /// 带工具结果的你那一条算工具结果（Claude Code 把提醒的文字也放在那一条里）
+  /// 带工具结果的你那一条算工具结果（Claude Code 把提醒的文字也放在那一条里，提醒以外的文字是你的话）；
+  /// 对话中间角色为 system 的消息（Claude Code 2.1 起用来放环境说明）并入 system，不算你的话
   private static func anthropic(_ json: [String: Any]) -> (String, [Message]) {
-    let system = (json["system"] as? String) ?? (json["system"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: "\n")
+    var system = [(json["system"] as? String) ?? (json["system"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: "\n")]
     var messages: [Message] = []
     for message in json["messages"] as? [[String: Any]] ?? [] {
       let content = message["content"]
@@ -138,6 +139,10 @@ public struct FakeRequest: Sendable {
         }
       }
       let text = (content as? String) ?? texts(blocks)
+      if message["role"] as? String == "system" {
+        system.append(text)
+        continue
+      }
       if message["role"] as? String == "assistant" {
         let calls = blocks.compactMap { $0["type"] as? String == "tool_use" ? $0["name"] as? String : nil }
         messages.append(Message(role: .assistant, text: text, images: [], calls: calls))
@@ -153,8 +158,11 @@ public struct FakeRequest: Sendable {
         let text = (inner as? String) ?? texts(inner as? [[String: Any]] ?? [])
         messages.append(Message(role: .tool, text: text, images: images(inner as? [[String: Any]] ?? []), calls: []))
       }
+      // 工具结果之后紧跟着你的新话（停下上一轮后接着说）与它同在一条里：提醒之外的文字是你的话
+      let said = blocks.filter { $0["type"] as? String == "text" && !(($0["text"] as? String) ?? "").hasPrefix("<system-reminder>") }
+      if !said.isEmpty { messages.append(Message(role: .user, text: texts(said), images: images(blocks), calls: [])) }
     }
-    return (system, messages)
+    return (system.filter { !$0.isEmpty }.joined(separator: "\n"), messages)
   }
 
   private static func dataURL(_ url: String) -> String {

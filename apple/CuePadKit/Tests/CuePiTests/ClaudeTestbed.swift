@@ -6,9 +6,11 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 真 Claude Code 的端到端测试台：配置目录、HOME、XDG 目录、CuePad 的连接目录与资料库全部指到临时目录，绝不碰 ~/.claude 与真实资料库。
+/// 真 Claude Code（钉住的版本，`PinnedAgent.claude`）的端到端测试台：配置目录、HOME、XDG 目录、CuePad 的连接目录与资料库全部指到临时目录，
+/// 绝不碰 ~/.claude 与真实资料库；模型是本测试台的假模型（`FakeModel`，Anthropic Messages，经 `ANTHROPIC_BASE_URL` 指过去），
+/// 登录是假密钥、不带订阅令牌，辅助流量关掉（见 `environment`），零网络。
 /// 终端会话跑在私有 tmux 服务器里（`tmux -L`），结束时按确切 pid 停掉 Claude Code 与那个 tmux 服务器。
-let claudeURL = ExecutableLocator.standard.candidates("claude").first
+let pinnedClaude = PinnedAgent.claude
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
 let claudeTestModel = "haiku", claudeOtherModel = "sonnet"
 
@@ -24,6 +26,7 @@ final class ClaudeTestbed {
     let work: URL
     let sockets: URL
     let environment: [String: String]
+    let model: FakeModel
     let paths: AgentPaths
     let bridge: PiBridge
     let hooks: AgentHookServer
@@ -35,21 +38,56 @@ final class ClaudeTestbed {
     private var terminals: [ClaudeTerminal] = []
     private var reading: Task<Void, Never>?
 
+    /// 起 Claude Code 用的环境：配置目录、HOME、XDG 目录都在 `root` 里（目录已建好），模型是 `model`。
+    /// 模型地址只管 /v1/messages：fast mode 检查、WebFetch 的安全检查等不经它，所以关掉非必要流量，再清掉订阅登录、别的认证通道与代理。
+    static func isolatedEnvironment(model: FakeModel, root: URL, signedIn: Bool = true) -> [String: String] {
+        for name in ["config", "home", "xdg-data", "xdg-state", "xdg-cache", "xdg-config"] {
+            try? FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true)
+        }
+        return [
+            "CLAUDE_CONFIG_DIR": root.appending(path: "config").path, "HOME": root.appending(path: "home").path,
+            "XDG_DATA_HOME": root.appending(path: "xdg-data").path, "XDG_STATE_HOME": root.appending(path: "xdg-state").path,
+            "XDG_CACHE_HOME": root.appending(path: "xdg-cache").path, "XDG_CONFIG_HOME": root.appending(path: "xdg-config").path,
+            "ANTHROPIC_BASE_URL": model.baseURL, "ANTHROPIC_API_KEY": signedIn ? apiKey : "",
+            "CLAUDE_CODE_OAUTH_TOKEN": "", "ANTHROPIC_AUTH_TOKEN": "", "CLAUDE_CODE_USE_BEDROCK": "", "CLAUDE_CODE_USE_VERTEX": "", "CLAUDE_CODE_USE_FOUNDRY": "",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_TELEMETRY": "1", "DISABLE_ERROR_REPORTING": "1",
+            "HTTP_PROXY": "", "HTTPS_PROXY": "", "ALL_PROXY": "", "http_proxy": "", "https_proxy": "", "all_proxy": "",
+            "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost",
+            // 不要自动记忆：叫它"记住"什么时它会先去翻记忆文件、要用 Bash，等你确认
+            "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+        ]
+    }
+
+    static let apiKey = "sk-ant-api03-cuepad-test-key-not-real-00000000"
+
+    /// 剧本只认带工具清单的请求（一轮真正的对话，含子代理的）：上面那类旁问的转录里也有你的话，不能让它们撞上剧本。
+    func on(_ prompt: String, _ steps: FakeReply...) {
+        model.on({ !$0.tools.isEmpty && $0.prompt.contains(prompt) }) { steps[min($0.step, steps.count - 1)] }
+    }
+
+    func on(_ prompt: String, reply: @escaping @Sendable (FakeRequest) -> FakeReply) {
+        model.on({ !$0.tools.isEmpty && $0.prompt.contains(prompt) }, reply: reply)
+    }
+
     func startConnected() throws {
         try runtime.start()
         runtime.follow(.all)
     }
 
     var integration: AgentIntegration {
-        AgentIntegration(paths: paths, locate: { AgentTape.locator("claude") }, cuepad: PiProcess.cuepad, timing: noDeadline)
+        AgentIntegration(paths: paths, locate: { pinnedClaude.locator }, cuepad: PiProcess.cuepad, timing: noDeadline)
     }
 
     /// - Parameter settings: 装钩子之前用户自己的 settings.json（nil 是没有这个文件）。
     /// - Parameter wrapper: CuePad 起的 `claude` 换成这段 shell 脚本的外壳，真 claude 在 `$REAL`（`passThrough`：托管进程是它的子进程，
     ///   钩子的父进程不是 CuePad 起的那个）。终端里开的仍是真 claude。脚本经 `TestScript` 放，内容里不写本次运行的路径：
     ///   它要用的文件放在 `wrapperDirectory`，脚本里写 `${0%/*}`。
-    /// - Parameter signedIn: false 时不给登录（录制时也一样），Claude Code 照常起来、上桥，要用模型的都被它拒收。
+    /// - Parameter signedIn: false 时不给密钥，Claude Code 照常起来、上桥，要用模型的都被它拒收。
     init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true) async throws {
+        try pinnedClaude.require()
+        model = try await FakeModel()
+        // auto 模式下没有明文放行的工具，Claude Code 先拿这一步问模型（不带工具清单）一个危害等级；答不出它就拦下这一步
+        model.on({ $0.tools.isEmpty && $0.prompt.contains("<severity>N</severity>") }) { _ in .say("<severity>0</severity>") }
         root = try makeTempDirectory()
         wrapperDirectory = root.appending(path: "wrapper", directoryHint: .isDirectory)
         config = root.appending(path: "config")
@@ -57,25 +95,19 @@ final class ClaudeTestbed {
         let workDirectory = root.appending(path: "work")
         try FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
         work = URL(filePath: ClaudeCode.realPath(workDirectory), directoryHint: .isDirectory)
-        for name in ["config", "home", "xdg-data", "xdg-state", "xdg-cache", "xdg-config", "library"] {
+        for name in ["config", "library"] {
             try FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true)
         }
-        // 跳过首次启动的引导与"信任这个目录"的询问
-        let seed: JSONValue = ["hasCompletedOnboarding": true, "bypassPermissionsModeAccepted": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]])]
+        // 跳过首次启动的引导、"信任这个目录"与"用这个密钥吗"的询问
+        let seed: JSONValue = [
+            "hasCompletedOnboarding": true, "bypassPermissionsModeAccepted": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]]),
+            "customApiKeyResponses": ["approved": [.string(String(Self.apiKey.suffix(20)))], "rejected": []],
+        ]
         try seed.data.write(to: config.appending(path: ".claude.json"))
         if let settings { try Data(settings.utf8).write(to: config.appending(path: "settings.json")) }
-        AgentTape.current?.watch(config.appending(path: "projects"), work)
-        environment = [
-            "CLAUDE_CONFIG_DIR": config.path, "HOME": root.appending(path: "home").path,
-            "XDG_DATA_HOME": root.appending(path: "xdg-data").path, "XDG_STATE_HOME": root.appending(path: "xdg-state").path,
-            "XDG_CACHE_HOME": root.appending(path: "xdg-cache").path, "XDG_CONFIG_HOME": root.appending(path: "xdg-config").path,
-            "CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path,
-            "CLAUDE_CODE_OAUTH_TOKEN": AgentTape.current?.mode == .replay || !signedIn ? "" : ClaudeLogin.token ?? "", "ANTHROPIC_API_KEY": "",
-            // 不要自动记忆：叫它"记住"什么时它会先去翻记忆文件、要用 Bash，等你确认
-            "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-        ]
+        environment = Self.isolatedEnvironment(model: model, root: root, signedIn: signedIn)
+            .merging(["CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path]) { $1 }
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
-        // 库在这个用例的临时目录里：交给托管进程的附件目录（`--add-dir`）录成占位符，回放对得上
         store = try CueStore(location: .isolated(root.appending(path: "store", directoryHint: .isDirectory)))
         files = store.files
         bridge = PiBridge(socketDirectory: sockets, hostedIdle: idleLimit)
@@ -85,7 +117,7 @@ final class ClaudeTestbed {
         try hooks.start()
         let presence = TestPresence()
         self.presence = presence
-        var bin = AgentTape.executable("claude").deletingLastPathComponent()
+        var bin = pinnedClaude.bin
         if let wrapper {
             let real = bin.appending(path: "claude")
             bin = wrapperDirectory
@@ -141,7 +173,6 @@ final class ClaudeTestbed {
         await runtime.stop()()
         hooks.stop()
         bridge.stop()
-        guard AgentTape.current?.mode != .replay else { return }
         for pid in pids {
             try? await eventually("Claude Code \(pid) 退出") { kill(pid, 0) != 0 }
             #expect(!FileManager.default.fileExists(atPath: "/tmp/cc-socks/\(pid).sock"), "Claude Code \(pid) 的收件箱 socket 留下了")
@@ -161,10 +192,9 @@ final class ClaudeTerminal {
 
     init(testbed: ClaudeTestbed, arguments: [String]) async throws {
         name = "cpt-\(UUID().uuidString.prefix(8))"
-        let environment = ProcessInfo.processInfo.environment.filter { key, _ in !["TMUX", "CLAUDE", "CUEPAD", "HERDR"].contains { key.hasPrefix($0) } }
-            .merging(testbed.environment) { $1 }
+        let environment = pinnedClaude.environment(home: testbed.root.appending(path: "home"), testbed.environment)
         _ = try await Self.tmux(name, ["-f", "/dev/null", "new-session", "-d", "-x", "200", "-y", "50", "-c", testbed.work.path,
-                                       (["exec", claudeURL!.path] + arguments).joined(separator: " ")], environment: environment)
+                                       (["exec", pinnedClaude.executable.path] + arguments).joined(separator: " ")], environment: environment)
         let ids = try await Self.tmux(name, ["display-message", "-p", "#{pane_pid} #{pid}"], environment: environment)
             .split(separator: " ").compactMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
         guard ids.count == 2 else { throw TmuxFailed(command: "display-message") }
