@@ -11,6 +11,11 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
 
   public var id: Self { self }
 
+  /// 交出后收没收下只看会话文件里有没有这句话（App 的 `PiDeliveryConfirmation`，重开后接着核对也按它）：
+  /// Pi 的回执先于写会话文件；终端里的 Claude Code 收件箱不回话，收下之前还按它的设置决定挂起等你批准、丢掉，或排到这一轮之后
+  /// （`crossSessionInbound`、跳过权限确认、没带收件箱令牌，2.1.318 源码与实测），外面看不全，所以不预判，只认会话文件。
+  public func confirmsFromHistory(hosted: Bool) -> Bool { self == .pi || (self == .claudeCode && !hosted) }
+
   public var name: String {
     switch self {
     case .pi: "Pi"

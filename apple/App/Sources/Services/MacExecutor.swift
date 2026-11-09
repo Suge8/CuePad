@@ -142,7 +142,7 @@ final class MacExecutor {
         }
         // 其余接入沿用各自的受理合同，不抹掉已有能力。
         guard !session.confirmsFromHistory else {
-            return PiDeliveryConfirmation(store: store, pi: pi).pending(in: session, reason: session.agent == .pi ? nil : PiDeliveryConfirmation.notTaken)
+            return PiDeliveryConfirmation(store: store, pi: pi).pending(in: session)
         }
         await record(content, of: request, to: session.sendTarget)
         return .succeeded

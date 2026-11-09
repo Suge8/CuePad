@@ -112,5 +112,30 @@ struct ClaudeInboxConfirmationTests {
             #expect(ClaudeRig.texts(in: file, role: "user").contains { $0.contains("INBOX-PROBE") })
         }
     }
+
+    /// 核对途中退出再打开 CuePad：新实例接着核对（`PiDeliveryConfirmation.recover`），之后它收下了就是送达，不停在中断未确认。
+    @Test func 核对途中重开App_之后收下了算送达() async throws {
+        var terminal: ClaudeRig.Terminal?
+        try await ClaudeRig.run(settings: #"{"skipDangerousModePermissionPrompt": true}"#, before: {
+            terminal = try await $0.terminal(["--permission-mode", "default"])
+        }) { rig in
+            let terminal = try #require(terminal)
+            let gate = FakeGate()
+            rig.model.on({ !$0.tools.isEmpty && $0.prompt.contains("BUSY-TURN") }) { _ in .held(gate, then: .say("BUSY-DONE")) }
+            try await eventually("CuePad 补上这个终端会话") { rig.bridge.sessions.contains { $0.pid == terminal.pid } }
+            let session = try #require(rig.bridge.sessions.first { $0.pid == terminal.pid })
+            try await terminal.type("BUSY-TURN 慢慢答")
+            try await gate.reached()
+
+            await Workspace(services: rig.services).send("INBOX-PROBE 只回复 OK", to: AgentTarget(session: session.sessionID)).value
+            let request = try #require(try await rig.store.deliveryRequests(toSession: session.sessionID).last)
+            try await eventually("交出了，在等会话文件") { try await rig.store.deliveryRequest(request.id)?.status == .known(.confirming) }
+
+            try await rig.relaunch()
+            #expect(try await rig.store.deliveryRequest(request.id)?.status == .known(.confirming), "重开后接着核对，不按中断收尾")
+            gate.open()
+            try await eventually("这一轮做完它收下了，送达") { try await rig.store.deliveryRequest(request.id)?.status == .known(.succeeded) }
+        }
+    }
 }
 #endif

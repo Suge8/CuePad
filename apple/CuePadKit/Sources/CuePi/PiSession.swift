@@ -77,10 +77,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var subagents: [PiSubagentState] = []
     /// CuePad 在后台托管的 Pi（RPC 模式，没有终端界面）：启动时经环境变量 `CUEPAD_HOSTED` 告诉扩展，扩展在 hello 里带回
     public internal(set) var hosted = false
-    /// `send` 返回不等于会话收下了这句话，收没收下只看会话文件里有没有它（`PiDeliveryConfirmation`）：
-    /// Pi 的回执先于写会话文件；终端里的 Claude Code 收件箱不回话，收下之前还按它的设置决定挂起等你批准、丢掉，或排到这一轮之后
-    /// （`crossSessionInbound`、跳过权限确认、没带收件箱令牌，2.1.318 源码与实测），外面看不全，所以不预判，只认会话文件。
-    public var confirmsFromHistory: Bool { agent == .pi || (agent == .claudeCode && !hosted) }
+    /// 见 `AgentKind.confirmsFromHistory`
+    public var confirmsFromHistory: Bool { agent.confirmsFromHistory(hosted: hosted) }
     /// 未选模型时 `model` 与 `thinking` 为 nil
     public internal(set) var model: PiModelOption? = nil
     public internal(set) var thinking: Open<PiThinkingLevel>? = nil

@@ -36,13 +36,16 @@ struct PiDeliveryConfirmation {
             } else { sessionID = nil }
             guard let sessionID else { return .unconfirmed(DeliveryRequest.interruptedReason) }
             if let session = pi.session(sessionID: sessionID) {
-                guard session.agent == .pi else { return .unconfirmed(DeliveryRequest.interruptedReason) }
+                guard session.confirmsFromHistory else { return .unconfirmed(DeliveryRequest.interruptedReason) }
                 return pending(in: session, reason: request.reason)
             }
-            let indexed = try await store.piSession(sessionID)
-            guard indexed?.agent == .pi else { return .unconfirmed(DeliveryRequest.interruptedReason) }
+            // 重开时会话多半还没回到桥上：按索引里的会话文件接着核对
+            let hosted = try await store.sessionState(sessionID)?.hosted ?? false
+            guard let indexed = try await store.piSession(sessionID), indexed.agent.confirmsFromHistory(hosted: hosted) else {
+                return .unconfirmed(DeliveryRequest.interruptedReason)
+            }
             return .confirming { current in
-                await verify(current, agent: .pi, connection: nil, file: indexed.map { URL(filePath: $0.path) }, reason: request.reason)
+                await verify(current, agent: indexed.agent, connection: nil, file: URL(filePath: indexed.path), reason: request.reason)
             }
         } catch { return unresolved(error) }
     }
@@ -50,7 +53,7 @@ struct PiDeliveryConfirmation {
     private func verify(
         _ request: DeliveryRequest, agent: AgentKind, connection: CuePi.PiSession.ID?, file: URL?, reason: ShownText?
     ) async -> DeliveryOutcome {
-        let uncertain = reason ?? Speech.unconfirmedReason
+        let uncertain = reason ?? (agent == .pi ? Speech.unconfirmedReason : Self.notTaken)
         guard let file else { return .unconfirmed(uncertain) }
         let following = PiHistory.following(file: file, agent: agent, files: store.files)
         let result: DeliveryOutcome

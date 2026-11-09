@@ -17,9 +17,11 @@ final class ClaudeRig {
     let work: URL
     let bin: URL
     let environment: [String: String]
-    let bridge: PiBridge
-    let hooks: AgentHookServer
-    let services: AppServices
+    private(set) var bridge: PiBridge
+    private(set) var hooks: AgentHookServer
+    private(set) var services: AppServices
+    /// 起一个 App 实例（桥、钩子 socket、AppServices）：`relaunch` 再起一次，库、设置与 Claude Code 的目录都不变
+    private let boot: () throws -> (PiBridge, AgentHookServer, AppServices)
     let model: FakeModel
     private var terminals: [Terminal] = []
     var store: CueStore { services.store }
@@ -55,21 +57,25 @@ final class ClaudeRig {
         let helper = root.appending(path: "CuePad.app/Contents/Helpers/cuepad")
         let agents = AgentIntegration(paths: agentPaths, locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) }, cuepad: helper)
         try await agents.install(.claudeCode)
-        bridge = PiBridge(socketDirectory: sockets, hostedIdle: hostedIdle, timing: timing)
-        hooks = AgentHookServer(path: paths.hookSocket)
-        let mac = MacDependencies(
-            pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: PiTerminalJumper(),
-            hostID: TestApp.hostID, workspaces: Workspaces(root: root.appending(path: "CuePad", directoryHint: .isDirectory)),
-            wakeNotifications: NotificationCenter(), timing: timing,
-            commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: root.appending(path: "home/.local/bin"), shellPath: { nil }),
-            updater: nil, hooks: hooks,
-            runtimes: { [bridge, hooks] store in [.claudeCode: ClaudeCodeRuntime(
-                bridge: bridge, paths: agentPaths, hooks: hooks, store: store, claude: { bin.appending(path: "claude") },
-                locate: { ExecutableLocator(searchDirectories: [bin]) })] },
-            pasteboard: NSPasteboard(name: .init("crig-\(UUID().uuidString)")),
-            cue: CueDependencies(launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
         let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: root.appending(path: "Library").path])
-        services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
+        let defaults = TempDefaults().defaults
+        boot = { [root] in
+            let bridge = PiBridge(socketDirectory: sockets, hostedIdle: hostedIdle, timing: timing)
+            let hooks = AgentHookServer(path: paths.hookSocket)
+            let mac = MacDependencies(
+                pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: PiTerminalJumper(),
+                hostID: TestApp.hostID, workspaces: Workspaces(root: root.appending(path: "CuePad", directoryHint: .isDirectory)),
+                wakeNotifications: NotificationCenter(), timing: timing,
+                commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: root.appending(path: "home/.local/bin"), shellPath: { nil }),
+                updater: nil, hooks: hooks,
+                runtimes: { store in [.claudeCode: ClaudeCodeRuntime(
+                    bridge: bridge, paths: agentPaths, hooks: hooks, store: store, claude: { bin.appending(path: "claude") },
+                    locate: { ExecutableLocator(searchDirectories: [bin]) })] },
+                pasteboard: NSPasteboard(name: .init("crig-\(UUID().uuidString)")),
+                cue: CueDependencies(launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
+            return (bridge, hooks, try AppServices(location: location, defaults: defaults, sync: .custom(FakeSync()), mac: mac))
+        }
+        (bridge, hooks, services) = try boot()
     }
 
     /// 搭好、起 App 跑 `body`，不论成败都收掉起的进程（临时目录随测试进程退出整体删除）。`before` 在 App 起来之前做（先开着的终端会话）。
@@ -87,6 +93,23 @@ final class ClaudeRig {
             throw error
         }
         await rig.shutdown()
+    }
+
+    /// 同退出 CuePad 再打开：这个实例的后台工作、执行器、接入、钩子与桥都停掉，再起一个新的（终端里的会话照常开着）。
+    /// 返回时新实例已对完上次没收尾的请求（执行器先起好，`start` 里不再起第二遍）。
+    func relaunch() async throws {
+        await stopApp()
+        (bridge, hooks, services) = try boot()
+        try await services.executor.start()
+        services.start()
+    }
+
+    private func stopApp() async {
+        services.cancelBackgroundWork()
+        await services.executor.beginStop()()
+        await runtime.stop()()
+        hooks.stop()
+        bridge.stop()
     }
 
     /// 托管的进程按 runtime 的收法收；终端里的按 pid 结束；外壳在 `bin/pids` 里记下的（修坏了时 runtime 收不掉的那种）按 pid 结束。

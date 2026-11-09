@@ -36,7 +36,7 @@ struct RealBrainProcessTests {
             // CODEX_HOME 是这次运行的临时目录（`RealBrainTests.Rig`），会话不落进真实的 ~/.codex
             #expect(codexSessions(mentioning: rig.marker, in: rig.directory.deletingLastPathComponent().appending(path: "codex/sessions")) == [])
         case .claudeCode:
-            // 用户的配置目录（`CLAUDE_CONFIG_DIR`）是测试台的隔离目录（`ClaudeTestbed.isolatedEnvironment`）：会话没落进去，目录可能都没有
+            // 用户的配置目录（`CLAUDE_CONFIG_DIR`）是测试台的隔离目录（`ClaudeSandbox.environment`）：会话没落进去，目录可能都没有
             #expect(claudeTranscripts(for: rig.marker, in: rig.directory.deletingLastPathComponent().appending(path: "config/projects")) == [])
         case .opencode:
             let sandbox = try #require(sandbox)
