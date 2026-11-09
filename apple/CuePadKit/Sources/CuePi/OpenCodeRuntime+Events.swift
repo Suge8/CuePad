@@ -15,7 +15,7 @@ extension OpenCodeRuntime {
         case "permission.asked":
             guard let sessionID = data.sessionID, let id = data.id else { return }
             let question = Self.question(OpenCodePermission(id: id, sessionID: sessionID, action: data.action ?? "", resources: data.resources ?? []))
-            await change(topLevel(sessionID), connection, active: true) { $0.facts.questions.append(question) }
+            await change(topLevel(sessionID), connection, activeAt: event.at) { $0.facts.questions.append(question) }
             return
         case "permission.replied":
             guard let sessionID = data.sessionID, let id = data.requestID else { return }
@@ -23,7 +23,7 @@ extension OpenCodeRuntime {
             return
         case "form.created":
             guard let form = data.form else { return }
-            await change(topLevel(form.sessionID), connection, active: true) { $0.facts.questions.append(Self.question(form)) }
+            await change(topLevel(form.sessionID), connection, activeAt: event.at) { $0.facts.questions.append(Self.question(form)) }
             return
         case "form.replied", "form.cancelled":
             guard let sessionID = data.sessionID, let id = data.id else { return }
@@ -41,7 +41,7 @@ extension OpenCodeRuntime {
                 id: sessionID, title: data.title, agent: data.agent, model: data.model, location: location, time: .init(created: now, updated: now))
             if sessions[sessionID] == nil { sessions[sessionID] = Tracked(info: info) }
             listed?.insert(sessionID)
-            await change(sessionID, connection, active: true) { _ in }
+            await change(sessionID, connection, activeAt: event.at) { _ in }
         case "session.deleted":
             guard let tracked = sessions.removeValue(forKey: sessionID) else { return }
             if tracked.online { bridge.detach(bridgeID(sessionID, connection), reason: .closed(reason: "deleted")) }
@@ -52,7 +52,7 @@ extension OpenCodeRuntime {
         case "session.model.selected":
             await change(sessionID, connection) { $0.info.model = data.model }
         case "session.inbox.enqueued":
-            await change(sessionID, connection, active: true) {
+            await change(sessionID, connection, activeAt: event.at) {
                 if $0.firstMessage == nil { $0.firstMessage = data.item?.payload?.text.map { String($0.prefix(PiSessionName.firstMessageLimit)) } }
             }
         case "session.inbox.delivered":
@@ -64,7 +64,7 @@ extension OpenCodeRuntime {
                 if let model = data.model { $0.info.model = model }
             }
         case "session.compaction.started":
-            await change(sessionID, connection, active: true) { $0.facts.compacting = true }
+            await change(sessionID, connection, activeAt: event.at) { $0.facts.compacting = true }
         case "session.compaction.ended", "session.compaction.failed":
             await change(sessionID, connection) {
                 $0.facts.compacting = false
@@ -83,7 +83,7 @@ extension OpenCodeRuntime {
     ]
 
     private func turn(_ event: OpenCodeEvent, of sessionID: String, _ connection: Connection) async {
-        if event.type == "session.execution.started" { await change(sessionID, connection, active: true, publishing: false) { _ in } }
+        if event.type == "session.execution.started" { await change(sessionID, connection, activeAt: event.at, publishing: false) { _ in } }
         guard var tracked = sessions[sessionID] else { return }
         let id = bridgeID(sessionID, connection)
         let turns = tracked.turn.apply(event, models: catalogs[tracked.directory]?.models ?? [])
@@ -114,19 +114,19 @@ extension OpenCodeRuntime {
         if turns.contains(where: \.changesFacts) { publish(sessionID) }
     }
 
-    /// 改一个顶层会话并发布。`active`：这是一次活动，会话不在线就上线（在 CuePad 里结束过的也重新上线）。
+    /// 改一个顶层会话并发布。`activeAt`：这是服务在这一刻记下的一次活动，会话不在线就上线（在 CuePad 里结束之后的才算，`revives`）。
     /// 不认识的会话（连上之后才建、事件先于列表）先取它的信息。
     private func change(
-        _ sessionID: String, _ connection: Connection, active: Bool = false, publishing: Bool = true, _ body: (inout Tracked) -> Void
+        _ sessionID: String, _ connection: Connection, activeAt: Date? = nil, publishing: Bool = true, _ body: (inout Tracked) -> Void
     ) async {
         if sessions[sessionID] == nil {
-            guard active, let info = try? await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(sessionID)").data,
+            guard activeAt != nil, let info = try? await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(sessionID)").data,
                   info.parentID == nil, !info.isCueBrain, self.connection === connection else { return }
             sessions[sessionID] = sessions[sessionID] ?? Tracked(info: info)
         }
         guard var tracked = sessions[sessionID] else { return }
         body(&tracked)
-        if active, !tracked.online {
+        if let activeAt, !tracked.online, revives(sessionID, at: activeAt) {
             tracked.online = true
             ended[sessionID] = nil
         }
