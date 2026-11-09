@@ -9,7 +9,8 @@ extension DshRuntime {
     /// 没有命令行登录：`dsh web` 打开它的网页，在设置里填 DeepSeek 的 API key 或登录 DeepSeek 账号（都存进 `$DSH_HOME/.credentials.yaml`），
     /// 环境里的 `DEEPSEEK_API_KEY` 它也认。只有桌面版时配置目录在、命令行程序不在：算装着（技能与规则照写），开不出会话。
     /// 没有上报通道：会话只有 CuePad 托管的，插件随每次启动经 `--patch` 叠上（`DshLaunch`），不装进它的目录。
-    /// 全局规则读 `<DSH_HOME>/AGENTS.md` 再读 `~/.agents/AGENTS.md`（内容相同只算一份），所以照多数家链过去。
+    /// 全局规则读 `<DSH_HOME>/AGENTS.md` 再读 `~/.agents/AGENTS.md`（`DSH_AGENTS_HOME` 换位置，内容相同只算一份）：前一份照各家链到共享的那份，
+    /// 后一份是 `~/.agents` 那个目录的项目规则（常是仓库），不当全局规则列、不去改它。
     nonisolated public static let facts = AgentFacts(
         command: "dsh", homeVariable: "DSH_HOME", minimumVersion: AgentVersion(0, 2, 1, prerelease: "rc.2"),
         installScript: "npm install -g @deepseek-ai/dsh",

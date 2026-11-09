@@ -20,6 +20,22 @@ extension DebugScene {
         )
         _ = try await store.recordAgentLibrary(library.library(host: host), texts: library.texts)
     }
+
+    #if os(macOS)
+    /// 本机扫出该一键整理的就点一下，直到 3 秒里不再冒出新的（隔离实例起来后各家的目录陆续建出来，又有一家要链），最多 20 秒。
+    static func tidyLibrary(_ workspace: Workspace) async {
+        var quiet = 0
+        for _ in 0..<200 where quiet < 30 {
+            if let library = workspace.library, !library.automaticTidies.isEmpty {
+                await workspace.tidy(library.automaticOrders, in: library)
+                quiet = 0
+            } else if workspace.library != nil {
+                quiet += 1
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+    #endif
 }
 
 struct DemoAgentLibrary {
@@ -214,6 +230,8 @@ struct DemoAgentLibrary {
         默认中文，删去客套与重复。
         """, table: "Demo")
 
+    static let agentsMap = String(localized: "# Agents 目录地图\n\n这个仓库存技能与治理文件，只给在这里干活的 Agent 看。\n\n- skills/：各家共读的技能", table: "Demo")
+
     static let claudeRules = String(localized: """
         # 原则
 
@@ -244,10 +262,13 @@ struct DemoAgentLibrary {
         let agents: [AgentKind] = [.pi, .claudeCode, .codex]
         var list = [
             instruction(
-                .global, home + "/.agents/AGENTS.md", text: Self.sharedRules, hours: 26, readers: clean ? agents : [.pi, .codex],
-                links: [home + "/.pi/agent/AGENTS.md", home + "/.codex/AGENTS.md"] + (clean ? [home + "/.claude/CLAUDE.md"] : [])),
+                .global, home + "/.config/agents/AGENTS.md", text: Self.sharedRules, hours: 26, readers: clean ? agents : [.pi, .codex],
+                links: [home + "/.pi/agent/AGENTS.md", home + "/.codex/AGENTS.md"] + (clean ? [home + "/.claude/rules/AGENTS.md"] : [])),
             instruction(.piSystem, home + "/.pi/agent/SYSTEM.md", text: Self.piSystem, hours: 24 * 9, readers: [.pi]),
         ]
+        if !clean {
+            list.insert(instruction(.agent(.claudeCode, file: "CLAUDE.md"), home + "/.claude/CLAUDE.md", text: Self.claudeRules, hours: 24 * 2, readers: [.claudeCode]), at: 1)
+        }
         if let cuepad {
             list.append(instruction(
                 .project(cuepad), home + "/Project/cuepad/AGENTS.md", text: Self.cuepadRules, hours: 3, readers: agents,
@@ -281,7 +302,7 @@ struct DemoAgentLibrary {
         }
         list.append(LibraryTidy(id: "empty", kind: .empty([home + "/.codex/skills/codex-primary-runtime"])))
         list.append(LibraryTidy(id: "global-instructions", kind: .globalInstructions([
-            source(.shared, home + "/.agents/AGENTS.md", Self.sharedRules, hours: 26),
+            source(.shared, home + "/.config/agents/AGENTS.md", Self.sharedRules, hours: 26),
             source(.agent(.claudeCode), home + "/.claude/CLAUDE.md", Self.claudeRules, hours: 24 * 2),
             source(.piSystem, home + "/.pi/agent/SYSTEM.md", Self.piSystem, hours: 24 * 9),
         ])))

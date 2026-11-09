@@ -35,9 +35,10 @@ extension AppServices {
     }
 
     func startCaptureIngest() {
+        let shared = DarwinNotifications.notifications(named: CaptureQueue.notification)  // 先订再扫：扫的途中分享进来的，通知不漏
         follow {
             await self.drainCaptures()
-            for await _ in DarwinNotifications.notifications(named: CaptureQueue.notification) {
+            for await _ in shared {
                 await self.drainCaptures()
             }
         }

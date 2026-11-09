@@ -155,7 +155,7 @@ extension CueTools {
   private func folderPath(_ raw: String) throws -> String? {
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard trimmed != Self.cleared else { return nil }
-    let expanded = NSString(string: trimmed).expandingTildeInPath
+    let expanded = UserHome.expanding(trimmed)
     guard expanded.hasPrefix("/") else { throw Failure("folder 写绝对路径或 ~/ 开头：\(raw)") }
     let url = URL(filePath: expanded, directoryHint: .isDirectory).standardizedFileURL
     var isDirectory: ObjCBool = false

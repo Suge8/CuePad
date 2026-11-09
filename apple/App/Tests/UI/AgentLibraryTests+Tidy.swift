@@ -52,7 +52,7 @@ extension AgentLibraryTests {
 
     @Test func 合并进来_撤掉选中的替换基础提示_能撤销() async throws {
         for directory in [claude, codex, pi] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
-        try write("共用的\n", agents.appending(path: "AGENTS.md"))
+        try write("共用的\n", rules)
         try write("全局规则\n", claude.appending(path: "CLAUDE.md"))
         try write("你是 Pi\n", pi.appending(path: "SYSTEM.md"))
         try write("你是 Codex\n", codex.appending(path: "prompt.md"))
@@ -76,16 +76,16 @@ extension AgentLibraryTests {
         let workspace = Workspace(services: services)
         try write("全局规则\n\n后来加的\n", claude.appending(path: "CLAUDE.md"))
         await workspace.tidy([TidyOrder(tidy: merge.id, retire: [.piSystem, .codexPrompt], base: merge.base)], in: found)
-        #expect(workspace.notice?.text.visible == "Mac 上刚改过" && read(agents.appending(path: "AGENTS.md")) == "共用的\n")
+        #expect(workspace.notice?.text.visible == "Mac 上刚改过" && read(rules) == "共用的\n")
         try write("全局规则\n", claude.appending(path: "CLAUDE.md"))
         let again = try await library("又是看过的那一版") { $0.merge(into: .global)?.base == merge.base }
 
         await workspace.tidy([TidyOrder(tidy: merge.id, retire: [.piSystem, .codexPrompt], base: merge.base)], in: again)
 
         #expect(workspace.notice?.text.visible == "合并好了")
-        #expect(read(agents.appending(path: "AGENTS.md")) == "共用的\n\n全局规则\n\n你是 Pi\n\n你是 Codex\n")
-        #expect(RelativeLink.points(codex.appending(path: "AGENTS.md"), to: agents.appending(path: "AGENTS.md")), "空的那份换成链接")
-        #expect(RelativeLink.points(claude.appending(path: "CLAUDE.md"), to: agents.appending(path: "AGENTS.md")))
+        #expect(read(rules) == "共用的\n\n全局规则\n\n你是 Pi\n\n你是 Codex\n")
+        #expect(RelativeLink.points(codex.appending(path: "AGENTS.md"), to: rules), "空的那份换成链接")
+        #expect(RelativeLink.points(claude.appending(path: "rules/AGENTS.md"), to: rules) && !exists(claude.appending(path: "CLAUDE.md")), "Claude Code 经 rules 读，不留挡项目规则的 CLAUDE.md")
         #expect(!exists(pi.appending(path: "SYSTEM.md")))
         #expect(read(codex.appending(path: "config.toml")) == "model = \"gpt\"\n\n[tools]\nweb = true\n")
         let merged = try await library("合并完没有该整理的") { $0.tidies.isEmpty }
@@ -94,7 +94,7 @@ extension AgentLibraryTests {
 
         try await #require(workspace.notice?.action).run()
 
-        #expect(read(claude.appending(path: "CLAUDE.md")) == "全局规则\n" && read(agents.appending(path: "AGENTS.md")) == "共用的\n")
+        #expect(read(claude.appending(path: "CLAUDE.md")) == "全局规则\n" && read(rules) == "共用的\n")
         #expect(read(pi.appending(path: "SYSTEM.md")) == "你是 Pi\n" && read(codex.appending(path: "config.toml")) == config)
     }
 }

@@ -4,6 +4,7 @@
 #   --dry-run  停在尝试目录里的 zip 与 appcast.xml（已用 EdDSA 签名校验），不上传；照样提交公证
 #   --resume   找回 submission.json 记着这个公证 ID 的那次尝试，沿用它的提交与产物，接着等公证并发布
 # 下载位置只有一处：Release $TAG 的三个资产，不新建 Release，每次发布原地替换；替换资产前在归档来源提交上打 mac/<构建号> 标签并推到远端（这一版源码的唯一记号）；三个资产各自的用途与上传顺序的理由见 docs/release.md。
+# 回读按上限轮询 CDN；失败后 --resume 沿用已生成的 appcast 与更新包，线上已一致的资产不重传。
 # 线上的构建号（更新源声明的 sparkle:version 与 Release 里带构建号的包）比这一版新就不发：迟到的恢复不覆盖新版；同号是同一版的重入，标签已指向别的提交时推送被拒。
 # 更新源 SUFeedURL 直接是这里的 appcast.xml（releases/latest/download/appcast.xml），核对与回读都从 App 的 Info.plist 读这个地址。
 # 打包前先核对生产环境的 CloudKit 结构（ck-production.sh），缺字段就不发；待部署清单只拦 iOS（release-ios.sh）。
@@ -116,14 +117,19 @@ spctl --assess --type execute --verbose=2 "$app"
 
 zip="$OUT/$ASSET"
 update="$OUT/${ASSET%.zip}-${build_version}.zip"
-ditto -c -k --keepParent "$app" "$zip"
-cp "$zip" "$update"
-appcast="$("$APPLE_DIR/scripts/sparkle.sh" appcast "$update" "$DOWNLOAD/")"
+appcast="$OUT/appcast.xml"
+# appcast 最后生成：它在，zip 与更新包就是它签过名的那份。恢复时沿用，重新生成会换 pubDate 与签名，线上已有的资产就不再一致
+if [ ! -e "$appcast" ]; then
+  ditto -c -k --keepParent "$app" "$zip"
+  cp "$zip" "$update"
+  "$APPLE_DIR/scripts/sparkle.sh" appcast "$update" "$DOWNLOAD/" >/dev/null
+fi
 "$APPLE_DIR/scripts/sparkle.sh" verify "$update" "$appcast"
 echo "$(plist CFBundleShortVersionString)（${build_version}）：$zip $update $appcast"
 if $dry_run; then exit 0; fi
 
-names="$(gh release view "$TAG" -R "$REPO" --json assets --jq '.assets[].name')"
+assets="$(gh release view "$TAG" -R "$REPO" --json assets --jq '.assets[] | "\(.name) \(.digest)"')"
+names="$(cut -d' ' -f1 <<<"$assets")"
 feed="$(curl -fsSL "$(plist SUFeedURL)")" || { echo "读不到线上的更新源 $(plist SUFeedURL)，不发布" >&2; exit 1; }
 declared="$(sed -nE 's/.*<sparkle:version>([0-9]+)<\/sparkle:version>.*/\1/p' <<<"$feed")"
 [ -n "$declared" ] || { echo "线上的更新源没有 sparkle:version，不发布" >&2; exit 1; }
@@ -131,7 +137,10 @@ online="$( { echo "$declared"; sed -nE "s/^${ASSET%.zip}-([0-9]+)\.zip$/\1/p" <<
 [ "${online:-0}" -le "$build_version" ] || { echo "拒绝发布旧版 ${build_version}：线上已是 ${online}" >&2; exit 1; }
 release_tag mac "$build_version" "$source_commit"
 # 顺序的理由见 docs/release.md：带构建号的新包 → appcast → 官网包 → 删上一版带构建号的包
-for path in "$update" "$appcast" "$zip"; do gh release upload "$TAG" "$path" -R "$REPO" --clobber; done
+# 线上摘要（GitHub 算的 sha256）已与本地一致的不重传
+for path in "$update" "$appcast" "$zip"; do
+  grep -qxF "${path##*/} sha256:$(shasum -a 256 "$path" | cut -d' ' -f1)" <<<"$assets" || gh release upload "$TAG" "$path" -R "$REPO" --clobber
+done
 for old in $names; do
   case "$old" in
     "${update##*/}") ;;
@@ -140,13 +149,21 @@ for old in $names; do
 done
 gh release edit "$TAG" -R "$REPO" --title "$TITLE" --notes "$NOTES"
 
-# 回读校验：从 App 实际使用的更新源取 appcast，再按它的 enclosure 与官网地址取包，都与本地一致且签名通过
+# 回读校验：从 App 实际使用的更新源取 appcast，再按它的 enclosure 与官网地址取包，都与本地一致且签名通过。
+# GitHub 的 CDN 在上传后 1–2 分钟内仍可能返回旧内容（#124），所以轮询到一致，超过 READBACK_TIMEOUT 秒才失败
 check="$OUT/check"; mkdir -p "$check"
-curl -fsSL -o "$check/appcast.xml" "$(plist SUFeedURL)"
-cmp "$check/appcast.xml" "$appcast"
-curl -fsSL -o "$check/update.zip" "$(sed -n 's/.*enclosure url="\([^"]*\)".*/\1/p' "$check/appcast.xml")"
-curl -fsSL -o "$check/$ASSET" "$DOWNLOAD/$ASSET"
-cmp "$check/update.zip" "$update"
-cmp "$check/$ASSET" "$zip"
-"$APPLE_DIR/scripts/sparkle.sh" verify "$check/update.zip" "$check/appcast.xml"
+READBACK_TIMEOUT="${READBACK_TIMEOUT:-300}"
+READBACK_INTERVAL="${READBACK_INTERVAL:-10}"
+wait_match() {
+  local url="$1" want="$2" got deadline=$((SECONDS + READBACK_TIMEOUT))
+  got="$check/${want##*/}"
+  until curl -fsSL -o "$got" "$url" 2>/dev/null && cmp -s "$got" "$want"; do
+    [ "$SECONDS" -lt "$deadline" ] || { echo "回读超时（${READBACK_TIMEOUT} 秒）：$url 一直读不到或不是本次上传的 ${want##*/}，多半是 CDN 缓存还没刷新；资产已上传，稍后用 --resume $notary_id 只回读" >&2; exit 1; }
+    sleep "$READBACK_INTERVAL"
+  done
+}
+wait_match "$(plist SUFeedURL)" "$appcast"
+wait_match "$(sed -n 's/.*enclosure url="\([^"]*\)".*/\1/p' "$appcast")" "$update"
+wait_match "$DOWNLOAD/$ASSET" "$zip"
+"$APPLE_DIR/scripts/sparkle.sh" verify "$check/${update##*/}" "$check/appcast.xml"
 echo "已发布：$DOWNLOAD/${ASSET}（mac/${build_version}）"

@@ -9,7 +9,7 @@ import Testing
 
 extension AgentLibraryTests {
     @Test func 标出合并时打字不改正文_取消后键盘回到正文接着存() async throws {
-        let shared = agents.appending(path: "AGENTS.md")
+        let shared = rules
         try write("共用的\n", shared)
         try write("全局规则\n", claude.appending(path: "CLAUDE.md"))
         let keeping = keep()

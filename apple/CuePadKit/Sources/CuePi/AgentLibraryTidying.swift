@@ -67,19 +67,20 @@ struct LibraryTidying {
         undo.steps.append(.linked(link, to: skill))
     }
 
+    /// 各家原生读、会挡住链接或重复读的那几份（`GlobalFile.retires`）并进来以后进废纸篓（链接只挪链接，它指的文件不动），
+    /// 各家的链接位置换成链到共享那份的链接。
     private mutating func mergeGlobal(_ tidy: LibraryTidy, retiring: Set<InstructionSource.Origin>) throws {
         let shared = places.globalInstructions
         try write(tidy.merged(retiring: retiring, texts: texts) ?? "", to: shared)
-        for kind in places.linkedKinds {
-            let file = places.globalFile(kind)
-            guard !RelativeLink.points(file, to: shared) else { continue }
-            if RelativeLink.isLink(file) { continue }
-            if FileManager.default.fileExists(atPath: file.path) { try moveToTrash(file) }
-            try RelativeLink.make(at: file, to: shared)
-            undo.steps.append(.linked(file, to: shared))
+        for file in places.globalFiles where file.retires { try moveToTrash(file.url) }
+        for kind in places.installed {
+            let link = places.globalFile(kind)
+            guard !RelativeLink.points(link, to: shared) else { continue }
+            if LibraryFileReading.exists(link) { try moveToTrash(link) }
+            try ensureDirectory(link.deletingLastPathComponent())
+            try RelativeLink.make(at: link, to: shared)
+            undo.steps.append(.linked(link, to: shared))
         }
-        let openCode = places.globalFile(.opencode)
-        if places.uses(.opencode), !RelativeLink.isLink(openCode), FileManager.default.fileExists(atPath: openCode.path) { try moveToTrash(openCode) }
         if retiring.contains(.piSystem), FileManager.default.fileExists(atPath: places.piSystem.path) { try moveToTrash(places.piSystem) }
         if retiring.contains(.codexPrompt), let key = CodexPromptKey(places) { try write(key.removed, to: key.config) }
     }

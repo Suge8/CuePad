@@ -32,7 +32,7 @@ final class AgentIntegrations {
     func home(_ kind: AgentKind) -> URL { integration.home(of: kind) }
 
     func writtenFiles(_ kind: AgentKind) -> [String] {
-        integration.writtenFiles(of: kind).map { ($0.path as NSString).abbreviatingWithTildeInPath }
+        integration.writtenFiles(of: kind).map { UserHome.shown($0.path) }
     }
 
     func detect(_ kind: AgentKind) async {
