@@ -28,8 +28,7 @@ enum SyncBench {
     static let log = Logger(subsystem: AppIdentity.id, category: "bench")
     static var role: String? { args.syncBench }
     static var relayOff: Bool { role != nil && args.syncBenchOpts.noRelay }
-    /// 没给 `-CuePadSyncBenchCloud` 就连真的 iCloud 开发环境，这时 `-CuePadSyncBenchBudget <个>` 是这个进程的请求上限。
-    static var sharedCloud: URL? { args.syncBenchOpts.cloud.map { URL(filePath: $0, directoryHint: .isDirectory) } }
+    /// 没给 `-CuePadSharedCloud` 就连真的 iCloud 开发环境，这时 `-CuePadSyncBenchBudget <个>` 是这个进程的请求上限。
     static var budget: Int? { args.syncBenchOpts.budget }
     private static var args: DebugArgs { DebugScene.args }
 
