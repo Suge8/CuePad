@@ -168,15 +168,20 @@ extension CodexRuntime {
     }
 
     /// 读不到、被取消（新一轮开始、再问到点）都留作暂时读不到，等它下一条推送再问；连接没了（进程退出）就不再记它。
+    /// 读的时候到的推送也算“下一条”：刚起的子线程会话文件还是空的（读到 `rollout … is empty`），子代理答得快时它的推送在这次读回来之前就发完了，
+    /// 之后再没有推送（`turn/completed` 先于会话文件写盘发出，0.167 的 `tasks/mod.rs`），不接着问它就一直认不出。
     private func resolve(_ thread: String, pid: Int32) async {
         let key = "\(thread).\(pid)"
         if case .unreadable(let queued) = threads[key] { threads[key] = .asking(queued) }
-        guard let rpc = hosted[pid]?.rpc ?? daemon.flatMap({ $0.pid == pid ? $0 : nil }) else {
-            threads[key] = nil
-            return
+        while true {
+            guard let rpc = hosted[pid]?.rpc ?? daemon.flatMap({ $0.pid == pid ? $0 : nil }) else {
+                threads[key] = nil
+                return
+            }
+            let seen = threads[key]?.pending?.count ?? 0
+            if let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] { return await register(info, on: rpc) }
+            guard !Task.isCancelled, let now = threads[key]?.pending?.count, now > seen else { return unresolved(key) }
         }
-        guard let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] else { return unresolved(key) }
-        await register(info, on: rpc)
     }
 
     private func unresolved(_ key: String) {

@@ -10,6 +10,7 @@ import Testing
 extension RealCodexHostedTests {
     /// 主会话派出 `children`（每个一个子代理，名字就是任务名），派完停在 `parent` 闸门上，放行后照 `then` 答；子代理答完时补的一轮答 BANANA。
     /// 子代理的请求由 `child` 定。返回时每个子线程的第一条推送都已读不到（中转的模式要是 `fail`）。
+    /// 子线程之后的推送还会陆续到（负载高时晚到），它们触发的读同样照中转此刻的模式回：等歇下前的再问要认推迟的歇下（`ending`），中转记下的读分不出是谁问的。
     private func dispatch(
         _ rig: CodexRig, _ children: [String], parent: FakeGate, then: FakeReply = .say("DISPATCHED"),
         child: @escaping @Sendable (FakeRequest) -> FakeReply
@@ -69,7 +70,7 @@ extension RealCodexHostedTests {
             let child = try #require(fault.threads("fail").first)
             fault.mode = .hold
             parent.open()
-            try await eventually("歇下前的再问挂住") { fault.threads("hold") == [child] }
+            try await eventually("歇下前的再问挂住") { rig.runtime.tracked[id]?.ending != nil && fault.threads("hold") == [child] }
             #expect(rig.bridge.session(id: id)?.state == .thinking)
 
             try await rig.bridge.send(PiMessage(text: "Reply with the single word KIWI."), to: id)
@@ -97,7 +98,7 @@ extension RealCodexHostedTests {
             let fault = try #require(rig.readFault)
             fault.mode = .hold
             parent.open()
-            try await eventually("两个一起再问") { fault.threads("hold").count == 2 }
+            try await eventually("两个一起再问") { rig.runtime.tracked[id]?.ending != nil && fault.threads("hold").count == 2 }
             #expect(rig.bridge.session(id: id)?.state == .thinking)
             await clock.waitForSleeper(until: clock.now.addingTimeInterval(AgentTimeouts.settleAsk.seconds))
             clock.advance(AgentTimeouts.settleAsk)
@@ -115,7 +116,7 @@ extension RealCodexHostedTests {
             let fault = try #require(rig.readFault)
             fault.mode = .hold
             parent.open()
-            try await eventually("歇下前的再问挂住") { !fault.threads("hold").isEmpty }
+            try await eventually("歇下前的再问挂住") { rig.runtime.tracked[id]?.ending != nil && !fault.threads("hold").isEmpty }
             let ending = try #require(rig.runtime.tracked[id]?.ending)
             let pid = try #require(rig.bridge.session(id: id)?.pid)
             switch gone {
