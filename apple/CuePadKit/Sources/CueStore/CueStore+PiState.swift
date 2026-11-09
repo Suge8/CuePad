@@ -5,7 +5,7 @@ extension CueStore {
   /// `catalog`：会话报的模型与命令所在的目录记录；`writesCatalog` 为真（这个会话报的变了或还没写过）才写它，
   /// 不必每次状态变化都去比一遍几十 KB 的清单。
   func writePiState(
-    sessionID: String, hostID: String, bootID: String?, content: PiStateContent, catalog: AgentCatalog?, writesCatalog: Bool, notify: PiAlert?
+    sessionID: String, hostID: String, bootID: String?, content: PiSessionSnapshot, catalog: AgentCatalog?, writesCatalog: Bool, notify: PiAlert?
   ) throws {
     try write {
       let now = Date.stamp
@@ -157,7 +157,7 @@ extension CueStore {
       // `+hostID`：同 `reconcilePiStates`，改走 state 索引只读没结束的那几条
       try db.run(
         """
-        DELETE FROM piSessionStates WHERE +hostID = ? AND \(Self.agentOf) = ? AND hosted = 1 AND \(PiWorkState.outsideSQL([.ended]))
+        DELETE FROM piSessionStates WHERE +hostID = ? AND agent = ? AND hosted = 1 AND \(PiWorkState.outsideSQL([.ended]))
           AND sessionID NOT IN (SELECT id FROM piSessions) AND sessionID NOT IN (SELECT value FROM json_each(?))
         """,
         arguments)
@@ -187,29 +187,44 @@ public struct PiProcess: Equatable, Sendable {
   }
 }
 
-/// 会话记录上由 Pi 桥与记录器写的全部字段（摘要不在其中）：会话的当前值、已写入的值与落盘用的是同一个形状。
-struct PiStateContent: Paced {
-  var state: PiWorkState
-  var detail: String?
-  var title = ""
+/// 一个会话此刻写进同步记录的全部字段（摘要不在其中）：桥上的会话产出它（`PiSession.snapshot`），记录器只收它（`PiStateRecorder.update`），
+/// 已写入的值与落盘用的也是它。加一个会话字段：这里加一个属性，桥上产出时填上，再在 `writePiState` 写进记录。
+public struct PiSessionSnapshot: Paced {
+  public var state: PiWorkState
+  public var detail: String?
+  public var title = ""
   /// 工作目录（完整路径，不同步）：记录上只写文件夹名。
-  var directory: String?
-  var projectID: UUID?
-  var question: PiQuestion?
+  public var directory: String?
+  public var projectID: UUID?
+  public var question: PiQuestion?
   /// 出错的种类（`PiSessionState.failure`，桥按原文归类）
-  var failure: PiFailure?
-  var times: PiTimes
+  public var failure: PiFailure?
+  public var times: PiTimes
   /// 最后一轮开始的时刻（`PiSessionState.turnStartedAt`）
-  var turnStartedAt: Date?
-  var launchToken: String?
-  var hosted = false
-  var subagents: [PiSubagentState] = []
-  var modelState = PiModelState()
-  var context: PiContextUsage?
-  var commands: [PiSlashCommand] = []
-  var agent = AgentKind.pi
+  public var turnStartedAt: Date?
+  public var launchToken: String?
+  public var hosted = false
+  public var subagents: [PiSubagentState] = []
+  public var modelState = PiModelState()
+  public var context: PiContextUsage?
+  public var commands: [PiSlashCommand] = []
+  public var agent = AgentKind.pi
   /// 承载它的进程（只写本机表，不进同步记录）；不知道为 nil。
-  var process: PiProcess?
+  public var process: PiProcess?
+
+  public init(state: PiWorkState, times: PiTimes) {
+    self.state = state
+    self.times = times
+  }
+
+  /// 这一刻说不上来、不等于没有的几项（为 nil 时沿用上一次写下的）：一轮的开始（中途重连的进程从头记起）、认领标识
+  /// （托管的进程让给终端里的那个时，后者不带）、上下文余量（换模型的间隙）、项目（工作目录此刻不在哪个项目里）。
+  mutating func keepingUnknown(from previous: PiSessionSnapshot) {
+    turnStartedAt = turnStartedAt ?? previous.turnStartedAt
+    launchToken = launchToken ?? previous.launchToken
+    context = context ?? previous.context
+    projectID = projectID ?? previous.projectID
+  }
 
   var folder: String? { directory.flatMap(CueStore.folderName(ofWorkingDirectory:)) }
   var isWorking: Bool { state.isWorking }
@@ -221,13 +236,13 @@ struct PiStateContent: Paced {
   }
 
   /// 模型与命令和上次写的（`written`，没写过为 nil）不同。
-  func catalogDiffers(from written: PiStateContent?) -> Bool {
+  func catalogDiffers(from written: PiSessionSnapshot?) -> Bool {
     written.map { $0.modelState.models != modelState.models || $0.commands != commands } ?? true
   }
 
   /// 去掉随每次工具调用不断变的细节（状态、说明、子代理的动作、上下文用量、一轮的开始、认领标识）的样子：它变了才值得绕开写入节流（`Pace`）。
   /// 一轮的开始在工作中变了不急着写：歇下立即写，带着的就是最后一轮的。
-  var steady: PiStateContent {
+  var steady: PiSessionSnapshot {
     var steady = self
     steady.state = .settled
     steady.detail = nil
