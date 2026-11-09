@@ -2,7 +2,7 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// 一次命令行调用的结果：进程退出码与两路输出（原样，不追加换行）。
+/// 两路输出原样，不追加换行。
 struct CLIResult {
   var code: Int32
   var out: String

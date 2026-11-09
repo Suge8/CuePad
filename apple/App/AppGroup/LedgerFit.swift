@@ -12,7 +12,6 @@ struct LedgerFit: Layout {
     /// 序号小于它的是要你管的那组。
     let yours: Int
 
-    /// `CueNow.ledger` 的各排，再是最粗那排收紧间距，再是只写要你管的那组（没有要你管的就停在收紧那排）。
     init(_ now: CueNow, gap: CGFloat) {
         let rows = now.ledger
         let items = rows.reduce(into: [CueNow.Entry]()) { items, row in items += row.filter { !items.contains($0) } }

@@ -12,7 +12,6 @@ public struct PastedItem: @unchecked Sendable {
 
     public init(_ provider: NSItemProvider) { self.provider = provider }
 
-    /// 这些种类（一个条目的，或整个剪贴板的）当附件收。
     public static func isFile(_ types: [UTType]) -> Bool {
         if types.contains(where: { $0.conforms(to: .image) || $0.conforms(to: .fileURL) }) { return true }
         return !types.contains { $0.conforms(to: .text) || $0.conforms(to: .url) } && types.contains { $0.conforms(to: .data) }

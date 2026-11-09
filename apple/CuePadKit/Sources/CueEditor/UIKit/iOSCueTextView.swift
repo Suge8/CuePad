@@ -15,7 +15,6 @@ public final class CueTextView: UITextView, CueEditorHost {
     public var onChange: ((String) -> Void)?
     public var onSelectionChange: ((Bool) -> Void)?
     public var selectedStoredText: String? { core.stored(in: selectedRange) }
-    /// 选中文字时编辑菜单里排在系统项前面的动作。
     public var selectionActions: [CueSelectionAction] = []
     public var onError: ((any Error) -> Void)?
     public var onOpenAttachment: ((_ key: String, _ name: String, _ picture: CGRect) -> Void)?
@@ -166,7 +165,6 @@ public final class CueTextView: UITextView, CueEditorHost {
     var displayScale: CGFloat { traitCollection.displayScale }
 }
 
-/// 编辑菜单加上外部提供的选区动作；选区变化（含手势）报告给宿主；点附件的手势只在点中附件时开始，并且先于系统的手势。
 private final class MenuDelegate: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let view = gestureRecognizer.view as? CueTextView else { return false }

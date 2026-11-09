@@ -4,7 +4,7 @@ import CueStore
 import UserNotifications
 import os
 
-/// 通知提示音：App 包里的 4 段（`Sounds/<rawValue>.caf`，合成源是 design/tools/notification-sounds.py）是唯一来源。
+/// App 包里的几段（`Sounds/<rawValue>.caf`，合成源是 `design/tools/notification-sounds.py`）是唯一来源。
 nonisolated enum AlertSound: String, CaseIterable, Sendable {
     case chime, tap, bell, drop
 
@@ -22,7 +22,7 @@ nonisolated enum AlertSound: String, CaseIterable, Sendable {
     /// 装进 ~/Library/Sounds 后的文件名，也是通知用的声音名：带品牌前缀，在系统设置的提示音列表里不撞名。
     var installedName: String { "CuePad \(rawValue.capitalized).caf" }
 
-    /// 设置里试听：直接播包里的文件。提醒本身的声音只经系统通知（遵守专注模式），不走这里。
+    /// 提醒本身的声音只经系统通知（遵守专注模式），不走这里。
     func preview() { NSSound(contentsOf: bundled, byReference: true)?.play() }
 }
 
@@ -32,7 +32,7 @@ nonisolated struct AlertPreference: Equatable, Sendable {
     var sound: AlertSound?
 }
 
-/// 三种提示（`AlertRoute.kind`：等你、待回复、做完了）各自的偏好，本机、不同步（`AppSettings.alerts`）。
+/// 本机、不同步。
 nonisolated struct AlertPreferences: Equatable, Sendable {
     private var kinds: [PiAlert: AlertPreference]
 

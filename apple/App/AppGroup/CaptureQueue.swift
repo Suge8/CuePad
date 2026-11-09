@@ -15,7 +15,7 @@ nonisolated struct ShareContent: Equatable, Sendable {
     var isEmpty: Bool { (text?.isEmpty ?? true) && urls.isEmpty && files.isEmpty }
 }
 
-/// 待入库的一条分享。文件放在同一目录（`stored` 是其中的文件名，`name` 是显示的文件名）。
+/// `stored` 是文件在同一目录里的文件名，`name` 是显示的文件名。
 nonisolated struct PendingCapture: Codable, Equatable, Sendable {
     struct File: Codable, Equatable, Sendable {
         var stored: String
@@ -34,7 +34,6 @@ nonisolated struct PendingCapture: Codable, Equatable, Sendable {
 /// 每条是一个目录：先放文件，最后原子写 `capture.json`；没有 json 的目录是尚未写完的，读取时跳过。
 /// 目录名（UUID）是条目的稳定标识：入库时与建卡同事务记下（`CueStore.createCard(capture:)`），删失败的条目下次只重试删除。
 nonisolated enum CaptureQueue {
-    /// 扩展写完后发出的进程间通知，主 App 收到后入库。
     static let notification = "\(AppIdentity.id).capture-enqueued"
 
     private static let manifestName = "capture.json"

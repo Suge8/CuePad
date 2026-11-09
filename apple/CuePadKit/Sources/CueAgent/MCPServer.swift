@@ -1,8 +1,7 @@
 import CueStore
 import Foundation
 
-/// Cue 的工具经 MCP 提供（`cuepad mcp`；后台整理记忆的大脑用 `cuepad mcp --dream`，只有 merge）：stdio，一行一个 JSON-RPC 消息。只做握手版：initialize、notifications/initialized、ping、
-/// tools/list、tools/call；不做 resources、prompts、sampling、tasks。请求按到达顺序一个个处理。
+/// stdio，一行一个 JSON-RPC 消息。只做握手版，不做 resources、prompts、sampling、tasks。请求按到达顺序一个个处理。
 public struct CueMCPServer: Sendable {
   let tools: CueTools
 
@@ -23,7 +22,6 @@ public struct CueMCPServer: Sendable {
 
   public static func toolName(_ tool: String, on runtime: AgentKind) -> String { toolPrefix(on: runtime) + tool }
 
-  /// 大脑事件里的工具名（`TurnEvent.tool`）：去掉 CuePad 的前缀并小写（Claude Code 的 `Read`）。
   public static func bareName(_ name: String, on runtime: AgentKind) -> String {
     let prefix = toolPrefix(on: runtime)
     return (!prefix.isEmpty && name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : name).lowercased()

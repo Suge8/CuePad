@@ -1,7 +1,6 @@
 import CueStore
 import Foundation
 
-/// Cue 的设置读到的那一份：同步的设置（`CueProfile`）与各台 Mac 自报的名字与能用的 Agent（`CueStore.allMacAgents`，Cue 能在哪台上运行就是这几台）。
 /// 在哪台启用、能不能启用的规则都在这里与 `CueGate`，界面（`CueSettingsModel`）只读结果。
 nonisolated struct CueSettings: Equatable, Sendable {
     var profile: CueProfile
@@ -15,7 +14,6 @@ nonisolated struct CueSettings: Equatable, Sendable {
 
     var isOn: Bool { profile.activeHost != nil }
 
-    /// 能运行 Cue 的一台：名字（那台自报的，`MacAgents.shownName`；是这台（`isHere`）时写"这台 Mac"）、能用的几家与一家都不能用时为什么。
     struct Host: Identifiable, Equatable {
         let id: String
         let isHere: Bool
@@ -29,7 +27,7 @@ nonisolated struct CueSettings: Equatable, Sendable {
         var selectable: Bool { usable || isHere }
     }
 
-    /// Cue 能在哪几台上运行，`here` 是这台 Mac（手机为 nil）时它排第一：这台刚启动、自己的记录还没写下时也在（启用前会先重新探测）。
+    /// `here` 是这台 Mac（手机为 nil）时它排第一：这台刚启动、自己的记录还没写下时也在（启用前会先重新探测）。
     func hosts(here: String?) -> [Host] {
         var hosts = macs.map { mac in
             Host(id: mac.hostID, isHere: mac.hostID == here, name: mac.hostID == here ? Self.here : mac.shownName,
@@ -42,7 +40,6 @@ nonisolated struct CueSettings: Equatable, Sendable {
         return hosts
     }
 
-    /// 开关打开时在哪台启用：停用前那台还能选就回到它（接着干活），否则这台 Mac，再否则第一台能用的；
     /// 都不能用时仍给第一台，启用时说清为什么（`CueEnableError`）。一台都没有为 nil。
     func resumeHost(here: String?) -> Host? {
         let hosts = hosts(here: here)
@@ -57,12 +54,11 @@ nonisolated struct CueSettings: Equatable, Sendable {
     private static var here: String { String(localized: "这台 Mac") }
 }
 
-/// 能不能在一台 Mac 上启用 Cue、改它运行的 Mac：所有入口（Cue 页的启用钮与它的多台菜单（`CueWelcome`）、手机 Cue 面板的选 Mac、接入面板 Cue 那一行、
-/// 各处的开关、两端设置里在哪台运行那一行）与 Cue 此刻（`AppServices.cueLocal`）只读这一处；启用的入口（`AppServices.enableCue`）按同一个事实拒绝。
+/// 所有入口只读这一处；启用的入口（`AppServices.enableCue`）按同一个事实拒绝。
 enum CueGate: Equatable {
-    /// 这台的库还没和 iCloud 对过一遍（`AppServices.knowsSyncedFacts`）：入口写这句原因，不能启用。不通的原因只在同步那一组说（`SyncSummary`）
+    /// 入口写这句原因，不能启用。不通的原因只在同步那一组说（`SyncSummary`）
     case waiting(String)
-    /// 正在 `id` 那台 Mac 上运行（`name` 是它自报的名字）：改到别的 Mac 要你确认（`CueMove`）
+    /// 改到别的 Mac 要你确认（`CueMove`）
     case runs(id: String, name: String)
     case open
 

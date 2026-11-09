@@ -3,8 +3,7 @@ import CuePi
 import CueStore
 import Foundation
 
-/// 这台 Mac 的技能与规则（同步表 agentLibraries 与各份正文 agentLibraryFiles）只经这里写：跟着文件与绑定的文件夹变化重读（`AgentLibraryFiles.keep`），
-/// 内容变了才写、写了立即上传；整理与改文件（本机界面、手机的投送请求）都经这里做，做完的文件变化照样经重读写进库。各处读库，这里不留结果。
+/// 这台 Mac 的技能与规则（同步表 agentLibraries 与各份正文 agentLibraryFiles）只经这里写；整理与改文件也经这里，做完的文件变化照样经重读写进库。各处读库，这里不留结果。
 @MainActor
 final class AgentLibraryKeeper {
     private let store: CueStore

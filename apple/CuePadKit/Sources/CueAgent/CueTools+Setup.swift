@@ -3,7 +3,6 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// setup 的说明与参数：Cue 读自己与它运行的那台 Mac（大脑、Agent 与模型、额度、技能与规则、项目、健康，`look` 在 `CueTools+SetupLook`），改自己的大脑设置与项目。
   static var setupDefinition: [String: Any] {
     [
       "name": "setup",

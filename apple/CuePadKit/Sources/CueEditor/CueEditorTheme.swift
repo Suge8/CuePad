@@ -18,7 +18,6 @@ public struct CueEditorTheme: Equatable, @unchecked Sendable {
     public var codeFont: CueFont
     /// 图片占位中间的说明字（图片缺失、传了几成）。
     public var captionFont: CueFont
-    /// 文件牌上没有缩略图时记号的大小。
     public var fileGlyphSize: CGFloat
     /// 标题、列表、围栏等标记字符的颜色：保持可见，降低存在感。
     public var markerColor: CueColor

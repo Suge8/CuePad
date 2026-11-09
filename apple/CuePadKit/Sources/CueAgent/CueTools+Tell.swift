@@ -53,7 +53,6 @@ extension CueTools {
     return shots
   }
 
-  /// `candidates` 里 id 或前缀是 `ref` 的那一条提问；对不上报 `missing`。
   private static func question(_ ref: String, in candidates: [CueMessage], missing: String) throws -> CueMessage {
     guard let question = try question(ref, in: candidates) else { throw Failure(missing) }
     return question

@@ -3,8 +3,7 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// 命中的那一段，至多 `excerptLimit` 字：从某个命中词前面一点起，取含不同的命中词最多的一段，一样多取命中次数多的，再一样取靠前的。
-  /// 不从开头截：长回复的开头多半不是要找的。不只认最少见的那个词：问的说法常与原文对不上（问"停止维护"，原文写"结束维护"），
+  /// 命中的那一段，至多 `excerptLimit` 字。不从开头截：长回复的开头多半不是要找的。不只认最少见的那个词：问的说法常与原文对不上（问"停止维护"，原文写"结束维护"），
   /// 只认一个词就落到别处（长程评测里查 Node 的建议，落到了 ESLint 那一行），几个词凑在一起的地方才是要找的。
   static func excerpt(_ text: String, around words: [String]) -> String {
     let flat = CueEnvelope.clip(text, Int.max)

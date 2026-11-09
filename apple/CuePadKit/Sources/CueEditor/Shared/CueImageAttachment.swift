@@ -30,7 +30,7 @@ final class CueImageAttachment: NSTextAttachment {
 
     required init?(coder: NSCoder) { nil }
 
-    /// 文件到了（`EditorCore.refreshAttachments`）：本来缺着的换成本机那份，尺寸重读。还没到的也要重画（占位上写着传了几成）。
+    /// 还没到的也要重画（占位上写着传了几成）。
     func relocate(_ url: URL?) -> Bool {
         guard fileURL == nil else { return false }
         if let url {
@@ -40,7 +40,6 @@ final class CueImageAttachment: NSTextAttachment {
         return true
     }
 
-    /// 宽度自适应：不超过行宽，也不放大超过自然尺寸；文件缺失时用固定占位尺寸。
     func size(fitting width: CGFloat) -> CGSize {
         let available = max(width, 1)
         guard let natural = pointSize else {

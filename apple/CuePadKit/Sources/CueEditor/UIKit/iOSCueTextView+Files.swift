@@ -45,7 +45,6 @@ extension CueTextView {
                 }
             }
         }
-        // 文本一律按存储格式解析：附件引用还原成附件
         guard item.itemProvider.canLoadObject(ofClass: NSString.self) else { return item.setNoResult() }
         _ = item.itemProvider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
             nonisolated(unsafe) let item = item
@@ -57,7 +56,6 @@ extension CueTextView {
         }
     }
 
-    /// 相册、文件选择器选来的：存好（后台）再插到此刻的光标处，光标落在后面。
     public func insert(_ files: [IncomingFile]) {
         core.importFiles(files, at: selectedRange, selection: { [weak self] in self?.selectedRange ?? NSRange(location: 0, length: 0) }) { [weak self] result in
             guard let self else { return }
@@ -71,7 +69,6 @@ extension CueTextView {
         }
     }
 
-    /// 点按落在哪个附件上（字符位置的附件，且点在它的框里）。
     func attachment(at point: CGPoint) -> (key: String, name: String, file: URL?, rect: CGRect)? {
         guard let position = closestPosition(to: point) else { return nil }
         let offset = self.offset(from: beginningOfDocument, to: position)

@@ -1,6 +1,5 @@
 import Foundation
 
-/// 在 Mac 上操作（`MacRemote`）记在本机的：每台 Mac 在 UU 远程里绑的哪台电脑、上次连的哪台、正在等哪一次绑定回跳。
 extension AppSettings {
     private enum RemoteKey {
         static let devices = "remoteDevices"
@@ -14,7 +13,6 @@ extension AppSettings {
         set { defaults.set(newValue, forKey: RemoteKey.devices) }
     }
 
-    /// 上次连的那台：有几台 Mac 时页顶那颗钮直接连它。
     var remoteLastHost: String? {
         get { defaults.string(forKey: RemoteKey.lastHost) }
         set { defaults.set(newValue, forKey: RemoteKey.lastHost) }

@@ -57,7 +57,6 @@ extension AppServices {
         startAlerts()
     }
 
-    /// 起各家的接入：有会话文件的 Agent 的运行时现在起，没有的（OpenCode）随它的索引起（`index(_:connected:)`）。
     private func startRuntimes() {
         do {
             for (agent, runtime) in runtimes where !runtimeIndexes(agent) { try runtime.start() }
@@ -67,7 +66,6 @@ extension AppServices {
         follow { await self.indexAgents() }
     }
 
-    /// 读出各 Agent 的接入状态，装过而内容不同的静默升级；失败报告一次。
     private func refreshAgentIntegrations() async {
         do {
             try await agents.refresh()
@@ -76,17 +74,17 @@ extension AppServices {
         } catch {}
     }
 
-    /// 系统唤醒后立即同步：睡眠期间的推送可能没收到。
+    /// 睡眠期间的推送可能没收到。
     func startWakeSync() {
         follow { [wakeNotifications] in
             for await _ in wakeNotifications.notifications(named: NSWorkspace.didWakeNotification) { await self.syncNow() }
         }
     }
 
-    /// 退出收尾。主线程上的部分（后台任务、Pi 连接、全局快捷键）在这里同步做完；返回的等待只涉及不在主线程上的组件
+    /// 主线程上的部分（后台任务、Pi 连接、全局快捷键）在这里同步做完；返回的等待只涉及不在主线程上的组件
     /// （远程投送执行器、同步），整体最多等 `limit`，自身不需要主线程：退出可能发生在主线程被占住时
     /// （在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等回复，主线程上排队的任务轮不到）。
-    /// 上传得到结果后才停同步；其他组件并行等待。卡住、失败或缺少云端确认都如实报告，全部成功才返回 nil。
+    /// 卡住、失败或缺少云端确认都如实报告，全部成功才返回 nil。
     func beginShutdown(within limit: Duration = .seconds(2)) -> @Sendable () async -> String? {
         cancelBackgroundWork()
         let hosted = runtimes.values.map { $0.stop() }
@@ -133,7 +131,6 @@ extension AppServices {
     }
 
 
-    /// 启动时注册存着的快捷键；没注册上记成启动问题，设置里换一个。
     /// 脚本起的实例不注册：全局快捷键全机只有一份，会和用户在用的 CuePad 抢同一个键。
     func register(_ hotkey: GlobalHotkey) {
         guard !DebugHooks.scripted else { return }
@@ -145,7 +142,6 @@ extension AppServices {
     }
 
 
-    /// 索引器取检查点：Store 读失败要报告（该文件不再写回）并从头读；没有或失效的检查点也是从头读。
     /// 不经主线程：回填时每个文件都来取一次，主线程同时在画界面。
     nonisolated func loadHistoryStart(for file: URL) async -> PiHistoryStart? {
         do {
@@ -156,9 +152,8 @@ extension AppServices {
         }
     }
 
-    /// 每家哪些会话归 CuePad 管（`PiHistoryScope`），随接入（`AgentStatus.isConnected`，与设置里的开关同一个含义）换：接入了的是全部，
-    /// 没接入的只有这台 Mac 托管过的会话（托管的会话没接入也开得出，`AgentProbe`）。索引按它回填，各家的接入按它接终端里的会话；
-    /// 检测出没接入（关掉开关，或 CuePad 的文件被删了）时先删掉范围外会话的本机索引。会话的同步记录与对话不动。
+    /// 没接入的只有这台 Mac 托管过的会话（托管的会话没接入也开得出，`AgentProbe`）；
+    /// 检测出没接入（关掉开关，或 CuePad 的文件被删了）时先删掉范围外会话的本机索引，会话的同步记录与对话不动。
     private func indexAgents() async {
         var indexing: [AgentKind: (connected: Bool, task: Task<Void, Never>)] = [:]
         defer { for entry in indexing.values { entry.task.cancel() } }
@@ -191,10 +186,8 @@ extension AppServices {
         setrlimit(RLIMIT_NOFILE, &limit)
     }
 
-    /// 没有会话文件的 Agent（OpenCode）由它的运行时连着它的服务建索引。
     private func runtimeIndexes(_ agent: AgentKind) -> Bool { paths.sessionsDirectory(of: agent) == nil }
 
-    /// 建一家的索引，直到任务取消：有会话文件的读文件，其余接入期间起它的运行时、取消时停掉。
     private func index(_ agent: AgentKind, connected: Bool) async {
         if let indexer = PiHistoryIndexer(
             agent: agent, paths: paths, transcriptWindow: PiChat.transcriptWindow, files: store.files,
@@ -218,7 +211,7 @@ extension AppServices {
         await runtime.stop()()
     }
 
-    /// 没接入的 Agent 回填的范围：这台 Mac 托管过的会话；读不出来就只跟在线的。
+    /// 读不出来就只跟在线的。
     private func hostedScope(of agent: AgentKind) async -> PiHistoryScope {
         do {
             return try await historyStore.hostedScope(of: agent)
@@ -228,11 +221,10 @@ extension AppServices {
         }
     }
 
-    /// 首次回填时攒够这么多个文件写一次（一个事务、一次变更通知）；回填完成后文件一变就写。
+    /// 首次回填时攒够这么多个文件写一次（一个事务、一次变更通知）。
     static let backfillBatch = 200
 
-    /// 消费一个 Agent 的历史索引事件：先落检查点再写会话行；读到的会话名交给桥（`PiBridge.read`），也交给这家的接入
-    /// （会话状态有要从文件里得知的，`AgentRuntime.read`）。
+    /// 先落检查点再写会话行；读到的会话名也交给这家的接入（会话状态有要从文件里得知的，`AgentRuntime.read`）。
     func consumePiHistory(_ events: AsyncStream<PiHistoryEvent>, agent: AgentKind) async {
         await historyStore.beginBackfill()
         var pending: [PiHistoryUpdate] = []
@@ -266,7 +258,6 @@ extension AppServices {
         await flush()
     }
 
-    /// 激活会话所在终端，尽量精确到标签页；精度与原因见返回值。
     func jumpToTerminal(_ id: CuePi.PiSession.ID) async throws -> PiJumpResult {
         guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
         return await terminal.jump(to: session)

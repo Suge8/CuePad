@@ -1,7 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// 小组件的界面。默认项目的整块点开"对 Cue 说"（`DeepLink.speak`，随手记也在那里说），卡片可用 `DeepLink.card` 链接直达。
 /// 主 App（iOS）也编进这个文件，调试画面用同一份视图按系统尺寸画（`DebugWidgetStage`）：尺寸档由调用方给，
 /// 小组件里从环境读（`widgetFamily` 只能由系统设）。
 enum WidgetViews {
@@ -11,7 +10,6 @@ enum WidgetViews {
             .modifier(WidgetPaper())
     }
 
-    /// Cue：头像（右上角是要你管的几件）、名字与数字账（`CueLedger`，同 App 里的名牌）；整块点开 Cue 页（`DeepLink.cue`）。
     static func cue(_ now: CueNow) -> some View {
         FamilyReader { cue(now, family: $0) }
     }
@@ -30,7 +28,6 @@ private struct FamilyReader<Content: View>: View {
     var body: some View { content(family) }
 }
 
-/// 小组件的底与字：桌面色的底、墨色的字，同 App 一样的纸与墨（不用系统白底灰字）。
 private struct WidgetPaper: ViewModifier {
     func body(content: Content) -> some View {
         content.modifier(Inked()).withPalette()

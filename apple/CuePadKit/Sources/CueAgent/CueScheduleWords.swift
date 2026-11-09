@@ -15,7 +15,6 @@ enum CueScheduleWords {
     }
   }
 
-  /// 某个时刻：今天的只写时刻，别的天带上日期（"10-26 9:00"）。
   static func time(_ date: Date, now: Date) -> String {
     let parts = Calendar.current.dateComponents([.month, .day, .hour, .minute], from: date)
     let clock = String(format: "%d:%02d", parts.hour ?? 0, parts.minute ?? 0)

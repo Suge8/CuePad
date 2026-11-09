@@ -10,7 +10,6 @@ public struct CueTools: Sendable {
   let wait: TimeInterval
   let toolset: Toolset
 
-  /// 给谁用：Cue，或后台整理记忆的大脑（merge，`CuePrompt.dream`）。
   public enum Toolset: Sendable {
     case cue, dream
   }
@@ -24,7 +23,6 @@ public struct CueTools: Sendable {
     self.toolset = toolset
   }
 
-  /// 一次调用的结果（MCP 的 `CallToolResult`）。
   public struct Result: Sendable {
     public var text: String
     public var isError: Bool

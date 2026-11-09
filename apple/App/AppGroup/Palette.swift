@@ -5,7 +5,6 @@ import SwiftUI
 /// 底子是纸与墨（logo、吉祥物的两种颜色）：侧栏 < 桌面 < 纸同一色温由深到浅，文字、图标、系统控件的 tint 都是墨，墨分三档。
 /// 深色是"夜里的纸"：暖黑的桌面、略亮的纸、更深的侧栏，三层靠明度分开；彩色在深色下提亮一档，实底压到中等明度配浅字。
 /// **签名色是靛青**，只给焦点与正在发生的事：主按钮、焦点环、Agent 在跑、图标点睛点亮；一屏通常一两处，不做装饰、不做链接。
-/// 它也是 App 的强调色：宽屏会话条项目、进展、更早三行的图标着它（HIG「Sidebars」，`RailRow`）。
 /// 选中不用它，只有中性的 `selection`（规则在 docs/ui.md「选中」）。
 /// 状态色三种各管一件事：等你确认赭黄、出错胭脂、石绿，只上状态图形与紧挨着的那个词。石绿有两种用途——会话有新回复，与任务做完（完成对勾、
 /// 看板已完成那一列的记号）：两者说的是同一件事"这一轮做完了，结果在那儿"，一个落在会话上、一个落在任务上，同一屏里不会把一个读成另一个。
@@ -30,7 +29,6 @@ struct Palette {
     /// 页面底，也是小组件与分享扩展的底。iOS 启动屏的底色（资源目录的 LaunchBackground）与它同值：启动屏只认资源目录里的颜色，不同的话冷启动先白后米一闪。
     var desk: Color { dark ? Color(hex: 0x1B1916) : Color(hex: 0xEFEDE8) }
     var paper: Color { dark ? Color(hex: 0x282420) : Color(hex: 0xFCFBF8) }
-    /// 纸的上沿：比纸略亮一点，纸面从上往下极轻地过渡到纸色，像有一层向上的光（`paper()`）。
     var paperLit: Color { dark ? Color(hex: 0x2E2A25) : Color(hex: 0xFFFFFD) }
     var sheen: Color { Color.white.opacity(dark ? 0.07 : 0.9) }
 
@@ -42,7 +40,6 @@ struct Palette {
     var bubbleEdge: Color? { highContrast ? ink.opacity(0.22) : nil }
 
 
-    /// 写着字的玻璃（`GlassInk.solid`）的着色：深色压一层暗色调，浅色垫一层淡纸色，与垫的底色一起定玻璃的明暗。
     var glassTint: Color { dark ? Color.black.opacity(0.4) : paper.opacity(0.45) }
     /// Mac 写字玻璃里外各垫的九成实的页面底色：背后的字与桌面壁纸透不过来。
     var solidGlass: Color { desk.opacity(0.9) }
@@ -124,9 +121,7 @@ struct Palette {
     var onFill: Color { Color(hex: 0xFFFDF8) }
 
 
-    /// 等你确认：赭黄，全 App 只有等你与拍板用它。对比度 4.7，深色 6.9。"等你"（WORDS.md）的现成样子只有这几样：Cue 此刻数字账里的"N 拍板"与"N 待回复"（`CueLedger`）、
-    /// 去 Cue 的入口角上的点（`CueDot`）、状态图形 `Icon.waiting` 与会话的状态字（经 `PiShown`）；待回复的记号是墨点（`Icon.awaitsReply`，经 `PiShown`）。
-    /// 别的"要你处理"（同步、连接）按 `StatusTone.notice` 用墨色，出错是 `FailureMark`。
+    /// 等你确认：赭黄，全 App 只有等你与拍板用它。对比度 4.7，深色 6.9。别的"要你处理"（同步、连接）按 `StatusTone.notice` 用墨色，出错是 `FailureMark`。
     var waiting: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0x845A06) }
     /// 等你的实底胶囊（实时活动里等你的数）。字 6.0，深色 4.6。
     var waitingFill: Color { dark ? Color(hex: 0x9C6A08) : Color(hex: 0x845A06) }
@@ -197,10 +192,9 @@ struct Palette {
         ProjectColor(stored: "#8A8A84", name: String(localized: "灰色"), light: 0x7D7A73, dark: 0xA39F96),
     ]
 
-    /// 不在表里的旧值退回的那一档。
     private static let fallbackProjectColor = projectColors.first { $0.stored == "#8A8A84" }!
 
-    /// 项目的颜色：只上图形（项目图标、任务行末的项目小图标），不写成字、不做成圆点。不在表里的旧值退回灰色。
+    /// 项目的颜色：只上图形（项目图标、任务行末的项目小图标），不写成字、不做成圆点。
     func project(_ stored: String) -> Color {
         let entry = Self.projectColors.first { $0.stored.caseInsensitiveCompare(stored) == .orderedSame } ?? Self.fallbackProjectColor
         return Color(hex: dark ? entry.dark : entry.light)

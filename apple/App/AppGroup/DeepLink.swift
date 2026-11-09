@@ -1,6 +1,5 @@
 import Foundation
 
-/// 小组件、分享扩展与实时活动打开主 App 的链接：`cuepad://speak`、`cuepad://project/<id>`、`cuepad://card/<id>`、`cuepad://cue`、`cuepad://session/<id>`。
 nonisolated enum DeepLink: Equatable, Sendable {
     static let scheme = "cuepad"
 

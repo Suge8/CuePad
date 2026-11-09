@@ -78,7 +78,6 @@ extension CueTools {
   }
   static var name: [String: Any] { ["type": "string", "description": "宽不过 \(CueName.limit)（汉字算 2）"] }
 
-  /// done 的证据：至多这么多条，每条宽不过 `evidenceLimit`（`CueName.width`）。结果消息由 Store 拼（`CueReport.text`）。
   static let evidenceCount = 3
   static let evidenceLimit = 40
   /// 证据的示例（工具说明与证据超长的报错共用）：一句行为上的结论。

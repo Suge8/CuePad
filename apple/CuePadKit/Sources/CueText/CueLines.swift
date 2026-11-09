@@ -1,18 +1,15 @@
 import Foundation
 
-/// 正文按行的规则：哪些行有文字（卡片名字与摘要用），选中的文字怎么转成任务。
 public enum CueLines {
     // 有文字的行只有一条规则，实现在私有的 `text(of:)`：不是分割线（`---`），且除图片引用
     // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字；文件链接算它的文件名。
 
     static func isTitleLine(_ line: String) -> Bool { !text(of: line).isEmpty }
 
-    /// 正文里全部有文字的行（图片引用去掉、文件留文件名，空白折成单个空格），按出现顺序。
     static func contentLines(_ stored: String) -> [String] {
         stored.components(separatedBy: "\n").map(text(of:)).filter { !$0.isEmpty }
     }
 
-    /// 转为任务：每个有文字的行一个任务，去掉开头的列表符号（`-` `*` `•`、`1.` `1)`）与复选框（`[ ]` `[x]`）。
     public static func taskLines(_ stored: String) -> [String] {
         contentLines(stored).map(stripListMarker).filter { !$0.isEmpty }
     }
@@ -26,7 +23,7 @@ public enum CueLines {
         return text.replacingOccurrences(of: object, with: "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
-    /// 任务的正文拆成标题与下面的话：第一个有文字的行是标题，其余（文字与图片，原样）是要交代给 Agent 的话；只有那一行时为 nil。
+    /// 第一个有文字的行是标题，其余（文字与图片，原样）是要交代给 Agent 的话；只有那一行时为 nil。
     public static func split(_ stored: String) -> (title: String, rest: String?) {
         var lines = stored.components(separatedBy: "\n")
         guard let index = lines.firstIndex(where: isTitleLine) else { return (stored, nil) }
@@ -36,7 +33,7 @@ public enum CueLines {
         return (heading, hasContent ? rest : nil)
     }
 
-    /// `split` 反过来：标题一行，下面接着要交代的话；话是空白时只有标题。
+    /// `split` 反过来；话是空白时只有标题。
     public static func joined(title: String, rest: String?) -> String {
         guard let rest, !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return title }
         return title + "\n" + rest
@@ -79,17 +76,14 @@ public enum CueName {
     }
 }
 
-/// 卡片的标题与摘要（唯一规则，App、小组件、命令行共用）。卡片没有标题字段：
-/// 标题 = 首个有文字的行（见 `CueLines.isTitleLine`）去掉开头的 `#`（Markdown 标题前缀）；
-/// 摘要 = 标题之后的第一段（跳过开头的空行，到下一个空行、分割线或只有图片的行为止），各行以空格连接，最多 `previewLimit` 字——
-/// 一张卡只露出开头那一段，卡与卡之间才看得出差别。
+/// 卡片的标题与摘要（唯一规则，App、小组件、命令行共用）。卡片没有标题字段：标题 = 首个有文字的行（`CueLines.isTitleLine`）去掉开头的 `#`；
+/// 摘要只取标题之后的第一段：一张卡只露出开头那一段，卡与卡之间才看得出差别。
 public struct CueSummary: Equatable, Sendable {
     static let previewLimit = 240
     public static let snippetLead = 12
 
     public var title: String
     public var preview: String
-    /// 正文里第一个 http(s) 链接的域名（去掉 www.），卡片上当小标；没有链接为 nil。
     public var linkHost: String?
 
     /// 展示层可在截断之前解释 Markdown 格式，避免把一对强调符号截断后当作字面星号。默认保留原文。

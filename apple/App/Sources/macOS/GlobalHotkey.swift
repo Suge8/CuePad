@@ -30,8 +30,8 @@ protocol HotkeyBackend: AnyObject {
     func unregister(_ handle: HotkeyHandle)
 }
 
-/// 一个全局快捷键（一处功能一个）：加速键（W3C code 形式，如 `Alt+Space`）存在设备偏好的 `key` 下，没存过用 `defaultAccelerator`。
-/// `set` 换键时先注册新的，成功才释放旧的、写进偏好；失败时抛出，旧的继续生效、偏好不变。设置页的录键直接绑这里。
+/// 加速键（W3C code 形式，如 `Alt+Space`）存在设备偏好的 `key` 下，没存过用 `defaultAccelerator`。
+/// `set` 换键时先注册新的，成功才释放旧的、写进偏好；失败时抛出，旧的继续生效、偏好不变。
 @Observable
 final class GlobalHotkey {
     let label: String
