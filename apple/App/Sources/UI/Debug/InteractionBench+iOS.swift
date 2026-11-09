@@ -120,6 +120,9 @@ enum IOSInteractionBench {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }
             await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
         }
+        if !callSteps.isDisjoint(with: only ?? callSteps) {
+            await call(workspace) { name, window, action in await step(name, window: window, action) }
+        }
         // Cue 页左边的会话条点会话（先读出这一页再推入）→ 返回 Cue
         for id in [sessions[0], sessions[0], sessions[1]] {
             await step("会话条进会话") { workspace.openSession(id) }
