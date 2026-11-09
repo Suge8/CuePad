@@ -23,7 +23,8 @@ import Testing
 /// - claude：本机的 claude 与它自己的登录（钥匙串里的那条，见 `ClaudeLogin`），模型 haiku（`ClaudeTestbed`）；
 /// - grok：本机的 grok（`CUEPAD_GROK` 可换），假模型（`FakeResponses`），零网络；环境里给了 `XAI_API_KEY` 或 `GROK_AUTH_PATH`（已登录的
 ///   凭据文件，如 `~/.grok/auth.json`）时连真的 xAI（`GrokModel`），托管会话的模型用 `CUEPAD_GROK_MODEL` 换；
-/// - dsh：`CUEPAD_DSH` 指的 dsh（0.2.1-rc.2 以上；没给按 PATH 找），DeepSeek 的 key 只经 `DEEPSEEK_API_KEY` 给（录完 grep 录像带确认没有它）；
+/// - dsh：没有录像带，总连钉住的真 dsh（`PinnedAgent.dsh`，`xc.sh agents install dsh`；没装时跳过、列为未覆盖），模型是本用例的假模型
+///   （`FakeModel`，Messages，经 `DEEPSEEK_BASE_URL`；搜索的地址 `DEEPSEEK_SEARCH_BASE_URL` 也指过去），key 是假的，零网络；
 /// - 大脑（`RealBrainTests`）除 Pi（假模型，剧本 `playBrain`）外用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
@@ -41,6 +42,7 @@ enum RealAgents {
 
     static func mode(of agent: AgentKind) -> TapeMode {
         if agent == .opencode || agent == .pi { return .live }
+        if agent == .dsh { return .live }
         return recording.contains(agent) ? .record : .replay
     }
 
@@ -55,10 +57,7 @@ enum RealAgents {
             else if recording.contains(.opencode), openCodeRealModel == nil { "列出 opencode 连真提供方要给 CUEPAD_OPENCODE_MODEL（提供方/模型）" }
             else { nil }
         case .grok: realGrokURL == nil ? "本机找不到 grok（CUEPAD_GROK 可指定）" : nil
-        case .dsh:
-            if realDshURL == nil { "本机找不到 dsh（CUEPAD_DSH 可指定）" }
-            else if ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"] == nil { "没给 DEEPSEEK_API_KEY" }
-            else { nil }
+        case .dsh: PinnedAgent.dsh.uncovered
         }
     }
 

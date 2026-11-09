@@ -6,10 +6,10 @@ import Testing
 @testable import CuePi
 
 /// MCP 是 Fixtures/mcp-echo.mjs 替身。
-/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，总在隔离的 `OpenCodeSandbox` 里连真 OpenCode 跑（模型见它）。
+/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；Pi、dsh 没有录像带，总连钉住的真 Agent 与本用例的假模型；OpenCode 没有录像带，总在隔离的 `OpenCodeSandbox` 里连真 OpenCode 跑（模型见它）。
 private let environment = ProcessInfo.processInfo.environment
 private let runtimes = AgentKind.allCases.filter(RealAgents.runs)
-/// Pi 连本用例的假模型（`FakeModel`，剧本 `playBrain`）
+/// Pi、dsh 连本用例的假模型（`FakeModel`，剧本 `playBrain`）
 private let cheapModels: [AgentKind: String] = [
     .pi: "fake/echo", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
     .grok: "grok-4.6", .dsh: "deepseek-official/deepseek-flash",
@@ -20,8 +20,6 @@ private let otherModels: [AgentKind: String] = [
     .pi: "fake/echo-think", .codex: "gpt-6-luna", .claudeCode: "sonnet", .opencode: AgentKind.opencode.modelRef(openCodeOtherModel),
     .grok: "grok-4.5", .dsh: "deepseek-official/deepseek-v4-pro",
 ]
-/// 录 dsh 用的 dsh：`CUEPAD_DSH` 指定（本机装的常是旧版，要 0.2.1-rc.2 以上），没给时按 PATH 找
-let realDshURL = environment["CUEPAD_DSH"].map { URL(filePath: $0) } ?? ExecutableLocator.standard.candidates("dsh").first
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
 /// 缺省 off：最便宜，Codex、Claude Code 还会走夹取
@@ -60,15 +58,15 @@ struct RealBrainTests {
             echoLog = root.appending(path: "echo.log")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             sandbox = runtime == .opencode ? try await OpenCodeSandbox() : nil
-            model = runtime == .pi ? try await FakeModel() : nil
+            model = [.pi, .dsh].contains(runtime) ? try await FakeModel() : nil
             model?.playBrain(chain: chain)
             if runtime == .pi, let model { try PiProcess.writeModels(model, into: root.appending(path: "pi-agent")) }
-            // Grok 的大脑另起临时配置目录，登录取用户配置目录里的：用户配置目录指到这里，不碰真实的 ~/.grok；dsh 的家目录也在这里（登录只经环境里的 key）；
+            // Grok 的大脑另起临时配置目录，登录取用户配置目录里的：用户配置目录指到这里，不碰真实的 ~/.grok；dsh 的家目录也在这里（模型地址与假 key 见 `DshRig.environment`）；
             // Pi 的 agent 目录也在这里，不读用户的 ~/.pi（设置、提供方各人不同）
             let agentHome = switch runtime {
             case .pi: ["PI_CODING_AGENT_DIR": root.appending(path: "pi-agent").path]
             case .grok: ["GROK_HOME": root.appending(path: "grok-user").path]
-            case .dsh: ["DSH_HOME": root.appending(path: "dsh").path]
+            case .dsh: try DshRig.environment(try #require(model), in: root)
             default: [String: String]()
             }
             let config = CueBrainConfig(
@@ -175,8 +173,7 @@ struct RealBrainTests {
 
     /// 这一轮唯一的一次请求模型还在飞时再说一句：收下它的那一轮照它回答（Claude Code 在这一轮收尾后另开一轮收下，Codex 在这一轮里
     /// 再请求一次，Grok 等排着的第一句跑起来再插进这一轮），收下（`received`）报在那一轮里，不记到只回答了第一句的那一轮上；每句话只收下一次。
-    /// dsh 不在其中：它的录像带要 DeepSeek 的 key 才录得了（`RealAgents`）。
-    @Test(arguments: runtimes.filter { $0 != .dsh }) func aMessageSentDuringTheLastRequestIsReceivedByTheTurnThatAnswersIt(_ runtime: AgentKind) async throws {
+    @Test(arguments: runtimes) func aMessageSentDuringTheLastRequestIsReceivedByTheTurnThatAnswersIt(_ runtime: AgentKind) async throws {
         AgentTape.use(runtime)
         try await withRig(runtime) { rig in
         let first = UUID(), second = UUID()
