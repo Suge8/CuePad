@@ -152,7 +152,7 @@ struct RealCodexHostedTests {
 
     @Test func aHostedSessionNamesItselfFromItsFirstMessageInATemporaryThread() async throws {
         try await withCodexRig { rig in
-            rig.model.on("single-line task title") { _ in .say(#"{"title":"Fix blank login page"}"#) }
+            rig.model.onTitle { _ in .say(#"{"title":"Fix blank login page"}"#) }
             let id = try await open(rig, "token-name")
             #expect(rig.bridge.canNameItself(id))
             try await rig.bridge.send(PiMessage(text: "Fix the login page that renders blank after sign-in. Reply with OK only."), to: id)

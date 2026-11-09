@@ -26,7 +26,7 @@ extension RealPiTests {
     ])
     func theModelsRawReplyIsCleanedByCuePadAndAnEmptyOneIsAFailure(reply: String, expected: String?) async throws {
         try await withRig { pi, bridge, s in
-            pi.model.on({ $0.system.contains("single-line task title") }) { _ in .say(reply) }
+            pi.model.onTitle { _ in .say(reply) }
             try await bridge.send(PiMessage(text: "帮我看看登录页为什么白屏"), to: s.id)
             try await eventually("第一句话上报") { bridge.sessions.first?.firstMessage != nil }
             if let expected {

@@ -10,6 +10,8 @@ import Synchronization
 /// 剧本：`on` 登记的规则，后登记的先认；都不认回 `ECHO <prompt>`（带图时再加 ` IMAGES[<mime>:<base64 长度>,…]`）。
 /// 规则只看这一个请求（`FakeRequest.prompt` 是最近一条你的话，`step` 是那之后已调过几次工具），不按到达先后数：
 /// 几个会话同时请求、Agent 重试同一步，各自拿到的都是自己那一步（共用一个游标会错配）。
+/// 起名的旁路请求（`FakeRequest.isTitle`）只由 `onTitle` 登记的答：它的你的话就是会话的第一句，又和那一轮同时发出、先后不定，
+/// 让演回合的规则认了它，它会抢走限次的名额、停在闸门上（负载高时实测抢走 `times: 1` 的那次出错，那一轮反倒答成功）。
 public final class FakeModel: Sendable {
   public let port: UInt16
   /// 每次回答报的输入用量（token），nil 时按请求里对话的字数估（每 4 个字一个，同 Pi 自己的估法）；输出总报 5
@@ -23,6 +25,7 @@ public final class FakeModel: Sendable {
   }
   private let state = Mutex(State())
   private struct Rule {
+    let title: Bool
     let match: @Sendable (FakeRequest) -> Bool
     let reply: @Sendable (FakeRequest) -> FakeReply
   }
@@ -79,7 +82,12 @@ public final class FakeModel: Sendable {
   }
 
   public func on(_ match: @escaping @Sendable (FakeRequest) -> Bool, reply: @escaping @Sendable (FakeRequest) -> FakeReply) {
-    state.withLock { $0.rules.insert(Rule(match: match, reply: reply), at: 0) }
+    state.withLock { $0.rules.insert(Rule(title: false, match: match, reply: reply), at: 0) }
+  }
+
+  /// 起名的旁路请求这样答（别的规则都不认它）
+  public func onTitle(_ reply: @escaping @Sendable (FakeRequest) -> FakeReply) {
+    state.withLock { $0.rules.insert(Rule(title: true, match: { _ in true }, reply: reply), at: 0) }
   }
 
   public func gate() -> FakeGate { FakeGate() }
@@ -89,7 +97,7 @@ public final class FakeModel: Sendable {
       state.requests.append(request)
       return state.rules
     }
-    if let rule = rules.first(where: { $0.match(request) }) { return rule.reply(request) }
+    if let rule = rules.first(where: { $0.title == request.isTitle && $0.match(request) }) { return rule.reply(request) }
     let images = request.images.isEmpty ? "" : " IMAGES[\(request.images.joined(separator: ","))]"
     return .say("ECHO \(request.prompt)\(images)")
   }
