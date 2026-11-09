@@ -18,7 +18,7 @@ public struct Workspaces: Equatable, Sendable {
     if let override = environment[environmentKey], override.hasPrefix("/") {
       return Workspaces(root: URL(filePath: override, directoryHint: .isDirectory))
     }
-    return Workspaces(root: (isolatedLibrary ?? URL.homeDirectory).appending(path: rootName, directoryHint: .isDirectory))
+    return Workspaces(root: (isolatedLibrary ?? UserHome.directory).appending(path: rootName, directoryHint: .isDirectory))
   }
 
   public func directory(for projectName: String) -> URL {
@@ -30,13 +30,5 @@ public struct Workspaces: Equatable, Sendable {
     var name = projectName.trimmingCharacters(in: .whitespacesAndNewlines).replacing(/[\/:]/, with: "-")
     while name.hasPrefix(".") { name = "-" + name.dropFirst() }
     return name.isEmpty ? Project.untitled : name
-  }
-
-  /// 本机路径给人看的写法（Mac 上项目的文件夹在哪，`ProjectPlace`；接入面板里任务在哪做同一个）：家目录下的写成 `~/…`（`~/CuePad/默认`），其余照写全路径。
-  public static func shown(_ path: String) -> String {
-    // 只比路径的各段，不经 standardizedFileURL / resolvingSymlinksInPath：它们对已存在与还没建的目录写法不同（/private/tmp 有时去掉 /private）
-    let target = URL(filePath: path).pathComponents, home = URL.homeDirectory.pathComponents
-    guard target.count > home.count, target.starts(with: home) else { return NSString.path(withComponents: target) }
-    return (["~"] + target.dropFirst(home.count)).joined(separator: "/")
   }
 }

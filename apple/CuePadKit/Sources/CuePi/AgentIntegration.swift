@@ -133,7 +133,7 @@ public struct AgentIntegration: Sendable {
         }
     }
 
-    private func abbreviated(_ file: URL) -> String { (file.path as NSString).abbreviatingWithTildeInPath }
+    private func abbreviated(_ file: URL) -> String { UserHome.shown(file.path) }
 
     private func read(_ file: URL) -> String? {
         (try? Data(contentsOf: file)).flatMap { String(data: $0, encoding: .utf8) }

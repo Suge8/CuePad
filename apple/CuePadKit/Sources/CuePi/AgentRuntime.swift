@@ -23,7 +23,7 @@ public struct AgentPaths: Sendable, Equatable {
     /// 全局规则的共享文件所在（`AgentLibraryPlaces.globalInstructions`）。环境变量同上，是 CuePad 自己的。
     public var agentsConfigDirectory: URL { directory("CUEPAD_AGENTS_CONFIG_DIR") ?? xdg("XDG_CONFIG_HOME", ".config").appending(path: "agents", directoryHint: .isDirectory) }
 
-    public var userHome: URL { directory("HOME") ?? FileManager.default.homeDirectoryForCurrentUser }
+    public var userHome: URL { directory("HOME") ?? UserHome.directory }
 
     public func sessionsDirectory(of kind: AgentKind) -> URL? { kind.facts.sessionFiles?.directory(self) }
 
@@ -36,10 +36,15 @@ public struct AgentPaths: Sendable, Equatable {
     }
 
     func directory(_ variable: String) -> URL? {
-        environment[variable].flatMap { $0.isEmpty ? nil : URL(filePath: ($0 as NSString).expandingTildeInPath, directoryHint: .isDirectory) }
+        environment[variable].flatMap { $0.isEmpty ? nil : URL(filePath: UserHome.expanding($0), directoryHint: .isDirectory) }
     }
 
     func xdg(_ variable: String, _ fallback: String) -> URL { directory(variable) ?? user(fallback) }
+
+    /// `~`、`~/…` 按这里的家目录（环境给的 HOME）展开，别的原样。
+    func expanding(_ path: String) -> String {
+        path == "~" || path.hasPrefix("~/") ? userHome.path + path.dropFirst() : path
+    }
 
     func user(_ path: String) -> URL { userHome.appending(path: path, directoryHint: .isDirectory) }
 }

@@ -180,7 +180,7 @@ extension CueTools {
   private static let projectsListed = 20
 
   private func projects(_ facts: ProjectFacts, detail: Bool) -> [String] {
-    func folder(_ project: Project) -> String? { facts.local[project.id].map { NSString(string: $0).abbreviatingWithTildeInPath } }
+    func folder(_ project: Project) -> String? { facts.local[project.id].map { UserHome.shown($0) } }
     guard detail else {
       let names = facts.projects.prefix(Self.projectsListed).map { project in project.name + (folder(project).map { "（\($0)）" } ?? "") }
       let more = facts.projects.count > Self.projectsListed ? "…等 \(facts.projects.count) 个" : ""

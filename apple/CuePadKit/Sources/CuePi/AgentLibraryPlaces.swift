@@ -11,6 +11,8 @@ import Foundation
 ///   dsh 另原生读 `~/.agents/AGENTS.md`：不列、不碰。对其余五家那是 `~/.agents` 那个目录（常是仓库）的项目规则，当全局规则列会误导；
 ///   改 `DSH_AGENTS_HOME` 能让 dsh 不读它，但同一个变量也定它读哪里的共享技能，所以不改。否决：`~/.agents/AGENTS.md`（只有 dsh 读，而 `~/.agents` 常是仓库，那份是它的项目规则）、`~/AGENTS.md` 与 `~/.config/AGENTS.md`
 ///   （在家目录、配置目录下干活的 Agent 往上找会当项目规则再读一遍，后者还常是 dotfiles 仓库）、借某一家的那份（卸掉那家就断）。
+///   Claude Code 配置目录里的 `AGENTS.md` 也算全局规则、整理时并进来：Claude Code 是在 ~ 这一层当项目规则读到它，但项目都在 ~ 下，
+///   凡在 ~ 下的项目它都读到；Grok 在哪都读。所以它实际是全局生效的（2.1.318 实测，`globalFiles`）。
 ///   OpenCode v2 没有自己那份时不读 Claude Code 的（v1 读）。替换基础提示的两份（Pi 的 `SYSTEM.md`、Codex 配置里 `model_instructions_file` 指的）只作比对来源。
 /// - 项目规则：`<文件夹>/AGENTS.md`；同层有 `CLAUDE.md`、`.claude/CLAUDE.md` 或 `CLAUDE.local.md` 时 Claude Code 不读它（2026-10 官方文档），
 ///   往上哪一层有这几份之一时也不读（2.1.318 实测，`claudeAbove`；`~/.claude/CLAUDE.md` 就是 ~ 这一层的）；`CLAUDE.md` 链到 AGENTS.md 时经链接读到。

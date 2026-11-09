@@ -1,5 +1,6 @@
 #if os(macOS)
 import CuePi
+import CueStore
 import Foundation
 import Observation
 
@@ -34,9 +35,9 @@ final class CommandLineToolInstaller {
     let helper: URL
     let linkDirectory: URL
     var link: URL { linkDirectory.appending(path: "cuepad") }
-    var linkDirectoryDisplay: String { (linkDirectory.path as NSString).abbreviatingWithTildeInPath }
+    var linkDirectoryDisplay: String { UserHome.shown(linkDirectory.path) }
     var pathExport: String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let home = UserHome.directory.path
         let directory = linkDirectory.path.hasPrefix(home + "/") ? "$HOME" + linkDirectory.path.dropFirst(home.count) : linkDirectory.path
         return "export PATH=\"\(directory):$PATH\""
     }
@@ -45,7 +46,7 @@ final class CommandLineToolInstaller {
 
     init(
         helper: URL = Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"),
-        linkDirectory: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin", directoryHint: .isDirectory),
+        linkDirectory: URL,
         shellPath: @escaping @Sendable () async -> String? = { await ExecutableLocator.loginShellPath() }
     ) {
         self.helper = helper

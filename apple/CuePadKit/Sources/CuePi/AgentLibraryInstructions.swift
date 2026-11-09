@@ -127,7 +127,7 @@ struct CodexPromptKey {
             let line = text[start..<end]
             if line.trimmingCharacters(in: .whitespaces).hasPrefix("[") { return nil }
             if let match = line.firstMatch(of: /^\s*model_instructions_file\s*=\s*(["'])(.*)\1\s*(#.*)?$/.anchorsMatchLineEndings()) {
-                let path = (String(match.2) as NSString).expandingTildeInPath
+                let path = places.paths.expanding(String(match.2))
                 file = path.hasPrefix("/") ? URL(filePath: path) : places.paths.home(of: .codex).appending(path: path)
                 self.line = start..<end
                 self.text = text

@@ -50,12 +50,12 @@ struct GrokDialect: ACPDialect {
         let home = directory.appending(path: "grok", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         func variable(_ name: String) -> String? {
-            (config.environment[name] ?? ProcessInfo.processInfo.environment[name]).flatMap { $0.isEmpty ? nil : ($0 as NSString).expandingTildeInPath }
+            (config.environment[name] ?? ProcessInfo.processInfo.environment[name]).flatMap { $0.isEmpty ? nil : UserHome.expanding($0) }
         }
         // 用户自己指定的凭据文件照用；没指定时是用户配置目录里的那份（配置目录换成了临时目录，不指过去就找不到）
         let auth = variable("GROK_AUTH_PATH")
             ?? (variable(GrokRuntime.facts.homeVariable).map { URL(filePath: $0, directoryHint: .isDirectory) }
-                ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".grok", directoryHint: .isDirectory)).appending(path: "auth.json").path
+                ?? UserHome.directory.appending(path: ".grok", directoryHint: .isDirectory)).appending(path: "auth.json").path
         let profile: JSONValue = [
             "name": "cue", "description": "Cue", "promptMode": "full", "promptBody": .string("${% raw %}\(config.systemPrompt)${% endraw %}"),
             "tools": .array(Self.readingTools.map(JSONValue.string)), "injectDefaultTools": false,

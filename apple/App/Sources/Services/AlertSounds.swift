@@ -72,7 +72,7 @@ nonisolated struct AlertPreferences: Equatable, Sendable {
 /// 一个声音名找不到过一次，之后装上了也播兜底音。所以发带声音的通知前，先把选中的那段从包里复制过去（内容与包里不一致就覆盖），
 /// 一次运行每段只核对一次。只在真发通知时用（`AlertCenter.delivers`），隔离库与测试不碰真实的 ~/Library/Sounds。
 actor AlertSounds {
-    private let directory = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Sounds", directoryHint: .isDirectory)
+    private let directory = UserHome.directory.appending(path: "Library/Sounds", directoryHint: .isDirectory)
     private var checked: Set<AlertSound> = []
 
     func prepare(_ sound: AlertSound) -> UNNotificationSoundName {
