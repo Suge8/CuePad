@@ -167,7 +167,7 @@ extension CodexRuntime {
 
     func detach(_ id: PiSession.ID) {
         guard let session = tracked.removeValue(forKey: id) else { return }
-        session.failureWatch?.cancel()
+        session.cancelWaits()
         threads = threads.filter { if case .session(id, _, _) = $0.value { false } else { true } }
         release(session)
         bridge.detach(id, reason: .closed(reason: "quit"))
