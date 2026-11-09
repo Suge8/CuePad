@@ -106,6 +106,27 @@ public struct PiSession: Identifiable, Sendable, Equatable {
         agent.facts.sessionFiles == nil || sessionFile.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false
     }
 
+    /// 此刻要写进同步记录的样子（`PiStateRecorder.update`）。标题与项目要查库，由 `PiSessionMirror` 定好交进来。
+    func snapshot(title: String, projectID: UUID?) -> PiSessionSnapshot {
+        var snapshot = PiSessionSnapshot(sessionID: sessionID, state: state, times: PiTimes(stateSince: stateSince, busySince: busySince))
+        snapshot.detail = detail
+        snapshot.failure = failure
+        snapshot.title = title
+        snapshot.directory = cwd.path(percentEncoded: false)
+        snapshot.projectID = projectID
+        snapshot.question = question
+        snapshot.turnStartedAt = turnStartedAt
+        snapshot.launchToken = launchToken
+        snapshot.hosted = hosted
+        snapshot.subagents = subagents
+        snapshot.modelState = modelState
+        snapshot.context = context
+        snapshot.commands = commands
+        snapshot.agent = agent
+        snapshot.process = PiProcess.running(pid: pid)
+        return snapshot
+    }
+
     /// 会话的显示名，规则见 `PiSessionName`。
     public var displayName: String {
         PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
