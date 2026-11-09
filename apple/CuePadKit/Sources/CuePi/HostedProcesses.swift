@@ -73,11 +73,17 @@ final class HostedProcesses {
         entries[process.pid]?.sessionID = sessionID
     }
 
-    func retire(_ id: PiSession.ID, link: any SessionLink) {
+    /// `stoppingTheTurn` 为 false：没有它认的这一轮可停（还没起），不发中断，直接关输入收进程。
+    func retire(_ id: PiSession.ID, link: any SessionLink, stoppingTheTurn: Bool = true) {
         guard let session = bridge.session(id: id) else { return }
         bridge.detach(id, reason: .closed(reason: "quit"))
         guard var entry = entries[session.pid], entry.leaving == nil else { return }
         let (process, timing) = (entry.process, timing)
+        guard stoppingTheTurn else {
+            entry.leaving = Task { await process.stop() }
+            entries[session.pid] = entry
+            return
+        }
         let stopping = Task { try await link.abort(id) }
         entry.leaving = Task {
             do {

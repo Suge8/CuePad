@@ -86,9 +86,11 @@ extension ClaudeHostedSession {
         publish(at: .now)
     }
 
+    /// 发出的话还没见它起这一轮（`starting`：没读到 `system/init`）时不先停这一轮：中断要等它起来，起得慢就等满
+    /// `AgentTimeouts.stop`（#81），直接关输入收进程。`init` 已在路上时这样会少一个被停下的标记，进程照样收掉。
     func end(_ id: PiSession.ID) async throws {
         _ = try live
-        processes?.retire(id, link: self)
+        processes?.retire(id, link: self, stoppingTheTurn: !starting)
     }
 }
 #endif

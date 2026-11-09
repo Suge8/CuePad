@@ -34,6 +34,41 @@ struct RealHostedEndTests {
         }
     }
 
+    /// 起来马上点结束（还没说过话，没有在跑的一轮）：不发中断，几秒内把进程收完，不等满停这一轮的时限 `AgentTimeouts.stop`。
+    @Test(arguments: Hosting.allCases)
+    func endingRightAfterOpeningCollectsTheProcessInSeconds(_ hosting: Hosting) async throws {
+        try await EndRig.run(hosting, timing: .system) { rig in
+            let id = try await rig.open()
+            let session = try #require(rig.bridge.session(id: id))
+            let began = ContinuousClock.now
+            try await rig.bridge.end(id)
+            try await eventually("进程收掉") { kill(session.pid, 0) != 0 }
+            let took = began.duration(to: .now)
+            #expect(took < .seconds(10), "结束到进程收掉用了 \(took)")
+        }
+    }
+
+    /// Claude Code 还没读到发出的第一句（起得慢；这里冻住它把这段拉长）时点结束：它还没起这一轮、中断它不认，
+    /// 不等它起来（#81：等满 `AgentTimeouts.stop`），当场下桥、关输入收进程。
+    @Test func endingClaudeBeforeItReadsTheFirstMessageDoesNotWaitForIt() async throws {
+        try await EndRig.run(.claude, timing: .system) { rig in
+            let id = try await rig.open()
+            let session = try #require(rig.bridge.session(id: id))
+            kill(session.pid, SIGSTOP)
+            // 交出的话等 Claude Code 读回才算送到：冻住时一直等着，这时点结束（开场的话还在送）
+            let sending = Task { try await rig.bridge.send(PiMessage(text: "PING-ONE"), to: id) }
+            try await eventually("这句话写出去了") { rig.bridge.session(id: id)?.state.hasPendingWork == true }
+            let began = ContinuousClock.now
+            try await rig.bridge.end(id)
+            #expect(rig.bridge.session(id: id) == nil, "还在桥上")
+            // 冻住的进程读不到关输入：宽限后 SIGTERM（挂着）、再宽限后 SIGKILL
+            try await eventually("进程收掉") { kill(session.pid, 0) != 0 }
+            let collected = began.duration(to: .now)
+            #expect(collected < .seconds(2 * AgentTimeouts.endGrace.seconds + 5), "收掉进程用了 \(collected)")
+            _ = await sending.result
+        }
+    }
+
     /// 闲置到点被请退出；外壳在真 Agent 退出后还握着输出 3 秒（进程还没走）。请退出的那一刻就不在桥上，
     /// 紧接着的话（`MacExecutor` 的接法）接着同一会话、等旧进程走了才起新的，话送到。
     @Test(arguments: Hosting.allCases)
