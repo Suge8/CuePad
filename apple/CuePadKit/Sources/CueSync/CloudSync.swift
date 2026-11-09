@@ -12,7 +12,7 @@ import os
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
 ///
 /// 一次 `start()` 到 `stop()` 是一代（`SyncGeneration`）：本代的拉取器、发送者、文件两路与这里起的认账号、重试、订阅、文件启动等任务都属于它。
-/// `stop` 一开始就结束这一代，再取消并等它们收尾；任务在每个 await 之后先看这一代结束没有再改状态，旧代不会在停止或重启之后写新一代的状态。
+/// `stop` 一开始就结束这一代，再取消并等它们收尾。
 /// `start` 等上一次 `stop` 收尾完才建新一代：新旧两代的发送者不并存。`resolve` 先停、再处理、再开始：处理（清库、重置元数据）时旧代已不再写。
 ///
 /// 冷启动：认过账号就能拉，第一拉不等别的；最低对端版本（`PeerFloor`）由发送者在第一次上传前对（上传等它，拉取不等：拉到的页里有门槛就当场看，
@@ -155,7 +155,6 @@ public actor CloudSync {
     )
   }
 
-  /// 本代的后台任务：结束时自己从登记里去掉。
   func spawn(_ body: @escaping @Sendable () async -> Void) {
     let id = UUID()
     background[id] = Task {
@@ -186,8 +185,7 @@ public actor CloudSync {
     await connectNow()
   }
 
-  /// 停下这一代：当场结束它，取消并等本代的认账号、重试、订阅、文件启动收尾，再停拉取器、发送者与文件两路；等开始的调用方得到"没在同步"，
-  /// 等账号认好的（`relaySecret`）抛出。
+  /// 等开始的调用方得到"没在同步"，等账号认好的（`relaySecret`）抛出。
   public func stop() async {
     let link = running?.link
     running?.generation.end()
@@ -225,7 +223,7 @@ public actor CloudSync {
     await teardown.value
   }
 
-  /// 认过就是 true；没认过的认一次（同时要认的等同一次）。
+  /// 认过就是 true；没认过的认一次。
   @discardableResult
   func connectNow() async -> Bool {
     guard let running else { return false }

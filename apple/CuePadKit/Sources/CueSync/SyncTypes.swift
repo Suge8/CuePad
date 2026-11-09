@@ -82,7 +82,6 @@ public struct SyncIssue: Equatable, Sendable {
     /// 取到的附件文件没有或内容与哈希不符，没放进本机
     case damaged
 
-    /// 请求或读写失败的那一类：CloudKit 的错误是 iCloud 没收下，其余是本机。
     init(_ error: any Error) { self = error is CKError ? .refused : .local }
   }
 
@@ -90,7 +89,6 @@ public struct SyncIssue: Equatable, Sendable {
   public var recordType: String?
   public var recordName: String?
   public var problem: Problem
-  /// 原话：排查用，不当标题。
   public var detail: String?
 
   public init(kind: Kind = .incoming, recordType: String? = nil, recordName: String? = nil, problem: Problem, detail: String? = nil) {

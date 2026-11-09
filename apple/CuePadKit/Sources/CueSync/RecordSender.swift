@@ -147,8 +147,6 @@ actor RecordSender {
     return run
   }
 
-  // MARK: 两路
-
   /// 后台那一路的一轮：一批接一批发到没有待推送、或要等。
   private func round() async {
     if !explicit {
@@ -281,8 +279,6 @@ actor RecordSender {
     preparing = nil
     return prepared
   }
-
-  // MARK: 重试
 
   private func schedule(_ fault: SyncFault) async {
     await coordinator.hold(fault, waiting: !urgent.isEmpty)

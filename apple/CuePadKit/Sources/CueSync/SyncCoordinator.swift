@@ -85,8 +85,6 @@ actor SyncCoordinator {
     self.zoneID = zoneID
   }
 
-  // MARK: 订阅
-
   /// 先给出当前快照，之后每次变化给出新快照。
   nonisolated var stateUpdates: AsyncStream<SyncState> { states.stream() }
 
@@ -114,8 +112,6 @@ actor SyncCoordinator {
     facts.reconciled = false  // 两种处理都清掉了令牌
     facts.status = .starting
   }
-
-  // MARK: 拉取器、发送者与账号检查交进来的
 
   /// 发送者有一批在路上，或因服务器要求等着重发：界面显示同步中。
   func setSending(_ busy: Bool) { facts.sending = busy }
@@ -204,8 +200,6 @@ actor SyncCoordinator {
     }
   }
 
-  // MARK: 成功与失败
-
   /// 一次请求成功（拉完、收下了上传、对过门槛）：连上了。正在连接、连不上、账号暂不可用回到空闲，请求类的问题消失，没有失败类的问题了就不再是同步出错；
   /// 连不上的等待提前结束（`connected`）。停下时不改状态。
   func succeeded() {
@@ -238,8 +232,6 @@ actor SyncCoordinator {
     noteWaiting(fault, error)
     return fault
   }
-
-  // MARK: 报告
 
   /// 记一条问题：同一类、同一条记录只留最新的一条（`SyncIssue.sameAs`）。失败类的让状态变成同步出错。
   /// 错误不直接报，经 `failed` 归类：连不上、要等、账号的不是问题。新出现的问题记一条 error 日志（`reason` 是给日志的原因，见 `Error.brief`；

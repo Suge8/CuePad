@@ -65,7 +65,6 @@ actor FileFetcher {
     running.values.forEach { $0.cancel() }
   }
 
-  /// 这个文件在本机的位置：本机没有就现在取（不看自动取的条件），记录还没到就等它到，服务器要求等就等到点。
   /// 停下同步（要你决定、要更新、没有账号）抛 `FileFetchFailure.notSyncing`；被取消就抛出。
   func fetch(_ key: String) async throws -> URL {
     do {
@@ -139,7 +138,6 @@ actor FileFetcher {
     }
   }
 
-  /// 不用你点就取：Mac 全取；手机只取小的、且不在按流量计费的网络上。
   private static func wanted(_ attachment: Attachment) -> Bool {
     #if os(macOS)
     true

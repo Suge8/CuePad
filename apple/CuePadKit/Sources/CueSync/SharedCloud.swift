@@ -327,7 +327,6 @@ struct SharedCloud: SyncCloud {
 }
 
 extension CKRecord {
-  /// 带的文件有多大（没有文件为 nil）。
   var fileBytes: Int? {
     guard let url = (self[RecordMapper.fileKey] as? CKAsset)?.fileURL else { return nil }
     return (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int
