@@ -3,6 +3,7 @@ import Foundation
 
 nonisolated enum CaptureCopy {
     #if os(macOS)
+    /// Mac 上 ↩ 是换行、⌘↩ 才记下，所以占位里括号写快捷键。
     static var prompt: String { String(localized: "记下灵感（⌘↩）") }
 
     static func placeholder(to destination: String) -> String { String(localized: "记下灵感 → \(destination)（⌘↩）") }

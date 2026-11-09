@@ -94,6 +94,7 @@ struct CueUnreadDot: View {
     @Environment(\.palette) private var palette
 
     nonisolated static let gap: CGFloat = 6
+    /// 页边距至少这么宽才把点放在气泡外，不然骑在气泡左缘上（`CueRow`）。
     static let room = StatusDot.size + gap + Spacing.item
 
     var body: some View {

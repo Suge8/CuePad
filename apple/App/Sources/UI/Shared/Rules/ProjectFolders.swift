@@ -63,6 +63,7 @@ nonisolated enum ProjectFolders {
         let items: [Candidate]
     }
 
+    /// 按设备分组：显示名可相同，设备标识（`hostID`）才是稳定的组标识。
     static func candidateGroups(_ candidates: [Candidate]) -> [CandidateGroup] {
         let byHost = Dictionary(grouping: candidates, by: \.hostID)
         return byHost.map { host, items in

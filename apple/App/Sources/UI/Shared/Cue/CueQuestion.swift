@@ -91,6 +91,7 @@ struct CueChoices: View {
     #else
     static let onceWidth: CGFloat = 88
     #endif
+    /// `ControlSurface` 按钮左右内边距之和：最小宽要扣掉它才是字的宽。
     private static let inset: CGFloat = 32
 
     var body: some View {

@@ -13,6 +13,7 @@ nonisolated struct CueMacSetup: Equatable {
     let waiting: String?
 
     var installed: Bool { !macs.isEmpty }
+    /// 到得了 Mac 且和 iCloud 对过一遍，库里才有 Mac 可信：同一个账户才看得到它。
     var reaches: Bool { status.reachesMac && waiting == nil }
     var agents: [AgentKind] { AgentKind.allCases.filter { kind in macs.contains { $0.kinds.contains(kind) } } }
 

@@ -108,10 +108,12 @@ nonisolated struct QuotaMeter: Equatable {
         }.map(\.1)
     }
 
+    /// 只认减号紧跟数字（"¥-0.06"），不解析金额。
     private static func negative(_ text: String) -> Bool {
         zip(text, text.dropFirst()).contains { ($0 == "-" || $0 == "\u{2212}") && $1.isNumber }
     }
 
+    /// 地址与授权分区只用于认身份，不显示。
     static func all(_ quotas: [AccountQuota], at now: Date) -> [Self] {
         var meters = labeled(quotas, at: now)
         for (_, indices) in Dictionary(grouping: meters.indices, by: { meters[$0].product }) where indices.count > 1 {
