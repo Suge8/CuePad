@@ -5,8 +5,8 @@ import Foundation
 /// 没有自带语义会话名的会话（Pi 默认取首句、Codex 托管会话）按第一句话起的短名：由会话自己那一家起（数据只发给你本就在用的那家），只回不写；
 /// 要不要起、起好后写不写由 App 定（`SessionNamer`：起名前与写回前各核对一次），写回走改名（Pi 扩展里即 Pi 的改名接口），名字照各家会话名回来。
 public enum SessionNameSuggestion {
-    /// 名字的长度上限（字符），同 Codex 终端界面起名（`THREAD_TITLE_MAX_CHARS`）。模型的回话取第一行、去掉首尾空白、截到这么长
-    /// （Pi 扩展里同一条，上限随命令给）
+    /// 名字的长度上限（字符），同 Codex 终端界面起名（`THREAD_TITLE_MAX_CHARS`）。各家回的都是模型的原话，只在这里（`cleaned`）
+    /// 取第一个不空的行、去掉首尾空白、截到这么长
     static let limit = 36
     /// 起一个名最多等这么久，过了就放弃：Pi 扩展要在桥等 ack 的时限（`AgentTimeouts.ack`）之内回话
     static let budget: Duration = .seconds(8)

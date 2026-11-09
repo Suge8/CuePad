@@ -61,7 +61,6 @@ extension AgentTape {
         }
         // agent 目录在本用例临时目录里的 Pi：录制时不取模型清单、不查版本（Pi 只认这个环境变量与 --offline，没有设置项；模型请求照常）
         if name == "pi", environment["PI_CODING_AGENT_DIR"]?.hasPrefix(state.withLock({ $0.temporaryRoot })) == true { environment["PI_OFFLINE"] = "1" }
-        if name == "grok" { environment.merge(GrokModel.environment) { current, _ in current } }
         environment["PATH"] = ((environment["PATH"] ?? "").split(separator: ":").map(String.init).filter { $0 != bin.path }
             + [real.deletingLastPathComponent().path]).joined(separator: ":")
         record(TapeEvent(k: "spawn", c: channel, d: name, p: cwd, a: arguments, m: environment[HostMark.variable]))

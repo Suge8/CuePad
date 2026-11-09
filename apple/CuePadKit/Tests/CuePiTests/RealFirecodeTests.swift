@@ -5,8 +5,19 @@ import Testing
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.taped(.pi), .enabled(if: RealAgents.mode(of: .pi) == .replay || firecodeAvailable, "录制要本机的 FireCode 源码"), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
+@Suite(RealAgents.taped(.pi))
 struct RealFirecodeTests {
+    /// 指挥官照 `prompt` 调 FireCode 的 subagents 工具（开子代理或移除它），之后回 TOOL_DONE；子代理的任务（"子任务"）停在返回的闸门上，
+    /// 指挥官收到它交回的结果照常回声。
+    private func script(_ pi: PiProcess, _ prompt: String, _ action: String, worker: String) -> FakeGate {
+        let arguments: [String: any Sendable] = action == "kill"
+            ? ["action": "kill", "worker": worker] : ["action": "start", "worker": worker, "role": "工程师", "prompt": "子任务"]
+        pi.model.on(prompt, .call("subagents", arguments), .say("TOOL_DONE"))
+        let gate = pi.model.gate()
+        pi.model.on({ $0.prompt == "子任务" }) { _ in .held(gate, then: .say("子任务做完")) }
+        return gate
+    }
+
     @Test func subagentsAreSummarizedOnTheMasterSessionAndTheirEventsAreNotYourPrompt() async throws {
         let pi = try await PiProcess(extraExtensions: [], firecode: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
@@ -15,7 +26,8 @@ struct RealFirecodeTests {
         let log = ChangeLog(bridge)
         try await eventually("桥发现指挥官会话") { !bridge.sessions.isEmpty }
 
-        try pi.prompt("[[subagent:ui]]")
+        let gate = script(pi, "派个子代理", "start", worker: "ui")
+        try pi.prompt("派个子代理")
         try await eventually("子代理出现在指挥官会话的摘要里（或 subagents 工具报错）") {
             bridge.sessions.first?.subagents.map(\.name) == ["ui"] || pi.subagentsToolFailed
         }
@@ -32,13 +44,12 @@ struct RealFirecodeTests {
         // 停止只停指挥官自己这一轮（Esc 的同一能力）：指挥官已歇下，停止成功但不动子代理，会话仍在等子代理
         try await bridge.abort(try #require(bridge.sessions.first?.id))
         #expect(bridge.sessions.first?.state == .delegating)
-        let releasing = pi.releaseEveryHold()  // 子代理停在假模型里，到这里才让它做完；它的结果带着标记，指挥官回应时也会停住
-        defer { releasing.cancel() }
+        gate.openForever()  // 子代理停在假模型里，到这里才让它做完
 
         try await eventually("指挥官回应了子代理事件") {
             recap(of: bridge.sessions.first)?.lastReply?.contains("firecode_master_event") == true
         }
-        #expect(recap(of: bridge.sessions.first)?.lastPrompt == "[[subagent:ui]]")
+        #expect(recap(of: bridge.sessions.first)?.lastPrompt == "派个子代理")
         try await eventually("全部歇下") { bridge.sessions.first?.state == .settled }
         // 歇下就绪（`PiSessionState.answered`）：派活那一轮的收尾早于交回结果那一轮的开始，那一轮的收尾不早于它
         let turn = try #require(bridge.sessions.first?.turnStartedAt)
@@ -72,20 +83,21 @@ struct RealFirecodeTests {
             return session?.state == .delegating && recap(of: session)?.lastPrompt == prompt
         }
 
+        var gate: FakeGate?
         for name in ["a", "b"] {
-            try pi.prompt("[[subagent:\(name)]]")
-            try await eventually("子代理 \(name) 在跑（停在假模型里）") { delegating(after: "[[subagent:\(name)]]") }
+            gate = script(pi, "派 \(name)", "start", worker: name)
+            try pi.prompt("派 \(name)")
+            try await eventually("子代理 \(name) 在跑（停在假模型里）") { delegating(after: "派 \(name)") }
         }
         try pi.requireSubagentsTool()
-        try pi.prompt("[[kill:a]]")
-        try await eventually("a 被移除，b 还在跑") { delegating(after: "[[kill:a]]") && bridge.session(id: id)?.subagents.map(\.name) == ["b"] }
+        _ = script(pi, "移除 a", "kill", worker: "a")
+        try pi.prompt("移除 a")
+        try await eventually("a 被移除，b 还在跑") { delegating(after: "移除 a") && bridge.session(id: id)?.subagents.map(\.name) == ["b"] }
 
-        // 等过几个空闲时限（回放时空闲的时长不占时间：之后的输出由放行的标记排先后）
-        if AgentTape.active.mode == .record { await quietPeriod(.seconds(idleSeconds * 3)) }
+        await quietPeriod(.seconds(idleSeconds * 3))  // 等过几个空闲时限
         try #require(bridge.session(id: id)?.state == .delegating, "b 还在跑，托管进程不该到点退出")
 
-        let releasing = pi.releaseEveryHold()  // b 做完，结果投回指挥官；回应里带着假模型的停住标记，同样放行
-        defer { releasing.cancel() }
+        gate?.openForever()  // b 做完，结果投回指挥官
         try await eventually("全部做完后到点退出") { bridge.session(id: id) == nil }
     }
 }

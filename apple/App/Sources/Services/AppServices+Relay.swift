@@ -19,12 +19,13 @@ extension AppServices {
         guard let relay, let sync = sync as? CloudSync else { return }
         let voiceEvents = relay.voiceEvents
         follow { for await event in voiceEvents { await self.voice.receive(event) } }
-        let accepted = sync.acceptedUpdates  // 当场订阅：同步一启动就可能有一批被收下，那时跟随者还没跑起来
+        // 当场订阅：同步一启动就可能有一批被收下、账号就可能变，那时跟随者还没跑起来
+        let accepted = sync.acceptedUpdates, accountChanged = NotificationCenter.default.notifications(named: .CKAccountChanged)
         follow {
             for await _ in accepted { relay.ring() }
         }
         follow {
-            for await _ in NotificationCenter.default.notifications(named: .CKAccountChanged) { await relay.reconnect() }
+            for await _ in accountChanged { await relay.reconnect() }
         }
         #if os(macOS)
         follow { await relay.run(connected: true) { await self.pull() } }

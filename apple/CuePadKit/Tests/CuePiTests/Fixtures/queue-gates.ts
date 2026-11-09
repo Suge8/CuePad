@@ -36,7 +36,7 @@ export default function (pi: any) {
 			const arm = join(directory, "sdk.arm");
 			if (!existsSync(arm)) return;
 			rmSync(arm);
-			pi.sendUserMessage("QUEUE-B [[tool:python3 -c 'import os,signal;open(\"B.pid\",\"w\").write(str(os.getpid()));signal.alarm(30);signal.pause()']]", { deliverAs: "followUp" });
+			pi.sendUserMessage("QUEUE-B WORK-B", { deliverAs: "followUp" }); // 假模型的剧本照 WORK-B 起 B 的工具（RealPiQueueTests.script）
 			setImmediate(() => writeFileSync(join(directory, ctx.hasPendingMessages() ? "sdk.pending" : "sdk.empty"), ""));
 		});
 		pi.on("session_shutdown", () => watcher.close());

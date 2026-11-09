@@ -5,17 +5,16 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 不起 Claude Code，只要它的测试台（录像带是空的）。
+/// 不用模型，只要 Claude Code 的测试台与它报的版本。
 @MainActor
-@Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.timeLimit(.minutes(5)))
+@Suite(RealAgents.taped(.claudeCode))
 struct ClaudeSettingsTests {
     @Test(arguments: [nil, RealClaudeTerminalTests.userSettings, #"{"hooks":{"Stop":[]},"theme":"dark"}"#])
     func connectingAndDisconnectingLeavesTheUsersSettingsByteForByte(settings: String?) async throws {
-        AgentTape.variant(settings.map { "\($0.count)" } ?? "none")
         try await ClaudeTestbed.run(installHooks: false, settings: settings) { testbed in
             let file = testbed.config.appending(path: "settings.json")
             let moved = AgentIntegration(
-                paths: testbed.paths, locate: { AgentTape.locator("claude") },
+                paths: testbed.paths, locate: { pinnedClaude.locator },
                 cuepad: testbed.root.appending(path: "Moved/CuePad.app/Contents/Helpers/cuepad"), timing: noDeadline)
 
             try await testbed.integration.install(.claudeCode)

@@ -5,33 +5,57 @@ import Foundation
 import Testing
 @testable import CuePi
 
+private let drinks: [String: any Sendable] = [
+    "questions": [["question": "喝什么？", "header": "饮料", "multiSelect": false,
+                   "options": [["label": "茶", "description": "tea"], ["label": "咖啡", "description": "coffee"]]] as [String: any Sendable]],
+]
+
 extension RealClaudeTerminalTests {
-    @Test func cuePadAnswersThePermissionPromptAndTheQuestionOfATerminalSession() async throws {
+    private func touching(_ testbed: ClaudeTestbed, _ tag: String, _ file: URL) {
+        testbed.on(tag) { $0.step == 0 ? .call("Bash", ["command": "touch \(file.path)", "description": "touch"]) : .say("DONE") }
+    }
+
+    /// 允许与拒绝都从桥上答：文件在不在，和模型下一次请求带回的工具结果两边对得上。
+    @Test(arguments: [true, false]) func cuePadAnswersThePermissionPromptOfATerminalSession(allow: Bool) async throws {
         try await ClaudeTestbed.run() { testbed in
             try testbed.startConnected()
             let terminal = try await testbed.terminal()
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let touched = testbed.work.appending(path: "allowed.txt")
+            touching(testbed, "TOUCH-FILE", touched)
 
             let asked = Date()
-            try await terminal.type("用 Bash 工具执行 touch \(touched.path) ，然后只回复 DONE")
+            try await terminal.type("TOUCH-FILE")
             let permission = try await testbed.waitForQuestion(session.id, on: terminal)
             #expect(permission.kind == .known(.confirm) && permission.text.hasPrefix("允许 Claude Code 使用 Bash？"))
-            try await testbed.bridge.answer(.confirmed(true), to: try #require(permission.promptID), in: session.id)
+            #expect(!FileManager.default.fileExists(atPath: touched.path))
+            try await testbed.bridge.answer(.confirmed(allow), to: try #require(permission.promptID), in: session.id)
             try await testbed.waitForTurn(session.id, since: asked)
-            #expect(FileManager.default.fileExists(atPath: touched.path))
+            #expect(FileManager.default.fileExists(atPath: touched.path) == allow)
             #expect(testbed.bridge.session(id: session.id)?.question == nil)
+            let result = try #require(testbed.model.requests.last { $0.prompt.contains("TOUCH-FILE") && $0.step == 1 }?.results.last)
+            #expect(result.contains("拒绝") == !allow, "工具结果：\(result)")
+        }
+    }
+
+    @Test func cuePadAnswersTheQuestionOfATerminalSession() async throws {
+        try await ClaudeTestbed.run() { testbed in
+            try testbed.startConnected()
+            let terminal = try await testbed.terminal()
+            let session = try await testbed.waitForSession(pid: terminal.pid)
+            testbed.on("ASK-DRINK") { $0.step == 0 ? .call("AskUserQuestion", drinks) : .say($0.results.last ?? "") }
 
             let chose = Date()
-            try await terminal.type("用 AskUserQuestion 工具问我喝什么（一个单选问题，选项是 茶、咖啡），然后只回复我选的选项词")
+            try await terminal.type("ASK-DRINK")
             let question = try await testbed.waitForQuestion(session.id, on: terminal)
             #expect(question.kind == .known(.select) && question.options == ["茶", "咖啡"])
             try await testbed.bridge.answer(.option("咖啡"), to: try #require(question.promptID), in: session.id)
             try await testbed.waitForTurn(session.id, since: chose)
             #expect(await terminal.screen.contains("→ 咖啡"))
+            #expect(testbed.model.requests.last { $0.prompt.contains("ASK-DRINK") && $0.step == 1 }?.results.last?.contains("咖啡") == true)
 
             let typed = Date()
-            try await terminal.type("再用 AskUserQuestion 工具问我一次喝什么（一个单选问题，选项是 茶、咖啡），然后只回复我给的回答")
+            try await terminal.type("ASK-DRINK again")
             let again = try await testbed.waitForQuestion(session.id, on: terminal)
             #expect(again.allowsOther)
             try await testbed.bridge.answer(.text("果汁"), to: try #require(again.promptID), in: session.id)
@@ -45,9 +69,9 @@ extension RealClaudeTerminalTests {
             try testbed.startConnected()
             let terminal = try await testbed.terminal()
             let session = try await testbed.waitForSession(pid: terminal.pid)
-            let prompt = "用 AskUserQuestion 工具问我喝什么（一个单选问题，选项是 茶、咖啡），然后只回复我选的选项词"
+            testbed.on("ASK-DRINK") { $0.step == 0 ? .call("AskUserQuestion", drinks) : .say($0.results.last ?? "") }
 
-            try await terminal.type(prompt)
+            try await terminal.type("ASK-DRINK")
             let held = try await testbed.waitForQuestion(session.id, on: terminal)
             #expect(await !terminal.screen.contains("2. 咖啡"))
             testbed.presence.isPresent = true
@@ -57,10 +81,10 @@ extension RealClaudeTerminalTests {
             }
             try await eventually("终端里问") { await terminal.screen.contains("2. 咖啡") }
             let chose = Date()
-            try await terminal.keys("Enter")
+            try await terminal.press("Enter", on: "2. 咖啡") { testbed.bridge.session(id: session.id)?.question == nil }
             try await testbed.waitForTurn(session.id, since: chose)
 
-            try await terminal.type(prompt)
+            try await terminal.type("ASK-DRINK again")
             try await eventually("又在问") { testbed.bridge.session(id: session.id)?.question != nil }
             #expect(testbed.bridge.session(id: session.id)?.question?.promptID == nil)
             try await eventually("终端里问") { await terminal.screen.contains("2. 咖啡") }
@@ -77,27 +101,29 @@ extension RealClaudeTerminalTests {
             try (["mcpServers": ["cue": ["command": .string(node.path), "args": [.string(server.path)]]]] as JSONValue).data.write(to: config)
             let terminal = try await testbed.terminal(["--mcp-config", config.path, "--allowedTools", "mcp__cue__pick"])
             let session = try await testbed.waitForSession(pid: terminal.pid)
-            let prompt = "调用 mcp__cue__pick 工具（不要用别的工具），然后原样回复它返回的文字"
+            testbed.on("MCP-PICK") { $0.step == 0 ? .call("mcp__cue__pick", [:]) : .say($0.results.last ?? "") }
+            testbed.on("MCP-ECHO") { $0.step == 0 ? .call("mcp__cue__echo", ["text": "hi"]) : .say("ECHOED") }
 
             let asked = Date()
-            let form = try await testbed.ask(prompt, on: terminal, in: session.id)
+            try await terminal.type("MCP-PICK")
+            let form = try await testbed.waitForQuestion(session.id, on: terminal)
             #expect(form.kind == .known(.select) && form.options == ["茶", "咖啡"])
             try await testbed.bridge.answer(.option("咖啡"), to: try #require(form.promptID), in: session.id)
             try await testbed.waitForTurn(session.id, since: asked)
             #expect(await terminal.screen.contains(#""drink":"咖啡""#))
 
             testbed.presence.isPresent = true
-            try await terminal.type(prompt)
+            try await terminal.type("MCP-PICK")
             try await eventually("又在问") { testbed.bridge.session(id: session.id)?.question != nil }
             #expect(testbed.bridge.session(id: session.id)?.question?.promptID == nil)
             try await eventually("终端里弹表单") { await terminal.screen.contains("饮料") }
             let cancelled = Date()
-            try await terminal.keys("Escape")  // 在终端里取消这个表单
-            try await eventually("CuePad 上收起") { testbed.bridge.session(id: session.id)?.question == nil }
+            try await terminal.press("Escape", on: "饮料") { testbed.bridge.session(id: session.id)?.question == nil }  // 在终端里取消这个表单
 
             testbed.presence.isPresent = false
             try await testbed.waitForTurn(session.id, since: cancelled)
-            let permission = try await testbed.ask("调用 mcp__cue__echo 工具（不要用别的工具），参数 text 为 hi", on: terminal, in: session.id)
+            try await terminal.type("MCP-ECHO")
+            let permission = try await testbed.waitForQuestion(session.id, on: terminal)
             #expect(permission.text.hasPrefix("允许 Claude Code 使用 cue - echo (MCP)？"), "\(permission.text)")
             try await testbed.bridge.answer(.confirmed(false), to: try #require(permission.promptID), in: session.id)
         }
@@ -109,13 +135,12 @@ extension RealClaudeTerminalTests {
             let terminal = try await testbed.terminal()
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let touched = testbed.work.appending(path: "here.txt")
+            touching(testbed, "HERE-TOUCH", touched)
 
-            let permission = try await testbed.ask(
-                "必须用 Bash 工具执行 touch \(touched.path) （不要用别的工具，也不要先检查），执行完只回复 DONE", on: terminal, in: session.id)
+            try await terminal.type("HERE-TOUCH")
+            let permission = try await testbed.waitForQuestion(session.id, on: terminal)
             try await eventually("终端里弹出确认") { await terminal.screen.contains("Do you want to proceed?") }
-            try await terminal.keys("Enter")
-
-            try await eventually("CuePad 上的这一问收起") { testbed.bridge.session(id: session.id)?.question == nil }
+            try await terminal.press("Enter", on: "Do you want to proceed?") { testbed.bridge.session(id: session.id)?.question == nil }
             #expect(FileManager.default.fileExists(atPath: touched.path))
             await #expect(throws: PiBridgeError.rejected("no_prompt")) {
                 try await testbed.bridge.answer(.confirmed(false), to: try #require(permission.promptID), in: session.id)

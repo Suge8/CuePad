@@ -12,7 +12,8 @@ extension HistoryRulesTests {
         let workspace = Workspace(services: rig.services)
         let id = try await rig.host.open(in: rig.cwd, launchToken: "retry", name: nil, model: nil, thinking: nil)
         let sessionID = try #require(rig.bridge.session(id: id)).sessionID
-        let prompt = "[[fail-once]] 跑一遍"
+        let prompt = "跑一遍"
+        rig.model.on(prompt, times: 1, .fail("fake model failure"))
         workspace.send(prompt, to: AgentTarget(session: sessionID))
         try await eventually("出错") { try await rig.records(.live).first?.state == .known(.error) }
         let failed = try #require(try await rig.records(.live).first)
@@ -21,7 +22,7 @@ extension HistoryRulesTests {
 
         workspace.retry(failed)
 
-        try await eventually("重跑做完") { try await rig.store.piMessages(of: sessionID).map(\.text) == [prompt, "ECHO \(prompt) IMAGES[]"] }
+        try await eventually("重跑做完") { try await rig.store.piMessages(of: sessionID).map(\.text) == [prompt, "ECHO \(prompt)"] }
         try await eventually("歇下") { try await rig.records(.live).first?.state == .known(.settled) }
         #expect(try RawDB(rig.services.location.databaseURL).count("sendRecords") == 1)
     }

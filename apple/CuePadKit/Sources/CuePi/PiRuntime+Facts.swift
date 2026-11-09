@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 extension PiRuntime {
-    /// 最低 1.4.0：官方原包验证了 agent_settled、context_edit 与命令空闲等待。抬它时同一改动里重录 Pi 录像带（`TEST_RUNNER_CUEPAD_AGENT_TESTS=pi`，见 CuePiTests 的 `RealAgents`）。官方脚本要 Node.js（下限是脚本里写的），没有时只报一句英文就退出。
+    /// 最低 1.4.0：官方原包验证了 agent_settled、context_edit 与命令空闲等待。抬它时同一改动里把测试钉住的 Pi（`CuePadKit/Tests/agents.json`）换成这一版跑一遍 CuePiTests。官方脚本要 Node.js（下限是脚本里写的），没有时只报一句英文就退出。
     nonisolated public static let facts = AgentFacts(
         command: "pi", homeVariable: "PI_CODING_AGENT_DIR", home: { $0.pi.agentDirectory }, minimumVersion: AgentVersion(1, 4, 0),
         installScript: "curl -fsSL https://pi.dev/install.sh | sh", upgradeCommand: "pi update --self",

@@ -6,7 +6,7 @@ import CueStore
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(2)))
+@Suite(RealAgents.taped(.pi))
 struct RealHostTests {
     private func endedSession(_ pi: PiProcess, _ bridge: PiBridge) async throws -> (file: URL, sessionID: String) {
         try await eventually("桥发现会话") { !bridge.sessions.isEmpty }
@@ -20,7 +20,7 @@ struct RealHostTests {
 
     /// 空闲时限给得短：测试进程意外退出时，留下的托管进程不久也会自己退。
     private func host(_ pi: PiProcess, _ bridge: PiBridge, idleLimit: Duration = .seconds(120)) -> PiRuntime {
-        PiRuntime(bridge: bridge, paths: pi.paths, pi: { AgentTape.executable("pi") }, idleLimit: idleLimit, timing: noDeadline)
+        PiRuntime(bridge: bridge, paths: pi.paths, pi: { pinnedPi.executable }, idleLimit: idleLimit, timing: noDeadline)
     }
 
     private func resume(_ host: PiRuntime, _ file: URL, in pi: PiProcess, on bridge: PiBridge) async throws -> PiSession {
@@ -29,7 +29,7 @@ struct RealHostTests {
     }
 
     @Test func anEndedSessionIsResumedInTheBackgroundAndTheMessageArrives() async throws {
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
@@ -42,11 +42,11 @@ struct RealHostTests {
 
         #expect(resumed.sessionID == sessionID && resumed.hosted)
         try await bridge.send(PiMessage(text: "后台接着说"), to: resumed.id)
-        try await eventually("后台进程回答了") { fileTexts("assistant", in: file).last == "ECHO 后台接着说 IMAGES[]" }
+        try await eventually("后台进程回答了") { fileTexts("assistant", in: file).last == "ECHO 后台接着说" }
     }
 
     @Test func theHostedMarkStaysWithTheHostedProcessAndIsNotInheritedByItsChildren() async throws {
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
@@ -57,8 +57,10 @@ struct RealHostTests {
         let resumed = try await resume(host, file, in: pi, on: bridge)
         let seen = pi.cwd.appending(path: "hosted-env.txt")
 
-        try await bridge.send(PiMessage(text: "[[tool:printf '%s' \"${CUEPAD_HOSTED-unset}\" > '\(seen.path)']] 看环境"), to: resumed.id)
-        try await eventually("子进程写下了它看到的") { (try? String(contentsOf: seen, encoding: .utf8)) != nil }
+        pi.model.on("看环境", .call("bash", ["command": "printf '%s' \"${CUEPAD_HOSTED-unset}\" > '\(seen.path)'"]), .say("TOOL_DONE"))
+        try await bridge.send(PiMessage(text: "看环境"), to: resumed.id)
+        // `>` 先建出空文件、printf 才写进去：等到有内容
+        try await eventually("子进程写下了它看到的") { (try? String(contentsOf: seen, encoding: .utf8))?.isEmpty == false }
         #expect(try String(contentsOf: seen, encoding: .utf8) == "unset")
 
         let log = ChangeLog(bridge)
@@ -67,10 +69,9 @@ struct RealHostTests {
         #expect(bridge.sessions.first { $0.sessionID == sessionID }?.hosted == true)
     }
 
-    @Test(arguments: ["", "[[slow]] 正在跑的一轮"])
-    func endingAHostedSessionClosesItsProcessEvenMidTurn(prompt: String) async throws {
-        AgentTape.variant(prompt.isEmpty ? "idle" : "busy")
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+    @Test(arguments: [false, true])
+    func endingAHostedSessionClosesItsProcessEvenMidTurn(busyTurn: Bool) async throws {
+        let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
@@ -79,8 +80,9 @@ struct RealHostTests {
         host.start()
         defer { stopHostedProcesses(bridge) }
         let resumed = try await resume(host, file, in: pi, on: bridge)
-        if !prompt.isEmpty {
-            try await bridge.send(PiMessage(text: prompt), to: resumed.id)
+        if busyTurn {
+            _ = pi.hold("正在跑的一轮")
+            try await bridge.send(PiMessage(text: "正在跑的一轮"), to: resumed.id)
             try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
         }
         let log = ChangeLog(bridge)
@@ -93,7 +95,7 @@ struct RealHostTests {
     }
 
     @Test func aNewSessionStartsInTheBackgroundAndIsClaimedByItsToken() async throws {
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
@@ -106,12 +108,12 @@ struct RealHostTests {
         #expect(opened.launchToken == "tok-1" && opened.hosted)
         try await bridge.send(PiMessage(text: "开场的话"), to: opened.id)
         try await eventually("回答了开场的话") {
-            recap(of: bridge.sessions.first { $0.id == opened.id })?.lastReply == "ECHO 开场的话 IMAGES[]"
+            recap(of: bridge.sessions.first { $0.id == opened.id })?.lastReply == "ECHO 开场的话"
         }
     }
 
     @Test func anIdleHostedSessionExitsAfterTheIdleLimit() async throws {
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
@@ -127,7 +129,7 @@ struct RealHostTests {
     }
 
     @Test func theHostedProcessGivesWayWhenTheSameSessionIsOpenedElsewhere() async throws {
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
@@ -149,7 +151,7 @@ struct RealHostTests {
     private func busy(_ state: PiWorkState?) -> Bool { state?.isWorking == true }
 
     @Test func aBusyHandoffReloadsTheUsersProcessSoTheSessionDoesNotBranch() async throws {
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
@@ -158,7 +160,8 @@ struct RealHostTests {
         host.start()
         defer { stopHostedProcesses(bridge) }
         let resumed = try await resume(host, file, in: pi, on: bridge)
-        try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
+        let gate = pi.hold("后台这一轮")
+        try await bridge.send(PiMessage(text: "后台这一轮"), to: resumed.id)
         try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
 
         let log = ChangeLog(bridge)
@@ -166,7 +169,7 @@ struct RealHostTests {
         defer { mine.stop() }
 
         try await eventually("用户的进程连上") { bridge.sessions.contains { $0.pid == mine.pid } }
-        try pi.release()  // 后台这一轮这才做完（它停在假模型里，由测试放行）
+        gate.open()  // 后台这一轮这才做完（它停在假模型里，由测试放行）
 
         try await eventually("后台做完退出、用户的进程重新载入") {
             bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [mine.pid]
@@ -181,7 +184,7 @@ struct RealHostTests {
     }
 
     @Test func aBusyHandoffLeavesTheUsersProcessAloneOnceItHasWrittenAndSaysSo() async throws {
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
@@ -190,7 +193,8 @@ struct RealHostTests {
         host.start()
         defer { stopHostedProcesses(bridge) }
         let resumed = try await resume(host, file, in: pi, on: bridge)
-        try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
+        let gate = pi.hold("后台这一轮")
+        try await bridge.send(PiMessage(text: "后台这一轮"), to: resumed.id)
         try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
 
         let mine = try await PiProcess(alongside: pi, sessionFile: file)
@@ -198,7 +202,7 @@ struct RealHostTests {
         try await eventually("用户的进程连上") { bridge.sessions.contains { $0.pid == mine.pid } }
         try mine.prompt("我自己的")
         try await eventually("用户这句落盘") { fileMessages(in: file).contains { $0.role == "user" && $0.text == "我自己的" } }
-        try pi.release()  // 用户先写了：后台这一轮这才做完
+        gate.open()  // 用户先写了：后台这一轮这才做完
 
         _ = try await mine.waitForEvent("提示会话分出了支线") {
             $0["method"] as? String == "notify" && ($0["message"] as? String)?.contains("支线") == true
@@ -207,7 +211,7 @@ struct RealHostTests {
     }
 
     @Test func aHostedSessionOutlivesCuePadAndIsSeenAgainByTheNextOne() async throws {
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let pi = try await PiProcess()
         let first = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { pi.stop() }
         try first.start()
@@ -215,12 +219,13 @@ struct RealHostTests {
         host?.start()
         let openedID = try #require(try await host?.open(in: pi.cwd, launchToken: "tok-outlive", name: nil, model: nil, thinking: nil))
         let opened = try #require(first.session(id: openedID))
-        try await first.send(PiMessage(text: "[[slow]] 跑到一半 CuePad 退出"), to: opened.id)
+        let gate = pi.hold("跑到一半 CuePad 退出")
+        try await first.send(PiMessage(text: "跑到一半 CuePad 退出"), to: opened.id)
         try await eventually("后台在忙") { busy(first.sessions.first { $0.id == opened.id }?.state) }
 
         host = nil
         first.stop()
-        try pi.release()
+        gate.open()
 
         let next = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { stopHostedProcesses(next); next.stop() }
@@ -233,13 +238,11 @@ struct RealHostTests {
         #expect(recap(of: again)?.lastReply?.contains("跑到一半") == true)
         try await next.send(PiMessage(text: "新的 CuePad 认回之后"), to: again.id)
         let file = try #require(again.sessionFile)
-        try await eventually("认回的进程接着收话、有回答") { fileTexts("assistant", in: file).last == "ECHO 新的 CuePad 认回之后 IMAGES[]" }
+        try await eventually("认回的进程接着收话、有回答") { fileTexts("assistant", in: file).last == "ECHO 新的 CuePad 认回之后" }
     }
 
-    /// 只连真 Pi 跑：两个 Pi 进程交替上桥、中途热换扩展文件，回放排不稳先后（三次两次等不到旧扩展上桥）。
-    @Test(RealAgents.live(.pi, "两个进程交替与热换扩展，回放排不稳先后"))
-    func anOldHostedProcessComesBackOnTheNewExtension() async throws {
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+    @Test func anOldHostedProcessComesBackOnTheNewExtension() async throws {
+        let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
@@ -265,13 +268,12 @@ struct RealHostTests {
         let target = try #require(bridge.sessions.first { $0.pid == left.pid })
         #expect(target.sessionID == sessionID)
         try await bridge.send(PiMessage(text: "换上新扩展之后"), to: target.id)
-        try await eventually("话送达、有回答") { fileTexts("assistant", in: file).last == "ECHO 换上新扩展之后 IMAGES[]" }
+        try await eventually("话送达、有回答") { fileTexts("assistant", in: file).last == "ECHO 换上新扩展之后" }
     }
 
     @Test(arguments: OldExtension.allCases)
     func aHostedLaunchOnAnExtensionThatCannotHonorHostingIsStoppedAndReported(_ old: OldExtension) async throws {
-        AgentTape.variant("\(old)")
-        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()

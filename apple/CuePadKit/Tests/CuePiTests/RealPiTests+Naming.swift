@@ -18,5 +18,23 @@ extension RealPiTests {
             try await eventually("写回成会话名") { bridge.sessions.first?.name == name }
         }
     }
+
+    /// 扩展回模型的原话，CuePad 取第一个不空的行、去掉首尾空白、截到上限；整理完是空的就报起不出
+    @Test(arguments: [
+        ("\n  修登录页白屏的问题，顺便把注册页、找回密码页和设置页的同类问题一起排查掉，再看首页  \n第二行", "修登录页白屏的问题，顺便把注册页、找回密码页和设置页的同类问题一起排查掉"),
+        ("  \n \n", nil),
+    ])
+    func theModelsRawReplyIsCleanedByCuePadAndAnEmptyOneIsAFailure(reply: String, expected: String?) async throws {
+        try await withRig { pi, bridge, s in
+            pi.model.on({ $0.system.contains("single-line task title") }) { _ in .say(reply) }
+            try await bridge.send(PiMessage(text: "帮我看看登录页为什么白屏"), to: s.id)
+            try await eventually("第一句话上报") { bridge.sessions.first?.firstMessage != nil }
+            if let expected {
+                #expect(try await bridge.suggestName(for: s.id) == expected)
+            } else {
+                await #expect(throws: PiBridgeError.rejected("failed: empty title")) { try await bridge.suggestName(for: s.id) }
+            }
+        }
+    }
 }
 #endif

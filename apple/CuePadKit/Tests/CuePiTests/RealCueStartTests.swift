@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 与 Grok Build 是假模型，Codex 用复制的登录（不刷新），Claude Code 用订阅令牌，OpenCode 见 `OpenCodeSandbox`，
+/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi、Claude Code 与 Grok Build 是假模型，Codex 用复制的登录（不刷新），OpenCode 见 `OpenCodeSandbox`，
 /// dsh 的家目录在临时目录里、登录只经环境里的 DeepSeek key。
 /// 默认回放录像带（OpenCode 没有录像带，总连真 OpenCode），见 `RealAgents`。
 private let agents = AgentKind.allCases.filter(RealAgents.runs)
@@ -82,11 +82,11 @@ struct RealCueStartTests {
     ) async throws {
         switch agent {
         case .pi:
-            let pi = try await PiProcess(modelInAgentDirectory: true)
+            let pi = try await PiProcess()
             let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
             defer { stopHostedProcesses(bridge); bridge.stop(); pi.stop() }
             try bridge.start()
-            let runtime = PiRuntime(bridge: bridge, paths: pi.paths, pi: { AgentTape.executable("pi") }, idleLimit: .seconds(120), timing: noDeadline)
+            let runtime = PiRuntime(bridge: bridge, paths: pi.paths, pi: { pinnedPi.executable }, idleLimit: .seconds(120), timing: noDeadline)
             runtime.start()
             try await body(runtime, bridge, pi.cwd, PiModelKey(provider: "fake", id: "echo"))
         case .codex:

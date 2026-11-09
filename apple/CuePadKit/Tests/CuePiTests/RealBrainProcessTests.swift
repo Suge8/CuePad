@@ -36,15 +36,16 @@ struct RealBrainProcessTests {
         case .codex:
             #expect(try codexSessions(mentioning: rig.marker) == [])
         case .claudeCode:
-            #expect(try claudeTranscripts(for: rig.marker) == [])
+            // 用户的配置目录（`CLAUDE_CONFIG_DIR`）是测试台的隔离目录（`ClaudeTestbed.isolatedEnvironment`）：会话没落进去，目录可能都没有
+            #expect(claudeTranscripts(for: rig.marker, in: rig.directory.deletingLastPathComponent().appending(path: "config/projects")) == [])
         case .opencode:
             let sandbox = try #require(sandbox)
             let left = try await openCodeSessions(in: rig.directory, sandbox)
             try await sandbox.stop()
             #expect(left.isEmpty, "\(left)")
         case .grok:
-            // 大脑的配置目录是它自己的临时目录（停下时删掉）：用户的会话目录里没有这个工作目录（只读）
-            let sessions = home.appending(path: ".grok/sessions")
+            // 大脑的配置目录是它自己的临时目录（`RealBrainTests.Rig`），会话不落进真实的 ~/.grok
+            let sessions = rig.directory.deletingLastPathComponent().appending(path: "grok-user/sessions")
             #expect(((try? FileManager.default.contentsOfDirectory(atPath: sessions.path)) ?? []).filter { $0.contains(rig.marker) } == [])
         case .dsh:
             // 会话、附件、存储都在本次运行的临时目录里，随它删掉；dsh 的家目录里没有会话
@@ -96,9 +97,8 @@ struct RealBrainProcessTests {
         }.map(\.path)
     }
 
-    private func claudeTranscripts(for marker: String) throws -> [String] {
-        let root = home.appending(path: ".claude/projects")
-        let projects = try FileManager.default.contentsOfDirectory(atPath: root.path).filter { $0.contains(marker) }
+    private func claudeTranscripts(for marker: String, in root: URL) -> [String] {
+        let projects = ((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []).filter { $0.contains(marker) }
         return projects.flatMap { project in
             ((try? FileManager.default.contentsOfDirectory(atPath: root.appending(path: project).path)) ?? []).filter { $0.hasSuffix(".jsonl") }
         }

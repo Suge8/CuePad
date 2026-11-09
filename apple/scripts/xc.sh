@@ -8,6 +8,8 @@
 #   xc.sh strings                                   编 mac 与 ios，把界面文字收进 String Catalog，列出缺英文的（strings.py 头注释）
 #   xc.sh test <mac|ios|ipad> [xcodebuild 参数…]     如 -only-testing:CuePadTests/SuiteName；ios、ipad 不带参数时连 CuePadKit 也在模拟器上跑
 #   xc.sh test kit [xcodebuild 参数…]               CuePadKit 在 macOS 上的测试，如 -only-testing:CueSyncTests/PendingTests
+#   xc.sh agents <status|install> [家…]              测试连的真 Agent：按 CuePadKit/Tests/agents.json 钉住的版本装进专用缓存（agents.py 头注释）。
+#                                                   没装的家，它的用例跳过，test 的结论页单列为「没跑、不算通过的」；TEST_RUNNER_CUEPAD_AGENT_MATRIX=full 时缺一家就失败
 #     test 只打印编译的警告与错误、失败的用例；收尾一页结论（test_summary.py）：Swift Testing 与 XCTest 各自的通过、失败、跳过数，首个失败（用例、断言原文、文件行），
 #       跳过的套件与原因，最慢 5 个，完整日志路径（App 日志、每条用例都在里面：apple/.derived/test.log）。退出码是 xcodebuild 的
 #   xc.sh shot <mac|ios|ipad> [图.png] [-- 启动参数…] [, [图.png] [-- 启动参数…]]…
@@ -54,7 +56,12 @@ IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 测试里条件等待的上限从这个时限推出（CueTestSupport 的 conditionBudget）：测试不另写短的墙钟上限
 export TEST_RUNNER_CUEPAD_TEST_TIME_LIMIT=$TEST_TIME_LIMIT
-USAGE="用法：$0 <check|build|strings|test|shot|rec|run|stop|fleet|explore|perf|release|device|provision|activity-log> [mac|ios|ipad|kit] …（见脚本头注释）"
+# 测试里起的 Pi（连同 CuePad 托管起的，它们继承测试进程的环境）不联网查更新：Pi 只认这个环境变量，没有设置项
+export TEST_RUNNER_PI_OFFLINE=1
+# 同时跑的测试最多这么多个（Swift Testing 的并行宽度；不限时它把用例全数同时起）：测试起的是真 Agent 进程，3 核的 CI 机器上同时起几十个，
+# 连回放的用例都等到超时（实测 76 条）。按核数给，CUEPAD_TEST_WIDTH 覆盖
+export TEST_RUNNER_SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH="${CUEPAD_TEST_WIDTH:-$(sysctl -n hw.ncpu)}"
+USAGE="用法：$0 <check|build|strings|test|agents|shot|rec|run|stop|fleet|explore|perf|release|device|provision|activity-log> [mac|ios|ipad|kit] …（见脚本头注释）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -62,6 +69,7 @@ case "$cmd" in
   strings) "$0" build mac; "$0" build ios; exec python3 "$APPLE_DIR/scripts/strings.py" sync ;;
   provision) signing_begin; exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;  # 签名锁见 _lock.sh 规则 3
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
+  agents) exec python3 "$APPLE_DIR/scripts/agents.py" "${@:2}" ;;
   explore) exec python3 "$APPLE_DIR/scripts/explore.py" "$0" "${@:2}" ;;
   fleet) exec python3 "$APPLE_DIR/scripts/fleet.py" "$0" "${@:2}" ;;
   perf) [ "$platform" != ab ] || exec python3 "$APPLE_DIR/scripts/perf-ab.py" "${@:3}" ;;  # 其余先构建、再测量，两段各自进锁（见下）
