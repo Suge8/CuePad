@@ -44,7 +44,7 @@ extension CueStore {
     let unsettled = "r.hostID = ?1 AND r.status NOT IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)')"
     return Set(try db.query(
       """
-      SELECT path FROM piSessions p WHERE COALESCE(p.agent, 'pi') = 'pi' AND p.id IN (
+      SELECT path FROM piSessions p WHERE p.agent = '\(AgentKind.pi.rawValue)' AND p.id IN (
         SELECT r.targetRef FROM deliveryRequests r WHERE \(unsettled) AND r.mode = 'send'
         UNION
         SELECT s.sessionID FROM deliveryRequests r JOIN piSessionStates s ON s.launchToken = \(Self.launchToken("r"))
@@ -78,8 +78,8 @@ extension CueStore {
     }
   }
 
-  /// 一行是哪家 Agent 的（会话索引与会话记录都是）：早于多家接入的行没写，是 Pi。也是 Agent 索引（`Schema.agentIndex`）的表达式。
-  static let agentOf = "COALESCE(agent, '\(AgentKind.pi.rawValue)')"
+  /// 一行是哪家 Agent 的（会话索引与会话记录都是）。
+  static let agentOf = "agent"
 
   /// 删掉一家 Agent 的本机会话索引（断开接入时）：会话同步记录与对话不动。`host` 这台 Mac 托管过的会话（`hostedPiSessionIDs`）留着：
   /// 没接入也照样开、照样读对话，闲置退出或结束后再发话要靠索引接着它（`MacExecutor`）。

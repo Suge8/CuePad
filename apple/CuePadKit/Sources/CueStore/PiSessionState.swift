@@ -64,7 +64,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var fast: Bool?
   /// 上下文余量（Pi 桥上报；已结束的会话留着最后一次的值）。旧版本写的记录没有。
   public var context: PiContextUsage?
-  /// 哪个 Agent 的会话。旧版本写的记录没有，是 Pi。
+  /// 哪个 Agent 的会话。
   public var agent: Open<AgentKind>
   /// 可以换成的模型与此刻能用的斜杠命令所在的目录记录（`AgentCatalog`，同一目录里的会话共用）；会话结束后也留着。
   public var catalogID: UUID?
@@ -218,7 +218,7 @@ extension PiSessionState: Record {
       pendingTools: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(25).flatMap(PiChatMessage.Tools.init(stored:)),
       model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)), fast: row.intOrNil(30).map { $0 == 1 },
       context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(22)),
-      agent: row.textOrNil(23).map(Open.init(rawValue:)) ?? .known(.pi), catalogID: row.uuidOrNil(24), turnStartedAt: row.dateOrNil(26),
+      agent: Open(rawValue: row.text(23)), catalogID: row.uuidOrNil(24), turnStartedAt: row.dateOrNil(26),
       answeredAt: row.dateOrNil(27), failure: row.textOrNil(28).map(Open.init(rawValue:)), bootID: row.textOrNil(29), createdForTaskID: row.uuidOrNil(31))
   }
 }

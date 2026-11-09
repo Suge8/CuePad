@@ -141,20 +141,6 @@ final class SQLite {
     guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else { throw error(sql) }
   }
 
-  /// 定义一个参数的 BLOB → BLOB SQL 函数（NULL 原样返回），给按行改写整张表的升级步骤用：一条 INSERT … SELECT 做完，行不进出 Swift。
-  func define(_ name: String, _ transform: @escaping (UnsafeRawBufferPointer) -> [UInt8]) throws {
-    let status = sqlite3_create_function_v2(
-      handle, name, 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC, Unmanaged.passRetained(BlobFunction(transform)).toOpaque(),
-      { context, _, values in
-        guard let value = values?[0], sqlite3_value_type(value) != SQLITE_NULL else { return sqlite3_result_null(context) }
-        let blob = sqlite3_value_blob(value)
-        let result = Unmanaged<BlobFunction>.fromOpaque(sqlite3_user_data(context)!).takeUnretainedValue()
-          .transform(UnsafeRawBufferPointer(start: blob, count: Int(sqlite3_value_bytes(value))))
-        result.withUnsafeBytes { sqlite3_result_blob(context, $0.baseAddress, Int32($0.count), SQLITE_TRANSIENT) }
-      }, nil, nil, { Unmanaged<BlobFunction>.fromOpaque($0!).release() })
-    guard status == SQLITE_OK else { throw error("define \(name)") }
-  }
-
   func run(_ sql: String, _ arguments: [any SQLBindable] = []) throws {
     _ = try query(sql, arguments) { _ in () }
   }
@@ -256,12 +242,6 @@ final class SQLite {
     Self.log.error("\(error.description, privacy: .public)")
     return error
   }
-}
-
-/// 注册成 SQL 函数的闭包：经 C 回调的 user data 带进去。
-private final class BlobFunction {
-  let transform: (UnsafeRawBufferPointer) -> [UInt8]
-  init(_ transform: @escaping (UnsafeRawBufferPointer) -> [UInt8]) { self.transform = transform }
 }
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
