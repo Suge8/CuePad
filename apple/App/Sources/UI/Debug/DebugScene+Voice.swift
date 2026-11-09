@@ -53,7 +53,7 @@ extension DebugScene {
             } catch { note("cue-store-error \(error)") }
         }
         defer { messages.cancel() }
-        guard let input = args.voice else { return await logPhoneCalls(workspace.services.voice, note: note) }
+        guard let input = args.voice else { return await logPhoneCalls(workspace.services, note: note) }
         for await canHear in Observations({ workspace.cue.canHear }) where canHear { break }
         var files: [URL] = []
         let fixture: VoiceFixture?
@@ -152,14 +152,26 @@ extension DebugScene {
     }
 
     /// 手机发起的通话由这台的 VoiceCall 持有（媒体在手机）：照样记节点与阶段，直到实例退出。
-    private static func logPhoneCalls(_ voice: VoiceService, note: @escaping (String) -> Void) async {
-        for await call in Observations({ voice.call }) {
+    private static func logPhoneCalls(_ services: AppServices, note: @escaping (String) -> Void) async {
+        for await call in Observations({ services.voice.call }) {
             guard let call else { continue }
             call.mark = note
+            var timers: [Task<Void, Never>] = []
             for await phase in Observations({ call.phase }) {
                 note("phase \(phase)")
+                if phase == .listening, timers.isEmpty {
+                    if let drop = dropRelay(note: note) { timers.append(drop) }
+                    if let seconds = args.voiceOpts.seconds {
+                        timers.append(Task {
+                            guard await Task.wait(for: .seconds(seconds)) else { return }
+                            note("hang-up")
+                            await services.voice.end()
+                        })
+                    }
+                }
                 if phase == .ended || phase.isFailure { note("end \(phase) audioMs=\(call.audioMs)") }
             }
+            timers.forEach { $0.cancel() }
         }
     }
 }

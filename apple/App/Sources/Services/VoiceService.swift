@@ -216,7 +216,8 @@ import os
             switch header.purpose {
             case .media:
                 guard header.session == session else { return }
-                await connectionClosed(local: header.sender, peer: header.recipient, reason: .protocolRejected)
+                let gone = reason == .leaseMismatch || reason == .unavailable
+                await connectionClosed(local: header.sender, peer: header.recipient, reason: gone ? .peerLeft : .protocolRejected)
             case .command(let id):
                 guard let wait = pending[id], wait.session == header.session, wait.local == header.sender, wait.peer == header.recipient else { return }
                 pending[id] = nil
@@ -233,6 +234,20 @@ import os
             #if os(iOS)
             if case .ready = value {} else { failPageReads(); revokeProjection() }
             #endif
+        }
+    }
+
+    /// `VoiceLink.relinking` 期间每秒试一次，直到 `done()` 或 until：本机中转在线就解析对端设备的当前租约，把这一帧发过去。
+    /// 对端还没连回来时解析、发送都会失败，这是等待的常态；结果只看对端有没有以新租约回帧（`done`）和期满。
+    func reach(_ device: VoiceDeviceID, until: ContinuousClock.Instant, done: () -> Bool,
+               send: (any VoiceSignaling, VoiceEndpoint) async throws -> Void) async {
+        while !done(), !Task.isCancelled, ContinuousClock.now < until {
+            if let signaling, case .ready = signaling.voiceAvailability {
+                do { try await send(signaling, try await signaling.resolveVoicePeer(device)) }
+                catch { AppServices.log.info("Voice relink attempt: \(String(describing: error), privacy: .public)") }
+            }
+            guard !done() else { return }
+            try? await Task.sleep(until: min(.now + .seconds(1), until), clock: .continuous)
         }
     }
 

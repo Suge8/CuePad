@@ -8,6 +8,8 @@ import UIKit
 /// 对方的声音录到 `-CuePadVoiceRecord <wav>`，节点写进 `-CuePadVoiceLog <文件>`（`DebugVoiceLog`）：阶段、回应、下行响停、进出后台。
 /// 后台：`-CuePadVoicePlayInBackground YES` 在听后记 `waiting-background`、等 App 进后台（外面 `xcrun simctl launch <UDID> com.apple.Preferences` 把它压下去）1 秒再送文件，
 /// 核对上下行、委派与挂断都在后台照常；下行这时走真的扬声器（静音、不录，`VoiceFixture.Downlink.speaker`），进了后台电平就停（`VoiceAudio`），没有 `output-loud`，回应看 Mac 的转写。中断：`-CuePadVoiceInterruptAfter <秒>` 在听后发系统收走声音时的那条通知，核对通话带"音频已中断"结束、Mac 收到挂断。
+/// 信令断开：`-CuePadVoiceDropRelay <在听后秒>,<断多久秒>` 断掉这台的中转连接（记 `relay-drop`），`link` 一行是通话链路的变化（等 Mac 回来、换绑），
+/// `projection` 一行是 Mac 投影的条数与阶段：断开期间通话照常，回来后投影补到最新；断得比宽限期（15 秒）久就带"网络断了"结束。
 /// 音频会话与真机同一种（录音类），模拟器一接通就弹麦克风授权：`simctl privacy grant` 写进了授权库也照弹（iOS 27 模拟器实测），不点它不挡通话。
 /// 负载很高时模拟器初始化扬声器会 RPC 超时、App 被系统中止（崩溃报告停在 `AURemoteIO::Initialize`），不是这里的问题，重跑。
 extension DebugScene {
@@ -28,6 +30,8 @@ extension DebugScene {
         var watching = [
             Task { for await response in Observations({ voice.response }) { note("response \(response)") } },
             Task { for await loud in Observations({ voice.outputActive }) { note(loud ? "output-loud" : "output-quiet") } },
+            Task { for await link in Observations({ voice.phone?.link }) { note("link \(link.map { "\($0)" } ?? "none")") } },
+            Task { for await value in Observations({ voice.projection.map { "\($0.requests.count) \($0.phase)" } }) { note("projection \(value ?? "none")") } },
             Task { for await _ in NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification) { note("app-background") } },
             Task { for await _ in NotificationCenter.default.notifications(named: UIApplication.willEnterForegroundNotification) { note("app-foreground") } },
         ]
@@ -44,6 +48,7 @@ extension DebugScene {
             note("phase \(phase.map { "\($0)" } ?? "none")")
             if !listened, phase == .listening {
                 listened = true
+                if let drop = dropRelay(note: note) { watching.append(drop) }
                 if args.voiceOpts.interruptAfter > 0 {
                     watching.append(Task {
                         guard await Task.wait(for: .seconds(args.voiceOpts.interruptAfter)) else { return }

@@ -1,4 +1,5 @@
 #if DEBUG
+import Foundation
 
 /// 与 Cue 通话的参数（Mac 发起见 `DebugScene+Voice`，手机发起见 `DebugScene+PhoneVoiceCall`）。
 /// 键 = `-CuePad` + 前缀「Voice」 + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。
@@ -6,6 +7,8 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     static let prefix = "Voice"
     /// `-CuePadVoiceCloseSeconds <秒>`：通话多久后关闭
     let closeSeconds: Double
+    /// `-CuePadVoiceDropRelay <在听后秒>,<断多久秒>`：像网络断了一样断掉这台的中转连接（`DebugRelayDrop`），核对通话等对端以新租约回来（`VoiceLink`）
+    let dropRelay: String?
     /// `-CuePadVoiceHangUpAfterReply YES`：结果送出后观察到实际输出、模型回合结束且音轨安静才挂断
     let hangUpAfterReply: Bool
     /// `-CuePadVoiceHistory <条数>`：通话面板预置的历史条数
@@ -40,11 +43,25 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     let runtime: String?
     /// `-CuePadVoiceScenario <名称>`：通话布局场景
     let scenario: String?
-    /// `-CuePadVoiceSeconds <秒>`（默认 60）：通话这么久后挂断
+    /// `-CuePadVoiceSeconds <秒>`（默认 60）：通话这么久后挂断；Mac 等手机来电时给了才挂（从接通算）
     let seconds: Double?
     /// `-CuePadVoiceToken <文件>` 读（`scripts/voice-token.py` 经本机 Codex app-server 获取，续期语义见 CodexAccess）：隔离目录里的 Codex 没登录
     let token: String?
     /// `-CuePadVoiceWireLog <文件>`：通话协议的收发日志
     let wireLog: String?
+}
+
+extension DebugScene {
+    /// 照 `-CuePadVoiceDropRelay` 在通话进入"在听"后断这台的中转连接；没给就不起。
+    static func dropRelay(note: @escaping (String) -> Void) -> Task<Void, Never>? {
+        guard let spec = args.voiceOpts.dropRelay else { return nil }
+        let parts = spec.split(separator: ",").compactMap { Double($0) }
+        guard parts.count == 2 else { abandon("-CuePadVoiceDropRelay 要写成 <在听后秒>,<断多久秒>", CocoaError(.formatting)) }
+        return Task {
+            guard await Task.wait(for: .seconds(parts[0])) else { return }
+            note("relay-drop \(parts[1])")
+            DebugRelayDrop.drop(for: .seconds(parts[1]))
+        }
+    }
 }
 #endif

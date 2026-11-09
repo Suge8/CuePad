@@ -29,15 +29,17 @@ import Testing
 
 @MainActor final class AuditSignaling: VoiceSignaling {
     let local = VoiceEndpoint(device: .init("phone-audit"), lease: UUID())
-    let peer = VoiceEndpoint(device: .init("mac-audit"), lease: UUID())
+    var peer = VoiceEndpoint(device: .init("mac-audit"), lease: UUID())
     var voiceAvailability: VoiceRelayAvailability { .ready(endpoint: local) }
     var voiceEvents: AsyncStream<VoiceRelayEvent> { AsyncStream { _ in } }
     var sent: [VoiceSignalPayload] = []
+    var recipients: [VoiceEndpoint] = []
     var failConnected = false
     func resolveVoicePeer(_ device: VoiceDeviceID) async throws -> VoiceEndpoint { peer }
     func sendVoice(_ payload: VoiceSignalPayload, session: VoiceSessionID, to recipient: VoiceEndpoint) async throws {
         if failConnected, case .media(.event(.connected)) = payload { throw URLError(.networkConnectionLost) }
         sent.append(payload)
+        recipients.append(recipient)
     }
     func event(_ payload: VoiceSignalPayload, session: VoiceSessionID) -> VoiceRelayEvent {
         .received(.init(header: .init(version: 1, sender: peer, recipient: local, session: session, sequence: 1, expiresAtMilliseconds: Int64(Date.now.timeIntervalSince1970 * 1000) + 30000, purpose: payload.purpose), payload: payload))
@@ -212,6 +214,25 @@ import Testing
         await voice.receive(signal.event(.projection(value: .init(session: old, phase: .failed(.storageUnavailable), requests: [], replies: [], executions: [])), session: old))
         #expect(!next.closed); #expect(voice.session == current)
         await voice.end(notify: false)
+    }
+
+    /// 中转断了不挂电话：Mac 以新租约回来的那帧带着最新投影，手机换绑、回 resume，之后的挂断送到新租约。
+    @Test func relayDropKeepsTheCallUntilTheMacComesBack() async throws {
+        let (app, voice, signal, media) = try await phone()
+        defer { app.services.cancelBackgroundWork() }
+        let session = try #require(voice.session), old = signal.peer
+        await voice.receive(.peerClosed(endpoint: old, reason: .disconnected))
+        #expect(!media.closing)
+        #expect(voice.isLive)
+        signal.peer = VoiceEndpoint(device: old.device, lease: UUID())
+        await voice.receive(signal.event(.projection(value: .init(session: session, phase: .speaking, requests: [], replies: [], executions: [])), session: session))
+        #expect(voice.phase == .speaking)
+        try await eventually("resume to the new lease") {
+            signal.sent.last == .media(signal: .resume) && signal.recipients.last == signal.peer
+        }
+        await Workspace(services: app.services).hangUpVoiceCall()
+        #expect(voice.phase == .ended(reason: .hungUp))
+        #expect(signal.sent.last == .media(signal: .hangup(reason: .hungUp)) && signal.recipients.last == signal.peer)
     }
 
     /// iPhone 进后台、锁屏不结束通话：媒体与 Mac 的信令都留着，之后照常挂断。

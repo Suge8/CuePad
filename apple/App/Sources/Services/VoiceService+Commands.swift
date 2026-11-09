@@ -36,7 +36,7 @@ extension VoiceService {
         Task {
             let outcome: VoiceCommandResult.Outcome
             if case .repeatReply = command.action,
-               remote?.header.session != header.session || remote?.header.sender != header.sender || remote?.header.recipient != header.recipient {
+               remote?.session != header.session || remote?.link != .bound(local: header.recipient, peer: header.sender) {
                 outcome = .rejected(reason: .sourceMismatch)
             } else {
                 outcome = await execute(command, mediaSession: header.session)
