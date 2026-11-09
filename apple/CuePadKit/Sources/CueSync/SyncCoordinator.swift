@@ -15,7 +15,10 @@ actor SyncCoordinator {
 
   let store: CueStore
   nonisolated let zoneID: CKRecordZone.ID
-  private let states = Broadcast(latest: Facts().state)
+  private let states = Broadcast(latest: Facts().state(accountUnconfirmed: false))
+  private var published = Facts().state(accountUnconfirmed: false)
+  /// 当前这一代的账号闸门（`CloudSync.start` 交进来）：认清了没有不是这里的事实，这里只读。
+  private var gate = AccountGate()
   /// 服务器收下了本机的一批改动（`CloudSync.acceptedUpdates`）。
   nonisolated let acceptances = Broadcast<Void>()
   /// 重试的等待结束了（到点、连通了、收下了一批）：发送者接着发，拉取器补上被挡下的那一拉（`SyncCoordinator+Hold`）。
@@ -42,9 +45,6 @@ actor SyncCoordinator {
     var catchingUp = false
     /// 下次最早什么时候发、因为什么（`hold`）；nil 是不用等。服务器要求的等待（`Hold.server`）在界面上算同步中，只从这里读。
     var holding: Hold?
-    /// 连着时账号没认清（账号变了之后取不到账号名、认账号失败）：不知道此刻是不是上次同步的那个账号，不拉不传，显示账号暂不可用，
-    /// 认清了（`account`）才放开。没连着时的认不了照旧（`accountStatus`）：那时本来就还没开始拉传。
-    var accountPending = false
     /// 库里有同步区令牌（`token()`、`setToken` 读写时记下）
     var reconciled = false
     var issues: [SyncIssue] = []
@@ -52,9 +52,9 @@ actor SyncCoordinator {
     /// 文件那一路因 iCloud 空间不足停着、到这一刻再试（`holdFiles`）；之后传上去一个才清掉：别的记录照常同步，所以不进 `status`。
     var filesHeldUntil: ContinuousClock.Instant?
 
-    /// 显示的状态：账号待核对时显示账号暂不可用（停下了、没有账号这些更要紧的照显示）。
-    var shown: SyncStatus {
-      guard accountPending else { return status }
+    /// 显示的状态：连着时账号没认清（`AccountGate.Verdict.unconfirmed`）显示账号暂不可用（停下了、没有账号这些更要紧的照显示）。
+    func shown(accountUnconfirmed: Bool) -> SyncStatus {
+      guard accountUnconfirmed else { return status }
       return switch status {
       case .needsDecision, .outdated, .noAccount, .accountRestricted: status
       default: .accountUnavailable
@@ -62,21 +62,35 @@ actor SyncCoordinator {
     }
 
     /// 界面看到的快照："同步中"是底层空闲、而一轮上传或拉积压正在进行，或服务器要求等着再发。
-    var state: SyncState {
-      SyncState(
+    func state(accountUnconfirmed: Bool) -> SyncState {
+      let shown = shown(accountUnconfirmed: accountUnconfirmed)
+      return SyncState(
         status: shown == .idle && (sending || catchingUp || holding?.server == true) ? .syncing : shown, issues: issues, alerts: alerts, catchingUp: catchingUp,
         reconciled: reconciled, filesOverQuota: filesHeldUntil != nil)
     }
   }
 
   var facts = Facts() {
-    didSet {
-      let state = facts.state
-      if state != oldValue.state { states.yield(state) }
-    }
+    didSet { publish() }
   }
 
-  var state: SyncState { facts.state }
+  var state: SyncState { facts.state(accountUnconfirmed: gate.current == .unconfirmed) }
+
+  private func publish() {
+    let state = state
+    guard state != published else { return }
+    published = state
+    states.yield(state)
+  }
+
+  /// 新一代开始：之后放行拉传、显示状态都看它的闸门。
+  func use(_ gate: AccountGate) {
+    self.gate = gate
+    publish()
+  }
+
+  /// 闸门变了（`CloudSync` 认完一次）：显示的状态可能跟着变。
+  func gateChanged() { publish() }
   var status: SyncStatus { facts.status }
   var issues: [SyncIssue] { facts.issues }
 
@@ -88,9 +102,9 @@ actor SyncCoordinator {
   /// 先给出当前快照，之后每次变化给出新快照。
   nonisolated var stateUpdates: AsyncStream<SyncState> { states.stream() }
 
-  /// 能不能和服务器同步：有可用的账号，也没有停下（`stopped`）。
+  /// 能不能和服务器同步：有可用的账号、认清了（闸门开着），也没有停下（`stopped`）。
   var canSync: Bool {
-    !stopped && !facts.accountPending && ![.noAccount, .accountRestricted].contains(status)
+    !stopped && gate.current == .open && ![.noAccount, .accountRestricted].contains(status)
   }
 
   /// 停下了：等你决定，或这台要更新（`SyncStatus.outdated`）。停下时不拉、不传，账号、同步区与上传失败都不改状态。
@@ -171,7 +185,6 @@ actor SyncCoordinator {
 
   /// 此刻登录的 iCloud 账号（用户记录名）。第一次同步记下；和上次同步的不是同一个时，本机数据属于上一个账号，停下来等你决定。
   func account(_ name: String) async {
-    facts.accountPending = false  // 认清了：是不是上次那个由下面判断
     guard !stopped else { return }
     let current = Data(name.utf8)
     do {
@@ -181,9 +194,6 @@ actor SyncCoordinator {
       failed(error)
     }
   }
-
-  /// 连着时认账号失败（`CloudSync`）：认清之前不拉不传（`Facts.accountPending`）。
-  func accountUnconfirmed() { facts.accountPending = true }
 
   /// 同步区不在了（`deletedByUser`：你在 iCloud 设置里删了 CuePad 的数据）：同步过的（有令牌或推送过的记录）是云端数据被删除或重置，
   /// 停下来等你决定；从没同步过的不用管，第一次上传时建区。

@@ -24,6 +24,9 @@ public struct Backoff: Sendable {
   }
 
   public mutating func reset() { failures = 0 }
+
+  /// 上次重置以来没失败过：一段失败的头一次、一段失败之后的恢复各记一条日志。
+  var isFresh: Bool { failures == 0 }
 }
 
 enum RequestLimits {

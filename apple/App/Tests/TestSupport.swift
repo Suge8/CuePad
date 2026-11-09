@@ -81,6 +81,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         return sendsSucceed.withLock { $0 }
     }
     func push() async {}
+    func activated() async {}
 
     func resolve(_ resolution: SyncResolution) async throws {}
     var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }

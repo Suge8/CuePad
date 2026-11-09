@@ -241,6 +241,7 @@ nonisolated extension DebugScene.StandInSyncing {
     @discardableResult func syncNow() async throws -> SyncPullResult { .incomplete }
     func send(recordNames: Set<String>) async -> Bool { true }
     func push() async {}
+    func activated() async {}
     func resolve(_ resolution: SyncResolution) async throws {}
     var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }
     func fetchFile(_ key: String) async throws -> URL { throw FileFetchFailure.notSyncing }

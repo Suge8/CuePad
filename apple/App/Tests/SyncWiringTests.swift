@@ -82,7 +82,8 @@ struct SyncWiringTests {
     @Test(arguments: [SyncResolution.uploadLocal, .eraseLocal])
     func 换了iCloud账号_停下等你决定(_ resolution: SyncResolution) async throws {
         let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
-        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
+        let accountChanges = NotificationCenter()  // 全进程的通知会叫醒并行的别的测试
+        let app = TestApp(sync: .built { CloudSync(store: $0, accountChanges: accountChanges) { cloud } })
         let services = app.services!
         let workspace = Workspace(services: services)
         services.startSync()
@@ -92,7 +93,7 @@ struct SyncWiringTests {
         try await services.store.upsertPiSession(IndexedSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: .now), host: "mac-a")
 
         await cloud.signIn("另一个账号")
-        NotificationCenter.default.post(name: .CKAccountChanged, object: nil)
+        accountChanges.post(name: .CKAccountChanged, object: nil)
         try await eventually("要你决定") { services.syncState.status == .needsDecision(.accountSwitched) }
         let waiting = try await workspace.createCard(body: "决定之前记的", in: Project.defaultID)
         await services.upload(waiting.id)

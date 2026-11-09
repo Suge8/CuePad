@@ -9,6 +9,8 @@ import Testing
 /// 设置里说为什么；认清之后不用用户再做什么，记下的就传上去。
 struct SyncAccountTests {
     let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
+    /// 账号变化只发给这里起的同步：全进程的通知会叫醒并行的别的测试。
+    let accountChanges = NotificationCenter()
 
     @Test
     func 没登录iCloud时_提示登录_记的不传_登上后自动传出() async throws {
@@ -25,7 +27,7 @@ struct SyncAccountTests {
         #expect(services.syncState.status == .noAccount)
 
         await cloud.setAccount(.available)
-        NotificationCenter.default.post(name: .CKAccountChanged, object: nil)
+        accountChanges.post(name: .CKAccountChanged, object: nil)
         try await eventually("登上后传出") { await cloud.saved.contains(name(card)) }
     }
 
@@ -57,7 +59,7 @@ struct SyncAccountTests {
         try await eventually("传上去") { await cloud.saved.contains(name(before)) }
 
         await cloud.setAccount(.couldNotDetermine)
-        NotificationCenter.default.post(name: .CKAccountChanged, object: nil)
+        accountChanges.post(name: .CKAccountChanged, object: nil)
         try await eventually("提示暂不可用") { services.syncState.status == .accountUnavailable }
         let waiting = try await workspace.createCard(body: "认不清时记的", in: Project.defaultID)
         await services.upload(waiting.id)
@@ -113,7 +115,7 @@ struct SyncAccountTests {
     }
 
     private func start() -> TestApp {
-        let app = TestApp(sync: .built { [cloud] in CloudSync(store: $0) { cloud } })
+        let app = TestApp(sync: .built { [cloud, accountChanges] in CloudSync(store: $0, accountChanges: accountChanges) { cloud } })
         app.services.startSync()
         return app
     }

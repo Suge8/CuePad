@@ -56,6 +56,7 @@ extension AppServices {
     func handleActivation() async {
         startPolling()
         relay?.resume()
+        await sync?.activated()
         await syncNow()
     }
 
