@@ -24,7 +24,7 @@ extension DebugScene {
             }
         }
         func reachable() async {
-            for await offline in Observations({ services.syncStatus == .offline }) where !offline { return }
+            for await offline in Observations({ services.syncState.status == .offline }) where !offline { return }
         }
         Task {
             await running("演示 Mac 交给 Cue") {

@@ -37,9 +37,9 @@ struct RealCodexHostedTests {
             #expect(rig.replies(session).last?.lowercased().contains("red") == true, "\(rig.replies(session))")
 
             let other = try #require(session.availableModels.first { $0.key.id != codexTestModel })
-            try await rig.bridge.configure(model: other.key, in: id)
+            try await rig.bridge.configure(PiConfig(model: other.key), in: id)
             #expect(rig.bridge.session(id: id)?.model?.key == other.key)
-            try await rig.bridge.configure(model: PiModelKey(provider: CodexModel.provider, id: codexTestModel), thinking: .high, name: "看图", in: id)
+            try await rig.bridge.configure(PiConfig(model: PiModelKey(provider: CodexModel.provider, id: codexTestModel), thinking: .high, name: "看图"), in: id)
             #expect(rig.bridge.session(id: id)?.model?.key.id == codexTestModel)
             #expect(rig.bridge.session(id: id)?.thinking == .known(.high))
             #expect(rig.bridge.session(id: id)?.displayName == "看图")

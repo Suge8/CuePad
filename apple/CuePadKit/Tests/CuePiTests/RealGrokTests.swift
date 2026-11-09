@@ -33,12 +33,12 @@ struct RealGrokTests {
             #expect(mine.text.hasPrefix("What color is this image?") && mine.text.contains("![](cuepad://file/"))
 
             let other = try #require(session.availableModels.first { $0.key.id != session.model?.key.id })
-            try await rig.bridge.configure(model: other.key, thinking: .high, name: "看图", in: id)
+            try await rig.bridge.configure(PiConfig(model: other.key, thinking: .high, name: "看图"), in: id)
             #expect(rig.bridge.session(id: id)?.model?.key == other.key)
             #expect(rig.bridge.session(id: id)?.thinking == .known(.high))
             #expect(rig.bridge.session(id: id)?.displayName == "看图")
             let unknown = await #expect(throws: PiBridgeError.unknownModel(.grok)) {
-                try await rig.bridge.configure(model: PiModelKey(provider: AgentKind.grok.rawValue, id: "no-such-model"), in: id)
+                try await rig.bridge.configure(PiConfig(model: PiModelKey(provider: AgentKind.grok.rawValue, id: "no-such-model")), in: id)
             }
             #expect(unknown?.localizedDescription == "Grok Build 里没有这个模型")
 

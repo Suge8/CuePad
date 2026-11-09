@@ -14,7 +14,6 @@ extension AppServices {
         register(hotkey)
         diagnostics.start(metricKit: location.touchesRealWorld)
         let piChanges = pi.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
-        let legacyPiChanges = pi.changes()
         agents.uninstalled = { [weak self] kind in await self?.runtimes[kind]?.integrationRemoved() }
         agents.installed = { [weak self] kind in self?.runtimes[kind]?.integrationInstalled() }
         do {
@@ -35,9 +34,6 @@ extension AppServices {
         follow(reporting: { .syncUnavailable(String(localized: "远程投送执行器没能启动：\(String(describing: $0))")) }) {
             await self.refreshAgentIntegrations()
             try await self.executor.start()
-        }
-        follow(reporting: { .piBridgeUnavailable(String(localized: "旧版 Pi 扩展文件没能删掉：\(String(describing: $0))")) }) {
-            try await self.agents.retireLegacyPiExtension(following: legacyPiChanges)
         }
         follow(reporting: { .syncUnavailable(String(localized: "目录绑定没能同步给手机：\(String(describing: $0))")) }) { try await self.startDirectoryBindings() }
         follow(reporting: { .syncUnavailable(String(localized: "这台 Mac 在线的记录没能写下：\(String(describing: $0))")) }) { [presence, wakeNotifications] in

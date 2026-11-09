@@ -46,24 +46,16 @@ final class AppServices {
         case built((CueStore) -> any SyncControlling)
     }
 
-    /// iCloud 同步；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
+    /// iCloud 同步；没有时同步状态是写明原因的 `.unavailable`。动作见 `AppServices+Sync`。
     @ObservationIgnored let sync: (any SyncControlling)?
     /// 门铃（实时层，见 `AppServices+Relay`）；不连真的 iCloud（替身、没有 iCloud 权限、隔离库）时没有。
     @ObservationIgnored let relay: Relay?
     @ObservationIgnored let sendOrder = SendOrder()
     @ObservationIgnored lazy var voice = VoiceService(services: self, signaling: relay)
-    private(set) var syncStatus: SyncStatus
-    private(set) var syncIssues: [SyncIssue] = []
-    /// 同步在一页页地拉积压（`SyncState.catchingUp`）；界面只经 `isCatchingUp` 读。
-    private(set) var syncCatchingUp = false
-    /// 这台的库和 iCloud 对过至少一遍（`SyncState.reconciled`）；界面只经 `knowsSyncedFacts` 读。
-    private(set) var syncReconciled = false
-    /// iCloud 空间不足，附件文件停在本机不往上传（`SyncState.filesOverQuota`）；别的记录照常同步，`syncStatus` 不因它变。
-    private(set) var syncFilesOverQuota = false
+    /// 同步此刻的样子（`sync.stateUpdates` 送来的那一份，`setSyncState` 写）：状态、问题、积压、对过没有、文件空间、锁屏通知的订阅都只读这里。
+    private(set) var syncState: SyncState
     /// 附件文件此刻在路上的，按 key（`CloudSync.fileTransfers`）：附件那一格据此画进度；key 离开就是那一趟结束了，文件在不在本机看附件目录。
     private(set) var fileTransfers: [String: FileTransfer] = [:]
-    /// Pi 锁屏通知的服务端订阅（只有 iOS 建立）；设置页与权限、注册状态一起显示。
-    private(set) var alertSubscription: PiAlertSubscriptionStatus = .off
     #if os(iOS)
     /// 最近一次要在前台提示的会话转换（见 `startSessionAlerts`）；每个窗口自己决定弹不弹。
     private(set) var sessionAlert: SessionAlert?
@@ -196,7 +188,7 @@ final class AppServices {
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
-        (self.sync, syncStatus) = (engine, status)
+        (self.sync, syncState) = (engine, SyncState(status: status, issues: []))
         relay = Self.makeRelay(sync, engine, device: mac.hostID)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
@@ -238,7 +230,7 @@ final class AppServices {
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
-        (self.sync, syncStatus) = (engine, status)
+        (self.sync, syncState) = (engine, SyncState(status: status, issues: []))
         relay = Self.makeRelay(sync, engine, device: UIDevice.current.identifierForVendor?.uuidString)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
@@ -276,7 +268,7 @@ final class AppServices {
         #if os(iOS)
         await cueActivity?.invalidate(reason: "resolveSync").value
         #endif
-        syncReconciled = false
+        syncState.reconciled = false
         try await sync?.resolve(resolution)
     }
 
@@ -286,10 +278,10 @@ final class AppServices {
     func setSyncState(_ state: SyncState) {
         let recovered = state.status.reachesMac && speech.reachableSince == nil
         #if os(macOS)
-        if state.status == .outdated, syncStatus != .outdated { updates.checkInBackground() }
+        if state.status == .outdated, syncState.status != .outdated { updates.checkInBackground() }
         #endif
         #if os(iOS)
-        if syncStatus != state.status {
+        if syncState.status != state.status {
             switch state.status {
             case .noAccount: cueActivity?.invalidate(reason: "syncNoAccount")
             case .needsDecision: cueActivity?.invalidate(reason: "syncNeedsDecision")
@@ -297,14 +289,9 @@ final class AppServices {
             }
         }
         #endif
-        syncStatus = state.status
+        syncState = state
         speechClock.setReachable(state.status.reachesMac)
         if recovered { Task { await syncNow() } }
-        syncIssues = state.issues
-        syncCatchingUp = state.catchingUp
-        syncReconciled = state.reconciled
-        syncFilesOverQuota = state.filesOverQuota
-        alertSubscription = state.alerts
     }
 
     func setFileTransfers(_ transfers: [String: FileTransfer]) {

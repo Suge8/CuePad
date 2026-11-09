@@ -55,10 +55,10 @@ extension CodexRuntime {
             try await call(session, "thread/compact/start", ["threadId": .string(session.threadID)])
         case "name":
             guard !argument.isEmpty else { throw PiBridgeError.rejected("missing_argument") }
-            try await configure(model: nil, thinking: nil, name: argument, in: id)
+            try await configure(PiConfig(name: argument), in: id)
         case "model":
             guard !argument.isEmpty else { throw PiBridgeError.rejected("missing_argument") }
-            try await configure(model: PiModelKey(provider: CodexModel.provider, id: argument), thinking: nil, name: nil, in: id)
+            try await configure(PiConfig(model: PiModelKey(provider: CodexModel.provider, id: argument)), in: id)
         case "plan", "default":
             guard hosted[session.pid] != nil else { throw PiBridgeError.rejected("unknown_command") }
             try await collaborate(name == "plan" ? "plan" : "default", in: session)

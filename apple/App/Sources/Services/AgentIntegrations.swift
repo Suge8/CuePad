@@ -142,7 +142,6 @@ final class AgentIntegrations {
         where isWritable(kind) && statuses[kind]?.files == .outdated && statuses[kind]?.isAvailable == true {
             do { try await install(kind) } catch { failure = failure ?? error }
         }
-        do { try await integration.retireLegacyPiExtension() } catch { failure = failure ?? error }
         if let failure { throw failure }
     }
 
@@ -150,17 +149,6 @@ final class AgentIntegrations {
     func install(_ kind: AgentKind) async throws {
         try await change(kind) { try await $0.install(kind) }
         installed(kind)
-    }
-
-    /// v37 单文件扩展到 v38 目录扩展的过渡：Pi 会话上线、下线（含换上新扩展时的重连）时复查旧扩展的存根还要不要留（`AgentIntegration.retireLegacyPiExtension`）。
-    /// 用户的 Mac 都装过一次 v38 起的 CuePad 并启动过（启动检查把旧扩展换掉）后，连同 Kit 里的存根与 `legacyPiExtensionInUse` 一起删。
-    func retireLegacyPiExtension(following changes: AsyncStream<PiSessionChange>) async throws {
-        for await change in changes {
-            switch change {
-            case .appeared, .ended: try await integration.retireLegacyPiExtension()
-            default: break
-            }
-        }
     }
 
     func uninstall(_ kind: AgentKind) async throws {

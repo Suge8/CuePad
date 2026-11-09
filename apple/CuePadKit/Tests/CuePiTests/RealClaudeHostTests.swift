@@ -150,9 +150,9 @@ struct RealClaudeHostTests {
             #expect(testbed.bridge.session(id: id)?.model?.key.id == claudeTestModel, "\(String(describing: testbed.bridge.session(id: id)?.model))")
             let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
 
-            try await testbed.bridge.configure(model: other, thinking: .low, name: "托管改名", in: id)
+            try await testbed.bridge.configure(PiConfig(model: other, thinking: .low, name: "托管改名"), in: id)
             await #expect(throws: PiBridgeError.unknownModel(.claudeCode)) {
-                try await testbed.bridge.configure(model: PiModelKey(provider: ClaudeCode.provider, id: "no-such-model"), in: id)
+                try await testbed.bridge.configure(PiConfig(model: PiModelKey(provider: ClaudeCode.provider, id: "no-such-model")), in: id)
             }
             try await testbed.bridge.command("/rename 命令改名", in: id)
             try await eventually("斜杠命令改了名、歇下") {
@@ -191,7 +191,7 @@ struct RealClaudeHostTests {
             try await testbed.bridge.send(PiMessage(text: "记住暗号 BANANA42，只回复 OK"), to: id)
             try await testbed.waitForTurn(id, since: start)
             let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
-            try await testbed.bridge.configure(model: other, in: id)
+            try await testbed.bridge.configure(PiConfig(model: other), in: id)
             let writing = Task { try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id) }
             try await eventually("开始这一轮") { testbed.bridge.session(id: id)?.state.isWorking == true }
             try await testbed.bridge.abort(id)

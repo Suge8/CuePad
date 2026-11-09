@@ -2,9 +2,10 @@
 打点是实例标准输出里的 `SYNCBENCH {json}` 行（DebugScene+SyncBench.swift），读线程按行收进 `Instance.events`，场景按事件等、不按时间猜。
 """
 from collections import defaultdict
-import hashlib, json, os, random, re, select, shutil, socket, subprocess, sys, threading, time
+import hashlib, json, os, random, select, shutil, socket, subprocess, sys, threading, time
 
 sys.dont_write_bytecode = True
+from _pi_extension import ENTRY, extension_version  # noqa: E402
 from app_env import disclaimed, isolated_env  # noqa: E402
 
 SESSIONS = int(os.environ.get("SYNC_BENCH_SESSIONS", 3))
@@ -121,15 +122,9 @@ class Load:
         return {"mean": round(sum(s) / len(s), 1), "max": round(max(s), 1), "cpus": os.cpu_count()}
 
 
-def extension_version(checkout):
-    source = open(f"{checkout}/apple/CuePadKit/Sources/CuePi/Extension/cuepad-bridge/index.ts").read()
-    # 已安装的旧扩展也解析这个精确声明；它是跨语言版本接口，不能随 TypeScript 排版改写。
-    return int(re.search(r"const EXTENSION_VERSION = (\d+);", source).group(1))
-
-
 def fake_extension(directory, checkout):
     """假扩展（子进程里跑）：SESSIONS 个会话，各自按指数分布的间隔切状态；任何带 id 的命令都回 ack ok。"""
-    version = extension_version(checkout)
+    version = extension_version(open(f"{checkout}/apple/{ENTRY}", encoding="utf-8").read())
     os.makedirs(directory, mode=0o700, exist_ok=True); os.chmod(directory, 0o700)
     now = lambda: time.time() * 1000
     sessions = []
