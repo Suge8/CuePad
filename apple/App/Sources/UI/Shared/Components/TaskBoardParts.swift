@@ -13,7 +13,6 @@ import SwiftUI
 /// 已完成列末尾是"更早做完的 N"：原地展开（它们没进归档，跳去归档页看到的是别的），展开后旁边是"全部归档"。
 struct BoardColumn: View {
     let column: TaskBoard.Column
-    /// 按项目范围筛过的看板。
     let board: TaskBoard
     /// 待办顶上浮出添加任务那一行（"+ 新任务"）；新任务落在 `newTaskProject`。
     @Binding var adding: Bool
@@ -227,8 +226,6 @@ struct BoardColumn: View {
         // 手机一行里它占一格：与旁边的空格一样高、字在中间
         .frame(maxHeight: isRow ? .infinity : nil)
     }
-
-    // MARK: 拖放
 
     private func drop(_ id: UUID, before target: UUID?) {
         guard let item = board.item(id) else { return }

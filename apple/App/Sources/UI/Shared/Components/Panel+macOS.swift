@@ -266,7 +266,6 @@ private struct PanelHostModifier: ViewModifier {
     }
 }
 
-/// 把所在的窗口报给 `PanelHost`。
 private struct WindowReader: NSViewRepresentable {
     let host: PanelHost
 

@@ -33,7 +33,6 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 
     var loaded: Int { ended.count }
     var hasMore: Bool { ended.count < endedTotal }
-    /// 一共几个会话（置顶的、在线的加结束的）。
     var count: Int { pinned.count + now.count + endedTotal }
     var isEmpty: Bool { count == 0 }
     /// 卡上写所在的项目图标：看全部项目时；只看一个项目时顶栏已经说了。

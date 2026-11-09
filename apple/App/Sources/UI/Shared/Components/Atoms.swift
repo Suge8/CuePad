@@ -4,8 +4,6 @@ import SwiftUI
 import UIKit
 #endif
 
-// MARK: 订阅 Store
-
 extension EnvironmentValues {
     /// 这一页此刻在前台。Mac 的内容区把去过的页都挂着（`Workspace.mountedPages`），不在前台的页暂停订阅（`observing`）、
     /// 不读实时状态；其余地方没有"挂着不看"的页，默认 true。
@@ -92,14 +90,10 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     }
 }
 
-// MARK: 分隔点
-
 /// 一行元信息里隔开两段的"·"：只是版面，读屏不念（行要读的话由行自己的标签给）。颜色跟随外层，要淡一档的调用处自己加。
 struct Dot: View {
     var body: some View { Text("·").readerHidden(true) }
 }
-
-// MARK: 项目图标
 
 struct ProjectGlyph: View {
     let project: Project?
@@ -131,7 +125,6 @@ nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
         self = stored.flatMap(Self.init(rawValue:)) ?? .folder
     }
 
-    /// 读屏与提示用的含义。
     var name: LocalizedStringResource {
         switch self {
         case .folder: "文件夹"
@@ -162,7 +155,6 @@ nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
     }
 }
 
-// MARK: 小件
 extension LocalizedStringResource {
     /// 收界面字的参数拿到的是已经算好或用户写的字（项目名、会话标题、Agent 说的）：原样显示，不查目录。
     static func verbatim(_ text: String) -> Self { "\(text)" }

@@ -17,7 +17,6 @@ private struct Chip: ViewModifier {
     let level: ControlSurface.Level?
     @Environment(\.palette) private var palette
 
-    /// 字与箭头之间。
     private static let gap: CGFloat = 4
 
     func body(content: Content) -> some View {
