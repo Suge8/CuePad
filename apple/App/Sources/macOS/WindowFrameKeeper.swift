@@ -14,8 +14,9 @@ final class WindowFrameKeeper {
         self.settings = settings
         if let descriptor = settings.windowFrame(for: name) { window.setFrame(from: descriptor) } else { window.center() }
         following = [NSWindow.didMoveNotification, NSWindow.didResizeNotification].map { name in
-            Task { [weak self] in
-                for await _ in NotificationCenter.default.notifications(named: name, object: window) { self?.save() }
+            let changes = NotificationCenter.default.notifications(named: name, object: window)
+            return Task { [weak self] in
+                for await _ in changes { self?.save() }
             }
         }
     }

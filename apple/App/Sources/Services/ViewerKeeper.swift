@@ -204,8 +204,9 @@ nonisolated extension ViewerKeeper {
 
     @MainActor private static func followExposure(_ services: AppServices) async {
         guard let shell = services.windowShell else { return }
+        let changes = NotificationCenter.default.notifications(named: NSWindow.didChangeOcclusionStateNotification, object: shell)
         services.mainWindowExposed = shell.occlusionState.contains(.visible)
-        for await _ in NotificationCenter.default.notifications(named: NSWindow.didChangeOcclusionStateNotification, object: shell) {
+        for await _ in changes {
             services.mainWindowExposed = shell.occlusionState.contains(.visible)
         }
     }
