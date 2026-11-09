@@ -27,6 +27,9 @@ jobs:
           - { name: test kit, args: test kit }
           - { name: test mac, args: test mac }
           - { name: test ios sync, args: test ios -only-testing:CuePadTests/SyncAccountTests -only-testing:CuePadTests/FileSyncTests -only-testing:CuePadTests/NewSessionFlowTests }
+    env:
+      # xcodebuild 只把 TEST_RUNNER_ 开头的变量交给测试进程：不给，测试里起的 pi（#!/usr/bin/env node）找不到 /opt/homebrew/bin 里的 node
+      TEST_RUNNER_PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
     steps:
       # lint 要 origin/main 与发布标签：整段历史、全部标签
       - uses: actions/checkout@v7
