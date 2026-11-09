@@ -3,26 +3,19 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// 手机上启用 Cue 前的三步：在 Mac 上装 CuePad、两台登同一个 iCloud、在 Mac 上接入 Agent。Cue 和 Agent 都在 Mac 上，手机只经 iCloud 看到它们，
-/// 每一步都只按同步来的事实算，不另记"做过哪步"：
-/// - 装好：库里有 Mac 写下过自己（`CueSettings.macs`）；
-/// - 对上：同步此刻到得了 Mac（`SyncStatus.reachesMac`）、和 iCloud 对过一遍（`CueGate.waiting` 为空），且库里有 Mac——同一个账户才看得到它；
-/// - 接好：有一台 Mac 报了能用的 Agent（`MacAgents.agents`）。
-/// 卡住的只有一步（`stuck`）：同步不通时一定是 iCloud（装没装 Mac 这时看不出），不然按顺序第一个没成的。
-/// 同步不通的说法与出路只用设置里同步那一行的（`SyncSummary`）。
+/// 每一步都只按同步来的事实算，不另记"做过哪步"。
+/// 卡住的只有一步（`stuck`）：同步不通时一定是 iCloud（装没装 Mac 这时看不出），不然按顺序第一个没成的。同步不通的说法与出路只用设置里同步那一行的（`SyncSummary`）。
 nonisolated struct CueMacSetup: Equatable {
     enum Step: Int, CaseIterable { case install, iCloud, agents }
 
     let macs: [MacAgents]
     let status: SyncStatus
-    /// 还没和 iCloud 对过时在等什么（`CueGate.waitingReason`）。
     let waiting: String?
 
     var installed: Bool { !macs.isEmpty }
     var reaches: Bool { status.reachesMac && waiting == nil }
     var agents: [AgentKind] { AgentKind.allCases.filter { kind in macs.contains { $0.kinds.contains(kind) } } }
 
-    /// 卡住的那一步；三步都通为 nil（这时是启用钮）。
     var stuck: Step? {
         if !reaches { return .iCloud }
         if !installed { return .install }
@@ -38,7 +31,6 @@ nonisolated struct CueMacSetup: Equatable {
     }
 }
 
-/// 三步一列，卡住的那一步亮起、带它的动作；三步都通时换成启用（`finish`）。卡底一句没有 Mac 时能先做什么。
 struct CueMacSteps<Finish: View>: View {
     let setup: CueMacSetup
     @ViewBuilder var finish: Finish
@@ -116,7 +108,6 @@ struct CueMacSteps<Finish: View>: View {
         }
     }
 
-    /// 卡住那一步的出路：发出下载链接、没开 iCloud 时打开设置；还在对时只转圈（在说明那一行）、Agent 只能在 Mac 上接，没有动作。
     @ViewBuilder private func action(_ step: CueMacSetup.Step) -> some View {
         switch step {
         case .install:

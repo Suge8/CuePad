@@ -1,23 +1,16 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页一次读到的：最近的对话、在等你的那几条；对话排成的格子与刻度滑条的刻度在读的时候一起推好
-/// （不在主线程，滚动时页面重算也不再推一遍）。
+/// 对话排成的格子与刻度滑条的刻度在读的时候一起推好（不在主线程，滚动时页面重算也不再推一遍）。
 nonisolated struct CueThread: Equatable, Sendable {
     /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
     /// 你的回答在读到的范围里，它引用的那条提问也要在，点引用才回得去。
     let messages: [CueMessage]
-    /// 拍板（Cue 的提问与会话在问的，`CueWait.read`），等得最久的在前。
     let waiting: [CueWait]
-    /// Cue 点名要你看的图（`CueMessage.shots`：提问的与做完的结果），按消息的 id：只有点了名、那一份还在的
     let shots: [UUID: [CueShown]]
     let rows: [Row]
-    /// 紧挨着上面同一边一颗气泡的气泡（你的话接你的话、Cue 的话接 Cue 的话，中间没隔着时间）：收紧成一串（`CueBubble`）。
     let joined: Set<UUID>
-    /// 上面另起一段写时间的格子（`ChatTimeMarker`）：读到的第一格，与离上一格隔了 `ChatTime.gap` 以上或跨了天的。
-    /// 换新的分隔自己写着时间，不另写。
     let stamps: [UUID: Date]
-    /// 刻度滑条：你的话与换新的地方（`ChatMark`），按 `rows` 的先后。
     let marks: [ChatMark]
     /// 还没读的 Cue 的话（Kit 的 `cueUnread` 是唯一的规则）。
     let unread: Set<UUID>
@@ -25,7 +18,6 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 读最近这么多条对话（更早的不在 Cue 页里翻：要找旧事问 Cue）。
     static let limit = 200
 
-    /// `lines`：定时叫醒 Cue 的那几轮，到点的那几条定时（按 id）。
     init(
         messages: [CueMessage], waiting: [CueWait], shots: [UUID: [CueShown]],
         unread: Set<UUID>, lines: [UUID: CueMemoryLine]
@@ -70,22 +62,14 @@ nonisolated struct CueThread: Equatable, Sendable {
             lines: Dictionary(try store.cueLines(fired).map { ($0.id, $0) }) { first, _ in first })
     }
 
-    /// 对话里的一格：你的话、你发起的一轮的经过（碰到的各处，`CueActivity.touches`；一处都没碰的一轮没有这一格；这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
-    /// 做完的结果点了名的图是结果卡，见 `rows`），
-    /// 连着的几轮 Cue 自己醒来（每轮是它的经过那一行与它说的话，`CueNoteRound`，每轮一行旁注 `CueNoteLog`）收成一格，隔了 `ChatTime.gap` 以上或跨了天另起一格。
     /// 还在等你的提问不在对话里，都在输入框上方的拍板卡里（同一问同屏一处），结束了回到 Cue 的一句；你答了的，答的那一刻另有一格你的回答（`answer`）。
-    /// 它此刻在做的事只写在对话末尾那一行（`CueEnding`）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
-        /// 你对一条提问的回答（选的那一项，`CueMessage.answer`；更旧版本存下的另外一句照原文），排在答的那一刻（`answeredAt`）；数据就是那条提问本身，
-        /// 收起、撤回的没有这一格。问的那句总在对话里（`messages`）：紧挨在上面时不带引用（`quoted` 为 false，问句同屏只留一份），
-        /// 隔开了才在字上面引一行它问的是什么，点了跳回去
+        /// 问的那句紧挨在上面时不带引用（`quoted` 为 false，问句同屏只留一份），隔开了才在字上面引一行它问的是什么。
         case answer(CueMessage, quoted: Bool)
         case cue(CueMessage, task: UUID?)
-        /// 点名了图的结果（结果卡）：图在 `CueThread.shots`
         case result(CueMessage, task: UUID)
         case notes([CueNoteRound])
-        /// 你发起的一轮的经过（`CueAuthor.round`）：碰到的各处（`CueTrace`），读的时候推好
         case process(CueMessage, touches: [CueActivity.Touch])
 
         var id: UUID {
@@ -104,14 +88,12 @@ nonisolated struct CueThread: Equatable, Sendable {
             }
         }
 
-        /// 回答那一格的 id：由提问的 id 推出（不另存），与提问那一格不同。
         static func answerID(of question: UUID) -> UUID {
             var bytes = question.uuid
             bytes.0 ^= 0xA5
             return UUID(uuid: bytes)
         }
 
-        /// 这一格下面挂的那件活：Cue 第一次提到它的话、结果卡。
         var taskID: UUID? {
             switch self {
             case .cue(_, let task): task
@@ -120,7 +102,6 @@ nonisolated struct CueThread: Equatable, Sendable {
             }
         }
 
-        /// 气泡在哪一边：你的话靠右，Cue 的话靠左；其余（结果卡、经过、醒来记录、分隔）不是气泡，不与上下的气泡连成一串。
         var speaker: HorizontalEdge? {
             switch self {
             case .you, .answer: .trailing
@@ -145,13 +126,11 @@ nonisolated struct CueThread: Equatable, Sendable {
         return stamps
     }
 
-    /// 回答按答的那一刻插进对话（`answer`）：排在那一刻之前最近的那格之后，与会话里的作答、预览卡同一条规则（`PiChat.entries`）。
-    /// 结果卡：关联一件活、不是提问、点名了图（`shots`，Cue 做完时挑的最终成果）的 Cue 的话；只挂点名的那几张，这件活发到手机的其余文件在它的会话里。
-    /// 提问的图跟着提问那一格（`CueSays`）。
+    /// 回答按答的那一刻插进对话，与会话里的作答、预览卡同一条规则（`PiChat.entries`）。
+    /// 结果卡只挂点名的那几张图，这件活发到手机的其余文件在它的会话里。
     private static func rows(
         _ messages: [CueMessage], waiting: Set<UUID>, shots: [UUID: [CueShown]], lines: [UUID: CueMemoryLine]
     ) -> [Row] {
-        // 同一毫秒答的按问的先后（`messages` 的顺序）
         var answers = messages.enumerated().filter { $0.element.answer != nil && $0.element.answeredAt != nil }
             .sorted { ($0.element.answeredAt!, $0.offset) < ($1.element.answeredAt!, $1.offset) }.map(\.element)[...]
         var shown = Set<UUID>()
@@ -203,7 +182,6 @@ nonisolated struct CueThread: Equatable, Sendable {
     }
 }
 
-/// Cue 点名要你看的一张图：发到手机的那一份与看它的什么（`CueShot`）。
 nonisolated struct CueShown: Identifiable, Equatable, Sendable {
     let preview: PiPreview
     let look: String

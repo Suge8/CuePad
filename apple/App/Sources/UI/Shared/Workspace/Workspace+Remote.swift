@@ -1,15 +1,13 @@
 import CueStore
 import Foundation
 
-/// 在 Mac 上操作（规则在 `MacRemote`）：去哪台、要不要先在 UU 远程里选电脑、回跳之后接着连。
 extension Workspace {
-    /// 连这台 Mac（会话页"⋯"里：会话所在的那台）：绑过就发起远控，没绑过先去 UU 里选电脑，回跳后接着连（`remoteBound`）。
     func operate(on host: String) async {
         services.settings.remoteLastHost = host
         if let device = services.settings.remoteDevices[host] { await launch(MacRemote.control(device, host: host)) } else { await bind(host) }
     }
 
-    /// 页顶那颗钮：只有一台 Mac 直接连它；几台时连上次连的那台，还没连过时返回这几台，由界面先选一台（换一台在钮的长按菜单里）。
+    /// 还没连过时返回这几台，由界面先选一台。
     func operateMac() async -> [MacAgents]? {
         let macs: [MacAgents]
         do { macs = try await services.store.allMacAgents() } catch {
@@ -44,7 +42,6 @@ extension Workspace {
         })
     }
 
-    /// UU 远程绑定完回跳：认得出是哪一次就记下这台 Mac 绑的电脑并接着连；失败说原因（取消的不说）。
     func remoteBound(device: String?, error: String?, nonce: String?) async {
         guard let nonce, let host = services.settings.remotePending[nonce] else { return }
         services.settings.remotePending = [:]
@@ -56,7 +53,6 @@ extension Workspace {
         }
     }
 
-    /// UU 远程说远控失败了：标识失效的忘掉，该重选的给"重新选择 Mac"，其余说原因。
     func remoteFailed(host: String?, reason: String) {
         guard let failure = MacRemote.controlFailure(reason) else { return }
         if reason == "device_not_found", let host { services.settings.remoteDevices[host] = nil }

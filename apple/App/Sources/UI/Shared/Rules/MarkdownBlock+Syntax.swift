@@ -23,7 +23,6 @@ nonisolated extension MarkdownBlock {
         line.prefix(while: \.isWhitespace).reduce(0) { $1 == "\t" ? ($0 / 4 + 1) * 4 : $0 + 1 }
     }
 
-    /// 标题：1～6 个 `#`、空白、正文。
     static func heading(_ line: String) -> (level: Int, text: String)? {
         let level = line.prefix { $0 == "#" }.count
         guard (1...6).contains(level) else { return nil }
@@ -37,7 +36,6 @@ nonisolated extension MarkdownBlock {
         return text.isEmpty ? nil : (level, String(text))
     }
 
-    /// 列表项：缩进、记号（`-`、`*`、`+`，或数字加 `.`、`)`）、空白、正文；无序的记号显示成"•"。
     static func item(_ raw: String) -> (marker: String, text: String, contentIndent: Int)? {
         let indent = raw.prefix { $0.isWhitespace }
         let rest = raw.dropFirst(indent.count)

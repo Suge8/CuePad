@@ -9,9 +9,7 @@ import Foundation
 /// - 小尺寸（`compact`，32pt 及以下）只留轮廓变了的帧（凉棚、欢呼）：眼睛只挪一两点，看不出来，换帧却照样要渲染服务合成。
 struct CueSprite: Hashable {
     let beat: CueBeat
-    /// 进来时放一遍，之后接 `loop`。
     let intro: [Frame]
-    /// 一圈从头再来；不到两帧时静止。
     let loop: [Frame]
 
     struct Frame: Hashable {
@@ -75,13 +73,10 @@ struct CueSprite: Hashable {
 }
 
 extension Motion {
-    /// 头像与状态标的节奏（帧序列各停多久在 `CueSprite.of`，两颗点的关键时刻在 `RelayMark`）。
     /// 常驻的连续摆动避开 5 秒上下（0.2Hz 的持续摆动最招晕），在 3～4 秒。
     nonisolated enum Beat {
-        /// 眨眼：闭眼那一张停多久，前后半闭各停多久。
         static let blink = 0.07
         static let halfBlink = 0.04
-        /// 在听时身体往耳朵那边倾的角度（度）与一个来回。
         static let lean = 2.5
         static let leanPeriod = 3.4
         /// 连续的循环（心电线、两颗点、在听的倾）最高多少帧每秒：这么小的图形用不着 120Hz。

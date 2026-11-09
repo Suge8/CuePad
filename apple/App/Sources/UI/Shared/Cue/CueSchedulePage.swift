@@ -1,10 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 定时（入口见 `CuePage`；手机与 Mac 同一张列表，壳是 `CueListPanel`）：Cue 到点照着做的那几句，先到点的在前。
-/// 一行左边是几点，右边是那句话，下面一行是哪天（重复的写"每天""每周一和周四"，一次的写"明天"）、挂在哪件任务上、错过后补上的那句事实；
-/// 点"改"原地展开成 `ScheduleEditor`。新定时是浮在底部的玻璃胶囊：写要做的事，右边那颗写着几点，点开在胶囊上方选。
-/// 改与不再定时按平台惯例收起（`CueListRow`）；不再定时先确认：库里是软删、界面上没有拨回去的路。
+/// 不再定时先确认：库里是软删、界面上没有拨回去的路。
 struct CueSchedulePage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -13,10 +10,8 @@ struct CueSchedulePage: View {
     @State private var shown: ScheduleShown?
     @State private var text = ""
     @State private var draft = ScheduleDraft()
-    /// 新定时的几点展开在选
     @State private var picking = DebugHooks.preset.scheduleOpen
     @State private var ending: CueMemoryLine?
-    /// 原地展开在改的那条
     @State private var rescheduling: Rescheduling?
     @FocusState private var adding: Bool
 
@@ -120,7 +115,6 @@ struct CueSchedulePage: View {
     }
 }
 
-/// 这一页一次读出的：定时与它们挂着的任务叫什么。
 nonisolated private struct ScheduleShown: Equatable, Sendable {
     var schedules: [CueScheduled]
     var tasks: [UUID: String]
@@ -133,13 +127,11 @@ nonisolated private struct ScheduleShown: Equatable, Sendable {
     }
 }
 
-/// 原地展开在改的那条定时与手上的那一份。
 private struct Rescheduling: Equatable {
     let id: UUID
     var draft: ScheduleDraft
 }
 
-/// 一行的几点那一列：字号比正文大一档，与正文隔开一段。
 private enum ScheduleMetrics {
     #if os(macOS)
     static let time = Typography.bodyStrong.weight(.medium)

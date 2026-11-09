@@ -1,18 +1,10 @@
 import SwiftUI
 
-/// 有人在看 Cue 页：这一页在屏上（Mac 页栈里的当前页、人看得到主窗口——露在屏上、有没有焦点都算、人没走开，`AppServices.seesMainWindow`；
-/// 手机上没被推进的页盖住、App 在前台）。在看的期间——
-/// - 算一个在看的（`AppServices.cueViewers`）：这台设备开着 Cue 页（`ViewerKeeper.showCue`，Cue 的提示据此不发，见 `AlertCenter`），手机按节奏拉；
-/// - 读新消息（哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读）。
-/// 新消息是气泡旁的一颗小点（`CueUnreadDot`），不插进对话：来去都不重排。开始看（进来、App 回到前台、窗口重新露出来）
-/// 又没在和 iCloud 对时，有新消息就从第一条读起（`ChatFollow.Landing.read`：停在顶上，下面不到一屏时滚动区停在最新处）；
-/// 每次开始看只落一次，对完之前你自己动过（发出一句、滚动、跳转）就不落（`ChatFollow.owesLanding`）。
-/// 读没读按条算：一条新消息的末尾在滚动区里停够 `dwell` 就算读到了它（`CueRow` 报看见，这里取最晚的一条合并成一次写），
-/// 打开时先停在最新处那一下、甩过去的不算；没在看、正在和 iCloud 对时不算。
+/// 有人在看 Cue 页的规则（算不算在看、读没读）只在这里：这一页在屏上（Mac 页栈里的当前页、人看得到主窗口 `AppServices.seesMainWindow`；手机上没被推进的页盖住、App 在前台）。
+/// 在看的期间算一个在看的（`AppServices.cueViewers`，Cue 的提示据此不发，手机按节奏拉），并读新消息：哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读。
 struct CueViewing: ViewModifier {
     let thread: CueThread?
     let catchingUp: Bool
-    /// 末尾此刻在滚动区里的新消息与它写下的时刻（`CueRow` 写）。
     @Binding var seen: [UUID: Date]
     @Binding var follow: ChatFollow
     @Environment(AppServices.self) private var services
@@ -22,19 +14,16 @@ struct CueViewing: ViewModifier {
     @Environment(\.scenePhase) private var phase
     private var onScreen: Bool { phase == .active }
     #else
-    /// 人看得到主窗口（`AppServices.seesMainWindow`：窗口露在屏上、人在跟前）。脚本起的验收实例窗口排在最后，当它露着
+    /// 脚本起的验收实例窗口排在最后，当它露着。
     private var onScreen: Bool { services.seesMainWindow || DebugHooks.scripted }
     #endif
-    /// 页面在屏上（推进了别的页盖住它时不在）。
     @State private var appeared = false
-    /// 已算进 `cueViewers`。
     @State private var counted = false
 
     /// 末尾在屏上停这么久才算读到：打开时先停在最新处、跳到第一条新消息之前的那一下，与一路甩过去的都不算。
     static let dwell: Duration = .seconds(1)
 
     private var watching: Bool { active && onScreen && appeared }
-    /// 读到的算数：在看、又没在和 iCloud 对（对的时候对话还不是最新的）。
     private var reading: Bool { watching && !catchingUp }
 
     func body(content: Content) -> some View {
@@ -79,7 +68,6 @@ struct CueViewing: ViewModifier {
     }
 }
 
-/// 一条新消息的末尾在不在可见区里：在滚动区里、又不在浮着的输入框与拍板卡底下（`chatBottomInset`）才算看到了这一条（长的回答要读到底）。
 /// 被盖着的那截仍在滚动区里，可见性回调（`onScrollVisibilityChange`）分不出，所以按滚动区此刻的边界自己比；只报变化，
 /// 浮着的那块的高在这里读，升起时每帧变也只重算新消息的这一格。
 /// 滚动区这个坐标空间不含上下的边（`ChatLayout.edge`），浮着那块的高却是从滚动区真正的下沿量起：比之前补回这一截。
@@ -100,15 +88,12 @@ struct CueEndProbe: View {
     }
 }
 
-/// 还没读的 Cue 的话：气泡左边外侧一颗石绿小点（新消息的颜色，同入口的点与侧栏的数，`CueDot`），对着第一行字；读到了淡出。
 /// 叠在格子上、不占地方：来去不重排。高按第一行字量（一个看不见的字），跟着动态字体走。
 struct CueUnreadDot: View {
     let unread: Bool
     @Environment(\.palette) private var palette
 
-    /// 点与气泡左缘之间。
     nonisolated static let gap: CGFloat = 6
-    /// 页边距至少这么宽才把点放在气泡外（点、缝，离屏缘再留一条缝），不然骑在气泡左缘上（`CueRow`）。
     static let room = StatusDot.size + gap + Spacing.item
 
     var body: some View {

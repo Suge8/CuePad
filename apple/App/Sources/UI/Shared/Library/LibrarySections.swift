@@ -1,25 +1,18 @@
 import CueStore
 import SwiftUI
 
-/// 技能与规则页的几块（Mac 的页与手机的页同一份，两段怎么挂、怎么换在 `LibraryDeck`，`LibraryPage`、`LibraryScreen` 只管页顶与空着时）：
-/// 一键整理那块纸（只在有不用你选的几件时出现，`TidyPaper`）、规则（`InstructionSection`）、技能（`SkillSection`）。
-/// 点任何一份都在 CuePad 里打开它的文件页（`LibraryFilePage`、`LibraryFileScreen`）；去重与合并在文件页顶上那一条里做。
 /// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。行末只画读不到这一份的那几家（`UnseenMarks`）。
-/// 一份规则是一行 `LinkRow`；行与行之间不画线，靠纸分组。
 
-/// 两段共用的排版：一列居中、最宽 `column`（同 Mac 文件页那一列字），块与块之间 `gap`。段名只在分段上（Mac 工具栏、手机页顶），段里不再写组名与个数。
+/// 段名只在分段上（Mac 工具栏、手机页顶），段里不再写组名与个数。
 enum LibraryLayout {
     static let column: CGFloat = 680
     static let gap = Spacing.group
     static let margin = Spacing.page
     static let bottom = Spacing.section
     #if os(macOS)
-    /// 纸的圆角
     static let radius = Radius.block
-    /// 一张纸里行上下留的边；手机上行铺满纸宽（`flush`），不留
     static let paperVertical = Spacing.tight
     static let flush = false
-    /// 文件页里正文与上面各块的左右留白
     static let textInset: CGFloat = 24
     /// 行尾的前进箭头：Mac 上点行打开的是盖在主区上的文件页（浮层，不是进一页），不画
     static let chevron = false
@@ -32,7 +25,6 @@ enum LibraryLayout {
     #endif
 }
 
-/// 一组行的纸：行与行之间不画线，手机上行铺满纸宽、首尾的圆角跟着纸（`rowContainer`）。
 struct LibraryPaper<Content: View>: View {
     @ViewBuilder var content: Content
 
@@ -45,9 +37,6 @@ struct LibraryPaper<Content: View>: View {
 }
 
 
-/// 一键整理那块纸：按段分开，规则段只列规则的事（内容相同换链接、Claude Code 读不到项目规则），技能段只列技能的事（旧目录、读不到、空文件夹），
-/// 那一段没有就不出现，有就在那一段最上面。不用你选的那几件逐条写结果的事实，不带逐条的按钮、不写标题，
-/// 底下一颗"一键整理"只做这一块列出的。手机上按钮旁直写后果（`TidyConsequence`）；Mac 做完给可撤销的提示（`Workspace.tidy`）。
 struct TidyPaper: View {
     let tidies: [LibraryTidy]
     let library: AgentLibrary
@@ -84,11 +73,9 @@ struct TidyPaper: View {
     #endif
 }
 
-/// 一键整理要做的那几件，各一条结果的事实（图标加一句；一键整理的纸与 Mac 接入面板的第二步同一份）。
 struct TidyFacts: View {
     let tidies: [LibraryTidy]
     let library: AgentLibrary
-    /// 字体；不给时用外面的
     var font: Font?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -106,7 +93,6 @@ struct TidyFacts: View {
     }
 }
 
-/// 一键整理那块纸摆在一段的最上面，只放这一段的事（`rules`：规则的，否则技能的）。
 /// 整理完收起时淡出、下面的跟着上移：是你点了才变的。
 struct TidySlot: View {
     let library: AgentLibrary
@@ -122,7 +108,6 @@ struct TidySlot: View {
     }
 }
 
-/// 整理那几颗按钮上的字：做着时换成转圈（宽度不变）；手机上带纸飞机——是发往 Mac 去做的。
 struct TidyLabel: View {
     let title: LocalizedStringResource
     let working: Bool
@@ -140,7 +125,6 @@ struct TidyLabel: View {
 }
 
 /// 整理按钮旁的后果（操作前必须知道的，不藏进问号）：去重、合并有东西进废纸篓；手机上发往 Mac 去做，做完撤不回（那台照做不留撤销，`MacExecutor`）。
-/// Mac 上做完给可撤销的提示，一键整理不另写。
 struct TidyConsequence: View {
     enum Kind { case automatic, duplicate, merge }
 
@@ -170,8 +154,6 @@ struct TidyConsequence: View {
     }
 }
 
-/// 规则：全局规则是一张露出正文开头几行的纸，Pi 的系统提示（有才列）接在它下面；绑了文件夹的各项目另一张纸，各一行。点哪一份都打开它的文件页。
-/// 行末是读不到这一份的那几家，内容不同、另写了一份的那家也在内（文件页顶上那一条里合并进来）；Pi 的系统提示不画。
 struct InstructionSection: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
@@ -203,8 +185,7 @@ struct InstructionSection: View {
     }
 }
 
-/// 全局规则那一张纸：名字一行（字、图标列与边同 `LinkRow`），下面露出正文开头四行（留足四行的高，短的不缩），点开就改。正文读同步来的那一条（`LibraryFileText`），不另存一份预览。
-/// 露出的是渲染后的样子（`MarkdownBlock`）：标题加粗、不带 #，列表带圆点，行内记号只留字，代码块、表格与分割线跳过。
+/// 正文读同步来的那一条（`LibraryFileText`），不另存一份预览。
 private struct GlobalRuleRow: View {
     let library: AgentLibrary
     let instruction: LibraryInstruction
@@ -239,7 +220,6 @@ private struct GlobalRuleRow: View {
 
     private static let lines = 4
 
-    /// 正文开头几行；还没有这个文件写"还没有"，正文还在路上时空着（四行的高留着）。
     private var opening: AttributedString {
         guard let arrived = AgentLibrary.arrived(instruction.path, hash: instruction.hash, in: texts) else { return "" }
         guard let text = arrived else { return AttributedString(localized: "还没有") }
@@ -266,7 +246,6 @@ private struct GlobalRuleRow: View {
     }
 }
 
-/// 规则行首的图：全局规则一张纸，Pi 的系统提示是 Pi 的标志，项目是它的图形。
 private struct InstructionIcon: View {
     let kind: LibraryInstruction.Kind
     @Environment(Workspace.self) private var workspace
@@ -287,7 +266,6 @@ private struct InstructionIcon: View {
     #endif
 }
 
-/// 规则行末：读不到的那几家与另写了一份的那家（还没有这个文件时写"还没有"）。
 private struct InstructionTrailing: View {
     let library: AgentLibrary
     let instruction: LibraryInstruction

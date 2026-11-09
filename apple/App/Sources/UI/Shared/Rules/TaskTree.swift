@@ -2,17 +2,14 @@ import CoreGraphics
 import CueStore
 import Foundation
 
-/// 一次结构上的移动：挂到哪、排在哪条同级之后（nil = 最前）。交给 `CueStore.moveCard`。
 nonisolated struct TaskMove: Hashable, Sendable {
     var slot: CardSlot
     var after: UUID?
 }
 
-/// 拖动时的落点：要做的移动，以及界面上怎么标（悬停高亮的那一行，或两行之间的插入线与它的层级）。
 nonisolated struct TaskDrop: Equatable, Sendable {
     enum Mark: Equatable, Sendable {
         case onto(UUID)
-        /// 插在 `after` 这一行（可见的行，nil = 最前）之下，层级 `depth`（0 起）。
         case gap(after: UUID?, depth: Int)
     }
 
@@ -20,12 +17,10 @@ nonisolated struct TaskDrop: Equatable, Sendable {
     var mark: Mark
 }
 
-/// 一组任务的层级（手机与 Mac 的项目页、任务看板的顶层共用）：按输入顺序（同级的手动顺序）建树，上级不在这组里的当顶层；
-/// 排出可见的行（只有两级，全部列出、不折起），算缩进、反缩进与拖放落点各是哪一次移动。任务最多几级只在 `Card.maxTaskDepth`。
+/// 任务最多几级只在 `Card.maxTaskDepth`。
 nonisolated struct TaskTree: Equatable, Sendable {
     struct Row: Identifiable, Equatable, Sendable {
         var task: Card
-        /// 0 起。
         var depth: Int
         var id: UUID { task.id }
     }
@@ -37,7 +32,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
     private var everything: [Card] = []
     private var structure = Links([])
 
-    /// 最深一级任务的缩进层数（0 起）。
     private static let deepest = Card.maxTaskDepth - 1
 
     /// `ordered` 是要显示的任务（同级手动顺序）；`all` 是同一范围里库中的全部任务（含已完成），省略时同 `ordered`。
@@ -55,8 +49,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
     var isEmpty: Bool { tasks.isEmpty }
     var ordered: [Card] { order }
 
-    /// 只留这些顶层任务和它们的子树（项目页显示的前几条），顶层按给的先后排：
-    /// 排出的行、缩进、反缩进与拖放的落点都按这个顺序算，与看到的一致。
     func scoped(to roots: [UUID]) -> TaskTree {
         TaskTree(roots.flatMap { [$0] + descendants(of: $0) }.compactMap { tasks[$0] }, all: everything)
     }
@@ -65,7 +57,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
     func depth(of id: UUID) -> Int { links.depth(of: id) }
     func descendants(of id: UUID) -> [UUID] { links.descendants(of: id) }
 
-    /// 可见的行：从 `roots`（默认全部顶层）往下，先序。
     func rows(of roots: [UUID]? = nil) -> [Row] {
         var rows: [Row] = []
         func visit(_ id: UUID, _ depth: Int) {
@@ -86,14 +77,11 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return TaskMove(slot: .under(parent), after: children(of: parent).last)
     }
 
-    /// 成为原上级的下一个同级；顶层为 nil。
     func outdent(_ id: UUID) -> TaskMove? {
         guard let parent = parents[id] else { return nil }
         return TaskMove(slot: slot(under: parents[parent], project: project(of: parent)), after: parent)
     }
 
-    /// 拖着 `dragged` 停在 `point`（与 `frames` 同一坐标系）时的落点。`rows` 是可见的行，`depthShift` 是手指横向挪了几级
-    /// （右正左负）。停在一行中部是成为它的子任务（排在最后）；在两行之间时，层级取原层级加横移、夹在这个位置可取的范围内。
     /// 不能落进自己的子树；与原位置相同时为 nil。
     func drop(_ dragged: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint, depthShift: Int) -> TaskDrop? {
         let excluded = Set([dragged] + descendants(of: dragged))
@@ -128,7 +116,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return nil
     }
 
-    /// 点落在哪一行、在这一行的上下哪个位置（0 上沿，1 下沿）。
     private func hit(_ point: CGPoint, in rows: [Row], frames: [UUID: CGRect]) -> (index: Int, fraction: CGFloat)? {
         guard let index = rows.firstIndex(where: { frames[$0.id]!.minY <= point.y && point.y < frames[$0.id]!.maxY }) else { return nil }
         let frame = frames[rows[index].id]!
@@ -147,7 +134,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return TaskMove(slot: slot(under: sibling.flatMap { parents[$0] }, project: project), after: sibling)
     }
 
-    /// 挂到 `parent` 下整棵子树不超过最深一级（按库里的整棵树）。
     private func fits(_ id: UUID, under parent: UUID) -> Bool {
         structure.depth(of: parent) + structure.height(of: id) <= Self.deepest
     }
@@ -162,7 +148,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         parent.map(CardSlot.under) ?? .top(project: project)
     }
 
-    /// 树里一条任务所在的项目（树里的 id 都在 `tasks` 里）。
     private func project(of id: UUID) -> UUID { tasks[id]!.projectID }
 
     /// 原位置：同级（顶层按同一项目算，与 Store 的同级范围一致）里的上一条。
@@ -174,7 +159,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
     }
 }
 
-/// 一组任务的上下级（要显示的那组，或库里含已完成的整棵树）：上级不在这组里的当顶层。
 /// 库里没有环（本机写入校验、远端变更在同一事务里收敛，见 `CardLinks.repairs`），上级链与子树都走得到头。
 nonisolated private struct Links: Equatable, Sendable {
     private(set) var roots: [UUID] = []
@@ -197,13 +181,11 @@ nonisolated private struct Links: Equatable, Sendable {
 
     func descendants(of id: UUID) -> [UUID] { children(of: id).flatMap { [$0] + descendants(of: $0) } }
 
-    /// 0 起。
     func depth(of id: UUID) -> Int {
         var depth = 0, cursor = parents[id]
         while let parent = cursor { depth += 1; cursor = parents[parent] }
         return depth
     }
 
-    /// 连自己在内往下有几级。
     func height(of id: UUID) -> Int { 1 + (children(of: id).map(height(of:)).max() ?? 0) }
 }

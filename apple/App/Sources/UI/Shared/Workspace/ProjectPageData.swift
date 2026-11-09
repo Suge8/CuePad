@@ -1,24 +1,17 @@
 import CueStore
 import Foundation
 
-/// 项目页的内容（灵感、发送、任务）一次读取；项目的名称、图标、目录、计数在 `ProjectCatalog`。
 nonisolated struct ProjectPageData: Sendable, Equatable {
     var project: Project?
-    /// 散放的灵感（不含任务与挂在任务下的）：卡片墙与"更早"。
     var cards: [Card]
-    /// 卡片最近一次发送（时间与目标）；从未发送的卡不在里面。
     var lastSends: [UUID: LastSend]
-    /// 本项目没完成的任务的层级，同级按手动顺序。
     var tasks: TaskTree
-    /// 本项目最近做完的顶层任务（`CueStore.tasksDone`，至多 `doneLimit` 条）：纸底"已完成"展开时列出。
     var done: [Card]
-    /// 本项目顶层任务的个数（`CueStore.taskCounts`）：纸底的"还有 N 条"与"已完成 M"。
     var taskCounts: TaskCounts
-    /// 任务的子任务完成了几个，完成圈与"子任务 n/m"由它推出。
     var subtasks: [UUID: TaskProgress]
-    /// 排墙用的卡片事实（`cards` 与 `lastSends` 推出，读取时算一次）：排墙、"更早"分组与"要不要重排"都读它。
+    /// 由 `cards` 与 `lastSends` 推出，读取时算一次。
     var stamps: [CardStamp]
-    /// 卡片最近一次发给的 Agent 会话名（同名会话写"已发过"，已下线的去处不写，`SendTarget.shownName`；`lastSends` 推出，读取时算一次）。
+    /// 由 `lastSends` 推出，读取时算一次。
     var lastTarget: [UUID: String]
 
     static let doneLimit = 30
@@ -42,7 +35,6 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     }
 }
 
-/// 项目页上墙的状态：当前分区，以及本次排墙之后从"更早"浮回墙上的卡（带 ↑ 标记）。Mac 与 iOS 项目页共用。
 nonisolated struct WallBoard: Equatable, Sendable {
     private(set) var arrangement: WallArrangement?
     private(set) var floated: Set<UUID> = []

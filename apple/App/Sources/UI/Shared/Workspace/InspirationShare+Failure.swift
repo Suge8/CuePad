@@ -13,7 +13,6 @@ extension InspirationShare {
         }
     }
 
-    /// 恢复动作随失败原因保存；只有临时网络失败可以用同一份快照重试。
     nonisolated struct Problem {
         let message: String
         let recovery: Recovery

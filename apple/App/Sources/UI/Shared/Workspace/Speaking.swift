@@ -1,16 +1,11 @@
 import CueStore
 import SwiftUI
 
-/// 发消息只有这一条路（全 App 所有入口：会话回复框的说话、作答与斜杠命令，Cue 页与浮起的 Cue 输入条，菜单栏交给 Cue，
-/// 手机发给 Agent，Mac 开始任务，压缩按钮）：
-/// 按下发送 → 同步取走草稿、清空输入框（在任何 await 之前）→ 写一条记录（`Listener`）→ 后台立即上传。界面从不等上传或执行结果，
-/// 到哪了只看记录（`Speech`）。只有写库本身失败时草稿放回输入框（期间新打的字接在后面）并提示。附件选好时已存进附件目录，
-/// 写正文不会失败（`saying` 是发出后的那句提示）。
-/// 草稿在这里取走；落库与全 App 的发送顺序归 AppServices，语音和多个窗口共用。
+/// 发消息只有这一条路（全 App 所有入口）：按下发送 → 同步取走草稿、清空输入框（在任何 await 之前）→ 写一条记录 → 后台立即上传。
+/// 界面从不等上传或执行结果，到哪了只看记录（`Speech`）。只有写库本身失败时草稿放回输入框（期间新打的字接在后面）并提示。
+/// 落库与全 App 的发送顺序归 AppServices，语音和多个窗口共用。
 extension Workspace {
-    /// 从输入框说出去：`box` 是输入框的草稿，`content` 把取走的草稿写成存储格式正文，
     /// `keeping` 是发出后输入框里留下的（斜杠命令留着批注跟下一句发）。返回写库与上传的那个任务（测试等它）。
-    /// 草稿里还有在存的附件（`importFiles`）时，这句等它们存好、连同附件一起写；输入框照样立刻清空。
     @discardableResult
     func speak(
         to listener: Listener, from box: Binding<ComposerDraft>, keeping: (ComposerDraft) -> ComposerDraft = { _ in ComposerDraft() },
@@ -18,7 +13,6 @@ extension Workspace {
     ) -> Task<Void, Never> {
         let taken = box.wrappedValue
         let kept = keeping(taken)
-        // 留在输入框里的编号，导入存好后还接给输入框，不随这句发出
         let claim = claimImports(taken.withImports(notIn: kept))
         box.wrappedValue = kept
         if let saying { say(saying) }
@@ -28,8 +22,6 @@ extension Workspace {
         }, restore: { sent in box.wrappedValue = sent.followed(by: box.wrappedValue, keeping: kept) })
     }
 
-    /// 从回复框交给会话（会话页的回复框、手机的交给 Agent，同一条规则）：草稿是一条命令（`PiSlash.line`）就按命令交出，批注留着跟下一句发；
-    /// 其余按 `mode` 说出去，模板与技能也在其中（`PiSlash.said`：你打的那行在最前）。`kinds` 是回复框此刻收的内容。
     @discardableResult
     func reply(
         to session: PiSessionState, commands: [PiSlashCommand], from box: Binding<ComposerDraft>, accepting kinds: ComposerKinds,
@@ -51,7 +43,6 @@ extension Workspace {
         }
     }
 
-    /// 回复某份预览（缩略图长按、右键或全屏页的"回复"）：会话的回复框带上它的引用并聚焦，话就在回复框里写，随下一句发出（`ReplyNote`）。
     func quote(_ preview: PiPreview, in entry: UUID, of session: PiSessionState) {
         services.settings.quote(preview, in: entry, for: session.id)
         replyFocus = session.id
@@ -64,8 +55,7 @@ extension Workspace {
         return write(stored, to: listener) {}
     }
 
-    /// 重发一句没能送达的话：先撤回它（撤不回——Mac 已领取、Cue 已收到——就不重发，免得说两遍），再用同样的内容写一条新的。
-    /// 撤回之后写不进库时，原文放进 `box`（这个去处的输入框），文字不丢。
+    /// 撤不回（Mac 已领取、Cue 已收到）就不重发，免得说两遍；撤回之后写不进库时，原文放进 `box`（这个去处的输入框），文字不丢。
     @discardableResult
     func resend(_ said: Said, restoringInto box: Binding<ComposerDraft>) -> Task<Void, Never> {
         let services = services
@@ -85,7 +75,6 @@ extension Workspace {
         write(said.content, to: said.listener) { box.wrappedValue.append(stored: said.content) }
     }
 
-    /// 移除一句没能送达的话（同样先撤回）。
     func remove(_ said: Said) {
         let services = services
         attempt { try await services.withdraw(said) }
@@ -95,7 +84,6 @@ extension Workspace {
         write(to: listener, taking: { (ComposerDraft(), stored) }, restore: { _ in restore() })
     }
 
-    /// `taking` 给出要写的正文和取走的那份草稿（等在存的附件存好之后）；写库失败时 `restore` 拿到那份草稿放回输入框。
     private func write(
         to listener: Listener, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void
     ) -> Task<Void, Never> {
@@ -125,7 +113,6 @@ extension Workspace {
 }
 
 extension Listener {
-    /// 同一个回复框（同一个对话）、Cue 各一条队。
     var orderKey: SendingTarget {
         switch self {
         case .cue: .cue
@@ -142,7 +129,6 @@ extension ComposerDraft {
         return draft
     }
 
-    /// 写库失败时放回输入框的草稿：取走的在前，期间新打的接在后面（文字空一行，附件、带上的卡片与批注依次接上、不重复）；
     /// 发出时就留在输入框里的（`kept`）本来就在取走的里，不算新打的。
     func followed(by later: ComposerDraft, keeping kept: ComposerDraft) -> ComposerDraft {
         var merged = self

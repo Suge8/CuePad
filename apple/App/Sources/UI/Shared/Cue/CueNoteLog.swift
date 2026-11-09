@@ -2,17 +2,9 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 连着的几轮 Cue 自己醒来（`CueThread.Row.notes`）：每轮一行旁注，不画框、不铺底（对话里只有说的话是一块，`Note`）。
 /// 要你拍板的不在这里：在输入框上方的拍板卡里（`CueWaitDock`），这里只留一句发生过什么。
-/// 一行从左到右：图标、字、几点（等宽一列，对齐）。一行是一条记录，定格在写下那一刻：图标与字只按记录画（`CueWakeHeader`、`CueMessage.tools`），
-/// 那一处之后改名、再动起来都不变；这一轮此刻在做什么只写在对话末尾那一行（`CueEnding`），这一行在这一轮做完一步时补上去处。
-/// - 字：发生了什么，逗号后是 Cue 定的去处（`CueNoteRound.outcome`）。去处落在提到的那一处上写成去处（让它继续、留给你、做完了、收掉了），
-///   落在别处写动作与名字（"定时到点，启动 写周报"）；还没定（在想、什么都没做）只写发生了什么。名字次要墨，其余淡墨；没提到哪处的前半句是为什么醒。
-///   Cue 这一轮不写话（系统提示「说话」），去处只从动作推出，三处说同一套话。
-/// - 图标：有去处时画去处（与经过同一个，`CueTrace.icon`）；没有时提到一处画当时出了什么事（`CueChange.Kind.icon`），否则画醒来原因（`CueWake.icon`）。
-///   都是灰的、只靠形状分；只有一处的那件事此刻还没处理、又是提到这一处最近的那一行时着它的颜色（`CueChange.Kind.isUnresolved`）。
-/// 整行是一行（`RowStyle`），点了去提到的那一处（会话直接进；几处时列出来选；定时去它挂着的任务，没挂的去记忆）；没提到哪处的不能点。
-/// 多于 `foldAfter` 轮时只露最近 `shownWhenFolded` 轮，上面一行"更早还醒过 N 次"，点它全部展开。左缘对着 Cue 气泡的左缘（同经过 `CueTrace`）。
+/// 一行是一条记录，定格在写下那一刻：图标与字只按记录画（`CueWakeHeader`、`CueMessage.tools`），那一处之后改名、再动起来都不变；这一轮此刻在做什么只写在对话末尾那一行（`CueEnding`）。
+/// Cue 这一轮不写话（系统提示「说话」），去处只从动作推出，三处说同一套话。
 struct CueNoteLog: View {
     let rounds: [CueNoteRound]
     @State private var expanded = DebugHooks.preset.toolsOpen
@@ -39,7 +31,6 @@ struct CueNoteLog: View {
         .transition(.entry)
     }
 
-    /// 只提到一处、又是提到这一处最近的那几轮。
     private static func newest(_ rounds: [CueNoteRound]) -> Set<CueNoteRound.ID> {
         var seen = Set<CueWakeHeader.Target>(), out = Set<CueNoteRound.ID>()
         for round in rounds.reversed() {
@@ -73,7 +64,6 @@ private struct CueNoteLine: View {
         }
     }
 
-    /// 还没处理的那件事的颜色；其余 nil（灰）。
     private func tint(_ places: [CueWakeHeader.Place]) -> Color? {
         guard newest, places.count == 1, let kind = places[0].kind, case .session(_, let id?) = places[0].target,
               let item = workspace.services.liveSessions.live.first(where: { $0.state.sessionID == id }),
@@ -109,7 +99,6 @@ private struct CueNoteLine: View {
         }
     }
 
-    /// 去处落在提到的那一处上时的说法。
     private static func outcome(_ kind: PiChatMessage.Tools.Kind) -> Text {
         switch kind {
         case .leave: Text("留给你")
@@ -119,14 +108,12 @@ private struct CueNoteLine: View {
         }
     }
 
-    /// 一处：名字，当时出了事时接一句（"登录回调 停下了"）；错过后补上的定时接那句事实。
     private func place(_ place: CueWakeHeader.Place) -> Text {
         let title = Text(place.title).foregroundStyle(palette.ink2)
         if let missed = place.missed { return Text("\(title)，\(ScheduleText.missed(missed))") }
         return place.kind.map { Self.line(title, $0) } ?? title
     }
 
-    /// 一处当时出了什么事的整句（名字带着样式插进去）。
     private static func line(_ title: Text, _ kind: CueChange.Kind) -> Text {
         switch kind {
         case .settled: Text("\(title) 停下了")
@@ -139,10 +126,9 @@ private struct CueNoteLine: View {
     }
 }
 
-/// Cue 页的一行旁注（醒来那几行、一轮的经过 `CueTrace` 共用）：图标、截成一行的字，醒来那几行行末是等宽的几点（一列对齐）。
+/// 醒来那几行、一轮的经过（`CueTrace`）共用。
 struct CueNoteRow<Glyph: View, Words: View>: View {
     var time: Date?
-    /// 图标的颜色；平时灰（ink3）。
     var tint: Color?
     @ViewBuilder let glyph: Glyph
     @ViewBuilder let text: Words
@@ -178,7 +164,6 @@ enum CueNoteRows {
 }
 
 extension CueChange.Kind {
-    /// 还没处理时那一行图标的颜色（`isUnresolved`）：等你赭黄，其余是出了问题的胭脂。
     func openTint(_ palette: Palette) -> Color {
         self == .waitingForUser ? palette.waiting : palette.failure
     }

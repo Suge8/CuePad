@@ -3,7 +3,7 @@ import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 分享只消费调用那一刻的不可变正文。原图交付真实文件；长图重新排完整篇，宽表按内容扩宽，绝不截取屏幕。
+/// 分享只消费调用那一刻的不可变正文。
 /// 单张最多 32 百万像素、最长边 16000 像素：超过时在分配位图之前明确失败，避免拖住主线程或被系统杀掉。
 enum InspirationShare {
     private static let filenameByteLimit = 180
@@ -58,7 +58,6 @@ enum InspirationShare {
         return InspirationPayload(files: artifacts, urls: [try await write(image, title: title, into: artifacts)])
     }
 
-    /// 留出扩展名与原图序号的字节预算，跨平台路径分隔符与控制字符不进入文件名。
     private static func filenameTitle(_ source: String) -> String {
         let title = CardText.label(of: source).unicodeScalars.map { scalar in
             CharacterSet.controlCharacters.contains(scalar) || "/\\:*?\"<>|".unicodeScalars.contains(scalar) ? " " : String(scalar)

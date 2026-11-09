@@ -1,9 +1,6 @@
 import SwiftUI
 
-/// Cue 钮（宽屏）：一颗头像钮，有等你或新消息时角上带点（`CueDot`）。Cue 露着时它收起 Cue（`shown`，`Workspace.hideCue`），
-/// 收着时放回（`showCue`）：放得下回到右边，放不下从窗口右缘拉出抽屉（`Workspace.cueDrawer`）。
 /// Mac 只在 Cue 收着时有（窗口右上、压在最右那一块的栏头右端；露着时点 Cue 栏头最右的收起右栏，`CueTitle`，抽屉开着时也不画）；Cue 交活的光点那时落在这里（`relaySpot(cue: .entry)`）。
-/// iPad 一直在会话条顶上那一排：Cue 页的名牌点了是名片面板，收起只有这一处。
 struct CueButton: View {
     let fits: Bool
     var shown = false
@@ -36,8 +33,7 @@ struct CueButton: View {
     }
 }
 
-/// 宽屏右边的 Cue（Mac 的 `MainWindow`、iPad 的 `SplitRoot` 同一份）：一个窗口任何时刻只挂这一块，放得下时是右边那一栏，放不下时是右缘的抽屉（`Workspace.cueDrawer`），
-/// 只是同一块的两种摆法，窗口跨过临界宽不拆不建：对话、滚动位置、输入框里的话都在。
+/// 放得下时是右边那一栏，放不下时是右缘的抽屉（`Workspace.cueDrawer`），只是同一块的两种摆法，窗口跨过临界宽不拆不建：对话、滚动位置、输入框里的话都在。
 /// 摆法只有一个数：露出多宽（`shown`：放得下时是右边那一栏的宽，收起是 0；放不下时抽屉开着是整栏、关着是 0），块的左缘在窗口右缘往里这么远；
 /// 露出 0 时排在窗口右缘外，滑出去落定才藏起（看不见、点不到、⌃Tab 跳过），订阅暂停（`pageActive`）。
 /// 收起与放回、跨过临界宽、抽屉开合都只是这个数变了，同一段渲染端的平移（`WideColumnSlide`）：主区跟着让出时，块的左缘每一帧贴着主区的右缘。
@@ -49,7 +45,6 @@ struct CueDock<Column: View>: View {
     let focus: WideFocus
     /// 块的上沿排在安全区里（iPad 的状态栏底下），抽屉的面往上伸出去这么多，照样铺满整窗高；下沿块自己伸到窗口下缘（`reachesWindowBottom`）。
     var bleed = EdgeInsets()
-    /// 这一栏：参数是放不放得下（放不下时它在抽屉里）。
     @ViewBuilder let column: (_ fits: Bool) -> Column
     @Environment(Workspace.self) private var workspace
 
