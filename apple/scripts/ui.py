@@ -114,7 +114,7 @@ def seen(target, text):
         # observe-ui 把大多数节点折起来（"N hidden"），找字用 search-ui
         out = subprocess.run(["bcu", "search-ui", "--pid", str(ident), "--text", text], capture_output=True, text=True).stdout
         return bool(re.match(r"[1-9]\d* of", out))  # 没找到也是退出码 0，只看"N of M matches"的 N
-    return any(text in (e["label"] or "") or text in (e["value"] or "") for e in read(ident))
+    return any(text in (e["label"] or "") or text in str(e["value"] or "") for e in read(ident))
 
 
 def wait(target, text, seconds=20):
@@ -143,7 +143,7 @@ def main(argv):
         sys.stdout.write(subprocess.run(["bcu", "observe-ui", "--pid", str(ident)], capture_output=True, text=True).stdout)
     elif cmd == "read":
         for e in read(ident, "--all" in flags):
-            print("\t".join([e["type"], e["label"] or "", e["value"] or "", ",".join(str(round(e["f"][k])) for k in ("x", "y", "width", "height"))]))
+            print("\t".join([e["type"], e["label"] or "", "" if e["value"] is None else str(e["value"]), ",".join(str(round(e["f"][k])) for k in ("x", "y", "width", "height"))]))
     elif cmd == "tap":
         tap(ident, args[0], opts.get("type"), int(opts["nth"]) if "nth" in opts else None, "--physical" in flags)
     elif cmd == "paste":
