@@ -3,7 +3,7 @@ import Foundation
 
 public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing
-  /// 执行的 Mac 在等现有会话就绪，整个操作尚未开始；不能据此恢复目标进程。
+  /// 整个操作尚未开始；不能据此恢复目标进程。
   case preparing
   /// 派发已结束，正在从真实历史核对；不是执行成功的证据。
   case confirming
@@ -16,100 +16,83 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
 extension DeliveryStatus {
   static let waiting: Set<DeliveryStatus> = [.pending, .preparing]
   static let waitingSQL = sqlList(waiting.sorted { $0.rawValue < $1.rawValue })
-  /// 持久记录尚未收尾（等领取、执行、确认）；是否仍在等进度由 Speech 连同期限推出：`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
+  /// 是否仍在等进度由 Speech 连同期限推出；`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
   static let open: Set<DeliveryStatus> = waiting.union([.executing, .confirming])
   static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
 }
 
-/// 投送请求的发送方式（唯一定义）。读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
+/// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。哪些方式写发送记录见 `CueStore.recordSend`。
 public enum DeliveryMode: String, Sendable, CaseIterable {
-  /// 你说的话（唯一一种）：会话歇着就以它开新一轮；在跑就先打断这一轮，再以它开新一轮（忙不忙以 Mac 执行时的会话为准，
-  /// 写请求时看到的状态可能已经过时）。没有排队：投送可能已送达、明确没交出，或交出后仍未确认；未确认不自动重发。
+  /// 你说的话（唯一一种）：会话歇着就以它开新一轮，在跑就先打断这一轮再开（忙不忙以 Mac 执行时的会话为准，写请求时看到的状态可能已经过时）。没有排队；未确认不自动重发。
   /// 用提示词模板或技能说的（`/名字 …`，回复框按 `PiSlash.speaks` 认）也是它：由 Agent 展开，展开后的那条消息带着请求 id
   case send
   /// 撤回另一条尚未派发的投送；正文为原请求 id，由执行 Mac 原子核对后处理。
   case withdraw
-  /// 回答会话正在等的弹窗；正文是 `PiAnswer`（见 `DeliveryRequest.answer`）
   case answer
-  /// 在 Mac 上开一个新会话（后台托管）；正文是 `PiLaunch`
+  /// 在 Mac 上开一个新会话（后台托管）
   case start
-  /// 请 Mac 从会话文件把这个会话的对话补写进来（7 天前活跃过的会话，手机打开时发）；正文是会话 id，不写发送记录
+  /// 请 Mac 从会话文件把这个会话的对话补写进来（7 天前活跃过的会话，手机打开时发）
   case transcript
-  /// 换会话的模型与思考强度；正文是 `PiConfig`（见 `DeliveryRequest.config`），不写发送记录
   case config
-  /// 结束会话（Pi 进程正常收尾退出，会话记录与会话文件都留着）；正文固定为 `end`，不写发送记录
+  /// 结束会话（Pi 进程正常收尾退出，会话记录与会话文件都留着）
   case end
-  /// 停止会话正在跑的这一轮（相当于在 Pi 里按 Esc：只停指挥官自己这一轮，子代理不动），会话回到等你下一句；
-  /// 正文固定为 `stop`，不写发送记录
+  /// 停止会话正在跑的这一轮（相当于在 Pi 里按 Esc：只停指挥官自己这一轮，子代理不动），会话回到等你下一句
   case stop
   /// 只停止正文指定的投送所开启的回合；Agent 接收端核对身份后同步停止。旧 Mac 不认识此方式，明确拒绝，不退化为 stop。
   case stopTurn
-  /// 接着会话出错的那一轮重试（`PiSessionState.canRetry`）：不补发用户消息，也不发"继续"；正文固定为 `retry`，
-  /// 不写发送记录。会话在跑或最后一轮不是出错结束的，扩展拒绝（`nothing_to_retry`）
+  /// 接着会话出错的那一轮重试（`PiSessionState.canRetry`）：不补发用户消息，也不发“继续”。
+  /// 会话在跑或最后一轮不是出错结束的，扩展拒绝（`nothing_to_retry`）
   case retry
-  /// 请 Mac 给项目绑定文件夹（或解除绑定）；正文是 `PiBind`（见 `DeliveryRequest.bind`），不写发送记录
+  /// 请 Mac 给项目绑定文件夹（或解除绑定）
   case bind
-  /// 斜杠命令：正文是以 / 开头的整行（命令加参数，可接着带上的卡片文字），由 Agent 执行——内置命令（压缩、命名、换模型……）、扩展命令，
-  /// 以 Agent 可证实的受理为送达（Pi 执行了扩展命令、压缩做完）；OpenCode 的模板经它的命令端点，端点执行完才回（`PiSlash.speaks`）。
-  /// 不是"你说的话"：不在对话里挂气泡、不写发送记录（与 config、answer 一样），带着卡片时只把卡片关联到会话；结果若在会话文件里（压缩）对话里自然有
+  /// 斜杠命令：正文是以 / 开头的整行，由 Agent 执行；以 Agent 可证实的受理为送达（Pi 执行了扩展命令、压缩做完；OpenCode 的模板经它的命令端点，端点执行完才回，`PiSlash.speaks`）。
+  /// 不是“你说的话”：不在对话里挂气泡，带着卡片时只把卡片关联到会话；结果若在会话文件里（压缩）对话里自然有
   case command
-  /// 请 Mac 刷新订阅额度（手机上的额度出现、打开明细或点重试时，`AccountQuotas`）：由 Mac 上能答额度的会话里的扩展查一次（`AccountQuota`），新值随同步回来；
-  /// 正文固定为 `quota`，不写发送记录；查不到时照常按失败写回（原因写进手机额度明细的那一行，不弹提示，`AccountQuotas`），读数仍是上次的值与更新时间
+  /// 请 Mac 刷新订阅额度：由 Mac 上能答额度的会话里的扩展查一次（`AccountQuota`），新值随同步回来；查不到时照常按失败写回（原因写进手机额度明细的那一行，不弹提示），读数仍是上次的值与更新时间
   case quota
-  /// 整理技能与规则（手机上的一键整理、去重、合并）：正文是 `[TidyOrder]`（见 `DeliveryRequest.tidyOrders`），由 Mac 照执行时的文件做，
-  /// 那件已不在的不做；不写发送记录
+  /// 整理技能与规则：由 Mac 照执行时的文件做，那件已不在的不做
   case tidy
-  /// 改一份技能或规则文件（手机上的"发往 Mac"）：正文是 `LibraryEdit`（见 `DeliveryRequest.libraryEdit`），Mac 上的文件已不是基准就退回
-  /// "Mac 上刚改过"；不写发送记录
+  /// 改一份技能或规则文件：Mac 上的文件已不是基准就退回“Mac 上刚改过”
   case libraryEdit
 
   public static let requiresReadySession: Set<DeliveryMode> = [.send, .answer, .command, .config, .retry]
 
-  /// 发给会话本身、会改变它状态的方式（说话、作答与重跑出错的一轮）；会话的显示状态只把这几种算进去。命令与设置（config、end、stop、bind）不在其中：
-  /// 它们不是"你说的话"，对话只来自会话文件，进度只在回复框上方短暂显示。
+  /// 会话的显示状态只把这几种算进去。命令与设置不在其中：对话只来自会话文件，进度只在回复框上方短暂显示。
   public static let toSession: Set<DeliveryMode> = [.send, .answer, .retry]
 }
 
-/// 请求是谁写的：没有值是你（经 CuePad 的界面或命令行）；Cue 写的标 `cue`。
+/// 请求是谁写的：没有值是你（界面或命令行）；Cue 写的标 `cue`。
 public enum DeliveryOrigin: String, Sendable, CaseIterable {
   case cue
 }
 
-/// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
-///
-/// 生命周期只有这一个状态机（持久状态 `DeliveryStatus`，各端此刻的样子由 `Speech.trip` 从记录与此刻推出）：
-/// - 写下即 `pending`。派发期限只有一个锚点 `serverAt`（`dispatchDeadline`，各端、执行器与 SQL 都从它读）：发给别处的是服务器收下它的时刻，
-///   不按写下时刻算——手机离线时写下、连上才传上去的照常送到，写方与 Mac 的钟差也不混进来；还没到服务器的不算到期，可以撤回。
-///   Mac 写给自己的不经服务器，执行器第一次看到它时按写下的时刻锚定（`actionableDeliveries`）；锚点一经写下不再变；
-/// - 执行的 Mac 缺附件时仍是 `pending`、在旁边取；现有会话没就绪时转 `preparing`（原因在 `reason`）；两种等待都守同一个派发期限、不续；
-/// - 期限前领取转 `executing`（新的执行期限），之后 `confirming` → `succeeded` / `failed` / `unconfirmed`；
-/// - 期限到了还没领取：执行的 Mac 写回 `failed`（`expiry`），手机收到后允许重发；
-/// - 发送方到期仍没收到结果：只结束等待，显示未确认；旧快照不能证明 Mac 没领取，不能授权安全重发。
+/// 派发期限只有一个锚点 `serverAt`，两种等待（`pending`、`preparing`）都守它、不续；执行的 Mac 缺附件时仍是 `pending`、在旁边取。
+/// 发送方到期仍没收到结果只结束等待、显示未确认：旧快照不能证明 Mac 没领取，不能授权安全重发。
 public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var content: String
   public var target: SendTarget
-  /// 指定执行的那台 Mac（只有它会领取）。必填。
+  /// 指定执行的 Mac，只有它会领取。
   public var hostID: String
   public var mode: Open<DeliveryMode>
   public var cardID: UUID?
   public var status: Open<DeliveryStatus>
-  /// 准备、失败或未确认的说明（各端按自己的语言显示，`ShownText`）；读 `failure` / `Speech.trip`。
+  /// 准备、失败或未确认的说明；读 `failure` / `Speech.trip`。
   public var reason: ShownText?
   public var handledBy: String?
   public var createdAt: Date
   public var completedAt: Date?
-  /// 领取后的执行、确认阶段的硬截止：进入阶段时写，不随同步、绑定或重开续期。等派发的期限不存在这里（`dispatchDeadline`）。
+  /// 领取后的执行、确认阶段的硬截止：进入阶段时写，不随同步、绑定或重开续期。等派发的期限不在这里。
   public var deadlineAt: Date? = nil
   public var modifiedAt: Date
-  /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
+  /// 本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
-  /// 派发期限的锚点：服务器收下它的时刻（CloudKit 记录的 creationDate，服务器的钟）——拉到它的一方从拉到的记录记下，写它的一方从上传成功带回的记录记下，
-  /// 两边是同一个值；Mac 写给自己、还没传上去的由执行器按写下的时刻锚定。只在本机，不同步，只填空。还没有的为 nil。
+  /// 派发期限的锚点：服务器收下它的时刻（CloudKit 记录的 creationDate，服务器的钟）——拉到它的一方从拉到的记录记下，写它的一方从上传成功带回的记录记下，两边是同一个值；
+  /// Mac 写给自己、还没传上去的由执行器按写下的时刻锚定。只填空，一经写下不再变。
+  /// 不按写下时刻算：手机离线时写下、连上才传上去的照常送到，写方与 Mac 的钟差也不混进来；还没到服务器的不算到期，可以撤回。
   public internal(set) var serverAt: Date? = nil
-  /// 谁写的（见 `DeliveryOrigin`）；nil 是你。
   public var origin: Open<DeliveryOrigin>?
-  /// 服务器收下过这条请求（读的时候由同步元数据推出，不存，`Speech.reachedServerSQL`）：说的话"已发出"的依据。
+  /// 读的时候由同步元数据推出，不存（`Speech.reachedServerSQL`）。
   public internal(set) var reachedServer = false
   public internal(set) var sessionBindingRevision: SessionBindingRevision?
 
@@ -131,19 +114,18 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     return reason
   }
 
-  /// 每个持久阶段（等派发、执行）的期限：服务器收下后这么久还没领取就不再派发，领取后这么久还没结果就是未确认。
-  /// 留足手机传大附件、Mac 等会话就绪的时间。
+  /// 等派发与执行两个阶段各用这个时长；留足手机传大附件、Mac 等会话就绪的时间。
   public static let phaseLimit: TimeInterval = 600
 
-  /// 派发期限：锚点（`serverAt`）后 `phaseLimit`；还没有锚点的为 nil，不算到期。同一条请求的派发期限只有这一个出处，SQL 里是 `dispatchDeadlineSQL`。
+  /// 还没有锚点的为 nil，不算到期。派发期限只有这一个出处，SQL 里是 `dispatchDeadlineSQL`。
   public var dispatchDeadline: Date? { serverAt.map { $0.addingTimeInterval(Self.phaseLimit) } }
 
-  /// `dispatchDeadline` 的 SQL（毫秒），表别名 `alias`；没有锚点为 NULL（比较都不成立：不领取、不到期）。
+  /// 毫秒；没有锚点为 NULL（比较都不成立：不领取、不到期）。
   static func dispatchDeadlineSQL(_ alias: String) -> String {
     "(\(alias).serverAt + \(Int(phaseLimit * 1000)))"
   }
 
-  /// 到期仍未派发的原因：执行的 Mac 写回，带着当时在等什么（`reason`）；准备就绪（`DeliveryPreparation.ready`）不是在等什么。
+  /// 执行的 Mac 写回的到期原因，带着当时在等什么（`reason`）；准备就绪（`DeliveryPreparation.ready`）不是在等什么。
   public var expiry: ShownText {
     guard status == .known(.preparing), let waiting = reason, waiting != DeliveryPreparation.ready else { return ShownText("到期仍未派发，没有发出，可以重发") }
     return ShownText("到期仍未派发（\(waiting.embedded)），没有发出，可以重发")
@@ -153,8 +135,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   public static var unexplainedFailure: String { String(localized: "Mac 没有说明原因") }
 
-  /// 发给一个会话的请求（先发的在前）里此刻要显示的那次结束到哪了（`Speech`）：还在路上的，或没能结束、之后也没再发过别的；
-  /// 结束成功或没请求过是 nil。
+  /// `requests` 先发的在前。只显示还在路上的，或没能结束且之后没再发过别的；结束成功、未确认或没请求过是 nil。
   public static func shownEnd(in requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
     guard let end = requests.last(where: { $0.mode == .known(.end) }) else { return nil }
     switch Speech.trip(end, at: moment) {
@@ -169,7 +150,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// `launch`、`bind`、`tidyOrders`、`libraryEdit`、`answer`、`config` 按 `mode` 取请求的内容；其他方式、读不出的为 nil。
   public var launch: PiLaunch? { mode == .known(.start) ? PiLaunch(stored: content) : nil }
 
-  /// 要交出去的话里引用的附件（开工的是开场的话里的）：写下时登记附件记录（随之上传）、执行的 Mac 取文件、回收附件时算引用，都只读这里。
+  /// 开工的是开场的话里的。写下时登记附件记录、执行的 Mac 取文件、回收附件时算引用，都只读这里。
   public var attachmentKeys: [String] { CueFormat.attachmentKeys(in: launch?.prompt ?? content) }
 
   public var bind: PiBind? { mode == .known(.bind) ? PiBind(stored: content) : nil }
@@ -182,20 +163,18 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   public var config: PiConfig? { mode == .known(.config) ? PiConfig(stored: content) : nil }
 
-  /// 改名请求：带名字的配置请求。
   public var isRename: Bool { config?.name != nil }
 
-  /// 一个会话的请求（按发出先后，即 `CueStore.deliveryRequests(toSession:)` 的顺序）里最近的一条改名。
-  /// 会话行（`PiSessionListItem.rename`）与会话页顶栏都按它显示名字，取法只此一处。
+  /// `requests` 按发出先后（`deliveryRequests(toSession:)` 的顺序）。会话行与会话页顶栏都按它显示名字，取法只此一处。
   public static func latestRename(in requests: [DeliveryRequest]) -> DeliveryRequest? { requests.last(where: \.isRename) }
 
-  /// 往返时间：创建 → 结果回到本机，两端都是发起设备的时钟。执行方与还没收到结果时为 nil。
+  /// 两端都是发起设备的时钟；执行方与还没收到结果时为 nil。
   public var roundTrip: Duration? {
     resultReceivedAt.map { .milliseconds(Int64(($0.timeIntervalSince(createdAt) * 1000).rounded())) }
   }
 }
 
-/// 一次派发后的进度：交给后台核对、明确成功、明确未交出，或可能已交出但无法确认。未知只能由真实消息等正证据收敛，不授权再次派发。
+/// 未知只能由真实消息等正证据收敛，不授权再次派发。
 public enum DeliveryOutcome: Sendable {
   case succeeded
   /// 核对在执行通道之外运行；传入的是已落盘的阶段与期限，不得再次派发。
@@ -225,7 +204,6 @@ extension DeliveryRequest: Record {
   }
 }
 
-/// Cue 开出的一个新会话（`CueStore.cueOpenedSessions`）：会话 id、开它时带着的卡、会话记录写下的时刻。
 public struct CueOpenedSession: Equatable, Sendable {
   public let session: String
   public let card: UUID?
