@@ -12,6 +12,8 @@ public enum AgentTimeouts {
     public static let end: Duration = .seconds(10)
     public static let command: Duration = .seconds(10)
     public static let shell: Duration = .seconds(5)
+    /// Codex 一轮要歇下前，同一进程上认不出主人的线程一起再问的总时限：这段时间卡片仍显示在跑，到点没回的等它下一条推送再问
+    public static let settleAsk: Duration = .seconds(5)
     public static let list: Duration = .seconds(15)
     /// CuePad 自有子进程的强制收尾宽限；已认领的 Pi 经桥走宿主退出，不用强杀兜底。
     public static let endGrace: Duration = .seconds(5)

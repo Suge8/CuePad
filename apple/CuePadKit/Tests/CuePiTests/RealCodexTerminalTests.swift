@@ -155,7 +155,8 @@ struct RealCodexTerminalTests {
         }
     }
 
-    /// 原话只在开出线程的连接上，常驻服务只广播 systemError。
+    /// 原话只在开出线程的连接上，常驻服务只广播 systemError。落定后同一轮再来不带原因的结束信号（这里是 Interrupt 钩子，
+    /// 真 Codex 排不出它晚到，照 `cuepad hook codex` 的样子直接交给钩子 socket），原因仍在：只有新一轮开始才清。
     @Test func aFailedTerminalTurnShowsTheReason() async throws {
         try await withCodexRig(daemon: true) { rig in
             play(rig.model)
@@ -166,6 +167,21 @@ struct RealCodexTerminalTests {
             try await eventually("这一轮失败，带着原因") {
                 rig.session?.state == .error && rig.session?.errorMessage?.contains("no-such-model-xyz") == true
             }
+
+            let session = try #require(rig.session)
+            let input: JSONValue = ["hook_event_name": "Interrupt", "session_id": .string(session.sessionID), "cwd": .string(rig.codex.work.path)]
+            let envelope = AgentHookEnvelope(agent: .codex, input: input.data, environment: [:], pid: session.pid, tty: nil)
+            let fd = try UnixSocket.connect(rig.codex.paths.pi.hookSocket.path)
+            defer { close(fd) }
+            let line = try JSONEncoder().encode(envelope) + Data([0x0A])
+            _ = line.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
+            // CuePad 在主线程处理完这次钩子才断开：在别的线程等
+            await Task.detached {
+                var byte: UInt8 = 0
+                while read(fd, &byte, 1) > 0 {}
+            }.value
+            #expect(rig.session?.state == .error)
+            #expect(rig.session?.errorMessage?.contains("no-such-model-xyz") == true, "\(String(describing: rig.session?.errorMessage))")
         }
     }
 

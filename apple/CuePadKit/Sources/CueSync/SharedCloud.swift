@@ -70,20 +70,7 @@ struct SharedCloud: SyncCloud {
     let total = Latency.draw(latency.fetch)
     let row = try admit("fetch", drawn: total)
     try? await Task.sleep(for: .seconds(total * 0.6))
-    let after = token.flatMap { Int64(String(decoding: $0, as: UTF8.self)) } ?? 0
-    let batch = try database { db in
-      let rows = try db.rows("SELECT seq, name, type, data FROM records WHERE seq > ? ORDER BY seq LIMIT \(Self.page + 1)", after)
-      let taken = rows.prefix(Self.page)
-      var batch = ZoneChangeBatch(modifications: [], deletions: [], token: Data(String(taken.last?.seq ?? after).utf8), moreComing: rows.count > Self.page)
-      for row in taken {
-        if let data = row.data {
-          batch.modifications.append(try Self.record(data))
-        } else {
-          batch.deletions.append((CKRecord.ID(recordName: row.name, zoneID: Self.zoneID), row.type))
-        }
-      }
-      return batch
-    }
+    let batch = try database { db in try Self.changes(in: "records", zoneID: Self.zoneID, since: token, db) }
     let landed = Date.now.timeIntervalSince1970
     try? await Task.sleep(for: .seconds(total * 0.4))
     finish(row, landed: landed, names: batch.modifications.map { "\($0.recordType):\($0.recordID.recordName)" } + batch.deletions.map { "\($0.recordType):\($0.id.recordName)" })
@@ -145,23 +132,7 @@ struct SharedCloud: SyncCloud {
       return SentRecords(failedSaves: saving.map { ($0, CKError(.quotaExceeded)) })
     }
     await transfer(Latency.transfer(saving, rate: latency.assetUp), progress)
-    try database { db in
-      try db.run("BEGIN IMMEDIATE")
-      do {
-        for record in saving {
-          let data = try NSKeyedArchiver.archivedData(withRootObject: record, requiringSecureCoding: true)
-          try db.run("INSERT OR REPLACE INTO records (name, type, data, seq) VALUES (?, ?, ?, (SELECT IFNULL(MAX(seq), 0) + 1 FROM records))",
-                     record.recordID.recordName, record.recordType, data)
-        }
-        for id in deleting {
-          try db.run("UPDATE records SET data = NULL, seq = (SELECT IFNULL(MAX(seq), 0) + 1 FROM records) WHERE name = ?", id.recordName)
-        }
-        try db.run("COMMIT")
-      } catch {
-        try? db.run("ROLLBACK")
-        throw error
-      }
-    }
+    try database { db in try Self.write(into: "records", saving: saving, deleting: deleting, db) }
     let landed = Date.now.timeIntervalSince1970
     try? await Task.sleep(for: .seconds(total * 0.4))
     finish(row, landed: landed, names: saving.map { "\($0.recordType):\($0.recordID.recordName)" } + deleting.map { "-:\($0.recordName)" })
@@ -171,6 +142,59 @@ struct SharedCloud: SyncCloud {
   func saveZone() async throws {
     try admit("other")
     await wait(latency.other)
+  }
+
+  /// 诊断区另一张表：拉同步区拉不到它。没有任何一条（从没传过）时同 CloudKit 报区不在。
+  func diagnosticChanges(since token: Data?) async throws -> ZoneChangeBatch {
+    let row = try admit("diagnostics-fetch")
+    await wait(latency.fetch)
+    let batch = try database { db in
+      guard try db.double("SELECT COUNT(*) FROM diagnostics") ?? 0 > 0 else { throw CKError(.zoneNotFound) }
+      return try Self.changes(in: "diagnostics", zoneID: DiagnosticZone.zoneID, since: token, db)
+    }
+    finish(row, landed: Date.now.timeIntervalSince1970, names: batch.modifications.map(\.recordID.recordName))
+    return batch
+  }
+
+  func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
+    let row = try admit("diagnostics-upload")
+    await wait(latency.upload)
+    try database { db in try Self.write(into: "diagnostics", saving: saving, deleting: deleting, db) }
+    finish(row, landed: Date.now.timeIntervalSince1970, names: saving.map(\.recordID.recordName) + deleting.map { "-:\($0.recordName)" })
+    return SentRecords(saved: saving, deleted: deleting)
+  }
+
+  private static func changes(in table: String, zoneID: CKRecordZone.ID, since token: Data?, _ db: Connection) throws -> ZoneChangeBatch {
+    let after = token.flatMap { Int64(String(decoding: $0, as: UTF8.self)) } ?? 0
+    let rows = try db.rows("SELECT seq, name, type, data FROM \(table) WHERE seq > ? ORDER BY seq LIMIT \(page + 1)", after)
+    let taken = rows.prefix(page)
+    var batch = ZoneChangeBatch(modifications: [], deletions: [], token: Data(String(taken.last?.seq ?? after).utf8), moreComing: rows.count > page)
+    for row in taken {
+      if let data = row.data {
+        batch.modifications.append(try record(data))
+      } else {
+        batch.deletions.append((CKRecord.ID(recordName: row.name, zoneID: zoneID), row.type))
+      }
+    }
+    return batch
+  }
+
+  private static func write(into table: String, saving: [CKRecord], deleting: [CKRecord.ID], _ db: Connection) throws {
+    try db.run("BEGIN IMMEDIATE")
+    do {
+      for record in saving {
+        let data = try NSKeyedArchiver.archivedData(withRootObject: record, requiringSecureCoding: true)
+        try db.run("INSERT OR REPLACE INTO \(table) (name, type, data, seq) VALUES (?, ?, ?, (SELECT IFNULL(MAX(seq), 0) + 1 FROM \(table)))",
+                   record.recordID.recordName, record.recordType, data)
+      }
+      for id in deleting {
+        try db.run("UPDATE \(table) SET data = NULL, seq = (SELECT IFNULL(MAX(seq), 0) + 1 FROM \(table)) WHERE name = ?", id.recordName)
+      }
+      try db.run("COMMIT")
+    } catch {
+      try? db.run("ROLLBACK")
+      throw error
+    }
   }
   func subscriptions() async throws -> [CKSubscription.ID: CKSubscription] { [:] }
   func save(_ subscription: CKSubscription) async throws {}
@@ -237,6 +261,7 @@ struct SharedCloud: SyncCloud {
         PRAGMA journal_mode = WAL;
         CREATE TABLE IF NOT EXISTS records (name TEXT PRIMARY KEY, type TEXT NOT NULL, data BLOB, seq INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS records_seq ON records(seq);
+        CREATE TABLE IF NOT EXISTS diagnostics (name TEXT PRIMARY KEY, type TEXT NOT NULL, data BLOB, seq INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value BLOB);
         CREATE TABLE IF NOT EXISTS requests (t REAL NOT NULL, pid INTEGER NOT NULL, kind TEXT NOT NULL, result TEXT NOT NULL, wait REAL, drawn REAL, done REAL, landed REAL, names TEXT);
         """)

@@ -40,7 +40,7 @@ nonisolated enum VoiceMediaSignal: Equatable, Codable, Sendable {
 
 /// 每帧的 AEAD 认证头。session 对媒体指当前通话，对业务命令指原通话来源，不限制命令必须在原通话存活时执行。
 /// sequence 由唯一 Relay 发送者按双方租约对从 1 单调分配，跨通话和命令共用，不能按 session 重置；耗尽前换连接。
-/// 期限使用 Unix 毫秒；两端/中转都拒绝 expires <= now 或 expires > now + lifetimeMilliseconds，不续期、不排队。
+/// 期限使用发端时钟的 Unix 毫秒，只由收端判定（容差见 `clockSkewMilliseconds`），中转不判；不续期、不排队。
 nonisolated struct VoiceSignalHeader: Equatable, Codable, Sendable {
     let version: UInt8
     let sender: VoiceEndpoint
@@ -75,6 +75,9 @@ nonisolated enum VoiceSignalFormat {
     static let maximumDeviceIDBytes = 128
     static let replacedCloseCode = 4409
     static let lifetimeMilliseconds: Int64 = 30_000
+    /// 期限由发端时钟写、收端时钟查，两台设备的时钟并不一致；零容差时发端快几十毫秒就整帧被拒。
+    /// 取 JWT 校验常用的 60 秒（RFC 7519 §4.1.4 允许"几分钟以内"的余量），收端在两侧都放宽这么多。
+    static let clockSkewMilliseconds: Int64 = 60_000
     /// 从现有 RelaySecret 经 HKDF-SHA256（空 salt、此 UTF-8 info、32 字节输出）派生 AES-256-GCM 密钥。
     static let keyContext = "cuepad-voice-signal-v1"
     static let registrationContext = "cuepad-relay-voice-v1"
