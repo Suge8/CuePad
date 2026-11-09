@@ -8,11 +8,13 @@ import Testing
 
 /// 接着同一托管会话（`HostedProcesses.resume`）不论几个调用方、怎么交错，这个会话同一时刻至多一个进程，不留没人收的进程：
 /// 同时来的恢复合成一次、拿到同一个 id；放弃的调用方各走各的；App 退出（`runtime.stop()`）之后不再起进程。
-/// 一次只跑一个用例，理由同 `RealHostedEndTests`。
+/// 合成、放弃与退出的判断都在共用层（`Resumptions`、`HostedProcesses`），一家（Codex）作代表；各家各走一遍的只有
+/// 自己的恢复经不经共用层（第一例）与起进程时登记（App 退出在起进程时，Grok 与 dsh 同一套 `ACPHost.launch`，Grok 作代表）。
 @MainActor
-@Suite(.serialized, .enabled(if: Hosting.uncovered == nil || PinnedAgent.fullMatrix, Comment(rawValue: Hosting.uncovered ?? "")))
+@Suite(.enabled(if: Hosting.uncovered == nil || PinnedAgent.fullMatrix, Comment(rawValue: Hosting.uncovered ?? "")))
 struct RealHostedResumeTests {
-    /// 两条投送同时落在一个刚请退出、旧进程还没走的会话上。
+    /// 闲置到点被请退出、外壳在真 Agent 退出后还握着输出 3 秒（旧进程还没走）。请退出的那一刻就不在桥上；
+    /// 紧接着同时来两条投送（`MacExecutor` 的接法）：接着同一会话、合成一次，等旧进程走了才起一个新的，话送到。
     @Test(arguments: Hosting.allCases)
     func twoResumesOfTheSameSessionAtOnceStartOneProcess(_ hosting: Hosting) async throws {
         try await EndRig.run(hosting, timing: noDeadline) { rig in
@@ -21,6 +23,7 @@ struct RealHostedResumeTests {
             async let two = rig.connect(rig.indexed(first))
             let (a, b) = try await (one, two)
             #expect(a == b)
+            #expect(rig.bridge.session(id: a)?.sessionID == first.sessionID)
             #expect(rig.launched.count == 2, "起了 \(rig.launched.count - 1) 个新进程")
             #expect(rig.overlaps.isEmpty, "同一会话同时有两个进程：\(rig.overlaps)")
             try await rig.bridge.send(PiMessage(text: "PING-TWO"), to: a)
@@ -29,9 +32,8 @@ struct RealHostedResumeTests {
     }
 
     /// 第一个恢复已经起了进程、还没连上，第二个到了：等它，不收它的进程。
-    @Test(arguments: Hosting.allCases)
-    func aResumeArrivingWhileAnotherIsLaunchingJoinsIt(_ hosting: Hosting) async throws {
-        try await EndRig.run(hosting, timing: noDeadline) { rig in
+    @Test func aResumeArrivingWhileAnotherIsLaunchingJoinsIt() async throws {
+        try await EndRig.run(.codex, timing: noDeadline) { rig in
             let id = try await rig.open()
             let first = try await rig.converse("PING-ONE", in: id)
             try await rig.idleOut(id)
@@ -47,9 +49,8 @@ struct RealHostedResumeTests {
     }
 
     /// 两个恢复在等旧进程，其中一个放弃（投送到了截止时刻）：它走它的，另一个照样接上，留下的进程就是桥上的那个。
-    @Test(arguments: Hosting.allCases)
-    func cancellingOneOfTwoResumesLeavesTheOtherConnected(_ hosting: Hosting) async throws {
-        try await EndRig.run(hosting, timing: noDeadline) { rig in
+    @Test func cancellingOneOfTwoResumesLeavesTheOtherConnected() async throws {
+        try await EndRig.run(.codex, timing: noDeadline) { rig in
             let first = try await quitWhileSlow(rig)
             let one = Task { try await rig.connect(rig.indexed(first)) }
             let two = Task { try await rig.connect(rig.indexed(first)) }
@@ -65,7 +66,7 @@ struct RealHostedResumeTests {
     }
 
     /// App 退出时恢复正在等旧进程收完（`waiting`），或已经起了新进程还没连上（`launching`）：退出之后一个进程都不剩。
-    @Test(arguments: Hosting.allCases, ["waiting", "launching"])
+    @Test(arguments: [(Hosting.codex, "waiting"), (.claude, "launching"), (.codex, "launching"), (.grok, "launching")])
     func quittingTheAppDuringAResumeLeavesNoProcess(_ hosting: Hosting, _ phase: String) async throws {
         try await EndRig.run(hosting, timing: noDeadline) { rig in
             let first: PiSession
