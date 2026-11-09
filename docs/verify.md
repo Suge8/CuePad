@@ -83,7 +83,10 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后会自己退�
 每端一份库，在 `apple/.derived/fleet/`；本检出的 Mac 实例最多一个，iPhone、iPad 各占一个槽位、各有角色名（`CUEPAD_RUN_ROLE`），互不收掉；`fleet down` 收，30 分钟后自己退出（`CUEPAD_RUN_SECONDS`）。
 起完用 `ui.py iphone|ipad|mac …` 各自操作（Mac 只有读与等）。`xc.sh fleet accept` 是现成的一条验收：iPhone ⌘N 建一条灵感、粘进一句话 → Mac 与 iPad 的屏上读到它，打印各端看到的时刻，没读到以 1 退出。
 时刻是各端读完那一刻，分辨率是一轮读界面的时长（iPad 约 1～3 秒，Mac 不到 1 秒），不是同步本身的时延；时延用 `sync-bench.py`（[perf.md](perf.md)）。
-门铃照常连正式中转（房间按这朵云自己的密钥）。验不了：真 iCloud 与 CloudKit 订阅、推送、真网络、两个账号；那些只能真机、真账号验收。
+门铃照常连正式中转（房间按这朵云自己的密钥）。
+真云：`xc.sh fleet cloud-sims` 建两台不在槽位池里的专用模拟器（`CuePad Cloud iPhone`、`CuePad Cloud iPad`），在它们的设置里登同一个测试 Apple ID（一次性，登录态留在模拟器里），
+之后 `xc.sh fleet up --real` 起这两台、连 CloudKit 开发环境（`-CuePadCloudKit YES`，`CUEPAD_PIN_SIM` 钉住模拟器），`fleet accept` 照样验；库在 `.derived/fleet-real`，`fleet down` 不删。不登账号时 App 照常起、不同步，accept 读不到。
+用真账号的运行也和正式版共用 CloudKit 限流（[perf.md](perf.md)「真 CloudKit」），少跑。验不了：推送、真网络、两个账号间的隔离；那些只能真机、真账号验收。
 
 ## 读屏验收
 
