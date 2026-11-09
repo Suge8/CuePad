@@ -32,7 +32,6 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
   /// 正文。你的消息是 CuePad 正文格式（`CueFormat`：文字，附件是 `![](cuepad://file/<键>)` 与 `[文件名](cuepad://file/<键>)`，与投送请求的 content 同一种），
   /// Pi 的回答与系统行是纯文字。文字至多 `PiChatMessage.textLimit` 个字符，超出截断并以省略号结尾（图片引用不计、不截）
   public var text: String
-  /// 这条消息的时间（会话文件里的时间戳）
   public var at: Date
   /// Pi 消息：这一轮的工具活动（没调工具为 nil）；你的消息为 nil
   public var tools: Tools?
@@ -71,7 +70,6 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
     modifiedAt = createdAt
   }
 
-  /// 系统行的种类；不是系统行、或别的版本写的不认识的为 nil。
   public var notice: PiNotice? { role == .known(.system) ? PiNotice(rawValue: text) : nil }
 
   /// 文字超过上限时截断，图片引用原样保留：切坏引用会让图片变成一段乱码。
@@ -98,7 +96,6 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
     return CueFormat.serialize(kept)
   }
 
-  /// 会话文件里一条（你的消息、或一轮最后的回答）对应的记录 id，任何时候重读都一样。
   public static func recordID(sessionID: String, entryID: String) -> UUID {
     DeterministicID.uuid("pi-message/\(sessionID)/\(entryID)")
   }
@@ -128,7 +125,6 @@ extension PiChatMessage: Record {
     shownText = row.textOrNil(12).flatMap(ShownText.init(stored:))
   }
 
-  /// 给人看的正文，这台设备的语言。
   public var shown: String { shownText?.text ?? text }
 }
 
@@ -151,7 +147,6 @@ extension PiChatMessage {
       case edit, command, read, search, other
       /// 中途说的一段话（调工具前后说的"先看看…""测试挂了，查一下"；Cue 用 tell 对你说的）：`target` 是那段话
       case said
-      /// Cue 的动作：对会话说话、开工、建任务、做完、停下会话、问你、把会话留给你回（`CueLeft`）、新建定时（`CueMemoryLine`）；碰到的那一处在 `Item.name` 等几项上
       case talk, start, add, done, stop, ask, leave, schedule
 
       /// 落了结果的一步（改文件与 Cue 的动作）：清单里总列上，标题行逐类写个数。
@@ -173,14 +168,11 @@ extension PiChatMessage {
       /// Cue 的一步是它自己的说法，只进它的上下文（`CueActivity.item`），界面不读
       public var target: String
       public var failed: Bool
-      /// 改文件：新增、删除的行数；算不出为 nil
       public var added: Int?
       public var removed: Int?
-      /// Cue 动到的任务：清单里点这一条打开它
       public var task: UUID?
       /// Cue 碰到的那一处叫什么（任务的标题、会话名，认不出时照它写的引用）；没指哪一处（看板、记忆）为 nil。Cue 页这一轮的经过读它（`CueActivity.touches`）
       public var name: String?
-      /// Cue 碰到的会话（`PiSessionState.id`）：点了进会话
       public var session: UUID?
       /// 这一步的结果里带的图（Agent 截的屏、读进来的图）：附件的键，存的是 Mac 读会话时缩小的那份（`ToolImage`）；没有为 nil
       public var images: [String]?
@@ -205,12 +197,10 @@ extension PiChatMessage {
       }
     }
 
-    /// 调用数（与清单的行同一口径；说的话不算）
     public var steps: Int
     /// 清单，按发生先后。落了结果的（`Kind.acts`）、结果里带图的与说的话总在里面；其余调用至多列到 `itemLimit` 条，超出的只进计数
     public var items: [Item]
 
-    /// 这一轮工具结果里的图，按先后、同一份只算一次：会话页那一行经过下的缩略图（`RoundProcess`）
     public var images: [String] {
       var seen = Set<String>()
       return items.flatMap { $0.images ?? [] }.filter { seen.insert($0).inserted }
@@ -220,7 +210,6 @@ extension PiChatMessage {
     static let imagesField = "\"images\""
 
     static let itemLimit = 30
-    /// 清单里一条调用的目标至多这么多字符
     public static let targetLimit = 120
     /// 一段说的话至多这么多字符：够读出它在想什么。进行中这一轮的清单每做完一步就随会话记录整份上传一次，不让长话把它撑大
     public static let saidLimit = 200

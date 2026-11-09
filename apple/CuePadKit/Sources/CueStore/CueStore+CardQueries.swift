@@ -2,20 +2,18 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 某项目里可见的灵感（不含任务，也不含挂在任务下的），按手动顺序：卡片墙与 `card list` 列的就是它们。
-  /// 任务见 `tasks(_:)`，挂在任务下的见 `children(of:)`。
   public func cards(in project: UUID) throws -> [Card] {
     try select(Card.self, where: "(\(Self.cardActive)) AND (\(Self.looseIdea)) AND projectID = ?", [project], orderBy: "sortKey, id")
   }
 
-  /// 回收站里单独删除的卡片，最近删除的在前；随项目删除的卡归在该项目名下，不在这里。
+  /// 随项目删除的卡归在该项目名下，不在这里。
   public func trashedCards() throws -> [Card] {
     try select(Card.self, where: "deletedAt IS NOT NULL", orderBy: "deletedAt DESC, id")
   }
 
   public func card(_ id: UUID) throws -> Card? { try find(Card.self, id) }
 
-  /// 归档的灵感与任务（只列归档时的那一条，不列随它一起归档的下级），最近归档的在前；回收站里的不列。
+  /// 只列归档时的那一条，不列随它一起归档的下级。
   public func archived() throws -> [Card] {
     try select(
       Card.self,
@@ -26,10 +24,8 @@ extension CueStore {
       orderBy: "archivedAt DESC, id")
   }
 
-  /// 交给了 Agent 的哪里：执行过或认领过的读灵感与任务上记的会话；还没执行的读最近一条投送请求——发给已有会话的是它的目标，
-  /// 开新会话的是"正在开"（开好后由 `claimLaunchedCards` 记到卡上；没开成的不算交给过，任务行重新给"开始"）。灵感与任务的行据此显示状态点（含"发送中""有新回复"）。
-  /// 在路上的（还没执行完的）最近一条发给已有会话的请求优先于卡上记的会话：手机重发后状态点跟着那个会话（发送中），
-  /// 不停在旧的回复上。开新会话的请求不抢：开好时由认领记到卡上（`claimLaunchedCards`）。
+  /// 执行过或认领过的读灵感与任务上记的会话；还没执行的读最近一条投送请求。开新会话的是“正在开”（开好后由 `claimLaunchedCards` 记到卡上；没开成的不算交给过，任务行重新给“开始”）。
+  /// 在路上的最近一条发给已有会话的请求优先于卡上记的会话：手机重发后状态点跟着那个会话（发送中），不停在旧的回复上。开新会话的请求不抢：开好时由认领记到卡上。
   public func handedSessions() throws -> [UUID: AgentHandoff] {
     let handOff = "r.cardID IS NOT NULL AND (r.mode = 'start' OR (r.targetRef IS NOT NULL AND r.mode IN (\(sqlList(DeliveryMode.toSession)))))"
       + " AND \(Self.latestHandoff("r"))"
@@ -45,26 +41,20 @@ extension CueStore {
       ORDER BY rank
       """
     ) { row in
-      // 开新会话那一行带着请求内容，读出用哪家开
       let launch = row.isNull(2) ? nil : PiLaunch(stored: row.text(2))
       return (card: row.uuid(0), handoff: row.isNull(2) ? AgentHandoff.session(row.text(1)) : .launching(launch?.opening ?? .pi))
     }
     return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })
   }
 
-  /// 一张任务的下级（子任务与挂在下面的灵感），按手动顺序；在回收站的不列。
   public func children(of parent: UUID) throws -> [Card] {
     try select(Card.self, where: "parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL", [parent], orderBy: "sortKey, id")
   }
 
-  /// 这几种状态的任务，按项目分组：项目顺序同 `projects()`。组内是整棵任务树的先序（同级按手动顺序，
-  /// 子任务紧跟上级）再按状态筛：上级被筛掉的子任务就排在上级原来的位置。只要完成的时不按树，最近完成在前。
-  /// 回收站里的任务与回收站项目的任务不列。
   public func tasks(_ statuses: TaskStatus...) throws -> [TaskGroup] {
     try taskGroups(Set(statuses))
   }
 
-  /// 一个项目里这几种状态的任务，排法同 `tasks(_:)` 的一组：只读这个项目，页面不必读全库再过滤。
   public func tasks(in project: UUID, _ statuses: TaskStatus...) throws -> [Card] {
     try taskGroups(Set(statuses), project: project).flatMap(\.tasks)
   }
@@ -92,7 +82,6 @@ extension CueStore {
     }
   }
 
-  /// 按手动顺序排好的一组任务的先序：上级不在这组里的当顶层。
   private static func preorder(_ tasks: [Card]) -> [Card] {
     let ids = Set(tasks.map(\.id))
     var children: [UUID: [Card]] = [:]
@@ -106,20 +95,15 @@ extension CueStore {
     return ordered
   }
 
-  /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的子任务当顶层，与 `tasks(_:)` 列出的一致。
   private static let liveTask = "u.deletedAt IS NULL AND u.archivedAt IS NULL AND u.todoAt IS NOT NULL"
 
-  /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts` 与 `tasksDone` 共用。
   private static let taskWithParent =
     "FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(liveTask)"
   private static let topLevel = "(u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))"
 
-  /// 各项目的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
-  /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `subtaskProgress`。
-  /// 灵感不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
+  /// 给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）。
   public func taskCounts() throws -> [UUID: TaskCounts] { try taskCounts(scope: "", []) }
 
-  /// 一个项目的顶层任务数，口径同 `taskCounts()`；没有任务为 `.zero`。
   public func taskCounts(in project: UUID) throws -> TaskCounts {
     try taskCounts(scope: "AND t.projectID = ?", [project])[project] ?? .zero
   }
@@ -137,9 +121,7 @@ extension CueStore {
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
   }
 
-  /// 做完的顶层任务，最近做完的在前——给用户看的"做完了哪些"只有这一处：任务看板的做完列与更早做完的、实时活动的"今天做完"、项目页的"已完成"。
-  /// 顶层与可见的口径同 `taskCounts`（做完的子任务跟着上级，归档、回收站里的与回收站项目的不算）。
-  /// `since` 只要这一刻以来做完的，`project` 只要这个项目的，`limit` 至多几条。
+  /// 给用户看的“做完了哪些”只有这一处：任务看板的做完列、实时活动的“今天做完”、项目页的“已完成”。顶层与可见的口径同 `taskCounts`。
   public func tasksDone(since: Date? = nil, in project: UUID? = nil, limit: Int? = nil) throws -> [Card] {
     var scope = "", arguments: [any SQLBindable] = []
     if let since {
@@ -159,8 +141,6 @@ extension CueStore {
     ) { Card(row: $0) }
   }
 
-  /// 每条任务的子任务完成了几个、一共几个：任务行的完成圈与"子任务 n/m"由它推出；没有子任务的不在结果里。
-  /// 不带参数读全库；`of` 只读这几条任务的；`in` 只读一个项目里的（下级与上级同项目）。
   public func subtaskProgress() throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "", []) }
 
   public func subtaskProgress(of parents: some Sequence<UUID>) throws -> [UUID: TaskProgress] {
@@ -173,7 +153,6 @@ extension CueStore {
     try Self.subtaskProgress(scope: scope, arguments, in: db)
   }
 
-  /// 同上，直接读一个连接（写事务里的 `CuePlace.capture`）。
   static func subtaskProgress(scope: String, _ arguments: [any SQLBindable], in db: SQLite) throws -> [UUID: TaskProgress] {
     let rows = try db.query(
       """
@@ -186,8 +165,6 @@ extension CueStore {
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
   }
 
-  /// 项目里可见卡片的最近一次发送（时间与目标）：卡片 id → `LastSend`；从未发送的卡不在结果里。
-  /// 一次查询覆盖整个项目，界面据此判断"未发送"和工作集，不必逐卡查询。
   public func lastSends(in project: UUID) throws -> [UUID: LastSend] {
     Dictionary(
       uniqueKeysWithValues: try db.query(
@@ -206,8 +183,6 @@ extension CueStore {
       })
   }
 
-  /// 发送过卡片的目标，按种类与名称去重，最近使用的在前（`ref` 取该目标最近一次的）。
-  /// 只含关联了卡片的发送：这些目标才可能筛出卡片，供搜索的"发给某目标"下拉使用。
   /// `ref` 靠 SQLite 对单个 MAX 聚合的裸列语义取自最近一行。
   public func sendTargets() throws -> [SendTarget] {
     try db.query(

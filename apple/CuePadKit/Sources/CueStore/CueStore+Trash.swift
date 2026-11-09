@@ -7,8 +7,7 @@ extension CueStore {
   @discardableResult
   public func trashCard(_ id: UUID) throws -> CardChange? { try trashCards([id]).first }
 
-  /// 一次删除多条（Mac 上批量选中的灵感）：同一个事务，库只通知一次；每条的规则同 `trashCard`，回执按给出的顺序，跳过的不在里面。
-  /// 没做完的任务就此离开看板，没人再用的会话随之结束（`endUnusedSessions`；撤销不重开）。
+  /// 一次删除多条（Mac 上批量选中的灵感）：同一个事务，库只通知一次；回执按给出的顺序，跳过的不在里面。
   @discardableResult
   public func trashCards(_ ids: [UUID]) throws -> [CardChange] {
     try write {
@@ -49,10 +48,7 @@ extension CueStore {
     if let parent = try find(Card.self, id)?.parentID { try settle(around: [parent]) }
   }
 
-  /// 拨回一次改动（`trashCard`、`moveCard`、`mergeIdea`、`createTask(fromIdea:)` 的回执），整个拨回是一个事务；
-  /// 合并与新建的回执带着任务当时的修改时刻，之后又改过就抛 `changedSinceUndo`、什么都不撤。其余：
-  /// 删除恢复、提上去的下级回到它下面；挪动放回原来的位置；接进任务的灵感恢复、任务正文改回；照灵感新建的任务进回收站、灵感恢复。
-  /// 其间已经不在了的下级跳过，原来的前一个同级不在了就排到最前。
+  /// 拨回一次改动的回执，整个拨回是一个事务；合并与新建的回执带着任务当时的修改时刻，之后又改过就抛 `changedSinceUndo`、什么都不撤。其间已经不在了的下级跳过，原来的前一个同级不在了就排到最前。
   public func undo(_ change: CardChange) throws { try undo([change]) }
 
   /// 一次拨回多个回执（批量删除的撤销），同一个事务，倒序拨回。
@@ -60,7 +56,6 @@ extension CueStore {
     try write { for change in changes.reversed() { try undoRow(change) } }
   }
 
-  /// 拨回一个回执（在调用方的事务里）。
   private func undoRow(_ change: CardChange) throws {
     switch change {
     case .trash(let id, let lifted):
@@ -82,7 +77,6 @@ extension CueStore {
     }
   }
 
-  /// 把这些卡按顺序重新挂到 `parent` 下（已经不在的跳过）。
   private func adopt(_ children: [UUID], by parent: UUID) throws {
     var previous: UUID?
     for child in children where try link(of: child) != nil {
@@ -92,7 +86,6 @@ extension CueStore {
   }
 
   /// 离开一条灵感的编辑时：还是空白（`Card.isBlank`）就不留下。任务、写了字或放了图的不动。
-  /// 记灵感是先建一条空的再进编辑，这是它的收尾。
   public func dropIfBlank(_ id: UUID) throws {
     try write {
       // 空白的正文不引用图片，没有附件要回收
@@ -106,7 +99,6 @@ extension CueStore {
     try removingFiles { try write { try reclaimAttachments(purgeCards(where: "id = ?", [id])) } }
   }
 
-  /// 清空回收站：单独删除的卡片，以及回收站项目连同其卡片。
   public func emptyTrash() throws {
     try removingFiles { try write {
       let orphaned = try purgeCards(
@@ -142,7 +134,6 @@ extension CueStore {
     return reclaimed
   }
 
-  /// 对话里你的消息中带附件的行（只有你的消息引用附件）；`?1` 是某个附件的引用（`CueFormat.reference`）或所有引用都含的 `CueFormat.referencePrefix`。
   static let userAttachments = "role = '\(PiChatRole.user.rawValue)' AND instr(text, ?1) > 0"
 
   /// 一轮经过里带图的（`?1` 是 `Tools.imagesField` 或某个键加引号）：工具结果里的图只记在经过上（`PiChatMessage.Tools.Item.images`）。

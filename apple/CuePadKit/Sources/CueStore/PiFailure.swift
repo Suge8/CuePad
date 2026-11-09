@@ -15,7 +15,6 @@ public enum PiFailure: String, Sendable, CaseIterable {
   /// 达到输出长度上限，文字已保留但这一轮未完成。
   case truncated
 
-  /// 重跑这一轮有用；额度与登录卡住的要换模型。
   public var retries: Bool { self == .network || self == .other || self == .truncated }
 
 }

@@ -32,7 +32,6 @@ extension Schema {
       if formats[hash] == nil { formats[hash] = format }
       if previewFormats[hash]?.contains(format) != true { previewFormats[hash, default: []].append(format) }
     }
-    /// 这个哈希的扩展名；nil 是这台推不出来
     func format(of hash: String) -> String? {
       if let known = formats[hash] { return known }
       if let record = recorded[hash], record.format != legacyBinary { return record.format }
@@ -101,7 +100,6 @@ extension Schema {
     return { for url in obsolete { try? FileManager.default.removeItem(at: url) } }
   }
 
-  /// 旧版给非图片附件写的 format
   static let legacyBinary = "bin"
   static let legacyImagePrefix = "![](cuepad://img/"
   private static var legacyImage: Regex<(Substring, Substring)> { /!\[\]\(cuepad:\/\/img\/([0-9a-f]{64})\)/ }

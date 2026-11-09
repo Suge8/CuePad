@@ -7,7 +7,6 @@ import Foundation
 /// - 其余（工作中的细节）合并：离上次写入不到间隔就挂起、到点写最新的一次。
 protocol Paced: Equatable, Sendable {
   var isWorking: Bool { get }
-  /// 去掉工作中不断变的细节的样子：它变了就是关键变化
   var steady: Self { get }
 }
 
@@ -15,11 +14,9 @@ struct Pace<Content: Paced> {
   enum Step {
     case skip
     case now
-    /// 挂起：等这么多秒再写（调用方据此起 `timer`）
     case wait(TimeInterval)
   }
 
-  /// 最近一次给的（挂起时到点写的就是它）；还没给过为 nil
   private(set) var content: Content?
   private(set) var written: Content?
   private var writtenAt: Date?
@@ -42,7 +39,6 @@ struct Pace<Content: Paced> {
     return timer == nil ? .wait(interval.seconds - elapsed) : .skip
   }
 
-  /// 把 `content` 记为已写入（这一刻），返回它。
   mutating func commit(_ content: Content, at now: Date) -> Content {
     self.content = content
     written = content

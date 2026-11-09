@@ -1,4 +1,3 @@
-/// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, agentCatalogs, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
@@ -11,7 +10,6 @@ public enum Table: String, Codable, Sendable, CaseIterable {
 }
 
 extension Table {
-  /// 进入 iCloud 同步的表；其余是本机表。
   package static let synced: [Table] = [
     .projects, .cards, .sendRecords, .attachments, .piSessionStates, .agentCatalogs, .deliveryRequests, .directoryBindings, .piMessages,
     .previews, .accountQuotas,
@@ -60,7 +58,6 @@ extension Table {
 protocol Record: Sendable {
   static var table: Table { get }
   static var columns: [String] { get }
-  /// 读出时 SELECT 的列：默认就是 `columns`；有推出来的字段的记录在后面加上。
   static var selection: String { get }
   var bindings: [any SQLBindable] { get }
   init(row: Row)

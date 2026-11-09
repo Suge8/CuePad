@@ -13,7 +13,6 @@ public struct SessionFolder: Sendable, Equatable {
   public var sessionID: String
   public var projectID: UUID?
   public var count: Int
-  /// 那台 Mac 给人看的名字（`MacAgents.shownName`，读出时取）。
   public var macName: String
 
   public init(hostID: String, folder: String, sessionID: String, projectID: UUID?, count: Int, macName: String) {
@@ -32,13 +31,10 @@ public struct PiSessionQuery: Sendable, Equatable {
   public var scope: PiSessionScope
   /// 在会话名、文件夹名、最后的提问里找（不分大小写）；nil 或空白表示全部。
   public var text: String?
-  /// 只要归在这个项目的（`PiSessionListItem.home`）；nil 表示不限。
   public var project: UUID?
   /// 只要带这个认领标识的（新会话认领用，精确取一条）。
   public var launchToken: String?
-  /// 只要这一条记录（`PiSessionState.id`）。
   public var id: UUID?
-  /// 只要绑在置顶任务上的（true）或其余的（false）；nil 表示不限。
   public var pinned: Bool?
   /// 不要这些会话（Pi 的会话 id）：库里认不出、要按此刻算的（"更早"不列正在唤醒的，`PiSessionList.earlier`）。
   public var excluding: [String] = []
@@ -60,9 +56,7 @@ public struct PiSessionQuery: Sendable, Equatable {
     self.limit = limit
   }
 
-  /// 全部在线会话（数量少，不分页）。
   public static let live = PiSessionQuery(scope: .live, limit: .max)
-  /// 此刻有事的会话（在线的与还有话发给它的已结束会话，数量少，不分页）。
   public static let current = PiSessionQuery(scope: .current, limit: .max)
 }
 
@@ -79,7 +73,6 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   /// 它此刻归的那件事的顶层任务（`CueStore.sessionOwners`）：会话的"置顶"置的是它；没绑还在列表里的任务为 nil。
   public var task: SessionTask?
   public var id: UUID { state.id }
-  /// 会话归在哪个项目（会话页按它筛、项目的此刻按它归）：它的项目还在就是它，没有项目或项目已删的归默认项目。
   public var home: UUID { project?.id ?? Project.defaultID }
 
   public init(
@@ -94,7 +87,6 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
     self.task = task
   }
 
-  /// 此刻没能送达的话有几句（`Speech`：失败的与超时的）：会话行的标记与会话页顶栏的"N 句没送到"同读这个数。
   public func undelivered(at moment: Speech.Moment) -> Int { Speech.undelivered(unsettled, at: moment) }
 }
 

@@ -8,7 +8,6 @@ public enum PiPreviewKind: String, Codable, Sendable, CaseIterable {
   // 顺序即归类的先后：SVG 也是图片、HTML、Markdown 与 diff 也是文本，先认出来的算数
   case web, markdown, image, video, audio, pdf, document, spreadsheet, presentation, model, diff, text
 
-  /// 属于这一类的系统类型；具体类型（带扩展名的）会写进"可发什么"。
   private var types: [UTType] {
     switch self {
     case .web: [.html, .svg]
@@ -54,7 +53,6 @@ public enum PiPreviewKind: String, Codable, Sendable, CaseIterable {
   /// 系统认得、这里却显示不了的：.svgz 是 gzip 压缩的 SVG，网页预览按原字节载入、不解压。
   private static let unreadable: Set<String> = ["svgz"]
 
-  /// 给 Agent 与用户看的"可发什么"：网页（html、htm、svg）、Markdown（md、markdown）、图片、……
   public static let supportedList = allCases.map { kind in
     let extensions = kind.types.flatMap { $0.tags[.filenameExtension] ?? [] }.filter { !unreadable.contains($0) }
     return extensions.isEmpty || extensions == [kind.label.lowercased()] ? kind.label : "\(kind.label)（\(extensions.joined(separator: "、"))）"
@@ -69,7 +67,6 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
   public var hash: String
-  /// 原文件名（含扩展名，类型由它定）
   public var name: String
   /// 一句标题：这份是什么、看哪里（Agent 发时每份一句、同批各不相同，宽不过 `titleLimit`），缩略图下、全屏页顶上与 Cue 的清单里都写它
   public var title: String
@@ -84,10 +81,8 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
   /// 标题怎么写（接在"每个一句，"或"标题要"后面）：技能、命令的帮助与标题不合时的报错共用这一句。
   public static let titleRule = "说清这份是什么、看哪里，用和用户对话的语言；一行、宽不过 \(titleLimit)（约 \(titleLimit / 2) 个汉字），同一次发的各不相同"
 
-  /// 这台设备不认识的类型（别的版本发来的）为 nil
   public var kind: PiPreviewKind? { PiPreviewKind(fileName: name) }
 
-  /// 附件的键：扩展名由文件名定（`AttachmentKey.make(hash:name:)`），本机文件 `AttachmentFiles.fileURL(for:)` 按它找。
   public var key: String { AttachmentKey.make(hash: hash, name: name) }
 
   public init(id: UUID = UUID(), sessionID: String, hash: String, name: String, title: String, byteCount: Int, createdAt: Date? = nil) {
@@ -119,7 +114,6 @@ extension PiPreview: Record {
   }
 }
 
-/// 一份预览的标题哪里不合 `PiPreview.titleRule`：报错说出这一条，Agent 照着改一处就对。
 public enum PreviewTitleProblem: Equatable, Sendable {
   case blank, multiline, tooWide(Int), repeated
 
@@ -133,7 +127,6 @@ public enum PreviewTitleProblem: Equatable, Sendable {
   }
 }
 
-/// `CueStore.addPreviews` 的结果，一个文件一份：预览，以及 HTML 里引用了、手机上预览时拿不到的外部资源。
 public struct PiPreviewAdded: Equatable, Sendable {
   public var preview: PiPreview
   /// 页面引用的本地文件或网络地址（预览只读单个文件、不联网）：缺的会显示不全，给 Agent 看，让它改成单文件再发。最多 `PiPreviewAdded.referenceLimit` 个
@@ -196,7 +189,6 @@ extension CueStore {
     }
   }
 
-  /// 一个会话的预览，从早到晚。
   public func previews(of sessionID: String) throws -> [PiPreview] {
     try select(PiPreview.self, where: "sessionID = ?", [sessionID], orderBy: "createdAt, id")
   }

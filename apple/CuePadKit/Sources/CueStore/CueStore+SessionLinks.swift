@@ -2,8 +2,7 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 记录一次投送或复制：内容快照、目标、时间。发送记录只记"内容"的投送——说给 Agent 的话、发到应用、复制；命令与设置（config、answer、end、stop、bind、command）不记。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话（`linkCard`；任务行据此显示会话状态）。执行投送的那台 Mac 记，
-  /// 请求从哪台设备发来都一样。灵感发出去不变成任务。经投送请求送出的带上请求的 id 与来源（`delivery`、`origin`）。
+  /// 发送记录只记“内容”的投送。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话（`linkCard`）。执行投送的那台 Mac 记，请求从哪台设备发来都一样。灵感发出去不变成任务。
   @discardableResult
   public func recordSend(
     _ content: String, to target: SendTarget, card: UUID? = nil, delivery: UUID? = nil, origin: Open<DeliveryOrigin>? = nil
@@ -77,9 +76,7 @@ extension CueStore {
     Set(try deliverySources(among: deliveries).compactMap { $0.value == .cue ? $0.key : nil })
   }
 
-  /// 把灵感或任务关联到一个会话（没开始的任务进行中；完成了的不变：说话不改任务的状态），不写发送记录：
-  /// 发给 Agent 的命令带着卡片时用（命令不是内容的投送，发送记录只记内容）。任务的会话只记在叶子上（`homeLeaf`）；
-  /// 一个叶子最多一个会话，一个会话可以绑好几个叶子。
+  /// 不写发送记录：发给 Agent 的命令带着卡片时用。没开始的任务进行中；完成了的不变：说话不改任务的状态。任务的会话只记在叶子上（`homeLeaf`）；一个叶子最多一个会话，一个会话可以绑好几个叶子。
   public func linkCard(_ card: UUID, toSession session: String) throws {
     try write { try linkCardInTransaction(card, toSession: session, at: Date.stamp) }
   }
@@ -114,9 +111,7 @@ extension CueStore {
     """
   }
 
-  /// 把会话绑到叶子任务 `task` 上（会话页的"绑定到任务"、任务的右键）：叶子是没有子任务的任务，有子任务的抛 `notALeaf`，不是任务抛 `notATask`。
-  /// 叶子原来绑着的会话换成这个；同一个会话可以绑好几个叶子（已完成的事绑着的会话照样能绑给新的事）。没开始的任务置为进行中，完成了的不变。
-  /// 绑会话不发任务的正文：它在做的事已经在会话里，要说的话在会话里说。
+  /// 有子任务的抛 `notALeaf`，不是任务抛 `notATask`。叶子原来绑着的会话换成这个；同一个会话可以绑好几个叶子。没开始的任务置为进行中，完成了的不变。绑会话不发任务的正文：它在做的事已经在会话里。
   public func bindSession(_ sessionID: String, to task: UUID) throws {
     try write {
       guard let link = try link(of: task) else { throw CueStoreError.notFound }
@@ -132,7 +127,6 @@ extension CueStore {
     }
   }
 
-  /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常（没有别的任务绑着它就是没绑任务的会话）。
   public func unbindSession(from task: UUID) throws {
     try write {
       let card = try requireLeaf(task)
@@ -142,8 +136,6 @@ extension CueStore {
     }
   }
 
-  /// 这个会话属于的叶子任务：正在用它的与以前用过它的（`formerSessionIDs`；没删除、没归档，含完成了的），先开始的在前；子任务带着上级。
-  /// 正在用它的是 `piSessionID` 等于它的那几个。
   public func tasks(boundTo sessionID: String) throws -> [LeafTask] {
     try select(
       Card.self,
@@ -160,7 +152,6 @@ extension CueStore {
     try tasks(boundTo: sessionID).flatMap { [$0.task.id, $0.parent?.id] }.compactMap(\.self)
   }
 
-  /// 能绑会话的叶子（没完成、没绑会话、没删除、没归档）：子任务带着上级一起给，界面写"上级 · 子任务"。顺序同 `tasks(in:_:)`
   /// （项目页的任务顺序：同级手动顺序，子任务紧跟上级）。`project` 是会话所在的项目；会话没归项目（文件夹没绑给哪个项目）时列默认项目的。
   public func bindableTasks(in project: UUID?) throws -> [LeafTask] {
     let open = try tasks(in: project ?? Project.defaultID, .todo, .inProgress)
@@ -175,7 +166,6 @@ extension CueStore {
     return result
   }
 
-  /// 表 `alias` 里的任务是叶子：没有（没删除的）子任务。
   static func isLeaf(_ alias: String) -> String {
     "NOT EXISTS (SELECT 1 FROM cards s WHERE s.parentID = \(alias).id AND s.todoAt IS NOT NULL AND s.deletedAt IS NULL)"
   }
