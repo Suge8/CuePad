@@ -55,7 +55,7 @@ extension CueStore {
     try db.run("""
       UPDATE deliveryRequests SET status = 'succeeded', failure = NULL,
         completedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1)
-      WHERE status != 'succeeded' AND mode IN ('send', 'start') AND id IN (SELECT value FROM json_each(?2))
+      WHERE status != 'succeeded' AND mode IN (\(DeliveryMode.landsAsMessageSQL)) AND id IN (SELECT value FROM json_each(?2))
         AND (targetRef = ?3 OR mode = 'start')
       """, [Date.stamp, Self.idList(ids), session])
     try reconcileDeliveredCards(deliveries: ids)

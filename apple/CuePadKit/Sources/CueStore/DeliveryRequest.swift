@@ -59,6 +59,17 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
 
   /// 会话的显示状态只把这几种算进去。命令与设置不在其中：对话只来自会话文件，进度只在回复框上方短暂显示。
   public static let toSession: Set<DeliveryMode> = [.send, .answer, .retry]
+
+  /// 内容会落成会话里的一条消息的方式：靠那条消息确认送达，也靠那条消息记发送记录。
+  /// 不写 `default`：新增一种方式时编译器逼着在这里表态。
+  public var landsAsMessage: Bool {
+    switch self {
+    case .send, .start: true
+    case .withdraw, .answer, .transcript, .config, .end, .stop, .stopTurn, .retry, .bind, .command, .quota, .tidy, .libraryEdit: false
+    }
+  }
+
+  static let landsAsMessageSQL = sqlList(allCases.filter(\.landsAsMessage).sorted { $0.rawValue < $1.rawValue })
 }
 
 /// 请求是谁写的：没有值是你（界面或命令行）；Cue 写的标 `cue`。

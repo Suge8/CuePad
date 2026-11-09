@@ -150,6 +150,7 @@ final class MacExecutor {
 
     /// 记发送记录。话已经送达，记不下也照样按成功写回（手机才不会重发）：没记下是这台 Mac 的资料库问题，在这里报。
     private func record(_ content: String, of request: DeliveryRequest, to target: SendTarget) async {
+        guard request.mode.known?.landsAsMessage == true else { return }
         do {
             try await store.recordDelivery(request, content: content, to: target)
         } catch {
