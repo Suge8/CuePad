@@ -32,6 +32,30 @@ extension RealClaudeHostTests {
         }
     }
 
+    /// 说到一半停住的回答（假模型的 `stream(_:until:)`，Anthropic Messages）：这一轮还在跑、回答没落盘，放行后同一条回答说完、这一轮歇下
+    @Test func aReplyHeldMidStreamFinishesOnceReleased() async throws {
+        try await ClaudeTestbed.run { testbed in
+            try testbed.startConnected()
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
+            let gate = testbed.model.gate()
+            testbed.on("说一半", .stream(["前半句，", "后半句"], until: gate))
+
+            let after = Date()
+            let sending = Task { try await testbed.bridge.send(PiMessage(text: "说一半"), to: id) }
+            try await gate.reached()
+            try await eventually("在跑") { testbed.bridge.session(id: id)?.state.isWorking == true }
+            // 会话文件这时可能还没写出来
+            #expect((try? testbed.transcript(testbed.bridge.session(id: id)?.sessionFile))?.recap.lastReply == nil)
+
+            gate.open()
+            try await sending.value
+            try await testbed.waitForTurn(id, since: after)
+            try await testbed.waitForDraftLanded(id)
+            #expect(try testbed.transcript(testbed.bridge.session(id: id)?.sessionFile).recap.lastReply == "前半句，后半句")
+            #expect(testbed.bridge.session(id: id)?.state == .settled)
+        }
+    }
+
     @Test func stoppingARunningToolEndsItsCommand() async throws {
         try await ClaudeTestbed.run(settings: #"{"permissions": {"allow": ["Bash"]}}"#) { testbed in
             try testbed.startConnected()
