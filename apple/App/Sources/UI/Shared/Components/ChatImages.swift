@@ -69,7 +69,7 @@ private struct ChatImage: View {
                 }
                 .overlay {
                     if place.isAway {
-                        Text(verbatim: services.awayLine(hash))
+                        Text(verbatim: AttachmentLooks.awayLine(hash, services))
                             .font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3)
                             .multilineTextAlignment(.center).padding(Spacing.tight)
                     }

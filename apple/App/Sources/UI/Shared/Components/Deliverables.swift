@@ -218,7 +218,7 @@ struct DeliverableTile: View {
                     // 还没到本机：点名的图没有下面那行字，传了几成、怎么取写在画面上
                     VStack(spacing: Spacing.tight) {
                         Image(.downloading).font(Glyph.control)
-                        Text(verbatim: services.awayLine(preview.key)).font(Typography.caption).monospacedDigit().multilineTextAlignment(.center)
+                        Text(verbatim: AttachmentLooks.awayLine(preview.key, services)).font(Typography.caption).monospacedDigit().multilineTextAlignment(.center)
                     }
                     .padding(.horizontal, Spacing.tight)
                     .foregroundStyle(palette.ink3)
@@ -256,7 +256,7 @@ struct DeliverableTile: View {
     private var caption: some View {
         Group {
             if file == nil {
-                Text(verbatim: services.awayLine(preview.key)).foregroundStyle(palette.ink3)
+                Text(verbatim: AttachmentLooks.awayLine(preview.key, services)).foregroundStyle(palette.ink3)
             } else {
                 Text("\(Text(label).foregroundStyle(palette.ink2))\(Dotted.inline)\(Text(kind))").foregroundStyle(palette.ink3)
             }
