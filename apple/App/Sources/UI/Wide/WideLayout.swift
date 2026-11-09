@@ -21,7 +21,6 @@ struct WideMetrics {
     /// 主区（并排两个会话时是两半合起来）。
     let main: CGFloat
     let cue: CGFloat
-    /// 主区并排两个会话。
     let split: Bool
     /// Cue 放得下：没露出来是用户收起的；放不下时 Cue 钮拉出抽屉。
     let cueFits: Bool

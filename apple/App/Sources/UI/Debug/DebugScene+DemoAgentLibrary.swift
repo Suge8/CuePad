@@ -140,8 +140,6 @@ struct DemoAgentLibrary {
         }
     }
 
-    // MARK: 技能
-
     static let global: [(group: String, name: String, description: String)] = [
         ("creative", "copywriting", String(localized: "写落地页、发布说明与商店文案", table: "Demo")),
         ("creative", "gpt-image", String(localized: "生成插图、海报与图标", table: "Demo")),
@@ -202,8 +200,6 @@ struct DemoAgentLibrary {
     static let globalRelease = String(localized: "---\nname: release\ndescription: 发布新版本\n---\n\n打 tag，推送，等 CI 绿。", table: "Demo")
     static let cuepadRelease = String(
         localized: "---\nname: release\ndescription: 签名、公证、发布新版本\n---\n\n只在干净检出运行 xc.sh release。\n\n公证完再推 appcast。", table: "Demo")
-
-    // MARK: 规则
 
     static let cuepadRules = String(localized: "# CuePad\n\nSwift 原生应用。构建、测试、截图只经 apple/scripts/xc.sh。", table: "Demo")
     static let homepageRules = String(localized: "# 个人网站\n\nAstro 静态站，部署前先跑 pnpm build。", table: "Demo")
@@ -270,8 +266,6 @@ struct DemoAgentLibrary {
         }
         return list
     }
-
-    // MARK: 该整理的
 
     private var tidies: [LibraryTidy] {
         let claude = home + "/.claude/skills"

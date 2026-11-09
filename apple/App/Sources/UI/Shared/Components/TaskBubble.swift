@@ -11,7 +11,6 @@ struct TaskBubble: View {
     /// 一次打开：`id` 每次打开都不同（同一件事再点一次也从新的那一下长出来）；`step` 是翻到的子任务，翻页不换 `id`。
     struct Request: Identifiable, Equatable {
         let id = UUID()
-        /// 顶层任务。
         let task: UUID
         /// 翻到的子任务；nil 是这件事本身（有子任务时是子任务一览）。
         var step: UUID?
@@ -116,10 +115,8 @@ nonisolated struct BubbleData: Sendable, Equatable {
     /// 在看板的哪一列（`TaskBoard.Column.of`，与看板同一条规则、同一份 `cueTally`）。
     var column: TaskBoard.Column
     var schedules: [CueScheduled]
-    /// 已不是一条看得见的任务（删了、归档了）。
     var gone: Bool { goal.deletedAt != nil || goal.archivedAt != nil }
 
-    /// 翻到的那一页：那一步（还在时），否则这件事本身。
     func focus(_ step: UUID?) -> Card { steps.first { $0.id == step } ?? goal }
 
     static func read(_ id: UUID, from store: isolated CueStore) throws -> BubbleData {

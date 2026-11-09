@@ -22,7 +22,6 @@ nonisolated struct BrandMark: Hashable, Sendable {
     static let mimo = Self("mimo")
     // 转发模型的提供方：认不出家族时退到它
     static let openrouter = Self("openrouter")
-    // 接入的 Agent
     static let claudeCode = Self("claudecode")
     static let codex = Self("codex")
     static let opencode = Self("opencode")

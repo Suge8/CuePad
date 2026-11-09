@@ -75,7 +75,6 @@ extension SyncBench {
             if let done = item.done, was?.done == nil { mark(prefix == "msg" ? "msg-delivered" : "req-done", id.merging(["at": done.timeIntervalSince1970] as [String: any Sendable]) { $1 }) }
         }
 
-        /// 已经画过的 Cue 消息。
         private static var shown: Set<UUID> = []
 
         /// 页面的订阅拿到新值（`Observing` 写进页面状态那一刻，`DebugHooks.observed`）：Cue 页里第一次出现的话，

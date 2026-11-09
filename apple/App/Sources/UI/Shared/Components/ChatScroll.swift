@@ -104,7 +104,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         content.padding(.bottom, padding).background { ContentLift.Anchor(lift: lift) }
                             .environment(\.chatAnchor, anchor)
                             .environment(\.chatOnScreen, onScreen)
-                        // 最新处（`toEnd`）
                         Color.clear.frame(height: 0).id(Self.end)
                     }
                 }

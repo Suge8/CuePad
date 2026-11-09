@@ -20,7 +20,6 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let click: String?
     /// `-CuePadClickGap <秒>`（默认 1.5）：`-CuePadClick` 几下之间的间隔
     let clickGap: Double?
-    /// `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口（同点关闭钮：内容摘下，`MainShellWindow`），配 `-CuePadFlightLog` 量关着窗时
     let closed: Double
     /// `-CuePadCommand YES`：从标准输入读命令（同步测量的实例用）
     let command: Bool
@@ -32,7 +31,6 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let cueFlowLog: String?
     /// `-CuePadCueSays <秒>`：过这么久 Cue 说一句（`DebugScene+CueDrivers.swift`，配 `-CuePadVisitCue`、`-CuePadClosed`、`-CuePadReopen`）
     let cueSays: Double
-    /// `-CuePadCycle YES`：就绪后循环走过各个画面状态，录屏用（`DebugScene+PiDemo.swift`）
     let cycle: Bool
     /// `-CuePadFlightLog <路径>`：叫醒、交给（`relayIfAsked`）前后各量一段（帧间隔、掉帧、主线程 CPU、指令数与能量），一段一行 JSON 追加到这个文件
     let flightLog: String?
@@ -52,13 +50,11 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let notice: String?
     /// `-CuePadPressAfter <秒>`（默认 3）：`-CuePadSpeech press` 在输入框出现这么久后按它的发送钮
     let pressAfter: Double?
-    /// `-CuePadRelay <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 交给会话一次——写一条 Cue 发起的投送请求
     let relay: Double
     /// `-CuePadRelayKind say|start`：`-CuePadRelay` 只做其中一种
     let relayKind: String?
     /// `-CuePadReopen <秒>`：关上这么久后再打开（真的显示，会到前台），关着的这段中途把 Cue 此刻的状态写成用工具
     let reopen: Double
-    /// `-CuePadReplyBlink <秒>`（配 `-CuePadDemo YES -CuePadScene cue`，画面就绪后开始、一直循环）：每隔这么久 Cue 把一个歇着的会话留给你回
     let replyBlink: Double
     /// `-CuePadRightClick x,y`（仅 Mac，要 `-CuePadForeground YES`）：右键点一下，打开那里的系统菜单
     let rightClick: String?

@@ -50,8 +50,6 @@ struct CuePage: View {
             }
     }
 
-    // MARK: 平台
-
     #if os(macOS)
     private var page: some View {
         HStack(spacing: 0) {
@@ -98,8 +96,6 @@ struct CuePage: View {
     #endif
 
     private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.chatInset : 0 }
-
-    // MARK: 对话
 
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/layout.md）。
     /// 还没说过话时正中是首次见面（`CueWelcome`：自我介绍，没启用时连同启用那一步，启用了接几句能直接说的话）。
@@ -165,8 +161,6 @@ struct CuePage: View {
             self.live = live
         }
     }
-
-    // MARK: 底部
 
     /// 拍板卡、停用时的启用与原输入框。
     private func bottom() -> some View {

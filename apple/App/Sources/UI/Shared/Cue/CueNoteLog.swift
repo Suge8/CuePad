@@ -50,10 +50,8 @@ struct CueNoteLog: View {
     }
 }
 
-/// 一轮一行。
 private struct CueNoteLine: View {
     let round: CueNoteRound
-    /// 是提到这一处最近的那一行。
     let newest: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

@@ -55,7 +55,6 @@ nonisolated extension Card {
 }
 
 nonisolated extension String {
-    /// 空串为 nil，便于 `?? 占位`。
     var nonEmpty: String? { isEmpty ? nil : self }
 }
 

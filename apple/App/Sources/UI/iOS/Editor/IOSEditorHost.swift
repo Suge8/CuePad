@@ -6,13 +6,10 @@ import UIKit
 /// 对编辑器的操作口：插入图片与文件、取当前正文与选中部分。
 final class IOSEditorHandle {
     fileprivate weak var view: CueTextView?
-    /// 点的那个附件在哪（全屏页从那里放大，`AttachmentSpotLayer` 盖在编辑器上）
     let spot = AttachmentSpot()
-    /// 停用时编辑器拿着键盘：再启用时还给它
     fileprivate var refocus = false
 
     var text: String? { view?.storedText }
-    /// 选中部分的存储格式；没选中为 nil。
     var selection: String? { view?.selectedStoredText }
     /// 相册、文件选择器选来的。
     func insert(_ files: [IncomingFile]) { view?.insert(files) }

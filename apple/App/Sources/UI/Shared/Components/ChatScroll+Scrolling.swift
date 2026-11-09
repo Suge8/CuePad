@@ -130,7 +130,6 @@ extension ChatScroll {
         lift.slide(by: height)
     }
 
-    /// 内容末尾那个不占高的点（`toEnd`）。
     static var end: String { "chat.end" }
 
     /// 滚到最新处：内容末尾那个点贴着可见区下沿（按条的 id 跳，`ScrollViewReader`）。不写进滚动位置（`position`）：那里存着的点

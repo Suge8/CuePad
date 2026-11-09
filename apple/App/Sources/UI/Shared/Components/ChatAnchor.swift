@@ -218,7 +218,6 @@ private struct RecordingStack: Layout {
 
     func updateCache(_ cache: inout Measured, subviews: Subviews) { cache = (nil, []) }
 
-    /// 各子视图在宽 `width` 下的高。
     private func heights(_ width: CGFloat?, _ subviews: Subviews, _ cache: inout Measured) -> [CGFloat] {
         if cache.heights.count != subviews.count || cache.width != width {
             cache = (width, subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height })

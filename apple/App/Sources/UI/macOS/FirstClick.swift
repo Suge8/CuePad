@@ -15,7 +15,6 @@ enum FirstClick {
         }
     }
 
-    /// 正在处理的这次按下是不是首击。
     static var isCurrent: Bool {
         guard let event = NSApp.currentEvent, event.type == .leftMouseDown else { return false }
         return event.timestamp <= keyAt
