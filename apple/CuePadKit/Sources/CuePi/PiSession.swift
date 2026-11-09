@@ -256,6 +256,7 @@ extension PiBridgeError: ShownError {
         case .rejected("unconfirmed_turn"): "当前轮次的来源尚未确认，Cue 没有打断"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("not_ready"): "终端里的会话还没起好，没有发出，可以重发"
+        case .rejected("unattested"): "终端里的这个会话跳过了权限确认，CuePad 还没收到它的钩子、没有它的收件凭证，送去会被扣在终端里等你批准，所以没有发出：在终端里对它说一句话后再发"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
         case .unknownModel(let agent): "\(agent.name) 里没有这个模型"
         case .refused(let reason): ShownText.verbatim(reason).value

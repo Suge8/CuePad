@@ -95,9 +95,9 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
         if let running = hosted[session.id], let id = running.id {
             if bridge.session(id: id) != nil { return id }
-            // 刚结束的：输出一断就下了桥，进程退了才离开 `hosted`（机器忙时隔得长；结束只关输入，不保证它退）。
-            // 收掉它再接着：不交回下了桥的 id（话会报"会话已经结束"），也不让两个进程同写一份会话文件。
-            // 收法同 `stop()`：宽限（`AgentTimeouts.endGrace`，按注入的 `timing`）后 SIGTERM、再宽限后 SIGKILL，有上限。旧条目这里就拿掉，不等退出监视那个任务
+            // 下了桥、进程还没退的：请它退出时（`ClaudeHostedSession.end`）或输出一断就下桥，进程退了才离开 `hosted`。
+            // 等它收完再接着：不交回下了桥的 id（话会报"会话已经结束"），也不让两个进程同写一份会话文件。
+            // 收法同 `end`：宽限（`AgentTimeouts.endGrace`，按注入的 `timing`）后 SIGTERM、再宽限后 SIGKILL，有上限。旧条目这里就拿掉，不等退出监视那个任务
             await running.stream?.process.stop()
             if hosted[session.id] === running { hosted[session.id] = nil }
         }
@@ -121,7 +121,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         return (claude, locator.environment(launching: claude, overrides: paths.environment))
     }
 
-    /// 进程先退出或握手超时（这时让它退出）都抛错。
+    /// 没连上就抛错：进程先退出、握手超时，或调用方取消（投送到了截止时刻）。没连上的都收掉自己起的进程、拿掉条目，
+    /// 不留一个不在桥上的进程占着这个会话（之后接着它时被当成在别处开着，或再起一个同写会话文件）。
     private func launch(
         sessionID: String, arguments: [String], model: PiModelKey? = nil, in directory: URL, launchToken: String?,
         known: (name: String?, firstMessage: String?)? = nil
@@ -143,10 +144,14 @@ public final class ClaudeCodeRuntime: AgentRuntime {
                 sessionID: sessionID, cwd: cwd, sessionFile: ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: sessionID), model: model, launchToken: launchToken,
                 known: known).id
         } catch PiBridgeError.sessionEnded {
-            throw ClaudeCodeError.exited(await process.exited())
-        } catch PiBridgeError.ackTimeout {
+            let reason = await process.exited()
+            if hosted[sessionID] === session { hosted[sessionID] = nil }
+            throw ClaudeCodeError.exited(reason)
+        } catch {
             await process.stop()
-            throw AgentRuntimeError.launchTimedOut(.claudeCode)
+            if hosted[sessionID] === session { hosted[sessionID] = nil }
+            if error as? PiBridgeError == .ackTimeout { throw AgentRuntimeError.launchTimedOut(.claudeCode) }
+            throw error
         }
     }
 
@@ -194,11 +199,11 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     }
 
     private func attach(_ session: PiSession, inbox: String?, runningSince: Date?, waiting: Bool) -> ClaudeTerminalSession {
+        let pid = session.pid, cwd = session.cwd, home = home
         let terminal = ClaudeTerminalSession(
-            id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, registry: registry(of: session.pid),
-            timing: timing, runningSince: runningSince, waiting: waiting)
+            id: session.id, pid: pid, bridge: bridge, gate: gate, inbox: inbox, registry: registry(of: pid),
+            timing: timing, runningSince: runningSince, waiting: waiting) { ClaudeBypass.reachable(pid: pid, cwd: cwd, home: home) }
         terminals[session.id] = terminal
-        let pid = session.pid
         if exitWatchers[pid] == nil {
             exitWatchers[pid] = ProcessExitWatcher(pid: pid) { [weak self] in self?.processExited(pid) }
         }

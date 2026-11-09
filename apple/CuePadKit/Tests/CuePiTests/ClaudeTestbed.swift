@@ -87,7 +87,11 @@ final class ClaudeTestbed {
     ///   钩子的父进程不是 CuePad 起的那个）。终端里开的仍是真 claude。脚本经 `TestScript` 放，内容里不写本次运行的路径：
     ///   它要用的文件放在 `wrapperDirectory`，脚本里写 `${0%/*}`。
     /// - Parameter signedIn: false 时不给密钥，Claude Code 照常起来、上桥，要用模型的都被它拒收。
-    init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true) async throws {
+    /// - Parameter timing: runtime 的钟（默认不前进：期限都不到点）；要量宽限的用例给 `ManualTiming`。
+    init(
+        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true,
+        timing: Timing = noDeadline
+    ) async throws {
         try pinnedClaude.require()
         model = try await FakeModel()
         // auto 模式下没有明文放行的工具，Claude Code 先拿这一步问模型（不带工具清单）一个危害等级；答不出它就拦下这一步
@@ -130,16 +134,17 @@ final class ClaudeTestbed {
         runtime = ClaudeCodeRuntime(
             bridge: bridge, paths: paths, hooks: hooks, store: store, claude: { [bin] in bin.appending(path: "claude") },
             locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) },
-            presence: presence, timing: noDeadline)
+            presence: presence, timing: timing)
         if installHooks { try await integration.install(.claudeCode) }
     }
 
     /// 搭好测试台跑 `body`，不论成败都停掉起的进程（临时目录随测试进程退出整体删除）。
     static func run(
         installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true,
-        _ body: (ClaudeTestbed) async throws -> Void
+        timing: Timing = noDeadline, _ body: (ClaudeTestbed) async throws -> Void
     ) async throws {
-        let testbed = try await ClaudeTestbed(installHooks: installHooks, settings: settings, idleLimit: idleLimit, wrapper: wrapper, signedIn: signedIn)
+        let testbed = try await ClaudeTestbed(
+            installHooks: installHooks, settings: settings, idleLimit: idleLimit, wrapper: wrapper, signedIn: signedIn, timing: timing)
         do {
             try await body(testbed)
         } catch {
@@ -149,15 +154,22 @@ final class ClaudeTestbed {
         await testbed.stop()
     }
 
-    func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
+    /// - Parameter mode: 命令行的 `--permission-mode`；nil 不带（启动时的模式取设置里的 `permissions.defaultMode`）。
+    func terminal(_ arguments: [String] = [], mode: String? = "default") async throws -> ClaudeTerminal {
         if reading == nil, let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) {
             reading = Task { [runtime, bridge] in
                 for await case .updated(let update) in indexer.events(following: bridge.sessionFiles, scope: .all) { runtime.read(update) }
             }
         }
-        let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
+        let terminal = try await ClaudeTerminal(testbed: self, arguments: (mode.map { ["--permission-mode", $0] } ?? []) + arguments)
         terminals.append(terminal)
         return terminal
+    }
+
+    /// 同 `MacExecutor.connect`：桥上有这个会话就用它，没有就接着它。
+    func connect(_ indexed: IndexedSession) async throws -> PiSession.ID {
+        if let live = bridge.session(sessionID: indexed.id) { return live.id }
+        return try await runtime.resume(indexed)
     }
 
     func session(pid: Int32) -> PiSession? { bridge.sessions.first { $0.pid == pid && $0.agent == .claudeCode } }

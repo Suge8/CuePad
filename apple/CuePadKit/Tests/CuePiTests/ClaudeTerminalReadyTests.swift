@@ -24,7 +24,7 @@ struct ClaudeTerminalReadyTests {
         let clock = ManualTiming()
         let terminal = ClaudeTerminalSession(
             id: "t", pid: getpid(), bridge: PiBridge(socketDirectory: directory), gate: PresenceGate(presence: TestPresence()),
-            inbox: inbox, registry: registry, timing: clock.timing, runningSince: nil, waiting: false)
+            inbox: inbox, registry: registry, timing: clock.timing, runningSince: nil, waiting: false) { false }
         let sending = Task { try await terminal.send(PiMessage(text: "你好"), in: "t") }
         try await eventually("在等它起好，或已经送了") { clock.sleeperCount > 0 || knocked() }
         clock.advance(AgentTimeouts.terminalReady)
