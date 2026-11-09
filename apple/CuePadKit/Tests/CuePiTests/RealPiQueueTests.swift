@@ -6,9 +6,9 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 按回合停止与后续发送的协议合同。真实 Pi、桥和 Python 工具；模型与异步事件闸是替身，不录制回放进程存活断言。
+/// 按回合停止与后续发送的协议合同。真实 Pi、桥和 Python 工具；模型与异步事件闸是替身。
 @MainActor
-@Suite(RealAgents.taped(.pi), .serialized)
+@Suite(RealAgents.needs(.pi), .serialized)
 struct RealPiQueueTests {
     @Test(arguments: ["preflight", "preflight-control", "pending", "starting", "sdk"])
     func 停止原回合不遗失后续消息(stage: String) async throws {

@@ -7,7 +7,7 @@ import Testing
 
 /// 托管进程自己也跑装好的钩子，桥上不多出一个会话。托管的会话让给终端里打开的那个在 `RealClaudeTerminalTests`。
 @MainActor
-@Suite(RealAgents.taped(.claudeCode))
+@Suite(RealAgents.needs(.claudeCode))
 struct RealClaudeHostTests {
     /// 只看提交那一刻的钩子（`UserPromptSubmit` 在调模型之前），不等模型回答。
     @Test func aWrappedClaudeIsNotSeenTwice() async throws {
