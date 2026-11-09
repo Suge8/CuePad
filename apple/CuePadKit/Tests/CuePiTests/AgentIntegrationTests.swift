@@ -156,26 +156,6 @@ struct AgentIntegrationTests {
         #expect(FileManager.default.fileExists(atPath: skillFile.path))
     }
 
-    /// 旧版写在各家自己目录里的副本：那几家算接入了、待升级；装任何一家都把副本收掉、记进共用的那一份，钩子的足迹搬过去。
-    @Test func legacyCopiesInEachAgentsDirectoryAreFoldedIntoTheSharedSkill() async throws {
-        try installAll()
-        let legacy = "---\nname: cuepad\n---\n旧的\n<!-- 由 CuePad 写入，升级时整文件覆盖 -->\n"
-        for kind in [AgentKind.claudeCode, .opencode] {
-            try FileManager.default.createDirectory(at: agentSkill(kind), withIntermediateDirectories: true)
-            try legacy.write(to: agentSkill(kind).appending(path: "SKILL.md"), atomically: true, encoding: .utf8)
-        }
-        try "{}".write(to: agentSkill(.claudeCode).appending(path: "claude-hooks.json"), atomically: true, encoding: .utf8)
-        #expect(await integration().status(of: .opencode).files == .outdated)
-
-        try await integration().install(.opencode)
-
-        #expect(await integration().status(of: .opencode).files == .current)
-        #expect(!FileManager.default.fileExists(atPath: agentSkill(.opencode).path))
-        #expect(RelativeLink.points(agentSkill(.claudeCode), to: skillFile.deletingLastPathComponent()))
-        #expect(FileManager.default.fileExists(atPath: skillFile.deletingLastPathComponent().appending(path: "claude-hooks.json").path))
-        #expect(AgentSkill.kinds(in: try String(contentsOf: skillFile, encoding: .utf8)) == [.claudeCode, .opencode])
-    }
-
     /// 问版本不在 Agent 自己的数据目录里留东西：OpenCode 每次运行（`--version` 也是）都往 `$XDG_DATA_HOME/opencode/log` 写日志，
     /// 检测时它的数据目录是一个用完即删的临时目录。替身照 OpenCode 的样子写日志，并记下给它的数据目录（没给时只记不写，不碰真实目录）。
     @Test func askingTheVersionLeavesNothingInTheAgentsDataDirectory() async throws {

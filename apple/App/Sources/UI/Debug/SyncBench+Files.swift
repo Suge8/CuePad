@@ -25,7 +25,7 @@ extension SyncBench {
                 }
             }
             Task {
-                for await over in Observations({ services.syncFilesOverQuota }) { mark("files-over-quota", ["v": over]) }
+                for await over in Observations({ services.syncState.filesOverQuota }) { mark("files-over-quota", ["v": over]) }
             }
             Task {
                 var known: Set<UUID>?

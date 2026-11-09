@@ -3,7 +3,7 @@ import Foundation
 /// 一条对话写下那一刻，它提到的那几处的样子（`CueMessage.places`）：关联的那件任务（`taskID`）、提问的范围（`CueAsked.project`，选项照它的名字写）
 /// 与叫醒 Cue 的那几处（`CueWake.sessionActivity`）。
 /// 对话是记录：Cue 页按它画气泡下的任务行、结果卡与醒来那几行，不读那几处此刻的样子，之后改名、改状态、删掉都不变。
-/// 写下时在同一个事务里取（`capture`），库升级 71 给之前的记录补也用它。名字是用户内容，加密同步。
+/// 写下时在同一个事务里取（`capture`）。名字是用户内容，加密同步。
 /// 其他版本写来的没有这一份：界面只说是哪一类（"一个会话"、"一件任务"），不另查。
 public struct CuePlace: Codable, Equatable, Sendable {
   /// 当时叫什么（会话名、任务标题）；空的为 nil

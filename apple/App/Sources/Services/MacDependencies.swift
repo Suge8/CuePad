@@ -60,8 +60,7 @@ struct MacDependencies {
                 if let agentHome { return ExecutableLocator(home: agentHome) }
                 return await .system
             },
-            cuepad: commandLineTool.helper, isolated: isolated,
-            legacyPiExtensionInUse: { await !pi.allRun(extensionVersion: PiExtensionBundle.version) }))
+            cuepad: commandLineTool.helper, isolated: isolated))
         let hostID = isolated ? DebugHooks.hostID ?? Self.isolatedHostID : HostIdentity.current()
         // 隔离实例用真实库的副本时，副本里记给这台的请求、会话索引（真实 ~/.pi 下的会话文件）、项目文件夹与 Cue 值班都按本机 id 认，
         // 冒充了这台就会在真实目录里恢复、开会话（#34）

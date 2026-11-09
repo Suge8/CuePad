@@ -173,7 +173,7 @@ extension CueStore {
     try Self.subtaskProgress(scope: scope, arguments, in: db)
   }
 
-  /// 同上，直接读一个连接（库升级里也用，`CuePlace.capture`）。
+  /// 同上，直接读一个连接（写事务里的 `CuePlace.capture`）。
   static func subtaskProgress(scope: String, _ arguments: [any SQLBindable], in db: SQLite) throws -> [UUID: TaskProgress] {
     let rows = try db.query(
       """

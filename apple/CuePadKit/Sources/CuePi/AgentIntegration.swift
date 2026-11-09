@@ -7,9 +7,7 @@ import Foundation
 /// `status` 没有任何副作用；写入只发生在 `install`，调用方要先征得用户同意；`uninstall` 删掉 CuePad 写的全部文件和因此空出来的目录。
 /// 技能只写一份，在几家共读的 `~/.agents/skills/cuepad`；不读 `.agents` 的（`SharedSkills.none`，Claude Code）
 /// 另有一个相对链接 `<它的目录>/skills/cuepad` 指到那里。各家接没接入记在技能的标记行里（`AgentSkill.kinds(in:)`）。
-/// 钩子的足迹（`HookFile.Footprint`）也放在那个目录里。旧版写在各家自己目录里、带标记的副本，装或升级任何一家时一起收掉
-/// （它们的那家记进标记行，足迹搬过来），所以旧版接入过的几家状态是 `outdated`、由静默升级换过来。
-/// 这是过渡：用户的 Mac 都装过一次带技能与规则（结构 76）起的 CuePad 并启动过后，连同 `legacyCopies` 与搬足迹那一段一起删。
+/// 钩子的足迹（`HookFile.Footprint`）也放在那个目录里。
 /// CuePad 起的 OpenCode 服务不读 `.claude/skills`（`OpenCodeRuntime.serviceEnvironment`），同一个技能不会经两条路读到。
 /// 写入不做事务：哪一样没写上，状态就是 `outdated`，下次启动的静默升级补上。
 public struct AgentIntegration: Sendable {
@@ -21,22 +19,19 @@ public struct AgentIntegration: Sendable {
     private let cuepad: URL
     /// 装一家用的命令（`runInstaller`）：官方的那条，测试换成放替身的
     let installCommand: @Sendable (AgentKind, AgentStatus.Presence) -> String
-    /// 还有 Pi 会话开着旧单文件扩展（`PiExtensionBundle.legacyFileName`）：App 里是桥上连着的会话没都报随包版本（`PiBridge.allRun`），缺省没有 Pi 在跑
-    let legacyPiExtensionInUse: @Sendable () async -> Bool
     /// 量问版本、问模型这些等别的进程的时限的钟：起一个进程要多久取决于系统此刻多忙，测试给手动推进的钟
     private let timing: Timing
 
     public init(
         paths: AgentPaths = AgentPaths(), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, cuepad: URL,
         isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, AgentStatus.Presence) -> String = { $0.facts.installCommand($1) },
-        legacyPiExtensionInUse: @escaping @Sendable () async -> Bool = { false }, timing: Timing = .system
+        timing: Timing = .system
     ) {
         self.timing = timing
         fileAccess = AgentFileAccess(paths: paths, isolated: isolated)
         self.locate = locate
         self.cuepad = cuepad
         self.installCommand = installCommand
-        self.legacyPiExtensionInUse = legacyPiExtensionInUse
     }
 
     public func home(of kind: AgentKind) -> URL { paths.home(of: kind) }
@@ -62,9 +57,8 @@ public struct AgentIntegration: Sendable {
     /// 那一份技能的目录（`~/.agents/skills/cuepad`）。
     var skillDirectory: URL { paths.agentsDirectory.appending(path: "skills/\(AgentSkill.name)", directoryHint: .isDirectory) }
     var skillFile: URL { skillDirectory.appending(path: AgentSkill.fileName) }
-    /// 不读 `.agents` 的那家的技能链接；也是旧版各家副本所在的位置（`<各家目录>/skills/cuepad`）。
+    /// 不读 `.agents` 的那家的技能链接（`<各家目录>/skills/cuepad`）。
     func agentSkillDirectory(_ kind: AgentKind) -> URL { home(of: kind).appending(path: "skills/\(AgentSkill.name)", directoryHint: .isDirectory) }
-    private var piExtension: PiExtensionFiles { PiExtensionFiles(extensionsDirectory: pi.extensionsDirectory, legacyInUse: legacyPiExtensionInUse) }
 
     /// CuePad 写给这家的文件：技能（不读 `.agents` 的另有链接），上报通道（钩子配置只改其中 CuePad 的条目）。界面据此说明会写哪里。
     public func writtenFiles(of kind: AgentKind) -> [URL] {
@@ -88,23 +82,16 @@ public struct AgentIntegration: Sendable {
         case .found: break
         }
         if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
-        try writeSkill(for: connectedKinds.union([kind]).union(legacyCopies))
+        try writeSkill(for: connectedKinds.union([kind]))
         try await channel(kind, executable: found.executable)?.install(command: hookCommand(kind))
     }
 
     /// 删掉 CuePad 写给这个 Agent 的全部文件，以及因此空出来的目录（`skills/cuepad`，空了的 `skills`、Pi 的 `extensions`）。
     /// Agent 已经卸掉了也能删；隔离运行写不了、有别人的同名文件时什么都不删。`executable` 是检测时挑中的那个（`AgentStatus.executable`）：
     /// Codex 删信任要起它，其余不用。
-    /// 过渡：旧单文件扩展的存根没有会话再用时删掉（见 `PiExtensionBundle.legacyFileName`）。App 在 Pi 会话上线、下线与启动检查时调。
-    @concurrent public func retireLegacyPiExtension() async throws {
-        guard isWritable(.pi) else { return }
-        try piExtension.retireLegacyFile(inUse: await legacyPiExtensionInUse())
-    }
-
     @concurrent public func uninstall(_ kind: AgentKind, executable: URL? = nil) async throws {
         guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
         if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
-        if legacyCopies.contains(kind) { try writeSkill(for: connectedKinds.union(legacyCopies)) }  // 先把足迹搬过来，钩子才删得干净
         try await channel(kind, executable: executable)?.uninstall()
         let left = connectedKinds.subtracting([kind])
         if Self.linksSkill(kind), RelativeLink.isLink(agentSkillDirectory(kind)) { try FileManager.default.removeItem(at: agentSkillDirectory(kind)) }
@@ -122,27 +109,11 @@ public struct AgentIntegration: Sendable {
     /// 标记行里接入的几家（没有那份技能、或不是 CuePad 写的为空）。
     private var connectedKinds: Set<AgentKind> { read(skillFile).flatMap(AgentSkill.kinds(in:)) ?? [] }
 
-    /// 还留着旧版副本（各家目录里带标记的 `skills/cuepad`，不是链接）的几家，只看写得了的。
-    private var legacyCopies: Set<AgentKind> {
-        Set(AgentKind.allCases.filter { kind in
-            let directory = agentSkillDirectory(kind)
-            return touches(kind) && !RelativeLink.isLink(directory) && read(directory.appending(path: AgentSkill.fileName)).flatMap(AgentSkill.kinds(in:)) != nil
-        })
-    }
-
-    /// 把那一份技能写成为 `kinds` 接入的样子：收掉旧版副本（足迹搬过来），补上其中不读 `.agents` 的几家的链接。
+    /// 把那一份技能写成为 `kinds` 接入的样子，补上其中不读 `.agents` 的几家的链接。
     private func writeSkill(for kinds: Set<AgentKind>) throws {
         let files = FileManager.default
         try files.createDirectory(at: skillDirectory, withIntermediateDirectories: true)
         try Data(AgentSkill.text(cuepad: cuepad, for: kinds).utf8).write(to: skillFile, options: .atomic)
-        for kind in legacyCopies {
-            let legacy = agentSkillDirectory(kind)
-            for footprint in (try? files.contentsOfDirectory(atPath: legacy.path)) ?? [] where footprint.hasSuffix("-hooks.json") {
-                let moved = skillDirectory.appending(path: footprint)
-                if !files.fileExists(atPath: moved.path) { try files.moveItem(at: legacy.appending(path: footprint), to: moved) }
-            }
-            try files.removeItem(at: legacy)
-        }
         for kind in kinds where Self.linksSkill(kind) {
             let link = agentSkillDirectory(kind)
             guard !RelativeLink.points(link, to: skillDirectory) else { continue }
@@ -156,19 +127,18 @@ public struct AgentIntegration: Sendable {
         await AgentProbe(paths: paths, locator: await locate(), timing: timing).run(statuses)
     }
 
-    /// 技能这一样：标记行里有这家，内容是这个版本要写的、旧副本收掉了、要链接的链接在，才是 `current`；
-    /// 只有旧版副本是 `outdated`。同名的不是 CuePad 写的（那一份、旧副本的位置上、链接的位置上）是 `foreign`。
+    /// 技能这一样：标记行里有这家，内容是这个版本要写的、要链接的链接在，才是 `current`。
+    /// 同名的不是 CuePad 写的（那一份、这家目录里 `skills/cuepad` 位置上的目录或指到别处的链接）是 `foreign`。
     private func skillState(of kind: AgentKind) -> AgentStatus.Files {
         let skill = read(skillFile)
         if skill.map({ AgentSkill.kinds(in: $0) == nil }) ?? unreadable(skillFile) { return .foreign(abbreviated(skillFile)) }
-        let own = agentSkillDirectory(kind), ownFile = own.appending(path: AgentSkill.fileName)
-        let legacy = !RelativeLink.isLink(own) && FileManager.default.fileExists(atPath: own.path)
-        if legacy, read(ownFile).flatMap(AgentSkill.kinds(in:)) == nil { return .foreign(abbreviated(own)) }
+        let own = agentSkillDirectory(kind)
+        if !RelativeLink.isLink(own), FileManager.default.fileExists(atPath: own.path) { return .foreign(abbreviated(own)) }
         let linked = !Self.linksSkill(kind) || RelativeLink.points(own, to: skillDirectory)
         if RelativeLink.isLink(own), !linked { return .foreign(abbreviated(own)) }
         let kinds = skill.flatMap(AgentSkill.kinds(in:)) ?? []
-        guard kinds.contains(kind) else { return legacy ? .outdated : .missing }
-        return skill == AgentSkill.text(cuepad: cuepad, for: kinds) && !legacy && linked ? .current : .outdated
+        guard kinds.contains(kind) else { return .missing }
+        return skill == AgentSkill.text(cuepad: cuepad, for: kinds) && linked ? .current : .outdated
     }
 
     private func files(of kind: AgentKind) -> AgentStatus.Files {

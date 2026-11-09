@@ -139,7 +139,7 @@ struct ReceiptTests {
         services.startSpeechClock()
         services.startLiveSessions()
         defer { services.cancelBackgroundWork() }
-        try await eventually("同步通了") { services.syncStatus == .idle && services.syncReconciled }
+        try await eventually("同步通了") { services.syncState.status == .idle && services.syncState.reconciled }
         let workspace = Workspace(services: services)
 
         let first = try await sayToSession(workspace, target, "改完再跑一遍")
@@ -160,7 +160,7 @@ struct ReceiptTests {
         // 弱网：一次拉取失败，同步状态连不上 iCloud；已发出的照旧
         await cloud.setDown(true)
         await services.syncNow()
-        try await eventually("连不上 iCloud") { services.syncStatus == .offline }
+        try await eventually("连不上 iCloud") { services.syncState.status == .offline }
         #expect(try await trip(of: first, services) == .sent)
         #expect(try await trip(of: toCue, services) == .sent)
         #expect(row(services)?.label == "已发出")
@@ -208,7 +208,7 @@ struct ReceiptTests {
         defer { services.cancelBackgroundWork() }
         func setSync(_ status: SyncStatus) async throws {
             app.sync.emit(SyncState(status: status, issues: []))
-            try await eventually("同步状态 \(status)") { services.syncStatus == status }
+            try await eventually("同步状态 \(status)") { services.syncState.status == status }
         }
         try await enableCue(in: store)
         try await store.recordMacPresence(host: "mac-cue") { false }  // 断网前同步来的：那台已睡（断网时本机说不准，不说它在睡觉）
@@ -281,7 +281,7 @@ struct ReceiptTests {
         let target = try await session(in: services.store)
         services.startSync()
         services.startLiveSessions()
-        try await eventually("同步通了") { services.syncStatus == .idle && services.syncReconciled }
+        try await eventually("同步通了") { services.syncState.status == .idle && services.syncState.reconciled }
         let request = try await sayToSession(workspace, target, "继续一次检查")
         try await eventually("服务器收下请求") { await cloud.holds(request.id) }
         try await cloud.macAnswers(request.id, status: status)

@@ -16159,22 +16159,6 @@
         }
       }
     },
-    "旧版 Pi 扩展文件没能删掉：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't remove the old Pi extension file: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "旧版 Pi 扩展文件没能删掉：%@"
-          }
-        }
-      }
-    },
     "时刻" : {
       "localizations" : {
         "en" : {

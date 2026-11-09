@@ -79,8 +79,6 @@ public final class PiBridge {
 
     public func start() throws { try connections.start() }
 
-    public func allRun(extensionVersion version: Int) -> Bool { connections.allRun(extensionVersion: version) }
-    var extensionVersions: [Int] { connections.extensionVersions }
     public func offerExtensionUpgrade() { connections.offerExtensionUpgrade() }
 
     public func stop() {
@@ -206,10 +204,6 @@ extension PiBridge {
 
     /// 换该会话的模型、思考强度或会话名（至少给一项，会话名不能是空白）：先换模型再设强度，强度按新模型支持的范围夹取。
     /// 模型不在 Agent 的模型表里抛 `unknownModel`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
-    public func configure(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, name: String? = nil, in id: PiSession.ID) async throws {
-        try await configure(PiConfig(model: model, thinking: thinking, name: name), in: id)
-    }
-
     public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
         var config = config
         config.name = config.name?.trimmingCharacters(in: .whitespacesAndNewlines)
