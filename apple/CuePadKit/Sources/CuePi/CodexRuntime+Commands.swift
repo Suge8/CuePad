@@ -131,10 +131,10 @@ extension CodexRuntime {
         }
     }
 
-    /// 终端里的会话 Codex 没有让终端退出的接口（能力表里没有，桥先拒绝）。
+    /// 终端里的会话 Codex 没有让终端退出的接口（能力表里没有，桥先拒绝）。托管的这一刻下桥，`tracked` 留到进程退出：停下这一轮还要用它。
     public func end(_ id: PiSession.ID) throws {
-        guard let session = tracked[id], let rpc = hosted[session.pid]?.rpc else { throw PiBridgeError.unsupported }
-        rpc.close()
+        guard let session = tracked[id], hosted[session.pid] != nil else { throw PiBridgeError.unsupported }
+        processes.retire(id, link: self)
     }
 
     func turnStart(_ session: Tracked, _ input: [JSONValue], options: [String: JSONValue] = [:]) async throws {

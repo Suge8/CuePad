@@ -57,10 +57,9 @@ extension ACPSession: SessionLink {
         if let id { bridge?.update(id) { $0.name = name } }
     }
 
-    /// 下线随进程退出报告。
-    func end(_: PiSession.ID) async throws {
-        let process = try live.process
-        Task { await process.stop() }
+    func end(_ id: PiSession.ID) async throws {
+        _ = try live
+        processes?.retire(id, link: self)
     }
 }
 #endif

@@ -12,6 +12,7 @@ import Foundation
 final class ACPSession {
     let dialect: any ACPDialect
     private(set) weak var bridge: PiBridge?
+    private(set) weak var processes: HostedProcesses?
     let brain: BrainSession?
     private(set) var connection: ACPConnection?
     private(set) var sessionID: String?
@@ -49,9 +50,10 @@ final class ACPSession {
     var brainSetup: (config: CueBrainConfig, setup: ACPBrainSetup)?
     var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
 
-    init(dialect: any ACPDialect, bridge: PiBridge, timing: Timing = .system) {
+    init(dialect: any ACPDialect, bridge: PiBridge, processes: HostedProcesses, timing: Timing = .system) {
         self.dialect = dialect
         self.bridge = bridge
+        self.processes = processes
         brain = nil
         stops = PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout)
     }

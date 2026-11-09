@@ -30,6 +30,8 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     let gate: PresenceGate
     var tracked: [PiSession.ID: Tracked] = [:]
     var hosted: [Int32: CodexDriver] = [:]
+    /// 托管会话的进程按会话（线程 id）登记，请退出与接着都经它（`HostedProcesses`）
+    let processes: HostedProcesses
     var marks: [String: Int32] = [:]
     var daemon: CodexRPC?
     var connecting: Task<CodexRPC?, any Error>?
@@ -61,6 +63,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         self.timing = timing
         self.codex = codex
         self.bridge = bridge
+        processes = HostedProcesses(bridge: bridge, timing: timing)
         self.paths = paths
         self.hooks = hooks
         self.locate = locate
@@ -147,6 +150,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     /// 恢复时它被别处拿着写（终端里刚开）也改走控制 socket；常驻服务里也没有它才报错。
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
         if let live = bridge.session(sessionID: session.id) { return live.id }
+        await processes.vacate(session.id)
         if let id = try await adoptFromDaemon(session.id) { return id }
         do {
             return try await launch { driver, rpc in
@@ -207,6 +211,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         session.hosted = true
         session.fast = result["serviceTier"]?.string == "priority"
         session.launchToken = launchToken
+        if let process = rpc.process { processes.adopt(process, for: session.sessionID) }
         attach(session)
         return session.id
     }

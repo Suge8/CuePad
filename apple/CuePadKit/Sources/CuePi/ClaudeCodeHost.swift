@@ -10,10 +10,11 @@ import Foundation
 /// 不用 `priority: "now"`：前台工具跑着时它不中止，等工具跑完并进这一轮（实测 2.1.299，各权限模式）。
 /// 大脑（不挂桥）与其余控制请求一律回错误，免得这一轮卡住。
 /// 托管会话的权限模式固定 auto（同终端里 Claude Code 的内置默认），所以不另设模式开关：用户的 allow / deny / ask 规则照旧生效。它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
-/// 结束、空闲满时限、让出（桥决定）都经 `end` 下桥、收进程，后两者不算结束。
+/// 结束、空闲满时限、让出（桥决定）都经 `end` 下桥、收进程（`HostedProcesses`），后两者不算结束。
 @MainActor
 final class ClaudeHostedSession: SessionLink {
     private(set) weak var bridge: PiBridge?
+    private(set) weak var processes: HostedProcesses?
     let brain: BrainSession?
     private(set) var stream: ClaudeStream?
     private(set) var id: PiSession.ID?
@@ -47,8 +48,9 @@ final class ClaudeHostedSession: SessionLink {
     /// 等收尾的时限与进程收尾的宽限（`ChildProcess.stop()`）都按 `timing` 量
     let timing: Timing
 
-    init(bridge: PiBridge, timing: Timing = .system) {
+    init(bridge: PiBridge, processes: HostedProcesses, timing: Timing = .system) {
         self.bridge = bridge
+        self.processes = processes
         self.timing = timing
         brain = nil
         (closing, startWaits, clearWaits) = Self.waits(timing)
