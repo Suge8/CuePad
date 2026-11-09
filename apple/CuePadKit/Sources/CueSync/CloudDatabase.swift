@@ -52,6 +52,9 @@ protocol SyncCloud: ZoneChangeSource, RecordUploader, SubscriptionStore, FileClo
   func accountName() async throws -> String
   /// 门铃的密钥（`RelaySecret`），没有就生成一把存进去。
   func relaySecret() async throws -> Data
+  /// 诊断区（`DiagnosticZone`）：拉与传同业务区，区不在时拉取抛 zoneNotFound，上传自己建区。
+  func diagnosticChanges(since token: Data?) async throws -> ZoneChangeBatch
+  func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords
 }
 
 struct CloudDatabase: SyncCloud {

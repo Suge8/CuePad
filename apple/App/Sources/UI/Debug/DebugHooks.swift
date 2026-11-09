@@ -68,6 +68,14 @@ enum DebugHooks {
     }
 
     /// `-CuePadSharedCloud <目录>`：同步连这个目录里的模拟云（`SharedCloud`），不连 iCloud。
+    static var diagnosticsEvery: Duration? {
+        #if DEBUG
+        DebugScene.args.diagnosticsEvery.map { .seconds($0) }
+        #else
+        nil
+        #endif
+    }
+
     static var sharedCloud: URL? {
         #if DEBUG
         DebugScene.args.sharedCloud.map { URL(filePath: $0, directoryHint: .isDirectory) }

@@ -8,6 +8,8 @@ actor SimulatedCloud: SyncCloud {
   private var zone: [CKRecord.ID: (seq: Int, record: CKRecord)] = [:]
   private var tombstones: [CKRecord.ID: (seq: Int, recordType: String)] = [:]
   private var seq = 0
+  /// 诊断区（`DiagnosticZone`）：与同步区各自记，拉同步区拉不到它。
+  private var diagnostics = SideZone()
   private var account = "simulated"
   /// nil：认账号一直没有回音。
   private var status: CKAccountStatus? = .available
@@ -35,6 +37,7 @@ actor SimulatedCloud: SyncCloud {
     self.account = account
     zone = [:]
     tombstones = [:]
+    diagnostics = SideZone()
   }
 
   func setAccount(_ status: CKAccountStatus?) { self.status = status }
@@ -93,6 +96,52 @@ actor SimulatedCloud: SyncCloud {
   }
 
   func saveZone() {}
+
+  func diagnosticChanges(since token: Data?) throws -> ZoneChangeBatch {
+    guard diagnostics.exists else { throw CKError(.zoneNotFound) }
+    return diagnostics.changes(since: token)
+  }
+
+  func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) -> SentRecords {
+    diagnostics.exists = true
+    return diagnostics.upload(saving: saving, deleting: deleting)
+  }
+
+  /// 同步区以外的区：只有序号与墓碑，不带收下时刻与文件。
+  private struct SideZone {
+    var exists = false
+    var records: [CKRecord.ID: (seq: Int, record: CKRecord)] = [:]
+    var tombstones: [CKRecord.ID: (seq: Int, recordType: String)] = [:]
+    var seq = 0
+
+    func changes(since token: Data?) -> ZoneChangeBatch {
+      let after = token.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
+      let changed = records.values.filter { $0.seq > after }.sorted { $0.seq < $1.seq }.map(\.record)
+      let gone = tombstones.filter { $0.value.seq > after }.sorted { $0.value.seq < $1.value.seq }.map { ($0.key, $0.value.recordType) }
+      return ZoneChangeBatch(modifications: changed, deletions: gone, token: Data(String(seq).utf8), moreComing: false)
+    }
+
+    mutating func upload(saving: [CKRecord], deleting: [CKRecord.ID]) -> SentRecords {
+      var sent = SentRecords()
+      for record in saving {
+        seq += 1
+        records[record.recordID] = (seq, record)
+        tombstones[record.recordID] = nil
+        sent.saved.append(record)
+      }
+      for id in deleting {
+        guard let gone = records.removeValue(forKey: id) else {
+          sent.failedDeletes.append((id, CKError(.unknownItem)))
+          continue
+        }
+        seq += 1
+        tombstones[id] = (seq, gone.record.recordType)
+        sent.deleted.append(id)
+      }
+      return sent
+    }
+  }
+
   func subscriptions() -> [CKSubscription.ID: CKSubscription] { [:] }
   func save(_ subscription: CKSubscription) {}
   func delete(_ id: CKSubscription.ID) {}
@@ -124,6 +173,8 @@ struct UnreachableCloud: SyncCloud {
   func resumedFileUploads() throws -> [ResumedUpload] { throw Self.failure }
   func downloadFile(_ id: CKRecord.ID, progress: @Sendable (Double) -> Void) throws -> CKRecord? { throw Self.failure }
   func saveZone() throws { throw Self.failure }
+  func diagnosticChanges(since token: Data?) throws -> ZoneChangeBatch { throw Self.failure }
+  func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) throws -> SentRecords { throw Self.failure }
   func subscriptions() throws -> [CKSubscription.ID: CKSubscription] { throw Self.failure }
   func save(_ subscription: CKSubscription) throws { throw Self.failure }
   func delete(_ id: CKSubscription.ID) throws { throw Self.failure }

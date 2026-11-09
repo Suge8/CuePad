@@ -93,6 +93,7 @@ private struct GeneralSections: View {
         }
         Section {
             if let report = services.diagnostics.latest { CrashRow(report: report) }
+            if services.diagnostics.canSend { SendLogsRow() }
             if services.location.touchesRealWorld { LoginItemRow() }
             UpdateRow()
         }

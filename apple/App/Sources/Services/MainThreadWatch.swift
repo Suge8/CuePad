@@ -37,7 +37,7 @@ nonisolated final class MainThreadWatch: Sendable {
         var open: (entered: UInt64, note: FreezeNote)?
         var archive: DiagnosticArchive?
         var meta = (version: "", device: "", os: "")
-        var recorded: (@Sendable () -> Void)?
+        var recorded: (@Sendable (FreezeNote) -> Void)?
     }
 
     private let state = Mutex(State())
@@ -50,13 +50,13 @@ nonisolated final class MainThreadWatch: Sendable {
         timer.setEventHandler { [unowned self] in check() }
     }
 
-    /// 幂等。记下的条目存进 `archive`，存下后在主线程调 `recorded`。
+    /// 幂等。记下的条目存进 `archive`，存下后在主线程调 `recorded`（卡住时一次，恢复了带上时长再一次）。
     @MainActor
-    func start(archive: DiagnosticArchive, version: String, recorded: @escaping @MainActor @Sendable () -> Void) {
+    func start(archive: DiagnosticArchive, version: String, recorded: @escaping @MainActor @Sendable (FreezeNote) -> Void) {
         let started = state.withLock { state in
             defer { state.archive = archive }
             state.meta = (version, Self.device, ProcessInfo.processInfo.operatingSystemVersionString)
-            state.recorded = { Task { @MainActor in recorded() } }
+            state.recorded = { note in Task { @MainActor in recorded(note) } }
             return state.archive != nil
         }
         guard !started else { return }
@@ -88,7 +88,7 @@ nonisolated final class MainThreadWatch: Sendable {
     }
 
     private func check() {
-        let (write, archive, recorded) = state.withLock { state -> (FreezeNote?, DiagnosticArchive?, (@Sendable () -> Void)?) in
+        let (write, archive, recorded) = state.withLock { state -> (FreezeNote?, DiagnosticArchive?, (@Sendable (FreezeNote) -> Void)?) in
             // 在锁里取时刻：锁外取的话主线程可能在取完之后才记下这一轮的醒来，醒来比"此刻"还晚
             let now = DispatchTime.now().uptimeNanoseconds
             var write: FreezeNote?
@@ -112,10 +112,11 @@ nonisolated final class MainThreadWatch: Sendable {
         }
         guard let write, let archive else { return }
         do { try archive.store(write) } catch { AppServices.log.error("卡住记录没存下：\(String(describing: error))") }
-        recorded?()
+        recorded?(write)
     }
 
-    private static var device: String {
+    /// 型号代号（iPhone18,1、Mac16,11）。
+    static var device: String {
         var info = utsname()
         uname(&info)
         return withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }

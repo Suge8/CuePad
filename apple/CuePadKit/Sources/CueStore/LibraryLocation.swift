@@ -58,6 +58,12 @@ public struct LibraryLocation: Equatable, Sendable {
     return directory.appending(path: "Caches", directoryHint: .isDirectory)
   }
 
+  /// 各台设备经 iCloud 送到这台 Mac 的诊断落在哪（App 的 `DiagnosticInbox`）：正式版在 macOS 放应用日志的地方（~/Library/Logs/CuePad），
+  /// 不进资料库目录，agent 读它不碰资料库；隔离库在自己目录的 `Logs/` 里，本机构建与测试不往正式版那里写。
+  public var deviceLogs: URL {
+    isIsolated ? directory.appending(path: "Logs", directoryHint: .isDirectory) : URL.libraryDirectory.appending(path: "Logs/CuePad", directoryHint: .isDirectory)
+  }
+
   public static func isolated(_ directory: URL) -> LibraryLocation {
     LibraryLocation(directory: directory, origin: .override)
   }

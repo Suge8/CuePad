@@ -32,9 +32,10 @@ CLOUD = f"{DIR}/cloud"
 REAL_LIBRARIES = f"{APPLE}/.derived/fleet-real"
 CLOUD_SIMS = {"iphone": ("CuePad Cloud iPhone", os.environ.get("CUEPAD_IOS_DEVICE", "iPhone 17")),
               "ipad": ("CuePad Cloud iPad", os.environ.get("CUEPAD_IPAD_DEVICE", "iPad Pro 11-inch (M5)"))}
-# 角色 → (xc.sh 的平台, 启动参数)：iPhone 停在 Cue 页（建灵感的一端），Mac 与 iPad 打开默认项目页（新灵感出现的地方）
+# 角色 → (xc.sh 的平台, 启动参数)：iPhone 停在 Cue 页（建灵感的一端），Mac 与 iPad 打开默认项目页（新灵感出现的地方）；
+# Mac 每 5 秒收一次各端送来的诊断，落在 <Mac 的库>/Logs（CUEPAD_DIAG_DIR 指给 xc.sh diag）
 ROLES = {
-    "mac": ("mac", ["-CuePadScene", "project", "-CuePadProject", "默认"]),
+    "mac": ("mac", ["-CuePadScene", "project", "-CuePadProject", "默认", "-CuePadDiagnosticsEvery", "5"]),
     "iphone": ("ios", ["-CuePadScene", "cue"]),
     "ipad": ("ipad", ["-CuePadScene", "project", "-CuePadProject", "默认"]),
 }
