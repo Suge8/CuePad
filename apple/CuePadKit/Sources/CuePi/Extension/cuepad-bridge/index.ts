@@ -1,3 +1,4 @@
+// CuePad Pi bridge extension
 // 由 CuePad 装成 Pi 扩展目录下的 cuepad-bridge/，升级时整个目录换成新版本，请勿手改。协议见 apple/CuePadKit/Sources/CuePi/README.md。
 
 import fs from "node:fs";
@@ -9,7 +10,7 @@ import { supportsFast } from "./fast.ts";
 import { watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 61;
+const EXTENSION_VERSION = 62;
 
 /** FireCode 的"在飞子代理数"（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算，与它判断"会话进行中"用同一个事实 */
 const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
