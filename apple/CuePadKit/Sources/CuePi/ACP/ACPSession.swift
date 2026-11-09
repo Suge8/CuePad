@@ -12,6 +12,7 @@ import Foundation
 final class ACPSession {
     let dialect: any ACPDialect
     private(set) weak var bridge: PiBridge?
+    private(set) weak var processes: HostedProcesses?
     let brain: BrainSession?
     private(set) var connection: ACPConnection?
     private(set) var sessionID: String?
@@ -36,9 +37,9 @@ final class ACPSession {
     /// 停下这一轮后它的结束不算出错
     private var stopping = false
     /// 等这一轮变化的（排着的那一句跑起来、这一轮结束）；进程退出时也放行。大脑等一轮自然做完，不限时
-    private let changes = PendingReplies<UUID, Void>(timeout: nil, timeoutError: PiBridgeError.ackTimeout)
+    private let changes = Occurrences(timeout: nil, timeoutError: PiBridgeError.ackTimeout)
     /// 停下这一轮后等它结束的：取消的回应不来（Agent 收下取消却不回也不断线）时到 `AgentTimeouts.stop` 放弃
-    private let stops: PendingReplies<UUID, Void>
+    private let stops: Occurrences
     let stopPhase = StopPhase()
     private var loading = false
     /// CuePad 的 MCP 服务连上没有（`ACPDialect.connectsMCPLater`）：nil 是这个会话还没报
@@ -49,17 +50,18 @@ final class ACPSession {
     var brainSetup: (config: CueBrainConfig, setup: ACPBrainSetup)?
     var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
 
-    init(dialect: any ACPDialect, bridge: PiBridge, timing: Timing = .system) {
+    init(dialect: any ACPDialect, bridge: PiBridge, processes: HostedProcesses, timing: Timing = .system) {
         self.dialect = dialect
         self.bridge = bridge
+        self.processes = processes
         brain = nil
-        stops = PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout)
+        stops = Occurrences(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout)
     }
 
     init(dialect: any ACPDialect) {
         self.dialect = dialect
         brain = BrainSession()
-        stops = PendingReplies(timeout: AgentTimeouts.stop, timeoutError: PiBridgeError.ackTimeout)
+        stops = Occurrences(timeout: AgentTimeouts.stop, timeoutError: PiBridgeError.ackTimeout)
     }
 
     /// 起好的连接；没起或进程已退出时抛错（托管会话 `sessionEnded`，大脑 `notRunning`）
@@ -73,8 +75,11 @@ final class ACPSession {
     var agent: AgentKind { dialect.agent }
     var seesImages: Bool { connection.map { dialect.acceptsImages($0.agent) } ?? false }
 
-    func launch(_ executable: URL, environment: [String: String], directory: URL, timing: Timing = .system) async throws {
-        let connection = try await ACPConnection.launch(executable, dialect.arguments, environment: environment, directory: directory, timing: timing)
+    func launch(
+        _ executable: URL, environment: [String: String], directory: URL, timing: Timing = .system, spawned: (ChildProcess) async throws -> Void = { _ in }
+    ) async throws {
+        let connection = try await ACPConnection.launch(
+            executable, dialect.arguments, environment: environment, directory: directory, timing: timing, spawned: spawned)
         connection.onNotification = { [weak self] in self?.notified($0, $1) }
         connection.onRequest = { [weak self] method, params, request in self?.asked(method, params, request: request) ?? false }
         connection.onClose = { [weak self] in self?.ended() }
@@ -171,13 +176,13 @@ final class ACPSession {
     /// 等这一轮结束（没在跑立即返回，进程退出时也返回）；取消的回应不来时到 `AgentTimeouts.stop` 抛 `ackTimeout`。
     func untilFinished() async throws {
         let current = turn
-        while turn == current, facts.running, connection?.isClosed == false { try await stops.wait() }
+        while turn == current, facts.running, connection?.isClosed == false { try await stops.next() }
     }
 
     /// 等这一轮变一次：排着的那一句跑起来、这一轮结束，或进程退出；没在跑或进程已退出时立即返回。不限时（大脑等一轮自然做完）。
     func nextChange() async throws {
         guard facts.running, connection?.isClosed == false else { return }
-        try await changes.wait()
+        try await changes.next()
     }
 
     private func begin() -> Int {
@@ -218,8 +223,8 @@ final class ACPSession {
     }
 
     private func release() {
-        changes.releaseAll()
-        stops.releaseAll()
+        changes.happened()
+        stops.happened()
     }
 
     private func decline() {

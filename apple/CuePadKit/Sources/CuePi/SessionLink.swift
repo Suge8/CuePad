@@ -13,7 +13,8 @@ public protocol SessionLink: AnyObject {
     /// 斜杠命令：不开轮的照原样执行，返回即这家执行了它；会开一轮的（带话的模式切换、OpenCode 的模板）与 `send` 同一规则。
     /// `deliveryID` 是投送请求 id，收得下的（托管的 Claude Code）随命令交出、据它认这条命令的结果。
     func command(_ line: String, deliveryID: String?, in id: PiSession.ID) async throws
-    /// 请会话退出：托管的进程退出（不论这一轮在不在跑），终端里的像在终端里退出那样收尾。受理即返回，下线随后经 `PiBridge.detach` 报告。
+    /// 请会话退出：托管的这一刻下桥，在跑的这一轮先停下再收进程（CuePad 起的进程见 `HostedProcesses`；Pi、OpenCode 由扩展、服务自己先停这一轮）；
+    /// 终端里的像在终端里退出那样收尾（Claude Code 收 SIGINT 就退，不先停下这一轮，2.1.318 实测）。受理即返回，下线经 `PiBridge.detach` 报告。
     func end(_ id: PiSession.ID) async throws
     func abort(_ id: PiSession.ID) async throws
     /// 核对真实投送身份和停止必须在接收端的同一同步段；不支持的接入明确拒绝，不能降级为无条件停止。

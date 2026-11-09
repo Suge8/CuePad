@@ -28,7 +28,7 @@ extension OpenCodeRuntime {
             tracked.turn = OpenCodeTurn()
             tracked.facts.compacting = false
             tracked.facts.failure = !tracked.facts.running && info.outcome == "failed" ? OpenCodeTurn.unknownFailure : nil
-            if tracked.facts.running || info.updatedAt >= connection.startedAt, ended[info.id].map({ info.updatedAt > $0 }) ?? true {
+            if tracked.facts.running || info.updatedAt >= connection.startedAt, revives(info.id, at: info.updatedAt) {
                 tracked.online = true
             }
             sessions[info.id] = tracked
@@ -103,6 +103,12 @@ extension OpenCodeRuntime {
     }
 
     static let compact = "compact"
+
+    /// 不在线的会话这一刻（服务的时钟，与 CuePad 同机）有活动是否让它上线：在 CuePad 里结束过的，只认结束之后的。
+    /// 事件流比请求的回应晚到：结束之前开会话、发出那句话的事件常在结束之后才到，不能把它又拉回桥上。
+    func revives(_ sessionID: String, at time: Date) -> Bool {
+        ended[sessionID].map { time > $0 } ?? true
+    }
 
     func bridgeID(_ sessionID: String, _ connection: Connection) -> PiSession.ID { "\(sessionID).\(connection.pid)" }
 

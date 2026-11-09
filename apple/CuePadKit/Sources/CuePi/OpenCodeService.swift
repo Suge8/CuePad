@@ -124,6 +124,8 @@ struct OpenCodeClient: Sendable {
 
 struct OpenCodeEvent: Decodable, Sendable {
     var type: String
+    /// 服务记下这件事的时刻（毫秒）；`server.connected` 不带，它不是哪个会话的事
+    var created: Double?
     var location: OpenCodeLocation?
     var data: Payload
 
@@ -156,6 +158,8 @@ struct OpenCodeEvent: Decodable, Sendable {
 
         struct Item: Decodable, Sendable { var payload: OpenCodePrompt? }
     }
+
+    var at: Date { created.map { Date(timeIntervalSince1970: $0 / 1000) } ?? .now }
 
     var isRelevant: Bool {
         if type.hasSuffix(".delta") { return type == "session.text.delta" }

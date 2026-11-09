@@ -76,19 +76,19 @@ struct RealFirecodeTests {
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
+        // 托管的 Pi 一起来就开始算空闲：第一句话经它自己的标准输入马上交出，不等桥发现它（同一测试进程忙时，发现会晚过这 1 秒，它已经退了）
+        var gate = script(pi, "派 a", "start", worker: "a")
+        try pi.prompt("派 a")
         try await eventually("桥发现指挥官会话") { !bridge.sessions.isEmpty }
         let id = bridge.sessions[0].id
         func delegating(after prompt: String) -> Bool {
             let session = bridge.session(id: id)
             return session?.state == .delegating && recap(of: session)?.lastPrompt == prompt
         }
-
-        var gate: FakeGate?
-        for name in ["a", "b"] {
-            gate = script(pi, "派 \(name)", "start", worker: name)
-            try pi.prompt("派 \(name)")
-            try await eventually("子代理 \(name) 在跑（停在假模型里）") { delegating(after: "派 \(name)") }
-        }
+        try await eventually("子代理 a 在跑（停在假模型里）") { delegating(after: "派 a") }
+        gate = script(pi, "派 b", "start", worker: "b")
+        try pi.prompt("派 b")
+        try await eventually("子代理 b 在跑（停在假模型里）") { delegating(after: "派 b") }
         try pi.requireSubagentsTool()
         _ = script(pi, "移除 a", "kill", worker: "a")
         try pi.prompt("移除 a")
@@ -97,7 +97,7 @@ struct RealFirecodeTests {
         await quietPeriod(.seconds(idleSeconds * 3))  // 等过几个空闲时限
         try #require(bridge.session(id: id)?.state == .delegating, "b 还在跑，托管进程不该到点退出")
 
-        gate?.openForever()  // b 做完，结果投回指挥官
+        gate.openForever()  // b 做完，结果投回指挥官
         try await eventually("全部做完后到点退出") { bridge.session(id: id) == nil }
     }
 }

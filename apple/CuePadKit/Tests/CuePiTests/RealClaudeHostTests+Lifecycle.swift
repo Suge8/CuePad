@@ -6,54 +6,36 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 托管会话的进程收尾：一个会话同一时刻只有一个 Claude Code 进程写它的会话文件，请它退出、接着它都不卡住下一句话。
-/// 外壳（`wrapper`）拉开真 Claude Code 自己太短、碰不到的那一段：退得慢、不肯退、起得慢。
+/// 托管会话的进程收尾：一个会话同一时刻只有一个 Claude Code 进程写它的会话文件。请它退出、接着它的各家同一组用例在 `RealHostedEndTests`。
+/// 外壳（`wrapper`）拉开真 Claude Code 自己太短、碰不到的那一段：起得慢。
 extension RealClaudeHostTests {
-    /// 歇满空闲时限、被请退出的那一刻就不在桥上：下一句话（`MacExecutor` 的接法）接着它，不撞上正在退出的进程。
-    /// 外壳在 Claude Code 读到 EOF 退出后（`eof`：CuePad 已请它退出）还握着输出 3 秒：请它退出了、进程还没走。
-    @Test func aMessageRightAfterAnIdleExitResumesTheSession() async throws {
-        let wrapper = listing + #""$REAL" "$@"; status=$?; : > "${0%/*}/eof"; sleep 3; exit $status"#
-        try await ClaudeTestbed.run(idleLimit: .seconds(3), wrapper: wrapper) { testbed in
+    /// 这一轮的 `system/init` 还没到 CuePad 时点停止或结束：不等 init，当场停下这一轮（#81：原先等满 `AgentTimeouts.stop`）。
+    /// 外壳滤掉 init 那一行，拉长"还没收到 init"这一段。
+    @Test(arguments: ["stop", "end"])
+    func stoppingBeforeTheTurnsInitArrivesDoesNotWaitForIt(_ action: String) async throws {
+        let withoutInit = #""$REAL" "$@" | /usr/bin/python3 -I -u -c 'import sys"# + "\n"
+            + #"for line in sys.stdin: "\"subtype\":\"init\"" in line or print(line, end="", flush=True)'"#
+        try await ClaudeTestbed.run(wrapper: withoutInit, timing: .system) { testbed in
             try testbed.startConnected()
-            let (id, indexed) = try await openWithATurn(testbed)
-
-            try await eventually("空闲到点，请它退出了") { testbed.hasFile("eof") }
-            #expect(testbed.bridge.session(id: id) == nil, "请它退出了还在桥上")
-            let resumed = try await testbed.connect(indexed)
-            let asked = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: resumed)
-            try await testbed.waitForTurn(resumed, since: asked)
-            #expect(resumed != id)
-        }
-    }
-
-    /// 被请退出后进程不走（外壳不理 SIGTERM、一直握着输出）：宽限后 SIGTERM、再宽限后 SIGKILL 收掉，宽限按 runtime 的钟量；
-    /// 下一句话等这次收尾完再起新进程，旧进程在新进程起来之前已经不在。
-    /// 外壳带着 `stubborn` 标记起的才这样（接着它起的新进程照常）。
-    @Test func anIdleSessionWhoseProcessWontExitIsKilledBeforeItIsResumed() async throws {
-        let clock = ManualTiming()
-        let wrapper = listing + #"dir=${0%/*}; [ -e "$dir/stubborn" ] || exec "$REAL" "$@"; trap '' TERM; "$REAL" "$@"; : > "$dir/eof"; exec sleep 600"#
-        try await ClaudeTestbed.run(idleLimit: .seconds(3), wrapper: wrapper, timing: clock.timing) { testbed in
-            try testbed.startConnected()
-            try Data().write(to: testbed.wrapperDirectory.appending(path: "stubborn"))
-            let (id, indexed) = try await openWithATurn(testbed)
-            let old = try #require(testbed.bridge.session(id: id)?.pid)
-            try FileManager.default.removeItem(at: testbed.wrapperDirectory.appending(path: "stubborn"))
-
-            try await eventually("空闲到点，请它退出了") { testbed.hasFile("eof") }
-            try #require(testbed.bridge.session(id: id) == nil, "请它退出了还在桥上")
-            let resuming = Task { try await testbed.connect(indexed) }
-            for _ in 0..<2 {
-                let due = clock.now.addingTimeInterval(AgentTimeouts.endGrace.seconds)
-                try await eventually("在等宽限") { kill(old, 0) != 0 || clock.hasSleeper(until: due) }
-                clock.advance(AgentTimeouts.endGrace)
+            let gate = testbed.model.gate()
+            testbed.on("BUSY-HANG", .held(gate, then: .say("LATE")))
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
+            let session = try #require(testbed.bridge.session(id: id))
+            // 这句话收下（`command_lifecycle` 的 completed）要等这一轮做完，所以另起；问到模型时它早发过 init 了
+            let sending = Task { try await testbed.bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: id) }
+            try await gate.reached()
+            let began = ContinuousClock.now
+            if action == "stop" {
+                try await testbed.bridge.abort(id)
+                #expect(testbed.bridge.session(id: id)?.state == .settled)
+            } else {
+                try await testbed.bridge.end(id)
+                try await eventually("进程收掉") { kill(session.pid, 0) != 0 }
             }
-            let resumed = try await resuming.value
-            #expect(kill(old, 0) != 0, "旧进程还在")
-            #expect(testbed.bridge.session(id: resumed)?.pid != old)
-            let asked = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: resumed)
-            try await testbed.waitForTurn(resumed, since: asked)
+            let took = began.duration(to: .now)
+            #expect(took < .seconds(10), "用了 \(took)")
+            gate.openForever()
+            _ = await sending.result
         }
     }
 
@@ -74,7 +56,8 @@ extension RealClaudeHostTests {
             try await eventually("进程起了") { pids().count == 2 }
             cancelled.cancel()
             await #expect(throws: CancellationError.self) { try await cancelled.value }
-            #expect(kill(pids()[1], 0) != 0, "被取消的那次起的进程还在")
+            // 被取消的调用方当场走（`Resumptions`），这次恢复随后收掉自己起的进程；下一次恢复等它收完才起
+            try await eventually("被取消的那次起的进程收掉") { kill(pids()[1], 0) != 0 }
 
             try FileManager.default.removeItem(at: testbed.wrapperDirectory.appending(path: "slow"))
             let resumed = try await testbed.connect(indexed)
@@ -103,8 +86,4 @@ extension RealClaudeHostTests {
     }
 }
 
-private extension ClaudeTestbed {
-    /// 外壳在 `wrapperDirectory` 里留下的标记
-    func hasFile(_ name: String) -> Bool { FileManager.default.fileExists(atPath: wrapperDirectory.appending(path: name).path) }
-}
 #endif
