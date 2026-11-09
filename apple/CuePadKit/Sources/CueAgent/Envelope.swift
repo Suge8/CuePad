@@ -2,14 +2,10 @@ import CueStore
 import CueText
 import Foundation
 
-/// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。
-/// 块里第一行是时间（带时区），然后是项目、变化（说到的事多半在下面带着近况，哪些带见 `CueTools.recaps`）、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、醒来的原因，
-/// 有才写的：他的短问句在会话回复里查到的（`CueTools.related`）、上一轮出错重试、吃紧的额度。
-/// 新会话的第一条输入里，它前面还有记忆视图与对话视图（`CueKeeper`）。信封与系统提示里"你"是 Cue、"他"是用户。
+/// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。新会话的第一条输入里，它前面还有记忆视图与对话视图（`CueKeeper`）。信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
   public struct Input: Sendable {
     public var now: Date
-    /// 所有项目（`CueStore.projects`）：Cue 据此把活放进项目。
     public var projects: [Project]
     public var changes: [CueChange]
     /// 变化说到的那几件事的近况（`CueTools.recaps`，同 peek 给的）：带了的那件，变化那一行不再写截短的回复。
@@ -20,7 +16,6 @@ public enum CueEnvelope {
     /// 它留给他回的会话（`CueState.left`）：看板上这几个写"待回复"。
     public var left: [CueLeft]
     public var wake: CueWake
-    /// 定时到点（`CueWake.schedule`）时到点的那几条
     public var fired: [Fired]
     /// 全部定时（`CueStore.cueSchedules`）：看板上挂着定时的任务写明
     public var schedules: [CueMemoryLine]
@@ -31,7 +26,6 @@ public enum CueEnvelope {
     public var quotas: [AccountQuota]
     /// 这一轮是上一轮出错后的重试：上一轮的错（原文首行），Cue 先核对上一轮做到了哪、不重做
     public var retrying: String?
-    /// 他的短问句按词在会话回复里查到的（`CueTools.related`），一条一行
     public var related: [String]
 
     public init(
@@ -125,7 +119,6 @@ public enum CueEnvelope {
     found.isEmpty ? [] : ["他问的话在会话回复里查到的（按他的词查的，不全；要全用 memory recall）："] + found.map { "- " + $0 }
   }
 
-  /// 定时到点的一条：哪条定时（UUID）、本该几点（`CueFire`）与挂着的任务。
   public struct Fired: Sendable {
     public var line: CueMemoryLine
     public var due: Date
@@ -147,7 +140,6 @@ public enum CueEnvelope {
     return parts.joined(separator: " · ")
   }
 
-  /// 一条提问一行：原话、id 与选项。
   private static func question(_ message: CueMessage) -> String {
     "\(clip(CueFormat.plainText(message.text), 80))（\(message.id.shortID)）选项：\((message.choices ?? []).joined(separator: " / "))"
   }
@@ -217,7 +209,7 @@ public enum CueEnvelope {
     }).joined(separator: "\n")
   }
 
-  /// 看板上一个不归没做完的事的活会话（信封与 peek 共用）：名字与短 id、状态与多久、近况。
+  /// 信封与 peek 共用。
   static func sessionLine(_ session: PiSessionState, now: Date, left: [CueLeft] = []) -> String {
     var parts = [sessionName(session), "\(state(session.state)) \(duration(now.timeIntervalSince(session.stateSince)))"]
     if left.contains(where: { $0.holds(for: session) }) { parts.append(leftNote) }

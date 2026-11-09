@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// `setup look`：Cue 读自己与它运行的那台 Mac。总览每块几行；`part` 给那一块的全部。只读库与本机的健康文件（`CueHealth`），不碰别的。
+/// 总览每块几行；`part` 给那一块的全部。只读库与本机的健康文件（`CueHealth`），不碰别的。
 extension CueTools {
   func look(_ part: LookPart?) async throws -> String {
     let now = Date()
@@ -164,7 +164,6 @@ extension CueTools {
 
   private struct ProjectFacts {
     let projects: [Project]
-    /// 这台 Mac 上绑的文件夹
     let local: [UUID: String]
     let elsewhere: [DirectoryBinding]
     let here: String
@@ -177,7 +176,6 @@ extension CueTools {
       elsewhere: try await store.directoryBindings().filter { $0.hostID != host }, here: host)
   }
 
-  /// 总览列这么多个项目，多的只报个数。
   private static let projectsListed = 20
 
   private func projects(_ facts: ProjectFacts, detail: Bool) -> [String] {

@@ -8,7 +8,6 @@ import QuickLookThumbnailing
 /// `image(at:maxPixel:)` 的结果按"文件 + 尺寸"缓存（编辑器、卡片墙、全屏页）；系统内存紧张时 NSCache 自动清空，下次需要时重新降采样。
 /// `decoded` 按原图尺寸定要多大、不进这份缓存：调用方自己留（交付物缩略图、附件条）。
 public enum Thumbnails {
-    /// 最长边不超过 `maxPixel` 的缩略图。不是图片或读不到返回 nil。
     public static func image(at url: URL, maxPixel: Int) -> CGImage? {
         let key = key(url, maxPixel)
         if let cached = cache.object(forKey: key) { return cached }

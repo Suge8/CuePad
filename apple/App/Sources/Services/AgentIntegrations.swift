@@ -5,9 +5,8 @@ import CueStore
 import Foundation
 import Observation
 
-/// CuePad 接入各个 Agent 的状态与开关（`AgentIntegration` 之上唯一的一份，设置、接入面板与会话页都读它）。
-/// 装只在用户点了之后（接入面板的主按钮、设置的开关）；装过的在 `refresh()` 发现与这个版本的 App 要写的不同时
-/// （App 更新了，或 App 被移动后技能里的 cuepad 路径变了）静默升级，不再询问——App 启动时就会 `refresh()`。
+/// `AgentIntegration` 之上唯一的一份。装只在用户点了之后；装过的在 `refresh()` 发现与这个版本的 App 要写的不同时
+/// （App 更新了，或 App 被移动后技能里的 cuepad 路径变了）静默升级，不再询问。
 /// 不碰真实世界时（`LibraryLocation.touchesRealWorld`）只写配置目录经环境变量换走了的那几家（`AgentIntegration.isWritable`），其余只检测。
 @Observable
 final class AgentIntegrations {
@@ -32,7 +31,6 @@ final class AgentIntegrations {
 
     func home(_ kind: AgentKind) -> URL { integration.home(of: kind) }
 
-    /// CuePad 会写的文件（`~/.claude/skills/cuepad/SKILL.md` 这样的写法），给界面说明。
     func writtenFiles(_ kind: AgentKind) -> [String] {
         integration.writtenFiles(of: kind).map { ($0.path as NSString).abbreviatingWithTildeInPath }
     }
@@ -41,7 +39,7 @@ final class AgentIntegrations {
         statuses[kind] = await integration.status(of: kind)
     }
 
-    /// 这家的可执行文件：检测时挑中的那个（`AgentStatus.executable`），开会话、起大脑、问模型都用它；还没检测过先检测。
+    /// 检测时挑中的那个（`AgentStatus.executable`），开会话、起大脑、问模型都用它。
     func executable(_ kind: AgentKind) async -> URL? {
         if statuses[kind] == nil { await detect(kind) }
         return statuses[kind]?.executable
@@ -64,7 +62,7 @@ final class AgentIntegrations {
         }
     }
 
-    /// 一键接入这几家（接入面板的主按钮，同设置里逐个打开开关）：逐家装，返回没装上的与原因。
+    /// 返回没装上的与原因。
     func install(_ kinds: [AgentKind]) async -> [AgentKind: String] {
         var failures: [AgentKind: String] = [:]
         for kind in kinds {
@@ -73,7 +71,7 @@ final class AgentIntegrations {
         return failures
     }
 
-    /// 在后台跑这家的官方安装脚本（`AgentFacts.installCommand`），装完重新检测它；没装上的原因记在 `jobs`（脚本输出的最后一句）。
+    /// 没装上的原因记在 `jobs`（脚本输出的最后一句）。
     func installAgent(_ kind: AgentKind) async {
         jobs[kind] = .installing
         let result = await integration.runInstaller(kind, statuses[kind]?.presence ?? .notFound)
@@ -86,8 +84,7 @@ final class AgentIntegrations {
         }
     }
 
-    /// 命令行登录（`AgentFacts.loginArguments`，会打开浏览器），等它结束；再点一次就结束旧的、等它退出（放开 Codex 的固定端口）再重来。
-    /// 没登录成的记在 `jobs`。
+    /// 再点一次就结束旧的、等它退出（放开 Codex 的固定端口）再重来。没登录成的记在 `jobs`。
     func logIn(_ kind: AgentKind) async {
         if let previous = logins.removeValue(forKey: kind) {
             previous.end()
@@ -121,13 +118,12 @@ final class AgentIntegrations {
             .map { $0.trimmingCharacters(in: .whitespaces) }.last { !$0.isEmpty }
     }
 
-    /// 各家能不能用与模型（`AgentIntegration.probe`）：按此刻检测出的状态。能开新会话的几家各起一个进程问，慢；
-    /// 只给写同步表 macAgents 的那一处（`MacAgentsRecorder`），界面读库。
+    /// 能开新会话的几家各起一个进程问，慢；只给写同步表 macAgents 的那一处（`MacAgentsRecorder`），界面读库。
     func probe() async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
         await integration.probe(statuses)
     }
 
-    /// 启动时：检测全部 Agent，装过而内容不同的升级到这个版本。升级失败抛第一个错，状态仍反映磁盘上的旧版。
+    /// 升级失败抛第一个错，状态仍反映磁盘上的旧版。
     func refresh() async throws {
         await redetect()
         var failure: (any Error)?
@@ -162,7 +158,7 @@ final class AgentIntegrations {
 }
 
 extension AppServices {
-    /// 装一家（接入面板与设置里的"安装""升级"）：后台跑官方安装脚本，装完再问一遍这台各家能不能用、写进库（开会话、启用 Cue 读它）。
+    /// 装完再问一遍这台各家能不能用、写进库（开会话、启用 Cue 读它）。
     func installAgent(_ kind: AgentKind) async throws {
         await agents.installAgent(kind)
         try await macAgents.record(redetecting: true)

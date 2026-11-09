@@ -2,19 +2,15 @@ import Foundation
 
 public enum CueLineKind: Equatable, Sendable {
     case body
-    /// `# 标题`、`## 标题`…（各级同一个样式）
     case heading
-    /// `- ` 或 `1. ` 列表项
     case list
-    /// ``` 围栏行本身
     case fence
     /// 分割线 `---`（`CueFormat.isRule`）：整行是标记
     case rule
-    /// 围栏之内的行
     case code
 }
 
-/// 一行的轻装饰描述。标记字符保留可见，宿主只降低它们的存在感，不做所见即所得。
+/// 标记字符保留可见，宿主只降低它们的存在感，不做所见即所得。
 public struct CueLineStyle: Equatable, Sendable {
     public var kind: CueLineKind
     /// 行首标记（缩进 + `##␣`、`-␣`、`1.␣`、`>␣`，或整条围栏行）的 UTF-16 长度；无标记为 0。

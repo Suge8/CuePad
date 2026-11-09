@@ -7,7 +7,6 @@ public struct CueHealth: Codable, Equatable, Sendable {
   public enum Phase: String, Codable, Sendable {
     case starting
     case running
-    /// 出了问题，等着自动重起（`nextRetry`）
     case restarting
   }
 
@@ -19,11 +18,8 @@ public struct CueHealth: Codable, Equatable, Sendable {
   public var model: String?
   /// 连续失败了几次（一轮做完清零）
   public var failures: Int
-  /// 下一次自动重起的时刻（`restarting` 时有）
   public var nextRetry: Date?
-  /// 最近一次出错：几点、原文
   public var lastFailure: Failure?
-  /// 最近一次自动换大脑（额度、登录卡住时）：从哪家换到哪家、为什么、几点
   public var failover: Failover?
 
   public struct Failure: Codable, Equatable, Sendable {

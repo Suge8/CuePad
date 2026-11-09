@@ -6,9 +6,9 @@ import Observation
 import OSLog
 
 /// 开着的岛由 Mac 唯一发布内容，手机只登记地址；中转不存业务状态。
-/// 事实直接订阅 CueReading，同一秒内只发最新一份（APNs timestamp 是秒）；网络慢或失败时不排历史队列。
+/// 同一秒内只发最新一份（APNs timestamp 是秒）；网络慢或失败时不排历史队列。
 /// 可作答的提问先确认 iCloud 收下；每次等待后从库核对当前内容，不把已撤回或回答的旧提问补推回去。
-/// 成功只表示 APNs 收下，不表示已上屏。普通进度低优先级，等你变化和结束用高优先级；不以高频推送耗尽系统预算。
+/// 成功只表示 APNs 收下，不表示已上屏。普通进度用低优先级，免得高频推送耗尽系统预算。
 final class ActivityPublisher {
     private let endpoint: URL
     private let session: URLSession

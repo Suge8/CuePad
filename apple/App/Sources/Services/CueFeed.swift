@@ -2,12 +2,9 @@ import CueStore
 import Foundation
 import Observation
 
-/// Cue 的现状：库里那页摘要（`CueDigest`）配上此刻（`AppServices.speech`）与本机事实（`AppServices.cueLocal`），整个界面一份、共用订阅读一次（同 `LiveSessions`）。
-/// 读的东西不随此刻与本机事实变：库变了重读，此刻或本机事实变了把手里那份配上新的再给一次（`updates`）。
-/// Cue 那一行（`CueWatch`，每个窗口一份）与 iPhone 的小组件快照、实时活动（`startSnapshots`）都从这里取，不各自订阅、库一变各读一遍摘要；
-/// iPhone 上同一次读顺带读小组件另要的项目、默认项目（`WidgetContent`，`widget`）。
+/// Cue 那一行、小组件快照与实时活动都从这里取，整个界面一份、共用订阅读一次，不各自订阅、库一变各读一遍摘要。
 /// 原始共享读取归 `CueReading`；发布者直接订阅它，不以这里的界面观察为前置。
-/// 第一个来读的起订阅（`AppServices.cueUpdates`），之后的共用；读失败时订阅结束、记下错误，读它的各自报出。
+/// 读失败时订阅结束、记下错误，读它的各自报出。
 @Observable
 final class CueFeed {
     typealias Read = CueReading.Read
@@ -31,7 +28,7 @@ final class CueFeed {
         self.widget = widget
     }
 
-    /// 手里最新的一份（新建的窗口第一帧就是它）：订阅读到的；还没读到就当场读，读不出来为 nil（失败页盖住页面）。
+    /// 新建的窗口第一帧就是它；读不出来为 nil（失败页盖住页面）。
     func latest() -> Read? {
         if let read { return read }
         start = try? store.snapshot { [widget] in try Read.read(from: $0, widget: widget) }
@@ -50,7 +47,7 @@ final class CueFeed {
         }
     }
 
-    /// 手里这份与之后的每一份，配上此刻与本机事实；订阅读失败时以那个错误结束。
+    /// 订阅读失败时以那个错误结束。
     fileprivate func updates(_ services: AppServices) -> AsyncThrowingStream<Seen, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -66,7 +63,7 @@ final class CueFeed {
 }
 
 extension AppServices {
-    /// Cue 的现状的每一份（`CueFeed`）：第一个来读的起订阅（随 App 的常驻任务一起取消），之后的共用它。
+    /// 第一个来读的起订阅（随 App 的常驻任务一起取消），之后的共用。
     func cueUpdates() -> AsyncThrowingStream<CueFeed.Seen, any Error> {
         if !cueFeed.following {
             cueFeed.following = true

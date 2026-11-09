@@ -82,7 +82,6 @@ struct CardView {
       + (card.parentID.map { "  ↳ \($0.shortID)" } ?? "")
   }
 
-  /// `card show` 的文本：元信息，空行，正文原样。
   var detail: String {
     var rows = ["id: \(card.id.uuidString.lowercased())", "项目: \(project)"]
     if let status = card.status { rows.append("任务: \(status.rawValue)") }

@@ -11,13 +11,11 @@ extension CueTextView {
             insert(files)
             return true
         }
-        // 文本一律按存储格式解析：附件引用还原成附件
         guard let text = pboard.string(forType: .string) else { return false }
         insertText(core.attributed(CueFormat.parse(text)), replacementRange: selectedRange())
         return true
     }
 
-    /// 拖入、粘贴、"插入文件…"选来的：存好（后台）再插到此刻的光标处。
     public func insert(_ files: [IncomingFile]) {
         core.importFiles(files, at: selectedRange(), selection: { [weak self] in self?.selectedRange() ?? NSRange(location: 0, length: 0) }) { [weak self] result in
             guard let self else { return }
@@ -60,7 +58,6 @@ extension CueTextView {
         onOpenAttachment?(hit.key, hit.name, FileChip.picture(in: rect, named: hit.name))
     }
 
-    /// 点在哪个附件上，连同它在本视图坐标里的框。
     private func attachment(at event: NSEvent) -> ((key: String, name: String, file: URL?), CGRect)? {
         guard let window else { return nil }
         let index = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))

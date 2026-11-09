@@ -1,7 +1,7 @@
 import CueStore
 
 extension CuePrompt {
-  /// 后台整理记忆的大脑的系统提示（`CueKeeper` 起的一次性大脑，工具只有 merge）：输入是 `CueMemoryView.dreamText`。
+  /// 输入是 `CueMemoryView.dreamText`。
   public static func dream(runtime: AgentKind) -> String {
     let merge = CueMCPServer.toolName("merge", on: runtime)
     return """

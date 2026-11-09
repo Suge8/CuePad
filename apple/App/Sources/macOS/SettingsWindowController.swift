@@ -2,8 +2,6 @@
 import AppKit
 import SwiftUI
 
-/// 设置窗口（⌘, 与菜单"设置…"）：工具栏上一排标签切换几页（`SettingsPane`），窗口跟着这一页的内容变高变矮；标题不显示，标签就是标题。
-/// 关闭只是隐藏，再次打开复用同一个窗口、停在上次那一页；窗口与内容在第一次打开时才建，在屏幕中间。
 /// 不记窗口位置与大小（`WindowFrameKeeper`）：高度随页变，记下的是另一页的高度，摆回去再改一次就是一次多余的缩放动画。
 final class SettingsWindowController {
     private let makePane: (SettingsPane) -> NSViewController

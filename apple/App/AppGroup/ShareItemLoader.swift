@@ -10,8 +10,7 @@ nonisolated enum ShareError: Error, LocalizedError {
     var errorDescription: String? { String(localized: "没有可保存的文字、网址或文件") }
 }
 
-/// 把系统分享面板给的 `NSItemProvider` 读成 `ShareContent`：文件（访达、文件 App 分享的，与图片）优先，其次网址，再次文字，
-/// 别的有内容的类型也当文件收。一个条目只取一种（网页分享常同时带网址与标题文字，标题不重复保存）。读不出的条目跳过并记一条日志。
+/// 把系统分享面板给的 `NSItemProvider` 读成 `ShareContent`。一个条目只取一种（网页分享常同时带网址与标题文字，标题不重复保存）。读不出的条目跳过并记一条日志。
 nonisolated enum ShareItemLoader {
     private static let log = Logger(subsystem: AppIdentity.id, category: "share")
 
@@ -34,7 +33,6 @@ nonisolated enum ShareItemLoader {
         return content
     }
 
-    /// 当文件收的：分享的是文件（带文件网址的，取它的内容类型）或图片。
     private static func fileType(of provider: NSItemProvider) -> UTType? {
         if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) { return .image }
         guard provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) else { return nil }

@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Observation
 
-/// 分享扩展的状态与动作：读取分享内容、选项目、存进待入库目录。界面（`ShareViews`）只画它。
+/// 界面（`ShareViews`）只画它。
 @MainActor @Observable
 final class ShareModel {
     enum State: Equatable {

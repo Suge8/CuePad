@@ -2,9 +2,7 @@ import MetricKit
 import Observation
 import os
 
-/// 崩溃诊断：订阅 MetricKit，系统把崩溃、卡死、CPU 与磁盘写入异常的诊断（一般在下次启动或隔天）交来时存进 `DiagnosticArchive`；
-/// 主线程卡住由 `MainThreadWatch` 当场记进同一个存档。设置页据 `latest` 写"上次崩溃"，导出整份存档的摘要（`DiagnosticSummary`）。
-/// 只存本机、不联网；真机上拿崩溃栈靠用户在设置页"导出诊断"。
+/// MetricKit 的诊断一般在下次启动或隔天才交来。只存本机、不联网；真机上拿崩溃栈靠用户在设置页"导出诊断"。
 @Observable
 final class Diagnostics {
     private(set) var reports: [CrashReport]
@@ -19,7 +17,7 @@ final class Diagnostics {
         reports = archive.reports()
     }
 
-    /// 幂等。看着主线程；`metricKit` 时（用户的设备上，`touchesRealWorld`）再订阅 MetricKit，并取一次系统已经攒着的（订阅之前到的）。
+    /// 幂等。`metricKit` 只在用户的设备上（`touchesRealWorld`）才订阅，并取一次系统已经攒着的（订阅之前到的）。
     func start(metricKit: Bool) {
         MainThreadWatch.shared.start(archive: archive, version: AppServices.version) { [weak self] in self?.reload() }
         guard metricKit, subscriber == nil else { return }

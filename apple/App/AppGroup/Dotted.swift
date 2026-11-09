@@ -26,7 +26,6 @@ nonisolated struct Dotted: Hashable, Sendable {
 }
 
 extension Text {
-    /// 屏幕上是"a · b"，读屏读"a，b"。
     init(_ dotted: Dotted) { self = Text(verbatim: dotted.visible).accessibilityLabel(dotted.spoken) }
 }
 
