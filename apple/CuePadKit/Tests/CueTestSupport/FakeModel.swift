@@ -162,6 +162,8 @@ public indirect enum FakeReply: Sendable {
   case stream([String], until: FakeGate? = nil)
   /// 停在闸门上：放行一次后照 `then` 答；Agent 先断开（停下这一轮）就不答，也不占用放行
   case held(FakeGate, then: FakeReply)
+  /// Responses：同一次回应里先说一条过程中的说明（`phase` 为 commentary 的消息），再照 `then` 答（`then` 是消息时标成 final_answer）
+  case commentary(String, then: FakeReply)
 
   /// 一直不答，直到 Agent 断开
   public static var hang: FakeReply { .held(FakeGate(), then: .say("")) }

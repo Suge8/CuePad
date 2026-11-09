@@ -177,9 +177,10 @@ struct CodexHome {
 
 @MainActor
 func withCodexRig(
-    approvals: String = "never", model: String = codexTestModel, daemon: Bool = false, childUnreadableWhileParentRuns: Bool = false, _ body: (CodexRig) async throws -> Void
+    approvals: String = "never", model: String = codexTestModel, daemon: Bool = false, readFault: CodexReadFault.Mode? = nil, timing: Timing = noDeadline,
+    _ body: (CodexRig) async throws -> Void
 ) async throws {
-    let rig = try await CodexRig(approvals: approvals, model: model, daemon: daemon, childUnreadableWhileParentRuns: childUnreadableWhileParentRuns)
+    let rig = try await CodexRig(approvals: approvals, model: model, daemon: daemon, readFault: readFault, timing: timing)
     do {
         try await body(rig)
     } catch {
@@ -228,22 +229,28 @@ final class CodexRig {
     let bridge: PiBridge
     let runtime: CodexRuntime
     let presence: TestPresence
+    /// 托管的 Codex 经它起时有（`readFault`）
+    let readFault: CodexReadFault?
     var model: FakeModel { codex.model }
     private let sharedBefore: DaemonDirectory?
 
     /// - Parameter daemon: 会起常驻服务（终端里的 Codex）：收尾时断言没动共用目录里别人的条目、自己的已清掉，见 `DaemonDirectory`。
-    /// - Parameter childUnreadableWhileParentRuns: 托管的 Codex 经 `CodexReadFault` 起：主会话一轮在跑时子线程的 `thread/read` 都读不到。
-    init(approvals: String = "never", model: String = codexTestModel, daemon: Bool = false, childUnreadableWhileParentRuns: Bool = false) async throws {
+    /// - Parameter readFault: 托管的 Codex 经 `CodexReadFault` 起，子线程的 `thread/read` 先照这一档回。
+    /// - Parameter timing: CuePad 自己的时限按它量（缺省永不到点，见 `noDeadline`）。
+    init(
+        approvals: String = "never", model: String = codexTestModel, daemon: Bool = false, readFault: CodexReadFault.Mode? = nil, timing: Timing = noDeadline
+    ) async throws {
         sharedBefore = daemon ? DaemonDirectory() : nil
         let codex = try CodexHome(model: try await FakeModel(), modelName: model)
         let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
         let bridge = PiBridge(socketDirectory: codex.sockets)
         let locator = codex.locator
-        let launch = childUnreadableWhileParentRuns ? try CodexReadFault.wrapper(around: pinnedCodex.executable, in: codex.root) : nil
+        let fault = try readFault.map { try CodexReadFault(around: pinnedCodex.executable, in: codex.root, mode: $0) }
+        let launch = fault?.executable
         let runtime = CodexRuntime(
             bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in launch ?? locator.candidates("codex").first }, locate: { [locator] in locator },
-            presence: presence, timing: noDeadline)
+            presence: presence, timing: timing)
         do {
             try codex.signIn(approvals: approvals)
             try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: PiProcess.cuepad, timing: noDeadline).install(.codex)
@@ -258,7 +265,7 @@ final class CodexRig {
             await codex.remove()
             throw error
         }
-        (self.codex, self.hooks, self.bridge, self.runtime, self.presence) = (codex, hooks, bridge, runtime, presence)
+        (self.codex, self.hooks, self.bridge, self.runtime, self.presence, self.readFault) = (codex, hooks, bridge, runtime, presence, fault)
     }
 
     /// 关掉托管的进程；停掉终端测试起的常驻服务等、删掉临时目录（含凭据，`CodexHome.remove`），再删常驻服务在共用的
@@ -292,8 +299,8 @@ final class CodexRig {
     func draftLanded(_ id: PiSession.ID) -> Bool {
         guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return true }
         let session = bridge.session(id: id)
-        let newest = session.flatMap { try? transcript($0) }?.messages.last { $0.role == .known(.pi) }?.at
-        return draft.landed(newestReply: newest)
+        let newest = session.flatMap { try? transcript($0) }?.messages.last { $0.role == .known(.pi) }
+        return draft.landed(newestReply: newest?.at, record: newest?.id)
     }
 }
 

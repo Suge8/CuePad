@@ -7,7 +7,7 @@ import Testing
 
 /// 端到端：钉住版本的真 Grok（ACP）+ 假模型（Responses，`FakeModel`）+ `GrokRuntime` 与 `PiBridge`。零网络、不用任何登录。
 @MainActor
-@Suite(RealAgents.taped(.grok))
+@Suite(RealAgents.needs(.grok))
 struct RealGrokTests {
     @Test func aHostedSessionTakesAMessageWithAnImageAndIsConfigured() async throws {
         try await withGrokRig { rig in

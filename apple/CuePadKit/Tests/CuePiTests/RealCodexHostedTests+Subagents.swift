@@ -56,7 +56,7 @@ extension RealCodexHostedTests {
     /// 假模型派完活立刻答完（真模型要几秒），这一轮结束时 CuePad 可能还没认出子代理：要先认清再歇下，不先报一次歇下。
     /// `childUnreadableWhileParentRuns`：这一轮结束前子线程的 `thread/read` 都读不到（`CodexReadFault`）。
     @Test(arguments: [false, true]) func aSubagentLeftRunningIsReadBackBeforeSettling(childUnreadableWhileParentRuns: Bool) async throws {
-        try await withCodexRig(model: "gpt-6-luna", childUnreadableWhileParentRuns: childUnreadableWhileParentRuns) { rig in
+        try await withCodexRig(model: "gpt-6-luna", readFault: childUnreadableWhileParentRuns ? .whileParentRuns : nil) { rig in
             let gate = rig.model.gate()
             rig.model.on("Spawn one subagent called fruit") { request in
                 request.step == 0

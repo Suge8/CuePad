@@ -87,13 +87,13 @@ extension ClaudeTestbed {
     /// 回答写进会话文件可能晚于这一轮歇下，等它落盘。
     func waitForDraftLanded(_ id: PiSession.ID) async throws {
         let file = bridge.session(id: id)?.sessionFile
-        var newest: Date?
+        var newest: PiChatMessage?
         try await eventually("回答落盘") {
-            newest = (try? transcript(file))?.messages.last { $0.role == .known(.pi) }?.at
-            return newest.map { $0 >= start(of: id) } ?? false
+            newest = (try? transcript(file))?.messages.last { $0.role == .known(.pi) }
+            return newest.map { $0.at >= start(of: id) } ?? false
         }
         guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return }
-        #expect(draft.landed(newestReply: newest), "正在说的话起点 \(draft.since.timeIntervalSince1970)，最近一条回答 \(String(describing: newest?.timeIntervalSince1970))")
+        #expect(draft.landed(newestReply: newest?.at, record: newest?.id), "正在说的话起点 \(draft.since.timeIntervalSince1970)，最近一条回答 \(String(describing: newest?.at.timeIntervalSince1970))")
     }
 
     private func start(of id: PiSession.ID) -> Date {

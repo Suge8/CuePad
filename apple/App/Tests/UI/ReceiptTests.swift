@@ -40,6 +40,10 @@ struct ReceiptTests {
         func accountStatus() async throws -> CKAccountStatus { await inner.accountStatus() }
         func accountName() async throws -> String { await inner.accountName() }
         func relaySecret() async throws -> Data { await inner.relaySecret() }
+        func diagnosticChanges(since token: Data?) async throws -> ZoneChangeBatch { try await inner.diagnosticChanges(since: token) }
+        func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
+          await inner.uploadDiagnostics(saving: saving, deleting: deleting)
+        }
         func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch {
             try reachable()
             return await inner.changes(since: token, keys: keys)

@@ -7,7 +7,7 @@ import Testing
 
 /// 真 Codex（钉住的版本）+ 假模型：发送、权限、结束后恢复、停止四条流程，外加配置、失败、起名、技能、计划模式提问。
 @MainActor
-@Suite(RealAgents.taped(.codex), RealAgents.timeLimit(.minutes(4)))
+@Suite(RealAgents.needs(.codex))
 struct RealCodexHostedTests {
     func open(_ rig: CodexRig, _ token: String) async throws -> PiSession.ID {
         let id = try await rig.runtime.open(in: rig.codex.work, launchToken: token, name: nil, model: nil, thinking: nil)
@@ -40,6 +40,37 @@ struct RealCodexHostedTests {
             let mine = try #require(try rig.transcript(session).messages.first { $0.role == .known(.user) })
             #expect(mine.deliveryID == delivery)
             #expect(mine.text.hasPrefix("What color is this image?") && mine.text.contains("![](cuepad://file/"))
+        }
+    }
+
+    /// 正在说的话按身份认落库（`PiDraft.record`）：同一轮里先说完的说明已写进会话文件，最终回答还在出字时不算落库，说完落盘后才算。
+    @Test func theFinalAnswerIsStillSpeakingAfterACommentaryOfTheSameTurnHasBeenWritten() async throws {
+        try await withCodexRig { rig in
+            let hold = rig.model.gate()
+            rig.model.on("Say hi") { _ in .say("hi") }
+            rig.model.on("Explain slowly") { _ in .commentary("Looking it up.", then: .stream(["Final ", "answer"], until: hold)) }
+            let id = try await open(rig, "token-1")
+            try await rig.bridge.send(PiMessage(text: "Say hi", images: []), to: id)
+            try await eventually("上一轮的回答落盘、歇下") {
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last == "hi" } == true
+            }
+
+            try await rig.bridge.send(PiMessage(text: "Explain slowly", images: []), to: id)
+            try await hold.reached()
+            let file = try #require(rig.bridge.session(id: id)?.sessionFile)
+            try await eventually("说明已写进会话文件，最终回答在出字") {
+                (try? String(contentsOf: file, encoding: .utf8))?.contains("Looking it up.") == true
+                    && rig.bridge.slots.first { $0.id == id }?.draft?.text == "Final answer"
+            }
+            #expect(!rig.draftLanded(id))
+
+            hold.open()
+            try await eventually("最终回答落盘、歇下") {
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last == "Final answer" } == true
+            }
+            #expect(rig.draftLanded(id))
+            let replies = try #require(rig.bridge.session(id: id).map(rig.replies))
+            #expect(replies == ["hi", "Final answer"], "说明不进对话：\(replies)")
         }
     }
 

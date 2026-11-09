@@ -144,11 +144,10 @@ for file in App/Sources/UI/Debug/*.swift; do
   status=1
 done
 
-# 放行的测试只读或只写测试自己的：只读真实凭据（EvalBrain）、找 ~/.local/bin 的真命令（RealBrainTests）、
-# 录带里换掉家目录与 Git 邮箱（AgentTape+Text）、固定版本 Agent 的下载缓存（PinnedAgent）
+# 放行的测试只读或只写测试自己的：只读真实凭据（EvalBrain）、固定版本 Agent 的下载缓存（PinnedAgent）
 forbid "家目录只经 UserHome（CueStore）取：读写各家 Agent 的走 AgentPaths（userHome、expanding，认环境给的 HOME，隔离实例与测试换得掉）；确要真实家目录的（显示 ~/…、展开用户写的 ~、缺省位置）用 UserHome。直接取绕过隔离，会读写真实的 ~/.claude、~/.pi" \
   '(\bhomeDirectoryForCurrentUser\b|\bNSHomeDirectory(?:ForUser)?\b|\bhomeDirectory\(forUser|\.homeDirectory\b|\b(?:expanding|abbreviatingWith)TildeInPath\b|getenv\("HOME"\)|processInfo\.environment\["HOME"\])' \
-  '**/CueStore/UserHome.swift' '**/EvalBrain.swift' '**/RealBrainTests.swift' '**/AgentTape+Text.swift' '**/PinnedAgent.swift'
+  '**/CueStore/UserHome.swift' '**/EvalBrain.swift' '**/PinnedAgent.swift'
 
 FORBID_U=1 forbid "通知先订再消费：任务外先 let 流，任务里 for await 它。for await 那行才订，此前发的就丢了；不怕丢的行尾写「// 晚订：理由」" \
   'for (?:try )?await\b[^{]*?\bin [^{]*?\.notifications\(named:(?!.*// 晚订：)'

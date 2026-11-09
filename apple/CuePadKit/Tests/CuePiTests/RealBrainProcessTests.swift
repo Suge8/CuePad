@@ -5,14 +5,12 @@ import Foundation
 import Testing
 @testable import CuePi
 
-private let liveRuntimes = AgentKind.allCases.filter { RealAgents.runs($0) && RealAgents.mode(of: $0) != .replay }
-
-/// 结束后进程连同它起的子进程（MCP 服务等）都退出、各家的历史里没有这次对话：断言的是真进程树与各家真实的历史目录，回放不出来，
-/// 只在录制或直连时连真运行时跑。
+/// 结束后进程连同它起的子进程（MCP 服务等）都退出、各家的历史里没有这次对话：断言的是真进程树与各家写会话的目录。
 @MainActor
-@Suite(.enabled(if: !liveRuntimes.isEmpty, "只连真运行时跑（看真进程树与各家的历史）：CUEPAD_AGENT_TESTS 列出 pi、codex、claude、grok、dsh，或本机有 opencode v2 时开启"), .serialized, .timeLimit(.minutes(5)))
+@Suite(.serialized, .timeLimit(.minutes(5)))
 struct RealBrainProcessTests {
-    @Test(arguments: liveRuntimes) func stoppingLeavesNoProcessesOrHistory(_ runtime: AgentKind) async throws {
+    @Test(arguments: AgentKind.allCases) func stoppingLeavesNoProcessesOrHistory(_ runtime: AgentKind) async throws {
+        try RealAgents.require(runtime)
         let rig = try await RealBrainTests.Rig(runtime)
         try await rig.brain.send("Reply with the single word OK.")
         try await rig.finished()
@@ -36,7 +34,7 @@ struct RealBrainProcessTests {
             // CODEX_HOME 是这次运行的临时目录（`RealBrainTests.Rig`），会话不落进真实的 ~/.codex
             #expect(codexSessions(mentioning: rig.marker, in: rig.directory.deletingLastPathComponent().appending(path: "codex/sessions")) == [])
         case .claudeCode:
-            // 用户的配置目录（`CLAUDE_CONFIG_DIR`）是测试台的隔离目录（`ClaudeTestbed.isolatedEnvironment`）：会话没落进去，目录可能都没有
+            // 用户的配置目录（`CLAUDE_CONFIG_DIR`）是测试台的隔离目录（`ClaudeSandbox.environment`）：会话没落进去，目录可能都没有
             #expect(claudeTranscripts(for: rig.marker, in: rig.directory.deletingLastPathComponent().appending(path: "config/projects")) == [])
         case .opencode:
             let sandbox = try #require(sandbox)

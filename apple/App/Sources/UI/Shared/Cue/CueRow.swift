@@ -114,7 +114,7 @@ struct CueEnding: View {
         VStack(alignment: .leading, spacing: 0) {
             #if os(macOS)
             let draft = services.cue.keeper?.speech.draft
-            if let draft, !draft.landed(newestReply: newestSaid) {
+            if let draft, !draft.landed(newestReply: newestSaid, record: nil) {
                 // 与落库后的那句（`CueSays`）同一颗气泡、同一个位置，换下时正文不动
                 BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
                     MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)

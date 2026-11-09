@@ -58,6 +58,17 @@ public struct LibraryLocation: Equatable, Sendable {
     return directory.appending(path: "Caches", directoryHint: .isDirectory)
   }
 
+  public static let deviceLogsKey = "CUEPAD_DEVICE_LOGS_DIR"
+
+  /// 各台设备经 iCloud 送到这台 Mac 的诊断落在哪（App 的 `DiagnosticInbox`）：正式版在 macOS 放应用日志的地方（~/Library/Logs/CuePad），
+  /// 不进资料库目录，agent 读它不碰资料库。环境变量 `CUEPAD_DEVICE_LOGS_DIR`（绝对路径）换掉它（`xc.sh` 的隔离实例给库里的 `Logs/`，`app_env.py` 的 `isolated_env`）；
+  /// 没给时隔离库也放自己目录的 `Logs/`，不往正式版那里写。
+  public func deviceLogs(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
+    if let override = environment[Self.deviceLogsKey], override.hasPrefix("/") { return URL(filePath: override, directoryHint: .isDirectory) }
+    return isIsolated
+      ? directory.appending(path: "Logs", directoryHint: .isDirectory) : UserHome.directory.appending(path: "Library/Logs/CuePad", directoryHint: .isDirectory)
+  }
+
   public static func isolated(_ directory: URL) -> LibraryLocation {
     LibraryLocation(directory: directory, origin: .override)
   }

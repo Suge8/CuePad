@@ -178,7 +178,7 @@ import Testing
         nextMedia = next
         try await voice.start()
         #expect(voice.session != old)
-        await voice.receive(.rejected(header: header, reason: .expired))
+        await voice.receive(.rejected(header: header, reason: .unavailable))
         #expect(!next.closed, "A rejected packet for the ended session must not terminate the new session")
         #expect(voice.phase == .connecting)
         await voice.end(notify: false)
