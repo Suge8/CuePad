@@ -45,6 +45,8 @@ struct NoticeBanner: View {
             guard !DebugHooks.preset.quietAlerts, let alert, workspace.showsAlert(about: alert.session) else { return }
             workspace.say(alert.text, status: alert.status, link: .session(alert.session))
         }
+        // 手机通话异常结束、有话没交给 Cue：不论在哪一页都在这里说
+        .background { PhoneVoiceEndings() }
         // 弹出后才进了那个会话（或 Agent 列表）：当场撤下
         .onChange(of: workspace.notice.map(workspace.keeps)) { _, keeps in if keeps == false { workspace.notice = nil } }
     }

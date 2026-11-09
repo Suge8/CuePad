@@ -14,27 +14,28 @@ extension PhoneVoiceAction: CueVoiceOperation {
         case .requests: "请求记录"
         case .replies: "朗读记录"
         case .executions: "执行记录"
-        case .microphoneSettings: "打开麦克风设置"
+        case .microphoneSettings: "设置"
         }
     }
 }
 
 extension VoiceIssue {
+    /// 结束的原因只写原因：下一步是旁边的"重新接通"（提示条、通话详情里都带着它，`phoneRecovery`）。
     var phoneMessage: LocalizedStringResource {
         switch self {
         case .ended(let reason):
             switch reason {
             case .hungUp: "通话已结束"
             case .background: "App 进入后台，通话已结束"
-            case .permissionDenied: "麦克风权限未开启，请在设置中允许 CuePad 使用麦克风"
-            case .audioInterrupted: "音频已中断，请重新接通"
-            case .mediaFailed: "通话的声音连接断了，请重新接通"
-            case .controlFailed: "通话控制连接断了，请重新接通"
-            case .peerLeft: "Mac 已断开连接，请检查 Mac 后重新接通"
-            case .leaseReplaced: "设备连接已更换，请重新接通"
-            case .accountChanged: "账号已更换，请重新接通"
-            case .networkFailed: "网络连接断了，请检查网络后重新接通"
-            case .timedOut: "通话连接超时，请重新接通"
+            case .permissionDenied: "麦克风权限未开启"
+            case .audioInterrupted: "音频已中断"
+            case .mediaFailed: "通话的声音连接断了"
+            case .controlFailed: "通话控制连接断了"
+            case .peerLeft: "Mac 已断开连接"
+            case .leaseReplaced: "设备连接已更换"
+            case .accountChanged: "账号已更换"
+            case .networkFailed: "网络连接断了"
+            case .timedOut: "通话连接超时"
             case .protocolRejected: "通话协议不兼容，请更新手机和 Mac 上的 CuePad"
             case .relayCapacity: "通话连接已满，请稍后再试"
             }
@@ -155,40 +156,131 @@ private extension VoiceCallProjection.Readback {
     }
 }
 
-struct CueVoicePanel: View {
+/// 手机通话条（`CueVoiceView`）盖在"对 Cue 说"那块玻璃上（`CueComposer` 让出它，`Composer.yielded`），与它的通话详情。
+/// 只读投影（`phoneVoiceViewState`），动作经 `performPhoneVoice`；动作的结果与被拒当场用提示条说。条只在通话中（`active`）。
+struct PhoneCall: ViewModifier {
+    let active: Bool
     @Environment(Workspace.self) private var workspace
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var feedback = PhoneVoiceFeedback()
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .bottom) {
+                if active {
+                    // 与输入框一行时同高：静音、挂断正对"＋"与发送
+                    PhoneCallBar(feedback: feedback)
+                        .frame(height: ComposerMetrics.lineSlot(line: ComposerField.lineHeight(typeSize)))
+                        .transition(.opacity)
+                }
+            }
+            .animation(Motion.fade, value: active)
+            .panel(isPresented: Binding { workspace.voiceDetails != nil } set: { if !$0 { workspace.voiceDetails = nil } },
+                   style: .bubble(workspace.voiceDetails ?? .unanchored, width: .fixed(360))) {
+                PhoneVoiceHost { state, perform in
+                    CueVoiceDetails(presentation: { state.shared(rejection: feedback.rejection) }, action: { intent in
+                        switch intent {
+                        case .hangUp: feedback.run(.hangUp, in: workspace, perform: perform)
+                        case .perform(let operation): feedback.run(operation, in: workspace, perform: perform)
+                        case .toggleMute, .stopExecution: break
+                        }
+                    })
+                }
+            }
+            .task { await DebugHooks.preparePhoneVoice(workspace) }
+    }
+}
+
+/// 单拆一个视图读通话的投影：听、说、静音换态只重算这一条，不重算输入框。
+private struct PhoneCallBar: View {
+    let feedback: PhoneVoiceFeedback
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         let state = workspace.phoneVoiceViewState
-        CueVoiceView(presentation: state.shared(rejection: feedback.rejection), detailsSource: Bindable(workspace).voiceDetails,
-                     start: { run(.start, perform: workspace.performPhoneVoice) }, action: { intent in
+        CueVoiceView(presentation: state.shared(rejection: feedback.rejection), detailsSource: Bindable(workspace).voiceDetails) { intent in
             switch intent {
-            case .toggleMute: run(.setMuted(!state.muted), perform: workspace.performPhoneVoice)
-            case .hangUp: run(.hangUp, perform: workspace.performPhoneVoice)
-            case .perform(let operation): run(operation, perform: workspace.performPhoneVoice)
+            case .toggleMute: feedback.run(.setMuted(!state.muted), in: workspace, perform: workspace.performPhoneVoice)
+            case .hangUp: feedback.run(.hangUp, in: workspace, perform: workspace.performPhoneVoice)
+            case .perform(let operation): feedback.run(operation, in: workspace, perform: workspace.performPhoneVoice)
             case .stopExecution: break
             }
-        })
-        .panel(isPresented: Binding { workspace.voiceDetails != nil } set: { if !$0 { workspace.voiceDetails = nil } },
-               style: .bubble(workspace.voiceDetails ?? .unanchored, width: .fixed(360))) {
-            PhoneVoiceHost { state, perform in
-                CueVoiceDetails(presentation: { state.shared(rejection: feedback.rejection) }, action: { intent in
-                    switch intent {
-                    case .hangUp: run(.hangUp, perform: perform)
-                    case .perform(let operation): run(operation, perform: perform)
-                    case .toggleMute, .stopExecution: break
-                    }
-                })
-            }
         }
-        .task { await DebugHooks.preparePhoneVoice(workspace) }
+    }
+}
+
+extension Workspace {
+    /// 发起手机通话（输入框里的通话钮、提示条上的"重新接通"）。此刻就起不了的（没连上 Mac、正忙）当场说原因，不碰通话；
+    /// `start` 抛出的 `VoiceIssue` 都已写进通话的阶段，由 `PhoneVoiceEndings` 带着恢复的动作说，这里不再说一遍。
+    func callCue() {
+        if let reason = services.voice.startUnavailableReason {
+            say(reason.phoneMessage, tone: .failure)
+            return
+        }
+        attempt {
+            do { try await self.startVoiceCall() } catch is VoiceIssue {}
+        }
     }
 
-    private func run(_ action: PhoneVoiceAction, perform: @escaping (PhoneVoiceAction) async throws -> VoiceCommandResult.Outcome?) {
+    /// 通话结束得要你知道的那一种；正常挂断、进后台、还在通话都是 nil。只由阶段与请求推出，不另存。
+    var phoneVoiceEnding: PhoneVoiceEnding? {
+        let voice = services.voice
+        return switch voice.phase {
+        case .failed(let issue): .failed(issue)
+        case .ended(let reason) where reason != .hungUp && reason != .background: .failed(.ended(reason))
+        case .ended: voice.requestPages.page.items.contains { $0.issue != nil } ? .unsent : nil
+        default: nil
+        }
+    }
+}
+
+enum PhoneVoiceEnding: Equatable {
+    case failed(VoiceIssue)
+    /// 正常挂断，但有话没交给 Cue（原话与恢复在通话详情里）。
+    case unsent
+}
+
+/// 通话结束时说一声：挂在每个窗口的提示条上（`NoticeBanner`），不论此刻在哪一页。正常挂断不说、不留字；
+/// 异常结束说原因并给恢复的动作（重新接通，麦克风没授权是打开设置），回到 Cue 页去接；有话没交给 Cue 时给"查看"开通话详情。
+/// 只在结束的那一下说：阶段一直停在结束，再出现不重说。
+struct PhoneVoiceEndings: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        Color.clear.onChange(of: workspace.phoneVoiceEnding) { _, ending in
+            switch ending {
+            case .failed(let issue):
+                workspace.say(issue.phoneMessage, tone: .failure, action: issue.phoneRecovery.map(recovery))
+            case .unsent:
+                workspace.say("这次通话有话没交给 Cue", tone: .failure, action: Workspace.NoticeAction(title: String(localized: "查看")) {
+                    workspace.show(.cue)
+                    workspace.voiceDetails = .unanchored
+                })
+            case nil: break
+            }
+        }
+    }
+
+    private func recovery(_ action: PhoneVoiceAction) -> Workspace.NoticeAction {
+        Workspace.NoticeAction(title: String(localized: action.title)) {
+            if case .start = action {
+                workspace.show(.cue)
+                workspace.callCue()
+            } else {
+                _ = try await workspace.performPhoneVoice(action)
+            }
+        }
+    }
+}
+
+@Observable private final class PhoneVoiceFeedback {
+    var rejection: VoiceCommandResult.Rejection?
+
+    /// 命令结果原样说出，被拒的另记一份给详情；不自动重发。
+    func run(_ action: PhoneVoiceAction, in workspace: Workspace, perform: @escaping (PhoneVoiceAction) async throws -> VoiceCommandResult.Outcome?) {
         Task {
             do {
-                if let result = try await perform(action) { report(result) }
+                if let result = try await perform(action) { report(result, in: workspace) }
             } catch let issue as VoiceIssue {
                 workspace.say(issue.phoneMessage, tone: .failure)
             } catch let error as VoicePageError {
@@ -201,57 +293,16 @@ struct CueVoicePanel: View {
         }
     }
 
-    private func report(_ result: VoiceCommandResult.Outcome) {
+    private func report(_ result: VoiceCommandResult.Outcome, in workspace: Workspace) {
         switch result {
         case .recorded: workspace.say("请求已记下")
         case .stopRequested: workspace.say("停止请求已提交")
         case .readbackQueued: workspace.say("已加入朗读队列")
         case .rejected(let reason):
-            feedback.rejection = reason
+            rejection = reason
             workspace.say(reason.phoneMessage, tone: .failure)
         }
     }
-}
-
-struct CueVoiceComposerEntry: View {
-    @Environment(Workspace.self) private var workspace
-    @State private var frame: CGRect?
-
-    var body: some View {
-        let state = workspace.phoneVoiceViewState.shared()
-        Button {
-            if state.active { workspace.voiceDetails = frame.map(BubbleSource.control) ?? .unanchored }
-            else { start() }
-        } label: {
-            Image(.audio)
-                .chip(on: state.active, size: .inline)
-                .frame(width: ControlSize.target, height: ControlSize.target)
-                .contentShape(.circle)
-        }
-        .buttonStyle(PressStyle())
-        .disabled(!state.active && state.startUnavailableReason != nil)
-        .accessibilityLabel(state.active ? "通话详情" : "和 Cue 通话")
-        .help(Text(state.active ? "通话详情" : state.startUnavailableReason ?? "和 Cue 通话"))
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { next in
-            if let frame, workspace.voiceDetails == .control(frame) { workspace.voiceDetails = .control(next) }
-            frame = next
-        }
-        .onDisappear {
-            if let frame, workspace.voiceDetails == .control(frame) { workspace.voiceDetails = nil }
-        }
-    }
-
-    private func start() {
-        Task {
-            do { try await workspace.startVoiceCall() }
-            catch let issue as VoiceIssue { workspace.say(issue.phoneMessage, tone: .failure) }
-            catch { workspace.fail(error) }
-        }
-    }
-}
-
-@Observable private final class PhoneVoiceFeedback {
-    var rejection: VoiceCommandResult.Rejection?
 }
 
 private extension VoiceCommandResult.Rejection {

@@ -24,6 +24,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var submitsEmpty = false
     /// 空着时钮位也露出钮（只是看的，不能提交）："对 Cue 说"发出后的发送中（话在路上）。
     var showsSendEmpty = false
+    /// 让出这块玻璃：里面的字、附件与钮淡去，不接点按、读屏与焦点，玻璃与高度留着，调用方把别的东西放在这块玻璃上（手机通话时的通话条，`CueComposer`）。
+    /// 草稿与文字区都还在，让回来时原样。
+    var yielded = false
     /// 收成一行时头部也留着（会话回复框：批注在这块玻璃的上部）；平时头部只在展开时出现。
     var keepsHeader = false
     /// 有工具排（`tools`：会话的模型与思考强度）。一直展开的有工具时才分两层（文字在上、＋工具提交钮一排在下），没有工具的照旧一排；
@@ -156,6 +159,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     .readerHidden(true)
             }
         }
+        .opacity(yielded ? 0 : 1)
+        .allowsHitTesting(!yielded)
+        .readerHidden(yielded)
+        .animation(Motion.fade, value: yielded)
         // 收成短胶囊时居中；展开是同一块玻璃从中间向两边长到全宽
         .frame(maxWidth: shrunk ? Self.compactWidth : .infinity, alignment: .leading)
         // 里面的东西裁在玻璃里：变形时淡出中的提交钮、工具排随玻璃一起收，不留在玻璃外。上沿不裁（往上浮出的

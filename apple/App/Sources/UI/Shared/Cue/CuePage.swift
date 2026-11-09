@@ -9,7 +9,7 @@ import SwiftUI
 /// Cue 自己醒来的那几轮每轮一行旁注（`CueNoteLog`：提到的那一处、当时出了什么事与它说的一句，点了去那里），
 /// 末尾是它此刻在做什么（`CueEnding`：常驻的一行，此刻在做的只写这里）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是拍板卡（`CueWaitDock`：Cue 的提问与会话在问的都在这里，
-/// 对话里不另挂）与输入框（`CueComposer`）。
+/// 对话里不另挂）与输入框（`CueComposer`；手机与 iPad 上通话也在它里面，Mac 的通话条在栏顶，`CueVoicePanel`）。
 /// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
@@ -81,14 +81,9 @@ struct CuePage: View {
         FloatingReply {
             chat.padding(.leading, railInset)
         } reply: {
-            VStack(spacing: 0) {
-                CueVoicePanel()
-                    .background(palette.desk, in: .rect(cornerRadius: Radius.field))
-                    .padding(.leading, railInset)
-                bottom()
-            }
-            .padding(.horizontal, Spacing.group)
-            .frame(maxWidth: Self.readingWidth)
+            bottom()
+                .padding(.horizontal, Spacing.group)
+                .frame(maxWidth: Self.readingWidth)
         }
         .scrollDismissesKeyboard(.interactively)
         // iPad 右边那一栏：名牌比栏窄，对话到名牌下沿淡出，不从名牌两侧露出来（`Bars`）；手机的名牌铺满整行，照沉浸式
@@ -179,16 +174,8 @@ struct CuePage: View {
             }
             // 宽屏没启用时不放输入框：主区底部已有记下灵感的那一条（`CaptureSlot`），一屏只留一个；这一栏只剩启用那一张（`CueWelcome`）
             if cue.canHear || workspace.layout == .narrow {
-                #if os(iOS)
-                HStack(alignment: .bottom, spacing: Spacing.item) {
-                    CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
-                        .fixedSize(horizontal: false, vertical: true)
-                    CueVoiceComposerEntry()
-                }
-                #else
                 CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
                     .fixedSize(horizontal: false, vertical: true)
-                #endif
             }
         }
         .animation(Motion.fade, value: cue.canHear)

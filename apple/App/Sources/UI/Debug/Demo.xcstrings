@@ -3575,6 +3575,22 @@
         }
       }
     },
+    "帮我看看发布" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the release for me"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帮我看看发布"
+          }
+        }
+      }
+    },
     "帮我记一下：周五不发版" : {
       "localizations" : {
         "en" : {

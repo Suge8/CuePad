@@ -3689,18 +3689,18 @@
         }
       }
     },
-    "Mac 已断开连接，请检查 Mac 后重新接通" : {
+    "Mac 已断开连接" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The Mac disconnected. Check your Mac and reconnect"
+            "value" : "The Mac disconnected"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mac 已断开连接，请检查 Mac 后重新接通"
+            "value" : "Mac 已断开连接"
           }
         }
       }
@@ -16927,6 +16927,22 @@
         }
       }
     },
+    "有问题" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs attention"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有问题"
+          }
+        }
+      }
+    },
     "朗读尚未确认" : {
       "localizations" : {
         "en" : {
@@ -21443,18 +21459,18 @@
         }
       }
     },
-    "网络连接断了，请检查网络后重新接通" : {
+    "网络连接断了" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Network disconnected. Check your connection and reconnect"
+            "value" : "The network connection dropped"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "网络连接断了，请检查网络后重新接通"
+            "value" : "网络连接断了"
           }
         }
       }
@@ -22191,18 +22207,18 @@
         }
       }
     },
-    "设备连接已更换，请重新接通" : {
+    "设备连接已更换" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The device connection changed. Reconnect to continue"
+            "value" : "The device connection changed"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "设备连接已更换，请重新接通"
+            "value" : "设备连接已更换"
           }
         }
       }
@@ -22719,18 +22735,18 @@
         }
       }
     },
-    "账号已更换，请重新接通" : {
+    "账号已更换" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The account changed. Reconnect to continue"
+            "value" : "The account changed"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "账号已更换，请重新接通"
+            "value" : "账号已更换"
           }
         }
       }
@@ -24607,6 +24623,22 @@
         }
       }
     },
+    "这次通话有话没交给 Cue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some of what you said didn't reach Cue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这次通话有话没交给 Cue"
+          }
+        }
+      }
+    },
     "这里还没有灵感" : {
       "localizations" : {
         "en" : {
@@ -25327,18 +25359,18 @@
         }
       }
     },
-    "通话控制连接断了，请重新接通" : {
+    "通话控制连接断了" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Call control disconnected. Reconnect to continue"
+            "value" : "The call's control connection dropped"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通话控制连接断了，请重新接通"
+            "value" : "通话控制连接断了"
           }
         }
       }
@@ -25503,22 +25535,6 @@
         }
       }
     },
-    "通话的声音连接断了，请重新接通" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Call audio disconnected. Reconnect to continue"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话的声音连接断了，请重新接通"
-          }
-        }
-      }
-    },
     "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex" : {
       "localizations" : {
         "en" : {
@@ -25631,18 +25647,18 @@
         }
       }
     },
-    "通话连接超时，请重新接通" : {
+    "通话连接超时" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Call connection timed out. Reconnect to continue"
+            "value" : "The call timed out"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通话连接超时，请重新接通"
+            "value" : "通话连接超时"
           }
         }
       }
@@ -26475,18 +26491,18 @@
         }
       }
     },
-    "音频已中断，请重新接通" : {
+    "音频已中断" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Audio was interrupted. Please reconnect"
+            "value" : "Audio was interrupted"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "音频已中断，请重新接通"
+            "value" : "音频已中断"
           }
         }
       }
@@ -26795,18 +26811,18 @@
         }
       }
     },
-    "麦克风权限未开启，请在设置中允许 CuePad 使用麦克风" : {
+    "麦克风权限未开启" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microphone access is off. Allow CuePad to use the microphone in Settings"
+            "value" : "No microphone access"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "麦克风权限未开启，请在设置中允许 CuePad 使用麦克风"
+            "value" : "麦克风权限未开启"
           }
         }
       }

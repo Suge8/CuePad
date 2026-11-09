@@ -89,8 +89,10 @@ import os
     var phase: VoiceCallProjection.Phase? {
         if let issue { return .failed(issue) }
         #if os(iOS)
+        // 先读结束再看在不在关：phone 不在观察里，`finish` 撤下 phone 后只改 phoneEnd，关着时没读过它的视图会一直停在"正在结束"
+        let ended = phoneEnd
         if closing { return .closing }
-        if let phoneEnd { return phoneEnd }
+        if let ended { return ended }
         #endif
         return projection?.phase ?? (session == nil ? nil : .connecting)
     }
