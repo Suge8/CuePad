@@ -4,6 +4,7 @@
 只读完整日志（xcodebuild 的原始输出，一次调用里 Kit 与 App 两段都在里面），不改退出码。分两家数：
 - Swift Testing：`✔/✘ Test run with N tests …` 给总数，`✘ Test … failed after`、`➜ Test … skipped` 给失败与跳过；
 - XCTest：每个测试包收尾的 `Test Suite 'All tests'|'Selected tests'` 后一行 `Executed N tests, with … skipped and … failures`。
+钉住的 Agent 没装时它的用例跳过、原因里带「未覆盖：」（CueTestSupport 的 PinnedAgent）：单列成「没跑、不算通过的」，不混进普通的跳过。
 用例的耗时取 `passed after`（Swift Testing，参数化的取汇总行，不取每个参数一行）与 `passed (x seconds)`（XCTest）。"""
 import re
 import sys
@@ -72,7 +73,17 @@ elif status != 0:
 by_reason = defaultdict(list)
 for name, reason in skip_reason.items():
     by_reason[reason].append(name)
+uncovered = defaultdict(int)
 for reason, names in by_reason.items():
+    if "未覆盖：" in reason:
+        uncovered[reason[reason.index("未覆盖：") + len("未覆盖："):]] += len(names)
+if uncovered:
+    print("没跑、不算通过的：")
+    for reason, count in sorted(uncovered.items()):
+        print(f"  {reason}（{count} 个用例）")
+for reason, names in by_reason.items():
+    if "未覆盖：" in reason:
+        continue
     suites = skip_suites.get(reason, [])
     shown = suites or names
     more = f" 等 {len(shown)} 个" if len(shown) > 3 else ""

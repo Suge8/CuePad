@@ -54,7 +54,7 @@ extension CueHostTests {
     }
 
     final class Rig {
-        let model: FakeModel
+        let model: CueModel
         let notifier = RecordingCueNotifier()
         let launches = LaunchGate()
         let app: TestApp
@@ -79,8 +79,8 @@ extension CueHostTests {
             renewAt: Int = CueContext.renewAt, clock: @escaping @Sendable () -> Date = { .now }, timing tune: (inout CueTiming) -> Void = { _ in },
             prepare: ((Rig) async throws -> Void)? = nil
         ) async throws {
-            model = try FakeModel(usage: usage, failingOnce: failingOnce, asksOnEnable: asksOnEnable)
-            let port = try await model.start()
+            model = try await CueModel(usage: usage, failingOnce: failingOnce, asksOnEnable: asksOnEnable)
+            let port = model.port
             var timing = CueTiming(
                 patrolAfter: patrolAfter, cacheLifetime: cacheLifetime, renewAt: renewAt,
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), sayWait: 5, quietHours: [], clock: clock)

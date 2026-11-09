@@ -13,51 +13,47 @@ import Testing
 ///
 /// 录制：列出要录的几家（`AgentKind` 的 rawValue），这几家连真 Agent 跑同样的断言，并重写它们的录像带：
 ///
-///     TEST_RUNNER_CUEPAD_AGENT_TESTS=pi,codex,claude apple/scripts/xc.sh test kit -only-testing:CuePiTests
+///     TEST_RUNNER_CUEPAD_AGENT_TESTS=codex,grok apple/scripts/xc.sh test kit -only-testing:CuePiTests
 ///
 /// 下面的变量同样加 `TEST_RUNNER_` 前缀给（xcodebuild 只把这样的变量交给测试进程）。
 ///
-/// - pi：`~/.local/bin/pi`（`CUEPAD_PI` 可换，如验证最低支持的 Pi），假模型（`Fixtures/fake-model.ts`），零网络；FireCode 用例另要本机的 FireCode 源码（`CUEPAD_FIRECODE_SOURCE` 可换）；
+/// - pi：没有录像带，总连钉住的真 Pi（`PinnedAgent.pi`，`xc.sh agents install pi`；没装时跳过、列为未覆盖），模型是本用例的假模型
+///   （`FakeModel`，Chat Completions），零网络；FireCode 随 Pi 钉住（`CUEPAD_FIRECODE_SOURCE` 可换成另一份检出）；
 /// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
-/// - claude：本机的 claude 与它自己的登录（钥匙串里的那条，见 `ClaudeLogin`），模型 haiku（`ClaudeTestbed`）；
-/// - grok：本机的 grok（`CUEPAD_GROK` 可换），假模型（`FakeResponses`），零网络；环境里给了 `XAI_API_KEY` 或 `GROK_AUTH_PATH`（已登录的
-///   凭据文件，如 `~/.grok/auth.json`）时连真的 xAI（`GrokModel`），托管会话的模型用 `CUEPAD_GROK_MODEL` 换；
-/// - dsh：`CUEPAD_DSH` 指的 dsh（0.2.1-rc.2 以上；没给按 PATH 找），DeepSeek 的 key 只经 `DEEPSEEK_API_KEY` 给（录完 grep 录像带确认没有它）；
-/// - 大脑（`RealBrainTests`）用本机用户自己的登录（Pi 的大脑用本机 Codex 的登录连 openai-codex，见 `writePiCodexAuth`），模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
+/// - claude：没有录像带，总连钉住的真 Claude Code（`PinnedAgent.claude`），模型是测试台的假模型（`FakeModel`，Anthropic Messages，`ClaudeTestbed`），
+///   假密钥、不带订阅登录、关辅助流量，零网络；终端里的 Claude Code 也是它（要 tmux）；
+/// - grok：没有录像带，总连钉住的真 Grok（`PinnedAgent.grok`，`xc.sh agents install grok`；没装时跳过、列为未覆盖），模型是本用例的假模型
+///   （`FakeModel`，Responses），零网络、不用任何登录；
+/// - dsh：没有录像带，总连钉住的真 dsh（`PinnedAgent.dsh`，`xc.sh agents install dsh`；没装时跳过、列为未覆盖），模型是本用例的假模型
+///   （`FakeModel`，Messages，经 `DEEPSEEK_BASE_URL`；搜索的地址 `DEEPSEEK_SEARCH_BASE_URL` 也指过去），key 是假的，零网络；
+/// - 大脑（`RealBrainTests`）除 Pi、OpenCode、dsh、Grok、Claude Code（假模型，剧本 `playBrain`、`playGrokBrain`）外用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
 ///
-/// OpenCode 没有录像带（它的 HTTP/SSE 边界没接进来），总是连真 OpenCode 跑：本机找得到 v2（官方脚本、Homebrew 或 npm 的 `@opencode/cli`，
-/// `CUEPAD_OPENCODE` 可指定）就在隔离的 `OpenCodeSandbox` 里跑，找不到就跳过。缺省用假模型 `Fixtures/fake-openai.mjs`，零网络、结果确定；
-/// 列出 `opencode` 只是改连真提供方，模型用 `CUEPAD_OPENCODE_MODEL`（`提供方/模型`，必给），密钥只经环境给。
+/// OpenCode 没有录像带，总连钉住的真 OpenCode v2（`PinnedAgent.opencode`，`xc.sh agents install opencode`；没装时跳过、列为未覆盖），
+/// 在隔离的 `OpenCodeSandbox` 里连本用例的假模型（`FakeModel`，Chat Completions），零网络。
 ///
-/// 没有录像带、只在列出这家时连真 Agent 跑的（`live(_:_:)`）：终端里的 Codex 与 Claude Code（断言的是伪终端、tmux 里真终端界面的
-/// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录；OpenCode 的总跑），
+/// 没有录像带、只在列出这家时连真 Agent 跑的（`live(_:_:)`）：终端里的 Codex（断言的是伪终端里真终端界面的
+/// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录；Pi、OpenCode、dsh、Grok、Claude Code 的总跑），
 /// 旧扩展托管进程换上新扩展（两个 Pi 进程交替上桥、热换扩展文件，回放排不稳先后）。
 enum RealAgents {
     static let recording: Set<AgentKind> = Set((ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS"] ?? "").split(separator: ",")
         .compactMap { AgentKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) })
 
     static func mode(of agent: AgentKind) -> TapeMode {
-        if agent == .opencode { return .live }
+        if [.opencode, .pi, .grok, .dsh, .claudeCode].contains(agent) { return .live }
         return recording.contains(agent) ? .record : .replay
     }
 
     /// 连真 Agent 跑不起来的原因（没装、没登录、缺模型）；跑得起来为 nil
     static func missing(_ agent: AgentKind) -> String? {
         switch agent {
-        case .pi: realPiInstalled ? nil : "本机没装 pi"
+        case .pi: pinnedPi.uncovered
         case .codex: realCodexURL != nil && FileManager.default.fileExists(atPath: realCodexAuth.path) ? nil : "本机没装或没登录 codex"
-        case .claudeCode: claudeURL != nil && ClaudeLogin.token != nil ? nil : "本机没装或没登录 claude"
-        case .opencode:
-            if realOpenCodeURL == nil { "本机找不到 opencode v2（CUEPAD_OPENCODE 可指定）" }
-            else if recording.contains(.opencode), openCodeRealModel == nil { "列出 opencode 连真提供方要给 CUEPAD_OPENCODE_MODEL（提供方/模型）" }
-            else { nil }
-        case .grok: realGrokURL == nil ? "本机找不到 grok（CUEPAD_GROK 可指定）" : nil
-        case .dsh:
-            if realDshURL == nil { "本机找不到 dsh（CUEPAD_DSH 可指定）" }
-            else if ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"] == nil { "没给 DEEPSEEK_API_KEY" }
-            else { nil }
+        case .claudeCode: pinnedClaude.uncovered
+        case .opencode: OpenCodeSandbox.pinned.uncovered
+        case .grok: pinnedGrok.uncovered
+        case .dsh: PinnedAgent.dsh.uncovered
         }
     }
 

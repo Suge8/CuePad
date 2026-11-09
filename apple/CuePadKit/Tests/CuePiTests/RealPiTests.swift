@@ -7,9 +7,9 @@ import Testing
 
 private let longCommand = "echo " + String(repeating: "a", count: 200)
 
-/// 端到端：真实 Pi（`~/.local/bin/pi`，已验证到 0.99.1）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
+/// 端到端：真实 Pi（钉住的版本）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
 @MainActor
-@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
+@Suite(RealAgents.taped(.pi))
 struct RealPiTests {
     /// 起 Pi、等桥发现它，测试体结束后停掉 Pi 与桥（Pi 进程的生命周期必须覆盖整个测试体）。
     func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
@@ -115,7 +115,8 @@ struct RealPiTests {
     @Test func aWorkingStretchKeepsOneClockAcrossThinkingAndToolsAndClearsWhenIdle() async throws {
         try await withRig { pi, bridge, _ in
             let log = ChangeLog(bridge)
-            try pi.prompt("[[tool:sleep 0.3]]")
+            pi.model.on("歇一下", .call("bash", ["command": "sleep 0.3"]), .say("TOOL_DONE"))
+            try pi.prompt("歇一下")
             try await eventually("一轮结束") { log.states.last == .settled }
             let working = log.changes.compactMap { change -> PiSession? in
                 guard case .stateChanged(let session, _) = change else { return nil }
@@ -133,14 +134,14 @@ struct RealPiTests {
     }
 
     @Test(arguments: [
-        ("echo first\\necho second", "echo first"),
+        ("echo first\necho second", "echo first"),
         (longCommand, String(longCommand.prefix(119)) + "…"),
     ])
     func bashToolDetailIsTheFirstLineTruncatedTo120Characters(command: String, expected: String) async throws {
-        AgentTape.variant("\(command.count)")
         try await withRig { pi, bridge, _ in
             let log = ChangeLog(bridge)
-            try pi.prompt("[[tool:\(command)]]")
+            pi.model.on("跑命令", .call("bash", ["command": command]), .say("TOOL_DONE"))
+            try pi.prompt("跑命令")
             try await eventually("一轮结束") { log.states.last == .settled }
             let prefix = "bash\(PiSessionState.detailSeparator)"
             let details = log.details.compactMap { $0?.hasPrefix(prefix) == true ? String($0!.dropFirst(prefix.count)) : nil }
@@ -152,14 +153,14 @@ struct RealPiTests {
     @Test func fileToolDetailIsTheFileName() async throws {
         try await withRig { pi, bridge, _ in
             let log = ChangeLog(bridge)
-            try pi.prompt("[[write:\(pi.cwd.path)/notes/hello.txt]]")
+            pi.model.on("写个文件", .call("write", ["path": "\(pi.cwd.path)/notes/hello.txt", "content": "x"]), .say("TOOL_DONE"))
+            try pi.prompt("写个文件")
             try await eventually("一轮结束") { log.states.last == .settled }
             try await eventually("日志记下了") { log.details.contains("write · hello.txt") }
         }
     }
 
     @Test(arguments: [SIGKILL, SIGTERM]) func anExitedPiEndsTheSessionAndItsSocketIsRemoved(_ signal: Int32) async throws {
-        AgentTape.variant(signal == SIGKILL ? "kill" : "term")
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)
             pi.kill(signal)
@@ -182,10 +183,13 @@ struct RealPiTests {
 
     @Test func oneShotPrintRunsDoNotOpenASocket() async throws {
         let socketDirectory = try makeTempDirectory()
-        let pi = try await PiProcess(socketDirectory: socketDirectory, oneShotPrompt: "[[slow]] hello")
-        try await pi.waitUntilHeld()  // 假模型停住：扩展早已加载过，要开 socket 此刻已开
+        let model = try await FakeModel()
+        let gate = model.gate()
+        model.on("hello", .held(gate, then: .say("hi")))
+        let pi = try await PiProcess(socketDirectory: socketDirectory, oneShotPrompt: "hello", model: model)
+        try await gate.reached()  // 假模型停住：扩展早已加载过，要开 socket 此刻已开
         #expect(try FileManager.default.contentsOfDirectory(atPath: socketDirectory.path).filter { $0.hasSuffix(".sock") }.isEmpty)
-        try pi.release()
+        gate.open()
         await pi.waitUntilExit()
     }
 }

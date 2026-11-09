@@ -8,7 +8,6 @@ import Testing
 extension RealPiTests {
     /// 结束走扩展接口 `ctx.shutdown`；测试驱动的是 RPC 进程，它在下一条命令后才检查退出请求，所以结束只验证弹窗被取消。
     @Test(arguments: ["end", "abort"]) func endingOrStoppingCancelsThePendingDialog(_ action: String) async throws {
-        AgentTape.variant(action)
         try await withRig { pi, bridge, s in
             try pi.prompt("/ask")
             try await eventually("确认框") { bridge.sessions.first?.question?.kind == .known(.confirm) }
@@ -26,26 +25,47 @@ extension RealPiTests {
             try await bridge.abort(s.id)  // 空闲：成功，不改状态
             #expect(bridge.sessions.first?.state == .settled)
 
-            try pi.prompt("[[slow]] 很长的一轮")
+            let gate = pi.hold("很长的一轮")
+            try pi.prompt("很长的一轮")
+            try await gate.reached()
             try await eventually("在跑") { bridge.sessions.first?.state == .thinking }
             try await bridge.abort(s.id)
             try await eventually("回到等下一句") { bridge.sessions.first?.state == .settled }
 
             try pi.prompt("接着说")
-            try await eventually("还能接着说") { recap(of: bridge.sessions.first)?.lastReply == "ECHO 接着说 IMAGES[]" }
+            try await eventually("还能接着说") { recap(of: bridge.sessions.first)?.lastReply == "ECHO 接着说" }
         }
     }
 
-    /// 工具跑着时停止，而 Pi 把这一轮记成了 error（工具被中止后的那次请求因中止失败，见 fake-model 的 [[abort-as-error]]）：
-    @Test func abortDuringAToolIsAStopEvenWhenPiRecordsAnError() async throws {
+    /// 说到一半停住的回答（假模型的 `stream(_:until:)`）：说出的半句先作为草稿上报、这一轮还在跑，放行后同一条回答说完、这一轮做完
+    @Test func aReplyHeldMidStreamShowsItsDraftAndFinishesOnceReleased() async throws {
         try await withRig { pi, bridge, s in
-            try pi.prompt("[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令")
+            let gate = pi.model.gate()
+            pi.model.on("说一半", .stream(["前半句，", "后半句"], until: gate))
+            try pi.prompt("说一半")
+            try await gate.reached()
+            try await eventually("半句是草稿，这一轮还在跑") {
+                bridge.sessions.first?.state == .thinking && bridge.slots.first { $0.id == s.id }?.draft?.text == "前半句，后半句"
+            }
+            #expect(recap(of: bridge.sessions.first)?.lastReply == nil)
+
+            gate.open()
+            try await eventually("说完，这一轮做完") {
+                bridge.sessions.first?.state == .settled && recap(of: bridge.sessions.first)?.lastReply == "前半句，后半句"
+            }
+        }
+    }
+
+    @Test func abortDuringAToolIsAStop() async throws {
+        try await withRig { pi, bridge, s in
+            pi.model.on("跑个慢命令", .call("bash", ["command": "sleep 30"]), .say("TOOL_DONE"))
+            try pi.prompt("跑个慢命令")
             try await eventually("在跑工具") { bridge.sessions.first?.state == .tool }
             try await bridge.abort(s.id)
             try await eventually("这一轮结束") { [.settled, .error].contains(bridge.sessions.first?.state) }
             #expect(bridge.sessions.first?.state == .settled, "\(String(describing: bridge.sessions.first?.detail))")
             let messages = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
-            #expect(messages.map(\.text) == ["[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令", PiNotice.stopped.rawValue])
+            #expect(messages.map(\.text) == ["跑个慢命令", PiNotice.stopped.rawValue])
         }
     }
 
@@ -60,13 +80,15 @@ extension RealPiTests {
         }
     }
 
-    /// 前一句的那一轮停住（`[[slow]]`）：第二句到达时它不论已经开始还是还在等着，结果都一样。
+    /// 前一句的那一轮停在假模型里：第二句到达时它不论已经开始还是还在等着，结果都一样。
     @Test func aMessageSentWhileBusyStopsTheRunningTurnAndStartsANewOneWithIt() async throws {
         try await withRig { pi, bridge, s in
-            try pi.prompt("[[tool:sleep 30]] 跑个慢命令")
+            pi.model.on("跑个慢命令", .call("bash", ["command": "sleep 30"]), .say("TOOL_DONE"))
+            _ = pi.hold("FIRST")
+            try pi.prompt("跑个慢命令")
             try await eventually("在跑工具") { bridge.sessions.first?.state == .tool }
             let first = UUID(), second = UUID(), log = ChangeLog(bridge)
-            try await bridge.send(PiMessage(text: "[[slow]] FIRST", deliveryID: first.uuidString), to: s.id)
+            try await bridge.send(PiMessage(text: "FIRST", deliveryID: first.uuidString), to: s.id)
             try await bridge.send(PiMessage(text: "SECOND", deliveryID: second.uuidString), to: s.id)
 
             try await eventually("最后一句答完") {
@@ -75,7 +97,7 @@ extension RealPiTests {
             #expect(log.settles == 1, "被停下的两轮都不算歇下：\(log.states)")
             let messages = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
             let users = messages.filter { $0.role == .known(.user) }
-            #expect(users.map(\.text) == ["[[tool:sleep 30]] 跑个慢命令", "[[slow]] FIRST", "SECOND"])
+            #expect(users.map(\.text) == ["跑个慢命令", "FIRST", "SECOND"])
             #expect(users.map(\.deliveryID) == [nil, first, second])
             #expect(!fileTexts("assistant", in: s.sessionFile).contains { $0 == "TOOL_DONE" || $0.contains("FIRST") }, "被停下的两轮都没有做完")
             // Pi 把这两轮记成 error（"The operation was aborted."）：对话里照停下处理，各留一行"已停止"
@@ -86,7 +108,7 @@ extension RealPiTests {
     @Test func recapKeepsYourWordsOnOneLineAndTruncatesLongOnes() async throws {
         try await withRig { pi, _, s in
             try pi.prompt("第一行\n第二行")
-            try await eventually("回答到了") { recap(of: s)?.lastReply == "ECHO 第一行\n第二行 IMAGES[]" }
+            try await eventually("回答到了") { recap(of: s)?.lastReply == "ECHO 第一行\n第二行" }
             #expect(recap(of: s)?.lastPrompt == "第一行 第二行")
 
             // 块与块之间夹着真人文字不是机器消息（整条都是块的见 `RealTranscriptTests`）
@@ -107,8 +129,9 @@ extension RealPiTests {
     @Test func anInterruptedRoundLeavesTheLastCompletedExchangeInTheRecap() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("第一问")
-            try await eventually("第一轮做完") { recap(of: s)?.lastReply == "ECHO 第一问 IMAGES[]" }
-            try pi.prompt("[[tool:sleep 30]]")
+            try await eventually("第一轮做完") { recap(of: s)?.lastReply == "ECHO 第一问" }
+            pi.model.on("慢命令", .call("bash", ["command": "sleep 30"]))
+            try pi.prompt("慢命令")
             try await eventually("工具在跑") {
                 if case .tool = bridge.sessions.first?.state { true } else { false }
             }
@@ -116,32 +139,36 @@ extension RealPiTests {
             try await eventually("会话结束") { bridge.sessions.isEmpty }
 
             let summary = try #require(recap(of: s))
-            #expect(summary.lastPrompt == "第一问" && summary.lastReply == "ECHO 第一问 IMAGES[]")
+            #expect(summary.lastPrompt == "第一问" && summary.lastReply == "ECHO 第一问")
         }
     }
 
     @Test func retryRerunsTheFailedTurnAndTheConversationOnlyGainsTheNewAnswer() async throws {
         try await withRig { pi, bridge, s in
             let file = try #require(s.sessionFile)
-            let prompt = "[[fail-once]] [[roles]] 跑一遍"
+            let prompt = "跑一遍"
+            pi.model.on(prompt, times: 1, .fail("fake model failure"))
             try pi.prompt(prompt)
             try await eventually("出错") { bridge.sessions.first?.state == .error }
             #expect(try PiHistory.index(file: file, from: nil).messages.map(\.text) == [prompt])
 
             try await bridge.retry(s.id)
-            try await eventually("重跑做完") { recap(of: bridge.sessions.first)?.lastReply == "ROLES system,user" }
+            try await eventually("重跑做完") { recap(of: bridge.sessions.first)?.lastReply == "ECHO 跑一遍" }
             try await eventually("歇下") { bridge.sessions.first?.state == .settled }
-            #expect(try PiHistory.index(file: file, from: nil).messages.map(\.text) == [prompt, "ROLES system,user"])
+            #expect(try PiHistory.index(file: file, from: nil).messages.map(\.text) == [prompt, "ECHO 跑一遍"])
+            #expect(pi.model.requests.last?.messages.map(\.role) == [.user], "重跑的请求里没有出错的那一轮")
 
-            try pi.prompt("[[roles]] 再来")
-            try await eventually("下一句") { recap(of: bridge.sessions.first)?.lastReply == "ROLES system,user,assistant,user" }
+            try pi.prompt("再来")
+            try await eventually("下一句") { recap(of: bridge.sessions.first)?.lastReply == "ECHO 再来" }
+            #expect(pi.model.requests.last?.messages.map(\.role) == [.user, .assistant, .user])
             await #expect(throws: PiBridgeError.rejected("nothing_to_retry")) { try await bridge.retry(s.id) }
         }
     }
 
     @Test func modelFailureShowsError() async throws {
         try await withRig { pi, bridge, _ in
-            try pi.prompt("[[fail]]")
+            pi.model.on("出错吧", .fail("fake model failure"))
+            try pi.prompt("出错吧")
             try await eventually("error 状态") {
                 bridge.sessions.first?.errorMessage?.contains("fake model failure") == true
             }

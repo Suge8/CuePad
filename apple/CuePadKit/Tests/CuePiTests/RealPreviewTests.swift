@@ -7,7 +7,7 @@ import Testing
 /// 模型在 bash 里一次 `cuepad show` 两个文件：这条命令带着会话的环境变量（扩展设的 `CUEPAD_SESSION_ID` 在先，Pi 自己的 `PI_SESSION_ID`），
 /// 命令行据此认出会话、把预览写进（隔离的）资料库。
 @MainActor
-@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
+@Suite(RealAgents.taped(.pi))
 struct RealPreviewTests {
     private func bashResult(_ pi: PiProcess) throws -> (isError: Bool, text: String) {
         let event = try #require(pi.events.last { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "bash" })
@@ -17,7 +17,6 @@ struct RealPreviewTests {
 
     @Test func theSkillIsDiscoveredAndShowFromBashAttachesThePreviewToTheSession() async throws {
         let library = try makeTempDirectory()
-        AgentTape.active.watch(library)  // 预览是 Pi 的 bash 里跑的 cuepad 命令写进资料库的
         let pi = try await PiProcess(env: ["CUEPAD_LIBRARY_DIR": library.path], discoverSkills: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
@@ -29,7 +28,8 @@ struct RealPreviewTests {
         try "<h1>登录页</h1>".write(to: pi.cwd.appending(path: "demo.html"), atomically: true, encoding: .utf8)
         try Data("m4a".utf8).write(to: pi.cwd.appending(path: "beep.m4a"))
 
-        try pi.prompt("[[tool:\(PiProcess.cuepad.path) show demo.html beep.m4a --title 登录页改好了 --title 提示音 --json]] 给我看看")
+        pi.model.on("给我看看", .call("bash", ["command": "\(PiProcess.cuepad.path) show demo.html beep.m4a --title 登录页改好了 --title 提示音 --json"]), .say("TOOL_DONE"))
+        try pi.prompt("给我看看")
         _ = try await pi.waitForEvent("命令结束", { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "bash" })
         _ = try await pi.waitForEvent("这一轮结束", { $0["type"] as? String == "agent_end" })
 

@@ -8,7 +8,7 @@ import Testing
 /// 选择器写设置走 `AppServices.updateCue`，写法照它的菜单项（`CueConfigControls`）；说话走 `Workspace.speak`。
 /// 大脑是真的 Pi，模型是 `CueHostTests` 的假端点（看得到每一轮用的模型与强度）。
 @MainActor
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized)
+@Suite(.pinnedPi, .serialized)
 struct CueBrainSwitchTests {
     private func say(_ text: String, to rig: CueHostTests.Rig, expecting reply: String) async throws {
         let workspace = Workspace(services: rig.services)
