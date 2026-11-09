@@ -9,6 +9,36 @@ import Testing
 /// 托管会话的进程收尾：一个会话同一时刻只有一个 Claude Code 进程写它的会话文件。请它退出、接着它的各家同一组用例在 `RealHostedEndTests`。
 /// 外壳（`wrapper`）拉开真 Claude Code 自己太短、碰不到的那一段：起得慢。
 extension RealClaudeHostTests {
+    /// 这一轮的 `system/init` 还没到 CuePad 时点停止或结束：不等 init，当场停下这一轮（#81：原先等满 `AgentTimeouts.stop`）。
+    /// 外壳滤掉 init 那一行，拉长"还没收到 init"这一段。
+    @Test(arguments: ["stop", "end"])
+    func stoppingBeforeTheTurnsInitArrivesDoesNotWaitForIt(_ action: String) async throws {
+        let withoutInit = #""$REAL" "$@" | /usr/bin/python3 -I -u -c 'import sys"# + "\n"
+            + #"for line in sys.stdin: "\"subtype\":\"init\"" in line or print(line, end="", flush=True)'"#
+        try await ClaudeTestbed.run(wrapper: withoutInit, timing: .system) { testbed in
+            try testbed.startConnected()
+            let gate = testbed.model.gate()
+            testbed.on("BUSY-HANG", .held(gate, then: .say("LATE")))
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
+            let session = try #require(testbed.bridge.session(id: id))
+            // 这句话收下（`command_lifecycle` 的 completed）要等这一轮做完，所以另起；问到模型时它早发过 init 了
+            let sending = Task { try await testbed.bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: id) }
+            try await gate.reached()
+            let began = ContinuousClock.now
+            if action == "stop" {
+                try await testbed.bridge.abort(id)
+                #expect(testbed.bridge.session(id: id)?.state == .settled)
+            } else {
+                try await testbed.bridge.end(id)
+                try await eventually("进程收掉") { kill(session.pid, 0) != 0 }
+            }
+            let took = began.duration(to: .now)
+            #expect(took < .seconds(10), "用了 \(took)")
+            gate.openForever()
+            _ = await sending.result
+        }
+    }
+
     /// 接着会话时还没连上就被取消（投送到了截止时刻）：自己起的进程收掉、不再占着这个会话；再接着同一会话只起一个进程，照常说话。
     /// 外壳带着 `slow` 标记时晚 2 秒才起 Claude Code：进程起了、还没连上。
     @Test func aResumeCancelledBeforeItConnectsLeavesNoProcessBehind() async throws {

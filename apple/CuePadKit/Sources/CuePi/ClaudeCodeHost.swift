@@ -32,9 +32,6 @@ final class ClaudeHostedSession: SessionLink {
     let stopPhase = StopPhase()
     /// 收尾过的轮数：停下时据此认出它在等回应的工夫里已经收尾
     var closed = 0
-    var starting = false
-    /// 等 `init` 的停止挂在这里，这一轮开跑或结束时放行；对端不发 `init` 时到 `AgentTimeouts.stop` 放弃
-    let startWaits: PendingReplies<UUID, Void>
     /// 大脑在做的 `/clear`，先发的在前：每个 `result` 结束最早的那个等待
     var clearing: [UUID] = []
     let clearWaits: PendingReplies<UUID, Void>
@@ -53,18 +50,18 @@ final class ClaudeHostedSession: SessionLink {
         self.processes = processes
         self.timing = timing
         brain = nil
-        (closing, startWaits, clearWaits) = Self.waits(timing)
+        (closing, clearWaits) = Self.waits(timing)
     }
 
     init(timing: Timing) {
         self.timing = timing
         brain = BrainSession()
-        (closing, startWaits, clearWaits) = Self.waits(timing)
+        (closing, clearWaits) = Self.waits(timing)
     }
 
-    private static func waits(_ timing: Timing) -> (PendingReplies<UUID, Void>, PendingReplies<UUID, Void>, PendingReplies<UUID, Void>) {
+    private static func waits(_ timing: Timing) -> (PendingReplies<UUID, Void>, PendingReplies<UUID, Void>) {
         func table() -> PendingReplies<UUID, Void> { PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout) }
-        return (table(), table(), table())
+        return (table(), table())
     }
 
     /// 起好的连接；没起或起不来时抛 `sessionEnded`（进程退出后写入同样抛它）
@@ -225,11 +222,9 @@ final class ClaudeHostedSession: SessionLink {
         if let failure { deliveries.failed(failure, in: message) }
         finishTurn(failure: failure)
         apiError = nil
-        started()
         if restart {
             restart = false
             startTurn(at: now)
-            starting = true
         }
         closed += 1
         release()
@@ -252,7 +247,6 @@ final class ClaudeHostedSession: SessionLink {
     private func system(_ message: JSONValue, at now: Date) {
         switch message["subtype"]?.string {
         case "init":
-            started()
             if let model = message["model"]?.string, let id {
                 bridge?.update(id) { session in session.model = self.option(model, current: session.model, in: session.availableModels) }
             }
@@ -299,7 +293,6 @@ final class ClaudeHostedSession: SessionLink {
 
     private func ended() {
         deliveries.close()
-        started()
         release()
         closeClears()
         if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }

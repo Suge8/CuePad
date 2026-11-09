@@ -154,6 +154,31 @@ struct RealHostTests {
         #expect(record.checkpoint.stoppedAt != nil, "会话记录里没有被停下的这一轮：\(record.messages.map(\.text))")
     }
 
+    /// 起来马上点结束、说出第一句马上点停止或结束（同 `RealHostedEndTests` 的那一例，#81）：都不等满 `AgentTimeouts.stop`。
+    @Test(arguments: ["end on open", "stop on first message", "end on first message"])
+    func stoppingOrEndingRightAwayDoesNotWaitOutTheStopLimit(_ moment: String) async throws {
+        let pi = try await PiProcess()
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let host = host(pi, bridge)
+        host.start()
+        defer { stopHostedProcesses(bridge) }
+        pi.model.on("BUSY-HANG", .stream(["Working on it"]))
+        let session = try #require(bridge.session(id: try await host.open(in: pi.cwd, launchToken: "tok-now", name: nil, model: nil, thinking: nil)))
+        if moment != "end on open" { try await bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: session.id) }
+        let began = ContinuousClock.now
+        if moment == "stop on first message" {
+            try await bridge.abort(session.id)
+            try await eventually("停下了") { bridge.session(id: session.id)?.state == .settled }
+        } else {
+            try await bridge.end(session.id)
+            try await eventually("进程退了") { kill(session.pid, 0) != 0 }
+        }
+        let took = began.duration(to: .now)
+        #expect(took < .seconds(10), "用了 \(took)")
+    }
+
     @Test func anIdleHostedSessionExitsAfterTheIdleLimit() async throws {
         let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
