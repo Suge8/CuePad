@@ -3,7 +3,7 @@
 （CuePi/README.md「协议」：扩展改了就升）。版本相同的会话 CuePad 不发 upgrade，跑着的旧扩展就一直不换，按新含义发的命令它照旧含义答。
 是否改了按与 origin/main 的分叉点比（含未提交、未跟踪的文件），不把主线后来的改动算成本分支的；版本要高过分叉点与 origin/main 两边：
 主线在这期间也升过的，同号的两版就是两个扩展。"""
-import subprocess, sys
+import re, subprocess, sys
 
 sys.dont_write_bytecode = True
 from _pi_extension import ENTRY, EXTENSION, extension_version as version  # noqa: E402
@@ -12,6 +12,11 @@ from _pi_extension import ENTRY, EXTENSION, extension_version as version  # noqa
 def git(*args):
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
+
+# 首行是 CuePad 认"这个目录是自己装的"的记号（PiExtension.swift 的 ownershipMarker），删了就把自己装的当成用户的同名目录。
+marker = re.search(r'ownershipMarker = "(.*)"', open("CuePadKit/Sources/CuePi/PiExtension.swift", encoding="utf-8").read())[1]
+if open(ENTRY, encoding="utf-8").readline().rstrip("\n") != marker:
+    sys.exit(f"{ENTRY} 首行必须是 {marker}：CuePad 靠它认出自己装的扩展（PiExtension.ownershipMarker）")
 
 try:
     base = git("merge-base", "HEAD", "origin/main").strip()
