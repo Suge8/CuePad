@@ -131,6 +131,23 @@ import Testing
     #expect(try await cli.hasAttachment(pending) && cli.files.fileURL(for: pending) != nil)
   }
 
+  /// 同步乱序：别的设备的附件记录先到、引用它的卡片后到，中间启动清理一次。别处来的记录不收（收了会把删除同步出去，那台的图就没了）：
+  /// 卡片到了照常有图。
+  @Test func recordFromElsewhereArrivingBeforeItsCardSurvivesCleanup() async throws {
+    let other = try Fixture()
+    let key = try other.store.files.store(pngData(width: 9, height: 9, shade: 0.42))
+    let card = try await other.store.createCard(body: "看 ![](cuepad://file/\(key))")
+    let record = try #require(try RawDB(other.url).rows("SELECT id FROM attachments").first?[0])
+    let attachmentRow = try #require(try await other.store.syncRow(recordName: record))
+    let cardRow = try #require(try await other.store.syncRow(recordName: card.id.uuidString.lowercased()))
+
+    _ = try await store.applyRemote([.save(attachmentRow, systemFields: Data())])
+    _ = try await store.removeStrayFiles(drafts: [])
+    _ = try await store.applyRemote([.save(cardRow, systemFields: Data())])
+    #expect(try await store.hasAttachment(key))
+    #expect(try await store.pendingSync().deletes.isEmpty)
+  }
+
   /// 键来自同步记录：拼不出附件目录外的路径。
   @Test(arguments: ["../cuepad.db", "deadbeef", String(repeating: "0", count: 64), String(repeating: "0", count: 64) + "./x"])
   func unknownOrMalformedKeyIsNotFound(key: String) throws {

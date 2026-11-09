@@ -176,12 +176,13 @@ extension CueStore {
   }
 
   /// 本机已有这个文件、还没有记录时登记附件记录（同步载体），连同保底（`AttachmentFiles.keepUntilUploaded`）。必须在写事务内调用。
-  /// 记录已有的（服务器收下过的同一份内容再存了一次也是）不留保底。
+  /// 记录已有的（服务器收下过的同一份内容再存了一次也是）不留保底。记下是这台设备登记的（本机列 `registeredHere`）：启动清理只收这种。
   func registerAttachment(_ key: String) throws {
     guard try !hasAttachment(key), let metadata = try files.keepUntilUploaded(key) else { return }
     let now = Date.stamp
-    try insert(
-      Attachment(id: UUID(), hash: metadata.hash, byteCount: metadata.byteCount, format: metadata.format, createdAt: now, modifiedAt: now))
+    let attachment = Attachment(id: UUID(), hash: metadata.hash, byteCount: metadata.byteCount, format: metadata.format, createdAt: now, modifiedAt: now)
+    try insert(attachment)
+    try db.run("UPDATE attachments SET registeredHere = 1 WHERE id = ?", [attachment.id])
   }
 }
 
