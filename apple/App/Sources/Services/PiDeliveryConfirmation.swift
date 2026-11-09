@@ -77,13 +77,14 @@ struct PiDeliveryConfirmation {
         uncertain: ShownText
     ) async throws -> DeliveryOutcome {
         if try await received(request) { return .succeeded }
-        // 首份是定点核对；先读再判断旧记录、到期或失联，不把缺期限当作未交出。
+        // 首份是定点核对；先读再判断失联与到期，不把缺期限当作未交出。
         if let first = try await history.first(where: { @Sendable _ in true }), let first {
             try await store.writePiDeliveryReceipts(first.messages)
         }
         if try await received(request) { return .succeeded }
         try Task.checkCancellation()
-        guard let deadline = request.deadlineAt, store.timing.now() < deadline else { return .unconfirmed(uncertain) }
+        // 到期只在 `wait` 的计时里判：走到这里已过期限的（读会话文件慢、交出后 Mac 睡了）在那里当场到期，同样先看它还在不在跑
+        guard let deadline = request.deadlineAt else { return .unconfirmed(uncertain) }
         if let connection, pi.session(id: connection) == nil { return try await lastLook(request, file: file, agent: agent, uncertain: uncertain) }
         return try await wait(request, agent: agent, history: history, connection: connection, file: file, until: deadline, uncertain: uncertain)
     }
