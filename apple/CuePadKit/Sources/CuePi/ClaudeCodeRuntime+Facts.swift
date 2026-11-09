@@ -17,7 +17,7 @@ extension ClaudeCodeRuntime {
             $0.home(of: .claudeCode).appending(path: "projects", directoryHint: .isDirectory)
         },
         channel: { integration, _ in HookFile.claudeCode(home: integration.home(of: .claudeCode), skillDirectory: integration.skillDirectory) },
-        releasesIdleHosted: true, probe: askClaude, brain: { ClaudeHostedSession() }, sharedSkills: .none, projectFolder: ".claude", selfManagedSkills: "synced",
+        releasesIdleHosted: true, probe: askClaude, brain: { ClaudeHostedSession(timing: .system) }, sharedSkills: .none, projectFolder: ".claude", selfManagedSkills: "synced",
         instructionsFile: "rules/AGENTS.md", globalReads: ["CLAUDE.md", "rules/AGENTS.md"], readsFirstOnly: false)
 
     /// stream-json 不存会话、关掉钩子（否则 CuePad 自己的钩子把它报成一个会话）、不起 MCP 服务，控制请求 `initialize` 给模型清单，

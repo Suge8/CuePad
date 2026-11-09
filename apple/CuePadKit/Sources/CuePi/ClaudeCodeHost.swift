@@ -44,13 +44,18 @@ final class ClaudeHostedSession: SessionLink {
     /// 模型目录里每项（别名，如 `haiku`）解析到的 id（`claude-haiku-5-5`）：每轮报的是后者，界面认前者
     private var resolved: [String: String] = [:]
 
-    init(bridge: PiBridge, timing: Timing = .system) {
+    /// 等收尾的时限与进程收尾的宽限（`ChildProcess.stop()`）都按 `timing` 量
+    let timing: Timing
+
+    init(bridge: PiBridge, timing: Timing) {
         self.bridge = bridge
+        self.timing = timing
         brain = nil
         (closing, startWaits, clearWaits) = Self.waits(timing)
     }
 
-    init(timing: Timing = .system) {
+    init(timing: Timing) {
+        self.timing = timing
         brain = BrainSession()
         (closing, startWaits, clearWaits) = Self.waits(timing)
     }
@@ -69,7 +74,7 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     func launch(
-        _ executable: URL, _ arguments: [String], directory: URL, environment: [String: String], timing: Timing = .system
+        _ executable: URL, _ arguments: [String], directory: URL, environment: [String: String], timing: Timing
     ) async throws -> ChildProcess {
         let stream = try await ClaudeStream(executable: executable, arguments: arguments, directory: directory, environment: environment, timing: timing)
         self.stream = stream

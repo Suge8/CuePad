@@ -11,6 +11,8 @@ import Testing
 /// 登录是假密钥、不带订阅令牌，辅助流量关掉（见 `environment`），零网络。
 /// 终端会话跑在私有 tmux 服务器里（`tmux -L`），结束时按确切 pid 停掉 Claude Code 与那个 tmux 服务器。
 let pinnedClaude = PinnedAgent.claude
+/// 录像框架登记各家可执行文件用的名字（`AgentTape.realExecutables`）：框架整体删除前不动它，Claude 已没有录像带
+let claudeURL: URL? = pinnedClaude.executable
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
 let claudeTestModel = "haiku", claudeOtherModel = "sonnet"
 
@@ -155,9 +157,6 @@ final class ClaudeTestbed {
         }
         let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
         terminals.append(terminal)
-        // 输入框画出来之前，收件箱收到的话即使带着令牌也按来路不明挂起（2.1.318 实测：13 个终端并行时上桥就发，12 个里挂起 3 个；
-        // 等到输入框再发，36 个都送到）。用户在 CuePad 上给终端会话发话时它早已起好，测试照这个先后。
-        try await eventually("终端里的 Claude Code 画出输入框") { await terminal.screen.contains(/for shortcuts|permissions on/) }
         return terminal
     }
 

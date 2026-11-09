@@ -19,14 +19,15 @@ import Testing
 ///
 /// - pi：没有录像带，总连钉住的真 Pi（`PinnedAgent.pi`，`xc.sh agents install pi`；没装时跳过、列为未覆盖），模型是本用例的假模型
 ///   （`FakeModel`，Chat Completions），零网络；FireCode 随 Pi 钉住（`CUEPAD_FIRECODE_SOURCE` 可换成另一份检出）；
-/// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
+/// - codex：没有录像带，总连钉住的真 Codex（`PinnedAgent.codex`，`xc.sh agents install codex`；没装时跳过、列为未覆盖），模型是本用例的假模型
+///   （`FakeModel`，Responses，经隔离 `CODEX_HOME/config.toml` 的 `model_providers` 指过去），零网络、不用任何登录；
 /// - claude：没有录像带，总连钉住的真 Claude Code（`PinnedAgent.claude`），模型是测试台的假模型（`FakeModel`，Anthropic Messages，`ClaudeTestbed`），
 ///   假密钥、不带订阅登录、关辅助流量，零网络；终端里的 Claude Code 也是它（要 tmux）；
 /// - grok：没有录像带，总连钉住的真 Grok（`PinnedAgent.grok`，`xc.sh agents install grok`；没装时跳过、列为未覆盖），模型是本用例的假模型
 ///   （`FakeModel`，Responses），零网络、不用任何登录；
 /// - dsh：没有录像带，总连钉住的真 dsh（`PinnedAgent.dsh`，`xc.sh agents install dsh`；没装时跳过、列为未覆盖），模型是本用例的假模型
 ///   （`FakeModel`，Messages，经 `DEEPSEEK_BASE_URL`；搜索的地址 `DEEPSEEK_SEARCH_BASE_URL` 也指过去），key 是假的，零网络；
-/// - 大脑（`RealBrainTests`）除 Pi、OpenCode、dsh、Grok、Claude Code（假模型，剧本 `playBrain`、`playGrokBrain`）外用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
+/// - 大脑（`RealBrainTests`）除 Pi、Codex、OpenCode、dsh、Grok、Claude Code（假模型，剧本 `playBrain`、`playGrokBrain`）外用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
 ///
@@ -41,7 +42,7 @@ enum RealAgents {
         .compactMap { AgentKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) })
 
     static func mode(of agent: AgentKind) -> TapeMode {
-        if [.opencode, .pi, .grok, .dsh, .claudeCode].contains(agent) { return .live }
+        if [.opencode, .pi, .codex, .grok, .dsh, .claudeCode].contains(agent) { return .live }
         return recording.contains(agent) ? .record : .replay
     }
 
@@ -49,7 +50,7 @@ enum RealAgents {
     static func missing(_ agent: AgentKind) -> String? {
         switch agent {
         case .pi: pinnedPi.uncovered
-        case .codex: realCodexURL != nil && FileManager.default.fileExists(atPath: realCodexAuth.path) ? nil : "本机没装或没登录 codex"
+        case .codex: pinnedCodex.uncovered
         case .claudeCode: pinnedClaude.uncovered
         case .opencode: OpenCodeSandbox.pinned.uncovered
         case .grok: pinnedGrok.uncovered

@@ -6,10 +6,28 @@ import Testing
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.live(.codex, "断言的是伪终端里真终端界面的输出与按键、真常驻服务"), .serialized, .timeLimit(.minutes(6)))
+/// 断言的是伪终端里真终端界面的输出与按键、真常驻服务（`CodexTerminal`）。常驻服务的目录是共用的 /tmp/codex-daemon-<uid>，一次只跑一个（`.serialized`），
+/// 收尾时检查那个目录只剩跑之前的样子（`DaemonDirectory`）。模型是假模型，剧本在 `play`。
+@Suite(RealAgents.taped(.codex), .serialized, .timeLimit(.minutes(6)))
 struct RealCodexTerminalTests {
+    /// 用到的话（写成真模型也照做的英文）：回答一个词、跑一个慢命令再回答、要一个需要批准的命令、没有的模型报错。
+    private func play(_ model: FakeModel) {
+        model.playBrain(chain: FakeGate())
+        model.on({ $0.prompt.contains("Run the shell command `sleep") }) { request in
+            let seconds = request.prompt.firstMatch(of: /`sleep (\d+)`/).map { String($0.1) } ?? "60"
+            let word = request.prompt.firstMatch(of: /word ([A-Z]+)\./).map { String($0.1) } ?? "DONE"
+            return request.step == 0 ? .call("exec_command", ["cmd": "sleep \(seconds)"]) : .say(word)
+        }
+        model.on("Make the file ") { request in
+            let file = request.prompt.firstMatch(of: /Make the file (\S+)/).map { String($0.1) } ?? "x"
+            return request.step == 0 ? codexEscalated("echo ok > \(file)") : .say("DONE")
+        }
+        model.on({ $0.model == "no-such-model-xyz" }) { _ in .fail("The model no-such-model-xyz does not exist", status: 404) }
+    }
+
     @Test func aTerminalSessionIsSeenAndDrivenFromCuePad() async throws {
-        try await withCodexRig(approvals: "on-request") { rig in
+        try await withCodexRig(approvals: "on-request", daemon: true) { rig in
+            play(rig.model)
             let terminal = try CodexTerminal(rig.codex)
             defer { terminal.stop() }
             try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
@@ -81,13 +99,28 @@ struct RealCodexTerminalTests {
     }
 
     @Test func aSubagentLeftRunningInTheTerminalIsReadBackBeforeSettling() async throws {
-        try await withCodexRig { rig in
+        try await withCodexRig(model: "gpt-6-luna", daemon: true) { rig in
+            // 子代理的请求停在闸门上，代替原来让它 sleep
+            let gate = rig.model.gate()
+            // 假模型答得太快：子代理在 CuePad 连上常驻服务之前就起了，CuePad 就认不出它、一直不进“等子代理”（去掉这一步实测超时）。真模型要几秒，所以派活的那一步等 CuePad 连上再放行
+            let spawn = rig.model.gate()
+            // 终端界面另发一个起名的请求（话嵌在里面），只认以这句开头的
+            rig.model.on({ $0.prompt.hasPrefix("Spawn exactly one subagent with task name fruit") }) { request in
+                request.step == 0
+                    ? .held(spawn, then: .call("spawn_agent", ["task_name": "fruit", "message": "Child task: fruit. Reply with BANANA.", "fork_turns": "none"]))
+                    : .say("DISPATCHED")
+            }
+            rig.model.on({ $0.said.contains { $0.contains("Spawn exactly one subagent") } && $0.messages.contains { $0.text.contains("BANANA") } }) { _ in .say("BANANA") }
+            rig.model.on("Child task: fruit", .held(gate, then: .say("BANANA")))
             let terminal = try CodexTerminal(rig.codex)
             defer { terminal.stop() }
             try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
             let log = ChangeLog(rig.bridge)
 
-            try terminal.type("Spawn exactly one subagent with task name fruit. Tell it: sleep 30 seconds with the sleep tool, then reply with exactly the word BANANA. Do not wait for it: end your turn right away, replying only DISPATCHED. When its result reaches you later, reply with exactly the word it sent you.")
+            try terminal.type("Spawn exactly one subagent with task name fruit and do not wait for it.")
+            try await spawn.reached()
+            try await eventually("CuePad 连上了常驻服务") { rig.runtime.daemon != nil }
+            spawn.open()
             try await eventually("这一轮结束、在等子代理") { rig.session?.state == .delegating }
             let session = try #require(rig.session)
 
@@ -106,6 +139,7 @@ struct RealCodexTerminalTests {
             await runtime.stop()()
             later.stop()
 
+            gate.openForever()
             try terminal.press("my half-typed draft")
             try await eventually("读到结果后歇下") {
                 rig.session.map { $0.state == .settled && rig.replies($0).last?.uppercased().contains("BANANA") == true } ?? false
@@ -123,7 +157,8 @@ struct RealCodexTerminalTests {
 
     /// 原话只在开出线程的连接上，常驻服务只广播 systemError。
     @Test func aFailedTerminalTurnShowsTheReason() async throws {
-        try await withCodexRig { rig in
+        try await withCodexRig(daemon: true) { rig in
+            play(rig.model)
             let terminal = try CodexTerminal(rig.codex, arguments: ["-m", "no-such-model-xyz"])
             defer { terminal.stop() }
             try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
@@ -135,7 +170,8 @@ struct RealCodexTerminalTests {
     }
 
     @Test func aPermissionRequestGoesWhereThePersonIs() async throws {
-        try await withCodexRig(approvals: "on-request") { rig in
+        try await withCodexRig(approvals: "on-request", daemon: true) { rig in
+            play(rig.model)
             let terminal = try CodexTerminal(rig.codex)
             defer { terminal.stop() }
             try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
@@ -145,7 +181,7 @@ struct RealCodexTerminalTests {
             // 允许的那一项：联网时是 "Yes, just this once"
             let approval = "Yes, "
             @MainActor func fetch(_ file: String) async throws {
-                let text = "Run exactly this shell command, requesting escalated sandbox permissions up front because it needs network access: curl -s -o \(file) https://example.com"
+                let text = "Make the file \(file)"
                 try await rig.bridge.send(PiMessage(text: text), to: id)
             }
             // 在终端里答：确认框弹出来后（从 `since` 起找）按 y，界面偶尔吞掉刚弹出时的按键，还在等就每秒再按；在 CuePad 里答：每个问题答一次

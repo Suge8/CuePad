@@ -6,7 +6,6 @@ import Testing
 @testable import CuePi
 
 private let liveRuntimes = AgentKind.allCases.filter { RealAgents.runs($0) && RealAgents.mode(of: $0) != .replay }
-private let home = FileManager.default.homeDirectoryForCurrentUser
 
 /// 结束后进程连同它起的子进程（MCP 服务等）都退出、各家的历史里没有这次对话：断言的是真进程树与各家真实的历史目录，回放不出来，
 /// 只在录制或直连时连真运行时跑。
@@ -34,7 +33,8 @@ struct RealBrainProcessTests {
         case .pi:
             #expect(((try? FileManager.default.contentsOfDirectory(atPath: rig.sessions.path)) ?? []) == [])
         case .codex:
-            #expect(try codexSessions(mentioning: rig.marker) == [])
+            // CODEX_HOME 是这次运行的临时目录（`RealBrainTests.Rig`），会话不落进真实的 ~/.codex
+            #expect(codexSessions(mentioning: rig.marker, in: rig.directory.deletingLastPathComponent().appending(path: "codex/sessions")) == [])
         case .claudeCode:
             // 用户的配置目录（`CLAUDE_CONFIG_DIR`）是测试台的隔离目录（`ClaudeTestbed.isolatedEnvironment`）：会话没落进去，目录可能都没有
             #expect(claudeTranscripts(for: rig.marker, in: rig.directory.deletingLastPathComponent().appending(path: "config/projects")) == [])
@@ -86,15 +86,9 @@ struct RealBrainProcessTests {
         return tree
     }
 
-    private func codexSessions(mentioning marker: String) throws -> [String] {
-        let root = home.appending(path: ".codex/sessions")
-        let recent = Date().addingTimeInterval(-600)
-        let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.contentModificationDateKey])?.compactMap { $0 as? URL } ?? []
-        return files.filter { file in
-            guard file.pathExtension == "jsonl", let modified = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
-                  modified > recent, let text = try? String(contentsOf: file, encoding: .utf8) else { return false }
-            return text.contains(marker)
-        }.map(\.path)
+    private func codexSessions(mentioning marker: String, in root: URL) -> [String] {
+        let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? []
+        return files.filter { $0.pathExtension == "jsonl" && ((try? String(contentsOf: $0, encoding: .utf8))?.contains(marker) ?? false) }.map(\.path)
     }
 
     private func claudeTranscripts(for marker: String, in root: URL) -> [String] {
