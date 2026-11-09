@@ -101,6 +101,7 @@ extension DeliveryMigrationTests {
             ALTER TABLE deliveryRequests DROP COLUMN sessionBindingRevision;
             DROP INDEX piSessionStates_createdForTaskID;
             ALTER TABLE piSessionStates DROP COLUMN createdForTaskID;
+            ALTER TABLE attachments DROP COLUMN registeredHere;
             PRAGMA user_version = 92;
             """)
     }

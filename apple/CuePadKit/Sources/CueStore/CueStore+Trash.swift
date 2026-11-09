@@ -130,7 +130,7 @@ extension CueStore {
 
   /// 候选附件中已无人引用的（`isAttachmentReferenced`）：在事务里删记录，返回它们的键，文件由 `removingFiles` 在提交后删——
   /// 事务中途失败回滚时，记录还在、文件也还在。提交后没删成的文件成了没记录没引用的游离文件，下次启动的 `removeStrayFiles` 会收走。
-  /// 只看被删的东西引用过的附件，不做全表扫描：刚粘贴、正文尚未保存的附件不能被顺手回收。
+  /// 只看被删的东西引用过的附件，不做全表扫描：别的没人用的文件归启动清理。
   /// 不处理跨设备竞态：另一台设备可能刚好在引用同一个键。
   func reclaimAttachments(_ candidates: Set<String>) throws -> [String] {
     var reclaimed: [String] = []

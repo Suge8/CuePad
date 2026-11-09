@@ -44,8 +44,9 @@ import Testing
 
     try await store.prunePiMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
 
-    #expect(try await !store.hasAttachment(only) && store.files.fileURL(for: only) == nil)
-    #expect(try await store.hasAttachment(shared) && store.files.fileURL(for: shared) != nil)
+    let cached = { (key: String) in FileManager.default.fileExists(atPath: store.files.directory.appending(path: key).path) }
+    #expect(try await !store.hasAttachment(only) && !cached(only))
+    #expect(try await store.hasAttachment(shared) && cached(shared))
   }
 
   /// 超长正文只截文字，图片引用不能被切断。

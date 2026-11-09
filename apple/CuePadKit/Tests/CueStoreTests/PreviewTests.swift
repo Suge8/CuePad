@@ -46,7 +46,8 @@ import Testing
 
     let quiet = try await store.previews(of: "quiet"), active = try await store.previews(of: "active")
     #expect(quiet.isEmpty && active.count == 1)
-    #expect(store.files.fileURL(for: shared.key) != nil && store.files.fileURL(for: only.key) == nil)
+    let cached = { (key: String) in FileManager.default.fileExists(atPath: store.files.directory.appending(path: key).path) }
+    #expect(cached(shared.key) && !cached(only.key))
     #expect(try RawDB(fixture.url).rows("SELECT hash FROM attachments") == [[shared.hash]])
   }
 }

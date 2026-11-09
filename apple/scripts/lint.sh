@@ -123,7 +123,8 @@ FORBID_IN="App/Tests CuePadKit/Tests" forbid "测试不碰 UserDefaults.standard
 # 拼装写法（一个个字段传）是演示与测试图方便的；真实写入只经 PiSessionSnapshot 的 update(_:)。参数可能换行，所以跨行认
 FORBID_U=1 forbid "生产代码不调 PiStateRecorder.update(sessionID: …)：它只给 UI/Debug 与测试拼状态用；真实会话的状态经 PiSessionMirror 产出 PiSessionSnapshot，再 update(_:)" \
   '(?<!func )\bupdate\(\s*sessionID:' 'App/Sources/UI/Debug/**' '**/Tests/**'
-
+FORBID_IN="CuePadKit/Sources/CueStore App/Sources/Services/AppServices+StrayFiles.swift" forbid "附件文件与资料库不按文件时刻定去留：拷贝、还原、同步会改写或带走时刻，按时刻猜「刚存的」曾删掉写者还没提交引用的文件（#102）。谁还要它只看库里的记录与引用、运行的持有（AttachmentRun 的锁）与草稿" \
+  '\b(?:(?:(?:content|attribute)ModificationDate|contentAccessDate|creationDate|modificationDate|addedToDirectoryDate)(?:Key)?|st_[acmb]tim(?:e|espec)\w*|storedBefore)\b'
 # 长按菜单带预览要跨行认（菜单闭包在中间），单独一条多行规则
 hits="$(rg -U --pcre2 --line-number --no-heading --type swift --glob '!App/Sources/UI/iOS/Components.swift' \
   -e '\.contextMenu\s*(?:\(menuItems:|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}\s*preview:)' -- App CuePadKit)" && rc=0 || rc=$?
