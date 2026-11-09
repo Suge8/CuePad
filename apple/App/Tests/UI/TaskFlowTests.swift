@@ -29,13 +29,15 @@ struct TaskFlowTests {
 
         // 开始：正文连同标题交出去；话在路上、没送到都看会话那一格，不再给"开始"
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
+        let session = try #require(try await store.allPiSessionStates().first)
         let delivers = Mutex(false)
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request, _ in
             guard delivers.withLock({ $0 }) else { return .failed(.verbatim("会话在送达前关掉了")) }
             _ = try? await store.recordSend(request.content, to: atlas, card: request.cardID)
             return .succeeded
         }
-        let request = try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
+        await workspace.speak(Outgoing.text(of: task), to: .session(session, mode: .send, card: task.id)).value
+        let request = try #require(try await store.deliveryRequests().first)
         guard case .agent(let sending, _) = try await next(task) else { throw Unexpected.next }
         #expect(sending.isRunning && sending.undelivered == nil)
         try await executor.start()
@@ -45,7 +47,8 @@ struct TaskFlowTests {
 
         // 重发送达：任务进行中并记着会话，正文留在任务上
         delivers.withLock { $0 = true }
-        let renewed = try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
+        await workspace.speak(Outgoing.text(of: task), to: .session(session, mode: .send, card: task.id)).value
+        let renewed = try #require(try await store.deliveryRequests().first { $0.id != request.id })
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "s1" }
         #expect(try await store.outcome(of: renewed).status == .known(.succeeded))
         await executor.stop()

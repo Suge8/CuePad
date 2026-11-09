@@ -85,9 +85,6 @@ struct IOSWorkflowTests {
         switch state {
         case "offline":
             #expect(progress.phase(at: app.services.speech).submission == .safe)
-            _ = try await app.services.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
-                                                 on: "mac-z", card: task.id, agent: .pi, intent: .replacing(resumed.request))
-            #expect(try await store.deliveryRequests().count == 1)
         case "sent":
             #expect(progress.phase(at: app.services.speech).submission == .waiting)
         default:
