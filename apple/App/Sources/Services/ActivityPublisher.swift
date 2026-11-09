@@ -40,7 +40,7 @@ final class ActivityPublisher {
             for try await _ in source.updates() { changed.yield() }
         }
         let availability: @MainActor @Sendable () async throws -> Void = {
-            for await _ in Observations({ (services.syncStatus.reachesMac && services.knowsSyncedFacts, services.speech) }) { changed.yield() }
+            for await _ in Observations({ (services.syncState.status.reachesMac && services.knowsSyncedFacts, services.speech) }) { changed.yield() }
         }
         let publishing: @MainActor @Sendable () async throws -> Void = {
             try await self.publish(changes, retrying: changed, services: services)
@@ -83,7 +83,7 @@ final class ActivityPublisher {
 
     /// 订阅只负责叫醒；网络返回时订阅重读未必已送到，不以它缓存的那一份证明问题仍有效。
     private func current(_ services: AppServices) throws -> Publication? {
-        guard services.syncStatus.reachesMac, services.knowsSyncedFacts else { return nil }
+        guard services.syncState.status.reachesMac, services.knowsSyncedFacts else { return nil }
         let read = try services.store.snapshot { try CueReading.Read.read(from: $0, widget: false) }.value
         guard let activity = read.activity, activity.publisher == services.hostID else { return nil }
         let now = AppServices.cueNow(read.digest, at: services.speech, local: CueNow.Local(waiting: nil, here: nil))

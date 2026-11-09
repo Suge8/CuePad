@@ -13,13 +13,13 @@ struct SyncRow: View {
     @State private var showsDecision = false
     @State private var showsIssues = false
     @State private var confirmErase = false
-    /// 这一轮同步中已久过 `Pending.delay`（`AppServices.shownSync`）。
+    /// 这一轮同步中已久过 `Pending.delay`（`ShownSync`）。
     @State private var syncLasts = false
 
     private enum Fix { case decide, openSettings, update, issues }
 
     var body: some View {
-        let shown = services.shownSync(lasting: syncLasts), summary = shown.summary
+        let shown = ShownSync(services, lasting: syncLasts), summary = shown.summary
         let fix = fix
         SettingRow(
             title: "iCloud 同步", icon: Image(summary.icon), tone: tone(summary), busy: shown.busy, status: status(summary),
@@ -51,25 +51,25 @@ struct SyncRow: View {
         // 状态始终有一行：短句不留额外空白，长句截断；完整说明在悬停提示里。
         .lineLimit(1)
         .confirmsErase($confirmErase, choices: choices, services: services)
-        .pending(services.syncStatus == .syncing, shown: $syncLasts)
+        .pending(services.syncState.status == .syncing, shown: $syncLasts)
     }
 
     private var fix: Fix? {
-        switch services.syncStatus {
+        switch services.syncState.status {
         case .needsDecision: .decide
         case .noAccount: .openSettings
         case .outdated: .update
-        default: services.syncIssues.isEmpty ? nil : .issues
+        default: services.syncState.issues.isEmpty ? nil : .issues
         }
     }
 
     private func tone(_ summary: SyncSummary) -> StatusTone {
-        choices.failure != nil || !services.syncIssues.isEmpty ? .failure : summary.tone
+        choices.failure != nil || !services.syncState.issues.isEmpty ? .failure : summary.tone
     }
 
     private func status(_ summary: SyncSummary) -> Dotted {
         if let failure = choices.failure { return Dotted(failure) }
-        if fix == .issues { return Dotted(String(localized: "\(summary.title)，\(services.syncIssues.count) 条记录没能同步")) }
+        if fix == .issues { return Dotted(String(localized: "\(summary.title)，\(services.syncState.issues.count) 条记录没能同步")) }
         return Dotted(summary.title)
     }
 
@@ -100,10 +100,10 @@ struct SyncRow: View {
     }
 
     private var issues: some View {
-        SettingPopover(title: "\(services.syncIssues.count) 条记录没能同步", width: 400) {
+        SettingPopover(title: "\(services.syncState.issues.count) 条记录没能同步", width: 400) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.group) {
-                    ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
+                    ForEach(Array(services.syncState.issues.enumerated()), id: \.offset) { _, issue in
                         VStack(alignment: .leading, spacing: Spacing.hair) {
                             Text(issue.text).font(Typography.meta).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
                             if let detail = issue.detail {
