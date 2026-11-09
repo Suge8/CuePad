@@ -8,7 +8,7 @@ import Foundation
 ///
 /// 读一遍进程表要两三百毫秒（两千多个进程时实测，机器忙时要几秒），找到进程时还要等它们退出：测试跑着时不在主线程上调，
 /// 也不在 Swift 并发的协作线程上调（只有核数那么多，几个用例同时收尾就占满，全进程的 async 都停下）——异步代码用 async 的那个。
-/// 主线程或协作线程一停，同时在跑的回放与 CuePad 跟着停（回放换通道前要等主线程排着的处理跑完），别的用例的等待就此超时。
+/// 主线程或协作线程一停，同时在跑的 CuePad 跟着停，别的用例的等待就此超时。
 public enum TestProcesses {
   public static func stop(under directories: [URL]) async {
     await withCheckedContinuation { done in

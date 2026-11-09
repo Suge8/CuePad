@@ -6,9 +6,8 @@ import Testing
 @testable import CuePi
 
 /// MCP 是 Fixtures/mcp-echo.mjs 替身。
-/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；Pi、OpenCode、dsh 没有录像带，总连钉住的真 Agent 与本用例的假模型。
+/// 各家连钉住的真 Agent 与本用例的假模型（`RealAgents`）；模型、强度用下面的变量换。
 private let environment = ProcessInfo.processInfo.environment
-private let runtimes = AgentKind.allCases.filter(RealAgents.runs)
 /// Pi、Codex、OpenCode、dsh、Claude Code 连本用例的假模型（`FakeModel`，剧本 `playBrain`），Grok 同（`playGrokBrain`）
 private let cheapModels: [AgentKind: String] = [
     .pi: "fake/echo", .codex: codexTestModel, .claudeCode: "haiku", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
@@ -21,23 +20,17 @@ private let otherModels: [AgentKind: String] = [
     .grok: "grok-4.5", .dsh: "deepseek-official/deepseek-v4-pro",
 ]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
-private let home = FileManager.default.homeDirectoryForCurrentUser
 /// 缺省 off：最便宜，Codex、Claude Code 还会走夹取
 private let effort = environment["CUEPAD_BRAIN_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .off
 
-private func executable(_ name: String) -> URL? {
-    let directories = (environment["PATH"] ?? "").split(separator: ":").map { URL(filePath: String($0)) } + [home.appending(path: ".local/bin")]
-    return directories.map { $0.appending(path: name) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
-}
-
 @MainActor
-@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode, .grok, .dsh), RealAgents.timeLimit(.minutes(5)))
+@Suite
 struct RealBrainTests {
     @MainActor
     final class Rig {
         let runtime: AgentKind
-        /// 回放时固定（录下的命令行里有它）；连真运行时随机，好在各家的历史里认出这一次
-        let marker = AgentTape.current == nil ? "cue-\(UUID().uuidString.prefix(8).lowercased())" : "cue-tape"
+        /// 随机：好在进程树与各家的历史里认出这一次
+        let marker = "cue-\(UUID().uuidString.prefix(8).lowercased())"
         let directory: URL
         let echoLog: URL
         let sessions: URL
@@ -75,14 +68,13 @@ struct RealBrainTests {
             default: [String: String]()
             }
             let config = CueBrainConfig(
-                runtime: runtime, executable: runtime == .opencode ? OpenCodeSandbox.pinned.executable : AgentTape.executable(runtime.facts.command),
+                runtime: runtime, executable: RealAgents.pinned(runtime).executable,
                 model: environment["CUEPAD_BRAIN_MODEL_\(runtime.rawValue.uppercased())"] ?? cheapModels[runtime], effort: effort,
                 systemPrompt: "You are Cue, a test assistant. Your codename is \(codename). Keep answers to one short sentence. When asked to echo something, call the echo tool.",
                 workingDirectory: directory,
-                mcp: [try #require(executable("node")).path, echoServer.path, marker],
+                mcp: [try #require(ExecutableLocator.standard.candidates("node").first).path, echoServer.path, marker],
                 // Pi 的会话落盘位置指到这里：`--no-session` 生效的话它一直是空的（不去翻用户的 ~/.pi）
                 environment: ["MCP_ECHO_LOG": echoLog.path, "PI_CODING_AGENT_SESSION_DIR": sessions.path].merging(sandbox?.environment ?? agentHome) { $1 })
-            AgentTape.current?.watch(root)
             brain = try await config.startBrain()
             let events = brain.events
             Task { [weak self] in for await event in events { self?.events.append(event) } }
@@ -126,8 +118,8 @@ struct RealBrainTests {
         try outcome.get()
     }
 
-    @Test(arguments: runtimes) func aMessageGetsAReplyContextAndAFinishedTurn(_ runtime: AgentKind) async throws {
-        AgentTape.use(runtime)
+    @Test(arguments: AgentKind.allCases) func aMessageGetsAReplyContextAndAFinishedTurn(_ runtime: AgentKind) async throws {
+        try RealAgents.require(runtime)
         try await withRig(runtime) { rig in
         try await rig.brain.send("What is your codename? Reply with only the codename.")
         try await rig.finished()
@@ -141,8 +133,8 @@ struct RealBrainTests {
         }
     }
 
-    @Test(arguments: runtimes) func anImageIsSeen(_ runtime: AgentKind) async throws {
-        AgentTape.use(runtime)
+    @Test(arguments: AgentKind.allCases) func anImageIsSeen(_ runtime: AgentKind) async throws {
+        try RealAgents.require(runtime)
         try await withRig(runtime) { rig in
         #expect(rig.brain.seesImages)
         try await rig.brain.send("What color is this image? Reply with only the color name in English.", images: [PiImage(mimeType: "image/png", data: redPNG)], id: UUID())
@@ -153,8 +145,8 @@ struct RealBrainTests {
         }
     }
 
-    @Test(arguments: runtimes) func aMessageDuringATurnJoinsThatTurn(_ runtime: AgentKind) async throws {
-        AgentTape.use(runtime)
+    @Test(arguments: AgentKind.allCases) func aMessageDuringATurnJoinsThatTurn(_ runtime: AgentKind) async throws {
+        try RealAgents.require(runtime)
         try await withRig(runtime) { rig in
         try await rig.brain.send("""
             Call the echo tool with the text "x". Then call it again with the exact text it returned, and keep doing that, \
@@ -174,8 +166,8 @@ struct RealBrainTests {
 
     /// 这一轮唯一的一次请求模型还在飞时再说一句：收下它的那一轮照它回答（Claude Code 在这一轮收尾后另开一轮收下，Codex 在这一轮里
     /// 再请求一次，Grok 等排着的第一句跑起来再插进这一轮），收下（`received`）报在那一轮里，不记到只回答了第一句的那一轮上；每句话只收下一次。
-    @Test(arguments: runtimes) func aMessageSentDuringTheLastRequestIsReceivedByTheTurnThatAnswersIt(_ runtime: AgentKind) async throws {
-        AgentTape.use(runtime)
+    @Test(arguments: AgentKind.allCases) func aMessageSentDuringTheLastRequestIsReceivedByTheTurnThatAnswersIt(_ runtime: AgentKind) async throws {
+        try RealAgents.require(runtime)
         try await withRig(runtime) { rig in
         let first = UUID(), second = UUID()
         try await rig.brain.send("Reply with only the single word ALPHA.", images: [], id: first)
@@ -189,8 +181,8 @@ struct RealBrainTests {
         }
     }
 
-    @Test(arguments: runtimes) func configureSwitchesModelInPlace(_ runtime: AgentKind) async throws {
-        AgentTape.use(runtime)
+    @Test(arguments: AgentKind.allCases) func configureSwitchesModelInPlace(_ runtime: AgentKind) async throws {
+        try RealAgents.require(runtime)
         try await withRig(runtime) { rig in
         try await rig.brain.send("Remember the word PAPAYA. Reply with only OK.")
         try await rig.finished()
@@ -213,8 +205,8 @@ struct RealBrainTests {
         }
     }
 
-    @Test(arguments: runtimes) func itCannotWriteFiles(_ runtime: AgentKind) async throws {
-        AgentTape.use(runtime)
+    @Test(arguments: AgentKind.allCases) func itCannotWriteFiles(_ runtime: AgentKind) async throws {
+        try RealAgents.require(runtime)
         try await withRig(runtime) { rig in
         try await rig.brain.send("Create a file named hack.txt in the current working directory containing the text x. Use any tool you have, try hard.")
         try await rig.finished()

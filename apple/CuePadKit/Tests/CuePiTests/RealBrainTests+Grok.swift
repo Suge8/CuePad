@@ -9,9 +9,8 @@ extension RealBrainTests {
     /// 最后一次请求结束之后、这一轮收尾之前插进的话，Grok 1.0.70 把它们搁浅，之后按先后各开一轮：每句由自己那一轮收下、各得到回答。
     /// 第一句的回答停在闸门上，放行后等到 CuePad 收到这次请求的上下文用量（请求已结束）再插话，窗口因此是定的
     /// （实测 20/20 三轮各收一句；请求还没结束时插话则 20/20 并进同一轮，那是 `aMessageDuringATurnJoinsThatTurn` 的路径）。
-    @Test(.enabled(if: RealAgents.runs(.grok), "没装 Grok"))
+    @Test(RealAgents.needs(.grok))
     func interjectionsStrandedAfterTheLastRequestAreReceivedByTheTurnsGrokOpensForThem() async throws {
-        AgentTape.use(.grok)
         try await withRig(.grok) { rig in
         let model = try #require(rig.model), hang = model.gate()
         model.on({ $0.prompt.contains("single word ALPHA") }) { _ in .stream(["ALPHA"], until: hang) }

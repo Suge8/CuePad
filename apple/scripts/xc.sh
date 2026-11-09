@@ -59,7 +59,7 @@ export TEST_RUNNER_CUEPAD_TEST_TIME_LIMIT=$TEST_TIME_LIMIT
 # 测试里起的 Pi（连同 CuePad 托管起的，它们继承测试进程的环境）不联网查更新：Pi 只认这个环境变量，没有设置项
 export TEST_RUNNER_PI_OFFLINE=1
 # 同时跑的测试最多这么多个（Swift Testing 的并行宽度；不限时它把用例全数同时起）：测试起的是真 Agent 进程，3 核的 CI 机器上同时起几十个，
-# 连回放的用例都等到超时（实测 76 条）。按核数给，CUEPAD_TEST_WIDTH 覆盖
+# 不少用例等到超时（实测 76 条）。按核数给，CUEPAD_TEST_WIDTH 覆盖
 export TEST_RUNNER_SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH="${CUEPAD_TEST_WIDTH:-$(sysctl -n hw.ncpu)}"
 USAGE="用法：$0 <check|build|strings|test|agents|shot|rec|run|stop|fleet|explore|perf|release|device|provision|activity-log> [mac|ios|ipad|kit] …（见脚本头注释）"
 

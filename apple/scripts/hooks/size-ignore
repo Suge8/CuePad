@@ -1,7 +1,7 @@
 # size.py 不看的文件（不是手写的），.gitignore 的 glob 语法，从仓库根算
 **/*.lock
 **/*.pbxproj
-# 录下的真 Agent 回放
-**/Fixtures/**
+# OpenCode 图片工具结果的原样样本（内嵌整张图的 base64）
+apple/CuePadKit/Tests/CuePiTests/Fixtures/opencode/imageToolResult.json
 # String Catalog：由 xcstringstool 与 strings.py 维护
 **/*.xcstrings

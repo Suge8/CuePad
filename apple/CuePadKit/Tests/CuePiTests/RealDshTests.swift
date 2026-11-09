@@ -8,7 +8,7 @@ import Testing
 /// 托管会话的开工、说话、歇下在 `RealCueStartTests`，这里是 dsh 才有的。真 dsh（钉住的版本）连本用例的假模型。
 /// dsh 的 ACP 实测不发 `session/request_permission`（0.2.1-rc.5：bash 在工作目录里、write 写到工作目录外，都直接执行），所以“权限”一条在这里是它的提问（`ask_user_question`）。
 @MainActor
-@Suite(RealAgents.taped(.dsh), .timeLimit(.minutes(3)))
+@Suite(RealAgents.needs(.dsh), .timeLimit(.minutes(3)))
 struct RealDshTests {
     /// 发送：起的是钉住版本的真 dsh，话到了模型（Messages，带着工具清单），回答回到对话里。
     @Test func aMessageReachesTheModelAndItsAnswerComesBack() async throws {
