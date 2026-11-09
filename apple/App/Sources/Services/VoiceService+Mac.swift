@@ -150,20 +150,40 @@ extension VoiceService {
                 guard self.call === call, self.session == value.session else { return }
                 self.setProjection(value)
                 for reader in self.projectionReaders.values where reader.session == value.session {
-                    let sending = VoiceOperationScope()
-                    do {
-                        try await sending.perform(within: .seconds(2)) {
-                            guard let signaling = self.signaling else { throw VoicePageError.unavailable }
-                            try DebugHooks.voiceProjectionSend()
-                            try await signaling.sendVoice(.projection(value: value), session: reader.session, to: reader.sender)
-                        }
-                    } catch {
-                        // 一次没发出去不等于链路断：断没断只认中转的关闭与离开事件，下一份投影是整份状态，照样补齐
-                        AppServices.log.error("Voice projection not sent: \(String(describing: error))")
-                    }
-                    sending.end()
+                    if await self.sendProjection(value, to: reader) { self.projectionRetries.removeValue(forKey: reader.sender.device)?.cancel() }
+                    else { self.retryProjection(to: reader) }
                 }
             }
+        }
+    }
+
+    private func sendProjection(_ value: VoiceCallProjection, to reader: VoiceSignalHeader) async -> Bool {
+        let sending = VoiceOperationScope()
+        defer { sending.end() }
+        do {
+            try await sending.perform(within: .seconds(2)) {
+                guard let signaling = self.signaling else { throw VoicePageError.unavailable }
+                try DebugHooks.voiceProjectionSend()
+                try await signaling.sendVoice(.projection(value: value), session: reader.session, to: reader.sender)
+            }
+            return true
+        } catch {
+            AppServices.log.error("Voice projection not sent: \(String(describing: error))")
+            return false
+        }
+    }
+
+    /// 一次没发出去不等于链路断（断没断只认中转的关闭、离开与拒收）：每秒补发最新的那份，直到发出、有更新的发出去了，或这个接收者没了；
+    /// 不补的话，之后没有新变化时手机一直停在旧状态。
+    private func retryProjection(to reader: VoiceSignalHeader) {
+        let device = reader.sender.device
+        guard projectionRetries[device] == nil else { return }
+        projectionRetries[device] = Task { [weak self] in
+            while (try? await Task.sleep(for: .seconds(1))) != nil {
+                guard let self, self.projectionReaders[device] == reader, let value = self.projection, value.session == reader.session else { break }
+                if await self.sendProjection(value, to: reader) { break }
+            }
+            if let self, !Task.isCancelled { self.projectionRetries[device] = nil }
         }
     }
 
