@@ -20,6 +20,9 @@ public struct AgentPaths: Sendable, Equatable {
     /// 环境变量是 CuePad 自己的（各家都按家目录读它）：隔离实例与测试经它换到临时目录。
     public var agentsDirectory: URL { directory("CUEPAD_AGENTS_DIR") ?? user(".agents") }
 
+    /// 全局规则的共享文件所在（`AgentLibraryPlaces.globalInstructions`）。环境变量同上，是 CuePad 自己的。
+    public var agentsConfigDirectory: URL { directory("CUEPAD_AGENTS_CONFIG_DIR") ?? xdg("XDG_CONFIG_HOME", ".config").appending(path: "agents", directoryHint: .isDirectory) }
+
     public var userHome: URL { directory("HOME") ?? FileManager.default.homeDirectoryForCurrentUser }
 
     public func sessionsDirectory(of kind: AgentKind) -> URL? { kind.facts.sessionFiles?.directory(self) }
@@ -82,7 +85,6 @@ public struct AgentFacts: Sendable {
     let projectFolder: String
     var selfManagedSkills: String?
     var instructionsFile = "AGENTS.md"
-    var linksGlobalInstructions = true
 }
 
 /// 读不到的技能 CuePad 逐个链到它自己的技能目录（`<配置目录>/skills/<名>`、项目里的 `<projectFolder>/skills/<名>`），整个目录链不行：

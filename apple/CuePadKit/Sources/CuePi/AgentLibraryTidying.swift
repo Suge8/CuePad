@@ -70,7 +70,7 @@ struct LibraryTidying {
     private mutating func mergeGlobal(_ tidy: LibraryTidy, retiring: Set<InstructionSource.Origin>) throws {
         let shared = places.globalInstructions
         try write(tidy.merged(retiring: retiring, texts: texts) ?? "", to: shared)
-        for kind in places.linkedKinds {
+        for kind in places.installed {
             let file = places.globalFile(kind)
             guard !RelativeLink.points(file, to: shared) else { continue }
             if RelativeLink.isLink(file) { continue }
@@ -78,8 +78,6 @@ struct LibraryTidying {
             try RelativeLink.make(at: file, to: shared)
             undo.steps.append(.linked(file, to: shared))
         }
-        let openCode = places.globalFile(.opencode)
-        if places.uses(.opencode), !RelativeLink.isLink(openCode), FileManager.default.fileExists(atPath: openCode.path) { try moveToTrash(openCode) }
         if retiring.contains(.piSystem), FileManager.default.fileExists(atPath: places.piSystem.path) { try moveToTrash(places.piSystem) }
         if retiring.contains(.codexPrompt), let key = CodexPromptKey(places) { try write(key.removed, to: key.config) }
     }

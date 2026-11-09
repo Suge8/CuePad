@@ -22,7 +22,7 @@ struct LibraryInstructionScan {
         var sources: [InstructionSource] = sharedText.map { [source(.shared, shared, $0)] } ?? []
         var readers: [AgentKind] = [], links: [String] = [], unlinked = false
         watch(shared)
-        for kind in places.linkedKinds {
+        for kind in places.installed {
             let file = places.globalFile(kind)
             watch(file)
             if RelativeLink.points(file, to: shared) {
@@ -35,16 +35,6 @@ struct LibraryInstructionScan {
                 unlinked = true
             } else {
                 unlinked = true
-            }
-        }
-        if places.uses(.opencode) {
-            let own = places.globalFile(.opencode)
-            watch(own)
-            if !RelativeLink.isLink(own), let text = LibraryFileReading.content(own) {
-                sources.append(source(.agent(.opencode), own, text))
-                unlinked = true
-            } else if readers.contains(.claudeCode) {
-                readers.append(.opencode)
             }
         }
         let replacements = replacements(places)

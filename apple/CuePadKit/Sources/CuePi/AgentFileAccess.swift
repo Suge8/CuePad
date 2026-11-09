@@ -19,6 +19,7 @@ public struct AgentFileAccess: Sendable {
 
     public var touchesShared: Bool {
         !isolated || paths.agentsDirectory.standardizedFileURL != Self.real.agentsDirectory.standardizedFileURL
+            && paths.agentsConfigDirectory.standardizedFileURL != Self.real.agentsConfigDirectory.standardizedFileURL
     }
 }
 #endif

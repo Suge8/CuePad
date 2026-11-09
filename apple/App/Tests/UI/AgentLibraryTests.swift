@@ -15,6 +15,7 @@ struct AgentLibraryTests {
 
     func home(_ name: String) -> URL { app.directory.appending(path: name, directoryHint: .isDirectory) }
     var agents: URL { home("agents") }
+    var rules: URL { home("config/agents").appending(path: "AGENTS.md") }
     var claude: URL { home("claude") }
     var codex: URL { home("codex") }
     var dsh: URL { home("dsh") }
@@ -87,7 +88,7 @@ struct AgentLibraryTests {
         #expect(RelativeLink.points(dsh.appending(path: "skills/write-swift"), to: agents.appending(path: "skills/development/write-swift")))
         #expect(!exists(dsh.appending(path: "skills/retro")), "第一层的 dsh 自己读得到")
         #expect(!exists(codex.appending(path: "skills/codex-primary-runtime")))
-        #expect(!RelativeLink.isLink(claude.appending(path: "CLAUDE.md")) && !exists(agents.appending(path: "AGENTS.md")), "规则一个字没动")
+        #expect(!RelativeLink.isLink(claude.appending(path: "CLAUDE.md")) && !exists(rules), "规则一个字没动")
         let tidied = try await library("只剩要合并的全局规则") { $0.tidies.map(\.id) == ["global-instructions"] }
         #expect(tidied.skills.allSatisfy(\.unseenBy.isEmpty) && tidied.skills.map(\.name) == ["write-swift", "retro"])
 
@@ -157,8 +158,8 @@ struct AgentLibraryTests {
 
         await #expect(throws: AgentLibraryError.changedSinceTidy) { try await undo.run() }
 
-        #expect(read(agents.appending(path: "AGENTS.md")) == "规则一\n\n规则二\n\n后来加的\n")
-        #expect(RelativeLink.points(claude.appending(path: "CLAUDE.md"), to: agents.appending(path: "AGENTS.md")))
+        #expect(read(rules) == "规则一\n\n规则二\n\n后来加的\n")
+        #expect(RelativeLink.points(claude.appending(path: "CLAUDE.md"), to: rules))
         _ = try await library("读到后来加的") { $0.instruction(.global)?.hash == hash("规则一\n\n规则二\n\n后来加的\n") }
         await quietPeriod(.milliseconds(300))  // 前面那些改动的跟随都过去了：下面这次只能由盯着 SYSTEM.md 读到
         try Data("你是 Pi，改过\n".utf8).write(to: pi.appending(path: "SYSTEM.md"))  // 原地写，不换文件，所在目录不变

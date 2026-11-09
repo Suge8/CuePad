@@ -5,8 +5,11 @@ import Foundation
 /// 2026-10 实测各家怎么读：
 /// - 技能：全局 `~/.agents/skills`、项目 `<文件夹>/.agents/skills`，Pi、Codex、OpenCode 原生读（递归、跟链接）；dsh 只读一层，Claude Code 不读，
 ///   读不到的逐个链到它们自己的技能目录（`SharedSkills`）。
-/// - 全局规则：`~/.agents/AGENTS.md`，Claude Code 的 `CLAUDE.md`、Codex、Pi 的 `AGENTS.md` 链到它；OpenCode 没有自己那份时读 Claude Code 的。
-///   替换基础提示的两份（Pi 的 `SYSTEM.md`、Codex 配置里 `model_instructions_file` 指的）只作比对来源。
+/// - 全局规则：各家只原生读自己配置目录里那份（2026-11 用钉住的版本截请求实测；Claude Code 的是 `CLAUDE.md`，其余是 `AGENTS.md`），
+///   没有哪家读与具体 Agent 无关的位置，所以共享的那份放在 `~/.config/agents/AGENTS.md`（agents.md 规范仓库第 91 号提案的位置，随 `XDG_CONFIG_HOME`），
+///   各家那份都链到它。否决：`~/.agents/AGENTS.md`（只有 dsh 读，而 `~/.agents` 常是仓库，那份是它的项目规则）、`~/AGENTS.md` 与 `~/.config/AGENTS.md`
+///   （在家目录、配置目录下干活的 Agent 往上找会当项目规则再读一遍，后者还常是 dotfiles 仓库）、借某一家的那份（卸掉那家就断）。
+///   OpenCode v2 没有自己那份时不读 Claude Code 的（v1 读）。替换基础提示的两份（Pi 的 `SYSTEM.md`、Codex 配置里 `model_instructions_file` 指的）只作比对来源。
 /// - 项目规则：`<文件夹>/AGENTS.md`；同层有 `CLAUDE.md`、`.claude/CLAUDE.md` 或 `CLAUDE.local.md` 时 Claude Code 不读它（2026-10 官方文档），
 ///   `CLAUDE.md` 链到 AGENTS.md 时经链接读到，同全局。
 struct AgentLibraryPlaces: Sendable {
@@ -64,13 +67,11 @@ struct AgentLibraryPlaces: Sendable {
         }
     }
 
-    var globalInstructions: URL { paths.agentsDirectory.appending(path: "AGENTS.md") }
+    var globalInstructions: URL { paths.agentsConfigDirectory.appending(path: "AGENTS.md") }
 
     func globalFile(_ kind: AgentKind) -> URL {
         paths.home(of: kind).appending(path: kind.facts.instructionsFile)
     }
-
-    var linkedKinds: [AgentKind] { installed.filter(\.facts.linksGlobalInstructions) }
 
     var piSystem: URL { paths.home(of: .pi).appending(path: "SYSTEM.md") }
     var codexConfig: URL { paths.home(of: .codex).appending(path: "config.toml") }

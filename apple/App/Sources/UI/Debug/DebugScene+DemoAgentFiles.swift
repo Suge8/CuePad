@@ -4,15 +4,16 @@ import CueStore
 import Foundation
 
 extension DebugScene {
-    /// 只写进 `xc.sh` 给隔离实例换到库里的各家目录（`CUEPAD_AGENTS_DIR` 等，`app_env.py`）与演示项目绑的文件夹（`DemoLibrary.demoHome`）；没换走（真实位置）就什么都不写。目录里已有东西就不再写（重开、整理过的样子留着）。
+    /// 只写进 `xc.sh` 给隔离实例换到库里的各家目录（`CUEPAD_AGENTS_DIR`、`CUEPAD_AGENTS_CONFIG_DIR` 等，`app_env.py`）与演示项目绑的文件夹（`DemoLibrary.demoHome`）；没换走（真实位置）就什么都不写。目录里已有东西就不再写（重开、整理过的样子留着）。
     static func seedAgentFiles() throws {
         let environment = ProcessInfo.processInfo.environment
-        guard let sharedPath = environment["CUEPAD_AGENTS_DIR"], let claudePath = environment[AgentKind.claudeCode.facts.homeVariable],
+        guard let sharedPath = environment["CUEPAD_AGENTS_DIR"], let rulesPath = environment["CUEPAD_AGENTS_CONFIG_DIR"], let claudePath = environment[AgentKind.claudeCode.facts.homeVariable],
               let piPath = environment[AgentKind.pi.facts.homeVariable], let codexPath = environment[AgentKind.codex.facts.homeVariable],
-              let library = environment[LibraryLocation.environmentKey], sharedPath.hasPrefix(library + "/"),
+              let library = environment[LibraryLocation.environmentKey], sharedPath.hasPrefix(library + "/"), rulesPath.hasPrefix(library + "/"),
               DemoLibrary.demoHome.hasPrefix(library + "/")
         else { return }
         let shared = URL(filePath: sharedPath, directoryHint: .isDirectory)
+        let rules = URL(filePath: rulesPath, directoryHint: .isDirectory).appending(path: "AGENTS.md")
         guard !FileManager.default.fileExists(atPath: shared.appending(path: "skills").path) else { return }
         let claude = URL(filePath: claudePath, directoryHint: .isDirectory)
         let pi = URL(filePath: piPath, directoryHint: .isDirectory)
@@ -37,6 +38,13 @@ extension DebugScene {
             try skill(item.name, item.description, in: directory)
             if clean || item.name != "write-swift" { try link(claude.appending(path: "skills/\(item.name)"), to: directory.appending(path: item.name)) }
         }
+        if args.agentLibrary == "agents-map" {
+            try write(DemoAgentLibrary.agentsMap, shared.appending(path: "AGENTS.md"))
+            try write(DemoAgentLibrary.claudeRules, pi.appending(path: "AGENTS.md"))
+            try write("", codex.appending(path: "AGENTS.md"))
+            try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
+            return
+        }
         let projects = URL(filePath: DemoLibrary.demoHome, directoryHint: .isDirectory).appending(path: "Project")
         let cuepad = projects.appending(path: "cuepad"), atlas = projects.appending(path: "atlas"), homepage = projects.appending(path: "homepage")
         try write(DemoAgentLibrary.cuepadRules, cuepad.appending(path: "AGENTS.md"))
@@ -48,11 +56,11 @@ extension DebugScene {
         try skill("load-test", DemoAgentLibrary.loadTest, in: atlas.appending(path: ".agents/skills"))
         if clean { try link(atlas.appending(path: ".claude/skills/load-test"), to: atlas.appending(path: ".agents/skills/load-test")) }
         try write(DemoAgentLibrary.homepageRules, homepage.appending(path: "AGENTS.md"))
-        try write(DemoAgentLibrary.sharedRules, shared.appending(path: "AGENTS.md"))
-        for file in [pi.appending(path: "AGENTS.md"), codex.appending(path: "AGENTS.md")] { try link(file, to: shared.appending(path: "AGENTS.md")) }
+        try write(DemoAgentLibrary.sharedRules, rules)
+        for file in [pi.appending(path: "AGENTS.md"), codex.appending(path: "AGENTS.md")] { try link(file, to: rules) }
         try write(DemoAgentLibrary.piSystem, pi.appending(path: "SYSTEM.md"))
         if clean {
-            try link(claude.appending(path: "CLAUDE.md"), to: shared.appending(path: "AGENTS.md"))
+            try link(claude.appending(path: "CLAUDE.md"), to: rules)
             try link(homepage.appending(path: "CLAUDE.md"), to: homepage.appending(path: "AGENTS.md"))
             return
         }

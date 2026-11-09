@@ -214,6 +214,8 @@ struct DemoAgentLibrary {
         默认中文，删去客套与重复。
         """, table: "Demo")
 
+    static let agentsMap = String(localized: "# Agents 目录地图\n\n这个仓库存技能与治理文件，只给在这里干活的 Agent 看。\n\n- skills/：各家共读的技能", table: "Demo")
+
     static let claudeRules = String(localized: """
         # 原则
 
@@ -244,7 +246,7 @@ struct DemoAgentLibrary {
         let agents: [AgentKind] = [.pi, .claudeCode, .codex]
         var list = [
             instruction(
-                .global, home + "/.agents/AGENTS.md", text: Self.sharedRules, hours: 26, readers: clean ? agents : [.pi, .codex],
+                .global, home + "/.config/agents/AGENTS.md", text: Self.sharedRules, hours: 26, readers: clean ? agents : [.pi, .codex],
                 links: [home + "/.pi/agent/AGENTS.md", home + "/.codex/AGENTS.md"] + (clean ? [home + "/.claude/CLAUDE.md"] : [])),
             instruction(.piSystem, home + "/.pi/agent/SYSTEM.md", text: Self.piSystem, hours: 24 * 9, readers: [.pi]),
         ]
@@ -281,7 +283,7 @@ struct DemoAgentLibrary {
         }
         list.append(LibraryTidy(id: "empty", kind: .empty([home + "/.codex/skills/codex-primary-runtime"])))
         list.append(LibraryTidy(id: "global-instructions", kind: .globalInstructions([
-            source(.shared, home + "/.agents/AGENTS.md", Self.sharedRules, hours: 26),
+            source(.shared, home + "/.config/agents/AGENTS.md", Self.sharedRules, hours: 26),
             source(.agent(.claudeCode), home + "/.claude/CLAUDE.md", Self.claudeRules, hours: 24 * 2),
             source(.piSystem, home + "/.pi/agent/SYSTEM.md", Self.piSystem, hours: 24 * 9),
         ])))

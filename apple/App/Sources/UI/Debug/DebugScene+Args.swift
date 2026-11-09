@@ -8,7 +8,8 @@ nonisolated struct DebugArgs: Decodable {
     let actsAs: String?
     /// `-CuePadAgentHome <目录>`（仅 Mac）：Agent 当作装在这个家目录里，给空目录是一家都没装，点安装真跑官方脚本装进它
     let agentHome: String?
-    /// `-CuePadAgentLibrary clean`：技能与规则的演示文件摆成整理好的样子（默认是该整理的样子）
+    /// `-CuePadAgentLibrary clean|agents-map`：技能与规则的演示文件摆成整理好的样子（默认是该整理的样子）；agents-map 是 ~/.agents 当仓库用的样子（仅 Mac）：
+    /// 它的 AGENTS.md 是一份目录地图，Pi 自己写了全局规则，Claude Code 没有，Codex 的是空文件
     let agentLibrary: String?
     let alertStatus: String?
     /// `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批
