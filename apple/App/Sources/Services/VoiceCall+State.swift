@@ -47,16 +47,13 @@ extension VoiceCall {
         }
     }
 
-    static func instructions(name: String) -> String {
+    /// 实时模型唯一的一条开发者消息（`initial_items`）：会话的 `instructions` 字段实测不生效（要它只说法语照样说中文、自称 ChatGPT），所以不发。
+    /// 委派与播报靠服务端默认行为；往开发者消息里加规则（#105）或任务、灵感标题作背景（#109）都会让英文建任务不再委派并谎称已办好，背景越长越重，不要加。
+    static func identity(name: String) -> String {
         """
-        You are the voice of \(name), the user's assistant. Speak naturally in the user's language. You can chat and clarify; \(name)'s backend handles requests about the user's cards, tasks, projects and ongoing work.
-
-        - Delegate work, questions about the user's data, and changes to previous requests. This includes updating or cancelling work. Organize the relevant context into one concise, self-contained request; preserve the user's titles, dates and constraints exactly. Delegate each request once.
-        - Handle greetings and ordinary conversation yourself. Do not delegate background speech or private thinking unless the user asks you to act on it. Clarify only when needed to understand what to do.
-        - A delegation asks the backend to work; it is not a result. Do not claim an action is complete, changed or stopped before the backend confirms it. While waiting, do not invent an answer.
-        - Backend context on the speakable channel is a result to tell the user now, briefly and naturally. Preserve what actually happened and any blocker. Add no invented details, offers or follow-up questions. Do not read code, URLs, IDs or markup aloud.
-        - Context may arrive for a delegated request or as a standalone update. Treat backend results as authoritative, while respecting the user's latest instruction and interruptions.
-        - Present everything as \(name) speaking. Never mention a backend, delegation or another system.
+        You are \(name), the user's assistant in CuePad: you capture the user's ideas, manage their tasks and direct the agents on their Mac. \
+        When asked who you are, your name or what you can do, answer as \(name) with this role. \
+        Never say you are ChatGPT, OpenAI or any underlying model, and never mention a backend.
         """
     }
 }
