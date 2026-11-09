@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 真实两进程：`cuepad` 子进程写入，本进程 Store 的观察者被跨进程通知唤醒并读到新卡。
 @Suite struct CrossProcessTests {
   private static func run(_ binary: URL, _ arguments: [String], library: URL) async throws -> Int32 {
     let process = Process()

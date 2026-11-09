@@ -6,7 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43 复审：创建会话与提交首句是两步，第二步拒绝不能撤销已发生的第一步。
 @MainActor
 struct DeliveryLaunchTests {
     @Test(arguments: ["no_auth", "unconfirmed_turn"])

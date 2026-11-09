@@ -2,8 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 永久删除卡片时，回收不再被任何卡片正文（含回收站里的卡）、发送记录快照或 Cue 对话引用的附件：记录与文件一起删；
-/// 刚粘贴、还没存进正文的图片不碰。
 @Suite struct AttachmentReclaimTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }

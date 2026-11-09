@@ -5,8 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 认不清 iCloud 账号时：真实的同步代码连内存里的 iCloud 替身，从 AppServices 启动。认清之前记的照记、不上传，
-/// 设置里说为什么；认清之后不用用户再做什么，记下的就传上去。
 struct SyncAccountTests {
     let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
     /// 账号变化只发给这里起的同步：全进程的通知会叫醒并行的别的测试。
@@ -31,7 +29,6 @@ struct SyncAccountTests {
         try await eventually("登上后传出") { await cloud.saved.contains(name(card)) }
     }
 
-    /// 暂时认不了不等账号变化：同步自己按退避再认（第一次隔 1–2 秒）。
     @Test
     func 账号暂时认不了时_提示暂不可用_自己再认_认好后传出() async throws {
         await cloud.setAccount(.temporarilyUnavailable)
@@ -49,7 +46,6 @@ struct SyncAccountTests {
         try await eventually("不再提示") { services.syncState.status == .idle }
     }
 
-    /// 同步着时账号变了、却认不清此刻是哪个账号：可能已是另一个账号，认清之前不传；认清还是原来那个就放开，不用等你决定。
     @Test
     func 同步着时账号认不清_认清之前不传_还是原账号就放开() async throws {
         let app = start()
@@ -73,7 +69,6 @@ struct SyncAccountTests {
         try await eventually("回到已同步") { services.syncState.status == .idle }  // 界面的状态由跟随者异步抄过来
     }
 
-    /// App 没开着时换了 iCloud 账号：再打开，第一次认账号就停下等你决定，决定之前记的不传；选上传本机后传给新账号。
     @Test
     func 关着时换了账号_再打开就等你决定_决定前不传() async throws {
         let app = start()
@@ -96,7 +91,6 @@ struct SyncAccountTests {
     }
 
     #if os(iOS)
-    /// 挂起期间换了 iCloud 账号、系统没补发账号变化的通知：回到前台先认出新账号、停下等你决定，挂起前没传出去的旧账号数据一条都不传给新账号。
     @Test
     func 挂起期间换了账号没收到通知_回到前台先认出来_旧数据不传() async throws {
         let app = start()
@@ -117,7 +111,6 @@ struct SyncAccountTests {
         #expect(await !cloud.saved.contains(name(pending)))
     }
 
-    /// 挂起前起的那次认账号还没认完、挂起期间换了账号：回到前台另认一次、认出新账号，不沿用挂起前那一次，旧数据不传。
     @Test
     func 挂起前的认账号还在路上_回到前台另认一次() async throws {
         let app = start()
@@ -142,7 +135,6 @@ struct SyncAccountTests {
     }
     #endif
 
-    /// 认账号一直没有回音时停下同步（Mac 退出收尾的最后一步）：当场返回，在等的立即同步、取文件、门铃的密钥都得到"没在同步"。
     @Test
     func 认账号没有回音时停下_在等的都当场返回() async throws {
         await cloud.setAccount(nil)

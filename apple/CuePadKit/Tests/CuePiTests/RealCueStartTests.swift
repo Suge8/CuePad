@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：Cue 用这家开工、说话、歇下。后台开一个带名字、模型、强度的会话（`AgentRuntime.open`，一次生效），开场一句做完歇下，
 /// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 与 Grok Build 是假模型，Codex 用复制的登录（不刷新），Claude Code 用订阅令牌，OpenCode 见 `OpenCodeSandbox`，
 /// dsh 的家目录在临时目录里、登录只经环境里的 DeepSeek key。
 /// 默认回放录像带（OpenCode 没有录像带，总连真 OpenCode），见 `RealAgents`。
@@ -46,7 +45,6 @@ struct RealCueStartTests {
                 let used = try #require(Self.used(in: file, agent), "会话文件里没记下用的模型")
                 // Claude Code 的别名（sonnet）在会话文件里记成它解析到的完整 id（claude-sonnet-…）
                 #expect(agent == .claudeCode ? used.model?.hasPrefix("claude-\(model.id)") == true : used.model == model.id, "\(used)")
-                // 强度照这个模型能选的落位（dsh 的模型没有 medium）
                 let levels = bridge.session(id: id)?.model?.thinkingLevels ?? []
                 if agent != .pi && agent != .grok { #expect(used.effort == PiThinkingLevel.medium.clamped(to: levels).rawValue, "\(used)") }
             }
@@ -79,7 +77,6 @@ struct RealCueStartTests {
         }
     }
 
-    /// 起这家的隔离测试台，交出接入、桥、工作目录与开工用的模型；不论成败都停掉起的进程、删掉临时目录。
     private func withAgent(
         _ agent: AgentKind, _ body: (any AgentRuntime, PiBridge, URL, PiModelKey) async throws -> Void
     ) async throws {

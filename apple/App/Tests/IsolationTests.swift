@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 隔离模式（CUEPAD_LIBRARY_DIR）：资料库之外，偏好与窗口位置也不能落到真实的偏好域（`AppIdentity.id`）里。
 /// 测试宿主的 `UserDefaults.standard` 就是正式版的偏好域，这里连读也不读：偏好要落在库目录里那份具名的域（文件里看得到），
 /// 窗口位置只存进设置，AppKit 自己写标准域的途径（窗口的自动保存名）必须是空的。
 struct IsolationTests {

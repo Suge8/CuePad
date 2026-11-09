@@ -3,9 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 新会话的三个入口（Mac 的新会话表单、Mac 任务的"开始"、手机的新会话输入框）同一套规则（`SessionLaunching`）：
-/// 首次开；明确没开成时直接重试，新请求替换失败的那条；结果未确认时先问，取消不动原请求与草稿，确认后另开；认领后各回各的去处；
-/// 结果未确认时关掉表单或输入框接着等：晚到的认领照样收尾，重开后再开照样先问；同一任务已有没收尾的请求时 Store 拒绝冒充首次的交出。
 @MainActor
 struct NewSessionFlowTests {
     nonisolated enum Entry: Sendable, CustomTestStringConvertible {
@@ -30,7 +27,6 @@ struct NewSessionFlowTests {
     let host = "mac-a"
     #endif
 
-    /// 打开一个入口（为一件新任务），返回任务、入口的那一份与提交动作（界面上点"开始"调的同一个；确认框里的"仍然再开"是 `launchAgain`）。
     private func open(_ entry: Entry, in workspace: Workspace) async throws -> (Card, SessionLaunching, () -> Task<Void, Never>?) {
         let task = try await store.createTask("修乱序\n先复现")
         let choice = AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)
@@ -66,7 +62,6 @@ struct NewSessionFlowTests {
         }
     }
 
-    /// 那台 Mac 把在等的请求都写成 `outcome`。
     private func mac(answers outcome: DeliveryOutcome, _ launching: SessionLaunching, until phase: (LaunchProgress.Phase) -> Bool) async throws {
         let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { Issue.record("\($0)") }) { _, _ in outcome }
         try await executor.start()
@@ -74,7 +69,6 @@ struct NewSessionFlowTests {
         await executor.stop()
     }
 
-    /// 关上表单或输入框；返回重新打开它的动作（同一份开场）。
     private func close(_ entry: Entry, in workspace: Workspace) -> () -> Void {
         #if os(macOS)
         workspace.showsNewSession = false

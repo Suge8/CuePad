@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 新会话安全替换与主动重复：编辑、关闭不等回执；第二次副作用须由可撤回事实或用户明确确认授权。
 /// "手机"开新会话走新会话输入框调的同一条 `AppServices.launchSession`；那台 Mac 写回什么由服务器的回声给。
 @MainActor
 struct LaunchLockTests {
@@ -17,7 +16,6 @@ struct LaunchLockTests {
             in: Project.defaultID, prompt: "hi", title: "CuePad", on: "mac-gone", card: nil, agent: .pi, intent: previous.map { .replacing($0.request) } ?? .new)
     }
 
-    /// 服务器收下（回声）；`status` 给了就同时带上那台 Mac 写回的状态。
     private func serverHas(_ phone: TestApp, _ launch: SessionLaunch, status: String? = nil) async throws {
         var row = try #require(try await phone.services.store.syncRow(recordName: launch.request.uuidString.lowercased()))
         if let status {

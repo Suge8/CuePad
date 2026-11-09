@@ -3,7 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43：投送占位防止重复，不是 Agent 当前在跑的证据。
 struct RuntimeHandoffTests {
     @Test(arguments: [DeliveryMode.send, .start], ["unconfirmed", "future_ack", "pending"])
     func 未确认交接仍在推进中但不算在跑(mode: DeliveryMode, status: String) async throws {
@@ -16,7 +15,6 @@ struct RuntimeHandoffTests {
         await workspace.speak(text, to: .session(target, host: "mac-worker", mode: mode, card: task.id)).value
         let request = try #require(try await store.deliveryRequests().first)
         if status == "pending" {
-            // 服务器收下了（派发期限从这一刻起算），那台 Mac 一直没领取
             let row = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
             try await store.markPushed([(row, Data(), clock.now)])
         }

@@ -21,7 +21,6 @@ struct SessionFile {
         line(["type": "session", "version": 3, "id": id, "timestamp": stamp(0), "cwd": cwd])
     }
 
-    /// 第 n 秒：2026-01-01T00:00:0n.000Z
     static func stamp(_ second: Int) -> String { String(format: "2026-01-01T00:%02d:%02d.000Z", second / 60, second % 60) }
     static func date(_ second: Int) -> Date { Date(timeIntervalSince1970: 1_767_225_600 + Double(second)) }
 

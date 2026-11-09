@@ -2,8 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 会话归哪个项目写在记录上（写入时按本机的目录绑定定）：绑定或解除时本机已有的会话（含几千条历史）要跟着归进来、放出去；
-/// 手机据"各 Mac 上跑过 Agent 的文件夹"建议绑定（`sessionFolders`）。
 @Suite struct SessionFolderTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }

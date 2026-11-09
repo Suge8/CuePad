@@ -5,11 +5,9 @@ import Testing
 
 @testable import CueSync
 
-/// 发送者面对服务器的几种拒绝：新装时同步区还不在、记录被限流。
 @Suite struct RecordSenderTests {
   let rig = try! Rig()
 
-  /// 按顺序回放每批上传的结局（用完之后照单全收），记下每批传了什么、建过几次区。
   actor ScriptedServer: RecordUploader {
     private var script: [@Sendable ([CKRecord]) throws -> SentRecords]
     private(set) var uploads: [[String]] = []
@@ -40,7 +38,6 @@ import Testing
     await sender.stop()
   }
 
-  /// 服务器拒收一条记录（这一版本身有问题）：之后说的话照样马上传上去，被拒的那一版不再一批批地重发。
   @Test func aRecordTheServerRefusesDoesNotHoldBackLaterUploads() async throws {
     let bad = try await rig.store.createCard(body: "服务器不收这一版")
     let refused = rig.id(bad.id)
@@ -62,7 +59,6 @@ import Testing
     await sender.stop()
   }
 
-  /// 改过的一版被服务器拒收之后，删掉这条照样传上去：跳过的只是被拒的那一版。
   @Test func deletingARecordWhoseEditWasRefusedStillReachesTheServer() async throws {
     let card = try await rig.store.createCard(body: "第一版")
     let server = ScriptedServer([
@@ -82,8 +78,7 @@ import Testing
     await sender.stop()
   }
 
-  /// 一轮做完、回答落进对话：手机多久看到回答取决于它多快传上去。回答（对话与会话近况）随本机提交在合并窗口后就发，
-  /// 不等会话状态细节的节流（这时还挂着一条工作中的细节；节流走手动时钟、永不到点，等它就会等到测试时限）。
+  /// 回答随本机提交在合并窗口后就发，不等会话状态细节的节流：这时还挂着一条工作中的细节，节流走手动时钟、永不到点，等它就会等到测试时限。
   @Test func aNewReplyIsUploadedRightAfterItIsWritten() async throws {
     let server = FakeUploader()
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)

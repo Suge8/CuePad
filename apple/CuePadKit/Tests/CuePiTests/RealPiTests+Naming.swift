@@ -6,8 +6,6 @@ import Testing
 @testable import CuePi
 
 extension RealPiTests {
-    /// 按第一句话起名（`SessionNameSuggestion`）走真实 Pi 的桥扩展：用会话所在 provider 里最便宜的模型（假模型里是 echo-b），
-    /// 交的是第一句话；只回不写，写回走改名（扩展里即 Pi 的改名接口），会话名随即上报。
     @Test func theSessionNamesItselfFromItsFirstMessageWithTheCheapestModelOfItsProvider() async throws {
         try await withRig { _, bridge, s in
             #expect(bridge.canNameItself(s.id))

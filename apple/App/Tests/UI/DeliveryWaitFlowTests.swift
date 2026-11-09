@@ -8,10 +8,8 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// 回复框说的话在 Mac 上等前提、等不到时，气泡上写的没送达原因（`Said.trip`）：说清是什么没到，可以重发。
 @MainActor
 struct DeliveryWaitFlowTests {
-    /// 取附件那一步返回了、文件却没落到这台 Mac：这一次就写回没送达，原因说附件取过了仍不在，不反复重取空转到期限。
     @Test func 附件取过了仍不在这台Mac_气泡写没送达原因_只取一次() async throws {
         let app = TestApp()
         let services: AppServices = app.services
@@ -46,7 +44,6 @@ struct DeliveryWaitFlowTests {
 }
 
 extension UpgradePreparationTests {
-    /// 现有会话等到就绪了，却一直排在另一处后面没轮到，过了派发期限：没送达的原因不把"准备就绪"当成在等什么。
     @Test func 会话就绪后排队到期_气泡原因不带在等什么() async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing), store = app.services.store
@@ -58,7 +55,6 @@ extension UpgradePreparationTests {
         let waiting = try await prepared(request, in: app)
         guard waiting.status == .known(.preparing) else { Issue.record("应在等会话升级"); await app.services.executor.beginStop()(); return }
 
-        // 另一处一直等 ACK，占着执行通道
         let blocker = try await app.host.connect("blocking-session", cwd: app.directory.path)
         blocker.onCommand = { _, command in command["t"] as? String == "send" ? nil : ["ok": true] }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
@@ -67,7 +63,6 @@ extension UpgradePreparationTests {
         _ = try await workspace.said(ComposerDraft(text: "在另一处等ACK"), to: blockingTarget, mode: .send)
         try await eventually("另一处已接手") { blocker.messages.count == 1 }
 
-        // 通道已占住后才写下的本机请求，也必须由独立监听锚定并按时收尾。
         let later = try await workspace.said(ComposerDraft(text: "阻塞后才写下的一句"), to: target, mode: .send)
         _ = try await eventually(store, { try $0.deliveryRequest(later.id) }) { $0?.dispatchDeadline != nil }
 

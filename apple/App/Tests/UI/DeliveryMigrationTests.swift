@@ -7,7 +7,6 @@ import Testing
 @testable import CuePad
 @testable import CueStore
 
-/// 旧库升级：旧 failed 不能冒充新版本明确未交出的 not_delivered，原原因不能被猜写；升级前已上传的待派发请求照常到期。
 @MainActor
 struct DeliveryMigrationTests {
     private func say(in app: TestApp) async throws -> DeliveryRequest {
@@ -51,7 +50,6 @@ struct DeliveryMigrationTests {
         #expect((workspace.notice?.isError == true) == claimed)
     }
 
-    /// 升级前已传上去、还在等派发的请求，发送方没记下服务器收下的时刻：升级按写下的时刻补上，到期照常转未确认，不一直显示已发出。
     @Test func 升级前已传上去的待派发请求_升级后补上锚点_到期转未确认() async throws {
         let phone = TestApp(host: "phone"), request = try await say(in: phone)
         let row = try #require(try await phone.services.store.syncRow(recordName: request.id.uuidString.lowercased()))

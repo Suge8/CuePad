@@ -5,12 +5,9 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：CuePad 在后台托管 Codex（`codex app-server`，真模型，账号里最便宜的），状态来自真钩子，对话来自真会话文件。
 @MainActor
 @Suite(RealAgents.taped(.codex), .agentTape(.codex), RealAgents.timeLimit(.minutes(4)), RealAgents.serialWhenRecording(.codex))
 struct RealCodexHostedTests {
-    /// 开一个新会话、发一句带图的话：会话出现在桥上（后台托管、带着认领标识），做完一轮后歇下；会话文件里你的话带着这次投送的 id 与图片，
-    /// 回答是一条 Codex 消息；换模型、强度与改名生效。结束后下线；再接着这个已结束的会话说，它在后台恢复、接着回答。
     @Test func aHostedSessionTakesAMessageWithAnImageIsConfiguredEndedAndResumed() async throws {
         try await withCodexRig { rig in
             let log = ChangeLog(rig.bridge)
@@ -43,7 +40,6 @@ struct RealCodexHostedTests {
             #expect(rig.bridge.session(id: id)?.model?.key.id == codexTestModel)
             #expect(rig.bridge.session(id: id)?.thinking == .known(.high))
             #expect(rig.bridge.session(id: id)?.displayName == "看图")
-            // 斜杠命令换到没有的模型：提示点的是这个会话的 Agent
             let unknown = await #expect(throws: PiBridgeError.unknownModel(.codex)) { try await rig.bridge.command("/model no-such-model", in: id) }
             #expect(unknown?.localizedDescription == "Codex 里没有这个模型")
 
@@ -60,8 +56,7 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// 发一句带 PDF 的话（文件交给 Agent 的那一行，`AttachmentFiles.agentLine`，指到附件目录里本机那份）：Codex 读到 PDF 里印的暗号；
-    /// 读回会话文件时那一行认回文件引用，会话页照样显示成文件。PDF 是手写的固定字节：键（内容哈希）每次相同，录下的发送对得上。
+    /// PDF 是手写的固定字节：键（内容哈希）每次相同，录下的发送对得上。
     @Test func aHostedSessionReadsAnAttachedPDF() async throws {
         try await withCodexRig { rig in
             let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-pdf", name: nil, model: nil, thinking: nil)
@@ -81,8 +76,6 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// #58：用技能说的话（`/skill:名字 …`）照说话交出：技能随这句交给 Codex，Codex 照它回答；会话文件里你的这句带着这次投送的 id
-    /// （对话据此换下气泡），写回你发的样子。
     @Test func aSkillLineIsSpokenWithItsDelivery() async throws {
         try await withCodexRig { rig in
             let skill = rig.codex.home.appending(path: "skills/kiwi-echo", directoryHint: .isDirectory)
@@ -102,8 +95,7 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// CuePad 起的 `codex` 是外壳（npm 装的就是 node 外壳）、真 codex 是它的子进程：钩子仍认回这个托管会话，不另接一个；
-    /// 忙闲来自托管进程自己的通知，第一句照常进入思考、答完歇下。
+    /// CuePad 起的 `codex` 是外壳（npm 装的就是 node 外壳）、真 codex 是它的子进程。
     @Test func aWrappedCodexAnswersTheFirstMessage() async throws {
         try await withCodexRig(wrapped: true) { rig in
             let log = ChangeLog(rig.bridge)
@@ -120,7 +112,6 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// 需要你确认的命令：会话停在"等你确认"、带着要跑的命令；在 CuePad 里允许后命令照常跑完，这一轮做完。
     @Test func aPermissionRequestIsAnsweredFromCuePad() async throws {
         try await withCodexRig(approvals: "on-request") { rig in
             let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-2", name: nil, model: nil, thinking: nil)
@@ -139,9 +130,6 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// Plan 模式里不挡着这一轮的提问（`request_user_input_async`，Codex 问完睡着等）：在 CuePad 里用 /plan 进 Plan 模式说话，
-    /// 会话停在"等你回答"、带着问题与选项（也能自己填），睡着等的那段不显示成在调工具；在 CuePad 里选了，答案当你的下一句话交给它，
-    /// 它接着说。说完的回答落了库，正在说的话随之换下。
     @Test func aPlanModeQuestionIsAnsweredFromCuePad() async throws {
         try await withCodexRig { rig in
             let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-ask", name: nil, model: nil, thinking: nil)
@@ -167,7 +155,6 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// 子代理：派出去时出现在会话的子代理名册里（名字是派它时给的任务名），交回结果后落定；在这一轮里等到了它，这一轮做完只歇下一次。
     @Test func aSubagentShowsUpInTheRoster() async throws {
         try await withCodexRig { rig in
             let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-3", name: nil, model: nil, thinking: nil)
@@ -197,8 +184,6 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// 派完不等的子代理：这一轮结束时它还在跑，会话在等子代理、不歇下；它做完后 CuePad 补一轮让会话读到结果，
-    /// 那一轮答出结果后才歇下，只歇下一次。
     @Test func aSubagentLeftRunningIsReadBackBeforeSettling() async throws {
         try await withCodexRig { rig in
             let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-wake", name: nil, model: nil, thinking: nil)
@@ -228,8 +213,7 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// 提供方拒绝了这一轮（本机假服务对每个请求回 400，不花钱）：Codex 不重试、这一轮失败，没有 Stop 钩子；
-    /// 会话停在出错，说明是提供方的原话，悬停看的全文也在。
+    /// 本机假服务对每个请求回 400（不花钱）：Codex 不重试、这一轮失败，没有 Stop 钩子。
     @Test func aFailedTurnLeavesTheSessionInErrorWithTheReason() async throws {
         let provider = try await RejectingProvider()
         defer { provider.stop() }

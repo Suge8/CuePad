@@ -17,7 +17,6 @@ nonisolated let realPi = ProcessInfo.processInfo.environment["CUEPAD_TEST_PI"].m
 
 @Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized)
 struct CueHostTests {
-    /// 你的话送进 Cue 不受库忙不忙影响：十个会话的状态一刻不停地写着，说的话照样交给 Cue——
     /// 不是等写入歇下才交。不量时长：写入到交出去为止一直在继续，交不出去由测试时限报。
     @Test func 库正忙时你的话马上送进Cue() async throws {
         let rig = try await Rig()
@@ -43,7 +42,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 你说一句，Cue 的回答落库（写成 Cue 说的）；你的消息记下已交给大脑。Cue 的大脑不是 Agent 会话：不在会话列表、历史与 Pi 的会话目录里。
     @Test func 你说一句_Cue的回答落库() async throws {
         let rig = try await Rig()
         try await rig.say("你好")
@@ -56,7 +54,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 你在 Cue 页发图：资料库里的图片引用转成图片交给大脑（假模型收到的是图片，不只是文字里的引用），Cue 照图回答。
     @Test func 你发图_Cue看得见() async throws {
         let rig = try await Rig()
         try await rig.say("这是什么？\n\(try rig.image())")
@@ -64,7 +61,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 模型看不了图：同看不了图的会话一样，图写成"附件：图片.png（本机路径）"交给它（不另附图），Cue 照常回答。
     @Test func 模型看不了图_图写成路径交给它() async throws {
         let rig = try await Rig(seesImages: false)
         let image = try rig.image()
@@ -90,7 +86,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 额度只看 Cue 运行的这台 Mac（额度各台各登各的）：别的 Mac 上吃紧的账号不写进信封，这台的照写。
     @Test func 信封里的额度只写这台Mac的() async throws {
         let rig = try await Rig()
         let tight = [QuotaWindow(seconds: 18_000, used: 0.9, resetsAt: .now.addingTimeInterval(3600), isBinding: true)]
@@ -113,8 +108,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 手上什么都没有时启用、巡视也到点了：Cue 都不醒来说"没有在做的事"，对话里只有你说的与它的回答，没有醒来记录那一行
-    /// （Cue 页空着时是能说什么的空态）。
     @Test func 空库启用与巡视_不说空话() async throws {
         let rig = try await Rig(patrolAfter: .zero)
         try await rig.say("你好")

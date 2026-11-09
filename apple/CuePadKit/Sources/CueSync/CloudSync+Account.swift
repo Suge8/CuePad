@@ -1,7 +1,6 @@
 import CloudKit
 import Foundation
 
-/// 认账号与等账号：`CloudSync` 的一代里，认账号、按原因再认、门铃的密钥。进度只在 `Run.account`（见 `Account`、`Wait`）。
 ///
 /// 连着时账号变了不能当作没事：此刻可能已是另一个账号，本机数据会传进去。所以通知一到就关上闸门（`AccountGate`）不拉不传，
 /// 认清了才放开或停下等你决定；认不清的界面显示账号暂不可用，按退避再认。
@@ -15,8 +14,7 @@ extension CloudSync {
     case networkReturned, activated
   }
 
-  /// 在认的先等那一次（连着的也等：认清之前不拉，被更新的一次取代了就接着等新的）；本代还没认过的先认；等再认的不另认（`Wait`）。连上了为 true。
-  /// 调用方被取消就当场返回 false，不等认账号的请求到时限。
+  /// 连上了为 true。调用方被取消就当场返回 false，不等认账号的请求到时限。
   @discardableResult
   func connectNow() async -> Bool {
     while let run = running {
@@ -34,7 +32,6 @@ extension CloudSync {
     return false
   }
 
-  /// 账号可能变了（`CKAccountChanged`、退避到点、网络回来、回到前台）：另起一次认，认好了在新账号的数据库里建订阅（连着的那里还没有），再拉一次。
   /// 那一拉在本代后台起、不等：账号变化按到达先后处理，下一次不排在一拉（可能挂到请求超时）后面。
   func recheck(_ generation: SyncGeneration) {
     let wasConnected = connected
@@ -78,7 +75,7 @@ extension CloudSync {
     }
   }
 
-  /// 起本代新的一次认：在认的那次取消、作废，等着的定时取消；连着的当场关上闸门（已是认不清的照旧显示）。那一代已经结束的不起。
+  /// 那一代已经结束的不起。
   @discardableResult
   func startCheck(_ generation: SyncGeneration) -> Task<Bool, Never>? {
     update(generation) { run in
@@ -96,8 +93,7 @@ extension CloudSync {
 
   func isLatest(_ check: AccountGate.Check) -> Bool { running?.gate.admits(check) == true }
 
-  /// 认一次账号：状态交给协调器，可用时再认是不是上次同步的那个账号（换了就停下来等你决定）。本代还没连上的，认清且没停着就建部件、开始上传、
-  /// 在后台建订阅。返回是否认清、能接着拉；拉取由调用方接着发起（`syncNow`、`recheck`）。每个 await 之后先看自己还是不是最新的一次。
+  /// 返回是否认清、能接着拉；拉取由调用方接着发起（`syncNow`、`recheck`）。每个 await 之后先看自己还是不是最新的一次。
   func checkAccount(_ check: AccountGate.Check, _ cloud: any SyncCloud, _ generation: SyncGeneration) async -> Bool {
     do {
       let status = try await withDeadline(RequestLimits.request) { try await cloud.accountStatus() }
@@ -105,7 +101,6 @@ extension CloudSync {
       switch status {
       case .available: break
       case .noAccount, .restricted: return await conclude(check, generation, .accountChange)
-      // 暂不可用、无法确定，与认不出的新状态：界面说稍后自动重试（`SyncStatus.accountUnavailable`），就按退避再认
       default: return await conclude(check, generation, .retry)
       }
       let name = try await withDeadline(RequestLimits.request) { try await cloud.accountName() }
@@ -134,7 +129,6 @@ extension CloudSync {
     return true
   }
 
-  /// 最新的这一次认完：定下等什么再认、闸门开没开，告诉等账号认好的（`relaySecret`）。返回是否认清。
   @discardableResult
   private func conclude(_ check: AccountGate.Check, _ generation: SyncGeneration, _ outcome: Outcome) async -> Bool {
     let concluded = update(generation) { run -> Bool in

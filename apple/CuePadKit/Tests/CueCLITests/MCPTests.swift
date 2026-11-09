@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 import Testing
 
-/// Cue 的大脑经 `cuepad mcp`（stdio，一行一个 JSON-RPC）派活、说话、记东西：真实子进程，结果落在库里。
+/// `cuepad mcp` 走 stdio，一行一个 JSON-RPC；真实子进程，结果落在库里。
 @Suite struct MCPTests {
   /// 一个 `cuepad mcp` 子进程：写一行请求，读一行回应。回应由它自己的线程读：两个子进程同时有调用在等（一个工具在等送达结果时
   /// 另一个照常回应）也互不挡着，`FileHandle.bytes` 的读取会把它们排成一队。
@@ -37,7 +37,6 @@ import Testing
       exit = try ProcessExit(launching: process)
     }
 
-    /// 起一个 `cuepad mcp`（`arguments` 换成 `mcp --dream` 是整理记忆的那一组）交给 `body`；之后（失败也一样）关它的输入、等它退出。
     static func run(library: URL, arguments: [String] = ["mcp"], _ body: (Server) async throws -> Void) async throws {
       let server = try Server(library: library, arguments: arguments)
       let outcome: Result<Void, any Error>
@@ -57,11 +56,9 @@ import Testing
       return try #require(reply["result"] as? [String: Any], "\(reply)")
     }
 
-    /// 调一个工具，返回正文；期望不出错。
     @discardableResult
     func call(_ tool: String, _ arguments: [String: Any]) async throws -> String { try await tools(tool, arguments, isError: false) }
 
-    /// 调一个工具，期望被退回（`isError`），返回给 Cue 的理由。
     @discardableResult
     func refused(_ tool: String, _ arguments: [String: Any]) async throws -> String { try await tools(tool, arguments, isError: true) }
 
@@ -99,7 +96,6 @@ import Testing
       #expect(try await store.card(research.id)?.rest == nil)
       _ = try await server.call("task", ["action": "edit", "task": research.id.uuidString, "body": "先读 release.sh"])
       #expect(try await server.call("task", ["action": "peek"]).contains("重写发布脚本（\(task.shortID)）"))
-      // 名字宽过上限（汉字算 2）：整件退回，告诉 Cue 怎么改，什么都不写
       for long: [String: Any] in [["title": "让 Agent 编译测试排队、模拟器复用、测试快速失败"], ["title": "发布", "steps": ["调研", "把发布脚本改成按渠道分别打包上传"]]] {
         #expect(try await server.refused("task", ["action": "add"].merging(long) { $1 }).contains("上限 24"))
       }
@@ -123,7 +119,6 @@ import Testing
     }
   }
 
-  /// 停用之后 Cue 的工具不能再派活（停用只清启用时刻，运行在哪台 Mac 还留着）。
   @Test func aDisabledCueCannotDispatchWork() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store

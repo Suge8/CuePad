@@ -5,9 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 启用 Cue、改它运行的 Mac 只有一个入口（`AppServices.enableCue`），各处入口读同一处判断（`CueGate`）：
-/// 这台的库还没和 iCloud 对过一遍时不能启用（不知道它是不是已在别的 Mac 上），Cue 那一行写在等什么；
-/// 它正在别的 Mac 上运行时，没确认就不改，确认框说清改在哪台、原来那台不再运行，确认了才改过来；这台改不过来时原因写在那一行、仍在原来那台。
 @MainActor
 struct CueGateTests {
     let app = TestApp()
@@ -18,7 +15,6 @@ struct CueGateTests {
         try await CueSettings.read(from: store).gate(services)
     }
 
-    /// 第一遍拉回来的：Cue 在 Mac Studio 上运行，那台醒着。
     private func runsOnStudio() async throws {
         try await store.recordMacAgents(host: "mac-old", name: "Mac Studio", [MacAgent(kind: .pi, model: nil, models: [])])
         try await store.recordMacPresence(host: "mac-old") { true }
@@ -28,7 +24,6 @@ struct CueGateTests {
         }
     }
 
-    /// 设置里选这台：先请你确认（不动库），说清楚改在哪、哪台不再运行。
     private func chooseHere() async throws -> (CueSettingsModel, CueMove) {
         let model = CueSettingsModel()
         model.settings = try await CueSettings.read(from: store)

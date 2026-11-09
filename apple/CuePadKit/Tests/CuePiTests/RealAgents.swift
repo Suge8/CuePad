@@ -38,7 +38,6 @@ enum RealAgents {
     static let recording: Set<AgentKind> = Set((ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS"] ?? "").split(separator: ",")
         .compactMap { AgentKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) })
 
-    /// OpenCode 总是连真的（`live`）；别家列出了录制，否则回放。
     static func mode(of agent: AgentKind) -> TapeMode {
         if agent == .opencode { return .live }
         return recording.contains(agent) ? .record : .replay
@@ -62,15 +61,12 @@ enum RealAgents {
         }
     }
 
-    /// 回放，或连真 Agent 且本机跑得起来
     static func runs(_ agent: AgentKind) -> Bool { mode(of: agent) == .replay || missing(agent) == nil }
 
-    /// 有录像带的套件（与 OpenCode 的）：回放总是跑，连真 Agent 要本机跑得起来。
     static func taped(_ agent: AgentKind) -> ConditionTrait {
         .enabled(if: runs(agent), "\(agent.rawValue) 跑不了：\(missing(agent) ?? "")")
     }
 
-    /// 只连真 Agent 跑的套件（没有录像带）：列出这家且本机跑得起来时才跑。
     static func live(_ agent: AgentKind, _ why: String) -> ConditionTrait {
         .enabled(if: recording.contains(agent) && missing(agent) == nil, "只连真 \(agent.rawValue) 跑（\(why)）：TEST_RUNNER_CUEPAD_AGENT_TESTS=\(agent.rawValue) 开启")
     }

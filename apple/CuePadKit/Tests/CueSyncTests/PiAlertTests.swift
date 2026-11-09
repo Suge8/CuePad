@@ -5,7 +5,6 @@ import Testing
 
 @testable import CueSync
 
-/// Pi"等你确认"与"完成"到手机锁屏：CloudKit 服务端按记录上的通知标志生成可见通知（不依赖静默推送与 App 在后台）。
 /// 通知里不能出现加密字段（标题、详情）：文案是本地化 key 的通用句。
 @Suite struct PiAlertTests {
   let zone = testZone
@@ -27,7 +26,7 @@ import Testing
     #expect(record.encryptedValues["title"] as? String == "secret title")
   }
 
-  /// 状态已经往前走（用户在 Mac 上答了，回到思考中）：通知不再送出。这一种取代是有意的——已恢复工作的会话不该再提示"等你确认"。
+  /// 这一种取代是有意的：已恢复工作的会话不该再提示"等你确认"。
   @Test func anAlertForAStateThatHasSinceMovedOnIsNotDelivered() async throws {
     let rig = try Rig()
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
@@ -41,7 +40,6 @@ import Testing
     #expect(record["state"] as? String == "thinking")
   }
 
-  /// 标志已经上传过，之后同状态的更新不再带标志，订阅不会为同一次等待重复通知。
   @Test func aSameStateUpdateAfterUploadDoesNotAlertAgain() async throws {
     let rig = try Rig()
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
@@ -56,7 +54,6 @@ import Testing
     #expect(record["notify"] == nil && record.encryptedValues["detail"] as? String == "q2")
   }
 
-  /// 通知服务扩展取回记录、在设备上解密后改写文案：等你确认是"会话名 等你拍板" + 问题首行，完成是会话名 + "完成了"。
   @Test func theNotificationExtensionRewritesTheAlertFromTheDecryptedRecord() async throws {
     let rig = try Rig()
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
@@ -72,8 +69,6 @@ import Testing
     #expect(settled.title == "homepage" && settled.body == "完成了")
   }
 
-  /// Cue 的消息："等你"写下就带推送标志（明文字段），随那一次上传送出，服务端收下后本机清掉，之后的改动（你回答了）不再带它；
-  /// 远端带回来的标志不留。文案由通知服务扩展改写成 Cue 的名字与要你定什么（不露原话）、点名的图各看什么，附上选项。
   @Test func aCueMessageFlaggedForPushGoesUpOnceAndIsRewrittenFromTheDecryptedRecord() async throws {
     let rig = try Rig()
     try await rig.store.updateCueProfile { $0.name = "小管家" }
@@ -96,14 +91,13 @@ import Testing
     #expect(answered["notify"] == nil && answered.encryptedValues["answer"] as? String == CueAsk.once)
   }
 
-  // MARK: 到不到你（用户定的规则：回答他那一轮的话推到手机、一轮只响一次；他在 Mac 上开着那一页不推；Cue 值班时会话做完只推留给他回的）
+  // MARK: 到不到你
 
   private func flag(_ rig: Rig, _ id: UUID) async throws -> String? {
     try #require(try await rig.coordinator.record(for: rig.recordID(id)))["notify"] as? String
   }
 
-  /// 他发完消息就离开了 App：Cue 回答这一轮的话推到手机，正文是 Cue 的原话；这一轮先发了提问卡就只响提问卡那一下。
-  /// 他在 Mac 上开着 Cue 页时不出通知（只静默叫醒，`CuePush`）；手机上开着的不挡（那条可能停在"开着"，手机前台自己不弹）。
+  /// 手机上开着的不挡：那条可能停在"开着"，手机前台自己不弹。
   @Test func cueRepliesToHisRoundReachThePhoneOncePerRoundUnlessHeHasTheCuePageOpenOnAMac() async throws {
     let rig = try Rig()
     func reply(_ text: String, startedAt: Date = .now) async throws -> UUID {
@@ -127,8 +121,6 @@ import Testing
     #expect(try await flag(rig, reply("合并好了")) == "said")
   }
 
-  /// 会话做完：Cue 不值班时推；值班时做完不推，只推留给他回的（他发起的一轮当场留，待回复，正文是会话最后那句回答）；
-  /// 他在 Mac 上开着那个会话时都不出通知，只静默叫醒手机（`PiPush.wake`）。
   @Test func sessionAlertsReachThePhoneOnlyWhenTheStopIsHis() async throws {
     let rig = try Rig()
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing, bootID: TestBoot.id)

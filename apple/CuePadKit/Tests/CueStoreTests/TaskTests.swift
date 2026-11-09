@@ -2,8 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 灵感与任务是同一种记录（Card）：差别只是"要做"（`todoAt`）。任务三态、可有子任务（任务最多两级），也可挂灵感；
-/// 只有任务能当上级；进回收站时，下级按原顺序提到它的位置；归档连同下级。
 @Suite struct TaskTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -22,7 +20,6 @@ import Testing
     await #expect(throws: CueStoreError.taskTooDeep) { try await store.moveCard(a.id, to: .under(b1.id), after: nil) }
     #expect(try await card(a.id).parentID == nil)
 
-    // 挂到别的项目的任务下：整棵子树换到那个项目，同级按放的位置排
     let moving = try await store.createTask("换首图", in: site.id)
     let child = try await store.createCard(body: "裁图")
     try await store.moveCard(child.id, to: .under(moving.id), after: nil)
@@ -30,7 +27,6 @@ import Testing
     let first = try await store.createTask("备份", under: parent.id)
     let last = try await store.createTask("发布", under: parent.id)
     let change = try await store.moveCard(moving.id, to: .under(parent.id), after: first.id)
-    // 任务成了子任务，下级跟着换项目
     #expect(try await store.children(of: parent.id).map(\.id) == [first.id, moving.id, last.id])
     #expect(try await card(child.id).parentID == moving.id)
     #expect(try await card(child.id).projectID == table.id)
@@ -38,7 +34,6 @@ import Testing
     try await store.undo(change)
     #expect(try await card(moving.id).parentID == nil)
 
-    // 进回收站：下级按原顺序提到它的位置
     let release = try await store.createProject(name: "发布", color: "#111")
     let after = try await store.createTask("后一条", in: release.id)
     let middle = try await store.createTask("备份", in: release.id)

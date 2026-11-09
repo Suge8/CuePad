@@ -3,7 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43：旧 boot 或旧宿主晚到的 Cue 报告不能重新变成当前运行证明。
 struct RuntimeBootTests {
     @Test func Cue旧报告晚到与换Mac不复活忙碌_新报告保持确认() async throws {
         let source = TestApp(), receiver = TestApp()

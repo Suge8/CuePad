@@ -12,8 +12,7 @@ extension ClaudeTestbed {
         return session(pid: pid)!
     }
 
-    /// 等这个会话在 `start` 之后做完一轮（进过工作、又歇下）：发话之前取 `start`。看变化记录，不看此刻的状态——
-    /// 回放时一轮可能在开始等之前就做完了；按歇下的时刻认，之前停下的那一轮不算。
+    /// 看变化记录，不看此刻的状态：回放时一轮可能在开始等之前就做完了；按歇下的时刻认，之前停下的那一轮不算。发话之前取 `start`。
     func waitForTurn(_ id: PiSession.ID, since start: Date) async throws {
         func done() -> Bool {
             var worked = false
@@ -30,7 +29,6 @@ extension ClaudeTestbed {
         }
     }
 
-    /// 等这个会话弹出能从 CuePad 作答的问题；等不到时带上终端此刻的样子。
     func waitForQuestion(_ id: PiSession.ID, on terminal: ClaudeTerminal? = nil) async throws -> PiQuestion {
         do {
             try await eventually("会话在等你确认") { bridge.session(id: id)?.question?.promptID != nil }
@@ -40,7 +38,7 @@ extension ClaudeTestbed {
         return bridge.session(id: id)!.question!
     }
 
-    /// 在终端里叫它用一个要确认的工具，等到它在等你确认。模型偶尔不照做（没调工具就答完了这一轮）：在同一会话里再说一次，只重来一次。
+    /// 模型偶尔不照做（没调工具就答完了这一轮）：在同一会话里再说一次，只重来一次。
     func ask(_ prompt: String, on terminal: ClaudeTerminal, in id: PiSession.ID) async throws -> PiQuestion {
         for attempt in 0..<2 {
             try await terminal.type(prompt)
@@ -55,7 +53,6 @@ extension ClaudeTestbed {
         return try await waitForQuestion(id, on: terminal)
     }
 
-    /// 叫它同时派出一个后台子代理（前台跑约 8 秒命令）与一条 20 秒的后台命令，然后歇下；做完的各自由 Claude Code 再跑一轮交回。
     static let backgroundWork = "Do two things in one message, then stop. (1) Launch one subagent with the Agent tool: subagent_type general-purpose, "
         + "run_in_background true, description ticker, prompt: Run the Bash command `for i in 1 2; do sleep 4; done; echo SUB_DONE` as one foreground "
         + "Bash call (not run_in_background), then reply SUB_DONE. (2) Run a Bash command with run_in_background true: `sleep 20; echo BG_DONE`. "
@@ -68,7 +65,6 @@ extension ClaudeTestbed {
         + "Do not wait, poll, sleep or use Monitor. When that command reports back later, reply only with NESTED_DONE. "
         + "After launching the subagent, reply only with the word launched and end your turn. Do not wait or poll. "
         + "Whenever the subagent reports back later, reply only with the last word it said."
-    /// 派一个要跑约一分钟的后台子代理，你再叫它停掉。
     static let longSubagent = "Launch one subagent with the Agent tool: subagent_type general-purpose, run_in_background true, description victim, "
         + "prompt: Run the Bash command `for i in $(seq 1 12); do sleep 5; done; echo V` as one foreground Bash call (not run_in_background), then reply V. "
         + "After launching it, reply only with the word launched and end your turn. Do not wait or poll."
@@ -76,8 +72,6 @@ extension ClaudeTestbed {
     static let passThrough = #""$REAL" "$@""#
     static let backgroundSettings = #"{"permissions": {"allow": ["Bash", "TaskStop"]}}"#
 
-    /// 有后台工作的一件事：在飞时等子代理（至少 `waits` 段），最后交回结果的那一轮做完才歇下，只歇下一次；
-    /// 歇下时的回答是那一轮的（含 `reply`），名册里只有一项、落在 `roster`。
     func expectSettledOnce(_ id: PiSession.ID, since start: Date, reply: String, roster: PiSubagentPhase, waits: Int = 1) async throws {
         let session = { [bridge] in bridge.session(id: id) }
         // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次歇下
@@ -102,12 +96,10 @@ extension ClaudeTestbed {
         }
     }
 
-    /// 会话文件此刻的对话（从头读）
     func transcript(_ file: URL?) throws -> PiHistoryUpdate {
         try PiHistory.index(file: try #require(file), agent: .claudeCode, from: nil, files: files)
     }
 
-    /// 像 App 的索引器那样把会话文件读进会话索引（检查点里有会话名与首条消息）。
     func index(_ file: URL?) async throws {
         let update = try transcript(file)
         let session = IndexedSession(
@@ -115,7 +107,6 @@ extension ClaudeTestbed {
         try await store.upsertPiSessions([PiSessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: nil)], host: "mac")
     }
 
-    /// 这一轮的回答落了库，正在说的话就换下：没有了，或会话页认得出它已在对话里（`PiDraft.landed`，对着会话文件里最近一条回答）。
     /// 回答写进会话文件可能晚于这一轮歇下，等它落盘。
     func waitForDraftLanded(_ id: PiSession.ID) async throws {
         let file = bridge.session(id: id)?.sessionFile
@@ -128,7 +119,6 @@ extension ClaudeTestbed {
         #expect(draft.landed(newestReply: newest), "正在说的话起点 \(draft.since.timeIntervalSince1970)，最近一条回答 \(String(describing: newest?.timeIntervalSince1970))")
     }
 
-    /// 这一轮开始（最近一次进入工作）的时刻
     private func start(of id: PiSession.ID) -> Date {
         log.changes.compactMap { if case .stateChanged(let session, _) = $0, session.id == id, session.state.isWorking { session.stateSince } else { nil } }
             .last ?? .distantPast

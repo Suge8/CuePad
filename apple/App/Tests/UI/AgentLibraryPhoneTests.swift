@@ -5,8 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 手机上的技能与规则：看的是 Mac 报来的快照，改文件发往那台 Mac、等它做完（整理的往返在 `AgentLibraryTests+Sync`）。改动攒在文件页上，点纸飞机才发，离开再回来还在；
-/// Mac 上刚改过就退回（技能那条）。那台 Mac 由一个领 mac-a 请求的执行器扮演：照基准判断、做完写回新快照（同 Mac 的 `AgentLibraryKeeper`）。
+/// 那台 Mac 由一个领 mac-a 请求的执行器扮演：照基准判断、做完写回新快照（同 Mac 的 `AgentLibraryKeeper`）。
 @MainActor
 struct AgentLibraryPhoneTests {
     let app = TestApp()
@@ -14,14 +13,12 @@ struct AgentLibraryPhoneTests {
     nonisolated static let skillPath = "/Users/a/.agents/skills/pr"
     nonisolated static let rulesPath = "/Users/a/.agents/AGENTS.md"
 
-    /// 手机上这份文件此刻同步来的正文（文件页读的那一条，对上快照的哈希才算）。
     func text(_ file: LibraryFile, _ workspace: Workspace) async throws -> String? {
         let library = try #require(workspace.library)
         let texts = try await store.agentLibraryTexts(host: library.hostID, paths: library.textPaths(for: file))
         return library.arrived(file, in: texts) ?? nil
     }
 
-    /// 那台 Mac 上全局规则与 pr 这个技能此刻的样子。
     actor Mac {
         var text = "# 原则\n"
         var skill = "---\nname: pr\ndescription: 写 PR\nlicense: MIT\n---\n\n先读模板\n"
@@ -80,7 +77,6 @@ struct AgentLibraryPhoneTests {
         let global = try await text(.instruction(.global), workspace)
         let opened = workspace.fileDraft(.instruction(.global), text: global, on: "mac-a")
         opened.changed(body: "# 原则\n\n手机改的\n")
-        // 离开文件页再回来：改着的还在，一条都没发
         let draft = workspace.fileDraft(.instruction(.global), text: global, on: "mac-a")
         let requests = try await store.deliveryRequests()
         #expect(draft === opened && draft.dirty && draft.body == "# 原则\n\n手机改的\n" && requests.allSatisfy { $0.libraryEdit == nil }, "没点纸飞机就不发")
@@ -93,7 +89,6 @@ struct AgentLibraryPhoneTests {
         #expect(draft.state == .saved)
     }
 
-    /// 手机上改技能：说明与正文攒着，纸飞机发往 Mac 写成整份 SKILL.md（别的键留着）；Mac 上刚改过就退回，留着你的字等你选。
     @Test func 手机改技能发往Mac写回_Mac上刚改过就退回() async throws {
         let (mac, workspace, stop) = try await start()
         defer { stop() }

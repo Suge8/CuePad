@@ -2,16 +2,7 @@ import CloudKit
 import CueStore
 import Foundation
 
-/// 文件那一路的取：附件记录随拉取与别的记录一起先入库（不带文件，`ZonePuller`），文件在这里另取、带进度（`TransferBoard`），
-/// 验过哈希才放进附件目录（`AttachmentFiles.adopt`）。记录在不等于文件在本机：本机有没有只看附件目录。
-///
-/// 自动取（`wanted`）：Mac 取全部；手机只取不大于 `phoneAutoLimit`、且网络不按流量计费（`NetworkReturns.isMetered`）时的，其余用到时取（`fetch`）。
-/// 自己传上去的文件本来就在本机，不会再取。自动取的至多 `parallel` 个同时在路上；用到时取的不排队。
-/// 跟着附件表（新记录到了）、网络回来（手机换到 Wi-Fi）与重试的等待结束再看一遍。失败交给同步层唯一的调度（`SyncCoordinator.hold`），
-/// 自动取守它（`admits(.fileDownload(urgent: false))`），等待结束（`retryDue`）再试；用到时取的同马上传，只越过连不上与被拒的退避。
-/// 文件坏了（没有文件、哈希不符）报告一次，与这期间在 iCloud 被删了的一样记下不再取（`skipped`），直到记录本身变了或没了。
-/// 用到时取的调用方被取消就当场抛出；没有别人在等、也不是自动取的那一趟随之取消。
-/// 属于一代（`SyncGeneration`）：`stop` 之后不再开始取，在等的（记录、重试时刻、下载结果）当场抛 `FileFetchFailure.notSyncing`。
+/// 文件在这里另取（附件记录随拉取先入库，不带文件）、带进度，验过哈希才放进附件目录（`AttachmentFiles.adopt`）。记录在不等于文件在本机：本机有没有只看附件目录。
 actor FileFetcher {
   static let parallel = 2
   static let phoneAutoLimit = 10 << 20
@@ -20,17 +11,13 @@ actor FileFetcher {
   private let coordinator: SyncCoordinator
   private let board: TransferBoard
   private var files: AttachmentFiles { coordinator.store.files }
-  /// 库里的附件记录（按 key）：订阅附件表得到。
   private var known: [String: Attachment] = [:]
   private var running: [String: Task<URL, any Error>] = [:]
-  /// 在跑的里面自动取的（占 `parallel` 的名额）。
   private var automatic: Set<String> = []
-  /// 不再取的（坏了：`FileFetchFailure.damaged`；在 iCloud 被删了：`unknownItem`）与那时的记录：用到时取的照样抛出这个错，
-  /// 记录变了（另一台重传）或没了（删除拉到了）就忘掉。
+  /// 不再取的（坏了、在 iCloud 被删了）与那时的记录：用到时取的照样抛出这个错，记录变了（另一台重传）或没了（删除拉到了）就忘掉。
   private var skipped: [String: (attachment: Attachment, error: any Error)] = [:]
-  /// 每个 key 有几个用到时取的调用方在等。
   private var demand: [String: Int] = [:]
-  /// 用到时要取、记录还没到的：记录到了就取。停下时随这一代结束一起答（`fetch` 抛 `notSyncing`）。
+  /// 用到时要取、记录还没到的：停下时随这一代结束一起答（`fetch` 抛 `notSyncing`）。
   private var waiters: [(key: String, answer: Promise<Attachment>)] = []
   private var tasks: [Task<Void, Never>] = []
   private let generation: SyncGeneration
@@ -88,7 +75,6 @@ actor FileFetcher {
     return try await generation.outcome(of: running[key] ?? begin(attachment, automatic: false))
   }
 
-  /// 同步层此刻许这一路发请求：停下了抛出，服务器要求等就等到等待结束（`retryDue`）。
   private func admitted() async throws {
     let due = coordinator.retryDue.stream()  // 先订阅：看条件时跨了 actor，其间结束的那次不漏
     while true {
@@ -112,7 +98,6 @@ actor FileFetcher {
     if left <= 0, !automatic.contains(key) { running[key]?.cancel() }
   }
 
-  /// 等这个 key 的附件记录到本机库。
   private func record(of key: String) async throws -> Attachment {
     let answer = Promise<Attachment>()
     waiters.append((key, answer))
@@ -129,7 +114,6 @@ actor FileFetcher {
     await scan()
   }
 
-  /// 补足自动取的。
   private func scan() async {
     guard !generation.isOver, automatic.count < Self.parallel, await coordinator.canSync, await coordinator.admits(.fileDownload(urgent: false)) else { return }
     for (key, attachment) in known where automatic.count < Self.parallel {

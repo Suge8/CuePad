@@ -5,14 +5,11 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：真 OpenCode 的后台服务，模型见 `openCodeTestModel`（缺省是假模型，零网络）。CuePad 看得到它的会话、在 CuePad 里跟它说话与作答，
-/// 也能在服务没开时自己把它拉起来开新会话、接着已结束的会话。
 @MainActor
 @Suite(RealAgents.taped(.opencode), .serialized, .timeLimit(.minutes(10)))
 struct RealOpenCodeTests {
     func session(_ bridge: PiBridge) -> PiSession? { bridge.sessions.first { $0.agent == .opencode } }
 
-    /// 一台隔离的 OpenCode 加一个空资料库与桥；不论成败，最后停掉接入、按 pid 停掉服务、删掉临时目录。
     func withOpenCode(_ body: (OpenCodeSandbox, CueStore, PiBridge, OpenCodeRuntime) async throws -> Void) async throws {
         let sandbox = try await OpenCodeSandbox()
         let store = try Fixture().store
@@ -36,8 +33,6 @@ struct RealOpenCodeTests {
         try await store.piMessages(of: sessionID).filter { $0.role == .known(.pi) }.map(\.text)
     }
 
-    /// 终端里（`opencode run`，连着后台服务）说过话的会话出现在 CuePad：实时状态、对话进资料库；CuePad 接着跟它说、改名、换模型与强度、
-    /// 回答它要你确认的命令；服务停了会话就下线。
     @Test func aTerminalSessionIsLiveInCuePadAndTakesMessagesAnswersAndSettings() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             try await sandbox.run(["run", "Reply with exactly the word PONG and nothing else."])
@@ -74,7 +69,6 @@ struct RealOpenCodeTests {
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/no-such-command", in: live.id) }
             try await bridge.configure(PiConfig(model: openCodeTestModel), in: live.id)
 
-            // 用户给这个会话定了规矩：跑命令要先问
             try await sandbox.api("PATCH", "/api/session/\(live.sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])
             let marker = sandbox.work.appending(path: "approved.txt")
             try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: touch approved.txt  Then reply DONE."), to: live.id)
@@ -92,7 +86,6 @@ struct RealOpenCodeTests {
                 try await store.piMessages(of: live.sessionID).contains { $0.text == PiNotice.compacted.rawValue }
             }
 
-            // 断开接入（App 停掉接入、删掉索引）再接入：会话先下线，再接入后重新上桥、索引从头写回
             await runtime.stop()()
             #expect(session(bridge) == nil)
             try await store.deletePiSessions(of: .opencode, keepingHostedOn: "mac")
@@ -107,7 +100,6 @@ struct RealOpenCodeTests {
         }
     }
 
-    /// 忙的时候说一句：先停下在跑的这一轮（对话里留一行"已停止"），这句开新一轮并得到回答，认得出是这次投送。
     @Test func aMessageWhileBusyStopsTheRoundAndStartsANewOne() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-q", name: nil, model: nil, thinking: nil)
@@ -132,7 +124,6 @@ struct RealOpenCodeTests {
         }
     }
 
-    /// 在 CuePad 里停下跑着的一轮：没有回答，对话里留一行"已停止"（四家同一规则）。
     @Test func aStoppedRoundLeavesAStoppedLine() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-s", name: nil, model: nil, thinking: nil)
@@ -148,7 +139,6 @@ struct RealOpenCodeTests {
         }
     }
 
-    /// 在 CuePad 里拒绝它要跑的命令：OpenCode 随之停下这一轮，对话里写"已拒绝"，不写"已停止"（读起来不像你按了停止）。
     @Test func aRoundEndedByARejectedPermissionSaysDeclined() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-d", name: nil, model: nil, thinking: nil)

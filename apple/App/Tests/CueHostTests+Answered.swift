@@ -8,10 +8,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 交出去的你的话最终答上、只答一次：收尾那一刻插进去的、停用与崩溃时没答上的、退回或回答没写进库的。
 extension CueHostTests {
-    /// 收尾那一刻追问：会话的动静叫醒的那一轮在 Pi 里已收尾、还没报出来时你说一句，这台 Mac 以为那一轮还在跑、把话插进去，
-    /// Pi 报完收尾另开一轮接走它。这句在接走它的那一轮得到回答、只答一次；叫醒的那一轮最后的话不当成回答你写进对话。
     @Test func 收尾那一刻追问_这句在下一轮得到回答_只答一次() async throws {
         let rig = try await Rig(settleGate: true)
         let held = try rig.armSettle()
@@ -31,8 +28,7 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 收尾那一刻改规矩又追问：叫醒的那一轮在 Pi 里已收尾、还没报出来时你钉上一条、再说一句，那句插给了以为在跑的那一轮。
-    /// 规矩不插进这一轮（插了模型会回应它、盖掉回复），这一轮做完就换班次，新班次的系统提示照新规矩；你那句没被接走，退回交给新班次，只答一次。
+    /// 规矩不插进这一轮：插了模型会回应它、盖掉回复。
     @Test func 收尾那一刻改规矩又追问_这句换班次后只答一次_规矩照样生效() async throws {
         let rig = try await Rig(settleGate: true)
         let held = try rig.armSettle()
@@ -56,7 +52,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 一轮还没答完你就停用 Cue（App 退出同一条路）：交出去没答上的那句退回没送达，再启用时重新交给它、只答一次。
     @Test func 一轮没答完就停用_那句退回_再启用时答上() async throws {
         let rig = try await Rig()
         try await rig.say("请等我放行")
@@ -74,7 +69,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 一轮还没答完 App 就崩溃（没走到收尾）：磁盘上留着的是那句已送达、进度里记着它没答上。再值班时退回、重新交给它并答上。
     /// 崩溃留下的样子用正常停用后改回去摆出来：进度文件换回停用前的那份，那句再记成已送达。
     @Test func 一轮没答完App就崩溃_那句再值班时答上() async throws {
         let rig = try await Rig()
@@ -98,8 +92,7 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 一轮中途大脑没了，退回交出去的那句时库写不进（触发器拦下，同磁盘满、库坏这类真实失败）：那句不丢，库好了不等新动静自己退回、
-    /// 交给新的大脑，答上一次。
+    /// 触发器拦库写入，同磁盘满、库坏这类真实失败。
     @Test func 退回那句时库写不进_库好了自己再退回_答上一次() async throws {
         let rig = try await Rig(timing: { $0.returnRetry = .milliseconds(300) })
         let first = try #require(rig.brainPIDs.first)
@@ -118,7 +111,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 一轮做完、回答写不进库（触发器拦下）：那句不算答上，退回重新交给 Cue；库好了答上，只落一次。
     @Test func 回答写不进库_那句重新交出_库好了答上一次() async throws {
         let rig = try await Rig()
         let db = RawDB(rig.services.location.databaseURL)

@@ -14,7 +14,7 @@ extension EditorHarness {
 
     var stored: String { textView.storedText }
 
-    /// 条件等待：让出主线程直到条件成立，条件一成立马上返回。上限只是"确实不会来了"的兜底（同 CueTestSupport 的 conditionBudget）。
+    /// 让出主线程直到条件成立。上限只是"确实不会来了"的兜底。
     func wait(until condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(TimeInterval(conditionBudget.components.seconds))
         while !condition() {
@@ -25,7 +25,6 @@ extension EditorHarness {
     }
 }
 
-/// 变量高亮的可观察结果：直接问 TextKit 渲染属性哪些范围带了主题的变量背景色。
 @MainActor
 func highlightedRanges(in textView: CueTextView, color: CueColor) -> [NSRange] {
     let layout = textView.textLayoutManager!

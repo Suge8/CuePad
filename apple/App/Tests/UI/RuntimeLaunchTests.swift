@@ -4,8 +4,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Mac 重开（上次退出时写下了离线）：画第一帧时读到的本机会话就是确定的说法——还在的照它记下的、进程已经没了的对账成被打断，
-/// 不先闪一下"状态未确认"再变（`AppServices.launch`）。
 struct RuntimeLaunchTests {
     @Test func Mac重开_第一帧里本机的会话就是确定的说法() async throws {
         let app = TestApp(), store = app.services.store

@@ -5,12 +5,10 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：CuePad 在后台托管 Grok Build（`grok agent stdio`，录制时连假模型，见 `GrokModel`），对话来自它的会话记录。
+/// 录制时连假模型，见 `GrokModel`。
 @MainActor
 @Suite(RealAgents.taped(.grok), .agentTape(.grok), RealAgents.timeLimit(.minutes(3)), RealAgents.serialWhenRecording(.grok))
 struct RealGrokTests {
-    /// 开一个新会话、发一句带图的话：会话出现在桥上（后台托管、带着认领标识），做完一轮后歇下、报上下文余量；会话记录里你的话带着这次投送的 id 与图片，
-    /// 回答是一条 Grok 消息；换模型、强度与改名生效，不认的模型提示点的是 Grok。结束后下线；再接着这个已结束的会话说，它在后台恢复、接着回答。
     @Test func aHostedSessionTakesAMessageWithAnImageIsConfiguredEndedAndResumed() async throws {
         try await withGrokRig { rig in
             let log = ChangeLog(rig.bridge)
@@ -53,7 +51,6 @@ struct RealGrokTests {
         }
     }
 
-    /// 需要你确认的命令：会话停在"等你确认"、带着要跑的命令；在 CuePad 里允许后命令照常跑完，这一轮做完。
     /// 用例的话是真模型也照做的明确指令，断言只看你看得到的（假模型的剧本认这几句原话，`FakeResponses.plan`）。
     @Test func aPermissionRequestIsAnsweredFromCuePad() async throws {
         try await withGrokRig { rig in
@@ -73,8 +70,6 @@ struct RealGrokTests {
         }
     }
 
-    /// Grok 问你（`ask_user_question`，一次两问）：会话停在"等你回答"，逐问带着选项与说明、也能自己填，选项外的不收；在 CuePad 里答完第一问
-    /// 才出第二问，两问都答了它拿着答案接着说，这一轮做完。
     @Test func aQuestionIsAnsweredFromCuePadOneByOne() async throws {
         try await withGrokRig { rig in
             let id = try await rig.open("token-ask")
@@ -102,7 +97,6 @@ struct RealGrokTests {
         }
     }
 
-    /// 说了一句正在跑时停下：这一轮就此结束，会话歇下、能接着说。
     @Test func aRunningTurnIsAborted() async throws {
         try await withGrokRig { rig in
             let id = try await rig.open("token-3")
@@ -150,7 +144,6 @@ final class GrokRig {
         try runtime.start()
     }
 
-    /// 开一个托管会话（模型见 `GrokModel.hosted`）
     func open(_ launchToken: String) async throws -> PiSession.ID {
         try await runtime.open(in: work, launchToken: launchToken, name: nil, model: GrokModel.hosted, thinking: nil)
     }

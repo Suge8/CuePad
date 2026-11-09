@@ -4,9 +4,8 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 起进程取输出（Pi 检测、终端跳转、登录检测都经 `ChildProcess.run`）的边界契约。
 struct ChildProcessTests {
-    /// 输出比管道缓冲（64 KB）大时，子进程写不进去就卡住，必须在它运行期间就读。
+    /// 管道缓冲 64 KB：子进程写不进去就卡住，必须在它运行期间就读。
     @Test func outputLargerThanThePipeBufferIsReadInFull() async {
         let result = await ChildProcess.run(URL(filePath: "/bin/sh"), ["-c", "head -c 300000 /dev/zero | tr '\\0' x; exit 3"])
         #expect(result?.status == 3 && result?.output.count == 300_000)
@@ -28,10 +27,8 @@ struct ChildProcessTests {
         clock.advance(AgentTimeouts.endGrace)
     }
 
-    /// 超时结束的是起的命令连同它起的子进程：子进程握着输出管道、自己不退，也不让调用方等它。
     @Test func aTimeoutEndsTheChildrenHoldingTheOutputToo() async throws {
         let marker = try makeTempDirectory().appending(path: "child.pid")
-        // 子进程不理 SIGTERM（像 Agent 起的服务），后台跑着、继承了标准输出
         let script = "sh -c \"trap '' TERM; echo \\$\\$ > '\(marker.path)'; sleep 30\" & wait"
         let clock = ManualTiming()
         let call = Task { await ChildProcess.attempt(URL(filePath: "/bin/sh"), ["-c", script], timeout: .seconds(1), timing: clock.timing) }
@@ -55,9 +52,7 @@ struct ChildProcessTests {
         child.end()
     }
 
-    /// 后台托管的进程在认领之前，起它的一方没了（App 退出、更新、崩溃，这里是起它的对象释放了）就随之结束，连 SIGTERM 也不理的也不留下：
-    /// 不然起到一半 App 就没了、扩展又没接手的 Pi 会一直空转（10-21 测量实例留下的 25 个孤儿）。认领之后照常活着由
-    /// `RealHostTests.aHostedSessionOutlivesCuePadAndIsSeenAgainByTheNextOne` 证明。
+    /// 不然起到一半 App 就没了、扩展又没接手的 Pi 会一直空转（10-21 测量实例留下的 25 个孤儿）。认领之后照常活着由 `RealHostTests.aHostedSessionOutlivesCuePadAndIsSeenAgainByTheNextOne` 证明。
     @Test func aDetachedProcessNobodyClaimedEndsWithItsLauncher() async throws {
         let started = try makeTempDirectory().appending(path: "started")
         var child: ChildProcess? = try await ChildProcess(

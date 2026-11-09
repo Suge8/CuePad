@@ -3,9 +3,7 @@ import CueStore
 import Foundation
 import Testing
 
-/// Cue 经 `cuepad mcp` 改一条记着的规矩、看全部定时。
 extension MCPTests {
-  /// 他改了说法：新的一条取代旧的（同一次写入里忘掉旧的），钉不钉照旧的；定时不能被替换，整件退回、什么都不写。
   @Test func aChangedRuleReplacesTheOldOneInsteadOfPilingUp() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -33,7 +31,6 @@ extension MCPTests {
     }
   }
 
-  /// schedules 列出全部定时：UUID、下一次、怎么重复、挂在哪件任务上。
   @Test func cueListsAllItsSchedules() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store

@@ -6,7 +6,6 @@ import Testing
 @testable import CuePi
 
 extension RealPiTests {
-    /// 正在等你确认时结束会话或停止这一轮：弹窗被取消（不取消 Pi 会一直等下去），会话不卡在等你。
     /// 结束走扩展接口 `ctx.shutdown`；测试驱动的是 RPC 进程，它在下一条命令后才检查退出请求，所以结束只验证弹窗被取消。
     @Test(arguments: ["end", "abort"]) func endingOrStoppingCancelsThePendingDialog(_ action: String) async throws {
         AgentTape.variant(action)
@@ -22,7 +21,6 @@ extension RealPiTests {
         }
     }
 
-    /// 停止这一轮：正在跑的一轮被中止、会话回到空闲等下一句（终态是"被中止"），会话还在、能接着说；空闲时停止直接成功、什么也不发生。
     @Test func abortStopsTheRunningTurnAndTheSessionTakesTheNextMessage() async throws {
         try await withRig { pi, bridge, s in
             try await bridge.abort(s.id)  // 空闲：成功，不改状态
@@ -39,7 +37,6 @@ extension RealPiTests {
     }
 
     /// 工具跑着时停止，而 Pi 把这一轮记成了 error（工具被中止后的那次请求因中止失败，见 fake-model 的 [[abort-as-error]]）：
-    /// 这一轮收到过停止，按被停下报，会话歇着、不显示出错；对话里是"已停止"，不是一轮出错的空回答。
     @Test func abortDuringAToolIsAStopEvenWhenPiRecordsAnError() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令")
@@ -63,8 +60,6 @@ extension RealPiTests {
         }
     }
 
-    /// 会话正忙时发来的话先停下在跑的这一轮（连同跑着的工具），再作为新一轮开始；接连发两句，每句都是新的一轮——
-    /// 前一句开的那一轮也被下一句停下，只有最后一句得到回答。每句都带着自己的投送请求 id。
     /// 前一句的那一轮停住（`[[slow]]`）：第二句到达时它不论已经开始还是还在等着，结果都一样。
     @Test func aMessageSentWhileBusyStopsTheRunningTurnAndStartsANewOneWithIt() async throws {
         try await withRig { pi, bridge, s in
@@ -88,7 +83,6 @@ extension RealPiTests {
         }
     }
 
-    /// 摘要（读会话文件）：你说的话单行、回答保留换行；块之间夹着真人文字的算你说的；超长截断。
     @Test func recapKeepsYourWordsOnOneLineAndTruncatesLongOnes() async throws {
         try await withRig { pi, _, s in
             try pi.prompt("第一行\n第二行")
@@ -110,7 +104,6 @@ extension RealPiTests {
         }
     }
 
-    /// 上次在一轮中途退出（工具还在跑）的会话：摘要仍是之前那一轮做完的问答，不把半截的助手消息当成回答。
     @Test func anInterruptedRoundLeavesTheLastCompletedExchangeInTheRecap() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("第一问")
@@ -127,8 +120,6 @@ extension RealPiTests {
         }
     }
 
-    /// 重跑出错的那一轮：会话回到在跑、做完；请求与第一次一样（假模型报出请求里每条消息的角色：只有系统提示与你的话），
-    /// 对话里不多一句话、只多出新的回答，之后的请求里也没有重跑留下的消息；没出错的会话拒绝。
     @Test func retryRerunsTheFailedTurnAndTheConversationOnlyGainsTheNewAnswer() async throws {
         try await withRig { pi, bridge, s in
             let file = try #require(s.sessionFile)

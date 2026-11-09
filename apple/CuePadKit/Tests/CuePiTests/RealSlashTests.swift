@@ -5,7 +5,6 @@ import Testing
 import CueStore
 @testable import CuePi
 
-/// 斜杠命令与上下文余量的端到端：真实 Pi + 安装器装进临时目录的真实扩展 + 假模型 + `PiBridge`。
 /// 提示词模板与 skill 用 Pi 的显式路径参数加载，扩展命令来自测试夹具。
 @MainActor
 @Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
@@ -29,7 +28,6 @@ struct RealSlashTests {
         try await body(pi, bridge, bridge.sessions[0])
     }
 
-    /// 上下文余量：窗口大小来自当前模型；跑过一轮后有已用量；压缩后到下一次回答前未知（tokens 为 nil），窗口仍在。
     @Test func contextUsageIsReportedPerTurnAndUnknownRightAfterCompaction() async throws {
         try await withRig { pi, bridge, s in
             #expect(s.context?.window == 100_000)
@@ -51,14 +49,12 @@ struct RealSlashTests {
             try await eventually("压缩后已用量未知") {
                 bridge.sessions.first?.context.map { $0.tokens == nil && $0.window == 100_000 } == true
             }
-            // 压缩在会话文件里留下一条 compaction：对话里是一行系统行（真实 Pi 写的格式）
             let transcript = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
             #expect(transcript.contains { $0.role == .known(.system) && $0.text.hasPrefix("已压缩上下文") })
             #expect(transcript.filter { $0.role == .known(.user) }.count == 2)  // 命令没有变成你说的话
         }
     }
 
-    /// 清单 = 内置里能在非 TUI 下执行的 + 扩展命令 + 提示词模板 + skill；内部用的命令与纯终端交互的内置命令不列。
     @Test func commandListHasRunnableBuiltinsExtensionsTemplatesAndSkills() async throws {
         try await withRig { _, _, s in
             let byName = Dictionary(uniqueKeysWithValues: s.commands.map { ($0.name, $0) })
@@ -75,7 +71,6 @@ struct RealSlashTests {
         }
     }
 
-    /// #58：扩展命令不产生你的话，Pi 执行了它就确认；模板与 skill 是你说的话，经 send 交出、由 Pi 展开，落成的那条消息带着这次投送的 id（对话据此换下气泡）。
     @Test func extensionCommandsAreConfirmedAndTemplatesAndSkillsLandWithTheirDelivery() async throws {
         try await withRig { pi, bridge, s in
             try await bridge.command("/shout hi there", in: s.id)
@@ -120,7 +115,6 @@ struct RealSlashTests {
         }
     }
 
-    /// 需要会话控制权的内置命令（新会话、重新载入、克隆）经扩展自己的内部命令执行：旧会话结束、新会话出现。
     @Test func newSessionEndsTheOldOneAndOpensAnother() async throws {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)

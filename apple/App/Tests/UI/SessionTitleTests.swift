@@ -6,8 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话名取各家 Agent 自己的会话名：你起的为准，没起过时用 Agent 按对话起的（Claude Code 的 `ai-title`、dsh 的标题、Grok 的 `summary.json`、
-/// Codex 的 `session_index.jsonl`），都没有才退回首句。历史会话与在线会话（只落在文件里的名字经历史索引补上）同一个名字。
 /// 会话文件的形状照各家真机写下的（Claude Code 2.1、Grok 1.0、Codex 0.16x 的本机会话目录）。
 @MainActor
 struct SessionTitleTests {
@@ -21,7 +19,6 @@ struct SessionTitleTests {
         try objects.map { String(decoding: try JSONSerialization.data(withJSONObject: $0), as: UTF8.self) + "\n" }.joined().write(to: file, atomically: true, encoding: .utf8)
     }
 
-    /// 读一遍会话文件交给 App（同历史索引），返回会话行写的名字。
     private func indexed(_ file: URL, _ agent: AgentKind, id: String) async throws -> String {
         let update = try PiHistory.index(file: file, agent: agent, from: nil, files: store.files)
         await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: agent)
@@ -75,8 +72,6 @@ struct SessionTitleTests {
         #expect(try await indexed(grok, .grok, id: "g1") == "6 秒黑屏视频")
     }
 
-    /// 在线的会话：接入没报名字（Claude Code 的钩子不带它自己起的名字），历史索引读到后会话行与看板换成它；之后接入报来的改名，
-    /// 落后一步的文件不会把它倒回去。
     @Test func 在线会话的名字只在文件里_读到后补上_不倒回接入报来的改名() async throws {
         defer { app.services.cancelBackgroundWork() }
         let events = app.pi.changes()
@@ -112,7 +107,6 @@ struct SessionTitleTests {
         consume.cancel()
         _ = await consume.result
     }
-    /// Grok 起好、改过的名字只写 `summary.json`，会话记录不动：盯着的会话照样换上新名字，CuePad 重开后回填也读到这期间改的。
     @Test func 只有旁边存名字的文件变了_名字照样跟上_重开后也是() async throws {
         defer { app.services.cancelBackgroundWork() }
         let paths = AgentPaths(pi: app.piPaths, environment: app.agentHomes)

@@ -7,7 +7,6 @@ import Testing
 @testable import CuePi
 @testable import CueStore
 
-/// #43：一次未知不授权重投旧请求，也不能永久锁住用户明确发起的新控制意图。
 @MainActor
 struct DeliveryControlTests {
     @Test(arguments: [DeliveryMode.send, .start], [
@@ -31,7 +30,6 @@ struct DeliveryControlTests {
         let text = mode == .start ? PiLaunch(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
         await Workspace(services: app.services).speak(text, to: .session(target, host: host, mode: mode, card: task.id)).value
         let request = try #require(try await store.deliveryRequests().first)
-        // 写回前崩溃／丢回执：已交出的原意图留在库里，未确认不是未开工。
         try RawDB(app.services.location.databaseURL).exec(
             "UPDATE deliveryRequests SET status = '\(status)', handledBy = '\(host)', deadlineAt = createdAt - 1000 WHERE id = '\(request.id.uuidString.lowercased())'")
         let occupied = try #require(try await store.handoffRequests(for: [task.id])[task.id])

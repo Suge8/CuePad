@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 连真运行时才看得出的（进程树、各家的历史）：录制时列出的、OpenCode（总连真的），本机跑得起来的几家
 private let liveRuntimes = AgentKind.allCases.filter { RealAgents.runs($0) && RealAgents.mode(of: $0) != .replay }
 private let home = FileManager.default.homeDirectoryForCurrentUser
 
@@ -21,7 +20,6 @@ struct RealBrainProcessTests {
 
         let tree = try processTree(containing: rig.marker)
         #expect(tree.count >= 2)  // 运行时与 MCP 替身
-        // OpenCode 的会话在它的库里：用接入连的后台服务看这个工作目录里的会话，停之前有、停之后一个不剩
         let sandbox = rig.sandbox
         if let sandbox {
             try await sandbox.run(["service", "start"])
@@ -87,7 +85,6 @@ struct RealBrainProcessTests {
         return tree
     }
 
-    /// Codex 的会话文件（只读）里提到这个工作目录的。
     private func codexSessions(mentioning marker: String) throws -> [String] {
         let root = home.appending(path: ".codex/sessions")
         let recent = Date().addingTimeInterval(-600)
@@ -99,7 +96,6 @@ struct RealBrainProcessTests {
         }.map(\.path)
     }
 
-    /// Claude Code 按工作目录存的会话记录（只读）。
     private func claudeTranscripts(for marker: String) throws -> [String] {
         let root = home.appending(path: ".claude/projects")
         let projects = try FileManager.default.contentsOfDirectory(atPath: root.path).filter { $0.contains(marker) }

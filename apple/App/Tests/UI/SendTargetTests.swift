@@ -5,8 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Mac 上"开始"一件任务（`Workspace.handOff`）：标题连同正文作为第一句交出去——上一步绑着会话就接着发进那个会话，没有就在项目文件夹开一个以任务命名的新会话并绑上。
-/// 会话结束了在后台唤醒它，别的 Mac 上的会话（正忙也不先问）写指定那台 Mac 的请求；送达后这一步绑上会话，正文留在任务上。
 struct SendTargetTests {
     let rig = TestApp()
     let workspace: Workspace
@@ -30,7 +28,6 @@ struct SendTargetTests {
         rig.services.startLiveSessions()
     }
 
-    /// 一个连着桥的 Pi 会话（同一个会话重新打开时 `pid` 不同）。
     private func open(_ sessionID: String, in directory: String, pid: Int32 = 100) async throws -> FakeExtension {
         // 说过话的会话才有会话文件：结束后进历史（没有文件的结束时不进历史）
         let file = FileManager.default.temporaryDirectory.appending(path: "send-target-\(UUID().uuidString).jsonl")
@@ -47,7 +44,6 @@ struct SendTargetTests {
         try await eventually("rig.pi.session(id: ext.id) == nil") { rig.pi.session(id: ext.id) == nil }
     }
 
-    /// 一个带着正文的叶子任务；`session` 给了就是上一步绑着这个会话的第二步（开始时接着用它）。
     private func leaf(in project: Project, session: String? = nil) async throws -> Card {
         guard let session else { return try await store.createTask(Self.text, in: project.id) }
         let task = try await store.createTask("修乱序", in: project.id)
@@ -58,14 +54,11 @@ struct SendTargetTests {
 
     private static let text = "修乱序\n按首次加入时间排"
 
-    /// 别的 Mac 上在线的会话（同步记录里 hostID 不是本机，那台的在线记录同步到了这里）。
     private func remoteSession(_ id: String, title: String, state: PiWorkState = .settled) async throws {
         try await rig.runtimeRecorder(on: "mac-b").update(
             sessionID: id, state: state, title: title, directory: title, projectID: project.id)
     }
 
-    /// 没有会话可接着用：在项目文件夹开以任务命名的新会话，开场的话送进去后任务绑上它、正文留着。项目在这台 Mac 上没绑文件夹时，
-    /// 先在工作区的根下建好以项目名命名的文件夹（文件系统不收的字符换掉）、绑上；同名的文件夹已经在就直接用它，里面的东西不动。
     @Test func 没有会话可接着用_在项目文件夹开以任务命名的新会话并绑上_没绑文件夹的建好工作区() async throws {
         let folder = rig.directory.appending(path: "work/new", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -138,7 +131,6 @@ struct SendTargetTests {
         #expect(request.target == SendTarget(kind: .piSession, name: "alpha", ref: "a") && request.mode == .known(.send))
         #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
         #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: Self.text, deliveryID: request.id.uuidString)])
-        // 交出就提示，不等送达
         #expect(workspace.notice != nil && workspace.notice?.isError == false)
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "a" }
     }
@@ -173,9 +165,6 @@ struct SendTargetTests {
         #expect(rig.host.calls.isEmpty, "没有当成已结束的去唤醒")
     }
 
-    /// 交到哪只有一份规则（`CueStore.handOffPlan`）：同样的一步，Mac 上"开始"与 Cue 开工落到同一个会话；开新会话时会话名、项目、哪台 Mac 都一样。
-    /// 上一步绑着别的 Mac 上的会话：写一条指定那台 Mac 的请求，本机不执行；会话在跑也不先问，由那台执行时打断这一轮；还没送达，这一步还没绑上。
-    /// Cue 不插嘴不是它开的那一轮（`checkCueCanSpeak`）：会话正忙时 Cue 开工被退回、什么都不写，歇下后再开工，交到同一处。
     @Test func Mac开始与Cue开工_交到同一个地方_别的Mac上的会话正忙也不先问() async throws {
         try await remoteSession("r", title: "atlas", state: .thinking)
         let (forMac, forCue) = (try await leaf(in: project, session: "r"), try await leaf(in: project, session: "r"))
@@ -191,7 +180,6 @@ struct SendTargetTests {
         let cue = try await store.startLeaf(forCue.id, host: TestApp.hostID, cue: true)
         #expect(cue.target.ref == "r" && cue.hostID == mac.hostID)
 
-        // 上一步绑着别的 Mac 上已结束的会话：都请那台 Mac 唤醒它
         try await remoteSession("gone", title: "relic", state: .ended)
         let (endedForMac, endedForCue) = (try await leaf(in: project, session: "gone"), try await leaf(in: project, session: "gone"))
         workspace.handOff(endedForMac)
@@ -209,7 +197,6 @@ struct SendTargetTests {
         #expect(macLaunch.target.name == cueLaunch.target.name)
     }
 
-    /// 同步记录里还写着"在线"的本机会话，桥上却已经没有了（还没来得及标成结束）：不是能绑、能交的在线会话，与发送走的路（已结束）是同一个判定。
     @Test func 本机记录里在线但桥上已没有的会话不算在线() async throws {
         _ = try await open("a", in: "/work/alpha")
         try await remoteSession("r", title: "atlas")

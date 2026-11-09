@@ -3,10 +3,7 @@ import CueStore
 import Foundation
 import os
 
-/// 内存里的 iCloud 替身：账号默认可用（`setAccount` 改），同步区是一组按写入先后编号的记录，令牌就是编号；收下的上传照单记下（`saved`）。
-/// 同真服务器，收下的记录带着第一次收下的时刻（`creationDate`，按 `now` 的钟），上传的回执与之后的拉取都是这一份：投送请求的派发期限从它算。
-/// 删掉的记录留一个同样编号的墓碑，拉取时作为删除交给拉到它之后的设备（同 CloudKit 的变更令牌）。
-/// 测试与调试画面用它跑真实的同步代码（`CloudSync`），只换掉网络那一头。
+/// 收下的记录带着第一次收下的时刻（`creationDate`，按 `now` 的钟），上传的回执与之后的拉取都是这一份：投送请求的派发期限从它算。
 actor SimulatedCloud: SyncCloud {
   private var zone: [CKRecord.ID: (seq: Int, record: CKRecord)] = [:]
   private var tombstones: [CKRecord.ID: (seq: Int, recordType: String)] = [:]
@@ -15,9 +12,7 @@ actor SimulatedCloud: SyncCloud {
   /// nil：认账号一直没有回音。
   private var status: CKAccountStatus? = .available
   private(set) var accountChecks = 0
-  /// 上传逐条像断网那样失败（-1009）：本机写下的留在待推送里。
   private var uploadsFail = false
-  /// 收下的上传（记录名），按先后。
   private(set) var saved: [String] = []
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
   private let now: @Sendable () -> Date
@@ -30,14 +25,12 @@ actor SimulatedCloud: SyncCloud {
     }
   }
 
-  /// 别的设备写下一条。
   func put(_ record: CKRecord) {
     seq += 1
     zone[record.recordID] = (seq, record)
     tombstones[record.recordID] = nil
   }
 
-  /// 换登了另一个 iCloud 账号：它的同步区是空的。
   func signIn(_ account: String) {
     self.account = account
     zone = [:]
@@ -106,7 +99,6 @@ actor SimulatedCloud: SyncCloud {
 }
 
 extension CloudSync {
-  /// 连内存里的 iCloud 替身跑真实的同步代码（调试画面）：替身的同步区里已有最低对端版本 `peerFloor`。
   public static func simulated(store: CueStore, peerFloor: Int) -> CloudSync {
     let floor = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: zoneID).id)
     floor[PeerFloor.field] = peerFloor as NSNumber
@@ -115,8 +107,6 @@ extension CloudSync {
   }
 }
 
-/// 断了网的 iCloud 替身：认得出账号，其余请求都像断网那样失败——拉取与订阅是 CloudKit 包着的 -1009，上传是包在 `partialFailure` 里的逐条 -1009。
-/// 调试画面用它看断网时各处界面怎么说（`CloudSync.unreachable`）。
 struct UnreachableCloud: SyncCloud {
   private static let offline = NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)
   static var failure: CKError { CKError(.networkUnavailable, userInfo: [NSUnderlyingErrorKey: offline]) }
@@ -140,7 +130,6 @@ struct UnreachableCloud: SyncCloud {
 }
 
 extension CloudSync {
-  /// 连断了网的 iCloud 替身（`UnreachableCloud`，调试画面）。
   public static func unreachable(store: CueStore) -> CloudSync { CloudSync(store: store) { UnreachableCloud() } }
 }
 
@@ -154,7 +143,7 @@ extension CKRecord {
     return stamped
   }
 
-  /// 去掉文件的一份（替身的拉取与按 ID 取同 CloudKit 只要列：不带文件）。
+  /// 同 CloudKit：拉取与按 ID 取只要列，不带文件。
   var withoutFile: CKRecord {
     guard self[RecordMapper.fileKey] != nil, let copy = copy() as? CKRecord else { return self }
     copy[RecordMapper.fileKey] = nil
@@ -162,7 +151,6 @@ extension CKRecord {
   }
 }
 
-/// 读回归档时把记录的创建时刻换成 `date`（`CKRecord.created(at:)`）。
 private final class CreationStamp: NSKeyedUnarchiver {
   private let date: Date
 

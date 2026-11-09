@@ -5,14 +5,10 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// CuePad 在一轮中途才启动（重启、更新都是这样）：从 `claude agents --json` 接上在跑的会话，这一轮的开始取列出它之后会话文件里读到的
-/// （从索引器存下的检查点接着读）。
 /// 列表请求途中可能换轮或收尾：外壳把列表扣住，期间写好会话文件，再交出"在跑"。不起 Claude Code（录像带是空的）。
 @MainActor
 @Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.timeLimit(.minutes(5)))
 struct ClaudeDiscoveryTests {
-    /// 换轮：上一轮在请求途中答完、这一轮紧接着开始，回答还没写——上一轮的回答不算这一轮的（歇下先到时 Cue 不读它），这一轮的回答写下就算。
-    /// 收尾：这一轮在请求途中答完——它的回答算（Cue 照样被叫醒）。
     @Test func aRoundThatChangesOrEndsWhileCuePadIsListingItIsReadFromTheSessionFile() async throws {
         let wrapper = #"if [ "$1" = agents ]; then touch "${0%/*}/listed"; cat "${0%/*}/release" >/dev/null; cat "${0%/*}/listing.json"; else "$REAL" "$@"; fi"#
         try await ClaudeTestbed.run(installHooks: false, wrapper: wrapper) { testbed in
@@ -25,7 +21,6 @@ struct ClaudeDiscoveryTests {
             // 都写在列表请求发出之后，相隔 1 毫秒（会话文件的时间戳精确到毫秒）
             let base = try #require(try FileManager.default.attributesOfItem(atPath: listed.path)[.modificationDate] as? Date)
             let at = { (step: Double) in base + step / 1000 }
-            // 索引器已读过的部分接着检查点读：收尾的一轮读到时还开着，换轮的读到上一轮收尾
             let ended = try Transcript(testbed, id: UUID().uuidString.lowercased())
             try ended.user("go", at: at(1))
             try await testbed.index(ended.url)
@@ -64,7 +59,6 @@ struct ClaudeDiscoveryTests {
         }
     }
 
-    /// 像 Claude Code 那样逐行追加的会话文件。
     private struct Transcript {
         let id: String
         let url: URL

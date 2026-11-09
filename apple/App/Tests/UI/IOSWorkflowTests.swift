@@ -4,12 +4,10 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// iOS 发给 Agent 默认开新会话：新会话输入框默认的项目、哪台 Mac、会话名都是交到哪的决定（`CueStore.handOffPlan`）。
 struct IOSWorkflowTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    /// 一条带着正文的叶子任务，带着它打开发给 Agent 输入框（`Workspace.handOff` 带进来的那样），按默认的去处开新会话，返回写下的请求。
     private func handOff(in project: UUID) async throws -> (task: Card, request: DeliveryRequest) {
         let task = try await store.createTask("修乱序\n先复现", in: project)
         let draft = ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: task), card: task.id, project: task.projectID)])
@@ -31,8 +29,6 @@ struct IOSWorkflowTests {
         return (task, try #require(try await store.deliveryRequests().first))
     }
 
-    /// 一台 Mac 都没打开过 CuePad 时开不了，说清楚要先在 Mac 上打开它。项目哪台 Mac 都没绑文件夹：交给干活的那台 Mac
-    /// （Cue 在用的，没有就是按 Mac 自报的名字排第一台），由它建好工作区开会话；项目绑在两台 Mac 上也按名字排第一台。
     @Test func 发给Agent默认开新会话_项目Mac会话名都按交到哪的决定() async throws {
         let orphan = try await store.createTask("没处去", in: Project.defaultID)
         await #expect(throws: CueStoreError.noMac) { try await store.handOffPlan(orphan.id, host: nil) }

@@ -4,7 +4,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 照实说：会话交回里写着没做完的不算做完；Cue 自己说话、开工被拒时照结果里的原因告诉他，不许诺重发、不说别的原因。
 extension CueEvalTests {
     @Test func b2交回写着没做完() async throws {
         try await CueEval.run(

@@ -72,7 +72,6 @@ extension MCPTests {
     }
   }
 
-  /// 没给项目建的任务落在默认项目：Cue 用 edit 的 project 把它连同子任务与草稿挪进别的项目，开工就在那个项目的文件夹。
   @Test func cueMovesATaskFromTheDefaultProjectIntoAnother() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -96,7 +95,6 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "start", "task": taskID])
       #expect(try await store.deliveryRequests().first?.launch?.project == project.id)
 
-      // 你亲手给子任务绑上会话：再开工被拒（叫它用 say），什么请求都不多写
       try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s9", state: .settled, projectID: project.id)
       try await store.bindSession("s9", to: step.id)
       #expect(try await server.refused("task", ["action": "start", "task": taskID]).contains("say"))
@@ -104,9 +102,6 @@ extension MCPTests {
     }
   }
 
-  /// 会话交了结果、Cue 收尾（task done 带证据）：Cue 自己验收，顶层任务直接完成，不请用户收下；做完了的会话请它结束（算 Cue 发起），
-  /// 给用户写一条结果（关联任务、不是"等你"，正文由代码拼成"「任务名」做完了"加证据要点）。再调一次只说已经完成，不重复写。
-  /// 整件事收尾要带证据：没带、多于 3 条或一条太长都退回，什么都不写。
   @Test func cueFinishesATopTaskAndReportsIt() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -122,7 +117,6 @@ extension MCPTests {
     try await store.deleteDelivery(launch.id)
     try await Server.run(library: sandbox.directory) { server in
       try await server.refused("task", ["action": "done", "task": task.id.uuidString])
-      // 证据多于 3 条或一条太长：退回，什么都不写
       for bad in [["一", "二", "三", "四"], ["登录测试 12 个全过，另外把注册页、找回密码页也顺手都改好了"]] {
         try await server.refused("task", ["action": "done", "task": task.id.uuidString, "evidence": bad])
       }

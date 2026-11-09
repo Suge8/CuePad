@@ -18,7 +18,6 @@ struct GlobalShortcutTests {
         #expect(defaults.string(forKey: "slot") == "Alt+KeyQ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 12, modifiers: .option)])
 
-        // 另一个组合已被占用：抛错，旧的继续生效，设置不变
         let taken = Shortcut(keyCode: 13, modifiers: .option)
         _ = try rig.hotkeys.register(taken) {}
         #expect(throws: HotkeyError.occupied(taken)) { try hotkey.set("Alt+KeyW") }
@@ -59,7 +58,6 @@ struct PiHistoryPersistenceTests {
         #expect(try await rig.relaunch().historyStore.start(for: file)?.checkpoint != nil)
     }
 
-    /// 历史与 Pi 自己的会话列表一致：回填没看到的文件（已删除，或子代理会话这类不在会话列表里的）不再留在历史里。
     @Test func 回填完成后_不在会话列表里的旧行被删除() async throws {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
@@ -77,7 +75,6 @@ struct PiHistoryPersistenceTests {
     }
 }
 
-/// 设置里各家接入后的那一行是同一种写法：已接入 · 名字与版本（各家 `--version` 的原话各不相同）；写在哪、何时生效在悬停提示里。
 struct AgentLineTests {
     @Test func 各家接入后都写已接入与版本() async throws {
         let rig = TestApp()
@@ -99,7 +96,6 @@ struct AgentLineTests {
 }
 
 struct AgentUpgradeTests {
-    /// 装过的不再询问：App 更新后启动检查就把旧版的扩展静默升级到随包版本，缺的技能一起补上（几家共读的那一份）。
     @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
         let rig = TestApp()
         try TestScript.install("#!/bin/sh\necho \(AgentKind.pi.facts.minimumVersion!.description)\n", at: rig.directory.appending(path: "bin/pi"))
@@ -118,7 +114,6 @@ struct AgentUpgradeTests {
         #expect(AgentSkill.kinds(in: skill) == [.pi])
     }
 
-    /// 没装过的不碰：检测完什么都不写，等用户自己接入。
     @Test func 没接入过的Agent启动检查不写任何文件() async throws {
         let rig = TestApp()
         try FileManager.default.createDirectory(at: rig.directory.appending(path: "claude"), withIntermediateDirectories: true)
@@ -130,10 +125,7 @@ struct AgentUpgradeTests {
     }
 }
 
-/// "接入"管终端里的会话与历史：整个会话目录只为接入了的 Agent 回填，关掉时删掉这家的本地索引，同步出去的会话记录不动。
-/// CuePad 托管过的会话不论接入都读得到对话。
 struct AgentIndexingTests {
-    /// 在 Claude Code 的配置目录里放一个做完一轮的会话文件。
     private func claudeSession(in rig: TestApp, id: String) throws {
         let project = rig.directory.appending(path: "claude/projects/-work-x")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -146,7 +138,6 @@ struct AgentIndexingTests {
     }
 
     /// 没接入时那一遍回填只收 CuePad 托管过的会话（用户反馈：Cue 在没接入的 Claude Code 里开的会话做完、结束后，两端点进去都是空的）：
-    /// 托管过的那个读得到对话，就说明这一遍回填已经看过整个目录，同目录里终端开的那个没进索引。
     @Test func 只有接入了的Agent建会话索引_托管过的不论接入都读得到_关掉删本地索引_同步记录留着() async throws {
         let rig = TestApp()
         let hosted = "6f1c0d2e-0000-4000-8000-000000000002", terminal = "6f1c0d2e-0000-4000-8000-000000000001"
@@ -174,17 +165,12 @@ struct AgentIndexingTests {
         try await indexed([hosted])
         #expect(try await store.allPiSessionStates().contains { $0.sessionID == terminal }, "同步出去的会话记录不动")
 
-        // 再接入：从头回填回来
         try await services.agents.install(.claudeCode)
         try await indexed([hosted, terminal])
     }
 }
 
-/// 启用只是"换到这台运行、记下启用时刻"：你选的 Agent、模型、强度原样不动；选的 Agent 这台用不了（启用时重新问出的这台 Mac 上能用的
-/// Agent 里没有它）才换成第一家能用的，模型属于原来那家，一并清掉，强度留着（交给运行时取档）。
-/// 一家都不能用时报出各家为什么。
 struct CueEnableTests {
-    /// 起一个对过 iCloud 的 App（启用的前提）。
     private func launch() async throws -> TestApp {
         let app = TestApp()
         app.services.startSync()
