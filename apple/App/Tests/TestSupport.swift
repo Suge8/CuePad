@@ -81,6 +81,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         return sendsSucceed.withLock { $0 }
     }
     func push() async {}
+    func activated() async {}
 
     func resolve(_ resolution: SyncResolution) async throws {}
     var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }
@@ -146,6 +147,7 @@ final class TestApp {
     #endif
 
     isolated deinit {
+        endSync(of: services)
         #if os(macOS)
         pasteboard.releaseGlobally()
         try? FileManager.default.removeItem(at: socketDirectory)
@@ -157,8 +159,16 @@ final class TestApp {
     @discardableResult
     func relaunch() -> AppServices {
         services.cancelBackgroundWork()
+        endSync(of: services)
         services = makeServices()
         return services
+    }
+
+    /// 同真的进程退出：这个实例的同步不再跑。不停的话，换账号的通知是全进程的，测试结束后它还会跟着并行的测试去认账号、拉取。
+    /// deinit 里等不了，停下在后台做完。
+    private func endSync(of services: AppServices?) {
+        guard let sync = services?.sync else { return }
+        Task.detached { await sync.stop() }
     }
 
     /// 那台 Mac 醒着、这次开机报的会话状态（`CueStore.runtimeRecorder`），写入不合并、走这个 App 的时钟。

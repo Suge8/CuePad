@@ -33,7 +33,6 @@ extension SyncCoordinator {
     /// 取一个文件：同上传；用到时取的（`urgent`）同马上传，越过连不上与被拒的等待。
     case fileDownload(urgent: Bool)
 
-    /// 用户在等：越过连不上与被拒的等待。
     var urgent: Bool {
       switch self {
       case .upload(let urgent), .fileDownload(let urgent): urgent
@@ -121,7 +120,6 @@ extension SyncCoordinator {
     Self.syncLog.notice("同步进入等待：\(fault.label, privacy: .public)，\(wait, privacy: .public)。原因：\(error.brief, privacy: .public)")
   }
 
-  /// 一次请求成功：在等的那一段结束。
   func noteRecovered() {
     guard let outage else { return }
     self.outage = nil

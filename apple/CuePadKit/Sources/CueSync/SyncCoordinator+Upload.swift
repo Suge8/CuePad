@@ -16,7 +16,6 @@ struct OutgoingBatch: Sendable {
   var names: Set<String> { Set(saves.map(\.recordID.recordName) + deletes.map(\.recordName)) }
 }
 
-/// 一批从哪些待推送里挑。
 enum BatchScope: Sendable {
   /// 后台那一路：全部待推送，跳过在路上的（另一批里的不重发同一条）。
   case pending(excluding: Set<String>)
@@ -215,12 +214,10 @@ extension SyncCoordinator {
 }
 
 extension CKRecord {
-  /// 记录的版本（同步表的 `modifiedAt` 列）。
   var modifiedAt: Int64? { (self["modifiedAt"] as? NSNumber)?.int64Value }
 }
 
 extension SyncRow {
-  /// 附件记录的键（`AttachmentKey`）；不是附件记录为 nil。
   var attachmentKey: String? {
     guard table == .attachments, case .text(let hash)? = fields["hash"] else { return nil }
     let format = if case .text(let format)? = fields["format"] { format } else { "" }

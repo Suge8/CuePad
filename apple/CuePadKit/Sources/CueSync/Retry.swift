@@ -24,9 +24,11 @@ public struct Backoff: Sendable {
   }
 
   public mutating func reset() { failures = 0 }
+
+  /// 上次重置以来没失败过：一段失败的头一次、一段失败之后的恢复各记一条日志。
+  var isFresh: Bool { failures == 0 }
 }
 
-/// 同步自己给请求定的时限。
 enum RequestLimits {
   /// 不带数据的请求（认账号）至多等这么久，到点算连不上；也是数据库每个请求的空闲超时（`CloudDatabase.database`）。
   static let request = Duration.seconds(15)

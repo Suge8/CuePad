@@ -20,11 +20,14 @@ public enum NetworkReturns {
     let returns = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
     let metered = Atomic(false)
     private let path = NWPathMonitor()
+    /// 开始时报的第一次是此刻的路径，不是回来了：拿它当网络回来，认不了账号的会当场多认一次。
+    private let started = Atomic(false)
 
     init() {
       path.pathUpdateHandler = { update in  // 监视器整个进程一个，不释放
         self.metered.store(update.isExpensive || update.isConstrained, ordering: .relaxed)
-        if update.status == .satisfied { self.returns.yield(()) }
+        let first = !self.started.exchange(true, ordering: .relaxed)
+        if update.status == .satisfied, !first { self.returns.yield(()) }
       }
       path.start(queue: DispatchQueue(label: "\(AppIdentity.id).network"))
     }

@@ -25,7 +25,7 @@ public enum SyncStatus: Equatable, Sendable {
   case noAccount
   /// iCloud 账号受限（家长控制或设备管理）。
   case accountRestricted
-  /// 账号暂时不可用或无法确定，稍后会自动重试。
+  /// 账号暂时不可用、无法确定或是认不出的新状态，按退避自动再认（`CloudSync.Wait.retry`）。
   case accountUnavailable
   /// iCloud 空间不足：本机改动保留并继续待推送，空间释放后自动恢复。
   case quotaExceeded
@@ -82,7 +82,6 @@ public struct SyncIssue: Equatable, Sendable {
     /// 取到的附件文件没有或内容与哈希不符，没放进本机
     case damaged
 
-    /// 请求或读写失败的那一类：CloudKit 的错误是 iCloud 没收下，其余是本机。
     init(_ error: any Error) { self = error is CKError ? .refused : .local }
   }
 
@@ -90,7 +89,6 @@ public struct SyncIssue: Equatable, Sendable {
   public var recordType: String?
   public var recordName: String?
   public var problem: Problem
-  /// 原话：排查用，不当标题。
   public var detail: String?
 
   public init(kind: Kind = .incoming, recordType: String? = nil, recordName: String? = nil, problem: Problem, detail: String? = nil) {

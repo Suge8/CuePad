@@ -114,7 +114,6 @@ actor ZonePuller {
     return changed ? .newData : .noData
   }
 
-  /// 重试的等待结束了（`SyncCoordinator.retryDue`）：期间被挡下过的拉取补一次。
   func due() async {
     guard owed else { return }
     owed = false
@@ -146,7 +145,6 @@ actor ZonePuller {
     return changed
   }
 
-  /// 一页变化，只带 `keys` 这几个字段。
   private func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch {
     try await hedged(after: RequestLimits.hedge) { [source] in
       try await self.admitted()

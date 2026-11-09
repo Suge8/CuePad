@@ -64,7 +64,6 @@ enum SyncFault: Equatable, Sendable {
     }
   }
 
-  /// 服务器给的最早重试间隔。
   var retryAfter: Duration? {
     switch self {
     case .offline(let given), .wait(let given): given

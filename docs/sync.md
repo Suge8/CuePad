@@ -116,7 +116,6 @@ Cue 等结果的窗口是 `Speech.cueWait`；Cue 看失败见 `cueChanges`。
 
 到不到你只有 `CueStore.reaches` 一处，他此刻在哪台设备前只按最近一次来到哪台（`Viewer`）；进了等你的事手机总会被叫醒，到不到你只定出不出通知（`CuePush`、`PiPush`）。手机锁屏通知怎么由服务端生成在 `AlertSubscriptions`，两端怎么发在 `AlertCenter`。代码里没写的取舍：
 
-- `notify` 是一次性事件标志，通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的写入取代就不送出。要保证每个事件都送达得另建追加式的通知事件记录，那是另一种设计。
 - 实时活动、小组件与 App 使用同一份运行投影，Mac 发布者直接订阅 Store，不依赖界面订阅。快照过期只撤销运行证据；未知只保留已有活动，不授权新建，也不冒充完成。各 host 到期后的计数由 `CueNow.nextShownChange` 安排系统重画。
 - 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒；手机不拿本地旧库覆盖。令牌私有 iCloud 加密同步，中转内容不留存，密钥只在服务端。APNs 收下不证明已上屏，岛更新不证明手机资料库已同步。[部署与隐私边界](../relay/README.md)。
 - ActivityKit 推送仍受网络、优先级与系统预算限制，不保证秒到；活动最多八小时，本次不远程开启。`stale-date` 只标过时，不会取得新事实。依据：[ActivityKit](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications)、[后台通知](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app)。
