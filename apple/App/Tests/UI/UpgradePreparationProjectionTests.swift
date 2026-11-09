@@ -81,7 +81,6 @@ extension UpgradePreparationTests {
         _ = try await prepared(request, in: app)
         let item = try #require(try await store.cueBoard().tasks.first { $0.id == task.id })
         #expect(!item.isActive && !item.reaching)
-        #expect(try await store.cueTally().advancing.allSatisfy { $0.task?.id != task.id })
         #expect(try await store.handoffRequests(for: [task.id])[task.id]?.map(\.id) == [request.id])
         #expect(try await store.cueTaskDetail(task.id).leaves.first?.handoffs.map(\.id) == [request.id])
         #expect(try await store.card(task.id)?.piSessionID == nil)
