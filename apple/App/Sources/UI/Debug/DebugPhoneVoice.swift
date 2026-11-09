@@ -3,20 +3,24 @@ import CueStore
 import Foundation
 
 /// 隔离画面样例默认只注入远端投影；可选媒体回放边界见 DebugPhoneVoiceReplay，命令仍走正式服务。
-/// -CuePadPhoneVoice connecting|listening|muted|processing|speaking|closing|failed|failedRequest|ended
+/// -CuePadPhoneVoice idle|connecting|listening|muted|processing|speaking|closing|failed|failedRequest|ended|endedUnsent|interrupted
+/// （idle 没有通话；failed 是麦克风没授权，interrupted 是音频被打断，endedUnsent 是正常挂断但有一句没交给 Cue）。都当作中转已连上，输入框里的通话钮是能点的样子。
 /// -CuePadPhoneVoiceHistory 0|1|200：写入隔离聊天；-CuePadPhoneVoiceEnabled YES：启用隔离 Cue；-CuePadCueDraft 保留输入框草稿。
 /// -CuePadPhoneVoicePages YES：注入带续页的隔离投影，分页仍走正式服务，隔离环境无中转时应显示失败。
 /// -CuePadPhoneVoiceSessionUnavailable YES：模拟原通话已不存在，点击分页走服务的不可用分支。
 /// -CuePadPhoneVoiceRefreshRequired YES：在隔离分页视图注入失效锚点，首页按钮仍调用正式服务。
 /// -CuePadPhoneVoiceLastPage YES：注入无续页的末页，核对返回首页入口。
+/// -CuePadPhoneVoiceDetails YES：摆好后打开通话详情（没有落点、居中）。
 enum DebugPhoneVoice {
     static func prepare(_ workspace: Workspace) async {
         guard let name = DebugScene.args.phoneVoice else { return }
         let voice = workspace.services.voice
         guard voice.projection == nil else { return }
-        let phase: VoiceCallProjection.Phase
+        let phase: VoiceCallProjection.Phase?
         let response: VoiceCallProjection.Response
         switch name {
+        case "idle": (phase, response) = (nil, .none)
+        case "interrupted": (phase, response) = (.ended(reason: .audioInterrupted), .none)
         case "connecting": (phase, response) = (.connecting, .none)
         case "listening", "muted": (phase, response) = (.listening, .none)
         case "processing": (phase, response) = (.listening, .awaitingAssistant)
@@ -24,16 +28,20 @@ enum DebugPhoneVoice {
         case "closing": (phase, response) = (.closing, .none)
         case "failedRequest": (phase, response) = (.listening, .none)
         case "failed": (phase, response) = (.failed(.ended(.permissionDenied)), .none)
-        case "ended": (phase, response) = (.ended(reason: .hungUp), .none)
+        case "ended", "endedUnsent": (phase, response) = (.ended(reason: .hungUp), .none)
         default: return
         }
         let session = VoiceSessionID(UUID())
-        let requests: [VoiceCallProjection.Request] = name == "failedRequest" ? [
+        let requests: [VoiceCallProjection.Request] = name == "failedRequest" || name == "endedUnsent" ? [
             .init(reference: .unrecorded(session: session, request: UUID()), recording: false, issue: .storageUnavailable,
                   preview: .init(original: String(localized: "检查发布事项 \(1)", table: "Demo")))
         ] : []
         voice.muted = name == "muted"
-        voice.setProjection(.init(session: session, phase: phase, requests: requests, replies: [], executions: [], response: response))
+        voice.availability = .ready(endpoint: VoiceEndpoint(device: VoiceDeviceID("voice-layout-phone"), lease: UUID()))
+        DebugPhoneVoiceReplay.attach(voice, workspace: workspace, session: session)
+        if let phase {
+            voice.setProjection(.init(session: session, phase: phase, requests: requests, replies: [], executions: [], response: response))
+        }
         do {
             let store = workspace.services.store
             if DebugScene.args.phoneVoiceOpts.enabled {
@@ -59,7 +67,7 @@ enum DebugPhoneVoice {
                 heads.replies = .init(version: Data([1]), nextCursor: .init(session: session, list: .replies, after: nil))
                 heads.executions = .init(version: Data([1]), nextCursor: .init(session: session, list: .executions, after: nil))
                 voice.session = session
-                voice.setProjection(.init(session: session, phase: phase, requests: [request],
+                voice.setProjection(.init(session: session, phase: phase ?? .listening, requests: [request],
                                           replies: [.init(message: reply.id, readback: .submitted)], executions: [target], response: response, pages: heads))
                 if DebugScene.args.phoneVoiceOpts.sessionUnavailable { voice.session = nil }
                 if DebugScene.args.phoneVoiceOpts.lastPage {
@@ -75,7 +83,7 @@ enum DebugPhoneVoice {
                     } catch { workspace.fail(error) }
                 }
             }
-            DebugPhoneVoiceReplay.attach(voice)
+            if DebugScene.args.phoneVoiceOpts.details { workspace.voiceDetails = .unanchored }
         } catch { workspace.fail(error) }
     }
 }

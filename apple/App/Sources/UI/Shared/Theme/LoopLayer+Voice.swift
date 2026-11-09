@@ -1,17 +1,19 @@
 import QuartzCore
 import SwiftUI
 
-/// 声纹的绘制参数，不持有通话生命周期。十三根墨线始终是同一批图层：连接时围拢，听说时展开，静音和结束时收束。
+/// 声纹的绘制参数，不持有通话生命周期。十三根墨线始终是同一批图层：连接时围拢，听说时展开，静音和结束时收束；
+/// 收成种子（`seed`）时停在原样不动（那时整条正淡走，再收一遍看不见、只多一次提交），下一次离开种子时从正中一点长开成此刻的样子（手机通话接通时，`PhoneCall`）。
 /// 待连接与处理的光沿环行走只是等待信号；听说的起伏只来自音轨，静置没有假音量循环。
 struct VoiceRibbon: Equatable {
     let activity: CueVoiceActivity?
     let muted: Bool
+    var seed = false
     let samples: [CGFloat]
     let playing: Bool
     let reduced: Bool
 
     var quiet: Bool { muted && activity != .speaking }
-    var orbiting: Bool { activity == .connecting || activity == .processing }
+    var orbiting: Bool { !seed && (activity == .connecting || activity == .processing) }
     var waiting: Bool { playing && orbiting && !quiet }
 
     func height(at index: Int) -> CGFloat {
@@ -41,6 +43,8 @@ final class VoiceRibbonLayer: CALayer {
     private static let lightSteps = 24
     private var waiting = false
     private var installed = false
+    /// 停在种子上：下一次展示从正中一点长开。
+    private var seeded = false
 
     nonisolated override init() {
         super.init()
@@ -55,7 +59,19 @@ final class VoiceRibbonLayer: CALayer {
 
     func show(_ ribbon: VoiceRibbon, in bounds: CGRect, color: CGColor?) {
         frame = bounds
+        if ribbon.seed {
+            if waiting { for rib in sublayers ?? [] { if let shape = rib as? CAShapeLayer { light(shape, index: 0, playing: false, animate: false) } } }
+            waiting = false
+            seeded = true
+            installed = true
+            return
+        }
         let animate = installed && ribbon.playing && !ribbon.reduced
+        let grows = seeded && animate
+        seeded = false
+        let seed = CGPoint(x: bounds.midX, y: bounds.midY)
+        let dot = CGPath(roundedRect: CGRect(x: -Self.stroke / 2, y: -Self.stroke / 2, width: Self.stroke, height: Self.stroke),
+                         cornerWidth: Self.stroke / 2, cornerHeight: Self.stroke / 2, transform: nil)
         for (index, rib) in (sublayers ?? []).enumerated() {
             guard let shape = rib as? CAShapeLayer else { continue }
             let fraction = CGFloat(index) / CGFloat(Self.count - 1)
@@ -68,9 +84,10 @@ final class VoiceRibbonLayer: CALayer {
             let height = max(Self.stroke, bounds.height * ribbon.height(at: index))
             let path = CGPath(roundedRect: CGRect(x: -Self.stroke / 2, y: -height / 2, width: Self.stroke, height: height),
                               cornerWidth: Self.stroke / 2, cornerHeight: Self.stroke / 2, transform: nil)
-            redirect(shape, key: "position", to: point, animate: animate)
-            redirect(shape, key: "path", to: path, animate: animate)
-            redirect(shape, key: "transform", to: CATransform3DMakeRotation(orbit ? angle + .pi / 2 : 0, 0, 0, 1), animate: animate)
+            redirect(shape, key: "position", to: point, from: grows ? seed : nil, animate: animate)
+            redirect(shape, key: "path", to: path, from: grows ? dot : nil, animate: animate)
+            redirect(shape, key: "transform", to: CATransform3DMakeRotation(orbit ? angle + .pi / 2 : 0, 0, 0, 1),
+                     from: grows ? CATransform3DIdentity : nil, animate: animate)
             redirect(shape, key: "fillColor", to: color, animate: installed && ribbon.playing)
             if waiting != ribbon.waiting || !installed { light(shape, index: index, playing: ribbon.waiting, animate: animate) }
         }
@@ -79,12 +96,13 @@ final class VoiceRibbonLayer: CALayer {
         DebugHooks.voiceRibbon(ribbon, on: self)
     }
 
-    private func redirect(_ layer: CALayer, key: String, to value: Any?, animate: Bool) {
+    /// `from`：从这个值起（长开时的种子），不从此刻画着的样子起。
+    private func redirect(_ layer: CALayer, key: String, to value: Any?, from: Any? = nil, animate: Bool) {
         let old = layer.value(forKeyPath: key) as? NSObject
         let next = value as? NSObject
         if !animate { layer.removeAnimation(forKey: key) }
-        guard old != next else { return }
-        let shown = layer.presentation()?.value(forKeyPath: key) ?? layer.value(forKeyPath: key)
+        guard old != next || from != nil else { return }
+        let shown = from ?? layer.presentation()?.value(forKeyPath: key) ?? layer.value(forKeyPath: key)
         layer.setValue(value, forKeyPath: key)
         if animate {
             let move = CABasicAnimation(keyPath: key)
