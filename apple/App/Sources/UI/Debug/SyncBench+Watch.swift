@@ -18,7 +18,7 @@ extension SyncBench {
             Task { await follow(store.observe { try $0.cueMessages(limit: 200) }, prefix: "msg") { Seen($0) } }
             Task { await follow(store.observe { try $0.deliveryRequests() }, prefix: "req") { Seen($0) } }
             Task {
-                for await status in Observations({ String(describing: services.syncStatus) }) { mark("sync-status", ["s": status]) }
+                for await status in Observations({ String(describing: services.syncState.status) }) { mark("sync-status", ["s": status]) }
             }
             Task {
                 for await live in Observations({ services.relay?.isLive ?? false }) { mark("relay", ["live": live]) }

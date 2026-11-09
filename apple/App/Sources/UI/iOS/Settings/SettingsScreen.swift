@@ -94,7 +94,7 @@ private struct AlertSection: View {
 
     var body: some View {
         let live = PiAlertStatus(
-            authorization: alerts.authorization, registration: alerts.registration, subscription: services.alertSubscription)
+            authorization: alerts.authorization, registration: alerts.registration, subscription: services.syncState.alerts)
         let status = DebugHooks.preset.alertStatus ?? live
         Section {
             Label {
@@ -139,7 +139,7 @@ private struct SyncSection: View {
 
     var body: some View {
         Section {
-            let summary = SyncSummary(services.syncStatus)
+            let summary = SyncSummary(services.syncState.status)
             Label {
                 StatusText(title: summary.title, detail: summary.detail, reserve: SyncSummary(.offline).detail)
             } icon: {
@@ -150,15 +150,15 @@ private struct SyncSection: View {
                 }
             }
             // 要你决定、冲突与没能同步的记录都只在有同步时出现，按状态排；立即同步要有同步才点得动
-            if case .needsDecision = services.syncStatus {
+            if case .needsDecision = services.syncState.status {
                 Group {
                     Button(SyncChoices.upload.title, icon: .uploadLocal) { choices.resolve(.uploadLocal, services) }
                     Button(SyncChoices.erase.title, icon: .replaceWithCloud, role: .destructive) { confirmErase = true }
                 }
                 .disabled(choices.working)
-            } else if services.syncStatus == .noAccount {
+            } else if services.syncState.status == .noAccount {
                 Button(SyncSummary.settingsTitle, icon: .settings) { openURL(SyncSummary.settings) }
-            } else if services.syncStatus == .outdated {
+            } else if services.syncState.status == .outdated {
                 Button(SyncSummary.updateTitle, icon: .updates) { openURL(SyncSummary.update) }
             } else if services.canSyncNow {
                 Button("立即同步", icon: .syncNow) { Task { await services.syncNow() } }
@@ -167,7 +167,7 @@ private struct SyncSection: View {
             if let failure = choices.failure {
                 Label { Text(failure).font(Typography.meta) } icon: { FailureMark() }
             }
-            if services.syncFilesOverQuota {
+            if services.syncState.filesOverQuota {
                 Label { Text(FileStatus.overQuota).font(Typography.meta) } icon: { Image(.syncPaused).foregroundStyle(palette.color(.notice)) }
             }
             if !services.conflicts.isEmpty {
@@ -176,9 +176,9 @@ private struct SyncSection: View {
                         .foregroundStyle(palette.ink)
                 }
             }
-            if !services.syncIssues.isEmpty {
-                DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
-                    ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
+            if !services.syncState.issues.isEmpty {
+                DisclosureGroup("\(services.syncState.issues.count) 条记录没能同步") {
+                    ForEach(Array(services.syncState.issues.enumerated()), id: \.offset) { _, issue in
                         Text(issue.text).font(Typography.meta)
                         if let detail = issue.detail {
                             DisclosureGroup("详情") {
@@ -192,7 +192,7 @@ private struct SyncSection: View {
         } header: {
             Text("iCloud 同步")
         } footer: {
-            if case .needsDecision = services.syncStatus {
+            if case .needsDecision = services.syncState.status {
                 Text("上传：\(SyncChoices.upload.consequence)。替换：\(SyncChoices.erase.consequence)。")
             }
         }

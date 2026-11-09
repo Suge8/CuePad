@@ -15,7 +15,7 @@ struct ShelfScreen: View {
                         ProjectListPlace(title: "归档", icon: .archive, route: .archive)
                         ProjectListPlace(title: "回收站", icon: .trash, route: .trash)
                         if sizeClass == .compact {
-                            ProjectListPlace(title: "设置", icon: .settings, route: .settings, alert: services.macAlert)
+                            ProjectListPlace(title: "设置", icon: .settings, route: .settings, alert: .macAlert(services.syncState.status))
                         }
                     }
                 }

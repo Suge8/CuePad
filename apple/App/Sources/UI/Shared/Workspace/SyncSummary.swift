@@ -122,49 +122,26 @@ extension SyncIssue {
     }
 }
 
-nonisolated extension SyncStatus {
-    /// 此刻同步能把请求送到 Mac、把 Mac 上的 Pi 状态带回来：已连上或正在连接。
-    /// 其余状态（没开 iCloud、不可用、暂停、出错、空间不足）都到不了，界面写明原因。
-    var reachesMac: Bool {
-        switch self {
-        case .starting, .idle, .syncing: true
-        default: false
-        }
-    }
-}
-
 #if os(iOS)
-extension AppServices {
+extension SyncSummary {
     /// 同步到不了 Mac 时（`SyncStatus.reachesMac`）给人看的那一句；送得到时为 nil。手机与 iPad 上设置那一行（侧栏、项目页末尾）
     /// 与 iPhone 底部项目那一格带的点都只读它，点的颜色按它的 `tone`。
-    var macAlert: SyncSummary? {
-        let status = syncStatus
-        return status.reachesMac ? nil : SyncSummary(status)
+    static func macAlert(_ status: SyncStatus) -> SyncSummary? {
+        status.reachesMac ? nil : SyncSummary(status)
     }
 }
 #endif
 
-/// Mac 设置里同步那一行此刻怎么说：说哪种状态、图标位置转不转圈。
+/// Mac 设置里同步那一行（`SyncRow`）此刻怎么说：说哪种状态、图标位置转不转圈。
 struct ShownSync: Equatable {
     let status: SyncStatus
     let busy: Bool
     var summary: SyncSummary { SyncSummary(status) }
-}
 
-extension AppServices {
-    /// Mac 设置那一行（`SyncRow`）用。`lasting`：这一轮同步中（`.syncing`，一批上传或拉积压）已久过 `Pending.delay`（经 `pending` 给）。没久过的照旧说已同步：
+    /// `lasting`：这一轮同步中（`.syncing`，一批上传或拉积压）已久过 `Pending.delay`（经 `pending` 给）。没久过的照旧说已同步：
     /// 每传一句都要零点几秒，一闪一下"正在同步…"比稍等更扰人（同 `Pending`）。正在连接从第一帧就是它，照说；立即同步是你按的，当场转圈。
-    func shownSync(lasting: Bool) -> ShownSync {
-        syncStatus == .syncing && !lasting ? ShownSync(status: .idle, busy: isSyncingNow) : ShownSync(status: syncStatus, busy: isSyncBusy)
-    }
-
-    /// 要当场生效的请求（停止、改名、补对话）此刻送得到执行它的 Mac：手机靠同步；Mac 上就是本机执行，总送得到。
-    /// 说的话（回复、作答、开会话、交给 Agent、重发）不看它：写下就排着，恢复后自动发出，同对 Cue 说的话。
-    var reachesPiHost: Bool {
-        #if os(iOS)
-        speech.reachableSince != nil  // 演示 Mac 在本机库里接手时一直算通（`SpeechClock`）
-        #else
-        true
-        #endif
+    init(_ services: AppServices, lasting: Bool) {
+        let status = services.syncState.status
+        (self.status, busy) = status == .syncing && !lasting ? (.idle, services.isSyncingNow) : (status, services.isSyncBusy)
     }
 }
