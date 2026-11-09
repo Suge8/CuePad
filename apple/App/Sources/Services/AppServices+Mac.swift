@@ -75,9 +75,11 @@ extension AppServices {
     }
 
     /// 睡眠期间的推送可能没收到。
+    /// 返回时已经订上：订阅放进任务里，任务跑起来之前的唤醒就丢了。
     func startWakeSync() {
-        follow { [wakeNotifications] in
-            for await _ in wakeNotifications.notifications(named: NSWorkspace.didWakeNotification) { await self.syncNow() }
+        let wakes = wakeNotifications.notifications(named: NSWorkspace.didWakeNotification)
+        follow {
+            for await _ in wakes { await self.syncNow() }
         }
     }
 

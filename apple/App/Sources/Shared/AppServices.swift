@@ -76,10 +76,10 @@ final class AppServices {
     /// 会话页、Cue 页的在场、读过与提示都只认它。
     var seesMainWindow: Bool { mainWindowExposed && !away }
     #endif
-    /// 拉取（`CloudSync.syncNow`）只合并还没开拉的那一拉，立即同步要的是“这一次还没返回的”，所以另记：期间再要立即同步的等它。
-    var syncing: Task<Void, Never>?
+    /// 还没返回的立即同步有几个（`syncNow`）。
+    var syncNowWaits = 0
     @ObservationIgnored var syncConnected = false
-    var isSyncingNow: Bool { syncing != nil }
+    var isSyncingNow: Bool { syncNowWaits > 0 }
     @ObservationIgnored let flights = Flights()
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 这台设备开着哪一页的唯一写入口。

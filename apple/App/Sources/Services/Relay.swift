@@ -176,10 +176,11 @@ final class Relay {
     }
 
     private nonisolated static func wait(upTo delay: Duration) async {
+        let returns = NetworkReturns.stream()  // 在子任务跑起来之前订上：其间回来的网络不让门铃白等一个退避
         await withTaskGroup(of: Void.self) { group in
             group.addTask { try? await Task.sleep(for: delay) }
             group.addTask {
-                var returns = NetworkReturns.stream().makeAsyncIterator()
+                var returns = returns.makeAsyncIterator()
                 _ = await returns.next()
             }
             await group.next()

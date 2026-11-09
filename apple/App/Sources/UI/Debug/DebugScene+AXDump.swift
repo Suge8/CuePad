@@ -9,9 +9,10 @@ import UIKit
 extension DebugScene {
     static func logAccessibilityFocusIfAsked() {
         guard args.driveOpts.axFocus, let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
+        let focuses = NotificationCenter.default.notifications(named: UIAccessibility.elementFocusedNotification)
         Task {
             var lines: [String] = []
-            for await note in NotificationCenter.default.notifications(named: UIAccessibility.elementFocusedNotification) {
+            for await note in focuses {
                 guard let element = note.userInfo?[UIAccessibility.focusedElementUserInfoKey] as? NSObject else { continue }
                 let frame = element.accessibilityFrame
                 lines.append(describe(element) + " @\(Int(frame.minX)),\(Int(frame.minY))")

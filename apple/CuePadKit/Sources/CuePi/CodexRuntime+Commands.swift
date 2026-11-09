@@ -126,8 +126,11 @@ extension CodexRuntime {
         if let fast = config.fast { settings["serviceTier"] = fast ? "priority" : "default" }
         else if model != nil, entry?.supportsFast == false, bridge.session(id: id)?.fast != false { settings["serviceTier"] = "default" }
         try await call(session, "thread/settings/update", .object(settings))
-        if let thread = try await rpc.call("thread/read", ["threadId": .string(session.threadID)])["thread"] {
-            bridge.update(id) { self.apply(thread, to: &$0) }
+        // 回应只说排进了队（0.167 源码注释：要等 `thread/settings/updated`），这时读线程实测（负载高时）一成多还是改之前的：照它接受的显示，托管会话随那条通知校正
+        bridge.update(id) { s in
+            if model != nil, let entry { s.model = entry.option }
+            if let effort = settings["effort"]?.string { s.thinking = CodexModel.thinking(effort) }
+            if let tier = settings["serviceTier"]?.string { s.fast = tier == "priority" }
         }
     }
 

@@ -31,6 +31,8 @@ public struct FakeRequest: Sendable {
 
   /// 最近一条你的话（工具结果不算）
   public var prompt: String { lastUser.map { messages[$0].text } ?? "" }
+  /// 会话那一家按第一句话起名的旁路请求：带着 CuePad 的起名说明（`SessionNameSuggestion.instructions`），Pi 放在系统提示里，Codex 拼在你的话前面
+  public var isTitle: Bool { system.contains("single-line task title") || prompt.contains("single-line task title") }
   public var images: [String] { lastUser.map { messages[$0].images } ?? [] }
   /// 最近一条你的话之后，助手已调过几次工具
   public var step: Int { after.filter { !$0.calls.isEmpty }.count }

@@ -56,6 +56,16 @@ extension DebugScene {
             if !listened, phase == .listening {
                 listened = true
                 if let drop = dropRelay(note: note) { watching.append(drop) }
+                if args.voiceOpts.repeatOnReturn {
+                    watching.append(Task {
+                        for await availability in Observations({ voice.availability }) where availability == .unavailable { break }
+                        for await availability in Observations({ voice.availability }) { if case .ready = availability { break } }
+                        guard let reply = voice.projection?.replies.last?.message else { return note("repeat-skipped no reply") }
+                        note("repeat \(reply)")
+                        do { note("repeat-result \(try await workspace.repeatVoiceReply(reply, command: UUID()))") }
+                        catch { note("repeat-error \(error)") }
+                    })
+                }
                 if args.voiceOpts.interruptAfter > 0 {
                     watching.append(Task {
                         guard await Task.wait(for: .seconds(args.voiceOpts.interruptAfter)) else { return }

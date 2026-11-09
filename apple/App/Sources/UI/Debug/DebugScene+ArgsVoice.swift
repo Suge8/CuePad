@@ -33,6 +33,9 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     let motionTrace: Bool
     /// `-CuePadVoicePlayInBackground YES`（手机）：在听后等 App 进了后台再送声源文件；下行走真的扬声器（静音），不录
     let playInBackground: Bool
+    /// `-CuePadVoiceRepeatOnReturn YES`（手机，配 `-CuePadVoiceDropRelay`）：中转以新租约连回来的当下就请 Cue 重说最近一条结果，
+    /// 让这条命令赶在 resume 之前到 Mac（Mac 日志的 `relinked by command(…)`）
+    let repeatOnReturn: Bool
     /// `-CuePadVoiceReadFixture <原文>`：把原文作为隔离库的主动消息请 GPT Live 朗读，录成后续验收的声源
     let readFixture: String?
     /// `-CuePadVoiceReadings YES`：通话读数打点

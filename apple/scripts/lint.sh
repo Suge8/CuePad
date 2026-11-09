@@ -149,6 +149,9 @@ forbid "家目录只经 UserHome（CueStore）取：读写各家 Agent 的走 Ag
   '(\bhomeDirectoryForCurrentUser\b|\bNSHomeDirectory(?:ForUser)?\b|\bhomeDirectory\(forUser|\.homeDirectory\b|\b(?:expanding|abbreviatingWith)TildeInPath\b|getenv\("HOME"\)|processInfo\.environment\["HOME"\])' \
   '**/CueStore/UserHome.swift' '**/EvalBrain.swift' '**/PinnedAgent.swift'
 
+FORBID_U=1 forbid "通知先订再消费：任务外先 let 流，任务里 for await 它。for await 那行才订，此前发的就丢了；不怕丢的行尾写「// 晚订：理由」" \
+  'for (?:try )?await\b[^{]*?\bin [^{]*?\.notifications\(named:(?!.*// 晚订：)'
+
 # 间距只经 Spacing 的几档（规则在 lint_spacing.py 头注释）
 python3 "$scripts/lint_spacing.py" || status=1
 
