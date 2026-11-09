@@ -155,9 +155,6 @@ final class ClaudeTestbed {
         }
         let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
         terminals.append(terminal)
-        // 输入框画出来之前，收件箱收到的话即使带着令牌也按来路不明挂起（2.1.318 实测：13 个终端并行时上桥就发，12 个里挂起 3 个；
-        // 等到输入框再发，36 个都送到）。用户在 CuePad 上给终端会话发话时它早已起好，测试照这个先后。
-        try await eventually("终端里的 Claude Code 画出输入框") { await terminal.screen.contains(/for shortcuts|permissions on/) }
         return terminal
     }
 

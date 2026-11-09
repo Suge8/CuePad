@@ -188,7 +188,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     private func attach(_ session: PiSession, inbox: String?, runningSince: Date?, waiting: Bool) -> ClaudeTerminalSession {
         let terminal = ClaudeTerminalSession(
-            id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, runningSince: runningSince, waiting: waiting)
+            id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, registry: registry(of: session.pid),
+            runningSince: runningSince, waiting: waiting)
         terminals[session.id] = terminal
         let pid = session.pid
         if exitWatchers[pid] == nil {
@@ -273,9 +274,10 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     /// 会话的收件箱：Claude Code 的会话登记文件（`<配置目录>/sessions/<pid>.json`，官方没有写）里记着；`claude agents --json` 不给。
     private func inbox(of pid: Int32) -> String? {
-        let file = home.appending(path: "sessions/\(pid).json")
-        return (try? Data(contentsOf: file)).flatMap(JSONValue.parse)?["messagingSocketPath"]?.string
+        (try? Data(contentsOf: registry(of: pid))).flatMap(JSONValue.parse)?["messagingSocketPath"]?.string
     }
+
+    private func registry(of pid: Int32) -> URL { home.appending(path: "sessions/\(pid).json") }
 }
 
 public enum ClaudeCodeError: Error, Equatable, ShownError {

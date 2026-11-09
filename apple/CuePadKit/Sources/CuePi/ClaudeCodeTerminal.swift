@@ -25,6 +25,9 @@ final class ClaudeTerminalSession: SessionLink {
     var inbox: String?
     /// 收件箱令牌（钩子环境里的 `CLAUDE_CODE_MESSAGING_TOKEN`）：没有它，跳过权限确认的会话把送来的话挂起等你批准
     var inboxToken: String?
+    /// 会话登记文件（`<配置目录>/sessions/<pid>.json`）：它写下 `status` 之后收件箱才收话（`waitUntilReady`）
+    private let registry: URL
+    private var ready = false
     private var facts = SessionFacts()
     /// 要你回答的（同一时刻可能有好几个：子代理并行时各自要确认），按到达先后；会话的 `question` 是第一个
     private var pending: [Pending] = []
@@ -46,9 +49,12 @@ final class ClaudeTerminalSession: SessionLink {
     }
 
     /// - Parameter runningSince: 接上时已在跑（在忙或在等你）这一轮的开始（取法见 `SessionFacts.startTurn(at:)`）
-    init(id: PiSession.ID, pid: Int32, bridge: PiBridge, gate: PresenceGate, inbox: String?, runningSince: Date?, waiting: Bool) {
+    init(
+        id: PiSession.ID, pid: Int32, bridge: PiBridge, gate: PresenceGate, inbox: String?, registry: URL, runningSince: Date?, waiting: Bool
+    ) {
         self.id = id
         self.pid = pid
+        self.registry = registry
         self.bridge = bridge
         self.gate = gate
         self.inbox = inbox
@@ -263,10 +269,26 @@ final class ClaudeTerminalSession: SessionLink {
 
     private func post(_ line: JSONValue) async throws {
         guard let inbox else { throw PiBridgeError.unsupported }
+        if !ready {
+            try await Self.waitUntilReady(registry, pid: pid)
+            ready = true
+        }
         var lines = Data()
         if let inboxToken { lines += (["type": "auth", "token": .string(inboxToken)] as JSONValue).data + [0x0A] }
         lines += line.data + [0x0A]
         try await ClaudeInbox.post(lines, to: inbox)
+    }
+
+    /// 会话一起来（`SessionStart` 钩子）就上桥，这时收件箱已在听，但登记文件里还没有 `status`（起好时写 `idle`）：这之前送到的话
+    /// 即使带着令牌也按来路不明挂起，跳过权限确认的会话不交给模型、等你在终端里批准（2.1.318 实测：上桥就发，12 次挂起 7 次；
+    /// 等到 `status` 再发，24 次都送到）。上桥到起好本机约 0.5 秒，期限留给慢机器。
+    @concurrent private static func waitUntilReady(_ registry: URL, pid: Int32) async throws {
+        let deadline = ContinuousClock.now + .seconds(15)
+        while (try? Data(contentsOf: registry)).flatMap(JSONValue.parse)?["status"]?.string == nil {
+            guard kill(pid, 0) == 0 else { throw PiBridgeError.sessionEnded }
+            guard ContinuousClock.now < deadline else { throw PiBridgeError.rejected("not_ready") }
+            try await Task.sleep(for: .milliseconds(50))
+        }
     }
 }
 
