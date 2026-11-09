@@ -1,7 +1,6 @@
 #if DEBUG
 import Foundation
 
-/// 参数组：键 = `-CuePad` + `prefix` + 字段名。
 nonisolated protocol DebugArgGroup: Decodable {
     static var prefix: String { get }
 }
@@ -26,16 +25,13 @@ extension DebugArgs {
         return args
     }()
 
-    /// 同 `NSString.boolValue`（`UserDefaults.bool` 的规则）：YES、true、1 为真。
     nonisolated static func isOn(_ text: String) -> Bool { (text as NSString).boolValue }
 }
 
-/// 解码时问过的键（小写、不含 `cuepad`），解完用来找出没有字段对应的参数。
 private nonisolated final class Asked: @unchecked Sendable {
     var names: Set<String> = []
 }
 
-/// 把参数域里的字符串按字段类型解成 Decodable：没给的 Bool 是 false、数是 0（同 `UserDefaults.bool(forKey:)`、`double(forKey:)`），可选是 nil。
 private nonisolated struct ArgDecoder: Decoder {
     let values: [String: String]
     let prefix: String

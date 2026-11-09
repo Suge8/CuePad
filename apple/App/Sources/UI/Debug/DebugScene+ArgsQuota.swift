@@ -1,7 +1,5 @@
 #if DEBUG
 
-/// 额度演示的参数。
-/// 键 = `-CuePad` + 前缀「Quota」 + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。
 nonisolated struct QuotaArgs: Decodable, DebugArgGroup {
     static let prefix = "Quota"
     /// `-CuePadQuotaFails YES`（配 `-CuePadDemoMac YES`）：演示 Mac 答额度刷新按没查到写回（`runDemoMac`）

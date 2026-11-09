@@ -4,13 +4,8 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 接入 Agent 并启用 Cue，一处做完：首次打开出现一次（`Workspace.offerSetup`），Cue 页的启用钮（`CueWelcome`）、会话页的"接入"也打开它；之后在设置里逐个开关。
-/// 打开时与回到 App 时重新检测这台的 Agent、问它们能不能用（`Workspace.recheckAgents`：用户可能刚在终端里登录了 Pi、装了 Node.js），
-/// 打开后第一次问完之前只写检测中：没登录的那家一出来就是"登录"，不先给勾选再在启用时报错。
-/// Agent 那几行与 Cue 那一行只读 `Workspace.setupRows`、`setupCue`：一家都用不了时，一行一个按钮（安装、登录），
-/// 装、登录都在后台做、就地写进度与原因，不用开终端粘命令；平时是勾选要接入的几家。每行写它会写什么或做什么，点按钮就是同意。
-/// 没做成的那一行写原因，都做成就收起；这台的技能与规则还有一键整理能做的，换成第二步（`SetupLibraryStep`，"跳过"就不整理）。
-/// "以后再说"关掉就是不接。
+/// 打开时与回到 App 时重新检测这台的 Agent（用户可能刚在终端里登录了 Pi、装了 Node.js）；打开后第一次问完之前只写检测中：不先给勾选再在启用时报错。
+/// 每行写它会写什么或做什么，点按钮就是同意。
 struct SetupPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -18,11 +13,8 @@ struct SetupPanel: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
-    /// 打开后第一次检测、问完了
     @State private var checked = false
-    /// 这台写下的各家能不能用（读库）
     @State private var here: MacAgents?
-    /// 去掉勾的几家与 Cue 那一行（面板开着时的选择，不存）
     @State private var skipped: Set<AgentKind> = []
     @State private var skipsCue = false
     @State private var working = false
@@ -34,17 +26,14 @@ struct SetupPanel: View {
     private var chosen: [AgentKind] { rows.filter { $0.step == .connect && !skipped.contains($0.kind) }.map(\.kind) }
     private var cueName: String { workspace.cue.name }
     private var setupCue: Workspace.SetupCue { workspace.setupCue(here: mac) }
-    /// 列出 Cue 那一行：能勾的，或在等 iCloud 的。
     private var cueRowShown: Bool { setupCue == .enable || waiting != nil }
     private var waiting: String? { if case .waiting(let why) = setupCue { why } else { nil } }
     private var enablingCue: Bool { setupCue == .enable && !skipsCue }
     private var hasChoices: Bool { checked && (rows.contains { $0.step == .connect } || cueRowShown) }
-    /// 有一家装好了只差登录（提示写"先登录"，否则写"先装"）。
     private var logsInFirst: Bool {
         rows.contains { if case .logIn = $0.step { true } else { $0.step == .loggingIn } }
     }
     private var done: Bool { checked && rows.isEmpty && !cueRowShown }
-    /// 都接好了、技能与规则还有一键整理能做的：第二步（`SetupLibraryStep`）。
     private var tidying: AgentLibrary? {
         guard done, let library = workspace.library, library.hostID == services.hostID, !library.automaticOrders.isEmpty else { return nil }
         return library
@@ -74,7 +63,6 @@ struct SetupPanel: View {
         }
     }
 
-    /// 标题说这一步做成什么；要启用 Cue 时下面一句说它是什么（第一次打开的人只认得 Agent）。
     private var header: some View {
         HStack(alignment: .center, spacing: Spacing.block) {
             Image(decorative: Mascot.hello.rawValue).resizable().scaledToFit().frame(width: 64, height: 64)
@@ -102,7 +90,6 @@ struct SetupPanel: View {
                 Text(logsInFirst ? "先登录好其中一家" : "先装好其中一家").font(Typography.secondary).foregroundStyle(palette.ink2)
                     .padding(.horizontal, Spacing.tight)
             }
-            // Agent 那几行与 Cue 那一行分两组：先定接哪几家，再是启用这一步
             if !rows.isEmpty { group { ForEach(rows) { row($0) } } }
             if cueRowShown { group { cueRow } }
             if let tidying {
@@ -113,14 +100,12 @@ struct SetupPanel: View {
         }
     }
 
-    /// 一行一句的提示（检测中、都已接入）：纸色底。
     private func note(@ViewBuilder _ content: () -> some View) -> some View {
         HStack(spacing: Spacing.item) { content() }.foregroundStyle(palette.ink2)
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Spacing.inset).padding(.vertical, Spacing.item)
             .background(palette.paper, in: .rect(cornerRadius: Radius.block))
     }
 
-    /// 一家一行：这一步写什么、右边放什么（勾选、安装、登录）。
     private func row(_ row: SetupRow) -> some View {
         let kind = row.kind
         let (tone, line, busy) = describe(row)
@@ -184,8 +169,6 @@ struct SetupPanel: View {
             .accessibilityLabel("\(String(localized: title)) \(kind.name)")
     }
 
-    /// 启用 Cue 那一行：默认项目还没有文件夹时写任务在哪做（工作区，第一次开工时建好，`Workspaces`）。没启用成的写原因。
-    /// 在等 iCloud 时写在等什么、转圈，勾不上。
     private var cueRow: some View {
         let waiting = self.waiting
         let (tone, line): (StatusTone, Dotted?) = failures.cue.map { (.failure, Dotted($0)) }
@@ -259,12 +242,10 @@ struct SetupPanel: View {
         Task {
             failures = await workspace.setUp(connecting: chosen, enablingCue: enablingCue)
             working = false
-            // 还有技能与规则要收的：留着面板，换成第二步
             if failures.isEmpty, tidying == nil { close() }
         }
     }
 
-    /// 与设置窗口的分组同一种纸色圆角底。
     private func group(@ViewBuilder _ rows: () -> some View) -> some View {
         VStack(spacing: 0) {
             Group(subviews: rows()) { subviews in
@@ -277,7 +258,6 @@ struct SetupPanel: View {
     }
 }
 
-/// 设置行（`SettingRow`）在 Form 外的排法，同 Form 里：名称在左、控件靠右。
 private struct RowLayout: LabeledContentStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(alignment: .center, spacing: Spacing.group) {
@@ -288,7 +268,6 @@ private struct RowLayout: LabeledContentStyle {
     }
 }
 
-/// 同 Form 里：图标一列，名称与它下面的状态上下排。
 private struct RowLabel: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {

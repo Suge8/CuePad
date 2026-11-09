@@ -1,8 +1,6 @@
 #if DEBUG
 extension DebugSceneEntry {
-    /// cue：Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cueschedules 再打开定时（`-CuePadScheduleOpen YES` 新定时的几点展开），
-    /// cuerun（仅 Mac）再打开"运行情况"（Cue 在这台值班时才有）。`-CuePadCuePresence away`：一夜里 Cue 陆续说了几句，回到 Cue 页从新消息读起；
-    /// `-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCueDraft <文字>` 输入框里先有这句草稿。
+    /// cuememory 再打开"Cue 记得什么"，cueschedules 再打开定时，cuerun（仅 Mac）再打开"运行情况"（Cue 在这台值班时才有）。`-CuePadCuePresence away`：一夜里 Cue 陆续说了几句，回到 Cue 页从新消息读起。
     static let cue = DebugSceneEntry("cue", "cuememory", "cueschedules", "cuerun") { workspace, _ in
         let scene = DebugScene.scene
         #if os(macOS)
@@ -27,7 +25,6 @@ extension DebugSceneEntry {
         #endif
     }
 
-    /// cuerows：会话行（Mac 在进展页，iOS 在搜索页的会话一栏），Cue 在演示 Mac 上值班时的样子。
     static let cueRows = DebugSceneEntry("cuerows") { workspace, _ in
         #if os(macOS)
         await DebugScene.connectAgents(workspace.services)
@@ -40,7 +37,6 @@ extension DebugSceneEntry {
     }
 
     #if os(iOS)
-    /// cuepanel：宽屏主区开着项目页、右栏是 Cue。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
     static let cuePanel = DebugSceneEntry("cuepanel") { workspace, project in
         if DebugScene.args.demo { await DebugScene.seedCue(workspace.services) }
         workspace.select(project.map(Route.project) ?? .shelf)

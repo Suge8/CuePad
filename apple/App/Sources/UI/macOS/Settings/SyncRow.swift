@@ -2,9 +2,6 @@
 import CueSync
 import SwiftUI
 
-/// iCloud 同步那一行。状态字只写现状的标题（`SyncSummary`），补充说明在悬停提示里；有解决办法时后面给一个链接：
-/// 没开 iCloud → 打开系统设置；这台要更新 → "检查更新…"；暂停等你决定 → "处理…"弹出两个选择（替换本机前再确认一次）；有记录没能同步 → "查看"明细。
-/// 按了有用时右边给"立即同步"（`AppServices.canSyncNow`）。
 struct SyncRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -13,7 +10,6 @@ struct SyncRow: View {
     @State private var showsDecision = false
     @State private var showsIssues = false
     @State private var confirmErase = false
-    /// 这一轮同步中已久过 `Pending.delay`（`ShownSync`）。
     @State private var syncLasts = false
 
     private enum Fix { case decide, openSettings, update, issues }
@@ -48,7 +44,6 @@ struct SyncRow: View {
                 EmptyView()
             }
         }
-        // 状态始终有一行：短句不留额外空白，长句截断；完整说明在悬停提示里。
         .lineLimit(1)
         .confirmsErase($confirmErase, choices: choices, services: services)
         .pending(services.syncState.status == .syncing, shown: $syncLasts)

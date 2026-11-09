@@ -4,7 +4,6 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 的摆画面：数据与全局参数在这里，各画面的摆法在 `Scenes/`。
 extension DebugScene {
     /// 模拟器当作接了电脑键盘、聚焦不弹软键盘：清掉输入法的硬件键盘布局后照常弹出（私有选择子，只在 Debug 里）。
     private static func showSoftwareKeyboard() {
@@ -53,7 +52,6 @@ extension DebugScene {
         if let pace = args.layoutOpts.rightCycle { Task { await cycleWide(fast: pace == "fast") { workspace.services.settings.cueOpen.toggle() } } }
     }
 
-    /// `-CuePadSidebarCycle`、`-CuePadRightCycle`（iPad 宽屏，配录屏）：同 Mac，反复开合会话条或 Cue（直接改用户的开合选择，同侧栏钮与 Cue 钮），`fast` 在动画中途反向。
     private static func cycleWide(fast: Bool, _ toggle: () -> Void) async {
         // 两次之间停多久是录屏的节奏，不是在等别的事
         let gaps: [Double] = fast ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
@@ -66,19 +64,16 @@ extension DebugScene {
         }
     }
 
-    /// 在 `-CuePadProject` 打开的项目里（没有就是默认项目）打开一张灵感的详情。
     static func openCard(_ workspace: Workspace, project: UUID?) async throws {
         if let project { workspace.select(.project(project)) }
         if let card = try await card(in: project ?? Project.defaultID, store: workspace.services.store) { workspace.push(.card(card)) }
     }
 
-    /// 演示会话按会话名找（演示会话的会话名各不相同）。
     static func demoSession(titled title: String, store: CueStore) async throws -> PiSessionState? {
         try await store.piSessionPage(PiSessionQuery(text: title)).items.first { $0.state.title == title }?.state
     }
 
-    /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页通知那一行按这个状态显示
-    /// （演示模式没有同步、真实状态出不来）。
+    /// 演示模式没有同步，真实状态出不来。
     static var alertStatus: PiAlertStatus? {
         switch args.alertStatus {
         case "on": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .active)
@@ -91,7 +86,6 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadPanelCycle YES`（配 cue 画面录屏）：画面就绪后每 1.5 秒点一下 Cue 页头，开合面板几遍，看动效。
     static func cyclePanel() async {
         await Task.wait(for: .seconds(4))
         for _ in 0..<8 {

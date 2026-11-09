@@ -1,7 +1,5 @@
 #if DEBUG
 
-/// Cue 页与 Cue 此刻状态的参数。
-/// 键 = `-CuePad` + 前缀「Cue」 + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。
 nonisolated struct CueArgs: Decodable, DebugArgGroup {
     static let prefix = "Cue"
     /// `-CuePadCueAsk <proposals|push|one|four|evidence>`（配 `-CuePadScene cue` 与演示库）：把"等你"换成提问卡的一种样子，对照设计稿截图

@@ -4,12 +4,7 @@ import CueStore
 import Foundation
 
 extension DebugScene {
-    /// 把演示的技能与规则写成文件，由本机照常扫（`AgentLibraryKeeper`）：只写进 `xc.sh` 给隔离实例换到库里的各家目录
-    /// （`CUEPAD_AGENTS_DIR` 等，`app_env.py`）与演示项目绑的文件夹（`DemoLibrary.demoHome`，也在隔离库里），没换走（真实位置）就什么都不写。
-    /// 目录里已有东西就不再写（重开、整理过的样子留着）。
-    /// 该整理的样子：Claude Code 旧目录里两个技能、write-swift 与圆桌的 load-test 没给 Claude Code 补上链接、全局与 CuePad 各有一个 release、
-    /// uilane 没有名字与说明、Codex 技能目录里一个空目录、Claude Code 与 Pi 的系统提示各写一份全局规则、个人网站另有一份不同的 CLAUDE.md；
-    /// `-CuePadAgentLibrary clean` 时都已收好。
+    /// 只写进 `xc.sh` 给隔离实例换到库里的各家目录（`CUEPAD_AGENTS_DIR` 等，`app_env.py`）与演示项目绑的文件夹（`DemoLibrary.demoHome`）；没换走（真实位置）就什么都不写。目录里已有东西就不再写（重开、整理过的样子留着）。
     static func seedAgentFiles() throws {
         let environment = ProcessInfo.processInfo.environment
         guard let sharedPath = environment["CUEPAD_AGENTS_DIR"], let claudePath = environment[AgentKind.claudeCode.facts.homeVariable],

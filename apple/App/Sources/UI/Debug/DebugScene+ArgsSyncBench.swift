@@ -1,7 +1,5 @@
 #if DEBUG
 
-/// 同步测量的参数。
-/// 键 = `-CuePad` + 前缀「SyncBench」 + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。
 nonisolated struct SyncBenchArgs: Decodable, DebugArgGroup {
     static let prefix = "SyncBench"
     /// `-CuePadSyncBenchBudget <个>`：没给 `-CuePadSyncBenchCloud` 时，这个进程的请求上限

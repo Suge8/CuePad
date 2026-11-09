@@ -62,8 +62,7 @@ extension DebugScene {
             }
             send(magnify(n[0], n[1], in: window, phase: 4, by: 0))
         case ("jump", 3):
-            // 贴底跟随的对话据这两个通知知道是"用户在滚"，不把偏移拉回去（同 `ChatScrollBench`）；
-            // 滚动交给那里的滚动视图一份不挂窗口的滚动（同 `swipe`），一下挪完
+            // 贴底跟随的对话据这两个通知知道是"用户在滚"，不把偏移拉回去；滚动交给那里的滚动视图一份不挂窗口的滚动，一下挪完
             guard let target = window.contentView?.superview?.hitTest(NSPoint(x: n[0], y: window.frame.height - n[1]))?.enclosingScrollView else { break }
             NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: target)
             let steps = Self.frames / 2
@@ -148,7 +147,6 @@ extension DebugScene {
         return true
     }
 
-    /// 正在量的那一段：标签、帧、起量时的指令数（百万）。
     private static var measuring: (label: String, frames: FrameRecorder, instructions: Double)?
 
     private static func measure(_ label: String?, in window: NSWindow) {
@@ -239,7 +237,6 @@ extension DebugScene {
     private static let windowNumber = CGEventField(rawValue: 51)!
     private static let hidFrame = Duration.microseconds(8333)
 
-    /// 窗口里这一点（左上为原点）的全局坐标（主屏左上为原点，同 `CGEvent.location`）。
     private static func global(_ x: Double, _ y: Double, in window: NSWindow) -> CGPoint {
         let screen = window.convertPoint(toScreen: NSPoint(x: x, y: window.frame.height - y))
         return CGPoint(x: screen.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - screen.y)

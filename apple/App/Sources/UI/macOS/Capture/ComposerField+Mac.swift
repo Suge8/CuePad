@@ -3,10 +3,8 @@ import AppKit
 import CueEditor
 import SwiftUI
 
-/// 输入框里的多行文字区（Mac）：与 iOS 那份同样的接口与行为——高度随文字长到 `maxLines` 行后在里面滚，
-/// 输入法组字期间不从外面写回，空着时显示提示。焦点由调用方的 `.focused` 交给文本视图；文本视图自己拿到、交出焦点
-/// （点进来、Esc）时再报回 `focus`。↩ 换行；⌘↩ 等回复框快捷键是主菜单"回复"里的项，经响应链交到这里（`performReplyShortcut`）。
-/// 粘贴、拖进来的文件与图片交给 `files`（输入框放进附件条），不当文字插。
+/// 焦点由调用方的 `.focused` 交给文本视图；文本视图自己拿到、交出焦点（点进来、Esc）时再报回 `focus`。
+/// ⌘↩ 等回复框快捷键是主菜单"回复"里的项，经响应链交到这里（`performReplyShortcut`）。
 struct ComposerField: NSViewRepresentable {
     @Binding var text: String
     let prompt: String
@@ -14,16 +12,16 @@ struct ComposerField: NSViewRepresentable {
     let maxLines: Int
     let ink: Color
     let focus: FocusState<Bool>.Binding
-    /// 方向键、↩/Tab、Esc 先交给调用方（斜杠命令面板打开时用）；返回 true 表示已处理，不再按文本视图的默认行为走。
+    /// 返回 true 表示已处理，不再按文本视图的默认行为走。
     var keys: (ComposerKey) -> Bool = { _ in false }
-    /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了（菜单项停用）。
+    /// nil 是此刻用不了（菜单项停用）。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
-    /// 收下粘贴、拖进来的文件与图片；nil 是这个输入框不收附件，剪贴板里的照常当文字粘。
+    /// nil 是不收附件，剪贴板里的照常当文字粘。
     var files: (([IncomingFile]) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
 
-    /// 文字区一行中文的高（`ComposerMetrics.lineSlot`）；Mac 的字号不跟系统的动态字号走。
+    /// Mac 的字号不跟系统的动态字号走。
     static func lineHeight(_: DynamicTypeSize) -> CGFloat { GrowingTextView.lineHeight }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -62,7 +60,7 @@ struct ComposerField: NSViewRepresentable {
         context.coordinator.parent = self
         guard let view = scroll.documentView as? GrowingTextView else { return }
         // 组字期的文字已经在 `text` 里；只在外部改写（回到会话恢复草稿、发送后清空、展开编辑、编辑后重发）时才写回，免得打断输入法。
-        // 外部改写赢过组字期，先让输入法丢掉没上屏的那串（同 iOS 那份）。外部写进来的光标放到末尾、排好后让末尾露出来
+        // 外部改写赢过组字期，先让输入法丢掉没上屏的那串。外部写进来的光标放到末尾、排好后让末尾露出来
         if text != context.coordinator.sent {
             context.coordinator.sent = text
             if view.hasMarkedText() {
@@ -81,7 +79,7 @@ struct ComposerField: NSViewRepresentable {
         }
         view.placeholder = prompt
         view.placeholderColor = NSColor(palette.ink3)
-        // 只在颜色真的变了时设（同 iOS 那份：设一次就给整篇文字重铺颜色）
+        // 只在颜色真的变了时设：设一次就给整篇文字重铺颜色。
         if ink != context.coordinator.ink {
             context.coordinator.ink = ink
             view.textColor = NSColor(ink)
@@ -104,7 +102,6 @@ struct ComposerField: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: ComposerField
-        /// 上次交给 `text` 的那一串（同 iOS 那份：更新时拿它判断是不是外部改写）。
         var sent = ""
         var ink: Color?
         var writing = false
@@ -148,7 +145,6 @@ struct ComposerField: NSViewRepresentable {
     }
 }
 
-/// 文字区的滚动框：外部写进文字后，高度定下来的那次排版里滚到末尾。
 final class ComposerScrollView: NSScrollView {
     override func layout() {
         super.layout()
@@ -162,9 +158,8 @@ final class ComposerScrollView: NSScrollView {
 final class GrowingTextView: NSTextView {
     /// 与气泡里的字同一号：写下的这句发出去就是对话里的那颗气泡
     static let bodyFont = Typography.readingFont
-    /// 行距也同气泡（`Typography.readingLineSpacing`）：多行时不比对话挤，发出去节奏不突变。量高度用同一份。
+    /// 行距也同气泡（`Typography.readingLineSpacing`）：多行时不比对话挤，发出去节奏不突变。
     static let paragraph = Typography.readingParagraph
-    /// 量高只看字体与段落。
     private static let metrics: [NSAttributedString.Key: Any] = [.font: bodyFont, .paragraphStyle: paragraph]
     static func attributes(_ ink: Color) -> [NSAttributedString.Key: Any] { metrics.merging([.foregroundColor: NSColor(ink)]) { $1 } }
     var placeholder = ""
@@ -172,11 +167,9 @@ final class GrowingTextView: NSTextView {
     var maxLines = 1
     var focusChanged: ((Bool) -> Void)?
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
-    /// 收下粘贴、拖进来的文件与图片（`ComposerField.files`）。
     var files: (([IncomingFile]) -> Void)?
-    /// 外部刚写进文字：滚动区下一次排版后滚到末尾。
     var revealsEnd = false
-    /// 最大高度：排满 `maxLines` 行中文量出来的高度（中文行比西文行高），撑满时最后一行不被切一半。
+    /// 排满 `maxLines` 行中文量出来的高度（中文行比西文行高），撑满时最后一行不被切一半。
     var maxHeight: CGFloat {
         if let cached = Self.maxHeights[maxLines] { return cached }
         let height = Self.height(of: Array(repeating: "国", count: maxLines).joined(separator: "\n"), width: .greatestFiniteMagnitude)
@@ -187,7 +180,6 @@ final class GrowingTextView: NSTextView {
     /// 量用的字体 `bodyFont` 是进程内不变的常量，所以只按行数记。
     private static var maxHeights: [Int: CGFloat] = [:]
 
-    /// 按给定宽度排下现有文字要多高，最高 `maxHeight`（只排够上限的开头，量过的记着，见 `ComposerHeight`）。
     func fittingHeight(width: CGFloat) -> CGFloat {
         heights.height(of: textStorage?.string as NSString? ?? "", width: width, em: Self.bodyFont.pointSize, limit: maxHeight) {
             Self.height(of: $0, width: width)
@@ -195,7 +187,6 @@ final class GrowingTextView: NSTextView {
     }
     private var heights = ComposerHeight()
 
-    /// 文字变了（打字、外部写入）。
     func textChanged() { heights.textChanged() }
 
     private static func height(of string: String, width: CGFloat) -> CGFloat {
@@ -225,7 +216,7 @@ final class GrowingTextView: NSTextView {
         files == nil ? super.readablePasteboardTypes : NSPasteboard.fileTypes + super.readablePasteboardTypes
     }
 
-    /// 粘贴与拖入都汇到这里：有附件（规则在 `NSPasteboard.files`）就交出去；否则按文字的种类照常插（附件的种类排在前面，传进来的可能是它们）。
+    /// 有附件（规则在 `NSPasteboard.files`）就交出去，否则按文字的种类照常插：附件的种类排在前面，传进来的可能是它们。
     override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
         let found = pboard.files
         guard let files, !found.isEmpty else {
@@ -260,7 +251,6 @@ final class GrowingTextView: NSTextView {
     }
 }
 
-/// 当前输入框是否在输入法组字中（有未上屏的拼音等）：问窗口的第一响应者。
 enum TextComposition {
     static var isComposing: Bool {
         (NSApp.keyWindow?.firstResponder as? NSTextInputClient)?.hasMarkedText() == true

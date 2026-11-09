@@ -3,8 +3,7 @@ import AppKit
 
 /// 占前台的唯一入口：本机构建一律在后台（`DebugHooks.present`），只有启动参数给了 `-CuePadForeground YES` 且用户不在才借得到
 /// （启动时查，`requireUserAway`：不够空闲就报读数、退出码 2，调用方的命令随之失败；别的借法与重试都绕不开它）。
-/// 借时记下当时的前台应用，动过指针就记下原位，`giveBack` 时都还回去；量完、被结束都经应用终止流程还（`DebugHooks.willTerminate`），
-/// 被 KILL 时系统把前台交给下一个应用，指针不还。哪几样可以借、什么时候才可以给见 docs/verify.md「占前台」。
+/// 借时记下当时的前台应用，动过指针就记下原位，`giveBack` 时都还回去；量完、被结束都经应用终止流程还（`DebugHooks.willTerminate`），被 KILL 时系统把前台交给下一个应用，指针不还。
 /// 系统的激活是协商式的：别的应用在前台时 `NSApp.activate()` 会被忽略，窗口照旧在后面、点一下只是激活。所以借着而没在前台时
 /// 写下请求文件（`CUEPAD_FRONT_REQUEST`，起实例的 app.py 给），看守进程见到它就替本进程拉到前台；到了前台就删掉，被抢走再写。
 enum DebugForeground {
@@ -65,7 +64,6 @@ enum DebugForeground {
         lender.activate(from: .current)
     }
 
-    /// 借着时：到了前台撤下请求，被别的应用抢走再请求（第一次借时装上，之后一直在）。
     private static let watching: Void = {
         let center = NotificationCenter.default
         center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in

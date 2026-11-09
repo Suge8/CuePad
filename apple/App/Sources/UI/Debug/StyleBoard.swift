@@ -2,8 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 视觉样板（`-CuePadScene style`）：颜色 token、纸与玻璃、各类按压、状态标与动效放在一页，改主题时对照，录屏取帧。
-/// 打开后自动演一遍：计数每 1.5 秒加一（数字滚动）、列表每 2 秒进出一行、第二个状态标每 3 秒在工作 ↔ 做完之间切（看呼吸与涟漪）。
 struct StyleBoard: View {
     @Environment(\.palette) private var palette
     @State private var count = 3
@@ -89,7 +87,6 @@ struct StyleBoard: View {
         .foregroundStyle(palette.ink)
     }
 
-    /// 共享控件：按钮三档与淡底圆钮、问号、胶囊（关、开、带箭头）、两级节头、箭头与记号点。
     private var controls: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -140,7 +137,6 @@ struct StyleBoard: View {
                 Spacer()
                 Text("\(count)").font(.title.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink).counting(count)
             }
-            // 全部会话状态：状态标、状态词与颜色
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), alignment: .leading)], alignment: .leading, spacing: 10) {
                 ForEach(Self.statuses, id: \.self) { status in
                     let shown = PiShown(status: status)

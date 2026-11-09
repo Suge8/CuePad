@@ -2,11 +2,9 @@
 import CueStore
 import SwiftUI
 
-/// 主栏栏头右端的"⋯"：当前页的操作，只放页上已有的动作；没有可放的页（归档）钮停用、同系统停用的控件那样变淡（与可用时一个样子，点了没反应像是坏了）。
-/// 编辑页开着（`Workspace.openCard`，盖在项目页上）时是这张卡的操作，编辑页里不另放"⋯"：卡由这里按 `openCard` 自己从库里读（`observing`），
-/// 没读到时钮停用。
+/// 没有可放的页（归档）钮停用、同系统停用的控件那样变淡：与可用时一个样子，点了没反应像是坏了。
 /// 菜单项不按页面数据置灰：菜单拿不到页面读的库，抄一份过来就是第二个事实源；没有可归档、可清空的时候点了什么也不发生。
-/// 圆钮的玻璃自己画，与"收起"同一种做法。钮在每一页都在、只随页面置灰，栏头不随换页增删控件、不重排。
+/// 钮在每一页都在、只随页面置灰，栏头不随换页增删控件、不重排。
 /// 会话页的钮跟着页面就在，菜单里的会话项等页面交来的值、并晚于标题两帧（`showsMenu`）。
 struct PageMenuSlot: View {
     @Environment(Workspace.self) private var workspace
@@ -16,8 +14,6 @@ struct PageMenuSlot: View {
     @State private var inspirationSharing = InspirationSharing()
 
     private enum Content: Equatable {
-        /// 会话页；页面还没交来值时是 nil。
-        /// 编辑页开着：这张卡的操作；还没读到时是 nil。
         case card(Card?)
         case project(UUID)
         case progress
@@ -88,8 +84,6 @@ struct PageMenuSlot: View {
     }
 }
 
-/// 项目页"⋯"里的几项：进入批量选择（`CardPresses`，一条都还没选，点卡再选）、看这个项目的进展（项目范围设成它，再去进展的看板）、项目的操作。
-/// 添加任务就在页上的任务区里。
 private struct ProjectMenuItems: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace

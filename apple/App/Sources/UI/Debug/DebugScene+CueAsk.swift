@@ -2,13 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// `-CuePadCueAsk <proposals|push|one|four|evidence>`（配 `-CuePadScene cue` 与演示库）：把"等你"换成提问卡的一种样子，对照设计稿截图。
-/// 演示库原有的两条先撤回，换上这一条：
-/// - proposals：真实那张卡的同款——审美取舍，在三个方案里挑，推荐 1，点名每个方案一张手机截图；
-/// - push：推送，有第二项（"以后……不用问"），不带图；
-/// - one：部署到预发，只点名一张竖图；
-/// - four：四张竖图（一行平分，缩略图变小）；
-/// - evidence：合并，三张横图的证据，说明不带"："。
 extension DebugScene {
     static func seedAsk(_ variant: String, store: CueStore, task: UUID?) async throws {
         for open in try await store.cueMessagesWaitingForYou() { try await store.endCueQuestion(open.id, .withdrawn) }
@@ -54,8 +47,7 @@ extension DebugScene {
 
     private enum Proposal { case sheet, thread, slide, drawer }
 
-    /// 一个方案的手机效果图：一页对话，中间是那种样子的提问（各有一块显眼、彼此分得开的样子：黄卡大蓝钮、对话气泡、绿色滑轨、深色抽屉），
-    /// 方形缩略图取细节最多的那一段（`DeliverableLooks.detailRegion`）也一眼认得出是哪张。
+    /// 方形缩略图取细节最多的那一段（`DeliverableLooks.detailRegion`）也要一眼认得出是哪张，所以每个方案有一块显眼、彼此分得开的样子。
     private static func proposalPNG(_ proposal: Proposal) -> Data {
         let indigo = Color(red: 0.18, green: 0.29, blue: 0.62)
         let question = Text("可以推送 scheduler 的重连修复吗？", tableName: "Demo").font(.system(size: 15, weight: .semibold))

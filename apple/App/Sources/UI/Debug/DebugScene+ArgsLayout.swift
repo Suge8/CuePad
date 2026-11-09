@@ -1,7 +1,5 @@
 #if DEBUG
 
-/// 窗口尺寸、侧栏与右栏、窄屏宽屏、辅助功能与折叠展开这类"把界面摆成什么样"的参数。
-/// 键 = `-CuePad` + 前缀（无） + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。
 nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     static let prefix = ""
     /// `-CuePadBeside <会话>`（仅 Mac）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）

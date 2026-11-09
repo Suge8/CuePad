@@ -1,7 +1,5 @@
 #if DEBUG
 
-/// 录屏与测量的驱动：点击、悬停、循环、卡顿、基准、前台。
-/// 键 = `-CuePad` + 前缀（无） + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。
 nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     static let prefix = ""
     /// `-CuePadAXDump YES`：界面起来 4 秒后把读屏看到的元素（标签、值、特征）按顺序写进资料库目录的

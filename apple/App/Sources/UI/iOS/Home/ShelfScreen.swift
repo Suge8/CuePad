@@ -1,7 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 窄屏侧栏与宽屏主区的项目列表共用 ProjectList；辅助入口宽屏在网格前，窄屏放列表末尾并另有设置入口。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -26,7 +25,6 @@ struct ShelfScreen: View {
     }
 }
 
-/// iPad 宽屏在页顶；窄屏在侧栏顶上的那一排。
 private struct NewProjectButton: View {
     @Environment(Workspace.self) private var workspace
 

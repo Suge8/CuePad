@@ -2,9 +2,6 @@
 import CueStore
 import Foundation
 
-/// `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中那一列里再放几件 Agent 正在多步推进的任务——
-/// 运行工具的、刚想的、派了子代理的、被打断的，与一件有三个子任务（登录回调）、做到第二步、第二步的会话在跑测试的（行尾估还要多久）；只写一次。
-/// 每个会话之前还说过几句（`earlier`，几分钟前），卡下沿那条线的过去一句一颗点；这一轮的那句在 `busy` 分钟前。
 extension DebugScene {
     static func seedBusyBoard(_ store: CueStore) async {
         guard args.busyBoard else { return }
@@ -51,8 +48,7 @@ extension DebugScene {
         try await store.linkCard(second.id, toSession: "gateway")
     }
 
-    /// `-CuePadCanvasSteps YES`（配 tasks 画面，两端）：待办里"画布缩放锚点跟随指针"写上正文与三个子任务（第一个做完），
-    /// 进展页的看板上点它的卡看任务气泡的正文与子任务（演示库里另一件有子任务的"发言轮次乱序"在等你那一列，点它是去 Cue 页那一问、不开气泡）。
+    /// 进展页的看板上点它的卡看任务气泡的正文与子任务；演示库里另一件有子任务的"发言轮次乱序"在等你那一列，点它是去 Cue 页那一问、不开气泡。
     static func seedCanvasSteps(_ store: CueStore) async {
         guard args.canvasSteps else { return }
         await running("画布任务的子任务") { try await canvasSteps(store) }

@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// "更早"：墙以外的卡，三个月内按周分组（每周只有一条的月份并成一组），更久按月分组且默认折叠。点开的卡被编辑后回到墙首。
 struct OlderList: View {
     let groups: [OlderGroup]
     let cards: [UUID: Card]
@@ -56,14 +55,11 @@ struct OlderList: View {
         }
     }
 
-    /// 周分组常开；月分组默认折叠。
     private func isExpanded(_ group: OlderGroup) -> Bool {
         !group.isMonth || expanded.contains(group.period)
     }
 }
 
-/// "更早"与置顶的灵感里的一行：点开编辑页；指针停着时铺行的淡底、行尾浮出删除（`hoverReveal`，批量选择时不出），批量选择里选上的是选中底（`RowStyle`）。
-/// 置顶的（`pinned`）行首是图钉，那一组不另起组名。同墙上的卡，拖到任务纸的一行上接进那条任务，或拖到"添加任务"上照它新建一条。
 struct OlderRow: View {
     let card: Card
     let lastTarget: String?
@@ -116,7 +112,6 @@ extension OlderRow {
     }
 }
 
-/// 行首的小图标（置顶的是图钉）；批量选择里选上时换成墨色对勾（`PickedMark`，底是行的选中底）。
 private struct RowGlyph: View {
     let attached: Bool
     let pinned: Bool

@@ -13,7 +13,6 @@ extension View {
         #endif
     }
 
-    /// 点 Cue 页头（Mac 是 Cue 栏头的头像那一块）开合面板的那条路交给测量（两端 `InteractionBench` 的"展开 Cue 面板""收起 Cue 面板"）。
     func debugExposesCuePanel(_ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
         onAppear { DebugScene.toggleCuePanel = toggle }
@@ -23,7 +22,6 @@ extension View {
     }
 
     #if os(iOS)
-    /// 窄屏侧栏额度钮开合浮窗的那条路（点一下额度钮）交给录屏驱动（`-CuePadQuotaCycle`）。
     func debugExposesQuota(_ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
         onAppear { DebugScene.toggleQuota = toggle }
@@ -32,7 +30,6 @@ extension View {
         #endif
     }
 
-    /// 模态浮出点外面关的那条路（`ModalScrim` 接到一下时调的就是开着那一个的 `close`）交给录屏驱动。
     func debugExposesModals(_ host: ModalHost) -> some View {
         #if DEBUG
         onAppear { DebugScene.modals = host }
@@ -73,7 +70,6 @@ extension View {
         #if DEBUG
         task {
             guard DebugScene.args.layoutOpts.turnCycle else { return }
-            // 每步之前停多久是录屏的节奏
             for pause in [3.0, 1.5, 1.5, 0.1, 1.5, 1.5] {
                 guard await Task.wait(for: .seconds(pause)) else { return }
                 turn()
@@ -93,7 +89,6 @@ extension View {
         #endif
     }
 
-    /// 项目页任务纸点"还有 N 条"的那条路交给测量（两端 `InteractionBench` 的"展开任务"）：看得见的那一页（`active`）的纸。
     func debugExposesTaskFold(active: Bool = true, _ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
         onChange(of: active, initial: true) { if active { DebugScene.toggleTaskFold = toggle } }
@@ -144,7 +139,6 @@ extension View {
         #endif
     }
 
-    /// `older` 画面：墙排好（`ready`）后滚到"更早"。
     func debugScrollsToOlder(_ proxy: ScrollViewProxy, ready: Bool) -> some View {
         #if DEBUG
         onChange(of: ready) { if ready { DebugScene.scrollIfNeeded(proxy) } }
@@ -188,7 +182,6 @@ extension View {
     #endif
 
     #if os(iOS)
-    /// 窗口根上：按启动参数摆好调试画面（样板页盖在最上层），摆好后报"首帧就绪"（`xc.sh shot` 等它再截图）。
     func debugScene(_ workspace: Workspace) -> some View {
         #if DEBUG
         overlay {
@@ -239,7 +232,6 @@ private struct DebugSettling: ViewModifier {
 #endif
 
 #if os(macOS)
-/// 主窗口的内容：截图只截主窗口，调试画面要拍的另一扇窗（菜单栏面板、新会话）放进主窗口里拍；其余是 `main`。
 struct DebugStage<Main: View>: View {
     let workspace: Workspace
     @ViewBuilder let main: () -> Main

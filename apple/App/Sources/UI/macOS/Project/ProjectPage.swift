@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 项目页（与手机项目页同构）：最上面一行是它的文件夹与规则（`ProjectIntroLine`；项目名与介绍在主栏栏头，`WideProjectHeading`）→ 任务那张纸（`FocusBand`）→ 置顶的灵感 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有说现状的那一格（`EmptyWallTile`，记灵感在底部随手记）。
 struct ProjectPage: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
@@ -14,15 +13,12 @@ struct ProjectPage: View {
     /// 墙与"更早"要用的、由数据和分区推出的东西：数据或分区变了才重算（任务行里 Agent 的状态一变页面就要重算，每次都从上千张卡里重新分组太贵）。
     @State private var shape: PageShape?
     @State private var collapsed = false
-    /// 窗口最顶那一排的高（`topBand`）：下滚后的回到顶部排在那一排里。
     @Environment(\.topBand) private var band
-    /// 任务纸收起其余任务时连带的滚动（`TaskFoldAnchor`）。
     @State private var position = ScrollPosition()
     @State private var anchor = TaskFoldAnchor()
     /// 首次挂上时内容分几帧出（`Stage`）：一个回合里全建要几十毫秒；留着的页回来时已经在最后一段。
     @State private var stage = Stage.header
 
-    /// 最上面那行先到，其余每帧一段，自上而下。
     private enum Stage: Int, CaseIterable, Comparable {
         case header, focus, wall, older
         static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
@@ -45,8 +41,7 @@ struct ProjectPage: View {
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.fade) { collapsed = isCollapsed }
                 }
-                // 下滚后的回到顶部：排进窗口最顶那一排、居中（项目页那一排中间是空的），不压在下一排的卡片上；
-                // 是页里的一块、不放进栏头——栏头内容只随用户操作变，不随滚动位置这种布局读数变（docs/layout.md 第一条：跟着滚动位置变会形成布局循环）
+                // 下滚后的回到顶部是页里的一块、不放进栏头：栏头内容只随用户操作变，不随滚动位置这种布局读数变（docs/layout.md 第一条：跟着滚动位置变会形成布局循环）。
                 if collapsed, let data, !data.tasks.isEmpty {
                     CompactFocus(data: data) {
                         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
@@ -59,7 +54,6 @@ struct ProjectPage: View {
             }
             .debugScrollsToOlder(proxy, ready: board.arrangement != nil)
         }
-        // 批量选择的"全选"范围：看得见的这一页上散放的灵感（置顶、墙、更早），按页上的顺序
         .onChange(of: SelectableKey(active: active, ids: board.arrangement.map { $0.pinned + $0.wall + $0.older }), initial: true) { _, key in
             if key.active, let ids = key.ids { workspace.presses.selectable = ids }
         }
@@ -112,7 +106,6 @@ struct ProjectPage: View {
         }
     }
 
-    /// 置顶的灵感：长期参考的，一行一条压在任务纸下面；不另起组名，行首的图钉认得出。
     private func pinned(_ cards: [Card], lastTarget: [UUID: String]) -> some View {
         VStack(spacing: 0) {
             ForEach(cards) { card in
@@ -142,7 +135,6 @@ struct ProjectPage: View {
     private func rearrange() {
         guard let data else { return }
         var next = board
-        // 第一次排墙直接到位；之后墙上的卡增减、挪位有动画（同手机项目页）
         if next.refresh(with: data, project: projectID) {
             board = next
         } else if next != board {
