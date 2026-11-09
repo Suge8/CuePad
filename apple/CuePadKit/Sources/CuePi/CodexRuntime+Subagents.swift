@@ -96,20 +96,32 @@ extension CodexRuntime {
     }
 
     /// 同一进程上还有认不出主人的线程（推送先到、还在问或第一次没读到）时先不歇下：它可能就是这一轮派出的子代理，
-    /// 不等就会先报歇下、认出后再进“等子代理”。由这次结束触发再问一遍，认出的进名册，仍读不到的当作别人的；问完再歇下。
+    /// 不等就会先报歇下、认出后再进“等子代理”。由这次结束触发一起再问一遍，至多 `AgentTimeouts.settleAsk`：认出的进名册，
+    /// 仍读不到、没及时回的等它下一条推送再问（`resolve`）；问完歇下。推迟期间同一轮又来的结束信号（终端的 idle、Stop）
+    /// 不带原因，不清掉已记下的。这一轮的提问此刻就收起：推迟期间作答会被当成一句新话。
     func endTurn(_ session: Tracked, failure: String? = nil) {
         release(session)
         guard session.restarting == nil else { session.restarting = .stopped; return }
+        guard session.ending == nil else {
+            session.endingFailure = failure ?? session.endingFailure
+            return
+        }
         let unknown = unresolvedThreads(on: session.pid)
         guard !unknown.isEmpty else { return session.facts.endTurn(failure: failure) }
         session.endingFailure = failure
-        guard session.ending == nil else { return }
+        session.facts.questions = []
+        let pid = session.pid
         session.ending = Task {
-            for thread in unknown { await resolve(thread, pid: session.pid, settling: true) }
+            try? await withDeadline(AgentTimeouts.settleAsk, timing: timing, orThrow: CancellationError()) { @MainActor in
+                await withTaskGroup { group in
+                    for thread in unknown { group.addTask { await self.resolve(thread, pid: pid) } }
+                }
+            }
             guard !Task.isCancelled, tracked[session.id] === session else { return }
             session.ending = nil
-            endTurn(session, failure: session.endingFailure)
-            if session.ending == nil, !session.unread.isEmpty { wake(session) }
+            guard session.restarting == nil else { session.restarting = .stopped; return }
+            session.facts.endTurn(failure: session.endingFailure)
+            if !session.unread.isEmpty { wake(session) }
             publish(session)
         }
     }
@@ -126,8 +138,7 @@ extension CodexRuntime {
 
     /// `start` 是这一轮开始的时刻，早于它可能的结束：Codex 给的 `Turn.startedAt`，CuePad 补开的是发出的时刻，钩子没有时刻用收到的时刻。开始一轮只经这里。
     func startTurn(_ session: Tracked, at start: Date) {
-        session.failureWatch?.cancel()
-        session.ending?.cancel()
+        session.cancelWaits()
         session.ending = nil
         session.lastError = nil
         session.facts.startTurn(at: start)
@@ -157,29 +168,35 @@ extension CodexRuntime {
         }
     }
 
-    /// `settling`：一轮要歇下时的再问（`endTurn`），这次还读不到就当作别人的线程。
-    private func resolve(_ thread: String, pid: Int32, settling: Bool = false) async {
+    /// 读不到、被取消（新一轮开始、再问到点）都留作暂时读不到，等它下一条推送再问；连接没了（进程退出）就不再记它。
+    private func resolve(_ thread: String, pid: Int32) async {
         let key = "\(thread).\(pid)"
         if case .unreadable(let queued) = threads[key] { threads[key] = .asking(queued) }
         guard let rpc = hosted[pid]?.rpc ?? daemon.flatMap({ $0.pid == pid ? $0 : nil }) else {
-            threads[key] = .foreign
+            threads[key] = nil
             return
         }
-        guard let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] else {
-            if case .asking(let queued) = threads[key] { threads[key] = settling ? .foreign : .unreadable(queued) }
-            return
-        }
+        guard let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] else { return unresolved(key) }
         await register(info, on: rpc)
+    }
+
+    private func unresolved(_ key: String) {
+        if case .asking(let queued) = threads[key] { threads[key] = .unreadable(queued) }
     }
 
     func register(_ thread: JSONValue, on rpc: CodexRPC) async {
         guard let child = thread["id"]?.string else { return }
         let key = "\(child).\(rpc.pid)"
-        let owner = await owner(of: thread, on: rpc)
-        var last: JSONValue?
-        if case .session = owner { last = try? await Self.lastTurn(child, on: rpc) }
+        let owner: Owner, last: JSONValue?
+        do {
+            owner = try await self.owner(of: thread, on: rpc)
+            if case .session = owner { last = try await Self.lastTurn(child, on: rpc) } else { last = nil }
+        } catch {
+            return unresolved(key)
+        }
         let running = last?["status"]?.string == "inProgress"
-        guard case .asking(let queued) = threads[key] else { return }
+        // 同一线程同时在问的另一次（推送触发的与歇下前的再问）先没读到时，这次读到的照样算
+        guard let queued = threads[key]?.pending else { return }
         threads[key] = owner
         if case .session(let id, let name, let role) = owner, let session = tracked[id],
            !session.facts.subagents.contains(where: { $0.id == child }), running || last != nil {
@@ -196,8 +213,8 @@ extension CodexRuntime {
         for (method, params) in queued { self.child(method, params, thread: child, pid: rpc.pid) }
     }
 
-    /// 名字是派它时给的任务名（v2 的 `agent_path` 末段），没有就用 Codex 起的昵称。
-    private func owner(of thread: JSONValue, on rpc: CodexRPC) async -> Owner {
+    /// 名字是派它时给的任务名（v2 的 `agent_path` 末段），没有就用 Codex 起的昵称。沿父线程到顶也不是跟踪着的会话才是别人的；中途读不到抛出（认不清）。
+    private func owner(of thread: JSONValue, on rpc: CodexRPC) async throws -> Owner {
         let spawn = thread["source"]?["subAgent"]?["thread_spawn"]
         let role = thread["agentRole"]?.string ?? spawn?["agent_role"]?.string ?? "default"
         let path = spawn?["agent_path"]?.string.flatMap { $0.split(separator: "/").last.map(String.init) }
@@ -207,7 +224,7 @@ extension CodexRuntime {
             let key = "\(parent).\(rpc.pid)"
             if let session = tracked[key] { return .session(session.id, name: name, role: role) }
             if case .session(let id, _, _) = threads[key] { return .session(id, name: name, role: role) }
-            guard let up = try? await rpc.call("thread/read", ["threadId": .string(parent)])["thread"] else { break }
+            guard let up = try await rpc.call("thread/read", ["threadId": .string(parent)])["thread"] else { break }
             current = up
         }
         return .foreign
