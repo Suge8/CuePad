@@ -15,21 +15,20 @@ extension CloudSync {
     case networkReturned, activated
   }
 
-  /// 本代还没认过的先认，认的途中的等那一次（被更新的一次取代了就接着等新的）；等再认的不另认（`Wait`）。连上了为 true。
+  /// 在认的先等那一次（连着的也等：认清之前不拉，被更新的一次取代了就接着等新的）；本代还没认过的先认；等再认的不另认（`Wait`）。连上了为 true。
   /// 调用方被取消就当场返回 false，不等认账号的请求到时限。
   @discardableResult
   func connectNow() async -> Bool {
     while let run = running {
+      if let checking = run.checking {
+        guard (try? await run.generation.outcome(of: Task<Bool, any Error> { await checking.value })) != nil else { return false }
+        continue
+      }
       if connected { return true }
       switch run.account {
-      case .checking(_, let task):
-        guard (try? await run.generation.outcome(of: Task<Bool, any Error> { await task.value })) != nil else { return false }
-      case .waiting(.retry(let at, _)) where ContinuousClock.now >= at:
-        startCheck(run.generation)
-      case .waiting:
-        return false
-      case .idle:
-        startCheck(run.generation)
+      case .waiting(.retry(let at, _)) where ContinuousClock.now >= at: startCheck(run.generation)
+      case .waiting: return false
+      case .idle, .checking: startCheck(run.generation)
       }
     }
     return false
@@ -52,18 +51,29 @@ extension CloudSync {
     spawn(generation) { _ = try? await puller.pull() }
   }
 
-  /// 回到前台（App 的唯一入口）：在等再认的当场再认。没登录、受限的也认：挂起期间换的账号，回来时不保证还收得到 `CKAccountChanged`
-  /// （Apple 只说 App 在跑时用它察觉变化）。
+  /// 回到前台（App 的唯一入口）：等着按退避再认的当场再认。iOS 上没登录、受限的，与已连上的也再认（连着的同账号变化一样先关闸门）：
+  /// App 被挂起期间换的账号，回来时不保证还收得到 `CKAccountChanged`（Apple 只说 App 在跑时用它察觉变化），连着的不认就会把挂起前没传出去的
+  /// 传进新账号。代价是每次回前台两个认账号的请求、首拉晚一个来回。
   public func activated() {
     guard let generation = running?.generation else { return }
     recheckIfWaiting(generation, for: .activated)
   }
 
+  /// Mac 不接回前台的那两种：App Nap 只压低 CPU 与定时器、不挂起 App，账号变化的通知在跑着时照常送到；而 Mac 每次切回 App 都算激活，
+  /// 接了就是每次切换都关一次闸门、多两个请求。
+  #if os(iOS)
+  static let missesAccountChangesWhileInBackground = true
+  #else
+  static let missesAccountChangesWhileInBackground = false
+  #endif
+
   func recheckIfWaiting(_ generation: SyncGeneration, for trigger: Trigger) {
-    guard let run = running, run.generation === generation, case .waiting(let wait) = run.account else { return }
-    switch (wait, trigger) {
-    case (.retry, _), (.accountChange, .activated): recheck(generation)
-    case (.accountChange, .networkReturned), (.paused, _): break
+    guard let run = running, run.generation === generation else { return }
+    switch (run.account, trigger) {
+    case (.waiting(.retry), _): recheck(generation)
+    case (.waiting(.accountChange), .activated), (.idle, .activated):
+      if Self.missesAccountChangesWhileInBackground { recheck(generation) }
+    case (.waiting(.accountChange), .networkReturned), (.waiting(.paused), _), (.idle, .networkReturned), (.checking, _): break
     }
   }
 

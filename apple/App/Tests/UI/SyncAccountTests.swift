@@ -70,7 +70,7 @@ struct SyncAccountTests {
             await services.syncNow()
             return await cloud.saved.contains(name(waiting))
         }
-        #expect(services.syncState.status == .idle)
+        try await eventually("回到已同步") { services.syncState.status == .idle }  // 界面的状态由跟随者异步抄过来
     }
 
     /// App 没开着时换了 iCloud 账号：再打开，第一次认账号就停下等你决定，决定之前记的不传；选上传本机后传给新账号。
@@ -94,6 +94,29 @@ struct SyncAccountTests {
         try await services.resolveSync(.uploadLocal)
         try await eventually("传给新账号") { await cloud.saved.contains(name(waiting)) }
     }
+
+    #if os(iOS)
+    /// 挂起期间换了 iCloud 账号、系统没补发账号变化的通知：回到前台先认出新账号、停下等你决定，挂起前没传出去的旧账号数据一条都不传给新账号。
+    @Test
+    func 挂起期间换了账号没收到通知_回到前台先认出来_旧数据不传() async throws {
+        let app = start()
+        let (services, workspace) = (app.services!, Workspace(services: app.services))
+        defer { services.cancelBackgroundWork() }
+        let synced = try await workspace.createCard(body: "同步过的", in: Project.defaultID)
+        try await eventually("传上去") { await cloud.saved.contains(name(synced)) }
+
+        await cloud.setUploadsFail(true)
+        let pending = try await workspace.createCard(body: "挂起前没传出去的", in: Project.defaultID)
+        await services.upload(pending.id)
+        await cloud.signIn("另一个账号")
+        await cloud.setUploadsFail(false)
+
+        await services.handleActivation()
+        try await eventually("认出新账号、要你决定") { services.syncState.status == .needsDecision(.accountSwitched) }
+        await services.upload(pending.id)
+        #expect(await !cloud.saved.contains(name(pending)))
+    }
+    #endif
 
     /// 认账号一直没有回音时停下同步（Mac 退出收尾的最后一步）：当场返回，在等的立即同步、取文件、门铃的密钥都得到"没在同步"。
     @Test

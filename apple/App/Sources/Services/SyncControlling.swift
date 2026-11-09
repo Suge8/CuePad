@@ -14,7 +14,7 @@ nonisolated protocol SyncControlling: Sendable {
     /// 马上传这几条（不进攒批窗口、不等后台那批），返回时它们都有了结果：全被服务器收下为 true
     func send(recordNames: Set<String>) async -> Bool
     func push() async
-    /// 回到前台：等着再认账号的当场再认（`CloudSync.activated`）
+    /// 回到前台：iOS 上再认一次账号（挂起期间换的账号可能没有通知），Mac 只提前等着退避的那次（`CloudSync.activated`）
     func activated() async
     func resolve(_ resolution: SyncResolution) async throws
     var fileTransfers: AsyncStream<[String: FileTransfer]> { get }

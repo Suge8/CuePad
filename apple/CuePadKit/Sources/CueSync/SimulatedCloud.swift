@@ -15,6 +15,8 @@ actor SimulatedCloud: SyncCloud {
   /// nil：认账号一直没有回音。
   private var status: CKAccountStatus? = .available
   private(set) var accountChecks = 0
+  /// 上传逐条像断网那样失败（-1009）：本机写下的留在待推送里。
+  private var uploadsFail = false
   /// 收下的上传（记录名），按先后。
   private(set) var saved: [String] = []
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
@@ -43,6 +45,8 @@ actor SimulatedCloud: SyncCloud {
   }
 
   func setAccount(_ status: CKAccountStatus?) { self.status = status }
+
+  func setUploadsFail(_ fail: Bool) { uploadsFail = fail }
 
   func accountStatus() async -> CKAccountStatus {
     accountChecks += 1
@@ -77,6 +81,10 @@ actor SimulatedCloud: SyncCloud {
   }
 
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) -> SentRecords {
+    guard !uploadsFail else {
+      let offline = CKError(.networkFailure, userInfo: [NSUnderlyingErrorKey: URLError(.notConnectedToInternet)])
+      return SentRecords(failedSaves: saving.map { ($0, offline) }, failedDeletes: deleting.map { ($0, offline) })
+    }
     let saving = saving.map { $0.created(at: zone[$0.recordID]?.record.creationDate ?? now()) }
     for record in saving {
       put(record)
