@@ -97,7 +97,8 @@ protocol SubscriptionStore: Sendable {
 /// 不出通知，只叫醒 App 拉：进了等你的事手机总会跟上（`CuePush`、`PiPush`）。
 /// 通知文案只用本地化 key 的通用句：标题与详情是加密字段，不可能出现在通知里；也不设 `desiredKeys`。删除不通知。
 /// 谓词按标志而不是按状态，因为"同一状态下的重复更新"与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
-/// 标志在上传前会被同状态的更新沿用；状态已前进或会话已结束时未上传的标志作废（见 `PiStateRecorder`）。
+/// 标志是一次性事件，通知反映服务端收到记录那一刻的状态：上传前会被同状态的更新沿用；状态已前进或会话已结束时未上传的标志作废、不送出（见 `PiStateRecorder`）。
+/// 要保证每个事件都送达得另建追加式的通知事件记录，那是另一种设计，没有采用。
 /// 谓词用到的明文字段由谓词本身推出（`queriedColumns`），生成的数据结构据此建可查询索引（见 docs/release.md「CloudKit 数据结构」）；加密字段服务端看不见，不能出现在谓词里。
 /// 查询订阅是 schema 的一部分：改定义（谓词、选项、通知文案 key）要重新部署到生产，见 docs/release.md「CloudKit 数据结构」。
 struct AlertSubscriptions {
