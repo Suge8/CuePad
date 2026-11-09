@@ -304,14 +304,14 @@ enum PiWire {
     }
 
     /// 带回合身份的停止（`abortTurnSince`）与起名（`titleSince`）认得的最早扩展版本：更早的会话换上新扩展前，前者拒绝（`upgrade_stop_turn`），后者不起名（`PiConnection.canNameItself`）。
+    /// 起名从 63 起：之前的扩展要命令带 `limit`，不带就回 `bad_request`。
     static let abortTurnSince = 60
-    static let titleSince = 58
+    static let titleSince = 63
 
     private struct TitleCommand: Encodable {
         var t = "title"
         var id: String
         var instructions = SessionNameSuggestion.instructions
-        var limit = SessionNameSuggestion.limit
         var text: String
         var timeoutMs = Int(SessionNameSuggestion.budget.seconds * 1000)
     }
