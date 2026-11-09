@@ -50,7 +50,10 @@ import Testing
 
   /// 同一个库的另一个进程里做的事，做完它就退出了（持有它存过的文件的那次运行随之结束）。
   private func inEndedRun<T: Sendable>(_ body: (CueStore) async throws -> T) async throws -> T {
-    try await body(CueStore(location: .isolated(fixture.directory)))
+    let earlier = try CueStore(location: .isolated(fixture.directory))
+    let result = try await body(earlier)
+    earlier.files.endRun()
+    return result
   }
 
   @Test func backupCoversClearedCacheUntilUploaded() async throws {
@@ -170,6 +173,7 @@ import Testing
       let writer = try CueStore(location: .isolated(a.directory))  // A 上存图建卡的那次运行，随后结束
       let key = try writer.files.store(png)
       let card = try await writer.createCard(body: "![](cuepad://file/\(key))")
+      writer.files.endRun()
       return (key, try #require(try RawDB(a.url).rows("SELECT id FROM attachments").first?[0]), card.id)
     }()
     let aCache = a.directory.appending(path: "Caches/CuePadAttachments/\(key)")
