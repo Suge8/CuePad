@@ -43,6 +43,8 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     var threads: [String: Owner] = [:]
     enum Owner {
         case asking([(method: String, params: JSONValue)])
+        /// 刚起的线程，推送先到、`thread/read` 还读不到它（实测偶发，负载高时更常见）：留着已收下的推送，下一条推送来时再问
+        case unreadable([(method: String, params: JSONValue)])
         case session(PiSession.ID, name: String, role: String)
         case foreign
     }
@@ -81,6 +83,8 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         var lastWords: [String: String] = [:]
         /// 这一轮报过的错误原文（终端会话是常驻服务广播的 `error` 通知，托管的是驱动报的 `failed`），出错歇下时用
         var lastError: String?
+        /// 终端会话出错歇下后，等会话文件里这一轮的结束记录来读原因（`readFailure`）
+        var failureWatch: Task<Void, Never>?
         /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮
         var restarting: Restart?
         var restartGeneration = 0
@@ -116,7 +120,10 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
 
     public func stop() -> @concurrent @Sendable () async -> Void {
         stopped = true
-        for session in tracked.values { release(session) }
+        for session in tracked.values {
+            release(session)
+            session.failureWatch?.cancel()
+        }
         for watcher in exitWatchers.values { watcher.cancel() }
         exitWatchers = [:]
         daemon?.close()

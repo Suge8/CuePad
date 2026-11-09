@@ -198,7 +198,8 @@ func codexEscalated(_ command: String, model: String = codexTestModel) -> FakeRe
 }
 
 /// Codex 常驻服务的目录是 Codex 写死的 `/tmp/codex-daemon-<uid>`（不跟 TMPDIR、CODEX_HOME 走），里面每个常驻服务一个以 CODEX_HOME 的哈希命名的 socket 与锁文件，
-/// 同机真实的 Codex 的也在这里。测试只建、只删自己的那一项；跑前跑后各列一次（名字与修改时刻），不同就是动了别人的或没清自己的。
+/// 同机真实的 Codex 的也在这里，别的检出同时在跑的测试也往这里建、删它们自己的。测试只建、只删自己的那一项；跑前跑后各列一次（名字与修改时刻）：
+/// 跑之前就在的别人的条目修改时刻不能变（别人自己删掉的不算），自己的不能留下。
 struct DaemonDirectory: Equatable, CustomStringConvertible {
     private(set) var entries: [String: Double] = [:]
 
@@ -208,6 +209,11 @@ struct DaemonDirectory: Equatable, CustomStringConvertible {
             var info = stat()
             if lstat("\(directory)/\(name)", &info) == 0 { entries[name] = Double(info.st_mtimespec.tv_sec) + Double(info.st_mtimespec.tv_nsec) / 1e9 }
         }
+    }
+
+    func disturbed(since before: DaemonDirectory, ours: Set<String>) -> [String] {
+        let changed = before.entries.filter { name, time in !ours.contains(name) && entries[name].map { $0 != time } == true }.keys
+        return (Array(changed) + ours.filter { entries[$0] != nil }).sorted()
     }
 
     var description: String { entries.sorted { $0.key < $1.key }.map { "\($0.key.prefix(8))@\($0.value)" }.joined(separator: ",") }
@@ -223,7 +229,7 @@ final class CodexRig {
     var model: FakeModel { codex.model }
     private let sharedBefore: DaemonDirectory?
 
-    /// - Parameter daemon: 会起常驻服务（终端里的 Codex）：收尾时断言共用目录只剩跑之前的样子，见 `DaemonDirectory`。
+    /// - Parameter daemon: 会起常驻服务（终端里的 Codex）：收尾时断言没动共用目录里别人的条目、自己的已清掉，见 `DaemonDirectory`。
     init(approvals: String = "never", model: String = codexTestModel, daemon: Bool = false) async throws {
         sharedBefore = daemon ? DaemonDirectory() : nil
         let codex = try CodexHome(model: try await FakeModel(), modelName: model)
@@ -258,8 +264,13 @@ final class CodexRig {
         let control = codex.home.appending(path: "app-server-control/app-server-control.sock").path
         let shared = try? FileManager.default.destinationOfSymbolicLink(atPath: control)
         await codex.remove()
-        for leftover in shared.map({ [$0, $0 + ".lock"] }) ?? [] { try? FileManager.default.removeItem(atPath: leftover) }
-        if let sharedBefore { #expect(DaemonDirectory() == sharedBefore, "共用目录里别人的条目被动过，或自己的没清干净：\(sharedBefore) → \(DaemonDirectory())") }
+        let leftovers = shared.map { [$0, $0 + ".lock"] } ?? []
+        for leftover in leftovers { try? FileManager.default.removeItem(atPath: leftover) }
+        if let sharedBefore {
+            let now = DaemonDirectory()
+            let moved = now.disturbed(since: sharedBefore, ours: Set(leftovers.map { URL(filePath: $0).lastPathComponent }))
+            #expect(moved.isEmpty, "共用目录里别人的条目被动过，或自己的没清干净：\(moved)")
+        }
     }
 
     var session: PiSession? { bridge.sessions.first { $0.agent == .codex } }

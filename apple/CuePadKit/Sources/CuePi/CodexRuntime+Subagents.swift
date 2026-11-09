@@ -71,14 +71,25 @@ extension CodexRuntime {
         publish(session)
     }
 
-    /// 出错的原文只在开出线程的连接上（`error` 通知），常驻服务只广播 `systemError`：从最近一轮读出它的错误。
+    /// 出错的原文只在开出线程的连接上（`error` 通知），常驻服务只广播 `systemError`，而且它先于这一轮落定：此刻读 `thread/turns/list`
+    /// 偶尔还是 `interrupted`、没有原因（实测，之后没有任何通知再来）。会话文件里这一轮的 `task_complete` 记录带着原文，是落定的标志，
+    /// 一定会写：盯着会话文件，等到这一轮的结束记录出现就取原文。
     private func readFailure(_ session: Tracked) {
-        Task {
-            guard let rpc = try? await control(session),
-                  let turn = try? await Self.lastTurn(session.threadID, on: rpc), turn["status"]?.string == "failed", tracked[session.id] === session,
-                  !session.facts.running else { return }
-            session.facts.failure = CodexModel.failure(of: turn)
-            publish(session)
+        guard let file = bridge.session(id: session.id)?.sessionFile else { return }
+        session.failureWatch?.cancel()
+        session.failureWatch = Task {
+            let follower = FileFollower()
+            defer { follower.stop() }
+            follower.follow(only: [file.realPath.path])
+            for await _ in follower.paths {
+                guard tracked[session.id] === session, !session.facts.running else { return }
+                guard let turn = await CodexHistory.lastTurn(in: file), turn.finished else { continue }
+                if let failure = turn.failure, session.facts.failure != nil {
+                    session.facts.failure = failure
+                    publish(session)
+                }
+                return
+            }
         }
     }
 
@@ -90,6 +101,7 @@ extension CodexRuntime {
 
     /// `start` 是这一轮开始的时刻，早于它可能的结束：Codex 给的 `Turn.startedAt`，CuePad 补开的是发出的时刻，钩子没有时刻用收到的时刻。开始一轮只经这里。
     func startTurn(_ session: Tracked, at start: Date) {
+        session.failureWatch?.cancel()
         session.lastError = nil
         session.facts.startTurn(at: start)
         session.facts.inFlight.subtract(session.unread.keys)
@@ -109,6 +121,9 @@ extension CodexRuntime {
             return
         case .asking(let queued):
             threads[key] = .asking(queued + [(method, params)])
+        case .unreadable(let queued):
+            threads[key] = .asking(queued + [(method, params)])
+            Task { await resolve(thread, pid: pid) }
         case nil:
             threads[key] = .asking([(method, params)])
             Task { await resolve(thread, pid: pid) }
@@ -116,9 +131,13 @@ extension CodexRuntime {
     }
 
     private func resolve(_ thread: String, pid: Int32) async {
-        guard let rpc = hosted[pid]?.rpc ?? daemon.flatMap({ $0.pid == pid ? $0 : nil }),
-              let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] else {
-            threads["\(thread).\(pid)"] = .foreign
+        let key = "\(thread).\(pid)"
+        guard let rpc = hosted[pid]?.rpc ?? daemon.flatMap({ $0.pid == pid ? $0 : nil }) else {
+            threads[key] = .foreign
+            return
+        }
+        guard let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] else {
+            if case .asking(let queued) = threads[key] { threads[key] = .unreadable(queued) }
             return
         }
         await register(info, on: rpc)
