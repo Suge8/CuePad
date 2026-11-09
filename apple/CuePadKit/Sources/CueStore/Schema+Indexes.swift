@@ -28,8 +28,8 @@ extension Schema {
     """
   /// 清理过期对话（`CueStore.prunePiMessages`，启动时一次）按会话取最后的时刻：只读索引，不逐条读消息正文（冷读约 190ms → 15ms）。
   static let transcriptAgeIndex = "CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);"
-  /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。表达式与查询同出 `CueStore.agentOf`。
-  static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(\(CueStore.agentOf));"
+  /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。
+  static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(agent);"
   /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
   /// Cue 页读到的对话之前问、之后答的提问（`CueStore.cueQuestionsAnswered`，每次 Cue 的对话变化重读）：提问只占对话的一小部分。
   static let answeredIndex = "CREATE INDEX cueMessages_answered ON cueMessages(answeredAt) WHERE \(CueStore.answered);"

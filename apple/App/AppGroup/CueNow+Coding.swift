@@ -16,6 +16,7 @@ nonisolated extension CueNow {
     }
 
     /// 旧缓存没有 host 期限与贡献归属，只能保留任务和最后进度，不能据旧正数签发当前运行断言。
+    /// 写这种快照的是 ios/2610262136…ios/2610301244 这几个 TestFlight 构建：它们都过期（最后一个约 2027-01-28）后连同 `slot` 的缺省一起删。
     private mutating func migrateUnconfirmedRuntime() {
         self = settled
         items = items.enumerated().map { index, item in
