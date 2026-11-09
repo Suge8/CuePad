@@ -102,6 +102,8 @@ extension VoiceService {
         observing = Task { [weak self] in
             for await result in Observations({ [weak self] in self.map { service in Result { try service.macProjection(call) } } }) {
                 guard let self, let result, !Task.isCancelled else { return }
+                // 先于投影：投影读失败时也要放开手机那通，否则之后的来电一直被当成占线
+                if !call.isLive, self.call === call { self.remote = nil }
                 let value: VoiceCallProjection
                 switch result {
                 case .success(let projection): value = projection
@@ -127,8 +129,6 @@ extension VoiceService {
                     }
                     sending.end()
                 }
-                guard !Task.isCancelled, self.call === call, self.session == value.session else { return }
-                if !call.isLive { self.remote = nil }
             }
         }
     }

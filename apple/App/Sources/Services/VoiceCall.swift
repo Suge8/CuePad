@@ -87,6 +87,8 @@ final class VoiceCall {
     enum Input {
         case prepared(VoiceWire.Call, CodexAccess)
         case failed(Failure)
+        /// 连接时限到了：处理时已就绪就不算（就绪与到时可能同时排在输入里）
+        case deadline
         case peer(VoicePeer.Event)
         case wire(Result<VoiceWire.Event, VoiceWire.SidebandClosed>)
         case sent(UUID, Failure?)
@@ -161,7 +163,7 @@ final class VoiceCall {
         self.peer = peer
         peer.onEvent = { [inputs] in inputs.continuation.yield(.peer($0)) }
         deadline = Task { [inputs] in
-            do { try await Task.sleep(for: Self.connectionLimit); inputs.continuation.yield(.failed(.timedOut)) }
+            do { try await Task.sleep(for: Self.connectionLimit); inputs.continuation.yield(.deadline) }
             catch { }
         }
         connecting = Task { [inputs, dependencies, session] in
@@ -186,6 +188,7 @@ final class VoiceCall {
         switch input {
         case .hangUp: return .ended
         case .failed(let failure): return .failed(failure)
+        case .deadline: if case .ready = connection { break } else { return .failed(.timedOut) }
         case .prepared(let call, let access):
             usedPercent = call.usedPercent
             connection = .media(call, access)

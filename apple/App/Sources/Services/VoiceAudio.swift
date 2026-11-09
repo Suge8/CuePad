@@ -1,12 +1,16 @@
 import AVFoundation
 import CueStore
 import os
+#if os(iOS)
+import UIKit
+#endif
 
 /// 一通电话的声音，经 `VoiceAudioDevice` 接到 WebRTC；主线程开关，停了不复用。声源是 `VoiceFixture` 时上行由它送，下行看它的 `downlink`；
 /// iOS 的音频会话与中断照常（中断与后台因此能在模拟器上验，`DebugScene+PhoneVoiceCall`）。
 /// 麦克风走 AVAudioEngine，打开系统的语音处理（回声消除、降噪、自动增益），WebRTC 自己的那套关掉（`VoicePeer`）。
-/// iOS 的音频会话归这里：playAndRecord + voiceChat，默认扬声器、可走蓝牙；会话被打断（来电、Siri、闹钟）或媒体服务重置即结束（`audioInterrupted`），
-/// 不假装还在通。换路由（蓝牙、耳机）或 Mac 换设备时引擎自己停下并发配置变化：按新硬件格式重建再开，开不起来才结束。
+/// iOS 的音频会话只经 `VoiceAudioSession`：`start` 拿到、`stop` 交还，`start` 半途失败也交还。会话被系统收走即结束（`audioInterrupted`），
+/// 不假装还在通。换路由（蓝牙、耳机）或 Mac 换设备时引擎自己停下并发配置变化：按新硬件格式重建再开，开不起来按 mediaFailed 结束。
+/// 电平 50 ms 取一次，只给界面；iOS 进后台（含锁屏）就停，回前台接着取。
 final class VoiceAudio {
     /// 一次渲染的帧数上限：引擎默认 4096，留余量。
     nonisolated private static let maximumFrames = 16_384
@@ -16,6 +20,12 @@ final class VoiceAudio {
     private var engine: AVAudioEngine?
     private var events: (VoicePeer.Event) -> Void = { _ in }
     private var watching: [Task<Void, Never>] = []
+    private var metering: Task<Void, Never>?
+    private var gates = (input: VoiceLevels.Gate(), output: VoiceLevels.Gate())
+    #if os(iOS)
+    private var session: VoiceAudioSession?
+    private var visibility: [any NSObjectProtocol] = []
+    #endif
     private static let log = Logger(subsystem: AppIdentity.id, category: "voice")
 
     init(source: VoicePeer.Source) {
@@ -25,38 +35,38 @@ final class VoiceAudio {
     func start(_ events: @escaping (VoicePeer.Event) -> Void) throws {
         self.events = events
         guard let link = device.link else { throw VoicePeerError.unavailable }
+        do {
+            #if os(iOS)
+            session = try VoiceAudioSession { [weak self] in self?.events(.ended(.audioInterrupted)) }
+            watchVisibility()
+            if UIApplication.shared.applicationState != .background { meter() }
+            #else
+            meter()
+            #endif
+            try run(link)
+        } catch {
+            stop()
+            throw error
+        }
+    }
+
+    func stop() {
+        watching.forEach { $0.cancel() }
+        watching = []
+        metering?.cancel()
+        metering = nil
+        fixture?.stop()
+        engine?.stop()
+        engine = nil
         #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
-        try session.setActive(true)
+        visibility.forEach(NotificationCenter.default.removeObserver)
+        visibility = []
+        session?.end()
+        session = nil
         #endif
-        watching = [
-            Task { [levels] in
-                var input = VoiceLevels.Gate(), output = VoiceLevels.Gate()
-                while (try? await Task.sleep(for: VoiceLevels.Gate.interval)) != nil {
-                    let heard = levels.input.take(), said = levels.output.take()
-                    events(.sample(.input, peak: heard))
-                    events(.sample(.output, peak: said))
-                    if let change = input.update(heard) { events(.level(.input, loud: change.loud, peak: change.peak)) }
-                    if let change = output.update(said) { events(.level(.output, loud: change.loud, peak: change.peak)) }
-                }
-            },
-        ]
-        #if os(iOS)
-        watching += [
-            // 自己停用前已不再听（`stop`），这里收到的都是被系统或别处收走了会话
-            Task {
-                for await _ in NotificationCenter.default.notifications(named: AVAudioSession.didBecomeInactiveNotification) {
-                    return events(.ended(.audioInterrupted))
-                }
-            },
-            Task {
-                for await _ in NotificationCenter.default.notifications(named: AVAudioSession.mediaServicesWereResetNotification) {
-                    return events(.ended(.audioInterrupted))
-                }
-            },
-        ]
-        #endif
+    }
+
+    private func run(_ link: VoiceAudioDevice.Link) throws {
         if let fixture, fixture.downlink != .speaker {
             device.reconfigured(inputRate: VoiceAudioDevice.rate)
             return fixture.start(link: link, levels: levels)
@@ -68,27 +78,45 @@ final class VoiceAudio {
                 // 引擎停下才发；还在跑的（开语音处理时自己发的那一下）不用重建
                 guard let engine, !engine.isRunning else { continue }
                 do { try build(link) }
-                catch { fail("rebuild", error); return }
+                catch {
+                    Self.log.error("Voice audio rebuild failed: \(error.localizedDescription, privacy: .public)")
+                    return events(.ended(.mediaFailed))
+                }
             }
         })
     }
 
-    func stop() {
-        watching.forEach { $0.cancel() }
-        watching = []
-        fixture?.stop()
-        engine?.stop()
-        engine = nil
-        #if os(iOS)
-        do { try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
-        catch { Self.log.error("Voice audio session stayed active: \(error.localizedDescription, privacy: .public)") }
-        #endif
+    private func meter() {
+        guard metering == nil else { return }
+        _ = levels.input.take()
+        _ = levels.output.take()
+        metering = Task { [levels] in
+            while (try? await Task.sleep(for: VoiceLevels.Gate.interval)) != nil {
+                let heard = levels.input.take(), said = levels.output.take()
+                events(.sample(.input, peak: heard))
+                events(.sample(.output, peak: said))
+                if let change = gates.input.update(heard) { events(.level(.input, loud: change.loud, peak: change.peak)) }
+                if let change = gates.output.update(said) { events(.level(.output, loud: change.loud, peak: change.peak)) }
+            }
+        }
     }
 
-    private func fail(_ stage: String, _ error: Error) {
-        Self.log.error("Voice audio \(stage, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
-        events(.ended(.audioInterrupted))
+    #if os(iOS)
+    private func watchVisibility() {
+        let center = NotificationCenter.default
+        visibility = [
+            center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.metering?.cancel()
+                    self?.metering = nil
+                }
+            },
+            center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.meter() }
+            },
+        ]
     }
+    #endif
 
     /// 每次按此刻的硬件格式建一台新引擎：AVAudioEngine 换格式后旧连接的格式不再成立。
     /// 声源是文件时只建扬声器这一半，且不外放（无人值守）。

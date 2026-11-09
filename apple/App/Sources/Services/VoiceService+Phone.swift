@@ -96,9 +96,9 @@ extension VoiceService {
     }
 
     /// 不属于 owner.scope：结束可能正由该作用域的期限或发送失败触发，取消输入不能取消资源回收与挂断通知。
+    /// 结束原因就是触发结束的那个：挂断没送到不改它（Mac 那边由中转的离开事件或投影送不到收尾）。
     private func finish(_ owner: VoicePhoneSession, reason: VoiceEndReason, notify: Bool) async {
         await owner.media.close()
-        var failure: VoiceIssue?
         if notify, let peer = owner.peer, let signaling {
             let send = VoiceOperationScope()
             defer { send.end() }
@@ -106,13 +106,12 @@ extension VoiceService {
                 try await send.perform(within: .seconds(2)) {
                     try await signaling.sendVoice(.media(signal: .hangup(reason: reason)), session: owner.id, to: peer)
                 }
-            } catch { failure = .ended(.networkFailed) }
+            } catch { AppServices.log.error("Voice hangup not sent: \(error.localizedDescription, privacy: .public)") }
         }
         guard phone === owner else { return }
         phone = nil
         muting = false
-        phoneEnd = failure.map { .failed($0) } ?? .ended(reason: reason)
-        issue = failure
+        phoneEnd = .ended(reason: reason)
         // 在后台结束的：补上进后台时为通话留着的那段收尾（断开中转等）
         if UIApplication.shared.applicationState == .background {
             Task { await BackgroundWork.run { await self.services.prepareForBackground() } }
@@ -129,8 +128,8 @@ extension VoiceService {
             guard let binding = phoneBinding, binding.session == session, binding.session == received.header.session,
                   binding.local == received.header.recipient, binding.peer == received.header.sender else { return }
         }
+        // 本机已结束：Mac 的投影只更新业务，结束原因以本机先落定的为准（Mac 那时的投影是它收到挂断后的回声）
         if phone == nil, case .projection(let value) = received.payload, value.session == session {
-            if case .failed(let reason) = value.phase { issue = reason }
             setProjection(value)
             return
         }

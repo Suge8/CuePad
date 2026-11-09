@@ -29,9 +29,11 @@ final class VoiceFixture {
         clock = feed.clock(link: link, levels: levels, downlink: downlink)
     }
 
+    /// 返回时最后一拍也已走完：之后 WebRTC 的音频设备随 `VoicePeer` 释放，不能还有一拍在取下行
     func stop() {
         clock?.cancel()
         clock = nil
+        feed.queue.sync {}
     }
 
     func play(_ url: URL) throws {
@@ -86,6 +88,8 @@ final class VoiceFixture {
             var recorded: [Int16] = []
         }
         private let state = Mutex(State())
+        /// 节拍只在这条串行队列上走
+        let queue = DispatchQueue(label: "voice-fixture", qos: .userInteractive)
         nonisolated(unsafe) private let output = UnsafeMutableBufferPointer<Int16>.allocate(capacity: frames)
         nonisolated(unsafe) private let input = UnsafeMutableBufferPointer<Int16>.allocate(capacity: frames)
         nonisolated(unsafe) private var time = AudioTimeStamp()
@@ -103,7 +107,7 @@ final class VoiceFixture {
         func recorded() -> [Int16] { state.withLock { $0.recorded } }
 
         func clock(link: VoiceAudioDevice.Link, levels: VoiceLevels, downlink: Downlink) -> any DispatchSourceTimer {
-            let clock = DispatchSource.makeTimerSource(flags: .strict, queue: DispatchQueue(label: "voice-fixture", qos: .userInteractive))
+            let clock = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
             clock.setEventHandler { [weak clock] in
                 // 被耽搁时一次补上错过的几拍，上下行都不慢于实时
                 for _ in 0..<max(1, Int(clock?.data ?? 1)) { self.tick(link: link, levels: levels, downlink: downlink) }
