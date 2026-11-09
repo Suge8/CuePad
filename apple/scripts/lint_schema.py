@@ -5,12 +5,9 @@
 import re, subprocess, sys
 
 sys.dont_write_bytecode = True
+from lint_git import fail, git  # noqa: E402
 SCHEMA = "apple/CuePadKit/Sources/CueStore/Schema.swift"
 STEP = re.compile(r"^    // (\d+)[：:]", re.M)
-
-
-def git(*args):
-    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
 def version(source):
@@ -19,7 +16,10 @@ def version(source):
     return max(map(int, found)) if found else int(re.search(r"static let baseVersion = (\d+)", source).group(1))
 
 
-tags = git("tag", "--list", "mac/*", "ios/*").split()
+try:
+    tags = git("tag", "--list", "mac/*", "ios/*").split()
+except subprocess.CalledProcessError as error:
+    fail("lint_schema.py 要发布标签（mac/、ios/）来认 baseVersion 够不够老", error)
 if not tags:
     sys.exit("lint_schema.py 要发布标签（mac/、ios/）来认 baseVersion 够不够老：先 git fetch --tags")
 versions = {}

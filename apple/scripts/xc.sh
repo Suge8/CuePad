@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # CuePad 的构建、测试、截图、测量、发布只走这里（Agent 绕开它直接调 xcodebuild、swift build/test、simctl 开关机，
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
-#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 的整模块编译；
+#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 连测试目标的整模块编译（只在 Mac 编的测试，如 #if os(macOS) 的，警告也在这里拦）；
 #                                                   自己的 Swift 源文件（App、CuePadKit）有一条编译警告就失败，第三方与生成的代码不算（_build.sh 的 own_warnings）
 #   xc.sh build <mac|ios|ipad>
 #   xc.sh activity-log [输出.json]                  生产 iCloud 活动取证只读导出：签隔离副本、不启动应用服务，不打开真实库、不重启正式版
 #   xc.sh strings                                   编 mac 与 ios，把界面文字收进 String Catalog，列出缺英文的（strings.py 头注释）
 #   xc.sh test <mac|ios|ipad> [xcodebuild 参数…]     如 -only-testing:CuePadTests/SuiteName；ios、ipad 不带参数时连 CuePadKit 也在模拟器上跑
 #   xc.sh test kit [xcodebuild 参数…]               CuePadKit 在 macOS 上的测试，如 -only-testing:CueSyncTests/PendingTests
-#     test 只打印编译的警告与错误、失败的用例与汇总；完整输出（App 日志、每条用例）在 apple/.derived/test.log
+#     test 只打印编译的警告与错误、失败的用例；收尾一页结论（test_summary.py）：Swift Testing 与 XCTest 各自的通过、失败、跳过数，首个失败（用例、断言原文、文件行），
+#       跳过的套件与原因，最慢 5 个，完整日志路径（App 日志、每条用例都在里面：apple/.derived/test.log）。退出码是 xcodebuild 的
 #   xc.sh shot <mac|ios|ipad> [图.png] [-- 启动参数…] [, [图.png] [-- 启动参数…]]…
 #                                                   构建 → 逐张起隔离实例 → 画面就绪后截窗口 → 退出。一次调用拍一批：一次进锁、一次构建（iOS 还一次装包），
 #                                                   张与张之间用单独的 , 隔开；一张失败记下继续，最后列出失败的并非零退出。没写图路径的放 apple/.derived/shot-<平台>/<启动参数的值连起来>.png。例：
@@ -47,6 +48,8 @@ APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 . "$APPLE_DIR/scripts/_lock.sh"
 # shellcheck source=_build.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_build.sh"
+# shellcheck source=_test.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_test.sh"
 IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 测试里条件等待的上限从这个时限推出（CueTestSupport 的 conditionBudget）：测试不另写短的墙钟上限
@@ -131,11 +134,11 @@ case "$cmd" in
     # Kit 的 macOS 构建（CuePi、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
     kit_build & kit=$!
     # 归档（Release）是整模块编译，Debug 是按文件分批的增量编译：同一份源码，有些诊断（如 nonisolated 类型里静态存非 Sendable 值）只有整模块才报，
-    # 整模块编译与优化档位无关（-Onone 同样报），所以 Mac App 用 Debug 加整模块编一遍（只编 App，不签名）。Mac 独有的代码也只在这里编到。产物与 Debug 增量构建分开，免得交替时互相作废
+    # 整模块编译与优化档位无关（-Onone 同样报），所以 Mac App 用 Debug 加整模块编一遍（不签名）。Mac 独有的代码也只在这里编到，连测试目标（iOS 那份编不到 #if os(macOS) 的测试，它们的警告只在这里报）。产物与 Debug 增量构建分开，免得交替时互相作废
     (
       platform=mac; DERIVED="$APPLE_DIR/.derived-wmo"; destination='platform=macOS,arch=arm64'; app="$DERIVED/Build/Products/Debug/CuePad.app"
       build_settings=(SWIFT_COMPILATION_MODE=wholemodule CODE_SIGNING_ALLOWED=NO)
-      mkdir -p "$DERIVED"; built "$DERIVED/build-key" "$app" all xcb -quiet build
+      mkdir -p "$DERIVED"; built "$DERIVED/build-key" "$app" all xcb -quiet build-for-testing
     ) & wmo=$!
     status=0
     if xcd all; then python3 "$APPLE_DIR/scripts/strings.py" check || status=$?; else status=$?; fi
@@ -150,46 +153,7 @@ case "$cmd" in
     python3 "$APPLE_DIR/scripts/activity-log.py" "$app" "${2:-$DERIVED/activity-diagnostics.json}" ;;
   build) xcd all; sign_development ;;
   build-perf) built "$DERIVED/build-key-$platform" "$app" all xcb -quiet build ;;
-  test)
-    # 用例断言的是中文界面：不随跑测试那台机器的系统语言变
-    limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT" -testLanguage zh-Hans -testRegion CN)
-    # 先开好领到的模拟器（并瘦身，见 _sim.sh），xcodebuild 就用开着的这台。
-    # 再卸掉上一次装的 App：它开着的实时活动在重装时被系统结束，系统随即把 App 叫到后台（不带测试的环境），
-    # 正撞上测试宿主的启动，测试进程就连不上（"The test runner hung before establishing connection"）。卸掉时活动一起没了，没有这一下
-    if [ -n "${device:-}" ]; then phase 开机 sim_boot "$device"; xcrun simctl uninstall "$device" "$CUEPAD_APP_ID"; fi
-    # 屏幕上只留编译的警告与错误、失败的用例（带原因）与汇总：编译的每一步、App 与测试宿主的日志、每条用例的开始与通过一次就是几千行，
-    # 会把失败挤出 Agent 的输出上限。所以先 -quiet 编（只出警告与错误），再不带 -quiet 跑（-quiet 连失败的原因也吞掉），跑的输出滤掉上面那些；
-    # 完整输出写进 log
-    log="$DERIVED/test.log"; : >"$log"; echo "完整输出（含 App 日志）：$log" >&2
-    zwsp="$(printf '\342\200\213')"  # Swift Testing 在部分行首加零宽空格
-    noise="^($zwsp)*(◇ |✔ Suite .* passed after|✔ Test ([^ (]+\\(|\").* passed after)|^Test (Case|Suite) .* (started|passed)"  # 留着「✔ Test run with」那行汇总
-    noise+='|^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:.]+[+-][0-9]{4} [^ ]+\[[0-9]+:[0-9a-f]+\] |DVTAssertions|^(Details|Object|Method|Thread): |^Please file a bug|^\{ platform:|^--- xcodebuild: WARNING: Using the first'
-    shown() { tee -a "$log" | { grep --line-buffered -avE "$noise" || true; }; }
-    # 编译只认收窄参数（只编要跑的测试目标）；-test-iterations 这类只给跑的那一步
-    narrowed() { local a; for a in "$@"; do case "$a" in -only-testing:*|-skip-testing:*) printf '%s\0' "$a" ;; esac; done; }
-    kit_test() {
-      local narrow=(); while IFS= read -r -d '' a; do narrow+=("$a"); done < <(narrowed "$@")
-      (cd "$APPLE_DIR/CuePadKit" && built "$DERIVED/kit-$platform/build-key" "$DERIVED/kit-$platform/Build/Products" "${narrow[*]:-all}" xcodebuild -quiet build-for-testing -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" ${narrow[@]+"${narrow[@]}"} 2>&1 \
-        && xcodebuild test-without-building -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" "${limits[@]}" "$@" 2>&1) \
-        | { grep --line-buffered -v 'failed with exit code 0 but produced no further output' || true; }
-    }
-    # iOS/iPad：同一个入口也在模拟器上跑 CuePadKit 的测试（iOS 编辑器等只在这里跑；macOS 上的 Kit 测试是 test kit）。
-    # 带了收窄参数（-only-testing 等）时只跑 App 那部分；两部分都跑完再按其一失败退出。
-    status=0
-    if [ "$platform" = kit ]; then
-      kit_test "${@:3}" | shown || status=$?
-    else
-      narrow=(); while IFS= read -r -d '' a; do narrow+=("$a"); done < <(narrowed "${@:3}")
-      { xcd "${narrow[*]:-all}" ${narrow[@]+"${narrow[@]}"} && xcb test-without-building "${limits[@]}" "${@:3}"; } | shown || status=$?
-      if [ "$platform" != mac ] && [ "$#" -le 2 ]; then kit_test | shown || status=$?; fi
-    fi
-    # 点名的测试一个也没对上（名字或所在的 Suite 写错）时 xcodebuild 照样报成功。并行跑（-parallel-testing-enabled YES）时没有那两行汇总，
-    # 只有每条用例一行 Test case '…' passed/failed on '…'
-    if [[ " ${*:3}" == *" -only-testing:"* ]] && ! grep -aqE 'Test run with [1-9]|Executed [1-9][0-9]* tests?,|^Test case .* (passed|failed) on ' "$log"; then
-      echo "-only-testing 一个测试也没对上：Swift Testing 写 <测试目标>/<Suite 类型名>/<函数名>()，用例所在的类型以源码为准" >&2
-      status=1
-    fi
-    exit $status ;;
+  test) xc_test "$@" ;;
   shot|rec|run)
     # 截图前先查台前调度：开着就拍不对，不白等一次构建
     if [ "$platform" = mac ]; then python3 "$APPLE_DIR/scripts/app.py" preflight; fi
