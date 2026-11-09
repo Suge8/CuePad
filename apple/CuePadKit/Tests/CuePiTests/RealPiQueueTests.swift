@@ -8,7 +8,7 @@ import Testing
 
 /// 按回合停止与后续发送的协议合同。真实 Pi、桥和 Python 工具；模型与异步事件闸是替身，不录制回放进程存活断言。
 @MainActor
-@Suite(.serialized)
+@Suite(RealAgents.taped(.pi), .serialized)
 struct RealPiQueueTests {
     @Test(arguments: ["preflight", "preflight-control", "pending", "starting", "sdk"])
     func 停止原回合不遗失后续消息(stage: String) async throws {
@@ -56,8 +56,14 @@ struct RealPiQueueTests {
         }
     }
 
-    private func work(_ name: String) -> String {
-        "[[tool:python3 -c 'import os,signal;signal.signal(signal.SIGUSR1,lambda *_:None);open(\"\(name).pid\",\"w\").write(str(os.getpid()));signal.alarm(30);signal.pause();open(\"\(name).done\",\"w\").write(\"finished\")']]"
+    private func work(_ name: String) -> String { "WORK-\(name)" }
+
+    /// 每句话的工具是一个真进程：写下自己的 pid，等信号（SIGUSR1 不退）或 30 秒，正常结束时留下 `<名>.done`
+    private func script(_ model: FakeModel) {
+        for name in ["A", "B"] {
+            let command = "python3 -c 'import os,signal;signal.signal(signal.SIGUSR1,lambda *_:None);open(\"\(name).pid\",\"w\").write(str(os.getpid()));signal.alarm(30);signal.pause();open(\"\(name).done\",\"w\").write(\"finished\")'"
+            model.on(work(name), .call("bash", ["command": command]), .say("TOOL_DONE"))
+        }
     }
 
     private func exists(_ folder: URL, _ name: String) -> Bool {
@@ -72,10 +78,13 @@ struct RealPiQueueTests {
         let root = try makeTempDirectory(), folder = root.appending(path: "work"), agent = root.appending(path: "agent")
         let paths = PiPaths(agentDirectory: agent, socketDirectory: root.appending(path: "s"), binDirectory: root.appending(path: "bin"))
         for directory in [folder, agent] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
-        let environment = ProcessInfo.processInfo.environment.merging(paths.launchEnvironment) { $1 }
-            .merging(["HOME": root.path, "PI_OFFLINE": "1", "CUEPAD_HOSTED": "", "CUEPAD_LAUNCH_TOKEN": ""]) { $1 }
-        let process = try await ChildProcess(realPiURL, ["--mode", "rpc", "--no-extensions", "-e", PiExtensionBundle.url.path,
-            "-e", fixturesDirectory.appending(path: "fake-model.ts").path, "-e", fixturesDirectory.appending(path: "queue-gates.ts").path,
+        try pinnedPi.require()
+        let model = try await FakeModel()
+        try PiProcess.writeModels(model, into: agent)
+        script(model)
+        let environment = pinnedPi.environment(home: root, paths.launchEnvironment.merging(["PI_OFFLINE": "1"]) { $1 })
+        let process = try await ChildProcess(pinnedPi.executable, ["--mode", "rpc", "--no-extensions", "-e", PiExtensionBundle.url.path,
+            "-e", fixturesDirectory.appending(path: "queue-gates.ts").path,
             "--model", "fake/echo", "--no-skills"], directory: folder, environment: environment, placement: .group, input: .pipe)
         let bridge = PiBridge(socketDirectory: paths.socketDirectory)
         do {

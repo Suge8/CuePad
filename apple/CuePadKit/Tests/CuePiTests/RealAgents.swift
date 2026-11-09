@@ -17,13 +17,14 @@ import Testing
 ///
 /// 下面的变量同样加 `TEST_RUNNER_` 前缀给（xcodebuild 只把这样的变量交给测试进程）。
 ///
-/// - pi：`~/.local/bin/pi`（`CUEPAD_PI` 可换，如验证最低支持的 Pi），假模型（`Fixtures/fake-model.ts`），零网络；FireCode 用例另要本机的 FireCode 源码（`CUEPAD_FIRECODE_SOURCE` 可换）；
+/// - pi：没有录像带，总连钉住的真 Pi（`PinnedAgent.pi`，`xc.sh agents install pi`；没装时跳过、列为未覆盖），模型是本用例的假模型
+///   （`FakeModel`，Chat Completions），零网络；FireCode 随 Pi 钉住（`CUEPAD_FIRECODE_SOURCE` 可换成另一份检出）；
 /// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
 /// - claude：本机的 claude 与它自己的登录（钥匙串里的那条，见 `ClaudeLogin`），模型 haiku（`ClaudeTestbed`）；
 /// - grok：本机的 grok（`CUEPAD_GROK` 可换），假模型（`FakeResponses`），零网络；环境里给了 `XAI_API_KEY` 或 `GROK_AUTH_PATH`（已登录的
 ///   凭据文件，如 `~/.grok/auth.json`）时连真的 xAI（`GrokModel`），托管会话的模型用 `CUEPAD_GROK_MODEL` 换；
 /// - dsh：`CUEPAD_DSH` 指的 dsh（0.2.1-rc.2 以上；没给按 PATH 找），DeepSeek 的 key 只经 `DEEPSEEK_API_KEY` 给（录完 grep 录像带确认没有它）；
-/// - 大脑（`RealBrainTests`）用本机用户自己的登录（Pi 的大脑用本机 Codex 的登录连 openai-codex，见 `writePiCodexAuth`），模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
+/// - 大脑（`RealBrainTests`）除 Pi（假模型，剧本 `playBrain`）外用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
 ///
@@ -39,14 +40,14 @@ enum RealAgents {
         .compactMap { AgentKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) })
 
     static func mode(of agent: AgentKind) -> TapeMode {
-        if agent == .opencode { return .live }
+        if agent == .opencode || agent == .pi { return .live }
         return recording.contains(agent) ? .record : .replay
     }
 
     /// 连真 Agent 跑不起来的原因（没装、没登录、缺模型）；跑得起来为 nil
     static func missing(_ agent: AgentKind) -> String? {
         switch agent {
-        case .pi: realPiInstalled ? nil : "本机没装 pi"
+        case .pi: pinnedPi.uncovered
         case .codex: realCodexURL != nil && FileManager.default.fileExists(atPath: realCodexAuth.path) ? nil : "本机没装或没登录 codex"
         case .claudeCode: claudeURL != nil && ClaudeLogin.token != nil ? nil : "本机没装或没登录 claude"
         case .opencode:

@@ -9,7 +9,7 @@ import Testing
 
 /// 用户验收：真实 Pi 与桥扩展执行隔离 Python 工具；只替换语音媒体与付费模型。
 /// A 停止排队后，终端或同一通话开 B；旧停止必须明确结束而 B 的真实进程继续活着。
-@Suite(.serialized)
+@Suite(.pinnedPi, .serialized)
 @MainActor
 struct VoiceStopRaceTests {
     @Test(arguments: ["不换轮", "终端B", "语音B"])
@@ -22,7 +22,7 @@ struct VoiceStopRaceTests {
         } catch {
             process.end()
             _ = await process.waitForExit()
-            voice.call.hangUp()
+            voice.workspace.voice?.hangUp()  // 没连上通话就出错时没有它
             await rig.stop()
             throw error
         }
@@ -37,7 +37,7 @@ struct VoiceStopRaceTests {
         let session = try #require(rig.app.pi.sessions.first { $0.pid == process.pid })
         try await eventually("真实会话进库") { try await rig.store.allPiSessionStates().contains { $0.sessionID == session.sessionID } }
         try await voice.connect()
-        let first = work("A")
+        let first = work("A", in: rig)
         _ = try await voice.handoff("请对隔离会话说「\(first)」")
         try await eventually("A 工具已运行且停止归属已确认") {
             FileManager.default.fileExists(atPath: rig.folder.appending(path: "A.pid").path)
@@ -49,7 +49,7 @@ struct VoiceStopRaceTests {
         #expect(try await rig.store.deliveryRequest(stop.id)?.status == .known(.pending))
         var b: pid_t?
         if next != "不换轮" {
-            let second = work("B")
+            let second = work("B", in: rig)
             if next == "语音B" {
                 _ = try await voice.handoff("请对隔离会话说「\(second)」")
                 try await eventually("同一通话的 B 投送落库") {
@@ -107,8 +107,12 @@ struct VoiceStopRaceTests {
         }
     }
 
-    private func work(_ name: String) -> String {
-        "[[tool:python3 -c 'import os,signal;open(\"\(name).pid\",\"w\").write(str(os.getpid()));signal.alarm(30);signal.pause()']]"
+    /// 这句话的工具是一个真进程：写下自己的 pid，等信号或 30 秒（会话的 Pi 与大脑连同一个假模型，这条规则先于大脑的剧本认）
+    private func work(_ name: String, in rig: CueHostTests.Rig) -> String {
+        let command = "python3 -c 'import os,signal;open(\"\(name).pid\",\"w\").write(str(os.getpid()));signal.alarm(30);signal.pause()'"
+        // 只认会话收到的那句原话：大脑那边的请求里也带着它（"请对隔离会话说「WORK-A」"）
+        rig.model.server.on({ $0.prompt == "WORK-\(name)" }) { $0.step == 0 ? .call("bash", ["command": command]) : .say("TOOL_DONE") }
+        return "WORK-\(name)"
     }
 
     private func pid(_ name: String, in rig: CueHostTests.Rig) throws -> pid_t {
@@ -116,12 +120,9 @@ struct VoiceStopRaceTests {
     }
 
     private func agent(in rig: CueHostTests.Rig) async throws -> ChildProcess {
-        let apple = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let model = apple.appending(path: "CuePadKit/Tests/CuePiTests/Fixtures/fake-model.ts")
-        let environment = ProcessInfo.processInfo.environment.merging(rig.app.piPaths.launchEnvironment) { $1 }
-            .merging(["HOME": rig.app.directory.path, "PI_OFFLINE": "1", "CUEPAD_HOSTED": "", "CUEPAD_LAUNCH_TOKEN": ""]) { $1 }
+        let environment = PinnedAgent.pi.environment(home: rig.app.directory, rig.app.piPaths.launchEnvironment.merging(["PI_OFFLINE": "1"]) { $1 })
         return try await ChildProcess(realPi, ["--mode", "rpc", "--no-extensions", "-e", PiExtensionBundle.url.path,
-            "-e", model.path, "--model", "fake/echo", "--name", "语音停止验收", "--no-skills"],
+            "--model", "fake/fake-model", "--name", "语音停止验收", "--no-skills"],
             directory: rig.folder, environment: environment, placement: .group, input: .pipe)
     }
 }

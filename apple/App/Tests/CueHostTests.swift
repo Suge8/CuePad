@@ -11,11 +11,15 @@ import Testing
 /// Cue 在 Mac 上值班，端到端：真实的 Pi 当大脑（RPC），真实的 `cuepad mcp`（App 里的那份）读写同一个隔离库，
 /// 模型是本进程里的假 OpenAI 端点（按剧本回，零网络），执行器开的会话由假扩展扮演（`RecordingHost`）。
 /// Pi 的配置在临时目录（`PI_CODING_AGENT_DIR`），不碰 ~/.pi 与真实资料库。
-/// 本机的 Pi（真 Pi 的测试共用）
-nonisolated let realPi = ProcessInfo.processInfo.environment["CUEPAD_TEST_PI"].map { URL(filePath: $0) }
-    ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
+/// 钉住的 Pi（`PinnedAgent.pi`，`xc.sh agents install pi` 装进专用缓存），真 Pi 的测试共用
+nonisolated let realPi = PinnedAgent.pi.executable
 
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized)
+extension Trait where Self == ConditionTrait {
+    /// 钉住的 Pi 没装时跳过（原因以「未覆盖：」开头，xc.sh 汇总后列出）；完整矩阵时照跑，起 Pi 时失败
+    static var pinnedPi: Self { .enabled(if: PinnedAgent.pi.uncovered == nil, Comment(rawValue: PinnedAgent.pi.uncovered ?? "")) }
+}
+
+@Suite(.pinnedPi, .serialized)
 struct CueHostTests {
     /// 不是等写入歇下才交。不量时长：写入到交出去为止一直在继续，交不出去由测试时限报。
     @Test func 库正忙时你的话马上送进Cue() async throws {

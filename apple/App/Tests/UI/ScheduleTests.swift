@@ -58,7 +58,7 @@ struct ScheduleTests {
     }
 
     #if os(macOS)
-    @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
+    @Test(.pinnedPi)
     func 对Cue说一句_建成挂在任务上的定时() async throws {
         let rig = try await CueHostTests.Rig()
         let task = try await rig.store.createTask("清理过期分支")
@@ -72,7 +72,7 @@ struct ScheduleTests {
         await rig.stop()
     }
 
-    @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
+    @Test(.pinnedPi)
     func 写不成的重复_退回不定() async throws {
         let rig = try await CueHostTests.Rig()
         try await rig.say("请隔天 9 点清理分支")
@@ -82,7 +82,7 @@ struct ScheduleTests {
         await rig.stop()
     }
 
-    @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
+    @Test(.pinnedPi)
     func 错过的每天定时_启动后只补一次_排到下一次() async throws {
         let start = Date.now.addingTimeInterval(-3 * 86_400 + 3600)
         let missed = Date(timeIntervalSince1970: (start.timeIntervalSince1970 / 60).rounded(.down) * 60)

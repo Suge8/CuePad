@@ -82,11 +82,11 @@ struct RealCueStartTests {
     ) async throws {
         switch agent {
         case .pi:
-            let pi = try await PiProcess(modelInAgentDirectory: true)
+            let pi = try await PiProcess()
             let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
             defer { stopHostedProcesses(bridge); bridge.stop(); pi.stop() }
             try bridge.start()
-            let runtime = PiRuntime(bridge: bridge, paths: pi.paths, pi: { AgentTape.executable("pi") }, idleLimit: .seconds(120), timing: noDeadline)
+            let runtime = PiRuntime(bridge: bridge, paths: pi.paths, pi: { pinnedPi.executable }, idleLimit: .seconds(120), timing: noDeadline)
             runtime.start()
             try await body(runtime, bridge, pi.cwd, PiModelKey(provider: "fake", id: "echo"))
         case .codex:

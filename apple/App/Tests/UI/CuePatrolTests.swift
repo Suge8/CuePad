@@ -6,7 +6,7 @@ import Testing
 @testable import CuePad
 @testable import CueStore
 
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
+@Suite(.pinnedPi)
 @MainActor
 struct CuePatrolTests {
     @Test func 唯一在做的会话没说话就退出_Cue随后巡视() async throws {

@@ -4,18 +4,15 @@ import CuePi
 import CueStore
 import CueTestSupport
 import CueText
-import Darwin
 import Foundation
-import Network
 import Synchronization
 import Testing
 @testable import CuePad
 
-/// 剧本里有的只演第一次（`once`）：第一次出错、第一次不回（连接挂着，等大脑被杀）。用量固定为 `usage` 个输入 token。
-nonisolated final class FakeModel: Sendable {
-    private let listener: NWListener
-    private let queue = DispatchQueue(label: "fake-model")
-    private let usage: Int
+/// Cue 大脑的剧本，演在共用的假模型上（`server`，CueTestSupport 的 `FakeModel`：Pi 经 Chat Completions 连它）。
+/// 有的只演第一次（`once`）：第一次出错、第一次不回（连接挂着，等大脑被杀）。用量固定为 `usage` 个输入 token。
+nonisolated final class CueModel: Sendable {
+    let server: FakeModel
     private let played = Mutex<[String: Int]>([:])
     private let errorCount = Mutex(0)
     var errors: Int { errorCount.withLock { $0 } }
@@ -24,106 +21,27 @@ nonisolated final class FakeModel: Sendable {
     private let finishedAfter = Mutex<[String]>([])
     private let quotaBlocked = Mutex((left: 0, containing: String?.none))
     func blockQuota(times: Int, containing: String? = nil) { quotaBlocked.withLock { $0 = (times, containing) } }
-    /// 不回的请求的连接：留着，免得释放时断开
-    private let hung = Mutex<[NWConnection]>([])
+    /// 不回的请求停在这里，直到大脑断开
+    private let hang = FakeGate()
+    var hanging: Bool { hang.held > 0 }
     /// 先不回、等 `release()` 再回一句话的请求（这一轮停在模型那里，测试趁这时改库）
-    private let held = Mutex<[(NWConnection, String)]>([])
-    var holding: Bool { held.withLock { !$0.isEmpty } }
-    func release() {
-        let replies = held.withLock { held in defer { held = [] }; return held }
-        for (connection, text) in replies { send(connection, .delta(["role": "assistant", "content": text], finish: "stop")) }
-    }
+    private let held = FakeGate()
+    var holding: Bool { held.waiting > 0 }
+    func release() { for _ in 0..<held.waiting { held.open() } }
 
-    private enum Reply {
-        case delta([String: Any], finish: String)
-        case error(String)
-        case hang
-        case hold(String)
-    }
+    private typealias Reply = FakeReply
 
-    init(usage: Int, failingOnce: [String] = [], asksOnEnable: Bool = false) throws {
+    init(usage: Int, failingOnce: [String] = [], asksOnEnable: Bool = false) async throws {
         self.failingOnce = failingOnce
         self.asksOnEnable = asksOnEnable
-        let parameters = NWParameters.tcp
-        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
-        listener = try NWListener(using: parameters)
-        self.usage = usage
+        server = try await FakeModel(usage: usage)
+        server.on({ _ in true }) { [weak self] in self?.script($0) ?? .hang }
     }
 
-    func start() async throws -> UInt16 {
-        let (ports, port) = AsyncStream<UInt16?>.makeStream()
-        listener.stateUpdateHandler = { [listener] state in
-            switch state {
-            case .ready: port.yield(listener.port?.rawValue)
-            case .failed, .cancelled: port.yield(nil)
-            default: break
-            }
-        }
-        listener.newConnectionHandler = { [weak self] connection in self?.serve(connection) }
-        listener.start(queue: queue)
-        for await value in ports { if let value { return value } else { break } }
-        throw URLError(.cannotConnectToHost)
-    }
+    var port: UInt16 { server.port }
+    func stop() { server.stop() }
 
-    func stop() { listener.cancel() }
-
-    var hanging: Bool { hung.withLock { !$0.isEmpty } }
-
-    private func serve(_ connection: NWConnection) {
-        connection.start(queue: queue)
-        read(connection, Data())
-    }
-
-    private func read(_ connection: NWConnection, _ buffer: Data) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { [weak self] data, _, done, error in
-            guard let self else { return }
-            var buffer = buffer
-            if let data { buffer.append(data) }
-            if let body = Self.body(buffer) { return self.respond(connection, body) }
-            if done || error != nil { return connection.cancel() }
-            self.read(connection, buffer)
-        }
-    }
-
-    private static func body(_ data: Data) -> Data? {
-        guard let end = data.range(of: Data("\r\n\r\n".utf8)) else { return nil }
-        let head = String(decoding: data[..<end.lowerBound], as: UTF8.self).lowercased()
-        let length = head.split(separator: "\r\n").first { $0.hasPrefix("content-length:") }
-            .flatMap { Int($0.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)) } ?? 0
-        let body = data[end.upperBound...]
-        return body.count >= length ? Data(body.prefix(length)) : nil
-    }
-
-    private let requested = Mutex<[(model: String, effort: String?)]>([])
-    var requests: [(model: String, effort: String?)] { requested.withLock { $0 } }
-
-    private func respond(_ connection: NWConnection, _ body: Data) {
-        let request = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] ?? [:]
-        requested.withLock { $0.append((request["model"] as? String ?? "", request["reasoning_effort"] as? String)) }
-        send(connection, script(request))
-    }
-
-    private func send(_ connection: NWConnection, _ reply: Reply) {
-        let delta: [String: Any], finish: String
-        switch reply {
-        case .hang: return hung.withLock { $0.append(connection) }
-        case .hold(let text): return held.withLock { $0.append((connection, text)) }
-        case .error(let message):
-            let json = String(decoding: try! JSONSerialization.data(withJSONObject: ["error": ["message": message, "type": "invalid_request_error"]]), as: UTF8.self)
-            let out = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(json.utf8.count)\r\nConnection: close\r\n\r\n" + json
-            return connection.send(content: Data(out.utf8), completion: .contentProcessed { _ in connection.cancel() })
-        case .delta(let value, let reason): (delta, finish) = (value, reason)
-        }
-        var out = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n"
-        let usage: [String: Any] = ["prompt_tokens": usage, "completion_tokens": 5, "total_tokens": usage + 5]
-        for choice in [["index": 0, "delta": delta] as [String: Any], ["index": 0, "delta": [String: Any](), "finish_reason": finish]] {
-            var chunk: [String: Any] = ["id": "x", "object": "chat.completion.chunk", "created": 0, "model": "fake-model", "choices": [choice]]
-            if choice["finish_reason"] != nil { chunk["usage"] = usage }
-            out += "data: " + String(decoding: try! JSONSerialization.data(withJSONObject: chunk), as: UTF8.self) + "\n\n"
-        }
-        out += "data: [DONE]\n\n"
-        connection.send(content: Data(out.utf8), completion: .contentProcessed { _ in connection.cancel() })
-    }
+    var requests: [(model: String, effort: String?)] { server.requests.filter { $0.api == .chat }.map { ($0.model, $0.effort) } }
 
     /// 已就结果含 `fragment` 的工具调用回了这一轮最后一句。
     func answered(_ fragment: String) -> Bool { answers(fragment) > 0 }
@@ -139,17 +57,13 @@ nonisolated final class FakeModel: Sendable {
 
     private func fail() -> Reply {
         errorCount.withLock { $0 += 1 }
-        return .error("bad things happened")
+        return .fail("bad things happened")
     }
 
-    private func script(_ request: [String: Any]) -> Reply {
-        let tools = (request["tools"] as? [[String: Any]] ?? []).compactMap { ($0["function"] as? [String: Any])?["name"] as? String }
-        func tool(_ suffix: String) -> String { tools.first { $0.hasSuffix(suffix) } ?? suffix }
-        func call(_ suffix: String, _ arguments: [String: Any]) -> Reply {
-            let json = String(decoding: try! JSONSerialization.data(withJSONObject: arguments), as: UTF8.self)
-            return .delta(["role": "assistant", "tool_calls": [["index": 0, "id": "call-\(UUID().uuidString.prefix(8))", "type": "function", "function": ["name": tool(suffix), "arguments": json]]]], finish: "tool_calls")
-        }
-        func say(_ text: String) -> Reply { .delta(["role": "assistant", "content": text], finish: "stop") }
+    private func script(_ fake: FakeRequest) -> Reply {
+        let request = fake.json
+        func call(_ name: String, _ arguments: [String: any Sendable]) -> Reply { .call(name, arguments) }
+        func say(_ text: String) -> Reply { .say(text) }
         // Cue 自己醒来的一轮（刚启用除外）最后的话不写（`CueKeeper.Turn.writesReply`）：要让你看到它醒来看到了什么，就用 tell 对你说
         func tell(_ text: String) -> Reply { call("tell", ["text": text]) }
 
@@ -173,7 +87,7 @@ nonisolated final class FakeModel: Sendable {
             if let view = text.firstMatch(of: /<view>[\s\S]*<\/view>/)?.0, let code = view.firstMatch(of: /暗号是 (\S+)/)?.1 { return say("从视图接上：暗号是 \(code)") }
             return say("不记得暗号")
         }
-        if last["role"] as? String == "user", text.contains("请等我放行") { return .hold("先这样") }
+        if last["role"] as? String == "user", text.contains("请等我放行") { return .held(held, then: .say("先这样")) }
         if text.contains("重点有哪些") {
             let messages = request["messages"] as? [[String: Any]] ?? []
             let system = messages.first { $0["role"] as? String == "system" }?["content"] as? String ?? ""
@@ -210,9 +124,9 @@ nonisolated final class FakeModel: Sendable {
         }
         if blocked || last["role"] as? String == "user" && text.contains("请用到额度用完") {
             errorCount.withLock { $0 += 1 }
-            return .error("You have hit your usage limit.")
+            return .fail("You have hit your usage limit.")
         }
-        if text.contains("请慢慢想"), once("hang") { return .hang }
+        if text.contains("请慢慢想"), once("hang") { return .held(hang, then: .say("")) }
         if let block = text.firstMatch(of: /<merge>\n#\d+-\d+ range=([^\n]+)\n/) {
             return call("merge", ["range": String(block.1), "text": "合起来的偏好"])
         }

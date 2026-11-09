@@ -5,17 +5,16 @@ import Synchronization
 import Testing
 @testable import CuePi
 
-/// Pi（RPC 模式）的测试驱动：起的是录像带里的替身（`AgentTape`），录制时背后是真实 Pi（`~/.local/bin/pi`）。
-/// 所有状态落在临时 agent 目录（`PI_CODING_AGENT_DIR`），绝不碰真实 ~/.pi；模型是假模型扩展，零网络。
-let realPiURL = ProcessInfo.processInfo.environment["CUEPAD_PI"].map { URL(filePath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
-let realPiInstalled = FileManager.default.isExecutableFile(atPath: realPiURL.path)
+/// 真 Pi（钉住的版本，`PinnedAgent.pi`）的测试驱动，RPC 模式。所有状态落在临时目录：agent 目录（`PI_CODING_AGENT_DIR`）与家目录，
+/// 绝不碰真实 ~/.pi；模型是本用例的假模型（`FakeModel`，经 agent 目录的 `models.json` 指过去，Chat Completions），零网络。
+let pinnedPi = PinnedAgent.pi
+
+/// FireCode（Pi 扩展，npm 的 `pi-firecode`）随 Pi 一起钉住装进缓存（`Tests/agents.json` 的 `with`）；
+/// `CUEPAD_FIRECODE_SOURCE` 指向另一份 FireCode 检出时用它（验证还没合并的 FireCode 改动，入口是检出里的 `index.ts`）。
+let firecodeEntry: URL = ProcessInfo.processInfo.environment["CUEPAD_FIRECODE_SOURCE"].map { URL(filePath: $0).appending(path: "index.ts") }
+    ?? pinnedPi.bin.deletingLastPathComponent().appending(path: "node_modules/pi-firecode/dist/index.js")
 
 private let fixtures = fixturesDirectory
-
-/// 本机装的 FireCode（用户的 Pi 扩展）源码；只读，测试里软链进临时 agent 目录。`CUEPAD_FIRECODE_SOURCE` 指向另一份 FireCode 检出时用它（验证还没合并的 FireCode 改动）。
-let firecodeSource = (ProcessInfo.processInfo.environment["CUEPAD_FIRECODE_SOURCE"].map { URL(filePath: $0) }
-    ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/extensions/firecode/source")).resolvingSymlinksInPath()
-let firecodeAvailable = FileManager.default.fileExists(atPath: firecodeSource.appending(path: "index.ts").path)
 
 struct PiEvent: @unchecked Sendable {
     let json: [String: Any]
@@ -26,6 +25,8 @@ final class PiProcess: @unchecked Sendable {
     let root: URL
     let paths: PiPaths
     let cwd: URL
+    let model: FakeModel
+    var home: URL { root.appending(path: "home", directoryHint: .isDirectory) }
     private let process = Process()
     private let stdin = Pipe()
     private let errPipe = Pipe()
@@ -41,56 +42,52 @@ final class PiProcess: @unchecked Sendable {
     var pid: Int32 { process.processIdentifier }
     var events: [PiEvent] { output.withLock { $0.events } }
 
-    /// - Parameter installBridge: 先用安装器把桥扩展装进临时 agent 目录，让 Pi 按自己的发现规则加载。
+    /// - Parameter installBridge: 先用安装器把桥扩展装进临时 agent 目录、技能装进临时家目录的 `.agents`，让 Pi 按自己的发现规则加载。
     /// - Parameter oneShotPrompt: 非 nil 时以 print 模式跑这条 prompt 然后退出（否则 RPC 常驻）。
-    /// - Parameter firecode: 把本机 FireCode 与测试配置装进临时 agent 目录。它的子代理是进程内子会话，只加载 agent 目录里的扩展、
-    ///   只认 `models.json` 里的模型，所以假模型也改为装进 agent 目录，并在 `models.json` 里登记。
-    /// - Parameter modelInAgentDirectory: 假模型装进 agent 目录（不用 `-e` 加载）：CuePad 在后台托管的 Pi 只加载 agent 目录里的扩展。
-    /// - Parameter alongside: 与它共用同一个临时 agent 目录、连接目录与工作目录（同一会话的第二个进程）；结束时不删共用的目录。
+    /// - Parameter firecode: 把 FireCode 与测试配置装进临时 agent 目录（它的子代理是进程内子会话，只加载 agent 目录里的扩展、只认 `models.json` 里的模型）。
+    /// - Parameter alongside: 与它共用同一个临时 agent 目录、连接目录、工作目录与假模型（同一会话的第二个进程）。
     /// - Parameter discoverSkills: 让 Pi 去它的 skills 目录发现 skill（默认的安静参数里是 `--no-skills`）。
     /// - Parameter settings: 另外写进临时 agent 目录 Pi 设置（`settings.json`）的项，如压缩阈值（隔离的那几项见 `writeSettings`）。
+    /// - Parameter model: 剧本要在 Pi 起来之前写好时（一起来就发请求的 print 模式）先建好交进来。
     init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
-         oneShotPrompt: String? = nil, firecode: Bool = false, modelInAgentDirectory: Bool = false,
-         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], discoverSkills: Bool = false, settings: [String: Any]? = nil) async throws {
+         oneShotPrompt: String? = nil, firecode: Bool = false,
+         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], discoverSkills: Bool = false, settings: [String: Any]? = nil,
+         model: FakeModel? = nil) async throws {
+        try pinnedPi.require()
         let (exit, ended) = AsyncStream<Void>.makeStream()
         process.terminationHandler = { _ in ended.finish() }
         exited = Task { for await _ in exit {} }
         root = try other?.root ?? makeTempDirectory()
         cwd = root.appending(path: "work")
         try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: root.appending(path: "home"), withIntermediateDirectories: true)
         paths = other?.paths ?? PiPaths(
             agentDirectory: root.appending(path: "agent"), socketDirectory: socketDirectory ?? root.appending(path: "s"), binDirectory: root.appending(path: "bin"))
-        let tape = AgentTape.active
-        if installBridge && other == nil {
-            let agents = AgentIntegration(paths: AgentPaths(pi: paths, environment: ["CUEPAD_AGENTS_DIR": root.appending(path: "agents").path]), locate: { AgentTape.locator("pi") }, cuepad: Self.cuepad, timing: noDeadline)
-            try await agents.install(.pi)
+        if let other {
+            self.model = other.model
+        } else {
+            if let model { self.model = model } else { self.model = try await FakeModel() }
+            try Self.writeModels(self.model, into: paths.agentDirectory)
+            try Self.writeSettings(settings ?? [:], discoverSkills: discoverSkills, into: paths.agentDirectory)
+            self.model.on({ $0.system.contains("single-line task title") }) { .say("\($0.model)：\($0.prompt)") }
+            if installBridge {
+                let agents = AgentIntegration(paths: AgentPaths(pi: paths, environment: ["CUEPAD_AGENTS_DIR": home.appending(path: ".agents").path]), locate: { pinnedPi.locator }, cuepad: Self.cuepad, timing: noDeadline)
+                try await agents.install(.pi)
+            }
         }
-        if other == nil {
-            tape.watch(paths.sessionsDirectory, paths.agentDirectory.appending(path: "fake-model-gate"), cwd)
-        }
-
-        if other == nil { try Self.writeSettings(settings ?? [:], discoverSkills: discoverSkills, into: paths.agentDirectory) }
         if firecode { try Self.installFirecode(into: paths.agentDirectory) }
-        if modelInAgentDirectory { try Self.installFakeModel(into: paths.agentDirectory) }
-        let modelLoaded = firecode || modelInAgentDirectory || other != nil
 
         var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + extraArguments
         if let sessionFile { args += ["--session", sessionFile.path] }
-        if !modelLoaded { args += ["-e", fixtures.appending(path: "fake-model.ts").path] }
         for e in extraExtensions { args += ["-e", fixtures.appending(path: e).path] }
 
-        // 不继承跑测试的环境里的终端复用器与 CuePad 变量：在 CuePad 托管的 Pi 会话里跑测试时，CUEPAD_HOSTED 会让这里起的每个 Pi 都自认是托管的
-        var environment = ProcessInfo.processInfo.environment.filter { key, _ in !["HERDR", "TMUX", "CUEPAD_"].contains { key.hasPrefix($0) } }
-        environment["PI_CODING_AGENT_DIR"] = paths.agentDirectory.path
-        environment["CUEPAD_PI_SOCKET_DIR"] = paths.socketDirectory.path
-        environment["TERM_PROGRAM"] = "test-term"
-        environment["__CFBundleIdentifier"] = "com.example.term"
-        environment["TMUX_PANE"] = "%9"
-        environment["TMUX"] = "/tmp/tmux-test/default,1,0"
+        var environment = pinnedPi.environment(home: home, [
+            "PI_CODING_AGENT_DIR": paths.agentDirectory.path, "CUEPAD_PI_SOCKET_DIR": paths.socketDirectory.path, "PI_OFFLINE": "1",
+            "TERM_PROGRAM": "test-term", "__CFBundleIdentifier": "com.example.term", "TMUX_PANE": "%9", "TMUX": "/tmp/tmux-test/default,1,0",
+        ])
         environment.merge(env) { _, new in new }
-        environment[AgentTape.stdoutTypesVariable] = "extension_ui_request,tool_execution_end,agent_end"
 
-        process.executableURL = tape.executable("pi")
+        process.executableURL = pinnedPi.executable
         process.arguments = args
         process.environment = environment
         process.currentDirectoryURL = cwd
@@ -108,10 +105,22 @@ final class PiProcess: @unchecked Sendable {
     private final class Anchor {}
     static var cuepad: URL { Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent().appending(path: "cuepad") }
 
+    /// 假模型的三个模型：标价 echo-b 最低、echo（缺省的当前模型）其次（起名挑同一 provider 里最便宜的）；echo-think 能思考，echo-b 不能看图。
+    static func writeModels(_ model: FakeModel, into agent: URL) throws {
+        func entry(_ id: String, reasoning: Bool = false, images: Bool = true, cost: (Double, Double)) -> [String: Any] {
+            ["id": id, "name": id, "reasoning": reasoning, "input": images ? ["text", "image"] : ["text"], "contextWindow": 100_000, "maxTokens": 4096,
+             "cost": ["input": cost.0, "output": cost.1, "cacheRead": 0, "cacheWrite": 0]]
+        }
+        let provider: [String: Any] = [
+            "baseUrl": "\(model.baseURL)/v1", "api": "openai-completions", "apiKey": "fake",
+            "models": [entry("echo", cost: (1, 2)), entry("echo-think", reasoning: true, cost: (3, 4)), entry("echo-b", images: false, cost: (0.1, 0.5))],
+        ]
+        try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: ["providers": ["fake": provider]], options: [.sortedKeys]).write(to: agent.appending(path: "models.json"))
+    }
+
     /// 临时 agent 目录里的 Pi 设置（终端里起的与 CuePad 后台托管的都读它，同真实用户一样）：默认用假模型、不思考；
-    /// 不加载自动发现的 skill（`~/.agents/skills` 在用户家目录里，不随 agent 目录隔离），`discoverSkills` 时照常发现。
-    /// 上下文文件、提示词模板、主题只从 agent 目录与（受信任的）工作目录找，两处都是临时目录，不用另外关。
-    /// 不联网（`PI_OFFLINE`）由录像带在录制时交给 Pi（`AgentTape`）：Pi 没有对应的设置项。
+    /// 不加载自动发现的 skill，`discoverSkills` 时照常发现。上下文文件、提示词模板、主题只从 agent 目录与（受信任的）工作目录找，两处都是临时目录。
     private static func writeSettings(_ extra: [String: Any], discoverSkills: Bool, into agent: URL) throws {
         var settings: [String: Any] = ["defaultProvider": "fake", "defaultModel": "echo", "defaultThinkingLevel": "off"]
         if !discoverSkills { settings["skills"] = ["!**"] }
@@ -120,25 +129,13 @@ final class PiProcess: @unchecked Sendable {
         try JSONSerialization.data(withJSONObject: settings, options: [.sortedKeys]).write(to: agent.appending(path: "settings.json"))
     }
 
-    private static func installFakeModel(into agent: URL) throws {
-        let fm = FileManager.default
-        let extensions = agent.appending(path: "extensions")
-        try fm.createDirectory(at: extensions, withIntermediateDirectories: true)
-        if !fm.fileExists(atPath: extensions.appending(path: "fake-model.ts").path) {
-            try fm.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
-        }
-    }
-
     private static func installFirecode(into agent: URL) throws {
         let fm = FileManager.default
-        let extensions = agent.appending(path: "extensions")
-        let firecode = extensions.appending(path: "firecode")
+        let firecode = agent.appending(path: "extensions/firecode")
         try fm.createDirectory(at: firecode, withIntermediateDirectories: true)
-        try fm.createSymbolicLink(at: firecode.appending(path: "source"), withDestinationURL: firecodeSource)
-        try #"export { default } from "./source/index.ts";"#.write(to: firecode.appending(path: "index.ts"), atomically: true, encoding: .utf8)
+        try fm.createSymbolicLink(at: firecode.appending(path: "source"), withDestinationURL: firecodeEntry.deletingLastPathComponent())
+        try #"export { default } from "./source/\#(firecodeEntry.lastPathComponent)";"#.write(to: firecode.appending(path: "index.ts"), atomically: true, encoding: .utf8)
         try fm.copyItem(at: fixtures.appending(path: "firecode-config.jsonc"), to: firecode.appending(path: "config.jsonc"))
-        try fm.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
-        try fm.copyItem(at: fixtures.appending(path: "fake-models.json"), to: agent.appending(path: "models.json"))
     }
 
     struct FirecodeUnavailable: Error, CustomStringConvertible {
@@ -155,7 +152,7 @@ final class PiProcess: @unchecked Sendable {
         guard subagentsToolFailed else { return }
         let notices = events.filter { $0["type"] as? String == "extension_ui_request" && $0["method"] as? String == "notify" }
             .compactMap { $0["message"] as? String }
-        throw FirecodeUnavailable(description: "本机 FireCode 没有加载指挥官（subagents 工具不可用）。FireCode 的提示原文：\(notices.isEmpty ? "（没有）" : notices.joined(separator: " | "))；测试配置见 Fixtures/firecode-config.jsonc")
+        throw FirecodeUnavailable(description: "FireCode 没有加载指挥官（subagents 工具不可用）。FireCode 的提示原文：\(notices.isEmpty ? "（没有）" : notices.joined(separator: " | "))；测试配置见 Fixtures/firecode-config.jsonc")
     }
 
     func stop() {
@@ -200,36 +197,11 @@ final class PiProcess: @unchecked Sendable {
 
     func kill(_ signal: Int32) { Darwin.kill(process.processIdentifier, signal) }
 
-    /// 假模型的停住与放行（`[[slow]]`、`[[slow-compact]]`，见 Fixtures/fake-model.ts）：窗口多长由测试定，不按时长。
-    private var gate: URL { paths.agentDirectory.appending(path: "fake-model-gate", directoryHint: .isDirectory) }
-    private let heldSeen = Mutex(0)
-
-    private func heldCount() -> Int {
-        ((try? FileManager.default.contentsOfDirectory(atPath: gate.path)) ?? []).filter { $0.hasPrefix("held-") }.count
-    }
-
-    func waitUntilHeld() async throws {
-        let wanted = heldSeen.withLock { $0 += 1; return $0 }
-        try await eventually("假模型停住") { self.heldCount() >= wanted }
-    }
-
-    /// 之后每次停住都放行，不关心停几次（压缩会发一到两次摘要请求，子代理的回复又带着标记）：返回的任务在不再需要时取消。
-    func releaseEveryHold() -> Task<Void, any Error> {
-        Task {
-            while true {
-                try await waitUntilHeld()
-                try release()
-            }
-        }
-    }
-
-    func release() throws {
-        let tape = AgentTape.active
-        if tape.mode == .record {
-            try FileManager.default.createDirectory(at: gate, withIntermediateDirectories: true)
-            try Data().write(to: gate.appending(path: "release-\(UUID().uuidString)"))
-        }
-        tape.mark("release")
+    /// 这句话的那一轮停在假模型里，直到测试放行（`FakeGate.open`）或 Pi 停下这一轮；放行后照 `then` 答。
+    func hold(_ prompt: String, then reply: FakeReply? = nil) -> FakeGate {
+        let gate = model.gate()
+        model.on({ $0.prompt.contains(prompt) }) { .held(gate, then: reply ?? .say("ECHO \($0.prompt)")) }
+        return gate
     }
 
     func waitForEvent(_ what: String, _ match: @escaping @Sendable (PiEvent) -> Bool) async throws -> PiEvent {
@@ -240,6 +212,10 @@ final class PiProcess: @unchecked Sendable {
         }
         return found!
     }
+}
+
+extension PinnedAgent {
+    var locator: ExecutableLocator { ExecutableLocator(searchDirectories: [bin]) }
 }
 
 let tinyPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!

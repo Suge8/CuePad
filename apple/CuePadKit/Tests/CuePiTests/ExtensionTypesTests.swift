@@ -4,36 +4,19 @@ import Foundation
 import Testing
 
 /// 桥扩展由 Pi 在运行时加载（类型在加载时被擦掉），没有任何构建步骤检查它调用的 Pi 接口。
-/// 这里用本机 Pi 的类型声明与它检出里的 TypeScript 做严格类型检查：Pi 改了扩展接口，这一条先红。
+/// 这里用钉住的 Pi 的类型声明与随它装的 TypeScript（`Tests/agents.json` 的 `with`）做严格类型检查：Pi 改了扩展接口，这一条先红。
 private struct PiTypes {
-    let packageRoot: URL
-    let tsc: URL
-    let nodeTypes: URL
-
-    init?() {
-        guard RealAgents.recording.contains(.pi), realPiInstalled else { return nil }
-        var directory = realPiURL.resolvingSymlinksInPath().deletingLastPathComponent()
-        while !FileManager.default.fileExists(atPath: directory.appending(path: "dist/index.d.ts").path) {
-            guard directory.path != "/" else { return nil }
-            directory.deleteLastPathComponent()
-        }
-        packageRoot = directory
-        var found: (tsc: URL, types: URL)?
-        while directory.path != "/", found == nil {
-            directory.deleteLastPathComponent()
-            let modules = directory.appending(path: "node_modules")
-            let tsc = modules.appending(path: ".bin/tsc"), types = modules.appending(path: "@types")
-            if FileManager.default.isExecutableFile(atPath: tsc.path), FileManager.default.fileExists(atPath: types.path) { found = (tsc, types) }
-        }
-        guard let found else { return nil }
-        (tsc, nodeTypes) = found
-    }
+    private var modules: URL { pinnedPi.bin.deletingLastPathComponent().appending(path: "node_modules") }
+    var packageRoot: URL { modules.appending(path: "@earendil-works/pi-coding-agent") }
+    var tsc: URL { modules.appending(path: ".bin/tsc") }
+    var nodeTypes: URL { modules.appending(path: "@types") }
 }
 
-@Suite(.enabled(if: PiTypes() != nil, "需要 ~/.local/bin/pi 指向带 node_modules/.bin/tsc 的 Pi 检出"))
+@Suite(RealAgents.taped(.pi))
 struct ExtensionTypesTests {
     @Test func bridgeTypechecksAgainstInstalledPi() async throws {
-        let pi = try #require(PiTypes())
+        try pinnedPi.require()
+        let pi = PiTypes()
         let bridge = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/CuePi/Extension/cuepad-bridge/index.ts").standardized
         let config: [String: Any] = [
             "compilerOptions": [

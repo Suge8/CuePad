@@ -7,17 +7,16 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 真实 Pi 与真实后台托管（测闲置退出的用例闲置 2 秒就退），全部状态落在临时目录，假模型零网络；不碰真实资料库与 ~/.pi。
-nonisolated private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    .appending(path: "CuePadKit/Tests/CuePiTests/Fixtures")
+/// 真实 Pi 与真实后台托管（测闲置退出的用例闲置 2 秒就退），全部状态落在临时目录，假模型（`model`，回 `ECHO <你的话>`）零网络；不碰真实资料库与 ~/.pi。
 
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .timeLimit(.minutes(4)))
+@Suite(.pinnedPi, .timeLimit(.minutes(4)))
 struct HistoryRulesTests {
     final class Rig {
         let cwd: URL
         let host: PiRuntime
         let bridge: PiBridge
         let services: AppServices
+        let model: FakeModel
         var store: CueStore { services.store }
 
         init(idleLimit: Duration = AgentTimeouts.hostedIdle, providerFixture: URL? = nil, oauth: Bool = true, otherOAuthProviders: [String] = []) async throws {
@@ -45,9 +44,10 @@ struct HistoryRulesTests {
                 let directory = extensions.appending(path: "test-provider")
                 try FileManager.default.copyItem(at: providerFixture.deletingLastPathComponent(), to: directory)
                 try FileManager.default.moveItem(at: directory.appending(path: providerFixture.lastPathComponent), to: directory.appending(path: "index.ts"))
-            } else {
-                try FileManager.default.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
             }
+            model = try await FakeModel()
+            try Data(#"{"providers":{"fake":{"baseUrl":"\#(model.baseURL)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"echo","input":["text","image"]}]}}}"#.utf8)
+                .write(to: paths.agentDirectory.appending(path: "models.json"))
             // 托管的 Pi 同真实用户一样读 agent 目录里的设置：默认假模型、不思考，不加载家目录里自动发现的 skill
             let provider = providerFixture == nil ? "fake" : "openai"
             try JSONSerialization.data(withJSONObject: [
@@ -64,7 +64,6 @@ struct HistoryRulesTests {
                 }
                 try JSONSerialization.data(withJSONObject: credentials).write(to: paths.agentDirectory.appending(path: "auth.json"))
             }
-            _ = Self.offline
 
             bridge = PiBridge(socketDirectory: paths.socketDirectory)
             host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi }, idleLimit: idleLimit)
@@ -82,9 +81,6 @@ struct HistoryRulesTests {
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
             services.start()
         }
-
-        /// 不联网：Pi 只认 `PI_OFFLINE`（没有设置项），托管的 Pi 继承 CuePad 进程的环境，所以设在本测试进程上（只有 Pi 读它）。
-        static let offline: Void = { setenv("PI_OFFLINE", "1", 1) }()
 
         func shutdown() {
             services.cancelBackgroundWork()
@@ -131,7 +127,7 @@ struct HistoryRulesTests {
         let session = try #require(rig.bridge.session(id: id))
         let sessionID = session.sessionID
         _ = try await rig.bridge.send(PiMessage(text: "开场"), to: id)
-        try await eventually("回答落盘、索引跟上") { try await rig.replies(of: sessionID).last == "ECHO 开场 IMAGES[]" }
+        try await eventually("回答落盘、索引跟上") { try await rig.replies(of: sessionID).last == "ECHO 开场" }
 
         try await eventually("闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         let rested = try await expectResting(rig, sessionID)
@@ -140,20 +136,20 @@ struct HistoryRulesTests {
         _ = try await rig.store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
         let said = try #require(await CueTools(store: rig.store).call("task", ["action": "say", "session": rested.shortID, "text": "Cue 来的话"]))
         #expect(!said.isError, "\(said.text)")
-        try await eventually("Cue 说的话得到回复") { try await rig.replies(of: sessionID).last == "ECHO Cue 来的话 IMAGES[]" }
+        try await eventually("Cue 说的话得到回复") { try await rig.replies(of: sessionID).last == "ECHO Cue 来的话" }
         try await eventually("Cue 说完再次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         try await expectResting(rig, sessionID)
 
         // Mac 本机发话（"已结束"那条路：执行器用会话索引在后台唤醒）
         Workspace(services: rig.services).send("本机来的话", to: AgentTarget(session: sessionID))
-        try await eventually("本机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 本机来的话 IMAGES[]" }
+        try await eventually("本机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 本机来的话" }
         try await eventually("再次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         let resting = try await expectResting(rig, sessionID)
 
         let request = try await rig.store.requestDelivery("手机来的话", to: resting.target, on: resting.hostID, mode: .send)
         let result = try await rig.services.store.outcome(of: request)
         #expect(result.failure == nil)
-        try await eventually("手机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 手机来的话 IMAGES[]" }
+        try await eventually("手机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 手机来的话" }
         try await eventually("又一次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         let again = try await expectResting(rig, sessionID)
 
@@ -175,7 +171,7 @@ struct HistoryRulesTests {
     }
 }
 
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
+@Suite(.pinnedPi)
 struct HostedLaunchTests {
     @Test func 开新会话模型无效时整体失败() async throws {
         let directory = TestLibraries.makeDirectory()
