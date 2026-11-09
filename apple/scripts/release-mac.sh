@@ -4,7 +4,7 @@
 #   --dry-run  停在尝试目录里的 zip 与 appcast.xml（已用 EdDSA 签名校验），不上传；照样提交公证
 #   --resume   找回 submission.json 记着这个公证 ID 的那次尝试，沿用它的提交与产物，接着等公证并发布
 # 下载位置只有一处：Release $TAG 的三个资产，不新建 Release，每次发布原地替换；替换资产前在归档来源提交上打 mac/<构建号> 标签并推到远端（这一版源码的唯一记号）；三个资产各自的用途与上传顺序的理由见 docs/release.md。
-# 线上（资产与更新源）的构建号比这一版新就不发：迟到的恢复不覆盖新版；同号是同一版的重入，标签已指向别的提交时推送被拒。
+# 线上的构建号（更新源声明的 sparkle:version 与 Release 里带构建号的包）比这一版新就不发：迟到的恢复不覆盖新版；同号是同一版的重入，标签已指向别的提交时推送被拒。
 # 更新源 SUFeedURL 直接是这里的 appcast.xml（releases/latest/download/appcast.xml），核对与回读都从 App 的 Info.plist 读这个地址。
 # 打包前先核对生产环境的 CloudKit 结构（ck-production.sh），缺字段就不发；待部署清单只拦 iOS（release-ios.sh）。
 # 也核对发版顺序（check_ios_floor）：这一版的同步下界不高于 TestFlight 上处理好的最新 iOS 版（docs/release.md「发版顺序」）。门铃中转打包前、导出后各核对一次（check_relay）。
@@ -125,7 +125,9 @@ if $dry_run; then exit 0; fi
 
 names="$(gh release view "$TAG" -R "$REPO" --json assets --jq '.assets[].name')"
 feed="$(curl -fsSL "$(plist SUFeedURL)")" || { echo "读不到线上的更新源 $(plist SUFeedURL)，不发布" >&2; exit 1; }
-online="$(printf '%s\n' "$names" "$feed" | sed -nE "s/.*${ASSET%.zip}-([0-9]+)\.zip.*/\1/p" | sort -n | tail -1)"
+declared="$(sed -nE 's/.*<sparkle:version>([0-9]+)<\/sparkle:version>.*/\1/p' <<<"$feed")"
+[ -n "$declared" ] || { echo "线上的更新源没有 sparkle:version，不发布" >&2; exit 1; }
+online="$( { echo "$declared"; sed -nE "s/^${ASSET%.zip}-([0-9]+)\.zip$/\1/p" <<<"$names"; } | sort -n | tail -1)"
 [ "${online:-0}" -le "$build_version" ] || { echo "拒绝发布旧版 ${build_version}：线上已是 ${online}" >&2; exit 1; }
 release_tag mac "$build_version" "$source_commit"
 # 顺序的理由见 docs/release.md：带构建号的新包 → appcast → 官网包 → 删上一版带构建号的包
