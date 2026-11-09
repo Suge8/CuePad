@@ -7,7 +7,7 @@ import Testing
 
 /// 真 Codex（钉住的版本）+ 假模型：发送、权限、结束后恢复、停止四条流程，外加配置、失败、起名、技能、计划模式提问。
 @MainActor
-@Suite(RealAgents.taped(.codex), RealAgents.timeLimit(.minutes(4)))
+@Suite(RealAgents.needs(.codex))
 struct RealCodexHostedTests {
     func open(_ rig: CodexRig, _ token: String) async throws -> PiSession.ID {
         let id = try await rig.runtime.open(in: rig.codex.work, launchToken: token, name: nil, model: nil, thinking: nil)

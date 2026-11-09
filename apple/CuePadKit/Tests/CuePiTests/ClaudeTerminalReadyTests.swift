@@ -8,7 +8,7 @@ import Testing
 /// 终端里的 Claude Code 起好之前（登记文件里没有 `status`）CuePad 不往它的收件箱送话：一直起不好就报没发出，
 /// 等着时进程退了就马上报会话已结束（确定没发出），起好了再发就送到。
 @MainActor
-@Suite(RealAgents.taped(.claudeCode))
+@Suite(RealAgents.needs(.claudeCode))
 struct ClaudeTerminalReadyTests {
     @Test func aMessageToATerminalSessionThatNeverGetsReadyIsNotSent() async throws {
         let directory = URL(filePath: "/tmp/cpr-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)

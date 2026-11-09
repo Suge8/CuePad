@@ -5,8 +5,11 @@
 - Swift Testing：`✔/✘ Test run with N tests …` 给总数，`✘ Test … failed after`、`➜ Test … skipped` 给失败与跳过；
 - XCTest：每个测试包收尾的 `Test Suite 'All tests'|'Selected tests'` 后一行 `Executed N tests, with … skipped and … failures`。
 钉住的 Agent 没装时它的用例跳过、原因里带「未覆盖：」（CueTestSupport 的 PinnedAgent）：单列成「没跑、不算通过的」，不混进普通的跳过。
+按家参数化的用例跳过的那一例（`Test.cancel`）日志里没有任何一行，汇总把整个用例算通过：所以跑过真 Agent 用例时另列没装的家（agents.py status）。
 用例的耗时取 `passed after`（Swift Testing，参数化的取汇总行，不取每个参数一行）与 `passed (x seconds)`（XCTest）。"""
+import os
 import re
+import subprocess
 import sys
 from collections import Counter, defaultdict
 
@@ -81,6 +84,14 @@ if uncovered:
     print("没跑、不算通过的：")
     for reason, count in sorted(uncovered.items()):
         print(f"  {reason}（{count} 个用例）")
+if any("CuePiTests" in l for l in lines):
+    cache = os.environ.get("TEST_RUNNER_CUEPAD_AGENTS_CACHE") or os.environ.get("CUEPAD_AGENTS_CACHE")
+    agents = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agents.py")
+    listing = subprocess.run([sys.executable, "-I", agents, "status"], capture_output=True, text=True,
+                             env={**os.environ, **({"CUEPAD_AGENTS_CACHE": cache} if cache else {})}).stdout
+    absent = [" ".join(l.split()[:2]) for l in listing.splitlines() if l.split()[-1:] == ["没装"]]
+    if absent:
+        print("没装的 Agent（它的用例都没跑，按家参数化的用例里它那一例也没跑、却随整个用例算进了通过）：" + "、".join(absent))
 for reason, names in by_reason.items():
     if "未覆盖：" in reason:
         continue
