@@ -20,6 +20,7 @@
 #   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）。
 #                                                   iOS 的模拟器由后台看守租着，别的检出领不到，直到实例退出、到时或 stop
 #   xc.sh stop                                      结束本检出 run 起的实例（Mac 与模拟器）
+#   xc.sh fleet up|status|down|accept               同一个检出里 Mac、iPhone、iPad 三个隔离实例共用一朵模拟云；accept 验收手机建灵感 → Mac 与 iPad 读到（fleet.py 头注释）
 #   xc.sh explore [种子] [秒] [-- 启动参数…]           找偶发的主线程卡死：起 iPhone 实例，按种子随机点滑三页，App 的看守记下卡住时连取样本（explore.py 头注释）
 #   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
@@ -53,7 +54,7 @@ IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 测试里条件等待的上限从这个时限推出（CueTestSupport 的 conditionBudget）：测试不另写短的墙钟上限
 export TEST_RUNNER_CUEPAD_TEST_TIME_LIMIT=$TEST_TIME_LIMIT
-USAGE="用法：$0 <check|build|strings|test|shot|rec|run|stop|explore|perf|release|device|provision|activity-log> [mac|ios|ipad|kit] …（见脚本头注释）"
+USAGE="用法：$0 <check|build|strings|test|shot|rec|run|stop|fleet|explore|perf|release|device|provision|activity-log> [mac|ios|ipad|kit] …（见脚本头注释）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -62,6 +63,7 @@ case "$cmd" in
   provision) signing_begin; exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;  # 签名锁见 _lock.sh 规则 3
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
   explore) exec python3 "$APPLE_DIR/scripts/explore.py" "$0" "${@:2}" ;;
+  fleet) exec python3 "$APPLE_DIR/scripts/fleet.py" "$0" "${@:2}" ;;
   perf) [ "$platform" != ab ] || exec python3 "$APPLE_DIR/scripts/perf-ab.py" "${@:3}" ;;  # 其余先构建、再测量，两段各自进锁（见下）
   test|shot|rec|run)
     # 本检出上一个 run 的实例租着一台模拟器：先收掉再排队，免得槽位被自己占满

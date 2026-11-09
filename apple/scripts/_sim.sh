@@ -58,7 +58,9 @@ SIM_SLIM=(
 )
 
 # sim_udid <机型>：输出领到的槽位（没领就 0 号）上这个机型那台的 UDID，没有就建（只建不开机）。
+# CUEPAD_PIN_SIM=<UDID> 钉死这一台（xc.sh fleet up --real：模拟器里登着测试账号，换一台就没了；这台不在槽位池里，别的检出不会碰）。
 sim_udid() {
+  [ -z "${CUEPAD_PIN_SIM:-}" ] || { echo "$CUEPAD_PIN_SIM"; return; }
   local name="CuePad $1 #${CUEPAD_SIM:-0}" udid
   udid="$(xcrun simctl list devices -j | jq -r --arg n "$name" 'first(.devices[][] | select(.name == $n and .isAvailable) | .udid) // empty')"
   [ -n "$udid" ] || udid="$(xcrun simctl create "$name" "$1")"

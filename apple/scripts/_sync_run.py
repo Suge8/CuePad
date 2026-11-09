@@ -187,7 +187,7 @@ class Run:
         if cloud == "sim":
             os.makedirs(f"{out}/cloud")
             json.dump(latency, open(f"{out}/cloud/latency.json", "w"))
-            args, home = ["-CuePadSyncBenchCloud", f"{out}/cloud"], out
+            args, home = ["-CuePadSharedCloud", f"{out}/cloud"], out
         else:
             args, home = ["-CuePadSyncBenchBudget", str(budget)], f"{REAL_LIBS}/{hashlib.sha1(checkout.encode()).hexdigest()[:8]}"
         self.a, self.b = (Instance(r, checkout, out, relay, f"{home}/{r}", args) for r in ("a", "b"))

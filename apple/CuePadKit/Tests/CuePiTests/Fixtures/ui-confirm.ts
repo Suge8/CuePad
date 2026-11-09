@@ -1,4 +1,4 @@
-// 测试用：/ask 弹出扩展 ui.confirm、/pick 弹出 ui.select，用来触发"等待用户"状态；答案经 notify 报出来（confirmed:… / picked:…）。
+// 测试用：触发"等待用户"状态。
 export default function (pi: any) {
 	pi.registerCommand("ask", {
 		description: "test: open a confirm dialog",

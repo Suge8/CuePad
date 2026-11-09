@@ -7,8 +7,7 @@ struct CueVoicePanel: View {
     @State private var choosingExecution = false
 
     var body: some View {
-        CueVoiceView(presentation: workspace.voicePresentation, detailsSource: Bindable(workspace).voiceDetails,
-                     start: { workspace.startVoiceCall() }, action: act)
+        CueVoiceView(presentation: workspace.voicePresentation, detailsSource: Bindable(workspace).voiceDetails, action: act)
         .panel(isPresented: Binding { workspace.voiceDetails != nil } set: { if !$0 { workspace.voiceDetails = nil } },
                style: .bubble(workspace.voiceDetails ?? .unanchored, width: .fixed(360))) {
             CueVoiceDetails(presentation: { workspace.voicePresentation }, action: act)
