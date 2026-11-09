@@ -7,16 +7,12 @@ import subprocess, sys
 
 sys.dont_write_bytecode = True
 from _pi_extension import ENTRY, EXTENSION, extension_version as version  # noqa: E402
-
-
-def git(*args):
-    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
-
+from lint_git import fail, git  # noqa: E402
 
 try:
     base = git("merge-base", "HEAD", "origin/main").strip()
 except subprocess.CalledProcessError as error:
-    sys.exit(f"lint_extension.py 要 origin/main 来认扩展改没改：{error.stderr.strip()}（先 git fetch origin main）")
+    fail("lint_extension.py 要 origin/main 来认扩展改没改", error)
 changed = git("diff", "--name-only", base, "--", EXTENSION).split() + git("ls-files", "--others", "--exclude-standard", "--", EXTENSION).split()
 if not changed: sys.exit(0)
 
