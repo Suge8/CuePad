@@ -27,7 +27,7 @@ extension View {
 extension View {
     /// 系统在它自己的线程上发这个通知：按主线程上的任务等，`action` 改的界面状态不跨线程。
     func onDayChange(_ action: @escaping () -> Void) -> some View {
-        task { for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) { action() } }
+        task { for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) { action() } }  // 晚订：视图出现前换的日子，出现时画的就是新的一天
     }
 }
 

@@ -31,9 +31,10 @@ nonisolated final class MacPresenceKeeper: Sendable {
             goingToSleep()
         }
         defer { center.removeObserver(sleeping) }
+        let wakes = center.notifications(named: NSWorkspace.didWakeNotification)  // 在第一次写下在线之前订上
         try await withThrowingDiscardingTaskGroup { group in
             group.addTask {
-                for await _ in center.notifications(named: NSWorkspace.didWakeNotification) {
+                for await _ in wakes {
                     self.awake.withLock { $0 = true }
                     try await self.publish()
                 }

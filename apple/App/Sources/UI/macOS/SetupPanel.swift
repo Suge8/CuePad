@@ -57,9 +57,10 @@ struct SetupPanel: View {
         .onAppear { withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { shown = true } }
         .observing(services.store, into: $here, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
         .task {
+            let activations = NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification)  // 第一次检测途中切回来的也要再测
             await workspace.recheckAgents()
             checked = true
-            for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) { await workspace.recheckAgents() }
+            for await _ in activations { await workspace.recheckAgents() }
         }
     }
 
