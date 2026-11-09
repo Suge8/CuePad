@@ -113,7 +113,6 @@ final class CueService {
         }
     }
 
-    // MARK: 通知
 
     /// 值班时给要提示你的 Cue 消息（`CueMessage.alerts`）发本机通知，直到任务取消。只发这次启动之后新写的。
     func followNotifications() async throws {

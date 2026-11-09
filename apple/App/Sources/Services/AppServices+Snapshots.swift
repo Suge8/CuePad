@@ -117,7 +117,6 @@ extension AppServices {
         #endif
     }
 
-    /// 和上次写出的一样（`same`，默认相等）就不写；返回写了没有。
     @discardableResult
     private func write<S: SnapshotFile & Equatable>(_ snapshot: S, over old: S?, same: (S, S) -> Bool = (==)) throws -> Bool {
         if let old, same(snapshot, old) { return false }
@@ -126,7 +125,6 @@ extension AppServices {
     }
 }
 
-/// 快照的全部内容：与上次写出的比较，决定写哪份、要不要刷新小组件。
 nonisolated struct WidgetSnapshots: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var home: DefaultProjectSnapshot

@@ -9,7 +9,6 @@ struct MacDependencies {
     var pi: PiBridge
     var hotkeys: any HotkeyBackend
     var paths: AgentPaths
-    /// 各家的接入状态（检测出的可执行文件也在里面：各家的接入、Cue 的大脑都从这里取）。
     var agents: AgentIntegrations
     var terminal: PiTerminalJumper
     var hostID: String
@@ -23,7 +22,6 @@ struct MacDependencies {
     var commandLineTool: CommandLineToolInstaller
     /// 自动更新器；只有正式版签名的有，本机构建与测试为 nil。
     var updater: (any AppUpdater)?
-    /// Agent 钩子转发到 CuePad 的监听端（Claude Code、Codex 的接入用它）。
     var hooks: AgentHookServer
     /// 各 Agent 的接入：发现会话、后台开新会话与接着已结束的会话、结束会话。OpenCode 的会话索引由它的接入直接写进资料库，
     /// 所以等资料库打开后再建（参数就是它）。

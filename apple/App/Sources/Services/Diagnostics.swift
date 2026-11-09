@@ -7,7 +7,6 @@ import os
 /// 只存本机、不联网；真机上拿崩溃栈靠用户在设置页"导出诊断"。
 @Observable
 final class Diagnostics {
-    /// 存档里的诊断，新的在前。
     private(set) var reports: [CrashReport]
     @ObservationIgnored let archive: DiagnosticArchive
     @ObservationIgnored private var subscriber: Subscriber?
@@ -30,7 +29,6 @@ final class Diagnostics {
         record(MXMetricManager.shared.pastDiagnosticPayloads.map { $0.jsonRepresentation() })
     }
 
-    /// 存下一批包的原始 JSON。存不下来时记日志，别的包照常存。
     func record(_ payloads: [Data]) {
         for payload in payloads {
             do { try archive.store(payload) } catch { AppServices.log.error("诊断存档失败：\(String(describing: error))") }

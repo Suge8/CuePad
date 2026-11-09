@@ -22,7 +22,6 @@ import Synchronization
 /// 用 URLSessionWebSocketTask：带系统代理设置、协议层 ping、自动回中转的 ping；连接是 wss（证书由系统校验）。
 @Observable
 final class Relay {
-    /// 门铃此刻通着：入了房间，心跳有回应。
     private(set) var isLive = false
     private(set) var voiceAvailability: VoiceRelayAvailability = .unavailable
     @ObservationIgnored var voiceConnection: RelayVoiceConnection?
@@ -42,7 +41,6 @@ final class Relay {
     @ObservationIgnored private var rang: (@MainActor () async -> Void)?
     /// 这个账号的房间与签名（密钥派生的）：取到一次就记着，换账号（`reconnect`）时清掉。
     @ObservationIgnored private var known: RelayCredentials?
-    /// 保持连接的任务（断了自己重连）；断开着时为 nil。
     @ObservationIgnored private var connection: Task<Void, Never>?
     /// 正在收尾的旧连接任务（`disconnect` 都等它）：这期间不起新的。
     @ObservationIgnored private var closing: Task<Void, Never>?
@@ -60,7 +58,6 @@ final class Relay {
     /// 心跳察觉静默断线的上限，也是门铃通着时按节奏拉取降到的兜底间隔（`AppServices.doorbellFallback`）：兜底只补门铃自己察觉不到的丢失
     /// （对方按出去的那一下在路上没了、中转重启），察觉得到的断（断线、重连）当场换回快档、入房先拉一次，察觉不到的也不比它更晚。
     nonisolated static let silenceLimit = pingInterval + pongLimit
-    /// 连上、入房的时限。
     nonisolated static let handshakeLimit = Duration.seconds(15)
     /// 重连的退避：1 秒起，至多 `Backoff.waitingCap`（中转恢复后至多再等这么久就连回来，门铃不通时一直按 2 秒拉）。
     static let retry = Backoff(first: .seconds(1), cap: Backoff.waitingCap)
@@ -108,7 +105,6 @@ final class Relay {
         await disconnect(thenConnect: false)
     }
 
-    /// 想连着：没连着就连（还没 `run` 时只记下）。
     func resume() {
         wanted = true
         connect()

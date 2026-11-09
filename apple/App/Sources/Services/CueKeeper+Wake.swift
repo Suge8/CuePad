@@ -177,7 +177,6 @@ extension CueKeeper {
         }
     }
 
-    /// `urgent`：要提示你（`CueMessage.urgent`）。
     func say(_ author: CueAuthor, _ text: ShownText, urgent: Bool = false) async {
         do {
             try await store.addCueMessage(author, shown: text, urgent: urgent)
@@ -228,7 +227,6 @@ extension CueKeeper {
         }
     }
 
-    /// 重试可能好的错：额度、登录类的不算。
     static func retryable(_ summary: PiErrorSummary) -> Bool { summary.failure.retries }
 
     /// 错的原文首行（信封里那一行只放得下这么多）。

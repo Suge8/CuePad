@@ -30,7 +30,6 @@ nonisolated final class ViewerKeeper: Sendable {
     }
 
     private struct State {
-        /// 各窗口此刻开着的会话页。
         var shown: [UUID: Set<Page>] = [:]
         var cue = false
         var away: Set<Away> = []
@@ -68,7 +67,6 @@ nonisolated final class ViewerKeeper: Sendable {
         }
     }
 
-    /// 这台设备开没开着 Cue 页（`CueViewing` 数的在看的有没有）。
     func showCue(_ shown: Bool) {
         update { $0.cue = shown }
     }

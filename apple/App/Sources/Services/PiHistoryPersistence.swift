@@ -16,7 +16,6 @@ actor PiHistoryPersistence {
     private let storage: CueStore
     /// 这台 Mac：会话文件索引也写成这台 Mac 的会话同步记录（见 `CueStore.upsertPiSession`）。
     private let host: String
-    /// 会话文件路径 → 它的索引从哪接着读
     private var starts: [String: IndexedSessionStart]?
     private var blocked: Set<String> = []
     /// 回填期间检查点格式已过期（CuePi 升级）、从头重读的文件数与回填开始的时刻：不为 0 时回填完成汇总记一行
@@ -137,7 +136,6 @@ actor PiHistoryPersistence {
         starts = nil
     }
 
-    /// 没接入的 Agent 回填的范围：这台 Mac 托管过的会话。
     func hostedScope(of agent: AgentKind) async throws -> PiHistoryScope {
         .sessions(try await storage.hostedPiSessionIDs(of: agent, host: host))
     }

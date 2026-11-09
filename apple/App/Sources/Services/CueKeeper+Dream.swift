@@ -23,7 +23,6 @@ extension CueKeeper {
         }
     }
 
-    /// 做梦看的读数：记忆的版本与 Cue 在不在跑一轮（库里它此刻的状态）。
     private nonisolated struct DreamMoment: Equatable, Sendable {
         var memory: CueMemoryVersion
         var busy: Bool

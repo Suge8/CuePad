@@ -34,7 +34,6 @@ protocol HotkeyBackend: AnyObject {
 /// `set` 换键时先注册新的，成功才释放旧的、写进偏好；失败时抛出，旧的继续生效、偏好不变。设置页的录键直接绑这里。
 @Observable
 final class GlobalHotkey {
-    /// 设置页与启动问题里怎么称呼它
     let label: String
     private(set) var accelerator: String
     @ObservationIgnored private let key: String
@@ -71,7 +70,6 @@ final class GlobalHotkey {
         self.current = nil
     }
 
-    /// 注册成功返回规范写法。
     @discardableResult
     private func register(_ accelerator: String) throws -> String {
         guard let shortcut = Shortcut(accelerator: accelerator), let normalized = shortcut.accelerator else {

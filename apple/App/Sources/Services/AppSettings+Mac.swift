@@ -1,7 +1,6 @@
 #if os(macOS)
 import Foundation
 
-/// Mac 专属的偏好：窗口位置、首次打开的接入面板出现过没有。
 extension AppSettings.Key {
     static let setupOffered = "setupOffered"
     fileprivate static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置

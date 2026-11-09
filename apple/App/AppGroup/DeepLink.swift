@@ -70,7 +70,6 @@ nonisolated enum DeepLink: Equatable, Sendable {
 }
 
 nonisolated private extension URL {
-    /// 只接有值的参数。
     func appending(present items: [(String, String?)]) -> URL {
         appending(queryItems: items.compactMap { name, value in value.map { URLQueryItem(name: name, value: $0) } })
     }

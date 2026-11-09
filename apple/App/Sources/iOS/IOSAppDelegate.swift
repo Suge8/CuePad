@@ -20,7 +20,6 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         AppDependencyManager.shared.add { self as any CueQuestionAnswering }
     }
 
-    /// 资料库打不开时失败页的重试。
     func relaunch() {
         launch = Launch.make()
         connect()

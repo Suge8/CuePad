@@ -18,9 +18,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var cue: Brain
     /// 截掉之前各种各几件：数字账与角标数的是它，不是列得下的那几行。
     var tally: Tally
-    /// 推进中几件（`CueTally.advancing`，含歇着的）。
     var advancing: Int
-    /// 推进中各件的会话里在跑的子代理一共几个。
     var subagents: Int
     /// 至多 `itemLimit` 件；截的时候留住最近刚做完的那件（`justDone`，头像那一拍与那一句读它）。
     var items: [Item]
@@ -44,13 +42,11 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         /// 此刻不会接话：那一句原因（"「Mac Studio」没开"、换新 Mac 时"正在从 iCloud 同步…"），起不来时 `failed`。
         case away(String, failed: Bool)
         case idle
-        /// 你最近一句还在路上。
         case hearing
         /// 在一轮里：谁叫醒的（"被 canvas-zoom 叫醒"那一截，不知道为 nil）、此刻那一步（"读取 CueRules.swift"）、这一轮从几点起。
         case working(woke: String?, doing: String?, since: Date)
     }
 
-    /// 各种几件。
     struct Tally: Codable, Hashable, Sendable {
         var asks = 0
         var reply = 0
@@ -65,22 +61,16 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         var needsYou: Int { asks + reply }
     }
 
-    /// 一件：展开态与锁屏下面的一行。
     struct Item: Codable, Hashable, Sendable, Identifiable {
-        /// 声明的先后就是排的先后。
         enum Kind: String, Codable, Sendable, CaseIterable {
-            /// 等你拍板
             case asks
             /// 待回复：Cue 留给你回的会话（墨色，赭黄只给拍板）
             case reply
             /// 有会话在跑（在想、用工具、正在开、话正送进去）
             case running
-            /// 会话歇着、等它派出去的子代理交回
             case delegating
-            /// 推进中、此刻没在跑
             case resting
             case unconfirmed
-            /// 刚做完的顶层任务
             case done
         }
 
@@ -88,7 +78,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         var id: String
         var kind: Kind
         var name: String
-        /// 停在这个样子的起点（计时从它走；刚做完的是做完的时刻）。
         var since: Date
         var subagents: Int
         var slot = 0
@@ -121,7 +110,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     }
 
     static let itemLimit = 8
-    /// 刚做完的那件留多久。
     static let doneWindow: TimeInterval = 10 * 60
     /// 一份写下后多久算过时：在一轮里、话在路上这类快的事实几分钟就变，其余慢。
     static let fastStale: TimeInterval = 3 * 60
@@ -164,7 +152,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 未确认不等于全部完成；只有明确没有活（歇着与刚做完）时才允许现有生命周期收尾。
     var isLive: Bool { hasConfirmedActivity || unconfirmed }
 
-    /// 这一份过多久不可信。
     var staleAfter: TimeInterval { isBusy ? Self.fastStale : Self.slowStale }
     var staleAt: Date { min(at.addingTimeInterval(staleAfter), cueUntil ?? .distantFuture) }
 
@@ -216,7 +203,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
 nonisolated extension CueNow: SnapshotFile { static let fileName = "cue.json" }
 
 nonisolated extension CueNow {
-    /// 数字账的一项：哪一种、几件。
     struct Entry: Hashable, Sendable, Identifiable {
         enum Kind: Hashable, Sendable {
             case asks, reply, advancing, subagents
@@ -333,7 +319,6 @@ nonisolated extension CueNow.Item.Kind {
         }
     }
 
-    /// 这一件的样子写成字（展开态与锁屏的每一行）。
     var label: String {
         switch self {
         case .asks: String(localized: "等你拍板")

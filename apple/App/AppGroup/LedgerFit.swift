@@ -3,12 +3,10 @@ import SwiftUI
 /// 当帧按理想宽度选排并放置，不依赖布局后的回调或视图状态。
 struct LedgerFit: Layout {
     struct Line {
-        /// 子视图（`items`）的序号。
         let items: [Int]
         let gap: CGFloat
     }
 
-    /// 各排里出现过的项，各一次。
     let items: [CueNow.Entry]
     let lines: [Line]
     /// 序号小于它的是要你管的那组。

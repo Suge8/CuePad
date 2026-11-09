@@ -22,7 +22,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     /// 点开的通知交给它（`pendingDeepLink`）；资料库打开后接上（早于系统交来点开的通知）。
     @ObservationIgnored weak var services: AppServices?
     #if os(macOS)
-    /// 主窗口：前台怎么呈现、你在不在看（`Workspace.presentation`）。
     @ObservationIgnored weak var workspace: Workspace?
     @ObservationIgnored let sounds = AlertSounds()
     #endif
@@ -64,7 +63,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// 尚未决定时弹一次系统提示；已决定过的直接返回。
     func requestAuthorization() async {
         guard delivers else { return }
         do {
@@ -249,7 +247,6 @@ nonisolated enum AlertRoute: Equatable {
         }
     }
 
-    /// 说的是哪个会话（会话记录 id）；Cue 的为 nil。
     var session: UUID? {
         if case .session(let tap) = self { tap.sessionState } else { nil }
     }
