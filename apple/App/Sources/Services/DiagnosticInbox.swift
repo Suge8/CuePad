@@ -4,7 +4,7 @@ import Foundation
 import os
 
 /// Mac 上把各台设备经 iCloud 送来的诊断（`DeviceDiagnostic`）落成文件：`<directory>/<设备名>/<文件名>`，云上删了的这里也删，
-/// 与各台的存档一样只留最近几份。`directory` 是 `LibraryLocation.deviceLogs`（正式版在 ~/Library/Logs/CuePad，不在资料库里：
+/// 与各台的存档一样只留最近几份。`directory` 是 `LibraryLocation.deviceLogs()`（正式版在 ~/Library/Logs/CuePad，不在资料库里：
 /// agent 读它不碰真实资料库；隔离库在自己目录里），`xc.sh diag` 读它、符号化。
 /// 进度（拉到哪的令牌、设备 ID 对应哪个目录）记在 `directory/.inbox.json`；令牌失效或文件丢了就从头读一遍、照云上的全部重写。
 actor DiagnosticInbox {

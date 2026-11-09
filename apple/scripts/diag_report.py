@@ -54,7 +54,8 @@ def summarize(reports):
         return
     groups = {}
     for r in reports:
-        signature = (r["who"], r["title"], r["explanation"], r["reasons"][:1], r.get("trail", [])[:1], [(f["binary"], f["offset"]) for f in r["frames"]])
+        # 原因里的数字抹掉再比（同 CrashReport.cause）：CPU 用时、地址每次都不同
+        signature = (r["who"], r["title"], r["explanation"], [re.sub(r"\d+", "#", x) for x in r["reasons"][:1]], r.get("trail", [])[:1], [(f["binary"], f["offset"]) for f in r["frames"]])
         groups.setdefault(json.dumps(signature, ensure_ascii=False), []).append(r)
     ordered = sorted(groups.values(), key=lambda g: max(r["date"] for r in g), reverse=True)
     print(f"\n诊断摘要：{len(reports)} 份，{len(ordered)} 种")
@@ -69,8 +70,11 @@ def summarize(reports):
             print(f'版本：{"、".join(versions)}')
         if r["explanation"]:
             print(f'说明：{r["explanation"]}')
-        for reason in r["reasons"][:3]:
+        reasons = list(dict.fromkeys(x for g in group for x in g["reasons"]))  # 同一种各次的原因原文，同 DiagnosticSummary
+        for reason in reasons[:3]:
             print(f"原因：{reason}")
+        if len(reasons) > 3:
+            print("…")
         for step in r.get("trail", []):
             print(f"  {step}")
         if r["frames"]:

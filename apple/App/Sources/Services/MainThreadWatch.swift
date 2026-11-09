@@ -115,8 +115,9 @@ nonisolated final class MainThreadWatch: Sendable {
         recorded?(write)
     }
 
-    /// 型号代号（iPhone18,1、Mac16,11）。
+    /// 型号代号（iPhone18,1、Mac16,11）。模拟器里 uname 给的是主机的 arm64，用它模拟的型号。
     static var device: String {
+        if let simulated = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] { return simulated }
         var info = utsname()
         uname(&info)
         return withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }

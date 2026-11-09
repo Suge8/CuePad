@@ -19,7 +19,7 @@ extension AppServices {
             })
         #if os(macOS)
         if let cloud {
-            let inbox = DiagnosticInbox(directory: location.deviceLogs, sync: cloud)
+            let inbox = DiagnosticInbox(directory: location.deviceLogs(), sync: cloud)
             follow { await inbox.watch(every: DebugHooks.diagnosticsEvery ?? DiagnosticInbox.interval) }
         }
         #endif
