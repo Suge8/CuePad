@@ -14,7 +14,7 @@ let pinnedClaude = PinnedAgent.claude
 /// 录像框架登记各家可执行文件用的名字（`AgentTape.realExecutables`）：框架整体删除前不动它，Claude 已没有录像带
 let claudeURL: URL? = pinnedClaude.executable
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
-let claudeTestModel = "haiku", claudeOtherModel = "sonnet"
+let claudeTestModel = ClaudeSandbox.model, claudeOtherModel = "sonnet"
 
 /// 256×256 纯红 PNG（32×32 的常被模型认成别的颜色）
 let redPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAAB+0lEQVR42u3TQQkAAAjAwPUvrX8reHAJBmsK3pIAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgAJMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAyAASTAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADADHAllMDvLkz2XNAAAAAElFTkSuQmCC")!
@@ -39,30 +39,6 @@ final class ClaudeTestbed {
     let log: ChangeLog
     private var terminals: [ClaudeTerminal] = []
     private var reading: Task<Void, Never>?
-
-    /// 起 Claude Code 用的环境：配置目录、HOME、XDG 目录都在 `root` 里（目录已建好），模型是 `model`。
-    /// 模型地址只管 /v1/messages：fast mode 检查、WebFetch 的安全检查等不经它，所以关掉非必要流量，再清掉订阅登录、别的认证通道与代理。
-    static func isolatedEnvironment(model: FakeModel, root: URL, signedIn: Bool = true) -> [String: String] {
-        for name in ["config", "home", "xdg-data", "xdg-state", "xdg-cache", "xdg-config"] {
-            try? FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true)
-        }
-        return [
-            "CLAUDE_CONFIG_DIR": root.appending(path: "config").path, "HOME": root.appending(path: "home").path,
-            "XDG_DATA_HOME": root.appending(path: "xdg-data").path, "XDG_STATE_HOME": root.appending(path: "xdg-state").path,
-            "XDG_CACHE_HOME": root.appending(path: "xdg-cache").path, "XDG_CONFIG_HOME": root.appending(path: "xdg-config").path,
-            "ANTHROPIC_BASE_URL": model.baseURL, "ANTHROPIC_API_KEY": signedIn ? apiKey : "",
-            "CLAUDE_CODE_OAUTH_TOKEN": "", "ANTHROPIC_AUTH_TOKEN": "", "CLAUDE_CODE_USE_BEDROCK": "", "CLAUDE_CODE_USE_VERTEX": "", "CLAUDE_CODE_USE_FOUNDRY": "",
-            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_TELEMETRY": "1", "DISABLE_ERROR_REPORTING": "1",
-            // 关了非必要流量，终端里的它照样去 downloads.claude.ai 装官方插件市场（2.1.318 经记录 CONNECT 的本机代理实测，每个进程一次）
-            "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL": "1",
-            "HTTP_PROXY": "", "HTTPS_PROXY": "", "ALL_PROXY": "", "http_proxy": "", "https_proxy": "", "all_proxy": "",
-            "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost",
-            // 不要自动记忆：叫它"记住"什么时它会先去翻记忆文件、要用 Bash，等你确认
-            "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-        ]
-    }
-
-    static let apiKey = "sk-ant-api03-cuepad-test-key-not-real-00000000"
 
     /// 剧本只认带工具清单的请求（一轮真正的对话，含子代理的）：上面那类旁问的转录里也有你的话，不能让它们撞上剧本。
     func on(_ prompt: String, _ steps: FakeReply...) {
@@ -106,14 +82,9 @@ final class ClaudeTestbed {
         for name in ["config", "library"] {
             try FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true)
         }
-        // 跳过首次启动的引导、"信任这个目录"与"用这个密钥吗"的询问
-        let seed: JSONValue = [
-            "hasCompletedOnboarding": true, "bypassPermissionsModeAccepted": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]]),
-            "customApiKeyResponses": ["approved": [.string(String(Self.apiKey.suffix(20)))], "rejected": []],
-        ]
-        try seed.data.write(to: config.appending(path: ".claude.json"))
+        try ClaudeSandbox.seed(config: config, trusting: work)
         if let settings { try Data(settings.utf8).write(to: config.appending(path: "settings.json")) }
-        environment = Self.isolatedEnvironment(model: model, root: root, signedIn: signedIn)
+        environment = ClaudeSandbox.environment(model: model, root: root, signedIn: signedIn)
             .merging(["CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path]) { $1 }
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
         store = try CueStore(location: .isolated(root.appending(path: "store", directoryHint: .isDirectory)))
