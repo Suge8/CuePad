@@ -54,6 +54,8 @@ Sparkle 2：密钥、appcast 与只发完整包见 `sparkle.sh` 头注释，更�
 
 enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用固定名字时，换包与换 appcast 之间有一段旧签名配新包的窗口，落后的客户端验签失败。所以上传顺序是：带构建号的新包 → `appcast.xml` → 官网包 → 删上一版带构建号的包；中途失败用该产物的 `--resume <公证 id>` 补齐。
 
+恢复沿用那次尝试已生成的 `appcast.xml`、官网包与带构建号的包，不重新签名（重新生成会换 `pubDate` 与 EdDSA 签名，线上已有的资产就不一致了）；上传前按 GitHub 给资产算的 sha256 比对，已一致的不重传，顺序不变。回读从 `SUFeedURL` 与官网地址取三个文件，轮询到都与本地一致：GitHub 的 CDN 在上传后 1–2 分钟内仍可能返回旧内容（#124）。上限 `READBACK_TIMEOUT`（默认 300 秒，间隔 `READBACK_INTERVAL` 默认 10 秒），超时失败并说明原因；这时线上资产已传完，等一会儿 `--resume` 只做回读。
+
 公开前只核对一条：线上最大的构建号（更新源声明的 `sparkle:version`，Sparkle 客户端据它判新旧；以及 Release 里带构建号的包）大于本次就拒绝，更新源读不到或没有 `sparkle:version` 也不发，迟到的恢复因此盖不掉新版；同号是同一版的重入。随后在归档来源提交上打 `mac/<构建号>` 标签并推到远端，远端同名标签指向别的提交时推送被拒、不碰资产；标签先于资产，所以标签在不代表上传与回读已完成。全机发布锁让上传与删包不会和另一次发布交错；将来有第二台发布机时要另补跨机互斥。
 
 装更新要重启 CuePad：托管的 Pi 撑得过重启（新版经桥认回），Claude Code、Codex、OpenCode、Grok Build 这类随 App 退出的托管会话还在干活或等你确认时，重启推迟到它们空下来（`UpdateService`）。`-CuePadScene updatewait` 验托管的 Pi 在干活时更新直接装。
