@@ -106,7 +106,6 @@ extension CueKeeper {
         if !ids.isEmpty { save() }
         try await store.markCueMessagesDelivered(ids)
         unfetchable.subtract(ids)
-        guard !ids.isEmpty else { return }
         let upload = setup.upload
         Task { await upload(ids) }
     }
