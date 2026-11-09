@@ -148,6 +148,30 @@ import Testing
     #expect(try await store.pendingSync().deletes.isEmpty)
   }
 
+  /// 同一份内容两台各自登记过：这台编辑删图、再永久删卡后不再引用它，另一台的卡片还没到。启动清理只收这台登记的那条，
+  /// 另一台的记录与本机文件都留着，卡片到了有图。
+  @Test func cleanupKeepsAnotherDevicesRecordOfTheSameContent() async throws {
+    let png = pngData(width: 11, height: 11, shade: 0.33)
+    let key = try await inEndedRun { earlier in
+      let key = try earlier.files.store(png)
+      let card = try await earlier.createCard(body: "![](cuepad://file/\(key))")
+      try await earlier.updateCard(card.id) { $0.body = "图删了" }
+      try await earlier.purgeCard(card.id)
+      return key
+    }
+    let other = try Fixture()
+    _ = try other.store.files.store(png)
+    let card = try await other.store.createCard(body: "看 ![](cuepad://file/\(key))")
+    let theirs = try #require(try RawDB(other.url).rows("SELECT id FROM attachments").first?[0])
+    _ = try await store.applyRemote([.save(try #require(try await other.store.syncRow(recordName: theirs)), systemFields: Data())])
+
+    _ = try await store.removeStrayFiles(drafts: [])
+    #expect(try RawDB(fixture.url).rows("SELECT id FROM attachments") == [[theirs]])
+    #expect(store.files.fileURL(for: key) != nil)
+    _ = try await store.applyRemote([.save(try #require(try await other.store.syncRow(recordName: card.id.uuidString.lowercased())), systemFields: Data())])
+    #expect(try await store.hasAttachment(key) && store.files.fileURL(for: key) != nil)
+  }
+
   /// 键来自同步记录：拼不出附件目录外的路径。
   @Test(arguments: ["../cuepad.db", "deadbeef", String(repeating: "0", count: 64), String(repeating: "0", count: 64) + "./x"])
   func unknownOrMalformedKeyIsNotFound(key: String) throws {

@@ -26,8 +26,8 @@ extension CueStore {
   /// 回收时没删成的）；这台设备登记的记录（`registeredHere`）连记录一起删（编辑时删掉了图、再永久删卡：永久删除只看卡片当时正文里的键）。
   /// 别处来的记录不收：同步乱序，记录可能先于引用它的卡片到，这时没人引用不等于没人用，删了还会把删除同步出去、别的设备上的图找不回来。
   /// 升级（95）前就有的记录也算别处来的，漏下的照旧留着。
-  /// 剩下的边界同永久删除（`reclaimAttachments`，按键删这个键的所有记录）：同一份内容这台与别的设备各登记过、别的设备的卡片还没到时，
-  /// 收这台的记录会连同那台的一起删。与只看"有没有引用"时的窗口不同，它要两台恰好存过同一份内容、这台又已不再引用，不是每张别处来的图都会撞上。
+  /// 只删这台登记的那几行，不按键删这份内容的全部记录（永久删除 `reclaimAttachments` 按键删：那是用户明确要删这张卡，这里只是回收本机的垃圾）：
+  /// 同一份内容别的设备也登记过时，它那条与本机文件都留着（文件回收看到还有记录就不删），每台只回收自己登记的。
   /// 某个运行目录或文件删不掉不挡别的：都清过一遍后，连同删掉的个数一起抛 `strayFilesNotRemoved`。
   public func removeStrayFiles(drafts: [String]) throws -> Int {
     let drafted = Set(drafts.flatMap(CueFormat.attachmentKeys(in:)))
@@ -35,7 +35,10 @@ extension CueStore {
     let kept = files.heldKeys().union(drafted)
     try write {
       let recorded = try db.query("SELECT hash, format FROM attachments WHERE registeredHere = 1") { AttachmentKey.make(hash: $0.text(0), format: $0.text(1)) }
-      _ = try reclaimAttachments(Set(recorded).subtracting(kept))
+      for key in Set(recorded).subtracting(kept) where try !isAttachmentReferenced(key) {
+        guard let parts = AttachmentKey.parts(key) else { continue }
+        try db.run("DELETE FROM attachments WHERE hash = ? AND format = ? AND registeredHere = 1", [parts.hash, parts.format])
+      }
     }
     let removed = try reclaimFiles(candidates: files.unheldKeys) { key, error in failed.append("附件 \(key)：\(error)") }
     guard failed.isEmpty else { throw CueStoreError.strayFilesNotRemoved(removed: removed, failed: failed) }
