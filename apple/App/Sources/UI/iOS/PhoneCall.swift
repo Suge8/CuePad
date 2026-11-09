@@ -156,8 +156,9 @@ private extension VoiceCallProjection.Readback {
     }
 }
 
-/// 手机通话条（`CueVoiceView`）盖在"对 Cue 说"那块玻璃上（`CueComposer` 让出它，`Composer.yielded`），与它的通话详情。
-/// 只读投影（`phoneVoiceViewState`），动作经 `performPhoneVoice`；动作的结果与被拒当场用提示条说。条只在通话中（`active`）。
+/// 通话中"对 Cue 说"两颗圆钮之间的那一段（`CueComposer` 让出文字那一栏，`Composer.yielded`；两颗圆钮自己原地换成静音与挂断），与它的通话详情。
+/// 这一段一直挂着、只按在不在通话淡入淡出：接通又马上挂断时从此刻的透明度接着走，不重建、不闪；声纹在不在通话时收成正中一点，接通时从那一点长开。
+/// 只读投影（`phoneVoiceViewState`），动作经 `runPhoneVoice`。
 struct PhoneCall: ViewModifier {
     let active: Bool
     @Environment(Workspace.self) private var workspace
@@ -167,21 +168,23 @@ struct PhoneCall: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .bottom) {
-                if active {
-                    // 与输入框一行时同高：静音、挂断正对"＋"与发送
-                    PhoneCallBar(feedback: feedback)
-                        .frame(height: ComposerMetrics.lineSlot(line: ComposerField.lineHeight(typeSize)))
-                        .transition(.opacity)
-                }
+                // 与输入框一行时同高，左右让出两颗圆钮：居中按整条输入框算，两颗钮在不在都不挪它
+                PhoneCallStatus(active: active, rejection: feedback.rejection)
+                    .padding(.horizontal, ComposerMetrics.slot)
+                    .frame(height: ComposerMetrics.lineSlot(line: ComposerField.lineHeight(typeSize)))
+                    .opacity(active ? 1 : 0)
+                    .allowsHitTesting(active)
+                    .readerHidden(!active)
+                    // 进来等字先走（`Composer.yielded` 同一拍），走时先走、字再回来
+                    .animation(active ? Motion.fade.delay(Motion.Fade.yield) : Motion.yield, value: active)
             }
-            .animation(Motion.fade, value: active)
             .panel(isPresented: Binding { workspace.voiceDetails != nil } set: { if !$0 { workspace.voiceDetails = nil } },
                    style: .bubble(workspace.voiceDetails ?? .unanchored, width: .fixed(360))) {
-                PhoneVoiceHost { state, perform in
+                PhoneVoiceHost { state, _ in
                     CueVoiceDetails(presentation: { state.shared(rejection: feedback.rejection) }, action: { intent in
                         switch intent {
-                        case .hangUp: feedback.run(.hangUp, in: workspace, perform: perform)
-                        case .perform(let operation): feedback.run(operation, in: workspace, perform: perform)
+                        case .hangUp: workspace.runPhoneVoice(.hangUp) { feedback.rejection = $0 }
+                        case .perform(let operation): workspace.runPhoneVoice(operation) { feedback.rejection = $0 }
                         case .toggleMute, .stopExecution: break
                         }
                     })
@@ -191,22 +194,65 @@ struct PhoneCall: ViewModifier {
     }
 }
 
-/// 单拆一个视图读通话的投影：听、说、静音换态只重算这一条，不重算输入框。
-private struct PhoneCallBar: View {
-    let feedback: PhoneVoiceFeedback
+/// 声纹与状态，点它看通话详情。单拆一个视图读通话的投影：听、说换态只重算这一段，不重算输入框。
+/// 状态字按最长的那一种留宽、整段在输入框正中：听、说、静音、连接、结束换字时声纹与字都不挪，换的字原地淡换。
+/// 不在通话时（正淡走）写"正在结束…"：结束的那一下不再冒出"通话已结束"。
+private struct PhoneCallStatus: View {
+    let active: Bool
+    let rejection: VoiceCommandResult.Rejection?
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let titles: [LocalizedStringResource] = [
+        CueVoiceActivity.connecting.title, CueVoiceActivity.listening.title, CueVoiceActivity.processing.title,
+        CueVoiceActivity.speaking.title, CueVoiceActivity.closing.title, "麦克风已静音",
+    ]
 
     var body: some View {
-        let state = workspace.phoneVoiceViewState
-        CueVoiceView(presentation: state.shared(rejection: feedback.rejection), detailsSource: Bindable(workspace).voiceDetails) { intent in
-            switch intent {
-            case .toggleMute: feedback.run(.setMuted(!state.muted), in: workspace, perform: workspace.performPhoneVoice)
-            case .hangUp: feedback.run(.hangUp, in: workspace, perform: workspace.performPhoneVoice)
-            case .perform(let operation): feedback.run(operation, in: workspace, perform: workspace.performPhoneVoice)
-            case .stopExecution: break
+        let presentation = workspace.phoneVoiceViewState.shared(rejection: rejection)
+        let title = active ? presentation.title : CueVoiceActivity.closing.title
+        CueVoiceDetailButton(source: Bindable(workspace).voiceDetails) {
+            HStack(spacing: Spacing.item) {
+                CueVoiceSignal(presentation: presentation, seed: !active)
+                ZStack(alignment: .leading) {
+                    ForEach(Self.titles, id: \.key) { Text($0).hidden() }
+                    Text(title)
+                        .foregroundStyle(palette.ink2)
+                        .overlay(alignment: .trailing) {
+                            if presentation.needsAttention {
+                                Image(.failure).foregroundStyle(palette.failure)
+                                    .alignmentGuide(.trailing) { $0[.leading] - Spacing.glyph }
+                                    .transition(Motion.pop(reduceMotion: reduceMotion))
+                            }
+                        }
+                        .animation(Motion.fade, value: presentation.needsAttention)
+                        .id(title.key)
+                        .transition(swap)
+                }
+                .animation(Motion.fade, value: title.key)
+                .font(Typography.body).lineLimit(1).minimumScaleFactor(0.7)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(.rect)
+        }
+        .disabled(!presentation.hasDetails)
+        .accessibilityLabel(Text(title))
+        .accessibilityValue(presentation.needsAttention ? Text("有问题") : Text(verbatim: ""))
+        .accessibilityHint(Text("通话详情"))
+        // 只在开着时撤：写一遍同样的 nil 也会让读它的视图（详情面板的开合）全部重算，正压在挂断那一帧上
+        .onChange(of: presentation.hasDetails) { _, available in
+            if !available, workspace.voiceDetails != nil { workspace.voiceDetails = nil }
         }
     }
+
+    /// 换字：旧的先走完（`yield`），新的从下面半行浮上来（减弱动态效果时只淡）：同一处不叠两行字，听、说来回换也读得出是"下一句"。
+    private var swap: AnyTransition {
+        let arrive: AnyTransition = reduceMotion ? .opacity : .opacity.combined(with: .offset(y: Self.rise))
+        return .asymmetric(insertion: arrive.animation(Motion.fade.delay(Motion.Fade.yield)), removal: .opacity.animation(Motion.yield))
+    }
+
+    private static let rise: CGFloat = 4
 }
 
 extension Workspace {
@@ -273,34 +319,34 @@ struct PhoneVoiceEndings: View {
     }
 }
 
+/// 详情里最近一次被拒的动作（详情另写一行），提示条已当场说过。
 @Observable private final class PhoneVoiceFeedback {
     var rejection: VoiceCommandResult.Rejection?
+}
 
-    /// 命令结果原样说出，被拒的另记一份给详情；不自动重发。
-    func run(_ action: PhoneVoiceAction, in workspace: Workspace, perform: @escaping (PhoneVoiceAction) async throws -> VoiceCommandResult.Outcome?) {
+extension Workspace {
+    /// 发出通话的一个动作（静音、挂断、详情里的各项）：结果原样用提示条说，被拒的另交给 `rejected`；不自动重发。
+    func runPhoneVoice(_ action: PhoneVoiceAction, rejected: @escaping (VoiceCommandResult.Rejection) -> Void = { _ in }) {
         Task {
             do {
-                if let result = try await perform(action) { report(result, in: workspace) }
+                switch try await performPhoneVoice(action) {
+                case .recorded: say("请求已记下")
+                case .stopRequested: say("停止请求已提交")
+                case .readbackQueued: say("已加入朗读队列")
+                case .rejected(let reason):
+                    rejected(reason)
+                    say(reason.phoneMessage, tone: .failure)
+                case nil: break
+                }
             } catch let issue as VoiceIssue {
-                workspace.say(issue.phoneMessage, tone: .failure)
+                say(issue.phoneMessage, tone: .failure)
             } catch let error as VoicePageError {
-                workspace.say(error.phoneMessage, tone: .failure)
+                say(error.phoneMessage, tone: .failure)
             } catch is VoiceSignalError {
-                workspace.say("通话操作未确认，请检查连接后重试", tone: .failure)
+                say("通话操作未确认，请检查连接后重试", tone: .failure)
             } catch {
-                workspace.fail(error)
+                fail(error)
             }
-        }
-    }
-
-    private func report(_ result: VoiceCommandResult.Outcome, in workspace: Workspace) {
-        switch result {
-        case .recorded: workspace.say("请求已记下")
-        case .stopRequested: workspace.say("停止请求已提交")
-        case .readbackQueued: workspace.say("已加入朗读队列")
-        case .rejected(let reason):
-            rejection = reason
-            workspace.say(reason.phoneMessage, tone: .failure)
         }
     }
 }

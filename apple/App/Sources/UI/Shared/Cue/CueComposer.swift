@@ -7,8 +7,9 @@ import SwiftUI
 /// 没启用时也不放：发出去只是记下，还没有在哪台 Mac 运行，那几颗只能写一份选不了的缺省。
 /// Cue 运行在别的 Mac 上时工具排末尾的 Mac 图标说明在哪台（`CueNow.elsewhere`）：那几枚胶囊选的就是那台上的大脑。
 /// 手机上它们在 Cue 面板的第一行（`CueHeader`），输入框里不再放一份：聚焦才露出的胶囊找不到。
-/// 手机与 iPad 的 Cue 页上，右下那一颗空着时是和 Cue 通话、有草稿时是发送（同一颗钮原地换，`SendGlyph`）；通话中这块玻璃原地变成通话条
-/// （`PhoneCall`：静音、声纹与状态、挂断），草稿与焦点留着，挂断后原样回来。在不在通话只看 `VoiceService.canStart`，界面不另存一份。
+/// 手机与 iPad 的 Cue 页上，右下那一颗空着时是和 Cue 通话、有草稿时是发送（同一颗钮原地换，`SendGlyph`）；通话中这块玻璃原地变成通话条：
+/// "＋"原地换成静音、通话钮原地换成挂断，字淡走、两颗之间摆上声纹与状态（`PhoneCall`），焦点挂断后还回来。
+/// 在不在通话、静没静音只看 `VoiceService`，界面不另存一份。
 /// Mac 的通话入口在工具排末尾（`CueVoiceComposerEntry`），通话条在 Cue 栏顶上（`CueVoicePanel`）。
 struct CueComposer: View {
     enum Style: Equatable {
@@ -43,7 +44,7 @@ struct CueComposer: View {
             draft: Bindable(cue).draft, prompt: cue.canHear ? "对 \(cue.name) 说" : "记下灵感",
             label: "对 \(cue.name) 说",
             focus: $focused, accepts: .files,
-            form: form, showsSendEmpty: sending || calls, yielded: inCall, tooled: tooled, shortcuts: shortcuts,
+            form: form, showsSendEmpty: sending || calls || inCall, yielded: inCall, lead: lead, tooled: tooled, shortcuts: shortcuts,
             header: { EmptyView() },
             tools: { tools },
             send: { sendButton })
@@ -76,18 +77,19 @@ struct CueComposer: View {
     }
 
     /// 发送钮：点是发送，长按是"只记下"（`MenuButton`：菜单开着时输入框锁在原位）。Cue 没启用时只有记下。
-    /// 手机空着时同一颗是通话（`calls`），长按没有菜单。
+    /// 手机空着时同一颗是通话（`calls`）、通话中是挂断，长按没有菜单。
     @ViewBuilder private var sendButton: some View {
         let cue = workspace.cue
         if cue.canHear {
+            let hangingUp = inCall && workspace.services.voice.phase == .closing
             MenuButton(
                 sections: hasDraft ? [ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "只记下（记成灵感）", image: .icon(.write), choose: note)])] : [],
-                primary: calls ? call : send, press: .button,
-                accessibilityLabel: calls ? "和 Cue 通话" : "发送", hint: calls ? nil : "长按只记下"
+                primary: inCall ? hangUp : calls ? call : send, press: .button,
+                accessibilityLabel: inCall ? "结束通话" : calls ? "和 Cue 通话" : "发送", hint: inCall || calls ? nil : "长按只记下"
             ) {
-                SendGlyph(hasDraft ? .ready : calls ? .call(enabled: callReady) : .sending)
+                SendGlyph(hasDraft ? .ready : inCall ? (hangingUp ? .stopping : .hangUp) : calls ? .call(enabled: callReady) : .sending)
             }
-            .disabled(!hasDraft && !calls)
+            .disabled(inCall ? hangingUp : !hasDraft && !calls)
             .relayLaunch(launch, color: palette.signature)
             .fixedSize()
             #if os(macOS)
@@ -132,9 +134,27 @@ struct CueComposer: View {
     private var inCall: Bool { phonePage && !workspace.services.voice.canStart }
     private var callReady: Bool { workspace.services.voice.startUnavailableReason == nil }
 
+    /// 通话中左下那一颗是静音（"＋"原地换）：接通前、正在结束时不能点。
+    private var lead: ComposerLead? {
+        #if os(iOS)
+        guard inCall else { return nil }
+        let voice = workspace.services.voice
+        return ComposerLead(icon: voice.isMuted ? .muted : .microphone, label: voice.isMuted ? "取消静音" : "静音",
+                            on: voice.isMuted, enabled: voice.canMute) { workspace.runPhoneVoice(.setMuted(!voice.isMuted)) }
+        #else
+        nil
+        #endif
+    }
+
     private func call() {
         #if os(iOS)
         workspace.callCue()
+        #endif
+    }
+
+    private func hangUp() {
+        #if os(iOS)
+        workspace.runPhoneVoice(.hangUp)
         #endif
     }
     /// 空着时的发送中：你最近一句还在路上（与气泡、头像同一个事实，`CueWatch.sending`）。

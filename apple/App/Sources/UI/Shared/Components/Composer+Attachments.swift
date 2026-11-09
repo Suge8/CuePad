@@ -3,15 +3,23 @@ import CueText
 import SwiftUI
 
 extension Composer {
+    /// "＋"，或调用方换上的那一颗（`lead`）：同一颗钮，换的只是字形、底与点了做什么，换时字形原地替换、底渐变。
     var plus: some View {
         let cards = accepts.contains(.cards) ? [ChoiceMenu.Choice(title: "选灵感或任务", image: .icon(.pickCards)) { source = .cards }] : []
         let files = accepts.contains(.files) ? ComposerSource.fileChoices.map { choice in
             ChoiceMenu.Choice(title: choice.title, image: .icon(choice.icon)) { source = choice.source }
         } : []
-        return MenuButton(sections: [ChoiceMenu.Section(choices: cards + files)], press: .button, accessibilityLabel: "添加") {
-            CircleGlyph(fill: palette.fill) { Image(.add).font(Glyph.control.weight(.semibold)).foregroundStyle(palette.ink) }
-                .frame(width: ComposerMetrics.slot, height: buttonHeight)
+        return MenuButton(sections: lead == nil ? [ChoiceMenu.Section(choices: cards + files)] : [], primary: lead?.act, press: .button,
+                          accessibilityLabel: lead?.label ?? "添加") {
+            CircleGlyph(fill: lead?.on == true ? palette.selection : palette.fill) {
+                Image(lead?.icon ?? .add).font(Glyph.control.weight(.semibold))
+                    .foregroundStyle(lead?.enabled == false ? palette.ink3 : palette.ink)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .frame(width: ComposerMetrics.slot, height: buttonHeight)
+            .animation(Motion.fade, value: lead)
         }
+        .disabled(lead?.enabled == false)
         .fixedSize()
     }
 

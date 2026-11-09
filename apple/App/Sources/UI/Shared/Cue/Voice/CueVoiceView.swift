@@ -1,8 +1,31 @@
 import SwiftUI
 
-/// 通话条：真实状态立即更新，只有声纹在图层里连续变形；进出与换态只淡、不挪，听、说、静音、结束都不改它的尺寸。
-/// 手机与 iPad 只在通话中出现，盖在"对 Cue 说"那块玻璃上（`PhoneCall`）：静音在"＋"那一位、挂断在发送那一位，中间声纹与状态，点它看通话详情。
-/// Mac 常驻在 Cue 栏顶上，开始、关闭、失败都不挤动聊天；详情在行尾的"⋯"。
+/// 多个入口共用一个呈现来源；只量实际按钮，结束后的空通话栏不能充当锚点。
+struct CueVoiceDetailButton<Label: View>: View {
+    @Binding var source: BubbleSource?
+    var activate: (() -> Void)?
+    @ViewBuilder let label: () -> Label
+    @State private var frame: CGRect?
+
+    var body: some View {
+        Button {
+            if let activate { activate() }
+            else { source = frame.map(BubbleSource.control) ?? .unanchored }
+        } label: { label() }
+            .buttonStyle(PressStyle())
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { next in
+                if let frame, source == .control(frame) { source = .control(next) }
+                frame = next
+            }
+            .onDisappear {
+                if let frame, source == .control(frame) { source = nil }
+            }
+    }
+}
+
+#if os(macOS)
+/// Mac 的通话条，常驻在 Cue 栏顶上：真实状态立即更新，只有声纹在图层里连续变形；开始、关闭、失败都不挤动聊天，详情在行尾的"⋯"。
+/// 手机与 iPad 没有单独的条：通话就在"对 Cue 说"里（`CueComposer`、`PhoneCall`）。
 struct CueVoiceView<Operation: CueVoiceOperation>: View {
     let presentation: CueVoiceState<Operation>?
     @Binding var detailsSource: BubbleSource?
@@ -12,12 +35,7 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
     private var active: Bool { presentation?.active == true }
     private var closing: Bool { presentation?.activity == .closing }
     private var muted: Bool { presentation?.muted == true }
-    private var hasDetails: Bool {
-        guard let presentation else { return false }
-        return active || !presentation.issues.isEmpty || !presentation.readings.isEmpty
-            || !presentation.executions.isEmpty || presentation.canStopExecution
-            || presentation.requestPage != nil || presentation.replyPage != nil || presentation.executionPage != nil
-    }
+    private var hasDetails: Bool { presentation?.hasDetails == true }
 
     var body: some View {
         content
@@ -26,63 +44,6 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
             }
     }
 
-    #if os(iOS)
-    private var content: some View {
-        HStack(spacing: 0) {
-            muteButton
-            CueVoiceDetailButton(source: $detailsSource) {
-                HStack(spacing: Spacing.item) {
-                    CueVoiceSignal(presentation: presentation)
-                    status.lineLimit(1)
-                    if presentation?.needsAttention == true {
-                        Image(.failure).foregroundStyle(palette.failure).readerHidden(true)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .contentShape(.rect)
-            }
-            .disabled(!hasDetails)
-            .accessibilityLabel(Text(presentation?.title ?? "和 Cue 通话"))
-            .accessibilityValue(presentation?.needsAttention == true ? Text("有问题") : Text(verbatim: ""))
-            .accessibilityHint(Text("通话详情"))
-            hangUpButton
-        }
-    }
-
-    private var status: some View {
-        Text(presentation?.title ?? "和 Cue 通话")
-            .font(Typography.body)
-            .foregroundStyle(palette.ink2)
-            .contentTransition(.opacity)
-            .animation(Motion.fade, value: presentation?.title.key)
-    }
-
-    /// 与"＋"同一种圆钮；静音时换成划掉的麦克风、底深一档（同选中的胶囊）。
-    private var muteButton: some View {
-        Button { action(.toggleMute) } label: {
-            CircleGlyph(fill: muted ? palette.selection : palette.fill) {
-                Image(muted ? .muted : .microphone)
-                    .font(Glyph.control.weight(.semibold)).foregroundStyle(palette.ink)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .frame(width: ComposerMetrics.slot)
-            .animation(Motion.fade, value: muted)
-        }
-        .buttonStyle(PressStyle(.button))
-        .accessibilityLabel("静音")
-        .accessibilityAddTraits(muted ? .isSelected : [])
-        .voiceSlot(presentation?.canMute == true && !closing)
-    }
-
-    private var hangUpButton: some View {
-        Button { action(.hangUp) } label: {
-            SendGlyph(.hangUp).frame(width: ComposerMetrics.slot)
-        }
-        .buttonStyle(PressStyle(.button))
-        .accessibilityLabel("结束通话")
-        .voiceSlot(active && !closing)
-    }
-    #else
     private var showsStatus: Bool { active || hasDetails || presentation?.activity == .failed }
 
     private var content: some View {
@@ -140,30 +101,6 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
         .help(Text("结束通话"))
         .voiceSlot(active && !closing)
     }
-    #endif
-}
-
-/// 多个入口共用一个呈现来源；只量实际按钮，结束后的空通话栏不能充当锚点。
-private struct CueVoiceDetailButton<Label: View>: View {
-    @Binding var source: BubbleSource?
-    var activate: (() -> Void)?
-    @ViewBuilder let label: () -> Label
-    @State private var frame: CGRect?
-
-    var body: some View {
-        Button {
-            if let activate { activate() }
-            else { source = frame.map(BubbleSource.control) ?? .unanchored }
-        } label: { label() }
-            .buttonStyle(PressStyle())
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { next in
-                if let frame, source == .control(frame) { source = .control(next) }
-                frame = next
-            }
-            .onDisappear {
-                if let frame, source == .control(frame) { source = nil }
-            }
-    }
 }
 
 /// 配置排只占一个固定入口；问题与朗读记录统一从常驻通话栏的详情进入，结束时不再增高回复框。
@@ -194,3 +131,4 @@ private extension View {
             .readerHidden(!visible)
     }
 }
+#endif
