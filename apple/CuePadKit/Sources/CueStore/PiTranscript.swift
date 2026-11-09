@@ -129,7 +129,7 @@ extension CueStore {
     let list = Self.idList(ids)
     let requests = try select(
       DeliveryRequest.self,
-      where: "id IN (SELECT value FROM json_each(?)) AND mode IN ('send', 'start')", [list])
+      where: "id IN (SELECT value FROM json_each(?)) AND mode IN (\(DeliveryMode.landsAsMessageSQL))", [list])
     let recorded = Set(try db.query(
       "SELECT deliveryID FROM sendRecords WHERE deliveryID IN (SELECT value FROM json_each(?))", [list]) { $0.uuid(0) })
     for request in requests where !recorded.contains(request.id) {
