@@ -2,7 +2,7 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 新灵感放在所在项目的最前（没指定的进默认项目）。项目不存在或已在回收站时默认抛 `invalidProject`；显式 `.useDefault` 才回落到默认项目。
+  /// 项目不存在或已在回收站时默认抛 `invalidProject`；显式 `.useDefault` 才回落到默认项目。
   public func createCard(in project: UUID = Project.defaultID, body: String = "", ifProjectMissing: MissingProject = .reject) throws -> Card {
     try write {
       let project = try requireLiveProject(project, ifMissing: ifProjectMissing)
@@ -10,9 +10,7 @@ extension CueStore {
     }
   }
 
-  /// 分享队列的一条入库成灵感：建卡与记下"这条已入库"（`capture` 是条目的稳定标识）在同一个事务里，同一条再来返回 nil、不重复建。
-  /// 项目失效策略同普通建卡；已入库条目先去重，不重新选择项目。
-  /// 条目删掉后调 `finishCapture` 忘掉标记；删失败重试时标记还在，只重试删除。
+  /// `capture` 是分享队列条目的稳定标识：建卡与记下标记在同一个事务里，同一条再来返回 nil。条目删掉后调 `finishCapture` 忘掉标记；删失败重试时标记还在，只重试删除。
   public func createCard(in project: UUID = Project.defaultID, body: String, capture: String, ifProjectMissing: MissingProject = .reject) throws -> Card? {
     try write {
       let key = Self.captureKey(capture)
@@ -28,7 +26,7 @@ extension CueStore {
 
   private static func captureKey(_ capture: String) -> String { "capture:\(capture)" }
 
-  /// 新任务（要做的卡片）放在所在项目顶层的最前，项目失效策略同普通建卡。正文不能为空，否则抛 `blankTaskContent`；第一行是标题，其余是它的正文（`CueLines.split`）。
+  /// 正文不能为空（`blankTaskContent`）；第一行是标题，其余是它的正文（`CueLines.split`）。
   public func createTask(_ body: String, in project: UUID = Project.defaultID, ifProjectMissing: MissingProject = .reject) throws -> Card {
     try requireContent(body)
     return try write {
@@ -37,9 +35,8 @@ extension CueStore {
     }
   }
 
-  /// 新子任务放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
-  /// 上级原本是叶子时，它的会话移到这个新子任务上（这一步就是已经在做的那件事，`CardLinks` 的规则）；上级的正文留在上级。
-  /// 上级已完成的不再算做完（`reopen`）：加子任务是明说还有活。
+  /// 上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。上级原本是叶子时，它的会话移到这个新子任务上（`CardLinks` 的规则）；
+  /// 上级已完成的重新打开（`reopen`）：加子任务是明说还有活。
   public func createTask(_ body: String, under parent: UUID) throws -> Card {
     try requireContent(body)
     return try write {
@@ -47,17 +44,16 @@ extension CueStore {
       guard try ancestors(of: parent).count + 1 < Card.maxTaskDepth else { throw CueStoreError.taskTooDeep }
       let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
       let step = try insertCard(body, project: link.project, parent: parent, todo: true, sortKey: SortKey.after(last))
-      try settle(around: [parent])  // 叶子加了第一个子任务：它的会话移到这个子任务上
+      try settle(around: [parent])
       try reopen([parent])
       return try find(Card.self, step.id) ?? step
     }
   }
 
-  /// 任务此刻干活的叶子：任务自己是叶子就是它；有子任务的是第一个没完成的子任务，没有就第一个子任务（`CardLinks.home(of:)`）。
   /// 开工、绑会话、交话都落到它上面。`task` 必须是任务。
   func homeLeaf(_ task: UUID) throws -> UUID { try CardLinks(db, around: [task]).home(of: task) }
 
-  /// 改正文、置顶、变量取值。归属、结构、状态、删除对调用方只读，各有专门的方法（编译期保证）。
+  /// 归属、结构、状态、删除对调用方只读（编译期保证），各有专门的方法。
   public func updateCard(_ id: UUID, _ edit: @Sendable (inout Card) -> Void) throws {
     try write {
       guard var card = try find(Card.self, id) else { throw CueStoreError.notFound }
@@ -68,8 +64,7 @@ extension CueStore {
     }
   }
 
-  /// 把灵感接到任务正文后面（填好的变量换成值，没填的留占位符），灵感进回收站，一个事务（拖一条灵感到任务上）：灵感说的是这件事的一部分，接上后在任务里接着读、开工时一起交出去。
-  /// 返回回执（`undo` 把正文改回、灵感恢复）。灵感不在了抛 `notFound`，落点不是任务抛 `notATask`。
+  /// 一个事务。返回回执（`undo` 把正文改回、灵感恢复）。灵感不在了抛 `notFound`，落点不是任务抛 `notATask`。
   @discardableResult
   public func mergeIdea(_ idea: UUID, into task: UUID) throws -> CardChange {
     try write {
@@ -88,8 +83,7 @@ extension CueStore {
     }
   }
 
-  /// 照灵感的正文（`ideaText`）新建一条任务，放在灵感所在项目顶层的最前，灵感进回收站，一个事务（拖一条灵感到"添加任务"上）。
-  /// 返回新任务与回执（`undo` 把新任务放进回收站、灵感恢复）。灵感不在了抛 `notFound`，正文是空白的抛 `blankTaskContent`。
+  /// 一个事务。返回新任务与回执（`undo` 把新任务放进回收站、灵感恢复）。灵感不在了抛 `notFound`，正文是空白的抛 `blankTaskContent`。
   public func createTask(fromIdea idea: UUID) throws -> (task: Card, change: CardChange) {
     try write {
       let (card, body) = try ideaText(idea)
@@ -100,16 +94,13 @@ extension CueStore {
     }
   }
 
-  /// 要变成任务的那条灵感（不在了、已是任务抛 `notFound`）与它要带过去的字：填好的变量换成值——值记在灵感上，
-  /// 带到任务里就读不到了，留着占位符会丢了它的意思；没填的留占位符。
+  /// 不在了、已是任务抛 `notFound`。填好的变量换成值：值记在灵感上，带到任务里就读不到了，留着占位符会丢了它的意思；没填的留占位符。
   private func ideaText(_ id: UUID) throws -> (Card, String) {
     guard let card = try find(Card.self, id), !card.isTask, card.deletedAt == nil else { throw CueStoreError.notFound }
     return (card, CueVariables.fill(card.body, values: card.variableValues).trimmingCharacters(in: .whitespacesAndNewlines))
   }
 
-  /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、
-  /// 挂成子任务、灵感挂到任务下都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），任务的子树超过 `Card.maxTaskDepth` 级任务抛 `taskTooDeep`。
-  /// 任务挂成子任务后，上级原来的会话按叶子的规则移到子任务上（`settle`）。
+  /// 排序、换项目、缩进、挂成子任务都是它。不能挂到自己或自己的下级下（`invalidParent`），任务的子树超过 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
   /// 返回回执（`undo` 把它放回原来的位置：原来的上级或项目、原来的前一个同级）。
   @discardableResult
   public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
@@ -151,7 +142,7 @@ extension CueStore {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankTaskContent }
   }
 
-  /// 项目顶层（灵感与任务共用一个手动顺序）最前面的排序键。
+  /// 灵感与任务共用一个手动顺序。
   func firstTopKey(in project: UUID) throws -> String? {
     try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID = ? AND parentID IS NULL", [project]) { $0.textOrNil(0) } ?? nil
   }
@@ -166,7 +157,7 @@ extension CueStore {
     return card
   }
 
-  /// 下级（含已归档的）按原顺序提到 `card` 的位置（挂到它的上级下、排在它之后）：去掉要做、进回收站时用。返回被提的下级，`undo` 靠它放回去。
+  /// 下级（含已归档的）按原顺序提到 `card` 之后。返回被提的下级，`undo` 靠它放回去。
   @discardableResult
   func liftChildren(of card: Card, at now: Date) throws -> [UUID] {
     let children = try db.query("SELECT id FROM cards WHERE parentID = ? ORDER BY sortKey, id", [card.id]) { $0.uuid(0) }
@@ -192,7 +183,6 @@ extension CueStore {
     "[" + ids.map { "\"\($0.uuidString.lowercased())\"" }.joined(separator: ",") + "]"
   }
 
-  /// 待用户处理的正文冲突：原卡与副本都还在的卡对，最近产生的在前。
   public func conflicts() throws -> [CardConflict] {
     try select(
       Card.self,
@@ -203,7 +193,7 @@ extension CueStore {
     }
   }
 
-  /// 选定保留的版本并删除副本。原卡已不存在时，副本是唯一的版本：转为普通卡，不删除。
+  /// 原卡已不存在时，副本是唯一的版本：转为普通卡，不删除。
   public func resolveConflict(copy id: UUID, keep choice: ConflictChoice) throws {
     try removingFiles {
       try write {
@@ -224,8 +214,7 @@ extension CueStore {
     }
   }
 
-  /// 把 `id` 放到同一范围内 `previous` 之后：只改它自己的排序键；
-  /// 两侧键相同（多设备并发产生）时，重排该范围内所有键。
+  /// 只改它自己的排序键；两侧键相同（多设备并发产生）时才重排该范围内所有键。
   fileprivate func place(
     scope: String, _ scopeArguments: [any SQLBindable] = [], id: UUID, after previous: UUID?
   ) throws {
