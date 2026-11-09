@@ -59,7 +59,8 @@ struct RealHostTests {
 
         pi.model.on("看环境", .call("bash", ["command": "printf '%s' \"${CUEPAD_HOSTED-unset}\" > '\(seen.path)'"]), .say("TOOL_DONE"))
         try await bridge.send(PiMessage(text: "看环境"), to: resumed.id)
-        try await eventually("子进程写下了它看到的") { (try? String(contentsOf: seen, encoding: .utf8)) != nil }
+        // `>` 先建出空文件、printf 才写进去：等到有内容
+        try await eventually("子进程写下了它看到的") { (try? String(contentsOf: seen, encoding: .utf8))?.isEmpty == false }
         #expect(try String(contentsOf: seen, encoding: .utf8) == "unset")
 
         let log = ChangeLog(bridge)

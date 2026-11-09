@@ -143,10 +143,15 @@ private final class Budget: Sendable {
 public indirect enum FakeReply: Sendable {
   case say(String)
   case call(String, [String: any Sendable])
+  /// Responses 的自由格式工具调用（`custom_tool_call`，输入是原文；Codex 代码模式的 `exec` 收一段 JS）
+  case custom(String, String)
+  /// Responses 的客户端工具搜索（Codex 把 MCP 工具藏在 `tool_search` 后面，要先搜才能调）
+  case search(String)
   /// 回 HTTP 错误（默认 400），`message` 是错误原文
   case fail(String, status: Int = 400)
-  /// 先说这几段，然后不说完也不结束，直到 Agent 断开（停下这一轮）
-  case stream([String])
+  /// 先说这几段，请求不结束：没给闸门就一直不说完，直到 Agent 断开（停下这一轮）；给了就停在闸门上，放行后照说完的一句收尾
+  /// （回答就是这几段连起来）。Agent 先断开就不收尾，也不占用放行
+  case stream([String], until: FakeGate? = nil)
   /// 停在闸门上：放行一次后照 `then` 答；Agent 先断开（停下这一轮）就不答，也不占用放行
   case held(FakeGate, then: FakeReply)
 

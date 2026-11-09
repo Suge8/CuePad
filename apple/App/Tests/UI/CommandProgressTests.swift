@@ -1,4 +1,5 @@
 #if os(macOS)
+import CuePi
 import CueStore
 import CueTestSupport
 import Foundation
@@ -7,8 +8,11 @@ import Testing
 
 @MainActor
 struct CommandProgressTests {
-    let app = TestApp()
+    let clock = ManualTiming()
+    let app: TestApp
     var store: CueStore { app.services.store }
+
+    init() { app = TestApp(timing: clock.timing) }
 
     private func command() async throws -> DeliveryRequest {
         let workspace = Workspace(services: app.services)
@@ -38,6 +42,10 @@ struct CommandProgressTests {
         let request = try await command()
         #expect(try await progress() == .running("/compact"))
         try await app.services.executor.start()
+        if fault == "timeout" {
+            try await eventually("命令交给了宿主") { ext.received.contains("command") }
+            clock.advance(AgentTimeouts.ack)
+        }
         let result = try await store.outcome(of: request)
         #expect(result.status == .known(.unconfirmed))
         #expect(try await progress() != .running("/compact"))

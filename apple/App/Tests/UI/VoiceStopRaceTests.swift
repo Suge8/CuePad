@@ -107,9 +107,9 @@ struct VoiceStopRaceTests {
         }
     }
 
-    /// 这句话的工具是一个真进程：写下自己的 pid，等信号或 30 秒（会话的 Pi 与大脑连同一个假模型，这条规则先于大脑的剧本认）
+    /// 这句话的工具是一个真进程：写下自己的 pid（先写别名再改名：测试见到文件就读，直接写会读到空的），等信号或 30 秒（会话的 Pi 与大脑连同一个假模型，这条规则先于大脑的剧本认）
     private func work(_ name: String, in rig: CueHostTests.Rig) -> String {
-        let command = "python3 -c 'import os,signal;open(\"\(name).pid\",\"w\").write(str(os.getpid()));signal.alarm(30);signal.pause()'"
+        let command = "python3 -c 'import os,signal;open(\"\(name).tmp\",\"w\").write(str(os.getpid()));os.rename(\"\(name).tmp\",\"\(name).pid\");signal.alarm(30);signal.pause()'"
         // 只认会话收到的那句原话：大脑那边的请求里也带着它（"请对隔离会话说「WORK-A」"）
         rig.model.server.on({ $0.prompt == "WORK-\(name)" }) { $0.step == 0 ? .call("bash", ["command": command]) : .say("TOOL_DONE") }
         return "WORK-\(name)"

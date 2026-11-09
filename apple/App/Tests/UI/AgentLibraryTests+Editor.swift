@@ -7,7 +7,7 @@ import Testing
 
 extension AgentLibraryTests {
     @Test func 规则的文件页自动存_跟上别处的改动_两边都改时由你选() async throws {
-        let file = agents.appending(path: "AGENTS.md")
+        let file = rules
         let keeping = keep()
         defer { keeping.cancel() }
         let workspace = Workspace(services: services)
@@ -89,7 +89,7 @@ extension AgentLibraryTests {
     }
 
     @Test func 写入途中别处改了_冲突提示保持() async throws {
-        let file = agents.appending(path: "AGENTS.md")
+        let file = rules
         try write("# a\n", file)
         let keeping = keep()
         defer { keeping.cancel() }
@@ -111,7 +111,7 @@ extension AgentLibraryTests {
     }
 
     private func ready(_ text: String) async throws -> (FileDraft, Task<Void, Never>, Task<Void, Never>) {
-        try write(text, agents.appending(path: "AGENTS.md"))
+        try write(text, rules)
         let keeping = keep()
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
@@ -130,7 +130,7 @@ extension AgentLibraryTests {
         await writing.value
         #expect(!draft.conflicted, "把自己的写入误报成冲突：\(draft.state)")
         await draft.leave()
-        #expect(read(agents.appending(path: "AGENTS.md")) == "v2\n" && draft.state == .saved)
+        #expect(read(rules) == "v2\n" && draft.state == .saved)
     }
 
     @Test func 冲突后文件改回基准或变得和我的一样_冲突自动解除() async throws {
@@ -142,7 +142,7 @@ extension AgentLibraryTests {
         draft.follow("# a\n")
         #expect(!draft.conflicted && draft.dirty, "回到基准：没有别处的改动了，我的字照常存")
         await draft.leave()
-        #expect(draft.state == .saved && read(agents.appending(path: "AGENTS.md")) == "mine\n")
+        #expect(draft.state == .saved && read(rules) == "mine\n")
 
         draft.changed(body: "mine2\n")
         draft.follow("ext2\n")

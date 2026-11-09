@@ -20,7 +20,7 @@ extension Workspace {
         guard let catalog else { return nil }
         #if os(macOS)
         if let directory = catalog.directories[project.id] {
-            return ProjectPlace(text: Dotted(Workspaces.shown(directory)), folder: URL(filePath: directory, directoryHint: .isDirectory), isPath: true)
+            return ProjectPlace(text: Dotted(UserHome.shown(directory)), folder: URL(filePath: directory, directoryHint: .isDirectory), isPath: true)
         }
         return ProjectPlace(text: Dotted(pendingFolder(of: project), ProjectFolders.pending), folder: nil, isPath: true)
         #else
@@ -31,7 +31,7 @@ extension Workspace {
     #if os(macOS)
     /// 接入面板说任务在哪做也读它。
     func pendingFolder(of project: Project) -> String {
-        Workspaces.shown(services.workspaces.directory(for: project.name).path(percentEncoded: false))
+        UserHome.shown(services.workspaces.directory(for: project.name).path(percentEncoded: false))
     }
     #endif
 }

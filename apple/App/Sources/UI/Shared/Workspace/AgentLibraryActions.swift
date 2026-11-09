@@ -75,6 +75,7 @@ extension Workspace {
         case .global: String(localized: "全局规则")
         case .piSystem: String(localized: "Pi 的系统提示")
         case .project(let id): catalog?.project(id)?.shownName ?? String(localized: "项目规则")
+        case .agent(let agent, let file): Dotted(String(localized: "\(agent.name) 的全局规则"), file).visible
         }
     }
 }

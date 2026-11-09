@@ -19,7 +19,7 @@ struct HistoryRulesTests {
         let model: FakeModel
         var store: CueStore { services.store }
 
-        init(idleLimit: Duration = AgentTimeouts.hostedIdle, providerFixture: URL? = nil, oauth: Bool = true, otherOAuthProviders: [String] = []) async throws {
+        init(providerFixture: URL? = nil, oauth: Bool = true, otherOAuthProviders: [String] = []) async throws {
             let directory = TestLibraries.makeDirectory()
             cwd = directory.appending(path: "work", directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
@@ -66,7 +66,7 @@ struct HistoryRulesTests {
             }
 
             bridge = PiBridge(socketDirectory: paths.socketDirectory)
-            host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi }, idleLimit: idleLimit)
+            host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi })
             let mac = MacDependencies(
                 pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: PiTerminalJumper(),
                 hostID: TestApp.hostID, workspaces: Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)),
@@ -121,7 +121,7 @@ struct HistoryRulesTests {
     // MARK: 后台托管的会话闲置退出
 
     @Test func 托管会话闲置退出后歇着_Cue与本机手机发话都唤醒它_用户结束才进历史() async throws {
-        let rig = try await Rig(idleLimit: .seconds(2))
+        let rig = try await Rig()
         defer { rig.shutdown() }
         let id = try await rig.host.open(in: rig.cwd, launchToken: "hosted", name: nil, model: nil, thinking: nil)
         let session = try #require(rig.bridge.session(id: id))
@@ -129,7 +129,7 @@ struct HistoryRulesTests {
         _ = try await rig.bridge.send(PiMessage(text: "开场"), to: id)
         try await eventually("回答落盘、索引跟上") { try await rig.replies(of: sessionID).last == "ECHO 开场" }
 
-        try await eventually("闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
+        try await idleExit(rig, sessionID)
         let rested = try await expectResting(rig, sessionID)
 
         let host = TestApp.hostID
@@ -137,26 +137,34 @@ struct HistoryRulesTests {
         let said = try #require(await CueTools(store: rig.store).call("task", ["action": "say", "session": rested.shortID, "text": "Cue 来的话"]))
         #expect(!said.isError, "\(said.text)")
         try await eventually("Cue 说的话得到回复") { try await rig.replies(of: sessionID).last == "ECHO Cue 来的话" }
-        try await eventually("Cue 说完再次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
+        try await idleExit(rig, sessionID)
         try await expectResting(rig, sessionID)
 
         // Mac 本机发话（"已结束"那条路：执行器用会话索引在后台唤醒）
         Workspace(services: rig.services).send("本机来的话", to: AgentTarget(session: sessionID))
         try await eventually("本机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 本机来的话" }
-        try await eventually("再次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
+        try await idleExit(rig, sessionID)
         let resting = try await expectResting(rig, sessionID)
 
         let request = try await rig.store.requestDelivery("手机来的话", to: resting.target, on: resting.hostID, mode: .send)
         let result = try await rig.services.store.outcome(of: request)
         #expect(result.failure == nil)
         try await eventually("手机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 手机来的话" }
-        try await eventually("又一次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
+        try await idleExit(rig, sessionID)
         let again = try await expectResting(rig, sessionID)
 
         let end = try await rig.services.end(again)
         #expect(try await rig.services.store.outcome(of: end).failure == nil)
         try await eventually("结束后进历史") { try await rig.records(.ended).map(\.sessionID) == [sessionID] }
         #expect(try await rig.records(.live).isEmpty)
+    }
+
+    /// 闲置到点时扩展做的事就是给自己发 SIGTERM（lifecycle.ts 的 IdleExit）；到点本身由 CuePiTests 的 anIdleHostedSessionExitsAfterTheIdleLimit 守，
+    /// 这里歇下就直接发，不等墙钟（托管的闲置时限最小一秒，四次就是好几秒）。
+    private func idleExit(_ rig: Rig, _ sessionID: String) async throws {
+        try await eventually("这一轮歇下") { rig.bridge.session(sessionID: sessionID)?.state == .settled }
+        kill(try #require(rig.bridge.session(sessionID: sessionID)).pid, SIGTERM)
+        try await eventually("闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
     }
 
     @discardableResult

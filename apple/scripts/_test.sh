@@ -1,6 +1,7 @@
 # shellcheck shell=bash
-# 被 xc.sh source：xc.sh test 的跑法（xc_test，参数同 xc.sh），退出码为测试的结果。
-# 用到 xc.sh 的 APPLE_DIR、DERIVED、platform、destination、device、TEST_TIME_LIMIT 与 _build.sh、_sim.sh、_lock.sh 的函数（调用时才读）。
+# 被 xc.sh source：`xc.sh test <mac|ios|ipad|kit> [xcodebuild 参数…]` 的全部（编译、跑、过滤输出、收尾结论）。
+# 用到 xc.sh 的 APPLE_DIR、DERIVED、platform、destination、device、TEST_TIME_LIMIT（调用时才读）；参数原样是 xc.sh 的 "$@"。
+# 退出码是 xcodebuild 的（exit，不返回）。
 xc_test() {
   # 用例断言的是中文界面：不随跑测试那台机器的系统语言变
   limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT" -testLanguage zh-Hans -testRegion CN)
@@ -13,9 +14,24 @@ xc_test() {
   # 完整输出写进 log
   log="$DERIVED/test.log"; : >"$log"; echo "完整输出（含 App 日志）：$log" >&2
   zwsp="$(printf '\342\200\213')"  # Swift Testing 在部分行首加零宽空格
-  noise="^($zwsp)*(◇ |✔ Suite .* passed after|✔ Test ([^ (]+\\(|\").* passed after)|^Test (Case|Suite) .* (started|passed)"  # 留着「✔ Test run with」那行汇总
-  noise+='|^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:.]+[+-][0-9]{4} [^ ]+\[[0-9]+:[0-9a-f]+\] |DVTAssertions|^(Details|Object|Method|Thread): |^Please file a bug|^\{ platform:|^--- xcodebuild: WARNING: Using the first'
-  shown() { tee -a "$log" | { grep --line-buffered -avE "$noise" || true; }; }
+  # 噪音：开始与通过的逐条记录（留着「✔ Test run with」汇总与失败）、跳过（汇总里按原因列）、XCTest 的空汇总（Executed 0 tests 只数 XCTest，Swift Testing 的在汇总里）、Xcode 与系统的杂讯
+  noise="^($zwsp)*(➜ |↳ (Testing Library Version|Target Platform)|✔ Suite .* passed after|✔ Test ([^ (]+\\(|\").* passed after)|^Test (Case|Suite) .* (started|passed)|^[[:space:]]+Executed [0-9]+ tests?, with 0 failures"
+  noise+='|DVTAssertions|IDETestOperationsObserverDebug|IDERunDestination|^(Details|Object|Method|Thread): |^Please file a bug|^\{ platform:|^--- xcodebuild: WARNING: Using the first|^CoreGraphics PDF has logged'
+  noise+='|^Testing started$|^(Command line invocation|Build settings from command line|Resolve Package Graph|Resolved source packages)|^    (/Applications/|[A-Z_]+ = )|^  (CuePadKit|SparkleBinary): '
+  # 多行的记录：日志记录以时间戳起头（SQLite 报错带多行语句、WebKit 的 XPC 沙箱报错），Swift Testing 的「◇ Test case passing … started」带着多行的参数值
+  # （XCTestOutputBarrier 还会把它们的行首切碎，所以「◇ Test」不限行首）。后续行没有记号，跟着记录头一起丢，丢到下一条别的输出起头
+  head="^($zwsp)*[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:.]+[+-][0-9]{4} [^ ]+\\[[0-9]+:[0-9a-f]+\\] |◇ (Test|Suite) "
+  start="^($zwsp)*(◇|✔|✘|↳|➜|Test |Testing |/|\\*\\*|Failing tests|[0-9]{4}-)"
+  shown() {
+    # 正则走环境变量：awk -v 会再解一遍反斜杠
+    tee -a "$log" | NOISE="$noise" HEAD="$head" START="$start" awk '
+      BEGIN { noise = ENVIRON["NOISE"]; head = ENVIRON["HEAD"]; start = ENVIRON["START"] }
+      NF == 0 { next }
+      $0 ~ start { dropping = 0 }
+      $0 ~ head { dropping = 1; next }
+      $0 ~ noise || dropping { next }
+      { print; fflush() }'
+  }
   # 编译只认收窄参数（只编要跑的测试目标）；-test-iterations 这类只给跑的那一步
   narrowed() { local a; for a in "$@"; do case "$a" in -only-testing:*|-skip-testing:*) printf '%s\0' "$a" ;; esac; done; }
   kit_test() {
@@ -36,12 +52,10 @@ xc_test() {
   fi
   # 点名的测试一个也没对上（名字或所在的 Suite 写错）时 xcodebuild 照样报成功。并行跑（-parallel-testing-enabled YES）时没有那两行汇总，
   # 只有每条用例一行 Test case '…' passed/failed on '…'
-  # 钉住的 Agent 没装时它的用例跳过、跳过的原因以「未覆盖：」开头（CueTestSupport 的 PinnedAgent）：汇总后列出，不让一片绿掩掉它们
-  uncovered="$(grep -aoE '未覆盖：[^"]+' "$log" | sort -u | sed 's/^/  /' || true)"
-  if [ -n "$uncovered" ]; then printf '没跑、不算通过的：\n%s\n' "$uncovered" >&2; fi
   if [[ " ${*:3}" == *" -only-testing:"* ]] && ! grep -aqE 'Test run with [1-9]|Executed [1-9][0-9]* tests?,|^Test case .* (passed|failed) on ' "$log"; then
     echo "-only-testing 一个测试也没对上：Swift Testing 写 <测试目标>/<Suite 类型名>/<函数名>()，用例所在的类型以源码为准" >&2
     status=1
   fi
-  return $status
+  python3 -I "$APPLE_DIR/scripts/test_summary.py" "$log" "$status" || echo "test_summary.py 出错了，上面的输出和退出码照旧有效" >&2
+  exit $status
 }

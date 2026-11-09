@@ -33,8 +33,11 @@ struct RealOpenCodeTests {
         try await store.piMessages(of: sessionID).filter { $0.role == .known(.pi) }.map(\.text)
     }
 
+    /// 发送：终端里 `opencode run` 的会话上了桥、答完歇下，CuePad 再发一句、改名、就地换模型与强度、压缩上下文，接入停了再开会话回来，服务停了会话下线。
     @Test func aTerminalSessionIsLiveInCuePadAndTakesMessagesAnswersAndSettings() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
+            // 2.2.6 的 `run` 没有后台服务时自己带一个私有的、跑完就走：终端用户的服务是先开着的
+            try await sandbox.run(["service", "start"])
             try await sandbox.run(["run", "Reply with exactly the word PONG and nothing else."])
 
             // 会话一建好就上桥，那时还没开始这一轮、也就还不知道用的模型（状态同样是歇着）：等回答进了资料库——这一轮的事件都已处理——再看歇下
@@ -43,6 +46,9 @@ struct RealOpenCodeTests {
                 return try await replies(store, live.sessionID).last?.contains("PONG") == true
             }
             let live = try #require(session(bridge))
+            let service = commandLine(of: try #require(sandbox.service).pid)
+            #expect(service.contains("/\(OpenCodeSandbox.pinned.name)/\(OpenCodeSandbox.pinned.version)/"), "起的不是钉住的 OpenCode：\(service)")
+            #expect(sandbox.model.requests.contains { $0.api == .chat && $0.model == "echo" && $0.prompt.contains("PONG") && !$0.tools.isEmpty }, "假模型没收到终端里的那句")
             #expect(live.cwd.resolvingSymlinksInPath() == sandbox.work.resolvingSymlinksInPath())
             #expect(live.model?.key == openCodeTestModel && live.context?.window != nil)
             #expect(live.commands.contains { $0.name == "review" } && live.commands.contains { $0.name == "compact" })
@@ -54,6 +60,7 @@ struct RealOpenCodeTests {
                 let messages = try await store.piMessages(of: live.sessionID)
                 return messages.contains { $0.deliveryID == delivery } && messages.last { $0.role == .known(.pi) }?.text.contains("AGAIN") == true
             }
+            #expect(sandbox.model.requests.contains { $0.prompt.contains("AGAIN") && $0.said.contains { $0.contains("PONG") } }, "第二句请求里该带着前一句")
 
             try await bridge.configure(PiConfig(name: "改过的名字"), in: live.id)
             try await eventually("改名到了") { session(bridge)?.displayName == "改过的名字" }
@@ -68,18 +75,6 @@ struct RealOpenCodeTests {
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/no-such-command", in: live.id) }
             try await bridge.configure(PiConfig(model: openCodeTestModel), in: live.id)
-
-            try await sandbox.api("PATCH", "/api/session/\(live.sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])
-            let marker = sandbox.work.appending(path: "approved.txt")
-            try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: touch approved.txt  Then reply DONE."), to: live.id)
-            try await eventually("在等你确认这条命令") { session(bridge)?.question?.isAnswerable == true }
-            let question = try #require(session(bridge)?.question)
-            #expect(session(bridge)?.state == .waitingForUser && question.text.contains("touch approved.txt"))
-            #expect(question.text.hasPrefix("允许 OpenCode 使用 shell？"), "四家同一句式：\(question.text)")
-            try await bridge.answer(.option(question.options[0]), to: question.promptID!, in: live.id)
-            try await eventually("答了之后命令跑了、这一轮做完") {
-                FileManager.default.fileExists(atPath: marker.path) && session(bridge)?.state == .settled
-            }
 
             try await bridge.command("/compact", in: live.id)
             try await eventually("压缩上下文留下一行") {
@@ -100,15 +95,62 @@ struct RealOpenCodeTests {
         }
     }
 
+    /// 权限：要确认的命令，允许了就跑、拒绝了不跑，各留下该留的一行。
+    @Test(arguments: [true, false]) func aCommandThatNeedsPermissionRunsWhenAllowedAndNotWhenDeclined(allow: Bool) async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let file = allow ? "approved.txt" : "declined.txt"
+            sandbox.model.on("Run the permission command", .call("shell", ["command": "touch \(file)", "description": "Run the requested command"]), .say("DONE"))
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-p", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            try await sandbox.api("PATCH", "/api/session/\(sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])
+            try await bridge.send(PiMessage(text: "Run the permission command"), to: id)
+            try await eventually("在等你确认这条命令") { session(bridge)?.question?.isAnswerable == true }
+            let question = try #require(session(bridge)?.question)
+            #expect(session(bridge)?.state == .waitingForUser && question.text.contains("touch \(file)"))
+            #expect(question.text.hasPrefix("允许 OpenCode 使用 shell？"), "四家同一句式：\(question.text)")
+            let asked = sandbox.model.requests.count
+            try await bridge.answer(allow ? .option(question.options[0]) : .confirmed(false), to: try #require(question.promptID), in: id)
+
+            try await eventually("答了之后这一轮做完") {
+                let messages = try await store.piMessages(of: sessionID)
+                return session(bridge)?.state == .settled && messages.last.map { allow ? $0.role == .known(.pi) && $0.text.contains("DONE") : $0.text == "已拒绝" } == true
+            }
+            #expect(FileManager.default.fileExists(atPath: sandbox.work.appending(path: file).path) == allow)
+            // 允许了模型拿到命令的结果接着说；拒绝了这一轮到此为止，不再问模型
+            #expect(allow ? sandbox.model.requests.count > asked : sandbox.model.requests.count == asked)
+        }
+    }
+
+    /// 停止：跑着命令时停下，对话里留下“已停止”，再说一句照常回答。
+    @Test func aStoppedRoundLeavesAStoppedLineAndTheNextMessageIsAnswered() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 30", "description": "Run the requested command"]), .say("SLEPT"))
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-s", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            try await bridge.send(PiMessage(text: "Run the slow command"), to: id)
+            // 停在跑工具的那一步（它带着 aborted 的错误结束），不是还没开始的时候
+            try await eventually("在跑命令") { session(bridge)?.state == .tool }
+            try await bridge.abort(id)
+            try await eventually("停下了，对话里留下'已停止'") {
+                let messages = try await store.piMessages(of: sessionID)
+                return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
+            }
+
+            try await bridge.send(PiMessage(text: "Reply with exactly the word NEXT."), to: id)
+            try await eventually("停下之后说的那句得到回答") { try await replies(store, sessionID).last?.contains("NEXT") == true && session(bridge)?.state == .settled }
+        }
+    }
+
+    /// 停止的另一条路：这一轮还在跑时又说一句，停下在跑的、开新的一轮回答新的这句。
     @Test func aMessageWhileBusyStopsTheRoundAndStartsANewOne() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
+            sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 60", "description": "Run the requested command"]), .say("SLEPT"))
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-q", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(bridge.session(id: id)?.sessionID)
-            try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 60 . Then reply SLEPT."), to: id)
+            try await bridge.send(PiMessage(text: "Run the slow command"), to: id)
             try await eventually("在跑命令") { session(bridge)?.state.isWorking == true }
             let delivery = UUID()
-            // 不说明作废，真模型会在新的一轮里把被停下的命令再跑一遍（实测 deepseek-flash）
-            try await bridge.send(PiMessage(text: "The earlier request is cancelled, do not run it. Now: what is 6+6", deliveryID: delivery.uuidString), to: id)
+            try await bridge.send(PiMessage(text: "Now: what is 6+6", deliveryID: delivery.uuidString), to: id)
 
             try await eventually("这句开的一轮答完") {
                 let messages = try await store.piMessages(of: sessionID)
@@ -121,39 +163,6 @@ struct RealOpenCodeTests {
             #expect(messages[..<now].contains { $0.text == PiNotice.stopped.rawValue }, "被停下的那一轮留了一行已停止")
             #expect(!messages[..<now].contains { $0.role == .known(.pi) }, "被停下的那一轮没有回答")
             #expect(messages.map(\.seq) == messages.map(\.seq).sorted())
-        }
-    }
-
-    @Test func aStoppedRoundLeavesAStoppedLine() async throws {
-        try await withOpenCode { sandbox, store, bridge, runtime in
-            let id = try await runtime.open(in: sandbox.work, launchToken: "token-s", name: nil, model: nil, thinking: nil)
-            let sessionID = try #require(bridge.session(id: id)?.sessionID)
-            try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 30 . Then reply SLEPT."), to: id)
-            // 停在跑工具的那一步（它带着 aborted 的错误结束），不是还没开始的时候
-            try await eventually("在跑命令") { session(bridge)?.state == .tool }
-            try await bridge.abort(id)
-            try await eventually("停下了，对话里留下'已停止'") {
-                let messages = try await store.piMessages(of: sessionID)
-                return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
-            }
-        }
-    }
-
-    @Test func aRoundEndedByARejectedPermissionSaysDeclined() async throws {
-        try await withOpenCode { sandbox, store, bridge, runtime in
-            let id = try await runtime.open(in: sandbox.work, launchToken: "token-d", name: nil, model: nil, thinking: nil)
-            let sessionID = try #require(bridge.session(id: id)?.sessionID)
-            try await sandbox.api("PATCH", "/api/session/\(sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])
-            try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: touch declined.txt . Then reply DONE."), to: id)
-            try await eventually("在等你确认") { session(bridge)?.question?.isAnswerable == true }
-            let question = try #require(session(bridge)?.question)
-            try await bridge.answer(.confirmed(false), to: try #require(question.promptID), in: id)
-
-            try await eventually("停下了，对话里写'已拒绝'") {
-                let messages = try await store.piMessages(of: sessionID)
-                return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已拒绝"]
-            }
-            #expect(!FileManager.default.fileExists(atPath: sandbox.work.appending(path: "declined.txt").path))
         }
     }
 }

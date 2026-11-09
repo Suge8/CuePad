@@ -1,4 +1,5 @@
 // 按第一句话给会话起短名（CuePad 的 `title` 命令）：只回不写——CuePad 核对过任务标题与改名请求后，用 `config` 改名写回。
+// 回的是模型的原话：取哪一行、截多长、空名算不算失败只在 CuePad 一侧（`SessionNameSuggestion.cleaned`）。
 // 只在会话所在 provider 里挑最便宜的可用模型：数据不发给别家。
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -19,8 +20,8 @@ export function namingModel(ctx: ExtensionContext): Model | undefined {
 
 export async function handleTitle(session: Session, command: Record<string, unknown>, ack: Ack, reject: (error: string) => void) {
 	const { ctx } = session;
-	const { instructions, text, limit, timeoutMs } = command;
-	if (typeof instructions !== "string" || typeof text !== "string" || !text.trim() || typeof limit !== "number" || typeof timeoutMs !== "number") {
+	const { instructions, text, timeoutMs } = command;
+	if (typeof instructions !== "string" || typeof text !== "string" || !text.trim() || typeof timeoutMs !== "number") {
 		return reject("bad_request");
 	}
 	const model = namingModel(ctx);
@@ -32,9 +33,5 @@ export async function handleTitle(session: Session, command: Record<string, unkn
 		{ signal, maxTokens: 64, cacheRetention: "none" },
 	).result();
 	if (reply.stopReason !== "stop") return reject(`failed: ${reply.errorMessage ?? reply.stopReason}`);
-	// 与 Swift 一侧的 `SessionNameSuggestion.cleaned` 各实现一份同一条规则
-	const said = reply.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
-	const title = [...(said.split("\n")[0] ?? "").trim()].slice(0, limit).join("").trim();
-	if (!title) return reject("failed: empty title");
-	ack({ ok: true, title });
+	ack({ ok: true, title: reply.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("") });
 }

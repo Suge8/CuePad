@@ -523,6 +523,22 @@
         }
       }
     },
+    "%@ 的全局规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Global Rules"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的全局规则"
+          }
+        }
+      }
+    },
     "%@ 的执行结果尚未确认：%@" : {
       "localizations" : {
         "en" : {
@@ -755,6 +771,22 @@
         }
       }
     },
+    "%@ 读这份" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read by %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 读这份"
+          }
+        }
+      }
+    },
     "%@ 起不来了" : {
       "localizations" : {
         "en" : {
@@ -815,6 +847,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 里的 hooks 格式不对，CuePad 没有改它"
+          }
+        }
+      }
+    },
+    "%@ 链着这份" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linked by %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 链着这份"
           }
         }
       }

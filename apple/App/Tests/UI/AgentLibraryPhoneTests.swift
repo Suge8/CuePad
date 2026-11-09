@@ -11,7 +11,7 @@ struct AgentLibraryPhoneTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
     nonisolated static let skillPath = "/Users/a/.agents/skills/pr"
-    nonisolated static let rulesPath = "/Users/a/.agents/AGENTS.md"
+    nonisolated static let rulesPath = "/Users/a/.config/agents/AGENTS.md"
 
     func text(_ file: LibraryFile, _ workspace: Workspace) async throws -> String? {
         let library = try #require(workspace.library)

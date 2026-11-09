@@ -75,7 +75,7 @@ extension DebugScene {
         // 只在隔离库里搬：用真实库的 Debug 实例绑的就是用户自己的文件夹
         guard let library = ProcessInfo.processInfo.environment[LibraryLocation.environmentKey] else { return }
         let directories = try await store.projectDirectories()
-        let real = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        let real = UserHome.directory.path(percentEncoded: false)
         let home = DemoLibrary.demoHome, asked = args.folder
         for (project, path) in directories where path.hasPrefix(real) && !path.hasPrefix(library + "/") && path != asked {
             try await store.setDirectory(home + path.dropFirst(real.count), for: project)
