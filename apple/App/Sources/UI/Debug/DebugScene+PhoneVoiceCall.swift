@@ -1,12 +1,10 @@
 #if os(iOS) && DEBUG
-import AVFoundation
 import UIKit
 
 /// 手机发起的真实通话（媒体在这台，会话与鉴权在 Mac）：`-CuePadVoice <音频文件>` 在中转连上、Cue 能听后照通话钮拨出（`Workspace.startVoiceCall`），
 /// Mac 投影到"在听"时把文件当你说的话送进上行（`DebugHooks.phoneVoiceSource`）；`-CuePadVoiceSeconds`（默认 60）后挂断。
 /// Mac 那端起一个带 `-CuePadVoiceToken`、不带 `-CuePadVoice` 的实例，两端用同一朵模拟云（`-CuePadSharedCloud`，同一个中转房间）。
 /// 对方的声音录到 `-CuePadVoiceRecord <wav>`，节点写进 `-CuePadVoiceLog <文件>`（`DebugVoiceLog`）：阶段、回应、下行响停、进出后台。
-/// `-CuePadVoiceInterruptAfter <秒>`：拨出这么久后发一条"会话被停用"的通知（来电、Siri 收走声音时系统发的那条），核对通话带原因结束。
 extension DebugScene {
     static let phoneVoiceFixture: VoiceFixture? = args.voice.flatMap { $0 == "mic" ? nil : VoiceFixture(recording: args.voiceOpts.record != nil) }
 
@@ -34,13 +32,6 @@ extension DebugScene {
             await Task.wait(for: .seconds(args.voiceOpts.seconds ?? 60))
             await workspace.hangUpVoiceCall()
         })
-        if args.voiceOpts.interruptAfter > 0 {
-            watching.append(Task {
-                guard await Task.wait(for: .seconds(args.voiceOpts.interruptAfter)) else { return }
-                note("interrupt")
-                NotificationCenter.default.post(name: AVAudioSession.didBecomeInactiveNotification, object: AVAudioSession.sharedInstance())
-            })
-        }
         var played = false
         for await phase in Observations({ voice.phase }) {
             note("phase \(phase.map { "\($0)" } ?? "none")")

@@ -10,8 +10,6 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     let hangUpAfterReply: Bool
     /// `-CuePadVoiceHistory <条数>`：通话面板预置的历史条数
     let history: Int
-    /// `-CuePadVoiceInterruptAfter <秒>`（手机）：拨出这么久后发一条"会话被停用"的通知（来电、Siri 收走声音时系统发的那条）
-    let interruptAfter: Double
     /// `-CuePadVoiceKeepOpen YES`：首轮挂断后保留窗口，供真实按钮重连与结果阅读验收
     let keepOpen: Bool
     /// `-CuePadVoiceLayout <布局>`：语音面板布局样例
