@@ -122,16 +122,6 @@ extension SyncIssue {
     }
 }
 
-#if os(iOS)
-extension SyncSummary {
-    /// 同步到不了 Mac 时（`SyncStatus.reachesMac`）给人看的那一句；送得到时为 nil。手机与 iPad 上设置那一行（侧栏、项目页末尾）
-    /// 与 iPhone 底部项目那一格带的点都只读它，点的颜色按它的 `tone`。
-    static func macAlert(_ status: SyncStatus) -> SyncSummary? {
-        status.reachesMac ? nil : SyncSummary(status)
-    }
-}
-#endif
-
 /// Mac 设置里同步那一行（`SyncRow`）此刻怎么说：说哪种状态、图标位置转不转圈。
 struct ShownSync: Equatable {
     let status: SyncStatus

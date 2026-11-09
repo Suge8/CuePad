@@ -190,6 +190,14 @@ extension AppServices {
         #endif
     }
 
+    #if os(iOS)
+    /// 同步到不了 Mac 时（`SyncStatus.reachesMac`）给人看的那一句；送得到时为 nil。手机与 iPad 上设置那一行（侧栏、项目页末尾）、
+    /// iPhone 底部项目那一格带的点（颜色按它的 `tone`）与 Cue 没有 Mac 时那句（`CueSettings.noHost`）都只读它。
+    var macAlert: SyncSummary? {
+        syncState.status.reachesMac ? nil : SyncSummary(syncState.status)
+    }
+    #endif
+
     /// 同步那一行转不转圈（Mac 设置与手机设置共用）：正在连接、正在上传或对账，或立即同步还没返回。
     var isSyncBusy: Bool {
         if isSyncingNow { return true }
