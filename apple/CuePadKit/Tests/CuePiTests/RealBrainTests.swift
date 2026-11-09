@@ -62,6 +62,8 @@ struct RealBrainTests {
             sandbox = runtime == .opencode ? try await OpenCodeSandbox() : nil
             model = runtime == .pi || runtime == .claudeCode ? try await FakeModel() : nil
             model?.playBrain(chain: chain)
+            // Claude Code 换模型前问一次服务端：没有这个模型的答 404
+            if runtime == .claudeCode { model?.on({ $0.model == "no-such-model" }) { _ in .fail("model: no-such-model", status: 404) } }
             if runtime == .pi, let model { try PiProcess.writeModels(model, into: root.appending(path: "pi-agent")) }
             // Grok 的大脑另起临时配置目录，登录取用户配置目录里的：用户配置目录指到这里，不碰真实的 ~/.grok；dsh 的家目录也在这里（登录只经环境里的 key）；
             // Pi 的 agent 目录也在这里，不读用户的 ~/.pi（设置、提供方各人不同）

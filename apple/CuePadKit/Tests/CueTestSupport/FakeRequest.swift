@@ -122,7 +122,8 @@ public struct FakeRequest: Sendable {
   }
 
   /// 带工具结果的你那一条算工具结果（Claude Code 把提醒的文字也放在那一条里，提醒以外的文字是你的话）；
-  /// 对话中间角色为 system 的消息（Claude Code 2.1 起用来放环境说明）并入 system，不算你的话
+  /// 对话中间角色为 system 的消息（Claude Code 2.1 起用来放环境说明）并入 system，不算你的话；
+  /// 只有一种例外：一轮还在跑时你又说的话，Claude Code 2.1.318 包成 system 消息放进这一轮（`midTurn`）
   private static func anthropic(_ json: [String: Any]) -> (String, [Message]) {
     var system = [(json["system"] as? String) ?? (json["system"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: "\n")]
     var messages: [Message] = []
@@ -140,7 +141,7 @@ public struct FakeRequest: Sendable {
       }
       let text = (content as? String) ?? texts(blocks)
       if message["role"] as? String == "system" {
-        system.append(text)
+        if let said = midTurn(text) { messages.append(Message(role: .user, text: said, images: [], calls: [])) } else { system.append(text) }
         continue
       }
       if message["role"] as? String == "assistant" {
@@ -163,6 +164,14 @@ public struct FakeRequest: Sendable {
       if !said.isEmpty { messages.append(Message(role: .user, text: texts(said), images: images(blocks), calls: [])) }
     }
     return (system.filter { !$0.isEmpty }.joined(separator: "\n"), messages)
+  }
+
+  /// Claude Code 把一轮中途收到的你的话写成 "The user sent a new message while you were working:\n<你的话>\n\nThis is how Claude Code surfaces…"
+  private static func midTurn(_ text: String) -> String? {
+    let lead = "The user sent a new message while you were working:\n"
+    guard text.hasPrefix(lead) else { return nil }
+    let said = text.dropFirst(lead.count)
+    return String(said.range(of: "\n\nThis is how Claude Code surfaces").map { said[..<$0.lowerBound] } ?? said)
   }
 
   private static func dataURL(_ url: String) -> String {
