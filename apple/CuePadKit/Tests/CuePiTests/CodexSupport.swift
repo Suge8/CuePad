@@ -49,8 +49,18 @@ struct CodexHome {
             "XDG_STATE_HOME": path("xdg/state"), "XDG_CACHE_HOME": path("xdg/cache"), "CLAUDE_CONFIG_DIR": path("claude"),
             "OPENCODE_CONFIG_DIR": path("opencode"), "PI_CODING_AGENT_DIR": path("pi"), "CUEPAD_LIBRARY_DIR": path("library"),
             "CODEX_HOME": home.path, "CUEPAD_PI_SOCKET_DIR": sockets.path, Self.keyVariable: "fake",
-        ])
+        ].merging(Self.deadProxy) { $1 })
     }
+    /// Codex 0.167.0 的终端界面启动时会取公告（`raw.githubusercontent.com/openai/codex/main/announcement_tip.toml`），没有开关能关：
+    /// 测试用指向本机没人监听的端口的代理挡住它，取不到就退回本地提示（实测不卡、不重试）。假模型在 127.0.0.1，由 NO_PROXY 放行。
+    static let deadProxy: [String: String] = {
+        var proxy = ["NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"]
+        for name in ["https_proxy", "http_proxy", "all_proxy"] {
+            proxy[name] = "http://127.0.0.1:1"
+            proxy[name.uppercased()] = "http://127.0.0.1:1"
+        }
+        return proxy
+    }()
     static let keyVariable = "CUEPAD_FAKE_MODEL_KEY"
 
     init(model: FakeModel, modelName: String = codexTestModel) throws {
@@ -64,6 +74,7 @@ struct CodexHome {
     }
 
     /// 配置：假模型当提供方，最便宜的思考强度，信任工作目录（没人回答信任提问），关掉更新检查与遥测。
+    /// 终端界面启动时会弹新模型介绍（“Meet GPT-6 Sol”，升级提示）挡住输入：`notice.model_migrations` 记下这对模型就不弹（实测；`tui.model_availability_nux` 的写法无效）。
     func signIn(approvals: String = "never") throws {
         let config = """
             model = "\(modelName)"
@@ -75,17 +86,33 @@ struct CodexHome {
             [projects."\(work.realPath.path)"]
             trust_level = "trusted"
 
+            [tui]
+            show_tooltips = false
+
+            [notice.model_migrations]
+            "\(codexTestModel)" = "gpt-6-sol"
+
             """
         try Self.write(provider: model, config: config, into: home)
     }
 
     /// 把假模型写成这个配置目录的提供方（`model_providers` 只认这里，项目目录下同名的会被忽略），并关掉常驻服务的自动更新。
+    /// 插件三项必须关：常驻服务启动时会把官方插件仓库 git 克隆进 `$CODEX_HOME/.tmp/plugins-clone-*`，即联网（关了之后实测不再出现）；
+    /// apps 等三项也关：终端界面启动要等应用连接器（联网）就绪，不关就一直停在 “Waiting for startup”。
     static func write(provider model: FakeModel, config: String = "", into home: URL) throws {
         let text = """
             model_provider = "fake"
             \(config)
             [analytics]
             enabled = false
+
+            [features]
+            plugins = false
+            apps = false
+            browser_use = false
+            computer_use = false
+            remote_plugin = false
+            plugin_discovery_prefetch = false
 
             [model_providers.fake]
             name = "fake"
@@ -149,8 +176,8 @@ struct CodexHome {
 }
 
 @MainActor
-func withCodexRig(approvals: String = "never", model: String = codexTestModel, _ body: (CodexRig) async throws -> Void) async throws {
-    let rig = try await CodexRig(approvals: approvals, model: model)
+func withCodexRig(approvals: String = "never", model: String = codexTestModel, daemon: Bool = false, _ body: (CodexRig) async throws -> Void) async throws {
+    let rig = try await CodexRig(approvals: approvals, model: model, daemon: daemon)
     do {
         try await body(rig)
     } catch {
@@ -158,6 +185,32 @@ func withCodexRig(approvals: String = "never", model: String = codexTestModel, _
         throw error
     }
     await rig.stop()
+}
+
+/// 要批准才能跑的命令。两档模型的命令工具不同：gpt-5.5 的函数 `exec_command`，gpt-6-luna 一档的代码模式 `exec`（一段 JS，里面调 `tools.exec_command`）；
+/// CuePad 看到的一样（app-server 报同样的 `commandExecution` 项与审批请求）。
+func codexEscalated(_ command: String, model: String = codexTestModel) -> FakeReply {
+    let arguments: [String: any Sendable] = ["cmd": command, "sandbox_permissions": "require_escalated", "justification": "test"]
+    let json = String(decoding: (try? JSONSerialization.data(withJSONObject: arguments)) ?? Data(), as: UTF8.self)
+    return model == codexTestModel
+        ? .call("exec_command", arguments)
+        : .custom("exec", "const r = await tools.exec_command(\(json)); text(JSON.stringify(r));")
+}
+
+/// Codex 常驻服务的目录是 Codex 写死的 `/tmp/codex-daemon-<uid>`（不跟 TMPDIR、CODEX_HOME 走），里面每个常驻服务一个以 CODEX_HOME 的哈希命名的 socket 与锁文件，
+/// 同机真实的 Codex 的也在这里。测试只建、只删自己的那一项；跑前跑后各列一次（名字与修改时刻），不同就是动了别人的或没清自己的。
+struct DaemonDirectory: Equatable, CustomStringConvertible {
+    private(set) var entries: [String: Double] = [:]
+
+    init() {
+        let directory = "/tmp/codex-daemon-\(getuid())"
+        for name in (try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? [] {
+            var info = stat()
+            if lstat("\(directory)/\(name)", &info) == 0 { entries[name] = Double(info.st_mtimespec.tv_sec) + Double(info.st_mtimespec.tv_nsec) / 1e9 }
+        }
+    }
+
+    var description: String { entries.sorted { $0.key < $1.key }.map { "\($0.key.prefix(8))@\($0.value)" }.joined(separator: ",") }
 }
 
 @MainActor
@@ -168,8 +221,11 @@ final class CodexRig {
     let runtime: CodexRuntime
     let presence: TestPresence
     var model: FakeModel { codex.model }
+    private let sharedBefore: DaemonDirectory?
 
-    init(approvals: String = "never", model: String = codexTestModel) async throws {
+    /// - Parameter daemon: 会起常驻服务（终端里的 Codex）：收尾时断言共用目录只剩跑之前的样子，见 `DaemonDirectory`。
+    init(approvals: String = "never", model: String = codexTestModel, daemon: Bool = false) async throws {
+        sharedBefore = daemon ? DaemonDirectory() : nil
         let codex = try CodexHome(model: try await FakeModel(), modelName: model)
         let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
@@ -203,6 +259,7 @@ final class CodexRig {
         let shared = try? FileManager.default.destinationOfSymbolicLink(atPath: control)
         await codex.remove()
         for leftover in shared.map({ [$0, $0 + ".lock"] }) ?? [] { try? FileManager.default.removeItem(atPath: leftover) }
+        if let sharedBefore { #expect(DaemonDirectory() == sharedBefore, "共用目录里别人的条目被动过，或自己的没清干净：\(sharedBefore) → \(DaemonDirectory())") }
     }
 
     var session: PiSession? { bridge.sessions.first { $0.agent == .codex } }
