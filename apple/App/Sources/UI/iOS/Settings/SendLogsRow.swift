@@ -1,7 +1,8 @@
+#if os(iOS)
 import SwiftUI
 
-/// 设置里"把最近日志发到 Mac"：存一份最近的日志、经你自己的 iCloud 送到你的 Mac（`Diagnostics.sendRecentLogs`）。
-/// 只在连着 iCloud 时有（`Diagnostics.canSend`）。
+/// 手机、iPad 设置里"把最近日志发到 Mac"：存一份最近的日志、经你自己的 iCloud 送到你的 Mac（`Diagnostics.sendRecentLogs`）。
+/// 只在连着 iCloud 时有（`Diagnostics.canSend`）。Mac 上没有这一行：同一台 Mac 上的 agent 直接用 log show 读，比快照全（docs/diagnose.md）。
 struct SendLogsRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -45,7 +46,6 @@ struct SendLogsRow: View {
         }
     }
 
-    #if os(iOS)
     var body: some View {
         Button(action: send) {
             LabeledContent {
@@ -59,16 +59,5 @@ struct SendLogsRow: View {
         .buttonStyle(PressStyle())
         .disabled(phase == .sending)
     }
-    #else
-    var body: some View {
-        SettingRow(
-            title: "最近日志", icon: Image(.uploadLocal), tone: tone, busy: phase == .sending,
-            status: Dotted(status ?? String(localized: "经你的 iCloud 送到你的 Mac")), help: Self.note
-        ) {
-            EmptyView()
-        } fix: {
-            Button("把最近日志发到 Mac", action: send).settingFix().disabled(phase == .sending)
-        }
-    }
-    #endif
 }
+#endif

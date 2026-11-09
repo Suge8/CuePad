@@ -6,7 +6,7 @@
       xc.sh diag ios crashes [all]                     现场补充：拉连着这台 Mac 的手机上系统记下的 CuePad 崩溃报告（连同 CuePad 被内存回收的 JetsamEvent）到
                                                       apple/.derived/diag/<UDID>/、符号化、打出要点；all 连系统别的报告一起拉、一起解析
       xc.sh diag ips <文件.ips>…                         解析、符号化本机已有的系统崩溃报告（用户发来的，Mac 的 ~/Library/Logs/DiagnosticReports）
-主路是 App 自己收：各台设备（iPhone、iPad、Mac）的存档（MetricKit 的诊断、本机记下的主线程卡住、最近日志）经用户自己的 iCloud 私有库送到 Mac，
+主路是 App 自己收：各台设备（iPhone、iPad、Mac）的存档（MetricKit 的诊断、本机记下的主线程卡住、手机与 iPad 的最近日志）经用户自己的 iCloud 私有库送到 Mac，
 Mac 上的 CuePad 落成 <目录>/<设备>/<文件>（DiagnosticInbox.swift）。目录缺省是正式版的 ~/Library/Logs/CuePad；读隔离实例（xc.sh fleet）的给
 CUEPAD_DIAG_DIR=<库目录>/Logs。<设备> 是目录名（Mac 是电脑名，iPhone、iPad 是型号代号如 iPhone18,1：iOS 不给 App 用户起的设备名），写开头几个字也行。
 系统的崩溃报告走 devicectl（Xcode 自带；无线连接也行，不要 root）：systemCrashLogs 域的列出与拷出，拷出不删手机上的；手机选 CUEPAD_DIAG_DEVICE

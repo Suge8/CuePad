@@ -16787,22 +16787,6 @@
         }
       }
     },
-    "最近日志" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recent Logs"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近日志"
-          }
-        }
-      }
-    },
     "最近记下的灵感，点一下对 Cue 说。" : {
       "localizations" : {
         "en" : {
@@ -21247,22 +21231,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "终端里的会话还没起好，没有发出，可以重发"
-          }
-        }
-      }
-    },
-    "经你的 iCloud 送到你的 Mac" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent to your Mac through your iCloud"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "经你的 iCloud 送到你的 Mac"
           }
         }
       }

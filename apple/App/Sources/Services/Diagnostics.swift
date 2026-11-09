@@ -8,8 +8,10 @@ import os
 @Observable
 final class Diagnostics {
     private(set) var reports: [CrashReport]
-    /// 连着 iCloud（或测试、验收的替身云）时才能把最近日志发到 Mac。
+    #if os(iOS)
+    /// 连着 iCloud（或测试、验收的替身云）时手机、iPad 才能把最近日志发到 Mac。
     private(set) var canSend = false
+    #endif
     @ObservationIgnored let archive: DiagnosticArchive
     @ObservationIgnored private var subscriber: Subscriber?
     @ObservationIgnored private var outbox: DiagnosticOutbox?
@@ -29,7 +31,9 @@ final class Diagnostics {
         MainThreadWatch.shared.start(archive: archive, version: AppServices.version) { [weak self] note in self?.recorded(note) }
         if self.outbox == nil, let outbox {
             self.outbox = outbox
+            #if os(iOS)
             canSend = true
+            #endif
             push()
         }
         guard metricKit, subscriber == nil else { return }
@@ -46,7 +50,7 @@ final class Diagnostics {
         reload()
     }
 
-    /// 设置里"把最近日志发到 Mac"：存一份最近 `RecentLogs.window` 的日志，送进 iCloud。返回时已被 iCloud 收下；
+    /// 手机、iPad 设置里"把最近日志发到 Mac"（Mac 上的测试拿它演手机）：存一份最近 `RecentLogs.window` 的日志，送进 iCloud。返回时已被 iCloud 收下；
     /// 没送成（没登录、断网、被限流）或等了 `sendLimit` 还没收下，抛 `Queued`：日志已存下，送件那边自己接着送（`DiagnosticOutbox`）。
     func sendRecentLogs() async throws {
         guard let outbox else { throw CancellationError() }
