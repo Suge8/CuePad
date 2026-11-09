@@ -6,7 +6,7 @@ import Testing
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.taped(.claudeCode), .enabled(if: tmuxURL != nil, "要 tmux（断言的是 tmux 里真终端界面的输出与按键）"))
+@Suite(RealAgents.needs(.claudeCode), .enabled(if: tmuxURL != nil, "要 tmux（断言的是 tmux 里真终端界面的输出与按键）"))
 struct RealClaudeTerminalTests {
     nonisolated static let userSettings = """
         {

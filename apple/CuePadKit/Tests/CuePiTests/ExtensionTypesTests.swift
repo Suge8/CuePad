@@ -12,7 +12,7 @@ private struct PiTypes {
     var nodeTypes: URL { modules.appending(path: "@types") }
 }
 
-@Suite(RealAgents.taped(.pi))
+@Suite(RealAgents.needs(.pi))
 struct ExtensionTypesTests {
     @Test func bridgeTypechecksAgainstInstalledPi() async throws {
         try pinnedPi.require()

@@ -8,7 +8,7 @@ extension DebugScene {
         PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels, supportsFast: supportsFast)
     }
 
-    /// Codex、Claude Code 与 Grok Build 是它们自己报的清单，照录像带里 Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）、Claude Code 的 `initialize`（Claude 系）与 Grok Build 握手报的模型，提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）。
+    /// Codex、Claude Code 与 Grok Build 是它们自己报的清单，照钉住版本的真 Agent 报的：Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）、Claude Code 的 `initialize`（Claude 系）与 Grok Build 握手报的模型，提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）。
     static func demoModels(for agent: AgentKind?, fast: Bool? = nil) -> PiModelState {
         func listed(_ models: [PiModelOption], current: Int, thinking: PiThinkingLevel) -> PiModelState {
             PiModelState(model: models[current], thinking: .known(thinking), fast: fast, models: models)
