@@ -30,10 +30,12 @@ actor RecordSender {
   private var inFlight: Set<String> = []
   /// 马上传了、还没收下的：有它们时退避上限小，到点先发它们。
   private var urgent: Set<String> = []
-  /// 要马上传时已在路上或已被另一趟马上传占下的（多半是刚领取的那一版，结果紧跟着写下）：那批收下的、那趟读库时看到"已不是待推送"的
+  /// 要马上传时已在路上、已被另一趟马上传占下，或正被后台那一路挑批读库（`askedWhilePicking`）的（多半是刚领取的那一版，结果紧跟着写下）：那批收下的、那趟读库时看到"已不是待推送"的
   /// 都可能是旧版，不算答复，当场再发一趟（新版还在就传，已收下就答收下）。
   private var newer: Set<String> = []
   private var resend: Set<String> = []
+  /// 后台那一路挑批读库期间要马上传的（不在挑时为 nil）：读库在先、进 `inFlight` 在后，挑进那一批的不另记就会被旧版答成收下。
+  private var askedWhilePicking: Set<String>?
   /// 停下时随这一代结束一起答。
   private var waiters: [Waiter] = []
   private struct Waiter {
@@ -114,6 +116,7 @@ actor RecordSender {
     guard !stopped else { return false }
     urgent.formUnion(names)
     newer.formUnion(names.intersection(inFlight))
+    askedWhilePicking?.formUnion(names)
     let waiter = Waiter(remaining: names)
     waiters.append(waiter)
     runUrgent()
@@ -153,9 +156,14 @@ actor RecordSender {
     for _ in 0..<Self.batchesPerRound {
       guard !stopped, await coordinator.admits(.upload(urgent: urgent)) else { return }  // 另一路这期间被要求等了
       // 准备不了（停下了、读库出错）由协调器记下状态，下一次触发再来
-      guard var batch = try? await coordinator.nextBatch(.pending(excluding: inFlight), limit: limit) else { return }
+      askedWhilePicking = []
+      let picked = try? await coordinator.nextBatch(.pending(excluding: inFlight), limit: limit)
+      let asked = askedWhilePicking ?? []
+      askedWhilePicking = nil
+      guard var batch = picked else { return }
       batch.drop(inFlight)  // 挑的时候马上传那一路占下的
       guard !batch.isEmpty else { return }
+      newer.formUnion(batch.names.intersection(asked))
       guard await upload(batch) else { return }
     }
     kick()  // 一轮的批数用完，还有没发完的
@@ -196,10 +204,12 @@ actor RecordSender {
     return next
   }
 
-  /// 只在它们离开 `inFlight` 后调：之前发起的那一趟挑不到它们，在等的就一直等到别的批碰巧带上它们。
+  /// 只交出已离开 `inFlight` 的：交出去的那一趟挑不到还在路上的，就没人再发，在等的要等到这条记录下次被改（两批同时回来、先收尾的那批调到这里时）。
+  /// 还在路上的留到它那一批收尾（`upload`）。
   private func resendNewer() {
-    guard !resend.isEmpty else { return }
-    resend = []
+    let due = resend.subtracting(inFlight)
+    guard !due.isEmpty else { return }
+    resend.subtract(due)
     runUrgent()
   }
 
