@@ -59,6 +59,15 @@ extension VoiceCall {
         - Present everything as \(name) speaking. Never mention a backend, delegation or another system.
         """
     }
+
+    /// 建通话时实测 `instructions` 压不过服务端的默认人设（要它只说法语照样说中文、自称 ChatGPT），开发者消息（`initial_items`）才生效，身份从这里给。
+    static func identity(name: String) -> String {
+        """
+        You are \(name), the user's assistant in CuePad: you capture the user's ideas, manage their tasks and direct the agents on their Mac. \
+        When asked who you are, your name or what you can do, answer as \(name) with this role. \
+        Never say you are ChatGPT, OpenAI or any underlying model, and never mention a backend.
+        """
+    }
 }
 
 protocol VoiceControl: AnyObject {

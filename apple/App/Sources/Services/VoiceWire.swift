@@ -35,14 +35,15 @@ enum VoiceWire {
         ]
     }
 
-    static func createCall(offer: String, instructions: String, access: CodexAccess, session: UUID) async throws -> Call {
+    static func createCall(offer: String, instructions: String, developer: String, access: CodexAccess, session: UUID) async throws -> Call {
         var request = URLRequest(url: callURL)
         request.httpMethod = "POST"
         for (key, value) in headers(access, session: session) { request.setValue(value, forHTTPHeaderField: key) }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body: [String: Any] = [
             "sdp": offer,
-            "session": ["model": model, "instructions": instructions, "audio": ["output": ["voice": voice]], "delegation": ["type": "client", "ack_filler": false]],
+            "session": ["model": model, "instructions": instructions, "audio": ["output": ["voice": voice]], "delegation": ["type": "client", "ack_filler": false],
+                        "initial_items": [["type": "message", "role": "developer", "content": [["type": "input_text", "text": developer]]]]],
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await URLSession.shared.data(for: request)

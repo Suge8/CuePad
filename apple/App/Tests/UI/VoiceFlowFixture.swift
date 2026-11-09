@@ -69,7 +69,7 @@ final class VoiceFlowFixture {
             var dependencies = dependencies
             dependencies.access = { try await self.access() }
             dependencies.media = { _, _ in self.media }
-            dependencies.createCall = { _, _, _, _ in
+            dependencies.createCall = { _, _, _, _, _ in
                 if let error = self.connectError { throw error }
                 return VoiceWire.Call(id: "rtc_isolated", answer: "answer", usedPercent: nil)
             }
