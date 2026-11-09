@@ -8,7 +8,7 @@ import UIKit
 /// 对方的声音录到 `-CuePadVoiceRecord <wav>`，节点写进 `-CuePadVoiceLog <文件>`（`DebugVoiceLog`）：阶段、回应、下行响停、进出后台。
 /// 后台：`-CuePadVoicePlayInBackground YES` 在听后记 `waiting-background`、等 App 进后台（外面 `xcrun simctl launch <UDID> com.apple.Preferences` 把它压下去）1 秒再送文件，
 /// 核对上下行、委派与挂断都在后台照常；下行这时走真的扬声器（静音、不录，`VoiceFixture.Downlink.speaker`），回应看 `output-loud` 与 Mac 的转写。中断：`-CuePadVoiceInterruptAfter <秒>` 在听后发系统收走声音时的那条通知，核对通话带"音频已中断"结束、Mac 收到挂断。
-/// 音频会话与真机同一种（录音类）：没授权过麦克风的模拟器一接通就弹授权、停在那里，先 `xcrun simctl privacy <UDID> grant microphone <bundle id>`。
+/// 音频会话与真机同一种（录音类），模拟器一接通就弹麦克风授权：`simctl privacy grant` 写进了授权库也照弹（iOS 27 模拟器实测），不点它不挡通话。
 /// 负载很高时模拟器初始化扬声器会 RPC 超时、App 被系统中止（崩溃报告停在 `AURemoteIO::Initialize`），不是这里的问题，重跑。
 extension DebugScene {
     static let phoneVoiceFixture: VoiceFixture? = args.voice.flatMap {
