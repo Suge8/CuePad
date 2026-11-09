@@ -42,8 +42,9 @@ jobs:
       - if: startsWith(matrix.args, 'test')
         run: npm install -g --prefix "$HOME/.local" @earendil-works/pi-coding-agent@1.4.0
       - run: apple/scripts/xc.sh ${{ matrix.args }}
+        timeout-minutes: 30
       - uses: actions/upload-artifact@v7
-        if: failure()
+        if: always()
         with:
           name: logs-${{ strategy.job-index }}
           path: apple/.derived/test.log
