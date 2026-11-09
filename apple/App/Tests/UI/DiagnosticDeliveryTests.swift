@@ -64,4 +64,32 @@ struct DiagnosticDeliveryTests {
         services.diagnostics.record([])
         try await eventually("Mac 上的卡住记录换成恢复后的") { try await onMac()?.seconds == 3 }
     }
+
+    @Test func 送诊断时断网_连上后不等新诊断_自己补送到Mac() async throws {
+        let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
+        let clock = ManualTiming()
+        let phone = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, timing: clock.timing)
+        let mac = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
+        let services = phone.services!
+        for side in [phone, mac] { side.services.startSync() }
+        defer { for side in [phone, mac] { side.services.cancelBackgroundWork() } }
+        let inbox = DiagnosticInbox(directory: mac.directory.appending(path: "DeviceLogs"), sync: try #require(mac.services.sync as? CloudSync))
+        await cloud.setUploadsFail(true)
+        services.startDiagnostics()
+
+        services.diagnostics.record([crash(day: 5)])
+        let retry = clock.now.addingTimeInterval(DiagnosticOutbox.firstRetry.seconds)
+        await clock.waitForSleeper(until: retry)
+        try await inbox.check()
+        #expect(try FileManager.default.contentsOfDirectory(atPath: inbox.directory.path).filter { !$0.hasPrefix(".") }.isEmpty)
+
+        await cloud.setUploadsFail(false)
+        // 同步自己断网后按真钟退避一阵（期间诊断也不发、抛 RetryHeld），补送的时刻按手动钟一档档拨过去
+        try await eventually("断网时没送成的那份补送到了 Mac") {
+            clock.advance(DiagnosticOutbox.lastRetry)
+            try await inbox.check()
+            let folders = try FileManager.default.contentsOfDirectory(at: inbox.directory, includingPropertiesForKeys: nil).filter { !$0.lastPathComponent.hasPrefix(".") }
+            return try folders.flatMap { try FileManager.default.contentsOfDirectory(atPath: $0.path) }.contains { $0.hasPrefix("2026-01-05") }
+        }
+    }
 }

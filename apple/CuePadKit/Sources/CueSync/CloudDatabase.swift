@@ -105,9 +105,17 @@ struct CloudDatabase: SyncCloud {
     return found
   }
 
+  /// 按服务器版本比对：同步区的记录带着拉到的版本，冲突交给对账。
   func upload(saving records: [CKRecord], deleting ids: [CKRecord.ID]) async throws -> SentRecords {
+    try await upload(saving: records, deleting: ids, policy: .ifServerRecordUnchanged)
+  }
+
+  /// 新建的 `CKRecord` 不带服务器版本：要覆盖云上已有的同名记录得用 `.allKeys`，按版本比对会报 serverRecordChanged。
+  func upload(
+    saving records: [CKRecord], deleting ids: [CKRecord.ID], policy: CKModifyRecordsOperation.RecordSavePolicy
+  ) async throws -> SentRecords {
     let results = try await database {
-      try await $0.modifyRecords(saving: records, deleting: ids, savePolicy: .ifServerRecordUnchanged, atomically: false)
+      try await $0.modifyRecords(saving: records, deleting: ids, savePolicy: policy, atomically: false)
     }
     var sent = SentRecords()
     for record in records {

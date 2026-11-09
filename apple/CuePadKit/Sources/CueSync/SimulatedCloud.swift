@@ -103,6 +103,10 @@ actor SimulatedCloud: SyncCloud {
   }
 
   func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) -> SentRecords {
+    guard !uploadsFail else {
+      let offline = CKError(.networkFailure, userInfo: [NSUnderlyingErrorKey: URLError(.notConnectedToInternet)])
+      return SentRecords(failedSaves: saving.map { ($0, offline) }, failedDeletes: deleting.map { ($0, offline) })
+    }
     diagnostics.exists = true
     return diagnostics.upload(saving: saving, deleting: deleting)
   }

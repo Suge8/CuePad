@@ -116,12 +116,13 @@ extension CloudDatabase {
     try await diagnostics.changes(since: token.flatMap { $0.isEmpty ? nil : $0 }, keys: [DiagnosticZone.nameField, DiagnosticZone.contentField])
   }
 
+  /// 每台只写自己的记录、每次都是整份新建（不带服务器版本）：覆盖写。卡住记录恢复后原地改写、上一批部分传成后重传，都是改已有的记录。
   func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
     do {
-      return try await diagnostics.upload(saving: saving, deleting: deleting).throwingZoneMissing()
+      return try await diagnostics.upload(saving: saving, deleting: deleting, policy: .allKeys).throwingZoneMissing()
     } catch let error as CKError where error.code == .zoneNotFound {
       try await diagnostics.saveZone()
-      return try await diagnostics.upload(saving: saving, deleting: deleting)
+      return try await diagnostics.upload(saving: saving, deleting: deleting, policy: .allKeys)
     }
   }
 }

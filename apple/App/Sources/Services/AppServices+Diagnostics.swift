@@ -15,7 +15,7 @@ extension AppServices {
         diagnostics.start(
             metricKit: location.touchesRealWorld,
             outbox: cloud.flatMap { cloud in
-                diagnosticDevice.map { DiagnosticOutbox(archive: diagnostics.archive, sync: cloud, device: $0.id, deviceName: $0.name) }
+                diagnosticDevice.map { DiagnosticOutbox(archive: diagnostics.archive, sync: cloud, device: $0.id, deviceName: $0.name, timing: timing) }
             })
         #if os(macOS)
         if let cloud {

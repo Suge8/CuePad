@@ -37,7 +37,7 @@ struct SendLogsRow: View {
             do {
                 try await services.diagnostics.sendRecentLogs()
                 phase = .sent(.now)
-            } catch is Diagnostics.SendTimedOut {
+            } catch is Diagnostics.Queued {
                 phase = .pending
             } catch {
                 phase = .failed(error.localizedDescription)

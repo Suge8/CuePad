@@ -47,26 +47,30 @@ final class Diagnostics {
     }
 
     /// 设置里"把最近日志发到 Mac"：存一份最近 `RecentLogs.window` 的日志，送进 iCloud。返回时已被 iCloud 收下；
-    /// 等了 `sendLimit` 还没收下（没登录、断网、被限流）抛 `SendTimedOut`：日志已存下，之后连上了照样送出。
+    /// 没送成（没登录、断网、被限流）或等了 `sendLimit` 还没收下，抛 `Queued`：日志已存下，送件那边自己接着送（`DiagnosticOutbox`）。
     func sendRecentLogs() async throws {
         guard let outbox else { throw CancellationError() }
         let end = Date.now
         let text = try await Self.capture(from: end.addingTimeInterval(-RecentLogs.window), to: end, title: "最近日志 | CuePad \(AppServices.version)")
         try archive.store(log: text, at: end, kind: "log")
         reload(pushing: false)
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask { try await outbox.reconcile() }
-            group.addTask {
-                try await Task.sleep(for: Self.sendLimit)
-                throw SendTimedOut()
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask { try await outbox.reconcile() }
+                group.addTask {
+                    try await Task.sleep(for: Self.sendLimit)
+                    throw CancellationError()
+                }
+                try await group.next()
+                group.cancelAll()
             }
-            try await group.next()
-            group.cancelAll()
+        } catch {
+            throw Queued()
         }
     }
 
     static let sendLimit = Duration.seconds(30)
-    struct SendTimedOut: Error {}
+    struct Queued: Error {}
 
     /// 卡住恢复了就附上它前后那段日志（同一个时刻开头，存档里紧挨着那条卡住记录）：卡住期间与之前一分钟。
     /// 没恢复的（被结束）附不上：`OSLogStore` 只读得到本进程这次运行的。
@@ -101,7 +105,7 @@ final class Diagnostics {
         guard let outbox else { return }
         Task {
             do { try await outbox.reconcile() } catch {
-                Self.log.notice("诊断这次没送进 iCloud，下次存档变化或再开 App 时再送：\(String(describing: error), privacy: .public)")
+                Self.log.notice("诊断这次没送进 iCloud，过一阵自己再送：\(String(describing: error), privacy: .public)")
             }
         }
     }
