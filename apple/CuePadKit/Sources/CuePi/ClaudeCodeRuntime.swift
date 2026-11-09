@@ -95,9 +95,11 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
         if let running = hosted[session.id], let id = running.id {
             if bridge.session(id: id) != nil { return id }
-            // 刚结束的：输出一断就下了桥，进程收掉才离开 `hosted`（机器忙时隔得长）。
-            // 等它退完再接着：不交回下了桥的 id（话会报"会话已经结束"），也不让两个进程同写一份会话文件
-            _ = await running.stream?.process.exited()
+            // 刚结束的：输出一断就下了桥，进程退了才离开 `hosted`（机器忙时隔得长；结束只关输入，不保证它退）。
+            // 收掉它再接着：不交回下了桥的 id（话会报"会话已经结束"），也不让两个进程同写一份会话文件。
+            // 收法同 `stop()`：宽限后 SIGTERM、再宽限后 SIGKILL，有上限。旧条目这里就拿掉，不等退出监视那个任务
+            await running.stream?.process.stop()
+            if hosted[session.id] === running { hosted[session.id] = nil }
         }
         if bridge.sessions.contains(where: { $0.agent == .claudeCode && $0.sessionID == session.id && !$0.hosted }) {
             throw AgentRuntimeError.openElsewhere
