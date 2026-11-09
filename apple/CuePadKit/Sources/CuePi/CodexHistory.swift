@@ -115,7 +115,6 @@ enum CodexHistory {
         var name: String
         var arguments: PiToolArguments
         var failed: Bool
-        /// 结果里的图（原字节）
         var images: [Data?] = []
     }
 

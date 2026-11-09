@@ -72,7 +72,6 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var turnStartedAt: Date? = nil
     /// `/name` 设的会话名
     public internal(set) var name: String? = nil
-    /// 首条用户消息的开头
     public internal(set) var firstMessage: String? = nil
     /// 正在等你回答的弹窗；不在等待时为 nil
     public internal(set) var question: PiQuestion? = nil
@@ -127,7 +126,6 @@ public struct PiSession: Identifiable, Sendable, Equatable {
         return snapshot
     }
 
-    /// 会话的显示名，规则见 `PiSessionName`。
     public var displayName: String {
         PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
     }

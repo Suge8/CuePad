@@ -270,8 +270,6 @@ enum PiWire {
         }
     }
 
-    // MARK: CuePad → 扩展
-
     private struct Command: Encodable {
         struct CueTurn: Encodable { var deliveryId: String? }
         struct Image: Encodable { var mimeType: String; var data: String }

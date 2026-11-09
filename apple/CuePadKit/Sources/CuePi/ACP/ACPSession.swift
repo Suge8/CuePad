@@ -30,7 +30,6 @@ final class ACPSession {
     private(set) var connection: ACPConnection?
     /// Agent 给的会话 id
     private(set) var sessionID: String?
-    /// 会话的工作目录
     private(set) var cwd: URL?
     /// 上了桥之后的 id
     private(set) var id: PiSession.ID?
@@ -99,8 +98,6 @@ final class ACPSession {
     var agent: AgentKind { dialect.agent }
     var seesImages: Bool { connection.map { dialect.acceptsImages($0.agent) } ?? false }
 
-    // MARK: 起与开
-
     /// 起 Agent 的 ACP 服务并握手，接上它的通知与请求。`timing` 交给进程（`ChildProcess`）。
     func launch(_ executable: URL, environment: [String: String], directory: URL, timing: Timing = .system) async throws {
         let connection = try await ACPConnection.launch(executable, dialect.arguments, environment: environment, directory: directory, timing: timing)
@@ -136,7 +133,6 @@ final class ACPSession {
         contextWindow = currentModel.flatMap { dialect.window(of: $0, in: opened) }
     }
 
-    /// 上桥（托管会话）。
     func attach(_ session: PiSession) {
         id = session.id
         var session = session
@@ -163,8 +159,6 @@ final class ACPSession {
         mcpWaiters.forEach { $0.resume() }
         mcpWaiters = []
     }
-
-    // MARK: 一轮
 
     /// 以这句开一轮（不等模型）：读到回应的那一刻这一轮结束，之后读到的通知归下一轮。
     func prompt(_ blocks: [JSONValue], deliveryID: String? = nil) throws {
@@ -270,8 +264,6 @@ final class ACPSession {
         publish()
     }
 
-    // MARK: 一处产出
-
     /// 交给事件流（大脑）与桥（托管会话）。
     func emit(_ event: TurnEvent) {
         brain?.emit(event)
@@ -295,8 +287,6 @@ final class ACPSession {
         contextWindow = window
         emit(.context(used: used, window: window))
     }
-
-    // MARK: 收
 
     /// 这个会话的通知。MCP 服务连上的通知不论哪个会话都认：它可能先于 `session/new` 的回应到，进程里也只有这一个会话在开。
     private func notified(_ method: String, _ params: JSONValue) {

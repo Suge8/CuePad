@@ -88,8 +88,6 @@ enum ClaudeHistory {
         cp.said(said, entry, deliveryID: deliveryID, into: &transcript)
     }
 
-    // MARK: 收件箱送来的话
-
     /// Claude Code 给收件箱送来的话包的说明（2.1.293）：开头一行与结尾一段固定英文，正文原样夹在中间；CuePad 发的正文前还有一句
     /// `ClaudeInbox.userNote`。钩子交来的那句不一定包着英文说明，说明与那句各自有就去掉。
     private static let peerPrefix = "Another Claude session sent a message:\n"
@@ -111,8 +109,6 @@ enum ClaudeHistory {
     private static let syntheticModel = "<synthetic>"
     /// 斜杠命令与 `!` 命令留下的回显：终端的对话里是命令本身与它的输出，不是你对模型说的话
     private static let commandEchoPrefixes = ["<command-name>", "<command-message>", "<local-command-", "<bash-input>", "<bash-stdout>", "<bash-stderr>"]
-
-    // MARK: 解码
 
     private static let decoder = JSONDecoder()
     private static let timestampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)

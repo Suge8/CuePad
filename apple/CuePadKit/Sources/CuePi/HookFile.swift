@@ -94,8 +94,6 @@ struct HookFile: AgentHookConfig {
         return group
     }
 
-    // MARK: 状态
-
     /// 只看文件：CuePad 的组与这个版本要写的逐组一致（事件、先后、内容）为 `.current`。
     func files(command: String) -> AgentStatus.Files {
         guard let text = try? Data(contentsOf: file), let tree = try? JSONSourceTree(text) else { return .missing }
@@ -112,8 +110,6 @@ struct HookFile: AgentHookConfig {
             (member.value.elements ?? []).enumerated().filter { isOurs($0.element, in: tree.text) }.map { (member.key, $0.offset, $0.element) }
         }
     }
-
-    // MARK: 安装与卸载
 
     /// 换成这个版本的条目：先删掉旧的组（结构留着），再按事件表追加；第一次装时记下装之前有什么。
     func install(command: String) throws {
@@ -144,8 +140,6 @@ struct HookFile: AgentHookConfig {
         if FileManager.default.fileExists(atPath: footprintFile.path) { try FileManager.default.removeItem(at: footprintFile) }
     }
 
-    // MARK: 条目
-
     /// `<…/cuepad> hook <agent>`：路径可能是 App 的旧位置，可能带引号。
     private func isOurCommand(_ command: String) -> Bool {
         let suffix = " hook \(agent.rawValue)"
@@ -161,8 +155,6 @@ struct HookFile: AgentHookConfig {
     private func isOurs(_ node: JSONSourceTree.Node, in text: Data) -> Bool {
         ((Self.json(node, in: text)?["hooks"] as? [[String: Any]]) ?? []).contains { ($0["command"] as? String).map(isOurCommand) ?? false }
     }
-
-    // MARK: 就地改写
 
     /// 删掉 CuePad 的组；`dropping` 里记着的 CuePad 建的事件数组与 `hooks` 因此空了也删掉（nil：结构都留着，升级时用）。
     /// 一次删一处、重新扫描，删法是插入的逆操作。

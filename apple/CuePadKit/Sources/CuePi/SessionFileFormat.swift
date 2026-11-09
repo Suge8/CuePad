@@ -46,7 +46,6 @@ struct SessionFileFormat: Sendable {
         /// 它的内容里这个会话的名字
         let name: @Sendable (_ contents: Data, _ sessionID: String) -> String?
     }
-    /// 会话目录（`AgentPaths.sessionsDirectory`）
     let directory: @Sendable (AgentPaths) -> URL
 
     func matches(_ file: URL) -> Bool {

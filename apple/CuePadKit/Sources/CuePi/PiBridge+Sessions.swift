@@ -75,8 +75,6 @@ extension PiBridge {
         emit(.ended(session, reason: reason))
     }
 
-    // MARK: 托管的会话
-
     /// 托管的会话什么时候请它退出（不算结束，发话时再接着）：同一会话在别处（终端里）也开着、自己又空闲的（两边会各写各的；正在跑一轮的等它做完、状态变化时再看）；
     /// 歇着满 `hostedIdle` 的（CuePad 为它起了进程的几家，`AgentFacts.releasesIdleHosted`）。
     func reviewHosted() {

@@ -159,8 +159,6 @@ public enum PiHistory {
         return consumed
     }
 
-    // MARK: 检查点有效性
-
     /// 文件被 Pi 改写（版本迁移）或替换后，旧偏移指向的可能是半行：检查文件没变短、开头没变、偏移落在换行之后。
     private static func isResumable(_ cp: PiHistoryCheckpoint, handle: FileHandle, size: UInt64) throws -> Bool {
         guard cp.offset <= size else { return false }
@@ -182,8 +180,6 @@ public enum PiHistory {
         for byte in try handle.read(upToCount: length) ?? Data() { hash = (hash ^ UInt64(byte)) &* 0x100000001b3 }
         return hash
     }
-
-    // MARK: 对话与轮次（各家共用）
 
     /// 一条消息在会话里的位置：条目 id（没有时用行号）、行号（`seq`）、时间。
     struct Entry {
