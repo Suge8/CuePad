@@ -197,7 +197,6 @@ import os
             }
             await receiveSignal(received)
         case .localClosed(let endpoint, let reason):
-            failPending { $0.local == endpoint }
             failPageReads(local: endpoint)
             #if os(macOS)
             projectionReaders = projectionReaders.filter { $0.value.recipient != endpoint }
@@ -205,8 +204,8 @@ import os
             revokeProjection(local: endpoint)
             #endif
             await connectionClosed(local: endpoint, peer: nil, reason: reason)
+            failPending { $0.local == endpoint && !waitsForRelink($0.session) }
         case .peerClosed(let endpoint, let departure):
-            failPending { $0.peer == endpoint }
             failPageReads(peer: endpoint)
             #if os(macOS)
             projectionReaders = projectionReaders.filter { $0.value.sender != endpoint }
@@ -214,6 +213,7 @@ import os
             revokeProjection(peer: endpoint)
             #endif
             await connectionClosed(local: nil, peer: endpoint, reason: departure == .replaced ? .leaseReplaced : .peerLeft)
+            failPending { $0.peer == endpoint && !waitsForRelink($0.session) }
         case .rejected(let header, let reason):
             switch header.purpose {
             case .media:
@@ -256,7 +256,7 @@ import os
         }
     }
 
-    private func failPending(_ matches: (Pending<VoiceCommandResult.Outcome>) -> Bool) {
+    func failPending(_ matches: (Pending<VoiceCommandResult.Outcome>) -> Bool) {
         for (id, wait) in pending where matches(wait) {
             pending[id] = nil
             wait.finish(.failure(VoiceSignalError.leaseChanged))

@@ -36,9 +36,10 @@ nonisolated enum VoiceMediaSignal: Equatable, Codable, Sendable {
     case answer(value: VoiceAnswer)
     case event(value: VoiceMediaEvent)
     case hangup(reason: VoiceEndReason)
-    /// 手机发：同一通（header.session）它以 header.sender 这个租约回来了（`VoiceLink`、`VoiceSignalFormat.relinkGrace`）。
-    /// 手机等 Mac 时主动发、收到 Mac 新租约的帧后也回一个；Mac 收到就回当前投影。双方各收到对方新租约的一帧才算接回。
-    case resume
+    /// 同一通（header.session）"我在 header.sender 这个租约上"（`VoiceLink`、`VoiceSignalFormat.relinkGrace`）。
+    /// 正在等对端的一方每秒发 ask=true；另一方收到就回 ask=false（Mac 还另发当前投影），回的丢了下一秒的问会再问。
+    /// 两端各凭收到对方的一帧确认对方还在（换绑只认 `VoiceService.rebind` 一处），不靠自己发没发出去推断。
+    case resume(ask: Bool)
 }
 
 /// 每帧的 AEAD 认证头。session 对媒体指当前通话，对业务命令指原通话来源，不限制命令必须在原通话存活时执行。

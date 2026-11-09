@@ -53,7 +53,7 @@ extension VoiceService {
             return
         }
         let header = received.header
-        if case .media(.resume) = received.payload { return resume(header) }
+        if case .media(.resume(let ask)) = received.payload { return resume(header, ask: ask) }
         guard let remote, remote.session == header.session, remote.link == .bound(local: header.recipient, peer: header.sender) else { return }
         switch received.payload {
         case .media(.event(.connected)):
@@ -64,25 +64,35 @@ extension VoiceService {
         }
     }
 
-    /// 同一手机、同一通话从新租约来的一帧：媒体桥换绑到它，之后的命令来源核对、挂断与媒体事件都按新租约认。
+    /// 同一手机、同一通话来的一帧（等着时同一租约的也算）：媒体桥换绑到它，之后的命令来源核对、挂断与媒体事件都按这对租约认；
+    /// 这一通已有的命令结果按原命令身份补送到这里。
     func rebind(_ header: VoiceSignalHeader) {
         guard let remote, remote.session == header.session, remote.link.peerDevice == header.sender.device,
               remote.link != .bound(local: header.recipient, peer: header.sender) else { return }
         remote.link = .bound(local: header.recipient, peer: header.sender)
         call?.mark("relinked")
+        for (id, outcome) in remote.results {
+            Task { await sendResult(.init(command: id, outcome: outcome), session: remote.session, to: header.sender) }
+        }
     }
 
-    /// 手机以新租约回到这一通：重新登记投影接收者并回当前投影，宽限期里错过的更新由这份快照补齐（投影是整份状态，不是增量）。
-    /// 通话已在 Mac 这边先结束也照回：手机由此拿到真实的结束原因。
-    private func resume(_ header: VoiceSignalHeader) {
-        guard let call, VoiceSessionID(call.session) == header.session else { return }
+    func waitsForRelink(_ session: VoiceSessionID) -> Bool { false }
+
+    /// 手机在这一通上报到：重新登记投影接收者并发当前投影，宽限期里错过的更新由这份快照补齐（投影是整份状态，不是增量）；
+    /// 是问（ask）就再回一个 resume。通话已在 Mac 这边先结束也照回：手机由此拿到真实的结束原因。
+    private func resume(_ header: VoiceSignalHeader, ask: Bool) {
+        guard let call, VoiceSessionID(call.session) == header.session, let signaling else { return }
         projectionReaders[header.sender.device] = header
-        guard let projection, projection.session == header.session, let signaling else { return }
+        let projection = self.projection?.session == header.session ? self.projection : nil
         Task {
             let scope = VoiceOperationScope()
             defer { scope.end() }
-            do { try await scope.perform(within: .seconds(2)) { try await signaling.sendVoice(.projection(value: projection), session: header.session, to: header.sender) } }
-            catch { AppServices.log.error("Voice projection after resume not sent: \(String(describing: error))") }
+            do {
+                try await scope.perform(within: .seconds(2)) {
+                    if ask { try await signaling.sendVoice(.media(signal: .resume(ask: false)), session: header.session, to: header.sender) }
+                    if let projection { try await signaling.sendVoice(.projection(value: projection), session: header.session, to: header.sender) }
+                }
+            } catch { AppServices.log.error("Voice resume answer not sent: \(String(describing: error))") }
         }
     }
 
@@ -144,14 +154,12 @@ extension VoiceService {
                     do {
                         try await sending.perform(within: .seconds(2)) {
                             guard let signaling = self.signaling else { throw VoicePageError.unavailable }
+                            try DebugHooks.voiceProjectionSend()
                             try await signaling.sendVoice(.projection(value: value), session: reader.session, to: reader.sender)
                         }
                     } catch {
-                        guard !Task.isCancelled, self.call === call, self.session == value.session else { return }
-                        if self.projectionReaders[reader.sender.device] == reader { self.projectionReaders[reader.sender.device] = nil }
-                        if self.remote?.session == reader.session {
-                            await self.connectionClosed(local: reader.recipient, peer: reader.sender, reason: .networkFailed)
-                        }
+                        // 一次没发出去不等于链路断：断没断只认中转的关闭与离开事件，下一份投影是整份状态，照样补齐
+                        AppServices.log.error("Voice projection not sent: \(String(describing: error))")
                     }
                     sending.end()
                 }
@@ -167,7 +175,7 @@ extension VoiceService {
         if call?.isLive != true { self.remote = nil }
     }
 
-    /// 等手机以新租约回来；Mac 自己的中转断了时手机未必察觉，所以这边也主动把当前投影发到手机的当前租约，手机收到即换绑并回 resume。
+    /// 等手机回来；Mac 自己的中转断了时手机未必察觉，所以这边也每秒向手机的当前租约问一次（resume ask），手机回的任何一帧都算回来了。
     /// 宽限期满还没回来按断开时的原因结束；媒体或用户先结束时 `departed`/`close` 结束 remote.scope，这里的等待随之停下。
     private func relink(_ remote: VoiceRemoteMedia, phone: VoiceDeviceID, reason: VoiceEndReason) {
         let until = ContinuousClock.now + VoiceSignalFormat.relinkGrace
@@ -175,8 +183,7 @@ extension VoiceService {
         call?.mark("relinking \(reason.rawValue)")
         remote.scope.spawn { [weak self] in
             await self?.reach(phone, until: until, done: { remote.link.isBound }) { signaling, peer in
-                guard let projection = self?.projection, projection.session == remote.session else { return }
-                try await signaling.sendVoice(.projection(value: projection), session: remote.session, to: peer)
+                try await signaling.sendVoice(.media(signal: .resume(ask: true)), session: remote.session, to: peer)
             }
             guard !remote.link.isBound, !Task.isCancelled else { return }
             remote.departed(reason)

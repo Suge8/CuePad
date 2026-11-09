@@ -5,7 +5,7 @@ import os
 
 /// 一通电话对 iOS 音频会话的唯一一次占用（`VoiceAudio` 持有）：建出来时先同步装好监听再激活，激活不成就当场停用、还原、抛出；
 /// `end()` 摘监听、停用并还原原来的类别，只做一次。系统收走会话（来电、Siri、闹钟）或媒体服务重置时调 `interrupted`；
-/// App 自己停用的（这通或上一通的 `end()`，通知可能晚到）不算。
+/// 只认来源标明是系统的停用：App 自己停用的（这通或上一通的 `end()`，通知可能晚到）、来源不明的都不算。
 final class VoiceAudioSession {
     private let previous: (category: AVAudioSession.Category, mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions)
     private var observers: [any NSObjectProtocol] = []
@@ -21,7 +21,7 @@ final class VoiceAudioSession {
         observers = [
             center.addObserver(forName: AVAudioSession.didBecomeInactiveNotification, object: session, queue: .main) { [weak self] note in
                 let context = note.userInfo?[AVAudioSession.deactivationContextKey] as? AVAudioSession.DeactivationContext
-                guard context?.source != .app else { return }
+                guard context?.source == .system else { return }
                 MainActor.assumeIsolated { self?.interrupt() }
             },
             center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: session, queue: .main) { [weak self] _ in
@@ -43,11 +43,12 @@ final class VoiceAudioSession {
         interrupted = {}
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []
+        // 两步各做各的：停用失败（还有别的 I/O 在跑）也要把类别还回去
         let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setActive(false, options: .notifyOthersOnDeactivation)
-            try session.setCategory(previous.category, mode: previous.mode, options: previous.options)
-        } catch { Self.log.error("Voice audio session not released: \(error.localizedDescription, privacy: .public)") }
+        do { try session.setActive(false, options: .notifyOthersOnDeactivation) }
+        catch { Self.log.error("Voice audio session not deactivated: \(error.localizedDescription, privacy: .public)") }
+        do { try session.setCategory(previous.category, mode: previous.mode, options: previous.options) }
+        catch { Self.log.error("Voice audio category not restored: \(error.localizedDescription, privacy: .public)") }
     }
 
     private func interrupt() {

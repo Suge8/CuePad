@@ -161,6 +161,7 @@ extension DebugScene {
                 note("phase \(phase)")
                 if phase == .listening, timers.isEmpty {
                     if let drop = dropRelay(note: note) { timers.append(drop) }
+                    if let fail = failProjection(note: note) { timers.append(fail) }
                     if let seconds = args.voiceOpts.seconds {
                         timers.append(Task {
                             guard await Task.wait(for: .seconds(seconds)) else { return }

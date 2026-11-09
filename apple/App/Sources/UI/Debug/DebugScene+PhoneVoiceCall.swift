@@ -13,6 +13,13 @@ import UIKit
 /// 音频会话与真机同一种（录音类），模拟器一接通就弹麦克风授权：`simctl privacy grant` 写进了授权库也照弹（iOS 27 模拟器实测），不点它不挡通话。
 /// 负载很高时模拟器初始化扬声器会 RPC 超时、App 被系统中止（崩溃报告停在 `AURemoteIO::Initialize`），不是这里的问题，重跑。
 extension DebugScene {
+    /// 系统收走会话时通知里带的来源（`VoiceAudioSession` 只认它）：这个类型只由系统建、没有公开的构造，经运行时建一个、填上 system。
+    private static func systemDeactivation() -> NSObject {
+        let context = (NSClassFromString("AVAudioSessionDeactivationContext") as! NSObject.Type).init()
+        context.setValue(AVAudioSession.DeactivationSource.system.rawValue, forKey: "source")
+        return context
+    }
+
     static let phoneVoiceFixture: VoiceFixture? = args.voice.flatMap {
         $0 == "mic" ? nil : VoiceFixture(downlink: args.voiceOpts.playInBackground ? .speaker : args.voiceOpts.record != nil ? .record : .discard)
     }
@@ -53,7 +60,8 @@ extension DebugScene {
                     watching.append(Task {
                         guard await Task.wait(for: .seconds(args.voiceOpts.interruptAfter)) else { return }
                         note("interrupt")
-                        NotificationCenter.default.post(name: AVAudioSession.didBecomeInactiveNotification, object: AVAudioSession.sharedInstance())
+                        NotificationCenter.default.post(name: AVAudioSession.didBecomeInactiveNotification, object: AVAudioSession.sharedInstance(),
+                                                        userInfo: [AVAudioSession.deactivationContextKey: systemDeactivation()])
                     })
                 }
                 if let fixture = phoneVoiceFixture {

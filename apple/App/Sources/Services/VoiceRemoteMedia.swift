@@ -7,6 +7,8 @@ final class VoiceRemoteMedia: VoiceMedia {
     var link: VoiceLink
     /// 手机报过媒体已接通；之前的信令断开直接结束，之后的按 `link` 等手机回来。
     var connected = false
+    /// 这一通里手机发来的命令的结果：发给手机当前的租约，换绑后按原命令身份再补送一遍（手机按命令 ID 认，没在等的丢掉），不重新执行。
+    var results: [VoiceCommand.ID: VoiceCommandResult.Outcome] = [:]
     let offerSDP: String
     let signaling: any VoiceSignaling
     let scope = VoiceOperationScope()

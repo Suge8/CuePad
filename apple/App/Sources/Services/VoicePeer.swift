@@ -3,7 +3,8 @@ import AVFoundation
 
 /// 一通电话一份原生 WebRTC 连接，声音由 `VoiceAudio` 进出；关闭即刻停下声音与连接，不复用。所有者是通话服务。
 /// offer 不等 ICE 收集：服务端是 ICE-lite，由本机发起连通检查，SDP 里不必带候选。
-/// 持续收集候选：Wi-Fi 与蜂窝切换时在新网络上找回同一连接。断开（`disconnected`）后等 `grace`，回到 connected 就接着通，
+/// 持续收集候选：Wi-Fi 与蜂窝切换时在新网络上找回同一连接。第一次断开（`disconnected`）起等 `grace`，只有回到 connected 才清零
+/// （断开与 connecting 来回抖不重新计时），回到 connected 就接着通，
 /// 到期仍没回来按 mediaFailed 结束；`closed` 立刻结束。不等 WebRTC 自己报 failed：M157 断开后约 65 秒才报，
 /// `iceInactiveTimeout` 改不了这个时刻（对端静默或关闭，配不配都在断开后约 73 秒 failed，实测）。
 final class VoicePeer: NSObject, VoiceMedia {
@@ -79,7 +80,7 @@ final class VoicePeer: NSObject, VoiceMedia {
     }
 
     private func changed(_ state: RTCPeerConnectionState) {
-        if state != .disconnected {
+        if state == .connected {
             reconnecting?.cancel()
             reconnecting = nil
         }

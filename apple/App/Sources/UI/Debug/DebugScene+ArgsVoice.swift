@@ -9,6 +9,8 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     let closeSeconds: Double
     /// `-CuePadVoiceDropRelay <在听后秒>,<断多久秒>`：像网络断了一样断掉这台的中转连接（`DebugRelayDrop`），核对通话等对端以新租约回来（`VoiceLink`）
     let dropRelay: String?
+    /// `-CuePadVoiceFailProjection <在听后秒>,<多久秒>`（Mac）：这段时间里发给手机的投影一律当发送失败，核对 Mac 不因此当链路断
+    let failProjection: String?
     /// `-CuePadVoiceHangUpAfterReply YES`：结果送出后观察到实际输出、模型回合结束且音轨安静才挂断
     let hangUpAfterReply: Bool
     /// `-CuePadVoiceHistory <条数>`：通话面板预置的历史条数
@@ -54,13 +56,30 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
 extension DebugScene {
     /// 照 `-CuePadVoiceDropRelay` 在通话进入"在听"后断这台的中转连接；没给就不起。
     static func dropRelay(note: @escaping (String) -> Void) -> Task<Void, Never>? {
-        guard let spec = args.voiceOpts.dropRelay else { return nil }
+        window(args.voiceOpts.dropRelay, "-CuePadVoiceDropRelay") { seconds in
+            note("relay-drop \(seconds)")
+            DebugRelayDrop.drop(for: .seconds(seconds))
+        }
+    }
+
+    /// `DebugHooks.voiceProjectionSend` 读它。
+    static var projectionFailsUntil: ContinuousClock.Instant?
+
+    static func failProjection(note: @escaping (String) -> Void) -> Task<Void, Never>? {
+        window(args.voiceOpts.failProjection, "-CuePadVoiceFailProjection") { seconds in
+            note("projection-fail \(seconds)")
+            projectionFailsUntil = .now + .seconds(seconds)
+        }
+    }
+
+    /// `<在听后秒>,<多久秒>`：到点做 `start`（参数是多久）；没给就不起。
+    private static func window(_ spec: String?, _ name: String, start: @escaping (Double) -> Void) -> Task<Void, Never>? {
+        guard let spec else { return nil }
         let parts = spec.split(separator: ",").compactMap { Double($0) }
-        guard parts.count == 2 else { abandon("-CuePadVoiceDropRelay 要写成 <在听后秒>,<断多久秒>", CocoaError(.formatting)) }
+        guard parts.count == 2 else { abandon("\(name) 要写成 <在听后秒>,<多久秒>", CocoaError(.formatting)) }
         return Task {
             guard await Task.wait(for: .seconds(parts[0])) else { return }
-            note("relay-drop \(parts[1])")
-            DebugRelayDrop.drop(for: .seconds(parts[1]))
+            start(parts[1])
         }
     }
 }

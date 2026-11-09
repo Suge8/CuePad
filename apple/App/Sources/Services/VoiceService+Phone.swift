@@ -153,24 +153,30 @@ extension VoiceService {
         AppServices.log.notice("Voice signaling lost (\(reason.rawValue, privacy: .public)), waiting for the Mac")
         owner.scope.spawn { [weak self] in
             await self?.reach(mac, until: until, done: { owner.link?.isBound == true }) { signaling, peer in
-                try await signaling.sendVoice(.media(signal: .resume), session: owner.id, to: peer)
+                try await signaling.sendVoice(.media(signal: .resume(ask: true)), session: owner.id, to: peer)
             }
             guard let self, self.phone === owner, owner.link?.isBound == false, !Task.isCancelled else { return }
+            self.failPending { $0.session == owner.id }
             await self.end(reason: reason, notify: false)
         }
     }
 
-    /// 同一 Mac、同一通话从新租约来的一帧：换绑并回一个 resume，Mac 收到才知道手机的新租约（`VoiceMediaSignal.resume`）。
+    /// 同一 Mac、同一通话来的一帧（等着时同一租约的也算）：链路、投影来源与这一通还在等结果的命令都换到这对租约上。
     func rebind(_ header: VoiceSignalHeader) {
         guard let owner = phone, !owner.scope.ended, let link = owner.link, header.session == owner.id, header.sender.device == link.peerDevice,
               link != .bound(local: header.recipient, peer: header.sender) else { return }
         owner.link = .bound(local: header.recipient, peer: header.sender)
         phoneBinding = (owner.id, header.recipient, header.sender)
-        AppServices.log.notice("Voice signaling relinked")
-        owner.scope.spawn { [weak self] in
-            do { try await self?.signaling?.sendVoice(.media(signal: .resume), session: owner.id, to: header.sender) }
-            catch { AppServices.log.error("Voice resume not sent: \(error.localizedDescription, privacy: .public)") }
+        for (id, wait) in pending where wait.session == owner.id {
+            pending[id] = Pending(session: wait.session, peer: header.sender, local: header.recipient, finish: wait.finish)
         }
+        AppServices.log.notice("Voice signaling relinked")
+    }
+
+    /// 这一通正在等 Mac 回来：它的命令接着等结果（换绑后由 Mac 按原命令身份补送），不当作失败。
+    func waitsForRelink(_ session: VoiceSessionID) -> Bool {
+        guard let owner = phone, owner.id == session, case .relinking? = owner.link else { return false }
+        return true
     }
 
     func receiveSignal(_ received: VoiceReceivedSignal) async {
@@ -200,7 +206,12 @@ extension VoiceService {
             do { try await owner.scope.perform { try await owner.media.accept(answer: answer.sdp) } }
             catch { if phone === owner, !owner.scope.ended { await end(reason: .mediaFailed) } }
         case .media(.hangup(let reason)): await end(reason: reason, notify: false)
-        case .media(.resume): break
+        case .media(.resume(let ask)):
+            guard ask else { return }
+            owner.scope.spawn { [weak self] in
+                do { try await self?.signaling?.sendVoice(.media(signal: .resume(ask: false)), session: owner.id, to: received.header.sender) }
+                catch { AppServices.log.error("Voice resume answer not sent: \(error.localizedDescription, privacy: .public)") }
+            }
         default: await end(reason: .protocolRejected)
         }
     }
